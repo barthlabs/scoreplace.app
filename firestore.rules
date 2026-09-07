@@ -499,9 +499,28 @@ service cloud.firestore {
       // (js/views/tournaments-organizer.js:78). Deixá-lo entrar no create seria deixar o
       // cliente DECLARAR que o torneio é dividido sem nada morar fora: o app abriria
       // buscando subcoleção vazia e pintaria "0 inscritos" pra sempre.
+      /* ⛔ APAGADO É APAGADO — E ESTA É A LINHA QUE GARANTE ISSO (04/set/2026).
+       * MEDIDO: o "Torneio de Férias só Casais" foi apagado pelo dono e VOLTOU sozinho em
+       * 02/set às 12:42. `createTime` do SERVIDOR em 02/set carregando `createdAt` de
+       * 20/jun — recriação a partir de cópia em cache. Quem recriou foi o próprio app: o
+       * tick de 1s do prazo de inscrição chama `saveTournament(t)` com o `t` da MEMÓRIA da
+       * aba, e lá dentro é `set(merge:true)` — que num doc inexistente CRIA. Passou por
+       * ESTE `allow create`, porque o payload de junho satisfazia tudo o que ele pedia.
+       * 1 dos 47 torneios tinha a marca; os outros 46 estavam limpos.
+       *
+       * ⭐ E ELA NÃO É UMA LÁPIDE. A regra não pergunta "este torneio já foi apagado?" —
+       * isso exigiria guardar os mortos, e o dono recusou com razão: _"vai virar o maior
+       * cemitério do mundo. apagado é apagado"_. Ela pergunta "isto está NASCENDO agora?".
+       * `_nascidoEm` é `serverTimestamp()`, e só o servidor sabe carimbá-lo: no create de
+       * verdade ele É `request.time`; num payload vindo de cache ele não existe (ou é
+       * velho) e o servidor NEGA. Nada é guardado, nada é consultado — a ausência do
+       * documento continua sendo a única verdade.
+       * ⚠️ A exceção declarada pelo dono continua valendo: restaurar de backup roda pelo
+       * Admin SDK, que ignora as rules. Recuperar DE PROPÓSITO pode; por acidente, não. */
       allow create: if request.auth != null
         && request.resource.data.creatorUid is string
         && request.resource.data.creatorUid == request.auth.uid
+        && request.resource.data._nascidoEm == request.time
         && request.resource.data.get('currentPhaseIndex', 0) == 0
         && request.resource.data.get('_phaseMaterialized', 0) == 0
         && !('_semPesados' in request.resource.data)

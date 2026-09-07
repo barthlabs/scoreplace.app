@@ -18,6 +18,9 @@
  * e é ele que o agendamento usa; o número global é um campo NOVO, só de leitura de tela.
  */
 'use strict';
+const fs = require('fs');
+const path = require('path');
+const ROOT = path.join(__dirname, '..');
 const H = require('./render-harness');
 const W = H.sandbox;
 try { require('./headless').load('tournaments-utils.js'); } catch (e) { /* medido abaixo */ }
@@ -83,6 +86,13 @@ const t = confra();
   ok('⛔ e NÃO diz "Rodada 1"', !/Rodada 1\b/.test(pr.name), 'obtido: ' + pr.name);
   ok('⭐ o índice LOCAL continua 1 — é dele que o agendamento depende', pr.roundNum === 1,
     'obtido ' + pr.roundNum);
+  ok('⭐⭐ o card da primeira coluna também diz Rodada 2',
+    W._matchRoundDisplayNum(t, t.matches.find((m) => m.phaseIndex === 1 && m.round === 1)) === 2,
+    'obtido ' + W._matchRoundDisplayNum(t, t.matches.find((m) => m.phaseIndex === 1 && m.round === 1)));
+  const bracketSrc = fs.readFileSync(path.join(ROOT, 'js', 'views', 'bracket.js'), 'utf8');
+  ok('⭐⭐ o cabeçalho da chave usa a mesma numeração global',
+    bracketSrc.indexOf('window._numeroGlobalDaRodada(t, curPhase, idx)') !== -1,
+    'o cabeçalho eliminatório voltaria a exibir Rodada 1');
   const fase = W._currentPhaseGames(t);
   ok('⭐⭐ o contador da fase é 0/100, não 0/36', fase.total === 100 && fase.done === 0,
     JSON.stringify(fase));

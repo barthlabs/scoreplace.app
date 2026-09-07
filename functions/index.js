@@ -8803,6 +8803,34 @@ exports.purgeTournamentCopies = onDocumentDeleted(
     const t = (event.data && typeof event.data.data === "function" ? event.data.data() : null) || null;
     const conta = {};
 
+    /* ── (0) O LOG DA EXCLUSÃO — ordem do dono (04/set/2026) ────────────────────────────
+     * _"o histórico/log do torneio deveria ter isso. torneio apagado em tal data e hora"_.
+     *
+     * ⭐ NÃO É LÁPIDE, e a diferença é o que o dono recusou: lápide é um documento POR
+     * DEFUNTO que o app CONSULTA antes de escrever — é isso que vira cemitério. Esta linha
+     * ninguém consulta pra decidir nada; se ela sumir amanhã, o comportamento do app não
+     * muda em nada. Quem impede a volta é o `allow create` das rules (`_nascidoEm ==
+     * request.time`), que não guarda e não pergunta nada sobre os mortos.
+     * Ela existe porque em 04/set o dono perguntou "cadê aquele torneio?" e a resposta
+     * custou três medições forenses no `createTime` do servidor.
+     *
+     * ⛔ Escreve DEPOIS de nada e ANTES de tudo, e NUNCA derruba a limpeza: um log que
+     * falha não pode impedir as cópias de serem apagadas. */
+    try {
+      await _db.collection("tournamentDeletions").add({
+        tournamentId: tid,
+        nome: (t && t.name) || null,
+        organizador: (t && (t.organizerName || t.organizerEmail)) || null,
+        creatorUid: (t && t.creatorUid) || null,
+        status: (t && t.status) || null,
+        criadoEm: (t && t.createdAt) || null,
+        inscritos: t && Array.isArray(t.participants) ? t.participants.length : null,
+        apagadoEm: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      console.error(`[purgeTournamentCopies] log da exclusão falhou em ${tid}:`, e && e.message);
+    }
+
     // Apaga um punhado de refs em lotes de 400 (o teto do batch é 500).
     const apagarRefs = async (refs, rotulo) => {
       let n = 0;

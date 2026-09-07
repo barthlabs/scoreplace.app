@@ -441,6 +441,20 @@ function renderDashboard(container) {
   // Filtros de Relacionamento (Dono / Participante)
   const organizados = window.AppStore.getMyOrganized();
   const participacoes = window.AppStore.getMyParticipations();
+  // O documento de resultado é o espelho fino que pode chegar depois da estrutura.
+  // Limite pequeno evita transformar o dashboard numa leitura de todos os torneios; cada
+  // torneio só é hidratado uma vez nesta sessão e a chegada pede o repintar próprio daqui.
+  try {
+    participacoes.filter(function (t) { return t && (t.tournamentStarted || t.status === 'active'); })
+      .sort(function (a, b) { return Number(b.updatedAt || b.startDate || 0) - Number(a.updatedAt || a.startDate || 0); })
+      .slice(0, 5).forEach(function (t) {
+        if (t._resultsHydrated || !window.AppStore || typeof window.AppStore.hydrateMatchResults !== 'function') return;
+        t._resultsHydrated = true;
+        Promise.resolve(window.AppStore.hydrateMatchResults(t.id)).then(function (ok) {
+          if (ok && typeof window._dashPedirRepintura === 'function') window._dashPedirRepintura('resultados-hidratados');
+        });
+      });
+  } catch (e) { if (window._warn) window._warn('[dashboard] hidratação de resultados falhou', e); }
   /* ⛔ `organizadosCount` REMOVIDO (2.1.67): alimentava só a pílula "Organizados".
    * O filtro `organizados` em si segue existindo mais abaixo. */
   const participacoesCount = participacoes.length;

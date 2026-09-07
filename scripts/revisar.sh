@@ -26,8 +26,8 @@
 #   critica  — functions*/, rules, firebase.json, sw.js, store.js, router, main, DB, chave/sorteio/
 #              placar/inscrição/perfil/auth/W.O./fases, scripts de deploy e check, extensions/,
 #              arquivo NOVO nesses lugares, ou diff > 300 linhas (não rastreados contam)
-#              → GPT `revisao-critica` (high) · Claude opus/high.
-#   --modelo/--esforco = indicação de quem dispara; nunca fica abaixo do piso.
+#              → começa em medium; repete uma vez em high apenas com `ESCALAR: SIM`.
+#   --modelo/--esforco = indicação explícita de quem dispara; o padrão é medium.
 #
 # INTERRUPTOR, UM POR LADO (ordem do dono: "quero poder desligar essa revisão automática e
 # reativar quando voltarem os créditos, pra não ficarmos travados"): `desligar "<motivo>"` grava
@@ -53,7 +53,20 @@ set -euo pipefail
 RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$RAIZ"
 CODEX="${CODEX_BIN:-/Applications/ChatGPT.app/Contents/Resources/codex}"
-CLAUDE="${CLAUDE_BIN:-claude}"
+# O app Codex nasce com PATH mínimo e não herda ~/.local/bin, onde o instalador
+# do Claude Code coloca o link estável. Resolver aqui torna a revisão independente
+# do terminal que iniciou a sessão; CLAUDE_BIN explícito continua tendo prioridade.
+if [[ -n "${CLAUDE_BIN:-}" ]]; then
+  CLAUDE="$CLAUDE_BIN"
+elif command -v claude >/dev/null 2>&1; then
+  CLAUDE="$(command -v claude)"
+elif [[ -x "$HOME/.local/bin/claude" ]]; then
+  CLAUDE="$HOME/.local/bin/claude"
+elif [[ -x "/Applications/Claude.app/Contents/MacOS/claude" ]]; then
+  CLAUDE="/Applications/Claude.app/Contents/MacOS/claude"
+else
+  CLAUDE="claude"
+fi
 MODO="${1:-}"
 [[ $# -gt 0 ]] && shift
 OUTDIR="$RAIZ/.claude/tmp"
@@ -233,8 +246,14 @@ if [[ "$FAIXA" == "trivial" ]]; then
   echo "  ✓ faixa trivial — sem revisão (CSS/texto/notas/bump). Force com SP_GPT_FAIXA=normal."; exit 0
 fi
 
-# ── motor: quem dispara indica; a faixa é o piso ─────────────────────────────────────
-PISO=medium; [[ "$FAIXA" == "critica" ]] && PISO=high
+# ── motor: custo adaptativo ──────────────────────────────────────────────────────────
+# O primeiro parecer sempre começa em medium. Alta complexidade define a FAIXA e torna
+# obrigatória a segunda opinião, mas não cobra high por antecipação. O revisor só pede
+# a tentativa high escrevendo `ESCALAR: SIM` quando medium não conseguiu formar um
+# veredito confiável por limite material de análise. Ressalvas concretas NÃO escalam:
+# quem executa corrige e a nova submissão recomeça em medium.
+# Cada chamada é isolada, logo toda revisão seguinte volta ao padrão medium.
+PISO=medium
 nivel_esf() { case "$1" in low) echo 0;; medium) echo 1;; high) echo 2;; xhigh|max) echo 3;; esac; }
 if [[ -n "$ESFORCO" ]] && [[ $(nivel_esf "$ESFORCO") -lt $(nivel_esf "$PISO") ]]; then
   echo "  ⚠️ --esforco $ESFORCO fica ABAIXO do piso da faixa ($PISO); vai $PISO."; ESFORCO="$PISO"
@@ -245,7 +264,7 @@ if [[ "$REVISOR" == gpt ]]; then
   EXECUTOR_DICA='modelo=<sonnet|opus|fable> esforco=<low|medium|high|max>  (é o CLAUDE que vai executar: sonnet/low pra mudança mecânica e local; opus/high pra lógica com concorrência, dados de usuário, torneio dividido; fable/max só quando errar custa dado de produção)'
   QUEM_EXECUTA="o Claude"
 else
-  command -v "$CLAUDE" >/dev/null 2>&1 || { echo "✗ Claude Code CLI não encontrado ('$CLAUDE'; exporte CLAUDE_BIN)"; exit 4; }
+  { [[ -x "$CLAUDE" ]] || command -v "$CLAUDE" >/dev/null 2>&1; } || { echo "✗ Claude Code CLI não encontrado ('$CLAUDE'; exporte CLAUDE_BIN)"; exit 4; }
   [[ "$ESFORCO" == xhigh ]] && ESFORCO=max
   [[ -n "$MODELO" ]]  || { MODELO=sonnet; [[ "$FAIXA" == critica ]] && MODELO=opus; }
   [[ -n "$ESFORCO" ]] || ESFORCO="$PISO"
@@ -272,10 +291,16 @@ CLAUDE.md (AGENTS.md é a mesma coisa). Responda em português do Brasil.
 FORMATO OBRIGATÓRIO — as DUAS primeiras linhas, exatamente assim:
 VEREDITO: APROVADO | RESSALVAS | BLOQUEIO      (escolha UMA)
 EXECUTOR: $EXECUTOR_DICA — <por quê, 1 linha>
+ESCALAR: SIM | NAO
 (APROVADO = pode implementar como está; RESSALVAS = só depois de atender o que você lista —
 o texto volta pra você; BLOQUEIO = vai quebrar produção, perder dado, violar regra do
 CLAUDE.md, ou o diagnóstico está errado. Se é resubmissão, diga na linha EXECUTOR se os pontos
 anteriores foram atendidos.)
+
+Use ESCALAR: SIM SOMENTE se medium não permitiu uma conclusão confiável porque falta
+investigação técnica concreta (por exemplo, uma cadeia transacional extensa ou uma dúvida
+de autorização que exige prova adicional). Não escale por cautela genérica, por tamanho do
+diff, nem só porque há RESSALVAS ou BLOQUEIO: nesses casos, liste os ajustes e deixe NAO.
 
 Depois, só o que for concreto, sempre com arquivo:linha:
 1. O QUE QUEBRA — regressão, caso não coberto, concorrência, dado que some.
@@ -306,25 +331,32 @@ OUT_DATADO="${OUT%.md}-$CARIMBO.md"
 LOG="${OUT%.md}.log"
 RASCUNHO="$(mktemp "${TMPDIR:-/tmp}/sp-revisao-out.XXXXXX")"
 
-echo "  revisor: $REVISOR${MODELO:+ · modelo $MODELO}${ESFORCO:+ · esforço $ESFORCO}${ANTERIOR:+ · RESUBMISSÃO} · prompt: $(wc -c < "$PROMPT" | tr -d ' ') bytes · aguarde (minutos)…"
-set +e
-TOKENS=""
-if [[ "$REVISOR" == gpt ]]; then
+executar_revisor() {
+  local sufixo="$1"
+  RASCUNHO="$(mktemp "${TMPDIR:-/tmp}/sp-revisao-out.XXXXXX")"
+  local log_exec="${LOG%.log}${sufixo}.log"
+  local err_exec="${log_exec%.log}.stderr"
+  set +e
+  TOKENS=""
+  if [[ "$REVISOR" == gpt ]]; then
   EXTRA=(); [[ -n "$MODELO" ]] && EXTRA+=(-m "$MODELO"); [[ -n "$ESFORCO" ]] && EXTRA+=(-c "model_reasoning_effort=\"$ESFORCO\"")
-  "$CODEX" exec -p "revisao-$FAIXA" "${EXTRA[@]}" --sandbox read-only -C "$RAIZ" --skip-git-repo-check \
-    --ephemeral -o "$RASCUNHO" - < "$PROMPT" > "$LOG" 2>&1
+  # ⛔ `${EXTRA[@]+"${EXTRA[@]}"}` e NÃO `"${EXTRA[@]}"`: o bash do macOS é 3.2, e nele um
+  # array VAZIO sob `set -u` estoura "unbound variable". Só acontece quando ninguém passa
+  # --modelo/--esforco — que é o caminho PADRÃO, o mesmo do passo 1.8 do deploy. Ou seja:
+  # a revisão morria calada exatamente na forma em que ela é chamada de verdade.
+  "$CODEX" exec -p "revisao-$FAIXA" ${EXTRA[@]+"${EXTRA[@]}"} --sandbox read-only -C "$RAIZ" --skip-git-repo-check \
+    --ephemeral -o "$RASCUNHO" - < "$PROMPT" > "$log_exec" 2>&1
   RC=$?
-  TOKENS=$(grep -A1 -m1 'tokens used' "$LOG" | tail -1 | tr -d ' ' || true)
-else
+  TOKENS=$(grep -A1 -m1 'tokens used' "$log_exec" | tail -1 | tr -d ' ' || true)
+  else
   # `claude -p` de dentro de uma sessão do Claude Code exige tirar CLAUDECODE do ambiente.
   # Só leitura: Edit/Write/NotebookEdit/Bash proibidos — o diff já vai no prompt.
-  # `--disallowed-tools` e `--disallowedTools` são a MESMA flag (as duas constam no `claude
-  # --help` 2.1.84); fica a kebab-case, que é a documentada. stderr vai SEPARADO: o parser
-  # abaixo procura o 1º `{` do stdout, e um aviso no stderr com `{` viraria "sem parecer".
-  # (os dois pontos vieram do parecer do próprio Claude revisor, 04/set/2026)
+  # `dontAsk` é indispensável no `-p`: sem UI interativa, uma tentativa de ferramenta
+  # aguardava confirmação e terminava sem stdout. A allowlist é só leitura; stderr vai
+  # separado porque o parser abaixo procura o 1º `{` do stdout.
   env -u CLAUDECODE "$CLAUDE" -p --model "$MODELO" --effort "$ESFORCO" \
-    --disallowed-tools Edit Write NotebookEdit Bash --output-format json \
-    < "$PROMPT" > "$LOG" 2> "${LOG%.log}.stderr"
+    --permission-mode dontAsk --tools Read Glob Grep --output-format json \
+    < "$PROMPT" > "$log_exec" 2> "$err_exec"
   RC=$?
   node -e '
     const fs=require("fs"); const raw=fs.readFileSync(process.argv[1],"utf8");
@@ -333,21 +365,43 @@ else
     fs.writeFileSync(process.argv[2], j.result.replace(/\s+$/,"")+"\n");
     const u=j.usage||{}; const t=(u.input_tokens||0)+(u.cache_creation_input_tokens||0)+(u.cache_read_input_tokens||0)+(u.output_tokens||0);
     console.log(t+" tokens · US$ "+(j.total_cost_usd||0).toFixed(2));
-  ' "$LOG" "$RASCUNHO" > "$RASCUNHO.meta" 2>/dev/null || RC=1
+  ' "$log_exec" "$RASCUNHO" > "$RASCUNHO.meta" 2>/dev/null || RC=1
   TOKENS=$(cat "$RASCUNHO.meta" 2>/dev/null || true); rm -f "$RASCUNHO.meta"
-fi
-set -e
-if cat "$LOG" "${LOG%.log}.stderr" 2>/dev/null | grep -qiE "usage limit|rate limit|insufficient.?(quota|credits)|out of (credits|extra usage)|limit reached"; then
+  fi
+  set -e
+  if cat "$log_exec" "$err_exec" 2>/dev/null | grep -qiE "usage limit|rate limit|insufficient.?(quota|credits)|out of (credits|extra usage)|limit reached"; then
   echo "✗ COTA DO REVISOR ($REVISOR) ESGOTADA — não respondeu. Isto NÃO é aprovação."
-  grep -m1 -iE "usage limit|rate limit|try again|limit reached" "$LOG" | cut -c1-200
+  grep -m1 -iE "usage limit|rate limit|try again|limit reached" "$log_exec" | cut -c1-200
   echo "   pra não travar: scripts/revisar-com-$REVISOR.sh desligar \"<motivo>\""
   exit 4
-fi
-if [[ $RC -ne 0 || ! -s "$RASCUNHO" ]]; then
-  echo "✗ o revisor ($REVISOR) não devolveu parecer (exit $RC). Log: $LOG"
-  tail -20 "$LOG" | cut -c1-300; [[ -s "${LOG%.log}.stderr" ]] && tail -5 "${LOG%.log}.stderr" | cut -c1-300; exit 3
-fi
+  fi
+  if [[ $RC -ne 0 || ! -s "$RASCUNHO" ]]; then
+    echo "✗ o revisor ($REVISOR) não devolveu parecer (exit $RC). Log: $log_exec"
+    tail -20 "$log_exec" | cut -c1-300; [[ -s "$err_exec" ]] && tail -5 "$err_exec" | cut -c1-300; exit 3
+  fi
+  LOG="$log_exec"
+}
+
+echo "  revisor: $REVISOR${MODELO:+ · modelo $MODELO}${ESFORCO:+ · esforço $ESFORCO}${ANTERIOR:+ · RESUBMISSÃO} · prompt: $(wc -c < "$PROMPT" | tr -d ' ') bytes · aguarde (minutos)…"
+executar_revisor ""
 mv "$RASCUNHO" "$OUT"; RASCUNHO=""
+
+ESCALAR=$(grep -m1 -oE 'ESCALAR: *(SIM|NAO)' "$OUT" | sed 's/ESCALAR: *//' || true)
+if [[ "$ESCALAR" == SIM && "$ESFORCO" == medium ]]; then
+  echo "  ▸ medium pediu investigação adicional: uma única repetição em high."
+  cp "$OUT" "${OUT%.md}-medium-$CARIMBO.md"
+  {
+    echo
+    echo "=== PRIMEIRO PARECER (medium; ESCALAR: SIM) ==="
+    cat "$OUT"
+    echo
+    echo "=== REVISÃO HIGH ==="
+    echo "Faça a investigação adicional que você mesmo apontou. Mantenha o formato obrigatório."
+  } >> "$PROMPT"
+  ESFORCO=high
+  executar_revisor ".high"
+  mv "$RASCUNHO" "$OUT"; RASCUNHO=""
+fi
 cp "$OUT" "$OUT_DATADO"
 
 VEREDITO=$(grep -m1 -oE 'VEREDITO: *(APROVADO|RESSALVAS|BLOQUEIO)' "$OUT" | sed 's/VEREDITO: *//' || true)

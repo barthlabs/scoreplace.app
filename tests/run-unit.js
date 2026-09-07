@@ -288,7 +288,9 @@ const SUITES = [
   'tests/classificacao-anterior-fica-compacta.test.js',
   'tests/cabecalho-e-busca-fixos-no-celular.test.js',
   'tests/hidratacao-nao-congela-no-primeiro-quadro.test.js',
+  'tests/resultados-espelhados-hidratam-telas.test.js',
   'tests/rodada-tem-numero-global-no-torneio.test.js',
+  'tests/aborto-da-transacao-nao-vira-sucesso.test.js',
   'tests/confirmar-so-com-placar-escrito.test.js',
   'tests/busca-abre-o-mostrar-mais.test.js',
   'tests/queda-do-placar-nao-e-silenciosa.test.js',
@@ -312,6 +314,11 @@ const SUITES = [
   // e "não meu" pra filtrar. E a cura não conhecia o ELENCO, então só funcionava onde algum
   // outro jogo já tivesse o par nome+uid gravado.
   'tests/meu-jogo-uid-do-slot-se-recupera.test.js',
+  // ⛔ APAGADO É APAGADO (04/set/2026): um torneio que o dono tinha apagado VOLTOU sozinho —
+  // `set(merge:true)` num doc inexistente CRIA, e o tick do prazo de inscrição gravava o `t`
+  // que estava na memória da aba. A trava é `_nascidoEm == request.time` no `allow create`,
+  // sem guardar defunto nenhum; a exclusão só deixa uma LINHA DE LOG, que ninguém consulta.
+  'tests/rules-torneio-apagado-nao-volta.test.js',
   // ⭐ Jogador X é escolha de PRIMEIRA CLASSE no ato do W.O. (2.0.61, caso Fábio/E2).
   'tests/jogador-x-e-escolha-de-primeira-classe.test.js',
   // ⛔ OS CRITÉRIOS DE DESEMPATE E A ORDEM DO ORGANIZADOR MANDAM — SEMPRE, EM TODO CAMINHO.

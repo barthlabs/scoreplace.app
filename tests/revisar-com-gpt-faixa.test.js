@@ -19,8 +19,16 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..');
 const GPT = path.join(ROOT, 'scripts', 'revisar-com-gpt.sh');
 const CLAUDE = path.join(ROOT, 'scripts', 'revisar-com-claude.sh');
+const NUCLEO = fs.readFileSync(path.join(ROOT, 'scripts', 'revisar.sh'), 'utf8');
 let pass = 0, fail = 0;
 const ok = (c, m) => { c ? pass++ : (fail++, console.error('  ✗', m)); };
+
+ok(NUCLEO.indexOf('$HOME/.local/bin/claude') !== -1,
+  'o adaptador encontra o Claude Code instalado fora do PATH do Codex');
+ok(NUCLEO.indexOf('/Applications/Claude.app/Contents/MacOS/claude') !== -1,
+  'o adaptador tem fallback para o executável empacotado do Claude');
+ok(/--permission-mode dontAsk/.test(NUCLEO) && /--tools Read Glob Grep/.test(NUCLEO),
+  'a revisão Claude é não interativa e limitada a ferramentas de leitura');
 
 const SEM_REVISOR = { CODEX_BIN: '/nonexistent/codex', CLAUDE_BIN: '/nonexistent/claude',
   SP_GPT_CHAVE: '/nonexistent/chave-gpt', SP_CLAUDE_CHAVE: '/nonexistent/chave-claude' };
@@ -30,6 +38,7 @@ function run(script, args, opts) {
   // o núcleo testa `-n CLAUDECODE` e `^CODEX_`: pra simular "fora do Claude Code" a variável
   // tem que SUMIR, não ficar vazia
   if (opts.semClaudeCode) delete env.CLAUDECODE;
+  if (opts.semCodex) Object.keys(env).filter((k) => k.indexOf('CODEX_') === 0).forEach((k) => delete env[k]);
   const r = spawnSync('bash', [script].concat(args), { cwd: opts.cwd || ROOT, env, encoding: 'utf8' });
   return { code: r.status, out: (r.stdout || '') + (r.stderr || '') };
 }
@@ -76,7 +85,7 @@ git(['update-ref', 'refs/remotes/origin/main', 'HEAD']);
 const labGPT = path.join(lab, 'scripts', 'revisar-com-gpt.sh');
 const labCLAUDE = path.join(lab, 'scripts', 'revisar-com-claude.sh');
 const labCORE = path.join(lab, 'scripts', 'revisar.sh');
-const runLab = (script, args, env, semClaudeCode) => run(script, args, { cwd: lab, env, semClaudeCode });
+const runLab = (script, args, env, semClaudeCode, semCodex) => run(script, args, { cwd: lab, env, semClaudeCode, semCodex });
 
 // só o bump em store.js → trivial (modo diff)
 fs.writeFileSync(path.join(lab, 'js', 'store.js'), "window.SCOREPLACE_VERSION = '1.0.1';\nvar x = 1;\n");
@@ -98,8 +107,8 @@ r = runLab(labCORE, ['diff'], { CLAUDECODE: '1' });
 ok(/revisão pelo gpt/.test(r.out) && r.code === 4, 'auto dentro do Claude Code chama o GPT — ' + r.out.split('\n')[0]);
 r = runLab(labCORE, ['diff'], { CODEX_THREAD_ID: 'x' }, true);   // o que o Codex REAL exporta (medido 07/set)
 ok(/revisão pelo claude/.test(r.out) && r.code === 4, 'auto dentro do Codex chama o Claude — ' + r.out.split('\n')[0]);
-r = runLab(labCORE, ['diff'], {}, true);
-ok(/os DOIS revisam/.test(r.out) && r.code === 4, 'auto sem pista chama os dois — ' + r.out.split('\n')[0]);
+r = runLab(labCORE, ['diff'], {}, true, true);
+ok(/os DOIS revisam/.test(r.out) && r.code !== 0, 'auto sem pista chama os dois e não aprova sem revisor — ' + r.out.split('\n')[0]);
 // SP_SEM_GPT=1 sem motivo → aborta; com `sem-gpt:` num commit a publicar → passa
 r = runLab(labGPT, ['diff'], { SP_SEM_GPT: '1' });
 ok(r.code !== 0 && /exige o motivo/.test(r.out), 'SP_SEM_GPT sem motivo no commit aborta — code ' + r.code);
@@ -126,6 +135,27 @@ r = runLab(labGPT, ['ligar'], chaves);
 ok(r.code === 0 && !fs.existsSync(chaveG), 'ligar apaga a chave — code ' + r.code);
 r = runLab(labGPT, ['diff'], chaves);
 ok(r.code === 4, 'ligado de novo, sem Codex volta a falhar com exit 4 — code ' + r.code);
+
+// ── custo adaptativo: medium primeiro; high só quando o próprio parecer pede ─────────
+const fakeClaude = path.join(lab, 'claude-falso.sh');
+const efforts = path.join(lab, 'efforts.txt');
+fs.writeFileSync(fakeClaude, `#!/usr/bin/env bash
+for ((i=1; i<=$#; i++)); do
+  if [[ "${'$'}{!i}" == "--effort" ]]; then j=$((i+1)); echo "${'$'}{!j}" >> "${'$'}FAKE_EFFORTS"; fi
+done
+if grep -q '^medium$' "${'$'}FAKE_EFFORTS" && ! grep -q '^high$' "${'$'}FAKE_EFFORTS"; then
+  result=$'VEREDITO: RESSALVAS\\nEXECUTOR: modelo=gpt-5.6-terra esforco=medium — precisa investigar uma fronteira\\nESCALAR: SIM\\nInvestigue a fronteira.'
+else
+  result=$'VEREDITO: APROVADO\\nEXECUTOR: modelo=gpt-5.6-terra esforco=medium — análise concluída\\nESCALAR: NAO'
+fi
+node -e 'process.stdout.write(JSON.stringify({result:process.argv[1],usage:{input_tokens:1,output_tokens:1},total_cost_usd:0}))' "${'$'}result"
+`);
+fs.chmodSync(fakeClaude, 0o755);
+const planoAdapt = path.join(lab, 'plano-adaptativo.md');
+fs.writeFileSync(planoAdapt, '# plano\n\nTocar `js/store.js`.\n');
+r = runLab(labCLAUDE, ['plano', planoAdapt], { CLAUDE_BIN: fakeClaude, FAKE_EFFORTS: efforts });
+ok(r.code === 0, 'parecer high após ESCALAR: SIM aprova — code ' + r.code);
+ok(fs.readFileSync(efforts, 'utf8') === 'medium\nhigh\n', 'primeira tentativa é medium e há uma única escalada high');
 
 fs.rmSync(lab, { recursive: true, force: true });
 console.log(fail ? '❌ revisar (faixa/interruptor/auto): ' + fail + ' falha(s), ' + pass + ' ok' : '✅ revisar (faixa/interruptor/auto): ' + pass + ' ok');

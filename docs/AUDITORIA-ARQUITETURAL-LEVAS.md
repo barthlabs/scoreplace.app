@@ -21,7 +21,7 @@
 | L4 | profile/privacy + e-mail secundário | **Aberta. Inventário CONCLUÍDO (L4.P0), produção MEDIDA (L4.P1) fronteiras CARACTERIZADAS no emulador (L4.P2), `magicLinks` INVENTARIADO (L4.P3) a leitura cruzada de perfis MAPEADA (L4.P5) e a MATRIZ DE ALTERNATIVAS registrada (L4.P6, nada escolhido).** ⭐ **L4.P4 CONCLUÍDA E PUBLICADA (2.1.78, commit `2c8cb628`, ruleset `9a65fc58`):** a enumeração pública de `magicLinks` foi fechada — `allow get` por token, `list` negado —, com suíte de Rules, trava estática nos três clientes e controle contra `94f7d9cf`. ⛔ Confirmado por execução: `magicLinks` é enumerável por ANÔNIMO (`list`/`runQuery` = 200) e `users` por qualquer autenticado; os 15 campos privilegiados estão negados 30/30 em create e update. 18 superfícies de identidade mapeadas; 15 campos privilegiados fechados no create e no update, com **zero** writer no cliente (conferido). ⛔ Achados abertos: `users` é legível **inteiro** por qualquer autenticado (PII incluída); `notifications` aceita `create` de qualquer autenticado; `linkedEmails` é **prova de posse** aceita na fusão e na resolução de conta, e a REMOÇÃO segue sendo escrita direta do cliente (`js/views/auth.js:9626`); o bundle das lojas (2.1.28) roda o fluxo de identidade PRÉ-L1 contra Rules PÓS-L1. | Definir fonte de verdade e privacidade do perfil. **Não decidido nesta etapa.** |
 | L5 | amizade e autorização friends-only | **Preparada, bloqueada externamente.** Migração está `not_started`; dry-run leu 262 perfis. | Gate nativo (clientes mínimos) e aprovação humana formal do cutover. |
 | L6 | writers excessivamente amplos de `tournaments` | **Aberta. Inventário CONCLUÍDO (L6.P0, read-only, 31/ago/2026). ⛔ Nenhuma autoridade foi alterada e nada foi decidido.** Mapeadas as portas dos três codebases: no cliente, `js/firebase-db.js` concentra 9 portas (a maior é `saveTournament`, **93 chamadas**, que grava a cópia EM MEMÓRIA com `merge:true`) mais a orquestração `AppStore.mutate` → `commitTournamentTx`; no `functions/`, seis portas passam pelo tradutor ciente da divisão (`functions/split-parts.js`) e `aplicarNoTorneio` é a porta única de escrita fina; no `functions-autodraw/`, sete chamadores passam por `_leTorneio`/`_gravaTorneio`. ⛔ Achados abertos: as duas allowlists do documento pai (`firestore.rules:37` e `:97`) autorizam por CHAVE e **nunca por valor** — a segunda tem ~45 campos, entre eles `matches`, `standings`, `status`, `participants` e `memberUids`, e a primeira vale pra **qualquer autenticado**; há **5 escritas diretas do cliente fora da porta** (`js/store.js:3840`, `:9676`; `js/views/arbitros.js:274/:309/:342`); `results` tem **cinco** autoridades de escrita; e `participants`/`communications` são subcoleções **sem regra nenhuma**. ⭐ Achados MEDIDOS em produção: 41 dos 44 torneios estão divididos (`matches`, `participants`, `opponentHistory`) e o marcador e o documento **divergem em 1 torneio**. ⚠️ **A L6.P0.1 RETIFICOU a P7**: a leitura de log que dizia "roda a cada minuto num laço no-op" estava datada por LIMITE (`--limit 500`) e não por TEMPO — os 250 pares reproduzem, mas são **todos de 28/ago**, e o `stdout` do `autodraw` está **mudo desde 2026-08-28T14:09:13Z**. ⭐ **A L6.P1 fechou a causa, com as FUNÇÕES REAIS rodadas contra o documento real**: o agendador chega ao handler (`Google-Cloud-Scheduler`, POST /, **200**, 0,06–0,23 s, revisão `autodraw-00050-taw`), o documento **entra** na query (`nextDrawAt` inteiro, vencido há 166 min) e **todas** as guardas passam — `_isIncrementalLigaPhase`=false, `isLiga`=true, `drawManual`=false, `drawFirstDate` presente, `status`=active, `pendingDraw`=false. Barra só em `functions-autodraw/index.js:1148`, `participants.length` = **0**, um `continue` **sem log** — e por isso 200 sem `stdout` não é log perdido, é log inexistente. ⛔ Não é "não elegível": `_semPesados` inclui `participants` e as subcoleções têm **10 inscritos** e **13 jogos**. É **incompatibilidade com partes divididas**, e o risco é imediato: o sorteio AGENDADO nunca gera rodada nesse torneio (o manual, via `drawRound`, gera — ele hidrata). Correção à P5: são **três** e não dois os caminhos do autodraw que leem `doc.data()` cru — `autoDrawReconcile` (:1715) também. | Escolher autoridade por operação antes de restringir qualquer writer. **Não decidido nesta etapa.** ⚠️ Fechar as allowlists esbarra no bundle das lojas (2.1.28), o mesmo bloqueio externo da L2. |
-| L7 | `saveTournament` / `AppStore` e caminhos paralelos | **Aberta.** | Escolher porta canônica de mutação, com testes de save atrasado e rollback. |
+| L7 | `saveTournament` / `AppStore` e caminhos paralelos | **Em inventário (L7.P0).** | Escolher porta canônica de mutação, com testes de save atrasado e rollback. |
 | L8 | representações múltiplas de match + custo Firestore | **Parcial.** `matches` é fonte e `results` é projeção para jogos divididos; modelo completo ainda não convergiu. | Medir reads/writes por tela e preservar `replay`/autorizações. |
 | L9 | código morto, fallbacks e aliases | **Aberta.** | Prova de ausência de chamadores antes de remover compatibilidade. |
 | L10 | ES Modules, source → dist e Vite | **Proposta futura.** Nenhuma migração iniciada. | Definir fronteiras de módulos e build reproduzível antes de introduzir bundler. |
@@ -2676,3 +2676,57 @@ permissão para fazer exatamente esta exclusão.
 tem permissão de escrita nela), mas o **contador** do documento é gravado zerado — e é ele que
 `_marcaPartesQueFaltam` consulta para decidir se busca o elenco. Registrado como fato; não foi
 investigado nesta forense.
+
+**L7.P0 — censo das portas de escrita de torneio (read-only, 07/set/2026).** Esta etapa não
+alterou código nem banco. O plano foi revisado e aprovado pelo Claude (Sonnet, esforço médio),
+depois de incluir explicitamente `sync()` e `syncImmediate()`.
+
+O contrato já declarado em `js/store.js:11027-11101` é inequívoco: uma mudança deve ser
+reaplicada sobre o documento fresco por `AppStore.mutate()`/`commitTournamentTx`; gravar um
+snapshot local inteiro por `saveTournament`, `sync` ou `syncImmediate` é o anti-padrão de
+lost-update. O censo local encontrou cinco famílias:
+
+| Família | Evidência no fonte | Como grava | Situação na auditoria |
+|---|---:|---|---|
+| `FirestoreDB.saveTournament` | 96 call sites em `js/` (1 definição; 95 usos) | documento em memória com `set(..., {merge:true})`, com guards e sanitização | **Alto risco residual.** Os guards protegem classes específicas, mas não tornam o snapshot uma mutação reexecutável. |
+| `AppStore.sync()` | 32 chamadas em 6 arquivos | percorre todos os torneios do organizador e chama `saveTournament(t, {skipParticipants:true})` | **Alto risco.** `skipParticipants` evita regravar alguns campos, mas ainda serializa outros campos do snapshot. |
+| `AppStore.syncImmediate()` | 14 chamadas reais em 6 arquivos | carimba `updatedAt` no objeto local e chama `saveTournament(t)` | **Alto risco.** É a fotografia completa sem debounce. |
+| `AppStore.mutate()` / `commitTournamentTx()` | portas definidas em `js/store.js:11035` e `:11106`; usos distribuídos em resultados, W.O., chave, fases e transferência | fila por torneio + transação que relê e reaplica o mutator no estado fresco | **Caminho canônico.** Propaga aborto como `false`, não replica ação recusada e reconcilia pelo listener. |
+| portas especializadas | `js/firebase-db.js` | Cloud Function, transação estreita ou subdocumento | **Preferíveis quando o domínio é estreito.** Precisam permanecer fora do save do documento inteiro. |
+
+O maior concentrador de `sync()` é `js/views/tournaments-draw-prep.js` (13 chamadas), seguido
+de `js/views/tournaments-categories.js` (9). Este último faz alterações diretas em `t` antes de
+sincronizar em vários fluxos de categoria. Há precedente concreto para o risco: o comentário em
+`js/views/tournaments-draw-prep.js:4100` registra que um `sync()` com `matches: []` podia chegar
+depois de `commitDrawTx` e sobrescrever a chave recém-gerada — o “sorteio-fantasma”. A chamada
+foi removida daquele fluxo, mas isso não prova segurança para os demais 31 chamadores.
+
+As 14 chamadas reais de `syncImmediate()` aparecem em `bracket-ui` (4), `bracket` (3),
+`bracket-logic` (3), `participants` (2), `tournaments-enrollment` (1) e `tournaments-draw`
+(1). Elas merecem a primeira migração por incluírem resultado, W.O., quadra e publicação de
+chave: ações concorrentes e visíveis durante o torneio.
+
+As portas especializadas já existentes formam a base para o corte gradual:
+
+| Porta | Consistência observada | Escopo |
+|---|---|---|
+| `setPresenceFields` | Cloud Function com operações por campo | presença; evita read-modify-write do torneio inteiro |
+| `mutateMatchResult` | transação no subdocumento `results/{matchId}` | resultado de um jogo; o comentário em `firebase-db.js` está desatualizado: `commitMatchResult` a chama no seed de roster e no replay |
+| `enfileirarPlacar` | intenção idempotente em `resultQueue/{id}`; não promete aplicação remota | placar offline/instável |
+| `leaveStandby` | transação que atualiza `standbyParticipants`, `waitlist` e `memberUids` | saída da espera |
+| `enrollParticipant` / `deenrollParticipant` | Cloud Function primária; fallback transacional no cliente | inscrição e desinscrição |
+| `formPair` / `splitPair` e variantes tardias | Cloud Functions | composição de dupla e reflexo de sandbox |
+
+**Cobertura executada.** `node tests/save-atrasado-nao-desfaz-troca.test.js` passou com 21
+verificações: cobre a cópia antiga depois de uma troca transacional e a proteção de elenco/chave.
+`node tests/reativar-nao-desativa-sozinho.test.js` passou com 40: cobre o movimento elenco→fila
+e impede que o guard restaure uma pessoa no lugar errado. Ambas são proteções importantes do
+`saveTournament`; nenhuma demonstra que todos os 32 `sync()` ou 14 `syncImmediate()` preservam
+uma alteração concorrente arbitrária.
+
+**Conclusão desta etapa.** A porta canônica já existe e é `AppStore.mutate` para alterações do
+documento de torneio; portas especializadas são a escolha para presença, inscrição, dupla e
+resultado isolado. A próxima etapa deve migrar por comportamento, começando pelos 14 usos reais
+de `syncImmediate`, depois os 32 de `sync`, e para cada grupo acrescentar um teste que faça um
+snapshot velho terminar depois da transação fresca. Não é seguro substituir tudo mecanicamente:
+cada mutator precisa expressar uma mudança idempotente, pois será reexecutado durante retry.

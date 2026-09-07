@@ -36,19 +36,30 @@ window._isTeamEnrollMode = window._isTeamEnrollMode || function(mode) {
 // Ver [[project_round_naming]] / [[feedback_sweep_all_render_sites]].
 window._matchRoundDisplayNum = window._matchRoundDisplayNum || function(t, m) {
     if (!m) return 1;
-    if (typeof m.roundIndex === 'number' && m.roundIndex >= 0) return m.roundIndex + 1;
+    var _local;
+    if (typeof m.roundIndex === 'number' && m.roundIndex >= 0) _local = m.roundIndex + 1;
     var r = m.round;
-    if (typeof r !== 'number') return 1;
-    var all = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : ((t && t.matches) || []);
-    var bk = (m.bracket || 'main');
-    var seen = {};
-    for (var i = 0; i < (all ? all.length : 0); i++) {
-        var x = all[i];
-        if (x && (x.bracket || 'main') === bk && typeof x.round === 'number') seen[x.round] = 1;
+    if (_local == null) {
+        if (typeof r !== 'number') return 1;
+        var all = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : ((t && t.matches) || []);
+        var bk = (m.bracket || 'main');
+        var seen = {};
+        for (var i = 0; i < (all ? all.length : 0); i++) {
+            var x = all[i];
+            if (x && (x.bracket || 'main') === bk && typeof x.round === 'number') seen[x.round] = 1;
+        }
+        var sorted = Object.keys(seen).map(Number).sort(function(a, b){ return a - b; });
+        var idx = sorted.indexOf(r);
+        _local = idx >= 0 ? (idx + 1) : Math.max(1, r); // fallback: nunca abaixo de 1
     }
-    var sorted = Object.keys(seen).map(Number).sort(function(a, b){ return a - b; });
-    var idx = sorted.indexOf(r);
-    return idx >= 0 ? (idx + 1) : Math.max(1, r); // fallback: nunca abaixo de 1
+    // Motor e agendamento usam `round`/`roundIndex` locais. Só o texto para a
+    // pessoa soma as rodadas das fases anteriores: R1 classificatória → R2 na
+    // primeira coluna eliminatória, sem mudar a geometria da chave.
+    var _phase = Number(m.phaseIndex || 0);
+    if (_phase > 0 && typeof window._numeroGlobalDaRodada === 'function') {
+        return window._numeroGlobalDaRodada(t, _phase, _local - 1);
+    }
+    return _local;
 };
 
 // ── Merge Participants: mesclar dois participantes (organizer, após sorteio) ──

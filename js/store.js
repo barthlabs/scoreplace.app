@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.2.8';
+window.SCOREPLACE_VERSION = '2.2.9';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -11047,7 +11047,7 @@ window.AppStore = {
     var _attempt = 0, _lastErr = null;
     while (_attempt < 5) {
       try {
-        await window.FirestoreDB.mutateTournament(tournamentId, function (freshT) {
+        var _txOut = await window.FirestoreDB.mutateTournament(tournamentId, function (freshT) {
           // O mutator pode ABORTAR retornando `false` (ex.: guarda de idempotência —
           // outro caminho já aplicou a mudança no fresco). Nesse caso NÃO gravamos
           // (mutateTournament vê o `false` e não faz o set). Propagamos o `false`
@@ -11055,6 +11055,11 @@ window.AppStore = {
           if (mutatorFn(freshT) === false) return false;
           freshT.updatedAt = new Date().toISOString();
         });
+        // `false` do mutator é uma decisão de negócio (idempotência/conflito), não
+        // uma exceção do Firestore. Sem propagar esse retorno, os chamadores de
+        // consenso tratam uma proposta rejeitada como gravada e notificam pessoas
+        // sobre um placar que não existe no servidor.
+        if (_txOut && _txOut.aborted) return false;
         if (_t) _t.updatedAt = new Date().toISOString();
         this._saveToCache();
         return true;
@@ -11111,7 +11116,10 @@ window.AppStore = {
     _self._txQueue = _self._txQueue || {};
     var _doTx = function () {
       return _self.commitTournamentTx(_qId, function (freshT) {
-        mutatorFn(freshT);
+        // O mesmo `false` que aborta a mutação direta precisa atravessar esta
+        // fachada; caso contrário ela acrescenta histórico e devolve sucesso
+        // depois de o chamador ter recusado a alteração no estado fresco.
+        if (mutatorFn(freshT) === false) return false;
         if (logMessage) {
           if (!Array.isArray(freshT.history)) freshT.history = [];
           freshT.history.push({ date: new Date().toISOString(), message: logMessage });
@@ -11122,6 +11130,9 @@ window.AppStore = {
     var _chain = _prev.then(_doTx, _doTx); // roda DEPOIS da anterior (resolva ou rejeite)
     _self._txQueue[_qId] = _chain.catch(function () {}); // a fila nunca propaga rejeição
     var _r = await _chain;
+    // Não espelha uma ação que o servidor recusou. O snapshot autoritativo cura a
+    // alteração otimista local; replicar aqui a tornaria uma escrita indevida no SB.
+    if (_r === false) return false;
     // ── Sandbox (SB): replicação one-way original→SB — MESMA função, MESMO mutator ──
     // Sem código paralelo: o mesmíssimo mutatorFn que mudou o original roda também no
     // doc do SB. Só dispara quando: (a) quem age é o dev (só ele tem o SB carregado e
@@ -11401,17 +11412,28 @@ window.AppStore = {
 
   // Hidrata t._results da subcoleção `results` e sobrepõe nos objetos match da
   // estrutura. Chamar ao entrar no bracket/detalhe (wiring vem no inc 2b/3).
-  async hydrateMatchResults(tournamentId) {
+  hydrateMatchResults(tournamentId) {
+    var id = String(tournamentId || '');
+    if (!id) return Promise.resolve(false);
+    this._hydrateResultPromises = this._hydrateResultPromises || {};
+    if (this._hydrateResultPromises[id]) return this._hydrateResultPromises[id];
+    var self = this;
+    var task = (async function () {
     var t = this.tournaments.find(function (x) { return String(x.id) === String(tournamentId); });
-    if (!t || !window.FirestoreDB || typeof window.FirestoreDB.loadMatchResults !== 'function') return;
+    if (!t || !window.FirestoreDB || typeof window.FirestoreDB.loadMatchResults !== 'function') return false;
     try {
       var map = await window.FirestoreDB.loadMatchResults(tournamentId);
       t._results = map || {};
       var all = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : [];
-      var self = this;
+      var store = self;
       all.forEach(function (m) { if (m && m.id != null && t._results[m.id]) self._overlayResultOnMatch(m, t._results[m.id]); });
-      this._saveToCache();
-    } catch (e) { if (window._error) window._error('hydrateMatchResults ' + tournamentId, e); }
+      store._saveToCache();
+      return true;
+    } catch (e) { if (window._error) window._error('hydrateMatchResults ' + tournamentId, e); return false; }
+    }).call(this);
+    this._hydrateResultPromises[id] = task;
+    task.then(function () { delete self._hydrateResultPromises[id]; }, function () { delete self._hydrateResultPromises[id]; });
+    return task;
   },
 
   // Grava o resultado de UM jogo no doc próprio (transação, sem lost-update) +
@@ -13223,6 +13245,26 @@ window.AppStore = {
       tourData = Object.assign({
         id: id,
         createdAt: new Date().toISOString(),
+        /* ⛔ APAGADO É APAGADO — ESTE CARIMBO É O QUE IMPEDE UM TORNEIO DE RESSUSCITAR.
+         * Medido em 02/set/2026: o "Torneio de Férias só Casais" foi APAGADO pelo dono e
+         * VOLTOU sozinho às 12:42. O documento tinha `createTime` de SERVIDOR em 02/set
+         * carregando `createdAt` de 20/jun — assinatura de recriação a partir de uma cópia
+         * em cache. Quem o recriou foi o próprio app: o tick de 1s do prazo de inscrição
+         * chama `saveTournament(t)` com o `t` que estava na MEMÓRIA da aba, e o método grava
+         * com `set(merge:true)` — que num doc inexistente CRIA. Só 1 dos 47 torneios tinha
+         * essa marca; os outros 46 estavam limpos.
+         *
+         * ⭐ A trava mora nas RULES, e ela NÃO pergunta "esse torneio já foi apagado?" —
+         * isso exigiria guardar os mortos (o dono recusou: _"vai virar o maior cemitério do
+         * mundo. apagado é apagado"_). Ela pergunta "isto está NASCENDO agora?": o
+         * `allow create` exige `_nascidoEm == request.time`, e só o SERVIDOR sabe carimbar
+         * isso. Payload de cache não tem o campo (ou tem um velho) e é NEGADO no servidor,
+         * em qualquer aba, para sempre. A ausência do documento segue sendo a única verdade.
+         * ⚠️ `_cleanUndefined` preserva o sentinel (ele não é `constructor === Object`).
+         * ⚠️ A exceção do dono continua de pé: restaurar de backup roda pelo Admin SDK, que
+         * passa por cima das rules — recuperar de propósito pode; por acidente, não. */
+        _nascidoEm: (window.firebase && firebase.firestore && firebase.firestore.FieldValue)
+          ? firebase.firestore.FieldValue.serverTimestamp() : null,
         /* ⛔ DESLIGADO em 26/ago, MESMO DIA em que foi ligado, com o app quebrado em
          * produção na mão do dono: "não mostra os meus jogos apenas a classificação".
          *

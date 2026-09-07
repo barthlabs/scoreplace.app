@@ -516,10 +516,16 @@ classifica), não opinião de modelo:
 |---|---|---|---|
 | **trivial** | só CSS/texto/notas/ícones, ou (só no diff) só o bump em `store.js` | não roda | não roda |
 | **normal** | telas, componentes, fluxo de UI | perfil `revisao-normal` (medium) | sonnet, medium |
-| **crítica** | `functions*/`, `firestore.rules`, `firebase.json`, `sw.js`, `store.js`, `router.js`, `main.js`, DB/presença/venue, chave/sorteio/format2/placar/inscrição/perfil/auth/W.O./fases, `scripts/deploy-*`, `scripts/check-*`, `scripts/revisar*`, `extensions/`, arquivo NOVO nesses lugares, ou diff > 300 linhas (não rastreados contam) | perfil `revisao-critica` (high) | opus, high |
+| **crítica** | `functions*/`, `firestore.rules`, `firebase.json`, `sw.js`, `store.js`, `router.js`, `main.js`, DB/presença/venue, chave/sorteio/format2/placar/inscrição/perfil/auth/W.O./fases, `scripts/deploy-*`, `scripts/check-*`, `scripts/revisar*`, `extensions/`, arquivo NOVO nesses lugares, ou diff > 300 linhas (não rastreados contam) | perfil `revisao-critica` (medium primeiro; high se o parecer pedir) | opus, medium primeiro; high se o parecer pedir |
 
-**Quem escolhe o motor:** quem dispara indica o do revisor por `--modelo`/`--esforco` (nunca
-abaixo do piso). O revisor devolve na 2ª linha do parecer `EXECUTOR: modelo=… esforco=…`, a
+**Custo adaptativo:** cada revisão normal ou crítica começa em `medium`, inclusive quando é
+crítica. O parecer é obrigado a escrever `ESCALAR: SIM|NAO`. Só `SIM`, por incerteza técnica
+concreta que o medium não resolveu, faz o script repetir uma única vez em `high`; ressalvas ou
+bloqueios concretos ficam em `NAO`, para evitar cobrar duas leituras do mesmo material. A próxima
+revisão recomeça em `medium`. `--esforco high|max` continua sendo escolha explícita de quem dispara.
+
+**Quem escolhe o motor:** quem dispara indica o do revisor por `--modelo`/`--esforco`; sem
+indicação, a revisão começa em `medium`. O revisor devolve na 2ª linha do parecer `EXECUTOR: modelo=… esforco=…`, a
 indicação dele pra quem vai executar. Como a sessão não troca o próprio modelo, quem executa
 **diz a indicação ao dono antes de implementar** (ele troca com `/model` e `/effort` no Claude,
 ou `/model` no Codex) ou executa por subagente com `model:` correspondente. Perfis do GPT em

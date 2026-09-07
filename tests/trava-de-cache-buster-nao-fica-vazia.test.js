@@ -19,6 +19,7 @@ const fs = require('fs'), path = require('path'), { execSync } = require('child_
 const ROOT = path.join(__dirname, '..');
 const src = fs.readFileSync(path.join(ROOT, 'scripts', 'check-cache-busters.js'), 'utf8');
 const hook = fs.readFileSync(path.join(ROOT, 'scripts', 'hooks', 'pre-push'), 'utf8');
+const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) { pass++; console.log('  ✓ ' + m); } else { fail++; console.error('  ✗ ' + m); } };
@@ -31,6 +32,8 @@ ok(/node scripts\/check-cache-busters\.js/.test(hook),
 ok(hook.indexOf('node scripts/check-cache-busters.js') < hook.indexOf('! npm test >'),
   '  → e antes da suíte de 2min30 (a trava é um git diff, custa nada)');
 ok(/barra "cache-buster desatualizado/.test(hook), '  → e BARRA o push, não só avisa');
+ok(String((pkg.scripts || {}).test || '').indexOf('node scripts/check-cache-busters.js') !== -1,
+  '⭐ npm test também chama a trava: deploy direto não depende de hook instalado');
 
 // ── 2. a régua não fica vazia quando não há nada à frente do main ────────────────────
 ok(/if \(base === head\)/.test(src),

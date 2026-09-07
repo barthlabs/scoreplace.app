@@ -1135,6 +1135,17 @@ function renderBracket(container, tournamentId, isInline) {
     t = window.AppStore.publicDiscovery.find(tour => tour.id.toString() === tId.toString()) || null;
   }
 
+  // O resultado pode chegar no espelho `results/{matchId}` depois da estrutura da chave.
+  // Busca uma vez por abertura: re-renderizações de W.O./placar não podem virar uma leitura
+  // completa da subcoleção a cada clique. Ao sair desta rota a flag é descartada pelo router.
+  if (t && !t._resultsHydrated && window.AppStore && typeof window.AppStore.hydrateMatchResults === 'function') {
+    t._resultsHydrated = true;
+    Promise.resolve(window.AppStore.hydrateMatchResults(t.id)).then(function (ok) {
+      if (!ok || String(window.location.hash || '').indexOf('#bracket/' + String(t.id)) !== 0) return;
+      if (typeof window._softRefreshView === 'function') window._softRefreshView();
+    });
+  }
+
   /* ⛔ PORTÃO DAS PARTES — ANTES de qualquer lógica de chave e de qualquer gravação.
    * `_maybeFinishElimination` e `_reassignBestLosersToRepechage` (logo abaixo) decidem
    * sobre jogos e elenco, e GRAVAM por `AppStore.mutate`. Com o documento magro elas
@@ -3644,7 +3655,12 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
     // que leva às oitavas) = "Rodada N" por posição do INÍCIO (1-based). NÃO se chama
     // "Repescagem" — repescagem é só o FATO de perdedores serem repescados pra completar
     // a rodada seguinte (já mostrado na tag laranja no time repescado).
-    return _t('bracket.round', { n: idx + 1 });
+    // `idx` é local à fase: na Confra a única classificatória foi R1, e a
+    // primeira coluna eliminatória precisa aparecer como R2. A topologia continua
+    // local; só o rótulo que a pessoa lê recebe o deslocamento das fases anteriores.
+    var displayRound = (typeof window._numeroGlobalDaRodada === 'function')
+      ? window._numeroGlobalDaRodada(t, curPhase, idx) : (idx + 1);
+    return _t('bracket.round', { n: displayRound });
   }
 
   // v2.8.19: classificação geral POR LINHA, colapsável, entre o título Ouro/Prata e a
