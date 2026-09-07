@@ -96,7 +96,7 @@ ok(r.code === 4 && /Claude Code CLI não encontrado/.test(r.out), 'sem claude o 
 // auto: dentro do Claude Code revisa o GPT; dentro do Codex revisa o Claude; sem pista, os dois
 r = runLab(labCORE, ['diff'], { CLAUDECODE: '1' });
 ok(/revisão pelo gpt/.test(r.out) && r.code === 4, 'auto dentro do Claude Code chama o GPT — ' + r.out.split('\n')[0]);
-r = runLab(labCORE, ['diff'], { CODEX_HOME: '/x' }, true);
+r = runLab(labCORE, ['diff'], { CODEX_THREAD_ID: 'x' }, true);   // o que o Codex REAL exporta (medido 07/set)
 ok(/revisão pelo claude/.test(r.out) && r.code === 4, 'auto dentro do Codex chama o Claude — ' + r.out.split('\n')[0]);
 r = runLab(labCORE, ['diff'], {}, true);
 ok(/os DOIS revisam/.test(r.out) && r.code === 4, 'auto sem pista chama os dois — ' + r.out.split('\n')[0]);

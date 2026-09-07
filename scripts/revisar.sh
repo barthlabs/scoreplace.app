@@ -11,7 +11,7 @@
 #
 # QUEM REVISA (REVISOR=gpt|claude|auto; os atalhos fixam; sem nada = auto):
 #   auto → o OPOSTO de quem chamou: dentro do Claude Code (CLAUDECODE=1) revisa o GPT; dentro
-#          do Codex (CODEX_*) revisa o Claude; sem pista, os DOIS revisam e os dois têm que aprovar.
+#          do Codex (CODEX_SANDBOX/THREAD_ID/SESSION_ID) revisa o Claude; sem pista, os DOIS revisam e os dois têm que aprovar.
 #
 # DUAS PORTAS:
 #   plano  — ANTES de editar: quem vai implementar escreve o que muda e o revisor confere contra
@@ -67,7 +67,9 @@ REVISOR="${REVISOR:-auto}"
 [[ "$REVISOR" =~ ^(gpt|claude|auto)$ ]] || { echo "✗ REVISOR tem que ser gpt|claude|auto (veio '$REVISOR')"; exit 1; }
 quem_chamou() {
   if [[ -n "${CLAUDECODE:-}" ]]; then echo claude
-  elif env | grep -qE '^CODEX_(HOME|SANDBOX|CLI_PATH|THREAD)'; then echo codex   # CODEX_BIN é nosso, não conta
+  # MEDIDO em 07/set/2026 (`env | grep ^CODEX` de dentro do `codex exec`): CODEX_SANDBOX,
+  # CODEX_SANDBOX_NETWORK_DISABLED, CODEX_THREAD_ID, CODEX_SESSION_ID, CODEX_CI. CODEX_BIN é nosso.
+  elif env | grep -qE '^CODEX_(SANDBOX|THREAD_ID|SESSION_ID|CI|HOME|CLI_PATH)='; then echo codex
   else echo ninguem; fi
 }
 if [[ "$REVISOR" == "auto" && "$MODO" =~ ^(plano|diff)$ ]]; then
