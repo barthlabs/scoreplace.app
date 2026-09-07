@@ -260,6 +260,20 @@ if ! "$RAIZ/scripts/revisar.sh" diff; then
   exit 1
 fi
 
+# ── 1.85 · SESSÃO DO FIREBASE ANTES DA SUÍTE ─────────────────────────────────
+# A suíte custa minutos e o upload depende da sessão local do Firebase CLI. Descobrir um
+# token expirado só depois dela deixa o main alinhado mas o site antigo. Esta consulta é de
+# leitura e usa a mesma sessão que o upload usará em seguida.
+echo "▸ conferindo a sessão do Firebase…"
+if ! firebase projects:list --json >/dev/null 2>&1; then
+  echo
+  echo "✗ FIREBASE NÃO AUTENTICADO — nada foi testado, empurrado ou publicado."
+  echo "  Rode: firebase login --reauth"
+  echo "  Depois repita: scripts/deploy-hosting.sh"
+  exit 1
+fi
+echo "  ✓ sessão do Firebase válida"
+
 # ── 1.9 · PREFLIGHT: TODOS OS GATES ANTES DE TOCAR NO `main` ─────────────────────────
 # ⛔ POR QUE ISTO EXISTE (medido em 01/set/2026, na publicação da 2.1.81 e de novo na
 # 2.1.82): este script empurrava o commit pro `main` no passo 2 e só DEPOIS extraía a

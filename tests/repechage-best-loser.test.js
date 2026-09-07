@@ -69,6 +69,22 @@ console.log('── com a rodada EM CURSO ninguém é eleito (o nome não dança
   ok(repOcup(t).length === 3, 'fechada a rodada, os 3 slots preenchem (got ' + repOcup(t).length + ')');
 })();
 
+console.log('── vencedor ocupa sua vaga na hora; só a repescagem espera ──');
+(function () {
+  const t = mk(10, 'winner-now'); // R1 tem avanço direto e uma vaga R2 de repescagem.
+  const r1 = r1De(t);
+  const venceu = r1[0];
+  const destino = t.matches.find((m) => m.id === venceu.nextMatchId);
+  const repDestino = t.matches.find((m) => m.id === venceu.loserNextMatchId);
+  ok(!!destino && !!repDestino, 'a fiação tem destino do vencedor e vaga de repescagem');
+  venceu.winner = venceu.p1; venceu.scoreP1 = 6; venceu.scoreP2 = 4; venceu.resultAt = 1;
+  W._advanceWinner(t, venceu);
+  ok(destino[venceu.nextSlot] === venceu.p1,
+    'vencedor entra imediatamente em ' + venceu.nextMatchId + '.' + venceu.nextSlot);
+  ok(repDestino[venceu.loserNextSlot] === 'TBD' && repDestino[venceu.loserNextSlot + 'AguardaMelhor'],
+    'só a vaga de repescagem fica A DEFINIR até a rodada terminar');
+})();
+
 console.log('── UMA vida extra só, e sem double-book ──');
 (function () {
   const t = mk(9, 'w');                        // N ímpar: sobra na R1 + repescados da R2

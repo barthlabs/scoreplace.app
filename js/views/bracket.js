@@ -1592,11 +1592,11 @@ function renderBracket(container, tournamentId, isInline) {
           var _ppName = window._safeHtml(((t.phases[_ppi] || {}).name) || ('Fase ' + (_ppi + 1)));
           var _ppContent = (_ppi === 0)
             ? window._renderPhase0ReadOnly(t)
-            : window._renderPhaseBracket(t, false, '', _ppi);
+            : window._renderPhaseBracket(t, canEnterResult, '', _ppi);
           // Fallback: se o render da fase 0 vier vazio ou não-carregou, tenta o render de
           // chave por índice (caso os jogos daquela fase morem em t.matches, não em t.rounds).
           if (!_ppContent || !String(_ppContent).trim() || /Não foi possível carregar/.test(_ppContent)) {
-            var _alt = window._renderPhaseBracket(t, false, '', _ppi);
+            var _alt = window._renderPhaseBracket(t, canEnterResult, '', _ppi);
             if (_alt && String(_alt).trim()) _ppContent = _alt;
           }
           if (!_ppContent || !String(_ppContent).trim()) _ppContent = '<div style="padding:1rem;color:var(--text-muted);">Sem dados pra exibir desta fase (formato não suportado no modo leitura).</div>';
@@ -3604,10 +3604,14 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
   if (typeof _updateProgressiveClassification === 'function') {
     try { _updateProgressiveClassification(t); } catch (e) {}
   }
-  // v3.1.28: navegação de fases — quando _viewPhaseIdx é passado, renderiza ESSA fase
-  // (encerrada) em vez da atual, só leitura. Default: a fase atual.
+  // A fase anterior é histórico para quem só consulta, mas não pode virar uma prisão para
+  // quem lançou um placar incompleto ou errado. `canEnterResult` já é a permissão canônica:
+  // organizador/árbitro corrige diretamente; participante cria proposta, que continua
+  // dependendo da confirmação ou contestação do outro time em `_saveResultInline`.
+  // Não a zere aqui: fazer isso escondia os campos e o botão de correção exatamente quando
+  // a próxima fase já tinha começado (Jogo 122 da Confra). Quem não tem essa permissão chega
+  // aqui com false e segue em modo de leitura.
   var _realCur = t.currentPhaseIndex || 0;
-  if (_viewPhaseIdx != null && _viewPhaseIdx < _realCur) canEnterResult = false;
   var curPhase = (_viewPhaseIdx != null) ? _viewPhaseIdx : _realCur;
   var phaseCfg = (t.phases && t.phases[curPhase]) || {};
   var pm = (t.matches || []).filter(function (m) { return (m.phaseIndex || 0) === curPhase; });

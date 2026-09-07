@@ -4410,7 +4410,16 @@ function renderDashboard(container) {
   // v1.9.64: a prévia das seções fechadas preenche a LINHA — mede quantas colunas a grade
   // abriu e reabre os cards que couberem. Roda no MESMO task do innerHTML: assim o usuário
   // nunca chega a ver o estado de 1 coluna que sai do builder.
-  try { window._spSyncCollapsePreview(); window._spWatchPreviewWidth(); } catch (_ePrev) {}
+  try {
+    window._spSyncCollapsePreview();
+    window._spWatchPreviewWidth();
+    /* A primeira leitura acontece no mesmo task do innerHTML para evitar piscar. Em
+     * Chrome, porém, uma grade auto-fill recém-inserida pode ainda devolver uma trilha
+     * única nesse instante, apesar de três caberem após o layout. Repetir a MESMA régua
+     * no próximo quadro corrige apenas os atributos data-sp-extra; não recria card nem
+     * altera a rolagem. */
+    requestAnimationFrame(function () { try { window._spSyncCollapsePreview(); } catch (e) {} });
+  } catch (_ePrev) {}
   // CÂNONE fit-name-to-box: ajusta a fonte dos nomes ao box fixo (saudação etc.).
   if (typeof window._fitNames === 'function') { try { window._fitNames(container); } catch (e) {} }
   // 1.9.88 — o brilho que ENSINA (um botão por vez) e a seta "encontre seu
