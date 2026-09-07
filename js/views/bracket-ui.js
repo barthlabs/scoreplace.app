@@ -570,6 +570,19 @@ function _resultNeedsApproval(t, m, user) {
   return _su(m, oppSide).length > 0;
 }
 
+// Forma canônica do placar transportado por notificações. Push continua usando
+// message como fallback, mas app e e-mail recebem as colunas sem precisar tentar
+// reconstruí-las de uma frase.
+window._matchScoreboard = function (m, sets, winner) {
+  if (!m || !Array.isArray(sets) || !sets.length) return null;
+  return {
+    p1: m.p1 || '?', p2: m.p2 || '?', winner: winner || '',
+    sets: sets.map(function (s, i) {
+      return { label: s.superTiebreak ? 'STB' : ('Set ' + (i + 1)), p1: s.gamesP1, p2: s.gamesP2, superTiebreak: !!s.superTiebreak };
+    })
+  };
+};
+
 // Notifica o time adversário (cada player com uid) + organizador
 // que há um resultado pendente de aprovação.
 function _notifyPendingApproval(t, m, proposerName) {
@@ -603,12 +616,7 @@ function _notifyPendingApproval(t, m, proposerName) {
   // e-mail, porém, o placar viaja estruturado: números soltos como “6 5 14”
   // deixam de fora a qual set cada ponto pertence.
   if (pr.useSets && Array.isArray(pr.sets) && pr.sets.length) {
-    notifData.scoreboard = {
-      p1: m.p1 || '?', p2: m.p2 || '?', winner: pr.winner || '',
-      sets: pr.sets.map(function (s, i) {
-        return { label: s.superTiebreak ? 'STB' : ('Set ' + (i + 1)), p1: s.gamesP1, p2: s.gamesP2, superTiebreak: !!s.superTiebreak };
-      })
-    };
+    notifData.scoreboard = window._matchScoreboard(m, pr.sets, pr.winner);
   }
   // Lado do proponente E adversário — SÓ pelo UID do slot (nunca casando nome). Notifica
   // TODOS os uids do lado adversário; o proponente é pulado. Ver [[project_uid_identity_canon_locked]].
@@ -1840,6 +1848,7 @@ window._commitSetsResult = function (tId, matchId, sets, p1Sets, p2Sets, isFixed
       level: 'fundamental',
       timestamp: Date.now()
     };
+    _notifData.scoreboard = window._matchScoreboard(m, sets, m.winner);
     const _parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
     [m.p1, m.p2].forEach(playerName => {
       if (!playerName || playerName === 'TBD' || playerName === 'BYE') return;
@@ -2664,6 +2673,7 @@ window._saveResultInline = function (tId, matchId) {
       level: 'fundamental',
       timestamp: Date.now()
     };
+    _notifData.scoreboard = window._matchScoreboard(m, m.sets, m.winner);
     // Find UIDs for both players and send notifications
     var _parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
     [m.p1, m.p2].forEach(function(playerName) {
@@ -2928,6 +2938,7 @@ window._approveResult = function(tId, matchId) {
       level: 'fundamental',
       timestamp: Date.now()
     };
+    notifData.scoreboard = window._matchScoreboard(m, m.sets, m.winner);
     // Notifica os dois lados — SÓ pelos UIDs do slot (nunca casando nome). [[project_uid_identity_canon_locked]]
     var _su = (typeof window._slotUids === 'function') ? window._slotUids : function () { return []; };
     var notifSeen = {};

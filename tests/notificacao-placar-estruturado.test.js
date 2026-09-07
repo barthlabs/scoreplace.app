@@ -13,13 +13,14 @@ const dispatch = read('js/views/tournaments-organizer.js');
 const digest = read('functions/index.js');
 const app = read('js/views/notifications-view.js');
 
-ok(/notifData\.scoreboard\s*=\s*\{/.test(bracket), 'resultado por sets cria payload estruturado');
+ok(/window\._matchScoreboard\s*=\s*function/.test(bracket) && /notifData\.scoreboard\s*=\s*window\._matchScoreboard/.test(bracket), 'resultado por sets cria payload estruturado');
 ok(/label:\s*s\.superTiebreak\s*\?\s*'STB'\s*:\s*\('Set '\s*\+\s*\(i \+ 1\)\)/.test(bracket), 'payload nomeia Set 1… e STB');
 ok(/scoreboard:\s*templateData\.scoreboard/.test(dispatch), 'canal de e-mail encaminha o payload');
 ok(/scoreboard:\s*opts\.scoreboard/.test(queue), 'fila do digest preserva o payload');
 ok(/function _digestScoreboard/.test(digest) && /_digestScoreboard\(it, P\)/.test(digest), 'e-mail renderiza tabela alinhada');
 ok(/#16a34a/.test(digest) && /#dc2626/.test(digest), 'e-mail pinta vencedor em verde e derrotado em vermelho');
 ok(/function _scoreboardHtml/.test(app) && /scoreboardHtml/.test(app), 'notificação dentro do app usa a mesma tabela');
+ok((bracket.match(/scoreboard\s*=\s*window\._matchScoreboard/g) || []).length >= 3, 'proposta e confirmações usam a mesma grade');
 
 if (failures) process.exit(1);
 console.log('✅ notificacao-placar-estruturado: OK');
