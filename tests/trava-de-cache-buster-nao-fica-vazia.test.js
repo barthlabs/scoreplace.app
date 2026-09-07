@@ -19,6 +19,7 @@ const fs = require('fs'), path = require('path'), { execSync } = require('child_
 const ROOT = path.join(__dirname, '..');
 const src = fs.readFileSync(path.join(ROOT, 'scripts', 'check-cache-busters.js'), 'utf8');
 const hook = fs.readFileSync(path.join(ROOT, 'scripts', 'hooks', 'pre-push'), 'utf8');
+const deploy = fs.readFileSync(path.join(ROOT, 'scripts', 'deploy-hosting.sh'), 'utf8');
 const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
 
 let pass = 0, fail = 0;
@@ -32,6 +33,16 @@ ok(/node scripts\/check-cache-busters\.js/.test(hook),
 ok(hook.indexOf('node scripts/check-cache-busters.js') < hook.indexOf('! npm test >'),
   '  → e antes da suíte de 2min30 (a trava é um git diff, custa nada)');
 ok(/barra "cache-buster desatualizado/.test(hook), '  → e BARRA o push, não só avisa');
+ok(/SP_PREFLIGHT_OK/.test(hook) && /git status --porcelain/.test(hook),
+  'o único reaproveitamento da suíte exige SHA do preflight e árvore limpa');
+const corpoDoGate = hook.slice(hook.indexOf('# ── 2. pro main'));
+ok(!/SP_HOOK_SKIP_TEST/.test(corpoDoGate), 'não há variável booleana que pule a suíte no push');
+ok(/SP_PREFLIGHT_OK.*==.*\$PREFLIGHT_HEAD/.test(corpoDoGate),
+  'o reuso compara o carimbo do preflight com o SHA exato do HEAD');
+ok(deploy.indexOf('export SP_PREFLIGHT_OK="$COMMIT"') < deploy.indexOf('git push origin "HEAD:main"'),
+  'o deploy carimba o SHA aprovado antes do push normal');
+ok(!/SP_HOOK_SKIP_TEST=1\s+git push/.test(deploy),
+  'o deploy não injeta bypass booleano no push');
 ok(String((pkg.scripts || {}).test || '').indexOf('node scripts/check-cache-busters.js') !== -1,
   '⭐ npm test também chama a trava: deploy direto não depende de hook instalado');
 

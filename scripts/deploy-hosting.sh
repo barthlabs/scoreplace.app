@@ -327,10 +327,12 @@ elif git merge-base --is-ancestor origin/main "$COMMIT" 2>/dev/null; then
   if [[ $DRY -eq 1 ]]; then
     echo "  (dry-run: não empurrei)"
   else
-    # o pre-push roda `npm test` em push pro main; aqui seria a MESMA suíte que o
-    # hosting.predeploy roda logo em seguida (2×2min30 pelo mesmo gate). O que barra o
-    # upload é o predeploy — ele aborta antes de subir qualquer byte.
-    SP_HOOK_SKIP_TEST=1 git push origin "HEAD:main"
+    # O pre-push normalmente roda `npm test` em push pro main. Aqui ele reconhece o
+    # carimbo SHA do preflight acima, portanto não repete a mesma suíte para o mesmo
+    # commit. O hosting.predeploy confere esse mesmo carimbo antes de reaproveitá-la.
+    # O pre-push reconhece apenas o SHA que o preflight acabou de aprovar. Não há
+    # escape booleano: se o commit ou a árvore mudarem, ele roda `npm test` de novo.
+    git push origin "HEAD:main"
     echo "  ✓ main alinhado em ${COMMIT:0:8}"
   fi
 else

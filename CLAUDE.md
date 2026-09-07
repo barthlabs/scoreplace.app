@@ -579,9 +579,9 @@ compartilham o `.git/hooks` do repo pai).
   quem os gera é só o `hosting.predeploy`, que roda dentro da cópia em /tmp — o gerado vai
   pro ar e nunca volta pro repo, e o `main` para de descrever o ar.
 - **`pre-push`** — só GUARDA: barra o push se o snapshot estiver velho e roda `npm test`
-  quando o destino é `main`. Escapes: `SP_SKIP_HOOKS=1` (tudo) e `SP_HOOK_SKIP_TEST=1`
-  (só a suíte — é o que o `deploy-hosting.sh` usa, porque o `hosting.predeploy` roda a
-  MESMA suíte logo depois e aborta o upload sozinho).
+  quando o destino é `main`. O `deploy-hosting.sh` só reaproveita a suíte quando o
+  `SP_PREFLIGHT_OK` é exatamente o SHA que acabou de passar no preflight e a árvore segue
+  limpa; qualquer outra situação roda a suíte de novo. Não há escape booleano da suíte.
 
 ⛔ **NUNCA gerar o snapshot no `pre-push` com `git commit --amend`** — foi como o hook
 antigo estava documentado e **NÃO FUNCIONA**. O git congela o que vai ser empurrado ANTES

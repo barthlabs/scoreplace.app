@@ -22,10 +22,10 @@
 #      (`main` é o que descreve o ar — ver CLAUDE.md, seção Deploy.)
 #
 # Instalação: scripts/install-hooks.sh
-# Escapes:    SP_SKIP_HOOKS=1        pula tudo (emergência declarada)
-#             SP_HOOK_SKIP_TEST=1    pula só a suíte (o deploy-hosting.sh usa: o
-#                                    hosting.predeploy roda `npm test` e aborta o
-#                                    upload sozinho, então seriam 2×2min30 iguais)
+# Escape:     SP_SKIP_HOOKS=1        pula tudo (emergência declarada)
+# Reuso:      o deploy-hosting.sh carimba `SP_PREFLIGHT_OK` somente depois de a
+#             suíte passar no SHA que será empurrado. Este hook só a reutiliza se
+#             esse SHA ainda for o HEAD e a árvore estiver limpa.
 set -uo pipefail
 
 [[ "${SP_SKIP_HOOKS:-}" == "1" ]] && { echo "⚠️  pre-push PULADO por SP_SKIP_HOOKS=1."; exit 0; }
@@ -101,8 +101,12 @@ if [[ $PRA_MAIN -eq 1 ]]; then
     barra "cache-buster desatualizado (saída acima)." "    bumpe o \`?v=\` no index.html — sem isso o navegador serve a cópia VELHA e o deploy é fantasma."
   fi
 
-  if [[ "${SP_HOOK_SKIP_TEST:-}" == "1" ]]; then
-    echo "▸ pre-push: npm test pulado (SP_HOOK_SKIP_TEST=1 — o hosting.predeploy roda a suíte e aborta o upload)."
+  # O deploy já roda esta mesma suíte na cópia exata ANTES de alcançar este push.
+  # A prova não é uma chave booleana: o SHA aprovado precisa ser o HEAD e a árvore
+  # precisa continuar limpa. Fora desse caso, o hook sempre roda a suíte normalmente.
+  PREFLIGHT_HEAD="$(git rev-parse HEAD 2>/dev/null || true)"
+  if [[ -n "${SP_PREFLIGHT_OK:-}" && "${SP_PREFLIGHT_OK}" == "$PREFLIGHT_HEAD" && -z "$(git status --porcelain 2>/dev/null)" ]]; then
+    echo "▸ pre-push: npm test já foi aprovado pelo preflight para ${PREFLIGHT_HEAD:0:8}."
   else
     echo "▸ pre-push: push pro \`main\` — rodando a suíte (~2min30)…"
     LOG="$(mktemp)"
