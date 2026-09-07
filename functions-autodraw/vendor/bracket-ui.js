@@ -2004,37 +2004,107 @@ window._confirmSetFromCard = function (tId, matchId, o) {
   }
 };
 
-// Corrigir um set já confirmado (clique na coluna dele). Apaga aquele set E os seguintes —
-// o placar de um set posterior deixa de fazer sentido quando o anterior muda.
-window._reopenSet = function (tId, matchId, idx) {
+// Edição de placar por sets. A versão anterior "reabria" um set apagando ele e os
+// seguintes. Isso é perigoso e fez o fluxo de correção parecer perda de placar. A edição
+// agora sempre começa com TODOS os valores já lançados, inclusive o subplacar do tie-break.
+// A pessoa altera somente o que está errado; o array inteiro só é substituído no momento de
+// salvar, depois de validado.
+window._editSetsInline = function (tId, matchId) {
   var t = window._findTournamentById(tId); if (!t) return;
   var m = _findMatch(t, matchId); if (!m) return;
-  if (m.winner) return;                     // jogo fechado corrige pelo ✏️ Editar, não por aqui
-  var sets = Array.isArray(m.sets) ? m.sets.slice() : [];
-  idx = parseInt(idx, 10);
-  if (!(idx >= 0) || idx >= sets.length) return;
   var sc = (typeof window._effectiveScoring === 'function') ? window._effectiveScoring(t, m) : t.scoring;
-  var plan = window._matchSetPlan(sc, m);
-  var col = (plan.columns || [])[idx];
-  var rot = col ? col.label : ('Set ' + (idx + 1));
-  var _tt = function (k, fb) {
-    var v = (typeof _t === 'function') ? _t(k, { set: rot }) : null;
-    return (v && v !== k) ? v : fb.replace('{set}', rot);
-  };
-  showConfirmDialog(
-    _tt('bracket.reopenSet', 'Corrigir {set}?'),
-    _tt('bracket.reopenSetDetail', 'O placar do {set} volta a ficar em aberto. Os sets seguintes também são apagados.'),
-    function () {
-      var novos = sets.slice(0, idx);
-      var p1 = 0, p2 = 0;
-      novos.forEach(function (s) {
-        var a = Number(s.gamesP1) || 0, b = Number(s.gamesP2) || 0;
-        if (a > b) p1++; else if (b > a) p2++;
-      });
-      window._saveSetsEmAndamento(tId, matchId, novos, p1, p2);
-    }
-  );
+  var sourceSets = (m.pendingResult && Array.isArray(m.pendingResult.sets)) ? m.pendingResult.sets : (m.sets || []);
+  var draftMatch = {};
+  Object.keys(m).forEach(function (k) { draftMatch[k] = m[k]; });
+  draftMatch.sets = sourceSets.slice();
+  var plan = window._matchSetPlan(sc, draftMatch, { sets: draftMatch.sets });
+  if (!plan || !plan.multi) return;
+
+  var old = document.getElementById('sp-set-editor'); if (old) old.remove();
+  var overlay = document.createElement('div');
+  overlay.id = 'sp-set-editor';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:10003;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;padding:16px;';
+  var box = document.createElement('div');
+  box.style.cssText = 'width:min(580px,100%);max-height:90vh;overflow:auto;background:#202124;color:#f1f3f4;border:1px solid #4a4d52;border-radius:16px;box-shadow:0 16px 45px #000;padding:20px;';
+  var title = document.createElement('h2'); title.textContent = '✏️ Editar placar'; title.style.margin = '0 0 8px'; box.appendChild(title);
+  var note = document.createElement('p'); note.textContent = 'Os placares existentes já estão preenchidos. Altere somente o que estiver errado; nada é apagado automaticamente.'; note.style.cssText = 'margin:0 0 18px;color:#c5c9d1;line-height:1.4;'; box.appendChild(note);
+  var names = document.createElement('div'); names.style.cssText = 'font-weight:700;margin-bottom:10px;line-height:1.5;';
+  names.textContent = m.p1 + '  ×  ' + m.p2; box.appendChild(names);
+  var rows = [];
+  var maxRows = Math.max(sourceSets.length, (plan.columns || []).length);
+  // Só mostra uma linha extra enquanto a partida ainda pode receber outro set.
+  if (plan.live && maxRows === sourceSets.length) maxRows++;
+  maxRows = Math.min(maxRows, (plan.columns || []).length || maxRows);
+  for (var i = 0; i < maxRows; i++) {
+    var original = sourceSets[i] || null;
+    var col = (plan.columns || [])[i] || {};
+    var isStb = !!(original && original.superTiebreak) || col.kind === 'stb';
+    var row = document.createElement('div'); row.style.cssText = 'display:grid;grid-template-columns:minmax(86px,1fr) 64px 18px 64px;gap:8px;align-items:center;margin:10px 0;padding:10px;background:#151618;border-radius:10px;';
+    var label = document.createElement('strong'); label.textContent = isStb ? 'Super tie-break' : (col.label || ('Set ' + (i + 1))); row.appendChild(label);
+    var a = document.createElement('input'); a.type = 'number'; a.min = '0'; a.inputMode = 'numeric'; a.placeholder = '0'; a.value = original ? original.gamesP1 : ''; a.style.cssText = 'width:100%;box-sizing:border-box;padding:8px;background:#292b2f;color:#fff;border:1px solid #666;border-radius:7px;text-align:center;'; row.appendChild(a);
+    var sep = document.createElement('span'); sep.textContent = '×'; sep.style.textAlign = 'center'; row.appendChild(sep);
+    var b = document.createElement('input'); b.type = 'number'; b.min = '0'; b.inputMode = 'numeric'; b.placeholder = '0'; b.value = original ? original.gamesP2 : ''; b.style.cssText = a.style.cssText; row.appendChild(b);
+    var tb = document.createElement('div'); tb.style.cssText = 'grid-column:2 / 5;display:flex;gap:8px;align-items:center;color:#bbc5d4;font-size:.9rem;';
+    var originalTb = original && original.tiebreak ? original.tiebreak : null;
+    var tbA = document.createElement('input'); tbA.type = 'number'; tbA.min = '0'; tbA.inputMode = 'numeric'; tbA.placeholder = 'TB'; tbA.value = originalTb ? (originalTb.pointsP1 != null ? originalTb.pointsP1 : originalTb.p1) : ''; tbA.style.cssText = 'width:70px;padding:6px;background:#292b2f;color:#fff;border:1px solid #666;border-radius:6px;text-align:center;';
+    var tbB = document.createElement('input'); tbB.type = 'number'; tbB.min = '0'; tbB.inputMode = 'numeric'; tbB.placeholder = 'TB'; tbB.value = originalTb ? (originalTb.pointsP2 != null ? originalTb.pointsP2 : originalTb.p2) : ''; tbB.style.cssText = tbA.style.cssText;
+    var tbLabel = document.createElement('span'); tbLabel.textContent = isStb ? 'pontos do STB' : 'pontos do tie-break (se houver)';
+    tb.appendChild(tbA); tb.appendChild(document.createTextNode('×')); tb.appendChild(tbB); tb.appendChild(tbLabel); row.appendChild(tb);
+    box.appendChild(row);
+    rows.push({ original: original, col: col, isStb: isStb, a: a, b: b, tbA: tbA, tbB: tbB });
+  }
+  var actions = document.createElement('div'); actions.style.cssText = 'display:flex;justify-content:flex-end;gap:10px;margin-top:20px;';
+  var cancel = document.createElement('button'); cancel.className = 'btn'; cancel.textContent = 'Cancelar'; cancel.onclick = function () { overlay.remove(); };
+  var save = document.createElement('button'); save.className = 'btn btn-warning'; save.textContent = 'Salvar correção';
+  save.onclick = function () { window._saveEditedSetsInline(tId, matchId, sc, rows, overlay); };
+  actions.appendChild(cancel); actions.appendChild(save); box.appendChild(actions); overlay.appendChild(box);
+  overlay.onclick = function (ev) { if (ev.target === overlay) overlay.remove(); };
+  document.body.appendChild(overlay);
 };
+
+window._saveEditedSetsInline = function (tId, matchId, sc, rows, overlay) {
+  var t = window._findTournamentById(tId); if (!t) return;
+  var m = _findMatch(t, matchId); if (!m) return;
+  var sets = [], sawBlank = false;
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i], av = String(r.a.value || '').trim(), bv = String(r.b.value || '').trim();
+    if (!av && !bv) { sawBlank = true; continue; }
+    if (!av || !bv || sawBlank) { showNotification('Placar incompleto', 'Preencha os dois lados de cada set, sem pular sets.', 'warning'); return; }
+    var a = parseInt(av, 10), b = parseInt(bv, 10);
+    if (isNaN(a) || isNaN(b) || a < 0 || b < 0 || a === b) { showNotification('Placar inválido', 'Cada set precisa de dois placares diferentes.', 'warning'); return; }
+    var ta = String(r.tbA.value || '').trim(), tb = String(r.tbB.value || '').trim();
+    var isStb = r.isStb;
+    var tbTrigger = window._tbLoserGames(sc, t.sport);
+    var isTb = !isStb && window._isTiebreakSetScore(a, b, tbTrigger);
+    if (isTb && (!ta || !tb)) { showNotification('Tie-break incompleto', 'Informe os pontos do tie-break deste set.', 'warning'); return; }
+    if ((ta && !tb) || (!ta && tb)) { showNotification('Tie-break incompleto', 'Informe os dois lados do tie-break.', 'warning'); return; }
+    var tba = ta ? parseInt(ta, 10) : null, tbb = tb ? parseInt(tb, 10) : null;
+    if (ta && (isNaN(tba) || isNaN(tbb) || tba === tbb || (a > b ? tba <= tbb : tbb <= tba))) { showNotification('Tie-break inválido', 'O vencedor do tie-break deve ser o vencedor do set.', 'warning'); return; }
+    var originalTb = r.original && r.original.tiebreak;
+    var oldA = r.original && Number(r.original.gamesP1), oldB = r.original && Number(r.original.gamesP2);
+    var oldTbA = originalTb && Number(originalTb.pointsP1 != null ? originalTb.pointsP1 : originalTb.p1);
+    var oldTbB = originalTb && Number(originalTb.pointsP2 != null ? originalTb.pointsP2 : originalTb.p2);
+    if (r.original && a === oldA && b === oldB && (tba == null ? oldTbA == null : tba === oldTbA) && (tbb == null ? oldTbB == null : tbb === oldTbB)) {
+      sets.push(r.original); continue;
+    }
+    var entry = window._buildManualSet(a, b, { isTiebreakEntry: !!ta, tbP1: tba, tbP2: tbb }).sets[0];
+    if (isStb) {
+      var planMargin = (window._matchSetPlan(sc, m, { sets: sets }).tiebreakMargin) || 2;
+      if (Math.max(a, b) < ((window._matchSetPlan(sc, m, { sets: sets }).live || {}).points || 10) || Math.abs(a - b) < planMargin) { showNotification('Super tie-break inválido', 'Confira a pontuação e a diferença mínima do super tie-break.', 'warning'); return; }
+      entry.superTiebreak = true;
+    }
+    sets.push(entry);
+  }
+  if (!sets.length) { showNotification('Sem placar', 'Informe ao menos um set para salvar.', 'warning'); return; }
+  var p1 = 0, p2 = 0; sets.forEach(function (s) { if (s.gamesP1 > s.gamesP2) p1++; else if (s.gamesP2 > s.gamesP1) p2++; });
+  if (overlay) overlay.remove();
+  var finalPlan = window._matchSetPlan(sc, m, { sets: sets });
+  if (p1 >= finalPlan.setsToWin || p2 >= finalPlan.setsToWin) return window._commitSetsResult(tId, matchId, sets, p1, p2, false);
+  return window._saveSetsEmAndamento(tId, matchId, sets, p1, p2);
+};
+
+// Compatibilidade para links/handlers antigos: eles agora abrem o mesmo editor seguro.
+window._reopenSet = function (tId, matchId) { return window._editSetsInline(tId, matchId); };
 
 // v2.3.46: re-renderiza UM card de partida in-place (sem re-render do bracket
 // inteiro). Usado pelo lançamento de placar em formatos por rodada (Liga/Suíço)
@@ -2100,8 +2170,13 @@ window._applyResultToTournament = function (t, matchId, payload) {
     // Corrida: o outro lado fechou o jogo inteiro entre o toque e a transação. Um jogo
     // com vencedor NÃO volta a ficar aberto por causa de um set que chegou atrasado.
     if (m.winner) return m;
+    // A mesma corrida existe um passo antes: o save assíncrono do Set 2 pode chegar
+    // DEPOIS da proposta do STB que encerrou a partida. Ele não tem autorização para
+    // apagar a proposta, nem para reduzir três sets de volta a dois. Foi o que zerou o
+    // STB do Jogo 122: a notificação guardou 14-16, mas a escrita atrasada regravou
+    // somente 6-4, 5-7. Enquanto há proposta, o próximo ato é aprovar/contestar/editar.
+    if (m.pendingResult) return m;
     window._applySetsInProgress(m, payload.sets || [], payload.setsWonP1 || 0, payload.setsWonP2 || 0, payload.at);
-    if (m.pendingResult) delete m.pendingResult;
     if (typeof window._propagateMatchUpdate === 'function') window._propagateMatchUpdate(t, m);
     return m;
   }

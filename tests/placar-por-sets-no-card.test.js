@@ -202,6 +202,19 @@ function decisao() {
   eq(c.fechou.sets.length, 3, 'com os 3 sets no array');
   ok(c.fechou.sets[2].superTiebreak === true, 'o 3º set fica marcado como super tie-break');
 
+  // Corrida real do Jogo 122: a escrita assíncrona do Set 2 chegou depois da
+  // proposta do STB. Ela precisa ser no-op; não pode apagar a proposta nem o 3º set.
+  const race = {
+    id: 'RACE', p1: 'A / B', p2: 'C / D', round: 0, bracket: 'main',
+    sets: [S(6, 4), S(5, 7), S(14, 16)], setsWonP1: 1, setsWonP2: 2,
+    pendingResult: { kind: 'gsm', sets: [S(6, 4), S(5, 7), S(14, 16)], setsWonP1: 1, setsWonP2: 2, winner: 'C / D' }
+  };
+  c.t.matches = [race];
+  W._applyResultToTournament(c.t, 'RACE', { setsInProgress: true, sets: [S(6, 4), S(5, 7)], setsWonP1: 1, setsWonP2: 1, at: Date.now() });
+  ok((race.sets || []).length === 3, 'save atrasado do Set 2 não apaga o STB já proposto');
+  ok(!!race.pendingResult && (race.pendingResult.sets || []).length === 3,
+    'nem apaga a proposta que espera aprovação');
+
   // recusas
   c = cenario(MELHOR3);
   c.confirma(6, 6);
@@ -226,13 +239,13 @@ function decisao() {
   const plan1 = W._matchSetPlan(UM_SET, c.m);
   ok(plan1.multi === false && plan1.live === null, '1 set: sem coluna em disputa — o card antigo cuida');
 
-  // corrigir um set já confirmado apaga ele e os seguintes
-  c = cenario(MELHOR3);
-  c.confirma(6, 4); c.confirma(3, 6);
-  W.showConfirmDialog = function (a, b, onConfirm) { onConfirm(); };
-  W._effectiveScoring = function () { return MELHOR3; };
-  W._reopenSet('T1', 'M1', 0);
-  eq((c.m.sets || []).length, 0, 'corrigir o Set 1 apaga ele E o Set 2');
+  // Corrigir não pode mais apagar o set tocado nem os seguintes. O handler legado é
+  // apenas compatibilidade e delega ao editor que pré-preenche todos os valores.
+  const fonteUi = read('js/views/bracket-ui.js');
+  ok(/window\._reopenSet\s*=\s*function\s*\(tId, matchId\)\s*\{\s*return window\._editSetsInline/.test(fonteUi),
+    'handler antigo abre o editor seguro em vez de apagar sets');
+  ok(!/var novos = sets\.slice\(0, idx\)/.test(fonteUi),
+    'não existe mais o caminho que truncava os sets posteriores');
 }
 
 /* ── ④ A TELA ─────────────────────────────────────────────────────────────────────── */

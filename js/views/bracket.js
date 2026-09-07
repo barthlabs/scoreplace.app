@@ -4826,8 +4826,8 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   const _setCellsHtml = (side) => _plan.columns.map(function (c) {
     if (c.state === 'live') return _setColOpen(c) + _setLiveHtml(c, side) + '</div>';
     const fix = _podeCorrigirSet
-      ? ' sp-set-col--fix" title="Corrigir ' + window._safeHtml(c.label) + '"' +
-        ' onclick="event.stopPropagation();window._reopenSet(\'' + _esc(tId) + '\',\'' + _esc(m.id) + '\',' + c.i + ')'
+      ? ' sp-set-col--fix" title="Editar placar"' +
+        ' onclick="event.stopPropagation();window._editSetsInline(\'' + _esc(tId) + '\',\'' + _esc(m.id) + '\')'
       : '';
     return '<div class="sp-set-col' + fix + '" style="--w:' + c.w + 'px;">' + _setNumHtml(c, side) + '</div>';
   }).join('');
@@ -5028,12 +5028,12 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   // não há placar real pra editar; o caminho é "Reverter W.O." (headerWoRevertBtn).
   const _hasPartialSets = !isDecided && Array.isArray(m.sets) && m.sets.length > 0;
   // Um melhor-de-N pode já ter sets gravados sem ter vencedor (ex.: 6-4, 5-7).
-  // A coluna é clicável, mas o caminho precisa ser descobrível: o mesmo botão Editar
-  // reabre o último set lançado, mantendo os anteriores e liberando sua correção.
+  // A edição abre todos os sets preenchidos: ela preserva o que está certo e altera
+  // somente o valor que a pessoa corrigir.
   const headerEditBtn = !isByeMatch && canEnterResult && !m.wo && !compactDone && (isDecided || _hasPartialSets)
     ? `<button class="btn btn-warning btn-micro" onclick="${isDecided
-        ? `window._editResultInline('${_esc(tId)}','${_esc(m.id)}')`
-        : `window._reopenSet('${_esc(tId)}','${_esc(m.id)}',${m.sets.length - 1})`}" style="flex-shrink:0;font-size:0.72rem;" title="${_t('bracket.editResult')}">✏️ ${_t('bracket.editResult')}</button>`
+        ? (_plan.multi ? `window._editSetsInline('${_esc(tId)}','${_esc(m.id)}')` : `window._editResultInline('${_esc(tId)}','${_esc(m.id)}')`)
+        : `window._editSetsInline('${_esc(tId)}','${_esc(m.id)}')`}" style="flex-shrink:0;font-size:0.72rem;" title="${_t('bracket.editResult')}">✏️ ${_t('bracket.editResult')}</button>`
     : '';
 
   const matchLabel = matchNum ? _t('bracket.matchNum', {n: matchNum}) : (m.label || _t('bracket.matchLabel'));
