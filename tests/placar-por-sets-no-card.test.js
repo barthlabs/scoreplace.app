@@ -246,6 +246,10 @@ function decisao() {
     'handler antigo abre o editor seguro em vez de apagar sets');
   ok(!/var novos = sets\.slice\(0, idx\)/.test(fonteUi),
     'não existe mais o caminho que truncava os sets posteriores');
+  ok(!/sp-set-editor/.test(fonteUi) && /window\._setsEditState\s*=\s*\{/.test(fonteUi),
+    'Editar não abre modal: ativa a edição no próprio card');
+  ok(/window\._saveEditedSetsInCard/.test(fonteUi) && /window\._cancelSetsEdit/.test(fonteUi),
+    'o próprio card oferece Salvar e Cancelar para a correção');
 }
 
 /* ── ④ A TELA ─────────────────────────────────────────────────────────────────────── */
@@ -281,6 +285,14 @@ async function tela() {
   ];
   const htmls = casos.map(function (c) { return cardHtml(c.sc, c.sets); });
   const html1set = cardHtml(UM_SET, []);
+  W._setsEditState = { tId: 'T1', matchId: 'M1' };
+  const editNoCard = cardHtml(MELHOR3, [S(6, 4), S(3, 6), S(10, 8)], { winner: 'Ana Cattani / Maria Helena' });
+  delete W._setsEditState;
+  ok(!/sp-set-editor/.test(editNoCard), 'Editar não cria uma tela/modal separado');
+  ok(/sp-edit-set-M1-0-1/.test(editNoCard) && /sp-edit-set-M1-2-2/.test(editNoCard),
+    'os placares existentes viram campos no mesmo lugar dos Sets e do STB');
+  ok(/_cancelSetsEdit/.test(editNoCard) && /_saveEditedSetsInCard/.test(editNoCard),
+    'o cabeçalho do mesmo card oferece Cancelar e Salvar');
 
   const browser = await chromium.launch();
   const page = await browser.newPage({ viewport: { width: 430, height: 900 } });

@@ -1783,11 +1783,24 @@ function renderDashboard(container) {
     var recentConfirmed = []; // últimas partidas com resultado confirmado
     var othersResults = [];  // 📣 Novidades: jogos de OUTRAS pessoas, já com resultado
 
-    // Carimbo → milissegundos. `resultAt` normalmente vem em ms (13 dígitos), mas há
-    // dado gravado em SEGUNDOS na base (a mesma armadilha que o abandon-core encontrou),
-    // e misturar as duas escalas põe um jogo de 2026 antes de um de hoje na ordenação.
+    // Carimbo → milissegundos. Os jogos antigos trazem número em segundos ou ms, os
+    // subdocs de resultado trazem ISO e snapshots do Firestore podem trazer Timestamp.
+    // Uma conversão só por Number() põe todo ISO/Timestamp em zero e deixa a ordem cair
+    // no nº do jogo — exatamente como uma novidade velha ficava acima da recém-lançada.
     function _tsMs(v) {
+      if (v == null || v === '') return 0;
+      if (v instanceof Date) return isNaN(v.getTime()) ? 0 : v.getTime();
+      if (typeof v === 'object') {
+        try { if (typeof v.toMillis === 'function') return _tsMs(v.toMillis()); } catch (_e1) {}
+        try { if (typeof v.toDate === 'function') return _tsMs(v.toDate()); } catch (_e2) {}
+        var _sec = v.seconds != null ? v.seconds : v._seconds;
+        if (_sec != null && !isNaN(Number(_sec))) {
+          var _nano = v.nanoseconds != null ? v.nanoseconds : (v._nanoseconds != null ? v._nanoseconds : 0);
+          return Math.round(Number(_sec) * 1000 + Number(_nano || 0) / 1000000);
+        }
+      }
       var n = Number(v);
+      if ((isNaN(n) || !n) && typeof v === 'string') n = Date.parse(v);
       if (!n || isNaN(n) || n <= 0) return 0;
       return n < 1e12 ? Math.round(n * 1000) : Math.round(n);
     }
@@ -2003,8 +2016,8 @@ function renderDashboard(container) {
               // tem carimbo NENHUM — daí a cadeia + o desempate por rodada/nº do jogo,
               // a mesma régua que "Meus Últimos Resultados" já usa.
               at: _pendente
-                ? (_tsMs(_pnd.proposedAt) || _tsMs(m.updatedAt) || 0)
-                : (_tsMs(m.resultAt) || _tsMs(m.updatedAt) || _tsMs(m.completedAt) || 0),
+                ? (_tsMs(_pnd.proposedAt) || _tsMs(_pnd.updatedAt) || _tsMs(m.updatedAt) || 0)
+                : (_tsMs(m.resultAt) || _tsMs(m.updatedAt) || _tsMs(m.completedAt) || _tsMs(m.createdAt) || 0),
               roundNum: (m.round != null && !isNaN(Number(m.round))) ? Number(m.round) : 0,
               gameSeq: (m._gameNum != null) ? Number(m._gameNum)
                 : (function(){ var g = String(m.label || '').match(/Jogo\s*(\d+)/i); return g ? Number(g[1]) : 0; })(),
@@ -3158,19 +3171,10 @@ function renderDashboard(container) {
         '</h3>';
       _spReset();
       _novHtml += '<div id="novidades-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;align-items:start;margin-top:12px;">';
-      // v1.8.78: agrupa por (grupo + torneio) preservando a ordem de PRIMEIRA aparição —
-      // a mesma regra de "Seus últimos resultados", pra as duas não divergirem. A promessa
-      // da seção ("o lançamento mais recente no topo") continua de pé: quem abre cada
-      // grupo é o jogo mais recente dele, e os grupos entram na ordem em que apareceram.
-      var _novGroups = [], _novGIdx = {};
-      _novList.forEach(function(it) {
-        var _fp = _splitFase(it.phaseLabel || it.subLine || '');
-        var _key = _fp.group.toLowerCase() + '||' + String(it.tName || '').toLowerCase();
-        var _can = !!_fp.group;
-        if (_can && _novGIdx[_key] != null) { _novGroups[_novGIdx[_key]].items.push({ it: it, jogo: _fp.jogo }); return; }
-        if (_can) _novGIdx[_key] = _novGroups.length;
-        _novGroups.push({ grupo: _fp.group, tName: it.tName, tId: it.tId, items: [{ it: it, jogo: _fp.jogo }] });
-      });
+      // A ordem aqui é a do FEED, nunca a de grupos. Agrupar globalmente parecia econômico,
+      // mas reordenava A(novo), B(segundo), A(antigo) para A(novo), A(antigo), B(segundo).
+      // O contexto de fase/torneio vai dentro de cada cartão: assim qualquer novidade nova
+      // entra no topo e as anteriores são apenas empurradas para baixo.
       // ── ⭐ O ESCONDIDO NEM NASCE (2.0.82) ──────────────────────────────────
       // Ordem do dono: _"tem o mostrar mais nos 2. poderia não carregar tudo antes
       // que alguém clicasse no mostrar mais."_ E ele está certo: recolhida, esta
@@ -3201,21 +3205,11 @@ function renderDashboard(container) {
         if (_novAntes >= _NOV_PREVIEW_MAX) _novExt += html; else _novVis += html;
       };
       var _novAntes = 0;
-      _novGroups.forEach(function(g) {
-        /* Grupo com 2+ jogos: cabeçalho compartilhado de linha inteira — ele se paga,
-         * porque o rótulo serve a vários cards. Grupo de UM jogo: o cabeçalho vai DENTRO
-         * do card e a linha segue livre pro grupo seguinte. Mesma regra da seção irmã. */
-        if (g.items.length >= 2) {
-          _novAntes = _spCards;
-          _guarda(_grupoHeadHtml(g.grupo, g.tName, '#fbbf24', 'data-nov-head="1"' + _spFull(), false, g.tId));
-          g.items.forEach(function(u) { _novAntes = _spCards; _guarda(_novCard(u.it)); });
-        } else {
-          /* `data-nov-head="inline"` (e não `"1"`): o rótulo continua RASTREÁVEL — a
-           * suíte confere que ele aparece uma vez só — mas não é confundido com o
-           * cabeçalho compartilhado, que é o único que ocupa a linha inteira. */
-          var _hIn = _grupoHeadHtml(g.grupo, g.tName, '#fbbf24', 'data-nov-head="inline"', true, g.tId);
-          g.items.forEach(function(u) { _novAntes = _spCards; _guarda(_novCard(u.it, _hIn)); });
-        }
+      _novList.forEach(function(it) {
+        var _fp = _splitFase(it.phaseLabel || it.subLine || '');
+        var _head = _grupoHeadHtml(_fp.group, it.tName, '#fbbf24', 'data-nov-head="inline"', true, it.tId);
+        _novAntes = _spCards;
+        _guarda(_novCard(it, _head));
       });
       _novHtml += _novVis;
       // ⚠️ Só guarda pra depois quando a seção NASCE recolhida. Aberta, tudo entra

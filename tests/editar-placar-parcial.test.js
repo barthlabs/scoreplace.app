@@ -14,7 +14,7 @@ ok(/const _hasPartialSets = !isDecided && Array\.isArray\(m\.sets\) && m\.sets\.
   'reconhece partida com sets gravados e sem vencedor');
 ok(/isDecided \|\| _hasPartialSets/.test(block),
   'Editar aparece também no placar parcial');
-ok(/window\._reopenSet\([^]*m\.sets\.length - 1/.test(block),
-  'Editar parcial reabre o último set, preservando os anteriores');
+ok(/window\._editSetsInline\(/.test(block),
+  'Editar parcial abre todos os sets no próprio card, preservando os anteriores');
 console.log((fail ? '❌' : '✅') + ' editar-placar-parcial: ' + (3 - fail) + ' ok, ' + fail + ' falhas');
 process.exit(fail ? 1 : 0);

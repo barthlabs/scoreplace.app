@@ -89,6 +89,11 @@ function confra() {
       { scoreP1: 6, scoreP2: 3, resultAt: ONTEM_TARDE, winner: 'Vanessa Bianchini / Bruna Arilla' }),
     jogo('m-S2', 'R1 Grupo S • Jogo 2', 'Vanessa Bianchini', 'Luciana Marinho', 'Bruna Arilla', 'Adriana Zalaf',
       { scoreP1: 5, scoreP2: 6, resultAt: ONTEM_CEDO, winner: 'Bruna Arilla / Adriana Zalaf' }),
+    // O mesmo grupo volta a ter jogo depois de outro grupo. Esta é a forma que expõe
+    // agrupamento global: ele reordenava S(novo), T(segundo), S(antigo) em S,S,T.
+    // O ISO é a forma gravada pelos subdocs de resultado.
+    jogo('m-S3', 'R1 Grupo S • Jogo 3', 'Vanessa Bianchini', 'Adriana Zalaf', 'Bruna Arilla', 'Luciana Marinho',
+      { scoreP1: 6, scoreP2: 2, resultAt: new Date(HOJE - 60000).toISOString(), winner: 'Vanessa Bianchini / Adriana Zalaf' }),
     // — jogo de OUTRAS pessoas LANÇADO HOJE, aguardando confirmação (o que sumia).
     // O payload é o do R1 Grupo T • Jogo 2 REAL (medido no doc em 14/ago 17:58Z): 5×6
     // decidido no TIE-BREAK 4×7, com `useSets` e o TB dentro de `sets[0].tiebreak`.
@@ -264,22 +269,17 @@ function cabecalhosNov(html, tipo) {
  * ⛔ O INVARIANTE destas asserções NÃO mudou: o rótulo de cada grupo aparece UMA vez. */
 const HEADS = cabecalhosNov(NOV);
 const HEADS_INLINE = cabecalhosNov(NOV, 'inline');
-ok(contar(NOV, 'data-nov-card="1"') === 3,
-  'B3. os 3 jogos de outros entram uma vez cada (o clone do sandbox não duplica) — vi ' + contar(NOV, 'data-nov-card="1"'));
-ok(HEADS.filter(function (h) { return h === 'R1 Grupo S'; }).length === 1,
-  'B4. o cabeçalho "R1 Grupo S" aparece UMA vez para os seus 2 jogos (a omissão pedida pelo dono) — vi ' +
-  HEADS.filter(function (h) { return h === 'R1 Grupo S'; }).length);
-ok(HEADS.length === 1 && HEADS[0] === 'R1 Grupo S',
-  'B4b. o Grupo S (2 jogos) tem cabeçalho COMPARTILHADO de linha cheia — vi [' + HEADS.join(' | ') + ']');
-ok(HEADS_INLINE.length === 1 && HEADS_INLINE[0] === 'R1 Grupo T',
-  'B4b2. o Grupo T (1 jogo) leva o rótulo DENTRO do card, sem gastar a linha — vi [' + HEADS_INLINE.join(' | ') + ']');
-ok(HEADS.concat(HEADS_INLINE).length === 2,
-  'B4b3. e no total cada grupo é rotulado UMA vez (o invariante de sempre)');
+ok(contar(NOV, 'data-nov-card="1"') === 4,
+  'B3. os 4 jogos de outros entram uma vez cada (o clone do sandbox não duplica) — vi ' + contar(NOV, 'data-nov-card="1"'));
+ok(HEADS.length === 0,
+  'B4. nenhuma novidade gasta uma linha inteira com cabeçalho de grupo — vi [' + HEADS.join(' | ') + ']');
+ok(HEADS_INLINE.length === 4,
+  'B4b. cada cartão carrega o próprio contexto sem reordenar o feed — vi [' + HEADS_INLINE.join(' | ') + ']');
+ok(HEADS_INLINE[0] === 'R1 Grupo S' && HEADS_INLINE[1] === 'R1 Grupo T' && HEADS_INLINE[2] === 'R1 Grupo S',
+  'B4c. o contexto acompanha a sequência cronológica, inclusive quando o grupo reaparece');
 // o torneio vai na LINHA DE BAIXO do mesmo cabeçalho (nunca colado ao grupo)
-ok(/data-nov-head="1"[\s\S]*?letter-spacing:2px;[^"]*">R1 Grupo S<\/div><div style="color:var\(--text-muted\)/.test(NOV),
-  'B4c. no cabeçalho compartilhado, o torneio vem na segunda linha, abaixo do grupo');
-ok(/data-nov-head="inline"[\s\S]*?letter-spacing:2px;[^"]*">R1 Grupo T<\/div><div style="color:var\(--text-muted\)/.test(NOV),
-  'B4c2. e no inline também — o desenho é o mesmo, só não ocupa a linha');
+ok(/data-nov-head="inline"[\s\S]*?letter-spacing:2px;[^"]*">R1 Grupo S<\/div><div style="color:var\(--text-muted\)/.test(NOV),
+  'B4d. o torneio segue na segunda linha do contexto do cartão');
 
 // id de DOM repetido é o que faria _editPendingResult/_approveResult agirem no card errado
 const idsCard = (HTML.match(/id="card-[^"]+"/g) || []);
@@ -297,8 +297,8 @@ const MR = secaoMeusResultados(HTML);
 const T2 = confra();
 T2.matches = [T2.rounds[0].matches[0]];      // o MESMO objeto, também solto em t.matches
 const NOV2 = secaoNovidades(render([T2]));
-ok(contar(NOV2, 'data-nov-card="1"') === 3,
-  'B7. jogo presente em t.matches E dentro da rodada entra 1 vez só (3 cards, não 4) — vi ' + contar(NOV2, 'data-nov-card="1"'));
+ok(contar(NOV2, 'data-nov-card="1"') === 4,
+  'B7. jogo presente em t.matches E dentro da rodada entra 1 vez só (4 cards, não 5) — vi ' + contar(NOV2, 'data-nov-card="1"'));
 
 // ═══════════════════════════════════════════════════════════════════════════
 // C. ORDEM — o lançamento de hoje acima do de ontem
@@ -310,16 +310,17 @@ ok(contar(NOV2, 'data-nov-card="1"') === 3,
 ok(NOV.indexOf('R1 Grupo T') !== -1,
   'C1. O BUG DO RELATO: o lançamento de HOJE (pendente de confirmação) aparece nas Novidades');
 
-const posHoje = NOV.indexOf('R1 Grupo T');
-const posOntem = NOV.indexOf('R1 Grupo S');
-ok(posHoje !== -1 && posOntem !== -1 && posHoje < posOntem,
-  'C2. o lançamento de hoje vem ACIMA do confirmado de ontem (hoje@' + posHoje + ' < ontem@' + posOntem + ')');
+const posHoje = NOV.indexOf('id="card-m-S3"');
+const posSegundo = NOV.indexOf('id="card-m-T1"');
+const posOntem = NOV.indexOf('id="card-m-S1"');
+ok(posHoje !== -1 && posSegundo !== -1 && posOntem !== -1 && posHoje < posSegundo && posSegundo < posOntem,
+  'C2. o feed inteiro segue a cronologia: S3@' + posHoje + ' < T1@' + posSegundo + ' < S1@' + posOntem);
 
 /* A ordem continua sendo medida — só que pela POSIÇÃO dos rótulos no HTML, que vale
  * para os dois tipos de cabeçalho. Comparar `HEADS[0]/HEADS[1]` deixou de servir quando o
  * rótulo do grupo de 1 jogo saiu da lista dos compartilhados. */
-ok(NOV.indexOf('R1 Grupo T') < NOV.indexOf('R1 Grupo S'),
-  'C2b. o rótulo do lançamento mais recente (Grupo T) vem antes do de ontem (Grupo S)');
+ok(NOV.indexOf('id="card-m-S3"') < NOV.indexOf('id="card-m-T1"'),
+  'C2b. o ISO do resultado mais novo é entendido e sobe S3 para o topo');
 
 // A sonda é o id do card (`id="card-<m.id>"`), que é estável e não depende de rótulo.
 const posS1 = NOV.indexOf('id="card-m-S1"');
@@ -332,7 +333,7 @@ ok(posS1 !== -1 && posS2 !== -1 && posS1 < posS2,
 // que ser 1 por jogo; a linha de cima carrega só o "quando", que o card não tem.
 ok(contar(NOV, 'Jogo 1') === 1,
   'C3b. o "Jogo N" aparece uma vez só — quem o mostra é o card, não a linha acima — vi ' + contar(NOV, 'Jogo 1'));
-ok(contar(NOV, 'data-nov-quando="1"') === 3,
+ok(contar(NOV, 'data-nov-quando="1"') === 4,
   'C3c. cada card mantém o carimbo de tempo, que é o que varia entre jogos do mesmo grupo');
 
 // o carimbo do pendente é o proposedAt — sem isso ele cairia pro fim com at=0
@@ -340,7 +341,7 @@ ok(NOV.indexOf('há 5min') !== -1 || NOV.indexOf('agora há pouco') !== -1,
   'C4. o "quando" do pendente sai do proposedAt (lançado há 5 min), não de um carimbo vazio');
 
 // ...e ele NÃO é apresentado como placar final
-const cardT1 = NOV.slice(posHoje, posOntem > posHoje ? posOntem : undefined);
+const cardT1 = NOV.slice(posSegundo, posOntem > posSegundo ? posOntem : undefined);
 ok(cardT1.indexOf('PENDENTE') !== -1, 'C5. o card de hoje mostra a tag PENDENTE — não se passa por resultado final');
 ok(cardT1.indexOf('Aguardando aprovação') !== -1, 'C6. o card de hoje diz "⏳ Aguardando aprovação"');
 ok(cardT1.indexOf('Elide Luccas') !== -1, 'C7. o card de hoje diz quem propôs');

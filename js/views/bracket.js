@@ -4760,7 +4760,10 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   // Inline score inputs: only for undecided matches with both players known
   // v0.17.1: também hidden quando hasPending (mostra valores propostos em modo
   // read-only com Aprovar/Rejeitar).
-  const showInputs = !isDecided && !hasPending && !isByeMatch && !hasTBD && canEnterResult;
+  const _setsEdit = !!(window._setsEditState &&
+    String(window._setsEditState.tId) === String(tId) &&
+    String(window._setsEditState.matchId) === String(m.id));
+  const showInputs = !isDecided && !hasPending && !isByeMatch && !hasTBD && canEnterResult && !_setsEdit;
 
   // Check-in dot indicator
   const ciDot = (status) => {
@@ -4820,10 +4823,31 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     return '<input type="number" id="s' + side + '-' + m.id + '" min="0" placeholder="0" class="sp-set-inp sp-set-inp--live"' +
       ' oninput="window._highlightWinner(\'' + _esc(m.id) + '\')">' + tb;
   };
+  // Correção de resultado é o MESMO placar do card, no MESMO lugar. Nenhum diálogo
+  // paralelo: os números viram campos já preenchidos e o restante do card não se move.
+  const _setEditHtml = (c, side, idx) => {
+    const original = c.set || {};
+    const value = side === 1 ? original.gamesP1 : original.gamesP2;
+    const tb = original.tiebreak || {};
+    const tbValue = side === 1
+      ? (tb.pointsP1 != null ? tb.pointsP1 : tb.p1)
+      : (tb.pointsP2 != null ? tb.pointsP2 : tb.p2);
+    const isStb = c.kind === 'stb' || !!original.superTiebreak;
+    const input = '<input type="number" min="0" inputmode="numeric" value="' +
+      (value != null ? window._safeHtml(value) : '') + '" id="sp-edit-set-' + _esc(m.id) + '-' + idx + '-' + side +
+      '" class="sp-set-inp" style="width:100%;min-width:0;box-sizing:border-box;" onclick="event.stopPropagation()">';
+    // O TB continua abaixo do mesmo set, em vez de ir para outro formulário. No STB
+    // os próprios campos principais já são os pontos, então não há subcampo.
+    if (isStb || c.kind !== 'set') return input;
+    return input + '<input type="number" min="0" inputmode="numeric" value="' +
+      (tbValue != null ? window._safeHtml(tbValue) : '') + '" id="sp-edit-tb-' + _esc(m.id) + '-' + idx + '-' + side +
+      '" class="sp-set-tb" placeholder="tb" title="Tie-break" style="margin-top:3px;display:block;" onclick="event.stopPropagation()">';
+  };
   // Set confirmado é CLICÁVEL pra corrigir enquanto o jogo não fechou — sem isso um 6-4
   // digitado errado no set 1 fica preso até o fim da partida.
   const _podeCorrigirSet = !isDecided && !hasPending && canEnterResult && !_readOnly;
-  const _setCellsHtml = (side) => _plan.columns.map(function (c) {
+  const _setCellsHtml = (side) => _plan.columns.map(function (c, idx) {
+    if (_setsEdit) return _setColOpen(c) + _setEditHtml(c, side, idx) + '</div>';
     if (c.state === 'live') return _setColOpen(c) + _setLiveHtml(c, side) + '</div>';
     const fix = _podeCorrigirSet
       ? ' sp-set-col--fix" title="Editar placar"' +
@@ -5030,11 +5054,13 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   // Um melhor-de-N pode já ter sets gravados sem ter vencedor (ex.: 6-4, 5-7).
   // A edição abre todos os sets preenchidos: ela preserva o que está certo e altera
   // somente o valor que a pessoa corrigir.
-  const headerEditBtn = !isByeMatch && canEnterResult && !m.wo && !compactDone && (isDecided || _hasPartialSets)
+  const headerEditBtn = _setsEdit
+    ? `<button class="btn btn-micro" onclick="window._cancelSetsEdit('${_esc(tId)}','${_esc(m.id)}')" style="flex-shrink:0;font-size:0.72rem;">✕ Cancelar</button><button class="btn btn-success btn-micro" onclick="window._saveEditedSetsInCard('${_esc(tId)}','${_esc(m.id)}')" style="flex-shrink:0;font-size:0.72rem;">✓ Salvar</button>`
+    : (!isByeMatch && canEnterResult && !m.wo && !compactDone && (isDecided || _hasPartialSets)
     ? `<button class="btn btn-warning btn-micro" onclick="${isDecided
         ? (_plan.multi ? `window._editSetsInline('${_esc(tId)}','${_esc(m.id)}')` : `window._editResultInline('${_esc(tId)}','${_esc(m.id)}')`)
         : `window._editSetsInline('${_esc(tId)}','${_esc(m.id)}')`}" style="flex-shrink:0;font-size:0.72rem;" title="${_t('bracket.editResult')}">✏️ ${_t('bracket.editResult')}</button>`
-    : '';
+    : '');
 
   const matchLabel = matchNum ? _t('bracket.matchNum', {n: matchNum}) : (m.label || _t('bracket.matchLabel'));
 

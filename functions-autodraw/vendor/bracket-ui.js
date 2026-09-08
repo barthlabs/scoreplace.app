@@ -2024,9 +2024,8 @@ window._confirmSetFromCard = function (tId, matchId, o) {
   }
 };
 
-// Edição de placar por sets. A versão anterior "reabria" um set apagando ele e os
-// seguintes. Isso é perigoso e fez o fluxo de correção parecer perda de placar. A edição
-// agora sempre começa com TODOS os valores já lançados, inclusive o subplacar do tie-break.
+// Edição de placar por sets. A correção acontece no PRÓPRIO card: os números viram
+// campos pré-preenchidos na mesma grade de Sets/STB, sem modal nem tela paralela.
 // A pessoa altera somente o que está errado; o array inteiro só é substituído no momento de
 // salvar, depois de validado.
 window._editSetsInline = function (tId, matchId) {
@@ -2039,50 +2038,44 @@ window._editSetsInline = function (tId, matchId) {
   draftMatch.sets = sourceSets.slice();
   var plan = window._matchSetPlan(sc, draftMatch, { sets: draftMatch.sets });
   if (!plan || !plan.multi) return;
-
-  var old = document.getElementById('sp-set-editor'); if (old) old.remove();
-  var overlay = document.createElement('div');
-  overlay.id = 'sp-set-editor';
-  overlay.style.cssText = 'position:fixed;inset:0;z-index:10003;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;padding:16px;';
-  var box = document.createElement('div');
-  box.style.cssText = 'width:min(580px,100%);max-height:90vh;overflow:auto;background:#202124;color:#f1f3f4;border:1px solid #4a4d52;border-radius:16px;box-shadow:0 16px 45px #000;padding:20px;';
-  var title = document.createElement('h2'); title.textContent = '✏️ Editar placar'; title.style.margin = '0 0 8px'; box.appendChild(title);
-  var note = document.createElement('p'); note.textContent = 'Os placares existentes já estão preenchidos. Altere somente o que estiver errado; nada é apagado automaticamente.'; note.style.cssText = 'margin:0 0 18px;color:#c5c9d1;line-height:1.4;'; box.appendChild(note);
-  var names = document.createElement('div'); names.style.cssText = 'font-weight:700;margin-bottom:10px;line-height:1.5;';
-  names.textContent = m.p1 + '  ×  ' + m.p2; box.appendChild(names);
-  var rows = [];
-  var maxRows = Math.max(sourceSets.length, (plan.columns || []).length);
-  // Só mostra uma linha extra enquanto a partida ainda pode receber outro set.
-  if (plan.live && maxRows === sourceSets.length) maxRows++;
-  maxRows = Math.min(maxRows, (plan.columns || []).length || maxRows);
-  for (var i = 0; i < maxRows; i++) {
-    var original = sourceSets[i] || null;
-    var col = (plan.columns || [])[i] || {};
-    var isStb = !!(original && original.superTiebreak) || col.kind === 'stb';
-    var row = document.createElement('div'); row.style.cssText = 'display:grid;grid-template-columns:minmax(86px,1fr) 64px 18px 64px;gap:8px;align-items:center;margin:10px 0;padding:10px;background:#151618;border-radius:10px;';
-    var label = document.createElement('strong'); label.textContent = isStb ? 'Super tie-break' : (col.label || ('Set ' + (i + 1))); row.appendChild(label);
-    var a = document.createElement('input'); a.type = 'number'; a.min = '0'; a.inputMode = 'numeric'; a.placeholder = '0'; a.value = original ? original.gamesP1 : ''; a.style.cssText = 'width:100%;box-sizing:border-box;padding:8px;background:#292b2f;color:#fff;border:1px solid #666;border-radius:7px;text-align:center;'; row.appendChild(a);
-    var sep = document.createElement('span'); sep.textContent = '×'; sep.style.textAlign = 'center'; row.appendChild(sep);
-    var b = document.createElement('input'); b.type = 'number'; b.min = '0'; b.inputMode = 'numeric'; b.placeholder = '0'; b.value = original ? original.gamesP2 : ''; b.style.cssText = a.style.cssText; row.appendChild(b);
-    var tb = document.createElement('div'); tb.style.cssText = 'grid-column:2 / 5;display:flex;gap:8px;align-items:center;color:#bbc5d4;font-size:.9rem;';
-    var originalTb = original && original.tiebreak ? original.tiebreak : null;
-    var tbA = document.createElement('input'); tbA.type = 'number'; tbA.min = '0'; tbA.inputMode = 'numeric'; tbA.placeholder = 'TB'; tbA.value = originalTb ? (originalTb.pointsP1 != null ? originalTb.pointsP1 : originalTb.p1) : ''; tbA.style.cssText = 'width:70px;padding:6px;background:#292b2f;color:#fff;border:1px solid #666;border-radius:6px;text-align:center;';
-    var tbB = document.createElement('input'); tbB.type = 'number'; tbB.min = '0'; tbB.inputMode = 'numeric'; tbB.placeholder = 'TB'; tbB.value = originalTb ? (originalTb.pointsP2 != null ? originalTb.pointsP2 : originalTb.p2) : ''; tbB.style.cssText = tbA.style.cssText;
-    var tbLabel = document.createElement('span'); tbLabel.textContent = isStb ? 'pontos do STB' : 'pontos do tie-break (se houver)';
-    tb.appendChild(tbA); tb.appendChild(document.createTextNode('×')); tb.appendChild(tbB); tb.appendChild(tbLabel); row.appendChild(tb);
-    box.appendChild(row);
-    rows.push({ original: original, col: col, isStb: isStb, a: a, b: b, tbA: tbA, tbB: tbB });
-  }
-  var actions = document.createElement('div'); actions.style.cssText = 'display:flex;justify-content:flex-end;gap:10px;margin-top:20px;';
-  var cancel = document.createElement('button'); cancel.className = 'btn'; cancel.textContent = 'Cancelar'; cancel.onclick = function () { overlay.remove(); };
-  var save = document.createElement('button'); save.className = 'btn btn-warning'; save.textContent = 'Salvar correção';
-  save.onclick = function () { window._saveEditedSetsInline(tId, matchId, sc, rows, overlay); };
-  actions.appendChild(cancel); actions.appendChild(save); box.appendChild(actions); overlay.appendChild(box);
-  overlay.onclick = function (ev) { if (ev.target === overlay) overlay.remove(); };
-  document.body.appendChild(overlay);
+  window._setsEditState = { tId: String(tId), matchId: String(matchId) };
+  window._suppressSoftRefresh = true;
+  _rerenderBracket(tId, matchId);
 };
 
-window._saveEditedSetsInline = function (tId, matchId, sc, rows, overlay) {
+window._cancelSetsEdit = function (tId, matchId) {
+  if (window._setsEditState && String(window._setsEditState.tId) === String(tId) && String(window._setsEditState.matchId) === String(matchId)) {
+    window._setsEditState = null;
+  }
+  window._suppressSoftRefresh = false;
+  _rerenderBracket(tId, matchId);
+};
+
+window._saveEditedSetsInCard = function (tId, matchId) {
+  var t = window._findTournamentById(tId); if (!t) return;
+  var m = _findMatch(t, matchId); if (!m) return;
+  var sc = (typeof window._effectiveScoring === 'function') ? window._effectiveScoring(t, m) : t.scoring;
+  var sourceSets = (m.pendingResult && Array.isArray(m.pendingResult.sets)) ? m.pendingResult.sets : (m.sets || []);
+  var draftMatch = {}; Object.keys(m).forEach(function (k) { draftMatch[k] = m[k]; }); draftMatch.sets = sourceSets.slice();
+  var plan = window._matchSetPlan(sc, draftMatch, { sets: draftMatch.sets });
+  var rows = (plan.columns || []).map(function (col, i) {
+    var original = sourceSets[i] || col.set || null;
+    return {
+      original: original, col: col, isStb: !!(original && original.superTiebreak) || col.kind === 'stb',
+      a: document.getElementById('sp-edit-set-' + matchId + '-' + i + '-1'),
+      b: document.getElementById('sp-edit-set-' + matchId + '-' + i + '-2'),
+      tbA: document.getElementById('sp-edit-tb-' + matchId + '-' + i + '-1') || { value: '' },
+      tbB: document.getElementById('sp-edit-tb-' + matchId + '-' + i + '-2') || { value: '' }
+    };
+  });
+  if (rows.some(function (r) { return !r.a || !r.b; })) return;
+  return window._saveEditedSetsInline(tId, matchId, sc, rows, null, function () {
+    window._setsEditState = null;
+    window._suppressSoftRefresh = false;
+  });
+};
+
+window._saveEditedSetsInline = function (tId, matchId, sc, rows, overlay, onAccepted) {
   var t = window._findTournamentById(tId); if (!t) return;
   var m = _findMatch(t, matchId); if (!m) return;
   var sets = [], sawBlank = false;
@@ -2118,6 +2111,7 @@ window._saveEditedSetsInline = function (tId, matchId, sc, rows, overlay) {
   if (!sets.length) { showNotification('Sem placar', 'Informe ao menos um set para salvar.', 'warning'); return; }
   var p1 = 0, p2 = 0; sets.forEach(function (s) { if (s.gamesP1 > s.gamesP2) p1++; else if (s.gamesP2 > s.gamesP1) p2++; });
   if (overlay) overlay.remove();
+  if (typeof onAccepted === 'function') onAccepted();
   var finalPlan = window._matchSetPlan(sc, m, { sets: sets });
   if (p1 >= finalPlan.setsToWin || p2 >= finalPlan.setsToWin) return window._commitSetsResult(tId, matchId, sets, p1, p2, false);
   return window._saveSetsEmAndamento(tId, matchId, sets, p1, p2);
