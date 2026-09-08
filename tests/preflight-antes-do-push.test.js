@@ -31,7 +31,7 @@ function eq(a, b, m) { ok(a === b, m + ' — esperado ' + JSON.stringify(b) + ',
 const sh = fs.readFileSync(path.join(RAIZ, 'scripts', 'deploy-hosting.sh'), 'utf8');
 
 // ── ① a ORDEM no script ──────────────────────────────────────────────────────────────
-console.log('\n▸ ① no script, o preflight vem ANTES do push, e o push antes do upload');
+console.log('\n▸ ① preflight e integridade vêm antes do Hosting; backup vem depois');
 {
   const pos = {
     cache: sh.indexOf('TRAVA DURA: O CACHE DO SW'),
@@ -42,12 +42,12 @@ console.log('\n▸ ① no script, o preflight vem ANTES do push, e o push antes 
     deploy: sh.indexOf('firebase deploy --only hosting --project')
   };
   Object.keys(pos).forEach((k) => ok(pos[k] > 0, 'achei o marco `' + k + '` no script'));
-  ok(pos.preflight < pos.push, '⭐ o preflight vem ANTES do `git push origin HEAD:main`');
-  ok(pos.npmtest < pos.push, '⭐ e o `npm test` do preflight também');
-  ok(pos.revisao < pos.push, '⭐ a revisão cruzada (1.8) também vem ANTES do push');
-  ok(pos.cache < pos.push, 'a trava do CACHE_NAME também foi pra antes do push');
-  ok(pos.push < pos.deploy, 'e o push continua antes do upload (o main descreve o ar)');
-  ok(/SP_EXIGE_CORRIDA_REAL=1/.test(sh.slice(pos.preflight, pos.push)),
+  ok(pos.preflight < pos.deploy, '⭐ o preflight vem ANTES do Hosting');
+  ok(pos.npmtest < pos.deploy, '⭐ e o `npm test` do preflight também');
+  ok(pos.revisao < pos.deploy, '⭐ a revisão Claude também vem ANTES do Hosting');
+  ok(pos.cache < pos.deploy, 'a trava do CACHE_NAME também vem antes do Hosting');
+  ok(pos.deploy < pos.push, '⭐ Hosting vem antes do backup GitHub');
+  ok(/SP_EXIGE_CORRIDA_REAL=1/.test(sh.slice(pos.preflight, pos.deploy)),
     '⛔ e o preflight proíbe "pulada" na corrida do sorteio');
   ok(/exit 1/.test(sh.slice(pos.preflight, pos.push)), 'e ele encerra em caso de falha');
   const chamadas = (sh.match(/montar_copia /g) || []).length;
@@ -111,6 +111,7 @@ function cenario(preflightPassa) {
   // binários falsos
   fs.writeFileSync(path.join(bin, 'firebase'),
     '#!/bin/sh\necho "$@" >> ' + JSON.stringify(path.join(marcas, 'firebase.txt')) + '\nexit 0\n');
+  fs.writeFileSync(path.join(bin, 'curl'), '#!/bin/sh\necho 9.9.9\n');
   fs.writeFileSync(path.join(bin, 'npm'),
     '#!/bin/sh\necho "$@" >> ' + JSON.stringify(path.join(marcas, 'npm.txt')) + '\n' +
     'case "$1" in\n' +
@@ -118,7 +119,7 @@ function cenario(preflightPassa) {
     '  run) exit 0 ;;\n' +
     '  *) exit 0 ;;\n' +
     'esac\n');
-  [path.join(bin, 'firebase'), path.join(bin, 'npm')].forEach((f) => fs.chmodSync(f, 0o755));
+  [path.join(bin, 'firebase'), path.join(bin, 'curl'), path.join(bin, 'npm')].forEach((f) => fs.chmodSync(f, 0o755));
 
   const r = spawnSync('bash', ['scripts/deploy-hosting.sh'], {
     cwd: repo, encoding: 'utf8',
@@ -148,14 +149,14 @@ console.log('▸ ② preflight REPROVADO: não empurra e não publica');
   } finally { c.limpar(); }
 }
 
-console.log('▸ ③ preflight VERDE: empurra e então publica');
+console.log('▸ ③ preflight VERDE: publica e então atualiza backup');
 {
   const c = cenario(true);
   try {
     ok(/preflight VERDE/.test(c.saida), 'o preflight passou');
-    eq(c.remotoDepois, c.shaRelease, '⭐ o remoto avançou pro commit de release');
-    ok(c.remotoDepois !== c.remotoAntes, 'ou seja: o push aconteceu');
-    ok(/deploy --only hosting/.test(c.chamouFirebase), '⭐ e só então o upload foi chamado');
+    ok(/deploy --only hosting/.test(c.chamouFirebase), '⭐ o Hosting foi chamado');
+    eq(c.remotoDepois, c.shaRelease, '⭐ o backup remoto avançou depois do Hosting');
+    ok(c.remotoDepois !== c.remotoAntes, 'ou seja: o push de backup aconteceu');
   } finally { c.limpar(); }
 }
 

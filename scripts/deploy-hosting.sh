@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# deploy-hosting.sh — O ÚNICO jeito de publicar o site. Alinha o `main` ANTES de subir.
+# deploy-hosting.sh — O ÚNICO jeito de publicar o site. Firebase é produção; GitHub é backup.
 #
 # POR QUE EXISTE (12/ago/2026): produção ficou em 1.8.27 com `origin/main` em 1.8.24. Não
 # foi comando errado — era o comportamento normal do fluxo: cada sessão publica de um
@@ -329,81 +329,23 @@ echo "  ✓ preflight VERDE — pode alinhar o main e publicar"
 # ⛔ Exportado AQUI, depois do preflight passar — nunca antes, e nunca fora dele.
 export SP_PREFLIGHT_OK="$COMMIT"
 
-# ── 2. alinhar o main ANTES de publicar ──────────────────────────────────────
-echo "▸ conferindo origin/main…"
-git fetch -q origin main || echo "  ⚠️  não deu pra atualizar origin/main (rede?) — seguindo com o local"
-
+# ── 2. conferir se o backup PODE avançar (sem depender dele) ───────────────
+# GitHub é backup, mas uma divergência real continua sendo bloqueio: publicar um
+# commit que o main não alcança por fast-forward deixaria o ar irreconciliável.
+echo "▸ conferindo se origin/main pode acompanhar este commit…"
+git fetch -q origin main || echo "  ⚠️  não deu pra atualizar origin/main (rede?) — conferindo a referência disponível"
+BACKUP_PENDENTE=0
 if git merge-base --is-ancestor "$COMMIT" origin/main 2>/dev/null; then
-  echo "  ✓ este commit já está em origin/main"
+  echo "  ✓ origin/main já contém este commit"
 elif git merge-base --is-ancestor origin/main "$COMMIT" 2>/dev/null; then
-  ATRAS="$(git rev-list --count origin/main..HEAD)"
-  echo "  ▸ main está $ATRAS commit(s) atrás — empurrando (fast-forward)…"
-  if [[ $DRY -eq 1 ]]; then
-    echo "  (dry-run: não empurrei)"
-  else
-    # O pre-push normalmente roda `npm test` em push pro main. Aqui ele reconhece o
-    # carimbo SHA do preflight acima, portanto não repete a mesma suíte para o mesmo
-    # commit. O hosting.predeploy confere esse mesmo carimbo antes de reaproveitá-la.
-    # O pre-push reconhece apenas o SHA que o preflight acabou de aprovar. Não há
-    # escape booleano: se o commit ou a árvore mudarem, ele roda `npm test` de novo.
-    git push origin "HEAD:main"
-    echo "  ✓ main alinhado em ${COMMIT:0:8}"
-  fi
+  BACKUP_PENDENTE=1
+  echo "  ✓ origin/main pode avançar por fast-forward depois do Hosting"
 else
   echo
-  echo "✗ HEAD e origin/main DIVERGIRAM — não dá pra alinhar sozinho sem escolher por você."
+  echo "✗ HEAD e origin/main DIVERGIRAM — não publico um estado que o backup não alcança."
   echo "  origin/main: $(git rev-parse --short origin/main)   ·   HEAD: ${COMMIT:0:8}"
-  echo
-  echo "  O QUE FAZER: traga o main pra dentro (rebase ou merge), rode a suíte, e publique"
-  echo "  de novo. NUNCA publicar divergente: o ar passaria a ser um estado que o main não"
-  echo "  descreve, que é exatamente o problema que este script existe pra impedir."
   exit 1
 fi
-
-# ── 2.5 O CHECKOUT PRINCIPAL ANDA JUNTO ──────────────────────────────────────
-# ⛔ REGRA DO DONO (27/ago/2026), depois de achar o repo dele 16 commits atrás do ar:
-# _"que merda é esse dessa porra de repo nao acompanhar a merda da versao web? ja falei que
-# tudo tem que andar junto"_ · _"e faca disso a porra de uma regra para nunca mais
-# acontecer"_.
-#
-# O QUE ACONTECIA, e é uma armadilha do próprio fluxo de worktrees: uma sessão trabalha em
-# .claude/worktrees/<nome>, empurra pro `main` e publica. O ar fica certo, o `main` fica
-# certo — e o CHECKOUT PRINCIPAL, que é onde o dono abre o projeto e de onde saem os builds
-# NATIVOS, fica parado onde estava. Medido no dia: ar e main em 2.1.22, o repo dele em
-# 2.1.6. Ninguém errou comando; era o comportamento normal, e é exatamente a mesma classe
-# do incidente de 12/ago (produção 1.8.27 com main 1.8.24) que criou o check-deploy-alignment.
-#
-# ⚠️ E o preço é MAIOR que o susto: o build de TestFlight/Play sai do checkout principal.
-# Um repo atrasado empacota uma versão velha com o número novo — o pior tipo de erro,
-# porque a loja diz uma coisa e o app faz outra.
-#
-# ⭐ Por que aqui e automático: o dono já tinha dito "tudo tem que andar junto" e mesmo
-# assim aconteceu — memória não resolve. Este é o único caminho por onde a publicação
-# passa, e neste ponto o `main` acabou de ser atualizado. Fast-forward só: se o principal
-# tiver trabalho próprio, o script AVISA e não decide por ninguém.
-PRINCIPAL="$(git worktree list --porcelain | awk '/^worktree /{print $2; exit}')"
-if [[ -n "$PRINCIPAL" && "$PRINCIPAL" != "$RAIZ" ]]; then
-  echo "▸ alinhando o checkout principal ($PRINCIPAL)…"
-  P_BRANCH="$(git -C "$PRINCIPAL" rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?')"
-  P_HEAD="$(git -C "$PRINCIPAL" rev-parse HEAD 2>/dev/null || echo '')"
-  if [[ "$P_BRANCH" != "main" ]]; then
-    echo "  ⚠️  ele está em '$P_BRANCH', não em main — NÃO mexi. Alinhe à mão quando puder:"
-    echo "      git -C \"$PRINCIPAL\" checkout main && git -C \"$PRINCIPAL\" merge --ff-only origin/main"
-  elif [[ -n "$(git -C "$PRINCIPAL" status --porcelain --untracked-files=no)" ]]; then
-    echo "  ⚠️  ele tem alterações não commitadas — NÃO mexi (trabalho de outra sessão não se descarta)."
-    git -C "$PRINCIPAL" status --short --untracked-files=no | head -5
-  elif [[ "$P_HEAD" == "$COMMIT" ]]; then
-    echo "  ✓ já estava em dia"
-  elif [[ $DRY -eq 1 ]]; then
-    echo "  (dry-run: não alinhei)"
-  elif git -C "$PRINCIPAL" merge --ff-only origin/main >/dev/null 2>&1; then
-    echo "  ✓ checkout principal em $(git -C "$PRINCIPAL" rev-parse --short HEAD) (v$(tr -d '[:space:]' < "$PRINCIPAL/version.txt" 2>/dev/null))"
-  else
-    echo "  ⚠️  não deu fast-forward (divergiu?) — alinhe à mão:"
-    echo "      git -C \"$PRINCIPAL\" merge --ff-only origin/main"
-  fi
-fi
-
 
 # ── 3-5. cópia limpa + carimbo (a MESMA função que o preflight usou) ─────────
 montar_copia "${TMPDIR:-/tmp}/sp-deploy-$$"
@@ -434,9 +376,25 @@ if [[ "${AR:-}" != "$VERSAO" ]]; then
 fi
 echo "✓ NO AR: $VERSAO  ·  main alinhado em ${COMMIT:0:8}"
 
-# ── 8. empatar o backup ──────────────────────────────────────────────────────
-# "tem que sempre atualizar tudo para tudo ficar junto" (dono, 22/ago/2026).
-# O ar, o main e a rede de baixo (o bundle no Drive) saem daqui juntos. Isso é
-# best-effort DE PROPÓSITO: o deploy já foi publicado e conferido acima — Drive
-# desmontado não pode transformar uma publicação boa em erro. Ele grita e sai 0.
+# ── 8. atualizar o backup depois do ar confirmado ───────────────────────────
+# O Hosting já foi conferido. Falha de GitHub/Drive é visível, mas não desfaz uma
+# correção de produção saudável.
+if [[ $BACKUP_PENDENTE -eq 1 && $DRY -eq 0 ]]; then
+  echo "▸ atualizando o backup no origin/main…"
+  if git push origin "HEAD:main"; then
+    echo "  ✓ origin/main alinhado em ${COMMIT:0:8}"
+  else
+    echo "⚠️  Hosting está publicado, mas o backup GitHub falhou."
+    echo "   origin/main ficou atrás do ar; quando a rede voltar: git push origin HEAD:main"
+  fi
+fi
+
+# O checkout principal só acompanha depois de o backup remoto confirmar o commit.
+if [[ $BACKUP_PENDENTE -eq 1 ]] && git merge-base --is-ancestor "$COMMIT" origin/main 2>/dev/null; then
+  PRINCIPAL="$(git worktree list --porcelain | awk '/^worktree /{print $2; exit}')"
+  if [[ -n "$PRINCIPAL" && "$PRINCIPAL" != "$RAIZ" ]] && [[ "$(git -C "$PRINCIPAL" rev-parse --abbrev-ref HEAD 2>/dev/null || true)" == main ]] && [[ -z "$(git -C "$PRINCIPAL" status --porcelain --untracked-files=no)" ]]; then
+    git -C "$PRINCIPAL" merge --ff-only origin/main >/dev/null 2>&1 && echo "  ✓ checkout principal alinhado" || echo "⚠️  checkout principal não pôde avançar automaticamente."
+  fi
+fi
+
 "$RAIZ/scripts/backup-bundle.sh" || true
