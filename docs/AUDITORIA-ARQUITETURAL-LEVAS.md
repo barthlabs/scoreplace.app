@@ -2724,6 +2724,15 @@ e impede que o guard restaure uma pessoa no lugar errado. Ambas são proteções
 `saveTournament`; nenhuma demonstra que todos os 32 `sync()` ou 14 `syncImmediate()` preservam
 uma alteração concorrente arbitrária.
 
+**L7.P1.1 — quadra de jogo migrou para mutação fresca (08/set/2026).** Publicada como
+2.2.20. `window._assignMatchCourt` deixava de ser uma exceção: alterava `m.court` na cópia
+local e chamava `syncImmediate`, que serializava o torneio inteiro. Agora a alteração é um
+mutator idempotente que localiza o mesmo `matchId` no documento fresco dentro de
+`AppStore.mutate`; placar, W.O. e chave concorrentes ficam fora da escrita. O teste
+`atribuir-quadra-nao-sobrescreve-placar.test.js`, registrado no `run-unit`, reproduz uma aba
+antiga contra um resultado que já chegou ao documento fresco e prova as duas operações:
+definir e remover a quadra.
+
 **Conclusão desta etapa.** A porta canônica já existe e é `AppStore.mutate` para alterações do
 documento de torneio; portas especializadas são a escolha para presença, inscrição, dupla e
 resultado isolado. A próxima etapa deve migrar por comportamento, começando pelos 14 usos reais

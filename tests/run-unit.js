@@ -916,6 +916,9 @@ const SUITES = [
   // VOLTOU NO TEMPO (mesmos jogos, conteúdo antigo — a substituição desfeita sozinha).
   // Roda as DUAS portas de escrita juntas, que é onde o buraco estava. v1.7.91.
   'tests/save-atrasado-nao-desfaz-troca.test.js',
+  // Escolher/remover quadra é alteração de um jogo; nunca pode regravar o snapshot
+  // antigo do torneio e apagar o resultado que outro aparelho acabou de registrar.
+  'tests/atribuir-quadra-nao-sobrescreve-placar.test.js',
   // Varredura do doc inteiro: grupo formado e registro de "já avisei" também não somem. v1.8.0.
   // CONFRA.MOBILE.P1: chave de torneio DIVIDIDO não pinta área vazia — mostra carregamento,
   // monta pela porta canônica e não roda lógica de chave (nem grava) com as partes fora.

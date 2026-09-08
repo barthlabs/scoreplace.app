@@ -1,3 +1,7 @@
+## 2.2.20 — quadra não sobrescreve placar concorrente (08/set/2026)
+
+A escolha ou remoção de quadra passou a atualizar somente o jogo escolhido dentro de uma transação. Uma aba com dados antigos não pode mais regravar o torneio inteiro e apagar placar, W.O. ou chave que chegou de outro aparelho enquanto a quadra era definida.
+
 ## 2.2.19 — edição de placar e tie-break legíveis (08/set/2026)
 
 A correção de placar mantém as cores de vitória e derrota durante a edição. Os campos de tie-break só aparecem quando o placar daquele set exige tie-break e os pontos ficam menores, separados do set seguinte. Em jogos melhor de três ou cinco sem placar, o cartão usa a escala compacta de um set até o primeiro resultado ser lançado.

@@ -1910,20 +1910,26 @@ window._assignMatchCourt = function(tId, matchId, court) {
     : (Array.isArray(t.matches) ? t.matches.slice() : []);
   var m = all.find(function(x){ return x && String(x.id) === String(matchId); });
   if (!m) return;
-  if (court) m.court = court; else { try { delete m.court; } catch (e) {} }
-  try {
-    if (window.AppStore && typeof window.AppStore.logAction === 'function') {
-      window.AppStore.logAction(tId, court ? ('Quadra definida: ' + court) : 'Quadra removida de um jogo');
-    }
-  } catch (e) {}
-  if (window.AppStore && typeof window.AppStore.syncImmediate === 'function') {
-    window.AppStore.syncImmediate(tId);
-  } else if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
-    window.FirestoreDB.saveTournament(t);
+  // O evento é uma alteração estreita. Não grava a fotografia local inteira: entre a
+  // escolha e o save pode ter chegado placar, W.O. ou chave nova de outro aparelho.
+  var _applyCourt = function (target) {
+    var targetMatches = (typeof window._collectAllMatches === 'function')
+      ? window._collectAllMatches(target)
+      : (Array.isArray(target.matches) ? target.matches.slice() : []);
+    var targetMatch = targetMatches.find(function (x) { return x && String(x.id) === String(matchId); });
+    if (!targetMatch) return false;
+    if (court) targetMatch.court = court; else delete targetMatch.court;
+  };
+  var _message = court ? ('Quadra definida: ' + court) : 'Quadra removida de um jogo';
+  if (window.AppStore && typeof window.AppStore.mutate === 'function') {
+    window.AppStore.mutate(tId, _applyCourt, _message);
+  } else {
+    // Compatibilidade sem a porta transacional: mantém a UI funcional em bundle legado.
+    _applyCourt(t);
+    if (window.AppStore && typeof window.AppStore.syncImmediate === 'function') window.AppStore.syncImmediate(tId);
+    else if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') window.FirestoreDB.saveTournament(t);
   }
-  if (typeof showNotification === 'function') {
-    showNotification('📍 Quadra ' + (court ? 'definida' : 'removida'), court || '', 'success');
-  }
+  if (typeof showNotification === 'function') showNotification('📍 Quadra ' + (court ? 'definida' : 'removida'), court || '', 'success');
 };
 
 // ─── Formação de duplas na LISTA DE ESPERA durante a R1 (inscrição tardia aberta) ──────
