@@ -2704,7 +2704,11 @@ window.generateDrawFunction = function (tId) {
     if (typeof window._deduplicateParticipants === 'function') {
         var _dupCount = window._deduplicateParticipants(t);
         if (_dupCount > 0) {
-            window.FirestoreDB.saveTournament(t);
+            if (window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
+                window.AppStore.commitTournamentTx(tId, function(ft) {
+                    return window._deduplicateParticipants(ft) > 0;
+                });
+            }
             showNotification(_t('tdraw.dupsRemoved'), _t('tdraw.dupsRemovedMsg', { n: _dupCount }), 'info');
         }
     }
@@ -4768,8 +4772,8 @@ window._healOrphanLabels = function (t) {
   return pre.then(function () {
     var n = (typeof window._stampMissingMatchUids === 'function') ? window._stampMissingMatchUids(t) : 0;
     if (n > 0 && window.AppStore && typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t) &&
-        window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
-      try { window.FirestoreDB.saveTournament(t); } catch (e) {}
+        typeof window.AppStore.commitTournamentTx === 'function') {
+      try { window.AppStore.commitTournamentTx(t.id, function(ft) { return window._stampMissingMatchUids(ft) > 0; }); } catch (e) {}
     }
     return n;
   });

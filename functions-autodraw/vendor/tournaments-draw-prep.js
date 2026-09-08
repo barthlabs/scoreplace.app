@@ -951,11 +951,22 @@ window._resolvePhaseInactives = function(tId, choice){
         }
         if (window.console && console.error) console.error('phase non-entrants save failed', err);
     };
-    if (window.FirestoreDB && window.FirestoreDB.saveTournament) {
-        Promise.resolve(window.FirestoreDB.saveTournament(t, choice === 'remove' ? { allowRosterRemoval: true } : undefined)).then(_finish).catch(_rollback);
-    } else {
-        _finish();
-    }
+    if (!window.AppStore || typeof window.AppStore.commitTournamentTx !== 'function') { _rollback(new Error('mutação indisponível')); return; }
+    Promise.resolve(window.AppStore.commitTournamentTx(tId, function(ft) {
+        var freshIdx = (ft.currentPhaseIndex || 0) + 1;
+        if (ft._inactiveResolvedPhase === freshIdx) return false;
+        if (choice === 'remove') {
+            var freshOut = window._phaseNonEntrants(ft);
+            var freshAll = Array.isArray(ft.participants) ? ft.participants.slice() : Object.values(ft.participants || {});
+            ft.participants = freshAll.filter(function(p) { return freshOut.indexOf(p) === -1; });
+            freshOut.forEach(function(p) {
+                if (!p || typeof p !== 'object' || typeof window._purgePersonFromMaps !== 'function') return;
+                window._purgePersonFromMaps(ft, p.uid || null, p.displayName || p.name || '');
+            });
+        }
+        ft._inactiveResolvedPhase = freshIdx;
+        return true;
+    })).then(function(saved) { if (saved === false) _rollback(new Error('decisão já aplicada')); else _finish(); }).catch(_rollback);
 };
 
 // Painel: manter inativos no cadastro ou excluir definitivamente. Mesma linguagem visual
@@ -1389,7 +1400,12 @@ window.showUnifiedResolutionPanel = function(tId) {
             t._previousStatus = t.status; // preserve original status for cancel
             t.status = 'closed';
             t._suspendedByPanel = true;
-            window.FirestoreDB.saveTournament(t);
+            if (window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
+                window.AppStore.commitTournamentTx(tId, function(ft) {
+                    if (ft.status === 'closed' && ft._suspendedByPanel) return false;
+                    ft._previousStatus = ft.status; ft.status = 'closed'; ft._suspendedByPanel = true; return true;
+                });
+            }
         }
 
         info = window._diagnoseAll(t);
@@ -1422,7 +1438,12 @@ window.showUnifiedResolutionPanel = function(tId) {
                 t.status = t._previousStatus || 'open';
                 delete t._suspendedByPanel;
                 delete t._previousStatus;
-                window.FirestoreDB.saveTournament(t);
+                if (window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
+                    window.AppStore.commitTournamentTx(tId, function(ft) {
+                        if (!ft._suspendedByPanel) return false;
+                        ft.status = ft._previousStatus || 'open'; delete ft._suspendedByPanel; delete ft._previousStatus; return true;
+                    });
+                }
             }
             if (typeof window.generateDrawFunction === 'function') {
                 window.generateDrawFunction(tId);
@@ -3115,9 +3136,18 @@ window._checkPollNotifications = function(t) {
         { type: 'info', confirmText: _t('btn.voteNow'), cancelText: _t('btn.later'), showCancel: true }
     );
 
-    // Persist read status
-    if (window.FirestoreDB && window.FirestoreDB.saveTournament) {
-        window.FirestoreDB.saveTournament(t);
+    // Marca somente os avisos deste usuário no documento fresco; outro aparelho
+    // pode ter criado voto, placar ou aviso enquanto este diálogo estava aberto.
+    if (window.AppStore && typeof window.AppStore.mutate === 'function') {
+        var myUid = user.uid || '', myEmail = user.email || '';
+        window.AppStore.mutate(t.id, function(ft) {
+            var changed = false;
+            (ft.pollNotifications || []).forEach(function(n) {
+                var mine = (n.targetUid && myUid && n.targetUid === myUid) || (n.targetEmail && myEmail && n.targetEmail === myEmail);
+                if (mine && n.pollId === activePoll.id && !n.read) { n.read = true; changed = true; }
+            });
+            return changed;
+        }, 'Aviso de enquete lido');
     }
 };
 
