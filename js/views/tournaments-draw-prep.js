@@ -3529,16 +3529,12 @@ window._confirmReopen = function (tId, target) {
     const autoClose = document.getElementById('reopen-autoclose-cb');
     const checked = autoClose ? autoClose.checked : false;
 
-    t.status = 'open';
-    t.maxParticipants = target;
-    t.autoCloseOnFull = checked;
-
     const actionMsg = checked
         ? `Inscrições Reabertas para atingir ${target} participantes (encerramento automático ativado)`
         : `Inscrições Reabertas para atingir ${target} participantes`;
 
-    window.AppStore.logAction(tId, actionMsg);
-    window.AppStore.sync();
+    if (!window.AppStore || typeof window.AppStore.mutate !== 'function') return;
+    window.AppStore.mutate(tId, function(ft) { ft.status = 'open'; ft.maxParticipants = target; ft.autoCloseOnFull = checked; return true; }, actionMsg);
 
     if (document.getElementById('reopen-panel')) document.getElementById('reopen-panel').remove();
     if (document.getElementById('p2-resolution-panel')) document.getElementById('p2-resolution-panel').remove();
@@ -3582,18 +3578,16 @@ window.finishTournament = function(tId) {
         _t('predraw.finishTitle'),
         msg,
         function() {
-            t.status = 'finished';
-            // v2.1.12: marca o instante do encerramento — usado pela regra de
-            // "vai pra seção Encerrados depois de 24h" no dashboard.
-            if (!t.finishedAt) t.finishedAt = new Date().toISOString();
+            if (!window.AppStore || typeof window.AppStore.mutate !== 'function') return;
+            var finishedAt = new Date().toISOString();
             // Som: torneio encerrado → campeão coroado.
             if (window._sound) window._sound('campeao');
-            // Compute final standings for Swiss/Liga
-            if (Array.isArray(t.rounds) && t.rounds.length > 0 && typeof window._computeStandings === 'function') {
-                window._poeStandings(t);
-            }
-            window.AppStore.logAction(tId, 'Torneio encerrado manualmente');
-            window.AppStore.sync();
+            window.AppStore.mutate(tId, function(ft) {
+                if (ft.status === 'finished') return false;
+                ft.status = 'finished'; if (!ft.finishedAt) ft.finishedAt = finishedAt;
+                if (Array.isArray(ft.rounds) && ft.rounds.length > 0 && typeof window._computeStandings === 'function') window._poeStandings(ft);
+                return true;
+            }, 'Torneio encerrado manualmente');
             // Notify all participants
             if (typeof window._notifyTournamentParticipants === 'function') {
                 window._notifyTournamentParticipants(t, {
@@ -3997,6 +3991,7 @@ window._runVagasDraw = function (tId) {
     if (slots <= 0) return;
     var info = (typeof window._diagnoseAll === 'function') ? window._diagnoseAll(t) : { teamSize: parseInt(t.teamSize) || 1 };
     var p = Array.isArray(t.participants) ? t.participants : (t.participants ? Object.values(t.participants) : []);
+    var _rosterSig = JSON.stringify(p.map(function(e) { return (e && typeof e === 'object') ? [e.uid || '', e.email || '', e.displayName || e.name || ''] : String(e); }));
     // Snapshot pré-sorteio (permite refazer o sorteio enquanto não houver chave)
     t.preDrawEnrollees = p.slice();
 
@@ -4055,12 +4050,15 @@ window._runVagasDraw = function (tId) {
         if (typeof window._handleSortearClick === 'function') { window._handleSortearClick(tId, false); }
         else if (typeof window.showUnifiedResolutionPanel === 'function') { window.showUnifiedResolutionPanel(tId); }
     };
-    if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
-        window.FirestoreDB.saveTournament(t).then(_after).catch(function(err) { window._error && window._error('[_runVagasDraw] save error:', err); _after(); });
-    } else {
-        try { window.AppStore.sync(); } catch (e) {}
-        _after();
-    }
+    if (!window.AppStore || typeof window.AppStore.mutate !== 'function') return;
+    window.AppStore.mutate(tId, function(ft) {
+        var freshParts = Array.isArray(ft.participants) ? ft.participants : (ft.participants ? Object.values(ft.participants) : []);
+        var freshSig = JSON.stringify(freshParts.map(function(e) { return (e && typeof e === 'object') ? [e.uid || '', e.email || '', e.displayName || e.name || ''] : String(e); }));
+        if (ft.drawSelectionDone || freshSig !== _rosterSig) return false;
+        ft.preDrawEnrollees = t.preDrawEnrollees; ft.participants = t.participants; ft.standbyParticipants = t.standbyParticipants;
+        ft.waitlistOrder = t.waitlistOrder; ft.standbyPick = t.standbyPick; ft.standbyMode = t.standbyMode;
+        ft.drawSelectionDone = true; ft.status = 'closed'; return true;
+    }, 'Sorteio de vagas registrado').then(function(saved) { if (saved !== false) _after(); });
 };
 
 // v4.0.73: showResolutionSimulationPanel (a 2ª tela de simulação/preview) REMOVIDA —
