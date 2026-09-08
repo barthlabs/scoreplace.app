@@ -3010,8 +3010,14 @@ window._showPollVotingDialog = function(tId, pollId) {
                     clearInterval(_pollTimer);
                     // Auto-close poll
                     poll.status = 'closed';
-                    if (window.FirestoreDB && window.FirestoreDB.saveTournament) {
-                        window.FirestoreDB.saveTournament(t);
+                    if (window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
+                        window.AppStore.commitTournamentTx(tId, function(ft) {
+                            var freshPolls = Array.isArray(ft.polls) ? ft.polls : [];
+                            var freshPoll = freshPolls.find(function(item) { return item && item.id === poll.id; });
+                            if (!freshPoll || freshPoll.status === 'closed') return false;
+                            freshPoll.status = 'closed';
+                            return true;
+                        });
                     }
                     return;
                 }

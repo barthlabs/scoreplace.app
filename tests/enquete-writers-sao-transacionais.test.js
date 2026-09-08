@@ -4,4 +4,7 @@ function body(name,next){const a=s.indexOf('window.'+name+' = function');const b
 const create=body('_showPollCreationDialog','// ── Poll Voting UI'),vote=body('_castPollVote','// ── Check for active polls'),close=body('_closePollEarly','// ── Restore enrollments'),reopen=body('_reopenPoll','// ── Apply poll result'),apply=body('_applyPollResult','window._handleP2Option');
 [['criação',create],['voto',vote],['fechamento',close],['reabertura',reopen],['aplicação',apply]].forEach(([n,b])=>{ok(/AppStore\.mutate\(/.test(b),n+' usa mutação fresca');ok(!/saveTournament\(|AppStore\.sync\(/.test(b),n+' não grava snapshot inteiro')});
 ok(/freshParts/.test(create)&&/pollNotifications/.test(create),'criação deriva destinatários do elenco fresco');
-ok(/freshWinner/.test(apply)&&/Promise\.resolve\(resolutionSave\)/.test(apply),'aplicação espera o vencedor fresco antes de disparar ação');if(fail)process.exit(1);
+ok(/freshWinner/.test(apply)&&/Promise\.resolve\(resolutionSave\)/.test(apply),'aplicação espera o vencedor fresco antes de disparar ação');
+const voteDialog=s.slice(s.indexOf('window._showPollVotingDialog = function'),s.indexOf('// ── Cast a vote'));
+ok(/commitTournamentTx/.test(voteDialog)&&/freshPoll/.test(voteDialog)&&!/saveTournament\(/.test(voteDialog),'fechamento automático localiza e fecha a enquete fresca');
+if(fail)process.exit(1);
