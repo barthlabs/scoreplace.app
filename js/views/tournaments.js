@@ -413,12 +413,13 @@ window._updateDuplaCardInPlace = function (tId, uid, playerName) {
 // renderTournaments) pra a page-route #participantes/<tId> funcionar inclusive em
 // deep-link/cold-load. Recebe a quantidade direto (sem prompt). Fonte ÚNICA usada pelo
 // botão legado (addPlaceholdersFunction) E pela página consolidada. onDone opcional.
-window._addPlaceholdersCore = function (id, qtd, onDone) {
+window._addPlaceholdersCore = function (id, qtd, onDone, opts) {
+    opts = opts || {};
     qtd = parseInt(qtd, 10);
-    if (isNaN(qtd) || qtd <= 0) { showNotification('Número inválido', 'Informe um número maior que zero.', 'warning'); return; }
+    if (isNaN(qtd) || qtd <= 0) { if (!opts.silent) showNotification('Número inválido', 'Informe um número maior que zero.', 'warning'); return false; }
     if (qtd > 200) qtd = 200;
-    var t = window.AppStore.tournaments.find(function (tour) { return tour.id.toString() === id.toString(); });
-    if (!t) return;
+    var t = opts.tournament || window.AppStore.tournaments.find(function (tour) { return tour.id.toString() === id.toString(); });
+    if (!t) return false;
     if (!Array.isArray(t.participants)) t.participants = t.participants ? Object.values(t.participants) : [];
     var hasDraw = (Array.isArray(t.matches) && t.matches.length > 0) || (Array.isArray(t.rounds) && t.rounds.length > 0) || (Array.isArray(t.groups) && t.groups.length > 0);
     // v4.5.92: antes de numerar os novos, DEDUP + cura os placeholders existentes (números
@@ -470,7 +471,8 @@ window._addPlaceholdersCore = function (id, qtd, onDone) {
         t.participants = t.participants.concat(made);
         dest = 'inscritos';
     }
-    if (window.AppStore && typeof window.AppStore.logAction === 'function') window.AppStore.logAction(id, qtd + ' placeholder(s) adicionado(s) em ' + dest);
+    if (!opts.silent && window.AppStore && typeof window.AppStore.logAction === 'function') window.AppStore.logAction(id, qtd + ' placeholder(s) adicionado(s) em ' + dest);
+    if (opts.skipPersist) return made.length > 0;
     // v4.4.72: onDone SÓ após o save resolver (ou falhar) — mantém o botão em
     // "Adicionando…" (cinza) até o commit REAL + toast, dando o retorno visual do
     // comando commitado. Antes onDone era síncrono (fora do .then) e revertia o
@@ -481,12 +483,16 @@ window._addPlaceholdersCore = function (id, qtd, onDone) {
         var container = document.getElementById('view-container');
         if (container) { var param = window.location.hash.split('/')[1] || null; renderTournaments(container, param); }
     };
-    if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
-        window.FirestoreDB.saveTournament(t).then(function () {
+    if (window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
+        window.AppStore.commitTournamentTx(id, function(ft) {
+            return window._addPlaceholdersCore(id, qtd, null, { tournament: ft, skipPersist: true, silent: true });
+        }).then(function (saved) {
+            if (saved === false) { showNotification('Erro', 'Não foi possível salvar.', 'error'); _finishAdd(); return; }
             showNotification('Placeholders adicionados', qtd + ' placeholder(s) em ' + dest + '.', 'success');
             _finishAdd();
         }).catch(function (err) { if (window._error) window._error('Erro ao salvar placeholders:', err); showNotification('Erro', 'Não foi possível salvar.', 'error'); _finishAdd(); });
     } else {
+        showNotification('Erro', 'Não foi possível salvar.', 'error');
         _finishAdd();
     }
 };
