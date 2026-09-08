@@ -2205,10 +2205,13 @@ window._handleIncompleteOption = function (tId, option) {
     if (!t) return;
 
     if (option === 'reopen') {
-        t.status = 'open';
-        t.enrollmentStatus = 'open';
-        window.AppStore.logAction(tId, 'Inscrições reabertas para completar times');
-        window.AppStore.sync();
+        if (!window.AppStore || typeof window.AppStore.mutate !== 'function') {
+            showNotification('Atualize o aplicativo', 'Não foi possível reabrir as inscrições com segurança.', 'error');
+            return;
+        }
+        window.AppStore.mutate(tId, function(ft) {
+            ft.status = 'open'; ft.enrollmentStatus = 'open'; return true;
+        }, 'Inscrições reabertas para completar times');
         var el = document.getElementById('incomplete-teams-panel');
         if (el) el.remove();
         if (typeof showNotification === 'function') showNotification(_t('draw.enrollReopenedTeams'), _t('draw.enrollReopenedTeamsMsg'), 'success');
@@ -2452,9 +2455,12 @@ window._handleOddOption = function (tId, option) {
     var isTeam = oddInfo.teamSize > 1;
 
     if (option === 'reopen') {
-        t.status = 'open';
-        window.AppStore.logAction(tId, 'Inscrições reabertas para resolver número ímpar');
-        window.AppStore.sync();
+        if (!window.AppStore || typeof window.AppStore.mutate !== 'function') {
+            showNotification('Atualize o aplicativo', 'Não foi possível reabrir as inscrições com segurança.', 'error');
+            return;
+        }
+        window.AppStore.mutate(tId, function(ft) { ft.status = 'open'; return true; },
+            'Inscrições reabertas para resolver número ímpar');
         var el = document.getElementById('odd-entries-panel');
         if (el) el.remove();
         showNotification(_t('draw.enrollReopenedParity'), _t('draw.enrollReopenedParityMsg'), 'info');

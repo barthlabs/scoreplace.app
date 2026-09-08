@@ -205,6 +205,7 @@ const SUITES = [
   // reativar não é desfeito pelo guard do elenco
   'tests/reativar-nao-desativa-sozinho.test.js',
   'tests/toggle-liga-nao-sobrescreve-placar.test.js',
+  'tests/reabrir-inscricoes-nao-sobrescreve-placar.test.js',
   // W.O. sempre desativa; a fila é ato da própria pessoa
   'tests/wo-sempre-desativa.test.js',
   // o suplente do W.O. respeita a proporção de gênero (o homem fura a fila de um grupo
