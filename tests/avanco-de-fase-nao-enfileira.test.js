@@ -27,7 +27,7 @@ const fs = require('fs'), path = require('path');
 const { window: W, sandbox, load } = require('./headless');
 const ROOT = path.join(__dirname, '..');
 sandbox.document = { getElementById: () => null, querySelector: () => null, querySelectorAll: () => [], body: { style: {} }, createElement: () => ({ style: {}, setAttribute() {}, appendChild() {} }) };
-sandbox.AppStore = { tournaments: [], currentUser: null, logAction: () => {}, sync: () => {} };
+sandbox.AppStore = { tournaments: [], currentUser: null, logAction: () => {}, sync: () => {}, commitTournamentTx: (id, fn) => Promise.resolve(fn(sandbox.AppStore.tournaments.find(t => String(t.id) === String(id))) !== false) };
 // headless.js já carrega waitlist-core + phases-engine; aqui entram os dois que faltam.
 load('identity-core.js');
 load('tournaments.js');
@@ -63,6 +63,7 @@ ok(!/_optCard\('include'/.test(prep) && !/Incluir na eliminatória/.test(prep),
 W._findTournamentById = () => t2;
 const t2 = { id: 'sb2', currentPhaseIndex: 0, allowSelfDeactivation: true, phases: [{}, {}],
   participants: [{ uid: 'x1', ligaActive: false }], standbyParticipants: [] };
+sandbox.AppStore.tournaments = [t2];
 W.FirestoreDB = { saveTournament: () => Promise.resolve() };
 W._advanceMultiPhase = () => {};
 W._resolvePhaseInactives('sb2', 'standby');

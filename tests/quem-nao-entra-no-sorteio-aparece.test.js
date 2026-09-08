@@ -145,7 +145,7 @@ const tExcluir = torneio();
 let saveOpts = null, avancosAposSave = 0;
 W.AppStore.tournaments = [tExcluir];
 W._findTournamentById = (id) => (String(id) === tExcluir.id ? tExcluir : null);
-W.FirestoreDB = { saveTournament: (_t, opts) => { saveOpts = opts; return Promise.resolve(); } };
+W.AppStore.commitTournamentTx = (_id, fn, opts) => { saveOpts = opts; fn(tExcluir); return Promise.resolve(true); };
 W._advanceMultiPhase = () => { avancosAposSave++; };
 chama('_resolvePhaseInactives', tExcluir.id, 'remove');
 ok('⭐⭐ saem os 2 desativados e os 2 W.O. (sobram só os ativos)',

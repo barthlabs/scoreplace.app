@@ -47,7 +47,7 @@ console.log('\n── excluir inscrito num roster SÓ-UID (o clique real do ✕)
 // 1) SOLO com conta — o card da tela de DUPLAS manda `p.displayName || p.name`, que num roster
 // só-uid é STRING VAZIA (foi exatamente isto que o dono viu: ✕ sem reação nenhuma).
 {
-  const t = mkT(); W.AppStore = { tournaments: [t], currentUser: { uid: 'uOrg' }, isCreator: () => true, sync: () => {} };
+  const t = mkT(); W.AppStore = { tournaments: [t], currentUser: { uid: 'uOrg' }, isCreator: () => true, sync: () => {}, commitTournamentTx: (id, fn) => { saved++; fn(t); return Promise.resolve(true); } };
   W.removeParticipantFunction(t.id, '', 'uSolo');
   ok(uidsOf(t).indexOf('uSolo') === -1, 'solo :: saiu do roster');
   ok(t.participants.length === 2, 'solo :: sobraram 2 entradas — got ' + t.participants.length);
@@ -56,7 +56,7 @@ console.log('\n── excluir inscrito num roster SÓ-UID (o clique real do ✕)
 
 // 2) MEMBRO DE DUPLA — excluir 1 pessoa não pode levar o parceiro junto nem virar no-op.
 {
-  const t = mkT(); W.AppStore = { tournaments: [t], currentUser: { uid: 'uOrg' }, isCreator: () => true, sync: () => {} };
+  const t = mkT(); W.AppStore = { tournaments: [t], currentUser: { uid: 'uOrg' }, isCreator: () => true, sync: () => {}, commitTournamentTx: (id, fn) => { saved++; fn(t); return Promise.resolve(true); } };
   W.removeParticipantFunction(t.id, 'Karla Fernandes', 'uKarla');
   const flat = uidsOf(t);
   ok(flat.indexOf('uMarcello+uKarla') === -1, 'dupla :: a dupla deixou de existir');
@@ -67,7 +67,7 @@ console.log('\n── excluir inscrito num roster SÓ-UID (o clique real do ✕)
 
 // 3) FICTÍCIO (sem conta) — identidade continua sendo o nome.
 {
-  const t = mkT(); W.AppStore = { tournaments: [t], currentUser: { uid: 'uOrg' }, isCreator: () => true, sync: () => {} };
+  const t = mkT(); W.AppStore = { tournaments: [t], currentUser: { uid: 'uOrg' }, isCreator: () => true, sync: () => {}, commitTournamentTx: (id, fn) => { saved++; fn(t); return Promise.resolve(true); } };
   W.removeParticipantFunction(t.id, 'Convidado sem conta');
   ok(t.participants.indexOf('Convidado sem conta') === -1, 'fictício :: saiu do roster');
 }
@@ -75,7 +75,7 @@ console.log('\n── excluir inscrito num roster SÓ-UID (o clique real do ✕)
 // 4) presença/W.O./VIP do excluído não podem ficar penduradas
 {
   const t = mkT(); t.checkedIn = { uKarla: true, uSolo: true }; t.absent = { uKarla: true }; t.vips = { uKarla: true };
-  W.AppStore = { tournaments: [t], currentUser: { uid: 'uOrg' }, isCreator: () => true, sync: () => {} };
+  W.AppStore = { tournaments: [t], currentUser: { uid: 'uOrg' }, isCreator: () => true, sync: () => {}, commitTournamentTx: (id, fn) => { saved++; fn(t); return Promise.resolve(true); } };
   W.removeParticipantFunction(t.id, 'Karla Fernandes', 'uKarla');
   ok(!t.checkedIn.uKarla && !t.absent.uKarla && !t.vips.uKarla, 'limpa presença/ausência/VIP do excluído');
   ok(t.checkedIn.uSolo === true, 'não mexe na presença de quem ficou');
@@ -89,7 +89,7 @@ console.log('\n── ações do card gravam na CHAVE-UID (W.O. · VIP · nível
   const t = mkT();
   t.skillCategories = ['A', 'B', 'C'];
   W.AppStore = {
-    tournaments: [t], currentUser: { uid: 'uOrg' }, isCreator: () => true, sync: () => {},
+    tournaments: [t], currentUser: { uid: 'uOrg' }, isCreator: () => true, sync: () => {}, commitTournamentTx: (id, fn) => { saved++; fn(t); return Promise.resolve(true); },
     mutate: function (tid, fn) { fn(t); return Promise.resolve(true); },
     getTournament: function () { return t; },
   };
@@ -116,7 +116,7 @@ console.log('\n── ações do card gravam na CHAVE-UID (W.O. · VIP · nível
 console.log('\n── W.O. do time chaveia pelos DOIS membros ──');
 {
   const t = mkT();
-  W.AppStore = { tournaments: [t], currentUser: { uid: 'uOrg' }, isCreator: () => true, sync: () => {}, mutate: (tid, fn) => { fn(t); return Promise.resolve(true); }, getTournament: () => t };
+  W.AppStore = { tournaments: [t], currentUser: { uid: 'uOrg' }, isCreator: () => true, sync: () => {}, commitTournamentTx: (id, fn) => { saved++; fn(t); return Promise.resolve(true); }, mutate: (tid, fn) => { fn(t); return Promise.resolve(true); }, getTournament: () => t };
   W._canManagePresence = function () { return true; };
   W._markAbsent(t.id, 'Marcello Martins de Souza / Karla Fernandes', 'u:uMarcello|u:uKarla');
   ok(t.absent.uMarcello != null && t.absent.uKarla != null, 'time :: os DOIS uids ficaram ausentes — got ' + JSON.stringify(Object.keys(t.absent)));
@@ -130,7 +130,7 @@ console.log('\n── W.O. do time chaveia pelos DOIS membros ──');
 {
   const t = mkT();
   t.participants = [{ uid: 'uMarcello', p1Uid: 'uMarcello', p2Name: 'Convidado sem conta' }];
-  W.AppStore = { tournaments: [t], currentUser: { uid: 'uOrg' }, isCreator: () => true, sync: () => {}, mutate: (tid, fn) => { fn(t); return Promise.resolve(true); }, getTournament: () => t };
+  W.AppStore = { tournaments: [t], currentUser: { uid: 'uOrg' }, isCreator: () => true, sync: () => {}, commitTournamentTx: (id, fn) => { saved++; fn(t); return Promise.resolve(true); }, mutate: (tid, fn) => { fn(t); return Promise.resolve(true); }, getTournament: () => t };
   W._canManagePresence = function () { return true; };
   W._markAbsent(t.id, 'Marcello / Convidado sem conta', 'u:uMarcello|n:Convidado sem conta');
   ok(t.absent.uMarcello != null, 'mista :: quem tem conta foi pelo UID');
@@ -140,7 +140,7 @@ console.log('\n── W.O. do time chaveia pelos DOIS membros ──');
 // FICTÍCIO (sem conta) — ÚNICO caso que continua pelo nome, como o dono definiu.
 {
   const t = mkT();
-  W.AppStore = { tournaments: [t], currentUser: { uid: 'uOrg' }, isCreator: () => true, sync: () => {}, mutate: (tid, fn) => { fn(t); return Promise.resolve(true); }, getTournament: () => t };
+  W.AppStore = { tournaments: [t], currentUser: { uid: 'uOrg' }, isCreator: () => true, sync: () => {}, commitTournamentTx: (id, fn) => { saved++; fn(t); return Promise.resolve(true); }, mutate: (tid, fn) => { fn(t); return Promise.resolve(true); }, getTournament: () => t };
   W._canManagePresence = function () { return true; };
   W._markAbsent(t.id, 'Convidado sem conta');
   ok(t.absent['Convidado sem conta'] != null, 'fictício :: W.O. pelo NOME (sem uid, é a exceção)');

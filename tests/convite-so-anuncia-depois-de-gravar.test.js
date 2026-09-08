@@ -194,10 +194,10 @@ function palco(opts) {
     ok(!p.eventos.some((e) => e.indexOf('toast:warning:') === 0), 'sem aviso de falha');
   }
 
-  console.log('\n§5 DUPLA — segue esperando o saveTournament, e o toast espera o veredito');
+  console.log('\n§5 DUPLA — segue esperando o (?:saveTournament|commitTournamentTx), e o toast espera o veredito');
   {
-    ok(/saveTournament\(t\)\)\.then\(function\(\)/.test(SRC_DRAW),
-      'o convite de dupla continua dentro do `.then` do saveTournament');
+    ok(/commitTournamentTx[\s\S]{0,1800}Promise\.resolve\(_pairSaved\)\.then/.test(SRC_DRAW),
+      'o convite de dupla continua dentro do `.then` da confirmação transacional');
     ok(/_pediuEmail[\s\S]{0,200}sendPairInviteEmail\(String\(t\.id\), uid2\)/.test(SRC_DRAW),
       '  → e a Function é chamada lá dentro');
     ok(/_pediuEmail\.then\(function \(veredito\)[\s\S]{0,500}veredito\.enviado/.test(SRC_DRAW),
