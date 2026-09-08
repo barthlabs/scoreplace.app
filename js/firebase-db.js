@@ -2119,53 +2119,16 @@ window.FirestoreDB = {
     return apagados;
   },
 
-  // APAGAR UM TORNEIO É APAGAR TUDO QUE É DELE. Regra do dono (01/ago/2026, sobre o
-  // sandbox): _"os dados do SB devem ficar apenas enquanto existe o SB. ao apagar o SB deve
-  // apagar tudo relativo a ele para não persistir."_ Vale pra qualquer torneio.
-  //
-  // ISSO AQUI ERA UMA LINHA SÓ (`doc().delete()`) e por isso o banco tinha, medido em
-  // 01/ago/2026, **211 documentos de placar dos quais só 60 eram de torneio vivo**: 151
-  // órfãos, 85 deles de sandboxes já apagados. Órfão não é dado inerte — ele responde à
-  // consulta `collectionGroup('results')` por uid e reaparece no histórico das pessoas.
-  //
-  // A ORDEM IMPORTA: as subcoleções PRIMEIRO, o doc do torneio DEPOIS. A regra do Firestore
-  // pra `results` autoriza pelo torneio PAI (`parentT()`); com o pai já apagado o `get()`
-  // devolve nada, `isAdminOf(null)` é falso e a limpeza toma permission-denied. Ou seja: uma
-  // vez apagado o pai, os filhos ficam INALCANÇÁVEIS pelo cliente — é assim que os 151
-  // órfãos nasceram e é por isso que não dá pra "limpar depois".
+  // APAGAR UM TORNEIO É UMA OPERAÇÃO DO SERVIDOR. A implementação anterior fazia a remoção
+  // direta do navegador e capturava o erro: a tela escondia o torneio, embora ele continuasse
+  // no Firestore e voltasse no próximo carregamento. A callable autentica, autoriza pelo
+  // documento fresco e só responde depois de apagar a raiz; o gatilho server-side limpa as
+  // cópias/subcoleções e grava a auditoria. Sem fallback local: apagar que não confirmou NÃO
+  // desaparece da tela.
   async deleteTournament(tournamentId) {
-    if (!this.db) return;
+    if (!this.db) throw new Error('Banco indisponível');
     var tId = String(tournamentId);
-    // sandbox: TODAS as partes são dele e ninguém mais as limpa — ver `_sandboxSubcollections`
-    var _subs = this._ehSandbox(tId) ? this._sandboxSubcollections : this._tournamentSubcollections;
-    for (var i = 0; i < _subs.length; i++) {
-      var sub = _subs[i];
-      try {
-        var n = await this._deleteSubcollection(tId, sub);
-        if (n && window._log) window._log('[delete torneio]', tId, '→', n, 'doc(s) de', sub);
-      } catch (e) {
-        // Não aborta o delete do torneio: é melhor o torneio sumir e sobrar subcoleção do
-        // que o organizador clicar em Apagar e nada acontecer. Mas o erro é BARULHENTO.
-        window._error('Erro ao limpar subcoleção ' + sub + ' de ' + tId + ':', e);
-        if (typeof window._captureException === 'function') {
-          window._captureException(e, { area: 'deleteTournament.sub', tournamentId: tId, sub: sub, code: e && e.code });
-        }
-      }
-    }
-    // ⛔ `discoveryFeed/{id}` NÃO se apaga daqui, e nunca deu: o índice é SERVER-AUTHORITATIVE.
-    // `firestore.rules` diz `allow write: if false` — e `delete` está DENTRO de `write` —, então
-    // a tentativa do cliente tomava permission-denied desde que nasceu (2.1.79 mediu: 0 órfãos
-    // em 44 torneios, ou seja quem limpava nunca foi este código). Quem remove é o Admin SDK,
-    // que ignora as rules: `syncDiscoveryFeed` (onDocumentWritten) e `purgeTournamentCopies`
-    // (onDocumentDeleted, passo 5), os dois em `functions/index.js`.
-    try {
-      await this._tRef(tId).delete();
-    } catch (e) {
-      window._error('Erro ao deletar torneio:', e);
-      if (typeof window._captureException === 'function') {
-        window._captureException(e, { area: 'deleteTournament', tournamentId: tournamentId, code: e && e.code });
-      }
-    }
+    return this._callFn('deleteTournament', { tournamentId: tId });
   },
 
   async loadAllTournaments() {

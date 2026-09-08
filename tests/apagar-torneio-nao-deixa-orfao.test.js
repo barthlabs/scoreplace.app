@@ -10,10 +10,8 @@
  * consulta por uid e reaparece no histórico das pessoas (foi o "(SB) Torneio de Férias" na
  * ficha da Lucia Helena — ver tests/jogo-so-com-placar.test.js).
  *
- * A ORDEM é o coração do teste: subcoleção PRIMEIRO, doc do torneio DEPOIS. A regra do
- * Firestore autoriza escrita em `results` pelo torneio PAI (`parentT()`); com o pai já
- * apagado a limpeza toma permission-denied e os filhos ficam INALCANÇÁVEIS pra sempre.
- * Apagar o pai primeiro não é "ordem diferente", é o bug.
+ * A remoção da raiz agora é uma callable autenticada. Só depois da confirmação o cliente
+ * remove a cópia visual; `purgeTournamentCopies` é o único responsável por limpar filhos.
  *
  * Ver project_game_counts_only_with_score_partner_opponent, project_sandbox_tournament.
  */
@@ -30,109 +28,24 @@ let pass = 0, fail = 0;
 function ok(c, m) { if (c) pass++; else { fail++; console.error('  ✗', m); } }
 function eq(a, b, m) { ok(a === b, m + ' — esperado ' + JSON.stringify(b) + ', veio ' + JSON.stringify(a)); }
 
-// ── Firestore de mentira que ANOTA A ORDEM das operações ──────────────────────
-function fakeDb(conteudo, opts) {
-  opts = opts || {};
-  const log = [];
-  const restante = JSON.parse(JSON.stringify(conteudo));   // { 'tid/sub': nDocs }
-  const api = {
-    _log: log,
-    _restante: restante,
-    batch: function () {
-      const alvos = [];
-      return {
-        delete: function (ref) { alvos.push(ref); },
-        commit: async function () {
-          alvos.forEach(function (r) {
-            log.push('del ' + r.chave);
-            restante[r.chave] = Math.max(0, (restante[r.chave] || 0) - 1);
-          });
-        }
-      };
-    },
-    collection: function (nome) {
-      return {
-        doc: function (id) {
-          return {
-            delete: async function () { log.push('del doc ' + nome + '/' + id); },
-            collection: function (sub) {
-              const chave = id + '/' + sub;
-              return {
-                limit: function (n) {
-                  return {
-                    get: async function () {
-                      if (opts.falha && opts.falha === sub) throw new Error('permission-denied');
-                      log.push('get ' + chave);
-                      const qtd = Math.min(n, restante[chave] || 0);
-                      const docs = [];
-                      for (let i = 0; i < qtd; i++) docs.push({ ref: { chave: chave } });
-                      return { empty: qtd === 0, size: qtd, forEach: function (f) { docs.forEach(f); } };
-                    }
-                  };
-                }
-              };
-            }
-          };
-        }
-      };
-    }
-  };
-  return api;
-}
-
 (async function () {
-  console.log('\n▸ apagar leva as subcoleções junto');
+  console.log('\n▸ apagar só confirma depois da callable do servidor');
   {
-    DB.db = fakeDb({ 'tour_x/results': 12, 'tour_x/letzplayScans': 3 });
+    DB.db = {};
+    let chamada = null;
+    DB._callFn = async function (nome, payload) { chamada = { nome, payload }; return { deleted: true }; };
     await DB.deleteTournament('tour_x');
-    eq(DB.db._restante['tour_x/results'], 0, 'nenhum placar sobrou');
-    eq(DB.db._restante['tour_x/letzplayScans'], 0, 'nenhum scan sobrou');
-    const log = DB.db._log;
-    ok(log.indexOf('del doc tournaments/tour_x') >= 0, 'o torneio foi apagado');
-    // ⭐ 2.1.79 — ESTA ASSERÇÃO ESTAVA INVERTIDA, e ficou verde por 30 dias.
-    // Ela exigia que o cliente apagasse `discoveryFeed/{id}`. O cliente TENTAVA — e a
-    // produção NEGAVA em 100% das vezes: `firestore.rules` tem um único bloco pra essa
-    // coleção, `allow write: if false`, e `delete` está dentro de `write`. O `catch (e) {}`
-    // mudo engolia o permission-denied, e este teste — que dirige um Firestore de MENTIRA,
-    // cujo `delete()` só ANOTA e não sabe negar — carimbava a limpeza como feita.
-    // Mock de cliente NÃO valida autorização de Rules; nunca validou. O índice é do
-    // SERVIDOR (ver o bloco "quem apaga o índice de descoberta é o SERVIDOR", abaixo).
-    ok(log.indexOf('del doc discoveryFeed/tour_x') < 0,
-      'o cliente NÃO tenta apagar discoveryFeed (a regra nega `write`; tentar só gerava catch mudo)');
-    // ORDEM: o último delete de subcoleção acontece ANTES do delete do torneio.
-    const ultimoFilho = Math.max(log.lastIndexOf('del tour_x/results'), log.lastIndexOf('del tour_x/letzplayScans'));
-    const paiIdx = log.indexOf('del doc tournaments/tour_x');
-    ok(ultimoFilho >= 0 && ultimoFilho < paiIdx,
-      'subcoleções PRIMEIRO, torneio DEPOIS (com o pai apagado a regra nega a limpeza pra sempre)');
+    eq(chamada && chamada.nome, 'deleteTournament', 'o cliente dispara a callable certa');
+    eq(chamada && chamada.payload && chamada.payload.tournamentId, 'tour_x', 'e envia somente o id');
   }
 
-  console.log('▸ subcoleção grande: apaga em lotes até esvaziar');
+  console.log('▸ erro do servidor chega à tela; apagar não vira sumiço local');
   {
-    DB.db = fakeDb({ 'tour_big/results': 950, 'tour_big/letzplayScans': 0 });
-    await DB.deleteTournament('tour_big');
-    eq(DB.db._restante['tour_big/results'], 0, 'os 950 placares foram embora (lotes de 400)');
-    const gets = DB.db._log.filter(function (l) { return l === 'get tour_big/results'; }).length;
-    ok(gets >= 3, 'precisou de mais de um lote (' + gets + ' páginas) — 400 é o teto do batch');
-  }
-
-  console.log('▸ torneio sem subcoleção nenhuma não quebra');
-  {
-    DB.db = fakeDb({ 'tour_zero/results': 0, 'tour_zero/letzplayScans': 0 });
-    await DB.deleteTournament('tour_zero');
-    ok(DB.db._log.indexOf('del doc tournaments/tour_zero') >= 0, 'apaga o torneio normalmente');
-  }
-
-  console.log('▸ falha na limpeza NÃO impede o torneio de sumir (mas é barulhenta)');
-  {
-    DB.db = fakeDb({ 'tour_err/results': 5, 'tour_err/letzplayScans': 0 }, { falha: 'results' });
-    let gritou = false;
-    const antes = window._error;
-    window._error = function () { gritou = true; };
-    await DB.deleteTournament('tour_err');
-    window._error = antes;
-    ok(DB.db._log.indexOf('del doc tournaments/tour_err') >= 0,
-      'o organizador clicou em Apagar e o torneio sumiu');
-    ok(gritou, 'e o erro da limpeza foi registrado (não é silencioso)');
+    DB.db = {};
+    DB._callFn = async function () { throw new Error('permission-denied'); };
+    let falhou = false;
+    try { await DB.deleteTournament('tour_err'); } catch (e) { falhou = /permission-denied/.test(e.message); }
+    ok(falhou, 'a rejeição da CF não é engolida pelo cliente');
   }
 
   console.log('▸ quem apaga o índice de descoberta é o SERVIDOR, e está escrito');
@@ -178,6 +91,19 @@ function fakeDb(conteudo, opts) {
     const cliente = fs.readFileSync(path.join(__dirname, '..', 'js', 'firebase-db.js'), 'utf8');
     ok(!/collection\(['"]discoveryFeed['"]\)\s*\.\s*doc\([^)]*\)\s*\.\s*delete\(/.test(cliente),
       'js/firebase-db.js não tem writer de discoveryFeed (o natimorto da 1.6.78 não volta)');
+    const deletar = cliente.slice(cliente.indexOf('async deleteTournament'), cliente.indexOf('\n  async loadAllTournaments'));
+    ok(/_callFn\('deleteTournament'/.test(deletar), 'o cliente só dispara `deleteTournament` no servidor');
+    ok(!/\.delete\(\)/.test(deletar), 'e não mantém uma exclusão direta como queda');
+
+    const apagar = gatilho('deleteTournament');
+    ok(/onCall/.test(apagar) && /_isTournamentOrgCaller/.test(apagar),
+      'a CF exige autenticação e autoridade do organizador pelo documento fresco');
+    ok(/await ref\.delete\(\)/.test(apagar), 'a CF só responde após apagar a raiz');
+
+    const tela = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'tournaments-enrollment.js'), 'utf8');
+    const ui = tela.slice(tela.indexOf('window.deleteTournamentFunction'), tela.indexOf('// Liga active toggle'));
+    ok(ui.indexOf('deleteTournament(tId).then') < ui.indexOf('tournaments.splice'),
+      'a tela remove da memória somente depois da confirmação da CF');
   }
 
   console.log('▸ a lista de subcoleções é a das regras do Firestore');

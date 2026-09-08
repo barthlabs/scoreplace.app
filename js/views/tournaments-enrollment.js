@@ -1632,46 +1632,33 @@ window.deleteTournamentFunction = function (tId) {
         function() {
             const idx = window.AppStore.tournaments.findIndex(tour => tour.id.toString() === tId.toString());
             if (idx !== -1) {
-                // Marca como deletado para evitar que o listener traga de volta
-                if (!window.AppStore._deletedTournamentIds) window.AppStore._deletedTournamentIds = [];
-                window.AppStore._deletedTournamentIds.push(String(tId));
-                try { localStorage.setItem('scoreplace_deleted_ids', JSON.stringify(window.AppStore._deletedTournamentIds)); } catch(e) {}
-
-                // Save reference for background tasks before removing
+                // Guarda a referência, mas NÃO a remove antes do servidor confirmar. A rota
+                // anterior escondia um erro de permissão e fazia o mesmo torneio reaparecer.
                 var _delTour = window.AppStore.tournaments[idx];
-
-                // ── Optimistic: remove from memory, navigate immediately ──
-                window.AppStore.tournaments.splice(idx, 1);
-                window.AppStore._saveToCache();
-
-                showNotification(_t('enroll.deletedTitle'), _t('enroll.deletedMsg'), 'success');
-                window.location.hash = '#dashboard';
-
-                // ── Background: notify participants + delete from Firestore ──
-                // Notifications run in background — don't block UI
-                if (_delTour && typeof window._notifyTournamentParticipants === 'function') {
-                    var _cu = window.AppStore.currentUser;
-                    try {
-                        window._notifyTournamentParticipants(_delTour, {
-                            type: 'tournament_deleted',
-                            title: '🗑️ Torneio cancelado',
-                            message: _t('notif.tournamentDeleted').replace('{name}', _delTour.name || 'Torneio'),
-                            tournamentName: _delTour.name || 'Torneio',
-                            level: 'fundamental'
-                        }, _cu ? _cu.email : null);
-                    } catch(e) { window._warn('Delete notification error:', e); }
-                }
-
-                // Firestore delete runs in background
                 if (window.FirestoreDB && window.FirestoreDB.db) {
+                    showNotification('Apagando torneio', 'Confirmando a exclusão no servidor…', 'info');
                     window.FirestoreDB.deleteTournament(tId).then(function() {
-                        var delIdx = window.AppStore._deletedTournamentIds.indexOf(String(tId));
-                        if (delIdx !== -1) window.AppStore._deletedTournamentIds.splice(delIdx, 1);
-                        try { localStorage.setItem('scoreplace_deleted_ids', JSON.stringify(window.AppStore._deletedTournamentIds)); } catch(e) {}
+                        var liveIdx = window.AppStore.tournaments.findIndex(function(tour) { return String(tour.id) === String(tId); });
+                        if (liveIdx !== -1) window.AppStore.tournaments.splice(liveIdx, 1);
+                        window.AppStore._saveToCache();
+                        showNotification(_t('enroll.deletedTitle'), _t('enroll.deletedMsg'), 'success');
+                        window.location.hash = '#dashboard';
+                        if (_delTour && typeof window._notifyTournamentParticipants === 'function') {
+                            var _cu = window.AppStore.currentUser;
+                            try {
+                                window._notifyTournamentParticipants(_delTour, {
+                                    type: 'tournament_deleted', title: '🗑️ Torneio cancelado',
+                                    message: _t('notif.tournamentDeleted').replace('{name}', _delTour.name || 'Torneio'),
+                                    tournamentName: _delTour.name || 'Torneio', level: 'fundamental'
+                                }, _cu ? _cu.email : null);
+                            } catch(e) { window._warn('Delete notification error:', e); }
+                        }
                     }).catch(function(err) {
                         window._error('Erro ao deletar torneio do Firestore:', err);
                         showNotification(_t('enroll.deleteError'), _t('enroll.deleteErrorMsg'), 'error');
                     });
+                } else {
+                    showNotification(_t('enroll.deleteError'), _t('enroll.deleteErrorMsg'), 'error');
                 }
             }
         },

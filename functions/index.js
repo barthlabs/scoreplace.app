@@ -3338,6 +3338,37 @@ function _isTournamentOrgCaller(t, callerUid) {
   return ch.some((c) => c && c.uid === callerUid && (c.status === 'active' || c.status === 'accepted'));
 }
 
+/* ─── deleteTournament (servidor, confirmado) ───────────────────────────────────
+ * O botão de apagar jamais pode esconder o torneio antes de o banco confirmar. A antiga
+ * rota fazia `doc.delete()` no navegador, engolia `permission-denied` e removia apenas a
+ * cópia local: ao abrir de novo, o torneio que NUNCA fora apagado "voltava".
+ *
+ * A CF é a única porta: autoriza por UID contra o documento fresco e então apaga a raiz.
+ * `purgeTournamentCopies` observa essa exclusão, preserva o log de auditoria e remove as
+ * subcoleções e projeções. Um cliente atrasado também não pode recriar o id: a regra de
+ * create exige `_nascidoEm == request.time`.
+ */
+exports.deleteTournament = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
+    const tournamentId = String((request.data && request.data.tournamentId) || "");
+    if (!tournamentId) throw new HttpsError("invalid-argument", "sem tournamentId");
+
+    const db = admin.firestore();
+    const ref = db.collection("tournaments").doc(tournamentId);
+    const snap = await ref.get();
+    if (!snap.exists) return { deleted: false, alreadyMissing: true };
+    if (!_isTournamentOrgCaller(snap.data(), callerUid)) {
+      throw new HttpsError("permission-denied", "só o organizador pode apagar o torneio");
+    }
+    await ref.delete();
+    console.log(`[deleteTournament] ${tournamentId} apagado por ${callerUid}`);
+    return { deleted: true, alreadyMissing: false };
+  }
+);
+
 /* ═══════════════════════════════════════════════════════════════════════════════
  * O LINK DO GRUPO DE WHATSAPP DO JOGO — A PORTA DE ESCRITA
  *
