@@ -1260,38 +1260,53 @@ window._showLateConfrontosPanel = function(tId) {
     overlay.id = 'unified-resolution-panel';
     overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.92);z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem;';
     document.body.style.overflow = 'hidden';
-    var _proceedDraw = function() {
-        // restaura inscrição (suspensa ao abrir o painel) e dispara o sorteio
-        if (t._suspendedByPanel) {
-            t.status = t._previousStatus || 'open';
-            delete t._suspendedByPanel; delete t._previousStatus;
+    var _applyLateDecision = function(target, mode) {
+        if (!target) return false;
+        target._lateResolutionAck = mode;
+        if (mode === 'standby') {
+            var phase = (Array.isArray(target.phases) && target.phases[target.currentPhaseIndex || 0]) || null;
+            if (phase) phase.lateEnrollment = 'standby';
+            target.lateEnrollment = 'standby';
+        } else {
+            target.p2Resolution = (mode === 'bye') ? 'bye' : 'playin';
         }
-        try { window.FirestoreDB.saveTournament(t); } catch (e) {}
-        overlay.remove(); document.body.style.overflow = '';
-        if (typeof window.generateDrawFunction === 'function') window.generateDrawFunction(tId);
-        else if (typeof window.showFinalReviewPanel === 'function') window.showFinalReviewPanel(tId);
+        if (target._suspendedByPanel) {
+            target.status = target._previousStatus || 'open';
+            delete target._suspendedByPanel; delete target._previousStatus;
+        }
+        return true;
+    };
+    var _proceedDraw = function(mode) {
+        _applyLateDecision(t, mode);
+        var save = window.AppStore && typeof window.AppStore.commitTournamentTx === 'function'
+            ? window.AppStore.commitTournamentTx(tId, function(ft) { return _applyLateDecision(ft, mode); })
+            : Promise.resolve(false);
+        Promise.resolve(save).then(function(saved) {
+            if (saved === false) {
+                overlay.remove(); document.body.style.overflow = '';
+                return;
+            }
+            overlay.remove(); document.body.style.overflow = '';
+            if (typeof window.generateDrawFunction === 'function') window.generateDrawFunction(tId);
+            else if (typeof window.showFinalReviewPanel === 'function') window.showFinalReviewPanel(tId);
+        });
     };
     window._lateConfrontosPick = function(mode) {
-        t._lateResolutionAck = mode;
-        if (mode === 'standby') {
-            // novos times viram SUPLENTES (não entram na chave). Seta na fase atual + no topo.
-            var ph = (Array.isArray(t.phases) && t.phases[t.currentPhaseIndex || 0]) || null;
-            if (ph) ph.lateEnrollment = 'standby';
-            t.lateEnrollment = 'standby';
-        } else {
-            // v1.3.72: grava a ESCOLHA de resolução de rodada ímpar, aplicada SEMPRE pelo motor
-            // (_rebuildIntegratedBracket lê t.p2Resolution). bye = folga; repescagem = puxa o
-            // melhor derrotado (default, inclusão). Ver [[project_inclusion_philosophy_canon]].
-            t.p2Resolution = (mode === 'bye') ? 'bye' : 'playin';
-        }
-        _proceedDraw();
+        _proceedDraw(mode);
     };
     window._lateConfrontosCancel = function() {
         // desiste do sorteio: restaura o status original da inscrição
         if (t._suspendedByPanel) {
             t.status = t._previousStatus || 'open';
             delete t._suspendedByPanel; delete t._previousStatus;
-            try { window.FirestoreDB.saveTournament(t); } catch (e) {}
+            if (window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
+                window.AppStore.commitTournamentTx(tId, function(ft) {
+                    if (!ft._suspendedByPanel) return false;
+                    ft.status = ft._previousStatus || 'open';
+                    delete ft._suspendedByPanel; delete ft._previousStatus;
+                    return true;
+                });
+            }
         }
         overlay.remove(); document.body.style.overflow = '';
     };
