@@ -672,7 +672,19 @@ window._cancelDrawResolution = function(tId) {
             if (t.phases && t.phases[_pnIdx]) { delete t.phases[_pnIdx]._promoteAsked; delete t.phases[_pnIdx]._promoteLines; }
             window._clearPhaseResInfo(t);
         } catch (e) {}
-        if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') window.FirestoreDB.saveTournament(t);
+        if (window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
+            window.AppStore.commitTournamentTx(tId, function(ft) {
+                if (ft._suspendedByPanel) { ft.status = ft._previousStatus || 'open'; }
+                else if (ft._reopenIfDrawCancelled) ft.status = 'open';
+                if (typeof window._clearDrawRuntimeFlags === 'function') window._clearDrawRuntimeFlags(ft);
+                try {
+                    var nextIdx = (ft.currentPhaseIndex || 0) + 1;
+                    if (ft.phases && ft.phases[nextIdx]) { delete ft.phases[nextIdx]._promoteAsked; delete ft.phases[nextIdx]._promoteLines; }
+                    window._clearPhaseResInfo(ft);
+                } catch (e) {}
+                return true;
+            });
+        }
     }
     // ⭐ `inactive-phase-panel` entrou na lista: o painel de inativos ganhou Cancelar e ele
     // usa ESTE cancelar canônico (o mesmo dos outros do fluxo). Sem estar aqui, cancelar

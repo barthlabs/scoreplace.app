@@ -3926,8 +3926,14 @@ window._requestMergeAcceptance = function(opts) {
             // evita duplicar o mesmo pedido (mesmo real + mesmo genérico)
             t.pendingMerges = t.pendingMerges.filter(function(r) { return !(r.realUid === realUid && r.genericName === genericName); });
             t.pendingMerges.push(req);
-            t.updatedAt = new Date().toISOString();
-            window.FirestoreDB.saveTournament(t);
+            var _requestSaved = window.AppStore && typeof window.AppStore.commitTournamentTx === 'function'
+              ? window.AppStore.commitTournamentTx(opts.tId, function(ft) {
+                  if (!Array.isArray(ft.pendingMerges)) ft.pendingMerges = [];
+                  ft.pendingMerges = ft.pendingMerges.filter(function(r) { return !(r.realUid === realUid && r.genericName === genericName); });
+                  ft.pendingMerges.push(req); return true;
+                }) : Promise.resolve(false);
+            Promise.resolve(_requestSaved).then(function(saved) {
+            if (saved === false) { if (typeof window._softRefreshView === 'function') window._softRefreshView(); return; }
             if (typeof window._sendUserNotification === 'function') {
                 window._sendUserNotification(realUid, {
                     type: 'enrollment_new',
@@ -3938,6 +3944,7 @@ window._requestMergeAcceptance = function(opts) {
             }
             if (typeof showNotification === 'function') showNotification('Pedido enviado', 'Aguardando ' + realName + ' aceitar o vínculo.', 'success');
             if (typeof window._softRefreshView === 'function') window._softRefreshView();
+            });
         },
         null,
         { type: 'warning', confirmText: 'Enviar pedido', cancelText: 'Cancelar' }
@@ -3977,8 +3984,13 @@ window._rejectMergeRequest = function(tId, reqId) {
     if (!req) return;
     t.pendingMerges = t.pendingMerges.filter(function(r) { return r.id !== reqId; });
     if (window._mergePromptShown) delete window._mergePromptShown[reqId];
-    t.updatedAt = new Date().toISOString();
-    window.FirestoreDB.saveTournament(t);
+    var _rejectSaved = window.AppStore && typeof window.AppStore.commitTournamentTx === 'function'
+      ? window.AppStore.commitTournamentTx(tId, function(ft) {
+          if (!Array.isArray(ft.pendingMerges) || !ft.pendingMerges.some(function(r) { return r && r.id === reqId; })) return false;
+          ft.pendingMerges = ft.pendingMerges.filter(function(r) { return r.id !== reqId; }); return true;
+        }) : Promise.resolve(false);
+    Promise.resolve(_rejectSaved).then(function(saved) {
+    if (saved === false) { if (typeof window._softRefreshView === 'function') window._softRefreshView(); return; }
     if (req.byUid && typeof window._sendUserNotification === 'function') {
         window._sendUserNotification(req.byUid, {
             type: 'enrollment_new', title: '❌ Vínculo recusado',
@@ -3988,6 +4000,7 @@ window._rejectMergeRequest = function(tId, reqId) {
     }
     if (typeof showNotification === 'function') showNotification('Vínculo recusado', '', 'info');
     if (typeof window._softRefreshView === 'function') window._softRefreshView();
+    });
 };
 
 // Mostra ao usuário REAL (quando abre o torneio) o pedido de vínculo pendente.
@@ -4044,11 +4057,16 @@ window._participantSelfPair = function(tId, name1, uid1, name2, uid2) {
             window._formDuplaByUids(tId, iN, iU, eN, eU);
             return;
         }
-        t.updatedAt = new Date().toISOString();
         // v2.7.84: salva o convite ANTES de notificar — e mostra erro se o Firestore
         // rejeitar (antes era silencioso: o convite não persistia e o convidado ficava
         // sem o botão de aceitar). Só notifica/avisa "enviado" após o save confirmar.
-        Promise.resolve(window.FirestoreDB.saveTournament(t)).then(function() {
+        var _pairSaved = window.AppStore && typeof window.AppStore.commitTournamentTx === 'function'
+          ? window.AppStore.commitTournamentTx(tId, function(ft) {
+              var freshRes = window._teamFormation.requestPair(ft, uid1, uid2, name1, name2);
+              return freshRes && freshRes.ok;
+            }) : Promise.resolve(false);
+        Promise.resolve(_pairSaved).then(function(saved) {
+            if (saved === false) { if (typeof window._softRefreshView === 'function') window._softRefreshView(); return; }
             if (typeof window._sendUserNotification === 'function') {
                 // v2.7.94: tipo 'pair_invite' + reqId + deep-links → botões Aceitar/Recusar
                 // funcionais na plataforma, no email e no WhatsApp.
