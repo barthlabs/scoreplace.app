@@ -23,4 +23,6 @@ const autoAssign = s.slice(s.indexOf('window._autoAssignCategories = function'),
 const hydrate = s.slice(s.indexOf('window._hydrateInlineCatMgr = function'), s.indexOf('/* ══ OS CLIQUES', s.indexOf('window._hydrateInlineCatMgr = function')));
 ok(/commitTournamentTx/.test(autoAssign) && /skipPersist/.test(autoAssign) && !/saveTournament\(|AppStore\.sync\(/.test(autoAssign), 'autoatribuição reexecuta a reconciliação no documento fresco');
 ok(/commitTournamentTx/.test(hydrate) && /_simplifySingletonCategories\(ft\)/.test(hydrate) && !/saveTournament\(|AppStore\.sync\(/.test(hydrate), 'normalização passiva de categorias usa documento fresco');
+const resolveRequest = body('_resolveCategoryChange', 'window._approveCategoryChange');
+ok(/commitTournamentTx/.test(resolveRequest) && /reqIdentity/.test(resolveRequest) && !/saveTournament\(|AppStore\.sync\(/.test(resolveRequest), 'aprovação de pedido identifica e resolve o pedido fresco');
 if (fail) process.exit(1);
