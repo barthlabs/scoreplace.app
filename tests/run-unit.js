@@ -1523,6 +1523,9 @@ const SUITES = [
   // p1Name/p2Name — vira placar creditado errado. Agora: 2x2 ou nao formou.
   'tests/dupla-casual-nao-perde-jogador.test.js',
   'tests/formacao-de-duplas-casual.test.js',
+  // L3.P1: troféus e backfill liam host/guest inexistentes e zeravam as
+  // estatísticas. O núcleo usa playerUids/players/result, igual ao banco real.
+  'tests/casual-stats-canonicos.test.js',
   // a MESMA bola de 'Carregando' era pedida em 5 tamanhos (4.5/4/3/2.4/2.2rem) e pulava
   // de tamanho a cada troca de tela. O tamanho passa a ser imposto NA FONTE; o que varia
   // por tela e a CAIXA (minHeight). A versao inline e excecao (e uma linha, nao uma tela).

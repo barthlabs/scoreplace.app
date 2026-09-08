@@ -247,35 +247,36 @@
       casualActiveDaysThisMonth: cu.casualActiveDaysThisMonth || 0
     };
 
-    // ── Partidas casuais: coleta host + guest em paralelo, dedup por docId,
-    //    aplica anti-fraude (qualificação individual + limite diário). ────────
-    var _casualMatchMap = {};  // docId → {data, role}
-    var _casualHostDone = false, _casualGuestDone = false;
+    // ── Partidas casuais: createdBy + playerUids, dedup por docId.
+    // O esquema da sala não possui hostUid/guestUid; `playerUids` é o índice de
+    // participação e `createdBy` preserva a sala legada cujo criador ainda não
+    // tenha sido espelhado no array. Filtros ficam no cliente para não pedir
+    // índice composto e para aplicar a mesma regra do backfill.
+    var _casualMatchMap = {};  // docId → data
+    var _casualCreatedDone = false, _casualPlayersDone = false;
 
     function _processCasualMatchMap() {
-      if (!_casualHostDone || !_casualGuestDone) return;
+      if (!_casualCreatedDone || !_casualPlayersDone) return;
       // Converte mapa para array e filtra por qualificação anti-fraude
       var allMatches = Object.keys(_casualMatchMap).map(function(id) {
         return _casualMatchMap[id];
       });
       var qualified = allMatches.filter(function(item) {
         return typeof window._isCasualMatchQualified === 'function'
-          ? window._isCasualMatchQualified(item.data)
-          : item.data.status === 'finished';
+          ? window._isCasualMatchQualified(item)
+          : item.status === 'finished';
       });
       // Aplica limite diário (max 5 partidas por dia-calendário)
       if (typeof window._applyDailyMatchLimit === 'function') {
         qualified = window._applyDailyMatchLimit(
-          qualified.map(function(i) { return i.data; })
-        ).map(function(d) { return { data: d, role: _casualMatchMap[d._docId] && _casualMatchMap[d._docId].role }; });
+          qualified
+        );
       }
       var played = qualified.length;
       var won = 0;
       var sportsSet = {};
-      qualified.forEach(function(item) {
-        var d = item.data;
-        var myColor = item.role === 'host' ? d.hostColor : d.guestColor;
-        if (d.winner && d.winner === myColor) won++;
+      qualified.forEach(function(d) {
+        if (window.CasualStatsCore && window.CasualStatsCore.didUidWin(d, uid)) won++;
         if (d.sport) sportsSet[d.sport] = true;
       });
       stats.casualMatchesPlayed = played;
@@ -285,41 +286,39 @@
 
     // Busca contadores de coleções Firestore em paralelo
     var promises = [
-      // Partidas casuais — host
+      // Partidas casuais criadas pelo usuário (complemento para dados legados).
       db.collection('casualMatches')
-        .where('hostUid', '==', uid)
-        .where('status', '==', 'finished')
+        .where('createdBy', '==', uid)
         .get()
         .then(function(snap) {
           snap.forEach(function(doc) {
             if (!_casualMatchMap[doc.id]) {
               var d = doc.data();
               d._docId = doc.id;
-              _casualMatchMap[doc.id] = { data: d, role: 'host' };
+              _casualMatchMap[doc.id] = d;
             }
           });
-          _casualHostDone = true;
+          _casualCreatedDone = true;
           _processCasualMatchMap();
         })
-        .catch(function() { _casualHostDone = true; _processCasualMatchMap(); }),
+        .catch(function() { _casualCreatedDone = true; _processCasualMatchMap(); }),
 
-      // Partidas casuais — guest (dedup via _casualMatchMap)
+      // Partidas em que o usuário participou (índice canônico da sala).
       db.collection('casualMatches')
-        .where('guestUid', '==', uid)
-        .where('status', '==', 'finished')
+        .where('playerUids', 'array-contains', uid)
         .get()
         .then(function(snap) {
           snap.forEach(function(doc) {
             if (!_casualMatchMap[doc.id]) {
               var d = doc.data();
               d._docId = doc.id;
-              _casualMatchMap[doc.id] = { data: d, role: 'guest' };
+              _casualMatchMap[doc.id] = d;
             }
           });
-          _casualGuestDone = true;
+          _casualPlayersDone = true;
           _processCasualMatchMap();
         })
-        .catch(function() { _casualGuestDone = true; _processCasualMatchMap(); }),
+        .catch(function() { _casualPlayersDone = true; _processCasualMatchMap(); }),
 
       // Torneios — v1.2.2: UID ONLY. A query por `memberEmails` saiu: além de ser
       // fallback, ela NUNCA capturou o e-mail de slot de dupla (_computeMemberEmails

@@ -35,6 +35,7 @@ const _profileMerge = require("./profile-merge-core");
 const _uidSweep = require("./uid-sweep");
 const _mergeCols = require("./merge-collections-core");
 const _dupPerson = require("./duplicate-person-core");
+const _casualStats = require("./casual-stats-core");
 
 // v1.8.38 — RARIDADE DO TOKEN, em UM lugar só (os dois caminhos de detecção usam este).
 // O subconjunto de 1 token só vira sinal quando o token existe SÓ nas duas contas
@@ -5338,40 +5339,8 @@ async function _computeBackfillStats(db, uid, userData) {
 
   const LIGA_KEYWORDS = ["Liga", "Ranking", "Suíço", "Suico", "Swiss"];
 
-  // ── Anti-fraude (inline — mesma lógica de trophy-catalog.js) ─────────────
+  // ── Anti-fraude (mesmo núcleo do navegador) ──────────────────────────────
   const DAILY_MATCH_LIMIT = 5;
-
-  function _isMatchQualified(d) {
-    if (d.status !== "finished") return false;
-    const h = String(d.hostUid  || "").trim();
-    const g = String(d.guestUid || "").trim();
-    if (!h || !g || h === g) return false;
-    if (/^bot[_\-]|^bot$/i.test(h) || /^bot[_\-]|^bot$/i.test(g)) return false;
-    const created  = d.createdAt  || d.startedAt;
-    const finished = d.finishedAt || d.updatedAt;
-    if (created && finished) {
-      const ts = (t) => (t && typeof t.toDate === "function" ? t.toDate() : new Date(t));
-      const t0 = ts(created).getTime();
-      const t1 = ts(finished).getTime();
-      if (!isNaN(t0) && !isNaN(t1) && t1 > t0 && (t1 - t0) < 3 * 60 * 1000) return false;
-    }
-    return true;
-  }
-
-  function _applyDailyLimit(docs, limitPerDay) {
-    const byDay = {};
-    const out   = [];
-    for (const d of docs) {
-      const ts = d.finishedAt || d.updatedAt || d.createdAt;
-      if (!ts) { out.push(d); continue; }
-      const dt = typeof ts.toDate === "function" ? ts.toDate() : new Date(ts);
-      if (isNaN(dt.getTime())) { out.push(d); continue; }
-      const key = `${dt.getFullYear()}-${dt.getMonth() + 1}-${dt.getDate()}`;
-      byDay[key] = (byDay[key] || 0) + 1;
-      if (byDay[key] <= limitPerDay) out.push(d);
-    }
-    return out;
-  }
 
   function _isTournamentQualified(t) {
     if (t.status !== "finished") return false;
@@ -5381,30 +5350,29 @@ async function _computeBackfillStats(db, uid, userData) {
     return count >= 4;
   }
 
-  // Coleta casual matches (host + guest) com dedup por docId
-  const _casualMap = {};  // docId → {data, role}
+  // Coleta pelo índice canônico playerUids, com createdBy como complemento
+  // para salas legadas. Não há hostUid/guestUid no esquema da coleção.
+  const _casualMap = {};  // docId → data
 
   const queries = [
-    // Casual matches where user is host
+    // Salas criadas pelo usuário (complemento dos documentos legados)
     db.collection("casualMatches")
-      .where("hostUid", "==", uid)
-      .where("status", "==", "finished")
+      .where("createdBy", "==", uid)
       .get()
       .then((snap) => {
         snap.forEach((doc) => {
-          if (!_casualMap[doc.id]) _casualMap[doc.id] = { data: doc.data(), role: "host" };
+          if (!_casualMap[doc.id]) _casualMap[doc.id] = doc.data();
         });
       })
       .catch(() => {}),
 
-    // Casual matches where user is guest
+    // Salas em que o usuário participou (índice canônico)
     db.collection("casualMatches")
-      .where("guestUid", "==", uid)
-      .where("status", "==", "finished")
+      .where("playerUids", "array-contains", uid)
       .get()
       .then((snap) => {
         snap.forEach((doc) => {
-          if (!_casualMap[doc.id]) _casualMap[doc.id] = { data: doc.data(), role: "guest" };
+          if (!_casualMap[doc.id]) _casualMap[doc.id] = doc.data();
         });
       })
       .catch(() => {}),
@@ -5488,30 +5456,19 @@ async function _computeBackfillStats(db, uid, userData) {
 
   await Promise.all(queries);
 
-  // ── Processa casual matches com anti-fraude após ambas as queries ──────────
-  // _casualMap: { docId → { data, role } }
-  // Etapas: qualificação individual → limite diário → contagem de stats
+  // ── Processa casual matches com o núcleo compartilhado ────────────────────
   {
-    // 1. Filtra por qualificação individual, preservando o role
-    const qualified = Object.entries(_casualMap)
-      .filter(([, item]) => _isMatchQualified(item.data));
-
-    // 2. Aplica limite diário sobre os dados, mantendo mapeamento para role
-    // Injeta docId no data temporariamente para rastreamento
-    const dataWithIds = qualified.map(([docId, item]) => {
-      return Object.assign({ _backfillDocId: docId }, item.data);
-    });
-    const limited = _applyDailyLimit(dataWithIds, DAILY_MATCH_LIMIT);
+    const qualified = Object.keys(_casualMap)
+      .map((docId) => _casualMap[docId])
+      .filter(_casualStats.isQualified);
+    const limited = _casualStats.applyDailyLimit(qualified, DAILY_MATCH_LIMIT);
 
     // 3. Conta stats a partir do conjunto limitado
     const sportsSet = {};
     let played = 0, won = 0;
     for (const d of limited) {
-      const item = _casualMap[d._backfillDocId];
-      if (!item) continue;
       played++;
-      const myColor = item.role === "host" ? d.hostColor : d.guestColor;
-      if (d.winner && d.winner === myColor) won++;
+      if (_casualStats.didUidWin(d, uid)) won++;
       if (d.sport) sportsSet[d.sport] = true;
     }
     stats.casualMatchesPlayed = played;
