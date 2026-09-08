@@ -5854,12 +5854,15 @@ window._annulPendingDraw = function (tId) {
   if (!t || !t.pendingDraw) return;
   if (!(store.isOrganizer && store.isOrganizer(t))) return;
   var go = function () {
-    t.pendingDraw = null;
-    t.lastAutoDrawAt = null; // libera re-sorteio no próximo ciclo do servidor
-    t.updatedAt = new Date().toISOString();
-    try { store.syncImmediate(t.id); } catch (e) {}
-    if (typeof window.showNotification === 'function') window.showNotification('Sorteio anulado', 'O sorteio em revisão foi descartado (nada foi publicado). Um novo será gerado automaticamente.', 'info');
-    try { var _vc = document.getElementById('view-container'); if (_vc && typeof window.renderTournaments === 'function') window.renderTournaments(_vc, t.id); } catch (e) {}
+    store.mutate(t.id, function (ft) {
+      if (!ft.pendingDraw) return false;
+      ft.pendingDraw = null;
+      ft.lastAutoDrawAt = null; // libera re-sorteio no próximo ciclo do servidor
+    }, 'Sorteio em revisão anulado').then(function (saved) {
+      if (!saved) return;
+      if (typeof window.showNotification === 'function') window.showNotification('Sorteio anulado', 'O sorteio em revisão foi descartado (nada foi publicado). Um novo será gerado automaticamente.', 'info');
+      try { var _vc = document.getElementById('view-container'); if (_vc && typeof window.renderTournaments === 'function') window.renderTournaments(_vc, t.id); } catch (e) {}
+    });
   };
   if (typeof window.showConfirmDialog === 'function') {
     window.showConfirmDialog('Anular sorteio?', 'O sorteio em revisão será descartado (nada foi publicado). Um novo será gerado automaticamente no próximo ciclo.', go, null, { confirmText: 'Anular', cancelText: 'Cancelar', danger: true });

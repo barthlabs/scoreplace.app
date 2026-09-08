@@ -1,3 +1,9 @@
+## 2.2.24 — ajustes administrativos preservam atualizações concorrentes (08/set/2026)
+
+Cancelar um sorteio em revisão e alterar a categoria técnica de um participante agora atualizam
+somente esses dados sobre o torneio atual. Placares, chave e demais novidades recebidos de outro
+aparelho permanecem preservados.
+
 ## 2.2.23 — reversão de W.O. não sobrescreve a chave (08/set/2026)
 
 Reverter um W.O. passou a refazer o jogo, o avanço e a classificação a partir do estado atual do

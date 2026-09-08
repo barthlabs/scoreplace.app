@@ -3137,8 +3137,9 @@ window._setParticipantSkillCategory = function(tId, pName, newSkill, uid) {
 
   // Acha o inscrito pelo UID (identidade). O nome só resolve fictício sem conta / doc legado —
   // num roster só-uid o nome pode nem existir, e o nível ia pro vazio sem aviso.
+  var _applySkill = function(target) {
   let found = false;
-  (t.participants || []).forEach(function(p) {
+  (target.participants || []).forEach(function(p) {
     if (!p) return;
     if (uid) {
       if (!(typeof p === 'object' && (p.uid === uid || p.p1Uid === uid || p.p2Uid === uid))) return;
@@ -3164,12 +3165,15 @@ window._setParticipantSkillCategory = function(tId, pName, newSkill, uid) {
     p.categorySource = 'organizador';
     found = true;
   });
+  return found;
+  };
 
+  let found = _applySkill(t);
   if (!found) return;
 
   // Save and re-render
-  const savePromise = (window.AppStore && window.AppStore.syncImmediate)
-    ? window.AppStore.syncImmediate(tId)
+  const savePromise = (window.AppStore && typeof window.AppStore.mutate === 'function')
+    ? window.AppStore.mutate(tId, _applySkill, 'Categoria técnica atualizada: ' + (pName || uid || 'participante'))
     : (window.FirestoreDB ? window.FirestoreDB.saveTournament(t) : Promise.resolve());
 
   savePromise.then(function() {

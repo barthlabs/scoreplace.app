@@ -2750,6 +2750,12 @@ usar `syncImmediate`. Agora a mesma operação é reaplicada sobre o jogo fresco
 participantes só parte após confirmação da gravação. O gate existente de reversão de W.O. passou
 com 56 verificações, e o motor vendorizado da Function foi sincronizado.
 
+**L7.P1.4 — cancelamento de sorteio e categoria de participante (08/set/2026).** A anulação
+de `pendingDraw` e a edição de categoria técnica deixaram de chamar `syncImmediate`; ambas
+expressam somente sua alteração em `AppStore.mutate`, que a reaplica sobre o documento fresco.
+Esses ajustes administrativos não podem mais regravar placar, chave ou novidade que chegaram em
+outra sessão enquanto a tela permanecia aberta.
+
 **Conclusão desta etapa.** A porta canônica já existe e é `AppStore.mutate` para alterações do
 documento de torneio; portas especializadas são a escolha para presença, inscrição, dupla e
 resultado isolado. A próxima etapa deve migrar por comportamento, começando pelos 14 usos reais
