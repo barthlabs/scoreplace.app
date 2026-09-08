@@ -1,3 +1,8 @@
+## 2.2.25 — reabertura de resultado preserva atualizações concorrentes (08/set/2026)
+
+Reabrir um placar para corrigir o resultado agora aplica o reset no estado atual do torneio.
+Uma cópia antiga não pode apagar novidade, placar ou avanço de chave que chegou de outro aparelho.
+
 ## 2.2.24 — ajustes administrativos preservam atualizações concorrentes (08/set/2026)
 
 Cancelar um sorteio em revisão e alterar a categoria técnica de um participante agora atualizam

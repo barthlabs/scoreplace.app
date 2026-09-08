@@ -3479,7 +3479,12 @@ window._editResult = function (tId, matchId) {
       if (!t) return;
       const m = _findMatch(t, matchId);
       if (!m) return;
+      const _message = `Resultado editado: partida ${m.label || matchId} reaberta`;
 
+      window.AppStore.mutate(tId, function(ft) {
+      const t = ft;
+      const m = _findMatch(t, matchId);
+      if (!m) return false;
       // Undo winner advancement: clear p1/p2 from next match where this winner was placed
       if (m.nextMatchId) {
         const next = _findMatch(t, m.nextMatchId);
@@ -3519,10 +3524,10 @@ window._editResult = function (tId, matchId) {
       // groups, t.rodadas legacy) que ficaram separadas após Firestore
       // deserialização.
       _propagateMatchUpdate(t, m);
-
-      window.AppStore.logAction(tId, `Resultado editado: partida ${m.label || matchId} reaberta`);
-      window.AppStore.syncImmediate(tId);
+      }, _message).then(function(saved) {
+      if (!saved) return;
       _rerenderBracket(tId);
+      });
     },
     null,
     { type: 'warning', confirmText: _t('btn.deleteReedit'), cancelText: _t('btn.cancel') }

@@ -5703,8 +5703,13 @@ window._checkLigaAutoDraws = async function() {
     var _didHeal = _healPrematureLigaRounds(t);
     if (_healSitOutWinners(t)) _didHeal = true;
     if (_didHeal) {
-      t.updatedAt = new Date().toISOString();
-      try { await window.AppStore.syncImmediate(t.id); } catch (e) { window._warn('[heal] save failed', e); }
+      try {
+        await window.AppStore.mutate(t.id, function(ft) {
+          var changed = _healPrematureLigaRounds(ft);
+          if (_healSitOutWinners(ft)) changed = true;
+          return changed || false;
+        }, 'Auto-correção de rodada Liga');
+      } catch (e) { window._warn('[heal] save failed', e); }
       try {
         var _h = (window.location && window.location.hash) || '';
         var _vc = document.getElementById('view-container');
