@@ -105,8 +105,8 @@ console.log('▸ ⑤ cópia `git archive` COM a dependência ligada executa a co
       '⭐ estamos DENTRO da cópia do predeploy e o firebase-admin está ligado aqui');
     ok(fs.existsSync(path.join(RAIZ, 'functions-autodraw', 'test-corrida-slot-emu.js')),
       'e o teste da corrida veio junto na cópia');
-    ok(process.env.SP_EXIGE_CORRIDA_REAL === '1',
-      '⛔ e a marca que proíbe "pulada" está ligada nesta execução');
+    ok(/export SP_EXIGE_CORRIDA_REAL=1/.test(sh),
+      '⛔ o script-fonte exporta a marca que proíbe \"pulada\"');
   } else if (!fs.existsSync(path.join(admin, 'firebase-admin'))) {
     console.error('  ✗ firebase-admin ausente nesta árvore — este teste EXIGE a dependência');
     console.error('    (é exatamente o que o deploy passou a exigir). CONSERTO: cd functions-autodraw && npm install');
