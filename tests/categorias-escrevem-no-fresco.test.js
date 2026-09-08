@@ -27,4 +27,6 @@ const resolveRequest = body('_resolveCategoryChange', 'window._approveCategoryCh
 ok(/commitTournamentTx/.test(resolveRequest) && /reqIdentity/.test(resolveRequest) && !/saveTournament\(|AppStore\.sync\(/.test(resolveRequest), 'aprovação de pedido identifica e resolve o pedido fresco');
 const profileDirect = body('_applyProfileCategoryDirect', 'window._requestCategoryChangeFromProfile');
 ok(/commitTournamentTx/.test(profileDirect) && /freshMe/.test(profileDirect) && !/saveTournament\(|AppStore\.sync\(/.test(profileDirect), 'categoria direta do perfil atualiza o inscrito fresco');
+const requestChange = s.slice(s.indexOf('window._requestCategoryChangeFromProfile = function'), s.indexOf('// Helper interno'));
+ok(/commitTournamentTx/.test(requestChange) && /changeRequest/.test(requestChange) && !/saveTournament\(|AppStore\.sync\(/.test(requestChange), 'pedido de rebaixamento é inserido no documento fresco');
 if (fail) process.exit(1);

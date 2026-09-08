@@ -3357,11 +3357,12 @@ window._requestCategoryChangeFromProfile = function(profileLike, uid) {
             return !(r.uid === uid && r.status === 'pending');
         });
         var playerName = me.displayName || me.name || profileLike.displayName || 'Participante';
-        t.categoryChangeRequests.push({
+        var changeRequest = {
             uid: uid, playerName: playerName,
             fromCat: fromCat, toCat: implied,
             requestedAt: new Date().toISOString(), status: 'pending'
-        });
+        };
+        t.categoryChangeRequests.push(changeRequest);
         made++;
         var orgUid = t.creatorUid || null;
         if (orgUid && typeof window._sendUserNotification === 'function') {
@@ -3378,9 +3379,14 @@ window._requestCategoryChangeFromProfile = function(profileLike, uid) {
                 });
             } catch (_e) {}
         }
-        if (window.FirestoreDB && window.FirestoreDB.saveTournament) {
-            if (!Array.isArray(t.participants)) t.participants = parts;
-            try { window.FirestoreDB.saveTournament(t); } catch (_e) {}
+        if (window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
+            window.AppStore.commitTournamentTx(t.id, function(ft) {
+                if (!Array.isArray(ft.categoryChangeRequests)) ft.categoryChangeRequests = [];
+                if (ft.categoryChangeRequests.some(function(r) { return r && r.uid === changeRequest.uid && r.toCat === changeRequest.toCat && r.requestedAt === changeRequest.requestedAt; })) return false;
+                ft.categoryChangeRequests = ft.categoryChangeRequests.filter(function(r) { return !(r.uid === changeRequest.uid && r.status === 'pending'); });
+                ft.categoryChangeRequests.push(changeRequest);
+                return true;
+            });
         }
     });
     return made;
