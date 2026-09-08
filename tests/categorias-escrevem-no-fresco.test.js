@@ -13,6 +13,12 @@ const assign = body('_assignParticipantCategory', '// Category assignment notifi
 });
 ok(/_removeKey/.test(remove) && /_moveKey/.test(move) && /_assignKey/.test(assign), 'cada ato usa uma identidade estável, nunca o índice da tela');
 const merge = body('_executeMerge', '// Remove a participant');
+const deleteEmpty = s.slice(s.indexOf('function _applyDeleteEmptyCategory'), s.indexOf('// Unmerge a previously merged category', s.indexOf('function _applyDeleteEmptyCategory')));
+ok(/return 'occupied'/.test(deleteEmpty) && /return 'played'/.test(deleteEmpty), 'exclusão mantém as proteções contra categoria ocupada ou com jogos');
+ok(/_simplifySingletonCategories\(t\)/.test(deleteEmpty) && /_autoReconcileParticipantCategories\(t\)/.test(deleteEmpty), 'exclusão reaplica a reconciliação completa no documento fresco');
+const deleteAction = s.slice(s.indexOf('window._deleteEmptyCategory = function'), s.indexOf('// Unmerge a previously merged category', s.indexOf('window._deleteEmptyCategory = function')));
+ok(/commitTournamentTx/.test(deleteAction) && /_applyDeleteEmptyCategory\(ft, cat\)/.test(deleteAction), 'exclusão de categoria grava por transação fresca');
+ok(!/saveTournament\(|AppStore\.sync\(/.test(deleteAction), 'exclusão de categoria não regrava snapshot inteiro');
 const unmerge = body('_executeUnmerge', '// Unmerge without mergeHistory');
 const inferred = body('_executeInferredUnmerge', '// Assign an uncategorized participant');
 [['mesclagem', merge, '_applyCategoryMerge'], ['desfazer histórico', unmerge, '_applyCategoryUnmerge'], ['desfazer inferido', inferred, '_applyInferredCategoryUnmerge']].forEach(([name, code, apply]) => {

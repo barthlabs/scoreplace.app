@@ -2371,32 +2371,24 @@ function _autoReconcileParticipantCategories(t) {
     return changed;
 }
 
-// Delete an empty category from the tournament's combinedCategories
-window._deleteEmptyCategory = function(tId, cat) {
-    var t = window._findTournamentById(tId);
-    if (!t) return;
+// Delete an empty category from the tournament's combinedCategories.
+// Reused on the live object and on the fresh Firestore document so an older tab
+// cannot restore a category or participant assignment changed elsewhere.
+function _applyDeleteEmptyCategory(t, cat) {
+    if (!t) return 'missing';
 
-    // Safety check: refuse to delete if participants are still assigned
     var parts = t.participants ? (Array.isArray(t.participants) ? t.participants : Object.values(t.participants)) : [];
     var hasParticipants = parts.some(function(p) { return typeof window._participantInCategory === 'function' && window._participantInCategory(p, cat); });
-    if (hasParticipants) {
-        if (typeof showNotification === 'function') showNotification('⚠️ Categoria não vazia', 'Mova os participantes antes de excluir.', 'error');
-        return;
-    }
+    if (hasParticipants) return 'occupied';
 
-    // v2.4.13: refuse to delete if there are PLAYED matches under this category —
-    // excluí-la orfanaria esses jogos (somem da classificação). Histórico é sagrado.
-    if (typeof window._categoryHasPlayedMatches === 'function' && window._categoryHasPlayedMatches(t, cat)) {
-        if (typeof showNotification === 'function') showNotification('⚠️ Categoria com jogos disputados', 'Não dá pra excluir "' + (window._displayCategoryName ? window._displayCategoryName(cat) : cat) + '" — ela tem partidas já jogadas que seriam perdidas da classificação.', 'error');
-        return;
-    }
+    // Never orphan played matches by removing their category.
+    if (typeof window._categoryHasPlayedMatches === 'function' && window._categoryHasPlayedMatches(t, cat)) return 'played';
 
     t.combinedCategories = (t.combinedCategories || []).filter(function(c) { return c !== cat; });
     if (t.mergeHistory) t.mergeHistory = t.mergeHistory.filter(function(mh) { return mh.mergedName !== cat; });
 
-    // Reconcile skillCategories and genderCategories from remaining combinedCategories
     var _gKeyToLabel = { fem: 'Fem', masc: 'Masc', misto_aleatorio: 'Misto Aleat.', misto_obrigatorio: 'Misto Obrig.' };
-    var _gLabelLong = ['Misto Obrig.', 'Misto Aleat.', 'Fem', 'Masc']; // longest first
+    var _gLabelLong = ['Misto Obrig.', 'Misto Aleat.', 'Fem', 'Masc'];
     var _usedGenderLabels = {};
     var _usedSkills = {};
     (t.combinedCategories || []).forEach(function(c) {
@@ -2412,40 +2404,33 @@ window._deleteEmptyCategory = function(tId, cat) {
             _usedSkills[c] = true;
         }
     });
-    if (t.skillCategories) {
-        t.skillCategories = t.skillCategories.filter(function(s) { return !!_usedSkills[s]; });
-    }
-    if (t.genderCategories) {
-        t.genderCategories = t.genderCategories.filter(function(k) {
-            return !!_usedGenderLabels[_gKeyToLabel[k] || k];
-        });
-    }
+    if (t.skillCategories) t.skillCategories = t.skillCategories.filter(function(s) { return !!_usedSkills[s]; });
+    if (t.genderCategories) t.genderCategories = t.genderCategories.filter(function(k) { return !!_usedGenderLabels[_gKeyToLabel[k] || k]; });
 
-    // If only 1 category per gender remains (e.g. "Fem C" is the only Fem cat),
-    // rename it to the bare gender label ("Fem"). Updates combinedCategories,
-    // skillCategories, and participant assignments in one pass.
     _simplifySingletonCategories(t);
-
-    // Auto-reassign any remaining stale participant categories (safety net).
     _autoReconcileParticipantCategories(t);
-    // v2.4.29: remove de vez qualquer categoria que continuou inválida após o
-    // remap por gênero (categoria sem equivalente → participante fica sem categoria).
-    if (typeof window._purgeInvalidParticipantCategories === 'function') {
-        window._purgeInvalidParticipantCategories(t);
+    if (typeof window._purgeInvalidParticipantCategories === 'function') window._purgeInvalidParticipantCategories(t);
+    return true;
+}
+
+window._deleteEmptyCategory = function(tId, cat) {
+    var t = window._findTournamentById(tId);
+    var outcome = _applyDeleteEmptyCategory(t, cat);
+    if (outcome === 'occupied') {
+        if (typeof showNotification === 'function') showNotification('⚠️ Categoria não vazia', 'Mova os participantes antes de excluir.', 'error');
+        return;
     }
+    if (outcome === 'played') {
+        if (typeof showNotification === 'function') showNotification('⚠️ Categoria com jogos disputados', 'Não dá pra excluir "' + (window._displayCategoryName ? window._displayCategoryName(cat) : cat) + '" — ela tem partidas já jogadas que seriam perdidas da classificação.', 'error');
+        return;
+    }
+    if (outcome !== true) return;
 
     window.AppStore.logAction(tId, 'Categoria excluída: ' + cat);
-
-    if (window.FirestoreDB && window.FirestoreDB.saveTournament) {
-        window.FirestoreDB.saveTournament(t);
-    } else {
-        window.AppStore.sync();
+    if (window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
+        window.AppStore.commitTournamentTx(tId, function(ft) { return _applyDeleteEmptyCategory(ft, cat) === true; });
     }
-
-    if (typeof showNotification === 'function') {
-        showNotification('✅ Categoria excluída', window._displayCategoryName(cat), 'success');
-    }
-
+    if (typeof showNotification === 'function') showNotification('✅ Categoria excluída', window._displayCategoryName(cat), 'success');
     setTimeout(function() { window._refreshCatMgr(tId); }, 100);
 };
 
