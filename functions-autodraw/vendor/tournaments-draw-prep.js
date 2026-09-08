@@ -966,7 +966,7 @@ window._resolvePhaseInactives = function(tId, choice){
         }
         ft._inactiveResolvedPhase = freshIdx;
         return true;
-    })).then(function(saved) { if (saved === false) _rollback(new Error('decisão já aplicada')); else _finish(); }).catch(_rollback);
+    }, choice === 'remove' ? { allowRosterRemoval: true } : undefined)).then(function(saved) { if (saved === false) _rollback(new Error('decisão já aplicada')); else _finish(); }).catch(_rollback);
 };
 
 // Painel: manter inativos no cadastro ou excluir definitivamente. Mesma linguagem visual

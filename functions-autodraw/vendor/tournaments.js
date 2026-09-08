@@ -632,6 +632,43 @@ window.removeParticipantFunction = function (tId, participantName, memberUid) {
         { type: 'danger', confirmText: _t('btn.remove'), cancelText: _t('btn.cancel') }
     );
 };
+window._applySplitParticipantFresh = function (t, participantName) {
+    if (!t || !t.participants) return false;
+    var arr = Array.isArray(t.participants) ? t.participants : Object.values(t.participants);
+    var idx = arr.findIndex(function(p) { return window._pName(p) === participantName; });
+    if (idx === -1) return false;
+    var entry = arr[idx];
+    var slots = [];
+    var mkSlot = function(uid, name, email) {
+        var o = {};
+        if (uid) o.uid = uid;
+        if (name) { o.name = name; o.displayName = name; }
+        if (email) o.email = email;
+        return (o.uid || o.name) ? o : null;
+    };
+    if (entry && typeof entry === 'object' && Array.isArray(entry.participants) && entry.participants.length) {
+        entry.participants.forEach(function(s) {
+            var o = s && typeof s === 'object' ? mkSlot(s.uid, s.displayName || s.name, s.email) : (s ? mkSlot(null, String(s), null) : null);
+            if (o) slots.push(o);
+        });
+    } else if (entry && typeof entry === 'object' && (entry.p1Uid || entry.p2Uid || (entry.p1Name && entry.p2Name))) {
+        var s1 = mkSlot(entry.p1Uid, entry.p1Name, entry.p1Email);
+        var s2 = mkSlot(entry.p2Uid, entry.p2Name, entry.p2Email);
+        if (s1) slots.push(s1);
+        if (s2) slots.push(s2);
+    }
+    if (slots.length < 2) return false;
+    arr.splice(idx, 1);
+    Array.prototype.splice.apply(arr, [idx, 0].concat(slots));
+    t.participants = arr;
+    if (t.teamOrigins && typeof t.teamOrigins === 'object') {
+        delete t.teamOrigins[participantName];
+        var label = window._entryDisplayName ? window._entryDisplayName(entry) : null;
+        if (label) delete t.teamOrigins[label];
+    }
+    return true;
+};
+
 window.splitParticipantFunction = function (tId, participantName) {
     showConfirmDialog(
         _t('tourn.splitTeamTitle'),
@@ -680,8 +717,11 @@ window.splitParticipantFunction = function (tId, participantName) {
                     if (_lbl) delete t.teamOrigins[_lbl];
                 }
             } catch (_e) {}
-            if (typeof window.FirestoreDB !== 'undefined' && window.FirestoreDB.saveTournament) window.FirestoreDB.saveTournament(t);
-            else if (typeof window.AppStore.sync === 'function') window.AppStore.sync();
+            if (window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
+                window.AppStore.commitTournamentTx(tId, function(ft) {
+                    return window._applySplitParticipantFresh(ft, participantName);
+                }, { allowRosterRemoval: true });
+            }
             const container = document.getElementById('view-container');
             if (container) {
                 if ((window.location.hash || '').indexOf('#participants') === 0 && typeof window.renderParticipants === 'function') window.renderParticipants(container, tId);

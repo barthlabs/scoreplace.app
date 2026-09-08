@@ -211,6 +211,7 @@ const SUITES = [
   'tests/enquete-writers-sao-transacionais.test.js',
   'tests/sorteio-vagas-nao-sobrescreve-elenco.test.js',
   'tests/categorias-escrevem-no-fresco.test.js',
+  'tests/inscritos-escrevem-no-fresco.test.js',
   // W.O. sempre desativa; a fila é ato da própria pessoa
   'tests/wo-sempre-desativa.test.js',
   // o suplente do W.O. respeita a proporção de gênero (o homem fura a fila de um grupo

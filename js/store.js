@@ -11032,7 +11032,7 @@ window.AppStore = {
   // o onSnapshot reconcilia o estado autoritativo, igual ao syncImmediate. NÃO faz
   // fallback pra syncImmediate em erro (reintroduziria o lost-update) — só reporta.
   // É o primitivo reusável pela campanha inteira de blindagem.
-  async commitTournamentTx(tournamentId, mutatorFn) {
+  async commitTournamentTx(tournamentId, mutatorFn, options) {
     if (!window.FirestoreDB || typeof window.FirestoreDB.mutateTournament !== 'function') {
       window._error('commitTournamentTx: mutateTournament indisponível');
       return false;
@@ -11054,7 +11054,7 @@ window.AppStore = {
           // pra frente pra não tocar updatedAt de um doc que não vamos escrever.
           if (mutatorFn(freshT) === false) return false;
           freshT.updatedAt = new Date().toISOString();
-        });
+        }, options);
         // `false` do mutator é uma decisão de negócio (idempotência/conflito), não
         // uma exceção do Firestore. Sem propagar esse retorno, os chamadores de
         // consenso tratam uma proposta rejeitada como gravada e notificam pessoas

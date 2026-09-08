@@ -38,8 +38,8 @@ console.log('\n① O caminho de remoção do ORGANIZADOR declara a intenção');
 const i = src.indexOf('window.removeParticipantFunction = function');
 ok(i > 0, 'achei removeParticipantFunction');
 const corpo = _R.ateOFim(src, i).slice(0, 9000);
-ok(/saveTournament\(t,\s*\{\s*allowRosterRemoval:\s*true\s*\}\)/.test(corpo),
-   '⛔ ele passa `allowRosterRemoval: true` — sem isso o guard restaura quem foi removido');
+ok(/saveTournament\(t,\s*\{\s*allowRosterRemoval:\s*true\s*\}\)|commitTournamentTx\([\s\S]*?\{\s*allowRosterRemoval:\s*true\s*\}/.test(corpo),
+   '⛔ ele declara `allowRosterRemoval: true` — sem isso o guard restaura quem foi removido');
 ok(!/saveTournament\(t\)\s*;/.test(corpo),
    '   e não sobrou a chamada crua (era ela que voltava atrás na remoção)');
 
@@ -59,8 +59,8 @@ todos.forEach((x) => {
   const n = (x.s.match(/allowRosterRemoval:\s*true/g) || []).length;
   if (n) usos.push(x.f + '×' + n);
 });
-ok(usos.length <= 3 && usos.every((u) => /^(tournaments-draw-prep\.js|tournaments-enrollment\.js|tournaments\.js)×1$/.test(u)),
-   '⛔ só os três caminhos de REMOÇÃO confirmada declaram (sair, remover pelo organizador, excluir não-entrantes) — got ' +
+ok(usos.length <= 3 && usos.every((u) => /^(tournaments-draw-prep\.js×1|tournaments-enrollment\.js×1|tournaments\.js×2)$/.test(u)),
+   '⛔ só os caminhos de REMOÇÃO confirmada declaram (inclui desfazer dupla) — got ' +
    JSON.stringify(usos));
 
 console.log(falhas === 0
