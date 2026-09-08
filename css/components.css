@@ -2439,9 +2439,10 @@ html, body,
 .sp-set-zero{display:block;font-weight:800;font-size:var(--sp-num-fs-set,1rem);line-height:1.2;color:rgba(255,255,255,0.3);}
 .sp-set-inp{width:100%;box-sizing:border-box;text-align:center;font-size:var(--sp-num-fs-set,0.9rem);font-weight:700;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:var(--text-bright);border-radius:6px;padding:4px 2px;}
 .sp-set-inp--live{border-color:rgba(56,189,248,0.55);}
-.sp-set-tb{width:100%;box-sizing:border-box;margin-top:3px;text-align:center;font-size:0.68rem;font-weight:700;background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.3);color:var(--text-bright);border-radius:5px;padding:2px 1px;}
+.sp-set-tb{width:100%;box-sizing:border-box;margin-top:3px;text-align:center;font-size:0.60rem;font-weight:700;background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.3);color:var(--text-bright);border-radius:5px;padding:2px 1px;}
 /* Set confirmado é CLICÁVEL pra corrigir (só enquanto o jogo não fechou) — o cursor é
    o único aviso, porque um ✕ por coluna encheria a linha de ruído. */
+.sp-tb-points{font-size:0.58em;font-weight:700;margin-left:1px;margin-right:0.22em;vertical-align:super;line-height:0;}
 .sp-set-col--fix{cursor:pointer;border-radius:6px;}
 .sp-set-col--fix:hover{background:rgba(255,255,255,0.06);}
 /* ⭐ O BOX PENDENTE TEM O MESMO TAMANHO DO NÚMERO LANÇADO (2.0.47, ordem do dono):

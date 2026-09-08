@@ -1016,7 +1016,7 @@
     if (tb) {
       var myPts = playerNum === 1 ? tb.p1 : tb.p2;
       if (opts.html) {
-        out += '<sup style="font-size:0.75em;font-weight:700;">(' + myPts + ')</sup>';
+        out += '<sup class="sp-tb-points">(' + myPts + ')</sup>';
       } else {
         out += '⁽' + _supDigits(myPts) + '⁾';
       }
@@ -1243,7 +1243,10 @@
     // pode ter (o STB incluído), então o espaço dele já está reservado desde o primeiro set.
     // 1 set não passa por aqui (não tem grade); melhor de 3 fica no meio; melhor de 5 no
     // degrau mais apertado — exatamente a escada que o dono descreveu.
-    var esc = window._setColEscala(multi ? bestOf : 1);
+    // Enquanto nenhum set foi lançado, a grade mostra só o Set 1 com a escala de jogo
+    // de um set. Ao gravar o primeiro set, passa a reservar a escala do melhor de N.
+    // Assim o cartão vazio não encolhe antes de haver placar a comparar.
+    var esc = window._setColEscala(multi ? (played.length ? bestOf : 1) : 1);
     var larg = function (k) { return k === 'stb' ? esc.stb : esc.set; };
 
     var cols = [], i;

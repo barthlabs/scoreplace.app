@@ -1,3 +1,7 @@
+## 2.2.19 — edição de placar e tie-break legíveis (08/set/2026)
+
+A correção de placar mantém as cores de vitória e derrota durante a edição. Os campos de tie-break só aparecem quando o placar daquele set exige tie-break e os pontos ficam menores, separados do set seguinte. Em jogos melhor de três ou cinco sem placar, o cartão usa a escala compacta de um set até o primeiro resultado ser lançado.
+
 # Changelog do scoreplace.app
 
 ## 2.1.95 — cabeças de chave Ouro/Prata pela campanha da dupla (02/set/2026)

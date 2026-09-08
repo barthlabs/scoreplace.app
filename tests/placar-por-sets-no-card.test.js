@@ -134,10 +134,11 @@ function regua() {
     'Melhor de 3 · Super Tie-Break',
     'morte súbita (margem 1) NÃO escreve margem nenhuma — seria ruído sobre o esperado');
 
-  // LARGURA POR TIPO, nunca por estado — é o que mantém o rótulo em cima do box
+  // Antes de haver placar, o cartão mostra o Set 1 com escala de jogo de um set.
+  // Ao gravar o primeiro, passa à escala completa do melhor de 3.
   const antes = plano(MELHOR3, []).columns[0].w;
   const depois = plano(MELHOR3, [S(6, 4)]).columns[0].w;
-  ok(antes === depois, 'a coluna do Set 1 mede IGUAL em disputa e confirmada (' + antes + 'px)');
+  ok(antes > depois, 'cartão vazio usa a escala compacta de 1 set e só reduz após Set 1 (' + antes + 'px → ' + depois + 'px)');
 }
 
 /* ── ② A DECISÃO + ③ O QUE O PARCIAL GRAVA ────────────────────────────────────────── */

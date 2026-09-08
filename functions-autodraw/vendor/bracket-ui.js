@@ -2051,6 +2051,29 @@ window._cancelSetsEdit = function (tId, matchId) {
   _rerenderBracket(tId, matchId);
 };
 
+// Mantém a edição no próprio card legível: cores seguem o placar digitado e os
+// campos de tie-break existem somente no placar que efetivamente exige tie-break.
+window._syncEditedSetInputs = function (tId, matchId, index) {
+  var t = window._findTournamentById(tId); if (!t) return;
+  var m = _findMatch(t, matchId); if (!m) return;
+  var aEl = document.getElementById('sp-edit-set-' + matchId + '-' + index + '-1');
+  var bEl = document.getElementById('sp-edit-set-' + matchId + '-' + index + '-2');
+  if (!aEl || !bEl) return;
+  var a = parseInt(aEl.value, 10), b = parseInt(bEl.value, 10);
+  var validPair = !isNaN(a) && !isNaN(b) && a !== b;
+  aEl.style.color = validPair ? (a > b ? '#4ade80' : '#f87171') : 'var(--text-bright)';
+  bEl.style.color = validPair ? (b > a ? '#4ade80' : '#f87171') : 'var(--text-bright)';
+  var tbA = document.getElementById('sp-edit-tb-' + matchId + '-' + index + '-1');
+  var tbB = document.getElementById('sp-edit-tb-' + matchId + '-' + index + '-2');
+  if (!tbA || !tbB) return; // STB não tem subcampo de tie-break.
+  var sc = (typeof window._effectiveScoring === 'function') ? window._effectiveScoring(t, m) : t.scoring;
+  var needTb = validPair && typeof window._isTiebreakSetScore === 'function' &&
+    window._isTiebreakSetScore(a, b, window._tbLoserGames(sc, t.sport));
+  tbA.style.display = needTb ? 'block' : 'none';
+  tbB.style.display = needTb ? 'block' : 'none';
+  if (!needTb) { tbA.value = ''; tbB.value = ''; }
+};
+
 window._saveEditedSetsInCard = function (tId, matchId) {
   var t = window._findTournamentById(tId); if (!t) return;
   var m = _findMatch(t, matchId); if (!m) return;

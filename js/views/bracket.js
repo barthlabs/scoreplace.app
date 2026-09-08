@@ -4833,15 +4833,20 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
       ? (tb.pointsP1 != null ? tb.pointsP1 : tb.p1)
       : (tb.pointsP2 != null ? tb.pointsP2 : tb.p2);
     const isStb = c.kind === 'stb' || !!original.superTiebreak;
+    const own = Number(value), other = Number(side === 1 ? original.gamesP2 : original.gamesP1);
+    const scoreColor = Number.isFinite(own) && Number.isFinite(other) && own !== other
+      ? (own > other ? '#4ade80' : '#f87171') : 'var(--text-bright)';
+    const sync = ' oninput="window._syncEditedSetInputs(\'' + _esc(tId) + '\',\'' + _esc(m.id) + '\',' + idx + ')"';
     const input = '<input type="number" min="0" inputmode="numeric" value="' +
       (value != null ? window._safeHtml(value) : '') + '" id="sp-edit-set-' + _esc(m.id) + '-' + idx + '-' + side +
-      '" class="sp-set-inp" style="width:100%;min-width:0;box-sizing:border-box;" onclick="event.stopPropagation()">';
-    // O TB continua abaixo do mesmo set, em vez de ir para outro formulário. No STB
-    // os próprios campos principais já são os pontos, então não há subcampo.
+      '" class="sp-set-inp" style="width:100%;min-width:0;box-sizing:border-box;color:' + scoreColor + ';"' + sync + ' onclick="event.stopPropagation()">';
+    // O TB só surge se o placar do set exige tie-break. STB já usa os campos principais.
     if (isStb || c.kind !== 'set') return input;
+    const tbNeeded = Number.isFinite(Number(original.gamesP1)) && Number.isFinite(Number(original.gamesP2)) &&
+      typeof window._isTiebreakSetScore === 'function' && window._isTiebreakSetScore(original.gamesP1, original.gamesP2, window._tbLoserGames(_msc, t.sport));
     return input + '<input type="number" min="0" inputmode="numeric" value="' +
       (tbValue != null ? window._safeHtml(tbValue) : '') + '" id="sp-edit-tb-' + _esc(m.id) + '-' + idx + '-' + side +
-      '" class="sp-set-tb" placeholder="tb" title="Tie-break" style="margin-top:3px;display:block;" onclick="event.stopPropagation()">';
+      '" class="sp-set-tb" placeholder="tb" title="Tie-break" style="margin-top:3px;' + (tbNeeded ? 'display:block;' : 'display:none;') + '" onclick="event.stopPropagation()">';
   };
   // Set confirmado é CLICÁVEL pra corrigir enquanto o jogo não fechou — sem isso um 6-4
   // digitado errado no set 1 fica preso até o fim da partida.
