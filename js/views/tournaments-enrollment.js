@@ -1681,10 +1681,12 @@ window.deleteTournamentFunction = function (tId) {
 };
 
 // Liga active toggle: participant opts in/out of upcoming draws
-window._toggleLigaActive = function(tId, isActive) {
+window._toggleLigaActive = function(tId, isActive, _freshTarget) {
   var store = window.AppStore;
   if (!store || !Array.isArray(store.tournaments)) return;
-  var t = store.tournaments.find(function(x) { return String(x.id) === String(tId); });
+  // `_freshTarget` é usado exclusivamente pela transação abaixo: reaplica esta mesma
+  // intenção no documento fresco, sem duplicar a regra de elenco/fila/folga.
+  var t = _freshTarget || store.tournaments.find(function(x) { return String(x.id) === String(tId); });
   if (!t || !t.participants) return;
   var user = store.currentUser;
   if (!user) return;
@@ -1839,12 +1841,19 @@ window._toggleLigaActive = function(tId, isActive) {
       _movedToWait = { entry: found, idx: _idx };
     }
   }
-  // Save to Firestore. Use syncImmediate when we're the organizer (goes through
-  // AppStore cache); otherwise hit Firestore directly (participants can't
-  // always round-trip through syncImmediate).
+  // A reaplicação transacional já fez toda a mudança no alvo fresco. Ela não pode
+  // disparar outro save, notificação ou renderização.
+  if (_freshTarget) return true;
+
+  // Save to Firestore. Toda alteração de organizador passa pelo mutator, que reaplica
+  // esta intenção sobre o documento fresco e não serializa o snapshot da tela.
   var savePromise;
-  if (typeof store.isOrganizer === 'function' && store.isOrganizer(t) && typeof store.syncImmediate === 'function') {
-    savePromise = store.syncImmediate(t.id);
+  if (typeof store.isOrganizer === 'function' && store.isOrganizer(t) && typeof store.mutate === 'function') {
+    savePromise = store.mutate(t.id, function(fresh) {
+      return window._toggleLigaActive(tId, isActive, fresh) !== false;
+    }, 'Disponibilidade para o próximo sorteio atualizada');
+  } else if (typeof store.isOrganizer === 'function' && store.isOrganizer(t)) {
+    savePromise = Promise.reject(new Error('Atualize o aplicativo para salvar esta alteração com segurança.'));
   } else if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
     savePromise = window.FirestoreDB.saveTournament(t);
   } else {
