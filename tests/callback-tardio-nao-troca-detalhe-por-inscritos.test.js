@@ -47,10 +47,10 @@ function armar() {
     isCreator: () => true,
     getTournament: (id) => (String(id) === TID ? t : null),
     sync: () => {},
+    mutate: (_id, fn) => new Promise((res) => { resolver = () => { fn(t); res(true); }; }),
   };
   let resolver = null;
   // a gravação NÃO resolve sozinha: o teste decide quando (é a janela do bug)
-  W.AppStore.syncImmediate = () => new Promise((res) => { resolver = res; });
 
   let pintouParticipantes = 0, ultimoTid = null;
   W.renderParticipants = function (container, tid) { pintouParticipantes++; ultimoTid = tid; };

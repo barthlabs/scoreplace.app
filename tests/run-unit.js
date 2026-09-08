@@ -920,6 +920,7 @@ const SUITES = [
   // antigo do torneio e apagar o resultado que outro aparelho acabou de registrar.
   'tests/atribuir-quadra-nao-sobrescreve-placar.test.js',
   'tests/publicar-sorteio-nao-sobrescreve-resultado.test.js',
+  'tests/avanco-eliminatoria-nao-sobrescreve-placar.test.js',
   // Varredura do doc inteiro: grupo formado e registro de "já avisei" também não somem. v1.8.0.
   // CONFRA.MOBILE.P1: chave de torneio DIVIDIDO não pinta área vazia — mostra carregamento,
   // monta pela porta canônica e não roda lógica de chave (nem grava) com as partes fora.

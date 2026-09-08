@@ -4455,11 +4455,15 @@ window._showAdvancedPointsBreakdown = function(tId, playerName, category) {
 window._advanceToElimination = function (tId) {
   const t = window._findTournamentById(tId);
   if (!t || !t.groups) return;
+  const ts = Date.now(); // mesmo id na atualização otimista e na transação fresca
+  let _nClassificados = 0;
 
-  const classified = t.gruposClassified || 2;
+  const _aplicarNoTorneio = function (target) {
+    if (!target || !target.groups || target.currentStage === 'elimination') return false;
+    const classified = target.gruposClassified || 2;
   const qualifiedPlayers = [];
 
-  t.groups.forEach(g => {
+    target.groups.forEach(g => {
     const scoreMap = {};
     g.participants.forEach(name => {
       scoreMap[name] = { name, points: 0, wins: 0, draws: 0, losses: 0, pointsDiff: 0, played: 0 };
@@ -4494,7 +4498,7 @@ window._advanceToElimination = function (tId) {
   // Simple cross-seeding: group winners in one half, runners-up in other half
   const groupWinners = [];
   const groupRunnersUp = [];
-  t.groups.forEach(g => {
+    target.groups.forEach(g => {
     const scoreMap = {};
     g.participants.forEach(name => {
       scoreMap[name] = { name, points: 0, wins: 0, draws: 0, pointsDiff: 0 };
@@ -4528,7 +4532,7 @@ window._advanceToElimination = function (tId) {
 
   // Cross-seed: 1st of group A vs runner-up from opposite group
   const seeded = [];
-  const numGroups = t.groups.length;
+    const numGroups = target.groups.length;
   for (let i = 0; i < groupWinners.length; i++) {
     seeded.push(groupWinners[i]);
     const oppositeIdx = (numGroups - 1 - i) % groupRunnersUp.length;
@@ -4540,7 +4544,6 @@ window._advanceToElimination = function (tId) {
   groupRunnersUp.forEach(r => { if (!seeded.includes(r)) seeded.push(r); });
 
   // Generate elimination bracket
-  const ts = Date.now();
   const matches = [];
   for (let i = 0; i < seeded.length; i += 2) {
     const p1 = seeded[i];
@@ -4555,15 +4558,27 @@ window._advanceToElimination = function (tId) {
     });
   }
 
-  t.matches = matches;
-  t.currentStage = 'elimination';
-  window._buildNextMatchLinks(t);
+    target.matches = matches;
+    target.currentStage = 'elimination';
+    window._buildNextMatchLinks(target);
+    _nClassificados = seeded.length;
+  };
 
-  window.AppStore.logAction(tId, `Fase Eliminatória iniciada com ${seeded.length} classificados`);
-  window.AppStore.syncImmediate(tId);
-
-  showNotification(_t('bui.knockoutPhase'), _t('bui.knockoutPhaseMsg', {n: seeded.length}), 'success');
-  _rerenderBracket(tId);
+  const store = window.AppStore;
+  if (!store || typeof store.mutate !== 'function') return;
+  return Promise.resolve(store.mutate(tId, _aplicarNoTorneio, 'Fase Eliminatória iniciada'))
+    .then(function (saved) {
+      if (saved === false) {
+        showNotification('Não foi possível avançar a fase', 'A chave não foi alterada. Atualize a página e tente novamente.', 'error');
+        return;
+      }
+      showNotification(_t('bui.knockoutPhase'), _t('bui.knockoutPhaseMsg', {n: _nClassificados}), 'success');
+      _rerenderBracket(tId);
+    })
+    .catch(function (err) {
+      if (window._error) window._error('advanceToElimination: mutação falhou', err);
+      showNotification('Não foi possível avançar a fase', 'A chave não foi alterada. Atualize a página e tente novamente.', 'error');
+    });
 };
 
 // Rei/Rainha NÃO é formato de fase: o antigo _advanceMonarchToElimination (avanço standalone
@@ -4691,9 +4706,28 @@ window._openLiveScoring = function(tId, matchId, opts) {
     if (_sportDef && _sportDef.type === 'sets') {
       sc = Object.assign({}, _sportDef);
       useSets = true;
-      t.scoring = sc;
-      if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
-        try { window.FirestoreDB.saveTournament(t); } catch (e) {}
+      // A tela usa o padrão já nesta abertura, mas a persistência só passa pela
+      // mutação fresca. Não regravar o documento inteiro aqui: este caminho pode
+      // abrir enquanto outro aparelho acabou de lançar um placar.
+      if (window.AppStore && typeof window.AppStore.mutate === 'function') {
+        try {
+          Promise.resolve(window.AppStore.mutate(tId, function (freshT) {
+            // A configuração pode ter chegado de outro aparelho entre a cópia local
+            // e a transação. Nesse caso ela já é a verdade e não é substituída.
+            if (freshT.scoring && freshT.scoring.type === 'sets') return false;
+            freshT.scoring = Object.assign({}, sc);
+          })).catch(function (err) {
+            if (window._error) window._error('openLiveScoring: persistência GSM falhou', err);
+          });
+        } catch (e) {
+          // Mantém o padrão apenas nesta abertura; não cai na persistência insegura.
+          t.scoring = sc;
+          if (window._error) window._error('openLiveScoring: porta GSM indisponível', e);
+        }
+      } else {
+        // Sem a porta transacional não há fallback de persistência insegura; mantém
+        // apenas a configuração desta tela até o próximo snapshot autoritativo.
+        t.scoring = sc;
       }
     }
   }
@@ -16652,17 +16686,17 @@ window._toggleWlBalance = function (tId) {
     window._isUserOrgOrCoHost(t, store && store.currentUser));
   if (!_isAdmin) return;
 
-  var _eraEquil = (t.wlGroupBalance !== 'livre');
-  t.wlGroupBalance = _eraEquil ? 'livre' : 'equilibrado';
-  var _agoraEquil = !_eraEquil;
-
-  var savePromise = null;
-  if (store && typeof store.isOrganizer === 'function' && store.isOrganizer(t) &&
-      typeof store.syncImmediate === 'function') {
-    savePromise = store.syncImmediate(t.id);
-  } else if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
-    savePromise = window.FirestoreDB.saveTournament(t);
-  }
+  var _estadoAnterior = t.wlGroupBalance;
+  var _agoraEquil = (t.wlGroupBalance === 'livre');
+  if (!store || typeof store.mutate !== 'function') return;
+  // A porta canônica aplica localmente para resposta imediata e repete a mesma
+  // mudança sobre o documento fresco. Nunca cair em syncImmediate/saveTournament:
+  // o toggle não pode apagar placar ou chave que chegaram em outra sessão.
+  var savePromise = store.mutate(tId, function (freshT) {
+    var _eraEquil = (freshT.wlGroupBalance !== 'livre');
+    freshT.wlGroupBalance = _eraEquil ? 'livre' : 'equilibrado';
+    _agoraEquil = !_eraEquil;
+  });
   var done = function () {
     if (typeof showNotification === 'function') {
       // v1.7.16: o toggle virou "Travar proporção" e a mensagem tem que dizer QUAL é a
@@ -16678,6 +16712,17 @@ window._toggleWlBalance = function (tId) {
     }
     if (typeof window._rerenderBracket === 'function') window._rerenderBracket(tId);
   };
-  if (savePromise && typeof savePromise.then === 'function') savePromise.then(done).catch(done);
-  else done();
+  var failed = function (err) {
+    // `mutate` já aplicou o toggle otimista na cópia local. Se a transação não
+    // confirmou, volta ao estado anterior até o snapshot autoritativo reconciliar.
+    t.wlGroupBalance = _estadoAnterior;
+    if (typeof window._rerenderBracket === 'function') window._rerenderBracket(tId);
+    if (window._error && err) window._error('toggleWlBalance: mutação falhou', err);
+    if (typeof showNotification === 'function') {
+      showNotification('Não foi possível salvar a proporção', 'A configuração anterior foi mantida.', 'error');
+    }
+  };
+  if (savePromise && typeof savePromise.then === 'function') {
+    savePromise.then(function (saved) { if (saved !== false) done(); else failed(); }).catch(failed);
+  }
 };

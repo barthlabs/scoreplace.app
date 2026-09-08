@@ -90,7 +90,7 @@ console.log('\n── ações do card gravam na CHAVE-UID (W.O. · VIP · nível
   t.skillCategories = ['A', 'B', 'C'];
   W.AppStore = {
     tournaments: [t], currentUser: { uid: 'uOrg' }, isCreator: () => true, sync: () => {},
-    mutate: function (tid, fn) { fn(t); },
+    mutate: function (tid, fn) { fn(t); return Promise.resolve(true); },
     getTournament: function () { return t; },
   };
   W._canManagePresence = function () { return true; };
@@ -116,7 +116,7 @@ console.log('\n── ações do card gravam na CHAVE-UID (W.O. · VIP · nível
 console.log('\n── W.O. do time chaveia pelos DOIS membros ──');
 {
   const t = mkT();
-  W.AppStore = { tournaments: [t], currentUser: { uid: 'uOrg' }, isCreator: () => true, sync: () => {}, mutate: (tid, fn) => fn(t), getTournament: () => t };
+  W.AppStore = { tournaments: [t], currentUser: { uid: 'uOrg' }, isCreator: () => true, sync: () => {}, mutate: (tid, fn) => { fn(t); return Promise.resolve(true); }, getTournament: () => t };
   W._canManagePresence = function () { return true; };
   W._markAbsent(t.id, 'Marcello Martins de Souza / Karla Fernandes', 'u:uMarcello|u:uKarla');
   ok(t.absent.uMarcello != null && t.absent.uKarla != null, 'time :: os DOIS uids ficaram ausentes — got ' + JSON.stringify(Object.keys(t.absent)));
@@ -130,7 +130,7 @@ console.log('\n── W.O. do time chaveia pelos DOIS membros ──');
 {
   const t = mkT();
   t.participants = [{ uid: 'uMarcello', p1Uid: 'uMarcello', p2Name: 'Convidado sem conta' }];
-  W.AppStore = { tournaments: [t], currentUser: { uid: 'uOrg' }, isCreator: () => true, sync: () => {}, mutate: (tid, fn) => fn(t), getTournament: () => t };
+  W.AppStore = { tournaments: [t], currentUser: { uid: 'uOrg' }, isCreator: () => true, sync: () => {}, mutate: (tid, fn) => { fn(t); return Promise.resolve(true); }, getTournament: () => t };
   W._canManagePresence = function () { return true; };
   W._markAbsent(t.id, 'Marcello / Convidado sem conta', 'u:uMarcello|n:Convidado sem conta');
   ok(t.absent.uMarcello != null, 'mista :: quem tem conta foi pelo UID');
@@ -140,7 +140,7 @@ console.log('\n── W.O. do time chaveia pelos DOIS membros ──');
 // FICTÍCIO (sem conta) — ÚNICO caso que continua pelo nome, como o dono definiu.
 {
   const t = mkT();
-  W.AppStore = { tournaments: [t], currentUser: { uid: 'uOrg' }, isCreator: () => true, sync: () => {}, mutate: (tid, fn) => fn(t), getTournament: () => t };
+  W.AppStore = { tournaments: [t], currentUser: { uid: 'uOrg' }, isCreator: () => true, sync: () => {}, mutate: (tid, fn) => { fn(t); return Promise.resolve(true); }, getTournament: () => t };
   W._canManagePresence = function () { return true; };
   W._markAbsent(t.id, 'Convidado sem conta');
   ok(t.absent['Convidado sem conta'] != null, 'fictício :: W.O. pelo NOME (sem uid, é a exceção)');

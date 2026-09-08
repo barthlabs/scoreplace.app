@@ -42,15 +42,15 @@ ok(iPush > 0 && iAlinha > iPush,
 
 // ⛔ as três recusas — alinhar não pode virar descartar trabalho alheio
 const bloco = sh.slice(iAlinha - 200, iAlinha + 2200);
-ok(/!= "main"/.test(bloco) && /NÃO mexi/.test(bloco),
+ok(/!= main/.test(bloco) && /não mexi fora de main/.test(bloco),
    '⛔ principal noutro branch → avisa e NÃO mexe');
 ok(/status --porcelain --untracked-files=no/.test(bloco),
    '⛔ principal com alterações não commitadas → avisa e NÃO mexe (trabalho de outra sessão não se descarta)');
 ok(/untracked-files=no/.test(bloco),
    'e arquivo NÃO RASTREADO não conta como sujeira — ele sobrevive ao fast-forward e ' +
    'bloquear por causa dele deixaria o alinhamento sem acontecer justamente onde há rascunho');
-ok(/dry-run: não alinhei/.test(bloco), 'o --dry-run não toca em nada');
-ok(/já estava em dia/.test(bloco), 'e é no-op quando já está alinhado (o caso comum)');
+ok(/dry-run completo/.test(sh), 'o --dry-run não toca em nada');
+ok(/origin\/main já contém este commit/.test(sh), 'e é no-op quando já está alinhado (o caso comum)');
 
 // não pode ABORTAR o deploy: o ar já foi publicado / o main já foi empurrado
 ok(!/exit 1/.test(bloco),

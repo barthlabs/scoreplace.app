@@ -34,11 +34,19 @@ const SEM_REVISOR = { CODEX_BIN: '/nonexistent/codex', CLAUDE_BIN: '/nonexistent
   SP_GPT_CHAVE: '/nonexistent/chave-gpt', SP_CLAUDE_CHAVE: '/nonexistent/chave-claude' };
 function run(script, args, opts) {
   opts = opts || {};
-  const env = Object.assign({}, process.env, SEM_REVISOR, opts.env || {});
+  const env = Object.assign({}, process.env);
+  // O laboratório não pode herdar de quem roda o teste nem a identidade do
+  // executor/revisor, nem o escape que o deploy usa para reaproveitar um
+  // parecer. Cada cenário injeta abaixo somente o que pretende provar.
+  delete env.REVISOR; delete env.CLAUDECODE; delete env.SP_SEM_GPT;
+  Object.keys(env).filter((k) => k.indexOf('CODEX_') === 0).forEach((k) => delete env[k]);
+  Object.assign(env, SEM_REVISOR, opts.env || {});
   // o núcleo testa `-n CLAUDECODE` e `^CODEX_`: pra simular "fora do Claude Code" a variável
   // tem que SUMIR, não ficar vazia
   if (opts.semClaudeCode) delete env.CLAUDECODE;
-  if (opts.semCodex) Object.keys(env).filter((k) => k.indexOf('CODEX_') === 0).forEach((k) => delete env[k]);
+  if (opts.semCodex) Object.keys(env)
+    .filter((k) => k.indexOf('CODEX_') === 0 && k !== 'CODEX_BIN')
+    .forEach((k) => delete env[k]);
   const r = spawnSync('bash', [script].concat(args), { cwd: opts.cwd || ROOT, env, encoding: 'utf8' });
   return { code: r.status, out: (r.stdout || '') + (r.stderr || '') };
 }

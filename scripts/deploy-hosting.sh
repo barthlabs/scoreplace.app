@@ -392,8 +392,16 @@ fi
 # O checkout principal só acompanha depois de o backup remoto confirmar o commit.
 if [[ $BACKUP_PENDENTE -eq 1 ]] && git merge-base --is-ancestor "$COMMIT" origin/main 2>/dev/null; then
   PRINCIPAL="$(git worktree list --porcelain | awk '/^worktree /{print $2; exit}')"
-  if [[ -n "$PRINCIPAL" && "$PRINCIPAL" != "$RAIZ" ]] && [[ "$(git -C "$PRINCIPAL" rev-parse --abbrev-ref HEAD 2>/dev/null || true)" == main ]] && [[ -z "$(git -C "$PRINCIPAL" status --porcelain --untracked-files=no)" ]]; then
-    git -C "$PRINCIPAL" merge --ff-only origin/main >/dev/null 2>&1 && echo "  ✓ checkout principal alinhado" || echo "⚠️  checkout principal não pôde avançar automaticamente."
+  if [[ -n "$PRINCIPAL" && "$PRINCIPAL" != "$RAIZ" ]]; then
+    BRANCH_PRINCIPAL="$(git -C "$PRINCIPAL" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+    SUJO_PRINCIPAL="$(git -C "$PRINCIPAL" status --porcelain --untracked-files=no)"
+    if [[ "$BRANCH_PRINCIPAL" == main && -z "$SUJO_PRINCIPAL" ]]; then
+      git -C "$PRINCIPAL" merge --ff-only origin/main >/dev/null 2>&1 && echo "  ✓ checkout principal alinhado" || echo "⚠️  checkout principal não pôde avançar automaticamente."
+    elif [[ "$BRANCH_PRINCIPAL" != main ]]; then
+      echo "⚠️  checkout principal está em '$BRANCH_PRINCIPAL'; não mexi fora de main."
+    else
+      echo "⚠️  checkout principal tem alterações; não mexi."
+    fi
   fi
 fi
 
