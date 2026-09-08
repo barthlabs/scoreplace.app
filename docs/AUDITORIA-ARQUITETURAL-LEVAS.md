@@ -2743,6 +2743,13 @@ quando a gravação confirma sucesso. O novo gate
 `publicar-sorteio-nao-sobrescreve-resultado.test.js` reproduz uma chave antiga contra um placar
 que chega depois e garante a preservação do resultado, do histórico e da ordem de notificação.
 
+**L7.P1.3 — reversão de W.O. migrou para mutação fresca (08/set/2026).** Publicada como
+2.2.23. A reversão alterava resultado, avanço, classificação e ausência no objeto local antes de
+usar `syncImmediate`. Agora a mesma operação é reaplicada sobre o jogo fresco por
+`AppStore.mutate`, preservando qualquer atualização concorrente fora dessa reversão; o aviso aos
+participantes só parte após confirmação da gravação. O gate existente de reversão de W.O. passou
+com 56 verificações, e o motor vendorizado da Function foi sincronizado.
+
 **Conclusão desta etapa.** A porta canônica já existe e é `AppStore.mutate` para alterações do
 documento de torneio; portas especializadas são a escolha para presença, inscrição, dupla e
 resultado isolado. A próxima etapa deve migrar por comportamento, começando pelos 14 usos reais

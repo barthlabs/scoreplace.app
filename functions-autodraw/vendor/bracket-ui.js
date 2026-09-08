@@ -3138,6 +3138,13 @@ window._revertWO = function(tId, matchId) {
     '↩️ Reverter W.O.',
     'O W.O. de "' + m.p1 + ' vs ' + m.p2 + '" será desfeito. O placar volta a 0×0, o avanço do vencedor é cancelado e os jogadores marcados como ausentes voltam a ficar disponíveis. A partida deverá ser jogada novamente. Confirma?',
     function() {
+      var _message = 'W.O. revertido: ' + m.p1 + ' vs ' + m.p2 + ' — partida reaberta';
+      // Reaplica toda a reversão no documento fresco. Não use syncImmediate aqui:
+      // entre a confirmação e o save pode chegar placar ou mudança de chave de outro aparelho.
+      window.AppStore.mutate(tId, function(ft) {
+      var t = ft;
+      var m = _findMatch(t, matchId);
+      if (!m || !m.wo) return false;
       var prevWinner = m.winner;
       var oldLoser = window._matchWinnerSide(m) === 1 ? m.p2 : m.p1;
 
@@ -3204,8 +3211,8 @@ window._revertWO = function(tId, matchId) {
       }
 
       _propagateMatchUpdate(t, m);
-      window.AppStore.logAction(tId, 'W.O. revertido: ' + m.p1 + ' vs ' + m.p2 + ' (vitória por W.O. de ' + prevWinner + ' desfeita) — partida reaberta');
-      window.AppStore.syncImmediate(tId);
+      }, _message).then(function(_saved) {
+      if (!_saved) return;
 
       if (typeof _notifyMatchParticipants === 'function') {
         _notifyMatchParticipants(t, m, {
@@ -3222,6 +3229,7 @@ window._revertWO = function(tId, matchId) {
 
       showNotification('↩️ W.O. revertido', 'A partida foi reaberta (0×0). Os jogadores voltam a ficar disponíveis.', 'success');
       _rerenderBracket(tId, matchId);
+      });
     },
     null,
     { type: 'warning', confirmText: 'Reverter W.O.', cancelText: 'Cancelar' }

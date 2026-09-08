@@ -1,3 +1,9 @@
+## 2.2.23 — reversão de W.O. não sobrescreve a chave (08/set/2026)
+
+Reverter um W.O. passou a refazer o jogo, o avanço e a classificação a partir do estado atual do
+torneio. Assim, a confirmação de uma aba antiga não pode apagar um placar ou uma atualização de
+chave que chegou de outro aparelho.
+
 ## 2.2.22 — publicar sorteio preserva resultado concorrente (08/set/2026)
 
 Publicar uma chave que estava em revisão passou a aplicar apenas essa transição sobre o estado
