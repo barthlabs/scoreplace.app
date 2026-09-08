@@ -62,6 +62,8 @@ const apply = draw.slice(draw.indexOf('window._applyDrawBalanceChoice = function
                          draw.indexOf('// ─── PORTA 1: sorteio MANUAL'));
 ok(/t\._drawBalanceMode = mode;/.test(apply), 'grava o modo que manda na formação de duplas');
 ok(/t\.equilibrado = \(mode === 'equilibrado'\);/.test(apply), 'e o que manda no espalhamento dentro dos grupos');
+ok(/commitTournamentTx[\s\S]*_applyDrawBalanceChoice\(ft, mode, assigned/.test(apply), 'e reaplica a decisão no documento fresco');
+ok(/skipProfileSync/.test(apply), 'a repetição transacional não reenvia a sincronização global de perfil');
 
 console.log((fail ? '✗' : '✓') + ' auto-draw-balance-choice: ' + pass + ' passaram, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);

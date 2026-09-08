@@ -1780,15 +1780,20 @@ window._applyDrawBalanceChoice = function (t, mode, assigned, opts) {
   }
   // 3) grava no PERFIL global (via função) — só os que têm uid; fire-and-forget
   var comUid = assigned.filter(function (r) { return r.uid; }).map(function (r) { return { uid: r.uid, gender: r.gender }; });
-  if (comUid.length > 0 && window.firebase && firebase.functions) {
+  if (!opts.skipProfileSync && comUid.length > 0 && window.firebase && firebase.functions) {
     try {
       firebase.functions().httpsCallable('setParticipantsGender')({ tournamentId: String((t && t.id) || ''), assignments: comUid })
         .catch(function (e) { window._warn && window._warn('[genderDraw] setParticipantsGender falhou:', e && (e.code || e.message)); });
     } catch (e) {}
   }
   // 4) persiste (a porta do SALVAR passa persist:false — quem grava é o próprio salvar)
-  if (t && opts.persist !== false && window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
-    try { window.FirestoreDB.saveTournament(t); } catch (e) {}
+  if (t && opts.persist !== false && window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
+    try {
+      window.AppStore.commitTournamentTx(t.id, function(ft) {
+        window._applyDrawBalanceChoice(ft, mode, assigned, Object.assign({}, opts, { persist: false, skipProfileSync: true }));
+        return true;
+      });
+    } catch (e) {}
   }
 };
 
