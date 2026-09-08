@@ -2808,8 +2808,8 @@ esses três campos em `AppStore.mutate`: a transação reaplica a mudança sobre
 mantém um carimbo/data já existentes e preserva placar, chave e novidades concorrentes. O gate
 `iniciar-torneio-nao-sobrescreve-placar` exige esse caminho e proíbe a mutação prévia do snapshot.
 
-**L7.P1.7 — reparação de rodadas futuras migrou para mutação fresca (08/set/2026, aguardando
-o próximo lote de publicação).** Ao renderizar uma eliminatória antiga sem todas as colunas, o
+**L7.P1.7 — reparação de rodadas futuras migrou para mutação fresca (08/set/2026, publicada em
+2.2.29).** Ao renderizar uma eliminatória antiga sem todas as colunas, o
 reparador criava a rodada faltante e chamava `syncImmediate`, regravando o torneio inteiro a
 partir da cópia renderizada. Agora o primeiro passo é uma checagem pura; somente havendo lacuna,
 `AppStore.mutate` reaplica a reparação no documento fresco. Se outra sessão já a completou, a
@@ -2817,26 +2817,23 @@ transação aborta sem escrever. O gate `reparo-chave-nao-sobrescreve-placar` re
 rodada 2 e um documento fresco com resultado 6–3: a rodada é criada e o placar recente permanece
 intacto. Claude aprovou o diff (Opus, esforço baixo).
 
-**L7.P1.8 — substituição por W.O. migrou para mutação fresca (08/set/2026, aguardando o
-próximo lote de publicação).** O wrapper que aplica substituta partia do torneio carregado e,
+**L7.P1.8 — substituição por W.O. migrou para mutação fresca (08/set/2026, publicada em
+2.2.29).** O wrapper que aplica substituta partia do torneio carregado e,
 na ausência da porta transacional, caía em `syncImmediate` ou `sync`. Ele agora exige
 `AppStore.mutate` e reaplica o núcleo puro no documento fresco; se a vaga já tiver sido ocupada,
 aborta a escrita. O gate `substituicao-wo-nao-sobrescreve-placar` prova tanto a preservação de
 um resultado concorrente quanto a recusa segura sem a porta de mutação. Claude aprovou o diff
 (Opus, esforço baixo).
 
-**Censo após 2.2.29 (08/set/2026).** Restam três usos reais de `syncImmediate`: o toggle de
-atividade de inscrição (`tournaments-enrollment`), a geração manual de rodada extra
-(`tournaments-draw`) e o encerramento de rodada da Liga (`bracket`). Os dois
-últimos chamam geradores que acrescentam uma rodada e usam aleatoriedade; não é seguro apenas
-substituir o save por uma transação, porque uma reexecução pode produzir uma segunda rodada ou
-outro pareamento. A próxima migração deve carregar uma intenção idempotente — número de rodada
-esperado e fonte aleatória estável — e abortar quando o documento fresco já alcançou aquela
-rodada. Os 27 `sync()` restantes se concentram em preparação de sorteio e categorias e serão
-tratados por comportamento, não por substituição mecânica.
+**Censo após 2.2.30 (08/set/2026).** Resta um único uso real de `syncImmediate`: o toggle de
+atividade de inscrição em `tournaments-enrollment`. Os geradores manual de rodada extra e de
+rodada seguinte da Liga já usam intenção idempotente: número esperado, instante e fonte aleatória
+estável, com aborto quando o documento fresco já alcançou a rodada. Os usos restantes de
+`sync()` se concentram em preparação de sorteio e categorias e serão tratados por comportamento,
+nunca por substituição mecânica.
 
-**L7.P1.9 — rodada extra ganhou intenção transacional (08/set/2026, aguardando o próximo lote
-de publicação).** Gerar uma rodada extra alterava a cópia local, chamava o pareamento aleatório
+**L7.P1.9 — rodada extra ganhou intenção transacional (08/set/2026, publicada em 2.2.30).**
+Gerar uma rodada extra alterava a cópia local, chamava o pareamento aleatório
 e depois fazia `syncImmediate`. Agora cada clique fixa o número de rodada esperado, o instante e
 uma fonte aleatória estável; a mutação reaplica essa mesma intenção no documento fresco e aborta
 se ele já alcançou aquela rodada. Assim, retry não cria outra rodada nem muda os confrontos. O
@@ -2845,7 +2842,7 @@ placar concorrente, aborto da rodada já existente e números corretos na notifi
 aprovou o diff (Opus, esforço baixo).
 
 **L7.P1.10 — fechamento de rodada da Liga ganhou intenção transacional (08/set/2026,
-aguardando o próximo lote de publicação).** A geração da rodada seguinte em uma Liga de fase
+publicada em 2.2.30).** A geração da rodada seguinte em uma Liga de fase
 usava `syncImmediate` depois do pareamento. Agora a intenção fixa fase, rodada esperada,
 instante e RNG; é reaplicada no documento fresco e aborta se a rodada já foi criada. O gate
 `fechar-rodada-liga-nao-duplica-nem-sobrescreve` comprova retry determinístico e preservação de
@@ -2853,7 +2850,7 @@ um placar concorrente. Claude aprovou o diff (Opus, esforço baixo).
 
 **Conclusão desta etapa.** A porta canônica já existe e é `AppStore.mutate` para alterações do
 documento de torneio; portas especializadas são a escolha para presença, inscrição, dupla e
-resultado isolado. A próxima etapa deve migrar por comportamento, começando pelos 14 usos reais
-de `syncImmediate`, depois os 32 de `sync`, e para cada grupo acrescentar um teste que faça um
-snapshot velho terminar depois da transação fresca. Não é seguro substituir tudo mecanicamente:
-cada mutator precisa expressar uma mudança idempotente, pois será reexecutado durante retry.
+resultado isolado. O próximo alvo é o único `syncImmediate` restante, o toggle de atividade da
+Liga. Depois serão tratados os `sync()` de preparação de sorteio e categorias, com um teste por
+fluxo que faça um snapshot velho terminar depois da transação fresca. Cada mutator deve expressar
+uma mudança idempotente, pois será reexecutado durante retry.
