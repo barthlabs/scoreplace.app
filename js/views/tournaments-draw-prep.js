@@ -13,11 +13,13 @@ var _t = window._t || function(k) { return k; };
 window._grupos_f2Direct = function(tId) {
     var t = window._findTournamentById ? window._findTournamentById(tId) : null;
     if (!t || !t.fmt2 || !(parseInt(t.gruposCount, 10) >= 1)) return false;
-    if (t.status !== 'closed') t.status = 'closed';
-    delete t._suspendedByPanel; delete t._previousStatus;
     var _go = function() { if (typeof window.generateDrawFunction === 'function') window.generateDrawFunction(tId); };
-    if (window.FirestoreDB && window.FirestoreDB.saveTournament) { window.FirestoreDB.saveTournament(t).then(_go).catch(_go); }
-    else { _go(); }
+    if (!window.AppStore || typeof window.AppStore.mutate !== 'function') return false;
+    window.AppStore.mutate(tId, function(ft) {
+        if (!ft.fmt2 || !(parseInt(ft.gruposCount, 10) >= 1)) return false;
+        ft.status = 'closed'; delete ft._suspendedByPanel; delete ft._previousStatus;
+        return true;
+    }, 'Inscrições encerradas para sortear grupos').then(function(saved) { if (saved !== false) _go(); });
     return true;
 };
 
@@ -357,31 +359,27 @@ window._showGroupsConfigPanel = function(tId) {
     window._selectGroupsConfig = function(tId, numGroups, classPerGroup, advanceTotal, equalOnly) {
         var t = window._findTournamentById(tId);
         if (!t) return;
-        t.gruposCount = numGroups;
-        t.gruposClassified = classPerGroup;
-        if (advanceTotal) t.gruposAdvanceTotal = advanceTotal;
-        if (typeof equalOnly === 'boolean') t.gruposEqualOnly = equalOnly;
-        // Ensure enrollment is closed
-        if (t.status !== 'closed') {
-            t.status = 'closed';
-        }
-        // Clean up suspension flags
-        delete t._suspendedByPanel;
-        delete t._previousStatus;
-        window.FirestoreDB.saveTournament(t).then(function() {
+        var _persistGroups = window.AppStore && typeof window.AppStore.mutate === 'function'
+          ? window.AppStore.mutate(tId, function(ft) {
+              ft.gruposCount = numGroups; ft.gruposClassified = classPerGroup;
+              if (advanceTotal) ft.gruposAdvanceTotal = advanceTotal;
+              if (typeof equalOnly === 'boolean') ft.gruposEqualOnly = equalOnly;
+              ft.status = 'closed'; delete ft._suspendedByPanel; delete ft._previousStatus;
+              return true;
+            }, 'Configuração de grupos confirmada')
+          : Promise.reject(new Error('mutate indisponível'));
+        _persistGroups.then(function() {
             var panel = document.getElementById('groups-config-panel');
             if (panel) panel.remove();
             document.body.style.overflow = '';
             if (typeof window.generateDrawFunction === 'function') {
                 window.generateDrawFunction(tId);
             }
-        }).catch(function() {
-            var panel = document.getElementById('groups-config-panel');
-            if (panel) panel.remove();
-            document.body.style.overflow = '';
-            if (typeof window.generateDrawFunction === 'function') {
-                window.generateDrawFunction(tId);
-            }
+        }).catch(function(err) {
+            window._error('[groups-config] save error:', err);
+            if (typeof showNotification === 'function') showNotification('Não foi possível salvar', 'A configuração dos grupos não foi alterada.', 'error');
+            var btn = document.getElementById('grp-panel-confirm-btn');
+            if (btn) { btn.disabled = false; btn.style.opacity = ''; btn.style.cursor = ''; btn.innerHTML = '✓ Confirmar e sortear'; }
         });
     };
 
@@ -1197,12 +1195,15 @@ window._phasePromoteApply = function(tId) {
     var t = window._findTournamentById(tId);
     if (!t) return;
     var _idx = (t._phaseResInfo && t._phaseResInfo.nextIdx != null) ? t._phaseResInfo.nextIdx : ((t.currentPhaseIndex || 0) + 1);
-    if (t.phases && t.phases[_idx]) { t.phases[_idx]._promoteLines = 1; t.phases[_idx]._promoteAsked = true; }
     window._clearPhaseResInfo(t);
     var _p = document.getElementById('phase-promote-panel'); if (_p) _p.remove();
     document.body.style.overflow = '';
-    if (window.FirestoreDB && window.FirestoreDB.saveTournament) window.FirestoreDB.saveTournament(t);
-    if (window._advanceMultiPhase) window._advanceMultiPhase(tId);
+    if (!window.AppStore || typeof window.AppStore.mutate !== 'function') return;
+    window.AppStore.mutate(tId, function(ft) {
+        if (!ft.phases || !ft.phases[_idx]) return false;
+        ft.phases[_idx]._promoteLines = 1; ft.phases[_idx]._promoteAsked = true;
+        return true;
+    }, 'Promoção entre fases confirmada').then(function(saved) { if (saved !== false && window._advanceMultiPhase) window._advanceMultiPhase(tId); });
 };
 
 // NÃO PROMOVER → mantém as linhas como estão (0 promoções) + marca decidido → painel de pow2.
@@ -1210,12 +1211,15 @@ window._phasePromoteSkip = function(tId) {
     var t = window._findTournamentById(tId);
     if (!t) return;
     var _idx = (t._phaseResInfo && t._phaseResInfo.nextIdx != null) ? t._phaseResInfo.nextIdx : ((t.currentPhaseIndex || 0) + 1);
-    if (t.phases && t.phases[_idx]) { t.phases[_idx]._promoteLines = 0; t.phases[_idx]._promoteAsked = true; }
     window._clearPhaseResInfo(t);
     var _p = document.getElementById('phase-promote-panel'); if (_p) _p.remove();
     document.body.style.overflow = '';
-    if (window.FirestoreDB && window.FirestoreDB.saveTournament) window.FirestoreDB.saveTournament(t);
-    if (window._advanceMultiPhase) window._advanceMultiPhase(tId);
+    if (!window.AppStore || typeof window.AppStore.mutate !== 'function') return;
+    window.AppStore.mutate(tId, function(ft) {
+        if (!ft.phases || !ft.phases[_idx]) return false;
+        ft.phases[_idx]._promoteLines = 0; ft.phases[_idx]._promoteAsked = true;
+        return true;
+    }, 'Promoção entre fases dispensada').then(function(saved) { if (saved !== false && window._advanceMultiPhase) window._advanceMultiPhase(tId); });
 };
 
 // v1.3.60: painel de "Novos Confrontos" — só Eliminatória Simples com pow2 LIMPA e
@@ -2778,52 +2782,38 @@ window._showPollCreationDialog = function(tId, context, pollOptions) {
             }
         });
 
-        if (!t.polls) t.polls = [];
-        t.polls.push(pollData);
-        t.activePollId = pollData.id;
-
-        // Suspend enrollments while poll is active
-        if (t.status === 'open' || !t.status) {
-            t._pollSuspended = true;
-            t.status = 'closed';
+        if (!window.AppStore || typeof window.AppStore.mutate !== 'function') {
+            if (typeof showNotification === 'function') showNotification('Atualize o aplicativo', 'Não foi possível criar a enquete com segurança.', 'error');
+            return;
         }
 
-        // Add in-app notification markers for all participants
-        var parts = t.participants ? (Array.isArray(t.participants) ? t.participants : Object.values(t.participants)) : [];
-        if (!t.pollNotifications) t.pollNotifications = [];
-        parts.forEach(function(p) {
-            if (typeof p !== 'object') return;
-            // uid-first: marca TODOS os uids do participante (dupla = p1Uid+p2Uid);
-            // jogador informal (sem uid) cai no e-mail (fallback legado).
-            var _uids = (typeof window._participantUids === 'function') ? window._participantUids(p) : (p.uid ? [p.uid] : []);
-            if (_uids.length) {
-                _uids.forEach(function(u) {
-                    t.pollNotifications.push({ targetUid: u, pollId: pollData.id, timestamp: Date.now(), read: false });
-                });
-            } else if (p.email) {
-                t.pollNotifications.push({ targetEmail: p.email, pollId: pollData.id, timestamp: Date.now(), read: false });
-            }
-        });
+        // A enquete depende da lista de participantes e fecha inscrições. Faz tudo
+        // sobre o documento fresco para não devolver um placar/check-in antigo.
+        var created = window.AppStore.mutate(tId, function(ft) {
+            if (!Array.isArray(ft.polls)) ft.polls = ft.polls ? Object.values(ft.polls) : [];
+            if (ft.polls.some(function(existing) { return existing && existing.id === pollData.id; })) return false;
+            ft.polls.push(pollData);
+            ft.activePollId = pollData.id;
+            if (ft.status === 'open' || !ft.status) { ft._pollSuspended = true; ft.status = 'closed'; }
+            if (!Array.isArray(ft.pollNotifications)) ft.pollNotifications = [];
+            var freshParts = ft.participants ? (Array.isArray(ft.participants) ? ft.participants : Object.values(ft.participants)) : [];
+            freshParts.forEach(function(p) {
+                if (!p || typeof p !== 'object') return;
+                var uids = (typeof window._participantUids === 'function') ? window._participantUids(p) : (p.uid ? [p.uid] : []);
+                if (uids.length) uids.forEach(function(uid) { ft.pollNotifications.push({ targetUid: uid, pollId: pollData.id, timestamp: Date.now(), read: false }); });
+                else if (p.email) ft.pollNotifications.push({ targetEmail: p.email, pollId: pollData.id, timestamp: Date.now(), read: false });
+            });
+            return true;
+        }, 'Enquete criada: ' + selectedOptions.length + ' opções, prazo de ' + hours + 'h');
 
-        window.AppStore.logAction(tId, 'Enquete criada: ' + selectedOptions.length + ' opções, prazo de ' + hours + 'h');
-
-        if (window.FirestoreDB && window.FirestoreDB.saveTournament) {
-            window.FirestoreDB.saveTournament(t);
-        } else {
-            window.AppStore.sync();
-        }
-
-        // Send Firestore push notification to all participants
-        if (typeof window._notifyTournamentParticipants === 'function') {
+        Promise.resolve(created).then(function(saved) {
+            if (saved === false || typeof window._notifyTournamentParticipants !== 'function') return;
             window._notifyTournamentParticipants(t, {
-                type: 'poll',
-                level: 'important',
+                type: 'poll', level: 'important',
                 title: _t('predraw.pollNotifTitle', {name: window._safeHtml(t.name)}),
-                message: _t('predraw.pollNotifMsg', {hours: hours}),
-                tournamentId: tId,
-                pollId: pollData.id
+                message: _t('predraw.pollNotifMsg', {hours: hours}), tournamentId: tId, pollId: pollData.id
             }, t.organizerEmail);
-        }
+        }).catch(function(err) { window._error('[poll-create] save error:', err); });
 
         overlay.remove();
         document.body.style.overflow = '';
