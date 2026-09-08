@@ -1522,8 +1522,13 @@ window._hydrateInlineCatMgr = function(tId) {
         var _prevCombined = JSON.stringify(t.combinedCategories);
         _simplifySingletonCategories(t);
         if (JSON.stringify(t.combinedCategories) !== _prevCombined) {
-            if (window.FirestoreDB && window.FirestoreDB.saveTournament) window.FirestoreDB.saveTournament(t);
-            else if (window.AppStore && window.AppStore.sync) window.AppStore.sync();
+            if (window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
+                window.AppStore.commitTournamentTx(tId, function(ft) {
+                    var before = JSON.stringify({ combinedCategories: ft.combinedCategories, skillCategories: ft.skillCategories, participants: ft.participants, mergeHistory: ft.mergeHistory });
+                    _simplifySingletonCategories(ft);
+                    return before !== JSON.stringify({ combinedCategories: ft.combinedCategories, skillCategories: ft.skillCategories, participants: ft.participants, mergeHistory: ft.mergeHistory });
+                });
+            }
         }
     }
 
@@ -2856,7 +2861,7 @@ function _eligibleCatsForParticipant(p, allCats, tSport) {
     return eligible;
 }
 
-window._autoAssignCategories = function(tId, _preloadedT) {
+window._autoAssignCategories = function(tId, _preloadedT, opts) {
     var t = _preloadedT || window._findTournamentById(tId);
     if (!t) return 0;
 
@@ -2916,12 +2921,16 @@ window._autoAssignCategories = function(tId, _preloadedT) {
         }
     });
 
-    if (assigned > 0 || purged > 0) {
+    var didMutate = assigned > 0 || purged > 0;
+    if (opts) opts.didMutate = didMutate;
+    if (didMutate) {
         if (!Array.isArray(t.participants)) t.participants = parts;
-        if (window.FirestoreDB && window.FirestoreDB.saveTournament) {
-            window.FirestoreDB.saveTournament(t);
-        } else if (window.AppStore && window.AppStore.sync) {
-            window.AppStore.sync();
+        if (!(opts && opts.skipPersist) && window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
+            window.AppStore.commitTournamentTx(tId, function(ft) {
+                var freshOpts = { skipPersist: true, didMutate: false };
+                window._autoAssignCategories(tId, ft, freshOpts);
+                return freshOpts.didMutate;
+            });
         }
     }
 

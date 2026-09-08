@@ -19,4 +19,8 @@ const inferred = body('_executeInferredUnmerge', '// Assign an uncategorized par
   ok(code.indexOf('AppStore.commitTournamentTx') >= 0 && code.indexOf(apply) >= 0, name + ' reaplica a intenção no documento fresco');
   ok(!/saveTournament\(|AppStore\.sync\(/.test(code), name + ' não regrava snapshot inteiro');
 });
+const autoAssign = s.slice(s.indexOf('window._autoAssignCategories = function'), s.indexOf('// Async version:', s.indexOf('window._autoAssignCategories = function')));
+const hydrate = s.slice(s.indexOf('window._hydrateInlineCatMgr = function'), s.indexOf('/* ══ OS CLIQUES', s.indexOf('window._hydrateInlineCatMgr = function')));
+ok(/commitTournamentTx/.test(autoAssign) && /skipPersist/.test(autoAssign) && !/saveTournament\(|AppStore\.sync\(/.test(autoAssign), 'autoatribuição reexecuta a reconciliação no documento fresco');
+ok(/commitTournamentTx/.test(hydrate) && /_simplifySingletonCategories\(ft\)/.test(hydrate) && !/saveTournament\(|AppStore\.sync\(/.test(hydrate), 'normalização passiva de categorias usa documento fresco');
 if (fail) process.exit(1);
