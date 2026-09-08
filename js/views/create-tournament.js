@@ -5961,8 +5961,8 @@ window._saveTournamentClickHandler = function() {
           }, 500);
         }
 
-        // Persiste no localStorage
-        window.AppStore.sync();
+        // addTournament já persiste criação pela porta especializada e edição pela
+        // transação fresca. Não sincronize o snapshot inteiro depois disso.
 
         // Auto-assign categories to uncategorized participants based on profile (gender, age, skill)
         var _autoAssignTid = editId || (window.AppStore.tournaments.length > 0 ? window.AppStore.tournaments[window.AppStore.tournaments.length - 1].id : null);
