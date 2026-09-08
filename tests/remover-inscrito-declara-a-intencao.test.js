@@ -42,6 +42,8 @@ ok(/saveTournament\(t,\s*\{\s*allowRosterRemoval:\s*true\s*\}\)|commitTournament
    '⛔ ele declara `allowRosterRemoval: true` — sem isso o guard restaura quem foi removido');
 ok(!/saveTournament\(t\)\s*;/.test(corpo),
    '   e não sobrou a chamada crua (era ela que voltava atrás na remoção)');
+ok(/_applyOrganizerParticipantRemoval/.test(corpo) && /_applyOrganizerParticipantRemoval\(ft, participantName, memberUid\)/.test(corpo),
+   'a mesma remoção é reaplicada no documento fresco antes de gravar');
 
 console.log('\n② O guard continua existindo e continua sendo a regra');
 ok(/roster shrink blocked/.test(db), 'o guard segue reportando quando barra alguém');

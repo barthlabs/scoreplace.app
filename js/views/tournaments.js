@@ -535,6 +535,42 @@ window._purgePersonFromMaps = function (t, uid, name) {
         if (nm) Object.keys(m).forEach(function (key) { if (String(key).trim().toLowerCase() === nm) delete m[key]; });
     });
 };
+// Applies the organizer's confirmed removal to any tournament object. The caller
+// runs it once for the screen and once for the fresh transaction document.
+function _applyOrganizerParticipantRemoval(t, participantName, memberUid) {
+    if (!t) return false;
+    var target = String(participantName || '').trim().toLowerCase();
+    var removedP = null;
+    var arr = Array.isArray(t.participants) ? t.participants : (t.participants ? Object.values(t.participants) : []);
+    var idx = -1;
+    if (memberUid) {
+        var si = arr.findIndex(function (p) { return p && typeof p === 'object' && p.uid === memberUid && !p.p1Uid && !p.p2Uid && !p.p1Name && !p.p2Name; });
+        if (si !== -1) { removedP = arr[si]; arr.splice(si, 1); t.participants = arr; idx = si; }
+    }
+    if (idx === -1 && memberUid) {
+        var pi = arr.findIndex(function (p) { return p && typeof p === 'object' && (p.p1Uid === memberUid || p.p2Uid === memberUid); });
+        if (pi !== -1) {
+            var entry = arr[pi];
+            var keep = window._pairPartnerSolo(entry, entry.p1Uid === memberUid ? 2 : 1);
+            removedP = { uid: memberUid };
+            if (keep) arr.splice(pi, 1, keep); else arr.splice(pi, 1);
+            t.participants = arr;
+            idx = pi;
+        }
+    }
+    if (idx === -1) {
+        idx = arr.findIndex(function(p, i) {
+            var forms = (typeof window._nameForms === 'function') ? window._nameForms(p) : [String(window._pName(p) || '').toLowerCase()];
+            return forms.indexOf(target) !== -1 || ('participante ' + (i + 1)) === target;
+        });
+        if (idx !== -1) { removedP = arr[idx]; arr.splice(idx, 1); t.participants = arr; }
+    } else if (!removedP) removedP = { uid: memberUid };
+    var removedFromWait = (typeof window._removeFromWaitlist === 'function') ? window._removeFromWaitlist(t, participantName) : false;
+    if (idx === -1 && !removedFromWait) return false;
+    if (typeof window._purgePersonFromMaps === 'function') window._purgePersonFromMaps(t, memberUid || (removedP && removedP.uid), participantName);
+    return { participant: removedP, removedFromWait: removedFromWait };
+}
+
 // memberUid = a IDENTIDADE de quem o card representa. O card individual manda o uid; o nome é
 // só fallback (fictício sem conta / doc legado). Sem o uid, excluir alguém que está EM DUPLA era
 // no-op silencioso — o nome da entrada é "A / B", nunca "A" — e o dono via o ✕ "não fazer nada".
@@ -565,43 +601,9 @@ window.removeParticipantFunction = function (tId, participantName, memberUid) {
                 // v2.7.54: casa nome CRU/FORMATADO (telefone "+5511981933576" vs
                 // "+55 (11) 98193-3576") e remove TAMBÉM dos storages da lista de espera
                 // — assim o organizador remove qualquer um, inclusive quem só está na espera.
-                var _target = String(participantName || '').trim().toLowerCase();
-                var _removedP = null;
-                let arr = Array.isArray(t.participants) ? t.participants : (t.participants ? Object.values(t.participants) : []);
-                // 1) IDENTIDADE (uid) primeiro: entrada solo da pessoa.
-                var idx = -1;
-                if (memberUid) {
-                    var si = arr.findIndex(function (p) {
-                        return p && typeof p === 'object' && p.uid === memberUid && !p.p1Uid && !p.p2Uid && !p.p1Name && !p.p2Name;
-                    });
-                    if (si !== -1) { _removedP = arr[si]; arr.splice(si, 1); t.participants = arr; idx = si; }
-                }
-                // 2) Está EM DUPLA → a dupla vira o parceiro solo (a pessoa sai).
-                if (idx === -1 && memberUid) {
-                    var pi = arr.findIndex(function (p) {
-                        return p && typeof p === 'object' && (p.p1Uid === memberUid || p.p2Uid === memberUid);
-                    });
-                    if (pi !== -1) {
-                        var ent = arr[pi];
-                        var keep = window._pairPartnerSolo(ent, ent.p1Uid === memberUid ? 2 : 1);
-                        _removedP = { uid: memberUid };
-                        if (keep) arr.splice(pi, 1, keep); else arr.splice(pi, 1);
-                        t.participants = arr;
-                        idx = pi;                         // marca que houve remoção
-                    }
-                }
-                // 3) Fallback por NOME (fictício sem conta / doc legado / "Participante N").
-                if (idx === -1) {
-                    idx = arr.findIndex(function(p, i) {
-                        var forms = (typeof window._nameForms === 'function') ? window._nameForms(p) : [String(window._pName(p) || '').toLowerCase()];
-                        if (forms.indexOf(_target) !== -1) return true;
-                        return ('participante ' + (i + 1)) === _target;
-                    });
-                    if (idx !== -1) { _removedP = arr[idx]; arr.splice(idx, 1); t.participants = arr; }
-                } else if (!_removedP) { _removedP = { uid: memberUid }; }
-                var _removedFromWait = (typeof window._removeFromWaitlist === 'function') ? window._removeFromWaitlist(t, participantName) : false;
-                if (idx === -1 && !_removedFromWait) return; // nada pra remover
-                if (typeof window._purgePersonFromMaps === 'function') window._purgePersonFromMaps(t, memberUid || (_removedP && _removedP.uid), participantName);
+                var _removal = _applyOrganizerParticipantRemoval(t, participantName, memberUid);
+                if (!_removal) return;
+                var _removedP = _removal.participant;
                 if (_removedP && typeof _removedP === 'object' && _removedP.uid && typeof window._sendUserNotification === 'function') {
                     var _cuRem = window.AppStore && window.AppStore.currentUser;
                     var _remover = (_cuRem && (_cuRem.displayName || _cuRem.email)) || 'o organizador';
@@ -612,21 +614,11 @@ window.removeParticipantFunction = function (tId, participantName, memberUid) {
                         tournamentId: String(t.id), tournamentName: t.name || '', level: 'fundamental'
                     });
                 }
-                /* ⛔ 2.1.42 — SEM `allowRosterRemoval` A REMOÇÃO NUNCA ACONTECIA. O guard
-                 * de elenco do `saveTournament` restaura quem chega faltando no save — é a
-                 * proteção contra cópia atrasada apagar gente (o "sumiço do Gersom"). Ele
-                 * tem a porta de saída para a remoção INTENCIONAL, e o próprio aviso dele
-                 * diz: _"se a remoção era intencional, o caminho precisa passar
-                 * allowRosterRemoval"_. Este caminho — o botão ✕ do ORGANIZADOR — nunca
-                 * passava. Só o "sair do torneio" do próprio inscrito passava.
-                 * ⭐ MEDIDO NO SENTRY: `roster shrink blocked: tour_1787962809278
-                 * (nome:jogador 01 (participants))`, 15 ocorrências. Relato do dono no
-                 * mesmo minuto: _"removi o 1 e ele voltou como inscrito 8"_ — ele voltava
-                 * porque o guard o devolvia, e ia pro fim da fila.
-                 * ⚠️ A remoção aqui já é intencional e confirmada por diálogo; declarar
-                 * isso é o contrato do guard, não um furo nele. */
-                if (typeof window.FirestoreDB !== 'undefined' && window.FirestoreDB.saveTournament) window.FirestoreDB.saveTournament(t, { allowRosterRemoval: true });
-                else if (typeof window.AppStore.sync === 'function') window.AppStore.sync();
+                if (window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
+                    window.AppStore.commitTournamentTx(tId, function(ft) {
+                        return !!_applyOrganizerParticipantRemoval(ft, participantName, memberUid);
+                    }, { allowRosterRemoval: true });
+                }
                 const container = document.getElementById('view-container');
                 if (container) {
                     if ((window.location.hash || '').indexOf('#participants') === 0 && typeof window.renderParticipants === 'function') window.renderParticipants(container, tId);
