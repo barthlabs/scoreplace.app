@@ -2581,10 +2581,17 @@ window._cancelPowerOf2Panel = function (tId) {
     if (panel) panel.remove();
     const t = window._findTournamentById(tId);
     if (t && t._suspendedByPanel) {
-        t.status = t._previousStatus || 'open';
-        delete t._suspendedByPanel;
-        delete t._previousStatus;
-        window.AppStore.sync();
+        if (!window.AppStore || typeof window.AppStore.mutate !== 'function') {
+            showNotification('Atualize o aplicativo', 'Não foi possível restaurar as inscrições com segurança.', 'error');
+            return;
+        }
+        window.AppStore.mutate(tId, function(ft) {
+            if (!ft._suspendedByPanel) return false;
+            ft.status = ft._previousStatus || 'open';
+            delete ft._suspendedByPanel;
+            delete ft._previousStatus;
+            return true;
+        }, 'Inscrições restauradas após cancelar a decisão');
         const container = document.getElementById('view-container');
         if (container) renderTournaments(container, window.location.hash.split('/')[1]);
         showNotification(_t('draw.enrollRestored'), _t('draw.enrollRestoredMsg'), 'info');
