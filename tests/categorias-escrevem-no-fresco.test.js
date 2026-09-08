@@ -29,6 +29,9 @@ const autoAssign = s.slice(s.indexOf('window._autoAssignCategories = function'),
 const hydrate = s.slice(s.indexOf('window._hydrateInlineCatMgr = function'), s.indexOf('/* ══ OS CLIQUES', s.indexOf('window._hydrateInlineCatMgr = function')));
 ok(/commitTournamentTx/.test(autoAssign) && /skipPersist/.test(autoAssign) && !/saveTournament\(|AppStore\.sync\(/.test(autoAssign), 'autoatribuição reexecuta a reconciliação no documento fresco');
 ok(/commitTournamentTx/.test(hydrate) && /_simplifySingletonCategories\(ft\)/.test(hydrate) && !/saveTournament\(|AppStore\.sync\(/.test(hydrate), 'normalização passiva de categorias usa documento fresco');
+const categoryComm = s.slice(s.indexOf('function _categoryCommIdentity'), s.indexOf('// ════════════════════════════════════════════════════════════════════════════\n// v2.4.28:', s.indexOf('function _categoryCommIdentity')));
+ok(/_applyCategoryCommUpdates/.test(categoryComm) && /commitTournamentTx/.test(categoryComm), 'marcadores de comunicação de categoria usam o participante fresco');
+ok(!/saveTournament\(|AppStore\.sync\(/.test(categoryComm), 'comunicação de categoria não regrava snapshot inteiro');
 const resolveRequest = body('_resolveCategoryChange', 'window._approveCategoryChange');
 ok(/commitTournamentTx/.test(resolveRequest) && /reqIdentity/.test(resolveRequest) && !/saveTournament\(|AppStore\.sync\(/.test(resolveRequest), 'aprovação de pedido identifica e resolve o pedido fresco');
 const profileDirect = body('_applyProfileCategoryDirect', 'window._requestCategoryChangeFromProfile');

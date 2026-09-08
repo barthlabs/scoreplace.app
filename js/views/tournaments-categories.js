@@ -3036,6 +3036,33 @@ window._autoAssignCategoriesAsync = async function(tId) {
 // (plataforma/email/WhatsApp via _sendUserNotification) e registra data/hora no
 // participante (mostrada na Análise de Inscritos). Dedup: só reenvia se o conjunto
 // de campos faltantes mudou.
+function _categoryCommIdentity(p) {
+    if (!p || typeof p !== 'object') return '';
+    return p.uid || p.p1Uid || p.email || p.displayName || p.name || '';
+}
+
+// Persist only communication markers on the fresh participant. The notification
+// itself was already sent; this prevents an old tab from restoring the roster.
+function _applyCategoryCommUpdates(t, updates) {
+    if (!t || !updates || !updates.length) return false;
+    var freshParts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
+    var changed = false;
+    updates.forEach(function(update) {
+        var p = freshParts.find(function(candidate) { return _categoryCommIdentity(candidate) === update.identity; });
+        if (!p) return;
+        if (update.clear) {
+            if (p.categoryCommPending) { delete p.categoryCommPending; changed = true; }
+            return;
+        }
+        p.categoryCommAt = update.at;
+        p.categoryCommFields = update.fields.slice();
+        p.categoryCommPending = update.pending;
+        changed = true;
+    });
+    if (changed && !Array.isArray(t.participants)) t.participants = freshParts;
+    return changed;
+}
+
 window._dispatchCategoryDataRequests = async function(t) {
     if (!t) return 0;
     var allCats = (typeof window._getTournamentCategories === 'function') ? window._getTournamentCategories(t) : (t.combinedCategories || []);
@@ -3044,51 +3071,37 @@ window._dispatchCategoryDataRequests = async function(t) {
     if (parts.length === 0) return 0;
 
     var tName = t.name || 'torneio';
-    var sent = 0, changed = false;
-
+    var sent = 0, updates = [];
     for (var i = 0; i < parts.length; i++) {
         var p = parts[i];
         if (!p || typeof p !== 'object') continue;
-        // Já tem categoria válida? então está regularizado.
+        var identity = _categoryCommIdentity(p);
+        if (!identity) continue;
         var existing = (typeof window._getParticipantCategories === 'function') ? window._getParticipantCategories(p) : (p.categories || (p.category ? [p.category] : []));
         var hasValid = existing.some(function(c) { return allCats.indexOf(c) !== -1; });
         if (hasValid) {
-            // Regularizou desde a última cobrança — limpa o registro de pendência.
-            if (p.categoryCommAt) { delete p.categoryCommPending; changed = true; }
+            if (p.categoryCommAt) { delete p.categoryCommPending; updates.push({ identity: identity, clear: true }); }
             continue;
         }
         var mf = window._categoryMissingFields(p, t);
-        if (!mf.missing || mf.missing.length === 0) continue; // ambíguo mas com dados → decisão do organizador, não cobra
-
+        if (!mf.missing || mf.missing.length === 0) continue;
         var uid = p.uid || p.p1Uid || null;
-        if (!uid) continue; // sem conta → não há canal pra avisar
-
+        if (!uid) continue;
         var fieldKey = mf.missing.slice().sort().join(',');
-        if (p.categoryCommPending === fieldKey) continue; // já cobrado por exatamente esses campos
-
+        if (p.categoryCommPending === fieldKey) continue;
         var nowIso = new Date().toISOString();
         var faltam = mf.missing.join(', ');
         try {
-            await window._sendUserNotification(uid, {
-                type: 'category-data-request',
-                level: 'fundamental',
-                tournamentId: String(t.id),
-                tournamentName: tName,
-                openProfile: true,
-                missingFields: mf.missing,
-                message: 'Para confirmar sua inscrição em "' + tName + '", complete no seu perfil: ' + faltam + '. Toque em "Abrir meu perfil".'
-            });
+            await window._sendUserNotification(uid, { type: 'category-data-request', level: 'fundamental', tournamentId: String(t.id), tournamentName: tName, openProfile: true, missingFields: mf.missing, message: 'Para confirmar sua inscrição em "' + tName + '", complete no seu perfil: ' + faltam + '. Toque em "Abrir meu perfil".' });
             p.categoryCommAt = nowIso;
             p.categoryCommFields = mf.missing.slice();
             p.categoryCommPending = fieldKey;
+            updates.push({ identity: identity, at: nowIso, fields: mf.missing.slice(), pending: fieldKey });
             sent++;
-            changed = true;
         } catch (e) { window._warn('[catDataReq] envio falhou p/ uid ' + uid, e); }
     }
-
-    if (changed && window.FirestoreDB && window.FirestoreDB.saveTournament) {
-        if (!Array.isArray(t.participants)) t.participants = parts;
-        try { window.FirestoreDB.saveTournament(t); } catch (_e) {}
+    if (updates.length && window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
+        window.AppStore.commitTournamentTx(t.id, function(ft) { return _applyCategoryCommUpdates(ft, updates); });
     }
     return sent;
 };
