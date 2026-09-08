@@ -5663,17 +5663,9 @@ window._checkLigaAutoDraws = async function() {
 
   var now = new Date();
   var tournaments = store.tournaments.slice();
-  // Tombstone set — ids que o usuário acabou de apagar localmente. A lista
-  // é limpa quando o delete server-side confirma em tournaments-enrollment.
-  var _deletedIds = (store._deletedTournamentIds || []).map(String);
-
   for (var i = 0; i < tournaments.length; i++) {
     var t = tournaments[i];
     if (!t) continue;
-
-    // Torneio apagado (ou em processo de apagar) — nunca disparar auto-draw,
-    // sob pena de ressuscitar o doc via saveTournament({merge: true}).
-    if (_deletedIds.indexOf(String(t.id)) !== -1) continue;
 
     // v3.1.14 (brick 4 etapa 4): Liga incremental de FASE POSTERIOR tem agenda PRÓPRIA
     // por fase. Num multi-fase t.format NÃO é 'Liga', então o filtro _isLigaFormat abaixo

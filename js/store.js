@@ -3648,7 +3648,6 @@ window._devWhatsAppBtnHtml = function (opts) {
       // wipe intermitente do iOS PWA. Apagá-los fazia a partida casual "esquecer"
       // a última modalidade e cair no primeiro esporte preferido (ex: pickleball)
       // — enquanto a "ida planejada" (scoreplace_planmem_*, nunca apagado) lembrava.
-      'scoreplace_deleted_ids',   // tombstones de ids deletados
       'scoreplace_analytics_open' // estado de details aberto
     ];
     dataKeys.forEach(function (k) {
@@ -10820,6 +10819,11 @@ window._ensureTournamentLoaded = function (tId, cb) {
   });
 };
 
+/* Resíduo de versões que escondiam o torneio antes da confirmação do servidor. A exclusão
+ * agora é uma callable; manter esta lista faria uma falha antiga continuar mascarando a
+ * produção neste aparelho. Limpa uma vez no boot e nunca mais a usa. */
+try { localStorage.removeItem('scoreplace_deleted_ids'); } catch (e) {}
+
 window.AppStore = {
   currentUser: null,
   viewMode: 'organizer',
@@ -10831,7 +10835,6 @@ window.AppStore = {
   _publicDiscoveryCursor: null,
   _publicDiscoveryHasMore: false,
   _invitedTournamentIds: [],  // Track tournament IDs from invite links
-  _deletedTournamentIds: (function() { try { var d = localStorage.getItem('scoreplace_deleted_ids'); return d ? JSON.parse(d) : []; } catch(e) { return []; } })(),
   _syncDebounce: null,
   _loading: false,
   _realtimeUnsubscribe: null,  // Real-time listener unsubscribe function
@@ -10911,15 +10914,8 @@ window.AppStore = {
       var data = JSON.parse(raw);
       // Cache valid for 24h
       if (data && data.tournaments && (Date.now() - data.ts) < 86400000) {
-        var deletedIds = this._deletedTournamentIds || [];
         var _cached = window._dropSandboxForNonDev(data.tournaments);
-        if (deletedIds.length > 0) {
-          this.tournaments = _cached.filter(function(t) {
-            return deletedIds.indexOf(String(t.id)) === -1;
-          });
-        } else {
-          this.tournaments = _cached;
-        }
+        this.tournaments = _cached;
         /* ⛔ O QUE VEIO DO CACHE É RÁPIDO, NÃO É FRESCO — e a diferença tem sintoma.
          * Relato do dono (25/ago/2026), depois de aprovar um placar: _"pelo que vejo foi
          * aprovado, mas quando abri de novo não estava. Mas daí reiniciei e estava.
@@ -11637,7 +11633,6 @@ window.AppStore = {
         // ⭐ e o que já está montado em memória é GUARDADO pra sobreviver ao rebuild abaixo.
         var _sbGuardados = window._sbsNaLista(store.tournaments);
         var tournaments = [];
-        var deletedIds = store._deletedTournamentIds || [];
         // CINTO do isolamento do SANDBOX: mesmo que um doc de SB chegue aqui (legado criado
         // antes do fix de memberUids, ou leitura por id), ele NÃO entra no AppStore de quem
         // não é o dev. Sem isto a invisibilidade dependia de cada consumidor de
@@ -11697,9 +11692,7 @@ window.AppStore = {
           }
           _novoParsed[doc.id] = data;
           if (data && data.isSandbox === true && !_devSeesSb) return;
-          if (deletedIds.indexOf(String(data.id)) === -1) {
-            tournaments.push(data);
-          }
+          tournaments.push(data);
         });
         store._parsedById = _novoParsed;
         /* ⭐ 2.1.91: o rebuild da lista PRESERVA os sandboxes. O eco de `tournaments` não
@@ -12218,12 +12211,6 @@ window.AppStore = {
       var tournaments = _uid
         ? await window.FirestoreDB.loadMyTournaments(_uid)
         : await window.FirestoreDB.loadAllTournaments();
-      var deletedIds = this._deletedTournamentIds || [];
-      if (deletedIds.length > 0) {
-        tournaments = tournaments.filter(function(t) {
-          return deletedIds.indexOf(String(t.id)) === -1;
-        });
-      }
       this.tournaments = window._dropSandboxForNonDev(tournaments);
       this._saveToCache();
       // v4.4.69 Rei/Rainha: reidrata group.matches como refs de round.matches (fonte única).

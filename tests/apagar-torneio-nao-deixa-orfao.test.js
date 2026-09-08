@@ -104,6 +104,14 @@ function eq(a, b, m) { ok(a === b, m + ' — esperado ' + JSON.stringify(b) + ',
     const ui = tela.slice(tela.indexOf('window.deleteTournamentFunction'), tela.indexOf('// Liga active toggle'));
     ok(ui.indexOf('deleteTournament(tId).then') < ui.indexOf('tournaments.splice'),
       'a tela remove da memória somente depois da confirmação da CF');
+
+    const store = fs.readFileSync(path.join(__dirname, '..', 'js', 'store.js'), 'utf8');
+    const usos = store.match(/scoreplace_deleted_ids/g) || [];
+    ok(usos.length === 1 && /localStorage\.removeItem\('scoreplace_deleted_ids'\)/.test(store),
+      'resíduo de versões antigas é apagado no boot, sem filtro local persistente');
+    const liga = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'bracket-logic.js'), 'utf8');
+    ok(!/_deletedTournamentIds|_deletedIds/.test(liga),
+      'o agendador não carrega mais uma lista local de torneios supostamente apagados');
   }
 
   console.log('▸ a lista de subcoleções é a das regras do Firestore');
