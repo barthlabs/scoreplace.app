@@ -2356,6 +2356,24 @@ window.showDissolveTeamsPanel = function (tId) {
     renderLists();
 };
 
+window._dissolveIncompleteTeams = function (t) {
+    var enrMode = t.enrollmentMode || t.enrollment || 'individual';
+    var teamSize = parseInt(t.teamSize) || 1;
+    if (window._isTeamEnrollMode(enrMode) && teamSize < 2) teamSize = 2;
+    var parts = Array.isArray(t.participants) ? t.participants : (t.participants ? Object.values(t.participants) : []);
+    var newParts = [], dissolved = 0;
+    parts.forEach(function (p) {
+        var members = window._entryTeamMembers(p);
+        if (members && members.length < teamSize) {
+            dissolved++;
+            if (p && typeof p === 'object' && Array.isArray(p.participants) && p.participants.length) p.participants.forEach(function (s) { newParts.push((s && typeof s === 'object') ? Object.assign({}, s) : { name: String(s || ''), displayName: String(s || '') }); });
+            else if (p && typeof p === 'object' && p.p1Name) { newParts.push({ name: p.p1Name, displayName: p.p1Name, uid: p.p1Uid || '', email: p.p1Email || '', photoURL: p.p1Photo || '' }); if (p.p2Name) newParts.push({ name: p.p2Name, displayName: p.p2Name, uid: p.p2Uid || '', email: p.p2Email || '', photoURL: p.p2Photo || '' }); }
+            else members.forEach(function (m) { newParts.push({ name: m, displayName: m }); });
+        } else newParts.push(p);
+    });
+    return { participants: newParts, dissolved: dissolved };
+};
+
 // v3.0.x: implementação REAL. Antes era no-op (logAction + toast "salvo"), mentindo
 // sucesso enquanto o sorteio seguia com os times incompletos. Agora dissolve cada time
 // incompleto (membros < teamSize) em jogadores INDIVIDUAIS — preservando uid/email/foto
@@ -2364,34 +2382,8 @@ window._saveDissolveResolution = function (tId) {
     var t = window._findTournamentById(tId);
     if (!t) { showNotification(window._t ? window._t('auth.error') : 'Erro', 'Torneio não encontrado.', 'error'); return; }
 
-    var enrMode = t.enrollmentMode || t.enrollment || 'individual';
-    var teamSize = parseInt(t.teamSize) || 1;
-    if (window._isTeamEnrollMode(enrMode) && teamSize < 2) teamSize = 2;
-
-    var parts = Array.isArray(t.participants) ? t.participants : (t.participants ? Object.values(t.participants) : []);
-    var newParts = [];
-    var dissolved = 0;
-
-    parts.forEach(function (p) {
-        var members = window._entryTeamMembers(p);
-        if (members && members.length < teamSize) {
-            // Time incompleto → quebra em individuais, mantendo identidade quando possível.
-            dissolved++;
-            if (p && typeof p === 'object' && Array.isArray(p.participants) && p.participants.length) {
-                p.participants.forEach(function (s) {
-                    newParts.push((s && typeof s === 'object') ? Object.assign({}, s)
-                                                              : { name: String(s || ''), displayName: String(s || '') });
-                });
-            } else if (p && typeof p === 'object' && p.p1Name) {
-                newParts.push({ name: p.p1Name, displayName: p.p1Name, uid: p.p1Uid || '', email: p.p1Email || '', photoURL: p.p1Photo || '' });
-                if (p.p2Name) newParts.push({ name: p.p2Name, displayName: p.p2Name, uid: p.p2Uid || '', email: p.p2Email || '', photoURL: p.p2Photo || '' });
-            } else {
-                members.forEach(function (m) { newParts.push({ name: m, displayName: m }); });
-            }
-        } else {
-            newParts.push(p); // time completo ou individual: intocado
-        }
-    });
+    var outcome = window._dissolveIncompleteTeams(t);
+    var newParts = outcome.participants, dissolved = outcome.dissolved;
 
     var _closePanels = function () {
         var d = document.getElementById('dissolve-panel'); if (d) d.remove();
@@ -2405,17 +2397,16 @@ window._saveDissolveResolution = function (tId) {
         return;
     }
 
-    t.participants = newParts;
-    try { window.AppStore.logAction(tId, dissolved + ' time(s) incompleto(s) dissolvido(s) em jogadores individuais'); } catch (_e) {}
-
-    // Persistência real (não mente mais sucesso).
-    try {
-        if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
-            window.FirestoreDB.saveTournament(t).catch(function () {});
-        } else if (window.AppStore && typeof window.AppStore.sync === 'function') {
-            window.AppStore.sync();
-        }
-    } catch (_se) {}
+    if (!window.AppStore || typeof window.AppStore.mutate !== 'function') {
+        showNotification('Atualize o aplicativo', 'Não foi possível dissolver os times com segurança.', 'error');
+        return;
+    }
+    window.AppStore.mutate(tId, function(ft) {
+        var fresh = window._dissolveIncompleteTeams(ft);
+        if (!fresh.dissolved) return false;
+        ft.participants = fresh.participants;
+        return true;
+    }, dissolved + ' time(s) incompleto(s) dissolvido(s) em jogadores individuais');
 
     showNotification('Times dissolvidos', dissolved + ' time(s) incompleto(s) viraram jogadores individuais. Eles voltam ao sorteio.', 'success');
     _closePanels();

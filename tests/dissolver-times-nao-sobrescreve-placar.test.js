@@ -1,0 +1,7 @@
+const fs=require('fs'),vm=require('vm'); const src=fs.readFileSync('js/views/tournaments-draw-prep.js','utf8');
+const a=src.indexOf('window._dissolveIncompleteTeams = function'), b=src.indexOf('// ─── VERIFICAÇÃO 2:',a); if(a<0||b<0)throw Error('funções não encontradas');
+const local={id:'T',teamSize:2,enrollmentMode:'team',participants:[{participants:[{uid:'u1',name:'A'}]}]},fresh={id:'T',teamSize:2,enrollmentMode:'team',participants:[{participants:[{uid:'u1',name:'A'}]}],matches:[{id:'M',scoreP1:6,scoreP2:4}]};let fail=0;
+const w={AppStore:{mutate:(id,fn)=>{fn(local);fn(fresh);return Promise.resolve(true);}},_findTournamentById:()=>local,_isTeamEnrollMode:()=>true,_entryTeamMembers:p=>p.participants||null,showNotification(){},showUnifiedResolutionPanel(){}};w.window=w;
+const s={window:w,document:{getElementById:()=>null},showNotification:w.showNotification,console,Object,Array,String,parseInt,Promise};vm.createContext(s);vm.runInContext(src.slice(a,b),s);w._saveDissolveResolution('T');
+function ok(v,m){if(v)console.log('✓ '+m);else{fail++;console.error('✗ '+m)}}
+ok(fresh.participants[0].uid==='u1','dissolve o time no documento fresco');ok(fresh.matches[0].scoreP1===6&&fresh.matches[0].scoreP2===4,'preserva placar concorrente');ok(/if \(!fresh\.dissolved\) return false;/.test(src.slice(a,b)),'aborta se outra sessão já resolveu os times');ok(!/FirestoreDB\.saveTournament\(|AppStore\.sync\(/.test(src.slice(a,b)),'não grava snapshot inteiro');if(fail)process.exit(1);
