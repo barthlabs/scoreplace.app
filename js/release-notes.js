@@ -19,6 +19,9 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    // ⚠️ 2.2.33 NÃO ganhou item próprio: lançamento de placar passa exclusivamente pela
+    // Cloud Function, que registra antes/depois no recibo de auditoria. É correção de
+    // integridade; a tela e as regras de jogo permanecem as mesmas.
     // ⚠️ 2.2.32 NÃO ganhou item próprio: a migração L7 elimina regravações concorrentes de snapshots; não muda regra ou tela.
     // ⚠️ 2.2.3 NÃO ganhou item: ícone do calendário/relógio visível no tema escuro (color-scheme) e o
     // "Veja data proposta" com o brilho padrão de varredura em vez do anel. Acabamento, sem regra nova.
