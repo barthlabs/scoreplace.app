@@ -198,6 +198,7 @@ ok(/var _schGrpBtn = \(typeof window\._schGroupChip === 'function'\)/.test(srcBr
   'bracket: o gate isMyGroup saiu do call site do grupo (senão a data some nos outros grupos)');
 const srcDraw = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'tournaments-draw.js'), 'utf8');
 ok(/window\._schAplicarGrade\(t\)/.test(srcDraw), 'o pós-sorteio aplica a grade estimada');
+ok(/commitTournamentTx[\s\S]*_schAplicarGrade\(ft\)/.test(srcDraw), 'o pós-sorteio reaplica a grade no documento fresco');
 const srcDb = fs.readFileSync(path.join(__dirname, '..', 'js', 'firebase-db.js'), 'utf8');
 ok(/_ADITIVOS = \[[^\]]*'scheduledKind'/.test(srcDb),
   'firebase-db: scheduledKind está na allowlist do save aditivo (senão a origem se perde e a invariante cai)');

@@ -2886,7 +2886,9 @@ window.generateDrawFunction = function (tId) {
             // falha ao estimar não pode derrubar a tela nem o toast do que deu certo.
             try {
               if (typeof window._schAplicarGrade === 'function' && window._schAplicarGrade(t) > 0) {
-                Promise.resolve(window.FirestoreDB && window.FirestoreDB.saveTournament(t)).catch(function (_eS) {});
+                Promise.resolve(window.AppStore && window.AppStore.commitTournamentTx && window.AppStore.commitTournamentTx(tId, function(ft) {
+                  return window._schAplicarGrade(ft) > 0;
+                })).catch(function (_eS) {});
               }
             } catch (_eGrade) {}
             try { window.AppStore._saveToCache(); } catch (_eC) {}
