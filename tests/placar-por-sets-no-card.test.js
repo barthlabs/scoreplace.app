@@ -216,6 +216,14 @@ function decisao() {
   ok(!!race.pendingResult && (race.pendingResult.sets || []).length === 3,
     'nem apaga a proposta que espera aprovação');
 
+  // O incidente do Jogo 163: a gravação do Set 1 voltou depois do Set 2 e reduziu o
+  // placar canônico. O servidor aceita somente progressão igual ou mais completa.
+  const stale = { id: 'STALE', p1: 'A / B', p2: 'C / D', round: 0, bracket: 'main',
+    sets: [S(0, 6), S(2, 6)], setsWonP1: 0, setsWonP2: 2, setsProgressAt: 200 };
+  c.t.matches = [stale];
+  W._applyResultToTournament(c.t, 'STALE', { setsInProgress: true, sets: [S(0, 6)], setsWonP1: 0, setsWonP2: 1, at: 100 });
+  eq(stale.sets, [S(0, 6), S(2, 6)], 'eco atrasado do Set 1 não apaga o Set 2 já confirmado');
+
   // recusas
   c = cenario(MELHOR3);
   c.confirma(6, 6);

@@ -924,6 +924,9 @@ exports.splitLatePair = onCall(async (request) => {
  */
 async function _aplicaPlacarNaTransacao(db, tId, matchId, payload, ator, logMessage) {
   const ref = db.collection('tournaments').doc(tId);
+  // Recibo independente do documento do torneio. O id nasce fora do callback porque a
+  // transação pode repetir; assim uma repetição não cria dois fatos de auditoria.
+  const auditRef = ref.collection('scoreAudit').doc();
   /* ⛔ INSTANTE ESTÁVEL DA OPERAÇÃO — calculado UMA VEZ, FORA do callback.
    * O Firestore RE-EXECUTA o callback no retry; um `new Date()` lá dentro faria
    * cada tentativa produzir espelho e plano diferentes. */
@@ -933,6 +936,8 @@ async function _aplicaPlacarNaTransacao(db, tId, matchId, payload, ator, logMess
     if (!t) return { ok: false, reason: 'not-found' };
     const _tAntes = _antesDoMotor(t);
     _enrichParticipantsFromProfiles(t);
+    const _matchAntes = (typeof drawWindow._findMatch === 'function')
+      ? _scoreAuditSnapshot(drawWindow._findMatch(t, matchId)) : null;
     // Re-checa sobre o doc FRESCO (acesso pode ter mudado entre o read e a txn).
     if (!_isTournamentParticipant(t, ator.uid) && !_isTournamentAdmin(t, ator.uid)) {
       return { ok: false, reason: 'permission-denied' };
@@ -944,8 +949,53 @@ async function _aplicaPlacarNaTransacao(db, tId, matchId, payload, ator, logMess
     });
     if (!res || !res.ok) return { ok: false, reason: (res && res.reason) || 'apply-failed' };
     const b = _gravaTorneio(tx, ref, t, _tAntes, { agoraIso: _agoraIsoTx }); // clobber-free; divide se o marcador mandar
+    // O mesmo commit do placar contém o antes/depois. Diferentemente do histórico de
+    // interface, este recibo não depende de um cliente chegar ao fim da operação e não é
+    // reescrito quando o espelho ou o documento principal forem podados.
+    tx.set(auditRef, {
+      schema: 1,
+      kind: 'score-write',
+      tournamentId: tId,
+      matchId: matchId,
+      actorUid: String(ator.uid || ''),
+      actorEmail: String(ator.email || ''),
+      outcome: res.outcome || 'applied',
+      at: _agoraIsoTx,
+      before: _matchAntes,
+      after: (typeof drawWindow._findMatch === 'function')
+        ? _scoreAuditSnapshot(drawWindow._findMatch(t, matchId)) : null,
+      payload: _scoreAuditPayload(payload),
+      logMessage: String(logMessage || '')
+    });
     return { ok: true, outcome: res.outcome, tournament: b.clean };
   });
+}
+
+// Só campos de placar e transição entram no recibo; jamais perfil completo, nem o objeto
+// inteiro do torneio. O formato é deliberadamente estável para a conferência posterior.
+function _scoreAuditSnapshot(m) {
+  if (!m) return null;
+  const pick = (v) => (v === undefined ? null : JSON.parse(JSON.stringify(v)));
+  return {
+    p1: String(m.p1 || ''), p2: String(m.p2 || ''),
+    sets: pick(m.sets), setsWonP1: m.setsWonP1 == null ? null : m.setsWonP1,
+    setsWonP2: m.setsWonP2 == null ? null : m.setsWonP2,
+    scoreP1: m.scoreP1 == null ? null : m.scoreP1, scoreP2: m.scoreP2 == null ? null : m.scoreP2,
+    winner: m.winner == null ? null : m.winner, winnerUids: pick(m.winnerUids),
+    draw: !!m.draw, pendingResult: pick(m.pendingResult), resultAt: m.resultAt == null ? null : m.resultAt
+  };
+}
+
+function _scoreAuditPayload(payload) {
+  const p = payload || {};
+  return {
+    setsInProgress: !!p.setsInProgress, gsmFinal: !!p.gsmFinal,
+    isFixedSet: !!p.isFixedSet, useSets: !!p.useSets,
+    sets: Array.isArray(p.sets) ? JSON.parse(JSON.stringify(p.sets)) : null,
+    pending: p.pending ? JSON.parse(JSON.stringify(p.pending)) : null,
+    s1: p.s1 == null ? null : p.s1, s2: p.s2 == null ? null : p.s2,
+    at: p.at == null ? null : p.at
+  };
 }
 
 exports.applyMatchResult = onCall(async (request) => {

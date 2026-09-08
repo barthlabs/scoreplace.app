@@ -1695,7 +1695,7 @@ window._commitSetsResult = function (tId, matchId, sets, p1Sets, p2Sets, isFixed
       _scoreP1Gsm = p1Sets;
       _scoreP2Gsm = p2Sets;
     }
-    m.pendingResult = {
+    var _pendingGsmObj = {
       kind: 'gsm',
       proposedBy: _curUserGsm.uid || null,
       proposedByEmail: _curUserGsm.email || null,
@@ -1716,153 +1716,38 @@ window._commitSetsResult = function (tId, matchId, sets, p1Sets, p2Sets, isFixed
     };
     var _ovGsm = document.getElementById('set-scoring-overlay');
     if (_ovGsm) _ovGsm.remove();
-    _propagateMatchUpdate(t, m);
-    var _pendingGsmObj = m.pendingResult;
-    var _gsmPropLogMsg = 'Resultado proposto (sets): ' + m.p1 + ' vs ' + m.p2 + ' — aguardando aprovação (' + m.pendingResult.proposedByName + ')';
-    window.AppStore.logAction(tId, _gsmPropLogMsg);
-    // BLINDAGEM DE CORRIDA (project_concurrency_safe_saves): re-aplica a proposta GSM
-    // (pendingResult) no match FRESCO via commitTournamentTx, em vez de syncImmediate
-    // (doc inteiro → lost-update quando 2 propostas/resultados concorrem). Espelha o
-    // caminho de proposta simples de _saveResultInline.
-    // ⭐ MESMA TRAVA DO CAMINHO INLINE (ver _propostaDoOutroLado). Aqui ela é a ÚNICA:
-    // o fecho por sets nunca teve nem a checagem local, então o 2º lançamento gravava
-    // por cima do 1º sem perguntar nada a ninguém.
-    var _perdeuCorridaGsm = null;
-    window.AppStore.commitTournamentTx(tId, function (freshT) {
-      var fm = window._findMatch(freshT, matchId);
-      if (fm && _propostaDoOutroLado(freshT, fm, _curUserGsm)) {
-        _perdeuCorridaGsm = fm.pendingResult;
-        return false;                       // mutator aborta → nada é gravado
-      }
-      if (fm) {
-        fm.pendingResult = _pendingGsmObj;
-        if (typeof window._propagateMatchUpdate === 'function') window._propagateMatchUpdate(freshT, fm);
-      }
-      if (!Array.isArray(freshT.history)) freshT.history = [];
-      freshT.history.push({ date: new Date().toISOString(), message: _gsmPropLogMsg });
-    }).then(function (gravou) {
-      // mesma régua do caminho inline (ver o comentário lá): o desfecho é contado DEPOIS
-      // que a transação volta, não antes.
-      if (_perdeuCorridaGsm) { _fechaCorridaDoPlacar(tId, matchId, _perdeuCorridaGsm, _pendingGsmObj); return; }
-      if (gravou === false) return;      // a falha já se anuncia sozinha (commitTournamentTx)
-      try { _notifyPendingApproval(t, m, _pendingGsmObj.proposedByName); } catch (e) { window._error('[pendingApproval gsm] notify failed', e); }
-      showNotification('⏳ Resultado enviado', 'Aguardando aprovação do time adversário ou do organizador.', 'success');
-    });
-    _rerenderBracket(tId, matchId);
+    var _gsmPropLogMsg = 'Resultado proposto (sets): ' + m.p1 + ' vs ' + m.p2 + ' — aguardando aprovação (' + _pendingGsmObj.proposedByName + ')';
+    // A CF é a única dona da transação: ela lê o match fresco, bloqueia proposta do outro
+    // lado e grava o envelope + espelho na mesma operação. Gravar essa proposta pelo
+    // documento inteiro do navegador deixava o histórico dizer uma coisa e o placar outra.
+    window.AppStore.commitResultTx(tId, matchId, { pending: _pendingGsmObj }, _gsmPropLogMsg)
+      .then(function (gravou) {
+        // Só a confirmação da CF pode disparar aviso de aprovação.
+        if (gravou !== true) return;
+        try { _notifyPendingApproval(t, m, _pendingGsmObj.proposedByName); } catch (e) { window._error('[pendingApproval gsm] notify failed', e); }
+        showNotification('⏳ Resultado enviado', 'Aguardando aprovação do time adversário ou do organizador.', 'success');
+      })
+      .catch(function () {});
     return;
   }
 
-  m.sets = sets;
-  m.setsWonP1 = p1Sets;
-  m.setsWonP2 = p2Sets;
-  if (isFixedSet) {
-    m.fixedSet = true;
-    // For fixed set, scoreP1/P2 show actual games (e.g. 4-2), not sets won
-    var _fs0 = sets[0];
-    m.scoreP1 = _fs0 ? _fs0.gamesP1 : p1Sets;
-    m.scoreP2 = _fs0 ? _fs0.gamesP2 : p2Sets;
-  } else {
-    m.scoreP1 = p1Sets;
-    m.scoreP2 = p2Sets;
-  }
-
-  let totalGamesP1 = 0, totalGamesP2 = 0;
-  sets.forEach(s => {
-    totalGamesP1 += s.gamesP1;
-    totalGamesP2 += s.gamesP2;
-  });
-  m.totalGamesP1 = totalGamesP1;
-  m.totalGamesP2 = totalGamesP2;
-
-  // 2.0.1: carimba o vencedor COM a identidade do lado (window._stampWinner) — nome sozinho
-  // envelhece na primeira substituição/rename e o jogo fica sem vencedor reconhecível.
-  if (p1Sets > p2Sets) {
-    window._stampWinner(m, 1);
-  } else if (p2Sets > p1Sets) {
-    window._stampWinner(m, 2);
-  }
-  // v2.3.17: lançamento por sets — marca fim/início.
-  m.resultAt = Date.now();
-  if (!m.startedAt) m.startedAt = m.resultAt;
-  if (m.pendingResult) delete m.pendingResult;
-
   const ov = document.getElementById('set-scoring-overlay');
   if (ov) ov.remove();
-
-  const isGroupMatch = m.group !== undefined;
-  const isRoundMatch = m.roundIndex !== undefined || (t.rounds && t.rounds.some(r => (r.matches || []).some(rm => rm.id === matchId)));
-
-  if (!isGroupMatch && !isRoundMatch) {
-    _advanceWinner(t, m);
-    showNotification(_t('result.saved'), m.winner + ' vence ' + p1Sets + '-' + p2Sets + '!', 'success');
-  } else if (isRoundMatch) {
-    showNotification(_t('result.saved'), m.winner + ' vence ' + p1Sets + '-' + p2Sets + '!', 'success');
-  } else {
-    _checkGroupRoundComplete(t, m.group);
-    showNotification(_t('result.saved'), m.winner + ' vence ' + p1Sets + '-' + p2Sets + '!', 'success');
-  }
-
-  if (!t.checkedIn) t.checkedIn = {};
-  if (!t.absent) t.absent = {};
-  [m.p1, m.p2].forEach(side => {
-    if (!side || side === 'TBD' || side === 'BYE') return;
-    const _names = side.includes(' / ') ? side.split(' / ').map(n => n.trim()).filter(Boolean) : [side];
-    _names.forEach(nm => {
-      // uid-first: resolve o nome do membro pro uid; nome só fallback.
-      // Lançar resultado MARCA presença (quem jogou está presente) — CORRETO (dono
-      // reafirmou 1-jul). O que NÃO pode é o SORTEIO marcar presença: o sorteio LIMPA
-      // checkedIn/absent (ver _commitInitialDraw / _clearDrawRuntimeFlags).
-      if (!window._idMapHas(t, t.checkedIn, nm)) window._idMapSet(t, t.checkedIn, nm, Date.now());
-      window._idMapDel(t, t.absent, nm);
-    });
-  });
-  if (!t.tournamentStarted) t.tournamentStarted = Date.now();
-
   const scoreText = sets.map(s => (typeof window._formatSetCombined === 'function')
     ? window._formatSetCombined(s, { html: false })
     : (s.gamesP1 + '-' + s.gamesP2)
   ).join(' ');
 
-  var _gsmLogMsg = 'Resultado: ' + m.p1 + ' vs ' + m.p2 + ' — ' + scoreText + ' — Vencedor: ' + m.winner;
-  window.AppStore.logAction(tId, _gsmLogMsg);
-  // BLINDAGEM DE CORRIDA (project_concurrency_safe_saves): em vez de syncImmediate
-  // (grava o doc INTEIRO → lost-update quando 2 resultados de jogos diferentes
-  // concorrem, o último clobbera o outro), re-aplica o resultado GSM sobre o estado
-  // FRESCO via commitResultTx → _applyResultToTournament(gsmFinal). A `t` local já
-  // foi mutada acima (UI otimista); a transação reproduz a MESMA mutação no fresco.
-  window.AppStore.commitResultTx(tId, matchId, {
+  var _winnerName = p1Sets > p2Sets ? m.p1 : m.p2;
+  var _gsmLogMsg = 'Resultado: ' + m.p1 + ' vs ' + m.p2 + ' — ' + scoreText + ' — Vencedor: ' + _winnerName;
+  // Só a Cloud Function aplica placar, vencedor, avanço, presença e notificações.
+  // O navegador fecha o editor e envia o comando; a tela é reconstituída da resposta.
+  return Promise.resolve(window.AppStore.commitResultTx(tId, matchId, {
     gsmFinal: true, sets: sets, setsWonP1: p1Sets, setsWonP2: p2Sets, isFixedSet: !!isFixedSet
-  }, _gsmLogMsg);
-
-  // Persist per-user matchHistory record (GSM path) — uses richer m.sets data.
-  try { _persistGSMTournamentMatchRecord(t, m, sets, p1Sets, p2Sets, totalGamesP1, totalGamesP2); } catch(e) {}
-
-  if (typeof window._sendUserNotification === 'function') {
-    const _resultText = m.p1 + ' vs ' + m.p2 + ' — ' + scoreText + ' — Vencedor: ' + m.winner;
-    const _notifData = {
-      type: 'result',
-      title: _t('bui.resultRegistered'),
-      message: _resultText,
-      tournamentId: tId,
-      tournamentName: t.name,
-      level: 'fundamental',
-      timestamp: Date.now()
-    };
-    _notifData.scoreboard = window._matchScoreboard(m, sets, m.winner);
-    const _parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
-    [m.p1, m.p2].forEach(playerName => {
-      if (!playerName || playerName === 'TBD' || playerName === 'BYE') return;
-      const _found = _parts.find(p => {
-        const pName = typeof p === 'string' ? p : (p.displayName || p.name || '');
-        return pName === playerName;
-      });
-      if (_found && typeof _found === 'object' && _found.uid) {
-        window._sendUserNotification(_found.uid, _notifData);
-      }
-    });
-  }
-
-  _rerenderBracket(tId, matchId);
+  }, _gsmLogMsg)).then(function (ok) {
+    if (ok === true) showNotification(_t('result.saved'), _winnerName + ' vence ' + p1Sets + '-' + p2Sets + '!', 'success');
+    return ok;
+  });
 };
 
 // ─── ⭐ MELHOR DE 3 / MELHOR DE 5: O CARD FECHA UM SET POR VEZ ────────────────────────
@@ -1903,6 +1788,10 @@ window._applySetsInProgress = function (m, sets, p1Sets, p2Sets, agora) {
   m.sets = (sets || []).slice();
   m.setsWonP1 = p1Sets || 0;
   m.setsWonP2 = p2Sets || 0;
+  // Carimbo da intenção de jogo em andamento. Ele não decide resultado nem avanço;
+  // serve apenas para que duas confirmações de set que cruzem na rede não façam a
+  // mais antiga voltar por cima da mais nova.
+  m.setsProgressAt = agora || Date.now();
   if (!m.sets.length) {
     // voltou a zero (correção do 1º set): não deixa espelho de set nenhum pra trás
     delete m.sets; delete m.setsWonP1; delete m.setsWonP2;
@@ -1919,19 +1808,21 @@ window._saveSetsEmAndamento = function (tId, matchId, sets, p1Sets, p2Sets) {
   var t = window._findTournamentById(tId); if (!t) return;
   var m = _findMatch(t, matchId); if (!m) return;
   var agora = Date.now();
-  window._applySetsInProgress(m, sets, p1Sets, p2Sets, agora);          // otimista, pra tela não esperar
-  if (typeof window._propagateMatchUpdate === 'function') window._propagateMatchUpdate(t, m);
   var payload = {
     setsInProgress: true, sets: sets, setsWonP1: p1Sets, setsWonP2: p2Sets, at: agora
   };
   var _log = 'Set confirmado (jogo em andamento): ' + m.p1 + ' vs ' + m.p2 + ' — ' +
     sets.map(function (x) { return (x.gamesP1 || 0) + '-' + (x.gamesP2 || 0); }).join(' ');
   if (window.AppStore && typeof window.AppStore.commitResultTx === 'function') {
-    Promise.resolve(window.AppStore.commitResultTx(tId, matchId, payload, _log))
-      .then(function () { window._curaVencedorIndevido(tId, matchId, sets, p1Sets, p2Sets, agora); })
-      .catch(function () {});
+    return Promise.resolve(window.AppStore.commitResultTx(tId, matchId, payload, _log))
+      .then(function (estado) {
+        // A CF devolve o torneio canônico e a Store repinta a partir dele. O navegador
+        // não antecipa nem grava o set: resposta diferente de `true` não altera a tela.
+        return estado;
+      })
+      .catch(function () { return false; });
   }
-  _rerenderBracket(tId, matchId);
+  return Promise.resolve(false);
 };
 
 // CF velha (anterior ao ramo `setsInProgress`) não conhece o payload e carimba vencedor num
@@ -2015,13 +1906,17 @@ window._confirmSetFromCard = function (tId, matchId, o) {
   if (p1 >= plan.setsToWin || p2 >= plan.setsToWin) {
     return window._commitSetsResult(tId, matchId, sets, p1, p2, false);   // ← a partida fecha aqui
   }
-  window._saveSetsEmAndamento(tId, matchId, sets, p1, p2);
-  var prox = window._matchSetPlan(o.scoring, m, { sets: sets });
-  if (typeof showNotification === 'function') {
+  return Promise.resolve(window._saveSetsEmAndamento(tId, matchId, sets, p1, p2)).then(function (estado) {
+    // "Confirmado" quer dizer que a CF respondeu e o set entrou no estado
+    // autoritativo. Se ficou na fila offline, commitResultTx já informou isso;
+    // se falhou, nunca prometemos um placar que o servidor não recebeu.
+    if (estado !== true || typeof showNotification !== 'function') return estado;
+    var prox = window._matchSetPlan(o.scoring, m, { sets: sets });
     showNotification(_tt('bracket.setSaved', 'Set confirmado'),
       _tt('bracket.setSavedNext', '{set} registrado. Agora o {next}.',
         { set: col.label, next: (prox && prox.live) ? prox.live.label : '' }), 'success');
-  }
+    return estado;
+  });
 };
 
 // Edição de placar por sets. A correção acontece no PRÓPRIO card: os números viram
@@ -2213,6 +2108,17 @@ window._applyResultToTournament = function (t, matchId, payload) {
     // STB do Jogo 122: a notificação guardou 14-16, mas a escrita atrasada regravou
     // somente 6-4, 5-7. Enquanto há proposta, o próximo ato é aprovar/contestar/editar.
     if (m.pendingResult) return m;
+    // As confirmações dos sets viajam separadamente até a CF. Set 1 pode chegar
+    // depois do Set 2; reatribuir o array menor apagaria o placar já confirmado e
+    // deixaria o cartão mostrando um 0-0 falso. A progressão é monotônica: um
+    // payload com menos sets é sempre um eco atrasado. Com a mesma quantidade,
+    // o carimbo permite a correção mais recente e recusa o eco anterior.
+    var _setsAtuais = Array.isArray(m.sets) ? m.sets : [];
+    var _setsRecebidos = Array.isArray(payload.sets) ? payload.sets : [];
+    if (_setsAtuais.length > _setsRecebidos.length) return m;
+    if (_setsAtuais.length === _setsRecebidos.length &&
+        m.setsProgressAt != null && payload.at != null &&
+        Number(payload.at) < Number(m.setsProgressAt)) return m;
     window._applySetsInProgress(m, payload.sets || [], payload.setsWonP1 || 0, payload.setsWonP2 || 0, payload.at);
     if (typeof window._propagateMatchUpdate === 'function') window._propagateMatchUpdate(t, m);
     return m;

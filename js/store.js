@@ -11181,15 +11181,10 @@ window.AppStore = {
     // continuar lançando placar na quadra" — está VENCIDA: conferido no git, TODO build
     // nativo desde o 2.0.3 já chama a CF.
     //
-    // ⚠️ MAS TIRAR A QUEDA SEM MAIS NADA TERIA UM CUSTO que o argumento não cobria: o
-    // caminho local escreve no Firestore, que tem FILA OFFLINE; uma CF chamável não tem.
-    // Numa quadra sem sinal, chamada falha na hora e escrita comum ESPERA.
-    // ⇒ A queda agora é a FILA: grava a INTENÇÃO (escrita comum, que o SDK entrega sozinho
-    // quando a rede volta) e o gatilho `applyQueuedResult` APLICA no servidor, com a mesma
-    // função da porta chamável. Nenhum cliente deriva avanço de chave, e nada se perde.
-    // ⚠️ O preço, dito na tela: sem sinal o placar fica salvo mas a CHAVE NÃO AVANÇA até o
-    // sinal voltar. Prometer "pronto" quando o servidor ainda não viu seria pior.
-    // Ver [[project_result_launch_cf_evaluation]] §5.
+    // O navegador não tem queda de escrita: ele só dispara a callable autenticada. Sem
+    // conexão, nada é aceito como lançado; a pessoa recebe erro e tenta novamente quando
+    // houver rede. Assim não existe uma segunda porta que possa divergir do recibo e do
+    // placar canônicos da CF.
     var _viaCF = false;
     if (typeof window._callApplyMatchResult === 'function') {
       try {
@@ -11240,10 +11235,10 @@ window.AppStore = {
             }
           }
         } else {
-          // Recusa do servidor: registra pra diagnóstico e deixa o caminho local decidir.
+          // Recusa do servidor: registra pra diagnóstico e devolve falha ao chamador.
           window._lastSaveError = { tournamentId: tournamentId, matchId: matchId,
             area: 'applyMatchResult', reason: _d.reason || 'unknown', at: new Date().toISOString() };
-          if (window._warn) window._warn('[applyMatchResult] recusou: ' + (_d.reason || '?') + ' — caindo na fila');
+          if (window._warn) window._warn('[applyMatchResult] recusou: ' + (_d.reason || '?'));
           /* ⛔ RECUSA DO SERVIDOR NÃO PODE PASSAR EM SILÊNCIO. Ordem do dono sobre a queda:
            * "NÃO FECHAR > fechar ERRADO — mas nunca em silêncio". Só `_warn` significa que
            * ninguém fica sabendo: foi por isso que passei a noite achando que "nenhum evento
@@ -11262,7 +11257,7 @@ window.AppStore = {
         window._lastSaveError = { tournamentId: tournamentId, matchId: matchId,
           area: 'applyMatchResult', code: (e && e.code) || '', message: (e && e.message) || String(e),
           at: new Date().toISOString() };
-        if (window._warn) window._warn('[applyMatchResult] falhou (' + ((e && e.code) || '?') + ') — caindo na fila');
+        if (window._warn) window._warn('[applyMatchResult] falhou (' + ((e && e.code) || '?') + ')');
         /* ⚠️ AQUI A COTA IMPORTA, e por isso este ramo FILTRA. Quadra sem sinal é o caso
          * ESPERADO — a fila existe pra isso (2.0.103) e reportar cada uma queimaria a cota
          * de telemetria, que já venceu sem eu saber uma vez (2.0.81). Rede fora não é
@@ -11284,31 +11279,12 @@ window.AppStore = {
     // do CLIENTE aplicando e gravando o torneio inteiro. É exatamente o que a ordem do dono
     // proíbe, e é o que impede os jogos de saírem do documento (enquanto o cliente escreve
     // o torneio, ele precisa de permissão de escrita nele).
-    var r = true;
-    if (!_viaCF) {
-      var _cu = this.currentUser || {};
-      var _ok = false;
+    var r = _viaCF;
+    if (!r) {
       try {
-        _ok = await window.FirestoreDB.enfileirarPlacar(tournamentId, matchId, payload,
-          logMessage || '', { uid: _cu.uid, email: _cu.email || '' });
-      } catch (_eF) { _ok = false; }
-      if (_ok) {
-        // Falhar em SILÊNCIO é o que custou o jogo 63. A pessoa precisa saber que o placar
-        // está guardado E que a chave só anda quando a conexão voltar — são duas coisas
-        // diferentes, e prometer a segunda agora seria mentira.
-        try {
-          showNotification('Placar guardado',
-            'Sem conexão com o servidor agora. Ele entra sozinho quando a internet voltar — a chave só avança lá.',
-            'warning');
-        } catch (_eN) {}
-      } else {
-        try {
-          showNotification('Não consegui lançar o placar',
-            'Não deu pra falar com o servidor nem guardar pra depois. Confira a conexão e tente de novo.',
-            'error');
-        } catch (_eN2) {}
-        r = false;
-      }
+        showNotification('Não consegui lançar o placar',
+          'O servidor não confirmou este placar. Confira a conexão e tente novamente.', 'error');
+      } catch (_eN) {}
     }
     /* ⛔ AQUI MORAVA O ESPELHO DO CLIENTE (`_dualWriteMatchResult`), E ELE MORREU (2.1.30).
      * Ordem do dono: _"acabe com o espelho. já migramos definitivamente para a nova versão
