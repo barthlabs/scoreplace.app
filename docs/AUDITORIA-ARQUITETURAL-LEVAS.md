@@ -2825,6 +2825,32 @@ aborta a escrita. O gate `substituicao-wo-nao-sobrescreve-placar` prova tanto a 
 um resultado concorrente quanto a recusa segura sem a porta de mutação. Claude aprovou o diff
 (Opus, esforço baixo).
 
+**Censo após 2.2.29 (08/set/2026).** Restam três usos reais de `syncImmediate`: o toggle de
+atividade de inscrição (`tournaments-enrollment`), a geração manual de rodada extra
+(`tournaments-draw`) e o encerramento de rodada da Liga (`bracket`). Os dois
+últimos chamam geradores que acrescentam uma rodada e usam aleatoriedade; não é seguro apenas
+substituir o save por uma transação, porque uma reexecução pode produzir uma segunda rodada ou
+outro pareamento. A próxima migração deve carregar uma intenção idempotente — número de rodada
+esperado e fonte aleatória estável — e abortar quando o documento fresco já alcançou aquela
+rodada. Os 27 `sync()` restantes se concentram em preparação de sorteio e categorias e serão
+tratados por comportamento, não por substituição mecânica.
+
+**L7.P1.9 — rodada extra ganhou intenção transacional (08/set/2026, aguardando o próximo lote
+de publicação).** Gerar uma rodada extra alterava a cópia local, chamava o pareamento aleatório
+e depois fazia `syncImmediate`. Agora cada clique fixa o número de rodada esperado, o instante e
+uma fonte aleatória estável; a mutação reaplica essa mesma intenção no documento fresco e aborta
+se ele já alcançou aquela rodada. Assim, retry não cria outra rodada nem muda os confrontos. O
+gate `rodada-extra-nao-duplica-nem-sobrescreve` prova RNG igual nas reaplicações, preservação de
+placar concorrente, aborto da rodada já existente e números corretos na notificação. Claude
+aprovou o diff (Opus, esforço baixo).
+
+**L7.P1.10 — fechamento de rodada da Liga ganhou intenção transacional (08/set/2026,
+aguardando o próximo lote de publicação).** A geração da rodada seguinte em uma Liga de fase
+usava `syncImmediate` depois do pareamento. Agora a intenção fixa fase, rodada esperada,
+instante e RNG; é reaplicada no documento fresco e aborta se a rodada já foi criada. O gate
+`fechar-rodada-liga-nao-duplica-nem-sobrescreve` comprova retry determinístico e preservação de
+um placar concorrente. Claude aprovou o diff (Opus, esforço baixo).
+
 **Conclusão desta etapa.** A porta canônica já existe e é `AppStore.mutate` para alterações do
 documento de torneio; portas especializadas são a escolha para presença, inscrição, dupla e
 resultado isolado. A próxima etapa deve migrar por comportamento, começando pelos 14 usos reais

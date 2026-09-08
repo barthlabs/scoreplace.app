@@ -1526,6 +1526,8 @@ const SUITES = [
   'tests/iniciar-torneio-nao-sobrescreve-placar.test.js',
   'tests/reparo-chave-nao-sobrescreve-placar.test.js',
   'tests/substituicao-wo-nao-sobrescreve-placar.test.js',
+  'tests/rodada-extra-nao-duplica-nem-sobrescreve.test.js',
+  'tests/fechar-rodada-liga-nao-duplica-nem-sobrescreve.test.js',
   // L3.P1: troféus e backfill liam host/guest inexistentes e zeravam as
   // estatísticas. O núcleo usa playerUids/players/result, igual ao banco real.
   'tests/casual-stats-canonicos.test.js',

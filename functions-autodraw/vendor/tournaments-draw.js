@@ -2064,6 +2064,24 @@ window._confirmManualAutoDraw = function (tId) {
 // Guarda: torneio no modelo ANTIGO (fase Rei/Rainha de rodada única em t.matches, t.rounds
 // vazio) NÃO pode ganhar rodada extra sem re-sortear — gerar em t.rounds criaria um storage
 // paralelo invisível. Nesse caso avisa pra re-sortear (o sorteio novo nasce league/multi-rodada).
+function _extraRoundRng(seed) {
+    // Pequeno PRNG estável: a transação pode reexecutar, mas o mesmo clique precisa
+    // chegar exatamente ao mesmo pareamento. Não é segurança criptográfica; só fixa
+    // o sorteio dentro de uma intenção já autorizada pelo organizador.
+    var state = 2166136261;
+    String(seed).split('').forEach(function(ch) {
+        state ^= ch.charCodeAt(0);
+        state = Math.imul(state, 16777619);
+    });
+    return function() {
+        state += 0x6D2B79F5;
+        var x = state;
+        x = Math.imul(x ^ (x >>> 15), x | 1);
+        x ^= x + Math.imul(x ^ (x >>> 7), x | 61);
+        return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+    };
+}
+
 window._generateExtraRound = function (tId) {
     var t = window._findTournamentById ? window._findTournamentById(tId) : (window.AppStore.tournaments || []).find(function (x) { return String(x.id) === String(tId); });
     if (!t) return;
@@ -2077,28 +2095,44 @@ window._generateExtraRound = function (tId) {
         if (typeof window._drawBtnDone === 'function') window._drawBtnDone();
         return;
     }
-    var _before = (t.rounds || []).length;
-    try { window._generateNextRound(t); }
-    catch (e) { if (window._warn) window._warn('[extra-round] falhou', e); }
-    var _after = (t.rounds || []).length;
-    if (_after <= _before) {
-        if (typeof showNotification === 'function') showNotification('Rodada extra', 'Não foi possível gerar uma rodada extra pra esta fase.', 'warning');
-        if (typeof window._drawBtnDone === 'function') window._drawBtnDone();
+    if (!window.AppStore || typeof window.AppStore.mutate !== 'function') {
+        if (typeof showNotification === 'function') showNotification('Rodada extra não salva', 'Atualize o aplicativo e tente novamente.', 'error');
         return;
     }
-    t.status = 'active';
-    var _newRound = t.rounds[_after - 1];
-    var _cnt = ((_newRound && _newRound.matches) || []).filter(function (m) { return !m.isSitOut; }).length;
-    window.AppStore.logAction(tId, 'Rodada extra ' + _after + ' gerada manualmente (' + _cnt + ' jogo(s))');
-    var _p = (window.AppStore && typeof window.AppStore.syncImmediate === 'function') ? window.AppStore.syncImmediate(tId) : null;
+    var _expectedRound = (t.rounds || []).reduce(function(mx, round) { return Math.max(mx, (round && round.round) || 0); }, 0) + 1;
+    var _intentTs = Date.now();
+    var _createdCount = 0;
+    var _applyExtraRound = function(target) {
+        var _maxRound = (target.rounds || []).reduce(function(mx, round) { return Math.max(mx, (round && round.round) || 0); }, 0);
+        // A intenção pertence a esta próxima rodada. Retry ou outra sessão que já a
+        // produziu não podem acrescentar uma segunda rodada por acidente.
+        if (_maxRound >= _expectedRound) return false;
+        try { window._generateNextRound(target, { ts: _intentTs, rnd: _extraRoundRng(String(tId) + ':' + _expectedRound + ':' + _intentTs) }); }
+        catch (e) { if (window._warn) window._warn('[extra-round] falhou', e); return false; }
+        var _created = (target.rounds || []).some(function(round) { return round && round.round === _expectedRound; });
+        if (!_created) return false;
+        target.status = 'active';
+        if (target === t) {
+            var localRound = (target.rounds || []).filter(function(round) { return round && round.round === _expectedRound; })[0];
+            _createdCount = ((localRound && localRound.matches) || []).filter(function(m) { return !m.isSitOut; }).length;
+        }
+        return true;
+    };
+    var _p = window.AppStore.mutate(tId, _applyExtraRound, 'Rodada extra ' + _expectedRound + ' gerada manualmente');
     var _go = function () {
         window.location.hash = '#bracket/' + tId;
         setTimeout(function () {
-            if (typeof showNotification === 'function') showNotification('Rodada extra gerada', 'Rodada ' + _after + ' com ' + _cnt + ' jogo(s).', 'success');
-            if (typeof window._notifyDrawPersonalized === 'function') { try { window._notifyDrawPersonalized(t, tId, { type: 'new_round', roundIndex: _after - 1 }); } catch (e) {} }
+            if (typeof showNotification === 'function') showNotification('Rodada extra gerada', 'Rodada ' + _expectedRound + ' com ' + _createdCount + ' jogo(s).', 'success');
+            if (typeof window._notifyDrawPersonalized === 'function') { try { window._notifyDrawPersonalized(t, tId, { type: 'new_round', roundIndex: _expectedRound - 1 }); } catch (e) {} }
         }, 140);
     };
-    if (_p && typeof _p.then === 'function') _p.then(_go); else _go();
+    if (_p && typeof _p.then === 'function') _p.then(function(saved) {
+        if (saved === false) {
+            if (typeof showNotification === 'function') showNotification('Rodada extra não gerada', 'A chave mudou em outro aparelho. Atualize e tente novamente.', 'warning');
+            return;
+        }
+        _go();
+    }); else _go();
 };
 
 // Monta a cfg da fase 0 (índice 0) a partir do torneio — a inscrição é a ENTRADA da
