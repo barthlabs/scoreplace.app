@@ -1,3 +1,7 @@
+## 2.2.21 — vencedor consistente nos avisos e tie-break legível (08/set/2026)
+
+Os avisos de resultado passaram a usar a mesma regra de vencedor da chave, inclusive quando uma dupla mudou de nome depois do jogo. A formatação do tie-break preserva pontos menores e separados em todos os cards.
+
 ## 2.2.20 — quadra não sobrescreve placar concorrente (08/set/2026)
 
 A escolha ou remoção de quadra passou a atualizar somente o jogo escolhido dentro de uma transação. Uma aba com dados antigos não pode mais regravar o torneio inteiro e apagar placar, W.O. ou chave que chegou de outro aparelho enquanto a quadra era definida.

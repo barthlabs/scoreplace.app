@@ -188,7 +188,10 @@ function renderNotifications(container) {
           return '<td style="text-align:center;padding:5px 4px;color:' + color + ';font-size:1rem;font-weight:800;">' + safe(String(s && s[side] != null ? s[side] : '–')) + '</td>';
         }).join('') + '</tr>';
       };
-      return '<div style="margin-top:9px;padding:8px 10px;background:rgba(148,163,184,.08);border:1px solid var(--border-color);border-radius:8px;overflow-x:auto;"><table style="border-collapse:collapse;min-width:100%;"><tr><td></td>' + heads + '</tr>' + row(b.p1, 'p1', b.winner && b.winner === b.p1) + row(b.p2, 'p2', b.winner && b.winner === b.p2) + '</table></div>';
+      // Mesma regra canônica do card: nome pode envelhecer depois de uma troca de dupla.
+      // A identidade carimbada e, no legado, o placar resolvem o lado vencedor.
+      var winnerSide = (typeof window._matchWinnerSide === 'function') ? window._matchWinnerSide(b) : null;
+      return '<div style="margin-top:9px;padding:8px 10px;background:rgba(148,163,184,.08);border:1px solid var(--border-color);border-radius:8px;overflow-x:auto;"><table style="border-collapse:collapse;min-width:100%;"><tr><td></td>' + heads + '</tr>' + row(b.p1, 'p1', winnerSide === 1) + row(b.p2, 'p2', winnerSide === 2) + '</table></div>';
     }
     function _renderNotifCard(n) {
       var isUnread = !n.read;

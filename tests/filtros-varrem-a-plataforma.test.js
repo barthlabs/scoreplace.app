@@ -410,7 +410,7 @@ if (codPools && codCont) {
     '"Seus últimos resultados" (agrupado) passa o id');
   ok(/u\.tName, u\.color, '', true, u\.tId/.test(dash),
     '"Seus últimos resultados" (avulso) passa o id');
-  ok(/_grupoHeadHtml\(g\.grupo, g\.tName, '#fbbf24', 'data-nov-head="1"[^,]*, false, g\.tId\)/.test(dash),
+  ok(/_grupoHeadHtml\(_fp\.group, it\.tName, '#fbbf24', 'data-nov-head="inline"', true, it\.tId\)/.test(dash),
     '"Novidades no seu torneio" passa o id');
 })();
 

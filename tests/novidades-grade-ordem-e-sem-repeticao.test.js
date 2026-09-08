@@ -356,7 +356,7 @@ ok(cardT1.indexOf('Elide Luccas') !== -1, 'C7. o card de hoje diz quem propôs')
 // O card pendente montava o placar à mão (`sets.map(s => s.gamesP1)`) e descartava
 // `s.tiebreak` — 5×6 no tie-break saía como "5" e "6" secos. O decidido sempre mostrou,
 // porque passa por formatSetScores → _formatSetForPlayer. Agora os dois usam o MESMO.
-const _sup = function (n) { return '<sup style="font-size:0.75em;font-weight:700;">(' + n + ')</sup>'; };
+const _sup = function (n) { return '<sup class="sp-tb-points" style="font-size:0.58em;font-weight:700;">(' + n + ')</sup>'; };
 ok(cardT1.indexOf('5' + _sup(4)) !== -1, 'C10. o pendente mostra 5⁽⁴⁾ — o subplacar do tie-break do lado perdedor');
 ok(cardT1.indexOf('6' + _sup(7)) !== -1, 'C11. o pendente mostra 6⁽⁷⁾ — o subplacar do tie-break do lado vencedor');
 
