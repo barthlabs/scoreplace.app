@@ -3815,8 +3815,10 @@ function renderTournaments(container, tournamentId = null) {
         // Deduplicação de participantes
         if (typeof window._deduplicateParticipants === 'function') {
             var _ddCount = window._deduplicateParticipants(visible[0]);
-            if (_ddCount > 0 && window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
-                window.FirestoreDB.saveTournament(visible[0]).catch(function() {});
+            if (_ddCount > 0 && window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
+                window.AppStore.commitTournamentTx(visible[0].id, function(ft) {
+                    return typeof window._deduplicateParticipants === 'function' && window._deduplicateParticipants(ft) > 0;
+                });
             }
         }
     }

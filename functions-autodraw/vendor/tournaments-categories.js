@@ -1376,8 +1376,10 @@ window.renderCategoryManagerPage = function(container, tId) {
         var _tPurge = window._findTournamentById(tId);
         if (_tPurge && typeof window._purgeInvalidParticipantCategories === 'function') {
             var _purged = window._purgeInvalidParticipantCategories(_tPurge);
-            if (_purged > 0 && window.FirestoreDB && window.FirestoreDB.saveTournament) {
-                window.FirestoreDB.saveTournament(_tPurge);
+            if (_purged > 0 && window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
+                window.AppStore.commitTournamentTx(tId, function(ft) {
+                    return typeof window._purgeInvalidParticipantCategories === 'function' && window._purgeInvalidParticipantCategories(ft) > 0;
+                });
             }
         }
     } catch (_e) {}
