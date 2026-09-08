@@ -11,4 +11,9 @@ ok(/commitTournamentTx[\s\S]*allowRosterRemoval:\s*true/.test(merge), 'mescla de
 ok(/_applyParticipantMergeFresh\(ft, personName, personUid, placeholderName, placeholderUid\)/.test(merge), 'mescla reaplica a troca de vaga no documento fresco');
 ok(!/saveTournament\(|AppStore\.sync\(/.test(merge), 'mescla não regrava o snapshot da tela');
 ok(/_mergedFrom/.test(apply) && /_replaceParticipantNameInBracket/.test(apply), 'aplicador fresco preserva desfazer e atualiza a chave');
+const undoStart = s.indexOf('window._undoMergeParticipant = function');
+const undoEnd = s.indexOf('/**', undoStart);
+const undoMerge = s.slice(undoStart, undoEnd);
+ok(/commitTournamentTx/.test(undoMerge) && /_applyUndoParticipantMergeFresh\(ft, personName, placeholderName\)/.test(undoMerge), 'desfazer mescla restaura a vaga no documento fresco');
+ok(!/saveTournament\(|AppStore\.sync\(/.test(undoMerge), 'desfazer mescla não regrava o snapshot da tela');
 if (fail) process.exit(1);

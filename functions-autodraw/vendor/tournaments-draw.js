@@ -4144,6 +4144,22 @@ window._participantSelfPair = function(tId, name1, uid1, name2, uid2) {
 
 // ── v2.0.0: DESFAZER MESCLAGEM — restaura o placeholder na posição e devolve a
 // pessoa como participante avulso; reverte o nome na chave (pessoa → placeholder).
+window._applyUndoParticipantMergeFresh = function(t, personName, placeholderName) {
+    if (!t) return false;
+    var arr = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
+    var idx = arr.findIndex(function(p) { return p && typeof p === 'object' && p._mergedFrom && (p.displayName || p.name) === personName; });
+    if (idx === -1) return false;
+    var undo = arr[idx]._mergedFrom;
+    if (!undo || !undo.placeholder || !undo.person) return false;
+    var freshPlaceholderName = undo.placeholder.displayName || undo.placeholder.name;
+    if (placeholderName && freshPlaceholderName !== placeholderName) return false;
+    arr[idx] = JSON.parse(JSON.stringify(undo.placeholder));
+    arr.push(JSON.parse(JSON.stringify(undo.person)));
+    t.participants = arr;
+    window._replaceParticipantNameInBracket(t, personName, freshPlaceholderName);
+    return true;
+};
+
 window._undoMergeParticipant = function(tId, ref) {
     var t = window._findTournamentById(tId);
     if (!t) return;
@@ -4170,14 +4186,12 @@ window._undoMergeParticipant = function(tId, ref) {
         'Desfazer mesclagem',
         '“' + window._safeHtml(personName) + '” voltará a ser avulso e a vaga “' + window._safeHtml(placeholderName) + '” será restaurada na chave. Confirmar?',
         function() {
-            var arr2 = Array.isArray(t.participants) ? t.participants : Object.values(t.participants);
-            var mi = arr2.findIndex(function(p) { return p && typeof p === 'object' && p._mergedFrom && (p.displayName || p.name) === personName; });
-            if (mi === -1) mi = idx;
-            arr2[mi] = JSON.parse(JSON.stringify(undo.placeholder));
-            arr2.push(JSON.parse(JSON.stringify(undo.person)));
-            t.participants = arr2;
-            window._replaceParticipantNameInBracket(t, personName, placeholderName);
-            window.FirestoreDB.saveTournament(t);
+            if (!window._applyUndoParticipantMergeFresh(t, personName, placeholderName)) return;
+            if (window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
+                window.AppStore.commitTournamentTx(tId, function(ft) {
+                    return window._applyUndoParticipantMergeFresh(ft, personName, placeholderName);
+                });
+            }
             var container = document.getElementById('view-container');
             if (container) renderTournaments(container, tId);
             if (typeof showNotification === 'function') showNotification('Mescla desfeita', placeholderName + ' restaurado; ' + personName + ' voltou como avulso.', 'info');
