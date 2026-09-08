@@ -3040,15 +3040,18 @@ window._castPollVote = function(tId, pollId, optionKey) {
     // uid-first: voto chaveado pelo uid; migra chave-e-mail legada.
     var _voteKey = (user && user.uid) ? user.uid : userEmail;
     var previousVote = (poll.votes[_voteKey] != null ? poll.votes[_voteKey] : poll.votes[userEmail]) || null;
-    poll.votes[_voteKey] = optionKey;
-    if (_voteKey !== userEmail && poll.votes[userEmail] != null) delete poll.votes[userEmail];
-
-    // Persist
-    if (window.FirestoreDB && window.FirestoreDB.saveTournament) {
-        window.FirestoreDB.saveTournament(t);
-    } else {
-        window.AppStore.sync();
+    if (!window.AppStore || typeof window.AppStore.mutate !== 'function') {
+        if (typeof showNotification === 'function') showNotification('Atualize o aplicativo', 'Não foi possível registrar o voto com segurança.', 'error');
+        return;
     }
+    window.AppStore.mutate(tId, function(ft) {
+        var freshPoll = (ft.polls || []).filter(function(p) { return p && p.id === pollId; })[0];
+        if (!freshPoll || freshPoll.status !== 'active' || Date.now() > freshPoll.deadline) return false;
+        if (!freshPoll.votes) freshPoll.votes = {};
+        freshPoll.votes[_voteKey] = optionKey;
+        if (_voteKey !== userEmail && freshPoll.votes[userEmail] != null) delete freshPoll.votes[userEmail];
+        return true;
+    }, 'Voto registrado na enquete');
 
     var optTitle = '';
     poll.options.forEach(function(o) { if (o.key === optionKey) optTitle = o.title; });
@@ -3259,22 +3262,15 @@ window._closePollEarly = function(tId, pollId) {
             _t('predraw.closePollTitle'),
             _t('predraw.closePollDesc'),
             function() {
-                poll.status = 'closed';
-                poll.deadline = Date.now();
-                t.activePollId = null;
-
-                // Restore enrollments if suspended by poll
-                if (t._pollSuspended) {
-                    t.status = 'open';
-                    delete t._pollSuspended;
-                }
-
-                window.AppStore.logAction(tId, 'Enquete encerrada antecipadamente pelo organizador');
-                if (window.FirestoreDB && window.FirestoreDB.saveTournament) {
-                    window.FirestoreDB.saveTournament(t);
-                } else {
-                    window.AppStore.sync();
-                }
+                if (!window.AppStore || typeof window.AppStore.mutate !== 'function') return;
+                var closedAt = Date.now();
+                window.AppStore.mutate(tId, function(ft) {
+                    var fresh = (ft.polls || []).filter(function(p) { return p && p.id === pollId; })[0];
+                    if (!fresh || fresh.status !== 'active') return false;
+                    fresh.status = 'closed'; fresh.deadline = closedAt; ft.activePollId = null;
+                    if (ft._pollSuspended) { ft.status = 'open'; delete ft._pollSuspended; }
+                    return true;
+                }, 'Enquete encerrada antecipadamente pelo organizador');
                 if (typeof showNotification === 'function') {
                     showNotification(_t('draw.pollClosed'), _t('draw.pollClosedApply'), 'info');
                 }
@@ -3308,25 +3304,16 @@ window._reopenPoll = function(tId, pollId) {
             if (hours < 1) hours = 1;
             if (hours > 168) hours = 168;
 
-            poll.status = 'active';
-            poll.deadline = Date.now() + (hours * 3600000);
-            poll.resolved = false;
-            poll.resolvedOption = null;
-            poll.resolvedAt = null;
-            t.activePollId = poll.id;
-
-            // Suspend enrollments again
-            if (t.status === 'open' || !t.status) {
-                t._pollSuspended = true;
-                t.status = 'closed';
-            }
-
-            window.AppStore.logAction(tId, 'Enquete reaberta pelo organizador: prazo de ' + hours + 'h');
-            if (window.FirestoreDB && window.FirestoreDB.saveTournament) {
-                window.FirestoreDB.saveTournament(t);
-            } else {
-                window.AppStore.sync();
-            }
+            if (!window.AppStore || typeof window.AppStore.mutate !== 'function') return;
+            var deadline = Date.now() + (hours * 3600000);
+            window.AppStore.mutate(tId, function(ft) {
+                var fresh = (ft.polls || []).filter(function(p) { return p && p.id === pollId; })[0];
+                if (!fresh) return false;
+                fresh.status = 'active'; fresh.deadline = deadline; fresh.resolved = false;
+                fresh.resolvedOption = null; fresh.resolvedAt = null; ft.activePollId = fresh.id;
+                if (ft.status === 'open' || !ft.status) { ft._pollSuspended = true; ft.status = 'closed'; }
+                return true;
+            }, 'Enquete reaberta pelo organizador: prazo de ' + hours + 'h');
 
             // Notify participants about reopened poll
             if (typeof window._notifyTournamentParticipants === 'function') {
@@ -3384,27 +3371,30 @@ window._applyPollResult = function(tId, pollId) {
 
     if (!winnerKey) return;
 
-    poll.resolved = true;
-    poll.resolvedOption = winnerKey;
-    poll.resolvedAt = Date.now();
-    t.activePollId = null;
-
-    window.AppStore.logAction(tId, 'Resultado da enquete aplicado: ' + winnerKey);
-
-    if (window.FirestoreDB && window.FirestoreDB.saveTournament) {
-        window.FirestoreDB.saveTournament(t);
-    } else {
-        window.AppStore.sync();
-    }
+    if (!window.AppStore || typeof window.AppStore.mutate !== 'function') return;
+    var resolvedAt = Date.now(), freshWinner = '';
+    var resolutionSave = window.AppStore.mutate(tId, function(ft) {
+        var fresh = (ft.polls || []).filter(function(p) { return p && p.id === pollId; })[0];
+        if (!fresh || fresh.resolved) return false;
+        var counts = {}, best = '', bestCount = 0;
+        (fresh.options || []).forEach(function(o) { counts[o.key] = 0; });
+        Object.keys(fresh.votes || {}).forEach(function(k) { if (counts[fresh.votes[k]] !== undefined) counts[fresh.votes[k]]++; });
+        (fresh.options || []).forEach(function(o) { if (counts[o.key] > bestCount) { best = o.key; bestCount = counts[o.key]; } });
+        if (!best) return false;
+        freshWinner = best;
+        fresh.resolved = true; fresh.resolvedOption = best; fresh.resolvedAt = resolvedAt;
+        ft.activePollId = null;
+        if (ft._pollSuspended) { ft.status = 'open'; delete ft._pollSuspended; }
+        return true;
+    }, 'Resultado da enquete aplicado: ' + winnerKey);
 
     // Trigger the winning option's action
-    if (poll.context === 'incomplete') {
-        window._handleIncompleteOption(tId, winnerKey);
-    } else if (poll.context === 'p2') {
-        window._handleP2Option(tId, winnerKey);
-    } else if (poll.context === 'odd') {
-        window._handleOddOption(tId, winnerKey);
-    }
+    Promise.resolve(resolutionSave).then(function(saved) {
+        if (saved === false || !freshWinner) return;
+        if (poll.context === 'incomplete') window._handleIncompleteOption(tId, freshWinner);
+        else if (poll.context === 'p2') window._handleP2Option(tId, freshWinner);
+        else if (poll.context === 'odd') window._handleOddOption(tId, freshWinner);
+    });
 };
 
 window._handleP2Option = function (tId, option) {

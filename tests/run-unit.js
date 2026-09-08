@@ -208,6 +208,7 @@ const SUITES = [
   'tests/reabrir-inscricoes-nao-sobrescreve-placar.test.js',
   'tests/dissolver-times-nao-sobrescreve-placar.test.js',
   'tests/cancelar-painel-nao-sobrescreve-placar.test.js',
+  'tests/enquete-writers-sao-transacionais.test.js',
   // W.O. sempre desativa; a fila é ato da própria pessoa
   'tests/wo-sempre-desativa.test.js',
   // o suplente do W.O. respeita a proporção de gênero (o homem fura a fila de um grupo
