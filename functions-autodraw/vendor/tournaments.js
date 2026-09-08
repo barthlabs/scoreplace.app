@@ -1296,8 +1296,16 @@ window._cancelPairRequest = function(tId, reqId) {
     var req = (Array.isArray(t.pairRequests) ? t.pairRequests : []).filter(function(r){ return r && r.id === reqId; })[0];
     var res = window._teamFormation.cancelPair(t, reqId, isOrg ? null : myUid);
     if (!res.ok) { if (typeof showNotification !== 'undefined') showNotification('Não foi possível', window._pairErrorMsg(res.error), 'warning'); return; }
-    t.updatedAt = new Date().toISOString();
-    window.FirestoreDB.saveTournament(t);
+    // O convite pode ter mudado enquanto o diálogo estava aberto. Reexecuta o
+    // cancelamento sobre o documento fresco, em vez de salvar a cópia local.
+    var _cancelSaved = window.AppStore && typeof window.AppStore.commitTournamentTx === 'function'
+      ? window.AppStore.commitTournamentTx(tId, function(ft) {
+          var freshRes = window._teamFormation.cancelPair(ft, reqId, isOrg ? null : myUid);
+          return freshRes && freshRes.ok;
+        })
+      : Promise.resolve(false);
+    Promise.resolve(_cancelSaved).then(function(saved) {
+      if (saved === false) { if (typeof window._softRefreshView === 'function') window._softRefreshView(); return; }
     // v2.8.91: notifica os DOIS envolvidos (menos quem cancelou) que o convite caiu.
     try {
         if (req) {
@@ -1311,6 +1319,7 @@ window._cancelPairRequest = function(tId, reqId) {
     } catch(e){}
     if (typeof showNotification !== 'undefined') showNotification('Convite cancelado', '', 'info');
     if (typeof window._softRefreshView === 'function') window._softRefreshView();
+    });
 };
 
 // v2.8.90: busca dinâmica + filtro CÍCLICO de categoria na lista de inscritos
@@ -2067,10 +2076,11 @@ function renderTournaments(container, tournamentId = null) {
                 var tc = window._findTournamentById(tId);
                 if (!tc) { _startDraw(); return; }
                 tc.status = 'closed';
-                tc._reopenIfDrawCancelled = true; // reabre se cancelar antes de sortear
-                if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
-                    window.FirestoreDB.saveTournament(tc).then(_startDraw).catch(function () { try { window.AppStore.sync(); } catch (_e) {} _startDraw(); });
-                } else { try { window.AppStore.sync(); } catch (_e) {} _startDraw(); }
+                tc._reopenIfDrawCancelled = true; // preview otimista; o commit lê fresco
+                if (!window.AppStore || typeof window.AppStore.commitTournamentTx !== 'function') return;
+                window.AppStore.commitTournamentTx(tId, function(ft) {
+                    ft.status = 'closed'; ft._reopenIfDrawCancelled = true; return true;
+                }).then(function(saved) { if (saved !== false) _startDraw(); });
             };
             window._showPresenceDrawChoice(tId, _afterPresence, { lateMode: _lateMode, closeOnDraw: _closeOnDraw, enrollmentClosed: !_inscricoesAbertas });
             return;
@@ -2084,19 +2094,11 @@ function renderTournaments(container, tournamentId = null) {
                 () => {
                     const t = window._findTournamentById(tId);
                     if (t) {
-                        t.status = 'closed';
-                        t._reopenIfDrawCancelled = true;
-                        if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
-                            window.FirestoreDB.saveTournament(t).then(function() {
-                                _startDraw();
-                            }).catch(function() {
-                                window.AppStore.sync();
-                                _startDraw();
-                            });
-                        } else {
-                            window.AppStore.sync();
-                            _startDraw();
-                        }
+                        t.status = 'closed'; t._reopenIfDrawCancelled = true;
+                        if (!window.AppStore || typeof window.AppStore.commitTournamentTx !== 'function') return;
+                        window.AppStore.commitTournamentTx(tId, function(ft) {
+                            ft.status = 'closed'; ft._reopenIfDrawCancelled = true; return true;
+                        }).then(function(saved) { if (saved !== false) _startDraw(); });
                     }
                 },
                 function() { if (typeof window._drawBtnDone === 'function') window._drawBtnDone(); },
