@@ -13232,7 +13232,8 @@ window.AppStore = {
       if (String(this.tournaments[_i].id) === String(id)) { _idx = _i; break; }
     }
     var tourData;
-    if (_idx !== -1) {
+    var _isExisting = _idx !== -1;
+    if (_isExisting) {
       Object.assign(this.tournaments[_idx], data);
       this.tournaments[_idx].id = id;
       tourData = this.tournaments[_idx];
@@ -13362,25 +13363,49 @@ window.AppStore = {
       tourData.id = id;
       this.tournaments.push(tourData);
     }
-    // Save to Firestore immediately (saveTournament captura o _allowConfigReset de forma
-    // SÍNCRONA no cleanData antes de qualquer await, então pode remover da memória logo após).
-    if (window.FirestoreDB && window.FirestoreDB.db) {
-      // `withImages`: este é o caminho da CRIAÇÃO/EDIÇÃO pelo formulário — o único, com o
-      // botão de trocar logo, que traz imagem NOVA. Sem a marca, o save omitiria
-      // `logoData`/`coverPhotoData` (ver a nota em firebase-db.saveTournament) e a imagem
-      // escolhida agora não chegaria ao banco.
+    // A edição reaplica só os campos escolhidos sobre o documento fresco. Criação
+    // continua na porta especializada: o documento ainda não existe e pode incluir upload.
+    if (_isExisting && window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
+      var _editPatch = Object.assign({}, data);
+      var _persistEdit = function () {
+        return window.AppStore.commitTournamentTx(id, function (fresh) {
+          if (!fresh) return false;
+          Object.keys(_editPatch).forEach(function (key) {
+            if (key !== 'id' && key !== '_allowConfigReset') fresh[key] = _editPatch[key];
+          });
+          return true;
+        });
+      };
+      // Storage é assíncrono e não pode rodar dentro de uma transação Firestore. Primeiro
+      // transforma base64 em URL; depois a URL e os demais campos entram juntos no fresco.
+      var _images = [['logoData', 'logoUrl', 'logo'], ['coverPhotoData', 'coverUrl', 'cover']];
+      Promise.all(_images.map(function (pair) {
+        var raw = _editPatch[pair[0]] || _editPatch[pair[1]];
+        if (!raw) { delete _editPatch[pair[0]]; return Promise.resolve(); }
+        if (typeof window._subirImagemTorneio !== 'function') return Promise.resolve();
+        return window._subirImagemTorneio(id, pair[2], raw).then(function (url) {
+          if (url) _editPatch[pair[1]] = url;
+          delete _editPatch[pair[0]];
+        }).catch(function (err) {
+          // Mesmo contrato do save especializado: upload falhou, imagem existente fica.
+          if (window._warn) window._warn('[addTournament] upload da imagem falhou; campo preservado', err);
+          delete _editPatch[pair[0]];
+          delete _editPatch[pair[1]];
+        });
+      })).then(_persistEdit).catch(function (err) {
+        window._error('Erro ao atualizar torneio:', err);
+        if (typeof window._captureException === 'function') window._captureException(err, { area: 'addTournamentEdit', tournamentId: id, code: err && err.code });
+      });
+    } else if (window.FirestoreDB && window.FirestoreDB.db) {
+      // Criação nova precisa do create especializado e do upload de imagens, pois ainda
+      // não há documento que uma transação possa reler.
       window.FirestoreDB.saveTournament(tourData, { withImages: true }).catch(function(err) {
         window._error('Erro ao salvar torneio:', err);
-        // permission-denied = token expirado ou regra de auth — não é bug de código
         if (err && err.code === 'permission-denied') {
-          if (typeof showNotification === 'function') {
-            showNotification('Sessão expirada', 'Faça login novamente para salvar o torneio.', 'warning');
-          }
+          if (typeof showNotification === 'function') showNotification('Sessão expirada', 'Faça login novamente para salvar o torneio.', 'warning');
           return;
         }
-        if (typeof window._captureException === 'function') {
-          window._captureException(err, { area: 'addTournament', tournamentId: id, code: err && err.code });
-        }
+        if (typeof window._captureException === 'function') window._captureException(err, { area: 'addTournament', tournamentId: id, code: err && err.code });
       });
     }
     // Flag transiente: NUNCA pode sobrar na memória/cache, senão um sync futuro
