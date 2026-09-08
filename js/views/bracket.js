@@ -5055,7 +5055,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   // A edição abre todos os sets preenchidos: ela preserva o que está certo e altera
   // somente o valor que a pessoa corrigir.
   const headerEditBtn = _setsEdit
-    ? `<button class="btn btn-micro" onclick="window._cancelSetsEdit('${_esc(tId)}','${_esc(m.id)}')" style="flex-shrink:0;font-size:0.72rem;">✕ Cancelar</button><button class="btn btn-success btn-micro" onclick="window._saveEditedSetsInCard('${_esc(tId)}','${_esc(m.id)}')" style="flex-shrink:0;font-size:0.72rem;">✓ Salvar</button>`
+    ? `<button class="btn btn-danger btn-micro" onclick="window._cancelSetsEdit('${_esc(tId)}','${_esc(m.id)}')" style="flex-shrink:0;font-size:0.72rem;color:#fff;">✕ Cancelar</button><button class="btn btn-success btn-micro" onclick="window._saveEditedSetsInCard('${_esc(tId)}','${_esc(m.id)}')" style="flex-shrink:0;font-size:0.72rem;">✓ Salvar</button>`
     : (!isByeMatch && canEnterResult && !m.wo && !compactDone && (isDecided || _hasPartialSets)
     ? `<button class="btn btn-warning btn-micro" onclick="${isDecided
         ? (_plan.multi ? `window._editSetsInline('${_esc(tId)}','${_esc(m.id)}')` : `window._editResultInline('${_esc(tId)}','${_esc(m.id)}')`)
@@ -5393,7 +5393,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
 
   // v4.1.19 CANÔNICO: botão W.O. compacto no HEADER, à esquerda do "Ao Vivo" (substitui o
   // "⚠️ Faltou alguém?" largo que ficava embaixo do card). Mesmo gate do chip antigo.
-  var _woHeaderChip = (!_readOnly && typeof window._woClaimChip === 'function' && typeof window._woIsKnockoutMatch === 'function' && window._woIsKnockoutMatch(t, m))
+  var _woHeaderChip = (!_setsEdit && !_readOnly && typeof window._woClaimChip === 'function' && typeof window._woIsKnockoutMatch === 'function' && window._woIsKnockoutMatch(t, m))
     ? window._woClaimChip(t, { scope: 'match', matchId: m.id, compact: true })
     : '';
   // v1.8.79: REPLAY — só existe se o jogo tem ponto a ponto gravado no doc do jogo

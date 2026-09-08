@@ -293,6 +293,10 @@ async function tela() {
     'os placares existentes viram campos no mesmo lugar dos Sets e do STB');
   ok(/_cancelSetsEdit/.test(editNoCard) && /_saveEditedSetsInCard/.test(editNoCard),
     'o cabeçalho do mesmo card oferece Cancelar e Salvar');
+  ok(/btn-danger btn-micro/.test(editNoCard) && /color:#fff/.test(editNoCard),
+    'Cancelar é vermelho com texto branco, como os demais botões destrutivos');
+  ok(!/_woClaimChip/.test(editNoCard),
+    'W.O. some durante a edição para não duplicar ação vermelha no card');
 
   const browser = await chromium.launch();
   const page = await browser.newPage({ viewport: { width: 430, height: 900 } });
