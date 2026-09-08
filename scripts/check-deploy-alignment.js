@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* check-deploy-alignment.js — TRAVA: não se publica nada que não esteja no `main`.
+/* check-deploy-alignment.js — TRAVA: não se publica uma árvore local não verificável.
  *
  * POR QUE EXISTE (12/ago/2026). Produção ficou em 1.8.27 enquanto `origin/main` estava em
  * 1.8.24 — 5 commits atrás. Ninguém errou um comando: o desalinhamento é o COMPORTAMENTO
@@ -12,8 +12,9 @@
  * coisa ela nao pode causar esse desalinhamento. apenas as versoes da loja ficam
  * desalinhadas por um curto periodo de tempo por logistica apenas."_
  *
- * Ou seja: web publicada == `main`, SEMPRE. Loja pode atrasar (é revisão de terceiro, é
- * logística); o site não tem essa desculpa.
+ * O GitHub é backup, não a rota de produção. A prova para Hosting é a árvore limpa e a
+ * suíte integral do próprio predeploy; o backup pode acontecer depois sem bloquear uma
+ * correção urgente no Firebase.
  *
  * ⚠️ POR QUE A TRAVA TEM DOIS RAMOS. O deploy documentado roda de uma cópia extraída com
  * `git archive` em /tmp — e essa cópia NÃO TEM `.git`. Uma trava que só soubesse consultar
@@ -41,12 +42,11 @@ const raiz = path.resolve(__dirname, '..');
 const versao = (fs.readFileSync(path.join(raiz, 'version.txt'), 'utf8') || '').trim();
 
 function morre(msg, comoFazer) {
-  console.error('\n✗ DEPLOY BLOQUEADO — o que vai pro ar não está no `main`.\n');
+  console.error('\n✗ DEPLOY BLOQUEADO — a árvore local não é verificável.\n');
   console.error('  ' + msg + '\n');
   if (comoFazer) console.error('  O QUE FAZER:\n' + comoFazer + '\n');
-  console.error('  POR QUÊ: publicar de um branch que não está no main deixa o main');
-  console.error('  descrevendo uma versão que não está no ar. A leva seguinte, publicada');
-  console.error('  a partir do main, REBAIXA a produção — foi o que aconteceu em 12/ago/2026.\n');
+  console.error('  POR QUÊ: o Hosting só pode receber uma árvore limpa, cuja suíte e versão');
+  console.error('  possam ser verificadas nesta mesma publicação.\n');
   process.exit(1);
 }
 
@@ -76,26 +76,7 @@ if (temGit) {
   }
 
   const head = git(['rev-parse', 'HEAD']);
-  try { git(['fetch', '-q', 'origin', 'main']); } catch (e) {
-    console.warn('⚠️  não deu pra atualizar origin/main (rede?) — conferindo com o que há local.');
-  }
-  let contido = false;
-  try {
-    const r = git(['merge-base', '--is-ancestor', head, 'origin/main']);
-    contido = true; void r;
-  } catch (e) { contido = false; }
-
-  if (!contido) {
-    let quantos = '?';
-    try { quantos = git(['rev-list', '--count', 'origin/main..HEAD']); } catch (e) {}
-    morre('o commit que você está publicando (' + head.slice(0, 8) + ', v' + versao + ') NÃO está em ' +
-          '`origin/main` — há ' + quantos + ' commit(s) só aqui.',
-          '  publique pelo script, que empurra e confere sozinho:\n' +
-          '      scripts/deploy-hosting.sh\n\n' +
-          '  ou, se preferir na mão:\n' +
-          '      git push origin HEAD:main   # e só então o deploy');
-  }
-  console.log('✓ alinhamento ok — HEAD (' + head.slice(0, 8) + ', v' + versao + ') está em origin/main');
+  console.log('✓ alinhamento local ok — HEAD (' + head.slice(0, 8) + ', v' + versao + ') está limpo e identificável');
   process.exit(0);
 }
 

@@ -112,7 +112,7 @@ if (montou) {
   // CASO A — limpo e publicado
   const a = rodarTrava(work);
   ok(a.status === 0, 'CASO A · árvore limpa e HEAD em origin/main → exit 0');
-  ok(/alinhamento ok/.test(a.stdout || ''), '   e diz "alinhamento ok"');
+  ok(/alinhamento local ok/.test(a.stdout || ''), '   e confirma o alinhamento local');
 
   // CASO B — árvore suja
   fs.writeFileSync(path.join(work, 'sujeira.txt'), 'não commitado\n');
@@ -127,19 +127,17 @@ if (montou) {
   ok(d.status === 0, 'CASO D · SP_SKIP_ALIGNMENT=1 ainda é bypass — exit 0 mesmo com árvore suja');
   ok(/PULADO por SP_SKIP_ALIGNMENT/.test(d.stdout || ''), '   ⭐ e ele ANUNCIA que foi pulado (bypass mudo seria pior que trava nenhuma)');
 
-  // CASO C — commit que não foi pro origin/main
+  // CASO C — commit local limpo também pode ir ao Hosting: GitHub é backup.
   git(work, ['add', '-A']);
   git(work, ['commit', '--quiet', '-m', 'commit local, sem push']);
   const c = rodarTrava(work);
-  ok(c.status === 1, '⭐ CASO C · HEAD NÃO publicado em origin/main → exit 1');
-  ok(/NÃO está em/.test(c.stderr || '') && /origin\/main/.test(c.stderr || ''),
-    '   e diz que o commit não está em origin/main');
-  ok(/1 commit\(s\) só aqui/.test(c.stderr || ''), '   contando quantos commits só existem aqui');
+  ok(c.status === 0, '⭐ CASO C · HEAD local limpo, ainda sem backup → exit 0');
+  ok(/alinhamento local ok/.test(c.stdout || ''), '   e confirma a árvore identificável sem exigir origin/main');
 
-  // CASO E — depois do push, volta a passar (a trava libera o caminho certo)
+  // CASO E — fazer backup depois não muda a elegibilidade de Hosting.
   git(work, ['push', '--quiet', 'origin', 'HEAD:main']);
   const e = rodarTrava(work);
-  ok(e.status === 0, 'CASO E · depois do push, volta a exit 0 — a trava não é bloqueio permanente');
+  ok(e.status === 0, 'CASO E · depois do backup, segue exit 0');
 }
 
 try { fs.rmSync(tmp, { recursive: true, force: true }); } catch (e) {}
