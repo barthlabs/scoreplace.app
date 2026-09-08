@@ -19,6 +19,7 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    // ⚠️ 2.2.32 NÃO ganhou item próprio: a migração L7 elimina regravações concorrentes de snapshots; não muda regra ou tela.
     // ⚠️ 2.2.3 NÃO ganhou item: ícone do calendário/relógio visível no tema escuro (color-scheme) e o
     // "Veja data proposta" com o brilho padrão de varredura em vez do anel. Acabamento, sem regra nova.
     // ⚠️ 2.1.118 NÃO ganhou item: diagnóstico da busca em toda consulta, com o mapa da tela.
