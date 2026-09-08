@@ -1767,6 +1767,9 @@ const MEXEM_NO_REPO = [
 const PRENDEM_PORTA = [
   'functions-autodraw/test-corrida-slot-emu.js',   // corrida real no Firestore Emulator
   'tests/deploy-liga-firebase-admin.test.js',      // roda a corrida acima dentro da cópia extraída
+  // Abre dois emuladores em sequência; sob carga paralela o Firebase CLI pode esperar
+  // sem devolver controle, portanto precisa da mesma exclusividade dos demais emuladores.
+  'tests/rules-contencao-avanco-de-fase.test.js',
 ];
 const EXCLUSIVAS = new Set(MEXEM_NO_REPO.concat(PRENDEM_PORTA));
 

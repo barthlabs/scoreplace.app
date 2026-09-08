@@ -371,6 +371,10 @@ function rodar(rulesFile, port, rotulo) {
       'node ' + JSON.stringify(drv),
     ], {
       cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 32 * 1024 * 1024,
+      // Um emulador que não conseguiu iniciar antes ficava aguardado indefinidamente pelo
+      // execFileSync e congelava a suíte inteira de publicação. Falhar com o diagnóstico
+      // do Firebase é verificável; esperar sem limite não é.
+      timeout: 180000,
       env: Object.assign({}, process.env, {
         SP_ADMIN: path.join(ROOT, 'functions', 'node_modules', 'firebase-admin'),
         NO_UPDATE_NOTIFIER: '1',
