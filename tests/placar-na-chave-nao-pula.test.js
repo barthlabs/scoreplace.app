@@ -89,9 +89,19 @@ async function abreChave(browser, torneio, usuario, raizPx) {
   for (const f of JS) await page.addScriptTag({ content: fs.readFileSync(path.join(ROOT,f),'utf8') });
   await page.evaluate(([t, u]) => {
     const noop = function(){}, tx = function(){ return { then:function(cb){cb&&cb();return{catch:noop};}, catch:noop }; };
+    // A tela não aplica placar. Esta é a resposta canônica que a CF devolveria: o
+    // teste continua cobrindo o repaint e a posição da chave, sem reintroduzir a antiga
+    // mutação otimista no navegador.
+    const resultTx = function(tid, mid, payload) {
+      const m = (t.matches || []).find(function(x){ return String(x.id) === String(mid); });
+      if (payload && payload.pending && m) m.pendingResult = payload.pending;
+      else window._applyResultToTournament(t, mid, payload || {});
+      if (typeof window._rerenderBracket === 'function') window._rerenderBracket(tid, mid);
+      return Promise.resolve(true);
+    };
     window.AppStore = Object.assign(window.AppStore||{}, {
       tournaments:[t], currentUser:u, isOrganizer:function(){ return !!u.org; },
-      logAction:noop, sync:noop, syncImmediate:tx, commitTournamentTx:tx, commitResultTx:tx, commitDrawTx:tx,
+      logAction:noop, sync:noop, syncImmediate:tx, commitTournamentTx:tx, commitResultTx:resultTx, commitDrawTx:tx,
       getTournament:function(id){ return window.AppStore.tournaments.find(x=>String(x.id)===String(id)); }
     });
     window.FirestoreDB = { saveTournament: function(){ return Promise.resolve(); } };
