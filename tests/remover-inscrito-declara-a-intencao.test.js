@@ -59,8 +59,8 @@ todos.forEach((x) => {
   const n = (x.s.match(/allowRosterRemoval:\s*true/g) || []).length;
   if (n) usos.push(x.f + '×' + n);
 });
-ok(usos.length <= 3 && usos.every((u) => /^(tournaments-draw-prep\.js×1|tournaments-enrollment\.js×1|tournaments\.js×2)$/.test(u)),
-   '⛔ só os caminhos de REMOÇÃO confirmada declaram (inclui desfazer dupla) — got ' +
+ok(usos.length <= 4 && usos.every((u) => /^(tournaments-draw-prep\.js×1|tournaments-enrollment\.js×1|tournaments\.js×2|tournaments-draw\.js×1)$/.test(u)),
+   '⛔ só os caminhos de REMOÇÃO confirmada declaram (inclui mescla e desfazer dupla) — got ' +
    JSON.stringify(usos));
 
 console.log(falhas === 0

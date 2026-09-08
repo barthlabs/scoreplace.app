@@ -3862,9 +3862,8 @@ window._replaceParticipantNameInBracket = function(t, oldName, newName) {
 // (alvo). A entrada do placeholder mantém a POSIÇÃO no array, mas a IDENTIDADE
 // vira a da pessoa; a entrada avulsa da pessoa é removida; o nome é substituído
 // na chave (placeholder → pessoa). Guarda snapshot pra desfazer.
-window._mergeParticipantConfirm = function(tId, personName, personUid, placeholderName, placeholderUid) {
-    var t = window._findTournamentById(tId);
-    if (!t) return;
+window._applyParticipantMergeFresh = function(t, personName, personUid, placeholderName, placeholderUid) {
+    if (!t) return false;
     var arr = Array.isArray(t.participants) ? t.participants : Object.values(t.participants);
     var findIdx = function(uid, name) {
         if (uid) {
@@ -3878,7 +3877,7 @@ window._mergeParticipantConfirm = function(tId, personName, personUid, placehold
     };
     var pIdx = findIdx(personUid, personName);          // pessoa (origem)
     var phIdx = findIdx(placeholderUid, placeholderName); // placeholder (alvo)
-    if (pIdx === -1 || phIdx === -1 || pIdx === phIdx) return;
+    if (pIdx === -1 || phIdx === -1 || pIdx === phIdx) return false;
     var personObj = typeof arr[pIdx] === 'object' ? arr[pIdx] : { displayName: arr[pIdx], name: arr[pIdx] };
     var placeholderObj = typeof arr[phIdx] === 'object' ? arr[phIdx] : { displayName: arr[phIdx], name: arr[phIdx] };
     var undo = {
@@ -3898,7 +3897,17 @@ window._mergeParticipantConfirm = function(tId, personName, personUid, placehold
     arr.splice(pIdx, 1);         // remove a entrada avulsa da pessoa
     t.participants = arr;
     window._replaceParticipantNameInBracket(t, placeholderName, personName);
-    window.FirestoreDB.saveTournament(t);
+    return true;
+};
+
+window._mergeParticipantConfirm = function(tId, personName, personUid, placeholderName, placeholderUid) {
+    var t = window._findTournamentById(tId);
+    if (!window._applyParticipantMergeFresh(t, personName, personUid, placeholderName, placeholderUid)) return;
+    if (window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
+        window.AppStore.commitTournamentTx(tId, function(ft) {
+            return window._applyParticipantMergeFresh(ft, personName, personUid, placeholderName, placeholderUid);
+        }, { allowRosterRemoval: true });
+    }
     var container = document.getElementById('view-container');
     if (container) renderTournaments(container, tId);
     if (typeof showNotification === 'function') showNotification('Mesclado', personName + ' assumiu a vaga de ' + placeholderName + '.', 'success');
