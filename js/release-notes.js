@@ -19,6 +19,11 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    // ⚠️ 2.2.32 · exclusão de torneio passou a ser confirmada na Cloud Function antes
+    // de a tela removê-lo. Antes um erro de permissão podia escondê-lo só localmente e
+    // ele voltava no próximo carregamento; agora o erro permanece visível e a limpeza
+    // completa (subcoleções, feed e cópias) parte do servidor. Correção de integridade,
+    // sem regra nova para participantes.
     // ⚠️ 2.2.33 NÃO ganhou item próprio: lançamento de placar passa exclusivamente pela
     // Cloud Function, que registra antes/depois no recibo de auditoria. É correção de
     // integridade; a tela e as regras de jogo permanecem as mesmas. Os arquivos da tela
