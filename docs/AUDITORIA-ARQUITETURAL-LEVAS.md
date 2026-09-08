@@ -2854,3 +2854,16 @@ resultado isolado. O próximo alvo é o único `syncImmediate` restante, o toggl
 Liga. Depois serão tratados os `sync()` de preparação de sorteio e categorias, com um teste por
 fluxo que faça um snapshot velho terminar depois da transação fresca. Cada mutator deve expressar
 uma mudança idempotente, pois será reexecutado durante retry.
+
+**L7 — fechamento do censo de writers (08/set/2026, aguardando publicação única).** A auditoria
+migrou os writers de produção que regravavam o documento local inteiro durante inscrição,
+categorias, chave, enquetes, rodadas, manutenção, remoção e edição. Cada mudança agora se
+expressa como intenção reaplicada no documento fresco por `commitTournamentTx`/`mutate`.
+
+O formulário separa os dois casos: **edição** envia apenas seu patch, após converter imagem nova
+em URL de Storage; **criação** permanece na porta especializada porque ainda não há documento
+para a transação reler. O `sync()` redundante após o formulário foi removido. Os remanescentes
+fora desse contrato são ferramentas de desenvolvimento (simular sorteio e bots), a atualização
+parcial de status no contador e as próprias portas internas `sync`/`syncImmediate`, que não são
+mais chamadas pelos fluxos L7 migrados. Gates dedicados cobrem categorias, inscritos, manutenção,
+status e edição; cada diff funcional recebeu parecer **APROVADO** do Claude.
