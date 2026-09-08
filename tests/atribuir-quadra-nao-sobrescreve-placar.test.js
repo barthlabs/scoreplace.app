@@ -31,4 +31,6 @@ ok(fresh.matches[0].winner === 'Time B' && fresh.matches[0].scoreP1 === 1 && fre
 ok(history[0] === 'Quadra definida: Quadra 4', 'a alteração deixa histórico transacional');
 sandbox._assignMatchCourt('T1', 'M1', '');
 ok(!Object.prototype.hasOwnProperty.call(fresh.matches[0], 'court'), 'remover a quadra também é uma mutação estreita');
+ok(!/syncImmediate\(|FirestoreDB\.saveTournament\(/.test(src.slice(start, end)),
+  'sem mutação fresca, não há fallback que grave o snapshot inteiro');
 if (fail) process.exit(1);

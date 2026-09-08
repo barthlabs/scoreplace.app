@@ -235,15 +235,21 @@ function _pintarInscritosEmFatias(gridId, itens, montaCard, jaNaTela, aoCompleta
 window._processWoSubstitutions = function(tId) {
   const t = window._findTournamentById(tId);
   if (!t) return { ok: false, reason: 'no-tournament' };
+  if (!window.AppStore || typeof window.AppStore.mutate !== 'function') {
+    if (typeof window._error === 'function') window._error('processWoSubstitutions: AppStore.mutate indisponível');
+    return { ok: false, reason: 'safe-mutation-unavailable' };
+  }
   const r = window._applyWoSubsToTournament(t);
   if (r && r.subCount > 0) {
     // BLINDAGEM (project_concurrency_safe_saves): re-aplica as substituições no doc
     // FRESCO via portão (o núcleo é idempotente — absent já substituído = no-op), em
     // vez de syncImmediate (doc inteiro → lost-update com check-in/resultado concorrente).
-    if (window.AppStore && typeof window.AppStore.mutate === 'function') {
-      window.AppStore.mutate(tId, function (ft) { window._applyWoSubsToTournament(ft); });
-    } else if (typeof window.AppStore.syncImmediate === 'function') window.AppStore.syncImmediate(tId);
-    else window.AppStore.sync();
+    window.AppStore.mutate(tId, function (ft) {
+      const freshResult = window._applyWoSubsToTournament(ft);
+      // A aplicação otimista já consumiu a vaga; se outra sessão também a consumiu,
+      // não há escrita para fazer no documento fresco.
+      if (!freshResult || freshResult.subCount <= 0) return false;
+    });
   }
   return r;
 };

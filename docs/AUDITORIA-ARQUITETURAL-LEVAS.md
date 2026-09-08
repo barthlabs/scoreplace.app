@@ -2766,6 +2766,12 @@ mutator idempotente que localiza o mesmo `matchId` no documento fresco dentro de
 antiga contra um resultado que já chegou ao documento fresco e prova as duas operações:
 definir e remover a quadra.
 
+**L7.P1.1b — compatibilidade insegura da quadra removida (08/set/2026, aguardando o próximo
+lote de publicação).** Mesmo após a migração, um bundle sem `AppStore.mutate` ainda caía em
+`syncImmediate`/`saveTournament`, isto é, voltava a serializar a cópia inteira. A ação agora
+avisa que não foi salva e não escreve nessa condição. O gate de quadra exige a ausência desses
+dois fallbacks; Claude aprovou o diff (Opus, esforço baixo).
+
 **L7.P1.2 — publicação do sorteio em revisão migrou para mutação fresca (08/set/2026).**
 Publicada como 2.2.22. `window._publishPendingDraw` transferia a chave revisada e em seguida
 chamava `syncImmediate`; uma cópia local anterior podia, portanto, regravar o documento inteiro
@@ -2775,6 +2781,12 @@ materializam aquele sorteio e conserva todos os outros campos frescos. A notific
 quando a gravação confirma sucesso. O novo gate
 `publicar-sorteio-nao-sobrescreve-resultado.test.js` reproduz uma chave antiga contra um placar
 que chega depois e garante a preservação do resultado, do histórico e da ordem de notificação.
+
+**L7.P1.2b — compatibilidade insegura da publicação removida (08/set/2026, aguardando o
+próximo lote de publicação).** A publicação ainda mantinha um fallback para `syncImmediate`
+quando `mutate` não estivesse carregado. Esse caminho foi removido: a chave não é publicada
+sem a porta transacional, e o organizador recebe um aviso para atualizar o aplicativo. O gate
+da publicação proíbe o fallback; Claude aprovou o diff (Opus, esforço baixo).
 
 **L7.P1.3 — reversão de W.O. migrou para mutação fresca (08/set/2026).** Publicada como
 2.2.23. A reversão alterava resultado, avanço, classificação e ausência no objeto local antes de
@@ -2795,6 +2807,23 @@ chamava `sync()`, que persistia a fotografia inteira do organizador. Agora ela e
 esses três campos em `AppStore.mutate`: a transação reaplica a mudança sobre o documento fresco,
 mantém um carimbo/data já existentes e preserva placar, chave e novidades concorrentes. O gate
 `iniciar-torneio-nao-sobrescreve-placar` exige esse caminho e proíbe a mutação prévia do snapshot.
+
+**L7.P1.7 — reparação de rodadas futuras migrou para mutação fresca (08/set/2026, aguardando
+o próximo lote de publicação).** Ao renderizar uma eliminatória antiga sem todas as colunas, o
+reparador criava a rodada faltante e chamava `syncImmediate`, regravando o torneio inteiro a
+partir da cópia renderizada. Agora o primeiro passo é uma checagem pura; somente havendo lacuna,
+`AppStore.mutate` reaplica a reparação no documento fresco. Se outra sessão já a completou, a
+transação aborta sem escrever. O gate `reparo-chave-nao-sobrescreve-placar` reproduz uma aba sem
+rodada 2 e um documento fresco com resultado 6–3: a rodada é criada e o placar recente permanece
+intacto. Claude aprovou o diff (Opus, esforço baixo).
+
+**L7.P1.8 — substituição por W.O. migrou para mutação fresca (08/set/2026, aguardando o
+próximo lote de publicação).** O wrapper que aplica substituta partia do torneio carregado e,
+na ausência da porta transacional, caía em `syncImmediate` ou `sync`. Ele agora exige
+`AppStore.mutate` e reaplica o núcleo puro no documento fresco; se a vaga já tiver sido ocupada,
+aborta a escrita. O gate `substituicao-wo-nao-sobrescreve-placar` prova tanto a preservação de
+um resultado concorrente quanto a recusa segura sem a porta de mutação. Claude aprovou o diff
+(Opus, esforço baixo).
 
 **Conclusão desta etapa.** A porta canônica já existe e é `AppStore.mutate` para alterações do
 documento de torneio; portas especializadas são a escolha para presença, inscrição, dupla e

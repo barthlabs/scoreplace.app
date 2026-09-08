@@ -1921,14 +1921,12 @@ window._assignMatchCourt = function(tId, matchId, court) {
     if (court) targetMatch.court = court; else delete targetMatch.court;
   };
   var _message = court ? ('Quadra definida: ' + court) : 'Quadra removida de um jogo';
-  if (window.AppStore && typeof window.AppStore.mutate === 'function') {
-    window.AppStore.mutate(tId, _applyCourt, _message);
-  } else {
-    // Compatibilidade sem a porta transacional: mantém a UI funcional em bundle legado.
-    _applyCourt(t);
-    if (window.AppStore && typeof window.AppStore.syncImmediate === 'function') window.AppStore.syncImmediate(tId);
-    else if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') window.FirestoreDB.saveTournament(t);
+  if (!window.AppStore || typeof window.AppStore.mutate !== 'function') {
+    if (typeof window._error === 'function') window._error('assignMatchCourt: AppStore.mutate indisponível');
+    if (typeof showNotification === 'function') showNotification('Quadra não salva', 'Atualize o aplicativo e tente novamente.', 'error');
+    return;
   }
+  window.AppStore.mutate(tId, _applyCourt, _message);
   if (typeof showNotification === 'function') showNotification('📍 Quadra ' + (court ? 'definida' : 'removida'), court || '', 'success');
 };
 
@@ -2828,10 +2826,10 @@ function _setupFixedScrollbar(container) {
 }
 
 // ─── Auto-reparação: gera rodadas futuras para torneios antigos ──────────────
-function _ensureFutureRounds(t) {
-  if (!t.matches || !t.matches.length) return;
+function _ensureFutureRounds(t, dryRun) {
+  if (!t.matches || !t.matches.length) return false;
   // Repechage tournaments already have all rounds built — skip
-  if (t.hasRepechage) return;
+  if (t.hasRepechage) return false;
   const isDupla = t.format === 'Dupla Eliminatória';
 
   // Filtrar apenas matches do bracket principal (upper ou sem bracket)
@@ -2847,15 +2845,19 @@ function _ensureFutureRounds(t) {
 
   // Skip repechage rounds (negative) — only process main bracket rounds
   const rounds = Object.keys(roundsMap).map(Number).filter(r => r >= 1).sort((a, b) => a - b);
-  if (rounds.length === 0) return;
+  if (rounds.length === 0) return false;
 
   const r1Count = (roundsMap[rounds[0]] || []).length;
-  if (r1Count <= 1) return; // Final ou apenas 1 jogo — nada a gerar
+  if (r1Count <= 1) return false; // Final ou apenas 1 jogo — nada a gerar
 
   const expectedTotalRounds = Math.ceil(Math.log2(r1Count * 2));
 
   // Se já tem todas as rodadas, não precisa reparar
-  if (rounds.length >= expectedTotalRounds) return;
+  if (rounds.length >= expectedTotalRounds) return false;
+
+  // A mesma checagem serve para decidir se vale abrir uma transação. Assim, a
+  // renderização não cria escrita alguma quando a chave já está íntegra.
+  if (dryRun) return true;
 
   // Gerar rodadas faltantes
   const timestamp = Date.now();
@@ -2943,10 +2945,23 @@ function _ensureFutureRounds(t) {
     }
   }
 
-  // Salvar a reparação
-  if (typeof window.AppStore !== 'undefined' && typeof window.AppStore.syncImmediate === 'function') {
-    window.AppStore.syncImmediate(t.id);
+  return true;
+}
+
+// A auto-reparação nasce durante o render, mas a persistência não pode regravar
+// a fotografia que aquele render recebeu. `mutate` aplica a mesma reparação no
+// documento fresco; se outro aparelho já a completou, o `false` aborta a escrita.
+function _repairFutureRoundsSafely(t) {
+  if (!_ensureFutureRounds(t, true)) return false;
+  if (!window.AppStore || typeof window.AppStore.mutate !== 'function') {
+    if (typeof window._warn === 'function') window._warn('[bracket] reparação segura indisponível: AppStore.mutate ausente');
+    return false;
   }
+  window.AppStore.mutate(t.id, function(freshT) {
+    if (!_ensureFutureRounds(freshT, true)) return false;
+    _ensureFutureRounds(freshT);
+  });
+  return true;
 }
 
 // ─── Hidden rounds state, bracket view mode & zoom ──────────────────────────
@@ -2958,7 +2973,7 @@ if (window._bracketZoom === undefined) window._bracketZoom = 1;
 function renderSingleElimBracket(t, canEnterResult, standbyHtml) {
   var _t = window._t || function(k) { return k; };
   // ── Auto-reparação: gera rodadas futuras se não existirem ──
-  _ensureFutureRounds(t);
+  _repairFutureRoundsSafely(t);
 
   // ── Always recompute progressive classification from current match data ──
   if (typeof _updateProgressiveClassification === 'function') {
@@ -3382,7 +3397,7 @@ function renderSingleElimBracket(t, canEnterResult, standbyHtml) {
 function renderDoubleElimBracket(t, canEnterResult, standbyHtml) {
   var _t = window._t || function(k) { return k; };
   // Auto-reparação para dupla eliminatória também
-  _ensureFutureRounds(t);
+  _repairFutureRoundsSafely(t);
 
   // v1.0.95-beta HOTFIX: removido syncImmediate do render. User: 'fica
   // recarregando de forma que é impossivel apagar esse torneio que insiste

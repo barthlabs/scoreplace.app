@@ -38,5 +38,7 @@ vm.runInContext(src.slice(start, end), sandbox, { filename: 'bracket-logic.js:_p
     'preserva o placar que chegou depois da cópia local');
   ok(action === 'Sorteio em revisão publicado', 'registra a publicação no histórico transacional');
   ok(notification && notification[0] === '🚀 Sorteio publicado!', 'notifica somente depois da gravação confirmada');
+  ok(!/syncImmediate\(|FirestoreDB\.saveTournament\(/.test(src.slice(start, end)),
+    'sem mutação fresca, não há fallback que publique o snapshot inteiro');
   if (fail) process.exit(1);
 })().catch((err) => { console.error(err); process.exit(1); });

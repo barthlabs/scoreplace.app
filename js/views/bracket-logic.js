@@ -5832,13 +5832,12 @@ window._publishPendingDraw = async function (tId) {
   };
   var _saved = false;
   try {
-    if (typeof store.mutate === 'function') {
-      _saved = await store.mutate(t.id, _publish, 'Sorteio em revisão publicado');
-    } else {
-      // Bundle legado: conserva o caminho anterior, sem fingir que ele é transacional.
-      _publish(t);
-      _saved = await store.syncImmediate(t.id);
+    if (typeof store.mutate !== 'function') {
+      if (typeof window._error === 'function') window._error('publishPendingDraw: AppStore.mutate indisponível');
+      if (typeof window.showNotification === 'function') window.showNotification('Sorteio não publicado', 'Atualize o aplicativo e tente novamente.', 'error');
+      return;
     }
+    _saved = await store.mutate(t.id, _publish, 'Sorteio em revisão publicado');
   } catch (e) { window._warn('[publishPendingDraw] save falhou', e); }
   if (!_saved || !pd) return;
   // Agora SIM dispara as notificações (idênticas ao sorteio normal).
