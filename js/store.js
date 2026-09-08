@@ -4080,8 +4080,12 @@ setInterval(function() {
       });
       if (_appT) {
         _appT.status = 'closed';
-        if (typeof window.FirestoreDB.saveTournament === 'function') {
-          window.FirestoreDB.saveTournament(_appT).catch(function() {});
+        if (typeof window.AppStore.commitTournamentTx === 'function') {
+          window.AppStore.commitTournamentTx(tId, function(ft) {
+            if (!ft || ft.status === 'closed' || ft.status === 'finished') return false;
+            ft.status = 'closed';
+            return true;
+          });
         }
       } else if (window.FirestoreDB.db) {
         // Fallback: update cirúrgico — não toca em memberEmails/adminEmails
@@ -9962,10 +9966,12 @@ window._autoCloseExpiredEnrollments = function() {
       // Só o organizador persiste — salva objeto completo para não limpar
       // adminEmails/memberEmails (bug v1.6.66 corrigido em v1.6.67).
       var cu = window.AppStore.currentUser;
-      if (cu && window.AppStore.isOrganizer(t)) { // v2.8.79: uid-primário (co-host com email '')
-        if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
-          window.FirestoreDB.saveTournament(t).catch(function() {});
-        }
+      if (cu && window.AppStore.isOrganizer(t) && typeof window.AppStore.commitTournamentTx === 'function') { // v2.8.79: uid-primário (co-host com email '')
+        window.AppStore.commitTournamentTx(t.id, function(ft) {
+          if (!ft || ft.status === 'closed' || ft.status === 'finished') return false;
+          ft.status = 'closed';
+          return true;
+        });
       }
     }
   });
