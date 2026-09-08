@@ -1994,7 +1994,13 @@ function renderDashboard(container) {
           // lançamento, e torneio velho sem carimbo cai no desempate por rodada).
           // Encerrado = `finished`, inclusive o encerrado automaticamente por abandono.
           var _tEncerrado = (t.status === 'finished') || !!t.autoClosed;
-          var _confirmado = !!m.winner && (m.scoreP1 != null || (Array.isArray(m.sets) && m.sets.length));
+          // Um placar parcial também é uma novidade: o J122 tinha os dois sets já
+          // gravados no `results/{matchId}`, mas sem STB/vencedor e por isso sumia do
+          // feed. Resultado parcial não é final — o card continua sem vencedor — porém
+          // o lançamento precisa ser visível e entrar pela hora da última atualização.
+          var _placarLancado = m.scoreP1 != null || m.scoreP2 != null || (Array.isArray(m.sets) && m.sets.length);
+          var _confirmado = !!m.winner && _placarLancado;
+          var _parcial = !_confirmado && _placarLancado;
           // ⚠️ v1.8.67: LANÇAMENTO PENDENTE TAMBÉM É NOVIDADE. Exigir `m.winner` fazia a
           // seção ignorar justamente o que ACABOU de acontecer: placar lançado por um
           // jogador só ganha `winner` quando o outro lado confirma, o que pode levar horas.
@@ -2008,7 +2014,7 @@ function renderDashboard(container) {
           // lançamento. Em disputa também entra: contestação é novidade do torneio.
           var _pnd = (!m.winner && m.pendingResult) ? m.pendingResult : null;
           var _pendente = !!_pnd && (_pnd.scoreP1 != null || (Array.isArray(_pnd.sets) && _pnd.sets.length) || !!_pnd.winner);
-          if (!_tEncerrado && (_confirmado || _pendente)) {
+          if (!_tEncerrado && (_confirmado || _parcial || _pendente)) {
             othersResults.push({
               tId: t.id, tName: t.name || '', m: m, pendente: _pendente,
               // MEDIDO em produção: `resultAt` é o carimbo do lançamento (7 de 8 jogos
@@ -2017,7 +2023,7 @@ function renderDashboard(container) {
               // a mesma régua que "Meus Últimos Resultados" já usa.
               at: _pendente
                 ? (_tsMs(_pnd.proposedAt) || _tsMs(_pnd.updatedAt) || _tsMs(m.updatedAt) || 0)
-                : (_tsMs(m.resultAt) || _tsMs(m.updatedAt) || _tsMs(m.completedAt) || _tsMs(m.createdAt) || 0),
+                : (_tsMs(m.updatedAt) || _tsMs(m.resultAt) || _tsMs(m.completedAt) || _tsMs(m.createdAt) || 0),
               roundNum: (m.round != null && !isNaN(Number(m.round))) ? Number(m.round) : 0,
               gameSeq: (m._gameNum != null) ? Number(m._gameNum)
                 : (function(){ var g = String(m.label || '').match(/Jogo\s*(\d+)/i); return g ? Number(g[1]) : 0; })(),

@@ -106,6 +106,12 @@ AppStore._overlayResultOnMatch(m4, { matchId: 'm-x', scoreP1: null, scoreP2: nul
                                      pendingResult: { proposedByName: 'Fulano', scoreP1: 6, scoreP2: 4 } });
 ok(!!m4.pendingResult, 'a proposta entra');
 ok(m4.winner == null, 'e o jogo segue indeciso — não inventamos resultado');
+AppStore._overlayResultOnMatch(m4, {
+  matchId: 'm-x', sets: [{ gamesP1: 6, gamesP2: 4 }, { gamesP1: 5, gamesP2: 7 }],
+  updatedAt: '2026-09-07T19:49:42.622Z'
+});
+eq(m4.updatedAt, '2026-09-07T19:49:42.622Z', 'placar parcial também traz o carimbo que ordena a novidade');
+eq(m4.sets.length, 2, 'e mantém seus sets sem inventar vencedor');
 
 console.log('\n5. Empate e W.O. contam como RESULTADO (não são "não sei")');
 var m5 = matchConfirmado();

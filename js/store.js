@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.2.16';
+window.SCOREPLACE_VERSION = '2.2.17';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -11366,7 +11366,7 @@ window.AppStore = {
 
   // Campos de RESULTADO que vivem no subdoc (o resto do match = ESTRUTURA, fica no
   // doc do torneio). Sobrepõe esses campos do subdoc no objeto match da estrutura.
-  _matchResultFields: ['scoreP1', 'scoreP2', 'winner', 'draw', 'sets', 'setsWonP1', 'setsWonP2', 'totalGamesP1', 'totalGamesP2', 'fixedSet', 'resultAt', 'startedAt', 'pendingResult', 'wo', 'woAbsent', 'woAbsentSide'],
+  _matchResultFields: ['scoreP1', 'scoreP2', 'winner', 'draw', 'sets', 'setsWonP1', 'setsWonP2', 'totalGamesP1', 'totalGamesP2', 'fixedSet', 'resultAt', 'updatedAt', 'startedAt', 'pendingResult', 'wo', 'woAbsent', 'woAbsentSide'],
   /* ⛔ PROPOSTA PENDENTE NÃO APAGA RESULTADO CONFIRMADO.
    *
    * MEDIDO NA CONFRA (28/ago/2026), e é o relato "lancei os jogos ontem e agora
