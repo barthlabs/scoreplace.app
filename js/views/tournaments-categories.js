@@ -1980,10 +1980,12 @@ function _confirmMergeCategories(tId, sourceCat, targetCat) {
     }
 }
 
-// Execute the actual merge
-function _executeMerge(tId, sourceCat, targetCat, mergedName) {
-    var t = window._findTournamentById(tId);
-    if (!t) return;
+// Reapplies one merge intent to whichever tournament snapshot it receives.
+// The caller uses it once for the live UI and again inside commitTournamentTx.
+function _applyCategoryMerge(t, sourceCat, targetCat, mergedName, timestamp) {
+    if (!t) return false;
+    var _mergeCats = t.combinedCategories || [];
+    if (_mergeCats.indexOf(sourceCat) === -1 && _mergeCats.indexOf(targetCat) === -1) return false;
 
     var parts = t.participants ? (Array.isArray(t.participants) ? t.participants : Object.values(t.participants)) : [];
 
@@ -2063,20 +2065,25 @@ function _executeMerge(tId, sourceCat, targetCat, mergedName) {
         mergedName: mergedName,
         sourceCat: sourceCat,
         targetCat: targetCat,
-        timestamp: Date.now(),
+        timestamp: timestamp || Date.now(),
         participants: premergeMap // email → category before this merge (sourceCat or targetCat)
     };
     t.mergeHistory.push(mergeRecord);
 
-    // Log action
-    window.AppStore.logAction(tId, 'Categorias mescladas: ' + sourceCat + ' + ' + targetCat + ' → ' + mergedName);
+    return true;
+}
 
-    // Persist — merge is handled as one compound update and will be migrated
-    // together with its undo flow so its history and bracket references remain atomic.
-    if (window.FirestoreDB && window.FirestoreDB.saveTournament) {
-        window.FirestoreDB.saveTournament(t);
-    } else {
-        window.AppStore.sync();
+// Execute the actual merge
+function _executeMerge(tId, sourceCat, targetCat, mergedName) {
+    var t = window._findTournamentById(tId);
+    if (!t) return;
+    var timestamp = Date.now();
+    if (!_applyCategoryMerge(t, sourceCat, targetCat, mergedName, timestamp)) return;
+    window.AppStore.logAction(tId, 'Categorias mescladas: ' + sourceCat + ' + ' + targetCat + ' → ' + mergedName);
+    if (window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
+        window.AppStore.commitTournamentTx(tId, function(ft) {
+            return _applyCategoryMerge(ft, sourceCat, targetCat, mergedName, timestamp);
+        });
     }
 
     if (typeof showNotification === 'function') {
@@ -2509,10 +2516,12 @@ function _unmergeCategoryAction(tId, catName) {
     );
 }
 
-function _executeUnmerge(tId, mergeIdx) {
-    var t = window._findTournamentById(tId);
-    if (!t || !t.mergeHistory || !t.mergeHistory[mergeIdx]) return;
-
+function _applyCategoryUnmerge(t, mergeIdentity) {
+    if (!t || !t.mergeHistory || !mergeIdentity) return false;
+    var mergeIdx = t.mergeHistory.findIndex(function(item) {
+        return item && item.timestamp === mergeIdentity.timestamp && item.mergedName === mergeIdentity.mergedName && item.sourceCat === mergeIdentity.sourceCat && item.targetCat === mergeIdentity.targetCat;
+    });
+    if (mergeIdx < 0) return false;
     var record = t.mergeHistory[mergeIdx];
     var mergedName = record.mergedName;
     var sourceCat = record.sourceCat;
@@ -2580,30 +2589,37 @@ function _executeUnmerge(tId, mergeIdx) {
     // Remove this merge record from history
     t.mergeHistory.splice(mergeIdx, 1);
 
-    // Log action
-    window.AppStore.logAction(tId, 'Mesclagem desfeita: ' + mergedName + ' → ' + sourceCat + ' + ' + targetCat);
+    return true;
+}
 
-    // Persist
-    if (window.FirestoreDB && window.FirestoreDB.saveTournament) {
-        window.FirestoreDB.saveTournament(t);
-    } else {
-        window.AppStore.sync();
+function _executeUnmerge(tId, mergeIdx) {
+    var t = window._findTournamentById(tId);
+    if (!t || !t.mergeHistory || !t.mergeHistory[mergeIdx]) return;
+    var record = t.mergeHistory[mergeIdx];
+    var mergeIdentity = { timestamp: record.timestamp, mergedName: record.mergedName, sourceCat: record.sourceCat, targetCat: record.targetCat };
+    if (!_applyCategoryUnmerge(t, mergeIdentity)) return;
+    window.AppStore.logAction(tId, 'Mesclagem desfeita: ' + mergeIdentity.mergedName + ' → ' + mergeIdentity.sourceCat + ' + ' + mergeIdentity.targetCat);
+    if (window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
+        window.AppStore.commitTournamentTx(tId, function(ft) { return _applyCategoryUnmerge(ft, mergeIdentity); });
     }
 
     if (typeof showNotification === 'function') {
-        showNotification(_t('cat.unmerged'), _t('cat.unmergedMsg', { merged: mergedName, src: sourceCat, target: targetCat }), 'success');
+        showNotification(_t('cat.unmerged'), _t('cat.unmergedMsg', { merged: mergeIdentity.mergedName, src: mergeIdentity.sourceCat, target: mergeIdentity.targetCat }), 'success');
     }
 
     // Re-render
     setTimeout(function() { window._refreshCatMgr(tId); }, 100);
 }
 
-// Unmerge without mergeHistory — infer from name pattern
-function _executeInferredUnmerge(tId, mergedName, inferredCats) {
-    var t = window._findTournamentById(tId);
-    if (!t) return;
+// Reapply an inferred undo to a fresh snapshot when no historical merge record exists.
+function _applyInferredCategoryUnmerge(t, mergedName, inferredCats) {
+    if (!t || !Array.isArray(inferredCats) || inferredCats.length < 2) return false;
 
     var parts = t.participants ? (Array.isArray(t.participants) ? t.participants : Object.values(t.participants)) : [];
+    var _hasMerged = (t.combinedCategories || []).indexOf(mergedName) !== -1 || parts.some(function(p) {
+        return p && typeof p === 'object' && window._getParticipantCategories(p).indexOf(mergedName) !== -1;
+    });
+    if (!_hasMerged) return false;
 
     // Restore participants to their original categories using p.originalCategory
     parts.forEach(function(p) {
@@ -2646,14 +2662,16 @@ function _executeInferredUnmerge(tId, mergedName, inferredCats) {
         t.mergeHistory = t.mergeHistory.filter(function(mh) { return mh.mergedName !== mergedName; });
     }
 
-    // Log action
-    window.AppStore.logAction(tId, 'Mesclagem desfeita: ' + mergedName + ' → ' + inferredCats.join(' + '));
+    return true;
+}
 
-    // Persist
-    if (window.FirestoreDB && window.FirestoreDB.saveTournament) {
-        window.FirestoreDB.saveTournament(t);
-    } else {
-        window.AppStore.sync();
+// Unmerge without mergeHistory — infer from name pattern
+function _executeInferredUnmerge(tId, mergedName, inferredCats) {
+    var t = window._findTournamentById(tId);
+    if (!_applyInferredCategoryUnmerge(t, mergedName, inferredCats)) return;
+    window.AppStore.logAction(tId, 'Mesclagem desfeita: ' + mergedName + ' → ' + inferredCats.join(' + '));
+    if (window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
+        window.AppStore.commitTournamentTx(tId, function(ft) { return _applyInferredCategoryUnmerge(ft, mergedName, inferredCats); });
     }
 
     if (typeof showNotification === 'function') {

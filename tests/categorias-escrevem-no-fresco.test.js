@@ -12,4 +12,11 @@ const assign = body('_assignParticipantCategory', '// Category assignment notifi
   ok(/freshParts/.test(code) && /freshP/.test(code), name + ' reencontra o participante no elenco fresco');
 });
 ok(/_removeKey/.test(remove) && /_moveKey/.test(move) && /_assignKey/.test(assign), 'cada ato usa uma identidade estável, nunca o índice da tela');
+const merge = body('_executeMerge', '// Remove a participant');
+const unmerge = body('_executeUnmerge', '// Unmerge without mergeHistory');
+const inferred = body('_executeInferredUnmerge', '// Assign an uncategorized participant');
+[['mesclagem', merge, '_applyCategoryMerge'], ['desfazer histórico', unmerge, '_applyCategoryUnmerge'], ['desfazer inferido', inferred, '_applyInferredCategoryUnmerge']].forEach(([name, code, apply]) => {
+  ok(code.indexOf('AppStore.commitTournamentTx') >= 0 && code.indexOf(apply) >= 0, name + ' reaplica a intenção no documento fresco');
+  ok(!/saveTournament\(|AppStore\.sync\(/.test(code), name + ' não regrava snapshot inteiro');
+});
 if (fail) process.exit(1);
