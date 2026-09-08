@@ -1523,6 +1523,7 @@ const SUITES = [
   // p1Name/p2Name — vira placar creditado errado. Agora: 2x2 ou nao formou.
   'tests/dupla-casual-nao-perde-jogador.test.js',
   'tests/formacao-de-duplas-casual.test.js',
+  'tests/iniciar-torneio-nao-sobrescreve-placar.test.js',
   // L3.P1: troféus e backfill liam host/guest inexistentes e zeravam as
   // estatísticas. O núcleo usa playerUids/players/result, igual ao banco real.
   'tests/casual-stats-canonicos.test.js',

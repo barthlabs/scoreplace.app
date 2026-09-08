@@ -1291,16 +1291,25 @@ window._editParticipantName = function(tId, oldName) {
 window._startTournament = function (tId) {
   const t = window._findTournamentById(tId);
   if (!t) return;
-  t.tournamentStarted = Date.now();
-  // Se não houver data de início, preencher com a data atual
-  if (!t.startDate) {
-    const now = new Date();
-    const pad = (v) => String(v).padStart(2, '0');
-    t.startDate = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate()) + 'T' + pad(now.getHours()) + ':' + pad(now.getMinutes());
+  const startedAt = Date.now();
+  const now = new Date();
+  const pad = (v) => String(v).padStart(2, '0');
+  const startDate = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate()) + 'T' + pad(now.getHours()) + ':' + pad(now.getMinutes());
+  const applyStart = function(freshT) {
+    if (!freshT.tournamentStarted) freshT.tournamentStarted = startedAt;
+    if (!freshT.startDate) freshT.startDate = startDate;
+    freshT.status = 'in_progress';
+  };
+  // Reaplica somente o início no documento FRESCO. `sync()` serializava a
+  // fotografia local inteira e podia desfazer um placar que chegasse enquanto o
+  // organizador ainda estava nesta tela.
+  if (!window.AppStore || typeof window.AppStore.mutate !== 'function') {
+    const message = 'Não foi possível iniciar o torneio com segurança. Atualize o aplicativo e tente novamente.';
+    if (typeof window._error === 'function') window._error('startTournament: AppStore.mutate indisponível');
+    if (typeof showNotification === 'function') showNotification('Início não salvo', message, 'error');
+    return;
   }
-  // Status passa a ser em andamento
-  t.status = 'in_progress';
-  window.AppStore.sync();
+  window.AppStore.mutate(tId, applyStart);
   if (typeof showNotification === 'function') showNotification(_t('participants.tournamentStarted'), _t('participants.tournamentStartedMsg'), 'success');
   // Re-render current view
   const hash = window.location.hash;

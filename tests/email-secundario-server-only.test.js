@@ -121,6 +121,16 @@ console.log('\n⑥ o cliente não escreve mais nada deste fluxo\n');
   ok(/httpsCallable\('confirmSecondaryEmail'\)/.test(codigo), 'a confirmação chama confirmSecondaryEmail');
   ok(codigo.indexOf('_checkEmailLinkIntent') === -1, '⛔ o fallback morto de escrita direta foi removido');
   ok(codigo.indexOf('scoreplace_linkEmailIntent') === -1, '   e a chave de localStorage dele também');
+
+  /* Remover o próprio e-mail continua sendo a única escrita cliente permitida
+   * para essa lista. O contrato não pode voltar a apontar para ownerUid vindo de
+   * URL/localStorage ou para outro perfil. */
+  const unlink = codigo.slice(codigo.indexOf('window._profileUnlinkEmail = function'),
+    codigo.indexOf('window._profileUnlinkEmail = function') + 1000);
+  ok(/\.collection\('users'\)\.doc\(cu\.uid\)\.update\(\{\s*linkedEmails: linked\s*\}\)/.test(unlink),
+    'remoção escreve somente users/{cu.uid}.linkedEmails');
+  ok(!/ownerUid|intent\.|\.doc\(email\)/.test(unlink),
+    '⛔ remoção não aceita dono ou documento vindos do e-mail/link');
 }
 
 console.log('\n⑦ as Functions existem, com o contrato certo\n');

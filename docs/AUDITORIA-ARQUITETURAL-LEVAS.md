@@ -776,6 +776,17 @@ suítes `functions/test-*`. **As lacunas medidas:**
 | Nenhum teste de Rules para `users`, `notifications`, `presences`, `magicLinks` | os 7 `rules-*.test.js` não cobrem essas quatro |
 | Nenhum gate de paridade web × bundle nativo | a divergência do item (9) não é detectada por nada |
 
+**L4.P7 — cobertura das fronteiras já decididas (08/set/2026).** Sem alterar Rules,
+autoridade de `linkedEmails` ou o bundle nativo, a lacuna mecânica de cobertura foi reduzida:
+`rules-privileged-fields` agora tenta os **15** campos privilegiados em `create` e `update`
+e prova a recusa das duas operações no emulador. `email-secundario-server-only` também
+trava a única exceção cliente ainda admitida: remover e-mail vinculado só pode atualizar
+`users/{cu.uid}.linkedEmails`, nunca um `ownerUid`, `intent` ou documento derivado do link.
+
+Resultado da execução: 36 asserções da Rule e 70 do fluxo de e-mail passaram. Isto não
+transforma `linkedEmails` em campo server-only, não fecha a enumeração de `users` e não
+resolve a paridade do app nativo; são decisões e bloqueios preservados acima.
+
 **Classificação exigida pela leva.**
 
 *DECISÃO JÁ ADOTADA (registro, não mudança).* (a) Token, template e destinatário do e-mail
@@ -2777,6 +2788,13 @@ de `pendingDraw` e a edição de categoria técnica deixaram de chamar `syncImme
 expressam somente sua alteração em `AppStore.mutate`, que a reaplica sobre o documento fresco.
 Esses ajustes administrativos não podem mais regravar placar, chave ou novidade que chegaram em
 outra sessão enquanto a tela permanecia aberta.
+
+**L7.P1.6 — início do torneio migrou para mutação fresca (08/set/2026).** A ação
+`_startTournament` alterava `tournamentStarted`, `startDate` e `status` na cópia local e
+chamava `sync()`, que persistia a fotografia inteira do organizador. Agora ela expressa apenas
+esses três campos em `AppStore.mutate`: a transação reaplica a mudança sobre o documento fresco,
+mantém um carimbo/data já existentes e preserva placar, chave e novidades concorrentes. O gate
+`iniciar-torneio-nao-sobrescreve-placar` exige esse caminho e proíbe a mutação prévia do snapshot.
 
 **Conclusão desta etapa.** A porta canônica já existe e é `AppStore.mutate` para alterações do
 documento de torneio; portas especializadas são a escolha para presença, inscrição, dupla e

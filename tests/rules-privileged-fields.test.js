@@ -65,6 +65,22 @@ const S = v => ({ stringValue: v });
   out.ataquePlanExp = await req('PATCH', 'users/' + A + '?updateMask.fieldPaths=planExpiresAt', A,
     { fields: { planExpiresAt: S('2099-01-01') } });
 
+  // Os outros campos privilegiados não podem virar uma brecha só porque o
+  // primeiro teste histórico cobria quatro deles. O tipo não é relevante para
+  // esta fronteira: Rules decide por chave, então uma string basta para provar
+  // que cada chave é recusada no update e no create.
+  const extras = ['dupDismissed', 'dupDismissedInfo', 'dupSuspect', 'nameConflict',
+    'phoneSource', 'phoneSetBy', 'phoneSetAt', 'friends', 'friendRequestsSent',
+    'friendRequestsReceived', 'friendRequestsSentAt'];
+  out.ataquesExtras = {};
+  out.criaComExtras = {};
+  for (const field of extras) {
+    out.ataquesExtras[field] = await req('PATCH', 'users/' + A + '?updateMask.fieldPaths=' + field, A,
+      { fields: { [field]: S('forjado') } });
+    out.criaComExtras[field] = await req('PATCH', 'users/uid_novo_' + field, 'uid_novo_' + field,
+      { fields: { displayName: S('Novo'), [field]: S('forjado') } });
+  }
+
   // ── USO LEGÍTIMO tem que continuar passando (senão o fix quebra o app) ──
   out.editaProprioNome = await req('PATCH', 'users/' + A + '?updateMask.fieldPaths=displayName', A,
     { fields: { displayName: S('Novo Nome') } });
@@ -127,6 +143,13 @@ ok(novo.ataqueMergedInto === 403,
 ok(novo.ataqueMergedAt === 403, '🔒 mergedAt negado (got ' + novo.ataqueMergedAt + ')');
 ok(novo.ataquePlan === 403, '🔒 plan=pro (Pro de graça) negado (got ' + novo.ataquePlan + ')');
 ok(novo.ataquePlanExp === 403, '🔒 planExpiresAt negado (got ' + novo.ataquePlanExp + ')');
+['dupDismissed', 'dupDismissedInfo', 'dupSuspect', 'nameConflict', 'phoneSource', 'phoneSetBy', 'phoneSetAt',
+  'friends', 'friendRequestsSent', 'friendRequestsReceived', 'friendRequestsSentAt'].forEach((field) => {
+  ok(novo.ataquesExtras[field] === 403,
+    '🔒 update de ' + field + ' negado (got ' + novo.ataquesExtras[field] + ')');
+  ok(novo.criaComExtras[field] === 403,
+    '🔒 create com ' + field + ' negado (got ' + novo.criaComExtras[field] + ')');
+});
 ok(novo.createComMergedInto === 403,
   '🔒 CREATE já com mergedInto negado — senão bastava apagar e recriar o perfil (got ' + novo.createComMergedInto + ')');
 
