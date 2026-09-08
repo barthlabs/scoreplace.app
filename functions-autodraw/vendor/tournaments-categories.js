@@ -2071,7 +2071,8 @@ function _executeMerge(tId, sourceCat, targetCat, mergedName) {
     // Log action
     window.AppStore.logAction(tId, 'Categorias mescladas: ' + sourceCat + ' + ' + targetCat + ' → ' + mergedName);
 
-    // Persist — use FirestoreDB.saveTournament directly for reliability
+    // Persist — merge is handled as one compound update and will be migrated
+    // together with its undo flow so its history and bracket references remain atomic.
     if (window.FirestoreDB && window.FirestoreDB.saveTournament) {
         window.FirestoreDB.saveTournament(t);
     } else {
@@ -2139,11 +2140,17 @@ function _executeRemoveFromCategory(tId, pIdx, category) {
     // Log action
     window.AppStore.logAction(tId, 'Participante removido da categoria: ' + pName + ' ← ' + category);
 
-    // Persist
-    if (window.FirestoreDB && window.FirestoreDB.saveTournament) {
-        window.FirestoreDB.saveTournament(t);
-    } else {
-        window.AppStore.sync();
+    var _removeKey = p.uid || p.email || p.displayName || p.name || '';
+    if (window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
+        window.AppStore.commitTournamentTx(tId, function(ft) {
+            var freshParts = Array.isArray(ft.participants) ? ft.participants : Object.values(ft.participants || {});
+            var freshP = freshParts.filter(function(x) { return x && typeof x === 'object' && (x.uid === _removeKey || x.email === _removeKey || x.displayName === _removeKey || x.name === _removeKey); })[0];
+            if (!freshP) return false;
+            var cats = window._getParticipantCategories(freshP).filter(function(c) { return c !== category; });
+            window._setParticipantCategories(freshP, cats);
+            if (!cats.length) { freshP.wasUncategorized = true; freshP.categorySource = 'organizador'; }
+            return true;
+        });
     }
 
     if (typeof showNotification === 'function') {
@@ -2175,10 +2182,17 @@ window._moveBetweenCategories = function(tId, pIdx, sourceCat, targetCat) {
     if (!Array.isArray(t.participants)) t.participants = parts;
     window.AppStore.logAction(tId, 'Participante movido: ' + pName + ' ' + sourceCat + ' → ' + targetCat);
 
-    if (window.FirestoreDB && window.FirestoreDB.saveTournament) {
-        window.FirestoreDB.saveTournament(t);
-    } else {
-        window.AppStore.sync();
+    var _moveKey = p.uid || p.email || p.displayName || p.name || '';
+    if (window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
+        window.AppStore.commitTournamentTx(tId, function(ft) {
+            var freshParts = Array.isArray(ft.participants) ? ft.participants : Object.values(ft.participants || {});
+            var freshP = freshParts.filter(function(x) { return x && typeof x === 'object' && (x.uid === _moveKey || x.email === _moveKey || x.displayName === _moveKey || x.name === _moveKey); })[0];
+            if (!freshP) return false;
+            var cats = window._getParticipantCategories(freshP).filter(function(c) { return c !== sourceCat; });
+            if (cats.indexOf(targetCat) === -1) cats.push(targetCat);
+            window._setParticipantCategories(freshP, cats); freshP.categorySource = 'organizador'; delete freshP.wasUncategorized;
+            return true;
+        });
     }
 
     if (typeof showNotification === 'function') {
@@ -2680,11 +2694,22 @@ function _assignParticipantCategory(tId, pIdx, category) {
     // Add notification for the participant
     _addCategoryNotification(t, parts[pIdx], category);
 
-    // Persist — use FirestoreDB.saveTournament directly for reliability
-    if (window.FirestoreDB && window.FirestoreDB.saveTournament) {
-        window.FirestoreDB.saveTournament(t);
-    } else {
-        window.AppStore.sync();
+    var _assignKey = (p && typeof p === 'object') ? (p.uid || p.email || p.displayName || p.name || '') : String(p || '');
+    if (window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
+        window.AppStore.commitTournamentTx(tId, function(ft) {
+            var freshParts = Array.isArray(ft.participants) ? ft.participants : Object.values(ft.participants || {});
+            var freshIdx = freshParts.findIndex(function(x) {
+                if (typeof x === 'string') return x === _assignKey;
+                return x && typeof x === 'object' && (x.uid === _assignKey || x.email === _assignKey || x.displayName === _assignKey || x.name === _assignKey);
+            });
+            if (freshIdx < 0) return false;
+            var freshP = freshParts[freshIdx];
+            if (typeof freshP === 'string') freshP = freshParts[freshIdx] = { name: freshP, displayName: freshP, categories: [category], category: category, categorySource: 'organizador', wasUncategorized: true };
+            else { window._addParticipantCategory(freshP, category); freshP.categorySource = 'organizador'; freshP.wasUncategorized = true; }
+            if (!Array.isArray(ft.participants)) ft.participants = freshParts;
+            _addCategoryNotification(ft, freshP, category);
+            return true;
+        });
     }
 
     if (typeof showNotification === 'function') {

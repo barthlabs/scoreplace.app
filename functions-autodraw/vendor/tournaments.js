@@ -731,8 +731,10 @@ window._drainWaitlistsIfOpen = function(t, opts) {
       ? window._clearAllWaitlists(t)
       : (function () { var p = (t.standbyParticipants || []).concat(t.waitlist || []); t.standbyParticipants = []; t.waitlist = []; t.monarchWaitlist = {}; return p; })();
     promote(_wlAll);
-    if (opts && opts.save && window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
-        window.FirestoreDB.saveTournament(t).catch(function() {});
+    if (opts && opts.save && window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
+        window.AppStore.commitTournamentTx(t.id, function(ft) {
+            return window._drainWaitlistsIfOpen(ft, { save: false }) > 0;
+        }).catch(function() {});
     }
     if (promoted > 0 && window.AppStore && typeof window.AppStore.logAction === 'function') {
         window.AppStore.logAction(t.id, promoted + ' participante(s) promovido(s) da lista de espera (inscrições abertas)');
