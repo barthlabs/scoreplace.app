@@ -25,4 +25,6 @@ ok(/commitTournamentTx/.test(autoAssign) && /skipPersist/.test(autoAssign) && !/
 ok(/commitTournamentTx/.test(hydrate) && /_simplifySingletonCategories\(ft\)/.test(hydrate) && !/saveTournament\(|AppStore\.sync\(/.test(hydrate), 'normalização passiva de categorias usa documento fresco');
 const resolveRequest = body('_resolveCategoryChange', 'window._approveCategoryChange');
 ok(/commitTournamentTx/.test(resolveRequest) && /reqIdentity/.test(resolveRequest) && !/saveTournament\(|AppStore\.sync\(/.test(resolveRequest), 'aprovação de pedido identifica e resolve o pedido fresco');
+const profileDirect = body('_applyProfileCategoryDirect', 'window._requestCategoryChangeFromProfile');
+ok(/commitTournamentTx/.test(profileDirect) && /freshMe/.test(profileDirect) && !/saveTournament\(|AppStore\.sync\(/.test(profileDirect), 'categoria direta do perfil atualiza o inscrito fresco');
 if (fail) process.exit(1);

@@ -3261,9 +3261,22 @@ function _applyProfileCategoryDirect(t, me, parts, cat, uid, fromCat) {
     else { me.categories = [cat]; me.category = cat; }
     me.categorySource = 'perfil';
     delete me.wasUncategorized; delete me.autoWeakestCat; delete me.staleCat;
-    if (window.FirestoreDB && window.FirestoreDB.saveTournament) {
-        if (!Array.isArray(t.participants)) t.participants = parts;
-        try { window.FirestoreDB.saveTournament(t); } catch (_e) {}
+    if (window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
+        window.AppStore.commitTournamentTx(t.id, function(ft) {
+            var freshParts = Array.isArray(ft.participants) ? ft.participants : Object.values(ft.participants || {});
+            var freshMe = freshParts.find(function(p) {
+                if (!p || typeof p !== 'object') return false;
+                var ids = (typeof window._participantUids === 'function') ? window._participantUids(p) : [p.uid].filter(Boolean);
+                return ids.indexOf(uid) !== -1;
+            });
+            if (!freshMe) return false;
+            if (typeof window._setParticipantCategories === 'function') window._setParticipantCategories(freshMe, [cat]);
+            else { freshMe.categories = [cat]; freshMe.category = cat; }
+            freshMe.categorySource = 'perfil'; delete freshMe.wasUncategorized; delete freshMe.autoWeakestCat; delete freshMe.staleCat;
+            if (Array.isArray(ft.categoryChangeRequests)) ft.categoryChangeRequests = ft.categoryChangeRequests.filter(function(r) { return !(r.uid === uid && r.status === 'pending'); });
+            if (!Array.isArray(ft.participants)) ft.participants = freshParts;
+            return true;
+        });
     }
     if (uid && typeof window._sendUserNotification === 'function') {
         try {
