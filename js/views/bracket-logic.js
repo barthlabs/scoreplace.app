@@ -5802,32 +5802,40 @@ window._publishPendingDraw = async function (tId) {
   var t = store && store.tournaments.find(function (x) { return String(x.id) === String(tId); });
   if (!t || !t.pendingDraw) return;
   if (!(store.isOrganizer && store.isOrganizer(t))) return;
-  var pd = t.pendingDraw;
-  // Move o sorteio pra produção (vira público).
-  t.rounds = Array.isArray(pd.rounds) ? pd.rounds : [];
-  if (pd.standings) t.standings = pd.standings;
-  if (pd.sitOutHistory) t.sitOutHistory = pd.sitOutHistory;
-  if (pd.opponentHistory) t.opponentHistory = pd.opponentHistory;
-  // v2.7.9: a lista de espera do Rei/Rainha mora em t.monarchWaitlist (sobra da
-  // divisão por 4). O staged draw a calcula no servidor mas o publish não a
-  // carregava → após Publicar a espera sumia. Carrega aqui.
-  if (pd.monarchWaitlist) t.monarchWaitlist = pd.monarchWaitlist;
-  t.status = pd.status || 'active';
-  t.drawVisibility = t.drawVisibility || 'public';
-  // v2.7.8: PUBLICAR um sorteio automático É INICIAR o torneio — mesma regra
-  // canônica de _generateNextRound (SORTEAR É INICIAR). O staged draw nasce no
-  // servidor em t.pendingDraw e NUNCA passa pelo gerador no cliente (o poller
-  // pula torneios staged), então tournamentStarted nunca era marcado e o banner
-  // "Iniciar Torneio" reaparecia depois de Publicar. Marca aqui, no momento em
-  // que o sorteio vai a público. Manual (drawManual===true) mantém o passo.
-  if (t.drawManual !== true && !t.tournamentStarted) {
-    var _genMs = pd.generatedAt ? new Date(pd.generatedAt).getTime() : NaN;
-    t.tournamentStarted = (!isNaN(_genMs) && _genMs > 0) ? _genMs : Date.now();
-  }
-  t.lastAutoDrawAt = pd.generatedAt || t.lastAutoDrawAt || new Date().toISOString();
-  t.pendingDraw = null;
-  t.updatedAt = new Date().toISOString();
-  try { await store.syncImmediate(t.id); } catch (e) { window._warn('[publishPendingDraw] save falhou', e); }
+  var pd = null;
+  // Publicar precisa re-aplicar a transição sobre o documento fresco: o organizador
+  // pode estar revisando enquanto a CF recebe placar ou atualiza outro campo. Salvar a
+  // fotografia local inteira aqui era capaz de apagar essa novidade recém-chegada.
+  var _publish = function (target) {
+    var freshPd = target && target.pendingDraw;
+    if (!freshPd) return false;
+    pd = freshPd;
+    target.rounds = Array.isArray(freshPd.rounds) ? freshPd.rounds : [];
+    if (freshPd.standings) target.standings = freshPd.standings;
+    if (freshPd.sitOutHistory) target.sitOutHistory = freshPd.sitOutHistory;
+    if (freshPd.opponentHistory) target.opponentHistory = freshPd.opponentHistory;
+    // A lista de espera do Rei/Rainha é produzida no sorteio em revisão.
+    if (freshPd.monarchWaitlist) target.monarchWaitlist = freshPd.monarchWaitlist;
+    target.status = freshPd.status || 'active';
+    target.drawVisibility = target.drawVisibility || 'public';
+    if (target.drawManual !== true && !target.tournamentStarted) {
+      var _genMs = freshPd.generatedAt ? new Date(freshPd.generatedAt).getTime() : NaN;
+      target.tournamentStarted = (!isNaN(_genMs) && _genMs > 0) ? _genMs : Date.now();
+    }
+    target.lastAutoDrawAt = freshPd.generatedAt || target.lastAutoDrawAt || new Date().toISOString();
+    target.pendingDraw = null;
+  };
+  var _saved = false;
+  try {
+    if (typeof store.mutate === 'function') {
+      _saved = await store.mutate(t.id, _publish, 'Sorteio em revisão publicado');
+    } else {
+      // Bundle legado: conserva o caminho anterior, sem fingir que ele é transacional.
+      _publish(t);
+      _saved = await store.syncImmediate(t.id);
+    }
+  } catch (e) { window._warn('[publishPendingDraw] save falhou', e); }
+  if (!_saved || !pd) return;
   // Agora SIM dispara as notificações (idênticas ao sorteio normal).
   var roundIndex = (typeof pd.roundIndex === 'number') ? pd.roundIndex : (t.rounds.length - 1);
   try { if (window._notifyDrawPersonalized) window._notifyDrawPersonalized(t, t.id, { type: pd.firstDraw ? 'draw' : 'new_round', roundIndex: roundIndex }); } catch (e) {}
@@ -5873,4 +5881,3 @@ window._isLigaAutoDraw = function (t) {
 // cliente×CF). Apagada em vez de mantida dormente: uma função de sorteio viva no
 // cliente é a corrida a uma linha de voltar. Quem sorteia: functions-autodraw
 // (autoDraw, cron 1min) via draw-core.generateLigaRound — o MESMO motor, vendored.
-

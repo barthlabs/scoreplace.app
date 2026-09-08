@@ -1,3 +1,9 @@
+## 2.2.22 — publicar sorteio preserva resultado concorrente (08/set/2026)
+
+Publicar uma chave que estava em revisão passou a aplicar apenas essa transição sobre o estado
+atual do torneio. Um placar, W.O. ou outra atualização que chegou enquanto o organizador
+conferia o sorteio não é mais vulnerável a ser apagado pela cópia antiga do navegador.
+
 ## 2.2.21 — vencedor consistente nos avisos e tie-break legível (08/set/2026)
 
 Os avisos de resultado passaram a usar a mesma regra de vencedor da chave, inclusive quando uma dupla mudou de nome depois do jogo. A formatação do tie-break preserva pontos menores e separados em todos os cards.

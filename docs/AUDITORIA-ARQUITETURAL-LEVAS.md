@@ -2733,6 +2733,16 @@ mutator idempotente que localiza o mesmo `matchId` no documento fresco dentro de
 antiga contra um resultado que já chegou ao documento fresco e prova as duas operações:
 definir e remover a quadra.
 
+**L7.P1.2 — publicação do sorteio em revisão migrou para mutação fresca (08/set/2026).**
+Publicada como 2.2.22. `window._publishPendingDraw` transferia a chave revisada e em seguida
+chamava `syncImmediate`; uma cópia local anterior podia, portanto, regravar o documento inteiro
+e remover um placar recebido durante a revisão. A transferência agora é um mutator idempotente
+em `AppStore.mutate`: lê `pendingDraw` no documento transacional, move somente os campos que
+materializam aquele sorteio e conserva todos os outros campos frescos. A notificação só é enviada
+quando a gravação confirma sucesso. O novo gate
+`publicar-sorteio-nao-sobrescreve-resultado.test.js` reproduz uma chave antiga contra um placar
+que chega depois e garante a preservação do resultado, do histórico e da ordem de notificação.
+
 **Conclusão desta etapa.** A porta canônica já existe e é `AppStore.mutate` para alterações do
 documento de torneio; portas especializadas são a escolha para presença, inscrição, dupla e
 resultado isolado. A próxima etapa deve migrar por comportamento, começando pelos 14 usos reais
