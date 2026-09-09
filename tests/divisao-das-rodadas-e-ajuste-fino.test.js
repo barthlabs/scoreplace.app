@@ -34,6 +34,8 @@ console.log('──── divisão das rodadas: igual por padrão, ajuste fino n
 const createUi = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'create-tournament.js'), 'utf8');
 ok(/_rodadasVisiveisDaFase\(t, fi\)[\s\S]{0,300}return reais[\s\S]{0,900}f2-sched-n/.test(createUi),
    '⓪ fase editada e rodadas reais vencem o campo de agendamento de outra fase');
+ok(/fi === 0\) return \{ roundBounds: bounds \}/.test(createUi) && /ps\[fi\]\.roundBounds = bounds/.test(createUi),
+   '⓪ salvar limites grava a fase 0 ou a fase editada, sem cruzar classificatória e eliminatória');
 
 const DIA = 86400000;
 const INI = W._rbMs('2026-09-02T11:17');

@@ -5576,18 +5576,19 @@ window._saveTournamentClickHandler = function() {
            * ele congelaria e deixaria de acompanhar uma mudança de data depois. A validação
            * é toda na LEITURA (`_rbNormaliza`), que devolve null se o arranjo não descrever
            * mais a fase — então um valor velho nunca vira estado inválido. */
-          roundBounds: _rbDoFormulario(),
-          /* E na FASE, quando o torneio já passou da primeira: o campo do topo descreve a
-           * fase INICIAL (mesma regra de `t.endDate`, store.js:14267), então numa fase
-           * posterior ele não seria lido. Só entra quando há torneio em edição e há fase —
-           * criar torneio novo nunca cai aqui. */
+          /* Os limites do topo pertencem EXCLUSIVAMENTE à fase 0. Ao editar uma
+           * fase posterior, enviar roundBounds aqui regravava a classificatória com os
+           * stops da eliminatória — a régua podia até desenhar certo e voltar errada após
+           * salvar. Cada fase persiste somente a própria divisão. */
           ...(function () {
             try {
               var t0 = window._editingTournament;
               var fi = (t0 && t0.currentPhaseIndex) || 0;
-              if (!t0 || !Array.isArray(t0.phases) || fi < 1 || !t0.phases[fi]) return {};
+              var bounds = _rbDoFormulario();
+              if (!t0 || fi === 0) return { roundBounds: bounds };
+              if (!Array.isArray(t0.phases) || !t0.phases[fi]) return {};
               var ps = JSON.parse(JSON.stringify(t0.phases));
-              ps[fi].roundBounds = _rbDoFormulario();
+              ps[fi].roundBounds = bounds;
               return { phases: ps };
             } catch (e) { return {}; }
           })(),
