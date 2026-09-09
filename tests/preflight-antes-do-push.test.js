@@ -89,6 +89,7 @@ function cenario(preflightPassa) {
   fs.writeFileSync(path.join(repo, 'scripts', 'revisar.sh'), '#!/bin/sh\nexit 0\n');
   fs.chmodSync(path.join(repo, 'scripts', 'revisar.sh'), 0o755);
   fs.writeFileSync(path.join(repo, 'scripts', 'check-version-ahead.js'), 'process.exit(0);\n');
+  fs.writeFileSync(path.join(repo, 'scripts', 'check-release-version-fresh.js'), 'process.exit(0);\n');
   fs.writeFileSync(path.join(repo, 'scripts', 'check-release-notes.js'), 'process.exit(0);\n');
   fs.writeFileSync(path.join(repo, 'scripts', 'check-deploy-alignment.js'), 'process.exit(0);\n');
   fs.writeFileSync(path.join(repo, 'package.json'), JSON.stringify({ name: 'x', version: '1.0.0', scripts: {} }));

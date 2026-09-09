@@ -2783,7 +2783,6 @@ if (window._bracketZoom === undefined) window._bracketZoom = 1;
 function renderSingleElimBracket(t, canEnterResult, standbyHtml) {
   var _t = window._t || function(k) { return k; };
   // ── Auto-reparação: gera rodadas futuras se não existirem ──
-  _repairFutureRoundsSafely(t);
 
   // ── Always recompute progressive classification from current match data ──
   if (typeof _updateProgressiveClassification === 'function') {
@@ -3206,8 +3205,8 @@ function renderSingleElimBracket(t, canEnterResult, standbyHtml) {
 // ─── Double Elimination ───────────────────────────────────────────────────────
 function renderDoubleElimBracket(t, canEnterResult, standbyHtml) {
   var _t = window._t || function(k) { return k; };
-  // Auto-reparação para dupla eliminatória também
-  _repairFutureRoundsSafely(t);
+  // A reparação de rodadas futuras é exclusivamente do servidor. Renderizar apenas lê a
+  // chave recebida; uma tela aberta nunca tenta fabricar ou reparar confrontos localmente.
 
   // v1.0.95-beta HOTFIX: removido syncImmediate do render. User: 'fica
   // recarregando de forma que é impossivel apagar esse torneio que insiste
