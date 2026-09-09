@@ -2867,3 +2867,30 @@ fora desse contrato são ferramentas de desenvolvimento (simular sorteio e bots)
 parcial de status no contador e as próprias portas internas `sync`/`syncImmediate`, que não são
 mais chamadas pelos fluxos L7 migrados. Gates dedicados cobrem categorias, inscritos, manutenção,
 status e edição; cada diff funcional recebeu parecer **APROVADO** do Claude.
+
+## L8 — matriz de leitura e projeção (08/set/2026)
+
+`matches` permanece a fonte canônica. `results/{matchId}` é uma projeção server-written para
+autorização por jogo, deep-link e leituras por participante. A medição de consistência desta data
+reparou 71 projeções legadas ausentes no Confra; o conferidor posterior encontrou 214 jogos
+canônicos, nenhuma ausência e nenhuma divergência.
+
+| Tela ou fluxo | Leitura atual | Custo por abertura | Observação |
+|---|---|---|---|
+| Chave | `loadMatchResults(tid)` | uma coleção `results` inteira do torneio | Coalescida por torneio e uma vez por rota. Necessária enquanto o card mescla a projeção na estrutura. |
+| Dashboard | `hydrateMatchResults` para até 5 participações ativas | até 5 coleções inteiras | Uma vez por sessão, mas o custo cresce com todos os jogos de cada torneio e não apenas com os cards mostrados. |
+| Link de jogo | `loadMatchResult(tid, matchId)` | um documento | É o caminho fino correto. |
+| Ficha de jogador | `collectionGroup('results')` limitado a 400 **mais** uma consulta por até 40 torneios, cada uma limitada a 120 | até 41 consultas; a união é deduplicada no navegador | É a maior redundância medida. A consulta agrupada já cobre os mesmos documentos quando regra e índice estão disponíveis; os 40 fallbacks devem virar contingência, não execução paralela. |
+
+**Escrita medida.** A porta `functions-autodraw/_gravaTorneio` usa `write-plan.js`: cada match
+alterado gera uma escrita de `matches` e sua projeção `results` na mesma transação. O gatilho
+`syncSplitMatchResult` preserva compatibilidade para writers antigos e reconstrói o espelho quando
+uma escrita chega diretamente à subcoleção; para o fluxo novo ele deve ser tratado como rede de
+recuperação, não como segunda autoridade. O `replay` continua sendo dado não derivável e é levado
+adiante pelo construtor de espelho.
+
+**Próximo gate L8.** Substituir a execução paralela da ficha por `collectionGroup` como caminho
+primário, usando os 40 reads locais apenas após falha comprovada; medir o fallback e preservar a
+filtragem de sandboxes, placar ausente e identidade do lado. Antes de remover os oito `results`
+órfãos, a limpeza precisa confirmar que nenhum contém placar, W.O. ou replay e apagar somente ids
+fora do conjunto canônico.
