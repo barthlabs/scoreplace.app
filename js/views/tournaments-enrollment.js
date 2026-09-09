@@ -1441,16 +1441,7 @@ window.deenrollCurrentUser = function (tId) {
                         var c2 = document.getElementById('view-container');
                         if (c2) renderTournaments(c2, window.location.hash.split('/')[1]);
                     });
-                } else {
-                    // Fallback: non-transactional save (already removed locally above)
-                    if (window.FirestoreDB && window.FirestoreDB.saveTournament) {
-                        // v1.7.26: DESINSCRIÇÃO É REMOÇÃO DECLARADA — único caminho que pode
-                        // encolher o elenco por `saveTournament`. Sem a flag, o guard do
-                        // saveTournament restaura a pessoa (o elenco nunca encolhe por acidente)
-                        // e a desinscrição não teria efeito. Ver o comentário do guard.
-                        window.FirestoreDB.saveTournament(t, { allowRosterRemoval: true }).catch(function(err) { window._warn('Deenroll save error:', err); });
-                    }
-                }
+                } else { if (window.showNotification) window.showNotification(_t('enroll.error'), _t('enroll.cancelError'), 'error'); }
             },
             null,
             { type: 'warning', confirmText: _t('enroll.cancelEnroll'), cancelText: _t('enroll.keep') }
@@ -1537,34 +1528,20 @@ window._doAddParticipant = function (tId, pName, selectedUid, selectedPhoto, onD
                     });
                     if (_verdictAdd !== 'enrolled') return;
                     if (window._sound) window._sound('sino'); // +Participante concluído
-                    // v2.6.99: Rei/Rainha com rodada em andamento → novo inscrito entra
-                    // na LISTA DE ESPERA; ao juntar 4, forma um grupo automaticamente.
-                    try {
-                        if (typeof window._onParticipantAddedToMonarchRound === 'function') {
-                            var _wlRes = window._onParticipantAddedToMonarchRound(t, participantObj.name, (participantObj.categories && participantObj.categories[0]) || participantObj.category || null);
-                            if (_wlRes.added && window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') window.FirestoreDB.saveTournament(t);
+                    // Rei/Rainha com rodada em andamento: a CF relê a inscrição recém-gravada,
+                    // inclui na espera e forma grupos. O navegador não persiste a chave.
+                    if (selectedUid && typeof window._callCF === 'function') {
+                        window._callCF('reconcileMonarchEnrollment', { tournamentId: String(tId), participantUid: String(selectedUid) }, 'Entre na sua conta para concluir a inscrição.').then(function(_r) {
+                            var _wlRes = (_r && _r.data) || {};
                             if (_wlRes.formed > 0 && typeof showNotification !== 'undefined') showNotification('Novo grupo formado', _wlRes.formed + ' grupo(s) criado(s) a partir da lista de espera.', 'success');
-                        }
-                    } catch (_wlErr) { if (window._warn) window._warn('[monarch waitlist add]', _wlErr); }
+                            if (_wlRes.changed && typeof window._softRefreshView === 'function') window._softRefreshView();
+                        }).catch(function(_wlErr) { if (window._warn) window._warn('[monarch waitlist CF]', _wlErr); });
+                    }
                 }).catch(function(err) {
                     window._warn('Add participant error:', err);
                     if (typeof showNotification !== 'undefined') showNotification(_t('enroll.error'), _t('enroll.addError'), 'error');
                 });
-            } else {
-                // Fallback: non-transactional
-                let arr = Array.isArray(t.participants) ? t.participants : (t.participants ? Object.values(t.participants) : []);
-                arr.push(participantObj);
-                t.participants = arr;
-                if (window._sound) window._sound('sino'); // +Participante concluído (fallback)
-                try {
-                    if (typeof window._onParticipantAddedToMonarchRound === 'function') {
-                        var _wlRes2 = window._onParticipantAddedToMonarchRound(t, participantObj.name, (participantObj.categories && participantObj.categories[0]) || participantObj.category || null);
-                        if (_wlRes2.formed > 0 && typeof showNotification !== 'undefined') showNotification('Novo grupo formado', _wlRes2.formed + ' grupo(s) criado(s) a partir da lista de espera.', 'success');
-                    }
-                } catch (_wlErr2) { if (window._warn) window._warn('[monarch waitlist add]', _wlErr2); }
-                window.FirestoreDB.saveTournament(t);
-                _refresh();
-            }
+            } else { if (typeof showNotification !== 'undefined') showNotification(_t('enroll.error'), _t('enroll.addError'), 'error'); }
     }
 };
 

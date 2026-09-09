@@ -26,7 +26,11 @@ let drawInitial = null;   // v1.2.25: motor do SORTEIO INICIAL (Etapa 3 · fase 
 let integrateLateFn = null; // v1.2.57: integração de tardios no servidor — usado pela integrateLateEntries
 let formLatePairFn = null;  // formar dupla na espera + integrar, atômico — usado pela formLatePair
 let splitLatePairFn = null; // desfazer dupla da espera, atômico — usado pela splitLatePair
-let closeRoundFn = null;    // fecho de rodada no servidor (Suíço-pow2 Opção B) — usado pela closeRound
+let closeRoundFn = null;
+let materializePhaseFn = null;
+let phaseStandingsFn = null;
+let phaseCompleteFn = null;
+let groupTeamStandingsFn = null;    // fecho de rodada no servidor (Suíço-pow2 Opção B) — usado pela closeRound
 let canRecompile = null;
 let hasDrawnBracket = null;  // régua de 'já tem chave' — a MESMA do cliente (matches/rounds/groups)
 let drawWindow = null; // window do shim Node — expõe _calcNextDrawDate (prazo p/ lançar resultado)
@@ -41,6 +45,10 @@ try {
   formLatePairFn = _dc.formLatePairCore;
   splitLatePairFn = _dc.splitLatePairCore;
   closeRoundFn = _dc.closeRoundCore;
+  materializePhaseFn = _dc.materializeNextPhase;
+  phaseStandingsFn = _dc.standingsDaFaseAnterior;
+  phaseCompleteFn = _dc.phaseComplete;
+  groupTeamStandingsFn = _dc.groupTeamStandings;
   canRecompile = _dc.canRecompile;
   hasDrawnBracket = _dc.hasDrawnBracket;
   drawWindow = _dc._window;
@@ -639,6 +647,8 @@ exports.drawRound = onCall(async (request) => {
     const t = await _leTorneio(tx, ref, tId);
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
     const _tAntes = _antesDoMotor(t);
+    if (decisions && decisions.groupConfig) { const g=decisions.groupConfig; t.gruposCount=parseInt(g.numGroups,10)||t.gruposCount; t.gruposClassified=parseInt(g.classPerGroup,10)||t.gruposClassified; if(g.advanceTotal) t.gruposAdvanceTotal=parseInt(g.advanceTotal,10); if(typeof g.equalOnly==='boolean') t.gruposEqualOnly=g.equalOnly; }
+    if (decisions && (decisions.groupConfig || decisions.closeEnrollment)) { t.status='closed'; delete t._suspendedByPanel; delete t._previousStatus; }
     _enrichParticipantsFromProfiles(t); // v1.3.52: gênero/skill/etc. por uid (inscrito grava só uid)
 
     // Re-checa authz sobre o doc FRESCO: entre o read de fora e a transação o organizador
@@ -1409,6 +1419,155 @@ exports.assignMatchCourt = onCall(async (request) => {
     throw new HttpsError('internal', 'Falha ao definir quadra: ' + String((e && e.message) || e).slice(0, 300));
   }
 });
+
+exports.setDefaultTournamentScoring = onCall(async request=>{ const uid=request.auth&&request.auth.uid; if(!uid) throw new HttpsError('unauthenticated','Entre na sua conta.'); const tId=String((request.data&&request.data.tournamentId)||''); const scoring=request.data&&request.data.scoring; if(!tId||!scoring||scoring.type!=='sets') throw new HttpsError('invalid-argument','Formato inválido.'); const ref=db.collection('tournaments').doc(tId),agoraIso=new Date().toISOString(); return db.runTransaction(async tx=>{ const t=await _leTorneio(tx,ref,tId); if(!t) throw new HttpsError('not-found','Torneio não encontrado.'); if(!_isTournamentAdmin(t,uid)) throw _drawFail('permission-denied','Só a organização configura o formato.',{tId,uid}); if(t.scoring&&t.scoring.type==='sets') return {ok:true,changed:false}; const antes=_antesDoMotor(t); t.scoring=Object.assign({},scoring); const b=_gravaTorneio(tx,ref,t,antes,{agoraIso}); return {ok:true,changed:true,tournament:b.clean}; }); });
+
+exports.advanceTournamentPhase = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid;
+  const tId = String((request.data && request.data.tournamentId) || '').trim();
+  const phaseChoices = Array.isArray(request.data && request.data.phaseChoices) ? request.data.phaseChoices : [];
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId || !materializePhaseFn || !phaseStandingsFn || !phaseCompleteFn) {
+    throw new HttpsError('failed-precondition', 'Motor de fases indisponível.');
+  }
+  const ref = db.collection('tournaments').doc(tId);
+  const pre = await ref.get();
+  if (!pre.exists) throw new HttpsError('not-found', 'Torneio não encontrado.');
+  if (!_isTournamentAdmin(pre.data(), uid)) throw _drawFail('permission-denied', 'Só a organização avança a fase.', { tId, uid });
+  await _preloadDrawNames(pre.data());
+  const agoraIso = new Date().toISOString();
+  const out = await db.runTransaction(async (tx) => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização avança a fase.', { tId, uid });
+    if (!phaseCompleteFn(t)) return { ok: false, reason: 'phase-incomplete' };
+    const current = t.currentPhaseIndex || 0;
+    if (!Array.isArray(t.phases) || current + 1 >= t.phases.length) return { ok: false, reason: 'no-next-phase' };
+    const antes = _antesDoMotor(t);
+    // O painel pode ter decidido play-in e rodadas suíças no snapshot da tela.
+    // A CF aceita somente essas duas escolhas de configuração e as reaplica no doc fresco
+    // antes de materializar; nenhum placar, participante ou chave vem do cliente.
+    phaseChoices.forEach((choice, index) => {
+      if (!choice || !t.phases || !t.phases[index]) return;
+      if (typeof choice.bracketResolution === 'string' && choice.bracketResolution.length <= 32) t.phases[index].bracketResolution = choice.bracketResolution;
+      if (Number.isInteger(choice.swissRounds) && choice.swissRounds > 0 && choice.swissRounds <= 30) t.phases[index].swissRounds = choice.swissRounds;
+    });
+    _enrichParticipantsFromProfiles(t);
+    try { if (typeof drawWindow._hydrateMonarchGroups === 'function') drawWindow._hydrateMonarchGroups(t); } catch (e) {}
+    const hasMonarch = (t.rounds || []).some(r => r && Array.isArray(r.monarchGroups) && r.monarchGroups.length) ||
+      (((current === 0 ? (t.groups || []) : (((t.phaseGroups || [])[current]) || []))).some(g => {
+        const ms = (g.matches || []).concat((g.rounds || []).reduce((a, r) => a.concat((r && r.matches) || []), []));
+        return ms.some(m => m && m.isMonarch);
+      }));
+    const tbOpts = { tiebreakers: t.tiebreakers, birthByName: typeof drawWindow._tbBirthByName === 'function' ? drawWindow._tbBirthByName(t) : {} };
+    const standings = g => phaseStandingsFn(g, t, tbOpts, hasMonarch);
+    const next = current + 1;
+    const res = materializePhaseFn(t, standings, 'ph-' + tId + '-' + next);
+    if (!res || !res.ok) return { ok: false, reason: (res && res.error) || 'phase-not-materialized' };
+    if (res.incrementalLeague && typeof drawWindow._phaseGenNextLeagueRound === 'function') drawWindow._phaseGenNextLeagueRound(t, res.phaseIndex);
+    if (res.built && res.built.needsDoubleElim && typeof drawWindow._buildDoubleElimBracket === 'function') drawWindow._buildDoubleElimBracket(t, { phaseIndex: t.currentPhaseIndex });
+    if (res.built && res.built.needsRepechageDoubleElim && typeof drawWindow._buildRepechageDoubleElim === 'function') {
+      const metas = res.built.repMetaByCat && res.built.repMetaByCat.length ? res.built.repMetaByCat : [res.built.repMeta];
+      metas.forEach(meta => drawWindow._buildRepechageDoubleElim(t, meta, { phaseIndex: t.currentPhaseIndex }));
+    }
+    const b = _gravaTorneio(tx, ref, t, antes, { agoraIso });
+    return { ok: true, changed: true, phaseIndex: t.currentPhaseIndex, tournament: b.clean };
+  });
+  if (out.ok) await _notifyAdvancedPhase(out.tournament, tId, out.phaseIndex, agoraIso);
+  return out;
+});
+
+async function _notifyAdvancedPhase(t, tId, phaseIndex, nowIso) {
+  if (!t || t.isSandbox || t.notificationsMuted) return;
+  const ids = new Set();
+  // A fase pode armazenar jogos em matches, rounds ou phaseRounds. A novidade é do
+  // torneio e deve chegar aos inscritos mesmo se o formato ainda não expõe um match plano.
+  (t.participants || []).forEach(p => [p && p.uid, p && p.p1Uid, p && p.p2Uid].forEach(u => u && ids.add(String(u))));
+  const { profByUid } = await _loadLiveNames(ids);
+  const mailed = new Set();
+  for (const participantUid of ids) {
+    const profile = profByUid[participantUid]; if (!profile) continue;
+    const message = '🏆 Nova fase do torneio ' + (t.name || '') + ' disponível. Confira seus jogos.';
+    if (profile.notifyPlatform !== false) await db.collection('users').doc(participantUid).collection('notifications').doc('phase-' + tId + '-' + phaseIndex).set({ type:'new_phase', fromUid:'system', fromName:'scoreplace.app', fromPhoto:'', tournamentId:tId, tournamentName:t.name || '', message, createdAt:nowIso, read:false }, { merge:true });
+    await _queueDrawEmail(profile, _drawEmailOpts(t, tId, message), mailed);
+  }
+}
+
+
+exports.reopenTournament = onCall(async request=>{const uid=request.auth&&request.auth.uid,d=request.data||{},tId=String(d.tournamentId||''),ini=String(d.startDate||''),fim=String(d.endDate||'');if(!uid)throw new HttpsError('unauthenticated','Entre na sua conta.');if(!tId||!ini||!fim||fim<ini)throw new HttpsError('invalid-argument','Datas inválidas.');const ref=db.collection('tournaments').doc(tId),agoraIso=new Date().toISOString();return db.runTransaction(async tx=>{const t=await _leTorneio(tx,ref,tId);if(!t)throw new HttpsError('not-found','Torneio não encontrado.');if(!_isTournamentAdmin(t,uid))throw _drawFail('permission-denied','Só a organização reabre o torneio.',{tId,uid});const antes=_antesDoMotor(t),has=!!((t.matches||[]).length||(t.rounds||[]).length||(t.groups||[]).length);t.startDate=ini;t.endDate=fim;t.status=has?'in_progress':'open';['autoClosed','autoClosedAt','autoCloseReason','autoCloseWarnedAt','autoCloseDueAt'].forEach(k=>delete t[k]);const b=_gravaTorneio(tx,ref,t,antes,{agoraIso});return {ok:true,tournament:b.clean};});});
+
+
+// ─── Entrada tardia Rei/Rainha: espera e grupo são decisão do servidor ───────────
+exports.reconcileMonarchEnrollment = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid;
+  const data = request.data || {};
+  const tId = String(data.tournamentId || '').trim();
+  const participantUid = String(data.participantUid || '').trim();
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId || !participantUid) throw new HttpsError('invalid-argument', 'Torneio e participante são obrigatórios.');
+  if (!drawWindow || typeof drawWindow._onParticipantAddedToMonarchRound !== 'function') throw new HttpsError('failed-precondition', 'Motor Rei/Rainha indisponível.');
+  const ref = db.collection('tournaments').doc(tId);
+  const pre = await ref.get();
+  if (!pre.exists) throw new HttpsError('not-found', 'Torneio não encontrado.');
+  if (!_isTournamentAdmin(pre.data(), uid)) throw _drawFail('permission-denied', 'Só a organização confirma uma inscrição Rei/Rainha.', { tId, uid });
+  await _preloadDrawNames(pre.data());
+  const agoraIso = new Date().toISOString();
+  return db.runTransaction(async (tx) => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização confirma uma inscrição Rei/Rainha.', { tId, uid });
+    _enrichParticipantsFromProfiles(t);
+    const entrant = (t.participants || []).find(p => p && String(p.uid || '') === participantUid);
+    if (!entrant) return { ok: true, changed: false, reason: 'participant-not-found' };
+    const name = typeof drawWindow._entryDisplayName === 'function' ? drawWindow._entryDisplayName(entrant) : (entrant.displayName || entrant.name || '');
+    const category = (entrant.categories && entrant.categories[0]) || entrant.category || null;
+    const before = _antesDoMotor(t);
+    const result = drawWindow._onParticipantAddedToMonarchRound(t, name, category) || { added: false, formed: 0 };
+    if (!result.added) return { ok: true, changed: false, formed: 0 };
+    const b = _gravaTorneio(tx, ref, t, before, { agoraIso });
+    return { ok: true, changed: true, formed: result.formed || 0, tournament: b.clean };
+  });
+});
+
+// ─── Publicação/anulação de sorteio em revisão: intenção server-side ──────────────
+exports.resolvePendingDraw = onCall(async (request) => {
+  const uid=request.auth && request.auth.uid;
+  if (!uid) throw new HttpsError('unauthenticated','Entre na sua conta.');
+  const tId=String((request.data&&request.data.tournamentId)||'').trim();
+  const action=String((request.data&&request.data.action)||'').trim();
+  if (!tId || !['publish','annul'].includes(action)) throw new HttpsError('invalid-argument','Ação de sorteio inválida.');
+  const ref=db.collection('tournaments').doc(tId), agoraIso=new Date().toISOString();
+  return db.runTransaction(async tx=>{
+    const t=await _leTorneio(tx,ref,tId); if(!t) throw new HttpsError('not-found','Torneio não encontrado.');
+    if(!_isTournamentAdmin(t,uid)) throw _drawFail('permission-denied','Só a organização altera o sorteio em revisão.',{tId,uid});
+    const pd=t.pendingDraw; if(!pd) return {ok:true,changed:false};
+    const antes=_antesDoMotor(t);
+    if(action==='annul') { t.pendingDraw=null; t.lastAutoDrawAt=null; }
+    else {
+      t.rounds=Array.isArray(pd.rounds)?pd.rounds:[];
+      ['standings','sitOutHistory','opponentHistory','monarchWaitlist'].forEach(k=>{ if(pd[k]) t[k]=pd[k]; });
+      t.status=pd.status||'active'; t.drawVisibility=t.drawVisibility||'public';
+      if(t.drawManual!==true&&!t.tournamentStarted) { const ms=Date.parse(pd.generatedAt||''); t.tournamentStarted=Number.isFinite(ms)&&ms>0?ms:Date.now(); }
+      t.lastAutoDrawAt=pd.generatedAt||t.lastAutoDrawAt||agoraIso; t.pendingDraw=null;
+    }
+    const b=_gravaTorneio(tx,ref,t,antes,{agoraIso});
+    return {ok:true,changed:true,action,roundIndex:pd.roundIndex,firstDraw:!!pd.firstDraw,tournament:b.clean};
+  }).then(async out=>{
+    // A publicação deixa o servidor, e não o navegador, responsável pela entrega.
+    if(out.changed && action==='publish') await _notifyPublishedPendingDraw(out.tournament,tId,out.roundIndex,agoraIso);
+    return out;
+  });
+});
+
+async function _notifyPublishedPendingDraw(t,tId,roundIndex,nowIso) {
+  if(!t || t.isSandbox || t.notificationsMuted) return;
+  const ids=new Set(); (t.participants||[]).forEach(p=>[p&&p.uid,p&&p.p1Uid,p&&p.p2Uid].forEach(u=>u&&ids.add(String(u))));
+  const {profByUid}=await _loadLiveNames(ids); const mailed=new Set();
+  for(const uid of ids){ const profile=profByUid[uid]; if(!profile) continue; const msg='🔄 Sorteio publicado no torneio '+(t.name||'')+'! Confira seus jogos.';
+    if(profile.notifyPlatform!==false) try { await db.collection('users').doc(uid).collection('notifications').doc('pending-draw-'+tId+'-'+roundIndex).set({type:'draw',fromUid:'system',fromName:'scoreplace.app',fromPhoto:'',tournamentId:tId,tournamentName:t.name||'',message:msg,createdAt:nowIso,read:false},{merge:true}); } catch(e){console.warn('pending draw notif',e&&e.message);}
+    await _queueDrawEmail(profile,_drawEmailOpts(t,tId,msg),mailed);
+  }
+}
 
 // ─── Reconciliação idempotente da chave: repescagem nunca é decidida pelo render ──
 // Um torneio criado ou pontuado por um bundle antigo pode conter uma vaga de repescagem

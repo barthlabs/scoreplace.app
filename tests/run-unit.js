@@ -1315,6 +1315,14 @@ const SUITES = [
   'tests/close-round-promise-handled.test.js', // aprovação aguarda closeRound; demais chamadores consomem erro
   'tests/l7-consenso-placar-cf-only.test.js',
   'tests/l7-auto-repairs-cf-only.test.js', // L7: reparos automáticos só despacham a CF // L7: proposta/contestação só despacham a CF
+  'tests/l7-pending-draw-cf-only.test.js', // L7: sorteio em revisão só despacha a CF
+  'tests/l7-default-scoring-cf-only.test.js', // L7: formato padrão só despacha a CF
+  'tests/l7-group-config-draw-cf.test.js', // L7: grupos entram pela CF de sorteio
+  'tests/l7-close-enrollment-draw-cf.test.js', // L7: fechamento entra pela CF de sorteio
+  'tests/l7-advance-phase-cf-only.test.js', // L7: avanço de fase só despacha a CF
+  'tests/l7-enrollment-no-direct-fallback.test.js', // L7: inscrição sem fallback direto
+  'tests/l7-server-owned-tournament-writes.test.js', // L7: navegador não grava inscrição/chave
+  'tests/l7-reopen-tournament-cf-only.test.js', // L7: reabertura pela CF
   // Joga o torneio INTEIRO lançando só pelo servidor: 8 jogos (escada + 3º lugar), campeão,
   // zero slot TBD. É o "jogar até o campeão" antes de mexer no caminho mais quente do app.
   'functions-autodraw/test-result-playthrough.js',

@@ -1715,11 +1715,9 @@ window.FirestoreDB = {
         extraUpdates: extraUpdates || null
       });
     } catch (e) {
-      if (window._warn) window._warn('[enrollParticipant] CF falhou (' + ((e && e.code) || e) + ') — fallback pra transação cliente');
-      if (typeof window._captureException === 'function') {
-        window._captureException(e, { area: 'enrollParticipant-cf-fallback', tournamentId: String(tournamentId), code: e && e.code });
-      }
-      return this._enrollParticipantTx(tournamentId, participantObj, extraUpdates);
+      if (window._warn) window._warn('[enrollParticipant] CF falhou', e);
+      if (typeof window._captureException === 'function') window._captureException(e, { area: 'enrollParticipant-cf', tournamentId: String(tournamentId), code: e && e.code });
+      throw e;
     }
   },
 
@@ -1947,11 +1945,9 @@ window.FirestoreDB = {
         userUid: String(userUid || '')
       });
     } catch (e) {
-      if (window._warn) window._warn('[deenrollParticipant] CF falhou (' + ((e && e.code) || e) + ') — fallback pra transação cliente');
-      if (typeof window._captureException === 'function') {
-        window._captureException(e, { area: 'deenrollParticipant-cf-fallback', tournamentId: String(tournamentId), code: e && e.code });
-      }
-      return this._deenrollParticipantTx(tournamentId, userUid);
+      if (window._warn) window._warn('[deenrollParticipant] CF falhou', e);
+      if (typeof window._captureException === 'function') window._captureException(e, { area: 'deenrollParticipant-cf', tournamentId: String(tournamentId), code: e && e.code });
+      throw e;
     }
   },
 

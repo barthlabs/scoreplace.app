@@ -13,13 +13,8 @@ var _t = window._t || function(k) { return k; };
 window._grupos_f2Direct = function(tId) {
     var t = window._findTournamentById ? window._findTournamentById(tId) : null;
     if (!t || !t.fmt2 || !(parseInt(t.gruposCount, 10) >= 1)) return false;
-    var _go = function() { if (typeof window.generateDrawFunction === 'function') window.generateDrawFunction(tId); };
-    if (!window.AppStore || typeof window.AppStore.mutate !== 'function') return false;
-    window.AppStore.mutate(tId, function(ft) {
-        if (!ft.fmt2 || !(parseInt(ft.gruposCount, 10) >= 1)) return false;
-        ft.status = 'closed'; delete ft._suspendedByPanel; delete ft._previousStatus;
-        return true;
-    }, 'Inscrições encerradas para sortear grupos').then(function(saved) { if (saved !== false) _go(); });
+    if (typeof window._setDrawDecision === 'function') window._setDrawDecision(tId,{closeEnrollment:true});
+    if (typeof window.generateDrawFunction === 'function') window.generateDrawFunction(tId);
     return true;
 };
 
@@ -359,15 +354,8 @@ window._showGroupsConfigPanel = function(tId) {
     window._selectGroupsConfig = function(tId, numGroups, classPerGroup, advanceTotal, equalOnly) {
         var t = window._findTournamentById(tId);
         if (!t) return;
-        var _persistGroups = window.AppStore && typeof window.AppStore.mutate === 'function'
-          ? window.AppStore.mutate(tId, function(ft) {
-              ft.gruposCount = numGroups; ft.gruposClassified = classPerGroup;
-              if (advanceTotal) ft.gruposAdvanceTotal = advanceTotal;
-              if (typeof equalOnly === 'boolean') ft.gruposEqualOnly = equalOnly;
-              ft.status = 'closed'; delete ft._suspendedByPanel; delete ft._previousStatus;
-              return true;
-            }, 'Configuração de grupos confirmada')
-          : Promise.reject(new Error('mutate indisponível'));
+        if (typeof window._setDrawDecision === 'function') window._setDrawDecision(tId,{ groupConfig:{numGroups:numGroups,classPerGroup:classPerGroup,advanceTotal:advanceTotal,equalOnly:!!equalOnly} });
+        var _persistGroups = Promise.resolve(true);
         _persistGroups.then(function() {
             var panel = document.getElementById('groups-config-panel');
             if (panel) panel.remove();

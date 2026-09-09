@@ -831,4 +831,4 @@ function closeRoundCore(t, roundIdx, resultCtx) {
   return { ok: true, branch: branch };
 }
 
-module.exports = { generateLigaRound, compileFromFmt2, canRecompile, hasDrawnBracket, drawInitial, integrateLateEntries, formLatePairCore, splitLatePairCore, closeRoundCore, _window: g.window };
+module.exports = { generateLigaRound, compileFromFmt2, canRecompile, hasDrawnBracket, drawInitial, integrateLateEntries, formLatePairCore, splitLatePairCore, closeRoundCore, materializeNextPhase: g.window._phasesEngine && g.window._phasesEngine.materializeNextPhase, standingsDaFaseAnterior: g.window._phasesEngine && g.window._phasesEngine.standingsDaFaseAnterior, phaseComplete: g.window._phasesEngine && g.window._phasesEngine.phaseComplete, groupTeamStandings: g.window._phasesEngine && g.window._phasesEngine.groupTeamStandings, _window: g.window };

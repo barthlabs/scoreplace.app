@@ -2445,41 +2445,18 @@
     // próxima fase sobre o estado FRESCO (idempotente via _phaseMaterialized). Substitui
     // o syncImmediate do doc inteiro, que a corrida (echo de result-save) podia clobbar.
     // O `t` local já foi materializado acima (UI otimista). project_concurrency_safe_saves.
-    AppStore.commitTournamentTx(tId, function (freshT) {
-      var _idp = 'ph-' + tId + '-' + ((freshT.currentPhaseIndex || 0) + 1);
-      // CAUSA-RAIZ da repescagem virar BYE (25 times → 9 jogos + byes): o painel de
-      // resolução seta phaseCfg.bracketResolution='playin' SÓ no `t` LOCAL (memória,
-      // _handleUnifiedOption), sem persistir. Esta tx re-materializa no doc FRESCO do
-      // Firestore, que não tinha a escolha → caía no default 'bye'. Propaga a resolução
-      // (e o nº de rodadas do Suíço) do local pro fresco ANTES de materializar.
-      if (Array.isArray(t.phases) && Array.isArray(freshT.phases)) {
-        t.phases.forEach(function (ph, i) {
-          if (!ph || !freshT.phases[i]) return;
-          if (ph.bracketResolution) freshT.phases[i].bracketResolution = ph.bracketResolution;
-          if (ph.swissRounds) freshT.phases[i].swissRounds = ph.swissRounds;
-        });
-      }
-      var r = materializeNextPhase(freshT, cs, _idp);
-      if (r && r.ok && r.incrementalLeague && typeof window._phaseGenNextLeagueRound === 'function') {
-        window._phaseGenNextLeagueRound(freshT, r.phaseIndex);
-      }
-      if (r && r.ok && r.built && r.built.needsDoubleElim && typeof window._buildDoubleElimBracket === 'function') {
-        window._buildDoubleElimBracket(freshT, { phaseIndex: freshT.currentPhaseIndex });
-      }
-      if (r && r.ok && r.built && r.built.needsRepechageDoubleElim && typeof window._buildRepechageDoubleElim === 'function') {
-        var _rm2 = (r.built.repMetaByCat && r.built.repMetaByCat.length) ? r.built.repMetaByCat : [r.built.repMeta];
-        _rm2.forEach(function (mm) { window._buildRepechageDoubleElim(freshT, mm, { phaseIndex: freshT.currentPhaseIndex }); });
-      }
+    if (typeof window._callCF !== 'function') { if (window.showNotification) window.showNotification('Não foi possível avançar','Atualize o aplicativo e tente novamente.','error'); return; }
+    var phaseChoices = (t.phases || []).map(function (phase) { return { bracketResolution: phase && phase.bracketResolution, swissRounds: phase && phase.swissRounds }; });
+    window._callCF('advanceTournamentPhase',{ tournamentId:String(tId), phaseChoices:phaseChoices },'Entre na sua conta para avançar a fase.').then(function(res) {
+      var out=(res&&res.data)||{};
+      if (!out.ok) throw new Error(out.reason||'advance-failed');
+      if (window._rerenderBracket) window._rerenderBracket(tId);
+      var advanced=(t.phases[out.phaseIndex] || {}).name || ('Fase ' + (Number(out.phaseIndex) + 1));
+      if (window.showNotification) window.showNotification('Avançou para ' + advanced, 'Chaves geradas a partir das colocações da fase anterior.', 'success');
+    }).catch(function(e) {
+      if (window._warn) window._warn('[advancePhase] CF falhou',e);
+      if (window.showNotification) window.showNotification('Não foi possível avançar','Tente novamente.','error');
     });
-    if (window._rerenderBracket) window._rerenderBracket(tId);
-    // Notifica CADA participante do seu jogo na nova fase (app/push/e-mail/WhatsApp
-    // 1:1), igual ao sorteio de rodada. Personalizado por uid (cada membro da dupla).
-    // Fire-and-forget — não bloqueia o avanço. Só roda no cliente (avanço é manual).
-    if (typeof window._notifyDrawPersonalized === 'function') {
-      try { window._notifyDrawPersonalized(t, tId, { type: 'new_phase', phaseIndex: t.currentPhaseIndex }); } catch (e) {}
-    }
-    var nm = (t.phases[t.currentPhaseIndex] || {}).name || ('Fase ' + (t.currentPhaseIndex + 1));
-    if (window.showNotification) window.showNotification('Avançou para ' + nm, 'Chaves geradas a partir das colocações da fase anterior.', 'success');
   }
 
   // (resolveRepechage REMOVIDO — unificado em resolveRepFills. O playin single-elim e o

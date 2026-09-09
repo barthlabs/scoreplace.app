@@ -1,0 +1,1 @@
+'use strict';const s=require('fs').readFileSync('js/views/tournaments-enrollment.js','utf8');let f=0;const ok=(v,x)=>{console.log((v?'✓ ':'✗ ')+x);if(!v)f++;};ok(!s.includes('Fallback: non-transactional save'),'desinscrição não tem fallback de save direto');ok(!s.includes('Fallback: non-transactional'),'inscrição não tem fallback não transacional');process.exit(f?1:0);

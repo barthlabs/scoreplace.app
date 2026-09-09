@@ -1552,22 +1552,14 @@ window._reopenAbandonedTournament = function (tId, _valores) {
       setTimeout(function () { window._reopenAbandonedTournament(tId, { ini: ini, fim: fim }); }, 60);
       return;
     }
-    var temChave = !!((t.matches && t.matches.length) || (t.rounds && t.rounds.length) || (t.groups && t.groups.length));
-    window.AppStore.mutate(tId, function (fresh) {
-      fresh.startDate = ini;
-      fresh.endDate = fim;
-      fresh.status = temChave ? 'in_progress' : 'open';
-      // Limpar as marcas é o que faz o torneio deixar de ser "abandonado" — o `set` da
-      // transação é sem merge, então apagar a chave aqui apaga o campo no doc.
-      delete fresh.autoClosed;
-      delete fresh.autoClosedAt;
-      delete fresh.autoCloseReason;
-      delete fresh.autoCloseWarnedAt;   // volta a poder ser avisado numa próxima ociosidade
-      delete fresh.autoCloseDueAt;
-    }, 'Torneio reaberto pelo organizador (datas: ' + ini + ' a ' + fim + ')').then(function (ok) {
-      if (ok === false) { showNotification('Não foi possível reabrir', 'Tente de novo.', 'error'); return; }
+    if (typeof window._callCF !== 'function') { showNotification('Não foi possível reabrir', 'Atualize o aplicativo e tente novamente.', 'error'); return; }
+    window._callCF('reopenTournament', { tournamentId: String(tId), startDate: ini, endDate: fim }, 'Entre na sua conta para reabrir o torneio.').then(function (res) {
+      if (!((res && res.data) || {}).ok) throw new Error('reopen-failed');
       showNotification('Torneio reaberto', 'De ' + ini + ' até ' + fim + '.', 'success');
       if (typeof window._softRefreshView === 'function') window._softRefreshView();
+    }).catch(function (err) {
+      if (window._warn) window._warn('[reopenTournament] CF falhou', err);
+      showNotification('Não foi possível reabrir', 'Tente de novo.', 'error');
     });
   }, null, { confirmText: '🔓 Reabrir', cancelText: 'Cancelar', type: 'info', maxWidth: '460px' });
 };

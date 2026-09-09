@@ -4333,29 +4333,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
     if (_sportDef && _sportDef.type === 'sets') {
       sc = Object.assign({}, _sportDef);
       useSets = true;
-      // A tela usa o padrão já nesta abertura, mas a persistência só passa pela
-      // mutação fresca. Não regravar o documento inteiro aqui: este caminho pode
-      // abrir enquanto outro aparelho acabou de lançar um placar.
-      if (window.AppStore && typeof window.AppStore.mutate === 'function') {
-        try {
-          Promise.resolve(window.AppStore.mutate(tId, function (freshT) {
-            // A configuração pode ter chegado de outro aparelho entre a cópia local
-            // e a transação. Nesse caso ela já é a verdade e não é substituída.
-            if (freshT.scoring && freshT.scoring.type === 'sets') return false;
-            freshT.scoring = Object.assign({}, sc);
-          })).catch(function (err) {
-            if (window._error) window._error('openLiveScoring: persistência GSM falhou', err);
-          });
-        } catch (e) {
-          // Mantém o padrão apenas nesta abertura; não cai na persistência insegura.
-          t.scoring = sc;
-          if (window._error) window._error('openLiveScoring: porta GSM indisponível', e);
-        }
-      } else {
-        // Sem a porta transacional não há fallback de persistência insegura; mantém
-        // apenas a configuração desta tela até o próximo snapshot autoritativo.
-        t.scoring = sc;
-      }
+      // A tela só propõe o padrão; a Function confirma e grava o documento fresco.
+      if (typeof window._callCF === 'function') window._callCF('setDefaultTournamentScoring', { tournamentId:String(tId), scoring:sc }, 'Entre na sua conta para configurar o formato.').catch(function(err) { if (window._error) window._error('openLiveScoring: GSM CF falhou', err); });
     }
   }
   // v2.8.20: completa campos faltantes do GSM (ex.: countingType) pelo padrão do esporte —

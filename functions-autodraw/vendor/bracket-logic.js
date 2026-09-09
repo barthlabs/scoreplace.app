@@ -5929,74 +5929,16 @@ window._renderPendingDrawBanner = function (t) {
 };
 
 window._publishPendingDraw = async function (tId) {
-  var store = window.AppStore;
-  var t = store && store.tournaments.find(function (x) { return String(x.id) === String(tId); });
-  if (!t || !t.pendingDraw) return;
-  if (!(store.isOrganizer && store.isOrganizer(t))) return;
-  var pd = null;
-  // Publicar precisa re-aplicar a transição sobre o documento fresco: o organizador
-  // pode estar revisando enquanto a CF recebe placar ou atualiza outro campo. Salvar a
-  // fotografia local inteira aqui era capaz de apagar essa novidade recém-chegada.
-  var _publish = function (target) {
-    var freshPd = target && target.pendingDraw;
-    if (!freshPd) return false;
-    pd = freshPd;
-    target.rounds = Array.isArray(freshPd.rounds) ? freshPd.rounds : [];
-    if (freshPd.standings) target.standings = freshPd.standings;
-    if (freshPd.sitOutHistory) target.sitOutHistory = freshPd.sitOutHistory;
-    if (freshPd.opponentHistory) target.opponentHistory = freshPd.opponentHistory;
-    // A lista de espera do Rei/Rainha é produzida no sorteio em revisão.
-    if (freshPd.monarchWaitlist) target.monarchWaitlist = freshPd.monarchWaitlist;
-    target.status = freshPd.status || 'active';
-    target.drawVisibility = target.drawVisibility || 'public';
-    if (target.drawManual !== true && !target.tournamentStarted) {
-      var _genMs = freshPd.generatedAt ? new Date(freshPd.generatedAt).getTime() : NaN;
-      target.tournamentStarted = (!isNaN(_genMs) && _genMs > 0) ? _genMs : Date.now();
-    }
-    target.lastAutoDrawAt = freshPd.generatedAt || target.lastAutoDrawAt || new Date().toISOString();
-    target.pendingDraw = null;
-  };
-  var _saved = false;
   try {
-    if (typeof store.mutate !== 'function') {
-      if (typeof window._error === 'function') window._error('publishPendingDraw: AppStore.mutate indisponível');
-      if (typeof window.showNotification === 'function') window.showNotification('Sorteio não publicado', 'Atualize o aplicativo e tente novamente.', 'error');
-      return;
-    }
-    _saved = await store.mutate(t.id, _publish, 'Sorteio em revisão publicado');
-  } catch (e) { window._warn('[publishPendingDraw] save falhou', e); }
-  if (!_saved || !pd) return;
-  // Agora SIM dispara as notificações (idênticas ao sorteio normal).
-  var roundIndex = (typeof pd.roundIndex === 'number') ? pd.roundIndex : (t.rounds.length - 1);
-  try { if (window._notifyDrawPersonalized) window._notifyDrawPersonalized(t, t.id, { type: pd.firstDraw ? 'draw' : 'new_round', roundIndex: roundIndex }); } catch (e) {}
-  if (typeof window.showNotification === 'function') window.showNotification('🚀 Sorteio publicado!', 'A chave e as notificações foram liberadas para os participantes.', 'success');
-  try {
-    var _vc = document.getElementById('view-container');
-    var _h = (window.location && window.location.hash) || '';
-    if (_vc && _h.indexOf('#tournaments/' + t.id) === 0 && typeof window.renderTournaments === 'function') window.renderTournaments(_vc, t.id);
-    else if (_h.indexOf('#bracket/' + t.id) === 0 && typeof window._rerenderBracket === 'function') window._rerenderBracket(t.id);
-  } catch (e) {}
+    var res=await window._callCF('resolvePendingDraw',{ tournamentId:String(tId), action:'publish' },'Entre na sua conta para publicar o sorteio.');
+    if(!((res&&res.data)||{}).changed) return;
+    if(window.showNotification) window.showNotification('🚀 Sorteio publicado!','A chave foi liberada para os participantes.','success');
+    if(window._rerenderBracket) window._rerenderBracket(tId);
+  } catch(e) { if(window._warn) window._warn('[publishPendingDraw] CF falhou',e); if(window.showNotification) window.showNotification('Sorteio não publicado','Não foi possível publicar o sorteio. Tente novamente.','error'); }
 };
-
 window._annulPendingDraw = function (tId) {
-  var store = window.AppStore;
-  var t = store && store.tournaments.find(function (x) { return String(x.id) === String(tId); });
-  if (!t || !t.pendingDraw) return;
-  if (!(store.isOrganizer && store.isOrganizer(t))) return;
-  var go = function () {
-    store.mutate(t.id, function (ft) {
-      if (!ft.pendingDraw) return false;
-      ft.pendingDraw = null;
-      ft.lastAutoDrawAt = null; // libera re-sorteio no próximo ciclo do servidor
-    }, 'Sorteio em revisão anulado').then(function (saved) {
-      if (!saved) return;
-      if (typeof window.showNotification === 'function') window.showNotification('Sorteio anulado', 'O sorteio em revisão foi descartado (nada foi publicado). Um novo será gerado automaticamente.', 'info');
-      try { var _vc = document.getElementById('view-container'); if (_vc && typeof window.renderTournaments === 'function') window.renderTournaments(_vc, t.id); } catch (e) {}
-    });
-  };
-  if (typeof window.showConfirmDialog === 'function') {
-    window.showConfirmDialog('Anular sorteio?', 'O sorteio em revisão será descartado (nada foi publicado). Um novo será gerado automaticamente no próximo ciclo.', go, null, { confirmText: 'Anular', cancelText: 'Cancelar', danger: true });
-  } else { go(); }
+  var go=function(){ return window._callCF('resolvePendingDraw',{ tournamentId:String(tId), action:'annul' },'Entre na sua conta para anular o sorteio.').then(function(res){ if(!((res&&res.data)||{}).changed) return; if(window.showNotification) window.showNotification('Sorteio anulado','O sorteio em revisão foi descartado.','info'); if(window._rerenderBracket) window._rerenderBracket(tId); }).catch(function(e){ if(window._warn) window._warn('[annulPendingDraw] CF falhou',e); }); };
+  if(window.showConfirmDialog) window.showConfirmDialog('Anular sorteio?','O sorteio em revisão será descartado.',go,null,{confirmText:'Anular',cancelText:'Cancelar',danger:true}); else go();
 };
 
 // v2.7.6: ÚNICA fonte de "Pontos Corridos com sorteio AUTOMÁTICO agendado" — Liga
