@@ -4019,7 +4019,10 @@ function setupCreateTournamentModal() {
     try {
       var t = window._editingTournament || (window.AppStore && window.AppStore._editing) || null;
       if (t) {
-        var fi = t.currentPhaseIndex || 0;
+        // Este bloco vive dentro da fase INICIAL; `currentPhaseIndex` é o estado
+        // de execução do torneio e pode já apontar para a eliminatória. Nunca o use
+        // para desenhar controles da classificatória.
+        var fi = 0;
         if (typeof window._rodadasVisiveisDaFase === 'function') {
           var reais = window._rodadasVisiveisDaFase(t, fi);
           if (reais >= 1) return reais;
@@ -4683,9 +4686,11 @@ function setupCreateTournamentModal() {
       window._editingTournament = t;
       var _rbEl = document.getElementById('round-bounds');
       if (_rbEl) {
-        var _fi = t.currentPhaseIndex || 0;
+        // O campo pertence à fase classificatória (fase 0), mesmo depois de o
+        // torneio ter avançado. A eliminatória usa o seu próprio controle no format2.
+        var _fi = 0;
         var _f = (Array.isArray(t.phases) && t.phases[_fi]) || null;
-        var _rb = (_f && _f.roundBounds) || ((_fi === 0 && Array.isArray(t.roundBounds)) ? t.roundBounds : null);
+        var _rb = (_f && _f.roundBounds) || (Array.isArray(t.roundBounds) ? t.roundBounds : null);
         _rbEl.value = (Array.isArray(_rb) && _rb.length) ? JSON.stringify(_rb) : '';
       }
       if (typeof window._rbFormRefresh === 'function') window._rbFormRefresh();
@@ -5583,13 +5588,10 @@ window._saveTournamentClickHandler = function() {
           ...(function () {
             try {
               var t0 = window._editingTournament;
-              var fi = (t0 && t0.currentPhaseIndex) || 0;
+              // Este input é exclusivamente da fase classificatória. A fase
+              // eliminatória mantém seu próprio roundBounds dentro de fmt2.
               var bounds = _rbDoFormulario();
-              if (!t0 || fi === 0) return { roundBounds: bounds };
-              if (!Array.isArray(t0.phases) || !t0.phases[fi]) return {};
-              var ps = JSON.parse(JSON.stringify(t0.phases));
-              ps[fi].roundBounds = bounds;
-              return { phases: ps };
+              return { roundBounds: bounds };
             } catch (e) { return {}; }
           })(),
           // v2.1.21: Liga ignora prazo de inscrição (sempre aberta) — limpa o residual.
@@ -5808,6 +5810,13 @@ window._saveTournamentClickHandler = function() {
           var _f2out = window.FORMAT2.compileToPhases(_f2cfg, { sport: _f2sport, resultEntry: tourData.resultEntry, lateEnrollment: tourData.lateEnrollment, newMatchups: tourData.newMatchups });
           Object.assign(tourData, _f2out.topLevel);
           tourData.phases = _f2out.phases;
+          // O compilador recria phases[]. Preserva os limites que pertencem à
+          // classificatória e aos controles próprios das fases posteriores.
+          if (Array.isArray(tourData.roundBounds) && tourData.phases[0]) tourData.phases[0].roundBounds = tourData.roundBounds.slice();
+          var _elimBounds = _f2cfg && _f2cfg.eliminatoria && _f2cfg.eliminatoria.roundBounds;
+          if (Array.isArray(_elimBounds) && _elimBounds.length && tourData.phases.length > 1) {
+            tourData.phases[tourData.phases.length - 1].roundBounds = _elimBounds.slice();
+          }
           tourData.fmt2 = _f2cfg;
           tourData._allowConfigReset = true;
           if (tourData.format === 'Fase de Grupos') { tourData.ligaRoundFormat = 'standard'; tourData.ligaDrawMode = 'standard'; }

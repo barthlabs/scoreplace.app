@@ -75,7 +75,9 @@
         // 2ª fase e NÃO tinha janela nenhuma, então o fim do TORNEIO era o fim da classificatória.
         // Compila pra phases[última].endDate/endTime, o schema que _tournamentDateRange e
         // _tournamentScheduledWindow já leem. Vazio = sem término próprio (herda o do torneio).
-        endDate: '', endTime: ''
+        endDate: '', endTime: '',
+        // Ajuste fino das divisões da eliminatória. Vazio = dias iguais.
+        roundBounds: []
       }
     }, sport);
   }
@@ -239,6 +241,7 @@
     e.scoring = out.classifAtiva ? normScoring(e.scoring) : null;
     e.endDate = (out.classifAtiva && /^\d{4}-\d{2}-\d{2}$/.test(String(e.endDate || ''))) ? String(e.endDate) : '';
     e.endTime = (e.endDate && /^\d{2}:\d{2}$/.test(String(e.endTime || ''))) ? String(e.endTime) : '';
+    e.roundBounds = Array.isArray(e.roundBounds) ? e.roundBounds.slice() : [];
     out.eliminatoria = e;
 
     return out;
@@ -362,7 +365,8 @@
       // FORMAÇÃO (pRR, acima) fica com null de propósito: ela é uma rodada Rei/Rainha, irmã
       // da classificatória — quem muda de formato é a disputa eliminatória em si.
       scoring: e0.scoring || null,
-      endDate: e0.endDate || '', endTime: e0.endTime || ''   // v1.6.80: término da ÚLTIMA fase
+      endDate: e0.endDate || '', endTime: e0.endTime || '',
+      roundBounds: Array.isArray(e0.roundBounds) ? e0.roundBounds.slice() : []
     });
     return [pRR, pElimRR];
   }
@@ -591,7 +595,8 @@
         newMatchups: _elimNM(e.newMatchups, opts),       // ⊥ de "Abertas" — a elim tem a SUA regra
         scoring: e.scoring || null,                      // formato da partida DESTA fase (null = herda t.scoring)
         drawManual: false,
-        endDate: e.endDate || '', endTime: e.endTime || ''   // v1.6.80: término da ÚLTIMA fase
+        endDate: e.endDate || '', endTime: e.endTime || '',
+        roundBounds: Array.isArray(e.roundBounds) ? e.roundBounds.slice() : []
       });
       phases.push(p1);
     }

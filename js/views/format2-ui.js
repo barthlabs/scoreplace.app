@@ -66,6 +66,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       var el = document.getElementById('f2-config-mount');
       if (el) el.innerHTML = _bodyControls();
       _placeExt();
+      _mountElimRoundBounds();
     } else {
       var c = document.getElementById('view-container');
       if (c) window.renderFormatoPage(c);
@@ -322,6 +323,51 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         : 'Em branco, o torneio termina junto com a <b>fase classificatória</b>. Preencha para que o convite e o card mostrem até quando vai a eliminatória.') + '</div>' +
       '</div>';
   }
+  // A eliminatória tem prazo e divisões próprios. O início é carimbado no AVANÇO
+  // (`phaseStartedAt[idx]`); o fim vem da configuração da eliminatória. Não se reutiliza
+  // nem a data nem o número de rodadas da classificatória.
+  function _elimPhaseIndex() { return (S && S.t && Array.isArray(S.t.phases)) ? Math.max(1, S.t.phases.length - 1) : 1; }
+  function _elimRoundCount() {
+    if (!S || !S.t) return 1;
+    var i = _elimPhaseIndex();
+    var observed = (typeof window._rodadasVisiveisDaFase === 'function') ? window._rodadasVisiveisDaFase(S.t, i) : 0;
+    var ph = (S.t.phases || [])[i] || {};
+    return Math.max(observed || 0, parseInt(ph.rounds, 10) || 0, 1);
+  }
+  function _elimBoundsWindow() {
+    if (!S || !S.cfg || !S.t) return null;
+    var i = _elimPhaseIndex(), e = S.cfg.eliminatoria || {}, ph = (S.t.phases || [])[i] || {};
+    var started = (S.t.phaseStartedAt || {})[String(i)] || '';
+    var sd = String(started).slice(0, 10), st = String(started).indexOf('T') >= 0 ? String(started).slice(11, 16) : '00:00';
+    var ed = e.endDate || ph.endDate || '', et = e.endTime || ph.endTime || '23:59';
+    var a = window._rbMs ? window._rbMs(sd + 'T' + st) : NaN;
+    var b = window._rbMs ? window._rbMs(ed + 'T' + et) : NaN;
+    return (a > 0 && b > a) ? { startMs: a, endMs: b } : null;
+  }
+  function _elimRoundBoundsHtml() {
+    return '<div id="f2-elim-round-bounds-box" style="display:none;margin-top:12px;padding-top:10px;border-top:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));">' +
+      '<div style="font-size:0.7rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">⏱️ Divisão das rodadas <span style="text-transform:none;font-weight:500;opacity:0.8;">— arraste para esticar ou encurtar</span></div>' +
+      '<div id="f2-elim-round-bounds-mount"></div>' +
+      '<div style="text-align:right;margin-top:2px;"><button type="button" onclick="window._f2ElimRoundBoundsReset()" style="background:none;border:0;color:var(--text-muted);font-size:0.66rem;font-weight:700;cursor:pointer;text-decoration:underline;padding:2px 4px;">voltar ao padrão (dias iguais)</button></div>' +
+    '</div>';
+  }
+  function _mountElimRoundBounds() {
+    var box = document.getElementById('f2-elim-round-bounds-box');
+    var mount = document.getElementById('f2-elim-round-bounds-mount');
+    if (!box || !mount || typeof window._rbMount !== 'function') return;
+    var n = _elimRoundCount(), win = _elimBoundsWindow();
+    if (n < 2 || !win) { box.style.display = 'none'; return; }
+    box.style.display = '';
+    window._rbMount(mount, {
+      startMs: function () { var w = _elimBoundsWindow(); return w ? w.startMs : NaN; },
+      endMs: function () { var w = _elimBoundsWindow(); return w ? w.endMs : NaN; },
+      rodadas: _elimRoundCount,
+      valor: function () { return ((S.cfg.eliminatoria && S.cfg.eliminatoria.roundBounds) || []).map(window._rbMs).filter(function (v) { return !isNaN(v); }); },
+      onChange: function (v) { S.cfg.eliminatoria.roundBounds = (v || []).map(window._rbIso); }
+    });
+  }
+  window._f2ElimRoundBoundsReset = function () { if (S && S.cfg && S.cfg.eliminatoria) { S.cfg.eliminatoria.roundBounds = []; _mountElimRoundBounds(); } };
+
   // Janela da fase em dias: (término − 1º sorteio). Base da via de mão dupla rodadas↔repetir.
   // v4.4.62: CONSIDERA O HORÁRIO de cada campo (não meia-noite). 1º sorteio = data+hora do
   // agendamento (sem data, cai no início da fase); fim = data+hora de término da fase.
@@ -752,7 +798,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         // v1.6.80: término PRÓPRIO da eliminatória — FORA do wrapper de trava (igual às datas
         // da classificatória): estender/ajustar o fim é exatamente o que o organizador precisa
         // fazer com a fase JÁ em andamento. Só a ESTRUTURA trava.
-        _elimEndExtra = _elimEndDateBlock(e);
+        _elimEndExtra = _elimEndDateBlock(e) + _elimRoundBoundsHtml();
       }
     }
     var elimInner = e.ativa ? (eb + _elimEndExtra + _elimInitExtra) : '';
@@ -1151,9 +1197,13 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   window._f2MountInForm = function (container, sport, initialCfg, tournament) {
     sport = sport || 'Beach Tennis';
     var cfg = (initialCfg && typeof initialCfg === 'object') ? window.FORMAT2.normalize(initialCfg, sport) : window.FORMAT2.defaultConfig(sport);
+    var last = tournament && Array.isArray(tournament.phases) ? tournament.phases[tournament.phases.length - 1] : null;
+    if (cfg.classifAtiva && cfg.eliminatoria && last && last.formatCode && String(last.formatCode).indexOf('elim_') === 0) {
+      if (!Array.isArray(cfg.eliminatoria.roundBounds) || !cfg.eliminatoria.roundBounds.length) cfg.eliminatoria.roundBounds = Array.isArray(last.roundBounds) ? last.roundBounds.slice() : [];
+    }
     S = { mode: 'form', mountEl: container, sport: sport, cfg: cfg, t: tournament || null };
     _syncTeamSize();
-    if (container) { container.innerHTML = _bodyControls(); _placeExt(); }
+    if (container) { container.innerHTML = _bodyControls(); _placeExt(); _mountElimRoundBounds(); }
   };
   // Config atual (pro save do form). null se não montado em modo form.
   window._f2GetConfig = function () { return (S && S.mode === 'form') ? window.FORMAT2.normalize(S.cfg, S.sport) : null; };
