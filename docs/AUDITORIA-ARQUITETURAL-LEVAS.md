@@ -2898,6 +2898,12 @@ recalcula nem grava vagas pelo navegador. Ela apenas despacha `reconcileBracket`
 autoriza o participante ou organizador, relê a chave fresca, aplica o ranking canônico e
 persiste somente quando uma vaga ou o encerramento realmente mudou.
 
+**L7.P1.16 — rodadas futuras legadas são reparadas só na Cloud Function
+(09/set/2026, aprovado pelo Claude; aguarda publicação acumulada).** O motor puro saiu de
+`bracket.js` e foi vendorado para a Function. `reconcileBracket` o executa com um carimbo
+estável no documento fresco, preserva placares que chegaram depois e não escreve em chave já
+íntegra. A renderização não gera nem persiste colunas.
+
 ## L8 — matriz de leitura e projeção (08/set/2026)
 
 `matches` permanece a fonte canônica. `results/{matchId}` é uma projeção server-written para

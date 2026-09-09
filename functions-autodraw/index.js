@@ -1407,11 +1407,13 @@ exports.reconcileBracket = onCall(async (request) => {
       const antes = _antesDoMotor(t);
       const statusAntes = t.status;
       const trocas = drawWindow._reassignBestLosersToRepechage(t) || 0;
+      const futuras = (typeof drawWindow._ensureFutureRounds === 'function')
+        ? !!drawWindow._ensureFutureRounds(t, false, { now: Date.parse(agoraIso), thirdPlaceLabel: 'Disputa de 3º lugar' }) : false;
       if (typeof drawWindow._maybeFinishElimination === 'function') drawWindow._maybeFinishElimination(t);
-      const mudou = trocas > 0 || t.status !== statusAntes;
+      const mudou = trocas > 0 || futuras || t.status !== statusAntes;
       if (!mudou) return { ok: true, changed: false };
       const b = _gravaTorneio(tx, ref, t, antes, { agoraIso: agoraIso });
-      return { ok: true, changed: true, changes: trocas, tournament: b.clean };
+      return { ok: true, changed: true, changes: trocas, futureRoundsRepaired: futuras, tournament: b.clean };
     });
   } catch (e) {
     if (e instanceof HttpsError) throw e;
