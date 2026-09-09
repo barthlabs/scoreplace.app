@@ -1936,6 +1936,66 @@ async function _autoDrawIncrementalPhaseRound(t, tId, now) {
   if (!_sbMuteAuto) console.log(`Auto-draw phase: ${tId} — in-app: ${notified.size} uid(s) | e-mails enfileirados: ${_mailedPh}`);
 }
 
+// Notificação de rodada incremental manual/automática: uma única entrega server-side.
+async function _notifyIncrementalPhaseRound(t, tId, phaseIdx, nowIso) {
+  const slot = (t.phaseRounds && t.phaseRounds[phaseIdx]) || {};
+  const rounds = slot.rounds || [];
+  const maxR = rounds.reduce((mx, r) => Math.max(mx, (r && r.round) || 1), 0);
+  const matches = ((rounds.find(r => ((r && r.round) || 1) === maxR) || {}).matches || [])
+    .filter(m => m && !m.isSitOut && !m.isBye)
+    .map(m => ({ p1: m.p1 || '', p2: m.p2 || '', label: m.label || '', p1Uids: _slotUidsOf(m, 'p1'), p2Uids: _slotUidsOf(m, 'p2') }));
+  const pool = Array.isArray(slot.pool) ? slot.pool : [];
+  const uids = new Set(); matches.forEach(m => { m.p1Uids.forEach(u => uids.add(u)); m.p2Uids.forEach(u => uids.add(u)); });
+  pool.forEach(p => [p && p.uid, p && p.p1Uid, p && p.p2Uid].forEach(u => { if (u) uids.add(String(u)); }));
+  const { profByUid, nameByUid } = await _loadLiveNames(uids);
+  const mailed = new Set(), notified = new Set();
+  for (const p of pool) {
+    const mine = [p && p.uid, p && p.p1Uid, p && p.p2Uid].filter(Boolean).map(String);
+    const mineSet = new Set(mine);
+    const games = matches.filter(m => m.p1Uids.some(u => mineSet.has(u)) || m.p2Uids.some(u => mineSet.has(u)));
+    const message = games.length ? ('🔄 Nova rodada no torneio ' + (t.name || '') + '!\n\n' + games.map((m,i) => (m.label || ('Jogo '+(i+1))) + ':\n' + _sideDisplayName(m.p1Uids,nameByUid,m.p1) + '\nvs\n' + _sideDisplayName(m.p2Uids,nameByUid,m.p2)).join('\n\n')) : 'Nova rodada sorteada! Confira seus jogos.';
+    for (const uid of mine) {
+      if (notified.has(uid)) continue; notified.add(uid);
+      const profile=profByUid[uid]; if (!profile) continue;
+      if (!t.isSandbox && !t.notificationsMuted && profile.notifyPlatform !== false) {
+        try {
+          // ID determinístico: retry da callable não duplica o aviso da mesma rodada.
+          await db.collection('users').doc(uid).collection('notifications').doc('phase-round-' + tId + '-' + phaseIdx + '-' + maxR).set({ type:'draw', fromUid:'system', fromName:'scoreplace.app', fromPhoto:'', tournamentId:tId, tournamentName:t.name||'', message, createdAt:nowIso, read:false }, { merge:true });
+        } catch (e) { console.warn(`Notif phase manual error uid ${uid}:`, e && e.message); }
+      }
+      if (!t.isSandbox && !t.notificationsMuted) await _queueDrawEmail(profile,_drawEmailOpts(t,tId,message),mailed);
+    }
+  }
+}
+
+exports.closePhaseLeagueRound = onCall(async (request) => {
+  const uid=request.auth && request.auth.uid;
+  if (!uid) throw new HttpsError('unauthenticated','Entre na sua conta.');
+  const tId=String((request.data&&request.data.tournamentId)||'').trim();
+  const phaseIdx=parseInt(request.data&&request.data.phaseIdx,10); const force=!!(request.data&&request.data.force);
+  if (!tId || !Number.isInteger(phaseIdx) || phaseIdx<0) throw new HttpsError('invalid-argument','Torneio e fase são obrigatórios.');
+  if (!drawWindow || typeof drawWindow._phaseGenNextLeagueRound!=='function' || typeof drawWindow._phaseRoundRng!=='function') throw _drawFail('internal','Motor de Liga indisponível no servidor.',{tId});
+  const ref=db.collection('tournaments').doc(tId), nowMs=Date.now(), nowIso=new Date(nowMs).toISOString();
+  // Perfis são uma leitura auxiliar; nunca faça I/O externo dentro de uma transação
+  // que o Firestore pode repetir.
+  const seed=await ref.get();
+  if (seed.exists) await _preloadDrawNames(seed.data());
+  const out=await db.runTransaction(async tx=>{
+    const t=await _leTorneio(tx,ref,tId); if(!t) throw new HttpsError('not-found','Torneio não encontrado.');
+    if (!_isTournamentAdmin(t,uid)) throw _drawFail('permission-denied','Só a organização encerra a rodada.',{tId,uid});
+    const slot=(t.phaseRounds&&t.phaseRounds[phaseIdx])||null; if(!slot) return {ok:false,reason:'phase-not-found'};
+    const rounds=slot.rounds||[]; const maxR=rounds.reduce((mx,r)=>Math.max(mx,(r&&r.round)||1),0);
+    const current=[]; rounds.filter(r=>((r&&r.round)||1)===maxR).forEach(r=>(r.matches||[]).forEach(m=>current.push(m)));
+    if (!force && current.some(m=>!m.winner&&!m.isBye&&!m.isSitOut)) return {ok:false,reason:'round-incomplete'};
+    const before=_antesDoMotor(t); _enrichParticipantsFromProfiles(t); if (typeof drawWindow._rehydrateEntryNames==='function') drawWindow._rehydrateEntryNames(t);
+    const made=drawWindow._phaseGenNextLeagueRound(t,phaseIdx,{ts:nowMs,rnd:drawWindow._phaseRoundRng(tId+':'+phaseIdx+':'+(maxR+1)+':'+nowMs)});
+    if(!made) return {ok:false,reason:'round-not-generated'};
+    _gravaTorneio(tx,ref,t,before,{agoraIso:nowIso}); return {ok:true,tournament:t};
+  });
+  if(out.ok) await _notifyIncrementalPhaseRound(out.tournament,tId,phaseIdx,nowIso);
+  return out;
+});
+
 // ─── Reconciliador de nextDrawAt (v2.6.74) ──────────────────────────────────
 // O autoDraw (acima) consulta por `nextDrawAt` pra ser barato + na hora. Mas:
 //  (a) torneios LEGADOS (criados antes deste campo) não têm nextDrawAt → a range

@@ -2915,6 +2915,16 @@ Function idempotente.
 `assignMatchCourt`; a Function relê o jogo, confirma a permissão administrativa e grava somente
 a alteração estreita no plano canônico. O navegador não persiste a fotografia do torneio.
 
+**L7.P1.19 — fechamento manual de rodada Liga por fase só despacha a Cloud Function
+(09/set/2026, aprovado pelo Claude; aguarda publicação acumulada).** O botão de encerrar
+rodada não sorteia, não grava e não notifica no navegador. `closePhaseLeagueRound` autentica a
+organização por UID, relê a fase na transação canônica, recusa rodada incompleta sem a confirmação
+explícita, gera a próxima usando RNG estável e persiste pelo plano de escrita. A entrega é
+server-side: o aviso in-app recebe ID determinístico por torneio/fase/rodada, portanto um retry
+não duplica a notificação. O gate confirma que o cliente ficou somente como despachante, que a
+leitura auxiliar não entra no retry da transação e que a notificação é deduplicada. Claude
+aprovou o diff integral (Opus, esforço medium), sem ressalvas.
+
 ## L8 — matriz de leitura e projeção (08/set/2026)
 
 `matches` permanece a fonte canônica. `results/{matchId}` é uma projeção server-written para

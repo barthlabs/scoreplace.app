@@ -5666,6 +5666,22 @@ window._generateNextRoundForPlayers = _generateNextRoundForPlayers;
 // (phaseIndex + bracket:'league') e mergeada em t.matches. PURO (sem DOM/AppStore) —
 // a cadência de UI (_phaseCloseLeagueRound) e o avanço por cron (etapa 4) são à parte.
 /* 2.2: `det` opcional desce até o gerador de rodada; sem ele nada muda. */
+function _phaseRoundRng(seed) {
+  var state = 2166136261;
+  String(seed).split('').forEach(function(ch) {
+    state ^= ch.charCodeAt(0);
+    state = Math.imul(state, 16777619);
+  });
+  return function() {
+    state += 0x6D2B79F5;
+    var x = state;
+    x = Math.imul(x ^ (x >>> 15), x | 1);
+    x ^= x + Math.imul(x ^ (x >>> 7), x | 61);
+    return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+  };
+}
+window._phaseRoundRng = _phaseRoundRng;
+
 function _phaseGenNextLeagueRound(t, phaseIdx, det) {
   det = det || {};
   if (!t || typeof window._generateNextRoundForPlayers !== 'function') return false;

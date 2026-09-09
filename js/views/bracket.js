@@ -3905,70 +3905,35 @@ window._phaseClassifiedCount = function (t, groupSize) {
 // rodada numa fase POSTERIOR. Disparado pelo botão no render (renderStandings via
 // opts.phaseLeagueCadence). Gera a próxima rodada via o driver acima, persiste e
 // re-renderiza. NÃO usa _closeRound (que opera em t.rounds da Fase 0).
-function _phaseRoundRng(seed) {
-  var state = 2166136261;
-  String(seed).split('').forEach(function(ch) {
-    state ^= ch.charCodeAt(0);
-    state = Math.imul(state, 16777619);
-  });
-  return function() {
-    state += 0x6D2B79F5;
-    var x = state;
-    x = Math.imul(x ^ (x >>> 15), x | 1);
-    x ^= x + Math.imul(x ^ (x >>> 7), x | 61);
-    return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
 window._phaseCloseLeagueRound = function (tId, phaseIdx) {
   var t = (typeof window._findTournamentById === 'function') ? window._findTournamentById(tId) : null;
   if (!t) return;
-  // v3.1.16 (inc 8): rodadas da Liga incremental moram em t.phaseRounds[idx].rounds.
-  var _slot = (t.phaseRounds && t.phaseRounds[phaseIdx]) || null;
-  var _rounds = (_slot && _slot.rounds) || [];
-  var maxR = _rounds.reduce(function (mx, r) { return Math.max(mx, (r && r.round) || 1); }, 0);
+  var slot = (t.phaseRounds && t.phaseRounds[phaseIdx]) || null;
+  var rounds = (slot && slot.rounds) || [];
+  var maxR = rounds.reduce(function(mx, r) { return Math.max(mx, (r && r.round) || 1); }, 0);
   var cur = [];
-  _rounds.filter(function (r) { return ((r && r.round) || 1) === maxR; })
-    .forEach(function (r) { (r.matches || []).forEach(function (m) { cur.push(m); }); });
-  var unfinished = cur.filter(function (m) { return !m.winner && !m.isBye && !m.isSitOut; });
-  var _go = function () {
-    if (!window.AppStore || typeof window.AppStore.mutate !== 'function') {
-      if (typeof window.showNotification === 'function') window.showNotification('Rodada não salva', 'Atualize o aplicativo e tente novamente.', 'error');
-      return;
-    }
-    var _expectedRound = maxR + 1;
-    var _intentTs = Date.now();
-    var _applyNext = function(target) {
-      var freshSlot = (target.phaseRounds && target.phaseRounds[phaseIdx]) || null;
-      var freshMax = ((freshSlot && freshSlot.rounds) || []).reduce(function(mx, r) { return Math.max(mx, (r && r.round) || 0); }, 0);
-      if (freshMax >= _expectedRound) return false;
-      if (typeof window._autoApprovePendingResults === 'function') { try { window._autoApprovePendingResults(target); } catch (e) {} }
-      var made = window._phaseGenNextLeagueRound(target, phaseIdx, { ts: _intentTs, rnd: _phaseRoundRng(String(tId) + ':' + phaseIdx + ':' + _expectedRound + ':' + _intentTs) });
-      if (!made) return false;
-      return true;
-    };
-    window.AppStore.mutate(tId, _applyNext,
-      'Liga (fase ' + (phaseIdx + 1) + '): rodada ' + maxR + ' encerrada, próxima sorteada').then(function(saved) {
-      if (saved === false) {
-        if (typeof window.showNotification === 'function') window.showNotification('Rodada não gerada', 'A chave mudou em outro aparelho. Atualize e tente novamente.', 'warning');
-        return;
-      }
-      if (typeof window._notifyDrawPersonalized === 'function') {
-        try { window._notifyDrawPersonalized(t, tId, { type: 'new_round', phaseIndex: phaseIdx }); } catch (e) {}
-      }
-      if (typeof window._rerenderBracket === 'function') window._rerenderBracket(tId);
-      else if (typeof renderBracket === 'function') renderBracket(document.getElementById('view-container'), tId);
-    }).catch(function(e) {
-      if (typeof window._warn === 'function') window._warn('[phase-close-league] save falhou', e);
-      if (typeof window.showNotification === 'function') window.showNotification('Rodada não salva', 'Não foi possível salvar a nova rodada. Tente novamente.', 'error');
-    });
+  rounds.filter(function(r) { return ((r && r.round) || 1) === maxR; }).forEach(function(r) { (r.matches || []).forEach(function(m) { cur.push(m); }); });
+  var unfinished = cur.filter(function(m) { return !m.winner && !m.isBye && !m.isSitOut; });
+  var go = function(force) {
+    if (typeof window._callCF !== 'function') return Promise.reject(new Error('Cloud Function indisponível'));
+    return window._callCF('closePhaseLeagueRound', { tournamentId: String(tId), phaseIdx: Number(phaseIdx), force: !!force }, 'Entre na sua conta para encerrar a rodada.')
+      .then(function(res) {
+        var d = (res && res.data) || {};
+        if (!d.ok) throw new Error(d.reason || 'Rodada não gerada');
+        if (typeof window._rerenderBracket === 'function') window._rerenderBracket(tId);
+        return d;
+      }).catch(function(e) {
+        if (typeof window._warn === 'function') window._warn('[phase-close-league] CF falhou', e);
+        if (typeof window.showNotification === 'function') window.showNotification('Rodada não salva', 'Não foi possível gerar a próxima rodada. Tente novamente.', 'error');
+        throw e;
+      });
   };
-  if (unfinished.length > 0 && typeof window.showConfirmDialog === 'function') {
-    var _tt = window._t || function (k) { return k; };
-    window.showConfirmDialog(_tt('bui.incompleteRound'), _tt('bui.incompleteRoundMsg', { n: unfinished.length }), _go, null, { type: 'warning', confirmText: _tt('btn.finishAnyway'), cancelText: _tt('btn.back') });
+  if (unfinished.length && typeof window.showConfirmDialog === 'function') {
+    var tt = window._t || function(k) { return k; };
+    window.showConfirmDialog(tt('bui.incompleteRound'), tt('bui.incompleteRoundMsg', { n: unfinished.length }), function() { go(true); }, null, { type: 'warning', confirmText: tt('btn.finishAnyway'), cancelText: tt('btn.back') });
     return;
   }
-  _go();
+  return go(false);
 };
 
 // v2.8.24: ocultar/mostrar rodadas concluídas POR LINHA (gold/silver…) no bracket de
