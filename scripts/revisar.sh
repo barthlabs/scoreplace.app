@@ -307,6 +307,9 @@ Depois, só o que for concreto, sempre com arquivo:linha:
 2. O QUE JÁ EXISTE — função/padrão/porta que o texto reinventa em vez de reusar.
 3. O QUE FALTA — dado, teste, caminho (offline, torneio dividido, versão velha da loja).
 4. AJUSTE SUGERIDO — a versão corrigida do plano/diff, curta.
+5. RELEASE — quando o diff tiver código de app, confira version.txt, SCOREPLACE_VERSION,
+   CACHE_NAME e compare a versão com origin/main:version.txt. Código novo com a mesma
+   versão do release-base é BLOQUEIO: o aparelho pode conservar o JavaScript antigo no cache.
 Sem elogios, sem resumo do que leu, sem repetir o texto. Se algo é opinião, marque como tal.
 EOF
   echo

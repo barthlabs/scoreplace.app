@@ -60,6 +60,10 @@ const SUITES = [
   // SP_GPT_FAIXA=trivial silenciava crítica, não rastreado não contava no teto, store.js
   // numa lista à mão caía em trivial, SP_SEM_GPT liberava sem motivo. Não chama o Codex.
   'tests/revisar-com-gpt-faixa.test.js',
+  // Um deploy com a mesma versão do release anterior é um deploy fantasma: o Service Worker
+  // mantém a chave velha e o usuário continua rodando o JS anterior. A trava é dupla:
+  // executor no deploy e instrução explícita para a revisão Claude.
+  'tests/release-version-fresh.test.js',
   // Cada FASE pode ter o seu formato de partida (1 set na classificatória, melhor de 3 com
   // super tie-break na eliminatória — pedido do dono com a Confra de exemplo). Guarda o
   // caminho INTEIRO, não o desenho: cfg.eliminatoria.scoring → compileToPhases →

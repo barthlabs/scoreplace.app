@@ -294,6 +294,14 @@ if ! node "$RAIZ/scripts/check-version-ahead.js"; then
   exit 1
 fi
 
+echo "▸ preflight: código novo recebeu uma versão nova?"
+VERSAO_NO_AR="$(curl -fsS --max-time 15 https://scoreplace.app/version.txt 2>/dev/null || true)"
+if [[ -z "$VERSAO_NO_AR" ]]; then
+  echo "✗ não consegui ler a versão atualmente servida — não publico sem saber se o cache vai trocar."
+  exit 1
+fi
+SP_RELEASE_PRODUCTION_VERSION="$VERSAO_NO_AR" node "$RAIZ/scripts/check-release-version-fresh.js" || exit 1
+
 echo "▸ preflight: montando a cópia e rodando os gates ANTES de tocar no main…"
 PRE="${TMPDIR:-/tmp}/sp-preflight-$$"
 montar_copia "$PRE"
