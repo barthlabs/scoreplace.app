@@ -1311,6 +1311,8 @@ const SUITES = [
   // lado do jogador por uid, fase da negociação). Antes existia só no navegador, com as
   // rules liberando `matches` pro participante — regra sem autoridade nenhuma.
   'functions-autodraw/test-result-core.js',
+  'tests/l8-ficha-results-fallback.test.js', // L8: fallback local só em falha da consulta global
+  'tests/close-round-promise-handled.test.js', // aprovação aguarda closeRound; demais chamadores consomem erro
   // Joga o torneio INTEIRO lançando só pelo servidor: 8 jogos (escada + 3º lugar), campeão,
   // zero slot TBD. É o "jogar até o campeão" antes de mexer no caminho mais quente do app.
   'functions-autodraw/test-result-playthrough.js',

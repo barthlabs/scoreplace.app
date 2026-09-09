@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.2.33';
+window.SCOREPLACE_VERSION = '2.2.34';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -11299,6 +11299,13 @@ window.AppStore = {
     return r;
   },
 
+
+  // Aprovação de proposta passa pela MESMA callable do lançamento. A CF ignora
+  // qualquer placar carregado pelo navegador, relê pendingResult dentro da transação
+  // e cria o recibo/outbox junto do resultado confirmado.
+  async commitResultApprovalTx(tournamentId, matchId, logMessage) {
+    return this.commitResultTx(tournamentId, matchId, { action: 'approve-pending' }, logMessage || 'Resultado aprovado');
+  },
 
   // Re-escreve SÓ o playerUids (roster) de um jogo a partir da ESTRUTURA atual,
   // FORÇANDO overwrite (o dual-write só semeia quando vazio; aqui o slot TBD virou

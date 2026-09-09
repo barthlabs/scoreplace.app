@@ -116,6 +116,19 @@ console.log('\n──── result-core: autorização ────');
   t('disputa → organizador aplica', rO.ok && rO.outcome === 'applied', JSON.stringify(rO));
 }
 
+// 9) O adversário aprova a proposta CANONICAMENTE: não manda placar, a CF usa
+// o pendingResult fresco. O proponente não pode autoaprovar a própria proposta.
+{
+  const T = mkT();
+  core.applyResult(T, { matchId: 'm1', payload: PAYLOAD, actor: { uid: UID_A1 }, now: 1 });
+  const self = core.applyResult(T, { matchId: 'm1', payload: { action: 'approve-pending' }, actor: { uid: UID_A2 }, now: 2 });
+  t('proponente não autoaprova', self.ok === false && self.reason === 'not-allowed-to-approve', JSON.stringify(self));
+  const other = core.applyResult(T, { matchId: 'm1', payload: { action: 'approve-pending' }, actor: { uid: UID_B1 }, now: 3 });
+  const m = win._findMatch(T, 'm1');
+  t('adversário aprova proposta fresca', other.ok && other.outcome === 'applied', JSON.stringify(other));
+  t('aprovação define vencedor e limpa pendência', !!m.winner && !m.pendingResult);
+}
+
 // 9) Sem ator (chamada sem auth) nunca passa.
 {
   const T = mkT();

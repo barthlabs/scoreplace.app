@@ -96,6 +96,26 @@ function applyResult(t, opts) {
   const m = (typeof win._findMatch === 'function') ? win._findMatch(t, matchId) : null;
   if (!m) return { ok: false, reason: 'match-not-found' };
 
+  // Aprovação é uma transição própria: o navegador só pede, e a CF relê a
+  // proposta atual antes de aplicá-la. Assim não existe payload velho apagando ou
+  // alterando o placar que está pendente no documento canônico.
+  if (payload.action === 'approve-pending') {
+    const pending = m.pendingResult;
+    if (!pending) return { ok: false, reason: 'no-pending-result' };
+    const isAdmin = !!(typeof win._isUserOrgOrCoHost === 'function' && win._isUserOrgOrCoHost(t, actor));
+    const actorSide = (typeof win._userTeamInMatch === 'function') ? win._userTeamInMatch(t, m, actor) : 0;
+    const proposerSide = (typeof win._userTeamInMatch === 'function')
+      ? win._userTeamInMatch(t, m, { uid: pending.proposedBy }) : 0;
+    if (!isAdmin && (!actorSide || !proposerSide || actorSide === proposerSide)) {
+      return { ok: false, reason: 'not-allowed-to-approve' };
+    }
+    const approved = (typeof win._applyApprovedResult === 'function')
+      ? win._applyApprovedResult(t, matchId, pending) : null;
+    if (!approved || !approved.ok) return { ok: false, reason: 'approve-failed' };
+    if (o.logMessage) pushHistory(t, o.logMessage, o.now);
+    return { ok: true, outcome: 'applied', reason: '' };
+  }
+
   const authz = authorize(t, m, actor);
   if (!authz.ok) return { ok: false, reason: authz.reason };
 

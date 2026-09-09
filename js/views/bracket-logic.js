@@ -3605,7 +3605,7 @@ window._closeRound = function (tId, roundIdx, anchorMatchId, resultCtx) {
     );
     return;
   }
-  _doCloseRound(t, tId, roundIdx, anchorMatchId, resultCtx);
+  return _doCloseRound(t, tId, roundIdx, anchorMatchId, resultCtx);
 };
 
 function _doCloseRound(t, tId, roundIdx, anchorMatchId, resultCtx, _forcarLocal) {
@@ -3651,7 +3651,7 @@ function _doCloseRound(t, tId, roundIdx, anchorMatchId, resultCtx, _forcarLocal)
   }
   if (!_forcarLocal) {
     window.AppStore.logAction(tId, `Rodada ${roundIdx + 1} encerrada`);
-    window._callCloseRound({ tournamentId: String(tId), roundIdx: roundIdx, resultCtx: resultCtx || null })
+    return window._callCloseRound({ tournamentId: String(tId), roundIdx: roundIdx, resultCtx: resultCtx || null })
       .then(function (_res) {
         var d = (_res && _res.data) || {};
         if (d.ok && d.tournament) {
@@ -3665,6 +3665,7 @@ function _doCloseRound(t, tId, roundIdx, anchorMatchId, resultCtx, _forcarLocal)
         }
         // noop (d.ok===false: outro fechou primeiro / rodada não fechou) → o listener reconcilia.
         if (typeof window._rerenderBracket === 'function') window._rerenderBracket(tId, anchorMatchId);
+        return d;
       })
       .catch(function (err) {
         window._lastSaveError = { tournamentId: tId, area: 'closeRound', code: (err && err.code) || '', message: (err && err.message) || String(err) };
@@ -3682,8 +3683,8 @@ function _doCloseRound(t, tId, roundIdx, anchorMatchId, resultCtx, _forcarLocal)
           showNotification('Não consegui encerrar a rodada',
             'A rodada continua aberta. Confira a conexão e tente de novo.', 'error');
         } catch (e2) {}
+        throw err;
       });
-    return;
   }
 
   t.rounds[roundIdx].status = 'complete';

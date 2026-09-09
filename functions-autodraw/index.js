@@ -1118,6 +1118,7 @@ function _scoreAuditSnapshot(m) {
 function _scoreAuditPayload(payload) {
   const p = payload || {};
   return {
+    action: p.action == null ? null : String(p.action),
     setsInProgress: !!p.setsInProgress, gsmFinal: !!p.gsmFinal,
     isFixedSet: !!p.isFixedSet, useSets: !!p.useSets,
     sets: Array.isArray(p.sets) ? JSON.parse(JSON.stringify(p.sets)) : null,

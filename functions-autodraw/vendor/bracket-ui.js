@@ -2494,7 +2494,7 @@ window._saveResultInline = function (tId, matchId) {
         } };
         setTimeout(function() {
           if (typeof window._closeRound === 'function') {
-            window._closeRound(tId, _roundIdxAuto, matchId, _closeResultCtx);
+            window._closeRound(tId, _roundIdxAuto, matchId, _closeResultCtx).catch(function() {});
           }
         }, 0);
       } else if (!_thisComplete) {
@@ -2785,32 +2785,17 @@ window._approveResult = function(tId, matchId) {
 
   var _logMsg = 'Resultado aprovado: ' + m.p1 + ' ' + s1 + ' × ' + s2 + ' ' + m.p2 + (m.draw ? ' — Empate' : ' — Vencedor: ' + m.winner);
   window.AppStore.logAction(tId, _logMsg);
+  // A aprovação nunca grava pelo navegador: a CF relê a proposta atual, decide
+  // autorização e grava placar, auditoria e outbox na mesma transação.
+  var _approved = Promise.resolve(window.AppStore.commitResultApprovalTx(tId, matchId, _logMsg));
   if (_ctx.deferred) {
-    // BLINDAGEM (save #2): fecho da última rodada deferido pro _closeRound (transação
-    // atômica) — NÃO persiste aqui (senão grava a rodada ainda-aberta e sobrescreve o
-    // fecho pela rede). resultCtx re-aplica o resultado aprovado sobre o fresco.
-    var _approveResultCtx = { matchId: matchId, payload: {
-      s1: s1, s2: s2, useSets: !!pr.useSets, isFixedSet: !!pr.isFixedSet,
-      isTiebreakEntry: !!pr.isTiebreakEntry, tbP1: pr.tbP1, tbP2: pr.tbP2
-    } };
-    setTimeout(function() {
-      if (typeof window._closeRound !== 'function') { _avisarFalha(new Error('_closeRound indisponível')); return; }
-      // `_closeRound` pode ou não devolver promessa; `Promise.resolve` cobre os dois
-      // casos sem exigir que ele mude de contrato.
-      try {
-        Promise.resolve(window._closeRound(tId, _ctx.roundIdx, matchId, _approveResultCtx))
-          .then(_avisarOk).catch(_avisarFalha);
-      } catch (e) { _avisarFalha(e); }
-    }, 0);
+    _approved.then(function() {
+      if (typeof window._closeRound !== 'function') throw new Error('_closeRound indisponível');
+      // O placar já está confirmado na CF; o fecho não recebe payload para reaplicar.
+      return window._closeRound(tId, _ctx.roundIdx, matchId);
+    }).then(_avisarOk).catch(_avisarFalha);
   } else {
-    // BLINDAGEM (v4.0.121): persiste ATÔMICO pelo portão — re-aplica a aprovação
-    // (via a mesma mutação pura, com o `pr` capturado) sobre o doc fresco.
-    // `commitTournamentTx` é async: sem `.catch` a rejeição vira unhandled e some.
-    Promise.resolve(window.AppStore.commitTournamentTx(tId, function (ft) {
-      window._applyApprovedResult(ft, matchId, pr);
-      if (!Array.isArray(ft.history)) ft.history = [];
-      ft.history.push({ date: new Date().toISOString(), message: _logMsg });
-    })).then(_avisarOk).catch(_avisarFalha);
+    _approved.then(_avisarOk).catch(_avisarFalha);
   }
   // 4.1 DUAL-WRITE (project_match_result_docs, inc 3a): espelha o resultado aprovado
   // (já aplicado otimista no `m` local por _applyApprovedResult) no doc do jogo.

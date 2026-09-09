@@ -1915,51 +1915,46 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var db = window.FirestoreDB && window.FirestoreDB.db;
     if (!db || !uid) return Promise.resolve([]);
     var ts = (window.AppStore && window.AppStore.tournaments) || [];
-    var locais = ts.slice(0, 40)
+    function itens(qs, tid) {
+      var o = [];
+      qs.forEach(function (d) {
+        var raw = d.data() || {};
+        if (tid && !raw.tournamentId) raw.tournamentId = tid;
+        var it = _lzItemDeResult(raw, uid, meNome);
+        if (it) o.push(it);
+      });
+      return o;
+    }
+    function unir(rs) {
+      var vistos = {}, out = [];
+      rs.forEach(function (lista) { (lista || []).forEach(function (it) {
+        if (!it) return; var k = it._k || (it.competition + '|' + it.opponent + '|' + it.ts);
+        if (vistos[k]) return; vistos[k] = 1; out.push(it);
+      }); });
+      return out;
+    }
+    function locais() { return Promise.all(ts.slice(0, 40)
       // SB nem é consultado (o dev tem o doc na lista) — a consulta economizada é de graça
       // e o cinto de verdade continua sendo o `_isSandboxRef` de dentro do item.
       .filter(function (t) { return !(window._isSandboxRef && window._isSandboxRef(t.id, t.name)); })
       .map(function (t) {
         return db.collection('tournaments').doc(t.id).collection('results')
           .where('playerUids', 'array-contains', uid).limit(120).get()
-          .then(function (qs) {
-            var o = [];
-            qs.forEach(function (d) {
-              var raw = d.data() || {};
-              if (!raw.tournamentId) raw.tournamentId = t.id;   // doc antigo sem o campo
-              var it = _lzItemDeResult(raw, uid, meNome);
-              if (it) o.push(it);
-            });
-            return o;
-          })
+          .then(function (qs) { return itens(qs, t.id); })
           .catch(function () { return []; });
-      });
-    var amplo = db.collectionGroup('results').where('playerUids', 'array-contains', uid).limit(400).get()
-      .then(function (qs) {
-        var o = [];
-        qs.forEach(function (d) { var it = _lzItemDeResult(d.data() || {}, uid, meNome); if (it) o.push(it); });
-        return o;
-      })
+      })); }
+    return db.collectionGroup('results').where('playerUids', 'array-contains', uid).limit(400).get()
+      .then(function (qs) { return itens(qs, null); })
       .catch(function (e) {
         window._warn && window._warn('[letzplay] collection group de placares indisponível:', (e && e.code) || e);
-        return [];
+        return locais().then(unir);
       });
-    return Promise.all(locais.concat([amplo])).then(function (rs) {
-      var vistos = {}, out = [];
-      rs.forEach(function (lista) {
-        (lista || []).forEach(function (it) {
-          if (!it) return;
-          var k = it._k || (it.competition + '|' + it.opponent + '|' + it.ts);
-          if (vistos[k]) return; vistos[k] = 1; out.push(it);
-        });
-      });
-      return out;
-    });
   }
 
   // Exportado pra que o teste exercite as TRÊS LEIS no código REAL (tests/jogo-so-com-
   // placar.test.js roda os docs de produção que quebraram a ficha da Lucia Helena).
   window._lzItemDeResult = _lzItemDeResult;
+  window._lzJogosDoScoreplace = _lzJogosDoScoreplace;
 
   // ── PARTIDAS CASUAIS ──────────────────────────────────────────────────────────
   // "torneios ou casuais. diferenciados." (dono). O card já distingue pelo selo e pela

@@ -6435,7 +6435,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
   if (isSuico && allComplete && currentRound < maxRounds && currentRoundData.status !== 'complete') {
     setTimeout(function() {
       if (typeof window._closeRound === 'function') {
-        window._closeRound(t.id, currentRound - 1);
+        window._closeRound(t.id, currentRound - 1).catch(function() {});
       }
     }, 0);
   }
@@ -6518,7 +6518,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
             🔁 Encerrar rodada e sortear próxima
           </button>` : ''}
         ${isOrg && !isFinished && allComplete && !_suppressAdvance && !_phaseCad && !(window._isLigaAutoDraw && window._isLigaAutoDraw(t)) && !(window._phasesPhaseComplete && window._phasesPhaseComplete(t)) ? `
-          <button class="btn btn-success btn-sm hover-lift" onclick="window._closeRound('${String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}', ${currentRound - 1})">
+          <button class="btn btn-success btn-sm hover-lift" onclick="window._closeRound('${String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}', ${currentRound - 1}).catch(function(){})">
             ${_t('bracket.closeRound')}
           </button>` : ''}
         ${isFinished ? `<span style="color:var(--sp-c-fbbf24,#fbbf24);font-weight:700;">${_t('bracket.tournamentFinished')}</span>` : ''}
@@ -7986,7 +7986,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
       ? '<span style="color:var(--sp-c-4ade80,#4ade80);font-size:0.7rem;font-weight:700;white-space:nowrap;">✓ ' + _t('bracket.complete') + '</span>'
       : (isFinished ? '<span style="color:var(--sp-c-fbbf24,#fbbf24);font-weight:700;font-size:0.7rem;white-space:nowrap;">' + _t('bracket.tournamentFinished') + '</span>' : '');
     var _closeBtn = (isOrg && !isFinished && allComplete && !(window._isLigaAutoDraw && window._isLigaAutoDraw(t)) && !(window._phasesPhaseComplete && window._phasesPhaseComplete(t)))
-      ? '<button class="btn btn-success btn-sm" onclick="window._closeRound(\'' + _tIdEsc + '\', ' + (currentRound - 1) + ')" style="font-size:0.72rem;white-space:nowrap;">' + _t('bracket.closeRound') + '</button>'
+      ? '<button class="btn btn-success btn-sm" onclick="window._closeRound(\'' + _tIdEsc + '\', ' + (currentRound - 1) + ').catch(function(){})" style="font-size:0.72rem;white-space:nowrap;">' + _t('bracket.closeRound') + '</button>'
       : '';
     _roundColumns.push(
       '<div class="bracket-round-column" data-round-num="' + currentRound + '" style="display:flex;flex-direction:column;gap:1rem;min-width:280px;">' +
