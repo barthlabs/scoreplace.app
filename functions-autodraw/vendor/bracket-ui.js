@@ -2370,40 +2370,14 @@ window._saveResultInline = function (tId, matchId) {
       _pendingPayload.setsWonP1 = _mp.setsWonP1;
       _pendingPayload.setsWonP2 = _mp.setsWonP2;
     }
-    m.pendingResult = _pendingPayload;
-    _propagateMatchUpdate(t, m);
     var _pendingLogMsg = 'Resultado proposto: ' + m.p1 + ' ' + s1 + ' × ' + s2 + ' ' + m.p2 + ' — aguardando aprovação (' + _pendingPayload.proposedByName + ')';
-    window.AppStore.logAction(tId, _pendingLogMsg);
-    // BLINDAGEM: persiste a proposta ATOMICAMENTE (re-aplica pendingResult no
-    // match fresco + histórico), em vez de syncImmediate do doc inteiro. project_concurrency_safe_saves.
-    // ⭐ A TRAVA VALE ONDE ESTÁ A VERDADE (ver _propostaDoOutroLado): a checagem local
-    // acima olha uma cópia que pode ser velha. Aqui, dentro da transação, o doc é o
-    // FRESCO — se o outro lado já propôs, aborta em vez de gravar por cima.
-    var _perdeuCorrida = null;
-    window.AppStore.commitTournamentTx(tId, function (freshT) {
-      var fm = window._findMatch(freshT, matchId);
-      if (fm && _propostaDoOutroLado(freshT, fm, _curUser)) {
-        _perdeuCorrida = fm.pendingResult;
-        return false;                       // mutator aborta → nada é gravado
-      }
-      if (fm) {
-        fm.pendingResult = _pendingPayload;
-        if (typeof window._propagateMatchUpdate === 'function') window._propagateMatchUpdate(freshT, fm);
-      }
-      if (!Array.isArray(freshT.history)) freshT.history = [];
-      freshT.history.push({ date: new Date().toISOString(), message: _pendingLogMsg });
-    }).then(function (gravou) {
-      // ⚠️ O QUE ACONTECE DEPOIS DA GRAVAÇÃO SÓ PODE SER DITO DEPOIS DELA. O aviso de
-      // "enviado", a notificação pro adversário e o espelho do jogo saíam DAQUI DE CIMA,
-      // antes de a transação voltar — então quem perdia a corrida (ou nem gravava, por
-      // falta de rede) avisava o adversário sobre uma proposta que não existe. Agora cada
-      // desfecho conta a sua própria história.
-      if (_perdeuCorrida) { _fechaCorridaDoPlacar(tId, matchId, _perdeuCorrida, _pendingPayload); return; }
-      if (gravou === false) return;      // a falha já se anuncia sozinha (commitTournamentTx)
-      // A entrega é criada pela CF junto com o placar canônico.
-      showNotification('⏳ Resultado enviado', 'Aguardando aprovação do time adversário ou do organizador.', 'success');
-    });
-    _rerenderBracket(tId, matchId);
+    // A proposta não é aplicada nem antecipada no navegador. Ele só transmite a
+    // intenção; a CF relê o jogo fresco, decide a corrida e cria o recibo/outbox.
+    Promise.resolve(window.AppStore.commitResultTx(tId, matchId, { pending: _pendingPayload }, _pendingLogMsg))
+      .then(function (gravou) {
+        if (!gravou) return;
+        showNotification('⏳ Resultado enviado', 'Aguardando aprovação do time adversário ou do organizador.', 'success');
+      });
     return;
   }
 
@@ -2857,27 +2831,15 @@ window._contestResult = function(tId, matchId) {
       // Som: placar não aprovado (contestado) → "dois pra baixo".
       if (window._sound) window._sound('rejeicao');
       var _disputedByName = cu.displayName || cu.email || 'Jogador';
-      // BLINDAGEM (v4.0.121): marca a disputa ATÔMICO pelo portão (local + fresco).
-      window.AppStore.mutate(tId, function (ft) {
-        var fm = _findMatch(ft, matchId);
-        if (!fm || !fm.pendingResult) return;
-        fm.pendingResult.disputed = true;
-        fm.pendingResult.disputedBy = cu.uid || null;
-        fm.pendingResult.disputedByName = _disputedByName;
-        fm.pendingResult.disputedAt = Date.now();
-        if (typeof window._propagateMatchUpdate === 'function') window._propagateMatchUpdate(ft, fm);
-      }, 'Resultado contestado por ' + (cu.displayName || cu.email) + ': ' + m.p1 + ' vs ' + m.p2);
-      // 4.1 DUAL-WRITE: espelha a disputa (pendingResult.disputed) no doc do jogo.
-
-      var scoreText = (pr.scoreP1 != null ? pr.scoreP1 : '?') + ' × ' + (pr.scoreP2 != null ? pr.scoreP2 : '?');
-      _notifyOrgAndCoHosts(t, {
-        type: 'match-disputed',
-        title: '🚨 Resultado em disputa',
-        message: m.p1 + ' vs ' + m.p2 + ' — placar ' + scoreText + ' contestado por ' + _disputedByName + '. Intervenha para resolver.',
-        tournamentId: t.id, tournamentName: t.name, matchId: m.id, level: 'fundamental', timestamp: Date.now()
+      var _contestLog = 'Resultado contestado por ' + _disputedByName + ': ' + m.p1 + ' vs ' + m.p2;
+      // O cliente não marca nem avisa por conta própria: a CF relê a proposta fresca,
+      // autoriza o contestador e produz o aviso dos organizadores no mesmo commit.
+      Promise.resolve(window.AppStore.commitResultTx(tId, matchId, {
+        action: 'contest-pending'
+      }, _contestLog)).then(function (gravou) {
+        if (!gravou) return;
+        showNotification('❌ Contestação enviada', 'O organizador foi notificado para resolver o resultado.', 'success');
       });
-      showNotification('❌ Contestação enviada', 'O organizador foi notificado para resolver o resultado.', 'success');
-      _rerenderBracket(tId, matchId);
     }
   );
 };
@@ -3299,19 +3261,16 @@ window._editPendingResult = function(tId, matchId) {
         _counter.setsWonP1 = _msC.setsWonP1;
         _counter.setsWonP2 = _msC.setsWonP2;
       }
-      m.pendingResult = _counter; // local otimista
-      // BLINDAGEM (v4.0.121): grava a contra-proposta ATÔMICO pelo portão.
-      window.AppStore.mutate(tId, function (ft) {
-        var fm = _findMatch(ft, matchId);
-        if (!fm) return;
-        fm.pendingResult = _counter;
-        if (typeof window._propagateMatchUpdate === 'function') window._propagateMatchUpdate(ft, fm);
-      }, 'Contra-proposta: ' + m.p1 + ' ' + s1v + ' × ' + s2v + ' ' + m.p2 + ' por ' + (cu.displayName || cu.email));
-      // 4.1 DUAL-WRITE: espelha a contra-proposta (novo pendingResult) no doc do jogo.
-      // A entrega é criada pela CF junto com o placar canônico.
-      showNotification('⏳ Contra-proposta enviada', 'O time adversário foi notificado para aprovar ou contestar.', 'success');
+      var _counterLog = 'Contra-proposta: ' + m.p1 + ' ' + s1v + ' × ' + s2v + ' ' + m.p2 + ' por ' + (cu.displayName || cu.email);
+      // A proposta original só é lida e trocada dentro da CF. Assim uma tela velha não
+      // consegue substituir a proposta que o outro time acabou de registrar.
+      Promise.resolve(window.AppStore.commitResultTx(tId, matchId, {
+        action: 'counter-pending', pending: _counter
+      }, _counterLog)).then(function (gravou) {
+        if (!gravou) return;
+        showNotification('⏳ Contra-proposta enviada', 'O time adversário foi notificado para aprovar ou contestar.', 'success');
+      });
       window._suppressSoftRefresh = false;
-      _rerenderBracket(tId, matchId);
     });
   }
 

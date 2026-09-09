@@ -11278,8 +11278,14 @@ window.AppStore = {
     var r = _viaCF;
     if (!r) {
       try {
-        showNotification('Não consegui lançar o placar',
-          'O servidor não confirmou este placar. Confira a conexão e tente novamente.', 'error');
+        var _reason = window._lastSaveError && window._lastSaveError.reason;
+        if (_reason === 'pending-other-side') {
+          showNotification('O outro time lançou primeiro',
+            'Use Confirmar, Editar ou Contestar o placar que já está aguardando aprovação.', 'info');
+        } else {
+          showNotification('Não consegui lançar o placar',
+            'O servidor não confirmou este placar. Confira a conexão e tente novamente.', 'error');
+        }
       } catch (_eN) {}
     }
     /* ⛔ AQUI MORAVA O ESPELHO DO CLIENTE (`_dualWriteMatchResult`), E ELE MORREU (2.1.30).

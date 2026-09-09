@@ -949,7 +949,7 @@ async function _aplicaPlacarNaTransacao(db, tId, matchId, payload, ator, logMess
     }
     try { drawWindow._hydrateMonarchGroups(t); } catch (e) { /* best-effort */ }
     const res = applyResultFn(t, {
-      matchId: matchId, payload: payload, actor: { uid: ator.uid, email: ator.email || '' },
+      matchId: matchId, payload: payload, actor: { uid: ator.uid, email: ator.email || '', name: ator.name || '' },
       logMessage: logMessage
     });
     if (!res || !res.ok) return { ok: false, reason: (res && res.reason) || 'apply-failed' };
@@ -975,7 +975,9 @@ async function _aplicaPlacarNaTransacao(db, tId, matchId, payload, ator, logMess
     const _matchDepois = (typeof drawWindow._findMatch === 'function')
       ? drawWindow._findMatch(t, matchId) : null;
     const _notif = _scoreNotificationEvent(t, _matchDepois, res.outcome, ator, _agoraIsoTx);
-    if (_notif) tx.set(notifOutboxRef, _notif);
+    const _transitionNotif = res.outcome === 'disputed'
+      ? _disputeNotificationEvent(t, _matchDepois, ator, _agoraIsoTx) : null;
+    if (_notif || _transitionNotif) tx.set(notifOutboxRef, _notif || _transitionNotif);
     return { ok: true, outcome: res.outcome, tournament: b.clean };
   });
 }
@@ -1016,7 +1018,9 @@ function _scoreNotificationRecipients(t, m, pending) {
 }
 
 function _scoreNotificationEvent(t, m, outcome, actor, at) {
-  if (!m || outcome === 'in-progress') return null;
+  // Disputa nunca é confirmação: mesmo que o jogo conserve sets de um placar
+  // anterior, só a notificação própria da transição pode sair da transação.
+  if (!m || outcome === 'in-progress' || outcome === 'disputed') return null;
   const pending = outcome === 'pending';
   const scoreboard = _notificationScoreboard(m, pending);
   if (!scoreboard || !scoreboard.p1 || !scoreboard.p2) return null;
@@ -1037,6 +1041,33 @@ function _scoreNotificationEvent(t, m, outcome, actor, at) {
     level: 'fundamental',
     scoreboard,
     recipients: _scoreNotificationRecipients(t, m, pending),
+    createdAt: at,
+    createdAtMs: Date.parse(at),
+    dispatchStatus: 'pending'
+  };
+}
+
+// Contestação não tem novo placar para comunicar; ela é uma transição do fluxo. Ainda
+// assim o aviso nasce junto com a mudança canônica, nunca do navegador que apertou o botão.
+function _disputeNotificationEvent(t, m, actor, at) {
+  if (!t || !m) return null;
+  const recipients = new Set();
+  if (t.creatorUid) recipients.add(String(t.creatorUid));
+  (Array.isArray(t.adminUids) ? t.adminUids : []).forEach(uid => { if (uid) recipients.add(String(uid)); });
+  const who = String((m.pendingResult && m.pendingResult.disputedByName) || actor.name || actor.email || 'Alguém');
+  return {
+    schema: 1,
+    kind: 'score-notification',
+    type: 'match-disputed',
+    title: '🚨 Resultado em disputa',
+    message: String(m.p1 || '') + ' vs ' + String(m.p2 || '') + ' — contestado por ' + who + '. Intervenha para resolver.',
+    tournamentId: String(t.id || ''),
+    tournamentName: String(t.name || ''),
+    matchId: String(m.id || ''),
+    fromUid: String(actor.uid || ''),
+    fromName: who,
+    level: 'fundamental',
+    recipients: Array.from(recipients),
     createdAt: at,
     createdAtMs: Date.parse(at),
     dispatchStatus: 'pending'
@@ -1159,7 +1190,9 @@ exports.applyMatchResult = onCall(async (request) => {
   let out;
   try {
     // MESMO miolo que a fila usa — ver _aplicaPlacarNaTransacao.
-    out = await _aplicaPlacarNaTransacao(db, tId, matchId, payload, { uid, email }, logMessage);
+    out = await _aplicaPlacarNaTransacao(db, tId, matchId, payload, {
+      uid, email, name: (request.auth && request.auth.token && request.auth.token.name) || ''
+    }, logMessage);
     if (!out.ok && out.reason === 'permission-denied') {
       throw _drawFail('permission-denied', 'Sem permissão (doc fresco).', { tId, matchId, uid });
     }

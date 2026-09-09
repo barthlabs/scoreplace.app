@@ -136,7 +136,37 @@ console.log('\n──── result-core: autorização ────');
   t('sem uid → RECUSADO', r.ok === false && r.reason === 'no-actor', JSON.stringify(r));
 }
 
-// 10) Jogo inexistente.
+// 10) Contra-proposta só pode sair do outro time e preserva a proposta que a CF leu.
+{
+  const T = mkT();
+  core.applyResult(T, { matchId: 'm1', payload: PAYLOAD, actor: { uid: UID_A1 }, now: 1 });
+  const r = core.applyResult(T, {
+    matchId: 'm1',
+    payload: { action: 'counter-pending', pending: { scoreP1: 3, scoreP2: 6, winner: 'Caio / Dora' } },
+    actor: { uid: UID_B1 }, now: 2
+  });
+  const m = win._findMatch(T, 'm1');
+  t('adversário envia contra-proposta pela CF', r.ok && r.outcome === 'pending', JSON.stringify(r));
+  t('contra-proposta preserva a proposta original fresca', m.pendingResult && m.pendingResult.proposedBy === UID_B1 && m.pendingResult.originalProposal && m.pendingResult.originalProposal.proposedBy === UID_A1);
+  const self = core.applyResult(T, {
+    matchId: 'm1', payload: { action: 'counter-pending', pending: PAYLOAD.pending }, actor: { uid: UID_B2 }, now: 3
+  });
+  t('mesmo lado não sobrepõe a própria contra-proposta', self.ok === false && self.reason === 'not-allowed-to-counter', JSON.stringify(self));
+}
+
+// 11) Contestação é decidida no servidor e o proponente não consegue se auto-contestar.
+{
+  const T = mkT();
+  core.applyResult(T, { matchId: 'm1', payload: PAYLOAD, actor: { uid: UID_A1 }, now: 1 });
+  const self = core.applyResult(T, { matchId: 'm1', payload: { action: 'contest-pending' }, actor: { uid: UID_A2 }, now: 2 });
+  t('proponente não auto-contesta', self.ok === false && self.reason === 'not-allowed-to-contest', JSON.stringify(self));
+  const other = core.applyResult(T, { matchId: 'm1', payload: { action: 'contest-pending' }, actor: { uid: UID_B1, name: 'Caio' }, now: 3 });
+  const m = win._findMatch(T, 'm1');
+  t('adversário contesta pelo documento fresco', other.ok && other.outcome === 'disputed', JSON.stringify(other));
+  t('contestação registra o ator canônico', m.pendingResult && m.pendingResult.disputed === true && m.pendingResult.disputedBy === UID_B1 && m.pendingResult.disputedByName === 'Caio');
+}
+
+// 12) Jogo inexistente.
 {
   const T = mkT();
   const r = core.applyResult(T, { matchId: 'nope', payload: PAYLOAD, actor: { uid: UID_ORG }, now: 1 });

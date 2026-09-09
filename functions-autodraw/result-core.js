@@ -116,6 +116,61 @@ function applyResult(t, opts) {
     return { ok: true, outcome: 'applied', reason: '' };
   }
 
+  // Contra-proposta é uma transição diferente de "lançar": há uma proposta fresca
+  // que pertence ao outro lado e a regra comum deliberadamente a protege de overwrite.
+  // A CF, porém, pode trocá-la de forma controlada, preservando o registro original.
+  if (payload.action === 'counter-pending') {
+    const pending = m.pendingResult;
+    if (!pending || pending.disputed) return { ok: false, reason: 'no-open-pending-result' };
+    const isAdmin = !!(typeof win._isUserOrgOrCoHost === 'function' && win._isUserOrgOrCoHost(t, actor));
+    const actorSide = (typeof win._userTeamInMatch === 'function') ? win._userTeamInMatch(t, m, actor) : 0;
+    const proposerSide = (typeof win._userTeamInMatch === 'function')
+      ? win._userTeamInMatch(t, m, { uid: pending.proposedBy }) : 0;
+    if (isAdmin || !playersMaySubmit(t, m) || !actorSide || !proposerSide || actorSide === proposerSide) {
+      return { ok: false, reason: 'not-allowed-to-counter' };
+    }
+    const original = pending.originalProposal || {
+      proposedBy: pending.proposedBy || null,
+      proposedByName: pending.proposedByName || '',
+      scoreP1: pending.scoreP1,
+      scoreP2: pending.scoreP2,
+      sets: Array.isArray(pending.sets) ? pending.sets : null
+    };
+    m.pendingResult = Object.assign({}, payload.pending || {}, {
+      proposedBy: actor.uid || null,
+      proposedByEmail: actor.email || null,
+      proposedByName: actor.name || actor.email || 'Jogador',
+      proposedAt: (typeof o.now === 'number') ? o.now : Date.now(),
+      isCounterProposal: true,
+      originalProposal: original
+    });
+    if (typeof win._propagateMatchUpdate === 'function') win._propagateMatchUpdate(t, m);
+    if (o.logMessage) pushHistory(t, o.logMessage, o.now);
+    return { ok: true, outcome: 'pending', reason: '' };
+  }
+
+  // Contestação não recebe placar do cliente: a CF relê a proposta e apenas marca
+  // a transição de consenso. Proponente não pode contestar a própria proposta.
+  if (payload.action === 'contest-pending') {
+    const pending = m.pendingResult;
+    if (!pending || pending.disputed) return { ok: false, reason: 'no-open-pending-result' };
+    const isAdmin = !!(typeof win._isUserOrgOrCoHost === 'function' && win._isUserOrgOrCoHost(t, actor));
+    const actorSide = (typeof win._userTeamInMatch === 'function') ? win._userTeamInMatch(t, m, actor) : 0;
+    const proposerSide = (typeof win._userTeamInMatch === 'function')
+      ? win._userTeamInMatch(t, m, { uid: pending.proposedBy }) : 0;
+    const isProposer = String(pending.proposedBy || '') === String(actor.uid || '');
+    if (isProposer || (!isAdmin && (!actorSide || !proposerSide || actorSide === proposerSide))) {
+      return { ok: false, reason: 'not-allowed-to-contest' };
+    }
+    pending.disputed = true;
+    pending.disputedBy = actor.uid || null;
+    pending.disputedByName = actor.name || actor.email || 'Jogador';
+    pending.disputedAt = (typeof o.now === 'number') ? o.now : Date.now();
+    if (typeof win._propagateMatchUpdate === 'function') win._propagateMatchUpdate(t, m);
+    if (o.logMessage) pushHistory(t, o.logMessage, o.now);
+    return { ok: true, outcome: 'disputed', reason: '' };
+  }
+
   const authz = authorize(t, m, actor);
   if (!authz.ok) return { ok: false, reason: authz.reason };
 
@@ -144,6 +199,8 @@ function applyResult(t, opts) {
   if (needsApproval && !o.forceApply) {
     m.pendingResult = Object.assign({}, payload.pending || {}, {
       proposedBy: actor.uid || null,
+      proposedByEmail: actor.email || null,
+      proposedByName: actor.name || actor.email || 'Jogador',
       proposedAt: (typeof o.now === 'number') ? o.now : Date.now()
     });
     if (typeof win._propagateMatchUpdate === 'function') win._propagateMatchUpdate(t, m);

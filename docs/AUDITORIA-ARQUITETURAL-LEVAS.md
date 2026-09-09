@@ -2848,9 +2848,9 @@ instante e RNG; é reaplicada no documento fresco e aborta se a rodada já foi c
 `fechar-rodada-liga-nao-duplica-nem-sobrescreve` comprova retry determinístico e preservação de
 um placar concorrente. Claude aprovou o diff (Opus, esforço baixo).
 
-**Conclusão desta etapa.** A porta canônica já existe e é `AppStore.mutate` para alterações do
-documento de torneio; portas especializadas são a escolha para presença, inscrição, dupla e
-resultado isolado. O próximo alvo é o único `syncImmediate` restante, o toggle de atividade da
+**Conclusão desta etapa.** Alterações estruturais seguem a transação fresca; resultado isolado
+é uma porta especializada no servidor. O próximo alvo estrutural é o único `syncImmediate`
+restante, o toggle de atividade da
 Liga. Depois serão tratados os `sync()` de preparação de sorteio e categorias, com um teste por
 fluxo que faça um snapshot velho terminar depois da transação fresca. Cada mutator deve expressar
 uma mudança idempotente, pois será reexecutado durante retry.
@@ -2867,6 +2867,16 @@ fora desse contrato são ferramentas de desenvolvimento (simular sorteio e bots)
 parcial de status no contador e as próprias portas internas `sync`/`syncImmediate`, que não são
 mais chamadas pelos fluxos L7 migrados. Gates dedicados cobrem categorias, inscritos, manutenção,
 status e edição; cada diff funcional recebeu parecer **APROVADO** do Claude.
+
+**L7.P1.11 — consenso de resultado só despacha a Cloud Function (08/set/2026, em revisão).**
+Proposta, contra-proposta e contestação ainda alteravam `pendingResult` pelo navegador, embora
+a aprovação definitiva já fosse canônica em `applyMatchResult`. O lote substitui essas três
+escritas por intenções `pending`, `counter-pending` e `contest-pending`: a Function relê o jogo
+fresco, deriva o autor da autenticação, preserva a proposta original na contra-proposta e cria a
+contestação junto ao recibo `scoreAudit` e à outbox dos organizadores. Os testes cobrem proponente
+versus adversário, preservação da proposta fresca e impedimento de autoaprovação/autocontestação.
+Reabertura administrativa e reversão de W.O. continuam fora deste lote, pois modificam avanço e
+classificação e exigem uma intenção server-side própria.
 
 ## L8 — matriz de leitura e projeção (08/set/2026)
 

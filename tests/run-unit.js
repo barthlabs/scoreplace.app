@@ -1313,6 +1313,7 @@ const SUITES = [
   'functions-autodraw/test-result-core.js',
   'tests/l8-ficha-results-fallback.test.js', // L8: fallback local só em falha da consulta global
   'tests/close-round-promise-handled.test.js', // aprovação aguarda closeRound; demais chamadores consomem erro
+  'tests/l7-consenso-placar-cf-only.test.js', // L7: proposta/contestação só despacham a CF
   // Joga o torneio INTEIRO lançando só pelo servidor: 8 jogos (escada + 3º lugar), campeão,
   // zero slot TBD. É o "jogar até o campeão" antes de mexer no caminho mais quente do app.
   'functions-autodraw/test-result-playthrough.js',
