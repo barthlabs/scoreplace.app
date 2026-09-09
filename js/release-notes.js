@@ -24,6 +24,10 @@ window._RELEASE_NOTES_HTML = (function () {
     // ele voltava no próximo carregamento; agora o erro permanece visível, resíduos locais
     // antigos são descartados e a limpeza completa (subcoleções, feed e cópias) parte do
     // servidor. Correção de integridade, sem regra nova para participantes.
+    // ⚠️ 2.2.32 · aviso de placar também sai agora da Cloud Function: a mesma transação
+    // que grava o resultado cria uma caixa de saída com os sets canônicos. Assim e-mail,
+    // sino e notificação recebem 6–2 / 6–2 de verdade, nunca `?` vindo de um card antigo.
+    // A entrega é idempotente e continua respeitando os canais escolhidos por cada pessoa.
     // ⚠️ 2.2.33 NÃO ganhou item próprio: lançamento de placar passa exclusivamente pela
     // Cloud Function, que registra antes/depois no recibo de auditoria. É correção de
     // integridade; a tela e as regras de jogo permanecem as mesmas. Os arquivos da tela
