@@ -91,6 +91,30 @@ function boot(local, servidor, quem) {
     servidor.updatedAt = 'gravado';
     return Promise.resolve(true);
   };
+  // Dublê da callable: lê o estado fresco (`servidor`) e devolve seu recibo para
+  // a cópia local. Não há escrita de resultado pelo browser neste teste.
+  W.AppStore.commitResultTx = (id, matchId, payload) => {
+    const m = jogo(servidor), incoming = payload && payload.pending;
+    if (!incoming) return Promise.resolve(true);
+    const outroLado = m.pendingResult && W._propostaDoOutroLado(servidor, m, quem);
+    if (outroLado) {
+      if (W._assinaturaDoPlacar(m.pendingResult) === W._assinaturaDoPlacar(incoming)) {
+        W._applyApprovedResult(servidor, matchId, incoming);
+        avisos.push('Mesmo placar :: confirmado pela CF');
+      } else {
+        avisos.push('O outro time lançou primeiro :: a CF preservou a proposta fresca');
+      }
+    } else {
+      m.pendingResult = JSON.parse(JSON.stringify(incoming));
+      servidor.updatedAt = 'gravado';
+    }
+    if (local !== servidor) {
+      const receipt = JSON.parse(JSON.stringify(servidor));
+      Object.keys(local).forEach(k => delete local[k]);
+      Object.assign(local, receipt);
+    }
+    return Promise.resolve(true);
+  };
   W.AppStore.logAction = () => {};
   W.showAlertDialog = (t2, m) => { avisos.push(String(t2) + ' :: ' + String(m)); };
   W.showNotification = (t2, m) => { avisos.push(String(t2) + ' :: ' + String(m)); };
@@ -124,9 +148,9 @@ async function main() {
     montaDom('m1', 3, 6);                      // B digita 3×6 e manda
     W._saveResultInline('t1', 'm1');
 
-    // o local é mutado otimista ANTES da transação — é isso que o aparelho pinta
-    ok(jogo(local).pendingResult && jogo(local).pendingResult.proposedBy === B.uid,
-      'antes da transação, o aparelho de B mostra B como autor (a cópia otimista)');
+    // A tela não inventa autor local: ela espera o recibo da CF, que lê o documento fresco.
+    ok(jogo(local).pendingResult && jogo(local).pendingResult.proposedBy === A.uid,
+      'o recibo da CF substitui imediatamente a intenção local pela proposta fresca de A');
 
     await new Promise((r) => setTimeout(r, 0));   // deixa a transação resolver
 

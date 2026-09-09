@@ -95,13 +95,16 @@ async function abreChave(browser, torneio, usuario, raizPx) {
     const resultTx = function(tid, mid, payload) {
       const m = (t.matches || []).find(function(x){ return String(x.id) === String(mid); });
       if (payload && payload.pending && m) m.pendingResult = payload.pending;
-      else window._applyResultToTournament(t, mid, payload || {});
+      // A aprovação já foi aplicada otimisticamente pela própria tela; a callable
+      // devolve esse torneio confirmado, sem reaplicar um payload sem placar.
+      else if (!(payload && payload.action === 'approve-pending')) window._applyResultToTournament(t, mid, payload || {});
       if (typeof window._rerenderBracket === 'function') window._rerenderBracket(tid, mid);
       return Promise.resolve(true);
     };
     window.AppStore = Object.assign(window.AppStore||{}, {
       tournaments:[t], currentUser:u, isOrganizer:function(){ return !!u.org; },
-      logAction:noop, sync:noop, syncImmediate:tx, commitTournamentTx:tx, commitResultTx:resultTx, commitDrawTx:tx,
+      logAction:noop, sync:noop, syncImmediate:tx, commitTournamentTx:tx, commitResultTx:resultTx,
+      commitResultApprovalTx:function(tid, mid, log){ return resultTx(tid, mid, { action:'approve-pending' }, log); }, commitDrawTx:tx,
       getTournament:function(id){ return window.AppStore.tournaments.find(x=>String(x.id)===String(id)); }
     });
     window.FirestoreDB = { saveTournament: function(){ return Promise.resolve(); } };

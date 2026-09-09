@@ -139,11 +139,10 @@ s.FirestoreDB = {
 // ── C · enquanto falta parte, nenhuma lógica de chave roda ───────────────────
 {
   const chamada = srcB.indexOf('if (t && _bracketSeguraSemPartes(t, container, tId)) return;');
-  const fin = srcB.indexOf('_maybeFinishElimination(t)');
-  const rep = srcB.indexOf('_reassignBestLosersToRepechage(t)');
+  const rep = srcB.indexOf("_callCF('reconcileBracket'");
   ok(chamada > 0, 'C: renderBracket chama o portão');
-  ok(chamada < fin && chamada < rep,
-     'C: o portão vem ANTES de _maybeFinishElimination e _reassignBestLosersToRepechage');
+  ok(chamada < rep,
+     'C: o portão vem ANTES da reconciliação de chave pedida ao servidor');
 }
 // ── D · depois da montagem, a chave passa ────────────────────────────────────
 {

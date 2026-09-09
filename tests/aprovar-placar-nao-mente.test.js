@@ -52,8 +52,8 @@ ok(/\.then\(\s*_avisarOk\s*\)/.test(corpo),
    'e é encadeado no `.then` da persistência');
 
 // ── 2. TODO CAMINHO DE PERSISTÊNCIA TEM .catch ──────────────────────────────
-ok(/commitTournamentTx[\s\S]{0,400}?\.catch\(\s*_avisarFalha\s*\)/.test(corpo),
-   'o caminho normal (commitTournamentTx) trata a rejeição');
+ok(/commitResultApprovalTx[\s\S]{0,400}?\.catch\(\s*_avisarFalha\s*\)/.test(corpo),
+   'o caminho normal (commitResultApprovalTx → CF) trata a rejeição');
 ok(/_closeRound[\s\S]{0,400}?\.catch\(\s*_avisarFalha\s*\)/.test(corpo),
    'o caminho deferido (_closeRound, fecho de rodada) também trata');
 // `_closeRound` pode não devolver promessa — encapsular protege sem mudar o contrato dele

@@ -148,8 +148,9 @@ console.log('\nIMAGEM NÃO VIAJA JUNTO COM PLACAR');
   const sharing = fs.readFileSync(path.join(ROOT, 'js', 'views', 'tournaments-sharing.js'), 'utf8');
   ok(/saveTournament\(tourData,\s*\{\s*withImages:\s*true\s*\}\)/.test(store),
      'a criação/edição (AppStore.addTournament) passa `withImages`');
-  ok(/saveTournament\(t,\s*\{\s*withImages:\s*true\s*\}\)/.test(sharing),
-     'o botão de trocar logo passa `withImages`');
+  ok(/_callCF\('setTournamentBranding'/.test(sharing) &&
+     !/saveTournament\(t,\s*\{\s*withImages:\s*true\s*\}\)/.test(sharing),
+     'o botão de trocar logo envia a marca apenas pela Cloud Function');
 
   console.log(falhas === 0
     ? '\n✅ imagem só viaja quando é ELA que mudou\n'

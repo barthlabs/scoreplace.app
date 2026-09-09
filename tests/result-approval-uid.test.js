@@ -36,11 +36,15 @@ sandbox.firebase = { functions: () => ({ httpsCallable: () => (() => Promise.res
 const _sent = [];
 sandbox._sendUserNotification = (uid, data) => { _sent.push({ uid, data }); };
 let _cu = null;
+const _commands = [];
 sandbox.AppStore = {
   tournaments: [],
   get currentUser() { return _cu; },
   isOrganizer: () => false, isCreator: () => false,
-  logAction() {}, mutate() { return Promise.resolve(true); }, commitTournamentTx() { return Promise.resolve(true); },
+  logAction() {}, mutate() { return Promise.resolve(true); },
+  // A ficha só pode transmitir a intenção. A CF aplica o pendingResult fresco; este mock
+  // guarda o comando para provar que o cliente não muda o torneio por conta própria.
+  commitResultTx(tId, matchId, payload, message) { _commands.push({ tId, matchId, payload, message }); return Promise.resolve(true); },
 };
 sandbox._findTournamentById = (id) => sandbox.AppStore.tournaments.find(t => String(t.id) === String(id)) || null;
 
@@ -81,6 +85,7 @@ console.log('──── result-approval-uid ────');
 // _slotUids lê os uids do slot via team*Obj (a base do cânone)
 (function () {
   const t = mkT(), m = t.matches[0];
+  _commands.length = 0;
   ok(W._slotUids(m, 'p1').indexOf('uA1') !== -1 && W._slotUids(m, 'p1').indexOf('uA2') !== -1, 'slotUids p1 = [uA1,uA2]');
   ok(W._slotUids(m, 'p2').indexOf('uB1') !== -1 && W._slotUids(m, 'p2').indexOf('uB2') !== -1, 'slotUids p2 = [uB1,uB2]');
 })();
@@ -138,9 +143,10 @@ console.log('──── result-approval-uid ────');
   inputs['s1-m1'].value = '6'; inputs['s2-m1'].value = '1';
   _cu = { uid: 'uA1', displayName: 'Ana' };
   W._saveResultInline('t1', 'm1');
-  eq(m.pendingResult && m.pendingResult.proposedBy, 'uA1', 'mesmo lado: relançamento atualiza a própria proposta');
-  eq(m.pendingResult && m.pendingResult.scoreP1, 6, 'mesmo lado: novo placar 6×1 aplicado');
-  eq(m.pendingResult && m.pendingResult.scoreP2, 1, 'mesmo lado: score P2 atualizado');
+  eq(_commands.length, 1, 'mesmo lado: envia UMA nova intenção à CF');
+  eq(_commands[0] && _commands[0].payload.pending.proposedBy, 'uA1', 'mesmo lado: a intenção conserva a autoria');
+  eq(_commands[0] && _commands[0].payload.pending.scoreP1, 6, 'mesmo lado: novo placar 6×1 é enviado');
+  eq(_commands[0] && _commands[0].payload.pending.scoreP2, 1, 'mesmo lado: score P2 é enviado');
   W.document.getElementById = () => null; _cu = null;
 })();
 

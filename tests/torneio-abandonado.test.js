@@ -99,8 +99,11 @@ console.log('▸ a fiação nas telas (o que o dono pediu, onde ele vê)');
   const reab = org.slice(org.indexOf('window._reopenAbandonedTournament = function'));
   ok(/Preencha as duas datas/.test(reab), 'reabrir EXIGE as duas datas');
   ok(/fim < ini/.test(reab), 'e recusa término antes do início');
+  const reopenCF = fs.readFileSync(path.join(__dirname, '..', 'functions-autodraw', 'index.js'), 'utf8');
+  const reopenBody = reopenCF.slice(reopenCF.indexOf('exports.reopenTournament'));
   ['autoClosed', 'autoClosedAt', 'autoCloseReason', 'autoCloseWarnedAt', 'autoCloseDueAt'].forEach(function (c) {
-    ok(new RegExp('delete fresh\\.' + c + '\\b').test(reab), 'reabrir limpa a marca ' + c);
+    ok(reopenBody.indexOf("'" + c + "'") !== -1 && /forEach\(k=>delete t\[k\]\)/.test(reopenBody),
+       'a CF de reabrir limpa a marca ' + c);
   });
   ok(/_reopenSetDate/.test(reab),
      'o valor é lido enquanto se digita (o diálogo se remove ANTES do onConfirm)');
@@ -108,7 +111,7 @@ console.log('▸ a fiação nas telas (o que o dono pediu, onde ele vê)');
   // anterior e sem relação — 5 dos 8 torneios vivos têm o campo. Varrer por prefixo apagaria
   // a configuração do organizador junto.
   ok(!/autoCloseOnFull/.test(reab), 'reabrir NÃO toca em autoCloseOnFull (campo de outra feature)');
-  ok(!/delete fresh\[[^\]]*\]/.test(reab) && !/startsWith\(['"]autoClose/.test(reab),
+  ok(!/startsWith\(['"]autoClose/.test(reopenBody),
      'e nunca apaga por prefixo/dinamicamente — só os 5 campos, um a um');
 }
 

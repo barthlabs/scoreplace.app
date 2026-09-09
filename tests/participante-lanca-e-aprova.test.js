@@ -74,6 +74,16 @@ function boot(t, quem) {
   W.AppStore.currentUser = quem;
   W.AppStore.mutate = (id, fn) => { fn(t); return Promise.resolve(true); };
   W.AppStore.commitTournamentTx = (id, fn) => { fn(t); return Promise.resolve(true); };
+  // O navegador só envia a intenção; esta dublê representa a resposta já confirmada
+  // da CF, para testar a tela sem recriar a escrita local que a produção proibiu.
+  W.AppStore.commitResultTx = (id, matchId, payload) => {
+    const m = jogo(t);
+    if (payload && payload.pending) m.pendingResult = JSON.parse(JSON.stringify(payload.pending));
+    if (payload && payload.action === 'contest-pending' && m.pendingResult) m.pendingResult.disputed = true;
+    return Promise.resolve(true);
+  };
+  W.AppStore.commitResultApprovalTx = (id, matchId, msg) =>
+    W.AppStore.commitResultTx(id, matchId, { action: 'approve-pending' }, msg);
   W.AppStore.logAction = (id, msg) => { (t.history = t.history || []).push({ message: msg }); };
   W.showAlertDialog = (titulo, msg) => { avisos.push(String(titulo) + ' :: ' + String(msg)); };
   W.showNotification = (titulo, msg) => { avisos.push(String(titulo) + ' :: ' + String(msg)); };

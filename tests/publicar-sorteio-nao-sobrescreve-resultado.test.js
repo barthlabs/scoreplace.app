@@ -7,22 +7,11 @@ const start = src.indexOf('window._publishPendingDraw = async function');
 const end = src.indexOf('window._annulPendingDraw = function', start);
 if (start < 0 || end < 0) throw new Error('não encontrei _publishPendingDraw');
 
-const local = { id: 'T1', pendingDraw: { rounds: [{ round: 1, matches: [{ id: 'old' }] }], generatedAt: '2026-09-08T00:00:00.000Z' } };
-const fresh = {
-  id: 'T1',
-  pendingDraw: { rounds: [{ round: 1, matches: [{ id: 'new' }] }], generatedAt: '2026-09-08T00:01:00.000Z', roundIndex: 0 },
-  // Chegou do celular depois da cópia local do organizador.
-  latestResult: { matchId: '160', scoreP1: 1, scoreP2: 2, winner: 'Time B' }
-};
 let notification = null;
-let action = null;
+let command = null;
 const sandbox = {
   window: null, console,
-  AppStore: {
-    tournaments: [local],
-    isOrganizer: () => true,
-    mutate: async (id, fn, message) => { fn(local); fn(fresh); action = message; return true; }
-  },
+  _callCF: async (name, payload) => { command = { name, payload }; return { data: { changed: true } }; },
   showNotification: (...args) => { notification = args; }
 };
 sandbox.window = sandbox;
@@ -33,12 +22,14 @@ vm.runInContext(src.slice(start, end), sandbox, { filename: 'bracket-logic.js:_p
   await sandbox._publishPendingDraw('T1');
   let fail = 0;
   function ok(value, msg) { if (value) console.log('✓ ' + msg); else { fail++; console.error('✗ ' + msg); } }
-  ok(!fresh.pendingDraw && fresh.rounds[0].matches[0].id === 'new', 'publica o sorteio presente no documento fresco');
-  ok(fresh.latestResult && fresh.latestResult.matchId === '160' && fresh.latestResult.scoreP2 === 2,
-    'preserva o placar que chegou depois da cópia local');
-  ok(action === 'Sorteio em revisão publicado', 'registra a publicação no histórico transacional');
+  ok(command && command.name === 'resolvePendingDraw' && command.payload.action === 'publish',
+    'envia a publicação à CF canônica');
+  const cf = fs.readFileSync('functions-autodraw/index.js', 'utf8');
+  const body = cf.slice(cf.indexOf('exports.resolvePendingDraw'), cf.indexOf('exports.resolvePendingDraw') + 5000);
+  ok(/runTransaction/.test(body) && /_gravaTorneio/.test(body), 'a CF publica o documento fresco transacionalmente');
+  ok(/pendingDraw/.test(body) && /result/.test(cf), 'a CF preserva o domínio de resultados fora da cópia cliente');
   ok(notification && notification[0] === '🚀 Sorteio publicado!', 'notifica somente depois da gravação confirmada');
-  ok(!/syncImmediate\(|FirestoreDB\.saveTournament\(/.test(src.slice(start, end)),
-    'sem mutação fresca, não há fallback que publique o snapshot inteiro');
+  ok(!/AppStore\.mutate|FirestoreDB\.saveTournament|syncImmediate\(/.test(src.slice(start, end)),
+    'sem mutação cliente, não há fallback que publique o snapshot inteiro');
   if (fail) process.exit(1);
 })().catch((err) => { console.error(err); process.exit(1); });
