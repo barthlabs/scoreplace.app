@@ -2910,6 +2910,11 @@ também remove rodadas prematuras e vencedores legados de folga sobre o document
 abertura da chave e o poller da Liga deixaram de salvar; ambos apenas podem solicitar a mesma
 Function idempotente.
 
+**L7.P1.18 — atribuição de quadra só despacha a Cloud Function
+(09/set/2026, aprovado pelo Claude; aguarda publicação acumulada).** A organização chama
+`assignMatchCourt`; a Function relê o jogo, confirma a permissão administrativa e grava somente
+a alteração estreita no plano canônico. O navegador não persiste a fotografia do torneio.
+
 ## L8 — matriz de leitura e projeção (08/set/2026)
 
 `matches` permanece a fonte canônica. `results/{matchId}` é uma projeção server-written para

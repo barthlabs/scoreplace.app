@@ -1861,32 +1861,22 @@ window._renderReadyMatchesBanner = function _renderReadyMatchesBanner(t) {
 // Só o organizador vê o dropdown, então só ele chama esta função. O <select>
 // já reflete a escolha na hora; persistimos sem re-render pra não perder scroll.
 window._assignMatchCourt = function(tId, matchId, court) {
-  var t = window.AppStore && Array.isArray(window.AppStore.tournaments)
-    ? window.AppStore.tournaments.find(function(x){ return String(x.id) === String(tId); }) : null;
-  if (!t) return;
-  var all = (typeof window._collectAllMatches === 'function')
-    ? window._collectAllMatches(t)
-    : (Array.isArray(t.matches) ? t.matches.slice() : []);
-  var m = all.find(function(x){ return x && String(x.id) === String(matchId); });
-  if (!m) return;
-  // O evento é uma alteração estreita. Não grava a fotografia local inteira: entre a
-  // escolha e o save pode ter chegado placar, W.O. ou chave nova de outro aparelho.
-  var _applyCourt = function (target) {
-    var targetMatches = (typeof window._collectAllMatches === 'function')
-      ? window._collectAllMatches(target)
-      : (Array.isArray(target.matches) ? target.matches.slice() : []);
-    var targetMatch = targetMatches.find(function (x) { return x && String(x.id) === String(matchId); });
-    if (!targetMatch) return false;
-    if (court) targetMatch.court = court; else delete targetMatch.court;
-  };
-  var _message = court ? ('Quadra definida: ' + court) : 'Quadra removida de um jogo';
-  if (!window.AppStore || typeof window.AppStore.mutate !== 'function') {
-    if (typeof window._error === 'function') window._error('assignMatchCourt: AppStore.mutate indisponível');
+  court = String(court || '').trim();
+  if (typeof window._callCF !== 'function') {
     if (typeof showNotification === 'function') showNotification('Quadra não salva', 'Atualize o aplicativo e tente novamente.', 'error');
-    return;
+    return Promise.reject(new Error('Cloud Function indisponível'));
   }
-  window.AppStore.mutate(tId, _applyCourt, _message);
-  if (typeof showNotification === 'function') showNotification('📍 Quadra ' + (court ? 'definida' : 'removida'), court || '', 'success');
+  return window._callCF('assignMatchCourt', { tournamentId: String(tId), matchId: String(matchId), court: court }, 'Entre na sua conta para definir a quadra.')
+    .then(function(res) {
+      var d = (res && res.data) || {};
+      if (!d.ok) throw new Error(d.reason || 'Não foi possível definir a quadra.');
+      if (typeof showNotification === 'function' && d.changed) showNotification('📍 Quadra ' + (court ? 'definida' : 'removida'), court || '', 'success');
+      return d;
+    }).catch(function(err) {
+      if (typeof window._warn === 'function') window._warn('[assignMatchCourt] CF falhou', err);
+      if (typeof showNotification === 'function') showNotification('Quadra não salva', 'Não foi possível salvar a alteração. Tente novamente.', 'error');
+      throw err;
+    });
 };
 
 // ─── Formação de duplas na LISTA DE ESPERA durante a R1 (inscrição tardia aberta) ──────

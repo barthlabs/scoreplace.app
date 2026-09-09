@@ -1376,6 +1376,40 @@ exports.closeRound = onCall(async (request) => {
   return out;
 });
 
+// ─── Atribuição de quadra: intenção administrativa estreita ─────────────────
+exports.assignMatchCourt = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  const tId = String((request.data && request.data.tournamentId) || '').trim();
+  const matchId = String((request.data && request.data.matchId) || '').trim();
+  const court = String((request.data && request.data.court) || '').trim().slice(0, 120);
+  if (!tId || !matchId) throw new HttpsError('invalid-argument', 'Torneio e jogo são obrigatórios.');
+  if (!drawWindow || typeof drawWindow._findMatch !== 'function') {
+    throw _drawFail('internal', 'Motor de chave indisponível no servidor.', { tId, matchId });
+  }
+  const ref = db.collection('tournaments').doc(tId);
+  const agoraIso = new Date().toISOString();
+  try {
+    return await db.runTransaction(async (tx) => {
+      const t = await _leTorneio(tx, ref, tId);
+      if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+      if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização define a quadra.', { tId, matchId, uid });
+      const m = drawWindow._findMatch(t, matchId);
+      if (!m) return { ok: false, reason: 'match-not-found' };
+      const antes = _antesDoMotor(t);
+      const atual = String(m.court || '');
+      if (atual === court) return { ok: true, changed: false };
+      if (court) m.court = court; else delete m.court;
+      const b = _gravaTorneio(tx, ref, t, antes, { agoraIso: agoraIso });
+      return { ok: true, changed: true, court, tournament: b.clean };
+    });
+  } catch (e) {
+    if (e instanceof HttpsError) throw e;
+    console.error(`assignMatchCourt EXPLODIU em ${tId}/${matchId} (uid ${uid}):`, e && e.stack || e);
+    throw new HttpsError('internal', 'Falha ao definir quadra: ' + String((e && e.message) || e).slice(0, 300));
+  }
+});
+
 // ─── Reconciliação idempotente da chave: repescagem nunca é decidida pelo render ──
 // Um torneio criado ou pontuado por um bundle antigo pode conter uma vaga de repescagem
 // legada. A tela pode pedir esta intenção, mas não calcula nem grava: a Function relê a
