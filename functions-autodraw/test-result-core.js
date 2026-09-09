@@ -173,6 +173,45 @@ console.log('\n──── result-core: autorização ────');
   t('match inexistente → RECUSADO', r.ok === false && r.reason === 'match-not-found', JSON.stringify(r));
 }
 
+console.log('\n──── result-core: reabertura administrativa ────');
+
+// 13) Reabrir resultado é exclusivamente do organizador e desfaz avanço/classificação.
+{
+  const T = mkT({ classification: { 'Ana / Bia': { place: 1 }, 'Caio / Dora': { place: 2 } } });
+  const m = win._findMatch(T, 'm1');
+  const next = { id: 'm2', p1: 'Ana / Bia', p2: 'TBD' };
+  T.matches.push(next); m.nextMatchId = 'm2';
+  m.winner = 'Ana / Bia'; m.scoreP1 = 6; m.scoreP2 = 2; m.sets = [{ gamesP1: 6, gamesP2: 2 }];
+  const denied = core.applyResult(T, { matchId: 'm1', payload: { action: 'reopen-result' }, actor: { uid: UID_A1 }, now: 1 });
+  t('participante não reabre resultado', denied.ok === false && denied.reason === 'organizer-only', JSON.stringify(denied));
+  const reopened = core.applyResult(T, { matchId: 'm1', payload: { action: 'reopen-result' }, actor: { uid: UID_ORG }, now: 2 });
+  t('organizador reabre resultado pela CF', reopened.ok && reopened.outcome === 'result-reopened', JSON.stringify(reopened));
+  t('reabertura desfaz avanço e placar', next.p1 === 'TBD' && !m.winner && m.scoreP1 === undefined && !m.sets);
+  t('reabertura limpa classificação progressiva', !T.classification['Ana / Bia'] && !T.classification['Caio / Dora']);
+}
+
+// 14) Refazer limpa pendência/placar sem tentar remover um avanço que já não existe.
+{
+  const T = mkT(); const m = win._findMatch(T, 'm1');
+  m.winner = 'Ana / Bia'; m.pendingResult = { proposedBy: UID_A1 }; m.scoreP1 = 6; m.scoreP2 = 0;
+  const r = core.applyResult(T, { matchId: 'm1', payload: { action: 'reset-match' }, actor: { uid: UID_ORG }, now: 1 });
+  t('refazer partida é ação administrativa da CF', r.ok && r.outcome === 'match-reset', JSON.stringify(r));
+  t('refazer remove placar e pendência', !m.winner && !m.pendingResult && m.scoreP1 === undefined && m.scoreP2 === undefined);
+}
+
+// 15) Reverter W.O. desfaz avanço, ausência e encerramento, mas nunca apaga jogo real.
+{
+  const T = mkT({ status: 'finished', finishedAt: 'x', absent: { Ana: true, Bia: true }, woHistory: { Ana: { name: 'Ana' }, Bia: { name: 'Bia' } } });
+  const m = win._findMatch(T, 'm1'); const next = { id: 'm2', p1: 'Ana / Bia', p2: 'TBD' };
+  T.matches.push(next); m.nextMatchId = 'm2'; m.wo = true; m.woAbsentSide = 2; m.winner = 'Ana / Bia'; m.scoreP1 = 'W.O.'; m.scoreP2 = 0;
+  const r = core.applyResult(T, { matchId: 'm1', payload: { action: 'revert-wo' }, actor: { uid: UID_ORG }, now: 1 });
+  t('organizador reverte W.O. pela CF', r.ok && r.outcome === 'wo-reverted', JSON.stringify(r));
+  t('W.O. revertido remove avanço, ausência e encerramento', next.p1 === 'TBD' && !m.wo && m.scoreP1 === undefined && !T.absent.Ana && !T.absent.Bia && !T.woHistory.Ana && !T.woHistory.Bia && T.status === 'active' && !T.finishedAt);
+  m.wo = true; m.sets = [{ gamesP1: 6, gamesP2: 2 }];
+  const real = core.applyResult(T, { matchId: 'm1', payload: { action: 'revert-wo' }, actor: { uid: UID_ORG }, now: 2 });
+  t('W.O. com jogo real não é apagado', real.ok === false && real.reason === 'wo-has-real-play', JSON.stringify(real));
+}
+
 console.log('\n──── paridade com o cliente ────');
 
 // 11) _effectiveResultEntry do servidor == o de js/store.js (evita drift silencioso).

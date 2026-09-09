@@ -976,7 +976,9 @@ async function _aplicaPlacarNaTransacao(db, tId, matchId, payload, ator, logMess
       ? drawWindow._findMatch(t, matchId) : null;
     const _notif = _scoreNotificationEvent(t, _matchDepois, res.outcome, ator, _agoraIsoTx);
     const _transitionNotif = res.outcome === 'disputed'
-      ? _disputeNotificationEvent(t, _matchDepois, ator, _agoraIsoTx) : null;
+      ? _disputeNotificationEvent(t, _matchDepois, ator, _agoraIsoTx)
+      : (res.outcome === 'match-reset' || res.outcome === 'result-reopened' || res.outcome === 'wo-reverted')
+        ? _matchReopenedNotificationEvent(t, _matchDepois, res.outcome, ator, _agoraIsoTx) : null;
     if (_notif || _transitionNotif) tx.set(notifOutboxRef, _notif || _transitionNotif);
     return { ok: true, outcome: res.outcome, tournament: b.clean };
   });
@@ -1071,6 +1073,29 @@ function _disputeNotificationEvent(t, m, actor, at) {
     createdAt: at,
     createdAtMs: Date.parse(at),
     dispatchStatus: 'pending'
+  };
+}
+
+// Reabertura é uma transição, não um resultado: nasce no mesmo commit que limpa o
+// placar e nunca no telefone do organizador. Assim participantes recebem o aviso mesmo
+// quando o browser fecha logo depois de apertar o botão.
+function _matchReopenedNotificationEvent(t, m, outcome, actor, at) {
+  if (!t || !m) return null;
+  const recipients = new Set(_slotUidsOf(m, 'p1').concat(_slotUidsOf(m, 'p2')));
+  if (t.creatorUid) recipients.add(String(t.creatorUid));
+  (Array.isArray(t.adminUids) ? t.adminUids : []).forEach(uid => { if (uid) recipients.add(String(uid)); });
+  const isWo = outcome === 'wo-reverted';
+  const title = isWo ? '↩️ W.O. revertido pelo organizador' : '🔄 Partida reaberta pelo organizador';
+  const suffix = isWo
+    ? 'o organizador desfez o W.O. A partida está reaberta e deve ser jogada.'
+    : 'o organizador zerou o placar. A partida deve ser jogada novamente.';
+  return {
+    schema: 1, kind: 'score-notification', type: isWo ? 'wo-reverted' : 'match-reset', title,
+    message: String(m.p1 || '') + ' vs ' + String(m.p2 || '') + ' — ' + suffix,
+    tournamentId: String(t.id || ''), tournamentName: String(t.name || ''), matchId: String(m.id || ''),
+    fromUid: String(actor.uid || ''), fromName: String(actor.name || actor.email || 'Organizador'),
+    level: 'fundamental', recipients: Array.from(recipients), createdAt: at,
+    createdAtMs: Date.parse(at), dispatchStatus: 'pending'
   };
 }
 

@@ -2882,33 +2882,13 @@ window._organizerResetMatch = function(tId, matchId) {
     '🔄 Refazer partida',
     'Você está atuando como ORGANIZADOR. O placar voltará para 0×0 e a partida deverá ser jogada novamente. Os participantes serão notificados. Confirma?',
     function() {
-      // BLINDAGEM (v4.0.121): zera o resultado/proposta/disputa ATÔMICO pelo portão.
-      window.AppStore.mutate(tId, function (ft) {
-        var fm = _findMatch(ft, matchId);
-        if (!fm) return;
-        delete fm.pendingResult; delete fm.winner; delete fm.draw;
-        delete fm.scoreP1; delete fm.scoreP2;
-        delete fm.sets; delete fm.setsWonP1; delete fm.setsWonP2;
-        delete fm.totalGamesP1; delete fm.totalGamesP2;
-        delete fm.fixedSet;
-        if (typeof window._propagateMatchUpdate === 'function') window._propagateMatchUpdate(ft, fm);
-      }, 'Organizador refez a partida (placar zerado): ' + m.p1 + ' vs ' + m.p2);
-      // 4.1 DUAL-WRITE: o match local foi ZERADO → o espelho completo REMOVE os
-      // campos de resultado do doc do jogo (senão o subdoc guardaria o placar velho).
-
-      _notifyMatchParticipants(t, m, {
-        type: 'match-reset',
-        title: '🔄 Partida reaberta pelo organizador',
-        message: m.p1 + ' vs ' + m.p2 + ' — o organizador zerou o placar. A partida deve ser jogada novamente.',
-        tournamentId: t.id,
-        tournamentName: t.name,
-        matchId: m.id,
-        level: 'fundamental',
-        timestamp: Date.now()
+      // A CF relê o jogo fresco, grava o recibo e cria o aviso na outbox no mesmo commit.
+      Promise.resolve(window.AppStore.commitResultTx(tId, matchId, { action: 'reset-match' },
+        'Organizador refez a partida (placar zerado): ' + m.p1 + ' vs ' + m.p2)).then(function(saved) {
+        if (!saved) return;
+        showNotification('🔄 Partida reaberta', 'O placar foi zerado. A partida deve ser jogada novamente.', 'success');
+        _rerenderBracket(tId, matchId);
       });
-
-      showNotification('🔄 Partida reaberta', 'O placar foi zerado. A partida deve ser jogada novamente.', 'success');
-      _rerenderBracket(tId, matchId);
     }
   );
 };
@@ -2949,96 +2929,12 @@ window._revertWO = function(tId, matchId) {
     'O W.O. de "' + m.p1 + ' vs ' + m.p2 + '" será desfeito. O placar volta a 0×0, o avanço do vencedor é cancelado e os jogadores marcados como ausentes voltam a ficar disponíveis. A partida deverá ser jogada novamente. Confirma?',
     function() {
       var _message = 'W.O. revertido: ' + m.p1 + ' vs ' + m.p2 + ' — partida reaberta';
-      // Reaplica toda a reversão no documento fresco. Não use syncImmediate aqui:
-      // entre a confirmação e o save pode chegar placar ou mudança de chave de outro aparelho.
-      window.AppStore.mutate(tId, function(ft) {
-      var t = ft;
-      var m = _findMatch(t, matchId);
-      if (!m || !m.wo) return false;
-      var prevWinner = m.winner;
-      var oldLoser = window._matchWinnerSide(m) === 1 ? m.p2 : m.p1;
-
-      // 1. Desfaz avanço do vencedor (próximo jogo) — só se ainda não decidido.
-      if (m.nextMatchId) {
-        var next = _findMatch(t, m.nextMatchId);
-        if (next && !next.winner) {
-          if (next.p1 === prevWinner) { next.p1 = 'TBD'; delete next.p1FromBye; }
-          if (next.p2 === prevWinner) { next.p2 = 'TBD'; delete next.p2FromBye; }
-        }
-      }
-      // 2. Desfaz avanço do perdedor (chave inferior, Dupla Eliminatória).
-      if (m.loserMatchId) {
-        var lm = _findMatch(t, m.loserMatchId);
-        if (lm && !lm.winner) {
-          if (lm.p1 === oldLoser) lm.p1 = 'TBD';
-          if (lm.p2 === oldLoser) lm.p2 = 'TBD';
-        }
-      }
-      // 3. Limpa classificação progressiva dos dois lados.
-      if (t.classification) {
-        delete t.classification[prevWinner];
-        delete t.classification[oldLoser];
-      }
-
-      // 4. Zera o resultado + flag W.O. → partida volta a indecisa (jogável).
-      delete m.wo;
-      delete m.woAbsentSide;
-      m.winner = null;
-      m.draw = undefined;
-      m.scoreP1 = undefined; m.scoreP2 = undefined;
-      m.sets = undefined; m.setsWonP1 = undefined; m.setsWonP2 = undefined;
-      m.totalGamesP1 = undefined; m.totalGamesP2 = undefined;
-      m.fixedSet = undefined;
-      delete m.pendingResult;
-
-      // 5. Remove ausência + histórico de W.O. dos jogadores deste jogo (ambos
-      //    os lados, desmembrando duplas). Voltam a ficar disponíveis.
-      var _clearAbsenceFor = function(side) {
-        if (!side || side === 'TBD' || side === 'BYE') return;
-        var members = side.indexOf(' / ') !== -1 ? side.split(' / ')
-          : (side.indexOf('/') !== -1 ? side.split('/') : [side]);
-        members.forEach(function(n) {
-          var nm = (n || '').trim();
-          if (!nm) return;
-          window._idMapDel(t, t.absent, nm);
-          window._woHistDel(t, nm); // uid-key + nome legado
-        });
-      };
-      _clearAbsenceFor(m.p1);
-      _clearAbsenceFor(m.p2);
-
-      // 6. Liga/Suíço: reabre a rodada e recalcula a classificação.
-      if (m.roundIndex !== undefined && Array.isArray(t.rounds) && t.rounds[m.roundIndex]) {
-        t.rounds[m.roundIndex].status = 'active';
-      }
-      if (typeof window._computeStandings === 'function' && Array.isArray(t.rounds) && t.rounds.length) {
-        try { window._poeStandings(t); } catch (_e) {}
-      }
-      // Reabre o torneio se este jogo o havia encerrado.
-      if (t.status === 'finished') {
-        t.status = 'active';
-        delete t.finishedAt;
-      }
-
-      _propagateMatchUpdate(t, m);
-      }, _message).then(function(_saved) {
-      if (!_saved) return;
-
-      if (typeof _notifyMatchParticipants === 'function') {
-        _notifyMatchParticipants(t, m, {
-          type: 'match-reset',
-          title: '↩️ W.O. revertido pelo organizador',
-          message: m.p1 + ' vs ' + m.p2 + ' — o organizador desfez o W.O. A partida está reaberta e deve ser jogada.',
-          tournamentId: t.id,
-          tournamentName: t.name,
-          matchId: m.id,
-          level: 'fundamental',
-          timestamp: Date.now()
-        });
-      }
-
-      showNotification('↩️ W.O. revertido', 'A partida foi reaberta (0×0). Os jogadores voltam a ficar disponíveis.', 'success');
-      _rerenderBracket(tId, matchId);
+      // A CF relê a chave, a ausência e o W.O. fresco. Ela também desfaz os avanços,
+      // registra o recibo e entrega o aviso pela outbox; este browser não escreve nada.
+      Promise.resolve(window.AppStore.commitResultTx(tId, matchId, { action: 'revert-wo' }, _message)).then(function(saved) {
+        if (!saved) return;
+        showNotification('↩️ W.O. revertido', 'A partida foi reaberta (0×0). Os jogadores voltam a ficar disponíveis.', 'success');
+        _rerenderBracket(tId, matchId);
       });
     },
     null,
@@ -3288,50 +3184,9 @@ window._editResult = function (tId, matchId) {
       if (!m) return;
       const _message = `Resultado editado: partida ${m.label || matchId} reaberta`;
 
-      window.AppStore.mutate(tId, function(ft) {
-      const t = ft;
-      const m = _findMatch(t, matchId);
-      if (!m) return false;
-      // Undo winner advancement: clear p1/p2 from next match where this winner was placed
-      if (m.nextMatchId) {
-        const next = _findMatch(t, m.nextMatchId);
-        if (next && !next.winner) {
-          if (next.p1 === m.winner) next.p1 = 'TBD';
-          if (next.p2 === m.winner) next.p2 = 'TBD';
-        }
-      }
-      // Undo loser advancement in double elimination (lower bracket)
-      if (m.loserMatchId) {
-        const lm = _findMatch(t, m.loserMatchId);
-        if (lm && !lm.winner) {
-          const oldLoser = window._matchWinnerSide(m) === 1 ? m.p2 : m.p1;
-          if (lm.p1 === oldLoser) lm.p1 = 'TBD';
-          if (lm.p2 === oldLoser) lm.p2 = 'TBD';
-        }
-      }
-      // Clear progressive classification entries
-      if (t.classification) {
-        var oldLoser2 = window._matchWinnerSide(m) === 1 ? m.p2 : m.p1;
-        delete t.classification[m.winner];
-        delete t.classification[oldLoser2];
-      }
-
-      const prevWinner = m.winner;
-      m.winner = null;
-      m.scoreP1 = undefined;
-      m.scoreP2 = undefined;
-      m.draw = undefined;
-      // Clear GSM data
-      m.sets = undefined;
-      m.setsWonP1 = undefined;
-      m.setsWonP2 = undefined;
-      m.totalGamesP1 = undefined;
-      m.totalGamesP2 = undefined;
-      // v0.16.87: propaga reset pra outras refs do mesmo match (monarch
-      // groups, t.rodadas legacy) que ficaram separadas após Firestore
-      // deserialização.
-      _propagateMatchUpdate(t, m);
-      }, _message).then(function(saved) {
+      // O navegador não desmonta a chave nem a classificação: pede a transição
+      // administrativa, e só abre os campos depois da confirmação canônica.
+      window.AppStore.commitResultTx(tId, matchId, { action: 'reopen-result' }, _message).then(function(saved) {
       if (!saved) return;
       _rerenderBracket(tId);
       });

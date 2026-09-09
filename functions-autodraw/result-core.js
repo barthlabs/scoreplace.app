@@ -44,6 +44,88 @@ function playersMaySubmit(t, m) {
   return re === 'players' || re === 'all' || (Array.isArray(re) && re.indexOf('players') !== -1);
 }
 
+// ── REABERTURA CANÔNICA ───────────────────────────────────────────────────────────────
+// Estas transições existiam em bracket-ui.js e gravavam o torneio inteiro no navegador.
+// Resultado, avanço de chave e ausência são um único fato: por isso a reabertura também
+// passa por esta CF, na mesma transação, recibo de auditoria e caixa de saída.
+function organizerOnly(t, m, actor) {
+  if (!t || !m) return { ok: false, reason: 'match-not-found' };
+  if (!actor || !actor.uid) return { ok: false, reason: 'no-actor' };
+  if (!(typeof win._isUserOrgOrCoHost === 'function' && win._isUserOrgOrCoHost(t, actor))) {
+    return { ok: false, reason: 'organizer-only' };
+  }
+  return { ok: true };
+}
+
+function winnerSide(m) {
+  return (typeof win._matchWinnerSide === 'function') ? win._matchWinnerSide(m) : 0;
+}
+
+function clearResultFields(m) {
+  delete m.pendingResult; delete m.winner; delete m.draw;
+  delete m.scoreP1; delete m.scoreP2;
+  delete m.sets; delete m.setsWonP1; delete m.setsWonP2;
+  delete m.totalGamesP1; delete m.totalGamesP2;
+  delete m.fixedSet;
+}
+
+function undoAdvancement(t, m) {
+  const side = winnerSide(m);
+  const prevWinner = m.winner;
+  const oldLoser = side === 1 ? m.p2 : m.p1;
+  if (m.nextMatchId) {
+    const next = win._findMatch(t, m.nextMatchId);
+    if (next && !next.winner) {
+      if (next.p1 === prevWinner) { next.p1 = 'TBD'; delete next.p1FromBye; }
+      if (next.p2 === prevWinner) { next.p2 = 'TBD'; delete next.p2FromBye; }
+    }
+  }
+  if (m.loserMatchId) {
+    const loserMatch = win._findMatch(t, m.loserMatchId);
+    if (loserMatch && !loserMatch.winner) {
+      if (loserMatch.p1 === oldLoser) loserMatch.p1 = 'TBD';
+      if (loserMatch.p2 === oldLoser) loserMatch.p2 = 'TBD';
+    }
+  }
+  if (t.classification) {
+    delete t.classification[prevWinner];
+    delete t.classification[oldLoser];
+  }
+}
+
+function hasRealPlay(m) {
+  if (!m || typeof m !== 'object') return false;
+  if (m.liveScored === true || m.startedAt || m.resultAt) return true;
+  if (Array.isArray(m.sets) && m.sets.length > 0) return true;
+  const numeric = v => typeof v === 'number' && v > 0;
+  return (numeric(m.scoreP1) || numeric(m.scoreP2)) && !m.wo;
+}
+
+function clearAbsenceAndWoHistory(t, side) {
+  if (!side || side === 'TBD' || side === 'BYE') return;
+  const names = String(side).indexOf(' / ') !== -1 ? String(side).split(' / ')
+    : (String(side).indexOf('/') !== -1 ? String(side).split('/') : [side]);
+  names.forEach(raw => {
+    const name = String(raw || '').trim();
+    if (!name) return;
+    if (typeof win._idMapDel === 'function') win._idMapDel(t, t.absent, name);
+    if (!t.woHistory) return;
+    const key = (typeof win._idMapKey === 'function') ? win._idMapKey(t, name) : { name };
+    if (key.uid && t.woHistory[key.uid] != null) delete t.woHistory[key.uid];
+    if (key.name && t.woHistory[key.name] != null) delete t.woHistory[key.name];
+  });
+}
+
+function reopenMatch(t, m, action) {
+  if (action === 'reset-match') {
+    clearResultFields(m);
+  } else {
+    undoAdvancement(t, m);
+    clearResultFields(m);
+  }
+  if (typeof win._propagateMatchUpdate === 'function') win._propagateMatchUpdate(t, m);
+}
+
 // ── AUTORIZAÇÃO ───────────────────────────────────────────────────────────────────────
 // Devolve { ok, reason, isAdmin, side }. `side` é 1/2 (time do ator) ou 0.
 // Identidade SÓ por uid — `_userTeamInMatch` lê `_slotUids`, nunca casa nome
@@ -95,6 +177,36 @@ function applyResult(t, opts) {
   if (!matchId) return { ok: false, reason: 'no-match-id' };
   const m = (typeof win._findMatch === 'function') ? win._findMatch(t, matchId) : null;
   if (!m) return { ok: false, reason: 'match-not-found' };
+
+  // Reabrir, refazer e reverter W.O. são operações administrativas. Elas não podem
+  // depender de uma tela que ainda tenha o vencedor/ausência em memória: a CF usa o
+  // jogo lido no documento fresco e devolve o torneio já reconciliado.
+  if (payload.action === 'reset-match' || payload.action === 'reopen-result' || payload.action === 'revert-wo') {
+    const admin = organizerOnly(t, m, actor);
+    if (!admin.ok) return admin;
+    if (payload.action === 'revert-wo') {
+      if (!m.wo) return { ok: false, reason: 'not-a-wo' };
+      if (hasRealPlay(m)) return { ok: false, reason: 'wo-has-real-play' };
+      undoAdvancement(t, m);
+      delete m.wo; delete m.woAbsentSide;
+      clearResultFields(m);
+      clearAbsenceAndWoHistory(t, m.p1);
+      clearAbsenceAndWoHistory(t, m.p2);
+      if (m.roundIndex !== undefined && Array.isArray(t.rounds) && t.rounds[m.roundIndex]) {
+        t.rounds[m.roundIndex].status = 'active';
+      }
+      if (typeof win._poeStandings === 'function' && Array.isArray(t.rounds) && t.rounds.length) {
+        try { win._poeStandings(t); } catch (e) { /* derived standings never block a safe reopen */ }
+      }
+      if (t.status === 'finished') { t.status = 'active'; delete t.finishedAt; }
+      if (typeof win._propagateMatchUpdate === 'function') win._propagateMatchUpdate(t, m);
+      if (o.logMessage) pushHistory(t, o.logMessage, o.now);
+      return { ok: true, outcome: 'wo-reverted', reason: '' };
+    }
+    reopenMatch(t, m, payload.action);
+    if (o.logMessage) pushHistory(t, o.logMessage, o.now);
+    return { ok: true, outcome: payload.action === 'reset-match' ? 'match-reset' : 'result-reopened', reason: '' };
+  }
 
   // Aprovação é uma transição própria: o navegador só pede, e a CF relê a
   // proposta atual antes de aplicá-la. Assim não existe payload velho apagando ou

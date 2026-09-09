@@ -2868,15 +2868,20 @@ parcial de status no contador e as próprias portas internas `sync`/`syncImmedia
 mais chamadas pelos fluxos L7 migrados. Gates dedicados cobrem categorias, inscritos, manutenção,
 status e edição; cada diff funcional recebeu parecer **APROVADO** do Claude.
 
-**L7.P1.11 — consenso de resultado só despacha a Cloud Function (08/set/2026, em revisão).**
+**L7.P1.11 — consenso de resultado só despacha a Cloud Function (08/set/2026, aprovado pelo Claude; aguarda publicação acumulada).**
 Proposta, contra-proposta e contestação ainda alteravam `pendingResult` pelo navegador, embora
 a aprovação definitiva já fosse canônica em `applyMatchResult`. O lote substitui essas três
 escritas por intenções `pending`, `counter-pending` e `contest-pending`: a Function relê o jogo
 fresco, deriva o autor da autenticação, preserva a proposta original na contra-proposta e cria a
 contestação junto ao recibo `scoreAudit` e à outbox dos organizadores. Os testes cobrem proponente
 versus adversário, preservação da proposta fresca e impedimento de autoaprovação/autocontestação.
-Reabertura administrativa e reversão de W.O. continuam fora deste lote, pois modificam avanço e
-classificação e exigem uma intenção server-side própria.
+**L7.P1.12 — reabertura administrativa e reversão de W.O. só despacham a Cloud Function
+(08/set/2026, aprovado pelo Claude; aguarda publicação acumulada).** `reset-match`, `reopen-result` e `revert-wo` são intenções
+administrativas autorizadas pela Function sobre o jogo fresco. A Function desfaz avanço e
+classificação quando necessário, limpa ausência e histórico de W.O., reabre rodada/torneio,
+registra `scoreAudit` antes/depois e gera a notificação pela outbox no mesmo commit. O navegador
+não muda mais chave, placar, classificação ou avisos por conta própria. Os testes cobrem a
+proibição para participante, a reversão completa e a trava que impede apagar jogo real.
 
 ## L8 — matriz de leitura e projeção (08/set/2026)
 
