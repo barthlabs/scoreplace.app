@@ -2925,6 +2925,14 @@ não duplica a notificação. O gate confirma que o cliente ficou somente como d
 leitura auxiliar não entra no retry da transação e que a notificação é deduplicada. Claude
 aprovou o diff integral (Opus, esforço medium), sem ressalvas.
 
+**L7.P1.20 — heals de folga e Rei/Rainha só ocorrem na Cloud Function
+(09/set/2026, aprovado pelo Claude; aguarda publicação acumulada).** Abrir a chave não
+limpa mais folga de participante reativado nem move sobras Rei/Rainha diretamente para a espera.
+A chamada existente a `reconcileBracket` executa ambos sobre o documento fresco e persiste pelo
+plano canônico apenas quando há mudança. A tela pode ocultar transitoriamente a sobra legada, mas
+não a altera. O gate exige ausência de `saveTournament`, dos dois heals e de temporizadores de
+persistência no render. Claude aprovou o diff integral (Opus, esforço medium), sem ressalvas.
+
 ## L8 — matriz de leitura e projeção (08/set/2026)
 
 `matches` permanece a fonte canônica. `results/{matchId}` é uma projeção server-written para

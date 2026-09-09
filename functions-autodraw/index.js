@@ -1449,11 +1449,17 @@ exports.reconcileBracket = onCall(async (request) => {
         ? !!drawWindow._healPrematureLigaRounds(t) : false;
       const folgaLegada = (typeof drawWindow._healSitOutWinners === 'function')
         ? !!drawWindow._healSitOutWinners(t) : false;
+      // Os dois heals abaixo já foram disparados pelo render. Agora a tela apenas pede
+      // reconciliação: a decisão e qualquer escrita acontecem neste documento fresco.
+      const folgaReativada = (typeof drawWindow._sanitizeSitOutsVsRoster === 'function')
+        ? (drawWindow._sanitizeSitOutsVsRoster(t) || 0) : 0;
+      const sobraMonarca = (typeof drawWindow._healMonarchRemainderToWaitlist === 'function')
+        ? !!drawWindow._healMonarchRemainderToWaitlist(t) : false;
       if (typeof drawWindow._maybeFinishElimination === 'function') drawWindow._maybeFinishElimination(t);
-      const mudou = trocas > 0 || futuras || ligaPrematura || folgaLegada || t.status !== statusAntes;
+      const mudou = trocas > 0 || futuras || ligaPrematura || folgaLegada || folgaReativada > 0 || sobraMonarca || t.status !== statusAntes;
       if (!mudou) return { ok: true, changed: false };
       const b = _gravaTorneio(tx, ref, t, antes, { agoraIso: agoraIso });
-      return { ok: true, changed: true, changes: trocas, futureRoundsRepaired: futuras, ligaPrematureRepaired: ligaPrematura, sitOutRepaired: folgaLegada, tournament: b.clean };
+      return { ok: true, changed: true, changes: trocas, futureRoundsRepaired: futuras, ligaPrematureRepaired: ligaPrematura, sitOutRepaired: folgaLegada, reactivatedSitOutsRepaired: folgaReativada, monarchRemainderRepaired: sobraMonarca, tournament: b.clean };
     });
   } catch (e) {
     if (e instanceof HttpsError) throw e;
