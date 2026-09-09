@@ -4012,21 +4012,28 @@ function setupCreateTournamentModal() {
    *   · Nº de rodadas: `#f2-sched-n` quando o formulário tem esse campo; senão, o que o
    *     torneio em edição realmente tem na fase atual (a chave já sorteada manda). */
   function _rbNumeroDeRodadas() {
+    // Ao editar, o torneio e a fase selecionada são a fonte da verdade. O configurador
+    // format2 pode manter o campo #f2-sched-n da PRÓXIMA fase aberto (por exemplo,
+    // 6 rodadas eliminatórias enquanto a classificatória de 1 rodada está sendo
+    // exibida); priorizá-lo fazia a régua desenhar seis partes na fase errada.
+    try {
+      var t = window._editingTournament || (window.AppStore && window.AppStore._editing) || null;
+      if (t) {
+        var fi = t.currentPhaseIndex || 0;
+        if (typeof window._rodadasVisiveisDaFase === 'function') {
+          var reais = window._rodadasVisiveisDaFase(t, fi);
+          if (reais >= 1) return reais;
+        }
+        var f = (t.phases && t.phases[fi]) || {};
+        var declaradas = parseInt(f.rounds, 10);
+        if (declaradas >= 1) return declaradas;
+      }
+    } catch (e) {}
+    // No torneio novo ainda não existe fase materializada: aí o configurador é a
+    // intenção legítima e a única fonte disponível.
     var el = document.getElementById('f2-sched-n');
     var n = el ? parseInt(el.value, 10) : NaN;
     if (n >= 1) return n;
-    try {
-      var t = window._editingTournament || (window.AppStore && window.AppStore._editing) || null;
-      if (t && typeof window._phaseCurrentRoundProgress === 'function') {
-        var pr = window._phaseCurrentRoundProgress(t);
-        if (pr && pr.roundsTotal >= 1) return pr.roundsTotal;
-      }
-      if (t) {
-        var f = (t.phases && t.phases[t.currentPhaseIndex || 0]) || {};
-        var r = parseInt(f.rounds, 10);
-        if (r >= 1) return r;
-      }
-    } catch (e) {}
     return 1;
   }
   function _rbCampoMs(idData, idHora, horaPadrao) {

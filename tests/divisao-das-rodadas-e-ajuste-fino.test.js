@@ -28,6 +28,13 @@ let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.error('  ✗', m); } };
 console.log('──── divisão das rodadas: igual por padrão, ajuste fino no slider ────');
 
+// A tela de edição não pode pegar o nº de rodadas da outra fase no campo do
+// configurador; este é o incidente da classificatória R1 recebendo seis divisões
+// da eliminatória. Guarda a precedência no próprio código da tela.
+const createUi = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'create-tournament.js'), 'utf8');
+ok(/_rodadasVisiveisDaFase\(t, fi\)[\s\S]{0,300}return reais[\s\S]{0,900}f2-sched-n/.test(createUi),
+   '⓪ fase editada e rodadas reais vencem o campo de agendamento de outra fase');
+
 const DIA = 86400000;
 const INI = W._rbMs('2026-09-02T11:17');
 const FIM = W._rbMs('2026-11-12T23:00');   // a janela real da Fase 2 da Confra
