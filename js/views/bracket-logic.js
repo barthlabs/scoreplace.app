@@ -3242,6 +3242,10 @@ function _maybeFinishElimination(t) {
     } catch(_te) {}
   }, 500);
 }
+// A Function aplica resultado no documento fresco e precisa executar o mesmo
+// encerramento. Expor o motor é seguro: ele é idempotente e só muda para finished
+// quando toda a chave canônica já está resolvida.
+window._maybeFinishElimination = _maybeFinishElimination;
 
 // ─── 3rd place ────────────────────────────────────────────────────────────────
 // Garante que o thirdPlaceMatch existe com TBD e preenche progressivamente

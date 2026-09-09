@@ -220,6 +220,15 @@ console.log('\n──── result-core: reabertura administrativa ────'
   t('placar ao vivo não cria pendência entre times', !m.pendingResult && m.scoreP1 === 6 && m.scoreP2 === 4);
 }
 
+// 17) A CF fecha eliminatória ao confirmar a final; abrir a tela nunca é requisito.
+{
+  const T = mkT({ format: 'Eliminatórias Simples', status: 'active' });
+  const m = win._findMatch(T, 'm1');
+  T.matches = [m];
+  const r = core.applyResult(T, { matchId: 'm1', payload: PAYLOAD, actor: { uid: UID_ORG }, now: 1 });
+  t('resultado final encerra eliminatória na CF', r.ok && T.status === 'finished' && !!T.finishedAt, JSON.stringify({ r, status: T.status }));
+}
+
 console.log('\n──── paridade com o cliente ────');
 
 // 11) _effectiveResultEntry do servidor == o de js/store.js (evita drift silencioso).

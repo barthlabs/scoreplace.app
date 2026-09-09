@@ -241,6 +241,10 @@ function applyResult(t, opts) {
     const approved = (typeof win._applyApprovedResult === 'function')
       ? win._applyApprovedResult(t, matchId, pending) : null;
     if (!approved || !approved.ok) return { ok: false, reason: 'approve-failed' };
+    // Encerramento é consequência canônica do resultado aprovado, nunca da tela que
+    // por acaso abriu a chave depois. O motor é idempotente e só fecha quando a final
+    // e todas as condições do formato já estão satisfeitas.
+    if (typeof win._maybeFinishElimination === 'function') win._maybeFinishElimination(t);
     if (o.logMessage) pushHistory(t, o.logMessage, o.now);
     return { ok: true, outcome: 'applied', reason: '' };
   }
@@ -340,6 +344,7 @@ function applyResult(t, opts) {
   // Caminho definitivo: a MESMA mutação do cliente, re-aplicada sobre o doc FRESCO.
   const applied = win._applyResultToTournament(t, matchId, payload);
   if (!applied) return { ok: false, reason: 'apply-failed' };
+  if (typeof win._maybeFinishElimination === 'function') win._maybeFinishElimination(t);
   if (o.logMessage) pushHistory(t, o.logMessage, o.now);
   return { ok: true, outcome: 'applied', reason: '' };
 }

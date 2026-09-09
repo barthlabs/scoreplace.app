@@ -2855,18 +2855,14 @@ Liga. Depois serão tratados os `sync()` de preparação de sorteio e categorias
 fluxo que faça um snapshot velho terminar depois da transação fresca. Cada mutator deve expressar
 uma mudança idempotente, pois será reexecutado durante retry.
 
-**L7 — fechamento do censo de writers (08/set/2026, aguardando publicação única).** A auditoria
-migrou os writers de produção que regravavam o documento local inteiro durante inscrição,
-categorias, chave, enquetes, rodadas, manutenção, remoção e edição. Cada mudança agora se
-expressa como intenção reaplicada no documento fresco por `commitTournamentTx`/`mutate`.
-
-O formulário separa os dois casos: **edição** envia apenas seu patch, após converter imagem nova
-em URL de Storage; **criação** permanece na porta especializada porque ainda não há documento
-para a transação reler. O `sync()` redundante após o formulário foi removido. Os remanescentes
-fora desse contrato são ferramentas de desenvolvimento (simular sorteio e bots), a atualização
-parcial de status no contador e as próprias portas internas `sync`/`syncImmediate`, que não são
-mais chamadas pelos fluxos L7 migrados. Gates dedicados cobrem categorias, inscritos, manutenção,
-status e edição; cada diff funcional recebeu parecer **APROVADO** do Claude.
+**L7 — censo reaberto e reclassificado (09/set/2026).** A frase anterior que declarava o
+fechamento do censo era prematura. O levantamento atualizado encontrou writers ainda ativos em
+três classes: (1) operações estreitas já transacionais de categoria, inscrição e administração;
+(2) fluxo de chave/manutenção que reaplica um mutator fresco; e (3) reparos automáticos disparados
+pelo render da chave, que ainda podem decidir encerramento, repescagem e rodadas futuras no cliente.
+Resultado, consenso, reabertura, W.O. e placar ao vivo foram movidos para intenções de Cloud
+Function; os reparos de render são a prioridade seguinte. A conclusão da L7 exige classificar e
+migrar ou justificar cada reparo automático remanescente.
 
 **L7.P1.11 — consenso de resultado só despacha a Cloud Function (08/set/2026, aprovado pelo Claude; aguarda publicação acumulada).**
 Proposta, contra-proposta e contestação ainda alteravam `pendingResult` pelo navegador, embora
@@ -2889,6 +2885,12 @@ proibição para participante, a reversão completa e a trava que impede apagar 
 placar GSM ou simples no documento fresco, marca `liveScored`, avança e encerra a chave quando
 cabível, e entrega o aviso pelo mesmo recibo/outbox do resultado. Uma recusa do servidor limpa o
 flag local de tentativa e permite tentar novamente, sem criar resultado-fantasma.
+
+**L7.P1.14 — encerramento de eliminatória só ocorre na Cloud Function
+(09/set/2026, aprovado pelo Claude; aguarda publicação acumulada).** Após cada resultado
+aplicado — direto, ao vivo ou aprovado de proposta — a Function executa o mesmo encerramento
+idempotente da chave. A renderização deixou de decidir nem persistir `status: finished`; o teste
+cobre a final de uma eliminatória e exige `finishedAt` no documento canônico.
 
 ## L8 — matriz de leitura e projeção (08/set/2026)
 

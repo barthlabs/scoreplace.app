@@ -1152,24 +1152,6 @@ function renderBracket(container, tournamentId, isInline) {
    * decidiriam sobre listas vazias. Ver a nota longa em `_bracketSeguraSemPartes`. */
   if (t && _bracketSeguraSemPartes(t, container, tId)) return;
 
-  // v4.5.11: ao ABRIR a chave, se ela já está totalmente jogada (final/grande final
-  // decidida) mas o torneio ficou 'active' — caso da inscrição tardia ('expand'/'standby')
-  // que não auto-encerrava depois da final —, encerra AGORA pra mostrar pódio +
-  // classificação. `_maybeFinishElimination` é idempotente (sai cedo se já finished OU se
-  // ainda há jogo pendente). Persiste no doc FRESCO só quando REALMENTE virou 'finished'
-  // (não salva a cada render; o próximo render vê 'finished' e nem entra aqui). Sem isto,
-  // torneios já jogados até a final ficavam presos em 'active' pra sempre (bug reportado).
-  if (t && t.status !== 'finished' && typeof window._maybeFinishElimination === 'function') {
-    try {
-      window._maybeFinishElimination(t);
-      if (t.status === 'finished' && window.AppStore && typeof window.AppStore.mutate === 'function') {
-        window.AppStore.mutate(String(tId), function (ft) {
-          if (ft.status !== 'finished' && typeof window._maybeFinishElimination === 'function') window._maybeFinishElimination(ft);
-        });
-      }
-    } catch (_efin) {}
-  }
-
   // REPESCADO = MELHOR DERROTADO — TAMBÉM AO ABRIR A CHAVE (v1.5.34).
   //
   // `_reassignBestLosersToRepechage` só era chamado de dentro de `_advanceWinner`: a chave
