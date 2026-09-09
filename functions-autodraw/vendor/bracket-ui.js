@@ -1774,14 +1774,6 @@ window._commitSetsResult = function (tId, matchId, sets, p1Sets, p2Sets, isFixed
 // pra CF (copy-vendor no predeploy), e o cliente grava por `commitResultTx` igual a
 // qualquer outro placar. [[project_canon_runs_on_server]]
 //
-// ⚠️ A ÚNICA JANELA DE RISCO É A ORDEM DO DEPLOY: web nova + CF velha. A CF anterior a este
-// ramo não conhece `setsInProgress`, cairia no ramo simples e CARIMBARIA VENCEDOR num jogo
-// aberto. Não dá pra impedir pelo payload (a CF velha não valida nada), então a defesa é
-// pela PROVA NO DADO: depois do commit, se o jogo voltou COM vencedor, o cliente desfaz na
-// hora (`_curaVencedorIndevido`). Isso se apaga sozinho no instante em que a CF sobe — e é
-// justamente o que evita depender de release pra consertar.
-// ⛔ Publique a CF ANTES da web: `scripts/deploy-functions.sh` e depois deploy-hosting.
-//
 // Mutação PURA, usada nos dois lados da transação (otimista local + doc fresco): sem isso
 // o retry da transação reescreveria `startedAt` com outro instante.
 window._applySetsInProgress = function (m, sets, p1Sets, p2Sets, agora) {
@@ -1824,33 +1816,6 @@ window._saveSetsEmAndamento = function (tId, matchId, sets, p1Sets, p2Sets) {
       .catch(function () { return false; });
   }
   return Promise.resolve(false);
-};
-
-// CF velha (anterior ao ramo `setsInProgress`) não conhece o payload e carimba vencedor num
-// jogo aberto. Não dá pra detectar isso pelo que ela responde — a CF velha responde `ok`.
-// Dá pra detectar pelo DADO: pedimos "em andamento" e o jogo voltou COM vencedor. Aí
-// desfaz na hora, pelo caminho local. Vira no-op no segundo em que a CF nova sobe.
-// [[feedback_proof_lives_in_the_data_not_in_a_stamp]]
-window._curaVencedorIndevido = function (tId, matchId, sets, p1Sets, p2Sets, agora) {
-  try {
-    var t = window._findTournamentById(tId); if (!t) return;
-    var m = _findMatch(t, matchId); if (!m || !m.winner) return;        // caminho normal: nada a fazer
-    if (window._warn) window._warn('[setsInProgress] CF sem o ramo de jogo em andamento carimbou vencedor — desfazendo');
-    window._applySetsInProgress(m, sets, p1Sets, p2Sets, agora);
-    delete m.winner; delete m.winnerUids; delete m.draw; delete m.resultAt;
-    delete m.scoreP1; delete m.scoreP2; delete m.totalGamesP1; delete m.totalGamesP2;
-    if (window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
-      window.AppStore.commitTournamentTx(tId, function (freshT) {
-        var fm = window._findMatch(freshT, matchId);
-        if (!fm) return false;
-        window._applySetsInProgress(fm, sets, p1Sets, p2Sets, agora);
-        delete fm.winner; delete fm.winnerUids; delete fm.draw; delete fm.resultAt;
-        delete fm.scoreP1; delete fm.scoreP2; delete fm.totalGamesP1; delete fm.totalGamesP2;
-        if (typeof window._propagateMatchUpdate === 'function') window._propagateMatchUpdate(freshT, fm);
-      });
-    }
-    _rerenderBracket(tId, matchId);
-  } catch (e) { if (window._error) window._error('curaVencedorIndevido', e); }
 };
 
 // O Confirmar do card em melhor de N. Recebe o placar do set em disputa já validado como
