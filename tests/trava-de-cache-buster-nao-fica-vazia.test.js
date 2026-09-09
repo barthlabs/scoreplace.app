@@ -100,8 +100,6 @@ const original = fs.readFileSync(idx, 'utf8');
 const rodar = () => { try { execSync('node scripts/check-cache-busters.js', { cwd: ROOT, stdio: 'pipe' }); return 0; } catch (e) { return e.status || 1; } };
 try {
   ok(rodar() === 0, 'no estado atual do repo a trava passa');
-  const mudados = execSync('git diff --name-only ' + _relAnterior + ' -- js/', { cwd: ROOT })
-    .toString().split('\n').map((s) => s.trim()).filter((s) => s.endsWith('.js'));
   // ⚠️ "0 js alterados" NÃO é trava vazia — é uma leva sem JS, e ela EXISTE: o bump do iOS
   // mexe só no `project.pbxproj`. Foi assim que esta asserção reprovou o push da build 245.
   // O que precisa ser verdade sempre é a BASE não ser o próprio HEAD (aí sim o diff seria
@@ -115,6 +113,11 @@ try {
   if (_base === _head) _base = _relAnterior;
   ok(_base && _base !== _head,
     '  → a base NUNCA é o próprio HEAD (base ' + String(_base).slice(0, 8) + ' ≠ head ' + _head.slice(0, 8) + ')');
+  // O arquivo adulterado precisa vir da MESMA base que o gate real vai usar.
+  // Escolher desde o release anterior podia pegar um JS já presente em origin/main;
+  // nessa situação o gate corretamente o ignora e o teste acusava falso negativo.
+  const mudados = execSync('git diff --name-only ' + _base + ' -- js/', { cwd: ROOT })
+    .toString().split('\n').map((s) => s.trim()).filter((s) => s.endsWith('.js'));
   const um = mudados.map((f) => new RegExp(f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\?v=[0-9.]+'))
     .map((re) => (original.match(re) || [])[0]).filter(Boolean)[0];
   if (um) {
