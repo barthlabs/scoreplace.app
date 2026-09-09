@@ -34,8 +34,8 @@ const blocked = (baseline) => {
   console.error('  Bumpe SCOREPLACE_VERSION, rode npm run prerender e atualize os cache-busters antes de publicar.');
   process.exit(1);
 };
+if (ahead > 0 && valid(base) && cmp(current, base) <= 0) blocked(base);
 if (valid(live) && cmp(current, live) <= 0) blocked(live);
-if (!live && ahead > 0 && valid(base) && cmp(current, base) <= 0) blocked(base);
 if (!base && !live) {
   console.log('✓ versão fresca: cópia de deploy sem histórico Git; a checagem ocorreu no repositório-fonte');
   process.exit(0);
