@@ -1376,6 +1376,50 @@ exports.closeRound = onCall(async (request) => {
   return out;
 });
 
+// ─── Reconciliação idempotente da chave: repescagem nunca é decidida pelo render ──
+// Um torneio criado ou pontuado por um bundle antigo pode conter uma vaga de repescagem
+// legada. A tela pode pedir esta intenção, mas não calcula nem grava: a Function relê a
+// chave inteira, aplica o motor canônico e só escreve se o documento fresco realmente mudou.
+exports.reconcileBracket = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  const tId = String((request.data && request.data.tournamentId) || '').trim();
+  if (!tId) throw new HttpsError('invalid-argument', 'tournamentId é obrigatório.');
+  if (!drawWindow || typeof drawWindow._reassignBestLosersToRepechage !== 'function') {
+    throw _drawFail('internal', 'Motor de chave indisponível no servidor.', { tId });
+  }
+
+  const ref = db.collection('tournaments').doc(tId);
+  const pre = await ref.get();
+  if (!pre.exists) throw _drawFail('not-found', 'Torneio não encontrado.', { tId, uid });
+  if (!_isTournamentParticipant(pre.data(), uid) && !_isTournamentAdmin(pre.data(), uid)) {
+    throw _drawFail('permission-denied', 'Só quem participa do torneio pode reconciliar a chave.', { tId, uid });
+  }
+
+  const agoraIso = new Date().toISOString();
+  try {
+    return await db.runTransaction(async (tx) => {
+      const t = await _leTorneio(tx, ref, tId);
+      if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+      if (!_isTournamentParticipant(t, uid) && !_isTournamentAdmin(t, uid)) {
+        throw _drawFail('permission-denied', 'Sem permissão (doc fresco).', { tId, uid });
+      }
+      const antes = _antesDoMotor(t);
+      const statusAntes = t.status;
+      const trocas = drawWindow._reassignBestLosersToRepechage(t) || 0;
+      if (typeof drawWindow._maybeFinishElimination === 'function') drawWindow._maybeFinishElimination(t);
+      const mudou = trocas > 0 || t.status !== statusAntes;
+      if (!mudou) return { ok: true, changed: false };
+      const b = _gravaTorneio(tx, ref, t, antes, { agoraIso: agoraIso });
+      return { ok: true, changed: true, changes: trocas, tournament: b.clean };
+    });
+  } catch (e) {
+    if (e instanceof HttpsError) throw e;
+    console.error(`reconcileBracket EXPLODIU em ${tId} (uid ${uid}):`, e && e.stack || e);
+    throw new HttpsError('internal', 'Falha ao reconciliar chave: ' + String((e && e.message) || e).slice(0, 300));
+  }
+});
+
 // ─── Auto-Draw: runs every hour, checks for pending draws ───────────────────
 // v2.6.74: sorteio NA HORA + custo baixo. Cadência de 1 minuto, mas em vez de
 // varrer a coleção inteira a cada tick, consulta só os torneios com `nextDrawAt`

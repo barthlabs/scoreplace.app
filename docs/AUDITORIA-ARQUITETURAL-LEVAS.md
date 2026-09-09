@@ -2892,6 +2892,12 @@ aplicado — direto, ao vivo ou aprovado de proposta — a Function executa o me
 idempotente da chave. A renderização deixou de decidir nem persistir `status: finished`; o teste
 cobre a final de uma eliminatória e exige `finishedAt` no documento canônico.
 
+**L7.P1.15 — repescagem legada é reconciliada só na Cloud Function
+(09/set/2026, aprovado pelo Claude; aguarda publicação acumulada).** A abertura da chave não
+recalcula nem grava vagas pelo navegador. Ela apenas despacha `reconcileBracket`; a Function
+autoriza o participante ou organizador, relê a chave fresca, aplica o ranking canônico e
+persiste somente quando uma vaga ou o encerramento realmente mudou.
+
 ## L8 — matriz de leitura e projeção (08/set/2026)
 
 `matches` permanece a fonte canônica. `results/{matchId}` é uma projeção server-written para

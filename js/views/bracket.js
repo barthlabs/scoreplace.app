@@ -1152,28 +1152,24 @@ function renderBracket(container, tournamentId, isInline) {
    * decidiriam sobre listas vazias. Ver a nota longa em `_bracketSeguraSemPartes`. */
   if (t && _bracketSeguraSemPartes(t, container, tId)) return;
 
-  // REPESCADO = MELHOR DERROTADO — TAMBÉM AO ABRIR A CHAVE (v1.5.34).
-  //
-  // `_reassignBestLosersToRepechage` só era chamado de dentro de `_advanceWinner`: a chave
-  // só se corrigia quando ALGUÉM lançava MAIS UM resultado. Se o último jogo da rodada-fonte
-  // foi lançado antes do fix (ou por um cliente com bundle velho), a vaga ficava com quem a
-  // aresta `loserNextMatchId` trouxe — os perdedores do 1º, 2º e 3º jogos, justamente os de
-  // PIOR placar — e nada mais a corrigia, porque abrir a chave não reavaliava nada.
-  // Foi exatamente o que o dono viu na linha Ouro do SB: Marina Turri (6-2), Anke (6-1) e
-  // Kelly Barth (6-3) nas vagas, no lugar de Marilia/Silvia (6-5 7-5), Glauce (6-4) e
-  // Gabriela (6-4), que são as melhores pelos critérios de desempate do organizador.
-  //
-  // Idempotente e no-op com a rodada-fonte em curso (aí o card mostra "A definir"). Persiste
-  // no doc FRESCO só quando realmente trocou algo — mesmo padrão do `_maybeFinishElimination`
-  // logo acima. [[feedback_resolution_one_logic]]
-  if (t && typeof window._reassignBestLosersToRepechage === 'function') {
-    try {
-      if (window._reassignBestLosersToRepechage(t) > 0 && window.AppStore && typeof window.AppStore.mutate === 'function') {
-        window.AppStore.mutate(String(tId), function (ft) {
-          try { window._reassignBestLosersToRepechage(ft); } catch (_e) {}
-        });
-      }
-    } catch (_erep) {}
+  // REPESCADO = MELHOR DERROTADO — a tela apenas pede a reconciliação ao servidor.
+  // O motor da Function relê o documento fresco e só escreve se a vaga legada realmente
+  // precisar mudar. Assim abrir a chave nunca mais persiste cálculo de um bundle local.
+  if (t && window.firebase && window.firebase.auth && window.firebase.auth().currentUser &&
+      typeof window._callCF === 'function' && !((window._repechageReconcileRequested || {})[String(tId)])) {
+    window._repechageReconcileRequested = window._repechageReconcileRequested || {};
+    window._repechageReconcileRequested[String(tId)] = true;
+    window._callCF('reconcileBracket', { tournamentId: String(tId) }, 'Entre na sua conta pra atualizar a chave.')
+      .then(function (res) {
+        var d = (res && res.data) || {};
+        if (d.changed && typeof window._softRefreshView === 'function') window._softRefreshView();
+      })
+      .catch(function (err) {
+        // Sem fallback local: a próxima abertura pode tentar de novo, mas a chave nunca é
+        // alterada por um cliente que esteja com código velho.
+        try { delete window._repechageReconcileRequested[String(tId)]; } catch (_e) {}
+        if (window._warn) window._warn('[reconcileBracket] CF falhou (' + ((err && err.code) || '?') + ')');
+      });
   }
 
   // CURA do rótulo cru "Jogador sem perfil (…)" com uids gravados (v1.4.29): busca os

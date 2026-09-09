@@ -391,16 +391,18 @@ console.log('\n── DUPLA: vaga vazia na rodada em curso; topo do ranking ao f
     'dupla: as vagas têm o TOPO do ranking [' + rankTopo.join(', ') + '], got [' + ocup.join(', ') + ']');
 })();
 
-// SOURCE: o render TEM de chamar a reavaliação — é isso que quebrava no código antigo.
-console.log('\n── renderBracket chama a reavaliação (source) ──');
+// SOURCE: o render pede a reconciliação, mas nunca persiste a chave localmente.
+console.log('\n── renderBracket pede reconciliação pela CF (source) ──');
 (function () {
   const fs = require('fs'), path = require('path');
   const src = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'bracket.js'), 'utf8');
   const i = src.indexOf('function renderBracket(');
   ok(i !== -1, 'renderBracket existe');
   const corpo = _R.ateOFim(src, i);
-  ok(corpo.indexOf('_reassignBestLosersToRepechage') !== -1,
-    'renderBracket chama _reassignBestLosersToRepechage (sem isto, a chave só se corrige no próximo resultado)');
+  ok(corpo.indexOf("_callCF('reconcileBracket'") !== -1,
+    'render despacha reconcileBracket para a CF quando encontra chave legada');
+  ok(corpo.indexOf('window.AppStore.mutate(String(tId)') === -1,
+    'render não persiste repescagem pelo AppStore.mutate');
 })();
 
 console.log('\n' + (fail === 0 ? '✅ repechage-best-loser: OK' : '❌ ' + fail + ' FALHA(S)') + '  (' + pass + ' asserts ok)');
