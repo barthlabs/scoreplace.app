@@ -34,7 +34,12 @@ ok(html.indexOf('final<br>estimado') >= 0, 'o cartão preserva o rótulo de prev
 ok(html.indexOf('início<br>real') >= 0 && html.indexOf(String(new Date(win.startMs).getDate()).padStart(2, '0') + '/') >= 0,
   'a coluna superior inclui o início configurado da rodada');
 const fmt = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'format2-ui.js'), 'utf8');
-ok(fmt.indexOf('Prazo de cada rodada — duração, data e horário') >= 0, 'o ajuste sempre lista prazo e duração de todas as rodadas, mesmo nas faixas estreitas');
-ok(fmt.indexOf('window._f2ElimRoundEndTime') >= 0 && fmt.indexOf('window._numeroGlobalDaRodada') >= 0, 'cada prazo expõe horário editável e o número global/nome da chave');
+ok(fmt.indexOf('summaryHtml: function') >= 0 && fmt.indexOf('Duração de cada rodada') >= 0,
+  'o ajuste mantém prazo e duração de todas as rodadas, inclusive nas faixas estreitas');
+ok(fmt.indexOf('deadlineHtml: function') >= 0 && fmt.indexOf('window._f2ElimRoundEndTime') >= 0 &&
+   fmt.indexOf("['R2', 'R3', 'OF', 'QF', 'SF', 'F']") >= 0,
+  'cada divisor expõe o horário editável e a sequência global/nome correto da chave');
+ok(fmt.indexOf('Prazo de cada rodada — duração, data e horário') === -1,
+  'os horários não voltam como cartões grandes fora da régua');
 console.log(fail ? '\n❌ prazo-da-rodada-eliminatoria: ' + fail + ' falha(s)' : '\n✅ prazo-da-rodada-eliminatoria: OK (' + pass + ')');
 process.exit(fail ? 1 : 0);

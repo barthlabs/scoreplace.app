@@ -2460,7 +2460,11 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
   var _merged = (typeof window._getWaitlist === 'function')
     ? window._getWaitlist(t)
     : (Array.isArray(t.standbyParticipants) ? t.standbyParticipants.slice() : []);
-  if (_merged.length === 0) return '';
+  // W.O. e inativos também precisam continuar acessíveis quando a fila está vazia:
+  // são o único caminho visual para recuperar o histórico e reativar alguém.
+  var _hasOutsideStandby = ((typeof window._phasePendingInactives === 'function' && (window._phasePendingInactives(t) || []).length) ||
+    (typeof window._phaseWoDeactivated === 'function' && (window._phaseWoDeactivated(t) || []).length));
+  if (_merged.length === 0 && !_hasOutsideStandby) return '';
 
   // v1.3.97 (dono, "não travado, alterável durante a fase"): controle do organizador AO VIVO pra
   // ligar/desligar a ENTRADA TARDIA desta fase. O default do torneio é 'closed' (o dono não escolheu
@@ -2533,6 +2537,34 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
   }
 
   const getName = (p) => window._pName(p, '?');
+  // A busca da chave usa exclusivamente `[data-players]`. Lista de espera, inativos e W.O.
+  // também são participantes da chave: sem esse índice eles desaparecem justamente quando o
+  // organizador procura o histórico. Mantém nome gravado + nome vivo por uid no mesmo índice.
+  const _standbySearchAttrs = function (p, extra) {
+    var names = [], uids = [];
+    var add = function (uid, name) {
+      if (uid) uids.push(String(uid));
+      if (name) names.push(String(name));
+      if (uid && typeof window._displayName === 'function') {
+        var live = window._displayName(uid, name || '');
+        if (live) names.push(String(live));
+      }
+    };
+    if (p && typeof p === 'object') {
+      add(p.uid, p.displayName || p.name || '');
+      add(p.p1Uid, p.p1Name || '');
+      add(p.p2Uid, p.p2Name || '');
+      if (Array.isArray(p.participants)) p.participants.forEach(function (member) {
+        if (member && typeof member === 'object') add(member.uid, member.displayName || member.name || '');
+        else if (member) add('', member);
+      });
+    } else add('', getName(p));
+    if (!names.length) names.push(getName(p));
+    if (extra) names.push(String(extra));
+    var attrNames = window._safeHtml(names.filter(Boolean).join(' '));
+    var attrUids = window._safeHtml(uids.filter(Boolean).join(','));
+    return 'data-players="' + attrNames + '" data-player-uids="' + attrUids + '" data-my-match="1" ';
+  };
   const _tIdSafe = String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
   const ci = window._presencaViva(t);
   const ab = t.absent || {};
@@ -2589,7 +2621,7 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
             splitDupla: function (tid, m1id, m2id) { return 'window._splitLateDupla(\'' + tid + '\',\'' + m1id + '\',\'' + m2id + '\',this)'; }
           });
           const _tg = (typeof window._lateGrowthWaitTag === 'function') ? window._lateGrowthWaitTag(_sbGap, p) : '';
-          return _tg ? ('<div style="display:flex;flex-direction:column;gap:6px;min-width:0;">' + _tg + _c + '</div>') : _c;
+          return '<div ' + _standbySearchAttrs(p) + 'style="display:flex;flex-direction:column;gap:6px;min-width:0;">' + _tg + _c + '</div>';
         }).join('') +
       '</div>'
     : '';
@@ -2631,7 +2663,7 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
       : '';
 
     return `
-      <div ${_phDragAttrs}style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:${window._spCor(mc ? 'rgba(16,185,129,0.08)' : isAb ? 'rgba(239,68,68,0.08)' : 'rgba(255,255,255,0.03)', 'background')};border-radius:10px;border-left:4px solid ${isNext ? '#f59e0b' : 'rgba(255,255,255,0.08)'};${dimAbsent ? 'opacity:0.5;' : ''}${_phDragAttrs ? 'cursor:grab;touch-action:none;' : ''}">
+      <div ${_standbySearchAttrs(p)}${_phDragAttrs}style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:${window._spCor(mc ? 'rgba(16,185,129,0.08)' : isAb ? 'rgba(239,68,68,0.08)' : 'rgba(255,255,255,0.03)', 'background')};border-radius:10px;border-left:4px solid ${isNext ? '#f59e0b' : 'rgba(255,255,255,0.08)'};${dimAbsent ? 'opacity:0.5;' : ''}${_phDragAttrs ? 'cursor:grab;touch-action:none;' : ''}">
         <div style="width:26px;height:26px;border-radius:50%;background:${window._spCor(isNext ? 'linear-gradient(135deg,#f59e0b,#d97706)' : 'rgba(255,255,255,0.08)', 'background')};display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:800;color:${window._spCor(isNext ? '#000' : '#94a3b8', 'color')};flex-shrink:0;">${i + 1}</div>
         <span style="font-weight:600;font-size:0.88rem;color:${window._spCor(isNext ? '#fbbf24' : '#94a3b8', 'color')};flex:1;min-width:0;word-break:break-word;overflow-wrap:anywhere;">${name}${isNext && _policy === 'locked' ? ' <span style="font-size:0.62rem;font-weight:700;color:var(--sp-c-fbbf24,#fbbf24);background:rgba(245,158,11,0.15);padding:1px 6px;border-radius:6px;white-space:nowrap;">Próximo a entrar</span>' : ''}</span>
         <label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;${isAb ? 'opacity:0.35;cursor:not-allowed;pointer-events:none;' : ''}"><input type="checkbox" ${mc ? 'checked' : ''} ${isAb ? 'disabled' : `onclick="event.stopPropagation(); window._toggleCheckIn('${_tIdSafe}', '${safeName}', '${String(_pUid).replace(/'/g, "\\'")}');"`}><span class="toggle-slider"></span></label>
@@ -2658,8 +2690,20 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
     var _inat = (typeof window._phasePendingInactives === 'function') ? window._phasePendingInactives(t) : [];
     var _wos  = (typeof window._phaseWoDeactivated === 'function') ? window._phaseWoDeactivated(t) : [];
     if (!_inat.length && !_wos.length) return '';
-    var _linha = function (pp) {
+    var _linha = function (pp, isWo) {
       var _uid = (pp && pp.uid) ? String(pp.uid) : '';
+      // woClaims é a trilha canônica do servidor para W.O. de grupo. Legados continuam
+      // recuperáveis pelo uid/nome, e o grupo fica explícito sem depender do cliente antigo.
+      var _hist = null;
+      if (isWo && Array.isArray(t.woClaims)) {
+        var _nmHist = getName(pp);
+        for (var _hi = t.woClaims.length - 1; _hi >= 0; _hi--) {
+          var _claim = t.woClaims[_hi] || {};
+          if ((_uid && Array.isArray(_claim.absentUids) && _claim.absentUids.indexOf(_uid) !== -1) ||
+              (_nmHist && String(_claim.absentName || '').toLocaleLowerCase() === String(_nmHist).toLocaleLowerCase())) { _hist = _claim; break; }
+        }
+      }
+      var _origem = _hist && _hist.groupName ? ('Grupo anterior: ' + _hist.groupName) : '';
       if (!_uid && typeof window._memberUidByName === 'function') {
         try { _uid = window._memberUidByName(t, getName(pp)) || ''; } catch (_e) { _uid = ''; }
       }
@@ -2667,21 +2711,31 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
        * inicial só existe pra quem não tem conta. */
       var _txt = _uid ? window._safeHtml(window._displayName(_uid, '') || '') : window._safeHtml(getName(pp));
       var _at = _uid ? (' data-uid-name="' + window._safeHtml(_uid) + '"') : '';
-      return '<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:9px;' +
+      // O painel continua usando o MESMO card de jogador da tela de participantes.
+      // Após o avanço de fase uma lista plana escondia avatar, identidade e contexto —
+      // justamente as referências necessárias para recuperar alguém que saiu por W.O.
+      if (typeof window._inscritoIndividualCard === 'function') {
+        var _card = window._inscritoIndividualCard(t, pp, 0, { isOrg: false, drawDone: true, canRollCall: false, postDrawPresence: false });
+        _card = _card.replace('<div class="participant-card"', '<div ' + _standbySearchAttrs(pp, _origem) + 'class="participant-card"');
+        if (_origem) _card = _card.replace(/<\/div>\s*$/, '<div style="margin-top:5px;font-size:0.69rem;color:var(--text-muted);overflow-wrap:anywhere;">' + window._safeHtml(_origem) + '</div></div>');
+        return _card;
+      }
+      return '<div ' + _standbySearchAttrs(pp, _origem) + 'style="display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:9px;' +
         'background:rgba(255,255,255,0.03);border:1px solid var(--border-color);min-width:0;">' +
         window._personAvatarHtml(_uid, getName(pp), 'width:22px;height:22px;border-radius:50%;object-fit:cover;flex-shrink:0;') +
-        '<span' + _at + ' style="font-weight:700;font-size:0.82rem;color:var(--text-bright);min-width:0;overflow-wrap:anywhere;">' + _txt + '</span></div>';
+        '<div style="min-width:0;display:flex;flex-direction:column;gap:2px;"><span' + _at + ' style="font-weight:700;font-size:0.82rem;color:var(--text-bright);min-width:0;overflow-wrap:anywhere;">' + _txt + '</span>' +
+        (_origem ? '<span style="font-size:0.69rem;color:var(--text-muted);overflow-wrap:anywhere;">' + window._safeHtml(_origem) + '</span>' : '') + '</div></div>';
     };
-    var _bloco = function (titulo, cor, lista) {
+    var _bloco = function (titulo, cor, lista, isWo) {
       if (!lista.length) return '';
       return '<div style="margin-top:1rem;">' +
         '<div style="font-size:0.72rem;font-weight:700;color:' + window._spCor(cor, 'color') + ';text-transform:uppercase;letter-spacing:0.6px;margin-bottom:8px;">' +
           window._safeHtml(titulo) + ' (' + lista.length + ')</div>' +
-        '<div style="display:flex;flex-direction:column;gap:6px;">' + lista.map(_linha).join('') + '</div>' +
+        '<div style="display:flex;flex-direction:column;gap:6px;">' + lista.map(function (pp) { return _linha(pp, isWo); }).join('') + '</div>' +
       '</div>';
     };
-    return _bloco('💤 Inativos', '#94a3b8', _inat) +
-           _bloco('🚫 W.O.', '#f87171', _wos) +
+    return _bloco('💤 Inativos', '#94a3b8', _inat, false) +
+           _bloco('🚫 W.O.', '#f87171', _wos, true) +
            '<div style="font-size:0.7rem;color:var(--text-muted);margin-top:8px;">Quem reativar entra no fim da lista de espera.</div>';
   })();
 

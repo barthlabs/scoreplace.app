@@ -40,7 +40,9 @@ const APROVADOS = [
   { arquivo: 'js/views/participants.js', marca: 'data-panel-card="1"',
     quem: 'painel por pessoa pós-sorteio (mostra o jogo) — outro CONTEÚDO' },
   { arquivo: 'js/views/tournaments.js', marca: 'data-dupla-card="1"',
-    quem: '_duplaCard (dupla formada) — FONTE ÚNICA' }
+    quem: '_duplaCard (dupla formada) — FONTE ÚNICA' },
+  { arquivo: 'js/views/bracket.js', marca: `_card = _card.replace('<div class="participant-card"'`,
+    quem: 'decorador do card canônico na lista de espera/W.O. — NÃO emite outro card' }
 ];
 
 function varrer(dir) {

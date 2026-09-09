@@ -132,13 +132,15 @@
    * Uma trilha com N segmentos. Cada segmento mostra os DIAS que dura; cada divisa
    * mostra a data dd/mm. As pontas são o início e o fim da fase — elas não se arrastam,
    * e por isso aparecem em cinza, não como stop. */
-  window._rbSliderHtml = function (startMs, endMs, n, limites) {
+  window._rbSliderHtml = function (startMs, endMs, n, limites, presentation) {
     var k = parseInt(n, 10) || 1;
     if (!(endMs > startMs) || k < 1) {
       return '<div style="font-size:0.72rem;color:var(--text-muted);padding:6px 2px;">' +
              'Defina início e fim da fase para distribuir as rodadas.</div>';
     }
     var v = (limites && limites.length === k - 1) ? limites : window._rbIguais(startMs, endMs, k);
+    var view = presentation || {};
+    var roundLabel = (typeof view.roundLabel === 'function') ? view.roundLabel : function (idx) { return 'R' + (idx + 1); };
     var total = endMs - startMs;
     var pct = function (ms) { return ((ms - startMs) / total) * 100; };
     var cortes = [startMs].concat(v, [endMs]);
@@ -152,8 +154,8 @@
         'background:' + (i % 2 ? 'rgba(129,140,248,0.22)' : 'rgba(56,189,248,0.22)') + ';' +
         'border-right:' + (i < k - 1 ? '0' : '0') + ';display:flex;align-items:center;justify-content:center;' +
         'overflow:hidden;font-size:0.62rem;font-weight:800;color:var(--text-bright);white-space:nowrap;">' +
-        (largura > 11 ? ('R' + (i + 1) + ' · ' + window._rbDias(b - a) + 'd') :
-         largura > 6 ? ('R' + (i + 1)) : '') +
+        (largura > 9 ? (roundLabel(i) + ' · ' + window._rbDias(b - a) + 'd') :
+         largura > 4 ? roundLabel(i) : '') +
       '</div>';
     }
 
@@ -170,11 +172,18 @@
     }
 
     var rotulos = '';
+    var prazoHtml = (typeof view.deadlineHtml === 'function') ? view.deadlineHtml : null;
     for (var q = 0; q < v.length; q++) {
+      var _rot = prazoHtml ? prazoHtml(v[q], q, false) : window._rbDDMM(v[q]);
       rotulos += '<span data-rb-lbl="' + q + '" style="position:absolute;left:' + pct(v[q]).toFixed(4) + '%;' +
         'transform:translateX(-50%);font-size:0.62rem;font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);' +
-        'white-space:nowrap;">' + window._rbDDMM(v[q]) + '</span>';
+        'white-space:nowrap;text-align:center;display:flex;flex-direction:column;align-items:center;gap:2px;">' + _rot + '</span>';
     }
+    if (prazoHtml) {
+      rotulos += '<span data-rb-lbl-final="1" style="position:absolute;left:100%;transform:translateX(-100%);font-size:0.62rem;font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);white-space:nowrap;text-align:center;display:flex;flex-direction:column;align-items:center;gap:2px;">' + prazoHtml(endMs, k - 1, true) + '</span>';
+    }
+    var _rotHeight = prazoHtml ? '44px' : '14px';
+    var _summary = (typeof view.summaryHtml === 'function') ? view.summaryHtml(cortes) : '';
 
     return '<div data-rb-root="1" style="padding:2px 12px 0;">' +
       '<div data-rb-track="1" style="position:relative;height:26px;border-radius:8px;overflow:visible;' +
@@ -182,10 +191,10 @@
         '<div style="position:absolute;inset:0;border-radius:8px;overflow:hidden;">' + segs + '</div>' +
         stops +
       '</div>' +
-      '<div style="position:relative;height:14px;margin-top:3px;">' + rotulos + '</div>' +
+      '<div style="position:relative;height:' + _rotHeight + ';margin-top:3px;">' + rotulos + '</div>' +
       '<div style="display:flex;justify-content:space-between;font-size:0.62rem;color:var(--text-muted);font-weight:700;">' +
-        '<span>' + window._rbDDMM(startMs) + '</span><span>' + window._rbDDMM(endMs) + '</span>' +
-      '</div>' +
+        '<span>' + window._rbDDMM(startMs) + '</span><span>' + (prazoHtml ? '' : window._rbDDMM(endMs)) + '</span>' +
+      '</div>' + _summary +
     '</div>';
   };
 
@@ -204,7 +213,9 @@
     }
     function pinta(v) {
       var e = estado();
-      root.innerHTML = window._rbSliderHtml(e.start, e.end, e.n, v || e.v);
+      var atual = v || e.v;
+      var presentation = (typeof st.presentation === 'function') ? st.presentation(e, atual) : null;
+      root.innerHTML = window._rbSliderHtml(e.start, e.end, e.n, atual, presentation);
     }
     root._rbPinta = pinta;
 

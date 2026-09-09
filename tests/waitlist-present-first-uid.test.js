@@ -65,6 +65,28 @@ const m = {};
 W._idMapSet(t, m, { uid: 'uR2', displayName: 'Rodrigo' }, 2000);
 ok(m['uR2'] === 2000 && m['Rodrigo'] == null, 'write com conta grava SÓ o uid (nunca o nome)');
 
+W._inscritoIndividualCard = () => '<div class="participant-card"><div>card</div></div>';
+
+// (5) Busca + trilha histórica: quem está em W.O. não pode desaparecer do filtro, e o
+// painel deve exibir o grupo canônico gravado em woClaims. Reproduz Nathalya no Confra.
+W._phasePendingInactives = () => [];
+W._phaseWoDeactivated = () => [{ uid: 'uNath', displayName: 'Nathalya Calil', woDeactivatedAt: 1 }];
+t.woClaims = [{ absentUids: ['uNath'], absentName: 'Nathalya Calil', groupName: 'R1 Grupo H2' }];
+const historico = W._renderStandbyPanel(t, true);
+const posNath = historico.indexOf('Nathalya Calil');
+ok(posNath !== -1, 'a pessoa em W.O. aparece no painel');
+ok(historico.includes('Grupo anterior: R1 Grupo H2'), 'W.O. exibe o grupo de origem do log canônico');
+ok(/data-players="[^"]*Nathalya Calil[^"]*"[^>]*data-my-match="1"/.test(historico),
+  'a linha W.O. declara data-players e permanece pesquisável também com “Só meus jogos”');
+
+// (6) Mesmo sem espera, o painel preserva a pessoa em W.O. para pesquisa e recuperação.
+t.standbyParticipants = [];
+const somenteWo = W._renderStandbyPanel(t, true);
+ok(somenteWo.includes('Nathalya Calil') && somenteWo.includes('R1 Grupo H2'),
+  'W.O. não some quando a lista de espera fica vazia');
+ok(somenteWo.includes('participant-card'),
+  'W.O. reutiliza o cartão canônico de participante após o avanço de fase');
+
 console.log('  ' + pass + ' asserts OK, ' + fail + ' falhas');
 if (fail > 0) { console.error('❌ waitlist-present-first-uid FALHOU'); process.exit(1); }
 console.log('✅ waitlist-present-first-uid: OK');

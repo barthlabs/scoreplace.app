@@ -38,6 +38,12 @@ ok(/n < 2 \|\| !win\) \{ box\.style\.display = 'none'; return; \}/.test(f2ui),
   '⑨ uma fase de rodada única não mostra controle de divisão');
 ok(/_elimRoundCount[\s\S]{0,600}_rodadasVisiveisDaFase/.test(f2ui),
   '⑩ eliminatória materializada usa suas rodadas reais');
+ok(/\['R2', 'R3', 'OF', 'QF', 'SF', 'F'\]/.test(f2ui),
+  '⑪ eliminatória de seis etapas recebe os rótulos R2, R3, OF, QF, SF e F');
+ok(/deadlineHtml[\s\S]{0,500}_f2ElimRoundEndTime/.test(f2ui),
+  '⑫ o horário editável nasce sob o respectivo divisor da régua');
+ok(!/_elimRoundDeadlineTimesHtml/.test(f2ui),
+  '⑬ não há uma segunda lista de campos grandes de horário abaixo da régua');
 
 console.log(fail ? ('  ' + fail + ' FALHA(S), ' + pass + ' ok') : ('  ✓ ' + pass + ' asserções'));
 process.exit(fail ? 1 : 0);
