@@ -15,7 +15,10 @@ const digest = read('functions/index.js');
 const app = read('js/views/notifications-view.js');
 
 ok(/function _notificationScoreboard/.test(auto) && /Number\.isFinite\(p1\)/.test(auto), 'CF só cria aviso com sets canônicos completos');
-ok(/collection\('notificationOutbox'\)/.test(auto) && /tx\.set\(notifOutboxRef, _notif\)/.test(auto), 'placar e outbox nascem na mesma transação');
+ok(/collection\('notificationOutbox'\)/.test(auto) && /tx\.set\(notifOutboxRef, _notif \|\| _transitionNotif\)/.test(auto), 'placar e outbox nascem na mesma transação');
+ok(/const _pendingAntes/.test(auto) && /pendingBefore: _pendingAntes/.test(auto), 'aprovação preserva autoria da proposta antes de consumi-la');
+ok(/confirmou o resultado lançado por/.test(auto) && /function _notificationPersonName/.test(auto), 'confirmação identifica quem confirmou e nunca expõe e-mail como autoria');
+ok(/liveIdentity = await _loadLiveNames/.test(auto) && /callerName =/.test(auto), 'CF resolve nome de exibição antes de comunicar o resultado');
 ok(/exports\.deliverScoreNotification\s*=\s*onDocumentCreated/.test(auto), 'CF entrega a outbox depois do commit');
 ok(/scoreboard: item\.scoreboard/.test(auto) && /scoreboard: item\.scoreboard/.test(auto), 'plataforma e fila recebem o mesmo placar estruturado da CF');
 ok(!/try\s*\{\s*_notifyPendingApproval\(/.test(bracket), 'cliente não dispara aviso a partir do card potencialmente velho');

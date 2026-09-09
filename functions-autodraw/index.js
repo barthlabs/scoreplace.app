@@ -953,6 +953,12 @@ async function _aplicaPlacarNaTransacao(db, tId, matchId, payload, ator, logMess
     _enrichParticipantsFromProfiles(t);
     const _matchAntes = (typeof drawWindow._findMatch === 'function')
       ? _scoreAuditSnapshot(drawWindow._findMatch(t, matchId)) : null;
+    // A aprovação consome pendingResult. Guardamos a proposta ANTES de o motor
+    // removê-la para que a comunicação posterior não atribua o lançamento a quem
+    // apenas confirmou (incidente do organizador identificado pelo e-mail).
+    const _pendingAntes = (typeof drawWindow._findMatch === 'function')
+      ? (() => { const m = drawWindow._findMatch(t, matchId); return m && m.pendingResult ? JSON.parse(JSON.stringify(m.pendingResult)) : null; })()
+      : null;
     // Re-checa sobre o doc FRESCO (acesso pode ter mudado entre o read e a txn).
     if (!_isTournamentParticipant(t, ator.uid) && !_isTournamentAdmin(t, ator.uid)) {
       return { ok: false, reason: 'permission-denied' };
@@ -984,7 +990,11 @@ async function _aplicaPlacarNaTransacao(db, tId, matchId, payload, ator, logMess
     });
     const _matchDepois = (typeof drawWindow._findMatch === 'function')
       ? drawWindow._findMatch(t, matchId) : null;
-    const _notif = _scoreNotificationEvent(t, _matchDepois, res.outcome, ator, _agoraIsoTx);
+    const _notif = _scoreNotificationEvent(t, _matchDepois, res.outcome, ator, _agoraIsoTx, {
+      action: payload && payload.action,
+      pendingBefore: _pendingAntes,
+      liveNames: ator.liveNames || {}
+    });
     const _transitionNotif = res.outcome === 'disputed'
       ? _disputeNotificationEvent(t, _matchDepois, ator, _agoraIsoTx)
       : (res.outcome === 'match-reset' || res.outcome === 'result-reopened' || res.outcome === 'wo-reverted')
@@ -1029,27 +1039,49 @@ function _scoreNotificationRecipients(t, m, pending) {
   return Array.from(all);
 }
 
-function _scoreNotificationEvent(t, m, outcome, actor, at) {
+function _notificationPersonName(value, fallback) {
+  const name = String(value || '').trim();
+  // E-mail é identificador técnico, nunca autoria para participantes. Dados
+  // históricos ainda podem carregá-lo em proposedByName; nesse caso preferimos
+  // o papel compreensível a repetir um endereço no toast ou e-mail.
+  return name && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(name) ? name : fallback;
+}
+
+function _scoreNotificationEvent(t, m, outcome, actor, at, context) {
   // Disputa nunca é confirmação: mesmo que o jogo conserve sets de um placar
   // anterior, só a notificação própria da transição pode sair da transação.
   if (!m || outcome === 'in-progress' || outcome === 'disputed') return null;
   const pending = outcome === 'pending';
+  const ctx = context || {};
+  const proposal = pending ? m.pendingResult : ctx.pendingBefore;
   const scoreboard = _notificationScoreboard(m, pending);
   if (!scoreboard || !scoreboard.p1 || !scoreboard.p2) return null;
   const compact = (side) => scoreboard.sets.map(s => String(s[side])).join(' ');
-  const actorName = String((m.pendingResult && m.pendingResult.proposedByName) || actor.name || actor.email || 'Alguém');
+  const proposerUid = String(proposal && proposal.proposedBy || '');
+  const liveProposerName = ctx.liveNames && ctx.liveNames[proposerUid];
+  const proposerName = _notificationPersonName(
+    proposal && proposal.proposedByName,
+    _notificationPersonName(liveProposerName, 'Jogador')
+  );
+  const actorFallback = _isTournamentAdmin(t, actor && actor.uid) ? 'Organizador' : 'Jogador';
+  const confirmerName = _notificationPersonName(actor && actor.name, actorFallback);
+  const isApproval = !pending && ctx.action === 'approve-pending' && !!proposal;
+  const authorName = pending || !isApproval ? proposerName : confirmerName;
   const type = pending ? 'match-pending-approval' : 'result';
+  const messagePrefix = isApproval
+    ? confirmerName + ' confirmou o resultado lançado por ' + proposerName + ':'
+    : proposerName + ' lançou:';
   return {
     schema: 1,
     kind: 'score-notification',
     type,
     title: pending ? '⏳ Resultado precisa de aprovação' : '✅ Resultado confirmado',
-    message: actorName + ' lançou:\n' + scoreboard.p1 + ' ' + compact('p1') + '\nvs\n' + scoreboard.p2 + ' ' + compact('p2'),
+    message: messagePrefix + '\n' + scoreboard.p1 + ' ' + compact('p1') + '\nvs\n' + scoreboard.p2 + ' ' + compact('p2'),
     tournamentId: String(t.id || ''),
     tournamentName: String(t.name || ''),
     matchId: String(m.id || ''),
-    fromUid: String(actor.uid || ''),
-    fromName: actorName,
+    fromUid: String((isApproval ? actor && actor.uid : proposerUid || actor && actor.uid) || ''),
+    fromName: authorName,
     level: 'fundamental',
     scoreboard,
     recipients: _scoreNotificationRecipients(t, m, pending),
@@ -1221,12 +1253,20 @@ exports.applyMatchResult = onCall(async (request) => {
       { tId, matchId, uid, email: email || '(sem email)' });
   }
   await _preloadDrawNames(pre.data()); // nome vivo por uid (o motor pode gerar/avançar)
+  // A comunicação usa nome de exibição, nunca e-mail. Também pré-carregamos quem
+  // propôs a pendência: a aprovação remove esse objeto durante a transação.
+  const preMatch = typeof drawWindow._findMatch === 'function' ? drawWindow._findMatch(pre.data(), matchId) : null;
+  const namesToLoad = new Set([String(uid)]);
+  if (preMatch && preMatch.pendingResult && preMatch.pendingResult.proposedBy) namesToLoad.add(String(preMatch.pendingResult.proposedBy));
+  const liveIdentity = await _loadLiveNames(namesToLoad);
+  const callerName = (liveIdentity.nameByUid && liveIdentity.nameByUid[String(uid)]) ||
+    (request.auth && request.auth.token && request.auth.token.name) || '';
 
   let out;
   try {
     // MESMO miolo que a fila usa — ver _aplicaPlacarNaTransacao.
     out = await _aplicaPlacarNaTransacao(db, tId, matchId, payload, {
-      uid, email, name: (request.auth && request.auth.token && request.auth.token.name) || ''
+      uid, email, name: callerName, liveNames: liveIdentity.nameByUid || {}
     }, logMessage);
     if (!out.ok && out.reason === 'permission-denied') {
       throw _drawFail('permission-denied', 'Sem permissão (doc fresco).', { tId, matchId, uid });
@@ -1422,6 +1462,27 @@ exports.assignMatchCourt = onCall(async (request) => {
 
 
 // ─── Metadados de apresentação: comandos estreitos, nunca ficha inteira ───────────
+
+
+// ─── Fechamento por prazo: a tela pede; a organização e o servidor confirmam ─────
+exports.closeExpiredEnrollment = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid;
+  const tId = String((request.data && request.data.tournamentId) || '').trim();
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId) throw new HttpsError('invalid-argument', 'Torneio obrigatório.');
+  const ref = db.collection('tournaments').doc(tId), agora = Date.now(), agoraIso = new Date(agora).toISOString();
+  return db.runTransaction(async tx => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização fecha inscrições por prazo.', { tId, uid });
+    const deadline = Date.parse(t.registrationLimit || '');
+    if (!Number.isFinite(deadline) || deadline > agora) return { ok:true, changed:false, reason:'not-expired' };
+    if (t.status === 'closed' || t.status === 'finished' || hasDrawnBracket(t)) return { ok:true, changed:false, reason:'already-closed-or-drawn' };
+    const antes = _antesDoMotor(t); t.status = 'closed';
+    const b = _gravaTorneio(tx, ref, t, antes, { agoraIso });
+    return { ok:true, changed:true, tournament:b.clean };
+  });
+});
 
 exports.setTournamentCategoryConfig = onCall(async (request) => {
   const uid = request.auth && request.auth.uid;

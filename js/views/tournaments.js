@@ -2599,16 +2599,10 @@ function _applyLigaSeasonClosure(t, now) {
 
         // Auto-close: if deadline passed but status hasn't been updated yet, close it now
         if (!isAberto && !isFinished && !sorteioRealizado && t.status !== 'closed' && t.registrationLimit && new Date(t.registrationLimit) < new Date()) {
-          t.status = 'closed';
-          // v4.5.10: marca que o fechamento foi AUTOMÁTICO (prazo vencido), não uma decisão
-          // explícita do organizador. O gate do Sortear ainda pede a confirmação "Encerrar
-          // Inscrições?" pra torneios auto-fechados (o organizador não escolheu fechar) —
-          // só pula a confirmação quando ELE fechou de propósito via "Encerrar Inscrições".
-          // Flag em memória (não persiste no save de status abaixo; re-derivada a cada render).
+          // O prazo já fechou para a UI. A Function relê e grava o status somente se o
+          // documento fresco ainda estiver aberto e sem chave; a tela nunca salva esse estado.
           t._autoClosedByDeadline = true;
-          if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
-            window.FirestoreDB.saveTournament({ id: t.id, status: 'closed' }).catch(function() {});
-          }
+          if (typeof window._callCF === 'function' && window.AppStore && window.AppStore.isOrganizer && window.AppStore.isOrganizer(t)) window._callCF('closeExpiredEnrollment', { tournamentId: String(t.id) }, 'Entre na sua conta para atualizar inscrições.').catch(function() {});
         }
 
         // Self-heal: enrollments open + no draw => drain any residual waitlist/standby into participants
