@@ -1409,11 +1409,17 @@ exports.reconcileBracket = onCall(async (request) => {
       const trocas = drawWindow._reassignBestLosersToRepechage(t) || 0;
       const futuras = (typeof drawWindow._ensureFutureRounds === 'function')
         ? !!drawWindow._ensureFutureRounds(t, false, { now: Date.parse(agoraIso), thirdPlaceLabel: 'Disputa de 3º lugar' }) : false;
+      // Reparos legados da Liga também pertencem à mesma leitura fresca. Abrir a chave ou
+      // deixar o poller do navegador rodar não pode mais limpar rodada/folga por conta própria.
+      const ligaPrematura = (typeof drawWindow._healPrematureLigaRounds === 'function')
+        ? !!drawWindow._healPrematureLigaRounds(t) : false;
+      const folgaLegada = (typeof drawWindow._healSitOutWinners === 'function')
+        ? !!drawWindow._healSitOutWinners(t) : false;
       if (typeof drawWindow._maybeFinishElimination === 'function') drawWindow._maybeFinishElimination(t);
-      const mudou = trocas > 0 || futuras || t.status !== statusAntes;
+      const mudou = trocas > 0 || futuras || ligaPrematura || folgaLegada || t.status !== statusAntes;
       if (!mudou) return { ok: true, changed: false };
       const b = _gravaTorneio(tx, ref, t, antes, { agoraIso: agoraIso });
-      return { ok: true, changed: true, changes: trocas, futureRoundsRepaired: futuras, tournament: b.clean };
+      return { ok: true, changed: true, changes: trocas, futureRoundsRepaired: futuras, ligaPrematureRepaired: ligaPrematura, sitOutRepaired: folgaLegada, tournament: b.clean };
     });
   } catch (e) {
     if (e instanceof HttpsError) throw e;

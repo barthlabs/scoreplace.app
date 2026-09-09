@@ -1343,27 +1343,8 @@ function renderBracket(container, tournamentId, isInline) {
 
   const isOrg = typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t);
 
-  // v2.3.10: heal IMEDIATO ao abrir o bracket (organizador) — não espera o
-  // poller de 60s. Remove rodada gerada antes da hora (bug pré-v2.3.7) e o
-  // `winner` legado de folgas. Salva uma vez (idempotente nas próximas).
-  if (isOrg) {
-    var _healedPrem = (typeof window._healPrematureLigaRounds === 'function') && window._healPrematureLigaRounds(t);
-    var _healedSit = (typeof window._healSitOutWinners === 'function') && window._healSitOutWinners(t);
-    // v1.3.62: heal do 3º lugar em Elim Simples — a chave integrada de tardios (v1.3.61) apagou
-    // t.thirdPlaceMatch ao reconstruir e a recriação só rodava ao lançar resultado. Aqui recria
-    // ao ABRIR o bracket (idempotente: _maybeGenerate3rdPlace só cria se faltar). SÓ elim simples
-    // — em Liga/Suíço/Grupos a função criaria 3º lugar bogus (penúltima rodada ≠ semifinal).
-    var _healed3rd = false;
-    var _isElimSimples = (t.format === 'Eliminatórias Simples' || t.format === 'Eliminatória Simples');
-    if (_isElimSimples && typeof window._maybeGenerate3rdPlace === 'function') {
-      var _had3rd = !!t.thirdPlaceMatch;
-      try { window._maybeGenerate3rdPlace(t); } catch (e) {}
-      _healed3rd = (!_had3rd && !!t.thirdPlaceMatch);
-    }
-    if ((_healedPrem || _healedSit || _healed3rd) && window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
-      try { window.FirestoreDB.saveTournament(t); } catch (e) {}
-    }
-  }
+  // Reparos legados são tratados por `reconcileBracket` na Cloud Function acima.
+  // Esta view só lê e renderiza; não salva estado ao abrir.
 
   // v1.3.87 (dono, SANDBOX): a INTEGRAÇÃO TARDIA passa a rodar SÓ na CF (integrateLateEntries),
   // como o sorteio inicial (drawRound). O cliente NÃO computa mais a chave — só DISPARA e o

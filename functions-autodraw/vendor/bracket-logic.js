@@ -5822,28 +5822,13 @@ window._checkLigaAutoDraws = async function() {
     // Skip finished
     if (t.status === 'finished') continue;
 
-    // v2.3.8/2.3.9: auto-correções nos dados — (a) rodada gerada antes da hora
-    // (bug pré-v2.3.7) e (b) folgas (sit-out) com winner legado. Remove/limpa,
-    // salva e re-renderiza. Segue o fluxo normal depois.
-    var _didHeal = _healPrematureLigaRounds(t);
-    if (_healSitOutWinners(t)) _didHeal = true;
-    if (_didHeal) {
-      try {
-        await window.AppStore.mutate(t.id, function(ft) {
-          var changed = _healPrematureLigaRounds(ft);
-          if (_healSitOutWinners(ft)) changed = true;
-          return changed || false;
-        }, 'Auto-correção de rodada Liga');
-      } catch (e) { window._warn('[heal] save failed', e); }
-      try {
-        var _h = (window.location && window.location.hash) || '';
-        var _vc = document.getElementById('view-container');
-        if (_vc && _h.indexOf('#tournaments/' + t.id) === 0 && typeof window.renderTournaments === 'function') {
-          window.renderTournaments(_vc, t.id);
-        } else if (_h.indexOf('#bracket/' + t.id) === 0 && typeof window._rerenderBracket === 'function') {
-          window._rerenderBracket(t.id);
-        }
-      } catch (e) {}
+    // Auto-correções legadas são da mesma Function que reconcilia a chave. O poller
+    // só despacha uma vez por torneio nesta sessão; não calcula nem persiste no navegador.
+    window._ligaRepairRequested = window._ligaRepairRequested || {};
+    if (!window._ligaRepairRequested[String(t.id)] && typeof window._callCF === 'function') {
+      window._ligaRepairRequested[String(t.id)] = true;
+      window._callCF('reconcileBracket', { tournamentId: String(t.id) }, 'Entre na sua conta para atualizar o torneio.')
+        .catch(function () { try { delete window._ligaRepairRequested[String(t.id)]; } catch (_e) {} });
     }
 
     // ── v1.2.11: O SORTEIO AGENDADO DA LIGA É DO SERVIDOR — FIM DA CORRIDA ──────

@@ -2904,6 +2904,12 @@ persiste somente quando uma vaga ou o encerramento realmente mudou.
 estável no documento fresco, preserva placares que chegaram depois e não escreve em chave já
 íntegra. A renderização não gera nem persiste colunas.
 
+**L7.P1.17 — reparos automáticos da Liga só rodam na Cloud Function
+(09/set/2026, aprovado pelo Claude; aguarda publicação acumulada).** A reconciliação canônica
+também remove rodadas prematuras e vencedores legados de folga sobre o documento fresco. A
+abertura da chave e o poller da Liga deixaram de salvar; ambos apenas podem solicitar a mesma
+Function idempotente.
+
 ## L8 — matriz de leitura e projeção (08/set/2026)
 
 `matches` permanece a fonte canônica. `results/{matchId}` é uma projeção server-written para
