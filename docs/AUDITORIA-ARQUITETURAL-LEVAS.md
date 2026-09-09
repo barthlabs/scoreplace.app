@@ -2933,6 +2933,11 @@ plano canônico apenas quando há mudança. A tela pode ocultar transitoriamente
 não a altera. O gate exige ausência de `saveTournament`, dos dois heals e de temporizadores de
 persistência no render. Claude aprovou o diff integral (Opus, esforço medium), sem ressalvas.
 
+
+**L7.P1.21 — decisões de pré-sorteio e avanço passam pela Function (09/set/2026, commit `84d3cdef`; aprovado pelo Claude Opus, esforço medium).** Publicação/anulação do sorteio em revisão, formato padrão, configuração/fechamento de grupos, avanço de fase e reabertura do torneio foram convertidos em intenções estreitas. A Function relê o documento, autoriza por UID, reaplica apenas escolhas declaradas de play-in e Liga Suíça, materializa no motor canônico e só então notifica. Inscrição, desinscrição e a espera Rei/Rainha também não têm mais fallback de escrita pelo navegador. O runner registra oito gates específicos e a suíte completa passou com 674 suítes.
+
+**L7.P1.22 — metadados administrativos sem `saveTournament` (em validação local, 09/set/2026).** Logo do torneio, preferências de impressão e a configuração de categorias passam a comandos administrativos com payload limitado e transação server-side. A edição de atribuições individuais da análise permanece separada: ela altera simultaneamente a entrada do torneio e o perfil do usuário, portanto exige uma intenção própria e não será tratada como um save genérico.
+
 ## L8 — matriz de leitura e projeção (08/set/2026)
 
 `matches` permanece a fonte canônica. `results/{matchId}` é uma projeção server-written para

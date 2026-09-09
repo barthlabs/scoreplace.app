@@ -1420,6 +1420,72 @@ exports.assignMatchCourt = onCall(async (request) => {
   }
 });
 
+
+// ─── Metadados de apresentação: comandos estreitos, nunca ficha inteira ───────────
+
+exports.setTournamentCategoryConfig = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid;
+  const data = request.data || {};
+  const tId = String(data.tournamentId || '').trim();
+  const cleanList = value => Array.isArray(value) ? [...new Set(value.map(v => String(v).trim()).filter(v => v && v.length <= 48))].slice(0, 12) : null;
+  const genderCategories = cleanList(data.genderCategories), skillCategories = cleanList(data.skillCategories);
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId || !genderCategories || !skillCategories) throw new HttpsError('invalid-argument', 'Categorias inválidas.');
+  const combinedCategories = !genderCategories.length ? skillCategories.slice() : !skillCategories.length ? genderCategories.slice() : genderCategories.flatMap(g => skillCategories.map(sk => g + ' ' + sk));
+  const ref = db.collection('tournaments').doc(tId), agoraIso = new Date().toISOString();
+  return db.runTransaction(async tx => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização configura categorias.', { tId, uid });
+    if (JSON.stringify(t.genderCategories || []) === JSON.stringify(genderCategories) && JSON.stringify(t.skillCategories || []) === JSON.stringify(skillCategories)) return { ok:true, changed:false };
+    const antes = _antesDoMotor(t); t.genderCategories = genderCategories; t.skillCategories = skillCategories; t.combinedCategories = combinedCategories;
+    const b = _gravaTorneio(tx, ref, t, antes, { agoraIso });
+    return { ok:true, changed:true, tournament:b.clean };
+  });
+});
+
+exports.setTournamentBranding = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid;
+  const data = request.data || {};
+  const tId = String(data.tournamentId || '').trim();
+  const logoData = String(data.logoData || '');
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId || !/^data:image\/(png|jpe?g|webp);base64,/i.test(logoData) || logoData.length > 2 * 1024 * 1024) throw new HttpsError('invalid-argument', 'Logo inválido.');
+  const ref = db.collection('tournaments').doc(tId), agoraIso = new Date().toISOString();
+  return db.runTransaction(async tx => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização altera o logo.', { tId, uid });
+    if (t.logoData === logoData && t.logoLocked === true) return { ok:true, changed:false };
+    const antes = _antesDoMotor(t); t.logoData = logoData; t.logoLocked = true;
+    const b = _gravaTorneio(tx, ref, t, antes, { agoraIso });
+    return { ok:true, changed:true, tournament:b.clean };
+  });
+});
+
+exports.setTournamentFlyerPrefs = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid;
+  const data = request.data || {};
+  const tId = String(data.tournamentId || '').trim();
+  const raw = data.prefs;
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId || !raw || typeof raw !== 'object' || Array.isArray(raw)) throw new HttpsError('invalid-argument', 'Preferências inválidas.');
+  const prefs = {
+    content: String(raw.content || '').slice(0, 64), paper: String(raw.paper || '').slice(0, 32), color: String(raw.color || '').slice(0, 32),
+    orient: String(raw.orient || '').slice(0, 32), sizes: Array.isArray(raw.sizes) ? raw.sizes.slice(0, 12).map(v => String(v).slice(0, 32)) : [], phrase: String(raw.phrase || '').slice(0, 280)
+  };
+  const ref = db.collection('tournaments').doc(tId), agoraIso = new Date().toISOString();
+  return db.runTransaction(async tx => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização altera as preferências.', { tId, uid });
+    if (JSON.stringify(t.flyerPrintPrefs || null) === JSON.stringify(prefs)) return { ok:true, changed:false };
+    const antes = _antesDoMotor(t); t.flyerPrintPrefs = prefs;
+    const b = _gravaTorneio(tx, ref, t, antes, { agoraIso });
+    return { ok:true, changed:true, tournament:b.clean };
+  });
+});
+
 exports.setDefaultTournamentScoring = onCall(async request=>{ const uid=request.auth&&request.auth.uid; if(!uid) throw new HttpsError('unauthenticated','Entre na sua conta.'); const tId=String((request.data&&request.data.tournamentId)||''); const scoring=request.data&&request.data.scoring; if(!tId||!scoring||scoring.type!=='sets') throw new HttpsError('invalid-argument','Formato inválido.'); const ref=db.collection('tournaments').doc(tId),agoraIso=new Date().toISOString(); return db.runTransaction(async tx=>{ const t=await _leTorneio(tx,ref,tId); if(!t) throw new HttpsError('not-found','Torneio não encontrado.'); if(!_isTournamentAdmin(t,uid)) throw _drawFail('permission-denied','Só a organização configura o formato.',{tId,uid}); if(t.scoring&&t.scoring.type==='sets') return {ok:true,changed:false}; const antes=_antesDoMotor(t); t.scoring=Object.assign({},scoring); const b=_gravaTorneio(tx,ref,t,antes,{agoraIso}); return {ok:true,changed:true,tournament:b.clean}; }); });
 
 exports.advanceTournamentPhase = onCall(async (request) => {

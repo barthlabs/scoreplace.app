@@ -33,20 +33,15 @@ window._editTournamentLogoFromDetail = function(tournamentId) {
       window._openImageCropEditor(e.target.result,
         { shape: 'square', size: 400, title: '🎨 Editar logo do torneio' },
         function(croppedDataUrl) {
-          // Salva no torneio e re-renderiza
-          t.logoData = croppedDataUrl;
-          t.logoLocked = true;
-          t.updatedAt = new Date().toISOString();
-          if (window.FirestoreDB && window.FirestoreDB.saveTournament) {
-            // `withImages`: aqui a imagem É a mudança — sem a marca o save a omitiria
-            // (ver a nota em firebase-db.saveTournament).
-            window.FirestoreDB.saveTournament(t, { withImages: true }).then(function() {
-              if (window.showNotification) window.showNotification('Logo atualizado', '', 'success');
-              if (typeof window._softRefreshView === 'function') window._softRefreshView();
-            }).catch(function(err) {
-              if (window.showNotification) window.showNotification('Erro ao salvar logo', err && err.message, 'error');
-            });
-          }
+          // O navegador envia a imagem; a Function autoriza e altera apenas o logo.
+          if (typeof window._callCF !== 'function') { if (window.showNotification) window.showNotification('Erro ao salvar logo', 'Atualize o aplicativo e tente novamente.', 'error'); return; }
+          window._callCF('setTournamentBranding', { tournamentId: String(tournamentId), logoData: croppedDataUrl }, 'Entre na sua conta para atualizar o logo.').then(function(res) {
+            if (!((res && res.data) || {}).ok) throw new Error('branding-failed');
+            if (window.showNotification) window.showNotification('Logo atualizado', '', 'success');
+            if (typeof window._softRefreshView === 'function') window._softRefreshView();
+          }).catch(function(err) {
+            if (window.showNotification) window.showNotification('Erro ao salvar logo', err && err.message, 'error');
+          });
         }
       );
     };
@@ -559,8 +554,8 @@ window._flyerPersistPrefs = function() {
     var o = window._collectFlyerOpts();
     var prefs = { content: o.content, paper: o.paper, color: o.color, orient: o.orient, sizes: o.sizes, phrase: o.phrase || '' };
     if (JSON.stringify(t.flyerPrintPrefs || null) === JSON.stringify(prefs)) return; // nada mudou
-    t.flyerPrintPrefs = prefs;
-    if (window.FirestoreDB && window.FirestoreDB.saveTournament) window.FirestoreDB.saveTournament(t).catch(function() {});
+    if (typeof window._callCF !== 'function') return;
+    window._callCF('setTournamentFlyerPrefs', { tournamentId: String(opts.tournamentId), prefs: prefs }, 'Entre na sua conta para salvar as preferências.').catch(function() {});
   } catch (e) { /* nunca quebra o fluxo de impressão */ }
 };
 

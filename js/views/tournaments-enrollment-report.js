@@ -3002,8 +3002,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       setTimeout(function () { window._suppressSoftRefresh = false; }, 1200);
     };
     try {
-      var p = (window.FirestoreDB && window.FirestoreDB.saveTournament) ? window.FirestoreDB.saveTournament(t) : null;
-      if (p && typeof p.then === 'function') p.then(done, done); else setTimeout(done, 300);
+      if (typeof window._callCF !== 'function') { done(); return; }
+      window._callCF('setTournamentCategoryConfig', { tournamentId: String(t.id), genderCategories: t.genderCategories || [], skillCategories: t.skillCategories || [] }, 'Entre na sua conta para configurar categorias.').then(done, done);
     } catch (e) { done(); }
   }
   window._erToggleGender = function (tId, btn) {
