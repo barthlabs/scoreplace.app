@@ -5949,139 +5949,63 @@ window._openLiveScoring = function(tId, matchId, opts) {
       return;
     }
 
+    // O overlay só INTERPRETA os pontos em um payload. Não altera o jogo local,
+    // não marca presença e não avança a chave: esses fatos pertencem à CF.
+    var _liveSets = null, _liveSetsP1 = 0, _liveSetsP2 = 0;
+    var _liveScoreP1, _liveScoreP2, _liveFixedSet = !!state.isFixedSet;
     if (useSets) {
-      // Save as GSM sets data
-      m.sets = state.sets.map(function(s) {
+      _liveSets = state.sets.map(function(s) {
         var setData = { gamesP1: s.gamesP1, gamesP2: s.gamesP2 };
-        var _tbd = window._setTiebreak(s);
-        if (_tbd) setData.tiebreak = window._tbPoints(_tbd.p1, _tbd.p2);
-        if (state.isFixedSet) setData.fixedSet = true;
+        var tb = window._setTiebreak(s);
+        if (tb) setData.tiebreak = window._tbPoints(tb.p1, tb.p2);
+        if (_liveFixedSet) setData.fixedSet = true;
         return setData;
       });
-      var totalSetsP1 = 0, totalSetsP2 = 0, totalGamesP1 = 0, totalGamesP2 = 0;
-      for (var i = 0; i < state.sets.length; i++) {
-        var s = state.sets[i];
-        if (s.gamesP1 > s.gamesP2) totalSetsP1++;
-        else if (s.gamesP2 > s.gamesP1) totalSetsP2++;
-        totalGamesP1 += s.gamesP1;
-        totalGamesP2 += s.gamesP2;
-      }
-      m.setsWonP1 = totalSetsP1;
-      m.setsWonP2 = totalSetsP2;
-      m.scoreP1 = totalSetsP1;
-      m.scoreP2 = totalSetsP2;
-      m.totalGamesP1 = totalGamesP1;
-      m.totalGamesP2 = totalGamesP2;
-      if (state.isFixedSet) {
-        m.fixedSet = true;
-        m.scoreP1 = totalGamesP1;
-        m.scoreP2 = totalGamesP2;
-      }
-    } else {
-      // Simple scoring
-      m.scoreP1 = state.currentGameP1;
-      m.scoreP2 = state.currentGameP2;
-    }
-
-    // 2.0.1: o placar AO VIVO é o terceiro escritor — a trava do teste foi quem apontou,
-    // depois de eu ter arrumado só os outros dois. Carimba o lado, igual aos demais.
-    if (state.winner === 1) window._stampWinner(m, 1);
-    else if (state.winner === 2) window._stampWinner(m, 2);
-    else if (state.currentGameP1 === state.currentGameP2) {
-      m.winner = 'draw';
-      m.draw = true;
-    } else {
-      m.winner = state.currentGameP1 > state.currentGameP2 ? m.p1 : m.p2;
-    }
-    m.liveScored = true;
-    // v2.3.17: marca o FIM (último ponto) da partida.
-    m.resultAt = Date.now();
-    if (!m.startedAt) m.startedAt = m.resultAt;
-
-    // Check-in both teams — having played the match proves both were present.
-    // Mirrors the logic in _saveSetResult so live-scored matches don't leave
-    // losers marked absent and trigger WO flows. Handles both doubles separators
-    // ("A / B" from the standard match flow and "A/B" from live-scoring names).
-    if (!t.checkedIn) t.checkedIn = {};
-    if (!t.absent) t.absent = {};
-    var _sidesToCheckIn = [m.p1, m.p2];
-    for (var _si = 0; _si < _sidesToCheckIn.length; _si++) {
-      var _side = _sidesToCheckIn[_si];
-      if (!_side || _side === 'TBD' || _side === 'BYE') continue;
-      var _names = _side.indexOf(' / ') !== -1 ? _side.split(' / ')
-                 : _side.indexOf('/') !== -1 ? _side.split('/')
-                 : [_side];
-      for (var _ni = 0; _ni < _names.length; _ni++) {
-        var _nm = _names[_ni].trim();
-        if (!_nm) continue;
-        if (!window._idMapHas(t, t.checkedIn, _nm)) window._idMapSet(t, t.checkedIn, _nm, Date.now());
-        window._idMapDel(t, t.absent, _nm);
-      }
-    }
-    if (!t.tournamentStarted) t.tournamentStarted = Date.now();
-
-    // Advance winner BEFORE re-render so the next round's card shows the
-    // new competitor immediately (not on the next sync tick).
-    if (typeof window._advanceWinner === 'function') window._advanceWinner(t, m);
-    if (typeof window._maybeFinishElimination === 'function') window._maybeFinishElimination(t);
-
-    // BLINDAGEM DE CORRIDA (project_concurrency_safe_saves): antes eram DOIS saves de
-    // doc inteiro (syncImmediate + saveTournament) → lost-update quando 2 jogos são
-    // finalizados ao mesmo tempo. Agora re-aplica os campos JÁ computados do resultado
-    // no match FRESCO (+ check-in + advance no fresco), atomicamente. A `t` local já foi
-    // mutada acima (UI otimista).
-    var _liveResult = {
-      sets: m.sets, setsWonP1: m.setsWonP1, setsWonP2: m.setsWonP2,
-      scoreP1: m.scoreP1, scoreP2: m.scoreP2,
-      totalGamesP1: m.totalGamesP1, totalGamesP2: m.totalGamesP2,
-      fixedSet: m.fixedSet, winner: m.winner, draw: m.draw,
-      liveScored: true, resultAt: m.resultAt, startedAt: m.startedAt
-    };
-    var _liveSides = [m.p1, m.p2];
-    var _liveLogMsg = 'Resultado (ao vivo): ' + m.p1 + ' vs ' + m.p2 + (m.winner === 'draw' ? ' — Empate' : ' — Vencedor: ' + m.winner);
-    window.AppStore.logAction(tId, _liveLogMsg);
-    window.AppStore.commitTournamentTx(tId, function (freshT) {
-      var fm = window._findMatch(freshT, matchId);
-      if (!fm) return;
-      Object.keys(_liveResult).forEach(function (k) { if (_liveResult[k] !== undefined) fm[k] = _liveResult[k]; });
-      if (!freshT.checkedIn) freshT.checkedIn = {};
-      if (!freshT.absent) freshT.absent = {};
-      _liveSides.forEach(function (side) {
-        if (!side || side === 'TBD' || side === 'BYE') return;
-        var _ns = side.indexOf(' / ') !== -1 ? side.split(' / ')
-                : side.indexOf('/') !== -1 ? side.split('/') : [side];
-        _ns.forEach(function (raw) {
-          var nm = raw.trim();
-          if (!nm) return;
-          if (!window._idMapHas(freshT, freshT.checkedIn, nm)) window._idMapSet(freshT, freshT.checkedIn, nm, Date.now());
-          window._idMapDel(freshT, freshT.absent, nm);
-        });
+      _liveSets.forEach(function(s) {
+        if (s.gamesP1 > s.gamesP2) _liveSetsP1++;
+        else if (s.gamesP2 > s.gamesP1) _liveSetsP2++;
       });
-      if (!freshT.tournamentStarted) freshT.tournamentStarted = Date.now();
-      if (typeof window._advanceWinner === 'function') window._advanceWinner(freshT, fm);
-      if (typeof window._maybeFinishElimination === 'function') window._maybeFinishElimination(freshT);
-      if (!Array.isArray(freshT.history)) freshT.history = [];
-      freshT.history.push({ date: new Date().toISOString(), message: _liveLogMsg });
-    });
-
-    // Persist detailed tournament match stats in each registered participant's
-    // account so their per-user history outlives the tournament.
-    _buildAndPersistMatchRecord({
-      matchId: 'tourn_' + (t && t.id ? t.id : 'x') + '_' + (m && m.id ? m.id : 'x'),
-      matchType: 'tournament',
-      tournamentId: t && t.id ? t.id : null,
-      tournamentName: t && t.name ? t.name : null,
-      sport: t && t.sport ? t.sport : ''
-    });
-
-    // Close overlay
-    if (!opts.keepOpen) {
-      var ov = document.getElementById('live-scoring-overlay');
-      if (ov) ov.remove();
+      _liveScoreP1 = _liveFixedSet ? _liveSets.reduce(function(n, s) { return n + s.gamesP1; }, 0) : _liveSetsP1;
+      _liveScoreP2 = _liveFixedSet ? _liveSets.reduce(function(n, s) { return n + s.gamesP2; }, 0) : _liveSetsP2;
+    } else {
+      _liveScoreP1 = state.currentGameP1;
+      _liveScoreP2 = state.currentGameP2;
     }
+    var _liveWinner = state.winner === 1 ? m.p1 : state.winner === 2 ? m.p2 :
+      (_liveScoreP1 === _liveScoreP2 ? 'draw' : (_liveScoreP1 > _liveScoreP2 ? m.p1 : m.p2));
 
-    if (!opts.silent) showNotification(_t('bui.resultSaved'), m.winner === 'draw' ? _t('bui.draw') : _t('bui.matchWon', {winner: m.winner}), 'success');
-    _rerenderBracket(tId, matchId);
+    // O overlay só envia o placar calculado. A CF relê o jogo fresco, reaplica o motor
+    // canônico, marca `liveScored`, avança/encerra a chave e entrega a notificação.
+    var _livePayload = useSets ? {
+      action: 'live-final', gsmFinal: true, sets: _liveSets,
+      setsWonP1: _liveSetsP1, setsWonP2: _liveSetsP2, isFixedSet: _liveFixedSet
+    } : {
+      action: 'live-final', s1: _liveScoreP1, s2: _liveScoreP2, useSets: false
+    };
+    var _liveLogMsg = 'Resultado (ao vivo): ' + m.p1 + ' vs ' + m.p2 + (_liveWinner === 'draw' ? ' — Empate' : ' — Vencedor: ' + _liveWinner);
+    window.AppStore.logAction(tId, _liveLogMsg);
+    return window.AppStore.commitResultTx(tId, matchId, _livePayload, _liveLogMsg).then(function(saved) {
+      if (!saved) {
+        _resultSaved = false;
+        if (typeof window._softRefreshView === 'function') window._softRefreshView();
+        return false;
+      }
+      // Só depois da confirmação canônica o histórico individual, a mensagem e a tela
+      // são atualizados. Assim uma recusa de servidor não cria um "resultado fantasma".
+      _buildAndPersistMatchRecord({
+        matchId: 'tourn_' + (t && t.id ? t.id : 'x') + '_' + (m && m.id ? m.id : 'x'),
+        matchType: 'tournament', tournamentId: t && t.id ? t.id : null,
+        tournamentName: t && t.name ? t.name : null, sport: t && t.sport ? t.sport : ''
+      });
+      if (!opts.keepOpen) {
+        var ov = document.getElementById('live-scoring-overlay');
+        if (ov) ov.remove();
+      }
+      if (!opts.silent) showNotification(_t('bui.resultSaved'), _liveWinner === 'draw' ? _t('bui.draw') : _t('bui.matchWon', {winner: _liveWinner}), 'success');
+      _rerenderBracket(tId, matchId);
+      return true;
+    });
+
   }
 
   // ── Serve tracking — progressive definition ──

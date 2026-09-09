@@ -208,6 +208,23 @@ function applyResult(t, opts) {
     return { ok: true, outcome: payload.action === 'reset-match' ? 'match-reset' : 'result-reopened', reason: '' };
   }
 
+  // O overlay ao vivo manda somente o placar final calculado na quadra. A CF reaplica
+  // esse payload no jogo fresco, sem exigir a aprovação entre times (o jogo foi
+  // acompanhado ponto a ponto), e é a única que marca o resultado como ao vivo.
+  if (payload.action === 'live-final') {
+    const authz = authorize(t, m, actor);
+    if (!authz.ok) return { ok: false, reason: authz.reason };
+    const finalPayload = Object.assign({}, payload);
+    delete finalPayload.action;
+    const appliedLive = win._applyResultToTournament(t, matchId, finalPayload);
+    if (!appliedLive) return { ok: false, reason: 'apply-failed' };
+    appliedLive.liveScored = true;
+    if (typeof win._maybeFinishElimination === 'function') win._maybeFinishElimination(t);
+    if (typeof win._propagateMatchUpdate === 'function') win._propagateMatchUpdate(t, appliedLive);
+    if (o.logMessage) pushHistory(t, o.logMessage, o.now);
+    return { ok: true, outcome: 'applied', reason: '' };
+  }
+
   // Aprovação é uma transição própria: o navegador só pede, e a CF relê a
   // proposta atual antes de aplicá-la. Assim não existe payload velho apagando ou
   // alterando o placar que está pendente no documento canônico.

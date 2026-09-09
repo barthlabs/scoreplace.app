@@ -212,6 +212,14 @@ console.log('\n──── result-core: reabertura administrativa ────'
   t('W.O. com jogo real não é apagado', real.ok === false && real.reason === 'wo-has-real-play', JSON.stringify(real));
 }
 
+// 16) O fechamento do placar ao vivo é reaplicado pelo servidor e não entra em fila de aprovação.
+{
+  const T = mkT(); const m = win._findMatch(T, 'm1');
+  const r = core.applyResult(T, { matchId: 'm1', payload: { action: 'live-final', s1: 6, s2: 4, useSets: false }, actor: { uid: UID_A1 }, now: 1 });
+  t('placar ao vivo final é aplicado pela CF', r.ok && r.outcome === 'applied' && m.winner === 'Ana / Bia' && m.liveScored === true, JSON.stringify(r));
+  t('placar ao vivo não cria pendência entre times', !m.pendingResult && m.scoreP1 === 6 && m.scoreP2 === 4);
+}
+
 console.log('\n──── paridade com o cliente ────');
 
 // 11) _effectiveResultEntry do servidor == o de js/store.js (evita drift silencioso).

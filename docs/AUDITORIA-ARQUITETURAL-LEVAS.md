@@ -2883,6 +2883,13 @@ registra `scoreAudit` antes/depois e gera a notificação pela outbox no mesmo c
 não muda mais chave, placar, classificação ou avisos por conta própria. Os testes cobrem a
 proibição para participante, a reversão completa e a trava que impede apagar jogo real.
 
+**L7.P1.13 — fechamento do placar ao vivo só despacha a Cloud Function
+(08/set/2026, aprovado pelo Claude; aguarda publicação acumulada).** O overlay agora monta
+`live-final` sem alterar o jogo, avanço, presença ou histórico local. A Function reaplica o
+placar GSM ou simples no documento fresco, marca `liveScored`, avança e encerra a chave quando
+cabível, e entrega o aviso pelo mesmo recibo/outbox do resultado. Uma recusa do servidor limpa o
+flag local de tentativa e permite tentar novamente, sem criar resultado-fantasma.
+
 ## L8 — matriz de leitura e projeção (08/set/2026)
 
 `matches` permanece a fonte canônica. `results/{matchId}` é uma projeção server-written para

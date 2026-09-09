@@ -14,6 +14,7 @@ const counter = body('var _counterLog =', '// Não auto-focar no mobile');
 const reset = body('window._organizerResetMatch = function', '// Reverter / desfazer um W.O.');
 const revertWo = body('window._revertWO = function', '// Editar resultado pendente:');
 const reopen = body('window._editResult = function', '// ─── Edit result inline');
+const liveSave = body('function _saveResult(opts)', '// ── Serve tracking');
 ok('proposta usa a callable', /commitResultTx\(tId, matchId, \{ pending: _pendingPayload \}/.test(proposal));
 ok('proposta não escreve pela transação genérica', !/commitTournamentTx|AppStore\.mutate/.test(proposal));
 ok('contestação usa a callable', /action: 'contest-pending'/.test(contest) && /commitResultTx/.test(contest));
@@ -29,4 +30,6 @@ ok('reverter W.O. não escreve ou notifica pelo cliente', !/AppStore\.mutate|_no
 ok('editar resultado usa a callable', /action: 'reopen-result'/.test(reopen) && /commitResultTx/.test(reopen));
 ok('editar resultado não escreve pela transação genérica', !/AppStore\.mutate|commitTournamentTx/.test(reopen));
 ok('transições administrativas notificam pela outbox do servidor', /_matchReopenedNotificationEvent/.test(functionsIndex) && /wo-reverted/.test(functionsIndex));
+ok('fechamento ao vivo usa a callable', /action: 'live-final'/.test(liveSave) && /commitResultTx\(tId, matchId, _livePayload/.test(liveSave));
+ok('fechamento ao vivo não grava por mutação genérica', !/commitTournamentTx\(tId/.test(liveSave));
 if (failed) process.exit(1);
