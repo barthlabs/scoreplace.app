@@ -1461,6 +1461,33 @@ exports.assignMatchCourt = onCall(async (request) => {
 });
 
 
+// ─── Atribuições da análise: torneio e perfil no mesmo comando canônico ─────────
+exports.applyEnrollmentAssignments = onCall(async (request) => {
+  const uid=request.auth&&request.auth.uid, data=request.data||{}, tId=String(data.tournamentId||'').trim();
+  const sport=String(data.sport||'').trim().slice(0,80), raw=Array.isArray(data.edits)?data.edits.slice(0,100):null;
+  if(!uid) throw new HttpsError('unauthenticated','Entre na sua conta.');
+  if(!tId||!raw||!raw.length) throw new HttpsError('invalid-argument','Atribuições inválidas.');
+  const clean=raw.map(x=>({uid:String(x&&x.uid||'').trim(),name:String(x&&x.name||'').trim().slice(0,120),email:String(x&&x.email||'').trim().toLowerCase().slice(0,180),waitlist:!!(x&&x.waitlist),pairMember:(x&&['p1','p2'].includes(x.pairMember))?x.pairMember:'',gender:(x&&['feminino','masculino','misto',''].includes(x.gender))?x.gender:undefined,category:x&&Object.prototype.hasOwnProperty.call(x,'category')?String(x.category||'').trim().slice(0,80):undefined}));
+  if(clean.some(x=>(!x.uid&&!x.name&&!x.email)||(x.gender===undefined&&x.category===undefined))) throw new HttpsError('invalid-argument','Alvo ou alteração inválida.');
+  const ref=db.collection('tournaments').doc(tId),agoraIso=new Date().toISOString();
+  return db.runTransaction(async tx=>{
+    const t=await _leTorneio(tx,ref,tId); if(!t) throw new HttpsError('not-found','Torneio não encontrado.');
+    if(!_isTournamentAdmin(t,uid)) throw _drawFail('permission-denied','Só a organização altera inscrições.',{tId,uid});
+    const before=_antesDoMotor(t), valid=new Set(Array.isArray(t.combinedCategories)?t.combinedCategories:[]); let changed=0,profiles={};
+    const find=(arr,e)=>{let hit=null; (arr||[]).forEach(p=>{if(hit||!p||typeof p!=='object')return; const u=[p.uid,p.p1Uid,p.p2Uid].filter(Boolean).map(String); if(Array.isArray(p.participants))p.participants.forEach(q=>q&&q.uid&&u.push(String(q.uid))); if(e.uid?u.includes(e.uid):(!u.length&&((e.email&&String(p.email||'').toLowerCase()===e.email)||(e.name&&(p.name===e.name||p.displayName===e.name)))))hit=p;});return hit;};
+    for(const e of clean){const pools=e.waitlist?[t.waitlist,t.standbyParticipants,t.monarchWaitlist]:[t.participants]; let target=null; for(const pool of pools){target=find(pool,e);if(target)break;} if(!target) continue;
+      if(e.gender!==undefined){if(e.pairMember){if(e.gender)target[e.pairMember+'Gender']=e.gender;else delete target[e.pairMember+'Gender'];}else if(e.gender){target.gender=e.gender;target.genderSource='organizador';}else{delete target.gender;delete target.genderSource;} changed++;}
+      if(e.category!==undefined){if(e.category&&valid.size&&!valid.has(e.category)) throw new HttpsError('invalid-argument','Categoria não pertence ao torneio.'); if(e.category){target.categories=[e.category];target.category=e.category;target.categorySource='organizador';delete target.wasUncategorized;delete target.autoWeakestCat;delete target.staleCat;}else{target.categories=[];target.category='';delete target.categorySource;delete target.wasUncategorized;} changed++;}
+      const profileUid=e.uid||((e.pairMember&&target[e.pairMember+'Uid'])||target.uid);
+      // Uma dupla pode ter duas alterações na mesma chamada. Junta por UID antes de
+      // escrever: assim cada perfil recebe uma única atualização transacional.
+      if(profileUid&&(e.gender||e.category)){const k=String(profileUid), prior=profiles[k]||{uid:k}; if(e.gender)prior.gender=e.gender; if(e.category)prior.category=e.category; profiles[k]=prior;}
+    }
+    for(const k of Object.keys(profiles)){const a=profiles[k], uref=db.collection('users').doc(a.uid), us=await tx.get(uref); if(!us.exists)continue; const upd={profileSetAt:FieldValue.serverTimestamp()}; if(a.gender)upd.gender=a.gender,upd.genderSetBy=uid; if(a.category&&sport){const sb=Object.assign({},(us.data().skillBySport||{}));sb[sport]=a.category;upd.skillBySport=sb;upd.skillSetBy=uid;} tx.update(uref,upd);}
+    if(!changed)return {ok:true,changed:0}; const b=_gravaTorneio(tx,ref,t,before,{agoraIso}); return {ok:true,changed,tournament:b.clean};
+  });
+});
+
 // ─── Metadados de apresentação: comandos estreitos, nunca ficha inteira ───────────
 
 

@@ -365,6 +365,8 @@ const SUITES = [
   'tests/selos-das-lojas-do-mesmo-tamanho.test.js',
   'tests/trava-de-cache-buster-nao-fica-vazia.test.js',
   'tests/regressiva-e-da-rodada-nao-da-fase.test.js',
+  // A rodada eliminatória anuncia a janela configurada, sem inventar datas pelo ritmo dos placares.
+  'tests/prazo-da-rodada-eliminatoria.test.js',
   // o cronômetro da Liga mira o fim da rodada
   'tests/liga-countdown-round-end.test.js',
   // o relógio do meio (RODADA e TORNEIO COMPLETO) vira REGRESSIVA quando há fim programado
@@ -1329,7 +1331,8 @@ const SUITES = [
   'tests/l7-server-owned-tournament-writes.test.js', // L7: navegador não grava inscrição/chave
   'tests/l7-reopen-tournament-cf-only.test.js', // L7: reabertura pela CF
   'tests/l7-tournament-branding-cf-only.test.js', // L7: metadados de apresentação pela CF
-  'tests/l7-category-config-cf-only.test.js', // L7: configuração de categorias pela CF
+  'tests/l7-category-config-cf-only.test.js',
+  'tests/l7-enrollment-assignments-cf-only.test.js', // L7: configuração de categorias pela CF
   'tests/l7-expired-enrollment-cf-only.test.js', // L7: prazo de inscrição pela CF
   // Joga o torneio INTEIRO lançando só pelo servidor: 8 jogos (escada + 3º lugar), campeão,
   // zero slot TBD. É o "jogar até o campeão" antes de mexer no caminho mais quente do app.

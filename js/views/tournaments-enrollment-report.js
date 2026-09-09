@@ -1098,161 +1098,35 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   // Aplica TODAS as mudanças staged de uma vez.
   window._erSaveEdits = function (tId, sport) {
     if (!_liveState || !_liveState.isOrg) return;
-    var t = window.AppStore && window.AppStore.tournaments
-      ? window.AppStore.tournaments.find(function (x) { return String(x.id) === String(tId); }) : null;
-    if (!t) return;
-    var parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
-    var validCats = (typeof window._getTournamentCategories === 'function') ? (window._getTournamentCategories(t) || []) : [];
-    var rows = _liveState.rows || [];
-    var profileAssignments = [];
+    var rows = _liveState.rows || [], edits = [];
     Object.keys(_pendingEdits).forEach(function (orderKey) {
       var pe = _pendingEdits[orderKey]; if (!pe || Object.keys(pe).length === 0) return;
-      var order = parseInt(orderKey, 10);
-      var row = rows.filter(function (r) { return r.order === order; })[0];
-      // v2.8.62: linha de MEMBRO de dupla → o alvo é o DOC da dupla (parts[_duplaIdx])
-      // e o gênero é gravado per-membro (p1Gender/p2Gender). Antes _erFindParticipant
-      // não achava o membro em t.participants (ele é p1/p2 dentro da dupla) e o gênero
-      // "não gravava". Categoria continua no doc da dupla (o time tem 1 categoria).
-      var isDuplaMember = !!(row && row._duplaSide && typeof row._duplaIdx === 'number' && parts[row._duplaIdx] && typeof parts[row._duplaIdx] === 'object');
-      // v1.7.2: linha da LISTA DE ESPERA → o alvo é a entrada no storage da espera, NUNCA
-      // t.participants (ela não está lá). _getWaitlist devolve a REFERÊNCIA do objeto, então
-      // mutá-la grava no storage certo (waitlist / standbyParticipants / monarchWaitlist).
-      // Resolução SÓ por uid: cair no fallback posicional de _erFindParticipant
-      // (`parts[order-1]`) gravaria a categoria em OUTRA PESSOA. Sem uid (fictício na
-      // espera) não há como casar com segurança → não grava.
-      var p;
-      if (row && row._wl) {
-        if (!row.uid) return;
-        var _wlArr = (typeof window._getWaitlist === 'function') ? (window._getWaitlist(t) || []) : [];
-        p = null;
-        for (var _wi = 0; _wi < _wlArr.length; _wi++) {
-          var _we = _wlArr[_wi];
-          if (_we && typeof _we === 'object' && _we.uid && String(_we.uid) === String(row.uid)) { p = _we; break; }
-        }
-        if (!p) return;
-      } else {
-        p = isDuplaMember ? parts[row._duplaIdx] : _erFindParticipant(parts, row, order);
-      }
-      if (!p) return;
-      var asg = {};
-      if ('gender' in pe) {
-        var gv = (pe.gender === 'feminino' || pe.gender === 'masculino' || pe.gender === 'misto') ? pe.gender : '';
-        if (isDuplaMember) {
-          if (gv) p[row._duplaSide + 'Gender'] = gv; else delete p[row._duplaSide + 'Gender'];
-        } else {
-          if (gv) { p.gender = gv; p.genderSource = 'organizador'; } else { delete p.gender; delete p.genderSource; }
-        }
-        if (row) row.gender = gv || null;
-        if (gv === 'feminino' || gv === 'masculino') asg.gender = gv; // CF só aceita masc/fem/outro
-      }
-      if ('category' in pe) {
-        var cv = pe.category;
-        // Aceita cv em validCats OU (torneio sem categorias configuradas / cat
-        // fabricada pela matriz) qualquer cv que decomponha numa habilidade válida.
-        var _cvOk = cv && (validCats.indexOf(cv) !== -1 || (function () { var dd = _decomposeCat(cv, t); return !!(dd && dd.skill); })());
-        if (_cvOk) {
-          if (typeof window._setParticipantCategories === 'function') window._setParticipantCategories(p, [cv]);
-          else { p.categories = [cv]; p.category = cv; }
-          p.categorySource = 'organizador'; delete p.wasUncategorized; delete p.autoWeakestCat; delete p.staleCat;
-          var d = _decomposeCat(cv, t);
-          if (row) { row.assigned = [cv]; row.effectiveSkills = (d && d.skill) ? [d.skill] : (row.profileSkill ? [row.profileSkill] : []); }
-          if (d && d.skill) asg.category = d.skill; // o perfil guarda a HABILIDADE
-        } else if (!cv) {
-          if (typeof window._setParticipantCategories === 'function') window._setParticipantCategories(p, []);
-          else { p.categories = []; p.category = ''; }
-          if (['organizador', 'auto_fraca', 'perfil'].indexOf(p.categorySource) !== -1) delete p.categorySource;
-          delete p.autoWeakestCat; delete p.wasUncategorized;
-          if (row) { row.assigned = []; row.effectiveSkills = row.profileSkill ? [row.profileSkill] : []; }
-        }
-      }
-      // v2.8.62: pro membro de dupla, o perfil a atualizar é o do MEMBRO (row.uid),
-      // não o do doc da dupla.
-      var _asgUid = (isDuplaMember && row && row.uid) ? row.uid : p.uid;
-      if (_asgUid && (asg.gender || asg.category)) { asg.uid = _asgUid; profileAssignments.push(asg); }
+      var row = rows.filter(function (r) { return r.order === parseInt(orderKey, 10); })[0];
+      // UID é a identidade do alvo. Para uma entrada fictícia, nome/e-mail só permitem
+      // localizar uma entrada igualmente sem uid; o servidor recusa ambiguidade.
+      if (!row) return;
+      var e = { uid: row.uid || '', name: row.uid ? '' : (row.name || ''), email: row.uid ? '' : (row.email || ''), waitlist: !!row._wl, pairMember: row._duplaSide || '' };
+      if ('gender' in pe) e.gender = pe.gender;
+      if ('category' in pe) e.category = pe.category;
+      edits.push(e);
     });
-    var nEdits = _erPendingCount();
-    // ⚠️ v1.7.39 — MAIS DE UMA MUDANÇA DE UMA VEZ SÓ GRAVAVA A PRIMEIRA (relato do dono).
-    //
-    // Este caminho aplicava TODAS as edições em memória (o forEach acima está correto) e
-    // gravava — mas depois re-renderizava lendo de `_liveState.t`, que o onSnapshot do
-    // Firestore acabara de TROCAR por um objeto novo. A tela voltava ao estado do servidor
-    // anterior ao save, o organizador via só a 1ª mudança valer, refazia, e na 2ª vez
-    // "funcionava" — porque aí a referência já tinha alcançado.
-    //
-    // O irmão `_erCommitCats` já documenta e conserta exatamente isso desde 23/jul
-    // ("_liveState.t pode estar apontando pro objeto VELHO"), com as duas linhas abaixo.
-    // O conserto nunca foi aplicado AQUI, que é o caminho de mover pessoa entre blocos.
-    // Mesma classe do [[feedback_unify_dual_entry_points]]: dois caminhos, um só curado.
-    if (_liveState) _liveState.t = t;
+    var nEdits = edits.length; if (!nEdits || !window.firebase || !firebase.functions) return;
+    var btns = ['er-save-btn','er-mx-save-btn'].map(function(id){return document.getElementById(id);}).filter(Boolean);
+    btns.forEach(function(b){ if(window._spinButton) window._spinButton(b,'Salvando…'); else { b.disabled=true; b.textContent='Salvando…'; } });
     window._suppressSoftRefresh = true;
-    // grava a ficha do torneio (sorteio + inscritos sem conta)
-    try { if (window.FirestoreDB && window.FirestoreDB.saveTournament) { if (!Array.isArray(t.participants)) t.participants = parts; window.FirestoreDB.saveTournament(t); } } catch (e) {}
-    _pendingEdits = {};
-    // ── "SALVANDO…" NOS DOIS BOTÕES, ATÉ O TRABALHO TERMINAR ──────────────────────
-    // Relato do dono (07/ago/2026): "o botão salvar da análise precisa de um salvando
-    // enquanto não termina de salvar". Existia meio: só o `#er-save-btn` (a barra da lista
-    // legada) trocava de texto — o `#er-mx-save-btn`, que é o da MATRIZ e o que o
-    // organizador usa, não recebia nada. E era texto puro: sem cinza, sem spinner e sem
-    // `disabled` no inline, dava pra clicar de novo no meio do save.
-    // Agora os dois passam pelo motor canônico (cinza + spinner + gerúndio + "…"), e o fim
-    // é EVENTO — o `finish` abaixo —, nunca timeout. [[project_busy_button_canonical]]
-    var _btnsSalvar = ['er-save-btn', 'er-mx-save-btn']
-      .map(function (id) { return document.getElementById(id); })
-      .filter(Boolean);
-    _btnsSalvar.forEach(function (b) {
-      if (window._spinButton) window._spinButton(b, 'Salvando…');
-      else { b.disabled = true; b.textContent = 'Salvando…'; }
-    });
-    var finish = function (extra) {
-      // Solta ANTES do _erUpdateSaveBar: o restore do spin repõe o innerHTML original, então
-      // repintar primeiro faria o rótulo velho ("💾 Salvar (3)") voltar por cima do novo.
-      _btnsSalvar.forEach(function (b) { if (window._spinButtonDone) window._spinButtonDone(b); });
+    firebase.functions().httpsCallable('applyEnrollmentAssignments')({ tournamentId:String(tId), sport:String(sport||''), edits:edits }).then(function(res){
+      var r=(res&&res.data)||{}; _pendingEdits={};
+      if (typeof showNotification==='function') showNotification('✅ Alterações salvas', (r.changed||nEdits)+' inscrito(s) atualizado(s).','success');
+      btns.forEach(function(b){if(window._spinButtonDone)window._spinButtonDone(b);});
+      // Só a confirmação do servidor pode recarregar a tela: em erro de rede as
+      // alterações staged permanecem disponíveis para o organizador tentar de novo.
+      setTimeout(function(){window._suppressSoftRefresh=false; try{window.location.reload();}catch(e){}},900);
+    }).catch(function(err){
+      window._suppressSoftRefresh=false;
+      btns.forEach(function(b){if(window._spinButtonDone)window._spinButtonDone(b);});
+      if(typeof showNotification==='function') showNotification('Não foi possível salvar',String((err&&err.message)||err),'error');
       window._erUpdateSaveBar();
-      if (typeof window._erRenderInscritos === 'function') window._erRenderInscritos();
-      if (typeof window._erRenderMatrix === 'function') window._erRenderMatrix();
-      if (typeof showNotification === 'function') showNotification('✅ Alterações salvas', nEdits + ' inscrito(s) atualizado(s).' + (extra ? ' ' + extra : ''), 'success');
-      // Solta a supressão — a mesma janela de 1200ms do _erCommitCats. Deixá-la ligada
-      // congelaria o soft-refresh do app INTEIRO, não só desta tela.
-      setTimeout(function () { window._suppressSoftRefresh = false; }, 1200);
-      // ── SALVAR RECARREGA A PÁGINA ────────────────────────────────────────────────
-      // Ordem do dono (17/ago/2026): "salvar deve recarregar a pagina para atualizar as
-      // cores". O re-render acima repinta as linhas, mas a cor do nome sai de
-      // _erApplyLzToRows, que compara a categoria da inscrição com o nível apurado — e ele
-      // trabalha sobre o perfil/scan carregados no boot, não sobre o que acabou de ser
-      // gravado. Resultado: mudava a categoria, salvava, e a cor continuava a de antes.
-      // Recarregar é o que garante que TUDO (inclusive o que veio da CF) seja relido.
-      // O atraso é só pra a confirmação ser lida antes da tela recarregar.
-      setTimeout(function () { try { window.location.reload(); } catch (e) {} }, 900);
-    };
-    // v1.7.1 — POR QUE O CACHE DE PERFIL PRECISA SER ATUALIZADO AQUI (bug do dono:
-    // "realoco a pessoa, salvo, e ela volta pra sem gênero; tem que repetir pra fixar"):
-    // `gender` está em _PROFILE_FIELDS (identity-core), então o save do TORNEIO o remove
-    // da entrada de propósito — gênero mora no PERFIL e é resolvido por uid (v1.3.52).
-    // Quem persiste de verdade é esta CF, no doc do usuário. Só que o cliente re-renderiza
-    // logo em seguida e resolve o gênero por `_userProfileCache[uid]`, que ainda tem o
-    // valor VELHO: o onSnapshot do torneio ecoa o doc já sem `gender`, a entrada local
-    // perde o valor, e a tela mostra "sem gênero". Na segunda tentativa funcionava porque
-    // aí o perfil já tinha chegado. Escrever no cache o que a CF acabou de confirmar fecha
-    // a janela. NÃO mexe no strip — ele é cânone ([[project_uid_identity_canon_locked]]).
-    var _primeProfileCache = function () {
-      var cache = window._userProfileCache; if (!cache) return;
-      profileAssignments.forEach(function (a) {
-        if (!a || !a.uid) return;
-        var prof = cache[a.uid] = cache[a.uid] || {};
-        if (a.gender) prof.gender = a.gender;
-        if (a.category && sport) {
-          prof.skillBySport = prof.skillBySport || {};
-          prof.skillBySport[String(sport)] = a.category; // o perfil guarda a HABILIDADE
-        }
-      });
-    };
-    if (profileAssignments.length > 0 && window.firebase && firebase.functions) {
-      firebase.functions().httpsCallable('setParticipantsProfile')({ tournamentId: String(tId), sport: String(sport || ''), assignments: profileAssignments })
-        .then(function (res) { var r = (res && res.data) || {}; _primeProfileCache(); finish('Perfis: ' + (r.written || 0) + ' atualizado(s).'); })
-        .catch(function (err) { finish('(perfis não gravados: ' + ((err && err.message) || 'falha') + ')'); });
-    } else {
-      finish('');
-    }
+    });
   };
 
   // ─── Verificação letzplay (escopo do módulo — usada pela matriz) ─────

@@ -1545,6 +1545,13 @@ window._buildProgressInner = function(t) {
           schedStart = _rwL.startMs; plannedEnd = _rwL.endMs; _schedEndReal = true;
           if (_rwL.sliced) { _labelSchedStart = 'início da rodada'; _labelSchedEnd = 'final da rodada'; }
         } else { plannedEnd = _cfgEL; _schedEndReal = true; }
+        /* A janela configurada é a referência pública da rodada eliminatória.
+         * Antes o cabeçalho superior trocava 02/09 pelo primeiro placar (07/09) e
+         * inventava outro "final estimado" a partir da velocidade dos jogos. Isso
+         * contradizia a régua logo abaixo, que já mostrava corretamente 02/09→20/09.
+         * Enquanto a rodada estiver aberta, início e previsão mostram a mesma janela
+         * acordada pelo organizador; ao fechar, o fim real continua vencendo abaixo. */
+        if (_schedEndReal && schedStart) actualStart = (schedStart <= now) ? schedStart : null;
       }
       else {
         // v2.0.74: tempo é POR SET — a partida desta fase (`_phL`). Ver sport-rules.js.
@@ -1791,6 +1798,9 @@ window._buildProgressInner = function(t) {
   // now se não houver jogo com resultado. Assim o fim mostra a hora/dia do jogo final, não a
   // hora em que o status virou 'finished'.
   else if (isFinished) estEndMs = (_latestGameMs != null ? _latestGameMs : (finishedMs != null ? finishedMs : now));
+  // Rodada eliminatória com prazo definido: a previsão é o limite que o organizador
+  // configurou, não uma extrapolação volátil baseada nos poucos jogos já lançados.
+  else if (_phaseRoundActive && _schedEndReal) estEndMs = plannedEnd;
   else if (!_notStarted && progFrac > 0.001) estEndMs = actualStart + (elapsedMs / progFrac);
   else estEndMs = plannedEnd;
 

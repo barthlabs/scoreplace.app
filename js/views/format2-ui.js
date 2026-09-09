@@ -344,11 +344,46 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var b = window._rbMs ? window._rbMs(ed + 'T' + et) : NaN;
     return (a > 0 && b > a) ? { startMs: a, endMs: b } : null;
   }
+  function _elimRoundDeadlineTimesHtml() {
+    var n = _elimRoundCount(), win = _elimBoundsWindow();
+    if (!win || n < 1 || typeof window._rbIso !== 'function') return '';
+    var e = S.cfg.eliminatoria || {};
+    var raw = (e.roundBounds || []).map(window._rbMs).filter(function (v) { return !isNaN(v); });
+    var cuts = (raw.length === n - 1 && typeof window._rbNormaliza === 'function')
+      ? window._rbNormaliza(raw, win.startMs, win.endMs, n) : null;
+    if (!cuts) cuts = (typeof window._rbIguais === 'function') ? window._rbIguais(win.startMs, win.endMs, n) : [];
+    cuts = cuts.concat([win.endMs]);
+    var phaseIdx = _elimPhaseIndex();
+    var roundName = function (localIdx) {
+      var fromEnd = n - localIdx;
+      if (fromEnd === 1) return 'Final';
+      if (fromEnd === 2) return 'Semifinais';
+      if (fromEnd === 3) return 'Quartas de final';
+      if (fromEnd === 4) return 'Oitavas de final';
+      return 'Rodada';
+    };
+    var fields = cuts.map(function (ms, i) {
+      var time = window._rbIso(ms).slice(11, 16);
+      var global = (typeof window._numeroGlobalDaRodada === 'function')
+        ? window._numeroGlobalDaRodada(S.t, phaseIdx, i) : (i + 1);
+      var inicio = i ? cuts[i - 1] : win.startMs;
+      var dias = (typeof window._rbDias === 'function') ? window._rbDias(ms - inicio) : '';
+      return '<label style="display:flex;align-items:center;gap:6px;padding:5px 7px;border:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));border-radius:7px;font-size:0.68rem;color:var(--text-muted);font-weight:700;">' +
+        '<span style="white-space:nowrap;">R' + global + ' · ' + roundName(i) + ' · ' + dias + 'd<br><span style="font-weight:500;">até ' + window._rbDDMM(ms) + '</span></span>' +
+        '<input type="time" value="' + time + '" aria-label="Horário de término da rodada ' + global + '" ' +
+        'onchange="window._f2ElimRoundEndTime(' + i + ',this.value)" style="width:76px;padding:4px;font-size:0.72rem;">' +
+      '</label>';
+    }).join('');
+    return '<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));">' +
+      '<div style="font-size:0.67rem;font-weight:700;color:var(--text-muted);margin-bottom:6px;">Prazo de cada rodada — duração, data e horário</div>' +
+      '<div style="display:flex;gap:6px;flex-wrap:wrap;">' + fields + '</div></div>';
+  }
   function _elimRoundBoundsHtml() {
     return '<div id="f2-elim-round-bounds-box" style="display:none;margin-top:12px;padding-top:10px;border-top:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));">' +
       '<div style="font-size:0.7rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">⏱️ Divisão das rodadas <span style="text-transform:none;font-weight:500;opacity:0.8;">— arraste para esticar ou encurtar</span></div>' +
       '<div id="f2-elim-round-bounds-mount"></div>' +
       '<div style="text-align:right;margin-top:2px;"><button type="button" onclick="window._f2ElimRoundBoundsReset()" style="background:none;border:0;color:var(--text-muted);font-size:0.66rem;font-weight:700;cursor:pointer;text-decoration:underline;padding:2px 4px;">voltar ao padrão (dias iguais)</button></div>' +
+      _elimRoundDeadlineTimesHtml() +
     '</div>';
   }
   function _mountElimRoundBounds() {
@@ -367,6 +402,26 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     });
   }
   window._f2ElimRoundBoundsReset = function () { if (S && S.cfg && S.cfg.eliminatoria) { S.cfg.eliminatoria.roundBounds = []; _mountElimRoundBounds(); } };
+  // Cada divisor já é uma data/hora ISO. Este editor muda somente a HORA, preserva a
+  // data escolhida no arraste e mantém o último prazo no endTime canônico da fase.
+  window._f2ElimRoundEndTime = function (idx, value) {
+    if (!S || !S.cfg || !S.cfg.eliminatoria || !value) return;
+    var n = _elimRoundCount(), win = _elimBoundsWindow();
+    if (!win || idx < 0 || idx >= n || typeof window._rbIso !== 'function') return;
+    var e = S.cfg.eliminatoria;
+    var raw = (e.roundBounds || []).map(window._rbMs).filter(function (v) { return !isNaN(v); });
+    var cuts = (raw.length === n - 1 && typeof window._rbNormaliza === 'function')
+      ? window._rbNormaliza(raw, win.startMs, win.endMs, n) : null;
+    if (!cuts) cuts = (typeof window._rbIguais === 'function') ? window._rbIguais(win.startMs, win.endMs, n) : [];
+    if (idx < n - 1) {
+      var date = window._rbIso(cuts[idx]).slice(0, 10);
+      e.roundBounds = cuts.map(window._rbIso);
+      e.roundBounds[idx] = date + 'T' + String(value).slice(0, 5);
+    } else {
+      e.endTime = String(value).slice(0, 5);
+    }
+    _norm(); _rerender();
+  };
 
   // Janela da fase em dias: (término − 1º sorteio). Base da via de mão dupla rodadas↔repetir.
   // v4.4.62: CONSIDERA O HORÁRIO de cada campo (não meia-noite). 1º sorteio = data+hora do

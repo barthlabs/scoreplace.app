@@ -1,0 +1,10 @@
+'use strict';
+const fs=require('fs');let f=0;const ok=(v,s)=>{console.log((v?'✓ ':'✗ ')+s);if(!v)f++;};
+const ui=fs.readFileSync('js/views/tournaments-enrollment-report.js','utf8');
+const start=ui.indexOf('window._erSaveEdits = function');const end=ui.indexOf('// ─── Verificação letzplay',start);const part=ui.slice(start,end);
+ok(part.includes("httpsCallable('applyEnrollmentAssignments'")&&!part.includes('saveTournament(t)')&&!part.includes("setParticipantsProfile"),'análise apenas despacha a intenção atômica; não grava snapshot nem perfil separadamente');
+const fn=fs.readFileSync('functions-autodraw/index.js','utf8');const a=fn.indexOf('exports.applyEnrollmentAssignments');const b=fn.indexOf('\nexports.',a+8);const srv=fn.slice(a,b<0?fn.length:b);
+ok(a>=0&&srv.includes('db.runTransaction')&&srv.includes('_isTournamentAdmin')&&srv.includes('_gravaTorneio'),'servidor autoriza, relê e grava as atribuições na transação canônica');
+ok(srv.includes("collection('users')")&&srv.includes('skillBySport')&&srv.includes("'misto'")&&srv.includes('Object.keys(profiles)'),'a mesma transação aceita misto e atualiza cada perfil uma vez por modalidade');
+ok(!part.includes('.finally(function(){')&&part.includes('window._erUpdateSaveBar();'),'falha da CF preserva alterações staged para nova tentativa, sem recarga');
+process.exit(f?1:0);

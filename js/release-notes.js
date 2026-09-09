@@ -19,6 +19,10 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    // ⚠️ 2.2.39 · o prazo da rodada eliminatória agora é a janela definida pelo organizador:
+    // o cartão usa início/fim dessa rodada (não o primeiro placar nem uma extrapolação), e o
+    // ajuste lista todas as rodadas com nome, duração, data e hora de término editável.
+    // As atribuições administrativas de inscrição também passam pela Function em transação.
     // ⚠️ 2.2.32 · exclusão de torneio passou a ser confirmada na Cloud Function antes
     // de a tela removê-lo. Antes um erro de permissão podia escondê-lo só localmente e
     // ele voltava no próximo carregamento; agora o erro permanece visível, resíduos locais
