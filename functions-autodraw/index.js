@@ -927,6 +927,11 @@ async function _aplicaPlacarNaTransacao(db, tId, matchId, payload, ator, logMess
   // Recibo independente do documento do torneio. O id nasce fora do callback porque a
   // transação pode repetir; assim uma repetição não cria dois fatos de auditoria.
   const auditRef = ref.collection('scoreAudit').doc();
+  // A entrega de aviso nasce no MESMO commit do placar. O navegador não é uma
+  // fonte confiável para esse fato: ele pode ainda ter o card anterior na memória
+  // (o incidente Fabio/Priscila, que enviou `?` apesar de 6-2, 6-2 já estar no
+  // servidor). O gatilho abaixo consome esta caixa de saída de forma idempotente.
+  const notifOutboxRef = ref.collection('notificationOutbox').doc(auditRef.id);
   /* ⛔ INSTANTE ESTÁVEL DA OPERAÇÃO — calculado UMA VEZ, FORA do callback.
    * O Firestore RE-EXECUTA o callback no retry; um `new Date()` lá dentro faria
    * cada tentativa produzir espelho e plano diferentes. */
@@ -967,9 +972,133 @@ async function _aplicaPlacarNaTransacao(db, tId, matchId, payload, ator, logMess
       payload: _scoreAuditPayload(payload),
       logMessage: String(logMessage || '')
     });
+    const _matchDepois = (typeof drawWindow._findMatch === 'function')
+      ? drawWindow._findMatch(t, matchId) : null;
+    const _notif = _scoreNotificationEvent(t, _matchDepois, res.outcome, ator, _agoraIsoTx);
+    if (_notif) tx.set(notifOutboxRef, _notif);
     return { ok: true, outcome: res.outcome, tournament: b.clean };
   });
 }
+
+// ─── Caixa de saída canônica de placar ──────────────────────────────────────
+// Um resultado só vira comunicação quando há sets completos e válidos. Nunca
+// substituímos dado ausente por "?": melhor não comunicar do que avisar um
+// placar inexistente. O recibo scoreAudit acima continua registrando o fato para
+// investigação, inclusive nesses casos anômalos.
+function _notificationScoreboard(m, pending) {
+  const source = pending ? (m && m.pendingResult) : m;
+  if (!m || !source || !Array.isArray(source.sets) || !source.sets.length) return null;
+  const sets = source.sets.map((s, i) => {
+    const p1 = s && s.gamesP1, p2 = s && s.gamesP2;
+    if (!Number.isFinite(p1) || !Number.isFinite(p2)) return null;
+    return { label: s.superTiebreak ? 'STB' : ('Set ' + (i + 1)), p1, p2, superTiebreak: !!s.superTiebreak };
+  });
+  if (sets.some(s => !s)) return null;
+  return { p1: String(m.p1 || ''), p2: String(m.p2 || ''), winner: String(source.winner || ''), sets };
+}
+
+function _scoreNotificationRecipients(t, m, pending) {
+  const all = new Set();
+  const p1 = _slotUidsOf(m, 'p1'), p2 = _slotUidsOf(m, 'p2');
+  if (pending) {
+    const proposer = String((m.pendingResult && m.pendingResult.proposedBy) || '');
+    const proposerOnP1 = proposer && p1.indexOf(proposer) !== -1;
+    const proposerOnP2 = proposer && p2.indexOf(proposer) !== -1;
+    // O outro time confirma; o próprio time já conhece o que lançou.
+    (proposerOnP1 ? p2 : proposerOnP2 ? p1 : []).forEach(uid => all.add(uid));
+  } else {
+    p1.concat(p2).forEach(uid => all.add(uid));
+  }
+  // Organizador e co-organizadores recebem sempre o acompanhamento oficial.
+  if (t && t.creatorUid) all.add(String(t.creatorUid));
+  (t && Array.isArray(t.adminUids) ? t.adminUids : []).forEach(uid => { if (uid) all.add(String(uid)); });
+  return Array.from(all);
+}
+
+function _scoreNotificationEvent(t, m, outcome, actor, at) {
+  if (!m || outcome === 'in-progress') return null;
+  const pending = outcome === 'pending';
+  const scoreboard = _notificationScoreboard(m, pending);
+  if (!scoreboard || !scoreboard.p1 || !scoreboard.p2) return null;
+  const compact = (side) => scoreboard.sets.map(s => String(s[side])).join(' ');
+  const actorName = String((m.pendingResult && m.pendingResult.proposedByName) || actor.name || actor.email || 'Alguém');
+  const type = pending ? 'match-pending-approval' : 'result';
+  return {
+    schema: 1,
+    kind: 'score-notification',
+    type,
+    title: pending ? '⏳ Resultado precisa de aprovação' : '✅ Resultado confirmado',
+    message: actorName + ' lançou:\n' + scoreboard.p1 + ' ' + compact('p1') + '\nvs\n' + scoreboard.p2 + ' ' + compact('p2'),
+    tournamentId: String(t.id || ''),
+    tournamentName: String(t.name || ''),
+    matchId: String(m.id || ''),
+    fromUid: String(actor.uid || ''),
+    fromName: actorName,
+    level: 'fundamental',
+    scoreboard,
+    recipients: _scoreNotificationRecipients(t, m, pending),
+    createdAt: at,
+    createdAtMs: Date.parse(at),
+    dispatchStatus: 'pending'
+  };
+}
+
+function _outboxDocIdPart(v) {
+  return String(v || '').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 500);
+}
+
+// A transação só escreve o fato. Este gatilho faz I/O depois do commit e pode
+// repetir sem duplicar: cada aviso e cada item da fila usa o id da outbox.
+exports.deliverScoreNotification = onDocumentCreated(
+  { document: 'tournaments/{tournamentId}/notificationOutbox/{eventId}', region: 'us-central1', timeoutSeconds: 120 },
+  async (event) => {
+    const item = event.data && event.data.data();
+    if (!item || item.kind !== 'score-notification') return;
+    const tId = String(event.params.tournamentId || item.tournamentId || '');
+    const eventId = String(event.params.eventId || '');
+    const recipients = Array.isArray(item.recipients) ? Array.from(new Set(item.recipients.map(String).filter(Boolean))) : [];
+    const profiles = await _loadLiveNames(new Set(recipients));
+    const now = Date.now();
+    const day = String(item.createdAt || new Date(now).toISOString()).slice(0, 10);
+    let batch = db.batch(); let writes = 0;
+    const commit = async () => {
+      if (!writes) return;
+      await batch.commit();
+      batch = db.batch();
+      writes = 0;
+    };
+    for (const uid of recipients) {
+      const profile = profiles.profByUid[uid];
+      if (!profile) continue;
+      const key = _outboxDocIdPart(eventId + '_' + uid);
+      if (profile.notifyPlatform !== false) {
+        batch.set(db.collection('users').doc(uid).collection('notifications').doc('score_' + key), {
+          type: item.type, title: item.title, message: item.message,
+          tournamentId: tId, tournamentName: item.tournamentName || '', matchId: item.matchId || '',
+          fromUid: item.fromUid || '', fromName: item.fromName || '', fromPhoto: '',
+          level: item.level || 'fundamental', scoreboard: item.scoreboard || null,
+          createdAt: item.createdAt || new Date(now).toISOString(), timestamp: item.createdAtMs || now, read: false,
+          outboxEventId: eventId
+        }, { merge: true });
+        if (++writes >= 380) await commit();
+      }
+      if (!_notifLevelOk(profile.notifyLevel, item.level || 'fundamental')) continue;
+      for (const email of _profileEmails(profile)) {
+        const eKey = _outboxDocIdPart(eventId + '_' + uid + '_' + email);
+        batch.set(db.collection('notif_email_queue').doc('score_' + eKey), {
+          email, level: item.level || 'fundamental', message: item.message || '',
+          tournamentName: item.tournamentName || '', tournamentUrl: 'https://scoreplace.app/#tournaments/' + tId,
+          ctaLabel: 'Conferir placar', ctaUrl: 'https://scoreplace.app/#tournaments/' + tId,
+          scoreboard: item.scoreboard || null, createdAt: now, flushAtMs: now + 5 * 60 * 1000,
+          outboxEventId: eventId, recipientUid: uid, day
+        }, { merge: true });
+        if (++writes >= 380) await commit();
+      }
+    }
+    await commit();
+    await event.data.ref.set({ dispatchStatus: 'dispatched', dispatchedAt: new Date().toISOString() }, { merge: true });
+  }
+);
 
 // Só campos de placar e transição entram no recibo; jamais perfil completo, nem o objeto
 // inteiro do torneio. O formato é deliberadamente estável para a conferência posterior.

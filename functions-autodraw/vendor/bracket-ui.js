@@ -1722,9 +1722,10 @@ window._commitSetsResult = function (tId, matchId, sets, p1Sets, p2Sets, isFixed
     // documento inteiro do navegador deixava o histórico dizer uma coisa e o placar outra.
     window.AppStore.commitResultTx(tId, matchId, { pending: _pendingGsmObj }, _gsmPropLogMsg)
       .then(function (gravou) {
-        // Só a confirmação da CF pode disparar aviso de aprovação.
+        // A CF confirmou e criou o aviso a partir do placar canônico, na mesma
+        // transação. Nunca montar a notificação a partir deste card: ele pode
+        // estar atrás do servidor e transformar um 6-2 em `?`.
         if (gravou !== true) return;
-        try { _notifyPendingApproval(t, m, _pendingGsmObj.proposedByName); } catch (e) { window._error('[pendingApproval gsm] notify failed', e); }
         showNotification('⏳ Resultado enviado', 'Aguardando aprovação do time adversário ou do organizador.', 'success');
       })
       .catch(function () {});
@@ -2399,7 +2400,7 @@ window._saveResultInline = function (tId, matchId) {
       // desfecho conta a sua própria história.
       if (_perdeuCorrida) { _fechaCorridaDoPlacar(tId, matchId, _perdeuCorrida, _pendingPayload); return; }
       if (gravou === false) return;      // a falha já se anuncia sozinha (commitTournamentTx)
-      try { _notifyPendingApproval(t, m, _pendingPayload.proposedByName); } catch (e) { window._error('[pendingApproval] notify failed', e); }
+      // A entrega é criada pela CF junto com o placar canônico.
       showNotification('⏳ Resultado enviado', 'Aguardando aprovação do time adversário ou do organizador.', 'success');
     });
     _rerenderBracket(tId, matchId);
@@ -2582,34 +2583,8 @@ window._saveResultInline = function (tId, matchId) {
     }
   } catch(_te) {}
 
-  // Notify match participants about the result
-  if (typeof window._sendUserNotification === 'function') {
-    var _resultText = m.draw
-      ? (m.p1 + ' ' + s1 + ' × ' + s2 + ' ' + m.p2 + ' — ' + _t('bui.drawResult'))
-      : (m.p1 + ' ' + s1 + ' × ' + s2 + ' ' + m.p2 + ' — ' + _t('bui.matchWon', {winner: m.winner}));
-    var _notifData = {
-      type: 'result',
-      title: _t('bui.resultRegistered'),
-      message: _resultText,
-      tournamentId: tId,
-      tournamentName: t.name,
-      level: 'fundamental',
-      timestamp: Date.now()
-    };
-    _notifData.scoreboard = window._matchScoreboard(m, m.sets, m.winner);
-    // Find UIDs for both players and send notifications
-    var _parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
-    [m.p1, m.p2].forEach(function(playerName) {
-      if (!playerName || playerName === 'TBD' || playerName === 'BYE') return;
-      var _found = _parts.find(function(p) {
-        var pName = typeof p === 'string' ? p : (p.displayName || p.name || '');
-        return pName === playerName;
-      });
-      if (_found && typeof _found === 'object' && _found.uid) {
-        window._sendUserNotification(_found.uid, _notifData);
-      }
-    });
-  }
+  // A CF entrega o aviso a partir da outbox do resultado confirmado. O cliente
+  // não tem segunda porta de entrega nem reconstroi placar para e-mail/push.
 
   // v2.3.46: rodada incompleta em formato por rodada → atualiza só o card
   // lançado (página estática). Se a finalização in-place falhar (card fora do
@@ -2850,25 +2825,7 @@ window._approveResult = function(tId, matchId) {
       _persistInlineTournamentMatchRecord(t, m, s1, s2, pr.tbP1, pr.tbP2, !!pr.isTiebreakEntry, !!pr.useSets);
     }
   } catch(e) {}
-  if (typeof window._sendUserNotification === 'function') {
-    var resultText = m.p1 + ' ' + s1 + ' × ' + s2 + ' ' + m.p2 + ' — ' + (m.draw ? _t('bui.drawResult') : _t('bui.matchWon', {winner: m.winner}));
-    var notifData = {
-      type: 'result',
-      title: '✅ Resultado confirmado',
-      message: resultText,
-      tournamentId: tId,
-      tournamentName: t.name,
-      level: 'fundamental',
-      timestamp: Date.now()
-    };
-    notifData.scoreboard = window._matchScoreboard(m, m.sets, m.winner);
-    // Notifica os dois lados — SÓ pelos UIDs do slot (nunca casando nome). [[project_uid_identity_canon_locked]]
-    var _su = (typeof window._slotUids === 'function') ? window._slotUids : function () { return []; };
-    var notifSeen = {};
-    _su(m, 'p1').concat(_su(m, 'p2')).forEach(function(u) {
-      if (u && !notifSeen[u]) { notifSeen[u] = true; window._sendUserNotification(u, notifData); }
-    });
-  }
+  // A CF entrega o aviso confirmado através da outbox canônica do placar.
 
   _rerenderBracket(tId, matchId);
 };
@@ -3366,7 +3323,7 @@ window._editPendingResult = function(tId, matchId) {
         if (typeof window._propagateMatchUpdate === 'function') window._propagateMatchUpdate(ft, fm);
       }, 'Contra-proposta: ' + m.p1 + ' ' + s1v + ' × ' + s2v + ' ' + m.p2 + ' por ' + (cu.displayName || cu.email));
       // 4.1 DUAL-WRITE: espelha a contra-proposta (novo pendingResult) no doc do jogo.
-      try { _notifyPendingApproval(t, m, _counter.proposedByName); } catch(e2) {}
+      // A entrega é criada pela CF junto com o placar canônico.
       showNotification('⏳ Contra-proposta enviada', 'O time adversário foi notificado para aprovar ou contestar.', 'success');
       window._suppressSoftRefresh = false;
       _rerenderBracket(tId, matchId);
