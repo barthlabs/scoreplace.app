@@ -78,9 +78,12 @@ const src = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'tournamen
 t('roster da Análise inclui _getWaitlist e marca a origem',
   /_getWaitlist\(t\)/.test(src) && /_wl\s*=\s*true/.test(src));
 t('a marca chega na linha (_buildRows propaga _wl)', /_wl:\s*!!\(p && p\._wl\)/.test(src));
-t('save trata linha da espera antes do lookup normal', /row\._wl/.test(src));
-t('save exige uid na linha da espera (sem uid não grava)',
-  /if\s*\(\s*row\s*&&\s*row\._wl\s*\)\s*\{[\s\S]{0,120}if\s*\(\s*!row\.uid\s*\)\s*return;/.test(src));
+t('save preserva a origem espera no comando enviado ao servidor',
+  /waitlist:\s*!!row\._wl/.test(src));
+t('save envia o uid da linha como identidade do alvo',
+  /uid:\s*row\.uid\s*\|\|\s*''/.test(src));
+t('save delega a resolução e a escrita à Cloud Function canônica',
+  /httpsCallable\('applyEnrollmentAssignments'\)/.test(src));
 
 console.log('\n──── a espera é VISÍVEL como espera (não se mistura aos inscritos) ────');
 t('linha da espera leva etiqueta', /\(r\._wl \?[\s\S]{0,900}>espera<\/span>/.test(src));
