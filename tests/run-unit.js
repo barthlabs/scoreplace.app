@@ -1153,6 +1153,7 @@ const SUITES = [
   // roda MAIS DE UMA VEZ (local+fresco, retry da txn) → nº par de aplicações desmarcava. Idempotente.
   'tests/presence-mutator-idempotent.test.js',
   'tests/presence-field-write.test.js',
+  'tests/self-presence-cf-only.test.js',
   'tests/draw-scope-all-ignores-presence.test.js',
   'tests/dupla-elim-minimal-tree.test.js',
   'tests/late-entry-door-closes.test.js',

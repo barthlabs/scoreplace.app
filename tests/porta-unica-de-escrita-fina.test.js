@@ -92,8 +92,10 @@ const iPresence = cf.indexOf('exports.setTournamentPresence');
 const presenceBody = cf.slice(iPresence, cf.indexOf('\nexports.', iPresence + 10));
 ok('⭐ há uma CF tipada para presença do organizador', iPresence > 0 && /setTournamentPresence/.test(presenceBody));
 ok('⛔ a CF tipada não aceita `ops` do navegador', !/data\.ops|const ops = data\.ops/.test(presenceBody));
-ok('⛔ só organizador pode dispará-la', /_isTournamentOrgCaller\(t, callerUid\)/.test(presenceBody));
-ok('⛔ ela só aceita as intenções `present` e `clear`', /action !== "present" && action !== "clear"/.test(presenceBody));
+ok('⛔ exige organização OU o próprio inscrito autenticado',
+  /_isTournamentOrgCaller\(t, callerUid\)/.test(presenceBody) && /isOwnEnrolledPresence/.test(presenceBody));
+ok('⛔ ela só aceita as intenções de presença previstas', /action !== "present" && action !== "confirmed" && action !== "clear"/.test(presenceBody));
+ok('⭐ o próprio inscrito só pode agir sobre o próprio UID', /targetKey === callerUid/.test(presenceBody) && /memberUids/.test(presenceBody));
 
 
 /* ═══ ⑥ A PORTA RODANDO DE VERDADE ═════════════════════════════════════════════
@@ -382,6 +384,24 @@ function chamarPresenca(uid, data, doc, subs) {
     }));
     ok('⛔ participante não usa a porta do organizador — e nada grava',
       !!negada && /permission-denied/.test(String(negada.code || negada.message)) && BANCO.commits === 0);
+
+    const proprio = Object.assign(clone(DOC), { memberUids: ['uA'], absent: { uA: 1 }, checkedIn: { uA: 1 } });
+    const confirmado = await chamarPresenca('uA', { targetKey: 'uA', action: 'confirmed' }, proprio);
+    ok('⭐⭐ inscrito confirma a própria presença, sem autoridade sobre terceiros',
+      confirmado.b.doc.checkedInConfirmed && typeof confirmado.b.doc.checkedInConfirmed.uA === 'number' &&
+      !('uA' in confirmado.b.doc.checkedIn) && !('uA' in confirmado.b.doc.absent));
+
+    BANCO = bancoDeMentira('T1', Object.assign(clone(DOC), { memberUids: ['uA'] }));
+    const terceiro = await erroDe(CF.setTournamentPresence.run({
+      data: { tournamentId: 'T1', targetKey: 'uB', action: 'present' },
+      auth: { uid: 'uA', token: { uid: 'uA' } }, rawRequest: { headers: {} }, acceptsStreaming: false,
+    }));
+    ok('⛔ inscrito não marca outra pessoa', !!terceiro && /permission-denied/.test(String(terceiro.code || terceiro.message)) && BANCO.commits === 0);
+
+    const legadaDeTerceiro = Object.assign(clone(DOC), { memberUids: ['uA'], checkedIn: { uA: 1, uB: 2 } });
+    const propriaComLegadaForjada = await chamarPresenca('uA', { targetKey: 'uA', legacyKey: 'uB', action: 'clear' }, legadaDeTerceiro);
+    ok('⛔ inscrito não usa legacyKey para apagar presença de terceiro',
+      !('uA' in propriaComLegadaForjada.b.doc.checkedIn) && propriaComLegadaForjada.b.doc.checkedIn.uB === 2);
   }
 
   } catch (e) {

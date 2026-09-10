@@ -3174,7 +3174,8 @@ exports.dismissDuplicateAccount = onCall(
 /* ═══ PRESENÇA · intenção estreita, sem operações arbitrárias ──────────────────
  * O navegador informa apenas a pessoa e se ela está presente. A decisão dos
  * campos envolvidos pertence ao servidor: marcar presença sempre remove W.O. e
- * a confirmação azul; desmarcar remove somente a presença verde. Mantém a
+ * a confirmação azul; desmarcar remove a presença; confirmar presença remota
+ * mantém apenas o estado confirmado. Mantém a
  * escrita por FieldPath, que foi a única forma medida sem perda sob rajada. */
 exports.setTournamentPresence = onCall(
   { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
@@ -3184,24 +3185,30 @@ exports.setTournamentPresence = onCall(
     const data = request.data || {};
     const tournamentId = String(data.tournamentId || "").trim();
     const targetKey = String(data.targetKey || "").trim();
-    const legacyKey = String(data.legacyKey || "").trim();
+    let legacyKey = String(data.legacyKey || "").trim();
     const action = String(data.action || "");
     if (!tournamentId || !_partesPerm.idDeDocumentoValido(targetKey)) {
       throw new HttpsError("invalid-argument", "torneio e participante válidos são obrigatórios");
     }
-    if (action !== "present" && action !== "clear") {
+    if (action !== "present" && action !== "confirmed" && action !== "clear") {
       throw new HttpsError("invalid-argument", "ação de presença inválida");
-    }
-    if (legacyKey && !_partesPerm.idDeDocumentoValido(legacyKey)) {
-      throw new HttpsError("invalid-argument", "identidade legada inválida");
     }
     const db = admin.firestore();
     const ref = db.collection("tournaments").doc(tournamentId);
     const snap = await ref.get();
     if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
     const t = snap.data() || {};
-    if (!_isTournamentOrgCaller(t, callerUid)) {
-      throw new HttpsError("permission-denied", "só a organização marca presença");
+    const isOrg = _isTournamentOrgCaller(t, callerUid);
+    const isOwnEnrolledPresence = targetKey === callerUid && Array.isArray(t.memberUids) &&
+      t.memberUids.map(String).indexOf(callerUid) !== -1;
+    if (!isOrg && !isOwnEnrolledPresence) {
+      throw new HttpsError("permission-denied", "só a organização ou o próprio inscrito marca presença");
+    }
+    // A migração nome→UID é administrativa. Um inscrito só pode tocar a própria
+    // chave UID e jamais pode transformar `legacyKey` em apagamento de terceiro.
+    if (!isOrg) legacyKey = "";
+    else if (legacyKey && !_partesPerm.idDeDocumentoValido(legacyKey)) {
+      throw new HttpsError("invalid-argument", "identidade legada inválida");
     }
     const now = Date.now();
     const changes = action === "present"
@@ -3210,7 +3217,16 @@ exports.setTournamentPresence = onCall(
           { parte: "absent", chave: targetKey, valor: null },
           { parte: "checkedInConfirmed", chave: targetKey, valor: null }
         ]
-      : [{ parte: "checkedIn", chave: targetKey, valor: null }];
+      : action === "confirmed"
+        ? [
+            { parte: "checkedIn", chave: targetKey, valor: null },
+            { parte: "absent", chave: targetKey, valor: null },
+            { parte: "checkedInConfirmed", chave: targetKey, valor: now }
+          ]
+        : [
+            { parte: "checkedIn", chave: targetKey, valor: null },
+            { parte: "checkedInConfirmed", chave: targetKey, valor: null }
+          ];
     if (legacyKey && legacyKey !== targetKey) {
       changes.push({ parte: "checkedIn", chave: legacyKey, valor: null });
       // A identidade legada não pode sobreviver em nenhum mapa: ao limpar a

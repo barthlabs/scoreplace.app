@@ -414,15 +414,27 @@ window._applySelfPresence = function (tId, playerName, uid) {
   const _who = uid ? { uid: uid, displayName: playerName } : playerName;
   const isGreen = window._idMapHas(t, t.checkedIn || {}, _who);
   const isBlue = window._idMapHas(t, t.checkedInConfirmed || {}, _who);
-  if (isGreen || isBlue) {
-    // Já marcado → tocar de novo = sair (remove verde E azul).
-    var _mdOff = window.AppStore.mutate(tId, function (ft) {
-      ft.checkedIn = ft.checkedIn || {}; ft.checkedInConfirmed = ft.checkedInConfirmed || {};
-      window._idMapDel(ft, ft.checkedIn, _who);
-      window._idMapDel(ft, ft.checkedInConfirmed, _who);
+  const selfUid = String(uid || ((window.AppStore && window.AppStore.currentUser && window.AppStore.currentUser.uid) || '')).trim();
+  if (!selfUid || !window.FirestoreDB || typeof window.FirestoreDB.setTournamentPresence !== 'function') {
+    if (typeof showNotification === 'function') showNotification('⚠️ Presença não salva', 'Atualize o aplicativo e tente novamente.', 'warning');
+    return;
+  }
+  var _sendSelfPresence = function(action, successTitle, successMessage) {
+    // Sem estado otimista: o card fica ocupado e só repinta a resposta canônica.
+    // Chave legada é limpeza exclusiva da organização, nunca do próprio inscrito.
+    var save = window.FirestoreDB.setTournamentPresence(tId, selfUid, action, '');
+    window._presenceBusyUntil(selfUid, save);
+    save.then(function () {
+      if (typeof showNotification === 'function') showNotification(successTitle, successMessage, 'success');
+      _reRenderParticipantsStable();
+    }).catch(function (e) {
+      if (typeof showNotification === 'function') showNotification('⚠️ Presença não salva', (e && e.message) || 'Tente novamente.', 'warning');
     });
-    window._presenceBusyUntil(uid || playerName, _mdOff);
-    _reRenderParticipantsStable();
+    return save;
+  };
+  if (isGreen || isBlue) {
+    // Já marcado → tocar de novo = sair. O navegador só despacha a intenção.
+    _sendSelfPresence('clear', 'Presença removida', 'Você não aparece mais como presente neste torneio.');
     return;
   }
   if (typeof showNotification === 'function') {
@@ -430,18 +442,9 @@ window._applySelfPresence = function (tId, playerName, uid) {
   }
   window._presenceCardBusy(uid || playerName, true); // spinner já durante o GPS + write
   window._isUserAtTournamentVenue(t).then(function (atVenue) {
-    var _mdSelf = window.AppStore.mutate(tId, function (ft) {
-      ft.checkedIn = ft.checkedIn || {}; ft.absent = ft.absent || {}; ft.checkedInConfirmed = ft.checkedInConfirmed || {};
-      window._idMapDel(ft, ft.absent, _who);
-      if (atVenue) { window._idMapSet(ft, ft.checkedIn, _who, Date.now()); window._idMapDel(ft, ft.checkedInConfirmed, _who); }
-      else { window._idMapSet(ft, ft.checkedInConfirmed, _who, Date.now()); window._idMapDel(ft, ft.checkedIn, _who); }
-    });
-    window._presenceBusyUntil(uid || playerName, _mdSelf);
-    if (typeof showNotification === 'function') {
-      if (atVenue) showNotification('✅ Presente', 'O GPS confirmou você no local do torneio.', 'success');
-      else showNotification('🔵 Presença confirmada', 'Você confirmou que vem. Ao chegar no local, vira "Presente" automaticamente.', 'info');
-    }
-    _reRenderParticipantsStable();
+    _sendSelfPresence(atVenue ? 'present' : 'confirmed',
+      atVenue ? '✅ Presente' : '🔵 Presença confirmada',
+      atVenue ? 'O GPS confirmou você no local do torneio.' : 'Você confirmou que vem. Ao chegar no local, vira "Presente" automaticamente.');
   });
 };
 

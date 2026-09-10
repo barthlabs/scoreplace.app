@@ -11,7 +11,7 @@ const approved = {
   'store.js': 3,
   'views/bracket-logic.js': 2,
   'views/liga-substitution.js': 1,
-  'views/participants.js': 12,
+  'views/participants.js': 10,
   'views/tournaments-categories.js': 14,
   'views/tournaments-draw-prep.js': 23,
   'views/tournaments-draw.js': 13,
@@ -41,5 +41,5 @@ Object.keys(found).forEach((file) => ok(Object.prototype.hasOwnProperty.call(app
 Object.keys(approved).forEach((file) => ok((found[file] || 0) <= approved[file],
   file + ' não ganhou mutador novo (' + (found[file] || 0) + '/' + approved[file] + ')'));
 const total = Object.values(found).reduce((sum, count) => sum + count, 0);
-ok(total <= 82, 'o total de mutadores do navegador só pode cair (' + total + '/82)');
+ok(total <= 80, 'o total de mutadores do navegador só pode cair (' + total + '/80)');
 process.exit(failed ? 1 : 0);

@@ -1,3 +1,4 @@
+// ⚠️ 2.2.46 · a presença, tanto da organização quanto do participante, é confirmada pelo servidor; o aparelho só mostra a resposta canônica e não mistura estado local antigo.
 // ⚠️ 2.2.45 · o convite de co-organização só informa envio quando a Function confirma; resposta vazia vira aviso honesto, sem perder o convite já persistido.
 // ⚠️ 2.2.44 · convites de coorganização e o encerramento de temporada da Liga são confirmados pela Cloud Function, com gravação transacional no servidor.
 // scoreplace.app — Release notes (lazy-loaded)
@@ -21,6 +22,8 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    // ⚠️ 2.2.46 · presença da chamada e a confirmação do participante passam pela Function;
+    // a tela só despacha a intenção autenticada e mostra o estado canônico de volta.
     // ⚠️ 2.2.42 · enquetes agora também passam pela Cloud Function: criar, editar, votar, encerrar e reenviar relêem o torneio no servidor. Nenhuma aba antiga pode sobrescrever votos ou avisos.
     // ⚠️ 2.2.44 · organização e encerramento de temporada não dependem mais de uma aba aberta:
     // os convites de co-host e a finalização da Liga são aplicados no documento fresco pelo servidor.
@@ -198,6 +201,7 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:var(--sp-c-fde68a,#fde68a); font-size:1rem; margin-bottom:8px;">🎾 v2.2 — Busca da chave que leva até o resultado, “Propor datas” de volta e a chave de torneio grande sem sumir <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(Setembro, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>📍 Presença chega igual em todos os aparelhos:</b> a chamada do organizador e a confirmação do próprio participante agora são registradas no servidor. O card aguarda a resposta oficial antes de mudar, evitando que uma tela antiga mostre presença, ausência ou confirmação diferente do torneio.</li>' +
         '<li><b>🔐 Organização e temporada ficam consistentes em todos os aparelhos:</b> convidar, cancelar ou remover coorganizadores agora é confirmado pelo servidor no torneio mais recente. O encerramento de uma temporada de Liga também é decidido no servidor, que grava a classificação final e envia o aviso oficial sem depender de uma aba antiga aberta.</li>' +
         '<li><b>🏅 Partidas casuais passam a contar no seu histórico:</b> jogos casuais concluídos estavam registrados, mas não apareciam nas estatísticas nem liberavam os troféus correspondentes. Agora o aplicativo reconhece os participantes e o time vencedor pelo mesmo registro usado no placar, preserva o limite diário contra abuso e atualiza quantidade de jogos, vitórias e modalidades.</li>' +
         '<li><b>▶️ Iniciar torneio preserva placares recebidos:</b> ao iniciar um torneio, o organizador não regrava mais toda a cópia que está aberta no seu aparelho. A mudança grava somente o início no registro mais recente; se outro aparelho acabou de lançar ou corrigir um placar, ele continua preservado.</li>' +

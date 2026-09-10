@@ -3005,10 +3005,14 @@ genérica. Ele agora informa somente `tournamentId`, a identidade, a ação `pre
 chave legada que o servidor deve limpar. A `setTournamentPresence` relê o torneio, exige a
 organização e fixa no servidor as consequências: marcar remove W.O. e confirmação; desmarcar
 remove a presença; as chaves UID/nome antigas são limpas de todos os mapas sem deixar
-duplicidade. O gate
+duplicidade. A autopresença do inscrito usa a mesma porta, mas é restrita ao UID autenticado
+que conste em `memberUids`; ela pode confirmar remotamente, marcar presença local ou sair, nunca
+alterar outra pessoa. O GPS continua sendo o sinal obtido na tela, sem escrita direta. O gate
 `porta-unica-de-escrita-fina` executa a Function com banco simulado, inclusive em torneio com
 mapas separados, e prova autorização, lote único e limpeza. A rota com ausentes, que ainda
 aplica substituição de W.O. sobre a chave, continua inventariada no censo para migração própria.
+Com a autopresença fora das duas mutações locais, o censo cai de **82 para 80** writers; o gate
+aceita somente essa direção.
 
 ## L8 — matriz de leitura e projeção (08/set/2026)
 
