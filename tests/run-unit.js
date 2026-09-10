@@ -1360,6 +1360,7 @@ const SUITES = [
   'tests/decisoes-fase-cf-only.test.js', // L7: inativos/W.O. e promoção entre fases só despacham Functions
   'tests/decisao-entrada-tardia-cf-only.test.js', // L7: regra de tardios só é decidida pela Function
   'tests/equipes-incompletas-cf-only.test.js', // L7: reabertura e dissolução de equipes só usam Functions
+  'tests/fechar-enquete-cf-only.test.js', // L7: fechamento de enquete só despacha a Function
   // Joga o torneio INTEIRO lançando só pelo servidor: 8 jogos (escada + 3º lugar), campeão,
   // zero slot TBD. É o "jogar até o campeão" antes de mexer no caminho mais quente do app.
   'functions-autodraw/test-result-playthrough.js',

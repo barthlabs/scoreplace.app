@@ -669,6 +669,17 @@ window._setDrawPreparationSuspension = function(tId, action) {
     });
 };
 
+// Enquete de preparação: o navegador só despacha a intenção. A Function valida prazo/
+// organização, fecha no documento fresco e devolve o torneio canônico para esta aba.
+window._closeDrawPoll = function(tId, pollId, early) {
+    if (typeof window._callCF !== 'function') return Promise.reject(new Error('Function indisponível'));
+    return window._callCF('closeDrawPoll', { tournamentId:String(tId), pollId:String(pollId), early:early === true }, 'Entre na sua conta para encerrar a enquete.').then(function(res) {
+        var data = (res && res.data) || {};
+        if (data.tournament && typeof window._applyCFTournament === 'function') window._applyCFTournament(tId, data.tournament);
+        return data;
+    });
+};
+
 window._reopenDrawEnrollment = function(tId, reason) {
     if (typeof window._callCF !== 'function') return Promise.reject(new Error('Function indisponível'));
     return window._callCF('reopenDrawEnrollment', { tournamentId:String(tId), reason:reason }, 'Entre na sua conta para reabrir as inscrições.').then(function(res) {
@@ -2886,17 +2897,11 @@ window._showPollVotingDialog = function(tId, pollId) {
                     countdownEl.textContent = _t('predraw.closed');
                     countdownEl.style.color = '#f87171';
                     clearInterval(_pollTimer);
-                    // Auto-close poll
-                    poll.status = 'closed';
-                    if (window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
-                        window.AppStore.commitTournamentTx(tId, function(ft) {
-                            var freshPolls = Array.isArray(ft.polls) ? ft.polls : [];
-                            var freshPoll = freshPolls.find(function(item) { return item && item.id === poll.id; });
-                            if (!freshPoll || freshPoll.status === 'closed') return false;
-                            freshPoll.status = 'closed';
-                            return true;
-                        });
-                    }
+                    // A expiração é uma intenção: a Function relê a enquete, confere o prazo
+                    // e devolve o estado canônico. Nenhuma aba fecha o torneio diretamente.
+                    window._closeDrawPoll(tId, poll.id, false).catch(function(err) {
+                        if (window._warn) window._warn('[closeDrawPoll] prazo não foi fechado', err);
+                    });
                     return;
                 }
                 var h = Math.floor(rem / 3600000);
@@ -3193,19 +3198,15 @@ window._closePollEarly = function(tId, pollId) {
             _t('predraw.closePollTitle'),
             _t('predraw.closePollDesc'),
             function() {
-                if (!window.AppStore || typeof window.AppStore.mutate !== 'function') return;
-                var closedAt = Date.now();
-                window.AppStore.mutate(tId, function(ft) {
-                    var fresh = (ft.polls || []).filter(function(p) { return p && p.id === pollId; })[0];
-                    if (!fresh || fresh.status !== 'active') return false;
-                    fresh.status = 'closed'; fresh.deadline = closedAt; ft.activePollId = null;
-                    if (ft._pollSuspended) { ft.status = 'open'; delete ft._pollSuspended; }
-                    return true;
-                }, 'Enquete encerrada antecipadamente pelo organizador');
-                if (typeof showNotification === 'function') {
-                    showNotification(_t('draw.pollClosed'), _t('draw.pollClosedApply'), 'info');
-                }
-                window.location.hash = '#tournaments/' + tId;
+                window._closeDrawPoll(tId, pollId, true).then(function() {
+                    if (typeof showNotification === 'function') {
+                        showNotification(_t('draw.pollClosed'), _t('draw.pollClosedApply'), 'info');
+                    }
+                    window.location.hash = '#tournaments/' + tId;
+                }).catch(function(err) {
+                    if (window._warn) window._warn('[closeDrawPoll] encerramento antecipado falhou', err);
+                    if (typeof showNotification === 'function') showNotification('Não foi possível encerrar', 'Nada foi alterado. Tente novamente.', 'error');
+                });
             }
         );
     }

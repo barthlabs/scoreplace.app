@@ -2599,6 +2599,44 @@ exports.dissolveIncompleteTeams = onCall(async (request) => {
   });
 });
 
+// ─── Fechamento de enquete de preparação: intenção server-side ─────────────
+// A enquete suspende inscrições e altera o fluxo do sorteio. O navegador só pode pedir
+// seu encerramento: a Function relê a enquete fresca, valida o autor e devolve o recibo.
+// Participante só encerra após o prazo; organização pode encerrar antes.
+exports.closeDrawPoll = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid;
+  const data = request.data || {}, tId = String(data.tournamentId || '').trim();
+  const pollId = String(data.pollId || '').trim(), early = data.early === true;
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId || !pollId) throw new HttpsError('invalid-argument', 'Enquete obrigatória.');
+  const ref = db.collection('tournaments').doc(tId), agora = Date.now(), agoraIso = new Date(agora).toISOString();
+  return db.runTransaction(async (tx) => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    const polls = Array.isArray(t.polls) ? t.polls : [];
+    const poll = polls.find((item) => item && String(item.id) === pollId);
+    if (!poll) throw new HttpsError('not-found', 'Enquete não encontrada.');
+    if (poll.status === 'closed') return { ok:true, changed:false, tournament:t };
+    if (poll.status !== 'active') throw new HttpsError('failed-precondition', 'Esta enquete não está ativa.');
+    if (early) {
+      if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização encerra a enquete antes do prazo.', { tId, uid, pollId });
+    } else {
+      if (!_isTournamentAdmin(t, uid) && !_isTournamentParticipant(t, uid)) throw _drawFail('permission-denied', 'Só participantes do torneio encerram a enquete vencida.', { tId, uid, pollId });
+      if (!Number.isFinite(Number(poll.deadline)) || agora < Number(poll.deadline)) throw new HttpsError('failed-precondition', 'O prazo da enquete ainda não terminou.');
+    }
+    const antes = _antesDoMotor(t);
+    poll.status = 'closed';
+    if (early) poll.deadline = agora;
+    t.activePollId = null;
+    if (t._pollSuspended) {
+      t.status = 'open';
+      delete t._pollSuspended;
+    }
+    const b = _gravaTorneio(tx, ref, t, antes, { agoraIso });
+    return { ok:true, changed:true, tournament:b.clean };
+  });
+});
+
 // ─── Decisões entre fases: somente a Function altera elenco e promoção ───────
 // O painel mostra os inativos/W.O. e a possível linha extra, mas não pode aplicar
 // essas escolhas sobre um snapshot que talvez já esteja atrasado.
