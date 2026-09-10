@@ -1,17 +1,23 @@
-const fs = require('fs'), vm = require('vm');
-const src = fs.readFileSync('js/views/tournaments-draw-prep.js', 'utf8');
-const incStart = src.indexOf('window._handleIncompleteOption = function'), oddStart = src.indexOf('window._handleOddOption = function');
-const inc = src.slice(incStart, src.indexOf('\n};', incStart) + 3);
-const odd = src.slice(oddStart, src.indexOf('\n};', oddStart) + 3);
+'use strict';
+// A reabertura deixou de executar uma transação na aba. A garantia que importa é
+// o servidor alterar somente estado de inscrição no documento fresco, sem aceitar
+// nem reconstruir jogos/placares de um snapshot que pode estar atrasado.
+const fs = require('fs');
+const client = fs.readFileSync('js/views/tournaments-draw-prep.js', 'utf8');
+const server = fs.readFileSync('functions-autodraw/index.js', 'utf8');
+const a = server.indexOf('exports.reopenDrawEnrollment = onCall');
+const b = server.indexOf('exports.dissolveIncompleteTeams = onCall', a);
+const fn = server.slice(a, b);
+const i = client.indexOf('window._handleIncompleteOption = function');
+const j = client.indexOf('window.showLotteryIncompletePanel', i);
+const k = client.indexOf('window._handleOddOption = function');
+const l = client.indexOf('// ─── VERIFICAÇÃO 3:', k);
+const handlers = client.slice(i, j) + client.slice(k, l);
 let fail = 0; function ok(v,m){ if(v) console.log('✓ '+m); else { fail++; console.error('✗ '+m); } }
-function run(kind) {
-  const local={id:'T',status:'active',participants:[{}]}, fresh={id:'T',status:'active',participants:[{}],matches:[{id:'M',scoreP1:6,scoreP2:4}]};
-  const w={ AppStore:{ mutate:(id,fn)=>{fn(local);fn(fresh);}, logAction(){} }, _findTournamentById:()=>local,
-    checkOddEntries:()=>({teamSize:1}), showNotification(){}, _t:k=>k, location:{hash:''} }; w.window=w;
-  const d={getElementById:()=>null}; const s={window:w,document:d,showNotification:w.showNotification,_t:w._t,renderTournaments(){}};
-  vm.createContext(s); vm.runInContext(kind==='inc'?inc:odd,s); kind==='inc'?w._handleIncompleteOption('T','reopen'):w._handleOddOption('T','reopen');
-  return fresh;
-}
-const a=run('inc'); ok(a.status==='open'&&a.enrollmentStatus==='open','reabrir times altera só estado fresco'); ok(a.matches[0].scoreP1===6,'reabrir times preserva placar');
-const b=run('odd'); ok(b.status==='open','reabrir ímpar altera estado fresco'); ok(b.matches[0].scoreP2===4,'reabrir ímpar preserva placar');
-ok(!/AppStore\.sync\(/.test(inc+odd),'os dois handlers não chamam sync'); if(fail) process.exit(1);
+ok(/_reopenDrawEnrollment\(tId, 'incomplete'\)/.test(handlers) && /_reopenDrawEnrollment\(tId, 'odd'\)/.test(handlers), 'reabrir times e ímpar despacham a intenção para a Function');
+ok(!/AppStore\.(?:mutate|commitTournamentTx)\s*\(/.test(handlers), 'os handlers não escrevem uma cópia local');
+ok(/db\.runTransaction/.test(fn) && /_leTorneio/.test(fn) && /_isTournamentAdmin/.test(fn), 'a Function relê o documento fresco e exige a organização');
+ok(/t\.status = 'open'/.test(fn) && /reason === 'incomplete'/.test(fn), 'a Function altera só o estado de inscrição previsto');
+ok(!/(?:t\.|request\.data).*matches\s*=/.test(fn) && !/(?:t\.|request\.data).*(?:scoreP1|scoreP2|sets)\s*=/.test(fn), 'reabrir não regrava jogos nem placares');
+ok(/_antesDoMotor/.test(fn) && /_gravaTorneio/.test(fn) && /tournament:b\.clean/.test(fn), 'a persistência canônica preserva os campos concorrentes e devolve o recibo');
+if(fail) process.exit(1);

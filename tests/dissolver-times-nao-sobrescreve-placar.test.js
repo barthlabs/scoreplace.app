@@ -1,7 +1,20 @@
-const fs=require('fs'),vm=require('vm'); const src=fs.readFileSync('js/views/tournaments-draw-prep.js','utf8');
-const a=src.indexOf('window._dissolveIncompleteTeams = function'), b=src.indexOf('// ─── VERIFICAÇÃO 2:',a); if(a<0||b<0)throw Error('funções não encontradas');
-const local={id:'T',teamSize:2,enrollmentMode:'team',participants:[{participants:[{uid:'u1',name:'A'}]}]},fresh={id:'T',teamSize:2,enrollmentMode:'team',participants:[{participants:[{uid:'u1',name:'A'}]}],matches:[{id:'M',scoreP1:6,scoreP2:4}]};let fail=0;
-const w={AppStore:{mutate:(id,fn)=>{fn(local);fn(fresh);return Promise.resolve(true);}},_findTournamentById:()=>local,_isTeamEnrollMode:()=>true,_entryTeamMembers:p=>p.participants||null,showNotification(){},showUnifiedResolutionPanel(){}};w.window=w;
-const s={window:w,document:{getElementById:()=>null},showNotification:w.showNotification,console,Object,Array,String,parseInt,Promise};vm.createContext(s);vm.runInContext(src.slice(a,b),s);w._saveDissolveResolution('T');
-function ok(v,m){if(v)console.log('✓ '+m);else{fail++;console.error('✗ '+m)}}
-ok(fresh.participants[0].uid==='u1','dissolve o time no documento fresco');ok(fresh.matches[0].scoreP1===6&&fresh.matches[0].scoreP2===4,'preserva placar concorrente');ok(/if \(!fresh\.dissolved\) return false;/.test(src.slice(a,b)),'aborta se outra sessão já resolveu os times');ok(!/FirestoreDB\.saveTournament\(|AppStore\.sync\(/.test(src.slice(a,b)),'não grava snapshot inteiro');if(fail)process.exit(1);
+'use strict';
+// O cliente não pode desmontar um time a partir de sua fotografia. A Function
+// roda o mesmo motor puro sobre o torneio recém-lido e persiste somente participantes.
+const fs = require('fs');
+const client = fs.readFileSync('js/views/tournaments-draw-prep.js', 'utf8');
+const server = fs.readFileSync('functions-autodraw/index.js', 'utf8');
+const a = client.indexOf('window._saveDissolveResolution = function');
+const b = client.indexOf('// ─── VERIFICAÇÃO 2:', a);
+const handler = client.slice(a, b);
+const c = server.indexOf('exports.dissolveIncompleteTeams = onCall');
+const d = server.indexOf('// ─── Decisões entre fases', c);
+const fn = server.slice(c, d);
+let fail=0; function ok(v,m){if(v)console.log('✓ '+m);else{fail++;console.error('✗ '+m)}}
+ok(/_callCF\('dissolveIncompleteTeams'/.test(handler), 'dissolver só despacha a intenção');
+ok(!/AppStore\.(?:mutate|commitTournamentTx)\s*\(/.test(handler), 'dissolver não grava um snapshot local');
+ok(/drawWindow\._dissolveIncompleteTeams\(t\)/.test(fn) && /db\.runTransaction/.test(fn), 'Function calcula a dissolução sobre o documento fresco');
+ok(/t\.participants = outcome\.participants/.test(fn), 'Function altera exclusivamente a lista de participantes');
+ok(!/(?:t\.|request\.data).*matches\s*=/.test(fn) && !/(?:t\.|request\.data).*(?:scoreP1|scoreP2|sets)\s*=/.test(fn), 'dissolver preserva jogos e placares concorrentes');
+ok(/_antesDoMotor/.test(fn) && /_gravaTorneio/.test(fn) && /tournament:b\.clean/.test(fn), 'a gravação é canônica e devolve o documento fresco');
+if(fail)process.exit(1);
