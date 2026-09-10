@@ -24,6 +24,13 @@ assert(!serverBranch.includes('AppStore.mutate('), 'presença que pode substitui
 
 
 const choiceSource = fs.readFileSync('js/views/wo-claim.js', 'utf8');
+const claimDeclareBegin = choiceSource.indexOf('window._woDeclare = function');
+const claimDeclareEnd = choiceSource.indexOf('// Stage 2:', claimDeclareBegin);
+assert(claimDeclareBegin >= 0 && claimDeclareEnd > claimDeclareBegin, 'recorte do apontamento participativo existe');
+const claimDeclare = choiceSource.slice(claimDeclareBegin, claimDeclareEnd);
+assert(claimDeclare.includes('_claimServer('), 'apontamento participativo despacha o consenso à CF');
+assert(claimDeclare.includes('absentName: String(absentName ||'), 'apontamento preserva nome apenas para convidado sem UID');
+assert(!claimDeclare.includes('_commit('), 'apontamento participativo não grava claim no navegador');
 const choiceBegin = choiceSource.indexOf('window._woResolveSubChoiceUI = function');
 const choiceEnd = choiceSource.indexOf('// ─── APLICAÇÃO do W.O.', choiceBegin);
 assert(choiceBegin >= 0 && choiceEnd > choiceBegin, 'recorte da escolha de substituto existe');

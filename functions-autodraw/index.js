@@ -9,6 +9,7 @@ const { getMessaging } = require('firebase-admin/messaging');
 const { rebaseRounds } = require('./rebase-core.js');
 const _tourSummary = require('./tournament-summary-core.js');
 const _wp = require('./write-plan.js');
+const _woClaimCore = require('./wo-claim-core.js');
 const _tSplit = require('./vendor/tournament-split-core.js');   // fonte única: js/views/ (copy-vendor)
 // fonte única: functions/match-roster.js (copy-vendor) — monta o subdoc de resultado,
 // incluindo o carregar-adiante do `replay`, que o servidor não sabe recalcular.
@@ -1251,6 +1252,104 @@ exports.deliverScoreNotification = onDocumentCreated(
     await event.data.ref.set({ dispatchStatus: 'dispatched', dispatchedAt: new Date().toISOString() }, { merge: true });
   }
 );
+
+// ─── Consenso de W.O.: contexto fresco, consenso e motor na mesma transação ───────
+// O browser só aponta ids.  Nome, integrantes, adversário, permissões e o motor são
+// todos recompostos aqui, a partir do documento que a transação acabou de reler.
+function _woClaimContext(t, raw) {
+  const scope = raw && raw.scope === 'group' ? 'group' : 'match';
+  const all = typeof drawWindow._collectAllMatches === 'function' ? drawWindow._collectAllMatches(t) : (t.matches || []);
+  const nameOf = uid => (typeof drawWindow._memberNameByUid === 'function' ? drawWindow._memberNameByUid(t, uid) : '') || String(uid || '');
+  if (scope === 'match') {
+    const id = String(raw && raw.matchId || '');
+    const match = all.find(m => m && String(m.id) === id);
+    if (!match) return null;
+    const sides = {};
+    ['p1', 'p2'].forEach(side => {
+      const uids = _slotUidsOf(match, side).filter(Boolean).map(String);
+      sides[side] = { name: String(match[side] || ''), uids };
+    });
+    const members = uniqueWoMembers(Object.entries(sides).flatMap(([side, value]) => value.uids.length
+      ? value.uids.map(uid => ({ uid, name: nameOf(uid) })) : (value.name ? [{ uid: '', name: value.name, side }] : [])));
+    return { key: 'm|' + id, scope, matchId: id, match, matchIds: [id], matchSides: sides,
+      members, memberUids: members.map(m => m.uid), isLeague: false };
+  }
+  const roundIndex = Number(raw && raw.roundIndex);
+  const groupName = String(raw && raw.groupName || '');
+  const round = Array.isArray(t.rounds) ? t.rounds[roundIndex] : null;
+  const group = round && Array.isArray(round.monarchGroups) ? round.monarchGroups.find(g => g && String(g.name) === groupName) : null;
+  if (!group) return null;
+  const players = Array.isArray(group.players) ? group.players : [];
+  const playerUids = Array.isArray(group.playersUids) ? group.playersUids : [];
+  const members = uniqueWoMembers(players.map((name, index) => ({ uid: String(playerUids[index] || ''), name: String(name || '') })).filter(m => m.uid));
+  const matchIds = all.filter(m => m && (String(m.groupName || '') === groupName || String(m.group || '') === groupName || String(m.monarchGroup || '') === groupName)).map(m => String(m.id));
+  return { key: 'g|' + roundIndex + '|' + groupName, scope, roundIndex, groupName, group, matchIds,
+    members, memberUids: members.map(m => m.uid), isLeague: true };
+}
+function uniqueWoMembers(entries) {
+  const seen = new Set();
+  return entries.filter(m => {
+    const key = m && (m.uid ? 'u:' + String(m.uid) : (m.name ? 'n:' + String(m.name) : ''));
+    return !!key && !seen.has(key) && seen.add(key);
+  });
+}
+
+exports.manageWOClaim = onCall(async request => {
+  const uid = request.auth && request.auth.uid;
+  const data = request.data || {};
+  const tId = String(data.tournamentId || '').trim();
+  const action = String(data.action || '').trim();
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId || !action) throw new HttpsError('invalid-argument', 'Torneio e ação são obrigatórios.');
+  if (typeof applyWoFn !== 'function' || !drawWindow) throw _drawFail('internal', 'Motor de W.O. indisponível no servidor.', { tId });
+  const ref = db.collection('tournaments').doc(tId);
+  const agoraIso = new Date().toISOString();
+  return db.runTransaction(async tx => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw _drawFail('not-found', 'Torneio não encontrado.', { tId, uid });
+    await _preloadDrawNames(t);
+    _enrichParticipantsFromProfiles(t);
+    const existing = action === 'declare' ? null : _woClaimCore.claimOf(t, String(data.claimId || ''));
+    const ctxRaw = action === 'declare' ? data.context : (existing || {});
+    const ctx = _woClaimContext(t, ctxRaw);
+    if (!ctx) throw _drawFail('failed-precondition', 'O jogo ou grupo não existe mais no torneio fresco.', { tId, action });
+    const before = _antesDoMotor(t);
+    const step = _woClaimCore.transition(t, {
+      action, uid, isAdmin: _isTournamentAdmin(t, uid), context: ctx,
+      absentUid: String(data.absentUid || ''), absentName: String(data.absentName || ''), byName: String(data.byName || ''),
+      claimId: action === 'declare' ? ('wo_' + Date.now() + '_' + Math.floor(Math.random() * 1e6)) : String(data.claimId || ''),
+      choice: String(data.choice || ''), now: agoraIso
+    });
+    if (!step.ok) throw _drawFail(step.reason === 'permission-denied' ? 'permission-denied' : 'failed-precondition', 'Ação de W.O. não é válida no estado atual.', { tId, action, reason: step.reason });
+    let motor = null;
+    if (step.apply) {
+      const claim = step.claim;
+      const motorOpts = {
+        absentName: claim.absentName, absentUids: claim.absentUids, scope: ctx.scope,
+        matches: ctx.scope === 'group' ? ctx.matchIds.map(id => (typeof drawWindow._collectAllMatches === 'function' ? drawWindow._collectAllMatches(t) : []).find(m => String(m.id) === id)).filter(Boolean) : [ctx.match],
+        roundIndex: ctx.roundIndex, groupName: ctx.groupName, noSubBehavior: 'escalate',
+        woScope: t.woScope || 'individual', offerOutcomeChoice: !!step.offerOutcomeChoice,
+        outcomeChoice: step.choice || null
+      };
+      // `needsOutcomeChoice` é uma sondagem: o motor marca ausência antes de
+      // chegar nessa decisão. Rodá-lo numa cópia impede que uma escolha ainda não
+      // feita deixe qualquer marca no documento canônico.
+      const probe = JSON.parse(JSON.stringify(t));
+      const probeResult = applyWoFn(probe, motorOpts);
+      if (probeResult && probeResult.outcome === 'needsOutcomeChoice') {
+        const boundary = _gravaTorneio(tx, ref, t, before, { agoraIso });
+        return { ok: true, changed: !!step.changed, needsOutcomeChoice: true, claim: step.claim, outcome: probeResult, tournament: boundary.clean };
+      }
+      motor = applyWoFn(t, motorOpts);
+      if (!motor || !motor.ok) throw _drawFail('failed-precondition', 'O motor recusou aplicar este W.O.', { tId, action, reason: motor && motor.reason });
+      claim.status = 'applied'; claim.resolvedAt = agoraIso;
+      if (step.choice) claim.outcomeStage = 'resolved';
+    }
+    const boundary = _gravaTorneio(tx, ref, t, before, { agoraIso });
+    return { ok: true, changed: !!step.changed || !!step.apply, claim: step.claim, outcome: motor, tournament: boundary.clean,
+      requiresGroupReplacement: !!(motor && motor.outcome === 'ligaDelegated') };
+  });
+});
 
 // ─── W.O. declarado pela organização: intenção fina, motor e escrita no servidor ───
 // O navegador não monta mapas nem propaga chave. Ele só informa a pessoa escolhida;

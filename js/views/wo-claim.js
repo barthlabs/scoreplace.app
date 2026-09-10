@@ -563,6 +563,27 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       return false;
     });
   }
+  // O apontamento inicial é uma intenção. A Function reconstrói o contexto a
+  // partir do documento fresco e decide se só registra o claim ou se já aplica
+  // o auto-W.O.; aqui ficam apenas loader e render.
+  function _claimServer(tId, payload, onDone, loadingMsg) {
+    if (!window.FirestoreDB || typeof window.FirestoreDB._callFn !== 'function') {
+      if (typeof showNotification === 'function') showNotification('⚠️ Não salvou', 'A conexão com o servidor não está disponível.', 'error');
+      return Promise.resolve(null);
+    }
+    if (typeof window._showLoading === 'function') window._showLoading(loadingMsg || 'Processando…');
+    return window.FirestoreDB._callFn('manageWOClaim', Object.assign({ tournamentId: String(tId) }, payload)).then(function (data) {
+      if (typeof window._hideLoading === 'function') window._hideLoading();
+      if (typeof onDone === 'function') onDone(data || {});
+      if (typeof window._rerenderBracket === 'function') window._rerenderBracket(String(tId));
+      else if (typeof window._softRefreshView === 'function') window._softRefreshView();
+      return data || {};
+    }).catch(function (err) {
+      if (typeof window._hideLoading === 'function') window._hideLoading();
+      if (typeof showNotification === 'function') showNotification('⚠️ Não salvou', (err && err.message) || 'Tente de novo.', 'error');
+      return null;
+    });
+  }
   function _isLigaGroup(t, c) { return c && c.scope === 'group' && (_isLiga(t) || _isMonarchFmt(t)); }
 
   // ─── ações ─────────────────────────────────────────────────────────────────────
@@ -660,23 +681,24 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var selfData = _notifData(t, '🚫 W.O. avisado pelo próprio jogador',
       '"' + absentName + '" avisou que não vai jogar em "' + (t.name || '') + '". Não precisa de confirmação.' +
       (_nctx ? ' O parceiro que ficou escolhe o desfecho.' : ''));
-    _commit(tId, function (ft) {
-      var claims = _claims(ft);
-      if (!claims.some(function (x) { return x.id === c.id; })) claims.push(c); // idempotente por id
-    }, function (okSave) {
+    _claimServer(tId, {
+      action: 'declare',
+      context: rc.scope === 'match' ? { scope: 'match', matchId: rc.matchId } : { scope: 'group', roundIndex: rc.roundIndex, groupName: rc.groupName },
+      absentUid: String(absentUid || ''), absentName: String(absentName || ''), byName: c.byName
+    }, function (saved) {
+      if (!saved || !saved.ok) return;
+      var savedClaim = saved.claim || c;
       if (_self) {
-        _notify(t, _claimAudience(t, c, cu.uid), selfData);
+        _notify(t, _claimAudience(t, savedClaim, cu.uid), selfData);
         if (_nctx && _nctx.partnerUid) _notify(t, [_nctx.partnerUid], _notifData(t, '🤝 Proponha o desfecho',
           'Seu parceiro avisou que não vai jogar em "' + (t.name || '') + '". Escolha como o seu jogo continua — o adversário confirma.'));
-        // Sem desfecho a negociar → o W.O. já vale. Com desfecho, o claim já nasceu em
-        // 'awaiting-proposal' e o overlay abre na etapa certa.
-        if (!_nctx && okSave !== false) { _applyClaimViaGate(tId, c.id, cu.uid, false); return; }
-        window._woOpenClaim(tId, ctxKey);
+        // O servidor já aplicou o auto-W.O. se não havia desfecho a negociar.
+        setTimeout(function () { window._woOpenClaim(tId, ctxKey); }, 250);
         return;
       }
       _notify(t, conf, data);
       if (t.creatorUid && conf.indexOf(t.creatorUid) === -1) _notify(t, [t.creatorUid], data);
-      window._woOpenClaim(tId, ctxKey);
+      setTimeout(function () { window._woOpenClaim(tId, ctxKey); }, 250);
     }, 'Registrando o apontamento…');
   };
 

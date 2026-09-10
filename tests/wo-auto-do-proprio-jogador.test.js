@@ -85,6 +85,34 @@ const ROOT = path.join(__dirname, '..');
 ['js/views/bracket-model.js', 'js/views/bracket-logic.js', 'js/views/wo-core.js', 'js/views/participants.js', 'js/views/wo-claim.js']
   .forEach((rel) => vm.runInContext(fs.readFileSync(path.join(ROOT, rel), 'utf8'), sandbox, { filename: rel }));
 const W = sandbox;
+// A tela agora só despacha a intenção. Este adaptador é a borda da CF no teste de
+// view: replica a resposta canônica já coberta pelo teste puro wo-claim-server-core.
+W.FirestoreDB = { _callFn(name, payload) {
+  if (name !== 'manageWOClaim') return Promise.resolve({ ok: false });
+  const t = W.AppStore.tournaments.find(x => String(x.id) === String(payload.tournamentId));
+  const m = t && (t.matches || []).find(x => String(x.id) === String(payload.context && payload.context.matchId));
+  const absentUid = String(payload.absentUid || '');
+  const absentName = W._displayNameForUid(absentUid, '');
+  const byUid = (_cu && _cu.uid) || '';
+  const claim = { id: 'cf_' + Date.now(), scope: 'match', matchId: m && m.id, byUid, byName: payload.byName || '', absentName, absentUids: [absentUid], status: 'pending', confirms: {}, createdAt: new Date().toISOString() };
+  const side = m && ['p1', 'p2'].find(s => (W._slotUids(m, s) || []).indexOf(absentUid) !== -1);
+  const own = side ? W._slotUids(m, side).filter(Boolean) : [];
+  const self = absentUid === byUid;
+  if (self) {
+    claim.selfDeclared = true; claim.factConfirmed = true; claim.confirms[byUid] = true;
+    if (own.length > 1) {
+      claim.outcomeStage = 'awaiting-proposal';
+      claim.outcomePartnerUid = own.find(u => u !== absentUid);
+      claim.outcomeOppUids = W._slotUids(m, side === 'p1' ? 'p2' : []).filter(Boolean);
+    }
+  }
+  t.woClaims.push(claim);
+  if (self && !claim.outcomeStage) {
+    const r = W._applyWO(t, { absentName, absentUids: [absentUid], scope: 'match', noSubBehavior: 'escalate', woScope: t.woScope || 'individual' });
+    if (r && r.ok) { claim.status = 'applied'; claim.resolvedAt = new Date().toISOString(); }
+  }
+  return Promise.resolve({ ok: true, claim });
+} };
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.error('  ✗', m); } };

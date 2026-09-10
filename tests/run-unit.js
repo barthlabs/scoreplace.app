@@ -801,6 +801,7 @@ const SUITES = [
   'tests/apply-wo.test.js',
   // W.O. declarado pela organização roda o motor vendored na CF; a tela só envia intenção.
   'tests/wo-server-core.test.js',
+  'tests/wo-claim-server-core.test.js', // consenso de W.O. é puro e roda antes da gravação da CF
   'tests/wo-declare-cf-only.test.js',
   'tests/wo-individual.test.js',
   'tests/wo-availability-canonical.test.js',

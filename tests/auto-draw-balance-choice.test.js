@@ -22,7 +22,7 @@ ok(/quando\.getTime\(\) > Date\.now\(\)/.test(chk), 'e só quando a data/hora ai
 ok(/window\._tournamentHasDraw\(_tj\)\) return false;/.test(chk), 'e NUNCA quando o sorteio já aconteceu');
 
 // ── A TELA É A APROVADA, não uma nova ────────────────────────────────────────
-const dlg = src.slice(src.indexOf('function _perguntarEquilibrio'), src.indexOf('window._saveTournamentClickHandler = function'));
+const dlg = src.slice(src.indexOf('function _perguntarEquilibrio'), src.search(/window\._saveTournamentClickHandler = (?:async )?function/));
 ok(/window\._showDrawBalanceOverlay\(\{/.test(dlg), 'o salvar abre a tela canônica (_showDrawBalanceOverlay)');
 ok(!/showConfirmDialog/.test(dlg), 'e NÃO inventa diálogo próprio pra essa escolha');
 ok(/_drawBalanceChoice = !!equil/.test(dlg), 'guarda a escolha do jeito que o salvar lê');
@@ -45,8 +45,8 @@ const manual = draw.slice(draw.indexOf('window._maybeShowGenderDrawDialog = func
 ok(/window\._showDrawBalanceOverlay\(\{/.test(manual), 'a porta MANUAL usa a mesma tela');
 
 // o salvar pergunta ANTES de montar/gravar, e repete o salvar depois da resposta
-const save = src.slice(src.indexOf('window._saveTournamentClickHandler = function'),
-                       src.indexOf('window._saveTournamentClickHandler = function') + 2600);
+const save = src.slice(src.search(/window\._saveTournamentClickHandler = (?:async )?function/),
+                       src.search(/window\._saveTournamentClickHandler = (?:async )?function/) + 2600);
 ok(/_perguntarEquilibrio\(function \(\) \{ window\._saveTournamentClickHandler\(\); \}\)/.test(save),
   'responder a pergunta re-executa o salvar (mesmo padrão da reconciliação de pontuação)');
 ok(/!window\._drawBalanceConfirmed/.test(save), 'e não pergunta de novo depois de respondida');
