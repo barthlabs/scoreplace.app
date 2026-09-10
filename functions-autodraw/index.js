@@ -2637,6 +2637,34 @@ exports.closeDrawPoll = onCall(async (request) => {
   });
 });
 
+// ─── Voto em enquete de preparação: intenção server-side ────────────────────
+// O voto é identidade e decisão de sorteio. A Function usa apenas o UID autenticado,
+// relê prazo/opções no documento fresco e retorna o torneio canônico à tela.
+exports.castDrawPollVote = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid;
+  const data = request.data || {}, tId = String(data.tournamentId || '').trim();
+  const pollId = String(data.pollId || '').trim(), optionKey = String(data.optionKey || '').trim();
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId || !pollId || !optionKey) throw new HttpsError('invalid-argument', 'Voto inválido.');
+  const ref = db.collection('tournaments').doc(tId), agoraIso = new Date().toISOString();
+  return db.runTransaction(async (tx) => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    if (!_isTournamentAdmin(t, uid) && !_isTournamentParticipant(t, uid)) throw _drawFail('permission-denied', 'Só participantes do torneio votam nesta enquete.', { tId, uid, pollId });
+    const poll = (Array.isArray(t.polls) ? t.polls : []).find((item) => item && String(item.id) === pollId);
+    if (!poll) throw new HttpsError('not-found', 'Enquete não encontrada.');
+    if (poll.status !== 'active') throw new HttpsError('failed-precondition', 'Esta enquete já foi encerrada.');
+    if (!Number.isFinite(Number(poll.deadline)) || Date.now() >= Number(poll.deadline)) throw new HttpsError('failed-precondition', 'O prazo da enquete terminou.');
+    if (!(Array.isArray(poll.options) && poll.options.some((option) => option && String(option.key) === optionKey))) throw new HttpsError('invalid-argument', 'Opção de voto inválida.');
+    if (!poll.votes || typeof poll.votes !== 'object') poll.votes = {};
+    if (poll.votes[uid] === optionKey) return { ok:true, changed:false, tournament:t };
+    const antes = _antesDoMotor(t);
+    poll.votes[uid] = optionKey;
+    const b = _gravaTorneio(tx, ref, t, antes, { agoraIso });
+    return { ok:true, changed:true, tournament:b.clean };
+  });
+});
+
 // ─── Decisões entre fases: somente a Function altera elenco e promoção ───────
 // O painel mostra os inativos/W.O. e a possível linha extra, mas não pode aplicar
 // essas escolhas sobre um snapshot que talvez já esteja atrasado.

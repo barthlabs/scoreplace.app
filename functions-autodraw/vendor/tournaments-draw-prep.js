@@ -680,6 +680,15 @@ window._closeDrawPoll = function(tId, pollId, early) {
     });
 };
 
+window._castDrawPollVote = function(tId, pollId, optionKey) {
+    if (typeof window._callCF !== 'function') return Promise.reject(new Error('Function indisponível'));
+    return window._callCF('castDrawPollVote', { tournamentId:String(tId), pollId:String(pollId), optionKey:String(optionKey) }, 'Entre na sua conta para votar na enquete.').then(function(res) {
+        var data = (res && res.data) || {};
+        if (data.tournament && typeof window._applyCFTournament === 'function') window._applyCFTournament(tId, data.tournament);
+        return data;
+    });
+};
+
 window._reopenDrawEnrollment = function(tId, reason) {
     if (typeof window._callCF !== 'function') return Promise.reject(new Error('Function indisponível'));
     return window._callCF('reopenDrawEnrollment', { tournamentId:String(tId), reason:reason }, 'Entre na sua conta para reabrir as inscrições.').then(function(res) {
@@ -2926,73 +2935,34 @@ window._showPollVotingDialog = function(tId, pollId) {
 window._castPollVote = function(tId, pollId, optionKey) {
     var t = window._findTournamentById(tId);
     if (!t || !t.polls) return;
-
     var poll = null;
     for (var i = 0; i < t.polls.length; i++) {
         if (t.polls[i].id === pollId) { poll = t.polls[i]; break; }
     }
     if (!poll || poll.status === 'closed') return;
-    if (Date.now() > poll.deadline) {
-        poll.status = 'closed';
+    if (Date.now() >= poll.deadline) {
+        window._closeDrawPoll(tId, pollId, false).catch(function(err) { if (window._warn) window._warn('[closeDrawPoll] voto após prazo', err); });
         if (typeof showNotification === 'function') showNotification(_t('draw.pollClosed'), _t('draw.pollClosedMsg'), 'info');
         return;
     }
-
-    var user = window.AppStore.currentUser;
-    var userEmail = (user && user.email) ? user.email : '';
-    if (!userEmail) {
+    var user = window.AppStore && window.AppStore.currentUser;
+    if (!user || !user.uid) {
         if (typeof showNotification === 'function') showNotification(_t('auth.error'), _t('draw.pollLoginRequired'), 'error');
         return;
     }
-
-    // Only participants (or organizer) can vote
-    var parts = t.participants ? (Array.isArray(t.participants) ? t.participants : Object.values(t.participants)) : [];
-    var isParticipant = parts.some(function(p) {
-        if (typeof p === 'string') return p === userEmail || p === (user.displayName || '');
-        // uid-first + slot-aware: pega TODOS os uids do participante (p.uid + p1Uid/p2Uid +
-        // sub-participants[]) — senão o p2 de uma dupla (uid em p2Uid, displayName só do p1)
-        // era barrado de votar na enquete de resolução. Nome/email só fallback.
-        if (user.uid && typeof window._participantUids === 'function' &&
-            window._participantUids(p).indexOf(user.uid) !== -1) return true;
-        return (p.uid && user.uid && p.uid === user.uid) || (p.email && p.email === userEmail) || (p.displayName && p.displayName === (user.displayName || ''));
-    });
-    // v1.2.44: organizador é UID (creatorUid/co-host ativo) — era `userEmail === t.organizerEmail`,
-    // e-mail puro, sem nem olhar uid. Cânone: quem tem conta é uid e mais nada.
-    var isOrganizer = !!(window.AppStore && typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t));
-    if (!isParticipant && !isOrganizer) {
-        if (typeof showNotification === 'function') showNotification(_t('draw.pollNotAllowed'), _t('draw.pollNotAllowedMsg'), 'warning');
-        return;
-    }
-
-    // uid-first: voto chaveado pelo uid; migra chave-e-mail legada.
-    var _voteKey = (user && user.uid) ? user.uid : userEmail;
-    var previousVote = (poll.votes[_voteKey] != null ? poll.votes[_voteKey] : poll.votes[userEmail]) || null;
-    if (!window.AppStore || typeof window.AppStore.mutate !== 'function') {
-        if (typeof showNotification === 'function') showNotification('Atualize o aplicativo', 'Não foi possível registrar o voto com segurança.', 'error');
-        return;
-    }
-    window.AppStore.mutate(tId, function(ft) {
-        var freshPoll = (ft.polls || []).filter(function(p) { return p && p.id === pollId; })[0];
-        if (!freshPoll || freshPoll.status !== 'active' || Date.now() > freshPoll.deadline) return false;
-        if (!freshPoll.votes) freshPoll.votes = {};
-        freshPoll.votes[_voteKey] = optionKey;
-        if (_voteKey !== userEmail && freshPoll.votes[userEmail] != null) delete freshPoll.votes[userEmail];
-        return true;
-    }, 'Voto registrado na enquete');
-
+    var previousVote = (poll.votes && poll.votes[user.uid]) || null;
     var optTitle = '';
-    poll.options.forEach(function(o) { if (o.key === optionKey) optTitle = o.title; });
-
-    if (typeof showNotification === 'function') {
-        if (previousVote && previousVote !== optionKey) {
-            showNotification(_t('draw.voteChanged'), _t('draw.voteChangedMsg', {option: optTitle}), 'success');
-        } else {
-            showNotification(_t('draw.voteRegistered'), _t('draw.voteRegisteredMsg', {option: optTitle}), 'success');
+    (poll.options || []).forEach(function(o) { if (o.key === optionKey) optTitle = o.title; });
+    window._castDrawPollVote(tId, pollId, optionKey).then(function() {
+        if (typeof showNotification === 'function') {
+            if (previousVote && previousVote !== optionKey) showNotification(_t('draw.voteChanged'), _t('draw.voteChangedMsg', {option: optTitle}), 'success');
+            else showNotification(_t('draw.voteRegistered'), _t('draw.voteRegisteredMsg', {option: optTitle}), 'success');
         }
-    }
-
-    // Re-render the voting dialog to show updated counts
-    window._showPollVotingDialog(tId, pollId);
+        window._showPollVotingDialog(tId, pollId);
+    }).catch(function(err) {
+        if (window._warn) window._warn('[castDrawPollVote] voto falhou', err);
+        if (typeof showNotification === 'function') showNotification('Não foi possível votar', 'Nada foi alterado. Atualize e tente novamente.', 'error');
+    });
 };
 
 // ── Check for active polls and show notification to participant ──
