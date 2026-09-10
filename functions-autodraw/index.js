@@ -2480,6 +2480,79 @@ exports.cancelDrawPreparation = onCall(async (request) => {
   });
 });
 
+// ─── Escolha para entradas tardias antes do sorteio: intenção server-side ────
+// A tela apenas apresenta repescagem, BYE ou lista de espera. A escolha muda a
+// regra que será usada pelo motor e ainda pode reabrir inscrições que o painel
+// suspendeu; por isso a Function relê o torneio dentro da transação e devolve o
+// documento canônico, sem receber qualquer retrato de elenco do navegador.
+exports.setLateDrawDecision = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid;
+  const data = request.data || {}, tId = String(data.tournamentId || '').trim();
+  const mode = String(data.mode || '').trim();
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId || !['repescagem', 'bye', 'standby'].includes(mode)) {
+    throw new HttpsError('invalid-argument', 'Decisão de entrada tardia inválida.');
+  }
+  const ref = db.collection('tournaments').doc(tId), agoraIso = new Date().toISOString();
+  return db.runTransaction(async (tx) => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização decide a entrada tardia.', { tId, uid });
+    if (hasDrawnBracket && hasDrawnBracket(t)) throw _drawFail('failed-precondition', 'A chave já foi sorteada; a regra para tardios não pode mais mudar.', { tId, uid });
+    if (t.pendingDraw) throw _drawFail('failed-precondition', 'Há um sorteio em revisão; conclua-o antes de alterar esta regra.', { tId, uid });
+    const antes = _antesDoMotor(t);
+    t._lateResolutionAck = mode;
+    if (mode === 'standby') {
+      const phase = (Array.isArray(t.phases) && t.phases[t.currentPhaseIndex || 0]) || null;
+      if (phase) phase.lateEnrollment = 'standby';
+      t.lateEnrollment = 'standby';
+    } else {
+      t.p2Resolution = mode === 'bye' ? 'bye' : 'playin';
+    }
+    if (t._suspendedByPanel) {
+      t.status = t._previousStatus || 'open';
+      delete t._suspendedByPanel;
+      delete t._previousStatus;
+    }
+    const b = _gravaTorneio(tx, ref, t, antes, { agoraIso });
+    return { ok:true, changed:true, tournament:b.clean };
+  });
+});
+
+// ─── Suspensão temporária durante a preparação: intenção server-side ─────────
+// Um painel não é estado canônico. Se ele precisa fechar inscrições enquanto uma decisão
+// está pendente, a transição acontece aqui, sobre a leitura fresca, e a aba recebe o
+// documento resultante. Assim fechar/reabrir não pode sobrescrever outra alteração.
+exports.setDrawPreparationSuspension = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid;
+  const data = request.data || {}, tId = String(data.tournamentId || '').trim();
+  const action = String(data.action || '').trim();
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId || !['suspend', 'resume'].includes(action)) throw new HttpsError('invalid-argument', 'Ação de preparação inválida.');
+  const ref = db.collection('tournaments').doc(tId), agoraIso = new Date().toISOString();
+  return db.runTransaction(async (tx) => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização prepara o sorteio.', { tId, uid });
+    if (hasDrawnBracket && hasDrawnBracket(t)) throw _drawFail('failed-precondition', 'A chave já foi sorteada; a preparação não pode mais mudar.', { tId, uid });
+    if (t.pendingDraw) throw _drawFail('failed-precondition', 'Há um sorteio em revisão; conclua-o antes de alterar a preparação.', { tId, uid });
+    if (action === 'suspend' && t.status === 'closed' && t._suspendedByPanel) return { ok:true, changed:false, tournament:t };
+    if (action === 'resume' && !t._suspendedByPanel) return { ok:true, changed:false, tournament:t };
+    const antes = _antesDoMotor(t);
+    if (action === 'suspend') {
+      t._previousStatus = t.status;
+      t.status = 'closed';
+      t._suspendedByPanel = true;
+    } else {
+      t.status = t._previousStatus || 'open';
+      delete t._suspendedByPanel;
+      delete t._previousStatus;
+    }
+    const b = _gravaTorneio(tx, ref, t, antes, { agoraIso });
+    return { ok:true, changed:true, tournament:b.clean };
+  });
+});
+
 // ─── Decisões entre fases: somente a Function altera elenco e promoção ───────
 // O painel mostra os inativos/W.O. e a possível linha extra, mas não pode aplicar
 // essas escolhas sobre um snapshot que talvez já esteja atrasado.

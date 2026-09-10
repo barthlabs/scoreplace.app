@@ -657,6 +657,18 @@ window._cancelDrawResolution = function(tId) {
     });
 };
 
+// O painel de preparação pode fechar inscrições temporariamente enquanto a organização
+// escolhe como resolver o elenco. A aba não grava essa troca: pede a intenção e espelha o
+// recibo canônico antes de abrir o painel ou disparar o sorteio.
+window._setDrawPreparationSuspension = function(tId, action) {
+    if (typeof window._callCF !== 'function') return Promise.reject(new Error('Function indisponível'));
+    return window._callCF('setDrawPreparationSuspension', { tournamentId:String(tId), action:action }, 'Entre na sua conta para preparar o sorteio.').then(function(res) {
+        var data = (res && res.data) || {};
+        if (data.tournament && typeof window._applyCFTournament === 'function') window._applyCFTournament(tId, data.tournament);
+        return data;
+    });
+};
+
 // Cancelar o painel de resto = cancel canônico (reset total + detalhe limpo).
 window._cancelRemainderPanel = function(tId) { window._cancelDrawResolution(tId); };
 
@@ -1184,35 +1196,16 @@ window._showLateConfrontosPanel = function(tId) {
     overlay.id = 'unified-resolution-panel';
     overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.92);z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem;';
     document.body.style.overflow = 'hidden';
-    var _applyLateDecision = function(target, mode) {
-        if (!target) return false;
-        target._lateResolutionAck = mode;
-        if (mode === 'standby') {
-            var phase = (Array.isArray(target.phases) && target.phases[target.currentPhaseIndex || 0]) || null;
-            if (phase) phase.lateEnrollment = 'standby';
-            target.lateEnrollment = 'standby';
-        } else {
-            target.p2Resolution = (mode === 'bye') ? 'bye' : 'playin';
-        }
-        if (target._suspendedByPanel) {
-            target.status = target._previousStatus || 'open';
-            delete target._suspendedByPanel; delete target._previousStatus;
-        }
-        return true;
-    };
     var _proceedDraw = function(mode) {
-        _applyLateDecision(t, mode);
-        var save = window.AppStore && typeof window.AppStore.commitTournamentTx === 'function'
-            ? window.AppStore.commitTournamentTx(tId, function(ft) { return _applyLateDecision(ft, mode); })
-            : Promise.resolve(false);
-        Promise.resolve(save).then(function(saved) {
-            if (saved === false) {
-                overlay.remove(); document.body.style.overflow = '';
-                return;
-            }
+        if (typeof window._callCF !== 'function') return;
+        window._callCF('setLateDrawDecision', { tournamentId:String(tId), mode:mode }, 'Entre na sua conta para decidir a entrada tardia.').then(function(res) {
+            var data = (res && res.data) || {};
+            if (data.tournament && typeof window._applyCFTournament === 'function') window._applyCFTournament(tId, data.tournament);
             overlay.remove(); document.body.style.overflow = '';
             if (typeof window.generateDrawFunction === 'function') window.generateDrawFunction(tId);
             else if (typeof window.showFinalReviewPanel === 'function') window.showFinalReviewPanel(tId);
+        }).catch(function(err) {
+            if (typeof showNotification !== 'undefined') showNotification('Não foi possível decidir agora', (err && err.message) || 'Tente novamente.', 'error');
         });
     };
     window._lateConfrontosPick = function(mode) {
@@ -1324,17 +1317,15 @@ window.showUnifiedResolutionPanel = function(tId) {
             }
         }
 
-        // Suspend enrollment while decision panel is open
+        // Suspend enrollment while decision panel is open. This is persisted only by the
+        // Function; once its canonical receipt arrives, re-enter and diagnose that document.
         if (t.status !== 'closed') {
-            t._previousStatus = t.status; // preserve original status for cancel
-            t.status = 'closed';
-            t._suspendedByPanel = true;
-            if (window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
-                window.AppStore.commitTournamentTx(tId, function(ft) {
-                    if (ft.status === 'closed' && ft._suspendedByPanel) return false;
-                    ft._previousStatus = ft.status; ft.status = 'closed'; ft._suspendedByPanel = true; return true;
-                });
-            }
+            window._setDrawPreparationSuspension(tId, 'suspend').then(function() {
+                window.showUnifiedResolutionPanel(tId);
+            }).catch(function(err) {
+                if (typeof showNotification !== 'undefined') showNotification('Não foi possível preparar o sorteio', (err && err.message) || 'Tente novamente.', 'error');
+            });
+            return;
         }
 
         info = window._diagnoseAll(t);
@@ -1362,17 +1353,15 @@ window.showUnifiedResolutionPanel = function(tId) {
                 window._showLateConfrontosPanel(tId);
                 return;
             }
-            // Auto-restore enrollment
+            // Auto-restore enrollment only after the Function confirms the fresh document.
             if (t._suspendedByPanel) {
-                t.status = t._previousStatus || 'open';
-                delete t._suspendedByPanel;
-                delete t._previousStatus;
-                if (window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
-                    window.AppStore.commitTournamentTx(tId, function(ft) {
-                        if (!ft._suspendedByPanel) return false;
-                        ft.status = ft._previousStatus || 'open'; delete ft._suspendedByPanel; delete ft._previousStatus; return true;
-                    });
-                }
+                window._setDrawPreparationSuspension(tId, 'resume').then(function() {
+                    if (typeof window.generateDrawFunction === 'function') window.generateDrawFunction(tId);
+                    else window.showFinalReviewPanel(tId);
+                }).catch(function(err) {
+                    if (typeof showNotification !== 'undefined') showNotification('Não foi possível continuar o sorteio', (err && err.message) || 'Tente novamente.', 'error');
+                });
+                return;
             }
             if (typeof window.generateDrawFunction === 'function') {
                 window.generateDrawFunction(tId);
