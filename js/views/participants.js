@@ -1606,34 +1606,17 @@ window._partApplyFilter = function () {
 
 window._toggleVip = function (tId, participantName, uid) {
   const t = window._findTournamentById(tId);
-  if (!t) return;
-  if (!t.vips) t.vips = {};
-  // uid-first: resolve a ENTRADA pra pegar todos os uids (solo = 1; dupla =
-  // p1Uid+p2Uid). VIP fica marcado em cada uid → os readers que fazem
-  // members.some(m => _vips[m]) acham, e dois jogadores de mesmo nome não
-  // colidem. Jogador informal (sem uid) continua pelo nome (fallback).
-  const partsArr = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
-  // A ENTRADA é achada pelo UID (3º arg, mandado pelo card). Casar por nome só funcionava
-  // enquanto o nome resolvia igual dos dois lados — num roster só-uid com cache frio, não
-  // resolve, `entry` vinha undefined e o VIP ia parar numa CHAVE-NOME órfã.
-  const entry = (uid ? partsArr.find(p => p && typeof p === 'object' &&
-                   (p.uid === uid || p.p1Uid === uid || p.p2Uid === uid)) : null)
-             || partsArr.find(p => window._pName(p) === participantName);
-  const uids = (entry && typeof window._participantUids === 'function') ? window._participantUids(entry) : [];
-  let isVip = false;
-  uids.forEach(u => { if (t.vips[u]) isVip = true; });
-  if (!uids.length && t.vips[participantName]) isVip = true;
-  if (isVip) {
-    uids.forEach(u => { delete t.vips[u]; });
-    delete t.vips[participantName]; // limpa chave-nome legada
-  } else if (uids.length) {
-    uids.forEach(u => { t.vips[u] = Date.now(); });
-    delete t.vips[participantName]; // migra: sai do nome, entra no uid
-  } else {
-    t.vips[participantName] = Date.now();
-  }
-  window.FirestoreDB.saveTournament(t);
-  _reRenderParticipants();
+  if (!t || !window.FirestoreDB || typeof window.FirestoreDB._callFn !== 'function') return;
+  window.FirestoreDB._callFn('setTournamentParticipantVip', {
+    tournamentId: String(tId), participantName: String(participantName || ''), uid: String(uid || '')
+  }).then(function(res) {
+    const out = (res && res.data) || res || {};
+    if (!out.ok) throw new Error('vip-not-updated');
+    t.vips = out.vips || {};
+    _reRenderParticipants();
+  }).catch(function(e) {
+    if (typeof showNotification === 'function') showNotification('VIP', String((e && e.message) || e), 'error');
+  });
 };
 
 // ── Declarar ausência de participante ──

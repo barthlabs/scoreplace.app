@@ -10,8 +10,8 @@
  * pior que um erro: ninguém tenta de novo.
  *
  * ⇒ Ordem do dono, que é a arquitetura do projeto: _"tudo em CF apenas disparado pelo
- * cliente"_. O nível JOGO passa por `setMatchWhatsAppGroup`; o nível TORNEIO continua no
- * documento, porque `t.waGroup` nunca esteve dividido.
+ * cliente"_. O nível JOGO passa por `setMatchWhatsAppGroup`; o nível TORNEIO passa por
+ * `setTournamentWhatsAppGroup`. Os dois preservam o documento fresco no servidor.
  *
  * ESTA SUÍTE RODA O CÓDIGO REAL de js/views/wa-group.js no harness de render (mesmo
  * caminho de tests/wa-group-por-grupo.test.js) e mede COMPORTAMENTO: quem é chamado,
@@ -190,16 +190,19 @@ const UUID_V4_SERVIDOR = (function () {
     ok('⛔ apagar que falhou devolve o link', !!(jogo().waGroup && jogo().waGroup.link === LINK));
   }
 
-  // ═══ ⑤ O NÍVEL TORNEIO NÃO MUDOU ═════════════════════════════════════════
-  console.log('\n⑤ o grupo GERAL do torneio continua no documento');
+  // ═══ ⑤ O NÍVEL TORNEIO TAMBÉM PASSA PELA CF ═══════════════════════════════
+  console.log('\n⑤ o grupo GERAL do torneio também passa pela CF');
   {
     reset();
     W.AppStore.currentUser = { uid: 'uOrg', displayName: 'Olga', notifyWhatsApp: true };
     W._waGrpSaveLink('T1', '', 0, null);
-    ok('⭐ escopo TORNEIO segue pelo saveTournament (t.waGroup nunca foi dividido)',
-      saves === 1 && chamadas.length === 0, 'saves=' + saves + ' chamadas=' + chamadas.length);
+    ok('⭐ escopo TORNEIO chama sua porta específica',
+      saves === 0 && chamadas.length === 1 && chamadas[0].nome === 'setTournamentWhatsAppGroup', 'saves=' + saves + ' chamadas=' + JSON.stringify(chamadas));
+    ok('⛔ o payload leva a intenção estreita e um operationId válido',
+      chamadas[0].payload.tournamentId === 'T1' && chamadas[0].payload.action === 'set-link' && UUID_V4_SERVIDOR.test(String(chamadas[0].payload.operationId)));
+    pendente.res(respostaOk(LINK));
     await respira();
-    ok('  → e o link ficou no torneio, não no jogo', T.waGroup && T.waGroup.link === LINK && !jogo().waGroup);
+    ok('  → o retorno confirmado fica no torneio, não no jogo', T.waGroup && T.waGroup.link === LINK && !jogo().waGroup);
     W.AppStore.currentUser = { uid: 'uA', displayName: 'Ana', notifyWhatsApp: true };
   }
 

@@ -2938,6 +2938,47 @@ persistência no render. Claude aprovou o diff integral (Opus, esforço medium),
 
 **L7.P1.22 — metadados administrativos sem `saveTournament` (em validação local, 09/set/2026).** Logo do torneio, preferências de impressão e a configuração de categorias passam a comandos administrativos com payload limitado e transação server-side. A edição de atribuições individuais da análise permanece separada: ela altera simultaneamente a entrada do torneio e o perfil do usuário, portanto exige uma intenção própria e não será tratada como um save genérico.
 
+**L7.P1.23 — censo residual de writers de produção (09/set/2026; em execução).** O
+levantamento reabriu a conclusão prematura da P1.22. `saveTournament` ainda aparece em
+portas de produção que não podem sobreviver como exceção: disponibilidade do inscrito na
+Liga, enquete do torneio, grupo geral de WhatsApp, renomeação/VIP de inscrito, aplicação do
+formato 2 e encerramento de temporada disparado no render. Criação de torneio e propagação
+de nome/foto de perfil são portas separadas e também precisam ser eliminadas ou migradas,
+mas não devem ser confundidas com uma alteração administrativa do torneio.
+
+| Writer residual | Decisão da L7 | Critério de conclusão |
+|---|---|---|
+| disponibilidade da Liga | intenção `setLeagueAvailability` | Function relê a inscrição e move entre elenco/espera no estado fresco |
+| enquete e voto | intenção tipada `mutateOpinionPoll` | Function valida pergunta/opção no torneio fresco e grava voto ou configuração autorizada |
+| grupo geral de WhatsApp | intenção `setTournamentWhatsAppGroup` | Function grava/limpa apenas `waGroup`; o jogo continua em `setMatchWhatsAppGroup` |
+| nome e VIP de inscrito | intenções administrativas estreitas | Function localiza entrada por UID e preserva jogos, histórico e perfis vizinhos |
+| formato 2 | intenção `applyTournamentFormat` | Function recompila a configuração no documento fresco e limpa chave apenas quando autorizado |
+| fim de temporada | rotina server-side | nenhum render decide ou persiste `finished` |
+| criação e propagação de perfil | portas próprias ou remoção | nenhuma abertura de sessão regrava torneios para propagar perfil |
+
+O gate desta etapa não pode aceitar um wrapper genérico nem um snapshot do navegador. Cada
+payload declara somente a intenção e os parâmetros indispensáveis; a Function relê,
+autoriza por UID, aplica no estado fresco e devolve o torneio canônico. A L7 só será marcada
+como concluída após os sete itens terem porta server-side, remoção justificada ou teste de
+não-escrita correspondente.
+
+
+**L7.P1.24 — três writers residuais removidos (09/set/2026; em validação local).** O
+link geral do WhatsApp, antes salvo pela fotografia inteira do torneio, agora usa
+`setTournamentWhatsAppGroup`, com operação idempotente e recibo confirmado. A aplicação do
+Format 2 passou a `applyTournamentFormat`: a Function recompila somente `fmt2` no documento
+fresco, exige organização e recusa chave já sorteada. A marca VIP usa
+`setTournamentParticipantVip`, que valida o elenco hidratado e altera somente `vips`. Os
+gates `o-cliente-dispara-a-porta-do-grupo`, `l7-format2-page-cf-only` e
+`l7-vip-cf-only` impedem a volta de `saveTournament` nesses fluxos.
+
+**L7.P1.25 — abertura de sessão não propaga perfil por snapshot (09/set/2026; em validação
+local).** A propagação local de nome/foto regravava todos os torneios visíveis na aba. Nome
+já é responsabilidade do trigger `propagateDisplayName`, que localiza por UID e grava apenas
+os campos tocados dentro de transação; foto é resolvida diretamente do perfil. As cascas do
+cliente ficaram sem escrita para não quebrar chamadores antigos. O gate
+`l7-profile-propagation-server-only` exige essa fronteira.
+
 ## L8 — matriz de leitura e projeção (08/set/2026)
 
 `matches` permanece a fonte canônica. `results/{matchId}` é uma projeção server-written para

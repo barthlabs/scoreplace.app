@@ -22,10 +22,21 @@ W._nameForUid = function (u) { return W._profileNameByUid[u] || ''; };
 W.showConfirmDialog = function (title, msg, onYes) { if (typeof onYes === 'function') onYes(); };
 W.showNotification = function () {};
 let saved = 0;
+let vipCall = null;
 W.FirestoreDB = {
   saveTournament: function () {
     saved++;
     return { then: function (f) { if (f) f(); return { catch: function () { return null; } }; } };
+  },
+  // VIP é uma intenção enviada à Function; a tela recebe de volta o mapa canônico.
+  // O thenable síncrono preserva o ritmo deste harness, que testa a ação do card sem
+  // precisar de um loop assíncrono de navegador.
+  _callFn: function (name, payload) {
+    vipCall = { name: name, payload: payload };
+    return { then: function (f) {
+      if (f) f({ data: { ok: true, vips: (function () { var out = {}; out[String(payload.uid || payload.participantName)] = true; return out; })() } });
+      return { catch: function () { return null; } };
+    } };
   },
 };
 
@@ -103,6 +114,7 @@ console.log('\n── ações do card gravam na CHAVE-UID (W.O. · VIP · nível
 
   // VIP do solo
   W._toggleVip(t.id, '', 'uSolo');
+  ok(vipCall && vipCall.name === 'setTournamentParticipantVip' && vipCall.payload.uid === 'uSolo', 'VIP :: enviou somente a intenção uid à Function');
   ok(t.vips.uSolo != null, 'VIP :: gravou na chave-UID');
   ok(!Object.keys(t.vips).some((k) => k === '' || k === 'undefined'), 'VIP :: sem chave-nome órfã — got ' + JSON.stringify(Object.keys(t.vips)));
 

@@ -1284,18 +1284,20 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       '<button type="button" onclick="window._f2ApplyPage()" style="margin-top:16px;width:100%;padding:14px;border-radius:12px;border:none;background:linear-gradient(135deg,#10b981,#059669);color:#fff;font-size:0.95rem;font-weight:700;cursor:pointer;">Aplicar formato ao torneio</button></div>';
   };
   window._f2ApplyPage = function () {
-    var t = S.t;
-    // preserva a política de inscrição/novos confrontos JÁ escolhida no torneio (o painel da fase
-    // inicial vive no form de criar/editar, não nesta página) — senão 'inherit' cairia no default.
-    var out = window.FORMAT2.compileToPhases(S.cfg, { sport: S.sport, resultEntry: t.resultEntry || ['organizer'], lateEnrollment: t.lateEnrollment, newMatchups: t.newMatchups });
-    Object.assign(t, out.topLevel);
-    t.phases = out.phases; t.fmt2 = S.cfg;
-    if (t.format === 'Fase de Grupos') { t.ligaRoundFormat = 'standard'; t.ligaDrawMode = 'standard'; }
-    t.currentPhaseIndex = 0; t.currentStage = null;
-    t.matches = []; t.rounds = []; t.groups = []; t.standings = []; t.thirdPlaceMatch = null;
-    t.updatedAt = new Date().toISOString();
-    var done = function () { if (window.showNotification) showNotification('Formato aplicado', window.FORMAT2.summary(S.cfg), 'success'); location.hash = '#tournaments/' + S.tId; };
-    try { var p = (window.FirestoreDB && window.FirestoreDB.saveTournament) ? window.FirestoreDB.saveTournament(t) : null; if (p && p.then) p.then(done).catch(function (e) { if (window.showNotification) showNotification('Erro ao salvar', String((e && e.message) || e), 'error'); }); else done(); }
-    catch (e) { if (window.showNotification) showNotification('Erro ao salvar', String((e && e.message) || e), 'error'); }
+    if (!S || !S.tId || !S.cfg || typeof window._callCF !== 'function') {
+      if (window.showNotification) showNotification('Não foi possível aplicar', 'Entre na sua conta e tente novamente.', 'error');
+      return;
+    }
+    window._callCF('applyTournamentFormat', {
+      tournamentId: String(S.tId),
+      fmt2: S.cfg
+    }, 'Entre na sua conta para aplicar o formato.').then(function (res) {
+      var out = (res && res.data) || res || {};
+      if (!out.ok) throw new Error('format-not-applied');
+      if (window.showNotification) showNotification('Formato aplicado', out.summary || window.FORMAT2.summary(S.cfg), 'success');
+      location.hash = '#tournaments/' + S.tId;
+    }).catch(function (e) {
+      if (window.showNotification) showNotification('Erro ao salvar', String((e && e.message) || e), 'error');
+    });
   };
 })();

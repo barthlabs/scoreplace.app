@@ -19,6 +19,9 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    // ⚠️ 2.2.41 · os últimos writers residuais desta leva passam a chamar Functions:
+    // formato, preferência VIP e grupo geral de WhatsApp são confirmados no servidor,
+    // sem que uma aba antiga possa regravar um snapshot inteiro do torneio.
     // ⚠️ 2.2.39 · o prazo da rodada eliminatória agora é a janela definida pelo organizador:
     // o cartão usa início/fim dessa rodada (não o primeiro placar nem uma extrapolação), e o
     // ajuste lista todas as rodadas com nome, duração, data e hora de término editável.

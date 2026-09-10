@@ -3636,6 +3636,123 @@ exports.setMatchWhatsAppGroup = onCall(
   }
 );
 
+
+/* ═══ MARCA VIP · porta CF estreita ════════════════════════════════════════════
+ * VIP é metadado administrativo do torneio. A aba não pode gravar o mapa inteiro,
+ * porque uma cópia atrasada apagaria presença, resultado ou outra marcação. */
+exports.setTournamentParticipantVip = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
+    const data = request.data || {};
+    const tournamentId = String(data.tournamentId || "").trim();
+    const targetUid = String(data.uid || "").trim();
+    const participantName = String(data.participantName || "").trim().slice(0, 160);
+    if (!tournamentId || (!targetUid && !participantName)) {
+      throw new HttpsError("invalid-argument", "torneio e participante são obrigatórios");
+    }
+    const db = admin.firestore();
+    const hydrated = await _lerTorneioComElenco(db, tournamentId);
+    if (!hydrated) throw new HttpsError("not-found", "torneio não existe");
+    if (!_isTournamentOrgCaller(hydrated, callerUid)) {
+      throw new HttpsError("permission-denied", "só a organização marca VIP");
+    }
+    const roster = Array.isArray(hydrated.participants) ? hydrated.participants : [];
+    const target = roster.find((p) => {
+      if (typeof p === "string") return !targetUid && p.split(" /").map(x => x.trim()).indexOf(participantName) !== -1;
+      if (!p || typeof p !== "object") return false;
+      const ids = [p.uid, p.p1Uid, p.p2Uid].concat(Array.isArray(p.participants) ? p.participants.map(x => x && x.uid) : []).filter(Boolean).map(String);
+      const names = [p.displayName, p.name, p.p1Name, p.p2Name].concat(Array.isArray(p.participants) ? p.participants.map(x => x && (x.displayName || x.name)) : []).filter(Boolean).map(String);
+      return (targetUid && ids.indexOf(targetUid) !== -1) || (!targetUid && names.indexOf(participantName) !== -1);
+    });
+    if (!target) throw new HttpsError("failed-precondition", "participante não está inscrito");
+    const memberUids = typeof target === "object"
+      ? [target.uid, target.p1Uid, target.p2Uid].concat(Array.isArray(target.participants) ? target.participants.map(x => x && x.uid) : []).filter(Boolean).map(String)
+      : [];
+    const legacyKey = memberUids.length ? "" : participantName;
+    const ref = db.collection("tournaments").doc(tournamentId);
+    return db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
+      const fresh = snap.data() || {};
+      if (!_isTournamentOrgCaller(fresh, callerUid)) throw new HttpsError("permission-denied", "só a organização marca VIP");
+      const vips = Object.assign({}, fresh.vips || {});
+      const wasVip = memberUids.length ? memberUids.some(uid => !!vips[uid]) : !!vips[legacyKey];
+      if (wasVip) {
+        memberUids.forEach(uid => { delete vips[uid]; });
+        if (legacyKey) delete vips[legacyKey];
+      } else if (memberUids.length) {
+        memberUids.forEach(uid => { vips[uid] = Date.now(); });
+        if (participantName) delete vips[participantName];
+      } else {
+        vips[legacyKey] = Date.now();
+      }
+      tx.update(ref, { vips, updatedAt: new Date().toISOString() });
+      return { ok: true, isVip: !wasVip, vips };
+    });
+  }
+);
+
+/* ═══ GRUPO GERAL DO TORNEIO · porta CF estreita ════════════════════════════════
+ * O link geral mora no documento do torneio, mas ainda assim não pode ser salvo pela
+ * fotografia da aba: uma edição atrasada apagaria dados que chegaram em outra sessão.
+ * O cliente manda apenas link/null e operationId; autor, data e autorização pertencem
+ * ao servidor. O grupo de JOGO continua na porta acima porque pode morar em subcoleção.
+ */
+exports.setTournamentWhatsAppGroup = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
+    const pedido = request.data || {};
+    const tournamentId = String(pedido.tournamentId || "");
+    const operationId = String(pedido.operationId || "");
+    const stampNotification = pedido.action === "stamp-notification";
+    if (!tournamentId) throw new HttpsError("invalid-argument", "tournamentId é obrigatório");
+    if (!_WA_UUID_V4_RE.test(operationId)) throw new HttpsError("invalid-argument", "operationId tem que ser um UUID v4");
+    const apagar = !stampNotification && (pedido.link === null || pedido.link === undefined || String(pedido.link) === "");
+    const link = apagar ? null : _waNormalizaLink(pedido.link);
+    if (!stampNotification && !apagar && !link) throw new HttpsError("invalid-argument", "link inválido — só https://chat.whatsapp.com/<código>");
+
+    const db = admin.firestore();
+    let byName = String((request.auth.token && request.auth.token.name) || "");
+    try {
+      const user = await db.collection("users").doc(callerUid).get();
+      if (user.exists) byName = String((user.data() || {}).displayName || byName || "");
+    } catch (_e) { /* nome é só apresentação */ }
+    const agora = Date.now();
+    const ref = db.collection("tournaments").doc(tournamentId);
+    return db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
+      const t = snap.data() || {};
+      if (!_isTournamentOrgCaller(t, callerUid)) throw new HttpsError("permission-denied", "só a organização altera o grupo geral");
+      const atual = t.waGroup || null;
+      if (stampNotification) {
+        if (!atual || !atual.link) throw new HttpsError("failed-precondition", "grupo geral não existe");
+        if (atual.lastNotificationOpId === operationId) return { ok: true, jaAplicado: true, waGroup: atual };
+        const notifyLog = Array.isArray(atual.notifyLog) ? atual.notifyLog.slice(0, 19) : [];
+        notifyLog.unshift({ at: agora, byUid: callerUid, byName: byName });
+        const valorNotificado = Object.assign({}, atual, {
+          notifiedAt: agora,
+          notifyCount: (Number(atual.notifyCount) || 0) + 1,
+          notifyLog: notifyLog,
+          lastNotificationOpId: operationId
+        });
+        tx.update(ref, { waGroup: valorNotificado, updatedAt: new Date(agora).toISOString() });
+        return { ok: true, jaAplicado: false, waGroup: valorNotificado };
+      }
+      if (atual && atual.opId === operationId) return { ok: true, jaAplicado: true, waGroup: atual };
+      if (apagar && !atual) return { ok: true, jaAplicado: true, waGroup: null };
+      const valor = apagar ? null : { link: link, byUid: callerUid, byName: byName, at: agora, opId: operationId };
+      const FieldValue = admin.firestore.FieldValue;
+      tx.update(ref, { waGroup: valor === null ? FieldValue.delete() : valor, updatedAt: new Date(agora).toISOString() });
+      return { ok: true, jaAplicado: false, waGroup: valor };
+    });
+  }
+);
+
 /* ═══ PROPOR DATAS · a porta do AGENDAMENTO por jogo ═══════════════════════════════════
  * Gêmea de `setMatchWhatsAppGroup`, pelo MESMO buraco (medido no Confra em 03/set/2026):
  * `schedule-poll.js` gravava `m.schedule`/`scheduledAt` em memória e persistia com

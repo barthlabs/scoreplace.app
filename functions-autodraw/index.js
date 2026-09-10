@@ -1576,6 +1576,61 @@ exports.setTournamentFlyerPrefs = onCall(async (request) => {
 
 exports.setDefaultTournamentScoring = onCall(async request=>{ const uid=request.auth&&request.auth.uid; if(!uid) throw new HttpsError('unauthenticated','Entre na sua conta.'); const tId=String((request.data&&request.data.tournamentId)||''); const scoring=request.data&&request.data.scoring; if(!tId||!scoring||scoring.type!=='sets') throw new HttpsError('invalid-argument','Formato inválido.'); const ref=db.collection('tournaments').doc(tId),agoraIso=new Date().toISOString(); return db.runTransaction(async tx=>{ const t=await _leTorneio(tx,ref,tId); if(!t) throw new HttpsError('not-found','Torneio não encontrado.'); if(!_isTournamentAdmin(t,uid)) throw _drawFail('permission-denied','Só a organização configura o formato.',{tId,uid}); if(t.scoring&&t.scoring.type==='sets') return {ok:true,changed:false}; const antes=_antesDoMotor(t); t.scoring=Object.assign({},scoring); const b=_gravaTorneio(tx,ref,t,antes,{agoraIso}); return {ok:true,changed:true,tournament:b.clean}; }); });
 
+
+// Configurador Format 2: o cliente envia apenas a configuração declarada; a CF
+// recompila contra o documento fresco e é a única autoridade que reabre a chave.
+exports.applyTournamentFormat = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid;
+  const data = request.data || {};
+  const tId = String(data.tournamentId || '').trim();
+  const fmt2 = data.fmt2;
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId || !fmt2 || typeof fmt2 !== 'object' || Array.isArray(fmt2)) {
+    throw new HttpsError('invalid-argument', 'Configuração de formato inválida.');
+  }
+  if (!drawWindow || !drawWindow.FORMAT2 || typeof drawWindow.FORMAT2.compileToPhases !== 'function') {
+    throw new HttpsError('failed-precondition', 'Compilador de formato indisponível.');
+  }
+  const ref = db.collection('tournaments').doc(tId);
+  const agoraIso = new Date().toISOString();
+  return db.runTransaction(async tx => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    if (!_isTournamentAdmin(t, uid)) {
+      throw _drawFail('permission-denied', 'Só a organização configura o formato.', { tId, uid });
+    }
+    if (hasDrawnBracket(t)) throw _drawFail('failed-precondition', 'already-drawn', { tId });
+    let out;
+    try {
+      out = drawWindow.FORMAT2.compileToPhases(fmt2, {
+        sport: t.sport,
+        resultEntry: t.resultEntry || ['organizer'],
+        lateEnrollment: t.lateEnrollment,
+        newMatchups: t.newMatchups
+      });
+    } catch (e) {
+      throw new HttpsError('invalid-argument', 'Não foi possível compilar o formato: ' + String((e && e.message) || e).slice(0, 180));
+    }
+    const antes = _antesDoMotor(t);
+    Object.assign(t, out.topLevel);
+    t.phases = out.phases;
+    t.fmt2 = out.cfg;
+    if (t.format === 'Fase de Grupos') {
+      t.ligaRoundFormat = 'standard';
+      t.ligaDrawMode = 'standard';
+    }
+    t.currentPhaseIndex = 0;
+    t.currentStage = null;
+    t.matches = [];
+    t.rounds = [];
+    t.groups = [];
+    t.standings = [];
+    t.thirdPlaceMatch = null;
+    const b = _gravaTorneio(tx, ref, t, antes, { agoraIso });
+    return { ok: true, changed: true, summary: drawWindow.FORMAT2.summary(out.cfg), tournament: b.clean };
+  });
+});
+
 exports.advanceTournamentPhase = onCall(async (request) => {
   const uid = request.auth && request.auth.uid;
   const tId = String((request.data && request.data.tournamentId) || '').trim();

@@ -195,8 +195,9 @@ Object.defineProperty(admin, 'initializeApp', { value: function () { return {}; 
 Object.defineProperty(admin, 'firestore', { value: fsStub, writable: true, configurable: true });
 if (admin.firestore !== fsStub) { console.error('  ✗ o dublê do admin.firestore não pegou — abortando'); process.exit(1); }
 const CF = require(path.join(ROOT, 'functions', 'index.js'));
-if (typeof CF.setMatchWhatsAppGroup !== 'function' || typeof CF.setMatchWhatsAppGroup.run !== 'function') {
-  console.error('  ✗ setMatchWhatsAppGroup não existe (ou não é onCall) — abortando');
+if (typeof CF.setMatchWhatsAppGroup !== 'function' || typeof CF.setMatchWhatsAppGroup.run !== 'function' ||
+    typeof CF.setTournamentWhatsAppGroup !== 'function' || typeof CF.setTournamentWhatsAppGroup.run !== 'function') {
+  console.error('  ✗ porta de grupo WhatsApp não existe (ou não é onCall) — abortando');
   process.exit(1);
 }
 
@@ -205,6 +206,14 @@ const LINK = (s) => 'https://chat.whatsapp.com/AbCdEf' + s;
 
 function chamar(uid, data, nome) {
   return CF.setMatchWhatsAppGroup.run({
+    data: data,
+    auth: { uid: uid, token: { name: nome || '', uid: uid } },
+    rawRequest: { headers: {} },
+    acceptsStreaming: false,
+  });
+}
+function chamarTorneio(uid, data, nome) {
+  return CF.setTournamentWhatsAppGroup.run({
     data: data,
     auth: { uid: uid, token: { name: nome || '', uid: uid } },
     rawRequest: { headers: {} },
@@ -590,6 +599,22 @@ const jogoDoDoc = (b, id) => (b.doc.rounds[0].matches || []).find((m) => m && m.
     const dA = clone(docAntes), dD = clone(BANCO.doc);
     delete dA.updatedAt; delete dD.updatedAt;
     ok('⛔ e no DOCUMENTO só o `updatedAt` andou', JSON.stringify(dA) === JSON.stringify(dD));
+  }
+
+  // ═══ ⑨ GRUPO GERAL: documento fresco, operação estreita ════════════════════
+  console.log('\n⑨ grupo geral: a Function preserva o torneio e autoriza a organização');
+  {
+    BANCO = bancoInteiro();
+    BANCO.doc.scoreAudit = [{ id: 'recibo-que-nao-pode-sumir' }];
+    const r = await chamarTorneio('uOrg', { tournamentId: 'T1', link: LINK('T'), operationId: UUID(5) }, 'Olga');
+    ok('⭐ organização grava o link confirmado no documento fresco', r.waGroup && r.waGroup.link === LINK('T') && BANCO.doc.waGroup.byUid === 'uOrg');
+    ok('⛔ e preserva os campos vizinhos do torneio', BANCO.doc.scoreAudit && BANCO.doc.scoreAudit[0].id === 'recibo-que-nao-pode-sumir');
+    const repetido = await chamarTorneio('uOrg', { tournamentId: 'T1', link: LINK('T'), operationId: UUID(5) }, 'Olga');
+    ok('⭐ retry com o mesmo operationId é idempotente', repetido.jaAplicado === true && BANCO.doc.waGroup.opId === UUID(5));
+    const negado = await erroDe(chamarTorneio('uA', { tournamentId: 'T1', link: LINK('Z'), operationId: UUID(6) }, 'Ana'));
+    ok('⛔ participante não altera o grupo geral', !!negado && /permission-denied/.test(String(negado.code || negado.message)) && BANCO.doc.waGroup.link === LINK('T'));
+    const apagado = await chamarTorneio('uOrg', { tournamentId: 'T1', link: null, operationId: UUID(7) }, 'Olga');
+    ok('⭐ apagar também é uma intenção explícita', apagado.waGroup === null && !BANCO.doc.waGroup);
   }
 
   console.log('\n' + (falhas === 0 ? '✅ link-do-grupo-do-jogo-persiste: ' + passou + ' ok' : '❌ ' + falhas + ' falha(s) em ' + (passou + falhas)));

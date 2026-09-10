@@ -60,14 +60,6 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (typeof window._findTournamentById === 'function') return window._findTournamentById(tId);
     return window.AppStore && (window.AppStore.tournaments || []).find(function (x) { return String(x.id) === String(tId); });
   }
-  // Promise do save — NUNCA engolir rejeição (classe do bug Confra; mesma regra
-  // do _save do schedule-poll.js).
-  function _save(t) {
-    try {
-      if (window.FirestoreDB && window.FirestoreDB.saveTournament) return Promise.resolve(window.FirestoreDB.saveTournament(t));
-    } catch (e) { return Promise.reject(e); }
-    return Promise.reject(new Error('FirestoreDB indisponível'));
-  }
   function _notify(a, b, k) { if (typeof showNotification === 'function') showNotification(a, b || '', k || 'info'); }
 
   /* ══ O LINK DO JOGO É GRAVADO PELA CF, NÃO PELO `saveTournament` ══════════════
@@ -146,6 +138,19 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       return Promise.resolve(DB._callFn('setMatchWhatsAppGroup', {
         tournamentId: tId, matchId: mId, link: link, operationId: _opIdPara(tId, mId)
       })).then(function (r) { _opQueimar(tId, mId); return r || {}; });
+    } catch (e) { return Promise.reject(e); }
+  }
+  // Mesmo contrato do jogo, mas sem matchId: o grupo geral pertence ao documento do
+  // torneio. A tela só despacha a intenção; o servidor define autor/data e preserva
+  // toda mudança concorrente no documento fresco.
+  function _persistTorneio(ctx, link, action) {
+    var tId = String(ctx.t.id);
+    var DB = window.FirestoreDB;
+    if (!DB || typeof DB._callFn !== 'function') return Promise.reject(new Error('FirestoreDB indisponível'));
+    try {
+      return Promise.resolve(DB._callFn('setTournamentWhatsAppGroup', {
+        tournamentId: tId, link: link, action: action || 'set-link', operationId: _opIdPara(tId, '')
+      })).then(function (r) { _opQueimar(tId, ''); return r || {}; });
     } catch (e) { return Promise.reject(e); }
   }
   // Aplica no objeto EM MEMÓRIA o que o servidor confirmou. O ouvinte do Firestore traz o
@@ -733,12 +738,12 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     ctx.target.waGroup = { link: link, byUid: cu.uid, byName: (cu.displayName || cu.name || ''), at: Date.now() };
     if (ctx.groupMode) _mirror(ctx);
 
-    /* O JOGO vai pela CF (a subcoleção é dela); o TORNEIO segue no documento. O `waGroup`
-     * acima é pintura otimista — quem manda é o retorno, aplicado em `_aplicarConfirmado`. */
-    var _grava = (ctx.scope === 'match') ? _persistJogo(ctx, link) : _save(ctx.t);
+    // Os dois escopos passam por CF. `waGroup` acima é apenas pintura otimista;
+    // quem manda é a resposta confirmada pelo servidor.
+    var _grava = (ctx.scope === 'match') ? _persistJogo(ctx, link) : _persistTorneio(ctx, link);
 
     _grava.then(function (resp) {
-      if (ctx.scope === 'match') _aplicarConfirmado(ctx, resp);
+      _aplicarConfirmado(ctx, resp);
       window._waGrpClose();
       _notify('Grupo salvo', ctx.scope === 'tournament'
         ? 'Os inscritos já veem "Entrar no grupo".' : 'Os outros jogadores já veem "Abrir grupo".', 'success');
@@ -791,11 +796,11 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     delete ctx.target.waGroup;
     if (ctx.groupMode) _mirror(ctx);
 
-    // Apagar é a MESMA porta com `link: null` — um só caminho de escrita pro jogo.
-    var _apaga = (ctx.scope === 'match') ? _persistJogo(ctx, null) : _save(ctx.t);
+    // Apagar usa a mesma porta CF com `link: null` nos dois escopos.
+    var _apaga = (ctx.scope === 'match') ? _persistJogo(ctx, null) : _persistTorneio(ctx, null);
 
     _apaga.then(function (resp) {
-      if (ctx.scope === 'match') _aplicarConfirmado(ctx, resp);
+      _aplicarConfirmado(ctx, resp);
       window._waGrpClose();
       _notify('Link apagado', 'Voltou ao estado de antes do grupo.', 'success');
       if (typeof window._rerenderBracket === 'function' && ctx.scope === 'match') window._rerenderBracket(ctx.t.id);
@@ -840,7 +845,12 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       delete wg.notifyLog;
     }
     if (ctx.groupMode) _mirror(ctx);
-    try { _save(ctx.t).catch(function () {}); } catch (e) {}
+    // O carimbo também é estado do grupo geral: não pode voltar ao save do
+    // documento inteiro. Ele reaproveita a porta, que autoriza e confirma o valor
+    // fresco (a notificação em si segue no fluxo existente).
+    if (ctx.scope === 'tournament') {
+      _persistTorneio(ctx, wg.link, 'stamp-notification').then(function (resp) { _aplicarConfirmado(ctx, resp); }).catch(function () {});
+    }
   }
 
   function _notifyOthers(ctx) {
