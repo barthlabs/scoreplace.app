@@ -25,7 +25,7 @@ assert(!serverBranch.includes('AppStore.mutate('), 'presença que pode substitui
 
 const choiceSource = fs.readFileSync('js/views/wo-claim.js', 'utf8');
 const claimDeclareBegin = choiceSource.indexOf('window._woDeclare = function');
-const claimDeclareEnd = choiceSource.indexOf('// Stage 2:', claimDeclareBegin);
+const claimDeclareEnd = choiceSource.indexOf('// As transições do consenso', claimDeclareBegin);
 assert(claimDeclareBegin >= 0 && claimDeclareEnd > claimDeclareBegin, 'recorte do apontamento participativo existe');
 const claimDeclare = choiceSource.slice(claimDeclareBegin, claimDeclareEnd);
 assert(claimDeclare.includes('_claimServer('), 'apontamento participativo despacha o consenso à CF');

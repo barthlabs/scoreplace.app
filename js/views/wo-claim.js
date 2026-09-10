@@ -49,7 +49,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     return window.AppStore && (window.AppStore.tournaments || []).find(function (x) { return String(x.id) === String(tId); });
   }
   // (o _save doc-inteiro foi removido na v4.0.116 — wo-claim persiste TUDO pelo
-  //  portão AppStore.mutate/commitTournamentTx, ver _commit abaixo.)
+  //  Function transacional: a tela só envia intenção e repinta a resposta.)
   function _isOrg(t) { return !!(window.AppStore && ((window.AppStore.isOrganizer && window.AppStore.isOrganizer(t)) || (window.AppStore.isCreator && window.AppStore.isCreator(t)))); }
   function _canManage(t) {
     if (_isOrg(t)) return true;
@@ -525,44 +525,6 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     return { type: 'wo-claim', tournamentId: String(t.id), tournamentName: t.name || '', title: title, message: message, level: 'fundamental', timestamp: Date.now() };
   }
 
-  // ─── save BLINDADO pelo portão AppStore.mutate (Fase-B da blindagem) ───────────
-  // Substitui o _persist antigo (saveTournament doc-inteiro = lost-update numa
-  // corrida). `mutatorFn(ft)` expressa a MUDANÇA e é re-executada sobre o doc
-  // FRESCO da transação (retorne false pra abortar/idempotência). onDone roda no
-  // fim (notify/overlay/toast) com o `ok` do save. NÃO pôr efeito interativo
-  // (ex.: _ligaPickFill, que abre diálogo) DENTRO do mutator — ele roda 2× (local
-  // + fresco); esses vão no onDone.
-  function _commit(tId, mutatorFn, onDone, loadingMsg) {
-    if (!window.AppStore || typeof window.AppStore.mutate !== 'function') {
-      if (typeof showNotification === 'function') showNotification('⚠️ Não salvou', 'Portão de escrita indisponível.', 'error');
-      return Promise.resolve(false);
-    }
-    // Feedback IMEDIATO (feedback_global_loading_always) + trava anti-duplo-toque:
-    // a transação do portão demora e sem loader o usuário tocava 2×. Trava os botões
-    // do overlay e mostra o loader rico até o save terminar.
-    var _lockBtns = function (on) {
-      try {
-        var _ov = document.getElementById('wo-overlay');
-        if (_ov) _ov.querySelectorAll('button').forEach(function (b) {
-          b.disabled = on; b.style.opacity = on ? '0.55' : ''; b.style.pointerEvents = on ? 'none' : '';
-        });
-      } catch (e) {}
-    };
-    _lockBtns(true);
-    if (typeof window._showLoading === 'function') window._showLoading(loadingMsg || 'Processando…');
-    return window.AppStore.mutate(String(tId), mutatorFn).then(function (okSave) {
-      if (typeof window._hideLoading === 'function') window._hideLoading();
-      if (typeof onDone === 'function') { try { onDone(okSave); } catch (e) {} }
-      if (typeof window._rerenderBracket === 'function') { try { window._rerenderBracket(String(tId)); } catch (e) {} }
-      else if (typeof window._softRefreshView === 'function') window._softRefreshView();
-      return okSave;
-    }, function (err) {
-      if (typeof window._hideLoading === 'function') window._hideLoading();
-      _lockBtns(false);
-      if (typeof showNotification === 'function') showNotification('⚠️ Não salvou', (err && err.message) || 'Tente de novo.', 'error');
-      return false;
-    });
-  }
   // O apontamento inicial é uma intenção. A Function reconstrói o contexto a
   // partir do documento fresco e decide se só registra o claim ou se já aplica
   // o auto-W.O.; aqui ficam apenas loader e render.
@@ -702,186 +664,35 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     }, 'Registrando o apontamento…');
   };
 
-  // Stage 2: um PARTICIPANTE confirmou a falta → NÃO decide o jogo. Entra em
-  // 'awaiting-proposal': o parceiro que ficou (_pUid) propõe o desfecho, o adversário
-  // (_oppUids) aceita/rejeita. A ausência só é marcada quando o desfecho é aplicado.
-  function _woEnterNegotiation(tId, claimId, confirmerUid, nctx) {
-    var t = _findT(tId); if (!t) return;
-    var c = _claimById(t, claimId); if (!c) return;
-    var data = _notifData(t, '🤝 Proponha o desfecho', 'A falta de "' + c.absentName + '" foi confirmada em "' + (t.name || '') + '". Escolha como o seu jogo continua — o adversário confirma.');
-    _commit(tId, function (ft) {
-      var c2 = _claimById(ft, claimId); if (!c2 || c2.status !== 'pending' || c2.outcomeStage) return false; // idempotente
-      c2.confirms = c2.confirms || {}; if (confirmerUid) c2.confirms[confirmerUid] = true;
-      c2.factConfirmed = true;
-      c2.outcomeStage = 'awaiting-proposal';
-      c2.outcomePartnerUid = nctx.partnerUid;
-      c2.outcomeOppUids = nctx.oppUids || [];
-    }, function () {
-      _notify(t, [nctx.partnerUid], data);
-      window._woOpenClaim(tId, _ctxKey(_ctxFromClaim(c)));
-    }, 'Confirmando a falta…');
+  // As transições do consenso também passam pela mesma Function. O cliente usa
+  // somente o claim já exibido para orientar a interface; estado e placar vêm da resposta.
+  function _claimAction(tId, claimId, action, choice, onDone, loading) {
+    return _claimServer(tId, { action: action, claimId: String(claimId), choice: String(choice || '') }, onDone, loading);
+  }
+  function _refreshClaim(tId, claimId, saved) {
+    var t = _findT(tId); var c = t && _claimById(t, claimId);
+    if (saved && saved.needsOutcomeChoice && typeof window._woOutcomeOverlay === 'function') {
+      window._woCloseOverlay(); window._woOutcomeOverlay(String(tId), String(claimId), saved.outcome || {}); return;
+    }
+    if (saved && saved.requiresGroupReplacement && typeof window._ligaPickFill === 'function' && c) {
+      window._woCloseOverlay(); window._ligaPickFill(String(tId), c.roundIndex, c.groupName, c.absentName); return;
+    }
+    if (typeof window._woOpenClaim === 'function' && c) window._woOpenClaim(String(tId), _ctxKey(_ctxFromClaim(c)));
   }
 
   window._woConfirm = function (tId, claimId) {
-    var t = _findT(tId); if (!t) return;
-    var c = _claimById(t, claimId); if (!c || c.status !== 'pending') return;
-    var ctx = _ctxFromClaim(c); var rc = _resolveCtx(t, ctx); if (!rc) return;
-    var cu = _cu(); if (!cu || !cu.uid) return;
-    var canConfirm = _confirmerUids(t, rc, c).indexOf(cu.uid) !== -1 || _isOrg(t);
-    if (!canConfirm) { if (typeof showNotification === 'function') showNotification('Sem permissão', 'Só o outro lado (ou o organizador) confirma.', 'warning'); return; }
-    // Stage 2 (project_wo_outcome_negotiation_canon): confirmar a FALTA não decide mais o
-    // jogo sozinho em W.O. INDIVIDUAL de dupla — o desfecho é negociado. Só quando quem
-    // confirma é um PARTICIPANTE; o organizador confirmando cai direto no fluxo de
-    // resolução dele (Stage 1: overlay das opções). Sem negociação (time / 1×1 / Liga /
-    // adversário TBD) = aplica direto na confirmação, como antes.
-    var nctx = _outcomeCtx(t, c);
-    var iAmPlayer = _allCtxUids(t, rc).indexOf(cu.uid) !== -1;
-    if (nctx && iAmPlayer) { _woEnterNegotiation(tId, claimId, cu.uid, nctx); return; }
-    if (nctx && _isOrg(t)) { _applyClaimViaGate(tId, claimId, cu.uid, true); return; }
-    _applyClaimViaGate(tId, claimId, cu.uid, false);
+    _claimAction(tId, claimId, 'confirm', '', function (saved) { _refreshClaim(tId, claimId, saved); }, 'Confirmando a falta…');
   };
-
   window._woContest = function (tId, claimId) {
-    var t = _findT(tId); if (!t) return;
-    var c = _claimById(t, claimId); if (!c || c.status !== 'pending') return;
-    var ctx = _ctxFromClaim(c); var rc = _resolveCtx(t, ctx); if (!rc) return;
-    var cu = _cu(); if (!cu || !cu.uid) return;
-    var canConfirm = _confirmerUids(t, rc, c).indexOf(cu.uid) !== -1 || _isOrg(t);
-    if (!canConfirm) return;
-    var data = _notifData(t, '⚠️ W.O. contestado', 'A falta de "' + c.absentName + '" em "' + (t.name || '') + '" foi contestada. Você decide.');
-    _commit(tId, function (ft) {
-      var c2 = _claimById(ft, claimId); if (!c2 || c2.status !== 'pending') return false;
-      c2.status = 'disputed'; c2.disputedByUid = cu.uid;
-    }, function () {
-      // Escala a disputa pro organizador + co-organizadores ativos — MESMO helper do
-      // placar (_contestResult → _notifyOrgAndCoHosts). Antes só t.creatorUid era
-      // avisado, então co-host de torneio nunca sabia de um W.O. contestado. (portado de v4.4.121)
-      if (typeof window._notifyOrgAndCoHosts === 'function') window._notifyOrgAndCoHosts(t, data);
-      else _notify(t, t.creatorUid ? [t.creatorUid] : [], data);
-      window._woOpenClaim(tId, _ctxKey(ctx));
-    }, 'Registrando a contestação…');
+    _claimAction(tId, claimId, 'contest', '', function (saved) { _refreshClaim(tId, claimId, saved); }, 'Registrando a contestação…');
   };
-
-  // Envolvidos num claim (jogadores do contexto + ausente + organizador), menos o
-  // próprio ator — pro REVERTER avisar todo mundo que o apontamento caiu.
-  function _claimAudience(t, c, actorUid) {
-    var rc = _resolveCtx(t, _ctxFromClaim(c));
-    var uids = (rc ? _allCtxUids(t, rc) : []).concat(c.absentUids || []);
-    if (t.creatorUid) uids.push(t.creatorUid);
-    var seen = {};
-    return uids.filter(function (u) { if (!u || u === actorUid || seen[u]) return false; seen[u] = 1; return true; });
-  }
-  function _revertClaim(tId, claimId) {
-    var t = _findT(tId); if (!t) return;
-    var c = _claimById(t, claimId); if (!c) return;
-    var cu = _cu() || {};
-    var aud = _claimAudience(t, c, cu.uid);
-    var data = _notifData(t, '↩️ Apontamento de W.O. revertido',
-      'O apontamento de falta de "' + c.absentName + '" em "' + (t.name || '') + '" foi revertido por ' + (cu.displayName || 'alguém') + '. Nada mudou na chave.');
-    _commit(tId, function (ft) {
-      var c2 = _claimById(ft, claimId); if (!c2 || c2.status === 'cancelled') return false;
-      c2.status = 'cancelled'; c2.resolvedAt = new Date().toISOString();
-    }, function (okSave) {
-      if (okSave) {
-        _notify(t, aud, data);
-        if (typeof showNotification === 'function') showNotification('↩️ Apontamento revertido', 'Todos os envolvidos foram avisados.', 'success');
-      }
-      window._woCloseOverlay();
-    }, 'Revertendo o apontamento…');
-  }
-
   window._woCancel = function (tId, claimId) {
-    var t = _findT(tId); if (!t) return;
-    var c = _claimById(t, claimId); if (!c) return;
-    var cu = _cu(); if (!cu) return;
-    if (cu.uid !== c.byUid && !_canManage(t)) return;
-    _revertClaim(tId, claimId);
+    _claimAction(tId, claimId, 'cancel', '', function () { window._woCloseOverlay(); }, 'Revertendo o apontamento…');
   };
-
   window._woResolveApply = function (tId, claimId) {
-    var t = _findT(tId); if (!t || !_isOrg(t)) return;
-    var c = _claimById(t, claimId); if (!c || (c.status !== 'pending' && c.status !== 'disputed')) return;
-    var ctx = _ctxFromClaim(c); var rc = _resolveCtx(t, ctx); if (!rc) return;
-    _applyClaimViaGate(tId, claimId, null, true);
+    _claimAction(tId, claimId, 'resolve', '', function (saved) { _refreshClaim(tId, claimId, saved); }, 'Aplicando o W.O.…');
   };
-
-  window._woResolveDiscard = function (tId, claimId) {
-    var t = _findT(tId); if (!t || !_isOrg(t)) return;
-    _revertClaim(tId, claimId);
-  };
-
-  // Aplica o W.O. de um claim ATOMICAMENTE pelo portão. `confirmerUid` (ou null p/
-  // resolução do org) marca confirms. `orgResolve` aceita claim pending OU disputed.
-  // Liga/Rei-Rainha (escopo grupo) é INTERATIVO (_ligaPickFill abre diálogo): a
-  // marcação do claim vai pelo portão e o picker abre no onDone (1× só, fora da txn).
-  function _applyClaimViaGate(tId, claimId, confirmerUid, orgResolve) {
-    var t = _findT(tId); if (!t) return;
-    var c = _claimById(t, claimId); if (!c) return;
-    var ligaGroup = _isLigaGroup(t, c);
-    var applied; // resultado da exec LOCAL (síncrona) do mutator, pra UI
-    _commit(tId, function (ft) {
-      var c2 = _claimById(ft, claimId); if (!c2) return false;
-      if (orgResolve) { if (c2.status !== 'pending' && c2.status !== 'disputed') return false; }
-      else if (c2.status !== 'pending') return false; // idempotência (já resolvido)
-      var _prevStatus = c2.status;
-      if (confirmerUid) { c2.confirms = c2.confirms || {}; c2.confirms[confirmerUid] = true; }
-      c2.status = 'applied'; c2.resolvedAt = new Date().toISOString();
-      if (ligaGroup) return; // aplicação real via _ligaPickFill (interativo, no onDone)
-      var rc2 = _resolveCtx(ft, _ctxFromClaim(c2)); if (!rc2) { if (applied === undefined) applied = { ok: false, reason: 'contexto perdido' }; return false; }
-      var ap = _applyClaim(ft, c2, rc2, orgResolve ? { offerOutcomeChoice: true } : {});
-      if (applied === undefined) applied = ap;
-      if (ap.ok && ap.needsOutcomeChoice) {
-        // Stage 1 (project_wo_outcome_negotiation_canon): desfecho a escolher — NÃO
-        // persiste (nem 'applied' nem ausência). O organizador escolhe no overlay (abre
-        // no onDone) e a escolha re-aplica de verdade. Aborta a txn mantendo o claim.
-        c2.status = _prevStatus; c2.resolvedAt = null;
-        if (confirmerUid) { try { delete c2.confirms[confirmerUid]; } catch (e) {} }
-        return false;
-      }
-      if (!ap.ok) { c2.status = orgResolve ? c2.status : 'pending'; if (confirmerUid) { try { delete c2.confirms[confirmerUid]; } catch (e) {} } return false; }
-    }, function () {
-      if (ligaGroup) {
-        // ⚠️ AVISA O GRUPO INTEIRO no momento do W.O. — antes só o ausente era notificado
-        // aqui, e o resto do grupo só descobria SE e QUANDO a substituição fosse concluída
-        // (era o único ponto que chamava o notificador). Ordem do dono (13/ago): "ao dar o
-        // W.O., todos os que estão no grupo e o que entrou no lugar devem receber
-        // notificação automaticamente". Reusa o notificador ÚNICO do ciclo, com subName
-        // vazio = "a vaga está aberta"; quando o suplente entrar, ele dispara de novo com
-        // o nome. Best-effort: notificação nunca derruba o W.O. que já foi aplicado.
-        try {
-          if (typeof window._ligaNotifyWoCycle === 'function') {
-            var _gAf = null;
-            try { _gAf = (t.rounds && t.rounds[c.roundIndex] && (t.rounds[c.roundIndex].monarchGroups || [])
-              .filter(function (g) { return g && g.name === c.groupName; })[0]) || null; } catch (e2) {}
-            window._ligaNotifyWoCycle(t, _gAf, c.absentName, '', false);
-          } else {
-            _notify(t, c.absentUids, _notifData(t, '🚫 W.O. registrado', 'Você foi marcado como ausente em "' + (t.name || '') + '".'));
-          }
-        } catch (e3) {
-          _notify(t, c.absentUids, _notifData(t, '🚫 W.O. registrado', 'Você foi marcado como ausente em "' + (t.name || '') + '".'));
-        }
-        window._woCloseOverlay();
-        if (typeof window._ligaPickFill === 'function') window._ligaPickFill(String(t.id), c.roundIndex, c.groupName, c.absentName);
-        return;
-      }
-      if (applied && applied.needsOutcomeChoice) {
-        // Stage 1: eliminatória individual — o organizador escolhe o desfecho.
-        window._woCloseOverlay();
-        if (typeof window._woOutcomeOverlay === 'function') window._woOutcomeOverlay(String(t.id), claimId, applied);
-        return;
-      }
-      if (applied && applied.ok) {
-        _notify(t, c.absentUids, _notifData(t, '🚫 W.O. registrado', 'Você foi marcado como ausente em "' + (t.name || '') + '". ' + (applied.note || '')));
-        window._woCloseOverlay();
-        // Nenhum suplente presente atende a categoria → o organizador escolhe (dialog).
-        if (applied.needsSubChoice && _canManage(t)) { window._woShowSubChoiceDialog(String(t.id)); return; }
-        if (applied.needsSubChoice) { if (typeof showNotification === 'function') showNotification('⏳ Aguardando o organizador', 'Nenhum suplente presente atende a categoria — o organizador vai definir.', 'info'); return; }
-        if (typeof showNotification === 'function') showNotification('✅ W.O. aplicado', applied.note || '', 'success');
-      } else if (applied) {
-        if (typeof showNotification === 'function') showNotification('Não aplicou', applied.reason || (orgResolve ? '' : 'Tente pelo painel do organizador.'), 'warning');
-      }
-    }, 'Aplicando o W.O.…');
-  }
+  window._woResolveDiscard = function (tId, claimId) { window._woCancel(tId, claimId); };
 
   // ─── ESCOLHA DE SUPLENTE quando NENHUM presente atende a categoria ─────────────
   // Só o organizador. Lê t.woSubChoices (marcado pelo motor quando o único suplente
@@ -1031,84 +842,19 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     _overlay(_header(mode === 'propose' ? 'Proponha o desfecho' : 'Como resolver o W.O.?') + body);
   };
 
-  // núcleo compartilhado: aplica o desfecho escolhido (organizador OU adversário que
-  // aceitou a proposta) atomicamente pelo portão. Sem gate próprio — cada chamador valida.
-  function _applyOutcome(tId, claimId, choice) {
-    var t = _findT(tId); if (!t) return;
-    var c = _claimById(t, claimId); if (!c) return;
-    var applied;
-    _commit(tId, function (ft) {
-      var c2 = _claimById(ft, claimId); if (!c2) return false;
-      if (c2.status === 'applied' || c2.status === 'cancelled') return false;
-      var rc2 = _resolveCtx(ft, _ctxFromClaim(c2)); if (!rc2) return false;
-      var ap = _applyClaim(ft, c2, rc2, { outcomeChoice: choice });
-      if (applied === undefined) applied = ap;
-      if (!ap.ok) return false;
-      c2.status = 'applied'; c2.resolvedAt = new Date().toISOString(); c2.outcomeStage = 'resolved';
-    }, function (okSave) {
-      window._woCloseOverlay();
-      if (okSave && applied && applied.ok) {
-        if (applied.needsSubChoice && _canManage(t)) { if (typeof window._woShowSubChoiceDialog === 'function') window._woShowSubChoiceDialog(String(t.id)); return; }
-        if (applied.needsSubChoice) { if (typeof showNotification === 'function') showNotification('⏳ Aguardando o organizador', 'Nenhum suplente presente atende a categoria — o organizador vai definir.', 'info'); return; }
-        var aud = (c.absentUids || []).concat(c.outcomePartnerUid ? [c.outcomePartnerUid] : []).concat(c.outcomeOppUids || []);
-        _notify(t, aud, _notifData(t, '🚫 W.O. resolvido', (applied.note || '') + ' — ' + (t.name || '')));
-        if (typeof showNotification === 'function') showNotification('✅ W.O. resolvido', applied.note || '', 'success');
-      } else if (typeof showNotification === 'function') {
-        showNotification('Não aplicou', (applied && applied.reason) || 'Tente de novo.', 'warning');
-      }
+  // Desfecho e acordo são comandos finos. A Function relê o claim fresco e só
+  // então aplica o motor, sem qualquer mutação do snapshot que a tela possui.
+  function _applyOutcome(tId, claimId, choice, action) {
+    _claimAction(tId, claimId, action || 'choose', choice, function (saved) {
+      window._woCloseOverlay(); _refreshClaim(tId, claimId, saved);
     }, 'Aplicando o desfecho…');
   }
-
-  window._woChooseOutcome = function (tId, claimId, choice) {
-    var t = _findT(tId); if (!t || !_canManage(t)) return;
-    _applyOutcome(tId, claimId, choice);
-  };
-
-  // Stage 2 — o PARCEIRO que ficou propõe o desfecho (via overlay em modo 'propose').
+  window._woChooseOutcome = function (tId, claimId, choice) { _applyOutcome(tId, claimId, choice, 'choose'); };
   window._woProposeOutcome = function (tId, claimId, choice) {
-    var t = _findT(tId); if (!t) return;
-    var c = _claimById(t, claimId); if (!c) return;
-    var cu = _cu(); if (!cu || !cu.uid) return;
-    if (cu.uid !== c.outcomePartnerUid && !_canManage(t)) { if (typeof showNotification === 'function') showNotification('Só o parceiro propõe', 'Quem ficou no jogo escolhe como ele continua.', 'warning'); return; }
-    var data = _notifData(t, '🤝 Desfecho proposto', 'Uma forma de resolver a falta de "' + c.absentName + '" em "' + (t.name || '') + '" foi proposta. Aceite ou rejeite.');
-    _commit(tId, function (ft) {
-      var c2 = _claimById(ft, claimId); if (!c2 || c2.outcomeStage !== 'awaiting-proposal') return false;
-      c2.outcomeProposal = { choice: choice, byUid: cu.uid, at: new Date().toISOString() };
-      c2.outcomeStage = 'proposed';
-    }, function () {
-      _notify(t, c.outcomeOppUids || [], data);
-      window._woCloseOverlay();
-      window._woOpenClaim(tId, _ctxKey(_ctxFromClaim(c)));
-    }, 'Registrando a proposta…');
+    _claimAction(tId, claimId, 'propose', choice, function (saved) { _refreshClaim(tId, claimId, saved); }, 'Registrando a proposta…');
   };
-
-  // Stage 2 — o ADVERSÁRIO aceita a proposta → aplica o desfecho.
-  window._woAcceptOutcome = function (tId, claimId) {
-    var t = _findT(tId); if (!t) return;
-    var c = _claimById(t, claimId); if (!c || c.outcomeStage !== 'proposed') return;
-    var cu = _cu(); if (!cu || !cu.uid) return;
-    var isOpp = (c.outcomeOppUids || []).indexOf(cu.uid) !== -1;
-    if (!isOpp && !_canManage(t)) { if (typeof showNotification === 'function') showNotification('Só o adversário aceita', 'Quem enfrenta a dupla aceita ou rejeita a proposta.', 'warning'); return; }
-    var choice = c.outcomeProposal && c.outcomeProposal.choice; if (!choice) return;
-    _applyOutcome(tId, claimId, choice);
-  };
-
-  // Stage 2 — o ADVERSÁRIO rejeita → sem acordo, escala pro organizador decidir.
+  window._woAcceptOutcome = function (tId, claimId) { _applyOutcome(tId, claimId, '', 'accept'); };
   window._woRejectOutcome = function (tId, claimId) {
-    var t = _findT(tId); if (!t) return;
-    var c = _claimById(t, claimId); if (!c || c.outcomeStage !== 'proposed') return;
-    var cu = _cu(); if (!cu || !cu.uid) return;
-    var isOpp = (c.outcomeOppUids || []).indexOf(cu.uid) !== -1;
-    if (!isOpp && !_canManage(t)) { if (typeof showNotification === 'function') showNotification('Só o adversário', 'Quem enfrenta a dupla aceita ou rejeita a proposta.', 'warning'); return; }
-    var data = _notifData(t, '⚖️ Desfecho do W.O. sem acordo', 'O adversário rejeitou a proposta pra falta de "' + c.absentName + '" em "' + (t.name || '') + '". Você decide o desfecho.');
-    _commit(tId, function (ft) {
-      var c2 = _claimById(ft, claimId); if (!c2 || c2.outcomeStage !== 'proposed') return false;
-      c2.outcomeStage = 'escalated'; c2.outcomeRejectedByUid = cu.uid;
-    }, function () {
-      if (typeof window._notifyOrgAndCoHosts === 'function') window._notifyOrgAndCoHosts(t, data);
-      else _notify(t, t.creatorUid ? [t.creatorUid] : [], data);
-      window._woCloseOverlay();
-      window._woOpenClaim(tId, _ctxKey(_ctxFromClaim(c)));
-    }, 'Registrando a rejeição…');
+    _claimAction(tId, claimId, 'reject', '', function (saved) { _refreshClaim(tId, claimId, saved); }, 'Registrando a rejeição…');
   };
 })();
