@@ -2979,6 +2979,26 @@ os campos tocados dentro de transação; foto é resolvida diretamente do perfil
 cliente ficaram sem escrita para não quebrar chamadores antigos. O gate
 `l7-profile-propagation-server-only` exige essa fronteira.
 
+**L7.P1.26 — censo travado de mutadores iniciados pelo navegador (10/set/2026; read-only).**
+O censo anterior tratava `AppStore.mutate`/`commitTournamentTx` como se a transação fresca
+encerrasse a questão de autoridade. Ela elimina o snapshot atrasado, mas ainda deixa o
+navegador decidir e escrever a intenção. A exigência atual é mais estrita: o navegador só
+despacha uma Cloud Function; a Function relê, autoriza e grava.
+
+No estado medido há **82** chamadas em dez arquivos: `tournaments-draw-prep` 23,
+`tournaments-categories` 14, `tournaments-draw` 13, `tournaments` 10,
+`participants` 12, `store` 3, `bracket-logic` 2, `tournaments-org-tools` 2,
+`wo-claim` 2 e uma em `liga-substitution`. Elas estão inventariadas como
+dívida explícita, não como exceção aceita. O gate
+`tests/l7-client-writer-census.test.js` falha se surgir outro arquivo, se qualquer arquivo
+ganhar mutadores, ou se o total subir; a única direção permitida é a redução.
+
+Ordem de migração por risco: (1) presença/check-in e sua substituição por W.O.; (2) decisões
+de sorteio/preparação; (3) categorias e inscrições administrativas; (4) substituição de Liga;
+(5) compatibilidade em `store`. Cada etapa deve extrair um núcleo puro, receber payload mínimo
+e ter teste de autorização, corrida e não-escrita do cliente. A L7 permanece aberta até esse
+censo chegar a zero ou cada exceção receber uma remoção justificada e um gate específico.
+
 ## L8 — matriz de leitura e projeção (08/set/2026)
 
 `matches` permanece a fonte canônica. `results/{matchId}` é uma projeção server-written para
