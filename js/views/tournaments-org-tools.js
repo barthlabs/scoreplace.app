@@ -331,20 +331,20 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   };
 
   window._substitutePlaceholder = function (tId, placeholderName, realPlayer, onDone) {
-    var t = window._findTournamentById(tId);
-    if (!t || !placeholderName || !realPlayer) return false;
-    var realName = (realPlayer.displayName || realPlayer.name || '').trim();
-    if (!realName) return false;
-    // Blindagem v4.0.117: aplica pelo portão AppStore.mutate (atômico no doc fresco).
-    // O bool de "casou" vem da execução LOCAL (síncrona) — o chamador ainda o usa.
-    var matchedLocal;
-    window.AppStore.mutate(tId, function (ft) {
-      var m = window._applyPlaceholderSub(ft, placeholderName, realPlayer);
-      if (matchedLocal === undefined) matchedLocal = m;
+    if (!tId || !placeholderName || !realPlayer || !realPlayer.uid || typeof window._callCF !== 'function') return Promise.resolve(false);
+    // A tela só aponta a vaga e o UID já presente na lista de espera. A Function relê
+    // os dois no torneio fresco, troca chave/elenco/espera na mesma transação e devolve
+    // o veredito; nenhuma cópia local pode ocupar uma vaga que o servidor já mudou.
+    return window._callCF('occupyTournamentPlaceholder', {
+      tournamentId: String(tId), placeholderName: String(placeholderName), participantUid: String(realPlayer.uid)
+    }).then(function (out) {
+      var ok = !!(out && out.ok && out.changed);
+      if (ok && typeof onDone === 'function') onDone(out);
+      return ok;
+    }).catch(function (err) {
+      if (window._warn) window._warn('[placeholder] ocupação recusada', err);
+      return false;
     });
-    matchedLocal = !!matchedLocal;
-    if (matchedLocal && typeof onDone === 'function') onDone();
-    return matchedLocal;
   };
 
   // ── UI canônica: arrastar jogador real (handle ⠿ na lista de espera) sobre uma VAGA
@@ -432,11 +432,12 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var t = window._currentBracketTournament;
     if (!t) return;
     var apply = function () {
-      var oktrue = window._substitutePlaceholder(t.id, phName, { displayName: d.name, name: d.name, uid: d.uid }, function () {
+      window._substitutePlaceholder(t.id, phName, { displayName: d.name, name: d.name, uid: d.uid }, function () {
         if (typeof window._rerenderBracket === 'function') window._rerenderBracket(String(t.id));
         if (typeof showNotification === 'function') showNotification('Vaga ocupada', _safe(d.name) + ' assumiu a vaga de ' + _safe(phName) + '.', 'success');
+      }).then(function (oktrue) {
+        if (!oktrue && typeof showNotification === 'function') showNotification('Vaga não encontrada', 'A vaga ou o suplente já mudou no servidor.', 'warning');
       });
-      if (!oktrue && typeof showNotification === 'function') showNotification('Vaga não encontrada', 'Não consegui localizar essa vaga na chave.', 'warning');
     };
     if (typeof showConfirmDialog === 'function') {
       showConfirmDialog('Ocupar a vaga?',

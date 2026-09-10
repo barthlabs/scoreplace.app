@@ -1413,6 +1413,81 @@ exports.resolveWOSubstitutionChoice = onCall(async (request) => {
   });
 });
 
+// ─── Ocupar placeholder na chave ──────────────────────────────────────────────
+// O navegador só escolhe uma vaga e um UID que já está na espera. A Function relê o
+// torneio fresco e faz a troca integralmente: chave, elenco, lista de espera, membro e
+// histórico. Assim uma aba antiga não pode ressuscitar uma vaga nem sobrescrever placar.
+exports.occupyTournamentPlaceholder = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid;
+  const data = request.data || {};
+  const tId = String(data.tournamentId || '').trim();
+  const placeholderName = String(data.placeholderName || '').trim();
+  const participantUid = String(data.participantUid || '').trim();
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId || !participantUid || !/^(Jogador|Placeholder)\s+\d+$/i.test(placeholderName)) {
+    throw new HttpsError('invalid-argument', 'Vaga ou participante inválido.');
+  }
+  const ref = db.collection('tournaments').doc(tId);
+  const agoraIso = new Date().toISOString();
+  return db.runTransaction(async tx => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização ocupa uma vaga.', { tId, uid });
+    const espera = [].concat(Array.isArray(t.standbyParticipants) ? t.standbyParticipants : [], Array.isArray(t.waitlist) ? t.waitlist : []);
+    const person = espera.find(p => p && String(p.uid || '') === participantUid);
+    const realName = String(person && (person.displayName || person.name) || '').trim();
+    if (!person || !realName) throw _drawFail('failed-precondition', 'Este suplente não pertence mais à espera.', { tId, participantUid });
+    const before = _antesDoMotor(t);
+    const placeholderLc = placeholderName.toLowerCase();
+    let changed = false;
+    const replaceLabel = value => {
+      if (typeof value !== 'string' || !value) return value;
+      if (value.indexOf(' / ') !== -1) return value.split(' / ').map(part => {
+        if (part.trim().toLowerCase() === placeholderLc) { changed = true; return realName; }
+        return part.trim();
+      }).join(' / ');
+      if (value.trim().toLowerCase() === placeholderLc) { changed = true; return realName; }
+      return value;
+    };
+    const allMatches = typeof drawWindow._collectAllMatches === 'function' ? drawWindow._collectAllMatches(t) : (Array.isArray(t.matches) ? t.matches : []);
+    allMatches.forEach(m => {
+      if (!m) return;
+      m.p1 = replaceLabel(m.p1); m.p2 = replaceLabel(m.p2);
+      ['team1', 'team2'].forEach(key => {
+        if (Array.isArray(m[key])) m[key] = m[key].map(name => {
+          if (String(name || '').trim().toLowerCase() === placeholderLc) { changed = true; return realName; }
+          return name;
+        });
+      });
+    });
+    (Array.isArray(t.participants) ? t.participants : []).forEach(p => {
+      if (!p || typeof p !== 'object') return;
+      if (!(p.p1Uid || p.p1Name) && !(p.p2Uid || p.p2Name) && String(p.displayName || p.name || '').trim().toLowerCase() === placeholderLc) {
+        p.name = realName; p.displayName = realName; p.uid = participantUid;
+        p.email = person.email || null; p.photoURL = person.photoURL || null; delete p.isPlaceholder; changed = true;
+      }
+      if (String(p.p1Name || '').trim().toLowerCase() === placeholderLc) { p.p1Name = realName; p.p1Uid = participantUid; p.p1Email = person.email || null; p.p1Photo = person.photoURL || null; changed = true; }
+      if (String(p.p2Name || '').trim().toLowerCase() === placeholderLc) { p.p2Name = realName; p.p2Uid = participantUid; p.p2Email = person.email || null; p.p2Photo = person.photoURL || null; changed = true; }
+      if (p.p1Name && p.p2Name && typeof p.displayName === 'string' && p.displayName.indexOf(' / ') !== -1) p.displayName = p.p1Name + ' / ' + p.p2Name;
+      if (Array.isArray(p.participants)) p.participants = p.participants.map(slot => {
+        if (slot && String(slot.displayName || slot.name || '').trim().toLowerCase() === placeholderLc) {
+          changed = true;
+          return { name: realName, displayName: realName, uid: participantUid, email: person.email || null, photoURL: person.photoURL || null };
+        }
+        return slot;
+      });
+    });
+    if (!changed) return { ok: true, changed: false, reason: 'placeholder-not-found' };
+    const isPerson = p => p && String(p.uid || '') === participantUid;
+    if (Array.isArray(t.standbyParticipants)) t.standbyParticipants = t.standbyParticipants.filter(p => !isPerson(p));
+    if (Array.isArray(t.waitlist)) t.waitlist = t.waitlist.filter(p => !isPerson(p));
+    if (!Array.isArray(t.history)) t.history = [];
+    t.history.push({ date: agoraIso, message: '"' + realName + '" assumiu a vaga de "' + placeholderName + '"' });
+    const boundary = _gravaTorneio(tx, ref, t, before, { agoraIso });
+    return { ok: true, changed: true, tournament: boundary.clean };
+  });
+});
+
 // ─── Declarar/reverter ausência de W.O. ──────────────────────────────────────
 // Esta porta cobre os botões compactos de chamada. O browser envia identidades e
 // o alvo absoluto; a Function confere cada identidade no elenco fresco e roda a
