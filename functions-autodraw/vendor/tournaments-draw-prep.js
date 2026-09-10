@@ -689,6 +689,15 @@ window._castDrawPollVote = function(tId, pollId, optionKey) {
     });
 };
 
+window._markDrawPollNotificationsRead = function(tId, pollId) {
+    if (typeof window._callCF !== 'function') return Promise.reject(new Error('Function indisponível'));
+    return window._callCF('markDrawPollNotificationsRead', { tournamentId:String(tId), pollId:String(pollId) }, 'Entre na sua conta para registrar a leitura do aviso.').then(function(res) {
+        var data = (res && res.data) || {};
+        if (data.tournament && typeof window._applyCFTournament === 'function') window._applyCFTournament(tId, data.tournament);
+        return data;
+    });
+};
+
 window._reopenDrawEnrollment = function(tId, reason) {
     if (typeof window._callCF !== 'function') return Promise.reject(new Error('Function indisponível'));
     return window._callCF('reopenDrawEnrollment', { tournamentId:String(tId), reason:reason }, 'Entre na sua conta para reabrir as inscrições.').then(function(res) {
@@ -2990,9 +2999,6 @@ window._checkPollNotifications = function(t) {
     }
     if (!activePoll) return;
 
-    // Mark notifications as read
-    unreadNotifs.forEach(function(n) { n.read = true; });
-
     // Calculate time remaining
     var remaining = Math.max(0, activePoll.deadline - Date.now());
     var hrs = Math.floor(remaining / 3600000);
@@ -3010,19 +3016,11 @@ window._checkPollNotifications = function(t) {
         { type: 'info', confirmText: _t('btn.voteNow'), cancelText: _t('btn.later'), showCancel: true }
     );
 
-    // Marca somente os avisos deste usuário no documento fresco; outro aparelho
-    // pode ter criado voto, placar ou aviso enquanto este diálogo estava aberto.
-    if (window.AppStore && typeof window.AppStore.mutate === 'function') {
-        var myUid = user.uid || '', myEmail = user.email || '';
-        window.AppStore.mutate(t.id, function(ft) {
-            var changed = false;
-            (ft.pollNotifications || []).forEach(function(n) {
-                var mine = (n.targetUid && myUid && n.targetUid === myUid) || (n.targetEmail && myEmail && n.targetEmail === myEmail);
-                if (mine && n.pollId === activePoll.id && !n.read) { n.read = true; changed = true; }
-            });
-            return changed;
-        }, 'Aviso de enquete lido');
-    }
+    // A aba só registra a intenção. A Function deriva o destinatário do token e marca
+    // o documento fresco, sem risco de apagar aviso que outro aparelho acabou de receber.
+    window._markDrawPollNotificationsRead(t.id, activePoll.id).catch(function(err) {
+        if (window._warn) window._warn('[markDrawPollNotificationsRead] leitura falhou', err);
+    });
 };
 
 // ── Show active poll banner in tournament detail ──

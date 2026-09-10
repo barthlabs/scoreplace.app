@@ -13,7 +13,7 @@ const approved = {
   'views/liga-substitution.js': 1,
   'views/participants.js': 0,
   'views/tournaments-categories.js': 14,
-  'views/tournaments-draw-prep.js': 8,
+  'views/tournaments-draw-prep.js': 7,
   'views/tournaments-draw.js': 10,
   'views/tournaments-org-tools.js': 0,
   'views/tournaments.js': 10,

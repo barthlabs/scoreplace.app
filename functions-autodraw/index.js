@@ -2671,6 +2671,34 @@ exports.castDrawPollVote = onCall(async (request) => {
   });
 });
 
+// ─── Leitura de aviso de enquete: intenção server-side ───────────────────────
+// Receber o aviso não dá à tela permissão para alterar notificações de outras pessoas.
+// A Function deriva o destinatário do token e marca apenas avisos daquele UID (ou e-mail
+// legado do mesmo token) para a enquete indicada.
+exports.markDrawPollNotificationsRead = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid;
+  const legacyEmail = request.auth && request.auth.token && typeof request.auth.token.email === 'string' ? request.auth.token.email.trim().toLowerCase() : '';
+  const data = request.data || {}, tId = String(data.tournamentId || '').trim(), pollId = String(data.pollId || '').trim();
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId || !pollId) throw new HttpsError('invalid-argument', 'Aviso de enquete inválido.');
+  const ref = db.collection('tournaments').doc(tId), agoraIso = new Date().toISOString();
+  return db.runTransaction(async (tx) => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    const poll = (Array.isArray(t.polls) ? t.polls : []).find((item) => item && String(item.id) === pollId);
+    if (!poll) throw new HttpsError('not-found', 'Enquete não encontrada.');
+    const notifications = Array.isArray(t.pollNotifications) ? t.pollNotifications : [];
+    const unread = notifications.filter((notification) => notification && !notification.read && String(notification.pollId || '') === pollId && (
+      (notification.targetUid && notification.targetUid === uid) || (!notification.targetUid && legacyEmail && String(notification.targetEmail || '').toLowerCase() === legacyEmail)
+    ));
+    if (!unread.length) return { ok:true, changed:false, tournament:t };
+    const antes = _antesDoMotor(t);
+    unread.forEach((notification) => { notification.read = true; });
+    const b = _gravaTorneio(tx, ref, t, antes, { agoraIso });
+    return { ok:true, changed:true, tournament:b.clean };
+  });
+});
+
 // ─── Decisões entre fases: somente a Function altera elenco e promoção ───────
 // O painel mostra os inativos/W.O. e a possível linha extra, mas não pode aplicar
 // essas escolhas sobre um snapshot que talvez já esteja atrasado.
