@@ -1,4 +1,4 @@
-// ⚠️ 2.2.52 · cancelar o pré-sorteio, decidir inativos/W.O. e promover uma linha entre fases são confirmados pela Function com o torneio fresco; a aba não reabre inscrições, não remove elenco e não restaura uma cópia local.
+// ⚠️ 2.2.53 · decisões de entrada tardia, suspensão do pré-sorteio, reabertura e dissolução de times incompletos passam exclusivamente pela Function transacional; a aba apenas despacha a intenção e espelha o documento fresco.
 // ⚠️ 2.2.51 · todo o consenso de W.O. — apontar, confirmar, contestar, reverter e decidir o desfecho — é processado pela Function com documento fresco; a tela apenas envia a intenção.
 // ⚠️ 2.2.50 · editar a configuração do torneio, fechar rodada e apontar uma ausência de W.O. passam por Functions que relêem o documento fresco. A tela só envia a intenção; confirmação, chave e histórico não são mais gravados por uma aba antiga.
 // ⚠️ 2.2.49 · presença, prazo de inscrição, ocupação de vagas e vínculo de participante são confirmados pela Cloud Function; nenhuma aba regrava chave, elenco ou pendências.
