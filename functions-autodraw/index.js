@@ -78,7 +78,7 @@ try {
 
 // Versão DESTE código de function. Sobe junto com a do app a cada deploy — é o que prova,
 // no log, qual build atendeu a chamada. Ver [[feedback_indicate_version_on_deploy]].
-const CF_VERSION = '2.1.80';
+const CF_VERSION = '2.2.54';
 
 initializeApp();
 const db = getFirestore();
@@ -2477,6 +2477,151 @@ exports.cancelDrawPreparation = onCall(async (request) => {
     delete t._phaseResInfo;
     const b = _gravaTorneio(tx, ref, t, antes, { agoraIso });
     return { ok:true, changed:true, tournament:b.clean };
+  });
+});
+
+// ─── L7: inscrição e sorteio de vagas são intenções, nunca mutações da aba ───
+function _entriesOf(t, key) {
+  const raw = t && t[key];
+  return Array.isArray(raw) ? raw.slice() : (raw && typeof raw === 'object' ? Object.values(raw) : []);
+}
+function _entryIdentityKeys(entry) {
+  if (!entry) return [];
+  if (typeof entry === 'string') return ['name:' + entry.trim().toLowerCase()];
+  const keys = [];
+  [entry.uid, entry.p1Uid, entry.p2Uid, entry.email,
+    entry.displayName, entry.name, entry.p1Name, entry.p2Name].forEach(v => {
+      const s = String(v || '').trim(); if (s) keys.push(s.includes('@') ? 'email:' + s.toLowerCase() : 'id:' + s);
+    });
+  (Array.isArray(entry.participants) ? entry.participants : []).forEach(member => {
+    if (!member) return;
+    const u = String(member.uid || '').trim();
+    const n = String(member.displayName || member.name || '').trim();
+    if (u) keys.push('id:' + u); if (n) keys.push('id:' + n);
+  });
+  return keys;
+}
+function _isSameEnrollment(a, b) {
+  const seen = new Set(_entryIdentityKeys(a));
+  return _entryIdentityKeys(b).some(key => seen.has(key));
+}
+function _promoteWaitlists(t) {
+  const participants = _entriesOf(t, 'participants');
+  const pending = _entriesOf(t, 'standbyParticipants').concat(_entriesOf(t, 'waitlist'));
+  const monarch = t && t.monarchWaitlist && typeof t.monarchWaitlist === 'object' ? Object.values(t.monarchWaitlist) : [];
+  let promoted = 0;
+  pending.concat(monarch).forEach(entry => {
+    if (entry == null || participants.some(existing => _isSameEnrollment(existing, entry))) return;
+    participants.push(entry); promoted++;
+  });
+  t.participants = participants;
+  t.standbyParticipants = [];
+  t.waitlist = [];
+  t.monarchWaitlist = {};
+  return promoted;
+}
+function _hasTournamentDraw(t) {
+  return !!((_entriesOf(t, 'matches').length) || (_entriesOf(t, 'rounds').length) || (_entriesOf(t, 'groups').length));
+}
+function _enqueueEnrollmentNotice(tx, ref, t, type, title, message, nowIso) {
+  const recipients = _seasonRecipientUids(t);
+  if (!recipients.length || t.isSandbox || t.notificationsMuted) return;
+  tx.set(ref.collection('notificationOutbox').doc(type + '-' + String(Date.parse(nowIso))), {
+    schema: 1, kind: 'tournament-notification', type, title, message,
+    tournamentId: String(t.id || ref.id), tournamentName: String(t.name || ''),
+    level: 'important', recipients, ctaLabel: 'Ver torneio',
+    ctaUrl: 'https://scoreplace.app/#tournaments/' + String(t.id || ref.id),
+    createdAt: nowIso, createdAtMs: Date.parse(nowIso), dispatchStatus: 'pending'
+  }, { merge: true });
+}
+
+exports.setTournamentEnrollmentStatus = onCall(async request => {
+  const uid = request.auth && request.auth.uid;
+  const d = request.data || {}, tId = String(d.tournamentId || '').trim();
+  const action = String(d.action || '').trim();
+  const nowIso = new Date().toISOString();
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId || !['open', 'close', 'late-open', 'late-close'].includes(action)) throw new HttpsError('invalid-argument', 'Ação de inscrição inválida.');
+  const ref = db.collection('tournaments').doc(tId);
+  return db.runTransaction(async tx => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização altera as inscrições.', { tId, uid });
+    if (t.status === 'finished') throw new HttpsError('failed-precondition', 'O torneio já foi encerrado.');
+    const hasDraw = _hasTournamentDraw(t);
+    const late = (drawWindow && typeof drawWindow._effectiveLateEnrollment === 'function')
+      ? ['standby', 'expand'].includes(drawWindow._effectiveLateEnrollment(t))
+      : (t.lateEnrollment === 'standby' || t.lateEnrollment === 'expand');
+    if ((action === 'late-open' || action === 'late-close') && (!hasDraw || !late)) throw new HttpsError('failed-precondition', 'A inscrição tardia não está disponível neste torneio.');
+    if ((action === 'open' || action === 'close') && hasDraw) throw new HttpsError('failed-precondition', 'Depois da chave, use a inscrição tardia.');
+    const before = _antesDoMotor(t);
+    let promoted = 0, changed = false;
+    if (action === 'open') {
+      if (t.status !== 'open' || t.registrationLimit != null || t.activePollId) changed = true;
+      t.status = 'open'; t.registrationLimit = null; delete t._pollSuspended;
+      if (!drawWindow || typeof drawWindow._clearDrawRuntimeFlags !== 'function') throw new HttpsError('failed-precondition', 'Motor de preparação indisponível.');
+      drawWindow._clearDrawRuntimeFlags(t);
+      if (t.enrollmentLimitMode === 'draw') { t.drawSelectionDone = false; t.waitlistOrder = null; }
+      if (t.activePollId && Array.isArray(t.polls)) {
+        t.polls.forEach(p => { if (p && p.id === t.activePollId && p.status === 'active') { p.status = 'closed'; p.deadline = Date.now(); } });
+        t.activePollId = null;
+      }
+      promoted = _promoteWaitlists(t);
+      _enqueueEnrollmentNotice(tx, ref, t, 'enrollments-reopened', '📋 Inscrições reabertas', 'As inscrições de ' + String(t.name || 'seu torneio') + ' foram reabertas.', nowIso);
+    } else if (action === 'close' || action === 'late-close') {
+      if (t.status !== 'closed') { t.status = 'closed'; changed = true; }
+      if (action === 'late-close' && drawWindow && typeof drawWindow._maybeFinishElimination === 'function') {
+        const beforeFinish = t.status; drawWindow._maybeFinishElimination(t); if (t.status !== beforeFinish) changed = true;
+      }
+      _enqueueEnrollmentNotice(tx, ref, t, 'enrollments-closed', '🔒 Inscrições encerradas', 'As inscrições de ' + String(t.name || 'seu torneio') + ' foram encerradas.', nowIso);
+    } else {
+      if (t.status !== 'active') { t.status = 'active'; changed = true; }
+      _enqueueEnrollmentNotice(tx, ref, t, 'late-enrollments-reopened', '📋 Inscrições tardias reabertas', 'Novos inscritos entram na lista de espera de ' + String(t.name || 'seu torneio') + '.', nowIso);
+    }
+    if (!changed && !promoted) return { ok:true, changed:false, tournament:t };
+    const b = _gravaTorneio(tx, ref, t, before, { agoraIso:nowIso });
+    return { ok:true, changed:true, promoted, tournament:b.clean };
+  });
+});
+
+exports.runEnrollmentSlotsDraw = onCall(async request => {
+  const uid = request.auth && request.auth.uid;
+  const tId = String((request.data && request.data.tournamentId) || '').trim();
+  const nowIso = new Date().toISOString();
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId) throw new HttpsError('invalid-argument', 'Torneio obrigatório.');
+  if (!drawWindow || typeof drawWindow._entryHasVip !== 'function' || typeof drawWindow._entryTeamMembers !== 'function') throw new HttpsError('failed-precondition', 'Motor do sorteio indisponível.');
+  const ref = db.collection('tournaments').doc(tId);
+  return db.runTransaction(async tx => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização realiza o sorteio de vagas.', { tId, uid });
+    if (_hasTournamentDraw(t)) throw new HttpsError('failed-precondition', 'A chave já foi sorteada.');
+    if (t.enrollmentLimitMode !== 'draw') throw new HttpsError('failed-precondition', 'Este torneio não usa sorteio de vagas.');
+    if (t.drawSelectionDone) return { ok:true, changed:false, tournament:t };
+    const slots = Number.parseInt(t.targetSlots, 10);
+    if (!Number.isFinite(slots) || slots < 1) throw new HttpsError('failed-precondition', 'Defina o número de vagas antes do sorteio.');
+    const before = _antesDoMotor(t), entries = _entriesOf(t, 'participants');
+    const teamSize = Math.max(1, Number.parseInt(t.teamSize, 10) || 1);
+    const vips = [], pool = [];
+    entries.forEach(entry => (drawWindow._entryHasVip(t, entry) ? vips : pool).push(entry));
+    for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp; }
+    const playersOf = entry => drawWindow._entryTeamMembers(entry) ? teamSize : 1;
+    const target = slots * teamSize;
+    let used = vips.reduce((sum, entry) => sum + playersOf(entry), 0);
+    const kept = [], overflow = [];
+    pool.forEach(entry => { const size = playersOf(entry); if (used + size <= target) { kept.push(entry); used += size; } else overflow.push(entry); });
+    const order = overflow.map((entry, index) => {
+      if (entry && typeof entry === 'object') entry.drawOrder = index;
+      return String((entry && (entry.displayName || entry.name)) || entry || '');
+    });
+    t.preDrawEnrollees = entries;
+    t.participants = vips.concat(kept);
+    t.standbyParticipants = _entriesOf(t, 'standbyParticipants').concat(overflow);
+    t.waitlistOrder = order; t.standbyPick = 'random'; t.standbyMode = teamSize > 1 ? 'teams' : 'individual';
+    t.drawSelectionDone = true; t.status = 'closed';
+    const b = _gravaTorneio(tx, ref, t, before, { agoraIso:nowIso });
+    return { ok:true, changed:true, selected:t.participants.length, standby:overflow.length, tournament:b.clean };
   });
 });
 

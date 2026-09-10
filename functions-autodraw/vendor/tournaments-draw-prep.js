@@ -732,6 +732,24 @@ window._reopenEnrollmentForTarget = function(tId, target, autoClose) {
     return window._callCF('reopenEnrollmentForTarget', { tournamentId:String(tId), target:Number(target), autoClose:autoClose === true }, 'Entre na sua conta para reabrir as inscrições.').then(function(res) { var data=(res&&res.data)||{}; if(data.tournament&&typeof window._applyCFTournament==='function') window._applyCFTournament(tId,data.tournament); return data; });
 };
 
+window._setTournamentEnrollmentStatus = function(tId, action) {
+    if (typeof window._callCF !== 'function') return Promise.reject(new Error('Function indisponível'));
+    return window._callCF('setTournamentEnrollmentStatus', { tournamentId:String(tId), action:String(action) }, 'Entre na sua conta para alterar as inscrições.').then(function(res) {
+        var data = (res && res.data) || {};
+        if (data.tournament && typeof window._applyCFTournament === 'function') window._applyCFTournament(tId, data.tournament);
+        return data;
+    });
+};
+
+window._runEnrollmentSlotsDraw = function(tId) {
+    if (typeof window._callCF !== 'function') return Promise.reject(new Error('Function indisponível'));
+    return window._callCF('runEnrollmentSlotsDraw', { tournamentId:String(tId) }, 'Entre na sua conta para realizar o sorteio de vagas.').then(function(res) {
+        var data = (res && res.data) || {};
+        if (data.tournament && typeof window._applyCFTournament === 'function') window._applyCFTournament(tId, data.tournament);
+        return data;
+    });
+};
+
 window._reopenDrawEnrollment = function(tId, reason) {
     if (typeof window._callCF !== 'function') return Promise.reject(new Error('Function indisponível'));
     return window._callCF('reopenDrawEnrollment', { tournamentId:String(tId), reason:reason }, 'Entre na sua conta para reabrir as inscrições.').then(function(res) {
@@ -3397,316 +3415,66 @@ window.finishTournament = function(tId) {
 // ─── Painel Integrado de Encerramento ───
 window.toggleRegistrationStatus = function (tId) {
     var t = window._findTournamentById(tId);
-    if (!t) { return; }
-
-    // Blindagem v4.0.119: snapshot ANTES de qualquer mutação; no save, aplica o
-    // DELTA (campos mudados/removidos) sobre o doc FRESCO via portão — preserva
-    // edições concorrentes dos DEMAIS campos (ao contrário do saveTournament
-    // doc-inteiro). Histórico é APPEND (não clobbera entradas concorrentes).
-    var _preSnap = {}; try { _preSnap = JSON.parse(JSON.stringify(t)); } catch (e) {}
-    var _preHistLen = Array.isArray(_preSnap.history) ? _preSnap.history.length : 0;
-    var _saveTournament = function(callback) {
-        var changed = {}, deleted = [];
-        Object.keys(t).forEach(function (k) {
-            if (k === 'updatedAt' || k === 'history') return; // updatedAt = portão; history = append
-            if (JSON.stringify(t[k]) !== JSON.stringify(_preSnap[k])) changed[k] = t[k];
-        });
-        Object.keys(_preSnap).forEach(function (k) { if (k !== 'history' && !(k in t)) deleted.push(k); });
-        var newHist = Array.isArray(t.history) ? t.history.slice(_preHistLen) : [];
-        window.AppStore.commitTournamentTx(tId, function (ft) {
-            Object.keys(changed).forEach(function (k) { ft[k] = changed[k]; });
-            deleted.forEach(function (k) { try { delete ft[k]; } catch (e) { ft[k] = null; } });
-            if (newHist.length) { if (!Array.isArray(ft.history)) ft.history = []; ft.history = ft.history.concat(newHist); }
-        }).then(function () {
-            if (callback) callback();
-        }).catch(function (err) {
-            window._error('[toggleRegistrationStatus] save error:', err);
-            if (callback) callback();
-            if (typeof showNotification === 'function') showNotification(_t('draw.savedLocally'), _t('draw.savedLocallyMsg'), 'warning');
-        });
-    };
-
-    var _refreshView = function() {
-        // v4.1.18: save concluído → solta o botão cinza "Reabrindo…"/"Encerrando…" ANTES do
-        // re-render, pra o render mostrar o botão já invertido (Encerrar↔Reabrir).
+    if (!t) return;
+    var refresh = function () {
         if (typeof window._regBtnDone === 'function') window._regBtnDone();
         var container = document.getElementById('view-container');
-        if (container && typeof renderTournaments === 'function') {
-            renderTournaments(container, String(tId));
-        }
+        if (container && typeof renderTournaments === 'function') renderTournaments(container, String(tId));
     };
-
-    // v2.1.0: inscrição TARDIA pós-sorteio (lateEnrollment 'standby'/'expand').
-    // Aqui o "Encerrar Inscrições" apenas ALTERNA o status — sem painel de
-    // resolução (que é pré-sorteio) e sem promover a lista de espera. Encerrar
-    // = 'closed'; Reabrir = 'active'. (O sorteio NÃO encerra; só este botão.)
-    var _hasDrawNow = (Array.isArray(t.matches) && t.matches.length > 0) ||
-                      (Array.isArray(t.rounds) && t.rounds.length > 0) ||
-                      (Array.isArray(t.groups) && t.groups.length > 0);
-    var _le = window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t) : t.lateEnrollment;
-    var _lateMode = (_le === 'standby' || _le === 'expand');
-    if (_hasDrawNow && _lateMode && t.status !== 'finished') {
-        if (t.status === 'closed') {
-            t.status = 'active';
-            if (window.AppStore && window.AppStore.logAction) window.AppStore.logAction(tId, 'Inscrições reabertas (tardias) após o sorteio');
-            if (typeof showNotification === 'function') showNotification('Inscrições reabertas', 'Novos inscritos vão para a lista de espera.', 'success');
-        } else {
-            t.status = 'closed';
-            if (window.AppStore && window.AppStore.logAction) window.AppStore.logAction(tId, 'Inscrições encerradas pelo organizador');
-            if (typeof showNotification === 'function') showNotification('Inscrições encerradas', 'Ninguém mais pode se inscrever.', 'info');
-            // v2.4.20: com a inscrição fechada, o guard de inscrição-tardia em
-            // _maybeFinishElimination libera — se a chave já chegou ao campeão,
-            // encerra o torneio agora (não espera um próximo salvar de resultado,
-            // que pode nem existir).
-            if (typeof window._maybeFinishElimination === 'function') { try { window._maybeFinishElimination(t); } catch (e) {} }
-        }
-        _saveTournament(_refreshView);
+    var request = function(action, successTitle, successMessage, type) {
+        window._setTournamentEnrollmentStatus(tId, action).then(function(data) {
+            refresh();
+            if (data.changed !== false && typeof showNotification === 'function') showNotification(successTitle, successMessage, type || 'success');
+        }).catch(function(err) {
+            if (window._warn) window._warn('[setTournamentEnrollmentStatus] falhou', err);
+            if (typeof window._regBtnDone === 'function') window._regBtnDone();
+            if (typeof showNotification === 'function') showNotification('Não foi possível alterar as inscrições', 'Nada foi alterado. Atualize e tente novamente.', 'error');
+        });
+    };
+    var hasDraw = (Array.isArray(t.matches) && t.matches.length > 0) || (Array.isArray(t.rounds) && t.rounds.length > 0) || (Array.isArray(t.groups) && t.groups.length > 0);
+    var late = (window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t) : t.lateEnrollment);
+    var isLate = hasDraw && (late === 'standby' || late === 'expand') && t.status !== 'finished';
+    if (isLate) {
+        if (t.status === 'closed') request('late-open', _t('draw.enrollReopened'), 'Novos inscritos vão para a lista de espera.', 'success');
+        else request('late-close', _t('draw.enrollClosed'), _t('draw.enrollClosedMsg'), 'info');
         return;
     }
-
     if (t.status === 'closed') {
-        // Impedir reabertura se já houve sorteio
-        var hasDraw = (Array.isArray(t.matches) && t.matches.length > 0) || (Array.isArray(t.rounds) && t.rounds.length > 0) || (Array.isArray(t.groups) && t.groups.length > 0);
         if (hasDraw) {
             if (typeof showAlertDialog === 'function') showAlertDialog(_t('draw.notAllowedTitle'), _t('draw.cantReopenAfterDraw'), null, { type: 'warning' });
             return;
         }
-        if (typeof showConfirmDialog !== 'function') { window._error('showConfirmDialog not available'); return; }
+        if (typeof showConfirmDialog !== 'function') return;
         showConfirmDialog(_t('draw.reopenEnrollTitle'), _t('draw.reopenEnrollMsg', { name: window._safeHtml(t.name || '') }) + (t.activePollId ? _t('draw.reopenEnrollPollSuffix') : ''), function() {
-            t.status = 'open';
-            // v1.6.66-beta: limpa prazo de inscrição ao reabrir — inscrições
-            // ficam abertas indefinidamente e o organizador pode redefinir o
-            // prazo em "Detalhes Avançados" do torneio.
-            t.registrationLimit = null;
-            delete t._pollSuspended;
-            // v4.0.86: reabrir volta às inscrições → limpa TODOS os flags RUNTIME de
-            // sorteio/jogo (mesma fonte única do reset) pra que o próximo sorteio re-rode
-            // o diagnóstico completo (sem-dupla → resto → pow2) em vez de curto-circuitar
-            // pro "Tudo Pronto" via classifyFormat/p2Resolution velhos.
-            if (typeof window._clearDrawRuntimeFlags === 'function') window._clearDrawRuntimeFlags(t);
-            // Sorteio de Vagas: ao reabrir, limpa a seleção pra um futuro
-            // fechamento re-sortear do zero (a lista de espera é promovida abaixo).
-            if (t.enrollmentLimitMode === 'draw') { t.drawSelectionDone = false; t.waitlistOrder = null; }
-            // Auto-close active poll when reopening inscriptions
-            if (t.activePollId && t.polls) {
-                for (var _pi = 0; _pi < t.polls.length; _pi++) {
-                    if (t.polls[_pi].id === t.activePollId && t.polls[_pi].status === 'active') {
-                        t.polls[_pi].status = 'closed';
-                        t.polls[_pi].deadline = Date.now();
-                        window.AppStore.logAction(tId, 'Enquete encerrada automaticamente ao reabrir inscrições');
-                        break;
-                    }
-                }
-                t.activePollId = null;
-            }
-            // Promote everyone on any waitlist back to the main list — once enrollments
-            // are open again, there's no reason to keep anyone waiting. Drains both
-            // t.standbyParticipants (draw-time standby) and t.waitlist (late-enrollment
-            // waitlist), with duplicate check by email/uid/displayName.
-            var _promoted = 0;
-            if (!Array.isArray(t.participants)) t.participants = t.participants ? Object.values(t.participants) : [];
-            function _promoteList(list) {
-                if (!Array.isArray(list) || list.length === 0) return;
-                list.forEach(function(sp) {
-                    var spEmail = (sp && sp.email) || '';
-                    var spUid = (sp && sp.uid) || '';
-                    var spName = (sp && (sp.displayName || sp.name)) || (typeof sp === 'string' ? sp : '');
-                    var already = t.participants.some(function(p) {
-                        if (typeof p === 'string') return (spEmail && p === spEmail) || (spName && p === spName);
-                        return (p.email && spEmail && p.email === spEmail) ||
-                               (p.uid && spUid && p.uid === spUid) ||
-                               (p.displayName && spName && p.displayName === spName) ||
-                               (p.name && spName && p.name === spName);
-                    });
-                    if (!already) {
-                        t.participants.push(sp);
-                        _promoted++;
-                    }
-                });
-            }
-            // CANÔNICO: promove a espera dos TRÊS storages e zera os 3.
-            var _wlAll = (typeof window._clearAllWaitlists === 'function')
-              ? window._clearAllWaitlists(t)
-              : (function () { var p = (t.standbyParticipants || []).concat(t.waitlist || []); t.standbyParticipants = []; t.waitlist = []; t.monarchWaitlist = {}; return p; })();
-            _promoteList(_wlAll);
-            if (_promoted > 0) window.AppStore.logAction(tId, _promoted + ' participante(s) promovido(s) da lista de espera ao reabrir inscrições');
-            window.AppStore.logAction(tId, 'Inscrições Reabertas');
-            // Notify participants about reopened enrollments
-            if (typeof window._notifyTournamentParticipants === 'function') {
-                    window._notifyTournamentParticipants(t, {
-                    type: 'enrollments_reopened',
-                    message: _t('notif.enrollmentsReopened').replace('{name}', t.name || 'Torneio'),
-                    level: 'important'
-                }, window.AppStore.currentUser ? window.AppStore.currentUser.email : null);
-            }
-            _saveTournament(function() {
-                _refreshView();
-                if (typeof showNotification === 'function') {
-                    var _msg = _t('draw.enrollReopenedMsg');
-                    if (_promoted > 0) _msg += ' ' + _t('draw.standbyPromoted', { count: _promoted });
-                    showNotification(_t('draw.enrollReopened'), _msg, 'info');
-                }
-            });
+            request('open', _t('draw.enrollReopened'), _t('draw.enrollReopenedMsg'), 'info');
         });
         return;
     }
-
-    // Verificar número de inscritos para todos os formatos
-    var arr = Array.isArray(t.participants) ? t.participants : (t.participants ? Object.values(t.participants) : []);
-    if (arr.length < 2) {
+    var entries = Array.isArray(t.participants) ? t.participants : (t.participants ? Object.values(t.participants) : []);
+    if (entries.length < 2) {
         if (typeof showAlertDialog === 'function') showAlertDialog(_t('draw.tooFewTitle'), _t('draw.tooFewCloseMsg'), null, { type: 'warning' });
         return;
     }
-
-    // Sorteio de Vagas: inscrição ficou aberta a janela inteira (sem corrida).
-    // Ao encerrar, sorteia a ORDEM — os primeiros N (= targetSlots) entram e o
-    // resto vai pra lista de espera nessa ordem. Pré-etapa antes da chave normal.
-    if (t.enrollmentLimitMode === 'draw' && !t.drawSelectionDone && !_hasDrawNow &&
-        typeof window._showVagasDrawPanel === 'function') {
-        window._showVagasDrawPanel(tId);
-        return;
+    if (t.enrollmentLimitMode === 'draw' && !t.drawSelectionDone && !hasDraw && typeof window._showVagasDrawPanel === 'function') {
+        window._showVagasDrawPanel(tId); return;
     }
-
-    // Run unified diagnostics for formats that need it.
-    // Classify by *exclusion* to match the logic in showUnifiedResolutionPanel —
-    // Liga/Suíço handle BYEs naturally, Groups has its own config panel, everything
-    // else (Elim, Dupla Elim, Rei/Rainha, unknown legacy formats) needs the full
-    // power-of-2/odd/incomplete/remainder check. Using a strict equality on
-    // 'Eliminatórias Simples' missed tournaments whose format string drifted.
-    var isGrupos = t.format === 'Grupos + Eliminatória' || t.format === 'Grupos + Mata-Mata' || (t.format || '').indexOf('Grupo') !== -1 || t.format === 'Fase de Grupos + Eliminatórias';
-    var isLigaOrSwiss = t.format === 'Liga' || t.format === 'Suíço Clássico' || t.format === 'Ranking' || (window._isLigaFormat && window._isLigaFormat(t));
-
-    // Groups format: always show groups config panel (no BYE/Swiss/waitlist)
-    if (isGrupos && typeof window._showGroupsConfigPanel === 'function') {
-        if (typeof window._diagnoseAll === 'function') {
-            var diagG = window._diagnoseAll(t);
-            // Only block on incomplete teams or remainder (not power of 2 or odd)
-            if (diagG.incompleteTeams.length > 0 || diagG.remainder > 0) {
-                window.showUnifiedResolutionPanel(tId);
-                return;
-            }
-        }
-        if (typeof window._grupos_f2Direct === 'function' && window._grupos_f2Direct(tId)) return; // format2 → sorteia direto
-        window._showGroupsConfigPanel(tId);
-        return;
-    }
-
-    // Run diagnostics. Wrap in try/catch so a malformed participant list (null,
-    // legacy shapes) doesn't make the whole handler die silently — which looks
-    // exactly like "panel didn't fire" from the user's perspective.
     var diag = null;
-    var diagError = null;
-    try {
-        if (typeof window._diagnoseAll === 'function') diag = window._diagnoseAll(t);
-    } catch(e) {
-        diagError = e;
+    try { if (typeof window._diagnoseAll === 'function') diag = window._diagnoseAll(t); } catch (e) { if (window._warn) window._warn('[Encerrar Inscrições] diagnóstico falhou', e); }
+    var isGroups = t.format === 'Grupos + Eliminatória' || t.format === 'Grupos + Mata-Mata' || (t.format || '').indexOf('Grupo') !== -1 || t.format === 'Fase de Grupos + Eliminatórias';
+    var isLigaOrSwiss = t.format === 'Liga' || t.format === 'Suíço Clássico' || t.format === 'Ranking' || (window._isLigaFormat && window._isLigaFormat(t));
+    if (isGroups && typeof window._showGroupsConfigPanel === 'function') {
+        if (diag && (diag.incompleteTeams.length > 0 || diag.remainder > 0)) { window.showUnifiedResolutionPanel(tId); return; }
+        if (typeof window._grupos_f2Direct === 'function' && window._grupos_f2Direct(tId)) return;
+        window._showGroupsConfigPanel(tId); return;
     }
-
     if (diag) {
-        // Liga/Swiss E Eliminatória (pow2 AUTO): só incompleto e remainder importam — pow2/ímpar
-        // o programa decide sozinho (bye/play-in), sem painel. Só formatos sem resolução automática
-        // (legado desconhecido) usam o check completo. Ver _autoResolvesPow2.
-        var _autoP2 = (typeof window._autoResolvesPow2 === 'function') && window._autoResolvesPow2(t);
-        var hasRelevantIssues = (isLigaOrSwiss || _autoP2)
-            ? (diag.incompleteTeams.length > 0 || diag.remainder > 0)
-            : diag.hasIssues;
-        try {
-            window._log('[Encerrar Inscrições] diag', {
-                format: t.format,
-                isGrupos: isGrupos,
-                isLigaOrSwiss: isLigaOrSwiss,
-                effectiveTeams: diag.effectiveTeams,
-                remainder: diag.remainder,
-                isOdd: diag.isOdd,
-                isPowerOf2: diag.isPowerOf2,
-                incompleteTeams: diag.incompleteTeams.length,
-                hasIssues: diag.hasIssues,
-                hasRelevantIssues: hasRelevantIssues
-            });
-        } catch(e) {}
-        if (hasRelevantIssues) {
-            // Fire the panel. If for any reason the overlay DOESN'T appear
-            // surface a visible toast so the organizer isn't left with a
-            // silently-failed button. We check TWICE: once synchronously
-            // (catches throws inside _showRemainderPanel / showUnified…) and
-            // once at 120ms (catches async removal by something else). Version
-            // is embedded in the toast so a stale-cache browser shows whatever
-            // version it cached — making stale-cache easy to diagnose.
-            var _ver = window.SCOREPLACE_VERSION || '?';
-            function _overlayPresent() {
-                return document.getElementById('unified-resolution-panel') ||
-                       document.getElementById('groups-config-panel') ||
-                       document.getElementById('remainder-resolution-panel');
-            }
-            function _diagStr(extra) {
-                return (extra ? extra + ' | ' : '') +
-                    'v=' + _ver +
-                    ' | fmt=' + (t.format || '?') +
-                    ' | teams=' + diag.effectiveTeams +
-                    ' | resto=' + diag.remainder +
-                    ' | pot2=' + diag.isPowerOf2 +
-                    ' | ímpar=' + diag.isOdd +
-                    ' | incomp=' + diag.incompleteTeams.length;
-            }
-            var panelThrew = false;
-            try {
-                if (typeof window.showUnifiedResolutionPanel === 'function') {
-                    window.showUnifiedResolutionPanel(tId);
-                } else {
-                    throw new Error('showUnifiedResolutionPanel is not defined');
-                }
-            } catch(e) {
-                panelThrew = true;
-                window._error('[Encerrar Inscrições] panel throw:', e);
-                if (typeof showNotification === 'function') {
-                    showNotification('⚠️ Erro ao abrir painel (sync)', _diagStr('err=' + String(e && e.message || e)), 'error');
-                }
-            }
-            // Synchronous check: if no overlay RIGHT NOW (and no throw), the
-            // panel function returned early without rendering (bug in the
-            // dispatch logic itself, not an async removal).
-            if (!panelThrew && !_overlayPresent() && typeof showNotification === 'function') {
-                showNotification('⚠️ Painel não criado (sync)', _diagStr(), 'warning');
-            }
-            // Async check: catches cases where the overlay was created then
-            // immediately removed by another code path (re-render, onSnapshot,
-            // etc). Only fires if no overlay exists at 120ms AND the sync
-            // check passed (avoids duplicate toasts).
-            setTimeout(function() {
-                if (panelThrew) return;
-                if (!_overlayPresent() && typeof showNotification === 'function') {
-                    showNotification('⚠️ Painel removido (async)', _diagStr(), 'warning');
-                }
-            }, 120);
-            return;
-        }
-    } else if (diagError) {
-        window._error('[Encerrar Inscrições] _diagnoseAll throw:', diagError);
-        if (typeof showNotification === 'function') {
-            showNotification('⚠️ Falha no diagnóstico',
-                'Não consegui avaliar o número de inscritos: ' + (diagError.message || String(diagError)) + '. Encerrando mesmo assim.',
-                'warning');
-        }
-        // Fall through to confirm-close dialog below.
+        var autoP2 = typeof window._autoResolvesPow2 === 'function' && window._autoResolvesPow2(t);
+        var issues = (isLigaOrSwiss || autoP2) ? (diag.incompleteTeams.length > 0 || diag.remainder > 0) : diag.hasIssues;
+        if (issues && typeof window.showUnifiedResolutionPanel === 'function') { window.showUnifiedResolutionPanel(tId); return; }
     }
-
-    // Confirmar antes de encerrar
-    if (typeof showConfirmDialog !== 'function') { window._error('showConfirmDialog not available'); return; }
+    if (typeof showConfirmDialog !== 'function') return;
     showConfirmDialog(_t('draw.closeEnrollTitle'), _t('draw.closeEnrollMsg', { name: window._safeHtml(t.name || '') }), function() {
-        t.status = 'closed';
-        window.AppStore.logAction(tId, 'Inscrições Encerradas manualmente');
-        // Notify participants about closed enrollments
-        if (typeof window._notifyTournamentParticipants === 'function') {
-            window._notifyTournamentParticipants(t, {
-                type: 'enrollments_closed',
-                message: _t('notif.enrollmentsClosed').replace('{name}', t.name || 'Torneio'),
-                level: 'important'
-            }, window.AppStore.currentUser ? window.AppStore.currentUser.email : null);
-        }
-        _saveTournament(function() {
-            _refreshView();
-            if (typeof showNotification === 'function') showNotification(_t('draw.enrollClosed'), _t('draw.enrollClosedMsg'), 'success');
-        });
+        request('close', _t('draw.enrollClosed'), _t('draw.enrollClosedMsg'), 'success');
     });
 };
 
@@ -3773,80 +3541,17 @@ window._showVagasDrawPanel = function (tId) {
 // lista de espera na ordem sorteada (t.waitlistOrder). Generaliza o ramo
 // 'standby' de _confirmP2Resolution, mas com corte definido pelo organizador.
 window._runVagasDraw = function (tId) {
-    var t = window._findTournamentById(tId);
-    if (!t) return;
-    var slots = parseInt(t.targetSlots) || 0;
-    if (slots <= 0) return;
-    var info = (typeof window._diagnoseAll === 'function') ? window._diagnoseAll(t) : { teamSize: parseInt(t.teamSize) || 1 };
-    var p = Array.isArray(t.participants) ? t.participants : (t.participants ? Object.values(t.participants) : []);
-    var _rosterSig = JSON.stringify(p.map(function(e) { return (e && typeof e === 'object') ? [e.uid || '', e.email || '', e.displayName || e.name || ''] : String(e); }));
-    // Snapshot pré-sorteio (permite refazer o sorteio enquanto não houver chave)
-    t.preDrawEnrollees = p.slice();
-
-    var _vips = t.vips || {};
-    var vipEntries = [];
-    var nonVipEntries = [];
-    p.forEach(function(entry) {
-        if (window._entryHasVip(t, entry)) vipEntries.push(entry); else nonVipEntries.push(entry);
-    });
-
-    // Embaralha SEMPRE (este modo é sempre sorteio aleatório) — Fisher-Yates.
-    var pool = nonVipEntries.slice();
-    for (var i = pool.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp; }
-
-    // Corte em jogadores (indivíduo=1, time pré-formado=teamSize) → mantém times
-    // completos sem BYE. Igual à contabilidade do ramo standby existente.
-    var _ts = info.teamSize || 1;
-    var _playersOf = function(e) { return window._entryTeamMembers(e) ? _ts : 1; }; // v3.0.x: time por estrutura, não por '/'
-    var _targetPlayers = slots * _ts;
-    var _used = vipEntries.reduce(function(s, e) { return s + _playersOf(e); }, 0);
-    var kept = [];
-    var overflow = [];
-    pool.forEach(function(e) { var s = _playersOf(e); if (_used + s <= _targetPlayers) { kept.push(e); _used += s; } else { overflow.push(e); } });
-
-    // Persiste a ordem sorteada da sobra (nomes canônicos + índice por entrada).
-    var order = [];
-    overflow.forEach(function(e, idx) {
-        if (e && typeof e === 'object') e.drawOrder = idx;
-        var nm = (typeof window._pName === 'function') ? window._pName(e) : (typeof e === 'string' ? e : (e.displayName || e.name || ''));
-        order.push(nm);
-    });
-
-    t.participants = vipEntries.concat(kept);
-    t.standbyParticipants = (t.standbyParticipants || []).concat(overflow);
-    t.waitlistOrder = order;
-    t.standbyPick = 'random';
-    t.standbyMode = (_ts > 1) ? 'teams' : 'individual';
-    t.drawSelectionDone = true;
-    t.status = 'closed';
-
-    // VIPs > vagas: todos os VIPs ficam (garantidos), nenhum não-VIP entra.
-    if (kept.length === 0 && vipEntries.length > slots && typeof showNotification === 'function') {
-        showNotification('⚠️ VIPs excedem as vagas', vipEntries.length + ' VIP(s) para ' + slots + ' vaga(s) — todos os VIPs foram mantidos; a chave terá ' + (window._countCompetitors ? window._countCompetitors(t).people : t.participants.length) + ' participantes.', 'warning');
-    }
-
-    if (window.AppStore && window.AppStore.logAction) {
-        window.AppStore.logAction(tId, 'Sorteio de vagas: ' + t.participants.length + ' selecionado(s), ' + overflow.length + ' na lista de espera (' + (t.callPolicy === 'locked' ? 'ordem travada' : 'por presença') + ')');
-    }
-
     if (document.getElementById('vagas-draw-panel')) document.getElementById('vagas-draw-panel').remove();
     document.body.style.overflow = '';
-
-    // Hand-off pro fluxo de sorteio de chave existente (igual ao botão Sortear):
-    // resolve grupos/Liga/eliminatória e o painel de resolução pra N≠potência de 2.
-    var _after = function() {
-        if (typeof window._handleSortearClick === 'function') { window._handleSortearClick(tId, false); }
-        else if (typeof window.showUnifiedResolutionPanel === 'function') { window.showUnifiedResolutionPanel(tId); }
-    };
-    if (!window.AppStore || typeof window.AppStore.mutate !== 'function') return;
-    window.AppStore.mutate(tId, function(ft) {
-        var freshParts = Array.isArray(ft.participants) ? ft.participants : (ft.participants ? Object.values(ft.participants) : []);
-        var freshSig = JSON.stringify(freshParts.map(function(e) { return (e && typeof e === 'object') ? [e.uid || '', e.email || '', e.displayName || e.name || ''] : String(e); }));
-        if (ft.drawSelectionDone || freshSig !== _rosterSig) return false;
-        ft.preDrawEnrollees = t.preDrawEnrollees; ft.participants = t.participants; ft.standbyParticipants = t.standbyParticipants;
-        ft.waitlistOrder = t.waitlistOrder; ft.standbyPick = t.standbyPick; ft.standbyMode = t.standbyMode;
-        ft.drawSelectionDone = true; ft.status = 'closed'; return true;
-    }, 'Sorteio de vagas registrado').then(function(saved) { if (saved !== false) _after(); });
+    window._runEnrollmentSlotsDraw(tId).then(function(data) {
+        if (data.changed === false) return;
+        if (data.standby > 0 && typeof showNotification === 'function') showNotification('Sorteio de vagas concluído', data.selected + ' selecionado(s) e ' + data.standby + ' na lista de espera.', 'success');
+        if (typeof window._handleSortearClick === 'function') window._handleSortearClick(tId, false);
+        else if (typeof window.showUnifiedResolutionPanel === 'function') window.showUnifiedResolutionPanel(tId);
+    }).catch(function(err) {
+        if (window._warn) window._warn('[runEnrollmentSlotsDraw] falhou', err);
+        if (typeof showNotification === 'function') showNotification('Não foi possível sortear as vagas', 'Nada foi alterado. Atualize e tente novamente.', 'error');
+    });
 };
 
 // v4.0.73: showResolutionSimulationPanel (a 2ª tela de simulação/preview) REMOVIDA —

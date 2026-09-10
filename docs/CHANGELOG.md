@@ -1,3 +1,9 @@
+# Changelog do scoreplace.app
+
+## 2.2.54 — inscrições e sorteio de vagas decididos no servidor (10/set/2026)
+
+Abertura, fechamento, inscrição tardia e sorteio de vagas agora são operações transacionais da Cloud Function. A tela apenas solicita a ação e recebe o torneio canônico, evitando que uma aba antiga regrave elenco, espera, VIPs ou o estado da chave.
+
 ## 2.2.25 — reabertura de resultado preserva atualizações concorrentes (08/set/2026)
 
 Reabrir um placar para corrigir o resultado agora aplica o reset no estado atual do torneio.
@@ -33,7 +39,6 @@ A escolha ou remoção de quadra passou a atualizar somente o jogo escolhido den
 
 A correção de placar mantém as cores de vitória e derrota durante a edição. Os campos de tie-break só aparecem quando o placar daquele set exige tie-break e os pontos ficam menores, separados do set seguinte. Em jogos melhor de três ou cinco sem placar, o cartão usa a escala compacta de um set até o primeiro resultado ser lançado.
 
-# Changelog do scoreplace.app
 
 ## 2.1.95 — cabeças de chave Ouro/Prata pela campanha da dupla (02/set/2026)
 
