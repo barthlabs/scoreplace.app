@@ -3845,18 +3845,9 @@ function _doCloseRound(t, tId, roundIdx, anchorMatchId, resultCtx, _forcarLocal)
       window._applySwissEliminationTransition(t, roundIdx);
       var _swLog = 'Suíço encerrado — ' + _targetCount + ' classificado(s) pra eliminatória';
       window.AppStore.logAction(tId, _swLog);
-      // BLINDAGEM (Fase B): persiste a transição ATOMICAMENTE. Re-aplica o resultado
-      // DEFERIDO do último jogo do suíço (resultCtx) + a transição sobre o estado FRESCO,
-      // em transação. Substitui o syncImmediate do doc inteiro (que a corrida das quartas
-      // do Suíço→elim clobbava). project_concurrency_safe_saves.
-      window.AppStore.commitTournamentTx(tId, function (freshT) {
-        if (resultCtx && resultCtx.matchId && typeof window._applyResultToTournament === 'function') {
-          window._applyResultToTournament(freshT, resultCtx.matchId, resultCtx.payload || {});
-        }
-        window._applySwissEliminationTransition(freshT, roundIdx);
-        if (!Array.isArray(freshT.history)) freshT.history = [];
-        freshT.history.push({ date: new Date().toISOString(), message: _swLog });
-      });
+      // L7.P1.35: este ramo só existe para testes puros (`_forcarLocal`). A produção
+      // já fechou acima pela CF closeRound; portanto nem a contingência de teste persiste
+      // a transição no navegador.
 
       showNotification(_t('bui.swissFinished'), _t('bui.swissFinishedMsg', { n: _targetCount, format: t.format || 'Eliminatórias' }), 'success');
       if (typeof window._notifyTournamentParticipants === 'function') {
@@ -3912,19 +3903,8 @@ function _doCloseRound(t, tId, roundIdx, anchorMatchId, resultCtx, _forcarLocal)
 
   var _closeLogMsg = `Rodada ${roundIdx + 1} encerrada`;
   window.AppStore.logAction(tId, _closeLogMsg);
-  // BLINDAGEM (save #2): persiste o fecho de rodada ATOMICAMENTE, re-aplicando o
-  // resultado que disparou o auto-close (deferido, não persistido) + o fecho + a
-  // geração da próxima rodada sobre o estado FRESCO. Substitui o syncImmediate do
-  // doc inteiro (que perdia write quando um echo do result-save chegava depois).
-  // Só o caminho NÃO-transição chega aqui (a transição Suíço→elim retorna antes).
-  window.AppStore.commitTournamentTx(tId, function (freshT) {
-    if (resultCtx && resultCtx.matchId && typeof window._applyResultToTournament === 'function') {
-      window._applyResultToTournament(freshT, resultCtx.matchId, resultCtx.payload || {});
-    }
-    window._applyRoundCloseToTournament(freshT, roundIdx);
-    if (!Array.isArray(freshT.history)) freshT.history = [];
-    freshT.history.push({ date: new Date().toISOString(), message: _closeLogMsg });
-  });
+  // L7.P1.35: este ramo é exercitado apenas por testes de motor. Persistir daqui
+  // reabriria uma segunda autoridade no navegador; a produção já retornou pela CF.
   // Notify Liga round via WhatsApp (fire-and-forget, only for Liga/Suíço formats)
   if (typeof window._rerenderBracket === 'function') {
     // v0.17.27: passa anchorMatchId quando vem de auto-close (após approve/save)

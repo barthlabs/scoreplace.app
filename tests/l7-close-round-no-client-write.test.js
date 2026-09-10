@@ -1,0 +1,11 @@
+'use strict';
+const fs = require('fs');
+let failed = 0;
+const ok = (v, s) => { console.log((v ? '✓ ' : '✗ ') + s); if (!v) failed++; };
+const source = fs.readFileSync('js/views/bracket-logic.js', 'utf8');
+const begin = source.indexOf('function _doCloseRound');
+const end = source.indexOf('// ─── Swiss pairing', begin);
+const body = source.slice(begin, end);
+ok(begin >= 0 && !/AppStore\.(?:mutate|commitTournamentTx)\s*\(/.test(body), 'fecho de rodada não persiste pelo navegador, nem no ramo de teste');
+ok(body.includes('window._callCloseRound({ tournamentId'), 'produção continua roteando o fecho à Function');
+process.exit(failed ? 1 : 0);
