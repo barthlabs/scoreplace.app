@@ -2769,6 +2769,37 @@ exports.reopenDrawPoll = onCall(async (request) => {
   });
 });
 
+// ─── Criação de enquete: configuração declarativa, estado e aviso server-side ─
+exports.createDrawPoll = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid;
+  const data = request.data || {}, tId = String(data.tournamentId || '').trim(), context = String(data.context || '').trim();
+  const hours = Math.max(1, Math.min(168, Math.trunc(Number(data.hours) || 48)));
+  const rawOptions = Array.isArray(data.options) ? data.options : [];
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId || !['incomplete', 'p2', 'odd'].includes(context)) throw new HttpsError('invalid-argument', 'Contexto de enquete inválido.');
+  if (rawOptions.length < 2 || rawOptions.length > 8) throw new HttpsError('invalid-argument', 'Escolha entre duas e oito opções.');
+  const options = rawOptions.map((option) => ({ key:String(option && option.key || '').trim(), icon:String(option && option.icon || '').slice(0, 16), title:String(option && option.title || '').trim().slice(0, 140), desc:String(option && option.desc || '').trim().slice(0, 500), isNash:option && option.isNash === true }));
+  if (options.some((option) => !option.key || !option.title) || new Set(options.map((option) => option.key)).size !== options.length) throw new HttpsError('invalid-argument', 'Opções de enquete inválidas.');
+  const ref = db.collection('tournaments').doc(tId), now = Date.now(), deadline = now + hours * 3600000, agoraIso = new Date(now).toISOString();
+  return db.runTransaction(async (tx) => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização cria a enquete.', { tId, uid });
+    if (Array.isArray(t.polls) && t.polls.some((poll) => poll && poll.status === 'active' && Number(poll.deadline) > now)) throw new HttpsError('failed-precondition', 'Já existe uma enquete aberta.');
+    const antes = _antesDoMotor(t), pollId = 'poll_' + now + '_' + Math.random().toString(36).slice(2, 8);
+    const poll = { id:pollId, context, status:'active', options, votes:{}, deadline, createdAt:now, nashRecommendation:(options.find((option) => option.isNash) || {}).key || '' };
+    if (!Array.isArray(t.polls)) t.polls = t.polls ? Object.values(t.polls) : [];
+    t.polls.push(poll); t.activePollId = pollId;
+    if (t.status === 'open' || !t.status) { t._pollSuspended = true; t.status = 'closed'; }
+    const recipients = Array.isArray(t.memberUids) ? Array.from(new Set(t.memberUids.map(String).filter(Boolean))) : [];
+    if (!Array.isArray(t.pollNotifications)) t.pollNotifications = [];
+    recipients.forEach((recipientUid) => t.pollNotifications.push({ targetUid:recipientUid, pollId, timestamp:now, read:false }));
+    const b = _gravaTorneio(tx, ref, t, antes, { agoraIso });
+    tx.set(ref.collection('notificationOutbox').doc('poll-created-' + pollId), { schema:1, kind:'tournament-notification', type:'poll', title:'🗳️ Nova enquete', message:'Há uma enquete aberta. Vote nas próximas ' + hours + ' horas.', tournamentId:tId, tournamentName:t.name || '', level:'important', recipients, ctaLabel:'📊 Responder enquete', ctaUrl:'https://scoreplace.app/#tournaments/' + tId, createdAt:agoraIso, createdAtMs:now, dispatchStatus:'pending' });
+    return { ok:true, changed:true, pollId, tournament:b.clean };
+  });
+});
+
 // ─── Decisões entre fases: somente a Function altera elenco e promoção ───────
 // O painel mostra os inativos/W.O. e a possível linha extra, mas não pode aplicar
 // essas escolhas sobre um snapshot que talvez já esteja atrasado.

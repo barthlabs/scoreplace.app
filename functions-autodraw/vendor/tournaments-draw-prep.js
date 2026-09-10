@@ -716,6 +716,15 @@ window._reopenDrawPoll = function(tId, pollId, hours) {
     });
 };
 
+window._createDrawPoll = function(tId, context, options, hours) {
+    if (typeof window._callCF !== 'function') return Promise.reject(new Error('Function indisponível'));
+    return window._callCF('createDrawPoll', { tournamentId:String(tId), context:String(context), options:options, hours:Number(hours) }, 'Entre na sua conta para criar a enquete.').then(function(res) {
+        var data = (res && res.data) || {};
+        if (data.tournament && typeof window._applyCFTournament === 'function') window._applyCFTournament(tId, data.tournament);
+        return data;
+    });
+};
+
 window._reopenDrawEnrollment = function(tId, reason) {
     if (typeof window._callCF !== 'function') return Promise.reject(new Error('Function indisponível'));
     return window._callCF('reopenDrawEnrollment', { tournamentId:String(tId), reason:reason }, 'Entre na sua conta para reabrir as inscrições.').then(function(res) {
@@ -2730,72 +2739,22 @@ window._showPollCreationDialog = function(tId, context, pollOptions) {
         if (hours < 1) hours = 1;
         if (hours > 168) hours = 168;
 
-        // Create poll on tournament
-        var pollData = {
-            id: 'poll_' + Date.now(),
-            context: context,
-            status: 'active',
-            options: [],
-            votes: {},       // email → optionKey
-            deadline: Date.now() + (hours * 3600000),
-            createdAt: Date.now(),
-            nashRecommendation: nashRec
-        };
-
-        // Build options from the full list, filtered by selection
+        // A configuração é declarativa; a Function cria a enquete no documento fresco,
+        // suspende inscrições e registra a entrega em outbox para push/e-mail.
+        var selectedPollOptions = [];
         pollOptions.forEach(function(opt) {
-            if (selectedOptions.indexOf(opt.key) !== -1) {
-                pollData.options.push({
-                    key: opt.key,
-                    icon: opt.icon,
-                    title: opt.title,
-                    desc: opt.desc,
-                    isNash: (opt.key === nashRec)
-                });
-            }
+            if (selectedOptions.indexOf(opt.key) !== -1) selectedPollOptions.push({ key:opt.key, icon:opt.icon, title:opt.title, desc:opt.desc, isNash:opt.key === nashRec });
         });
-
-        if (!window.AppStore || typeof window.AppStore.mutate !== 'function') {
-            if (typeof showNotification === 'function') showNotification('Atualize o aplicativo', 'Não foi possível criar a enquete com segurança.', 'error');
-            return;
-        }
-
-        // A enquete depende da lista de participantes e fecha inscrições. Faz tudo
-        // sobre o documento fresco para não devolver um placar/check-in antigo.
-        var created = window.AppStore.mutate(tId, function(ft) {
-            if (!Array.isArray(ft.polls)) ft.polls = ft.polls ? Object.values(ft.polls) : [];
-            if (ft.polls.some(function(existing) { return existing && existing.id === pollData.id; })) return false;
-            ft.polls.push(pollData);
-            ft.activePollId = pollData.id;
-            if (ft.status === 'open' || !ft.status) { ft._pollSuspended = true; ft.status = 'closed'; }
-            if (!Array.isArray(ft.pollNotifications)) ft.pollNotifications = [];
-            var freshParts = ft.participants ? (Array.isArray(ft.participants) ? ft.participants : Object.values(ft.participants)) : [];
-            freshParts.forEach(function(p) {
-                if (!p || typeof p !== 'object') return;
-                var uids = (typeof window._participantUids === 'function') ? window._participantUids(p) : (p.uid ? [p.uid] : []);
-                if (uids.length) uids.forEach(function(uid) { ft.pollNotifications.push({ targetUid: uid, pollId: pollData.id, timestamp: Date.now(), read: false }); });
-                else if (p.email) ft.pollNotifications.push({ targetEmail: p.email, pollId: pollData.id, timestamp: Date.now(), read: false });
-            });
-            return true;
-        }, 'Enquete criada: ' + selectedOptions.length + ' opções, prazo de ' + hours + 'h');
-
-        Promise.resolve(created).then(function(saved) {
-            if (saved === false || typeof window._notifyTournamentParticipants !== 'function') return;
-            window._notifyTournamentParticipants(t, {
-                type: 'poll', level: 'important',
-                title: _t('predraw.pollNotifTitle', {name: window._safeHtml(t.name)}),
-                message: _t('predraw.pollNotifMsg', {hours: hours}), tournamentId: tId, pollId: pollData.id
-            }, t.organizerEmail);
-        }).catch(function(err) { window._error('[poll-create] save error:', err); });
+        window._createDrawPoll(tId, context, selectedPollOptions, hours).then(function() {
+            if (typeof showNotification === 'function') showNotification(_t('draw.pollCreated'), _t('draw.pollCreatedMsg', {hours: hours}), 'success');
+            window.location.hash = '#tournaments/' + tId;
+        }).catch(function(err) {
+            if (window._warn) window._warn('[createDrawPoll] criação falhou', err);
+            if (typeof showNotification === 'function') showNotification('Não foi possível criar', 'Nada foi alterado. Atualize e tente novamente.', 'error');
+        });
 
         overlay.remove();
         document.body.style.overflow = '';
-        if (typeof showNotification === 'function') {
-            showNotification(_t('draw.pollCreated'), _t('draw.pollCreatedMsg', {hours: hours}), 'success');
-        }
-
-        // Re-render tournament detail
-        window.location.hash = '#tournaments/' + tId;
     });
 };
 
