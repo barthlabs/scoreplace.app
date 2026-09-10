@@ -896,29 +896,29 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   // aplica a escolha do organizador: subUid vazio = W.O. ao time (marca resolvido e escala).
   window._woResolveSubChoiceUI = function (tId, absentUid, subUid) {
     var t = _findT(tId); if (!t) return;
-    if (subUid) {
-      // aceite explícito: o motor coloca o suplente (pulando o filtro de categoria)
-      _commit(tId, function (ft) {
-        if (typeof window._woResolveSubChoice === 'function') window._woResolveSubChoice(String(ft.id), absentUid, subUid);
-      }, function () {
-        window._woCloseOverlay();
-        if (typeof showNotification === 'function') showNotification('✅ Substituto definido', _nameOfUid(t, subUid, '') + ' assumiu a vaga.', 'success');
-        var t2 = _findT(tId); if (t2 && _pendingSubChoices(t2).length) window._woShowSubChoiceDialog(tId); // próxima pendência
-      }, 'Aplicando a substituição…');
-    } else {
-      // W.O. ao time: marca a pendência resolvida e re-roda o W.O. pra escalar (sem sub).
-      _commit(tId, function (ft) {
-        if (Array.isArray(ft.woSubChoices)) ft.woSubChoices.forEach(function (x) { if (x.absentUid === absentUid) x.resolved = true; });
-        // limpa o check-in do(s) suplente(s) daquela pendência pra não re-disparar, e escala:
-        var gc = (Array.isArray(ft.woSubChoices) ? ft.woSubChoices : []).find(function (x) { return x.absentUid === absentUid; });
-        var absName = (gc && gc.absentName) || (typeof window._memberNameByUid === 'function' ? window._memberNameByUid(ft, absentUid) : '') || absentUid;
-        if (typeof window._applyWO === 'function') window._applyWO(ft, { absentName: absName, absentUids: [absentUid], scope: 'match', noSubBehavior: 'escalate', woScope: ft.woScope || 'individual', _forceNoSub: true });
-      }, function () {
-        window._woCloseOverlay();
-        if (typeof showNotification === 'function') showNotification('🚫 W.O. ao time', 'Ninguém assumiu a vaga — o adversário venceu.', 'warning');
-        var t2 = _findT(tId); if (t2 && _pendingSubChoices(t2).length) window._woShowSubChoiceDialog(tId);
-      }, 'Registrando o W.O.…');
+    if (!window.FirestoreDB || typeof window.FirestoreDB._callFn !== 'function') {
+      if (typeof showNotification === 'function') showNotification('⚠️ Substituição não salva', 'A conexão com o servidor não está disponível.', 'warning');
+      return;
     }
+    // Nenhuma escolha de categoria altera a chave no navegador. A CF relê a
+    // pendência, aceita somente as opções registradas e grava o motor canônico.
+    var save = window.FirestoreDB._callFn('resolveWOSubstitutionChoice', {
+      tournamentId: String(tId),
+      absentUid: String(absentUid),
+      substituteUid: String(subUid || '')
+    });
+    save.then(function () {
+      window._woCloseOverlay();
+      if (typeof showNotification === 'function') {
+        if (subUid) showNotification('✅ Substituto definido', _nameOfUid(t, subUid, '') + ' assumiu a vaga.', 'success');
+        else showNotification('🚫 W.O. ao time', 'Ninguém assumiu a vaga — o adversário venceu.', 'warning');
+      }
+      if (typeof window.renderParticipants === 'function') window.renderParticipants(tId);
+      setTimeout(function () { var t2 = _findT(tId); if (t2 && _pendingSubChoices(t2).length) window._woShowSubChoiceDialog(tId); }, 250);
+    }).catch(function (e) {
+      if (window._error) window._error('[wo sub choice] falhou', e);
+      if (typeof showNotification === 'function') showNotification('⚠️ Substituição não salva', (e && e.message) || 'Tente novamente.', 'warning');
+    });
   };
 
   // ─── APLICAÇÃO do W.O. — funil no motor único _applyWO (participants.js) ────────

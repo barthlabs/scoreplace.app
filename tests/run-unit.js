@@ -799,6 +799,9 @@ const SUITES = [
   'tests/apply-result.test.js',
   'tests/apply-round-close.test.js',
   'tests/apply-wo.test.js',
+  // W.O. declarado pela organização roda o motor vendored na CF; a tela só envia intenção.
+  'tests/wo-server-core.test.js',
+  'tests/wo-declare-cf-only.test.js',
   'tests/wo-individual.test.js',
   'tests/wo-availability-canonical.test.js',
   'tests/wo-outcome-wiring.test.js',

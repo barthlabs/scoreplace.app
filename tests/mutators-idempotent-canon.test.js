@@ -13,6 +13,7 @@
 // nasça como toggle fica VERMELHO aqui. [[project_concurrency_safe_saves]]
 const H = require('./render-harness');
 const W = H.sandbox;
+require('./headless').load('wo-core.js');
 require('./headless').load('participants.js');
 
 let pass = 0, fail = 0; const fails = [];

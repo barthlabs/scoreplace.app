@@ -1,3 +1,4 @@
+// ⚠️ 2.2.47 · W.O., substituições e reversões são aplicados pela Cloud Function; a tela só envia a ação autorizada e recebe o torneio canônico.
 // ⚠️ 2.2.46 · a presença, tanto da organização quanto do participante, é confirmada pelo servidor; o aparelho só mostra a resposta canônica e não mistura estado local antigo.
 // ⚠️ 2.2.45 · o convite de co-organização só informa envio quando a Function confirma; resposta vazia vira aviso honesto, sem perder o convite já persistido.
 // ⚠️ 2.2.44 · convites de coorganização e o encerramento de temporada da Liga são confirmados pela Cloud Function, com gravação transacional no servidor.

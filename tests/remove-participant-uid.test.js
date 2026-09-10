@@ -23,6 +23,7 @@ W.showConfirmDialog = function (title, msg, onYes) { if (typeof onYes === 'funct
 W.showNotification = function () {};
 let saved = 0;
 let vipCall = null;
+let woCalls = [];
 W.FirestoreDB = {
   saveTournament: function () {
     saved++;
@@ -32,7 +33,8 @@ W.FirestoreDB = {
   // O thenable síncrono preserva o ritmo deste harness, que testa a ação do card sem
   // precisar de um loop assíncrono de navegador.
   _callFn: function (name, payload) {
-    vipCall = { name: name, payload: payload };
+    if (name === 'setTournamentWOAbsence') woCalls.push(payload);
+    else vipCall = { name: name, payload: payload };
     return { then: function (f) {
       if (f) f({ data: { ok: true, vips: (function () { var out = {}; out[String(payload.uid || payload.participantName)] = true; return out; })() } });
       return { catch: function () { return null; } };
@@ -109,8 +111,9 @@ console.log('\n── ações do card gravam na CHAVE-UID (W.O. · VIP · nível
 
   // W.O. do solo — o card manda nome VAZIO (não há nome gravado) + uid
   W._markAbsent(t.id, '', 'uSolo');
-  ok(t.absent.uSolo != null, 'W.O. :: gravou na chave-UID');
-  ok(Object.keys(t.absent).every((k) => k === 'uSolo'), 'W.O. :: NENHUMA chave-nome criada — got ' + JSON.stringify(Object.keys(t.absent)));
+  const woSolo = woCalls.pop();
+  ok(woSolo && woSolo.action === 'absent' && woSolo.identities.length === 1 && woSolo.identities[0].uid === 'uSolo', 'W.O. :: enviou a intenção pela chave-UID');
+  ok(!Object.keys(t.absent).length, 'W.O. :: a tela não gravou ausência localmente');
 
   // VIP do solo
   W._toggleVip(t.id, '', 'uSolo');
@@ -131,11 +134,13 @@ console.log('\n── W.O. do time chaveia pelos DOIS membros ──');
   W.AppStore = { tournaments: [t], currentUser: { uid: 'uOrg' }, isCreator: () => true, sync: () => {}, commitTournamentTx: (id, fn) => { saved++; fn(t); return Promise.resolve(true); }, mutate: (tid, fn) => { fn(t); return Promise.resolve(true); }, getTournament: () => t };
   W._canManagePresence = function () { return true; };
   W._markAbsent(t.id, 'Marcello Martins de Souza / Karla Fernandes', 'u:uMarcello|u:uKarla');
-  ok(t.absent.uMarcello != null && t.absent.uKarla != null, 'time :: os DOIS uids ficaram ausentes — got ' + JSON.stringify(Object.keys(t.absent)));
-  ok(!Object.keys(t.absent).some((k) => k.indexOf('/') !== -1), 'time :: NENHUMA chave com o nome do time');
-  // reverter: um clique devolve os dois
+  const woTeam = woCalls.pop();
+  ok(woTeam && woTeam.action === 'absent' && woTeam.identities.map(x => x.uid).sort().join(',') === 'uKarla,uMarcello', 'time :: envia os DOIS uids, nunca o nome do time');
+  // Simula o snapshot canônico que chega da Function antes do clique de reverter.
+  t.absent = { uMarcello: Date.now(), uKarla: Date.now() };
   W._markAbsent(t.id, 'Marcello Martins de Souza / Karla Fernandes', 'u:uMarcello|u:uKarla');
-  ok(t.absent.uMarcello == null && t.absent.uKarla == null, 'time :: reverter devolve os DOIS');
+  const woRevert = woCalls.pop();
+  ok(woRevert && woRevert.action === 'revert' && woRevert.identities.length === 2, 'time :: reverter envia os DOIS pela mesma porta');
 }
 
 // DUPLA MISTA (um com conta + um fictício) — cada um pelo que ele é.
@@ -145,8 +150,9 @@ console.log('\n── W.O. do time chaveia pelos DOIS membros ──');
   W.AppStore = { tournaments: [t], currentUser: { uid: 'uOrg' }, isCreator: () => true, sync: () => {}, commitTournamentTx: (id, fn) => { saved++; fn(t); return Promise.resolve(true); }, mutate: (tid, fn) => { fn(t); return Promise.resolve(true); }, getTournament: () => t };
   W._canManagePresence = function () { return true; };
   W._markAbsent(t.id, 'Marcello / Convidado sem conta', 'u:uMarcello|n:Convidado sem conta');
-  ok(t.absent.uMarcello != null, 'mista :: quem tem conta foi pelo UID');
-  ok(t.absent['Convidado sem conta'] != null, 'mista :: o fictício foi pelo NOME');
+  const woMixed = woCalls.pop();
+  ok(woMixed && woMixed.identities.some(x => x.uid === 'uMarcello'), 'mista :: quem tem conta viaja pelo UID');
+  ok(woMixed && woMixed.identities.some(x => x.name === 'Convidado sem conta'), 'mista :: o fictício viaja pelo NOME');
 }
 
 // FICTÍCIO (sem conta) — ÚNICO caso que continua pelo nome, como o dono definiu.
@@ -155,7 +161,8 @@ console.log('\n── W.O. do time chaveia pelos DOIS membros ──');
   W.AppStore = { tournaments: [t], currentUser: { uid: 'uOrg' }, isCreator: () => true, sync: () => {}, commitTournamentTx: (id, fn) => { saved++; fn(t); return Promise.resolve(true); }, mutate: (tid, fn) => { fn(t); return Promise.resolve(true); }, getTournament: () => t };
   W._canManagePresence = function () { return true; };
   W._markAbsent(t.id, 'Convidado sem conta');
-  ok(t.absent['Convidado sem conta'] != null, 'fictício :: W.O. pelo NOME (sem uid, é a exceção)');
+  const woGuest = woCalls.pop();
+  ok(woGuest && woGuest.identities.length === 1 && woGuest.identities[0].name === 'Convidado sem conta', 'fictício :: W.O. envia nome somente quando não há uid');
 }
 
 console.log(fail === 0 ? `✅ remove-participant-uid: OK  (${pass} asserts ok)` : `❌ ${fail} FALHA(S)  (${pass} ok)`);

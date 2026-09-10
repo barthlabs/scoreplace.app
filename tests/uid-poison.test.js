@@ -214,6 +214,8 @@ console.log('\nSubstituição de W.O. — regra de gênero por uid (misto obriga
      r.subChoicePending[0].absentUid === 'a1' && r.subChoicePending[0].options[0].uid === 'sF');
   // organizador ACEITA a quebra → sF entra no lugar do homem
   const t2 = mkT(); t2.standbyParticipants = [{ uid: 'sF', gender: 'feminino' }]; t2.checkedIn = { sF: _AGORA }; t2.absent = { a1: 1 };
+  // A escolha só pode existir depois que o motor registrou a pendência canônica.
+  sandbox._applyWoSubsToTournament(t2);
   sandbox._findTournamentById = (id) => (String(id) === 'G' ? t2 : null);
   const rr = sandbox._woResolveSubChoice('G', 'a1', 'sF');
   ok('organizador aceita a quebra → sF assume a vaga do a1',

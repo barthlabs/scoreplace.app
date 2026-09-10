@@ -22,6 +22,10 @@ catch (e) { console.error('[espelho-result] vendor/match-roster.js indisponível
 // Require defensivo: se draw-core falhar ao carregar, NÃO derruba o módulo
 // (sendPushNotification continua funcionando); autoDraw apenas pula.
 let generateLigaRound = null;
+let applyWoFn = null;
+let setPresenceWithWOSubstitutionFn = null;
+let resolveWOSubstitutionChoiceFn = null;
+let setTournamentWOAbsenceFn = null;
 let drawInitial = null;   // v1.2.25: motor do SORTEIO INICIAL (Etapa 3 · fase A) — usado pela drawRound
 let integrateLateFn = null; // v1.2.57: integração de tardios no servidor — usado pela integrateLateEntries
 let formLatePairFn = null;  // formar dupla na espera + integrar, atômico — usado pela formLatePair
@@ -41,6 +45,10 @@ const _leagueSeasonCore = require('./league-season-core.js');
 try {
   const _dc = require('./draw-core.js');
   generateLigaRound = _dc.generateLigaRound;
+  applyWoFn = _dc.applyTournamentWO;
+  setPresenceWithWOSubstitutionFn = _dc.setPresenceWithWOSubstitution;
+  resolveWOSubstitutionChoiceFn = _dc.resolveWOSubstitutionChoice;
+  setTournamentWOAbsenceFn = _dc.setTournamentWOAbsence;
   drawInitial = _dc.drawInitial;
   integrateLateFn = _dc.integrateLateEntries;
   formLatePairFn = _dc.formLatePairCore;
@@ -1243,6 +1251,235 @@ exports.deliverScoreNotification = onDocumentCreated(
     await event.data.ref.set({ dispatchStatus: 'dispatched', dispatchedAt: new Date().toISOString() }, { merge: true });
   }
 );
+
+// ─── W.O. declarado pela organização: intenção fina, motor e escrita no servidor ───
+// O navegador não monta mapas nem propaga chave. Ele só informa a pessoa escolhida;
+// a CF relê o torneio, revalida a organização e roda o motor vendored na transação.
+exports.applyTournamentWO = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid;
+  const data = request.data || {};
+  const tId = String(data.tournamentId || '').trim();
+  const absentName = String(data.absentName || '').trim();
+  const requestedUid = String(data.absentUid || '').trim();
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId || (!absentName && !requestedUid)) throw new HttpsError('invalid-argument', 'Torneio e participante são obrigatórios.');
+  if (typeof applyWoFn !== 'function' || !drawWindow) throw _drawFail('internal', 'Motor de W.O. indisponível no servidor.', { tId });
+
+  const ref = db.collection('tournaments').doc(tId);
+  const pre = await ref.get();
+  if (!pre.exists) throw _drawFail('not-found', 'Torneio não encontrado.', { tId, uid });
+  if (!_isTournamentAdmin(pre.data(), uid)) throw _drawFail('permission-denied', 'Só a organização pode declarar W.O.', { tId, uid });
+  await _preloadDrawNames(pre.data());
+  const agoraIso = new Date().toISOString();
+
+  return db.runTransaction(async (tx) => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Sem permissão (doc fresco).', { tId, uid });
+    _enrichParticipantsFromProfiles(t);
+
+    // O nome recebido é somente o alvo de interface. Ele precisa existir no roster
+    // fresco; uid(s) são derivados aqui para que homônimos não possam redirecionar W.O.
+    const entries = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
+    const entry = entries.find((p) => {
+      const uids = typeof drawWindow._participantUids === 'function' ? drawWindow._participantUids(p).filter(Boolean) : [];
+      if (requestedUid) return uids.includes(requestedUid);
+      const display = typeof drawWindow._pName === 'function' ? drawWindow._pName(p, '') : String((p && (p.displayName || p.name)) || '');
+      return display === absentName || display.split('/').map(x => x.trim()).includes(absentName);
+    });
+    if (!entry) throw _drawFail('not-found', 'Participante não pertence mais ao torneio.', { tId, uid, absentName, requestedUid });
+    const entryUids = typeof drawWindow._participantUids === 'function' ? drawWindow._participantUids(entry).filter(Boolean) : [];
+    const targetUids = requestedUid ? [requestedUid] : (typeof drawWindow._memberUidByName === 'function' ? [drawWindow._memberUidByName(t, absentName)].filter(Boolean) : entryUids);
+    const canonicalName = requestedUid && typeof drawWindow._memberNameByUid === 'function'
+      ? (drawWindow._memberNameByUid(t, requestedUid) || absentName) : absentName;
+    if (!canonicalName) throw _drawFail('not-found', 'Participante não pertence mais ao torneio.', { tId, uid, requestedUid });
+    const before = _antesDoMotor(t);
+    const result = applyWoFn(t, {
+      absentName: canonicalName,
+      absentUids: targetUids,
+      scope: 'match',
+      noSubBehavior: 'wait',
+      woScope: t.woScope || 'individual'
+    });
+    if (!result || !result.ok) return { ok: false, result: result || { outcome: 'error' } };
+    const boundary = _gravaTorneio(tx, ref, t, before, { agoraIso });
+    return { ok: true, result, tournament: boundary.clean };
+  });
+});
+
+// ─── Presença da organização com substituição de W.O. ─────────────────────────
+// Quando já há ausentes, marcar alguém presente pode mudar a chave. Por isso a
+// intenção não pode voltar ao navegador: a Function aplica presença + motor de
+// substituições dentro da mesma transação e devolve o estado canônico.
+exports.setTournamentPresenceWithWOSubstitution = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid;
+  const data = request.data || {};
+  const tId = String(data.tournamentId || '').trim();
+  const targetUid = String(data.targetUid || '').trim();
+  const targetName = String(data.targetName || '').trim();
+  const action = String(data.action || '').trim();
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId || (!targetUid && !targetName)) throw new HttpsError('invalid-argument', 'Torneio e participante são obrigatórios.');
+  if (action !== 'present' && action !== 'clear') throw new HttpsError('invalid-argument', 'Ação de presença inválida.');
+  if (typeof setPresenceWithWOSubstitutionFn !== 'function' || !drawWindow) {
+    throw _drawFail('internal', 'Motor de presença indisponível no servidor.', { tId });
+  }
+
+  const ref = db.collection('tournaments').doc(tId);
+  const pre = await ref.get();
+  if (!pre.exists) throw _drawFail('not-found', 'Torneio não encontrado.', { tId, uid });
+  if (!_isTournamentAdmin(pre.data(), uid)) throw _drawFail('permission-denied', 'Só a organização controla esta presença.', { tId, uid });
+  await _preloadDrawNames(pre.data());
+  const agoraIso = new Date().toISOString();
+
+  return db.runTransaction(async (tx) => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Sem permissão (doc fresco).', { tId, uid });
+    _enrichParticipantsFromProfiles(t);
+
+    const pools = ['participants', 'standbyParticipants', 'waitlist'];
+    let target = null;
+    let targetIsStandby = false;
+    for (const key of pools) {
+      const entries = Array.isArray(t[key]) ? t[key] : Object.values(t[key] || {});
+      const found = entries.find((p) => {
+        const uids = typeof drawWindow._participantUids === 'function' ? drawWindow._participantUids(p).filter(Boolean) : [];
+        if (targetUid) return uids.includes(targetUid);
+        const display = typeof drawWindow._pName === 'function' ? drawWindow._pName(p, '') : String((p && (p.displayName || p.name)) || '');
+        return display === targetName || display.split('/').map(x => x.trim()).includes(targetName);
+      });
+      if (found) { target = found; targetIsStandby = key !== 'participants'; break; }
+    }
+    if (!target) throw _drawFail('not-found', 'Participante não pertence mais ao torneio.', { tId, uid, targetUid, targetName });
+
+    const resolvedUid = targetUid || ((typeof drawWindow._memberUidByName === 'function' && targetName)
+      ? String(drawWindow._memberUidByName(t, targetName) || '') : '');
+    const canonicalName = resolvedUid && typeof drawWindow._memberNameByUid === 'function'
+      ? (drawWindow._memberNameByUid(t, resolvedUid) || targetName) : targetName;
+    const who = resolvedUid ? { uid: resolvedUid, displayName: canonicalName } : canonicalName;
+    if (!canonicalName && !resolvedUid) throw _drawFail('not-found', 'Participante não pertence mais ao torneio.', { tId, uid });
+    if (action === 'present' && targetIsStandby && typeof drawWindow._idMapHas === 'function' && drawWindow._idMapHas(t, t.absent || {}, who)) {
+      throw _drawFail('failed-precondition', 'Use Reverter para reativar este suplente.', { tId, uid, targetUid: resolvedUid });
+    }
+
+    const before = _antesDoMotor(t);
+    const result = setPresenceWithWOSubstitutionFn(t, { uid: resolvedUid, name: canonicalName, action, at: Date.now() });
+    if (!result || !result.ok) return { ok: false, result: result || { reason: 'error' } };
+    const boundary = _gravaTorneio(tx, ref, t, before, { agoraIso });
+    return { ok: true, result, tournament: boundary.clean };
+  });
+});
+
+// ─── Escolha explícita de substituto que quebra categoria ────────────────────
+// A tela somente escolhe entre as opções que a própria Function registrou. O
+// aceite (ou o W.O. definitivo) é reaplicado no documento fresco para impedir
+// que uma pendência vencida ou um UID injetado alterem a chave.
+exports.resolveWOSubstitutionChoice = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid;
+  const data = request.data || {};
+  const tId = String(data.tournamentId || '').trim();
+  const absentUid = String(data.absentUid || '').trim();
+  const substituteUid = String(data.substituteUid || '').trim();
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId || !absentUid) throw new HttpsError('invalid-argument', 'Torneio e ausência são obrigatórios.');
+  if (typeof resolveWOSubstitutionChoiceFn !== 'function' || !drawWindow) {
+    throw _drawFail('internal', 'Motor de substituição indisponível no servidor.', { tId });
+  }
+
+  const ref = db.collection('tournaments').doc(tId);
+  const pre = await ref.get();
+  if (!pre.exists) throw _drawFail('not-found', 'Torneio não encontrado.', { tId, uid });
+  if (!_isTournamentAdmin(pre.data(), uid)) throw _drawFail('permission-denied', 'Só a organização escolhe o substituto.', { tId, uid });
+  await _preloadDrawNames(pre.data());
+  const agoraIso = new Date().toISOString();
+
+  return db.runTransaction(async (tx) => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Sem permissão (doc fresco).', { tId, uid });
+    _enrichParticipantsFromProfiles(t);
+    const choice = (Array.isArray(t.woSubChoices) ? t.woSubChoices : []).find((x) => x && String(x.absentUid || '') === absentUid && !x.resolved);
+    if (!choice) throw _drawFail('failed-precondition', 'Esta escolha de substituto já foi resolvida.', { tId, uid, absentUid });
+    if (substituteUid && !(choice.options || []).some((o) => o && String(o.uid || '') === substituteUid)) {
+      throw _drawFail('permission-denied', 'O substituto não pertence às opções desta pendência.', { tId, uid, absentUid, substituteUid });
+    }
+
+    const before = _antesDoMotor(t);
+    const result = resolveWOSubstitutionChoiceFn(t, absentUid, substituteUid);
+    if (!result || !result.ok) return { ok: false, result: result || { reason: 'error' } };
+    const boundary = _gravaTorneio(tx, ref, t, before, { agoraIso });
+    return { ok: true, result, tournament: boundary.clean };
+  });
+});
+
+// ─── Declarar/reverter ausência de W.O. ──────────────────────────────────────
+// Esta porta cobre os botões compactos de chamada. O browser envia identidades e
+// o alvo absoluto; a Function confere cada identidade no elenco fresco e roda a
+// mesma reversão vendorizada, inclusive a trava de placar já jogado.
+exports.setTournamentWOAbsence = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid;
+  const data = request.data || {};
+  const tId = String(data.tournamentId || '').trim();
+  const wantAbsent = data.action === 'absent' ? true : (data.action === 'revert' ? false : null);
+  const requested = Array.isArray(data.identities) ? data.identities.slice(0, 4) : [];
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId || wantAbsent === null || !requested.length) throw new HttpsError('invalid-argument', 'Torneio, ação e participante são obrigatórios.');
+  if (typeof setTournamentWOAbsenceFn !== 'function' || !drawWindow) {
+    throw _drawFail('internal', 'Motor de W.O. indisponível no servidor.', { tId });
+  }
+
+  const ref = db.collection('tournaments').doc(tId);
+  const pre = await ref.get();
+  if (!pre.exists) throw _drawFail('not-found', 'Torneio não encontrado.', { tId, uid });
+  if (!_isTournamentAdmin(pre.data(), uid)) throw _drawFail('permission-denied', 'Só a organização altera W.O.', { tId, uid });
+  await _preloadDrawNames(pre.data());
+  const agoraIso = new Date().toISOString();
+
+  return db.runTransaction(async (tx) => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Sem permissão (doc fresco).', { tId, uid });
+    _enrichParticipantsFromProfiles(t);
+    const pools = ['participants', 'standbyParticipants', 'waitlist'];
+    const allEntries = pools.flatMap((key) => Array.isArray(t[key]) ? t[key] : Object.values(t[key] || {}));
+    const identities = requested.map((raw) => {
+      const requestedUid = String(raw && raw.uid || '').trim();
+      const requestedName = String(raw && raw.name || '').trim();
+      const entry = allEntries.find((p) => {
+        const uids = typeof drawWindow._participantUids === 'function' ? drawWindow._participantUids(p).filter(Boolean) : [];
+        if (requestedUid) return uids.includes(requestedUid);
+        const display = typeof drawWindow._pName === 'function' ? drawWindow._pName(p, '') : String((p && (p.displayName || p.name)) || '');
+        return display === requestedName || display.split('/').map(x => x.trim()).includes(requestedName);
+      });
+      if (!entry) return null;
+      if (requestedUid) {
+        const displayName = typeof drawWindow._memberNameByUid === 'function'
+          ? (drawWindow._memberNameByUid(t, requestedUid) || requestedName) : requestedName;
+        return { uid: requestedUid, displayName };
+      }
+      return requestedName;
+    });
+    if (identities.some((x) => !x)) throw _drawFail('not-found', 'Participante não pertence mais ao torneio.', { tId, uid });
+
+    if (!wantAbsent) {
+      const allMatches = typeof drawWindow._collectAllMatches === 'function' ? drawWindow._collectAllMatches(t) : (t.matches || []);
+      for (const who of identities) {
+        const meta = typeof drawWindow._woHistGet === 'function' ? drawWindow._woHistGet(t, who) : null;
+        const match = meta && meta.matchNum ? allMatches[Number(meta.matchNum) - 1] : null;
+        if (match && typeof drawWindow._matchHasRealPlay === 'function' && drawWindow._matchHasRealPlay(match)) {
+          throw _drawFail('failed-precondition', 'A partida já foi jogada e o W.O. não pode ser revertido.', { tId, uid, matchNum: meta.matchNum });
+        }
+      }
+    }
+
+    const before = _antesDoMotor(t);
+    const result = setTournamentWOAbsenceFn(t, identities, wantAbsent);
+    if (!result || !result.ok) return { ok: false, result: result || { reason: 'error' } };
+    const boundary = _gravaTorneio(tx, ref, t, before, { agoraIso });
+    return { ok: true, result, tournament: boundary.clean };
+  });
+});
 
 // Só campos de placar e transição entram no recibo; jamais perfil completo, nem o objeto
 // inteiro do torneio. O formato é deliberadamente estável para a conferência posterior.

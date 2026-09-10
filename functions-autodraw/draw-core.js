@@ -226,6 +226,47 @@ require('./vendor/tournaments-draw-prep.js');
 // _applyDrawDecisions + os núcleos PUROS extraídos dos handlers de painel. É o que permite
 // o servidor APLICAR a decisão do organizador ao elenco com a MESMA função do cliente.
 require('./vendor/draw-decisions.js');
+
+// ── W.O. no servidor: mesmos auxiliares do cliente, sem DOM ─────────────────
+// `wo-core.js` é vendored da tela. Estes adaptadores só fornecem as dependências
+// de armazenamento que antes viviam em store.js (que não pode ser carregado no Node).
+// A decisão e a mutação continuam no motor compartilhado, nunca numa cópia da CF.
+g.window._woHistGet = function (t, who) {
+  if (!t || !t.woHistory || who == null) return undefined;
+  var k = g.window._idMapKey(t, who);
+  if (k.uid && t.woHistory[k.uid] != null) return t.woHistory[k.uid];
+  return k.name ? t.woHistory[k.name] : undefined;
+};
+g.window._woHistSet = function (t, who, meta) {
+  if (!t || who == null) return;
+  if (!t.woHistory) t.woHistory = {};
+  var k = g.window._idMapKey(t, who);
+  if (meta && typeof meta === 'object' && !meta.name) meta.name = k.name || '';
+  if (k.uid) { t.woHistory[k.uid] = meta; if (k.name && k.name !== k.uid && t.woHistory[k.name] != null) delete t.woHistory[k.name]; }
+  else if (k.name) t.woHistory[k.name] = meta;
+};
+g.window._woHistDel = function (t, who) {
+  if (!t || !t.woHistory || who == null) return;
+  var k = g.window._idMapKey(t, who);
+  if (k.uid) delete t.woHistory[k.uid];
+  if (k.name) delete t.woHistory[k.name];
+};
+g.window._getStandbyPool = function (t) {
+  if (!t) return [];
+  var sp = Array.isArray(t.standbyParticipants) ? t.standbyParticipants : [];
+  var wl = Array.isArray(t.waitlist) ? t.waitlist : [];
+  var key = function (p) {
+    var u = typeof g.window._participantUids === 'function' ? g.window._participantUids(p) : (p && p.uid ? [p.uid] : []);
+    return u.length ? 'u:' + u.slice().sort().join('+') : 'n:' + g.window._pName(p);
+  };
+  var seen = new Set(sp.map(key)), pool = sp.slice();
+  wl.forEach(function (w) { var k = key(w); if (k !== 'n:' && !seen.has(k)) { seen.add(k); pool.push(w); } });
+  return pool;
+};
+// Fluxos Liga/Rei-Rainha que exigem escolha visual não são aplicados por adivinhação.
+// O callable devolve ligaDelegated para a tela solicitar a escolha explícita depois.
+g.window._ligaPickFill = function () {};
+require('./vendor/wo-core.js');
 // _applyResultToTournament (fecho de rodada no servidor re-aplica o placar DEFERIDO que fechou
 // a rodada). DOM só em funções que o servidor não chama (live-scoring/TV) — no load é limpo.
 require('./vendor/bracket-ui.js');
@@ -831,4 +872,58 @@ function closeRoundCore(t, roundIdx, resultCtx) {
   return { ok: true, branch: branch };
 }
 
-module.exports = { generateLigaRound, compileFromFmt2, canRecompile, hasDrawnBracket, drawInitial, integrateLateEntries, formLatePairCore, splitLatePairCore, closeRoundCore, materializeNextPhase: g.window._phasesEngine && g.window._phasesEngine.materializeNextPhase, standingsDaFaseAnterior: g.window._phasesEngine && g.window._phasesEngine.standingsDaFaseAnterior, phaseComplete: g.window._phasesEngine && g.window._phasesEngine.phaseComplete, groupTeamStandings: g.window._phasesEngine && g.window._phasesEngine.groupTeamStandings, _window: g.window };
+function applyTournamentWO(t, opts) {
+  if (!t || typeof g.window._applyWO !== 'function') return { ok: false, outcome: 'error', reason: 'wo-core-unavailable' };
+  if (typeof g.window._rehydrateEntryNames === 'function') g.window._rehydrateEntryNames(t);
+  return g.window._applyWO(t, opts || {});
+}
+
+// Presença que pode destravar substituição de W.O. Usa o mesmo motor vendored da
+// tela, mas recebe uma intenção absoluta (presente/retirar) para continuar
+// idempotente quando a transação do Firestore for repetida.
+function setPresenceWithWOSubstitution(t, opts) {
+  const win = g.window;
+  if (!t) return { ok: false, reason: 'no-tournament' };
+  opts = opts || {};
+  const action = opts.action === 'present' ? 'present' : (opts.action === 'clear' ? 'clear' : '');
+  if (!action) return { ok: false, reason: 'invalid-action' };
+  const who = opts.uid ? { uid: String(opts.uid), displayName: String(opts.name || '') } : String(opts.name || '');
+  if (!who || (typeof who === 'string' && !who)) return { ok: false, reason: 'missing-target' };
+  if (!t.checkedIn || typeof t.checkedIn !== 'object') t.checkedIn = {};
+  if (!t.absent || typeof t.absent !== 'object') t.absent = {};
+  if (!t.checkedInConfirmed || typeof t.checkedInConfirmed !== 'object') t.checkedInConfirmed = {};
+
+  if (action === 'present') {
+    win._idMapSet(t, t.checkedIn, who, Number(opts.at) || Date.now());
+    win._idMapDel(t, t.absent, who);
+    win._idMapDel(t, t.checkedInConfirmed, who);
+    const substitutions = typeof win._applyWoSubsToTournament === 'function'
+      ? win._applyWoSubsToTournament(t)
+      : { ok: false, reason: 'wo-core-unavailable', subCount: 0 };
+    return { ok: true, action, substitutions };
+  }
+
+  win._idMapDel(t, t.checkedIn, who);
+  return { ok: true, action, substitutions: { ok: false, reason: 'not-applicable', subCount: 0 } };
+}
+
+function resolveWOSubstitutionChoice(t, absentUid, substituteUid) {
+  if (!t || typeof g.window._resolveWoSubChoiceToTournament !== 'function') {
+    return { ok: false, reason: 'wo-choice-core-unavailable' };
+  }
+  if (typeof g.window._rehydrateEntryNames === 'function') g.window._rehydrateEntryNames(t);
+  return g.window._resolveWoSubChoiceToTournament(t, String(absentUid || ''), String(substituteUid || ''));
+}
+
+function setTournamentWOAbsence(t, identities, wantAbsent) {
+  if (!t || typeof g.window._applyAbsenceToggle !== 'function') {
+    return { ok: false, reason: 'wo-revert-core-unavailable' };
+  }
+  const list = Array.isArray(identities) ? identities.filter(Boolean) : [];
+  if (!list.length) return { ok: false, reason: 'missing-target' };
+  if (typeof g.window._rehydrateEntryNames === 'function') g.window._rehydrateEntryNames(t);
+  list.forEach(function (who) { g.window._applyAbsenceToggle(t, who, !!wantAbsent); });
+  return { ok: true, action: wantAbsent ? 'absent' : 'revert', targets: list.length };
+}
+
+module.exports = { generateLigaRound, applyTournamentWO, setPresenceWithWOSubstitution, resolveWOSubstitutionChoice, setTournamentWOAbsence, compileFromFmt2, canRecompile, hasDrawnBracket, drawInitial, integrateLateEntries, formLatePairCore, splitLatePairCore, closeRoundCore, materializeNextPhase: g.window._phasesEngine && g.window._phasesEngine.materializeNextPhase, standingsDaFaseAnterior: g.window._phasesEngine && g.window._phasesEngine.standingsDaFaseAnterior, phaseComplete: g.window._phasesEngine && g.window._phasesEngine.phaseComplete, groupTeamStandings: g.window._phasesEngine && g.window._phasesEngine.groupTeamStandings, _window: g.window };

@@ -58,6 +58,8 @@ const FILES = [
   // ímpar/chamada). É o que faz o servidor aplicar a decisão do organizador ao elenco
   // com a MESMA função do cliente. Ver docs/sorteio-ciclo-decisoes.md.
   'draw-decisions.js',
+  // Motor de W.O. puro: a tela só envia intenção; a CF roda este mesmo arquivo.
+  'wo-core.js',
 ];
 
 if (!fs.existsSync(OUT_DIR)) fs.mkdirSync(OUT_DIR, { recursive: true });
