@@ -2642,6 +2642,8 @@ exports.closeDrawPoll = onCall(async (request) => {
 // relê prazo/opções no documento fresco e retorna o torneio canônico à tela.
 exports.castDrawPollVote = onCall(async (request) => {
   const uid = request.auth && request.auth.uid;
+  // Só para apagar a chave legada DO PRÓPRIO token; nunca é identidade de voto.
+  const legacyEmail = request.auth && request.auth.token && typeof request.auth.token.email === 'string' ? request.auth.token.email.trim().toLowerCase() : '';
   const data = request.data || {}, tId = String(data.tournamentId || '').trim();
   const pollId = String(data.pollId || '').trim(), optionKey = String(data.optionKey || '').trim();
   if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
@@ -2657,9 +2659,13 @@ exports.castDrawPollVote = onCall(async (request) => {
     if (!Number.isFinite(Number(poll.deadline)) || Date.now() >= Number(poll.deadline)) throw new HttpsError('failed-precondition', 'O prazo da enquete terminou.');
     if (!(Array.isArray(poll.options) && poll.options.some((option) => option && String(option.key) === optionKey))) throw new HttpsError('invalid-argument', 'Opção de voto inválida.');
     if (!poll.votes || typeof poll.votes !== 'object') poll.votes = {};
-    if (poll.votes[uid] === optionKey) return { ok:true, changed:false, tournament:t };
+    const hasLegacyOwnVote = !!(legacyEmail && legacyEmail !== uid && poll.votes[legacyEmail] != null);
+    if (poll.votes[uid] === optionKey && !hasLegacyOwnVote) return { ok:true, changed:false, tournament:t };
     const antes = _antesDoMotor(t);
     poll.votes[uid] = optionKey;
+    // Migra só a chave e-mail pertencente ao token autenticado; nenhum payload escolhe
+    // qual voto legado será removido e o valor persistido permanece exclusivamente UID.
+    if (hasLegacyOwnVote) delete poll.votes[legacyEmail];
     const b = _gravaTorneio(tx, ref, t, antes, { agoraIso });
     return { ok:true, changed:true, tournament:b.clean };
   });

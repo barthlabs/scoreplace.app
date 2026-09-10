@@ -17,6 +17,7 @@ ok(/_isTournamentAdmin/.test(fn) && /_isTournamentParticipant/.test(fn), 'Functi
 ok(/Date\.now\(\) >= Number\(poll\.deadline\)/.test(fn), 'Function recusa voto após o prazo');
 ok(/poll\.options/.test(fn) && /optionKey/.test(fn), 'Function aceita somente opção existente');
 ok(/poll\.votes\[uid\] = optionKey/.test(fn), 'Function grava voto sob UID autenticado');
-ok(!/email/.test(fn), 'Function não usa e-mail como identidade de voto');
+ok(/legacyEmail/.test(fn) && /request\.auth\.token\.email/.test(fn) && /delete poll\.votes\[legacyEmail\]/.test(fn), 'Function migra apenas a chave e-mail do próprio token para UID');
+ok(/poll\.votes\[uid\] = optionKey/.test(fn), 'UID autenticado continua sendo a única identidade persistida');
 ok(/tournament:b\.clean/.test(fn), 'Function devolve documento canônico');
 process.exit(failed ? 1 : 0);
