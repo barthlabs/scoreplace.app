@@ -37,6 +37,7 @@ let drawWindow = null; // window do shim Node — expõe _calcNextDrawDate (praz
 // L6.R1 (2.1.80): a agenda do sorteio no FUSO DO EVENTO — janela de 1 minuto, calendário
 // em dias civis e a trava de slot. Puro e testado à parte (test-agenda-core.js).
 const _agenda = require('./agenda-core.js');
+const _leagueSeasonCore = require('./league-season-core.js');
 try {
   const _dc = require('./draw-core.js');
   generateLigaRound = _dc.generateLigaRound;
@@ -295,6 +296,51 @@ function _ligaSeasonEnded(t, now) {
     }
   }
   return false;
+}
+
+function _seasonRecipientUids(t) {
+  const out = new Set();
+  (Array.isArray(t && t.memberUids) ? t.memberUids : []).forEach(uid => { if (uid) out.add(String(uid)); });
+  ['participants', 'standbyParticipants', 'waitlist'].forEach(key => {
+    (Array.isArray(t && t[key]) ? t[key] : []).forEach(p => {
+      if (!p || typeof p !== 'object') return;
+      [p.uid, p.p1Uid, p.p2Uid].forEach(uid => { if (uid) out.add(String(uid)); });
+      (Array.isArray(p.participants) ? p.participants : []).forEach(member => {
+        if (member && member.uid) out.add(String(member.uid));
+      });
+    });
+  });
+  return Array.from(out);
+}
+
+// Uma única porta para a temporada acabar. A tela a solicita para obter a
+// resposta imediatamente; a decisão e a escrita seguem sendo do servidor.
+async function _closeExpiredLeagueSeason(ref, tId, nowIso) {
+  const now = new Date(nowIso);
+  return db.runTransaction(async tx => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    const before = _antesDoMotor(t);
+    const result = _leagueSeasonCore.closeExpiredLeagueSeason(t, {
+      expired: _ligaSeasonEnded(t, now), nowIso,
+      computeStandings: drawWindow && drawWindow._computeStandings
+    });
+    if (!result.changed) return { ok: true, changed: false, reason: result.reason };
+    const recipients = _seasonRecipientUids(t);
+    const boundary = _gravaTorneio(tx, ref, t, before, { agoraIso: nowIso });
+    if (recipients.length && !t.isSandbox && !t.notificationsMuted) {
+      tx.set(ref.collection('notificationOutbox').doc('season-finished'), {
+        schema: 1, kind: 'score-notification', type: 'tournament_finished',
+        title: '🏁 Torneio encerrado',
+        message: 'A temporada de ' + String(t.name || 'seu torneio') + ' foi encerrada.',
+        tournamentId: String(tId), tournamentName: String(t.name || ''), matchId: '',
+        fromUid: 'system', fromName: 'scoreplace.app', level: 'important',
+        recipients, ctaLabel: 'Ver torneio', ctaUrl: 'https://scoreplace.app/#tournaments/' + String(tId),
+        createdAt: nowIso, createdAtMs: Date.parse(nowIso), dispatchStatus: 'pending'
+      }, { merge: true });
+    }
+    return { ok: true, changed: true, tournament: boundary.clean };
+  });
 }
 
 // ─── SORTEIO INICIAL SOB DEMANDA (Etapa 3 · fase B) ─────────────────────────
@@ -1186,7 +1232,7 @@ exports.deliverScoreNotification = onDocumentCreated(
         batch.set(db.collection('notif_email_queue').doc('score_' + eKey), {
           email, level: item.level || 'fundamental', message: item.message || '',
           tournamentName: item.tournamentName || '', tournamentUrl: 'https://scoreplace.app/#tournaments/' + tId,
-          ctaLabel: 'Conferir placar', ctaUrl: 'https://scoreplace.app/#tournaments/' + tId,
+          ctaLabel: item.ctaLabel || 'Conferir placar', ctaUrl: item.ctaUrl || ('https://scoreplace.app/#tournaments/' + tId),
           scoreboard: item.scoreboard || null, createdAt: now, flushAtMs: now + 5 * 60 * 1000,
           outboxEventId: eventId, recipientUid: uid, day
         }, { merge: true });
@@ -1509,6 +1555,20 @@ exports.closeExpiredEnrollment = onCall(async (request) => {
     const b = _gravaTorneio(tx, ref, t, antes, { agoraIso });
     return { ok:true, changed:true, tournament:b.clean };
   });
+});
+
+// A tela pode pedir o fecho para refletir a mudança imediatamente, mas não
+// recebe nem persiste um torneio: a decisão e toda escrita vivem no servidor.
+exports.closeExpiredLeagueSeason = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid;
+  const tId = String((request.data && request.data.tournamentId) || '').trim();
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId) throw new HttpsError('invalid-argument', 'Torneio obrigatório.');
+  const ref = db.collection('tournaments').doc(tId);
+  const pre = await _leTorneio(_TX_LEITURA, ref, tId);
+  if (!pre) throw new HttpsError('not-found', 'Torneio não encontrado.');
+  if (!_isTournamentAdmin(pre, uid)) throw _drawFail('permission-denied', 'Só a organização encerra a temporada.', { tId, uid });
+  return _closeExpiredLeagueSeason(ref, tId, new Date().toISOString());
 });
 
 exports.setTournamentCategoryConfig = onCall(async (request) => {

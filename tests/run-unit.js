@@ -62,6 +62,8 @@ const SUITES = [
   'tests/revisar-com-gpt-faixa.test.js',
   'tests/l7-rename-participant-core.test.js',
   'tests/l7-liga-availability-cf.test.js',
+  'tests/l7-host-organization-cf.test.js',
+  'tests/l7-league-season-close-cf.test.js',
   // Um deploy com a mesma versão do release anterior é um deploy fantasma: o Service Worker
   // mantém a chave velha e o usuário continua rodando o JS anterior. A trava é dupla:
   // executor no deploy e instrução explícita para a revisão Claude.

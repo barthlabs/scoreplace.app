@@ -94,143 +94,78 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     });
   };
 
+  // O cliente apenas declara a intenção. A Function relê o torneio e confirma a
+  // alteração antes de qualquer notificação; não existe estado otimista de organização.
+  function _mutateHostOrganization(tId, action, inviteType, targetUid) {
+    if (typeof window._callCF !== 'function') return Promise.reject(new Error('sem conexão com o servidor'));
+    return Promise.resolve(window._callCF('mutateHostOrganization', {
+      tournamentId: String(tId), action: String(action), inviteType: String(inviteType), targetUid: String(targetUid || '')
+    })).then(function (res) { return (res && res.data) ? res.data : (res || {}); });
+  }
+
   // ─── Initiate host transfer ───────────────────────────────────────────────
   window._initiateHostTransfer = function(tId, target) {
     var t = (window.AppStore.tournaments || []).find(function(x) { return String(x.id) === String(tId); });
     var user = window.AppStore.currentUser;
-    if (!t || !user) return;
-
-    var _pt = {
-      targetEmail: target.email, targetUid: target.uid, targetName: target.displayName,
-      fromEmail: user.email, fromUid: user.uid, createdAt: new Date().toISOString()
-    };
-    t.pendingTransfer = _pt;
-    // Blindagem v4.0.119: persiste pelo portão AppStore.mutate (atômico no fresco).
-    window.AppStore.mutate(tId, function (ft) { ft.pendingTransfer = _pt; });
-
-    // Notify target
-    _notifyByEmail(target.uid || target.email, {
-      type: 'host_transfer_invite', tournamentId: String(t.id), tournamentName: t.name,
-      fromName: user.displayName, fromUid: user.uid,
-      message: (user.displayName || _tH('org.theOrganizer')) + ' ' + _tH('org.wantsToTransfer') + ' "' + t.name + '".',
-      level: 'fundamental',
-      _fallbackEmail: target.email || '', _fallbackName: target.displayName || ''
+    if (!t || !user || !target || !target.uid) return;
+    _mutateHostOrganization(tId, 'invite', 'transfer', target.uid).then(function (out) {
+      if (!out.changed) throw new Error('convite já não está disponível');
+      var name = out.targetName || target.displayName || target.email || '';
+      _notifyByEmail(out.targetUid || target.uid, {
+        type: 'host_transfer_invite', tournamentId: String(t.id), tournamentName: out.tournamentName || t.name,
+        fromName: user.displayName, fromUid: user.uid,
+        message: (user.displayName || _tH('org.theOrganizer')) + ' ' + _tH('org.wantsToTransfer') + ' "' + (out.tournamentName || t.name) + '".',
+        level: 'fundamental', _fallbackEmail: target.email || '', _fallbackName: name
+      });
+      _notifyByEmail(user.uid, {
+        type: 'host_transfer_sent', tournamentId: String(t.id), tournamentName: out.tournamentName || t.name,
+        targetName: name, message: _tH('org.transferInviteSent') + ' ' + name + '.', level: 'all', inviteType: 'transfer'
+      });
+      if (typeof showNotification === 'function') showNotification(_tH('org.inviteSent'), _tH('org.awaitingResponse') + ' ' + name, 'info');
+    }).catch(function (e) {
+      window._warn('[co-org] transferência não gravada', e);
+      if (typeof showNotification === 'function') showNotification('Não foi possível convidar', 'O convite não foi salvo. Verifique a conexão e tente de novo.', 'error');
     });
-    // Notify self
-    _notifyByEmail(user.uid, {
-      type: 'host_transfer_sent', tournamentId: String(t.id), tournamentName: t.name,
-      targetName: target.displayName,
-      message: _tH('org.transferInviteSent') + ' ' + (target.displayName || target.email) + '.',
-      level: 'all', inviteType: 'transfer'
-    });
-    if (typeof showNotification === 'function') showNotification(_tH('org.inviteSent'), _tH('org.awaitingResponse') + ' ' + (target.displayName || target.email), 'info');
   };
 
   // ─── Initiate co-host invite ──────────────────────────────────────────────
   window._initiateCoHostInvite = function(tId, target) {
     var t = (window.AppStore.tournaments || []).find(function(x) { return String(x.id) === String(tId); });
     var user = window.AppStore.currentUser;
-    if (!t || !user) return;
-
-    if (!Array.isArray(t.coHosts)) t.coHosts = [];
-    // Check if already invited/active — v2.8.50: por uid OU email (uid-only não casava
-    // por email e podia duplicar o convite).
-    var existing = t.coHosts.find(function(ch) {
-      return (target.uid && ch.uid && ch.uid === target.uid) || (target.email && ch.email && ch.email === target.email);
-    });
-    if (existing) {
-      if (typeof showNotification === 'function') showNotification(_tH('org.alreadyInvited'), (target.displayName || target.email || _pName(target)) + ' ' + _tH('org.alreadyInvitedMsg'), 'warning');
-      return;
-    }
-
-    // SÓ UID (jul/2026): a entrada guarda o uid como identidade. `displayName` fica só
-    // como âncora pra quem NÃO tem perfil resolvível — o choke point de persistência
-    // (_stripStoredNamesForUidEntries) o remove quando o perfil existe. `email` NÃO é
-    // mais gravado: nada casa co-host por e-mail (nem as rules, nem a UI, nem a CF).
-    var _chEntry = {
-      uid: target.uid, displayName: target.displayName,
-      status: 'pending', type: 'cohost', invitedAt: new Date().toISOString()
-    };
-    t.coHosts.push(_chEntry);
-
-    /* ⛔ L1.1.1 · AQUI FALTAVA UM `await`, E ISSO TORNAVA O E-MAIL INTERMITENTE.
-     * `AppStore.mutate` é ASSÍNCRONA: ela aplica o mutator no objeto local na hora, mas a
-     * gravação vai pra uma FILA por torneio e só termina quando o `commitTournamentTx`
-     * resolve. O código chamava `sendCoHostInviteEmail` na linha seguinte — então a
-     * Function podia LER o documento antes de a entrada `pending` existir nele e devolver
-     * `convite-inexistente`. E a tela dizia "convite enviado" do mesmo jeito.
-     * ⚠️ É a autorização por REGISTRO PERSISTIDO da L1.1 que torna a ordem obrigatória:
-     * quem autoriza é o documento, não o payload — pedir o e-mail antes de o registro
-     * existir é pedir a um servidor que ele recuse.
-     *
-     * ⭐ Agora TUDO que anuncia o convite espera a gravação: o e-mail, a notificação do
-     * convidado, a notificação do organizador e o toast. E se a gravação FALHAR, a entrada
-     * otimista local é desfeita e ninguém é avisado de um convite que não existe. */
-    var _tudoOuNada = Promise.resolve(window.AppStore.mutate(tId, function (ft) {
-      if (!Array.isArray(ft.coHosts)) ft.coHosts = [];
-      var ex = ft.coHosts.find(function (ch) { return target.uid && ch.uid && ch.uid === target.uid; });
-      if (ex) return;
-      ft.coHosts.push(_chEntry);
-    }));
-
-    _tudoOuNada.then(function () {
-      // v2.8.52: deep-links Aceitar/Recusar (#cohost/<accept|reject>/<tId>/cohost) pra
-      // o convite ter BOTÕES funcionais — hoje montados no SERVIDOR (L1.1); estes aqui
-      // seguem só pra notificação in-app.
-      var _chBase = 'https://scoreplace.app/#cohost/';
-      _notifyByEmail(target.uid || target.email, {
-        type: 'cohost_invite', tournamentId: String(t.id), tournamentName: t.name,
-        fromName: user.displayName, fromUid: user.uid,
-        inviterName: user.displayName || _tH('org.theOrganizer'),
-        acceptUrl: _chBase + 'accept/' + encodeURIComponent(String(t.id)) + '/cohost',
-        rejectUrl: _chBase + 'reject/' + encodeURIComponent(String(t.id)) + '/cohost',
-        message: (user.displayName || _tH('org.theOrganizer')) + ' ' + _tH('org.invitedCohost') + ' "' + t.name + '".',
-        level: 'fundamental',
-        _fallbackEmail: target.email || '', _fallbackName: target.displayName || ''
-      });
-      _notifyByEmail(user.uid, {
-        type: 'cohost_invite_sent', tournamentId: String(t.id), tournamentName: t.name,
-        targetName: target.displayName,
-        message: _tH('org.cohostInviteSent') + ' ' + (target.displayName || target.email) + '.',
-        level: 'all', inviteType: 'cohost'
-      });
-      /* ⭐ O E-MAIL SAI PELO SERVIDOR, agora com a entrada `pending` JÁ gravada. */
-      if (!target.uid || !window.FirestoreDB || typeof window.FirestoreDB.sendCoHostInviteEmail !== 'function') {
-        return { enviado: false, motivo: 'sem-uid' };
-      }
-      /* ⛔ A FALHA DO E-MAIL NÃO PODE CAIR NO `catch` DA GRAVAÇÃO. Se a chamada
-       * REJEITAR, o `catch` lá embaixo desfaria a entrada `pending` e diria "o convite
-       * não foi salvo" — apagando da tela um convite que ESTÁ gravado, por causa de um
-       * e-mail. São duas falhas diferentes e cada uma tem o seu desfecho. */
-      return Promise.resolve(window.FirestoreDB.sendCoHostInviteEmail(String(t.id), String(target.uid)))
-        .catch(function (e) { window._warn('[co-org] e-mail falhou:', e && e.message); return { enviado: false, motivo: 'falha-de-rede' }; });
-    }).then(function (veredito) {
-      var quem = target.displayName || target.email || '';
-      if (veredito && veredito.enviado) {
-        if (typeof showNotification === 'function') showNotification(_tH('org.inviteSent'), _tH('org.awaitingResponse') + ' ' + quem, 'info');
+    if (!t || !user || !target || !target.uid) return;
+    _mutateHostOrganization(tId, 'invite', 'cohost', target.uid).then(function (out) {
+      if (!out.changed) {
+        if (typeof showNotification === 'function') showNotification(_tH('org.alreadyInvited'), (target.displayName || target.email || _pName(target)) + ' ' + _tH('org.alreadyInvitedMsg'), 'warning');
         return;
       }
-      /* ⛔ O CONVITE EXISTE — ele está gravado e a notificação no app já foi criada. O que
-       * não saiu foi o E-MAIL. Dizer "convite enviado" aqui seria a mentira que esta leva
-       * fecha; apagar o convite seria pior ainda. Fala-se a verdade inteira. */
-      if (typeof showNotification === 'function') {
+      var name = out.targetName || target.displayName || target.email || '';
+      var _chBase = 'https://scoreplace.app/#cohost/';
+      _notifyByEmail(out.targetUid || target.uid, {
+        type: 'cohost_invite', tournamentId: String(t.id), tournamentName: out.tournamentName || t.name,
+        fromName: user.displayName, fromUid: user.uid, inviterName: user.displayName || _tH('org.theOrganizer'),
+        acceptUrl: _chBase + 'accept/' + encodeURIComponent(String(t.id)) + '/cohost',
+        rejectUrl: _chBase + 'reject/' + encodeURIComponent(String(t.id)) + '/cohost',
+        message: (user.displayName || _tH('org.theOrganizer')) + ' ' + _tH('org.invitedCohost') + ' "' + (out.tournamentName || t.name) + '".',
+        level: 'fundamental', _fallbackEmail: target.email || '', _fallbackName: name
+      });
+      _notifyByEmail(user.uid, {
+        type: 'cohost_invite_sent', tournamentId: String(t.id), tournamentName: out.tournamentName || t.name,
+        targetName: name, message: _tH('org.cohostInviteSent') + ' ' + name + '.', level: 'all', inviteType: 'cohost'
+      });
+      if (!window.FirestoreDB || typeof window.FirestoreDB.sendCoHostInviteEmail !== 'function') return { enviado: false };
+      return Promise.resolve(window.FirestoreDB.sendCoHostInviteEmail(String(t.id), String(out.targetUid || target.uid)))
+        .catch(function (e) { window._warn('[co-org] e-mail falhou:', e && e.message); return { enviado: false }; });
+    }).then(function (veredito) {
+      if (!veredito) return;
+      var quem = target.displayName || target.email || '';
+      if (veredito.enviado) {
+        if (typeof showNotification === 'function') showNotification(_tH('org.inviteSent'), _tH('org.awaitingResponse') + ' ' + quem, 'info');
+      } else if (typeof showNotification === 'function') {
         showNotification('Convite registrado', quem + ' já pode ver o convite no app — mas o e-mail de aviso não pôde ser enviado agora.', 'warning');
       }
     }).catch(function (e) {
-      /* ⛔ A GRAVAÇÃO FALHOU: desfaz a entrada otimista e NÃO anuncia convite nenhum.
-       * ⚠️ Remove pela REFERÊNCIA, não por valor — foi a lição da v1.8.40 na inscrição:
-       * filtrar por igualdade não removia a cópia que entrou no array, e a pessoa
-       * continuava se vendo convidada. */
-      try {
-        var _tv = (window.AppStore.tournaments || []).find(function (x) { return String(x.id) === String(tId); });
-        if (_tv && Array.isArray(_tv.coHosts)) _tv.coHosts = _tv.coHosts.filter(function (ch) { return ch !== _chEntry; });
-        if (Array.isArray(t.coHosts)) t.coHosts = t.coHosts.filter(function (ch) { return ch !== _chEntry; });
-      } catch (_e) {}
-      window._error('[co-org] convite NÃO foi gravado', e);
-      if (typeof showNotification === 'function') {
-        showNotification('Não foi possível convidar', 'O convite não foi salvo. Verifique a conexão e tente de novo.', 'error');
-      }
-      if (typeof window._softRefreshView === 'function') window._softRefreshView();
+      window._warn('[co-org] convite não gravado', e);
+      if (typeof showNotification === 'function') showNotification('Não foi possível convidar', 'O convite não foi salvo. Verifique a conexão e tente de novo.', 'error');
     });
   };
 
@@ -340,62 +275,35 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var t = (window.AppStore.tournaments || []).find(function(x) { return String(x.id) === String(tId); });
     if (!t) return;
     var user = window.AppStore.currentUser;
-    var targetUidOrEmail = null;
-    var targetName = '';
-    if (inviteType === 'transfer' && t.pendingTransfer) {
-      targetUidOrEmail = t.pendingTransfer.targetUid || t.pendingTransfer.targetEmail;
-      targetName = t.pendingTransfer.targetName || '';
-      t.pendingTransfer = null;
-    } else if (inviteType === 'cohost' && Array.isArray(t.coHosts)) {
-      var pending = t.coHosts.filter(function(ch) { return ch.status === 'pending'; });
-      if (pending.length > 0) {
-        targetUidOrEmail = pending[0].uid || pending[0].email;
-        targetName = pending[0].displayName || '';
-      }
-      t.coHosts = t.coHosts.filter(function(ch) { return ch.status !== 'pending'; });
-    }
-    // Blindagem v4.0.119: portão AppStore.mutate (re-aplica no fresco).
-    window.AppStore.mutate(tId, function (ft) {
-      if (inviteType === 'transfer') ft.pendingTransfer = null;
-      else if (inviteType === 'cohost' && Array.isArray(ft.coHosts)) ft.coHosts = ft.coHosts.filter(function (ch) { return ch.status !== 'pending'; });
-    });
-    // Notify target that invite was cancelled
-    if (targetUidOrEmail) {
-      _notifyByEmail(targetUidOrEmail, {
-        type: 'cohost_removed', tournamentId: String(t.id), tournamentName: t.name,
-        message: (user ? user.displayName : '') + ' ' + _tH('org.cancelledInviteFor') + ' "' + t.name + '".',
-        level: 'important'
+    var target = inviteType === 'transfer' ? (t.pendingTransfer || {}) : ((t.coHosts || []).find(function (ch) { return ch && ch.status === 'pending'; }) || {});
+    if (!target.targetUid && !target.uid) return;
+    _mutateHostOrganization(tId, 'cancel', inviteType, target.targetUid || target.uid).then(function (out) {
+      if (!out.changed) return;
+      var targetUid = out.targetUid || target.targetUid || target.uid;
+      _notifyByEmail(targetUid, {
+        type: 'cohost_removed', tournamentId: String(t.id), tournamentName: out.tournamentName || t.name,
+        message: (user ? user.displayName : '') + ' ' + _tH('org.cancelledInviteFor') + ' "' + (out.tournamentName || t.name) + '".', level: 'important'
       });
-    }
-    if (typeof showNotification === 'function') showNotification(_tH('org.cancelled'), _tH('org.inviteCancelled'), 'info');
+      if (typeof showNotification === 'function') showNotification(_tH('org.cancelled'), _tH('org.inviteCancelled'), 'info');
+    }).catch(function (e) { window._warn('[co-org] cancelamento falhou', e); if (typeof showNotification === 'function') showNotification(_tH('org.error'), _tH('org.errorProcessing'), 'error'); });
   };
 
   // ─── Remove co-host (creator only) ───────────────────────────────────────
   window._removeCoHost = function(tId, coHostKey) {
     var t = (window.AppStore.tournaments || []).find(function(x) { return String(x.id) === String(tId); });
     if (!t || !window.AppStore.isCreator(t)) return;
-    if (!Array.isArray(t.coHosts)) return;
-    // v2.8.79: casa por UID (primário) OU email — co-host com email '' (conta por
-    // telefone) era impossível de remover. Remove por REFERÊNCIA do objeto achado.
-    var removed = t.coHosts.find(function(ch) { return ch && ch.uid && ch.uid === coHostKey; });
+    var removed = (t.coHosts || []).find(function(ch) { return ch && ch.uid === coHostKey; });
     if (!removed) return;
-    t.coHosts = t.coHosts.filter(function(ch) { return ch !== removed; });
-    // Blindagem v4.0.119: portão AppStore.mutate — re-filtra no fresco por chave
-    // (a ref do objeto `removed` não casa no doc fresco).
-    window.AppStore.mutate(tId, function (ft) {
-      if (!Array.isArray(ft.coHosts)) return;
-      ft.coHosts = ft.coHosts.filter(function (ch) { return !(ch && ch.uid && ch.uid === coHostKey); });
-    });
-    if (removed && typeof window._sendUserNotification === 'function') {
-      _notifyByEmail(removed.uid || removed.email || coHostKey, {
-        type: 'cohost_removed', tournamentId: String(t.id), tournamentName: t.name,
-        message: _tH('org.youWereRemoved') + ' "' + t.name + '".',
-        level: 'important'
+    _mutateHostOrganization(tId, 'remove', 'cohost', coHostKey).then(function (out) {
+      if (!out.changed) return;
+      _notifyByEmail(out.targetUid || coHostKey, {
+        type: 'cohost_removed', tournamentId: String(t.id), tournamentName: out.tournamentName || t.name,
+        message: _tH('org.youWereRemoved') + ' "' + (out.tournamentName || t.name) + '".', level: 'important'
       });
-    }
-    if (typeof showNotification === 'function') showNotification(_tH('org.removed'), (removed ? removed.displayName : coHostKey) + ' ' + _tH('org.removedFromOrg'), 'info');
-    var container = document.getElementById('view-container');
-    if (container && typeof renderTournaments === 'function') renderTournaments(container, String(tId));
+      if (typeof showNotification === 'function') showNotification(_tH('org.removed'), (out.targetName || removed.displayName || coHostKey) + ' ' + _tH('org.removedFromOrg'), 'info');
+      var container = document.getElementById('view-container');
+      if (container && typeof renderTournaments === 'function') renderTournaments(container, String(tId));
+    }).catch(function (e) { window._warn('[co-org] remoção falhou', e); if (typeof showNotification === 'function') showNotification(_tH('org.error'), _tH('org.errorProcessing'), 'error'); });
   };
 
   // ─── Crown drop handler ───────────────────────────────────────────────────

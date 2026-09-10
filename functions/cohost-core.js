@@ -175,6 +175,107 @@ function computeRespondHostInvite(data, callerUid, inviteType, action) {
   return nothing;
 }
 
+
+// O alvo de convite precisa já constar no torneio. Isso mantém a superfície do comando
+// estreita: o picker escolhe uma inscrição existente, e a Function nunca promove um UID
+// arbitrário só porque ele foi enviado pelo navegador.
+function tournamentHasMember(data, uid) {
+  if (!data || !uid) return false;
+  const wanted = String(uid);
+  const members = Array.isArray(data.memberUids) ? data.memberUids.map(String) : [];
+  if (members.indexOf(wanted) !== -1) return true;
+  const roster = Array.isArray(data.participants) ? data.participants : Object.values(data.participants || {});
+  return roster.some(function (p) {
+    if (!p || typeof p !== 'object') return false;
+    const ids = [p.uid, p.p1Uid, p.p2Uid]
+      .concat(Array.isArray(p.participants) ? p.participants.map(function (x) { return x && x.uid; }) : [])
+      .filter(Boolean).map(String);
+    return ids.indexOf(wanted) !== -1;
+  });
+}
+
+function participantDisplayName(data, uid) {
+  const wanted = String(uid || '');
+  const roster = Array.isArray(data && data.participants) ? data.participants : Object.values((data && data.participants) || {});
+  for (const p of roster) {
+    if (!p || typeof p !== 'object') continue;
+    const ids = [p.uid, p.p1Uid, p.p2Uid].concat(Array.isArray(p.participants) ? p.participants.map(function (x) { return x && x.uid; }) : []).filter(Boolean).map(String);
+    if (ids.indexOf(wanted) === -1) continue;
+    if (p.uid && String(p.uid) === wanted) return String(p.displayName || p.name || '');
+    const nested = (p.participants || []).find(function (x) { return x && String(x.uid || '') === wanted; });
+    return String((nested && (nested.displayName || nested.name)) || p.p1Name || p.p2Name || p.displayName || p.name || '');
+  }
+  return '';
+}
+
+function _hostOutcome(data, action, inviteType, targetUid, targetName, updateData) {
+  return {
+    outcome: 'applied', action: action, inviteType: inviteType,
+    targetUid: targetUid || '', targetName: targetName || '',
+    tournamentName: (data && data.name) || '', updateData: updateData
+  };
+}
+
+/*
+ * Cria, cancela e remove convites de organização sobre o documento fresco.
+ * `respondHostInvite` continua sendo a única porta para aceitar/recusar pelo destinatário.
+ */
+function computeMutateHostOrganization(data, callerUid, input) {
+  const nothing = { outcome: 'notFound', updateData: null, tournamentName: (data && data.name) || '' };
+  if (!data || !callerUid || !input) return nothing;
+  const action = String(input.action || '');
+  const inviteType = String(input.inviteType || '');
+  const targetUid = String(input.targetUid || '');
+  const targetName = participantDisplayName(data, targetUid);
+  if ((inviteType !== 'cohost' && inviteType !== 'transfer') ||
+      (action !== 'invite' && action !== 'cancel' && action !== 'remove')) return nothing;
+
+  const coHosts = coHostsArray(data).map(function (ch) { return Object.assign({}, ch); });
+  if (action === 'invite') {
+    if (!targetUid || targetUid === callerUid || !tournamentHasMember(data, targetUid)) {
+      return { outcome: 'invalidTarget', updateData: null, tournamentName: data.name || '' };
+    }
+    if (inviteType === 'transfer') {
+      if (data.pendingTransfer && data.pendingTransfer.targetUid === targetUid) return nothing;
+      const next = Object.assign({}, data, { pendingTransfer: {
+        targetUid: targetUid, targetName: targetName, fromUid: callerUid, createdAt: new Date().toISOString()
+      } });
+      return _hostOutcome(data, action, inviteType, targetUid, targetName,
+        withDerived(next, { pendingTransfer: next.pendingTransfer }));
+    }
+    if (coHosts.some(function (ch) { return ch && ch.uid === targetUid; })) return nothing;
+    coHosts.push({ uid: targetUid, displayName: targetName, status: 'pending', type: 'cohost', invitedAt: new Date().toISOString() });
+    const next = Object.assign({}, data, { coHosts: coHosts });
+    return _hostOutcome(data, action, inviteType, targetUid, targetName, withDerived(next, { coHosts: coHosts }));
+  }
+
+  if (action === 'cancel') {
+    if (inviteType === 'transfer') {
+      const pending = data.pendingTransfer;
+      if (!pending || (targetUid && pending.targetUid !== targetUid)) return nothing;
+      const next = Object.assign({}, data, { pendingTransfer: null });
+      return _hostOutcome(data, action, inviteType, pending.targetUid, pending.targetName,
+        withDerived(next, { pendingTransfer: null }));
+    }
+    const idx = coHosts.findIndex(function (ch) { return ch && ch.status === 'pending' && ch.uid === targetUid; });
+    if (idx < 0) return nothing;
+    const removed = coHosts.splice(idx, 1)[0];
+    const next = Object.assign({}, data, { coHosts: coHosts });
+    return _hostOutcome(data, action, inviteType, removed.uid, removed.displayName,
+      withDerived(next, { coHosts: coHosts }));
+  }
+
+  // Somente o criador pode remover um co-organizador ativo; co-organizador não revoga outro.
+  if (data.creatorUid !== callerUid) return { outcome: 'forbidden', updateData: null, tournamentName: data.name || '' };
+  const idx = coHosts.findIndex(function (ch) { return ch && ch.uid === targetUid && ch.status !== 'pending'; });
+  if (idx < 0) return nothing;
+  const removed = coHosts.splice(idx, 1)[0];
+  const next = Object.assign({}, data, { coHosts: coHosts });
+  return _hostOutcome(data, action, 'cohost', removed.uid, removed.displayName,
+    withDerived(next, { coHosts: coHosts }));
+}
+
 module.exports = {
-  computeAdminUids, computeAdminEmails, pendingCoHostIndex, computeRespondHostInvite
+  computeAdminUids, computeAdminEmails, pendingCoHostIndex, computeRespondHostInvite,
+  tournamentHasMember, participantDisplayName, computeMutateHostOrganization
 };

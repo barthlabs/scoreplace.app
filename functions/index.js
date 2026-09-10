@@ -4216,6 +4216,40 @@ exports.respondHostInvite = onCall(
   }
 );
 
+
+/* ═══ CONVITES DE CO-ORGANIZAÇÃO · transação canônica ════════════════════════
+ * Criar, cancelar e remover nunca grava a fotografia da aba. A resposta do convite
+ * permanece em respondHostInvite, que autentica o destinatário. */
+exports.mutateHostOrganization = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
+    const data = request.data || {};
+    const tournamentId = String(data.tournamentId || "").trim();
+    const action = String(data.action || "");
+    const inviteType = String(data.inviteType || "");
+    const targetUid = String(data.targetUid || "").trim();
+    if (!tournamentId || !targetUid) throw new HttpsError("invalid-argument", "torneio e participante são obrigatórios");
+    const db = admin.firestore();
+    const ref = db.collection("tournaments").doc(tournamentId);
+    return db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
+      const t = await _splitParts.hidratar(tx, ref, snap.data() || {});
+      if (!_isTournamentOrgCaller(t, callerUid)) throw new HttpsError("permission-denied", "só a organização altera convites");
+      const before = JSON.parse(JSON.stringify(t));
+      const result = _coHostCore.computeMutateHostOrganization(t, callerUid, { action, inviteType, targetUid });
+      if (result.outcome === "forbidden") throw new HttpsError("permission-denied", "só o criador remove co-organizador");
+      if (result.outcome === "invalidTarget") throw new HttpsError("failed-precondition", "participante inválido para organização");
+      if (result.outcome !== "applied" || !result.updateData) return { ok: true, changed: false, tournamentName: t.name || "" };
+      _splitParts.gravar(tx, ref, before, Object.assign({}, result.updateData, { updatedAt: new Date().toISOString() }));
+      return { ok: true, changed: true, action: result.action, inviteType: result.inviteType,
+        targetUid: result.targetUid, targetName: result.targetName, tournamentName: result.tournamentName };
+    });
+  }
+);
+
 // O servidor RELÊ letzplayScans/{uid} — não confia em payload do cliente (qualquer authed
 // escreve nessa coleção; sem reler, dava pra forjar o nível de terceiros via esta função).
 // Deploy:  firebase deploy --only functions:applyLetzplayScans

@@ -17,6 +17,23 @@ window._dashCardClick = function(event, tournamentId) {
   window._openTournamentCard(event, tournamentId);
 };
 
+// A tela só solicita o fecho. O servidor decide pelo documento fresco, calcula
+// a classificação e registra a notificação; nunca mutar/persistir durante render.
+window._requestExpiredLeagueSeasonClose = window._requestExpiredLeagueSeasonClose || (function() {
+  var requested = {};
+  return function(t) {
+    if (!t || !t.id || t.status === 'finished' || !window.AppStore ||
+        typeof window.AppStore.isOrganizer !== 'function' || !window.AppStore.isOrganizer(t) ||
+        typeof window._callCF !== 'function') return;
+    var isLeague = typeof window._isLigaFormat === 'function' ? window._isLigaFormat(t) : (t.format === 'Liga' || t.format === 'Ranking');
+    if (!isLeague || !(t.ligaSeasonMonths || t.rankingSeasonMonths) || !t.startDate || requested[t.id]) return;
+    requested[t.id] = true;
+    window._callCF('closeExpiredLeagueSeason', { tournamentId: String(t.id) }, 'Entre na sua conta para atualizar a temporada.').catch(function() {
+      delete requested[t.id];
+    });
+  };
+})();
+
 // ─── Organizer Analytics Section ────────────────────────────────────────────
 window._buildAnalyticsSection = function _buildAnalyticsSection(organizados) {
   if (!window.AppStore || !window.AppStore.currentUser) return '';
@@ -705,44 +722,7 @@ function renderDashboard(container) {
     const regLimit = formatDateBr(t.registrationLimit);
     const cats = (t.categories && t.categories.length) ? t.categories.join(', ') : _t('tourn.singleCat');
 
-    // Liga season auto-closure: se a temporada expirou, encerra automaticamente
-    if ((typeof window._isLigaFormat === 'function' ? window._isLigaFormat(t) : t.format === 'Liga') && t.status !== 'finished') {
-      const _seasonMonths = t.ligaSeasonMonths || t.rankingSeasonMonths;
-      if (_seasonMonths && t.startDate) {
-        const _seasonStart = new Date(t.startDate);
-        if (!isNaN(_seasonStart.getTime())) {
-          const _seasonEnd = new Date(_seasonStart);
-          _seasonEnd.setMonth(_seasonEnd.getMonth() + parseInt(_seasonMonths));
-          if (new Date() >= _seasonEnd) {
-            t.status = 'finished';
-            if (!t.finishedAt) t.finishedAt = new Date().toISOString(); // v2.1.12: regra 24h
-            if (!t.standings || !t.standings.length) {
-              if (typeof window._computeStandings === 'function') {
-                var _cats = (t.combinedCategories && t.combinedCategories.length) ? t.combinedCategories : ['default'];
-                for (var _ci = 0; _ci < _cats.length; _ci++) {
-                  var _st = window._computeStandings(t, _cats[_ci]);
-                  if (_st && _st.length) { t.standings = _st; break; }
-                }
-              }
-            }
-            if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
-              window.FirestoreDB.saveTournament(t).catch(function() {});
-            }
-            // Notify participants of season end (flag persistida no Firestore — v1.8.45)
-            if (!t.finishNotifiedAt && typeof window._notifyTournamentParticipants === 'function') {
-              t.finishNotifiedAt = new Date().toISOString();
-              var _tFnSeason = window._t || function(k) { return k; };
-              window._notifyTournamentParticipants(t, {
-                type: 'tournament_finished',
-                message: _tFnSeason('notif.tournamentFinished').replace('{name}', t.name || 'Torneio'),
-                tournamentName: t.name || '',
-                level: 'important'
-              });
-            }
-          }
-        }
-      }
-    }
+    window._requestExpiredLeagueSeasonClose(t);
 
     // Inscrições fecham após sorteio (status 'active'), exceto Liga com inscrições abertas na temporada
     const isFinished = t.status === 'finished';
