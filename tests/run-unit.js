@@ -1367,6 +1367,7 @@ const SUITES = [
   'tests/reabrir-enquete-cf-only.test.js', // L7: reabertura e aviso de enquete só passam pela Function
   'tests/criar-enquete-cf-only.test.js', // L7: criação e aviso de enquete só passam pela Function
   'tests/reabrir-vagas-cf-only.test.js', // L7: meta de vagas só passa pela Function
+  'tests/encerrar-torneio-cf-only.test.js', // L7: encerramento manual só passa pela Function
   // Joga o torneio INTEIRO lançando só pelo servidor: 8 jogos (escada + 3º lugar), campeão,
   // zero slot TBD. É o "jogar até o campeão" antes de mexer no caminho mais quente do app.
   'functions-autodraw/test-result-playthrough.js',

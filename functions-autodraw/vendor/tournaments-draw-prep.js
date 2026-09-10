@@ -725,6 +725,8 @@ window._createDrawPoll = function(tId, context, options, hours) {
     });
 };
 
+window._finishTournamentCF = function(tId) { if(typeof window._callCF!=='function')return Promise.reject(new Error('Function indisponível'));return window._callCF('finishTournament',{tournamentId:String(tId)},'Entre na sua conta para encerrar o torneio.').then(function(res){var d=(res&&res.data)||{};if(d.tournament&&typeof window._applyCFTournament==='function')window._applyCFTournament(tId,d.tournament);return d;});};
+
 window._reopenEnrollmentForTarget = function(tId, target, autoClose) {
     if (typeof window._callCF !== 'function') return Promise.reject(new Error('Function indisponível'));
     return window._callCF('reopenEnrollmentForTarget', { tournamentId:String(tId), target:Number(target), autoClose:autoClose === true }, 'Entre na sua conta para reabrir as inscrições.').then(function(res) { var data=(res&&res.data)||{}; if(data.tournament&&typeof window._applyCFTournament==='function') window._applyCFTournament(tId,data.tournament); return data; });
@@ -3385,28 +3387,7 @@ window.finishTournament = function(tId) {
         _t('predraw.finishTitle'),
         msg,
         function() {
-            if (!window.AppStore || typeof window.AppStore.mutate !== 'function') return;
-            var finishedAt = new Date().toISOString();
-            // Som: torneio encerrado → campeão coroado.
-            if (window._sound) window._sound('campeao');
-            window.AppStore.mutate(tId, function(ft) {
-                if (ft.status === 'finished') return false;
-                ft.status = 'finished'; if (!ft.finishedAt) ft.finishedAt = finishedAt;
-                if (Array.isArray(ft.rounds) && ft.rounds.length > 0 && typeof window._computeStandings === 'function') window._poeStandings(ft);
-                return true;
-            }, 'Torneio encerrado manualmente');
-            // Notify all participants
-            if (typeof window._notifyTournamentParticipants === 'function') {
-                window._notifyTournamentParticipants(t, {
-                    type: 'tournament_finished',
-                    message: _t('notif.tournamentFinished').replace('{name}', t.name || 'Torneio'),
-                    tournamentName: t.name || '',
-                    level: 'important'
-                }, window.AppStore.currentUser ? window.AppStore.currentUser.email : null);
-            }
-            const container = document.getElementById('view-container');
-            if (container) renderTournaments(container, tId);
-            showNotification(_t('draw.finishDone'), _t('draw.finishDoneMsg', { name: t.name }), 'success');
+            window._finishTournamentCF(tId).then(function(data) { if(data.changed===false)return; if(window._sound)window._sound('campeao'); const container=document.getElementById('view-container');if(container)renderTournaments(container,tId);showNotification(_t('draw.finishDone'),_t('draw.finishDoneMsg',{name:t.name}),'success'); }).catch(function(err){if(window._warn)window._warn('[finishTournament] falhou',err);showNotification('Não foi possível encerrar','Nada foi alterado. Atualize e tente novamente.','error');});
         },
         null,
         { type: 'warning', confirmText: _t('btn.finishTourn'), cancelText: _t('btn.cancel') }

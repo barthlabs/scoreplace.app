@@ -2480,6 +2480,9 @@ exports.cancelDrawPreparation = onCall(async (request) => {
   });
 });
 
+// ─── Encerramento manual: status, classificação e aviso server-side ─────────
+exports.finishTournament = onCall(async request=>{const uid=request.auth&&request.auth.uid,tId=String((request.data&&request.data.tournamentId)||'').trim(),nowIso=new Date().toISOString();if(!uid)throw new HttpsError('unauthenticated','Entre na sua conta.');if(!tId)throw new HttpsError('invalid-argument','Torneio obrigatório.');const ref=db.collection('tournaments').doc(tId);return db.runTransaction(async tx=>{const t=await _leTorneio(tx,ref,tId);if(!t)throw new HttpsError('not-found','Torneio não encontrado.');if(!_isTournamentAdmin(t,uid))throw _drawFail('permission-denied','Só a organização encerra o torneio.',{tId,uid});if(t.status==='finished')return{ok:true,changed:false,tournament:t};const before=_antesDoMotor(t);t.status='finished';if(!t.finishedAt)t.finishedAt=nowIso;if(Array.isArray(t.rounds)&&t.rounds.length&&drawWindow&&typeof drawWindow._poeStandings==='function')drawWindow._poeStandings(t);const recipients=_seasonRecipientUids(t),b=_gravaTorneio(tx,ref,t,before,{agoraIso:nowIso});if(recipients.length&&!t.isSandbox&&!t.notificationsMuted)tx.set(ref.collection('notificationOutbox').doc('manual-finished'),{schema:1,kind:'tournament-notification',type:'tournament_finished',title:'🏁 Torneio encerrado',message:'O torneio '+String(t.name||'')+' foi encerrado.',tournamentId:tId,tournamentName:t.name||'',level:'important',recipients,ctaLabel:'Ver torneio',ctaUrl:'https://scoreplace.app/#tournaments/'+tId,createdAt:nowIso,createdAtMs:Date.parse(nowIso),dispatchStatus:'pending'},{merge:true});return{ok:true,changed:true,tournament:b.clean};});});
+
 // ─── Escolha para entradas tardias antes do sorteio: intenção server-side ────
 // A tela apenas apresenta repescagem, BYE ou lista de espera. A escolha muda a
 // regra que será usada pelo motor e ainda pode reabrir inscrições que o painel
