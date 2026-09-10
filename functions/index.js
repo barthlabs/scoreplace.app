@@ -3171,6 +3171,74 @@ exports.dismissDuplicateAccount = onCall(
   }
 );
 
+/* ═══ PRESENÇA · intenção estreita, sem operações arbitrárias ──────────────────
+ * O navegador informa apenas a pessoa e se ela está presente. A decisão dos
+ * campos envolvidos pertence ao servidor: marcar presença sempre remove W.O. e
+ * a confirmação azul; desmarcar remove somente a presença verde. Mantém a
+ * escrita por FieldPath, que foi a única forma medida sem perda sob rajada. */
+exports.setTournamentPresence = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
+    const data = request.data || {};
+    const tournamentId = String(data.tournamentId || "").trim();
+    const targetKey = String(data.targetKey || "").trim();
+    const legacyKey = String(data.legacyKey || "").trim();
+    const action = String(data.action || "");
+    if (!tournamentId || !_partesPerm.idDeDocumentoValido(targetKey)) {
+      throw new HttpsError("invalid-argument", "torneio e participante válidos são obrigatórios");
+    }
+    if (action !== "present" && action !== "clear") {
+      throw new HttpsError("invalid-argument", "ação de presença inválida");
+    }
+    if (legacyKey && !_partesPerm.idDeDocumentoValido(legacyKey)) {
+      throw new HttpsError("invalid-argument", "identidade legada inválida");
+    }
+    const db = admin.firestore();
+    const ref = db.collection("tournaments").doc(tournamentId);
+    const snap = await ref.get();
+    if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
+    const t = snap.data() || {};
+    if (!_isTournamentOrgCaller(t, callerUid)) {
+      throw new HttpsError("permission-denied", "só a organização marca presença");
+    }
+    const now = Date.now();
+    const changes = action === "present"
+      ? [
+          { parte: "checkedIn", chave: targetKey, valor: now },
+          { parte: "absent", chave: targetKey, valor: null },
+          { parte: "checkedInConfirmed", chave: targetKey, valor: null }
+        ]
+      : [{ parte: "checkedIn", chave: targetKey, valor: null }];
+    if (legacyKey && legacyKey !== targetKey) {
+      changes.push({ parte: "checkedIn", chave: legacyKey, valor: null });
+      // A identidade legada não pode sobreviver em nenhum mapa: ao limpar a
+      // presença atual ela já não representa uma pessoa ativa no placar.
+      changes.push({ parte: "absent", chave: legacyKey, valor: null });
+      changes.push({ parte: "checkedInConfirmed", chave: legacyKey, valor: null });
+    }
+    const fora = Array.isArray(t._semPesados) ? t._semPesados : [];
+    const FieldPath = admin.firestore.FieldPath;
+    const FieldValue = admin.firestore.FieldValue;
+    const lote = db.batch();
+    const paresDoDoc = [];
+    changes.forEach((op) => {
+      if (fora.indexOf(op.parte) !== -1) {
+        const itemRef = ref.collection(_tSplitFn.colecaoDaParte(op.parte)).doc(op.chave);
+        if (op.valor === null) lote.delete(itemRef);
+        else lote.set(itemRef, { _idx: op.chave, _k: op.chave, item: op.valor });
+      } else {
+        paresDoDoc.push(new FieldPath(op.parte, op.chave), op.valor === null ? FieldValue.delete() : op.valor);
+      }
+    });
+    paresDoDoc.push(new FieldPath("updatedAt"), new Date().toISOString());
+    lote.update.apply(lote, [ref].concat(paresDoDoc));
+    await lote.commit();
+    return { ok: true, action, targetKey, updatedAt: now };
+  }
+);
+
 /* ═══════════════════════════════════════════════════════════════════════════════
  * A PORTA ÚNICA DE ESCRITA FINA NO TORNEIO  (2.0.122)
  * Ordem do dono: _"tudo em CF apenas disparado pelo cliente"_.

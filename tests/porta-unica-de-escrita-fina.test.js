@@ -80,13 +80,20 @@ ok('⛔ há teto de operações por chamada', /ops\.length > 200/.test(corpo));
 
 // ── ⑤ o cliente parou de escrever presença direto ─────────────────────────────
 const cli = fs.readFileSync(path.join(ROOT, 'js/firebase-db.js'), 'utf8');
-const iSP = cli.indexOf('async setPresenceFields(');
+const iSP = cli.indexOf('async setTournamentPresence(');
 const sp = cli.slice(iSP, cli.indexOf('\n  },', iSP));
-ok('⛔ setPresenceFields NÃO escreve mais no Firestore direto',
+ok('⛔ setTournamentPresence NÃO escreve mais no Firestore direto',
   !/ref\.update\.apply/.test(sp) && !/this\.db\.collection/.test(sp),
   'enquanto o cliente escrever aqui, `checkedIn` não pode sair do documento');
-ok('⭐ ele DISPARA a CF', /_callFn\('aplicarNoTorneio'/.test(sp));
-ok('  → preservando a forma {map, key, value} de quem chama', /o\.map/.test(sp) && /o\.key/.test(sp));
+ok('⭐ ele DISPARA a CF tipada', /_callFn\('setTournamentPresence'/.test(sp));
+ok('  → sem aceitar mapa de operações do navegador', !/ops\s*=|parte:|chave:|valor:/.test(sp));
+
+const iPresence = cf.indexOf('exports.setTournamentPresence');
+const presenceBody = cf.slice(iPresence, cf.indexOf('\nexports.', iPresence + 10));
+ok('⭐ há uma CF tipada para presença do organizador', iPresence > 0 && /setTournamentPresence/.test(presenceBody));
+ok('⛔ a CF tipada não aceita `ops` do navegador', !/data\.ops|const ops = data\.ops/.test(presenceBody));
+ok('⛔ só organizador pode dispará-la', /_isTournamentOrgCaller\(t, callerUid\)/.test(presenceBody));
+ok('⛔ ela só aceita as intenções `present` e `clear`', /action !== "present" && action !== "clear"/.test(presenceBody));
 
 
 /* ═══ ⑥ A PORTA RODANDO DE VERDADE ═════════════════════════════════════════════
@@ -195,8 +202,9 @@ Object.defineProperty(admin, 'initializeApp', { value: function () { return {}; 
 Object.defineProperty(admin, 'firestore', { value: fsStub, writable: true, configurable: true });
 if (admin.firestore !== fsStub) { console.error('  ✗ o dublê do admin.firestore não pegou — abortando'); process.exit(1); }
 const CF = require(path.join(ROOT, 'functions/index.js'));
-if (typeof CF.aplicarNoTorneio !== 'function' || typeof CF.aplicarNoTorneio.run !== 'function') {
-  console.error('  ✗ aplicarNoTorneio não existe (ou não é onCall) — abortando');
+if (typeof CF.aplicarNoTorneio !== 'function' || typeof CF.aplicarNoTorneio.run !== 'function' ||
+    typeof CF.setTournamentPresence !== 'function' || typeof CF.setTournamentPresence.run !== 'function') {
+  console.error('  ✗ uma das Cloud Functions de presença não existe (ou não é onCall) — abortando');
   process.exit(1);
 }
 
@@ -213,6 +221,14 @@ function chamar(uid, ops, doc, subs) {
   }).then((r) => ({ r: r, b: BANCO }));
 }
 async function erroDe(p) { try { await p; return null; } catch (e) { return e; } }
+function chamarPresenca(uid, data, doc, subs) {
+  BANCO = bancoDeMentira('T1', doc || DOC, subs);
+  return CF.setTournamentPresence.run({
+    data: Object.assign({ tournamentId: 'T1' }, data),
+    auth: { uid: uid, token: { uid: uid } },
+    rawRequest: { headers: {} }, acceptsStreaming: false,
+  }).then((r) => ({ r: r, b: BANCO }));
+}
 
 (async function () {
   console.log('\n──── ⑥ a porta RODANDO (execução, não texto) ────');
@@ -328,6 +344,44 @@ async function erroDe(p) { try { await p; return null; } catch (e) { return e; }
       auth: null, rawRequest: { headers: {} }, acceptsStreaming: false,
     }));
     ok('⛔ sem login não passa — e não grava', !!e3 && /unauthenticated/.test(String(e3.code || e3.message)) && b3.commits === 0);
+  }
+
+  // ⑥.7 a intenção tipada do organizador aplica a regra completa no servidor ───
+  {
+    const origem = Object.assign(clone(DOC), {
+      checkedIn: { uB: 111, 'Nome antigo': 222 }, absent: { uA: 1 }, checkedInConfirmed: { uA: 1 }
+    });
+    const { r, b } = await chamarPresenca('uOrg', { targetKey: 'uA', legacyKey: 'Nome antigo', action: 'present' }, origem);
+    ok('⭐⭐ presença tipada EXECUTA no servidor', r && r.ok === true && r.action === 'present');
+    ok('  → marca a pessoa e limpa ausência/confirmação antigas',
+      typeof b.doc.checkedIn.uA === 'number' && !('uA' in b.doc.absent) && !('uA' in b.doc.checkedInConfirmed));
+    ok('  → e remove a chave legada duplicada', !('Nome antigo' in b.doc.checkedIn));
+    ok('  → em um único commit sem tocar o documento duas vezes', b.commits === 1 && b.docTocadoNoLote === 1 && !b.dupNoLote);
+
+    const limparOrigem = Object.assign(clone(DOC), {
+      checkedIn: { uB: 111, 'Nome antigo': 222 }, absent: { uB: 1, 'Nome antigo': 1 }, checkedInConfirmed: { 'Nome antigo': 1 }
+    });
+    const limpar = await chamarPresenca('uOrg', { targetKey: 'uB', legacyKey: 'Nome antigo', action: 'clear' }, limparOrigem);
+    ok('⭐ limpar remove a presença e qualquer rastro da identidade legada',
+      !('uB' in limpar.b.doc.checkedIn) && !('Nome antigo' in limpar.b.doc.checkedIn) &&
+      limpar.b.doc.absent && limpar.b.doc.absent.uB === 1 && !('Nome antigo' in limpar.b.doc.absent) &&
+      !('Nome antigo' in limpar.b.doc.checkedInConfirmed));
+
+    const dividido = Object.assign(clone(DOC), {
+      _semPesados: ['checkedIn', 'absent', 'checkedInConfirmed'], checkedIn: {}, absent: {}, checkedInConfirmed: {}
+    });
+    const split = await chamarPresenca('uOrg', { targetKey: 'uA', action: 'present' }, dividido);
+    ok('⭐⭐ presença tipada também grava nos mapas já separados em subcoleção',
+      split.b.subs.checkedIn && split.b.subs.checkedIn.uA && split.b.subs.checkedIn.uA.item &&
+      split.b.doc.checkedIn && !('uA' in split.b.doc.checkedIn));
+
+    BANCO = bancoDeMentira('T1', DOC);
+    const negada = await erroDe(CF.setTournamentPresence.run({
+      data: { tournamentId: 'T1', targetKey: 'uB', action: 'present' },
+      auth: { uid: 'uA', token: { uid: 'uA' } }, rawRequest: { headers: {} }, acceptsStreaming: false,
+    }));
+    ok('⛔ participante não usa a porta do organizador — e nada grava',
+      !!negada && /permission-denied/.test(String(negada.code || negada.message)) && BANCO.commits === 0);
   }
 
   } catch (e) {

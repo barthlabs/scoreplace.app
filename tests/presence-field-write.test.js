@@ -35,14 +35,14 @@ function mkT(present, comAusente) {
 }
 const isPresent = (t) => W._idMapHas(t, t.checkedIn || {}, { uid: UID, displayName: NOME });
 
-// executa o toggle com FirestoreDB.setPresenceFields disponível; devolve o que cada via recebeu
+// executa o toggle com a intenção tipada de presença disponível; devolve o que cada via recebeu
 function run(t) {
   const campo = [];       // chamadas por campo
   let docInteiro = 0;     // transações que reescrevem o doc
   W.AppStore.tournaments = [t];
   W.AppStore.mutate = function (tid, fn) { docInteiro++; try { fn(t); } catch (e) {} return Promise.resolve(); };
   W.FirestoreDB = W.FirestoreDB || {};
-  W.FirestoreDB.setPresenceFields = function (tid, sets, dels) { campo.push({ tid, sets, dels }); return Promise.resolve(true); };
+  W.FirestoreDB.setTournamentPresence = function (tid, key, action, legacyKey) { campo.push({ tid, key, action, legacyKey }); return Promise.resolve(true); };
   W._presenceBusyUntil = function () {};
   W._updateCardPresenceInPlace = function () { return true; };
   W._stampPresenceIntent = function () {};
@@ -60,14 +60,11 @@ console.log('── presença grava POR CAMPO (não reescreve o torneio inteiro)
   ok(r.campo.length === 1, 'marcar presente ⇒ 1 escrita POR CAMPO');
   ok(r.docInteiro === 0, 'marcar presente ⇒ NENHUMA reescrita do doc inteiro (era o que perdia marcação)');
   ok(isPresent(t) === true, 'estado local fica PRESENTE na hora (otimista)');
-  const c = r.campo[0] || { sets: [], dels: [] };
-  ok(c.sets.some(s => s.map === 'checkedIn' && s.key === UID), 'grava checkedIn.<uid>');
-  ok(c.dels.some(d => d.map === 'absent' && d.key === UID), 'apaga absent.<uid> no mesmo update');
-  ok(c.dels.some(d => d.map === 'checkedInConfirmed' && d.key === UID), 'apaga checkedInConfirmed.<uid> no mesmo update');
-  // nada fora dos 3 mapas de presença pode ser tocado
-  const mapas = c.sets.concat(c.dels).map(x => x.map);
-  ok(mapas.every(m => m === 'checkedIn' || m === 'absent' || m === 'checkedInConfirmed'),
-    'toca SÓ os mapas de presença — nenhum outro campo do torneio entra na escrita');
+  const c = r.campo[0] || {};
+  ok(c.key === UID && c.action === 'present', 'envia a intenção tipada de marcar presença');
+  ok(!Object.prototype.hasOwnProperty.call(c, 'sets') && !Object.prototype.hasOwnProperty.call(c, 'dels'),
+    'o navegador não monta campos nem operações de banco');
+  ok(c.legacyKey === NOME, 'preserva a chave legada para limpar a duplicidade no servidor');
 })();
 
 // (2) desmarcar: apaga por campo, sem reescrever o doc
@@ -75,8 +72,8 @@ console.log('── presença grava POR CAMPO (não reescreve o torneio inteiro)
   const t = mkT(true, false);
   const r = run(t);
   ok(r.campo.length === 1 && r.docInteiro === 0, 'desmarcar ⇒ 1 escrita POR CAMPO, 0 doc inteiro');
-  ok((r.campo[0]||{dels:[],sets:[]}).dels.some(d => d.map === 'checkedIn' && d.key === UID), 'desmarcar apaga checkedIn.<uid>');
-  ok((r.campo[0]||{sets:[1]}).sets.length === 0, 'desmarcar não grava nada, só apaga');
+  ok(r.campo[0] && r.campo[0].key === UID && r.campo[0].action === 'clear',
+    'desmarcar envia a intenção tipada de limpar a presença');
   ok(isPresent(t) === false, 'estado local fica DESMARCADO na hora');
 })();
 
@@ -92,10 +89,10 @@ console.log('── presença grava POR CAMPO (não reescreve o torneio inteiro)
 (function () {
   const t = mkT(false, false);
   const r1 = run(t);
-  const chaveA = r1.campo[0] && r1.campo[0].sets[0] && r1.campo[0].sets[0].key;
+  const chaveA = r1.campo[0] && r1.campo[0].key;
   const t2 = mkT(false, false);
   W.AppStore.tournaments = [t2];
-  W.FirestoreDB.setPresenceFields = function (tid, sets) { t2._ultima = sets[0].key; return Promise.resolve(true); };
+  W.FirestoreDB.setTournamentPresence = function (tid, key) { t2._ultima = key; return Promise.resolve(true); };
   W._applyCheckInToggle('FLD', 'Outro', 'u9');
   ok(chaveA !== t2._ultima, 'pessoas diferentes escrevem em CAMPOS diferentes (sem colisão em rajada)');
 })();
@@ -106,9 +103,9 @@ console.log('── presença grava POR CAMPO (não reescreve o torneio inteiro)
   let docInteiro = 0;
   W.AppStore.tournaments = [t];
   W.AppStore.mutate = function (tid, fn) { docInteiro++; try { fn(t); } catch (e) {} return Promise.resolve(); };
-  W.FirestoreDB.setPresenceFields = undefined;
+  W.FirestoreDB.setTournamentPresence = undefined;
   W._applyCheckInToggle('FLD', NOME, UID);
-  ok(docInteiro === 1, 'sem setPresenceFields cai na transação de doc inteiro (fallback preservado)');
+  ok(docInteiro === 1, 'sem intenção tipada cai na transação de doc inteiro (fallback preservado)');
   ok(isPresent(t) === true, 'fallback continua marcando presente');
 })();
 

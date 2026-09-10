@@ -1003,7 +1003,7 @@ window.FirestoreDB = {
             // ── v1.7.35 · PRESENÇA ("Cheguei") não é apagada por save de outra coisa ──
             // Eu tinha deixado isto de fora achando que DESMARCAR passava por aqui e o
             // guard prenderia a pessoa. Fui ler o toggle (`_toggleCheckIn`) e **não passa**:
-            // desmarcar vai por `setPresenceFields` (escrita campo a campo, `checkedIn.<uid>`)
+            // desmarcar vai por `setTournamentPresence` (intenção tipada, aplicada no servidor)
             // ou pelo `AppStore.mutate`, que é TRANSAÇÃO e lê o doc fresco. Nenhum dos dois
             // é este caminho. Então proteger aqui não pode prender ninguém na quadra.
             // Quem legitimamente zera a presença por aqui é o SORTEIO ("acabou de sortear,
@@ -1295,9 +1295,9 @@ window.FirestoreDB = {
   // contenção elas se atropelam, algumas esgotam os retries e FALHAM — a marca já estava na tela
   // (otimista) e o snapshot seguinte a removia. Update por CAMPO não colide: o Firestore funde no
   // nível do campo, sem read-modify-write. Ver [[project_concurrency_safe_saves]].
-  // `sets`/`dels` = arrays de {map, key}. Ex.: sets [{map:'checkedIn', key:'uid1'}].
-  async setPresenceFields(tournamentId, sets, dels) {
-    /* ── AGORA QUEM ESCREVE É A CF; O CLIENTE DISPARA (2.0.122) ──────────────────
+  // A tela não monta mais operações de mapa. Ela pede somente o estado de uma presença.
+  async setTournamentPresence(tournamentId, targetKey, action, legacyKey) {
+    /* ── AGORA QUEM ESCREVE É A CF; O CLIENTE DISPARA (L7.P1.27) ──────────────────
      * Ordem do dono: _"tudo em CF apenas disparado pelo cliente"_.
      * ⛔ O motivo não é estilo: presença é um campo que PRECISA sair do documento (mapa
      * uid→instante, linear no número de pessoas — 4,1 KB no Confra e crescendo), e o
@@ -1307,13 +1307,12 @@ window.FirestoreDB = {
      * CAMPO (`checkedIn.<uid>`), sem read-modify-write e sem transação no torneio —
      * marcar UMA presença nunca volta a reescrever o torneio inteiro. Quando o campo
      * estiver na subcoleção, cada marca vira UM documento: contenção zero.
-     * A forma de `sets`/`dels` não mudou: [{map, key, value}]. */
-    var ops = [];
-    (sets || []).forEach(function (o) { if (o && o.map && o.key) ops.push({ parte: o.map, chave: String(o.key), valor: (o.value === undefined ? true : o.value) }); });
-    (dels || []).forEach(function (o) { if (o && o.map && o.key) ops.push({ parte: o.map, chave: String(o.key), valor: null }); });
-    if (!ops.length) return true;
-    await this._callFn('aplicarNoTorneio', { tournamentId: String(tournamentId), ops: ops });
-    return true;
+     * A Function fixa os campos que uma presença pode alterar; o cliente não envia
+     * mapas, chaves extras nem timestamp. */
+    return this._callFn('setTournamentPresence', {
+      tournamentId: String(tournamentId), targetKey: String(targetKey || ''),
+      action: action, legacyKey: legacyKey ? String(legacyKey) : ''
+    });
   },
 
 

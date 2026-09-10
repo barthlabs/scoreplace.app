@@ -2999,6 +2999,17 @@ de sorteio/preparação; (3) categorias e inscrições administrativas; (4) subs
 e ter teste de autorização, corrida e não-escrita do cliente. A L7 permanece aberta até esse
 censo chegar a zero ou cada exceção receber uma remoção justificada e um gate específico.
 
+**L7.P1.27 — check-in comum da organização por intenção tipada (10/set/2026; em validação
+local).** O caminho rápido de presença deixou de encaminhar listas `sets`/`dels` para a porta
+genérica. Ele agora informa somente `tournamentId`, a identidade, a ação `present`/`clear` e a
+chave legada que o servidor deve limpar. A `setTournamentPresence` relê o torneio, exige a
+organização e fixa no servidor as consequências: marcar remove W.O. e confirmação; desmarcar
+remove a presença; as chaves UID/nome antigas são limpas de todos os mapas sem deixar
+duplicidade. O gate
+`porta-unica-de-escrita-fina` executa a Function com banco simulado, inclusive em torneio com
+mapas separados, e prova autorização, lote único e limpeza. A rota com ausentes, que ainda
+aplica substituição de W.O. sobre a chave, continua inventariada no censo para migração própria.
+
 ## L8 — matriz de leitura e projeção (08/set/2026)
 
 `matches` permanece a fonte canônica. `results/{matchId}` é uma projeção server-written para

@@ -648,7 +648,7 @@ window._applyCheckInToggle = function (tId, playerName, uid) {
   var _temAusentes = !!(t.absent && Object.keys(t.absent).length);
   var _fieldDone = null;
   var _viaCampo = !!(_presKey && !_temAusentes &&
-    window.FirestoreDB && typeof window.FirestoreDB.setPresenceFields === 'function');
+    window.FirestoreDB && typeof window.FirestoreDB.setTournamentPresence === 'function');
   if (_viaCampo) {
     // estado local otimista (idêntico ao do mutator), depois UM update de campo
     if (!t.checkedIn) t.checkedIn = {};
@@ -661,15 +661,10 @@ window._applyCheckInToggle = function (tId, playerName, uid) {
     } else {
       window._idMapDel(t, t.checkedIn, _who);
     }
-    var _dels = _wantPresent
-      ? [{ map: 'absent', key: _presKey }, { map: 'checkedInConfirmed', key: _presKey }]
-      : [{ map: 'checkedIn', key: _presKey }];
-    var _sets = _wantPresent ? [{ map: 'checkedIn', key: _presKey, value: _presTs }] : [];
     // chave-nome legada (quando há uid) some junto — mesma migração do _idMapSet
-    if (_kPres && _kPres.uid && _kPres.name && _kPres.name !== _kPres.uid) {
-      _dels.push({ map: 'checkedIn', key: _kPres.name });
-    }
-    _fieldDone = window.FirestoreDB.setPresenceFields(tId, _sets, _dels)
+    var _legacyPresenceKey = (_kPres && _kPres.uid && _kPres.name && _kPres.name !== _kPres.uid) ? _kPres.name : '';
+    _fieldDone = window.FirestoreDB.setTournamentPresence(tId, _presKey,
+      _wantPresent ? 'present' : 'clear', _legacyPresenceKey)
       .catch(function (e) {
         if (window._error) window._error('[presença por campo] falhou', e);
         if (typeof showNotification === 'function') showNotification('⚠️ Presença não salva', (e && e.message) || 'Tente de novo.', 'warning');
