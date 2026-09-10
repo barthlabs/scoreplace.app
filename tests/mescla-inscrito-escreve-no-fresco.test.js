@@ -1,5 +1,6 @@
 const fs = require('fs');
 const s = fs.readFileSync('js/views/tournaments-draw.js', 'utf8');
+const server = fs.readFileSync('functions-autodraw/index.js', 'utf8');
 let fail = 0;
 function ok(v, m) { if (v) console.log('✓ ' + m); else { fail++; console.error('✗ ' + m); } }
 const start = s.indexOf('window._mergeParticipantConfirm = function');
@@ -7,8 +8,9 @@ const end = s.indexOf('// ── v2.7.75', start);
 const merge = s.slice(start, end);
 const applyStart = s.indexOf('window._applyParticipantMergeFresh = function');
 const apply = s.slice(applyStart, start);
-ok(/commitTournamentTx[\s\S]*allowRosterRemoval:\s*true/.test(merge), 'mescla declara a remoção intencional na transação');
-ok(/_applyParticipantMergeFresh\(ft, personName, personUid, placeholderName, placeholderUid\)/.test(merge), 'mescla reaplica a troca de vaga no documento fresco');
+const serverMerge = server.slice(server.indexOf('exports.resolveParticipantMerge = onCall'), server.indexOf('// ─── Declarar/reverter ausência', server.indexOf('exports.resolveParticipantMerge = onCall')));
+ok(/_callCF\('resolveParticipantMerge'/.test(merge) && !/commitTournamentTx|AppStore\.mutate/.test(merge), 'mescla só envia a decisão à Function');
+ok(/_mergeParticipantInFreshTournament/.test(serverMerge) && /_gravaTorneio/.test(serverMerge), 'Function reaplica a troca no documento fresco');
 ok(!/saveTournament\(|AppStore\.sync\(/.test(merge), 'mescla não regrava o snapshot da tela');
 ok(/_mergedFrom/.test(apply) && /_replaceParticipantNameInBracket/.test(apply), 'aplicador fresco preserva desfazer e atualiza a chave');
 const undoStart = s.indexOf('window._undoMergeParticipant = function');

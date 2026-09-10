@@ -1,4 +1,4 @@
-// ⚠️ 2.2.48 · iniciar o torneio, limpar a chamada e ajustar o nível de um inscrito são confirmados pela Cloud Function; a tela só recebe o estado canônico.
+// ⚠️ 2.2.49 · presença, prazo de inscrição, ocupação de vagas e vínculo de participante são confirmados pela Cloud Function; nenhuma aba regrava chave, elenco ou pendências.
 // ⚠️ 2.2.47 · W.O., substituições e reversões são aplicados pela Cloud Function; a tela só envia a ação autorizada e recebe o torneio canônico.
 // ⚠️ 2.2.46 · a presença, tanto da organização quanto do participante, é confirmada pelo servidor; o aparelho só mostra a resposta canônica e não mistura estado local antigo.
 // ⚠️ 2.2.45 · o convite de co-organização só informa envio quando a Function confirma; resposta vazia vira aviso honesto, sem perder o convite já persistido.
@@ -1475,6 +1475,7 @@ window._RELEASE_NOTES_HTML = (function () {
         // usuário vê a diferença: sobra card na tela.
         '<li><b>\uD83D\uDCCD A chave n\u00e3o pula mais de lugar quando voc\u00ea lan\u00e7a um placar:</b> em chave larga, bastava rolar at\u00e9 a rodada que voc\u00ea estava lan\u00e7ando e confirmar um placar \u2014 a chave <b>voltava sozinha para a Rodada 1</b> e voc\u00ea tinha que procurar o jogo de novo a cada resultado. Agora ela fica exatamente onde estava, em qualquer formato de chave.</li>' +
         '<li><b>\uD83C\uDFBE Tie-break e super tie-break avisam a diferen\u00e7a de 2 pontos ANTES:</b> empatou os sets, a linha do card j\u00e1 diz <b>\u201cSuper Tie-Break (dif 2 pts)\u201d</b> \u2014 antes de voc\u00ea entrar na quadra. No tie-break de um set, o aviso aparece junto com os campinhos de ponto. E o aplicativo passou a <b>cobrar</b> o que avisa: 10-9 no super tie-break n\u00e3o \u00e9 mais aceito. O placar que espera aprova\u00e7\u00e3o tamb\u00e9m ganhou o <b>nome de cada set em cima do n\u00famero</b> \u2014 quem vai confirmar precisa saber qual coluna \u00e9 o Set 2 e qual \u00e9 o super tie-break.</li>' +
+        '<li><b>\uD83D\uDEE1\uFE0F A tela deixa de regravar uma vers\u00e3o velha do torneio:</b> presen\u00e7a, fechamento de inscri\u00e7\u00f5es, ocupa\u00e7\u00e3o de vaga e a liga\u00e7\u00e3o entre uma inscri\u00e7\u00e3o digitada e uma conta agora s\u00e3o confirmados no servidor. Isso evita que duas abas abertas ou uma conex\u00e3o lenta desfa\u00e7am elenco, chave ou pend\u00eancias que j\u00e1 tinham sido atualizados.</li>' +
         // ⚠️ 2.0.34 NÃO ganha item, e é DECISÃO. Ela DESFAZ o item de tamanhos que a 2.0.33
         // tinha escrito aqui (nome/foto/número maiores) e também a caixa de duas linhas da
         // 2.0.30 — ordem do dono, vendo no ar: _"reverte tudo que está uma merda"_. Anunciar
