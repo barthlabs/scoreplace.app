@@ -3036,6 +3036,8 @@ nos dois controles, payload mínimo, autorização e transação. O censo caiu d
 mutadores de navegador desde a publicação 2.2.47; os caminhos de presença legados continuam
 inventariados até migração completa, sem receber exceção de segurança.
 
+**L7.P1.31 — fechamento de inscrição pelo servidor (10/set/2026; em validação local).** O relógio do dashboard e a varredura do boot não gravam mais `status: closed`, nem de forma otimista nem via transação local. Ambos enviam uma única intenção deduplicada por torneio para `closeExpiredEnrollment`; a Function relê prazo, organização e chave antes de decidir. Os gates exigem ausência de `commitTournamentTx`/`update` nos dois caminhos e o censo cai de **70 para 68** writers iniciados pelo navegador.
+
 **L7.P1.30 — presença sem fotografia otimista (10/set/2026; em validação local).** O
 check-in comum não reescreve nem antecipa mapas em memória e não conserva fallback por
 `AppStore.mutate`: a tela traduz o clique em ação absoluta e aguarda a Function tipada. Quando

@@ -4070,27 +4070,13 @@ setInterval(function() {
       var enrollEl = document.getElementById('dash-enrollbtn-' + tId);
       if (enrollEl) enrollEl.style.display = 'none';
     }
-    // Persiste status:'closed' no Firestore usando o objeto completo do
-    // AppStore — salvar objeto parcial limparia memberEmails/adminEmails e
-    // bloquearia futuras gravações via regras de segurança do Firestore.
-    if (tId && window.AppStore && window.FirestoreDB) {
-      var _appT = window.AppStore.tournaments && window.AppStore.tournaments.find(function(x) {
+    // A data já basta para a apresentação. A persistência é uma intenção
+    // server-owned e só a organização pode solicitá-la.
+    if (tId && typeof window._requestExpiredEnrollmentClose === 'function') {
+      var _appT = window.AppStore && window.AppStore.tournaments && window.AppStore.tournaments.find(function(x) {
         return String(x.id) === String(tId);
       });
-      if (_appT) {
-        _appT.status = 'closed';
-        if (typeof window.AppStore.commitTournamentTx === 'function') {
-          window.AppStore.commitTournamentTx(tId, function(ft) {
-            if (!ft || ft.status === 'closed' || ft.status === 'finished') return false;
-            ft.status = 'closed';
-            return true;
-          });
-        }
-      } else if (window.FirestoreDB.db) {
-        // Fallback: update cirúrgico — não toca em memberEmails/adminEmails
-        window.FirestoreDB._tRef(tId)
-          .update({ status: 'closed' }).catch(function() {});
-      }
+      window._requestExpiredEnrollmentClose(tId, _appT);
     }
   });
   };
@@ -9941,6 +9927,22 @@ window._regBtnBusy = function(btn, tId, label) {
   s.timer = setTimeout(window._regBtnDone, 20000); // backstop: nunca trava
 };
 
+// Fecho por prazo é idempotente no servidor. Esta trava evita que o relógio ou
+// o boot disparem a mesma intenção repetidamente antes do snapshot canônico.
+window._expiredEnrollmentRequests = window._expiredEnrollmentRequests || {};
+window._requestExpiredEnrollmentClose = function(tId, tournament) {
+  if (!tId || !tournament || !window.AppStore || !window.AppStore.currentUser ||
+      !window.AppStore.isOrganizer || !window.AppStore.isOrganizer(tournament) ||
+      typeof window._callCF !== 'function') return Promise.resolve(false);
+  var key = String(tId);
+  if (window._expiredEnrollmentRequests[key]) return window._expiredEnrollmentRequests[key];
+  var request = window._callCF('closeExpiredEnrollment', { tournamentId: key })
+    .catch(function(e) { if (window._error) window._error('[fechamento por prazo]', e); return false; })
+    .finally(function() { delete window._expiredEnrollmentRequests[key]; });
+  window._expiredEnrollmentRequests[key] = request;
+  return request;
+};
+
 // Auto-close tournaments whose registration deadline has passed
 // Runs once on app load — checks all tournaments and closes expired ones
 window._autoCloseExpiredEnrollments = function() {
@@ -9961,17 +9963,7 @@ window._autoCloseExpiredEnrollments = function() {
     if (isLiga && t.ligaOpenEnrollment !== false) return;
     // Check if deadline passed
     if (new Date(t.registrationLimit) < now) {
-      t.status = 'closed';
-      // Só o organizador persiste — salva objeto completo para não limpar
-      // adminEmails/memberEmails (bug v1.6.66 corrigido em v1.6.67).
-      var cu = window.AppStore.currentUser;
-      if (cu && window.AppStore.isOrganizer(t) && typeof window.AppStore.commitTournamentTx === 'function') { // v2.8.79: uid-primário (co-host com email '')
-        window.AppStore.commitTournamentTx(t.id, function(ft) {
-          if (!ft || ft.status === 'closed' || ft.status === 'finished') return false;
-          ft.status = 'closed';
-          return true;
-        });
-      }
+      window._requestExpiredEnrollmentClose(t.id, t);
     }
   });
 };

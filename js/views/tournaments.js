@@ -2558,8 +2558,9 @@ function renderTournaments(container, tournamentId = null) {
         if (!isAberto && !isFinished && !sorteioRealizado && t.status !== 'closed' && t.registrationLimit && new Date(t.registrationLimit) < new Date()) {
           // O prazo já fechou para a UI. A Function relê e grava o status somente se o
           // documento fresco ainda estiver aberto e sem chave; a tela nunca salva esse estado.
-          t._autoClosedByDeadline = true;
-          if (typeof window._callCF === 'function' && window.AppStore && window.AppStore.isOrganizer && window.AppStore.isOrganizer(t)) window._callCF('closeExpiredEnrollment', { tournamentId: String(t.id) }, 'Entre na sua conta para atualizar inscrições.').catch(function() {});
+          if (typeof window._requestExpiredEnrollmentClose === 'function') {
+            window._requestExpiredEnrollmentClose(String(t.id), t);
+          }
         }
 
         // Self-heal: enrollments open + no draw => drain any residual waitlist/standby into participants

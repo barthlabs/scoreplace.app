@@ -1,0 +1,11 @@
+'use strict';
+const fs = require('fs');
+const s = fs.readFileSync('js/store.js', 'utf8');
+let failed = 0; const ok = (v, m) => { console.log((v ? '✓ ' : '✗ ') + m); if (!v) failed++; };
+const start = s.indexOf('window._requestExpiredEnrollmentClose = function');
+const end = s.indexOf('// Auto-close tournaments', start);
+const body = s.slice(start, end);
+ok(start >= 0 && body.includes("_callCF('closeExpiredEnrollment'"), 'helper despacha somente a Function tipada');
+ok(!/commitTournamentTx|\.update\(|\.status\s*=\s*'closed'/.test(body), 'helper não grava status local nem Firestore direto');
+ok(body.includes('_expiredEnrollmentRequests[key]'), 'relógio e boot compartilham deduplicação por torneio');
+process.exit(failed ? 1 : 0);
