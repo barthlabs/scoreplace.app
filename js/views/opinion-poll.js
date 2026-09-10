@@ -26,16 +26,17 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (typeof window._findTournamentById === 'function') return window._findTournamentById(tId);
     return window.AppStore && (window.AppStore.tournaments || []).find(function (x) { return String(x.id) === String(tId); });
   }
-  // Retorna a Promise do save pra quem precisa saber se REALMENTE persistiu
-  // (ex.: voto). NUNCA mais engolir a rejeição em silêncio — um catch vazio aqui
-  // foi a causa do voto da Confra "salvar" na tela e sumir no servidor.
-  function _save(t) {
-    try {
-      if (window.FirestoreDB && window.FirestoreDB.saveTournament) {
-        return Promise.resolve(window.FirestoreDB.saveTournament(t));
-      }
-    } catch (e) { return Promise.reject(e); }
-    return Promise.reject(new Error('FirestoreDB indisponível'));
+  // L7: a tela envia uma INTENÇÃO curta. A Function relê o torneio fresco, autoriza
+  // e devolve a enquete canônica. Nunca mais salvar a cópia inteira da aba.
+  function _mutate(t, action, payload) {
+    if (!t || typeof window._callCF !== 'function') return Promise.reject(new Error('Cloud Function indisponível'));
+    payload = payload || {}; payload.tournamentId = String(t.id); payload.action = action;
+    return window._callCF('mutateOpinionPoll', payload, 'Entre na sua conta para atualizar a enquete.').then(function (res) {
+      var out = (res && res.data) || {};
+      if (!out.ok || !Array.isArray(out.opinionPolls)) throw new Error(out.reason || 'opinion-poll-failed');
+      t.opinionPolls = out.opinionPolls;
+      return out;
+    });
   }
   function _isOrg(t) { return !!(window.AppStore && ((window.AppStore.isOrganizer && window.AppStore.isOrganizer(t)) || (window.AppStore.isCreator && window.AppStore.isCreator(t)))); }
   function _rand() { return Math.floor(Math.random() * 1e6); }
@@ -383,34 +384,16 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var hide = !!(document.getElementById('op-hide') && document.getElementById('op-hide').checked);
     var cu = _cu();
 
-    if (pollId) {
-      // edição: preserva id/votes/createdAt, troca conteúdo. Os ids das opções/seções são
-      // novos (regenerados) → votos de opções alteradas naturalmente deixam de contar.
-      var existing = _findPoll(t, pollId); if (!existing) return;
-      existing.sections = sections;
-      existing.hideResultsUntilVote = hide;
-      // limpa campos legados pra não confundir os acessores
-      delete existing.question; delete existing.options; delete existing.multiSelect;
-      _save(t);
+    var id = pollId || ('op_' + Date.now() + '_' + _rand());
+    _mutate(t, 'save', { pollId: id, sections: sections, hideResultsUntilVote: hide }).then(function () {
+      var poll = _findPoll(t, id);
       window._opCloseOverlay();
-      if (typeof showNotification === 'function') showNotification('✅ Enquete atualizada', '', 'success');
+      if (typeof showNotification === 'function') showNotification(pollId ? '✅ Enquete atualizada' : '📊 Enquete criada', pollId ? '' : 'Notificando os inscritos…', 'success');
+      if (!pollId && poll) window._opNotifyEnrolled(t, poll, { excludeEmail: (cu && cu.email) || '' });
       if (typeof window._softRefreshView === 'function') window._softRefreshView();
-      return;
-    }
-
-    var poll = {
-      id: 'op_' + Date.now() + '_' + _rand(),
-      sections: sections,
-      hideResultsUntilVote: hide,
-      votes: {}, createdAt: new Date().toISOString(), createdByUid: (cu && cu.uid) || '', closed: false
-    };
-    if (!Array.isArray(t.opinionPolls)) t.opinionPolls = [];
-    t.opinionPolls.push(poll);
-    _save(t);
-    window._opCloseOverlay();
-    if (typeof showNotification === 'function') showNotification('📊 Enquete criada', 'Notificando os inscritos…', 'success');
-    window._opNotifyEnrolled(t, poll, { excludeEmail: (cu && cu.email) || '' });
-    if (typeof window._softRefreshView === 'function') window._softRefreshView();
+    }).catch(function (err) {
+      if (typeof showNotification === 'function') showNotification('⚠️ Enquete não salva', 'Não foi possível registrar no servidor (' + String((err && (err.code || err.message)) || 'tente novamente') + ').', 'error');
+    });
   };
 
   // ─── PASSO 3: Votar / ver resultados (por seção, todas na tela) ──────────────────
@@ -685,17 +668,11 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (!checked.length) { if (typeof showNotification === 'function') showNotification('Escolha uma opção', '', 'warning'); return; }
     if (!sec.multiSelect) checked = [checked[0]];
     var _wasVoted = _opHasVotedSection(poll, secId, cu.uid);
-    var _prev = poll.votes && poll.votes[cu.uid]; // snapshot pra reverter se o save falhar
-    var _prevClone = _prev == null ? undefined : (Array.isArray(_prev) ? _prev.slice() : JSON.parse(JSON.stringify(_prev)));
-    _opSetVote(poll, cu.uid, secId, checked);
-    // Só confirma DEPOIS que o servidor aceitar. Se a gravação for rejeitada (ex.: rule),
-    // reverte o voto local e avisa de verdade — nunca mais "voto registrado" mentiroso.
-    _save(t).then(function () {
+    _mutate(t, 'vote', { pollId: pollId, sectionId: secId, yes: checked, no: [] }).then(function () {
       if (typeof showNotification === 'function') showNotification(_wasVoted ? '✓ Voto atualizado' : '✓ Voto registrado', '', 'success');
-      _renderVote(t, poll, null);
+      _renderVote(t, _findPoll(t, pollId), null);
       if (typeof window._softRefreshView === 'function') window._softRefreshView();
     }).catch(function (err) {
-      if (poll.votes) { if (_prevClone === undefined) { try { delete poll.votes[cu.uid]; } catch (e) {} } else poll.votes[cu.uid] = _prevClone; }
       var _msg = (err && (err.code || err.message)) ? String(err.code || err.message) : 'tente novamente';
       if (typeof showNotification === 'function') showNotification('⚠️ Voto NÃO salvo', 'Não foi possível registrar no servidor (' + _msg + ').', 'error');
       try { console.error('[opinion-poll] voto rejeitado:', err); } catch (e) {}
@@ -742,15 +719,13 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       return;
     }
     if (!toSave.length) { if (typeof showNotification === 'function') showNotification('Nada a confirmar', '', 'info'); return; }
-    var _prev = poll.votes && poll.votes[cu.uid]; // snapshot pra reverter se o save falhar
-    var _prevClone = _prev == null ? undefined : (Array.isArray(_prev) ? _prev.slice() : JSON.parse(JSON.stringify(_prev)));
-    toSave.forEach(function (s) { if (s.multi) _opSetVoteMulti(poll, cu.uid, s.secId, s.yes, s.no); else _opSetVote(poll, cu.uid, s.secId, s.yes); });
-    _save(t).then(function () {
+    toSave.reduce(function (chain, item) {
+      return chain.then(function () { return _mutate(t, 'vote', { pollId: pollId, sectionId: item.secId, yes: item.yes, no: item.no || [] }); });
+    }, Promise.resolve()).then(function () {
       if (typeof showNotification === 'function') showNotification(secs.length > 1 ? '✓ Votos registrados' : '✓ Voto registrado', '', 'success');
-      _renderVote(t, poll, null);
+      _renderVote(t, _findPoll(t, pollId), null);
       if (typeof window._softRefreshView === 'function') window._softRefreshView();
     }).catch(function (err) {
-      if (poll.votes) { if (_prevClone === undefined) { try { delete poll.votes[cu.uid]; } catch (e) {} } else poll.votes[cu.uid] = _prevClone; }
       var _msg = (err && (err.code || err.message)) ? String(err.code || err.message) : 'tente novamente';
       if (typeof showNotification === 'function') showNotification('⚠️ Voto NÃO salvo', 'Não foi possível registrar no servidor (' + _msg + ').', 'error');
       try { console.error('[opinion-poll] voto-all rejeitado:', err); } catch (e) {}
@@ -783,10 +758,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       if (!checked.length) { if (typeof showNotification === 'function') showNotification('Escolha uma opção', 'Selecione antes de confirmar.', 'warning'); return; }
       yes = [checked[0]];
     }
-    var _prev = poll.votes && poll.votes[cu.uid];
-    var _prevClone = _prev == null ? undefined : (Array.isArray(_prev) ? _prev.slice() : JSON.parse(JSON.stringify(_prev)));
-    if (sec.multiSelect) _opSetVoteMulti(poll, cu.uid, sec.id, yes, no); else _opSetVote(poll, cu.uid, sec.id, yes);
-    _save(t).then(function () {
+    _mutate(t, 'vote', { pollId: pollId, sectionId: sec.id, yes: yes, no: no }).then(function () {
+      poll = _findPoll(t, pollId);
       // v4.5.101: na edição-completa, AVANÇA o cursor pra próxima pergunta; ao passar da última,
       // sai da edição (volta pros resultados). Fora dela, mantém a lógica de "faltam N".
       if (_editAll && _editAll.pollId === poll.id) {
@@ -812,7 +785,6 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       _renderVote(t, poll, null); // re-render: mostra o próximo passo OU os resultados
       if (typeof window._softRefreshView === 'function') window._softRefreshView();
     }).catch(function (err) {
-      if (poll.votes) { if (_prevClone === undefined) { try { delete poll.votes[cu.uid]; } catch (e) {} } else poll.votes[cu.uid] = _prevClone; }
       var _msg = (err && (err.code || err.message)) ? String(err.code || err.message) : 'tente novamente';
       if (typeof showNotification === 'function') showNotification('⚠️ Voto NÃO salvo', 'Não foi possível registrar no servidor (' + _msg + ').', 'error');
       try { console.error('[opinion-poll] voto-step rejeitado:', err); } catch (e) {}
@@ -823,10 +795,11 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var t = _findT(tId); if (!t || !_isOrg(t)) return;
     var poll = _findPoll(t, pollId); if (!poll) return;
     var go = function () {
-      poll.closed = true; poll.closedAt = new Date().toISOString();
-      _save(t); window._opCloseOverlay();
-      if (typeof showNotification === 'function') showNotification('🔒 Enquete encerrada', '', 'success');
-      if (typeof window._softRefreshView === 'function') window._softRefreshView();
+      _mutate(t, 'close', { pollId: pollId }).then(function () {
+        window._opCloseOverlay();
+        if (typeof showNotification === 'function') showNotification('🔒 Enquete encerrada', '', 'success');
+        if (typeof window._softRefreshView === 'function') window._softRefreshView();
+      }).catch(function (err) { if (typeof showNotification === 'function') showNotification('⚠️ Enquete não encerrada', String((err && (err.code || err.message)) || 'Tente novamente.'), 'error'); });
     };
     if (typeof window.showConfirmDialog === 'function') window.showConfirmDialog('Encerrar enquete?', 'Os inscritos não poderão mais votar. Os resultados continuam visíveis.', go, null, { confirmText: 'Encerrar', cancelText: 'Cancelar' });
     else go();
@@ -856,30 +829,22 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       return;
     }
     var go = function () {
-      // Notifica SÓ quem ainda NÃO votou (e nunca o próprio que republicou).
-      var info = (typeof _opVoterInfoMap === 'function') ? _opVoterInfoMap(t) : {};
-      var myUid = (cu && cu.uid) || '';
-      var data = (typeof _opPollNotifData === 'function') ? _opPollNotifData(t, poll) : null;
-      var sent = 0;
-      if (data && typeof window._sendUserNotification === 'function') {
-        Object.keys(info).forEach(function (uid) {
-          if (!uid || uid === myUid) return;
-          if (_opHasVotedAny(poll, uid)) return;   // já votou → não incomoda
-          try { window._sendUserNotification(uid, data); sent++; } catch (e) {}
-        });
-      }
-      poll.republishedAt = new Date().toISOString();
-      try { _save(t); } catch (e) {}
-      // v3.1.57: RE-RENDERIZA a enquete (em vez de fechar) → o botão Republicar vira
-      // CINZA "✅ Notificados" na hora. Volta ao normal sozinho depois de 24h.
-      if (typeof window._softRefreshView === 'function') window._softRefreshView();
-      try { _renderVote(t, poll, null); } catch (e) {}
-      // Confirmação explícita de que disparou (pedido do dono).
-      var msg = sent > 0
-        ? ('Avisamos de novo ' + sent + ' inscrito(s) que ainda não responderam. Quem já votou não foi incomodado.')
-        : 'Todos os inscritos já responderam — não havia ninguém pra avisar.';
-      if (typeof window.showAlertDialog === 'function') window.showAlertDialog('✅ Enquete republicada', msg);
-      else if (typeof showNotification === 'function') showNotification('✅ Enquete republicada', msg, 'success');
+      // O navegador só dispara as duas portas; o servidor decide destinatários e grava.
+      _mutate(t, 'republish', { pollId: pollId }).then(function () {
+        var q = (window._opSections(_findPoll(t, pollId))[0] || {}).question || 'a enquete';
+        return window._callCF('sendOrgCommunication', {
+          tournamentId: String(t.id),
+          message: '📊 Lembrete: responda ' + q + '.', level: 'fundamental',
+          skipOpinionPollVoters: String(pollId), skipCaller: true
+        }, 'Entre na sua conta para republicar a enquete.');
+      }).then(function (res) {
+        var out = (res && res.data) || {};
+        if (typeof window._softRefreshView === 'function') window._softRefreshView();
+        try { _renderVote(t, _findPoll(t, pollId), null); } catch (e) {}
+        var msg = out.platform > 0 ? ('Avisamos de novo ' + out.platform + ' inscrito(s) que ainda não responderam. Quem já votou não foi incomodado.') : 'Todos os inscritos já responderam — não havia ninguém pra avisar.';
+        if (typeof window.showAlertDialog === 'function') window.showAlertDialog('✅ Enquete republicada', msg);
+        else if (typeof showNotification === 'function') showNotification('✅ Enquete republicada', msg, 'success');
+      }).catch(function (err) { if (typeof showNotification === 'function') showNotification('⚠️ Enquete não republicada', String((err && (err.code || err.message)) || 'Tente novamente.'), 'error'); });
     };
     if (typeof window.showConfirmDialog === 'function') window.showConfirmDialog('Republicar enquete?', 'Vamos avisar de novo SÓ quem ainda não respondeu. Quem já votou não será incomodado.', go, null, { confirmText: 'Republicar', cancelText: 'Cancelar' });
     else go();
@@ -1089,15 +1054,15 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     window._opNotifiedThisSession = window._opNotifiedThisSession || {};
     if (window._opNotifiedThisSession[poll.id] && !opts.force) return;
     window._opNotifiedThisSession[poll.id] = true;
-    poll.notifiedAt = new Date().toISOString();
-    try { _save(t); } catch (e) {}
-    try {
-      if (typeof window._notifyTournamentParticipants === 'function') {
-        var cu = _cu();
-        var excl = opts.excludeEmail != null ? opts.excludeEmail : ((cu && cu.email) || '');
-        window._notifyTournamentParticipants(t, _opPollNotifData(t, poll), excl);
-      }
-    } catch (e2) {}
+    var q = (window._opSections(poll)[0] || {}).question || 'a enquete';
+    window._callCF('sendOrgCommunication', {
+      tournamentId: String(t.id), message: '📊 Responda a enquete: ' + q + '.', level: 'fundamental'
+    }, 'Entre na sua conta para notificar os inscritos.').then(function () {
+      return _mutate(t, 'stamp-notification', { pollId: poll.id });
+    }).catch(function (err) {
+      try { delete window._opNotifiedThisSession[poll.id]; } catch (e) {}
+      try { console.error('[opinion-poll] notificação rejeitada:', err); } catch (e2) {}
+    });
   };
 
   // Chamado pelo app do CRIADOR ao renderizar — dispara enquete ativa ainda não notificada.
@@ -1117,7 +1082,11 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       if (!t || !uid) return;
       var poll = window._opActivePoll(t); if (!poll || poll.closed) return;
       if (_opHasVotedAny(poll, uid)) return;
-      if (typeof window._sendUserNotification === 'function') window._sendUserNotification(uid, _opPollNotifData(t, poll));
+      var q = (window._opSections(poll)[0] || {}).question || 'a enquete';
+      if (typeof window._callCF === 'function') window._callCF('sendOrgCommunication', {
+        tournamentId: String(t.id), targetUids: [String(uid)],
+        message: '📊 Responda a enquete: ' + q + '.', level: 'fundamental'
+      }, 'Entre na sua conta para notificar o inscrito.').catch(function () {});
     } catch (e) {}
   };
 })();

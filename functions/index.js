@@ -3637,6 +3637,86 @@ exports.setMatchWhatsAppGroup = onCall(
 );
 
 
+/* ═══ ENQUETE · porta CF tipada ════════════════════════════════════════════════
+ * A enquete morava em `opinionPolls`, mas criação, voto e fechamento usavam
+ * saveTournament(t): uma aba com a cópia velha podia apagar resultado ou chave. A porta
+ * recebe uma intenção pequena, relê o elenco dentro da transação e grava só esse campo. */
+function _opPollSections(raw) {
+  if (!Array.isArray(raw) || raw.length < 1 || raw.length > 20) throw new HttpsError("invalid-argument", "seções inválidas");
+  const seenSections = new Set();
+  return raw.map((section, i) => {
+    const id = String(section && section.id || "").trim().slice(0, 100);
+    const question = String(section && section.question || "").trim().slice(0, 500);
+    const options = Array.isArray(section && section.options) ? section.options : [];
+    if (!id || seenSections.has(id) || !question || options.length < 2 || options.length > 30) throw new HttpsError("invalid-argument", "cada seção precisa de pergunta e 2 a 30 opções");
+    seenSections.add(id);
+    const seen = new Set();
+    return { id, question, multiSelect: !!section.multiSelect, options: options.map((option) => {
+      const optId = String(option && option.id || "").trim().slice(0, 100);
+      const text = String(option && option.text || "").trim().slice(0, 300);
+      if (!optId || !text || seen.has(optId)) throw new HttpsError("invalid-argument", "opções inválidas");
+      seen.add(optId); return { id: optId, text };
+    }) };
+  });
+}
+function _opPollCallerCanVote(t, uid) {
+  if (_isTournamentOrgCaller(t, uid)) return true;
+  if (Array.isArray(t.memberUids) && t.memberUids.map(String).indexOf(uid) !== -1) return true;
+  return (Array.isArray(t.participants) ? t.participants : []).some((p) => p && typeof p === "object" && [p.uid, p.p1Uid, p.p2Uid].filter(Boolean).map(String).indexOf(uid) !== -1);
+}
+exports.mutateOpinionPoll = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
+    const data = request.data || {}, tournamentId = String(data.tournamentId || "").trim();
+    const action = String(data.action || "");
+    if (!tournamentId || ["save", "vote", "close", "stamp-notification", "republish"].indexOf(action) === -1) throw new HttpsError("invalid-argument", "ação de enquete inválida");
+    const db = admin.firestore(), ref = db.collection("tournaments").doc(tournamentId);
+    return db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
+      const t = await _splitParts.hidratar(tx, ref, snap.data() || {}, ["participants"]);
+      const polls = Array.isArray(t.opinionPolls) ? t.opinionPolls.slice() : [];
+      const pollId = String(data.pollId || "").trim().slice(0, 160);
+      let poll = pollId ? polls.find(p => p && String(p.id) === pollId) : null;
+      const isOrg = _isTournamentOrgCaller(t, callerUid);
+      if (action === "save") {
+        if (!isOrg) throw new HttpsError("permission-denied", "só a organização edita enquete");
+        const sections = _opPollSections(data.sections);
+        if (poll) { poll.sections = sections; poll.hideResultsUntilVote = !!data.hideResultsUntilVote; delete poll.question; delete poll.options; delete poll.multiSelect; }
+        else { if (!pollId) throw new HttpsError("invalid-argument", "pollId obrigatório"); poll = { id: pollId, sections, hideResultsUntilVote: !!data.hideResultsUntilVote, votes: {}, createdAt: new Date().toISOString(), createdByUid: callerUid, closed: false }; polls.push(poll); }
+      } else {
+        if (!poll) throw new HttpsError("not-found", "enquete não existe");
+        if (action === "close") { if (!isOrg) throw new HttpsError("permission-denied", "só a organização encerra enquete"); poll.closed = true; poll.closedAt = new Date().toISOString(); }
+        if (action === "stamp-notification") { if (!isOrg) throw new HttpsError("permission-denied", "só a organização notifica"); poll.notifiedAt = new Date().toISOString(); }
+        if (action === "republish") {
+          if (!isOrg && String(poll.createdByUid || "") !== callerUid) throw new HttpsError("permission-denied", "só a organização ou quem criou a enquete pode republicar");
+          if (poll.closed) throw new HttpsError("failed-precondition", "enquete encerrada");
+          const last = Date.parse(poll.republishedAt || "") || 0;
+          if (last && Date.now() - last < 24 * 60 * 60 * 1000) throw new HttpsError("resource-exhausted", "aguarde 24 horas para republicar");
+          poll.republishedAt = new Date().toISOString();
+        }
+        if (action === "vote") {
+          if (poll.closed) throw new HttpsError("failed-precondition", "enquete encerrada");
+          if (!_opPollCallerCanVote(t, callerUid)) throw new HttpsError("permission-denied", "só inscritos votam");
+          const sectionId = String(data.sectionId || "");
+          const legacySections = Array.isArray(poll.sections) && poll.sections.length ? poll.sections : [{ id: "_s0", options: Array.isArray(poll.options) ? poll.options : [], multiSelect: !!poll.multiSelect }];
+          const sec = legacySections.find(s => s && s.id === sectionId);
+          if (!sec) throw new HttpsError("invalid-argument", "seção inválida");
+          const yes = Array.isArray(data.yes) ? data.yes.map(String) : [], no = Array.isArray(data.no) ? data.no.map(String) : [];
+          const allowed = new Set((sec.options || []).map(o => String(o.id)));
+          if ((!yes.length && !no.length) || yes.some(x => !allowed.has(x)) || no.some(x => !allowed.has(x)) || yes.some(x => no.indexOf(x) !== -1) || (!sec.multiSelect && (yes.length !== 1 || no.length))) throw new HttpsError("invalid-argument", "voto inválido");
+          poll.votes = Object.assign({}, poll.votes || {}); const mine = Object.assign({}, Array.isArray(poll.votes[callerUid]) ? { [sec.id]: poll.votes[callerUid] } : (poll.votes[callerUid] || {}));
+          mine[sec.id] = sec.multiSelect ? { yes: Array.from(new Set(yes)), no: Array.from(new Set(no)) } : [yes[0]]; poll.votes[callerUid] = mine;
+        }
+      }
+      _splitParts.gravar(tx, ref, t, { opinionPolls: polls, updatedAt: new Date().toISOString() });
+      return { ok: true, opinionPolls: polls, poll: poll || null };
+    });
+  }
+);
+
 /* ═══ MARCA VIP · porta CF estreita ════════════════════════════════════════════
  * VIP é metadado administrativo do torneio. A aba não pode gravar o mapa inteiro,
  * porque uma cópia atrasada apagaria presença, resultado ou outra marcação. */
@@ -4177,6 +4257,9 @@ exports.sendOrgCommunication = onCall(
 
     const tournamentId = String((request.data && request.data.tournamentId) || "");
     const rawMessage = String((request.data && request.data.message) || "").trim();
+    const skipOpinionPollVoters = String((request.data && request.data.skipOpinionPollVoters) || "").trim();
+    const skipCaller = !!(request.data && request.data.skipCaller);
+    const targetUids = Array.isArray(request.data && request.data.targetUids) ? new Set((request.data.targetUids || []).map(String).filter(Boolean)) : null;
     let level = String((request.data && request.data.level) || "important");
     if (["fundamental", "important", "all"].indexOf(level) === -1) level = "important";
     if (!tournamentId || !rawMessage) {
@@ -4190,6 +4273,16 @@ exports.sendOrgCommunication = onCall(
     // na tela, que é o que fazia isto passar despercebido.
     const t = await _lerTorneioComElenco(db, tournamentId);
     if (!t) throw new HttpsError("not-found", "torneio não existe");
+    const skippedPoll = skipOpinionPollVoters && Array.isArray(t.opinionPolls)
+      ? t.opinionPolls.find((p) => p && String(p.id) === skipOpinionPollVoters) : null;
+    if (skipOpinionPollVoters && !skippedPoll) throw new HttpsError("not-found", "enquete não existe");
+    const _hasPollVote = (uid) => {
+      const v = skippedPoll && skippedPoll.votes && skippedPoll.votes[uid];
+      if (Array.isArray(v)) return v.length > 0;
+      return !!(v && typeof v === "object" && Object.keys(v).some((key) => {
+        const answer = v[key]; return Array.isArray(answer) ? answer.length > 0 : !!(answer && ((answer.yes && answer.yes.length) || (answer.no && answer.no.length)));
+      }));
+    };
 
     // Sandbox/killswitch: torneio com notificações mudas não dispara comunicado.
     if (t && (t.isSandbox === true || t.notificationsMuted === true)) {
@@ -4225,6 +4318,8 @@ exports.sendOrgCommunication = onCall(
       const e = String(p.email || "").toLowerCase();
       const uids = _allUids(p);
       uids.forEach((u) => {
+        if (targetUids && !targetUids.has(String(u))) return;
+        if ((skipCaller && u === callerUid) || (skippedPoll && _hasPollVote(u))) return;
         if (u && !seenUids[u]) { seenUids[u] = true; recipients.push({ uid: u, email: e }); }
       });
       if (uids.length === 0 && e && !seenEmails[e]) {
@@ -4241,7 +4336,7 @@ exports.sendOrgCommunication = onCall(
         r.isOrganizer = true; orgInList = true;
       }
     });
-    if (!orgInList) recipients.push({ uid: callerUid, email: callerEmail, isOrganizer: true });
+    if (!orgInList && !skipCaller && !targetUids) recipients.push({ uid: callerUid, email: callerEmail, isOrganizer: true });
 
     function _notifLevelAllowed(userLevel, notifLevel) {
       if (!userLevel || userLevel === "todas") return true;

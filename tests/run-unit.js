@@ -213,6 +213,7 @@ const SUITES = [
   'tests/dissolver-times-nao-sobrescreve-placar.test.js',
   'tests/cancelar-painel-nao-sobrescreve-placar.test.js',
   'tests/enquete-writers-sao-transacionais.test.js',
+  'tests/l7-opinion-poll-cf-only.test.js',
   'tests/sorteio-vagas-nao-sobrescreve-elenco.test.js',
   'tests/categorias-escrevem-no-fresco.test.js',
   'tests/maintenance-writers-sao-transacionais.test.js',

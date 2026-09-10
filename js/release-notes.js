@@ -19,6 +19,7 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    // ⚠️ 2.2.42 · enquetes agora também passam pela Cloud Function: criar, editar, votar, encerrar e reenviar relêem o torneio no servidor. Nenhuma aba antiga pode sobrescrever votos ou avisos.
     // ⚠️ 2.2.41 · os últimos writers residuais desta leva passam a chamar Functions:
     // formato, preferência VIP e grupo geral de WhatsApp são confirmados no servidor,
     // sem que uma aba antiga possa regravar um snapshot inteiro do torneio.
