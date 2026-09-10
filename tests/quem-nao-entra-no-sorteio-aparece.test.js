@@ -105,8 +105,8 @@ const _corpoResolve = (function () {
   const i = src.indexOf('window._resolvePhaseInactives = function');
   return i < 0 ? '' : src.slice(i, src.indexOf('\n};', i));
 })();
-ok('⭐⭐ o resolvedor reúne as duas listas pela porta canônica',
-  _corpoResolve.indexOf('window._phaseNonEntrants(t)') !== -1);
+ok('⭐⭐ o resolvedor despacha a decisão pela porta canônica',
+  /_callCF\('resolvePhaseInactives'/.test(_corpoResolve) && /choice:choice/.test(_corpoResolve));
 ok('⛔ o resolvedor não reativa nem escreve _includeInactive',
   _corpoResolve.indexOf('ligaActive = true') === -1 && _corpoResolve.indexOf('_includeInactive') === -1);
 
@@ -140,22 +140,17 @@ ok('⭐⭐ Confirmar aplica a escolha pela porta de sempre', aplicado && aplicad
   JSON.stringify(aplicado));
 W._resolvePhaseInactives = _origResolve;
 
-console.log('\n── ⑤b excluir definitivamente remove inativos E W.O., sem alterar histórico ──');
-const tExcluir = torneio();
-let saveOpts = null, avancosAposSave = 0;
-W.AppStore.tournaments = [tExcluir];
-W._findTournamentById = (id) => (String(id) === tExcluir.id ? tExcluir : null);
-W.AppStore.commitTournamentTx = (_id, fn, opts) => { saveOpts = opts; fn(tExcluir); return Promise.resolve(true); };
-W._advanceMultiPhase = () => { avancosAposSave++; };
-chama('_resolvePhaseInactives', tExcluir.id, 'remove');
-ok('⭐⭐ saem os 2 desativados e os 2 W.O. (sobram só os ativos)',
-  tExcluir.participants.length === 2 && tExcluir.participants.every((p) => p.ligaActive !== false));
-ok('⭐⭐ a remoção pede explicitamente a porta de encolhimento autorizado',
-  saveOpts && saveOpts.allowRosterRemoval === true, JSON.stringify(saveOpts));
+console.log('\n── ⑤b excluir definitivamente é aplicado no servidor, sem alterar histórico ──');
+const server = fs.readFileSync(path.join(ROOT, 'functions-autodraw/index.js'), 'utf8');
+const aResolve = server.indexOf('exports.resolvePhaseInactives = onCall');
+const bResolve = server.indexOf('exports.setPhasePromotion = onCall', aResolve);
+const serverResolve = server.slice(aResolve, bResolve);
+ok('⭐⭐ saem no servidor os inativos e W.O. apresentados pelo painel',
+  /drawWindow\._phaseNonEntrants\(t\)/.test(serverResolve) && /fora\.indexOf\(p\) === -1/.test(serverResolve));
+ok('⭐⭐ a remoção usa a transação autorizada do servidor',
+  /db\.runTransaction/.test(serverResolve) && /_isTournamentAdmin\(t, uid\)/.test(serverResolve));
 ok('⛔ não criou _includeInactive nem reativou alguém',
-  !tExcluir.phases[1]._includeInactive && !tExcluir.participants.some((p) => p.uid === 'u3' || p.uid === 'u4' || p.uid === 'u5' || p.uid === 'u6'));
-W.AppStore.tournaments = [t];
-W._findTournamentById = (id) => (String(id) === t.id ? t : null);
+  !/_includeInactive/.test(serverResolve) && !/ligaActive\s*=\s*true/.test(serverResolve));
 
 console.log('\n── ⑥ a TELA SEGUINTE (promover linha) tem Cancelar e Seguir, também no topo ──');
 t._phaseResInfo = { lines: [{ label: 'Ouro', dest: 'upper', size: 35 }, { label: 'Prata', dest: 'lower', size: 35 }],
