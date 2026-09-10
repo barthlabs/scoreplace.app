@@ -3314,6 +3314,9 @@ exports.deenrollParticipant = onCall(
 // [[project_draw_client_to_cf_migration]] / [[project_sandbox_tournament]].
 // Deploy:  firebase deploy --only functions:formPair,functions:splitPair
 const _pairCore = require("./pair-core");
+const _participantRename = require("./participant-rename-core");
+const _ligaAvailability = require("./liga-availability-core");
+const _ligaDrawWindow = require("../functions-autodraw/draw-core.js")._window;
 
 /* ⛔ SÓ UID — a porta ÚNICA de "quem é organizador" nas CFs principais.
  * Ordem do dono (26/ago): _"nada por nome ou email, sempre por uid a menos que seja
@@ -3770,6 +3773,65 @@ exports.setTournamentParticipantVip = onCall(
       }
       tx.update(ref, { vips, updatedAt: new Date().toISOString() });
       return { ok: true, isVip: !wasVip, vips };
+    });
+  }
+);
+
+/* ═══ DISPONIBILIDADE DA LIGA · transação canônica ═════════════════════════════
+ * A própria pessoa pode alterar a sua disponibilidade. Ela nunca salva o torneio:
+ * a CF relê o elenco/fila/rodadas e aplica a decisão sobre o estado fresco. */
+exports.setLigaAvailability = onCall(
+  { region: "us-central1", memory: "512MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
+    const data = request.data || {};
+    const tournamentId = String(data.tournamentId || "").trim();
+    if (!tournamentId || typeof data.isActive !== "boolean") throw new HttpsError("invalid-argument", "torneio e disponibilidade são obrigatórios");
+    const db = admin.firestore(); const ref = db.collection("tournaments").doc(tournamentId);
+    return db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
+      const t = await _splitParts.hidratar(tx, ref, snap.data() || {});
+      const before = JSON.parse(JSON.stringify(t));
+      let update;
+      try { update = _ligaAvailability.applyLigaAvailability(t, callerUid, data.isActive, _ligaDrawWindow); }
+      catch (err) { throw new HttpsError("failed-precondition", err && err.message ? err.message : "não foi possível alterar disponibilidade"); }
+      _splitParts.gravar(tx, ref, before, Object.assign({}, update, { updatedAt: new Date().toISOString() }));
+      return { ok: true, isActive: !!data.isActive };
+    });
+  }
+);
+
+/* ═══ RENOMEAR PARTICIPANTE · transação canônica ═══════════════════════════════
+ * Um nome pode existir em várias partes do torneio. A aba envia somente a intenção;
+ * esta porta hidrata o estado fresco, autoriza por UID e grava o diff numa transação. */
+exports.renameTournamentParticipant = onCall(
+  { region: "us-central1", memory: "512MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
+    const data = request.data || {};
+    const tournamentId = String(data.tournamentId || "").trim();
+    const oldName = String(data.oldName || "").trim();
+    const newName = String(data.newName || "").trim();
+    const targetUid = String(data.uid || "").trim();
+    if (!tournamentId || !oldName || !newName) throw new HttpsError("invalid-argument", "torneio e nomes são obrigatórios");
+    if (newName.length > 160) throw new HttpsError("invalid-argument", "nome muito longo");
+    const db = admin.firestore();
+    const ref = db.collection("tournaments").doc(tournamentId);
+    return db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
+      const t = await _splitParts.hidratar(tx, ref, snap.data() || {});
+      if (!_isTournamentOrgCaller(t, callerUid)) throw new HttpsError("permission-denied", "só a organização edita nome de participante");
+      const before = JSON.parse(JSON.stringify(t));
+      let renamed;
+      try { renamed = _participantRename.renameTournamentParticipant(t, { oldName, newName, uid: targetUid }); }
+      catch (err) { throw new HttpsError("failed-precondition", err && err.message ? err.message : "não foi possível renomear participante"); }
+      if (!renamed.changed) return { ok: true, changed: false };
+      _splitParts.gravar(tx, ref, before, Object.assign({}, renamed.update, { updatedAt: new Date().toISOString() }));
+      return { ok: true, changed: true, oldName, newName };
     });
   }
 );

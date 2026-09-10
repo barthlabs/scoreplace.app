@@ -1171,9 +1171,9 @@ window._resolveAbsenteesThenDraw = function (tId, mode, proceed) {
 };
 
 // ── Inline name editing for organizers ──
-window._editParticipantName = function(tId, oldName) {
+window._editParticipantName = function(tId, oldName, targetUid) {
   var span = event.target;
-  if (span.getAttribute('contenteditable') === 'true') return; // already editing
+  if (span.getAttribute('contenteditable') === 'true') return;
   span.setAttribute('contenteditable', 'true');
   span.style.background = 'rgba(255,255,255,0.1)';
   span.style.borderRadius = '4px';
@@ -1181,116 +1181,35 @@ window._editParticipantName = function(tId, oldName) {
   span.style.outline = '1px solid rgba(99,102,241,0.5)';
   span.style.minWidth = '60px';
   span.focus();
-  // Select all text
-  var range = document.createRange();
-  range.selectNodeContents(span);
-  var sel = window.getSelection();
-  sel.removeAllRanges();
-  sel.addRange(range);
-
+  var range = document.createRange(); range.selectNodeContents(span);
+  var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
   var _save = function() {
     span.setAttribute('contenteditable', 'false');
-    span.style.background = '';
-    span.style.padding = '';
-    span.style.outline = '';
+    span.style.background = ''; span.style.padding = ''; span.style.outline = '';
     var newName = span.textContent.trim();
-    if (!newName || newName === oldName) {
-      span.textContent = oldName; // revert
+    if (!newName || newName === oldName) { span.textContent = oldName; return; }
+    if (typeof window._callCF !== 'function') {
+      span.textContent = oldName;
+      if (typeof showNotification === 'function') showNotification('Atualize o aplicativo', 'A edição segura do nome requer a versão atual.', 'error');
       return;
     }
-    var t = window._findTournamentById(tId);
-    if (!t) return;
-    // Update in participants array
-    var parts = Array.isArray(t.participants) ? t.participants : [];
-    parts.forEach(function(p, idx) {
-      if (typeof p === 'string') {
-        if (p === oldName) parts[idx] = newName;
-        else if (p.indexOf(' / ') !== -1) {
-          var updated = p.split(' / ').map(function(n) { return n.trim() === oldName ? newName : n.trim(); }).join(' / ');
-          if (updated !== p) parts[idx] = updated;
-        }
-      } else if (p && typeof p === 'object') {
-        if (p.displayName === oldName) p.displayName = newName;
-        if (p.name === oldName) p.name = newName;
-      }
-    });
-    // Update in matches, rounds, groups
-    var _updateMatch = function(m) {
-      if (!m) return;
-      if (m.p1 === oldName) m.p1 = newName;
-      if (m.p2 === oldName) m.p2 = newName;
-      if (m.winner === oldName) m.winner = newName;
-      // Team names with " / "
-      ['p1', 'p2', 'winner'].forEach(function(field) {
-        if (m[field] && m[field].indexOf(oldName) !== -1 && m[field].indexOf(' / ') !== -1) {
-          var upd = m[field].split(' / ').map(function(n) { return n.trim() === oldName ? newName : n.trim(); }).join(' / ');
-          if (upd !== m[field]) m[field] = upd;
-        }
-      });
-      if (Array.isArray(m.team1)) { var i1 = m.team1.indexOf(oldName); if (i1 !== -1) m.team1[i1] = newName; }
-      if (Array.isArray(m.team2)) { var i2 = m.team2.indexOf(oldName); if (i2 !== -1) m.team2[i2] = newName; }
-    };
-    // Update every match across all shapes (by-reference, mutations persist).
-    if (typeof window._collectAllMatches === 'function') {
-      window._collectAllMatches(t).forEach(_updateMatch);
-    } else {
-      // Defensive fallback: bracket-model.js not loaded.
-      if (Array.isArray(t.matches)) t.matches.forEach(_updateMatch);
-      if (t.thirdPlaceMatch) _updateMatch(t.thirdPlaceMatch);
-      if (Array.isArray(t.rounds)) t.rounds.forEach(function(r) { if (r && Array.isArray(r.matches)) r.matches.forEach(_updateMatch); });
-      if (Array.isArray(t.groups)) t.groups.forEach(function(g) {
-        if (!g) return;
-        if (Array.isArray(g.matches)) g.matches.forEach(_updateMatch);
-        if (Array.isArray(g.rounds)) g.rounds.forEach(function(gr) { if (Array.isArray(gr)) gr.forEach(_updateMatch); else if (gr && Array.isArray(gr.matches)) gr.matches.forEach(_updateMatch); });
-      });
-      if (Array.isArray(t.rodadas)) t.rodadas.forEach(function(r) { if (Array.isArray(r)) r.forEach(_updateMatch); else if (r && Array.isArray(r.matches)) r.matches.forEach(_updateMatch); });
-    }
-    // g.players is a roster field (not a match), handled separately.
-    if (Array.isArray(t.groups)) t.groups.forEach(function(g) {
-      if (g && Array.isArray(g.players)) {
-        var pi = g.players.indexOf(oldName);
-        if (pi !== -1) g.players[pi] = newName;
-      }
-    });
-    // Update checkedIn, absent, vips, standings, classification, sorteioRealizado
-    ['checkedIn', 'absent', 'vips'].forEach(function(field) {
-      if (!t[field]) return;
-      if (t[field][oldName] !== undefined) { t[field][newName] = t[field][oldName]; delete t[field][oldName]; }
-      Object.keys(t[field]).forEach(function(k) {
-        if (k.indexOf(oldName) !== -1 && k.indexOf(' / ') !== -1) {
-          var newKey = k.split(' / ').map(function(n) { return n.trim() === oldName ? newName : n.trim(); }).join(' / ');
-          if (newKey !== k) { t[field][newKey] = t[field][k]; delete t[field][k]; }
-        }
-      });
-    });
-    if (t.classification && t.classification[oldName] !== undefined) { t.classification[newName] = t.classification[oldName]; delete t.classification[oldName]; }
-    if (Array.isArray(t.standings)) t.standings.forEach(function(s) { if (s.name === oldName) s.name = newName; if (s.player === oldName) s.player = newName; });
-    if (Array.isArray(t.sorteioRealizado)) t.sorteioRealizado.forEach(function(item, idx2) {
-      if (typeof item === 'string') {
-        if (item === oldName) t.sorteioRealizado[idx2] = newName;
-        else if (item.indexOf(oldName) !== -1 && item.indexOf(' / ') !== -1) {
-          var newSR = item.split(' / ').map(function(n) { return n.trim() === oldName ? newName : n.trim(); }).join(' / ');
-          if (newSR !== item) t.sorteioRealizado[idx2] = newSR;
-        }
-      } else if (typeof item === 'object' && item) { if (item.name === oldName) item.name = newName; if (item.displayName === oldName) item.displayName = newName; }
-    });
-
-    window.FirestoreDB.saveTournament(t);
-    window.AppStore.logAction(tId, 'Nome editado: "' + oldName + '" → "' + newName + '"');
-    if (typeof showNotification === 'function') showNotification(_t('participants.nameUpdated'), _t('participants.nameUpdatedMsg', { old: oldName, 'new': newName }), 'success');
-    _reRenderParticipants();
+    span.setAttribute('aria-busy', 'true');
+    window._callCF('renameTournamentParticipant', { tournamentId: tId, oldName: oldName, newName: newName, uid: targetUid || '' }, 'Salvando nome…')
+      .then(function() {
+        if (window.AppStore && typeof window.AppStore.logAction === 'function') window.AppStore.logAction(tId, 'Nome editado: "' + oldName + '" → "' + newName + '"');
+        if (typeof showNotification === 'function') showNotification(_t('participants.nameUpdated'), _t('participants.nameUpdatedMsg', { old: oldName, 'new': newName }), 'success');
+        _reRenderParticipants();
+      })
+      .catch(function(err) {
+        span.textContent = oldName;
+        if (typeof showNotification === 'function') showNotification('Não foi possível editar o nome', (err && err.message) || 'Tente novamente.', 'error');
+      })
+      .finally(function() { span.removeAttribute('aria-busy'); });
   };
-
   span.addEventListener('blur', _save, { once: true });
   span.addEventListener('keydown', function(e) {
-    if (e.key === 'Enter' || e.key === 'Tab') {
-      e.preventDefault();
-      span.blur();
-    }
-    if (e.key === 'Escape') {
-      span.textContent = oldName;
-      span.blur();
-    }
+    if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); span.blur(); }
+    if (e.key === 'Escape') { span.textContent = oldName; span.blur(); }
   });
 };
 
@@ -1856,7 +1775,7 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
       var _mUidJs = _mUid ? (',{uid:\'' + _mUid + '\',tournamentId:\'' + t.id + '\'}') : (',{tournamentId:\'' + t.id + '\'}');
       var _mDisp = _mUid ? window._safeHtml(window._displayName(_mUid, _nm)) : _nmH;
       var _mUidAttr = _mUid ? ' data-uid-name="' + window._safeHtml(_mUid) + '"' : '';
-      var _editAttr = isOrg ? 'onclick="event.stopPropagation();window._editParticipantName(\'' + t.id + '\',\'' + _nmSafe + '\')" title="Clique para editar" style="font-weight:700;font-size:' + _FONT + 'px;color:var(--text-bright);white-space:normal;overflow-wrap:anywhere;word-break:break-word;min-width:0;cursor:text;"' : 'style="font-weight:700;font-size:' + _FONT + 'px;color:var(--text-bright);white-space:normal;overflow-wrap:anywhere;word-break:break-word;min-width:0;cursor:pointer;" onclick="event.stopPropagation();if(typeof window._openPlayerProfile===\'function\')window._openPlayerProfile(\'' + _nmSafe + '\'' + _mUidJs + ');else if(typeof window._showPlayerStats===\'function\')window._showPlayerStats(\'' + _nmSafe + '\')" onmouseover="this.style.textDecoration=\'underline\'" onmouseout="this.style.textDecoration=\'none\'" title="Ver perfil de ' + _nmH + '"';
+      var _editAttr = isOrg ? 'onclick="event.stopPropagation();window._editParticipantName(\'' + t.id + '\',\'' + _nmSafe + '\',\'' + _mUid + '\')" title="Clique para editar" style="font-weight:700;font-size:' + _FONT + 'px;color:var(--text-bright);white-space:normal;overflow-wrap:anywhere;word-break:break-word;min-width:0;cursor:text;"' : 'style="font-weight:700;font-size:' + _FONT + 'px;color:var(--text-bright);white-space:normal;overflow-wrap:anywhere;word-break:break-word;min-width:0;cursor:pointer;" onclick="event.stopPropagation();if(typeof window._openPlayerProfile===\'function\')window._openPlayerProfile(\'' + _nmSafe + '\'' + _mUidJs + ');else if(typeof window._showPlayerStats===\'function\')window._showPlayerStats(\'' + _nmSafe + '\')" onmouseover="this.style.textDecoration=\'underline\'" onmouseout="this.style.textDecoration=\'none\'" title="Ver perfil de ' + _nmH + '"';
       // ⭐ ponto único: o nome já hidratava (_mUidAttr), o ÍCONE não — e era ele que
       // nascia mudo quando o perfil ainda não tinha chegado.
       return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;overflow:hidden;">' +
@@ -1891,7 +1810,7 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
     var _pUidJs = _pUid ? (',{uid:\'' + _pUid + '\',tournamentId:\'' + t.id + '\'}') : (',{tournamentId:\'' + t.id + '\'}');
     var _pDisp = _pUid ? window._safeHtml(window._displayName(_pUid, pName)) : _pNameH;
     var _pUidAttr = _pUid ? ' data-uid-name="' + window._safeHtml(_pUid) + '"' : '';
-    var _editAttrN = isOrg ? 'onclick="event.stopPropagation();window._editParticipantName(\'' + t.id + '\',\'' + _pSafe + '\')" title="Clique para editar" style="font-weight:700;font-size:' + _FONT + 'px;color:var(--text-bright);white-space:normal;overflow-wrap:anywhere;word-break:break-word;min-width:0;cursor:text;"' : 'style="font-weight:700;font-size:' + _FONT + 'px;color:var(--text-bright);white-space:normal;overflow-wrap:anywhere;word-break:break-word;min-width:0;cursor:pointer;" onclick="event.stopPropagation();if(typeof window._openPlayerProfile===\'function\')window._openPlayerProfile(\'' + _pSafe + '\'' + _pUidJs + ');else if(typeof window._showPlayerStats===\'function\')window._showPlayerStats(\'' + _pSafe + '\')" onmouseover="this.style.textDecoration=\'underline\'" onmouseout="this.style.textDecoration=\'none\'" title="Ver perfil de ' + _pNameH + '"';
+    var _editAttrN = isOrg ? 'onclick="event.stopPropagation();window._editParticipantName(\'' + t.id + '\',\'' + _pSafe + '\',\'' + _pUid + '\')" title="Clique para editar" style="font-weight:700;font-size:' + _FONT + 'px;color:var(--text-bright);white-space:normal;overflow-wrap:anywhere;word-break:break-word;min-width:0;cursor:text;"' : 'style="font-weight:700;font-size:' + _FONT + 'px;color:var(--text-bright);white-space:normal;overflow-wrap:anywhere;word-break:break-word;min-width:0;cursor:pointer;" onclick="event.stopPropagation();if(typeof window._openPlayerProfile===\'function\')window._openPlayerProfile(\'' + _pSafe + '\'' + _pUidJs + ');else if(typeof window._showPlayerStats===\'function\')window._showPlayerStats(\'' + _pSafe + '\')" onmouseover="this.style.textDecoration=\'underline\'" onmouseout="this.style.textDecoration=\'none\'" title="Ver perfil de ' + _pNameH + '"';
     pNameHtml = '<div style="display:flex;align-items:center;gap:8px;overflow:hidden;">' +
       window._personAvatarHtml(_pUid, pName, 'width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;') + '<span' + _pUidAttr + ' ' + _editAttrN + '>' + _pDisp + '</span>' + _orgStar + '</div>';
   }
@@ -2814,7 +2733,7 @@ function renderParticipants(container, tournamentId) {
       const _niUid = ind.uid || '';
       const _niUidAttr = _niUid ? ` data-uid-name="${window._safeHtml(_niUid)}"` : '';
       const _niDisp = _niUid ? window._safeHtml(window._displayName(_niUid, ind.name)) : _safeName;
-      const _nameRow = `<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;min-width:0;"><span${_niUidAttr} style="font-weight:600;font-size:0.92rem;color:${window._spCor(nameColor, 'color')};line-height:1.18;word-break:break-word;${isAbsent ? 'text-decoration:line-through;text-decoration-color:rgba(248,113,113,0.4);' : ''}${isOrg ? 'cursor:text;' : ''}" ${isOrg ? `onclick="event.stopPropagation();window._editParticipantName('${tId}','${safeName}')" title="Clique para editar"` : ''}>${_niDisp}</span>${_orgStarC}${isStandby ? presenceDot : ''}</div>`;
+      const _nameRow = `<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;min-width:0;"><span${_niUidAttr} style="font-weight:600;font-size:0.92rem;color:${window._spCor(nameColor, 'color')};line-height:1.18;word-break:break-word;${isAbsent ? 'text-decoration:line-through;text-decoration-color:rgba(248,113,113,0.4);' : ''}${isOrg ? 'cursor:text;' : ''}" ${isOrg ? `onclick="event.stopPropagation();window._editParticipantName('${tId}','${safeName}','${_niUid}')" title="Clique para editar"` : ''}>${_niDisp}</span>${_orgStarC}${isStandby ? presenceDot : ''}</div>`;
       const _jogoTop = matchLabel ? `<span style="font-weight:${_jogoWeight};color:${window._spCor(_jogoColor, 'color')};opacity:${_jogoOpacity};font-size:0.72rem;white-space:nowrap;">${matchLabel}</span>` : '';
       // Faixa do jogo FULL-WIDTH abaixo do header (libera largura pros nomes dos times).
       let _matchStrip = '';
@@ -3172,7 +3091,7 @@ window._setParticipantSkillCategory = function(tId, pName, newSkill, uid) {
   // Save and re-render
   const savePromise = (window.AppStore && typeof window.AppStore.mutate === 'function')
     ? window.AppStore.mutate(tId, _applySkill, 'Categoria técnica atualizada: ' + (pName || uid || 'participante'))
-    : (window.FirestoreDB ? window.FirestoreDB.saveTournament(t) : Promise.resolve());
+    : Promise.reject(new Error('Atualize o aplicativo para salvar esta alteração com segurança.'));
 
   savePromise.then(function() {
     /* A gravação pode voltar DEPOIS de a pessoa navegar: só repinta se a rota ainda for a

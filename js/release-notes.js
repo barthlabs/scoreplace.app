@@ -1,3 +1,4 @@
+// ⚠️ 2.2.43 · disponibilidade na Liga e edição de nomes são confirmadas pela Cloud Function, com gravação transacional no servidor.
 // scoreplace.app — Release notes (lazy-loaded)
 // Loaded on demand when the user opens "Notas de versões" in help modal.
 //

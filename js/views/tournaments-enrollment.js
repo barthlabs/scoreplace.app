@@ -1645,287 +1645,36 @@ window.deleteTournamentFunction = function (tId) {
 };
 
 // Liga active toggle: participant opts in/out of upcoming draws
-window._toggleLigaActive = function(tId, isActive, _freshTarget) {
+window._toggleLigaActive = function(tId, isActive) {
   var store = window.AppStore;
-  if (!store || !Array.isArray(store.tournaments)) return;
-  // `_freshTarget` é usado exclusivamente pela transação abaixo: reaplica esta mesma
-  // intenção no documento fresco, sem duplicar a regra de elenco/fila/folga.
-  var t = _freshTarget || store.tournaments.find(function(x) { return String(x.id) === String(tId); });
-  if (!t || !t.participants) return;
-  var user = store.currentUser;
-  if (!user) return;
-  var arr = Array.isArray(t.participants) ? t.participants : Object.values(t.participants);
-  var found = arr.find(function(p) {
-    if (typeof p !== 'object' || !p) return false;
-    // v3.0.76: uid-first + slot-aware — p2 de uma dupla (uid em p2Uid) também
-    // controla a participação da entrada no próximo sorteio.
-    if (typeof window._userMatchesParticipant === 'function') return window._userMatchesParticipant(user, p);
-    if (p.uid && user.uid && p.uid === user.uid) return true;
-    if (p.email && user.email && p.email === user.email) return true;
-    return false;
-  });
-  // v1.6.93 — quem está NA FILA também aparece aqui (o toggle passou a mostrá-lo).
-  // Ligar = VOLTAR AOS SORTEIOS: a entrada sai da espera e volta pro elenco ativo, que é
-  // a fonte do sorteio das próximas rodadas. Sem isto, quem foi pro fim da fila por um
-  // W.O. não tinha caminho de volta nenhum.
-  var _vindoDaFila = null;
-  if (!found && typeof window._getWaitlist === 'function') {
-    var _naEspera = window._getWaitlist(t).find(function(p) {
-      if (typeof p !== 'object' || !p) return false;
-      if (typeof window._userMatchesParticipant === 'function') return window._userMatchesParticipant(user, p);
-      return !!(p.uid && user.uid && p.uid === user.uid);
-    });
-    if (_naEspera) {
-      if (isActive) {
-        // ⚠️ v1.7.38 — LIGAR ESTANDO NA FILA **NÃO TIRA DA FILA** QUANDO A FASE JÁ FOI
-        // SORTEADA. Duas regras se contradiziam aqui, e o resultado era o INSCRITO FANTASMA:
-        //
-        //   • v1.6.93: quem levou W.O. e foi pro fim da fila precisa de caminho de volta →
-        //     ligar devolve ao elenco ativo (que é a fonte do sorteio).
-        //   • v1.6.86: reativar com a fase JÁ sorteada manda pra fila, senão a pessoa fica
-        //     no elenco sem grupo — inscrita, fora dos jogos, fora da espera.
-        //
-        // A primeira vencia porque marcava `_vindoDaFila`, e o guard da segunda começa com
-        // `if (!_vindoDaFila ...)`. MEDIDO no Confra (05/ago/2026): Mari Telles, Ana Carolina
-        // Cilone e danielacsimao caíram nesse limbo, cada uma minutos depois de se inscrever
-        // — na fila a pessoa aparece como "Desativado", então ela liga o toggle pra jogar e
-        // o app a tirava do único lugar onde alguém a chamaria.
-        //
-        // Com a fase sorteada, estar na fila JÁ É o estado certo de quem quer jogar: é de lá
-        // que "Novos Confrontos" e o organizador chamam. Então ligar só marca disponibilidade
-        // (`ligaActive`) e a pessoa PERMANECE na fila, na posição dela. Sem sorteio ainda, o
-        // comportamento da v1.6.93 continua igual: volta pro elenco e entra no sorteio.
-        var _volta = _naEspera;
-        var _faseSorteada = (typeof window._phaseDrawDone === 'function') && window._phaseDrawDone(t);
-        _volta.ligaActive = true;
-        delete _volta.woSentToWaitlistAt;
-        if (!_faseSorteada) {
-          if (typeof window._removeFromWaitlist === 'function') {
-            window._removeFromWaitlist(t, (window._pName ? window._pName(_volta, '') : '') || _volta.displayName || _volta.name || '');
-          }
-          arr.push(_volta); t.participants = arr;
-        }
-        // fase sorteada → fica na fila (não mexe em participants nem na espera)
-        _vindoDaFila = _volta;
-        found = _volta;
-      } else {
-        // desligar estando na fila: sai da fila e vira DESATIVADO no elenco
-        if (typeof window._removeFromWaitlist === 'function') {
-          window._removeFromWaitlist(t, (window._pName ? window._pName(_naEspera, '') : '') || _naEspera.displayName || _naEspera.name || '');
-        }
-        _naEspera.ligaActive = false;
-        // v1.7.59: a marca acompanha a LISTA (simétrico ao religar). Quem estava na fila
-        // por causa de um W.O. e se desliga volta a ser "W.O. + desativado" — deixar
-        // `woSentToWaitlistAt` faria o card dizer "está na fila" com a pessoa nos inativos.
-        if (_naEspera.woSentToWaitlistAt) {
-          delete _naEspera.woSentToWaitlistAt;
-          _naEspera.woDeactivatedAt = new Date().toISOString();
-        }
-        arr.push(_naEspera); t.participants = arr;
-        found = _naEspera;
-      }
-    }
+  var user = store && store.currentUser;
+  if (!user || !user.uid || typeof window._callCF !== 'function') {
+    if (typeof window.showNotification === 'function') window.showNotification('Atualize o aplicativo', 'A disponibilidade é salva com segurança pela versão atual.', 'error');
+    return;
   }
-  if (!found) return;
-  found.ligaActive = !!isActive;
-  // v1.6.86 — REATIVAR COM A FASE JÁ SORTEADA MANDA PRA LISTA DE ESPERA (regra do dono):
-  // "se os inativos ativarem aí sim vão pra lista de espera, saindo dos inativos".
-  // Quem estava inativo não foi sorteado; voltar a ficar `ligaActive:true` em
-  // t.participants não o coloca em grupo nenhum — ele viraria o mesmo INSCRITO FANTASMA
-  // do inscrito tardio. Então a reativação MOVE a entrada de participants pra espera,
-  // de onde "Novos Confrontos" (ou o organizador) o chama pra jogar. Sai dos inativos,
-  // entra na fila. Só quando: fase sorteada E a pessoa NÃO está jogando a fase corrente
-  // (quem desativou DEPOIS do sorteio e já tem jogo volta a jogar direto, sem fila).
-  //
-  // v1.7.59 — QUEM LEVOU W.O. VAI PRA FILA AO RELIGAR, SEM EXCEÇÃO. O W.O. passou a
-  // desativar SEMPRE (liga-substitution.js), e a segunda metade da regra do dono mora
-  // aqui: "se o participante se reativar manualmente, vai para a lista de espera".
-  // `woDeactivatedAt` FURA o teste `_isPlayingCurrentPhase` de propósito — quando a fila
-  // estava vazia no momento do W.O. ninguém assumiu a vaga, então o nome dele CONTINUA
-  // nos players do grupo e o teste diria "está jogando", devolvendo ao elenco ativo
-  // alguém que tem um W.O. lançado na rodada. A marca é o fato; a presença no grupo é
-  // resíduo de uma vaga que não foi preenchida.
-  var _levouWo = !!(found && found.woDeactivatedAt);
-  var _marcasWo = null;
-  var _movedToWait = null;
-  var _folgasRemovidas = [];   // v1.7.73 — pro rollback devolver a folga junto com a pessoa
-  var _uidsDe = function (p) {
-    return (typeof window._participantUids === 'function') ? window._participantUids(p)
-         : ((p && p.uid) ? [p.uid] : []);
-  };
-  if (!_vindoDaFila && isActive && typeof window._phaseDrawDone === 'function' && window._phaseDrawDone(t) &&
-      (_levouWo || (typeof window._isPlayingCurrentPhase === 'function' && !window._isPlayingCurrentPhase(t, found)))) {
-    var _idx = arr.indexOf(found);
-    if (_idx !== -1) {
-      arr.splice(_idx, 1);
-      t.participants = arr;
-      if (_levouWo) {
-        // Troca a marca junto com a lista: o card lê `woSentToWaitlistAt` ANTES de
-        // `woDeactivatedAt` (store.js), e deixar a antiga faria a instrução dizer
-        // "religue o toggle" pra quem já está na fila. O selo de W.O. permanece — é
-        // verdade que ela está na fila POR CAUSA do W.O.
-        _marcasWo = { deactivatedAt: found.woDeactivatedAt };
-        delete found.woDeactivatedAt;
-        found.woSentToWaitlistAt = new Date().toISOString();
-      }
-      // v1.6.88: entra no FIM da fila — regra do dono pro reativado que veio de um W.O.
-      // ("se o W.O. for para desativados, passa para última posição da lista de espera ao
-      // se reativar"). _waitlistPushBack é o ponto único disso e é idempotente.
-      window._waitlistPushBack(t, found);
-      // v1.7.73 — REATIVAR SAI DA FOLGA, no MESMO ato (regra do dono: _"reativou sai da
-      // folga e entra na lista de espera"_). A folga `inactive` que o sorteio deu descreve
-      // "está desativada"; a partir daqui ela não está mais, então o marcador some junto —
-      // senão a pessoa entra na fila e SEGUE listada em "Desativados", que foi o que
-      // aconteceu com a Ana Ribeiro no Confra. O saneamento é idempotente e casa por uid.
-      // v2.0.57 — a folga `wo` TAMBÉM sai quando a vaga foi PREENCHIDA (regra do dono,
-      // 24/ago/2026, caso Carol Moresco: _"ou está inativa, ou na lista de espera ou no wo
-      // ou em jogo. não pode estar em 2 lugares diferentes"_). A Carol reativou, foi pra
-      // fila — e seguia em "⚠️ W.O.", que lê os nomes do marcador de folga. A indicação
-      // histórica que fica é a do GRUPO (g.woAbsent/g.subName); o marcador é estado, e o
-      // estado agora é "na fila". Com a vaga ABERTA (nome ainda nos players do grupo) o
-      // marcador PERMANECE: é dele que saem os 0 pts da rodada, a punição de W.O. e a
-      // blindagem de jogos-fantasma — a régua mora em _sanitizeSitOutsVsRoster.
-      // Snapshot → sanitize → diff: o rollback do save falho devolve EXATAMENTE o que
-      // saiu junto com a pessoa — desfazer metade deixaria o doc num estado que nenhum
-      // caminho produz.
-      var _minhasFolgas = [];
-      (t.rounds || []).forEach(function (r, ri) {
-        (r && r.matches || []).forEach(function (m) {
-          if (m && m.isSitOut && (m.sitOutReason === 'inactive' || m.sitOutReason === 'wo') &&
-              (m.p1Uid ? _uidsDe(found).indexOf(m.p1Uid) !== -1 : false)) {
-            _minhasFolgas.push({ ri: ri, m: m });
-          }
-        });
-      });
-      if (typeof window._sanitizeSitOutsVsRoster === 'function') window._sanitizeSitOutsVsRoster(t);
-      _minhasFolgas.forEach(function (f) {
-        var _r = (t.rounds || [])[f.ri];
-        if (!_r || !Array.isArray(_r.matches) || _r.matches.indexOf(f.m) === -1) _folgasRemovidas.push(f);
-      });
-      _movedToWait = { entry: found, idx: _idx };
-    }
-  }
-  // A reaplicação transacional já fez toda a mudança no alvo fresco. Ela não pode
-  // disparar outro save, notificação ou renderização.
-  if (_freshTarget) return true;
-
-  // Save to Firestore. Toda alteração de organizador passa pelo mutator, que reaplica
-  // esta intenção sobre o documento fresco e não serializa o snapshot da tela.
-  var savePromise;
-  if (typeof store.isOrganizer === 'function' && store.isOrganizer(t) && typeof store.mutate === 'function') {
-    savePromise = store.mutate(t.id, function(fresh) {
-      return window._toggleLigaActive(tId, isActive, fresh) !== false;
-    }, 'Disponibilidade para o próximo sorteio atualizada');
-  } else if (typeof store.isOrganizer === 'function' && store.isOrganizer(t)) {
-    savePromise = Promise.reject(new Error('Atualize o aplicativo para salvar esta alteração com segurança.'));
-  } else if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
-    savePromise = window.FirestoreDB.saveTournament(t);
-  } else {
-    savePromise = Promise.resolve();
-  }
-  // v0.16.93: update do texto do toggle in-place + skip re-render. Pedido
-  // do usuário: "quando clicamos no togle ativado/desativado na dashboard
-  // mantenha tudo parado no lugar e não fique scrolando a pagina (isso
-  // causa uma baita confusão na cabeça do usuário)." Antes
-  // renderTournaments(container, tId) era chamado — quando tId é setado,
-  // a função renderiza a página de DETALHE do torneio (substituindo a
-  // dashboard) → causa navegação + scroll jump. Agora atualizamos só os
-  // labels do próprio toggle via querySelectorAll por data-attribute. Toast
-  // continua disparando pra confirmar a ação. Firestore onSnapshot já
-  // sincroniza na próxima soft-refresh sem causar scroll jump (suprimida
-  // por _suppressSoftRefresh quando preciso).
-  var _syncTogglesInDom = function() {
-    var newLabel = isActive ? 'Ativado' : 'Desativado';
-    var newPillBg = isActive ? '#10b981' : '#ef4444'; // verde / vermelho sólido
-    var newTitle = isActive
-      ? 'Clique para ficar de fora do próximo sorteio'
-      : 'Clique para voltar ao próximo sorteio';
-    // Toggle wrappers carregam data-liga-toggle-tid pra ser query-friendly.
+  // A tela só espelha a intenção. Elenco, fila e marcadores de W.O. são recalculados
+  // pela CF sobre o documento fresco; nenhuma fotografia local é persistida.
+  var sync = function(active) {
     var wrappers = document.querySelectorAll('[data-liga-toggle-tid="' + String(tId).replace(/"/g, '\\"') + '"]');
     wrappers.forEach(function(w) {
       var lbl = w.querySelector('.liga-toggle-state-label');
-      if (lbl) { lbl.textContent = newLabel; lbl.style.color = '#fff'; } // texto sempre branco
-      if (w.classList && w.classList.contains('liga-toggle-pill')) w.style.background = newPillBg;
-      w.setAttribute('title', newTitle);
-      var inp = w.querySelector('input[type="checkbox"]');
-      if (inp) inp.checked = !!isActive;
+      if (lbl) { lbl.textContent = active ? 'Ativado' : 'Desativado'; lbl.style.color = '#fff'; }
+      if (w.classList && w.classList.contains('liga-toggle-pill')) w.style.background = active ? '#10b981' : '#ef4444';
+      w.setAttribute('title', active ? 'Clique para ficar de fora do próximo sorteio' : 'Clique para voltar ao próximo sorteio');
+      var inp = w.querySelector('input[type="checkbox"]'); if (inp) inp.checked = !!active;
     });
   };
-  // Update otimista imediato — não espera o save.
-  _syncTogglesInDom();
-  Promise.resolve(savePromise).then(function() {
-    if (typeof window.showNotification === 'function') {
-      if (_vindoDaFila) {
-        window.showNotification('✅ Você voltou aos sorteios',
-          'Saiu da lista de espera e entra no sorteio da próxima rodada.', 'success');
-      } else if (_movedToWait) {
-        // Reativou com a fase já sorteada: o destino é a fila, e o aviso tem que dizer isso —
-        // "Ativado" sozinho prometeria um jogo que a rodada sorteada não tem.
-        window.showNotification('📋 Você entrou na lista de espera',
-          _levouWo
-            ? 'Você tinha levado W.O. e estava nos Desativados. Ao reativar, você entra no FIM da lista de espera — joga assim que chegar a sua vez.'
-            : 'A rodada já foi sorteada. Você sai dos inativos e entra na fila — assim que houver vaga ou um novo confronto, você joga.', 'success');
-      } else {
-        window.showNotification(
-          isActive ? _t('enroll.ligaActive') : _t('enroll.ligaInactive'),
-          isActive ? _t('enroll.ligaActiveMsg') : _t('enroll.ligaInactiveMsg'),
-          isActive ? 'success' : 'warning'
-        );
-      }
-    }
-    // Re-render só quando a pessoa MUDOU DE LISTA (participants → espera): o card
-    // dela muda de seção e o toggle some. No caminho normal segue sem re-render
-    // (preserva scroll — [[project_dashboard_no_rerender]]).
-    if (_movedToWait || _vindoDaFila) {
-      var _vcT = document.getElementById('view-container');
-      if (_vcT && typeof renderTournaments === 'function') renderTournaments(_vcT, tId);
-    }
-  }).catch(function(e) {
-    window._warn('[toggle-liga] save failed', e);
-    // Reverte o update otimista no DOM se save falhou.
-    isActive = !isActive;
-    found.ligaActive = !!isActive;
-    // ...e desfaz a mudança de lista, devolvendo a entrada à posição original.
-    if (_movedToWait) {
-      var _sb = Array.isArray(t.standbyParticipants) ? t.standbyParticipants : [];
-      var _si = _sb.indexOf(_movedToWait.entry);
-      if (_si !== -1) _sb.splice(_si, 1);
-      var _pa = Array.isArray(t.participants) ? t.participants : [];
-      _pa.splice(Math.min(_movedToWait.idx, _pa.length), 0, _movedToWait.entry);
-      t.participants = _pa;
-      // Desfaz também a TROCA DE MARCA — sem isto o save falho deixaria a pessoa de volta
-      // no elenco carregando `woSentToWaitlistAt`, e o card diria "está na fila".
-      if (_marcasWo) {
-        delete _movedToWait.entry.woSentToWaitlistAt;
-        _movedToWait.entry.woDeactivatedAt = _marcasWo.deactivatedAt;
-        _marcasWo = null;
-      }
-      // ...e devolve a folga: a pessoa volta a estar desativada, logo volta a ser folga.
-      _folgasRemovidas.forEach(function (f) {
-        var _r = (t.rounds || [])[f.ri];
-        if (!_r) return;
-        if (!Array.isArray(_r.matches)) _r.matches = [];
-        if (_r.matches.indexOf(f.m) === -1) _r.matches.push(f.m);
-      });
-      _folgasRemovidas = [];
-      _movedToWait = null;
-    }
-    _syncTogglesInDom();
-    if (typeof window.showNotification === 'function') {
-      window.showNotification('Erro', 'Não foi possível salvar a alteração.', 'error');
-    }
-  });
+  sync(!!isActive);
+  window._callCF('setLigaAvailability', { tournamentId: String(tId), isActive: !!isActive }, 'Entre na sua conta para alterar sua disponibilidade.')
+    .then(function() {
+      if (typeof window.showNotification === 'function') showNotification(isActive ? '✅ Disponibilidade ativada' : '⏸️ Disponibilidade desativada', isActive ? 'Você participa do próximo sorteio conforme a sua posição.' : 'Você fica de fora do próximo sorteio.', 'success');
+    })
+    .catch(function(err) {
+      sync(!isActive);
+      if (typeof window.showNotification === 'function') showNotification('Não foi possível alterar disponibilidade', (err && err.message) || 'Tente novamente.', 'error');
+    });
 };
 
-// v0.16.89/90: helper compartilhado pra renderizar o toggle "Ativado/
-// Desativado para o próximo sorteio". Usado em 3 pontos: dashboard widget
-// Próximas Partidas, card de Liga na lista da dashboard, e página de
-// detalhe do torneio. Renderiza VAZIO quando: não é Liga, user não logado,
-// user não é participante, ou torneio finished. Estado inicial:
-// ligaActive===false → Desativado; senão → Ativado (default ON).
-// v0.16.90: retorna inline (sem wrapper de row) — caller posiciona. Texto
-// dinâmico só "Ativado" (verde) ou "Desativado" (vermelho) sem prefixo,
-// com fonte 0.95rem (mais visível).
 window._buildLigaActiveToggleHtml = function(t) {
   if (!t) return '';
   var isLiga = (typeof window._isLigaFormat === 'function')
