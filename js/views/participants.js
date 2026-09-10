@@ -971,9 +971,18 @@ window._absenceIdentities = function (uid, playerName) {
 window._resetCheckIn = function (tId) {
   const t = window._findTournamentById(tId);
   if (!t) return;
-  window.AppStore.mutate(tId, function (ft) { ft.checkedIn = {}; ft.absent = {}; ft.checkedInConfirmed = {}; });
-  _reRenderParticipants();
-  if (typeof showNotification === 'function') showNotification(_t('participants.resetCheckin'), _t('participants.resetCheckinMsg'), 'info');
+  if (typeof window._callCF !== 'function') {
+    if (typeof showNotification === 'function') showNotification('Chamada não limpa', 'Atualize o aplicativo e tente novamente.', 'error');
+    return;
+  }
+  window._callCF('resetTournamentCheckIn', { tournamentId: String(tId) }, 'Entre na sua conta para limpar a chamada.')
+    .then(function () {
+      _reRenderParticipants();
+      if (typeof showNotification === 'function') showNotification(_t('participants.resetCheckin'), _t('participants.resetCheckinMsg'), 'info');
+    })
+    .catch(function (e) {
+      if (typeof showNotification === 'function') showNotification('Chamada não limpa', (e && e.message) || 'Tente novamente.', 'error');
+    });
 };
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -1156,34 +1165,27 @@ window._editParticipantName = function(tId, oldName, targetUid) {
 window._startTournament = function (tId) {
   const t = window._findTournamentById(tId);
   if (!t) return;
-  const startedAt = Date.now();
-  const now = new Date();
-  const pad = (v) => String(v).padStart(2, '0');
-  const startDate = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate()) + 'T' + pad(now.getHours()) + ':' + pad(now.getMinutes());
-  const applyStart = function(freshT) {
-    if (!freshT.tournamentStarted) freshT.tournamentStarted = startedAt;
-    if (!freshT.startDate) freshT.startDate = startDate;
-    freshT.status = 'in_progress';
-  };
-  // Reaplica somente o início no documento FRESCO. `sync()` serializava a
-  // fotografia local inteira e podia desfazer um placar que chegasse enquanto o
-  // organizador ainda estava nesta tela.
-  if (!window.AppStore || typeof window.AppStore.mutate !== 'function') {
+  if (typeof window._callCF !== 'function') {
     const message = 'Não foi possível iniciar o torneio com segurança. Atualize o aplicativo e tente novamente.';
-    if (typeof window._error === 'function') window._error('startTournament: AppStore.mutate indisponível');
+    if (typeof window._error === 'function') window._error('startTournament: Cloud Function indisponível');
     if (typeof showNotification === 'function') showNotification('Início não salvo', message, 'error');
     return;
   }
-  window.AppStore.mutate(tId, applyStart);
-  if (typeof showNotification === 'function') showNotification(_t('participants.tournamentStarted'), _t('participants.tournamentStartedMsg'), 'success');
-  // Re-render current view
-  const hash = window.location.hash;
-  const container = document.getElementById('view-container');
-  if (container && hash.startsWith('#bracket/')) {
-    if (typeof renderBracket === 'function') renderBracket(container, tId);
-  } else {
-    _reRenderParticipants();
-  }
+  window._callCF('startTournament', { tournamentId: String(tId) }, 'Entre na sua conta para iniciar o torneio.')
+    .then(function () {
+      if (typeof showNotification === 'function') showNotification(_t('participants.tournamentStarted'), _t('participants.tournamentStartedMsg'), 'success');
+      // Re-render current view somente depois da confirmação do servidor.
+      const hash = window.location.hash;
+      const container = document.getElementById('view-container');
+      if (container && hash.startsWith('#bracket/')) {
+        if (typeof renderBracket === 'function') renderBracket(container, tId);
+      } else {
+        _reRenderParticipants();
+      }
+    })
+    .catch(function (e) {
+      if (typeof showNotification === 'function') showNotification('Início não salvo', (e && e.message) || 'Tente novamente.', 'error');
+    });
 };
 
 window._setCheckInFilter = function (tId, filter) {
@@ -2999,8 +3001,10 @@ window._setParticipantSkillCategory = function(tId, pName, newSkill, uid) {
   if (!skillCats.length) return;
 
   // Acha o inscrito pelo UID (identidade). O nome só resolve fictício sem conta / doc legado —
-  // num roster só-uid o nome pode nem existir, e o nível ia pro vazio sem aviso.
-  var _applySkill = function(target) {
+  // num roster só-uid o nome pode nem existir, e o nível ia pro vazio sem aviso. A tela só
+  // usa essa leitura para compor a intenção; quem altera torneio e perfil é a Function.
+  var _skillIntent = function(target) {
+  var category = null;
   let found = false;
   (target.participants || []).forEach(function(p) {
     if (!p) return;
@@ -3024,19 +3028,24 @@ window._setParticipantSkillCategory = function(tId, pName, newSkill, uid) {
     }
     // Build new combined category
     const newCat = newSkill ? (genderPrefix ? genderPrefix + ' ' + newSkill : newSkill) : genderPrefix;
-    p.category = newCat;
-    p.categorySource = 'organizador';
+    category = newCat;
     found = true;
   });
-  return found;
+  return found ? category : null;
   };
 
-  let found = _applySkill(t);
-  if (!found) return;
+  var newCategory = _skillIntent(t);
+  if (newCategory === null) return;
 
-  // Save and re-render
-  const savePromise = (window.AppStore && typeof window.AppStore.mutate === 'function')
-    ? window.AppStore.mutate(tId, _applySkill, 'Categoria técnica atualizada: ' + (pName || uid || 'participante'))
+  // Sem alteração otimista: o navegador só despacha a categoria já combinada e espera o
+  // snapshot canônico. A mesma transação atualiza a entrada e o perfil por esporte, sem
+  // regravar placar, chave ou presença que tenham mudado em outra aba.
+  const savePromise = (typeof window._callCF === 'function')
+    ? window._callCF('applyEnrollmentAssignments', {
+      tournamentId: String(tId),
+      sport: String(t.sport || t.sportType || ''),
+      edits: [{ uid: uid ? String(uid) : '', name: uid ? '' : String(pName || ''), category: newCategory }]
+    }, 'Entre na sua conta para atualizar a categoria.')
     : Promise.reject(new Error('Atualize o aplicativo para salvar esta alteração com segurança.'));
 
   savePromise.then(function() {

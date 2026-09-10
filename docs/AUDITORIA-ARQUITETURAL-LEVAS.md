@@ -3027,6 +3027,16 @@ catálogo; `npm test` fechou 694 suítes verdes e Claude aprovou o diff. O censo
 recalculado depois da publicação; os fluxos de consenso de participante seguem inventariados
 separadamente, pois possuem autorização diferente da organização.
 
+**L7.P1.29 — ciclo presencial e categoria individual por intenção (10/set/2026; local,
+aguarda revisão final).** O card de nível não altera mais a categoria no objeto em memória:
+ele reaproveita `applyEnrollmentAssignments`, que relê o elenco e atualiza inscrição e perfil
+na mesma transação. Iniciar o torneio e limpar a chamada ganharam as intenções estreitas
+`startTournament` e `resetTournamentCheckIn`; a Function fixa a autorização, a data civil BRT
+de início e os três mapas de chamada. Os gates conferem ausência de `AppStore.mutate` no card e
+nos dois controles, payload mínimo, autorização e transação. O censo caiu de **76 para 74**
+mutadores de navegador desde a publicação 2.2.47; os caminhos de presença legados continuam
+inventariados até migração completa, sem receber exceção de segurança.
+
 ## L8 — matriz de leitura e projeção (08/set/2026)
 
 `matches` permanece a fonte canônica. `results/{matchId}` é uma projeção server-written para

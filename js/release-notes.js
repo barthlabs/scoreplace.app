@@ -1,3 +1,4 @@
+// ⚠️ 2.2.48 · iniciar o torneio, limpar a chamada e ajustar o nível de um inscrito são confirmados pela Cloud Function; a tela só recebe o estado canônico.
 // ⚠️ 2.2.47 · W.O., substituições e reversões são aplicados pela Cloud Function; a tela só envia a ação autorizada e recebe o torneio canônico.
 // ⚠️ 2.2.46 · a presença, tanto da organização quanto do participante, é confirmada pelo servidor; o aparelho só mostra a resposta canônica e não mistura estado local antigo.
 // ⚠️ 2.2.45 · o convite de co-organização só informa envio quando a Function confirma; resposta vazia vira aviso honesto, sem perder o convite já persistido.

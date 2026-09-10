@@ -1871,6 +1871,49 @@ exports.setTournamentFlyerPrefs = onCall(async (request) => {
   });
 });
 
+// ─── Ciclo presencial: comandos estreitos, nunca mutadores da tela ───────────
+exports.startTournament = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid;
+  const tId = String((request.data && request.data.tournamentId) || '').trim();
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId) throw new HttpsError('invalid-argument', 'Torneio obrigatório.');
+  const ref = db.collection('tournaments').doc(tId), agora = new Date(), agoraIso = agora.toISOString();
+  const startLocal = agora.toLocaleString('sv-SE', { timeZone:'America/Sao_Paulo', year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', hour12:false }).replace(' ', 'T');
+  return db.runTransaction(async tx => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização inicia o torneio.', { tId, uid });
+    if (t.status === 'finished') throw _drawFail('failed-precondition', 'O torneio já foi encerrado.', { tId, uid });
+    if (t.tournamentStarted && t.status === 'in_progress') return { ok:true, changed:false };
+    const antes = _antesDoMotor(t);
+    if (!t.tournamentStarted) t.tournamentStarted = agora.getTime();
+    // `startDate` já é uma data civil do torneio; não pode ganhar o fuso UTC do
+    // servidor ao sair do navegador. O campo mantém o mesmo contrato BRT da UI.
+    if (!t.startDate) t.startDate = startLocal;
+    t.status = 'in_progress';
+    const b = _gravaTorneio(tx, ref, t, antes, { agoraIso });
+    return { ok:true, changed:true, tournament:b.clean };
+  });
+});
+
+exports.resetTournamentCheckIn = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid;
+  const tId = String((request.data && request.data.tournamentId) || '').trim();
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId) throw new HttpsError('invalid-argument', 'Torneio obrigatório.');
+  const ref = db.collection('tournaments').doc(tId), agoraIso = new Date().toISOString();
+  return db.runTransaction(async tx => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização limpa a chamada.', { tId, uid });
+    if (!Object.keys(t.checkedIn || {}).length && !Object.keys(t.absent || {}).length && !Object.keys(t.checkedInConfirmed || {}).length) return { ok:true, changed:false };
+    const antes = _antesDoMotor(t);
+    t.checkedIn = {}; t.absent = {}; t.checkedInConfirmed = {};
+    const b = _gravaTorneio(tx, ref, t, antes, { agoraIso });
+    return { ok:true, changed:true, tournament:b.clean };
+  });
+});
+
 exports.setDefaultTournamentScoring = onCall(async request=>{ const uid=request.auth&&request.auth.uid; if(!uid) throw new HttpsError('unauthenticated','Entre na sua conta.'); const tId=String((request.data&&request.data.tournamentId)||''); const scoring=request.data&&request.data.scoring; if(!tId||!scoring||scoring.type!=='sets') throw new HttpsError('invalid-argument','Formato inválido.'); const ref=db.collection('tournaments').doc(tId),agoraIso=new Date().toISOString(); return db.runTransaction(async tx=>{ const t=await _leTorneio(tx,ref,tId); if(!t) throw new HttpsError('not-found','Torneio não encontrado.'); if(!_isTournamentAdmin(t,uid)) throw _drawFail('permission-denied','Só a organização configura o formato.',{tId,uid}); if(t.scoring&&t.scoring.type==='sets') return {ok:true,changed:false}; const antes=_antesDoMotor(t); t.scoring=Object.assign({},scoring); const b=_gravaTorneio(tx,ref,t,antes,{agoraIso}); return {ok:true,changed:true,tournament:b.clean}; }); });
 
 

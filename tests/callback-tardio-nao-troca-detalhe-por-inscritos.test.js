@@ -38,7 +38,7 @@ function mkT() {
   };
 }
 
-/** Prepara o mundo e devolve o controle da promessa de gravação (que fica ABERTA). */
+/** Prepara o mundo e devolve o controle da resposta da Function (que fica ABERTA). */
 function armar() {
   const t = mkT();
   W.AppStore = {
@@ -47,10 +47,13 @@ function armar() {
     isCreator: () => true,
     getTournament: (id) => (String(id) === TID ? t : null),
     sync: () => {},
-    mutate: (_id, fn) => new Promise((res) => { resolver = () => { fn(t); res(true); }; }),
   };
   let resolver = null;
-  // a gravação NÃO resolve sozinha: o teste decide quando (é a janela do bug)
+  W._callCF = function (name, payload) {
+    if (name !== 'applyEnrollmentAssignments') return Promise.reject(new Error('Function inesperada'));
+    return new Promise((res) => { resolver = () => res({ data: { ok: true, changed: 1 } }); });
+  };
+  // A Function NÃO responde sozinha: o teste decide quando (é a janela do bug).
 
   let pintouParticipantes = 0, ultimoTid = null;
   W.renderParticipants = function (container, tid) { pintouParticipantes++; ultimoTid = tid; };
@@ -71,8 +74,8 @@ const virarAVez = () => new Promise((r) => setTimeout(r, 0));
     const c = armar();
     W.location.hash = '#participants/' + TID;          // a pessoa estava nos inscritos…
     W._setParticipantSkillCategory(TID, 'Jogador Um', 'B', UID);
-    ok(c.t.participants[0].category === 'B', 'setup: o nível foi gravado no objeto');
-    ok(c.contar() === 0, 'setup: nada foi repintado ainda (a gravação está em voo)');
+    ok(c.t.participants[0].category === 'A', 'setup: o nível não foi gravado no objeto local');
+    ok(c.contar() === 0, 'setup: nada foi repintado ainda (a Function está em voo)');
 
     W.location.hash = '#tournaments/' + TID;           // …e clicou no torneio no meio
     c.soltar();

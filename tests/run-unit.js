@@ -1345,6 +1345,8 @@ const SUITES = [
   'tests/l7-reopen-tournament-cf-only.test.js', // L7: reabertura pela CF
   'tests/l7-tournament-branding-cf-only.test.js', // L7: metadados de apresentação pela CF
   'tests/l7-category-config-cf-only.test.js',
+  'tests/l7-participant-skill-cf-only.test.js', // L7: card de nível só despacha a atribuição server-side
+  'tests/l7-tournament-lifecycle-cf-only.test.js', // L7: início e limpeza de chamada só despacham Functions
   'tests/l7-enrollment-assignments-cf-only.test.js', // L7: configuração de categorias pela CF
   'tests/l7-expired-enrollment-cf-only.test.js', // L7: prazo de inscrição pela CF
   'tests/l7-client-writer-census.test.js', // L7: novos writers do navegador exigem classificação explícita

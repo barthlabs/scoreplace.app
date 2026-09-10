@@ -24,6 +24,7 @@ W.showNotification = function () {};
 let saved = 0;
 let vipCall = null;
 let woCalls = [];
+let skillCalls = [];
 W.FirestoreDB = {
   saveTournament: function () {
     saved++;
@@ -40,6 +41,10 @@ W.FirestoreDB = {
       return { catch: function () { return null; } };
     } };
   },
+};
+W._callCF = function (name, payload) {
+  if (name === 'applyEnrollmentAssignments') skillCalls.push(payload);
+  return { then: function (f) { if (f) f({ data: { ok: true, changed: 1 } }); return { catch: function () { return null; } }; } };
 };
 
 function mkT() {
@@ -123,8 +128,10 @@ console.log('\n── ações do card gravam na CHAVE-UID (W.O. · VIP · nível
 
   // nível (habilidade) do solo
   W._setParticipantSkillCategory(t.id, '', 'B', 'uSolo');
+  const skillCall = skillCalls.pop();
   const solo = t.participants.find((p) => p && p.uid === 'uSolo');
-  ok(solo && String(solo.category || '').indexOf('B') !== -1, 'nível :: aplicado no inscrito certo — got ' + (solo && solo.category));
+  ok(skillCall && skillCall.edits.length === 1 && skillCall.edits[0].uid === 'uSolo' && skillCall.edits[0].category === 'B', 'nível :: enviou ao servidor a categoria do inscrito certo');
+  ok(solo && !solo.category, 'nível :: a tela não gravou categoria localmente');
 }
 
 // W.O. DO TIME — chaveia pelos DOIS MEMBROS (dono, 22/jul), nunca pelo nome do time.
