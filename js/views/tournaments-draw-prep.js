@@ -1256,20 +1256,10 @@ window._showLateConfrontosPanel = function(tId) {
         _proceedDraw(mode);
     };
     window._lateConfrontosCancel = function() {
-        // desiste do sorteio: restaura o status original da inscrição
-        if (t._suspendedByPanel) {
-            t.status = t._previousStatus || 'open';
-            delete t._suspendedByPanel; delete t._previousStatus;
-            if (window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
-                window.AppStore.commitTournamentTx(tId, function(ft) {
-                    if (!ft._suspendedByPanel) return false;
-                    ft.status = ft._previousStatus || 'open';
-                    delete ft._suspendedByPanel; delete ft._previousStatus;
-                    return true;
-                });
-            }
-        }
-        overlay.remove(); document.body.style.overflow = '';
+        // O cancelamento tem de passar pelo mesmo recibo canônico dos demais
+        // painéis de preparação. A aba não reabre inscrição nem fecha o painel
+        // antes de a Function confirmar o torneio fresco.
+        window._cancelDrawResolution(tId);
     };
     overlay.innerHTML =
       '<div style="background:#0f1729;border:1px solid #1e293b;border-radius:16px;max-width:560px;width:100%;max-height:92%;overflow-y:auto;padding:1.5rem;">' +
@@ -2590,25 +2580,9 @@ window.showPowerOf2Panel = function (tId) {
 
 // Cancelar painel de decisão e restaurar inscrições se suspensas
 window._cancelPowerOf2Panel = function (tId) {
-    const panel = document.getElementById('p2-resolution-panel');
-    if (panel) panel.remove();
-    const t = window._findTournamentById(tId);
-    if (t && t._suspendedByPanel) {
-        if (!window.AppStore || typeof window.AppStore.mutate !== 'function') {
-            showNotification('Atualize o aplicativo', 'Não foi possível restaurar as inscrições com segurança.', 'error');
-            return;
-        }
-        window.AppStore.mutate(tId, function(ft) {
-            if (!ft._suspendedByPanel) return false;
-            ft.status = ft._previousStatus || 'open';
-            delete ft._suspendedByPanel;
-            delete ft._previousStatus;
-            return true;
-        }, 'Inscrições restauradas após cancelar a decisão');
-        const container = document.getElementById('view-container');
-        if (container) renderTournaments(container, window.location.hash.split('/')[1]);
-        showNotification(_t('draw.enrollRestored'), _t('draw.enrollRestoredMsg'), 'info');
-    }
+    // Idem: não existe uma segunda porta de escrita para restaurar inscrições.
+    // A Function rejeita chave já sorteada e responde com o documento canônico.
+    window._cancelDrawResolution(tId);
 };
 
 // (Check-in functions moved to participants.js)

@@ -1,6 +1,9 @@
-const fs=require('fs'),vm=require('vm'),src=fs.readFileSync('js/views/tournaments-draw-prep.js','utf8');
-const a=src.indexOf('window._cancelPowerOf2Panel = function'),b=src.indexOf('// (Check-in functions moved',a);let fail=0;
-const local={id:'T',status:'suspended',_suspendedByPanel:true,_previousStatus:'open'},fresh={id:'T',status:'suspended',_suspendedByPanel:true,_previousStatus:'open',matches:[{scoreP1:6,scoreP2:4}]};
-const w={AppStore:{mutate:(id,fn)=>{fn(local);fn(fresh);}},_findTournamentById:()=>local,location:{hash:'#tournaments/T'},showNotification(){},_t:k=>k};w.window=w;
-const s={window:w,document:{getElementById:()=>null},renderTournaments(){},showNotification:w.showNotification,_t:w._t};vm.createContext(s);vm.runInContext(src.slice(a,b),s);w._cancelPowerOf2Panel('T');
-function ok(v,m){if(v)console.log('✓ '+m);else{fail++;console.error('✗ '+m)}}ok(fresh.status==='open'&&!fresh._suspendedByPanel,'restaura somente estado fresco');ok(fresh.matches[0].scoreP1===6,'preserva placar concorrente');ok(!/AppStore\.sync\(/.test(src.slice(a,b)),'não usa sync');if(fail)process.exit(1);
+const fs=require('fs'),src=fs.readFileSync('js/views/tournaments-draw-prep.js','utf8');
+let fail=0;
+function ok(v,m){if(v)console.log('✓ '+m);else{fail++;console.error('✗ '+m)}}
+const lateA=src.indexOf('window._lateConfrontosCancel = function'),lateB=src.indexOf('overlay.innerHTML =',lateA),late=src.slice(lateA,lateB);
+const p2A=src.indexOf('window._cancelPowerOf2Panel = function'),p2B=src.indexOf('// (Check-in functions moved',p2A),p2=src.slice(p2A,p2B);
+ok(/window\._cancelDrawResolution\(tId\)/.test(late),'cancelar confrontos tardios delega ao recibo canônico');
+ok(/window\._cancelDrawResolution\(tId\)/.test(p2),'cancelar potência de 2 delega ao recibo canônico');
+ok(!/AppStore\.(?:mutate|commitTournamentTx|sync)\s*\(/.test(late+p2),'cancelamentos legados não escrevem nem sincronizam no navegador');
+if(fail)process.exit(1);

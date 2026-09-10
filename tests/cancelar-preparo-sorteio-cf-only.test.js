@@ -19,6 +19,13 @@ const cf = index.slice(cfStart, cfEnd);
 
 ok(start >= 0 && client.includes("_callCF('cancelDrawPreparation'") , 'cliente só despacha o cancelamento para a Function');
 ok(!/AppStore\.(?:mutate|commitTournamentTx)|saveTournament|syncImmediate/.test(client), 'cliente não regrava o torneio ao cancelar');
+const lateStart = prep.indexOf('window._lateConfrontosCancel = function');
+const lateEnd = prep.indexOf('overlay.innerHTML =', lateStart);
+const p2Start = prep.indexOf('window._cancelPowerOf2Panel = function');
+const p2End = prep.indexOf('// (Check-in functions moved', p2Start);
+const legacyCancels = prep.slice(lateStart, lateEnd) + prep.slice(p2Start, p2End);
+ok(/window\._cancelDrawResolution\(tId\)/.test(legacyCancels), 'os cancelamentos auxiliares reutilizam o recibo canônico');
+ok(!/AppStore\.(?:mutate|commitTournamentTx|sync)\s*\(/.test(legacyCancels), 'cancelamentos auxiliares não persistem no navegador');
 ok(!/cancelDrawPreparation'[\s\S]{0,180}(?:snapshot|participants|waitlist)/.test(client) && !/request\.data[^;]{0,180}(?:snapshot|participants|waitlist)/.test(cf),
   'prévia de elenco não vira payload arbitrário: a Function conserva o roster fresco');
 ok(cfStart >= 0 && cf.includes('request.auth && request.auth.uid') && cf.includes('_isTournamentAdmin(t, uid)'), 'Function exige autenticação e organização por UID');
@@ -31,5 +38,5 @@ drawCore._window._clearDrawRuntimeFlags(t);
 ok(t.classifyFormat === null && t._suspendedByPanel === null && t._drawDecisions === null && t.currentStage === null,
   'motor canônico limpa os mesmos marcadores de preparação');
 
-console.log('cancelar-preparo-sorteio-cf-only: ' + (8 - failed) + ' passou, ' + failed + ' falhou');
+console.log('cancelar-preparo-sorteio-cf-only: ' + (10 - failed) + ' passou, ' + failed + ' falhou');
 process.exit(failed ? 1 : 0);
