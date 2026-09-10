@@ -8,7 +8,7 @@ const path = require('path');
 const root = path.join(__dirname, '..');
 const jsRoot = path.join(root, 'js');
 const approved = {
-  'store.js': 1,
+  'store.js': 0,
   'views/bracket-logic.js': 2,
   'views/liga-substitution.js': 1,
   'views/participants.js': 0,
@@ -41,5 +41,5 @@ Object.keys(found).forEach((file) => ok(Object.prototype.hasOwnProperty.call(app
 Object.keys(approved).forEach((file) => ok((found[file] || 0) <= approved[file],
   file + ' não ganhou mutador novo (' + (found[file] || 0) + '/' + approved[file] + ')'));
 const total = Object.values(found).reduce((sum, count) => sum + count, 0);
-ok(total <= 63, 'o total de mutadores do navegador só pode cair (' + total + '/63)');
+ok(total <= 62, 'o total de mutadores do navegador só pode cair (' + total + '/62)');
 process.exit(failed ? 1 : 0);

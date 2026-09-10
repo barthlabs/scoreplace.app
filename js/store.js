@@ -13202,8 +13202,9 @@ window.AppStore = {
     var tourData;
     var _isExisting = _idx !== -1;
     if (_isExisting) {
-      Object.assign(this.tournaments[_idx], data);
-      this.tournaments[_idx].id = id;
+      // L7.P1.34: edição não altera nem o cache local antes da resposta canônica.
+      // O navegador só descreve a intenção; a Function relê, autoriza, filtra os
+      // campos de configuração e devolve o documento que efetivamente foi aceito.
       tourData = this.tournaments[_idx];
     } else {
       /* ⭐ TORNEIO NOVO NASCE NO FORMATO NOVO (2.0.106) ────────────────────────────
@@ -13331,23 +13332,22 @@ window.AppStore = {
       tourData.id = id;
       this.tournaments.push(tourData);
     }
-    // A edição reaplica só os campos escolhidos sobre o documento fresco. Criação
-    // continua na porta especializada: o documento ainda não existe e pode incluir upload.
-    if (_isExisting && window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
+    // A edição só despacha a intenção para a Function. A tela nunca reaplica uma
+    // ficha inteira nem grava uma transação genérica: só recebe de volta o estado fresco.
+    if (_isExisting) {
       var _editPatch = Object.assign({}, data);
-      var _persistEdit = function () {
-        return window.AppStore.commitTournamentTx(id, function (fresh) {
-          if (!fresh) return false;
-          Object.keys(_editPatch).forEach(function (key) {
-            if (key !== 'id' && key !== '_allowConfigReset') fresh[key] = _editPatch[key];
-          });
-          return true;
-        });
-      };
-      // Storage é assíncrono e não pode rodar dentro de uma transação Firestore. Primeiro
-      // transforma base64 em URL; depois a URL e os demais campos entram juntos no fresco.
+      ['id', '_allowConfigReset', 'storageCanonico', 'coHosts', 'creatorUid',
+        'creatorEmail', 'organizerUid', 'organizerEmail', 'organizerName',
+        'logoData', 'coverPhotoData'].forEach(function (key) { delete _editPatch[key]; });
+      Object.keys(_editPatch).forEach(function (key) {
+        // Não enviamos ruído do formulário: campos iguais ao documento canônico não
+        // podem destravar alteração estrutural depois que a chave já existe.
+        if (JSON.stringify(_editPatch[key]) === JSON.stringify(tourData[key])) delete _editPatch[key];
+      });
+      // Storage é assíncrono. A imagem vira URL antes de ir no mesmo comando de
+      // configuração; a escrita Firestore continua exclusivamente na Function.
       var _images = [['logoData', 'logoUrl', 'logo'], ['coverPhotoData', 'coverUrl', 'cover']];
-      Promise.all(_images.map(function (pair) {
+      var _saveEdit = Promise.all(_images.map(function (pair) {
         var raw = _editPatch[pair[0]] || _editPatch[pair[1]];
         if (!raw) { delete _editPatch[pair[0]]; return Promise.resolve(); }
         if (typeof window._subirImagemTorneio !== 'function') return Promise.resolve();
@@ -13355,15 +13355,28 @@ window.AppStore = {
           if (url) _editPatch[pair[1]] = url;
           delete _editPatch[pair[0]];
         }).catch(function (err) {
-          // Mesmo contrato do save especializado: upload falhou, imagem existente fica.
           if (window._warn) window._warn('[addTournament] upload da imagem falhou; campo preservado', err);
           delete _editPatch[pair[0]];
           delete _editPatch[pair[1]];
         });
-      })).then(_persistEdit).catch(function (err) {
+      })).then(function () {
+        if (!Object.keys(_editPatch).length) return { data: { ok: true, changed: false, tournament: tourData } };
+        if (typeof window._callCF !== 'function') throw new Error('Função de atualização indisponível.');
+        return window._callCF('updateTournamentConfiguration', { tournamentId: String(id), patch: _editPatch }, 'Entre na sua conta para atualizar o torneio.');
+      }).then(function (out) {
+        var fresh = out && out.data && out.data.tournament;
+        if (fresh && typeof fresh === 'object') {
+          Object.assign(tourData, fresh);
+          tourData.id = id;
+          window.AppStore._saveToCache();
+        }
+        return id;
+      }).catch(function (err) {
         window._error('Erro ao atualizar torneio:', err);
         if (typeof window._captureException === 'function') window._captureException(err, { area: 'addTournamentEdit', tournamentId: id, code: err && err.code });
+        throw err;
       });
+      return _saveEdit;
     } else if (window.FirestoreDB && window.FirestoreDB.db) {
       // Criação nova precisa do create especializado e do upload de imagens, pois ainda
       // não há documento que uma transação possa reler.

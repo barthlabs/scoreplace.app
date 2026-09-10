@@ -5409,7 +5409,7 @@ window._ctPaintRatio = function () {
     onRatio: 'window._ctSetRatio', onLock: 'window._ctSetRatioLock'
   });
 };
-window._saveTournamentClickHandler = function() {
+window._saveTournamentClickHandler = async function() {
       try {
         const editId = document.getElementById('edit-tournament-id').value;
         const name = document.getElementById('tourn-name').value.trim();
@@ -5924,35 +5924,21 @@ window._saveTournamentClickHandler = function() {
                 _changes.push(_checkFields[k]);
               }
             });
-            // Aplica cada campo explicitamente.
-            // v2.3.79: NÃO sobrescrever co-organizadores nem a posse do torneio
-            // na edição. tourData traz coHosts:[] (default de criação) e
-            // creator/organizer derivados do currentUser — copiá-los apagava os
-            // co-organizadores já cadastrados (bug reportado: "sumiram") e poderia
-            // trocar o dono. Esses campos têm fluxo próprio (host-transfer.js).
-            var _editPreserve = { coHosts: true, creatorUid: true, creatorEmail: true, organizerEmail: true, organizerName: true };
-            Object.keys(tourData).forEach(k => { if (_editPreserve[k]) return; t[k] = tourData[k]; });
-            // v3.1.62: bumpa o "Atualizado em" na EDIÇÃO. tourData não traz updatedAt,
-            // então sem isto a edição salvava os campos mas o carimbo de atualização
-            // ficava de uma ação anterior (parecia fuso errado, mas era valor velho).
-            t.updatedAt = new Date().toISOString();
-            window.AppStore.logAction(editId, `Regras atualizadas: formato ${format}, lançamento por ${resultEntryVal}`);
-            // v2.1.67: se a data/hora/local mudou, sincroniza o "Planejar ida" do
-            // próprio organizador (os demais participantes sincronizam ao abrir o
-            // torneio). Só atualiza a própria presença — respeita as regras.
+            // L7.P1.34: nenhuma alteração local é tratada como salva. A Function
+            // valida a configuração contra o documento fresco e devolve o estado canônico.
+            await window.AppStore.addTournament(tourData);
+            var _freshEdit = window.AppStore.tournaments.find(function (x) { return String(x.id) === String(editId); }) || t;
+            // A presença é um comando próprio; só é sincronizada depois de a configuração
+            // canônica ter sido aceita no servidor.
             try {
               var _cuEdit = window.AppStore && window.AppStore.currentUser;
-              if (_cuEdit && _cuEdit.uid && typeof window._syncTournamentPresencePlan === 'function') window._syncTournamentPresencePlan(t, _cuEdit);
+              if (_cuEdit && _cuEdit.uid && typeof window._syncTournamentPresencePlan === 'function') window._syncTournamentPresencePlan(_freshEdit, _cuEdit);
             } catch (_se) {}
-
-            // Notify enrolled participants about changes
             if (_changes.length > 0 && window._notifyTournamentParticipants) {
               var changeMsg = 'O torneio "' + name + '" foi atualizado: ' + _changes.join(', ') + '.';
-              window._notifyTournamentParticipants(t, {
-                type: 'tournament_updated',
-                message: changeMsg,
-                level: 'important'
-              }, t.organizerEmail);
+              window._notifyTournamentParticipants(_freshEdit, {
+                type: 'tournament_updated', message: changeMsg, level: 'important'
+              }, _freshEdit.organizerEmail);
             }
           }
           showNotification(window._t('create.tournamentUpdated'), '', 'success');

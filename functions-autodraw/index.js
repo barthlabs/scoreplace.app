@@ -1982,6 +1982,126 @@ exports.setTournamentFlyerPrefs = onCall(async (request) => {
   });
 });
 
+// ─── Edição da ficha: contrato explícito, sem snapshot do navegador ───────────
+// L7.P1.34: a tela só pode propor campos declarativos da configuração. Qualquer
+// detalhe de identidade, elenco, fila, jogos, resultados, fases materializadas ou
+// ciclo de vida fica fora desta lista e só possui comandos próprios no servidor.
+const _CAMPOS_CONFIG_TORNEIO = new Set([
+  'name','isPublic','format','sport','startDate','endDate','roundBounds','registrationLimit',
+  'enrollmentMode','mixedPairingSeparated','manualPairing','teamSize','gameTypes',
+  'maxParticipants','autoCloseOnFull','enrollmentLimitMode','targetSlots','callPolicy',
+  'resultEntry','woScope','lateEnrollment','newMatchups','venue','venueAccess','venueLat',
+  'venueLon','venueAddress','venuePlaceId','venueCity','venueState','venueCountry',
+  'venuePhotoUrl','coverUrl','logoUrl','logoLocked','logoShape','logoRadius','courtCount',
+  'courtNames','callTime','warmupTime','gameDuration','scoring','swissRounds',
+  'drawFirstDate','drawFirstTime','drawIntervalDays','drawManual','temporada','equilibrado',
+  'clusterSize','balanceBy','genderRatio','wlGroupBalance','ligaNewPlayerScore',
+  'ligaInactivity','ligaInactivityX','allowSelfDeactivation','ligaOpenEnrollment',
+  'ligaRoundFormat','ligaDrawMode','ligaTurnos','ligaRRSchedule','rankingNewPlayerScore',
+  'rankingInactivity','rankingInactivityX','rankingSeasonMonths','rankingOpenEnrollment',
+  'ligaSeasonMonths','elimRankingType','gruposCount','gruposClassified','gruposEqualOnly',
+  'gruposSeedVip','gruposSeedCategory','drawMode','reiRainhaGroupsBy','monarchAdvanceToElim',
+  'phase1Name','tiebreakers','tiebreakersExcluded','advancedScoring','genderCategories',
+  'skillCategories','ageCategories','customCategories','combinedCategories','rigor','rigorRequire',
+  'fmt2','phases'
+]);
+const _CONFIG_ESTRUTURAL = new Set([
+  'format','sport','teamSize','gameTypes','drawMode','fmt2','phases','roundBounds','swissRounds',
+  'gruposCount','gruposClassified','gruposEqualOnly','gruposSeedVip','gruposSeedCategory',
+  'ligaRoundFormat','ligaDrawMode','ligaTurnos','ligaRRSchedule','monarchAdvanceToElim'
+]);
+const _CONFIG_FASE_ATIVA = new Set(['name','startDate','endDate','roundBounds']);
+function _clonaConfigDeclarativa(value, depth) {
+  const d = depth || 0;
+  if (d > 6) throw new HttpsError('invalid-argument', 'Configuração profunda demais.');
+  if (value === null || typeof value === 'boolean') return value;
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) throw new HttpsError('invalid-argument', 'Número de configuração inválido.');
+    return value;
+  }
+  if (typeof value === 'string') {
+    if (value.length > 8192) throw new HttpsError('invalid-argument', 'Texto de configuração grande demais.');
+    return value;
+  }
+  if (Array.isArray(value)) {
+    if (value.length > 128) throw new HttpsError('invalid-argument', 'Lista de configuração grande demais.');
+    return value.map(v => _clonaConfigDeclarativa(v, d + 1));
+  }
+  if (!value || Object.getPrototypeOf(value) !== Object.prototype) {
+    throw new HttpsError('invalid-argument', 'Objeto de configuração inválido.');
+  }
+  const keys = Object.keys(value);
+  if (keys.length > 64) throw new HttpsError('invalid-argument', 'Objeto de configuração grande demais.');
+  const out = {};
+  keys.forEach(k => {
+    if (!/^[A-Za-z0-9_-]{1,80}$/.test(k)) throw new HttpsError('invalid-argument', 'Chave de configuração inválida.');
+    out[k] = _clonaConfigDeclarativa(value[k], d + 1);
+  });
+  return out;
+}
+function _fasesDeConfiguracaoAtualizaveis(atual, proposta) {
+  if (!Array.isArray(proposta) || proposta.length !== atual.length) {
+    throw new HttpsError('failed-precondition', 'A estrutura de fases já existe e não pode ser recriada.');
+  }
+  return atual.map((fase, i) => {
+    const input = proposta[i];
+    if (!input || typeof input !== 'object' || Array.isArray(input)) throw new HttpsError('invalid-argument', 'Fase inválida.');
+    const out = Object.assign({}, fase);
+    Object.keys(input).forEach(k => {
+      if (_CONFIG_FASE_ATIVA.has(k)) out[k] = _clonaConfigDeclarativa(input[k]);
+    });
+    return out;
+  });
+}
+exports.updateTournamentConfiguration = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid;
+  const data = request.data || {};
+  const tId = String(data.tournamentId || '').trim();
+  const raw = data.patch;
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId || !raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new HttpsError('invalid-argument', 'Configuração inválida.');
+  }
+  const keys = Object.keys(raw);
+  if (!keys.length || keys.length > _CAMPOS_CONFIG_TORNEIO.size) {
+    throw new HttpsError('invalid-argument', 'Nenhuma configuração válida foi informada.');
+  }
+  const patch = {};
+  keys.forEach(key => {
+    if (!_CAMPOS_CONFIG_TORNEIO.has(key)) {
+      throw new HttpsError('permission-denied', 'Este campo não pode ser alterado pela ficha do torneio.');
+    }
+    patch[key] = _clonaConfigDeclarativa(raw[key]);
+  });
+  const bytes = Buffer.byteLength(JSON.stringify(patch), 'utf8');
+  if (bytes > 96 * 1024) throw new HttpsError('invalid-argument', 'Configuração grande demais.');
+  const ref = db.collection('tournaments').doc(tId), agoraIso = new Date().toISOString();
+  return db.runTransaction(async tx => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização atualiza a configuração.', { tId, uid });
+    const hasDraw = hasDrawnBracket(t);
+    const changed = Object.keys(patch).some(key => JSON.stringify(t[key]) !== JSON.stringify(patch[key]));
+    if (!changed) return { ok:true, changed:false, tournament:t };
+    if (hasDraw && Object.keys(patch).some(key => _CONFIG_ESTRUTURAL.has(key) && key !== 'phases')) {
+      throw _drawFail('failed-precondition', 'A chave já existe; altere apenas a configuração que não recria as rodadas.', { tId });
+    }
+    const antes = _antesDoMotor(t);
+    Object.keys(patch).forEach(key => {
+      if (key === 'phases' && hasDraw) {
+        t.phases = _fasesDeConfiguracaoAtualizaveis(Array.isArray(t.phases) ? t.phases : [], patch.phases);
+      } else {
+        t[key] = patch[key];
+      }
+    });
+    t.updatedAt = agoraIso;
+    if (!Array.isArray(t.history)) t.history = [];
+    t.history.push({ date: agoraIso, message: 'Regras atualizadas pela organização.' });
+    const b = _gravaTorneio(tx, ref, t, antes, { agoraIso });
+    return { ok:true, changed:true, tournament:b.clean };
+  });
+});
+
 // ─── Ciclo presencial: comandos estreitos, nunca mutadores da tela ───────────
 exports.startTournament = onCall(async (request) => {
   const uid = request.auth && request.auth.uid;

@@ -1352,6 +1352,7 @@ const SUITES = [
   'tests/l7-expired-enrollment-store-cf-only.test.js',
   'tests/l7-placeholder-cf-only.test.js',
   'tests/l7-participant-merge-cf-only.test.js', // L7: render não fecha localmente
+  'tests/l7-tournament-config-cf-only.test.js', // L7: ficha só despacha configuração declarativa
   'tests/l7-client-writer-census.test.js', // L7: novos writers do navegador exigem classificação explícita
   // Joga o torneio INTEIRO lançando só pelo servidor: 8 jogos (escada + 3º lugar), campeão,
   // zero slot TBD. É o "jogar até o campeão" antes de mexer no caminho mais quente do app.
