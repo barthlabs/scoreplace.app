@@ -3316,7 +3316,11 @@ exports.deenrollParticipant = onCall(
 const _pairCore = require("./pair-core");
 const _participantRename = require("./participant-rename-core");
 const _ligaAvailability = require("./liga-availability-core");
-const _ligaDrawWindow = require("../functions-autodraw/draw-core.js")._window;
+// Codebases Firebase são pacotes isolados. Em desenvolvimento aproveita o motor
+// completo; no deploy principal usa o adaptador local com a mesma superfície.
+let _ligaDrawWindow;
+try { _ligaDrawWindow = require("../functions-autodraw/draw-core.js")._window; }
+catch (e) { _ligaDrawWindow = require("./liga-availability-window.js"); }
 
 /* ⛔ SÓ UID — a porta ÚNICA de "quem é organizador" nas CFs principais.
  * Ordem do dono (26/ago): _"nada por nome ou email, sempre por uid a menos que seja
