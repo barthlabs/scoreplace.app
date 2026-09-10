@@ -1356,6 +1356,7 @@ const SUITES = [
   'tests/l7-tournament-config-cf-only.test.js', // L7: ficha só despacha configuração declarativa
   'tests/l7-close-round-no-client-write.test.js', // L7: fecho não tem persistência local
   'tests/l7-client-writer-census.test.js', // L7: novos writers do navegador exigem classificação explícita
+  'tests/cancelar-preparo-sorteio-cf-only.test.js', // L7: cancelar preparação do sorteio só despacha a Function
   // Joga o torneio INTEIRO lançando só pelo servidor: 8 jogos (escada + 3º lugar), campeão,
   // zero slot TBD. É o "jogar até o campeão" antes de mexer no caminho mais quente do app.
   'functions-autodraw/test-result-playthrough.js',

@@ -13,11 +13,11 @@ const approved = {
   'views/liga-substitution.js': 1,
   'views/participants.js': 0,
   'views/tournaments-categories.js': 14,
-  'views/tournaments-draw-prep.js': 23,
+  'views/tournaments-draw-prep.js': 22,
   'views/tournaments-draw.js': 10,
   'views/tournaments-org-tools.js': 0,
   'views/tournaments.js': 10,
-  'views/wo-claim.js': 2
+  'views/wo-claim.js': 0
 };
 let failed = 0;
 function ok(value, label) {

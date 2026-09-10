@@ -1,3 +1,4 @@
+// ⚠️ 2.2.52 · cancelar a preparação do sorteio também é confirmado pela Function com o torneio fresco; a aba não reabre inscrições nem restaura uma cópia local.
 // ⚠️ 2.2.51 · todo o consenso de W.O. — apontar, confirmar, contestar, reverter e decidir o desfecho — é processado pela Function com documento fresco; a tela apenas envia a intenção.
 // ⚠️ 2.2.50 · editar a configuração do torneio, fechar rodada e apontar uma ausência de W.O. passam por Functions que relêem o documento fresco. A tela só envia a intenção; confirmação, chave e histórico não são mais gravados por uma aba antiga.
 // ⚠️ 2.2.49 · presença, prazo de inscrição, ocupação de vagas e vínculo de participante são confirmados pela Cloud Function; nenhuma aba regrava chave, elenco ou pendências.

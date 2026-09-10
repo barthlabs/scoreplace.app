@@ -2438,6 +2438,48 @@ exports.resolvePendingDraw = onCall(async (request) => {
   });
 });
 
+// ─── Cancelamento da preparação de sorteio: intenção server-side ─────────────
+// Antes do sorteio efetivo, os painéis podem suspender o torneio/fechar inscrição
+// enquanto a organização escolhe como resolver elenco, grupos ou potência de 2.
+// Cancelar volta somente esse estado transitório. A Function lê o documento fresco,
+// recusa uma chave ou revisão já materializada e limpa os mesmos flags canônicos do
+// motor; o navegador não reenfileira um retrato da aba. O snapshot de prévia do
+// navegador nunca é dado canônico: antes do sorteio ele não foi persistido, portanto
+// a transação preserva o elenco que acabou de reler em vez de aceitar um roster enviado.
+exports.cancelDrawPreparation = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid;
+  const tId = String((request.data && request.data.tournamentId) || '').trim();
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId) throw new HttpsError('invalid-argument', 'Torneio obrigatório.');
+  if (!drawWindow || typeof drawWindow._clearDrawRuntimeFlags !== 'function') {
+    throw new HttpsError('failed-precondition', 'Motor de preparação indisponível.');
+  }
+  const ref = db.collection('tournaments').doc(tId), agoraIso = new Date().toISOString();
+  return db.runTransaction(async (tx) => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização cancela a preparação do sorteio.', { tId, uid });
+    if (hasDrawnBracket && hasDrawnBracket(t)) throw _drawFail('failed-precondition', 'A chave já foi sorteada; esta preparação não pode mais ser cancelada.', { tId, uid });
+    if (t.pendingDraw) throw _drawFail('failed-precondition', 'Há um sorteio em revisão; anule-o pelo controle de revisão.', { tId, uid });
+    const hadPreparation = !!(t._suspendedByPanel || t._reopenIfDrawCancelled || t._drawDecisions || t.currentStage);
+    if (!hadPreparation) return { ok:true, changed:false, tournament:t };
+    const antes = _antesDoMotor(t);
+    if (t._suspendedByPanel) t.status = t._previousStatus || 'open';
+    else if (t._reopenIfDrawCancelled) t.status = 'open';
+    drawWindow._clearDrawRuntimeFlags(t);
+    const nextIdx = (t.currentPhaseIndex || 0) + 1;
+    if (Array.isArray(t.phases) && t.phases[nextIdx]) {
+      delete t.phases[nextIdx]._promoteAsked;
+      delete t.phases[nextIdx]._promoteLines;
+    }
+    // No navegador `_clearPhaseResInfo` também remove apenas este campo do doc; o
+    // registro auxiliar por id é memória da tela e não existe no processo da Function.
+    delete t._phaseResInfo;
+    const b = _gravaTorneio(tx, ref, t, antes, { agoraIso });
+    return { ok:true, changed:true, tournament:b.clean };
+  });
+});
+
 async function _notifyPublishedPendingDraw(t,tId,roundIndex,nowIso) {
   if(!t || t.isSandbox || t.notificationsMuted) return;
   const ids=new Set(); (t.participants||[]).forEach(p=>[p&&p.uid,p&&p.p1Uid,p&&p.p2Uid].forEach(u=>u&&ids.add(String(u))));

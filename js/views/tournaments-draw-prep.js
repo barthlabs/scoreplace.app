@@ -629,59 +629,32 @@ window._applyFlexibilizeBalance = function(tId) {
 // os painéis da cadeia, limpa os flags runtime (_clearDrawRuntimeFlags) e re-renderiza
 // o detalhe. Restaura o status anterior antes de limpar (o helper zera _previousStatus).
 window._cancelDrawResolution = function(tId) {
-    if (typeof window._drawBtnDone === 'function') window._drawBtnDone(); // limpa _drawingTid antes do re-render → botão volta a "Sortear"
-    if (window._clearDrawDecisions) window._clearDrawDecisions(tId); // v1.3.93: cancelar zera o pacote de decisões do mapa
-    var t = window._findTournamentById(tId);
-    if (t) {
-        // v4.5.6: cancelar ANTES do sorteio efetivo RESETA todas as decisões — restaura o
-        // elenco ao estado pré-sorteio (sem-dupla/pow2/standby moveram em memória), pra que
-        // sejam reavaliadas no próximo Sortear (pedido do dono). Snapshot vive fora do doc.
-        try {
-            var _snap = window._drawPrepSnapshots && window._drawPrepSnapshots[String(tId)];
-            if (_snap) {
-                if (_snap.participants) t.participants = _snap.participants;
-                if (_snap.waitlist) t.waitlist = _snap.waitlist;
-                if (_snap.standbyParticipants) t.standbyParticipants = _snap.standbyParticipants;
-                if (_snap.monarchWaitlist) t.monarchWaitlist = _snap.monarchWaitlist;
-                if (_snap.teamOrigins) t.teamOrigins = _snap.teamOrigins;
-                delete window._drawPrepSnapshots[String(tId)];
-            }
-        } catch (_eRestore) {}
-        if (t._suspendedByPanel) t.status = t._previousStatus || 'open';
-        // config "Fechadas": o confirm "Encerrar e Sortear" fechou as inscrições p/ DECIDIR
-        // o sorteio (marcou _reopenIfDrawCancelled). Cancelar SEM sortear → REABRE. (Se o
-        // sorteio completar, _commitInitialDraw limpa a flag e as inscrições ficam fechadas.)
-        else if (t._reopenIfDrawCancelled) t.status = 'open';
-        if (typeof window._clearDrawRuntimeFlags === 'function') window._clearDrawRuntimeFlags(t);
-        // v4.5.5: cancelar a resolução da transição de fase reseta o promote da próxima fase
-        // (contagem + flag de "já perguntei") → re-avançar começa do zero (pergunta promote de novo).
-        try {
-            var _pnIdx = (t.currentPhaseIndex || 0) + 1;
-            if (t.phases && t.phases[_pnIdx]) { delete t.phases[_pnIdx]._promoteAsked; delete t.phases[_pnIdx]._promoteLines; }
-            window._clearPhaseResInfo(t);
-        } catch (e) {}
-        if (window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
-            window.AppStore.commitTournamentTx(tId, function(ft) {
-                if (ft._suspendedByPanel) { ft.status = ft._previousStatus || 'open'; }
-                else if (ft._reopenIfDrawCancelled) ft.status = 'open';
-                if (typeof window._clearDrawRuntimeFlags === 'function') window._clearDrawRuntimeFlags(ft);
-                try {
-                    var nextIdx = (ft.currentPhaseIndex || 0) + 1;
-                    if (ft.phases && ft.phases[nextIdx]) { delete ft.phases[nextIdx]._promoteAsked; delete ft.phases[nextIdx]._promoteLines; }
-                    window._clearPhaseResInfo(ft);
-                } catch (e) {}
-                return true;
-            });
-        }
+    // O painel é só interface. Reabrir inscrição e limpar decisões do pré-sorteio
+    // pertencem à Function: ela relê o torneio fresco e recusa cancelar depois que a
+    // chave existe. `_drawPrepSnapshots` guarda SOMENTE prévias que ainda não foram
+    // escritas; nunca viaja no payload nem vira uma segunda porta de alteração de elenco.
+    // O recibo canônico substitui essa prévia pelo elenco fresco do servidor.
+    if (typeof window._callCF !== 'function') {
+        if (typeof window.showNotification === 'function') window.showNotification('Não foi possível cancelar', 'Atualize o aplicativo e tente novamente.', 'error');
+        return;
     }
-    // ⭐ `inactive-phase-panel` entrou na lista: o painel de inativos ganhou Cancelar e ele
-    // usa ESTE cancelar canônico (o mesmo dos outros do fluxo). Sem estar aqui, cancelar
-    // fecharia tudo menos ele — e o overlay ficaria por cima da tela recém-renderizada.
-    ['unified-resolution-panel','phase-promote-panel','inactive-phase-panel','remainder-resolution-panel','removal-subchoice-panel','solo-resolution-panel','solo-manual-pair-panel','groups-config-panel','reopen-panel','p2-resolution-panel','final-review-panel'].forEach(function(id){ var el=document.getElementById(id); if(el) el.remove(); });
-    window._soloPairState = null;
-    document.body.style.overflow = '';
-    var c = document.getElementById('view-container');
-    if (c && typeof window.renderTournaments === 'function') window.renderTournaments(c, String(tId));
+    window._callCF('cancelDrawPreparation', { tournamentId: String(tId) }, 'Entre na sua conta para cancelar a preparação do sorteio.').then(function(res) {
+        var data = (res && res.data) || {};
+        if (data.tournament && typeof window._applyCFTournament === 'function') window._applyCFTournament(tId, data.tournament);
+        if (typeof window._drawBtnDone === 'function') window._drawBtnDone();
+        if (window._clearDrawDecisions) window._clearDrawDecisions(tId);
+        try { if (window._drawPrepSnapshots) delete window._drawPrepSnapshots[String(tId)]; } catch (_eRestore) {}
+        // `inactive-phase-panel` usa este mesmo cancelamento; só desaparece após o
+        // recibo canônico para que uma falha não faça a pessoa perder o contexto.
+        ['unified-resolution-panel','phase-promote-panel','inactive-phase-panel','remainder-resolution-panel','removal-subchoice-panel','solo-resolution-panel','solo-manual-pair-panel','groups-config-panel','reopen-panel','p2-resolution-panel','final-review-panel'].forEach(function(id){ var el=document.getElementById(id); if(el) el.remove(); });
+        window._soloPairState = null;
+        document.body.style.overflow = '';
+        var c = document.getElementById('view-container');
+        if (c && typeof window.renderTournaments === 'function') window.renderTournaments(c, String(tId));
+    }).catch(function(err) {
+        if (window._warn) window._warn('[cancelDrawPreparation] CF falhou', err);
+        if (typeof window.showNotification === 'function') window.showNotification('Não foi possível cancelar', 'Nada foi alterado. Tente novamente.', 'error');
+    });
 };
 
 // Cancelar o painel de resto = cancel canônico (reset total + detalhe limpo).
