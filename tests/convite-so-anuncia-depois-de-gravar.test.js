@@ -92,6 +92,16 @@ function palco(opts) {
       return Promise.resolve(('email' in opts) ? opts.email : { enviado: true, motivo: '' });
     }
   };
+  /* A tela não escreve mais o convite: a CF é a gravação. A promessa só resolve
+   * quando o servidor confirma, reproduzindo a barreira que o teste precisa provar. */
+  win._callCF = function () {
+    eventos.push('mutate:chamada');
+    return mutatePendente.then(function () {
+      eventos.push('mutate:gravou');
+      T.coHosts = [{ uid: 'alvo1', status: 'pending' }];
+      return { data: { changed: true, targetUid: 'alvo1', targetName: 'Kelly', tournamentName: 'Confra' } };
+    });
+  };
   win._error = () => {}; win._warn = () => {}; win._log = () => {};
   win._softRefreshView = () => { eventos.push('repintou'); };
   win._pName = (p) => (p && p.displayName) || '';
@@ -111,9 +121,10 @@ function palco(opts) {
                   'var showNotification = window.showNotification;', ctx);
   ctx.window.__ev = eventos;
 
+  const helper = recortaFn(SRC_HT, 'function _mutateHostOrganization');
   const corpo = recortaFn(SRC_HT, 'window._initiateCoHostInvite = function');
-  if (!corpo) return null;
-  vm.runInContext(corpo + ';', ctx);
+  if (!helper || !corpo) return null;
+  vm.runInContext(helper + ';' + corpo + ';', ctx);
   return { win, T, eventos, resolveMutate: _resolveMutate, rejeitaMutate: _rejeitaMutate, ctx };
 }
 
@@ -148,7 +159,7 @@ function palco(opts) {
     const p = palco();
     p.win._initiateCoHostInvite('tour_1', { uid: 'alvo1', displayName: 'Kelly', email: 'k@x.com' });
     await varios(2);
-    ok(p.T.coHosts.length === 1, 'a entrada otimista existe enquanto a gravação está em voo');
+    ok(p.T.coHosts.length === 0, 'não há entrada otimista: a tela aguarda a confirmação da Function');
     p.rejeitaMutate(new Error('failed-precondition'));
     await varios(8);
     ok(p.eventos.indexOf('function:chamada') === -1,
@@ -158,7 +169,7 @@ function palco(opts) {
     ok(p.eventos.some((e) => e.indexOf('toast:error:') === 0),
       '⭐ mostra erro claro');
     ok(p.T.coHosts.length === 0,
-      '⭐ e a entrada otimista foi DESFEITA (removida por referência, lição da v1.8.40)');
+      '⭐ e a tela permanece sem convite quando a Function rejeita');
     ok(p.eventos.filter((e) => e.indexOf('notif:') === 0).length === 0,
       '  → e ninguém foi notificado de um convite que não existe');
   }

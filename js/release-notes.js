@@ -1,3 +1,4 @@
+// ⚠️ 2.2.45 · o convite de co-organização só informa envio quando a Function confirma; resposta vazia vira aviso honesto, sem perder o convite já persistido.
 // ⚠️ 2.2.44 · convites de coorganização e o encerramento de temporada da Liga são confirmados pela Cloud Function, com gravação transacional no servidor.
 // scoreplace.app — Release notes (lazy-loaded)
 // Loaded on demand when the user opens "Notas de versões" in help modal.

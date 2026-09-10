@@ -156,9 +156,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       return Promise.resolve(window.FirestoreDB.sendCoHostInviteEmail(String(t.id), String(out.targetUid || target.uid)))
         .catch(function (e) { window._warn('[co-org] e-mail falhou:', e && e.message); return { enviado: false }; });
     }).then(function (veredito) {
-      if (!veredito) return;
       var quem = target.displayName || target.email || '';
-      if (veredito.enviado) {
+      if (veredito && veredito.enviado) {
         if (typeof showNotification === 'function') showNotification(_tH('org.inviteSent'), _tH('org.awaitingResponse') + ' ' + quem, 'info');
       } else if (typeof showNotification === 'function') {
         showNotification('Convite registrado', quem + ' já pode ver o convite no app — mas o e-mail de aviso não pôde ser enviado agora.', 'warning');

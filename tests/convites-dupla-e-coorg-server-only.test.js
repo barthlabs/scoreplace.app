@@ -114,11 +114,11 @@ console.log('\n§1c O DISPARO SAI DA ORIGEM, depois de o convite estar gravado')
    * a ESTRUTURA: a chamada mora dentro do `.then` da promessa da gravação. E a prova de
    * ORDEM DE EXECUÇÃO, que texto nenhum dá, está em
    * tests/convite-so-anuncia-depois-de-gravar.test.js. */
-  const _iMutate = SRC_HT.indexOf('Promise.resolve(window.AppStore.mutate(tId');
-  const _iThen = SRC_HT.indexOf('.then(function () {', _iMutate);
-  const _iChamada = SRC_HT.indexOf('sendCoHostInviteEmail(String(t.id), String(target.uid))');
-  ok(_iMutate > 0 && _iThen > _iMutate && _iChamada > _iThen,
-    '⭐ co-org: a chamada vive DEPOIS do `.then` da gravação (ordem de execução provada em convite-so-anuncia-depois-de-gravar)');
+  const _iMutate = SRC_HT.indexOf("_mutateHostOrganization(tId, 'invite', 'cohost', target.uid)");
+  const _iThen = SRC_HT.indexOf('.then(function (out) {', _iMutate);
+  const _iChamada = SRC_HT.indexOf('sendCoHostInviteEmail(String(t.id), String(out.targetUid || target.uid))', _iThen);
+  ok(_iMutate > 0 && _iThen > _iMutate && _iChamada > _iThen && !/AppStore\.mutate\(tId/.test(SRC_HT),
+    '⭐ co-org: a CF confirma a gravação antes do aviso/e-mail; a tela não escreve o torneio');
 }
 
 /* ── §2 · AS FUNCTIONS: RECUSAS ─────────────────────────────────────────────── */

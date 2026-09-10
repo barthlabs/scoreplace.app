@@ -28,7 +28,17 @@ const os = require('os');
 const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
-const PORT = 8134;
+/* O runner já serializa esta prova, mas uma porta fixa colide com emuladores deixados
+ * por outra sessão. Reserva uma porta efêmera e a fecha antes do Firebase iniciar. */
+function portaLivre() {
+  const out = execFileSync(process.execPath, ['-e',
+    "const s=require('net').createServer();s.listen(0,'127.0.0.1',()=>{console.log(s.address().port);s.close()})"
+  ], { encoding: 'utf8' });
+  const port = Number(String(out).trim());
+  if (!Number.isInteger(port) || port < 1024) throw new Error('não consegui escolher porta livre para o emulador');
+  return port;
+}
+const PORT = portaLivre();
 const PROJECT = 'demo-recuperacao';
 
 let pass = 0, fail = 0;
