@@ -2699,6 +2699,41 @@ exports.markDrawPollNotificationsRead = onCall(async (request) => {
   });
 });
 
+// ─── Apuração de enquete de preparação: intenção server-side ────────────────
+// Só a organização pode aplicar a decisão. O servidor conta os votos do documento
+// fresco, fixa o vencedor uma vez e devolve a próxima intenção ao cliente sem aceitar
+// vencedor, votos ou retrato de torneio no payload.
+exports.applyDrawPollResult = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid;
+  const data = request.data || {}, tId = String(data.tournamentId || '').trim(), pollId = String(data.pollId || '').trim();
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId || !pollId) throw new HttpsError('invalid-argument', 'Enquete obrigatória.');
+  const ref = db.collection('tournaments').doc(tId), resolvedAt = Date.now(), agoraIso = new Date(resolvedAt).toISOString();
+  return db.runTransaction(async (tx) => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização aplica o resultado da enquete.', { tId, uid, pollId });
+    const poll = (Array.isArray(t.polls) ? t.polls : []).find((item) => item && String(item.id) === pollId);
+    if (!poll) throw new HttpsError('not-found', 'Enquete não encontrada.');
+    if (poll.resolved) return { ok:true, changed:false, winnerKey:String(poll.resolvedOption || ''), context:String(poll.context || ''), tournament:t };
+    if (poll.status !== 'closed') throw new HttpsError('failed-precondition', 'Encerre a enquete antes de aplicar o resultado.');
+    const counts = {}, options = Array.isArray(poll.options) ? poll.options : [];
+    options.forEach((option) => { if (option && option.key != null) counts[String(option.key)] = 0; });
+    Object.keys(poll.votes || {}).forEach((voter) => { const key = String(poll.votes[voter]); if (Object.prototype.hasOwnProperty.call(counts, key)) counts[key]++; });
+    let winnerKey = '', winnerCount = 0;
+    options.forEach((option) => { const key = option && String(option.key); if (key && counts[key] > winnerCount) { winnerKey = key; winnerCount = counts[key]; } });
+    if (!winnerKey) throw new HttpsError('failed-precondition', 'A enquete não recebeu votos válidos.');
+    const antes = _antesDoMotor(t);
+    poll.resolved = true;
+    poll.resolvedOption = winnerKey;
+    poll.resolvedAt = resolvedAt;
+    t.activePollId = null;
+    if (t._pollSuspended) { t.status = 'open'; delete t._pollSuspended; }
+    const b = _gravaTorneio(tx, ref, t, antes, { agoraIso });
+    return { ok:true, changed:true, winnerKey, context:String(poll.context || ''), tournament:b.clean };
+  });
+});
+
 // ─── Decisões entre fases: somente a Function altera elenco e promoção ───────
 // O painel mostra os inativos/W.O. e a possível linha extra, mas não pode aplicar
 // essas escolhas sobre um snapshot que talvez já esteja atrasado.

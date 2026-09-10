@@ -698,6 +698,15 @@ window._markDrawPollNotificationsRead = function(tId, pollId) {
     });
 };
 
+window._applyDrawPollResult = function(tId, pollId) {
+    if (typeof window._callCF !== 'function') return Promise.reject(new Error('Function indisponível'));
+    return window._callCF('applyDrawPollResult', { tournamentId:String(tId), pollId:String(pollId) }, 'Entre na sua conta para aplicar o resultado da enquete.').then(function(res) {
+        var data = (res && res.data) || {};
+        if (data.tournament && typeof window._applyCFTournament === 'function') window._applyCFTournament(tId, data.tournament);
+        return data;
+    });
+};
+
 window._reopenDrawEnrollment = function(tId, reason) {
     if (typeof window._callCF !== 'function') return Promise.reject(new Error('Function indisponível'));
     return window._callCF('reopenDrawEnrollment', { tournamentId:String(tId), reason:reason }, 'Entre na sua conta para reabrir as inscrições.').then(function(res) {
@@ -3239,61 +3248,17 @@ window._reopenPoll = function(tId, pollId) {
 window._applyPollResult = function(tId, pollId) {
     var t = window._findTournamentById(tId);
     if (!t || !t.polls) return;
-
-    var poll = null;
-    for (var i = 0; i < t.polls.length; i++) {
-        if (t.polls[i].id === pollId) { poll = t.polls[i]; break; }
-    }
-    if (!poll) return;
-
-    // Restore enrollments if suspended by poll
-    if (t._pollSuspended) {
-        t.status = 'open';
-        delete t._pollSuspended;
-    }
-
-    // Find winner
-    var voteCounts = {};
-    poll.options.forEach(function(opt) { voteCounts[opt.key] = 0; });
-    Object.keys(poll.votes).forEach(function(email) {
-        var k = poll.votes[email];
-        if (voteCounts[k] !== undefined) voteCounts[k]++;
-    });
-
-    var winnerKey = '';
-    var winnerCount = 0;
-    poll.options.forEach(function(opt) {
-        if ((voteCounts[opt.key] || 0) > winnerCount) {
-            winnerCount = voteCounts[opt.key];
-            winnerKey = opt.key;
-        }
-    });
-
-    if (!winnerKey) return;
-
-    if (!window.AppStore || typeof window.AppStore.mutate !== 'function') return;
-    var resolvedAt = Date.now(), freshWinner = '';
-    var resolutionSave = window.AppStore.mutate(tId, function(ft) {
-        var fresh = (ft.polls || []).filter(function(p) { return p && p.id === pollId; })[0];
-        if (!fresh || fresh.resolved) return false;
-        var counts = {}, best = '', bestCount = 0;
-        (fresh.options || []).forEach(function(o) { counts[o.key] = 0; });
-        Object.keys(fresh.votes || {}).forEach(function(k) { if (counts[fresh.votes[k]] !== undefined) counts[fresh.votes[k]]++; });
-        (fresh.options || []).forEach(function(o) { if (counts[o.key] > bestCount) { best = o.key; bestCount = counts[o.key]; } });
-        if (!best) return false;
-        freshWinner = best;
-        fresh.resolved = true; fresh.resolvedOption = best; fresh.resolvedAt = resolvedAt;
-        ft.activePollId = null;
-        if (ft._pollSuspended) { ft.status = 'open'; delete ft._pollSuspended; }
-        return true;
-    }, 'Resultado da enquete aplicado: ' + winnerKey);
-
-    // Trigger the winning option's action
-    Promise.resolve(resolutionSave).then(function(saved) {
-        if (saved === false || !freshWinner) return;
-        if (poll.context === 'incomplete') window._handleIncompleteOption(tId, freshWinner);
-        else if (poll.context === 'p2') window._handleP2Option(tId, freshWinner);
-        else if (poll.context === 'odd') window._handleOddOption(tId, freshWinner);
+    window._applyDrawPollResult(tId, pollId).then(function(data) {
+        var winnerKey = String(data.winnerKey || ''), context = String(data.context || '');
+        // A Function é idempotente e sinaliza que outra aba já aplicou a decisão.
+        // Nesse caso não redespachamos a ação vencedora localmente.
+        if (data.changed === false || !winnerKey) return;
+        if (context === 'incomplete') window._handleIncompleteOption(tId, winnerKey);
+        else if (context === 'p2') window._handleP2Option(tId, winnerKey);
+        else if (context === 'odd') window._handleOddOption(tId, winnerKey);
+    }).catch(function(err) {
+        if (window._warn) window._warn('[applyDrawPollResult] apuração falhou', err);
+        if (typeof showNotification === 'function') showNotification('Não foi possível aplicar', 'Nada foi alterado. Atualize e tente novamente.', 'error');
     });
 };
 
