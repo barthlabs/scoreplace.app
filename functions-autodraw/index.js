@@ -1488,6 +1488,42 @@ exports.occupyTournamentPlaceholder = onCall(async (request) => {
   });
 });
 
+// ─── Vínculo de participante genérico com conta real ─────────────────────────
+function _mergeParticipantInFreshTournament(t, realUid, genericName) {
+  const arr = Array.isArray(t.participants) ? t.participants : [];
+  const realIndex = arr.findIndex(p => p && typeof p === 'object' && String(p.uid || '') === realUid);
+  const genericIndex = arr.findIndex(p => p && typeof p === 'object' && !p.uid && String(p.displayName || p.name || '') === genericName);
+  if (realIndex < 0 || genericIndex < 0 || realIndex === genericIndex) return null;
+  const real = arr[realIndex], generic = arr[genericIndex];
+  const realName = String(real.displayName || real.name || '').trim();
+  if (!realName) return null;
+  const entry = Object.assign({}, real, { displayName: realName, name: realName, _mergedFrom: { placeholder: JSON.parse(JSON.stringify(generic)), person: JSON.parse(JSON.stringify(real)) } });
+  arr[genericIndex] = entry;
+  arr.splice(realIndex, 1);
+  const swap = value => {
+    if (typeof value !== 'string') return value;
+    if (value === genericName) return realName;
+    if (value.indexOf(' / ') !== -1) return value.split(' / ').map(n => n.trim() === genericName ? realName : n.trim()).join(' / ');
+    return value;
+  };
+  const matches = typeof drawWindow._collectAllMatches === 'function' ? drawWindow._collectAllMatches(t) : (t.matches || []);
+  matches.forEach(m => { if (!m) return; m.p1=swap(m.p1); m.p2=swap(m.p2); m.winner=swap(m.winner); ['team1','team2'].forEach(k => { if (Array.isArray(m[k])) m[k]=m[k].map(n => n === genericName ? realName : n); }); });
+  return { realName };
+}
+exports.requestParticipantMerge = onCall(async request => {
+  const uid=request.auth&&request.auth.uid, data=request.data||{}, tId=String(data.tournamentId||'').trim(), realUid=String(data.realUid||'').trim(), genericName=String(data.genericName||'').trim();
+  if(!uid) throw new HttpsError('unauthenticated','Entre na sua conta.');
+  if(!tId||!realUid||!genericName) throw new HttpsError('invalid-argument','Dados de vínculo inválidos.');
+  const ref=db.collection('tournaments').doc(tId), agoraIso=new Date().toISOString();
+  return db.runTransaction(async tx=>{const t=await _leTorneio(tx,ref,tId);if(!t)throw new HttpsError('not-found','Torneio não encontrado.');if(!_isTournamentAdmin(t,uid))throw _drawFail('permission-denied','Só a organização pede o vínculo.',{tId,uid});const real=(t.participants||[]).find(p=>p&&String(p.uid||'')===realUid), generic=(t.participants||[]).find(p=>p&&!p.uid&&String(p.displayName||p.name||'')===genericName);if(!real||!generic)throw _drawFail('failed-precondition','Os participantes mudaram no servidor.',{tId});const before=_antesDoMotor(t), req={id:'merge__'+Date.now()+'__'+Math.floor(Math.random()*1e6),realName:String(real.displayName||real.name||''),realUid,genericName,byUid:uid,byName:'A organização',at:agoraIso};t.pendingMerges=(Array.isArray(t.pendingMerges)?t.pendingMerges:[]).filter(r=>!(r&&r.realUid===realUid&&r.genericName===genericName));t.pendingMerges.push(req);const boundary=_gravaTorneio(tx,ref,t,before,{agoraIso});return {ok:true,changed:true,request:req,tournament:boundary.clean};});
+});
+exports.resolveParticipantMerge = onCall(async request => {
+  const uid=request.auth&&request.auth.uid, data=request.data||{}, tId=String(data.tournamentId||'').trim(), reqId=String(data.requestId||'').trim(), action=data.action==='accept'?'accept':(data.action==='reject'?'reject':'');
+  if(!uid) throw new HttpsError('unauthenticated','Entre na sua conta.'); if(!tId||!reqId||!action) throw new HttpsError('invalid-argument','Pedido inválido.');
+  const ref=db.collection('tournaments').doc(tId),agoraIso=new Date().toISOString();
+  return db.runTransaction(async tx=>{const t=await _leTorneio(tx,ref,tId);if(!t)throw new HttpsError('not-found','Torneio não encontrado.');const req=(t.pendingMerges||[]).find(r=>r&&r.id===reqId);if(!req) return {ok:true,changed:false,reason:'already-resolved'};if(String(req.realUid||'')!==uid)throw _drawFail('permission-denied','Só a conta indicada decide o vínculo.',{tId,uid});const before=_antesDoMotor(t);t.pendingMerges=t.pendingMerges.filter(r=>r&&r.id!==reqId);if(action==='reject'){const boundary=_gravaTorneio(tx,ref,t,before,{agoraIso});return {ok:true,changed:true,action,tournament:boundary.clean};}const result=_mergeParticipantInFreshTournament(t,String(req.realUid),String(req.genericName));if(!result)throw _drawFail('failed-precondition','Os participantes mudaram no servidor.',{tId,reqId});if(!Array.isArray(t.history))t.history=[];t.history.push({date:agoraIso,message:'"'+result.realName+'" assumiu a vaga de "'+req.genericName+'"'});const boundary=_gravaTorneio(tx,ref,t,before,{agoraIso});return {ok:true,changed:true,action,tournament:boundary.clean};});
+});
+
 // ─── Declarar/reverter ausência de W.O. ──────────────────────────────────────
 // Esta porta cobre os botões compactos de chamada. O browser envia identidades e
 // o alvo absoluto; a Function confere cada identidade no elenco fresco e roda a

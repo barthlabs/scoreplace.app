@@ -3900,17 +3900,22 @@ window._applyParticipantMergeFresh = function(t, personName, personUid, placehol
     return true;
 };
 
-window._mergeParticipantConfirm = function(tId, personName, personUid, placeholderName, placeholderUid) {
-    var t = window._findTournamentById(tId);
-    if (!window._applyParticipantMergeFresh(t, personName, personUid, placeholderName, placeholderUid)) return;
-    if (window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
-        window.AppStore.commitTournamentTx(tId, function(ft) {
-            return window._applyParticipantMergeFresh(ft, personName, personUid, placeholderName, placeholderUid);
-        }, { allowRosterRemoval: true });
-    }
-    var container = document.getElementById('view-container');
-    if (container) renderTournaments(container, tId);
-    if (typeof showNotification === 'function') showNotification('Mesclado', personName + ' assumiu a vaga de ' + placeholderName + '.', 'success');
+window._mergeParticipantConfirm = function(tId, personName, personUid, placeholderName, placeholderUid, reqId) {
+    if (typeof window._callCF !== 'function') return Promise.resolve(false);
+    return window._callCF('resolveParticipantMerge', {
+        tournamentId: String(tId), requestId: String(reqId || ''), action: 'accept'
+    }).then(function(out) {
+        var ok = !!(out && out.ok && out.changed);
+        if (ok) {
+            var container = document.getElementById('view-container');
+            if (container) renderTournaments(container, tId);
+            if (typeof showNotification === 'function') showNotification('Mesclado', personName + ' assumiu a vaga de ' + placeholderName + '.', 'success');
+        }
+        return ok;
+    }).catch(function(err) {
+        if (window._warn) window._warn('[merge] aceite recusado', err);
+        return false;
+    });
 };
 
 // ── v2.7.75: MESCLA COM ACEITE ───────────────────────────────────────────────
@@ -3921,7 +3926,6 @@ window._mergeParticipantConfirm = function(tId, personName, personUid, placehold
 window._requestMergeAcceptance = function(opts) {
     var t = window.AppStore.tournaments.find(function(tour) { return tour.id.toString() === opts.tId.toString(); });
     if (!t) return;
-    // Identifica quem é o real (tem uid) e quem é o genérico (sem uid).
     var realName, realUid, genericName;
     if (opts.sourceUid && !opts.targetUid) { realName = opts.sourceName; realUid = opts.sourceUid; genericName = opts.targetName; }
     else if (!opts.sourceUid && opts.targetUid) { realName = opts.targetName; realUid = opts.targetUid; genericName = opts.sourceName; }
@@ -3929,98 +3933,53 @@ window._requestMergeAcceptance = function(opts) {
         if (typeof showNotification === 'function') showNotification('Não dá pra mesclar', 'A mescla só vincula UM participante genérico a UM usuário real (com conta).', 'warning');
         return;
     }
-    showConfirmDialog(
-        '🔴 Mesclar jogador',
-        '“' + window._safeHtml(realName) + '” (usuário real) vai assumir os jogos de “' + window._safeHtml(genericName) + '” <b>só neste torneio</b>. ' +
-        'Vamos enviar um pedido de aceite pra <b>' + window._safeHtml(realName) + '</b> — a mescla só acontece se ele aceitar. Enviar o pedido?',
+    showConfirmDialog('🔴 Mesclar jogador',
+        '“' + window._safeHtml(realName) + '” (usuário real) vai assumir os jogos de “' + window._safeHtml(genericName) + '” <b>só neste torneio</b>. Vamos enviar um pedido de aceite pra <b>' + window._safeHtml(realName) + '</b> — a mescla só acontece se ele aceitar. Enviar o pedido?',
         function() {
-            var req = {
-                id: 'merge__' + Date.now() + '__' + Math.floor(Math.random() * 1e6),
-                realName: realName, realUid: realUid,
-                genericName: genericName,
-                byUid: (window.AppStore.currentUser || {}).uid || '',
-                byName: (window.AppStore.currentUser || {}).displayName || 'O organizador',
-                at: new Date().toISOString()
-            };
-            if (!Array.isArray(t.pendingMerges)) t.pendingMerges = [];
-            // evita duplicar o mesmo pedido (mesmo real + mesmo genérico)
-            t.pendingMerges = t.pendingMerges.filter(function(r) { return !(r.realUid === realUid && r.genericName === genericName); });
-            t.pendingMerges.push(req);
-            var _requestSaved = window.AppStore && typeof window.AppStore.commitTournamentTx === 'function'
-              ? window.AppStore.commitTournamentTx(opts.tId, function(ft) {
-                  if (!Array.isArray(ft.pendingMerges)) ft.pendingMerges = [];
-                  ft.pendingMerges = ft.pendingMerges.filter(function(r) { return !(r.realUid === realUid && r.genericName === genericName); });
-                  ft.pendingMerges.push(req); return true;
-                }) : Promise.resolve(false);
-            Promise.resolve(_requestSaved).then(function(saved) {
-            if (saved === false) { if (typeof window._softRefreshView === 'function') window._softRefreshView(); return; }
-            if (typeof window._sendUserNotification === 'function') {
-                window._sendUserNotification(realUid, {
-                    type: 'enrollment_new',
-                    title: '🔗 Pedido de vínculo',
-                    message: req.byName + ' quer que você assuma a participação de “' + window._safeHtml(genericName) + '” no torneio ' + window._safeHtml(t.name || '') + '. Abra o torneio para aceitar ou recusar.',
+            if (typeof window._callCF !== 'function') return;
+            window._callCF('requestParticipantMerge', { tournamentId: String(opts.tId), realUid: String(realUid), genericName: String(genericName) })
+              .then(function(out) {
+                if (!out || !out.ok) return;
+                if (typeof window._sendUserNotification === 'function') window._sendUserNotification(realUid, {
+                    type: 'enrollment_new', title: '🔗 Pedido de vínculo',
+                    message: 'A organização quer que você assuma a participação de “' + window._safeHtml(genericName) + '” no torneio ' + window._safeHtml(t.name || '') + '. Abra o torneio para aceitar ou recusar.',
                     tournamentId: String(t.id), tournamentName: t.name || '', level: 'fundamental'
                 });
-            }
-            if (typeof showNotification === 'function') showNotification('Pedido enviado', 'Aguardando ' + realName + ' aceitar o vínculo.', 'success');
-            if (typeof window._softRefreshView === 'function') window._softRefreshView();
-            });
-        },
-        null,
-        { type: 'warning', confirmText: 'Enviar pedido', cancelText: 'Cancelar' }
-    );
+                if (typeof showNotification === 'function') showNotification('Pedido enviado', 'Aguardando ' + realName + ' aceitar o vínculo.', 'success');
+                if (typeof window._softRefreshView === 'function') window._softRefreshView();
+              }).catch(function(err) { if (typeof showNotification === 'function') showNotification('Não foi possível enviar o pedido', (err && err.message) || '', 'warning'); });
+        }, null, { type: 'warning', confirmText: 'Enviar pedido', cancelText: 'Cancelar' });
 };
 
 // O usuário REAL aceita o vínculo → executa a mescla (assume a vaga do genérico).
 window._acceptMergeRequest = function(tId, reqId) {
     var t = window._findTournamentById(tId);
-    if (!t || !Array.isArray(t.pendingMerges)) return;
-    var req = t.pendingMerges.filter(function(r) { return r.id === reqId; })[0];
+    var req = t && Array.isArray(t.pendingMerges) && t.pendingMerges.filter(function(r) { return r.id === reqId; })[0];
     if (!req) return;
     var myUid = (window.AppStore.currentUser || {}).uid;
-    if (!myUid || myUid !== req.realUid) {
-        if (typeof showNotification === 'function') showNotification('Sem permissão', 'Só o usuário indicado pode aceitar este vínculo.', 'warning');
-        return;
-    }
-    // remove a pendência ANTES de mesclar (a mescla re-renderiza)
-    t.pendingMerges = t.pendingMerges.filter(function(r) { return r.id !== reqId; });
+    if (!myUid || myUid !== req.realUid) { if (typeof showNotification === 'function') showNotification('Sem permissão', 'Só o usuário indicado pode aceitar este vínculo.', 'warning'); return; }
     if (window._mergePromptShown) delete window._mergePromptShown[reqId];
-    // person (real) assume a vaga do placeholder (genérico, sem uid)
-    window._mergeParticipantConfirm(tId, req.realName, req.realUid, req.genericName, '');
-    if (req.byUid && typeof window._sendUserNotification === 'function') {
-        window._sendUserNotification(req.byUid, {
-            type: 'enrollment_new', title: '✅ Vínculo aceito',
-            message: window._safeHtml(req.realName) + ' aceitou assumir “' + window._safeHtml(req.genericName) + '” em ' + window._safeHtml(t.name || '') + '.',
-            tournamentId: String(t.id), tournamentName: t.name || '', level: 'all'
-        });
-    }
+    window._mergeParticipantConfirm(tId, req.realName, req.realUid, req.genericName, '', reqId).then(function(ok) {
+        if (!ok) return;
+        if (req.byUid && typeof window._sendUserNotification === 'function') window._sendUserNotification(req.byUid, { type: 'enrollment_new', title: '✅ Vínculo aceito', message: window._safeHtml(req.realName) + ' aceitou assumir “' + window._safeHtml(req.genericName) + '” em ' + window._safeHtml(t.name || '') + '.', tournamentId: String(t.id), tournamentName: t.name || '', level: 'all' });
+    });
 };
 
 // O usuário REAL recusa o vínculo → descarta a pendência e avisa o organizador.
 window._rejectMergeRequest = function(tId, reqId) {
     var t = window._findTournamentById(tId);
-    if (!t || !Array.isArray(t.pendingMerges)) return;
-    var req = t.pendingMerges.filter(function(r) { return r.id === reqId; })[0];
+    var req = t && Array.isArray(t.pendingMerges) && t.pendingMerges.filter(function(r) { return r.id === reqId; })[0];
     if (!req) return;
-    t.pendingMerges = t.pendingMerges.filter(function(r) { return r.id !== reqId; });
+    var myUid = (window.AppStore.currentUser || {}).uid;
+    if (!myUid || myUid !== req.realUid) return;
     if (window._mergePromptShown) delete window._mergePromptShown[reqId];
-    var _rejectSaved = window.AppStore && typeof window.AppStore.commitTournamentTx === 'function'
-      ? window.AppStore.commitTournamentTx(tId, function(ft) {
-          if (!Array.isArray(ft.pendingMerges) || !ft.pendingMerges.some(function(r) { return r && r.id === reqId; })) return false;
-          ft.pendingMerges = ft.pendingMerges.filter(function(r) { return r.id !== reqId; }); return true;
-        }) : Promise.resolve(false);
-    Promise.resolve(_rejectSaved).then(function(saved) {
-    if (saved === false) { if (typeof window._softRefreshView === 'function') window._softRefreshView(); return; }
-    if (req.byUid && typeof window._sendUserNotification === 'function') {
-        window._sendUserNotification(req.byUid, {
-            type: 'enrollment_new', title: '❌ Vínculo recusado',
-            message: window._safeHtml(req.realName) + ' recusou assumir “' + window._safeHtml(req.genericName) + '” em ' + window._safeHtml(t.name || '') + '.',
-            tournamentId: String(t.id), tournamentName: t.name || '', level: 'all'
-        });
-    }
-    if (typeof showNotification === 'function') showNotification('Vínculo recusado', '', 'info');
-    if (typeof window._softRefreshView === 'function') window._softRefreshView();
-    });
+    if (typeof window._callCF !== 'function') return;
+    window._callCF('resolveParticipantMerge', { tournamentId: String(tId), requestId: String(reqId), action: 'reject' }).then(function(out) {
+        if (!out || !out.ok) return;
+        if (req.byUid && typeof window._sendUserNotification === 'function') window._sendUserNotification(req.byUid, { type: 'enrollment_new', title: '❌ Vínculo recusado', message: window._safeHtml(req.realName) + ' recusou assumir “' + window._safeHtml(req.genericName) + '” em ' + window._safeHtml(t.name || '') + '.', tournamentId: String(t.id), tournamentName: t.name || '', level: 'all' });
+        if (typeof showNotification === 'function') showNotification('Pedido recusado', 'A organização foi avisada.', 'info');
+        if (typeof window._softRefreshView === 'function') window._softRefreshView();
+    }).catch(function(err) { if (typeof showNotification === 'function') showNotification('Não foi possível recusar', (err && err.message) || '', 'warning'); });
 };
 
 // Mostra ao usuário REAL (quando abre o torneio) o pedido de vínculo pendente.
