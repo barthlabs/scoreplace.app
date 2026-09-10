@@ -1206,7 +1206,7 @@ exports.deliverScoreNotification = onDocumentCreated(
   { document: 'tournaments/{tournamentId}/notificationOutbox/{eventId}', region: 'us-central1', timeoutSeconds: 120 },
   async (event) => {
     const item = event.data && event.data.data();
-    if (!item || item.kind !== 'score-notification') return;
+    if (!item || !['score-notification', 'tournament-notification'].includes(item.kind)) return;
     const tId = String(event.params.tournamentId || item.tournamentId || '');
     const eventId = String(event.params.eventId || '');
     const recipients = Array.isArray(item.recipients) ? Array.from(new Set(item.recipients.map(String).filter(Boolean))) : [];
@@ -2731,6 +2731,41 @@ exports.applyDrawPollResult = onCall(async (request) => {
     if (t._pollSuspended) { t.status = 'open'; delete t._pollSuspended; }
     const b = _gravaTorneio(tx, ref, t, antes, { agoraIso });
     return { ok:true, changed:true, winnerKey, context:String(poll.context || ''), tournament:b.clean };
+  });
+});
+
+// ─── Reabertura de enquete: decisão, suspensão e aviso pelo servidor ─────────
+exports.reopenDrawPoll = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid;
+  const data = request.data || {}, tId = String(data.tournamentId || '').trim(), pollId = String(data.pollId || '').trim();
+  const hours = Math.max(1, Math.min(168, Math.trunc(Number(data.hours) || 48)));
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId || !pollId) throw new HttpsError('invalid-argument', 'Enquete obrigatória.');
+  const ref = db.collection('tournaments').doc(tId), now = Date.now(), deadline = now + hours * 3600000, agoraIso = new Date(now).toISOString();
+  return db.runTransaction(async (tx) => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização reabre a enquete.', { tId, uid, pollId });
+    const poll = (Array.isArray(t.polls) ? t.polls : []).find((item) => item && String(item.id) === pollId);
+    if (!poll) throw new HttpsError('not-found', 'Enquete não encontrada.');
+    if (poll.status === 'active' && Number(poll.deadline) > now) throw new HttpsError('failed-precondition', 'A enquete ainda está aberta.');
+    const antes = _antesDoMotor(t);
+    poll.status = 'active'; poll.deadline = deadline; poll.resolved = false;
+    poll.resolvedOption = null; poll.resolvedAt = null;
+    t.activePollId = poll.id;
+    if (t.status === 'open' || !t.status) { t._pollSuspended = true; t.status = 'closed'; }
+    const recipients = Array.isArray(t.memberUids) ? Array.from(new Set(t.memberUids.map(String).filter(Boolean))) : [];
+    if (!Array.isArray(t.pollNotifications)) t.pollNotifications = [];
+    recipients.forEach((recipientUid) => t.pollNotifications.push({ targetUid:recipientUid, pollId:poll.id, timestamp:now, read:false }));
+    const b = _gravaTorneio(tx, ref, t, antes, { agoraIso });
+    tx.set(ref.collection('notificationOutbox').doc('poll-reopened-' + _outboxDocIdPart(poll.id) + '-' + deadline), {
+      schema:1, kind:'tournament-notification', type:'poll', title:'🗳️ Enquete reaberta',
+      message:'A enquete foi reaberta pelo organizador. Vote novamente! Novo prazo: ' + hours + ' horas.',
+      tournamentId:tId, tournamentName:t.name || '', level:'important', recipients,
+      ctaLabel:'📊 Responder enquete', ctaUrl:'https://scoreplace.app/#tournaments/' + tId,
+      createdAt:agoraIso, createdAtMs:now, dispatchStatus:'pending'
+    });
+    return { ok:true, changed:true, tournament:b.clean };
   });
 });
 

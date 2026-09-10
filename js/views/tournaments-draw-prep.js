@@ -707,6 +707,15 @@ window._applyDrawPollResult = function(tId, pollId) {
     });
 };
 
+window._reopenDrawPoll = function(tId, pollId, hours) {
+    if (typeof window._callCF !== 'function') return Promise.reject(new Error('Function indisponível'));
+    return window._callCF('reopenDrawPoll', { tournamentId:String(tId), pollId:String(pollId), hours:Number(hours) }, 'Entre na sua conta para reabrir a enquete.').then(function(res) {
+        var data = (res && res.data) || {};
+        if (data.tournament && typeof window._applyCFTournament === 'function') window._applyCFTournament(tId, data.tournament);
+        return data;
+    });
+};
+
 window._reopenDrawEnrollment = function(tId, reason) {
     if (typeof window._callCF !== 'function') return Promise.reject(new Error('Function indisponível'));
     return window._callCF('reopenDrawEnrollment', { tournamentId:String(tId), reason:reason }, 'Entre na sua conta para reabrir as inscrições.').then(function(res) {
@@ -3201,45 +3210,16 @@ window._restorePollSuspendedEnrollments = function(t) {
 window._reopenPoll = function(tId, pollId) {
     var t = window._findTournamentById(tId);
     if (!t || !t.polls) return;
-    var poll = null;
-    for (var i = 0; i < t.polls.length; i++) {
-        if (t.polls[i].id === pollId) { poll = t.polls[i]; break; }
-    }
-    if (!poll) return;
-
     if (typeof showInputDialog === 'function') {
         showInputDialog(_t('draw.reopenPollTitle'), _t('draw.reopenPollPrompt'), '48', function(val) {
-            var hours = parseInt(val) || 48;
-            if (hours < 1) hours = 1;
-            if (hours > 168) hours = 168;
-
-            if (!window.AppStore || typeof window.AppStore.mutate !== 'function') return;
-            var deadline = Date.now() + (hours * 3600000);
-            window.AppStore.mutate(tId, function(ft) {
-                var fresh = (ft.polls || []).filter(function(p) { return p && p.id === pollId; })[0];
-                if (!fresh) return false;
-                fresh.status = 'active'; fresh.deadline = deadline; fresh.resolved = false;
-                fresh.resolvedOption = null; fresh.resolvedAt = null; ft.activePollId = fresh.id;
-                if (ft.status === 'open' || !ft.status) { ft._pollSuspended = true; ft.status = 'closed'; }
-                return true;
-            }, 'Enquete reaberta pelo organizador: prazo de ' + hours + 'h');
-
-            // Notify participants about reopened poll
-            if (typeof window._notifyTournamentParticipants === 'function') {
-                window._notifyTournamentParticipants(t, {
-                    type: 'poll',
-                    level: 'important',
-                    title: '🗳️ Enquete reaberta: ' + window._safeHtml(t.name),
-                    message: 'A enquete foi reaberta pelo organizador. Vote novamente! Novo prazo: ' + hours + ' horas.',
-                    tournamentId: tId,
-                    pollId: poll.id
-                }, t.organizerEmail);
-            }
-
-            if (typeof showNotification === 'function') {
-                showNotification(_t('draw.pollReopened'), _t('draw.pollReopenedMsg', {hours: hours}), 'success');
-            }
-            window.location.hash = '#tournaments/' + tId;
+            var hours = Math.max(1, Math.min(168, parseInt(val) || 48));
+            window._reopenDrawPoll(tId, pollId, hours).then(function() {
+                if (typeof showNotification === 'function') showNotification(_t('draw.pollReopened'), _t('draw.pollReopenedMsg', {hours: hours}), 'success');
+                window.location.hash = '#tournaments/' + tId;
+            }).catch(function(err) {
+                if (window._warn) window._warn('[reopenDrawPoll] reabertura falhou', err);
+                if (typeof showNotification === 'function') showNotification('Não foi possível reabrir', 'Nada foi alterado. Atualize e tente novamente.', 'error');
+            });
         });
     }
 };
