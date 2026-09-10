@@ -2553,6 +2553,52 @@ exports.setDrawPreparationSuspension = onCall(async (request) => {
   });
 });
 
+// ─── Reabertura e dissolução de elenco na preparação: server-side ────────────
+exports.reopenDrawEnrollment = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid;
+  const data = request.data || {}, tId = String(data.tournamentId || '').trim();
+  const reason = String(data.reason || '').trim();
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId || !['incomplete', 'odd'].includes(reason)) throw new HttpsError('invalid-argument', 'Motivo de reabertura inválido.');
+  const ref = db.collection('tournaments').doc(tId), agoraIso = new Date().toISOString();
+  return db.runTransaction(async (tx) => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização reabre as inscrições.', { tId, uid });
+    if (hasDrawnBracket && hasDrawnBracket(t)) throw _drawFail('failed-precondition', 'A chave já foi sorteada; reabra pela ferramenta do torneio.', { tId, uid });
+    if (t.pendingDraw) throw _drawFail('failed-precondition', 'Há um sorteio em revisão; conclua-o antes de reabrir.', { tId, uid });
+    const antes = _antesDoMotor(t);
+    t.status = 'open';
+    if (reason === 'incomplete') t.enrollmentStatus = 'open';
+    delete t._suspendedByPanel;
+    delete t._previousStatus;
+    const b = _gravaTorneio(tx, ref, t, antes, { agoraIso });
+    return { ok:true, changed:true, tournament:b.clean };
+  });
+});
+
+exports.dissolveIncompleteTeams = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid;
+  const tId = String((request.data && request.data.tournamentId) || '').trim();
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId) throw new HttpsError('invalid-argument', 'Torneio obrigatório.');
+  if (!drawWindow || typeof drawWindow._dissolveIncompleteTeams !== 'function') throw new HttpsError('failed-precondition', 'Motor de equipes indisponível.');
+  const ref = db.collection('tournaments').doc(tId), agoraIso = new Date().toISOString();
+  return db.runTransaction(async (tx) => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização dissolve times incompletos.', { tId, uid });
+    if (hasDrawnBracket && hasDrawnBracket(t)) throw _drawFail('failed-precondition', 'A chave já foi sorteada; os times não podem mais ser dissolvidos.', { tId, uid });
+    if (t.pendingDraw) throw _drawFail('failed-precondition', 'Há um sorteio em revisão; conclua-o antes de dissolver os times.', { tId, uid });
+    const outcome = drawWindow._dissolveIncompleteTeams(t);
+    if (!outcome || !outcome.dissolved) return { ok:true, changed:false, dissolved:0, tournament:t };
+    const antes = _antesDoMotor(t);
+    t.participants = outcome.participants;
+    const b = _gravaTorneio(tx, ref, t, antes, { agoraIso });
+    return { ok:true, changed:true, dissolved:outcome.dissolved, tournament:b.clean };
+  });
+});
+
 // ─── Decisões entre fases: somente a Function altera elenco e promoção ───────
 // O painel mostra os inativos/W.O. e a possível linha extra, mas não pode aplicar
 // essas escolhas sobre um snapshot que talvez já esteja atrasado.

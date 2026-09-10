@@ -669,6 +669,15 @@ window._setDrawPreparationSuspension = function(tId, action) {
     });
 };
 
+window._reopenDrawEnrollment = function(tId, reason) {
+    if (typeof window._callCF !== 'function') return Promise.reject(new Error('Function indisponível'));
+    return window._callCF('reopenDrawEnrollment', { tournamentId:String(tId), reason:reason }, 'Entre na sua conta para reabrir as inscrições.').then(function(res) {
+        var data = (res && res.data) || {};
+        if (data.tournament && typeof window._applyCFTournament === 'function') window._applyCFTournament(tId, data.tournament);
+        return data;
+    });
+};
+
 // Cancelar o painel de resto = cancel canônico (reset total + detalhe limpo).
 window._cancelRemainderPanel = function(tId) { window._cancelDrawResolution(tId); };
 
@@ -2160,17 +2169,14 @@ window._handleIncompleteOption = function (tId, option) {
     if (!t) return;
 
     if (option === 'reopen') {
-        if (!window.AppStore || typeof window.AppStore.mutate !== 'function') {
-            showNotification('Atualize o aplicativo', 'Não foi possível reabrir as inscrições com segurança.', 'error');
-            return;
-        }
-        window.AppStore.mutate(tId, function(ft) {
-            ft.status = 'open'; ft.enrollmentStatus = 'open'; return true;
-        }, 'Inscrições reabertas para completar times');
-        var el = document.getElementById('incomplete-teams-panel');
-        if (el) el.remove();
-        if (typeof showNotification === 'function') showNotification(_t('draw.enrollReopenedTeams'), _t('draw.enrollReopenedTeamsMsg'), 'success');
-        window.location.hash = '#tournaments/' + tId;
+        window._reopenDrawEnrollment(tId, 'incomplete').then(function() {
+            var el = document.getElementById('incomplete-teams-panel');
+            if (el) el.remove();
+            if (typeof showNotification === 'function') showNotification(_t('draw.enrollReopenedTeams'), _t('draw.enrollReopenedTeamsMsg'), 'success');
+            window.location.hash = '#tournaments/' + tId;
+        }).catch(function(err) {
+            if (typeof showNotification !== 'undefined') showNotification('Não foi possível reabrir as inscrições', (err && err.message) || 'Tente novamente.', 'error');
+        });
     } else if (option === 'lottery') {
         window.showLotteryIncompletePanel(tId);
     } else if (option === 'standby') {
@@ -2337,37 +2343,24 @@ window._saveDissolveResolution = function (tId) {
     var t = window._findTournamentById(tId);
     if (!t) { showNotification(window._t ? window._t('auth.error') : 'Erro', 'Torneio não encontrado.', 'error'); return; }
 
-    var outcome = window._dissolveIncompleteTeams(t);
-    var newParts = outcome.participants, dissolved = outcome.dissolved;
-
     var _closePanels = function () {
         var d = document.getElementById('dissolve-panel'); if (d) d.remove();
         var i = document.getElementById('incomplete-teams-panel'); if (i) i.remove();
     };
 
-    if (dissolved === 0) {
-        showNotification('Nada a dissolver', 'Não há times incompletos para desfazer.', 'info');
+    if (typeof window._callCF !== 'function') return;
+    window._callCF('dissolveIncompleteTeams', { tournamentId:String(tId) }, 'Entre na sua conta para dissolver os times.').then(function(res) {
+        var data = (res && res.data) || {}, dissolved = Number(data.dissolved || 0);
+        if (data.tournament && typeof window._applyCFTournament === 'function') window._applyCFTournament(tId, data.tournament);
+        if (dissolved === 0) showNotification('Nada a dissolver', 'Não há times incompletos para desfazer.', 'info');
+        else showNotification('Times dissolvidos', dissolved + ' time(s) incompleto(s) viraram jogadores individuais. Eles voltam ao sorteio.', 'success');
         _closePanels();
+        // Re-diagnostica com o recibo do servidor (remainder/potência-de-2 recomputados).
         if (typeof window.showUnifiedResolutionPanel === 'function') window.showUnifiedResolutionPanel(tId);
-        return;
-    }
-
-    if (!window.AppStore || typeof window.AppStore.mutate !== 'function') {
-        showNotification('Atualize o aplicativo', 'Não foi possível dissolver os times com segurança.', 'error');
-        return;
-    }
-    window.AppStore.mutate(tId, function(ft) {
-        var fresh = window._dissolveIncompleteTeams(ft);
-        if (!fresh.dissolved) return false;
-        ft.participants = fresh.participants;
-        return true;
-    }, dissolved + ' time(s) incompleto(s) dissolvido(s) em jogadores individuais');
-
-    showNotification('Times dissolvidos', dissolved + ' time(s) incompleto(s) viraram jogadores individuais. Eles voltam ao sorteio.', 'success');
-    _closePanels();
-    // Re-diagnostica com a base já dissolvida (remainder/potência-de-2 recomputados).
-    if (typeof window.showUnifiedResolutionPanel === 'function') window.showUnifiedResolutionPanel(tId);
-    else if (typeof window.showPowerOf2Panel === 'function') window.showPowerOf2Panel(tId);
+        else if (typeof window.showPowerOf2Panel === 'function') window.showPowerOf2Panel(tId);
+    }).catch(function(err) {
+        if (typeof showNotification !== 'undefined') showNotification('Não foi possível dissolver os times', (err && err.message) || 'Tente novamente.', 'error');
+    });
 };
 
 // ─── VERIFICAÇÃO 2: NÚMERO ÍMPAR DE TIMES/INSCRITOS ───
@@ -2401,17 +2394,15 @@ window._handleOddOption = function (tId, option) {
     var isTeam = oddInfo.teamSize > 1;
 
     if (option === 'reopen') {
-        if (!window.AppStore || typeof window.AppStore.mutate !== 'function') {
-            showNotification('Atualize o aplicativo', 'Não foi possível reabrir as inscrições com segurança.', 'error');
-            return;
-        }
-        window.AppStore.mutate(tId, function(ft) { ft.status = 'open'; return true; },
-            'Inscrições reabertas para resolver número ímpar');
-        var el = document.getElementById('odd-entries-panel');
-        if (el) el.remove();
-        showNotification(_t('draw.enrollReopenedParity'), _t('draw.enrollReopenedParityMsg'), 'info');
-        var container = document.getElementById('view-container');
-        if (container) renderTournaments(container, tId);
+        window._reopenDrawEnrollment(tId, 'odd').then(function() {
+            var el = document.getElementById('odd-entries-panel');
+            if (el) el.remove();
+            showNotification(_t('draw.enrollReopenedParity'), _t('draw.enrollReopenedParityMsg'), 'info');
+            var container = document.getElementById('view-container');
+            if (container) renderTournaments(container, tId);
+        }).catch(function(err) {
+            if (typeof showNotification !== 'undefined') showNotification('Não foi possível reabrir as inscrições', (err && err.message) || 'Tente novamente.', 'error');
+        });
     } else if (option === 'bye_odd') {
         // Núcleo puro em draw-decisions.js (o pacote leva a escolha pra CF aplicar).
         // v1.3.x (migração→CF): a decisão VIAJA no pacote (`odd`) e a CF aplica sobre o roster
