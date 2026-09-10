@@ -228,30 +228,14 @@ function _pintarInscritosEmFatias(gridId, itens, montaCard, jaNaTela, aoCompleta
 // 4. Atualizar match + partsArr + waitlists + checkedIn + woHistory
 // 5. Sync no fim se houve qualquer mutação
 // ─────────────────────────────────────────────────────────────────────────────
-// Wrapper (fetch por tId + save) — pros callers que só têm o id e persistem
-// direto (ex.: auto-sub do _toggleCheckIn). O núcleo PURO (_applyWoSubsToTournament)
-// opera sobre o `t` passado, SEM fetch e SEM save, então é transaction-safe e
-// reusável dentro de commitTournamentTx/AppStore.mutate (Fase B da blindagem).
+// O antigo wrapper de cliente foi preservado apenas como compatibilidade sem escrita.
+// O núcleo puro `_applyWoSubsToTournament` pertence ao servidor, que o executa na
+// transação da intenção de presença ou de W.O..
 window._processWoSubstitutions = function(tId) {
-  const t = window._findTournamentById(tId);
-  if (!t) return { ok: false, reason: 'no-tournament' };
-  if (!window.AppStore || typeof window.AppStore.mutate !== 'function') {
-    if (typeof window._error === 'function') window._error('processWoSubstitutions: AppStore.mutate indisponível');
-    return { ok: false, reason: 'safe-mutation-unavailable' };
-  }
-  const r = window._applyWoSubsToTournament(t);
-  if (r && r.subCount > 0) {
-    // BLINDAGEM (project_concurrency_safe_saves): re-aplica as substituições no doc
-    // FRESCO via portão (o núcleo é idempotente — absent já substituído = no-op), em
-    // vez de syncImmediate (doc inteiro → lost-update com check-in/resultado concorrente).
-    window.AppStore.mutate(tId, function (ft) {
-      const freshResult = window._applyWoSubsToTournament(ft);
-      // A aplicação otimista já consumiu a vaga; se outra sessão também a consumiu,
-      // não há escrita para fazer no documento fresco.
-      if (!freshResult || freshResult.subCount <= 0) return false;
-    });
-  }
-  return r;
+  // Compatibilidade sem escrita: a substituição de W.O. é aplicada pela Function
+  // que recebe a intenção de presença/ausência. Não existe mais um varredor que
+  // modifica a fotografia local e depois tenta salvá-la.
+  return { ok: false, reason: 'server-owned', tournamentId: String(tId || '') };
 };
 
 // ── O MOTOR DE W.O. MUDOU DE ARQUIVO (v1.8.0) ────────────────────────────────
@@ -598,281 +582,57 @@ window._rollCallBarHtml = function (tId, mode) {
 };
 
 window._applyCheckInToggle = function (tId, playerName, uid) {
-  const t = window._findTournamentById(tId);
+  var t = window._findTournamentById(tId);
   if (!t) return;
-  if (!t.checkedIn) t.checkedIn = {};
-  if (!t.absent) t.absent = {};
-  // uid only: chaveia a presença pelo uid quando o render o forneceu (homônimo não colide);
-  // guest sem conta cai no nome. Ver _toggleCheckIn.
-  const _who = uid ? { uid: uid, displayName: playerName } : playerName;
-  const wasCheckedIn = window._idMapHas(t, t.checkedIn, _who);
-
-  // Guard v2.2.8: jogadores na lista de espera por ausência devem ser reativados
-  // via botão "Reverter" — toggle fica desabilitado na UI, isso é um safety net.
-  if (!wasCheckedIn && window._idMapHas(t, t.absent, _who)) {
-    const _pnFor = p => (typeof p === 'string' ? p : (p && (p.displayName || p.name || p.email || '')));
-    const _inStandby = (Array.isArray(t.standbyParticipants) &&
-      t.standbyParticipants.some(p => _pnFor(p) === playerName)) ||
-      (Array.isArray(t.waitlist) &&
-      t.waitlist.some(p => _pnFor(p) === playerName));
-    if (_inStandby) {
-      if (typeof showNotification === 'function') {
-        showNotification('ℹ️', 'Use o botão "Reverter" para reativar este jogador da lista de espera.', 'info');
-      }
+  // A tela lê apenas para traduzir o clique em intenção absoluta. Nenhum mapa de
+  // presença, ausência ou chave é alterado aqui: a Function relê e decide tudo.
+  var who = uid ? { uid: uid, displayName: playerName } : playerName;
+  var wasCheckedIn = window._idMapHas(t, t.checkedIn || {}, who);
+  var wantPresent = !wasCheckedIn;
+  if (wantPresent && window._idMapHas(t, t.absent || {}, who)) {
+    var inStandby = (Array.isArray(t.standbyParticipants) && t.standbyParticipants.some(function (p) {
+      return (window._pName ? window._pName(p, '') : String((p && (p.displayName || p.name)) || '')) === playerName;
+    })) || (Array.isArray(t.waitlist) && t.waitlist.some(function (p) {
+      return (window._pName ? window._pName(p, '') : String((p && (p.displayName || p.name)) || '')) === playerName;
+    }));
+    if (inStandby) {
+      if (typeof showNotification === 'function') showNotification('ℹ️', 'Use o botão "Reverter" para reativar este jogador da lista de espera.', 'info');
       return;
     }
   }
 
-  // v4.0.117: toggle de presença + auto-sub de W.O. ATÔMICOS pelo portão
-  // AppStore.mutate (Fase B da blindagem). Antes eram DOIS saves crus (toggle
-  // saveTournament + _processWoSubstitutions syncImmediate) → dois pontos de
-  // lost-update. Agora ambos rodam no MESMO doc fresco da transação, usando o
-  // núcleo PURO _applyWoSubsToTournament (sem save próprio). `_was` recomputado
-  // do doc fresco decide o toggle; o toast da sub vem da execução LOCAL.
-  // ⚠️ MUTATOR IDEMPOTENTE (v1.3.152) — CAUSA-RAIZ do "presença pulando e desmarcando sozinha".
-  // O mutator era um TOGGLE que lia o estado do doc FRESCO e INVERTIA. Mas ele roda MAIS DE UMA VEZ:
-  //   (a) AppStore.mutate aplica no objeto LOCAL e de novo no doc fresco da transação;
-  //   (b) commitTournamentTx faz RETRY (até 5×) em conflito transiente, re-executando o mutator;
-  //   (c) o próprio Firestore re-executa a função da transação em contenção.
-  // Cada re-execução INVERTIA de novo → nº PAR de aplicações = volta a DESMARCADO. Marcando 16-24
-  // pessoas em rajada a contenção sobe, os retries acontecem e presenças caem sozinhas.
-  // Agora o ALVO é decidido UMA vez (estado no clique) e o mutator SETA esse alvo absoluto —
-  // aplicar N vezes dá exatamente o mesmo resultado. Ver [[project_concurrency_safe_saves]].
-  var _wantPresent = !wasCheckedIn;
-  var _presTs = Date.now();
-  let _subResult;
-  // ── CAMINHO RÁPIDO: escrita POR CAMPO (v1.3.157) ─────────────────────────────────────────
-  // MEDIDO no Firestore real: doc-inteiro em rajada PERDE marcações (23/25); por campo é 25/25,
-  // mesmo com a CF gravando junto. Marcar presença não precisa reescrever o torneio inteiro.
-  // Só cai na transação (doc inteiro) quando há AUSENTES — aí a substituição de W.O.
-  // (_applyWoSubsToTournament) precisa mexer na chave. Ver [[project_concurrency_safe_saves]].
-  var _kPres = (typeof window._idMapKey === 'function') ? window._idMapKey(t, _who) : null;
-  var _presKey = _kPres ? (_kPres.uid || _kPres.name) : null;
-  var _temAusentes = !!(t.absent && Object.keys(t.absent).length);
-  // Com ausentes, presença pode preencher uma vaga e alterar a chave. A tela não
-  // aplica mais esse motor: envia a intenção absoluta à Function, que relê o
-  // torneio e grava presença + substituições na mesma transação.
-  if (_temAusentes && window.FirestoreDB && typeof window.FirestoreDB._callFn === 'function') {
-    var _woPresenceDone = window.FirestoreDB._callFn('setTournamentPresenceWithWOSubstitution', {
-      tournamentId: String(tId),
-      targetUid: String(uid || ''),
-      targetName: String(playerName || ''),
-      action: _wantPresent ? 'present' : 'clear'
+  var hasAbsences = !!(t.absent && Object.keys(t.absent).length);
+  var save;
+  if (hasAbsences && window.FirestoreDB && typeof window.FirestoreDB._callFn === 'function') {
+    save = window.FirestoreDB._callFn('setTournamentPresenceWithWOSubstitution', {
+      tournamentId: String(tId), targetUid: String(uid || ''), targetName: String(playerName || ''),
+      action: wantPresent ? 'present' : 'clear'
     });
-    window._presenceBusyUntil(uid || playerName, _woPresenceDone);
-    _woPresenceDone.then(function (out) {
-      var r = out && out.result;
-      var subs = r && r.substitutions;
-      if (subs && subs.ok && Array.isArray(subs.subDetails)) {
-        subs.subDetails.forEach(function (d) {
-          if (typeof showNotification === 'function') showNotification('✅ Substituição W.O.',
-            String(d.sub || '') + ' substituiu ' + String(d.absent || '') + ' — Jogo ' + String(d.matchNum || ''), 'success');
-        });
-      }
-      _reRenderParticipantsStable();
-    }).catch(function (e) {
-      if (window._error) window._error('[presença com W.O.] falhou', e);
-      if (typeof showNotification === 'function') showNotification('⚠️ Presença não salva', (e && e.message) || 'Tente de novo.', 'warning');
-      _reRenderParticipantsStable();
-    });
-    return;
-  }
-  var _fieldDone = null;
-  var _viaCampo = !!(_presKey && !_temAusentes &&
-    window.FirestoreDB && typeof window.FirestoreDB.setTournamentPresence === 'function');
-  if (_viaCampo) {
-    // estado local otimista (idêntico ao do mutator), depois UM update de campo
-    if (!t.checkedIn) t.checkedIn = {};
-    if (!t.absent) t.absent = {};
-    if (!t.checkedInConfirmed) t.checkedInConfirmed = {};
-    if (_wantPresent) {
-      window._idMapSet(t, t.checkedIn, _who, _presTs);
-      window._idMapDel(t, t.absent, _who);
-      window._idMapDel(t, t.checkedInConfirmed, _who);
-    } else {
-      window._idMapDel(t, t.checkedIn, _who);
-    }
-    // chave-nome legada (quando há uid) some junto — mesma migração do _idMapSet
-    var _legacyPresenceKey = (_kPres && _kPres.uid && _kPres.name && _kPres.name !== _kPres.uid) ? _kPres.name : '';
-    _fieldDone = window.FirestoreDB.setTournamentPresence(tId, _presKey,
-      _wantPresent ? 'present' : 'clear', _legacyPresenceKey)
-      .catch(function (e) {
-        if (window._error) window._error('[presença por campo] falhou', e);
-        if (typeof showNotification === 'function') showNotification('⚠️ Presença não salva', (e && e.message) || 'Tente de novo.', 'warning');
-      });
-    if (window._dtrace) window._dtrace('presField', { quem: String(_presKey).slice(0, 10), alvo: _wantPresent ? 'presente' : 'fora', total: Object.keys(t.checkedIn || {}).length });
-  }
-  // ── INSTRUMENTAÇÃO (v1.3.155, diagnóstico do "presença pulando") ─────────────────────────
-  // Conta QUANTAS VEZES o mutator roda para ESTE clique (local + doc fresco + retries) e mostra a
-  // contagem de presentes ANTES/DEPOIS de cada execução. É a medição que faltava: em vez de
-  // deduzir, vemos a trajetória real (write parcial? re-execução? doc que volta zerado?).
-  var _runN = 0;
-  var _mutateDone = _viaCampo ? _fieldDone : window.AppStore.mutate(tId, function (ft) {
-    _runN++;
-    var _mb = Object.keys(ft.checkedIn || {}).length;
-    if (!ft.checkedIn) ft.checkedIn = {};
-    if (!ft.absent) ft.absent = {};
-    if (!ft.checkedInConfirmed) ft.checkedInConfirmed = {};
-    if (!_wantPresent) {
-      window._idMapDel(ft, ft.checkedIn, _who);
-    } else {
-      window._idMapSet(ft, ft.checkedIn, _who, _presTs);
-      window._idMapDel(ft, ft.absent, _who);
-      // v1.3.19: marcar PRESENTE (verde) tira o "Confirmado" (azul) — o organizador confirma
-      // que a pessoa está no local, então o aviso remoto some.
-      window._idMapDel(ft, ft.checkedInConfirmed, _who);
-      const r = window._applyWoSubsToTournament(ft); // núcleo puro, sem save
-      if (_subResult === undefined) _subResult = r;
-    }
-    if (window._dtrace) {
-      window._dtrace('presMut', { run: _runN, quem: String(uid || playerName).slice(0, 10),
-        alvo: _wantPresent ? 'presente' : 'fora', antes: _mb, depois: Object.keys(ft.checkedIn || {}).length });
-    }
-  });
-  // contagem LOCAL logo após o clique (antes de qualquer snapshot) — âncora da comparação
-  try {
-    if (window._dtrace) {
-      var _tLoc = window._findTournamentById(tId);
-      window._dtrace('presLocal', { presentes: _tLoc ? Object.keys(_tLoc.checkedIn || {}).length : -1, runs: _runN });
-    }
-  } catch (_eTr) {}
-  // feedback "salvando presença" no card até o write confirmar (como formar dupla).
-  window._presenceBusyUntil(uid || playerName, _mutateDone);
-  var _woSub = !!(_subResult && _subResult.ok && _subResult.subCount > 0);
-  if (_woSub) {
-    _subResult.subDetails.forEach(d => {
-      if (typeof showNotification === 'function') {
-        showNotification('✅ Substituição W.O.',
-          `${d.sub} substituiu ${d.absent} — Jogo ${d.matchNum}`,
-          'success');
-      }
-    });
-  }
-  // v1.3.82: registra a INTENÇÃO otimista (present/absent/none) deste jogador pra ela SOBREVIVER
-  // a snapshots stale do Firestore (o listener troca o objeto inteiro) até o write confirmar —
-  // fim do "clica, aparece, apaga". Por-jogador, não reverte presença de outro organizador.
-  try {
-    if (typeof window._stampPresenceIntent === 'function') {
-      var _fp = window._idMapHas(t, t.checkedIn || {}, _who);
-      var _fa = window._idMapHas(t, t.absent || {}, _who);
-      window._stampPresenceIntent(tId, _who, _fp ? 'present' : (_fa ? 'absent' : 'none'));
-    }
-  } catch (_eStamp) {}
-  // v1.3.46: card ESTÁTICO — atualiza só o card tocado no lugar (sem re-render da lista) e
-  // suprime o eco do onSnapshot (o próprio write), que re-renderizava e fazia os cards "pular e
-  // voltar" (dono: "o certo é ficarem estáticos"). Se houve substituição de W.O. (muda a chave)
-  // ou o in-place não deu, cai no re-render completo (correto).
-  // v1.3.83/84: tenta atualizar SÓ o card tocado no lugar, em QUALQUER um dos 3 renderers de card
-  // de presença — inscrito (grade), painel pós-sorteio (per-person), e DUPLA (chamada pré-sorteio,
-  // o caso do SB Casais). Só cai no re-render completo se nenhum aplicar. Um caminho robusto.
-  var _inPlace = !_woSub && (
-    window._updateCardPresenceInPlace(tId, uid, playerName) ||
-    (typeof window._updatePanelCardInPlace === 'function' && window._updatePanelCardInPlace(tId, uid, playerName)) ||
-    (typeof window._updateDuplaCardInPlace === 'function' && window._updateDuplaCardInPlace(tId, uid, playerName))
-  );
-  if (_inPlace) {
-    // atualiza a BARRA de chamada (Presentes/Ausentes/%) — recomputa por UID a partir do `t`
-    // fresco, sem re-render da lista. Sem isto o card fica estático mas o contador não mexia.
-    try {
-      var _bar = document.getElementById('rollcall-bar');
-      if (_bar) {
-        var _mode = _bar.getAttribute('data-rc-mode') || 'rollcall';
-        if (_mode === 'detail' && typeof window._detailCheckInBarHtml === 'function') {
-          _bar.outerHTML = window._detailCheckInBarHtml(tId);           // barra do detalhe
-        } else if (typeof window._rollCallBarHtml === 'function') {
-          _bar.outerHTML = window._rollCallBarHtml(tId, _mode);         // barra do #participants
-        }
-      }
-    } catch (_eBar) {}
-    // v1.5.15: a faixa "N equipes para novo confronto" (e a etiqueta "aguardando mais 1") também
-    // depende de QUEM está presente — sem isto ela ficava com o número do render anterior enquanto
-    // o toast já dizia "Falta 1". Mesmo tratamento da barra: recomputa e troca só ela.
-    try { if (typeof window._syncLateGrowthBanner === 'function') window._syncLateGrowthBanner(tId); } catch (_eGap) {}
-    window._suppressSoftRefresh = true;
-    clearTimeout(window._presenceRefreshRelease);
-    window._presenceRefreshRelease = setTimeout(function () { window._suppressSoftRefresh = false; }, 1600);
-    // v1.3.92: o card já foi atualizado in-place → adianta a assinatura da tela pro estado ATUAL, pra
-    // o ECO tardio do snapshot (depois do suppress) ver "igual" e NÃO re-renderizar a lista (o pulinho
-    // que sobrava). O gate de _softRefreshView compara com _pdetailSig; setando aqui, ele pula.
-    // v1.3.96: adianta TAMBÉM _tdetailSig — a chamada de DUPLAS (_duplaCard) vive na view de DETALHE
-    // (#tournaments/:id), cujo gate é _tournamentDetailSig. Sem isto, o toggle de dupla atualizava o
-    // card in-place mas o eco re-renderizava o detalhe inteiro (o pulo que o dono via "ao colocar
-    // presenças"). Adiantando ambas as assinaturas, o eco vê "igual" em qualquer uma das duas views.
-    try { if (window._participantsViewSig) window._pdetailSig = window._participantsViewSig(t); } catch (_eSig) {}
-    try { if (window._tournamentDetailSig) window._tdetailSig = window._tournamentDetailSig(t); } catch (_eSig2) {}
   } else {
-    // in-place não se aplica (ex.: painel de check-in pós-sorteio) → re-render ESTÁVEL:
-    // preserva scroll + suprime o eco do onSnapshot (mesmo robustez do card estático).
-    _reRenderParticipantsStable();
-  }
-  // v1.3.95 (dono, SB Casais): marcar PRESENTE uma dupla/solo da LISTA DE ESPERA precisa disparar a
-  // INTEGRAÇÃO TARDIA (CF integrateLateEntries) — que preenche o "a definir" existente ou cria o
-  // confronto. Antes SÓ o RENDER do bracket (bracket.js:232) disparava; mas o toggle virou in-place
-  // (fix do pulinho) e SUPRIME o re-render → a dupla presente atualizava o card mas NUNCA entrava na
-  // chave. Aqui disparamos explicitamente, MAS só DEPOIS do commit (a CF lê o doc FRESCO do Firestore
-  // — disparar antes faria a CF ver a dupla ainda ausente → nada a integrar). A CF faz TODO o
-  // trabalho — cliente só dispara. Ver [[feedback_draw_is_cf_only]] / [[project_late_dupla_fills_awaiting_slot]].
-  //
-  // v1.3.96 (dono, "tela continua pulando ao colocar presenças"): o disparo agora é CIRÚRGICO —
-  // SÓ quando a pessoa que acabou de ser marcada PERTENCE À LISTA DE ESPERA. Antes disparava em
-  // TODO toggle (com espera+bracket), inclusive marcando presença de quem JÁ está na chave (a
-  // chamada de rota normal): cada presença virava uma chamada de CF + eco → contribuía pro pulo.
-  // A integração tardia só faz sentido pra quem está na espera; pra esses, o re-render que MOVE a
-  // dupla pra chave é legítimo (e raro: só na 2ª marca, quando o par fica completo).
-  try {
-    var _canMng = !window._canManagePresence || window._canManagePresence(t, window.AppStore && window.AppStore.currentUser);
-    var _hasBracket = (Array.isArray(t.matches) && t.matches.length) ||
-                      (Array.isArray(t.rounds) && t.rounds.length) ||
-                      (Array.isArray(t.groups) && t.groups.length);
-    // a pessoa marcada está na ESPERA? (por uid de membro OU por nome) — só então integra.
-    var _wl = (typeof window._getWaitlist === 'function') ? window._getWaitlist(t)
-      : (t.standbyParticipants || []).concat(t.waitlist || []);
-    var _toggledInWaitlist = Array.isArray(_wl) && _wl.some(function (e) {
-      var _us = (typeof window._participantUids === 'function') ? window._participantUids(e) : [];
-      if (uid && _us && _us.indexOf(uid) !== -1) return true;
-      var _en = window._pName ? window._pName(e, '') : (e && (e.displayName || e.name)) || '';
-      // nome do membro (par "A / B") OU nome inteiro da entrada
-      if (playerName && _en) {
-        if (_en === playerName) return true;
-        if (_en.indexOf(' / ') !== -1 && _en.split(' / ').some(function (x) { return x.trim() === playerName; })) return true;
-      }
-      return false;
-    });
-    // v1.5.2 (dono, torneio AO VIVO 25/jul): a espera NÃO é a única origem de quem está FORA da
-    // chave. Quem foi marcado AUSENTE antes do sorteio pode ter ficado em `t.participants` (fora da
-    // chave) — marcar presença nele tem de gerar jogo igual. O gate agora é o que realmente importa:
-    // a pessoa ficou PRESENTE e NÃO está na chave. Continua cirúrgico (quem já está na chave não
-    // dispara nada). Ver [[project_late_dupla_fills_awaiting_slot]].
-    var _toggledOutOfBracket = false;
-    try {
-      if (!_toggledInWaitlist && _wantPresent && typeof window._entryInBracket === 'function') {
-        var _bset = window._bracketUidKeySet ? window._bracketUidKeySet(t) : null;
-        _toggledOutOfBracket = (Array.isArray(t.participants) ? t.participants : []).some(function (p) {
-          var _us = (typeof window._participantUids === 'function') ? window._participantUids(p) : [];
-          var _mine = (uid && _us && _us.indexOf(uid) !== -1);
-          if (!_mine && playerName) {
-            var _pn = window._pName ? window._pName(p, '') : '';
-            _mine = (_pn === playerName) ||
-              (_pn.indexOf(' / ') !== -1 && _pn.split(' / ').some(function (x) { return x.trim() === playerName; }));
-          }
-          return _mine && !window._entryInBracket(t, p, _bset);
-        });
-      }
-    } catch (_eOob) {}
-    if (_canMng && _hasBracket && (_toggledInWaitlist || _toggledOutOfBracket) && typeof window._triggerLateIntegration === 'function') {
-      var _fireLate = function () {
-        try {
-          var _ft = window._findTournamentById(tId) || t;
-          // DEBOUNCE (v1.3.149): marcar presença em rajada (chamada de 20+ pessoas) coalesce numa
-          // ÚNICA chamada de CF. Antes era 1 por toggle → enxurrada de docs + re-render = "presença
-          // pulando/regredindo, instabilidade total".
-          window._triggerLateIntegration(_ft, { force: true, debounce: true });
-        } catch (_eFire) {}
-      };
-      if (_mutateDone && typeof _mutateDone.then === 'function') _mutateDone.then(_fireLate, _fireLate);
-      else _fireLate();
+    var key = typeof window._idMapKey === 'function' ? window._idMapKey(t, who) : null;
+    var targetKey = key ? (key.uid || key.name) : '';
+    var legacyKey = key && key.uid && key.name && key.name !== key.uid ? key.name : '';
+    if (!targetKey || !window.FirestoreDB || typeof window.FirestoreDB.setTournamentPresence !== 'function') {
+      if (typeof showNotification === 'function') showNotification('⚠️ Presença não salva', 'A conexão com o servidor não está disponível.', 'warning');
+      return;
     }
-  } catch (_eLate) {}
+    save = window.FirestoreDB.setTournamentPresence(tId, targetKey, wantPresent ? 'present' : 'clear', legacyKey);
+  }
+
+  window._presenceBusyUntil(uid || playerName, save);
+  Promise.resolve(save).then(function () {
+    // Sem escrita otimista: o listener refletirá o recibo canônico do servidor.
+    _reRenderParticipantsStable();
+    // A integração tardia também só parte depois do commit da presença; a CF
+    // correspondente relê o torneio e é idempotente.
+    if (wantPresent && typeof window._triggerLateIntegration === 'function') {
+      try { window._triggerLateIntegration(window._findTournamentById(tId) || t, { force: true, debounce: true }); } catch (_lateError) {}
+    }
+  }).catch(function (e) {
+    if (window._error) window._error('[presença] falhou', e);
+    if (typeof showNotification === 'function') showNotification('⚠️ Presença não salva', (e && e.message) || 'Tente de novo.', 'warning');
+    _reRenderParticipantsStable();
+  });
 };
 
 // uid = IDENTIDADE (3º arg, igual _toggleCheckIn). Sem ele, os mapas caíam em _memberUidByName,

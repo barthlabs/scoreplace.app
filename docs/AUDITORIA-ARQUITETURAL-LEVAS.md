@@ -3036,6 +3036,14 @@ nos dois controles, payload mínimo, autorização e transação. O censo caiu d
 mutadores de navegador desde a publicação 2.2.47; os caminhos de presença legados continuam
 inventariados até migração completa, sem receber exceção de segurança.
 
+**L7.P1.30 — presença sem fotografia otimista (10/set/2026; em validação local).** O
+check-in comum não reescreve nem antecipa mapas em memória e não conserva fallback por
+`AppStore.mutate`: a tela traduz o clique em ação absoluta e aguarda a Function tipada. Quando
+há W.O., a mesma intenção usa a transação `setTournamentPresenceWithWOSubstitution`; o antigo
+varredor local virou compatibilidade sem escrita. Os gates agora exigem payload por UID, zero
+mutação local e nenhum caminho de substituição que possa sobrescrever resultado. O censo cai de
+**74 para 70** writers iniciados pelo navegador.
+
 ## L8 — matriz de leitura e projeção (08/set/2026)
 
 `matches` permanece a fonte canônica. `results/{matchId}` é uma projeção server-written para

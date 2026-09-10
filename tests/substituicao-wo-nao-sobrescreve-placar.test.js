@@ -19,7 +19,7 @@ function apply(t) {
 const sandbox = {
   window: null,
   _findTournamentById: () => local,
-  _applyWoSubsToTournament: apply,
+  _applyWoSubsToTournament: () => { throw new Error('motor local não deve rodar'); },
   AppStore: { mutate(id, fn) { mutations++; fn(local); return fn(fresh); } }
 };
 sandbox.window = sandbox;
@@ -28,16 +28,16 @@ vm.runInContext(src.slice(begin, end), sandbox, { filename: 'participants.js:wo-
 const result = sandbox._processWoSubstitutions('T1');
 let fail = 0;
 function ok(value, label) { if (value) console.log('✓ ' + label); else { fail++; console.error('✗ ' + label); } }
-ok(result.subCount === 1 && mutations === 1, 'a substituição abre uma única mutação fresca');
-ok(fresh.substitutaAplicada === true, 'a substituição é reaplicada ao documento fresco');
+ok(result.reason === 'server-owned' && mutations === 0, 'o wrapper legado não abre mutação local');
+ok(fresh.substitutaAplicada !== true, 'o cliente não reaplica substituição na cópia fresca');
 ok(fresh.matches[0].winner === 'Dupla B' && fresh.matches[0].scoreP1 === 2 && fresh.matches[0].scoreP2 === 6,
   'o placar concorrente permanece intacto');
 ok(!/syncImmediate\(|AppStore\.sync\(/.test(src.slice(begin, end)), 'não há fallback de snapshot inteiro');
-const legacy = { window: null, _findTournamentById: () => ({ id: 'T2' }), _applyWoSubsToTournament: apply, AppStore: {} };
+const legacy = { window: null, _findTournamentById: () => ({ id: 'T2' }), AppStore: {} };
 legacy.window = legacy;
 vm.createContext(legacy);
 vm.runInContext(src.slice(begin, end), legacy, { filename: 'participants.js:wo-substitution-legacy' });
-ok(legacy._processWoSubstitutions('T2').reason === 'safe-mutation-unavailable',
-  'sem mutação fresca a ação não altera nem salva cópia antiga');
+ok(legacy._processWoSubstitutions('T2').reason === 'server-owned',
+  'a compatibilidade não altera nem salva cópia antiga');
 console.log('substituicao-wo-nao-sobrescreve-placar: ' + (5 - fail) + ' passou, ' + fail + ' falhou');
 process.exit(fail ? 1 : 0);

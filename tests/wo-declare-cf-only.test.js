@@ -18,8 +18,8 @@ const checkinEnd = source.indexOf('// uid = IDENTIDADE', checkinBegin);
 assert(checkinBegin >= 0 && checkinEnd > checkinBegin, 'recorte de _applyCheckInToggle existe');
 const checkin = source.slice(checkinBegin, checkinEnd);
 assert(checkin.includes("_callFn('setTournamentPresenceWithWOSubstitution'"), 'presença com ausentes envia intenção à CF');
-assert(checkin.includes("action: _wantPresent ? 'present' : 'clear'"), 'intenção de presença é absoluta');
-const serverBranch = checkin.slice(checkin.indexOf("_callFn('setTournamentPresenceWithWOSubstitution'"), checkin.indexOf('var _fieldDone'));
+assert(checkin.includes("action: wantPresent ? 'present' : 'clear'"), 'intenção de presença é absoluta');
+const serverBranch = checkin.slice(checkin.indexOf("_callFn('setTournamentPresenceWithWOSubstitution'"), checkin.indexOf('} else {', checkin.indexOf("_callFn('setTournamentPresenceWithWOSubstitution'")));
 assert(!serverBranch.includes('AppStore.mutate('), 'presença que pode substituir W.O. não muta no navegador');
 
 
