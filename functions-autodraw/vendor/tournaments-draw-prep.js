@@ -725,6 +725,11 @@ window._createDrawPoll = function(tId, context, options, hours) {
     });
 };
 
+window._reopenEnrollmentForTarget = function(tId, target, autoClose) {
+    if (typeof window._callCF !== 'function') return Promise.reject(new Error('Function indisponível'));
+    return window._callCF('reopenEnrollmentForTarget', { tournamentId:String(tId), target:Number(target), autoClose:autoClose === true }, 'Entre na sua conta para reabrir as inscrições.').then(function(res) { var data=(res&&res.data)||{}; if(data.tournament&&typeof window._applyCFTournament==='function') window._applyCFTournament(tId,data.tournament); return data; });
+};
+
 window._reopenDrawEnrollment = function(tId, reason) {
     if (typeof window._callCF !== 'function') return Promise.reject(new Error('Function indisponível'));
     return window._callCF('reopenDrawEnrollment', { tournamentId:String(tId), reason:reason }, 'Entre na sua conta para reabrir as inscrições.').then(function(res) {
@@ -3337,16 +3342,14 @@ window._confirmReopen = function (tId, target) {
         ? `Inscrições Reabertas para atingir ${target} participantes (encerramento automático ativado)`
         : `Inscrições Reabertas para atingir ${target} participantes`;
 
-    if (!window.AppStore || typeof window.AppStore.mutate !== 'function') return;
-    window.AppStore.mutate(tId, function(ft) { ft.status = 'open'; ft.maxParticipants = target; ft.autoCloseOnFull = checked; return true; }, actionMsg);
-
-    if (document.getElementById('reopen-panel')) document.getElementById('reopen-panel').remove();
-    if (document.getElementById('p2-resolution-panel')) document.getElementById('p2-resolution-panel').remove();
-    document.body.style.overflow = '';
-
-    const container = document.getElementById('view-container');
-    if (container) renderTournaments(container, window.location.hash.split('/')[1]);
-    showNotification(_t('draw.tournamentReopened'), checked ? _t('draw.reopenedAutoClose', {target: target}) : _t('draw.reopenedWaiting'), 'info');
+    window._reopenEnrollmentForTarget(tId, target, checked).then(function() {
+        if (document.getElementById('reopen-panel')) document.getElementById('reopen-panel').remove();
+        if (document.getElementById('p2-resolution-panel')) document.getElementById('p2-resolution-panel').remove();
+        document.body.style.overflow = '';
+        const container = document.getElementById('view-container');
+        if (container) renderTournaments(container, window.location.hash.split('/')[1]);
+        showNotification(_t('draw.tournamentReopened'), checked ? _t('draw.reopenedAutoClose', {target: target}) : _t('draw.reopenedWaiting'), 'info');
+    }).catch(function(err) { if(window._warn) window._warn('[reopenEnrollmentForTarget] falhou',err); showNotification('Não foi possível reabrir','Nada foi alterado. Atualize e tente novamente.','error'); });
 };
 
 // ─── Encerrar Torneio (manual) ───

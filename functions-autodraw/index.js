@@ -2800,6 +2800,16 @@ exports.createDrawPoll = onCall(async (request) => {
   });
 });
 
+// ─── Reabertura para completar vagas: intenção server-side ──────────────────
+exports.reopenEnrollmentForTarget = onCall(async (request) => {
+  const uid=request.auth&&request.auth.uid, data=request.data||{}, tId=String(data.tournamentId||'').trim();
+  const target=Math.trunc(Number(data.target)||0), autoClose=data.autoClose===true;
+  if(!uid) throw new HttpsError('unauthenticated','Entre na sua conta.');
+  if(!tId||target<2||target>10000) throw new HttpsError('invalid-argument','Meta de vagas inválida.');
+  const ref=db.collection('tournaments').doc(tId), agoraIso=new Date().toISOString();
+  return db.runTransaction(async tx=>{const t=await _leTorneio(tx,ref,tId);if(!t)throw new HttpsError('not-found','Torneio não encontrado.');if(!_isTournamentAdmin(t,uid))throw _drawFail('permission-denied','Só a organização reabre inscrições.',{tId,uid});if(hasDrawnBracket&&hasDrawnBracket(t))throw _drawFail('failed-precondition','A chave já foi sorteada; reabra pelas ferramentas do torneio.',{tId,uid});const currentCount=(Array.isArray(t.participants)?t.participants:Object.values(t.participants||{})).length;if(target<currentCount)throw new HttpsError('invalid-argument','Meta menor que o elenco atual.');const antes=_antesDoMotor(t);t.status='open';t.maxParticipants=target;t.autoCloseOnFull=autoClose;const b=_gravaTorneio(tx,ref,t,antes,{agoraIso});return{ok:true,changed:true,tournament:b.clean};});
+});
+
 // ─── Decisões entre fases: somente a Function altera elenco e promoção ───────
 // O painel mostra os inativos/W.O. e a possível linha extra, mas não pode aplicar
 // essas escolhas sobre um snapshot que talvez já esteja atrasado.
