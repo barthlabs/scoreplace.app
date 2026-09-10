@@ -3027,8 +3027,7 @@ catálogo; `npm test` fechou 694 suítes verdes e Claude aprovou o diff. O censo
 recalculado depois da publicação; os fluxos de consenso de participante seguem inventariados
 separadamente, pois possuem autorização diferente da organização.
 
-**L7.P1.29 — ciclo presencial e categoria individual por intenção (10/set/2026; local,
-aguarda revisão final).** O card de nível não altera mais a categoria no objeto em memória:
+**L7.P1.29 — ciclo presencial e categoria individual por intenção (10/set/2026; publicada na 2.2.48, revisão Claude aprovada).** O card de nível não altera mais a categoria no objeto em memória:
 ele reaproveita `applyEnrollmentAssignments`, que relê o elenco e atualiza inscrição e perfil
 na mesma transação. Iniciar o torneio e limpar a chamada ganharam as intenções estreitas
 `startTournament` e `resetTournamentCheckIn`; a Function fixa a autorização, a data civil BRT
