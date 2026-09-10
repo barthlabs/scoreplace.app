@@ -878,33 +878,12 @@ window._phaseOutNamesRow = function(icone, titulo, nomes, hint, borda){
 window._resolvePhaseInactives = function(tId, choice){
     var t = window._findTournamentById(tId);
     if (!t) return;
-    var _niIdx = (t.currentPhaseIndex || 0) + 1;
-    var fora = window._phaseNonEntrants(t);
-    var _hadResolved = Object.prototype.hasOwnProperty.call(t, '_inactiveResolvedPhase');
-    var _oldResolved = t._inactiveResolvedPhase;
-    var _oldParticipants = t.participants;
-    if (choice === 'remove') {
-        var _allP = Array.isArray(t.participants) ? t.participants.slice() : Object.values(t.participants || {});
-        // `fora` contém as próprias referências do elenco. Assim não há reconciliação por
-        // nome, e homônimos nunca são removidos por engano. Um registro de dupla é uma só
-        // inscrição nesta transição e é removido inteiro, como o cartão que o painel mostrou.
-        t.participants = _allP.filter(function(p){ return fora.indexOf(p) === -1; });
-        fora.forEach(function(p){
-            if (!p || typeof p !== 'object' || typeof window._purgePersonFromMaps !== 'function') return;
-            var uid = p.uid || null;
-            var nome = p.displayName || p.name || '';
-            window._purgePersonFromMaps(t, uid, nome);
-        });
-    }
-    t._inactiveResolvedPhase = _niIdx;
     var _finish = function(){
         var _p = document.getElementById('inactive-phase-panel'); if (_p) _p.remove();
         document.body.style.overflow = '';
         if (window._advanceMultiPhase) window._advanceMultiPhase(tId);
     };
     var _rollback = function(err){
-        t.participants = _oldParticipants;
-        if (_hadResolved) t._inactiveResolvedPhase = _oldResolved; else delete t._inactiveResolvedPhase;
         var btn = document.getElementById('inact-confirm-btn');
         if (btn) { btn.disabled = false; btn.textContent = '✓ Confirmar'; }
         if (typeof window.showAlertDialog === 'function') {
@@ -912,22 +891,12 @@ window._resolvePhaseInactives = function(tId, choice){
         }
         if (window.console && console.error) console.error('phase non-entrants save failed', err);
     };
-    if (!window.AppStore || typeof window.AppStore.commitTournamentTx !== 'function') { _rollback(new Error('mutação indisponível')); return; }
-    Promise.resolve(window.AppStore.commitTournamentTx(tId, function(ft) {
-        var freshIdx = (ft.currentPhaseIndex || 0) + 1;
-        if (ft._inactiveResolvedPhase === freshIdx) return false;
-        if (choice === 'remove') {
-            var freshOut = window._phaseNonEntrants(ft);
-            var freshAll = Array.isArray(ft.participants) ? ft.participants.slice() : Object.values(ft.participants || {});
-            ft.participants = freshAll.filter(function(p) { return freshOut.indexOf(p) === -1; });
-            freshOut.forEach(function(p) {
-                if (!p || typeof p !== 'object' || typeof window._purgePersonFromMaps !== 'function') return;
-                window._purgePersonFromMaps(ft, p.uid || null, p.displayName || p.name || '');
-            });
-        }
-        ft._inactiveResolvedPhase = freshIdx;
-        return true;
-    }, choice === 'remove' ? { allowRosterRemoval: true } : undefined)).then(function(saved) { if (saved === false) _rollback(new Error('decisão já aplicada')); else _finish(); }).catch(_rollback);
+    if (typeof window._callCF !== 'function') { _rollback(new Error('Function indisponível')); return; }
+    window._callCF('resolvePhaseInactives', { tournamentId:String(tId), choice:choice }, 'Entre na sua conta para decidir a próxima fase.').then(function(res) {
+        var data = (res && res.data) || {};
+        if (data.tournament && typeof window._applyCFTournament === 'function') window._applyCFTournament(tId, data.tournament);
+        _finish();
+    }).catch(_rollback);
 };
 
 // Painel: manter inativos no cadastro ou excluir definitivamente. Mesma linguagem visual
@@ -1176,34 +1145,28 @@ window._promotePanelConfirm = function(tId, btnEl){
 };
 
 window._phasePromoteApply = function(tId) {
-    var t = window._findTournamentById(tId);
-    if (!t) return;
-    var _idx = (t._phaseResInfo && t._phaseResInfo.nextIdx != null) ? t._phaseResInfo.nextIdx : ((t.currentPhaseIndex || 0) + 1);
-    window._clearPhaseResInfo(t);
-    var _p = document.getElementById('phase-promote-panel'); if (_p) _p.remove();
-    document.body.style.overflow = '';
-    if (!window.AppStore || typeof window.AppStore.mutate !== 'function') return;
-    window.AppStore.mutate(tId, function(ft) {
-        if (!ft.phases || !ft.phases[_idx]) return false;
-        ft.phases[_idx]._promoteLines = 1; ft.phases[_idx]._promoteAsked = true;
-        return true;
-    }, 'Promoção entre fases confirmada').then(function(saved) { if (saved !== false && window._advanceMultiPhase) window._advanceMultiPhase(tId); });
+    window._setPhasePromotion(tId, true);
 };
 
 // NÃO PROMOVER → mantém as linhas como estão (0 promoções) + marca decidido → painel de pow2.
 window._phasePromoteSkip = function(tId) {
+    window._setPhasePromotion(tId, false);
+};
+
+window._setPhasePromotion = function(tId, promote) {
     var t = window._findTournamentById(tId);
-    if (!t) return;
-    var _idx = (t._phaseResInfo && t._phaseResInfo.nextIdx != null) ? t._phaseResInfo.nextIdx : ((t.currentPhaseIndex || 0) + 1);
-    window._clearPhaseResInfo(t);
-    var _p = document.getElementById('phase-promote-panel'); if (_p) _p.remove();
-    document.body.style.overflow = '';
-    if (!window.AppStore || typeof window.AppStore.mutate !== 'function') return;
-    window.AppStore.mutate(tId, function(ft) {
-        if (!ft.phases || !ft.phases[_idx]) return false;
-        ft.phases[_idx]._promoteLines = 0; ft.phases[_idx]._promoteAsked = true;
-        return true;
-    }, 'Promoção entre fases dispensada').then(function(saved) { if (saved !== false && window._advanceMultiPhase) window._advanceMultiPhase(tId); });
+    if (!t || typeof window._callCF !== 'function') return;
+    window._callCF('setPhasePromotion', { tournamentId:String(tId), promote:!!promote }, 'Entre na sua conta para decidir a promoção entre fases.').then(function(res) {
+        var data = (res && res.data) || {};
+        if (data.tournament && typeof window._applyCFTournament === 'function') window._applyCFTournament(tId, data.tournament);
+        if (window._clearPhaseResInfo) window._clearPhaseResInfo(t);
+        var panel = document.getElementById('phase-promote-panel'); if (panel) panel.remove();
+        document.body.style.overflow = '';
+        if (window._advanceMultiPhase) window._advanceMultiPhase(tId);
+    }).catch(function(err) {
+        if (window._warn) window._warn('[setPhasePromotion] CF falhou', err);
+        if (typeof window.showNotification === 'function') window.showNotification('Não foi possível registrar a decisão', 'Nada foi alterado. Tente novamente.', 'error');
+    });
 };
 
 // v1.3.60: painel de "Novos Confrontos" — só Eliminatória Simples com pow2 LIMPA e

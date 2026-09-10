@@ -2480,6 +2480,63 @@ exports.cancelDrawPreparation = onCall(async (request) => {
   });
 });
 
+// ─── Decisões entre fases: somente a Function altera elenco e promoção ───────
+// O painel mostra os inativos/W.O. e a possível linha extra, mas não pode aplicar
+// essas escolhas sobre um snapshot que talvez já esteja atrasado.
+exports.resolvePhaseInactives = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid;
+  const data = request.data || {}, tId = String(data.tournamentId || '').trim();
+  const choice = String(data.choice || '').trim();
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId || !['keep', 'remove'].includes(choice)) throw new HttpsError('invalid-argument', 'Decisão inválida.');
+  if (!drawWindow || typeof drawWindow._phaseNonEntrants !== 'function' || typeof drawWindow._purgePersonFromMaps !== 'function') {
+    throw new HttpsError('failed-precondition', 'Motor de fases indisponível.');
+  }
+  const ref = db.collection('tournaments').doc(tId), agoraIso = new Date().toISOString();
+  return db.runTransaction(async (tx) => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização decide os participantes da próxima fase.', { tId, uid });
+    const nextIdx = (t.currentPhaseIndex || 0) + 1;
+    if (t._inactiveResolvedPhase === nextIdx) return { ok:true, changed:false, tournament:t };
+    const antes = _antesDoMotor(t);
+    if (choice === 'remove') {
+      const fora = drawWindow._phaseNonEntrants(t);
+      const all = Array.isArray(t.participants) ? t.participants.slice() : Object.values(t.participants || {});
+      t.participants = all.filter((p) => fora.indexOf(p) === -1);
+      fora.forEach((p) => {
+        if (!p || typeof p !== 'object') return;
+        drawWindow._purgePersonFromMaps(t, p.uid || null, p.displayName || p.name || '');
+      });
+    }
+    t._inactiveResolvedPhase = nextIdx;
+    const b = _gravaTorneio(tx, ref, t, antes, { agoraIso });
+    return { ok:true, changed:true, tournament:b.clean };
+  });
+});
+
+exports.setPhasePromotion = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid;
+  const data = request.data || {}, tId = String(data.tournamentId || '').trim();
+  const promote = data.promote === true;
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId) throw new HttpsError('invalid-argument', 'Torneio obrigatório.');
+  const ref = db.collection('tournaments').doc(tId), agoraIso = new Date().toISOString();
+  return db.runTransaction(async (tx) => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização decide a promoção entre fases.', { tId, uid });
+    const idx = (t.currentPhaseIndex || 0) + 1;
+    if (!Array.isArray(t.phases) || !t.phases[idx]) throw new HttpsError('failed-precondition', 'Próxima fase indisponível.');
+    const antes = _antesDoMotor(t);
+    t.phases[idx]._promoteLines = promote ? 1 : 0;
+    t.phases[idx]._promoteAsked = true;
+    delete t._phaseResInfo;
+    const b = _gravaTorneio(tx, ref, t, antes, { agoraIso });
+    return { ok:true, changed:true, tournament:b.clean };
+  });
+});
+
 async function _notifyPublishedPendingDraw(t,tId,roundIndex,nowIso) {
   if(!t || t.isSandbox || t.notificationsMuted) return;
   const ids=new Set(); (t.participants||[]).forEach(p=>[p&&p.uid,p&&p.p1Uid,p&&p.p2Uid].forEach(u=>u&&ids.add(String(u))));

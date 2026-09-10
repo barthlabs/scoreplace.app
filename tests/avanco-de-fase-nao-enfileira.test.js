@@ -59,17 +59,12 @@ ok(/_optCard\('keep'/.test(prep) && /_optCard\('remove'/.test(prep),
 ok(!/_optCard\('include'/.test(prep) && !/Incluir na eliminatória/.test(prep),
   '  → não oferece inclusão na eliminatória');
 
-// mesmo chamado à mão com 'standby', nada de fila (o caminho não existe)
-W._findTournamentById = () => t2;
-const t2 = { id: 'sb2', currentPhaseIndex: 0, allowSelfDeactivation: true, phases: [{}, {}],
-  participants: [{ uid: 'x1', ligaActive: false }], standbyParticipants: [] };
-sandbox.AppStore.tournaments = [t2];
-W.FirestoreDB = { saveTournament: () => Promise.resolve() };
-W._advanceMultiPhase = () => {};
-W._resolvePhaseInactives('sb2', 'standby');
-ok((t2.standbyParticipants || []).length === 0,
-  'chamar com "standby" não enfileira ninguém (got ' + JSON.stringify(t2.standbyParticipants) + ')');
-ok(t2._inactiveResolvedPhase === 1, '  → e a transição segue resolvida (não trava o avanço)');
+// A escolha agora é só uma intenção; o servidor relê o elenco antes de decidir.
+const resolveBody = prep.slice(prep.indexOf('window._resolvePhaseInactives = function'), prep.indexOf('// Painel: manter inativos', prep.indexOf('window._resolvePhaseInactives = function')));
+ok(/_callCF\('resolvePhaseInactives'/.test(resolveBody) && /choice:choice/.test(resolveBody),
+  'a decisão de inativos despacha somente torneio e escolha para a Function');
+ok(!/AppStore\.(?:mutate|commitTournamentTx|sync)\s*\(/.test(resolveBody),
+  'a decisão não reabre nem altera lista de espera no navegador');
 
 // ── 3. a contagem de inscritos não infla ────────────────────────────────────────────
 // O caso do sandbox: 3 pessoas no elenco (uid, nome stripado). Empurrar o NOME de uma delas

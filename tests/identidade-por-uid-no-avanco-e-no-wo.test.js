@@ -39,17 +39,17 @@ const t = { id: 'sb', currentPhaseIndex: 0, allowSelfDeactivation: true, phases:
     { uid: 'u3', ligaActive: false },   // inativo por escolha
     { name: 'Zé Digitado', ligaActive: false },   // sem conta: aqui o nome É a identidade
   ] };
-W._findTournamentById = () => t;
-sandbox.AppStore.tournaments = [t];
-W.FirestoreDB = { saveTournament: () => Promise.resolve() };
-W._advanceMultiPhase = () => {};
-W._resolvePhaseInactives('sb', 'remove');
-ok(t.participants.length === 2, 'os dois inativos saíram do roster (got ' + t.participants.length + ')');
-ok(t.participants[0].uid === 'u1' && t.participants[1].uid === 'u2',
-  '  → e os ativos só-uid não foram tocados');
-ok(!t.participants.some((p) => p.uid === 'u3' || p.name === 'Zé Digitado'),
-  '  → inclusive o fictício sem conta saiu pela referência correta');
-ok(!t.phases[1]._includeInactive, '  → ninguém foi incluído na fase seguinte');
+const prep = fs.readFileSync(path.join(ROOT, 'js', 'views', 'tournaments-draw-prep.js'), 'utf8');
+const resolveBody = prep.slice(prep.indexOf('window._resolvePhaseInactives = function'), prep.indexOf('// Painel: manter inativos', prep.indexOf('window._resolvePhaseInactives = function')));
+const server = fs.readFileSync(path.join(ROOT, 'functions-autodraw', 'index.js'), 'utf8');
+const serverResolve = server.slice(server.indexOf('exports.resolvePhaseInactives = onCall'), server.indexOf('exports.setPhasePromotion = onCall'));
+ok(/_callCF\('resolvePhaseInactives'/.test(resolveBody) && !/AppStore\.(?:mutate|commitTournamentTx)\s*\(/.test(resolveBody),
+  'excluir inativos só despacha a intenção; a tela não edita o elenco');
+ok(/drawWindow\._phaseNonEntrants\(t\)/.test(serverResolve) && /fora\.indexOf\(p\) === -1/.test(serverResolve),
+  '  → servidor remove exatamente as entradas apresentadas');
+ok(/drawWindow\._purgePersonFromMaps\(t, p\.uid \|\| null, p\.displayName \|\| p\.name \|\| ''\)/.test(serverResolve),
+  '  → inclusive o fictício sem conta usa a identidade canônica');
+ok(!/_includeInactive/.test(serverResolve), '  → ninguém é incluído na fase seguinte');
 
 // ── ② o W.O. acha a pessoa pelo uid, mesmo com o nome trocado ────────────────────────
 const liga = fs.readFileSync(path.join(ROOT, 'js', 'views', 'liga-substitution.js'), 'utf8');
