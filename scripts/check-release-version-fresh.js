@@ -21,6 +21,14 @@ const cmp = (a, b) => {
 const current = fs.readFileSync(path.join(root, 'version.txt'), 'utf8').trim();
 const base = git(['show', 'origin/main:version.txt']);
 const ahead = Number(git(['rev-list', '--count', 'origin/main..HEAD']) || 0);
+// Esta trava protege o shell que um aparelho instalado pode reutilizar. Mudanças só de
+// documentação, testes, scripts ou Functions não mudam esse shell e não podem exigir uma
+// versão/ciclo de cache novo só para permitir atualizar o backup.
+const arquivosAFrente = git(['diff', '--name-only', 'origin/main..HEAD']).split('\n').filter(Boolean);
+const tocaShellPublico = arquivosAFrente.some((p) => (
+  p === 'index.html' || p === 'sw.js' || p === 'manifest.json' ||
+  /^(js|css|assets|public)\//.test(p)
+));
 const live = String(process.env.SP_RELEASE_PRODUCTION_VERSION || '').trim();
 // Há duas comparações diferentes, em momentos diferentes do deploy:
 // - antes do push, HEAD precisa superar o backup quando há commits novos;
@@ -34,11 +42,15 @@ const blocked = (baseline) => {
   console.error('  Bumpe SCOREPLACE_VERSION, rode npm run prerender e atualize os cache-busters antes de publicar.');
   process.exit(1);
 };
-if (ahead > 0 && valid(base) && cmp(current, base) <= 0) blocked(base);
-if (valid(live) && cmp(current, live) <= 0) blocked(live);
+if (ahead > 0 && tocaShellPublico && valid(base) && cmp(current, base) <= 0) blocked(base);
+if (tocaShellPublico && valid(live) && cmp(current, live) <= 0) blocked(live);
 if (!base && !live) {
   console.log('✓ versão fresca: cópia de deploy sem histórico Git; a checagem ocorreu no repositório-fonte');
   process.exit(0);
 }
 const baseline = live || base || 'sem histórico';
-console.log('✓ versão fresca: ' + current + ' é maior que a base ' + baseline + ' (' + ahead + ' commit(s) novo(s))');
+if (ahead > 0 && !tocaShellPublico) {
+  console.log('✓ versão do shell preservada: ' + ahead + ' commit(s) só de servidor/documentação/teste');
+} else {
+  console.log('✓ versão fresca: ' + current + ' é maior que a base ' + baseline + ' (' + ahead + ' commit(s) novo(s))');
+}
