@@ -12,6 +12,9 @@ ok(/Roster\.subdocSignature\(atual\)/.test(src) && /Roster\.subdocSignature\(esp
   'divergência compara a assinatura canônica e ignora metadados irrelevantes');
 ok(/camposDiferentes\(atual, esperado\)/.test(src), 'modo detalhe identifica os campos divergentes sem reescrever o espelho');
 ok(/results ausentes/.test(src) && /results divergentes/.test(src), 'ausência e divergência são reportadas separadamente');
+ok(/riscoDoOrfao/.test(src) && /placar\/W\.O\.\/replay\/pendência/.test(src), 'órfão é classificado por placar, W.O., replay e pendência antes de qualquer limpeza');
+ok(/NÃO foram alterados/.test(src), 'órfãos são relatados sem o conferidor escrever');
+ok(/@@RESULTS_AUDIT@@/.test(src) && /orphans: orfaos/.test(src), 'modo JSON entrega a prova estruturada para uma manutenção auditável');
 ok(/NÃO escreve nada/.test(src), 'o script declara explicitamente a auditoria somente de leitura');
 
 console.log((fail ? '✗' : '✓') + ' conferidor-espelho-resultados: ' + pass + ' ok, ' + fail + ' falhas');

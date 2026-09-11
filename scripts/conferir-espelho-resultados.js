@@ -34,6 +34,7 @@ const Leitura = require(path.join(__dirname, 'lib', 'leitura-resiliente.js'));
 
 const BASE = 'https://firestore.googleapis.com/v1/projects/scoreplace-app/databases/(default)/documents';
 const DETALHE = process.argv.includes('--detalhe');
+const JSON_OUTPUT = process.argv.includes('--json');
 const SO_ESTE = process.argv.slice(2).find((a) => !a.startsWith('--')) || null;
 const token = () => execSync('gcloud auth print-access-token', { encoding: 'utf8' }).trim();
 
@@ -112,6 +113,18 @@ function camposDiferentes(atual, esperado) {
     return JSON.stringify(a) !== JSON.stringify(b);
   });
 }
+/* Um `results/{id}` sem jogo canônico só pode ser removido depois de provar que não
+ * carrega informação que o espelho não consegue reconstruir. Placar, W.O. e replay
+ * são os três casos que bloqueiam uma limpeza automática. O conferidor apenas mede e
+ * nomeia: ele nunca apaga. */
+function riscoDoOrfao(doc) {
+  const d = doc || {};
+  const temPlacar = ['scoreP1', 'scoreP2', 'winner', 'draw', 'sets', 'setsWonP1', 'setsWonP2', 'totalGamesP1', 'totalGamesP2', 'fixedSet', 'resultAt', 'startedAt']
+    .some((k) => d[k] != null && d[k] !== '');
+  const temWO = ['wo', 'woAbsent', 'woAbsentSide'].some((k) => d[k] != null && d[k] !== '');
+  const pendente = d.pendingResult != null && d.pendingResult !== '';
+  return { placar: temPlacar, wo: temWO, replay: d.replay != null && d.replay !== '', pendente, playerUids: Array.isArray(d.playerUids) ? d.playerUids.length : 0 };
+}
 
 (async () => {
   /* ⛔ O PRIMEIRO PASSO TAMBÉM PRECISA FALAR. `token()` é um `execSync` do gcloud, e num
@@ -132,6 +145,7 @@ function camposDiferentes(atual, esperado) {
     ? [{ id: SO_ESTE, dados: await documento(`${BASE}/tournaments/${SO_ESTE}`, tk, 'documento do torneio ' + SO_ESTE) }]
     : await lista(`${BASE}/tournaments`, tk, 'listagem de todos os torneios');
   let jogos = 0, semEspelho = 0, divergentes = 0, torneiosComJogos = 0;
+  const orfaos = [];
   const problemas = [];
 
   for (const item of torneios) {
@@ -144,6 +158,10 @@ function camposDiferentes(atual, esperado) {
     jogos += ids.length;
     const results = await lista(`${BASE}/tournaments/${item.id}/results`, tk, 'espelho `results` de ' + item.id);
     const espelho = Object.fromEntries(results.map((d) => [d.id, d.dados]));
+    results.forEach((d) => {
+      if (porId[d.id]) return;
+      orfaos.push({ tournamentId: item.id, tournamentName: item.dados.name || item.id, matchId: d.id, risco: riscoDoOrfao(d.dados) });
+    });
     const ausentes = [], diferentes = [];
     ids.forEach((id) => {
       const atual = espelho[id];
@@ -165,6 +183,23 @@ function camposDiferentes(atual, esperado) {
   console.log('  jogos canônicos          :', jogos);
   console.log('  ✗ results ausentes       :', semEspelho);
   console.log('  ✗ results divergentes    :', divergentes);
+  const orfaosComDados = orfaos.filter((o) => o.risco.placar || o.risco.wo || o.risco.replay || o.risco.pendente);
+  console.log('  ? results órfãos         :', orfaos.length);
+  console.log('    └─ com placar/W.O./replay/pendência:', orfaosComDados.length);
+  if (DETALHE && orfaos.length) {
+    console.log('\nÓRFÃOS (fora do conjunto canônico; NÃO foram alterados):');
+    orfaos.forEach((o) => console.log('  · ' + o.tournamentName + ' [' + o.tournamentId + '/' + o.matchId + '] ' + JSON.stringify(o.risco)));
+  }
+  if (JSON_OUTPUT) {
+    console.log('@@RESULTS_AUDIT@@' + JSON.stringify({
+      tournamentId: SO_ESTE || null,
+      tournaments: torneios.length,
+      canonicalMatches: jogos,
+      missing: semEspelho,
+      divergent: divergentes,
+      orphans: orfaos
+    }));
+  }
   if (problemas.length) {
     console.log('\nDIVERGÊNCIAS (fonte = matches):');
     problemas.slice(0, 20).forEach((p) => {
