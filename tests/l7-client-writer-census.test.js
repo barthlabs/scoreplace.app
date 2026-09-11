@@ -42,4 +42,6 @@ Object.keys(approved).forEach((file) => ok((found[file] || 0) <= approved[file],
   file + ' não ganhou mutador novo (' + (found[file] || 0) + '/' + approved[file] + ')'));
 const total = Object.values(found).reduce((sum, count) => sum + count, 0);
 ok(total <= 60, 'o total de mutadores do navegador só pode cair (' + total + '/60)');
+const tournamentsView = fs.readFileSync(path.join(jsRoot, 'views', 'tournaments.js'), 'utf8');
+ok(!/addBotsFunction/.test(tournamentsView), 'writer de bots sem chamador foi removido; placeholders usam a Function canônica');
 process.exit(failed ? 1 : 0);

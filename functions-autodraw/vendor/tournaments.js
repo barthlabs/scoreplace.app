@@ -2155,49 +2155,6 @@ function renderTournaments(container, tournamentId = null) {
         window.inviteModalSetupDone = true;
     }
 
-    if (!window.addBotsFunctionSetup) {
-        window.addBotsFunction = function (id) {
-            const qtd = parseInt(prompt('🔧 TEST MODE\nQuantos bots deseja adicionar?', '8'), 10);
-            if (isNaN(qtd) || qtd <= 0) return;
-
-            const t = window.AppStore.tournaments.find(tour => tour.id.toString() === id.toString());
-            if (t) {
-                if (!t.participants) t.participants = [];
-                if (!Array.isArray(t.participants)) {
-                    t.participants = Object.values(t.participants);
-                }
-                const currentCount = t.participants.length;
-                for (let i = 1; i <= qtd; i++) {
-                    const numStr = String(currentCount + i).padStart(2, '0');
-                    t.participants.push({
-                        name: 'Bot ' + numStr,
-                        displayName: 'Bot ' + numStr,
-                        email: 'bot' + numStr + '@scoreplace.app',
-                        uid: 'bot_' + numStr + '_' + Date.now(),
-                        isBot: true
-                    });
-                }
-                // Save directly to Firestore (sync() skips participants)
-                if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
-                    window.FirestoreDB.saveTournament(t).then(function() {
-                        showNotification(_t('tourn.botsAdded'), _t('tourn.botsAddedMsg', { n: qtd }), 'success');
-                    }).catch(function(err) {
-                        window._error('Erro ao salvar bots:', err);
-                        showNotification(_t('enroll.error'), _t('tourn.botError'), 'error');
-                    });
-                }
-
-                // Recarrega view mantendo contexto de roteamento ID
-                const container = document.getElementById('view-container');
-                if (container) {
-                    const param = window.location.hash.split('/')[1] || null;
-                    renderTournaments(container, param);
-                }
-            }
-        };
-        window.addBotsFunctionSetup = true;
-    }
-
     if (!window.addPlaceholdersFunctionSetup) {
         // v2.1.28: botão de teste do organizador — cria N inscritos "placeholder".
         // Antes do sorteio: vão pra INSCRITOS. Depois do sorteio: vão pra LISTA DE
