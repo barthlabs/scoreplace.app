@@ -1009,10 +1009,18 @@ window._ligaPickFill = function (tId, roundIndex, groupName, absentName, opts) {
 // Fecha o ciclo inteiro numa mutação: suplente entra no grupo E no elenco, sai da fila,
 // o ausente vai pro destino escolhido, e todo mundo é notificado.
 window._ligaSubstituteNow = function (tId, roundIndex, groupName, absentName, subUid, subName) {
+  if (!_ligaContext() && window.FirestoreDB && typeof window.FirestoreDB._callFn === 'function') {
+    window.FirestoreDB._callFn('substituteLigaGroupDirect', { tournamentId: tId, roundIndex: roundIndex, groupName: groupName, absentName: absentName, subUid: subUid, subName: subName }).then(function (out) {
+      if (out && out.tournament && typeof window._applyCFTournament === 'function') window._applyCFTournament(out.tournament);
+      if (window.showNotification) window.showNotification('Substituição feita', subName + ' entrou no lugar de ' + absentName + '.', 'success');
+      _rerender(tId);
+    }).catch(function (e) { if (window.showNotification) window.showNotification('Substituir', (e && e.message) || 'Não foi possível registrar no servidor.', 'error'); });
+    return;
+  }
   var t = _findT(tId); if (!t) return;
   var group = _getGroup(t, roundIndex, groupName); if (!group) return;
   // AUTORIDADE, não "pode gerir o grupo": substituição direta é do organizador.
-  if (typeof window._canManagePresence === 'function' &&
+  if (!_ligaContext() && typeof window._canManagePresence === 'function' &&
       !window._canManagePresence(t, window.AppStore && window.AppStore.currentUser)) {
     if (window.showNotification) window.showNotification('Substituir', 'Só o organizador pode colocar alguém direto. Você pode convidar.', 'info');
     return;
@@ -1209,6 +1217,14 @@ window._ligaFillGuestPrompt = function (tId, roundIndex, groupName, absentName) 
   }
 };
 window._ligaFillGuest = function (tId, roundIndex, groupName, absentName, guestName) {
+  if (!_ligaContext() && window.FirestoreDB && typeof window.FirestoreDB._callFn === 'function') {
+    window.FirestoreDB._callFn('fillLigaGuest', { tournamentId: tId, roundIndex: roundIndex, groupName: groupName, absentName: absentName, guestName: guestName }).then(function (out) {
+      if (out && out.tournament && typeof window._applyCFTournament === 'function') window._applyCFTournament(out.tournament);
+      if (window.showNotification) window.showNotification('Rodada liberada', absentName + ' levou W.O. e a vaga foi completada.', 'success');
+      _rerender(tId);
+    }).catch(function (e) { if (window.showNotification) window.showNotification('Jogador X', (e && e.message) || 'Não foi possível registrar no servidor.', 'error'); });
+    return;
+  }
   var t = _findT(tId); if (!t) return;
   var group = _getGroup(t, roundIndex, groupName); if (!group) return;
   if (!_canManageGroup(t, group)) return;
@@ -1263,6 +1279,14 @@ window._ligaFillGuest = function (tId, roundIndex, groupName, absentName, guestN
 // que aceitar preenche a vaga (entra como se tivesse sido sorteado e PONTUA); os
 // demais convites são supersedidos no aceite.
 window._ligaInviteSubMulti = function (tId, roundIndex, groupName, absentName, invitees) {
+  if (!_ligaContext() && window.FirestoreDB && typeof window.FirestoreDB._callFn === 'function') {
+    window.FirestoreDB._callFn('inviteLigaSubstitutes', { tournamentId: tId, roundIndex: roundIndex, groupName: groupName, absentName: absentName, invitees: invitees || [] }).then(function (out) {
+      if (out && out.tournament && typeof window._applyCFTournament === 'function') window._applyCFTournament(out.tournament);
+      if (window.showNotification) window.showNotification('Convite enviado', ((out && out.invited) || (invitees || []).length) + ' convite(s) enviado(s).', 'success');
+      _rerender(tId);
+    }).catch(function (e) { if (window.showNotification) window.showNotification('Convite', (e && e.message) || 'Não foi possível registrar no servidor.', 'error'); });
+    return;
+  }
   var t = _findT(tId); if (!t) return;
   var group = _getGroup(t, roundIndex, groupName); if (!group) return;
   if (!_canManageGroup(t, group)) return;
@@ -1547,6 +1571,14 @@ function _revertWoDoRastro(t, tId, roundIndex, groupName, absentUid, absentName)
   }
   var cat = _groupCategory(group);
   var doRevert = function () {
+    if (!_ligaContext() && window.FirestoreDB && typeof window.FirestoreDB._callFn === 'function') {
+      window.FirestoreDB._callFn('revertLigaGroupWO', { tournamentId: tId, roundIndex: roundIndex, groupName: groupName, absentUid: absentUid || '', absentName: absentName || '' }).then(function (out) {
+        if (out && out.tournament && typeof window._applyCFTournament === 'function') window._applyCFTournament(out.tournament);
+        if (window.showNotification) window.showNotification('W.O. revertido', par.absentName + ' voltou ao grupo.', 'success');
+        _rerender(tId);
+      }).catch(function (e) { if (window.showNotification) window.showNotification('Reverter W.O.', (e && e.message) || 'Não foi possível registrar no servidor.', 'error'); });
+      return;
+    }
     _commitLiga(tId, function (ft) {
       var g = _getGroup(ft, roundIndex, groupName); var r = ft.rounds && ft.rounds[roundIndex];
       if (!g || !r) return;
@@ -1600,6 +1632,14 @@ window._ligaRevertWo = function (tId, roundIndex, groupName, absentUid, absentNa
     return;
   }
   var doRevert = function () {
+    if (!_ligaContext() && window.FirestoreDB && typeof window.FirestoreDB._callFn === 'function') {
+      window.FirestoreDB._callFn('revertLigaGroupWO', { tournamentId: tId, roundIndex: roundIndex, groupName: groupName, absentUid: absentUid || '', absentName: absentName || '' }).then(function (out) {
+        if (out && out.tournament && typeof window._applyCFTournament === 'function') window._applyCFTournament(out.tournament);
+        if (window.showNotification) window.showNotification('W.O. revertido', absent + ' voltou ao grupo.', 'success');
+        _rerender(tId);
+      }).catch(function (e) { if (window.showNotification) window.showNotification('Reverter W.O.', (e && e.message) || 'Não foi possível registrar no servidor.', 'error'); });
+      return;
+    }
     _commitLiga(tId, function (ft) {
       var g = _getGroup(ft, roundIndex, groupName); var r = ft.rounds && ft.rounds[roundIndex];
       if (!g || !r) return;

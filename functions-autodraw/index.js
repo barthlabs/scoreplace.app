@@ -1070,6 +1070,71 @@ exports.applyLigaGroupWO = onCall(async request => {
   });
 });
 
+// Ações de preenchimento usam o mesmo núcleo que a tela, executado dentro da
+// transação do servidor. O navegador apenas pede a operação e renderiza o recibo.
+async function _applyLigaGroupAction(request, action, options) {
+  const uid = request.auth && request.auth.uid;
+  const data = request.data || {};
+  const tId = String(data.tournamentId || '').trim(), groupName = String(data.groupName || '').trim();
+  const roundIndex = Number(data.roundIndex);
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId || !groupName || !Number.isInteger(roundIndex) || roundIndex < 0) throw new HttpsError('invalid-argument', 'Dados do grupo inválidos.');
+  if (!runLigaActionFn) throw new HttpsError('internal', 'Núcleo de substituição indisponível.');
+  const ref = db.collection('tournaments').doc(tId), agoraIso = new Date().toISOString();
+  return db.runTransaction(async tx => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    const round = (t.rounds || [])[roundIndex], group = round && Array.isArray(round.monarchGroups) ? round.monarchGroups.find(g => g && g.name === groupName) : null;
+    if (!group) throw new HttpsError('not-found', 'Grupo não encontrado.');
+    const allowed = options.adminOnly ? _isTournamentAdmin(t, uid) : _canManageLigaGroup(t, group, uid);
+    if (!allowed) throw new HttpsError('permission-denied', options.adminOnly ? 'Só a organização pode substituir diretamente.' : 'Só a organização ou alguém do grupo pode completar a vaga.');
+    const before = _antesDoMotor(t);
+    const out = runLigaActionFn(t, { uid: uid }, action, options.args(data, tId, roundIndex, groupName));
+    if (!out || !out.changed) throw new HttpsError('failed-precondition', 'O grupo mudou antes da operação.');
+    const b = _gravaTorneio(tx, ref, t, before, { agoraIso });
+    return { ok: true, tournament: b.clean };
+  });
+}
+
+exports.fillLigaGuest = onCall(request => _applyLigaGroupAction(request, '_ligaFillGuest', {
+  args: (data, tId, roundIndex, groupName) => [tId, roundIndex, groupName, String(data.absentName || '').trim(), String(data.guestName || '').trim() || 'Jogador X']
+}));
+
+exports.substituteLigaGroupDirect = onCall(request => _applyLigaGroupAction(request, '_ligaSubstituteNow', {
+  adminOnly: true,
+  args: (data, tId, roundIndex, groupName) => [tId, roundIndex, groupName, String(data.absentName || '').trim(), String(data.subUid || '').trim(), String(data.subName || '').trim()]
+}));
+
+exports.inviteLigaSubstitutes = onCall(async request => {
+  const uid = request.auth && request.auth.uid;
+  const data = request.data || {};
+  const tId = String(data.tournamentId || '').trim(), groupName = String(data.groupName || '').trim(), absentName = String(data.absentName || '').trim();
+  const roundIndex = Number(data.roundIndex);
+  const invitees = Array.isArray(data.invitees) ? data.invitees.map(x => ({ uid: String(x && x.uid || '').trim(), name: String(x && x.name || '').trim() })).filter(x => x.uid && x.name).slice(0, 20) : [];
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId || !groupName || !absentName || !Number.isInteger(roundIndex) || roundIndex < 0 || !invitees.length) throw new HttpsError('invalid-argument', 'Convite inválido.');
+  if (!runLigaActionFn) throw new HttpsError('internal', 'Núcleo de substituição indisponível.');
+  const ref = db.collection('tournaments').doc(tId), agoraIso = new Date().toISOString();
+  return db.runTransaction(async tx => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    const round = (t.rounds || [])[roundIndex], group = round && Array.isArray(round.monarchGroups) ? round.monarchGroups.find(g => g && g.name === groupName) : null;
+    if (!group) throw new HttpsError('not-found', 'Grupo não encontrado.');
+    if (!_canManageLigaGroup(t, group, uid)) throw new HttpsError('permission-denied', 'Só a organização ou alguém do grupo pode convidar.');
+    const before = _antesDoMotor(t);
+    const out = runLigaActionFn(t, { uid: uid, displayName: String(request.auth.token && request.auth.token.name || '') }, '_ligaInviteSubMulti', [tId, roundIndex, groupName, absentName, invitees]);
+    if (!out || !out.changed) throw new HttpsError('failed-precondition', 'O grupo mudou antes do convite.');
+    const b = _gravaTorneio(tx, ref, t, before, { agoraIso });
+    const base = { schema: 1, kind: 'tournament-notification', tournamentId: tId, tournamentName: t.name || '', level: 'fundamental', createdAt: agoraIso, createdAtMs: Date.parse(agoraIso), dispatchStatus: 'pending', type: 'liga-sub-invite', title: 'Convite para substituição' };
+    invitees.forEach((x, i) => tx.set(ref.collection('notificationOutbox').doc('liga-sub-invite-' + _outboxDocIdPart(x.uid) + '-' + Date.parse(agoraIso) + '-' + i), Object.assign({}, base, { recipients: [x.uid], message: 'Chegou um convite para entrar no lugar de ' + absentName + ' no ' + groupName + ' do torneio "' + (t.name || 'torneio') + '". O primeiro que aceitar joga e pontua.' }), { merge: true }));
+    return { ok: true, tournament: b.clean, invited: invitees.length };
+  });
+});
+
+exports.revertLigaGroupWO = onCall(request => _applyLigaGroupAction(request, '_ligaRevertWo', {
+  args: (data, tId, roundIndex, groupName) => [tId, roundIndex, groupName, String(data.absentUid || '').trim() || undefined, String(data.absentName || '').trim() || undefined]
+}));
+
 // ─── Reset para inscrições: confirmação no cliente, mutação completa no servidor ───
 exports.resetTournamentToEnrollment = onCall(async request => {
   const uid = request.auth && request.auth.uid;
