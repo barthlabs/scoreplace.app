@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.2.65';
+window.SCOREPLACE_VERSION = '2.2.66';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -11405,7 +11405,13 @@ window.AppStore = {
     var t = this.tournaments.find(function (x) { return String(x.id) === String(tournamentId); });
     if (!t || !window.FirestoreDB || typeof window.FirestoreDB.loadMatchResults !== 'function') return false;
     try {
+      var actorUid = this.currentUser && this.currentUser.uid;
       var map = await window.FirestoreDB.loadMatchResults(tournamentId);
+      if ((this.currentUser && this.currentUser.uid) !== actorUid) return false;
+      // O snapshot pode substituir o objeto enquanto a consulta está em voo.
+      t = this.tournaments.find(function (x) { return String(x.id) === id; });
+      if (!t) return false;
+      t._resultsHydrated = true;
       t._results = map || {};
       var all = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : [];
       var store = self;

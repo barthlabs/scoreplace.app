@@ -473,13 +473,25 @@ function renderDashboard(container) {
   // por torneio, preserva o teto pequeno e cada coleção só é hidratada uma vez por sessão.
   try {
     _dashMyTournaments.filter(function (t) { return t.tournamentStarted || t.status === 'active'; })
-      .sort(function (a, b) { return Number(b.updatedAt || b.startDate || 0) - Number(a.updatedAt || a.startDate || 0); })
+      .filter(function (t) { return !window._isSandboxRef || !window._isSandboxRef(t.id, t.name); })
+      .sort(function (a, b) {
+        function stamp(t) {
+          var v = t.updatedAt || t.startDate || 0;
+          if (v && typeof v.toMillis === 'function') return v.toMillis();
+          var n = Number(v);
+          return Number.isFinite(n) ? n : (Date.parse(v) || 0);
+        }
+        return stamp(b) - stamp(a);
+      })
       .slice(0, 5).forEach(function (t) {
-        if (t._resultsHydrated || !window.AppStore || typeof window.AppStore.hydrateMatchResults !== 'function') return;
-        t._resultsHydrated = true;
-        Promise.resolve(window.AppStore.hydrateMatchResults(t.id)).then(function (ok) {
+        if (t._resultsHydrated || t._resultsHydrating || !window.AppStore || typeof window.AppStore.hydrateMatchResults !== 'function') return;
+        t._resultsHydrating = true;
+        Promise.resolve().then(function () { return window.AppStore.hydrateMatchResults(t.id); }).then(function (ok) {
+          t._resultsHydrated = !!ok;
           if (ok && typeof window._dashPedirRepintura === 'function') window._dashPedirRepintura('resultados-hidratados');
-        });
+        }).catch(function (e) {
+          if (window._warn) window._warn('[dashboard] hidratação de resultados falhou', e);
+        }).finally(function () { t._resultsHydrating = false; });
       });
   } catch (e) { if (window._warn) window._warn('[dashboard] hidratação de resultados falhou', e); }
   /* ⛔ `organizadosCount` REMOVIDO (2.1.67): alimentava só a pílula "Organizados".

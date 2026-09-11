@@ -1,3 +1,7 @@
+## 2.2.66 — 11/set/2026
+
+Dashboard: recupera hidratação após falha, ordena datas ISO corretamente e exclui sandbox das cinco coleções. Respostas assíncronas aplicam no torneio atual e são descartadas após troca de conta ou remoção. Revisão Claude suspensa por autorização do dono.
+
 ## 2.2.65 — fechamento das brechas do censo L7 (11/set/2026)
 
 Criação e cópia só chegam ao cache/navegação depois da confirmação do servidor, com identidade canônica e recibos temporários contra duplicação e recriação após exclusão. Corrigido descarte prematuro de imagens na edição. Proporção da espera usa configuração absoluta no servidor; replay usa porta própria por UID, preservando placar/roster/proposta concorrentes. Censo por AST reconhece aliases e classifica separadamente APIs antigas e simulação. Removidos dois writers sem chamadores. Revisão Claude suspensa temporariamente por autorização do dono devido à cota.
