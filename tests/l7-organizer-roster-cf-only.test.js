@@ -48,4 +48,10 @@ ok(/_isTournamentAdmin/.test(hygiene) && /runTransaction/.test(hygiene) && /_ded
 const startDraw = ui.indexOf('var movedCount =');
 const endDraw = ui.indexOf('// v2.1.20:', startDraw);
 ok(!/AppStore\.mutate|_autoMoveAbsentToStandby\(t\)|_autoMoveSoloToWaitlist\(t\)/.test(ui.slice(startDraw, endDraw)), 'pré-sorteio não muta ausentes nem sem-dupla no navegador');
+const liga = fs.readFileSync('js/views/liga-substitution.js', 'utf8');
+const decline = liga.slice(liga.indexOf('window._ligaDeclineSub = function'), liga.indexOf('// Cancelar convite pendente'));
+ok(/_callFn\('declineLigaSubstitutionInvite'/.test(decline) && !/_commitLiga/.test(decline), 'recusa de convite da Liga só despacha a CF');
+const lx = fn.indexOf('exports.declineLigaSubstitutionInvite');
+const ly = fn.indexOf('// ─── Reset para inscrições', lx);
+ok(/runTransaction/.test(fn.slice(lx, ly)) && /inviteeUid/.test(fn.slice(lx, ly)) && /notificationOutbox/.test(fn.slice(lx, ly)), 'CF autoriza a recusa pelo convidado e avisa a organização');
 process.exitCode = failed ? 1 : 0;

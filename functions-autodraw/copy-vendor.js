@@ -60,6 +60,8 @@ const FILES = [
   // ímpar/chamada). É o que faz o servidor aplicar a decisão do organizador ao elenco
   // com a MESMA função do cliente. Ver docs/sorteio-ciclo-decisoes.md.
   'draw-decisions.js',
+  'wo-log.js',               // registro append-only de W.O. compartilhado com a substituição
+  'liga-substitution.js',    // núcleo de substituição executado no contexto isolado da CF
   // Motor de W.O. puro: a tela só envia intenção; a CF roda este mesmo arquivo.
   'wo-core.js',
 ];

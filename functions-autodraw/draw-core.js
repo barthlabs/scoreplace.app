@@ -68,6 +68,7 @@ g.window._profileNameByUid = g.window._profileNameByUid || {};
  * sempre — comportamento idêntico ao de antes. */
 const { AsyncLocalStorage } = require('node:async_hooks');
 const _alsNomes = new AsyncLocalStorage();
+const _alsLiga = new AsyncLocalStorage();
 g.window._spRodaComNomes = function (nameByUid, profByUid, fn) {
   return _alsNomes.run({ nameByUid: nameByUid || {}, profByUid: profByUid || {} }, fn);
 };
@@ -79,6 +80,8 @@ g.window._spMapaDePerfis = function () {
   const st = _alsNomes.getStore();
   return (st && st.profByUid) || g.window._profByUid || {};
 };
+g.window._spRodaLiga = function (ctx, fn) { return _alsLiga.run(ctx || {}, fn); };
+g.window._spContextoLiga = function () { return _alsLiga.getStore() || null; };
 
 g.window._nameForUid = function (uid) {
   const mapa = g.window._spMapaDeNomes();
@@ -228,6 +231,7 @@ require('./vendor/tournaments-draw-prep.js');
 // _applyDrawDecisions + os núcleos PUROS extraídos dos handlers de painel. É o que permite
 // o servidor APLICAR a decisão do organizador ao elenco com a MESMA função do cliente.
 require('./vendor/draw-decisions.js');
+require('./vendor/wo-log.js');
 
 // ── W.O. no servidor: mesmos auxiliares do cliente, sem DOM ─────────────────
 // `wo-core.js` é vendored da tela. Estes adaptadores só fornecem as dependências
@@ -272,6 +276,7 @@ require('./vendor/wo-core.js');
 // _applyResultToTournament (fecho de rodada no servidor re-aplica o placar DEFERIDO que fechou
 // a rodada). DOM só em funções que o servidor não chama (live-scoring/TV) — no load é limpo.
 require('./vendor/bracket-ui.js');
+require('./vendor/liga-substitution.js');
 
 // Sanity: o dispatcher precisa ter sido exposto (v2.3.91+ do cliente).
 if (typeof g.window._generateNextRound !== 'function') {
@@ -928,4 +933,13 @@ function setTournamentWOAbsence(t, identities, wantAbsent) {
   return { ok: true, action: wantAbsent ? 'absent' : 'revert', targets: list.length };
 }
 
-module.exports = { generateLigaRound, applyTournamentWO, setPresenceWithWOSubstitution, resolveWOSubstitutionChoice, setTournamentWOAbsence, compileFromFmt2, canRecompile, hasDrawnBracket, drawInitial, integrateLateEntries, formLatePairCore, splitLatePairCore, closeRoundCore, materializeNextPhase: g.window._phasesEngine && g.window._phasesEngine.materializeNextPhase, standingsDaFaseAnterior: g.window._phasesEngine && g.window._phasesEngine.standingsDaFaseAnterior, phaseComplete: g.window._phasesEngine && g.window._phasesEngine.phaseComplete, groupTeamStandings: g.window._phasesEngine && g.window._phasesEngine.groupTeamStandings, _window: g.window };
+function acceptLigaSubstitution(t, actor, tId, inviteId) {
+  const ctx = { tournament: t, actor: actor || {}, changed: false };
+  return g.window._spRodaLiga(ctx, function () {
+    if (typeof g.window._ligaAcceptSub !== 'function') return { ok: false, reason: 'liga-core-unavailable' };
+    g.window._ligaAcceptSub(tId, inviteId);
+    return { ok: true, changed: ctx.changed };
+  });
+}
+
+module.exports = { generateLigaRound, applyTournamentWO, setPresenceWithWOSubstitution, resolveWOSubstitutionChoice, setTournamentWOAbsence, acceptLigaSubstitution, compileFromFmt2, canRecompile, hasDrawnBracket, drawInitial, integrateLateEntries, formLatePairCore, splitLatePairCore, closeRoundCore, materializeNextPhase: g.window._phasesEngine && g.window._phasesEngine.materializeNextPhase, standingsDaFaseAnterior: g.window._phasesEngine && g.window._phasesEngine.standingsDaFaseAnterior, phaseComplete: g.window._phasesEngine && g.window._phasesEngine.phaseComplete, groupTeamStandings: g.window._phasesEngine && g.window._phasesEngine.groupTeamStandings, _window: g.window };

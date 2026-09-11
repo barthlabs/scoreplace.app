@@ -27,6 +27,7 @@ let applyWoFn = null;
 let setPresenceWithWOSubstitutionFn = null;
 let resolveWOSubstitutionChoiceFn = null;
 let setTournamentWOAbsenceFn = null;
+let acceptLigaSubstitutionFn = null;
 let drawInitial = null;   // v1.2.25: motor do SORTEIO INICIAL (Etapa 3 · fase A) — usado pela drawRound
 let integrateLateFn = null; // v1.2.57: integração de tardios no servidor — usado pela integrateLateEntries
 let formLatePairFn = null;  // formar dupla na espera + integrar, atômico — usado pela formLatePair
@@ -50,6 +51,7 @@ try {
   setPresenceWithWOSubstitutionFn = _dc.setPresenceWithWOSubstitution;
   resolveWOSubstitutionChoiceFn = _dc.resolveWOSubstitutionChoice;
   setTournamentWOAbsenceFn = _dc.setTournamentWOAbsence;
+  acceptLigaSubstitutionFn = _dc.acceptLigaSubstitution;
   drawInitial = _dc.drawInitial;
   integrateLateFn = _dc.integrateLateEntries;
   formLatePairFn = _dc.formLatePairCore;
@@ -410,6 +412,11 @@ function _isTournamentAdmin(t, uid) {
 function _isTournamentParticipant(t, uid) {
   if (!t || !uid) return false;
   return Array.isArray(t.memberUids) && t.memberUids.indexOf(uid) !== -1;
+}
+
+function _canManageLigaGroup(t, group, uid) {
+  if (_isTournamentAdmin(t, uid)) return true;
+  return !!(group && Array.isArray(group.playersUids) && group.playersUids.map(String).indexOf(String(uid)) !== -1);
 }
 
 // Espelha o LIMITE DE PERSISTÊNCIA de FirestoreDB.mutateTournament (firebase-db.js:297) —
@@ -954,6 +961,87 @@ exports.drainTournamentWaitlists = onCall(async request => {
     if (!promoted) return { ok: true, changed: false, promoted: 0 };
     const b = _gravaTorneio(tx, ref, t, before, { agoraIso });
     return { ok: true, changed: true, promoted, tournament: b.clean };
+  });
+});
+
+// ─── Liga: recusa de convite de substituição ───
+exports.declineLigaSubstitutionInvite = onCall(async request => {
+  const uid = request.auth && request.auth.uid;
+  const data = request.data || {};
+  const tId = String(data.tournamentId || '').trim(), inviteId = String(data.inviteId || '').trim();
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId || !inviteId) throw new HttpsError('invalid-argument', 'Convite inválido.');
+  const ref = db.collection('tournaments').doc(tId), agoraIso = new Date().toISOString();
+  return db.runTransaction(async tx => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    const invite = (Array.isArray(t.ligaSubInvites) ? t.ligaSubInvites : []).find(x => x && x.id === inviteId && x.status === 'pending');
+    if (!invite) throw new HttpsError('failed-precondition', 'Esse convite já foi resolvido.');
+    if (String(invite.inviteeUid || '') !== String(uid)) throw new HttpsError('permission-denied', 'Esse convite não é para você.');
+    const before = _antesDoMotor(t);
+    invite.status = 'declined'; invite.resolvedAt = agoraIso;
+    const round = (t.rounds || [])[invite.roundIndex];
+    const group = round && Array.isArray(round.monarchGroups) ? round.monarchGroups.find(g => g && g.name === invite.groupName) : null;
+    const stillPending = (t.ligaSubInvites || []).some(x => x && x.status === 'pending' && x.groupName === invite.groupName && x.roundIndex === invite.roundIndex);
+    if (group && !stillPending) { group.subStatus = 'open'; delete group.pendingInviteId; }
+    const b = _gravaTorneio(tx, ref, t, before, { agoraIso });
+    if (invite.byUid) tx.set(ref.collection('notificationOutbox').doc('liga-sub-declined-' + _outboxDocIdPart(inviteId) + '-' + Date.parse(agoraIso)), {
+      schema: 1, kind: 'tournament-notification', type: 'liga_sub_declined', title: 'Convite de substituição recusado',
+      message: String(invite.inviteeName || 'O participante') + ' recusou o convite para substituir ' + String(invite.absentName || '') + ' no ' + String(invite.groupName || '') + '.',
+      tournamentId: tId, tournamentName: t.name || '', level: 'fundamental', recipients: [String(invite.byUid)], createdAt: agoraIso, createdAtMs: Date.parse(agoraIso), dispatchStatus: 'pending'
+    }, { merge: true });
+    return { ok: true, tournament: b.clean };
+  });
+});
+
+exports.cancelLigaSubstitutionInvites = onCall(async request => {
+  const uid = request.auth && request.auth.uid;
+  const data = request.data || {};
+  const tId = String(data.tournamentId || '').trim(), groupName = String(data.groupName || '').trim();
+  const roundIndex = Number(data.roundIndex);
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId || !groupName || !Number.isInteger(roundIndex) || roundIndex < 0) throw new HttpsError('invalid-argument', 'Grupo inválido.');
+  const ref = db.collection('tournaments').doc(tId), agoraIso = new Date().toISOString();
+  return db.runTransaction(async tx => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    const round = (t.rounds || [])[roundIndex];
+    const group = round && Array.isArray(round.monarchGroups) ? round.monarchGroups.find(g => g && g.name === groupName) : null;
+    if (!group) throw new HttpsError('not-found', 'Grupo não encontrado.');
+    if (!_canManageLigaGroup(t, group, uid)) throw new HttpsError('permission-denied', 'Só a organização ou alguém do grupo pode cancelar o convite.');
+    const before = _antesDoMotor(t);
+    let cancelled = 0;
+    (t.ligaSubInvites || []).forEach(invite => { if (invite && invite.groupName === groupName && invite.roundIndex === roundIndex && invite.status === 'pending') { invite.status = 'cancelled'; invite.resolvedAt = agoraIso; cancelled++; } });
+    group.subStatus = 'open'; delete group.pendingInviteId;
+    if (!cancelled) return { ok: true, changed: false, cancelled: 0 };
+    const b = _gravaTorneio(tx, ref, t, before, { agoraIso });
+    return { ok: true, changed: true, cancelled, tournament: b.clean };
+  });
+});
+
+exports.acceptLigaSubstitutionInvite = onCall(async request => {
+  const uid = request.auth && request.auth.uid;
+  const data = request.data || {};
+  const tId = String(data.tournamentId || '').trim(), inviteId = String(data.inviteId || '').trim();
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId || !inviteId) throw new HttpsError('invalid-argument', 'Convite inválido.');
+  if (!acceptLigaSubstitutionFn) throw new HttpsError('internal', 'Núcleo de substituição indisponível.');
+  const ref = db.collection('tournaments').doc(tId), agoraIso = new Date().toISOString();
+  return db.runTransaction(async tx => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    const invite = (t.ligaSubInvites || []).find(x => x && x.id === inviteId && x.status === 'pending');
+    if (!invite) throw new HttpsError('failed-precondition', 'Esse convite já foi resolvido.');
+    if (String(invite.inviteeUid || '') !== String(uid)) throw new HttpsError('permission-denied', 'Esse convite não é para você.');
+    const siblings = (t.ligaSubInvites || []).filter(x => x && x.id !== inviteId && x.status === 'pending' && x.groupName === invite.groupName && x.roundIndex === invite.roundIndex);
+    const before = _antesDoMotor(t);
+    const out = acceptLigaSubstitutionFn(t, { uid: uid, displayName: String(invite.inviteeName || '') }, tId, inviteId);
+    if (!out || !out.changed) throw new HttpsError('failed-precondition', 'O convite mudou antes do aceite.');
+    const b = _gravaTorneio(tx, ref, t, before, { agoraIso });
+    const base = { schema: 1, kind: 'tournament-notification', tournamentId: tId, tournamentName: t.name || '', level: 'fundamental', createdAt: agoraIso, createdAtMs: Date.parse(agoraIso), dispatchStatus: 'pending' };
+    siblings.forEach((s, i) => { if (s.inviteeUid) tx.set(ref.collection('notificationOutbox').doc('liga-sub-superseded-' + _outboxDocIdPart(inviteId) + '-' + i + '-' + Date.parse(agoraIso)), Object.assign({}, base, { type: 'liga_sub_superseded', title: 'Vaga já preenchida', message: String(invite.inviteeName || 'Outro participante') + ' aceitou primeiro a vaga no ' + String(invite.groupName || '') + '.', recipients: [String(s.inviteeUid)] }), { merge: true }); });
+    if (invite.byUid) tx.set(ref.collection('notificationOutbox').doc('liga-sub-accepted-' + _outboxDocIdPart(inviteId) + '-' + Date.parse(agoraIso)), Object.assign({}, base, { type: 'liga_sub_accepted', title: 'Substituição aceita', message: String(invite.inviteeName || 'O participante') + ' aceitou entrar no lugar de ' + String(invite.absentName || '') + ' no ' + String(invite.groupName || '') + '.', recipients: [String(invite.byUid)] }), { merge: true });
+    return { ok: true, tournament: b.clean };
   });
 });
 

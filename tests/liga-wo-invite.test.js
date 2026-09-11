@@ -23,8 +23,27 @@ W._findTournamentById = function () { return _curT; };
 W.AppStore = W.AppStore || {};
 W.AppStore.tournaments = [];
 W.AppStore.currentUser = { uid: 'u-org', displayName: 'Org' };
+// O núcleo do aceite roda na Function com este contexto; no teste ele permite
+// executar a mesma regra pura sem chamar rede.
+W._spContextoLiga = function () { return { tournament: _curT, actor: W.AppStore.currentUser }; };
 // portão de escrita: executa o mutator direto no t local (teste de lógica, não de corrida)
 W.AppStore.mutate = function (tId, fn) { try { fn(_curT); } catch (e) { console.error(e); } return Promise.resolve(true); };
+// A recusa passou a ser uma intenção para a CF. Este stub representa o recibo
+// canônico já validado pelas suítes da Function; `.then` síncrono mantém este
+// teste legado de regra, que não é async.
+W.FirestoreDB = { _callFn: function (name, data) {
+  if (name === 'declineLigaSubstitutionInvite') {
+    var iv = (_curT.ligaSubInvites || []).filter(function (x) { return x.id === data.inviteId && x.status === 'pending'; })[0];
+    if (iv) {
+      iv.status = 'declined';
+      var still = (_curT.ligaSubInvites || []).some(function (x) { return x.status === 'pending' && x.groupName === iv.groupName && x.roundIndex === iv.roundIndex; });
+      var g = _curT.rounds[iv.roundIndex].monarchGroups.filter(function (x) { return x.name === iv.groupName; })[0];
+      if (g && !still) { g.subStatus = 'open'; delete g.pendingInviteId; }
+    }
+  }
+  return { then: function (resolve) { resolve({ tournament: _curT }); return { catch: function () {} }; } };
+} };
+W._applyCFTournament = function () {};
 W._canManagePresence = function () { return true; };
 const _notifs = [];
 W._sendUserNotification = function (uid, data) { _notifs.push({ uid: uid, data: data }); };
