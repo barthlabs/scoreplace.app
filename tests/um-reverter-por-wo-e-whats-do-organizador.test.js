@@ -74,6 +74,9 @@ function torneio() {
 function comoOrganizador(t) {
   W.AppStore.tournaments = [t];
   W.AppStore.currentUser = { uid: 'u_org', email: 'org@x.com', displayName: 'Organizador', notifyWhatsApp: true };
+  // A regra de reversão é executada pela Cloud Function; este harness fornece o
+  // mesmo contexto fresco para exercitar o núcleo puro sem reabrir writer local.
+  W._spContextoLiga = () => ({ tournament: t, actor: W.AppStore.currentUser });
   W._findTournamentById = () => t;
   W._isUserOrgOrCoHost = (tt, cu) => !!(cu && cu.uid === 'u_org');
   W._canManagePresence = (tt, cu) => !!(cu && cu.uid === 'u_org');

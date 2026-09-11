@@ -46,6 +46,10 @@ sandbox.AppStore = {
   logAction() {}, sync() {}, syncImmediate() {},
 };
 sandbox._findTournamentById = (id) => sandbox.AppStore.tournaments.find(t => String(t.id) === String(id)) || null;
+sandbox._spContextoLiga = () => {
+  const tournament = sandbox.AppStore.tournaments[0] || null;
+  return tournament ? { tournament, actor: sandbox.AppStore.currentUser } : null;
+};
 sandbox._canManagePresence = () => true; // org pode gerenciar
 
 vm.createContext(sandbox);

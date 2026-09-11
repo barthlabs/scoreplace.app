@@ -35,9 +35,9 @@ const categoryComm = s.slice(s.indexOf('function _categoryCommIdentity'), s.inde
 ok(/_applyCategoryCommUpdates/.test(categoryComm) && /_callFn\('applyCategoryCommunicationMarkers'/.test(categoryComm), 'marcadores de comunicação são gravados pela Function no participante fresco');
 ok(!/AppStore\.(?:mutate|commitTournamentTx)|saveTournament\(|AppStore\.sync\(/.test(categoryComm), 'comunicação de categoria não escreve snapshot no navegador');
 const resolveRequest = body('_resolveCategoryChange', 'window._approveCategoryChange');
-ok(/commitTournamentTx/.test(resolveRequest) && /reqIdentity/.test(resolveRequest) && !/saveTournament\(|AppStore\.sync\(/.test(resolveRequest), 'aprovação de pedido identifica e resolve o pedido fresco');
-const profileDirect = body('_applyProfileCategoryDirect', 'window._requestCategoryChangeFromProfile');
-ok(/commitTournamentTx/.test(profileDirect) && /freshMe/.test(profileDirect) && !/saveTournament\(|AppStore\.sync\(/.test(profileDirect), 'categoria direta do perfil atualiza o inscrito fresco');
+ok(/_callFn\('resolveProfileTournamentCategoryChange'/.test(resolveRequest) && /participantUid/.test(resolveRequest) && !/commitTournamentTx|saveTournament\(|AppStore\.sync\(/.test(resolveRequest), 'aprovação de pedido só despacha identidade estável à Function');
+const profileDirect = s.slice(s.indexOf('window._requestCategoryChangeFromProfile = function'), s.indexOf('function _resolveCategoryChange', s.indexOf('window._requestCategoryChangeFromProfile = function')));
+ok(/_callFn\('syncProfileTournamentCategory'/.test(profileDirect) && /tournamentId/.test(profileDirect) && !/commitTournamentTx|saveTournament\(|AppStore\.sync\(/.test(profileDirect), 'categoria direta do perfil solicita a atualização canônica');
 const requestChange = s.slice(s.indexOf('window._requestCategoryChangeFromProfile = function'), s.indexOf('// Helper interno'));
-ok(/commitTournamentTx/.test(requestChange) && /changeRequest/.test(requestChange) && !/saveTournament\(|AppStore\.sync\(/.test(requestChange), 'pedido de rebaixamento é inserido no documento fresco');
+ok(/_callFn\('syncProfileTournamentCategory'/.test(requestChange) && !/commitTournamentTx|saveTournament\(|AppStore\.sync\(/.test(requestChange), 'pedido de rebaixamento é reconciliado no documento fresco pela Function');
 if (fail) process.exit(1);

@@ -38,12 +38,13 @@ console.log('\n① O caminho de remoção do ORGANIZADOR declara a intenção');
 const i = src.indexOf('window.removeParticipantFunction = function');
 ok(i > 0, 'achei removeParticipantFunction');
 const corpo = _R.ateOFim(src, i).slice(0, 9000);
-ok(/saveTournament\(t,\s*\{\s*allowRosterRemoval:\s*true\s*\}\)|commitTournamentTx\([\s\S]*?\{\s*allowRosterRemoval:\s*true\s*\}/.test(corpo),
-   '⛔ ele declara `allowRosterRemoval: true` — sem isso o guard restaura quem foi removido');
-ok(!/saveTournament\(t\)\s*;/.test(corpo),
-   '   e não sobrou a chamada crua (era ela que voltava atrás na remoção)');
-ok(/_applyOrganizerParticipantRemoval/.test(corpo) && /_applyOrganizerParticipantRemoval\(ft, participantName, memberUid\)/.test(corpo),
-   'a mesma remoção é reaplicada no documento fresco antes de gravar');
+ok(/_callFn\('removeTournamentParticipant'/.test(corpo),
+   'a remoção só declara a intenção à Cloud Function');
+ok(!/saveTournament|commitTournamentTx|AppStore\.mutate/.test(corpo),
+   '   e não sobrou escritor local que pudesse restaurar a cópia antiga');
+const fn = fs.readFileSync(path.join(ROOT, 'functions-autodraw', 'index.js'), 'utf8');
+ok(/exports\.removeTournamentParticipant/.test(fn) && /runTransaction/.test(fn) && /_gravaTorneio/.test(fn),
+   'a Function reaplica a remoção no documento fresco antes de gravar');
 
 console.log('\n② O guard continua existindo e continua sendo a regra');
 ok(/roster shrink blocked/.test(db), 'o guard segue reportando quando barra alguém');
@@ -61,9 +62,7 @@ todos.forEach((x) => {
   const n = (x.s.match(/allowRosterRemoval:\s*true/g) || []).length;
   if (n) usos.push(x.f + '×' + n);
 });
-ok(usos.length <= 4 && usos.every((u) => /^(tournaments-draw-prep\.js×1|tournaments-enrollment\.js×1|tournaments\.js×2|tournaments-draw\.js×1)$/.test(u)),
-   '⛔ só os caminhos de REMOÇÃO confirmada declaram (inclui mescla e desfazer dupla) — got ' +
-   JSON.stringify(usos));
+ok(usos.length === 0, '⛔ nenhuma tela declara bypass de remoção: a autorização fica só na Function — got ' + JSON.stringify(usos));
 
 console.log(falhas === 0
   ? '\n✅ remover remove; e o que não é remoção continua protegido\n'

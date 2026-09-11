@@ -106,8 +106,8 @@ console.log('\n§1b OS RAMOS F1/F2/F3 NÃO MONTAM MAIS E-MAIL');
 
 console.log('\n§1c O DISPARO SAI DA ORIGEM, depois de o convite estar gravado');
 {
-  ok((function(){ var i = SRC_DRAW.indexOf('var _pairSaved'); var j = SRC_DRAW.indexOf('Promise.resolve(_pairSaved).then', i); var k = SRC_DRAW.indexOf('sendPairInviteEmail', j); return i >= 0 && j > i && k > j; })(),
-    '⭐ dupla: só depois do `saveTournament` confirmar (é o registro que autoriza)');
+  ok((function(){ var i = SRC_DRAW.indexOf("_callFn('requestTournamentPair'"); var j = SRC_DRAW.indexOf('sendPairInviteEmail', i); return i >= 0 && j > i; })(),
+    '⭐ dupla: só depois da Function criar o convite canônico');
   /* ⚠️ MEDIR PROXIMIDADE NO TEXTO ERA UMA MEDIDA RUIM — e a L1.1.1 provou: a distância
    * mudou e a asserção quebrou sem que nada de errado tivesse acontecido. Pior, ela
    * passava na 2.1.75, onde a ORDEM estava ERRADA (`mutate` sem `await`). O que importa é

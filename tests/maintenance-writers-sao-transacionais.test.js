@@ -9,7 +9,7 @@ const purge = cats.slice(cats.indexOf('window.renderCategoryManagerPage = functi
 const dedup = tourn.slice(tourn.indexOf('// Deduplicação de participantes'), tourn.indexOf('// Build organizers section', tourn.indexOf('// Deduplicação de participantes')));
 ok(/_requestTournamentCategoryNormalization\(tId\)/.test(purge) && /exports\.normalizeTournamentCategories/.test(auto), 'limpeza passiva só solicita a normalização transacional da Function');
 ok(!/AppStore\.(?:mutate|commitTournamentTx)|saveTournament\(|AppStore\.sync\(/.test(purge), 'limpeza passiva não escreve no navegador');
-ok(/commitTournamentTx/.test(dedup) && /_deduplicateParticipants\(ft\)/.test(dedup), 'deduplicação passiva reaplica no documento fresco');
+ok(/_callFn\('deduplicateTournamentParticipants'/.test(tourn) && /exports\.deduplicateTournamentParticipants/.test(auto) && /_deduplicateParticipants\(t\)/.test(auto), 'deduplicação passiva reaplica no documento fresco pela Function');
 ok(!/saveTournament\(|AppStore\.sync\(/.test(dedup), 'deduplicação passiva não regrava snapshot inteiro');
 ok(!tourn.includes('_applyLigaSeasonClosure') && /_requestExpiredLeagueSeasonClose\(t\)/.test(tourn) && /closeExpiredLeagueSeason/.test(dash), 'fechamento de temporada só é solicitado pela tela, sem escritor local');
 ok(/exports\.closeExpiredLeagueSeason/.test(auto) && /runTransaction/.test(auto) && /_gravaTorneio\(tx/.test(auto), 'fechamento automático relê e grava o documento fresco na transação da Function');

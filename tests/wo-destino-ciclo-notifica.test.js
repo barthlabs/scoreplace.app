@@ -53,6 +53,7 @@ let CAP = null, NOTIFS = [], DOM = {};
 function boot(t, quemSou) {
   CAP = null; NOTIFS = []; DOM = {};
   win.AppStore = { tournaments: [t], currentUser: { uid: quemSou || 'org' }, mutate: (i, f) => { f(t); return Promise.resolve(true); }, isOrganizer: () => true };
+  win._spContextoLiga = () => ({ tournament: t, actor: win.AppStore.currentUser });
   win._findTournamentById = () => t;
   win._canManagePresence = () => true;
   win.showAlertDialog = (title, html) => { CAP = { title, html }; DOM = parseDom(html); };
@@ -310,6 +311,8 @@ sec(function () {
 sec(function () {
   const t = novoT(); boot(t, 'uid_fabiana');
   win._canManagePresence = () => false;
+  // Sem Function autorizada não existe contexto de mutação canônico.
+  win._spContextoLiga = () => null;
   win._ligaSubstituteNow(t.id, 0, 'R1 Grupo W', 'Thereza', 'uid_sandra', 'Sandra');
   ok(t.rounds[0].monarchGroups[0].players.includes('Thereza'), 'sem autoridade, a substituição direta é RECUSADA (não basta esconder o botão)');
 });

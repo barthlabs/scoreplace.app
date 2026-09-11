@@ -16,6 +16,6 @@ ok(/_mergedFrom/.test(apply) && /_replaceParticipantNameInBracket/.test(apply), 
 const undoStart = s.indexOf('window._undoMergeParticipant = function');
 const undoEnd = s.indexOf('/**', undoStart);
 const undoMerge = s.slice(undoStart, undoEnd);
-ok(/commitTournamentTx/.test(undoMerge) && /_applyUndoParticipantMergeFresh\(ft, personName, placeholderName\)/.test(undoMerge), 'desfazer mescla restaura a vaga no documento fresco');
+ok(/_callFn\('undoTournamentParticipantMerge'/.test(undoMerge) && /personName/.test(undoMerge) && /placeholderName/.test(undoMerge), 'desfazer mescla restaura a vaga no documento fresco pela Function');
 ok(!/saveTournament\(|AppStore\.sync\(/.test(undoMerge), 'desfazer mescla não regrava o snapshot da tela');
 if (fail) process.exit(1);

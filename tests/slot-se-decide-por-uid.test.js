@@ -97,6 +97,7 @@ sec(function () {
     matches: [], groups: [],
   };
   win.AppStore.tournaments = [t];
+  win._spContextoLiga = () => ({ tournament: t, actor: win.AppStore.currentUser });
   win.AppStore.mutate = (tid, fn2) => { fn2(t); return Promise.resolve(true); };
 
   win._ligaApplyWo(t.id, 0, 'R1 Grupo A', 'Carol');

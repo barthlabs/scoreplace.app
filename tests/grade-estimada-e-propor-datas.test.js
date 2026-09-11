@@ -197,8 +197,9 @@ const srcBracket = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'br
 ok(/var _schGrpBtn = \(typeof window\._schGroupChip === 'function'\)/.test(srcBracket),
   'bracket: o gate isMyGroup saiu do call site do grupo (senão a data some nos outros grupos)');
 const srcDraw = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'tournaments-draw.js'), 'utf8');
-ok(/window\._schAplicarGrade\(t\)/.test(srcDraw), 'o pós-sorteio aplica a grade estimada');
-ok(/commitTournamentTx[\s\S]*_schAplicarGrade\(ft\)/.test(srcDraw), 'o pós-sorteio reaplica a grade no documento fresco');
+const srcFn = fs.readFileSync(path.join(__dirname, '..', 'functions-autodraw', 'index.js'), 'utf8');
+ok(/generateDraw/.test(srcDraw) && /_callFn/.test(srcDraw), 'o pós-sorteio pede a chave canônica');
+ok(/_schAplicarGrade\(t\)/.test(srcFn) && /runTransaction/.test(srcFn), 'a Function aplica a grade no documento fresco');
 const srcDb = fs.readFileSync(path.join(__dirname, '..', 'js', 'firebase-db.js'), 'utf8');
 ok(/_ADITIVOS = \[[^\]]*'scheduledKind'/.test(srcDb),
   'firebase-db: scheduledKind está na allowlist do save aditivo (senão a origem se perde e a invariante cai)');

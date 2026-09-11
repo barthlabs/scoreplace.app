@@ -30,6 +30,9 @@ W.AppStore = W.AppStore || {};
 W.AppStore.tournaments = [];
 W.AppStore.currentUser = { uid: 'u-org', displayName: 'Org' };
 W.AppStore.mutate = (tId, fn) => { try { fn(_curT); } catch (e) { console.error(e); } return Promise.resolve(true); };
+// A L7 removeu a escrita do navegador. O motor continua sendo testado, mas agora
+// dentro do contexto canônico que a Cloud Function fornece à regra pura.
+W._spContextoLiga = () => _curT ? { tournament: _curT, actor: W.AppStore.currentUser } : null;
 W._canManagePresence = () => true;
 W._sendUserNotification = () => {};
 W.showNotification = () => {};

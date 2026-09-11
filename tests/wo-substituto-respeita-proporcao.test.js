@@ -79,6 +79,7 @@ function loadLiga(t, profiles) {
     isOrganizer: () => true,
   };
   win.AppStore = store;
+  win._spContextoLiga = () => ({ tournament: t, actor: win.AppStore.currentUser });
   win._findTournamentById = (id) => (String(t.id) === String(id) ? t : null);
   win._canManagePresence = () => true;
   win.showNotification = () => {};

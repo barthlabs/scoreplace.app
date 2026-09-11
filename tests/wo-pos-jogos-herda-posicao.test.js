@@ -58,6 +58,7 @@ function loadLiga(t, opts) {
     mutate: (tid, fn) => { fn(t); return Promise.resolve(true); },
     isOrganizer: () => true,
   };
+  win._spContextoLiga = () => ({ tournament: t, actor: win.AppStore.currentUser });
   win._findTournamentById = (id) => (String(t.id) === String(id) ? t : null);
   win._canManagePresence = () => ('org' in opts ? !!opts.org : true);
   win._isLigaFormat = () => true;

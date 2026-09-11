@@ -34,7 +34,18 @@ W.FirestoreDB = {
   // O thenable síncrono preserva o ritmo deste harness, que testa a ação do card sem
   // precisar de um loop assíncrono de navegador.
   _callFn: function (name, payload) {
-    if (name === 'setTournamentWOAbsence') woCalls.push(payload);
+    if (name === 'removeTournamentParticipant') {
+      var t = W.AppStore.tournaments[0]; var uid = String(payload.memberUid || '');
+      t.participants = t.participants.flatMap(function (p) {
+        if (typeof p === 'string') return p === payload.participantName ? [] : [p];
+        if (uid && p && (p.p1Uid === uid || p.p2Uid === uid)) {
+          var other = p.p1Uid === uid ? p.p2Uid : p.p1Uid; return other ? [{ uid: other }] : [];
+        }
+        return p && p.uid === uid ? [] : [p];
+      });
+      [t.checkedIn, t.absent, t.vips].forEach(function (m) { if (m && uid) delete m[uid]; });
+      saved++;
+    } else if (name === 'setTournamentWOAbsence') woCalls.push(payload);
     else vipCall = { name: name, payload: payload };
     return { then: function (f) {
       if (f) f({ data: { ok: true, vips: (function () { var out = {}; out[String(payload.uid || payload.participantName)] = true; return out; })() } });

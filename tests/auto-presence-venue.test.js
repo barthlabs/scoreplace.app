@@ -36,13 +36,18 @@ function setUser() { W.AppStore.currentUser = { uid: 'uA', displayName: 'Ana' };
 function checkinAt(pid, lat, lon) {
   return [{ type: 'checkin', placeId: pid, venueLat: lat, venueLon: lon, startsAt: Date.now() - HOUR, endsAt: Date.now() + 4 * HOUR }];
 }
+let _presenceCalls = 0;
 function run(t, presences) {
-  W._autoPresChk = {};              // zera throttle entre casos
+  W._autoPresChk = {}; _presenceCalls = 0;              // zera throttle entre casos
   W.PresenceDB = { loadMyActive: function () { return Promise.resolve(presences); } };
+  W.FirestoreDB = { setTournamentPresence: function (id, uid, action) { _presenceCalls++;
+    if (action === 'present') { t.checkedIn[uid] = Date.now(); delete t.checkedInConfirmed[uid]; }
+    return Promise.resolve({ ok: true });
+  } };
   W.AppStore.tournaments = [t];
   setUser();
   W._autoPresenceFromVenue(t);
-  return delay(5);                  // deixa o .then da Promise rodar
+  return delay(25);                  // deixa o .then da Promise rodar
 }
 const green = (t) => W._idMapHas(t, t.checkedIn || {}, { uid: 'uA', displayName: 'Ana' });
 const blue = (t) => W._idMapHas(t, t.checkedInConfirmed || {}, { uid: 'uA', displayName: 'Ana' });
@@ -54,6 +59,7 @@ const blue = (t) => W._idMapHas(t, t.checkedInConfirmed || {}, { uid: 'uA', disp
   var tA = mkT(1 * HOUR);                     // começa em 1h → agora está em [início−2h, fim]
   W._idMapSet(tA, tA.checkedInConfirmed, { uid: 'uA', displayName: 'Ana' }, 1);  // estava azul
   await run(tA, checkinAt('PID1', -23.5, -46.6));
+  ok(_presenceCalls === 1, 'A: dispara a Function de presença uma vez');
   ok(green(tA), 'A: check-in no local + na janela → PRESENTE (verde)');
   ok(!blue(tA), 'A: verde limpa o azul (confirmado)');
 

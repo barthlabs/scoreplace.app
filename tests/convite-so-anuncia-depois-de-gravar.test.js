@@ -205,15 +205,15 @@ function palco(opts) {
     ok(!p.eventos.some((e) => e.indexOf('toast:warning:') === 0), 'sem aviso de falha');
   }
 
-  console.log('\n§5 DUPLA — segue esperando o (?:saveTournament|commitTournamentTx), e o toast espera o veredito');
+  console.log('\n§5 DUPLA — a Function cria o convite antes de pedir o e-mail, e o toast espera o veredito');
   {
-    ok(/commitTournamentTx[\s\S]{0,1800}Promise\.resolve\(_pairSaved\)\.then/.test(SRC_DRAW),
+    ok(/_callFn\('requestTournamentPair'[\s\S]{0,1800}sendPairInviteEmail/.test(SRC_DRAW),
       'o convite de dupla continua dentro do `.then` da confirmação transacional');
-    ok(/_pediuEmail[\s\S]{0,200}sendPairInviteEmail\(String\(t\.id\), uid2\)/.test(SRC_DRAW),
+    ok(/sendPairInviteEmail\(String\(tId\), uid2\)/.test(SRC_DRAW),
       '  → e a Function é chamada lá dentro');
-    ok(/_pediuEmail\.then\(function \(veredito\)[\s\S]{0,500}veredito\.enviado/.test(SRC_DRAW),
+    ok(/Promise\.resolve\(email\)\.then[\s\S]{0,500}v && v\.enviado/.test(SRC_DRAW),
       '⭐ o toast passou a OLHAR o veredito');
-    ok(/veredito && veredito\.enviado\) \{[\s\S]{0,220}'Convite enviado'/.test(SRC_DRAW),
+    ok(/v && v\.enviado[\s\S]{0,220}'Convite enviado'/.test(SRC_DRAW),
       '  → "Convite enviado" só no ramo em que o e-mail saiu');
     ok(/Convite registrado[\s\S]{0,140}'warning'/.test(SRC_DRAW),
       '⭐ e o ramo de falha avisa sem afirmar envio');
