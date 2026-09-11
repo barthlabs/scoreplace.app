@@ -7,5 +7,10 @@ const fn=fs.readFileSync('functions-autodraw/index.js','utf8');const a=fn.indexO
 ok(a>=0&&srv.includes('db.runTransaction')&&srv.includes('_isTournamentAdmin')&&srv.includes('_gravaTorneio'),'servidor autoriza, relê e grava as atribuições na transação canônica');
 ok(srv.includes("collection('users')")&&srv.includes('skillBySport')&&srv.includes("'misto'")&&srv.includes('Object.keys(profiles)'),'a mesma transação aceita misto e atualiza cada perfil uma vez por modalidade');
 ok(srv.includes('uncategorizedByOrganizer')&&srv.includes("target.categorySource='organizador'")&&srv.includes('target.wasUncategorized=true'),'remoção administrativa preserva no servidor a marca de inscrito sem categoria');
+ok(srv.includes('markWasUncategorized')&&srv.includes('notifyCategory')&&srv.includes('categoryNotifications')&&srv.includes('slice(-200)'),'atribuição direta preserva marca e limita o histórico de aviso na mesma transação');
+ok(fn.includes('exports.mergeTournamentCategories')&&fn.includes('_categoryMutationsCore.merge')&&fn.includes('_isTournamentAdmin'),'mesclagem relê e aplica o núcleo no servidor autorizado');
+ok(fn.includes('exports.normalizeTournamentCategories')&&fn.includes('_categoryMutationsCore.normalize')&&fn.includes('_isTournamentAdmin'),'normalização de categorias relê e grava somente na transação autorizada');
+ok(fn.includes('exports.autoAssignTournamentCategories')&&fn.includes('_categoryMutationsCore.autoAssign')&&fn.includes("collection('users')"),'autoenquadramento lê perfil e grava a categoria somente na transação canônica');
+ok(fn.includes('exports.applyCategoryCommunicationMarkers')&&fn.includes('_isTournamentAdmin')&&fn.includes('categoryCommPending'),'marcadores de comunicação são persistidos na transação autorizada');
 ok(!part.includes('.finally(function(){')&&part.includes('window._erUpdateSaveBar();'),'falha da CF preserva alterações staged para nova tentativa, sem recarga');
 process.exit(f?1:0);

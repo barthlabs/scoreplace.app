@@ -1369,20 +1369,9 @@ window.renderCategoryManagerPage = function(container, tId) {
         // (os cliques vivem na delegação única — ver _catMgrTid)
     };
 
-    // v2.4.29: ao abrir, limpa categorias mortas/abandonadas dos participantes
-    // (ex.: "Fem TOP 500" num torneio C/D) ANTES de renderizar, pra a tela já
-    // mostrar quem ficou sem categoria. Salva se mudou algo.
-    try {
-        var _tPurge = window._findTournamentById(tId);
-        if (_tPurge && typeof window._purgeInvalidParticipantCategories === 'function') {
-            var _purged = window._purgeInvalidParticipantCategories(_tPurge);
-            if (_purged > 0 && window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
-                window.AppStore.commitTournamentTx(tId, function(ft) {
-                    return typeof window._purgeInvalidParticipantCategories === 'function' && window._purgeInvalidParticipantCategories(ft) > 0;
-                });
-            }
-        }
-    } catch (_e) {}
+    // Normalização canônica: a tela nunca corrige nem grava o torneio. Ela só
+    // pede à Function que releia o documento e aplique a limpeza transacional.
+    window._requestTournamentCategoryNormalization(tId);
 
     _renderModal();
 
@@ -1516,23 +1505,9 @@ window._hydrateInlineCatMgr = function(tId) {
     var container = document.getElementById('inline-cat-mgr-' + tId);
     if (!container) return;
 
-    // Safety net: if the tournament was saved with singleton skill categories
-    // (e.g. only "Fem C" and no other Fem category), rename them to bare gender labels
-    // ("Fem") so the manager and participant cards show the correct name.
-    var t = window._findTournamentById(tId);
-    if (t) {
-        var _prevCombined = JSON.stringify(t.combinedCategories);
-        _simplifySingletonCategories(t);
-        if (JSON.stringify(t.combinedCategories) !== _prevCombined) {
-            if (window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
-                window.AppStore.commitTournamentTx(tId, function(ft) {
-                    var before = JSON.stringify({ combinedCategories: ft.combinedCategories, skillCategories: ft.skillCategories, participants: ft.participants, mergeHistory: ft.mergeHistory });
-                    _simplifySingletonCategories(ft);
-                    return before !== JSON.stringify({ combinedCategories: ft.combinedCategories, skillCategories: ft.skillCategories, participants: ft.participants, mergeHistory: ft.mergeHistory });
-                });
-            }
-        }
-    }
+    // O saneamento de categorias únicas e rótulos antigos é sempre servidor-side.
+    // A hidratação só pede a normalização idempotente; não muda estado local.
+    window._requestTournamentCategoryNormalization(tId);
 
     // Preserve scroll: replacing innerHTML removes the focused button from the DOM,
     // causing the browser to move focus to body and scroll to top.
@@ -2085,20 +2060,12 @@ function _executeMerge(tId, sourceCat, targetCat, mergedName) {
     var t = window._findTournamentById(tId);
     if (!t) return;
     var timestamp = Date.now();
-    if (!_applyCategoryMerge(t, sourceCat, targetCat, mergedName, timestamp)) return;
-    window.AppStore.logAction(tId, 'Categorias mescladas: ' + sourceCat + ' + ' + targetCat + ' → ' + mergedName);
-    if (window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
-        window.AppStore.commitTournamentTx(tId, function(ft) {
-            return _applyCategoryMerge(ft, sourceCat, targetCat, mergedName, timestamp);
-        });
-    }
-
-    if (typeof showNotification === 'function') {
-        showNotification(_t('cat.merged'), _t('cat.mergedMsg', { src: sourceCat, target: targetCat, merged: mergedName }) + ' — toque no ⤺ do card para desfazer.', 'success');
-    }
-
-    // Re-render the modal after a small delay to ensure data is settled
-    setTimeout(function() { window._refreshCatMgr(tId); }, 100);
+    if (!window.FirestoreDB || typeof window.FirestoreDB._callFn !== 'function') return;
+    window.FirestoreDB._callFn('mergeTournamentCategories', { tournamentId: tId, sourceCat: sourceCat, targetCat: targetCat, mergedName: mergedName, timestamp: timestamp })
+        .then(function() {
+            if (typeof showNotification === 'function') showNotification(_t('cat.merged'), _t('cat.mergedMsg', { src: sourceCat, target: targetCat, merged: mergedName }) + ' — toque no ⤺ do card para desfazer.', 'success');
+            setTimeout(function() { window._refreshCatMgr(tId); }, 100);
+        }).catch(function(e) { if (typeof showNotification === 'function') showNotification('Erro', (e && e.message) || 'Não foi possível mesclar as categorias.', 'error'); });
 }
 
 // Remove a participant from a specific category (set as uncategorized)
@@ -2374,23 +2341,15 @@ function _applyDeleteEmptyCategory(t, cat) {
 
 window._deleteEmptyCategory = function(tId, cat) {
     var t = window._findTournamentById(tId);
-    var outcome = _applyDeleteEmptyCategory(t, cat);
-    if (outcome === 'occupied') {
-        if (typeof showNotification === 'function') showNotification('⚠️ Categoria não vazia', 'Mova os participantes antes de excluir.', 'error');
-        return;
-    }
-    if (outcome === 'played') {
-        if (typeof showNotification === 'function') showNotification('⚠️ Categoria com jogos disputados', 'Não dá pra excluir "' + (window._displayCategoryName ? window._displayCategoryName(cat) : cat) + '" — ela tem partidas já jogadas que seriam perdidas da classificação.', 'error');
-        return;
-    }
-    if (outcome !== true) return;
-
-    window.AppStore.logAction(tId, 'Categoria excluída: ' + cat);
-    if (window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
-        window.AppStore.commitTournamentTx(tId, function(ft) { return _applyDeleteEmptyCategory(ft, cat) === true; });
-    }
-    if (typeof showNotification === 'function') showNotification('✅ Categoria excluída', window._displayCategoryName(cat), 'success');
-    setTimeout(function() { window._refreshCatMgr(tId); }, 100);
+    if (!t || !window.FirestoreDB || typeof window.FirestoreDB._callFn !== 'function') return;
+    window.FirestoreDB._callFn('deleteEmptyTournamentCategory', { tournamentId: tId, category: cat }).then(function(result) {
+        var outcome = result && (result.outcome || (result.changed ? 'deleted' : 'missing'));
+        if (outcome === 'occupied') { if (typeof showNotification === 'function') showNotification('⚠️ Categoria não vazia', 'Mova os participantes antes de excluir.', 'error'); return; }
+        if (outcome === 'played') { if (typeof showNotification === 'function') showNotification('⚠️ Categoria com jogos disputados', 'Não dá pra excluir "' + (window._displayCategoryName ? window._displayCategoryName(cat) : cat) + '" — ela tem partidas já jogadas que seriam perdidas da classificação.', 'error'); return; }
+        if (outcome !== 'deleted') return;
+        if (typeof showNotification === 'function') showNotification('✅ Categoria excluída', window._displayCategoryName(cat), 'success');
+        setTimeout(function() { window._refreshCatMgr(tId); }, 100);
+    }).catch(function(e) { if (typeof showNotification === 'function') showNotification('Erro', (e && e.message) || 'Não foi possível excluir a categoria.', 'error'); });
 };
 
 // Unmerge a previously merged category
@@ -2546,18 +2505,12 @@ function _executeUnmerge(tId, mergeIdx) {
     if (!t || !t.mergeHistory || !t.mergeHistory[mergeIdx]) return;
     var record = t.mergeHistory[mergeIdx];
     var mergeIdentity = { timestamp: record.timestamp, mergedName: record.mergedName, sourceCat: record.sourceCat, targetCat: record.targetCat };
-    if (!_applyCategoryUnmerge(t, mergeIdentity)) return;
-    window.AppStore.logAction(tId, 'Mesclagem desfeita: ' + mergeIdentity.mergedName + ' → ' + mergeIdentity.sourceCat + ' + ' + mergeIdentity.targetCat);
-    if (window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
-        window.AppStore.commitTournamentTx(tId, function(ft) { return _applyCategoryUnmerge(ft, mergeIdentity); });
-    }
-
-    if (typeof showNotification === 'function') {
-        showNotification(_t('cat.unmerged'), _t('cat.unmergedMsg', { merged: mergeIdentity.mergedName, src: mergeIdentity.sourceCat, target: mergeIdentity.targetCat }), 'success');
-    }
-
-    // Re-render
-    setTimeout(function() { window._refreshCatMgr(tId); }, 100);
+    if (!window.FirestoreDB || typeof window.FirestoreDB._callFn !== 'function') return;
+    window.FirestoreDB._callFn('undoTournamentCategoryMerge', { tournamentId: tId, mergeIdentity: mergeIdentity }).then(function(result) {
+        if (!result || !result.changed) return;
+        if (typeof showNotification === 'function') showNotification(_t('cat.unmerged'), _t('cat.unmergedMsg', { merged: mergeIdentity.mergedName, src: mergeIdentity.sourceCat, target: mergeIdentity.targetCat }), 'success');
+        setTimeout(function() { window._refreshCatMgr(tId); }, 100);
+    }).catch(function(e) { if (typeof showNotification === 'function') showNotification('Erro', (e && e.message) || 'Não foi possível desfazer a mesclagem.', 'error'); });
 }
 
 // Reapply an inferred undo to a fresh snapshot when no historical merge record exists.
@@ -2617,74 +2570,27 @@ function _applyInferredCategoryUnmerge(t, mergedName, inferredCats) {
 // Unmerge without mergeHistory — infer from name pattern
 function _executeInferredUnmerge(tId, mergedName, inferredCats) {
     var t = window._findTournamentById(tId);
-    if (!_applyInferredCategoryUnmerge(t, mergedName, inferredCats)) return;
-    window.AppStore.logAction(tId, 'Mesclagem desfeita: ' + mergedName + ' → ' + inferredCats.join(' + '));
-    if (window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
-        window.AppStore.commitTournamentTx(tId, function(ft) { return _applyInferredCategoryUnmerge(ft, mergedName, inferredCats); });
-    }
-
-    if (typeof showNotification === 'function') {
-        showNotification(_t('cat.unmerged'), _t('cat.unmergedInferredMsg', { merged: mergedName, cats: inferredCats.join(' + ') }), 'success');
-    }
-
-    // Re-render
-    setTimeout(function() { window._refreshCatMgr(tId); }, 100);
+    if (!t || !window.FirestoreDB || typeof window.FirestoreDB._callFn !== 'function') return;
+    window.FirestoreDB._callFn('undoInferredTournamentCategoryMerge', { tournamentId: tId, mergedName: mergedName, inferredCats: inferredCats }).then(function(result) {
+        if (!result || !result.changed) return;
+        if (typeof showNotification === 'function') showNotification(_t('cat.unmerged'), _t('cat.unmergedInferredMsg', { merged: mergedName, cats: inferredCats.join(' + ') }), 'success');
+        setTimeout(function() { window._refreshCatMgr(tId); }, 100);
+    }).catch(function(e) { if (typeof showNotification === 'function') showNotification('Erro', (e && e.message) || 'Não foi possível desfazer a mesclagem.', 'error'); });
 }
 
 // Assign an uncategorized participant to a category (manual by organizer)
 function _assignParticipantCategory(tId, pIdx, category) {
     var t = window._findTournamentById(tId);
     if (!t || !t.participants) return;
-
-    // Work directly on the tournament's participants array
     var parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants);
     if (pIdx < 0 || pIdx >= parts.length) return;
-
     var p = parts[pIdx];
     var pName = typeof p === 'string' ? p : (p.displayName || p.name || '');
-
-    // Convert string participant to object if needed
-    if (typeof p === 'string') {
-        parts[pIdx] = { name: p, displayName: p, categories: [category], category: category, categorySource: 'organizador', wasUncategorized: true };
-        p = parts[pIdx];
-    } else {
-        window._addParticipantCategory(p, category);
-        p.categorySource = 'organizador';
-        p.wasUncategorized = true;
-    }
-
-    // Ensure the array is written back (in case Object.values created a copy)
-    if (!Array.isArray(t.participants)) {
-        t.participants = parts;
-    }
-
-    // Add notification for the participant
-    _addCategoryNotification(t, parts[pIdx], category);
-
     var _assignKey = (p && typeof p === 'object') ? (p.uid || p.email || p.displayName || p.name || '') : String(p || '');
-    if (window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
-        window.AppStore.commitTournamentTx(tId, function(ft) {
-            var freshParts = Array.isArray(ft.participants) ? ft.participants : Object.values(ft.participants || {});
-            var freshIdx = freshParts.findIndex(function(x) {
-                if (typeof x === 'string') return x === _assignKey;
-                return x && typeof x === 'object' && (x.uid === _assignKey || x.email === _assignKey || x.displayName === _assignKey || x.name === _assignKey);
-            });
-            if (freshIdx < 0) return false;
-            var freshP = freshParts[freshIdx];
-            if (typeof freshP === 'string') freshP = freshParts[freshIdx] = { name: freshP, displayName: freshP, categories: [category], category: category, categorySource: 'organizador', wasUncategorized: true };
-            else { window._addParticipantCategory(freshP, category); freshP.categorySource = 'organizador'; freshP.wasUncategorized = true; }
-            if (!Array.isArray(ft.participants)) ft.participants = freshParts;
-            _addCategoryNotification(ft, freshP, category);
-            return true;
-        });
-    }
-
-    if (typeof showNotification === 'function') {
-        showNotification(_t('cat.assigned'), _t('cat.assignedMsg', { name: pName, cat: window._displayCategoryName(category) }), 'success');
-    }
-
-    // Re-render the modal after a small delay to ensure data is settled
-    setTimeout(function() { window._refreshCatMgr(tId); }, 100);
+    if (!window.FirestoreDB || typeof window.FirestoreDB._callFn !== 'function') return;
+    window.FirestoreDB._callFn('applyEnrollmentAssignments', { tournamentId: tId, sport: t.sport || '', edits: [{ uid: (p && p.uid) || '', email: (p && p.email) || '', name: _assignKey, category: category, markWasUncategorized: true, notifyCategory: true }] })
+        .then(function() { if (typeof showNotification === 'function') showNotification(_t('cat.assigned'), _t('cat.assignedMsg', { name: pName, cat: window._displayCategoryName(category) }), 'success'); setTimeout(function() { window._refreshCatMgr(tId); }, 100); })
+        .catch(function(e) { if (typeof showNotification === 'function') showNotification('Erro', (e && e.message) || 'Não foi possível atribuir a categoria.', 'error'); });
 }
 
 // Category assignment notification
@@ -2867,16 +2773,7 @@ window._autoAssignCategories = function(tId, _preloadedT, opts) {
 
     var didMutate = assigned > 0 || purged > 0;
     if (opts) opts.didMutate = didMutate;
-    if (didMutate) {
-        if (!Array.isArray(t.participants)) t.participants = parts;
-        if (!(opts && opts.skipPersist) && window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
-            window.AppStore.commitTournamentTx(tId, function(ft) {
-                var freshOpts = { skipPersist: true, didMutate: false };
-                window._autoAssignCategories(tId, ft, freshOpts);
-                return freshOpts.didMutate;
-            });
-        }
-    }
+    if (didMutate && !Array.isArray(t.participants)) t.participants = parts;
 
     return assigned;
 };
@@ -2884,109 +2781,19 @@ window._autoAssignCategories = function(tId, _preloadedT, opts) {
 // Async version: loads Firestore profiles for participants missing profile data,
 // then runs the sync auto-assign. Caller should fire-and-forget.
 window._autoAssignCategoriesAsync = async function(tId) {
-    var t = window._findTournamentById(tId);
-    if (!t || !window.FirestoreDB) return 0;
-
-    var allCats = window._getTournamentCategories ? window._getTournamentCategories(t) : (t.combinedCategories || []);
-    if (allCats.length === 0) return 0;
-
-    var parts = t.participants ? (Array.isArray(t.participants) ? t.participants : Object.values(t.participants)) : [];
-
-    // Needs enrichment: participants missing MEANINGFUL profile data AND uncategorized
-    function _needsEnrichment(p) {
-        if (typeof p !== 'object') return false;
-        if (p.categorySource === 'organizador') return false;
-        var existingCats = (p.categories || (p.category ? [p.category] : []));
-        var hasValidCat = existingCats.some(function(c) { return allCats.indexOf(c) !== -1; });
-        if (hasValidCat) return false;
-        // skillBySport with all-null values (sport selected but skill not set) counts as missing
-        var _smMean = window._pSkillMap(p);
-        var hasMeaningfulSkill = _smMean && typeof _smMean === 'object' &&
-            Object.keys(_smMean).some(function(k) { return !!_smMean[k]; });
-        // Missing gender when tournament has gender categories also requires enrichment
-        var missingGender = !window._pGender(p) && (t.genderCategories || []).length > 0;
-        return !(window._pBirth(p) || hasMeaningfulSkill || window._pDefaultCat(p)) || missingGender;
+    tId = String(tId || '').trim();
+    if (!tId || !window.FirestoreDB || typeof window.FirestoreDB._callFn !== 'function') return 0;
+    // Perfil e torneio são lidos no servidor: a interface não combina snapshots
+    // nem persiste uma cópia potencialmente defasada da inscrição.
+    var result = await window.FirestoreDB._callFn('autoAssignTournamentCategories', { tournamentId: tId });
+    if (result && result.changed) {
+        setTimeout(function() { window._refreshCatMgr(tId); }, 100);
     }
-
-    // Participants with uid — load by uid
-    var toLoadByUid = parts.filter(function(p) { return _needsEnrichment(p) && p.uid; });
-    // Participants without uid but with email — load by email query
-    var toLoadByEmail = parts.filter(function(p) { return _needsEnrichment(p) && !p.uid && p.email; });
-
-    function _hasMeaningfulSkill(participant) {
-        var _smP = window._pSkillMap(participant); // v1.3.39: skill perfil-first
-        return _smP && typeof _smP === 'object' &&
-            Object.keys(_smP).some(function(k) { return !!_smP[k]; });
-    }
-
-    // Enrich by uid
-    for (var i = 0; i < toLoadByUid.length; i++) {
-        try {
-            var profile = await window.FirestoreDB.loadUserProfile(toLoadByUid[i].uid);
-            if (profile) {
-                if (profile.birthDate && !toLoadByUid[i].birthDate) toLoadByUid[i].birthDate = profile.birthDate;
-                // Overwrite skillBySport even if object exists — stale {sport: null} must be replaced with real data
-                if (profile.skillBySport && !_hasMeaningfulSkill(toLoadByUid[i])) toLoadByUid[i].skillBySport = profile.skillBySport;
-                if (profile.defaultCategory && !toLoadByUid[i].defaultCategory) toLoadByUid[i].defaultCategory = profile.defaultCategory;
-                if (profile.gender && !toLoadByUid[i].gender) toLoadByUid[i].gender = profile.gender;
-            }
-        } catch (_e) {}
-    }
-
-    // Enrich by email (participants added before uid was stored)
-    if (toLoadByEmail.length > 0 && window.FirestoreDB.db) {
-        for (var j = 0; j < toLoadByEmail.length; j++) {
-            try {
-                var emailQ = toLoadByEmail[j].email.toLowerCase();
-                var snap = await window.FirestoreDB.db.collection('users')
-                    .where('email_lower', '==', emailQ).limit(1).get();
-                var vivo = await window._userVivo(snap);   // lápide guarda o mesmo e-mail
-                if (vivo) {
-                    var pdata = vivo.data;
-                    if (pdata.birthDate && !toLoadByEmail[j].birthDate) toLoadByEmail[j].birthDate = pdata.birthDate;
-                    // Overwrite skillBySport even if object exists — stale {sport: null} must be replaced with real data
-                    if (pdata.skillBySport && !_hasMeaningfulSkill(toLoadByEmail[j])) toLoadByEmail[j].skillBySport = pdata.skillBySport;
-                    if (pdata.defaultCategory && !toLoadByEmail[j].defaultCategory) toLoadByEmail[j].defaultCategory = pdata.defaultCategory;
-                    if (pdata.gender && !toLoadByEmail[j].gender) toLoadByEmail[j].gender = pdata.gender;
-                    if (!toLoadByEmail[j].uid && vivo.uid) toLoadByEmail[j].uid = vivo.uid;
-                }
-            } catch (_e) {}
-        }
-    }
-
-    // Run the sync assign passing the enriched `t` directly to avoid race with onSnapshot
-    var n = window._autoAssignCategories(tId, t);
-
-    // If onSnapshot replaced AppStore during our awaits, the enriched `t` is now orphaned.
-    // Sync category assignments back to the current AppStore reference so _renderModal sees them.
-    if (n > 0) {
-        var currentT = window._findTournamentById(tId);
-        if (currentT && currentT !== t) {
-            var eParts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
-            var cParts = Array.isArray(currentT.participants) ? currentT.participants : Object.values(currentT.participants || {});
-            eParts.forEach(function(ep) {
-                if (!ep || ep.categorySource !== 'perfil') return;
-                var cp = cParts.find(function(p) {
-                    return (ep.uid && p.uid === ep.uid) ||
-                           (ep.email && p.email === ep.email) ||
-                           (ep.name && p.name === ep.name);
-                });
-                if (cp) {
-                    cp.categories = ep.categories;
-                    cp.category = ep.category;
-                    cp.categorySource = ep.categorySource;
-                    if (ep.gender) cp.gender = ep.gender;
-                    if (ep.skillBySport) cp.skillBySport = ep.skillBySport;
-                }
-            });
-        }
-    }
-
-    // v2.3.92: depois de enriquecer perfis e atribuir quem deu, dispara a
-    // comunicação FUNDAMENTAL pra quem ficou sem categoria por falta de dado.
-    try { await window._dispatchCategoryDataRequests(t); } catch (_e) { window._warn('[catDataReq] falhou', _e); }
-
-    return n;
+    try {
+        var fresh = window._findTournamentById(tId);
+        if (fresh) await window._dispatchCategoryDataRequests(fresh);
+    } catch (_e) { window._warn('[catDataReq] falhou', _e); }
+    return Number(result && result.assigned) || 0;
 };
 
 // v2.3.92: comunicação automática FUNDAMENTAL pros inscritos que não puderam ser
@@ -3059,13 +2866,34 @@ window._dispatchCategoryDataRequests = async function(t) {
             sent++;
         } catch (e) { window._warn('[catDataReq] envio falhou p/ uid ' + uid, e); }
     }
-    if (updates.length && window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
-        window.AppStore.commitTournamentTx(t.id, function(ft) { return _applyCategoryCommUpdates(ft, updates); });
+    if (updates.length && window.FirestoreDB && typeof window.FirestoreDB._callFn === 'function') {
+        try {
+            await window.FirestoreDB._callFn('applyCategoryCommunicationMarkers', { tournamentId: String(t.id), updates: updates });
+        } catch (e) { window._warn('[catDataReq] não gravou marcadores no servidor', e); }
     }
     return sent;
 };
 
 // ════════════════════════════════════════════════════════════════════════════
+// Normalização disparada pela tela, mas executada exclusivamente no servidor.
+// Cada torneio é solicitado uma vez por sessão de tela; a Function é idempotente e
+// relê o documento fresco antes de alterar qualquer campo.
+var _categoryNormalizationRequested = {};
+window._requestTournamentCategoryNormalization = function(tId) {
+    tId = String(tId || '').trim();
+    if (!tId || _categoryNormalizationRequested[tId]) return;
+    if (!window.FirestoreDB || typeof window.FirestoreDB._callFn !== 'function') return;
+    _categoryNormalizationRequested[tId] = true;
+    window.FirestoreDB._callFn('normalizeTournamentCategories', { tournamentId: tId }).then(function(result) {
+        if (result && result.changed) {
+            setTimeout(function() { window._refreshCatMgr(tId); }, 100);
+        }
+    }).catch(function(err) {
+        delete _categoryNormalizationRequested[tId];
+        window._warn('[categories] normalização no servidor falhou', err);
+    });
+};
+
 // v2.4.28: inscrito SEM categoria válida entra na categoria MAIS FRACA no sorteio
 // ════════════════════════════════════════════════════════════════════════════
 // Regra do dono (Confra, jun/2026): no sorteio, qualquer participante que não
@@ -3469,5 +3297,25 @@ window._categoryRequestsBannerHtml = function(t) {
 // ⚠️ Ao religar: as notificações antigas ainda estão não-lidas e apareceriam todas de
 // uma vez. Filtrar por data (ou marcar as anteriores a esta versão como lidas) antes.
 window._checkCategoryNotifications = function() { /* desligada — ver comentário acima */ };
+
+function _normalizeTournamentCategories(t) {
+    if (!t || typeof t !== 'object') return false;
+    var snapshot = function() {
+        return JSON.stringify({ combinedCategories: t.combinedCategories || [], skillCategories: t.skillCategories || [], genderCategories: t.genderCategories || [], participants: t.participants || [], mergeHistory: t.mergeHistory || [] });
+    };
+    var before = snapshot();
+    _simplifySingletonCategories(t);
+    _autoReconcileParticipantCategories(t);
+    if (typeof window._purgeInvalidParticipantCategories === 'function') window._purgeInvalidParticipantCategories(t);
+    return before !== snapshot();
+}
+
+function _autoAssignTournamentCategoriesCore(t) {
+    var opts = { skipPersist: true, didMutate: false };
+    var assigned = window._autoAssignCategories(String(t && t.id || ''), t, opts);
+    return { changed: !!opts.didMutate, assigned: assigned };
+}
+
+window._categoryMutationsCore = { merge: _applyCategoryMerge, deleteEmpty: _applyDeleteEmptyCategory, unmerge: _applyCategoryUnmerge, unmergeInferred: _applyInferredCategoryUnmerge, normalize: _normalizeTournamentCategories, autoAssign: _autoAssignTournamentCategoriesCore };
 
 })();

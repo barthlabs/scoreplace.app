@@ -5967,19 +5967,13 @@ window._saveTournamentClickHandler = async function() {
         // addTournament já persiste criação pela porta especializada e edição pela
         // transação fresca. Não sincronize o snapshot inteiro depois disso.
 
-        // Auto-assign categories to uncategorized participants based on profile (gender, age, skill)
+        // Autoenquadramento é uma Function: lê perfil e torneio canônicos, sem
+        // alterar a cópia criada na tela antes da confirmação do servidor.
         var _autoAssignTid = editId || (window.AppStore.tournaments.length > 0 ? window.AppStore.tournaments[window.AppStore.tournaments.length - 1].id : null);
-        if (_autoAssignTid && window._autoAssignCategories) {
-          var _autoCount = window._autoAssignCategories(_autoAssignTid);
-          if (_autoCount > 0) {
-            showNotification(window._t('create.autoAssigned'), window._t('create.autoAssignedMsg', {n: _autoCount}), 'info');
-          }
-          // Also enrich via Firestore for participants missing profile data (fire-and-forget)
-          if (window._autoAssignCategoriesAsync) {
-            window._autoAssignCategoriesAsync(_autoAssignTid).then(function(n) {
-              if (n > 0) showNotification(window._t('create.autoAssigned'), window._t('create.autoAssignedMsg', {n: n}), 'info');
-            }).catch(function() {});
-          }
+        if (_autoAssignTid && window._autoAssignCategoriesAsync) {
+          window._autoAssignCategoriesAsync(_autoAssignTid).then(function(n) {
+            if (n > 0) showNotification(window._t('create.autoAssigned'), window._t('create.autoAssignedMsg', {n: n}), 'info');
+          }).catch(function() {});
         }
 
         // Notify friends about new tournament (only for new, not edit)

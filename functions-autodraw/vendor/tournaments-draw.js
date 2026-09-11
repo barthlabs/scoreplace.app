@@ -2567,11 +2567,12 @@ window._setPhaseLateEnrollment = function (tId, mode) {
     // autoriza a organização e mantém fase/top-level coerentes na transação.
     if (!window.FirestoreDB || typeof window.FirestoreDB._callFn !== 'function') return;
     var _done = window.FirestoreDB._callFn('setPhaseLateEnrollment', { tournamentId: tId, mode: mode });
-    if (typeof showNotification === 'function') {
+    var _announce = function () {
+        if (typeof showNotification !== 'function') return;
         if (mode === 'expand') showNotification('➕ Entradas tardias ABERTAS', 'Marque presença de quem está na espera — entra por repescagem (vs a definir).', 'success');
         else if (mode === 'closed') showNotification('🚫 Entradas tardias fechadas', 'A lista de espera não gera novos confrontos nesta fase.', 'info');
         else showNotification('⏸️ Suplentes apenas', 'A espera só substitui ausentes (W.O.), sem novos confrontos.', 'info');
-    }
+    };
     // ao ABRIR, integra quem já está presente na espera (o dono já marcou a dupla → entra agora)
     var _fire = function () {
         try {
@@ -2583,7 +2584,11 @@ window._setPhaseLateEnrollment = function (tId, mode) {
             if (typeof window._softRefreshView === 'function') { window._suppressSoftRefresh = false; window._softRefreshView(); }
         } catch (_e) {}
     };
-    if (_done && typeof _done.then === 'function') _done.then(_fire, _fire); else _fire();
+    if (_done && typeof _done.then === 'function') {
+        _done.then(function () { _announce(); _fire(); }).catch(function (e) {
+            if (typeof showNotification === 'function') showNotification('Não foi possível atualizar entradas tardias', (e && e.message) || 'Tente novamente.', 'error');
+        });
+    } else { _announce(); _fire(); }
 };
 
 window.generateDrawFunction = function (tId) {

@@ -1960,7 +1960,7 @@ exports.applyEnrollmentAssignments = onCall(async (request) => {
   const sport=String(data.sport||'').trim().slice(0,80), raw=Array.isArray(data.edits)?data.edits.slice(0,100):null;
   if(!uid) throw new HttpsError('unauthenticated','Entre na sua conta.');
   if(!tId||!raw||!raw.length) throw new HttpsError('invalid-argument','Atribuições inválidas.');
-  const clean=raw.map(x=>({uid:String(x&&x.uid||'').trim(),name:String(x&&x.name||'').trim().slice(0,120),email:String(x&&x.email||'').trim().toLowerCase().slice(0,180),waitlist:!!(x&&x.waitlist),pairMember:(x&&['p1','p2'].includes(x.pairMember))?x.pairMember:'',gender:(x&&['feminino','masculino','misto',''].includes(x.gender))?x.gender:undefined,category:x&&Object.prototype.hasOwnProperty.call(x,'category')?String(x.category||'').trim().slice(0,80):undefined,uncategorizedByOrganizer:!!(x&&x.uncategorizedByOrganizer)}));
+  const clean=raw.map(x=>({uid:String(x&&x.uid||'').trim(),name:String(x&&x.name||'').trim().slice(0,120),email:String(x&&x.email||'').trim().toLowerCase().slice(0,180),waitlist:!!(x&&x.waitlist),pairMember:(x&&['p1','p2'].includes(x.pairMember))?x.pairMember:'',gender:(x&&['feminino','masculino','misto',''].includes(x.gender))?x.gender:undefined,category:x&&Object.prototype.hasOwnProperty.call(x,'category')?String(x.category||'').trim().slice(0,80):undefined,uncategorizedByOrganizer:!!(x&&x.uncategorizedByOrganizer),markWasUncategorized:!!(x&&x.markWasUncategorized),notifyCategory:!!(x&&x.notifyCategory)}));
   if(clean.some(x=>(!x.uid&&!x.name&&!x.email)||(x.gender===undefined&&x.category===undefined))) throw new HttpsError('invalid-argument','Alvo ou alteração inválida.');
   const ref=db.collection('tournaments').doc(tId),agoraIso=new Date().toISOString();
   return db.runTransaction(async tx=>{
@@ -1970,7 +1970,7 @@ exports.applyEnrollmentAssignments = onCall(async (request) => {
     const find=(arr,e)=>{let hit=null; (arr||[]).forEach(p=>{if(hit||!p||typeof p!=='object')return; const u=[p.uid,p.p1Uid,p.p2Uid].filter(Boolean).map(String); if(Array.isArray(p.participants))p.participants.forEach(q=>q&&q.uid&&u.push(String(q.uid))); if(e.uid?u.includes(e.uid):(!u.length&&((e.email&&String(p.email||'').toLowerCase()===e.email)||(e.name&&(p.name===e.name||p.displayName===e.name)))))hit=p;});return hit;};
     for(const e of clean){const pools=e.waitlist?[t.waitlist,t.standbyParticipants,t.monarchWaitlist]:[t.participants]; let target=null; for(const pool of pools){target=find(pool,e);if(target)break;} if(!target) continue;
       if(e.gender!==undefined){if(e.pairMember){if(e.gender)target[e.pairMember+'Gender']=e.gender;else delete target[e.pairMember+'Gender'];}else if(e.gender){target.gender=e.gender;target.genderSource='organizador';}else{delete target.gender;delete target.genderSource;} changed++;}
-      if(e.category!==undefined){if(e.category&&valid.size&&!valid.has(e.category)) throw new HttpsError('invalid-argument','Categoria não pertence ao torneio.'); if(e.category){target.categories=[e.category];target.category=e.category;target.categorySource='organizador';delete target.wasUncategorized;delete target.autoWeakestCat;delete target.staleCat;}else{target.categories=[];target.category='';if(e.uncategorizedByOrganizer){target.categorySource='organizador';target.wasUncategorized=true;}else{delete target.categorySource;delete target.wasUncategorized;}} changed++;}
+      if(e.category!==undefined){if(e.category&&valid.size&&!valid.has(e.category)) throw new HttpsError('invalid-argument','Categoria não pertence ao torneio.'); if(e.category){target.categories=[e.category];target.category=e.category;target.categorySource='organizador';if(e.markWasUncategorized)target.wasUncategorized=true;else delete target.wasUncategorized;delete target.autoWeakestCat;delete target.staleCat;if(e.notifyCategory){if(!Array.isArray(t.categoryNotifications))t.categoryNotifications=[];t.categoryNotifications.push({targetUid:String(target.uid||target.p1Uid||''),targetName:String(target.displayName||target.name||''),category:e.category,source:'organizador',timestamp:Date.now(),read:false});t.categoryNotifications=t.categoryNotifications.slice(-200);}}else{target.categories=[];target.category='';if(e.uncategorizedByOrganizer){target.categorySource='organizador';target.wasUncategorized=true;}else{delete target.categorySource;delete target.wasUncategorized;}} changed++;}
       const profileUid=e.uid||((e.pairMember&&target[e.pairMember+'Uid'])||target.uid);
       // Uma dupla pode ter duas alterações na mesma chamada. Junta por UID antes de
       // escrever: assim cada perfil recebe uma única atualização transacional.
@@ -1979,6 +1979,163 @@ exports.applyEnrollmentAssignments = onCall(async (request) => {
     for(const k of Object.keys(profiles)){const a=profiles[k], uref=db.collection('users').doc(a.uid), us=await tx.get(uref); if(!us.exists)continue; const upd={profileSetAt:FieldValue.serverTimestamp()}; if(a.gender)upd.gender=a.gender,upd.genderSetBy=uid; if(a.category&&sport){const sb=Object.assign({},(us.data().skillBySport||{}));sb[sport]=a.category;upd.skillBySport=sb;upd.skillSetBy=uid;} tx.update(uref,upd);}
     if(!changed)return {ok:true,changed:0}; const b=_gravaTorneio(tx,ref,t,before,{agoraIso}); return {ok:true,changed,tournament:b.clean};
   });
+});
+
+exports.applyCategoryCommunicationMarkers = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid, data = request.data || {};
+  const tId = String(data.tournamentId || '').trim();
+  const updates = Array.isArray(data.updates) ? data.updates.slice(0, 100).map(x => ({
+    identity: String(x && x.identity || '').trim().slice(0, 180), clear: !!(x && x.clear),
+    at: String(x && x.at || '').trim().slice(0, 40), fields: Array.isArray(x && x.fields) ? x.fields.map(v => String(v || '').trim().slice(0, 80)).filter(Boolean).slice(0, 8) : [], pending: String(x && x.pending || '').trim().slice(0, 240)
+  })).filter(x => x.identity) : [];
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId || !updates.length) throw new HttpsError('invalid-argument', 'Marcadores inválidos.');
+  const ref = db.collection('tournaments').doc(tId), agoraIso = new Date().toISOString();
+  return db.runTransaction(async tx => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização registra comunicação de categorias.', { tId, uid });
+    const before = _antesDoMotor(t), parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
+    let changed = false;
+    const identityOf = p => String((p && (p.uid || p.p1Uid || p.email || p.displayName || p.name)) || '');
+    for (const update of updates) {
+      const participant = parts.find(p => identityOf(p) === update.identity);
+      if (!participant) continue;
+      if (update.clear) { if (participant.categoryCommPending) { delete participant.categoryCommPending; changed = true; } continue; }
+      if (participant.categoryCommPending === update.pending && participant.categoryCommAt) continue;
+      participant.categoryCommAt = update.at || agoraIso;
+      participant.categoryCommFields = update.fields;
+      participant.categoryCommPending = update.pending;
+      changed = true;
+    }
+    if (!changed) return { ok: true, changed: false };
+    if (!Array.isArray(t.participants)) t.participants = parts;
+    const b = _gravaTorneio(tx, ref, t, before, { agoraIso });
+    return { ok: true, changed: true, tournament: b.clean };
+  });
+});
+
+exports.normalizeTournamentCategories = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid;
+  const tId = String((request.data && request.data.tournamentId) || '').trim();
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId) throw new HttpsError('invalid-argument', 'Torneio inválido.');
+  if (!drawWindow || !drawWindow._categoryMutationsCore || typeof drawWindow._categoryMutationsCore.normalize !== 'function') {
+    throw new HttpsError('internal', 'Núcleo de categorias indisponível no servidor.');
+  }
+  const ref = db.collection('tournaments').doc(tId), agoraIso = new Date().toISOString();
+  return db.runTransaction(async tx => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização normaliza categorias.', { tId, uid });
+    const before = _antesDoMotor(t);
+    if (!drawWindow._categoryMutationsCore.normalize(t)) return { ok: true, changed: false };
+    const b = _gravaTorneio(tx, ref, t, before, { agoraIso });
+    return { ok: true, changed: true, tournament: b.clean };
+  });
+});
+
+exports.autoAssignTournamentCategories = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid;
+  const tId = String((request.data && request.data.tournamentId) || '').trim();
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId) throw new HttpsError('invalid-argument', 'Torneio inválido.');
+  if (!drawWindow || !drawWindow._categoryMutationsCore || typeof drawWindow._categoryMutationsCore.autoAssign !== 'function') {
+    throw new HttpsError('internal', 'Núcleo de categorias indisponível no servidor.');
+  }
+  const ref = db.collection('tournaments').doc(tId), agoraIso = new Date().toISOString();
+  return db.runTransaction(async tx => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização enquadra participantes.', { tId, uid });
+    // Hidrate somente a cópia transacional com o perfil canônico. Nada do perfil
+    // volta para o browser e nenhum snapshot local participa da decisão.
+    const participants = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
+    const profileIds = [...new Set(participants.flatMap(p => p && typeof p === 'object' ? [p.uid, p.p1Uid, p.p2Uid].filter(Boolean).map(String) : []))];
+    const profiles = new Map();
+    for (const profileUid of profileIds) {
+      const user = await tx.get(db.collection('users').doc(profileUid));
+      if (user.exists) profiles.set(profileUid, user.data() || {});
+    }
+    participants.forEach(p => {
+      if (!p || typeof p !== 'object') return;
+      const profile = profiles.get(String(p.uid || p.p1Uid || ''));
+      if (!profile) return;
+      if (!p.birthDate && profile.birthDate) p.birthDate = profile.birthDate;
+      if ((!p.skillBySport || !Object.values(p.skillBySport).some(Boolean)) && profile.skillBySport) p.skillBySport = profile.skillBySport;
+      if (!p.defaultCategory && profile.defaultCategory) p.defaultCategory = profile.defaultCategory;
+      if (!p.gender && profile.gender) p.gender = profile.gender;
+    });
+    if (!Array.isArray(t.participants)) t.participants = participants;
+    const before = _antesDoMotor(t);
+    const outcome = drawWindow._categoryMutationsCore.autoAssign(t);
+    if (!outcome.changed) return { ok: true, changed: false, assigned: 0 };
+    const b = _gravaTorneio(tx, ref, t, before, { agoraIso });
+    return { ok: true, changed: true, assigned: outcome.assigned, tournament: b.clean };
+  });
+});
+
+exports.mergeTournamentCategories = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid, data = request.data || {};
+  const tId = String(data.tournamentId || '').trim();
+  const sourceCat = String(data.sourceCat || '').trim().slice(0, 80);
+  const targetCat = String(data.targetCat || '').trim().slice(0, 80);
+  const mergedName = String(data.mergedName || '').trim().slice(0, 160);
+  const timestamp = Number(data.timestamp) || Date.now();
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId || !sourceCat || !targetCat || sourceCat === targetCat || !mergedName) throw new HttpsError('invalid-argument', 'Categorias inválidas para mesclagem.');
+  if (!drawWindow || !drawWindow._categoryMutationsCore || typeof drawWindow._categoryMutationsCore.merge !== 'function') throw new HttpsError('internal', 'Núcleo de categorias indisponível no servidor.');
+  const ref = db.collection('tournaments').doc(tId), agoraIso = new Date().toISOString();
+  return db.runTransaction(async tx => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização mescla categorias.', { tId, uid });
+    const cats = Array.isArray(t.combinedCategories) ? t.combinedCategories : [];
+    if (!cats.includes(sourceCat) || !cats.includes(targetCat)) return { ok: true, changed: false, reason: 'categories-changed' };
+    const before = _antesDoMotor(t);
+    if (!drawWindow._categoryMutationsCore.merge(t, sourceCat, targetCat, mergedName, timestamp)) return { ok: true, changed: false };
+    const b = _gravaTorneio(tx, ref, t, before, { agoraIso });
+    return { ok: true, changed: true, tournament: b.clean };
+  });
+});
+
+exports.deleteEmptyTournamentCategory = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid, data = request.data || {};
+  const tId = String(data.tournamentId || '').trim(), category = String(data.category || '').trim().slice(0, 80);
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId || !category) throw new HttpsError('invalid-argument', 'Categoria inválida.');
+  if (!drawWindow || !drawWindow._categoryMutationsCore || typeof drawWindow._categoryMutationsCore.deleteEmpty !== 'function') throw new HttpsError('internal', 'Núcleo de categorias indisponível no servidor.');
+  const ref = db.collection('tournaments').doc(tId), agoraIso = new Date().toISOString();
+  return db.runTransaction(async tx => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização exclui categorias.', { tId, uid });
+    const before = _antesDoMotor(t), outcome = drawWindow._categoryMutationsCore.deleteEmpty(t, category);
+    if (outcome !== true) return { ok: true, changed: false, outcome };
+    const b = _gravaTorneio(tx, ref, t, before, { agoraIso });
+    return { ok: true, changed: true, outcome: 'deleted', tournament: b.clean };
+  });
+});
+
+exports.undoTournamentCategoryMerge = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid, data = request.data || {}, i = data.mergeIdentity || {};
+  const tId = String(data.tournamentId || '').trim();
+  const identity = { timestamp: Number(i.timestamp), mergedName: String(i.mergedName || '').trim().slice(0,160), sourceCat: String(i.sourceCat || '').trim().slice(0,80), targetCat: String(i.targetCat || '').trim().slice(0,80) };
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId || !Number.isFinite(identity.timestamp) || !identity.mergedName || !identity.sourceCat || !identity.targetCat) throw new HttpsError('invalid-argument', 'Mesclagem inválida.');
+  if (!drawWindow || !drawWindow._categoryMutationsCore || typeof drawWindow._categoryMutationsCore.unmerge !== 'function') throw new HttpsError('internal', 'Núcleo de categorias indisponível no servidor.');
+  const ref = db.collection('tournaments').doc(tId), agoraIso = new Date().toISOString();
+  return db.runTransaction(async tx => { const t=await _leTorneio(tx,ref,tId); if(!t) throw new HttpsError('not-found','Torneio não encontrado.'); if(!_isTournamentAdmin(t,uid)) throw _drawFail('permission-denied','Só a organização desfaz a mesclagem.',{tId,uid}); const before=_antesDoMotor(t); if(!drawWindow._categoryMutationsCore.unmerge(t,identity)) return {ok:true,changed:false}; const b=_gravaTorneio(tx,ref,t,before,{agoraIso}); return {ok:true,changed:true,tournament:b.clean}; });
+});
+
+exports.undoInferredTournamentCategoryMerge = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid, data = request.data || {}, tId = String(data.tournamentId || '').trim(), mergedName = String(data.mergedName || '').trim().slice(0,160);
+  const inferredCats = Array.isArray(data.inferredCats) ? [...new Set(data.inferredCats.map(x=>String(x||'').trim().slice(0,80)).filter(Boolean))].slice(0,12) : [];
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId || !mergedName || inferredCats.length < 2) throw new HttpsError('invalid-argument', 'Categorias inferidas inválidas.');
+  if (!drawWindow || !drawWindow._categoryMutationsCore || typeof drawWindow._categoryMutationsCore.unmergeInferred !== 'function') throw new HttpsError('internal', 'Núcleo de categorias indisponível no servidor.');
+  const ref=db.collection('tournaments').doc(tId),agoraIso=new Date().toISOString();
+  return db.runTransaction(async tx=>{const t=await _leTorneio(tx,ref,tId);if(!t)throw new HttpsError('not-found','Torneio não encontrado.');if(!_isTournamentAdmin(t,uid))throw _drawFail('permission-denied','Só a organização desfaz a mesclagem.',{tId,uid});const before=_antesDoMotor(t);if(!drawWindow._categoryMutationsCore.unmergeInferred(t,mergedName,inferredCats))return {ok:true,changed:false};const b=_gravaTorneio(tx,ref,t,before,{agoraIso});return {ok:true,changed:true,tournament:b.clean};});
 });
 
 // ─── Escolha de equilíbrio antes do sorteio: uma intenção, uma transação ───────

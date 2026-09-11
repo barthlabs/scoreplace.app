@@ -12,7 +12,7 @@ const approved = {
   'views/bracket-logic.js': 0,
   'views/liga-substitution.js': 1,
   'views/participants.js': 0,
-  'views/tournaments-categories.js': 12,
+  'views/tournaments-categories.js': 3,
   'views/tournaments-draw-prep.js': 0,
   'views/tournaments-draw.js': 8,
   'views/tournaments-org-tools.js': 0,

@@ -7,6 +7,7 @@ const client = fs.readFileSync(path.join(root, 'js/views/tournaments-draw.js'), 
 const ui = block(client, 'window._setPhaseLateEnrollment = function', '\nwindow.generateDrawFunction');
 ok(/_callFn\('setPhaseLateEnrollment'/.test(ui), 'cliente despacha somente a intenção de modo');
 ok(!/AppStore\.mutate|commitTournamentTx|saveTournament/.test(ui), 'cliente não grava fase nem torneio');
+ok(/_done\.then\(function \(\) \{ _announce\(\); _fire\(\); \}\)\.catch/.test(ui) && /Não foi possível atualizar entradas tardias/.test(ui), 'sucesso só aparece após a Function e a falha aparece para a organização');
 const server = fs.readFileSync(path.join(root, 'functions-autodraw/index.js'), 'utf8');
 const cf = block(server, 'exports.setPhaseLateEnrollment = onCall', '\nexports.setTournamentBranding');
 ok(/request\.auth/.test(cf) && /_isTournamentAdmin/.test(cf), 'Function exige autenticação e organização');
