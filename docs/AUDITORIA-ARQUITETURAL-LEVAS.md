@@ -3361,3 +3361,43 @@ erro, devolve uma conclusão falsa. Todo número aqui foi conferido contra o wri
 ⛔ Nenhuma Rule foi tocada e nenhuma decisão foi tomada aqui. O que muda é que a decisão agora tem
 número: 26 documentos, 2 vivos, 8 pessoas, 3 criadores — e a única peça que falta continua sendo o
 cutover do cliente antigo, que é a L13.
+
+## L4.P7 — a porta anônima medida hoje, e a pré-condição que ENFIM está cumprida (11/set/2026)
+
+A L4 registrava que o documento público carrega e-mail e que a Rule não conserta isso (o Firestore
+entrega o documento inteiro ou nada). A ordem certa já estava escrita: ① provar que
+`adminUids`/`creatorUid` cobrem 100% dos admins → ② tirar e-mail de toda DECISÃO → ③ só então
+remover os campos. **① e ② estão cumpridos e foram reconferidos hoje; ③ segue aberto.**
+
+### O que a internet lê agora, sem login (medido, não deduzido da regra)
+`GET /v1/projects/scoreplace-app/databases/(default)/documents/tournaments/{id}` **sem cabeçalho
+de autenticação**, nos 58 torneios públicos: **58 respondem 200**, 889 KB no total, **39 e-mails
+distintos** expostos.
+
+| Caminho | Ocorrências |
+|---|---|
+| `organizerEmail` · `adminEmails[]` · `creatorEmail` | **58 cada** (todo torneio público) |
+| `participants[].email` | 10 |
+| `name` · `organizerName` | 7 cada — alguém digitou e-mail no campo NOME: é dado, não schema |
+| `categoryNotifications[].targetName` / `.targetEmail` | 3 / 2 — resíduo dos que não resolveram na 2.0.102 |
+| `participants[].name` / `.displayName` | 1 / 1 |
+
+⭐ **O número que dimensiona a leva: tirando os três campos de organizador, os e-mails distintos
+expostos caem de 39 para 18.**
+
+### ① e ②, reconferidos hoje
+- **Cobertura por uid: 60 de 60 torneios têm `creatorUid` e `adminUids`; as 60 entradas de
+  `adminEmails` resolvem para um uid da base (258 usuários com e-mail); ZERO não resolvem.**
+  Era esta a prova que faltava — cada e-mail não coberto seria uma pessoa trancada para fora do
+  próprio torneio.
+- **Nenhuma decisão lê e-mail:** `tests/identidade-e-uid-nunca-email.test.js` passa **66/0**, e nas
+  `firestore.rules` os três campos aparecem **só em comentário** — as regras são uid puro.
+
+### O que falta para ③ (NÃO autorizado por este registro)
+Os campos continuam com leitores de EXIBIÇÃO e escrita: `organizerEmail` 72 referências,
+`adminEmails` 35, `creatorEmail` 16 (fora de comentário, sem vendor nem testes). A leva seria:
+inventariar quais são exibição e quais são escrita derivada, parar de gravá-los, e só então
+removê-los dos documentos existentes — com esta mesma porta anônima como medida de antes e depois
+(39 → 18 esperado). ⚠️ `scripts/conferir-admin-por-uid.js` não roda hoje pela credencial local
+(`invalid_grant / invalid_rapt` no Admin SDK); a cobertura acima foi medida pela API REST com a
+mesma conta, e o script precisa de um `gcloud auth` novo antes de valer como gate.
