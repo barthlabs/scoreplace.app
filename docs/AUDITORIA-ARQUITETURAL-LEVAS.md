@@ -3419,3 +3419,26 @@ Gate: `tests/l4-sem-leitura-morta-de-admin-email.test.js` (6 asserções) trava 
 `:4284`) e declara por escrito o que NÃO prova. Controle: falha na árvore anterior. 738 suítes
 verdes. ⚠️ `functions/` não sobe pelo Hosting — a mudança espera um `deploy-functions.sh`
 autorizado.
+
+## L13.P1 — por que "adoção" não estava medida: o dado NÃO EXISTE (11/set/2026, read-only)
+
+A política aprovada em 11/set condiciona o corte a **disponibilidade na loja + validação em
+aparelho + sete dias de aviso**, e o registro dizia "adoção ainda não medida". A auditoria de hoje
+mostra que isso não é tarefa pendente: **é dado ausente**.
+
+- Censo dos documentos de `users` (**277 perfis, 91 campos distintos**): **nenhum campo de versão
+  do app**. O único lugar do produto que grava `SCOREPLACE_VERSION` é o item da **fila offline de
+  placar** (`js/firebase-db.js:2543`, subcoleção `resultQueue`) — efêmero, raro e só de quem
+  lançou placar sem rede. Não serve para medir parque.
+- O único sinal de plataforma que existe: **`fcmTokenPlatform`, em 30 dos 277 perfis — 23 `web`,
+  7 `native-android`, 0 iOS** (carimbos entre 11/jul e 11/set). É a plataforma de quem registrou
+  push, não o parque: amostra enviesada, e não diz **versão** nenhuma.
+- ⚠️ `notifyPlatform` (153 perfis) **não é plataforma**: é `booleanValue` — preferência de
+  notificação. Conferi o tipo antes de contar; lido pelo nome, viraria um número inventado.
+
+**Consequência direta para a L13 e para as quatro levas que ela trava (L2, L5, L6 e as Rules da
+L3):** hoje o corte só poderia ser marcado por DATA, e a própria política diz que ele depende de
+medida de adoção. O primeiro passo da L13 não é loja nem build — é **instrumentação**: registrar
+por perfil a última versão e plataforma vistas (sem PII nova), barata e fora do caminho quente
+(uma escrita por sessão, junto de um update que já acontece), para que o prazo de sete dias possa
+um dia começar a contar sobre um número real. ⛔ Não autorizado por este registro.
