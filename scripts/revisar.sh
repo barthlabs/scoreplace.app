@@ -266,7 +266,9 @@ if [[ "$REVISOR" == gpt ]]; then
 else
   { [[ -x "$CLAUDE" ]] || command -v "$CLAUDE" >/dev/null 2>&1; } || { echo "✗ Claude Code CLI não encontrado ('$CLAUDE'; exporte CLAUDE_BIN)"; exit 4; }
   [[ "$ESFORCO" == xhigh ]] && ESFORCO=max
-  [[ -n "$MODELO" ]]  || { MODELO=sonnet; [[ "$FAIXA" == critica ]] && MODELO=opus; }
+  # Cota do Claude: Sonnet/medium é o padrão inclusive para diffs críticos.
+  # Opus é reservado a uma escolha explícita (--modelo opus), nunca automática.
+  [[ -n "$MODELO" ]]  || MODELO=sonnet
   [[ -n "$ESFORCO" ]] || ESFORCO="$PISO"
   EXECUTOR_DICA='modelo=<gpt-5.6-terra|outro> esforco=<low|medium|high|xhigh>  (é o GPT/Codex que vai executar: low pra mudança mecânica e local; high pra lógica com concorrência, dados de usuário, torneio dividido; xhigh só quando errar custa dado de produção)'
   QUEM_EXECUTA="o GPT (Codex)"
