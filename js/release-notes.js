@@ -1,3 +1,4 @@
+// ⚠️ 2.2.56 · reabertura de inscrições segue disponível mesmo se o shim do motor estiver indisponível; avisos de enquete não repetem em re-render antes do recibo.
 // ⚠️ 2.2.55 · reabrir vagas recusa de forma canônica qualquer torneio cuja chave já tenha sido sorteada.
 // ⚠️ 2.2.54 · encerramento, reabertura e sorteio de vagas passam exclusivamente pela Cloud Function com o elenco fresco; a aba só apresenta a resposta canônica.
 // ⚠️ 2.2.53 · decisões de entrada tardia, suspensão do pré-sorteio, reabertura e dissolução de times incompletos passam exclusivamente pela Function transacional; a aba apenas despacha a intenção e espelha o documento fresco.

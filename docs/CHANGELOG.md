@@ -1,5 +1,9 @@
 # Changelog do scoreplace.app
 
+## 2.2.56 — reabertura resiliente e avisos sem repetição (10/set/2026)
+
+A reabertura de inscrições não fica bloqueada por uma indisponibilidade transitória do shim do motor. Avisos de enquete são marcados localmente como exibidos até a confirmação canônica, evitando diálogos repetidos em re-render.
+
 ## 2.2.55 — reabertura de vagas protegida após o sorteio (10/set/2026)
 
 A Cloud Function agora usa a mesma verificação canônica de chave materializada antes de reabrir vagas. Nenhuma operação administrativa pode reabrir inscrições depois do sorteio.

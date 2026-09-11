@@ -3018,6 +3018,8 @@ window._checkPollNotifications = function(t) {
         { type: 'info', confirmText: _t('btn.voteNow'), cancelText: _t('btn.later'), showCancel: true }
     );
 
+    // Evita o mesmo diálogo em um re-render antes do recibo da Function; não persiste nada.
+    unreadNotifs.forEach(function(n) { n.read = true; });
     // A aba só registra a intenção. A Function deriva o destinatário do token e marca
     // o documento fresco, sem risco de apagar aviso que outro aparelho acabou de receber.
     window._markDrawPollNotificationsRead(t.id, activePoll.id).catch(function(err) {

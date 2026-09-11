@@ -78,7 +78,7 @@ try {
 
 // Versão DESTE código de function. Sobe junto com a do app a cada deploy — é o que prova,
 // no log, qual build atendeu a chamada. Ver [[feedback_indicate_version_on_deploy]].
-const CF_VERSION = '2.2.55';
+const CF_VERSION = '2.2.56';
 
 initializeApp();
 const db = getFirestore();
@@ -2559,8 +2559,7 @@ exports.setTournamentEnrollmentStatus = onCall(async request => {
     if (action === 'open') {
       if (t.status !== 'open' || t.registrationLimit != null || t.activePollId) changed = true;
       t.status = 'open'; t.registrationLimit = null; delete t._pollSuspended;
-      if (!drawWindow || typeof drawWindow._clearDrawRuntimeFlags !== 'function') throw new HttpsError('failed-precondition', 'Motor de preparação indisponível.');
-      drawWindow._clearDrawRuntimeFlags(t);
+      if (drawWindow && typeof drawWindow._clearDrawRuntimeFlags === 'function') drawWindow._clearDrawRuntimeFlags(t);
       if (t.enrollmentLimitMode === 'draw') { t.drawSelectionDone = false; t.waitlistOrder = null; }
       if (t.activePollId && Array.isArray(t.polls)) {
         t.polls.forEach(p => { if (p && p.id === t.activePollId && p.status === 'active') { p.status = 'closed'; p.deadline = Date.now(); } });
