@@ -1,3 +1,4 @@
+// ⚠️ 2.2.55 · reabrir vagas recusa de forma canônica qualquer torneio cuja chave já tenha sido sorteada.
 // ⚠️ 2.2.54 · encerramento, reabertura e sorteio de vagas passam exclusivamente pela Cloud Function com o elenco fresco; a aba só apresenta a resposta canônica.
 // ⚠️ 2.2.53 · decisões de entrada tardia, suspensão do pré-sorteio, reabertura e dissolução de times incompletos passam exclusivamente pela Function transacional; a aba apenas despacha a intenção e espelha o documento fresco.
 // ⚠️ 2.2.51 · todo o consenso de W.O. — apontar, confirmar, contestar, reverter e decidir o desfecho — é processado pela Function com documento fresco; a tela apenas envia a intenção.

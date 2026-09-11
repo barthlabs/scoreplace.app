@@ -1,5 +1,9 @@
 # Changelog do scoreplace.app
 
+## 2.2.55 — reabertura de vagas protegida após o sorteio (10/set/2026)
+
+A Cloud Function agora usa a mesma verificação canônica de chave materializada antes de reabrir vagas. Nenhuma operação administrativa pode reabrir inscrições depois do sorteio.
+
 ## 2.2.54 — inscrições e sorteio de vagas decididos no servidor (10/set/2026)
 
 Abertura, fechamento, inscrição tardia e sorteio de vagas agora são operações transacionais da Cloud Function. A tela apenas solicita a ação e recebe o torneio canônico, evitando que uma aba antiga regrave elenco, espera, VIPs ou o estado da chave.
