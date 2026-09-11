@@ -2522,7 +2522,6 @@ exports.setParticipantsGender = onCall(
     const tSnap = await db.collection("tournaments").doc(tournamentId).get();
     if (!tSnap.exists) throw new HttpsError("not-found", "torneio não existe");
     const t = tSnap.data();
-    const adminEmails = Array.isArray(t.adminEmails) ? t.adminEmails.map((e) => String(e).toLowerCase()) : [];
     const isOrg = _isTournamentOrgCaller(t, callerUid);
     if (!isOrg) throw new HttpsError("permission-denied", "só o organizador pode atribuir gênero");
 
@@ -2569,7 +2568,6 @@ exports.setParticipantsProfile = onCall(
     const tSnap = await db.collection("tournaments").doc(tournamentId).get();
     if (!tSnap.exists) throw new HttpsError("not-found", "torneio não existe");
     const t = tSnap.data();
-    const adminEmails = Array.isArray(t.adminEmails) ? t.adminEmails.map((e) => String(e).toLowerCase()) : [];
     const isOrg = _isTournamentOrgCaller(t, callerUid);
     if (!isOrg) throw new HttpsError("permission-denied", "só o organizador pode atribuir perfil");
 
@@ -3372,7 +3370,6 @@ exports.deenrollParticipant = onCall(
       // sem isto as regras rodam contra `participants: []`. Ver functions/split-parts.js.
       const t = await _splitParts.hidratar(tx, docRef, snap.data());
       // Permissão: cada um sai de si mesmo; o organizador/co-host tira qualquer um.
-      const adminEmails = Array.isArray(t.adminEmails) ? t.adminEmails.map((e) => String(e).toLowerCase()) : [];
       const isOrg = _isTournamentOrgCaller(t, callerUid);
       if (userUid !== callerUid && !isOrg) {
         throw new HttpsError("permission-denied", "só a própria pessoa ou o organizador podem desinscrever");
@@ -4358,7 +4355,6 @@ exports.applyLetzplayScans = onCall(
     const tSnap = await db.collection("tournaments").doc(tournamentId).get();
     if (!tSnap.exists) throw new HttpsError("not-found", "torneio não existe");
     const t = tSnap.data();
-    const adminEmails = Array.isArray(t.adminEmails) ? t.adminEmails.map((e) => String(e).toLowerCase()) : [];
     const isOrg = _isTournamentOrgCaller(t, callerUid);
     if (!isOrg) throw new HttpsError("permission-denied", "só o organizador pode aplicar a busca letzplay");
 
@@ -4474,9 +4470,6 @@ exports.sendOrgCommunication = onCall(
     }
 
     // Autorização: só organizador / co-organizador.
-    const adminEmails = Array.isArray(t.adminEmails) ? t.adminEmails.map((e) => String(e).toLowerCase()) : [];
-    const coHostUids = Array.isArray(t.coHosts)
-      ? t.coHosts.filter((c) => c && c.status === "active").map((c) => String(c.uid || "")) : [];
     const isOrg = _isTournamentOrgCaller(t, callerUid);
     if (!isOrg) throw new HttpsError("permission-denied", "só o organizador pode comunicar os inscritos");
 
@@ -4704,9 +4697,6 @@ exports.getCommunicationStats = onCall(
     const tSnap = await db.collection("tournaments").doc(tournamentId).get();
     if (!tSnap.exists) throw new HttpsError("not-found", "torneio não existe");
     const t = tSnap.data();
-    const adminEmails = Array.isArray(t.adminEmails) ? t.adminEmails.map((e) => String(e).toLowerCase()) : [];
-    const coHostUids = Array.isArray(t.coHosts)
-      ? t.coHosts.filter((c) => c && c.status === "active").map((c) => String(c.uid || "")) : [];
     const isOrg = _isTournamentOrgCaller(t, callerUid);
     if (!isOrg) throw new HttpsError("permission-denied", "só o organizador pode ver os comunicados");
 
@@ -4819,9 +4809,6 @@ exports.listCommunications = onCall(
     const tSnap = await db.collection("tournaments").doc(tournamentId).get();
     if (!tSnap.exists) throw new HttpsError("not-found", "torneio não existe");
     const t = tSnap.data();
-    const adminEmails = Array.isArray(t.adminEmails) ? t.adminEmails.map((e) => String(e).toLowerCase()) : [];
-    const coHostUids = Array.isArray(t.coHosts)
-      ? t.coHosts.filter((c) => c && c.status === "active").map((c) => String(c.uid || "")) : [];
     const isOrg = _isTournamentOrgCaller(t, callerUid);
     if (!isOrg) throw new HttpsError("permission-denied", "só o organizador pode ver os comunicados");
 

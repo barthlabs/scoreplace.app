@@ -3401,3 +3401,21 @@ removê-los dos documentos existentes — com esta mesma porta anônima como med
 (39 → 18 esperado). ⚠️ `scripts/conferir-admin-por-uid.js` não roda hoje pela credencial local
 (`invalid_grant / invalid_rapt` no Admin SDK); a cobertura acima foi medida pela API REST com a
 mesma conta, e o script precisa de um `gcloud auth` novo antes de valer como gate.
+
+**L4.P8 implementada (11/set/2026) — a primeira das três levas da etapa ③.** Saíram de
+`functions/index.js` **10 linhas mortas**: 7 declarações `const adminEmails = Array.isArray(
+t.adminEmails) ? … : []` e 3 de `coHostUids`, todas declaradas e nunca lidas — resíduo da 2.0.107,
+quando a autorização das CFs virou `_isTournamentOrgCaller` (uid puro). Nenhum comportamento mudou
+e nenhum campo saiu de documento algum.
+⭐ **O parecer da revisão evitou um gate errado, e o achado vale mais que a limpeza:** o predicado
+que eu tinha escrito proibiria qualquer leitura de `creatorEmail`/`organizerEmail` no arquivo — e
+elas existem de propósito em `:313` (troca de e-mail na **fusão de conta**) e `:7310-7311`
+(**migração de uid**), além de uma exibição em `:9221`. O gate ficaria vermelho na própria árvore
+correta. Mais importante: esses dois campos **não são exibição, são migração de identidade** — a
+L4.P9 terá de decidir o que a fusão de contas e a migração de uid fazem quando os campos não
+existirem mais, e isso não estava no mapa de papéis da P7.
+Gate: `tests/l4-sem-leitura-morta-de-admin-email.test.js` (6 asserções) trava o padrão morto,
+**nomeia** o writer derivado que continua (`upd.adminEmails = _coHostCore.computeAdminEmails`,
+`:4284`) e declara por escrito o que NÃO prova. Controle: falha na árvore anterior. 738 suítes
+verdes. ⚠️ `functions/` não sobe pelo Hosting — a mudança espera um `deploy-functions.sh`
+autorizado.
