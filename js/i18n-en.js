@@ -1,5 +1,12 @@
 // ─── English translations ───────────────────────────────────────────────────
 window._translations['en'] = {
+  "nativeUpdate.requiredTitle": "Update to continue",
+  "nativeUpdate.noticeTitle": "Update required",
+  "nativeUpdate.requiredBody": "Update scoreplace from the store to continue.",
+  "nativeUpdate.noticeBody": "Update by {date}. You can use the new features as soon as you install the new version.",
+  "nativeUpdate.update": "Update in {store}",
+  "nativeUpdate.later": "Later",
+
   // Topbar
   'nav.home': 'Home',
   'nav.explore': 'Explore',

@@ -493,6 +493,13 @@ store.js). Números queimados (não usar): `+55 11 91693-6454` e `+55 11 96658-1
 
 ## Revisão cruzada (Claude ⇄ GPT) — NADA se implementa sem o APROVADO do outro
 
+**Atualização autorizada em 11/set/2026:** revisão Claude reativada. Padrão econômico:
+Haiku para faixa normal, Sonnet/medium para crítica, sem Opus/Fable automático nem
+repetição automática em high. Teto de US$ 1 estimado pelo CLI por chamada; não é saldo
+da assinatura. Parecer aprovado só é reutilizado com o diff idêntico. As alterações
+já preparadas durante a suspensão passam pela revisão do diff antes de publicar.
+
+
 Ordens do dono (04/set/2026): _"quero que o GPT sempre revise o que o Claude vai implementar,
 pra sermos mais assertivos"_ · _"não executar o plano de cada ajuste sem aprovação: se ele
 indicar ajustes, submete de novo até ele aprovar, e daí sim edita"_ · _"quem dispara indica o

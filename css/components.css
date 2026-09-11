@@ -2660,3 +2660,14 @@ html, body,
   70%  { box-shadow: 0 0 0 10px rgba(67, 56, 202, 0); }
   100% { box-shadow: 0 0 0 0 rgba(67, 56, 202, 0); }
 }
+
+/* Atualização nativa: tokens dos dois temas; dialog modal só depois do prazo. */
+.sp-native-update { color: var(--text-primary); background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; padding: 24px; max-width: 440px; box-shadow: var(--shadow-lg); }
+.sp-native-update h2 { margin: 0 0 12px; font-size: 1.25rem; }
+.sp-native-update p { color: var(--text-primary); line-height: 1.5; margin: 0 0 16px; }
+.sp-native-update .btn { min-height: 44px; margin: 4px; }
+section.sp-native-update { position: fixed; z-index: 100001; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); margin: auto; }
+dialog.sp-native-update { margin: auto; width: calc(100% - 32px); box-sizing: border-box; }
+dialog.sp-native-update::backdrop { background: var(--bg-overlay, rgba(0,0,0,0.6)); }
+
+.sp-native-update .btn-primary { background: var(--text-primary); color: var(--bg-card); }

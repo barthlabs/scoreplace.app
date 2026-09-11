@@ -144,7 +144,7 @@ ok(r.code === 0 && !fs.existsSync(chaveG), 'ligar apaga a chave — code ' + r.c
 r = runLab(labGPT, ['diff'], chaves);
 ok(r.code === 4, 'ligado de novo, sem Codex volta a falhar com exit 4 — code ' + r.code);
 
-// ── custo adaptativo: medium primeiro; high só quando o próprio parecer pede ─────────
+// ── Claude econômico: uma chamada; pedido de investigação não escala automaticamente ─────────
 const fakeClaude = path.join(lab, 'claude-falso.sh');
 const efforts = path.join(lab, 'efforts.txt');
 fs.writeFileSync(fakeClaude, `#!/usr/bin/env bash
@@ -162,9 +162,11 @@ fs.chmodSync(fakeClaude, 0o755);
 const planoAdapt = path.join(lab, 'plano-adaptativo.md');
 fs.writeFileSync(planoAdapt, '# plano\n\nTocar `js/store.js`.\n');
 r = runLab(labCLAUDE, ['plano', planoAdapt], { CLAUDE_BIN: fakeClaude, FAKE_EFFORTS: efforts });
-ok(r.code === 0, 'parecer high após ESCALAR: SIM aprova — code ' + r.code);
-ok(fs.readFileSync(efforts, 'utf8') === 'medium\nhigh\n', 'primeira tentativa é medium e há uma única escalada high');
+ok(r.code !== 0, 'Claude pede investigação: bloqueia sem gastar outra chamada — code ' + r.code);
+ok(fs.readFileSync(efforts, 'utf8') === 'medium\n', 'Claude faz apenas a primeira tentativa medium, sem escalada automática');
 
+ok(NUCLEO.includes('--max-budget-usd 1') && NUCLEO.includes('--no-session-persistence'), 'Claude possui teto por chamada e sessão efêmera');
+ok(NUCLEO.includes('MODELO=haiku') && NUCLEO.includes('MODELO=sonnet'), 'padrões econômicos distintos por faixa');
 fs.rmSync(lab, { recursive: true, force: true });
 console.log(fail ? '❌ revisar (faixa/interruptor/auto): ' + fail + ' falha(s), ' + pass + ' ok' : '✅ revisar (faixa/interruptor/auto): ' + pass + ' ok');
 process.exit(fail ? 1 : 0);

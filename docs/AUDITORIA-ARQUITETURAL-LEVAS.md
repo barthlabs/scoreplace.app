@@ -3166,3 +3166,18 @@ ordem explícita do dono, devido à cota temporária**, não aprovada por infer�
 A dashboard marcava sucesso antes da consulta: uma falha bloqueava novas tentativas. Agora distingue requisição em voo de resultado confirmado, captura rejeições e permite retry no próximo render. A ordenação interpreta datas ISO, números e Timestamp; sandbox não ocupa uma das cinco consultas. O store aplica a resposta no objeto atual, após snapshot concorrente, e descarta resposta após remoção ou troca de conta. A leitura completa permanece necessária para novidades de outros jogadores, resultados parciais e propostas; limitá-la só a jogos próprios perderia cards. O corte do tamanho da consulta continua aberto. Revisão Claude permanece suspensa.
 
 L8.P3 também remove flags de hidratação ao salvar e ler o cache: elas descrevem a sessão, não resultados persistidos. O teste usa os métodos reais para provar que um cache antigo não impede nova consulta.
+
+
+## L8.P4 / L13.P0 — recuperação na chave e política aprovada (11/set/2026)
+
+A chave também marcava hidratação antes da confirmação. Agora usa flag em voo, captura falha e permite retry; só repinta a rota exata do torneio. `loadMatchResults` recusa Firestore indisponível em vez de devolver coleção vazia. A coalescência inclui UID, impedindo que a conta seguinte reutilize a requisição antiga.
+
+O dono aprovou mínimo independente por plataforma, sete dias de aviso após disponibilidade e validação, e novidades imediatas para quem atualiza. Source implementa comparador de versões, manifest com prazo validado e cliente nativo com aviso/bloqueio em momento seguro. O manifest permanece desativado até os gates das lojas. Política operacional em `docs/POLITICA-ATUALIZACAO-NATIVA.md`. Adoção ainda não medida; Rules e cutover permanecem intactos. Claude suspenso conforme autorização.
+
+
+### Revisão Claude reativada nesta execução
+
+O dono reativou a revisão em 11/set e pediu motores mais baratos. O adaptador usa
+Haiku para faixa normal e Sonnet/medium para crítica; não repete automaticamente em
+high e limita cada chamada a US$ 1 estimado pelo CLI. Alterações preparadas durante a
+suspensão serão revistas antes da publicação. A suspensão mencionada acima é histórica.

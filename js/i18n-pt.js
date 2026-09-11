@@ -1,5 +1,12 @@
 // ─── Portuguese (pt-BR) translations ────────────────────────────────────────
 window._translations['pt'] = {
+  "nativeUpdate.requiredTitle": "Atualize para continuar",
+  "nativeUpdate.noticeTitle": "Atualização necessária",
+  "nativeUpdate.requiredBody": "Atualize o scoreplace pela loja para continuar.",
+  "nativeUpdate.noticeBody": "Atualize até {date}. Você já pode usar as novidades ao instalar a nova versão.",
+  "nativeUpdate.update": "Atualizar na {store}",
+  "nativeUpdate.later": "Mais tarde",
+
   // Topbar
   'nav.home': 'Início',
   'nav.explore': 'Explorar',

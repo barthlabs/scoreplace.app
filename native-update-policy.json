@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "noticeDays": 7,
+  "platforms": {
+    "ios": { "minimumVersion": null, "availableAt": null, "deviceValidatedAt": null, "enforceAt": null },
+    "android": { "minimumVersion": null, "availableAt": null, "deviceValidatedAt": null, "enforceAt": null }
+  }
+}

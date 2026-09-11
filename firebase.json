@@ -72,6 +72,19 @@
             "value": "no-cache"
           }
         ]
+      },
+      {
+        "source": "/native-update-policy.json",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-store"
+          },
+          {
+            "key": "Access-Control-Allow-Origin",
+            "value": "*"
+          }
+        ]
       }
     ]
   },

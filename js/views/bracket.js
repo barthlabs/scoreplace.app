@@ -1138,12 +1138,16 @@ function renderBracket(container, tournamentId, isInline) {
   // O resultado pode chegar no espelho `results/{matchId}` depois da estrutura da chave.
   // Busca uma vez por abertura: re-renderizações de W.O./placar não podem virar uma leitura
   // completa da subcoleção a cada clique. Ao sair desta rota a flag é descartada pelo router.
-  if (t && !t._resultsHydrated && window.AppStore && typeof window.AppStore.hydrateMatchResults === 'function') {
-    t._resultsHydrated = true;
-    Promise.resolve(window.AppStore.hydrateMatchResults(t.id)).then(function (ok) {
-      if (!ok || String(window.location.hash || '').indexOf('#bracket/' + String(t.id)) !== 0) return;
+  if (t && !t._resultsHydrated && !t._resultsHydrating && window.AppStore && typeof window.AppStore.hydrateMatchResults === 'function') {
+    t._resultsHydrating = true;
+    Promise.resolve().then(function () { return window.AppStore.hydrateMatchResults(t.id); }).then(function (ok) {
+      t._resultsHydrated = !!ok;
+      var routeId = String(window.location.hash || '').split('/')[1];
+      if (!ok || String(window.location.hash || '').split('/')[0] !== '#bracket' || routeId !== String(t.id)) return;
       if (typeof window._softRefreshView === 'function') window._softRefreshView();
-    });
+    }).catch(function (e) {
+      if (window._warn) window._warn('[bracket] hidratação de resultados falhou', e);
+    }).finally(function () { t._resultsHydrating = false; });
   }
 
   /* ⛔ PORTÃO DAS PARTES — ANTES de qualquer lógica de chave e de qualquer gravação.

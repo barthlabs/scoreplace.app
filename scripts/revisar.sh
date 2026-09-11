@@ -266,9 +266,11 @@ if [[ "$REVISOR" == gpt ]]; then
 else
   { [[ -x "$CLAUDE" ]] || command -v "$CLAUDE" >/dev/null 2>&1; } || { echo "✗ Claude Code CLI não encontrado ('$CLAUDE'; exporte CLAUDE_BIN)"; exit 4; }
   [[ "$ESFORCO" == xhigh ]] && ESFORCO=max
-  # Cota do Claude: Sonnet/medium é o padrão inclusive para diffs críticos.
-  # Opus é reservado a uma escolha explícita (--modelo opus), nunca automática.
-  [[ -n "$MODELO" ]]  || MODELO=sonnet
+  # Ordem do dono (11/set): motores econômicos e sem escalada automática.
+  # Haiku para revisão comum; Sonnet/medium somente quando a faixa é crítica.
+  if [[ -z "$MODELO" ]]; then
+    if [[ "$FAIXA" == critica ]]; then MODELO=sonnet; else MODELO=haiku; fi
+  fi
   [[ -n "$ESFORCO" ]] || ESFORCO="$PISO"
   EXECUTOR_DICA='modelo=<gpt-5.6-terra|outro> esforco=<low|medium|high|xhigh>  (é o GPT/Codex que vai executar: low pra mudança mecânica e local; high pra lógica com concorrência, dados de usuário, torneio dividido; xhigh só quando errar custa dado de produção)'
   QUEM_EXECUTA="o GPT (Codex)"
@@ -300,7 +302,11 @@ Você é o REVISOR de segunda opinião deste repositório (scoreplace.app — SP
 Firebase). Outro agente ($QUEM_EXECUTA) vai implementar; seu trabalho é achar o que ele NÃO viu,
 e NADA é implementado sem o seu APROVADO. Você tem leitura da árvore inteira: CONFIRA CONTRA O
 CÓDIGO REAL, não contra o que o texto afirma. Nunca edite nada. As regras da casa estão em
-CLAUDE.md (AGENTS.md é a mesma coisa). Responda em português do Brasil.
+CLAUDE.md (AGENTS.md é a mesma coisa). Se já foi carregado no contexto, não releia o mesmo
+arquivo. Inspecione primeiro o diff e apenas as dependências necessárias; não percorra
+changelogs históricos ou documentação inteira sem ligação com um achado. Responda em português do Brasil.
+A revisão Claude usa motores econômicos e não escala automaticamente. ESCALAR: SIM é um
+pedido fundamentado para o executor avaliar, nunca autorização para uma chamada mais cara.
 
 FORMATO OBRIGATÓRIO — as DUAS primeiras linhas, exatamente assim:
 VEREDITO: APROVADO | RESSALVAS | BLOQUEIO      (escolha UMA)
@@ -371,7 +377,10 @@ executar_revisor() {
   # `dontAsk` é indispensável no `-p`: sem UI interativa, uma tentativa de ferramenta
   # aguardava confirmação e terminava sem stdout. A allowlist é só leitura; stderr vai
   # separado porque o parser abaixo procura o 1º `{` do stdout.
-  env -u CLAUDECODE "$CLAUDE" -p --model "$MODELO" --effort "$ESFORCO" \
+  CLAUDE_EXTRA=(); [[ "$MODELO" != haiku ]] && CLAUDE_EXTRA+=(--effort "$ESFORCO")
+  env -u CLAUDECODE "$CLAUDE" -p --model "$MODELO" ${CLAUDE_EXTRA[@]+"${CLAUDE_EXTRA[@]}"} \
+    --max-budget-usd 1 --no-session-persistence --disable-slash-commands \
+    --strict-mcp-config --mcp-config '{"mcpServers":{}}' \
     --permission-mode dontAsk --tools Read Glob Grep --output-format json \
     < "$PROMPT" > "$log_exec" 2> "$err_exec"
   RC=$?
@@ -404,7 +413,7 @@ executar_revisor ""
 mv "$RASCUNHO" "$OUT"; RASCUNHO=""
 
 ESCALAR=$(grep -m1 -oE 'ESCALAR: *(SIM|NAO)' "$OUT" | sed 's/ESCALAR: *//' || true)
-if [[ "$ESCALAR" == SIM && "$ESFORCO" == medium ]]; then
+if [[ "$REVISOR" == gpt && "$ESCALAR" == SIM && "$ESFORCO" == medium ]]; then
   echo "  ▸ medium pediu investigação adicional: uma única repetição em high."
   cp "$OUT" "${OUT%.md}-medium-$CARIMBO.md"
   {
@@ -420,6 +429,11 @@ if [[ "$ESCALAR" == SIM && "$ESFORCO" == medium ]]; then
   mv "$RASCUNHO" "$OUT"; RASCUNHO=""
 fi
 cp "$OUT" "$OUT_DATADO"
+if [[ "$REVISOR" == claude && "$ESCALAR" == SIM ]]; then
+  echo "✗ Claude pediu investigação adicional; sem repetição automática por política de custo."
+  cat "$OUT"
+  exit 2
+fi
 
 VEREDITO=$(grep -m1 -oE 'VEREDITO: *(APROVADO|RESSALVAS|BLOQUEIO)' "$OUT" | sed 's/VEREDITO: *//' || true)
 # Claude às vezes preserva o conteúdo obrigatório mas envolve a linha em `**`.

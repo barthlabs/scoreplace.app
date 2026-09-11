@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.2.66';
+window.SCOREPLACE_VERSION = '2.2.67';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -11405,14 +11405,15 @@ window.AppStore = {
   hydrateMatchResults(tournamentId) {
     var id = String(tournamentId || '');
     if (!id) return Promise.resolve(false);
+    var actorUid = this.currentUser && this.currentUser.uid;
+    var requestKey = JSON.stringify([actorUid || null, id]);
     this._hydrateResultPromises = this._hydrateResultPromises || {};
-    if (this._hydrateResultPromises[id]) return this._hydrateResultPromises[id];
+    if (this._hydrateResultPromises[requestKey]) return this._hydrateResultPromises[requestKey];
     var self = this;
     var task = (async function () {
     var t = this.tournaments.find(function (x) { return String(x.id) === String(tournamentId); });
     if (!t || !window.FirestoreDB || typeof window.FirestoreDB.loadMatchResults !== 'function') return false;
     try {
-      var actorUid = this.currentUser && this.currentUser.uid;
       var map = await window.FirestoreDB.loadMatchResults(tournamentId);
       if ((this.currentUser && this.currentUser.uid) !== actorUid) return false;
       // O snapshot pode substituir o objeto enquanto a consulta está em voo.
@@ -11427,8 +11428,8 @@ window.AppStore = {
       return true;
     } catch (e) { if (window._error) window._error('hydrateMatchResults ' + tournamentId, e); return false; }
     }).call(this);
-    this._hydrateResultPromises[id] = task;
-    task.then(function () { delete self._hydrateResultPromises[id]; }, function () { delete self._hydrateResultPromises[id]; });
+    this._hydrateResultPromises[requestKey] = task;
+    task.then(function () { delete self._hydrateResultPromises[requestKey]; }, function () { delete self._hydrateResultPromises[requestKey]; });
     return task;
   },
 

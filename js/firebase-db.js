@@ -1630,7 +1630,7 @@ window.FirestoreDB = {
   // Lê TODOS os docs de resultado de um torneio (subcoleção results). Retorna um
   // mapa { [matchId]: resultData } pra hidratação de leitura (merge nos matches).
   async loadMatchResults(tournamentId) {
-    if (!this.ensureDb()) return {};
+    if (!this.ensureDb()) throw Object.assign(new Error('Firestore indisponível para ler resultados.'), { code: 'unavailable' });
     var snap = await this._tSub(tournamentId, 'results').get();
     var out = {};
     snap.forEach(function (d) { out[d.id] = d.data(); });

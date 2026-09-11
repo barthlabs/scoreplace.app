@@ -1,3 +1,7 @@
+## 2.2.67 — 11/set/2026
+
+Resultados: chave permite retry, conexão indisponível não equivale a coleção vazia, requisições são isoladas por conta. Política nativa aprovada: sete dias por plataforma, novidades liberadas assim que atualizar, controle preparado sem mínimo ativo até disponibilidade e validação em aparelho. Nenhuma Rule fechada. Revisão Claude reativada com Haiku/Sonnet, teto por chamada e sem escalada automática.
+
 ## 2.2.66 — 11/set/2026
 
 Dashboard: recupera hidratação após falha, ordena datas ISO corretamente e exclui sandbox das cinco coleções. Respostas assíncronas aplicam no torneio atual e são descartadas após troca de conta ou remoção. Revisão Claude suspensa por autorização do dono.

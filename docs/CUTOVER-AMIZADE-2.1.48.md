@@ -34,13 +34,16 @@ adivinhado.
 
 ### GATE A — TÉCNICO (verificável por script)
 
-**Auditado em 29/ago/2026:** `capacitor.config.json` tem `webDir: "www"` e **não** tem
-`server.url` — o app nativo roda o **JS embarcado no binário**. Publicar no Hosting não
-atualiza o nativo. iOS e Android estão em **2.1.28**, e **não existe force-update nem
-minimum-version** em lugar nenhum do código.
+O Capacitor usa bundle local. A política aprovada em 11/set/2026 está em
+`docs/POLITICA-ATUALIZACAO-NATIVA.md`: mínimo independente por plataforma, disponível
+na loja e validado em aparelho, seguido de sete dias de aviso. O source já contém o
+controle, mas isso não o instala retroativamente nos binários antigos.
 
-`check-nativo-pronto-para-corte.js` exige: build 2.1.48 produzido, versões carimbadas,
-e lembra que a disponibilidade nas lojas é fato externo.
+`check-nativo-pronto-para-corte.js` confere mínimo declarado, prazo e coerência do
+JS embarcado com a versão nativa, além da presença do controle no bundle. O mínimo
+não acompanha automaticamente a versão web. Manifest desativado ou bundle ausente
+continuam impedindo o corte. Disponibilidade, validação e adoção precisam de evidências
+externas; o script não as transforma em fatos apenas por estarem declaradas.
 
 ### GATE B — APROVAÇÃO HUMANA DO CORTE NATIVO
 
