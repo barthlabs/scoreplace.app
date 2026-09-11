@@ -3921,75 +3921,16 @@ window._participantSelfPair = function(tId, name1, uid1, name2, uid2) {
         return;
     }
     var _send = function() {
-        if (!window._teamFormation) return;
-        var res = window._teamFormation.requestPair(t, uid1, uid2, name1, name2);
-        if (!res.ok) { if (typeof showNotification === 'function') showNotification('Não foi possível', window._pairErrorMsg ? window._pairErrorMsg(res.error) : res.error, 'warning'); return; }
-        if (res.action === 'confirm' && typeof window._formDuplaByUids === 'function') {
-            var iN = (res.inviterUid === uid1) ? name1 : name2, iU = res.inviterUid;
-            var eN = (res.inviterUid === uid1) ? name2 : name1, eU = (res.inviterUid === uid1) ? uid2 : uid1;
-            window._formDuplaByUids(tId, iN, iU, eN, eU);
-            return;
-        }
-        // v2.7.84: salva o convite ANTES de notificar — e mostra erro se o Firestore
-        // rejeitar (antes era silencioso: o convite não persistia e o convidado ficava
-        // sem o botão de aceitar). Só notifica/avisa "enviado" após o save confirmar.
-        var _pairSaved = window.AppStore && typeof window.AppStore.commitTournamentTx === 'function'
-          ? window.AppStore.commitTournamentTx(tId, function(ft) {
-              var freshRes = window._teamFormation.requestPair(ft, uid1, uid2, name1, name2);
-              return freshRes && freshRes.ok;
-            }) : Promise.resolve(false);
-        Promise.resolve(_pairSaved).then(function(saved) {
-            if (saved === false) { if (typeof window._softRefreshView === 'function') window._softRefreshView(); return; }
-            if (typeof window._sendUserNotification === 'function') {
-                // v2.7.94: tipo 'pair_invite' + reqId + deep-links → botões Aceitar/Recusar
-                // funcionais na plataforma, no email e no WhatsApp.
-                var _reqId = uid1 + '__' + uid2;
-                var _base = 'https://scoreplace.app/#pair/';
-                window._sendUserNotification(uid2, {
-                    type: 'pair_invite',
-                    title: '🤝 Convite de dupla',
-                    message: name1 + ' quer formar dupla com você em ' + (t.name || '') + '.',
-                    tournamentId: String(t.id),
-                    tournamentName: t.name || '',
-                    pairRequestId: _reqId,
-                    pairInviterName: name1,
-                    pairInviteeName: name2,
-                    acceptUrl: _base + 'accept/' + encodeURIComponent(String(t.id)) + '/' + encodeURIComponent(_reqId),
-                    rejectUrl: _base + 'reject/' + encodeURIComponent(String(t.id)) + '/' + encodeURIComponent(_reqId),
-                    level: 'fundamental'
-                });
+        if (!(window.FirestoreDB && typeof window.FirestoreDB._callFn === 'function')) return;
+        window.FirestoreDB._callFn('requestTournamentPair', { tournamentId: String(tId), inviteeUid: String(uid2) }).then(function(result) {
+            if (result && result.tournament && typeof window._applyCFTournament === 'function') window._applyCFTournament(tId, result.tournament);
+            if (result && result.action === 'confirm' && typeof window._formDuplaByUids === 'function') {
+                window._formDuplaByUids(tId, result.inviterName || name1, result.inviterUid, result.inviteeName || name2, result.inviteeUid);
+                return;
             }
-            /* ⭐ L1.1 · O E-MAIL SAI DAQUI, PELO SERVIDOR. O convite já está GRAVADO (o
-             * `saveTournament` acima confirmou) — e é esse registro que autoriza a
-             * Function. O cliente manda só os identificadores; assunto, HTML, links e
-             * destinatário são resolvidos lá.
-             * ⚠️ Depois do save de propósito: pedir o e-mail de um convite que não
-             * persistiu manda a pessoa clicar num botão que não vai encontrar nada.
-             * ⭐ L1.1.1 · e o TOAST espera o veredito. Antes ele dizia "Convite enviado"
-             * sem olhar o retorno — inclusive quando a Function tinha respondido que não
-             * achou o convite. O convite e a notificação no app são fatos; o e-mail é
-             * outro fato, e agora só é afirmado quando acontece. */
-            var _pediuEmail = (window.FirestoreDB && typeof window.FirestoreDB.sendPairInviteEmail === 'function')
-                ? Promise.resolve(window.FirestoreDB.sendPairInviteEmail(String(t.id), uid2))
-                    .catch(function (e) { window._warn('[convite-dupla] e-mail falhou:', e && e.message); return { enviado: false, motivo: 'falha-de-rede' }; })
-                : Promise.resolve({ enviado: false, motivo: 'sem-porta' });
-            _pediuEmail.then(function (veredito) {
-                if (typeof showNotification !== 'function') return;
-                if (veredito && veredito.enviado) {
-                    showNotification('Convite enviado', 'Aguardando ' + name2 + ' aceitar a dupla.', 'success');
-                    return;
-                }
-                /* ⛔ O convite EXISTE (gravado) e a notificação no app também. O que não
-                 * saiu foi o e-mail — e apagar o convite por causa disso seria pior. */
-                showNotification('Convite registrado', name2 + ' já pode ver o convite no app — mas o e-mail de aviso não pôde ser enviado agora.', 'warning');
-            });
-            if (typeof window._softRefreshView === 'function') window._softRefreshView();
-        }).catch(function(e) {
-            // não persistiu → remove o convite local e avisa (loud failure)
-            try { if (window._teamFormation && window._teamFormation.cancelPair) window._teamFormation.cancelPair(t, uid1 + '__' + uid2, uid1); } catch (_) {}
-            if (typeof showNotification === 'function') showNotification('Não foi possível enviar', 'O convite não pôde ser salvo (' + ((e && (e.code || e.message)) || 'erro') + '). Tente de novo.', 'error');
-            if (typeof window._softRefreshView === 'function') window._softRefreshView();
-        });
+            var email = (window.FirestoreDB && typeof window.FirestoreDB.sendPairInviteEmail === 'function') ? window.FirestoreDB.sendPairInviteEmail(String(tId), uid2) : Promise.resolve({ enviado:false });
+            return Promise.resolve(email).then(function(v) { if (typeof showNotification === 'function') showNotification(v && v.enviado ? 'Convite enviado' : 'Convite registrado', v && v.enviado ? 'Aguardando ' + name2 + ' aceitar a dupla.' : name2 + ' já pode ver o convite no app.', v && v.enviado ? 'success' : 'warning'); });
+        }).catch(function(e) { if (typeof showNotification === 'function') showNotification('Não foi possível enviar', (e && e.message) || 'Tente novamente.', 'error'); });
     };
     if (typeof showConfirmDialog === 'function') showConfirmDialog('🤝 Convidar para dupla?', 'Enviar convite para "' + window._safeHtml(name2) + '" formar dupla com você?', _send, null, { type: 'info', confirmText: 'Enviar convite', cancelText: 'Cancelar' });
     else _send();

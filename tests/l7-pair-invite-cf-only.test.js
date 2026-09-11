@@ -1,0 +1,3 @@
+'use strict';
+const fs=require('fs');let bad=0;const ok=(v,m)=>{console.log((v?'✓ ':'✗ ')+m);if(!v)bad++;};
+const ui=fs.readFileSync('js/views/tournaments-draw.js','utf8'),a=ui.lastIndexOf('window._participantSelfPair'),b=ui.indexOf('// ── v2.0.0',a),part=ui.slice(a,b);ok(/_callFn\('requestTournamentPair'/.test(part)&&!/(?:commitTournamentTx|AppStore\.mutate|_sendUserNotification)/.test(part),'convite só despacha CF');const fn=fs.readFileSync('functions-autodraw/index.js','utf8'),x=fn.indexOf('exports.requestTournamentPair'),y=fn.indexOf('// ─── Reset',x),srv=fn.slice(x,y);ok(/runTransaction/.test(srv)&&/_leTorneio/.test(srv)&&/notificationOutbox/.test(srv),'CF valida e grava convite com aviso canônico');process.exitCode=bad?1:0;

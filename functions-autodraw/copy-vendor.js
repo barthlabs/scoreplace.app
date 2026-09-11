@@ -30,6 +30,7 @@ const FILES = [
   'gender-ratio-core.js',      // proporção de gênero do sorteio equilibrado (o motor chama no servidor)
   'sport-rules.js',            // window.SPORT_RULES — dep de format2 (allowsSingles/teamSize)
   'schedule-poll.js',          // grade estimada canônica, aplicada pelo drawRound no documento fresco
+  'team-formation.js',         // máquina pura de convite de dupla; cliente e CF usam a mesma regra
   'tournaments-utils.js',      // _isLigaFormat, _calcNextDrawDate
   // _countCompetitors/_waitlistPeopleCount — as contagens que o CARTÃO mostra. O
   // resumo (tournamentSummary) TEM que usar estas, não uma cópia: medido em

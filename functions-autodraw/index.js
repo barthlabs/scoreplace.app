@@ -792,6 +792,30 @@ exports.drawRound = onCall(async (request) => {
   return out;
 });
 
+// ─── Convite de dupla: intenção do participante, decisão no documento fresco ───
+exports.requestTournamentPair = onCall(async request => {
+  const uid=request.auth&&request.auth.uid, data=request.data||{}, tId=String(data.tournamentId||'').trim(), inviteeUid=String(data.inviteeUid||'').trim();
+  if(!uid) throw new HttpsError('unauthenticated','Entre na sua conta.');
+  if(!tId||!inviteeUid||inviteeUid===uid) throw new HttpsError('invalid-argument','Convite inválido.');
+  if(!drawWindow||!drawWindow._teamFormation||typeof drawWindow._teamFormation.requestPair!=='function') throw new HttpsError('internal','Núcleo de duplas indisponível no servidor.');
+  const ref=db.collection('tournaments').doc(tId),nowIso=new Date().toISOString();
+  return db.runTransaction(async tx=>{
+    const t=await _leTorneio(tx,ref,tId);if(!t)throw new HttpsError('not-found','Torneio não encontrado.');
+    const parts=Array.isArray(t.participants)?t.participants:Object.values(t.participants||{});
+    const find=(id)=>parts.find(p=>p&&typeof p==='object'&&((typeof drawWindow._participantUids==='function'?drawWindow._participantUids(p):[p.uid]).map(String).includes(String(id))));
+    const inviter=find(uid),invitee=find(inviteeUid);if(!inviter||!invitee)throw new HttpsError('failed-precondition','Inscrito não encontrado.');
+    const nameOf=p=>String(p.displayName||p.name||'Participante');
+    const before=_antesDoMotor(t),out=drawWindow._teamFormation.requestPair(t,uid,inviteeUid,nameOf(inviter),nameOf(invitee),{now:Date.parse(nowIso)});
+    if(!out||!out.ok) throw new HttpsError('failed-precondition',String((out&&out.error)||'convite-inválido'));
+    if(out.action==='pending'){
+      const b=_gravaTorneio(tx,ref,t,before,{agoraIso:nowIso}),r=out.request;
+      tx.set(ref.collection('notificationOutbox').doc('pair-invite-'+_outboxDocIdPart(r.id)),{schema:1,kind:'tournament-notification',type:'pair_invite',title:'🤝 Convite de dupla',message:String(r.inviterName||'Participante')+' quer formar dupla com você em '+String(t.name||'torneio')+'.',tournamentId:tId,tournamentName:t.name||'',pairRequestId:r.id,pairInviterName:r.inviterName,pairInviteeName:r.inviteeName,level:'fundamental',recipients:[inviteeUid],ctaLabel:'Ver convite',ctaUrl:'https://scoreplace.app/#pair/accept/'+encodeURIComponent(tId)+'/'+encodeURIComponent(r.id),createdAt:nowIso,createdAtMs:Date.parse(nowIso),dispatchStatus:'pending'},{merge:true});
+      return {ok:true,action:'pending',requestId:r.id,inviterName:r.inviterName,inviteeName:r.inviteeName,tournament:b.clean};
+    }
+    return {ok:true,action:'confirm',inviterUid:out.inviterUid,inviteeUid:out.inviteeUid,inviterName:out.inviterName||nameOf(inviter),inviteeName:out.inviteeName||nameOf(invitee)};
+  });
+});
+
 // ─── Reset para inscrições: confirmação no cliente, mutação completa no servidor ───
 exports.resetTournamentToEnrollment = onCall(async request => {
   const uid = request.auth && request.auth.uid;
