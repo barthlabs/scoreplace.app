@@ -286,7 +286,7 @@ RECIBO="$OUT.sha256"
 FINGERPRINT=""
 if [[ "$MODO" == diff ]]; then
   FINGERPRINT=$( { git diff origin/main...HEAD 2>/dev/null; git diff HEAD 2>/dev/null; git ls-files --others --exclude-standard -z 2>/dev/null | xargs -0 shasum -a 256 2>/dev/null; } | shasum -a 256 | awk '{print $1}')
-  if [[ -s "$OUT" && -s "$RECIBO" && "$(cat "$RECIBO")" == "$FINGERPRINT" ]] && grep -qE '^VEREDITO: *APROVADO' "$OUT"; then
+  if [[ -s "$OUT" && -s "$RECIBO" && "$(cat "$RECIBO")" == "$FINGERPRINT" ]] && grep -qE '(^|\*\*)VEREDITO: *APROVADO' "$OUT"; then
     echo "  ✓ parecer APROVADO reaproveitado: diff idêntico ($FINGERPRINT)."
     exit 0
   fi
@@ -420,7 +420,10 @@ fi
 cp "$OUT" "$OUT_DATADO"
 
 VEREDITO=$(grep -m1 -oE 'VEREDITO: *(APROVADO|RESSALVAS|BLOQUEIO)' "$OUT" | sed 's/VEREDITO: *//' || true)
-EXECUTOR=$(grep -m1 -E '^EXECUTOR:' "$OUT" || true)
+# Claude às vezes preserva o conteúdo obrigatório mas envolve a linha em `**`.
+# Aceitamos só o mesmo token explícito, nunca uma frase solta dizendo "aprovado".
+[[ -n "$VEREDITO" ]] || VEREDITO=$(grep -m1 -oE '\*\*VEREDITO: *(APROVADO|RESSALVAS|BLOQUEIO)\*\*' "$OUT" | sed -E 's/^\*\*VEREDITO: *//; s/\*\*$//' || true)
+EXECUTOR=$(grep -m1 -E '^EXECUTOR:|^\*\*EXECUTOR:' "$OUT" || true)
 echo
 echo "════════ PARECER DO $(echo "$REVISOR" | tr a-z A-Z) ($MODO · faixa $FAIXA · ${TOKENS:-? tokens}) ════════"
 cat "$OUT"
