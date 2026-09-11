@@ -719,6 +719,8 @@ exports.drawRound = onCall(async (request) => {
     // Antes a tela a gravava em uma transação separada, que podia competir com o drawRound.
     const duplicatesRemoved = (drawWindow && typeof drawWindow._deduplicateParticipants === 'function')
       ? (Number(drawWindow._deduplicateParticipants(t)) || 0) : 0;
+    // Novo sorteio inicia presença limpa; só resultado e check-in explícito a preenchem.
+    t.checkedIn = {}; t.absent = {};
 
     // Régua do SORTEIO, não a do recompile: torneio RESETADO tem _phaseMaterialized=0 (o
     // reset grava assim) e o canRecompile barrava com 'already-drawn' sem haver chave —
@@ -738,6 +740,11 @@ exports.drawRound = onCall(async (request) => {
     }
 
     const res = drawInitial(t, { idStamp: Date.now(), decisions: decisions });
+    // A grade estimada nasce com a chave, na mesma transação. Datas combinadas
+    // continuam intocadas pelo núcleo (_schAplicarGrade preserva origem humana).
+    const estimatedScheduleApplied = (drawWindow && typeof drawWindow._schAplicarGrade === 'function')
+      ? (Number(drawWindow._schAplicarGrade(t)) || 0) : 0;
+
     if (!res || !res.ok) {
       // storePhase falho (ex.: 'no-entrants') NUNCA vira sucesso — era isso que dava
       // "diz que sorteou mas não mostra chave".
@@ -768,7 +775,7 @@ exports.drawRound = onCall(async (request) => {
     // (_notifyDrawPersonalized lê os nomes) e pra sincronizar o AppStore sem esperar o listener.
     // Vem FOLDADO (como o doc é no Firestore); o ingest do cliente hidrata, igual ao listener.
     return { ok: true, format: res.format, native: !!res.native, matchCount: res.matchCount,
-             sitOuts: res.sitOuts || 0, allMaleCount: res.allMaleCount || 0, duplicatesRemoved,
+             sitOuts: res.sitOuts || 0, allMaleCount: res.allMaleCount || 0, duplicatesRemoved, estimatedScheduleApplied,
              redraw: hadBracket, tournament: b.clean };
     });
   } catch (e) {

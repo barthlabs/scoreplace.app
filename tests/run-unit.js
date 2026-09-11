@@ -1320,8 +1320,7 @@ const SUITES = [
   // PORTÃO da migração sorteio client→CF (item #2): pacote ≡ core puro para odd/incomplete/
   // scope/absentees/p2 + regressão do loop infinito de _applyRemainderRemoval. v1.3.x.
   'functions-autodraw/test-draw-decisions-parity.js',
-  // Migração client→CF: generateDrawFunction RESTAURA o roster original no doc antes de
-  // despachar → a CF sorteia de (original + pacote), neutralizando mutação do cliente. v1.3.x.
+  // L7: prévia de preparação não restaura nem persiste elenco; drawRound decide no fresco.
   'tests/draw-client-restore-original.test.js',
   // Integração de tardios no servidor (draw-core.integrateLateEntries) — v1.2.57.
   'functions-autodraw/test-integrate-late.js',
@@ -1355,6 +1354,7 @@ const SUITES = [
   'tests/l7-orphan-label-heal-cf-only.test.js', // L7: cura da chave só é persistida pela Function
   'tests/l7-undo-merge-cf-only.test.js', // L7: desfazer mesclagem só é persistido pela Function
   'tests/l7-draw-dedup-cf-only.test.js', // L7: deduplicação corre no drawRound canônico
+  'tests/l7-draw-schedule-cf-only.test.js', // L7: grade estimada nasce no drawRound
   'tests/l7-reset-enrollment-cf-only.test.js', // L7: reset de chave só é persistido pela Function
   'tests/l7-profile-category-cf-only.test.js', // L7: categoria de perfil só é decidida pela Function
   'tests/l7-expired-enrollment-cf-only.test.js', // L7: prazo de inscrição pela CF

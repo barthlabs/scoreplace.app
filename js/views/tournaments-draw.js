@@ -2741,41 +2741,9 @@ window.generateDrawFunction = function (tId) {
         t.drawVisibility = 'public';
     }
 
-    // v4.5.6: SORTEIO EFETIVO — passou todos os gates. As decisões (sem-dupla/pow2) agora
-    // ficam PERMANENTES → o snapshot de draw-prep deixa de valer (cancel não restaura mais).
-    var _prepSnap = null;
-    try { _prepSnap = window._drawPrepSnapshots && window._drawPrepSnapshots[String(tId)]; } catch (_eSnapGet) {}
-
-    // BLINDAGEM: snapshot do estado PRÉ-sorteio (aqui `t` ainda não tem chave — passamos
-    // todos os gates de validação/re-sorteio acima). Os 3 saves de sorteio abaixo trocam
-    // syncImmediate (merge doc inteiro, lost-update) por _commitInitialDraw (delta atômico
-    // sobre o fresco). Um snapshot só serve os 3 ramos. project_concurrency_safe_saves.
-    var _preDraw;
-    try { _preDraw = JSON.parse(JSON.stringify(t)); } catch (_e) { _preDraw = {}; }
-    // v4.5.7: usa o elenco ORIGINAL (snapshot de draw-prep) como baseline do roster no
-    // _preDraw → o delta do _commitInitialDraw captura TODAS as decisões que mexeram no
-    // elenco ANTES daqui (sem-dupla→espera, standby, exclusão) e as persiste ATOMICAMENTE
-    // com a chave. Sem isto, waitlist/standbyParticipants ficavam iguais em preDraw e t →
-    // fora do delta → não gravavam (e dependiam do sync() que clobberava a chave). Ver
-    // _startDraw (snapshot) / _cancelDrawResolution (restore).
-    if (_prepSnap) {
-        try {
-            if (_prepSnap.participants) _preDraw.participants = _prepSnap.participants;
-            if (_prepSnap.waitlist) _preDraw.waitlist = _prepSnap.waitlist;
-            if (_prepSnap.standbyParticipants) _preDraw.standbyParticipants = _prepSnap.standbyParticipants;
-            if (_prepSnap.monarchWaitlist) _preDraw.monarchWaitlist = _prepSnap.monarchWaitlist;
-            if (_prepSnap.teamOrigins) _preDraw.teamOrigins = _prepSnap.teamOrigins;
-        } catch (_eBase) {}
-    }
+    // A preparação é uma prévia de interface. O documento que a Function sorteia é
+    // sempre o fresco do servidor; snapshot algum restaura ou altera elenco pelo cliente.
     try { if (window._drawPrepSnapshots) delete window._drawPrepSnapshots[String(tId)]; } catch (_eSnapClr) {}
-
-    // v4.1.30: o SORTEIO LIMPA a presença — "acabou de sortear, ninguém está presente"
-    // (dono). A partir daqui presença vem SÓ de: (a) lançar resultado = quem jogou está
-    // presente; (b) check-in explícito (toggle / "Cheguei"). As rodadas seguintes do Suíço
-    // (_generateNextRound) NÃO passam por aqui → a presença acumulada persiste entre rodadas.
-    // _preDraw já foi snapshotado com a presença antiga → o diff do _commitInitialDraw grava
-    // o {} limpo. Cobre 1º sorteio E re-sorteio (que arrastava presença de resultados velhos).
-    t.checkedIn = {}; t.absent = {};
 
     // ── MOTOR CANÔNICO: a primeira fase (índice 0) é desenhada pelo MESMO generatePhase das
     // fases seguintes. A INSCRIÇÃO é a entrada da fase. SEM switch por t.format: o FORMATO
@@ -2835,23 +2803,7 @@ window.generateDrawFunction = function (tId) {
             Object.keys(t).forEach(function (k) { delete t[k]; });
             Object.keys(d.tournament).forEach(function (k) { t[k] = d.tournament[k]; });
             if (typeof window._hydrateMonarchGroups === 'function') { try { window._hydrateMonarchGroups(t); } catch (_eH) {} }
-            // ⭐ 2.0.75 · GRADE ESTIMADA. Pedido do dono: em torneio de 1 a 3 dias o sistema
-            // CALCULA a data/hora de cada jogo e GRAVA (não é sugestão só de tela) — gravar é
-            // o que faz a data aparecer em todo lugar que já mostra data, inclusive nas
-            // "📣 Novidades no seu torneio", sem caminho de render novo. O carimbo é
-            // `scheduledKind:'estimate'`, e a invariante do schedule-poll garante que data
-            // combinada por gente nunca é pisada por um recálculo.
-            // Roda AQUI porque é o primeiro ponto em que a chave existe no `t` (o estado
-            // autoritativo do servidor acabou de entrar), e ANTES do #bracket.
-            // ⚠️ Dentro de try/catch de propósito: o sorteio JÁ aconteceu no servidor — uma
-            // falha ao estimar não pode derrubar a tela nem o toast do que deu certo.
-            try {
-              if (typeof window._schAplicarGrade === 'function' && window._schAplicarGrade(t) > 0) {
-                Promise.resolve(window.AppStore && window.AppStore.commitTournamentTx && window.AppStore.commitTournamentTx(tId, function(ft) {
-                  return window._schAplicarGrade(ft) > 0;
-                })).catch(function (_eS) {});
-              }
-            } catch (_eGrade) {}
+            // A grade estimada já veio no recibo canônico de drawRound.
             try { window.AppStore._saveToCache(); } catch (_eC) {}
             if (document.getElementById('final-review-panel')) { document.getElementById('final-review-panel').remove(); document.body.style.overflow = ''; }
             if (window._clearDrawDecisions) window._clearDrawDecisions(tId); // v1.3.93: sorteio efetivou → zera o pacote de decisões (próximo sorteio começa limpo)
@@ -2893,26 +2845,9 @@ window.generateDrawFunction = function (tId) {
             }
         });
         }; // fecha _doDrawDispatch
-        // v1.3.x (migração sorteio→CF): RESTAURA o roster ORIGINAL no doc (a partir do snapshot
-        // de draw-prep) e SÓ ENTÃO despacha. Assim a CF sorteia SEMPRE de (roster original +
-        // pacote de decisões) — neutraliza QUALQUER mutação/persistência do cliente na cadeia de
-        // resolução → resultado independente da versão do app (objetivo do #2). A restauração é
-        // async (via mutate); SEM ela (sorteio sem resolução / harness sem mutate) o despacho é
-        // SÍNCRONO — o drawRoundStub é thenable síncrono e os testes buildViaDraw dependem disso.
-        // Ver [[project_draw_client_to_cf_migration]].
-        if (_prepSnap && window.AppStore && typeof window.AppStore.mutate === 'function') {
-            Promise.resolve(window.AppStore.mutate(String(tId), function (ft) {
-                try {
-                    if (_prepSnap.participants) ft.participants = JSON.parse(JSON.stringify(_prepSnap.participants));
-                    if (_prepSnap.waitlist) ft.waitlist = JSON.parse(JSON.stringify(_prepSnap.waitlist));
-                    if (_prepSnap.standbyParticipants) ft.standbyParticipants = JSON.parse(JSON.stringify(_prepSnap.standbyParticipants));
-                    if (_prepSnap.monarchWaitlist) ft.monarchWaitlist = JSON.parse(JSON.stringify(_prepSnap.monarchWaitlist));
-                    if (_prepSnap.teamOrigins) ft.teamOrigins = JSON.parse(JSON.stringify(_prepSnap.teamOrigins));
-                } catch (_eRest) {}
-            })).then(_doDrawDispatch).catch(_doDrawDispatch);
-        } else {
-            _doDrawDispatch();
-        }
+        // O despacho não reescreve o elenco: decisões declarativas seguem no payload e
+        // drawRound relê o torneio fresco, aplica o motor canônico e persiste uma vez.
+        _doDrawDispatch();
         return;
     }
     // Suíço-pow2: removido o ramo local — a resolução 'swiss' flui pela CF drawRound (bloco

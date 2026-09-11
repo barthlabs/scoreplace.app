@@ -1,0 +1,10 @@
+'use strict';
+const fs=require('fs');let bad=0;const ok=(v,m)=>{console.log((v?'✓ ':'✗ ')+m);if(!v)bad++;};
+const ui=fs.readFileSync('js/views/tournaments-draw.js','utf8'),a=ui.indexOf('window.generateDrawFunction = function'),b=ui.indexOf('// Build nextMatchId links',a),part=ui.slice(a,b);
+ok(!/_schAplicarGrade\(t\)|commitTournamentTx\(tId/.test(part),'cliente não carimba nem persiste grade após sorteio');
+const fn=fs.readFileSync('functions-autodraw/index.js','utf8'),x=fn.indexOf('exports.drawRound'),y=fn.indexOf('exports.resetTournamentToEnrollment',x),srv=fn.slice(x,y);
+ok(/drawWindow\._schAplicarGrade\(t\)/.test(srv)&&/estimatedScheduleApplied/.test(srv),'drawRound aplica a grade no documento fresco e devolve recibo');
+ok(/t\.checkedIn = \{\}; t\.absent = \{\};/.test(srv),'drawRound limpa a presença antes de gerar a nova chave');
+const core=fs.readFileSync('functions-autodraw/draw-core.js','utf8'),copy=fs.readFileSync('functions-autodraw/copy-vendor.js','utf8');
+ok(/vendor\/schedule-poll\.js/.test(core)&&/'schedule-poll\.js'/.test(copy),'núcleo de grade compartilhado viaja para o servidor');
+process.exitCode=bad?1:0;

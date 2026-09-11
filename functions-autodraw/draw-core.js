@@ -191,6 +191,7 @@ g.window._expandFormationAllowed = function (t) {
 // no servidor (toca document no load), e espelhar as funções aqui criaria uma 2ª versão do
 // código — o bug de versão que a canonização quer matar. Agora é UM arquivo só, vendored.
 require('./vendor/identity-core.js');
+require('./vendor/schedule-poll.js');      // grade estimada: só o núcleo puro é chamado pela CF
 require('./vendor/waitlist-core.js');            // cânone da LISTA DE ESPERA (3 storages) —
                                                 // _removeFromWaitlist é chamada pelo motor ao formar
                                                 // grupo Rei/Rainha a partir da espera. Sem isto ela não
