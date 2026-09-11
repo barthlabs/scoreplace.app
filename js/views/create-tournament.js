@@ -2704,9 +2704,6 @@ function setupCreateTournamentModal() {
     });
   };
 
-  // _onRankingManualChange mantida como alias para backward compat
-  window._onRankingManualChange = function () {};
-
   // Liga: select exclusive NPS button
   window._selectLigaNps = function(btn) {
     var val = btn.getAttribute('data-value');

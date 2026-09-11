@@ -248,11 +248,11 @@ function decisao() {
   const plan1 = W._matchSetPlan(UM_SET, c.m);
   ok(plan1.multi === false && plan1.live === null, '1 set: sem coluna em disputa — o card antigo cuida');
 
-  // Corrigir não pode mais apagar o set tocado nem os seguintes. O handler legado é
-  // apenas compatibilidade e delega ao editor que pré-preenche todos os valores.
+  // Corrigir não pode mais apagar o set tocado nem os seguintes. A edição é feita
+  // pelo fluxo único que pré-preenche todos os valores no próprio card.
   const fonteUi = read('js/views/bracket-ui.js');
-  ok(/window\._reopenSet\s*=\s*function\s*\(tId, matchId\)\s*\{\s*return window\._editSetsInline/.test(fonteUi),
-    'handler antigo abre o editor seguro em vez de apagar sets');
+  ok(!/window\._reopenSet\b/.test(fonteUi),
+    'alias sem chamadores removido: só existe o editor seguro');
   ok(!/var novos = sets\.slice\(0, idx\)/.test(fonteUi),
     'não existe mais o caminho que truncava os sets posteriores');
   ok(!/sp-set-editor/.test(fonteUi) && /window\._setsEditState\s*=\s*\{/.test(fonteUi),

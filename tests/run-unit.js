@@ -1333,6 +1333,7 @@ const SUITES = [
   'functions-autodraw/test-result-core.js',
   'tests/l8-ficha-results-fallback.test.js', // L8: fallback local só em falha da consulta global
   'tests/l8-limpeza-orfaos-falha-fechada.test.js', // L8: limpeza só após prova canônica e pós-condição
+  'tests/l9-aliases-mortos-removidos.test.js', // L9: aliases sem chamadores não retornam
   'tests/close-round-promise-handled.test.js', // aprovação aguarda closeRound; demais chamadores consomem erro
   'tests/l7-consenso-placar-cf-only.test.js',
   'tests/l7-auto-repairs-cf-only.test.js', // L7: reparos automáticos só despacham a CF // L7: proposta/contestação só despacham a CF

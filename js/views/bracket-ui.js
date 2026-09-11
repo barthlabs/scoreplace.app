@@ -2001,9 +2001,6 @@ window._saveEditedSetsInline = function (tId, matchId, sc, rows, overlay, onAcce
   return window._saveSetsEmAndamento(tId, matchId, sets, p1, p2);
 };
 
-// Compatibilidade para links/handlers antigos: eles agora abrem o mesmo editor seguro.
-window._reopenSet = function (tId, matchId) { return window._editSetsInline(tId, matchId); };
-
 // v2.3.46: re-renderiza UM card de partida in-place (sem re-render do bracket
 // inteiro). Usado pelo lançamento de placar em formatos por rodada (Liga/Suíço)
 // enquanto a rodada NÃO está completa — assim a página fica estática:

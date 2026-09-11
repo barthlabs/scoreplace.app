@@ -1356,9 +1356,6 @@ window._contactOrganizer = async function(tId) {
   window._openContactOrgDialog(tId);
 };
 
-// Alias retrocompat (chamado por código/links antigos).
-window._messageOrganizer = function(tId) { return window._contactOrganizer(tId); };
-
 window._openContactOrgDialog = function(tId) {
   var pend = window._pendingContactOrg || {};
   var t = window._findTournamentById(tId);
