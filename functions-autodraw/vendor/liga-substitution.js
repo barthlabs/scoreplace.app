@@ -2117,6 +2117,13 @@ function _monCanManage(t, gName, pIdx) { return _canManageGroup(t, { players: _m
 
 // Aplica: troca ausente→substituto nos jogos do grupo + marcador W.O. + ghost/folga.
 window._monWoApply = function (tId, pIdx, gName, absentName, fillName, isGuest, absentSlotId) {
+  if (!_ligaContext() && window.FirestoreDB && typeof window.FirestoreDB._callFn === 'function') {
+    window.FirestoreDB._callFn('applyMonarchGroupWO', { tournamentId: tId, phaseIndex: pIdx || 0, groupName: gName, absentName: absentName, fillName: fillName, isGuest: !!isGuest, absentSlotId: absentSlotId || '' }).then(function (out) {
+      if (out && out.tournament && typeof window._applyCFTournament === 'function') window._applyCFTournament(out.tournament);
+      if (window.showNotification) window.showNotification('W.O. aplicado', absentName + ' → ' + fillName, 'success'); _rerender(tId);
+    }).catch(function (e) { if (window.showNotification) window.showNotification('W.O.', (e && e.message) || 'Não foi possível registrar no servidor.', 'error'); });
+    return;
+  }
   pIdx = pIdx || 0;
   _commitLiga(tId, function (ft) {
     var playing = _monPlaying(ft, gName, pIdx);
@@ -2186,6 +2193,13 @@ window._monWoApply = function (tId, pIdx, gName, absentName, fillName, isGuest, 
 
 // Reverte o W.O. de um grupo (só se os jogos ainda não começaram).
 window._monWoRevert = function (tId, pIdx, gName) {
+  if (!_ligaContext() && window.FirestoreDB && typeof window.FirestoreDB._callFn === 'function') {
+    window.FirestoreDB._callFn('revertMonarchGroupWO', { tournamentId: tId, phaseIndex: pIdx || 0, groupName: gName }).then(function (out) {
+      if (out && out.tournament && typeof window._applyCFTournament === 'function') window._applyCFTournament(out.tournament);
+      if (window.showNotification) window.showNotification('W.O. revertido', 'O grupo foi restaurado.', 'success'); _rerender(tId);
+    }).catch(function (e) { if (window.showNotification) window.showNotification('Reverter W.O.', (e && e.message) || 'Não foi possível registrar no servidor.', 'error'); });
+    return;
+  }
   pIdx = pIdx || 0;
   var t = _findT(tId); if (!t) return;
   var wm = _monWoMarker(t, gName, pIdx); if (!wm) return;

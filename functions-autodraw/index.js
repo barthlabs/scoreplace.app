@@ -421,6 +421,11 @@ function _canManageLigaGroup(t, group, uid) {
   return !!(group && Array.isArray(group.playersUids) && group.playersUids.map(String).indexOf(String(uid)) !== -1);
 }
 
+function _canManageMonarchGroup(t, groupName, phaseIndex, uid) {
+  if (_isTournamentAdmin(t, uid)) return true;
+  return (t.matches || []).some(m => m && m.bracket === 'monarch' && m.groupName === groupName && Number(m.phaseIndex || 0) === Number(phaseIndex || 0) && ([]).concat(m.team1Uids || [], m.team2Uids || [], m.p1Uid || [], m.p2Uid || []).filter(Boolean).map(String).indexOf(String(uid)) !== -1);
+}
+
 // Espelha o LIMITE DE PERSISTÊNCIA de FirestoreDB.mutateTournament (firebase-db.js:297) —
 // os passos entre o mutator e o `set`. Sem isto o doc do servidor sai diferente do doc do
 // cliente, que é exatamente o bug de duas versões que esta Etapa existe pra matar.
@@ -1134,6 +1139,26 @@ exports.inviteLigaSubstitutes = onCall(async request => {
 exports.revertLigaGroupWO = onCall(request => _applyLigaGroupAction(request, '_ligaRevertWo', {
   args: (data, tId, roundIndex, groupName) => [tId, roundIndex, groupName, String(data.absentUid || '').trim() || undefined, String(data.absentName || '').trim() || undefined]
 }));
+
+async function _applyMonarchWO(request, action, args) {
+  const uid = request.auth && request.auth.uid, data = request.data || {};
+  const tId = String(data.tournamentId || '').trim(), groupName = String(data.groupName || '').trim(), phaseIndex = Number(data.phaseIndex || 0);
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId || !groupName || !Number.isInteger(phaseIndex) || phaseIndex < 0) throw new HttpsError('invalid-argument', 'Dados do grupo inválidos.');
+  if (!runLigaActionFn) throw new HttpsError('internal', 'Núcleo de W.O. indisponível.');
+  const ref = db.collection('tournaments').doc(tId), agoraIso = new Date().toISOString();
+  return db.runTransaction(async tx => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    if (!_canManageMonarchGroup(t, groupName, phaseIndex, uid)) throw new HttpsError('permission-denied', 'Só a organização ou alguém do grupo pode alterar o W.O.');
+    const before = _antesDoMotor(t), out = runLigaActionFn(t, { uid: uid }, action, args(data, tId, phaseIndex, groupName));
+    if (!out || !out.changed) throw new HttpsError('failed-precondition', 'O grupo mudou antes da operação.');
+    const b = _gravaTorneio(tx, ref, t, before, { agoraIso });
+    return { ok: true, tournament: b.clean };
+  });
+}
+exports.applyMonarchGroupWO = onCall(request => _applyMonarchWO(request, '_monWoApply', (d, tId, p, g) => [tId, p, g, String(d.absentName || '').trim(), String(d.fillName || '').trim(), !!d.isGuest, String(d.absentSlotId || '').trim()]));
+exports.revertMonarchGroupWO = onCall(request => _applyMonarchWO(request, '_monWoRevert', (d, tId, p, g) => [tId, p, g]));
 
 // ─── Reset para inscrições: confirmação no cliente, mutação completa no servidor ───
 exports.resetTournamentToEnrollment = onCall(async request => {
