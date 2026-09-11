@@ -1960,7 +1960,7 @@ exports.applyEnrollmentAssignments = onCall(async (request) => {
   const sport=String(data.sport||'').trim().slice(0,80), raw=Array.isArray(data.edits)?data.edits.slice(0,100):null;
   if(!uid) throw new HttpsError('unauthenticated','Entre na sua conta.');
   if(!tId||!raw||!raw.length) throw new HttpsError('invalid-argument','Atribuições inválidas.');
-  const clean=raw.map(x=>({uid:String(x&&x.uid||'').trim(),name:String(x&&x.name||'').trim().slice(0,120),email:String(x&&x.email||'').trim().toLowerCase().slice(0,180),waitlist:!!(x&&x.waitlist),pairMember:(x&&['p1','p2'].includes(x.pairMember))?x.pairMember:'',gender:(x&&['feminino','masculino','misto',''].includes(x.gender))?x.gender:undefined,category:x&&Object.prototype.hasOwnProperty.call(x,'category')?String(x.category||'').trim().slice(0,80):undefined}));
+  const clean=raw.map(x=>({uid:String(x&&x.uid||'').trim(),name:String(x&&x.name||'').trim().slice(0,120),email:String(x&&x.email||'').trim().toLowerCase().slice(0,180),waitlist:!!(x&&x.waitlist),pairMember:(x&&['p1','p2'].includes(x.pairMember))?x.pairMember:'',gender:(x&&['feminino','masculino','misto',''].includes(x.gender))?x.gender:undefined,category:x&&Object.prototype.hasOwnProperty.call(x,'category')?String(x.category||'').trim().slice(0,80):undefined,uncategorizedByOrganizer:!!(x&&x.uncategorizedByOrganizer)}));
   if(clean.some(x=>(!x.uid&&!x.name&&!x.email)||(x.gender===undefined&&x.category===undefined))) throw new HttpsError('invalid-argument','Alvo ou alteração inválida.');
   const ref=db.collection('tournaments').doc(tId),agoraIso=new Date().toISOString();
   return db.runTransaction(async tx=>{
@@ -1970,7 +1970,7 @@ exports.applyEnrollmentAssignments = onCall(async (request) => {
     const find=(arr,e)=>{let hit=null; (arr||[]).forEach(p=>{if(hit||!p||typeof p!=='object')return; const u=[p.uid,p.p1Uid,p.p2Uid].filter(Boolean).map(String); if(Array.isArray(p.participants))p.participants.forEach(q=>q&&q.uid&&u.push(String(q.uid))); if(e.uid?u.includes(e.uid):(!u.length&&((e.email&&String(p.email||'').toLowerCase()===e.email)||(e.name&&(p.name===e.name||p.displayName===e.name)))))hit=p;});return hit;};
     for(const e of clean){const pools=e.waitlist?[t.waitlist,t.standbyParticipants,t.monarchWaitlist]:[t.participants]; let target=null; for(const pool of pools){target=find(pool,e);if(target)break;} if(!target) continue;
       if(e.gender!==undefined){if(e.pairMember){if(e.gender)target[e.pairMember+'Gender']=e.gender;else delete target[e.pairMember+'Gender'];}else if(e.gender){target.gender=e.gender;target.genderSource='organizador';}else{delete target.gender;delete target.genderSource;} changed++;}
-      if(e.category!==undefined){if(e.category&&valid.size&&!valid.has(e.category)) throw new HttpsError('invalid-argument','Categoria não pertence ao torneio.'); if(e.category){target.categories=[e.category];target.category=e.category;target.categorySource='organizador';delete target.wasUncategorized;delete target.autoWeakestCat;delete target.staleCat;}else{target.categories=[];target.category='';delete target.categorySource;delete target.wasUncategorized;} changed++;}
+      if(e.category!==undefined){if(e.category&&valid.size&&!valid.has(e.category)) throw new HttpsError('invalid-argument','Categoria não pertence ao torneio.'); if(e.category){target.categories=[e.category];target.category=e.category;target.categorySource='organizador';delete target.wasUncategorized;delete target.autoWeakestCat;delete target.staleCat;}else{target.categories=[];target.category='';if(e.uncategorizedByOrganizer){target.categorySource='organizador';target.wasUncategorized=true;}else{delete target.categorySource;delete target.wasUncategorized;}} changed++;}
       const profileUid=e.uid||((e.pairMember&&target[e.pairMember+'Uid'])||target.uid);
       // Uma dupla pode ter duas alterações na mesma chamada. Junta por UID antes de
       // escrever: assim cada perfil recebe uma única atualização transacional.
@@ -1978,6 +1978,67 @@ exports.applyEnrollmentAssignments = onCall(async (request) => {
     }
     for(const k of Object.keys(profiles)){const a=profiles[k], uref=db.collection('users').doc(a.uid), us=await tx.get(uref); if(!us.exists)continue; const upd={profileSetAt:FieldValue.serverTimestamp()}; if(a.gender)upd.gender=a.gender,upd.genderSetBy=uid; if(a.category&&sport){const sb=Object.assign({},(us.data().skillBySport||{}));sb[sport]=a.category;upd.skillBySport=sb;upd.skillSetBy=uid;} tx.update(uref,upd);}
     if(!changed)return {ok:true,changed:0}; const b=_gravaTorneio(tx,ref,t,before,{agoraIso}); return {ok:true,changed,tournament:b.clean};
+  });
+});
+
+// ─── Escolha de equilíbrio antes do sorteio: uma intenção, uma transação ───────
+exports.setDrawBalanceChoice = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid;
+  const data = request.data || {};
+  const tId = String(data.tournamentId || '').trim();
+  const mode = String(data.mode || '').trim();
+  const ratio = String(data.ratio || '').trim();
+  const locked = data.locked !== false;
+  const raw = Array.isArray(data.assignments) ? data.assignments.slice(0, 100) : null;
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId || !['livre', 'equilibrado'].includes(mode) || !raw) {
+    throw new HttpsError('invalid-argument', 'Escolha de equilíbrio inválida.');
+  }
+  const assignments = raw.map(item => ({
+    uid: String(item && item.uid || '').trim(),
+    name: String(item && item.name || '').trim().slice(0, 120),
+    gender: String(item && item.gender || '').trim()
+  }));
+  if (assignments.some(item => (!item.uid && !item.name) || !['feminino', 'masculino'].includes(item.gender))) {
+    throw new HttpsError('invalid-argument', 'Gênero ou participante inválido.');
+  }
+  const ref = db.collection('tournaments').doc(tId), agoraIso = new Date().toISOString();
+  return db.runTransaction(async tx => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização define o equilíbrio do sorteio.', { tId, uid });
+    const before = _antesDoMotor(t);
+    const find = item => (t.participants || []).find(participant => {
+      if (!participant || typeof participant !== 'object') return false;
+      if (item.uid) return String(participant.uid || '') === item.uid;
+      return !participant.uid && (String(participant.displayName || participant.name || '') === item.name);
+    });
+    const profiles = new Map();
+    for (const item of assignments) {
+      const participant = find(item);
+      if (!participant) continue;
+      participant.gender = item.gender;
+      participant.genderSource = 'organizador';
+      if (item.uid) profiles.set(item.uid, item.gender);
+    }
+    // Os dois campos são consumidos por motores diferentes. Mantê-los juntos aqui
+    // impede que a formação de duplas e o espalhamento por grupo leiam decisões opostas.
+    t._drawBalanceMode = mode;
+    t.equilibrado = mode === 'equilibrado';
+    const hasRatio = drawWindow && drawWindow._GENDER_RATIOS && drawWindow._GENDER_RATIOS[ratio];
+    const ratioApplies = !drawWindow || typeof drawWindow._ratioAppliesTo !== 'function' || drawWindow._ratioAppliesTo(t);
+    if (mode === 'equilibrado' && hasRatio && ratioApplies) {
+      const phaseIndex = Number.isInteger(t.currentPhaseIndex) ? t.currentPhaseIndex : 0;
+      if (Array.isArray(t.phases) && t.phases[phaseIndex]) t.phases[phaseIndex].genderRatio = ratio;
+      else t.genderRatio = ratio;
+      t.wlGroupBalance = locked ? 'equilibrado' : 'livre';
+    }
+    for (const [profileUid, gender] of profiles) {
+      const userRef = db.collection('users').doc(profileUid), user = await tx.get(userRef);
+      if (user.exists) tx.update(userRef, { gender, genderSetBy: uid, profileSetAt: FieldValue.serverTimestamp() });
+    }
+    const b = _gravaTorneio(tx, ref, t, before, { agoraIso });
+    return { ok: true, changed: true, tournament: b.clean };
   });
 });
 
@@ -2036,6 +2097,31 @@ exports.setTournamentCategoryConfig = onCall(async (request) => {
     const antes = _antesDoMotor(t); t.genderCategories = genderCategories; t.skillCategories = skillCategories; t.combinedCategories = combinedCategories;
     const b = _gravaTorneio(tx, ref, t, antes, { agoraIso });
     return { ok:true, changed:true, tournament:b.clean };
+  });
+});
+
+// ─── Entrada tardia da fase: decisão administrativa, nunca mutação da aba ───
+exports.setPhaseLateEnrollment = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid;
+  const data = request.data || {};
+  const tId = String(data.tournamentId || '').trim();
+  const mode = String(data.mode || '').trim();
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId || !['expand', 'closed', 'standby'].includes(mode)) throw new HttpsError('invalid-argument', 'Modo de entrada tardia inválido.');
+  const ref = db.collection('tournaments').doc(tId), agoraIso = new Date().toISOString();
+  return db.runTransaction(async tx => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização altera a entrada tardia.', { tId, uid });
+    const current = Number.isInteger(t.currentPhaseIndex) ? t.currentPhaseIndex : 0;
+    const phase = Array.isArray(t.phases) ? t.phases[current] : null;
+    if (t.lateEnrollment === mode && t.newMatchups === (mode === 'expand') && (!phase || (phase.lateEnrollment === mode && phase.newMatchups === (mode === 'expand')))) return { ok: true, changed: false };
+    const before = _antesDoMotor(t);
+    t.lateEnrollment = mode;
+    t.newMatchups = mode === 'expand';
+    if (phase) { phase.lateEnrollment = mode; phase.newMatchups = mode === 'expand'; }
+    const b = _gravaTorneio(tx, ref, t, before, { agoraIso });
+    return { ok: true, changed: true, tournament: b.clean };
   });
 });
 

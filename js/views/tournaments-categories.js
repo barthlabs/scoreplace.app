@@ -2134,45 +2134,19 @@ function _executeRemoveFromCategory(tId, pIdx, category) {
     if (typeof p !== 'object') return;
     var pName = p.displayName || p.name || 'Sem nome';
 
-    // Remove the specific category from the participant
-    var pCats = window._getParticipantCategories(p);
-    var newCats = pCats.filter(function(c) { return c !== category; });
-    window._setParticipantCategories(p, newCats);
-
-    // Mark as uncategorized if no categories left.
-    // Use 'organizador' so auto-assign never re-assigns them (bounce-back fix).
-    if (newCats.length === 0) {
-        p.wasUncategorized = true;
-        p.categorySource = 'organizador';
-    }
-
-    // Ensure the array is written back
-    if (!Array.isArray(t.participants)) {
-        t.participants = parts;
-    }
-
-    // Log action
-    window.AppStore.logAction(tId, 'Participante removido da categoria: ' + pName + ' ← ' + category);
-
-    var _removeKey = p.uid || p.email || p.displayName || p.name || '';
-    if (window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
-        window.AppStore.commitTournamentTx(tId, function(ft) {
-            var freshParts = Array.isArray(ft.participants) ? ft.participants : Object.values(ft.participants || {});
-            var freshP = freshParts.filter(function(x) { return x && typeof x === 'object' && (x.uid === _removeKey || x.email === _removeKey || x.displayName === _removeKey || x.name === _removeKey); })[0];
-            if (!freshP) return false;
-            var cats = window._getParticipantCategories(freshP).filter(function(c) { return c !== category; });
-            window._setParticipantCategories(freshP, cats);
-            if (!cats.length) { freshP.wasUncategorized = true; freshP.categorySource = 'organizador'; }
-            return true;
-        });
-    }
-
-    if (typeof showNotification === 'function') {
-        showNotification(_t('cat.participantRemoved'), _t('cat.removedMsg', { name: pName, cat: window._displayCategoryName(category) }), 'success');
-    }
-
-    // Re-render the category detail view (refreshed data)
-    setTimeout(function() { window._refreshCatMgr(tId); }, 100);
+    // L7: a tela só descreve a identidade e a categoria desejada. A Function
+    // relê o elenco fresco e grava a mudança; não há escrita otimista local.
+    if (!window.FirestoreDB || typeof window.FirestoreDB._callFn !== 'function') return;
+    window.FirestoreDB._callFn('applyEnrollmentAssignments', {
+        tournamentId: tId,
+        sport: t.sport || '',
+        edits: [{ uid: p.uid || '', email: p.email || '', name: p.displayName || p.name || '', category: '', uncategorizedByOrganizer: true }]
+    }).then(function() {
+        if (typeof showNotification === 'function') showNotification(_t('cat.participantRemoved'), _t('cat.removedMsg', { name: pName, cat: window._displayCategoryName(category) }), 'success');
+        setTimeout(function() { window._refreshCatMgr(tId); }, 100);
+    }).catch(function(err) {
+        if (typeof showNotification === 'function') showNotification('⚠️ Não foi possível atualizar a categoria', (err && err.message) || 'Tente novamente.', 'error');
+    });
 }
 
 // Move a participant from one category to another (organizer drag-and-drop)
@@ -2185,35 +2159,18 @@ window._moveBetweenCategories = function(tId, pIdx, sourceCat, targetCat) {
     if (typeof p !== 'object') return;
     var pName = p.displayName || p.name || 'Sem nome';
 
-    // Remove source category, add target category
-    var pCats = window._getParticipantCategories(p);
-    var newCats = pCats.filter(function(c) { return c !== sourceCat; });
-    if (newCats.indexOf(targetCat) === -1) newCats.push(targetCat);
-    window._setParticipantCategories(p, newCats);
-    p.categorySource = 'organizador';
-    if (p.wasUncategorized !== undefined) delete p.wasUncategorized;
-
-    if (!Array.isArray(t.participants)) t.participants = parts;
-    window.AppStore.logAction(tId, 'Participante movido: ' + pName + ' ' + sourceCat + ' → ' + targetCat);
-
-    var _moveKey = p.uid || p.email || p.displayName || p.name || '';
-    if (window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
-        window.AppStore.commitTournamentTx(tId, function(ft) {
-            var freshParts = Array.isArray(ft.participants) ? ft.participants : Object.values(ft.participants || {});
-            var freshP = freshParts.filter(function(x) { return x && typeof x === 'object' && (x.uid === _moveKey || x.email === _moveKey || x.displayName === _moveKey || x.name === _moveKey); })[0];
-            if (!freshP) return false;
-            var cats = window._getParticipantCategories(freshP).filter(function(c) { return c !== sourceCat; });
-            if (cats.indexOf(targetCat) === -1) cats.push(targetCat);
-            window._setParticipantCategories(freshP, cats); freshP.categorySource = 'organizador'; delete freshP.wasUncategorized;
-            return true;
-        });
-    }
-
-    if (typeof showNotification === 'function') {
-        showNotification('✅ Categoria atualizada', pName + ': ' + window._displayCategoryName(sourceCat) + ' → ' + window._displayCategoryName(targetCat), 'success');
-    }
-
-    setTimeout(function() { window._refreshCatMgr(tId); }, 100);
+    // L7: quem encontra a inscrição e substitui a categoria é a Function.
+    if (!window.FirestoreDB || typeof window.FirestoreDB._callFn !== 'function') return;
+    window.FirestoreDB._callFn('applyEnrollmentAssignments', {
+        tournamentId: tId,
+        sport: t.sport || '',
+        edits: [{ uid: p.uid || '', email: p.email || '', name: p.displayName || p.name || '', category: targetCat }]
+    }).then(function() {
+        if (typeof showNotification === 'function') showNotification('✅ Categoria atualizada', pName + ': ' + window._displayCategoryName(sourceCat) + ' → ' + window._displayCategoryName(targetCat), 'success');
+        setTimeout(function() { window._refreshCatMgr(tId); }, 100);
+    }).catch(function(err) {
+        if (typeof showNotification === 'function') showNotification('⚠️ Não foi possível atualizar a categoria', (err && err.message) || 'Tente novamente.', 'error');
+    });
 };
 
 // Auto-reassign participants whose stored categories are no longer valid.

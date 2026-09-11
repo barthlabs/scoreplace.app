@@ -6,12 +6,13 @@ function body(name, next, prefix) { const a = prefix === 'window.' ? s.indexOf(p
 const remove = body('_executeRemoveFromCategory', 'window._moveBetweenCategories');
 const move = body('_moveBetweenCategories', '// Auto-reassign', 'window.');
 const assign = body('_assignParticipantCategory', '// Category assignment notification');
-[['remoção', remove], ['movimentação', move], ['atribuição', assign]].forEach(([name, code]) => {
-  ok(code.indexOf('AppStore.commitTournamentTx') >= 0, name + ' grava por transação fresca');
-  ok(!/saveTournament\(|AppStore\.sync\(/.test(code), name + ' não regrava snapshot inteiro');
-  ok(/freshParts/.test(code) && /freshP/.test(code), name + ' reencontra o participante no elenco fresco');
+[['remoção', remove], ['movimentação', move]].forEach(([name, code]) => {
+  ok(/FirestoreDB\._callFn\('applyEnrollmentAssignments'/.test(code), name + ' despacha a intenção server-side');
+  ok(!/AppStore\.commitTournamentTx|saveTournament\(|AppStore\.sync\(/.test(code), name + ' não escreve no navegador');
+  ok(/uid: p\.uid/.test(code) && /email: p\.email/.test(code) && /name: p\.displayName/.test(code), name + ' envia identidade estável, nunca o índice da tela');
 });
-ok(/_removeKey/.test(remove) && /_moveKey/.test(move) && /_assignKey/.test(assign), 'cada ato usa uma identidade estável, nunca o índice da tela');
+ok(/uncategorizedByOrganizer: true/.test(remove), 'remoção preserva a marca explícita de sem categoria definida pela organização');
+ok(assign.indexOf('AppStore.commitTournamentTx') >= 0 && !/saveTournament\(|AppStore\.sync\(/.test(assign), 'atribuição restante ainda grava por transação fresca, sem snapshot inteiro');
 const merge = body('_executeMerge', '// Remove a participant');
 const deleteEmpty = s.slice(s.indexOf('function _applyDeleteEmptyCategory'), s.indexOf('// Unmerge a previously merged category', s.indexOf('function _applyDeleteEmptyCategory')));
 ok(/return 'occupied'/.test(deleteEmpty) && /return 'played'/.test(deleteEmpty), 'exclusão mantém as proteções contra categoria ocupada ou com jogos');

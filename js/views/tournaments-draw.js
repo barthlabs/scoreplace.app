@@ -1750,51 +1750,47 @@ window._showDrawBalanceOverlay = function (opts) {
 window._applyDrawBalanceChoice = function (t, mode, assigned, opts) {
   opts = opts || {};
   assigned = Array.isArray(assigned) ? assigned : [];
-  if (t) {
-    // 1) gênero atribuído na tela vai pros inscritos
+  // A criação ainda não tem tournamentId nem documento remoto. Nesta única porta,
+  // `persist:false` prepara o payload NOVO em memória e o salvamento de criação o
+  // inclui de uma vez. Não há escrita de torneio existente, nem sincronização de perfil.
+  if (t && opts.persist === false) {
     (t.participants || []).forEach(function (p) {
       if (typeof p !== 'object') return;
-      var m = assigned.find(function (r) {
+      var assignment = assigned.find(function (r) {
         return (r.uid && p.uid && r.uid === p.uid) || (!r.uid && (p.displayName || p.name) === r.name);
       });
-      if (m) p.gender = m.gender;
+      if (assignment) p.gender = assignment.gender;
     });
-    // 2) UMA escolha, os DOIS campos que o motor lê: `_drawBalanceMode` manda na
-    //    formação de duplas e `equilibrado` no espalhamento dentro dos grupos
-    //    (Rei/Rainha). Gravar só um deixava metade do sorteio sem equilíbrio.
     t._drawBalanceMode = mode;
     t.equilibrado = (mode === 'equilibrado');
-    // v1.7.16: PROPORÇÃO + TRAVA. A proporção pertence à FASE que está sendo sorteada
-    // (é o que o dono pediu: "dentro da fase a que se refere o sorteio"); sem fases,
-    // fica no topo. No sorteio LIVRE não se grava proporção nenhuma — lá ela não existe,
-    // e deixar um valor gravado faria a tela mostrar regra que o motor não aplica.
     if (mode === 'equilibrado' && opts.ratio && window._GENDER_RATIOS && window._GENDER_RATIOS[opts.ratio] &&
         (typeof window._ratioAppliesTo !== 'function' || window._ratioAppliesTo(t))) {
       var _pi = t.currentPhaseIndex || 0;
       if (Array.isArray(t.phases) && t.phases[_pi]) t.phases[_pi].genderRatio = opts.ratio;
       else t.genderRatio = opts.ratio;
-      // MESMO toggle da caixa da lista de espera (decisão do dono: "com o mesmo toggle").
-      // Valor interno preservado ('equilibrado'/'livre') — trocá-lo quebraria torneios vivos.
       t.wlGroupBalance = (opts.locked === false) ? 'livre' : 'equilibrado';
     }
+    return Promise.resolve({ ok: true, localDraft: true });
   }
-  // 3) grava no PERFIL global (via função) — só os que têm uid; fire-and-forget
-  var comUid = assigned.filter(function (r) { return r.uid; }).map(function (r) { return { uid: r.uid, gender: r.gender }; });
-  if (!opts.skipProfileSync && comUid.length > 0 && window.firebase && firebase.functions) {
-    try {
-      firebase.functions().httpsCallable('setParticipantsGender')({ tournamentId: String((t && t.id) || ''), assignments: comUid })
-        .catch(function (e) { window._warn && window._warn('[genderDraw] setParticipantsGender falhou:', e && (e.code || e.message)); });
-    } catch (e) {}
+  if (!t || !window.FirestoreDB || typeof window.FirestoreDB._callFn !== 'function') {
+    return Promise.reject(new Error('Comando de sorteio indisponível.'));
   }
-  // 4) persiste (a porta do SALVAR passa persist:false — quem grava é o próprio salvar)
-  if (t && opts.persist !== false && window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
-    try {
-      window.AppStore.commitTournamentTx(t.id, function(ft) {
-        window._applyDrawBalanceChoice(ft, mode, assigned, Object.assign({}, opts, { persist: false, skipProfileSync: true }));
-        return true;
-      });
-    } catch (e) {}
-  }
+  // L7: a tela somente descreve a escolha. A Function relê o torneio, autoriza a
+  // organização, atualiza inscrição + perfil e grava todos os campos do motor numa
+  // única transação; iniciar o sorteio antes disso poderia usar o estado anterior.
+  return window.FirestoreDB._callFn('setDrawBalanceChoice', {
+    tournamentId: String(t.id || ''),
+    mode: mode,
+    assignments: assigned.map(function (r) { return { uid: r.uid || '', name: r.name || '', gender: r.gender || '' }; }),
+    ratio: opts.ratio || '',
+    locked: opts.locked !== false
+  }).then(function (result) {
+    if (typeof window._softRefreshView === 'function') window._softRefreshView();
+    return result;
+  }).catch(function (e) {
+    if (typeof showNotification === 'function') showNotification('Não foi possível salvar o equilíbrio', (e && e.message) || 'Tente novamente.', 'error');
+    throw e;
+  });
 };
 
 // ─── PORTA 1: sorteio MANUAL (v2.1.20) ───────────────────────────────────────
@@ -1848,8 +1844,9 @@ window._maybeShowGenderDrawDialog = function(tId, onProceed) {
         : ((typeof window._ratioAppliesTo === 'function') ? window._ratioAppliesTo(t) : true),
       onConfirm: function (mode, assigned, ratioOpts) {
         window._applyDrawBalanceChoice(t, mode, assigned,
-          { persist: true, ratio: (ratioOpts && ratioOpts.ratio), locked: (ratioOpts && ratioOpts.locked) });
-        if (typeof onProceed === 'function') onProceed();
+          { ratio: (ratioOpts && ratioOpts.ratio), locked: (ratioOpts && ratioOpts.locked) })
+          .then(function () { if (typeof onProceed === 'function') onProceed(); })
+          .catch(function () {});
       }
     });
   });
@@ -2566,17 +2563,10 @@ window._setPhaseLateEnrollment = function (tId, mode) {
     var t = window._findTournamentById(tId);
     if (!t) return;
     if (mode !== 'expand' && mode !== 'closed' && mode !== 'standby') return;
-    var _done = window.AppStore.mutate(tId, function (ft) {
-        var _cp = (ft && ft.currentPhaseIndex) || 0;
-        if (Array.isArray(ft.phases) && ft.phases[_cp]) ft.phases[_cp].lateEnrollment = mode;
-        ft.lateEnrollment = mode;
-        // v1.3.x: mode 'expand' liga "Novos Confrontos" (integração tardia); 'standby'/'closed' desliga.
-        // (A independência total Abertas×NovosConfrontos vive na config de criar/editar via newMatchups.)
-        // v1.4.6: grava TAMBÉM na fase corrente — senão o valor por-fase (que _allowsNewMatchups lê
-        // primeiro) continuava valendo e o toggle ao vivo não tinha efeito na eliminatória.
-        ft.newMatchups = (mode === 'expand');
-        if (Array.isArray(ft.phases) && ft.phases[_cp]) ft.phases[_cp].newMatchups = (mode === 'expand');
-    }, 'Entrada tardia da fase: ' + (mode === 'expand' ? 'ABERTA (novos confrontos)' : mode === 'standby' ? 'suplentes apenas' : 'fechada'));
+    // L7: a aba transmite apenas o modo. A Function relê a fase corrente,
+    // autoriza a organização e mantém fase/top-level coerentes na transação.
+    if (!window.FirestoreDB || typeof window.FirestoreDB._callFn !== 'function') return;
+    var _done = window.FirestoreDB._callFn('setPhaseLateEnrollment', { tournamentId: tId, mode: mode });
     if (typeof showNotification === 'function') {
         if (mode === 'expand') showNotification('➕ Entradas tardias ABERTAS', 'Marque presença de quem está na espera — entra por repescagem (vs a definir).', 'success');
         else if (mode === 'closed') showNotification('🚫 Entradas tardias fechadas', 'A lista de espera não gera novos confrontos nesta fase.', 'info');

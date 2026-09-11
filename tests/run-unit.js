@@ -1349,6 +1349,8 @@ const SUITES = [
   'tests/l7-participant-skill-cf-only.test.js', // L7: card de nível só despacha a atribuição server-side
   'tests/l7-tournament-lifecycle-cf-only.test.js', // L7: início e limpeza de chamada só despacham Functions
   'tests/l7-enrollment-assignments-cf-only.test.js', // L7: configuração de categorias pela CF
+  'tests/l7-draw-balance-cf-only.test.js', // L7: equilíbrio do sorteio só despacha a Function
+  'tests/l7-phase-late-enrollment-cf-only.test.js', // L7: entrada tardia da fase só despacha a Function
   'tests/l7-expired-enrollment-cf-only.test.js', // L7: prazo de inscrição pela CF
   'tests/l7-expired-enrollment-store-cf-only.test.js',
   'tests/l7-placeholder-cf-only.test.js',

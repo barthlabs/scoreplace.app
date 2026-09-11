@@ -6,5 +6,6 @@ ok(part.includes("httpsCallable('applyEnrollmentAssignments'")&&!part.includes('
 const fn=fs.readFileSync('functions-autodraw/index.js','utf8');const a=fn.indexOf('exports.applyEnrollmentAssignments');const b=fn.indexOf('\nexports.',a+8);const srv=fn.slice(a,b<0?fn.length:b);
 ok(a>=0&&srv.includes('db.runTransaction')&&srv.includes('_isTournamentAdmin')&&srv.includes('_gravaTorneio'),'servidor autoriza, relê e grava as atribuições na transação canônica');
 ok(srv.includes("collection('users')")&&srv.includes('skillBySport')&&srv.includes("'misto'")&&srv.includes('Object.keys(profiles)'),'a mesma transação aceita misto e atualiza cada perfil uma vez por modalidade');
+ok(srv.includes('uncategorizedByOrganizer')&&srv.includes("target.categorySource='organizador'")&&srv.includes('target.wasUncategorized=true'),'remoção administrativa preserva no servidor a marca de inscrito sem categoria');
 ok(!part.includes('.finally(function(){')&&part.includes('window._erUpdateSaveBar();'),'falha da CF preserva alterações staged para nova tentativa, sem recarga');
 process.exit(f?1:0);
