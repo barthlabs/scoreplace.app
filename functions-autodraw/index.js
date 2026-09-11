@@ -28,6 +28,7 @@ let setPresenceWithWOSubstitutionFn = null;
 let resolveWOSubstitutionChoiceFn = null;
 let setTournamentWOAbsenceFn = null;
 let acceptLigaSubstitutionFn = null;
+let runLigaActionFn = null;
 let drawInitial = null;   // v1.2.25: motor do SORTEIO INICIAL (Etapa 3 · fase A) — usado pela drawRound
 let integrateLateFn = null; // v1.2.57: integração de tardios no servidor — usado pela integrateLateEntries
 let formLatePairFn = null;  // formar dupla na espera + integrar, atômico — usado pela formLatePair
@@ -52,6 +53,7 @@ try {
   resolveWOSubstitutionChoiceFn = _dc.resolveWOSubstitutionChoice;
   setTournamentWOAbsenceFn = _dc.setTournamentWOAbsence;
   acceptLigaSubstitutionFn = _dc.acceptLigaSubstitution;
+  runLigaActionFn = _dc.runLigaAction;
   drawInitial = _dc.drawInitial;
   integrateLateFn = _dc.integrateLateEntries;
   formLatePairFn = _dc.formLatePairCore;
@@ -1041,6 +1043,29 @@ exports.acceptLigaSubstitutionInvite = onCall(async request => {
     const base = { schema: 1, kind: 'tournament-notification', tournamentId: tId, tournamentName: t.name || '', level: 'fundamental', createdAt: agoraIso, createdAtMs: Date.parse(agoraIso), dispatchStatus: 'pending' };
     siblings.forEach((s, i) => { if (s.inviteeUid) tx.set(ref.collection('notificationOutbox').doc('liga-sub-superseded-' + _outboxDocIdPart(inviteId) + '-' + i + '-' + Date.parse(agoraIso)), Object.assign({}, base, { type: 'liga_sub_superseded', title: 'Vaga já preenchida', message: String(invite.inviteeName || 'Outro participante') + ' aceitou primeiro a vaga no ' + String(invite.groupName || '') + '.', recipients: [String(s.inviteeUid)] }), { merge: true }); });
     if (invite.byUid) tx.set(ref.collection('notificationOutbox').doc('liga-sub-accepted-' + _outboxDocIdPart(inviteId) + '-' + Date.parse(agoraIso)), Object.assign({}, base, { type: 'liga_sub_accepted', title: 'Substituição aceita', message: String(invite.inviteeName || 'O participante') + ' aceitou entrar no lugar de ' + String(invite.absentName || '') + ' no ' + String(invite.groupName || '') + '.', recipients: [String(invite.byUid)] }), { merge: true });
+    return { ok: true, tournament: b.clean };
+  });
+});
+
+exports.applyLigaGroupWO = onCall(async request => {
+  const uid = request.auth && request.auth.uid;
+  const data = request.data || {};
+  const tId = String(data.tournamentId || '').trim(), groupName = String(data.groupName || '').trim(), absentName = String(data.absentName || '').trim();
+  const roundIndex = Number(data.roundIndex);
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId || !groupName || !absentName || !Number.isInteger(roundIndex) || roundIndex < 0) throw new HttpsError('invalid-argument', 'W.O. inválido.');
+  if (!runLigaActionFn) throw new HttpsError('internal', 'Núcleo de substituição indisponível.');
+  const ref = db.collection('tournaments').doc(tId), agoraIso = new Date().toISOString();
+  return db.runTransaction(async tx => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    const round = (t.rounds || [])[roundIndex], group = round && Array.isArray(round.monarchGroups) ? round.monarchGroups.find(g => g && g.name === groupName) : null;
+    if (!group) throw new HttpsError('not-found', 'Grupo não encontrado.');
+    if (!_canManageLigaGroup(t, group, uid)) throw new HttpsError('permission-denied', 'Só a organização ou alguém do grupo pode aplicar W.O.');
+    const before = _antesDoMotor(t);
+    const out = runLigaActionFn(t, { uid: uid }, '_ligaApplyWo', [tId, roundIndex, groupName, absentName]);
+    if (!out || !out.changed) throw new HttpsError('failed-precondition', 'O grupo mudou antes do W.O.');
+    const b = _gravaTorneio(tx, ref, t, before, { agoraIso });
     return { ok: true, tournament: b.clean };
   });
 });

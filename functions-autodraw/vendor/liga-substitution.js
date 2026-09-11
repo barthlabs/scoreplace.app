@@ -49,7 +49,8 @@ function _meUid() { var c = _ligaContext(), u = (c && c.actor) || (window.AppSto
 // Quem pode dar W.O./substituir num grupo: organizador/co-org/árbitro OU um
 // jogador do próprio grupo ("os demais podem dar WO").
 function _canManageGroup(t, group) {
-  if (typeof window._canManagePresence === 'function' && window._canManagePresence(t, window.AppStore.currentUser)) return true;
+  var _actor = (_ligaContext() && _ligaContext().actor) || (window.AppStore && window.AppStore.currentUser);
+  if (typeof window._canManagePresence === 'function' && window._canManagePresence(t, _actor)) return true;
   if (!group || !Array.isArray(group.players)) return false;
   // v3.0.81 (varredura uid): "sou um jogador deste grupo?" por UID primeiro.
   // group.players guarda NOMES (camada do bracket) — resolve cada nome (e cada
@@ -576,6 +577,14 @@ window._ligaNextSuplente = _ligaNextSuplente;
 // Aplica o W.O. inteiro numa mutação só: marca o ausente, DESATIVA-o e põe o primeiro da
 // fila no lugar dele — no grupo E no elenco.
 window._ligaApplyWo = function (tId, roundIndex, groupName, absentName) {
+  if (!_ligaContext() && window.FirestoreDB && typeof window.FirestoreDB._callFn === 'function') {
+    window.FirestoreDB._callFn('applyLigaGroupWO', { tournamentId: String(tId), roundIndex: roundIndex, groupName: String(groupName), absentName: String(absentName) }).then(function(result) {
+      if (result && result.tournament && typeof window._applyCFTournament === 'function') window._applyCFTournament(tId, result.tournament);
+      if (window.showNotification) window.showNotification('W.O. aplicado', 'A substituição foi registrada no servidor.', 'success');
+      _rerender(tId);
+    }).catch(function(err) { if (window.showNotification) window.showNotification('W.O.', (err && err.message) || 'Não foi possível aplicar o W.O.', 'error'); });
+    return;
+  }
   var t = _findT(tId); if (!t) return;
   var group = _getGroup(t, roundIndex, groupName); if (!group) return;
   if (!_canManageGroup(t, group)) { if (window.showNotification) window.showNotification('W.O.', 'Só o organizador ou um jogador do grupo pode fazer isso.', 'info'); return; }

@@ -941,5 +941,14 @@ function acceptLigaSubstitution(t, actor, tId, inviteId) {
     return { ok: true, changed: ctx.changed };
   });
 }
+function runLigaAction(t, actor, action, args) {
+  const ctx = { tournament: t, actor: actor || {}, changed: false };
+  return g.window._spRodaLiga(ctx, function () {
+    const fn = g.window[action];
+    if (typeof fn !== 'function') return { ok: false, reason: 'liga-core-unavailable' };
+    fn.apply(null, args || []);
+    return { ok: true, changed: ctx.changed };
+  });
+}
 
-module.exports = { generateLigaRound, applyTournamentWO, setPresenceWithWOSubstitution, resolveWOSubstitutionChoice, setTournamentWOAbsence, acceptLigaSubstitution, compileFromFmt2, canRecompile, hasDrawnBracket, drawInitial, integrateLateEntries, formLatePairCore, splitLatePairCore, closeRoundCore, materializeNextPhase: g.window._phasesEngine && g.window._phasesEngine.materializeNextPhase, standingsDaFaseAnterior: g.window._phasesEngine && g.window._phasesEngine.standingsDaFaseAnterior, phaseComplete: g.window._phasesEngine && g.window._phasesEngine.phaseComplete, groupTeamStandings: g.window._phasesEngine && g.window._phasesEngine.groupTeamStandings, _window: g.window };
+module.exports = { generateLigaRound, applyTournamentWO, setPresenceWithWOSubstitution, resolveWOSubstitutionChoice, setTournamentWOAbsence, acceptLigaSubstitution, runLigaAction, compileFromFmt2, canRecompile, hasDrawnBracket, drawInitial, integrateLateEntries, formLatePairCore, splitLatePairCore, closeRoundCore, materializeNextPhase: g.window._phasesEngine && g.window._phasesEngine.materializeNextPhase, standingsDaFaseAnterior: g.window._phasesEngine && g.window._phasesEngine.standingsDaFaseAnterior, phaseComplete: g.window._phasesEngine && g.window._phasesEngine.phaseComplete, groupTeamStandings: g.window._phasesEngine && g.window._phasesEngine.groupTeamStandings, _window: g.window };
