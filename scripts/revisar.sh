@@ -279,6 +279,18 @@ if [[ "$MODO" == "plano" ]]; then
 else
   OUT="$OUTDIR/parecer-$REVISOR-diff.md"
 fi
+# Para `diff`, um parecer aprovado só pode ser reaproveitado se o conteúdo exato
+# revisado for idêntico. Assim o deploy não cobra/reaguarda o Claude quando nada
+# mudou, mas qualquer alteração invalida o recibo automaticamente.
+RECIBO="$OUT.sha256"
+FINGERPRINT=""
+if [[ "$MODO" == diff ]]; then
+  FINGERPRINT=$( { git diff origin/main...HEAD 2>/dev/null; git diff HEAD 2>/dev/null; git ls-files --others --exclude-standard -z 2>/dev/null | xargs -0 shasum -a 256 2>/dev/null; } | shasum -a 256 | awk '{print $1}')
+  if [[ -s "$OUT" && -s "$RECIBO" && "$(cat "$RECIBO")" == "$FINGERPRINT" ]] && grep -qE '^VEREDITO: *APROVADO' "$OUT"; then
+    echo "  ✓ parecer APROVADO reaproveitado: diff idêntico ($FINGERPRINT)."
+    exit 0
+  fi
+fi
 ANTERIOR=""; [[ -s "$OUT" ]] && ANTERIOR="$(cat "$OUT")"
 {
   cat <<EOF
@@ -415,7 +427,7 @@ cat "$OUT"
 echo "════════ fim · salvo em $OUT_DATADO ════════"
 [[ -n "$EXECUTOR" ]] && echo "🎯 $EXECUTOR"
 case "$VEREDITO" in
-  APROVADO)  echo "✅ APROVADO — pode implementar/publicar."; exit 0 ;;
+  APROVADO)  [[ -n "$FINGERPRINT" ]] && printf '%s\n' "$FINGERPRINT" > "$RECIBO"; echo "✅ APROVADO — pode implementar/publicar."; exit 0 ;;
   RESSALVAS) echo "🔁 RESSALVAS — atenda os pontos e SUBMETA DE NOVO (o parecer vai junto na próxima)."; exit 1 ;;
   BLOQUEIO)  echo "⛔ BLOQUEIO — atenda os pontos e SUBMETA DE NOVO."; exit 2 ;;
   *) echo "✗ parecer sem VEREDITO legível — isso NÃO é aprovação."; exit 3 ;;
