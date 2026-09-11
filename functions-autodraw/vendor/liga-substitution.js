@@ -27,12 +27,10 @@ function _esc(s) { return String(s == null ? '' : s).replace(/\\/g, '\\\\').repl
 function _safe(s) { return (window._safeHtml ? window._safeHtml(s) : String(s == null ? '' : s)); }
 function _ligaContext() { return (typeof window._spContextoLiga === 'function') ? window._spContextoLiga() : null; }
 function _findT(tId) { var c = _ligaContext(); if (c && c.tournament && String(c.tournament.id) === String(tId)) return c.tournament; return (typeof window._findTournamentById === 'function') ? window._findTournamentById(tId) : (window.AppStore.tournaments || []).find(function (x) { return String(x.id) === String(tId); }); } // v3.0.x: cobre torneio descoberto (publicDiscovery), p/ convidado de folga que veio pela descoberta
-// Blindagem v4.0.118: persiste a mutação da Liga pelo portão AppStore.mutate
-// (atômico no doc FRESCO da transação — sem lost-update do saveTournament
-// doc-inteiro). O `mutatorFn(ft)` RE-RESOLVE group/round do `ft` (as refs locais
-// não valem no doc fresco) e aplica a mudança. Efeitos interativos (diálogo,
-// notificação) ficam FORA do mutator (ele roda 2×: local + fresco).
-function _commitLiga(tId, mutatorFn) { var c = _ligaContext(); if (c && c.tournament && String(c.tournament.id) === String(tId)) { mutatorFn(c.tournament); c.changed = true; return Promise.resolve(c.tournament); } return window.AppStore.mutate(String(tId), mutatorFn); }
+// O mutador da Liga só existe dentro da transação da Cloud Function. A tela envia
+// intenção por `_callFn`; sem contexto canônico, falhar fechado impede ressuscitar
+// a escrita local e evita que uma versão antiga volte a divergir do servidor.
+function _commitLiga(tId, mutatorFn) { var c = _ligaContext(); if (c && c.tournament && String(c.tournament.id) === String(tId)) { mutatorFn(c.tournament); c.changed = true; return Promise.resolve(c.tournament); } throw new Error('Mutação da Liga exige Cloud Function.'); }
 function _rerender(tId) {
   try {
     var hash = (window.location && window.location.hash) || '';
