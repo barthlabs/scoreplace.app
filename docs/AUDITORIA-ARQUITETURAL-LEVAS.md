@@ -3266,3 +3266,44 @@ Provas: `tests/l8-escopo-da-hidratacao.test.js` (novo, no `run-unit`) mais dois 
 `l8-hydration-boundaries` (segunda abertura não re-hidrata; escopo parcial não serve para a
 chave). **Controle:** na árvore anterior (`182c6af1`) o gate novo FALHA. Ganho medido: 244 → ~94
 documentos por abertura (Confra de 214 para 40).
+
+## L9.P2 — os dois fallbacks que faltavam decidir (11/set/2026, read-only)
+
+### ① Eixos de categoria: dead code PROVADO, e mesmo assim a recomendação é MANTER
+O fallback é um ramo só, em `js/views/tournaments-categories.js:480` (`_getTournamentCategories`):
+sem `combinedCategories`, ele recompõe a lista cruzando `genderCategories` × `skillCategories`
+(+`customCategories`). O censo L9 mede exatamente a condição que o dispara — `categoriasPorEixos`
+é `!combinado && eixos` — e deu **0 de 60**.
+
+⭐ **A pergunta que faltava não era sobre o DADO, era sobre o CLIENTE que ainda cria torneio.**
+Um fallback de leitura só morre quando nenhum escritor vivo consegue produzir a forma antiga.
+Conferido no código dos dois clientes que importam: o bundle embarcado da árvore (**2.2.8**) e o
+**2.1.28** do parque instalado (commit `69c4986d`) **gravam `combinedCategories` na criação** —
+as duas telas, a do formulário (`create-tournament.js:3116`) e a da cópia (`:7650`). Nenhum
+cliente que ainda roda produz a forma por eixos.
+
+⛔ **Ainda assim: não remover.** São ~24 linhas sem custo de execução, sem leitura extra e sem
+risco de divergência; a remoção não devolve nada mensurável e abriria a chance de um documento
+histórico (anterior à 2.1.28) ficar sem categoria nenhuma na tela. Os eixos em si continuam
+VIVOS por outro motivo, que não é compatibilidade: `_isMistoObrigatorio` lê `genderCategories`
+para decidir Misto Obrigatório. O que fica no lugar da remoção é o **censo como trava**: enquanto
+`categoriasPorEixos` for 0, o ramo é comprovadamente inerte; se um dia for > 0, ele é necessário.
+
+### ② `_propagateNameChange`: a casca está certa — e a promessa dela é CUMPRIDA
+A L9.P0 preservou a casca de `js/views/auth.js:6835` porque ela é chamada ao salvar perfil
+(`:10152`), embora não grave torneio nenhum: o comentário diz que a autoridade é o gatilho
+`propagateDisplayName` no servidor. Uma casca que aponta para uma promessa é exatamente o tipo de
+código que já custou caro aqui — então a promessa foi CONFERIDA, não lida:
+
+- `exports.propagateDisplayName` existe (`functions/index.js:8632`) e está **ACTIVE** em produção,
+  atualizada em 10/set/2026;
+- e **executou de verdade hoje**, 11/set às 15:01:
+  `[propagateDisplayName] Go7PW03xZiSfFCvf11MuBRtqRKr1 → "Kallana Magliarelli": 1 rótulo(s) em 1 torneio(s)`.
+
+### ⚠️ Achado de MÉTODO (vale para toda auditoria futura de Functions)
+Filtrar por `resource.labels.function_name` devolve, numa função **Gen2**, apenas eventos de
+deploy — inclusive `severity>=ERROR` de operação, com `textPayload` vazio. Lido de relance, isso
+parece "nunca rodou, e ainda dá erro". A execução mora em
+`resource.type="cloud_run_revision" AND resource.labels.service_name="<nome em minúsculas>"`, e a
+mensagem vem em `jsonPayload.message`. É a mesma família do log lido por LIMITE e não por TEMPO
+(L6.P0.1): a consulta errada não devolve erro, devolve uma conclusão falsa.
