@@ -458,11 +458,21 @@ function renderDashboard(container) {
   // Filtros de Relacionamento (Dono / Participante)
   const organizados = window.AppStore.getMyOrganized();
   const participacoes = window.AppStore.getMyParticipations();
+  // Fonte única dos jogos que importam nesta dashboard. Participar e organizar podem
+  // apontar para o mesmo torneio; cada torneio entra uma vez, preservando o card próprio
+  // para participante e liberando Novidades para organizador que não está em quadra.
+  var _dashResultsSeen = {};
+  var _dashMyTournaments = participacoes.concat(organizados).filter(function (t) {
+    if (!t || _dashResultsSeen[String(t.id)]) return false;
+    _dashResultsSeen[String(t.id)] = true;
+    return true;
+  });
   // O documento de resultado é o espelho fino que pode chegar depois da estrutura.
-  // Limite pequeno evita transformar o dashboard numa leitura de todos os torneios; cada
-  // torneio só é hidratado uma vez nesta sessão e a chegada pede o repintar próprio daqui.
+  // Organizador também acompanha novidades mesmo quando não joga: limitar a hidratação só
+  // às participações deixava o placar novo fora da dashboard dele. A união é deduplicada
+  // por torneio, preserva o teto pequeno e cada coleção só é hidratada uma vez por sessão.
   try {
-    participacoes.filter(function (t) { return t && (t.tournamentStarted || t.status === 'active'); })
+    _dashMyTournaments.filter(function (t) { return t.tournamentStarted || t.status === 'active'; })
       .sort(function (a, b) { return Number(b.updatedAt || b.startDate || 0) - Number(a.updatedAt || a.startDate || 0); })
       .slice(0, 5).forEach(function (t) {
         if (t._resultsHydrated || !window.AppStore || typeof window.AppStore.hydrateMatchResults !== 'function') return;
@@ -1895,7 +1905,17 @@ function renderDashboard(container) {
     // um jogo que exista em `t.matches` E dentro de uma rodada entraria duas vezes.
     var _seenMatch = {};
 
-    participacoes.forEach(function(t) {
+    // O construtor também roda isoladamente em testes e em re-renderizações internas;
+    // portanto recompõe a união aqui, sem depender do escopo de renderDashboard.
+    var _dashGamesSeen = {};
+    var _dashGamesTournaments = (Array.isArray(participacoes) ? participacoes : [])
+      .concat((typeof organizados !== 'undefined' && Array.isArray(organizados)) ? organizados : [])
+      .filter(function (t) {
+        if (!t || _dashGamesSeen[String(t.id)]) return false;
+        _dashGamesSeen[String(t.id)] = true;
+        return true;
+      });
+    _dashGamesTournaments.forEach(function(t) {
       // ⚠️ v1.8.67: SANDBOX NÃO ENTRA. O SB é um CLONE do torneio real — mesmos jogos,
       // mesmos placares e os MESMOS ids de match. MEDIDO em produção (14/ago): o Confra e
       // o "(SB) Confra" tinham os 6 mesmos resultados, então cada jogo aparecia DUAS vezes

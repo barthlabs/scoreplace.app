@@ -12,6 +12,7 @@ must(/loadMatchResults\(tournamentId\)/.test(store), 'hidratação lê o espelho
 must(/_overlayResultOnMatch/.test(store), 'hidratação aplica o resultado ao match estrutural');
 must(/_resultsHydrated/.test(bracket) && /hydrateMatchResults/.test(bracket), 'abrir a chave dispara uma hidratação controlada');
 must(/_resultsHydrated/.test(dashboard) && /_dashPedirRepintura\('resultados-hidratados'\)/.test(dashboard), 'dashboard repinta novidades após hidratar');
+must(/participacoes\.concat\(organizados\)/.test(dashboard) && /_dashResultsSeen/.test(dashboard) && /_dashGamesTournaments\.forEach/.test(dashboard), 'dashboard também hidrata e mostra novidade do organizador, sem duplicar participação');
 console.log('──── resultados espelhados hidratam telas ────');
 console.log('  ' + ok + ' passaram, ' + fail + ' falharam');
 process.exitCode = fail ? 1 : 0;

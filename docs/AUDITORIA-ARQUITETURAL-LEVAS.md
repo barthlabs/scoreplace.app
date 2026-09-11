@@ -3085,3 +3085,10 @@ auditoria como pós-condição. A operação removeu os oito resíduos e a relei
 **Próximo gate L8.** A dashboard ainda pode hidratar a coleção inteira de `results` de até cinco
 participações ativas. Medir quais cards dependem dessa sobreposição e reduzir a consulta sem
 reintroduzir placar antigo, falha de autorização ou re-renderização concorrente.
+
+**L8.P2 — escopo correto da dashboard (11/set/2026).** A hidratação e os cards de jogos agora
+partem da união deduplicada de torneios em que a pessoa participa **ou organiza**. Antes, um
+organizador que não estivesse em quadra não recebia o espelho recém-chegado e tampouco a novidade
+correspondente; o card podia ficar com dado estrutural antigo. O teto de cinco coleções ativas e a
+coalescência por torneio foram preservados. O próximo corte de custo deve reduzir o tamanho dessas
+cinco leituras, não excluir organizadores do conjunto.
