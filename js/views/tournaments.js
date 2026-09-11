@@ -709,12 +709,7 @@ window._drainWaitlistsIfOpen = function(t, opts) {
       ? window._clearAllWaitlists(t)
       : (function () { var p = (t.standbyParticipants || []).concat(t.waitlist || []); t.standbyParticipants = []; t.waitlist = []; t.monarchWaitlist = {}; return p; })();
     promote(_wlAll);
-    if (opts && opts.save && window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
-        window.AppStore.commitTournamentTx(t.id, function(ft) {
-            return window._drainWaitlistsIfOpen(ft, { save: false }) > 0;
-        }).catch(function() {});
-    }
-    if (promoted > 0 && window.AppStore && typeof window.AppStore.logAction === 'function') {
+    if (promoted > 0 && !(opts && opts.server) && window.AppStore && typeof window.AppStore.logAction === 'function') {
         window.AppStore.logAction(t.id, promoted + ' participante(s) promovido(s) da lista de espera (inscrições abertas)');
     }
     return promoted;
@@ -1943,16 +1938,10 @@ function renderTournaments(container, tournamentId = null) {
                     }
                 }
             }
-            var movedCount = t ? window._autoMoveSoloToWaitlist(t) : 0;
-            if (movedCount > 0 && typeof showNotification !== 'undefined') {
-                showNotification('🙋 ' + movedCount + ' participante(s) sem dupla', 'Movido(s) para lista de espera.', 'info');
-            }
-            // v1.3.158: com scope:'all' o organizador dispensou a presença — nem ausente sai.
-            var _scopeAll = (function () { var _d = window._getDrawDecisions && window._getDrawDecisions(tId); return !!(_d && _d.scope === 'all'); })();
-            var absentMovedCount = (t && !_scopeAll) ? window._autoMoveAbsentToStandby(t) : 0;
-            if (absentMovedCount > 0 && typeof showNotification !== 'undefined') {
-                showNotification('⚠️ ' + absentMovedCount + ' participante(s) ausente(s)', 'Removido(s) do sorteio e enviado(s) para lista de espera.', 'warning');
-            }
+            // Sem dupla e ausentes são tratados por drawRound no documento fresco.
+            // A tela só conduz as escolhas; ela não antecipa mutações no seu snapshot.
+            // Ausentes são removidos dentro de drawRound, no documento fresco e
+            // na mesma transação que cria a chave. Não há cópia local a reconciliar.
             var _continueDraw = function() {
                 if (window._dtrace) window._dtrace('continueDraw');
                 try {
@@ -1966,10 +1955,6 @@ function renderTournaments(container, tournamentId = null) {
                     throw _eCont;
                 }
             };
-            // Se ausentes foram movidos, persistir no Firestore ANTES de abrir o painel.
-            // O listener onSnapshot substitui store.tournaments inteiro quando chega
-            // dados do servidor — sem salvar primeiro, os participantes originais
-            // (com ausentes) voltam do Firestore e o sorteio os inclui mesmo assim.
             // v1.6.40: o gênero de quem joga vem do PERFIL e o motor lê `p.gender` do
             // INSCRITO — no servidor (CF autoDraw) não existe perfil pra consultar. Sem
             // hidratar antes, o "equilibrado" não equilibra NADA (medido no Confra: 105
@@ -1985,13 +1970,6 @@ function renderTournaments(container, tournamentId = null) {
                 Promise.resolve(window._hydrateParticipantGenders(window._findTournamentById(tId)))
                     .then(_abrirTela).catch(_abrirTela);
             };
-            if (absentMovedCount > 0 && window.AppStore && typeof window.AppStore.mutate === 'function') {
-                // BLINDAGEM (project_concurrency_safe_saves): re-aplica o move de ausentes
-                // no doc FRESCO, em vez de syncImmediate (doc inteiro → clobbera check-in/
-                // W.O. concorrente). _autoMoveAbsentToStandby é pura + idempotente.
-                Promise.resolve(window.AppStore.mutate(tId, function (ft) { window._autoMoveAbsentToStandby(ft); })).then(_doGenderThenDraw).catch(_doGenderThenDraw);
-                return;
-            }
             // v2.1.20: em duplas mistas com sorteio livre (sem categoria masc/fem),
             // mostra o diálogo de gênero + modo (livre/equilibrado) antes do sorteio.
             // (a hidratação de gênero acontece dentro de _doGenderThenDraw)
@@ -2462,10 +2440,8 @@ function renderTournaments(container, tournamentId = null) {
           }
         }
 
-        // Self-heal: enrollments open + no draw => drain any residual waitlist/standby into participants
-        if (isAberto && !sorteioRealizado && typeof window._drainWaitlistsIfOpen === 'function') {
-          window._drainWaitlistsIfOpen(t, { save: true });
-        }
+        // A promoção de espera é feita pela Function sobre o documento fresco.
+        // Esta renderização não pode alterar `t`: ela só recebe o recibo canônico.
 
         // v1.3.35-beta: "Em Andamento" só quando o usuário clicou
         // explicitamente em "Iniciar Torneio" (t.tournamentStarted truthy
@@ -3660,14 +3636,17 @@ function renderTournaments(container, tournamentId = null) {
         // reconciliação de nome (heurística por iniciais/homônimo + reads de
         // perfil) viraram código morto.
 
-        // Deduplicação de participantes
-        if (typeof window._deduplicateParticipants === 'function') {
-            var _ddCount = window._deduplicateParticipants(visible[0]);
-            if (_ddCount > 0 && window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
-                window.AppStore.commitTournamentTx(visible[0].id, function(ft) {
-                    return typeof window._deduplicateParticipants === 'function' && window._deduplicateParticipants(ft) > 0;
-                });
-            }
+        // Higiene do elenco é sempre canônica: a tela só pede à Function que
+        // deduplique ou promova; ela nunca altera a cópia que está renderizando.
+        var _canReconcile = window.AppStore && typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(visible[0]);
+        var _reconcile = window.FirestoreDB && typeof window.FirestoreDB._callFn === 'function';
+        if (_canReconcile && _reconcile) {
+            window.FirestoreDB._callFn('deduplicateTournamentParticipants', { tournamentId: String(visible[0].id) })
+                .then(function(result) { if (result && result.tournament && typeof window._applyCFTournament === 'function') window._applyCFTournament(visible[0].id, result.tournament); })
+                .catch(function() {});
+            window.FirestoreDB._callFn('drainTournamentWaitlists', { tournamentId: String(visible[0].id) })
+                .then(function(result) { if (result && result.tournament && typeof window._applyCFTournament === 'function') window._applyCFTournament(visible[0].id, result.tournament); })
+                .catch(function() {});
         }
     }
 

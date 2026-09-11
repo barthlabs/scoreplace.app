@@ -914,6 +914,49 @@ exports.splitTournamentParticipant = onCall(async request => {
   });
 });
 
+// ─── Higiene de elenco: a tela pede, a Function decide e grava o documento fresco ───
+exports.deduplicateTournamentParticipants = onCall(async request => {
+  const uid = request.auth && request.auth.uid;
+  const tId = String((request.data && request.data.tournamentId) || '').trim();
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId) throw new HttpsError('invalid-argument', 'Torneio obrigatório.');
+  if (!drawWindow || typeof drawWindow._deduplicateParticipants !== 'function') {
+    throw new HttpsError('internal', 'Núcleo de participantes indisponível.');
+  }
+  const ref = db.collection('tournaments').doc(tId), agoraIso = new Date().toISOString();
+  return db.runTransaction(async tx => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    if (!_isTournamentAdmin(t, uid)) throw new HttpsError('permission-denied', 'Só a organização pode reconciliar o elenco.');
+    const before = _antesDoMotor(t);
+    const removed = Number(drawWindow._deduplicateParticipants(t)) || 0;
+    if (!removed) return { ok: true, changed: false, removed: 0 };
+    const b = _gravaTorneio(tx, ref, t, before, { agoraIso });
+    return { ok: true, changed: true, removed, tournament: b.clean };
+  });
+});
+
+exports.drainTournamentWaitlists = onCall(async request => {
+  const uid = request.auth && request.auth.uid;
+  const tId = String((request.data && request.data.tournamentId) || '').trim();
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId) throw new HttpsError('invalid-argument', 'Torneio obrigatório.');
+  if (!drawWindow || typeof drawWindow._drainWaitlistsIfOpen !== 'function') {
+    throw new HttpsError('internal', 'Núcleo da lista de espera indisponível.');
+  }
+  const ref = db.collection('tournaments').doc(tId), agoraIso = new Date().toISOString();
+  return db.runTransaction(async tx => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    if (!_isTournamentAdmin(t, uid)) throw new HttpsError('permission-denied', 'Só a organização pode promover a lista de espera.');
+    const before = _antesDoMotor(t);
+    const promoted = Number(drawWindow._drainWaitlistsIfOpen(t, { server: true })) || 0;
+    if (!promoted) return { ok: true, changed: false, promoted: 0 };
+    const b = _gravaTorneio(tx, ref, t, before, { agoraIso });
+    return { ok: true, changed: true, promoted, tournament: b.clean };
+  });
+});
+
 // ─── Reset para inscrições: confirmação no cliente, mutação completa no servidor ───
 exports.resetTournamentToEnrollment = onCall(async request => {
   const uid = request.auth && request.auth.uid;

@@ -16,7 +16,7 @@ const approved = {
   'views/tournaments-draw-prep.js': 0,
   'views/tournaments-draw.js': 0,
   'views/tournaments-org-tools.js': 0,
-  'views/tournaments.js': 3,
+  'views/tournaments.js': 0,
   'views/wo-claim.js': 0
 };
 let failed = 0;

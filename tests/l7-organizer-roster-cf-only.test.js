@@ -37,4 +37,15 @@ ok(/_setTournamentEnrollmentStatus\(tId, 'close', \{ forDraw: true \}\)/.test(dr
 const ex = fn.indexOf('exports.setTournamentEnrollmentStatus');
 const ey = fn.indexOf('exports.runEnrollmentSlotsDraw', ex);
 ok(/forDraw/.test(fn.slice(ex, ey)) && /_reopenIfDrawCancelled/.test(fn.slice(ex, ey)), 'CF conserva a reabertura do sorteio cancelado');
+const renderChecks = ui.indexOf('var _checksKey = tournamentId');
+const organizers = ui.indexOf('// Build organizers section', renderChecks);
+const reconciliation = ui.slice(renderChecks, organizers);
+ok(/_callFn\('deduplicateTournamentParticipants'/.test(reconciliation) && /_callFn\('drainTournamentWaitlists'/.test(reconciliation) && !/(?:commitTournamentTx|AppStore\.mutate)/.test(reconciliation), 'higiene de elenco na dashboard só despacha Functions');
+const dx = fn.indexOf('exports.deduplicateTournamentParticipants');
+const dy = fn.indexOf('// ─── Reset para inscrições', dx);
+const hygiene = fn.slice(dx, dy);
+ok(/_isTournamentAdmin/.test(hygiene) && /runTransaction/.test(hygiene) && /_deduplicateParticipants/.test(hygiene) && /_drainWaitlistsIfOpen/.test(hygiene), 'Functions reconciliam elenco fresco com autorização e transação');
+const startDraw = ui.indexOf('var movedCount =');
+const endDraw = ui.indexOf('// v2.1.20:', startDraw);
+ok(!/AppStore\.mutate|_autoMoveAbsentToStandby\(t\)|_autoMoveSoloToWaitlist\(t\)/.test(ui.slice(startDraw, endDraw)), 'pré-sorteio não muta ausentes nem sem-dupla no navegador');
 process.exitCode = failed ? 1 : 0;
