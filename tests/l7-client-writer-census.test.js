@@ -14,7 +14,7 @@ const approved = {
   'views/participants.js': 0,
   'views/tournaments-categories.js': 3,
   'views/tournaments-draw-prep.js': 0,
-  'views/tournaments-draw.js': 8,
+  'views/tournaments-draw.js': 3,
   'views/tournaments-org-tools.js': 0,
   'views/tournaments.js': 10,
   'views/wo-claim.js': 0

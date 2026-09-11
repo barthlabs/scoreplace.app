@@ -1,0 +1,12 @@
+'use strict';
+const fs=require('fs'); let bad=0;
+const ok=(v,m)=>{console.log((v?'✓ ':'✗ ')+m);if(!v)bad++;};
+const ui=fs.readFileSync('js/views/tournaments-draw.js','utf8');
+const a=ui.indexOf('window._generateExtraRound = function'),b=ui.indexOf('// Monta a cfg',a),part=ui.slice(a,b);
+ok(/_callFn\('generateExtraTournamentRound'/.test(part),'cliente só despacha a intenção da rodada extra');
+ok(!/AppStore\.mutate|commitTournamentTx|saveTournament/.test(part),'cliente não grava a rodada extra');
+ok(/_notifyDrawPersonalized/.test(part)&&/_applyCFTournament/.test(part),'cliente notifica os envolvidos após receber o torneio canônico');
+const fn=fs.readFileSync('functions-autodraw/index.js','utf8'),x=fn.indexOf('exports.generateExtraTournamentRound'),y=fn.indexOf('// ─── Integração de TARDIOS',x),srv=fn.slice(x,y);
+ok(/db\.runTransaction/.test(srv)&&/_leTorneio/.test(srv)&&/_gravaTorneio/.test(srv),'Function relê e grava o torneio na transação');
+ok(/_isTournamentAdmin/.test(srv)&&/_generateNextRound/.test(srv)&&/max>=expectedRound/.test(srv),'Function autoriza, usa o motor e deduplica a rodada esperada');
+process.exitCode=bad?1:0;

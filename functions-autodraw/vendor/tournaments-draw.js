@@ -220,28 +220,14 @@ window._resetTournamentToEnrollment = function (tId) {
         if (typeof showNotification === 'function') showNotification(_isSB ? '🔄 Sandbox resetado' : 'Torneio resetado', _isSB ? 'Re-sincronizado com o estado atual do original; sorteio/testes apagados.' : ('Voltou para inscrições abertas — ' + n + ' inscritos mantidos.' + (_wasAuto ? ' Sorteio automático reagendado pra amanhã.' : '')), 'success');
         _refresh();
       };
-      // Blindagem v4.0.119: reset ATÔMICO pelo portão AppStore.mutate. _clearTournamentDraw
-      // já é uma mutação PURA (muta o t passado, sem save) → aplica no doc fresco.
-      window.AppStore.mutate(tId, function (ft) {
-        // Sandbox: re-sincroniza o roster do original AGORA (dropa adições de teste) ANTES
-        // de limpar o sorteio — "SB tal qual o original no momento do reset".
-        if (ft.isSandbox === true && typeof window._resyncSandboxRoster === 'function') {
-          window._resyncSandboxRoster(ft);
-        }
-        window._clearTournamentDraw(ft);
-        ft.status = 'open';
-        // v2.8.4: mantém como auto-draw (drawManual continua false); se a data programada
-        // já passou, reagenda pro dia seguinte (futuro = não dispara agora).
-        if (_wasAuto) {
-          try {
-            var _dfMs = new Date(ft.drawFirstDate + 'T' + (ft.drawFirstTime || '19:00')).getTime();
-            if (isNaN(_dfMs) || _dfMs <= Date.now()) {
-              var _d = new Date(); _d.setDate(_d.getDate() + 1);
-              ft.drawFirstDate = _d.getFullYear() + '-' + ('0' + (_d.getMonth() + 1)).slice(-2) + '-' + ('0' + _d.getDate()).slice(-2);
-            }
-          } catch (e) {}
-        }
-      }).then(done).catch(function (err) { window._error && window._error('[resetToEnrollment] save error:', err); done(); });
+      // Confirmação fica na UI; limpeza, reagendamento e persistência são uma transação da CF.
+      if (!window.FirestoreDB || typeof window.FirestoreDB._callFn !== 'function') return;
+      window.FirestoreDB._callFn('resetTournamentToEnrollment', { tournamentId: String(tId) })
+        .then(done)
+        .catch(function (err) {
+          window._error && window._error('[resetToEnrollment] server error:', err);
+          if (typeof showNotification === 'function') showNotification('Erro ao resetar', (err && err.message) || 'Tente novamente.', 'error');
+        });
     },
     { type: 'danger', confirmText: 'Sim, resetar', cancelText: 'Cancelar' }
   );
@@ -2097,44 +2083,31 @@ window._generateExtraRound = function (tId) {
         if (typeof window._drawBtnDone === 'function') window._drawBtnDone();
         return;
     }
-    if (!window.AppStore || typeof window.AppStore.mutate !== 'function') {
+    var _expectedRound = (t.rounds || []).reduce(function(mx, round) { return Math.max(mx, (round && round.round) || 0); }, 0) + 1;
+    var _intentTs = Date.now();
+    if (!window.FirestoreDB || typeof window.FirestoreDB._callFn !== 'function') {
         if (typeof showNotification === 'function') showNotification('Rodada extra não salva', 'Atualize o aplicativo e tente novamente.', 'error');
         return;
     }
-    var _expectedRound = (t.rounds || []).reduce(function(mx, round) { return Math.max(mx, (round && round.round) || 0); }, 0) + 1;
-    var _intentTs = Date.now();
-    var _createdCount = 0;
-    var _applyExtraRound = function(target) {
-        var _maxRound = (target.rounds || []).reduce(function(mx, round) { return Math.max(mx, (round && round.round) || 0); }, 0);
-        // A intenção pertence a esta próxima rodada. Retry ou outra sessão que já a
-        // produziu não podem acrescentar uma segunda rodada por acidente.
-        if (_maxRound >= _expectedRound) return false;
-        try { window._generateNextRound(target, { ts: _intentTs, rnd: _extraRoundRng(String(tId) + ':' + _expectedRound + ':' + _intentTs) }); }
-        catch (e) { if (window._warn) window._warn('[extra-round] falhou', e); return false; }
-        var _created = (target.rounds || []).some(function(round) { return round && round.round === _expectedRound; });
-        if (!_created) return false;
-        target.status = 'active';
-        if (target === t) {
-            var localRound = (target.rounds || []).filter(function(round) { return round && round.round === _expectedRound; })[0];
-            _createdCount = ((localRound && localRound.matches) || []).filter(function(m) { return !m.isSitOut; }).length;
-        }
-        return true;
-    };
-    var _p = window.AppStore.mutate(tId, _applyExtraRound, 'Rodada extra ' + _expectedRound + ' gerada manualmente');
-    var _go = function () {
-        window.location.hash = '#bracket/' + tId;
-        setTimeout(function () {
-            if (typeof showNotification === 'function') showNotification('Rodada extra gerada', 'Rodada ' + _expectedRound + ' com ' + _createdCount + ' jogo(s).', 'success');
-            if (typeof window._notifyDrawPersonalized === 'function') { try { window._notifyDrawPersonalized(t, tId, { type: 'new_round', roundIndex: _expectedRound - 1 }); } catch (e) {} }
-        }, 140);
-    };
-    if (_p && typeof _p.then === 'function') _p.then(function(saved) {
-        if (saved === false) {
+    window.FirestoreDB._callFn('generateExtraTournamentRound', { tournamentId: tId, expectedRound: _expectedRound, intentTs: _intentTs }).then(function(result) {
+        if (!result || !result.changed) {
             if (typeof showNotification === 'function') showNotification('Rodada extra não gerada', 'A chave mudou em outro aparelho. Atualize e tente novamente.', 'warning');
             return;
         }
-        _go();
-    }); else _go();
+        // Reflete o documento canônico antes de montar a mensagem individual da rodada nova.
+        if (result.tournament && typeof window._applyCFTournament === 'function') window._applyCFTournament(tId, result.tournament);
+        var notifiedTournament = (typeof window._findTournamentById === 'function' && window._findTournamentById(tId)) || t;
+        window.location.hash = '#bracket/' + tId;
+        setTimeout(function () {
+            if (typeof showNotification === 'function') showNotification('Rodada extra gerada', 'Rodada ' + _expectedRound + ' com ' + (result.matchCount || 0) + ' jogo(s).', 'success');
+            // Preserva o aviso individual que existia antes da migração da escrita para a CF.
+            if (typeof window._notifyDrawPersonalized === 'function') {
+                try { window._notifyDrawPersonalized(notifiedTournament, tId, { type: 'new_round', roundIndex: _expectedRound - 1 }); } catch (e) {}
+            }
+        }, 140);
+    }).catch(function(e) {
+        if (typeof showNotification === 'function') showNotification('Rodada extra não gerada', (e && e.message) || 'Tente novamente.', 'error');
+    });
 };
 
 // Monta a cfg da fase 0 (índice 0) a partir do torneio — a inscrição é a ENTRADA da
@@ -2698,20 +2671,8 @@ window.generateDrawFunction = function (tId) {
     // Store active tournament ID for views that need it
     window._lastActiveTournamentId = tId;
 
-    // ── Deduplicação de participantes ────
-    // v4.5.72: _fixOrphanedMatchNames removido (identidade-por-uid: render resolve
-    // o nome vivo por uid; o remendo de nome órfão por heurística virou morto).
-    if (typeof window._deduplicateParticipants === 'function') {
-        var _dupCount = window._deduplicateParticipants(t);
-        if (_dupCount > 0) {
-            if (window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
-                window.AppStore.commitTournamentTx(tId, function(ft) {
-                    return window._deduplicateParticipants(ft) > 0;
-                });
-            }
-            showNotification(_t('tdraw.dupsRemoved'), _t('tdraw.dupsRemovedMsg', { n: _dupCount }), 'info');
-        }
-    }
+    // A deduplicação canônica corre dentro de drawRound no documento fresco. O navegador
+    // só apresenta o total devolvido pelo servidor depois da confirmação do sorteio.
 
     // ── Times incompletos: tratados pelo painel unificado (_showRemainderPanel)
     //    chamado via showUnifiedResolutionPanel em _handleSortearClick. Aqui
@@ -2898,6 +2859,9 @@ window.generateDrawFunction = function (tId) {
             // Toast do equilíbrio: o motor é do servidor, mas quem AVISA é a UI.
             if (d.allMaleCount > 0 && typeof showNotification !== 'undefined') {
                 showNotification('⚖️ Sorteio equilibrado', d.allMaleCount + ' dupla(s) ficaram 100% masculinas — não havia mulheres suficientes pra cobrir todas.', 'warning');
+            }
+            if (d.duplicatesRemoved > 0 && typeof showNotification !== 'undefined') {
+                showNotification(_t('tdraw.dupsRemoved'), _t('tdraw.dupsRemovedMsg', { n: d.duplicatesRemoved }), 'info');
             }
             // "Sorteando…" fica até a chave estar na tela (some no hashchange); toast só depois.
             window.location.hash = '#bracket/' + tId;
@@ -4140,15 +4104,17 @@ window._undoMergeParticipant = function(tId, ref) {
         'Desfazer mesclagem',
         '“' + window._safeHtml(personName) + '” voltará a ser avulso e a vaga “' + window._safeHtml(placeholderName) + '” será restaurada na chave. Confirmar?',
         function() {
-            if (!window._applyUndoParticipantMergeFresh(t, personName, placeholderName)) return;
-            if (window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
-                window.AppStore.commitTournamentTx(tId, function(ft) {
-                    return window._applyUndoParticipantMergeFresh(ft, personName, placeholderName);
-                });
-            }
-            var container = document.getElementById('view-container');
-            if (container) renderTournaments(container, tId);
-            if (typeof showNotification === 'function') showNotification('Mescla desfeita', placeholderName + ' restaurado; ' + personName + ' voltou como avulso.', 'info');
+            if (!window.FirestoreDB || typeof window.FirestoreDB._callFn !== 'function') return;
+            window.FirestoreDB._callFn('undoTournamentParticipantMerge', {
+                tournamentId: String(tId), personName: String(personName || ''), placeholderName: String(placeholderName || '')
+            }).then(function (r) {
+                if (!r || r.changed === false) return;
+                var container = document.getElementById('view-container');
+                if (container) renderTournaments(container, tId);
+                if (typeof showNotification === 'function') showNotification('Mescla desfeita', placeholderName + ' restaurado; ' + personName + ' voltou como avulso.', 'info');
+            }).catch(function (e) {
+                if (typeof showNotification === 'function') showNotification('Não foi possível desfazer', (e && e.message) || 'Tente novamente.', 'error');
+            });
         },
         null,
         { type: 'warning', confirmText: 'Desfazer', cancelText: 'Cancelar' }
@@ -4751,16 +4717,13 @@ window._healOrphanLabels = function (t) {
       us.forEach(function (u) { if (u && uids.indexOf(u) < 0) uids.push(u); });
     });
   });
-  if (!uids.length) return Promise.resolve(0);
-  var pre = (typeof window._preloadUserProfiles === 'function') ? window._preloadUserProfiles(uids) : Promise.resolve();
-  return pre.then(function () {
-    var n = (typeof window._stampMissingMatchUids === 'function') ? window._stampMissingMatchUids(t) : 0;
-    if (n > 0 && window.AppStore && typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t) &&
-        typeof window.AppStore.commitTournamentTx === 'function') {
-      try { window.AppStore.commitTournamentTx(t.id, function(ft) { return window._stampMissingMatchUids(ft) > 0; }); } catch (e) {}
-    }
-    return n;
-  });
+  if (!uids.length || !t.id) return Promise.resolve(0);
+  // A tela só identifica a necessidade. A leitura de perfis, o reparo e a persistência
+  // acontecem na CF, em transação, para que nenhum cliente grave uma chave parcial.
+  if (!window.FirestoreDB || typeof window.FirestoreDB._callFn !== 'function') return Promise.resolve(0);
+  return window.FirestoreDB._callFn('healOrphanTournamentMatchLabels', { tournamentId: t.id })
+    .then(function (r) { return Number(r && r.fixed) || 0; })
+    .catch(function (e) { console.warn('[bracket] não foi possível curar rótulos órfãos', e); return 0; });
 };
 
 // (2) Confronto repetido é detectado POR UID (nunca por rótulo). Remove o duplicado SEM resultado;

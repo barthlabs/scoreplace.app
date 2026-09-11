@@ -1,0 +1,11 @@
+'use strict';
+const fs=require('fs'); let bad=0;
+const ok=(v,m)=>{console.log((v?'✓ ':'✗ ')+m);if(!v)bad++;};
+const ui=fs.readFileSync('js/views/tournaments-draw.js','utf8');
+const a=ui.indexOf('window._healOrphanLabels = function'),b=ui.indexOf('// (2) Confronto repetido',a),part=ui.slice(a,b);
+ok(/_callFn\('healOrphanTournamentMatchLabels'/.test(part),'cliente só solicita a cura de rótulos órfãos');
+ok(!/commitTournamentTx|AppStore\.mutate|_stampMissingMatchUids\(t\)/.test(part),'cliente não altera nem persiste a chave durante a cura');
+const fn=fs.readFileSync('functions-autodraw/index.js','utf8'),x=fn.indexOf('exports.healOrphanTournamentMatchLabels'),y=fn.indexOf('// ─── Integração de TARDIOS',x),srv=fn.slice(x,y);
+ok(/db\.runTransaction/.test(srv)&&/_leTorneio/.test(srv)&&/_gravaTorneio/.test(srv),'Function relê e grava a chave em transação');
+ok(/_isTournamentAdmin/.test(srv)&&/_preloadDrawNames/.test(srv)&&/_stampMissingMatchUids/.test(srv),'Function autoriza, reidrata nomes e usa o reparo canônico');
+process.exitCode=bad?1:0;

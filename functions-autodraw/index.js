@@ -715,6 +715,10 @@ exports.drawRound = onCall(async (request) => {
     // Rei/Rainha: o doc fresco traz grupos só com matchIds — hidrata ANTES do motor,
     // igual mutateTournament faz antes do mutator.
     try { drawWindow._hydrateMonarchGroups(t); } catch (e) { /* best-effort */ }
+    // A limpeza de duplicatas precisa ocorrer no MESMO documento fresco que será sorteado.
+    // Antes a tela a gravava em uma transação separada, que podia competir com o drawRound.
+    const duplicatesRemoved = (drawWindow && typeof drawWindow._deduplicateParticipants === 'function')
+      ? (Number(drawWindow._deduplicateParticipants(t)) || 0) : 0;
 
     // Régua do SORTEIO, não a do recompile: torneio RESETADO tem _phaseMaterialized=0 (o
     // reset grava assim) e o canRecompile barrava com 'already-drawn' sem haver chave —
@@ -764,8 +768,8 @@ exports.drawRound = onCall(async (request) => {
     // (_notifyDrawPersonalized lê os nomes) e pra sincronizar o AppStore sem esperar o listener.
     // Vem FOLDADO (como o doc é no Firestore); o ingest do cliente hidrata, igual ao listener.
     return { ok: true, format: res.format, native: !!res.native, matchCount: res.matchCount,
-             sitOuts: res.sitOuts || 0, allMaleCount: res.allMaleCount || 0, redraw: hadBracket,
-             tournament: b.clean };
+             sitOuts: res.sitOuts || 0, allMaleCount: res.allMaleCount || 0, duplicatesRemoved,
+             redraw: hadBracket, tournament: b.clean };
     });
   } catch (e) {
     // HttpsError já foi logado pelo _drawFail — repassa. Qualquer OUTRO erro (motor
@@ -779,6 +783,122 @@ exports.drawRound = onCall(async (request) => {
   console.log(`drawRound: ${tId} sorteado por ${uid} — ${out.format}, ${out.matchCount} jogo(s)` +
     (out.redraw ? ' [re-sorteio]' : ' [1º sorteio]'));
   return out;
+});
+
+// ─── Reset para inscrições: confirmação no cliente, mutação completa no servidor ───
+exports.resetTournamentToEnrollment = onCall(async request => {
+  const uid = request.auth && request.auth.uid;
+  const tId = String((request.data && request.data.tournamentId) || '').trim();
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId) throw new HttpsError('invalid-argument', 'Torneio obrigatório.');
+  if (!drawWindow || typeof drawWindow._clearTournamentDraw !== 'function') {
+    throw new HttpsError('internal', 'Motor de reset indisponível no servidor.');
+  }
+  const ref = db.collection('tournaments').doc(tId), agora = new Date(), agoraIso = agora.toISOString();
+  return db.runTransaction(async tx => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    if (!_isTournamentAdmin(t, uid)) {
+      throw _drawFail('permission-denied', 'Só a organização reseta o torneio.', { tId, uid });
+    }
+    const before = _antesDoMotor(t), wasAuto = t.drawManual !== true && t.drawFirstDate;
+    drawWindow._clearTournamentDraw(t);
+    t.status = 'open';
+    // Preserva a configuração automática e impede que um horário já vencido redesenhe agora.
+    if (wasAuto) {
+      const at = new Date(String(t.drawFirstDate) + 'T' + String(t.drawFirstTime || '19:00')).getTime();
+      if (!Number.isFinite(at) || at <= agora.getTime()) {
+        const tomorrow = new Date(agora.getTime()); tomorrow.setDate(tomorrow.getDate() + 1);
+        t.drawFirstDate = tomorrow.getFullYear() + '-' + String(tomorrow.getMonth() + 1).padStart(2, '0') + '-' + String(tomorrow.getDate()).padStart(2, '0');
+      }
+    }
+    const boundary = _gravaTorneio(tx, ref, t, before, { agoraIso });
+    return { ok: true, changed: true, tournament: boundary.clean };
+  });
+});
+
+// ─── Rodada extra manual: intenção estreita, motor e transação no servidor ───
+exports.generateExtraTournamentRound = onCall(async (request) => {
+  const uid=request.auth&&request.auth.uid, data=request.data||{}, tId=String(data.tournamentId||'').trim();
+  const expectedRound=Math.max(1, Math.floor(Number(data.expectedRound)||0)), intentTs=Number(data.intentTs)||Date.now();
+  if(!uid) throw new HttpsError('unauthenticated','Entre na sua conta.');
+  if(!tId||!expectedRound) throw new HttpsError('invalid-argument','Rodada inválida.');
+  if(!drawWindow||typeof drawWindow._generateNextRound!=='function') throw new HttpsError('internal','Motor de rodadas indisponível no servidor.');
+  const ref=db.collection('tournaments').doc(tId), pre=await ref.get();
+  if(!pre.exists) throw new HttpsError('not-found','Torneio não encontrado.');
+  if(!_isTournamentAdmin(pre.data(),uid)) throw _drawFail('permission-denied','Só a organização gera rodada extra.',{tId,uid});
+  await _preloadDrawNames(pre.data());
+  const agoraIso=new Date().toISOString();
+  return db.runTransaction(async tx=>{
+    const t=await _leTorneio(tx,ref,tId); if(!t) throw new HttpsError('not-found','Torneio não encontrado.');
+    if(!_isTournamentAdmin(t,uid)) throw _drawFail('permission-denied','Só a organização gera rodada extra.',{tId,uid});
+    const max=(t.rounds||[]).reduce((n,r)=>Math.max(n,Number(r&&r.round)||0),0);
+    if(max>=expectedRound) return {ok:true,changed:false};
+    const before=_antesDoMotor(t);
+    try { drawWindow._generateNextRound(t,{ts:intentTs}); } catch(e) { throw new HttpsError('failed-precondition','Não foi possível gerar a rodada: '+String(e&&e.message||e).slice(0,200)); }
+    const round=(t.rounds||[]).find(r=>r&&Number(r.round)===expectedRound);
+    if(!round) return {ok:true,changed:false};
+    t.status='active';
+    const b=_gravaTorneio(tx,ref,t,before,{agoraIso});
+    return {ok:true,changed:true,matchCount:(round.matches||[]).filter(m=>!m.isSitOut).length,tournament:b.clean};
+  });
+});
+
+// ─── Cura de rótulos órfãos: intenção do browser, mutação canônica na CF ───
+exports.healOrphanTournamentMatchLabels = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid;
+  const tId = String((request.data && request.data.tournamentId) || '').trim();
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId) throw new HttpsError('invalid-argument', 'Torneio obrigatório.');
+  if (!drawWindow || typeof drawWindow._stampMissingMatchUids !== 'function') {
+    throw new HttpsError('internal', 'Motor de reparo indisponível no servidor.');
+  }
+  const ref = db.collection('tournaments').doc(tId), pre = await ref.get();
+  if (!pre.exists) throw new HttpsError('not-found', 'Torneio não encontrado.');
+  if (!_isTournamentAdmin(pre.data(), uid)) {
+    throw _drawFail('permission-denied', 'Só a organização repara a chave.', { tId, uid });
+  }
+  // Carrega nomes e perfis antes da transação; o motor usa o contexto por invocação.
+  await _preloadDrawNames(pre.data());
+  const agoraIso = new Date().toISOString();
+  return db.runTransaction(async tx => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    if (!_isTournamentAdmin(t, uid)) {
+      throw _drawFail('permission-denied', 'Só a organização repara a chave.', { tId, uid });
+    }
+    const before = _antesDoMotor(t);
+    const fixed = Number(drawWindow._stampMissingMatchUids(t)) || 0;
+    if (!fixed) return { ok: true, changed: false, fixed: 0 };
+    const boundary = _gravaTorneio(tx, ref, t, before, { agoraIso });
+    return { ok: true, changed: true, fixed, tournament: boundary.clean };
+  });
+});
+
+// ─── Desfazer mesclagem: navegador só envia a intenção identificada ───
+exports.undoTournamentParticipantMerge = onCall(async request => {
+  const uid = request.auth && request.auth.uid, data = request.data || {};
+  const tId = String(data.tournamentId || '').trim(), personName = String(data.personName || '').trim();
+  const placeholderName = String(data.placeholderName || '').trim();
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId || !personName || !placeholderName) throw new HttpsError('invalid-argument', 'Mesclagem inválida.');
+  if (!drawWindow || typeof drawWindow._applyUndoParticipantMergeFresh !== 'function') {
+    throw new HttpsError('internal', 'Motor de mesclagem indisponível no servidor.');
+  }
+  const ref = db.collection('tournaments').doc(tId), agoraIso = new Date().toISOString();
+  return db.runTransaction(async tx => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    if (!_isTournamentAdmin(t, uid)) {
+      throw _drawFail('permission-denied', 'Só a organização desfaz a mesclagem.', { tId, uid });
+    }
+    const before = _antesDoMotor(t);
+    if (!drawWindow._applyUndoParticipantMergeFresh(t, personName, placeholderName)) {
+      return { ok: true, changed: false };
+    }
+    const boundary = _gravaTorneio(tx, ref, t, before, { agoraIso });
+    return { ok: true, changed: true, tournament: boundary.clean };
+  });
 });
 
 // ─── Integração de TARDIOS no servidor (v1.2.57) ────────────────────────────

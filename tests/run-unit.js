@@ -1350,7 +1350,12 @@ const SUITES = [
   'tests/l7-tournament-lifecycle-cf-only.test.js', // L7: início e limpeza de chamada só despacham Functions
   'tests/l7-enrollment-assignments-cf-only.test.js', // L7: configuração de categorias pela CF
   'tests/l7-draw-balance-cf-only.test.js', // L7: equilíbrio do sorteio só despacha a Function
-  'tests/l7-phase-late-enrollment-cf-only.test.js', // L7: entrada tardia da fase só despacha a Function
+  'tests/l7-phase-late-enrollment-cf-only.test.js',
+  'tests/l7-extra-round-cf-only.test.js', // L7: entrada tardia da fase só despacha a Function
+  'tests/l7-orphan-label-heal-cf-only.test.js', // L7: cura da chave só é persistida pela Function
+  'tests/l7-undo-merge-cf-only.test.js', // L7: desfazer mesclagem só é persistido pela Function
+  'tests/l7-draw-dedup-cf-only.test.js', // L7: deduplicação corre no drawRound canônico
+  'tests/l7-reset-enrollment-cf-only.test.js', // L7: reset de chave só é persistido pela Function
   'tests/l7-expired-enrollment-cf-only.test.js', // L7: prazo de inscrição pela CF
   'tests/l7-expired-enrollment-store-cf-only.test.js',
   'tests/l7-placeholder-cf-only.test.js',
