@@ -418,6 +418,31 @@ window._addPlaceholdersCore = function (id, qtd, onDone, opts) {
     qtd = parseInt(qtd, 10);
     if (isNaN(qtd) || qtd <= 0) { if (!opts.silent) showNotification('Número inválido', 'Informe um número maior que zero.', 'warning'); return false; }
     if (qtd > 200) qtd = 200;
+    // O navegador só envia a intenção. A CF relê o documento fresco e usa este
+    // mesmo núcleo com `server:true`, devolvendo o torneio canônico à tela.
+    if (!opts.server && !opts.tournament) {
+        var _finishRequest = function () {
+            if (typeof onDone === 'function') { onDone(); return; }
+            var container = document.getElementById('view-container');
+            if (container) { var param = window.location.hash.split('/')[1] || null; renderTournaments(container, param); }
+        };
+        if (!(window.FirestoreDB && typeof window.FirestoreDB._callFn === 'function')) {
+            if (!opts.silent) showNotification('Erro', 'Não foi possível salvar.', 'error');
+            _finishRequest();
+            return false;
+        }
+        window.FirestoreDB._callFn('addTournamentPlaceholders', { tournamentId: String(id), quantity: qtd })
+            .then(function (result) {
+                if (result && result.tournament && typeof window._applyCFTournament === 'function') window._applyCFTournament(id, result.tournament);
+                if (!opts.silent) showNotification('Placeholders adicionados', String((result && result.added) || qtd) + ' placeholder(s) em ' + ((result && result.destination) || 'inscritos') + '.', 'success');
+                _finishRequest();
+            }).catch(function (err) {
+                if (window._error) window._error('Erro ao salvar placeholders:', err);
+                if (!opts.silent) showNotification('Erro', 'Não foi possível salvar.', 'error');
+                _finishRequest();
+            });
+        return true;
+    }
     var t = opts.tournament || window.AppStore.tournaments.find(function (tour) { return tour.id.toString() === id.toString(); });
     if (!t) return false;
     if (!Array.isArray(t.participants)) t.participants = t.participants ? Object.values(t.participants) : [];
@@ -472,29 +497,7 @@ window._addPlaceholdersCore = function (id, qtd, onDone, opts) {
         dest = 'inscritos';
     }
     if (!opts.silent && window.AppStore && typeof window.AppStore.logAction === 'function') window.AppStore.logAction(id, qtd + ' placeholder(s) adicionado(s) em ' + dest);
-    if (opts.skipPersist) return made.length > 0;
-    // v4.4.72: onDone SÓ após o save resolver (ou falhar) — mantém o botão em
-    // "Adicionando…" (cinza) até o commit REAL + toast, dando o retorno visual do
-    // comando commitado. Antes onDone era síncrono (fora do .then) e revertia o
-    // botão no mesmo tick do clique, antes de pintar o cinza → parecia que nada
-    // acontecia. Espelha o fluxo do participante (_doAddParticipant no .then).
-    var _finishAdd = function () {
-        if (typeof onDone === 'function') { onDone(); return; }
-        var container = document.getElementById('view-container');
-        if (container) { var param = window.location.hash.split('/')[1] || null; renderTournaments(container, param); }
-    };
-    if (window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
-        window.AppStore.commitTournamentTx(id, function(ft) {
-            return window._addPlaceholdersCore(id, qtd, null, { tournament: ft, skipPersist: true, silent: true });
-        }).then(function (saved) {
-            if (saved === false) { showNotification('Erro', 'Não foi possível salvar.', 'error'); _finishAdd(); return; }
-            showNotification('Placeholders adicionados', qtd + ' placeholder(s) em ' + dest + '.', 'success');
-            _finishAdd();
-        }).catch(function (err) { if (window._error) window._error('Erro ao salvar placeholders:', err); showNotification('Erro', 'Não foi possível salvar.', 'error'); _finishAdd(); });
-    } else {
-        showNotification('Erro', 'Não foi possível salvar.', 'error');
-        _finishAdd();
-    }
+    return { changed: made.length > 0, added: made.length, destination: dest };
 };
 
 // v2.7.32: handlers de ação do inscrito (remover/split) definidos no NÍVEL DO MÓDULO
@@ -537,7 +540,7 @@ window._purgePersonFromMaps = function (t, uid, name) {
 };
 // Applies the organizer's confirmed removal to any tournament object. The caller
 // runs it once for the screen and once for the fresh transaction document.
-function _applyOrganizerParticipantRemoval(t, participantName, memberUid) {
+window._applyOrganizerParticipantRemoval = function(t, participantName, memberUid) {
     if (!t) return false;
     var target = String(participantName || '').trim().toLowerCase();
     var removedP = null;
@@ -569,7 +572,7 @@ function _applyOrganizerParticipantRemoval(t, participantName, memberUid) {
     if (idx === -1 && !removedFromWait) return false;
     if (typeof window._purgePersonFromMaps === 'function') window._purgePersonFromMaps(t, memberUid || (removedP && removedP.uid), participantName);
     return { participant: removedP, removedFromWait: removedFromWait };
-}
+};
 
 // memberUid = a IDENTIDADE de quem o card representa. O card individual manda o uid; o nome é
 // só fallback (fictício sem conta / doc legado). Sem o uid, excluir alguém que está EM DUPLA era
@@ -596,34 +599,15 @@ window.removeParticipantFunction = function (tId, participantName, memberUid) {
         _t('tourn.removeParticipantTitle'),
         _t('tourn.removeParticipantMsg') + _pairMsg,
         () => {
-            const t = window._findTournamentById(tId);
-            if (t) {
-                // v2.7.54: casa nome CRU/FORMATADO (telefone "+5511981933576" vs
-                // "+55 (11) 98193-3576") e remove TAMBÉM dos storages da lista de espera
-                // — assim o organizador remove qualquer um, inclusive quem só está na espera.
-                var _removal = _applyOrganizerParticipantRemoval(t, participantName, memberUid);
-                if (!_removal) return;
-                var _removedP = _removal.participant;
-                if (_removedP && typeof _removedP === 'object' && _removedP.uid && typeof window._sendUserNotification === 'function') {
-                    var _cuRem = window.AppStore && window.AppStore.currentUser;
-                    var _remover = (_cuRem && (_cuRem.displayName || _cuRem.email)) || 'o organizador';
-                    var _whenStr = new Date().toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-                    window._sendUserNotification(_removedP.uid, {
-                        type: 'participant_removed',
-                        message: 'Você foi removido do torneio "' + (t.name || 'Torneio') + '" por ' + _remover + ' em ' + _whenStr + '.',
-                        tournamentId: String(t.id), tournamentName: t.name || '', level: 'fundamental'
-                    });
-                }
-                if (window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
-                    window.AppStore.commitTournamentTx(tId, function(ft) {
-                        return !!_applyOrganizerParticipantRemoval(ft, participantName, memberUid);
-                    }, { allowRosterRemoval: true });
-                }
-                const container = document.getElementById('view-container');
-                if (container) {
-                    if ((window.location.hash || '').indexOf('#participants') === 0 && typeof window.renderParticipants === 'function') window.renderParticipants(container, tId);
-                    else if (typeof renderTournaments === 'function') renderTournaments(container, tId);
-                }
+            if (window.FirestoreDB && typeof window.FirestoreDB._callFn === 'function') {
+                window.FirestoreDB._callFn('removeTournamentParticipant', { tournamentId: String(tId), participantName: String(participantName || ''), memberUid: String(memberUid || '') }).then(function(result) {
+                    if (result && result.tournament && typeof window._applyCFTournament === 'function') window._applyCFTournament(tId, result.tournament);
+                    const container = document.getElementById('view-container');
+                    if (container) {
+                        if ((window.location.hash || '').indexOf('#participants') === 0 && typeof window.renderParticipants === 'function') window.renderParticipants(container, tId);
+                        else if (typeof renderTournaments === 'function') renderTournaments(container, tId);
+                    }
+                }).catch(function(err) { if (typeof showNotification === 'function') showNotification('Erro', (err && err.message) || 'Não foi possível remover o participante.', 'error'); });
             }
         },
         null,
@@ -672,59 +656,15 @@ window.splitParticipantFunction = function (tId, participantName) {
         _t('tourn.splitTeamTitle'),
         _t('tourn.splitTeamMsg'),
         () => {
-            const t = window._findTournamentById(tId);
-            if (!t || !t.participants) return;
-            let arr = Array.isArray(t.participants) ? t.participants : Object.values(t.participants);
-            var idx = arr.findIndex(function(p) { return window._pName(p) === participantName; });
-            if (idx === -1) return;
-            var entry = arr[idx];
-            // IDENTIDADE = uid. Desfaz a dupla pela ESTRUTURA (slots p1/p2 ou participants[]),
-            // NUNCA pela barra do nome. Cada pessoa vira um slot próprio carregando o SEU uid —
-            // nome/email são só fallback (o perfil é puxado ao vivo pelo uid). Ver
-            // project_dupla_entry_structural_not_slash + project_uid_primary_identity.
-            var slots = [];
-            var mkSlot = function(uid, name, email) {
-                var o = {};
-                if (uid) o.uid = uid;                                 // identidade primária
-                if (name) { o.name = name; o.displayName = name; }    // fallback (informal/cache frio)
-                if (email) o.email = email;
-                return (o.uid || o.name) ? o : null;
-            };
-            if (entry && typeof entry === 'object' && Array.isArray(entry.participants) && entry.participants.length) {
-                entry.participants.forEach(function(s) {
-                    if (s && typeof s === 'object') { var o = mkSlot(s.uid, s.displayName || s.name, s.email); if (o) slots.push(o); }
-                    else if (s) { var o2 = mkSlot(null, String(s), null); if (o2) slots.push(o2); }
-                });
-            } else if (entry && typeof entry === 'object' && (entry.p1Uid || entry.p2Uid || (entry.p1Name && entry.p2Name))) {
-                var s1 = mkSlot(entry.p1Uid, entry.p1Name, entry.p1Email);
-                var s2 = mkSlot(entry.p2Uid, entry.p2Name, entry.p2Email);
-                if (s1) slots.push(s1);
-                if (s2) slots.push(s2);
-            } else {
-                return; // não é dupla/time — nada a desfazer
-            }
-            if (slots.length < 2) return;
-            arr.splice(idx, 1);
-            Array.prototype.splice.apply(arr, [idx, 0].concat(slots));
-            t.participants = arr;
-            // limpa a memória de origem da dupla desfeita (evita "formada" fantasma no teamOrigins)
-            try {
-                if (t.teamOrigins && typeof t.teamOrigins === 'object') {
-                    delete t.teamOrigins[participantName];
-                    var _lbl = window._entryDisplayName ? window._entryDisplayName(entry) : null;
-                    if (_lbl) delete t.teamOrigins[_lbl];
+            if (!(window.FirestoreDB && typeof window.FirestoreDB._callFn === 'function')) return;
+            window.FirestoreDB._callFn('splitTournamentParticipant', { tournamentId: String(tId), participantName: String(participantName || '') }).then(function(result) {
+                if (result && result.tournament && typeof window._applyCFTournament === 'function') window._applyCFTournament(tId, result.tournament);
+                const container = document.getElementById('view-container');
+                if (container) {
+                    if ((window.location.hash || '').indexOf('#participants') === 0 && typeof window.renderParticipants === 'function') window.renderParticipants(container, tId);
+                    else if (typeof renderTournaments === 'function') renderTournaments(container, tId);
                 }
-            } catch (_e) {}
-            if (window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
-                window.AppStore.commitTournamentTx(tId, function(ft) {
-                    return window._applySplitParticipantFresh(ft, participantName);
-                }, { allowRosterRemoval: true });
-            }
-            const container = document.getElementById('view-container');
-            if (container) {
-                if ((window.location.hash || '').indexOf('#participants') === 0 && typeof window.renderParticipants === 'function') window.renderParticipants(container, tId);
-                else if (typeof renderTournaments === 'function') renderTournaments(container, tId);
-            }
+            }).catch(function(err) { if (typeof showNotification === 'function') showNotification('Erro', (err && err.message) || 'Não foi possível desfazer a dupla.', 'error'); });
         },
         null,
         { type: 'warning', confirmText: _t('btn.undo'), cancelText: _t('btn.keepTeam') }

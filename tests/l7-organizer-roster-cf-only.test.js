@@ -1,0 +1,22 @@
+'use strict';
+const fs = require('fs');
+let failed = 0;
+function ok(condition, message) { if (condition) console.log('✓ ' + message); else { console.error('✗ ' + message); failed++; } }
+const ui = fs.readFileSync('js/views/tournaments.js', 'utf8');
+const a = ui.indexOf('window.removeParticipantFunction');
+const b = ui.indexOf('window._applySplitParticipantFresh', a);
+const block = ui.slice(a, b);
+ok(/_callFn\('removeTournamentParticipant'/.test(block) && !/(?:commitTournamentTx|AppStore\.mutate|_sendUserNotification)/.test(block), 'remoção administrativa só despacha a CF');
+const fn = fs.readFileSync('functions-autodraw/index.js', 'utf8');
+const x = fn.indexOf('exports.removeTournamentParticipant');
+const y = fn.indexOf('// ─── Reset para inscrições', x);
+const server = fn.slice(x, y);
+ok(/_isTournamentAdmin/.test(server) && /runTransaction/.test(server) && /notificationOutbox/.test(server), 'CF remove com autorização, transação e outbox');
+const s = ui.indexOf('window.splitParticipantFunction');
+const e = ui.indexOf('// Self-healing:', s);
+const split = ui.slice(s, e);
+ok(/_callFn\('splitTournamentParticipant'/.test(split) && !/commitTournamentTx/.test(split), 'desmembramento de dupla só despacha a CF');
+const sx = fn.indexOf('exports.splitTournamentParticipant');
+const sy = fn.indexOf('// ─── Reset para inscrições', sx);
+ok(/_isTournamentAdmin/.test(fn.slice(sx, sy)) && /_gravaTorneio/.test(fn.slice(sx, sy)), 'CF desmembra a dupla no documento fresco');
+process.exitCode = failed ? 1 : 0;

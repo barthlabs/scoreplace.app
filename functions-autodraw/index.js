@@ -816,6 +816,78 @@ exports.requestTournamentPair = onCall(async request => {
   });
 });
 
+// ─── Placeholders: pedido do organizador, numeração e gravação canônicas ───
+exports.addTournamentPlaceholders = onCall(async request => {
+  const uid = request.auth && request.auth.uid;
+  const data = request.data || {};
+  const tId = String(data.tournamentId || '').trim();
+  const quantity = Math.min(200, Math.max(0, parseInt(data.quantity, 10) || 0));
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId || !quantity) throw new HttpsError('invalid-argument', 'Quantidade inválida.');
+  if (!drawWindow || typeof drawWindow._addPlaceholdersCore !== 'function') throw new HttpsError('internal', 'Núcleo de participantes indisponível.');
+  const ref = db.collection('tournaments').doc(tId), agoraIso = new Date().toISOString();
+  return db.runTransaction(async tx => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    if (!_isTournamentAdmin(t, uid)) throw new HttpsError('permission-denied', 'Só a organização adiciona placeholders.');
+    const before = _antesDoMotor(t);
+    const out = drawWindow._addPlaceholdersCore(tId, quantity, null, { tournament: t, server: true, skipPersist: true, silent: true });
+    if (!out || !out.changed) throw new HttpsError('failed-precondition', 'Não foi possível adicionar placeholders.');
+    const b = _gravaTorneio(tx, ref, t, before, { agoraIso });
+    return { ok: true, added: out.added, destination: out.destination, tournament: b.clean };
+  });
+});
+
+// ─── Remoção administrativa: elenco, mapas e aviso no mesmo commit ───
+exports.removeTournamentParticipant = onCall(async request => {
+  const uid = request.auth && request.auth.uid;
+  const data = request.data || {};
+  const tId = String(data.tournamentId || '').trim();
+  const participantName = String(data.participantName || '').trim();
+  const memberUid = String(data.memberUid || '').trim();
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId || (!participantName && !memberUid)) throw new HttpsError('invalid-argument', 'Participante inválido.');
+  if (!drawWindow || typeof drawWindow._applyOrganizerParticipantRemoval !== 'function') throw new HttpsError('internal', 'Núcleo de elenco indisponível.');
+  const ref = db.collection('tournaments').doc(tId), agoraIso = new Date().toISOString();
+  return db.runTransaction(async tx => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    if (!_isTournamentAdmin(t, uid)) throw new HttpsError('permission-denied', 'Só a organização remove participantes.');
+    const before = _antesDoMotor(t);
+    const out = drawWindow._applyOrganizerParticipantRemoval(t, participantName, memberUid);
+    if (!out) throw new HttpsError('failed-precondition', 'Participante já não está inscrito.');
+    const b = _gravaTorneio(tx, ref, t, before, { agoraIso });
+    const removedUid = out.participant && out.participant.uid ? String(out.participant.uid) : '';
+    if (removedUid) tx.set(ref.collection('notificationOutbox').doc('participant-removed-' + _outboxDocIdPart(removedUid) + '-' + Date.parse(agoraIso)), {
+      schema: 1, kind: 'tournament-notification', type: 'participant_removed', title: 'Você foi removido do torneio',
+      message: 'A organização removeu você do torneio "' + String(t.name || 'Torneio') + '".', tournamentId: tId, tournamentName: t.name || '',
+      level: 'fundamental', recipients: [removedUid], createdAt: agoraIso, createdAtMs: Date.parse(agoraIso), dispatchStatus: 'pending'
+    }, { merge: true });
+    return { ok: true, tournament: b.clean };
+  });
+});
+
+// ─── Desmembrar dupla: o recibo vem do elenco fresco, nunca da cópia da tela ───
+exports.splitTournamentParticipant = onCall(async request => {
+  const uid = request.auth && request.auth.uid;
+  const data = request.data || {};
+  const tId = String(data.tournamentId || '').trim();
+  const participantName = String(data.participantName || '').trim();
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId || !participantName) throw new HttpsError('invalid-argument', 'Dupla inválida.');
+  if (!drawWindow || typeof drawWindow._applySplitParticipantFresh !== 'function') throw new HttpsError('internal', 'Núcleo de elenco indisponível.');
+  const ref = db.collection('tournaments').doc(tId), agoraIso = new Date().toISOString();
+  return db.runTransaction(async tx => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    if (!_isTournamentAdmin(t, uid)) throw new HttpsError('permission-denied', 'Só a organização desfaz duplas.');
+    const before = _antesDoMotor(t);
+    if (!drawWindow._applySplitParticipantFresh(t, participantName)) throw new HttpsError('failed-precondition', 'A dupla já mudou no servidor.');
+    const b = _gravaTorneio(tx, ref, t, before, { agoraIso });
+    return { ok: true, tournament: b.clean };
+  });
+});
+
 // ─── Reset para inscrições: confirmação no cliente, mutação completa no servidor ───
 exports.resetTournamentToEnrollment = onCall(async request => {
   const uid = request.auth && request.auth.uid;
