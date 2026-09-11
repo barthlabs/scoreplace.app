@@ -10849,9 +10849,11 @@ window.AppStore = {
         // localStorage duplicaria cada jogo (group.matches são refs → JSON as copia).
         // Clona só o que for tocado — nunca muta o objeto vivo (que mantém as refs).
         var _needFold = Array.isArray(t.rounds) && t.rounds.some(function(r){ return r && Array.isArray(r.monarchGroups) && r.monarchGroups.some(function(g){ return g && Array.isArray(g.matches); }); });
-        if (t._allowConfigReset === undefined && !_needFold) return t;
+        if (t._allowConfigReset === undefined && t._resultsHydrated === undefined && t._resultsHydrating === undefined && !_needFold) return t;
         var c = Object.assign({}, t);
         delete c._allowConfigReset;
+        delete c._resultsHydrated;
+        delete c._resultsHydrating;
         if (_needFold) {
           c.rounds = t.rounds.map(function(r){
             if (!r || !Array.isArray(r.monarchGroups)) return r;
@@ -10918,7 +10920,12 @@ window.AppStore = {
          * de ANTES da aprovação, e só um reinício (com o cache já trocado) corrigia.
          * A marca resolve sem perder o cache: ele segue pintando a lista na hora, e ABRIR
          * o torneio passa a buscar o fresco. Some quando o completo chega e substitui. */
-        this.tournaments.forEach(function (t) { if (t) t._doCache = true; });
+        this.tournaments.forEach(function (t) {
+          if (!t) return;
+          t._doCache = true;
+          delete t._resultsHydrated;
+          delete t._resultsHydrating;
+        });
         // v4.4.69 Rei/Rainha: o cache guarda grupos só com matchIds — reidrata
         // group.matches como refs de round.matches antes de qualquer consumidor.
         if (typeof window._hydrateMonarchGroups === 'function') {

@@ -28,5 +28,14 @@ function deferred(){let resolve,reject;const promise=new Promise((a,b)=>{resolve
  d.reject(new Error('offline'));await drain();assert.equal(tournament._resultsHydrating,false);vm.runInNewContext(dashCode,c);await drain();assert.equal(attempts,2);assert.equal(tournament._resultsHydrated,true);assert.equal(paints,1);
  const seen=[];const list=Array.from({length:7},(_,i)=>({id:String(i),status:'active',updatedAt:'2026-09-'+String(i+1).padStart(2,'0')}));list.push({id:'sandbox',status:'active',updatedAt:'2026-09-30'});
  vm.runInNewContext(dashCode,{window:{AppStore:{hydrateMatchResults(id){seen.push(id);return Promise.resolve(true);}},_isSandboxRef:id=>id==='sandbox'},_dashMyTournaments:list});await drain();assert.deepEqual(seen,['6','5','4','3','2']);
+ const acorn=require('acorn'), cacheMethods={};
+ function walk(n){if(!n||typeof n!=='object')return; if(n.type==='Property'&&['_saveToCache','_loadFromCache'].includes(n.key&&n.key.name))cacheMethods[n.key.name]=source.slice(n.start,n.end);for(const k of Object.keys(n)){const v=n[k];if(Array.isArray(v))v.forEach(walk);else if(v&&typeof v==='object')walk(v);}}
+ walk(acorn.parse(source,{ecmaVersion:'latest',sourceType:'script'}));
+ let saved='';const storage={setItem(k,v){saved=v;},getItem(){return saved;}};
+ const cacheStore=vm.runInNewContext('({'+Object.values(cacheMethods).join(',')+'})',{localStorage:storage,window:{_dropSandboxForNonDev:x=>x,_marcaPartesQueFaltam:()=>false},Date});
+ cacheStore.tournaments=[{id:'t',_resultsHydrating:true,_resultsHydrated:true}];cacheStore._saveToCache();
+ assert.equal(JSON.parse(saved).tournaments[0]._resultsHydrating,undefined);assert.equal(JSON.parse(saved).tournaments[0]._resultsHydrated,undefined);assert.equal(cacheStore.tournaments[0]._resultsHydrating,true);
+ saved=JSON.stringify({ts:Date.now(),tournaments:[{id:'t',_resultsHydrating:true,_resultsHydrated:true}]});assert.equal(cacheStore._loadFromCache(),true);
+ assert.equal(cacheStore.tournaments[0]._resultsHydrating,undefined);assert.equal(cacheStore.tournaments[0]._resultsHydrated,undefined);
  console.log('✅ L8: retry, coalescência, snapshot fresco, troca de conta, remoção, datas ISO e sandbox');
 })().catch(e=>{console.error(e);process.exitCode=1;});

@@ -1,4 +1,4 @@
-// 2.2.66 — hidratação da dashboard recupera falha e aplica no snapshot atual.
+// 2.2.66 — hidratação da dashboard recupera falha, aplica no snapshot atual e limpa flags ao reabrir.
 // 2.2.65: criar e copiar torneio só confirmam após salvar; imagens da edição voltam a ser enviadas. Replay e proporção são confirmados no servidor.
 // ⚠️ 2.2.64 · novidades de resultado também alcançam quem organiza o torneio, mesmo quando não disputa a partida; a consulta continua deduplicada por torneio. A limpeza interna removeu apenas compatibilidades sem chamadores, preservando os fluxos e os dados históricos.
 // ⚠️ 2.2.63 · L7 avançou (encerramento retificado na 2.2.65): inscrição, elenco, categorias, preparação de chave e toda a Liga (W.O., substituições, convites, Jogador X e Monarch) passam por Cloud Functions transacionais. A tela só envia a intenção e reflete a resposta canônica; o censo posterior identificou criação, replay e um alias ainda fora da migração.

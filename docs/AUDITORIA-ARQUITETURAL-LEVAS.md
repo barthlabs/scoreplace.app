@@ -3164,3 +3164,5 @@ ordem explícita do dono, devido à cota temporária**, não aprovada por infer�
 ## L8.P3 — recuperação da hidratação (11/set/2026)
 
 A dashboard marcava sucesso antes da consulta: uma falha bloqueava novas tentativas. Agora distingue requisição em voo de resultado confirmado, captura rejeições e permite retry no próximo render. A ordenação interpreta datas ISO, números e Timestamp; sandbox não ocupa uma das cinco consultas. O store aplica a resposta no objeto atual, após snapshot concorrente, e descarta resposta após remoção ou troca de conta. A leitura completa permanece necessária para novidades de outros jogadores, resultados parciais e propostas; limitá-la só a jogos próprios perderia cards. O corte do tamanho da consulta continua aberto. Revisão Claude permanece suspensa.
+
+L8.P3 também remove flags de hidratação ao salvar e ler o cache: elas descrevem a sessão, não resultados persistidos. O teste usa os métodos reais para provar que um cache antigo não impede nova consulta.
