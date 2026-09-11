@@ -34,7 +34,14 @@ adivinhado.
 
 ### GATE A — TÉCNICO (verificável por script)
 
-O Capacitor usa bundle local. A política aprovada em 11/set/2026 está em
+**O mecanismo, reconferido em 11/set/2026:** `capacitor.config.json` tem `webDir: "www"` e
+o bloco `server` **não** tem `url` (só `hostname` e os esquemas) — o app nativo executa o
+**JS EMBARCADO no binário**. Publicar no Hosting **não** atualiza o nativo. Medido nesta
+data, a árvore carrega `2.2.8` no bundle embarcado e `versionName 2.2.3` no Android; o que
+está INSTALADO nas lojas é fato externo a este repositório, e o número que o corte tem de
+sobreviver continua sendo o **2.1.28** do parque medido na L2 — nada aqui o atualiza sozinho.
+
+A política aprovada em 11/set/2026 está em
 `docs/POLITICA-ATUALIZACAO-NATIVA.md`: mínimo independente por plataforma, disponível
 na loja e validado em aparelho, seguido de sete dias de aviso. O source já contém o
 controle, mas isso não o instala retroativamente nos binários antigos.
