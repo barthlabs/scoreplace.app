@@ -3250,3 +3250,19 @@ hidratação (`t._resultsHydrated = 'parcial' | 'completa'`), com a chave exigin
 Novidades + Seus últimos resultados; (3) gate que prove que a chave nunca pinta sobre escopo
 parcial e que nenhum documento de `results` fique sem `updatedAt`. Ganho medido no estado atual:
 244 → ~N por abertura, com o Confra caindo de 214.
+
+**L8.P5 implementada (11/set/2026, 2.2.68 — preparada, publicação pendente da palavra do dono).**
+A marca de hidratação deixou de ser booleana e passou a registrar o escopo lido: `'parcial'`
+(janela recente, dashboard) ou `'completa'` (coleção inteira, chave). `loadMatchResults` aceita
+`opts.limit` e só então aplica `orderBy('updatedAt','desc').limit(N)`; sem `opts` a leitura é a
+mesma de antes. A coalescência entra no escopo (`[uid, tid, escopo]`) e o `finally` limpa a chave
+com escopo. `'parcial'` nunca rebaixa `'completa'`, a janela recente **acrescenta** ao mapa e a
+leitura completa substitui. A dashboard pede `limit: 40`; a chave exige `'completa'`.
+⭐ As duas linhas `t._resultsHydrated = !!ok` dos chamadores (`bracket.js`, `dashboard.js`) foram
+REMOVIDAS — o parecer da revisão mostrou que elas rebaixariam o escopo para `true` e fariam a
+chave re-hidratar a cada abertura; elas também carimbavam o objeto `t` CAPTURADO, enquanto a
+função relê o torneio depois da consulta por causa de snapshot concorrente.
+Provas: `tests/l8-escopo-da-hidratacao.test.js` (novo, no `run-unit`) mais dois casos novos em
+`l8-hydration-boundaries` (segunda abertura não re-hidrata; escopo parcial não serve para a
+chave). **Controle:** na árvore anterior (`182c6af1`) o gate novo FALHA. Ganho medido: 244 → ~94
+documentos por abertura (Confra de 214 para 40).

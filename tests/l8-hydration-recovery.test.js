@@ -2,7 +2,7 @@
 const fs=require('fs'),path=require('path'),vm=require('vm'),assert=require('assert/strict');
 const root=path.resolve(__dirname,'..');
 const source=fs.readFileSync(path.join(root,'js/store.js'),'utf8');
-const start=source.indexOf('  hydrateMatchResults(tournamentId) {');
+const start=source.indexOf('  hydrateMatchResults(tournamentId, opts) {');
 const end=source.indexOf('\n  // Grava o resultado',start);
 const storeCode='({'+source.slice(start,end)+'})';
 const dash=fs.readFileSync(path.join(root,'js/views/dashboard.js'),'utf8');
@@ -25,7 +25,7 @@ function deferred(){let resolve,reject;const promise=new Promise((a,b)=>{resolve
  let attempts=0,paints=0;const d=deferred();const tournament={id:'t',updatedAt:'2026-09-11',status:'active'};
  const c={window:{AppStore:{hydrateMatchResults(){attempts++;return attempts===1?d.promise:Promise.resolve(true);}},_dashPedirRepintura(){paints++;}},_dashMyTournaments:[tournament]};
  vm.runInNewContext(dashCode,c);vm.runInNewContext(dashCode,c);await drain();assert.equal(attempts,1);assert.equal(tournament._resultsHydrated,undefined);
- d.reject(new Error('offline'));await drain();assert.equal(tournament._resultsHydrating,false);vm.runInNewContext(dashCode,c);await drain();assert.equal(attempts,2);assert.equal(tournament._resultsHydrated,true);assert.equal(paints,1);
+ d.reject(new Error('offline'));await drain();assert.equal(tournament._resultsHydrating,false);vm.runInNewContext(dashCode,c);await drain();assert.equal(attempts,2);assert.equal(tournament._resultsHydrated,undefined,'⛔ L8.P5: o caller NÃO carimba a marca — quem grava o escopo é hydrateMatchResults, no torneio relido');assert.equal(paints,1);
  const seen=[];const list=Array.from({length:7},(_,i)=>({id:String(i),status:'active',updatedAt:'2026-09-'+String(i+1).padStart(2,'0')}));list.push({id:'sandbox',status:'active',updatedAt:'2026-09-30'});
  vm.runInNewContext(dashCode,{window:{AppStore:{hydrateMatchResults(id){seen.push(id);return Promise.resolve(true);}},_isSandboxRef:id=>id==='sandbox'},_dashMyTournaments:list});await drain();assert.deepEqual(seen,['6','5','4','3','2']);
  const acorn=require('acorn'), cacheMethods={};
@@ -33,9 +33,9 @@ function deferred(){let resolve,reject;const promise=new Promise((a,b)=>{resolve
  walk(acorn.parse(source,{ecmaVersion:'latest',sourceType:'script'}));
  let saved='';const storage={setItem(k,v){saved=v;},getItem(){return saved;}};
  const cacheStore=vm.runInNewContext('({'+Object.values(cacheMethods).join(',')+'})',{localStorage:storage,window:{_dropSandboxForNonDev:x=>x,_marcaPartesQueFaltam:()=>false},Date});
- cacheStore.tournaments=[{id:'t',_resultsHydrating:true,_resultsHydrated:true}];cacheStore._saveToCache();
- assert.equal(JSON.parse(saved).tournaments[0]._resultsHydrating,undefined);assert.equal(JSON.parse(saved).tournaments[0]._resultsHydrated,undefined);assert.equal(cacheStore.tournaments[0]._resultsHydrating,true);
- saved=JSON.stringify({ts:Date.now(),tournaments:[{id:'t',_resultsHydrating:true,_resultsHydrated:true}]});assert.equal(cacheStore._loadFromCache(),true);
+ cacheStore.tournaments=[{id:'t',_resultsHydrating:true,_resultsHydrated:'completa'}];cacheStore._saveToCache();
+ assert.equal(JSON.parse(saved).tournaments[0]._resultsHydrating,undefined);assert.equal(JSON.parse(saved).tournaments[0]._resultsHydrated,undefined,'escopo em string também sai do cache');assert.equal(cacheStore.tournaments[0]._resultsHydrating,true);
+ saved=JSON.stringify({ts:Date.now(),tournaments:[{id:'t',_resultsHydrating:true,_resultsHydrated:'parcial'}]});assert.equal(cacheStore._loadFromCache(),true);
  assert.equal(cacheStore.tournaments[0]._resultsHydrating,undefined);assert.equal(cacheStore.tournaments[0]._resultsHydrated,undefined);
  console.log('✅ L8: retry, coalescência, snapshot fresco, troca de conta, remoção, datas ISO e sandbox');
 })().catch(e=>{console.error(e);process.exitCode=1;});

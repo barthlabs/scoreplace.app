@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.2.67';
+window.SCOREPLACE_VERSION = '2.2.68';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -11402,11 +11402,25 @@ window.AppStore = {
 
   // Hidrata t._results da subcoleção `results` e sobrepõe nos objetos match da
   // estrutura. Chamar ao entrar no bracket/detalhe (wiring vem no inc 2b/3).
-  hydrateMatchResults(tournamentId) {
+  /* L8.P5 — A MARCA GUARDA O ESCOPO, NÃO UM "SIM".
+   *
+   * MEDIDO em 11/set/2026: a dashboard puxava 244 documentos de `results` por abertura e
+   * 214 deles eram de UM torneio (Confra), pra pintar ~uma dúzia de jogos em "Novidades" e
+   * "Seus últimos resultados". Mas truncar a consulta não é inocente: esta função sobrepõe o
+   * espelho em TODOS os jogos da estrutura e salva no cache — e a CHAVE chama esta MESMA
+   * função. Marca booleana + leitura truncada = torneio parcialmente sobreposto gravado como
+   * "hidratado", e a chave herdando isso: a família do "0-0 na Confra".
+   * Por isso a marca passa a dizer QUAL escopo foi lido: 'parcial' (janela recente, dashboard)
+   * ou 'completa' (coleção inteira, chave). 'parcial' NUNCA rebaixa 'completa', e a chave só
+   * aceita 'completa'. A coalescência entra no escopo: pedidos diferentes não se confundem.
+   */
+  hydrateMatchResults(tournamentId, opts) {
     var id = String(tournamentId || '');
     if (!id) return Promise.resolve(false);
+    var limite = (opts && Number(opts.limit) > 0) ? Number(opts.limit) : 0;
+    var escopo = limite ? 'parcial' : 'completa';
     var actorUid = this.currentUser && this.currentUser.uid;
-    var requestKey = JSON.stringify([actorUid || null, id]);
+    var requestKey = JSON.stringify([actorUid || null, id, escopo]);
     this._hydrateResultPromises = this._hydrateResultPromises || {};
     if (this._hydrateResultPromises[requestKey]) return this._hydrateResultPromises[requestKey];
     var self = this;
@@ -11414,13 +11428,17 @@ window.AppStore = {
     var t = this.tournaments.find(function (x) { return String(x.id) === String(tournamentId); });
     if (!t || !window.FirestoreDB || typeof window.FirestoreDB.loadMatchResults !== 'function') return false;
     try {
-      var map = await window.FirestoreDB.loadMatchResults(tournamentId);
+      var map = await window.FirestoreDB.loadMatchResults(tournamentId, limite ? { limit: limite } : undefined);
       if ((this.currentUser && this.currentUser.uid) !== actorUid) return false;
       // O snapshot pode substituir o objeto enquanto a consulta está em voo.
       t = this.tournaments.find(function (x) { return String(x.id) === id; });
       if (!t) return false;
-      t._resultsHydrated = true;
-      t._results = map || {};
+      // 'completa' sempre ganha; 'parcial' só marca quando não havia leitura completa.
+      if (escopo === 'completa' || t._resultsHydrated !== 'completa') t._resultsHydrated = escopo;
+      // A janela recente ACRESCENTA ao que já se sabia — substituir apagaria jogo antigo que
+      // uma leitura completa anterior já tinha trazido. A leitura completa, essa, é a verdade
+      // inteira e substitui.
+      t._results = (escopo === 'completa') ? (map || {}) : Object.assign({}, t._results || {}, map || {});
       var all = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : [];
       var store = self;
       all.forEach(function (m) { if (m && m.id != null && t._results[m.id]) self._overlayResultOnMatch(m, t._results[m.id]); });

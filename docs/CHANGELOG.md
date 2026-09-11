@@ -1,3 +1,7 @@
+## 2.2.68 — 11/set/2026
+
+Resultados: a marca de hidratação passa a registrar o escopo lido. A dashboard busca apenas a janela recente de cada torneio, ordenada pelo carimbo de atualização, e a chave continua exigindo a coleção inteira — leitura parcial nunca é aceita onde o jogo é desenhado. Medido em produção: 244 documentos por abertura caem para cerca de 94, sem perder novidade de outro jogador nem a visão de quem organiza.
+
 ## 2.2.67 — 11/set/2026
 
 Resultados: chave permite retry, conexão indisponível não equivale a coleção vazia, requisições são isoladas por conta. Política nativa aprovada: sete dias por plataforma, novidades liberadas assim que atualizar, controle preparado sem mínimo ativo até disponibilidade e validação em aparelho. Nenhuma Rule fechada. Revisão Claude reativada com Haiku/Sonnet, teto por chamada e sem escalada automática.

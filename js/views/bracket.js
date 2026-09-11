@@ -1138,10 +1138,13 @@ function renderBracket(container, tournamentId, isInline) {
   // O resultado pode chegar no espelho `results/{matchId}` depois da estrutura da chave.
   // Busca uma vez por abertura: re-renderizações de W.O./placar não podem virar uma leitura
   // completa da subcoleção a cada clique. Ao sair desta rota a flag é descartada pelo router.
-  if (t && !t._resultsHydrated && !t._resultsHydrating && window.AppStore && typeof window.AppStore.hydrateMatchResults === 'function') {
+  // L8.P5: a chave precisa da coleção INTEIRA e só aceita esse escopo — a dashboard hidrata
+  // uma janela recente, e pintar a chave sobre leitura truncada é o "0-0" de volta.
+  // ⛔ A marca é gravada dentro de `hydrateMatchResults`, no torneio relido: carimbar aqui
+  // rebaixaria 'completa' pra `true` e a guarda acima voltaria a disparar a cada abertura.
+  if (t && t._resultsHydrated !== 'completa' && !t._resultsHydrating && window.AppStore && typeof window.AppStore.hydrateMatchResults === 'function') {
     t._resultsHydrating = true;
     Promise.resolve().then(function () { return window.AppStore.hydrateMatchResults(t.id); }).then(function (ok) {
-      t._resultsHydrated = !!ok;
       var routeId = String(window.location.hash || '').split('/')[1];
       if (!ok || String(window.location.hash || '').split('/')[0] !== '#bracket' || routeId !== String(t.id)) return;
       if (typeof window._softRefreshView === 'function') window._softRefreshView();

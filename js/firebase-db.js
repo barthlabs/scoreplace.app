@@ -1629,9 +1629,16 @@ window.FirestoreDB = {
 
   // Lê TODOS os docs de resultado de um torneio (subcoleção results). Retorna um
   // mapa { [matchId]: resultData } pra hidratação de leitura (merge nos matches).
-  async loadMatchResults(tournamentId) {
+  async loadMatchResults(tournamentId, opts) {
     if (!this.ensureDb()) throw Object.assign(new Error('Firestore indisponível para ler resultados.'), { code: 'unavailable' });
-    var snap = await this._tSub(tournamentId, 'results').get();
+    // L8.P5: `opts.limit` pede a JANELA RECENTE (dashboard), não a coleção inteira (chave).
+    // ⛔ `orderBy` EXCLUI documento que não tem o campo — medido em 11/set/2026: 240 de 240
+    // docs de `results` têm `updatedAt` (Confra 214/214), e o gate do censo existe pra que
+    // isso não mude calado. Sem `opts` o caminho é o de sempre: coleção inteira, sem ordenação.
+    var limite = (opts && Number(opts.limit) > 0) ? Number(opts.limit) : 0;
+    var consulta = this._tSub(tournamentId, 'results');
+    if (limite) consulta = consulta.orderBy('updatedAt', 'desc').limit(limite);
+    var snap = await consulta.get();
     var out = {};
     snap.forEach(function (d) { out[d.id] = d.data(); });
     return out;

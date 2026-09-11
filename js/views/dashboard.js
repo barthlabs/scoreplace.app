@@ -486,8 +486,12 @@ function renderDashboard(container) {
       .slice(0, 5).forEach(function (t) {
         if (t._resultsHydrated || t._resultsHydrating || !window.AppStore || typeof window.AppStore.hydrateMatchResults !== 'function') return;
         t._resultsHydrating = true;
-        Promise.resolve().then(function () { return window.AppStore.hydrateMatchResults(t.id); }).then(function (ok) {
-          t._resultsHydrated = !!ok;
+        // L8.P5: a dashboard pede a JANELA RECENTE, não a coleção inteira. "Novidades" só
+        // aceita torneio em andamento e mostra poucos cards; "Seus últimos resultados" usa 10.
+        // ⛔ E quem grava a marca é `hydrateMatchResults` — carimbar aqui rebaixaria o escopo
+        // pra `true` (e ainda no objeto `t` CAPTURADO, que um snapshot concorrente pode ter
+        // substituído; lá dentro o torneio é relido antes de marcar).
+        Promise.resolve().then(function () { return window.AppStore.hydrateMatchResults(t.id, { limit: 40 }); }).then(function (ok) {
           if (ok && typeof window._dashPedirRepintura === 'function') window._dashPedirRepintura('resultados-hidratados');
         }).catch(function (e) {
           if (window._warn) window._warn('[dashboard] hidratação de resultados falhou', e);

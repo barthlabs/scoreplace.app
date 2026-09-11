@@ -1,3 +1,4 @@
+// 2.2.68 — a dashboard passa a ler a janela recente de resultados; a chave continua lendo tudo.
 // Revisão econômica reativada em 11/set; sem efeito sobre funcionalidades.
 // 2.2.67 — recuperação da chave e política nativa de atualização preparada, ainda sem mínimo ativo.
 // 2.2.66 — hidratação da dashboard recupera falha, aplica no snapshot atual e limpa flags ao reabrir.
