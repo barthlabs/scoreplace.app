@@ -47,15 +47,10 @@ console.log('\n▸ ① a regra de CREATE de torneio exige o carimbo do servidor'
 
 console.log('▸ ② quem CRIA de verdade manda o carimbo');
 {
-  const store = fs.readFileSync(path.join(RAIZ, 'js', 'store.js'), 'utf8');
-  const i = store.indexOf('addTournament(data)');
-  ok(i > 0, 'achei o `addTournament`');
-  // ⛔ Janela FIXA não: ancora no FIM do construto (a trava
-  // `teste-nao-recorta-por-tamanho-fixo` existe pra isso — um comentário a mais empurraria
-  // a linha pra fora e o teste reprovaria sem defeito nenhum).
-  const trecho = store.slice(i, store.indexOf('\n  },', i));
-  ok(/_nascidoEm[\s\S]{0,200}serverTimestamp\(\)/.test(trecho),
-    '⭐ o payload de criação leva `_nascidoEm: serverTimestamp()`');
+  const handler = fs.readFileSync(path.join(RAIZ, 'functions-autodraw', 'tournament-create.js'), 'utf8');
+  ok(/_nascidoEm:\s*FieldValue.serverTimestamp\(\)/.test(handler),
+    '⭐ a criação server-side leva `_nascidoEm: serverTimestamp()`');
+
 }
 
 console.log('▸ ③ o carimbo sobrevive à limpeza do payload');

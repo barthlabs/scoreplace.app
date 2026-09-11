@@ -431,7 +431,7 @@ console.log('\n──── a proporção está nas duas telas, com o mesmo togg
   t('a caixa da lista de espera mostra a proporção vigente', /_wlRatioTxt/.test(brk));
   t('e o rótulo do toggle virou "Travar proporção"', /Travar proporção/.test(brk));
   t('o valor gravado continua equilibrado/livre (compat com torneios vivos)',
-     /wlGroupBalance = _eraEquil \? 'livre' : 'equilibrado'/.test(bui));
+     /var desired = _agoraEquil \? 'equilibrado' : 'livre'/.test(bui) && bui.includes('wlGroupBalance: desired'));
   t('e o aviso do toggle diz QUAL é a proporção', /_ratioLabel/.test(bui));
 }
 

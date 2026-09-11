@@ -54,6 +54,9 @@ const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
 const SUITES = [
+  'tests/l7-form-confirmation-browser.test.js',
+  'tests/l7-creation-replay-emulator.test.js',
+  'tests/l7-creation-replay-behavior.test.js',
   'tests/test-utils.js',
   // A FAIXA da revisão do GPT (scripts/revisar-com-gpt.sh) é uma REGRA sobre os arquivos, e
   // os escapes só ELEVAM. O próprio revisor pediu este teste (parecer BLOQUEIO, 04/set/2026):
@@ -1850,6 +1853,7 @@ const MEXEM_NO_REPO = [
  * ⛔ Se estas duas voltarem a falhar com "Port ... is not open", procure emulador órfão
  *      (`lsof -ti :8097`) antes de suspeitar do paralelismo. */
 const PRENDEM_PORTA = [
+  'tests/l7-creation-replay-emulator.test.js',
   'functions-autodraw/test-corrida-slot-emu.js',   // corrida real no Firestore Emulator
   'tests/deploy-liga-firebase-admin.test.js',      // roda a corrida acima dentro da cópia extraída
   // Abre dois emuladores em sequência; sob carga paralela o Firebase CLI pode esperar

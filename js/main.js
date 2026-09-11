@@ -1488,7 +1488,11 @@ window.setupQuickCreateModal = function setupQuickCreateModal() {
   };
 
   // Criar Torneio (rápido com auto-nome)
-  document.getElementById('btn-quick-create').addEventListener('click', function () {
+  document.getElementById('btn-quick-create').addEventListener('click', async function () {
+    var button = this;
+    if (button.disabled) return;
+    button.disabled = true;
+    try {
     const sportRaw = document.getElementById('quick-create-sport').value || '';
     // FONTE \u00DANICA (_sportBaseName, store.js) \u2014 era uma 2\u00AA c\u00F3pia da mesma regex.
     const sportClean = ((typeof window._sportBaseName === 'function')
@@ -1559,14 +1563,20 @@ window.setupQuickCreateModal = function setupQuickCreateModal() {
         : { type: 'simple', setsToWin: 1, gamesPerSet: 1, tiebreakEnabled: false, tiebreakPoints: 7, tiebreakMargin: 2, superTiebreak: false, superTiebreakPoints: 10, countingType: 'numeric', advantageRule: false }
     };
 
-    window.AppStore.addTournament(tourData);
+    button._pendingCreation = button._pendingCreation || tourData;
+    var createdName = button._pendingCreation.name;
+    var createdId = await window.AppStore.addTournament(button._pendingCreation);
+    delete button._pendingCreation;
     if (typeof closeModal === 'function') closeModal('modal-quick-create');
     // Flag to auto-scroll to Edit button and show hint on tournament detail page
     try { sessionStorage.setItem('scoreplace_scroll_to_edit', '1'); } catch (e) {}
-    window.location.hash = '#tournaments/' + tourData.id;
+    window.location.hash = '#tournaments/' + createdId;
     if (typeof showNotification === 'function') {
-      showNotification(window._t ? window._t('quickCreate.created') : 'Torneio Criado!', autoName, 'success');
+      showNotification(window._t ? window._t('quickCreate.created') : 'Torneio Criado!', createdName, 'success');
     }
+    } catch (err) {
+      if (typeof showNotification === 'function') showNotification('Não foi possível criar o torneio', err.message, 'error');
+    } finally { button.disabled = false; }
   });
 
   // Detalhes Avançados — abre formulário completo com sport pré-selecionado

@@ -146,8 +146,8 @@ console.log('\nIMAGEM NÃO VIAJA JUNTO COM PLACAR');
   // troca de logo salvaria sem logo.
   const store = fs.readFileSync(path.join(ROOT, 'js', 'store.js'), 'utf8');
   const sharing = fs.readFileSync(path.join(ROOT, 'js', 'views', 'tournaments-sharing.js'), 'utf8');
-  ok(/saveTournament\(tourData,\s*\{\s*withImages:\s*true\s*\}\)/.test(store),
-     'a criação/edição (AppStore.addTournament) passa `withImages`');
+  ok(store.includes("_callFn('createTournament'") && store.includes('var raw = data[pair[0]]'),
+     'criação/edição sobem a imagem original antes da confirmação da Function');
   ok(/_callCF\('setTournamentBranding'/.test(sharing) &&
      !/saveTournament\(t,\s*\{\s*withImages:\s*true\s*\}\)/.test(sharing),
      'o botão de trocar logo envia a marca apenas pela Cloud Function');

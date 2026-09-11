@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.2.64';
+window.SCOREPLACE_VERSION = '2.2.65';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -11440,18 +11440,24 @@ window.AppStore = {
   // extra, e falhar aqui não pode atrapalhar o placar, que já foi gravado.
   async saveMatchReplay(tournamentId, matchId, replay) {
     if (!tournamentId || matchId == null || matchId === '' || !replay) return false;
-    var esperas = [0, 2500, 7000, 16000];
-    for (var i = 0; i < esperas.length; i++) {
-      if (esperas[i]) await new Promise(function (r) { setTimeout(r, esperas[i]); });
-      try {
-        var ok = await this.commitMatchResult(tournamentId, String(matchId), function (res) {
-          res.replay = replay;
-        }, { silent: true });
-        if (ok) return true;
-      } catch (e) { /* segue pra próxima tentativa */ }
+    if (!window.FirestoreDB || typeof window.FirestoreDB._callFn !== 'function') return false;
+    try {
+      var result = await window.FirestoreDB._callFn('saveTournamentReplay', {
+        tournamentId: String(tournamentId), matchId: String(matchId), replay: replay,
+        sandbox: !!(window.FirestoreDB._ehSandbox && window.FirestoreDB._ehSandbox(tournamentId))
+      });
+      if (!result || result.ok !== true || !result.replay) return false;
+      var t = this.tournaments.find(function (x) { return String(x.id) === String(tournamentId); });
+      if (t) {
+        t._results = t._results || {};
+        t._results[matchId] = Object.assign({}, t._results[matchId], { replay: result.replay });
+        this._saveToCache();
+      }
+      return true;
+    } catch (e) {
+      if (window._warn) window._warn('[replay] falha ao confirmar replay', e);
+      return false;
     }
-    if (window._warn) window._warn('[replay] não consegui gravar o ponto a ponto do jogo ' + matchId);
-    return false;
   },
 
   async commitMatchResult(tournamentId, matchId, mutatorFn, opts) {
@@ -13207,130 +13213,7 @@ window.AppStore = {
       // campos de configuração e devolve o documento que efetivamente foi aceito.
       tourData = this.tournaments[_idx];
     } else {
-      /* ⭐ TORNEIO NOVO NASCE NO FORMATO NOVO (2.0.106) ────────────────────────────
-       * Antes todo torneio nascia com os jogos DENTRO do documento e só era dividido
-       * depois, à mão. Isso deixava o caminho novo sendo exercitado por 1 torneio contra
-       * 38 — e caminho que é exceção apodrece: qualquer mudança futura quebra o raro em
-       * silêncio, porque a suíte e o uso real martelam o comum.
-       * ⭐ E nascer dividido é o caso MAIS SEGURO que existe: torneio novo não tem jogo
-       * nenhum, então não há o que mover nem o que perder. Ele já sorteia direto no lugar
-       * certo — a CF grava os jogos na subcoleção pela mesma porta do Confra.
-       * ⚠️ `_nJogos: 0` vai junto e é o que diz à tela "não tem jogo MESMO" em vez de
-       * "não carregou ainda" — sem ele, todo torneio recém-criado seria acusado de
-       * incompleto. Ver a rede em _enxertaJogos. */
-      tourData = Object.assign({
-        id: id,
-        createdAt: new Date().toISOString(),
-        /* ⛔ APAGADO É APAGADO — ESTE CARIMBO É O QUE IMPEDE UM TORNEIO DE RESSUSCITAR.
-         * Medido em 02/set/2026: o "Torneio de Férias só Casais" foi APAGADO pelo dono e
-         * VOLTOU sozinho às 12:42. O documento tinha `createTime` de SERVIDOR em 02/set
-         * carregando `createdAt` de 20/jun — assinatura de recriação a partir de uma cópia
-         * em cache. Quem o recriou foi o próprio app: o tick de 1s do prazo de inscrição
-         * chama `saveTournament(t)` com o `t` que estava na MEMÓRIA da aba, e o método grava
-         * com `set(merge:true)` — que num doc inexistente CRIA. Só 1 dos 47 torneios tinha
-         * essa marca; os outros 46 estavam limpos.
-         *
-         * ⭐ A trava mora nas RULES, e ela NÃO pergunta "esse torneio já foi apagado?" —
-         * isso exigiria guardar os mortos (o dono recusou: _"vai virar o maior cemitério do
-         * mundo. apagado é apagado"_). Ela pergunta "isto está NASCENDO agora?": o
-         * `allow create` exige `_nascidoEm == request.time`, e só o SERVIDOR sabe carimbar
-         * isso. Payload de cache não tem o campo (ou tem um velho) e é NEGADO no servidor,
-         * em qualquer aba, para sempre. A ausência do documento segue sendo a única verdade.
-         * ⚠️ `_cleanUndefined` preserva o sentinel (ele não é `constructor === Object`).
-         * ⚠️ A exceção do dono continua de pé: restaurar de backup roda pelo Admin SDK, que
-         * passa por cima das rules — recuperar de propósito pode; por acidente, não. */
-        _nascidoEm: (window.firebase && firebase.firestore && firebase.firestore.FieldValue)
-          ? firebase.firestore.FieldValue.serverTimestamp() : null,
-        /* ⛔ DESLIGADO em 26/ago, MESMO DIA em que foi ligado, com o app quebrado em
-         * produção na mão do dono: "não mostra os meus jogos apenas a classificação".
-         *
-         * A CAUSA: eu construí a REDE do ouvinte (que enxerta os jogos que já estão em
-         * MEMÓRIA) e nunca construí a BUSCA. No primeiro carregamento não há memória — e
-         * o carregamento inicial vem pelo ouvinte, não pelo `loadTournamentById` que eu
-         * tinha ensinado a montar. Resultado: torneio chega sem jogos e ninguém vai buscar.
-         * ⛔ Eu tinha ESCRITO essa rede como "a rede antes do salto" e me convenci de que
-         * ela cobria o caso. Ela cobre o RE-render; não cobre o primeiro.
-         *
-         * ⚠️ NÃO RELIGAR sem: (1) o ouvinte da subcoleção do torneio ABERTO, e (2) uma
-         * busca no primeiro carregamento — provados num torneio de verdade, não em teste.
-         * Ver [[project_backup_antes_da_transferencia]].
-         *
-         * ⭐⭐ RELIGADO EM 28/ago/2026, com as TRÊS condições conferidas NO CAMINHO — e é
-         * essa distinção que importa, porque o erro de 26/ago não foi a função estar
-         * errada, foi ninguém chamá-la no caminho por onde o torneio entra na tela:
-         *   (1) o ouvinte das partes que moram fora do documento existe (2.0.123);
-         *   (2) ⭐ a BUSCA do primeiro carregamento agora vive DENTRO do
-         *       `startRealtimeListener` (store.js) — exatamente o caminho que estava
-         *       descoberto. O ouvinte enxerta o que já está em memória E dispara
-         *       `_montaPesadosQueFaltam` pro que falta, com repintura quando chega;
-         *   (3) prova em torneio DE VERDADE, não em teste isolado: 41 torneios divididos
-         *       em produção — a Confra ao vivo, com 148 pessoas e 105 jogos, entre eles.
-         *
-         * POR QUE VOLTAR AGORA: enquanto existir um caminho que cria torneio no formato
-         * velho, o formato velho tem que seguir suportado — e aí `tournamentMirror` e
-         * `syncMatchRosters` não podem morrer. Ordem do dono: _"faça que senão vira
-         * regressão"_. Meio migrado é o pior dos dois mundos.
-         * ⭐ E nascer dividido segue sendo o caso MAIS SEGURO: torneio novo não tem jogo
-         * nem inscrito — não há o que mover nem o que perder. */
-        /* ⛔⛔ REVERTIDO em 28/ago/2026, minutos depois de publicar — e desta vez na
-         * CRIAÇÃO: o dono criou um torneio e ele NÃO CHEGOU AO BANCO ("criei o torneio mas
-         * não consegui salvar 8 placeholders"; medido: os 41 continuaram 41). A reversão
-         * escreveu, honestamente, "a causa ainda não está diagnosticada".
-         *
-         * ⭐⭐ A CAUSA, ACHADA EM 28/ago À NOITE — e não estava na divisão:
-         *   `ReferenceError: S is not defined`, 6 ocorrências às 15:20 UTC, 14 minutos
-         *   depois do deploy da 2.1.32. Em `firebase-db.saveTournament` a linha
-         *   `(S.PESADOS || [...])` usava um `S` declarado 1.100 linhas ABAIXO, dentro de
-         *   OUTRA função. Esse ramo só roda quando o doc tem `_semPesados` — então ficou
-         *   invisível enquanto torneio novo nascia inteiro, e passou a derrubar TODA
-         *   criação no dia em que ele passou a nascer dividido. O catch daquele bloco
-         *   RELANÇA de propósito (gravar o objeto inteiro desfaria a divisão em silêncio),
-         *   e por isso a falha era total e muda. Corrigido na 2.1.42.
-         * ⭐ E ACHEI MEDINDO, não lendo: o erro estava no Sentry desde as 15:20, com o
-         *   carimbo de hora colado no deploy. Eu tinha revertido às cegas.
-         *   [[feedback_measure_dont_declare_fixed]] [[feedback_no_blind_fixes]]
-         *
-         * ⚠️ O QUE CONTINUA VALENDO DA LIÇÃO ANTERIOR: as três condições que eu havia
-         * conferido eram todas sobre LER um torneio dividido; nenhuma cobria CRIAR um.
-         * Agora existe teste do caminho da CRIAÇÃO (torneio-novo-nasce-dividido) e a causa
-         * tem trava própria (grava-torneio-dividido-nao-usa-simbolo-de-outro-escopo). */
-        /* ⛔⛔⛔ REVERTIDO PELA TERCEIRA VEZ (28/ago/2026, 22:35) — e desta vez com PERDA
-         * DE DADO medida, não suposta. O dono criou um torneio com 8 placeholders e o
-         * banco ficou assim:
-         *     _nPartes  = { participants: 8 }   ← o doc DIZ que há 8 morando fora
-         *     participants no doc: 0            ← saíram do documento (correto)
-         *     subcoleção `inscritos`: 0         ← ⛔ NÃO CHEGARAM LÁ
-         * Os 8 existiam só na memória do navegador dele. Recarregar a aba os perderia.
-         *
-         * ⛔ A CAUSA, e ela é ESTRUTURAL — não é mais um símbolo fora de escopo:
-         * o cliente não tem permissão de escrever nas subcoleções (a regra nega, por
-         * desenho: [[feedback_draw_is_cf_only]]). Quem escreve é a CF `tournamentMirror`.
-         * Mas ela DERIVA DO DOCUMENTO: `_pulados = depois._semPesados` faz ela PULAR
-         * justamente as partes que saíram do doc — a trava que existe pra ela não APAGAR
-         * a subcoleção quando o doc está vazio. Resultado: quem tira do documento é o
-         * cliente, quem poderia gravar fora é a CF, e ela está proibida de olhar. Ninguém
-         * escreve. O dado cai no vão entre os dois.
-         * ⭐ Nos 41 torneios migrados isso não aparece porque a subcoleção foi escrita
-         * ANTES pela migração, com o doc ainda cheio. Só quebra em quem NASCE dividido.
-         *
-         * ⚠️ O QUE FALTA PRA RELIGAR (e agora é uma peça, não uma conferência):
-         * uma PORTA DE ESCRITA no servidor que receba os inscritos e os grave na
-         * subcoleção — o cliente dispara, a CF escreve ([[project_porta_unica_de_escrita_cf]]).
-         * Enquanto ela não existir, torneio novo NASCE INTEIRO, e a CF espelha a partir do
-         * documento como sempre fez. ⛔ Não religar sem CRIAR um torneio de verdade e ver
-         * os inscritos aparecerem NA SUBCOLEÇÃO — não no doc, não na tela. */
-        // Default status='open' pra que torneios novos apareçam no feed público de
-        // discovery (a query filtra por status=='open'). Só pra CRIAÇÃO.
-        status: 'open',
-        participants: [],
-        standbyParticipants: [],
-        history: [{
-          date: new Date().toISOString(),
-          message: 'Torneio Criado'
-        }]
-      }, data);
-      tourData.id = id;
-      this.tournaments.push(tourData);
+      return this._createTournamentConfirmed(data);
     }
     // A edição só despacha a intenção para a Function. A tela nunca reaplica uma
     // ficha inteira nem grava uma transação genérica: só recebe de volta o estado fresco.
@@ -13348,16 +13231,18 @@ window.AppStore = {
       // configuração; a escrita Firestore continua exclusivamente na Function.
       var _images = [['logoData', 'logoUrl', 'logo'], ['coverPhotoData', 'coverUrl', 'cover']];
       var _saveEdit = Promise.all(_images.map(function (pair) {
-        var raw = _editPatch[pair[0]] || _editPatch[pair[1]];
+        var raw = data[pair[0]] || _editPatch[pair[1]];
         if (!raw) { delete _editPatch[pair[0]]; return Promise.resolve(); }
-        if (typeof window._subirImagemTorneio !== 'function') return Promise.resolve();
+        if (typeof window._subirImagemTorneio !== 'function') throw new Error('Upload de imagem indisponível.');
         return window._subirImagemTorneio(id, pair[2], raw).then(function (url) {
-          if (url) _editPatch[pair[1]] = url;
+          if (!url) throw new Error('A imagem não foi salva.');
+          _editPatch[pair[1]] = url;
           delete _editPatch[pair[0]];
         }).catch(function (err) {
           if (window._warn) window._warn('[addTournament] upload da imagem falhou; campo preservado', err);
           delete _editPatch[pair[0]];
           delete _editPatch[pair[1]];
+          throw err;
         });
       })).then(function () {
         if (!Object.keys(_editPatch).length) return { data: { ok: true, changed: false, tournament: tourData } };
@@ -13365,6 +13250,7 @@ window.AppStore = {
         return window._callCF('updateTournamentConfiguration', { tournamentId: String(id), patch: _editPatch }, 'Entre na sua conta para atualizar o torneio.');
       }).then(function (out) {
         var fresh = out && out.data && out.data.tournament;
+        if (!fresh || String(fresh.id) !== String(id)) throw new Error('O servidor não confirmou a atualização.');
         if (fresh && typeof fresh === 'object') {
           Object.assign(tourData, fresh);
           tourData.id = id;
@@ -13377,25 +13263,68 @@ window.AppStore = {
         throw err;
       });
       return _saveEdit;
-    } else if (window.FirestoreDB && window.FirestoreDB.db) {
-      // Criação nova precisa do create especializado e do upload de imagens, pois ainda
-      // não há documento que uma transação possa reler.
-      window.FirestoreDB.saveTournament(tourData, { withImages: true }).catch(function(err) {
-        window._error('Erro ao salvar torneio:', err);
-        if (err && err.code === 'permission-denied') {
-          if (typeof showNotification === 'function') showNotification('Sessão expirada', 'Faça login novamente para salvar o torneio.', 'warning');
-          return;
-        }
-        if (typeof window._captureException === 'function') window._captureException(err, { area: 'addTournament', tournamentId: id, code: err && err.code });
-      });
     }
-    // Flag transiente: NUNCA pode sobrar na memória/cache, senão um sync futuro
-    // "autorizaria" um reset de config sem o organizador ter pedido.
-    delete tourData._allowConfigReset;
-    // Cache fresco NA HORA — não espera o echo do listener (que pode demorar ou nem vir se
-    // o app fecha logo após salvar). Mata a janela "config salva mas cache velho na reabertura".
-    this._saveToCache();
-    return id;
+  },
+
+  _createTournamentConfirmed(data) {
+    if (!this.currentUser || !this.currentUser.uid) return Promise.reject(new Error('Entre na sua conta para criar um torneio.'));
+    if (!window.FirestoreDB || typeof window.FirestoreDB._callFn !== 'function') return Promise.reject(new Error('Criação indisponível.'));
+    var store = this, actorUid = this.currentUser.uid;
+    if (!data._creationOwner) Object.defineProperty(data, '_creationOwner', { value: actorUid });
+    if (data._creationOwner !== actorUid) return Promise.reject(new Error('Este pedido pertence à conta anterior. Abra uma nova criação.'));
+    if (!data._creationId) {
+      var bytes = new Uint8Array(16);
+      window.crypto.getRandomValues(bytes);
+      Object.defineProperty(data, '_creationId', { value: 'tour_' + Date.now() + '_' + Array.from(bytes).map(function (n) { return n.toString(16).padStart(2, '0'); }).join('') });
+    }
+    var id = data._creationId;
+    if (!data._creationImages) Object.defineProperty(data, '_creationImages', { value: {} });
+    store._creationPromises = store._creationPromises || {};
+    if (store._creationPromises[id]) return store._creationPromises[id];
+    var config = Object.assign({}, data);
+    ['id', '_allowConfigReset', 'storageCanonico', 'coHosts', 'creatorUid', 'creatorEmail',
+      'organizerUid', 'organizerId', 'organizerEmail', 'organizerName', 'status', 'createdAt',
+      'participants', 'matches', 'phases', 'ligaRRSchedule', 'logoData', 'coverPhotoData', 'logoUrl', 'coverUrl'].forEach(function (key) { delete config[key]; });
+    Object.keys(config).forEach(function (key) { if (config[key] === undefined) delete config[key]; });
+    var images = [['logoData', 'logoUrl', 'logo'], ['coverPhotoData', 'coverUrl', 'cover']];
+    // Storage exige que o documento já exista e comprove o dono. Primeiro cria
+    // a configuração; depois anexa as imagens por outra intenção confirmada.
+    // O recibo da criação não inclui URLs voláteis de upload e sobrevive ao retry.
+    var created;
+    var task = Promise.resolve().then(function () {
+      if (!store.currentUser || store.currentUser.uid !== actorUid) throw new Error('A conta mudou durante a criação.');
+      return window.FirestoreDB._callFn('createTournament', { tournamentId: id, config: config });
+    }).then(function (out) {
+      if (!out || out.ok !== true || !out.tournament || out.tournament.id !== id) throw new Error('O servidor não confirmou a criação.');
+      created = out;
+      if (!store.currentUser || store.currentUser.uid !== actorUid) throw new Error('A conta mudou durante a criação.');
+      var patch = {};
+      return Promise.all(images.map(function (pair) {
+        var raw = data[pair[0]] || data[pair[1]];
+        if (!raw) return Promise.resolve();
+        if (typeof window._subirImagemTorneio !== 'function') throw new Error('Torneio salvo; upload de imagem indisponível. Tente novamente.');
+        return Promise.resolve(data._creationImages[pair[1]] || window._subirImagemTorneio(id, pair[2], raw)).then(function (url) {
+          if (!url) throw new Error('Torneio salvo; a imagem não foi salva. Tente novamente.');
+          patch[pair[1]] = url;
+          data._creationImages[pair[1]] = url;
+        });
+      })).then(function () {
+        if (!Object.keys(patch).length) return created;
+        if (!store.currentUser || store.currentUser.uid !== actorUid) throw new Error('A conta mudou durante a criação.');
+        return window.FirestoreDB._callFn('updateTournamentConfiguration', { tournamentId: id, patch: patch });
+      });
+    }).then(function (out) {
+      if (!store.currentUser || store.currentUser.uid !== actorUid) throw new Error('A conta mudou durante a criação.');
+      var fresh = out && out.tournament;
+      if (!out || out.ok !== true || !fresh || fresh.id !== id) throw new Error('O servidor não confirmou a criação.');
+      var existing = store.tournaments.find(function (t) { return String(t.id) === id; });
+      if (existing) Object.assign(existing, fresh); else store.tournaments.push(fresh);
+      store._saveToCache();
+      return id;
+    });
+    store._creationPromises[id] = task;
+    task.then(function () { delete store._creationPromises[id]; }, function () { delete store._creationPromises[id]; });
+    return task;
   },
 
   logAction(tournamentId, message) {

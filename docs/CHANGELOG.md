@@ -1,3 +1,7 @@
+## 2.2.65 — fechamento das brechas do censo L7 (11/set/2026)
+
+Criação e cópia só chegam ao cache/navegação depois da confirmação do servidor, com identidade canônica e recibos temporários contra duplicação e recriação após exclusão. Corrigido descarte prematuro de imagens na edição. Proporção da espera usa configuração absoluta no servidor; replay usa porta própria por UID, preservando placar/roster/proposta concorrentes. Censo por AST reconhece aliases e classifica separadamente APIs antigas e simulação. Removidos dois writers sem chamadores. Revisão Claude suspensa temporariamente por autorização do dono devido à cota.
+
 # Changelog do scoreplace.app
 
 ## 2.2.56 — reabertura resiliente e avisos sem repetição (10/set/2026)

@@ -36,9 +36,10 @@ const _cfPlan = fs.readFileSync(path.join(ROOT, 'functions-autodraw', 'write-pla
 const cf = _cfIdx + '\n/* ── write-plan.js (mesmo caminho de escrita) ── */\n' + _cfPlan;
 
 // ── ① a criação põe o marcador ──────────────────────────────────────────────
-const i = store.indexOf('tourData = Object.assign({');
+const creationSource = fs.readFileSync(path.join(ROOT, 'functions-autodraw', 'tournament-create.js'), 'utf8');
+const i = creationSource.indexOf('Object.assign(t, { id,');
 ok(i > 0, 'o caminho de CRIAÇÃO existe (separado do de edição)');
-const criacao = _R.ateOFim(store, i);
+const criacao = creationSource.slice(i);
 /* ⛔⛔ REVERTIDO NO MESMO DIA, com o app quebrado na mão do dono:
  *   "não mostra os meus jogos apenas a classificação" · "jogos já jogados perdidos".
  * (No banco nada se perdeu — conferido contra os dois backups: 115 jogos, 72 placares,

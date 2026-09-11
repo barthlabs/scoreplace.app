@@ -4076,134 +4076,8 @@ window._showAdvancedPointsBreakdown = function(tId, playerName, category) {
 };
 
 // ─── Advance from Groups to Elimination ─────────────────────────────────────
-window._advanceToElimination = function (tId) {
-  const t = window._findTournamentById(tId);
-  if (!t || !t.groups) return;
-  const ts = Date.now(); // mesmo id na atualização otimista e na transação fresca
-  let _nClassificados = 0;
-
-  const _aplicarNoTorneio = function (target) {
-    if (!target || !target.groups || target.currentStage === 'elimination') return false;
-    const classified = target.gruposClassified || 2;
-  const qualifiedPlayers = [];
-
-    target.groups.forEach(g => {
-    const scoreMap = {};
-    g.participants.forEach(name => {
-      scoreMap[name] = { name, points: 0, wins: 0, draws: 0, losses: 0, pointsDiff: 0, played: 0 };
-    });
-    (g.rounds || []).forEach(r => {
-      (r.matches || []).forEach(m => {
-        if (!m.winner && !m.draw) return;
-        const s1 = parseInt(m.scoreP1) || 0; const s2 = parseInt(m.scoreP2) || 0;
-        // Handle draws
-        if (m.winner === 'draw' || m.draw) {
-          if (!scoreMap[m.p1]) scoreMap[m.p1] = { name: m.p1, points: 0, wins: 0, draws: 0, losses: 0, pointsDiff: 0, played: 0 };
-          if (!scoreMap[m.p2]) scoreMap[m.p2] = { name: m.p2, points: 0, wins: 0, draws: 0, losses: 0, pointsDiff: 0, played: 0 };
-          scoreMap[m.p1].draws++; scoreMap[m.p1].points += 1; scoreMap[m.p1].played++;
-          scoreMap[m.p2].draws++; scoreMap[m.p2].points += 1; scoreMap[m.p2].played++;
-          scoreMap[m.p1].pointsDiff += (s1 - s2); scoreMap[m.p2].pointsDiff += (s2 - s1);
-          return;
-        }
-        const loser = window._matchWinnerSide(m) === 1 ? m.p2 : m.p1;
-        if (!scoreMap[m.winner]) scoreMap[m.winner] = { name: m.winner, points: 0, wins: 0, draws: 0, losses: 0, pointsDiff: 0, played: 0 };
-        if (!scoreMap[loser]) scoreMap[loser] = { name: loser, points: 0, wins: 0, draws: 0, losses: 0, pointsDiff: 0, played: 0 };
-        scoreMap[m.winner].wins++; scoreMap[m.winner].points += 3; scoreMap[m.winner].played++;
-        scoreMap[loser].losses++; scoreMap[loser].played++;
-        if (window._matchWinnerSide(m) === 1) { scoreMap[m.p1].pointsDiff += (s1 - s2); scoreMap[m.p2].pointsDiff += (s2 - s1); }
-        else { scoreMap[m.p2].pointsDiff += (s2 - s1); scoreMap[m.p1].pointsDiff += (s1 - s2); }
-      });
-    });
-    const sorted = Object.values(scoreMap).sort((a, b) => b.points - a.points || b.wins - a.wins || b.pointsDiff - a.pointsDiff);
-    qualifiedPlayers.push(...sorted.slice(0, classified).map(s => s.name));
-  });
-
-  // Shuffle qualified slightly (cross-seed: 1st of group A vs 2nd of group B etc)
-  // Simple cross-seeding: group winners in one half, runners-up in other half
-  const groupWinners = [];
-  const groupRunnersUp = [];
-    target.groups.forEach(g => {
-    const scoreMap = {};
-    g.participants.forEach(name => {
-      scoreMap[name] = { name, points: 0, wins: 0, draws: 0, pointsDiff: 0 };
-    });
-    (g.rounds || []).forEach(r => {
-      (r.matches || []).forEach(m => {
-        if (!m.winner && !m.draw) return;
-        const s1 = parseInt(m.scoreP1) || 0; const s2 = parseInt(m.scoreP2) || 0;
-        if (m.winner === 'draw' || m.draw) {
-          if (!scoreMap[m.p1]) scoreMap[m.p1] = { name: m.p1, points: 0, wins: 0, draws: 0, pointsDiff: 0 };
-          if (!scoreMap[m.p2]) scoreMap[m.p2] = { name: m.p2, points: 0, wins: 0, draws: 0, pointsDiff: 0 };
-          scoreMap[m.p1].draws++; scoreMap[m.p1].points += 1;
-          scoreMap[m.p2].draws++; scoreMap[m.p2].points += 1;
-          scoreMap[m.p1].pointsDiff += (s1 - s2); scoreMap[m.p2].pointsDiff += (s2 - s1);
-          return;
-        }
-        if (!scoreMap[m.winner]) scoreMap[m.winner] = { name: m.winner, points: 0, wins: 0, draws: 0, pointsDiff: 0 };
-        scoreMap[m.winner].wins++; scoreMap[m.winner].points += 3;
-        if (window._matchWinnerSide(m) === 1) scoreMap[m.p1].pointsDiff += (s1 - s2);
-        else scoreMap[m.p2].pointsDiff += (s2 - s1);
-      });
-    });
-    const sorted = Object.values(scoreMap).sort((a, b) => b.points - a.points || b.wins - a.wins || b.pointsDiff - a.pointsDiff);
-    if (sorted[0]) groupWinners.push(sorted[0].name);
-    if (sorted[1]) groupRunnersUp.push(sorted[1].name);
-    // Additional classified beyond 2
-    for (let i = 2; i < classified && i < sorted.length; i++) {
-      groupRunnersUp.push(sorted[i].name);
-    }
-  });
-
-  // Cross-seed: 1st of group A vs runner-up from opposite group
-  const seeded = [];
-    const numGroups = target.groups.length;
-  for (let i = 0; i < groupWinners.length; i++) {
-    seeded.push(groupWinners[i]);
-    const oppositeIdx = (numGroups - 1 - i) % groupRunnersUp.length;
-    if (groupRunnersUp[oppositeIdx]) {
-      seeded.push(groupRunnersUp[oppositeIdx]);
-    }
-  }
-  // Add any remaining runners-up
-  groupRunnersUp.forEach(r => { if (!seeded.includes(r)) seeded.push(r); });
-
-  // Generate elimination bracket
-  const matches = [];
-  for (let i = 0; i < seeded.length; i += 2) {
-    const p1 = seeded[i];
-    const p2 = i + 1 < seeded.length ? seeded[i + 1] : 'BYE (Avança Direto)';
-    const isBye = p2 === 'BYE (Avança Direto)';
-    matches.push({
-      id: `elim-${ts}-${i}`,
-      round: 1,
-      p1, p2,
-      winner: isBye ? p1 : null,
-      isBye
-    });
-  }
-
-    target.matches = matches;
-    target.currentStage = 'elimination';
-    window._buildNextMatchLinks(target);
-    _nClassificados = seeded.length;
-  };
-
-  const store = window.AppStore;
-  if (!store || typeof store.mutate !== 'function') return;
-  return Promise.resolve(store.mutate(tId, _aplicarNoTorneio, 'Fase Eliminatória iniciada'))
-    .then(function (saved) {
-      if (saved === false) {
-        showNotification('Não foi possível avançar a fase', 'A chave não foi alterada. Atualize a página e tente novamente.', 'error');
-        return;
-      }
-      showNotification(_t('bui.knockoutPhase'), _t('bui.knockoutPhaseMsg', {n: _nClassificados}), 'success');
-      _rerenderBracket(tId);
-    })
-    .catch(function (err) {
-      if (window._error) window._error('advanceToElimination: mutação falhou', err);
-      showNotification('Não foi possível avançar a fase', 'A chave não foi alterada. Atualize a página e tente novamente.', 'error');
-    });
-};
+// O avanço legado sem chamadores foi removido. A tela usa _advanceMultiPhase,
+// que despacha a intenção ao servidor e preserva o resultado canônico.
 
 // Rei/Rainha NÃO é formato de fase: o antigo _advanceMonarchToElimination (avanço standalone
 // Fase-0 monarch → eliminatória, exigia t.groups nativo) foi APAGADO na campanha
@@ -16213,16 +16087,21 @@ window._toggleWlBalance = function (tId) {
     window._isUserOrgOrCoHost(t, store && store.currentUser));
   if (!_isAdmin) return;
 
-  var _estadoAnterior = t.wlGroupBalance;
   var _agoraEquil = (t.wlGroupBalance === 'livre');
-  if (!store || typeof store.mutate !== 'function') return;
-  // A porta canônica aplica localmente para resposta imediata e repete a mesma
-  // mudança sobre o documento fresco. Nunca cair em syncImmediate/saveTournament:
-  // o toggle não pode apagar placar ou chave que chegaram em outra sessão.
-  var savePromise = store.mutate(tId, function (freshT) {
-    var _eraEquil = (freshT.wlGroupBalance !== 'livre');
-    freshT.wlGroupBalance = _eraEquil ? 'livre' : 'equilibrado';
-    _agoraEquil = !_eraEquil;
+  var desired = _agoraEquil ? 'equilibrado' : 'livre';
+  if (!window.FirestoreDB || typeof window.FirestoreDB._callFn !== 'function') return;
+  // Intenção absoluta: repetir o pedido não inverte a escolha duas vezes.
+  // O cache só recebe a configuração que o servidor confirmou.
+  var savePromise = window.FirestoreDB._callFn('updateTournamentConfiguration', {
+    tournamentId: String(tId), patch: { wlGroupBalance: desired }
+  }).then(function (out) {
+    var fresh = out && out.tournament;
+    if (!fresh || (fresh.wlGroupBalance !== 'livre' && fresh.wlGroupBalance !== 'equilibrado')) {
+      throw new Error('O servidor não confirmou a proporção.');
+    }
+    t.wlGroupBalance = fresh.wlGroupBalance;
+    _agoraEquil = fresh.wlGroupBalance === 'equilibrado';
+    if (store && typeof store._saveToCache === 'function') store._saveToCache();
   });
   var done = function () {
     if (typeof showNotification === 'function') {
@@ -16240,9 +16119,7 @@ window._toggleWlBalance = function (tId) {
     if (typeof window._rerenderBracket === 'function') window._rerenderBracket(tId);
   };
   var failed = function (err) {
-    // `mutate` já aplicou o toggle otimista na cópia local. Se a transação não
-    // confirmou, volta ao estado anterior até o snapshot autoritativo reconciliar.
-    t.wlGroupBalance = _estadoAnterior;
+    // Sem mudança otimista para desfazer: preservar inclusive snapshots concorrentes.
     if (typeof window._rerenderBracket === 'function') window._rerenderBracket(tId);
     if (window._error && err) window._error('toggleWlBalance: mutação falhou', err);
     if (typeof showNotification === 'function') {

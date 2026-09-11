@@ -2156,50 +2156,7 @@ window._buildPhase0Cfg = function (t) {
     return cfg;
 };
 
-// BLINDAGEM (Fase B) do SORTEIO INICIAL — project_concurrency_safe_saves.
-// A chave é gerada UMA vez local (com shuffle aleatório) → re-gerar no fresco daria
-// OUTRA chave. Então: diff top-level do `t` sorteado contra o snapshot `preDraw`
-// (pré-sorteio) → capturamos EXATAMENTE os campos que o sorteio mudou/deletou, e o
-// commitDrawTx re-aplica esse delta ATOMICAMENTE sobre o doc fresco (preservando
-// edições concorrentes aos demais campos, com guarda de duplo-sorteio). `history` e
-// `updatedAt` ficam FORA do diff: history é anexado (append preserva entradas
-// concorrentes), updatedAt é setado pelo commit. Auto-mantido: acompanha qualquer
-// campo novo que o sorteio venha a tocar, sem lista à mão.
-function _commitInitialDraw(tId, t, preDraw) {
-    // Sorteio COMPLETOU → não reabrir mais (config "Fechadas" fica fechada). Limpa a
-    // flag ANTES do diff pra ela não persistir no doc como `true` pendente.
-    if (t && t._reopenIfDrawCancelled) t._reopenIfDrawCancelled = null;
-    if (typeof window._drawBtnDone === 'function') window._drawBtnDone(); // encerra o "Sorteando…" (caso não navegue, ex.: Liga)
-    var changed = {}, deleted = [], k, a, b;
-    for (k in t) {
-        if (!Object.prototype.hasOwnProperty.call(t, k)) continue;
-        if (k === 'history' || k === 'updatedAt') continue;
-        try { a = JSON.stringify(t[k]); } catch (e) { a = null; }
-        try { b = JSON.stringify(preDraw[k]); } catch (e2) { b = undefined; }
-        if (a !== b) { try { changed[k] = JSON.parse(a); } catch (e3) { changed[k] = t[k]; } }
-    }
-    for (k in preDraw) {
-        if (!Object.prototype.hasOwnProperty.call(preDraw, k)) continue;
-        if (!(k in t)) deleted.push(k);
-    }
-    var _preHistLen = Array.isArray(preDraw.history) ? preDraw.history.length : 0;
-    var _newHistory = Array.isArray(t.history) ? t.history.slice(_preHistLen) : [];
-    var _p = window.AppStore.commitDrawTx(tId, changed, deleted, {
-        preHadBracket: (Array.isArray(preDraw.matches) && preDraw.matches.length > 0) ||
-                       (Array.isArray(preDraw.rounds) && preDraw.rounds.length > 0),
-        newHistory: _newHistory
-    });
-    // 4.1 (project_match_result_docs, inc 3a): semeia os docs de resultado por jogo
-    // com playerUids — o SORTEIO roda como organizador (admin) = caminho de confiança
-    // que seta o roster. Best-effort/fire-and-forget: não bloqueia a navegação e uma
-    // falha aqui não afeta o sorteio (já persistido). Defensivo a stub não-promise.
-    var _seed = function () { try { if (window.AppStore && typeof window.AppStore.seedMatchResultDocs === 'function') window.AppStore.seedMatchResultDocs(tId); } catch (e) {} };
-    // fire-and-forget: seed roda APÓS o sorteio persistir, mas retorna-se o `_p`
-    // ORIGINAL (o caller encadeia a navegação nele) — não consome/quebra a cadeia.
-    if (_p && typeof _p.then === 'function') { try { _p.then(_seed); } catch (e) { _seed(); } }
-    else { _seed(); }
-    return _p;
-}
+// O commit local do sorteio inicial não tinha chamadores; drawRound é a autoridade.
 
 // ── CHAMADA DA CF drawRound — fetch() DIRETO, sem o SDK ──────────────────────────────
 // POR QUE NÃO httpsCallable (custou um teste real na staging): o SDK compat monta o

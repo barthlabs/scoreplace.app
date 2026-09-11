@@ -75,9 +75,11 @@ window._openOrCreateSandbox = function(origId) {
     return window._criaSandboxFiel(origId, cu);
 };
 
-window._cloneTournament = function(tournamentId) {
+window._cloneTournament = async function(tournamentId) {
     var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tournamentId); });
     if (!t || !window.AppStore.currentUser) return;
+    window._clonePending = window._clonePending || {};
+    if (window._clonePending[tournamentId] && window._clonePending[tournamentId].running) return;
     var _t = window._t || function(k) { return k; };
 
     var newT = {
@@ -116,8 +118,9 @@ window._cloneTournament = function(tournamentId) {
     if (window._isLigaFormat && window._isLigaFormat(t)) {
         newT.ligaSeasonMonths = t.ligaSeasonMonths || t.rankingSeasonMonths || '';
         newT.ligaOpenEnrollment = t.ligaOpenEnrollment !== false;
-        newT.ligaInactivityWeeks = t.ligaInactivityWeeks || '';
-        newT.ligaNewPlayerPoints = t.ligaNewPlayerPoints || '';
+        newT.ligaInactivity = t.ligaInactivity || '';
+        newT.ligaInactivityX = t.ligaInactivityX || 3;
+        newT.ligaNewPlayerScore = t.ligaNewPlayerScore || '';
     }
     // Suíço-specific
     if (t.format === 'Suíço Clássico' || t.classifyFormat === 'swiss') {
@@ -129,18 +132,18 @@ window._cloneTournament = function(tournamentId) {
         newT.drawManual = t.drawManual || false;
     }
 
-    window.AppStore.addTournament(newT);
-    if (typeof showNotification === 'function') showNotification(_t('org.clonedTitle'), '"' + newT.name + '" ' + _t('org.clonedMsg'), 'success');
-    // Navigate to the new tournament
-    setTimeout(function() {
-        // ⛔ acha o recém-criado por DONO (uid), não por e-mail — mesmo cânone do resto.
-        var newest = window.AppStore.tournaments.find(function(tour) { return tour.name === newT.name && tour.creatorUid === newT.creatorUid; });
-        if (newest) {
-            window.location.hash = '#tournaments/' + newest.id;
-        } else {
-            window.location.hash = '#dashboard';
-        }
-    }, 500);
+    var pending = window._clonePending[tournamentId] || { data: newT };
+    window._clonePending[tournamentId] = pending;
+    pending.running = true;
+    try {
+        var newId = await window.AppStore.addTournament(pending.data);
+        delete window._clonePending[tournamentId];
+        if (typeof showNotification === 'function') showNotification(_t('org.clonedTitle'), '"' + pending.data.name + '" ' + _t('org.clonedMsg'), 'success');
+        window.location.hash = '#tournaments/' + newId;
+    } catch (err) {
+        if (typeof showNotification === 'function') showNotification('Não foi possível copiar o torneio', err.message, 'error');
+    } finally { pending.running = false; }
+
 };
 
 

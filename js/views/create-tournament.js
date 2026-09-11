@@ -5407,8 +5407,21 @@ window._ctPaintRatio = function () {
   });
 };
 window._saveTournamentClickHandler = async function() {
+      var saveButton = document.getElementById('btn-save-tournament');
+      if (saveButton && saveButton.disabled) return;
+      if (saveButton) saveButton.disabled = true;
+      var createdId = null;
       try {
         const editId = document.getElementById('edit-tournament-id').value;
+        var pendingForm = document.getElementById('form-create-tournament');
+        if (!editId && pendingForm && pendingForm._pendingCreation) {
+          createdId = await window.AppStore.addTournament(pendingForm._pendingCreation);
+          delete pendingForm._pendingCreation;
+          showNotification(window._t('create.tournamentCreated'), '', 'success');
+          closeModal('modal-create-tournament');
+          window.location.hash = '#tournaments/' + createdId;
+          return;
+        }
         const name = document.getElementById('tourn-name').value.trim();
         if (!name) { showAlertDialog(window._t('create.nameRequired'), window._t('create.nameRequiredMsg'), null, { type: 'warning' }); return; }
 
@@ -5906,7 +5919,9 @@ window._saveTournamentClickHandler = async function() {
         }
 
         if (editId) {
+          tourData.id = editId;
           const idx = window.AppStore.tournaments.findIndex(tour => tour.id.toString() === editId.toString());
+          if (idx === -1) throw new Error('Torneio não encontrado. Atualize a página.');
           if (idx !== -1) {
             const t = window.AppStore.tournaments[idx];
             // Detect meaningful changes to notify participants
@@ -5949,7 +5964,10 @@ window._saveTournamentClickHandler = async function() {
             window._showUpgradeModal('tournaments');
             return;
           }
-          window.AppStore.addTournament(tourData);
+          var form = document.getElementById('form-create-tournament');
+          if (form) form._pendingCreation = form._pendingCreation || tourData;
+          createdId = await window.AppStore.addTournament((form && form._pendingCreation) || tourData);
+          if (form) delete form._pendingCreation;
           showNotification(window._t('create.tournamentCreated'), window._t('create.tournamentCreatedMsg', {name: name}), 'success');
           // v1.0.59-beta: GA4 — tournament_created
           try {
@@ -5966,7 +5984,7 @@ window._saveTournamentClickHandler = async function() {
 
         // Autoenquadramento é uma Function: lê perfil e torneio canônicos, sem
         // alterar a cópia criada na tela antes da confirmação do servidor.
-        var _autoAssignTid = editId || (window.AppStore.tournaments.length > 0 ? window.AppStore.tournaments[window.AppStore.tournaments.length - 1].id : null);
+        var _autoAssignTid = editId || createdId;
         if (_autoAssignTid && window._autoAssignCategoriesAsync) {
           window._autoAssignCategoriesAsync(_autoAssignTid).then(function(n) {
             if (n > 0) showNotification(window._t('create.autoAssigned'), window._t('create.autoAssignedMsg', {n: n}), 'info');
@@ -5976,7 +5994,7 @@ window._saveTournamentClickHandler = async function() {
         // Notify friends about new tournament (only for new, not edit)
         if (!editId && typeof window._sendUserNotification === 'function') {
           var _cu = window.AppStore.currentUser;
-          var _newTour = window.AppStore.tournaments[window.AppStore.tournaments.length - 1];
+          var _newTour = window.AppStore.tournaments.find(function (t) { return String(t.id) === String(createdId); });
           if (_cu && _newTour && Array.isArray(_cu.friends) && _cu.friends.length > 0) {
             var _tFnCreate = window._t || function(k) { return k; };
             var _createMsg = _tFnCreate('notif.newTournamentByFriend').replace('{friend}', _cu.displayName || 'Um amigo').replace('{name}', _newTour.name || 'Torneio');
@@ -6005,7 +6023,7 @@ window._saveTournamentClickHandler = async function() {
 
         // Re-render: força atualização completa da view
         if (!editId) {
-          const newId = window.AppStore.tournaments[window.AppStore.tournaments.length - 1].id;
+          const newId = createdId;
           window.location.hash = `#tournaments/${newId}`;
         } else {
           // v1.6.5-beta: navega de volta ao card do torneio após edição
@@ -6014,7 +6032,7 @@ window._saveTournamentClickHandler = async function() {
       } catch (err) {
         window._error('Erro ao salvar torneio:', err);
         showNotification(window._t('auth.error'), window._t('create.saveError', {msg: err.message}), 'error');
-      }
+      } finally { if (saveButton) saveButton.disabled = false; }
   };
   const btnSave = document.getElementById('btn-save-tournament');
   if (btnSave) btnSave.addEventListener('click', window._saveTournamentClickHandler);

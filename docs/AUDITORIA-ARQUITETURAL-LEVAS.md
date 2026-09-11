@@ -7,10 +7,8 @@
 
 ## Medição de referência
 
-- **17 levas** no mapa: 3 concluídas (L0, L1, L15), 1 **bloqueada externamente** (L2) e 13 ainda não iniciadas.
-- Por contagem de levas (não por esforço): **17,6% concluído** e **82,4% restante**.
-- A porcentagem não é prazo: `Vite`, Capacitor e migrações de identidade são maiores
-  que uma correção de Rules, por exemplo.
+- A fotografia inicial de 30/ago tinha 3 de 17 levas concluídas; os antigos 17,6% **não medem o estado atual**. A tabela e os registros datados abaixo distinguem entregas, dívidas e bloqueios.
+- Em 11/set, a L7.P2 corrigiu as rotas que o censo textual não reconhecia. A L7 ainda mantém APIs internas antigas e simulação classificadas explicitamente; nenhuma dessas definições é prova de cutover das Rules ou dos aplicativos nativos.
 
 | Leva | Tema do backlog | Situação em 30/ago | Gate antes de executar |
 |---|---|---|---|
@@ -21,7 +19,7 @@
 | L4 | profile/privacy + e-mail secundário | **Aberta. Inventário CONCLUÍDO (L4.P0), produção MEDIDA (L4.P1) fronteiras CARACTERIZADAS no emulador (L4.P2), `magicLinks` INVENTARIADO (L4.P3) a leitura cruzada de perfis MAPEADA (L4.P5) e a MATRIZ DE ALTERNATIVAS registrada (L4.P6, nada escolhido).** ⭐ **L4.P4 CONCLUÍDA E PUBLICADA (2.1.78, commit `2c8cb628`, ruleset `9a65fc58`):** a enumeração pública de `magicLinks` foi fechada — `allow get` por token, `list` negado —, com suíte de Rules, trava estática nos três clientes e controle contra `94f7d9cf`. ⛔ Confirmado por execução: `magicLinks` é enumerável por ANÔNIMO (`list`/`runQuery` = 200) e `users` por qualquer autenticado; os 15 campos privilegiados estão negados 30/30 em create e update. 18 superfícies de identidade mapeadas; 15 campos privilegiados fechados no create e no update, com **zero** writer no cliente (conferido). ⛔ Achados abertos: `users` é legível **inteiro** por qualquer autenticado (PII incluída); `notifications` aceita `create` de qualquer autenticado; `linkedEmails` é **prova de posse** aceita na fusão e na resolução de conta, e a REMOÇÃO segue sendo escrita direta do cliente (`js/views/auth.js:9626`); o bundle das lojas (2.1.28) roda o fluxo de identidade PRÉ-L1 contra Rules PÓS-L1. | Definir fonte de verdade e privacidade do perfil. **Não decidido nesta etapa.** |
 | L5 | amizade e autorização friends-only | **Preparada, bloqueada externamente.** Migração está `not_started`; dry-run leu 262 perfis. | Gate nativo (clientes mínimos) e aprovação humana formal do cutover. |
 | L6 | writers excessivamente amplos de `tournaments` | **Aberta. Inventário CONCLUÍDO (L6.P0, read-only, 31/ago/2026). ⛔ Nenhuma autoridade foi alterada e nada foi decidido.** Mapeadas as portas dos três codebases: no cliente, `js/firebase-db.js` concentra 9 portas (a maior é `saveTournament`, **93 chamadas**, que grava a cópia EM MEMÓRIA com `merge:true`) mais a orquestração `AppStore.mutate` → `commitTournamentTx`; no `functions/`, seis portas passam pelo tradutor ciente da divisão (`functions/split-parts.js`) e `aplicarNoTorneio` é a porta única de escrita fina; no `functions-autodraw/`, sete chamadores passam por `_leTorneio`/`_gravaTorneio`. ⛔ Achados abertos: as duas allowlists do documento pai (`firestore.rules:37` e `:97`) autorizam por CHAVE e **nunca por valor** — a segunda tem ~45 campos, entre eles `matches`, `standings`, `status`, `participants` e `memberUids`, e a primeira vale pra **qualquer autenticado**; há **5 escritas diretas do cliente fora da porta** (`js/store.js:3840`, `:9676`; `js/views/arbitros.js:274/:309/:342`); `results` tem **cinco** autoridades de escrita; e `participants`/`communications` são subcoleções **sem regra nenhuma**. ⭐ Achados MEDIDOS em produção: 41 dos 44 torneios estão divididos (`matches`, `participants`, `opponentHistory`) e o marcador e o documento **divergem em 1 torneio**. ⚠️ **A L6.P0.1 RETIFICOU a P7**: a leitura de log que dizia "roda a cada minuto num laço no-op" estava datada por LIMITE (`--limit 500`) e não por TEMPO — os 250 pares reproduzem, mas são **todos de 28/ago**, e o `stdout` do `autodraw` está **mudo desde 2026-08-28T14:09:13Z**. ⭐ **A L6.P1 fechou a causa, com as FUNÇÕES REAIS rodadas contra o documento real**: o agendador chega ao handler (`Google-Cloud-Scheduler`, POST /, **200**, 0,06–0,23 s, revisão `autodraw-00050-taw`), o documento **entra** na query (`nextDrawAt` inteiro, vencido há 166 min) e **todas** as guardas passam — `_isIncrementalLigaPhase`=false, `isLiga`=true, `drawManual`=false, `drawFirstDate` presente, `status`=active, `pendingDraw`=false. Barra só em `functions-autodraw/index.js:1148`, `participants.length` = **0**, um `continue` **sem log** — e por isso 200 sem `stdout` não é log perdido, é log inexistente. ⛔ Não é "não elegível": `_semPesados` inclui `participants` e as subcoleções têm **10 inscritos** e **13 jogos**. É **incompatibilidade com partes divididas**, e o risco é imediato: o sorteio AGENDADO nunca gera rodada nesse torneio (o manual, via `drawRound`, gera — ele hidrata). Correção à P5: são **três** e não dois os caminhos do autodraw que leem `doc.data()` cru — `autoDrawReconcile` (:1715) também. | Escolher autoridade por operação antes de restringir qualquer writer. **Não decidido nesta etapa.** ⚠️ Fechar as allowlists esbarra no bundle das lojas (2.1.28), o mesmo bloqueio externo da L2. |
-| L7 | `saveTournament` / `AppStore` e caminhos paralelos | **Em execução. Núcleo crítico publicado até 2.2.47:** resultado, geração/publicação de chave, rodada de Liga, reabertura de inscrições, dissolução de times, sorteio de vagas, enquete, grupos, promoção de fase, presença comum e a família operacional de W.O. passam por Functions. **Restam writers administrativos** de perfil/categoria, inscrições/duplas, criação e manutenção de chave. | Migrar cada writer restante por intenção, com teste de corrida; não substituir por cópia/delta genérica que possa apagar alteração concorrente. |
+| L7 | `saveTournament` / `AppStore` e caminhos paralelos | **L7.P2 implementada para 2.2.65:** criação/cópia, replay e proporção migrados; edição envia ID e imagens; dois writers sem chamadores removidos. Censo estrutural encontra 11 chamadas internas/simulação, todas inventariadas como dívida. | Confirmar gates e publicação. Remover APIs antigas somente com prova de ausência de consumidores; Rules/nativos permanecem na L6/L13. |
 | L8 | representações múltiplas de match + custo Firestore | **Parcial, consistência e limpeza concluídas em 11/set.** `matches` é fonte e `results` é projeção para jogos divididos. O conferidor read-only mediu **60 torneios, 9 com jogos canônicos e 282 jogos: 0 `results` ausentes e 0 divergentes**. O Confra ficou com **214 jogos canônicos e 0 espelhos órfãos**: os oito resíduos legados foram classificados sem placar, W.O., replay ou proposta pendente e removidos por operação limitada ao `tid`, com releitura obrigatória antes e depois. A ficha já usa `collectionGroup('results')` como caminho primário; as leituras locais só ocorrem depois de falha comprovada. | Medir e reduzir as leituras completas da dashboard, preservando hidratação de placar e autorização por jogo. |
 | L9 | código morto, fallbacks e aliases | **Em execução. L9.P0 concluída em 11/set:** três aliases globais sem chamador foram removidos; aliases com leitor, dado histórico ou rota ainda ativa foram preservados. **L9.P1:** censo read-only de formatos reais registrado em `scripts/censo-formatos-legados.js`; ele mede antes de qualquer retirada de fallback. | Prova de ausência de chamadores **e censo de dados vivos** antes de remover compatibilidade. |
 | L10 | ES Modules, source → dist e Vite | **Proposta futura.** Nenhuma migração iniciada. | Definir fronteiras de módulos e build reproduzível antes de introduzir bundler. |
@@ -3123,3 +3121,41 @@ produto, em contraste com `addTournamentPlaceholders`, que já é uma intenção
 Ele foi removido; o censo L7 passa a exigir sua ausência. A simulação de fase permanece isolada
 em sandbox e identidade de teste, e a criação de torneio ainda é uma porta própria que precisa de
 decisão/migração específica antes de se declarar a L7 encerrada.
+
+
+## L7.P2 — censo por estrutura, criação e replay confirmados (11/set/2026)
+
+A alegação anterior de “nenhum escritor local” foi retificada: o gate só reconhecia o texto
+`AppStore.mutate`, mas `store.mutate` sobrevivia no controle de proporção e no avanço legado.
+A criação usava `saveTournament`, e o replay passava por `commitMatchResult`. O novo parser
+reconhece aliases, propriedades computadas literais e chamadas via `call`/`apply`/`bind`; não
+confunde comentários com chamadas. Suas 11 entradas remanescentes são APIs internas antigas
+sem chamada de produto e a simulação de desenvolvedor, não uma aprovação dessas portas.
+
+`createTournament` valida configuração declarativa, deriva organização da autenticação/perfil,
+compila fases no servidor e cria documento inteiro vazio. A operação tem ID estável com instante
+fixo e validade de 24h. Recibo e torneio nascem na mesma transação; retry retorna o documento
+fresco, colisões são recusadas e um torneio apagado não é recriado. O coletor apaga recibos
+expirados; o próprio ID expirado continua inválido, dispensando lápides permanentes.
+
+Storage exige que o documento comprove o dono. Por isso a criação do documento vem antes do
+upload, e a imagem é anexada por `updateTournamentConfiguration`. Se essa segunda etapa falha,
+o torneio já existe: a tela informa erro e a tentativa seguinte recupera o mesmo pedido e as
+URLs já obtidas. Nenhuma regra do Storage foi afrouxada. Criação rápida, formulário e cópia
+aguardam confirmação e bloqueiam cliques simultâneos. No formulário, `editId` passa a ser enviado
+explicitamente — sua ausência fazia o store tratar uma edição como criação. O upload da edição
+lê a imagem original, antes descartada do patch.
+
+A proporção envia valor absoluto à Function existente. `saveTournamentReplay` valida o replay,
+autoriza organização ou UID que esteja no jogo canônico e altera apenas o replay na projeção
+fresca. Se a projeção não existe, o servidor a constrói pelo módulo canônico. Sandbox usa
+`sandboxes/.../resultsSandbox`, limitado ao dono, sem publicar o roster da cópia.
+
+Foram removidos `_advanceToElimination` e `_commitInitialDraw`, sem chamadores no produto.
+As APIs genéricas do store e a simulação ainda estão registradas como dívida técnica; a L6
+continua responsável por restringir o acesso legado após o cutover dos clientes nativos.
+
+Validação desta leva: cenários de autorização/colisão/retry, compilador real, Chromium com o
+handler real do formulário e exports reais das Functions contra Firestore Emulator. O gate
+geral é executado novamente sobre a versão pronta. A revisão cruzada Claude está **suspensa por
+ordem explícita do dono, devido à cota temporária**, não aprovada por inferência.

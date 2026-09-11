@@ -356,7 +356,7 @@ console.log('\n──── o toggle existe na UI e é do organizador ───�
   t2('render NÃO gateia por creatorUid', !/_wlOrg[\s\S]{0,140}creatorUid/.test(ui));
   t2('handler checa a permissão TAMBÉM na função, incluindo co-host',
      /window\._toggleWlBalance = function[\s\S]{0,900}_isUserOrgOrCoHost[\s\S]{0,140}if\s*\(!_isAdmin\)\s*return;/.test(hnd));
-  t2('handler persiste pela porta transacional', /\.mutate\s*\(/.test(hnd.split('window._toggleWlBalance')[1] || ''));
+  t2('handler persiste pela porta transacional', (hnd.split('window._toggleWlBalance')[1] || '').includes("_callFn('updateTournamentConfiguration'"));
 }
 
 function t2(l, c, e) { t(l, c, e); }

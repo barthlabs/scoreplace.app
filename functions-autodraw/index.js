@@ -82,7 +82,7 @@ try {
 
 // Versão DESTE código de function. Sobe junto com a do app a cada deploy — é o que prova,
 // no log, qual build atendeu a chamada. Ver [[feedback_indicate_version_on_deploy]].
-const CF_VERSION = '2.2.56';
+const CF_VERSION = '2.2.65';
 
 initializeApp();
 const db = getFirestore();
@@ -2935,7 +2935,7 @@ function _clonaConfigDeclarativa(value, depth) {
   if (keys.length > 64) throw new HttpsError('invalid-argument', 'Objeto de configuração grande demais.');
   const out = {};
   keys.forEach(k => {
-    if (!/^[A-Za-z0-9_-]{1,80}$/.test(k)) throw new HttpsError('invalid-argument', 'Chave de configuração inválida.');
+    if (['__proto__', 'constructor', 'prototype'].includes(k) || !/^[A-Za-z0-9_-]{1,80}$/.test(k)) throw new HttpsError('invalid-argument', 'Chave de configuração inválida.');
     out[k] = _clonaConfigDeclarativa(value[k], d + 1);
   });
   return out;
@@ -2954,6 +2954,27 @@ function _fasesDeConfiguracaoAtualizaveis(atual, proposta) {
     return out;
   });
 }
+// Pedidos de criação duram 24 horas. Recibos são temporários, não lápides de torneios.
+exports.saveTournamentReplay = onCall(require('./tournament-replay').makeSaveTournamentReplay({
+  db, HttpsError, readTournament: _leTorneio,
+  findMatch: (t, id) => drawWindow._findMatch(t, id), isAdmin: _isTournamentAdmin,
+  playerUids: m => _slotUidsOf(m, 'p1').concat(_slotUidsOf(m, 'p2')),
+  buildMirror: (t, m, id, iso) => _mrEspelho.buildMirrorDoc(t, m, id, iso)
+}));
+exports.createTournament = onCall(require('./tournament-create').makeCreateTournament({
+  db, HttpsError, FieldValue, fields: _CAMPOS_CONFIG_TORNEIO,
+  cloneConfig: _clonaConfigDeclarativa,
+  compile: (cfg, ctx) => drawWindow.FORMAT2.compileToPhases(cfg, ctx),
+  boundary: _applyWriteBoundary, readTournament: _leTorneio
+}));
+exports.cleanupTournamentCreationRequests = onSchedule('every 24 hours', async () => {
+  const expired = await db.collection('tournamentCreationRequests').where('expiresAt', '<', Date.now()).limit(400).get();
+  if (expired.empty) return;
+  const batch = db.batch();
+  expired.docs.forEach(doc => batch.delete(doc.ref));
+  await batch.commit();
+});
+
 exports.updateTournamentConfiguration = onCall(async (request) => {
   const uid = request.auth && request.auth.uid;
   const data = request.data || {};
