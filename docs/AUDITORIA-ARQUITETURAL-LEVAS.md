@@ -3181,3 +3181,28 @@ O dono reativou a revisão em 11/set e pediu motores mais baratos. O adaptador u
 Haiku para faixa normal e Sonnet/medium para crítica; não repete automaticamente em
 high e limita cada chamada a US$ 1 estimado pelo CLI. Alterações preparadas durante a
 suspensão serão revistas antes da publicação. A suspensão mencionada acima é histórica.
+
+## REANÁLISE 11/set/2026 — auditoria retomada pelo Claude, revisão do GPT desligada
+
+**Interruptor.** `scripts/revisar-com-gpt.sh desligar` executado às 15:08 de 11/set, motivo
+registrado: sem créditos no ChatGPT até ~15/set. `scripts/revisar.sh status` mostra
+**revisor gpt: DESLIGADA · revisor claude: LIGADA**. Enquanto durar, plano e diff passam com
+aviso e o passo 1.8 do deploy não bloqueia — isso **não é aprovação**, e toda entrega feita
+neste período tem de dizer que saiu sem a segunda cabeça do GPT.
+
+**O estado que a reanálise mediu (não herdou do texto):**
+
+| Achado | Medida real | Consequência |
+|---|---|---|
+| 2.2.67 commitada, **não publicada** | `origin/main` = `10f4ca4c`; `HEAD` = `1e2022be`; `curl scoreplace.app/js/store.js` = **2.2.66**, `sw.js` = `scoreplace-v2.2.66` | L8.P4 (recuperação da hidratação na chave) e a política nativa estão **só no disco**. Ninguém testa o que não subiu. |
+| Censo L9 reproduzido **ao vivo** | 60 torneios · 41 divididos · 19 inteiros · 7 `combinedCategories` · **0** por eixos · 11 Liga legada · 19 sem marcador de fonte | Números do texto confirmados contra produção hoje. O fallback de Liga continua necessário (11); o de eixos não tem dependente vivo, mas os writers ainda gravam os eixos — a retirada exige mexer no writer antes. |
+| Catálogo de testes | 761 arquivos, **todos** com comando (`run-unit` = 736) | O gate da L15 continua íntegro depois das L7/L8/L9. |
+| Gate nativo | `check-nativo-pronto-para-corte.js` = **iOS e Android pendentes** (mínimo não ativado) | O bloqueio externo de L2/L6 (Rules × bundle das lojas) **permanece medido**, não suposto. |
+| L6 — escritas diretas fora da porta | **4**, não 5: `js/views/arbitros.js:274/:309/:342` e `js/store.js:9996` (recuperação de `adminEmails`, só pelo `creatorUid`) | As referências `js/store.js:3840` e `:9676` da tabela da L6 **envelheceram** com as levas L7/L8 e apontam hoje para outro código. A contagem correta é esta. |
+
+**Próximo gate, na ordem:** (1) publicar a 2.2.67 — consertar sem publicar não conta; (2) L8,
+reduzir o tamanho das cinco leituras da dashboard: o Confra sozinho tem **214** jogos canônicos,
+e `loadMyMatchResults` (`collectionGroup('results')` por `playerUids`) já existe, mas trocar a
+fonte por ela perderia novidade de outro jogador e a visão do organizador — o corte tem de
+preservar as duas; (3) L9, decidir os eixos de categoria pelo writer, com o censo acima na mão.
+⛔ Nenhuma dessas está autorizada por este registro.
