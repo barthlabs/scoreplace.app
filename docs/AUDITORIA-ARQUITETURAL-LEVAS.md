@@ -3206,3 +3206,47 @@ e `loadMyMatchResults` (`collectionGroup('results')` por `playerUids`) já exist
 fonte por ela perderia novidade de outro jogador e a visão do organizador — o corte tem de
 preservar as duas; (3) L9, decidir os eixos de categoria pelo writer, com o censo acima na mão.
 ⛔ Nenhuma dessas está autorizada por este registro.
+
+## L8.P5 — o custo da dashboard, MEDIDO em produção (11/set/2026, read-only)
+
+O gate aberto dizia "reduzir o tamanho das cinco leituras". A medição mostra que **não são
+cinco leituras grandes: é uma**.
+
+| Medida | Valor |
+|---|---|
+| Torneios na base | 60 |
+| Elegíveis pelo filtro real da dashboard (`tournamentStarted \|\| status==='active'`, sem sandbox) | **6** |
+| Documentos de `results` somados nos 5 mais recentes | **244** |
+| Confra sozinho | **214** (87,7% do total) |
+| Os outros cinco elegíveis, somados | **31** (13 · 13 · 4 · 1 · 0) |
+
+Ou seja: o custo não é sistêmico, é uma cauda de **um** torneio. Qualquer otimização genérica
+paga pouco em 5 dos 6 casos e tudo no sexto.
+
+**O que a tela realmente consome da hidratação.** "📣 Novidades" só aceita torneio **não
+encerrado** e jogo com placar confirmado, parcial ou pendente, mostrando poucos cards; "🏅 Seus
+últimos resultados" usa até 10. A hidratação lê a coleção inteira para pintar ~uma dúzia de
+jogos.
+
+**⚠️ Por que um `limit` ingênuo seria a otimização que muda o que a tela entrega.**
+`hydrateMatchResults` não é uma leitura de tela: ela sobrepõe o espelho em **todos** os jogos da
+estrutura (`_collectAllMatches`), marca `t._resultsHydrated = true` para o torneio inteiro e
+chama `_saveToCache()`. A **chave** (`js/views/bracket.js:1141`) chama a MESMA função e a mesma
+coalescência (`[uid, tid]`). Truncar a consulta da dashboard gravaria no cache um torneio
+**parcialmente sobreposto** com a marca de hidratado, e a chave herdaria isso — a família exata
+do "0-0 na Confra" já paga uma vez. O corte só é seguro se a marca disser **qual escopo** foi
+hidratado, e a chave nunca aceitar o escopo curto da dashboard.
+
+**O carimbo para ordenar existe.** Medido nos três maiores elegíveis: **240 de 240** documentos
+de `results` têm `updatedAt` (Confra 214/214). Como `orderBy` **exclui** documento sem o campo,
+isso era a condição silenciosa do desenho — e hoje ela vale. `results` não tem índice composto
+declarado para consulta por torneio (só o `collectionGroup` `playerUids CONTAINS + updatedAt
+DESC`), mas `orderBy('updatedAt','desc').limit(N)` numa única subcoleção usa índice de campo
+único automático: não exige índice novo.
+
+**Plano sugerido, NÃO autorizado por este registro:** (1) escopo explícito na marca de
+hidratação (`t._resultsHydrated = 'parcial' | 'completa'`), com a chave exigindo `completa`;
+(2) dashboard passa a ler `orderBy('updatedAt','desc').limit(N)`, N pequeno e suficiente para
+Novidades + Seus últimos resultados; (3) gate que prove que a chave nunca pinta sobre escopo
+parcial e que nenhum documento de `results` fique sem `updatedAt`. Ganho medido no estado atual:
+244 → ~N por abertura, com o Confra caindo de 214.
