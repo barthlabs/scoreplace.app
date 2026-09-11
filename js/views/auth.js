@@ -4431,6 +4431,20 @@ async function simulateLoginSuccess(user) {
     }
   } catch (e) { window._warn('[verify] gate check failed:', e); }
 
+  // L13.P2 — carimbo de versão/plataforma da sessão. AQUI e não antes: os três `return` acima
+  // (lápide `mergedInto`, `loginRedirects` e gate de e-mail não verificado) acontecem com o uid
+  // já presente, e carimbar antes marcaria como "vista agora" uma conta que esta mesma chamada
+  // descarta. Fire-and-forget: a porta freia sozinha (1 por dia por versão) e nunca é esperada.
+  try {
+    if (window.FirestoreDB && typeof window.FirestoreDB.marcarSessao === 'function') {
+      // `_mdoc` é o perfil que a checagem de lápide, acima, já leu (var, function-scoped).
+      // Se aquela leitura não rodou ou falhou, ele é `undefined` e a porta segue sem perfil —
+      // a guarda de lápide lá dentro é cinto além do suspensório, não a única defesa.
+      var _perfilSessao = (typeof _mdoc !== 'undefined' && _mdoc && _mdoc.exists) ? _mdoc.data() : null;
+      window.FirestoreDB.marcarSessao(user.uid, _perfilSessao);
+    }
+  } catch (e) { window._warn('[sessao] não foi possível carimbar a sessão:', e); }
+
   try {
 
   // Set AppStore.currentUser with the user object.

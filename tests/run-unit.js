@@ -55,6 +55,8 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..');
 const SUITES = [
   'tests/native-update-policy.test.js',
+  'tests/casual-dupla-e-segundo-sacador.test.js',
+  'tests/l13-carimbo-de-sessao.test.js',
   'tests/l4-sem-leitura-morta-de-admin-email.test.js',
   'tests/l8-escopo-da-hidratacao.test.js',
   'tests/l8-hydration-boundaries.test.js',

@@ -1,3 +1,5 @@
+// 2.2.69 — casual: a dupla formada não troca na tela de saque e o 2º sacador volta a ser perguntado.
+// 2.2.69 — o app passa a registrar versão e plataforma da sessão; sem isso não há como medir adoção.
 // 2.2.68 — a dashboard passa a ler a janela recente de resultados; a chave continua lendo tudo.
 // Revisão econômica reativada em 11/set; sem efeito sobre funcionalidades.
 // 2.2.67 — recuperação da chave e política nativa de atualização preparada, ainda sem mínimo ativo.

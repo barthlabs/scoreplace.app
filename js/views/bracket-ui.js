@@ -8351,6 +8351,11 @@ window._openLiveScoring = function(tId, matchId, opts) {
       totalGamesPlayed: state.totalGamesPlayed,
       serveOrder: state.serveOrder.map(function(s) { return { team: s.team, name: s.name }; }),
       serveSkipped: state.serveSkipped,
+      // ⛔ O FLAG DO 2º SACADOR PRECISA VIAJAR. Sem ele no `liveState`, quem recebe o estado
+      // (inclusive o ECO DA PRÓPRIA ESCRITA — a gravação local não avança `_lastSyncTs`) tinha
+      // de ADIVINHAR, e adivinhava "já escolheram" só porque havia rotação. Resultado medido pelo
+      // dono na 2.2.8: a tela "Quem saca no 2º game?" nunca aparecia, com um aparelho só.
+      secondServerPicked: !!state.secondServerPicked,
       gameLog: Array.isArray(state.gameLog) ? state.gameLog.slice() : [],
       pointLog: Array.isArray(state.pointLog) ? state.pointLog.slice() : [],
       tieRule: state.tieRule,
@@ -8377,7 +8382,12 @@ window._openLiveScoring = function(tId, matchId, opts) {
     state.tieRule = remote.tieRule || state.tieRule;
     if (Array.isArray(remote.serveOrder) && remote.serveOrder.length > 0) {
       state.serveOrder = remote.serveOrder;
-      state.secondServerPicked = true;
+      // A tela 1 já grava a rotação INTEIRA, então "tem serveOrder" nunca significou "o 2º
+      // sacador foi escolhido". Agora o estado diz; só documento ANTIGO (sem o campo) é inferido,
+      // e de forma conservadora: `totalGamesPlayed >= 2` é quando a pergunta já não cabe mais.
+      state.secondServerPicked = (typeof remote.secondServerPicked === 'boolean')
+        ? remote.secondServerPicked
+        : ((remote.totalGamesPlayed || 0) >= 2);
     }
     state.serveSkipped = !!remote.serveSkipped;
     if (Array.isArray(remote.gameLog)) state.gameLog = remote.gameLog.slice();
@@ -14404,6 +14414,18 @@ window._openCasualMatch = function(restoreOpts) {
       // dupla virava "Rodrigo Barth / Rodrigo Barth". O 1º match fica como
       // usuário; os demais do time 1 viram "Parceiro".
       var userTaken = false;
+      /* ⛔ O NÚMERO DO PLACEHOLDER É DA CAIXA DO SETUP, NÃO DA POSIÇÃO NO TIME.
+       * Relato do dono (11/set/2026, nativa 2.2.8): formou a dupla com o "Jogador 4" e na tela
+       * "Quem saca primeiro?" o parceiro dele apareceu como "Jogador 2". A DIVISÃO estava certa —
+       * `players[].team` vem de `_teamAssignments` —, mas quem numerava era o índice DENTRO do
+       * time: o slot 3, sendo o segundo do time 1, virava "Jogador 2", e os adversários viravam
+       * "Jogador 3"/"Jogador 4". Para slot anônimo o rótulo É a identidade, então a dupla parecia
+       * (e, para quem olha, era) outra. `p.slot` já vinha gravado desde a montagem; agora é ele
+       * que manda. O índice fica como reserva para documento antigo sem `slot`.
+       * É a v1.8.83 ("o rótulo gruda na pessoa, não na posição") aplicada também ao slot VAZIO. */
+      function _numDoSlot(p, reserva) {
+        return (p && typeof p.slot === 'number' && p.slot >= 0) ? (p.slot + 1) : reserva;
+      }
       for (var ti = 0; ti < t1List.length; ti++) {
         var p1p = t1List[ti];
         var isDefault1 = !p1p.name || defaultNames.indexOf(p1p.name) !== -1;
@@ -14425,9 +14447,12 @@ window._openCasualMatch = function(restoreOpts) {
         // Agora só preenche slot VAZIO. Exceção: "Jogador 1" nunca pode sobrar em
         // ninguém — aquele lugar é do usuário (cânone) —, então esse é reescrito.
         if (!p1p.name) {
-          p1p.name = 'Jogador ' + (ti + 1);
+          p1p.name = 'Jogador ' + _numDoSlot(p1p, ti + 1);
         } else if (p1p.name === 'Jogador 1') {
-          p1p.name = 'Jogador ' + (ti + 1 === 1 ? 2 : ti + 1);
+          // "Jogador 1" é o lugar do usuário (cânone) e não pode sobrar em outra pessoa. O número
+          // sai do slot; se o slot for justamente o 1º, cai na reserva antiga — a guarda fica.
+          var _n1 = _numDoSlot(p1p, ti + 1);
+          p1p.name = 'Jogador ' + (_n1 === 1 ? (ti + 1 === 1 ? 2 : ti + 1) : _n1);
         }
       }
       // ⚠️ "Jogador 1" NÃO PODE EXISTIR — aquele slot é o usuário (regra do
@@ -14451,7 +14476,7 @@ window._openCasualMatch = function(restoreOpts) {
         // ⚠️ o `isDefault2` que existia aqui virou código morto com a mudança — no time 2
         // não há o caso "sobrescrever com o nome do usuário", então ele só alimentava a
         // reescrita por índice que acabou de sair.
-        if (!p2p.name) p2p.name = 'Jogador ' + (_isDbl ? (tj + 3) : 2);
+        if (!p2p.name) p2p.name = 'Jogador ' + _numDoSlot(p2p, _isDbl ? (tj + 3) : 2);
       }
       // v1.9.72: dedupe de segurança — dois jogadores do MESMO time nunca
       // podem ter o mesmo nome (ex.: slot do parceiro carregando o nome real
@@ -14463,7 +14488,7 @@ window._openCasualMatch = function(restoreOpts) {
           var nmk = (list[di].name || '').trim().toLowerCase();
           if (!nmk) continue;
           if (seen[nmk]) {
-            list[di].name = isTeam1 ? ('Jogador ' + (di + 1)) : ('Jogador ' + (_isDbl ? (di + 3) : 2));
+            list[di].name = 'Jogador ' + _numDoSlot(list[di], isTeam1 ? (di + 1) : (_isDbl ? (di + 3) : 2));
           } else {
             seen[nmk] = true;
           }

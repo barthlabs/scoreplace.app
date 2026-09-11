@@ -1,3 +1,9 @@
+## 2.2.69 — 11/set/2026
+
+Partida casual: a dupla formada no setup continua a mesma na tela de saque. O número do jogador sem nome passa a vir da caixa em que ele foi posto, e não da posição dentro do time — formar dupla com o Jogador 4 mostrava o parceiro como Jogador 2. E a pergunta de quem saca no segundo game voltou a aparecer: o estado da partida não levava essa informação, então o próprio aparelho, ao receber de volta o que tinha acabado de gravar, concluía que a escolha já havia sido feita.
+
+Sessão: o perfil passa a registrar a última visita, a versão e a plataforma do cliente, uma vez por dia e por versão, fora do caminho quente e sem nenhum dado novo além desses três. `lastSeenAt` era lido em quatro telas e não era escrito em lugar nenhum — "visto por último" mostrava, em silêncio, a última vez que a pessoa mexeu no perfil. Conta fundida não é marcada. Limpeza sem efeito visível: saíram das Cloud Functions dez leituras que liam o documento e descartavam o valor.
+
 ## 2.2.68 — 11/set/2026
 
 Resultados: a marca de hidratação passa a registrar o escopo lido. A dashboard busca apenas a janela recente de cada torneio, ordenada pelo carimbo de atualização, e a chave continua exigindo a coleção inteira — leitura parcial nunca é aceita onde o jogo é desenhado. Medido em produção: 244 documentos por abertura caem para cerca de 94, sem perder novidade de outro jogador nem a visão de quem organiza.

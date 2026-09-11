@@ -2668,6 +2668,54 @@ window.FirestoreDB = {
     await this.db.collection('users').doc(uid).set(toSave, { merge: true });
   },
 
+  /* L13.P2 — O ÚNICO SINAL DE PARQUE QUE O PRODUTO TEM.
+   *
+   * MEDIDO em 11/set/2026: 277 perfis, 91 campos, NENHUM de versão do app — a política de corte
+   * nativo exige medida de adoção e o dado não existia. O único sinal de plataforma era
+   * `fcmTokenPlatform`, em 30 perfis e só de quem registrou push.
+   * ⭐ E `lastSeenAt` já era um CAMPO-FANTASMA: lido em `js/views/todas-pessoas.js:76` e em
+   * `js/views/explore.js` (3 pontos), escrito em lugar NENHUM, presente em 0 dos 277 documentos.
+   * Os leitores caíam em `updatedAt`, então "visto por último" queria dizer, calado, "última vez
+   * que mexeu no perfil". Aqui ele ganha writer.
+   *
+   * ⛔ FORA DO CAMINHO QUENTE: uma escrita por dia e por versão (freio no localStorage + na
+   * memória), fire-and-forget — a tela nunca espera por ela. `.catch()` explícito porque
+   * try/catch NÃO pega promessa; se falhar, o freio é liberado e a próxima sessão tenta.
+   * ⛔ LÁPIDE NÃO É CONTA VIVA: conta com `mergedInto` não é carimbada — marcá-la ressuscitaria
+   * a aparência de conta viva nas telas que leem `lastSeenAt`. O call-site (auth.js, depois do
+   * gate de e-mail) já está DEPOIS dos três `return` de lápide/redirect/verificação; esta guarda
+   * é o cinto além do suspensório.
+   * Formato ISO, igual a `updatedAt` na base — os leitores fazem `new Date(raw).getTime()`.
+   */
+  marcarSessao(uid, perfil) {
+    if (!uid || !this.ensureDb()) return false;
+    if (perfil && perfil.mergedInto) return false;
+    var versao = (typeof window !== 'undefined' && window.SCOREPLACE_VERSION) || '';
+    var plataforma = (typeof window !== 'undefined' && window.SCOREPLACE_PLATFORM) || 'web';
+    var agora = new Date();
+    var carimbo = String(uid) + '|' + versao + '|' + plataforma + '|' + agora.toISOString().slice(0, 10);
+    if (this._sessaoMarcada === carimbo) return false;
+    try {
+      if (typeof localStorage !== 'undefined' && localStorage.getItem('sp_sessao_marcada') === carimbo) {
+        this._sessaoMarcada = carimbo;
+        return false;
+      }
+    } catch (e) {}
+    this._sessaoMarcada = carimbo;
+    var self = this;
+    this.db.collection('users').doc(uid).set({
+      lastSeenAt: agora.toISOString(),
+      lastClientVersion: versao,
+      lastClientPlatform: plataforma
+    }, { merge: true }).then(function () {
+      try { if (typeof localStorage !== 'undefined') localStorage.setItem('sp_sessao_marcada', carimbo); } catch (e) {}
+    }).catch(function (e) {
+      self._sessaoMarcada = null;   // falhou: a próxima sessão tenta de novo
+      if (window._warn) window._warn('[sessao] carimbo de versão/plataforma falhou', e);
+    });
+    return true;
+  },
+
   async loadUserProfile(uid) {
     if (!this.db || !uid) return null;
     try {

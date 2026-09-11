@@ -102,8 +102,14 @@ const iRR = BUI.indexOf('var userTaken = false;');
 // ⚠️ janela larga o bastante pra cobrir os DOIS times: a 1ª versão cortava em 2600 e
 // parava antes do bloco do time 2 — o teste acusava um defeito que não existia.
 const bloco = BUI.slice(iRR, BUI.indexOf('_dedupeTeam(t1List, true);', iRR));
-ok(bloco.indexOf("if (!p1p.name) {\n          p1p.name = 'Jogador ' + (ti + 1);") !== -1,
+ok(bloco.indexOf("if (!p1p.name) {\n          p1p.name = 'Jogador ' + _numDoSlot(p1p, ti + 1);") !== -1,
   'E1. time 1: só preenche slot VAZIO (não renumera quem já tem rótulo)');
+// 11/set/2026: o NÚMERO passou a sair da caixa do setup (`p.slot`), não da posição no time —
+// formar dupla com o "Jogador 4" mostrava o parceiro como "Jogador 2" (relato do dono, nativa
+// 2.2.8). O índice continua como reserva pra documento antigo sem `slot`. Ver
+// `tests/casual-dupla-e-segundo-sacador.test.js`, que prova o comportamento rodando a função.
+ok(/function _numDoSlot\(p, reserva\)[\s\S]{0,200}p\.slot \+ 1/.test(bloco),
+  'E1.1. o número do placeholder vem de `p.slot`, com o índice só como reserva');
 ok(bloco.indexOf("if (!p2p.name) p2p.name = 'Jogador '") !== -1,
   'E2. time 2: idem');
 ok(bloco.indexOf("if (isDefault1) {\n          p1p.name = 'Jogador ' + (ti + 1);") === -1,
