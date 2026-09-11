@@ -2135,6 +2135,70 @@ exports.applyCategoryCommunicationMarkers = onCall(async (request) => {
   });
 });
 
+function _queueProfileCategoryNotice(tx, ref, t, eventId, recipients, type, level, message, nowIso) {
+  const unique = Array.from(new Set((recipients || []).map(String).filter(Boolean)));
+  if (!unique.length || t.isSandbox || t.notificationsMuted) return;
+  tx.set(ref.collection('notificationOutbox').doc(_outboxDocIdPart(eventId)), {
+    schema: 1, kind: 'tournament-notification', type, title: '🏷️ Categoria atualizada', message,
+    tournamentId: String(t.id || ''), tournamentName: String(t.name || ''), level: level || 'all', recipients: unique,
+    ctaLabel: 'Ver torneio', ctaUrl: 'https://scoreplace.app/#tournaments/' + String(t.id || ''),
+    createdAt: nowIso, createdAtMs: Date.parse(nowIso), dispatchStatus: 'pending'
+  }, { merge: true });
+}
+function _profileCategoryAdmins(t) {
+  const out = new Set();
+  if (t && t.creatorUid) out.add(String(t.creatorUid));
+  (t && Array.isArray(t.adminUids) ? t.adminUids : []).forEach(v => { if (v) out.add(String(v)); });
+  return Array.from(out);
+}
+
+exports.syncProfileTournamentCategory = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid;
+  const tId = String((request.data && request.data.tournamentId) || '').trim();
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId) throw new HttpsError('invalid-argument', 'Torneio inválido.');
+  if (!drawWindow || !drawWindow._categoryMutationsCore || typeof drawWindow._categoryMutationsCore.syncProfile !== 'function') throw new HttpsError('internal', 'Núcleo de categorias indisponível no servidor.');
+  const ref = db.collection('tournaments').doc(tId), nowIso = new Date().toISOString();
+  return db.runTransaction(async tx => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    const profileSnap = await tx.get(db.collection('users').doc(uid));
+    const profile = profileSnap.exists ? (profileSnap.data() || {}) : {};
+    const before = _antesDoMotor(t), outcome = drawWindow._categoryMutationsCore.syncProfile(t, profile, uid, nowIso);
+    if (!outcome.changed) return { ok: true, changed: false, action: outcome.action || 'unchanged' };
+    const b = _gravaTorneio(tx, ref, t, before, { agoraIso: nowIso });
+    if (outcome.action === 'direct') {
+      _queueProfileCategoryNotice(tx, ref, t, 'profile-category-direct-' + _outboxDocIdPart(uid) + '-' + Date.parse(nowIso), [uid], 'category-change-result', 'all', 'Sua categoria em "' + String(t.name || 'torneio') + '" foi atualizada para ' + String(outcome.toCat || '') + ' com base no seu perfil.', nowIso);
+    } else if (outcome.action === 'requested') {
+      const r = outcome.request || {};
+      _queueProfileCategoryNotice(tx, ref, t, 'profile-category-request-' + _outboxDocIdPart(uid) + '-' + Date.parse(nowIso), _profileCategoryAdmins(t), 'category-change-request', 'fundamental', String(r.playerName || 'Participante') + ' atualizou o perfil e pediu mudança de categoria: ' + String(r.fromCat || 'sem categoria') + ' → ' + String(r.toCat || '') + '. Aprove ou recuse nas Categorias.', nowIso);
+    }
+    return { ok: true, changed: true, action: outcome.action, tournament: b.clean };
+  });
+});
+
+exports.resolveProfileTournamentCategoryChange = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid, data = request.data || {};
+  const tId = String(data.tournamentId || '').trim(), participantUid = String(data.participantUid || '').trim(), approve = !!data.approve;
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId || !participantUid) throw new HttpsError('invalid-argument', 'Pedido de categoria inválido.');
+  if (!drawWindow || !drawWindow._categoryMutationsCore || typeof drawWindow._categoryMutationsCore.resolveProfile !== 'function') throw new HttpsError('internal', 'Núcleo de categorias indisponível no servidor.');
+  const ref = db.collection('tournaments').doc(tId), nowIso = new Date().toISOString();
+  return db.runTransaction(async tx => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização decide mudança de categoria.', { tId, uid });
+    const before = _antesDoMotor(t), outcome = drawWindow._categoryMutationsCore.resolveProfile(t, participantUid, approve, nowIso);
+    if (!outcome.changed) return { ok: true, changed: false, action: outcome.action || 'missing' };
+    const b = _gravaTorneio(tx, ref, t, before, { agoraIso: nowIso }), r = outcome.request || {};
+    const message = approve
+      ? 'Sua categoria em "' + String(t.name || 'torneio') + '" foi atualizada para ' + String(r.toCat || '') + '.'
+      : 'Sua mudança de categoria em "' + String(t.name || 'torneio') + '" foi recusada pela organização; você segue em ' + String(r.fromCat || 'sua categoria atual') + '.';
+    _queueProfileCategoryNotice(tx, ref, t, 'profile-category-' + (approve ? 'approved-' : 'rejected-') + _outboxDocIdPart(participantUid) + '-' + _outboxDocIdPart(r.requestedAt), [participantUid], 'category-change-result', 'all', message, nowIso);
+    return { ok: true, changed: true, action: outcome.action, tournament: b.clean };
+  });
+});
+
 exports.normalizeTournamentCategories = onCall(async (request) => {
   const uid = request.auth && request.auth.uid;
   const tId = String((request.data && request.data.tournamentId) || '').trim();

@@ -1,0 +1,14 @@
+'use strict';
+const fs=require('fs');let bad=0;const ok=(v,m)=>{console.log((v?'✓ ':'✗ ')+m);if(!v)bad++;};
+const ui=fs.readFileSync('js/views/tournaments-categories.js','utf8');
+const a=ui.indexOf('window._requestCategoryChangeFromProfile = function'),b=ui.indexOf('// Banner HTML com os pedidos pendentes de mudança de categoria',a),part=ui.slice(a,b);
+ok(/_callFn\('syncProfileTournamentCategory'/.test(part)&&/_callFn\('resolveProfileTournamentCategoryChange'/.test(part),'cliente só despacha as duas intenções de categoria à CF');
+ok(!/AppStore\.(?:mutate|commitTournamentTx)|_sendUserNotification/.test(part),'cliente não persiste nem notifica mudança de perfil');
+ok(/_applyCFTournament\(tournamentId, result\.tournament\)/.test(part)&&/_applyCFTournament\(tId, result\.tournament\)/.test(part),'resposta da CF atualiza o torneio certo no AppStore');
+const fn=fs.readFileSync('functions-autodraw/index.js','utf8');
+const x=fn.indexOf('exports.syncProfileTournamentCategory'),y=fn.indexOf('exports.normalizeTournamentCategories',x),srv=fn.slice(x,y);
+ok(/db\.runTransaction/.test(srv)&&/_leTorneio/.test(srv)&&/_gravaTorneio/.test(srv),'Functions leem e gravam o torneio fresco em transação');
+ok(/tx\.get\(db\.collection\('users'\)\.doc\(uid\)\)/.test(srv),'sincronização usa o perfil canônico do servidor');
+ok(/_isTournamentAdmin/.test(srv)&&/_queueProfileCategoryNotice/.test(srv),'decisão exige organização e gera aviso na outbox');
+ok(/syncProfile/.test(srv)&&/resolveProfile/.test(srv),'Functions delegam a mesma regra compartilhada de categoria');
+process.exitCode=bad?1:0;

@@ -3038,222 +3038,86 @@ function _skillRankOfCat(cat, t) {
     return skillRef.map(function(s){ return String(s).toUpperCase(); }).indexOf(sk);
 }
 
-// v2.4.35: aplica DIRETO a categoria implicada pelo perfil (sem aprovação) —
-// usado quando o inscrito estava SEM categoria (preencheu o perfil) ou SUBIU de
-// categoria. Grava na ficha e avisa o participante.
-function _applyProfileCategoryDirect(t, me, parts, cat, uid, fromCat) {
+// Núcleo compartilhado: a decisão é pura sobre a cópia transacional do torneio.
+// O browser apenas solicita a Function; nenhuma mudança de perfil escreve o torneio localmente.
+function _profileCategoryParts(t) {
+    return Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
+}
+function _profileCategoryMember(parts, uid) {
+    return parts.find(function(p) {
+        if (!p || typeof p !== 'object') return false;
+        var ids = (typeof window._participantUids === 'function') ? window._participantUids(p) : [p.uid].filter(Boolean);
+        return ids.indexOf(uid) !== -1;
+    }) || null;
+}
+function _setProfileCategory(me, cat, source) {
     if (typeof window._setParticipantCategories === 'function') window._setParticipantCategories(me, [cat]);
     else { me.categories = [cat]; me.category = cat; }
-    me.categorySource = 'perfil';
+    me.categorySource = source;
     delete me.wasUncategorized; delete me.autoWeakestCat; delete me.staleCat;
-    if (window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
-        window.AppStore.commitTournamentTx(t.id, function(ft) {
-            var freshParts = Array.isArray(ft.participants) ? ft.participants : Object.values(ft.participants || {});
-            var freshMe = freshParts.find(function(p) {
-                if (!p || typeof p !== 'object') return false;
-                var ids = (typeof window._participantUids === 'function') ? window._participantUids(p) : [p.uid].filter(Boolean);
-                return ids.indexOf(uid) !== -1;
-            });
-            if (!freshMe) return false;
-            if (typeof window._setParticipantCategories === 'function') window._setParticipantCategories(freshMe, [cat]);
-            else { freshMe.categories = [cat]; freshMe.category = cat; }
-            freshMe.categorySource = 'perfil'; delete freshMe.wasUncategorized; delete freshMe.autoWeakestCat; delete freshMe.staleCat;
-            if (Array.isArray(ft.categoryChangeRequests)) ft.categoryChangeRequests = ft.categoryChangeRequests.filter(function(r) { return !(r.uid === uid && r.status === 'pending'); });
-            if (!Array.isArray(ft.participants)) ft.participants = freshParts;
-            return true;
-        });
+}
+function _syncProfileCategoryCore(t, profileLike, uid, nowIso) {
+    if (!t || (t.status || 'open') === 'finished') return { changed: false, action: 'ignored' };
+    var validCats = (typeof window._getTournamentCategories === 'function') ? window._getTournamentCategories(t) : (t.combinedCategories || []);
+    if (!Array.isArray(validCats) || !validCats.length) return { changed: false, action: 'ignored' };
+    var parts = _profileCategoryParts(t), me = _profileCategoryMember(parts, uid);
+    if (!me) return { changed: false, action: 'not-participant' };
+    profileLike = profileLike || {};
+    var basis = { gender: profileLike.gender || me.gender, birthDate: profileLike.birthDate || me.birthDate, skillBySport: profileLike.skillBySport || me.skillBySport, defaultCategory: profileLike.defaultCategory || me.defaultCategory };
+    var implied = window._profileImpliedCategory(basis, t);
+    if (!implied) return { changed: false, action: 'ambiguous' };
+    var current = (typeof window._getParticipantCategories === 'function') ? window._getParticipantCategories(me) : (me.categories || (me.category ? [me.category] : []));
+    var currentValid = current.filter(function(c) { return validCats.indexOf(c) !== -1; });
+    if (currentValid.indexOf(implied) !== -1) return { changed: false, action: 'unchanged' };
+    var fromCat = currentValid[0] || '', isDemotion = false;
+    if (fromCat) { var rNew = _skillRankOfCat(implied, t), rCur = _skillRankOfCat(fromCat, t); if (rNew >= 0 && rCur >= 0 && rNew > rCur) isDemotion = true; }
+    var requests = Array.isArray(t.categoryChangeRequests) ? t.categoryChangeRequests : [];
+    if (!isDemotion) {
+        _setProfileCategory(me, implied, 'perfil');
+        t.categoryChangeRequests = requests.filter(function(r) { return !(r && r.uid === uid && r.status === 'pending'); });
+        if (!Array.isArray(t.participants)) t.participants = parts;
+        return { changed: true, action: 'direct', uid: uid, fromCat: fromCat, toCat: implied, playerName: me.displayName || me.name || profileLike.displayName || 'Participante' };
     }
-    if (uid && typeof window._sendUserNotification === 'function') {
-        try {
-            window._sendUserNotification(uid, {
-                type: 'category-change-result', level: 'all',
-                tournamentId: String(t.id), tournamentName: t.name || 'torneio',
-                message: 'Sua categoria em "' + (t.name || 'torneio') + '" foi atualizada para ' +
-                    window._displayCategoryName(cat) + ' com base no seu perfil.'
-            });
-        } catch (_e) {}
-    }
+    var pendingSame = requests.some(function(r) { return r && r.uid === uid && r.status === 'pending' && r.toCat === implied; });
+    if (pendingSame) return { changed: false, action: 'already-pending' };
+    var request = { uid: uid, playerName: me.displayName || me.name || profileLike.displayName || 'Participante', fromCat: fromCat, toCat: implied, requestedAt: nowIso, status: 'pending' };
+    t.categoryChangeRequests = requests.filter(function(r) { return !(r && r.uid === uid && r.status === 'pending'); });
+    t.categoryChangeRequests.push(request);
+    return { changed: true, action: 'requested', request: request };
+}
+function _resolveProfileCategoryCore(t, targetUid, approve, nowIso) {
+    if (!t || !Array.isArray(t.categoryChangeRequests)) return { changed: false, action: 'missing' };
+    var req = t.categoryChangeRequests.find(function(r) { return r && r.uid === targetUid && r.status === 'pending'; });
+    if (!req) return { changed: false, action: 'missing' };
+    var parts = _profileCategoryParts(t), me = _profileCategoryMember(parts, targetUid);
+    if (approve && me) { _setProfileCategory(me, req.toCat, 'perfil_aprovado'); me.wasUncategorized = false; }
+    req.status = approve ? 'approved' : 'rejected'; req.resolvedAt = nowIso;
+    t.categoryChangeRequests = t.categoryChangeRequests.filter(function(r) { return r && r.status === 'pending'; });
+    if (!Array.isArray(t.participants)) t.participants = parts;
+    return { changed: true, action: approve ? 'approved' : 'rejected', request: req, participantFound: !!me };
 }
 
-window._requestCategoryChangeFromProfile = function(profileLike, uid) {
-    if (!uid || !window.AppStore || !Array.isArray(window.AppStore.tournaments)) return 0;
-    profileLike = profileLike || {};
-    var made = 0;
-    window.AppStore.tournaments.forEach(function(t) {
-        if (!t) return;
-        if ((t.status || 'open') === 'finished') return;
-        var validCats = (typeof window._getTournamentCategories === 'function')
-            ? window._getTournamentCategories(t) : (t.combinedCategories || []);
-        if (!Array.isArray(validCats) || validCats.length === 0) return;
-        var parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
-        var me = null;
-        for (var i = 0; i < parts.length; i++) {
-            var p = parts[i];
-            if (!p || typeof p !== 'object') continue;
-            var uids = (typeof window._participantUids === 'function')
-                ? window._participantUids(p) : [p.uid].filter(Boolean);
-            if (uids.indexOf(uid) !== -1) { me = p; break; }
-        }
-        if (!me) return;
-        var basis = {
-            gender: profileLike.gender || me.gender,
-            birthDate: profileLike.birthDate || me.birthDate,
-            skillBySport: profileLike.skillBySport || me.skillBySport,
-            defaultCategory: profileLike.defaultCategory || me.defaultCategory
-        };
-        var implied = window._profileImpliedCategory(basis, t);
-        if (!implied) return;
-        var current = (typeof window._getParticipantCategories === 'function')
-            ? window._getParticipantCategories(me) : (me.categories || (me.category ? [me.category] : []));
-        var currentValid = current.filter(function(c) { return validCats.indexOf(c) !== -1; });
-        if (currentValid.indexOf(implied) !== -1) return; // já está lá
-        var fromCat = currentValid[0] || '';
-
-        // v2.4.35: REGRA — só pede aprovação do organizador quando é REBAIXAMENTO
-        // (categoria inferior à atual). Preencher perfil que estava vazio (sem
-        // categoria) OU subir de categoria OU mudança lateral (mesmo nível) =
-        // aplica DIRETO, sem aprovação.
-        var isDemotion = false;
-        if (fromCat) {
-            var rNew = _skillRankOfCat(implied, t);   // menor = mais forte
-            var rCur = _skillRankOfCat(fromCat, t);
-            if (rNew >= 0 && rCur >= 0 && rNew > rCur) isDemotion = true; // implied mais fraco
-        }
-
-        if (!isDemotion) {
-            // Aplica direto e limpa qualquer pedido pendente antigo (já resolvido).
-            if (Array.isArray(t.categoryChangeRequests)) {
-                t.categoryChangeRequests = t.categoryChangeRequests.filter(function(r) {
-                    return !(r.uid === uid && r.status === 'pending');
-                });
-            }
-            _applyProfileCategoryDirect(t, me, parts, implied, uid, fromCat);
-            return;
-        }
-
-        // ── REBAIXAMENTO → pedido de aprovação do organizador ─────────────────
-        if (!Array.isArray(t.categoryChangeRequests)) t.categoryChangeRequests = [];
-        var pendingSame = t.categoryChangeRequests.some(function(r) {
-            return r.uid === uid && r.status === 'pending' && r.toCat === implied;
-        });
-        if (pendingSame) return; // já pendente pro mesmo destino
-        // Substitui qualquer pendente antigo desse uid (destino mudou).
-        t.categoryChangeRequests = t.categoryChangeRequests.filter(function(r) {
-            return !(r.uid === uid && r.status === 'pending');
-        });
-        var playerName = me.displayName || me.name || profileLike.displayName || 'Participante';
-        var changeRequest = {
-            uid: uid, playerName: playerName,
-            fromCat: fromCat, toCat: implied,
-            requestedAt: new Date().toISOString(), status: 'pending'
-        };
-        t.categoryChangeRequests.push(changeRequest);
-        made++;
-        var orgUid = t.creatorUid || null;
-        if (orgUid && typeof window._sendUserNotification === 'function') {
-            try {
-                window._sendUserNotification(orgUid, {
-                    type: 'category-change-request',
-                    level: 'fundamental',
-                    tournamentId: String(t.id),
-                    tournamentName: t.name || 'torneio',
-                    message: playerName + ' atualizou o perfil e quer DESCER de categoria em "' +
-                        (t.name || 'torneio') + '": ' +
-                        window._displayCategoryName(fromCat) + ' → ' +
-                        window._displayCategoryName(implied) + ' (categoria inferior). Aprove ou recuse nas Categorias.'
-                });
-            } catch (_e) {}
-        }
-        if (window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
-            window.AppStore.commitTournamentTx(t.id, function(ft) {
-                if (!Array.isArray(ft.categoryChangeRequests)) ft.categoryChangeRequests = [];
-                if (ft.categoryChangeRequests.some(function(r) { return r && r.uid === changeRequest.uid && r.toCat === changeRequest.toCat && r.requestedAt === changeRequest.requestedAt; })) return false;
-                ft.categoryChangeRequests = ft.categoryChangeRequests.filter(function(r) { return !(r.uid === changeRequest.uid && r.status === 'pending'); });
-                ft.categoryChangeRequests.push(changeRequest);
-                return true;
-            });
-        }
+window._requestCategoryChangeFromProfile = function(_profileLike, uid) {
+    if (!uid || !window.AppStore || !Array.isArray(window.AppStore.tournaments) || !window.FirestoreDB || typeof window.FirestoreDB._callFn !== 'function') return 0;
+    var ids = window.AppStore.tournaments.filter(function(t) {
+        if (!t || (t.status || 'open') === 'finished') return false;
+        return !!_profileCategoryMember(_profileCategoryParts(t), uid);
+    }).map(function(t) { return String(t.id); });
+    ids.forEach(function(tournamentId) {
+        window.FirestoreDB._callFn('syncProfileTournamentCategory', { tournamentId: tournamentId }).then(function(result) {
+            if (result && result.tournament && window._applyCFTournament) window._applyCFTournament(tournamentId, result.tournament);
+        }).catch(function(e) { window._warn && window._warn('[Profile] sync cat change falhou', e); });
     });
-    return made;
+    return ids.length;
 };
 
-// Helper interno: aplica/recusa um pedido pendente. approve=true aplica a toCat.
 function _resolveCategoryChange(tId, uid, approve) {
-    var t = window.AppStore.tournaments.find(function(x) { return String(x.id) === String(tId); });
-    if (!t || !Array.isArray(t.categoryChangeRequests)) return;
-    var req = t.categoryChangeRequests.find(function(r) { return r.uid === uid && r.status === 'pending'; });
-    if (!req) return;
-    var reqIdentity = { uid: req.uid, toCat: req.toCat, requestedAt: req.requestedAt };
-    var parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
-    var me = null;
-    for (var i = 0; i < parts.length; i++) {
-        var p = parts[i];
-        if (!p || typeof p !== 'object') continue;
-        var us = (typeof window._participantUids === 'function')
-            ? window._participantUids(p) : [p.uid].filter(Boolean);
-        if (us.indexOf(uid) !== -1) { me = p; break; }
-    }
-    if (approve && me) {
-        if (typeof window._setParticipantCategories === 'function') window._setParticipantCategories(me, [req.toCat]);
-        else { me.categories = [req.toCat]; me.category = req.toCat; }
-        me.categorySource = 'perfil_aprovado';
-        delete me.autoWeakestCat;  // organizador aprovou — piso não se aplica mais
-        me.wasUncategorized = false;
-    }
-    req.status = approve ? 'approved' : 'rejected';
-    req.resolvedAt = new Date().toISOString();
-    t.categoryChangeRequests = t.categoryChangeRequests.filter(function(r) { return r.status === 'pending'; });
-    if (uid && typeof window._sendUserNotification === 'function') {
-        try {
-            window._sendUserNotification(uid, {
-                type: 'category-change-result',
-                level: 'all',
-                tournamentId: String(t.id),
-                tournamentName: t.name || 'torneio',
-                message: approve
-                    ? 'Sua categoria em "' + (t.name || 'torneio') + '" foi atualizada para ' + window._displayCategoryName(req.toCat) + '.'
-                    : 'Sua mudança de categoria em "' + (t.name || 'torneio') + '" foi recusada pelo organizador — você segue em ' + (req.fromCat ? window._displayCategoryName(req.fromCat) : 'sua categoria atual') + '.'
-            });
-        } catch (_e) {}
-    }
-    if (window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
-        window.AppStore.commitTournamentTx(tId, function(ft) {
-            var requests = Array.isArray(ft.categoryChangeRequests) ? ft.categoryChangeRequests : [];
-            var freshReq = requests.find(function(r) {
-                return r && r.uid === reqIdentity.uid && r.toCat === reqIdentity.toCat && r.requestedAt === reqIdentity.requestedAt && r.status === 'pending';
-            });
-            if (!freshReq) return false;
-            var freshParts = Array.isArray(ft.participants) ? ft.participants : Object.values(ft.participants || {});
-            var freshMe = freshParts.find(function(p) {
-                if (!p || typeof p !== 'object') return false;
-                var us = (typeof window._participantUids === 'function') ? window._participantUids(p) : [p.uid].filter(Boolean);
-                return us.indexOf(uid) !== -1;
-            });
-            if (approve && freshMe) {
-                if (typeof window._setParticipantCategories === 'function') window._setParticipantCategories(freshMe, [freshReq.toCat]);
-                else { freshMe.categories = [freshReq.toCat]; freshMe.category = freshReq.toCat; }
-                freshMe.categorySource = 'perfil_aprovado'; delete freshMe.autoWeakestCat; freshMe.wasUncategorized = false;
-            }
-            freshReq.status = approve ? 'approved' : 'rejected';
-            freshReq.resolvedAt = req.resolvedAt;
-            ft.categoryChangeRequests = requests.filter(function(r) { return r.status === 'pending'; });
-            if (!Array.isArray(ft.participants)) ft.participants = freshParts;
-            return true;
-        });
-    }
-    if (typeof showNotification === 'function') {
-        showNotification(approve ? 'Categoria aprovada' : 'Mudança recusada',
-            (req.playerName || 'Participante') + (approve ? ' → ' + window._displayCategoryName(req.toCat) : ' mantido em ' + (req.fromCat ? window._displayCategoryName(req.fromCat) : 'sua categoria')),
-            approve ? 'success' : 'info');
-    }
-    // Re-render a tela de categorias se estiver aberta.
-    try {
-        var hash = (window.location && window.location.hash) || '';
-        var cont = document.getElementById('view-container');
-        if (hash.indexOf('#categorias/' + tId) === 0 && typeof window.renderCategoryManagerPage === 'function' && cont) {
-            window.renderCategoryManagerPage(cont, tId);
-        }
-    } catch (_e) {}
+    if (!window.FirestoreDB || typeof window.FirestoreDB._callFn !== 'function') return;
+    window.FirestoreDB._callFn('resolveProfileTournamentCategoryChange', { tournamentId: String(tId), participantUid: String(uid), approve: !!approve }).then(function(result) {
+        if (result && result.tournament && window._applyCFTournament) window._applyCFTournament(tId, result.tournament);
+        if (typeof showNotification === 'function' && result && result.action !== 'missing') showNotification(approve ? 'Categoria aprovada' : 'Mudança recusada', approve ? 'A alteração foi registrada.' : 'A categoria atual foi mantida.', approve ? 'success' : 'info');
+        try { var cont=document.getElementById('view-container'); if (cont && window.location.hash.indexOf('#categorias/' + tId) === 0 && typeof window.renderCategoryManagerPage === 'function') window.renderCategoryManagerPage(cont, tId); } catch (_e) {}
+    }).catch(function(e) { if (typeof showNotification === 'function') showNotification('Erro ao decidir categoria', (e && e.message) || 'Tente novamente.', 'error'); });
 }
 window._approveCategoryChange = function(tId, uid) { _resolveCategoryChange(tId, uid, true); };
 window._rejectCategoryChange = function(tId, uid) { _resolveCategoryChange(tId, uid, false); };
@@ -3316,6 +3180,6 @@ function _autoAssignTournamentCategoriesCore(t) {
     return { changed: !!opts.didMutate, assigned: assigned };
 }
 
-window._categoryMutationsCore = { merge: _applyCategoryMerge, deleteEmpty: _applyDeleteEmptyCategory, unmerge: _applyCategoryUnmerge, unmergeInferred: _applyInferredCategoryUnmerge, normalize: _normalizeTournamentCategories, autoAssign: _autoAssignTournamentCategoriesCore };
+window._categoryMutationsCore = { merge: _applyCategoryMerge, deleteEmpty: _applyDeleteEmptyCategory, unmerge: _applyCategoryUnmerge, unmergeInferred: _applyInferredCategoryUnmerge, normalize: _normalizeTournamentCategories, autoAssign: _autoAssignTournamentCategoriesCore, syncProfile: _syncProfileCategoryCore, resolveProfile: _resolveProfileCategoryCore };
 
 })();
