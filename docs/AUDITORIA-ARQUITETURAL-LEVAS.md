@@ -3307,3 +3307,57 @@ parece "nunca rodou, e ainda dá erro". A execução mora em
 `resource.type="cloud_run_revision" AND resource.labels.service_name="<nome em minúsculas>"`, e a
 mensagem vem em `jsonPayload.message`. É a mesma família do log lido por LIMITE e não por TEMPO
 (L6.P0.1): a consulta errada não devolve erro, devolve uma conclusão falsa.
+
+## L3.P4 — `casualMatches` medido em produção e a matriz de autoridade fechada (11/set/2026, read-only)
+
+A L3 tinha inventário, schema e contrato registrados, e a decisão de autoridade parada por falta
+do dado que dimensiona o risco. Este é o dado.
+
+### O que existe hoje (26 documentos, lidos sem escrever nada)
+| Medida | Valor |
+|---|---|
+| Documentos em `casualMatches` | **26** |
+| Por status | `finished` **24** · `waiting` **1** · `setup` **1** |
+| Com `playerUids` preenchido | 24 · com `createdBy` **26/26** · com `result.winner` **20** |
+| **Campos-fantasma `hostUid`/`guestUid`** | **0 documentos** — confirmam-se inexistentes NO DADO, como a L3.P0 deduziu do código |
+| Pessoas distintas em `playerUids` | **8** · criadores distintos: **3** |
+| Sem carimbo de tempo algum | **0** (a limpeza agendada apaga o que não tem carimbo — nenhum documento está nessa faixa) |
+
+⭐ **Só 2 dos 26 documentos não estão `finished`.** A superfície viva que uma Rule de autoridade
+tocaria é minúscula; o que pesa na decisão não é o volume, é o cliente antigo (mesmo bloqueio
+externo da L2/L6).
+
+### ⭐ A L3.P3 FUNCIONOU — e eu quase registrei o contrário
+Primeira medição: `casualMatchesPlayed > 0` em **0 de 277** usuários — parecia "consertado que não
+consertou". **Estava medindo o campo errado.** O cliente persiste o snapshot de ranking em
+**`_rankStats`** (`js/trophies.js:934`), não num campo de topo, e é `_rankStats` que a tela de
+ranking lê (`js/trophies.js:1160`). Medido no campo certo: **273 de 277 usuários têm `_rankStats`
+gravado e 6 têm `casualMatchesPlayed > 0`, somando 14 partidas casuais contadas** — contra 20
+jogos encerrados com vencedor, diferença coerente com o filtro de qualificação (dois uids
+distintos) e o limite diário. Os troféus casuais **saíram do zero**.
+⚠️ `trophies` não é campo do documento de usuário: mora em `users/{uid}/trophies/{id}` — ausência
+no topo não é defeito.
+⛔ Lição, a mesma que esta auditoria já pagou duas vezes: a consulta no campo errado não devolve
+erro, devolve uma conclusão falsa. Todo número aqui foi conferido contra o writer que o grava.
+
+### Os escritores, recontados (a L3.P0.1 contava acessos; aqui a conta é de ESCRITA)
+- **6 portas em `js/firebase-db.js`**: `saveCasualMatch` (`.add`), `updateCasualMatch` (`.update`
+  cru, **sem transação**), `claimCasualSlot` (tx), `joinCasualMatch` (tx, 2 sítios),
+  `cancelCasualMatch` (`.delete`), `leaveCasualMatch` (tx `delete`/`update`).
+- **11 escritas diretas em `js/views/bracket-ui.js`** (de 24 acessos diretos à coleção).
+- **Servidor**: as consultas de `deleteAccount`, da varredura de uid e da limpeza agendada seguem
+  onde a L3.P0.1 as deixou.
+
+### Matriz de autoridade — o que cada operação precisaria (proposta, NADA decidido)
+| Operação | Quem pode, em uma frase | Por que a regra de hoje não serve |
+|---|---|---|
+| criar sala | qualquer autenticado, mas `createdBy == request.auth.uid` | hoje o payload declara `createdBy` de terceiro |
+| entrar / reivindicar slot | qualquer autenticado, **acrescentando só o próprio uid** | é o caso que impediu escopar `update` por "já está em `playerUids`" |
+| marcar ponto (`liveState`) | quem está em `playerUids` | hoje é `.update()` cru, sem transação e **last-write-wins** (debounce de 300 ms) |
+| encerrar (`result`) | quem está em `playerUids` | mesma porta crua |
+| sair | o próprio uid | já é transação |
+| apagar | `createdBy`, e nunca sala `finished` | hoje qualquer autenticado apaga a sala de outro |
+
+⛔ Nenhuma Rule foi tocada e nenhuma decisão foi tomada aqui. O que muda é que a decisão agora tem
+número: 26 documentos, 2 vivos, 8 pessoas, 3 criadores — e a única peça que falta continua sendo o
+cutover do cliente antigo, que é a L13.
