@@ -816,6 +816,32 @@ exports.requestTournamentPair = onCall(async request => {
   });
 });
 
+// ─── Cancelamento de convite: autorização, fato e avisos no mesmo commit ───
+exports.cancelTournamentPairRequest = onCall(async request => {
+  const uid = request.auth && request.auth.uid;
+  const data = request.data || {};
+  const tId = String(data.tournamentId || '').trim(), requestId = String(data.requestId || '').trim();
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId || !requestId) throw new HttpsError('invalid-argument', 'Convite inválido.');
+  if (!drawWindow || !drawWindow._teamFormation || typeof drawWindow._teamFormation.cancelPair !== 'function') throw new HttpsError('internal', 'Núcleo de duplas indisponível.');
+  const ref = db.collection('tournaments').doc(tId), agoraIso = new Date().toISOString();
+  return db.runTransaction(async tx => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    const byUid = _isTournamentAdmin(t, uid) ? null : uid;
+    const before = _antesDoMotor(t), out = drawWindow._teamFormation.cancelPair(t, requestId, byUid);
+    if (!out || !out.ok) throw new HttpsError('permission-denied', String((out && out.error) || 'sem-permissao'));
+    const b = _gravaTorneio(tx, ref, t, before, { agoraIso }), r = out.request;
+    const recipients = [r.inviterUid, r.inviteeUid].filter(x => x && String(x) !== String(uid)).map(String);
+    if (recipients.length) tx.set(ref.collection('notificationOutbox').doc('pair-cancel-' + _outboxDocIdPart(requestId) + '-' + Date.parse(agoraIso)), {
+      schema: 1, kind: 'tournament-notification', type: 'enrollment_cancelled', title: '↩️ Convite de dupla cancelado',
+      message: (_isTournamentAdmin(t, uid) ? 'O organizador' : 'Um participante') + ' cancelou o convite de dupla entre ' + String(r.inviterName || '') + ' e ' + String(r.inviteeName || '') + ' em ' + String(t.name || '') + '.',
+      tournamentId: tId, tournamentName: t.name || '', level: 'important', recipients, createdAt: agoraIso, createdAtMs: Date.parse(agoraIso), dispatchStatus: 'pending'
+    }, { merge: true });
+    return { ok: true, tournament: b.clean };
+  });
+});
+
 // ─── Placeholders: pedido do organizador, numeração e gravação canônicas ───
 exports.addTournamentPlaceholders = onCall(async request => {
   const uid = request.auth && request.auth.uid;
@@ -3069,6 +3095,7 @@ exports.setTournamentEnrollmentStatus = onCall(async request => {
   const uid = request.auth && request.auth.uid;
   const d = request.data || {}, tId = String(d.tournamentId || '').trim();
   const action = String(d.action || '').trim();
+  const forDraw = d.forDraw === true;
   const nowIso = new Date().toISOString();
   if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
   if (!tId || !['open', 'close', 'late-open', 'late-close'].includes(action)) throw new HttpsError('invalid-argument', 'Ação de inscrição inválida.');
@@ -3099,6 +3126,7 @@ exports.setTournamentEnrollmentStatus = onCall(async request => {
       _enqueueEnrollmentNotice(tx, ref, t, 'enrollments-reopened', '📋 Inscrições reabertas', 'As inscrições de ' + String(t.name || 'seu torneio') + ' foram reabertas.', nowIso);
     } else if (action === 'close' || action === 'late-close') {
       if (t.status !== 'closed') { t.status = 'closed'; changed = true; }
+      if (forDraw && !t._reopenIfDrawCancelled) { t._reopenIfDrawCancelled = true; changed = true; }
       if (action === 'late-close' && drawWindow && typeof drawWindow._maybeFinishElimination === 'function') {
         const beforeFinish = t.status; drawWindow._maybeFinishElimination(t); if (t.status !== beforeFinish) changed = true;
       }
