@@ -3442,3 +3442,30 @@ medida de adoção. O primeiro passo da L13 não é loja nem build — é **inst
 por perfil a última versão e plataforma vistas (sem PII nova), barata e fora do caminho quente
 (uma escrita por sessão, junto de um update que já acontece), para que o prazo de sete dias possa
 um dia começar a contar sobre um número real. ⛔ Não autorizado por este registro.
+
+## L16.P0 — inventário do erro que ninguém vê (11/set/2026, read-only)
+
+A L16 estava aberta sem inventário. Este é o censo dos `catch` que **não registram nada** no
+servidor — a família que deixou o writer natimorto do `discoveryFeed` sobreviver dois meses.
+
+**Medida:** `functions/index.js` tem **56** blocos `catch` sem `console`/`logger`/`throw`, dos
+quais **15 são completamente vazios**; `functions-autodraw/index.js` tem **17**, dos quais **3**
+vazios. `functions/reminder-run.js`: **zero**. A maioria dos 73 traz comentário declarando
+`best-effort` — engolir ali é decisão, não descuido. Os 18 vazios é que precisam de veredito, e
+eles não são iguais entre si:
+
+| Risco | Onde | Por que importa |
+|---|---|---|
+| 🔴 **Auditor CEGO** | `_sweepDeletionLeftovers`: `:7988`, `:8017`, `:8032`, `:8041`, `:8045` | São 9 consultas que procuram sobras depois de excluir uma conta. Cada `catch` vazio faz a consulta que falhou **não entrar** em `sobras[]` — e o resultado é reportado como `sobras=0` no log e **no e-mail de exclusão** (`:8116`, `:8144`). Uma falha transitória vira "exclusão limpa". É a mesma família do congelador cego: o verificador não sabe distinguir "não achei" de "não consegui olhar". |
+| 🔴 **Contador que MENTE** | `deleteAccount`, `:6480` | `out.notificationsDeleted++` acontece **dentro do laço, antes do `commit()`**, e a falha do commit é engolida. O retorno diz quantas notificações foram apagadas mesmo quando nenhuma foi. Caminho de exclusão de conta — o lugar onde um número errado custa mais caro. |
+| 🟠 **Exclusão incompleta em silêncio** | `deleteAccount`, `:6378` e `:6397` | Se a consulta de torneios do usuário falhar, aqueles torneios simplesmente não entram na limpeza e a exclusão "termina". |
+| 🟠 **Sorteio sem hidratar** | `functions-autodraw/index.js:1395`, `:1438`, `:3158` | `_hydrateMonarchGroups` dentro da transação de sorteio. Falha calada = sorteio rodando sobre estrutura não hidratada — vizinho do defeito que a L6.P1 mediu (`participants.length = 0` com `continue` sem log). |
+| 🟡 **Dívida já registrada** | `purgeTournamentCopies` passo 5, `:9304` | Remoção do `discoveryFeed` engolida e fora do contador do resumo — declarada na R1.4 e ainda não paga. |
+| 🟡 **Troféu que não é concedido** | `:5954`, `:6119` | `def.check()` de um troféu com defeito deixa de conceder, calado, para todo mundo. |
+| 🟢 **Sinal legítimo** | `admin.auth().getUser(uid)` em `:6313`, `:6352`, `:8002` | A exceção É a resposta ("não existe no Auth"). Correto como está. ⚠️ Exceção: `:2175` deixa `email = ""` e segue — vale conferir o que depende disso. |
+
+**O que a L16 deveria entregar primeiro (⛔ não autorizado por este registro):** não é log em 73
+lugares. São **dois** consertos com efeito imediato — (a) o auditor de sobras distinguir "não
+achei" de "não consegui olhar", devolvendo erro em vez de lista vazia; (b) o contador de
+`deleteAccount` só incrementar **depois** do commit. Os dois são a mesma regra desta auditoria:
+número que não se pode provar é pior que número nenhum.
