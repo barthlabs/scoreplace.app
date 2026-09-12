@@ -77,6 +77,7 @@ const SUITES = [
   'tests/grupo-do-whats-em-todo-card-da-tela-inicial.test.js',
   'tests/ir-para-o-jogo-espera-a-chave-nascer.test.js',
   'tests/cache-podre-do-firestore-se-joga-fora.test.js',
+  'tests/sem-credencial-guardada-abre-o-seletor.test.js',
   'tests/l4-sem-leitura-morta-de-admin-email.test.js',
   'tests/l8-escopo-da-hidratacao.test.js',
   'tests/l8-hydration-boundaries.test.js',

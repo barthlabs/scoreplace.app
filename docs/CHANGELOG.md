@@ -1,3 +1,17 @@
+## 2.2.83 — 12/set/2026
+
+Android, entrar com Google: o primeiro toque mostrava um erro vermelho e só o segundo abria a
+lista de contas. A causa é a porta moderna de login do Android, o Credential Manager, que começa
+perguntando "qual conta já autorizou este app?". Na primeira vez ninguém autorizou — e a resposta
+dele a isso é uma falha, "No credentials available", que o app exibia como erro. O segundo toque
+caía no seletor de contas de sempre e funcionava.
+
+Agora a falta de credencial guardada deixa de ser tratada como falha: o app abre o seletor de
+contas na hora, no mesmo toque. Quem já tem conta autorizada continua entrando direto, sem ver
+seletor nenhum. Desistir da tela continua sendo desistir — fechar o seletor não o reabre, e
+qualquer outro erro (rede, configuração) continua aparecendo como erro, porque esconder esses
+seria trocar um defeito visível por um invisível.
+
 ## 2.2.82 — 12/set/2026
 
 Tela de erro que não saía: o app parava em "Não consegui desenhar esta tela" e recarregar levava de

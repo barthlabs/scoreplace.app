@@ -87,9 +87,13 @@ fi
 
 echo "▶ Buildando celular (:app) + relógio (:wear)…"
 # bundleRelease → .aab (formato do Play). assembleRelease do wear → APK só p/ validar o manifesto.
-./gradlew :app:bundleRelease :wear:bundleRelease :wear:assembleRelease --console=plain --no-daemon
+# ⛔ :app:assembleRelease NÃO é opcional. Ordem do dono (12/set/2026): o .aab não se instala
+# em aparelho nenhum — quem ele testa é o APK do CELULAR, direto, ANTES de qualquer subida.
+# Sem este alvo, a leva chega ao fim sem a peça que o gate exige. [[project_apk_direto_e_o_gate]]
+./gradlew :app:bundleRelease :app:assembleRelease :wear:bundleRelease :wear:assembleRelease --console=plain --no-daemon
 
 APP_AAB="$(find app/build/outputs/bundle/release -name '*.aab' | head -1)"
+APP_APK_REL="$(find app/build/outputs/apk/release -name '*.apk' | head -1)"
 WEAR_AAB="$(find wear/build/outputs/bundle/release -name '*.aab' | head -1)"
 WEAR_APK="$(find wear/build/outputs/apk/release -name '*.apk' | head -1)"
 
@@ -103,6 +107,24 @@ echo "▶ Validando que os DOIS artefatos separados existem…"
 [ -n "$WEAR_AAB" ] || { echo "❌ FALHA: :wear (relógio) não gerou .aab. Os DOIS são obrigatórios."; exit 1; }
 [ "$APP_AAB" != "$WEAR_AAB" ] || { echo "❌ FALHA: celular e relógio apontam pro MESMO .aab → build cruzado."; exit 1; }
 echo "  ✅ Dois .aab distintos presentes (celular + relógio)."
+# ⛔ E o APK do CELULAR, que é o que o dono instala para APROVAR a leva.
+[ -n "$APP_APK_REL" ] || { echo "❌ FALHA: :app não gerou APK. É ELE que o dono instala para dar o OK."; exit 1; }
+echo "  ✅ APK do celular presente (o que vai para o aparelho do dono)."
+
+# ── ENTREGA: o APK precisa CHEGAR ao aparelho, e o caminho é o Drive do dono ──
+# Pôr no Drive montado é o único passo que não depende de Play, faixa de teste nem cabo:
+# o celular vê o arquivo em segundos pelo app do Drive.
+DRIVE="$HOME/Library/CloudStorage/GoogleDrive-rstbarth@gmail.com/Meu Drive"
+APK_ENTREGUE=""
+if [ -d "$DRIVE" ]; then
+  # nome com a VERSÃO REAL: dois APKs indistinguíveis no Drive já custaram uma volta inteira.
+  _VER="$(tr -d ' \n\r' < "$REPO_ROOT/version.txt" 2>/dev/null)"
+  [ -n "$_VER" ] || _VER="$(date +%Y%m%d-%H%M)"
+  APK_ENTREGUE="$DRIVE/scoreplace-$_VER.apk"
+  cp "$APP_APK_REL" "$APK_ENTREGUE" && echo "  ✅ APK copiado para o Drive: $APK_ENTREGUE"
+else
+  echo "  ⚠ Drive não montado — o APK ficou só em $APP_APK_REL; leve-o ao aparelho na mão."
+fi
 
 echo "▶ Validando artefato do relógio…"
 AAPT="$(ls -t "${ANDROID_HOME:-$HOME/Library/Android/sdk}"/build-tools/*/aapt2 2>/dev/null | head -1)"
@@ -125,8 +147,10 @@ fi
 
 echo ""
 echo "✅ Artefatos:"
-echo "   Celular : $APP_AAB"
-echo "   Relógio : $WEAR_AAB"
+echo "   Celular (.aab p/ o Play) : $APP_AAB"
+echo "   Celular (.apk p/ o DONO) : $APP_APK_REL"
+[ -n "$APK_ENTREGUE" ] && echo "   Celular (no Drive)       : $APK_ENTREGUE"
+echo "   Relógio (.aab p/ o Play) : $WEAR_AAB"
 echo ""
 echo "⚠ MODELO ANDROID: são DUAS distribuições SEPARADAS na MESMA ficha do Play —"
 echo "   • Celular → track do app de telefone"
@@ -136,9 +160,11 @@ echo "   O do relógio precisa estar ASSINADO com o mesmo upload key — ver not
 echo "   sobre signingConfig do :wear no README de release."
 echo "   (Na Apple é o oposto: watch vai EMBUTIDO num único arquivo — ver ios-archive.sh.)"
 echo ""
-echo "🚦 GATE OBRIGATÓRIO ANTES DE SUBIR (sem device Android → validação é no emulador):"
-echo "   1) Bootar o AVD:  ~/Library/Android/sdk/emulator/emulator -avd sp_test &"
-echo "   2) Instalar:      adb install -r <app-release.apk do :app>"
-echo "   3) Abrir o app e CONFERIR QUE A ENTRADA NÃO QUEBROU (login/onboarding, sem 403)."
-echo "      adb logcat | grep -iE 'PERMISSION_DENIED|403|FirebaseAuth|capacitor'"
-echo "   Só depois de a entrada passar no emulador é que o dono sobe os .aab no Play."
+echo "🚦 GATE OBRIGATÓRIO — quem aprova é o DONO, no aparelho dele (ordem de 12/set/2026):"
+echo "   1) O APK já está no Drive dele. Ele instala DIRETO e testa."
+echo "      ⚠ precisa DESINSTALAR o app vindo do Play antes: este é assinado com a chave de"
+echo "        UPLOAD e o do Play com a de assinatura do Google — o Android recusa a troca."
+echo "   2) Ele dá o OK."
+echo "   3) SÓ ENTÃO os .aab sobem — e vão DIRETO para a faixa ABERTA/Produção."
+echo "   ⛔ Emulador e faixa de teste interno saíram do caminho: não valem como aprovação"
+echo "      e não se usam por hábito. O aparelho real do dono substituiu os dois."

@@ -1134,13 +1134,36 @@ window._isNativeAuthAvailable = _isNativeAuthAvailable;
 // web: o JS SDK é a fonte de verdade da sessão (Firestore, listeners, perfil).
 // O plugin roda com skipNativeAuth:true (ver capacitor.config.json), então
 // signInWithGoogle() só devolve a credencial e NÃO cria sessão nativa paralela.
-function _handleGoogleLoginNative() {
+/* ⛔ "NÃO HÁ CREDENCIAL GUARDADA" NÃO É ERRO — É A PRIMEIRA VEZ.
+ * Relato do dono (12/set/2026, Android real): _"erro ao entrar com o google e aí clicando de
+ * novo aparece a conta única no aparelho e daí consegue entrar"_.
+ * MEDIDO em @capacitor-firebase/authentication@8.3.0
+ * (GoogleAuthProviderHandler.java:297-310): por padrão o plugin passa pelo Credential Manager
+ * do Android. Se o aparelho não tem credencial guardada para este app, ele lança
+ * `NoCredentialException` — mensagem "No credentials available" — e nós pintávamos uma tarja
+ * vermelha. Só que o MESMO plugin aceita `useCredentialManager: false`, que abre o seletor de
+ * contas clássico: exatamente a tela que aparecia no segundo toque e funcionava.
+ * Então a primeira tentativa pergunta "quem já autorizou?", ninguém autorizou ainda, e em vez
+ * de oferecer o seletor a gente acusava falha. Aqui a falta de credencial passa a CAIR no
+ * seletor, calada, no mesmo toque.
+ * ⚠️ Desistência do usuário NÃO entra nessa rede: quem fechou o seletor não quer vê-lo de novo.
+ * [[project_oauth_nativo_ios_aswebauthenticationsession]] */
+function _pedeCredencialDoGoogle() {
   var FA = window.Capacitor.Plugins.FirebaseAuthentication;
+  return FA.signInWithGoogle().catch(function (_erro) {
+    var _txt = String((_erro && (_erro.message || _erro.code)) || '');
+    if (!/NoCredentialException|no credential/i.test(_txt)) throw _erro;
+    window._log('[scoreplace-auth] sem credencial guardada — abrindo o seletor de contas…');
+    return FA.signInWithGoogle({ useCredentialManager: false });
+  });
+}
+
+function _handleGoogleLoginNative() {
   // Nativo NÃO usa popup (o _t('auth.connectingMsg') fala em "popup" — web only).
   showNotification(_t('auth.connecting'), 'Abrindo o login do Google…', 'info');
   window._log('[scoreplace-auth] Native Google Sign-In starting…');
 
-  FA.signInWithGoogle().then(function (result) {
+  _pedeCredencialDoGoogle().then(function (result) {
     var cred = result && result.credential;
     var idToken = cred && cred.idToken;
     var accessToken = cred && cred.accessToken;
