@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.2.75';
+window.SCOREPLACE_VERSION = '2.2.76';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -8137,7 +8137,7 @@ window._fbInner = function (key) {
             // v1.8.78: `padding-right` 34→46px pra o texto não correr por baixo do ALVO
             // do ✕ (que agora tem 44px). Sem isso, tocar no fim do próprio texto limparia
             // a busca em vez de posicionar o cursor.
-            + '<input id="' + opts.searchId + '" data-fb-search="1" type="text" oninput="window._fbSearchInput(\'' + key + '\',this)" placeholder="🔎 Buscar…" autocomplete="off" value="' + esc(search) + '" style="' + sctrl + 'width:100%;height:44px;min-height:44px;padding:0 46px 0 10px;font-size:0.8rem;">'
+            + '<input id="' + opts.searchId + '" data-fb-search="1" type="text" oninput="window._fbSearchInput(\'' + key + '\',this)" placeholder="' + esc(opts.placeholder || '🔎 Buscar…') + '" autocomplete="off" value="' + esc(search) + '" style="' + sctrl + 'width:100%;height:44px;min-height:44px;padding:0 46px 0 10px;font-size:0.8rem;">'
             // v1.8.78: o ALVO DE TOQUE e o DESENHO viraram coisas diferentes. O botão é
             // transparente e tem 44px de largura pela altura inteira do campo; o círculo
             // vermelho de 20px é o <span class="cancel-x-btn"> lá dentro. Antes o círculo
@@ -14017,6 +14017,7 @@ window._classifSearchBar = function () {
   window._classifSearchPending = false;
   var bar = window._inscritosFilterBar({
     stateKey: 'classif', sticky: false, searchOnly: true,
+    placeholder: '🔎 Buscar na classificação…',
     searchId: 'classif-search', onChange: 'window._classifApplyFilter()'
   });
   setTimeout(function () { if (typeof window._classifApplyFilter === 'function') window._classifApplyFilter(); }, 0);
@@ -14144,8 +14145,16 @@ window._renderClassifBlock = function (t, clMap, opts) {
     }).join('');
     countLabel = entries.length + ' definidos';
   }
+  /* ⛔ DUAS BARRAS IGUAIS A CINCO CENTÍMETROS UMA DA OUTRA SÃO UMA BARRA DUPLICADA.
+   * Relato do dono (12/set/2026, print da chave): _"continua a barra de busca duplicada aqui"_.
+   * Não eram duas barras da CHAVE — a de cima busca jogos, esta busca NOMES na classificação.
+   * Mas eram idênticas (mesma barra canônica, mesmo "🔎 Buscar…") e esta nascia FORA do
+   * `<details>`: aparecia mesmo com a classificação FECHADA, oferecendo busca numa lista que
+   * ninguém está vendo. Duas coisas diferentes com a mesma cara, e uma delas sem serventia
+   * naquele instante — o olho lê "duplicada", e o olho está certo.
+   * Agora ela mora DENTRO do bloco (some quando ele está fechado) e DIZ o que filtra. */
   var _searchBar = (typeof window._classifSearchBar === 'function') ? window._classifSearchBar() : '';
-  return _searchBar + '<details' + (open ? ' open' : '') + ' style="margin:6px 0 1rem;"><summary style="cursor:pointer;font-weight:700;font-size:0.78rem;color:' + window._spCor(color, 'color') + ';padding:7px 12px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;user-select:none;">' + label + ' — ' + countLabel + '</summary><div style="margin-top:6px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;padding:8px 0;">' + inner + '</div></details>';
+  return '<details' + (open ? ' open' : '') + ' style="margin:6px 0 1rem;"><summary style="cursor:pointer;font-weight:700;font-size:0.78rem;color:' + window._spCor(color, 'color') + ';padding:7px 12px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;user-select:none;">' + label + ' — ' + countLabel + '</summary>' + _searchBar + '<div style="margin-top:6px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;padding:8px 0;">' + inner + '</div></details>';
 };
 
 // pódio de UMA linha (winner/loser da final da linha + 3º da linha). '' se não há final.

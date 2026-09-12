@@ -1,3 +1,4 @@
+// 2.2.76 — a busca da classificação sai de cima da chave e diz o que filtra.
 // 2.2.75 — a lista de espera passa a usar o card canônico, com fila, presença e W.O.
 // 2.2.74 — subponto do tie-break não cola no set seguinte; W.O. e inativos em vermelho.
 // 2.2.73 — digitar a hora não perde o 2º dígito; a tela para de recarregar sozinha.

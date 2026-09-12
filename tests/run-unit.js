@@ -71,6 +71,7 @@ const SUITES = [
   'tests/coluna-do-tiebreak-nao-cola.test.js',
   'tests/wo-card-diz-de-onde-veio.test.js',
   'tests/espera-usa-o-card-canonico.test.js',
+  'tests/uma-barra-de-busca-por-lista.test.js',
   'tests/l4-sem-leitura-morta-de-admin-email.test.js',
   'tests/l8-escopo-da-hidratacao.test.js',
   'tests/l8-hydration-boundaries.test.js',

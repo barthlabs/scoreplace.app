@@ -1,3 +1,11 @@
+## 2.2.76 — 12/set/2026
+
+Tela do torneio: some a segunda barra de busca. Não eram duas barras da chave — a de cima busca
+jogos, a de baixo busca nomes na classificação —, mas eram idênticas e a da classificação nascia
+fora do bloco recolhível: aparecia mesmo com a classificação fechada, oferecendo busca numa lista
+que ninguém está vendo. Agora ela mora dentro do bloco (fechado, não existe) e o campo diz o que
+filtra: "Buscar na classificação…".
+
 ## 2.2.75 — 12/set/2026
 
 Lista de espera: as pessoas passam a aparecer no card canônico, o mesmo do elenco, das duplas, dos
