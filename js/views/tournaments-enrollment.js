@@ -919,13 +919,29 @@ window._doEnrollCurrentUser = function(tId, selectedCategories, _onSuccess) {
     // v2.3.93: regra do dono — sem nome → e-mail; na falta de e-mail → telefone.
     // (Antes pulava o e-mail e ia direto pro telefone.)
     var _dispName = window._enrollDisplayName(user) || null;
-    // Somente persiste email se ele realmente pertence a este uid.
-    // Quando um usuário phone-only faz login numa sessão que antes pertencia
-    // a outra conta (ex: Google), AppStore.currentUser.email pode estar
-    // contaminado com o email anterior. Verificação: se o uid não bate com
-    // o provedor de email (sem @), descarta o email para evitar coroa falsa.
-    var _safeEmail = user.email || null;
-    const participantObj = { name: _dispName, email: _safeEmail, displayName: _dispName, uid: user.uid, selfEnrolled: true, ligaActive: true };
+    /* (O cuidado que existia aqui — "só persiste e-mail se ele pertence mesmo a este uid",
+     * por causa de sessão phone-only contaminada com o e-mail de outra conta — deixou de ter
+     * objeto: o e-mail não é mais persistido. A preocupação morre com o campo.)
+     * ⛔ L4.P10 — O E-MAIL SAI DAQUI. ESTE ERA O VAZAMENTO VIVO.
+     * MEDIDO (12/set/2026, leitura ANÔNIMA por REST do doc do Confra): o documento do torneio
+     * é público — a internet o lê sem login — e a inscrição própria gravava `email` dentro de
+     * `participants[]`. Dos 4 e-mails expostos naquele documento, 3 vinham DAQUI. E são dado
+     * de TERCEIRO, não o e-mail do organizador: é o pior dos dois.
+     * POR QUE SAIR NÃO QUEBRA NADA, medido antes de mexer:
+     *   • `participants[].email` só serve de IDENTIDADE quando não há uid — tanto a chave do
+     *     sorteio (`p.uid || p.email`, tournaments-draw.js) quanto a busca do servidor
+     *     (functions-autodraw, `!u.length && …`) só caem no e-mail nessa falta. E aqui o uid
+     *     SEMPRE existe: é inscrição da própria pessoa, logada.
+     *   • NENHUM envio de e-mail do servidor lê este campo (conferido em functions/index.js,
+     *     functions-autodraw/index.js e reminder-run.js). Convite e lembrete resolvem por uid.
+     *   • Exibição tolera a ausência: os três pontos que liam `p.email` o usam como ÚLTIMO
+     *     recurso de rótulo, depois de `displayName` e `name` — e `_enrollDisplayName` já
+     *     garante nome aqui.
+     * ⛔ O caminho de inscrito SEM uid (digitado pelo organizador) NÃO é tocado por esta leva:
+     *    lá o e-mail ainda é a única âncora, e tirá-lo quebraria a deduplicação do sorteio.
+     * ⏳ Esta leva estanca a ENTRADA. Os e-mails já gravados continuam no documento até a
+     *    migração de remoção — que é outra leva e precisa de autorização. */
+    const participantObj = { name: _dispName, displayName: _dispName, uid: user.uid, selfEnrolled: true, ligaActive: true };
     // Audit trail: timestamp de inscrição própria
     participantObj.addedAt = new Date().toISOString();
     if (user.gender) participantObj.gender = user.gender;

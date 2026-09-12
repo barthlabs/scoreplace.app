@@ -1,3 +1,4 @@
+// 2.2.85 — inscrever-se num torneio deixa de gravar seu e-mail no documento público.
 // 2.2.84 — lista de espera, inativos e W.O.: cor do estado no card inteiro e várias colunas.
 // 2.2.83 — entrar com Google no Android abre o seletor de contas no primeiro toque.
 // 2.2.82 — cache local corrompido do Firestore deixa de travar o app: ele é descartado e a tela volta.

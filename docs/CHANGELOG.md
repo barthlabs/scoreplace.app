@@ -1,3 +1,20 @@
+## 2.2.85 — 12/set/2026
+
+Privacidade: inscrever-se num torneio deixa de gravar o seu e-mail dentro do documento do
+torneio. Esse documento é público — qualquer pessoa o lê pela internet sem estar logada, porque é
+assim que o link de convite e a página do torneio funcionam — e a inscrição própria vinha
+guardando ali o e-mail de quem se inscreveu. Medido no torneio em andamento: dos quatro e-mails
+que a leitura anônima entregava, três vinham daí. São e-mails de participantes, não do
+organizador, e é por isso que esta é a parte que mais importa.
+
+Nada depende desse campo para quem se inscreve sozinha: a identidade é a conta (o uid), que
+continua gravada; nenhum convite ou lembrete do servidor lê o e-mail do inscrito; e o nome
+exibido já vem do perfil. O caso do participante adicionado à mão pelo organizador, sem conta,
+não muda — ali o e-mail ainda é a única forma de não duplicar a pessoa no sorteio.
+
+Esta versão impede novas gravações. Os e-mails já guardados em torneios existentes continuam
+onde estão até uma limpeza específica, que mexe em documentos de produção e será feita à parte.
+
 ## 2.2.84 — 12/set/2026
 
 Painel da Lista de Espera: quem espera vaga agora tem o card inteiro em âmbar, e não mais um card
