@@ -1,3 +1,4 @@
+// 2.2.90 — partida casual: só quem criou apaga a sala, e jogo encerrado não se reescreve.
 // 2.2.89 — faxina automática dos tokens de verificação vencidos, no servidor.
 // 2.2.88 — listas de pessoas passam a baixar só o que aparece na tela.
 // 2.2.87 — remover um e-mail vinculado passa a ser feito pelo servidor, não pelo aparelho.

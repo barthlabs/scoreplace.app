@@ -3608,6 +3608,18 @@ window.FirestoreDB = {
           }
           return p;
         });
+        /* ⛔ QUEM CRIOU SAIU: A SALA NÃO FICA SEM DONO.
+         * Ordem do dono (12/set/2026): _"se quem criou sai da sala, os outros que ficam
+         * assumem a propriedade da sala na ordem da entrada"_.
+         * Sem isto, `createdBy` continuaria apontando para quem saiu — e como APAGAR a sala
+         * é só de quem criou (L3.P5), a sala ficaria órfã: ninguém dentro dela poderia
+         * encerrá-la. `playerUids` é a ordem de ENTRADA (cada um se acrescenta ao fim, ver
+         * js/views/bracket-ui.js), então o primeiro que sobra é o próximo dono. */
+        var _novoDono = null;
+        if (data.createdBy === uid && playerUids.length) {
+          _novoDono = playerUids[0];
+        }
+
         // Auto-dissolução (v1.9.60): a sala vive enquanto houver ≥1 usuário
         // CADASTRADO (uid) — não importa se é o criador ou não. Quando o último
         // uid sai (sobram só nomes digitados sem conta, ou ninguém), a sala se
@@ -3626,7 +3638,11 @@ window.FirestoreDB = {
           transaction.delete(docRef);
           return 'dissolved';
         }
-        transaction.update(docRef, { participants: participants, playerUids: playerUids, players: players });
+        var _upd = { participants: participants, playerUids: playerUids, players: players };
+        // a propriedade passa junto, no MESMO commit da saída — nunca num segundo passo, que
+        // poderia falhar e deixar a sala sem dono.
+        if (_novoDono) _upd.createdBy = _novoDono;
+        transaction.update(docRef, _upd);
         return true;
       });
     } catch (e) {

@@ -1,3 +1,20 @@
+## 2.2.90 — 12/set/2026
+
+Partida casual: quem manda em cada coisa passou a estar escrito. Até aqui, qualquer pessoa com
+conta podia apagar a sala de qualquer outra e reescrever o placar de uma partida em que nem
+estava — inclusive de partidas já encerradas.
+
+Agora: apagar a sala é só de quem a criou; lançar o placar é de quem está jogando; entrar pelo
+código ou QR continua livre, e cada pessoa só se acrescenta ou se retira — ninguém tira ninguém.
+Se quem criou a sala sai e ainda há gente jogando, a sala passa para o primeiro que entrou,
+no mesmo instante da saída, para não ficar sem ninguém que possa encerrá-la.
+
+Partida encerrada virou história e não se escreve mais nela. A única exceção é confirmar que
+era você quem estava jogando, que pode acontecer dias depois — e essa confirmação não serve de
+carona para mexer no placar.
+
+Ler continua aberto a todos, sem login: é o que faz o convite por QR funcionar.
+
 ## 2.2.89 — 12/set/2026
 
 Faxina no servidor. Os tokens que o app cria para provar que um e-mail é seu — o de verificar
