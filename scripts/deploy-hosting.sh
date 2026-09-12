@@ -265,7 +265,13 @@ fi
 # token expirado só depois dela deixa o main alinhado mas o site antigo. Esta consulta é de
 # leitura e usa a mesma sessão que o upload usará em seguida.
 echo "▸ conferindo a sessão do Firebase…"
-if ! firebase projects:list --json >/dev/null 2>&1; then
+# ⛔ NÃO CONFIAR NO EXIT CODE DO `firebase --json`. MEDIDO em 12/set/2026, com a sessão VÁLIDA:
+#     firebase projects:list --json  →  stdout com '"status": "success"'  e  exit code 2
+# Ou seja, o teste antigo (`if ! firebase … >/dev/null 2>&1`) dava FALSO NEGATIVO e abortava todo
+# deploy com "NÃO AUTENTICADO" — o dono passou horas achando que a credencial expirava toda hora,
+# e eu cheguei a pedir `login --reauth` sem necessidade. Quem responde "estou autenticado" é a
+# RESPOSTA, não o código de saída. [[feedback_medir_com_dado_real_antes_de_teorizar]]
+if ! firebase projects:list --json 2>/dev/null | grep -q '"status": *"success"'; then
   echo
   echo "✗ FIREBASE NÃO AUTENTICADO — nada foi testado, empurrado ou publicado."
   echo "  Rode: firebase login --reauth"

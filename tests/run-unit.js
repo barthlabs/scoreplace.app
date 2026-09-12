@@ -60,6 +60,7 @@ const SUITES = [
   'tests/l13-carimbo-de-sessao.test.js',
   'tests/l16-disponibilidade-deixa-rastro.test.js',
   'tests/ir-para-o-torneio-leva-ao-jogo.test.js',
+  'tests/sessao-do-firebase-nao-da-falso-negativo.test.js',
   'tests/zero-do-set-em-disputa-vira-travessao.test.js',
   'tests/l4-sem-leitura-morta-de-admin-email.test.js',
   'tests/l8-escopo-da-hidratacao.test.js',
