@@ -1,3 +1,14 @@
+## 2.2.75 — 12/set/2026
+
+Lista de espera: as pessoas passam a aparecer no card canônico, o mesmo do elenco, das duplas, dos
+inativos e dos W.O. Ali se montava à mão uma linha achatada — bolinha com o número, nome, toggle e
+botão —, e geometria paralela é a que diverge na primeira mudança (foi assim que os cards de
+inativos apareceram "todos com 1 de inscrição"). Nada do que a linha fazia se perdeu: a presença
+(toggle e "Aplicar W.O.") vem do mesmo factory da chamada, o número de inscrição vem do mapa de
+ordem, e a posição na fila — que é informação só desta tela — fica numa etiqueta acima do card,
+junto do "Próximo a entrar". O filtro de presença da tela de elenco não vale aqui: a fila mostra a
+fila inteira.
+
 ## 2.2.74 — 12/set/2026
 
 Card de jogo: a coluna de um set com tie-break nasce mais larga. Medido no jogo 122 (6 · 5⁽⁵⁾ · 14):

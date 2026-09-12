@@ -2657,13 +2657,38 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
     }
   }
 
+  /* ── ⭐ A ESPERA USA O CARD CANÔNICO, IGUAL AO RESTO DO APP ────────────────────────────
+   * Ordem do dono (12/set/2026, painel da Lista de Espera): _"os cards da lista de espera
+   * deveriam ser canônicos e como estão aqui os do W.O."_ — e, olhando o resultado: _"não são
+   * cards afinal"_. Estava certo: aqui se montava à mão uma LINHA achatada (bolinha com o
+   * número, nome, toggle, botão) enquanto inativos, W.O., duplas e o elenco inteiro usam
+   * `_inscritoIndividualCard`. Card feito à mão é a segunda geometria que diverge na primeira
+   * mudança — foi assim que os cards de inativos vieram "com 1 de inscrição" há duas levas.
+   *
+   * O QUE O CARD JÁ SABE FAZER, e por isso não se perde nada: a presença (Presente/Ausente,
+   * toggle e "Aplicar W.O.") vem do MESMO factory que a chamada usa (`_rollCallPresenceCtx`),
+   * o número de inscrição vem do mapa de ordem, e a pele âmbar de quem espera vaga já existe
+   * (`waitSet`). O que é só desta tela — a POSIÇÃO NA FILA e o "Próximo a entrar" — fica numa
+   * etiqueta acima do card, do mesmo jeito que as duplas da espera já faziam.
+   * ⛔ O FILTRO DA CHAMADA NÃO VALE AQUI: `cardPresence` pode pedir para PULAR quem não casa com
+   * o filtro de presença (que é da tela de elenco). Numa lista de espera isso APAGARIA gente da
+   * fila. O `skip` é neutralizado — a fila mostra a fila inteira, sempre.
+   * [[project_card_de_jogo_geometria_canon]] · [[project_inscrito_card_canonical]] */
+  const _ordemMapaWL = (typeof window._buildEnrollOrderMap === 'function') ? window._buildEnrollOrderMap(t) : {};
+  const _waitSetWL = (function () {
+    var m = {};
+    sorted.forEach(function (p) { var n = (getName(p) || '').toLowerCase().trim(); if (n) m[n] = true; });
+    return m;
+  })();
+  const _presencaWL = function (p) {
+    var r = (typeof _rcWL.cardPresence === 'function') ? _rcWL.cardPresence(p) : null;
+    if (!r) return null;
+    return { skip: false, styleExtra: r.styleExtra || '', rowHtml: r.rowHtml || '' };
+  };
+
   const listItems = _solosWL.map((p, i) => {
     const name = getName(p);
-    const safeName = name.replace(/'/g, "\\'");
-    const mc = window._idMapHas(t, ci, p);
     const isAb = window._idMapHas(t, ab, p);
-    const statusLabel = mc ? _t('bracket.checkedIn') : _t('bracket.notCheckedIn');
-    const statusColor = mc ? '#4ade80' : '#64748b';
     const isNext = (i === nextIdx);
     const dimAbsent = (_policy === 'locked' && isAb); // travado: ausente mantém posição, mas esmaecido
 
@@ -2678,19 +2703,25 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
       !(window._isPlaceholderName && window._isPlaceholderName(name)));
     // v1.2.31 (dono): o card INTEIRO é a área de arrasto — sem ícone de handle. Card nenhum
     // no app anuncia arrasto com "pontinhos"; ter só aqui quebra o padrão e não ajuda.
-    // Os data-attrs (que o _wirePlaceholderDnD lê) vão no próprio card, abaixo.
     const _phDragAttrs = (isOrg && _isSoloRealLate)
       ? `data-ph-drag="${name.replace(/"/g, '&quot;').replace(/'/g, '&#39;')}" data-ph-uid="${String(_pUid).replace(/"/g, '&quot;')}" title="Arraste sobre uma vaga (Jogador NN) na chave para ocupá-la" `
       : '';
 
-    return `
-      <div ${_standbySearchAttrs(p)}${_phDragAttrs}style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:${window._spCor(mc ? 'rgba(16,185,129,0.08)' : isAb ? 'rgba(239,68,68,0.08)' : 'rgba(255,255,255,0.03)', 'background')};border-radius:10px;border-left:4px solid ${isNext ? '#f59e0b' : 'rgba(255,255,255,0.08)'};${dimAbsent ? 'opacity:0.5;' : ''}${_phDragAttrs ? 'cursor:grab;touch-action:none;' : ''}">
-        <div style="width:26px;height:26px;border-radius:50%;background:${window._spCor(isNext ? 'linear-gradient(135deg,#f59e0b,#d97706)' : 'rgba(255,255,255,0.08)', 'background')};display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:800;color:${window._spCor(isNext ? '#000' : '#94a3b8', 'color')};flex-shrink:0;">${i + 1}</div>
-        <span style="font-weight:600;font-size:0.88rem;color:${window._spCor(isNext ? '#fbbf24' : '#94a3b8', 'color')};flex:1;min-width:0;word-break:break-word;overflow-wrap:anywhere;">${name}${isNext && _policy === 'locked' ? ' <span style="font-size:0.62rem;font-weight:700;color:var(--sp-c-fbbf24,#fbbf24);background:rgba(245,158,11,0.15);padding:1px 6px;border-radius:6px;white-space:nowrap;">Próximo a entrar</span>' : ''}</span>
-        <label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;${isAb ? 'opacity:0.35;cursor:not-allowed;pointer-events:none;' : ''}"><input type="checkbox" ${mc ? 'checked' : ''} ${isAb ? 'disabled' : `onclick="event.stopPropagation(); window._toggleCheckIn('${_tIdSafe}', '${safeName}', '${String(_pUid).replace(/'/g, "\\'")}');"`}><span class="toggle-slider"></span></label>
-        <span style="font-size:0.65rem;font-weight:700;color:${window._spCor(statusColor, 'color')};white-space:nowrap;">${statusLabel}</span>
-        ${window._woBtnHtml(`event.stopPropagation(); window._markAbsent('${_tIdSafe}', '${safeName}', '${String(_pUid).replace(/'/g, "\\'")}')`, !isAb, { label: isAb ? 'Reverter' : '', size: 'btn-micro', fontSize: '0.68rem' })}
-      </div>`;
+    // a posição na FILA (e o "Próximo a entrar") é informação desta tela, não do card:
+    // o número grande do card é o de INSCRIÇÃO, e os dois não são a mesma coisa.
+    const _fila = `<div style="display:flex;align-items:center;gap:6px;">` +
+      `<span style="min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:${window._spCor(isNext ? 'linear-gradient(135deg,#f59e0b,#d97706)' : 'rgba(255,255,255,0.08)', 'background')};display:inline-flex;align-items:center;justify-content:center;font-size:0.66rem;font-weight:800;color:${window._spCor(isNext ? '#000' : '#94a3b8', 'color')};flex-shrink:0;">${i + 1}º na fila</span>` +
+      (isNext && _policy === 'locked' ? `<span style="font-size:0.62rem;font-weight:700;color:var(--sp-c-fbbf24,#fbbf24);background:rgba(245,158,11,0.15);padding:1px 6px;border-radius:6px;white-space:nowrap;">Próximo a entrar</span>` : '') +
+    `</div>`;
+
+    const _card = (typeof window._inscritoIndividualCard === 'function')
+      ? window._inscritoIndividualCard(t, p, i, {
+          isOrg: isOrg, drawDone: true, cardPresence: _presencaWL,
+          enrollOrderMap: _ordemMapaWL, waitSet: _waitSetWL
+        })
+      : '';
+
+    return `<div ${_standbySearchAttrs(p)}${_phDragAttrs}style="display:flex;flex-direction:column;gap:4px;min-width:0;${dimAbsent ? 'opacity:0.5;' : ''}${_phDragAttrs ? 'cursor:grab;touch-action:none;' : ''}">${_fila}${_card}</div>`;
   }).join('');
 
   /* ── ABAIXO DA ESPERA: INATIVOS E W.O. ────────────────────────────────────────────────

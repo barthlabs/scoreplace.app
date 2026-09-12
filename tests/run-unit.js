@@ -70,6 +70,7 @@ const SUITES = [
   'tests/hora-nao-perde-o-que-se-digita.test.js',
   'tests/coluna-do-tiebreak-nao-cola.test.js',
   'tests/wo-card-diz-de-onde-veio.test.js',
+  'tests/espera-usa-o-card-canonico.test.js',
   'tests/l4-sem-leitura-morta-de-admin-email.test.js',
   'tests/l8-escopo-da-hidratacao.test.js',
   'tests/l8-hydration-boundaries.test.js',
