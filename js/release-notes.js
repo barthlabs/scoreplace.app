@@ -1,3 +1,4 @@
+// 2.2.82 — cache local corrompido do Firestore deixa de travar o app: ele é descartado e a tela volta.
 // 2.2.81 — o balãozinho entra na conta do nome; botões do grupo alinhados à esquerda.
 // 2.2.80 — grupo do WhatsApp em todo card da tela inicial; respiro dos sets ajustado.
 // 2.2.79 — a ordem das novidades é a hora do lançamento; placares de set mais juntos.

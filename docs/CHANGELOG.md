@@ -1,3 +1,24 @@
+## 2.2.82 — 12/set/2026
+
+Tela de erro que não saía: o app parava em "Não consegui desenhar esta tela" e recarregar levava de
+volta à mesma tela. A causa está no cache local do Firestore. O banco de dados do navegador guarda os
+valores grandes partidos em pedaços; quando um desses pedaços fica inconsistente, a biblioteca acusa
+`INTERNAL ASSERTION FAILED … Failed to read large IndexedDB value` e para de responder — e como o
+cache é o primeiro a ser lido, a tela seguinte cai no mesmo lugar. Era o que se via no emulador
+Android, e é o mesmo defeito que já vinha aparecendo na web desde junho.
+
+Dois consertos, ambos necessários. O primeiro: quem captura o erro agora o mostra ao detector. Ele
+estourava dentro do desenho da tela e era capturado pela rede de erro que pinta a mensagem — nunca
+chegava ao detector, que só escutava a porta dos erros não capturados. A recuperação existia e nunca
+era chamada. O segundo: a recuperação passa a JOGAR O CACHE FORA antes de recarregar. Só recarregar
+relê o mesmo valor quebrado. O cache do Firestore é espelho do servidor — descartá-lo não perde nada
+que esteja gravado; o que se perde é a fila de lançamentos offline, que neste estado já está parada
+de qualquer forma, porque é justamente a fila da biblioteca que falhou.
+
+A limpeza tem teto de três segundos e acontece uma vez por sessão: recuperação que trava seria pior
+que a doença, e recarregar em laço, pior ainda. O nome do banco a apagar é descoberto na hora, não
+cravado no código.
+
 ## 2.2.81 — 12/set/2026
 
 Card de jogo: o balãozinho de conversa deixa de ser cortado. Ele morava dentro da caixa do nome, mas

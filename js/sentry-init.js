@@ -89,6 +89,55 @@
   function _fsFatal(s) {
     return /INTERNAL ASSERTION FAILED|Unexpected state|Database deleted by request of the user/i.test(String(s || ''));
   }
+  /* ⛔ RECARREGAR SEM LIMPAR O CACHE É RECARREGAR PRA DENTRO DO MESMO DEFEITO.
+   * MEDIDO no emulador Android (12/set/2026): o erro era
+   * `INTERNAL ASSERTION FAILED … {"rl":"Failed to read large IndexedDB value"}` — o SDK não
+   * consegue LER um valor que ele mesmo gravou em pedaços no IndexedDB. O reload relê o mesmo
+   * valor quebrado e o app volta pra tela de erro; foi o que o dono viu repetir.
+   * O cache do Firestore é DESCARTÁVEL — é espelho do servidor. Então antes de recarregar,
+   * joga fora: `terminate()` (solta o IndexedDB) + `clearPersistence()`. Se a API falhar,
+   * apaga o banco na unha. Com teto de tempo: recuperação que trava é pior que a doença.
+   * ⚠️ O que se perde é a FILA OFFLINE — que neste estado já está morta de qualquer jeito
+   * (a AsyncQueue do Firestore falhou; é isso que o erro significa). */
+  /* ⛔ O NOME DO BANCO NÃO SE CHUTA — se ENUMERA.
+   * O SDK monta `firestore/{chave}/{projectId}[.{database}]/…` (MEDIDO no
+   * firebase-firestore-compat 12.17.1). Cravar esse nome à mão erraria em staging, em 2ª
+   * base e em qualquer versão futura — e erraria em SILÊNCIO, que é o pior jeito.
+   * [[project_ler_firestore_por_rest_erra_calado]] */
+  function _apagarBancosDoFirestore() {
+    return new Promise(function (pronto) {
+      try {
+        if (!indexedDB.databases) return pronto();
+        indexedDB.databases().then(function (bancos) {
+          var _alvos = (bancos || []).map(function (b) { return b && b.name; })
+            .filter(function (n) { return n && n.indexOf('firestore/') === 0; });
+          if (!_alvos.length) return pronto();
+          var _falta = _alvos.length;
+          var _menos = function () { if (--_falta <= 0) pronto(); };
+          _alvos.forEach(function (nome) {
+            try {
+              var _r = indexedDB.deleteDatabase(nome);
+              _r.onsuccess = _menos; _r.onerror = _menos; _r.onblocked = _menos;
+            } catch (_) { _menos(); }
+          });
+        }).catch(function () { pronto(); });
+      } catch (_) { pronto(); }
+    });
+  }
+  function _limparCacheDoFirestore() {
+    return new Promise(function (pronto) {
+      var _teto = setTimeout(pronto, 3000);
+      var _fim = function () { clearTimeout(_teto); pronto(); };
+      try {
+        if (typeof firebase === 'undefined' || typeof firebase.firestore !== 'function') return _fim();
+        var _db = firebase.firestore();
+        _db.terminate()
+          .then(function () { return _db.clearPersistence(); })
+          .then(_fim)
+          .catch(function () { _apagarBancosDoFirestore().then(_fim); });
+      } catch (_) { _fim(); }
+    });
+  }
   function _maybeRecoverFirestore(text) {
     if (_fsRecovering || !_fsFatal(text)) return;
     try { if (sessionStorage.getItem('sp_fsRecovered')) return; } catch (_) { }
@@ -102,9 +151,17 @@
       }
       try { sessionStorage.setItem('sp_fsRecovered', '1'); } catch (_) { }
       try { if (typeof window.showNotification === 'function') window.showNotification('🔄 Reconectando', 'Recuperando a conexão com o servidor…', 'info'); } catch (_) { }
-      setTimeout(function () { try { window.location.reload(); } catch (_) { } }, 1200);
+      _limparCacheDoFirestore().then(function () {
+        setTimeout(function () { try { window.location.reload(); } catch (_) { } }, 400);
+      });
     })();
   }
+
+  /* ⛔ QUEM PEGA O ERRO NEM SEMPRE É O `onerror`. MEDIDO: no Android o erro estourou DENTRO do
+   * render e foi capturado pela rede de erro do router (`try/catch` que desenha "Não consegui
+   * desenhar esta tela") — ou seja, nunca chegou aqui, e a recuperação nunca rodou. Por isso
+   * o detector fica exposto: quem engole um erro tem a obrigação de mostrá-lo a ele. */
+  window._recuperarFirestoreSePreciso = function (texto) { try { _maybeRecoverFirestore(texto); } catch (_) {} };
 
   // ── 3. Capturar erros DO MOMENTO ZERO até o SDK carregar ───────────────────
   // window.onerror handler temporário que enche o buffer. Quando o SDK

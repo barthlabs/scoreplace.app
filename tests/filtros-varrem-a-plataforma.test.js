@@ -366,7 +366,12 @@ if (codPools && codCont) {
   ok(/\} catch \(_erroRender\) \{/.test(router), 'existe o catch do render');
 
   const iCatch = router.indexOf('} catch (_erroRender) {');
-  const bloco = router.slice(iCatch, iCatch + 2600);
+  /* ⛔ ORÇAMENTO DE CARACTERES NÃO É ÂNCORA: a janela fixa de 2600 quebrou quando o bloco
+   * ganhou o aviso ao detector do Firestore (2.2.82) — acusou ausência do que estava lá,
+   * 6 linhas adiante. O fim do bloco é o `catch (_e3)` que guarda o desenho do aviso. */
+  const iFimBloco = router.indexOf('} catch (_e3) {}', iCatch);
+  ok(iFimBloco > iCatch, 'âncora: o bloco do catch termina no guarda do desenho');
+  const bloco = router.slice(iCatch, iFimBloco + 20);
   ok(/_captureException\(_erroRender/.test(bloco),
     'a falha é REPORTADA ao Sentry — antes era engolida, e foi por isso que não havia rastro');
   ok(/tags: \{ view:/.test(bloco), 'o relatório diz QUAL tela falhou');

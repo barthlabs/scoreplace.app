@@ -836,6 +836,14 @@ function initRouter() {
           window._captureException(_erroRender, { tags: { view: String(view || 'dashboard') } });
         }
         window._warn('[router] render de "' + view + '" falhou:', _erroRender);
+        /* ⛔ A REDE DE ERRO NÃO PODE ENGOLIR O QUE TEM CURA. MEDIDO no Android: o
+         * `INTERNAL ASSERTION FAILED … Failed to read large IndexedDB value` do Firestore
+         * estourou DENTRO do render, foi parar aqui e a recuperação automática (que limpa o
+         * cache e recarrega) nunca soube. A pessoa ficava na tela de erro, apertava "tentar de
+         * novo" e caía nela outra vez. Quem captura mostra ao detector; ele decide. */
+        if (typeof window._recuperarFirestoreSePreciso === 'function') {
+          window._recuperarFirestoreSePreciso((_erroRender && _erroRender.message) || String(_erroRender));
+        }
       } catch (_e2) {}
       try {
         var _msg = (_erroRender && _erroRender.message) ? String(_erroRender.message) : 'erro desconhecido';
