@@ -14,11 +14,27 @@
       },
       "oauth_client": [
         {
+          "client_id": "382268772878-1gselnmmdoptoj1nn7rnfm8b2ng7l68o.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "app.scoreplace",
+            "certificate_hash": "0a7982232a534d8e315d0ffb033292b5a9b4ff04"
+          }
+        },
+        {
           "client_id": "382268772878-2gp6j5o51501t6uqlvqs5hp9gbaf29ml.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "app.scoreplace",
             "certificate_hash": "9b17d202cc31c923ef000d66af9bf56254cf3a29"
+          }
+        },
+        {
+          "client_id": "382268772878-eim9s3tm9n671khiffoauetn9vbtgtfs.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "app.scoreplace",
+            "certificate_hash": "0fc50d769a624cd6ccccd00ee7181dc6f6aa9bf2"
           }
         },
         {
