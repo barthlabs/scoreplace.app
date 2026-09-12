@@ -5233,7 +5233,28 @@ async function _throttleHit(db, coll, key, maxPerMin) {
         tx.set(ref, { windowStart: winStart || now, count: count }, { merge: true });
       }
     });
-  } catch (e) { /* fail-open */ }
+  } catch (e) {
+    /* ⛔ L14.P1 — O LIMITADOR SE DERROTAVA SOZINHO.
+     * Aqui havia `catch (e) { /* fail-open *\/ }`: qualquer erro liberava a chamada, calado.
+     * O problema não é teórico e vem da própria forma: o contador vive num documento
+     * chaveado pelo IDENTIFICADOR, e é atualizado em TRANSAÇÃO. Um ataque de força bruta
+     * martela o MESMO documento — o que produz DISPUTA, que aborta a transação, que caía
+     * aqui e liberava. Quanto mais rápido o ataque, menos ele era limitado. É a família do
+     * "não consegui olhar virou não achei" (L16), agora numa porta de LOGIN.
+     * A distinção que conserta sem derrubar ninguém: DISPUTA é evidência de volume — trata
+     * como batida. Os outros erros (rede, indisponibilidade) seguem liberando, porque um
+     * soluço do Firestore não pode trancar quem só quer entrar — mas agora APARECEM no log.
+     * ⚠️ Um usuário legítimo praticamente não disputa o próprio documento: ele o toca uma vez
+     * por tentativa de login. */
+    var _cod = String((e && (e.code || e.message)) || '');
+    var _disputa = /ABORTED|aborted|contention|too much contention|failed-precondition|deadline/i.test(_cod);
+    if (_disputa) {
+      blocked = true;
+      console.warn('[throttle] ' + coll + ': disputa no contador — tratando como batida (volume alto):', _cod);
+    } else {
+      console.error('[throttle] ' + coll + ': falhou e LIBEROU a chamada:', _cod);
+    }
+  }
   return blocked;
 }
 

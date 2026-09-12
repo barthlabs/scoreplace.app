@@ -1,3 +1,4 @@
+// 2.2.92 — o limite de tentativas de login deixa de se desligar sozinho sob ataque.
 // 2.2.91 — remoção de um caminho antigo de gravação que podia sobrescrever dado do servidor.
 // 2.2.90 — partida casual: só quem criou apaga a sala, e jogo encerrado não se reescreve.
 // 2.2.89 — faxina automática dos tokens de verificação vencidos, no servidor.

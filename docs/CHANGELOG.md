@@ -1,3 +1,19 @@
+## 2.2.92 — 12/set/2026
+
+Segurança do login. Existe um limite de tentativas por minuto no login por telefone e na
+checagem de conta, para dificultar quem fica testando senhas. Esse limite tinha um defeito de
+forma: o contador vive num registro por identificador e é atualizado com trava; quando muitas
+tentativas chegam ao mesmo tempo, a trava falha por disputa — e a falha estava sendo tratada
+como "pode passar". Ou seja, quanto mais rápido o ataque, menos ele era barrado, e nada disso
+aparecia em lugar nenhum.
+
+Agora a disputa é lida pelo que ela é — sinal de volume — e conta como tentativa. Outras falhas,
+como uma instabilidade do banco, continuam deixando passar, porque um soluço não pode trancar
+quem só quer entrar; mas passam a ficar registradas.
+
+Para quem usa normalmente não muda nada: uma pessoa entrando na própria conta não disputa o
+próprio contador.
+
 ## 2.2.91 — 12/set/2026
 
 Limpeza interna, sem efeito visível. Saiu do código um caminho antigo de gravação que salvava o

@@ -86,6 +86,7 @@ const SUITES = [
   'tests/l4-desvincular-email-e-do-servidor.test.js',
   'tests/lista-de-pessoas-nao-entrega-a-ficha-inteira.test.js',
   'tests/limpeza-do-link-magico-roda-o-que-promete.test.js',
+  'tests/l14-limitador-nao-se-derrota-sozinho.test.js',
   'tests/l4-sem-leitura-morta-de-admin-email.test.js',
   'tests/l8-escopo-da-hidratacao.test.js',
   'tests/l8-hydration-boundaries.test.js',
