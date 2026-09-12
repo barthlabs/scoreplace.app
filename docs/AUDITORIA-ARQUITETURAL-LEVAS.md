@@ -3443,6 +3443,29 @@ por perfil a última versão e plataforma vistas (sem PII nova), barata e fora d
 (uma escrita por sessão, junto de um update que já acontece), para que o prazo de sete dias possa
 um dia começar a contar sobre um número real. ⛔ Não autorizado por este registro.
 
+## RECONFERÊNCIA DA PORTA ANÔNIMA — 12/set/2026 (read-only)
+
+⛔ **Vários "PROBLEMA ABERTO" registrados entre 31/ago e 11/set já não descrevem a produção.**
+Medido hoje por REST **sem nenhum cabeçalho de autenticação**, pedindo `list` em cada coleção:
+
+| coleção | registrado (11/set) | **medido hoje** |
+|---|---|---|
+| `magicLinks` | 200 — enumerável, com link assinado + e-mail em cada doc | **403** |
+| `users` | 200 — enumerável | **403** |
+| `emailVerifyCodes` | acumulando expirados, legível | **403** |
+| `mergeTokens` | idem | **403** |
+| `casualMatches` | 200 | **200 — aberto de propósito** (entrar por QR; sem PII além do que já é público) |
+
+O fechamento veio junto com a enumeração barrada pela **L4.P4**. ⚠️ Isto NÃO limpa os itens
+correlatos: a Rule de `users` é `allow read: if request.auth != null` no match do documento, e no
+Firestore isso **concede `list` a qualquer AUTENTICADO** — o 403 acima é só para anônimo. O item
+"users é enumerável por qualquer autenticado" segue de pé, e com ele `listRecentUsers` sem
+`sanitize` e `loadUserProfile` devolvendo o documento cru em 30 chamadas.
+
+⭐ **Lição de método, e ela vale para toda esta auditoria:** "PROBLEMA ABERTO" escrito num dia é
+uma fotografia, não um estado. Antes de planejar leva em cima de um item antigo, REMEDIR — hoje
+quatro dos cinco já estavam fechados e eu ia propor trabalho para nenhum deles.
+
 ## L16.P0 — inventário do erro que ninguém vê (11/set/2026, read-only)
 
 A L16 estava aberta sem inventário. Este é o censo dos `catch` que **não registram nada** no

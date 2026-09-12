@@ -83,6 +83,7 @@ const SUITES = [
   'tests/l16-hidratacao-que-falha-nao-fica-calada.test.js',
   'tests/l4-inscricao-propria-nao-grava-email.test.js',
   'tests/balao-fica-junto-do-nome-em-duas-linhas.test.js',
+  'tests/l4-desvincular-email-e-do-servidor.test.js',
   'tests/l4-sem-leitura-morta-de-admin-email.test.js',
   'tests/l8-escopo-da-hidratacao.test.js',
   'tests/l8-hydration-boundaries.test.js',

@@ -122,13 +122,22 @@ console.log('\n⑥ o cliente não escreve mais nada deste fluxo\n');
   ok(codigo.indexOf('_checkEmailLinkIntent') === -1, '⛔ o fallback morto de escrita direta foi removido');
   ok(codigo.indexOf('scoreplace_linkEmailIntent') === -1, '   e a chave de localStorage dele também');
 
-  /* Remover o próprio e-mail continua sendo a única escrita cliente permitida
-   * para essa lista. O contrato não pode voltar a apontar para ownerUid vindo de
-   * URL/localStorage ou para outro perfil. */
+  /* ⛔ O CONTRATO MUDOU NA 2.2.87 (L4.P11) — E APERTOU. NÃO AFROUXE DE VOLTA.
+   * Até aqui este teste afirmava que "remover o próprio e-mail continua sendo a ÚNICA escrita
+   * cliente permitida para essa lista". Essa exceção era o buraco: `linkedEmails` é PROVA DE
+   * POSSE (o servidor o aceita numa fusão de contas e resolve conta por ele no login por senha
+   * e no reset), e a Rule que permitia remover permitia gravar QUALQUER array — dava para PÔR
+   * o e-mail de outra pessoa, não só tirar o seu. Agora não há exceção: NENHUMA escrita
+   * cliente. A remoção entra pela porta `unlinkSecondaryEmail`, que só tira, só da conta de
+   * quem chamou, e não aceita lista vinda do cliente.
+   * A prova detalhada da porta vive em tests/l4-desvincular-email-e-do-servidor.test.js;
+   * aqui fica o contrato: o cliente não escreve. */
   const unlink = codigo.slice(codigo.indexOf('window._profileUnlinkEmail = function'),
-    codigo.indexOf('window._profileUnlinkEmail = function') + 1000);
-  ok(/\.collection\('users'\)\.doc\(cu\.uid\)\.update\(\{\s*linkedEmails: linked\s*\}\)/.test(unlink),
-    'remoção escreve somente users/{cu.uid}.linkedEmails');
+    codigo.indexOf('window._profileUnlinkEmail = function') + 2200);
+  ok(!/\.collection\('users'\)\.doc\(cu\.uid\)\.update\(/.test(unlink),
+    'remoção NÃO escreve mais no documento pelo cliente');
+  ok(/httpsCallable\('unlinkSecondaryEmail'\)/.test(unlink),
+    'remoção entra pela porta do servidor');
   ok(!/ownerUid|intent\.|\.doc\(email\)/.test(unlink),
     '⛔ remoção não aceita dono ou documento vindos do e-mail/link');
 }

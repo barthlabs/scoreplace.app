@@ -6854,6 +6854,48 @@ exports.requestSecondaryEmail = onCall(
  * caso comum (o fluxo antigo também não exigia). A posse do token É a prova, e o destino da
  * vinculação vem do registro (`ownerUid`), então estar logado em outra conta não muda nada:
  * o e-mail vai para a conta que PEDIU. */
+/* ⛔ L4.P11 — REMOVER E-MAIL VINCULADO SAI DA MÃO DO CLIENTE.
+ * MEDIDO: `linkedEmails` é PROVA DE POSSE. O servidor o aceita como prova numa fusão de contas
+ * (`via: "email-vinculado"`) e resolve conta por ele no login por senha e no reset
+ * (`_uidByProfileEmail` → `_resolveAccount` → `checkAccount`). A ADIÇÃO já era server-only
+ * desde a L1.1 — só entra com token de e-mail confirmado. Mas a REMOÇÃO continuava um
+ * `users/{uid}.update({ linkedEmails })` cru do cliente (js/views/auth.js), e a MESMA Rule que
+ * deixa remover deixa gravar **qualquer** array: bastava escrever o e-mail de outra pessoa
+ * para o servidor passar a tratar aquela caixa como prova de posse da MINHA conta.
+ * Das portas abertas do inventário, era a única cuja consequência é ENTRAR NA CONTA ALHEIA.
+ * ⛔ ESTA PORTA SÓ TIRA, NUNCA PÕE: ela remove um e-mail que JÁ ESTÁ na lista do PRÓPRIO
+ * chamador. Não aceita lista vinda do cliente — é o array do cliente que era o problema.
+ * ⏳ Fechar a Rule (mover `linkedEmails` para privilegedUserFields) é o passo seguinte e NÃO
+ * é feito aqui: o parque instalado ainda chama o caminho antigo, e fechar antes de a versão
+ * nova circular quebraria a remoção para quem está numa build velha. */
+exports.unlinkSecondaryEmail = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
+  async (request) => {
+    const uid = request.auth && request.auth.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Entre na sua conta para continuar.");
+    const alvo = _secEmail.normalizaEmail(String((request.data && request.data.email) || ""));
+    if (!alvo) throw new HttpsError("invalid-argument", "E-mail obrigatório.");
+
+    const db = admin.firestore();
+    const uref = db.collection("users").doc(uid);
+    /* transação: ler e reescrever a lista sem corrida com a confirmação de um outro vínculo */
+    const out = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(uref);
+      if (!snap.exists) return { ok: false, motivo: "sem-perfil" };
+      const atual = snap.data() || {};
+      const linked = Array.isArray(atual.linkedEmails) ? atual.linkedEmails : [];
+      const restam = linked.filter((e) => _secEmail.normalizaEmail(String(e || "")) !== alvo);
+      if (restam.length === linked.length) return { ok: false, motivo: "nao-vinculado" };
+      tx.update(uref, { linkedEmails: restam });
+      return { ok: true, restam: restam.length };
+    });
+
+    if (out.ok) console.log("[unlinkSecondaryEmail] uid=" + uid + " removeu 1, restam " + out.restam);
+    else console.log("[unlinkSecondaryEmail] uid=" + uid + " recusado: " + out.motivo);
+    return out;
+  }
+);
+
 exports.confirmSecondaryEmail = onCall(
   { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
   async (request) => {

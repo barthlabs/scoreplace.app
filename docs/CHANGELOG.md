@@ -1,3 +1,18 @@
+## 2.2.87 — 12/set/2026
+
+Segurança da conta: remover um e-mail vinculado passa a ser feito pelo servidor. Antes, o próprio
+aparelho reescrevia a lista inteira de e-mails vinculados do perfil — e essa lista não é enfeite:
+o servidor a trata como prova de que aquela caixa de e-mail é sua, tanto para juntar duas contas
+quanto para entrar por senha e para recuperar senha. Quem escrevesse a lista poderia acrescentar
+o e-mail de outra pessoa, e não apenas tirar o seu.
+
+Acrescentar já era do servidor desde agosto, e só com o link de confirmação recebido na caixa.
+Faltava a remoção, que agora passa pela mesma porta: ela só tira, só da conta de quem pediu, e
+só um e-mail que já esteja lá.
+
+Para quem usa, nada muda além da mensagem de erro ficar mais clara quando o e-mail não está
+vinculado.
+
 ## 2.2.86 — 12/set/2026
 
 Card de jogo: o balãozinho de conversa volta a ficar junto do nome. Quando o nome era curto,

@@ -9438,16 +9438,34 @@ window._profileHydrateNameConflict = function () {
       var cu = window.AppStore && window.AppStore.currentUser;
       if (!cu || !cu.uid || !window.FirestoreDB || !window.FirestoreDB.db) return;
       if (!confirm('Remover ' + email + ' dos seus e-mails vinculados?')) return;
-      var linked = Array.isArray(cu.linkedEmails) ? cu.linkedEmails.slice() : [];
-      var idx = linked.indexOf(email);
-      if (idx !== -1) linked.splice(idx, 1);
-      cu.linkedEmails = linked;
-      window.FirestoreDB.db.collection('users').doc(cu.uid).update({
-        linkedEmails: linked
-      }).then(function() {
+      /* ⛔ L4.P11 — QUEM TIRA É O SERVIDOR. Aqui havia um `users/{uid}.update({linkedEmails})`
+       * cru: o CLIENTE montava a lista inteira e a gravava. `linkedEmails` é PROVA DE POSSE —
+       * o servidor o aceita numa fusão de contas e resolve conta por ele no login por senha e
+       * no reset —, então escrever a lista pelo cliente permitia PÔR o e-mail de outra pessoa,
+       * não só tirar o meu. A adição já era server-only (só com token confirmado) desde a
+       * L1.1; faltava a remoção. A porta nova só TIRA, e só o que já está na lista de quem
+       * chamou. [[project_porta_unica_de_escrita_cf]] */
+      var _fn = (window.firebase && firebase.app && firebase.functions)
+        ? firebase.app().functions('us-central1') : null;
+      if (!_fn) { if (window.showNotification) window.showNotification('Sem conexão', 'Tente novamente em instantes.', 'error'); return; }
+      _fn.httpsCallable('unlinkSecondaryEmail')({ email: email }).then(function (r) {
+        var out = (r && r.data) || {};
+        if (!out.ok) {
+          if (window.showNotification) window.showNotification('Não removi', out.motivo === 'nao-vinculado' ? 'Esse e-mail não está vinculado à sua conta.' : 'Tente novamente.', 'error');
+          return;
+        }
+        /* a cópia em memória só muda DEPOIS de o servidor confirmar — senão a tela mostraria
+         * removido o que continua lá. */
+        var _l = Array.isArray(cu.linkedEmails) ? cu.linkedEmails.slice() : [];
+        var _i = _l.indexOf(email);
+        if (_i !== -1) _l.splice(_i, 1);
+        cu.linkedEmails = _l;
         window._profileRenderLinkedEmails();
         if (window.showNotification) window.showNotification('E-mail removido', email, 'info');
-      }).catch(function(e) { window._warn('[LinkedEmail] unlink error:', e); });
+      }).catch(function (e) {
+        window._warn('[LinkedEmail] unlink error:', e);
+        if (window.showNotification) window.showNotification('Não removi', (e && e.message) || 'Tente novamente.', 'error');
+      });
     };
 
     /* ⛔ `_checkEmailLinkIntent` REMOVIDA (L1.1, 2.1.65) — era o TERCEIRO caminho de escrita
