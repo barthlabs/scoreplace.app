@@ -76,17 +76,14 @@ const must = (v, m) => { assert.ok(v, m); ok++; };
 
 // ── ③ e ④ o placar do e-mail: cor por SET, subponto desenhado, cores da paleta ──
 {
-  const pIni = FN.indexOf('function _digestPalette(theme)');
-  const pFim = FN.indexOf('\n}\n', pIni);
-  const sIni = FN.indexOf('function _digestScoreboard(it, P)');
-  const sFim = FN.indexOf('\n}\n', sIni);
-  const ctx = { _digestEscape: (x) => String(x).replace(/&/g, '&amp;').replace(/</g, '&lt;') };
-  vm.runInNewContext(FN.slice(pIni, pFim + 2) + '\n' + FN.slice(sIni, sFim + 2), ctx);
+  // 12/set/2026: o desenho do e-mail saiu do `index.js` (que não é require-ável em teste) para
+  // `functions/digest-core.js`. Módulo puro ⇒ nada de fatiar fonte: dá pra exigir o próprio.
+  const ctx = require(path.join(root, 'functions/digest-core.js'));
 
   const claro = ctx._digestPalette('light'), escuro = ctx._digestPalette('dark');
   must(claro.win && claro.loss && escuro.win && escuro.loss, '⛔ vitória/derrota saem da PALETA, não de hex cravado');
   must(claro.win !== escuro.win, 'e cada tema tem o seu valor — contraste é regra dos dois');
-  must(!/#16a34a|#dc2626/.test(FN.slice(sIni, sFim)), '⛔ nenhuma cor cravada sobrou no placar');
+  must(!/#16a34a|#dc2626/.test(ctx._digestScoreboard.toString()), '⛔ nenhuma cor cravada sobrou no placar');
 
   const html = ctx._digestScoreboard({ scoreboard: {
     p1: 'Livia / Rodrigo', p2: 'Inga / Denise', winner: 'Inga / Denise',
@@ -104,8 +101,9 @@ const must = (v, m) => { assert.ok(v, m); ok++; };
   must(/>7<sup[^>]*>\(7\)/.test(l1.replace(/\s+/g, ' ')) || l1.indexOf('(7)') >= 0, '⛔ o subponto do tie-break aparece do lado dele');
   must(l2.indexOf('(9)') >= 0, 'e o do adversário do lado dele');
   must(html.indexOf('object') === -1, '⛔ nunca "[object Object]" — o tie-break é objeto e tem de ser lido por lado');
-  must(FN.indexOf('name="color-scheme" content="light dark"') > 0 &&
-       FN.indexOf('name="supported-color-schemes"') > 0,
+  const DG = fs.readFileSync(path.join(root, 'functions/digest-core.js'), 'utf8');
+  must(DG.indexOf('name="color-scheme" content="light dark"') > 0 &&
+       DG.indexOf('name="supported-color-schemes"') > 0,
     '⛔ o HTML declara color-scheme — sem isso o Apple Mail ignora o tema escuro que o servidor mandou');
 }
 
@@ -134,6 +132,40 @@ const must = (v, m) => { assert.ok(v, m); ok++; };
   must(/_spCor\(\s*window\._corDoSetLado\(/.test(bloco.replace(/\s+/g, ' ')) ||
        /_spCor\(_c,/.test(bloco), '⛔ a cor do set passa por `_spCor` (tema), nunca hex cru');
   must(/window\._corDoSetLado\(s, n,/.test(bloco), 'o card usa a fonte única da cor');
+}
+
+// ── ⑥ o aviso não pode mostrar a CHAVE de tradução ao usuário ───────────────
+{
+  const pt = fs.readFileSync(path.join(root, 'js/i18n-pt.js'), 'utf8');
+  const en = fs.readFileSync(path.join(root, 'js/i18n-en.js'), 'utf8');
+  ['bracket.matchClosed', 'bracket.matchClosedDetail'].forEach((k) => {
+    must(pt.indexOf("'" + k + "'") > 0, '⛔ `' + k + '` existe no dicionário PT');
+    must(en.indexOf("'" + k + "'") > 0, 'e no EN');
+  });
+  // ⛔ `_t(k)` devolve a própria chave quando não traduz: `_t(k) || fb` nunca cai no fallback.
+  // ⛔ recorte por ÂNCORA, nunca por tamanho fixo: 1200 caracteres hoje viram 900 amanhã.
+  const i = BUI.indexOf("_planSave.multi && !_planSave.live");
+  const fimAviso = BUI.indexOf("null, { type: 'warning' });", i);
+  assert.ok(i > 0 && fimAviso > i, 'âncoras do aviso de partida encerrada');
+  const bloco = BUI.slice(i, fimAviso);
+  must(/v === k/.test(bloco), '⛔ o aviso compara com a CHAVE antes de usar o texto (senão mostra "bracket.matchClosed")');
+  must(!/_t\('bracket\.matchClosed'\) \|\|/.test(bloco), 'e o padrão `_t(k) || fallback`, que não funciona, não voltou');
+}
+
+// ── ⑦ a cor por set vale em TODA tela que mostra placar (ordem do dono) ─────
+{
+  const DASH = fs.readFileSync(path.join(root, 'js/views/dashboard.js'), 'utf8');
+  const BRK = fs.readFileSync(path.join(root, 'js/views/bracket.js'), 'utf8');
+  const FN = fs.readFileSync(path.join(root, 'functions/index.js'), 'utf8');
+  must(/window\._corDoSetLado\(s, n,/.test(DASH), 'dashboard (Novidades e Seus últimos resultados)');
+  must(/window\._corDoSetLado\(s, playerNum, _temV\)/.test(BRK), 'card da CHAVE');
+  const DIGEST = fs.readFileSync(path.join(root, 'functions/digest-core.js'), 'utf8');
+  must(/const corDoSet = \(s, side\)/.test(DIGEST), 'e-mail de notificação');
+  // a grade read-only já era por set desde sempre — fica travada aqui também
+  const BM = fs.readFileSync(path.join(root, 'js/views/bracket-model.js'), 'utf8');
+  must(/var cor = g > o \? '#4ade80' : \(o > g \? '#f87171'/.test(BM), 'grade de sets read-only');
+  must((BM.match(/window\._corDoSetLado = function/g) || []).length === 1,
+    '⛔ a régua da cor é UMA só — quatro telas, uma fonte');
 }
 
 console.log('✅ jogo 168: ' + ok + ' asserções — melhor de N não vira 1 set, subponto viaja e aparece, cor por set e contraste nos dois temas');

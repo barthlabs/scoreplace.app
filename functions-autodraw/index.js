@@ -1633,6 +1633,13 @@ function _scoreNotificationEvent(t, m, outcome, actor, at, context) {
     fromUid: String((isApproval ? actor && actor.uid : proposerUid || actor && actor.uid) || ''),
     fromName: authorName,
     level: 'fundamental',
+    /* ⛔ FUNDAMENTAL É SÓ PARA QUEM JOGA AQUELE JOGO. Ordem do dono (12/set/2026): _"essas
+     * notificações de placar só são fundamentais se for o placar de jogo no qual participa;
+     * caso contrário é só importante"_. O nível ia igual para TODO destinatário — inclusive
+     * para o organizador, que recebe o acompanhamento de dezenas de jogos por dia. Quem sabe
+     * quem joga é o JOGO, então os uids dos dois lados viajam no item e a entrega decide por
+     * pessoa (ver `deliverScoreNotification`). */
+    matchUids: _slotUidsOf(m, 'p1').concat(_slotUidsOf(m, 'p2')).map(String),
     scoreboard,
     recipients: _scoreNotificationRecipients(t, m, pending),
     createdAt: at,
@@ -1724,7 +1731,11 @@ exports.deliverScoreNotification = onDocumentCreated(
           type: item.type, title: item.title, message: item.message,
           tournamentId: tId, tournamentName: item.tournamentName || '', matchId: item.matchId || '',
           fromUid: item.fromUid || '', fromName: item.fromName || '', fromPhoto: '',
-          level: item.level || 'fundamental', scoreboard: item.scoreboard || null,
+          // fundamental para quem está em quadra; importante para quem só acompanha
+          level: (Array.isArray(item.matchUids) && item.matchUids.length)
+            ? (item.matchUids.indexOf(String(uid)) !== -1 ? 'fundamental' : 'important')
+            : (item.level || 'fundamental'),
+          scoreboard: item.scoreboard || null,
           createdAt: item.createdAt || new Date(now).toISOString(), timestamp: item.createdAtMs || now, read: false,
           outboxEventId: eventId
         }, { merge: true });

@@ -298,6 +298,8 @@ window._translations['en'] = {
   'result.tbMarginDetail': 'A tie-break only ends with a {n}-point margin.',
   'bracket.tiebreak': 'Tie-break',
   'bracket.difPts': '{n}-pt margin',
+  'bracket.matchClosed': 'This match is already finished',
+  'bracket.matchClosedDetail': 'It is a best of {n} and already has a winner. To fix the score use ✏️ Edit — confirming again here would erase the sets already entered.',
   'bracket.setNoDraw': 'A set cannot be tied',
   'bracket.setNoDrawDetail': '{set} needs a winner.',
   'bracket.stbShort': 'Super tie-break not finished',

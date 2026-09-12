@@ -11,7 +11,7 @@ const bracket = read('js/views/bracket-ui.js');
 const auto = read('functions-autodraw/index.js');
 const queue = read('js/firebase-db.js');
 const dispatch = read('js/views/tournaments-organizer.js');
-const digest = read('functions/index.js');
+const digest = read('functions/digest-core.js');   // 12/set: o desenho do e-mail saiu do index.js (que não é require-ável em teste)
 const app = read('js/views/notifications-view.js');
 
 ok(/function _notificationScoreboard/.test(auto) && /Number\.isFinite\(p1\)/.test(auto), 'CF só cria aviso com sets canônicos completos');

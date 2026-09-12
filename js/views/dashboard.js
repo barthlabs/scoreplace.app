@@ -1840,16 +1840,24 @@ function renderDashboard(container) {
     // rola sozinha até o jogo do próprio usuário, e como estes grupos são os DELE, o
     // destino cai na classificação certa sem precisar de âncora por grupo (que não
     // existe hoje na chave).
-    function _grupoHeadHtml(grupo, tName, cor, attr, inline, tId) {
+    function _grupoHeadHtml(grupo, tName, cor, attr, inline, tId, matchId) {
       // v1.8.99: leva o GRUPO junto — ordem do dono: "tem que ir com o grupo clicado
       // no topo e nao no topo do torneio". O rótulo vai por sessionStorage (não pela
       // URL) porque a chave é normalizada e nome de grupo tem espaço/acento; a chave é
       // consumida pelo bracket assim que ele rola até lá.
       var _grpK = (typeof window._grpKey === 'function') ? window._grpKey(grupo) : '';
+      /* ⛔ NA ELIMINATÓRIA NÃO EXISTE GRUPO — e era só o grupo que viajava.
+       * Relato do dono (11/set/2026): "ao clicar em ir para o torneio, deveria ir para o jogo
+       * onde está o botão, e não foi". `sp_scrollToGroup` resolve a fase de grupos; na fase 2 o
+       * rótulo vem vazio, não há âncora e a tela cai no topo. Agora o ID DO JOGO viaja junto
+       * (`sp_scrollToMatch`) e a chave rola até ele — o grupo continua indo, para quem tem. */
+      var _mId = String(matchId == null ? '' : matchId).replace(/'/g, '');
       var _btn = tId
         ? '<a href="#bracket/' + String(tId).replace(/"/g, '&quot;') + '" ' +
           'onclick="event.stopPropagation();try{sessionStorage.setItem(\'sp_scrollToGroup\',\'' +
-            String(_grpK).replace(/'/g, '') + '\')}catch(e){}" ' +
+            String(_grpK).replace(/'/g, '') + '\');' +
+            (_mId ? ('sessionStorage.setItem(\'sp_scrollToMatch\',\'' + _mId + '\');') : '') +
+          '}catch(e){}" ' +
           'style="flex-shrink:0;margin-left:auto;align-self:center;font-size:0.62rem;font-weight:700;' +
           'text-decoration:none;color:var(--sp-c-7dd3fc,#7dd3fc);background:rgba(125,211,252,0.14);' +
           'border:1px solid rgba(125,211,252,0.45);border-radius:999px;padding:3px 9px;line-height:1.2;' +
@@ -2939,7 +2947,8 @@ function renderDashboard(container) {
           // Cabeçalho compartilhado (linha inteira) + só "JOGO N" acima de cada chave.
           // v1.8.78: grupo e torneio em DUAS LINHAS (antes lado a lado, e o torneio
           // sumia no `ellipsis` em tela estreita). Mesmo desenho das Novidades.
-          html += _grupoHeadHtml(g.group, g.tName, g.color, _spFull(), false, g.tId);
+          html += _grupoHeadHtml(g.group, g.tName, g.color, _spFull(), false, g.tId,
+            (g.units[0] && g.units[0].m && g.units[0].m.id) || null);
           // v2.3.62: o rótulo "JOGO N" com a barra colorida acima de cada chave
           // foi removido — essa info já aparece no header de cada box
           // ("R2 GRUPO A • JOGO N"). Só o cabeçalho do grupo (grupo + torneio)
@@ -2958,7 +2967,7 @@ function renderDashboard(container) {
             html += '<div data-mr-card="1"' + _spCard() + ' style="min-width:0;display:flex;flex-direction:column;gap:0.6rem;">' +
               _grupoHeadHtml(
                 (String(u.faseStr2 || '').toLowerCase().indexOf('final') !== -1 ? '🏆 ' : '') + u.faseStr2,
-                u.tName, u.color, '', true, u.tId
+                u.tName, u.color, '', true, u.tId, (u.m && u.m.id) || null
               ) +
               u.body +
             '</div>';
@@ -3247,7 +3256,8 @@ function renderDashboard(container) {
       var _novAntes = 0;
       _novList.forEach(function(it) {
         var _fp = _splitFase(it.phaseLabel || it.subLine || '');
-        var _head = _grupoHeadHtml(_fp.group, it.tName, '#fbbf24', 'data-nov-head="inline"', true, it.tId);
+        var _head = _grupoHeadHtml(_fp.group, it.tName, '#fbbf24', 'data-nov-head="inline"', true, it.tId,
+          (it.m && it.m.id) || null);
         _novAntes = _spCards;
         _guarda(_novCard(it, _head));
       });

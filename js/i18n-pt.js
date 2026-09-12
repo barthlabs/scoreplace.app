@@ -298,6 +298,8 @@ window._translations['pt'] = {
   'result.tbMarginDetail': 'O tie-break só termina com {n} pontos de diferença.',
   'bracket.tiebreak': 'Tie-break',
   'bracket.difPts': 'dif {n} pts',
+  'bracket.matchClosed': 'Este jogo já está encerrado',
+  'bracket.matchClosedDetail': 'Ele é melhor de {n} e já tem vencedor. Para corrigir o placar use ✏️ Editar — confirmar de novo aqui apagaria os sets já lançados.',
   'bracket.setNoDraw': 'Set não pode empatar',
   'bracket.setNoDrawDetail': 'O {set} precisa de um vencedor.',
   'bracket.stbShort': 'Super tie-break incompleto',

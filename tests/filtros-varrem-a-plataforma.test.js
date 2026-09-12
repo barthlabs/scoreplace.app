@@ -393,8 +393,10 @@ if (codPools && codCont) {
 // resultados" saiu de graça, em vez de virar uma segunda montagem que divergiria.
 (function () {
   const dash = fs.readFileSync(path.join(ROOT, 'js', 'views', 'dashboard.js'), 'utf8');
-  ok(/function _grupoHeadHtml\(grupo, tName, cor, attr, inline, tId\)/.test(dash),
-    'o cabeçalho compartilhado recebe o id do torneio');
+  // 11/set/2026: ganhou um 7º parâmetro — o id do JOGO — porque na eliminatória não há grupo
+  // e "Ir para o torneio" caía no topo. Ver tests/ir-para-o-torneio-leva-ao-jogo.test.js.
+  ok(/function _grupoHeadHtml\(grupo, tName, cor, attr, inline, tId, matchId\)/.test(dash),
+    'o cabeçalho compartilhado recebe o id do torneio (e agora também o do jogo)');
   ok(/href="#bracket\/' \+ String\(tId\)/.test(dash),
     'o botão leva pra chave/classificação do torneio');
   ok(/Ir para o torneio/.test(dash), 'o rótulo é "Ir para o torneio"');
@@ -406,11 +408,11 @@ if (codPools && codCont) {
   // v1.9.64: o 4º argumento (atributos) deixou de ser literal — passou a carregar o
   // `data-sp-extra` da prévia da linha fechada. O INVARIANTE aqui é o ÚLTIMO argumento:
   // o id do torneio, sem o qual o botão "Ir para o torneio" não é desenhado.
-  ok(/_grupoHeadHtml\(g\.group, g\.tName, g\.color, [^,]+, false, g\.tId\)/.test(dash),
+  ok(/_grupoHeadHtml\(g\.group, g\.tName, g\.color, [^,]+, false, g\.tId,/.test(dash),
     '"Seus últimos resultados" (agrupado) passa o id');
   ok(/u\.tName, u\.color, '', true, u\.tId/.test(dash),
     '"Seus últimos resultados" (avulso) passa o id');
-  ok(/_grupoHeadHtml\(_fp\.group, it\.tName, '#fbbf24', 'data-nov-head="inline"', true, it\.tId\)/.test(dash),
+  ok(/_grupoHeadHtml\(_fp\.group, it\.tName, '#fbbf24', 'data-nov-head="inline"', true, it\.tId,/.test(dash),
     '"Novidades no seu torneio" passa o id');
 })();
 

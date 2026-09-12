@@ -8223,7 +8223,27 @@ window._bracketBar = function (show) {
     // O texto digitado sobrevive ao re-render (estado da barra), mas os CARDS voltam sem
     // filtro. Reaplica assim que o DOM novo aterrissa — daqui, e não de cada render site do
     // bracket (são 7). setTimeout(0) porque este HTML ainda é string quando esta função roda.
-    setTimeout(function () { if (typeof window._bracketApplyFilter === 'function') window._bracketApplyFilter(); }, 0);
+    setTimeout(function () {
+      /* ⛔ UMA BARRA SÓ, E O NAVEGADOR NÃO DESEMPATA ID REPETIDO.
+       * Relato do dono (11/set/2026, print): a tela do torneio mostrava DUAS barras de busca —
+       * a de cima com o texto digitado e outra logo abaixo do rótulo da chave. Dois emissores
+       * (a tela do torneio e o cabeçalho do chaveamento) podem coincidir, e aí nascem dois
+       * `#bracket-search`: `getElementById` devolve o PRIMEIRO, então quem digitava na outra
+       * filtrava nada. Em vez de adivinhar qual dos dois emissores calar — os dois têm razão
+       * em contextos diferentes —, o DOM decide: sobra a PRIMEIRA, as demais saem.
+       * Feito aqui porque é o ponto único por onde toda barra de chave passa. */
+      try {
+        var _todas = document.querySelectorAll('#fbwrap-chaves');
+        for (var _i = 1; _i < _todas.length; _i++) {
+          if (_todas[_i] && _todas[_i].parentNode) _todas[_i].parentNode.removeChild(_todas[_i]);
+        }
+        var _vazios = document.querySelectorAll('#bracket-search-empty');
+        for (var _j = 1; _j < _vazios.length; _j++) {
+          if (_vazios[_j] && _vazios[_j].parentNode) _vazios[_j].parentNode.removeChild(_vazios[_j]);
+        }
+      } catch (e) {}
+      if (typeof window._bracketApplyFilter === 'function') window._bracketApplyFilter();
+    }, 0);
     return bar + '<div id="bracket-search-empty" style="display:none;text-align:center;color:var(--text-muted);padding:14px;font-size:0.85rem;">Nenhum jogo encontrado.</div>';
 };
 window._inscritosBar = function (t, show) {
@@ -11196,6 +11216,18 @@ window.AppStore = {
             var _lt = this.tournaments.find(function (x) { return String(x.id) === String(tournamentId); });
             if (_lt) {
               Object.keys(_d.tournament).forEach(function (k) { _lt[k] = _d.tournament[k]; });
+              /* ⛔ TORNEIO DIVIDIDO: o documento que a CF devolve NÃO traz os jogos — eles moram
+               * na subcoleção, e o placar fino do card vem do ESPELHO, que a dashboard hidrata
+               * uma vez por sessão. Sem apagar a marca, o card repinta com o espelho ANTIGO.
+               * MEDIDO duas vezes em 11-12/set/2026 (jogos 171 e 112 do Confra): o dado gravou
+               * certo e a tela continuou mostrando o placar anterior — no 112, os campos do
+               * super tie-break voltaram zerados logo depois de o 10-8 ser aceito.
+               * ⚠️ E ISSO É A CAUSA DA PERDA DO JOGO 168: a tela mentiu, o dono concluiu que não
+               * tinha gravado e lançou DE NOVO — e o segundo lançamento é que apagou os três
+               * sets. Consertar a tela tira o motivo de relançar.
+               * Só no SUCESSO: falha de gravação não pode virar releitura. */
+              delete _lt._resultsHydrated;
+              delete _lt._resultsHydrating;
               try { this._saveToCache(); } catch (_eC) {}
               /* ⛔ GRAVOU ⇒ REPINTA. NÃO ESPERAR O ECO (2.1.37).
                * Relato do dono no torneio de teste: lançou a final, "tive que lançar de

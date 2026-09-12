@@ -593,6 +593,20 @@ function _alvoDeEntrada() {
   if (_adv) return _adv;
   // 1) GRUPO PEDIDO — quem chegou pelo "Ir para o torneio" de um grupo específico (dashboard)
   //    quer AQUELE grupo, não o seu. Não encontrado (re-sorteio, fase avançada) → não insiste.
+  /* ⛔ 0) JOGO PEDIDO — na ELIMINATÓRIA não existe grupo, e era só o grupo que viajava.
+   * Relato do dono (11/set/2026): _"ao clicar em ir para o torneio, deveria ir para o jogo onde
+   * está o botão, e não foi"_. Sem rótulo de grupo, o item (1) abaixo não acha nada e a tela cai
+   * no seu próprio jogo (item 2) — ou no topo. O card tem `id="card-<matchId>"` e já carrega
+   * `scroll-margin-top`, então basta pedir por ele. Vale para TODA fase; o grupo continua
+   * valendo para quem tem (e é quem abre a seção fechada, lá embaixo). */
+  var _pm = null;
+  try { _pm = sessionStorage.getItem('sp_scrollToMatch'); } catch (e) {}
+  if (_pm) {
+    var _cardAlvo = document.getElementById('card-' + String(_pm));
+    if (_cardAlvo) return _cardAlvo;
+    // ainda não montado (grupo fechado / lote preguiçoso): o pedido de grupo abaixo resolve,
+    // e o pedido de jogo fica guardado para a próxima passada do laço de reafirmação.
+  }
   var _p = null;
   try { _p = sessionStorage.getItem('sp_scrollToGroup'); } catch (e) {}
   if (_p) {
@@ -817,7 +831,7 @@ function _applyMyMatchesFilter() {
         if (_estaveis < 3 && _voltas < 30) { setTimeout(_tick, 100); return; }
         // acabou (estabilizou ou estourou o teto): só agora a chave sai, senão a
         // próxima entrada na chave herdaria um pedido velho.
-        try { sessionStorage.removeItem('sp_scrollToGroup'); } catch (e) {}
+        try { sessionStorage.removeItem('sp_scrollToGroup'); sessionStorage.removeItem('sp_scrollToMatch'); } catch (e) {}
       };
       setTimeout(_tick, 220);
     };
@@ -2697,6 +2711,12 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
     var _inat = (typeof window._phasePendingInactives === 'function') ? window._phasePendingInactives(t) : [];
     var _wos  = (typeof window._phaseWoDeactivated === 'function') ? window._phaseWoDeactivated(t) : [];
     if (!_inat.length && !_wos.length) return '';
+    /* ⛔ O CARD CANÔNICO PRECISA DO MAPA DE ORDEM — sem ele, TODO card mostra "1".
+     * Relato do dono (11/set/2026, print de INATIVOS e W.O.): _"todos com 1 de inscrição?…
+     * não são os cards que aprovamos"_. O card É o canônico (`_inscritoIndividualCard`), mas
+     * ele tira o número de `ctx.enrollOrderMap` e cai em `idx + 1` quando o mapa não vem —
+     * e aqui o idx ia fixo em 0. Passar o mapa devolve a ordem real de inscrição de cada um. */
+    var _ordemMapa = (typeof window._buildEnrollOrderMap === 'function') ? window._buildEnrollOrderMap(t) : {};
     var _linha = function (pp, isWo) {
       var _uid = (pp && pp.uid) ? String(pp.uid) : '';
       // woClaims é a trilha canônica do servidor para W.O. de grupo. Legados continuam
@@ -2722,7 +2742,7 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
       // Após o avanço de fase uma lista plana escondia avatar, identidade e contexto —
       // justamente as referências necessárias para recuperar alguém que saiu por W.O.
       if (typeof window._inscritoIndividualCard === 'function') {
-        var _card = window._inscritoIndividualCard(t, pp, 0, { isOrg: false, drawDone: true, canRollCall: false, postDrawPresence: false });
+        var _card = window._inscritoIndividualCard(t, pp, 0, { isOrg: false, drawDone: true, canRollCall: false, postDrawPresence: false, enrollOrderMap: _ordemMapa });
         _card = _card.replace('<div class="participant-card"', '<div ' + _standbySearchAttrs(pp, _origem) + 'class="participant-card"');
         if (_origem) _card = _card.replace(/<\/div>\s*$/, '<div style="margin-top:5px;font-size:0.69rem;color:var(--text-muted);overflow-wrap:anywhere;">' + window._safeHtml(_origem) + '</div></div>');
         return _card;
@@ -4639,10 +4659,22 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
         ? window._formatSetForPlayer(s0, playerNum, { html: true })
         : String(playerNum === 1 ? s0.gamesP1 : s0.gamesP2);
     }
-    return match.sets.map(s => (typeof window._formatSetForPlayer === 'function')
-      ? window._formatSetForPlayer(s, playerNum, { html: true })
-      : String(playerNum === 1 ? s.gamesP1 : s.gamesP2)
-    ).join(' ');
+    /* ⛔ A COR É DE CADA SET, TAMBÉM NA CHAVE. Ordem do dono (11/set/2026): _"os placares
+     * vencedores têm que ser verdes e os perdedores vermelhos… isso deve ser dessa forma
+     * sempre, não só nesse jogo"_. O `scoreDisplay` pinta a linha inteira pela cor de quem
+     * venceu a PARTIDA; num melhor de 3, o set ganho pelo perdedor saía vermelho. Cada número
+     * passa a trazer a própria cor (fonte única `_corDoSetLado`), e a cor de fora só vale para
+     * o que não tem span próprio. Set único e placar simples continuam como estavam. */
+    var _temV = !!isDecided;
+    return match.sets.map(function (s) {
+      var _txt = (typeof window._formatSetForPlayer === 'function')
+        ? window._formatSetForPlayer(s, playerNum, { html: true })
+        : String(playerNum === 1 ? s.gamesP1 : s.gamesP2);
+      if (typeof window._corDoSetLado !== 'function') return _txt;
+      var _c = window._corDoSetLado(s, playerNum, _temV);
+      var _cor = (typeof window._spCor === 'function') ? window._spCor(_c, 'color') : _c;
+      return '<span style="color:' + _cor + ';">' + _txt + '</span>';
+    }).join(' ');
   };
 
   // Inline score inputs: only for undecided matches with both players known

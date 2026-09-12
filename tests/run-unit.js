@@ -58,6 +58,9 @@ const SUITES = [
   'tests/casual-dupla-e-segundo-sacador.test.js',
   'tests/placar-melhor-de-3-nao-vira-um-set.test.js',
   'tests/l13-carimbo-de-sessao.test.js',
+  'tests/l16-disponibilidade-deixa-rastro.test.js',
+  'tests/ir-para-o-torneio-leva-ao-jogo.test.js',
+  'tests/zero-do-set-em-disputa-vira-travessao.test.js',
   'tests/l4-sem-leitura-morta-de-admin-email.test.js',
   'tests/l8-escopo-da-hidratacao.test.js',
   'tests/l8-hydration-boundaries.test.js',
@@ -1440,6 +1443,7 @@ const SUITES = [
   // permission-denied em TODO convidado com conta. Também trava a identidade SÓ-UID e a
   // escalada da transferência (terceiro assumindo organização alheia).
   'functions/test-cohost-core.js',
+  'functions/test-digest-core.js',
   // Nome de exibição ÚNICO entre uids checado no SERVIDOR (registerPhonePassword).
   // Trava o incidente de 02/ago/2026: segunda "Gabriela Ferreira" criada por
   // celular+senha porque a regra só existia no cliente. Conflito = already-exists

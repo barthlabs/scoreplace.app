@@ -2297,12 +2297,22 @@ window._saveResultInline = function (tId, matchId) {
    * que tem caminho próprio e preserva os sets. [[project_placar_por_sets_no_card]]
    */
   if (_planSave && _planSave.multi && !_planSave.live) {
+    /* ⛔ `_t(k)` DEVOLVE A PRÓPRIA CHAVE quando não há tradução — então `_t(k) || fallback`
+     * NUNCA cai no fallback, e a tela mostra "bracket.matchClosed" para o usuário. Foi o que
+     * o dono viu em 11/set/2026, na 2.2.70. O idioma da casa é comparar com a chave. */
+    var _tFb = function (k, fb, par) {
+      var v = (typeof _t === 'function') ? _t(k, par) : null;
+      if (!v || v === k) {
+        v = fb;
+        Object.keys(par || {}).forEach(function (x) { v = String(v).replace('{' + x + '}', par[x]); });
+      }
+      return v;
+    };
     showAlertDialog(
-      (typeof _t === 'function' ? _t('bracket.matchClosed') : null) || 'Partida já encerrada',
-      (typeof _t === 'function' ? _t('bracket.matchClosedDetail') : null) ||
-        'Este jogo é melhor de ' + _planSave.bestOf + ' e já está fechado com ' +
-        _planSave.played.length + ' set(s). Para corrigir o placar, use a edição do resultado — ' +
-        'confirmar de novo aqui apagaria os sets já lançados.',
+      _tFb('bracket.matchClosed', 'Este jogo já está encerrado'),
+      _tFb('bracket.matchClosedDetail',
+        'Ele é melhor de {n} e já tem vencedor. Para corrigir o placar use ✏️ Editar — ' +
+        'confirmar de novo aqui apagaria os sets já lançados.', { n: _planSave.bestOf }),
       null, { type: 'warning' });
     return;
   }

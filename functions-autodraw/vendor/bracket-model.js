@@ -1503,14 +1503,20 @@ window._assignGlobalGameNumbers = function (t) {
       '</div>';
   };
 
-  /** A grade de números de UM lado. Coluna em disputa entra como zero (read-only). */
+  /** A grade de números de UM lado. A coluna EM DISPUTA não mostra placar (read-only).
+   * ⛔ ZERO É UM PLACAR, NÃO UM VAZIO. Relato do dono (11/set/2026, jogo 112 do Confra): o jogo
+   * estava 1×1 esperando o super tie-break e o card mostrava `6 4 0` contra `3 6 0` — ele leu
+   * como "o STB deu 0×0 e o meu 10-8 não apareceu". Conferido no dado: `sets: [6-3, 4-6]`,
+   * `winner: null` — o STB simplesmente ainda não fora lançado. O travessão diz isso; o zero
+   * mentia. ⚠️ O zero REAL (set perdido por 0×6) continua aparecendo — a diferença entre "não
+   * jogado" e "jogado e perdi de zero" é exatamente o que se estava apagando. */
   window._setGridHtml = function (plan, side, opts) {
     opts = opts || {};
     if (!plan || !plan.multi || !plan.columns || !plan.columns.length) return '';
     var fsVar = plan.numFs ? ('--sp-num-fs-set:' + plan.numFs + 'rem;') : '';
     var cels = plan.columns.map(function (c) {
       var dentro = (c.state === 'live')
-        ? '<span class="sp-set-zero">0</span>'
+        ? '<span class="sp-set-zero">\u2013</span>'
         : _spSetNum(c, side, !!opts.italico);
       return '<div class="sp-set-col" style="--w:' + c.w + 'px;">' + dentro + '</div>';
     }).join('');

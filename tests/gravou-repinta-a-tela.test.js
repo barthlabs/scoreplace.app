@@ -51,6 +51,22 @@ ok(/catch \(_eR\)/.test(bloco), 'o bloco é best-effort — falhar ao repintar n
 ok(bloco.indexOf('_saveToCache') < bloco.indexOf('_softRefreshView'),
    'e ela vem DEPOIS de persistir o cache, não antes');
 
+console.log('\n④ Torneio DIVIDIDO: o que a CF devolve não traz os jogos');
+ok(/delete _lt\._resultsHydrated/.test(bloco),
+   '⛔ o sucesso invalida a hidratação do espelho — sem isso o card repinta com o placar ANTIGO');
+ok(/delete _lt\._resultsHydrating/.test(bloco),
+   'e limpa a trava de voo: a guarda da dashboard pula a releitura se ela ficar pendurada');
+{
+  // o CATCH do applyMatchResult não pode apagar a marca: tentativa perdida não vira releitura
+  // ⛔ ÂNCORA, não tamanho fixo. O catch vai até a linha que decide seguir sem a CF.
+  const iC = src.indexOf('catch', src.indexOf('_callApplyMatchResult'));
+  const fC = src.indexOf('_viaCF', iC);
+  ok(iC > 0 && fC > iC, 'âncoras do catch do applyMatchResult');
+  const catchBloco = src.slice(iC, fC);
+  ok(!/_resultsHydrated/.test(catchBloco),
+     '⛔ falha de gravação NÃO apaga a marca — releitura é prêmio de quem gravou');
+}
+
 console.log(falhas === 0
   ? '\n✅ quem grava repinta — o eco virou redundância, não a única ponte\n'
   : '\n❌ ' + falhas + ' falha(s)\n');
