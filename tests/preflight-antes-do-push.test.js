@@ -110,8 +110,16 @@ function cenario(preflightPassa) {
   const remotoAntes = execFileSync('git', ['rev-parse', 'main'], { cwd: remoto, encoding: 'utf8' }).trim();
 
   // binários falsos
+  // ⚠️ O `firebase` falso precisa RESPONDER à checagem de sessão como o real responde:
+  // `projects:list --json` imprime o JSON com "status": "success". (E o real ainda sai com
+  // código 2 nesse comando — por isso o script captura a saída e examina o texto.)
   fs.writeFileSync(path.join(bin, 'firebase'),
-    '#!/bin/sh\necho "$@" >> ' + JSON.stringify(path.join(marcas, 'firebase.txt')) + '\nexit 0\n');
+    '#!/bin/sh\n' +
+    'echo "$@" >> ' + JSON.stringify(path.join(marcas, 'firebase.txt')) + '\n' +
+    'case "$*" in\n' +
+    '  *"projects:list"*) echo \'{ "status": "success", "result": [] }\'; exit 2;;\n' +
+    'esac\n' +
+    'exit 0\n');
   fs.writeFileSync(path.join(bin, 'curl'), '#!/bin/sh\necho 9.9.9\n');
   fs.writeFileSync(path.join(bin, 'npm'),
     '#!/bin/sh\necho "$@" >> ' + JSON.stringify(path.join(marcas, 'npm.txt')) + '\n' +
