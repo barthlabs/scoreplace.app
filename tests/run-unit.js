@@ -79,6 +79,8 @@ const SUITES = [
   'tests/cache-podre-do-firestore-se-joga-fora.test.js',
   'tests/sem-credencial-guardada-abre-o-seletor.test.js',
   'tests/espera-e-fora-usam-a-grade-e-a-cor-canonicas.test.js',
+  'tests/l16-auditor-nao-mente-quando-nao-consegue-olhar.test.js',
+  'tests/l16-hidratacao-que-falha-nao-fica-calada.test.js',
   'tests/l4-sem-leitura-morta-de-admin-email.test.js',
   'tests/l8-escopo-da-hidratacao.test.js',
   'tests/l8-hydration-boundaries.test.js',

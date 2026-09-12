@@ -41,6 +41,30 @@ let groupTeamStandingsFn = null;    // fecho de rodada no servidor (Suíço-pow2
 let canRecompile = null;
 let hasDrawnBracket = null;  // régua de 'já tem chave' — a MESMA do cliente (matches/rounds/groups)
 let drawWindow = null; // window do shim Node — expõe _calcNextDrawDate (prazo p/ lançar resultado)
+
+/* ⛔ L16.P2 — HIDRATAÇÃO QUE FALHA CALADA NÃO É "BEST-EFFORT".
+ * MEDIDO: `_hydrateMonarchGroups` era chamada em OITO lugares deste arquivo e TODOS os oito
+ * engoliam a exceção — cinco com o comentário "best-effort" e três com `catch (e) {}` seco
+ * (inventariados pela L16.P0 como risco 🟠 "sorteio sem hidratar").
+ * O rótulo era otimista demais. A função não é enfeite de leitura: ela religa `group.matches`
+ * como REFERÊNCIA ao plano `round.matches` e MIGRA documento legado — inclusive FUNDINDO
+ * placar que só existe na cópia do grupo (ver js/views/bracket-model.js:474). Falhar no meio,
+ * dentro da transação de sorteio, pode gravar grupo sem religar jogo, e ninguém fica sabendo.
+ * ⛔ O QUE ESTA PORTA NÃO FAZ: não aborta nem propaga. Interromper um sorteio é decisão de
+ * produto, do dono, e não se toma dentro de uma leva de observabilidade. O que ela faz é
+ * acabar com o silêncio — falhou, o log diz ONDE e com QUAL torneio.
+ * [[feedback_init_que_morre_no_meio_e_silencioso]] */
+function _hidrataGrupos(t, onde, tId) {
+  try {
+    if (drawWindow && typeof drawWindow._hydrateMonarchGroups === 'function') {
+      drawWindow._hydrateMonarchGroups(t);
+    }
+    return true;
+  } catch (e) {
+    console.error('[hidratacao] FALHOU em ' + onde + ' (torneio ' + (tId || (t && t.id) || '?') + '):', (e && e.message) || e);
+    return false;
+  }
+}
 // L6.R1 (2.1.80): a agenda do sorteio no FUSO DO EVENTO — janela de 1 minuto, calendário
 // em dias civis e a trava de slot. Puro e testado à parte (test-agenda-core.js).
 const _agenda = require('./agenda-core.js');
@@ -733,7 +757,7 @@ exports.drawRound = onCall(async (request) => {
 
     // Rei/Rainha: o doc fresco traz grupos só com matchIds — hidrata ANTES do motor,
     // igual mutateTournament faz antes do mutator.
-    try { drawWindow._hydrateMonarchGroups(t); } catch (e) { /* best-effort */ }
+    _hidrataGrupos(t, 'drawRound', tId);
     // A limpeza de duplicatas precisa ocorrer no MESMO documento fresco que será sorteado.
     // Antes a tela a gravava em uma transação separada, que podia competir com o drawRound.
     const duplicatesRemoved = (drawWindow && typeof drawWindow._deduplicateParticipants === 'function')
@@ -1320,7 +1344,7 @@ exports.integrateLateEntries = onCall(async (request) => {
         throw _drawFail('permission-denied', 'Sem permissão (doc fresco).', { tId, uid });
       }
       // Rei/Rainha: o doc fresco traz grupos só com matchIds — hidrata ANTES do motor.
-      try { drawWindow._hydrateMonarchGroups(t); } catch (e) { /* best-effort */ }
+      _hidrataGrupos(t, 'integrateLateEntries', tId);
       // ── v1.2.58 · SEM ISTO A FILA NUNCA FORMA GRUPO ────────────────────────────────
       // `_preloadDrawNames` acima popula só o MAPA `_profByUid`; quem ESCREVE `gender` nas
       // entradas é esta função — e ela faltava AQUI (as outras 5 chamadas do arquivo a
@@ -1397,7 +1421,7 @@ exports.formLatePair = onCall(async (request) => {
       if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
       const _tAntes = _antesDoMotor(t);
       if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Sem permissão (doc fresco).', { tId, uid });
-      try { drawWindow._hydrateMonarchGroups(t); } catch (e) {}
+      _hidrataGrupos(t, 'formLatePair', tId);
       const res = formLatePairFn(t, { key1: key1, key2: key2, nowTs: Date.now() });
       if (!res || !res.ok) throw _drawFail('failed-precondition', (res && res.reason) || 'form-failed', { tId });
       const b = _gravaTorneio(tx, ref, t, _tAntes, { agoraIso: _agoraIsoTx });
@@ -1440,7 +1464,7 @@ exports.splitLatePair = onCall(async (request) => {
       if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
       const _tAntes = _antesDoMotor(t);
       if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Sem permissão (doc fresco).', { tId, uid });
-      try { drawWindow._hydrateMonarchGroups(t); } catch (e) {}
+      _hidrataGrupos(t, 'splitLatePair', tId);
       const res = splitLatePairFn(t, { id1: id1, id2: id2 });
       if (!res || !res.ok) throw _drawFail('failed-precondition', (res && res.reason) || 'split-failed', { tId });
       const b = _gravaTorneio(tx, ref, t, _tAntes, { agoraIso: _agoraIsoTx });
@@ -1518,7 +1542,7 @@ async function _aplicaPlacarNaTransacao(db, tId, matchId, payload, ator, logMess
     if (!_isTournamentParticipant(t, ator.uid) && !_isTournamentAdmin(t, ator.uid)) {
       return { ok: false, reason: 'permission-denied' };
     }
-    try { drawWindow._hydrateMonarchGroups(t); } catch (e) { /* best-effort */ }
+    _hidrataGrupos(t, 'aplicaPlacarNaTransacao', tId);
     const res = applyResultFn(t, {
       matchId: matchId, payload: payload, actor: { uid: ator.uid, email: ator.email || '', name: ator.name || '' },
       logMessage: logMessage
@@ -2404,7 +2428,7 @@ exports.closeRound = onCall(async (request) => {
       if (!_isTournamentParticipant(t, uid) && !_isTournamentAdmin(t, uid)) {
         throw _drawFail('permission-denied', 'Sem permissão (doc fresco).', { tId, uid });
       }
-      try { drawWindow._hydrateMonarchGroups(t); } catch (e) { /* best-effort */ }
+      _hidrataGrupos(t, 'closeRound', tId);
 
       const res = closeRoundFn(t, roundIdx, resultCtx);
       if (!res || !res.ok) {
@@ -3214,7 +3238,7 @@ exports.advanceTournamentPhase = onCall(async (request) => {
       if (Number.isInteger(choice.swissRounds) && choice.swissRounds > 0 && choice.swissRounds <= 30) t.phases[index].swissRounds = choice.swissRounds;
     });
     _enrichParticipantsFromProfiles(t);
-    try { if (typeof drawWindow._hydrateMonarchGroups === 'function') drawWindow._hydrateMonarchGroups(t); } catch (e) {}
+    _hidrataGrupos(t, 'advanceTournamentPhase', tId);
     const hasMonarch = (t.rounds || []).some(r => r && Array.isArray(r.monarchGroups) && r.monarchGroups.length) ||
       (((current === 0 ? (t.groups || []) : (((t.phaseGroups || [])[current]) || []))).some(g => {
         const ms = (g.matches || []).concat((g.rounds || []).reduce((a, r) => a.concat((r && r.matches) || []), []));
@@ -4614,7 +4638,7 @@ async function _formarGruposDaEspera(doc) {
       const t = await _leTorneio(tx, doc.ref, doc.id);
       if (!t) return { changed: false };
       const _tAntes = _antesDoMotor(t);
-      try { drawWindow._hydrateMonarchGroups(t); } catch (e) { /* best-effort */ }
+      _hidrataGrupos(t, 'formarGruposDaEspera', doc.id);
       _enrichParticipantsFromProfiles(t);
       // nomes dos grupos ANTES, pra saber depois quais nasceram agora (e avisar só eles)
       const antes = new Set();

@@ -6316,7 +6316,21 @@ exports.deleteAccount = onCall(
         // TEVE aquele e-mail e não achava nada de quem entrou por telefone.
         db.collection("tournaments").where("memberUids", "array-contains", uid),
       ]) {
-        try { (await q.get()).docs.forEach(add); } catch (e) {}
+        /* ⛔ L16.P3 — GUARDA NÃO PODE FALHAR ABERTA.
+         * Estas três consultas decidem se a exclusão é BLOQUEADA por a pessoa organizar
+         * torneio. Com `catch (e) {}`, a consulta que falhasse simplesmente não trazia nada:
+         * `organizando` ficava vazio e a conta era APAGADA — justamente porque ninguém
+         * conseguiu conferir. "Não achei" e "não consegui olhar" davam a mesma resposta, e a
+         * resposta errada era a destrutiva.
+         * Agora a falha interrompe com `unavailable`: a pessoa tenta de novo em vez de perder
+         * torneio. Preço aceito por escrito: um erro transitório de leitura adia uma exclusão.
+         * O contrário — apagar conta de quem organiza torneio vivo — não tem volta.
+         * [[feedback_fallback_local_recria_a_divergencia]] (NÃO FECHAR > fechar ERRADO) */
+        try { (await q.get()).docs.forEach(add); } catch (e) {
+          console.error("[deleteAccount] guarda: consulta de torneios falhou —", (e && e.message) || e);
+          throw new HttpsError("unavailable",
+            "Não consegui conferir se você organiza algum torneio agora. Tente de novo em instantes.");
+        }
       }
       const todos = Array.from(vistos.values());
       const organizando = _delGuard.torneiosQueOrganiza(todos, uid, email);
@@ -6335,9 +6349,24 @@ exports.deleteAccount = onCall(
       db.collection("tournaments").where("organizerUid", "==", uid),
       // ⛔ idem: `organizerEmail` saiu daqui. uid é a identidade.
     ]) {
-      try { (await q.get()).docs.forEach((d) => organizados.set(d.id, d.ref)); } catch (e) {}
+      /* ⛔ Mesma regra da guarda acima, um passo adiante: se a consulta falha, estes torneios
+       * não entram na limpeza e a exclusão "termina" deixando dado do dono para trás. Aqui não
+       * interrompe (a guarda já passou e o perfil vai virar tombstone de qualquer forma), mas
+       * o fato fica no log e no RETORNO — silêncio é que não pode. */
+      try { (await q.get()).docs.forEach((d) => organizados.set(d.id, d.ref)); } catch (e) {
+        out.tournamentsQueryFailed = true;
+        console.error("[deleteAccount] consulta de torneios organizados falhou:", (e && e.message) || e);
+      }
     }
-    for (const [, ref] of organizados) { await ref.delete().catch(() => {}); out.tournamentsDeleted++; }
+    /* ⛔ CONTADOR SÓ CONTA O QUE FOI APAGADO — o mesmo defeito das notificações (L16.P1):
+     * `.catch(() => {})` engolia a falha e o `++` acontecia assim mesmo. */
+    for (const [, ref] of organizados) {
+      try { await ref.delete(); out.tournamentsDeleted++; }
+      catch (e) {
+        out.tournamentsDeleteFailed = (out.tournamentsDeleteFailed || 0) + 1;
+        console.error("[deleteAccount] falha ao apagar torneio " + ref.id + ":", (e && e.message) || e);
+      }
+    }
 
     // 2) Torneios em que ela PARTICIPA — o cânone acha o uid onde ele estiver.
     const snap = await db.collection("tournaments").get();
@@ -6413,12 +6442,24 @@ exports.deleteAccount = onCall(
     } catch (e) { console.error("[deleteAccount] casual:", e.message); }
 
     // 6) Notificações + perfil → TOMBSTONE mínimo (zero dado pessoal).
+    /* ⛔ L16.P1 — CONTADOR SÓ CONTA O QUE FOI COMMITADO.
+     * MEDIDO na L16.P0: `out.notificationsDeleted++` acontecia DENTRO do laço, antes do
+     * `commit()`, e a falha do commit era engolida por um catch vazio. O retorno da exclusão
+     * de conta dizia quantas notificações foram apagadas mesmo quando NENHUMA foi — e este é
+     * o caminho onde um número errado vira promessa de privacidade não cumprida.
+     * Agora o incremento é por LOTE CONFIRMADO, e a falha aparece no log e no retorno. */
     try {
       const nt = await db.collection("users").doc(uid).collection("notifications").get();
       let b = db.batch(), n = 0;
-      for (const d of nt.docs) { b.delete(d.ref); out.notificationsDeleted++; if (++n >= 400) { await b.commit(); b = db.batch(); n = 0; } }
-      if (n) await b.commit();
-    } catch (e) {}
+      for (const d of nt.docs) {
+        b.delete(d.ref); n++;
+        if (n >= 400) { await b.commit(); out.notificationsDeleted += n; b = db.batch(); n = 0; }
+      }
+      if (n) { await b.commit(); out.notificationsDeleted += n; }
+    } catch (e) {
+      out.notificationsFailed = true;
+      console.error("[deleteAccount] notificações:", (e && e.message) || e);
+    }
     /* ⚠️ `_FV` (subpath `firebase-admin/firestore`) e não `admin.firestore.FieldValue`:
      * dentro do runtime do emulador de Functions o namespace vem sem `.FieldValue`, e esta
      * linha derrubava o caminho feliz do delete com 500 — achado pelo teste de happy path.
@@ -7924,10 +7965,28 @@ const _delEmail = require("./account-deletion-email-core.js");
 const _espera = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function _sweepDeletionLeftovers(db, uid, kind) {
+  /* ⛔ L16.P1 — "NÃO ACHEI" E "NÃO CONSEGUI OLHAR" NÃO PODEM DAR A MESMA RESPOSTA.
+   * MEDIDO na L16.P0 (11/set/2026): este auditor tinha CINCO `catch` completamente vazios em
+   * nove consultas. A consulta que falhava simplesmente não entrava em `sobras[]`, e o
+   * resultado saía como `sobras=0` no log e no e-mail de exclusão de conta — ou seja, o
+   * relatório dizia "está tudo limpo" justamente quando NÃO tinha conseguido conferir.
+   * Num caminho de exclusão de conta isso é o pior tipo de número: o que não se pode provar.
+   * Aqui toda verificação passa por `olha()`. Falha vira entrada VISÍVEL em `sobras[]` — e
+   * isso é de propósito: quem lê o relatório precisa agir igual, seja porque sobrou coisa,
+   * seja porque ninguém conseguiu olhar. O consumidor só REPORTA (log + e-mail), nunca apaga
+   * a partir desta lista, então marcar a falha aqui não dispara ação destrutiva nenhuma. */
   const sobras = [];
-  const conta = async (label, q) => {
-    try { const s = await q.get(); if (!s.empty) sobras.push(label + " (" + s.size + ")"); } catch (e) {}
+  const naoConsegui = [];
+  const olha = async (label, fn) => {
+    try { await fn(); } catch (e) {
+      naoConsegui.push(label);
+      console.error("[sweepLeftovers] NÃO CONSEGUI OLHAR " + label + ":", (e && e.message) || e);
+    }
   };
+  const conta = (label, q) => olha(label, async () => {
+    const s = await q.get();
+    if (!s.empty) sobras.push(label + " (" + s.size + ")");
+  });
 
   // ⚠️ ESPERA DELIBERADA, e ela é o que faz o aviso valer alguma coisa. A CF
   // deleteAccount grava o tombstone no passo 6 e só apaga o Auth no passo 7 —
@@ -7940,7 +7999,7 @@ async function _sweepDeletionLeftovers(db, uid, kind) {
   // Auth: se o login sobreviveu à exclusão do perfil, a pessoa ainda "existe".
   // Segunda chance antes de acusar — a primeira pode ser só lentidão do Admin SDK.
   let authVivo = false;
-  try { await admin.auth().getUser(uid); authVivo = true; } catch (e) {}
+  try { await admin.auth().getUser(uid); authVivo = true; } catch (e) { /* a exceção É a resposta: não existe no Auth. Deliberado — L16.P0 classificou como sinal legítimo. */ }
   if (authVivo) {
     await _espera(5000);
     try { await admin.auth().getUser(uid); } catch (e) { authVivo = false; }
@@ -7952,15 +8011,15 @@ async function _sweepDeletionLeftovers(db, uid, kind) {
    * concede leitura. Órfão ali é autorização sem dono. */
   await conta("friendships.uidA (relação com uid morto)", db.collection("friendships").where("uidA", "==", uid));
   await conta("friendships.uidB (relação com uid morto)", db.collection("friendships").where("uidB", "==", uid));
-  try {
+  await olha("friendAccess/" + uid + "/accepted", async () => {
     const meus = await db.collection("friendAccess").doc(uid).collection("accepted").get();
     if (!meus.empty) sobras.push("friendAccess/" + uid + "/accepted (" + meus.size + ")");
-  } catch (e) {}
-  try {
+  });
+  await olha("friendAccess reverso", async () => {
     // projeção REVERSA: alguém ainda concede acesso PARA o uid morto
     const rev = await db.collectionGroup("accepted").where("friendUid", "==", uid).get();
     if (!rev.empty) sobras.push("friendAccess reverso apontando pro uid (" + rev.size + ")");
-  } catch (e) { console.warn("[sweepLeftovers] friendAccess reverso:", e && e.message); }
+  });
 
   await conta("tournaments.memberUids", db.collection("tournaments").where("memberUids", "array-contains", uid));
   await conta("tournaments.creatorUid", db.collection("tournaments").where("creatorUid", "==", uid));
@@ -7970,20 +8029,31 @@ async function _sweepDeletionLeftovers(db, uid, kind) {
   // user-vivo:isento — busca reversa por uid (contagem de vínculos de terceiros).
   await conta("users.friends[] de terceiros", db.collection("users").where("friends", "array-contains", uid));
   await conta("results.playerUids", db.collectionGroup("results").where("playerUids", "array-contains", uid));
-  try { const d = await db.collection("letzplayScans").doc(uid).get(); if (d.exists) sobras.push("letzplayScans/" + uid); } catch (e) {}
+  await olha("letzplayScans/" + uid, async () => {
+    const d = await db.collection("letzplayScans").doc(uid).get();
+    if (d.exists) sobras.push("letzplayScans/" + uid);
+  });
 
   // Subcoleções de users/{uid}: o Firestore NÃO as apaga junto com o doc pai.
-  try {
+  await olha("subcoleções de users/" + uid, async () => {
     const cols = await db.collection("users").doc(uid).listCollections();
     for (const c of cols) {
       const s = await c.limit(1).get();
       if (!s.empty) sobras.push("users/" + uid + "/" + c.id + " — subcoleção órfã");
     }
-  } catch (e) {}
+  });
 
   // Tombstone é o estado ESPERADO da exclusão canônica — não é sobra.
   if (kind === "hard") {
-    try { const d = await db.collection("users").doc(uid).get(); if (d.exists) sobras.push("users/" + uid + " — doc recriado"); } catch (e) {}
+    await olha("users/" + uid + " (doc recriado)", async () => {
+      const d = await db.collection("users").doc(uid).get();
+      if (d.exists) sobras.push("users/" + uid + " — doc recriado");
+    });
+  }
+  /* A falha entra na MESMA lista que o relatório lê. Sem isto, o conserto acima morreria no
+   * console: quem recebe o e-mail de exclusão continuaria vendo `sobras=0`. */
+  if (naoConsegui.length) {
+    sobras.push("⛔ " + naoConsegui.length + " verificação(ões) NÃO puderam ser feitas (resultado INCONCLUSIVO): " + naoConsegui.join(" | "));
   }
   return sobras;
 }
