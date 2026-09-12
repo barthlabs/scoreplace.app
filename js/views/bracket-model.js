@@ -1138,7 +1138,16 @@
       avatar: dupla ? '20px' : '24px',   // altura da linha sai daqui: a foto é a mais alta
       boxH: +(teto * 1.35).toFixed(2),   // caixa de UMA linha
       maxRem: teto,
-      minRem: dupla ? 0.52 : 0.58
+      /* ⭐ O PISO DESCE ANTES DE QUEBRAR. Relato do dono (12/set/2026, jogos 112 e 159):
+       * _"Fernando Bernacchi poderia ter fonte menor ou quebrar em 2 linhas"_ e _"nomes duplos
+       * cortados"_.
+       * MEDIDO no navegador com o motor real, caixa de 73px: "Lucia Helena Silva Cerri 💬"
+       * parava em 0,51rem — o piso de então —, não cabia em UMA linha e caía na quebra em
+       * DUAS; duas linhas pedem 15px numa caixa de 13,6, e o que sobra é corte. A 0,44rem o
+       * mesmo nome cabe inteiro numa linha só.
+       * ⛔ O piso existe pra o nome não virar textura, e continua existindo — só desceu o
+       * bastante pra caber o nome duplo mais longo do Confra com o balãozinho junto. */
+      minRem: dupla ? 0.44 : 0.50
     };
   };
 
@@ -1306,10 +1315,11 @@
         var digTb = Math.max(_t(tb.p1), _t(tb.p2));
         extraTb = (esc.tb || 0) + Math.ceil((digTb - 1) * esc.digito * 0.6);
       }
-      /* 4px de respiro (2 de cada lado) + o vão de 2px da grade. MEDIDO na régua do dono
-       * (root 17px): com 3px o vão entre dois números caía a 3,8px — perto demais de colar,
-       * que é justamente o limite que ele pediu para não cruzar. Com 4px fica ~5px. */
-      return Math.max(piso, Math.ceil(dig * esc.digito) + 4) + extraTb;
+      /* 6px de respiro (3 de cada lado) + o vão de 2px da grade. MEDIDO na régua do dono
+       * (root 17px): 3px davam 3,8px entre dois números (perto demais de colar), 4px davam
+       * 4,8px e ele pediu _"um pouco mais do que está agora, mas não o que estava antes"_ —
+       * 6px levam o vão a ~7px, contra os ~15px do desenho original. */
+      return Math.max(piso, Math.ceil(dig * esc.digito) + 6) + extraTb;
     };
 
     var cols = [], i;
@@ -1598,11 +1608,12 @@ window._assignGlobalGameNumbers = function (t) {
     var tb = (typeof window._setTiebreak === 'function') ? window._setTiebreak(set) : null;
     // o subponto sai em <sup> a 0,58em: "(7)" são 3 caracteres nesse tamanho.
     if (tb) w += (Math.max(dig(tb.p1), dig(tb.p2)) + 2) * 0.62;
-    /* ⭐ 2.2.79 — RESPIRO MÍNIMO. Ordem do dono (12/set/2026), olhando "Seus últimos
-     * resultados": _"pode ter menos espaço entre os placares dos sets… isso dará mais espaço
-     * para os nomes nas duplas"_. Eram 0,45ch de cada lado — quase um algarismo inteiro de ar
-     * entre dois números. 0,18ch mantém o "não colar" e devolve o resto ao nome. */
-    return (w + 0.18).toFixed(2) + 'ch';
+    /* ⭐ RESPIRO. Ordem do dono (12/set/2026), olhando "Seus últimos resultados": _"pode ter
+     * menos espaço entre os placares dos sets… isso dará mais espaço para os nomes nas
+     * duplas"_ — e, vendo o resultado: _"um pouco mais do que está agora, mas não o que estava
+     * antes"_. Eram 0,45ch de cada lado (quase um algarismo inteiro de ar); 0,18 ficou apertado
+     * demais; 0,28 é o meio que ele pediu. */
+    return (w + 0.28).toFixed(2) + 'ch';
   };
   /** Uma célula da grade de placar encerrado: mesma classe da chave, largura do dado. */
   window._colunaDeSetHtml = function (dentro, set) {

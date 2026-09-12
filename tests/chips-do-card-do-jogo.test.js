@@ -174,8 +174,13 @@ ok(!/SEU GRUPO/i.test(htmlEstranho), 'quem não é do grupo continua sem "SEU GR
 
 // ─── cenário 4: FIAÇÃO — o que não pode sumir do código ───────────────────────
 const braket = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'bracket.js'), 'utf8');
-ok(/_cardFooterChips\s*\(\s*t\s*,\s*m\s*\)/.test(braket),
+/* 2.2.80: a chamada passou a levar um 3º argumento — o aviso de que a TELA não tem cabeçalho
+ * de grupo (tela inicial), pra o chip de Rei/Rainha não sumir lá. A fiação é a mesma; o que se
+ * guarda aqui é que ela CONTINUA existindo. */
+ok(/_cardFooterChips\s*\(\s*t\s*,\s*m\s*[,)]/.test(braket),
   'renderMatchCard continua chamando _cardFooterChips (o rodapé dos dois chips)');
+ok(/_cardFooterChips\(t, m, \{ semCabecalhoDeGrupo:/.test(braket),
+  'e diz ao chip se a tela tem (ou não) cabeçalho de grupo pra carregá-lo');
 ok(/_schCardChip/.test(braket) && /_waGrpCardChip/.test(braket),
   'o rodapé do card continua montando OS DOIS chips (nunca só um)');
 ok(/_schGroupChip/.test(braket) && /_waGrpGroupChip/.test(braket),

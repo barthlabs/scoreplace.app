@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.2.79';
+window.SCOREPLACE_VERSION = '2.2.80';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -6202,7 +6202,14 @@ window._firstNameOnly = function(name) {
   // scrollHeight ÷ line-height do próprio elemento, lido na MESMA fase de leitura em que
   // já se mede scrollWidth — então não custa um reflow a mais.
   function _cabe(d) {
-    if (d.el.scrollWidth > d.bw2 + 1 || d.el.scrollHeight > d.bh2 + 1) return false;
+    /* ⛔ EM CAIXA DE ALTURA FIXA, 1px DE FOLGA É 1px DE CORTE. Relato do dono (12/set/2026,
+     * jogos 112 e 159): _"nomes duplos cortados"_.
+     * MEDIDO no navegador com este motor: "Lucia Helena Silva Cerri 💬" era aceito em DUAS
+     * linhas a 0,51rem — 15px de texto numa caixa de 13,6 —, e a sobra virava corte. A tolerância
+     * de +1px existe pro arredondamento sub-pixel de uma caixa que PODE crescer; onde ela não
+     * cresce (`d.fixa`), quem sobra é cortado. Então ali a régua é exata. */
+    if (d.el.scrollWidth > d.bw2 + 1) return false;
+    if (d.el.scrollHeight > d.bh2 + (d.fixa ? 0 : 1)) return false;
     if (!d.fixa) return true;
     var lh = parseFloat(getComputedStyle(d.el).lineHeight) || 0;
     if (!lh) return true;

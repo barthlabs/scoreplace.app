@@ -1,3 +1,29 @@
+## 2.2.80 — 12/set/2026
+
+Tela inicial: o botão do grupo do WhatsApp volta a aparecer nos jogos de Rei/Rainha. Na chave ele é
+único por grupo — fica no cabeçalho, e um por jogo seriam três botões idênticos lado a lado. Só que
+em "Novidades" e em "Seus últimos resultados" o card aparece sozinho, sem grupo em volta: ali calar o
+botão não evitava repetição nenhuma, só tirava o acesso. Agora quem avisa se existe cabeçalho é a
+própria tela.
+
+Placar por sets: o espaço entre as colunas ficou no meio do caminho — mais do que o mínimo da versão
+anterior, bem menos do que o desenho original.
+
+Nome cortado no card: em caixa de altura fixa, a régua do ajuste passa a ser exata. O motor que
+encolhe o nome aceitava uma sobra de 1px para absorver arredondamento — tolerância que faz sentido
+numa caixa que pode crescer, mas ali ela não cresce, e o que sobra é cortado. Era isso que partia o
+nome duplo em duas linhas com a segunda pela metade, e o que comia o balãozinho de conversa ao lado
+de nomes longos. O piso da fonte também desceu um degrau, para o nome caber inteiro antes de
+precisar quebrar.
+
+"Ir para o torneio" para no jogo, e não no topo da chave. O identificador do jogo já viajava e a
+chave já era montada sob demanda para encontrá-lo — o que faltava estava no laço que corrige a
+posição: quando o card ainda não existia no documento, ele DESISTIA na primeira tentativa. O laço
+começa 220 milissegundos depois da navegação, e num torneio dividido a chave ainda está baixando as
+partes nesse instante. Agora ele espera o card nascer (até seis segundos) e só então posiciona; o
+tempo gasto esperando não consome o orçamento de correção da posição. Lançar placar continua
+interrompendo a rolagem na hora.
+
 ## 2.2.79 — 12/set/2026
 
 Novidades no seu torneio: a ordem passa a ser a hora em que o placar foi lançado. O espelho de cada

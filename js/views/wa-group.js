@@ -392,13 +392,17 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   // Pra quem ORGANIZA a regra é outra: ele monta os grupos de todas as rodadas, inclusive
   // antes de a rodada abrir e depois de os jogos acabarem (o grupo do WhatsApp sobrevive ao
   // jogo — é onde se combina o próximo). Os filtros seguem valendo pro jogador.
-  window._waGrpCardChip = function (t, m) {
+  window._waGrpCardChip = function (t, m, opts) {
     try {
       if (!t || !m) return '';
-      // Rei/Rainha: o chip é ÚNICO por grupo (cabeçalho, via _waGrpGroupChip) —
-      // não um por jogo. Mesma supressão do _schCardChip. Vale também pro organizador:
-      // três botões idênticos no mesmo grupo seriam ruído, não acesso.
-      if (m.isMonarch) return '';
+      /* Rei/Rainha: na CHAVE o chip é ÚNICO por grupo (cabeçalho, via `_waGrpGroupChip`) —
+       * três botões idênticos no mesmo grupo seriam ruído, não acesso.
+       * ⛔ MAS ISSO SÓ VALE ONDE EXISTE O CABEÇALHO. Relato do dono (12/set/2026, tela
+       * inicial): _"alguns jogos sem o botão de grupo do whats"_ — e os "alguns" eram
+       * exatamente os de Rei/Rainha (a Fase 1 do Confra). Em "Novidades" e em "Seus últimos
+       * resultados" o card aparece SOZINHO, sem grupo em volta: calar o chip ali não evita
+       * repetição nenhuma, só tira o acesso. Quem sabe se há cabeçalho é a tela, e ela diz. */
+      if (m.isMonarch && !(opts && opts.semCabecalhoDeGrupo)) return '';
       var _souOrg = _isOrg(t, _cu());
       if (!_souOrg && (m.winner || m.isBye || m.isSitOut)) return '';
       if (m.isBye || m.isSitOut) return '';   // folga/BYE não é jogo, pra ninguém

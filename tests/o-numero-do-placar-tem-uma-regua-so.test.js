@@ -76,7 +76,7 @@ const PX_POR_DIGITO_POR_REM = 9.9;   // no meio de um número de 2 algarismos
  * agora a conta é `dígitos × digito + folga`, com piso no RÓTULO. */
 E.forEach(function (d, i) {
   const largura2Digitos = 2 * PX_POR_DIGITO_POR_REM * d.fs;
-  const coluna2Digitos = Math.max(d.piso, Math.ceil(2 * d.digito) + 4);
+  const coluna2Digitos = Math.max(d.piso, Math.ceil(2 * d.digito) + 6);
   ok(largura2Digitos <= coluna2Digitos + 0.5,
      '② ⭐ degrau ' + (i + 1) + ' (até ' + d.ate + ' colunas): 2 dígitos a ' + d.fs +
      'rem ≈ ' + largura2Digitos.toFixed(1) + 'px cabem na coluna de ' + coluna2Digitos + 'px');

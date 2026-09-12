@@ -805,7 +805,7 @@ function _applyMyMatchesFilter() {
     // numa carga fria o instante certo não existe. Aqui a régua é o próprio DOM — a
     // posição do alvo — e a rolagem se corrige enquanto ela mudar.
     var _reafirmar = function () {
-      var _ultimo = null, _estaveis = 0, _voltas = 0;
+      var _ultimo = null, _estaveis = 0, _voltas = 0, _esperas = 0;
       var _tick = function () {
         // ⛔ 2.1.21 — LANÇOU PLACAR? O LAÇO PARA NA HORA. Ordem do dono: _"quando estamos
         // lancando resultados a tela nao pode scrollar de forma alguma. inferniza tudo. tem
@@ -820,7 +820,30 @@ function _applyMyMatchesFilter() {
         if (window._travaRolagemDaChave) return;
         _voltas++;
         var _el = _alvoDeEntrada();   // MESMO alvo do _goMine — senão um desfaz o outro
-        if (!_el) return;
+        /* ⛔ ALVO AINDA NÃO EXISTE NÃO É "DESISTIR" — É "AINDA NÃO". Relato do dono
+         * (12/set/2026, pela terceira vez): _"ao clicar no ir para o torneio tem que ir para o
+         * jogo na chave… e não simplesmente abrir a chave e ficar no topo"_.
+         * A CAUSA estava aqui: `if (!_el) return;` MATAVA o laço na primeira volta. O laço
+         * começa 220ms depois da rota, e a chave de um torneio DIVIDIDO ainda está carregando
+         * as partes nesse instante — o card do jogo pedido não existe no DOM, o laço morria e
+         * ninguém mais rolava. Na segunda visita (tudo em cache) funcionava, que é exatamente
+         * o "às vezes vai" que ele descreveu.
+         * Agora a ausência do alvo REAGENDA como qualquer outra volta: o teto de ~3s (30
+         * voltas) continua sendo o fim, e a chave de sessão só é consumida quando o laço
+         * termina — então o pedido sobrevive até o card aparecer. */
+        if (!_el) {
+          /* ⚠️ A ESPERA TEM CONTADOR PRÓPRIO. O teto de 30 voltas mede a CORREÇÃO da posição
+           * (o alvo já existe e a tela ainda assenta). Esperar o alvo NASCER é outra coisa:
+           * num torneio dividido a chave só monta depois de baixar as partes, e gastar as 30
+           * voltas nessa espera deixaria zero para posicionar. 60 voltas ≈ 6s de paciência —
+           * acabou a paciência, a chave de sessão sai e ninguém rola (melhor não rolar do que
+           * rolar no lugar errado três segundos depois). */
+          _voltas--;
+          _esperas++;
+          if (_esperas < 60) { setTimeout(_tick, 100); return; }
+          try { sessionStorage.removeItem('sp_scrollToGroup'); sessionStorage.removeItem('sp_scrollToMatch'); } catch (e) {}
+          return;
+        }
         var _topo = Math.round(_el.getBoundingClientRect().top);
         // ⚠️ A RÉGUA É A CORREÇÃO, NÃO A ESTABILIDADE. Minha 1ª versão só re-rolava
         // quando o alvo SE MOVIA — e o defeito do dono é justamente ficar PARADO no
@@ -5549,7 +5572,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
       ${p2Row}
       ${_tbHintHtml}
       ${winnerBadge}
-      ${_cardFooterChips(t, m)}
+      ${_cardFooterChips(t, m, { semCabecalhoDeGrupo: _dashConsensus })}
     </div>`;
 }
 
@@ -5560,9 +5583,9 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
 // a conversa. Ambas obedecem ao MESMO gate (jogador do confronto, rodada atual,
 // jogo sem resultado) — fonte única nos helpers do schedule-poll.js.
 // Os dois chips retornam elemento PURO; a centralização é aqui.
-function _cardFooterChips(t, m) {
+function _cardFooterChips(t, m, opts) {
   var sch = (typeof window._schCardChip === 'function') ? window._schCardChip(t, m) : '';
-  var wa = (typeof window._waGrpCardChip === 'function') ? window._waGrpCardChip(t, m) : '';
+  var wa = (typeof window._waGrpCardChip === 'function') ? window._waGrpCardChip(t, m, opts) : '';
   if (!sch && !wa) return '';
   return '<div class="btn-row" style="display:flex;justify-content:center;align-items:center;gap:6px;flex-wrap:wrap;margin:8px 0 2px;">' + sch + wa + '</div>';
 }

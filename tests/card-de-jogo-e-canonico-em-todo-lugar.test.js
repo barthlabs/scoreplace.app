@@ -39,7 +39,14 @@ const MD = read('js/views/bracket-model.js');
 console.log('\n① A régua existe, e é UMA');
 t(/window\._cardNomeGeo = function/.test(MD),
   '_cardNomeGeo mora no bracket-model.js — o arquivo onde vivem as réguas do card');
-t(/avatar:[^,]+,[\s\S]{0,200}?boxH:[\s\S]{0,200}?maxRem:[\s\S]{0,200}?minRem:/.test(MD),
+/* ⛔ recorte por ÂNCORA, não por orçamento de caracteres: a versão anterior media 200 chars
+ * entre uma chave e a próxima e quebrou sozinha quando a régua ganhou um comentário — sem que
+ * nada do comportamento mudasse. O que importa é que as QUATRO medidas saem daqui, nesta ordem. */
+const _geoIni = MD.indexOf('window._cardNomeGeo = function');
+const _geoFim = MD.indexOf('\n  };', _geoIni);
+const GEO = (_geoIni > 0 && _geoFim > _geoIni) ? MD.slice(_geoIni, _geoFim) : '';
+t(GEO && ['avatar:', 'boxH:', 'maxRem:', 'minRem:'].every((k, i, arr) =>
+    GEO.indexOf(k) > 0 && (i === 0 || GEO.indexOf(arr[i - 1]) < GEO.indexOf(k))),
   'e devolve as quatro medidas: foto, altura da caixa, teto e piso da fonte');
 
 console.log('\n② Os dois desenhos de card leem a régua (nenhum crava número)');

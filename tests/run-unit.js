@@ -74,6 +74,8 @@ const SUITES = [
   'tests/uma-barra-de-busca-por-lista.test.js',
   'tests/ir-para-o-jogo-monta-a-chave.test.js',
   'tests/novidades-le-o-espelho.test.js',
+  'tests/grupo-do-whats-em-todo-card-da-tela-inicial.test.js',
+  'tests/ir-para-o-jogo-espera-a-chave-nascer.test.js',
   'tests/l4-sem-leitura-morta-de-admin-email.test.js',
   'tests/l8-escopo-da-hidratacao.test.js',
   'tests/l8-hydration-boundaries.test.js',
