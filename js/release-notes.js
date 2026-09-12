@@ -1,3 +1,4 @@
+// 2.2.89 — faxina automática dos tokens de verificação vencidos, no servidor.
 // 2.2.88 — listas de pessoas passam a baixar só o que aparece na tela.
 // 2.2.87 — remover um e-mail vinculado passa a ser feito pelo servidor, não pelo aparelho.
 // 2.2.86 — o balãozinho de conversa volta a ficar junto do nome quando ele quebra em duas linhas.

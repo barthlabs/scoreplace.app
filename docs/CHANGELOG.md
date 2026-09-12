@@ -1,3 +1,20 @@
+## 2.2.89 — 12/set/2026
+
+Faxina no servidor. Os tokens que o app cria para provar que um e-mail é seu — o de verificar
+e-mail e o de juntar duas contas — ficavam guardados depois de vencidos, cada um com o e-mail
+dentro. Medido em produção: dezoito e nove, todos vencidos, alguns havia semanas.
+
+Nunca tinham sido apagados por um motivo que não estava à vista: o campo de validade foi gravado
+em três formatos diferentes em três lugares — texto numa coleção, data noutra, número na
+terceira. O banco compara dentro do formato, então a varredura escrita do jeito comum devolvia
+"nada vencido" e ninguém desconfiava.
+
+Cada uma passa a ser varrida no seu formato, três vezes ao dia, e o número apagado aparece no
+registro. A limpeza dos links de entrada por e-mail, que dizia rodar três vezes ao dia e rodava
+uma, também passou a rodar o que prometia.
+
+Nada disso muda o que você vê no app.
+
 ## 2.2.88 — 12/set/2026
 
 Privacidade: as listas de pessoas passam a baixar só o que aparece na tela. Para montar a lista

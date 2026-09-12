@@ -1543,11 +1543,18 @@ exports.cleanupAbandonedAuth = onSchedule(
 // v1.0.34-beta: docs em magicLinks/{token} guardam o firebaseLink resolvido
 // pelo wrapper-URL no clique do email. Cada doc tem expiresAt = createdAt+90min
 // (oobCode em si expira em 1h via Firebase). Sem cleanup, a coleção cresce
-// 1 doc por magic link request. Roda 3x ao dia (04:30, 12:30, 20:30 BRT) pra
-// manter a coleção pequena — cada execução remove docs com expiresAt < now.
+// 1 doc por magic link request.
+/* ⛔ L4.P13 — O COMENTÁRIO PROMETIA 3x AO DIA E O CÓDIGO RODAVA 1x.
+ * Achado da auditoria (L4, item c) e reconferido em 12/set/2026: a linha acima já dizia
+ * "04:30, 12:30, 20:30" desde a v1.0.34-beta, mas o agendamento era `every day 04:30`.
+ * Não é cosmético: cada documento carrega o LINK ASSINADO DE ENTRADA e um e-mail, e expira
+ * em 90 minutos. Rodando 1x ao dia, um documento já vencido ficava guardado por até ~24h em
+ * vez de ~8h — três vezes a janela de exposição que alguém tinha decidido aceitar.
+ * O código passa a cumprir o que estava escrito. ⚠️ Varri as OUTRAS 11 funções agendadas
+ * comparando comentário e cadência: esta era a única divergente. */
 exports.cleanupOldMagicLinks = onSchedule(
   {
-    schedule: "every day 04:30",
+    schedule: "30 4,12,20 * * *",
     timeZone: "America/Sao_Paulo",
     region: "us-central1",
   },
@@ -1564,6 +1571,28 @@ exports.cleanupOldMagicLinks = onSchedule(
       db.collection("gateTokens").where("expiresAt", "<", now));
     const delGateVerif = await _batchDeleteQuery(
       db.collection("gateVerifications").where("expiresAt", "<", now));
+
+    /* ⛔ L4.P14 — O MESMO CAMPO COM TRÊS TIPOS: POR ISSO NUNCA FORAM VARRIDAS.
+     * MEDIDO em 12/set/2026, em produção: `emailVerifications` com 18 documentos, TODOS
+     * vencidos; `mergeTokens` com 9, TODOS vencidos. São artefatos de PROVA DE POSSE — token
+     * de verificação de e-mail e token de fusão de contas, cada um com o e-mail dentro.
+     * A causa de nunca terem sido limpas está no schema: `expiresAt` é **texto ISO** em
+     * `emailVerifications`, **Timestamp** em `mergeTokens` e **número** em `emailVerifyCodes`.
+     * O Firestore compara DENTRO do tipo — quem escrevesse a consulta padrão com um `Date`
+     * receberia zero em duas delas, em silêncio, e concluiria que estava tudo limpo. É a
+     * mesma família do "não achei vs. não consegui olhar" da L16.
+     * ⚠️ Por isso cada uma é consultada com o valor NO SEU TIPO. Se um dia os três forem
+     * unificados, esta função é o lugar de acertar — e o teste ao lado falha se alguém
+     * trocar o tipo sem trocar a consulta. */
+    const nowIso = now.toISOString();
+    const nowMs = now.getTime();
+    const delVerif = await _batchDeleteQuery(
+      db.collection("emailVerifications").where("expiresAt", "<", nowIso));   // texto ISO
+    const delMerge = await _batchDeleteQuery(
+      db.collection("mergeTokens").where("expiresAt", "<", now));             // Timestamp
+    const delCodes = await _batchDeleteQuery(
+      db.collection("emailVerifyCodes").where("expiresAt", "<", nowMs));      // número (epoch ms)
+    console.log(`[cleanupOldMagicLinks] provas de posse vencidas: emailVerifications=${delVerif} mergeTokens=${delMerge} emailVerifyCodes=${delCodes}`);
     console.log(`[cleanupOldMagicLinks] deleted magicLinks=${deleted} gateTokens=${delGateTokens} gateVerifications=${delGateVerif} (threshold: ${now.toISOString()})`);
   }
 );
