@@ -1,3 +1,21 @@
+## 2.2.84 — 12/set/2026
+
+Painel da Lista de Espera: quem espera vaga agora tem o card inteiro em âmbar, e não mais um card
+azul com uma tarja âmbar. O âmbar já estava escrito desde a versão anterior e nunca chegava à tela —
+a cor da presença ("Ausente") era aplicada depois, com prioridade máxima, e pintava por cima da cor
+do estado. O vermelho dos inativos só escapava porque, para eles, a presença não devolve cor nenhuma.
+Agora, quando o card já diz um estado — esperando vaga, ou fora da disputa — a presença não pinta o
+fundo; ela continua sendo dita no texto e no botão Presente/Ausente da própria linha.
+
+A tarja "Lista de Espera" saiu. Ela repetia, dentro do card, o que a cor do card, o título do painel
+e a posição na fila logo acima já diziam — e ocupava o lugar do tipo de inscrição, que nos outros
+cards aparece normalmente.
+
+Espera, inativos e W.O. passam a usar a mesma grade dos inscritos: em telas largas o painel se abre
+em várias colunas e no celular volta a uma só. Os dois painéis estavam presos a uma coluna em
+qualquer largura. A grade deixou de ser uma medida escrita em cada lugar e passou a ser uma única
+definição que os três painéis leem — duas réguas para a mesma coisa divergem na primeira mudança.
+
 ## 2.2.83 — 12/set/2026
 
 Android, entrar com Google: o primeiro toque mostrava um erro vermelho e só o segundo abria a

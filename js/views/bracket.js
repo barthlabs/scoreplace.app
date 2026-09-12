@@ -2847,7 +2847,13 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
       return '<div style="margin-top:1rem;">' +
         '<div style="font-size:0.72rem;font-weight:700;color:' + window._spCor(cor, 'color') + ';text-transform:uppercase;letter-spacing:0.6px;margin-bottom:8px;">' +
           window._safeHtml(titulo) + ' (' + lista.length + ')</div>' +
-        '<div style="display:flex;flex-direction:column;gap:6px;">' + lista.map(function (pp) { return _linha(pp, isWo); }).join('') + '</div>' +
+        /* mesma grade dos inscritos e da espera logo acima — a régua é uma só.
+         * ⛔ SEM fallback para a coluna antiga: um fallback que devolve exatamente o defeito
+         * é o melhor jeito de escondê-lo. A constante é atribuída no topo de participants.js,
+         * e isto aqui só roda quando alguém abre o painel — muito depois de os dois
+         * carregarem (bracket.js vem antes no index.html, mas ninguém LÊ no load). */
+        '<div style="' + window._GRADE_DE_CARDS + '">' +
+          lista.map(function (pp) { return _linha(pp, isWo); }).join('') + '</div>' +
       '</div>';
     };
     return _bloco('💤 Inativos', '#94a3b8', _inat, false) +
@@ -2868,7 +2874,11 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
       <div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:0.75rem;">${_policy === 'locked' ? '🔒 Ordem do sorteio travada — entra o próximo presente na ordem.' : '🏃 Quem fizer check-in primeiro é o próximo a entrar.'}</div>
       ${_duplaCardsWL ? ('<div style="font-size:0.72rem;font-weight:700;color:var(--sp-c-34d399,#34d399);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:8px;">👫 Duplas na espera (' + _duplasWL.length + ')</div>' + _duplaCardsWL) : ''}
       ${(_duplaCardsWL && listItems) ? '<div style="font-size:0.72rem;font-weight:700;color:var(--sp-c-fbbf24,#fbbf24);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:8px;">🙋 Sem dupla</div>' : ''}
-      <div style="display:flex;flex-direction:column;gap:6px;">
+      <!-- MESMA GRADE DOS INSCRITOS: em tela larga o painel vira varias colunas, no celular
+           volta a uma. Era flex-direction:column, ou seja coluna unica em QUALQUER largura -
+           o dono viu dois cards ocupando a tela inteira onde cabiam tres.
+           (sem crase aqui dentro: e template literal - ver a trava texto-nunca-corta) -->
+      <div style="${window._GRADE_DE_CARDS}">
         ${listItems}
       </div>
       ${_faixasForaDaEspera}

@@ -4,6 +4,17 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
 var _t = window._t || function(k) { return k; };
 
 // ── Funções globais de check-in (disponíveis para qualquer view) ──
+/* ⭐ A GRADE DE CARDS DE INSCRITO É UMA SÓ — ordem do dono (12/set/2026, painel da Lista de
+ * Espera numa tela larga): _"nessa largura de tela os cards de espera, inativo, W.O. deveriam
+ * ser mais colunas — isso cabe e já fazemos em outras situações. isso deve ser consistente
+ * sempre; canônico"_.
+ * A grade dos inscritos era esta string, escrita AQUI e só aqui; o painel da espera usava
+ * `flex-direction:column`, ou seja UMA coluna em qualquer largura. Duas réguas para a mesma
+ * coisa divergem na primeira mudança — então a régua passa a ser esta constante, e quem
+ * desenha card de inscrito a usa. `min(100%,440px)` é o que garante coluna única no celular
+ * sem estourar a largura. [[project_card_de_jogo_geometria_canon]] */
+window._GRADE_DE_CARDS = 'display:grid;grid-template-columns:repeat(auto-fill, minmax(min(100%, 440px), 1fr));gap:1rem;';
+
 // v0.17.33: adicionado suporte a #bracket/ — Lista de Espera vive em
 // bracket.js e o toggle Presente daí precisa re-renderizar a view de
 // bracket pra atualizar o label "Ausente"/"Presente" (CSS reactive já
@@ -1475,6 +1486,21 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
    * [[project_card_de_jogo_geometria_canon]] */
   if (ctx.pele === 'fora') cardStyle = 'background: linear-gradient(135deg, rgba(127,29,29,0.55) 0%, rgba(220,38,38,0.38) 100%); border: 1px solid rgba(248,113,113,0.55);';
 
+  /* ⛔ POR QUE O ÂMBAR DA ESPERA NUNCA APARECEU, MESMO ESCRITO ACIMA.
+   * Relato do dono (12/set/2026, segunda vez): _"os cards da lista de espera deveriam ter tom
+   * âmbar e não essa tarja idiota de lista de espera em âmbar"_ — no print, card AZUL com uma
+   * tarjinha âmbar. Eu tinha escrito o âmbar na leva anterior e dado por feito.
+   * MEDIDO: `_presenceCardStyle` devolve `background:… !important;border:… !important` e entra
+   * por ÚLTIMO na linha de estilo do card (ver o `_rcCardExtra` lá no fim do HTML). `!important`
+   * numa declaração inline vence qualquer outra do mesmo atributo — então a cor da PRESENÇA
+   * ("Ausente") pintava por cima da cor do ESTADO. O vermelho dos inativos só sobreviveu porque,
+   * para inativo, a fábrica de presença devolve estilo VAZIO.
+   * O CONSERTO: quando o card já tem cor de ESTADO (esperando vaga, ou fora da disputa), a pele
+   * de presença não pinta o fundo. A presença continua dita onde sempre esteve — no texto e no
+   * botão "Presente/Ausente" da própria linha, que não mudam.
+   * [[feedback_medir_com_dado_real_antes_de_teorizar]] */
+  if (_isStandbyEntry || ctx.pele === 'fora') _rcCardExtra = '';
+
   var _FONT = window._INSCRITO_NAME_FONT_PX || 17;
   var pNameHtml = '';
   if (isTeam) {
@@ -1541,8 +1567,12 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
     else if (origin === 'sorteada') teamLabel = _T('tourn.teamDrawn');
     else teamLabel = _T('tourn.teamFormed');
   }
-  var _standbyBadge = _isStandbyEntry ? '<span style="background:linear-gradient(135deg,#92400e,#f59e0b);color:#1a1a2e;font-size:0.6rem;font-weight:900;padding:1px 6px;border-radius:4px;letter-spacing:0.5px;">🕐 Lista de Espera</span>' : '';
-  var typeText = _isStandbyEntry ? _standbyBadge : teamLabel;
+  /* ⛔ A TARJA SAIU (12/set/2026). Ordem do dono: _"não essa tarja idiota de lista de espera
+   * em âmbar"_. Ela existia para dizer um estado que a COR do card agora diz inteiro — e o
+   * card já mora dentro de um painel chamado "Lista de Espera", com a posição na fila logo
+   * acima. Três vezes a mesma informação, e a tarja ainda roubava o lugar do tipo de
+   * inscrição, que some nos cards da espera e aparece nos outros. */
+  var typeText = teamLabel;
   if (ctx.lateJoin && !isTeam) typeText = '<span style="font-size:0.62rem;color:rgba(255,255,255,0.5);">' + (ctx.lateJoin.canPair ? 'Segure e arraste sobre outro card para formar dupla' : 'Sem dupla') + '</span>';
 
   var _nmSkillCats = t.skillCategories || [];
@@ -1906,7 +1936,7 @@ function renderParticipants(container, tournamentId) {
     // v2.7.39: o card pós-sorteio é mais largo (jogo/parceiro/adversários) → grade
     // de cards LARGOS: 1 coluna no mobile, 2-3 nas telas maiores (não muitas estreitas).
     // min(100%,440px) garante 1 coluna sem overflow em telas estreitas.
-    gridStyle = 'display:grid;grid-template-columns:repeat(auto-fill, minmax(min(100%, 440px), 1fr));gap:1rem;';
+    gridStyle = window._GRADE_DE_CARDS;
 
     // v0.17.36: lookup é POR NOME DE MEMBRO, não por team string. Quando
     // substituição W.O. acontece, o match é atualizado pra novo team
