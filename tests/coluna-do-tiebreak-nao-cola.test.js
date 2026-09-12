@@ -31,7 +31,7 @@ const esc = W._setColEscala(3);
 // a largura de uma coluna = o maior entre o PISO (que é o rótulo) e o número que ela mostra,
 // mais a folga do tie-break quando existe. É a mesma conta para todas — uma régua só.
 const larguraEsperada = (digitos, kind, temTb) =>
-  Math.max(kind === 'stb' ? esc.pisoStb : esc.piso, Math.ceil(digitos * esc.digito) + 3) + (temTb ? esc.tb : 0);
+  Math.max(kind === 'stb' ? esc.pisoStb : esc.piso, Math.ceil(digitos * esc.digito) + 4) + (temTb ? esc.tb : 0);
 must(c2.w === larguraEsperada(1, 'set', true),
   'e o quanto ela cresce sai da MESMA escada que dimensiona tudo (+' + esc.tb + ')');
 must(c1.w === larguraEsperada(1, 'set', false) && c3.w === larguraEsperada(2, 'stb', false),

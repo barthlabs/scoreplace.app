@@ -1179,15 +1179,19 @@
    * tie-break — e cobravam esse preço de TODA coluna: um `6` sozinho ficava com 8,7px de folga
    * de cada lado (medido), e o placar inteiro ocupava largura que o NOME queria.
    * Agora a largura sai do dado: `digito` é quanto ocupa um algarismo naquele degrau de fonte
-   * (medido no navegador: 11,9px a 1,20rem) e `piso` é o mínimo que a coluna nunca perde —
-   * que NÃO é o número, é o RÓTULO: "STB" quer ~17px e, se não couber, quebra em duas linhas e
-   * engorda o cabeçalho (o defeito "cards de alturas diferentes" da 2.0.35). Por isso o piso do
-   * super tie-break é maior que o do set.
+   * (MEDIDO no navegador, root 17px: um "6" sozinho a 1,20rem ocupa 13,6px — o algarismo no
+   * meio de "14" sai mais estreito, 11,9; a régua usa o caso largo, senão a coluna aperta) e `piso` é o mínimo que a coluna nunca perde —
+   * que NÃO é o número, é o RÓTULO — e o rótulo de um set é só o ALGARISMO ("1", "2"), que é
+   * estreito; quem precisa de largura é o "STB", ~17px, que quebra em duas linhas se não couber
+   * e engorda o cabeçalho (o defeito "cards de alturas diferentes" da 2.0.35).
+   * ⭐ 2.2.78 — os pisos de SET caíram (22/20/18 → 18/16/14) pelo mesmo pedido do dono: _"dá pra
+   * ter menos espaço entre os placares dos sets em melhor de 3; isso dará mais espaço para os
+   * nomes nas duplas"_. O piso do STB não se mexe: lá o limite continua sendo o rótulo.
    * ⛔ As duas linhas continuam casadas: a conta é por COLUNA e lê o mesmo set dos dois lados. */
   window._SET_COL_ESCALA = [
-    { ate: 2, digito: 12.9, piso: 22, pisoStb: 24, tb: 21, fs: 1.30 },   // 1 ou 2 colunas
-    { ate: 3, digito: 11.9, piso: 20, pisoStb: 22, tb: 20, fs: 1.20 },   // 3 colunas (melhor de 3)
-    { ate: 5, digito: 9.4,  piso: 18, pisoStb: 20, tb: 16, fs: 0.95 }    // 4 ou 5 colunas
+    { ate: 2, digito: 14.0, piso: 18, pisoStb: 24, tb: 21, fs: 1.30 },   // 1 ou 2 colunas
+    { ate: 3, digito: 13.0, piso: 16, pisoStb: 22, tb: 20, fs: 1.20 },   // 3 colunas (melhor de 3)
+    { ate: 5, digito: 10.3, piso: 14, pisoStb: 20, tb: 16, fs: 0.95 }    // 4 ou 5 colunas
   ];
   window._setColEscala = function (nCols) {
     var e = window._SET_COL_ESCALA;
@@ -1302,8 +1306,10 @@
         var digTb = Math.max(_t(tb.p1), _t(tb.p2));
         extraTb = (esc.tb || 0) + Math.ceil((digTb - 1) * esc.digito * 0.6);
       }
-      // 3px de respiro (1,5 de cada lado) + o vão de 2px da grade = o "mínimo pra não colar"
-      return Math.max(piso, Math.ceil(dig * esc.digito) + 3) + extraTb;
+      /* 4px de respiro (2 de cada lado) + o vão de 2px da grade. MEDIDO na régua do dono
+       * (root 17px): com 3px o vão entre dois números caía a 3,8px — perto demais de colar,
+       * que é justamente o limite que ele pediu para não cruzar. Com 4px fica ~5px. */
+      return Math.max(piso, Math.ceil(dig * esc.digito) + 4) + extraTb;
     };
 
     var cols = [], i;

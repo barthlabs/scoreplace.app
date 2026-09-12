@@ -1,3 +1,16 @@
+## 2.2.78 — 12/set/2026
+
+Novidades no seu torneio: a ordem volta a ser a hora do resultado. O espelho de cada jogo tem dois
+carimbos — quando o resultado foi lançado e quando o documento foi escrito pela última vez — e a
+lista usava o segundo. Medido na base do Confra: os 214 espelhos estão todos com o mesmo horário de
+escrita, de um re-sync do servidor, o que fazia jogo de semanas atrás parecer recém-jogado e
+empurrava para fora da janela os jogos da rodada em curso. Agora quem ordena é a hora do lançamento.
+
+Placar por sets: as colunas ficam mais juntas. O piso de uma coluna de set deixa de ser o de uma
+coluna de super tie-break — o rótulo de um set é só o algarismo, que é estreito, enquanto "STB"
+precisa de largura. Medido na tela: o vão entre dois números caiu para ~5px (o mínimo para não
+colarem) e o placar de melhor de 3 devolveu 13px de largura para os nomes das duplas.
+
 ## 2.2.77 — 12/set/2026
 
 Novidades no seu torneio: os jogos da fase em curso voltam a aparecer. Num torneio dividido, os

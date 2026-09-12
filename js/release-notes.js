@@ -1,3 +1,4 @@
+// 2.2.78 — novidades ordenam pela hora do RESULTADO; colunas de set mais juntas.
 // 2.2.77 — novidades leem o espelho do resultado; "ir para o torneio" para no jogo.
 // 2.2.76 — a busca da classificação sai de cima da chave e diz o que filtra.
 // 2.2.75 — a lista de espera passa a usar o card canônico, com fila, presença e W.O.

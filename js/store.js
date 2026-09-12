@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.2.77';
+window.SCOREPLACE_VERSION = '2.2.78';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -11441,9 +11441,23 @@ window.AppStore = {
     for (var i = 0; i < F.length; i++) {
       if (Object.prototype.hasOwnProperty.call(res, F[i])) m[F[i]] = res[F[i]];
     }
+    /* ⛔ O `updatedAt` DO ESPELHO É DO DOCUMENTO, NÃO DO RESULTADO — e não pode virar "quando
+     * isto aconteceu". MEDIDO na base do Confra (12/set/2026): os 214 espelhos estão TODOS com
+     * `updatedAt = 2026-09-12T11:51:32.898Z` — um re-sync do servidor reescreveu a coleção
+     * inteira de uma vez. Usar esse carimbo faria um jogo de semanas atrás parecer recém-jogado,
+     * e foi o que aconteceu: "Novidades" encheu de R1 antiga e a R2 de verdade sumiu da janela.
+     * Quem sabe a hora do resultado é `resultAt` (e, no pendente, `proposedAt`). O `updatedAt`
+     * fica de fora de propósito — a cadeia de quem ordena cai sozinha no carimbo certo. */
+    delete m.updatedAt;
     if (res.p1 != null) m.p1 = res.p1;
     if (res.p2 != null) m.p2 = res.p2;
-    if (res.roundLabel) m.label = String(res.roundLabel);
+    if (res.roundLabel) {
+      m.label = String(res.roundLabel);
+      // "R2 Grupo X • Jogo 7" → rodada 2: é o desempate quando dois resultados têm o mesmo
+      // carimbo (e, sem jogo na estrutura, é a única fonte de rodada que existe).
+      var _r = /^R(\d+)/.exec(String(res.roundLabel));
+      if (_r && m.round == null) m.round = Number(_r[1]);
+    }
     if (Array.isArray(res.playerUids)) m._playerUids = res.playerUids.slice();
     // sem nome dos dois lados não há card que se desenhe — melhor não fingir que há jogo
     if (m.p1 == null && m.p2 == null) return null;
