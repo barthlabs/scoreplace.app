@@ -14,10 +14,23 @@
     </linearGradient>
   </defs>
   <rect width="192" height="192" fill="url(#bg)"/>
-  <!-- Pódio: prata (2º), ouro (1º), bronze (3º) — cores universais de medalha -->
-  <rect x="44" y="100" width="32" height="52" rx="5" fill="#CBD5E1"/>
-  <rect x="80" y="68" width="32" height="84" rx="5" fill="#F59E0B"/>
-  <rect x="116" y="118" width="32" height="34" rx="5" fill="#FB923C"/>
-  <!-- Estrela sobre o 1º lugar -->
-  <path d="M 96 40 L 100 52 L 112 52 L 102 60 L 106 72 L 96 64 L 86 72 L 90 60 L 80 52 L 92 52 Z" fill="#F59E0B"/>
+  <!-- ⭐ 12/set/2026 — O PÓDIO ENCHE O ÍCONE (ordem do dono, print do atalho no Chrome ao
+       lado de instagram/youtube): _"nosso ícone é pequeno em relação aos demais. a parte azul
+       não conta, é preenchimento; o que conta é o pódio com as barras e a estrela. devem
+       encher o espaço sem cortar nos cantos"_.
+       O desenho é o MESMO, ampliado 1,20x a partir do centro — o mesmo enquadramento que o
+       icon-maskable.svg já usava desde a 1.9.86.
+       ⛔ O TETO É MEDIDO E É O CÍRCULO, NÃO O QUADRADO: os cantos INFERIORES do pódio (prata e
+       bronze) são os pontos mais distantes do centro — raio 76,7 de 96. Em 1,251 eles
+       ENCOSTAM na borda do recorte circular que o atalho aplica; 1,20 leva o raio a 92,1 e
+       deixa ~4px de folga. Não subir sem refazer essa conta.
+       ⚠️ O ícone das LOJAS (AppIcon) NÃO sai daqui — lá a margem larga é exigida por elas. -->
+  <g transform="translate(96,96) scale(1.20) translate(-96,-96)">
+    <!-- Pódio: prata (2º), ouro (1º), bronze (3º) — cores universais de medalha -->
+    <rect x="44" y="100" width="32" height="52" rx="5" fill="#CBD5E1"/>
+    <rect x="80" y="68" width="32" height="84" rx="5" fill="#F59E0B"/>
+    <rect x="116" y="118" width="32" height="34" rx="5" fill="#FB923C"/>
+    <!-- Estrela sobre o 1º lugar -->
+    <path d="M 96 40 L 100 52 L 112 52 L 102 60 L 106 72 L 96 64 L 86 72 L 90 60 L 80 52 L 92 52 Z" fill="#F59E0B"/>
+  </g>
 </svg>
