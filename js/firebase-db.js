@@ -5,6 +5,35 @@
 // Collections: tournaments, users
 // Requires firebase-app-compat + firebase-firestore-compat loaded first.
 
+/* ⛔ UMA LISTA SÓ DE CAMPOS — DUAS TELAS IRMÃS NÃO PODEM TER PROTEÇÕES DIFERENTES.
+ * A tela "Explorar" é alimentada por DOIS caminhos: a busca por nome (`searchUsers`) e a
+ * lista de quem entrou recentemente (`listRecentUsers`). Em 2026 alguém limitou o que a
+ * BUSCA devolve — antes ela entregava a ficha inteira de estranhos — mas a lista de recentes
+ * ficou de fora e seguiu devolvendo `doc.data()` cru de até 30 pessoas: telefone, data de
+ * nascimento, gênero, cidades preferidas, tudo baixado para o aparelho de quem abre a tela,
+ * embora a tela só mostre nome e foto. Achado da auditoria (L4): "a mitigação cobre um
+ * caminho e não o irmão".
+ * A régua passa a ser ESTA, e os dois a usam — duas cópias divergem na primeira mudança.
+ * ⚠️ O conteúdo da lista é o MESMO de antes, de propósito: esta leva conserta o esquecimento,
+ * não redefine o que é público. O `email` aqui é herdado da decisão original e segue
+ * pendente de revisão (o convite de amigo hoje encontra gente por e-mail).
+ * [[project_email_no_doc_publico]] */
+window._CAMPOS_DE_LISTA = [
+  'displayName', 'displayName_lower',
+  'photoURL',
+  'acceptFriendRequests',
+  'preferredSports',
+  'createdAt', 'updatedAt', 'lastSeenAt'
+];
+window._perfilDeLista = function (raw) {
+  var out = { _docId: raw && raw._docId };
+  for (var i = 0; i < window._CAMPOS_DE_LISTA.length; i++) {
+    var k = window._CAMPOS_DE_LISTA[i];
+    if (raw && raw[k] !== undefined) out[k] = raw[k];
+  }
+  return out;
+};
+
 window.FirestoreDB = {
   db: null,
   lastInitError: null,
@@ -2745,7 +2774,8 @@ window.FirestoreDB = {
           if (results[doc.id]) return;
           var data = doc.data();
           data._docId = doc.id;
-          if (data.acceptFriendRequests !== false) results[doc.id] = data;
+          // mesma régua da busca por nome: a tela mostra nome e foto, não a ficha inteira.
+          if (data.acceptFriendRequests !== false) results[doc.id] = window._perfilDeLista(data);
         });
       };
       // Two parallel queries — some profiles have updatedAt (active users),
@@ -2875,22 +2905,7 @@ window.FirestoreDB = {
     // chama isso pra busca de amigos). Fix em 1 camada client-side; security
     // rules ainda permitem leitura do doc inteiro — fix definitivo em rules
     // fica pra round dedicado com testes.
-    var PUBLIC_FIELDS = [
-      'displayName', 'displayName_lower',
-      'email', 'email_lower',
-      'photoURL',
-      'acceptFriendRequests',
-      'preferredSports',  // útil pra sugestão de parceiros
-      'createdAt', 'updatedAt', 'lastSeenAt'
-    ];
-    var sanitize = function(raw) {
-      var out = { _docId: raw._docId };
-      for (var i = 0; i < PUBLIC_FIELDS.length; i++) {
-        var k = PUBLIC_FIELDS[i];
-        if (raw[k] !== undefined) out[k] = raw[k];
-      }
-      return out;
-    };
+    var sanitize = window._perfilDeLista;
     var addFromSnap = function(snap) {
       snap.forEach(function(doc) {
         if (results[doc.id]) return;
@@ -2948,12 +2963,9 @@ window.FirestoreDB = {
     // dono), e pra isso o local preferido do OUTRO precisa chegar ao cliente. O campo não
     // é EXIBIDO — serve só pra decidir a seção. Ele é da mesma família de `city`, que já
     // viajava aqui. MEDIDO em 27/ago: 40 dos 259 perfis (15%) têm o campo preenchido.
-    var PUBLIC_FIELDS = [
-      'displayName', 'displayName_lower', 'email', 'email_lower',
-      'photoURL', 'acceptFriendRequests', 'preferredSports', 'city',
-      'preferredLocations',
-      'createdAt', 'updatedAt', 'lastSeenAt'
-    ];
+    /* a base é a mesma das outras duas listas; aqui ela é ESTENDIDA com os dois campos que
+     * esta tela precisa para AGRUPAR (não para exibir), e isso está declarado logo acima. */
+    var PUBLIC_FIELDS = window._CAMPOS_DE_LISTA.concat(['city', 'preferredLocations']);
     var out = [];
     try {
       var snap = await this.db.collection('users').limit(2000).get();

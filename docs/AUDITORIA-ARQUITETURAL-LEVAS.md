@@ -3443,6 +3443,36 @@ por perfil a última versão e plataforma vistas (sem PII nova), barata e fora d
 (uma escrita por sessão, junto de um update que já acontece), para que o prazo de sete dias possa
 um dia começar a contar sobre um número real. ⛔ Não autorizado por este registro.
 
+## LEVAS EXECUTADAS EM 12/set/2026 — registro
+
+⛔ Registradas aqui porque, sem isto, elas existem só em commit: quem reler o documento amanhã
+encontra tudo em aberto. Foi esse mesmo buraco que quase me fez planejar trabalho para quatro
+itens já resolvidos (ver "Reconferência da porta anônima").
+
+| leva | o que fechou | onde |
+|---|---|---|
+| **L16.P1** | `_sweepDeletionLeftovers` com 5 `catch` vazios reportava `sobras=0` quando não conseguia olhar; contador de notificações somava antes do `commit()` | `functions/index.js` · no ar |
+| **L16.P2** | `_hydrateMonarchGroups` engolida em 8 pontos do sorteio — inclusive dentro da transação, onde ela MIGRA doc legado | `functions-autodraw/index.js` · no ar |
+| **L16.P3** | ⛔ **guarda da exclusão de conta falhava ABERTA**: consulta que falhasse deixava "organiza" vazio e a conta era APAGADA. Passa a recusar com `unavailable`. Segundo contador mentiroso (torneios) corrigido | `functions/index.js` · no ar |
+| **L4.P10** | inscrição própria gravava `participants[].email` no doc PÚBLICO — 3 dos 4 e-mails do Confra vinham daí | web 2.2.85 |
+| **L4.P11** | `linkedEmails` (prova de posse) era reescrito pelo cliente: dava para PÔR o e-mail de outra pessoa. Porta `unlinkSecondaryEmail`, que só tira e só do próprio | Functions + web 2.2.87 |
+| **L4.P12** | as 3 listas de pessoas baixavam a ficha inteira de até 30 desconhecidos; agora uma régua só, e o `email` saiu dela | web 2.2.88 |
+
+⏳ **Aberto e dependente do dono:** fechar a Rule de `linkedEmails` (mover para
+`privilegedUserFields`) depois de a 2.2.87 circular — a trava atual EXIGE que ainda esteja
+permitido, para ninguém fechar antes da hora; e a migração que remove os e-mails já gravados
+nos 58 documentos de torneio.
+
+⭐ **A L4.P9 se dissolveu:** os dois pontos tidos como bloqueio (fusão de contas `:313`, migração
+de uid `:7279`) NÃO migram identidade — o comentário do próprio código diz "o uid acima é a
+identidade; isto aqui é só higiene de dados antigos". São condicionais sobre os próprios campos:
+sem eles, viram inoperantes. Não havia decisão pendente.
+
+⭐ **L13 destravada e a pergunta estava errada.** Não é "8 de 279 perfis carimbados": são **9
+perfis ativos em 3 dias e 8 deles carimbados**. A instrumentação pega quem abre o app; a base é
+dormente. E os 8 carimbos acompanham cada publicação do dia (2.2.69 → 2.2.84): entre quem usa, a
+adoção é do dia. Falta iOS, que só carimba quando a Apple aprovar.
+
 ## RECONFERÊNCIA DA PORTA ANÔNIMA — 12/set/2026 (read-only)
 
 ⛔ **Vários "PROBLEMA ABERTO" registrados entre 31/ago e 11/set já não descrevem a produção.**

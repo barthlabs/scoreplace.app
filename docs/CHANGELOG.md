@@ -1,3 +1,15 @@
+## 2.2.88 — 12/set/2026
+
+Privacidade: as listas de pessoas passam a baixar só o que aparece na tela. Para montar a lista
+de quem entrou recentemente, o app baixava a ficha completa de até trinta desconhecidos —
+telefone, data de nascimento, gênero, cidades preferidas, e-mail — embora a tela mostre apenas
+nome e foto. A busca por nome já tinha sido limitada tempos atrás; a lista de recentes ficou de
+fora, e as duas alimentam a mesma tela.
+
+Agora as três listas de pessoas do app usam a mesma régua, escrita num lugar só, e o e-mail saiu
+dela: não é exibido, então não é baixado. A tela de convidar continua recebendo os dois campos de
+que precisa para agrupar por local, e isso está declarado como exceção, não escondido.
+
 ## 2.2.87 — 12/set/2026
 
 Segurança da conta: remover um e-mail vinculado passa a ser feito pelo servidor. Antes, o próprio
