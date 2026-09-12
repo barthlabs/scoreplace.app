@@ -14,14 +14,13 @@
        lado de instagram/youtube): _"nosso ícone é pequeno em relação aos demais. a parte azul
        não conta, é preenchimento; o que conta é o pódio com as barras e a estrela. devem
        encher o espaço sem cortar nos cantos"_.
-       O desenho é o MESMO, ampliado 1,20x a partir do centro — o mesmo enquadramento que o
+       O desenho é o MESMO, ampliado 1,25x a partir do centro — o mesmo enquadramento que o
        icon-maskable.svg já usava desde a 1.9.86.
        ⛔ O TETO É MEDIDO E É O CÍRCULO, NÃO O QUADRADO: os cantos INFERIORES do pódio (prata e
-       bronze) são os pontos mais distantes do centro — raio 204,6 de 256. Em 1,251 eles
-       ENCOSTAM na borda do recorte circular que o atalho aplica; 1,20 leva o raio a 245,5 e
-       deixa ~10px de folga. Não subir sem refazer essa conta.
+       bronze) são os pontos mais distantes do centro — raio 204,6 de 256. ⛔ Em 1,26 eles ENCOSTAM na borda do recorte circular que o atalho aplica; 1,25 leva o raio a 248,6 e
+       deixa ~7px de folga. Não subir sem refazer essa conta.
        ⚠️ O ícone das LOJAS (AppIcon) NÃO sai daqui — lá a margem larga é exigida por elas. -->
-  <g transform="translate(256,256) scale(1.20) translate(-256,-256)">
+  <g transform="translate(256,256) scale(1.25) translate(-256,-256)">
     <!-- Pódio: prata (2º), ouro (1º), bronze (3º) -->
     <rect x="117" y="267" width="85" height="139" rx="13" fill="#CBD5E1"/>
     <rect x="213" y="181" width="86" height="225" rx="13" fill="#F59E0B"/>

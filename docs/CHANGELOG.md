@@ -21,8 +21,9 @@ que mudou dentro dela?": prazos passam, formato, grupos e número de rodadas con
 que o servidor grava é a mescla que ele mesmo monta a partir do documento fresco.
 
 Ícone do app na web: o pódio passa a encher o espaço. Ele ocupava pouco mais da metade do quadrado e
-aparecia pequeno ao lado dos outros atalhos do navegador; agora vai a 1,20× — o limite medido para
-que os cantos de baixo do pódio não sejam cortados pelo recorte redondo que o atalho aplica. Vale
+aparecia pequeno ao lado dos outros atalhos do navegador; agora vai a 1,25× — o limite medido para
+que os cantos de baixo do pódio não sejam cortados pelo recorte redondo que o atalho aplica (o
+pódio passa a ocupar 97% do raio, contra 78% de antes). Vale
 para o favicon, o atalho e o ícone do PWA; o ícone das lojas não muda.
 
 Ícone do site: `/favicon.ico` passa a existir na raiz. Os ícones do manifest e das tags `<link>`
