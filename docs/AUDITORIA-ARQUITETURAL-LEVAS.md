@@ -3443,6 +3443,30 @@ por perfil a última versão e plataforma vistas (sem PII nova), barata e fora d
 (uma escrita por sessão, junto de um update que já acontece), para que o prazo de sete dias possa
 um dia começar a contar sobre um número real. ⛔ Não autorizado por este registro.
 
+## L6 — ESTÁ PRATICAMENTE FECHADA, E O REGISTRO DIZIA O CONTRÁRIO (12/set/2026)
+
+O registro da L6 descreve `saveTournament` como "a maior porta, **93 chamadas**, que grava a
+cópia EM MEMÓRIA com `merge:true`". ⛔ **Medido hoje: 3 chamadas reais.** As outras ocorrências
+do nome no código são COMENTÁRIOS contando que o anti-padrão foi retirado. A migração da L7.P2
+já tinha fechado o resto.
+
+E as três não estão no produto:
+- `store.js#sync` e o `saveTournament` direto em `tournaments-draw.js` são o **simulador de
+  fase** (`_devSimulateCurrentPhase`), exposto só quando `_isSandboxTournament(t)` — não alcança
+  torneio real;
+- `store.js#syncImmediate` tinha **ZERO** chamadores (medido em `js/`, `index.html` e
+  `functions/`; as ~15 ocorrências em `tests/` são dublês que só definem a propriedade).
+
+**Pago em 2.2.91:** `syncImmediate` REMOVIDA. Era o anti-padrão em estado puro — documento
+inteiro, da memória, com merge, sujeito a lost-update. O censo de escritores
+(`tests/l7-client-writer-census.test.js`) caiu de 11 para 10 chamadas de dívida.
+⚠️ `sync` FICA, e continua declarada no censo: o simulador do sandbox ainda a chama.
+
+⭐ **QUARTA vez no mesmo dia que um número deste documento não descrevia a produção** — depois da
+porta anônima (4 de 5 coleções já fechadas), da leitura de perfil (93, não 30) e desta.
+O documento envelhece mais rápido do que se lê. **Remedir antes de planejar** deixou de ser
+conselho e passou a ser pré-requisito de qualquer leva daqui pra frente.
+
 ## L4 — LEITURA DE PERFIL: O NÚMERO DO REGISTRO ESTAVA DESATUALIZADO (12/set/2026, read-only)
 
 O registro da L4 diz que `FirestoreDB.loadUserProfile` devolve o documento cru em **30 chamadas**.

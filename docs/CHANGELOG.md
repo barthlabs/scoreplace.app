@@ -1,3 +1,16 @@
+## 2.2.91 — 12/set/2026
+
+Limpeza interna, sem efeito visível. Saiu do código um caminho antigo de gravação que salvava o
+torneio inteiro a partir da cópia que estava na memória do aparelho. Quando duas pessoas mexiam
+no mesmo torneio, quem tivesse a cópia mais velha podia apagar o que a outra já tinha salvado.
+
+Esse caminho não era mais usado por nada — foi substituído há versões pelas gravações que passam
+pelo servidor e mexem só no que mudou. Ficava apenas definido, disponível para alguém chamar por
+engano no futuro.
+
+Um caminho parecido continua no código, usado só pelo simulador de fases dos torneios de teste,
+e segue anotado como pendência.
+
 ## 2.2.90 — 12/set/2026
 
 Partida casual: quem manda em cada coisa passou a estar escrito. Até aqui, qualquer pessoa com

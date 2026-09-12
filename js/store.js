@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.2.90';
+window.SCOREPLACE_VERSION = '2.2.91';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -11001,54 +11001,17 @@ window.AppStore = {
     store._saveToCache();
   },
 
-  // SyncImmediate: saves a specific tournament to Firestore RIGHT NOW (no debounce)
-  // Use for critical operations: draw, match results, status changes, enrollments
-  async syncImmediate(tournamentId) {
-    if (!window.FirestoreDB || !window.FirestoreDB.db) {
-      window._error('syncImmediate: Firestore not available');
-      return false;
-    }
-    var t = this.tournaments.find(function(tour) {
-      return String(tour.id) === String(tournamentId);
-    });
-    if (!t) {
-      window._error('syncImmediate: Tournament not found:', tournamentId);
-      return false;
-    }
-    try {
-      t.updatedAt = new Date().toISOString();
-      await window.FirestoreDB.saveTournament(t);
-      this._saveToCache();
-      // Tournament saved to Firestore
-      return true;
-    } catch (err) {
-      window._error('syncImmediate: FAILED to save tournament ' + tournamentId, err);
-      // Sentry observability (no-op se DSN não configurada — ver js/sentry-init.js)
-      if (typeof window._captureException === 'function') {
-        window._captureException(err, { area: 'syncImmediate', tournamentId: tournamentId, code: err && err.code });
-      }
-      // v0.16.54: expor mensagem real do erro no toast (antes era genérico
-      // "Não foi possível salvar no servidor. Tente novamente." que escondia
-      // a causa). Inclui código Firestore (permission-denied, resource-
-      // exhausted, deadline-exceeded, etc.) + mensagem detalhada + tamanho
-      // estimado do doc pra detectar erros de "documento muito grande" (>1MiB).
-      var _diagMsg = '';
-      try {
-        var _code = (err && err.code) || '';
-        var _msg = (err && err.message) || String(err);
-        var _docBytes = 0;
-        try { _docBytes = new Blob([JSON.stringify(t)]).size; } catch(e2) {}
-        _diagMsg = (_code ? '[' + _code + '] ' : '') + _msg.substring(0, 200);
-        if (_docBytes > 0) _diagMsg += ' · ~' + Math.round(_docBytes / 1024) + 'KB';
-        // window expose pra inspeção
-        window._lastSaveError = { tournamentId: tournamentId, code: _code, message: _msg, docBytes: _docBytes, at: new Date().toISOString() };
-      } catch (e3) { _diagMsg = String(err); }
-      if (typeof showNotification === 'function') {
-        showNotification(window._t('store.saveError') + ' (v0.16.54)', _diagMsg, 'error');
-      }
-      return false;
-    }
-  },
+  /* ⛔ `syncImmediate` REMOVIDA (2.2.91) — era o anti-padrão da L6 sem nenhum chamador.
+   * Ela gravava o documento INTEIRO do torneio a partir da cópia EM MEMÓRIA, com merge: quem
+   * tivesse uma cópia velha sobrescrevia o que o servidor já tinha (lost-update). O censo de
+   * escritores (tests/l7-client-writer-census.test.js) já a listava como dívida explícita —
+   * "sem chamadores de produto, mantida provisoriamente".
+   * MEDIDO em 12/set/2026: ZERO chamadas em js/, index.html e functions. As ~15 ocorrências em
+   * tests/ são DUBLÊS (`syncImmediate() {}`), que só definem a propriedade e não chamam esta.
+   * ⚠️ `sync()` NÃO saiu junto: ela ainda tem um chamador — o simulador de fase, que só aparece
+   * em torneio SANDBOX (`_isSandboxTournament`). Enquanto ele existir, a dívida continua, e é
+   * por isso que o censo segue com a entrada dela. */
+
 
   // ── BLINDAGEM DE CONCORRÊNCIA (project_concurrency_safe_saves) ──────────────
   // Persiste uma mutação de torneio ATOMICAMENTE, via transação. Substitui o

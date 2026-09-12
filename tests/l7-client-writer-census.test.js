@@ -5,9 +5,14 @@ const root=path.join(__dirname,'../js');
 function walk(dir){return fs.readdirSync(dir,{withFileTypes:true}).flatMap(e=>e.isDirectory()?walk(path.join(dir,e.name)):[path.join(dir,e.name)]);}
 // APIs antigas ainda definidas no store, sem chamadores de produto após esta leva.
 // Mantidas provisoriamente por cobertura de compatibilidade; são dívida explícita.
+// ⭐ PARCELA PAGA EM 2.2.91: `store.js#syncImmediate#saveTournament` SAIU desta lista porque o
+// método foi REMOVIDO — tinha ZERO chamadores em js/, index.html e functions (as ~15 ocorrências
+// em tests/ são dublês que só definem a propriedade). Era o anti-padrão da L6 em estado puro:
+// gravava o doc INTEIRO a partir da cópia em memória, com merge.
+// ⚠️ `sync` CONTINUA na lista de propósito: ela ainda tem um chamador — o simulador de fase, que
+// só aparece em torneio SANDBOX. Enquanto ele existir, a dívida é real e fica declarada.
 const debt={
  'store.js#sync#saveTournament':1,
- 'store.js#syncImmediate#saveTournament':1,
  'store.js#commitTournamentTx#mutateTournament':1,
  'store.js#mutate#commitTournamentTx':2,
  'store.js#reseedMatchRoster#commitMatchResult':1,

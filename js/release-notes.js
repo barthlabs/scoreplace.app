@@ -1,3 +1,4 @@
+// 2.2.91 — remoção de um caminho antigo de gravação que podia sobrescrever dado do servidor.
 // 2.2.90 — partida casual: só quem criou apaga a sala, e jogo encerrado não se reescreve.
 // 2.2.89 — faxina automática dos tokens de verificação vencidos, no servidor.
 // 2.2.88 — listas de pessoas passam a baixar só o que aparece na tela.
