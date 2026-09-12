@@ -378,7 +378,16 @@ fi
 # ⚠️ SEM PIPE. Pipe transforma o exit code no do último comando e o gate do predeploy
 # vira decoração — é a armadilha já registrada no CLAUDE.md (deploy-functions.sh).
 cd "$DEST"
-firebase deploy --only hosting --project scoreplace-app
+# ⛔ O CLI TAMBÉM SAI NÃO-ZERO DEPOIS DE PUBLICAR. MEDIDO em 12/set/2026: o log terminou com
+# "✔ Deploy complete!" e, na linha seguinte, "Error: An unexpected error has occurred." — com
+# `set -e` o script morreu ALI, depois de publicar e antes de empurrar o main e o backup. Ficou o
+# pior dos mundos: o ar novo e o repositório atrás (exatamente o que a trava de alinhamento existe
+# para impedir). Quem julga se publicou é O AR, conferido logo abaixo — não o código de saída.
+_DEPLOY_RC=0
+firebase deploy --only hosting --project scoreplace-app || _DEPLOY_RC=$?
+if [[ "$_DEPLOY_RC" != "0" ]]; then
+  echo "⚠ o firebase saiu com código $_DEPLOY_RC — seguindo para a conferência NO AR, que é quem decide."
+fi
 
 # ── 7. conferir no ar ────────────────────────────────────────────────────────
 cd "$RAIZ"

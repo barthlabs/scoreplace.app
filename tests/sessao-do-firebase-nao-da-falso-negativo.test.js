@@ -23,4 +23,11 @@ must(/FIREBASE NÃO AUTENTICADO/.test(sh), 'a trava continua existindo — o que
 must(sh.indexOf('conferindo a sessão do Firebase') < sh.indexOf('FIREBASE NÃO AUTENTICADO'),
   'e ela continua ANTES da suíte: descobrir sessão morta depois de minutos de teste é o que ela evita');
 
+// ⛔ E o MESMO CLI sai não-zero DEPOIS de publicar: com `set -e` o script morria após o upload,
+// deixando o ar novo e o `main` atrás — o oposto do que a trava de alinhamento protege.
+must(/firebase deploy --only hosting --project scoreplace-app \|\| _DEPLOY_RC=\$\?/.test(sh),
+  '⛔ o upload não derruba o script pelo código de saída — quem julga é a conferência no ar');
+must(sh.indexOf('_DEPLOY_RC') < sh.indexOf('conferindo o ar'),
+  'e a conferência no ar vem logo depois, como juíza');
+
 console.log('✅ ' + ok + ' asserções — sessão do Firebase medida pela resposta');
