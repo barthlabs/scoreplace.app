@@ -175,12 +175,18 @@
     var prazoHtml = (typeof view.deadlineHtml === 'function') ? view.deadlineHtml : null;
     for (var q = 0; q < v.length; q++) {
       var _rot = prazoHtml ? prazoHtml(v[q], q, false) : window._rbDDMM(v[q]);
-      rotulos += '<span data-rb-lbl="' + q + '" style="position:absolute;left:' + pct(v[q]).toFixed(4) + '%;' +
+      rotulos += '<span data-rb-lbl="' + q + '" style="position:absolute;top:0;left:' + pct(v[q]).toFixed(4) + '%;' +
         'transform:translateX(-50%);font-size:0.62rem;font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);' +
         'white-space:nowrap;text-align:center;display:flex;flex-direction:column;align-items:center;gap:2px;">' + _rot + '</span>';
     }
     if (prazoHtml) {
-      rotulos += '<span data-rb-lbl-final="1" style="position:absolute;left:100%;transform:translateX(-100%);font-size:0.62rem;font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);white-space:nowrap;text-align:center;display:flex;flex-direction:column;align-items:center;gap:2px;">' + prazoHtml(endMs, k - 1, true) + '</span>';
+      /* ⭐ A DATA FINAL ENCOSTA NA EXTREMA DIREITA. Ordem do dono (12/set/2026): _"a data
+       * final aqui deveria estar na extrema direita"_. O bloco já era ancorado em 100% com
+       * `translateX(-100%)`, mas com `align-items:center` a DATA ficava centrada sobre o
+       * campo de hora (mais largo que ela) — e sobrava um dedo de espaço à direita dela,
+       * como se o fim da fase não fosse o fim da régua. `flex-end` alinha os dois pela
+       * direita, que é a borda que significa alguma coisa aqui. */
+      rotulos += '<span data-rb-lbl-final="1" style="position:absolute;top:0;left:100%;transform:translateX(-100%);font-size:0.62rem;font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);white-space:nowrap;text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:2px;">' + prazoHtml(endMs, k - 1, true) + '</span>';
     }
     var _rotHeight = prazoHtml ? '44px' : '14px';
     var _summary = (typeof view.summaryHtml === 'function') ? view.summaryHtml(cortes) : '';
@@ -191,7 +197,7 @@
         '<div style="position:absolute;inset:0;border-radius:8px;overflow:hidden;">' + segs + '</div>' +
         stops +
       '</div>' +
-      '<div style="position:relative;height:' + _rotHeight + ';margin-top:3px;">' + rotulos + '</div>' +
+      '<div data-rb-rotulos="1" style="position:relative;height:' + _rotHeight + ';margin-top:3px;">' + rotulos + '</div>' +
       '<div style="display:flex;justify-content:space-between;font-size:0.62rem;color:var(--text-muted);font-weight:700;">' +
         '<span>' + window._rbDDMM(startMs) + '</span><span>' + (prazoHtml ? '' : window._rbDDMM(endMs)) + '</span>' +
       '</div>' + _summary +
@@ -201,6 +207,60 @@
   /* Liga o arraste. `onChange(limites)` recebe o array novo a cada movimento.
    * ⛔ DELEGAÇÃO no root: o HTML é remontado a cada movimento, então ouvinte preso ao stop
    * morreria no primeiro arraste — a mesma armadilha da montagem preguiçosa. */
+  /* ── ⭐ RÓTULO NENHUM ENCAVALA OUTRO — ELE DESCE UMA FAIXA ──────────────────────
+   * Ordem do dono (12/set/2026, régua da Fase 2 da Confra): _"quando for encavalar 2 datas
+   * e horários deveria colocar a próxima numa linha abaixo sem encavalar, o que já abriria
+   * espaço para a próxima rodada; assim ficaria um na linha e a próxima na linha de baixo e
+   * o seguinte volta para a linha original; eventualmente pode até usar uma terceira linha"_.
+   * Duas rodadas curtas (R3 de 5 dias) põem dois rótulos a poucos pixels um do outro e eles
+   * se sobrepunham — "23:0009:11" era o que aparecia, ilegível e impossível de editar.
+   *
+   * A REGRA, na letra dele: cada rótulo entra na PRIMEIRA faixa onde couber. Quem cabe na
+   * de cima volta pra ela — as faixas de baixo só existem enquanto a de cima está ocupada.
+   * ⛔ A DECISÃO É MEDIDA, NÃO ESTIMADA: as caixas chegam aqui já medidas no DOM (px), porque
+   * a largura do rótulo depende da fonte, do idioma e do `--ui-scale` do aparelho — calcular
+   * "quantos % um dd/mm ocupa" erraria em metade das telas. Esta função é só a aritmética,
+   * pura e testável; quem mede é `_rbEscalonaRotulos`. */
+  window._rbFaixas = function (caixas, folga) {
+    var f = (folga == null) ? 6 : folga;
+    var ocupado = [];   // borda direita já usada em cada faixa
+    return (caixas || []).map(function (c) {
+      for (var i = 0; i < ocupado.length; i++) {
+        if (c.left >= ocupado[i] + f) { ocupado[i] = c.right; return i; }
+      }
+      ocupado.push(c.right);
+      return ocupado.length - 1;
+    });
+  };
+
+  /* Mede os rótulos desenhados e empilha os que se encavalam. Roda DEPOIS de cada pintura
+   * (o HTML é remontado a cada arraste) e cresce a faixa de rótulos só o quanto precisar. */
+  function _rbEscalonaRotulos(root) {
+    if (!root || !root.querySelector) return;
+    var faixa = root.querySelector('[data-rb-rotulos]');
+    if (!faixa || !faixa.getBoundingClientRect) return;
+    var els = Array.prototype.slice.call(faixa.querySelectorAll('[data-rb-lbl],[data-rb-lbl-final]'));
+    if (!els.length) return;
+    var base = faixa.getBoundingClientRect();
+    var alt = 0;
+    var caixas = els.map(function (el) {
+      el.style.top = '0px';
+      var r = el.getBoundingClientRect();
+      if (r.height > alt) alt = r.height;
+      return { left: r.left - base.left, right: r.right - base.left };
+    });
+    if (!alt) return;                      // fora da tela: nada a medir, nada a mexer
+    var linhas = window._rbFaixas(caixas, 6);
+    var passo = alt + 3;
+    var maior = 0;
+    els.forEach(function (el, i) {
+      el.style.top = (linhas[i] * passo) + 'px';
+      if (linhas[i] > maior) maior = linhas[i];
+    });
+    faixa.style.height = ((maior + 1) * passo) + 'px';
+  }
+  window._rbEscalonaRotulos = _rbEscalonaRotulos;
+
   window._rbMount = function (root, opts) {
     if (!root || root._rbOn) return;
     root._rbOn = true;
@@ -216,6 +276,7 @@
       var atual = v || e.v;
       var presentation = (typeof st.presentation === 'function') ? st.presentation(e, atual) : null;
       root.innerHTML = window._rbSliderHtml(e.start, e.end, e.n, atual, presentation);
+      _rbEscalonaRotulos(root);
     }
     root._rbPinta = pinta;
 

@@ -365,8 +365,11 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       deadlineHtml: function (ms, idx) {
         var time = window._rbIso(ms).slice(11, 16);
         return '<span>' + window._rbDDMM(ms) + '</span>' +
-          '<input type="time" value="' + time + '" aria-label="Horário de encerramento de ' + _elimRoundLabel(idx, n) + '" ' +
-          'onchange="window._f2ElimRoundEndTime(' + idx + ',this.value)" style="width:58px;padding:1px 2px;border:1px solid rgba(251,191,36,0.48);border-radius:5px;background:var(--sp-g-0-0-0-025,rgba(0,0,0,0.25));color:var(--sp-c-fbbf24,#fbbf24);font:700 0.62rem/1.15 ui-monospace,SFMono-Regular,monospace;text-align:center;color-scheme:dark;">';
+          // ⛔ A CLASSE, NÃO O STYLE: a régua canônica de `input[type=time]` (components.css)
+          // é `!important` e engolia o `font:0.62rem` inline — o campo saía com 0,9rem e 92px
+          // de piso, encavalando os rótulos vizinhos. `.rb-time` é a exceção escrita no CSS.
+          '<input type="time" class="rb-time" value="' + time + '" aria-label="Horário de encerramento de ' + _elimRoundLabel(idx, n) + '" ' +
+          'onchange="window._f2ElimRoundEndTime(' + idx + ',this.value)" style="border:1px solid rgba(251,191,36,0.48);border-radius:5px;background:var(--sp-g-0-0-0-025,rgba(0,0,0,0.25));color:var(--sp-c-fbbf24,#fbbf24);font-weight:800;text-align:center;color-scheme:dark;">';
       },
       // A legenda permanece completa mesmo quando uma final de um dia é estreita demais
       // para comportar texto dentro da faixa.

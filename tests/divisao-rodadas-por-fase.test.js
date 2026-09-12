@@ -40,7 +40,14 @@ ok(/_elimRoundCount[\s\S]{0,600}_rodadasVisiveisDaFase/.test(f2ui),
   '⑩ eliminatória materializada usa suas rodadas reais');
 ok(/\['R2', 'R3', 'OF', 'QF', 'SF', 'F'\]/.test(f2ui),
   '⑪ eliminatória de seis etapas recebe os rótulos R2, R3, OF, QF, SF e F');
-ok(/deadlineHtml[\s\S]{0,500}_f2ElimRoundEndTime/.test(f2ui),
+/* ⛔ RECORTE POR ÂNCORA, NUNCA POR TAMANHO FIXO: este teste media 500 caracteres a partir
+ * de `deadlineHtml` e quebrou sozinho quando o bloco ganhou um comentário — sem que nada do
+ * comportamento mudasse. O que importa é que o editor de hora viva DENTRO do deadlineHtml e
+ * chame `_f2ElimRoundEndTime`; é isso que se afirma agora, no bloco inteiro e só nele. */
+const _dhIni = f2ui.indexOf('      deadlineHtml: function (ms, idx) {');
+const _dhFim = f2ui.indexOf('\n      },', _dhIni);
+const _dh = (_dhIni > 0 && _dhFim > _dhIni) ? f2ui.slice(_dhIni, _dhFim) : '';
+ok(_dh && /_f2ElimRoundEndTime/.test(_dh) && /<input type="time"/.test(_dh),
   '⑫ o horário editável nasce sob o respectivo divisor da régua');
 ok(!/_elimRoundDeadlineTimesHtml/.test(f2ui),
   '⑬ não há uma segunda lista de campos grandes de horário abaixo da régua');

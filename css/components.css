@@ -88,6 +88,48 @@ input[type="date"] { min-width: 8.5rem !important; }   /* "dd/mm/aaaa" + ícone 
   height: 13px !important;
   flex-shrink: 0;
 }
+/* ── ⏱️ A HORA DA RÉGUA DAS RODADAS É RÓTULO, NÃO CAMPO DE FORMULÁRIO ──────────────
+   Ordem do dono (12/set/2026, olhando a Divisão das Rodadas): _"esses horários grandes
+   estão muito ruins. deveria ser com a fonte do mesmo tamanho que as datas"_. E estavam
+   grandes por um motivo que NÃO se resolve no style inline: a régua canônica lá em cima
+   (`input[type=time]`) manda `font-size:0.9rem`, `height:40px` e `min-width:5.75rem` com
+   `!important` — o `font:700 0.62rem` inline do rótulo perdia para ela, sempre. Um campo
+   de 92px de largura e 40px de altura embaixo de uma data de 30px: era isso que encavalava
+   os rótulos das rodadas curtas.
+   Aqui ele volta ao tamanho da data que ele acompanha. ⚠️ O PISO CONTINUA VALENDO pela
+   razão de sempre (o valor não pode truncar) — o que muda é que quem dá o espaço agora é a
+   FONTE MENOR, e a largura é INTRÍNSECA (`auto`): o próprio campo pede o que o valor
+   precisa, em 24h ("23:00") ou em 12h ("11:00 PM"), sem eu chutar um número que só serve
+   pro meu locale.
+   ⛔ E O SELETOR PRECISA DO `input[type="time"]` NA FRENTE: `[type="time"]` é ATRIBUTO, que
+   pesa o mesmo que uma classe — `input[type="time"]` (0,1,1) VENCE `.rb-time` (0,1,0) mesmo
+   com os dois `!important` e mesmo vindo antes no arquivo. MEDIDO no navegador: com a classe
+   sozinha o campo continuava com 40px de altura e 0,9rem de fonte, idêntico ao print do dono.
+   [[project_tournament_plan_2day_rule]] */
+input[type="time"].rb-time {
+  height: 18px !important;
+  min-height: 18px !important;
+  max-height: 18px !important;
+  width: auto !important;
+  min-width: 0 !important;
+  padding: 0 1px !important;
+  font-size: 0.62rem !important;
+  line-height: 1.1 !important;
+}
+input[type="time"].rb-time::-webkit-date-and-time-value {
+  line-height: 16px !important;
+  text-align: center !important;
+}
+/* ⛔ SEM O RELÓGIO. Ordem do dono (12/set/2026): _"esse box da hora não tem que ter o
+   relógio… um campo menor possível com o horário apenas, no mesmo tamanho da data"_. O
+   ícone nativo é ~metade da largura do campo nesse tamanho — e aqui ele não informa nada:
+   o rótulo inteiro já é o editor do prazo, e a hora se digita. */
+input[type="time"].rb-time::-webkit-calendar-picker-indicator {
+  display: none !important;
+  width: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
 /* "Repetir a cada [N] dias" (número) e a tag "≈ N rodadas" acompanham a mesma
    altura pra alinhar na linha do agendamento de sorteios. */
 #liga-draw-interval, #liga-rounds-tag {
