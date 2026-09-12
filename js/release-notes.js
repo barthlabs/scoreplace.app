@@ -1,3 +1,5 @@
+// 2.2.72 — placar em coluna nos resultados; a régua das rodadas para de encavalar data e hora.
+// 2.2.72 — torneio já sorteado volta a aceitar correção de prazo; o ícone do app enche o espaço.
 // 2.2.71 — no card, a cor do placar passa a ser de cada set: quem venceu o set fica verde.
 // 2.2.70 — melhor de 3: confirmar de novo num jogo já encerrado não apaga mais os sets lançados.
 // 2.2.69 — casual: a dupla formada não troca na tela de saque e o 2º sacador volta a ser perguntado.

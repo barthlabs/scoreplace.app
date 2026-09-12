@@ -1,3 +1,34 @@
+## 2.2.72 — 12/set/2026
+
+Card de resultado: cada set vira uma coluna. Os números saíam como texto corrido, então um `10` de
+super tie-break na linha de baixo empurrava a linha inteira e nenhum set casava com o de cima. A
+largura de cada coluna passa a sair do próprio set — as duas linhas chegam à mesma medida sem se
+conhecerem — e set 1 fica embaixo de set 1, set 2 embaixo de set 2, até o quinto.
+
+Divisão das rodadas (configuração da eliminatória): o campo de hora de cada rodada volta ao tamanho
+do rótulo de data que ele acompanha, sem o ícone de relógio. Ele vinha com 40px de altura e 92px de
+largura porque a régua canônica de `input[type=time]` vencia o estilo do rótulo — dois prazos
+próximos apareciam um por cima do outro (`23:0009:11`), ilegíveis e impossíveis de editar. Quando
+dois rótulos ainda assim se encavalariam, o seguinte desce uma linha (e uma terceira, se precisar) e
+volta para a de cima assim que houver espaço. A data final passa a encostar na extrema direita da
+régua, que é onde a fase termina.
+
+Configuração de um torneio já sorteado: dá para corrigir os prazos das rodadas de novo. Arrastar a
+régua muda a configuração de formato, e como a configuração de formato inteira é campo estrutural, a
+trava recusava o pedido por causa de um horário — num torneio em andamento era impossível mexer na
+data-limite de uma rodada. A pergunta da trava mudou de "veio a configuração de formato?" para "o
+que mudou dentro dela?": prazos passam, formato, grupos e número de rodadas continuam recusados, e o
+que o servidor grava é a mescla que ele mesmo monta a partir do documento fresco.
+
+Ícone do app na web: o pódio passa a encher o espaço. Ele ocupava pouco mais da metade do quadrado e
+aparecia pequeno ao lado dos outros atalhos do navegador; agora vai a 1,20× — o limite medido para
+que os cantos de baixo do pódio não sejam cortados pelo recorte redondo que o atalho aplica. Vale
+para o favicon, o atalho e o ícone do PWA; o ícone das lojas não muda.
+
+Ícone do site: `/favicon.ico` passa a existir na raiz. Os ícones do manifest e das tags `<link>`
+sempre estiveram no ar e corretos, mas lançador de atalho, agregador e robô pedem só esse caminho —
+e ele respondia 404.
+
 ## 2.2.71 — 11/set/2026
 
 Card de resultado: a cor de cada placar passa a ser do set, e não da partida. Quem venceu um set
