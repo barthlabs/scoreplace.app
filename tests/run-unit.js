@@ -67,6 +67,7 @@ const SUITES = [
   'tests/favicon-na-raiz-existe.test.js',
   'tests/prazo-se-corrige-com-chave-sorteada.test.js',
   'tests/icone-enche-o-espaco.test.js',
+  'tests/hora-nao-perde-o-que-se-digita.test.js',
   'tests/l4-sem-leitura-morta-de-admin-email.test.js',
   'tests/l8-escopo-da-hidratacao.test.js',
   'tests/l8-hydration-boundaries.test.js',

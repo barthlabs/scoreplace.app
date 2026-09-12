@@ -1,3 +1,19 @@
+## 2.2.73 — 12/set/2026
+
+Campos de data e hora da configuração: digitar volta a funcionar. Escrever "23" na hora resultava em
+"02" — o `change` de um campo de hora dispara assim que o valor fica completo, e o primeiro dígito já
+formava um horário válido: a tela se repintava no meio da digitação e o campo era destruído antes do
+segundo dígito chegar. Agora, enquanto o campo está em foco, o modelo é atualizado e a tela só se
+repinta quando a pessoa sai do campo.
+
+Tela que recarrega sozinha: trocar de identificador interno de usuário deixa de contar como
+navegação. A chave que decide "isto é uma tela nova" carregava o uid cru, então qualquer passada em
+que o objeto do usuário era reconstruído — perfil que chega, token que renova, conta que funde —
+esvaziava a tela, subia o "Carregando" por cima do que a pessoa estava lendo e devolvia o scroll pro
+topo, sem ninguém ter ido a lugar nenhum. Entrar e sair da conta continuam sendo navegação de
+verdade. E se ainda assim uma navegação acontecer por cima de conteúdo na mesma rota, fica um aviso
+dizendo o que mudou.
+
 ## 2.2.72 — 12/set/2026
 
 Card de resultado: cada set vira uma coluna. Os números saíam como texto corrido, então um `10` de

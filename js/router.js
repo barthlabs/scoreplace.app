@@ -147,8 +147,30 @@ function initRouter() {
     // valer (sem loader, sem scroll-pro-topo, sem recolher seções).
     // ⚠️ uid e idioma entram na chave de propósito: login/logout e troca de língua
     // na mesma hash são navegações DE VERDADE (a tela muda de natureza).
-    var _rotaKey = hash + '|' + ((window.AppStore && window.AppStore.currentUser && window.AppStore.currentUser.uid) || '') + '|' + (window._lang || '');
+    /* ⛔ TROCAR DE UID NÃO É NAVEGAR — ENTRAR OU SAIR É. Relato do dono (12/set/2026):
+     * _"carrega a página, daí você rola até o que está procurando, começa a analisar e o
+     * carregando volta cortando a experiência… isso faz tempo e no programa todo"_.
+     * A chave da re-entrada carregava o UID CRU. Qualquer passada em que o objeto do usuário
+     * é reconstruído — perfil que chega, token que renova, fusão de conta, o elenco que
+     * re-hidrata — mudava a chave sem a pessoa ter ido a lugar nenhum: a tela era ESVAZIADA,
+     * o "Carregando" subia por cima do que ela estava lendo e o scroll voltava pro topo.
+     * O que a chave precisa saber é se a tela MUDOU DE NATUREZA: entrar (anônimo → logado) e
+     * sair (logado → anônimo) continuam sendo navegação de verdade; o mesmo usuário com outro
+     * objeto, não. Idioma continua na chave — trocar de língua repinta a tela inteira. */
+    var _temUser = (window.AppStore && window.AppStore.currentUser) ? '1' : '0';
+    var _rotaKey = hash + '|' + _temUser + '|' + (window._lang || '');
     var _reentrada = (window._ultimaRotaPintada === _rotaKey) && !!viewContainer.firstElementChild;
+    /* ⭐ E QUANDO AINDA ASSIM FOR NAVEGAÇÃO POR CIMA DE CONTEÚDO, FICA O RASTRO.
+     * Se um dia a tela de alguém for esvaziada sem a pessoa ter navegado, isto diz o que
+     * mudou — sem custo: uma comparação de texto e um aviso, só quando acontece.
+     * [[feedback_instrumentacao_nao_pode_cobrar_pedagio]] */
+    if (!_reentrada && viewContainer.firstElementChild && window._ultimaRotaPintada &&
+        String(window._ultimaRotaPintada).split('|')[0] === hash) {
+      try {
+        window._warn('[router] MESMA rota, tela com conteúdo, e ainda assim navegação: ' +
+          window._ultimaRotaPintada + ' → ' + _rotaKey);
+      } catch (e) {}
+    }
     if (!_shouldPreservePrerender && !_reentrada) {
       viewContainer.innerHTML = '';
     }

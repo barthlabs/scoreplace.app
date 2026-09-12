@@ -73,6 +73,28 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     }
   }
 
+  /* ── ⛔ NÃO REPINTAR COM O CAMPO EM FOCO ───────────────────────────────────────────
+   * Relato do dono (12/set/2026): _"você clica na hora e quer escrever 23 e ele fica 02
+   * apenas"_. Não é o teclado: é o REPINTE.
+   * O `change` de um `<input type=time>` (e de `type=date`) dispara ASSIM QUE o valor fica
+   * completo — não no blur. Com "23:00" já no campo, digitar o `2` da hora já forma
+   * "02:00" → `change` → `_rerender()` → o `<input>` é DESTRUÍDO e recriado → o `3` que vinha
+   * a seguir cai num elemento que não existe mais. O valor congela no primeiro dígito.
+   * A regra: enquanto o campo está em foco, o modelo é atualizado e a tela NÃO é repintada;
+   * o repinte fica armado pro `blur`, quando a pessoa já terminou de digitar.
+   * ⚠️ `{ once: true }` + trava própria: `change` dispara a cada dígito e sem a trava
+   * empilharíamos um ouvinte por tecla. */
+  function _rerenderSemAtrapalhar(el) {
+    if (el && document.activeElement === el && typeof el.addEventListener === 'function') {
+      if (el._f2BlurArmado) return;
+      el._f2BlurArmado = true;
+      el.addEventListener('blur', function () { _norm(); _rerender(); }, { once: true });
+      return;
+    }
+    _rerender();
+  }
+
+
   function _pill(active, onclick, label) {
     var on = 'border:2px solid #818cf8;background:rgba(99,102,241,0.22);color:var(--sp-c-c7d2fe,#c7d2fe);';
     var off = 'border:2px solid var(--sp-b-255-255-255-016,rgba(255,255,255,0.16));background:var(--sp-g-255-255-255-005,rgba(255,255,255,0.05));color:var(--text-main);';
@@ -311,8 +333,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       // `nowrap` (nunca desce), os dois campos com `min-width:0` (podem encolher de verdade)
       // e o ✕ com `flex-shrink:0` (é o único que não encolhe — é alvo de toque).
       '<div class="sp-dt-tight" style="display:flex;gap:4px;align-items:center;flex-wrap:nowrap;min-width:0;">' +
-        '<input type="date" class="form-control" id="f2-elim-end-date" value="' + d + '" aria-label="Data de término da fase eliminatória" style="padding:6px 6px;font-size:0.78rem;flex:1 1 0;min-width:0;box-sizing:border-box;" onchange="window._f2ElimEndDate(this.value)">' +
-        '<input type="time" class="form-control" id="f2-elim-end-time" value="' + h + '" aria-label="Hora de término da fase eliminatória" style="padding:6px 4px;font-size:0.78rem;flex:0 1 78px;min-width:0;box-sizing:border-box;" onchange="window._f2ElimEndTime(this.value)">' +
+        '<input type="date" class="form-control" id="f2-elim-end-date" value="' + d + '" aria-label="Data de término da fase eliminatória" style="padding:6px 6px;font-size:0.78rem;flex:1 1 0;min-width:0;box-sizing:border-box;" onchange="window._f2ElimEndDate(this.value,this)">' +
+        '<input type="time" class="form-control" id="f2-elim-end-time" value="' + h + '" aria-label="Hora de término da fase eliminatória" style="padding:6px 4px;font-size:0.78rem;flex:0 1 78px;min-width:0;box-sizing:border-box;" onchange="window._f2ElimEndTime(this.value,this)">' +
         // ✕ canônico (project_cancel_x_canonical) — nunca ✕ solto estilizado à mão.
         (d && typeof window._cancelXBtn === 'function'
           ? '<span style="flex-shrink:0;display:inline-flex;">' + window._cancelXBtn("window._f2ElimEndDate('')", 'Limpar término da eliminatória') + '</span>'
@@ -369,7 +391,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
           // é `!important` e engolia o `font:0.62rem` inline — o campo saía com 0,9rem e 92px
           // de piso, encavalando os rótulos vizinhos. `.rb-time` é a exceção escrita no CSS.
           '<input type="time" class="rb-time" value="' + time + '" aria-label="Horário de encerramento de ' + _elimRoundLabel(idx, n) + '" ' +
-          'onchange="window._f2ElimRoundEndTime(' + idx + ',this.value)" style="border:1px solid rgba(251,191,36,0.48);border-radius:5px;background:var(--sp-g-0-0-0-025,rgba(0,0,0,0.25));color:var(--sp-c-fbbf24,#fbbf24);font-weight:800;text-align:center;color-scheme:dark;">';
+          'onchange="window._f2ElimRoundEndTime(' + idx + ',this.value,this)" style="border:1px solid rgba(251,191,36,0.48);border-radius:5px;background:var(--sp-g-0-0-0-025,rgba(0,0,0,0.25));color:var(--sp-c-fbbf24,#fbbf24);font-weight:800;text-align:center;color-scheme:dark;">';
       },
       // A legenda permanece completa mesmo quando uma final de um dia é estreita demais
       // para comportar texto dentro da faixa.
@@ -410,7 +432,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   window._f2ElimRoundBoundsReset = function () { if (S && S.cfg && S.cfg.eliminatoria) { S.cfg.eliminatoria.roundBounds = []; _mountElimRoundBounds(); } };
   // Cada divisor já é uma data/hora ISO. Este editor muda somente a HORA, preserva a
   // data escolhida no arraste e mantém o último prazo no endTime canônico da fase.
-  window._f2ElimRoundEndTime = function (idx, value) {
+  window._f2ElimRoundEndTime = function (idx, value, el) {
     if (!S || !S.cfg || !S.cfg.eliminatoria || !value) return;
     var n = _elimRoundCount(), win = _elimBoundsWindow();
     if (!win || idx < 0 || idx >= n || typeof window._rbIso !== 'function') return;
@@ -426,7 +448,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     } else {
       e.endTime = String(value).slice(0, 5);
     }
-    _norm(); _rerender();
+    _norm(); _rerenderSemAtrapalhar(el);
   };
 
   // Janela da fase em dias: (término − 1º sorteio). Base da via de mão dupla rodadas↔repetir.
@@ -1233,14 +1255,14 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   // v1.6.80: término PRÓPRIO da eliminatória (2ª fase). Vazio = sem término próprio — o torneio
   // volta a terminar com a classificatória. A hora sozinha não vale nada (normalize a descarta
   // sem data), então limpar a data limpa a hora junto.
-  window._f2ElimEndDate = function (v) {
+  window._f2ElimEndDate = function (v, el) {
     if (!S) return; var e = S.cfg.eliminatoria;
     e.endDate = String(v || '');
     if (!e.endDate) e.endTime = '';
     else if (!e.endTime) e.endTime = '23:59';   // fim do dia — o organizador escolheu o DIA
-    _norm(); _rerender();
+    _norm(); _rerenderSemAtrapalhar(el);
   };
-  window._f2ElimEndTime = function (v) { if (!S) return; S.cfg.eliminatoria.endTime = String(v || ''); _norm(); _rerender(); };
+  window._f2ElimEndTime = function (v, el) { if (!S) return; S.cfg.eliminatoria.endTime = String(v || ''); _norm(); _rerenderSemAtrapalhar(el); };
   window._f2Origem = function (v) { S.cfg.eliminatoria.origem = v; _norm(); _rerender(); };
   // v4.5.51: abrir a eliminatória com rodada Rei/Rainha (grupos de 4 formam as duplas).
   window._f2ElimOpenRR = function (checked) { if (!S) return; S.cfg.eliminatoria.openReiRainha = !!checked; _norm(); _rerender(); };

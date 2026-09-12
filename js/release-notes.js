@@ -1,3 +1,4 @@
+// 2.2.73 — digitar a hora não perde o 2º dígito; a tela para de recarregar sozinha.
 // 2.2.72 — placar em coluna nos resultados; a régua das rodadas para de encavalar data e hora.
 // 2.2.72 — torneio já sorteado volta a aceitar correção de prazo; o ícone do app enche o espaço.
 // 2.2.71 — no card, a cor do placar passa a ser de cada set: quem venceu o set fica verde.
