@@ -1,3 +1,15 @@
+## 2.2.81 — 12/set/2026
+
+Card de jogo: o balãozinho de conversa deixa de ser cortado. Ele morava dentro da caixa do nome, mas
+FORA do trecho que o motor de ajuste mede — então o motor encolhia o nome até ocupar a caixa inteira
+e o balão, logo depois, não tinha mais onde caber: sobrava para fora e era cortado ao meio. Nenhum
+tamanho de fonte resolvia, porque o motor nunca soube que havia mais alguém na linha. Medido no
+navegador com o card real e nomes de verdade: antes o balão passava 16 a 17 pixels da borda; agora
+cabe. O card da tela inicial já fazia assim — era o card da chave que estava fora do padrão.
+
+Botões do grupo do WhatsApp: alinhados à esquerda do card. Centralizados, cada card punha o botão num
+lugar diferente conforme a própria largura, e numa lista a coluna de botões serpenteava.
+
 ## 2.2.80 — 12/set/2026
 
 Tela inicial: o botão do grupo do WhatsApp volta a aparecer nos jogos de Rei/Rainha. Na chave ele é

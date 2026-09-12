@@ -4537,18 +4537,22 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint, m) {
               window._isOrgName(name, window._currentBracketTournament)) ? (' ' + (window._CROWN_MINI || '')) : '')
           : (typeof window._nameWithCrown === 'function' && window._currentBracketTournament
               ? window._nameWithCrown(name, window._currentBracketTournament) : window._safeHtml(name))
-      }</span>` +
-      /* ⭐ DENTRO da caixa, logo DEPOIS do nome. Ordem do dono (02/set/2026): _"os
-       * balõezinhos devem ficar junto do nome de cada atleta e não colado no placar"_.
-       * Fora da caixa ele era irmão dela, e como a caixa tem largura FIXA (mesma pra todo
-       * mundo, que é o cânone), num nome curto o balão ia parar a 231px do nome — colado
-       * no placar. MEDIDO no DOM real, movendo-o pra cá: a distância vira 4px tanto em
-       * "Val" quanto em "Maria Betânia Roberto Faria", o balão continua visível nos dois e
-       * NENHUM nome passa a ser cortado — a caixa já é `display:flex` e já previa ícone
-       * dentro (`.sp-mc-box svg{flex-shrink:0}`, components.css). */
+      }` +
+      /* ⭐ DENTRO DA CAIXA **E DENTRO DA MEDIÇÃO**. Ordem do dono (02/set/2026): _"os
+       * balõezinhos devem ficar junto do nome de cada atleta e não colado no placar"_ — o que
+       * o trouxe pra dentro da caixa. E relato dele em 12/set/2026, olhando a tela inicial:
+       * _"ainda vejo balões cortados"_.
+       * ⛔ A CAUSA ERA ESTA LINHA ESTAR FORA DO span.sp-name-fit: o motor de ajuste
+       * encolhe o NOME até ele caber na caixa — e, medindo só o nome, ele usa a caixa INTEIRA.
+       * O balão, irmão logo depois, não tinha mais onde caber: sobrava pra fora e o
+       * `overflow:hidden` da caixa o cortava ao meio. Nenhum tamanho de fonte resolve isso,
+       * porque o motor nunca soube que havia mais alguém na linha.
+       * Agora ele entra DENTRO do span medido — que é exatamente o que o card da tela inicial
+       * (`_playerRow`, dashboard.js) já fazia e por isso não cortava. A hidratação do nome vivo
+       * continua intacta: ela escreve no `[data-uid-name]` interno, não no span do ajuste. */
       (typeof window._contactPersonIconHtml === 'function'
         ? window._contactPersonIconHtml(t, _slotUid, name, { sameGroup: _souDoJogo, dentroDaCaixa: true }) : '') +
-      `</div>` +
+      `</span></div>` +
     `</div>`;
   });
   if (members.length > 1) html += '</div>';
@@ -5587,7 +5591,11 @@ function _cardFooterChips(t, m, opts) {
   var sch = (typeof window._schCardChip === 'function') ? window._schCardChip(t, m) : '';
   var wa = (typeof window._waGrpCardChip === 'function') ? window._waGrpCardChip(t, m, opts) : '';
   if (!sch && !wa) return '';
-  return '<div class="btn-row" style="display:flex;justify-content:center;align-items:center;gap:6px;flex-wrap:wrap;margin:8px 0 2px;">' + sch + wa + '</div>';
+  /* ⭐ ALINHADOS À ESQUERDA. Ordem do dono (12/set/2026): _"os botões do whats deveriam estar
+   * alinhados na esquerda de cada card"_. Centralizado, cada card punha o botão num lugar
+   * diferente conforme a largura dele — numa lista de cards a coluna de botões ficava serpenteando.
+   * À esquerda todos começam na mesma linha vertical, que é o que o olho procura. */
+  return '<div class="btn-row" style="display:flex;justify-content:flex-start;align-items:center;gap:6px;flex-wrap:wrap;margin:8px 0 2px;">' + sch + wa + '</div>';
 }
 // v2.3.46: exposto pra que _saveResultInline possa re-renderizar UM card
 // individual in-place (sem re-render do bracket inteiro), preservando scroll,
