@@ -52,7 +52,15 @@ deploy_dir() { # $1=dir(de onde rodar o firebase) $2=targets $3=descrição $4=p
   # package in your source code" (aconteceu num worktree limpo, 04/ago/2026). Checar o pacote
   # em vez da pasta também cobre node_modules pela metade.
   [ -d "$pkgdir/node_modules/firebase-functions" ] || (cd "$pkgdir" && npm ci)
-  (cd "$dir" && firebase deploy --project "$PROJECT" --non-interactive --only "$targets")
+  # ⛔ MESMA ARMADILHA DO HOSTING (medida em 12/set/2026): o CLI imprime "Deploy complete!" e
+  # SAI NÃO-ZERO. Com `set -e` o script morria aqui — e, num deploy `all`, os codebases seguintes
+  # nem rodavam, sem ninguém dizer por quê. Quem julga é a lista de funções, conferida depois.
+  local _rc=0
+  (cd "$dir" && firebase deploy --project "$PROJECT" --non-interactive --only "$targets") || _rc=$?
+  if [[ "$_rc" != "0" ]]; then
+    echo "⚠ firebase saiu com código $_rc — confira o que subiu com:"
+    echo "   gcloud functions list --project $PROJECT --format='value(name,updateTime)'"
+  fi
 }
 
 do_main() {
