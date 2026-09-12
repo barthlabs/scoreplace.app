@@ -45,6 +45,11 @@ let drawWindow = null; // window do shim Node — expõe _calcNextDrawDate (praz
 // em dias civis e a trava de slot. Puro e testado à parte (test-agenda-core.js).
 const _agenda = require('./agenda-core.js');
 const _leagueSeasonCore = require('./league-season-core.js');
+/* Quais campos de `fmt2` um torneio JÁ SORTEADO ainda aceita mudar (os prazos).
+ * ⛔ O require mora AQUI EM CIMA, com os outros: o bloco de configuração lá embaixo é
+ * recortado e avaliado por `tests/l7-creation-replay-behavior.test.js` num escopo sem
+ * `require` — um require lá dentro derruba aquele teste com ReferenceError. */
+const _configAtiva = require('./config-ativa-core.js');
 try {
   const _dc = require('./draw-core.js');
   generateLigaRound = _dc.generateLigaRound;
@@ -3016,13 +3021,32 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
     const hasDraw = hasDrawnBracket(t);
     const changed = Object.keys(patch).some(key => JSON.stringify(t[key]) !== JSON.stringify(patch[key]));
     if (!changed) return { ok:true, changed:false, tournament:t };
-    if (hasDraw && Object.keys(patch).some(key => _CONFIG_ESTRUTURAL.has(key) && key !== 'phases')) {
-      throw _drawFail('failed-precondition', 'A chave já existe; altere apenas a configuração que não recria as rodadas.', { tId });
+    /* ⏱️ COM A CHAVE SORTEADA, O PRAZO AINDA SE CORRIGE. Relato do dono (12/set/2026, Confra
+     * com a Fase 2 rodando): _"não consigo salvar alterações nas datas"_. Arrastar a régua da
+     * eliminatória muda `fmt2.eliminatoria.roundBounds`, a tela manda `fmt2` inteiro, e `fmt2`
+     * é campo ESTRUTURAL — a trava recusava o pedido inteiro por causa de um horário. Num
+     * torneio em andamento era impossível mexer na data-limite de uma rodada, que é o ajuste
+     * que a fase em andamento mais precisa.
+     * ⛔ A TRAVA NÃO AFROUXOU: a pergunta mudou de "veio `fmt2`?" para "o que mudou DENTRO
+     * dele?" — e o que se grava é a MESCLA construída aqui a partir do documento fresco, não o
+     * objeto que veio da tela. Qualquer diferença fora dos prazos continua recusada, com a
+     * mesma mensagem. */
+    let _fmt2Mesclado = null;
+    const _estruturais = Object.keys(patch).filter(key => _CONFIG_ESTRUTURAL.has(key) && key !== 'phases');
+    if (hasDraw && _estruturais.length) {
+      const _soFmt2 = _estruturais.length === 1 && _estruturais[0] === 'fmt2';
+      const _veredito = _soFmt2 ? _configAtiva.fmt2Atualizavel(t.fmt2, patch.fmt2) : { ok: false };
+      if (!_veredito.ok) {
+        throw _drawFail('failed-precondition', 'A chave já existe; altere apenas a configuração que não recria as rodadas.', { tId });
+      }
+      _fmt2Mesclado = _veredito.valor;
     }
     const antes = _antesDoMotor(t);
     Object.keys(patch).forEach(key => {
       if (key === 'phases' && hasDraw) {
         t.phases = _fasesDeConfiguracaoAtualizaveis(Array.isArray(t.phases) ? t.phases : [], patch.phases);
+      } else if (key === 'fmt2' && _fmt2Mesclado) {
+        t.fmt2 = _fmt2Mesclado;   // a mescla conferida, nunca o objeto cru da tela
       } else {
         t[key] = patch[key];
       }
