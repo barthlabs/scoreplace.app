@@ -2922,8 +2922,19 @@ const _CAMPOS_CONFIG_TORNEIO = new Set([
   'skillCategories','ageCategories','customCategories','combinedCategories','rigor','rigorRequire',
   'fmt2','phases'
 ]);
+/* ⛔ `roundBounds` NÃO É ESTRUTURA — É CALENDÁRIO. Relato do dono (12/set/2026, Confra com a
+ * Fase 2 rodando): _"não consigo salvar alterações nas datas"_, e a recusa — depois de passar a
+ * NOMEAR o campo — apontou o culpado: `roundBounds`.
+ * Ele é a DIVISÃO DE PRAZOS das rodadas da fase 1: move data-limite, não cria nem apaga rodada,
+ * não mexe em chave, grupo ou formato. A prova de que isto já era entendido está uma linha
+ * abaixo: `_CONFIG_FASE_ATIVA` — a lista do que um torneio JÁ SORTEADO aceita mudar DENTRO de
+ * `phases` — sempre incluiu `roundBounds`. O mesmo dado era editável dentro da fase e congelado
+ * no espelho de topo; o formulário manda os dois, e o de topo derrubava o pedido inteiro.
+ * ⚠️ E não há como ele recriar rodada: quem lê (`_normaliza`) confere o tamanho contra o número
+ * de rodadas da fase e, se não bater, DESCARTA o arranjo e volta pra divisão igual.
+ * Os demais campos desta lista continuam onde estavam — esses sim redesenham a chave. */
 const _CONFIG_ESTRUTURAL = new Set([
-  'format','sport','teamSize','gameTypes','drawMode','fmt2','phases','roundBounds','swissRounds',
+  'format','sport','teamSize','gameTypes','drawMode','fmt2','phases','swissRounds',
   'gruposCount','gruposClassified','gruposEqualOnly','gruposSeedVip','gruposSeedCategory',
   'ligaRoundFormat','ligaDrawMode','ligaTurnos','ligaRRSchedule','monarchAdvanceToElim'
 ]);

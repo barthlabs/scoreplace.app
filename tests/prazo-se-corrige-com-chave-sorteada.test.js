@@ -68,4 +68,19 @@ must(!core.igual({ a: [1, 2] }, { a: [2, 1] }), '⑥ mas em ARRAY a ordem é con
 must(core.igual(undefined, null), '⑥ ausente e nulo contam como a mesma coisa');
 must(!core.igual({ a: 1 }, { a: 1, b: 2 }), '⑥ campo a mais é diferença de verdade');
 
+// ── ⑦ `roundBounds` é CALENDÁRIO, não estrutura (o campo que a recusa nomeou) ──
+{
+  const ini = IDX.indexOf('const _CONFIG_ESTRUTURAL = new Set([');
+  const fim = IDX.indexOf(']);', ini);
+  const estrutural = IDX.slice(ini, fim);
+  must(!/'roundBounds'/.test(estrutural),
+    '⑦ ⛔ `roundBounds` saiu da lista de ESTRUTURAIS — ele move prazo, não recria rodada');
+  ['format', 'sport', 'fmt2', 'gruposCount', 'swissRounds'].forEach((k) => {
+    must(estrutural.indexOf("'" + k + "'") > 0, '⑦ e `' + k + '` continua lá — esse sim redesenha a chave');
+  });
+  const ativa = IDX.slice(IDX.indexOf('const _CONFIG_FASE_ATIVA'), IDX.indexOf(']);', IDX.indexOf('const _CONFIG_FASE_ATIVA')));
+  must(/'roundBounds'/.test(ativa),
+    '⑦ ⭐ e dentro de `phases` ele SEMPRE foi editável — era essa a contradição que travava o save');
+}
+
 console.log('✅ ' + ok + ' asserções — prazo se corrige com a chave no ar, formato continua trancado');
