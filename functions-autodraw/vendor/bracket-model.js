@@ -1523,6 +1523,38 @@ window._assignGlobalGameNumbers = function (t) {
     return '<div class="sp-set-grid" style="' + fsVar + '">' + cels + '</div>';
   };
 
+  /* ── ⭐ CADA SET É UMA COLUNA — TAMBÉM NO PLACAR JÁ ENCERRADO ──────────────────
+   * Relato do dono (12/set/2026, "Seus últimos resultados", jogo 168): _"os números dos
+   * placares na coluna não estão alinhados. set 1 deve ficar alinhado na coluna; set 2, 3, 4
+   * e 5 (quando for o caso), sempre alinhados na coluna"_. Ali o placar saía como TEXTO
+   * CORRIDO (`sets.map(...).join(' ')`): sem coluna, quem mandava era a largura de cada
+   * número — o `10` do super tie-break é mais largo que o `7`, então a linha de baixo
+   * empurrava TODOS os números dela pra esquerda e nenhum set casava com o de cima.
+   *
+   * A LARGURA SAI DO DADO E É A MESMA NOS DOIS LADOS: a coluna mede o maior número que ela
+   * pode mostrar (os dois lados do MESMO set), mais o subponto do tie-break. Por isso alinha
+   * sem as duas linhas se conhecerem — elas leem o mesmo set e chegam ao mesmo número.
+   * ⚠️ EM `ch`, NÃO EM px: a fonte muda de tela pra tela (1,45rem no card de resultado, a
+   * escada de `_setColEscala` na chave) e px cravado aqui só acertaria uma delas. `ch` é a
+   * largura do "0" da fonte corrente — a coluna acompanha o tamanho do número sozinha.
+   * ⛔ NÃO confundir com `_setGridHtml`: aquela é a grade do jogo EM ANDAMENTO, que precisa da
+   * régua do formato (`_matchSetPlan`) pra saber quantas colunas ainda vêm e qual está em
+   * disputa. Aqui o jogo já acabou — as colunas são os sets jogados, e só isso.
+   * [[project_placar_por_sets_no_card]] */
+  window._larguraDaColunaDoSet = function (set) {
+    var dig = function (v) { var s = String(v == null ? '' : v); return s.length || 1; };
+    var w = Math.max(dig(set && set.gamesP1), dig(set && set.gamesP2));
+    var tb = (typeof window._setTiebreak === 'function') ? window._setTiebreak(set) : null;
+    // o subponto sai em <sup> a 0,58em: "(7)" são 3 caracteres nesse tamanho.
+    if (tb) w += (Math.max(dig(tb.p1), dig(tb.p2)) + 2) * 0.62;
+    return (w + 0.45).toFixed(2) + 'ch';   // 0,45ch de respiro entre colunas vizinhas
+  };
+  /** Uma célula da grade de placar encerrado: mesma classe da chave, largura do dado. */
+  window._colunaDeSetHtml = function (dentro, set) {
+    return '<div class="sp-set-col" style="--w:' + window._larguraDaColunaDoSet(set) + ';">' +
+      dentro + '</div>';
+  };
+
   // ── SIMULAR UMA PARTIDA INTEIRA (dev) — pela MESMA régua que desenha o card ──────
   // Ordem do dono (23/ago/2026): _"o simular fase (dev) está simulando 1 set e entregando o
   // ganhador do jogo com apenas 1 set. O certo seria simular o melhor de 3 ou de 5 quando

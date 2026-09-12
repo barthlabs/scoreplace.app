@@ -2809,15 +2809,28 @@ function renderDashboard(container) {
             // A cor é de CADA set (fonte única `_corDoSetLado`), não da linha: quem venceu o set
             // fica verde mesmo tendo perdido a partida. ⛔ Sempre por `_spCor` — hex cru aqui
             // reintroduziria o verde ilegível no tema claro.
-            return m2.sets.map(function(s) {
+            // UM set não precisa de grade: uma coluna só já está alinhada com ela mesma, e
+            // envolvê-la mudaria o desenho do card de 1 set, que está aprovado como está.
+            var _emColuna = (m2.sets.length > 1 && typeof window._colunaDeSetHtml === 'function');
+            var _cels = m2.sets.map(function(s) {
               var _txt = window._formatSetForPlayer(s, n, { html: true });
               if (typeof window._corDoSetLado !== 'function') return _txt;
               // ⛔ NÃO depender de `_temVencedor2`: ele é declarado ADIANTE (`var`, içado) e, se
               // um dia alguém chamar `_placarLado` antes daquela linha, chegaria `undefined` e
               // TODO set ficaria cinza — em silêncio. Aqui a pergunta é feita na hora.
               var _c = window._corDoSetLado(s, n, !m2.draw && window._matchWinnerSide(m2) != null);
-              return '<span style="color:' + window._spCor(_c, 'color') + ';">' + _txt + '</span>';
-            }).join(' ');
+              var _num = '<span style="color:' + window._spCor(_c, 'color') + ';">' + _txt + '</span>';
+              /* ⭐ UMA COLUNA POR SET, também aqui — ordem do dono (12/set/2026): _"os números
+               * dos placares na coluna não estão alinhados… set 1, 2, 3, 4 e 5 sempre alinhados
+               * na coluna"_. O `join(' ')` de antes era texto corrido: o `10` do super
+               * tie-break é mais largo que o `7` e empurrava a linha de baixo inteira.
+               * A largura vem do SET (fonte única `_larguraDaColunaDoSet`), então as duas
+               * linhas chegam à mesma medida sem se conhecerem. */
+              return _emColuna ? window._colunaDeSetHtml(_num, s) : _num;
+            });
+            return _emColuna
+              ? '<div class="sp-set-grid" style="justify-content:flex-end;">' + _cels.join('') + '</div>'
+              : _cels.join(' ');
           }
           var v = (n === 1 ? m2.scoreP1 : m2.scoreP2);
           return v == null ? '' : _sf(String(v));
