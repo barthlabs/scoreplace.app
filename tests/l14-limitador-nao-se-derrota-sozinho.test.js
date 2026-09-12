@@ -44,3 +44,60 @@ must(/createHash\("sha256"\)\.update\(String\(key\)\)/.test(bloco),
   '③ a chave do contador é hash — a coleção não vira lista de quem foi tentado');
 
 console.log('\n✅ limitador não se derrota sozinho — ' + ok + ' verificações');
+
+/* ─── L14.P2 — O SILÊNCIO TINHA FORMATO DIFERENTE DO SUCESSO ──────────────────
+ * `dispatchAccountRecovery` já respondia `ok` mesmo sem achar a conta — defesa contra
+ * enumeração, com comentário e tudo. Mas vazava pela FORMA: sucesso devolvia
+ * `{ ok, channels: { email: "r***@..." } }` e o silêncio devolvia `{ ok }` SEM a chave.
+ * Bastava olhar se `channels` veio. */
+(function () {
+  const j = F.indexOf('exports.dispatchAccountRecovery');
+  assert.ok(j > 0, 'âncora: a recuperação de conta');
+  /* ⛔ âncora, não orçamento de caracteres: com 3000 o `return` de sucesso ficava DE FORA e a
+   * trava acusava ausência do que estava logo adiante. Mesmo erro que já apareceu hoje. */
+  const fimRec = F.indexOf('\nexports.', j + 10);
+  assert.ok(fimRec > j, 'âncora: o fim da recuperação de conta');
+  const rec = F.slice(j, fimRec);
+  must(/if \(!ur\) return \{ ok: true, channels: \{ email: null, phone: null \} \};/.test(rec),
+    '④ conta inexistente devolve o MESMO desenho do sucesso, com os canais nulos');
+  must(!/if \(!ur\) return \{ ok: true \};/.test(rec),
+    '④ ⛔ o retorno curto, que denunciava pela ausência da chave, não existe mais');
+  must(/return \{ ok: true, channels: out \};/.test(rec),
+    '④ e o caminho de sucesso segue com a mesma chave — os dois são indistinguíveis por forma');
+})();
+
+/* ⑤ a tela aguenta canais nulos — conferido ANTES de igualar o formato no servidor */
+const AUTH = fs.readFileSync(path.join(__dirname, '..', 'js/views/auth.js'), 'utf8');
+must(/parts\.length \? parts\.join\(' e '\) : 'seus contatos cadastrados'/.test(AUTH),
+  '⑤ sem canal, a tela diz "seus contatos cadastrados" — nada quebra do lado de quem usa');
+
+console.log('✅ (+ L14.P2) o silêncio tem o mesmo formato do sucesso — total ' + ok + ' verificações');
+
+/* ─── L14.P3 — "USO ÚNICO" QUE DEPENDIA DE UM APAGAMENTO ENGOLIDO ─────────────
+ * `verifyPasswordResetPhoneToken` lia o token, EMITIA a credencial e só então apagava, com a
+ * falha engolida. Dois furos: se o apagamento falhasse, o link de redefinição de senha seguia
+ * valendo depois de já ter servido; e dois usos simultâneos passavam os dois pelo `exists`,
+ * porque ler e apagar eram passos separados. */
+(function () {
+  const k = F.indexOf('exports.verifyPasswordResetPhoneToken');
+  assert.ok(k > 0, 'âncora: a porta do token de redefinição');
+  const fimK = F.indexOf('\nexports.', k + 10);
+  const tok = F.slice(k, fimK > k ? fimK : k + 4000);
+
+  must(/const _consumo = await db\.runTransaction\(/.test(tok),
+    '⑥ o token é consumido em TRANSAÇÃO — ler e apagar deixam de ser passos separados');
+  must(/tx\.delete\(ref\);\s*\n\s*return \{ ok: true/.test(tok),
+    '⑥ quem consegue apagar é quem usa');
+  const posConsumo = tok.indexOf('const _consumo');
+  const posCred = tok.indexOf('_approvePasswordResetPhone(t.uid');
+  must(posConsumo > 0 && posCred > posConsumo,
+    '⑥ ⛔ a credencial só é emitida DEPOIS do consumo confirmado — antes vinha primeiro');
+  must(!/await ref\.delete\(\)\.catch\(\(\) => \{\}\);/.test(tok),
+    '⑥ ⛔ o apagamento com a falha engolida não existe mais nesta porta');
+  must(/console\.error\("\[verifyPasswordResetPhoneToken\] consumo falhou — NÃO emito credencial:"/.test(tok),
+    '⑥ e a falha do consumo é registrada, recusando em vez de seguir');
+  must(/reason: "indisponivel"/.test(tok),
+    '⑥ falha de banco vira recusa explícita: custa um link novo, não um link reutilizável');
+})();
+
+console.log('✅ (+ L14.P3) o link de redefinição é consumido de uma vez só — total ' + ok + ' verificações');

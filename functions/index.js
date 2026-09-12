@@ -5114,15 +5114,33 @@ exports.verifyPasswordResetPhoneToken = onCall(
     if (!token) return { ok: false, reason: "no-token" };
     const db = admin.firestore();
     const ref = db.collection("passwordResetTokens").doc(token);
-    const snap = await ref.get();
-    if (!snap.exists) return { ok: false, reason: "invalid-token" };
-    const t = snap.data();
-    const exp = t.expiresAt && t.expiresAt.toDate ? t.expiresAt.toDate() : t.expiresAt;
-    if (exp && new Date(exp) < new Date()) { await ref.delete().catch(() => {}); return { ok: false, reason: "expired" }; }
+    /* ⛔ L14.P3 — "USO ÚNICO" QUE DEPENDIA DE UM APAGAMENTO ENGOLIDO.
+     * Como estava: lia o token, EMITIA a credencial e só então fazia
+     * `ref.delete().catch(() => {})`. Dois furos:
+     *   (a) se o apagamento falhasse, a falha era engolida e o link de redefinição de senha
+     *       CONTINUAVA VALENDO — depois de já ter servido uma vez;
+     *   (b) dois usos simultâneos do mesmo token passavam os dois pelo `exists` e emitiam
+     *       credencial duas vezes, porque ler e apagar eram passos separados.
+     * Agora o consumo é uma TRANSAÇÃO: quem consegue apagar é quem usa. Quem chegar depois
+     * encontra o documento ausente e recebe "invalid-token" — sem corrida e sem reuso.
+     * ⛔ E a credencial só é emitida DEPOIS do consumo confirmado: se o apagamento falhar,
+     * ninguém entra. Preço aceito: uma falha de banco custa um link novo. O contrário é um
+     * link de redefinição de senha que vale mais de uma vez. */
+    const _consumo = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) return { ok: false, reason: "invalid-token" };
+      const t = snap.data();
+      const exp = t.expiresAt && t.expiresAt.toDate ? t.expiresAt.toDate() : t.expiresAt;
+      if (exp && new Date(exp) < new Date()) { tx.delete(ref); return { ok: false, reason: "expired" }; }
+      tx.delete(ref);
+      return { ok: true, t: t };
+    }).catch((e) => {
+      console.error("[verifyPasswordResetPhoneToken] consumo falhou — NÃO emito credencial:", (e && e.message) || e);
+      return { ok: false, reason: "indisponivel" };
+    });
+    if (!_consumo.ok) return { ok: false, reason: _consumo.reason };
+    const t = _consumo.t;
     const ct = await _approvePasswordResetPhone(t.uid, t.phone || null);
-    // v1.2.9: _approvePasswordResetPhone não apaga mais o token (o param saiu com o
-    // canal WhatsApp) — quem consome apaga. Uso único preservado.
-    await ref.delete().catch(() => {});
     console.log("[verifyPasswordResetPhoneToken] token ok, uid:", t.uid);
     return { ok: true, customToken: ct, email: t.email };
   }
@@ -5438,7 +5456,15 @@ exports.dispatchAccountRecovery = onCall(
     if (!identifier) throw new HttpsError("invalid-argument", "identifier vazio");
     const db = admin.firestore();
     const ur = await _resolveAccount(identifier);
-    if (!ur) return { ok: true }; // silencioso (enumeração)
+    /* ⛔ L14.P2 — O SILÊNCIO PRECISA TER O MESMO FORMATO DO SUCESSO.
+     * Aqui já havia a defesa contra enumeração — responder `ok` mesmo sem achar a conta —, mas
+     * ela vazava pela FORMA: o caminho de sucesso devolve `{ ok, channels: { email: "r***@..." } }`
+     * e este devolvia `{ ok }` SEM a chave. Bastava olhar se `channels` veio para saber se o
+     * identificador existe, e o e-mail mascarado ainda dava uma pista do endereço.
+     * Agora as duas respostas têm o MESMO desenho. A tela não muda: ela já cai em
+     * "seus contatos cadastrados" quando não há canal (js/views/auth.js,
+     * `_entrarShowRecovery`) — foi conferido antes de mexer. */
+    if (!ur) return { ok: true, channels: { email: null, phone: null } };
 
     const realEmail = _realEmailOf(ur);
     const phone = await _registeredPhoneFor(ur.uid, ur);

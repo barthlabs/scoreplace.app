@@ -1,3 +1,19 @@
+## 2.2.93 — 12/set/2026
+
+Duas correções no caminho de recuperar a conta, ambas de um tipo só: a proteção existia e
+escapava pela borda.
+
+O link para redefinir a senha devia valer uma única vez. Na prática, o app validava o link,
+liberava o acesso e só depois marcava o link como usado — e se esse último passo falhasse,
+ninguém ficava sabendo e o link continuava funcionando. Dois cliques ao mesmo tempo no mesmo
+link também passavam os dois. Agora o link é consumido antes de qualquer acesso ser liberado, de
+uma vez só: quem chega depois recebe "link inválido", e se algo falhar ninguém entra — custa
+pedir um link novo, em vez de um link que serve duas vezes.
+
+A tela de recuperação também deixava descobrir se um telefone ou e-mail tem conta no app. Ela já
+respondia da mesma forma nos dois casos, de propósito, mas o formato da resposta era diferente
+quando a conta existia. Agora as duas respostas são iguais. Quem usa não vê diferença.
+
 ## 2.2.92 — 12/set/2026
 
 Segurança do login. Existe um limite de tentativas por minuto no login por telefone e na
