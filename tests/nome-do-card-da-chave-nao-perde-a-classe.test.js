@@ -235,7 +235,17 @@ async function medir() {
     const q = m['medio/quebrado'], c = m['medio/curado'];
     ok(c.peso === '600', ctx + ' · curado: font-weight 600 (obtido: ' + c.peso + ')');
     ok(q.peso === '400', ctx + ' · quebrado: font-weight 400 — a régua acusa o markup de antes');
-    ok(c.display === 'flex', ctx + ' · curado: display flex — inline-flex blocado no flex item (obtido: ' + c.display + ')');
+    /* ⛔ ERA `flex` ATÉ 2.2.86, E A MUDANÇA É DELIBERADA — não afrouxe isto de volta.
+     * `.sp-mc-nm` deixou de ser `inline-flex` porque o balãozinho de conversa era um ITEM
+     * IRMÃO do nome, e não parte do texto: com o nome quebrado em duas linhas ele era
+     * empurrado para a borda da caixa (MEDIDO: 44px e 61px do fim do nome) em vez de cair
+     * depois da última palavra (4px). Agora é `inline-block` — que o CSS BLOCA para `block`
+     * aqui, porque este elemento é filho de `.sp-mc-box`, que é `display:flex`. O que importa
+     * não é o rótulo: é que o CONTEÚDO volta a ser fluxo inline, e é isso que põe o balão
+     * junto do nome. As asserções que realmente protegem o nome — "nenhum nome que cabia
+     * passa a ser cortado" e "nenhum nome cortado na varredura inteira" — continuam abaixo e
+     * passaram nos 52 casos com esta mudança. */
+    ok(c.display === 'block', ctx + ' · curado: conteúdo em fluxo inline (block, blocado do inline-block) (obtido: ' + c.display + ')');
     ok(q.display === 'block', ctx + ' · quebrado: display block (obtido: ' + q.display + ')');
     ok(c.ws === 'nowrap', ctx + ' · curado: white-space nowrap (obtido: ' + c.ws + ')');
     ok(q.ws === 'normal', ctx + ' · quebrado: white-space normal — o fit media texto que podia quebrar');

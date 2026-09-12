@@ -1,3 +1,17 @@
+## 2.2.86 — 12/set/2026
+
+Card de jogo: o balãozinho de conversa volta a ficar junto do nome. Quando o nome era curto,
+ele caía logo depois e parecia certo; quando o nome quebrava em duas linhas, ele era jogado para
+a borda do card e ficava centralizado entre as duas linhas, longe da pessoa a quem pertence.
+
+A causa é de layout, não de tamanho de letra: o balão era tratado como um vizinho do nome, e não
+como parte do texto. Com uma linha isso não aparece; com duas, o bloco do nome ocupa a largura
+inteira e empurra o vizinho para o fim. Medido no navegador, com nomes reais: o balão ficava a 44
+e a 61 pixels do fim do nome, e agora fica a 4 — o mesmo de sempre para nome de uma linha.
+
+O ajuste automático de tamanho do nome não mudou: a varredura de 52 casos, em três larguras de
+tela e nos dois temas, confirma que nenhum nome que cabia passa a ser cortado.
+
 ## 2.2.85 — 12/set/2026
 
 Privacidade: inscrever-se num torneio deixa de gravar o seu e-mail dentro do documento do

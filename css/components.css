@@ -2391,7 +2391,26 @@ html, body,
       ⚠️ Só em CARD DE JOGO e CAIXA DE GRUPO. Nos chips (spans pequenos) reservar
       altura fixa faria a linha pular. Medido: 2.467ms → 1.564ms.
    ───────────────────────────────────────────────────────────────────────────── */
-.sp-mc-nm{font-weight:600;white-space:nowrap;display:inline-flex;align-items:center;gap:2px;}
+/* ⛔ O BALÃO TEM DE FLUIR COM O TEXTO — `inline-flex` O ARRANCAVA DELE.
+   Relato do dono (12/set/2026, jogo 112 da tela inicial): _"o balãozinho da Lucia Cerri tem
+   alguma inconsistência, não está junto ao nome dela"_.
+   MEDIDO no Chromium, com esta mesma caixa e nomes reais (harness de 3 casos):
+     leila arida (1 linha) .......... balão a  6px do fim do nome  ← sempre pareceu certo
+     Lucia Helena Silva Cerri (2) ... balão a 44px
+     Nádia Santiago Lazarin (2) ..... balão a 61px
+   POR QUÊ: em `inline-flex` o balão é um ITEM IRMÃO do nome, não parte do texto. Com nome de
+   uma linha ele cai logo depois e ninguém nota; quando o motor de ajuste quebra o nome em duas
+   linhas, o bloco do nome toma a largura toda e o balão é empurrado para a borda, centralizado
+   verticalmente no BLOCO (e não na última linha). Nenhum ajuste de fonte corrige isso.
+   O CONSERTO é a caixa voltar a ser fluxo inline: o balão cai depois da última palavra, em
+   qualquer número de linhas — medido: 4px nos TRÊS casos.
+   ⚠️ O `gap:2px` morre junto, e isso foi conferido antes: os dois filhos que entram aqui têm
+   espaçamento PRÓPRIO — a coroa (`_CROWN_MINI`, store.js) traz `margin-left:2px` e
+   `vertical-align:middle`, e o balão (`_contactPersonIconHtml`) traz `margin-left:4px`.
+   ⚠️ O `align-items:center` também sai — e é justamente ele que centralizava o balão no bloco
+   inteiro. Em fluxo inline quem manda é `vertical-align`, que o acompanha na última linha.
+   [[project_card_de_jogo_geometria_canon]] */
+.sp-mc-nm{font-weight:600;white-space:nowrap;display:inline-block;}
 .sp-mc-side{display:flex;align-items:center;gap:5px;overflow:hidden;}
 .sp-mc-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;margin-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:5px;}
 .sp-mc-col{display:flex;flex-direction:column;gap:2px;overflow:hidden;}

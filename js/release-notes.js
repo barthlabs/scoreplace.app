@@ -1,3 +1,4 @@
+// 2.2.86 — o balãozinho de conversa volta a ficar junto do nome quando ele quebra em duas linhas.
 // 2.2.85 — inscrever-se num torneio deixa de gravar seu e-mail no documento público.
 // 2.2.84 — lista de espera, inativos e W.O.: cor do estado no card inteiro e várias colunas.
 // 2.2.83 — entrar com Google no Android abre o seletor de contas no primeiro toque.
