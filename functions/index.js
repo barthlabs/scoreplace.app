@@ -1242,10 +1242,15 @@ function _digestLevelMeta(level) {
 // v3.0.56: paleta do e-mail de digest segue o TEMA escolhido pelo destinatário
 // (profile.theme: 'light'|'dark'). Default dark (tema padrão do app).
 function _digestPalette(theme) {
+  // ⛔ CONTRASTE É REGRA DOS DOIS TEMAS. O verde de vitória era `#16a34a` CRAVADO na função do
+  // placar — sobre o card branco do tema claro dá ~3,4:1, abaixo do mínimo de texto, e o dono
+  // leu na tela: _"o verde no tema claro é quase ilegível"_. Agora as duas cores moram na
+  // paleta, com valor próprio em cada tema. ⚠️ Isso importa mesmo quando o tema está certo: o
+  // cliente de e-mail pode ignorar o escuro e renderizar em fundo claro assim mesmo.
   if (theme === "light") {
-    return { pageBg: "#eef2f7", cardBg: "#ffffff", text: "#0f172a", text2: "#1f2937", muted: "#64748b", footer: "#94a3b8", divider: "#e2e8f0", heading: "#0f172a" };
+    return { pageBg: "#eef2f7", cardBg: "#ffffff", text: "#0f172a", text2: "#1f2937", muted: "#64748b", footer: "#94a3b8", divider: "#e2e8f0", heading: "#0f172a", win: "#15803d", loss: "#b91c1c" };
   }
-  return { pageBg: "#0f172a", cardBg: "#111827", text: "#f1f5f9", text2: "#e5e7eb", muted: "#94a3b8", footer: "#64748b", divider: "#1e293b", heading: "#ffffff" };
+  return { pageBg: "#0f172a", cardBg: "#111827", text: "#f1f5f9", text2: "#e5e7eb", muted: "#94a3b8", footer: "#64748b", divider: "#1e293b", heading: "#ffffff", win: "#4ade80", loss: "#f87171" };
 }
 // Tabela básica (em vez de grid/flex) para os clientes de e-mail manterem os
 // cabeçalhos e os números na mesma coluna em Gmail, Apple Mail e Outlook.
@@ -1256,7 +1261,35 @@ function _digestScoreboard(it, P) {
     const label = s && s.label ? s.label : ((s && s.superTiebreak) ? "STB" : "Set " + (i + 1));
     return '<td align="center" style="min-width:38px;padding:0 4px 5px;font-size:0.68rem;font-weight:800;color:' + P.muted + ';text-transform:uppercase;">' + _digestEscape(label) + "</td>";
   }).join("");
-  const row = (name, side, won) => '<tr><td style="padding:7px 8px 7px 0;font-size:0.88rem;font-weight:700;color:' + (won ? "#16a34a" : (b.winner ? "#dc2626" : P.text)) + ';">' + _digestEscape(name || "?") + "</td>" + b.sets.map((s) => '<td align="center" style="padding:7px 4px;font-size:1.05rem;font-weight:800;color:' + (won ? "#16a34a" : (b.winner ? "#dc2626" : P.text)) + ';">' + _digestEscape(String(s && s[side] != null ? s[side] : "–")) + "</td>").join("") + "</tr>";
+  // ⛔ A COR É DO SET, NÃO DA LINHA. Relato do dono (11/set/2026): num melhor de 3 ele perdeu a
+  // partida mas GANHOU o set 2 por 6-3 — e o 6 saía vermelho, porque a cor vinha do vencedor da
+  // PARTIDA e pintava a linha inteira. O NOME do time continua seguindo o vencedor da partida
+  // (é dele que a linha fala); cada célula de set segue quem ganhou AQUELE set. Set não empata,
+  // mas se vier igual fica neutro em vez de inventar um vencedor.
+  const corDaPartida = (won) => (won ? P.win : (b.winner ? P.loss : P.text));
+  const corDoSet = (s, side) => {
+    const a = Number(s && s.p1), c = Number(s && s.p2);
+    if (!isFinite(a) || !isFinite(c) || a === c) return P.text;
+    return (side === "p1" ? a > c : c > a) ? P.win : P.loss;
+  };
+  // ⛔ O SUBPONTO DO TIE-BREAK É OBJETO ({pointsP1, pointsP2}) — imprimir o objeto cru sairia
+  // como "[object Object]" no corpo do e-mail. Cada lado mostra os PRÓPRIOS pontos, igual ao
+  // card (`_formatSetForPlayer`), pra as duas telas dizerem a mesma coisa.
+  const pontosTb = (s, side) => {
+    const tb = s && s.tiebreak;
+    if (!tb) return null;
+    const v = side === "p1" ? (tb.pointsP1 != null ? tb.pointsP1 : tb.p1) : (tb.pointsP2 != null ? tb.pointsP2 : tb.p2);
+    return (v == null || v === "") ? null : v;
+  };
+  const row = (name, side, won) => {
+    return '<tr><td style="padding:7px 8px 7px 0;font-size:0.88rem;font-weight:700;color:' + corDaPartida(won) + ';">' + _digestEscape(name || "?") + "</td>" +
+      b.sets.map((s) => {
+        const val = _digestEscape(String(s && s[side] != null ? s[side] : "–"));
+        const tbv = pontosTb(s, side);
+        const sup = (tbv != null) ? '<sup style="font-size:0.62em;font-weight:700;">(' + _digestEscape(String(tbv)) + ')</sup>' : "";
+        return '<td align="center" style="padding:7px 4px;font-size:1.05rem;font-weight:800;color:' + corDoSet(s, side) + ';">' + val + sup + "</td>";
+      }).join("") + "</tr>";
+  };
   return '<table cellspacing="0" cellpadding="0" border="0" width="100%" style="margin-top:12px;border-collapse:separate;border-spacing:0;background:rgba(148,163,184,0.08);border:1px solid ' + P.divider + ';border-radius:8px;"><tr><td></td>' + heads + "</tr>" + row(b.p1, "p1", b.winner && b.winner === b.p1) + row(b.p2, "p2", b.winner && b.winner === b.p2) + "</table>";
 }
 function _buildDigestHtml(items, theme) {
@@ -1286,7 +1319,10 @@ function _buildDigestHtml(items, theme) {
     );
   }).join("");
   return (
-    '<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>' +
+    // ⛔ SEM ESTAS DUAS METAS O APPLE MAIL IGNORA O TEMA ESCURO e renderiza em fundo claro —
+    // medido: os e-mails do dono SAÍRAM com a paleta escura e chegaram brancos na tela dele.
+    '<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">' +
+    '<meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"></head>' +
     '<body style="margin:0;padding:0;background:' + P.pageBg + ';font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;">' +
       '<table cellspacing="0" cellpadding="0" border="0" width="100%" style="background:' + P.pageBg + ';padding:32px 16px;"><tr><td align="center">' +
         '<table cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width:540px;">' +

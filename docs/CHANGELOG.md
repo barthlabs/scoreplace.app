@@ -1,3 +1,15 @@
+## 2.2.70 — 11/set/2026
+
+Placar de melhor de 3 e de 5: confirmar de novo um jogo que já terminou deixa de reescrever a
+partida como um set único. O caso real: três sets lançados corretamente foram substituídos, 22
+segundos depois, pelo placar do super tie-break sozinho. Agora a tela avisa que o jogo está
+encerrado e manda corrigir pela edição, que preserva os sets.
+
+Notificação de resultado: o subponto do tie-break volta a aparecer (6 com o (5) em cima), a cor
+passa a ser de cada set — quem venceu aquele set fica verde mesmo tendo perdido a partida — e o
+verde e o vermelho ganharam valores próprios para tema claro e escuro. O e-mail também passou a
+declarar que aceita os dois temas, porque sem isso alguns aplicativos de e-mail ignoram o escuro.
+
 ## 2.2.69 — 11/set/2026
 
 Partida casual: a dupla formada no setup continua a mesma na tela de saque. O número do jogador sem nome passa a vir da caixa em que ele foi posto, e não da posição dentro do time — formar dupla com o Jogador 4 mostrava o parceiro como Jogador 2. E a pergunta de quem saca no segundo game voltou a aparecer: o estado da partida não levava essa informação, então o próprio aparelho, ao receber de volta o que tinha acabado de gravar, concluía que a escolha já havia sido feita.

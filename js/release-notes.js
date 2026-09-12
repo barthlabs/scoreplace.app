@@ -1,3 +1,4 @@
+// 2.2.70 — melhor de 3: confirmar de novo num jogo já encerrado não apaga mais os sets lançados.
 // 2.2.69 — casual: a dupla formada não troca na tela de saque e o 2º sacador volta a ser perguntado.
 // 2.2.69 — o app passa a registrar versão e plataforma da sessão; sem isso não há como medir adoção.
 // 2.2.68 — a dashboard passa a ler a janela recente de resultados; a chave continua lendo tudo.

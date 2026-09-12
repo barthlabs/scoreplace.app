@@ -578,7 +578,17 @@ window._matchScoreboard = function (m, sets, winner) {
   return {
     p1: m.p1 || '?', p2: m.p2 || '?', winner: winner || '',
     sets: sets.map(function (s, i) {
-      return { label: s.superTiebreak ? 'STB' : ('Set ' + (i + 1)), p1: s.gamesP1, p2: s.gamesP2, superTiebreak: !!s.superTiebreak };
+      var _it = { label: s.superTiebreak ? 'STB' : ('Set ' + (i + 1)), p1: s.gamesP1, p2: s.gamesP2, superTiebreak: !!s.superTiebreak };
+      // ⛔ O SUBPONTO DO TIE-BREAK TEM DE VIAJAR. O card desenha 6⁽⁵⁾ lendo `set.tiebreak`
+      // (`_formatSetForPlayer`), mas este payload descartava o campo — então o e-mail mostrava
+      // "5 6 7" e o dono, com razão: _"só não consta o subponto do tiebreak no set 1"_.
+      // A forma é a do escritor único `_tbPoints`: { pointsP1, pointsP2 }.
+      // Leitor único pra ler, ESCRITOR único pra montar — montar o objeto à mão aqui seria a
+      // segunda forma de gravar um tie-break, que é exatamente o que este projeto já pagou.
+      var _tb = (typeof window._setTiebreak === 'function') ? window._setTiebreak(s) : null;
+      var _tbCanon = (_tb && typeof window._tbPoints === 'function') ? window._tbPoints(_tb.p1, _tb.p2) : null;
+      if (_tbCanon) _it.tiebreak = _tbCanon;
+      return _it;
     })
   };
 };
@@ -2271,6 +2281,30 @@ window._saveResultInline = function (tId, matchId) {
       s1: s1, s2: s2, tbP1: tbP1, tbP2: tbP2, isTiebreakEntry: isTiebreakEntry,
       plan: _planSave, scoring: _isc
     });
+  }
+  /* ⛔ MELHOR DE N JÁ DECIDIDO NÃO VOLTA A SER UM SET.
+   *
+   * MEDIDO no jogo 168 do Confra (11/set/2026, relato do dono): as duas notificações gravadas
+   * mostram o mesmo jogo escrito DUAS vezes, com 22,8 s de diferença — a primeira com os três
+   * sets certos (5-6 · 6-3 · STB 7-10) e a segunda com UM só ("Set 1: 7-10"). O espelho ficou
+   * com a segunda. Não foi o caminho de melhor de 3 que falhou: ele gravou certo, e um SEGUNDO
+   * Confirmar, com a partida já encerrada, caiu aqui embaixo — em `_saveResultInline`, que por
+   * contrato grava SEMPRE 1 set — e reescreveu os três como um, rebatizando o super tie-break.
+   *
+   * A porta é `plan.live`: ela é `null` quando o plano está `done` (e `done` inclui `m.winner`).
+   * Então, em melhor de N, `multi && !live` significa "esta partida já terminou" — e o salvamento
+   * de set único NUNCA é a operação certa aqui. Corrigir placar de partida encerrada é edição,
+   * que tem caminho próprio e preserva os sets. [[project_placar_por_sets_no_card]]
+   */
+  if (_planSave && _planSave.multi && !_planSave.live) {
+    showAlertDialog(
+      (typeof _t === 'function' ? _t('bracket.matchClosed') : null) || 'Partida já encerrada',
+      (typeof _t === 'function' ? _t('bracket.matchClosedDetail') : null) ||
+        'Este jogo é melhor de ' + _planSave.bestOf + ' e já está fechado com ' +
+        _planSave.played.length + ' set(s). Para corrigir o placar, use a edição do resultado — ' +
+        'confirmar de novo aqui apagaria os sets já lançados.',
+      null, { type: 'warning' });
+    return;
   }
 
   if (s1 === s2 && !allowDraw) {
