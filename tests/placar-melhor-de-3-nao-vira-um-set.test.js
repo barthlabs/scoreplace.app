@@ -109,4 +109,31 @@ const must = (v, m) => { assert.ok(v, m); ok++; };
     '⛔ o HTML declara color-scheme — sem isso o Apple Mail ignora o tema escuro que o servidor mandou');
 }
 
+// ── ⑤ a cor do CARD também é por SET (a outra metade do ③) ───────────────────
+{
+  const BM = fs.readFileSync(path.join(root, 'js/views/bracket-model.js'), 'utf8');
+  const ini = BM.indexOf('  window._corDoSetLado = function');
+  const fim = BM.indexOf('\n  };\n', ini);
+  assert.ok(ini > 0, 'âncora de _corDoSetLado');
+  const ctx = { window: {} };
+  vm.runInNewContext(BM.slice(ini, fim + 4), ctx);
+  const cor = ctx.window._corDoSetLado;
+  const sets = [{ gamesP1: 5, gamesP2: 6 }, { gamesP1: 6, gamesP2: 3 }, { gamesP1: 7, gamesP2: 10 }];
+  const lado1 = sets.map((s) => cor(s, 1, true)), lado2 = sets.map((s) => cor(s, 2, true));
+  must(lado1[0] !== lado1[1] && lado1[1] === cor({ gamesP1: 9, gamesP2: 1 }, 1, true),
+    '⛔ o set 2 (6-3) recebe a cor de VITÓRIA na linha de quem perdeu a partida');
+  must(lado1[0] === lado2[1] && lado2[0] === lado1[1], 'os dois lados são espelho um do outro, set a set');
+  must(cor({ gamesP1: 6, gamesP2: 6 }, 1, true) === cor(null, 1, true), 'set sem vencedor legível fica neutro');
+  must(cor(sets[1], 1, false) === cor(null, 1, true), 'partida sem vencedor: tudo neutro');
+
+  // e o card emite a cor SEMPRE por _spCor — hex cru aqui traria de volta o verde ilegível
+  const DASH = fs.readFileSync(path.join(root, 'js/views/dashboard.js'), 'utf8');
+  const pIni = DASH.indexOf('        function _placarLado(n) {');
+  const pFim = DASH.indexOf('\n        }\n', pIni);
+  const bloco = DASH.slice(pIni, pFim);
+  must(/_spCor\(\s*window\._corDoSetLado\(/.test(bloco.replace(/\s+/g, ' ')) ||
+       /_spCor\(_c,/.test(bloco), '⛔ a cor do set passa por `_spCor` (tema), nunca hex cru');
+  must(/window\._corDoSetLado\(s, n,/.test(bloco), 'o card usa a fonte única da cor');
+}
+
 console.log('✅ jogo 168: ' + ok + ' asserções — melhor de N não vira 1 set, subponto viaja e aparece, cor por set e contraste nos dois temas');

@@ -1007,6 +1007,18 @@
     if (p1 == null || p2 == null || isNaN(p1) || isNaN(p2)) return null;
     return { pointsP1: Number(p1), pointsP2: Number(p2) };
   };
+  /* ⛔ A COR DO PLACAR É DO SET, NÃO DA PARTIDA — e é a MESMA régua do e-mail.
+   * Relato do dono (11/set/2026, jogo 168): ele perdeu a partida e a linha dele saiu inteira
+   * vermelha, incluindo o set 2, que ele GANHOU por 6-3. No e-mail isso foi corrigido em
+   * `_digestScoreboard` (2.2.70); aqui ficava a outra metade do mesmo defeito.
+   * Devolve o HEX; quem desenha passa por `window._spCor` — é ele que adapta ao tema, e sem
+   * isso o verde claro fica ilegível no tema claro (o defeito que acabou de sair do e-mail).
+   * Set não empata; se vier igual, ou se a partida não tem vencedor, fica neutro. */
+  window._corDoSetLado = function (set, playerNum, temVencedor) {
+    var a = Number(set && set.gamesP1), b = Number(set && set.gamesP2);
+    if (!isFinite(a) || !isFinite(b) || a === b || !temVencedor) return '#94a3b8';
+    return ((playerNum === 1) ? (a > b) : (b > a)) ? '#4ade80' : '#f87171';
+  };
   window._formatSetForPlayer = function(set, playerNum, opts) {
     opts = opts || {};
     if (!set) return '';

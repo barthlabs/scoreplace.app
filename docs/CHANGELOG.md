@@ -1,3 +1,10 @@
+## 2.2.71 — 11/set/2026
+
+Card de resultado: a cor de cada placar passa a ser do set, e não da partida. Quem venceu um set
+aparece em verde naquele set mesmo tendo perdido o jogo — antes a linha inteira saía da cor do
+vencedor da partida. É a mesma regra que a notificação por e-mail recebeu na versão anterior, agora
+com uma fonte única para as duas telas.
+
 ## 2.2.70 — 11/set/2026
 
 Placar de melhor de 3 e de 5: confirmar de novo um jogo que já terminou deixa de reescrever a

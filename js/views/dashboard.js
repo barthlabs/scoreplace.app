@@ -2798,7 +2798,18 @@ function renderDashboard(container) {
         // é o (7). Fonte única de formatação: window._formatSetForPlayer.
         function _placarLado(n) {
           if (Array.isArray(m2.sets) && m2.sets.length > 0 && typeof window._formatSetForPlayer === 'function') {
-            return m2.sets.map(function(s) { return window._formatSetForPlayer(s, n, { html: true }); }).join(' ');
+            // A cor é de CADA set (fonte única `_corDoSetLado`), não da linha: quem venceu o set
+            // fica verde mesmo tendo perdido a partida. ⛔ Sempre por `_spCor` — hex cru aqui
+            // reintroduziria o verde ilegível no tema claro.
+            return m2.sets.map(function(s) {
+              var _txt = window._formatSetForPlayer(s, n, { html: true });
+              if (typeof window._corDoSetLado !== 'function') return _txt;
+              // ⛔ NÃO depender de `_temVencedor2`: ele é declarado ADIANTE (`var`, içado) e, se
+              // um dia alguém chamar `_placarLado` antes daquela linha, chegaria `undefined` e
+              // TODO set ficaria cinza — em silêncio. Aqui a pergunta é feita na hora.
+              var _c = window._corDoSetLado(s, n, !m2.draw && window._matchWinnerSide(m2) != null);
+              return '<span style="color:' + window._spCor(_c, 'color') + ';">' + _txt + '</span>';
+            }).join(' ');
           }
           var v = (n === 1 ? m2.scoreP1 : m2.scoreP2);
           return v == null ? '' : _sf(String(v));
