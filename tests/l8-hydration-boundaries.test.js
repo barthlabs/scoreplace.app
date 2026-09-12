@@ -12,7 +12,7 @@ async function drain(){for(let i=0;i<12;i++)await Promise.resolve();}
   await db.loadMatchResults('t',{limit:40});assert.deepEqual(ordenou,['updatedAt','desc'],'a janela recente ordena pelo carimbo');assert.equal(limitou,40);
   ordenou=null;limitou=null;await db.loadMatchResults('t',{limit:0});assert.equal(ordenou,null,'limite inválido não vira consulta truncada');assert.equal(limitou,null);}
  const a=deferred(),b=deferred();let count=0,saves=0;const window={FirestoreDB:{loadMatchResults(){return ++count===1?a.promise:b.promise;}},_collectAllMatches:t=>t.matches};
- const store=vm.runInNewContext('({'+property('js/store.js','hydrateMatchResults')+'})',{window});store.currentUser={uid:'a'};store.tournaments=[{id:'t',matches:[{id:'m'}]}];store._overlayResultOnMatch=(m,r)=>Object.assign(m,r);store._saveToCache=()=>saves++;
+ const store=vm.runInNewContext('({'+property('js/store.js','hydrateMatchResults')+','+property('js/store.js','_carimboDeLote')+'})',{window});store.currentUser={uid:'a'};store.tournaments=[{id:'t',matches:[{id:'m'}]}];store._overlayResultOnMatch=(m,r)=>Object.assign(m,r);store._saveToCache=()=>saves++;
  const first=store.hydrateMatchResults('t');store.currentUser={uid:'b'};const second=store.hydrateMatchResults('t');assert.notEqual(first,second);assert.equal(count,2);
  b.resolve({m:{scoreP1:7}});assert.equal(await second,true);a.resolve({m:{scoreP1:1}});assert.equal(await first,false);assert.equal(store.tournaments[0].matches[0].scoreP1,7);assert.equal(saves,1);
  const text=fs.readFileSync(path.join(root,'js/views/bracket.js'),'utf8');const start=text.indexOf("  if (t && t._resultsHydrated !== 'completa'");const end=text.indexOf('\n  /* ⛔ PORTÃO',start);const code=text.slice(start,end);assert(start>=0&&end>start);

@@ -2062,9 +2062,17 @@ function renderDashboard(container) {
               // do "Duplas Mistas" o têm), mas torneio antigo (BT Corpus Christi) não
               // tem carimbo NENHUM — daí a cadeia + o desempate por rodada/nº do jogo,
               // a mesma régua que "Meus Últimos Resultados" já usa.
+              /* ⛔ `resultAt` PRIMEIRO — `updatedAt` É DO DOCUMENTO, NÃO DO JOGO.
+               * MEDIDO na base do Confra (12/set/2026): os 213 espelhos de `results` estão
+               * TODOS com `updatedAt = 11:51:32.898Z`, de um re-sync do servidor que reescreveu
+               * a coleção inteira. Esse carimbo entra no jogo pelo overlay e faz um resultado de
+               * 01/set parecer recém-lançado. Foi isso que encheu "Novidades" de R1 antiga e
+               * empurrou a R2 (lançada às 03:18) pra fora da janela dos 3 cards visíveis.
+               * A hora de um RESULTADO é quando ele foi lançado: `resultAt`. O `updatedAt` só
+               * responde quando não há `resultAt` (jogo antigo, W.O. sem carimbo). */
               at: _pendente
                 ? (_tsMs(_pnd.proposedAt) || _tsMs(_pnd.updatedAt) || _tsMs(m.updatedAt) || 0)
-                : (_tsMs(m.updatedAt) || _tsMs(m.resultAt) || _tsMs(m.completedAt) || _tsMs(m.createdAt) || 0),
+                : (_tsMs(m.resultAt) || _tsMs(m.completedAt) || _tsMs(m.updatedAt) || _tsMs(m.createdAt) || 0),
               roundNum: (m.round != null && !isNaN(Number(m.round))) ? Number(m.round) : 0,
               gameSeq: (m._gameNum != null) ? Number(m._gameNum)
                 : (function(){ var g = String(m.label || '').match(/Jogo\s*(\d+)/i); return g ? Number(g[1]) : 0; })(),

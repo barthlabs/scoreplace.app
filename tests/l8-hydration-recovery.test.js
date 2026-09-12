@@ -4,7 +4,11 @@ const root=path.resolve(__dirname,'..');
 const source=fs.readFileSync(path.join(root,'js/store.js'),'utf8');
 const start=source.indexOf('  hydrateMatchResults(tournamentId, opts) {');
 const end=source.indexOf('\n  // Grava o resultado',start);
-const storeCode='({'+source.slice(start,end)+'})';
+/* o detector de escrita em massa (`_carimboDeLote`, 2.2.79) vem JUNTO: a hidratação pergunta
+ * a ele antes de sobrepor. Sem o par, o recorte testaria uma função que chama algo inexistente. */
+const cIni=source.indexOf('  _carimboDeLote: function (map) {');
+const cFim=source.indexOf('\n  },',cIni)+4;
+const storeCode='({'+source.slice(start,end).replace(/[\s,]*$/,'')+',\n'+source.slice(cIni,cFim).replace(/[\s,]*$/,'')+'})';
 const dash=fs.readFileSync(path.join(root,'js/views/dashboard.js'),'utf8');
 const ds=dash.indexOf('  try {\n    _dashMyTournaments.filter');
 const de=dash.indexOf('\n  /* ⛔ `organizadosCount`',ds);

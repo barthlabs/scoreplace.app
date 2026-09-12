@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.2.78';
+window.SCOREPLACE_VERSION = '2.2.79';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -11434,7 +11434,7 @@ window.AppStore = {
    * ⛔ NÃO É UMA SEGUNDA FONTE DE VERDADE: quando o jogo EXISTE na estrutura, ele manda e este
    * caminho nem é usado. Isto cobre o buraco de quem só tem o espelho.
    * [[project_jogo_vive_em_matches_e_results]] · [[project_arquitetura_resumo_do_torneio]] */
-  _jogoDoEspelho: function (matchId, res) {
+  _jogoDoEspelho: function (matchId, res, carimboDeLote) {
     if (!matchId || !res || typeof res !== 'object') return null;
     var m = { id: String(matchId), _doEspelho: true };
     var F = this._matchResultFields;
@@ -11448,7 +11448,7 @@ window.AppStore = {
      * e foi o que aconteceu: "Novidades" encheu de R1 antiga e a R2 de verdade sumiu da janela.
      * Quem sabe a hora do resultado é `resultAt` (e, no pendente, `proposedAt`). O `updatedAt`
      * fica de fora de propósito — a cadeia de quem ordena cai sozinha no carimbo certo. */
-    delete m.updatedAt;
+    if (carimboDeLote != null && String(res.updatedAt) === String(carimboDeLote)) delete m.updatedAt;
     if (res.p1 != null) m.p1 = res.p1;
     if (res.p2 != null) m.p2 = res.p2;
     if (res.roundLabel) {
@@ -11470,15 +11470,37 @@ window.AppStore = {
     var out = [];
     if (!t || !t._results) return out;
     var self = this;
+    var _lote = self._carimboDeLote(t._results);
     Object.keys(t._results).forEach(function (mid) {
       if (jaVistos && jaVistos[String(mid)]) return;
-      var m = self._jogoDoEspelho(mid, t._results[mid]);
+      var m = self._jogoDoEspelho(mid, t._results[mid], _lote);
       if (m) out.push(m);
     });
     return out;
   },
 
-  _overlayResultOnMatch: function (m, result) {
+  /* ── ⭐ O CARIMBO QUE SE REPETE EM MASSA NÃO É EVENTO ────────────────────────────────
+   * Devolve o `updatedAt` que aparece em documentos DEMAIS pra ter sido escrito por gente —
+   * o rastro de um re-sync/backfill do servidor. MEDIDO no Confra: 213 de 213 espelhos com
+   * `2026-09-12T11:51:32.898Z`. Abaixo do piso (5 documentos E um quarto do lote) devolve
+   * null: dois jogos lançados no mesmo minuto são coincidência legítima, não escrita em massa.
+   * ⛔ Puro e sem DOM — quem chama é a hidratação, que tem o mapa inteiro na mão. */
+  _carimboDeLote: function (map) {
+    if (!map || typeof map !== 'object') return null;
+    var chaves = Object.keys(map);
+    if (chaves.length < 5) return null;
+    var conta = {}, maior = null, maiorN = 0;
+    for (var i = 0; i < chaves.length; i++) {
+      var u = map[chaves[i]] && map[chaves[i]].updatedAt;
+      if (u == null || u === '') continue;
+      var k = String(u);
+      conta[k] = (conta[k] || 0) + 1;
+      if (conta[k] > maiorN) { maiorN = conta[k]; maior = u; }
+    }
+    return (maiorN >= 5 && maiorN >= chaves.length / 4) ? maior : null;
+  },
+
+  _overlayResultOnMatch: function (m, result, carimboDeLote) {
     if (!m || !result || typeof result !== 'object') return;
     var F = this._matchResultFields;
     // O subdoc só fala sobre o RESULTADO quando ele de fato carrega um.
@@ -11487,6 +11509,20 @@ window.AppStore = {
     for (var i = 0; i < F.length; i++) {
       var k = F[i];
       if (!Object.prototype.hasOwnProperty.call(result, k)) continue;
+      /* ⛔ O `updatedAt` DE UMA ESCRITA EM MASSA NÃO CARIMBA O JOGO.
+       * Ele diz quando o DOCUMENTO foi escrito — e um re-sync do servidor reescreve a coleção
+       * inteira de uma vez: MEDIDO no Confra (12/set/2026), os 213 espelhos ficaram com o
+       * MESMO `updatedAt`, 11:51:32.898Z. Com esse carimbo, resultado de duas semanas atrás
+       * vira "novidade" e empurra a rodada em curso pra fora da tela.
+       * ⛔ E NÃO DÁ PRA SIMPLESMENTE IGNORAR `updatedAt`: um placar PARCIAL (sets lançados,
+       * sem vencedor) não tem `resultAt` — ali o `updatedAt` é o único carimbo que existe, e
+       * é ele que faz o lançamento aparecer (contrato travado em
+       * tests/proposta-nao-apaga-resultado.test.js).
+       * A regra que separa os dois casos é o LOTE: um carimbo que se repete em dezenas de
+       * documentos é escrita em massa, não evento. Quem o detecta é `_carimboDeLote`, na
+       * hidratação, e passa por aqui. */
+      if (k === 'updatedAt' && carimboDeLote != null &&
+          String(result[k]) === String(carimboDeLote)) continue;
       if (!temResultado && k !== 'pendingResult' &&
           result[k] == null && m[k] != null) continue;   // "não sei" não apaga o que se sabe
       m[k] = result[k];
@@ -11534,7 +11570,8 @@ window.AppStore = {
       t._results = (escopo === 'completa') ? (map || {}) : Object.assign({}, t._results || {}, map || {});
       var all = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : [];
       var store = self;
-      all.forEach(function (m) { if (m && m.id != null && t._results[m.id]) self._overlayResultOnMatch(m, t._results[m.id]); });
+      var _lote = self._carimboDeLote(t._results);
+      all.forEach(function (m) { if (m && m.id != null && t._results[m.id]) self._overlayResultOnMatch(m, t._results[m.id], _lote); });
       store._saveToCache();
       return true;
     } catch (e) { if (window._error) window._error('hydrateMatchResults ' + tournamentId, e); return false; }

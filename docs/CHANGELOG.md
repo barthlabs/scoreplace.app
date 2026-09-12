@@ -1,3 +1,16 @@
+## 2.2.79 — 12/set/2026
+
+Novidades no seu torneio: a ordem passa a ser a hora em que o placar foi lançado. O espelho de cada
+jogo tem dois carimbos, e o de escrita do documento estava vencendo o do resultado — medido na base,
+os 213 espelhos do Confra têm o MESMO horário de escrita, de um re-sync do servidor. Esse carimbo
+entrava no jogo e fazia um resultado de duas semanas atrás parecer recém-lançado, empurrando a
+rodada em curso para fora dos três cards visíveis. Agora o carimbo do documento não encosta no jogo,
+e quem ordena é a hora do lançamento.
+
+Placar por sets no card de resultado: as colunas ficam mais juntas, como já tinham ficado no card da
+chave. Era quase um algarismo inteiro de ar entre dois números; agora é o mínimo para não colarem, e
+o resto da largura fica com os nomes das duplas.
+
 ## 2.2.78 — 12/set/2026
 
 Novidades no seu torneio: a ordem volta a ser a hora do resultado. O espelho de cada jogo tem dois

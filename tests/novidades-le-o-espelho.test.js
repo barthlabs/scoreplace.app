@@ -17,7 +17,7 @@ let ok = 0; const must = (v, m) => { assert.ok(v, m); ok++; console.log('  ✓ '
 
 // recorte por ÂNCORA: os dois leitores + a lista canônica de campos de resultado
 const campos = S.slice(S.indexOf('  _matchResultFields:'), S.indexOf('\n', S.indexOf('  _matchResultFields:')));
-const ini = S.indexOf('  _jogoDoEspelho: function (matchId, res) {');
+const ini = S.indexOf('  _jogoDoEspelho: function (matchId, res, carimboDeLote) {');
 const fim = S.indexOf('  _overlayResultOnMatch: function', ini);
 assert.ok(ini > 0 && fim > ini, 'âncoras dos leitores de espelho');
 const ctx = { AppStore: null };
@@ -64,3 +64,49 @@ must(/matchSources\.forEach\(function \(m\) \{ if \(m && m\.id != null\) _jaNaEs
   '④ e monta o conjunto do que já veio ANTES de acrescentar — senão duplicaria tudo');
 
 console.log('✅ ' + ok + ' asserções — o jogo que só existe no espelho chega às Novidades');
+
+/* ── ⑤ A HORA É A DO RESULTADO, NÃO A DO DOCUMENTO ───────────────────────────
+ * MEDIDO na base do Confra (12/set/2026): os 213 espelhos de `results` estão TODOS com
+ * `updatedAt = 2026-09-12T11:51:32.898Z` — um re-sync do servidor reescreveu a coleção
+ * inteira. Esse carimbo entrava no jogo pelo overlay e fazia um resultado de 01/set parecer
+ * recém-lançado: "Novidades" enchia de R1 antiga e a R2 (lançada 03:18) saía da janela.
+ */
+{
+  const ini2 = S.indexOf('  _overlayResultOnMatch: function (m, result, carimboDeLote) {');
+  const fim2 = S.indexOf('\n  },', ini2);
+  const overlay = S.slice(ini2, fim2);
+  must(/k === 'updatedAt' && carimboDeLote != null/.test(overlay),
+    '⑤ ⛔ o overlay recusa o `updatedAt` quando ele é de uma escrita em MASSA');
+  must(!/if \(k === 'updatedAt'\) continue;/.test(overlay),
+    '⑤ ⛔ e não o recusa sempre — um placar PARCIAL não tem `resultAt`, ali o `updatedAt` é o único carimbo');
+  must(/resultAt/.test(campos), '⑤ e o `resultAt` — a hora do lançamento — continua vindo');
+
+  const DASH2 = fs.readFileSync(path.join(root, 'js/views/dashboard.js'), 'utf8');
+  // ⛔ só o ramo do resultado CONFIRMADO: o do pendente tem carimbo próprio (`proposedAt`)
+  const _iConf = DASH2.indexOf('                : (_tsMs(');
+  const confirmado = DASH2.slice(_iConf, DASH2.indexOf('\n', _iConf));
+  must(confirmado.indexOf('m.resultAt') < confirmado.indexOf('m.updatedAt'),
+    '⑤ ⭐ e quem ordena as Novidades é `resultAt` ANTES de `updatedAt` (' + confirmado.trim().slice(0, 60) + '…)');
+}
+
+/* ── ⑥ O DETECTOR DE ESCRITA EM MASSA ────────────────────────────────────────
+ * MEDIDO: 213 de 213 espelhos do Confra com `2026-09-12T11:51:32.898Z`. Um carimbo que se
+ * repete em documentos demais é re-sync, não evento — e não pode ordenar novidade nenhuma.
+ * ⛔ Mas dois jogos lançados no mesmo minuto são coincidência LEGÍTIMA: o piso existe pra
+ * não confundir uma com a outra. */
+{
+  const ini3 = S.indexOf('  _carimboDeLote: function (map) {');
+  const fim3 = S.indexOf('\n  },', ini3);
+  const ctx3 = { AppStore: null };
+  vm.runInNewContext('AppStore = {' + S.slice(ini3, fim3) + '\n}};', ctx3);
+  const C = ctx3.AppStore._carimboDeLote;
+  const emMassa = {}; for (let i = 0; i < 40; i++) emMassa['m' + i] = { updatedAt: '2026-09-12T11:51:32.898Z' };
+  must(C(emMassa) === '2026-09-12T11:51:32.898Z', '⑥ ⭐ 40 documentos com o mesmo carimbo: é escrita em massa');
+  const misto = Object.assign({}, emMassa); misto['novo'] = { updatedAt: '2026-09-12T14:00:00.000Z' };
+  must(C(misto) === '2026-09-12T11:51:32.898Z', '⑥ e o lançamento de verdade no meio do lote não confunde o detector');
+  const doisIguais = { a: { updatedAt: 'X' }, b: { updatedAt: 'X' }, c: { updatedAt: 'Y' }, d: { updatedAt: 'Z' }, e: { updatedAt: 'W' }, f: { updatedAt: 'V' }, g: { updatedAt: 'U' }, h: { updatedAt: 'T' } };
+  must(C(doisIguais) === null, '⑥ ⛔ dois jogos no mesmo minuto NÃO são lote — o piso protege a coincidência legítima');
+  must(C({ a: { updatedAt: 'X' } }) === null && C(null) === null, '⑥ mapa pequeno ou vazio não inventa lote');
+}
+
+console.log('✅ e a ordem é a do lançamento, não a do re-sync');

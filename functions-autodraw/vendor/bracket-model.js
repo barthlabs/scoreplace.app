@@ -1598,7 +1598,11 @@ window._assignGlobalGameNumbers = function (t) {
     var tb = (typeof window._setTiebreak === 'function') ? window._setTiebreak(set) : null;
     // o subponto sai em <sup> a 0,58em: "(7)" são 3 caracteres nesse tamanho.
     if (tb) w += (Math.max(dig(tb.p1), dig(tb.p2)) + 2) * 0.62;
-    return (w + 0.45).toFixed(2) + 'ch';   // 0,45ch de respiro entre colunas vizinhas
+    /* ⭐ 2.2.79 — RESPIRO MÍNIMO. Ordem do dono (12/set/2026), olhando "Seus últimos
+     * resultados": _"pode ter menos espaço entre os placares dos sets… isso dará mais espaço
+     * para os nomes nas duplas"_. Eram 0,45ch de cada lado — quase um algarismo inteiro de ar
+     * entre dois números. 0,18ch mantém o "não colar" e devolve o resto ao nome. */
+    return (w + 0.18).toFixed(2) + 'ch';
   };
   /** Uma célula da grade de placar encerrado: mesma classe da chave, largura do dado. */
   window._colunaDeSetHtml = function (dentro, set) {
