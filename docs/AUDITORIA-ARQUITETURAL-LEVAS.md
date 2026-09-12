@@ -3443,6 +3443,39 @@ por perfil a última versão e plataforma vistas (sem PII nova), barata e fora d
 (uma escrita por sessão, junto de um update que já acontece), para que o prazo de sete dias possa
 um dia começar a contar sobre um número real. ⛔ Não autorizado por este registro.
 
+## L14.P0 — inventário das portas de identidade (12/set/2026)
+
+A L14 estava "Aberta", sem inventário, com o portão *"matriz de idempotência e provas de posse
+antes de alterar merge/login"*. Este é o inventário, e ele mudou a expectativa: **as portas de
+FUSÃO estão bem defendidas; o que estava frágil era RECUPERAÇÃO e LOGIN.**
+
+### Defendidas — verificadas, sem leva
+| porta | prova exigida |
+|---|---|
+| `autoMergeOnProfileUpdate` | dispara com `phone`/`email` mudando no perfil — e esses campos **não** são privilegiados, qualquer um escreve os próprios. Mas a fusão exige `_mayAutoMerge`: **credencial autenticada nos DOIS lados** (federada, ou senha/telefone verificados no Auth). O comentário nomeia o ataque: *"fundir por texto digitado apagaria conta de terceiro"*. Histórico: a regra já morou só neste caminho e a **varredura diária fundiu duas pessoas diferentes**; foi unificada em `merge-rules` com dois chamadores e teste próprio. |
+| `confirmEmailMerge` | token em `mergeTokens` é a prova; sem `request.auth` de propósito (fluxo de link de e-mail). Enumeração de `mergeTokens` está fechada. |
+| `registerPhonePassword` | exige `request.auth` e lê o telefone **verificado do Auth**, não do payload. |
+| `resolveMergedLogin` | exige login; lê a lápide do PRÓPRIO chamador; recusa sem `mergedAt` Timestamp; confere que o uid de destino EXISTE antes de emitir credencial. `mergedInto` é campo privilegiado — ninguém aponta a própria lápide para conta alheia. Os dois comentários citam incidentes reais. |
+| `passwordResetTokens`, `gateTokens`, `recoveryThrottle`, `phoneLoginThrottle` | sem regra no `firestore.rules` ⇒ **negadas por padrão**. MEDIDO por leitura anônima real: 403 nas quatro. Por isso o token em texto puro como id é aceitável — só o Admin SDK alcança. |
+
+### Consertadas nesta leva (P1/P2/P3) — todas o mesmo padrão
+⭐ **A defesa existia e vazava pela borda.** Em nenhum caso houve descuido: a intenção certa
+estava escrita, com comentário. Faltou perguntar o que acontece no ERRO, na DISPUTA, no FORMATO
+e na ORDEM.
+
+- **P1** `_throttleHit` — contador em transação no MESMO documento; força bruta gera DISPUTA,
+  a transação aborta, o `catch` liberava calado. **O ataque desligava o próprio limite.** Agora
+  disputa conta como batida; os demais erros seguem liberando, mas aparecem no log.
+- **P2** `dispatchAccountRecovery` — respondia `ok` sem achar a conta (anti-enumeração), mas o
+  **formato** diferia: sucesso trazia `channels`, silêncio não. Igualado.
+- **P3** `verifyPasswordResetPhoneToken` — "uso único" que dependia de um apagamento **posterior
+  à emissão da credencial**, com a falha engolida; e ler+apagar separados permitiam dois usos
+  simultâneos. Agora consumo em transação, credencial só depois.
+
+### O que a L14 ainda não cobriu
+Idempotência de **retries** (o portão fala em "matriz de idempotência"): não inventariada. As
+portas acima foram lidas pela ótica de PROVA DE POSSE, não pela de reentrega.
+
 ## L6 — ESTÁ PRATICAMENTE FECHADA, E O REGISTRO DIZIA O CONTRÁRIO (12/set/2026)
 
 O registro da L6 descreve `saveTournament` como "a maior porta, **93 chamadas**, que grava a
