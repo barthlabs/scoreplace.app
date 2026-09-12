@@ -1,3 +1,22 @@
+## 2.2.77 — 12/set/2026
+
+Novidades no seu torneio: os jogos da fase em curso voltam a aparecer. Num torneio dividido, os
+jogos moram numa parte separada do documento — medido no Confra, o campo de jogos do documento é um
+array vazio — e a tela inicial não carrega essa parte: ela mostrava o que tivesse sobrado no cache
+de uma visita antiga, por isso só a primeira rodada. A janela recente de resultados já era baixada,
+mas só sabia sobrepor num jogo que já existisse. Agora o resultado que não encontra jogo na
+estrutura entra pelo próprio espelho, que carrega os dois lados, o placar e o rótulo da rodada.
+
+"Ir para o torneio" volta a parar no jogo do botão clicado, em vez do topo da chave. Acima de seis
+chaves, as que não são a sua nascem como marcador e só são montadas ao abrir — o card pedido não
+existia no documento, a busca desistia e sobrava o topo. Agora a chave é montada sob demanda, só
+quando alguém pediu um jogo específico, exatamente como já acontecia para o grupo.
+
+Placar por sets: cada coluna passa a medir o número que ela mostra, em vez de reservar sempre o pior
+caso. Entre um número e o seguinte ficam ~8px — o mínimo para não colarem — e o placar de melhor de
+3 devolve 10px de largura para os nomes. A coluna com tie-break cresce o tanto que o subponto ocupa,
+inclusive quando ele tem dois algarismos.
+
 ## 2.2.76 — 12/set/2026
 
 Tela do torneio: some a segunda barra de busca. Não eram duas barras da chave — a de cima busca

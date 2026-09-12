@@ -2446,7 +2446,11 @@ html, body,
    alinhada com os boxes de baixo. `align-self:flex-end` deixa a palavra na linha de base dos
    rótulos, não flutuando acima deles. */
 .sp-set-head-sets{align-self:flex-end;font-size:0.46rem;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-muted);white-space:nowrap;margin-right:1px;line-height:1.05;flex-shrink:0;}
-.sp-set-grid{display:flex;align-items:flex-end;gap:3px;flex-shrink:0;}
+/* ⭐ 2px de vão: o mínimo pra dois números não colarem. Ordem do dono (12/set/2026):
+   _"pode ter menos espaço entre os placares de cada set (espaço mínimo entre eles para não
+   colar)"_. O resto do respiro é a folga que cada coluna já reserva ao redor do número
+   (ver `_SET_COL_ESCALA`); somados, dão ~7px entre um número e o seguinte — medido. */
+.sp-set-grid{display:flex;align-items:flex-end;gap:2px;flex-shrink:0;}
 .sp-set-col{width:var(--w,34px);flex:0 0 var(--w,34px);text-align:center;}
 .sp-set-lbl{display:block;font-size:0.46rem;font-weight:800;line-height:1.05;letter-spacing:0.02em;text-transform:uppercase;color:var(--text-muted);}
 .sp-set-lbl--live{color:#38bdf8;}

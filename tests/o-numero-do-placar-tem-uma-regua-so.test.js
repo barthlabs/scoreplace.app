@@ -60,14 +60,29 @@ vm.runInContext(model.slice(iFn, model.indexOf('\n  };', iFn) + 4), W, { filenam
 const E = W._SET_COL_ESCALA;
 ok(E.length === 3, '② a escada tem os três degraus (1 set/2 · melhor de 3 · melhor de 5)');
 
-/* Régua de referência do próprio CSS: "dois dígitos a 1,45rem ≈ 36px" → ~12,4px por
- * dígito por rem. O número tem de caber DOIS dígitos dentro da coluna. */
-const PX_POR_DIGITO_POR_REM = 36 / 2 / 1.45;
+/* ⛔ A RÉGUA AGORA É MEDIDA, NÃO DERIVADA DE UM CAMPO DE TEXTO.
+ * A referência antiga saía do comentário do CSS — "dois dígitos a 1,45rem ≈ 36px", ou 12,4px
+ * por dígito por rem. Só que esses 36px eram do `.sp-mc-inp`, um INPUT: o número mora dentro
+ * dele com padding e borda. O GLIFO é bem mais estreito.
+ * MEDIDO no navegador (12/set/2026, fonte do app, root 17px): "14" a 1,20rem ocupa 23,8px →
+ * 11,9px por dígito → 9,9px por dígito por rem. É esse o número que dimensiona a coluna, e é
+ * contra ele que a régua tem de conferir — senão a trava exige folga que o desenho não usa. */
+const PX_POR_DIGITO_POR_REM = 9.9;
+/* ⭐ 2.2.77 — A COLUNA DEIXOU DE SER FIXA E PASSOU A MEDIR O NÚMERO QUE MOSTRA.
+ * Ordem do dono: _"pode ter menos espaço entre os placares de cada set (espaço mínimo entre
+ * eles para não colar)"_. A largura fixa reservava sempre o PIOR caso (dois dígitos + tie-break)
+ * e cobrava esse preço de toda coluna — inclusive a do `6` sozinho, que ficava com 8,7px de
+ * folga de cada lado (medido). O que a régua guarda continua o mesmo: o número CABE. Só que
+ * agora a conta é `dígitos × digito + folga`, com piso no RÓTULO. */
 E.forEach(function (d, i) {
   const largura2Digitos = 2 * PX_POR_DIGITO_POR_REM * d.fs;
-  ok(largura2Digitos <= d.set + 0.5,
+  const coluna2Digitos = Math.max(d.piso, Math.ceil(2 * d.digito) + 3);
+  ok(largura2Digitos <= coluna2Digitos + 0.5,
      '② ⭐ degrau ' + (i + 1) + ' (até ' + d.ate + ' colunas): 2 dígitos a ' + d.fs +
-     'rem ≈ ' + largura2Digitos.toFixed(1) + 'px cabem na coluna de ' + d.set + 'px');
+     'rem ≈ ' + largura2Digitos.toFixed(1) + 'px cabem na coluna de ' + coluna2Digitos + 'px');
+  ok(Math.abs(d.digito / d.fs - PX_POR_DIGITO_POR_REM) < 1.2,
+     '② e o `digito` do degrau bate com a medida real (' + (d.digito / d.fs).toFixed(1) +
+     ' vs ' + PX_POR_DIGITO_POR_REM.toFixed(1) + ' px por dígito por rem)');
 });
 
 /* ── ③ o degrau sai do FORMATO e cresce quando há menos colunas ───────────── */
@@ -79,10 +94,15 @@ ok(W._setColEscala(9).fs === W._setColEscala(5).fs, '③ acima de 5 não encolhe
 /* ── ④ ⛔ A LARGURA DA COLUNA NÃO SE MEXE SEM DECISÃO ────────────────────────
  * É ela que divide espaço com a caixa do nome. Subir a FONTE é de graça; alargar a
  * COLUNA é tirar do nome — e o cânone da caixa invisível diz que nome não é cortado. */
-ok(E[0].set === 35 && E[1].set === 31 && E[2].set === 25,
-   '④ ⭐ as larguras seguem 35/31/25px — mexer nelas é roubar do nome, e isso é decisão do dono');
-ok(E.every(function (d) { return d.stb > d.set; }),
-   '④ a coluna do super tie-break é mais larga (o número passa de 9)');
+/* ⭐ 2.2.77 — o que não se mexe sem decisão passa a ser o PISO, não a largura cheia:
+ * é ele que garante o rótulo ("STB") numa linha só — abaixo disso o cabeçalho engorda e os
+ * cards ficam de alturas diferentes (o defeito da 2.0.35). A largura acima do piso é do DADO. */
+ok(E[0].piso === 22 && E[1].piso === 20 && E[2].piso === 18,
+   '④ ⭐ os pisos seguem 22/20/18px — abaixo disso o rótulo quebra em duas linhas');
+ok(E.every(function (d) { return d.pisoStb >= d.piso; }),
+   '④ o piso do super tie-break é maior ou igual (o rótulo "STB" é o mais largo)');
+ok(E.every(function (d) { return d.tb > d.digito; }),
+   '④ e a folga do tie-break é maior que um dígito — o subponto ocupa mais que um algarismo');
 
 console.log(fail ? ('  ' + fail + ' FALHA(S), ' + pass + ' ok') : ('  ✓ ' + pass + ' asserções'));
 process.exit(fail ? 1 : 0);

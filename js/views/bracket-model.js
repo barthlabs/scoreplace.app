@@ -1172,10 +1172,22 @@
    * engordaria a grade em quase 20px — e largura de coluna é largura roubada do NOME. Estes
    * valores devolvem o estouro mais a mesma folga da coluna de 2 dígitos: o espaço existe,
    * o nome não paga a conta inteira. Escalam com a fonte de cada degrau. */
+  /* ⭐ `digito` e `piso`: A COLUNA MEDE O NÚMERO QUE ELA MOSTRA. Ordem do dono (12/set/2026):
+   * _"pode ter menos espaço entre os placares de cada set (espaço mínimo entre eles para não
+   * colar)"_.
+   * As larguras fixas (35/31/25) foram dimensionadas pelo PIOR caso — dois dígitos mais o
+   * tie-break — e cobravam esse preço de TODA coluna: um `6` sozinho ficava com 8,7px de folga
+   * de cada lado (medido), e o placar inteiro ocupava largura que o NOME queria.
+   * Agora a largura sai do dado: `digito` é quanto ocupa um algarismo naquele degrau de fonte
+   * (medido no navegador: 11,9px a 1,20rem) e `piso` é o mínimo que a coluna nunca perde —
+   * que NÃO é o número, é o RÓTULO: "STB" quer ~17px e, se não couber, quebra em duas linhas e
+   * engorda o cabeçalho (o defeito "cards de alturas diferentes" da 2.0.35). Por isso o piso do
+   * super tie-break é maior que o do set.
+   * ⛔ As duas linhas continuam casadas: a conta é por COLUNA e lê o mesmo set dos dois lados. */
   window._SET_COL_ESCALA = [
-    { ate: 2, set: 35, stb: 37, tb: 12, fs: 1.30 },   // 1 ou 2 colunas: sobra espaço, número cheio
-    { ate: 3, set: 31, stb: 33, tb: 11, fs: 1.20 },   // 3 colunas (melhor de 3 completo)
-    { ate: 5, set: 25, stb: 27, tb: 9,  fs: 0.95 }    // 4 ou 5 colunas (melhor de 5)
+    { ate: 2, digito: 12.9, piso: 22, pisoStb: 24, tb: 21, fs: 1.30 },   // 1 ou 2 colunas
+    { ate: 3, digito: 11.9, piso: 20, pisoStb: 22, tb: 20, fs: 1.20 },   // 3 colunas (melhor de 3)
+    { ate: 5, digito: 9.4,  piso: 18, pisoStb: 20, tb: 16, fs: 0.95 }    // 4 ou 5 colunas
   ];
   window._setColEscala = function (nCols) {
     var e = window._SET_COL_ESCALA;
@@ -1275,9 +1287,23 @@
     /* ⛔ A COLUNA COM TIE-BREAK É MAIS LARGA — senão o subponto cola no número seguinte.
      * O subponto é do SET, então as duas linhas crescem juntas e a grade segue casada. */
     var larg = function (k, set) {
-      var base = (k === 'stb') ? esc.stb : esc.set;
+      var piso = (k === 'stb') ? esc.pisoStb : esc.piso;
+      var dig = 1;
+      if (set) {
+        var _n = function (v) { var x = String(v == null ? '' : v); return x.length || 1; };
+        dig = Math.max(_n(set.gamesP1), _n(set.gamesP2));
+      }
       var tb = (set && typeof window._setTiebreak === 'function') ? window._setTiebreak(set) : null;
-      return base + (tb ? (esc.tb || 0) : 0);
+      var extraTb = 0;
+      if (tb) {
+        // o subponto sai num `<sup>` a 0,58em — `esc.tb` é o custo dele com UM algarismo,
+        // medido no navegador. Dois algarismos ("(10)") pedem mais: meio dígito a mais.
+        var _t = function (v) { var x = String(v == null ? '' : v); return x.length || 1; };
+        var digTb = Math.max(_t(tb.p1), _t(tb.p2));
+        extraTb = (esc.tb || 0) + Math.ceil((digTb - 1) * esc.digito * 0.6);
+      }
+      // 3px de respiro (1,5 de cada lado) + o vão de 2px da grade = o "mínimo pra não colar"
+      return Math.max(piso, Math.ceil(dig * esc.digito) + 3) + extraTb;
     };
 
     var cols = [], i;

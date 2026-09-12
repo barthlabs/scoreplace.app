@@ -1973,6 +1973,23 @@ function renderDashboard(container) {
         });
       }
 
+      /* ⭐ E OS JOGOS QUE SÓ EXISTEM NO ESPELHO. Relato do dono (12/set/2026): _"em NOVIDADES
+       * aparecem apenas jogos da R1, mas já temos várias R2"_ — e, depois: _"isso está quebrado
+       * na versão web também"_.
+       * MEDIDO no documento real do Confra: ele é DIVIDIDO (`_semPesados` inclui `matches`) e o
+       * campo `matches` do doc é um ARRAY VAZIO — `rounds`, `groups` e `rodadas` idem. A tela
+       * inicial não carrega a parte pesada, então as linhas acima colhem ZERO jogo da fase em
+       * curso: o que aparecia era o resto de uma visita antiga guardado em cache (a R1).
+       * A janela recente de `results/` já era baixada aqui do lado — mas ela só sabia SOBREPOR
+       * num jogo existente. Agora o que não tem jogo na estrutura ENTRA pelo espelho, que
+       * carrega nome dos dois lados, placar e rótulo da rodada.
+       * ⛔ Sem duplicar: quem já veio da estrutura manda, e o espelho só preenche o buraco. */
+      if (window.AppStore && typeof window.AppStore._jogosSoDoEspelho === 'function') {
+        var _jaNaEstrutura = {};
+        matchSources.forEach(function (m) { if (m && m.id != null) _jaNaEstrutura[String(m.id)] = 1; });
+        matchSources = matchSources.concat(window.AppStore._jogosSoDoEspelho(t, _jaNaEstrutura));
+      }
+
       matchSources.forEach(function(m) {
         if (!m) return;
         // v1.8.67: o MESMO jogo nunca entra duas vezes (ver `_seenMatch`). O id é a

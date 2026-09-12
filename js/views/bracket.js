@@ -603,9 +603,22 @@ function _alvoDeEntrada() {
   try { _pm = sessionStorage.getItem('sp_scrollToMatch'); } catch (e) {}
   if (_pm) {
     var _cardAlvo = document.getElementById('card-' + String(_pm));
+    /* ⛔ O CARD PEDIDO PODE AINDA NÃO EXISTIR NO DOM — e aí a tela caía no topo da chave.
+     * Relato do dono (12/set/2026, TestFlight): _"o ir para o torneio não está indo para o jogo
+     * onde está esse botão… está indo para o topo da chave"_.
+     * A causa é a MESMA que já estava escrita logo abaixo, para o grupo: acima de
+     * `_CHAVE_LOTE_MIN` grupos/chaves, o que não é o seu nasce como marcador e só é montado ao
+     * abrir — o Confra tem 35. `getElementById('card-<id>')` não achava nada, o ramo do grupo
+     * também não (na eliminatória não há rótulo de grupo) e sobrava o topo.
+     * O conserto é o mesmo: montar tudo AQUI, só quando alguém pediu um jogo específico — e
+     * nesse instante a pessoa está esperando chegar lá. `_chaveMontaTudo` é idempotente. */
+    if (!_cardAlvo && typeof window._chaveMontaTudo === 'function') {
+      try { window._chaveMontaTudo(document); } catch (e) {}
+      _cardAlvo = document.getElementById('card-' + String(_pm));
+    }
     if (_cardAlvo) return _cardAlvo;
-    // ainda não montado (grupo fechado / lote preguiçoso): o pedido de grupo abaixo resolve,
-    // e o pedido de jogo fica guardado para a próxima passada do laço de reafirmação.
+    // ainda não montado (lote preguiçoso que ainda não aterrissou): o pedido de grupo abaixo
+    // resolve, e o pedido de jogo fica guardado para a próxima passada do laço de reafirmação.
   }
   var _p = null;
   try { _p = sessionStorage.getItem('sp_scrollToGroup'); } catch (e) {}

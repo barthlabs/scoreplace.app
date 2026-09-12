@@ -28,8 +28,16 @@ must(plan.columns.length === 3, 'as três colunas do jogo 122');
 const [c1, c2, c3] = plan.columns;
 must(c2.w > c1.w, '⛔ a coluna COM tie-break é mais larga que a de número simples (' + c2.w + ' > ' + c1.w + ')');
 const esc = W._setColEscala(3);
-must(c2.w === esc.set + esc.tb, 'e o quanto ela cresce sai da MESMA escada que dimensiona tudo (+' + esc.tb + ')');
-must(c1.w === esc.set && c3.w === esc.stb, 'as colunas sem tie-break não mudaram — ninguém rouba largura do nome à toa');
+// a largura de uma coluna = o maior entre o PISO (que é o rótulo) e o número que ela mostra,
+// mais a folga do tie-break quando existe. É a mesma conta para todas — uma régua só.
+const larguraEsperada = (digitos, kind, temTb) =>
+  Math.max(kind === 'stb' ? esc.pisoStb : esc.piso, Math.ceil(digitos * esc.digito) + 3) + (temTb ? esc.tb : 0);
+must(c2.w === larguraEsperada(1, 'set', true),
+  'e o quanto ela cresce sai da MESMA escada que dimensiona tudo (+' + esc.tb + ')');
+must(c1.w === larguraEsperada(1, 'set', false) && c3.w === larguraEsperada(2, 'stb', false),
+  'as colunas sem tie-break medem o número que mostram — ninguém rouba largura do nome à toa');
+must(c3.w > c1.w, '⭐ dois dígitos pedem mais que um — a coluna mede o DADO, não o pior caso (' + c3.w + ' > ' + c1.w + ')');
+must(c1.w >= esc.piso, '⛔ e nunca menos que o piso: abaixo dele o rótulo "STB" quebraria em duas linhas');
 
 // as duas linhas leem o mesmo set → medem o mesmo; é isso que mantém a grade casada
 const p2 = W._matchSetPlan(sc, { sets: sets, winner: 'p1' }, { sets: sets, done: true });
@@ -39,6 +47,8 @@ must(p2.columns.map((c) => c.w).join() === plan.columns.map((c) => c.w).join(),
 // a escada inteira tem o valor, e ele acompanha a fonte de cada degrau
 W._SET_COL_ESCALA.forEach((d) => {
   must(d.tb > 0, 'o degrau de ' + d.fs + 'rem tem folga de tie-break (' + d.tb + 'px)');
+  must(d.digito > 0 && d.piso > 0 && d.pisoStb >= d.piso,
+    'e tem largura de dígito e piso de rótulo (STB pede mais que um número)');
 });
 must(W._setColEscala(2).tb >= W._setColEscala(5).tb,
   'e quanto maior a fonte, maior a folga — o subponto cresce junto');
@@ -46,7 +56,7 @@ must(W._setColEscala(2).tb >= W._setColEscala(5).tb,
 // sem tie-break, nada muda: a régua de antes continua de pé
 const semTb = W._matchSetPlan(sc, { sets: [sets[0], { gamesP1: 3, gamesP2: 6 }] },
   { sets: [sets[0], { gamesP1: 3, gamesP2: 6 }], done: true });
-must(semTb.columns.every((c) => c.w === W._setColEscala(3).set || c.w === W._setColEscala(3).stb),
-  '⛔ jogo sem tie-break nenhum mantém as larguras de sempre');
+must(semTb.columns.every((c) => c.w === larguraEsperada(1, c.kind, false)),
+  '⛔ jogo sem tie-break nenhum fica no tamanho do número, sem folga sobrando');
 
 console.log('✅ ' + ok + ' asserções — a coluna do tie-break tem o mesmo espaço das outras');

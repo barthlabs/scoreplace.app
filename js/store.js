@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.2.76';
+window.SCOREPLACE_VERSION = '2.2.77';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -11417,6 +11417,53 @@ window.AppStore = {
    * ⛔ `pendingResult` segue sempre sobrescrevendo, inclusive pra LIMPAR: é ele que
    * tira os botões de Confirmar/Contestar da tela quando o consenso fecha.
    */
+  /* ── ⭐ TORNEIO DIVIDIDO: O JOGO PODE NÃO ESTAR NO DOCUMENTO — O RESULTADO ESTÁ ──────
+   * Relato do dono (12/set/2026, TestFlight e web): _"em NOVIDADES aparecem apenas jogos da
+   * R1, mas já temos várias R2 que deveriam aparecer aqui"_.
+   * MEDIDO no documento real do Confra (leitura pública, 12/set): `_semPesados` lista
+   * `matches` como parte separada e o campo `matches` do doc é um ARRAY VAZIO — `rounds`,
+   * `groups` e `rodadas` também não têm jogo nenhum. Ou seja: a tela inicial não tem os jogos
+   * da fase em curso, só o que sobrou no cache de uma visita antiga (daí a R1 congelada).
+   * A hidratação de resultados até BAIXA a janela recente (`results/`, 40 docs) — mas ela só
+   * sabia SOBREPOR num jogo que já existisse. O resultado novo chegava e não tinha onde pousar.
+   *
+   * O espelho, porém, é gordo o bastante pra se sustentar sozinho: além do resultado, ele traz
+   * `p1`, `p2`, `playerUids` e `roundLabel` (ver functions/match-roster.js `buildSeedDoc`).
+   * Esta função monta o objeto de jogo a partir dele — os MESMOS campos de resultado que
+   * `_overlayResultOnMatch` aplica, de uma lista só (`_matchResultFields`).
+   * ⛔ NÃO É UMA SEGUNDA FONTE DE VERDADE: quando o jogo EXISTE na estrutura, ele manda e este
+   * caminho nem é usado. Isto cobre o buraco de quem só tem o espelho.
+   * [[project_jogo_vive_em_matches_e_results]] · [[project_arquitetura_resumo_do_torneio]] */
+  _jogoDoEspelho: function (matchId, res) {
+    if (!matchId || !res || typeof res !== 'object') return null;
+    var m = { id: String(matchId), _doEspelho: true };
+    var F = this._matchResultFields;
+    for (var i = 0; i < F.length; i++) {
+      if (Object.prototype.hasOwnProperty.call(res, F[i])) m[F[i]] = res[F[i]];
+    }
+    if (res.p1 != null) m.p1 = res.p1;
+    if (res.p2 != null) m.p2 = res.p2;
+    if (res.roundLabel) m.label = String(res.roundLabel);
+    if (Array.isArray(res.playerUids)) m._playerUids = res.playerUids.slice();
+    // sem nome dos dois lados não há card que se desenhe — melhor não fingir que há jogo
+    if (m.p1 == null && m.p2 == null) return null;
+    return m;
+  },
+
+  /* Os jogos que SÓ existem no espelho, prontos pra entrar na mesma lista dos outros.
+   * `jaVistos` é o conjunto de ids que a estrutura já entregou — quem está lá não repete. */
+  _jogosSoDoEspelho: function (t, jaVistos) {
+    var out = [];
+    if (!t || !t._results) return out;
+    var self = this;
+    Object.keys(t._results).forEach(function (mid) {
+      if (jaVistos && jaVistos[String(mid)]) return;
+      var m = self._jogoDoEspelho(mid, t._results[mid]);
+      if (m) out.push(m);
+    });
+    return out;
+  },
+
   _overlayResultOnMatch: function (m, result) {
     if (!m || !result || typeof result !== 'object') return;
     var F = this._matchResultFields;
