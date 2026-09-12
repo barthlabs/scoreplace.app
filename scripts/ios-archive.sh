@@ -172,11 +172,35 @@ xcodebuild -exportArchive \
   -allowProvisioningUpdates \
   "${AUTH_ARGS[@]}"
 
-IPA="$(find "$EXPORT_DIR" -name '*.ipa' -maxdepth 1 | head -1)"
+# ⛔ COM `destination = upload` NÃO SOBRA .ipa LOCAL — E ISSO NÃO É FALHA.
+# Medido na build 2.2.76(274), 12/set/2026: o log terminou com `Upload succeeded` e
+# `** EXPORT SUCCEEDED **`, e o script MESMO ASSIM saiu com código 1 — o `find` abaixo
+# batia num diretório que o xcodebuild nem cria quando o destino é o App Store Connect
+# (ele envia direto). Sob `set -e`, um `find` em diretório inexistente derruba tudo DEPOIS
+# de o envio ter dado certo: a mesma mentira do CLI do Firebase, agora aqui.
+# Quem decide é o que aconteceu: se o destino é upload, o envio É o resultado.
+IPA=""
+if [ -d "$EXPORT_DIR" ]; then
+  IPA="$(find "$EXPORT_DIR" -name '*.ipa' -maxdepth 1 2>/dev/null | head -1 || true)"
+fi
+_DESTINO_UPLOAD=0
+grep -q '<string>upload</string>' "$EXPORT_OPTS" 2>/dev/null && _DESTINO_UPLOAD=1
 
 # ── VALIDAÇÃO DO IPA: o que sobe é o .ipa, NÃO o .xcarchive. Validar só o archive
 # (como era até aqui) deixa passar qualquer perda de watch no export/re-assinatura
 # — o script dizia "✅ Export pronto" sem nunca ter olhado dentro do IPA.
+if [ -z "$IPA" ] && [ "$_DESTINO_UPLOAD" = "1" ]; then
+  echo "▶ destino = upload: o xcodebuild enviou direto e não deixou .ipa local."
+  echo "  A validação do relógio rodou no .xcarchive (acima); a do .ipa não tem arquivo pra abrir."
+  echo ""
+  echo "✅ Enviado pro App Store Connect — confira o processamento no TestFlight."
+  echo ""
+  echo "🚦 GATE OBRIGATÓRIO (Apple): esta build vai pro TESTFLIGHT PRIMEIRO."
+  echo "   NÃO submeta à ANÁLISE ainda. O dono instala pelo TestFlight no iPhone e"
+  echo "   confirma que A ENTRADA NÃO QUEBROU (login/onboarding). Só DEPOIS dessa"
+  echo "   confirmação é que se manda pra revisão no App Store Connect."
+  exit 0
+fi
 if [ -z "$IPA" ]; then
   echo "❌ FALHA: nenhum .ipa gerado em $EXPORT_DIR."
   exit 1
