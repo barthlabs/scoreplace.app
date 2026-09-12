@@ -3443,6 +3443,34 @@ por perfil a última versão e plataforma vistas (sem PII nova), barata e fora d
 (uma escrita por sessão, junto de um update que já acontece), para que o prazo de sete dias possa
 um dia começar a contar sobre um número real. ⛔ Não autorizado por este registro.
 
+## L4 — LEITURA DE PERFIL: O NÚMERO DO REGISTRO ESTAVA DESATUALIZADO (12/set/2026, read-only)
+
+O registro da L4 diz que `FirestoreDB.loadUserProfile` devolve o documento cru em **30 chamadas**.
+⛔ **Medido hoje: são 93.**
+
+| onde | chamadas |
+|---|---|
+| `js/views/auth.js` | 26 |
+| `js/store.js` | 19 |
+| `js/views/tournaments-organizer.js` | 8 |
+| `js/views/bracket-ui.js` | 8 |
+| `js/views/tournaments-draw.js` | 5 |
+| `js/views/explore.js` | 5 |
+| (demais) | 22 |
+
+⭐ **A distinção que dimensiona o trabalho:** só **18** passam um uid que é o do próprio usuário —
+ler a PRÓPRIA ficha inteira é legítimo. As outras **~75 lêem o perfil completo de TERCEIROS**.
+
+⛔ **Por que isto NÃO virou leva hoje, e não deve virar uma só:** os perfis carregados são
+repassados a RENDERIZADORES, não consumidos ali. Não há como saber por leitura estática quais
+campos cada superfície precisa — a tentativa de trocar por uma projeção "no chute" quebraria a
+tela em produção. É trabalho escalonado, uma superfície por vez, cada uma verificada no
+navegador antes de apertar. A L4.P12 (listas de pessoas) foi a primeira fatia e funcionou
+justamente porque ali os campos eram enumeráveis.
+
+⚠️ Isto é a terceira vez hoje que um número do documento não descrevia a produção (ver
+"Reconferência da porta anônima" e a lição registrada lá). Remedir antes de planejar.
+
 ## LEVAS EXECUTADAS EM 12/set/2026 — registro
 
 ⛔ Registradas aqui porque, sem isto, elas existem só em commit: quem reler o documento amanhã
