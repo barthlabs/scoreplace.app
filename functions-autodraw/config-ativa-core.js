@@ -32,6 +32,26 @@ const CAMINHOS_ATIVOS_FMT2 = [
 
 function _clone(v) { return (v === undefined) ? undefined : JSON.parse(JSON.stringify(v)); }
 
+/* ⛔ ORDEM DE CHAVE NÃO É MUDANÇA. O formulário RECOMPILA a configuração toda a cada save
+ * (`FORMAT2.compileToPhases`), e o objeto recompilado sai com as chaves em outra ordem que o
+ * gravado. `JSON.stringify` de um contra o outro dá diferente, e a trava lia isso como "o
+ * organizador mexeu na estrutura" — recusando um save em que nada estrutural mudou.
+ * Aqui a comparação é pelo CONTEÚDO: chaves ordenadas, arrays na ordem (em array a ordem É
+ * conteúdo). [[feedback_medir_com_dado_real_antes_de_teorizar]] */
+function _canonico(v) {
+  if (Array.isArray(v)) return v.map(_canonico);
+  if (v && typeof v === 'object') {
+    const out = {};
+    Object.keys(v).sort().forEach((k) => { out[k] = _canonico(v[k]); });
+    return out;
+  }
+  return v;
+}
+function igual(a, b) {
+  return JSON.stringify(_canonico(a === undefined ? null : a)) ===
+         JSON.stringify(_canonico(b === undefined ? null : b));
+}
+
 function _leia(obj, caminho) {
   const partes = caminho.split('.');
   let cur = obj;
@@ -71,10 +91,10 @@ function fmt2Atualizavel(atual, enviado, caminhos) {
   }
   const mescla = _clone(atual);
   lista.forEach((c) => { _escreva(mescla, c, _clone(_leia(enviado, c))); });
-  if (JSON.stringify(mescla) !== JSON.stringify(enviado)) {
+  if (!igual(mescla, enviado)) {
     return { ok: false, motivo: 'a alteração passa por campos que recriariam as rodadas' };
   }
   return { ok: true, valor: mescla };
 }
 
-module.exports = { CAMINHOS_ATIVOS_FMT2, fmt2Atualizavel };
+module.exports = { CAMINHOS_ATIVOS_FMT2, fmt2Atualizavel, igual };

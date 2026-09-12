@@ -54,7 +54,18 @@ const IDX = fs.readFileSync(path.join(__dirname, '..', 'functions-autodraw/index
 must(/_configAtiva\.fmt2Atualizavel\(t\.fmt2, patch\.fmt2\)/.test(IDX),
   '⑤ a Function pergunta ao núcleo, com o documento FRESCO da transação');
 must(/t\.fmt2 = _fmt2Mesclado;/.test(IDX), '⑤ ⛔ e grava a mescla conferida, nunca `patch.fmt2` cru');
-must(/_estruturais\.length === 1 && _estruturais\[0\] === 'fmt2'/.test(IDX),
-  '⑤ a exceção vale só quando `fmt2` é o ÚNICO estrutural do pedido — outro campo derruba tudo');
+must(/if \(_configAtiva\.igual\(t\[key\], patch\[key\]\)\) \{ delete patch\[key\]; return; \}/.test(IDX),
+  '⑤ campo estrutural IGUAL ao gravado sai do pedido — ordem de chave não é mudança');
+must(/_recusados\.push\(key\)/.test(IDX) && /recusado: ' \+ _recusados\.join/.test(IDX),
+  '⑤ ⭐ e a recusa DIZ QUAIS campos foram recusados — "a chave já existe" sozinho não dá pra depurar');
+
+// ── ⑥ ordem de chave não é mudança (a causa real da recusa em produção) ─────
+const revirado = { eliminatoria: { roundBounds: canonico.eliminatoria.roundBounds.slice(), endTime: '23:00', endDate: '2026-11-12' }, classificatoria: { rodadas: 1, grupos: 4 } };
+must(core.igual(canonico, revirado),
+  '⑥ ⛔ o MESMO conteúdo com as chaves em outra ordem é IGUAL — foi isto que recusava o save');
+must(core.fmt2Atualizavel(canonico, revirado).ok, '⑥ e por isso ele passa pela trava');
+must(!core.igual({ a: [1, 2] }, { a: [2, 1] }), '⑥ mas em ARRAY a ordem é conteúdo — [1,2] ≠ [2,1]');
+must(core.igual(undefined, null), '⑥ ausente e nulo contam como a mesma coisa');
+must(!core.igual({ a: 1 }, { a: 1, b: 2 }), '⑥ campo a mais é diferença de verdade');
 
 console.log('✅ ' + ok + ' asserções — prazo se corrige com a chave no ar, formato continua trancado');

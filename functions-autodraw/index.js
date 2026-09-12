@@ -3032,14 +3032,27 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
      * objeto que veio da tela. Qualquer diferença fora dos prazos continua recusada, com a
      * mesma mensagem. */
     let _fmt2Mesclado = null;
-    const _estruturais = Object.keys(patch).filter(key => _CONFIG_ESTRUTURAL.has(key) && key !== 'phases');
-    if (hasDraw && _estruturais.length) {
-      const _soFmt2 = _estruturais.length === 1 && _estruturais[0] === 'fmt2';
-      const _veredito = _soFmt2 ? _configAtiva.fmt2Atualizavel(t.fmt2, patch.fmt2) : { ok: false };
-      if (!_veredito.ok) {
-        throw _drawFail('failed-precondition', 'A chave já existe; altere apenas a configuração que não recria as rodadas.', { tId });
+    const _recusados = [];
+    if (hasDraw) {
+      Object.keys(patch).forEach(key => {
+        if (!_CONFIG_ESTRUTURAL.has(key) || key === 'phases') return;
+        // ⛔ ORDEM DE CHAVE NÃO É MUDANÇA: o formulário recompila a configuração inteira a cada
+        // save e ela volta com as chaves em outra ordem. Comparar por conteúdo evita recusar um
+        // pedido em que o campo estrutural está IGUAL ao que já está gravado.
+        if (_configAtiva.igual(t[key], patch[key])) { delete patch[key]; return; }
+        if (key === 'fmt2') {
+          const v = _configAtiva.fmt2Atualizavel(t.fmt2, patch.fmt2);
+          if (v.ok) { _fmt2Mesclado = v.valor; return; }
+        }
+        _recusados.push(key);
+      });
+      if (_recusados.length) {
+        // ⭐ A RECUSA DIZ QUAIS CAMPOS. Sem isto, o organizador (e quem for depurar) só via "a
+        // chave já existe" e não tinha como saber o que exatamente o pedido queria mudar.
+        throw _drawFail('failed-precondition',
+          'A chave já existe; altere apenas a configuração que não recria as rodadas. (recusado: ' + _recusados.join(', ') + ')',
+          { tId, recusados: _recusados });
       }
-      _fmt2Mesclado = _veredito.valor;
     }
     const antes = _antesDoMotor(t);
     Object.keys(patch).forEach(key => {
