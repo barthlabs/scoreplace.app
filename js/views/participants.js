@@ -1465,6 +1465,15 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
   // v1.3.36: modo PAREAMENTO TARDIO (lista de espera pós-sorteio, _renderLateJoinPairing) —
   // âmbar de propósito (janela de formar dupla na R1). Card canônico, só muda a pele + o arraste.
   if (ctx.lateJoin) cardStyle = 'background:linear-gradient(135deg,rgba(180,120,20,0.32),rgba(245,158,11,0.26));border:1px solid rgba(245,158,11,0.5);' + (ctx.lateJoin.canPair ? 'cursor:grab;-webkit-user-select:none;user-select:none;' : '');
+  /* ⭐ PELE VERMELHA: QUEM ESTÁ FORA DA DISPUTA. Ordem do dono (12/set/2026, painel da Lista de
+   * Espera): _"esses cards deveriam estar com tom vermelho e os da lista de espera com tom
+   * âmbar. vermelho também para inativos"_.
+   * Inativos e W.O. saíam com o azul-índigo do card comum — a mesma cor de quem está jogando.
+   * A cor passa a dizer o ESTADO: âmbar = esperando vaga (já é o `_isStandbyEntry` acima),
+   * vermelho = fora da disputa. ⛔ Fica por ÚLTIMO de propósito: é o estado mais forte e vence
+   * VIP, dupla e espera — um VIP que levou W.O. está fora como qualquer outro.
+   * [[project_card_de_jogo_geometria_canon]] */
+  if (ctx.pele === 'fora') cardStyle = 'background: linear-gradient(135deg, rgba(127,29,29,0.55) 0%, rgba(220,38,38,0.38) 100%); border: 1px solid rgba(248,113,113,0.55);';
 
   var _FONT = window._INSCRITO_NAME_FONT_PX || 17;
   var pNameHtml = '';

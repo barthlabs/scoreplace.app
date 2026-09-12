@@ -2719,21 +2719,43 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
     var _ordemMapa = (typeof window._buildEnrollOrderMap === 'function') ? window._buildEnrollOrderMap(t) : {};
     var _linha = function (pp, isWo) {
       var _uid = (pp && pp.uid) ? String(pp.uid) : '';
-      // woClaims é a trilha canônica do servidor para W.O. de grupo. Legados continuam
-      // recuperáveis pelo uid/nome, e o grupo fica explícito sem depender do cliente antigo.
-      var _hist = null;
-      if (isWo && Array.isArray(t.woClaims)) {
-        var _nmHist = getName(pp);
-        for (var _hi = t.woClaims.length - 1; _hi >= 0; _hi--) {
-          var _claim = t.woClaims[_hi] || {};
-          if ((_uid && Array.isArray(_claim.absentUids) && _claim.absentUids.indexOf(_uid) !== -1) ||
-              (_nmHist && String(_claim.absentName || '').toLocaleLowerCase() === String(_nmHist).toLocaleLowerCase())) { _hist = _claim; break; }
-        }
-      }
-      var _origem = _hist && _hist.groupName ? ('Grupo anterior: ' + _hist.groupName) : '';
+      /* ⛔ O UID PRIMEIRO: é por ele que o registro de W.O. identifica a pessoa. Resolver
+       * depois de perguntar a origem fazia a busca cair no NOME sem necessidade. */
       if (!_uid && typeof window._memberUidByName === 'function') {
         try { _uid = window._memberUidByName(t, getName(pp)) || ''; } catch (_e) { _uid = ''; }
       }
+      /* ⛔ DE ONDE A PESSOA VEIO SAI DO REGISTRO, NÃO DE UMA FONTE SÓ. Relato do dono
+       * (12/set/2026, painel de W.O. do Confra): _"alguns W.O. não estão indicando de onde a
+       * pessoa veio (em que grupo estava quando tomou o W.O.)"_ — no print, Thereza e marcia
+       * mostram o grupo e Claudia não.
+       * Aqui se lia SÓ `t.woClaims` (a trilha do servidor, que nasceu depois). Quem levou W.O.
+       * por um caminho que não gravou claim — ou cujo claim veio sem `groupName` — ficava sem
+       * origem, embora o fato esteja gravado: `t.woLog` é o registro append-only do W.O., com
+       * `groupName` e `roundIndex`, e tem leitor canônico pronto (`_woLogGrupoDoWo`).
+       * Pergunta-se ao REGISTRO primeiro; o claim fica como segunda fonte. */
+      var _nmHist = getName(pp);
+      var _grupoOrigem = '';
+      if (isWo && typeof window._woLogGrupoDoWo === 'function') {
+        try {
+          var _reg = window._woLogGrupoDoWo(t, _uid, _nmHist);
+          if (_reg && _reg.groupName) {
+            _grupoOrigem = /^R\d/.test(_reg.groupName)
+              ? _reg.groupName
+              : ('R' + ((_reg.roundIndex || 0) + 1) + ' ' + _reg.groupName);
+          }
+        } catch (_eReg) {}
+      }
+      if (!_grupoOrigem && isWo && Array.isArray(t.woClaims)) {
+        for (var _hi = t.woClaims.length - 1; _hi >= 0; _hi--) {
+          var _claim = t.woClaims[_hi] || {};
+          if ((_uid && Array.isArray(_claim.absentUids) && _claim.absentUids.indexOf(_uid) !== -1) ||
+              (_nmHist && String(_claim.absentName || '').toLocaleLowerCase() === String(_nmHist).toLocaleLowerCase())) {
+            if (_claim.groupName) _grupoOrigem = _claim.groupName;
+            break;
+          }
+        }
+      }
+      var _origem = _grupoOrigem ? ('Grupo anterior: ' + _grupoOrigem) : '';
       /* nome SEMPRE por uid (data-uid-name hidrata com o nome vivo do perfil); o texto
        * inicial só existe pra quem não tem conta. */
       var _txt = _uid ? window._safeHtml(window._displayName(_uid, '') || '') : window._safeHtml(getName(pp));
@@ -2742,7 +2764,7 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
       // Após o avanço de fase uma lista plana escondia avatar, identidade e contexto —
       // justamente as referências necessárias para recuperar alguém que saiu por W.O.
       if (typeof window._inscritoIndividualCard === 'function') {
-        var _card = window._inscritoIndividualCard(t, pp, 0, { isOrg: false, drawDone: true, canRollCall: false, postDrawPresence: false, enrollOrderMap: _ordemMapa });
+        var _card = window._inscritoIndividualCard(t, pp, 0, { isOrg: false, drawDone: true, canRollCall: false, postDrawPresence: false, enrollOrderMap: _ordemMapa, pele: 'fora' });
         _card = _card.replace('<div class="participant-card"', '<div ' + _standbySearchAttrs(pp, _origem) + 'class="participant-card"');
         if (_origem) _card = _card.replace(/<\/div>\s*$/, '<div style="margin-top:5px;font-size:0.69rem;color:var(--text-muted);overflow-wrap:anywhere;">' + window._safeHtml(_origem) + '</div></div>');
         return _card;

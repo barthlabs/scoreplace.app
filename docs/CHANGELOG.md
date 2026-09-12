@@ -1,3 +1,19 @@
+## 2.2.74 — 12/set/2026
+
+Card de jogo: a coluna de um set com tie-break nasce mais larga. Medido no jogo 122 (6 · 5⁽⁵⁾ · 14):
+o texto com subponto ocupava 32,2px numa coluna de 31 — estourava e comia o vão até a coluna
+seguinte, então o `5⁽⁵⁾` encostava no `14`. O vão entre os números caía de 15,3px para 6,4px; agora
+são 15,3 e 13,8. Colunas sem tie-break não mudaram de tamanho — largura de coluna é largura tirada
+do nome.
+
+Painel da Lista de Espera: quem levou W.O. volta a mostrar de onde veio. O card lia só a trilha do
+servidor; quem levou W.O. por um caminho que não gravou essa trilha aparecia sem grupo de origem,
+embora o fato esteja gravado no registro de W.O. do próprio torneio. Agora a pergunta vai primeiro
+ao registro, que é append-only e durável, e a trilha do servidor fica como segunda fonte.
+
+E a cor dos cards passa a dizer o estado: inativos e W.O. em vermelho — fora da disputa —, lista de
+espera em âmbar. Antes os dois primeiros saíam no mesmo azul de quem está jogando.
+
 ## 2.2.73 — 12/set/2026
 
 Campos de data e hora da configuração: digitar volta a funcionar. Escrever "23" na hora resultava em

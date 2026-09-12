@@ -1159,10 +1159,23 @@
    * `.sp-mc-inp`, "dois dígitos a 1,45rem ≈ 36px". Daí 1,30 / 1,20 / 0,95 — cada degrau
    * o maior que cabe em 35 / 31 / 25px sem estourar a coluna.
    * ⛔ NÃO subir mais sem alargar a coluna primeiro; e alargar a coluna É roubar do nome. */
+  /* ⭐ `tb`: O QUANTO A COLUNA CRESCE QUANDO O SET TEM TIE-BREAK.
+   * Relato do dono (12/set/2026, jogo 122): _"entre o set 2 e 3, quando tem tie-break, está
+   * colando. entre o set 1 e 2, quando o set 1 deu tie, não cola e tem um espaço bacana.
+   * esse espaço precisa existir sempre"_.
+   * MEDIDO no navegador, com o placar real dele (6 · 5⁽⁵⁾ · 14, três colunas, fonte 1,20rem):
+   *   · coluna de 1 dígito → texto 13,6px em 31px = 8,7px de folga de cada lado;
+   *   · coluna com tie-break → texto 32,2px em 31px = ESTOURA 1,2px à direita e come o vão de
+   *     3px que separa da coluna seguinte;
+   *   · coluna de 2 dígitos → texto 23,8px em 33px = 4,6px de cada lado.
+   * O subponto custa ~18,6px (o `<sup>` a 0,58em mais as margens). Devolver os 18,6 inteiros
+   * engordaria a grade em quase 20px — e largura de coluna é largura roubada do NOME. Estes
+   * valores devolvem o estouro mais a mesma folga da coluna de 2 dígitos: o espaço existe,
+   * o nome não paga a conta inteira. Escalam com a fonte de cada degrau. */
   window._SET_COL_ESCALA = [
-    { ate: 2, set: 35, stb: 37, fs: 1.30 },   // 1 ou 2 colunas: sobra espaço, número cheio
-    { ate: 3, set: 31, stb: 33, fs: 1.20 },   // 3 colunas (melhor de 3 completo)
-    { ate: 5, set: 25, stb: 27, fs: 0.95 }    // 4 ou 5 colunas (melhor de 5)
+    { ate: 2, set: 35, stb: 37, tb: 12, fs: 1.30 },   // 1 ou 2 colunas: sobra espaço, número cheio
+    { ate: 3, set: 31, stb: 33, tb: 11, fs: 1.20 },   // 3 colunas (melhor de 3 completo)
+    { ate: 5, set: 25, stb: 27, tb: 9,  fs: 0.95 }    // 4 ou 5 colunas (melhor de 5)
   ];
   window._setColEscala = function (nCols) {
     var e = window._SET_COL_ESCALA;
@@ -1259,12 +1272,18 @@
     // de um set. Ao gravar o primeiro set, passa a reservar a escala do melhor de N.
     // Assim o cartão vazio não encolhe antes de haver placar a comparar.
     var esc = window._setColEscala(multi ? (played.length ? bestOf : 1) : 1);
-    var larg = function (k) { return k === 'stb' ? esc.stb : esc.set; };
+    /* ⛔ A COLUNA COM TIE-BREAK É MAIS LARGA — senão o subponto cola no número seguinte.
+     * O subponto é do SET, então as duas linhas crescem juntas e a grade segue casada. */
+    var larg = function (k, set) {
+      var base = (k === 'stb') ? esc.stb : esc.set;
+      var tb = (set && typeof window._setTiebreak === 'function') ? window._setTiebreak(set) : null;
+      return base + (tb ? (esc.tb || 0) : 0);
+    };
 
     var cols = [], i;
     for (i = 0; i < played.length; i++) {
       cols.push({ i: i, kind: kindAt(i), label: labelAt(i), points: kindAt(i) === 'stb' ? stbPts : null,
-        state: 'done', set: played[i], w: larg(kindAt(i)) });
+        state: 'done', set: played[i], w: larg(kindAt(i), played[i]) });
     }
     var live = null;
     if (multi && !done && played.length < bestOf) {
