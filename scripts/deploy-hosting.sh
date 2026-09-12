@@ -271,7 +271,11 @@ echo "▸ conferindo a sessão do Firebase…"
 # deploy com "NÃO AUTENTICADO" — o dono passou horas achando que a credencial expirava toda hora,
 # e eu cheguei a pedir `login --reauth` sem necessidade. Quem responde "estou autenticado" é a
 # RESPOSTA, não o código de saída. [[feedback_medir_com_dado_real_antes_de_teorizar]]
-if ! firebase projects:list --json 2>/dev/null | grep -q '"status": *"success"'; then
+# ⚠️ E O `set -o pipefail` DERRUBA O CANO INTEIRO: com ele, `firebase … | grep` devolve o 2 do
+# firebase mesmo com o grep achando. Por isso a saída é capturada ANTES (com `|| true`) e só
+# depois examinada — senão o conserto acima continuaria dando o mesmo falso negativo.
+_FB_SESSAO="$(firebase projects:list --json 2>/dev/null || true)"
+if ! printf '%s' "$_FB_SESSAO" | grep -q '"status": *"success"'; then
   echo
   echo "✗ FIREBASE NÃO AUTENTICADO — nada foi testado, empurrado ou publicado."
   echo "  Rode: firebase login --reauth"

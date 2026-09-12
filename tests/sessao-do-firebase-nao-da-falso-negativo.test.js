@@ -11,8 +11,12 @@ const assert = require('assert/strict'), fs = require('fs'), path = require('pat
 const sh = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'deploy-hosting.sh'), 'utf8');
 let ok = 0; const must = (v, m) => { assert.ok(v, m); ok++; console.log('  ✓ ' + m); };
 
-must(/firebase projects:list --json 2>\/dev\/null \| grep -q '"status": \*"success"'/.test(sh),
-  '⛔ a sessão é conferida pela RESPOSTA do comando, não pelo código de saída');
+must(/_FB_SESSAO="\$\(firebase projects:list --json 2>\/dev\/null \|\| true\)"/.test(sh),
+  '⛔ a saída é CAPTURADA antes (com `|| true`) — o exit code 2 do CLI não decide nada');
+must(/printf '%s' "\$_FB_SESSAO" \| grep -q '"status": \*"success"'/.test(sh),
+  'e a sessão é julgada pela RESPOSTA do comando');
+must(!/firebase projects:list --json 2>\/dev\/null \| grep/.test(sh),
+  '⛔ e não por um cano direto: com `set -o pipefail` o cano herda o 2 e o falso negativo volta');
 must(!/if ! firebase projects:list --json >\/dev\/null 2>&1; then/.test(sh),
   'e o teste por exit code (falso negativo) não voltou');
 must(/FIREBASE NÃO AUTENTICADO/.test(sh), 'a trava continua existindo — o que mudou é COMO ela decide');
