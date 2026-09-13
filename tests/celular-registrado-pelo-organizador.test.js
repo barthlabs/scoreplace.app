@@ -131,8 +131,19 @@ ok(/_survSemIdentidade/.test(IDX),
 // ⚠️ v2.1.48: passou a usar `_FV` (subpath `firebase-admin/firestore`) — no runtime do
 // emulador de Functions `admin.firestore.FieldValue` vem undefined e derrubava este ramo.
 // A REGRA é a mesma: a procedência de organizador morre quando o SMS prova a posse.
-ok(/phoneSource: _FV\.delete\(\)/.test(IDX),
-  'F8. quando o SMS finalmente prova a posse, a procedência de organizador é apagada');
+/* ⭐ 13/set/2026 — A REGRA PASSOU A MORAR NUMA PORTA SÓ, e por um motivo medido: apagar os
+ * três campos na mão só estava feito no ramo do SMS. O cadastro com telefone gravava o
+ * número PROVADO e deixava o selo de "posto por terceiro" para trás — conta com telefone
+ * verificado E carimbo de organizador, e as travas de identidade seguiam recusando o que já
+ * tinha sido provado. Caminho novo nasce certo por usar a porta, em vez de alguém lembrar de
+ * três campos. Ordem do dono: _"depois que ela autenticou seu telefone o registro do
+ * organizador fica superado"_. */
+ok(/apagarCarimboDeTerceiro\(_FV\)/.test(IDX),
+  'F8. quando o SMS prova a posse, a procedência de organizador é apagada pela porta única');
+ok((IDX.match(/apagarCarimboDeTerceiro\(/g) || []).length === 2,
+  'F8b. e os DOIS caminhos que provam um número usam a MESMA porta');
+ok(!/phoneSource: _FV\.delete\(\)/.test(IDX),
+  'F8c. ninguém apaga os três na mão — é assim que um fica para trás');
 // Todo caminho do SERVIDOR que põe telefone num perfil deriva notifyWhatsApp junto —
 // mesma razão do E6: o false residual não pode sobreviver ao número chegar.
 // (janela ampliada: comentários novos entraram entre os dois pontos)
