@@ -40,10 +40,13 @@ console.log('\n──── parte que não chegou não vira lista vazia ──�
 
 /* ── ① A MÁQUINA DE CONTAR, RODANDO DE VERDADE ────────────────────────────── */
 const STORE = fs.readFileSync(path.join(raiz, 'js/store.js'), 'utf8');
-const iM = STORE.indexOf('window._marcaPartesQueFaltam = function');
 const W = {};
-vm.runInNewContext(STORE.slice(iM, STORE.indexOf('\n};', iM) + 3),
-  { window: W, Array, Object, String });
+['window._marcaPartesQueFaltam = function', 'window._partesFaltandoComCerteza = function']
+  .forEach((a) => {
+    const i = STORE.indexOf(a);
+    assert.ok(i > 0, 'achei ' + a);
+    vm.runInNewContext(STORE.slice(i, STORE.indexOf('\n};', i) + 3), { window: W, Array, Object, String });
+  });
 
 const completo = () => ({
   _semPesados: ['woClaims'], _nPartes: { woClaims: 3 },
@@ -53,26 +56,44 @@ const truncado = () => ({ _semPesados: ['woClaims'], _nPartes: { woClaims: 3 }, 
 const parcial = () => ({ _semPesados: ['woClaims'], _nPartes: { woClaims: 3 }, woClaims: [{ id: 'a' }] });
 const vazioDeVerdade = () => ({ _semPesados: ['woClaims'], _nPartes: { woClaims: 0 } });
 
-must(W._marcaPartesQueFaltam(completo()) === false, '① parte COMPLETA: nada falta');
-must(W._marcaPartesQueFaltam(truncado()) === true, '① ⭐ parte AUSENTE (0 de 3): falta');
-must(W._marcaPartesQueFaltam(parcial()) === true, '① ⭐ parte PARCIAL (1 de 3): falta');
-must(W._marcaPartesQueFaltam(vazioDeVerdade()) === false,
+const prova = (t) => W._partesFaltandoComCerteza(t);
+must(prova(completo()).length === 0, '① parte COMPLETA: nada falta');
+must(prova(truncado())[0] === 'woClaims', '① ⭐ parte AUSENTE (0 de 3): falta, com PROVA');
+must(prova(parcial())[0] === 'woClaims', '① ⭐ parte PARCIAL (1 de 3): falta, com PROVA');
+must(prova(vazioDeVerdade()).length === 0,
   '① ⛔ vazio DE VERDADE (0 de 0) NÃO é falta — senão o guarda travaria torneio sem W.O. nenhum');
-must(W._marcaPartesQueFaltam({ woClaims: [] }) === false,
-  '① ⛔ torneio NÃO dividido passa reto — o guarda não pode custar nada a quem não usa partes');
+must(prova({ woClaims: [] }).length === 0,
+  '① ⛔ torneio NÃO dividido passa reto — o guarda não custa nada a quem não usa partes');
+
+/* ── ①b ⛔ A RÉGUA DA TARJA NÃO SERVE PARA RECUSAR — E ISSO FOI MEDIDO ──────
+ * A primeira versão deste guarda usou `_marcaPartesQueFaltam`, que é a régua da TELA. Ela
+ * decide também por TESTEMUNHA: para `participants`, "tem gente em `memberUids`". MEDIDO
+ * em 13/set/2026, rodando as duas funções contra os 41 torneios divididos de produção, cada
+ * um remontado com as subcoleções INTEIRAS:
+ *     régua da TARJA  → marcaria 28 como incompletos ESTANDO COMPLETOS
+ *     régua de PROVA  → 0
+ * São torneios de elenco vazio, com o organizador em `memberUids` fazendo de testemunha.
+ * Pintar uma tarja à toa custa um "carregando"; recusar à toa destrói o trabalho de quem
+ * gravou. Este portão trava a diferença. */
+const semContador = { _semPesados: ['participants'], participants: [],
+  memberUids: ['org'] };   // a testemunha existe; o contador NÃO
+must(W._marcaPartesQueFaltam(semContador) === true,
+  '①b a régua da TARJA marca por testemunha (é o desenho dela, e está certo para pintar)');
+must(prova(semContador).length === 0,
+  '①b ⭐⭐ a régua de PROVA não recusa sem contador — 28 torneios reais dependem disto');
 
 /* ── ② O GUARDA NA GRAVAÇÃO — e ele RECUSA A GRAVAÇÃO INTEIRA ─────────────── */
 const DB = fs.readFileSync(path.join(raiz, 'js/firebase-db.js'), 'utf8');
 const codigo = DB.split('\n').filter((l) => !/^\s*(\*|\/\/|\/\*)/.test(l)).join('\n');
-const iG = codigo.indexOf('if (_fora && _fora.length && typeof window._marcaPartesQueFaltam');
+const iG = codigo.indexOf('if (_fora && _fora.length && typeof window._partesFaltandoComCerteza');
 must(iG > 0, '② o guarda existe em `saveTournament`');
 const guarda = codigo.slice(iG, codigo.indexOf('var _sbPartesSave', iG));
 
-must(/JSON\.parse\(JSON\.stringify\(cleanData\)\)/.test(guarda),
-  '② ⭐ ele sonda uma CÓPIA — marcar `_faltamPesados` no objeto real o gravaria no banco');
+must(/_partesFaltandoComCerteza\(cleanData\)/.test(guarda),
+  '② ⭐ ele pergunta pela porta de PROVA, que não muta o objeto (a da tarja marca `_faltamPesados` nele)');
 must(/throw _erro/.test(guarda),
   '② ⭐ e RECUSA a gravação inteira — salvar o resto produziria documento coerente e MENTIROSO');
-must(/_faltaOQue/.test(guarda),
+must(/_semProva\.join/.test(guarda),
   '② o erro diz QUAIS partes faltam, não só que faltam');
 must(/_captureException/.test(guarda),
   '② e a recusa é reportada — silêncio aqui é o defeito que ela veio impedir');
@@ -109,7 +130,7 @@ must(semGuarda.length < codigo.length,
 /* ⚠️ E o marcador do controle tem de ser EXCLUSIVO do guarda. Usei `throw _erro` e ele
  * sobrevivia: existe outro `throw _erro` no mesmo arquivo. Marcador compartilhado num
  * controle faz o controle dizer "não removi" quando removeu — ou, pior, o contrário. */
-must(!/_marcaPartesQueFaltam\(_sonda\)/.test(semGuarda) && !/recuso gravar/.test(semGuarda),
+must(!/_partesFaltandoComCerteza\(cleanData\)/.test(semGuarda) && !/recuso gravar/.test(semGuarda),
   '⑥ ⭐ e sem ela as asserções ② iriam vermelhas — o portão mede o que diz medir');
 
 console.log('\n✅ ' + ok + ' verificações');

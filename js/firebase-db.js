@@ -1253,10 +1253,18 @@ window.FirestoreDB = {
      * ⚠️ E ELE RECUSA A GRAVAÇÃO INTEIRA, não "só aquela parte": salvar o resto e deixar a
      * parte de fora produziria um documento coerente consigo mesmo e MENTIROSO sobre o
      * torneio — que é pior que não salvar, porque ninguém desconfia. */
-    if (_fora && _fora.length && typeof window._marcaPartesQueFaltam === 'function') {
-      var _sonda = JSON.parse(JSON.stringify(cleanData));
-      if (window._marcaPartesQueFaltam(_sonda)) {
-        var _quais = (_sonda._faltaOQue || []).join(', ');
+    /* ⛔ A PROVA AQUI É MAIS DURA QUE A DA TARJA, E ISSO FOI MEDIDO, NÃO ESCOLHIDO.
+     * A primeira versão deste guarda chamava `_marcaPartesQueFaltam`, que é a régua da TELA.
+     * Rodando a função real contra os 41 torneios divididos de produção, cada um remontado
+     * com as subcoleções INTEIRAS: **28 seriam marcados como incompletos estando completos**
+     * — elenco de fato vazio, e `memberUids` com o organizador servindo de "testemunha".
+     * Ou seja, o guarda teria recusado TODA gravação em 28 torneios. Pintar uma tarja à toa
+     * custa um "carregando" na tela; recusar à toa destrói o trabalho de quem gravou.
+     * `_partesFaltandoComCerteza` só aceita PROVA: contador numérico e objeto abaixo dele. */
+    if (_fora && _fora.length && typeof window._partesFaltandoComCerteza === 'function') {
+      var _semProva = window._partesFaltandoComCerteza(cleanData);
+      if (_semProva.length) {
+        var _quais = _semProva.join(', ');
         var _erro = new Error('recuso gravar ' + docId + ': parte(s) ainda não carregada(s) — ' + _quais);
         if (window._captureException) {
           try { window._captureException(_erro, { area: 'saveTournament', docId: docId, faltam: _quais }); } catch (_e) {}

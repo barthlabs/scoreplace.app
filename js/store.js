@@ -967,6 +967,58 @@ window._preservaPartesMontadas = function (novo, velho) {
  * chamador a decidir o que fazer com "não sei" — e é isso que a leva pede.
  * [[project_derivado_nao_se_guarda_standings]] */
 
+/* ⛔ O QUE BASTA PARA PINTAR "CARREGANDO" NÃO BASTA PARA RECUSAR UMA GRAVAÇÃO.
+ *
+ * `_marcaPartesQueFaltam` decide por DUAS vias: o contador (`_nPartes[x]`, que é prova) e,
+ * quando não há contador, por TESTEMUNHA — para `participants`, "tem gente em `memberUids`".
+ * A testemunha é boa o suficiente para PINTAR uma tarja: se errar, o custo é um "carregando"
+ * a mais na tela.
+ *
+ * ⛔ E ela é FRACA DEMAIS para RECUSAR. MEDIDO em 13/set/2026, rodando a função real contra
+ * os 41 torneios divididos de produção, cada um remontado com as subcoleções INTEIRAS:
+ * **28 deles seriam marcados como incompletos estando completos**. São torneios com elenco
+ * de fato VAZIO — `memberUids` tem o organizador, que não é inscrito. Com a testemunha, o
+ * guarda de gravação recusaria TODO save nesses 28.
+ *
+ * ⭐ Por isso o guarda de escrita usa ESTA porta, e ela só aceita PROVA: existe contador
+ * numérico e o objeto tem menos do que ele. Sem contador, não recusa — no máximo pinta.
+ * ⚠️ Não é o guarda ficando frouxo: é a prova certa para o custo certo. Recusar a gravação
+ * de quem carregou tudo é destruir o trabalho da pessoa para proteger um dado que está lá.
+ */
+window._partesFaltandoComCerteza = function (t) {
+  if (!t || !Array.isArray(t._semPesados) || !t._semPesados.length) return [];
+  var _tam = function (x) {
+    if (Array.isArray(x)) return x.length;
+    if (x && typeof x === 'object') return Object.keys(x).length;
+    return 0;
+  };
+  var _quantoTenho = function (nome) {
+    if (nome === 'matches') {
+      var n = _tam(t.matches);
+      (t.rounds || []).forEach(function (r) { if (r) n += _tam(r.matches); });
+      (t.groups || []).forEach(function (g) { if (g) n += _tam(g.matches); });
+      return n;
+    }
+    if (nome === 'grupos') {
+      var g2 = 0;
+      (t.rounds || []).forEach(function (r) { if (r) g2 += _tam(r.monarchGroups); });
+      return g2;
+    }
+    return _tam(t[nome]);
+  };
+  var fora = [];
+  t._semPesados.forEach(function (nome) {
+    var n = null;
+    if (t._nPartes && typeof t._nPartes[nome] === 'number') n = t._nPartes[nome];
+    else if (nome === 'matches' && typeof t._nJogos === 'number') n = t._nJogos;
+    else if (nome === 'grupos' && typeof t._nGrupos === 'number') n = t._nGrupos;
+    if (n == null || n === 0) return;              // sem prova, ou vazio de verdade
+    if (_quantoTenho(nome) >= n) return;           // completo
+    fora.push(nome);
+  });
+  return fora;
+};
+
 /** Esta parte pesada específica falta? Reconta em vez de confiar no marcador — ele é
  *  campo local que uma mutação pode ter gravado no documento. */
 window._parteFalta = function (t, nome) {
