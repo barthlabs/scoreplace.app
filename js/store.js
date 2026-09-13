@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.2.98';
+window.SCOREPLACE_VERSION = '2.2.99';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -7533,6 +7533,45 @@ window._formatHHMM = function(d) {
   if (!d) return '';
   if (typeof d === 'number' || typeof d === 'string') d = new Date(d);
   return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+};
+
+/* ⛔ TEXTO QUE VAI SER GUARDADO NÃO PODE DIZER "HOJE" E PRONTO.
+ *
+ * MEDIDO em 13/set/2026, varrendo 5.792 avisos in-app: 657 pares com o MESMO texto para a
+ * mesma pessoa em dias diferentes — quase todos `presence_plan` e `presence_checkin`. A
+ * causa não é reentrega: é a frase. O aviso é gravado e lido depois, e a palavra "hoje"
+ * envelhece junto com ele.
+ *
+ * E as duas portas que montam essa frase MENTIAM, cada uma do seu jeito:
+ *   • `js/views/presence.js` cravava **"hoje"** sempre — um plano para a semana que vem
+ *     chegava como "às 17:30 hoje";
+ *   • `js/views/venues.js` fazia `sameDay ? 'hoje' : 'amanhã'` — qualquer dia que não fosse
+ *     hoje virava "amanhã", inclusive daqui a cinco dias.
+ * É o caso clássico das DUAS PONTAS: a regra escrita em dois lugares, errada nos dois.
+ * [[feedback_unify_dual_entry_points]]
+ *
+ * ⭐ A data vai JUNTO em todos os casos. "hoje (13/set)" é levemente redundante no minuto em
+ * que o aviso chega, e é o que o torna verdadeiro — e distinguível — na semana seguinte.
+ *
+ * ⚠️ Compara DIA DE CALENDÁRIO, não diferença em horas: 23h50 e 00h10 são 20 minutos de
+ * distância e dias diferentes. */
+window._rotuloDoDia = function (quando, agoraMs) {
+  /* ⚠️ `!quando` PRIMEIRO: `new Date(null)` não é data inválida — é 1º/jan/1970. Sem esta
+   * linha, um plano sem data virava "em 1/jan" no texto do aviso. O portão pegou. */
+  if (!quando) return '';
+  var d = (quando instanceof Date) ? quando : new Date(quando);
+  if (isNaN(d.getTime())) return '';
+  var agora = new Date(typeof agoraMs === 'number' ? agoraMs : Date.now());
+  var soODia = function (x) { return new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime(); };
+  var dif = Math.round((soODia(d) - soODia(agora)) / 86400000);
+  var MES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+  var data = d.getDate() + '/' + MES[d.getMonth()];
+  if (dif === 0) return 'hoje (' + data + ')';
+  if (dif === 1) return 'amanhã (' + data + ')';
+  if (dif === -1) return 'ontem (' + data + ')';
+  var DIAS = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
+  if (dif > 1 && dif < 7) return DIAS[d.getDay()] + ' (' + data + ')';
+  return 'em ' + data;
 };
 
 // v1.8.8-beta: canonical DD/MM HH:MM formatter — builds on _formatHHMM.

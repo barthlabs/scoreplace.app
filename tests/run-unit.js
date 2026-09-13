@@ -86,6 +86,7 @@ const SUITES = [
   'tests/liberar-versao-da-apple-nao-fica-parada.test.js',
   'tests/contador-de-trofeu-se-reconta.test.js',
   'tests/porta-de-email-de-conta-tem-limite.test.js',
+  'tests/aviso-guardado-nao-diz-hoje-e-pronto.test.js',
   'tests/espera-e-fora-usam-a-grade-e-a-cor-canonicas.test.js',
   'tests/l16-auditor-nao-mente-quando-nao-consegue-olhar.test.js',
   'tests/l16-hidratacao-que-falha-nao-fica-calada.test.js',

@@ -1,3 +1,16 @@
+## 2.2.99 — 13/set/2026
+
+Quando alguém planeja uma ida e avisa os amigos, o aviso dizia a hora e o dia. O dia estava
+errado: por uma das telas ele saía sempre como "hoje", mesmo para um plano da semana seguinte;
+pela outra, qualquer dia que não fosse hoje virava "amanhã".
+
+E como o aviso fica guardado e pode ser lido dias depois, até o "hoje" correto envelhecia —
+dois planos de dias diferentes chegavam com texto idêntico.
+
+Agora o dia vem do mesmo lugar nas duas telas e sempre acompanhado da data: "hoje (13/set)",
+"amanhã (14/set)", "sexta (18/set)" ou "em 23/out". Continua legível no minuto em que chega e
+continua verdadeiro uma semana depois.
+
 ## 2.2.98 — 13/set/2026
 
 Na tela de troféus, cada conquista mostra quantos por cento das pessoas a têm. Esse número

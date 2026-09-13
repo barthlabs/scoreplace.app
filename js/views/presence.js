@@ -1173,8 +1173,12 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var sportLabel = (Array.isArray(payload.sports) && payload.sports.length > 0)
       ? payload.sports.join('/')
       : 'algo';
+    // ⛔ "hoje" era CRAVADO aqui — um plano para a semana que vem chegava como "hoje".
+    // O rótulo agora sai do canônico `_rotuloDoDia`, que leva a data junto e por isso
+    // continua verdadeiro quando o aviso for lido dias depois.
     var msg = (cu.displayName || 'Um amigo') + ' vai jogar ' + sportLabel +
-      ' em ' + (payload.venueName || 'um local') + ' às ' + hhmm + ' hoje. Quer ir junto?';
+      ' em ' + (payload.venueName || 'um local') + ' às ' + hhmm + ' ' +
+      window._rotuloDoDia(payload.startsAt) + '. Quer ir junto?';
 
     friends.forEach(function(friendUid) {
       if (!friendUid) return;
