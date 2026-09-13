@@ -89,6 +89,7 @@ const SUITES = [
   'tests/aviso-guardado-nao-diz-hoje-e-pronto.test.js',
   'tests/aviso-carrega-o-uid-de-quem-mandou.test.js',
   'tests/espelho-publico-nao-leva-email-nem-telefone.test.js',
+  'tests/stb-aparece-para-quem-lancou.test.js',
   'tests/espera-e-fora-usam-a-grade-e-a-cor-canonicas.test.js',
   'tests/l16-auditor-nao-mente-quando-nao-consegue-olhar.test.js',
   'tests/l16-hidratacao-que-falha-nao-fica-calada.test.js',

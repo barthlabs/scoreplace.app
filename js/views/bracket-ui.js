@@ -1650,6 +1650,20 @@ window._saveSetResult = function(tId, matchId) {
         if (tbP1 || tbP2) setData.tiebreak = window._tbPoints(tbP1, tbP2);  // escritor único
       }
 
+      /* ⛔ QUEM LANÇOU VIA 0-0 NO SUPER TIE-BREAK. Relato do dono (13/set/2026): _"lancei os
+       * placares e o placar do STB não aparece"_ — e, depois: _"apareceu em outra instância o
+       * STB, mas quando lança deveria dar o feedback pra quem lançou e não voltar o 0-0"_.
+       * MEDIDO no documento real (jogo 158 do Confra): o banco tem
+       * `{gamesP1:7, gamesP2:10, superTiebreak:true}` — a gravação está CERTA. Quem marca o
+       * `superTiebreak` é o servidor, ao canonizar. Este coletor não marcava, então a cópia
+       * LOCAL — a que repinta o card de quem acabou de lançar — tinha o set sem a marca, o
+       * desenho não achava a coluna do STB e mostrava 0. Outra aba, que lê o gravado, mostrava
+       * certo: o sintoma exato de otimista divergindo do servidor.
+       * ⚠️ A régua de QUAL set é o super tie-break é a mesma de sempre (`_matchSetPlan`): o
+       * ÚLTIMO do formato, e só quando o torneio tem STB ligado. Nada de segunda regra aqui.
+       * [[feedback_fallback_local_recria_a_divergencia]] */
+      if (sc && sc.superTiebreak && i === totalSets - 1) setData.superTiebreak = true;
+
       sets.push(setData);
       if (setData.gamesP1 > setData.gamesP2) p1Sets++;
       else if (setData.gamesP2 > setData.gamesP1) p2Sets++;

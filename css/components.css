@@ -2470,7 +2470,14 @@ html, body,
    colar)"_. O resto do respiro é a folga que cada coluna já reserva ao redor do número
    (ver `_SET_COL_ESCALA`); somados, dão ~7px entre um número e o seguinte — medido. */
 .sp-set-grid{display:flex;align-items:flex-end;gap:2px;flex-shrink:0;}
-.sp-set-col{width:var(--w,34px);flex:0 0 var(--w,34px);text-align:center;}
+/* ⛔ PLACAR ALINHA À DIREITA, NÃO AO CENTRO. Ordem do dono (13/set/2026, olhando um jogo
+   com super tie-break): _"os placares parecem alinhados nas colunas pela esquerda; faça o
+   alinhamento na direita de cada coluna de placares"_.
+   A coluna era `center`, e centralizar só parece certo quando os dois lados têm o MESMO
+   número de algarismos. Num 7 sobre 10 o `7` fica no meio da coluna — ou seja, sobre o `1`
+   do `10` — e a leitura de cima pra baixo desalinha. À direita, a unidade fica sob a
+   unidade, que é como placar se lê. [[project_card_de_jogo_geometria_canon]] */
+.sp-set-col{width:var(--w,34px);flex:0 0 var(--w,34px);text-align:right;}
 .sp-set-lbl{display:block;font-size:0.46rem;font-weight:800;line-height:1.05;letter-spacing:0.02em;text-transform:uppercase;color:var(--text-muted);}
 .sp-set-lbl--live{color:#38bdf8;}
 /* o rótulo do set já CONFIRMADO recua — quem tem que saltar é a coluna em disputa */

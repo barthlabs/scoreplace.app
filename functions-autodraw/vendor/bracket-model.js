@@ -1306,6 +1306,14 @@
         var _n = function (v) { var x = String(v == null ? '' : v); return x.length || 1; };
         dig = Math.max(_n(set.gamesP1), _n(set.gamesP2));
       }
+      /* ⛔ A COLUNA DO STB NASCE COM DOIS DÍGITOS, mesmo VAZIA. Relato do dono (13/set/2026):
+       * _"o campo do STB tem que ser mais largo por receber 2 dígitos de um lado pelo menos.
+       * pode até terminar em 22-20"_. A largura já saía do DADO, e é por isso que o defeito
+       * só aparecia na hora de digitar: com a caixa vazia `dig` é 1, e o piso (dimensionado
+       * para o RÓTULO "STB") não cobre dois algarismos. Só que um super tie-break termina em
+       * `stbPts` ou mais POR DEFINIÇÃO — o mínimo não é um dígito, é o tamanho do alvo. E se
+       * a disputa esticar (22-20), o `dig` acima já cresce sozinho. */
+      if (k === 'stb') dig = Math.max(dig, String(stbPts).length);
       var tb = (set && typeof window._setTiebreak === 'function') ? window._setTiebreak(set) : null;
       var extraTb = 0;
       if (tb) {

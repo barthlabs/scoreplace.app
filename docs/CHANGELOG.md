@@ -1,3 +1,18 @@
+## 2.3.4 — 13/set/2026
+
+Três coisas no placar por sets, todas no super tie-break.
+
+Quem lançava o resultado via **0 a 0** na coluna do super tie-break, enquanto em outro aparelho
+o placar aparecia certo. O que foi gravado sempre esteve correto — quem ficava desatualizada
+era a tela de quem acabou de lançar.
+
+A caixa do super tie-break era **estreita demais**: ela recebe pelo menos dois algarismos de um
+lado, e pode terminar em 22 a 20. Agora ela já nasce com espaço para isso, e cresce sozinha se
+a disputa esticar.
+
+E os placares passaram a **alinhar pela direita**. Centralizados, um 7 acima de um 10 ficava
+sobre o "1" — agora a unidade fica embaixo da unidade, como placar se lê.
+
 ## 2.3.3 — 13/set/2026
 
 A tela da chave baixava o cadastro completo das pessoas — com e-mail, telefone e data de

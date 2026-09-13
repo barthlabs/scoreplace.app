@@ -1,3 +1,4 @@
+// 2.3.4 — super tie-break aparece na hora para quem lançou, cabe dois dígitos e alinha à direita.
 // 2.3.3 — a chave do torneio para de baixar a ficha completa de quem joga.
 // 2.3.2 — busca e sugestões de pessoas param de baixar e-mail e telefone de terceiros.
 // 2.3.1 — o ícone do atalho enche o espaço: o pódio sobe e cresce sem ser cortado.
