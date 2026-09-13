@@ -1,3 +1,4 @@
+// 2.3.6 — abrir um torneio deixa de baixar a ficha de todo mundo que está nele.
 // 2.3.5 — avisar alguém deixa de exigir que o app leia a ficha dessa pessoa.
 // 2.3.4 — super tie-break aparece na hora para quem lançou, cabe dois dígitos e alinha à direita.
 // 2.3.3 — a chave do torneio para de baixar a ficha completa de quem joga.

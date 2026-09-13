@@ -55,10 +55,25 @@
 
   // Leitor padrão: users/{uid} no Firestore. Devolve null se não houver db ou doc.
   function _leitorFirestore(uid) {
+    return _leitorDe('users', uid);
+  }
+
+  /* ⭐ SEGUIR A LÁPIDE SEM BAIXAR A FICHA. Resolver quem é a conta viva não exige e-mail
+   * nem telefone de ninguém: precisa só de `mergedInto`, e ele está no espelho público.
+   * Quem só quer MOSTRAR a pessoa (chave, inscritos, sorteio) passa `{publico:true}` e
+   * atravessa a lápide lendo `usersPublic`. Quem precisa de campo privado (o próprio
+   * perfil, o contato que o organizador registra) continua no leitor real.
+   * ⚠️ O CACHE de uid→vivo VALE NOS DOIS: a corrente de `mergedInto` é a mesma coleção a
+   * coleção — o que muda é só de onde vêm os campos do sobrevivente. */
+  function _leitorEspelho(uid) {
+    return _leitorDe(window._COLECAO_PERFIL_PUBLICO || 'usersPublic', uid);
+  }
+
+  function _leitorDe(colecao, uid) {
     var db = window.FirestoreDB && (window.FirestoreDB.db ||
       (typeof window.FirestoreDB.ensureDb === 'function' && window.FirestoreDB.ensureDb()));
     if (!db) return Promise.resolve(null);
-    return db.collection('users').doc(uid).get().then(function (doc) {
+    return db.collection(colecao).doc(uid).get().then(function (doc) {
       if (!doc || !doc.exists) return null;
       return { uid: doc.id, data: doc.data() || {}, ref: doc.ref };
     }).catch(function () { return null; });
@@ -95,7 +110,8 @@
    */
   window._userVivo = function (x, opts) {
     opts = opts || {};
-    var get = typeof opts.get === 'function' ? opts.get : _leitorFirestore;
+    var get = typeof opts.get === 'function' ? opts.get
+      : (opts.publico ? _leitorEspelho : _leitorFirestore);
     var usaCache = !opts.get;
     var entradas = _normalizar(x);
     if (!entradas.length) return Promise.resolve(null);

@@ -1738,6 +1738,43 @@ function renderParticipants(container, tournamentId) {
   } else { setTimeout(_hydrateNamesP, 0); }
 
   const isOrg = typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t);
+
+  /* ⭐ CONTATO DO ELENCO — SÓ PARA O ORGANIZADOR, E SÓ AQUI.
+   * Celular, DDI, procedência do número, `omitPhone` e o @ do letzplay são privados e não
+   * estão no espelho público que a hidratação passou a ler. Esta tela é a única que os usa
+   * (o "📱 contato" pendente, o 💬 do WhatsApp e o "🎾 letzplay"), e usa só para quem manda
+   * no torneio. Um pedido, o elenco inteiro, e re-render quando chega.
+   * ⚠️ Guarda por torneio, igual ao `_ensureProfilesP` logo acima: sem ela o soft-refresh
+   * que a chegada dispara re-entraria na view e pediria de novo, em laço. */
+  (function _ensureContatosP() {
+    if (!isOrg || !window.FirestoreDB || typeof window.FirestoreDB.carregarContatosDoElenco !== 'function') return;
+    var _k = '_tcontP_' + (t.id || '');
+    if (window[_k]) return;
+    var _uids = [];
+    var _pl = (t.participants ? (Array.isArray(t.participants) ? t.participants : Object.values(t.participants)) : []);
+    _pl.forEach(function (p) {
+      if (typeof window._participantUids === 'function') (window._participantUids(p) || []).forEach(function (u) { if (u) _uids.push(u); });
+      else if (p && typeof p === 'object') { [p.uid, p.p1Uid, p.p2Uid].forEach(function (u) { if (u) _uids.push(u); }); }
+    });
+    if (!_uids.length) return;
+    // ⚠️ Já carregado? `omitPhone` é o marcador honesto: ele só existe depois desta porta
+    // (a hidratação nunca o trouxe), então `!== undefined` significa "esta pessoa já passou
+    // por aqui". Testar `.phone` não serviria — quem não tem celular ficaria pedindo sempre.
+    var _falta = _uids.some(function (u) {
+      var c = window._userProfileCache && window._userProfileCache[u];
+      return !c || c.omitPhone === undefined;
+    });
+    if (!_falta) return;
+    window[_k] = true;
+    window.FirestoreDB.carregarContatosDoElenco(_uids).then(function (n) {
+      window[_k] = false;
+      // ⚠️ Só redesenha se ALGO chegou: re-render sem novidade voltaria aqui e pediria de novo.
+      if (n > 0 && (window.location.hash || '').indexOf('participants') !== -1 && typeof window._softRefreshView === 'function') {
+        try { window._softRefreshView(); } catch (e) {}
+      }
+    }).catch(function () { window[_k] = false; });
+  })();
+
   const parts = typeof window._getCompetitors === 'function' ? window._getCompetitors(t) : (t.participants ? (Array.isArray(t.participants) ? t.participants : Object.values(t.participants)) : []);
 
   // v4.5.78: expande uma entrada em NOMES DE PESSOAS — dupla ESTRUTURAL (p1Name/

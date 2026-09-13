@@ -244,7 +244,7 @@ window.FirestoreDB = {
 
   // v1.2.2: _computeMemberEmails REMOVIDA junto com o campo memberEmails[]. Identidade de
   // membro é o uid (memberUids) — e-mail/telefone são ATRIBUTOS do perfil, resolvidos pelo
-  // uid (_emailForUid/_phoneForUid), nunca chave. O campo só sobrevivia como fallback, e
+  // uid (o perfil, via `loadUserProfile`), nunca chave. O campo só sobrevivia como fallback, e
   // fallback é rede de segurança pra código que não confia na própria identidade.
   // Ver [[project_uid_primary_identity]] / [[project_orphan_uid_entries]].
 
@@ -428,7 +428,7 @@ window.FirestoreDB = {
     } else {
       // v1.2.2: memberEmails NÃO é mais escrito — identidade de membro é o uid (memberUids).
       // O campo saiu do schema; quem precisa do e-mail de alguém resolve pelo uid no perfil
-      // (_emailForUid). O `delete` não é decorativo: o doc carregado do banco ainda TRAZ o
+      // (`loadUserProfile`). O `delete` não é decorativo: o doc carregado do banco ainda TRAZ o
       // campo, e sem isto o save o devolveria intacto — ele nunca sairia dos documentos.
       // Ver [[project_uid_primary_identity]].
       delete cleanData.memberEmails;
@@ -2798,6 +2798,81 @@ window.FirestoreDB = {
       window._error('Erro ao carregar perfil:', e);
       return null;
     }
+  },
+
+  /* ⭐ A PORTA ESTREITA DO CONTATO — só o organizador, só o elenco dele, só o que a tela usa.
+   *
+   * ⛔ POR QUE ELA EXISTE. A tela de inscritos mostra, PARA O ORGANIZADOR, se cada jogador
+   * já tem celular registrado ("📱 contato" pendente vs 💬 abrir o WhatsApp) e se já tem @
+   * do letzplay. Esses campos são privados e NÃO estão no espelho público — de propósito.
+   * Antes eles vinham de carona na hidratação geral, que baixava o documento inteiro de
+   * todo mundo para todo mundo. Tirar a ficha da hidratação sem esta porta apagaria o
+   * recurso do organizador; abrir a ficha para todos para manter o recurso é o que a
+   * auditoria mandou parar de fazer. A porta separa as duas coisas.
+   *
+   * ⛔ E ELA CONSERTA UM SILÊNCIO MEDIDO. `phoneSource`, `phoneCountry`, `omitPhone` e
+   * `letzplayHandle` NUNCA estiveram no cache — a hidratação guardava oito campos e nenhum
+   * deles era esses quatro —, então a tela lia `undefined` e decidia errado, sem erro
+   * nenhum: o balãozinho do WhatsApp aparecia inclusive para quem marcou "não mostrar meu
+   * telefone" (o comentário ali jura que respeita `omitPhone`), o número registrado pela
+   * organização era pintado de verde como se a pessoa tivesse confirmado por SMS, e o botão
+   * "🎾 letzplay" era oferecido para quem já tinha o @ preenchido.
+   *
+   * ⚠️ NÃO É FRONTEIRA DE SEGURANÇA, é redução de superfície: `users` segue legível por
+   * qualquer autenticado até a Rule fechar, e fechá-la depende de versão nativa nas lojas.
+   * O que muda aqui é o que o APP baixa, que é o vazamento real do dia a dia.
+   * [[project_email_no_doc_publico]] */
+  async carregarContatosDoElenco(uids) {
+    if (!this.db || !Array.isArray(uids) || !uids.length) return 0;
+    var _fb = (typeof firebase !== 'undefined' && firebase.firestore && firebase.firestore.FieldPath)
+      ? firebase.firestore.FieldPath.documentId() : null;
+    var alvos = [];
+    uids.forEach(function (u) {
+      if (u && typeof u === 'string' && u.indexOf(' ') === -1 && alvos.indexOf(u) === -1) alvos.push(u);
+    });
+    if (!alvos.length) return 0;
+    /* ⛔ A ORDEM IMPORTA E QUASE ME CUSTOU OS NOMES DA TELA. `_preloadUserProfiles` PULA
+     * uid que já esteja no cache. Se esta porta chegasse primeiro e criasse a entrada,
+     * a carga de nomes acharia que já tinha carregado e nunca buscaria o nome — a lista
+     * do organizador ficaria com "…" para sempre. Então: a carga de nomes PRIMEIRO, e
+     * aqui só se VESTE o que já existe, nunca se inventa entrada.
+     * [[feedback_chave_de_espelho_nunca_e_posicao]] */
+    if (typeof window._preloadUserProfiles === 'function') {
+      try { await window._preloadUserProfiles(alvos); } catch (e) {}
+    }
+    var cache = (window._userProfileCache = window._userProfileCache || {});
+    var vestir = function (uid, d) {
+      var alvo = cache[uid];
+      if (!alvo) return;   // a carga de nomes falhou para este uid: a próxima passada refaz
+      alvo.phone = d.phone || '';
+      alvo.phoneCountry = d.phoneCountry || '';
+      alvo.phoneSource = d.phoneSource || '';
+      alvo.omitPhone = d.omitPhone === true;
+      alvo.letzplayHandle = d.letzplayHandle || '';
+      alvo.letzplaySource = d.letzplaySource || '';
+    };
+    var n = 0;
+    try {
+      // ⚠️ `documentId() in [...]` aceita 10 por consulta — o mesmo lote da hidratação.
+      var lotes = [];
+      for (var i = 0; i < alvos.length; i += 10) lotes.push(alvos.slice(i, i + 10));
+      await Promise.all(lotes.map(function (lote) {
+        var q = _fb
+          ? this.db.collection('users').where(_fb, 'in', lote).get()
+          : Promise.all(lote.map(function (u) { return this.db.collection('users').doc(u).get(); }, this))
+              .then(function (docs) { return { forEach: function (f) { docs.forEach(f); } }; });
+        return q.then(function (snap) {
+          snap.forEach(function (doc) {
+            if (doc && doc.exists && cache[doc.id]) { vestir(doc.id, doc.data() || {}); n++; }
+          });
+        }).catch(function (e) {
+          window._warn('[contatos do elenco] lote falhou:', e && (e.code || e.message));
+        });
+      }, this));
+    } catch (e) {
+      window._warn('[contatos do elenco] falhou:', e && e.message);
+    }
+    return n;
   },
 
   // Recently-active users (created or updated in the last N days). Used to

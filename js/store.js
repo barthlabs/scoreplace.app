@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.3.5';
+window.SCOREPLACE_VERSION = '2.3.6';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -770,7 +770,7 @@ window._spNameForLetzplay = function (handle, fallback) {
 // só nesse caso o nome vem de um campo (guestName). Onde HÁ uid, o nome gravado
 // NÃO é lido nem como fallback.
 //   _preloadUserProfiles(uids)  — carrega em lote os perfis por uid (cache).
-//   _nameForUid/_emailForUid/_phoneForUid(uid) — leem o cache (síncrono).
+//   _nameForUid/_phoneForUid(uid) — leem o cache (síncrono).
 //   _displayName(uid, guestName) — uid → nome vivo (vazio até hidratar); sem uid → guest.
 //   _hydrateUidNames(root) — pós-render, preenche [data-uid-name] com o nome vivo.
 /* ── QUE PARTES FALTAM NESTE TORNEIO? — FONTE ÚNICA (2.1.66) ────────────────────
@@ -1079,8 +1079,27 @@ window._userProfilePending = window._userProfilePending || {};
 window._profileEpoch = window._profileEpoch || 0;
 window._bumpProfileEpoch = function () { window._profileEpoch = (window._profileEpoch || 0) + 1; };
 
+/* ⛔ A HIDRATAÇÃO DA CHAVE BAIXAVA A FICHA INTEIRA DE CADA DESCONHECIDO.
+ * Esta função é a carga em lote que alimenta chave, inscritos, sorteio, categorias e
+ * substituição da liga — ou seja, ela roda para QUALQUER pessoa que abra QUALQUER torneio.
+ * MEDIDO no Confra: 143 uids por abertura. Ela lia `users/{uid}`, que é
+ * `allow read: if request.auth != null` e guarda 94 campos — e-mail, celular, data de
+ * nascimento, cidades preferidas, token de push — para ficar com OITO deles. Os outros 86
+ * viajavam até o aparelho de quem só queria ver nome e foto.
+ *
+ * ⛔ Rule não projeta CAMPO, só autoriza DOCUMENTO: a única saída é LER DE OUTRO LUGAR.
+ * Passa a ler `usersPublic`, o espelho escrito só pela Function (279/279 semeados,
+ * 0 e-mails, 0 telefones — medido em 13/set/2026).
+ *
+ * ⚠️ `email` SAIU do cache e não foi substituído: `_emailForUid` existia com ZERO leitores
+ * (varredura do repositório inteiro). Guardar campo que ninguém lê é só superfície.
+ *
+ * ⚠️ `phone` CONTINUA no formato do cache, vazio, porque o organizador precisa dele — e
+ * agora ele chega pela porta estreita `carregarContatosDoElenco`, que só a tela de
+ * inscritos do organizador abre. [[project_email_no_doc_publico]] */
 window._preloadUserProfiles = function (uids) {
   var db = window.FirestoreDB && window.FirestoreDB.db;
+  var COL = window._COLECAO_PERFIL_PUBLICO || 'usersPublic';
   // v4.5.93: _userProfilePending guarda a PROMISE em voo (não só um flag). Um 2º caller
   // pros mesmos uids AGUARDA a carga já em andamento em vez de resolver na hora com o cache
   // ainda vazio. Era a corrida do "nome em branco": _ensureParticipantProfiles marcava os
@@ -1135,12 +1154,12 @@ window._preloadUserProfiles = function (uids) {
           if (_resolvers[uid]) { try { _resolvers[uid](); } catch (e) {} _resolvers[uid] = null; }
         });
       }, 8000);
-      db.collection('users').where(_fb, 'in', lote).get().then(function (snap) {
+      db.collection(COL).where(_fb, 'in', lote).get().then(function (snap) {
         var vistos = {};
         var redirects = [];
         var guardarPerfil = function (uid, d) {
           window._userProfileCache[uid] = {
-            displayName: d.displayName || d.name || '', email: d.email || '', phone: d.phone || '',
+            displayName: d.displayName || d.name || '', phone: '',
             photoURL: d.photoURL || '', gender: d.gender || '',
             skillBySport: (d.skillBySport && typeof d.skillBySport === 'object') ? d.skillBySport : null,
             birthDate: d.birthDate || '', defaultCategory: d.defaultCategory || ''
@@ -1155,7 +1174,7 @@ window._preloadUserProfiles = function (uids) {
           // muda, apenas o display desse uid volta a resolver.
           if (d.mergedInto && typeof window._userVivo === 'function') {
             (function (uidAntigo, docLapide) {
-              redirects.push(window._userVivo(docLapide).then(function (vivo) {
+              redirects.push(window._userVivo(docLapide, { publico: true }).then(function (vivo) {
                 if (!vivo || !vivo.data) return;
                 guardarPerfil(uidAntigo, vivo.data);
                 if (vivo.uid && vivo.uid !== uidAntigo) guardarPerfil(vivo.uid, vivo.data);
@@ -1169,7 +1188,7 @@ window._preloadUserProfiles = function (uids) {
           // uid sem doc: entra vazio, senão ele seria pedido de novo a cada hidratação
           lote.forEach(function (uid) {
             if (!vistos[uid] && !window._userProfileCache[uid]) {
-              window._userProfileCache[uid] = { displayName: '', email: '', phone: '', photoURL: '',
+              window._userProfileCache[uid] = { displayName: '', phone: '', photoURL: '',
                 gender: '', skillBySport: null, birthDate: '', defaultCategory: '' };
             }
           });
@@ -1181,7 +1200,7 @@ window._preloadUserProfiles = function (uids) {
         // que diferencia regra de segurança, rede e IndexedDB preso.
         window._preloadFalhas = (window._preloadFalhas || 0) + 1;
         if (window._preloadFalhas <= 2 && typeof window._captureMessage === 'function') {
-          try { window._captureMessage('preload users falhou: ' + ((e && e.code) || (e && e.message) || e) + ' · lote=' + lote.length, 'warning'); } catch (e2) {}
+          try { window._captureMessage('preload ' + COL + ' falhou: ' + ((e && e.code) || (e && e.message) || e) + ' · lote=' + lote.length, 'warning'); } catch (e2) {}
         }
       }).then(function () {
         _lotou = true; clearTimeout(_prazoLote);
@@ -1201,12 +1220,11 @@ window._preloadUserProfiles = function (uids) {
     return waitFor.length ? Promise.all(waitFor) : Promise.resolve();
   }
   toLoad.forEach(function (uid) {
-    var pr = db.collection('users').doc(uid).get().then(function (s) {
+    var pr = db.collection(COL).doc(uid).get().then(function (s) {
       var d = (s && s.exists) ? (s.data() || {}) : {};
       window._userProfileCache[uid] = {
         displayName: d.displayName || d.name || '',
-        email: d.email || '',
-        phone: d.phone || '',
+        phone: '',
         photoURL: d.photoURL || '',
         // v1.3.39: gênero/skill/idade/categoria-padrão do PERFIL — pra o app resolver
         // esses campos pelo uid (sorteio, categorias, badges) em vez do snapshot gravado
@@ -1219,7 +1237,7 @@ window._preloadUserProfiles = function (uids) {
     }).catch(function (e) {
       window._preloadFalhas = (window._preloadFalhas || 0) + 1;
       if (window._preloadFalhas <= 2 && typeof window._captureMessage === 'function') {
-        try { window._captureMessage('preload user falhou: ' + ((e && e.code) || (e && e.message) || e), 'warning'); } catch (e2) {}
+        try { window._captureMessage('preload ' + COL + ' (1) falhou: ' + ((e && e.code) || (e && e.message) || e), 'warning'); } catch (e2) {}
       }
     }).then(function () {
       window._bumpProfileEpoch();   // uma vez por perfil resolvido, não por escrita
@@ -1260,7 +1278,11 @@ window._nameForUid = function (uid) {
   if (p && window._nomeGravadoPorUid[uid]) return window._nomeGravadoPorUid[uid];
   return '';
 };
-window._emailForUid = function (uid) { var p = uid && window._userProfileCache[uid]; return (p && p.email) || ''; };
+/* ⛔ `_emailForUid` REMOVIDA (13/set/2026). Ela lia o `email` do cache de perfis, e o cache
+ * deixou de ter e-mail quando a hidratação passou a ler o espelho público. Varredura do
+ * repositório inteiro na hora da remoção: ZERO chamadas — só menções em comentário. Manter
+ * a função devolvendo '' calado seria pior que não tê-la: quem a chamasse acharia que a
+ * pessoa não tem e-mail. Quem precisa de e-mail de alguém usa `loadUserProfile`. */
 window._phoneForUid = function (uid) { var p = uid && window._userProfileCache[uid]; return (p && p.phone) || ''; };
 window._genderForUid = function (uid) { var p = uid && window._userProfileCache[uid]; return (p && p.gender) || ''; };
 window._birthForUid = function (uid) { var p = uid && window._userProfileCache[uid]; return (p && p.birthDate) || ''; };
@@ -9242,7 +9264,7 @@ window._haversineKm = function(lat1, lon1, lat2, lon2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
 
-// ─── v2.3.52: badges de perfil do participante (gênero · nível · faixa etária) ──
+// ─── v2.3.62: badges de perfil do participante (gênero · nível · faixa etária) ──
 // ── "EU ESTOU INSCRITO?" — A PERGUNTA QUE O ORGANIZADOR MAIS RECEBE ──────────────
 // Pedido do dono (02/ago/2026): _"nessa lista, vamos colocar o card do usuário no topo
 // absoluto, acima até dos organizadores. assim eles param de perguntar ao organizador se
