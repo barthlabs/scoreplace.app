@@ -1,3 +1,4 @@
+// 2.2.95 — quem cai numa rodada passa a ocupar as ÚLTIMAS posições, e só quando a rodada fecha.
 // 2.2.94 — salvar o mesmo link do grupo de WhatsApp não avisa todo mundo de novo.
 // 2.2.93 — o link de redefinir senha vale uma vez só, de verdade.
 // 2.2.92 — o limite de tentativas de login deixa de se desligar sozinho sob ataque.

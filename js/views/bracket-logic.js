@@ -2529,6 +2529,14 @@ function _updateProgressiveClassification(t) {
   // se R for a última aparição dele (maxRound==R). Sem isso, um repescado AINDA VIVO
   // (perdeu o round 0 mas está nas semis) ganhava posição no bloco do round 0 →
   // estourava o total (25º numa linha de 24) e dava posição a quem não foi eliminado.
+  function _nomeDeGente(nm) {
+    if (!nm) return false;
+    var s = String(nm).trim();
+    if (!s || s === 'TBD' || s === 'BYE') return false;
+    if (/^\s*bye/i.test(s) || /a definir/i.test(s)) return false;
+    return true;
+  }
+
   var maxRoundByName = {};
   allMatches.forEach(function(m) {
     if (!m || m.bracket === 'lower' || m.bracket === 'grand') return;
@@ -2540,6 +2548,94 @@ function _updateProgressiveClassification(t) {
   });
   function _advancedPast(name, roundNum) {
     return maxRoundByName[name] !== undefined && maxRoundByName[name] > roundNum;
+  }
+
+  /* ⛔ QUEM CAI NÃO GANHA AS PRIMEIRAS POSIÇÕES — GANHA AS ÚLTIMAS.
+   *
+   * Relato do dono (12/set/2026, Confra BT Alta da Clínica, Ouro, 36 duplas na rodada):
+   * _"não tem como com 36 duplas na r2 ter do 9º ao 5º definido com algumas derrotas.
+   * primeiro que seria 36º"_.
+   *
+   * MEDIDO no documento real (tour_1780009816637, fase 2 remontada do banco): a linha Ouro
+   * tem 36 duplas e 18 jogos na 1ª rodada, dos quais 5 tinham vencedor. A função devolvia
+   * exatamente 5 posições — 5º, 6º, 7º, 8º e 9º — para os cinco eliminados. A Prata, com
+   * 34 duplas, devolvia a mesma coisa.
+   *
+   * CAUSA: o contador de posições (`_runPos`) começava em 3 (ou 5, havendo disputa de 3º) e
+   * andava da FINAL para trás. Como final, semis e quartas ainda não têm vencedor, nada era
+   * atribuído lá e o contador NÃO ANDAVA — então a primeira rodada com resultado pegava as
+   * posições logo abaixo do pódio. A conta só fechava com o torneio TERMINADO, quando todas
+   * as rodadas contribuem.
+   *
+   * REGRA NOVA, do dono: posição de eliminado se conta DO FIM, e só vale quando a rodada
+   * FECHOU — porque a repescagem acontece no fim da rodada, e antes disso não se sabe quem
+   * de fato caiu. Enquanto uma rodada estiver aberta, ninguém dela (nem de nenhuma rodada
+   * acima) recebe colocação: ainda pode melhorar. */
+  var _totalDaLinha = (function () {
+    var set = {};
+    allMatches.forEach(function (m) {
+      if (!m || m.bracket === 'lower' || m.bracket === 'grand') return;
+      [m.p1, m.p2].forEach(function (nm) {
+        if (!_nomeDeGente(nm)) return;
+        set[String(nm)] = 1;
+      });
+    });
+    return Object.keys(set).length;
+  })();
+
+  /* A rodada FECHOU? Todo jogo dela tem vencedor. BYE e folga não contam como pendência;
+   * lado ainda "a definir" conta — a rodada nem começou por inteiro. */
+  function _rodadaFechada(roundNum) {
+    var ms = allMatches.filter(function (m) {
+      return m && m.round === roundNum && m.bracket !== 'lower' && m.bracket !== 'grand' && !m.isThirdPlace;
+    });
+    if (!ms.length) return false;
+    for (var i = 0; i < ms.length; i++) {
+      var m = ms[i];
+      if (m.isBye || m.isSitOut) continue;
+      if (!_nomeDeGente(m.p1) || !_nomeDeGente(m.p2)) {
+        // um lado é BYE ⇒ jogo resolvido sozinho; um lado é TBD ⇒ rodada incompleta
+        if (/^\s*bye/i.test(String(m.p1 || '')) || /^\s*bye/i.test(String(m.p2 || ''))) continue;
+        return false;
+      }
+      if (!m.winner || m.winner === 'draw') return false;
+    }
+    return true;
+  }
+
+  /* ⛔ FECHAR A RODADA NÃO BASTA — A REPESCAGEM TEM DE ESTAR SORTEADA.
+   *
+   * Correção do dono (12/set/2026): _"na rodada 3 temos repescagens da r2 e isso impede de
+   * sabermos quem ficou em 36º antes de todos os jogos da rodada 2 terminarem e rodarmos o
+   * critério de desempate"_ · _"temos que esperar o fim de cada rodada para saber quem não
+   * pode mais melhorar seu resultado e aí definir as posições ali com base nos critérios"_.
+   *
+   * MEDIDO na Confra (linha Ouro, tour_1780009816637): a rodada seguinte tem SETE jogos com
+   * `isRepechageSlot`, `p1FromRepechage` e `p2FromRepechage`, com os dois lados em "TBD" —
+   * ou seja, CATORZE dos dezoito perdedores daquela rodada voltam. Fechar a rodada e carimbar
+   * os dezoito como eliminados poria em 19º–36º gente que continua no torneio.
+   *
+   * ⭐ MAS NÃO SE ESPERA O SORTEIO — correção do dono: _"ao final da r2, quem não for
+   * repescado não tem como melhorar seu resultado, ANTES MESMO do sorteio da repescagem: os
+   * repescados serão definidos por performance"_. Fechado o último placar da rodada, os
+   * critérios de desempate ordenam TODOS os perdedores; os melhores ocupam as vagas e os que
+   * sobram são os que de fato perderam a chance — e aí _"o pior perdedor da r2 é o 36º na
+   * Ouro ou o 34º na Prata, e daí vai subindo"_.
+   *
+   * Esta função conta as vagas que AINDA ESTÃO ABERTAS, e é isso que se desconta. Quando o
+   * sorteio já aconteceu, os repescados aparecem na rodada seguinte e `_advancedPast` já os
+   * tirou da lista — a conta dá o mesmo número dos dois lados. */
+  function _vagasDeRepescagemAbertas(roundNum) {
+    var seguintes = allMatches.filter(function (m) {
+      return m && m.round === roundNum + 1 && m.bracket !== 'lower' && m.bracket !== 'grand' &&
+             (m.isRepechageSlot || m.p1FromRepechage || m.p2FromRepechage);
+    });
+    var abertas = 0;
+    seguintes.forEach(function (m) {
+      if ((m.p1FromRepechage || m.isRepechageSlot) && !_nomeDeGente(m.p1)) abertas++;
+      if ((m.p2FromRepechage || m.isRepechageSlot) && !_nomeDeGente(m.p2)) abertas++;
+    });
+    return abertas;
   }
 
   // Helper: get loser's score and winner's score from a match
@@ -2595,6 +2691,7 @@ function _updateProgressiveClassification(t) {
   // overwrites the canonical final position (e.g. final loser landing at pos 9
   // instead of pos 2 when they also appear in a stale R1 match).
   var positionGroups = []; // [{posStart, losers: [{name, stats, history}]}]
+  var _blocosDeBaixo = []; // [{round, losers}] — posicionados DO FIM, depois do laço
   var placed = {}; // name -> true: already assigned a definitive position
 
   // Record 3rd place match winner/loser up-front so semi/earlier rounds skip them.
@@ -2689,8 +2786,9 @@ function _updateProgressiveClassification(t) {
       }
     } else {
       // Collect all losers in this round for tiebreaking.
-      // v1.3.79: posStart = próxima posição livre (contador corrido), NÃO 2^roundFromEnd+1 (pow2).
-      var posStart = _runPos;
+      // ⚠️ O `var posStart = _runPos` que morava aqui SAIU: era ele que dava 5º/6º/7º a quem
+      // caiu na 1ª rodada de uma linha de 36. Estes blocos agora se ancoram no FIM da linha,
+      // logo depois deste laço.
       // v3.1.29: DEDUP por nome dentro do round. Na resolução PLAY-IN/REPESCAGEM, o
       // round 0 tem o jogo normal (isPhaseRepR1) E o jogo de repescagem (isPhaseRepGame).
       // Um derrotado da R1 que é repescado pra disputar a repescagem e PERDE de novo
@@ -2710,9 +2808,12 @@ function _updateProgressiveClassification(t) {
       var losers = Object.keys(_losersByName).map(function(k) { return _losersByName[k]; });
 
       if (losers.length > 0) {
-        positionGroups.push({ posStart: posStart, losers: losers });
+        // ⛔ NÃO recebe posição aqui. A colocação destes blocos se conta DO FIM da linha e só
+        // depois que a rodada fechou — resolvido no passo abaixo, com as rodadas em ordem
+        // cronológica. `placed` continua sendo marcado agora, que é o que impede a mesma
+        // pessoa de ser contada duas vezes.
+        _blocosDeBaixo.push({ round: roundNum, losers: losers });
         losers.forEach(function(e) { placed[e.name] = true; });
-        _runPos += losers.length;
       }
     }
   });
@@ -2760,14 +2861,20 @@ function _updateProgressiveClassification(t) {
       tiebreaksWon: 0, tiebreaksLost: 0, played: 0, winRate: 0
     };
   }
-  positionGroups.forEach(function(group) {
+  /* MELHOR → PIOR entre os que caíram na mesma rodada, pelos critérios do organizador NA
+   * ORDEM configurada. Ordem do dono (12/set/2026): _"para definir quem é o melhor perdedor
+   * e quem é o pior tem que aplicar os critérios de desempate na ordem"_. É a MESMA cadeia
+   * que ordena as tabelas do torneio — não há segunda régua. */
+  function _ordenaEliminados(losers) {
     if (_cmpElim && _tbElim) {
       var _opts = { tiebreakers: _tbElim, ordem: _ordElim, birth: _birthElim };
-      group.losers.forEach(function (e) { e._linha = _linhaDoEliminado(e); });
-      group.losers.sort(function (a, b) { return _cmpElim(a._linha, b._linha, _opts); });
-    } else group.losers.sort(function(a, b) {
-      // Sem configuração de desempate: a cadeia histórica (performance no jogo que eliminou,
-      // depois no torneio). Mantida como está — é o que os torneios sem config já produziam.
+      losers.forEach(function (e) { e._linha = _linhaDoEliminado(e); });
+      losers.sort(function (a, b) { return _cmpElim(a._linha, b._linha, _opts); });
+      return losers;
+    }
+    // Sem configuração de desempate: a cadeia histórica (performance no jogo que eliminou,
+    // depois no torneio). Mantida como está — é o que os torneios sem config já produziam.
+    losers.sort(function (a, b) {
       if (a.stats.scoreDiff !== b.stats.scoreDiff) return b.stats.scoreDiff - a.stats.scoreDiff;
       if (a.stats.setsWon !== b.stats.setsWon) return b.stats.setsWon - a.stats.setsWon;
       if (a.stats.gamesDiff !== b.stats.gamesDiff) return b.stats.gamesDiff - a.stats.gamesDiff;
@@ -2776,6 +2883,32 @@ function _updateProgressiveClassification(t) {
       if (a.history.wins !== b.history.wins) return b.history.wins - a.history.wins;
       return a.name.localeCompare(b.name);
     });
+    return losers;
+  }
+
+  /* ── AS POSIÇÕES DE BAIXO, ANCORADAS NO TOTAL DA LINHA ──────────────────────
+   * Da rodada MAIS ANTIGA para a mais nova. Para cada rodada FECHADA:
+   *   ① ordena TODOS os perdedores dela pelos critérios, na ordem;
+   *   ② tira da conta os MELHORES, tantos quantas forem as vagas de repescagem ainda
+   *      abertas — esses ainda podem melhorar, e não recebem posição;
+   *   ③ os que sobram ocupam as ÚLTIMAS posições livres da linha: o pior de todos fica com
+   *      o último lugar (36º na Ouro, 34º na Prata) e vai subindo.
+   * ⛔ PARA na primeira rodada que ainda não fechou — dali pra cima ninguém tem posição. */
+  _blocosDeBaixo.sort(function (a, b) { return a.round - b.round; });
+  var _piso = _totalDaLinha;
+  for (var _bi = 0; _bi < _blocosDeBaixo.length; _bi++) {
+    var _bloco = _blocosDeBaixo[_bi];
+    if (!_rodadaFechada(_bloco.round)) break;
+    var _ordenados = _ordenaEliminados(_bloco.losers);
+    var _vagas = _vagasDeRepescagemAbertas(_bloco.round);
+    var _caidos = (_vagas > 0) ? _ordenados.slice(_vagas) : _ordenados;
+    if (!_caidos.length) continue;
+    positionGroups.push({ posStart: _piso - _caidos.length + 1, losers: _caidos, _jaOrdenado: true });
+    _piso -= _caidos.length;
+  }
+
+  positionGroups.forEach(function(group) {
+    if (!group._jaOrdenado) _ordenaEliminados(group.losers);
 
     group.losers.forEach(function(entry, idx) {
       t.classification[entry.name] = group.posStart + idx;

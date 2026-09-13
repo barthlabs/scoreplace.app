@@ -1,3 +1,17 @@
+## 2.2.95 — 12/set/2026
+
+A classificação parcial da fase eliminatória estava colocando quem perde nas PRIMEIRAS posições.
+
+Na Confra, com 36 duplas na chave Ouro, cinco jogos decididos faziam a tela anunciar "5 definidos"
+e listar essas cinco duplas em 5º, 6º, 7º, 8º e 9º lugar. Quem cai numa rodada inicial não disputa
+o 5º lugar: disputa o fim da tabela. A chave Prata, com 34 duplas, tinha o mesmo defeito.
+
+Agora a colocação de quem cai se conta do FIM da chave, e só aparece quando a rodada inteira
+termina — antes disso ninguém tem posição, porque ainda dá para melhorar. Fechado o último placar
+da rodada, os critérios de desempate do torneio ordenam todos os perdedores daquela rodada: os de
+melhor desempenho ocupam as vagas de repescagem e seguem na disputa; os que sobram são os que
+perderam a chance, e recebem os últimos lugares — o pior deles fica com o último lugar da chave.
+
 ## 2.2.94 — 12/set/2026
 
 Quando alguém cria o grupo de WhatsApp de um jogo ou do torneio, todo mundo é avisado — no app,
