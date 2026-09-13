@@ -63,13 +63,20 @@ must(/Array\.isArray\(t\.arbitros\)/.test(BRACKET) && /a\.uid/.test(BRACKET),
   '③ ⭐ a chave confere quem pode apitar pelo `uid` — tirar o e-mail não tira poder de ninguém');
 
 // ── ④ o que SOBRA de `users` aqui é o achado aberto, e é UM ────────────────
+/* ⭐ 13/set/2026 — O ACHADO DA LISTA FOI CONSERTADO, não só anotado.
+ * MEDIDO: 0 de 279 perfis têm `refereeSports`. Com esporte a consulta já voltava vazia; SEM
+ * esporte ela caía no `.limit(80)` e listava 80 pessoas QUAISQUER como "árbitros
+ * disponíveis" — lista falsa — baixando a ficha inteira das 80, com `preferredLocations`,
+ * que são coordenadas. Exigir a marca SEMPRE tira a lista falsa e o download no mesmo gesto. */
 const fichas = (codigo.match(/collection\('users'\)/g) || []).length;
-must(fichas === 1,
-  '④ resta ' + fichas + ' leitura de `users`: a LISTA de árbitros disponíveis, achado aberto e anotado');
-must(/refereeSports/.test(codigo),
-  '④ e ela é a consulta por `refereeSports` — 0 de 279 perfis têm a marca hoje');
-must(/ACHADO NÃO CONSERTADO NESTA LEVA/.test(SRC) && /preferredLocations/.test(SRC),
-  '④ ⭐ o achado está ESCRITO no código, com a medida e o motivo de não ter sido mexido');
+must(fichas === 2,
+  '④ as ' + fichas + ' leituras de `users` restantes são as duas pontas da MESMA lista de árbitros');
+must(/where\('refereeSports', 'array-contains', sport\)/.test(codigo),
+  '④ com esporte, filtra pela modalidade');
+must(/orderBy\('refereeSports'\)/.test(codigo),
+  '④ ⭐⭐ SEM esporte, ainda exige a MARCA (`orderBy` só devolve quem TEM o campo) — antes listava 80 pessoas quaisquer');
+must(!/db\.collection\('users'\);\s*\n\s*if \(sport\)/.test(codigo),
+  '④ ⛔ e a coleção crua sem filtro não existe mais neste caminho');
 
 // ── ⑤ CONTROLE: o portão tem dentes ───────────────────────────────────────
 const comEmail = entry.replace('uid:', "email:     u.email || '',\n          uid:");

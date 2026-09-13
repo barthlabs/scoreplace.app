@@ -192,22 +192,19 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
           else invitedUids[a.uid] = a;
         });
 
-        /* ⚠️ ACHADO NÃO CONSERTADO NESTA LEVA, PORQUE É DECISÃO DE PRODUTO — e está aqui
-         * escrito para não se perder. MEDIDO em 13/set/2026: **0 de 279 perfis** têm
-         * `refereeSports`. Com esporte, esta consulta devolve VAZIO (a tela diz que não há
-         * árbitro). SEM esporte, ela cai no `.limit(80)` abaixo e lista **80 pessoas
-         * quaisquer** como "árbitros disponíveis" — baixando a ficha INTEIRA das 80, o que
-         * inclui `preferredLocations`, que são COORDENADAS de onde a pessoa joga.
-         * ⛔ Não dá para mover isto para o espelho sem duas decisões que não são minhas:
-         * se `refereeSports` entra nele, e se coordenada de jogador pode entrar — e
-         * coordenada é o tipo de campo que este espelho existe para NÃO carregar.
-         * ⭐ O conserto provável é a tela exigir a marca de árbitro (sem marca, ninguém é
-         * listado): tira a lista falsa E o download de uma vez. Falta o dono decidir. */
-        var refQuery = db.collection('users');
-        if (sport) {
-          refQuery = refQuery.where('refereeSports', 'array-contains', sport);
-        }
-        // If no sport, just limit results
+        /* ⛔ SEM A MARCA DE ÁRBITRO, NINGUÉM É LISTADO — e isto conserta duas coisas de uma vez.
+         * MEDIDO em 13/set/2026: **0 de 279 perfis** têm `refereeSports`. Com esporte, a
+         * consulta já voltava vazia; SEM esporte ela caía no `.limit(80)` e listava **80
+         * pessoas quaisquer** como "árbitros disponíveis" — uma lista FALSA — baixando a
+         * ficha INTEIRA das 80, o que inclui `preferredLocations`, que são COORDENADAS de
+         * onde a pessoa joga.
+         * ⭐ Exigir a marca sempre tira a lista falsa E o download no mesmo gesto. A tela
+         * passa a dizer honestamente que não há árbitro cadastrado, que é o estado real.
+         * ⚠️ Sem esporte definido o torneio não filtra por modalidade, mas ainda exige a
+         * marca: `orderBy(refereeSports)` devolve só quem TEM o campo. */
+        var refQuery = sport
+          ? db.collection('users').where('refereeSports', 'array-contains', sport)
+          : db.collection('users').orderBy('refereeSports');   // só quem TEM a marca
         return refQuery.limit(80).get().then(function(snap) {
           var available = [];
           snap.forEach(function(d) {
