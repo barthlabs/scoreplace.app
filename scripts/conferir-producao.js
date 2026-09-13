@@ -83,7 +83,8 @@ const conta = (rotulo, n, total, detalhe) => {
   });
   Object.keys(vivos).forEach((u) => { if (!temEsp[u]) semEspelho++; });
   conta('perfis SEM espelho', semEspelho, usuarios.size);
-  conta('espelhos que NÃO batem com a regra', divergente, espelhos.size);
+  conta('espelhos que NÃO batem com a regra', divergente, espelhos.size,
+    divergente ? '(se a regra mudou hoje, é semeadura pendente — rode a semeadura)' : '');
   conta('espelhos com campo VETADO (e-mail/telefone/token)', vazou, espelhos.size);
   conta('espelhos ÓRFÃOS (pessoa não existe mais)', orfao, espelhos.size);
 
@@ -167,6 +168,75 @@ const conta = (rotulo, n, total, detalhe) => {
   }
   conta('avisos de placar SEM nome de gente', genericos, avisos,
     'amostra de ' + amostra.length + ' caixas');
+
+  /* ── ⑥ JOGO E ESPELHO DO JOGO: o placar que a tela mostra é o mesmo? ────── */
+  console.log('\n── jogos e seus espelhos');
+  let comJogos = 0, jogoSemEspelho = 0, divergem = 0, orfaos = 0;
+  for (const d of torneios.docs) {
+    const t = d.data() || {};
+    const fora = Array.isArray(t._semPesados) ? t._semPesados : [];
+    if (fora.indexOf('matches') === -1) continue;
+    const [jogos, espelho] = await Promise.all([
+      d.ref.collection('matches').get(), d.ref.collection('results').get(),
+    ]);
+    if (!jogos.size) continue;
+    comJogos++;
+    const porId = {};
+    espelho.forEach((r) => { porId[r.id] = r.data() || {}; });
+    /* ⚠️ A CHAVE É O ID DO DOCUMENTO, não um campo dentro dele — e o campo se chama `jogo`,
+     * não `item` (`item` é a forma do elenco). Minha primeira versão procurou `item.id`,
+     * não achou, e acusou 281 "espelhos órfãos" que não existiam. Conferidor que erra a
+     * chave inventa problema, que é o oposto do que ele existe para fazer. */
+    const vistos = {};
+    jogos.forEach((j) => {
+      const d0 = j.data() || {};
+      const m = d0.jogo || d0.item || d0;
+      vistos[j.id] = 1;
+      if (m && m.id) vistos[String(m.id)] = 1;
+      if (!m) return;
+      const temPlacar = m.winner || m.scoreP1 != null || (Array.isArray(m.sets) && m.sets.length);
+      if (!temPlacar) return;
+      const r = porId[j.id] || porId[String(m.id || '')];
+      if (!r) { jogoSemEspelho++; return; }
+      if (String(r.winner || '') !== String(m.winner || '')) divergem++;
+    });
+    espelho.forEach((r) => { if (!vistos[r.id]) orfaos++; });
+  }
+  conta('jogos com placar SEM espelho', jogoSemEspelho, null, comJogos + ' torneios com jogos fora do doc');
+  conta('espelhos que DIVERGEM do jogo', divergem);
+  conta('espelhos ÓRFÃOS (jogo não existe mais)', orfaos);
+
+  /* ── ⑦ AVISO SEM DONO: quem mandou não dá para saber ────────────────────── */
+  console.log('\n── autoria dos avisos (amostra)');
+  let total = 0, semAutor = 0, autorMorto = 0;
+  for (const u of usuarios.docs.slice(0, 60)) {
+    const ns = await u.ref.collection('notifications').limit(25).get();
+    ns.forEach((n) => {
+      const v = n.data() || {};
+      total++;
+      const f = String(v.fromUid || '');
+      if (!f) { semAutor++; return; }
+      if (f !== 'system' && !vivos[f]) autorMorto++;
+    });
+  }
+  conta('avisos SEM quem mandou', semAutor, total);
+  conta('avisos de conta que não existe mais', autorMorto, total);
+
+  /* ── ⑧ CONTA DUPLICADA: mesma pessoa, dois cadastros vivos ──────────────── */
+  console.log('\n── contas duplicadas');
+  const porEmail = {}, porTel = {};
+  usuarios.forEach((d) => {
+    const v = d.data() || {};
+    if (v.mergedInto) return;                       // lápide não conta
+    const e = String(v.email || '').toLowerCase().trim();
+    const t2 = String(v.phone || '').replace(/\D/g, '');
+    if (e) (porEmail[e] = porEmail[e] || []).push(d.id);
+    if (t2.length >= 10) (porTel[t2] = porTel[t2] || []).push(d.id);
+  });
+  const dupE = Object.keys(porEmail).filter((k) => porEmail[k].length > 1);
+  const dupT = Object.keys(porTel).filter((k) => porTel[k].length > 1);
+  conta('mesmo e-mail em duas contas VIVAS', dupE.length);
+  conta('mesmo telefone em duas contas VIVAS', dupT.length);
 
   /* ── veredito ───────────────────────────────────────────────────────────── */
   console.log('\n════════════════════════════════════════');
