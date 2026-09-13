@@ -77,6 +77,25 @@ num deles produz um "achado" que não existe. [[feedback_busca_truncada_nao_e_bu
   contra os 49: **resolveria 1**. Custo sem retorno, e afrouxaria a regra *"fuso não se
   adivinha"*. O que destrava é o evento declarar fuso ou local.
 
+## 📦 A LISTA DO DIA DA VERSÃO NATIVA
+
+Ordem do dono (13/set/2026): _"deixaremos apenas os nativos para fazer imediatamente antes de
+subir nova versao nativa"_. Tudo abaixo está PRONTO para ser feito e só espera esse dia —
+não porque falte trabalho, mas porque o aplicativo instalado nas lojas roda pacote embarcado
+sem atualização automática, e cortar antes quebraria quem já está lá.
+
+| o que fazer no dia | por que espera | medida que justifica |
+|---|---|---|
+| fechar a Rule de `users` | o pacote instalado lê a ficha inteira | 279 perfis, 94 campos, hoje legíveis por qualquer pessoa logada |
+| fechar a Rule de `linkedEmails` | idem | esperando o Google aprovar a versão em análise |
+| tirar o formato antigo de categorias | **ZERO** torneios usam (censo L9), mas o pacote instalado ainda CRIA nesse formato | 0 de 61 hoje; o app da loja escreve os mesmos 4 campos que o atual |
+| teste de atualização e navegação offline | só se prova em aparelho | — |
+
+⭐ **Medir antes, sempre.** O formato antigo de categorias parecia removível: zero torneios.
+Só que o pacote das lojas ainda o CRIA — tirar o leitor hoje quebraria o torneio de quem
+criasse pelo app instalado. A medida que decide não é "quantos existem", é "quem ainda
+escreve".
+
 ## ⛔ O QUE A SUÍTE NÃO PEGA — e o instrumento que faltava
 
 Relato do dono (13/set/2026): _"esses testes nao servem pra nada, depois de concluidos todos
