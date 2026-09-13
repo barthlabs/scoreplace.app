@@ -159,8 +159,14 @@ function ladoLeitura() {
   ok(w._lzCuraImport(impOk) === impOk, 'LEITURA · import sem defeito passa pela mesma referência');
 
   // os DOIS pontos de entrada aplicam a cura — um só deixaria metade das telas mentindo
-  ok(/this\.currentUser\.letzplayImport = window\._lzCuraImport\(profile\.letzplayImport\)/.test(store),
+  /* ⚠️ 13/set/2026 — o import passou a vir de `users/{uid}/letzplay/import` (ele chega a
+   * 499 KB e o perfil é lido inteiro em todo login), então a carga virou assíncrona e o
+   * argumento da cura deixou de ser `profile.letzplayImport`. O que este portão guarda
+   * continua igual: o import que ENTRA no `currentUser` passa pela cura. */
+  ok(/_self\.currentUser\.letzplayImport = window\._lzCuraImport\(imp\)/.test(store),
      'ENTRADA · o doc resumo é curado ao carregar o perfil');
+  ok(/carregarLetzplayImport\(uid, profile\)/.test(store),
+     'ENTRADA · e ele vem do documento próprio, com o perfil já lido como queda da migração');
   const hist = read('js/views/letzplay-history-write.js');
   ok(/_lzCuraMatchCanon\(m\)/.test(hist),
      'ENTRADA · a leitura canônica cura cada partida');

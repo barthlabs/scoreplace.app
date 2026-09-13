@@ -172,7 +172,10 @@ const torneio = {
   // não há doc por tid pra apagar quando um torneio é purgado. Some junto com a conta:
   // a exclusão de conta enumera as subcoleções por `listCollections()` (index.js ~6275),
   // então não precisa de lista.
-  const semTorneio = ['templates', 'trophies', 'milestones', 'phoneVerifyAttempts'];
+  /* ⭐ `letzplay` entrou em 13/set/2026 e a decisão é a mesma destas: NÃO tem doc por
+   * torneio, então o purge de torneio não a toca. Some com a CONTA, pelo
+   * `listCollections()` da exclusão de conta — que enumera, não lê lista. */
+  const semTorneio = ['templates', 'trophies', 'milestones', 'phoneVerifyAttempts', 'letzplay'];
   const conhecidas = USER_SUBCOLLECTIONS_BY_TOURNAMENT.concat(semTorneio);
   const novas = subs.filter((s) => !conhecidas.includes(s));
 
