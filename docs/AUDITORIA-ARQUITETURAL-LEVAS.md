@@ -2063,6 +2063,26 @@ a da janela. ⏳ **Dívida aberta:** enquanto os eventos não declararem fuso (o
 coordenada — medido: `venueLat`/`venueLon` são **nulos nos 44**), o sorteio agendado fica
 inativo para eles. O caminho MANUAL não é afetado. Nenhum dado foi alterado por esta leva.
 
+*⭐ REMEDIDO EM 13/set/2026, rodando `resolverFuso` REAL contra os 61 torneios e os 279
+perfis.* A dívida **está dormente, e a saída óbvia não compensa**:
+
+| | |
+|---|---|
+| torneios sem fuso determinável | **49 de 61** (48 ainda abertos ou em andamento) |
+| fuso resolvido | 9 por local do evento · 2 pela cidade do organizador · 1 por coordenada |
+| torneios com QUALQUER sinal de sorteio automático | **1** — e ele **não** está entre os 49 |
+| ⇒ torneios hoje impedidos de sortear sozinhos | **ZERO** |
+
+⛔ **E a proposta natural foi MEDIDA E RECUSADA.** O achado (E) da L6.R2.P0 diz que
+`preferredLocations` e `preferredCeps` do organizador "continuam sem leitor", e o leitor
+natural seria exatamente este: mais um degrau no passo (c), usando as coordenadas dos locais
+onde o organizador joga. Simulado contra os 49: **resolveria 1**; pelo rótulo textual desses
+locais, **0**. Os outros 48 têm organizador sem local, sem CEP e sem cidade — não há sinal
+nenhum de onde enriquecer. Escrever um degrau a mais na resolução de fuso para alcançar 1 em
+49 é custo sem retorno, e ainda afrouxaria a regra ⛔ *"fuso não se adivinha"* que rege este
+módulo. **Fica registrado como decidido, não como pendente** — o que destrava isto é o evento
+declarar o fuso ou o local, não mais inferência.
+
 **L6.R1.1 — a trava de slot passou a ter prova REAL, no emulador (31/ago/2026). Só teste;
 nada de produto, versão ou publicação.**
 
