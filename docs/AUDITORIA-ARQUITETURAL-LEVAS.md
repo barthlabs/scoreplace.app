@@ -1033,19 +1033,37 @@ absorvida, e `_userVivo` é a porta que atravessa — as 2 colisões de `linkedP
 exatamente isso. (c) Nome/e-mail/telefone de terceiro vêm sempre do perfil vivo, nunca de
 campo gravado (`js/store.js:766-773`).
 
-*PROBLEMA ABERTO (evidência nova).* (a) **`emailVerifyCodes` guarda o e-mail em claro**
-(`functions/index.js:2144`) e os 4 documentos existentes estão expirados e não são apagados.
-(b) `emailVerifications`, `emailVerifyCodes` e `mergeTokens` acumulam expirados —
-27 documentos hoje, sem varredura. (c) `preferredCeps` existe em **dois tipos** no mesmo
-campo. (d) `fcmToken` e `preferredCeps` são legíveis por qualquer autenticado **sem nenhum
-leitor cliente que precise deles**. (e) ⛔ **`magicLinks` tem `allow read: if true` numa
-regra de documento curinga.** Em Rules do Firestore, `read` cobre `get` **e** `list`; para
-liberar só o acesso por token seria preciso `allow get`, e o projeto **não usa `allow get` em
-lugar nenhum** (conferido no arquivo inteiro). O documento guarda `firebaseLink` — o link
-assinado de entrada — e o `email`. ⚠️ Fato aqui é o **texto da regra**; que uma listagem
-retorne documentos **não foi testado** e não será. (f) `pendingEmailVerifications` guarda
-`email` e `name` e **não tem bloco nas Rules** (server-only por default-deny, como
-`mergeTokens`).
+*⭐ RETIFICADO EM 13/set/2026 — QUATRO DOS SEIS JÁ NÃO DESCREVEM A PRODUÇÃO.* Medido de
+novo, coleção a coleção, com a conta de serviço:
+
+| item | escrito então | medido em 13/set/2026 |
+|---|---|---|
+| (a) `emailVerifyCodes` com 4 expirados sem apagar | aberto | ✅ **0 documentos** — a varredura `cleanupOldMagicLinks` apaga as provas de posse vencidas |
+| (b) 27 efêmeros acumulados sem varredura | aberto | ✅ **0** em `emailVerifications`, `emailVerifyCodes`, `mergeTokens`, `pendingEmailVerifications` e `magicLinks` |
+| (e) `magicLinks` com `allow read` (cobre `list`) | aberto | ✅ **fechado na L4.P4**: hoje é `allow get: if true` + `allow list: if false` + `allow write: if false`, com portão estático (`check-magiclinks-get-only.js`, que anda o disco por causa dos bundles ignorados) e teste de emulador |
+| (c) `preferredCeps` em **dois tipos** | aberto | ⚠️ **confirmado e CONSERTADO hoje** — ver abaixo |
+| (d) `fcmToken`/`preferredCeps` legíveis por qualquer autenticado | aberto | ⛔ **SEGUE ABERTO** (42 perfis com `fcmToken`) — depende de fechar a Rule de `users`, que depende de versão nativa |
+| (f) `pendingEmailVerifications` sem bloco nas Rules | aberto | ⚠️ **é o estado SEGURO, não um furo**: sem regra, o SDK cliente é negado por padrão (medido na L6: 403). Só o Admin SDK escreve |
+
+⚠️ A frase *"o projeto não usa `allow get` em lugar nenhum"* deixou de ser verdade no mesmo
+dia em que virou o conserto — e é o tipo de afirmação que envelhece sem avisar.
+
+*⛔ (c) ERA MAIS FUNDO DO QUE "DOIS TIPOS", E A MEDIDA MOSTROU A CADEIA INTEIRA.*
+**42 perfis com STRING** (o que o editor de perfil grava) e **3 com ARRAY — os três VAZIOS**.
+Os três vazios têm assinatura: a fusão de contas fazia `unionArr(novo, velho)`, e `unionArr`
+começa com `Array.isArray(a) ? a.slice() : []` — contra uma string devolve `[]`. Conferido
+rodando a função original: `unionArr("04533-010,01310-000", undefined) === []`. **A fusão
+apagava os CEPs da pessoa e trocava o tipo do campo.**
+E o tipo trocado matava o aviso, em silêncio: `_checkNearbyTournaments` fazia
+`(cu.preferredCeps || '').split(',')`, e `[].split` não existe — TypeError na primeira linha
+útil, a função inteira morria. Das 3 contas com array, **2 estão vivas** (a terceira é
+lápide), e essas 2 **pararam de receber "tem torneio perto de você"**. O outro leitor errava
+para o lado oposto: o gate de "já usou o app" testava `Array.isArray`, então a evidência dos
+42 perfis com string nunca contava.
+⭐ **Conserto:** regra única (`functions/ceps-core.js` + `window._cepsDoPerfil`) que aceita as
+duas formas, e a fusão passa a unir sem destruir. ⚠️ Escolher um tipo e migrar NÃO fecharia —
+quem grava é o editor, e ele grava string; enquanto o leitor não aceitar as duas formas, a
+próxima gravação recria tudo. Por isso **não foi preciso escrever em produção**.
 
 *HIPÓTESE PENDENTE — agora com data.* A L4.P0 supôs que o app das lojas estivesse rodando o
 fluxo pré-L1 contra Rules pós-L1. O dado mostra que, até **31/ago ~04:38Z**
@@ -1160,12 +1178,20 @@ server-only são deny-all completo, inclusive as duas que dependem só do defaul
 cross-user é negado (403) — a fronteira que a L4.P0/P1 descreveu está confirmada nos dois
 sentidos.
 
-*PROBLEMA ABERTO (evidência nova desta etapa).* (a) **`magicLinks` é enumerável por anônimo**
-(`list` e `runQuery` = 200), e cada documento carrega o link assinado de entrada e um e-mail.
-Deixa de ser hipótese. (b) **`users` é enumerável por qualquer autenticado** (`list` e
-`runQuery` = 200) — a L4.P0 tinha registrado a leitura do documento inteiro; agora está claro
-que também não há barreira para varrer a coleção. (c) A caixa de notificações de qualquer
-pessoa aceita depósito de qualquer autenticado.
+*⭐ RETIFICADO EM 13/set/2026 — DOIS DOS TRÊS ESTÃO FECHADOS.*
+(a) ✅ **`magicLinks` NÃO é mais enumerável.** A regra virou `allow get: if true` +
+`allow list: if false` + `allow write: if false` (L4.P4), travada por portão estático nos três
+clientes e por teste de emulador. E a coleção está **vazia** hoje (a varredura agendada
+funciona), então nem havia o que enumerar.
+(c) ✅ **A caixa de avisos não aceita mais depósito anônimo de autoria.** Desde a 2.3.0 a
+regra exige `request.resource.data.fromUid == request.auth.uid`: ninguém escreve aviso na
+caixa de outra pessoa assinando como terceiro ou como `system`. Travado em
+`tests/rules-aviso-so-em-nome-proprio.test.js`, que roda a falsificação contra as rules REAIS
+no emulador **e** contra a árvore anterior, onde ela tem de passar.
+(b) ⛔ **SEGUE ABERTO:** `users` continua enumerável por qualquer autenticado. É a Rule que
+depende de versão nativa nas lojas. ⚠️ Mas o que o APP baixa mudou muito desde então — ver a
+retificação da L4.P5: a chave, os inscritos, o sorteio, as fotos, os troféus, o ranking, a
+ficha pública e o contador de jogadores leem o espelho, não a ficha.
 
 *HIPÓTESE PENDENTE.* Que alguém já tenha enumerado qualquer uma das duas coleções. **Não
 medido e não mensurável por este caminho** — exigiria log de acesso do Firestore, que não foi
