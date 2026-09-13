@@ -324,14 +324,19 @@ window._openPlayerProfile = function(playerName, opts) {
 
   // ── buscar perfil ──
   if (!db) { _build(null, uid); return; }
+  /* ⭐ A ficha PÚBLICA de um jogador lê `displayName`, `photoURL`, `city`,
+   * `preferredSports` e `skillBySport` — e os cinco estão no espelho (`city` entrou em
+   * 13/set/2026 justamente porque 98 de 279 perfis a têm e tirá-la da tela seria regressão
+   * real). Nada aqui precisa de e-mail nem telefone. [[project_email_no_doc_publico]] */
+  var _colPub = window._COLECAO_PERFIL_PUBLICO || 'usersPublic';
   if (uid) {
-    db.collection('users').doc(uid).get()
-      .then(function(doc) { return window._userVivo(doc); })   // uid guardado pode ser LÁPIDE
+    db.collection(_colPub).doc(uid).get()
+      .then(function(doc) { return window._userVivo(doc, { publico: true }); })   // uid guardado pode ser LÁPIDE
       .then(function(v) { _build(v ? v.data : null, v ? v.uid : uid); })
       .catch(function() { _build(null, uid); });
   } else {
-    db.collection('users').where('displayName', '==', playerName).limit(1).get()
-      .then(function(snap) { return window._userVivo(snap); })   // lápide guarda o mesmo nome
+    db.collection(_colPub).where('displayName', '==', playerName).limit(1).get()
+      .then(function(snap) { return window._userVivo(snap, { publico: true }); })   // lápide guarda o mesmo nome
       .then(function(v) { _build(v ? v.data : null, v ? v.uid : ''); })
       .catch(function() { _build(null, ''); });
   }
@@ -981,6 +986,16 @@ window._showPlayerStats = function(playerName, currentTournamentId) {
     if (!_lpIsCurUser && resolvedUid && window.FirestoreDB) {
         var _tpDb = window.FirestoreDB.db || (window.FirestoreDB.ensureDb && window.FirestoreDB.ensureDb());
         if (_tpDb) {
+            /* ⚠️ ACHADO ABERTO, ANOTADO, NÃO CONSERTADO AQUI — e é gordo.
+             * Esta leitura fica em `users` porque quer `letzplayImport`, que é a partida a
+             * partida importada e NÃO cabe no espelho: MEDIDO em 13/set/2026, 18 dos 279
+             * perfis têm import, somando 2.292 jogos, e o MAIOR ocupa **499 KB dentro do
+             * documento de perfil**. Ou seja, abrir a ficha de um desses jogadores baixa
+             * meio megabyte de histórico junto — e qualquer leitura de ficha inteira desses
+             * 18 perfis paga isso, não só esta tela.
+             * ⛔ Pôr isso no espelho seria pior, não melhor: o espelho é lido em LOTE pela
+             * chave e pela busca. A forma certa é o import virar documento/subcoleção
+             * própria, carregada só quando alguém pede — migração, não troca de coleção. */
             _tpDb.collection('users').doc(resolvedUid).get().then(function(doc) {
                 var d = doc.exists ? (doc.data() || {}) : null;
                 if (!d || !d.letzplayImport || !Array.isArray(d.letzplayImport.games) || !d.letzplayImport.games.length) return;

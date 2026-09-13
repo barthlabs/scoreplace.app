@@ -208,7 +208,12 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     // Fetch in batches of 10
     for (var i = 0; i < friendUids.length; i += 10) {
       var batch = friendUids.slice(i, i + 10);
-      var refs = batch.map(function(uid) { return db.collection('users').doc(uid); });
+      /* ⛔ ESTE ERA O MAIOR DESTA TELA: até 20 fichas INTEIRAS por abertura, para ler
+       * `displayName` e `_trophyIds`. A tela de comparar troféus existe para mostrar os
+       * troféus do amigo — e agora os lê do espelho. */
+      var refs = batch.map(function(uid) {
+        return db.collection(window._COLECAO_PERFIL_PUBLICO || 'usersPublic').doc(uid);
+      });
       try {
         var snaps = db.getAll
           ? await db.getAll.apply(db, refs)
@@ -216,7 +221,10 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         snaps.forEach(function(snap) {
           if (!snap.exists) return;
           var data = snap.data() || {};
-          var name = data.displayName || data.email || snap.id;
+          /* ⛔ `data.email` SAIU da queda. Ela transformava o e-mail de um amigo em NOME na
+           * tela — e o espelho não tem e-mail, então a queda nunca acertaria: só mascararia
+           * a ausência. Sem nome, o uid é o rótulo honesto. */
+          var name = data.displayName || snap.id;
           var trophyIds = Array.isArray(data._trophyIds) ? data._trophyIds : [];
           var friendSet = {};
           trophyIds.forEach(function(id) { friendSet[id] = true; });

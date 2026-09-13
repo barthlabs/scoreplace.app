@@ -1140,7 +1140,9 @@
     var db = _db();
     if (!db) return Promise.resolve([]);
 
-    return db.collection('users')
+    /* ⭐ Ranking entre amigos: lê `_rankStats`, `xpSnapshot`, `displayName` e `photoURL` —
+     * contador de jogo e identidade visual, nada de contato. Os quatro estão no espelho. */
+    return db.collection(window._COLECAO_PERFIL_PUBLICO || 'usersPublic')
       .where(firebase.firestore.FieldPath.documentId(), 'in', uids)
       .get()
       .then(function(snap) {

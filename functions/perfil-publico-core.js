@@ -52,6 +52,15 @@ const CAMPOS_PUBLICOS = [
    * ⛔ SE O DONO DISCORDAR DE QUALQUER UM: tirar é apagar a linha e re-semear; o espelho é
    * derivado, nada se perde. [[project_email_no_doc_publico]] */
   'city', '_trophyIds', 'letzplayHandle',
+  /* ⚠️ E MAIS DOIS, achados SEGUINDO O LEITOR em vez de adivinhando: o ranking entre amigos
+   * ("quem jogou mais", "quem fez mais check-in") lê `_rankStats` e `xpSnapshot`, e sem eles
+   * ele baixaria a ficha inteira dos amigos para somar contador de jogo.
+   *   • `_rankStats` (275 de 279) — objeto com QUATRO chaves, todas contador:
+   *     casualMatchesPlayed, checkinsTotal, tournamentWins, tournamentsEnrolled.
+   *   • `xpSnapshot` (0 de 279) — ninguém tem hoje. Entra assim mesmo: incluir um número que
+   *     ninguém tem custa zero, e DEIXAR DE FORA cria armadilha — no dia em que alguém
+   *     começar a escrevê-lo, o ranking leria `undefined` e mostraria zero, sem erro nenhum. */
+  '_rankStats', 'xpSnapshot',
 ];
 
 /* ⛔ A LISTA DE VETO existe só para o PORTÃO cobrar, não para filtrar: filtrar por veto é o

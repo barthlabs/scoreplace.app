@@ -737,10 +737,14 @@ window._loadLetzplayNameCache = async function (handles) {
   for (var i = 0; i < want.length; i += 10) {
     var batch = want.slice(i, i + 10);
     try {
-      var snap = await db.collection('users').where('letzplayHandle', 'in', batch).get();
+      /* ⭐ ESPELHO: esta resolução usa `letzplayHandle`, `displayName` e `photoURL` — os
+       * três estão no espelho (`letzplayHandle` entrou em 13/set/2026: é um @ público de
+       * outra plataforma, por natureza, e 26 dos 279 perfis o têm). */
+      var snap = await db.collection(window._COLECAO_PERFIL_PUBLICO || 'usersPublic')
+        .where('letzplayHandle', 'in', batch).get();
       // A lápide carrega o MESMO letzplayHandle do sobrevivente — resolver doc a doc pela
       // porta única evita cachear o @ apontando pra conta morta.
-      var vivos = await window._userVivo(snap);
+      var vivos = await window._userVivo(snap, { publico: true });
       ((vivos && vivos.docs) || []).forEach(function (e) {
         var d = e.data || {};
         if (d.letzplayHandle) {
