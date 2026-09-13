@@ -7738,7 +7738,14 @@ exports.mergePhoneAccount = onCall(
       { email: newEmail, linkedEmails: surv.linkedEmails }, oldEmailRaw, null);
     if (_linkPhone.linkedEmails) surv.linkedEmails = _linkPhone.linkedEmails;
     surv.preferredSports = unionArr(newData.preferredSports, oldData.preferredSports);
-    surv.preferredCeps = unionArr(newData.preferredCeps, oldData.preferredCeps);
+    /* ⛔ `unionArr` DESTRUÍA ESTE CAMPO. Ele começa com `Array.isArray(a) ? a.slice() : []`,
+     * e `preferredCeps` é gravado como STRING pelo editor de perfil — conferido:
+     * `unionArr("04533-010,01310-000", undefined)` devolve `[]`. Ou seja, fundir contas
+     * apagava os CEPs da pessoa E trocava o tipo do campo, e o tipo trocado depois matava
+     * `_checkNearbyTournaments` com TypeError. MEDIDO em 13/set/2026: 42 perfis com string,
+     * 3 com array — os três VAZIOS, que é a assinatura exata deste apagamento.
+     * A união agora passa pela regra única, que aceita as duas formas. */
+    surv.preferredCeps = _cepsCore.unirCeps(newData.preferredCeps, oldData.preferredCeps);
     surv.preferredLocations = unionLocations(newData.preferredLocations, oldData.preferredLocations);
     surv.skillBySport = Object.assign({}, oldData.skillBySport || {}, newData.skillBySport || {});
     // matchHistory (campo-array legado): união por matchId
@@ -8936,6 +8943,7 @@ function _discoverySummary(t) {
  * loja. [[project_travar_as_rules_em_9_setembro]]
  */
 const _perfilPublico = require("./perfil-publico-core.js");
+const _cepsCore = require("./ceps-core.js");
 
 exports.espelhoDoPerfilPublico = onDocumentWritten(
   { document: "users/{uid}", region: "us-central1", memory: "256MiB", timeoutSeconds: 120 },

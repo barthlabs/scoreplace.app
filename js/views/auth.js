@@ -5707,7 +5707,9 @@ async function simulateLoginSuccess(user) {
       (Array.isArray(_profile.friends) && _profile.friends.length > 0) ||
       (Array.isArray(_profile.preferredSports) && _profile.preferredSports.length > 0) ||
       (Array.isArray(_profile.preferredLocations) && _profile.preferredLocations.length > 0) ||
-      (Array.isArray(_profile.preferredCeps) && _profile.preferredCeps.length > 0) ||
+      // ⛔ era `Array.isArray(...)`, e 42 dos 45 perfis com CEP guardam STRING: a evidência
+      // existia e não contava. A regra única lê as duas formas.
+      window._cepsDoPerfil(_profile.preferredCeps).length > 0 ||
       (Array.isArray(_profile.matchHistory) && _profile.matchHistory.length > 0) ||
       _profile.letzplayHandle ||
       _profile.plan

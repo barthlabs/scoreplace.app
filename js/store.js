@@ -6874,6 +6874,34 @@ window._normalizePhoneE164 = function(phone, cc) {
 // _formatPhoneDisplay which expects DDD+number without DDI.
 // E.g., '+5511997237733' + cc='55' → '11997237733'
 //       '11997237733'               → '11997237733'
+/* OS CEPs PREFERIDOS DE UM PERFIL — a MESMA regra que `functions/ceps-core.js`.
+ *
+ * ⛔ O campo tem DUAS FORMAS VIVAS em produção (medido em 13/set/2026: 42 perfis com STRING,
+ * 3 com ARRAY), e cada leitor escolhia uma:
+ *   • `_checkNearbyTournaments` fazia `(cu.preferredCeps || '').split(',')` — e `[].split`
+ *     não existe. TypeError na primeira linha útil, a função inteira morria, e as 2 contas
+ *     vivas com array pararam de receber "tem torneio perto de você" SEM ERRO VISÍVEL.
+ *   • o gate de "usuário que já usou o app" fazia `Array.isArray(...) && length > 0` — para
+ *     os 42 perfis com string a evidência simplesmente não contava.
+ * Um campo, dois leitores, duas suposições opostas, e as duas erradas em metade da base.
+ *
+ * ⚠️ ESCOLHER UM TIPO E MIGRAR NÃO FECHARIA: quem grava é o editor de perfil, e ele grava
+ * string. Enquanto o leitor não aceitar as duas formas, a próxima gravação recria o defeito.
+ * [[feedback_unify_dual_entry_points]] */
+window._cepsDoPerfil = function (valor) {
+  var bruto = [];
+  if (Array.isArray(valor)) bruto = valor;
+  else if (typeof valor === 'string') bruto = valor.split(',');
+  else if (valor !== null && valor !== undefined) bruto = [valor];
+  var fora = [];
+  for (var i = 0; i < bruto.length; i++) {
+    var d = String(bruto[i] === null || bruto[i] === undefined ? '' : bruto[i]).replace(/\D/g, '');
+    // ⚠️ 5 dígitos é o CEP antigo sem sufixo; menos que isso não localiza nada.
+    if (d.length >= 5 && fora.indexOf(d) === -1) fora.push(d);
+  }
+  return fora;
+};
+
 window._phoneLocalDigits = function(phone, cc) {
   if (!phone) return '';
   var d = String(phone).replace(/\D/g, '');

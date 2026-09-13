@@ -710,7 +710,11 @@ window._checkNearbyTournaments = async function() {
 
     // Location-based matching (primary) + legacy CEP matching (fallback)
     var userLocs = Array.isArray(cu.preferredLocations) ? cu.preferredLocations : [];
-    var userCeps = (cu.preferredCeps || '').split(',').map(function(c) { return c.trim().replace(/\D/g, ''); }).filter(function(c) { return c.length >= 5; });
+    /* ⛔ ERA `(cu.preferredCeps || '').split(',')` — e o campo tem duas formas vivas. Num
+     * ARRAY, `[].split` não existe: TypeError aqui matava esta função INTEIRA, então as 2
+     * contas vivas nesse estado nunca mais receberam "tem torneio perto de você", sem erro
+     * visível para ninguém. A regra única aceita as duas formas. */
+    var userCeps = window._cepsDoPerfil(cu.preferredCeps);
     if (userLocs.length === 0 && userCeps.length === 0) return;
 
     var NEARBY_RADIUS_KM = 15; // notify if tournament is within 15km
