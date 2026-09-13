@@ -1,3 +1,4 @@
+// 2.3.1 — o ícone do atalho enche o espaço: o pódio sobe e cresce sem ser cortado.
 // 2.3.0 — o aviso passa a carregar a identidade conferida de quem mandou.
 // 2.2.99 — o aviso de "vou jogar" passa a dizer o dia certo, com a data.
 // 2.2.98 — a raridade dos troféus volta a aparecer, e com o número certo.

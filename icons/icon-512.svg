@@ -20,7 +20,21 @@
        bronze) são os pontos mais distantes do centro — raio 204,6 de 256. ⛔ Em 1,26 eles ENCOSTAM na borda do recorte circular que o atalho aplica; 1,25 leva o raio a 248,6 e
        deixa ~7px de folga. Não subir sem refazer essa conta.
        ⚠️ O ícone das LOJAS (AppIcon) NÃO sai daqui — lá a margem larga é exigida por elas. -->
-  <g transform="translate(256,256) scale(1.25) translate(-256,-256)">
+  <!--
+    2.3.1 — O PÓDIO SOBE PARA PODER CRESCER.
+    Relato do dono (13/set/2026, print do atalho ao lado de instagram e youtube):
+    _"o nosso icone continua ridiculamente pequeno aqui"_ — e ele estava certo, mesmo
+    depois do conserto anterior. MEDIDO no PNG que o navegador serve: o pódio ocupava
+    68% da largura. O `scale(1.25)` de então já era o TETO, porque os pontos extremos
+    são os cantos de BAIXO das barras laterais, na diagonal — a 204,6 de um raio de 256.
+    ⭐ A saída foi do dono: _"subindo um pouco o conjunto para que corte nada"_. Subir
+    aproxima esses cantos do centro e libera escala. MEDIDO: subindo 42px cabe
+    `scale(1.432)`; o pódio passa a ocupar 78% e o ponto mais distante fica em 255,6 de
+    256 — ZERO pixel fora do círculo, conferido no pixel do PNG, não na conta do SVG.
+    ⚠️ O portão antigo media o SVG e só o CABEÇALHO do PNG; por isso deu verde com a
+    tela errada. Agora mede o desenho dentro do PNG. [[feedback_unify_dual_entry_points]]
+  -->
+  <g transform="translate(256,214.00) scale(1.432) translate(-256,-256)">
     <!-- Pódio: prata (2º), ouro (1º), bronze (3º) -->
     <rect x="117" y="267" width="85" height="139" rx="13" fill="#CBD5E1"/>
     <rect x="213" y="181" width="86" height="225" rx="13" fill="#F59E0B"/>

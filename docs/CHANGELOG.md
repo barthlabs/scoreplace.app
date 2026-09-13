@@ -1,3 +1,14 @@
+## 2.3.1 — 13/set/2026
+
+O ícone do atalho aparecia pequeno demais ao lado dos outros aplicativos. O conserto anterior
+tinha sido feito no lugar certo, mas não era suficiente: o desenho já estava no limite de
+aumento que cabia dentro do recorte redondo, porque os pontos que encostam primeiro na borda
+são os cantos de baixo do pódio, na diagonal.
+
+A saída foi subir o conjunto. Subindo, esses cantos se afastam da borda e o pódio pode crescer:
+ele passa a ocupar 78% do espaço em vez de 68% — quase um terço a mais de área — sem que um
+único ponto saia do círculo.
+
 ## 2.3.0 — 13/set/2026
 
 Cada aviso guarda quem o mandou. Esse campo aceitava, como alternativa, o e-mail da pessoa —
