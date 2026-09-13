@@ -1,3 +1,16 @@
+## 2.2.98 — 13/set/2026
+
+Na tela de troféus, cada conquista mostra quantos por cento das pessoas a têm. Esse número
+aparecia como 0% em todos os troféus, para todo mundo — o app não tinha permissão de ler a
+estatística, e a falha era engolida em silêncio.
+
+E o número guardado também estava errado. Ele era mantido somando de um em um, a partir de
+três lugares diferentes que não se falavam, e cada soma perdida nunca era recuperada: 15 dos
+17 troféus divergiam da contagem real, um deles marcando quase o dobro.
+
+Agora a contagem é refeita do zero a partir dos troféus que existem de verdade, pelo servidor,
+e a tela pode lê-la. Refazer a conta dá sempre o mesmo resultado — somar, não dava.
+
 ## 2.2.97 — 12/set/2026
 
 O aviso de placar chegava marcado como "Fundamental" para todo mundo, inclusive para quem

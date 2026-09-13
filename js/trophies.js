@@ -460,17 +460,14 @@
 
   window._loadTrophyStats = _loadTrophyStats;
 
-  // ─── Incrementar contador global de um troféu ────────────────────────────
-  function _incrementTrophyStat(trophyId) {
-    var db = _db();
-    if (!db) return;
-    try {
-      db.collection('_meta').doc('trophyStats').set({
-        counts: { [trophyId]: firebase.firestore.FieldValue.increment(1) },
-        totalUsers: firebase.firestore.FieldValue.increment(0) // não muda, só garante existência
-      }, { merge: true }).catch(function() {});
-    } catch(e) {}
-  }
+  /* ⛔ O INCREMENTO DAQUI MORREU — ELE NUNCA FUNCIONOU.
+   * `_incrementTrophyStat` escrevia em `_meta/trophyStats`, e `_meta` não tinha regra no
+   * firestore.rules: sem regra é NEGADO (medido em 12/set/2026 — 403). O `.catch` mudo
+   * escondia a recusa, então parecia que o contador global era mantido pelo navegador.
+   * Não era — e o contador derivou: 15 dos 17 ids divergiam da contagem real, com
+   * `perfil_foto` marcando 297 contra 149 troféus de verdade.
+   * ⭐ Agora quem mantém o número é o SERVIDOR, e por RECONTAGEM (`_recontarTrofeus`), que
+   * é certa por construção: rodar duas vezes dá o mesmo resultado. Somar, não era. */
 
   // ─── Carregar troféus do usuário ─────────────────────────────────────────
   window._loadUserTrophies = function(uid) {
@@ -600,8 +597,8 @@
           _cache.trophies[uid][trophyId] = payload;
           delete _pendingAwards[lockKey];
 
-          // Incrementa contador global
-          _incrementTrophyStat(trophyId);
+          // ⛔ O incremento do contador global saiu daqui: era negado pelas rules e falhava
+          // calado. Quem mantém o número agora é o servidor, recontando — ver o bloco acima.
 
           // Verifica troféu de categoria completa (após 300ms para cache estar fresco)
           if (trophy.category && trophyId.indexOf('cat_') !== 0) {

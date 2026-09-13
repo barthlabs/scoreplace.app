@@ -5959,6 +5959,44 @@ async function _computeBackfillStats(db, uid, userData) {
   return stats;
 }
 
+/* ⛔ CONTADOR DE TROFÉU NÃO SE SOMA — SE RECONTA.
+ *
+ * MEDIDO em 12/set/2026, comparando `_meta/trophyStats.counts` com a contagem real de
+ * `collectionGroup('trophies')`: **15 dos 17 ids divergem**. O pior, `perfil_foto`, marcava
+ * **297** contra **149** documentos reais — quase o dobro. A soma de todos: 891 no contador,
+ * **1.007** de verdade.
+ *
+ * POR QUE DERIVOU: era um agregado mantido por INCREMENTO, com três escritores sem
+ * combinação entre si e com a gravação sempre engolida (`.catch(() => {})`):
+ *   ① `backfillAllUserTrophies` — onRequest/onCall, pode ser rodada de novo, e cada rodada
+ *      somava outra vez o que premiou;
+ *   ② `scheduledTrophyCheck` — o agendado, que o Firebase entrega ao menos uma vez;
+ *   ③ `js/trophies.js#_incrementTrophyStat` — no NAVEGADOR. Esta nunca funcionou: `_meta`
+ *      não tem regra no firestore.rules e é negada por padrão (medido: 403). A escrita
+ *      falhava calada desde sempre.
+ * E um incremento perdido não se recupera: na volta seguinte o troféu já existe, ninguém
+ * conta, e o número fica errado para sempre.
+ *
+ * ⭐ A CONTA É DERIVADA — o dono dela são os documentos, não a soma. Recontar 1.007
+ * documentos é barato e é certo por construção: roda duas vezes, dá o mesmo número.
+ * [[feedback_a_defesa_vaza_pela_borda]] */
+async function _recontarTrofeus(db, deOnde) {
+  const contagem = {};
+  const snap = await db.collectionGroup("trophies").get();
+  snap.forEach((d) => { contagem[d.id] = (contagem[d.id] || 0) + 1; });
+  const usersSnap = await db.collection("users").get();
+  const totalUsers = usersSnap.docs.filter((d) => d.data() && d.data().email).length;
+  /* `set` SEM merge no campo `counts`: um id que zerou (troféu revogado, conta apagada) tem
+   * de SUMIR do mapa. Com merge ele ficaria lá para sempre com o valor velho — que é
+   * exatamente o defeito que estamos tirando. */
+  await db.collection("_meta").doc("trophyStats").set(
+    { counts: contagem, totalUsers: Math.max(totalUsers, 1), recontadoEm: new Date().toISOString(), recontadoPor: deOnde },
+    { merge: true }
+  );
+  console.log(`[${deOnde}] contador RECONTADO: ${snap.size} troféus em ${Object.keys(contagem).length} ids · ${totalUsers} perfis`);
+  return { ids: Object.keys(contagem).length, trofeus: snap.size, totalUsers };
+}
+
 exports.backfillAllUserTrophies = onCall(
   {
     region: "us-central1",
@@ -5984,11 +6022,9 @@ exports.backfillAllUserTrophies = onCall(
     const totalUsers = usersSnap.docs.filter((d) => d.data() && d.data().email).length;
     console.log(`[backfill] Starting trophy backfill: ${totalUsers} users with profiles`);
 
-    // Update totalUsers in trophyStats so rarity calculations work
-    await db.collection("_meta").doc("trophyStats").set(
-      { totalUsers: Math.max(totalUsers, 1) },
-      { merge: true }
-    ).catch(() => {});
+    // ⚠️ O `totalUsers` era gravado AQUI, no começo, com a falha engolida. Saiu: quem grava
+    // é a recontagem do fim (`_recontarTrofeus`), junto com os counts, numa escrita só e sem
+    // `.catch` mudo — se ela falhar, a função falha e a gente fica sabendo.
 
     let processed = 0;
     let trophiesAwarded = 0;
@@ -6118,14 +6154,8 @@ exports.backfillAllUserTrophies = onCall(
       }
     }
 
-    // ── 5. Update global trophy counts ────────────────────────────────────────
-    if (Object.keys(trophyCounts).length > 0) {
-      const countsUpdate = {};
-      Object.entries(trophyCounts).forEach(([id, count]) => {
-        countsUpdate["counts." + id] = admin.firestore.FieldValue.increment(count);
-      });
-      await db.collection("_meta").doc("trophyStats").update(countsUpdate).catch(() => {});
-    }
+    // ── 5. O contador global é RECONTADO, não somado — ver `_recontarTrofeus`.
+    await _recontarTrofeus(db, "backfill");
 
     console.log(`[backfill] DONE: processed=${processed} trophiesAwarded=${trophiesAwarded} milestonesAwarded=${milestonesAwarded} errors=${errors}`);
     return { ok: true, processed, trophiesAwarded, milestonesAwarded, errors, trophyCounts };
@@ -6292,14 +6322,8 @@ exports.scheduledTrophyCheck = onSchedule(
       }
     }
 
-    // Update global trophy counts
-    if (Object.keys(trophyCounts).length > 0) {
-      const countsUpdate = {};
-      Object.entries(trophyCounts).forEach(([id, count]) => {
-        countsUpdate["counts." + id] = admin.firestore.FieldValue.increment(count);
-      });
-      await db.collection("_meta").doc("trophyStats").update(countsUpdate).catch(() => {});
-    }
+    // O contador global é RECONTADO, não somado — ver `_recontarTrofeus`.
+    await _recontarTrofeus(db, "scheduledTrophyCheck");
 
     console.log(`[scheduledTrophyCheck] DONE: processed=${processed} trophiesAwarded=${trophiesAwarded} milestonesAwarded=${milestonesAwarded} pushSent=${pushSent} errors=${errors}`);
   }

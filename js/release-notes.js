@@ -1,3 +1,4 @@
+// 2.2.98 — a raridade dos troféus volta a aparecer, e com o número certo.
 // 2.2.97 — aviso de placar: fundamental só para quem joga o jogo.
 // 2.2.96 — abrir o torneio já mostra o seu jogo: o próximo, o último ou o seu card.
 // 2.2.95 — quem cai numa rodada passa a ocupar as ÚLTIMAS posições, e só quando a rodada fecha.

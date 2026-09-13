@@ -163,6 +163,21 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    /* ⛔ A RARIDADE DO TROFÉU ESTAVA NO ESCURO. `_meta` não tinha regra nenhuma, e sem regra
+     * é negado — MEDIDO: 403. A tela de troféus (`js/views/trophies-view.js:455`) calcula
+     * "quantos por cento têm este troféu" a partir de `_meta/trophyStats`, e a leitura sempre
+     * caía no `.catch` que devolve `{counts:{}}`: TODO troféu aparecia com 0%, para todo
+     * mundo, desde sempre. E `js/trophies.js#_incrementTrophyStat` escrevia aqui — também
+     * negado, também calado: escrita morta desde o primeiro dia.
+     * ⭐ Só `get`, e só deste documento: é agregado (contagem por troféu + total de perfis),
+     * não tem PII e não identifica ninguém. `list` continua negado, e ESCRITA é do servidor —
+     * quem grava é `_recontarTrofeus`, pelo Admin SDK, que ignora as rules.
+     * ⚠️ Regra ADITIVA: só concede. Nenhuma versão de app que hoje funciona passa a falhar. */
+    match /_meta/trophyStats {
+      allow get: if true;
+      allow list, write: if false;
+    }
+
     // DEBUG (v1.3.42, TEMPORÁRIO): log do fluxo de sorteio, gravado pelo cliente, pra o
     // desenvolvedor LER direto no Firestore (sem depender de print de tela). Doc por uid.
     // Remover quando o bug do fluxo de sorteio estiver fechado.
