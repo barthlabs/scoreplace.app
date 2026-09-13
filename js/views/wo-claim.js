@@ -252,16 +252,44 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   }
 
   // ─── claims ────────────────────────────────────────────────────────────────────
-  function _claims(t) { if (!Array.isArray(t.woClaims)) t.woClaims = []; return t.woClaims; }
+  /* ⛔ PARTE QUE NÃO CHEGOU NÃO VIRA LISTA VAZIA.
+   * Este acessor fazia `if (!Array.isArray(t.woClaims)) t.woClaims = []` — e é exatamente
+   * a armadilha que o desenho de partes arma. `woClaims` está em `PESADOS`: no dia em que
+   * um torneio o marcar em `_semPesados`, ele passa a morar numa SUBCOLEÇÃO, e um `t` que
+   * ainda não a carregou tem `t.woClaims === undefined`. O acessor então INVENTAVA `[]`, e
+   * a partir daí duas coisas aconteciam em silêncio: toda leitura respondia "não há W.O.
+   * nenhum" e toda gravação salvava a lista vazia POR CIMA do rastro real.
+   * ⭐ Agora ele devolve `null` — "não sei" — e quem chama decide. É a mesma correção que
+   * `_souInscrito` recebeu: ausência de dado é ausência de dado, não é resposta negativa.
+   * ⚠️ Hoje o guarda NUNCA dispara (medido em 13/set/2026: `woClaims` está fora do
+   * documento em ZERO dos 61 torneios). É de propósito: a porta vem ANTES do campo sair.
+   * [[project_porta_unica_de_escrita_cf]] · [[feedback_a_defesa_vaza_pela_borda]] */
+  function _claims(t) {
+    if (!t) return null;
+    if (typeof window._parteFalta === 'function' && window._parteFalta(t, 'woClaims')) return null;
+    if (!Array.isArray(t.woClaims)) t.woClaims = [];
+    return t.woClaims;
+  }
+  /* ⚠️ NÃO EXISTE `_claimsProntos` AQUI DE PROPÓSITO. Escrevi um e apaguei: o rastro de
+   * W.O. não é gravado neste arquivo — ele é gravado por `saveTournament`, junto com o
+   * torneio inteiro. Guardar a escrita aqui seria guardar o lugar errado e deixar os outros
+   * três escritores (wo-log, categorias, sorteio) descobertos. O guarda mora numa porta só,
+   * em `js/firebase-db.js`. Aqui a correção é outra e é de LEITURA: `_claims` devolve
+   * `null` em vez de inventar lista vazia. */
   function _activeClaimFor(t, ctx) {
     var key = _ctxKey(ctx);
-    return _claims(t).find(function (c) {
+    var cs = _claims(t);
+    if (!cs) return null;                      // ⛔ "não sei" — nunca "não tem"
+    return cs.find(function (c) {
       if (c.status !== 'pending' && c.status !== 'disputed') return false;
       if (ctx.scope === 'match') return c.scope === 'match' && String(c.matchId) === String(ctx.matchId);
       return c.scope === 'group' && String(c.roundIndex) === String(ctx.roundIndex) && c.groupName === ctx.groupName;
     }) || null;
   }
-  function _claimById(t, id) { return _claims(t).find(function (c) { return c.id === id; }) || null; }
+  function _claimById(t, id) {
+    var cs = _claims(t);
+    return cs ? (cs.find(function (c) { return c.id === id; }) || null) : null;
+  }
   function _ctxFromClaim(c) {
     if (c.scope === 'match') return { scope: 'match', matchId: c.matchId };
     return { scope: 'group', roundIndex: c.roundIndex, groupName: c.groupName, matchIds: c.matchIds, players: c.players, playerUids: c.playerUids };
@@ -374,7 +402,17 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   window._woOpenClaim = function (tId, ctxKey) {
     var t = _findT(tId); if (!t) return;
     // resolve ctx: claim ativo manda; senão ctx fresco do registro.
-    var claim = _claims(t).find(function (c) {
+    var _cs = _claims(t);
+    /* ⛔ RECUSA EM VOZ ALTA. Abrir o painel de W.O. com a lista ainda a caminho mostraria
+     * "nenhum W.O." e, pior, o próximo salvamento gravaria essa mentira. Melhor não abrir
+     * e dizer por quê — o mesmo caminho que o resto do app usa quando falta parte. */
+    if (!_cs) {
+      if (typeof window.showNotification === 'function') {
+        window.showNotification('Ainda carregando', 'O registro de W.O. deste torneio ainda não chegou. Tente de novo em instantes.', 'info');
+      }
+      return;
+    }
+    var claim = _cs.find(function (c) {
       if (c.status !== 'pending' && c.status !== 'disputed') return false;
       return _ctxKey(_ctxFromClaim(c)) === ctxKey;
     });

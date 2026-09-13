@@ -96,6 +96,7 @@ const SUITES = [
   'tests/convite-de-arbitro-nao-grava-contato.test.js',
   'tests/trofeu-e-ranking-nao-abrem-a-ficha.test.js',
   'tests/cep-preferido-tem-uma-forma-so.test.js',
+  'tests/parte-que-nao-chegou-nao-vira-lista-vazia.test.js',
   'tests/stb-aparece-para-quem-lancou.test.js',
   'tests/espera-e-fora-usam-a-grade-e-a-cor-canonicas.test.js',
   'tests/l16-auditor-nao-mente-quando-nao-consegue-olhar.test.js',

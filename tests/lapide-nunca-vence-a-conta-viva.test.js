@@ -157,7 +157,16 @@ function querySnap(base, uids) {
   // ═══════════════════════════════════════════════════════════════════════════
   const CAMPOS = ['email', 'email_lower', 'phone', 'displayName', 'displayName_lower', 'letzplayHandle'];
   const RE_CAMPO = new RegExp('\\.where\\(\\s*[\'"](' + CAMPOS.join('|') + ')[\'"]');
-  const RE_USERS = /collection\(\s*['"]users['"]\s*\)/;
+  /* ⛔ O ESPELHO PÚBLICO ENTRA NA VARREDURA, E A LIÇÃO É A DO PRÓPRIO PORTÃO.
+   * Em 13/set/2026 várias buscas por identidade saíram de `users` para `usersPublic` (a
+   * frente que tirou a ficha de terceiro do aparelho). Esta varredura só olhava `users` —
+   * então as buscas movidas simplesmente SUMIRAM do radar dela, e o portão caiu de 20+ para
+   * 16 vistos. O número caindo foi o sintoma; o problema era a COBERTURA.
+   * ⚠️ E elas precisam do `_userVivo` exatamente igual: o espelho carrega `mergedInto` de
+   * propósito (é o que impede a lápide de voltar a parecer pessoa na tela). Trocar de
+   * coleção não dispensa atravessar a lápide — dispensaria se o espelho não tivesse o campo,
+   * e ele tem. [[project_user_vivo_porta_unica]] */
+  const RE_USERS = /collection\(\s*(?:['"]users['"]|_col|COL|_colPub|window\._COLECAO_PERFIL_PUBLICO[^)]*)\s*\)/;
   const JANELA = 16;  // linhas depois do início da query em que a porta tem de aparecer
 
   function jsDe(dir, out) {

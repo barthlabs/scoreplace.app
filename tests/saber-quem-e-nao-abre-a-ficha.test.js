@@ -40,7 +40,11 @@ console.log('\n──── saber quem é não abre a ficha ────\n');
 // ── ① perfis por NOME (badges de gênero/nível/idade e o sorteio) ───────────
 const i = STORE.indexOf('var _col = window._COLECAO_PERFIL_PUBLICO');
 must(i > 0, '① o carregador de perfis por nome resolve pelo espelho');
-const bloco = STORE.slice(i, i + 700);
+/* ⚠️ ANCORADO NO FIM DO CONSTRUTO, não numa janela de N caracteres. Escrevi
+ * `slice(i, i + 700)` e o portão-meta `teste-nao-recorta-por-tamanho-fixo` me reprovou com
+ * a razão certa: janela fixa quebra sozinha assim que um comentário empurra a linha para
+ * fora, e teste que falha sem defeito ensina a ignorar teste. */
+const bloco = STORE.slice(i, STORE.indexOf('proms.push(', i));
 must(/collection\(_col\)\.doc\(pr\.uid\)/.test(bloco), '① ⭐ o caminho por uid lê o espelho');
 must(/collection\(_col\)\.where\('displayName', '==', pr\.name\)/.test(bloco),
   '① ⭐ e o caminho por nome também');
@@ -51,11 +55,12 @@ must(!/collection\('users'\)/.test(bloco), '① ⛔ nenhum dos dois toca `users`
 // ── ② a GÊMEA divergente: mesma pergunta, agora uma coleção só ─────────────
 const iAuth = AUTH.indexOf("where('displayName_lower', '==', _nameLower).limit(8)");
 must(iAuth > 0, '② a checagem de conflito de nome no save do perfil existe');
-const antes = AUTH.slice(Math.max(0, iAuth - 300), iAuth);
+// idem: ancorado no início da declaração, não em 300 caracteres para trás.
+const antes = AUTH.slice(AUTH.lastIndexOf('var _nameSnap', iAuth), iAuth);
 must(/_COLECAO_PERFIL_PUBLICO/.test(antes),
   '② ⭐ ela passou a ler o espelho — baixava até 8 fichas para ler `id` e `mergedInto`');
-must(/_COLECAO_PERFIL_PUBLICO/.test(DB.slice(Math.max(0, DB.indexOf("where('displayName_lower', '==', q)") - 300),
-  DB.indexOf("where('displayName_lower', '==', q)"))),
+const _iq = DB.indexOf("where('displayName_lower', '==', q)");
+must(/_COLECAO_PERFIL_PUBLICO/.test(DB.slice(DB.lastIndexOf('var snap', _iq), _iq)),
   '② ⭐ e a gêmea `isDisplayNameTaken` continua no espelho — as duas na MESMA coleção');
 
 // ── ③ transferência de organização: existência e conta viva, nunca campo ───

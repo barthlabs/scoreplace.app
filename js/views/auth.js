@@ -5707,9 +5707,19 @@ async function simulateLoginSuccess(user) {
       (Array.isArray(_profile.friends) && _profile.friends.length > 0) ||
       (Array.isArray(_profile.preferredSports) && _profile.preferredSports.length > 0) ||
       (Array.isArray(_profile.preferredLocations) && _profile.preferredLocations.length > 0) ||
-      // ⛔ era `Array.isArray(...)`, e 42 dos 45 perfis com CEP guardam STRING: a evidência
-      // existia e não contava. A regra única lê as duas formas.
-      window._cepsDoPerfil(_profile.preferredCeps).length > 0 ||
+      /* ⛔ era `Array.isArray(...)`, e 42 dos 45 perfis com CEP guardam STRING: a evidência
+       * existia e não contava. Lê as DUAS formas.
+       * ⚠️ E é inline de propósito, sem chamar `window._cepsDoPerfil`. Este `if` é caminho de
+       * LOGIN e o portão `gate-de-termos-nao-carimba-conta-nova` extrai esta expressão e a
+       * roda como função PURA de `_profile` — chamei o ajudante aqui e o portão me reprovou
+       * com `window is not defined`, o que também é o aviso de que uma dependência global
+       * neste ponto quebraria o gate de termos se ela não tivesse carregado.
+       * ⚠️ NÃO é terceira cópia da regra de CEP: aquela responde "QUAIS CEPs a pessoa tem"
+       * (normaliza dígito, exige 5+); esta responde "a pessoa PREENCHEU o campo", que é
+       * outra pergunta e não precisa de nenhuma das duas coisas. */
+      (typeof _profile.preferredCeps === 'string'
+        ? _profile.preferredCeps.trim().length > 0
+        : (Array.isArray(_profile.preferredCeps) && _profile.preferredCeps.length > 0)) ||
       (Array.isArray(_profile.matchHistory) && _profile.matchHistory.length > 0) ||
       _profile.letzplayHandle ||
       _profile.plan
@@ -9711,14 +9721,17 @@ window._profileHydrateNameConflict = function () {
           && window.FirestoreDB && window.FirestoreDB.db) {
         try {
           var _nameLower = finalName.trim().toLowerCase();
-          // user-vivo:isento — mesma exclusão do isDisplayNameTaken: conflito de nome
-          // IGNORA lápide (conta morta não reserva nome), nunca segue pro sobrevivente.
           /* ⛔ A GÊMEA DISTO JÁ LIA O ESPELHO E ESTA NÃO — mesma pergunta, duas coleções.
            * `FirestoreDB.isDisplayNameTaken` faz a consulta IDÊNTICA (`displayName_lower`,
            * limite 8, ignorando lápide) e passou para `usersPublic` na 2.3.2; esta cópia
            * ficou em `users` e baixava até 8 fichas inteiras para ler `id` e `mergedInto`.
            * É o mesmo padrão que a auditoria já nomeou: a mitigação cobre um caminho e não
-           * o irmão. Os dois campos que a decisão usa estão no espelho. */
+           * o irmão. Os dois campos que a decisão usa estão no espelho.
+           * ⚠️ A marca de isenção abaixo tem de ficar COLADA na consulta: a varredura da
+           * lápide olha 3 linhas acima, e foi exatamente este comentário que a empurrou para
+           * fora do alcance e fez o portão acusar fuga. */
+          // user-vivo:isento — mesma exclusão do isDisplayNameTaken: conflito de nome
+          // IGNORA lápide (conta morta não reserva nome), nunca segue pro sobrevivente.
           var _nameSnap = await window.FirestoreDB.db
             .collection(window._COLECAO_PERFIL_PUBLICO || 'usersPublic')
             .where('displayName_lower', '==', _nameLower).limit(8).get();

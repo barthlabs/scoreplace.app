@@ -1099,7 +1099,24 @@ window.FirestoreDB = {
               }
             }
 
+            /* ⚠️ ESTA REDE LÊ O DOCUMENTO, E POR ISSO ELA TEM PRAZO DE VALIDADE.
+             * Ela existe para não perder um W.O. ou uma enquete que OUTRA pessoa criou
+             * entre a leitura e a gravação: relê `_bancoP[campo]` e recoloca o que tem id
+             * novo. Só que `_bancoP` é o DOCUMENTO — e `woClaims` está em `PESADOS`,
+             * esperando a migração. No dia em que um torneio o marcar em `_semPesados`,
+             * `_bancoP.woClaims` vira `undefined`, o `return` acima dispara, e a rede passa
+             * a não proteger NADA — sem erro, sem log, sem diferença visível.
+             * ⛔ Não conserto aqui porque o conserto é reler a SUBCOLEÇÃO, e isso é a
+             * migração em si. O que dá para fazer hoje é não deixar isso acontecer calado:
+             * se a parte estiver fora do documento, a rede DIZ que saiu do ar. */
             ['woClaims', 'polls'].forEach(function (campo) {
+              if (Array.isArray(cleanData._semPesados) && cleanData._semPesados.indexOf(campo) !== -1) {
+                if (window._warn) {
+                  window._warn('[saveTournament] rede de ' + campo + ' NÃO se aplica em ' + docId +
+                    ': o campo mora fora do documento e esta rede lê o documento.');
+                }
+                return;
+              }
               var _b = _bancoP[campo];
               if (!Array.isArray(_b) || !_b.length) return;
               if (!Array.isArray(cleanData[campo])) cleanData[campo] = [];
@@ -1210,6 +1227,45 @@ window.FirestoreDB = {
      * intacto no pai, mas não entra no reconciliador de partes. O sinal é do objeto
      * em memória e não é enumerável, portanto nunca vira campo persistido. */
     var _fora = Array.isArray(cleanData._semPesados) && !cleanData._syncSandboxSemPartes ? cleanData._semPesados : null;
+
+    /* ⛔⛔ NÃO GRAVAR PARTE QUE NÃO CHEGOU — O GUARDA QUE FALTAVA, E É UM SÓ.
+     *
+     * Quando uma parte mora FORA do documento, ela volta pela subcoleção. Se quem está
+     * gravando ainda não recebeu essa volta, o objeto em memória tem a parte TRUNCADA (ou
+     * vazia) — e `dividir` grava fielmente o que recebeu. Resultado: a subcoleção inteira é
+     * substituída pelo pedaço, sem erro, sem aviso, sem nada na tela.
+     *
+     * ⭐ A MÁQUINA QUE SABE DIZER ISSO JÁ EXISTIA e ninguém a consultava aqui:
+     * `_marcaPartesQueFaltam` compara `_nPartes[x]` (quantos moram fora) com o que o objeto
+     * tem em mãos. Ela alimenta a TELA desde a 2.0.124 — a tarja de "carregando partes" — e
+     * nunca alimentou a GRAVAÇÃO. Rede que cobre o desenho e não cobre a escrita.
+     * [[feedback_rede_que_cobre_o_rerender_nao_cobre_o_primeiro]]
+     *
+     * ⚠️ POR QUE ISTO ENTRA AGORA, ANTES DE PRECISAR. Medido em 13/set/2026: hoje só
+     * `participants`, `matches` e `opponentHistory` estão fora do documento (41 dos 61
+     * torneios), e esses três já têm rede própria. Mas `checkedIn`, `woClaims`, `woLog` e
+     * `categoryNotifications` JÁ ESTÃO em `PESADOS` esperando a migração — e no dia em que
+     * um torneio os marcar, quatro escritores do cliente (wo-claim, wo-log, categorias,
+     * sorteio) passam a poder apagar o rastro de W.O. de um evento inteiro. A porta vem
+     * ANTES do campo sair do documento; é a regra desta frente inteira.
+     * [[project_porta_unica_de_escrita_cf]] · [[project_dividir_exige_todo_escritor_ciente]]
+     *
+     * ⚠️ E ELE RECUSA A GRAVAÇÃO INTEIRA, não "só aquela parte": salvar o resto e deixar a
+     * parte de fora produziria um documento coerente consigo mesmo e MENTIROSO sobre o
+     * torneio — que é pior que não salvar, porque ninguém desconfia. */
+    if (_fora && _fora.length && typeof window._marcaPartesQueFaltam === 'function') {
+      var _sonda = JSON.parse(JSON.stringify(cleanData));
+      if (window._marcaPartesQueFaltam(_sonda)) {
+        var _quais = (_sonda._faltaOQue || []).join(', ');
+        var _erro = new Error('recuso gravar ' + docId + ': parte(s) ainda não carregada(s) — ' + _quais);
+        if (window._captureException) {
+          try { window._captureException(_erro, { area: 'saveTournament', docId: docId, faltam: _quais }); } catch (_e) {}
+        }
+        if (window._error) window._error('[saveTournament] ' + _erro.message);
+        throw _erro;
+      }
+    }
+
     var _sbPartesSave = null;
     if (_fora && _fora.length && window._tSplit && typeof window._tSplit.dividir === 'function') {
       try {

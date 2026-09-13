@@ -101,8 +101,20 @@ must(!/\.split\(','\)/.test(ORG.slice(ORG.indexOf('_checkNearbyTournaments'), OR
   '④ ⛔ e NENHUM `.split` sobrou ali — nem como reserva: reserva é a segunda cópia da regra');
 must(!/typeof window\._cepsDoPerfil === 'function'/.test(ORG) && !/typeof window\._cepsDoPerfil === 'function'/.test(AUTH),
   '④ ⛔ e ninguém guarda uma implementação de reserva — store.js carrega antes dos dois');
-must(/window\._cepsDoPerfil\(_profile\.preferredCeps\)/.test(AUTH),
-  '④ ⭐ o gate de "já usou o app" também — a evidência dos 42 volta a contar');
+/* ⚠️ AQUI A REGRA É LIDA INLINE, E É CERTO QUE SEJA. O gate de termos é caminho de LOGIN, e
+ * o portão `gate-de-termos-nao-carimba-conta-nova` extrai essa expressão e a roda como
+ * função PURA de `_profile`. Chamar `window._cepsDoPerfil` ali reprovava com
+ * `window is not defined` — que é também o aviso de que uma dependência global naquele
+ * ponto quebraria o gate de termos se ela não tivesse carregado.
+ * ⛔ E NÃO é terceira cópia da regra: a regra única responde "QUAIS CEPs a pessoa tem"
+ * (normaliza dígito, exige 5+); esta responde "a pessoa PREENCHEU o campo". Perguntas
+ * diferentes — o que este portão trava é que ela leia as DUAS FORMAS, que era o defeito. */
+const iEv = AUTH.indexOf('_hasUsageEvidence');
+const expr = AUTH.slice(iEv, AUTH.indexOf('_profile.plan', iEv));
+must(/typeof _profile\.preferredCeps === 'string'/.test(expr) && /Array\.isArray\(_profile\.preferredCeps\)/.test(expr),
+  '④ ⭐ o gate de "já usou o app" lê as DUAS formas — a evidência dos 42 volta a contar');
+must(!/window\./.test(expr),
+  '④ ⛔ e a expressão continua PURA (sem `window.`) — ela roda no caminho de login');
 must(/_cepsCore\.unirCeps\(newData\.preferredCeps, oldData\.preferredCeps\)/.test(FN),
   '④ ⭐ e a fusão de contas usa a união que não destrói');
 must(!/unionArr\(newData\.preferredCeps/.test(FN),
