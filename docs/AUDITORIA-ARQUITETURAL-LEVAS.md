@@ -5,6 +5,46 @@
 > explícita do arquiteto, com causa-raiz, invariantes, tentativas anteriores e gates
 > relidos antes de editar.
 
+## ⭐ ESTADO DE HOJE — 13/set/2026 (leia ISTO antes do resto)
+
+> ⛔ **O RESTO DESTE DOCUMENTO É UM LOG CRONOLÓGICO, NÃO UM PAINEL.** Cada bloco
+> *"PROBLEMA ABERTO"* descreve o que estava aberto **no dia em que aquele parágrafo foi
+> escrito** — e vários já não descrevem a produção há semanas. Só em 13/set/2026, remedindo
+> com a conta de serviço, **6 de 9 achados que eu conferi já estavam fechados**, e eu gastei
+> três voltas para descobrir isso um a um. Esta seção existe para ninguém mais pagar esse
+> pedágio. Nada aqui é lembrança: cada linha tem a medida do dia.
+
+**Frente da privacidade de perfil — o que ainda está aberto:**
+
+| o que | medida de hoje | o que destrava |
+|---|---|---|
+| `users` legível E enumerável por qualquer autenticado | 279 perfis, 94 campos | fechar a Rule — **depende de versão nativa nas lojas**, que rodam bundle embarcado sem auto-update |
+| `fcmToken` legível sem nenhum leitor cliente que precise dele | 42 de 279 perfis | idem |
+| resolver **e-mail → conta** no cliente | 13 chamadas | o espelho não tem e-mail **de propósito**; sair daqui é capability no servidor, não troca de coleção |
+| Rule de `linkedEmails` | — | esperar o Google aprovar a 2.2.84 |
+
+⭐ **Mas o que o APP BAIXA já mudou, e isso é independente da Rule.** Chave, inscritos,
+sorteio, categorias, fotos, nomes, troféus, ranking, ficha pública, busca, lista de
+convidáveis e o contador de jogadores leem o **espelho público** (`usersPublic`), que não tem
+e-mail nem telefone. Medido em 13/set: espelho com **279 documentos, 0 e-mails, 0 telefones**,
+e 0 divergentes do que a regra manda espelhar.
+
+**Achados medidos e NÃO consertados — cada um espera uma decisão sua:**
+
+| achado | medida | por que não mexi |
+|---|---|---|
+| lista de árbitros disponíveis | **0 de 279** perfis têm `refereeSports`. Com esporte, a consulta volta vazia; **sem esporte, lista 80 pessoas quaisquer** e baixa a ficha inteira das 80 — inclusive `preferredLocations`, que são **coordenadas** | o conserto provável (exigir a marca de árbitro) **muda o produto**, e coordenada de jogador é o tipo de campo que o espelho existe para NÃO carregar |
+| `letzplayImport` dentro do documento de perfil | **18 de 279** perfis · 2.292 jogos · o **maior ocupa 499 KB** | qualquer leitura de ficha inteira desses 18 paga meio megabyte. Pôr no espelho seria PIOR (ele é lido em lote). A saída é o import virar documento próprio — **migração** |
+| peso do documento do torneio (Confra) | **73,6 KB** · `rounds` 22,9 · `history` 14,3 · `woClaims` 6,9 · `checkedIn` 6,2 | a máquina de dividir está PRONTA e ensaiada (73,6 → 50,6 KB), mas é **escrita destrutiva no seu torneio principal** — não rodo sem sua palavra |
+
+**Decidido, não pendente** (medido e recusado, para não ser reaberto):
+
+- **Fuso do sorteio agendado.** 49 de 61 torneios sem fuso determinável, mas só **1** torneio
+  tem sinal de sorteio automático e ele **não** está entre os 49 ⇒ **zero** torneios impedidos
+  hoje. E o enriquecimento óbvio (usar os locais preferidos do organizador) foi simulado
+  contra os 49: **resolveria 1**. Custo sem retorno, e afrouxaria a regra *"fuso não se
+  adivinha"*. O que destrava é o evento declarar fuso ou local.
+
 ## Medição de referência
 
 - A fotografia inicial de 30/ago tinha 3 de 17 levas concluídas; os antigos 17,6% **não medem o estado atual**. A tabela e os registros datados abaixo distinguem entregas, dívidas e bloqueios.
