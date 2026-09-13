@@ -1818,6 +1818,35 @@ exports.healOrphanProfiles = onSchedule(
 // agora magic link segue o mesmo padrão.
 //
 // Deploy:  firebase deploy --only functions:sendMagicLink
+
+/* ⛔ AS TRÊS PORTAS DE E-MAIL DE CONTA ERAM ABERTAS E SEM LIMITE NENHUM.
+ *
+ * MEDIDO em 13/set/2026: `sendMagicLink`, `sendVerificationEmail` e `sendPasswordReset` são
+ * `onCall` **sem `request.auth`** — de propósito, porque quem precisa entrar ainda não entrou
+ * — e recebem o endereço de destino do PAYLOAD DO CLIENTE. Nenhuma delas tinha cooldown,
+ * throttle ou contador: qualquer pessoa na internet podia fazer o NOSSO remetente despejar
+ * mensagem ilimitada em QUALQUER endereço que digitasse.
+ * Só `sendVerificationCode` tinha freio (45 s), e mesmo assim por ler-e-depois-gravar, fora
+ * de transação.
+ *
+ * E não é só abuso teórico: na coleção `mail` há **25 pares** de "Confirme seu e-mail" /
+ * "Redefinir sua senha" para o MESMO endereço a menos de 3 horas, vários no MESMO SEGUNDO —
+ * pedido em duplicata que ninguém barrava.
+ *
+ * ⭐ O limite é por ENDEREÇO DE DESTINO, que é quem sofre: é a caixa dele que enche. Conta
+ * toda tentativa, exista conta ou não — então a recusa NÃO revela se o endereço tem cadastro
+ * (mesma disciplina da L14.P2, em que a FORMA da resposta vazava).
+ * ⚠️ Reusa `_throttleHit`, que desde a L14.P1 trata DISPUTA como batida — sem isso, quanto
+ * mais rápido o ataque, menos ele seria limitado. [[feedback_a_defesa_vaza_pela_borda]] */
+const _TETO_EMAIL_DE_CONTA_POR_MIN = 3;
+
+async function _barraSeAbusar(db, porta, email) {
+  if (await _throttleHit(db, "accountEmailThrottle", porta + ":" + String(email || "").toLowerCase(), _TETO_EMAIL_DE_CONTA_POR_MIN)) {
+    console.warn("[" + porta + "] limite por endereço atingido");
+    throw new HttpsError("resource-exhausted", "muitos pedidos para este e-mail. aguarde um minuto.");
+  }
+}
+
 exports.sendMagicLink = onCall(
   {
     region: "us-central1",
@@ -1830,6 +1859,7 @@ exports.sendMagicLink = onCall(
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       throw new HttpsError("invalid-argument", "email inválido");
     }
+    await _barraSeAbusar(admin.firestore(), "sendMagicLink", email);
 
     // Gera o link assinado oficial do Firebase. O frontend depois usará
     // `signInWithEmailLink(email, link)` pra completar — mesmo flow do
@@ -2122,6 +2152,7 @@ exports.sendVerificationEmail = onCall(
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       throw new HttpsError("invalid-argument", "email inválido");
     }
+    await _barraSeAbusar(admin.firestore(), "sendVerificationEmail", email);
 
     const db = admin.firestore();
     // Tenta gerar o link AGORA (retry ~13,5s cobre a maioria dos soluços).
@@ -2418,6 +2449,8 @@ exports.sendPasswordReset = onCall(
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       throw new HttpsError("invalid-argument", "email inválido");
     }
+
+    await _barraSeAbusar(admin.firestore(), "sendPasswordReset", email);
 
     const db = admin.firestore();
     // v2.6.x: wrapper `?pr=TOKEN` (token no Firestore) em vez do oobCode cru do

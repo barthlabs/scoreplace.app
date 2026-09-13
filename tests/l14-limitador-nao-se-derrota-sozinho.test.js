@@ -29,10 +29,16 @@ must(/console\.error\('\[throttle\] ' \+ coll \+ ': falhou e LIBEROU a chamada:'
 must(/console\.warn\('\[throttle\] ' \+ coll \+ ': disputa no contador/.test(bloco),
   '① e a disputa também aparece, com o nome da coleção');
 
-/* ② os dois chamadores continuam sendo portas de identidade — se alguém acrescentar um
- *    terceiro, que seja com consciência de que o erro agora pode BLOQUEAR. */
+/* ② TODO chamador é porta de identidade, e cada um entra NOMEADO aqui — um chamador novo
+ *    tem de passar por esta linha, que é onde está escrito que o erro agora pode BLOQUEAR.
+ *    ⭐ O terceiro entrou em 13/set/2026: `_barraSeAbusar`, o limite das três portas de
+ *    e-mail de conta (link de acesso, confirmação e redefinição de senha), que eram
+ *    ABERTAS e sem freio nenhum. Ver tests/porta-de-email-de-conta-tem-limite.test.js. */
 const chamadas = (F.match(/_throttleHit\(db, "/g) || []).length;
-must(chamadas === 2, '② são dois chamadores (login por telefone e checagem de conta) — achei ' + chamadas);
+must(chamadas === 3, '② são três chamadores nomeados — achei ' + chamadas);
+must(/_throttleHit\(db, "phoneLoginThrottle"/.test(F), '② ① login por telefone');
+must(/_throttleHit\(db, "checkAccountThrottle"/.test(F), '② ② checagem de conta');
+must(/_throttleHit\(db, "accountEmailThrottle"/.test(F), '② ③ e-mail de conta (`_barraSeAbusar`)');
 must(/_throttleHit\(db, "phoneLoginThrottle", identifier\.toLowerCase\(\), 15\)/.test(F),
   '② login por telefone: 15 por minuto');
 must(/_throttleHit\(db, "checkAccountThrottle", identifier\.toLowerCase\(\), 20\)/.test(F),
