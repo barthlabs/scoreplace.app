@@ -83,6 +83,7 @@ const SUITES = [
   'tests/quem-cai-fica-no-fim-da-chave.test.js',
   'tests/abrir-o-torneio-cai-no-meu-jogo.test.js',
   'tests/nivel-do-aviso-de-placar-e-de-quem-recebe.test.js',
+  'tests/liberar-versao-da-apple-nao-fica-parada.test.js',
   'tests/espera-e-fora-usam-a-grade-e-a-cor-canonicas.test.js',
   'tests/l16-auditor-nao-mente-quando-nao-consegue-olhar.test.js',
   'tests/l16-hidratacao-que-falha-nao-fica-calada.test.js',

@@ -9,6 +9,7 @@
  * Uso:
  *   node scripts/asc.js estado                 → app, versões e a última build
  *   node scripts/asc.js submeter <versao> --apply
+ *   node scripts/asc.js liberar  <versao> --apply   → publica uma versão APROVADA e parada
  */
 'use strict';
 const fs = require('fs');
@@ -69,6 +70,36 @@ if (require.main === module) {
       }
       return;
     }
+    /* ⛔ APROVADA NÃO É PUBLICADA — e não havia verbo pra publicar.
+     * MEDIDO em 12/set/2026: a 2.2.81 passou na revisão e ficou em
+     * `PENDING_DEVELOPER_RELEASE`, invisível pra quem só olha "foi aprovada?". O script
+     * sabia SUBMETER e não sabia LIBERAR, então a última perna era clique manual — sem
+     * rastro, e fácil de ninguém dar. Agora fecha o ciclo.
+     * ⚠️ É a ação mais externa que existe aqui: põe a versão no aparelho de todo mundo.
+     * Exige `--apply` como todo verbo de escrita, e RECUSA se a versão não estiver
+     * exatamente esperando o botão — pra não virar um "libera qualquer coisa". */
+    if (cmd === 'liberar') {
+      const versao = process.argv[3];
+      const APLICAR = process.argv.includes('--apply');
+      if (!versao) { console.error('uso: node scripts/asc.js liberar <versao> --apply'); process.exit(2); }
+      const vs = await api(`/apps/${app.id}/appStoreVersions?limit=20`);
+      const ver = (vs.data || []).find((v) => v.attributes.versionString === versao);
+      if (!ver) { console.error(`✗ versão ${versao} não existe na conta.`); process.exit(1); }
+      const st = ver.attributes.appStoreState;
+      console.log(`versão ${versao} — estado ${st} (release: ${ver.attributes.releaseType})`);
+      if (st !== 'PENDING_DEVELOPER_RELEASE') {
+        console.error(`✗ só libero quem está em PENDING_DEVELOPER_RELEASE. Esta está em ${st}.`);
+        process.exit(1);
+      }
+      if (!APLICAR) { console.log('\n(dry-run — rode com --apply pra PUBLICAR de verdade)\n'); return; }
+      await api('/appStoreVersionReleaseRequests', { method: 'POST', body: { data: {
+        type: 'appStoreVersionReleaseRequests',
+        relationships: { appStoreVersion: { data: { type: 'appStoreVersions', id: ver.id } } },
+      } } });
+      console.log(`\n✅ ${versao} LIBERADA — a Apple começa a distribuir agora.`);
+      return;
+    }
+
     if (cmd === 'submeter') {
       const versao = process.argv[3];
       const APLICAR = process.argv.includes('--apply');
@@ -88,6 +119,28 @@ if (require.main === module) {
         console.log(`versão ${versao} já existe — estado ${ver.attributes.appStoreState}`);
         if (ver.attributes.appStoreState === 'READY_FOR_SALE') {
           console.error('✗ essa versão já está publicada. Use um número novo.'); process.exit(1);
+        }
+        /* ⛔ VERSÃO QUE JÁ EXISTIA FICAVA COM A LIBERAÇÃO DA APPLE, NÃO COM A NOSSA.
+         * MEDIDO em 12/set/2026: a 2.2.81 foi APROVADA e ficou parada em
+         * `PENDING_DEVELOPER_RELEASE` — esperando alguém apertar o botão — enquanto as
+         * versões anteriores estavam todas em `AFTER_APPROVAL`. A causa está aqui: o
+         * `releaseType: 'AFTER_APPROVAL'` só era escrito no ramo que CRIA a versão. Quando
+         * ela já existia (criada pelo upload do Xcode ou pela interface, que nascem MANUAL),
+         * este ramo não mexia no campo — e mesmo assim o script IMPRIMIA no fim
+         * "Liberação: automática após aprovação". Mensagem falsa é pior que mensagem
+         * nenhuma: foi ela que nos fez acreditar que a publicação sairia sozinha.
+         * [[feedback_nao_prometer_no_botao_o_que_nao_se_pode_conferir]] */
+        if (ver.attributes.releaseType !== 'AFTER_APPROVAL') {
+          console.log(`   liberação estava ${ver.attributes.releaseType} — corrigindo para AFTER_APPROVAL`);
+          if (APLICAR) {
+            await api(`/appStoreVersions/${ver.id}`, { method: 'PATCH', body: { data: {
+              type: 'appStoreVersions', id: ver.id, attributes: { releaseType: 'AFTER_APPROVAL' },
+            } } });
+            ver.attributes.releaseType = 'AFTER_APPROVAL';
+            console.log('   ✓ liberação automática após aprovação');
+          } else {
+            console.log('   (corrigiria com --apply)');
+          }
         }
       } else if (!APLICAR) {
         console.log(`(criaria a versão ${versao})`);
@@ -132,7 +185,10 @@ if (require.main === module) {
         type: 'reviewSubmissions', id: rs.id, attributes: { submitted: true },
       } } });
       console.log(`\n✅ ${versao} (build ${build.attributes.version}) SUBMETIDA para revisão da Apple.`);
-      console.log('   Liberação: automática após aprovação (AFTER_APPROVAL).');
+      // ⛔ diz o que É, não o que se espera que seja — ver o comentário longo acima.
+      console.log(`   Liberação: ${ver.attributes.releaseType === 'AFTER_APPROVAL'
+        ? 'automática após aprovação (AFTER_APPROVAL)'
+        : 'MANUAL (' + ver.attributes.releaseType + ') — vai FICAR PARADA esperando o botão'}.`);
       return;
     }
     console.error('comando desconhecido:', cmd);
