@@ -18,6 +18,7 @@
  * [[feedback_never_claim_proven_without_real_verification]]
  */
 const { execFileSync } = require('child_process');
+const { rodarNoEmulador } = require('./emulador');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -38,9 +39,16 @@ const tok = uid => b64({alg:'none',typ:'JWT'}) + '.' + b64({
   firebase:{ identities:{}, sign_in_provider:'google.com' }
 }) + '.';
 const url = p => H + '/v1/projects/' + P + '/databases/(default)/documents/' + p;
+/* ⚠️ \`uid === 'owner'\` usa o bypass de ADMIN do emulador, e existe só para MONTAR o
+ * cenário. A regra de \`create\` de torneio passou a exigir \`_nascidoEm == request.time\`
+ * (leva L7, "confirma criação no servidor") e os setups destes testes criavam o torneio como
+ * usuário — a partir dali eles reprovavam em TUDO, inclusive nas asserções que não têm nada
+ * a ver com criação. MEDIDO em 13/set/2026: 4 das 9 suítes de \`test:rules\` estavam
+ * vermelhas assim, e ninguém via, porque \`test:rules\` NÃO roda no \`npm test\`.
+ * Montar o cenário não é o que estes testes medem; o que eles medem é o \`update\`. */
 async function req(method, p, uid, body) {
   const h = { 'Content-Type': 'application/json' };
-  if (uid) h['Authorization'] = 'Bearer ' + tok(uid);
+  if (uid) h['Authorization'] = (uid === 'owner' ? 'Bearer owner' : 'Bearer ' + tok(uid));
   const r = await fetch(url(p), { method, headers: h, body: body ? JSON.stringify(body) : undefined });
   return r.status;
 }
@@ -66,7 +74,7 @@ const CORPO = { fields: {
     to: { arrayValue: { values: [S(U + '@x.com')] } },
     message: { mapValue: { fields: { subject: S('oi') } } } } });
   // ── DONO DE TORNEIO: cria um torneio e tenta mandar e-mail "do torneio dele" ─
-  out.criaTorneio = await req('PATCH', 'tournaments/t_do_org', ORG, { fields: {
+  out.criaTorneio = await req('PATCH', 'tournaments/t_do_org', 'owner', { fields: {
     creatorUid: S(ORG), name: S('Meu torneio'), isPublic: { booleanValue: true } } });
   out.orgCriaMail = await req('PATCH', 'mail/forjado_org', ORG, CORPO);
   // ── UPDATE e DELETE ────────────────────────────────────────────────────────
@@ -102,7 +110,7 @@ function runAgainst(rulesFile, label) {
     emulators: { firestore: { port: PORT }, ui: { enabled: false }, singleProjectMode: true },
   }));
   fs.writeFileSync(drv, DRIVER);
-  const out = execFileSync('firebase', [
+  const out = rodarNoEmulador([
     'emulators:exec', '--only', 'firestore', '--config', cfg, '--project', PROJECT,
     'node ' + JSON.stringify(drv),
   ], {

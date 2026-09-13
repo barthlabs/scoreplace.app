@@ -15,6 +15,7 @@
  */
 'use strict';
 const { execFileSync } = require('child_process');
+const { rodarNoEmulador } = require('./emulador');
 const fs = require('fs'), path = require('path');
 const ROOT = path.join(__dirname, '..');
 
@@ -301,6 +302,14 @@ const canon=v=>{ if(v===null||typeof v!=='object') return JSON.stringify(v===und
   vm.runInContext(fs2.readFileSync(ROOT2+'/js/firebase-db.js','utf8'), win);
   const FDB=win.FirestoreDB;
   FDB.db=fdb;                       // o compat do app, apontado pro Emulator
+  /* ⛔ SEM ISTO O TESTE NÃO PROVAVA NADA. \`FDB._callFn\` monta a URL de PRODUÇÃO
+   * (\`https://us-central1-<pid>.cloudfunctions.net/...\`) — dentro do emulador essa chamada
+   * nunca chega em lugar nenhum, e o \`await FDB.deleteTournament(...)\` voltava sem ter
+   * apagado, sem erro. A asserção "o sandbox sumiu" ficou vermelha por isso, e não por
+   * defeito do produto... até que ERA defeito do produto também: a CF só olhava
+   * \`tournaments/{id}\`. Aqui a chamada é redirecionada para a callable DO EMULADOR, que é
+   * o que a asserção quer medir: o comportamento da FUNÇÃO, não a montagem da URL. */
+  FDB._callFn=async(nome,payload)=>{ const r=await call(nome)(payload||{}); return r.data; };
   win.AppStore={tournaments:[]};    // ⛔ nada em memória
   delete win._sbIdsConhecidos;      // ⛔ nenhum fato registrado
 
@@ -364,7 +373,7 @@ const drv = path.join(ROOT, 'tests', '.sandbox-cf-driver.tmp.js');
 fs.writeFileSync(drv, DRIVER);
 let saida = '';
 try {
-  saida = execFileSync('firebase', ['emulators:exec', '--only', 'firestore,auth,functions',
+  saida = rodarNoEmulador(['emulators:exec', '--only', 'firestore,auth,functions',
     '--config', path.join(ROOT, 'firebase.sandbox.json'), '--project', 'demo-scoreplace',
     'node ' + JSON.stringify(drv)], {
     cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 * 1024 * 1024,

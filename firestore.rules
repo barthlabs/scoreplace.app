@@ -34,8 +34,43 @@ service cloud.firestore {
     // Keys legitimately touched by the enroll/deenroll transactions when run
     // by a non-admin (i.e. a participant joining or leaving). Anything
     // outside this set requires admin rights.
+    /* ⛔⛔ ESTA REGRA OLHAVA SÓ *QUAIS* CAMPOS MUDARAM — NUNCA QUEM ESCREVE NEM O QUÊ.
+     *
+     * PROVADO NO EMULADOR em 13/set/2026, contra estas Rules, com controles nos dois lados
+     * (anônimo → negado; campo fora da lista → negado, ou seja a sonda valia):
+     *     inscrito apaga OUTRO do elenco ............ PASSOU
+     *     inscrito marca o torneio como 'finished' .. PASSOU
+     *     quem NEM É INSCRITO apaga o elenco todo ... PASSOU
+     * Não é pela tela — o app nunca oferece isso. É escrevendo direto no Firestore com a
+     * credencial da própria sessão. Mas "o app não oferece" nunca foi fronteira.
+     *
+     * ⭐ O CORTE É O MÍNIMO QUE MATA A DESTRUIÇÃO SEM QUEBRAR A INSCRIÇÃO:
+     *   ① NINGUÉM É REMOVIDO de `memberUids` por esta porta — apagar é o que não tem volta,
+     *      e tirar gente do torneio é do organizador (outro ramo) ou da CF;
+     * ⛔ E SÓ ISSO. Tentei exigir também que quem escreve TERMINASSE dentro de `memberUids`
+     * ("você mexe no torneio em que está entrando") e o portão da LISTA DE ESPERA reprovou na
+     * hora: quem entra na espera NÃO vira membro, então a condição negava a própria inscrição
+     * que ela deveria proteger. A condição ① sozinha já mata o que não tem volta — apagar. O
+     * que sobra é acrescentar, que é o que inscrição faz.
+     * ⚠️ Não exijo que o delta seja EXATAMENTE o próprio uid: a inscrição de DUPLA acrescenta
+     * dois uids de uma vez (p1/p2), e a re-gravação da espera pode não mexer no conjunto.
+     * ⛔ E `status` continua na lista porque a inscrição que ATINGE O TETO fecha o torneio
+     * (`status: 'closed'`, js/firebase-db.js) — mas agora só quem está entrando consegue.
+     * [[project_porta_unica_de_escrita_cf]] */
+    function inscricaoNaoRemove() {
+      return request.resource.data.get('memberUids', []).toSet()
+               .hasAll(resource.data.get('memberUids', []).toSet())
+        /* ⛔ E O ELENCO TAMBÉM NÃO ENCOLHE. Só `memberUids` não bastava: a sonda mostrou
+         * que dava para zerar `participants` deixando `memberUids` intacto — e quem some da
+         * lista de inscritos some do torneio. Inscrição ACRESCENTA; tirar alguém é do
+         * organizador (outro ramo) ou da CF de saída. */
+        && request.resource.data.get('participants', []).size()
+             >= resource.data.get('participants', []).size();
+    }
+
     function isEnrollmentOnlyDiff() {
-      return request.resource.data.diff(resource.data).affectedKeys()
+      return inscricaoNaoRemove()
+        && request.resource.data.diff(resource.data).affectedKeys()
         .hasOnly(['participants', 'memberUids', 'status', 'teamOrigins',
           // v2.1.5: inscrição tardia (standby/expand) — um NOVO inscrito que
           // ainda não está em participants escreve a si mesmo na lista de
@@ -94,8 +129,15 @@ service cloud.firestore {
     // _maybeFinishElimination, _closeRound (Suíço/Liga), auto check-in,
     // logAction, sitOutHistory, etc. — paths que podem rodar como side
     // effect quando participante aprova ou lança placar.
+    /* ⛔ E O MESMO CORTE AQUI. Este ramo é o do INSCRITO que faz a chave andar ao lançar
+     * placar — e a lista abaixo inclui `participants`, `memberUids` e `status`. Provado no
+     * emulador em 13/set/2026: um inscrito apagava OUTRO do elenco e marcava o torneio como
+     * 'finished'. Avançar chave não remove ninguém do torneio; tirar gente é do organizador
+     * (outro ramo) ou da CF. */
     function isParticipantBracketDiff() {
-      return request.resource.data.diff(resource.data).affectedKeys()
+      return request.resource.data.get('memberUids', []).toSet()
+               .hasAll(resource.data.get('memberUids', []).toSet())
+        && request.resource.data.diff(resource.data).affectedKeys()
         .hasOnly([
           // Bracket / scoring / aprovação de resultado
           'matches', 'rounds', 'groups', 'rodadas', 'thirdPlaceMatch',

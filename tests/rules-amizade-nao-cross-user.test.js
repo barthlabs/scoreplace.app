@@ -20,6 +20,7 @@
  * Rodado por: npm run test:rules
  */
 const { execFileSync } = require('child_process');
+const { rodarNoEmulador } = require('./emulador');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -125,7 +126,7 @@ function runAgainst(rulesFile, label) {
     emulators: { firestore: { port: PORT }, ui: { enabled: false }, singleProjectMode: true },
   }));
   fs.writeFileSync(drv, DRIVER);
-  const out = execFileSync('firebase', [
+  const out = rodarNoEmulador([
     'emulators:exec', '--only', 'firestore', '--config', cfg, '--project', PROJECT,
     'node ' + JSON.stringify(drv),
   ], {

@@ -23,6 +23,7 @@
  */
 'use strict';
 const { execFileSync } = require('child_process');
+const { rodarNoEmulador } = require('./emulador');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -203,7 +204,7 @@ fs.writeFileSync(drv, DRIVER);
 console.log('──── recuperação da Fase 2 no emulador ────');
 let saida = '';
 try {
-  saida = execFileSync('firebase', ['emulators:exec', '--only', 'firestore', '--config', cfg,
+  saida = rodarNoEmulador(['emulators:exec', '--only', 'firestore', '--config', cfg,
     '--project', PROJECT, 'node ' + JSON.stringify(drv)], {
     cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
     env: Object.assign({}, process.env, { PATH: '/opt/homebrew/opt/openjdk@21/bin:/opt/homebrew/opt/openjdk/bin:' + process.env.PATH })

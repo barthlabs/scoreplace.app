@@ -21,6 +21,7 @@
  * Rodado por: npm run test:rules:sandbox
  */
 const { execFileSync } = require('child_process');
+const { rodarNoEmulador } = require('./emulador');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -42,9 +43,16 @@ const tok = uid => b64({alg:'none',typ:'JWT'}) + '.' + b64({
   firebase:{ identities:{}, sign_in_provider:'google.com' }
 }) + '.';
 const url = p => H + '/v1/projects/' + P + '/databases/(default)/documents/' + p;
+/* ⚠️ \`uid === 'owner'\` usa o bypass de ADMIN do emulador, e existe só para MONTAR o
+ * cenário. A regra de \`create\` de torneio passou a exigir \`_nascidoEm == request.time\`
+ * (leva L7, "confirma criação no servidor") e os setups destes testes criavam o torneio como
+ * usuário — a partir dali eles reprovavam em TUDO, inclusive nas asserções que não têm nada
+ * a ver com criação. MEDIDO em 13/set/2026: 4 das 9 suítes de \`test:rules\` estavam
+ * vermelhas assim, e ninguém via, porque \`test:rules\` NÃO roda no \`npm test\`.
+ * Montar o cenário não é o que estes testes medem; o que eles medem é o \`update\`. */
 async function req(method, p, uid, body) {
   const r = await fetch(url(p), { method,
-    headers: { 'Authorization': 'Bearer ' + tok(uid), 'Content-Type': 'application/json' },
+    headers: { 'Authorization': (uid === 'owner' ? 'Bearer owner' : 'Bearer ' + tok(uid)), 'Content-Type': 'application/json' },
     body: body ? JSON.stringify(body) : undefined });
   return r.status;
 }
@@ -57,16 +65,16 @@ const L = a => ({ arrayValue: { values: a.map(S) } });
 
   // ── setup: o dev cria (a) o SB e (b) um torneio privado normal; (c) um público ──
   // memberUids do SB = SÓ o dev (é o que persist-core passa a gravar).
-  out.criaSB = await req('PATCH', 'tournaments/tour_1_sb', DEV, { fields: {
+  out.criaSB = await req('PATCH', 'tournaments/tour_1_sb', 'owner', { fields: {
     name: S('(SB) Torneio de Férias'), creatorUid: S(DEV), sandboxOwnerUid: S(DEV),
     isSandbox: B(true), isPublic: B(false), sandboxOf: S('tour_1'),
     memberUids: L([DEV])
   }});
-  out.criaPrivadoNormal = await req('PATCH', 'tournaments/tour_2', DEV, { fields: {
+  out.criaPrivadoNormal = await req('PATCH', 'tournaments/tour_2', 'owner', { fields: {
     name: S('Torneio privado normal'), creatorUid: S(DEV), isPublic: B(false),
     memberUids: L([DEV, REAL])
   }});
-  out.criaPublico = await req('PATCH', 'tournaments/tour_3', DEV, { fields: {
+  out.criaPublico = await req('PATCH', 'tournaments/tour_3', 'owner', { fields: {
     name: S('Torneio público'), creatorUid: S(DEV), isPublic: B(true),
     memberUids: L([DEV, REAL])
   }});
@@ -95,7 +103,7 @@ function runAgainst(rulesFile, label) {
     emulators: { firestore: { port: PORT }, ui: { enabled: false }, singleProjectMode: true },
   }));
   fs.writeFileSync(drv, DRIVER);
-  const out = execFileSync('firebase', [
+  const out = rodarNoEmulador([
     'emulators:exec', '--only', 'firestore', '--config', cfg, '--project', PROJECT,
     'node ' + JSON.stringify(drv),
   ], {

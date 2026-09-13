@@ -101,6 +101,7 @@ const SUITES = [
   'tests/porta-de-wo-e-de-quem-joga.test.js',
   'tests/import-do-letzplay-sai-do-perfil.test.js',
   'tests/escrita-que-falha-nao-some.test.js',
+  'tests/rules-mudou-tem-de-ser-testada.test.js',
   'tests/stb-aparece-para-quem-lancou.test.js',
   'tests/espera-e-fora-usam-a-grade-e-a-cor-canonicas.test.js',
   'tests/l16-auditor-nao-mente-quando-nao-consegue-olhar.test.js',
@@ -1898,6 +1899,7 @@ const MEXEM_NO_REPO = [
   'tests/ext-version-single-source.test.js',            // reescreve js/store.js e extension/content.js
   'tests/trava-de-cache-buster-nao-fica-vazia.test.js', // reescreve index.html
   'tests/gate-amizade-detecta-alias.test.js',           // cria js/views/__sonda-gate-amizade.js
+  'tests/rules-mudou-tem-de-ser-testada.test.js',       // mexe em .rules-testadas (controle)
 ];
 /* (1b) PRENDEM PORTA FIXA DE EMULADOR (8080/8097/8098/8099). Duas instâncias do
  *      Firestore Emulator NÃO coexistem na mesma porta, e estas duas sobem a sua: a

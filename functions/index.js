@@ -3542,7 +3542,47 @@ exports.deleteTournament = onCall(
     const db = admin.firestore();
     const ref = db.collection("tournaments").doc(tournamentId);
     const snap = await ref.get();
-    if (!snap.exists) return { deleted: false, alreadyMissing: true };
+
+    /* ⛔ APAGAR UM SANDBOX NÃO APAGAVA NADA — silenciosamente.
+     * O sandbox mora em `sandboxes/{id}`, não em `tournaments/{id}`. Esta porta só olhava
+     * `tournaments`, então o `delete` do dono caía em `alreadyMissing: true` e devolvia
+     * sucesso: o documento e as 12 subcoleções ficavam lá, e a tela dizia que apagou.
+     * Ficou assim quando a exclusão virou CF, e ninguém viu porque a suíte que provava isso
+     * (`npm run test:sandbox`) não roda no `npm test`.
+     * ⚠️ E o `purgeTournamentCopies` NÃO cobre: ele é `onDocumentDeleted('tournaments/{tid}')`.
+     * Sandbox nenhum dispara esse gatilho — por isso a varredura é feita AQUI mesmo.
+     * ⛔ A autorização é a do SANDBOX, não a do torneio: quem apaga é o DONO do sandbox
+     * (`sandboxOwnerUid`), que é quem o criou para testar. */
+    if (!snap.exists) {
+      const sbRef = db.collection("sandboxes").doc(tournamentId);
+      const sbSnap = await sbRef.get();
+      if (!sbSnap.exists) return { deleted: false, alreadyMissing: true };
+      const sb = sbSnap.data() || {};
+      if (String(sb.sandboxOwnerUid || "") !== String(callerUid)) {
+        throw new HttpsError("permission-denied", "só o dono apaga o próprio sandbox");
+      }
+      /* ⛔ SUBCOLEÇÕES ENUMERADAS, nunca listadas à mão — mesma lição do
+       * `purgeTournamentCopies`: a lista à mão já deixou DUAS passarem. Enumerar mata a
+       * classe: subcoleção nova nasce coberta. */
+      const conta = {};
+      const subs = await sbRef.listCollections();
+      for (const col of subs) {
+        for (let volta = 0; volta < 50; volta++) {
+          const s2 = await col.limit(400).get();
+          if (s2.empty) break;
+          const batch = db.batch();
+          s2.forEach((d) => batch.delete(d.ref));
+          await batch.commit();
+          conta[col.id] = (conta[col.id] || 0) + s2.size;
+          if (s2.size < 400) break;
+        }
+      }
+      await sbRef.delete();
+      const resumo = Object.keys(conta).map((k) => `${k}=${conta[k]}`).join(" · ") || "sem subcoleção";
+      console.log(`[deleteTournament] SANDBOX ${tournamentId} apagado por ${callerUid} → ${resumo}`);
+      return { deleted: true, alreadyMissing: false, sandbox: true };
+    }
+
     if (!_isTournamentOrgCaller(snap.data(), callerUid)) {
       throw new HttpsError("permission-denied", "só o organizador pode apagar o torneio");
     }

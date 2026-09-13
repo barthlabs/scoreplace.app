@@ -22,6 +22,7 @@
  */
 'use strict';
 const { execFileSync } = require('child_process');
+const { rodarNoEmulador } = require('./emulador');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -366,7 +367,7 @@ function rodar(rulesFile, port, rotulo) {
   fs.writeFileSync(drv, driver(port));
   let out;
   try {
-    out = execFileSync('firebase', [
+    out = rodarNoEmulador([
       'emulators:exec', '--only', 'firestore', '--config', cfg, '--project', PROJECT,
       'node ' + JSON.stringify(drv),
     ], {

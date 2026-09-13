@@ -27,6 +27,7 @@
  * Rodado por: node tests/rules-inscricao-espera.test.js
  */
 const { execFileSync } = require('child_process');
+const { rodarNoEmulador } = require('./emulador');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -48,9 +49,15 @@ const tok = uid => b64({alg:'none',typ:'JWT'}) + '.' + b64({
   firebase:{ identities:{}, sign_in_provider:'google.com' }
 }) + '.';
 const base = H + '/v1/projects/' + P + '/databases/(default)/documents/';
+/* ⚠️ \`uid === 'owner'\` usa o bypass de ADMIN do emulador. Existe só para MONTAR o cenário:
+ * a regra de \`create\` de torneio passou a exigir \`_nascidoEm == request.time\` (leva L7,
+ * "confirma criação no servidor"), e o setup deste teste criava o torneio como usuário — a
+ * partir dali ele reprovava em TUDO, inclusive nas asserções que não têm nada a ver com
+ * criação. Montar o cenário não é o que este teste mede; o que ele mede é o \`update\`. */
 async function req(method, p, uid, body) {
+  const auth = uid === 'owner' ? 'Bearer owner' : 'Bearer ' + tok(uid);
   const r = await fetch(base + p, { method,
-    headers: { 'Authorization': 'Bearer ' + tok(uid), 'Content-Type': 'application/json' },
+    headers: { 'Authorization': auth, 'Content-Type': 'application/json' },
     body: body ? JSON.stringify(body) : undefined });
   return r.status;
 }
@@ -75,7 +82,7 @@ const mask = paths => 'updateMask.fieldPaths=' + paths.join('&updateMask.fieldPa
   // isParticipantBracketDiff(), não por isEnrollmentOnlyDiff(). Dava 200 em tudo e o
   // teste "provava" o contrário do que mede. Estado sequencial contamina teste de regra.
   async function nova(doc) {
-    return req('PATCH', 'tournaments/' + doc, ORG, { fields: {
+    return req('PATCH', 'tournaments/' + doc, 'owner', { fields: {
       name: S('Confra BT Alta da Clínica 2026'), creatorUid: S(ORG), isPublic: B(true),
       status: S('active'), format: S('Liga'),
       participants: { arrayValue: { values: [P1(ORG)] } },
@@ -128,7 +135,7 @@ function runAgainst(rulesFile, label) {
     emulators: { firestore: { port: PORT }, ui: { enabled: false }, singleProjectMode: true },
   }));
   fs.writeFileSync(drv, DRIVER);
-  const out = execFileSync('firebase', [
+  const out = rodarNoEmulador([
     'emulators:exec', '--only', 'firestore', '--config', cfg, '--project', PROJECT,
     'node ' + JSON.stringify(drv),
   ], {

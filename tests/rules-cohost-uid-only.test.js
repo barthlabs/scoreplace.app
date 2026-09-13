@@ -20,6 +20,7 @@
  * Rodado por: npm run test:rules
  */
 const { execFileSync } = require('child_process');
+const { rodarNoEmulador } = require('./emulador');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -39,9 +40,16 @@ const tok = uid => b64({alg:'none',typ:'JWT'}) + '.' + b64({
   firebase:{ identities:{}, sign_in_provider:'google.com' }
 }) + '.';
 const url = p => H + '/v1/projects/' + P + '/databases/(default)/documents/' + p;
+/* ⚠️ \`uid === 'owner'\` usa o bypass de ADMIN do emulador, e existe só para MONTAR o
+ * cenário. A regra de \`create\` de torneio passou a exigir \`_nascidoEm == request.time\`
+ * (leva L7, "confirma criação no servidor") e os setups destes testes criavam o torneio como
+ * usuário — a partir dali eles reprovavam em TUDO, inclusive nas asserções que não têm nada
+ * a ver com criação. MEDIDO em 13/set/2026: 4 das 9 suítes de \`test:rules\` estavam
+ * vermelhas assim, e ninguém via, porque \`test:rules\` NÃO roda no \`npm test\`.
+ * Montar o cenário não é o que estes testes medem; o que eles medem é o \`update\`. */
 async function req(method, p, uid, body) {
   const r = await fetch(url(p), { method,
-    headers: { 'Authorization': 'Bearer ' + tok(uid), 'Content-Type': 'application/json' },
+    headers: { 'Authorization': (uid === 'owner' ? 'Bearer owner' : 'Bearer ' + tok(uid)), 'Content-Type': 'application/json' },
     body: body ? JSON.stringify(body) : undefined });
   return r.status;
 }
@@ -54,7 +62,7 @@ const ARR = vs => ({ arrayValue: { values: vs.map(S) } });
 
   // ── Torneio NORMAL: dono por creatorUid, co-host ativo em adminUids ──────────
   // Criado pelo próprio dono (único caminho de create que resta).
-  out.criaTorneio = await req('PATCH', 'tournaments/t1', DONO, { fields: {
+  out.criaTorneio = await req('PATCH', 'tournaments/t1', 'owner', { fields: {
     name: S('Confra'), creatorUid: S(DONO),
     adminUids: ARR([DONO, COHOST]),
     adminEmails: ARR([DONO + '@x.com']),
@@ -110,7 +118,7 @@ function runAgainst(rulesFile, label) {
     emulators: { firestore: { port: PORT }, ui: { enabled: false }, singleProjectMode: true },
   }));
   fs.writeFileSync(drv, DRIVER);
-  const out = execFileSync('firebase', [
+  const out = rodarNoEmulador([
     'emulators:exec', '--only', 'firestore', '--config', cfg, '--project', PROJECT,
     'node ' + JSON.stringify(drv),
   ], {
@@ -141,8 +149,14 @@ ok(novo.recoveryPorOrganizerEmail === 403,
   '🔒 SÓ-UID: recovery por organizerEmail é NEGADA (got ' + novo.recoveryPorOrganizerEmail + ')');
 ok(novo.forjaCreate === 403,
   '🔒 CREATE: forjar torneio com creatorUid de OUTRO é negado (got ' + novo.forjaCreate + ')');
-ok(novo.createLegitimo === 200,
-  'legítimo: criar torneio com o próprio uid funciona (got ' + novo.createLegitimo + ')');
+/* ⭐ ESTA ASSERÇÃO VIROU AO CONTRÁRIO, e é o desenho que mudou, não o teste que quebrou.
+ * Criar torneio pelo CLIENTE deixou de existir: a regra de `create` exige
+ * `_nascidoEm == request.time` (leva L7 — "confirma criação no servidor"), e só o servidor
+ * sabe carimbar isso. Quem cria é a CF `createTournament`, que roda com Admin SDK.
+ * ⛔ Deixar a asserção antiga esperando 200 mantinha a suíte vermelha para SEMPRE — e foi
+ * exatamente isso que aconteceu: `test:rules` não roda no `npm test`, então ninguém viu. */
+ok(novo.createLegitimo === 403,
+  'criar torneio DIRETO pelo cliente é negado — criação é da CF, que carimba `_nascidoEm` (got ' + novo.createLegitimo + ')');
 
 // ── 2. RULES ANTIGAS: os caminhos por e-mail PASSAVAM ────────────────────────
 // Sem isto o teste não prova nada — se passasse nos dois, não estaria testando a mudança.
