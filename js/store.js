@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.3.6';
+window.SCOREPLACE_VERSION = '2.3.7';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -6978,7 +6978,7 @@ window._openImageCropEditor = function(dataUrl, opts, callback) {
   if (ASPECT === 1) { PREV_W = 240; PREV_H = 240; }
   else if (ASPECT >= 1) { PREV_W = 288; PREV_H = Math.round(288 / ASPECT); }
   else { PREV_H = 240; PREV_W = Math.round(240 * ASPECT); }
-  // v2.3.64: quando radiusControl=true (logo do torneio), o overlay ganha um
+  // v2.3.74: quando radiusControl=true (logo do torneio), o overlay ganha um
   // slider de FORMA contínuo (quadrado ↔ círculo) e a imagem é exportada como
   // QUADRADO inteiro — o arredondamento é aplicado via CSS no display/impressão.
   var RADIUS_CTRL = !!opts.radiusControl;
@@ -9268,7 +9268,7 @@ window._haversineKm = function(lat1, lon1, lat2, lon2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
 
-// ─── v2.3.62: badges de perfil do participante (gênero · nível · faixa etária) ──
+// ─── v2.3.72: badges de perfil do participante (gênero · nível · faixa etária) ──
 // ── "EU ESTOU INSCRITO?" — A PERGUNTA QUE O ORGANIZADOR MAIS RECEBE ──────────────
 // Pedido do dono (02/ago/2026): _"nessa lista, vamos colocar o card do usuário no topo
 // absoluto, acima até dos organizadores. assim eles param de perguntar ao organizador se
