@@ -9832,7 +9832,8 @@ exports.setParticipantContactPhone = onCall(
         const orgSnap = await db.collection("users").doc(callerUid).get();
         const orgNome = (orgSnap.exists && orgSnap.data() && orgSnap.data().displayName) || "O organizador";
         const aviso = _contactPhone.buildContactPhoneNotice({
-          organizerName: orgNome, tournamentName: t.name || "", phone: r.phone,
+          organizerName: orgNome, organizerUid: callerUid,
+          tournamentName: t.name || "", phone: r.phone,
           nowIso: r.update.phoneSetAt,
         });
         // id determinístico por torneio+número: corrigir o mesmo número duas vezes não

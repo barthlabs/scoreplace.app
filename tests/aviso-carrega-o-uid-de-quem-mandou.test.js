@@ -65,4 +65,27 @@ must(/fromUid == request\.auth\.uid/.test(bloco),
 must(!/allow create: if request\.auth != null;\s*$/m.test(bloco),
   '④ ⛔ não sobrou o `create` que aceitava qualquer autenticado sem conferir o autor');
 
+
+/* ── ⑩ O AVISO ESCRITO PELO SERVIDOR TAMBÉM ASSINA ─────────────────────────
+ * ⛔ MEDIDO no dado real em 13/set/2026: os ÚNICOS avisos sem `fromUid` em toda a amostra
+ * eram do tipo `contact_phone_set` — 5 de 645. E é o aviso em que saber QUEM mais importa,
+ * porque ele conta à pessoa que alguém mexeu no perfil dela.
+ * ⚠️ Passou batido porque quem o escreve é a Function, e Admin SDK IGNORA as Rules: a trava
+ * que exige autoria (`fromUid == request.auth.uid`, 2.3.0) só vale para o cliente. Regra que
+ * só o cliente obedece não é regra do sistema. */
+(function () {
+  const CP = require(path.join(raiz, 'functions/contact-phone-core.js'));
+  const a = CP.buildContactPhoneNotice({
+    organizerName: 'Rodrigo', organizerUid: 'uid_do_org',
+    phone: '+5511999999999', tournamentName: 'Confra',
+  });
+  must(a.fromUid === 'uid_do_org', '⑩ ⭐⭐ o aviso de celular registrado assina com o uid de quem registrou');
+  must(a.fromName === 'Rodrigo', '⑩ e leva o nome junto, para a pessoa ler sem resolver nada');
+  const b = CP.buildContactPhoneNotice({ organizerName: 'X', phone: '+5511999999999' });
+  must(b.fromUid === '', '⑩ sem uid informado, o campo fica vazio — nunca inventa autor');
+  const FN = require('fs').readFileSync(path.join(raiz, 'functions/index.js'), 'utf8');
+  must(/organizerUid: callerUid/.test(FN),
+    '⑩ ⭐ e quem chama passa o uid de quem está logado, não um nome solto');
+})();
+
 console.log('\n✅ aviso carrega o uid de quem mandou — ' + ok + ' verificações');

@@ -143,6 +143,14 @@ function buildContactPhoneNotice(input) {
   const mascara = maskTail(inp.phone);
   return {
     type: 'contact_phone_set',
+    /* ⛔ ESTE AVISO NÃO DIZIA QUEM MANDOU. MEDIDO em 13/set/2026, no dado real: os ÚNICOS 5
+     * avisos sem `fromUid` em toda a amostra eram deste tipo — e é o aviso em que saber
+     * QUEM mais importa, porque ele conta que alguém mexeu no perfil da pessoa.
+     * ⚠️ Passou batido porque quem escreve é a Function, e Admin SDK ignora as Rules — a
+     * trava que exige autoria (`fromUid == request.auth.uid`, 2.3.0) só vale para o cliente.
+     * Regra que só o cliente obedece não é regra do sistema. */
+    fromUid: String(inp.organizerUid || ''),
+    fromName: orgNome,
     title: '📱 Seu celular foi registrado',
     message: orgNome + ' registrou seu celular ' + mascara + ' no seu perfil'
       + (torneio ? ' para o torneio "' + torneio + '"' : '') + '.\n'
