@@ -133,6 +133,40 @@ function desenho(arquivo) {
     f + ': ⛔ e ZERO pixel fora do recorte redondo (achei ' + g.fora + ')');
 });
 
+/* ⛔ O NATIVO TAMBÉM. Ordem do dono (13/set/2026): _"adote esse novo padrão em todo o app"_.
+ * MEDIDO antes: enquanto a web já estava em 78%, o Android estava entre 28% e 50% e o iOS e o
+ * relógio em 54% — cada família tinha derivado por conta própria, porque cada uma foi gerada
+ * à mão, uma vez, há muito tempo. Agora todas saem do MESMO gerador
+ * (`scripts/gerar-icones.js`) e este portão cobra o resultado.
+ *
+ * ⚠️ A REGRA DO ADAPTATIVO DO ANDROID É OUTRA, e não é descuido: a tela só garante o círculo
+ * CENTRAL de 72dp num quadro de 108dp. O pódio enche ESSE círculo (≈52% do quadro) e o resto
+ * fica transparente de propósito — é margem do sistema. Exigir 74% ali seria exigir que o
+ * ícone fosse cortado no aparelho. */
+const DPIS = [['ldpi', 36], ['mdpi', 48], ['hdpi', 72], ['xhdpi', 96], ['xxhdpi', 144], ['xxxhdpi', 192]];
+DPIS.forEach(([dpi, lado]) => {
+  ['ic_launcher', 'ic_launcher_round'].forEach((nome) => {
+    const f = 'android/app/src/main/res/mipmap-' + dpi + '/' + nome + '.png';
+    if (!fs.existsSync(path.join(root, f))) return;
+    const g = desenho(f);
+    must(g.w === lado, f + ' tem ' + lado + '×' + lado);
+    must(g.largura >= (lado >= 48 ? 0.74 : 0.6),
+      dpi + '/' + nome + ': o pódio ENCHE (' + Math.round(100 * g.largura) + '%)');
+    must(g.fora === 0, dpi + '/' + nome + ': ⛔ zero pixel fora do recorte redondo');
+  });
+});
+[['ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png', 1024, 'iOS'],
+ ['ios/App/Watch/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png', 1024, 'Watch']].forEach(([f, n, rot]) => {
+  if (!fs.existsSync(path.join(root, f))) return;
+  const g = desenho(f);
+  must(g.w === n, rot + ': ' + n + '×' + n);
+  must(g.largura >= 0.74, rot + ': o pódio ENCHE (' + Math.round(100 * g.largura) + '%, era 54%)');
+  must(g.fora === 0, rot + ': ⛔ zero pixel fora do recorte redondo');
+  // ⛔ a Apple RECUSA ícone de app com canal alfa. Errar isso só aparece na submissão.
+  const tipo = fs.readFileSync(path.join(root, f))[25];
+  must(tipo !== 4 && tipo !== 6, rot + ': ⛔ SEM canal alfa — a Apple recusa ícone transparente');
+});
+
 // ⛔ ícone novo com cache-buster velho é ícone velho na tela de quem já visitou
 const man = fs.readFileSync(path.join(root, 'manifest.json'), 'utf8');
 const idx = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
