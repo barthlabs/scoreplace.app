@@ -37,35 +37,29 @@ e 0 divergentes do que a regra manda espelhar.
 | `letzplayImport` dentro do documento de perfil | **18 de 279** perfis · 2.292 jogos · o **maior ocupa 499 KB** | qualquer leitura de ficha inteira desses 18 paga meio megabyte. Pôr no espelho seria PIOR (ele é lido em lote). A saída é o import virar documento próprio — **migração** |
 | peso do documento do torneio (Confra) | **73,6 KB** · `rounds` 22,9 · `history` 14,3 · `woClaims` 6,9 · `checkedIn` 6,2 | a máquina de dividir está PRONTA e ensaiada (73,6 → 50,6 KB), mas é **escrita destrutiva no seu torneio principal** — não rodo sem sua palavra |
 
-**⛔ O QUE FALTA PARA TIRAR OS 17,4 KB DE PRESENÇA E RASTROS — agora com o mecanismo exato.**
-A dívida ② estava escrita como *"rotear os escritores pela porta ANTES"*. Conferindo as Rules
-em 13/set/2026, o motivo é mais duro do que "podem truncar": é **autorização**.
+**⭐ OS 17,4 KB DE PRESENÇA E RASTROS: RETIFICADO EM 13/set/2026 — eu tinha errado o
+diagnóstico.** Escrevi aqui, horas antes, que faltavam TRÊS portas de servidor
+(`woClaims`, `woLog`, `categoryNotifications`) porque `grep woClaims functions/index.js`
+deu zero. Fui conferir seguindo o CLIENTE em vez do grep, e o quadro é outro:
 
-- **Hoje**, com os campos DENTRO do documento, a regra `isParticipantBracketDiff` permite que
-  um INSCRITO altere `checkedIn`, `woClaims`, `categoryNotifications` e `history` — é assim
-  que declarar W.O. funciona.
-- **Nas subcoleções**, a regra é `allow write: if false` — escrita só pelo Admin SDK.
-- ⇒ No dia em que o campo sair do documento, **o inscrito perde a capacidade de escrever**, e
-  o recurso morre para ele. Não é perda de dado: é perda de permissão, e acontece no instante
-  da migração.
+- `woClaims` **já é escrito por Cloud Function** desde sempre: o cliente chama
+  `manageWOClaim` (`functions-autodraw/index.js`), nunca `saveTournament`. O grep deu zero
+  porque a função vive no OUTRO pacote de functions.
+- Essa função **já lê e grava torneio dividido**: lê por `_leTorneio`, que monta as partes
+  pela porta única (`montarDoBanco`), e grava por `_gravaTorneio`, que delega ao planejador
+  (`write-plan.js`) — e o planejador deriva as coleções de `PESADOS`/`colecaoDaParte`, então
+  parte nova nasce coberta.
+- `checkedIn` tem `setTournamentPresence`, também no vocabulário de partes.
 
-| parte | porta de servidor | estado |
-|---|---|---|
-| `checkedIn` | `setTournamentPresence` | ✅ **pronta** — já usa o vocabulário de partes (`{parte, chave, valor}`) |
-| `woClaims` | — | ⛔ **não existe** (zero ocorrências em `functions/index.js`) |
-| `woLog` | — | ⛔ **não existe** |
-| `categoryNotifications` | — | ⛔ **não existe** |
+⇒ **O que de fato falta não é porta: é a Rule e a tabela.** A regra da subcoleção é
+`allow write: if false` (só Admin SDK), o que está certo porque quem escreve é a CF — e a
+tabela de `partes-permissao.js` precisava estar certa sobre QUEM pode. Ela dizia "só
+organizador" para `woClaims` quando quem aponta W.O. é **quem joga** — corrigido em
+13/set/2026, com `byUid` como trava (cada um aponta em nome próprio).
 
-⚠️ **E `aplicarNoTorneio` NÃO é essa porta na prática.** Ela existe, é testada e tem tabela de
-permissão — mas **nenhum arquivo do cliente a chama** (varredura de `js/`: zero). O padrão que
-de fato entrou em produção é o de capability específica (`setTournamentPresence`,
-`enrollParticipant`, `setMatchSchedule`), que é o que a decisão da L2 mandou. Quem for tirar
-esses três campos do documento escreve três portas específicas — não liga o cliente na porta
-genérica.
-
-⭐ **O guarda de gravação já está no lugar** (`saveTournament` recusa gravar parte truncada),
-mas ele impede o ESTRAGO, não substitui a porta: sem porta, o inscrito simplesmente não
-consegue mais registrar.
+⚠️ **A lição de método é a mesma do resto deste documento:** `grep` num arquivo não é
+varredura do sistema. `functions/` e `functions-autodraw/` são dois pacotes, e procurar só
+num deles produz um "achado" que não existe. [[feedback_busca_truncada_nao_e_busca]]
 
 **Decidido, não pendente** (medido e recusado, para não ser reaberto):
 
