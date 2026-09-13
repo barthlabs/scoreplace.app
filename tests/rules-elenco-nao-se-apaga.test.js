@@ -98,6 +98,26 @@ ok(r.entra_dupla===200, '② ⭐ e a DUPLA também, dois uids de uma vez (got '+
 ok(r.anonimo===403, '③ CONTROLE: anônimo é negado — a sonda está valendo as Rules (got '+r.anonimo+')');
 ok(r.campo_fora===403, '③ CONTROLE: campo fora da lista é negado (got '+r.campo_fora+')');
 ok(r.muda_status===200, '④ ⚠️ MEDIDO E NÃO CORTADO: inscrito ainda mexe em `status` — quem lança a final fecha o torneio');
+
+/* ── ⑤ A ALLOWLIST ENCOLHEU, E SÓ POR MEDIDA ───────────────────────────────
+ * A L6 aponta que esta lista autoriza por CHAVE e nunca por valor, e que cresceu para ~43
+ * campos. Cinco saíram em 13/set/2026 — `lastModified`, `pollNotifications`,
+ * `_finishNotified`, `_roundCloseAt`, `pendingMerges` — depois de medir as DUAS pontas:
+ * ZERO escritores no cliente de hoje e ZERO menções no BUNDLE INSTALADO (2.2.4, o que está
+ * nas lojas). Cortar não tirou permissão de ninguém, nem de quem não recebe atualização.
+ * ⚠️ `polls` FICOU: aparece 3× no bundle instalado. Campo com escritor real não sai por
+ * arrumação — é assim que se quebra quem já está na loja. */
+const RULES = fs.readFileSync(path.join(ROOT, 'firestore.rules'), 'utf8');
+const iL = RULES.indexOf('function isParticipantBracketDiff');
+const lista = RULES.slice(iL, RULES.indexOf(']);', iL));
+['lastModified', 'pollNotifications', '_finishNotified', '_roundCloseAt', 'pendingMerges']
+  .forEach((c) => ok(lista.indexOf("'" + c + "'") === -1,
+    '⑤ ⛔ `' + c + '` saiu da allowlist do inscrito (zero escritores, aqui e no bundle da loja)'));
+ok(lista.indexOf("'polls'") !== -1,
+  '⑤ ⭐ `polls` FICOU — tem escritor real no bundle instalado');
+['matches', 'status', 'participants', 'memberUids'].forEach((c) =>
+  ok(lista.indexOf("'" + c + "'") !== -1,
+    '⑤ `' + c + '` continua — o produto depende dele, e agora há checagem de VALOR'));
 console.log('\n'+(fail?'✗ '+fail+' falha(s), ':'✅ ')+pass+' verificações');
 process.exit(fail?1:0);
 /* saída antiga, mantida fora do caminho:

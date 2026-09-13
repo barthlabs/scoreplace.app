@@ -360,9 +360,12 @@ window._devSimulateCurrentPhase = function (tId) {
       if (typeof window._rerenderBracket === 'function') window._rerenderBracket(String(tId));
       else if (c && typeof window.renderTournaments === 'function') window.renderTournaments(c, String(tId));
     };
+    /* ⚠️ A QUEDA PARA `AppStore.sync()` SAIU com ele (13/set/2026). Era o `else` de um `if`
+     * que pergunta se `saveTournament` existe — nunca rodava, e era o ÚNICO chamador do
+     * último caminho paralelo de escrita. Sem porta, o simulador de dev apenas não grava. */
     if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
       window.FirestoreDB.saveTournament(t).then(done).catch(function (err) { window._error && window._error('[devSimulate] save error:', err); done(); });
-    } else { try { window.AppStore.sync(); } catch (e) {} done(); }
+    } else { done(); }
   };
 
   if (typeof showAlertDialog === 'function') {

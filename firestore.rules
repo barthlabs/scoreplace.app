@@ -156,12 +156,25 @@ service cloud.firestore {
           'standbyParticipants', 'waitlist',
           // Activity log (logAction escreve em t.history)
           'history',
+          /* ⛔ CINCO CAMPOS SAÍRAM DAQUI EM 13/set/2026 — `lastModified`, `pollNotifications`,
+           * `_finishNotified`, `_roundCloseAt` e `pendingMerges`.
+           * A L6 aponta que esta allowlist autoriza por CHAVE e nunca por valor, e que ela
+           * cresceu para ~43 campos. MEDIDO antes de cortar, nas DUAS pontas:
+           *   · no cliente de hoje: ZERO escritores para os cinco;
+           *   · no BUNDLE INSTALADO (2.2.4, o que está nas lojas): ZERO menções aos cinco.
+           * Ou seja, cortar não tira permissão de ninguém — nem de quem não recebe
+           * atualização, que é a trava que segura todo o resto desta frente.
+           * ⚠️ `polls` FICOU: aparece 3× no `firebase-db.js` do bundle instalado (a rede que
+           * recupera enquete concorrente). Campo com escritor real não sai por arrumação.
+           * ⛔ E `status`, `matches`, `participants` e `memberUids` continuam aqui porque o
+           * produto depende deles — o que mudou é que agora há checagem de VALOR
+           * (`inscricaoNaoRemove`), que é o que faltava. */
           // Timestamps
-          'updatedAt', 'lastModified',
+          'updatedAt',
           // Liga: toggle ativado/desativado pra próximo sorteio
           'ligaActive', 'ligaInactive',
           // Polls: votação de decisão (cada participante vota uma vez)
-          'pollNotifications', 'polls', 'activePollId',
+          'polls', 'activePollId',
           // Enquete do organizador (📊): inscritos votam gravando opinionPolls[].votes.
           // BUG (Confra): sem este campo na lista, o voto do PARTICIPANTE era
           // rejeitado com permission-denied — só o organizador (admin) conseguia
@@ -173,8 +186,6 @@ service cloud.firestore {
           'woClaims',
           // Categorias notificadas (auto-assign comunica ao participante)
           'categoryNotifications',
-          // Flags internas setadas em fim de torneio / transições
-          '_finishNotified', '_roundCloseAt',
           // Status — pode mudar pra 'finished' quando última partida aprovada
           'status',
           // Inscrição — overlap com isEnrollmentOnlyDiff
@@ -183,9 +194,6 @@ service cloud.firestore {
           'memberUids',
           // Convites de dupla pendentes (participante envia/aceita/cancela)
           'pairRequests',
-          // v2.7.75: pedidos de vínculo/mescla pendentes — o usuário real aceita
-          // (assume a vaga do genérico) ou recusa, alterando pendingMerges.
-          'pendingMerges',
           // v2.7.84: nextDrawAt é um índice DERIVADO recomputado em TODO save (cliente
           // e servidor). Qualquer save de participante (placar, convite de dupla, etc.)
           // recalcula esse campo — sem permiti-lo, a regra rejeitava o save inteiro

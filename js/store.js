@@ -11134,21 +11134,21 @@ window.AppStore = {
     return false;
   },
 
-  // Sync: saves ALL organizer tournaments to Firestore IMMEDIATELY
-  // No more debounce — every mutation must persist to prevent data loss across devices
-  // IMPORTANT: skipParticipants prevents overwriting enrollments from other users
-  sync() {
-    var store = this;
-    if (!window.FirestoreDB || !window.FirestoreDB.db || !store.currentUser) return;
-    store.tournaments.forEach(function(t) {
-      if (store.isOrganizer(t)) { // v2.8.79: uid-primário (co-host com email '')
-        window.FirestoreDB.saveTournament(t, { skipParticipants: true }).catch(function(err) {
-          window._warn('Sync error:', err);
-        });
-      }
-    });
-    store._saveToCache();
-  },
+  /* ⛔ `sync()` REMOVIDO em 13/set/2026 — era o último caminho paralelo de escrita (L7).
+   *
+   * Ele gravava o documento INTEIRO de TODOS os torneios do organizador, "a cada mutação",
+   * com `skipParticipants:true`. É o mesmo desenho que já tinha derrubado os inscritos do
+   * sandbox da Confra, e o que sobrava da leva "saveTournament / caminhos paralelos".
+   *
+   * ⭐ MEDIDO ANTES DE REMOVER: UM chamador em todo o repositório, e era o ramo MORTO de uma
+   * ferramenta de dev (`devSimulate`, em `tournaments-draw.js`) — o `else` de um `if` que
+   * pergunta se `FirestoreDB.saveTournament` existe. Nunca roda. Varredura por nome dinâmico
+   * (`AppStore['sync']`, string) também deu zero.
+   *
+   * ⚠️ O portão `sandbox-sync-nao-apaga-partes` continua valendo: ele exercita
+   * `saveTournament` com `skipParticipants:true` DIRETO, que é o comportamento de verdade
+   * guardado ali — nunca dependeu desta função. */
+
 
   /* ⛔ `syncImmediate` REMOVIDA (2.2.91) — era o anti-padrão da L6 sem nenhum chamador.
    * Ela gravava o documento INTEIRO do torneio a partir da cópia EM MEMÓRIA, com merge: quem
