@@ -3570,12 +3570,61 @@ a Produção Android está treze versões atrás. Esta função vê toda a fila,
 Trava: `tests/digest-nao-manda-a-mesma-novidade-duas-vezes.test.js` — 23 verificações, a regra
 EXECUTADA (não procurada por regex), provada derrubando as duas metades: a janela e a fiação.
 
+### L14.P6 — o dedup in-app: MEDIDO, e não vale mexer (13/set/2026)
+
+O item dizia que `_notifDedupCheck` é de 5 minutos e vive na memória da aba, para **todos** os
+tipos de aviso. Antes de mexer num caminho quente, fui contar o estrago.
+
+**MEDIDO** em 279 perfis / **5.792 avisos in-app**, agrupando por pessoa + tipo + torneio +
+jogo + texto: **738 pares repetidos**. Mas a distância entre eles desmonta o número:
+
+| distância | pares | o que é |
+|---|---|---|
+| até 5 min | 39 | o que o dedup atual JÁ pega |
+| 5 min a 24 h | **42** | o que ele deixa passar — a reentrega de verdade |
+| mais de 24 h | 657 | **evento diferente com texto igual**, não repetição |
+
+⭐ Os 657 são quase todos `presence_checkin` (317), `tournament_updated` (175) e
+`presence_plan` (119): textos como *"vai jogar hoje às 17:00"* se repetem em dias diferentes
+palavra por palavra. Não é reentrega — é **texto que não distingue o evento**.
+
+**Conclusão: 42 em 5.792 — 0,7%**, e a maioria de maio, de tipos já corrigidos por outra via
+(`wa_group` fechou na 2.2.94; o e-mail, na L14.P5). ⛔ **Não vale trocar o dedup do caminho
+quente por isso.** Fica registrado com a medida, não com a impressão.
+⚠️ Fica ABERTO, porém, o que a medição achou de lambuja: **aviso persistido que diz "hoje"**
+é errado quando lido dias depois, e *"Um participante se inscreveu"* não diz quem. É defeito
+de TEXTO, não de entrega.
+
+### L14.P7 — o contador de troféu: o único `increment` do servidor estava errado (13/set/2026)
+
+A lente da reentrega aplicada a contadores. Só havia um lugar com `FieldValue.increment`.
+
+**MEDIDO**, comparando `_meta/trophyStats.counts` com `collectionGroup('trophies')`:
+**15 dos 17 ids divergem**; `perfil_foto` marcava **297** contra **149** reais; a soma dava
+**891** contra **1.007**.
+
+**Três escritores somavam o mesmo número, sem se falar, com a gravação engolida:**
+`backfillAllUserTrophies` (re-executável — cada rodada somava de novo), `scheduledTrophyCheck`
+(agendado, entregue ao menos uma vez) e `js/trophies.js#_incrementTrophyStat`, **no navegador**.
+
+⭐ **O terceiro nunca funcionou — e isso revelou o defeito maior.** `_meta` não tinha regra
+nenhuma no `firestore.rules`, e sem regra é negado (**medido: 403**). A escrita do navegador
+falhava calada desde o primeiro dia — **e a leitura também**. A tela de troféus mostra
+*"x% têm este troféu"* lendo esse documento; a leitura caía no `.catch` que devolve
+`{counts:{}}`, e **todo troféu aparecia com 0%, para todo mundo, desde sempre**.
+
+**Pago na 2.2.98:** a conta virou **derivada** — `_recontarTrofeus` conta os documentos e
+grava o mapa inteiro; rodar duas vezes dá o mesmo número, que é a definição do que faltava. O
+`totalUsers` entrou na mesma escrita, sem `.catch` mudo. O incremento do navegador saiu. E a
+Rule abriu `get` **só** em `_meta/trophyStats` (`list` e escrita negados) — aditiva, não quebra
+versão nenhuma. Conferido no ar: `get` = 200, `list` = 403.
+⏳ O número em produção se corrige sozinho na próxima passada do agendado (todo dia, 02:00).
+
 ### O que a L14 ainda não cobriu
-- `_notifDedupCheck` segue de 5 min e em memória para **todos** os outros tipos de notificação.
-- Reentrega das **CFs agendadas e de gatilho** (o Firebase entrega ao menos uma vez por
-  contrato): `accountSummaryEmail`, `accountDeletionEmail`, `sendPairInviteEmail` e
-  `sendCoHostInviteEmail` já têm id determinístico + `create()`; as demais não foram lidas
-  por essa ótica.
+- Reentrega das **CFs agendadas e de gatilho** que ENVIAM: `sendTournamentReminders`,
+  `nudgeMissingPhones`, `drainPendingVerifications` e `drainPendingPasswordResets` não foram
+  lidas por essa ótica. As de e-mail de conta e de convite já têm id determinístico +
+  `create()`.
 
 ## L6 — ESTÁ PRATICAMENTE FECHADA, E O REGISTRO DIZIA O CONTRÁRIO (12/set/2026)
 
