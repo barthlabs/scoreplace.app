@@ -158,16 +158,38 @@ const DOCS = { uid1: FICHA, uid2: Object.assign({}, FICHA, { displayName: 'Beltr
   must(/if \(n > 0 &&/.test(P),
     '⑦ a tela só redesenha se algo CHEGOU — re-render vazio voltaria a pedir, em laço');
 
-  /* ── ⑧ CONTROLE: NA ÁRVORE ANTERIOR A LEITURA CAÍA EM `users` ───────────── */
-  const anterior = execFileSync('git', ['show', 'HEAD:js/store.js'], { cwd: raiz, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
-  const antes = await rodar(anterior, UIDS, DOCS);
-  console.log('\n  (controle: a árvore HEAD, ANTES da troca)');
-  must(antes.lidas.every((l) => l.colecao === 'users'),
-    '⑧ ⭐ ANTES, TODA leitura era em `users` — a troca é real, não decorativa');
-  must(JSON.stringify(antes.cache).includes('exemplo.invalid'),
-    '⑧ ⛔ ANTES, o e-mail de estranho ENTRAVA no cache do aparelho');
-  must(JSON.stringify(antes.cache).includes('+5511999999999'),
-    '⑧ ⛔ ANTES, o telefone de estranho também');
+  /* ── ⑧ CONTROLE: O MOTORISTA TEM DENTES ─────────────────────────────────── */
+  // ⛔ UM PORTÃO QUE SÓ VÊ VERDE NÃO PROVA NADA. Este controle aponta a MESMA função para
+  // `users` e exige que o motorista ACUSE — ou seja, se alguém desfizer a troca amanhã,
+  // este arquivo fica vermelho. [[feedback_rede_que_cobre_o_rerender_nao_cobre_o_primeiro]]
+  const desfeito = STORE.replace(
+    "var COL = window._COLECAO_PERFIL_PUBLICO || 'usersPublic';",
+    "var COL = 'users';");
+  must(desfeito !== STORE, '⑧ o controle de fato alterou a fonte (senão ele mede nada)');
+  const volta = await rodar(desfeito, UIDS, DOCS);
+  console.log('\n  (controle: a MESMA função apontada de volta para `users`)');
+  must(volta.lidas.every((l) => l.colecao === 'users'),
+    '⑧ ⭐ desfeita a troca, o motorista ACUSA `users` — o teste ① tem dentes');
+
+  /* ── ⑨ CONTROLE HISTÓRICO: a árvore ANTERIOR lia `users` de verdade ──────── */
+  // ⚠️ Só roda onde há histórico: o preflight publica de uma CÓPIA sem `.git`, e ali o
+  // controle ⑧ (que não depende de git) é quem segura a barra. Nada é pulado em silêncio.
+  let temGit = true;
+  try { execFileSync('git', ['rev-parse', '--git-dir'], { cwd: raiz, stdio: 'ignore' }); }
+  catch (e) { temGit = false; }
+  if (!temGit) {
+    console.log('\n  (⑨ sem histórico nesta árvore — cópia do preflight; o controle ⑧ cobre)');
+  } else {
+    const anterior = execFileSync('git', ['show', 'HEAD~1:js/store.js'], { cwd: raiz, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+    const antes = await rodar(anterior, UIDS, DOCS);
+    console.log('\n  (controle: a árvore de ANTES da troca)');
+    must(antes.lidas.every((l) => l.colecao === 'users'),
+      '⑨ ⭐ ANTES, TODA leitura era em `users` — a troca é real, não decorativa');
+    must(JSON.stringify(antes.cache).includes('exemplo.invalid'),
+      '⑨ ⛔ ANTES, o e-mail de estranho ENTRAVA no cache do aparelho');
+    must(JSON.stringify(antes.cache).includes('+5511999999999'),
+      '⑨ ⛔ ANTES, o telefone de estranho também');
+  }
 
   console.log('\n✅ ' + ok + ' verificações');
 })().catch((e) => { console.error('\n✗ ' + e.message); process.exit(1); });

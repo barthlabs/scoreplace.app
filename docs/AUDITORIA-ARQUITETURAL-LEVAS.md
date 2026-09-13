@@ -1425,11 +1425,24 @@ cruzada necessária. (b) A busca de pessoas devolve **projeção**, não o docum
 (`PUBLIC_FIELDS`), e a mesma projeção está nos três clientes. (c) O cache de perfil retém 8
 campos. (d) A lápide é atravessada por `_userVivo`, nunca usada como pessoa.
 
-*PROBLEMA ABERTO (evidência nova).* (a) ⛔ **`listRecentUsers` não tem o `sanitize` que o
-`searchUsers` tem** — as duas alimentam a mesma tela (#explore) e uma guarda o documento
-inteiro de até 30 desconhecidos. A mitigação client-side cobre um caminho e não o irmão.
-(b) `FirestoreDB.loadUserProfile` devolve o documento cru em **30 chamadas**, enquanto o uso
-demonstrado em cada consumidor é de 1 a 4 campos. (c) ⛔ **A permissão de `list` em `users` é LOAD-BEARING, não sobra.**
+*⭐ RETIFICADO EM 13/set/2026 — (a) E (b) JÁ NÃO DESCREVEM A PRODUÇÃO.*
+(a) ✅ **FECHADO na 2.3.2.** `listRecentUsers` lê `usersPublic` e aplica `_perfilDeLista`, a
+MESMA régua da busca — as duas telas irmãs deixaram de ter proteções diferentes.
+(b) ✅ **FECHADO em três etapas.** A 2.3.3 tirou as quatro chamadas de `bracket-ui.js`
+(passaram por `carregarPerfilPublico`); a 2.3.5 tirou a leitura do envio de aviso; a **2.3.6**
+tirou a que faltava e era a maior de todas — `_preloadUserProfiles`, a carga em LOTE que
+alimenta chave, inscritos, sorteio, categorias e substituição da liga, ou seja a que roda para
+QUALQUER pessoa que abra QUALQUER torneio (**143 uids por abertura no Confra**). Ela lia
+`users` para ficar com oito campos de noventa e quatro. Hoje lê o espelho.
+⚠️ O que SOBRA de `loadUserProfile` é o próprio perfil e a porta estreita
+`carregarContatosDoElenco` — celular e @ do letzplay, só para o organizador, só no elenco dele.
+⭐ E a 2.3.6 achou de lambuja um **silêncio**: `omitPhone`, `phoneSource`, `phoneCountry` e
+`letzplayHandle` NUNCA estiveram no cache de perfis, então a tela de inscritos lia `undefined`
+e decidia errado sem erro nenhum — o balãozinho do WhatsApp aparecia inclusive para quem
+marcou "não mostrar meu telefone", e o comentário ali jurava que respeitava a marcação.
+Nenhum log, nenhuma exceção: o defeito só apareceu quando o campo foi PROCURADO.
+
+*PROBLEMA ABERTO (o que segue aberto desta etapa).* (c) ⛔ **A permissão de `list` em `users` é LOAD-BEARING, não sobra.**
 `listInvitableUsers` (`js/firebase-db.js:2693`) faz `collection('users').limit(2000).get()` —
 uma varredura da coleção — para montar a lista de convidáveis do `#explore` e do
 `#todas-pessoas`, com cache de sessão de 5 min. E a mesma permissão sustenta **8 consultas

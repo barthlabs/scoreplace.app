@@ -48,7 +48,7 @@ ok(typeof W._nameForUid === 'function', '_nameForUid existe');
 
 const PAULO = 'uPauloOriente', MAIRA = 'uMaira';
 // perfis vivos (o que estaria em users/{uid})
-W._userProfileCache[PAULO] = { displayName: 'Paulo Oriente', email: 'paulo@x.com', phone: '', photoURL: '' };
+W._userProfileCache[PAULO] = { displayName: 'Paulo Oriente', phone: '', photoURL: '' };
 W._userProfileCache[MAIRA] = { displayName: 'Maira', email: '', phone: '', photoURL: '' };
 
 // Dupla real: Maira (uid MAIRA) + Paulo (uid PAULO), mas o p2Name GRAVADO está
@@ -62,16 +62,21 @@ ok(W._displayName(PAULO, 'Maira') !== 'Maira', 'REGRESSÃO MORTA: nome gravado c
 // chega). NUNCA o nome gravado. Precisar de fallback = arquitetura errada.
 eq(W._displayName('uNaoCarregado', 'Maira'), '', 'uid sem perfil carregado → vazio (loading), JAMAIS o nome gravado');
 // ...quando o perfil carrega (o pré-requisito do render), resolve o nome vivo:
-W._userProfileCache['uNaoCarregado'] = { displayName: 'Nome Vivo', email: '', phone: '', photoURL: '' };
+W._userProfileCache['uNaoCarregado'] = { displayName: 'Nome Vivo', phone: '', photoURL: '' };
 eq(W._displayName('uNaoCarregado', 'Maira'), 'Nome Vivo', 'perfil carregado → nome vivo do uid');
 
 // Guest (participante SEM conta, sem uid) — única exceção física: não há perfil
 // de onde resolver, então o nome do guest é usado.
 eq(W._displayName('', 'Convidado Sem Conta'), 'Convidado Sem Conta', 'guest sem uid usa o nome (única exceção)');
 
-// e-mail/telefone também só do perfil vivo
-eq(W._emailForUid(PAULO), 'paulo@x.com', '_emailForUid lê e-mail do perfil vivo');
+// nome só do perfil vivo
 eq(W._nameForUid(PAULO), 'Paulo Oriente', '_nameForUid lê nome do perfil vivo');
+/* ⛔ E-MAIL NÃO MORA MAIS NO CACHE DE EXIBIÇÃO (2.3.6). A carga de perfis passou a ler o
+ * espelho público, que não tem e-mail nem telefone, e `_emailForUid` foi REMOVIDA porque
+ * tinha zero leitores. Se ela voltar a existir, volta com ela o hábito de guardar contato
+ * de estranho no aparelho — e é isso que esta linha trava. */
+ok(typeof W._emailForUid === 'undefined', '⛔ `_emailForUid` não existe: o cache de exibição não guarda e-mail');
+ok(typeof W._phoneForUid === 'function', '`_phoneForUid` continua — o organizador precisa dele, por porta própria');
 
 console.log((fail ? '✗ ' + fail + ' falha(s) · ' : '') + '✓ ' + pass + ' ok — uid-name-display');
 process.exit(fail ? 1 : 0);

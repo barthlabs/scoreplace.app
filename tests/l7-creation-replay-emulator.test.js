@@ -8,9 +8,28 @@ if(!process.env.FIRESTORE_EMULATOR_HOST){
  const port=Number(execFileSync(process.execPath,['-e',"const s=require('net').createServer();s.listen(0,'127.0.0.1',()=>{console.log(s.address().port);s.close();});"],{encoding:'utf8'}).trim());
  const config=path.join(temp,'firebase.json');
  fs.writeFileSync(config,JSON.stringify({firestore:{rules:path.join(ROOT,'tests/concurrency/firestore.allow.rules')},emulators:{firestore:{host:'127.0.0.1',port},ui:{enabled:false},singleProjectMode:true}}));
- const result=spawnSync('firebase',['emulators:exec','--only','firestore','--config',config,'--project','demo-scoreplace','node tests/l7-creation-replay-emulator.test.js'],{cwd:ROOT,stdio:'inherit',env:{...process.env,PATH:'/opt/homebrew/opt/openjdk/bin:'+process.env.PATH},timeout:180000});
+ const result=spawnSync('firebase',['emulators:exec','--only','firestore','--config',config,'--project','demo-scoreplace','node tests/l7-creation-replay-emulator.test.js'],{cwd:ROOT,encoding:'utf8',env:{...process.env,PATH:'/opt/homebrew/opt/openjdk/bin:'+process.env.PATH},timeout:180000});
  fs.rmSync(temp,{recursive:true,force:true});
- if(result.error)console.error(result.error);process.exit(result.status===null?1:result.status);
+ const saida=(result.stdout||'')+(result.stderr||'');
+ process.stdout.write(saida);
+ if(result.error)console.error(result.error);
+ /* ⛔ QUEM DÁ O VEREDITO É O TESTE, NÃO O DESLIGAMENTO DO EMULADOR.
+  * MEDIDO em 13/set/2026: 2 de 3 rodadas limpas terminavam em `exit 2` com o emulador
+  * gravando `DatastoreException: Transaction lock timeout` — e o próprio firebase-tools
+  * imprimindo, uma linha antes, "Script exited successfully (code 0)". A trava é do
+  * DESLIGAMENTO da CLI, depois de o teste ter passado: este arquivo PROVOCA de propósito
+  * duas transações concorrentes no mesmo documento (é o que ele veio medir), e o emulador
+  * registra a disputa como erro dele. Resultado: o portão barrava publicação por sorteio.
+  * ⚠️ E ISTO NÃO ENGOLE FALHA DE VERDADE: o único caminho que passa é aquele em que a
+  * PRÓPRIA CLI certificou que o script saiu com 0. Script que falha nunca imprime essa
+  * linha, e continua reprovando. */
+ if(result.status!==0&&/Script exited successfully \(code 0\)/.test(saida)){
+  console.error('\n⚠️  O TESTE PASSOU; quem falhou foi o desligamento do emulador (firebase-tools '+
+   'saiu com '+result.status+' depois de certificar "Script exited successfully (code 0)").\n'+
+   '   Causa medida: disputa de transação que ESTE teste provoca de propósito.\n');
+  process.exit(0);
+ }
+ process.exit(result.status===null?1:result.status);
 }
 assert(/^127\.0\.0\.1:\d+$/.test(process.env.FIRESTORE_EMULATOR_HOST),'só emulador local');
 process.env.GCLOUD_PROJECT='demo-scoreplace';process.env.FIREBASE_CONFIG=JSON.stringify({projectId:'demo-scoreplace'});

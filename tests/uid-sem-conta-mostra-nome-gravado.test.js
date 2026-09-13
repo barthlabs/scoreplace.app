@@ -42,7 +42,7 @@ function recorta(assinatura, fim) {
 /* ⚠️ começa na declaração do MAPA, não na função: `_nomeGravadoPorUid` é criado uma linha
  * antes, e recortar só a função deixava o mapa indefinido no sandbox — o teste morria com
  * TypeError em vez de medir o que veio medir. */
-const NAME_FOR_UID = recorta('window._nomeGravadoPorUid = window._nomeGravadoPorUid || {};', 'window._emailForUid');
+const NAME_FOR_UID = recorta('window._nomeGravadoPorUid = window._nomeGravadoPorUid || {};', 'window._phoneForUid');
 ok(!!NAME_FOR_UID && NAME_FOR_UID.indexOf('window._nameForUid = function') !== -1,
   'achei `_nomeGravadoPorUid` + `_nameForUid` no store.js');
 /* ⚠️ a marca de FIM tem que existir de verdade: `indexOf` devolve -1 quando não acha, e
