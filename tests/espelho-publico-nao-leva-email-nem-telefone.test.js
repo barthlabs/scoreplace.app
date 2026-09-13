@@ -116,6 +116,33 @@ must(/var doc = await this\.db\.collection\('users'\)\.doc\(uid\)\.get\(\);/.tes
   '⑧ ⛔ `loadUserProfile` segue em `users` — é a leva seguinte, e mexer nela agora seria '
   + 'trocar 93 chamadas sem separar o próprio perfil do alheio');
 
+// ── ⑧b a ficha de TERCEIRO na tela vem do espelho ──────────────────────────
+must(/async carregarPerfilPublico\(uid\)/.test(DB),
+  '⑧b existe a porta para ficha de terceiro, separada da do próprio perfil');
+const iCP = DB.indexOf('async carregarPerfilPublico(uid)');
+const corpoCP = DB.slice(iCP, DB.indexOf('async loadUserProfile(uid)'));
+must(/collection\(window\._COLECAO_PERFIL_PUBLICO\)\.doc\(uid\)/.test(corpoCP),
+  '⑧b ela lê o espelho');
+must(!/collection\('users'\)/.test(corpoCP),
+  '⑧b ⛔ e NÃO cai para `users` quando o espelho falta — a queda anularia a leva inteira: '
+  + 'bastaria o espelho sumir para o app voltar a baixar a ficha cheia, calado');
+
+const BU = fs.readFileSync(path.join(raiz, 'js/views/bracket-ui.js'), 'utf8');
+must(!/FirestoreDB\.loadUserProfile\(/.test(BU),
+  '⑧b ⭐ a chave não pede mais o documento cheio de ninguém (eram 4 chamadas)');
+must((BU.match(/carregarPerfilPublico\(/g) || []).length === 4,
+  '⑧b e as quatro passaram para o espelho');
+
+/* ⛔ CONTROLE DE ESCOPO — o que NÃO foi trocado, e por quê, MEDIDO:
+ *  • `explore.js` mostra o E-MAIL no lugar do nome de quem não tem nome, e ordena por ele.
+ *    Trocar mudaria o que aparece na tela — decisão do dono, não minha.
+ *  • `tournaments.js` casa inscrito por e-mail (`profile.email`).
+ *  • `tournaments-organizer.js` resolve o e-mail do DESTINATÁRIO para mandar a notificação —
+ *    sai quando a fila de e-mail migrar para o servidor (a leva L2). */
+const EXP = fs.readFileSync(path.join(raiz, 'js/views/explore.js'), 'utf8');
+must(/loadUserProfile\(/.test(EXP),
+  '⑧b ⛔ `explore` segue no documento cheio — ele usa o e-mail como NOME de quem não tem nome');
+
 // ── ⑨ o espelho tem o que as consultas FILTRAM e ORDENAM ───────────────────
 ['displayName_lower', 'createdAt', 'updatedAt', 'acceptFriendRequests'].forEach((k) => {
   must(C.CAMPOS_PUBLICOS.indexOf(k) >= 0,

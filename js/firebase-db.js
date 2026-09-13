@@ -2765,6 +2765,30 @@ window.FirestoreDB = {
     return true;
   },
 
+  /* ⭐ FICHA DE TERCEIRO VEM DO ESPELHO PÚBLICO — nome, foto, gênero, nível, categoria.
+   * Sem e-mail, sem telefone, sem e-mails vinculados. Use esta quando a tela mostra ALGUÉM;
+   * `loadUserProfile` só para o PRÓPRIO perfil ou quando um campo privado é mesmo necessário.
+   *
+   * ⛔ NÃO cai para `users` quando o espelho não tem o documento. A queda anularia a leva
+   * inteira: bastaria o espelho faltar para o app voltar a baixar a ficha cheia — e falha
+   * silenciosa que "conserta sozinha" é como a exposição volta sem ninguém ver. Espelho
+   * ausente devolve `null`, e quem chama já trata isso (todos tratam: a lista de amigos, o
+   * gênero do participante e o cartão do jogo já lidam com perfil vazio). */
+  async carregarPerfilPublico(uid) {
+    if (!this.db || !uid) return null;
+    try {
+      var doc = await this.db.collection(window._COLECAO_PERFIL_PUBLICO).doc(uid).get();
+      return doc.exists ? doc.data() : null;
+    } catch (e) {
+      window._warn('[perfil público] não carregou ' + uid + ':', e && e.message);
+      return null;
+    }
+  },
+
+  /* ⚠️ ESTA LÊ O DOCUMENTO INTEIRO, com e-mail e telefone. Serve ao PRÓPRIO perfil e aos
+   * poucos caminhos que precisam de campo privado (o envio de notificação resolve o e-mail
+   * do destinatário aqui — e é justamente o que a migração da fila de e-mail vai tirar).
+   * Para MOSTRAR alguém na tela, use `carregarPerfilPublico`. */
   async loadUserProfile(uid) {
     if (!this.db || !uid) return null;
     try {

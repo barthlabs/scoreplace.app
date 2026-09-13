@@ -264,7 +264,7 @@ window._loadFriendProfilesCached = async function() {
   var toFetch = cu.friends.filter(function(uid) { return uid && !window._friendProfilesCache[uid]; });
   if (toFetch.length > 0) {
     var fetched = await Promise.all(toFetch.map(function(uid) {
-      return window.FirestoreDB.loadUserProfile(uid).then(function(p) {
+      return window.FirestoreDB.carregarPerfilPublico(uid).then(function(p) {
         return { uid: uid, profile: p };
       }).catch(function() { return { uid: uid, profile: null }; });
     }));
@@ -12166,7 +12166,7 @@ window._openCasualMatch = function(restoreOpts) {
       if (_rUid && window._friendProfilesCache && !window._friendProfilesCache[_rUid]) {
         (function(_u) {
           if (window.FirestoreDB && window.FirestoreDB.loadUserProfile) {
-            window.FirestoreDB.loadUserProfile(_u).then(function(p) {
+            window.FirestoreDB.carregarPerfilPublico(_u).then(function(p) {
               if (p) {
                 window._friendProfilesCache[_u] = {
                   uid: _u, displayName: p.displayName || '',
@@ -12260,7 +12260,7 @@ window._openCasualMatch = function(restoreOpts) {
     for (var j = 0; j < needed.length; j++) _participantGenders[needed[j]] = undefined;
     var pending = needed.length;
     needed.forEach(function(uid) {
-      window.FirestoreDB.loadUserProfile(uid).then(function(prof) {
+      window.FirestoreDB.carregarPerfilPublico(uid).then(function(prof) {
         _participantGenders[uid] = (prof && prof.gender) ? prof.gender : '';
         // v1.6.33-beta: propaga gender do perfil para _slotGenders se ainda não
         // há override manual, para que outros clientes vejam via Firestore sync.
@@ -15230,7 +15230,7 @@ window._openCasualMatch = function(restoreOpts) {
               if (_remoteUid && window._friendProfilesCache && !window._friendProfilesCache[_remoteUid]) {
                 (function(_uid) {
                   if (window.FirestoreDB && window.FirestoreDB.loadUserProfile) {
-                    window.FirestoreDB.loadUserProfile(_uid).then(function(p) {
+                    window.FirestoreDB.carregarPerfilPublico(_uid).then(function(p) {
                       if (p) {
                         window._friendProfilesCache[_uid] = {
                           uid: _uid,

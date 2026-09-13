@@ -1,3 +1,10 @@
+## 2.3.3 — 13/set/2026
+
+A tela da chave baixava o cadastro completo das pessoas — com e-mail, telefone e data de
+nascimento — para mostrar nome, foto e o ícone de gênero no card do jogo.
+
+Agora ela lê a versão pública do perfil, que tem só isso. O que aparece na tela é o mesmo.
+
 ## 2.3.2 — 13/set/2026
 
 Quando o app mostra uma lista de pessoas — busca por nome, sugestões de quem convidar, quem
