@@ -1,3 +1,17 @@
+## 2.2.96 — 12/set/2026
+
+Abrir os detalhes de um torneio agora leva direto ao seu jogo.
+
+Na chave, a tela já tentava parar no seu próximo jogo — mas quando não havia próximo (você
+perdeu e está esperando a repescagem), ela parava no seu jogo mais ANTIGO, lá no começo da
+chave. Agora para no último, que é onde a sua história está. E se o sorteio ainda não
+aconteceu, para no seu próprio card, no topo.
+
+Também havia um caso em que a tela simplesmente ficava no topo: em torneios grandes, a chave é
+montada por partes conforme você abre as seções, e o seu jogo podia ser justamente uma das
+partes ainda não montadas — então não havia o que procurar. Agora, quando você tem jogo naquela
+fase, a chave é montada antes de procurar.
+
 ## 2.2.95 — 12/set/2026
 
 A classificação parcial da fase eliminatória estava colocando quem perde nas PRIMEIRAS posições.

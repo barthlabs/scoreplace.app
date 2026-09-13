@@ -687,9 +687,34 @@ function _alvoDeEntrada() {
     }
     return _meus[_meus.length - 1];
   }
-  // 3) Sem grupo (eliminatória, chave): o próximo jogo dele — subindo pro box do grupo
-  //    quando o card mora dentro de um.
-  var _mine = document.querySelector('[data-my-pending="1"]') || document.querySelector('[data-my-match="1"]');
+  /* 3) SEM GRUPO (eliminatória, chave) — O JOGO DELE. Ordem do dono (12/set/2026):
+   *    _"o usuário clicando no card do torneio abre os detalhes e deveria pular para o jogo
+   *    do usuário (o próximo, o último ou seu card antes do sorteio)"_.
+   *    São TRÊS alvos, nesta ordem, e os três faltavam alguma coisa:
+   *      ① o PRÓXIMO jogo — já existia;
+   *      ② o ÚLTIMO jogo dele quando não há próximo (perdeu e espera repescagem) — existia
+   *         `[data-my-match="1"]`, mas `querySelector` devolve o PRIMEIRO do documento, que é
+   *         o jogo mais ANTIGO dele. Quem perdeu na 2ª rodada caía na 1ª. Agora é o último,
+   *         e restrito ao CARD de jogo (`data-match-num`): `data-my-match` também marca
+   *         pílulas de W.O. e de pontuação, que não são jogo.
+   *      ③ ANTES DO SORTEIO não existe jogo nenhum: o alvo é o card dele mesmo, que já mora
+   *         no topo da tela (`#sp-meu-card`, de `_meuCardNoTopo`). */
+  var _mine = document.querySelector('[data-my-pending="1"]');
+  /* ⛔ O CARD DELE PODE NÃO ESTAR MONTADO. Mesma causa já descrita nos itens 0 e 1: acima de
+   * `_CHAVE_LOTE_MIN` a chave nasce em lotes adiados, e o jogo da pessoa pode ser um deles —
+   * aí `querySelector` não acha nada e a tela fica no topo.
+   * ⚠️ Montar tudo é CARO (5.482 elementos no Confra) e por isso só se paga quando há o que
+   * achar: `_chaveTenhoJogoNaFase` é decidido no MODELO, na hora de renderizar a fase, e não
+   * perguntando ao DOM — perguntar ao DOM seria perguntar justamente à parte que falta. */
+  if (!_mine && window._chaveTenhoJogoNaFase && typeof window._chaveMontaTudo === 'function') {
+    try { window._chaveMontaTudo(document); } catch (e) {}
+    _mine = document.querySelector('[data-my-pending="1"]');
+  }
+  if (!_mine) {
+    var _meusCards = document.querySelectorAll('[data-my-match="1"][data-match-num]');
+    if (_meusCards && _meusCards.length) _mine = _meusCards[_meusCards.length - 1];
+  }
+  if (!_mine) _mine = document.getElementById('sp-meu-card');
   if (!_mine) return null;
   return (typeof _mine.closest === 'function' && _mine.closest('[data-group-box]')) || _mine;
 }
@@ -3625,6 +3650,23 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
   var curPhase = (_viewPhaseIdx != null) ? _viewPhaseIdx : _realCur;
   var phaseCfg = (t.phases && t.phases[curPhase]) || {};
   var pm = (t.matches || []).filter(function (m) { return (m.phaseIndex || 0) === curPhase; });
+
+  /* ⭐ "EU TENHO JOGO NESTA FASE?" — decidido AQUI, no MODELO, e lido pelo alvo da rolagem de
+   * entrada (`_alvoDeEntrada`). É ele que autoriza o custo de montar os lotes adiados: sem
+   * esta resposta, ou se paga o custo em TODA entrada, ou se pergunta ao DOM — e o DOM é
+   * exatamente quem não sabe, porque o card que falta é um dos adiados.
+   * A conta é barata: roda sobre `pm`, que já está na mão, e usa a régua canônica de
+   * "é o meu jogo?" (uid do slot), a MESMA do card. [[project_uid_identity_canon_locked]] */
+  window._chaveTenhoJogoNaFase = (function () {
+    var _cuAlvo = (typeof window._verifiedCurrentUser === 'function')
+      ? (window._verifiedCurrentUser() || null)
+      : ((window.AppStore && window.AppStore.currentUser) || null);
+    if (!_cuAlvo || typeof window._userTeamInMatch !== 'function') return false;
+    for (var _pi = 0; _pi < pm.length; _pi++) {
+      try { if (window._userTeamInMatch(t, pm[_pi], _cuAlvo) > 0) return true; } catch (e) {}
+    }
+    return false;
+  })();
 
   // Dupla Eliminatória: layout DEDICADO (Chaveamento Superior/Inferior + Grande Final +
   // Grande 3º). _renderPhaseBracket é a ÚNICA entrada de render — delega no renderer

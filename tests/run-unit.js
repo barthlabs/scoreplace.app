@@ -81,6 +81,7 @@ const SUITES = [
   'tests/mesmo-link-do-grupo-nao-avisa-de-novo.test.js',
   'tests/digest-nao-manda-a-mesma-novidade-duas-vezes.test.js',
   'tests/quem-cai-fica-no-fim-da-chave.test.js',
+  'tests/abrir-o-torneio-cai-no-meu-jogo.test.js',
   'tests/espera-e-fora-usam-a-grade-e-a-cor-canonicas.test.js',
   'tests/l16-auditor-nao-mente-quando-nao-consegue-olhar.test.js',
   'tests/l16-hidratacao-que-falha-nao-fica-calada.test.js',
