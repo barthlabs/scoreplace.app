@@ -30,6 +30,46 @@
 | L15 | testes não descobertos automaticamente | **Concluída (L15.P0/P1/P2).** Medido em 8341efe2: **603 arquivos de teste no disco, 581 na lista à mão de `tests/run-unit.js` e 15 que NENHUM comando alcançava** — entre eles `functions-autodraw/test-uid-identity.js`, **vermelho 11/22 sem ninguém ver**. Os 5 vermelhos foram triados e reparados sem afrouxar invariante nenhum (ver abaixo), e `scripts/check-test-catalog.js` passou a exigir que todo arquivo de teste tenha um comando conhecido. | Gate no `npm test`; suítes de emulador serializadas por grupo. |
 | L16 | observabilidade e hardening | **Aberta.** | Métricas, alertas e runbooks definidos por risco, sem registrar PII. |
 
+## L6 — RECONFERIDA: TRÊS "ACHADOS ABERTOS" E NENHUM ERA O QUE DIZIA (13/set/2026)
+
+Mesma disciplina que já retificou a L2: em vez de reler o registro, fui medir o que ele
+afirma. **Levantei três suspeitas e as três morreram na medição.** Registro as três, porque
+suspeita que morre também é resultado — e porque o padrão já é o terceiro do dia.
+
+**① "5 escritas diretas do cliente fora da porta" → são 3, e são estreitas.**
+Os endereços do registro (`js/store.js:3840`, `:9676`, `js/views/arbitros.js:274/309/342`)
+derivaram: em `store.js` não há mais escrita nenhuma — saíram na L7.P2. Sobram **três**, todas
+em `arbitros.js`, e nenhuma é o perigo descrito: não gravam a cópia em memória com `merge`,
+gravam **um campo só** por `arrayUnion`/`arrayRemove`. Não há risco de lost-update no
+documento do torneio.
+⚠️ Suspeitei que a confirmação do árbitro CONVIDADO falharia calada (o campo `arbitros` não
+aparece em regra nenhuma, e o diff de participante não o inclui). **Errado:** as três são
+ações do ORGANIZADOR, que passa pelo `allow update` de admin — e as três têm `.catch` que
+mostra o erro na tela. Nada a consertar.
+
+**② "`participants` e `communications` são subcoleções SEM REGRA NENHUMA".**
+É verdade — e **não é buraco, é o estado seguro**. Sem regra o Firestore NEGA. Medido por
+leitura anônima real: `participants` **403**, `communications` **403**, enquanto `matches`,
+`inscritos` e `results` respondem **200**. Estar na lista de "achados abertos" faz a frase ler
+como falta; é o contrário.
+
+**③ A suspeita que parecia grave: o cliente PRECISA de `participants` e não pode lê-la.**
+O marcador do Confra diz `_semPesados = ['matches', 'participants', 'opponentHistory']`, e é
+por ele que o app remonta o torneio dividido. Se a parte `participants` fosse negada, torneio
+dividido não abriria para ninguém. **Errado de novo:** `tournament-split-core.js` tem
+`COLECAO_DA_PARTE = { participants: 'inscritos' }` — a parte chamada `participants` mora na
+coleção **`inscritos`**, que tem regra e responde 200. A subcoleção `participants` do banco é
+outra coisa: o **espelho do roster**, escrito só pelo servidor (`enrollParticipant` e
+`syncMatchRosters`) e negado ao cliente. Está certo assim.
+
+⭐ **O que sobra de verdade da L6, e é pequeno:** `invitedBy: cu.uid || cu.email` nas três
+escritas de `arbitros.js` — a MESMA confusão uid/e-mail que a 2.3.0 acabou de tirar do aviso.
+Terceira ocorrência do mesmo desenho. Fica anotado para a próxima leva publicável.
+
+⚠️ **Lição repetida, agora com três casos no mesmo dia (L2, L14.P6 e esta):** o que o
+documento chama de "achado aberto" é FOTOGRAFIA do dia em que foi escrito. Remedir antes de
+planejar deixou de ser recomendação.
+
 ## L2 — O BLOQUEIO NÃO É O QUE ESTÁ ESCRITO (12/set/2026)
 
 A tabela diz que a L2 está *"BLOQUEADA EXTERNAMENTE"* porque **o bundle publicado está em
