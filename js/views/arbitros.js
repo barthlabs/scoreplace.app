@@ -192,7 +192,17 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
           else invitedUids[a.uid] = a;
         });
 
-        // Now query available referees
+        /* ⚠️ ACHADO NÃO CONSERTADO NESTA LEVA, PORQUE É DECISÃO DE PRODUTO — e está aqui
+         * escrito para não se perder. MEDIDO em 13/set/2026: **0 de 279 perfis** têm
+         * `refereeSports`. Com esporte, esta consulta devolve VAZIO (a tela diz que não há
+         * árbitro). SEM esporte, ela cai no `.limit(80)` abaixo e lista **80 pessoas
+         * quaisquer** como "árbitros disponíveis" — baixando a ficha INTEIRA das 80, o que
+         * inclui `preferredLocations`, que são COORDENADAS de onde a pessoa joga.
+         * ⛔ Não dá para mover isto para o espelho sem duas decisões que não são minhas:
+         * se `refereeSports` entra nele, e se coordenada de jogador pode entrar — e
+         * coordenada é o tipo de campo que este espelho existe para NÃO carregar.
+         * ⭐ O conserto provável é a tela exigir a marca de árbitro (sem marca, ninguém é
+         * listado): tira a lista falsa E o download de uma vez. Falta o dono decidir. */
         var refQuery = db.collection('users');
         if (sport) {
           refQuery = refQuery.where('refereeSports', 'array-contains', sport);
@@ -258,7 +268,17 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var cu = window.AppStore && window.AppStore.currentUser;
     if (!db || !cu || !uid || !tId) return;
 
-    db.collection('users').doc(uid).get()
+    /* ⛔ O E-MAIL SAIU DAQUI, E ELE NEM DEVIA ESTAR. Este convite gravava
+     * `email: u.email` DENTRO de `tournaments/{id}.arbitros[]` — copiar contato de uma
+     * pessoa para o documento do torneio é exatamente o que esta auditoria existe para
+     * acabar, e aqui era pior: o cabeçalho deste arquivo DOCUMENTA a forma da entrada
+     * (`{uid, name, photoURL, status, invitedAt, confirmedAt}`) e o e-mail não está nela.
+     * Campo que o contrato não tem e ninguém lê — varredura do repositório: ZERO leitores.
+     * ⭐ MEDIDO em 13/set/2026 antes de mexer: 61 torneios, ZERO com árbitros, ZERO entradas.
+     * Nunca vazou — era armadilha armada, não vazamento aberto. Quem identifica o árbitro é
+     * o `uid` (é assim que `bracket.js` confere quem pode apitar).
+     * ⭐ E a leitura passou para o espelho: o convite usa `displayName` e `photoURL`, só. */
+    db.collection(window._COLECAO_PERFIL_PUBLICO || 'usersPublic').doc(uid).get()
       .then(function(snap) {
         if (!snap.exists) throw new Error('Usuário não encontrado');
         var u = snap.data();
@@ -266,10 +286,14 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
           uid:       uid,
           name:      u.displayName || u.name || uid,
           photoURL:  u.photoURL || '',
-          email:     u.email || '',
           status:    'invited',
           invitedAt: new Date().toISOString(),
-          invitedBy: cu.uid || cu.email
+          /* ⛔ A QUEDA PARA E-MAIL SAIU. `cu.uid || cu.email` só podia gravar e-mail no
+           * documento do torneio quando não houvesse uid — e usuário autenticado SEMPRE tem
+           * uid: medido em 13/set/2026 sobre os 5.792 avisos de produção, a queda análoga
+           * nunca disparou uma vez. Queda que nunca acontece e que, se acontecesse, vazaria
+           * contato, não é rede de segurança: é a porta destrancada dos fundos. */
+          invitedBy: cu.uid || ''
         };
         return window.FirestoreDB._tRef(tId).update({
           arbitros: firebase.firestore.FieldValue.arrayUnion(entry)
@@ -297,14 +321,16 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var db = window.FirestoreDB && window.FirestoreDB.db;
     var cu = window.AppStore && window.AppStore.currentUser;
     if (!db || !cu || !tId) return;
+    /* ⛔ A GÊMEA DO CONVITE, com o mesmo defeito — e ela grava o e-mail do PRÓPRIO
+     * organizador no documento do torneio. Consertar só o convite deixaria o vazamento
+     * vivo no caminho do "eu mesmo apito", que é o mais usado dos dois. */
     var entry = {
       uid:         cu.uid || uid,
       name:        cu.displayName || cu.name || uid,
       photoURL:    cu.photoURL || '',
-      email:       cu.email || '',
       status:      'confirmed',
       confirmedAt: new Date().toISOString(),
-      invitedBy:   cu.uid || cu.email
+      invitedBy:   cu.uid || uid
     };
     window.FirestoreDB._tRef(tId).update({
       arbitros: firebase.firestore.FieldValue.arrayUnion(entry)
