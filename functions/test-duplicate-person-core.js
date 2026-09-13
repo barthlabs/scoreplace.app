@@ -342,12 +342,18 @@ const achou = (c, p) => D.detectarMesmaPessoa(c, p).suspeito;
 
 // ── 5 · CELULAR: todos os dígitos, nunca sufixo ─────────────────────────────
 (() => {
-  ok('mesmo número em formatos diferentes → dispara',
-    !!achou({ uid: 'a', nome: 'Um Nome', telefone: '+55 (11) 99978-6253' },
+  /* ⛔ ORDEM DO DONO (13/set/2026): _"nome diferente mesmo telefone"_ tem de ser possível —
+   * casal e mãe/filho dividem o aparelho, e o número do perfil pode ter sido digitado pelo
+   * organizador. Fabiana e Val são o caso real. O telefone CORROBORA o nome; não dispara só. */
+  ok('mesmo número com nomes que não têm nada a ver → NÃO dispara (casal, mãe e filho)',
+    !achou({ uid: 'a', nome: 'Um Nome', telefone: '+55 (11) 99978-6253' },
       [{ uid: 'b', nome: 'Nome Diferente', telefone: '11999786253' }]));
+  ok('mesmo número em formatos diferentes, com nome parecido → dispara',
+    !!achou({ uid: 'a', nome: 'Deborah Monteiro', telefone: '+55 (11) 99978-6253' },
+      [{ uid: 'b', nome: 'Deborah Perestrello Monteiro', telefone: '11999786253' }]));
   ok('  → motivo é "celular" (mais forte que nome)',
-    achou({ uid: 'a', nome: 'X', telefone: '+5511999786253' },
-      [{ uid: 'b', nome: 'Y', telefone: '+5511999786253' }]).motivo === 'celular');
+    achou({ uid: 'a', nome: 'Ana Silva', telefone: '+5511999786253' },
+      [{ uid: 'b', nome: 'Ana Silva', telefone: '+5511999786253' }]).motivo === 'celular');
 
   // A regra do dono: "considere todos os dígitos e não apenas os 8 últimos".
   ok('números DIFERENTES que compartilham os 8 últimos dígitos NÃO disparam',
@@ -374,11 +380,19 @@ const achou = (c, p) => D.detectarMesmaPessoa(c, p).suspeito;
 
 // ── 7 · ordem: celular vem antes de nome ────────────────────────────────────
 (() => {
+  /* ⛔ O NOME DIFERENTE COM O MESMO NÚMERO SUMIU DA LISTA (casal, mãe e filho). Quem compara
+   * agora são dois candidatos que JÁ passam pelo nome — e entre eles o celular desempata. */
   const r = D.detectarMesmaPessoa(
     { uid: 'a', nome: 'Nome Igual', telefone: '+5511911112222' },
-    [{ uid: 'so_nome', nome: 'Nome Igual' }, { uid: 'com_tel', nome: 'Zzz', telefone: '11911112222' }]);
+    [{ uid: 'so_nome', nome: 'Nome Igual' },
+      { uid: 'com_tel', nome: 'Nome Igual', telefone: '11911112222' }]);
   ok('acha os dois', r.todos.length === 2);
   ok('  → o suspeito principal é o do CELULAR (prova prática)', r.suspeito.uid === 'com_tel');
+
+  const so = D.detectarMesmaPessoa(
+    { uid: 'a', nome: 'Nome Igual', telefone: '+5511911112222' },
+    [{ uid: 'so_nome', nome: 'Nome Igual' }, { uid: 'casal', nome: 'Zzz', telefone: '11911112222' }]);
+  ok('  → e quem só tem o número igual nem entra na lista', so.todos.length === 1);
 })();
 
 // ── 8 · a pergunta não vaza PII ─────────────────────────────────────────────

@@ -86,7 +86,9 @@ const lojaFalsa = () => { const m = {}; return { getItem: (k) => (k in m ? m[k] 
     const gate = auth.indexOf("} catch (e) { window._warn('[verify] gate check failed:', e); }");
     const chamada = auth.indexOf('FirestoreDB.marcarSessao(');
     assert.ok(gate > 0 && chamada > gate, '⛔ o carimbo tem que vir DEPOIS do gate de e-mail (e dos returns de lápide/redirect)');
-    const mergedReturn = auth.indexOf('onAuthStateChanged re-dispara com o sobrevivente');
+    /* ⛔ ÂNCORA NO CÓDIGO, NUNCA NA PROSA. Isto apontava para uma frase de comentário e ficou
+     * vermelho no dia em que a frase mudou de lugar — o comportamento estava intacto. */
+    const mergedReturn = auth.indexOf('if (await window._trocarParaContaSobrevivente()) return;');
     assert.ok(mergedReturn > 0 && chamada > mergedReturn, '⛔ e DEPOIS do return da lápide');
   }
   console.log('✅ L13.P2: carimbo único por dia/versão, ISO, plataforma do global, lápide intocada, falha retentável e posição provada');

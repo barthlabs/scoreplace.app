@@ -413,14 +413,34 @@ function compararPessoa(candidato, pessoa, opts) {
   // letzplay NÃO dispara sozinho — só reforça. Regra do dono.
   if (!mesmoTel && !mesmoEmail && !parecidoNome) return null;
 
+  /* ⛔⛔ MESMO TELEFONE COM NOME DIFERENTE NÃO É A MESMA PESSOA.
+   *
+   * Ordem do dono (13/set/2026): _"sempre pode acontecer de autenticar 1 telefone em duas
+   * contas (mae e filho usando o mesmo telefone), marido e mulher como é o caso do val e
+   * fabiana"_ · _"precisa colocar essa possibilidade. nome diferente mesmo telefone"_.
+   *
+   * ⛔ O RACIOCÍNIO QUE ESTAVA AQUI ERA FALSO. O comentário logo abaixo dizia que celular é
+   * CREDENCIAL "porque o Auth não deixa dois uids com a mesma" — mas o número que chega aqui
+   * vem do PERFIL, e no perfil ele pode ter sido digitado pelo organizador, que é contato e
+   * não prova nada. Medido em 13/set/2026: os 4 números repetidos da base não estavam
+   * autenticados em conta nenhuma. E Fabiana e Val, que dividem o aparelho e são casal,
+   * disparariam a pergunta "vocês são a mesma pessoa?" com a força máxima da escala.
+   *
+   * ⭐ ENTÃO O TELEFONE DEIXA DE DISPARAR SOZINHO: ele CORROBORA o nome parecido, como o
+   * letzplay sempre fez. Quem some daqui é só o par de nomes sem nada a ver — a pessoa de
+   * verdade com dois cadastros continua caindo pelo nome ou pelo e-mail.
+   * [[project_celular_contato_vs_identidade]] */
+  if (mesmoTel && !mesmoEmail && !parecidoNome) return null;
+
   const corroboracoes = [];
   if ((mesmoTel || mesmoEmail) && parecidoNome) corroboracoes.push('nome');
   if (mesmoLz) corroboracoes.push('letzplay');
 
   return {
-    // Celular e e-mail são CREDENCIAIS (o Auth não deixa dois uids com a mesma); nome é
-    // indício. Por isso os dois vêm antes na ordem — e ambos, autenticados, fundem sem
-    // perguntar (ver index.js).
+    // E-mail é CREDENCIAL de verdade. Celular, aqui, NÃO é: o campo do perfil aceita o
+    // número digitado pelo organizador, e aparelho dividido em casa é normal. Ele continua
+    // à frente do nome na ordem porque, QUANDO vem junto de nome parecido, é o sinal mais
+    // forte que existe — mas sozinho não chega mais até aqui.
     motivo: mesmoTel ? 'celular' : (mesmoEmail ? 'email' : 'nome'),
     // Como os nomes se parecem — o index.js usa isto no log e o texto da pergunta muda
     // quando a grafia é diferente (afirmar "o mesmo nome" seria falso ali).

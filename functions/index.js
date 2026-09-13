@@ -5549,6 +5549,28 @@ exports.registerPhonePassword = onCall(
       console.error("[registerPhonePassword] updateUser failed:", err.code || err.message);
       throw new HttpsError("internal", "não foi possível salvar: " + (err.code || err.message));
     }
+    /* ⛔⛔ TELEFONE AUTENTICADO NÃO CRIA SEGUNDA CONTA — ELE ASSUME A QUE JÁ EXISTE.
+     *
+     * Ordem do dono (13/set/2026): _"nao tem que criar a porra de uma segunda conta nunca
+     * nesses casos"_ e _"o registro do organizador é superado por um mais forte, autenticado.
+     * ponto final"_.
+     *
+     * ⛔ COMO A SEGUNDA CONTA NASCIA. MEDIDO no dado real, em dois pares, pelos carimbos:
+     *   · Deborah entrou pela Apple às 21:09, criou conta por telefone+senha às 21:13 — e o
+     *     organizador só digitou o número às 21:14. A segunda conta veio ANTES dele.
+     *   · Carolina tinha conta desde 11/jun; a conta por telefone nasceu em 04/ago; o
+     *     organizador entrou em 24/ago.
+     * Ou seja: o culpado NUNCA foi o organizador. É o cadastro por telefone, que criava conta
+     * nova sem olhar se aquele número já estava no perfil de alguém vivo.
+     *
+     * ⭐ AGORA ELE OLHA. Se outra conta VIVA já tem esse telefone — não importa se veio do
+     * organizador ou da própria pessoa —, as duas são a mesma pessoa: o número acabou de ser
+     * PROVADO por SMS nesta sessão, e é o registro mais forte que existe. Em vez de nascer um
+     * segundo cadastro, as contas são unidas pela porta de sempre, que escolhe quem sobrevive
+     * por atividade (torneios, último acesso) e leva o histórico junto.
+     *
+     * ⚠️ NÃO É ADIVINHAÇÃO: o telefone só chega aqui depois do SMS. A prova é do usuário,
+     * não do organizador. [[project_celular_contato_vs_identidade]] */
     /* ⛔ O NÚMERO ACABOU DE SER PROVADO — o carimbo do organizador morre aqui.
      * Sem isto a conta ficava com telefone verificado E selo de "posto por terceiro", e as
      * travas de identidade seguiam recusando o que já tinha sido provado. Era o caminho que
@@ -9792,36 +9814,21 @@ exports.setParticipantContactPhone = onCall(
       throw new HttpsError(code, humano);
     }
 
-    /* ⛔ ESSE NÚMERO JÁ É DE ALGUÉM? — o furo que criou 4 cadastros duplicados.
+    /* ⛔⛔ NÚMERO REPETIDO É NORMAL — NÃO SE RECUSA POR ISSO.
      *
-     * MEDIDO na produção em 13/set/2026: **4 telefones aparecem em DUAS contas vivas**, e o
-     * padrão é o mesmo nos quatro — numa delas o número foi digitado pelo organizador, na
-     * outra ele é a identidade da pessoa. Ou seja, o organizador registrou o contato na
-     * conta ERRADA, e a pessoa ficou com dois cadastros: os resultados dela se dividem, e
-     * o convite vai para a metade errada.
+     * Ordem do dono (13/set/2026): _"sempre pode acontecer de autenticar 1 telefone em duas
+     * contas (mae e filho usando o mesmo telefone), marido e mulher"_.
      *
-     * ⛔ Esta porta nunca perguntou se o número já tinha dono. Agora pergunta, e RECUSA —
-     * porque o certo, quando a pessoa já tem conta, não é carimbar o telefone dela num
-     * segundo cadastro: é convidar ou unir. Duplicar é o caminho que não tem volta fácil.
+     * ⛔ EU TINHA POSTO AQUI UMA RECUSA quando o número já estivesse autenticado noutra conta,
+     * achando que era sempre a mesma pessoa. O dado real desmentiu: Fabiana e Val são casal,
+     * dividem o número e estão INSCRITOS NO MESMO TORNEIO. A recusa teria impedido o
+     * organizador de registrar o contato de uma das duas — quebrando justamente o que esta
+     * porta serve para fazer, que é o WhatsApp alcançar a pessoa para combinar o jogo.
      *
-     * ⚠️ A recusa NÃO conta quem é o outro dono: o organizador não precisa (e não deve)
-     * receber o cadastro alheio para saber que deve convidar em vez de digitar. */
-    const _fone = String((r.update && r.update.phone) || "").replace(/\D/g, "");
-    if (_fone.length >= 10) {
-      const _mesmos = await db.collection("users").where("phone", "==", r.update.phone).get();
-      const _outroDono = _mesmos.docs.some((d) => {
-        if (d.id === targetUid) return false;            // é o próprio alvo
-        const o = d.data() || {};
-        if (o.mergedInto) return false;                  // lápide não é dono de nada
-        return true;
-      });
-      if (_outroDono) {
-        throw new HttpsError("already-exists",
-          "Esse celular já pertence a uma conta no scoreplace. Convide a pessoa pelo número " +
-          "em vez de registrar o contato aqui — assim ela entra na conta que já tem, e os " +
-          "resultados dela não se dividem em dois cadastros.");
-      }
-    }
+     * ⭐ O QUE FICA: este número é CONTATO, nunca identidade. Ele entra marcado como posto por
+     * terceiro e caduca sozinho no dia em que a pessoa confirmar o próprio número por SMS.
+     * Telefone repetido não une conta nenhuma, aqui nem em lugar algum.
+     * [[project_celular_contato_vs_identidade]] */
 
     await db.collection("users").doc(targetUid).set(r.update, { merge: true });
 

@@ -1591,6 +1591,33 @@ window._authRace = function (promise, ms, label) {
 // recebeu perde o nome — foi assim que uma conta Apple ficou gravada com o
 // E-MAIL no lugar do nome ("brupoti@gmail.com" na lista de espera do
 // organizador) enquanto o Auth tinha "Bruna Verga Sá".
+/* ⛔ TROCAR PARA A CONTA QUE SOBREVIVEU À UNIÃO.
+ * Chamado logo depois que o servidor une duas contas na entrada por SMS: a sessão aberta pode
+ * ser a da conta que virou lápide, e seguir nela mostraria um perfil vazio. O servidor só
+ * entrega a chave da sobrevivente para quem prova estar logado na absorvida — por isso a troca
+ * acontece AQUI, ainda com a sessão de pé, e não numa passagem futura.
+ * ⛔ MORA NO NÍVEL DE CIMA de propósito: função declarada dentro de outra não existiria para
+ * quem a chama. [[feedback_funcao_dentro_de_outra_nao_existe]]
+ * Devolve true quando a troca aconteceu (quem chamou deve PARAR: a entrada recomeça sozinha). */
+window._trocarParaContaSobrevivente = async function () {
+  try {
+    window._mergedRedirectInProgress = true;
+    var _fn = firebase.functions().httpsCallable('resolveMergedLogin');
+    var _r = await _fn({});
+    if (_r && _r.data && _r.data.merged && _r.data.customToken) {
+      await firebase.auth().signInWithCustomToken(_r.data.customToken);
+      window._mergedRedirectInProgress = false;
+      return true; // onAuthStateChanged re-dispara já na conta certa
+    }
+  } catch (e) {
+    /* ⛔ NÃO FICAR CALADO: sem a troca a pessoa segue na conta absorvida, e é exatamente o
+     * sintoma ("entrei e sumiu tudo") que não se explica sem este rastro. */
+    window._warn('[conta-unida] não deu para trocar de conta:', e);
+  }
+  window._mergedRedirectInProgress = false;
+  return false;
+};
+
 window._providerDisplayName = function (user) {
   var live = '';
   try {
@@ -4357,16 +4384,8 @@ async function simulateLoginSuccess(user) {
         window._simulateLoginInProgressAt = 0;
         window._simulateLoginInProgressUid = '';
         window._log('[scoreplace-auth] conta mesclada — redirecionando login para o sobrevivente');
-        try {
-          var _resolveFn = firebase.functions().httpsCallable('resolveMergedLogin');
-          var _rr = await _resolveFn({});
-          if (_rr && _rr.data && _rr.data.merged && _rr.data.customToken) {
-            await firebase.auth().signInWithCustomToken(_rr.data.customToken);
-            window._mergedRedirectInProgress = false;
-            return; // onAuthStateChanged re-dispara com o sobrevivente
-          }
-        } catch (_re) { window._warn('[merged-login] resolveMergedLogin falhou:', _re); }
-        window._mergedRedirectInProgress = false;
+        // Mesma troca da entrada por SMS — uma só implementação.
+        if (await window._trocarParaContaSobrevivente()) return;
       }
     }
   } catch (e) { window._warn('[merged-login] checagem mergedInto falhou:', e); window._mergedRedirectInProgress = false; }

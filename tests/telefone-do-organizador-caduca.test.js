@@ -37,13 +37,28 @@ must(Object.keys(r).length === 3, '① e só esses três — não mexe em mais n
 // ── ② os DOIS caminhos de prova usam a porta ──────────────────────────────
 const FN = fs.readFileSync(path.join(raiz, 'functions/index.js'), 'utf8');
 const codigo = FN.split('\n').filter((l) => !/^\s*(\*|\/\/|\/\*)/.test(l)).join('\n');
-const usos = (codigo.match(/apagarCarimboDeTerceiro\(/g) || []).length;
-must(usos === 2, '② ⭐⭐ os DOIS caminhos que provam um número usam a porta (achados: ' + usos + ')');
-
-const iReg = codigo.indexOf('registerPhonePassword');
-const bloco = codigo.slice(iReg, codigo.indexOf('return { ok: true };', iReg));
-must(/apagarCarimboDeTerceiro/.test(bloco),
-  '② ⭐ o cadastro com telefone — que era o caminho ESQUECIDO — limpa o carimbo');
+/* ⛔ A RÉGUA É A PROPRIEDADE, NÃO A CONTAGEM. A versão anterior exigia exatamente 2 usos e
+ * ficou vermelha assim que um terceiro caminho legítimo nasceu — um portão que reprova o
+ * conserto certo não protege nada. O que importa: TODO lugar que grava um número PROVADO
+ * apaga o carimbo do organizador no mesmo movimento. */
+const gravamProvado = [];
+/* A forma de uma gravação de PERFIL é `phone` + `phoneCountry` juntos — é isso que a
+ * distingue dos registros de recuperação, que também carregam um `phone`. */
+const re = /phone:\s*[^,{}]+,\s*phoneCountry:/g;
+let m;
+while ((m = re.exec(codigo)) !== null) {
+  /* A GRAVAÇÃO INTEIRA, não só o objeto: a porta entra por `Object.assign`, ou seja FORA
+   * das chaves. Recortar no fecha-chaves deixava o conserto certo de fora e reprovava. */
+  const ini = codigo.lastIndexOf('{', m.index);
+  const fim = codigo.indexOf(';', m.index);
+  gravamProvado.push(codigo.slice(ini, fim < 0 ? codigo.length : fim));
+}
+must(gravamProvado.length >= 2,
+  '② achei os lugares que gravam um número já provado (' + gravamProvado.length + ')');
+gravamProvado.forEach((b, i) => {
+  must(/apagarCarimboDeTerceiro/.test(b),
+    '② ⭐⭐ gravação nº' + (i + 1) + ' de número provado apaga o carimbo do organizador junto');
+});
 
 // ── ③ ninguém apaga os campos na mão ──────────────────────────────────────
 must(!/phoneSource: _FV\.delete\(\)/.test(codigo) && !/phoneSource: admin\.firestore\.FieldValue\.delete\(\)/.test(codigo),
