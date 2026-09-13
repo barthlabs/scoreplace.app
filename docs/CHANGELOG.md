@@ -1,3 +1,17 @@
+## 2.2.94 — 12/set/2026
+
+Quando alguém cria o grupo de WhatsApp de um jogo ou do torneio, todo mundo é avisado — no app,
+por e-mail e por notificação no celular. Mas bastava reabrir a janela do link e apertar "Salvar"
+sem trocar nada para o mesmo aviso sair outra vez, para todos.
+
+Isso vinha acontecendo de verdade: o aviso do grupo de um jogo chegou à mesma pessoa em dois dias
+seguidos, e a versão de agosto do mesmo aviso saiu três vezes para as mesmas pessoas, com o texto
+idêntico. Havia um freio, mas era de cinco minutos e só valia dentro daquela aba aberta: recarregar
+a página, ou usar outro aparelho, e ele não sabia de nada.
+
+Agora quem decide é o próprio link: mudou, é notícia e todo mundo é avisado; continuou o mesmo,
+ninguém recebe nada. O reenvio de propósito continua no botão "Notificar participantes".
+
 ## 2.2.93 — 12/set/2026
 
 Duas correções no caminho de recuperar a conta, ambas de um tipo só: a proteção existia e

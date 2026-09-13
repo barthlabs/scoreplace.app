@@ -738,6 +738,21 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (_emVoo[_vk]) return;
     _emVoo[_vk] = 1;
 
+    /* ⛔ MESMO LINK SALVO DE NOVO NÃO É NOTÍCIA. `_notifyOthers` disparava em TODO save
+     * bem-sucedido, e reabrir o overlay e apertar "Salvar" sem trocar nada mandava a
+     * MESMA frase pra todo mundo outra vez — no app, por e-mail e por notificação nativa.
+     * MEDIDO em produção (12/set/2026): a notificação "criou o grupo de whats do jogo
+     * Livia Morais / Rodrigo Barth vs Inga / Denise Soares" chegou à mesma pessoa em
+     * 02/set 17:59 E 03/set 16:13, e a versão de agosto do mesmo aviso chegou em 02/ago
+     * 22:07 e 03/ago 00:11 — com dois e-mails idênticos a 20 min um do outro.
+     * O dedup que existia (`_notifDedupCheck`) é de 5 MINUTOS e vive na MEMÓRIA da aba:
+     * recarregou a página, ou era outro aparelho, e ele nunca viu o primeiro envio.
+     * Agora quem decide é o DADO: mudou o link, é notícia; não mudou, não avisa ninguém.
+     * O reenvio de propósito continua existindo pelo botão "Notificar participantes"
+     * (`_waGrpNotifyParticipants`). [[feedback_a_defesa_vaza_pela_borda]] */
+    var _linkAnterior = (prev && prev.link) ? String(prev.link).trim() : '';
+    var _linkMudou = (_linkAnterior !== String(link).trim());
+
     var release = _spin(btn, 'Salvando…');
     ctx.target.waGroup = { link: link, byUid: cu.uid, byName: (cu.displayName || cu.name || ''), at: Date.now() };
     if (ctx.groupMode) _mirror(ctx);
@@ -751,7 +766,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       window._waGrpClose();
       _notify('Grupo salvo', ctx.scope === 'tournament'
         ? 'Os inscritos já veem "Entrar no grupo".' : 'Os outros jogadores já veem "Abrir grupo".', 'success');
-      try { _notifyOthers(ctx); } catch (e) {}
+      if (_linkMudou) { try { _notifyOthers(ctx); } catch (e) {} }
       if (typeof window._rerenderBracket === 'function' && ctx.scope === 'match') window._rerenderBracket(ctx.t.id);
       else if (typeof window._softRefreshView === 'function') window._softRefreshView();
     }).catch(function (err) {

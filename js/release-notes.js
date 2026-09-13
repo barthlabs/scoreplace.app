@@ -1,3 +1,4 @@
+// 2.2.94 — salvar o mesmo link do grupo de WhatsApp não avisa todo mundo de novo.
 // 2.2.93 — o link de redefinir senha vale uma vez só, de verdade.
 // 2.2.92 — o limite de tentativas de login deixa de se desligar sozinho sob ataque.
 // 2.2.91 — remoção de um caminho antigo de gravação que podia sobrescrever dado do servidor.

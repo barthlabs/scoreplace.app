@@ -3472,9 +3472,53 @@ e na ORDEM.
   à emissão da credencial**, com a falha engolida; e ler+apagar separados permitiam dois usos
   simultâneos. Agora consumo em transação, credencial só depois.
 
+### L14.P4 — a mesma notícia entregue duas e três vezes (12/set/2026)
+
+Primeiro pedaço da **reentrega** (o portão fala em "matriz de idempotência"): as portas de P0–P3
+foram lidas pela ótica de PROVA DE POSSE; esta foi lida pela de *"e se a mesma coisa chegar duas
+vezes?"*.
+
+**O que foi MEDIDO em produção (leitura direta do Firestore, não dedução):**
+- `mail/` tem **5.440 documentos**. Cruzando destinatário + assunto + corpo, **161 pares
+  idênticos a menos de 30 minutos um do outro**.
+- **105 deles** são o e-mail "Confirmação: os dados da sua conta", entre 13 e 28/ago — ou seja,
+  **antes** do id determinístico que entrou em 30/ago (`acctsum_` + `create()`). Depois dessa
+  data, **zero**. Aquele buraco está fechado e a produção prova.
+- O resto é **notificação de grupo de WhatsApp**. O caso mais claro: *"Rodrigo Barth criou o
+  grupo do WhatsApp de «Erika de Paula / Livia Morais vs Loraine Soares / Rodrigo Barth»"* saiu
+  para as MESMAS duas pessoas às **00:19, 00:39 e 13:34** de 03/ago, texto idêntico. Um grupo,
+  um jogo, três e-mails.
+- E **não é história**: em `users/…/notifications` o mesmo aviso, na redação atual, chegou à
+  mesma pessoa em **02/set 17:59 e 03/set 16:13**.
+
+**Por onde vazava** — de novo a borda, não o descuido:
+1. `_notifyOthers` disparava em **todo save bem-sucedido** do link. Reabrir a janela e apertar
+   "Salvar" sem trocar nada mandava a mesma frase a todo mundo outra vez.
+2. O freio que existia, `_notifDedupCheck`, é de **5 minutos** e vive na **memória da aba** —
+   recarregou a página, ou era outro aparelho, e ele nunca viu o primeiro envio. As repetições
+   medidas são de 20 minutos e de 22 horas: fora do alcance dele por ordem de grandeza.
+3. `queueNotifEmail` grava com `.add()`, **sem identidade nenhuma**: dois itens iguais na fila
+   são dois itens, e se caírem em janelas de flush diferentes viram dois e-mails iguais.
+
+**Pago em 2.2.94:** quem decide passou a ser o **dado**. Mudou o link, é notícia; não mudou,
+ninguém é avisado. O reenvio de propósito continua no botão "Notificar participantes".
+Trava: `tests/mesmo-link-do-grupo-nao-avisa-de-novo.test.js` (13 verificações; a decisão é
+**executada** contra seis casos, não só procurada por regex) — provada derrubando-a de volta.
+
+⭐ Padrão que se repete e vale como régua: **defesa com prazo curto e memória local não é
+defesa** — é um amortecedor. O que fecha é identidade no dado (id determinístico, `create()`
+em vez de `add()`, comparar com o que já estava lá).
+
 ### O que a L14 ainda não cobriu
-Idempotência de **retries** (o portão fala em "matriz de idempotência"): não inventariada. As
-portas acima foram lidas pela ótica de PROVA DE POSSE, não pela de reentrega.
+- A **fila de e-mail** (`notif_email_queue`) continua sem identidade: `.add()` no cliente e
+  consolidação por destinatário no servidor. Fechar isso alcançaria também os duplicados que
+  nascem de dois aparelhos — e, se for feito no `flushNotifEmailDigest`, alcança quem está em
+  versão velha de loja, que o conserto do cliente não alcança.
+- `_notifDedupCheck` segue de 5 min e em memória para **todos** os outros tipos de notificação.
+- Reentrega das **CFs agendadas e de gatilho** (o Firebase entrega ao menos uma vez por
+  contrato): `accountSummaryEmail`, `accountDeletionEmail`, `sendPairInviteEmail` e
+  `sendCoHostInviteEmail` já têm id determinístico + `create()`; as demais não foram lidas
+  por essa ótica.
 
 ## L6 — ESTÁ PRATICAMENTE FECHADA, E O REGISTRO DIZIA O CONTRÁRIO (12/set/2026)
 
