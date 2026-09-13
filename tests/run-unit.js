@@ -91,6 +91,7 @@ const SUITES = [
   'tests/espelho-publico-nao-leva-email-nem-telefone.test.js',
   'tests/ver-a-chave-nao-baixa-a-ficha-de-ninguem.test.js',
   'tests/foto-da-chave-nao-abre-a-ficha.test.js',
+  'tests/contar-gente-nao-e-baixar-gente.test.js',
   'tests/stb-aparece-para-quem-lancou.test.js',
   'tests/espera-e-fora-usam-a-grade-e-a-cor-canonicas.test.js',
   'tests/l16-auditor-nao-mente-quando-nao-consegue-olhar.test.js',

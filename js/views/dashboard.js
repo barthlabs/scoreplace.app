@@ -3974,9 +3974,19 @@ function renderDashboard(container) {
   if (window.FirestoreDB && window.FirestoreDB.db && _myUid) {
     (async function() {
       var n = null;
+      /* ⛔ CONTAR PESSOAS NÃO PODE SIGNIFICAR BAIXAR PESSOAS.
+       * Este número é a pilha "N jogadores" da dashboard — um inteiro. A queda do caminho 2
+       * fazia `collection('users').get()` SEM limite: os 279 documentos INTEIROS (e-mail,
+       * celular, data de nascimento, token de push) descarregados no aparelho de quem abre a
+       * tela inicial, para ler `.size` e jogar o resto fora.
+       * ⭐ Passa a contar o espelho público, e o número é o MESMO: medido em 13/set/2026,
+       * `users` 279 · `usersPublic` 279, sem órfão nem faltante. Se um dia divergirem, quem
+       * está errado é o espelho — e aí o conserto é a semeadura, não voltar a ler a ficha.
+       * [[project_email_no_doc_publico]] */
+      var COL = window._COLECAO_PERFIL_PUBLICO || 'usersPublic';
       // Path 1: aggregate count (preferred)
       try {
-        var ref = window.FirestoreDB.db.collection('users');
+        var ref = window.FirestoreDB.db.collection(COL);
         if (typeof ref.count === 'function') {
           var snap = await ref.count().get();
           if (snap && snap.data) {
@@ -3991,7 +4001,7 @@ function renderDashboard(container) {
       // Path 2: fallback — get() todos os docs e count via .size
       if (n == null) {
         try {
-          var fullSnap = await window.FirestoreDB.db.collection('users').get();
+          var fullSnap = await window.FirestoreDB.db.collection(COL).get();
           if (fullSnap && typeof fullSnap.size === 'number') n = fullSnap.size;
         } catch (e2) {
           if (e2 && e2.code !== 'permission-denied')
