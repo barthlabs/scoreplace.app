@@ -42,9 +42,31 @@ const CAMPOS = {
   checkedInConfirmed: { forma: 'mapa', pode: (t, u) => ehOrganizador(t, u) },
   vips:               { forma: 'mapa', pode: (t, u) => ehOrganizador(t, u) },
 
-  // Rastro de W.O. e apontamento de categoria: decisão de organização.
-  // [[project_wo_e_do_grupo_onde_aconteceu]]
-  woClaims:              { forma: 'lista', pode: (t, u) => ehOrganizador(t, u) },
+  /* ⛔ O APONTAMENTO DE W.O. NÃO É DO ORGANIZADOR — É DE QUEM JOGA.
+   * MEDIDO em 13/set/2026 no cliente (`_woDeclare`, js/views/wo-claim.js): quem aponta é
+   * quem está no jogo (`_allCtxUids(t, rc).indexOf(cu.uid) !== -1`) OU o organizador; e a
+   * Rule do Firestore hoje concorda — `woClaims` está na lista que um INSCRITO pode alterar.
+   * Esta tabela dizia "só organizador". Ninguém tinha percebido porque NENHUM cliente chama
+   * esta porta ainda — a regra errada estava dormindo.
+   * ⚠️ E isso importa MUITO na hora de tirar `woClaims` do documento: a subcoleção é
+   * `allow write: if false`, então o dia da migração é o dia em que o inscrito passa a
+   * depender DESTA linha para conseguir apontar. Linha errada = recurso morto.
+   * ⭐ A trava real é `byUid`: cada um aponta EM NOME PRÓPRIO. É a mesma regra que fechou a
+   * caixa de avisos na 2.3.0. [[project_wo_e_do_grupo_onde_aconteceu]] */
+  woClaims: {
+    forma: 'lista',
+    pode: (t, u, k, op) => {
+      if (ehOrganizador(t, u)) return true;
+      if (!Array.isArray(t && t.memberUids) || t.memberUids.indexOf(u) === -1) return false;
+      const v = (op && op.valor) || null;
+      if (v === null) return true;                 // apagar o próprio registro: o `byUid` do
+      return String(v.byUid || '') === String(u);  // registro gravado tem de ser quem chama
+    }
+  },
+
+  /* ⚠️ `woLog` e `categoryNotifications` SEGUEM do organizador, e é medido: `woLog` é escrito
+   * pelo MOTOR quando o W.O. é aplicado (decisão de organização, não apontamento), e o
+   * apontamento de categoria idem. */
   woLog:                 { forma: 'lista', pode: (t, u) => ehOrganizador(t, u) },
   categoryNotifications: { forma: 'lista', pode: (t, u) => ehOrganizador(t, u) }
 };
@@ -67,7 +89,7 @@ function autoriza(t, quemChama, op) {
    * sozinhos, sem `__reservado__`, e dentro do limite de bytes.
    * A permissão de verdade é `pode()` logo abaixo — chave malformada não é a defesa. */
   if (!idDeDocumentoValido(chave)) return { ok: false, motivo: 'chave inválida como id de documento' };
-  if (!c.pode(t, quemChama, chave)) return { ok: false, motivo: 'sem permissão em "' + op.parte + '"' };
+  if (!c.pode(t, quemChama, chave, op)) return { ok: false, motivo: 'sem permissão em "' + op.parte + '"' };
   return { ok: true };
 }
 
