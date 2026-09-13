@@ -145,6 +145,11 @@ echo "▸ extraído em $DEST (carimbado)"
 VERSAO="$(tr -d '[:space:]' < version.txt)"
 COMMIT="$(git rev-parse HEAD)"
 
+# ⏱️ QUANTO CADA FASE CUSTA — medido, não estimado. Ordem do dono (13/set/2026):
+# _"mais de 20 min a cada publicacao parece um funcionario publico burocrata"_. Antes de
+# cortar qualquer coisa é preciso saber ONDE o tempo está; sem isto, cortar é chutar.
+SP_T0=$(date +%s); SP_TF=$SP_T0
+fase() { local a=$(date +%s); printf '   ⏱️  %s: %ds (total %ds)\n' "$1" "$((a-SP_TF))" "$((a-SP_T0))"; SP_TF=$a; }
 echo "▸ repo:   $RAIZ"
 echo "▸ commit: ${COMMIT:0:8}  ·  versão: $VERSAO"
 
@@ -177,6 +182,7 @@ node "$RAIZ/scripts/check-release-notes.js" || exit 1
 # window.SCOREPLACE_VERSION (store.js). O hosting.predeploy também roda o prerender,
 # mas lá dentro da cópia em /tmp — o resultado publica e evapora. Rodando aqui, o
 # commit que vira `main` carrega exatamente o que foi pro ar.
+fase "prerender"
 echo "▸ gerando o snapshot (prerender) no repo…"
 npm run --silent prerender
 if [[ -n "$(git status --porcelain)" ]]; then
@@ -251,6 +257,7 @@ echo "  ✓ CACHE_NAME do SW = versão do app ($VER_APP)"
 # parecer ilegível ou COTA ESGOTADA param o deploy ANTES do push: origin/main segue intocado.
 # Interruptor por lado: `revisar-com-{gpt,claude}.sh desligar "<motivo>"` (passa com aviso).
 # Escape só com uma linha `sem-gpt: <motivo>` num commit a publicar, e SP_SEM_GPT=1.
+fase "nota+gates locais"
 echo "▸ 1.8 revisão cruzada sobre origin/main..HEAD…"
 if ! "$RAIZ/scripts/revisar.sh" diff; then
   echo
@@ -264,6 +271,7 @@ fi
 # A suíte custa minutos e o upload depende da sessão local do Firebase CLI. Descobrir um
 # token expirado só depois dela deixa o main alinhado mas o site antigo. Esta consulta é de
 # leitura e usa a mesma sessão que o upload usará em seguida.
+fase "revisão cruzada"
 echo "▸ conferindo a sessão do Firebase…"
 # ⛔ NÃO CONFIAR NO EXIT CODE DO `firebase --json`. MEDIDO em 12/set/2026, com a sessão VÁLIDA:
 #     firebase projects:list --json  →  stdout com '"status": "success"'  e  exit code 2
@@ -315,6 +323,7 @@ echo "  ✓ sessão do Firebase válida"
 # ⚠️ `check-version-ahead` só tem sentido ONDE HÁ GIT: ele varre branches e remotos atrás de
 # uma versão MAIOR que a que vai subir. Na cópia extraída não há `.git`, então lá ele passa
 # vazio — por isso ele roda AQUI, no repositório de verdade, antes de tudo.
+fase "sessão firebase"
 echo "▸ preflight: nenhum branch/remoto está à frente desta versão?"
 if ! node "$RAIZ/scripts/check-version-ahead.js"; then
   echo
@@ -330,6 +339,7 @@ if [[ -z "$VERSAO_NO_AR" ]]; then
 fi
 SP_RELEASE_PRODUCTION_VERSION="$VERSAO_NO_AR" node "$RAIZ/scripts/check-release-version-fresh.js" || exit 1
 
+fase "gates de versão"
 echo "▸ preflight: montando a cópia e rodando os gates ANTES de tocar no main…"
 PRE="${TMPDIR:-/tmp}/sp-preflight-$$"
 montar_copia "$PRE"
@@ -368,6 +378,7 @@ export SP_PREFLIGHT_OK="$COMMIT"
 # ── 2. conferir se o backup PODE avançar (sem depender dele) ───────────────
 # GitHub é backup, mas uma divergência real continua sendo bloqueio: publicar um
 # commit que o main não alcança por fast-forward deixaria o ar irreconciliável.
+fase "PREFLIGHT (suíte+prerender)"
 echo "▸ conferindo se origin/main pode acompanhar este commit…"
 git fetch -q origin main || echo "  ⚠️  não deu pra atualizar origin/main (rede?) — conferindo a referência disponível"
 BACKUP_PENDENTE=0
@@ -409,6 +420,7 @@ fi
 
 # ── 7. conferir no ar ────────────────────────────────────────────────────────
 cd "$RAIZ"
+fase "push + upload"
 echo "▸ conferindo o ar…"
 for _ in $(seq 1 30); do
   AR="$(curl -s https://scoreplace.app/version.txt || true)"
@@ -451,3 +463,4 @@ if [[ $BACKUP_PENDENTE -eq 1 ]] && git merge-base --is-ancestor "$COMMIT" origin
 fi
 
 "$RAIZ/scripts/backup-bundle.sh" || true
+fase "conferência do ar"
