@@ -50,14 +50,19 @@ must(/_warn\('\[notif\] sem uid verificado/.test(envia),
 must(/_verifiedCurrentUser\(\)/.test(envia),
   '③ o usuário vem de `_verifiedCurrentUser`, conferido contra o Firebase Auth');
 
-// ── ④ CONTROLE DE ESCOPO: a Rule NÃO foi apertada nesta leva ────────────────
+/* ── ④ A RULE FECHOU (13/set/2026) ──────────────────────────────────────────
+ * Esta seção dizia o CONTRÁRIO: cobrava que a regra continuasse aberta, porque a trava só
+ * podia entrar depois de medir. A medida veio — 5.792 avisos de produção, e NENHUMA escrita
+ * de cliente seria recusada (as 37 sem autor são do servidor, que ignora as rules). A regra
+ * foi apertada e a inversão desta seção é o registro disso.
+ * ⚠️ O comportamento contra o emulador é provado em tests/rules-aviso-so-em-nome-proprio.js,
+ * que roda nas DUAS direções — aqui fica só a trava estática. */
 const iR = RULES.indexOf('match /notifications/{notifId}');
 assert.ok(iR > 0, 'âncora: a regra dos avisos');
 const bloco = RULES.slice(iR, RULES.indexOf('}', RULES.indexOf('allow update, delete', iR)));
-must(/allow create: if request\.auth != null;/.test(bloco),
-  '④ ⛔ a Rule segue aceitando create de qualquer autenticado — DE PROPÓSITO: o bundle das '
-  + 'lojas ainda grava e-mail no `fromUid`, e apertar agora cortaria o aviso de quem está lá');
-must(!/fromUid == request\.auth\.uid/.test(bloco),
-  '④ ⛔ e a trava ainda NÃO entrou — ela é a próxima leva, depois de um nativo publicado');
+must(/fromUid == request\.auth\.uid/.test(bloco),
+  '④ ⭐ a Rule exige que o autor seja quem está logado — fim da falsificação');
+must(!/allow create: if request\.auth != null;\s*$/m.test(bloco),
+  '④ ⛔ não sobrou o `create` que aceitava qualquer autenticado sem conferir o autor');
 
 console.log('\n✅ aviso carrega o uid de quem mandou — ' + ok + ' verificações');

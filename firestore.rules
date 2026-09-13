@@ -1026,9 +1026,33 @@ service cloud.firestore {
       allow delete: if request.auth != null && request.auth.uid == userId;
 
       // Notifications — senders create (cross-user), owner manages.
+      /* ⛔ QUEM ASSINA O AVISO TEM DE SER QUEM ESTÁ LOGADO.
+       * `allow create: if request.auth != null` deixava QUALQUER pessoa logada escrever aviso
+       * na lista de QUALQUER outra, com o autor que quisesse — dava para se passar pelo
+       * organizador, ou por outro jogador, dentro da caixa de avisos de terceiro. Era a porta
+       * mais fraca apontada pelo inventário da L2.
+       *
+       * ⭐ MEDIDO em 13/set/2026, sobre os 5.792 avisos gravados (279 perfis), antes de
+       * apertar — porque regra apertada sem medida corta usuário de verdade:
+       *   • 5.245  autor é uid que EXISTE em users/        → passa
+       *   •    75  uid que já não existe (conta apagada)   → passa (a regra compara com o
+       *                                                      CHAMADOR, não com a existência)
+       *   •   435  `system`                                → escrito pelo Admin SDK, que
+       *                                                      IGNORA as rules
+       *   •    37  sem o campo (`contact_phone_set`)       → TAMBÉM do servidor
+       *                                                      (functions/contact-phone-core.js)
+       *   •     0  e-mail   ·   0  vazio
+       * Ou seja: NENHUMA escrita de cliente seria recusada.
+       *
+       * ⚠️ PISO DAS LOJAS conferido, que é o que trava mudança de regra aqui: o bundle
+       * embarcado (2.2.84) grava `cu.uid || cu.email || ''`, e a queda para e-mail/vazio
+       * NUNCA disparou em 5.792 avisos — um usuário autenticado sempre tem uid. A 2.3.0 já
+       * tirou a queda do código; esta regra fecha a porta.
+       * [[project_travar_as_rules_em_9_setembro]] · [[feedback_nao_afirmar_causa_sem_medir]] */
       match /notifications/{notifId} {
         allow read: if request.auth != null && request.auth.uid == userId;
-        allow create: if request.auth != null;
+        allow create: if request.auth != null
+                      && request.resource.data.fromUid == request.auth.uid;
         allow update, delete: if request.auth != null && request.auth.uid == userId;
       }
 
