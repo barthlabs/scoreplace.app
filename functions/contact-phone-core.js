@@ -245,8 +245,29 @@ const RECUSA_HUMANA = {
   'ja-tem-proprio': 'Essa pessoa já indicou a própria conta letzplay no perfil. Só ela pode trocá-la.',
 };
 
+/* ⛔ O REGISTRO DO ORGANIZADOR CADUCA QUANDO A PESSOA PROVA O PRÓPRIO NÚMERO.
+ *
+ * Ordem do dono (13/set/2026): _"o telefone digitado pelo organizador só deve existir
+ * enquanto a pessoa nao autenticou seu telefone. depois que ela autenticou seu telefone o
+ * registro do organizador fica superado. o registro do organizador é apenas para que o
+ * whatsapp da pessoa seja alcancado pelos outros jogadores para facilitar a combinacao dos
+ * jogos. apenas para isso."_
+ *
+ * ⛔ O QUE ACONTECIA: só UM dos caminhos de verificação limpava os carimbos. Quem entrava
+ * pelo cadastro com telefone gravava o número PROVADO e deixava `phoneSource: 'organizer'`
+ * para trás — a conta ficava com telefone verificado e selo de "posto por terceiro", e as
+ * travas de identidade continuavam recusando o que já tinha sido provado.
+ *
+ * ⭐ A regra passa a morar AQUI, num lugar só. Todo caminho que prova um número usa isto —
+ * caminho novo nasce certo por usar a mesma porta, em vez de lembrar de três campos. */
+function apagarCarimboDeTerceiro(FieldValue) {
+  const del = FieldValue.delete();
+  return { phoneSource: del, phoneSetBy: del, phoneSetAt: del };
+}
+
 module.exports = {
   isIdentityPhone, contactPhoneOf, toE164, computeSetContactPhone,
+  apagarCarimboDeTerceiro,
   buildContactPhoneNotice, maskTail, RECUSA_HUMANA,
   normalizeLzHandle, computeSetContactLetzplay, buildContactLetzplayNotice,
 };

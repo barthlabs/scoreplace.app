@@ -5549,7 +5549,14 @@ exports.registerPhonePassword = onCall(
       console.error("[registerPhonePassword] updateUser failed:", err.code || err.message);
       throw new HttpsError("internal", "não foi possível salvar: " + (err.code || err.message));
     }
-    const prof = { phone: phoneE164, phoneCountry: "55", authProvider: "phone+password", updatedAt: new Date().toISOString() };
+    /* ⛔ O NÚMERO ACABOU DE SER PROVADO — o carimbo do organizador morre aqui.
+     * Sem isto a conta ficava com telefone verificado E selo de "posto por terceiro", e as
+     * travas de identidade seguiam recusando o que já tinha sido provado. Era o caminho que
+     * faltava: só o ramo do SMS limpava. [[project_celular_contato_vs_identidade]] */
+    const prof = Object.assign(
+      { phone: phoneE164, phoneCountry: "55", authProvider: "phone+password", updatedAt: new Date().toISOString() },
+      _contactPhone.apagarCarimboDeTerceiro(admin.firestore.FieldValue)
+    );
     // displayName_lower JUNTO do displayName (contrato do saveUserProfile do cliente) —
     // sem ele a conta fica invisível pra própria checagem de unicidade.
     if (displayName) _nameUnique.denormalizeDisplayName(prof, displayName);
@@ -7533,9 +7540,8 @@ exports.mergePhoneAccount = onCall(
             // ⚠️ `_FV` (subpath) e não `admin.firestore.FieldValue`: no runtime do emulador
             // de Functions o namespace vem sem `.FieldValue` e derrubava o ramo ghost com
             // 500 — o mesmo tropeço já corrigido no deleteAccount.
-            phoneSource: _FV.delete(),
-            phoneSetBy: _FV.delete(),
-            phoneSetAt: _FV.delete(),
+            // ⭐ pela porta única (`apagarCarimboDeTerceiro`) — os três campos num lugar só.
+            ..._contactPhone.apagarCarimboDeTerceiro(_FV),
             // notifyWhatsApp é derivado de ter celular (cânone v1.9.68) — sem isto,
             // um false residual de antes do número deixaria o canal 💬 caído.
             notifyWhatsApp: true,
