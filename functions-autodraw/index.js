@@ -1636,14 +1636,43 @@ function _scoreNotificationEvent(t, m, outcome, actor, at, context) {
   const scoreboard = _notificationScoreboard(m, pending);
   if (!scoreboard || !scoreboard.p1 || !scoreboard.p2) return null;
   const compact = (side) => scoreboard.sets.map(s => String(s[side])).join(' ');
-  const proposerUid = String(proposal && proposal.proposedBy || '');
-  const liveProposerName = ctx.liveNames && ctx.liveNames[proposerUid];
-  const proposerName = _notificationPersonName(
+  /* ⛔ "JOGADOR LANÇOU:" — O AVISO NÃO DIZIA O NOME DE NINGUÉM.
+   *
+   * Relato do dono (13/set/2026, e-mail do Confra): _"as notificacoes estao todas assim:
+   * jogador lancou. e numa delas eu lancei como organizador. o certo seria dizer o nome de
+   * quem lançou com (org.) quando foi na qualidade de organizador."_
+   *
+   * ⛔ A CAUSA: o nome saía SÓ da PROPOSTA (`proposal.proposedBy` / `proposedByName`). Quando
+   * o organizador lança direto — sem etapa de aprovação, que é o caminho dele — não existe
+   * proposta: `proposal` é nulo, `proposerUid` vira '', `liveNames['']` é `undefined`, e o
+   * texto caía no literal `'Jogador'`. Ou seja, o caso mais comum do organizador era
+   * justamente o que perdia a autoria.
+   *
+   * ⭐ QUEM LANÇOU É A PROPOSTA **OU O ATOR**. Sem proposta, quem age É quem lançou — o dado
+   * sempre esteve em `actor`, e ninguém perguntava.
+   *
+   * ⭐ E O PAPEL VAI JUNTO: `(org.)` quando quem lançou é organizador ou co-organizador. O
+   * dono precisa distinguir "um jogador lançou o placar do jogo dele" de "a organização
+   * lançou por eles" — são responsabilidades diferentes sobre o mesmo número. */
+  const proposerUid = String((proposal && proposal.proposedBy) || '');
+  const autorUid = proposerUid || String((actor && actor.uid) || '');
+  const autorEhOrg = _isTournamentAdmin(t, autorUid);
+  const liveProposerName = (ctx.liveNames && ctx.liveNames[autorUid]) || (actor && actor.name);
+  const proposerBase = _notificationPersonName(
     proposal && proposal.proposedByName,
-    _notificationPersonName(liveProposerName, 'Jogador')
+    _notificationPersonName(liveProposerName, autorEhOrg ? 'Organizador' : 'Jogador')
   );
-  const actorFallback = _isTournamentAdmin(t, actor && actor.uid) ? 'Organizador' : 'Jogador';
-  const confirmerName = _notificationPersonName(actor && actor.name, actorFallback);
+  /* ⚠️ Sem sufixo duplo: quando nem o nome resolveu, o rótulo já É "Organizador" — somar
+   * "(org.)" ali daria "Organizador (org.)". */
+  const proposerName = (autorEhOrg && proposerBase !== 'Organizador')
+    ? proposerBase + ' (org.)'
+    : proposerBase;
+  const actorEhOrg = _isTournamentAdmin(t, actor && actor.uid);
+  const actorFallback = actorEhOrg ? 'Organizador' : 'Jogador';
+  const confirmerBase = _notificationPersonName(actor && actor.name, actorFallback);
+  const confirmerName = (actorEhOrg && confirmerBase !== 'Organizador')
+    ? confirmerBase + ' (org.)'
+    : confirmerBase;
   const isApproval = !pending && ctx.action === 'approve-pending' && !!proposal;
   const authorName = pending || !isApproval ? proposerName : confirmerName;
   const type = pending ? 'match-pending-approval' : 'result';

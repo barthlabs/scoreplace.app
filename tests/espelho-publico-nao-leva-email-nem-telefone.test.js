@@ -50,6 +50,11 @@ must(!JSON.stringify(esp).includes('token-de-push'), '① ⭐ nem o token de not
 });
 must(C.CAMPOS_PUBLICOS.indexOf('mergedInto') >= 0,
   '② ⭐ `mergedInto` entra: sem ele a lápide volta a parecer pessoa na tela');
+/* ⛔ E `mergedAt` SAIU (13/set/2026), pelas duas medidas: ZERO leitores no cliente, e DOIS
+ * TIPOS em produção — `Timestamp` nos merges feitos pela CF, `string` nos antigos. Campo sem
+ * leitor é superfície; com dois tipos é armadilha pronta para quem for lê-lo primeiro. */
+must(C.CAMPOS_PUBLICOS.indexOf('mergedAt') < 0,
+  '② ⛔ `mergedAt` NÃO entra — sem leitor no cliente e com dois tipos no banco');
 must(C.CAMPOS_PUBLICOS.indexOf('birthDate') >= 0,
   '② `birthDate` entra por decisão consciente — o desempate por idade lê a de OUTROS jogadores');
 

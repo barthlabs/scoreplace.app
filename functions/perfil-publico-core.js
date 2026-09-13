@@ -33,7 +33,12 @@ const CAMPOS_PUBLICOS = [
   'displayName', 'displayName_lower', 'photoURL',
   'gender', 'skillBySport', 'defaultCategory', 'birthDate',
   'acceptFriendRequests', 'preferredSports',
-  'mergedInto', 'mergedAt',
+  /* ⛔ `mergedAt` SAIU em 13/set/2026. Duas razões, as duas medidas: ZERO leitores no
+   * cliente (varredura de `js/`), e o campo tem DOIS TIPOS em produção — `Timestamp` nos
+   * merges feitos pela CF e `string` nos antigos. Campo sem leitor é superfície; campo sem
+   * leitor E com dois tipos é a armadilha pronta para quem for lê-lo primeiro.
+   * ⚠️ `mergedInto` FICA: é ele que `_userVivo` segue para não mostrar lápide como pessoa. */
+  'mergedInto',
   'lastSeenAt', 'updatedAt', 'createdAt',
   /* ⭐ PREFERÊNCIA DE AVISO não é dado pessoal — é ajuste de canal, e QUEM MANDA precisa
    * dela para decidir se manda. Sem isto no espelho, avisar alguém obrigaria a ler o

@@ -101,7 +101,26 @@ const SUITES = [
   'tests/porta-de-wo-e-de-quem-joga.test.js',
   'tests/import-do-letzplay-sai-do-perfil.test.js',
   'tests/escrita-que-falha-nao-some.test.js',
+  'tests/aviso-de-placar-diz-quem-lancou.test.js',
   'tests/rules-mudou-tem-de-ser-testada.test.js',
+
+  /* ⭐ AS 9 DO AUTODRAW SAÍRAM DO LIMBO "MANUAL" (13/set/2026).
+   * Elas estavam num grupo do catálogo chamado `autodraw-manual`: existiam, tinham comando
+   * escrito, e ninguém rodava. Conferi as 9 uma a uma — todas VERDES, todas em milissegundos
+   * e NENHUMA precisa de emulador. Não havia motivo para ficarem fora; havia motivo para
+   * apodrecerem, que é o mesmo que aconteceu com 4 das 14 suítes de regras.
+   * ⚠️ Rodam da RAIZ: o require de draw-core delas é relativo ao ARQUIVO, não ao cwd.
+   * ⛔ E sem citar o caminho entre aspas neste comentário: o catálogo varre este bloco
+   * procurando strings terminadas em .js, e a minha citação virou "suíte fantasma". */
+  'functions-autodraw/test-closeround.js',
+  'functions-autodraw/test-closeround-authz.js',
+  'functions-autodraw/test-drawinitial.js',
+  'functions-autodraw/test-drawround-authz.js',
+  'functions-autodraw/test-format2.js',
+  'functions-autodraw/test-orphan-uid.js',
+  'functions-autodraw/test-parity-old-vs-new.js',
+  'functions-autodraw/test-persist-boundary.js',
+  'functions-autodraw/test-uid-identity.js',
   'tests/stb-aparece-para-quem-lancou.test.js',
   'tests/espera-e-fora-usam-a-grade-e-a-cor-canonicas.test.js',
   'tests/l16-auditor-nao-mente-quando-nao-consegue-olhar.test.js',

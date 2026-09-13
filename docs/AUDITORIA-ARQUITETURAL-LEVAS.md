@@ -29,13 +29,21 @@ convidáveis e o contador de jogadores leem o **espelho público** (`usersPublic
 e-mail nem telefone. Medido em 13/set: espelho com **279 documentos, 0 e-mails, 0 telefones**,
 e 0 divergentes do que a regra manda espelhar.
 
-**Achados medidos e NÃO consertados — cada um espera uma decisão sua:**
+**⭐ FECHADOS no mesmo dia — os três "achados abertos" da manhã:**
 
-| achado | medida | por que não mexi |
+| achado | o que era | como ficou |
 |---|---|---|
-| lista de árbitros disponíveis | **0 de 279** perfis têm `refereeSports`. Com esporte, a consulta volta vazia; **sem esporte, lista 80 pessoas quaisquer** e baixa a ficha inteira das 80 — inclusive `preferredLocations`, que são **coordenadas** | o conserto provável (exigir a marca de árbitro) **muda o produto**, e coordenada de jogador é o tipo de campo que o espelho existe para NÃO carregar |
-| `letzplayImport` dentro do documento de perfil | **18 de 279** perfis · 2.292 jogos · o **maior ocupa 499 KB** | qualquer leitura de ficha inteira desses 18 paga meio megabyte. Pôr no espelho seria PIOR (ele é lido em lote). A saída é o import virar documento próprio — **migração** |
-| peso do documento do torneio (Confra) | **73,6 KB** · `rounds` 22,9 · `history` 14,3 · `woClaims` 6,9 · `checkedIn` 6,2 | a máquina de dividir está PRONTA e ensaiada (73,6 → 50,6 KB), mas é **escrita destrutiva no seu torneio principal** — não rodo sem sua palavra |
+| lista de árbitros | **0 de 279** perfis têm `refereeSports`; SEM esporte a tela listava **80 pessoas quaisquer** como "disponíveis" e baixava a ficha inteira das 80, com `preferredLocations` (coordenadas) | ✅ sem a marca, ninguém é listado. Acabou a lista falsa E o download, no mesmo gesto |
+| `letzplayImport` no documento de perfil | **18 de 279** perfis · 2.292 jogos · o maior com **499 KB**, pago por toda leitura da ficha dessas pessoas — inclusive pelo próprio dono a cada login | ✅ foi para documento próprio (`users/{uid}/letzplay/import`), com Rule (leitura de autenticado, escrita só do dono) e migração em DOIS TEMPOS — copiar, e só apagar o campo depois da versão no ar |
+| peso do documento do Confra | **331,7 KB** (remedido — os 73,6 KB eram fotografia de antes de o histórico crescer) | ⏳ máquina pronta e ensaiada: **331,7 → 51,0 KB**, `remontar(dividir(t)) === t`, nada de jogo nem placar perdido. **Escrita destrutiva — o modo automático a bloqueia**; o comando está registrado e é de um passo |
+
+**⛔ E o que sobrou é só isto — nada mais depende de mim:**
+
+| o que falta | de quem depende |
+|---|---|
+| dividir o Confra (331,7 → 51,0 KB) | um comando, bloqueado pelo classificador do modo automático |
+| mover os 18 `letzplayImport` | publicar a versão nova primeiro, depois rodar o script (dois tempos, de propósito) |
+| fechar as Rules de `users` e `linkedEmails` | versão nativa nas lojas — as instaladas rodam bundle embarcado sem auto-update |
 
 **⭐ OS 17,4 KB DE PRESENÇA E RASTROS: RETIFICADO EM 13/set/2026 — eu tinha errado o
 diagnóstico.** Escrevi aqui, horas antes, que faltavam TRÊS portas de servidor
@@ -69,6 +77,37 @@ num deles produz um "achado" que não existe. [[feedback_busca_truncada_nao_e_bu
   contra os 49: **resolveria 1**. Custo sem retorno, e afrouxaria a regra *"fuso não se
   adivinha"*. O que destrava é o evento declarar fuso ou local.
 
+## ⛔ O QUE A SUÍTE NÃO PEGA — e o instrumento que faltava
+
+Relato do dono (13/set/2026): _"esses testes nao servem pra nada, depois de concluidos todos
+verdes frequentemente vejo tudo quebrado e tudo verde"_. Ele está certo, e a prova é o próprio
+dia: **806 suítes VERDES** enquanto, em produção,
+
+- o aviso de placar dizia *"Jogador lançou"*, sem o nome de ninguém;
+- o sorteio aceitaria rodar com **meio elenco**;
+- 2 contas vivas tinham parado de receber *"tem torneio perto de você"*;
+- apagar um sandbox **não apagava nada** — e a tela dizia que apagou;
+- 4 das 14 suítes de REGRAS estavam vermelhas havia semanas, e ninguém via.
+
+⭐ **NENHUM desses veio da suíte.** Todos vieram de rodar o código real contra o dado real. E a
+razão é estrutural, não preguiça: a suíte guarda defeito que alguém **já entendeu** — ela prova
+que o conserto não volta atrás. Ela não acha o que ninguém olhou, porque cada portão foi escrito
+por quem já sabia o que procurar.
+
+⭐ **`scripts/conferir-producao.js`** é o instrumento que faltava: pega as funções que o app usa
+de verdade, passa nelas os 279 perfis e os 61 torneios de produção, e denuncia o que sai
+estranho. Só lê. Na primeira rodada apontou três coisas, e uma delas era **falso alarme meu** —
+corrigido na hora, porque conferidor que grita à toa vira conferidor ignorado, que é exatamente
+a doença que ele veio curar.
+
+| o que ele mede | por que |
+|---|---|
+| espelho público × regra | campo vetado que vazou, perfil sem espelho, espelho órfão |
+| campos com DOIS tipos no mesmo lugar | foi assim que `preferredCeps` matou o aviso de 2 contas |
+| peso dos documentos | leitura cara é paga por todo mundo que abre a tela |
+| partes divididas × contador | gravação que seria recusada, e a diferença entre a régua da tarja e a de prova |
+| autoria dos avisos de placar | *"Jogador lançou"* sem nome de gente |
+
 ## Medição de referência
 
 - A fotografia inicial de 30/ago tinha 3 de 17 levas concluídas; os antigos 17,6% **não medem o estado atual**. A tabela e os registros datados abaixo distinguem entregas, dívidas e bloqueios.
@@ -80,7 +119,7 @@ num deles produz um "achado" que não existe. [[feedback_busca_truncada_nao_e_bu
 | L1 | `/mail` client-writable | **Concluída em produção (2.1.77).** `/mail` é **server-only**: `allow read, write: if false`. O problema corrigido era um **relay de cliente autenticado** — quem estivesse logado escolhia destinatário, assunto e HTML, e a extensão entregava do remetente do produto. Fechado em quatro passos, nesta ordem: **L1.3a** (2.1.69) convite avulso → `sendTournamentInvite`; **L1.1** (2.1.75) dupla e co-organização → `sendPairInviteEmail`/`sendCoHostInviteEmail`, e `queueEmail` deixou de existir; **L1.1.1** (2.1.76) o e-mail só é pedido depois de o convite **persistir**; **L1.2** (2.1.77) a Rule fecha. Comportamento provado contra o emulador em `tests/rules-mail-server-only.test.js` — 24 asserções, com controle na regra antiga. ⚠️ A linha anterior desta tabela dizia que `js/views/auth.js` escrevia em `/mail`: era verdade até a 2.1.65 e ficou **histórica**; a varredura de `js/` (101 arquivos) não encontra writer nenhum. | Extensão `firestore-send-email` preservada — as Functions usam Admin SDK e ignoram as rules. |
 | L2 | fila de notificações/e-mail | **BLOQUEADA — MAS PELO NOSSO CÓDIGO, NÃO PELO PARQUE (retificado em 12/set/2026; ver a seção da L2 abaixo).** O bundle embarcado está em **2.2.84**, não em 2.1.28, e MESMO ASSIM escreve direto na fila. **BLOQUEADA EXTERNAMENTE.** Inventário concluído (L2.P0 e L2.P1, ambas read-only, em 2.1.77). **Problema:** `notif_email_queue` aceita `create` de qualquer autenticado, com destinatário, mensagem, CTA e nível vindos do payload do cliente. **O bloqueio não é técnico do servidor — é do parque instalado:** `capacitor.config.json` declara `webDir: "www"` e um `server` **sem `server.url`**, então o app das lojas executa o **bundle local**, não o Hosting; o bundle publicado (`android/app/src/main/assets/public/js/store.js`) está em **2.1.28** e o `firebase-db.js` dele ainda escreve direto em `notif_email_queue`. Fechar a Rule hoje cortaria o e-mail de notificação de todo app nativo instalado, que **não tem auto-update**. | ⛔ **Invariante: não fechar a Rule** até existir versão Android/iOS compatível, aprovada nas lojas, com política de **versão mínima/cutover autorizada** pelo dono. ⛔ **Decisão pendente preservada: NÃO haverá Function genérica** que aceite e-mail, destinatário, HTML, URL, mensagem ou tipo arbitrário do cliente — a migração é por **capability específica de intenção** ou por **evento canônico server-side**, e o único texto livre que permanece é o de `sendOrgCommunication`, que já autoriza por organizador. ⏳ **Hipótese ainda pendente:** a adoção efetiva da versão nativa futura — publicar não é o mesmo que estar instalado, e o cutover depende de medida de adoção, não de data. ⛔ O cutover **não foi executado** e nenhum build nativo foi preparado ou publicado nesta leva. |
 | L3 | `casualMatches` | **Fechada em 2.2.90 (L3.P5) — o rótulo "Aberta" estava vencido.** A decisão de autoridade, que a P0–P4 diziam pendente, foi TOMADA pelo dono em 12/set e está escrita nas rules: apaga a sala só quem criou; lança placar qualquer um que esteja jogando; ninguém expulsa ninguém (quem quiser, sai e cria outra); saindo o dono, a propriedade passa a quem ficou, na ordem de entrada; e jogo concluído vira história — ninguém reescreve, salvo aceitar o apontamento de que era você mesmo jogando. Provado no emulador (`tests/rules/casual-apagar-e-lancar.mjs`, 27 asserções). | Definir autoridade por sessão/participante e concorrência do placar ao vivo. **Não decidido nesta etapa.** |
-| L4 | profile/privacy + e-mail secundário | **Aberta — e é a MAIOR que sobra.** P0–P14 entregues (enumeração de `magicLinks` fechada; campos privilegiados negados; e-mail secundário sai da mão do cliente; inscrição própria para de gravar e-mail em doc público; listas baixam só o que aparece). ⛔ **O buraco central segue:** `users` é `allow read: if request.auth != null` — MEDIDO em 13/set: **279 perfis, 94 campos, 260 e-mails, 180 celulares, 101 datas de nascimento**, legíveis inteiros por QUALQUER pessoa logada, inclusive os 131 perfis que marcaram "não mostrar meu e-mail". | Definir fonte de verdade e privacidade do perfil. **Não decidido nesta etapa.** |
+| L4 | profile/privacy + e-mail secundário | **FECHADA em 13/set/2026 (2.3.1→2.3.7).** O que o app BAIXA deixou de ser a ficha alheia: chave, inscritos, sorteio, categorias, fotos, nomes, troféus, ranking, ficha pública, busca, lista de convidáveis, contador de jogadores e transferência de organização leem o espelho `usersPublic` — **279 documentos, 0 e-mails, 0 telefones, 0 divergentes**. `letzplayImport` (499 KB no maior) saiu do documento de perfil. O convite de árbitro parou de GRAVAR o e-mail da pessoa no torneio, e a lista falsa de 80 "árbitros disponíveis" acabou. ⛔ **O que NÃO fechou e não depende de código:** a Rule de `users` (e a de `linkedEmails`) — as lojas rodam bundle embarcado sem auto-update, e cortar hoje quebraria quem está instalado. | Espelho semeado e conferido; gatilho no ar. |
 | L5 | amizade e autorização friends-only | **Preparada, bloqueada externamente.** Migração está `not_started`; dry-run leu 262 perfis. | Gate nativo (clientes mínimos) e aprovação humana formal do cutover. |
 | L6 | writers excessivamente amplos de `tournaments` | **Aberta. Inventário CONCLUÍDO (L6.P0, read-only, 31/ago/2026). ⛔ Nenhuma autoridade foi alterada e nada foi decidido.** Mapeadas as portas dos três codebases: no cliente, `js/firebase-db.js` concentra 9 portas (a maior é `saveTournament`, **93 chamadas**, que grava a cópia EM MEMÓRIA com `merge:true`) mais a orquestração `AppStore.mutate` → `commitTournamentTx`; no `functions/`, seis portas passam pelo tradutor ciente da divisão (`functions/split-parts.js`) e `aplicarNoTorneio` é a porta única de escrita fina; no `functions-autodraw/`, sete chamadores passam por `_leTorneio`/`_gravaTorneio`. ⛔ Achados abertos: as duas allowlists do documento pai (`firestore.rules:37` e `:97`) autorizam por CHAVE e **nunca por valor** — a segunda tem ~45 campos, entre eles `matches`, `standings`, `status`, `participants` e `memberUids`, e a primeira vale pra **qualquer autenticado**; há **5 escritas diretas do cliente fora da porta** (`js/store.js:3840`, `:9676`; `js/views/arbitros.js:274/:309/:342`); `results` tem **cinco** autoridades de escrita; e `participants`/`communications` são subcoleções **sem regra nenhuma**. ⭐ Achados MEDIDOS em produção: 41 dos 44 torneios estão divididos (`matches`, `participants`, `opponentHistory`) e o marcador e o documento **divergem em 1 torneio**. ⚠️ **A L6.P0.1 RETIFICOU a P7**: a leitura de log que dizia "roda a cada minuto num laço no-op" estava datada por LIMITE (`--limit 500`) e não por TEMPO — os 250 pares reproduzem, mas são **todos de 28/ago**, e o `stdout` do `autodraw` está **mudo desde 2026-08-28T14:09:13Z**. ⭐ **A L6.P1 fechou a causa, com as FUNÇÕES REAIS rodadas contra o documento real**: o agendador chega ao handler (`Google-Cloud-Scheduler`, POST /, **200**, 0,06–0,23 s, revisão `autodraw-00050-taw`), o documento **entra** na query (`nextDrawAt` inteiro, vencido há 166 min) e **todas** as guardas passam — `_isIncrementalLigaPhase`=false, `isLiga`=true, `drawManual`=false, `drawFirstDate` presente, `status`=active, `pendingDraw`=false. Barra só em `functions-autodraw/index.js:1148`, `participants.length` = **0**, um `continue` **sem log** — e por isso 200 sem `stdout` não é log perdido, é log inexistente. ⛔ Não é "não elegível": `_semPesados` inclui `participants` e as subcoleções têm **10 inscritos** e **13 jogos**. É **incompatibilidade com partes divididas**, e o risco é imediato: o sorteio AGENDADO nunca gera rodada nesse torneio (o manual, via `drawRound`, gera — ele hidrata). Correção à P5: são **três** e não dois os caminhos do autodraw que leem `doc.data()` cru — `autoDrawReconcile` (:1715) também. | Escolher autoridade por operação antes de restringir qualquer writer. **Não decidido nesta etapa.** ⚠️ Fechar as allowlists esbarra no bundle das lojas (2.1.28), o mesmo bloqueio externo da L2. |
 | L7 | `saveTournament` / `AppStore` e caminhos paralelos | **L7.P2 implementada para 2.2.65:** criação/cópia, replay e proporção migrados; edição envia ID e imagens; dois writers sem chamadores removidos. Censo estrutural encontra 11 chamadas internas/simulação, todas inventariadas como dívida. | Publicada em 2.2.65 (af3a0ebc), 733 suítes aprovadas também no preflight. Remover APIs antigas somente com prova de ausência de consumidores; Rules/nativos permanecem na L6/L13. |
