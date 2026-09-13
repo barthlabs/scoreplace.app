@@ -4234,16 +4234,26 @@ async function _preloadPlayerPhotos(tournament) {
     });
   }
 
+  /* ⛔ ESTE CARREGADOR É A GÊMEA DE `_preloadUserProfiles` E FICOU PARA TRÁS UMA LEVA.
+   * Ele roda no mesmo momento e sobre as mesmas pessoas — todo mundo que abre a chave —, só
+   * que para foto e nome. Lia `users`, que é `allow read: if request.auth != null` e guarda
+   * 94 campos, para usar DOIS: `displayName` e `photoURL`. Passa a ler o espelho público.
+   * MEDIDO em 13/set/2026, comparando as duas coleções: a consulta por nome dá resultado
+   * IDÊNTICO nos 263 nomes distintos, e as 144 fotos estão todas no espelho.
+   * ⚠️ A única exceção fica lá embaixo e está anotada: a queda por E-MAIL, que o espelho não
+   * pode atender porque e-mail não mora nele — de propósito. [[project_email_no_doc_publico]] */
+  var COL = window._COLECAO_PERFIL_PUBLICO || 'usersPublic';
+
   // Query Firestore for each unique name to get their photoURL
   var promises = [];
   names.forEach(function(name) {
     if (window._playerPhotoCache[name.toLowerCase()]) return; // already cached
     promises.push(
-      window.FirestoreDB.db.collection('users')
+      window.FirestoreDB.db.collection(COL)
         .where('displayName', '==', name)
         .limit(1)
         .get()
-        .then(function(snap) { return window._userVivo(snap); })   // lápide guarda o mesmo nome
+        .then(function(snap) { return window._userVivo(snap, { publico: true }); })   // lápide guarda o mesmo nome
         .then(function(v) {
           if (v) {
             var data = v.data;
@@ -4307,11 +4317,11 @@ async function _preloadPlayerPhotos(tournament) {
     for (var _b = 0; _b < _todosUids.length; _b += 10) {
       (function (lote) {
         promises.push(
-          window.FirestoreDB.db.collection('users').where(_fpId, 'in', lote).get()
+          window.FirestoreDB.db.collection(COL).where(_fpId, 'in', lote).get()
             .then(function (snap) {
               var pend = [];
               snap.forEach(function (doc) {
-                pend.push(Promise.resolve(window._userVivo(doc)).then(function (v) { _guardaDoc(doc.id, v); }));
+                pend.push(Promise.resolve(window._userVivo(doc, { publico: true })).then(function (v) { _guardaDoc(doc.id, v); }));
               });
               return Promise.all(pend);
             })
@@ -4322,15 +4332,24 @@ async function _preloadPlayerPhotos(tournament) {
   } else {
     _todosUids.forEach(function(uid) {
       promises.push(
-        window.FirestoreDB.db.collection('users').doc(uid).get()
-          .then(function(doc) { return window._userVivo(doc); })
+        window.FirestoreDB.db.collection(COL).doc(uid).get()
+          .then(function(doc) { return window._userVivo(doc, { publico: true }); })
           .then(function(v) { _guardaDoc(uid, v); })
           .catch(function() {})
       );
     });
   }
 
-  // Fallback: buscar por email para participantes sem uid
+  /* ⚠️ A ÚNICA LEITURA DE `users` QUE SOBRA AQUI — E É PROPOSITAL.
+   * Inscrito antigo sem uid só pode ser reconhecido pelo e-mail gravado na inscrição, e o
+   * espelho público NÃO tem e-mail (é exatamente o que ele existe para não ter). Então esta
+   * queda continua na ficha.
+   * ⭐ MEDIDA ANTES DE DECIDIR, sobre os 269 inscritos de produção: 190 têm uid, 78 não têm
+   * uid NEM e-mail, e **UM** cai aqui — uma dupla de um torneio ENCERRADO de junho, cujo
+   * e-mail resolve para uma conta que tem foto. Tirar a queda custaria a foto dessa pessoa;
+   * mantê-la custa a leitura de UMA ficha, e só quando essa entrada aparece na tela.
+   * ⛔ E É UMA SÓ: o portão conta as ocorrências de `collection('users')` neste arquivo e
+   * reprova na segunda. Sem isso, "só mais uma" volta a alargar a porta sem ninguém ver. */
   participants.forEach(function(p) {
     if (typeof p !== 'object' || p.uid || !p.email) return;
     promises.push(
