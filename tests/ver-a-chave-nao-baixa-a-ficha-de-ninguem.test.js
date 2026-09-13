@@ -180,9 +180,14 @@ const DOCS = { uid1: FICHA, uid2: Object.assign({}, FICHA, { displayName: 'Beltr
   if (!temGit) {
     console.log('\n  (⑨ sem histórico nesta árvore — cópia do preflight; o controle ⑧ cobre)');
   } else {
-    const anterior = execFileSync('git', ['show', 'HEAD~1:js/store.js'], { cwd: raiz, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+    /* ⛔ ÁRVORE FIXA, NUNCA `HEAD~1`. Ancorei em `HEAD~1` e o controle apodreceu no commit
+     * SEGUINTE: a cada leva nova o "antes" vira outro commit qualquer, e o portão reprova
+     * dizendo que a troca não foi feita — quando ela foi. Controle histórico nomeia a
+     * árvore. `c3952cc5` é a 2.3.5, a última ANTES desta troca. */
+    const ARVORE_ANTERIOR = 'c3952cc5';
+    const anterior = execFileSync('git', ['show', ARVORE_ANTERIOR + ':js/store.js'], { cwd: raiz, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
     const antes = await rodar(anterior, UIDS, DOCS);
-    console.log('\n  (controle: a árvore de ANTES da troca)');
+    console.log('\n  (controle: a árvore ' + ARVORE_ANTERIOR + ', ANTES da troca)');
     must(antes.lidas.every((l) => l.colecao === 'users'),
       '⑨ ⭐ ANTES, TODA leitura era em `users` — a troca é real, não decorativa');
     must(JSON.stringify(antes.cache).includes('exemplo.invalid'),

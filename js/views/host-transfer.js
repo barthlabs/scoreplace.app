@@ -197,8 +197,10 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     }
     // Assume UID — verify the doc exists; if not, nothing to do. O uid guardado no torneio
     // pode ser LÁPIDE (a conta foi fundida depois) — _userVivo devolve quem está vivo.
-    db.collection('users').doc(uidOrEmail).get()
-      .then(function(doc) { return window._userVivo(doc); })
+    /* ⭐ Só se pergunta EXISTE e QUEM ESTÁ VIVO — nunca um campo. O espelho responde as
+     * duas (ele carrega `mergedInto`), sem trazer e-mail nem telefone junto. */
+    db.collection(window._COLECAO_PERFIL_PUBLICO || 'usersPublic').doc(uidOrEmail).get()
+      .then(function(doc) { return window._userVivo(doc, { publico: true }); })
       .then(function(v) { if (v) _doMark(v.uid); })
       .catch(function() { _doMark(uidOrEmail); });
   }
@@ -457,8 +459,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         if (v) {
           _resolveAndSend(v.uid);
         } else if (fallbackName) {
-          window.FirestoreDB.db.collection('users').where('displayName', '==', fallbackName).limit(1).get()
-            .then(function(snap2) { return window._userVivo(snap2); })
+          window.FirestoreDB.db.collection(window._COLECAO_PERFIL_PUBLICO || 'usersPublic')
+            .where('displayName', '==', fallbackName).limit(1).get()
+            .then(function(snap2) { return window._userVivo(snap2, { publico: true }); })
             .then(function(v2) {
             if (v2) {
               _resolveAndSend(v2.uid);
@@ -475,8 +478,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     // If it looks like a UID (no @), try direct send + verify the doc exists
     if (uidOrEmail.indexOf('@') === -1) {
       if (window.FirestoreDB && window.FirestoreDB.db) {
-        window.FirestoreDB.db.collection('users').doc(uidOrEmail).get()
-          .then(function(doc) { return window._userVivo(doc); })
+        // ⭐ idem: existência + conta viva, do espelho.
+        window.FirestoreDB.db.collection(window._COLECAO_PERFIL_PUBLICO || 'usersPublic').doc(uidOrEmail).get()
+          .then(function(doc) { return window._userVivo(doc, { publico: true }); })
           .then(function(v) {
           if (v) {
             _resolveAndSend(v.uid);   // uid guardado pode ser LÁPIDE — manda pra conta viva

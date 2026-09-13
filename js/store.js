@@ -9690,9 +9690,13 @@ window._loadParticipantProfilesByName = function(list) {
     if (window._partProfileByName[lc]) return;
     // uid guardado no torneio pode ser LÁPIDE, e o nome casa com a lápide também: as duas
     // pontas passam pela porta única e devolvem o perfil da conta VIVA.
+    /* ⭐ ESPELHO PÚBLICO: quem consome este cache lê `gender`, `skillBySport` e `birthDate`
+     * — os badges de gênero/nível/idade e o sorteio por gênero —, e os três moram no
+     * espelho. A ficha completa nunca foi usada aqui. [[project_email_no_doc_publico]] */
+    var _col = window._COLECAO_PERFIL_PUBLICO || 'usersPublic';
     var q = pr.uid
-      ? db.collection('users').doc(pr.uid).get().then(function(doc) { return window._userVivo(doc); }).then(function(v) { return v ? v.data : null; })
-      : db.collection('users').where('displayName', '==', pr.name).limit(1).get().then(function(snap) { return window._userVivo(snap); }).then(function(v) { return v ? v.data : null; });
+      ? db.collection(_col).doc(pr.uid).get().then(function(doc) { return window._userVivo(doc, { publico: true }); }).then(function(v) { return v ? v.data : null; })
+      : db.collection(_col).where('displayName', '==', pr.name).limit(1).get().then(function(snap) { return window._userVivo(snap, { publico: true }); }).then(function(v) { return v ? v.data : null; });
     proms.push(q.then(function(d) { if (d) window._partProfileByName[lc] = d; }).catch(function() {}));
   });
   return Promise.all(proms);

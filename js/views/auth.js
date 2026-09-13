@@ -9711,7 +9711,14 @@ window._profileHydrateNameConflict = function () {
           var _nameLower = finalName.trim().toLowerCase();
           // user-vivo:isento — mesma exclusão do isDisplayNameTaken: conflito de nome
           // IGNORA lápide (conta morta não reserva nome), nunca segue pro sobrevivente.
-          var _nameSnap = await window.FirestoreDB.db.collection('users')
+          /* ⛔ A GÊMEA DISTO JÁ LIA O ESPELHO E ESTA NÃO — mesma pergunta, duas coleções.
+           * `FirestoreDB.isDisplayNameTaken` faz a consulta IDÊNTICA (`displayName_lower`,
+           * limite 8, ignorando lápide) e passou para `usersPublic` na 2.3.2; esta cópia
+           * ficou em `users` e baixava até 8 fichas inteiras para ler `id` e `mergedInto`.
+           * É o mesmo padrão que a auditoria já nomeou: a mitigação cobre um caminho e não
+           * o irmão. Os dois campos que a decisão usa estão no espelho. */
+          var _nameSnap = await window.FirestoreDB.db
+            .collection(window._COLECAO_PERFIL_PUBLICO || 'usersPublic')
             .where('displayName_lower', '==', _nameLower).limit(8).get();
           // Conflitos = outras contas VIVAS com o mesmo nome (exclui self e
           // tombstones mergedInto — mesma exclusão do isDisplayNameTaken).
