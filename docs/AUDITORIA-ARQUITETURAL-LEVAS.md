@@ -26,7 +26,7 @@
 | L11 | TypeScript progressivo + Firebase compat → modular | **Proposta futura.** | Plano incremental por fronteira, sem reescrita geral. |
 | L12 | PWA, service worker e cache | **Parcial/hardening contínuo.** Gates de versão/cache existem; não é encerrado por uma release. | Teste de atualização e navegação offline em aparelho real. |
 | L13 | Capacitor/nativo | **Aberta.** | Decidir política de versões mínimas/atualização e validar iOS/Android reais. |
-| L14 | identidade, merges, retries e concorrência | **Aberta.** | Matriz de idempotência e provas de posse antes de alterar merge/login. |
+| L14 | identidade, merges, retries e concorrência | **Provas de posse e MATRIZ DE REENTREGA concluídas (P0–P10, 12–13/set/2026).** Portas de identidade inventariadas; três furos de recuperação/login fechados (2.2.92/2.2.93); reentrega varrida em TODA CF agendada e de gatilho, com o que estava errado pago — aviso repetido do grupo (2.2.94), fila de e-mail sem identidade (CF-only), contador de troféu que se somava (2.2.98), portas de e-mail de conta sem limite nenhum (CF-only) e o texto que dizia "hoje" e envelhecia (2.2.99). ⛔ O que sobra está NOMEADO em "o que a L14 ainda não cobriu", com a distinção entre latente e ativo. | Concorrência de merge/login segue não alterada — e não precisou ser. |
 | L15 | testes não descobertos automaticamente | **Concluída (L15.P0/P1/P2).** Medido em 8341efe2: **603 arquivos de teste no disco, 581 na lista à mão de `tests/run-unit.js` e 15 que NENHUM comando alcançava** — entre eles `functions-autodraw/test-uid-identity.js`, **vermelho 11/22 sem ninguém ver**. Os 5 vermelhos foram triados e reparados sem afrouxar invariante nenhum (ver abaixo), e `scripts/check-test-catalog.js` passou a exigir que todo arquivo de teste tenha um comando conhecido. | Gate no `npm test`; suítes de emulador serializadas por grupo. |
 | L16 | observabilidade e hardening | **Aberta.** | Métricas, alertas e runbooks definidos por risco, sem registrar PII. |
 
@@ -3649,14 +3649,39 @@ endereço de domínio reservado — as três primeiras passaram, a quarta e a qu
 `RESOURCE_EXHAUSTED`, e o contador apareceu em `accountEmailThrottle`. ⚠️ As três mensagens do
 ensaio saíram e foram apagadas da fila em seguida; o domínio é reservado e não entrega.
 
+### L14.P9 — as duas agendadas que faltavam, lidas (13/set/2026)
+
+- **`nudgeMissingPhones`** — já está no MELHOR padrão da casa, e não era sabido: cada e-mail é
+  `mail/phone-nudge__<dia>__<uid>` criado com **`create()`**. Id determinístico + create-only:
+  reentrega bate em documento existente e não manda nada. ✅ Nada a fazer.
+- **`sendTournamentReminders`** — meio a meio, e o meio que falta já está coberto:
+  - o aviso **in-app** usa id determinístico (`tournament_reminder|<tid>|<janela>|<uid>`) —
+    reentrega sobrescreve o mesmo documento. ✅
+  - o **e-mail** entra em `notif_email_queue` com id automático — **não** é idempotente na
+    origem. ⭐ Mas a ORDEM está certa pela regra da casa (enfileira, e só então marca
+    `remindersSent`), porque **perder um lembrete é pior que repetir**; e a repetição que
+    sobra cai dentro da janela de 2 h da dedup da **L14.P5**, que colapsa conteúdo idêntico.
+  - ⚠️ Resta um caso estreito: marcação falhando **e** a mesma janela ainda valendo no dia
+    seguinte (fora das 2 h). Fica anotado, não consertado — o conserto seria inverter a ordem,
+    que troca "raramente repete" por "às vezes perde".
+
+### L14.P10 — o defeito era de REDAÇÃO (2.2.99)
+
+O achado de lambuja da P6, pago: o aviso de "vou jogar" dizia o dia errado por **duas** portas
+que montavam a frase com regras próprias — uma cravava *"hoje"* sempre, a outra chamava de
+*"amanhã"* qualquer dia que não fosse hoje. Agora há uma régua só (`window._rotuloDoDia`), e a
+**data vai junto** em todo caso, que é o que mantém a frase verdadeira quando o aviso for lido
+dias depois. ⛔ O portão pegou um defeito meu no caminho: `new Date(null)` é 1º/jan/1970, não
+data inválida.
+⚠️ Sobram **cinco** outros cálculos de rótulo de dia (venues.js ×4, weather.js), cada um com
+regra própria. Não foram tocados: são efêmeros, calculados no render — não congelam e por isso
+não mentem depois.
+
 ### O que a L14 ainda não cobriu
-- **Reentrega** de `sendTournamentReminders` e `nudgeMissingPhones` (as agendadas que enviam):
-  lidas por cima, **não auditadas** por essa ótica. `drainPendingVerifications` foi lida — a
-  ordem é *enfileirar e depois marcar "enviado"*, então uma falha na marcação re-manda na
-  volta seguinte (a cada 2 min); ⚠️ MEDIDO: a fila está **vazia**, ninguém preso, então o
-  defeito é latente, não ativo.
-- **Texto** de aviso que não distingue o evento (o *"hoje"* persistido, o *"um participante se
-  inscreveu"* sem dizer quem) — achado da P6, é defeito de redação, não de entrega.
+- `drainPendingVerifications`: enfileira e **depois** marca "enviado" — falha na marcação
+  re-manda a cada 2 min. ⚠️ MEDIDO: fila **vazia**, ninguém preso ⇒ **latente, não ativo**.
+- O caso estreito do lembrete de torneio descrito na P9.
+- *"Um participante se inscreveu"* não diz QUEM — outro texto que não distingue o evento.
 
 ## L6 — ESTÁ PRATICAMENTE FECHADA, E O REGISTRO DIZIA O CONTRÁRIO (12/set/2026)
 
