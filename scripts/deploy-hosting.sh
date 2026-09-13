@@ -278,7 +278,25 @@ _FB_SESSAO="$(firebase projects:list --json 2>/dev/null || true)"
 if ! printf '%s' "$_FB_SESSAO" | grep -q '"status": *"success"'; then
   echo
   echo "✗ FIREBASE NÃO AUTENTICADO — nada foi testado, empurrado ou publicado."
-  echo "  Rode: firebase login --reauth"
+  echo
+  # ⛔ NÃO EMPURRAR DE VOLTA PRA CREDENCIAL QUE EXPIRA. `firebase login` é sessão de USUÁRIO,
+  # e credencial de usuário do Google expira POR DESENHO (política de reautenticação). Mandar
+  # rodar `--reauth` conserta por hoje e traz o mesmo bloqueio na semana que vem — foi o que
+  # aconteceu, e o dono tinha razão de reclamar. O caminho que DURA é conta de serviço.
+  if [ -z "${GOOGLE_APPLICATION_CREDENTIALS:-}" ]; then
+    echo "  A causa provável: não há credencial DURÁVEL ligada (GOOGLE_APPLICATION_CREDENTIALS vazia)."
+    echo "  Resolva de uma vez — conta de serviço, que não expira:"
+    echo "      bash scripts/credencial-duradoura.sh --apply --ligar-no-shell"
+    echo
+    echo "  (só a primeira vez pede um  gcloud auth login)"
+  else
+    echo "  Há credencial durável ligada:"
+    echo "      $GOOGLE_APPLICATION_CREDENTIALS"
+    echo "  Então o problema é OUTRO — confira se o arquivo existe, se é legível e se a conta"
+    echo "  de serviço tem os papéis (rode o script acima sem --apply pra ver a lista)."
+  fi
+  echo
+  echo "  Saída para hoje, se estiver com pressa: firebase login --reauth"
   echo "  Depois repita: scripts/deploy-hosting.sh"
   exit 1
 fi
