@@ -53,6 +53,48 @@ must(C.CAMPOS_PUBLICOS.indexOf('mergedInto') >= 0,
 must(C.CAMPOS_PUBLICOS.indexOf('birthDate') >= 0,
   '② `birthDate` entra por decisão consciente — o desempate por idade lê a de OUTROS jogadores');
 
+// ── ②b CAMPO NOVO NO ESPELHO TEM DE PASSAR NO CRITÉRIO, NÃO NA VONTADE ─────
+/* ⛔ A lista vai crescer — já cresceu três vezes. O que não pode crescer é a CATEGORIA:
+ * este espelho existe para reter dado de CONTATO. Esta trava é estrutural, então pega o
+ * campo que ainda não existe: `contactEmail`, `phone2`, `pushToken`, `cpf`, `cep` entrariam
+ * vermelhos sem ninguém precisar lembrar de atualizar teste nenhum. */
+/* ⚠️ POR SEGMENTO DE PALAVRA, NÃO POR PEDAÇO DE STRING. A primeira versão desta trava
+ * reprovou `acceptFriendRequests` — porque "ac**cep**t" contém "cep". Substring não é
+ * palavra, e um portão que grita no campo certo pelo motivo errado ensina a ignorá-lo. */
+const PALAVRAS_DE_CONTATO = ['email', 'mail', 'phone', 'fone', 'telefone', 'celular',
+  'whatsapp', 'token', 'cep', 'cpf', 'passport', 'address', 'endereco'];
+const segmentos = (k) => k
+  .replace(/([a-z0-9])([A-Z])/g, '$1 $2')   // camelCase → duas palavras
+  .replace(/([a-zA-Z])(\d)/g, '$1 $2')      // ⚠️ e o DÍGITO colado: `phone2` é "phone" + "2",
+  .replace(/(\d)([a-zA-Z])/g, '$1 $2')      //    e sem isto ele passava reto pela trava
+  .split(/[^a-zA-Z0-9]+|\s+/).filter(Boolean).map((x) => x.toLowerCase());
+/* ⚠️ A ÚNICA EXCEÇÃO, E ELA É NOMEADA. `notifyEmail` é um SIM/NÃO — "esta pessoa quer ser
+ * avisada por e-mail?" —, não um endereço. Quem manda o aviso precisa da resposta; o
+ * endereço quem resolve é o servidor. Exceção nomeada é auditável; regex frouxa não. */
+const EXCECOES = { notifyEmail: 'é preferência (sim/não), não endereço' };
+// ⚠️ e o PLURAL conta: `preferredCeps` vira ['preferred','ceps'], e "ceps" não é "cep".
+const sujeira = (seg) => PALAVRAS_DE_CONTATO.some((w) => seg === w || seg === w + 's');
+C.CAMPOS_PUBLICOS.forEach((k) => {
+  if (EXCECOES[k]) { must(true, '②b `' + k + '` é exceção NOMEADA — ' + EXCECOES[k]); return; }
+  const sujo = segmentos(k).filter(sujeira);
+  must(sujo.length === 0,
+    '②b ⛔ `' + k + '` não tem cheiro de contato' + (sujo.length ? ' (achado: ' + sujo.join(',') + ')' : ''));
+});
+// ⛔ CONTROLE: a trava tem de gritar num campo que AINDA NÃO EXISTE.
+['contactEmail', 'phone2', 'pushToken', 'preferredCeps', 'homeAddress'].forEach((inventado) => {
+  const sujo = segmentos(inventado).filter(sujeira);
+  must(sujo.length > 0 && !EXCECOES[inventado],
+    '②b ⭐ um `' + inventado + '` futuro entraria VERMELHO sem ninguém lembrar do teste');
+});
+// e os três que entraram em 13/set/2026, com a conta de quem os usa
+[['city', 'a ficha pública mostra a cidade onde a pessoa joga'],
+ ['_trophyIds', 'a tela de comparar troféus EXISTE para mostrar isto'],
+ ['letzplayHandle', 'é um @ público de outra plataforma, por natureza']].forEach(([k, porque]) => {
+  must(C.CAMPOS_PUBLICOS.indexOf(k) >= 0, '②b `' + k + '` está no espelho — ' + porque);
+  must(C.perfilPublico(Object.assign({}, perfilCheio, { [k]: k === '_trophyIds' ? ['t1'] : 'x' }))[k] !== undefined,
+    '②b e o espelho realmente o carrega');
+});
+
 // ── ③ a lista é de PERMISSÃO: campo novo nasce privado ──────────────────────
 const comCampoNovo = Object.assign({}, perfilCheio, { campoQueNinguemPreviu: 'segredo' });
 must(!('campoQueNinguemPreviu' in C.perfilPublico(comCampoNovo)),

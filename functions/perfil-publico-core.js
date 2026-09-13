@@ -40,6 +40,18 @@ const CAMPOS_PUBLICOS = [
    * documento inteiro (com e-mail e telefone) só para saber se a pessoa quer ser avisada —
    * que é exatamente a leitura que esta frente existe para acabar. */
   'notifyLevel', 'notifyPlatform', 'notifyEmail', 'liveAlerts', 'liveAlertsWho',
+  /* ⚠️ OS TRÊS ABAIXO ENTRARAM EM 13/set/2026, E O CRITÉRIO FOI SEMPRE O MESMO: nenhum é
+   * dado de CONTATO — que é o que este espelho existe para reter —, os três já são legíveis
+   * hoje por qualquer pessoa autenticada (o documento inteiro é), e cada um sustenta uma
+   * tela que quebraria sem ele. Ou seja: incluí-los NÃO amplia o que se vê; o que muda é que
+   * quem vê para de baixar os outros 90 campos junto.
+   *   • `city` (98 de 279 perfis) — a ficha pública do jogador mostra a cidade onde ele joga.
+   *   • `_trophyIds` (237 de 279, média 3,9 · máx 15) — a tela de comparar troféus com um
+   *     amigo EXISTE para mostrar isto; sem o campo ela baixava a ficha de até 20 pessoas.
+   *   • `letzplayHandle` (26 de 279) — é um @ público de outra plataforma, por natureza.
+   * ⛔ SE O DONO DISCORDAR DE QUALQUER UM: tirar é apagar a linha e re-semear; o espelho é
+   * derivado, nada se perde. [[project_email_no_doc_publico]] */
+  'city', '_trophyIds', 'letzplayHandle',
 ];
 
 /* ⛔ A LISTA DE VETO existe só para o PORTÃO cobrar, não para filtrar: filtrar por veto é o
