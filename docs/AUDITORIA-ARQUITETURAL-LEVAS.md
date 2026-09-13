@@ -3883,7 +3883,16 @@ não mentem depois.
 - `drainPendingVerifications`: enfileira e **depois** marca "enviado" — falha na marcação
   re-manda a cada 2 min. ⚠️ MEDIDO: fila **vazia**, ninguém preso ⇒ **latente, não ativo**.
 - O caso estreito do lembrete de torneio descrito na P9.
-- *"Um participante se inscreveu"* não diz QUEM — outro texto que não distingue o evento.
+- ✅ *"Um participante se inscreveu"* não diz QUEM — **FECHADO em 13/set/2026**, e o conserto
+  foi o oposto do esperado: o texto JÁ nomeava, mas nomeava pelo **E-MAIL** da pessoa
+  (`_enrollDisplayName` resolvia displayName → e-mail → telefone), e esse aviso vira e-mail e
+  vira digest. MEDIDO nos 279 perfis: 275 têm nome, 3 têm telefone, **1** só tem e-mail — o
+  preço de tirar o endereço da cadeia é UMA pessoa aparecer como "Um participante", e o
+  organizador a identifica na lista de inscritos, que é onde esse dado deve estar.
+- ✅ E a gêmea disso, achada pelo dono no mesmo dia: *"Jogador lançou:"* sem nome de ninguém.
+  A causa era outra — o nome saía só da PROPOSTA pendente, e quando o organizador lança
+  direto não há proposta. Agora quem lançou é a proposta **ou o ator**, com `(org.)` quando
+  foi na qualidade de organização.
 
 ## L6 — ESTÁ PRATICAMENTE FECHADA, E O REGISTRO DIZIA O CONTRÁRIO (12/set/2026)
 

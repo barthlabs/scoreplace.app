@@ -609,10 +609,23 @@ function _enrollToStandby(t, tId, participantObj, callback) {
 // inscrito novo fique sem nome (o nome real vem do Google ou do que a pessoa
 // informa; este é o fallback dos casos legados). Usado em todos os builds de
 // participante self-enroll.
+/* ⛔ O E-MAIL SAIU DA CADEIA DE NOME (13/set/2026).
+ *
+ * Este nome vai para o AVISO que o organizador recebe — e aviso vira e-mail e vira digest.
+ * Usar o endereço de alguém como "nome" publicava o contato dessa pessoa num texto que
+ * viaja, e é a mesma coisa que saiu do espelho público, do cache da chave e da comparação
+ * de troféus no mesmo dia.
+ *
+ * ⭐ MEDIDO ANTES DE TIRAR, nos 279 perfis: **275 têm displayName**, 3 não têm nome mas têm
+ * telefone, e **1** só tem e-mail. Ou seja, o preço é UMA pessoa aparecer como "Um
+ * participante" no aviso — e o organizador identifica quem é na lista de inscritos, que é
+ * onde esse dado deve estar. Publicar o e-mail de 279 para nomear 1 é a troca errada.
+ *
+ * ⚠️ O telefone FICA: é o que o dono já aprovou como identificação de quem entra sem nome, e
+ * ele aparece formatado, não cru. [[project_email_no_doc_publico]] */
 window._enrollDisplayName = function (user) {
     if (!user) return '';
     if (user.displayName && String(user.displayName).trim()) return String(user.displayName).trim();
-    if (user.email && String(user.email).trim()) return String(user.email).trim();
     if (user.phone) {
         var d = String(user.phone).replace(/\D/g, '');
         if (d.length > 11 && d.substring(0, 2) === '55') d = d.substring(2);
