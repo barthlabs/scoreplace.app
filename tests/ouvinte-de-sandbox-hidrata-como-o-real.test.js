@@ -285,8 +285,15 @@ function novoMundo() {
     delete vv._faltamPesados; delete vv._faltaOQue;
     ingest([docMagro()]);                               // ③ ECO MAGRO depois de montado
     const vv2 = AS3.tournaments.find((t) => t.id === 'sb_x');
-    await FDB.saveTournament(vv2 || vv);                // ④ GRAVAÇÃO REAL
-    return { antes: { inscritos: 152, matches: 115 }, depois: banco.conta(),
+    /* ⚠️ A GRAVAÇÃO PODE SER RECUSADA AGORA, E ISSO É O DESFECHO CERTO.
+     * Em 13/set/2026 `saveTournament` ganhou um guarda: se a parte pesada não chegou, ele
+     * RECUSA a gravação inteira em vez de escrever o pedaço por cima da subcoleção. Este
+     * cenário roda duas vezes — com o ingest ATUAL (que preserva o montado, e aí o guarda
+     * nem dispara) e com o ingest ANTIGO (que trunca, e aí o guarda dispara). Capturar o
+     * erro aqui deixa as DUAS medições possíveis; deixar estourar matava o controle. */
+    let recusa = null;
+    try { await FDB.saveTournament(vv2 || vv); } catch (e) { recusa = e && e.message; }
+    return { recusa, antes: { inscritos: 152, matches: 115 }, depois: banco.conta(),
       emMemoria: { inscritos: ((vv2 || vv).participants || []).length,
                    matches: (((vv2 || vv).rounds || [])[0] || {}).matches ? ((vv2 || vv).rounds[0].matches || []).length : 0 } };
   };
@@ -311,12 +318,24 @@ function novoMundo() {
     try { vm.runInContext(SB_INGEST_2188, Wv); ingestVelho = Wv._sbIngest; } catch (e) { ingestVelho = null; }
     if (ingestVelho) {
       const rv = await cenarioDestrutivo(ingestVelho, Wv);
-      ok('⛔⛔ CONTROLE: com o HEAD anterior, a gravação APAGA `inscritos` (ficou ' + rv.depois.inscritos + ')',
-        rv.depois.inscritos === 0, JSON.stringify(rv.depois));
-      ok('⛔⛔ CONTROLE: e derruba `matches` também (ficou ' + rv.depois.matches + ')',
-        rv.depois.matches < 115, JSON.stringify(rv.depois));
-      ok('   ⇒ é a mesma assinatura do sandbox em produção: 0 inscritos e menos jogos',
-        rv.depois.inscritos === 0);
+      /* ⭐ ESTE CONTROLE MUDOU DE VEREDITO EM 13/set/2026, E A MUDANÇA É A NOTÍCIA.
+       * Ele existia para provar que o ingest ANTIGO apagava a subcoleção — 0 inscritos, a
+       * assinatura exata do sandbox em produção. Com o guarda de gravação, a MESMA entrada
+       * truncada já não consegue apagar: a gravação é RECUSADA antes de tocar no banco.
+       * ⛔ O controle continua provando que a entrada é destrutiva (o objeto em memória
+       * CHEGA truncado, é isso que ele mede); o que mudou é que existe uma segunda rede,
+       * independente do ingest, e ela segura. Duas redes para o mesmo estrago é de
+       * propósito: a primeira já regrediu uma vez. */
+      ok('⛔⛔ CONTROLE: com o HEAD anterior, o objeto CHEGA truncado à gravação (' +
+        rv.emMemoria.inscritos + ' inscritos em memória)',
+        rv.emMemoria.inscritos < 152, JSON.stringify(rv.emMemoria));
+      ok('⭐⭐ e a gravação é RECUSADA em vez de apagar — o guarda de partes segura',
+        !!rv.recusa && /ainda não carregada/.test(rv.recusa || ''), String(rv.recusa));
+      ok('⭐⭐ a recusa DIZ quais partes faltam',
+        /participants/.test(rv.recusa || '') && /matches/.test(rv.recusa || ''), String(rv.recusa));
+      ok('⭐⭐ ⇒ os 152 inscritos SOBREVIVEM (antes desta rede, ficavam 0)',
+        rv.depois.inscritos === 152, JSON.stringify(rv.depois));
+      ok('⭐⭐ e os 115 jogos também', rv.depois.matches === 115, JSON.stringify(rv.depois));
     } else {
       ok('⛔ não consegui recortar o `_sbIngest` do HEAD anterior — controle não rodou', false);
     }
