@@ -163,6 +163,18 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    /* ⭐ ESPELHO PÚBLICO DO PERFIL — o que terceiro pode ver de alguém.
+     * `users/{uid}` continua aberto a qualquer autenticado e é isso que se quer fechar; como
+     * Rule não projeta CAMPO, a saída foi MOVER: `usersPublic` carrega nome, foto, gênero,
+     * nível, categoria e data de nascimento, e NÃO carrega e-mail nem telefone.
+     * ⛔ `write: if false` — quem mantém é a Function `espelhoDoPerfilPublico`, escritor
+     * ÚNICO, pelo Admin SDK, que ignora as rules. Duas autoridades sobre a mesma projeção é
+     * a duplicidade que este projeto já pagou caro. */
+    match /usersPublic/{uid} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
     /* ⛔ A RARIDADE DO TROFÉU ESTAVA NO ESCURO. `_meta` não tinha regra nenhuma, e sem regra
      * é negado — MEDIDO: 403. A tela de troféus (`js/views/trophies-view.js:455`) calcula
      * "quantos por cento têm este troféu" a partir de `_meta/trophyStats`, e a leitura sempre

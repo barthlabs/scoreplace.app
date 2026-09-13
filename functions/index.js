@@ -8851,6 +8851,59 @@ function _discoverySummary(t) {
 // A regra do que reescrever mora em rename-propagate-core (PURO, 20 asserções):
 // só por uid, nunca por nome — e array desalinhado é recusado por inteiro em vez
 // de adivinhado (foi assim que a saída da Denise quase renomeou o vizinho).
+/* ⛔ ESPELHO PÚBLICO DO PERFIL — a saída para o que Rule nenhuma resolve.
+ *
+ * `users/{uid}` é `allow read: if request.auth != null`: qualquer pessoa logada lê o
+ * documento INTEIRO de qualquer outra. MEDIDO em 13/set/2026 — **279 perfis, 94 campos,
+ * 260 e-mails, 180 celulares, 101 datas de nascimento**, inclusive os **131 perfis que
+ * marcaram "não mostrar meu e-mail"**.
+ *
+ * E não há regra que conserte: Rules autorizam DOCUMENTO, não projetam CAMPO. A saída é
+ * MOVER — `usersPublic/{uid}` carrega o que a tela de terceiro precisa e deixa e-mail e
+ * telefone para trás. A lista mora em `perfil-publico-core.js`, que é puro e testado.
+ *
+ * ⚠️ UM ÚNICO ESCRITOR, e é este. Duas autoridades escrevendo a mesma projeção é a
+ * duplicidade que este projeto já pagou caro em `friends[]`. A Rule de `usersPublic` é
+ * `write: if false` — nem o cliente nem outra Function escrevem lá.
+ *
+ * ⚠️ REENTREGA: o Firebase entrega gatilho ao menos uma vez. Este é idempotente por
+ * construção — grava o MESMO documento derivado do mesmo perfil, com `set`. Rodar duas
+ * vezes dá o mesmo resultado. [[feedback_a_defesa_vaza_pela_borda]]
+ *
+ * ⛔ ESTA LEVA NÃO FECHA `users`. O espelho nasce e passa a ser mantido; o cliente só
+ * migra na leva seguinte, e fechar a leitura de `users` depende de versão nativa
+ * publicada — o bundle das lojas lê `users` direto. Fechar antes cortaria quem está na
+ * loja. [[project_travar_as_rules_em_9_setembro]]
+ */
+const _perfilPublico = require("./perfil-publico-core.js");
+
+exports.espelhoDoPerfilPublico = onDocumentWritten(
+  { document: "users/{uid}", region: "us-central1", memory: "256MiB", timeoutSeconds: 120 },
+  async (event) => {
+    const uid = event.params.uid;
+    const espelhoRef = admin.firestore().collection("usersPublic").doc(uid);
+    const before = event.data && event.data.before;
+    const after = event.data && event.data.after;
+
+    // Perfil apagado ⇒ espelho some junto. Espelho órfão é pessoa que não existe mais
+    // continuando a aparecer em busca e lista.
+    if (!after || !after.exists) {
+      await espelhoRef.delete();
+      console.log("[espelho-perfil] " + uid + " apagado junto com o perfil");
+      return;
+    }
+
+    const depois = after.data() || {};
+    const antes = (before && before.exists) ? (before.data() || {}) : null;
+    // ⚠️ Sem esta porta o espelho reescreveria a CADA toque no perfil — `lastSeenAt` sozinho
+    // dispara o gatilho toda vez que alguém abre o app.
+    if (antes && !_perfilPublico.espelhoPrecisaMudar(antes, depois)) return;
+
+    await espelhoRef.set(_perfilPublico.perfilPublico(depois));
+    console.log("[espelho-perfil] " + uid + " atualizado");
+  }
+);
+
 exports.propagateDisplayName = onDocumentWritten(
   { document: "users/{uid}", region: "us-central1", memory: "256MiB", timeoutSeconds: 300 },
   async (event) => {
