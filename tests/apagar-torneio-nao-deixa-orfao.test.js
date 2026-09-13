@@ -87,6 +87,26 @@ function eq(a, b, m) { ok(a === b, m + ' — esperado ' + JSON.stringify(b) + ',
     ok(/collection\("discoveryFeed"\)\.doc\(tid\)\.delete\(\)/.test(purge),
       'e apaga discoveryFeed/{tid} INCONDICIONALMENTE (a rede que cobre o guard de isPublic do outro)');
 
+    /* ⛔ E ESSE PASSO NÃO PODE SER MUDO — dívida registrada na L0.R0.4 e fechada em
+     * 13/set/2026. Era `try { ... } catch (e) {}`: não registrava o erro e não entrava no
+     * contador, então o resumo do log dizia EXATAMENTE o mesmo tendo o feed sido limpo ou
+     * não. Hoje não falha; no dia em que falhar, o torneio sumiria de todo lugar MENOS da
+     * descoberta, e ninguém ficaria sabendo. Os outros quatro passos sempre registraram e
+     * contaram. ⚠️ Medido antes de mexer: das 5 ocorrências de `catch (e) {}` em
+     * functions/index.js, as outras 4 são `getUser()` sondando existência — controle de
+     * fluxo legítimo, não silêncio. Era um caso só. */
+    const passo5 = purge.slice(purge.indexOf('collection("discoveryFeed")') - 200,
+                               purge.indexOf('const resumo'));
+    ok(!/catch \(e\) \{\}/.test(passo5),
+      '⛔ o passo do feed NÃO engole mais a falha em silêncio');
+    ok(/conta\.discoveryFeed = "FALHOU"/.test(passo5) && /console\.error\(/.test(passo5),
+      '⭐ se falhar, ele GRITA — no log de erro e no resumo da própria varredura');
+    ok(/conta\.discoveryFeed = "apagado"/.test(passo5),
+      '⭐ e quando dá certo, o resumo também diz — os dois casos passam a ser distinguíveis');
+    const resumoLinha = purge.slice(purge.indexOf('const resumo'), purge.indexOf('const resumo') + 200);
+    ok(/Object\.keys\(conta\)/.test(resumoLinha),
+      'o resumo do log é montado do MESMO contador em que o passo 5 agora escreve');
+
     // ⛔ E o cliente não pode voltar a tentar por outro caminho.
     const cliente = fs.readFileSync(path.join(__dirname, '..', 'js', 'firebase-db.js'), 'utf8');
     ok(!/collection\(['"]discoveryFeed['"]\)\s*\.\s*doc\([^)]*\)\s*\.\s*delete\(/.test(cliente),

@@ -9656,8 +9656,22 @@ exports.purgeTournamentCopies = onDocumentDeleted(
       console.error(`[purgeTournamentCopies] subcoleções falharam em ${tid}:`, e && e.message);
     }
 
-    // ── (5) o doc de índice do feed ─────────────────────────────────────────
-    try { await _db.collection("discoveryFeed").doc(tid).delete(); } catch (e) {}
+    /* ── (5) o doc de índice do feed ─────────────────────────────────────────
+     * ⛔ ESTE PASSO ERA O ÚNICO MUDO DOS CINCO. Era `catch (e) {}`: não registrava o erro
+     * e não entrava no `conta`, então o resumo do log não dizia UMA PALAVRA sobre o feed.
+     * Hoje ele não falha; no dia em que falhar, o torneio some de todo lugar MENOS da
+     * descoberta — e ninguém fica sabendo, porque o log diz exatamente o mesmo nos dois
+     * casos. Os outros quatro passos já registravam e contavam; este virou irmão deles.
+     * ⚠️ `delete()` num doc inexistente NÃO falha no Firestore, então "apagado" aqui quer
+     * dizer "a exclusão foi aceita", não "havia algo lá". A informação que importa é a
+     * outra: se FALHOU, o resumo grita. [[feedback_a_defesa_vaza_pela_borda]] */
+    try {
+      await _db.collection("discoveryFeed").doc(tid).delete();
+      conta.discoveryFeed = "apagado";
+    } catch (e) {
+      conta.discoveryFeed = "FALHOU";
+      console.error(`[purgeTournamentCopies] discoveryFeed falhou em ${tid}:`, e && e.message);
+    }
 
     const resumo = Object.keys(conta).map((k) => `${k}=${conta[k]}`).join(" · ") || "nada a apagar";
     console.log(`[purgeTournamentCopies] ${tid} → ${resumo}`);
