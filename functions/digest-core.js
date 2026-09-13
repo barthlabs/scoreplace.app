@@ -162,7 +162,76 @@ function _buildDigestText(items) {
   );
 }
 
+/* ⛔ A MESMA NOVIDADE NÃO SAI DUAS VEZES.
+ *
+ * MEDIDO em produção (12/set/2026, leitura direta do banco): o aviso "criou o grupo do
+ * WhatsApp de «…»" saiu para as MESMAS duas pessoas às 00:19, 00:39 e 13:34 de 03/ago, com
+ * o corpo idêntico caractere a caractere. O disparo em si foi consertado na 2.2.94 (salvar
+ * o mesmo link parou de avisar de novo), mas a FILA continuava sem identidade: `queueNotifEmail`
+ * grava com `.add()`, então dois itens iguais são dois itens — e se caírem em janelas de
+ * descarga diferentes viram dois e-mails iguais.
+ *
+ * ⭐ POR QUE AQUI, no servidor, e não só no cliente: o conserto do cliente só alcança quem
+ * atualizou. A Produção Android está treze versões atrás. Esta função vê TODA a fila, de
+ * QUALQUER versão de app. [[project_version_scheme_store_aligned]]
+ *
+ * ⚠️ ERRAR PARA QUAL LADO: perder um aviso é pior que mandá-lo duas vezes — é a mesma regra
+ * já escrita no `accountSummaryEmail`. Por isso o registro do que já saiu é CONSULTIVO: se a
+ * leitura dele falhar, `jaEnviados` chega vazio e TUDO é enviado. E a janela é curta (2h),
+ * larga o bastante para cobrir a repetição medida (20 min entre as duas descargas) e estreita
+ * o bastante para que o mesmo aviso no dia seguinte seja tratado como novidade de verdade.
+ */
+function _chaveDoAviso(item) {
+  const it = item || {};
+  return [
+    String(it.level || "all"),
+    String(it.message || ""),
+    String(it.tournamentName || ""),
+    String(it.tournamentUrl || ""),
+    String(it.ctaUrl || ""),
+    it.scoreboard ? JSON.stringify(it.scoreboard) : ""
+  ].join("\u0001");
+}
+
+/** Separa a fila de uma pessoa em: o que VAI no e-mail e o que só se APAGA.
+ *  Repetido dentro da mesma descarga vira UMA linha; repetido de uma descarga
+ *  anterior (dentro da janela) não vira linha nenhuma — mas o item sai da fila
+ *  do mesmo jeito, senão ficaria voltando para sempre. */
+function _semRepetidos(items, jaEnviados, agora, janelaMs) {
+  const lista = Array.isArray(items) ? items : [];
+  const visto = jaEnviados || {};
+  const t = (typeof agora === "number") ? agora : Date.now();
+  const janela = (typeof janelaMs === "number" && janelaMs > 0) ? janelaMs : 2 * 60 * 60 * 1000;
+  const nesteLote = Object.create(null);
+  const vao = [];
+  const chaves = [];
+  for (let i = 0; i < lista.length; i++) {
+    const k = _chaveDoAviso(lista[i]);
+    if (nesteLote[k]) continue;                       // repetido na mesma descarga
+    const quando = visto[k];
+    if (typeof quando === "number" && (t - quando) < janela) continue;  // já saiu há pouco
+    nesteLote[k] = 1;
+    vao.push(lista[i]);
+    chaves.push(k);
+  }
+  return { vao: vao, chaves: chaves };
+}
+
+/** Registro enxuto do que acabou de sair: some o que passou da janela. */
+function _registroPodado(jaEnviados, chaves, agora, janelaMs) {
+  const t = (typeof agora === "number") ? agora : Date.now();
+  const janela = (typeof janelaMs === "number" && janelaMs > 0) ? janelaMs : 2 * 60 * 60 * 1000;
+  const out = {};
+  const antes = jaEnviados || {};
+  Object.keys(antes).forEach(function (k) {
+    if (typeof antes[k] === "number" && (t - antes[k]) < janela) out[k] = antes[k];
+  });
+  (chaves || []).forEach(function (k) { out[k] = t; });
+  return out;
+}
+
 module.exports = {
   _digestEscape, _digestLevelMeta, _digestPalette, _digestScoreboard,
-  _placarDaMensagem, _semAsLinhasDePlacar, _buildDigestHtml, _buildDigestText
+  _placarDaMensagem, _semAsLinhasDePlacar, _buildDigestHtml, _buildDigestText,
+  _chaveDoAviso, _semRepetidos, _registroPodado
 };

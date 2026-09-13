@@ -3509,11 +3509,35 @@ Trava: `tests/mesmo-link-do-grupo-nao-avisa-de-novo.test.js` (13 verificações;
 defesa** — é um amortecedor. O que fecha é identidade no dado (id determinístico, `create()`
 em vez de `add()`, comparar com o que já estava lá).
 
+### L14.P5 — a fila de e-mail ganhou identidade, no SERVIDOR (12/set/2026)
+
+A P4 fechou o DISPARO. Faltava a FILA: `queueNotifEmail` grava com `.add()`, então duas cópias
+do mesmo aviso são dois documentos — e, caindo em descargas diferentes, viram dois e-mails
+idênticos. Era o que sobrava do caso medido (00:19 e 00:39 de 03/ago, 20 minutos, corpo igual).
+
+**Pago aqui — só SERVIDOR, sem número de versão web** (a suíte exige que commit de servidor
+não mexa no shell; a nota ao usuário já saiu na 2.2.94, que é a outra metade do mesmo conserto): `flushNotifEmailDigest` passou a perguntar *"isto já saiu?"*
+antes de montar o e-mail. A regra mora em `digest-core.js`, que é módulo puro e testável:
+uma CHAVE por conteúdo do aviso (nível, texto, torneio, botão, placar — sem id de documento e
+sem horário de entrada, que era justamente o que diferia entre as cópias), corte do repetido
+dentro da mesma descarga, e um registro por destinatário (`notifDigestSent`, sem regra ⇒ negada
+por padrão) com janela de **2 horas**.
+
+Três decisões que valem registro:
+- **A janela é curta de propósito.** Cobre com folga a repetição medida (20 min) e deixa o
+  mesmo texto no dia seguinte passar como novidade de verdade.
+- **O registro é CONSULTIVO.** Se a leitura falhar, ele chega vazio e tudo é enviado — perder
+  aviso é pior que repetir, a mesma regra já escrita no `accountSummaryEmail`.
+- **A fila se limpa sempre**, inclusive o que foi cortado por repetição; senão o repetido
+  voltaria a cada 5 minutos para sempre.
+
+⭐ **Por que no servidor e não no cliente:** o conserto do cliente só alcança quem atualizou, e
+a Produção Android está treze versões atrás. Esta função vê toda a fila, de qualquer versão.
+
+Trava: `tests/digest-nao-manda-a-mesma-novidade-duas-vezes.test.js` — 23 verificações, a regra
+EXECUTADA (não procurada por regex), provada derrubando as duas metades: a janela e a fiação.
+
 ### O que a L14 ainda não cobriu
-- A **fila de e-mail** (`notif_email_queue`) continua sem identidade: `.add()` no cliente e
-  consolidação por destinatário no servidor. Fechar isso alcançaria também os duplicados que
-  nascem de dois aparelhos — e, se for feito no `flushNotifEmailDigest`, alcança quem está em
-  versão velha de loja, que o conserto do cliente não alcança.
 - `_notifDedupCheck` segue de 5 min e em memória para **todos** os outros tipos de notificação.
 - Reentrega das **CFs agendadas e de gatilho** (o Firebase entrega ao menos uma vez por
   contrato): `accountSummaryEmail`, `accountDeletionEmail`, `sendPairInviteEmail` e

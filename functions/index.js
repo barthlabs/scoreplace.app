@@ -1239,6 +1239,11 @@ const _digestPalette = _digest._digestPalette;
 const _digestScoreboard = _digest._digestScoreboard;
 const _buildDigestHtml = _digest._buildDigestHtml;
 const _buildDigestText = _digest._buildDigestText;
+const _chaveDoAviso = _digest._chaveDoAviso;
+const _semRepetidos = _digest._semRepetidos;
+const _registroPodado = _digest._registroPodado;
+// Janela do "isto já saiu": 2h. Ver o comentário longo em digest-core.js.
+const _JANELA_DO_JA_SAIU_MS = 2 * 60 * 60 * 1000;
 
 exports.flushNotifEmailDigest = onSchedule(
   {
@@ -1259,6 +1264,7 @@ exports.flushNotifEmailDigest = onSchedule(
     dueSnap.forEach((d) => { const e = d.data().email; if (e) dueEmails.add(e); });
 
     let sent = 0;
+    let repetidos = 0;
     for (const email of dueEmails) {
       // Consolida TODOS os itens pendentes dessa pessoa (vencidos ou não).
       const allSnap = await db.collection("notif_email_queue").where("email", "==", email).get();
@@ -1280,30 +1286,73 @@ exports.flushNotifEmailDigest = onSchedule(
         const _vivo = await _userVivo.userVivo(db, _uSnap);
         if (_vivo && _vivo.data.theme === "light") _theme = "light";
       } catch (e) { /* default dark */ }
+      /* ⛔ O QUE JÁ SAIU NÃO SAI DE NOVO. A fila não tem identidade (`.add()` no cliente),
+       * então o MESMO aviso pode estar ali duas vezes — e, se as cópias caírem em descargas
+       * diferentes, a pessoa recebe dois e-mails idênticos. MEDIDO: 03/ago, o aviso do grupo
+       * do WhatsApp saiu 3× para as mesmas duas pessoas, corpo igual, com 20 min entre os dois
+       * primeiros. A regra mora em `digest-core.js`, que é testável.
+       * ⚠️ CONSULTIVO, NUNCA BLOQUEANTE: se esta leitura falhar, `_jaSaiu` fica vazio e TUDO é
+       * enviado — perder aviso é pior que repetir. [[feedback_a_defesa_vaza_pela_borda]] */
+      const _regRef = db.collection("notifDigestSent")
+        .doc(require("crypto").createHash("sha256").update(String(email)).digest("hex"));
+      let _jaSaiu = {};
       try {
-        const subject = items.length === 1
-          ? ("scoreplace.app — " + (items[0].tournamentName || "Notificação"))
-          : ("scoreplace.app — " + items.length + " novidades");
+        const _regSnap = await _regRef.get();
+        if (_regSnap.exists) _jaSaiu = (_regSnap.data() || {}).enviados || {};
+      } catch (e) {
+        console.warn("[flushNotifEmailDigest] registro do já-enviado ilegível — mandando tudo:", e && e.message);
+      }
+      const _agora = Date.now();
+      const _corte = _semRepetidos(items, _jaSaiu, _agora, _JANELA_DO_JA_SAIU_MS);
+      const novos = _corte.vao;
+
+      try {
+        // ⚠️ A FILA SEMPRE SE LIMPA, inclusive o que foi cortado por repetição — senão o
+        // repetido voltaria a cada 5 min para sempre. Só o E-MAIL é que deixa de sair.
+        const _limpaAFila = async () => {
+          let batch = db.batch();
+          let n = 0;
+          for (const it of items) {
+            batch.delete(db.collection("notif_email_queue").doc(it._id));
+            if (++n % 400 === 0) { await batch.commit(); batch = db.batch(); }
+          }
+          if (n % 400 !== 0) await batch.commit();
+        };
+
+        if (novos.length === 0) {
+          await _limpaAFila();
+          repetidos += items.length;
+          console.log("[flushNotifEmailDigest] nada novo pra", email, "— " + items.length + " item(ns) repetido(s), fila limpa");
+          continue;
+        }
+
+        const subject = novos.length === 1
+          ? ("scoreplace.app — " + (novos[0].tournamentName || "Notificação"))
+          : ("scoreplace.app — " + novos.length + " novidades");
         await _enqueueMail(db, {
           to: [email],
           replyTo: "scoreplace.app@gmail.com",
-          message: { subject, html: _buildDigestHtml(items, _theme), text: _buildDigestText(items) },
+          message: { subject, html: _buildDigestHtml(novos, _theme), text: _buildDigestText(novos) },
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
         });
-        // Limpa os itens consolidados.
-        let batch = db.batch();
-        let n = 0;
-        for (const it of items) {
-          batch.delete(db.collection("notif_email_queue").doc(it._id));
-          if (++n % 400 === 0) { await batch.commit(); batch = db.batch(); }
+        await _limpaAFila();
+        repetidos += (items.length - novos.length);
+        // ORDEM: o registro é o ÚLTIMO passo. Se ele falhar, o pior que acontece é uma
+        // repetição lá na frente; se viesse antes, uma falha no envio calaria o aviso.
+        try {
+          await _regRef.set({
+            enviados: _registroPodado(_jaSaiu, _corte.chaves, _agora, _JANELA_DO_JA_SAIU_MS),
+            atualizadoEm: _agora,
+          });
+        } catch (e) {
+          console.warn("[flushNotifEmailDigest] não gravei o registro do já-enviado:", e && e.message);
         }
-        if (n % 400 !== 0) await batch.commit();
         sent++;
       } catch (err) {
         console.error("[flushNotifEmailDigest] falha pra", email, err);
       }
     }
-    console.log("[flushNotifEmailDigest] digests enviados:", sent, "| destinatários vencidos:", dueEmails.size);
+    console.log("[flushNotifEmailDigest] digests enviados:", sent, "| repetidos cortados:", repetidos, "| destinatários vencidos:", dueEmails.size);
   }
 );
 
