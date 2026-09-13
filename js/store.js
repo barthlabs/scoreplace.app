@@ -12636,7 +12636,16 @@ window.AppStore = {
         // card "Seu nível" não renderizava). Bug: conta vinculada "apagava"
         // toda vez que o app fechava. Fix: mergear no load como os demais.
         if (profile.letzplayHandle) this.currentUser.letzplayHandle = profile.letzplayHandle;
-        if (profile.letzplayImport) this.currentUser.letzplayImport = window._lzCuraImport(profile.letzplayImport);
+        /* ⭐ O IMPORT VEM DO DOCUMENTO PRÓPRIO. Enquanto a migração não passa, o campo
+         * antigo do perfil (que já está em mãos aqui) responde — o subdoc vence sempre. */
+        (function (_self) {
+          var _dep = (window.FirestoreDB && typeof window.FirestoreDB.carregarLetzplayImport === 'function')
+            ? window.FirestoreDB.carregarLetzplayImport(uid, profile)
+            : Promise.resolve(profile.letzplayImport || null);
+          Promise.resolve(_dep).then(function (imp) {
+            if (imp) _self.currentUser.letzplayImport = window._lzCuraImport(imp);
+          }).catch(function () {});
+        })(this);
         // v0.17.86: bug crítico — acceptedTerms* não estavam na lista de merge.
         // Toda vez que simulateLoginSuccess re-rodava (ex: onAuthStateChanged
         // por token refresh), currentUser = user (4 campos) wipeava o
@@ -12778,6 +12787,7 @@ window.AppStore = {
     // Import COMPLETO trazido por organizador (scan "completo"): vira o letzplayImport
     // do PRÓPRIO dono, com procedência. Precedência: vence o MAIS RECENTE — um org-scan
     // antigo nunca sobrescreve um self-import mais novo.
+    var _impParaSubdoc = null;
     var fi = data.fullImport;
     if (fi && typeof fi === 'object' && Array.isArray(fi.footprint)) {
       // "Só atualiza se desatualizado": aplica o scan só quando ele traz MAIS jogos que o
@@ -12791,9 +12801,19 @@ window.AppStore = {
         fi.importedByName = data.scannedByName || null;
         fi.importedTournamentName = data.tournamentName || null;
         fi.importedAt = data.scannedAt || fi.importedAt || null;
-        patch.letzplayImport = fi;
+        /* ⭐ O IMPORT VAI PARA DOCUMENTO PRÓPRIO (`users/{uid}/letzplay/import`), não para o
+         * perfil: ele chega a 499 KB e o perfil é lido inteiro em todo login. Gravado logo
+         * abaixo, fora do `patch`. */
+        _impParaSubdoc = fi;
         if (!cu.letzplayHandle && fi.handle) patch.letzplayHandle = fi.handle;
       }
+    }
+    if (_impParaSubdoc) {
+      try {
+        await db.collection('users').doc(cu.uid).collection('letzplay').doc('import')
+          .set(_impParaSubdoc);
+        cu.letzplayImport = _impParaSubdoc;
+      } catch (e) { window._warn('[letzplay] não gravou o import:', e && e.message); }
     }
     if (!Object.keys(patch).length) return;
     try {

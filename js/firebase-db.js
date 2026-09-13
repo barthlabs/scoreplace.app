@@ -2864,6 +2864,30 @@ window.FirestoreDB = {
     }
   },
 
+  /* ⭐ O IMPORT DO LETZPLAY MORA FORA DO PERFIL — e é buscado só por quem pede.
+   * MEDIDO em 13/set/2026: 18 dos 279 perfis têm import, 2.292 jogos somados, e o MAIOR
+   * ocupa **499 KB dentro do documento de perfil**. O Firestore entrega o documento inteiro
+   * ou nada, então qualquer leitura da ficha dessas 18 pessoas pagava meio megabyte —
+   * inclusive o próprio dono, a cada login.
+   * ⚠️ Enquanto a migração não passa, cai para o campo antigo. Não é o "fallback que recria
+   * a divergência": não há duas fontes disputando, há uma fonte mudando de lugar — o
+   * documento novo VENCE sempre. [[project_email_no_doc_publico]] */
+  async carregarLetzplayImport(uid, perfilJaLido) {
+    if (!this.db || !uid) return null;
+    var _sub = null;
+    try {
+      var d = await this.db.collection('users').doc(String(uid))
+        .collection('letzplay').doc('import').get();
+      if (d && d.exists) _sub = d.data() || null;
+    } catch (e) { window._warn('[letzplay] subdoc não leu ' + uid + ':', e && e.message); }
+    if (_sub && Array.isArray(_sub.games)) return _sub;
+    if (perfilJaLido && perfilJaLido.letzplayImport) return perfilJaLido.letzplayImport;
+    /* ⚠️ Sem perfil em mãos NÃO buscamos a ficha inteira só para cair no campo antigo: isso
+     * desfaria o ganho. Quem tem o perfil passa; quem não tem, recebe null e segue. */
+    return null;
+  },
+
+
   /* ⭐ A PORTA ESTREITA DO CONTATO — só o organizador, só o elenco dele, só o que a tela usa.
    *
    * ⛔ POR QUE ELA EXISTE. A tela de inscritos mostra, PARA O ORGANIZADOR, se cada jogador

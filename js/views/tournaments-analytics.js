@@ -986,20 +986,15 @@ window._showPlayerStats = function(playerName, currentTournamentId) {
     if (!_lpIsCurUser && resolvedUid && window.FirestoreDB) {
         var _tpDb = window.FirestoreDB.db || (window.FirestoreDB.ensureDb && window.FirestoreDB.ensureDb());
         if (_tpDb) {
-            /* ⚠️ ACHADO ABERTO, ANOTADO, NÃO CONSERTADO AQUI — e é gordo.
-             * Esta leitura fica em `users` porque quer `letzplayImport`, que é a partida a
-             * partida importada e NÃO cabe no espelho: MEDIDO em 13/set/2026, 18 dos 279
-             * perfis têm import, somando 2.292 jogos, e o MAIOR ocupa **499 KB dentro do
-             * documento de perfil**. Ou seja, abrir a ficha de um desses jogadores baixa
-             * meio megabyte de histórico junto — e qualquer leitura de ficha inteira desses
-             * 18 perfis paga isso, não só esta tela.
-             * ⛔ Pôr isso no espelho seria pior, não melhor: o espelho é lido em LOTE pela
-             * chave e pela busca. A forma certa é o import virar documento/subcoleção
-             * própria, carregada só quando alguém pede — migração, não troca de coleção. */
-            _tpDb.collection('users').doc(resolvedUid).get().then(function(doc) {
-                var d = doc.exists ? (doc.data() || {}) : null;
-                if (!d || !d.letzplayImport || !Array.isArray(d.letzplayImport.games) || !d.letzplayImport.games.length) return;
-                window._spLetzplayImportByUid[resolvedUid] = d.letzplayImport;
+            /* ⭐ O IMPORT VEM DO DOCUMENTO PRÓPRIO, não da ficha. Antes esta linha lia
+             * `users/{uid}` INTEIRO só para pegar `letzplayImport` — e nesses 18 perfis isso
+             * custa até 499 KB. `carregarLetzplayImport` busca `users/{uid}/letzplay/import`
+             * e só cai no campo antigo se receber um perfil já lido (aqui não recebe: não
+             * vale a pena baixar a ficha para poder cair). */
+            window.FirestoreDB.carregarLetzplayImport(resolvedUid).then(function(imp) {
+                if (!imp || !Array.isArray(imp.games) || !imp.games.length) return;
+                var d = { letzplayImport: imp };
+                window._spLetzplayImportByUid[resolvedUid] = imp;
                 var cardSlot = modal.querySelector('#letzplay-card-stats-slot');
                 if (cardSlot && typeof window._renderLetzplayCard === 'function') cardSlot.innerHTML = window._renderLetzplayCard(d.letzplayImport, _spExtra);
                 var pslot = modal.querySelector('#player-stats-persistent');

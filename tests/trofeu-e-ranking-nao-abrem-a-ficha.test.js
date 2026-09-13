@@ -79,11 +79,13 @@ must(new RegExp("collection\\(window\\._COLECAO_PERFIL_PUBLICO \\|\\| 'usersPubl
   '⑤ ⭐ a resolução do @ lê o espelho');
 
 // ── ⑥ O ACHADO GORDO está escrito, com a medida ───────────────────────────
-const ANbruto = ler('js/views/tournaments-analytics.js');
-must(/ACHADO ABERTO, ANOTADO, NÃO CONSERTADO AQUI/.test(ANbruto) && /499 KB/.test(ANbruto),
-  '⑥ ⭐ `letzplayImport` (499 KB no maior, 18 de 279) está anotado como achado, com a medida');
-must(/collection\('users'\)\.doc\(resolvedUid\)/.test(AN),
-  '⑥ e ela CONTINUA em `users` de propósito — o import não cabe no espelho, que é lido em lote');
+/* ⭐ 13/set/2026 — O ACHADO GORDO FOI CONSERTADO, não só anotado. `letzplayImport` (18 de
+ * 279 perfis, 2.292 jogos, maior com 499 KB) saiu do documento de perfil para documento
+ * próprio. Detalhe e migração em `tests/import-do-letzplay-sai-do-perfil.test.js`. */
+must(/carregarLetzplayImport\(resolvedUid\)/.test(AN),
+  '⑥ ⭐⭐ a ficha de terceiro pede o import pela porta própria');
+must(!/collection\('users'\)/.test(AN),
+  '⑥ ⭐⭐ e este arquivo não lê mais NENHUMA ficha inteira');
 must(C.CAMPOS_PUBLICOS.indexOf('letzplayImport') < 0,
   '⑥ ⛔ e `letzplayImport` NÃO entrou no espelho — pôr meio megabyte nele seria pior, não melhor');
 
