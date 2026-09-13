@@ -1,3 +1,15 @@
+## 2.3.2 — 13/set/2026
+
+Quando o app mostra uma lista de pessoas — busca por nome, sugestões de quem convidar, quem
+entrou recentemente — ele baixava o cadastro inteiro de cada uma, com e-mail, telefone e data
+de nascimento. Numa dessas listas chegava a baixar até dois mil cadastros completos de uma vez.
+
+Nada disso aparecia na tela: o app usa nome, foto e pouco mais. Mas o dado descia assim mesmo,
+e ficava na memória do aparelho de quem estava olhando.
+
+Agora essas listas leem uma versão pública do perfil, mantida pelo servidor, que tem só o que a
+tela mostra. E-mail e telefone não fazem parte dela.
+
 ## 2.3.1 — 13/set/2026
 
 O ícone do atalho aparecia pequeno demais ao lado dos outros aplicativos. O conserto anterior

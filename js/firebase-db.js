@@ -18,6 +18,26 @@
  * não redefine o que é público. O `email` aqui é herdado da decisão original e segue
  * pendente de revisão (o convite de amigo hoje encontra gente por e-mail).
  * [[project_email_no_doc_publico]] */
+/* ⛔ LER PERFIL DE DESCONHECIDO SAIU DE `users` E FOI PARA `usersPublic`.
+ *
+ * MEDIDO em 13/set/2026: `users` é `allow read: if request.auth != null` e guarda 279 perfis
+ * com 94 campos — 260 e-mails, 180 celulares, 101 datas de nascimento —, inclusive os 131
+ * que marcaram "não mostrar meu e-mail". Qualquer pessoa logada lia tudo de todo mundo, e
+ * `listInvitableUsers` sozinha baixava até 2000 documentos INTEIROS.
+ *
+ * ⛔ Rule não projeta CAMPO, só autoriza DOCUMENTO — por isso a saída foi MOVER: o espelho
+ * `usersPublic` leva nome, foto, gênero, nível, categoria e data de nascimento, e não leva
+ * e-mail nem telefone. Quem o mantém é uma Function, escritor único; o cliente só lê.
+ *
+ * ⚠️ `window._perfilDeLista` CONTINUA aplicado em cima. Parece redundante e não é: ele é a
+ * projeção que o CÓDIGO promete, e o espelho é a que o SERVIDOR garante. Se um campo novo
+ * entrar no espelho amanhã, a projeção do cliente continua sendo a régua de quem consome.
+ *
+ * ⛔ FICA DE FORA desta troca, de propósito: `loadUserProfile` — ela serve também ao PRÓPRIO
+ * perfil, que precisa dos campos privados, e tem 93 chamadas a separar uma a uma. É a leva
+ * seguinte desta frente. */
+window._COLECAO_PERFIL_PUBLICO = 'usersPublic';
+
 window._CAMPOS_DE_LISTA = [
   'displayName', 'displayName_lower',
   'photoURL',
@@ -2781,11 +2801,11 @@ window.FirestoreDB = {
       // Two parallel queries — some profiles have updatedAt (active users),
       // others only carry createdAt from first login. Union them client-side.
       await Promise.all([
-        this.db.collection('users')
+        this.db.collection(window._COLECAO_PERFIL_PUBLICO)
           .where('updatedAt', '>=', cutoff)
           .orderBy('updatedAt', 'desc')
           .limit(lim).get().then(addFromSnap).catch(function(e) { window._warn('recent-updatedAt err', e && e.message); }),
-        this.db.collection('users')
+        this.db.collection(window._COLECAO_PERFIL_PUBLICO)
           .where('createdAt', '>=', cutoff)
           .orderBy('createdAt', 'desc')
           .limit(lim).get().then(addFromSnap).catch(function(e) { window._warn('recent-createdAt err', e && e.message); })
@@ -2810,7 +2830,7 @@ window.FirestoreDB = {
     try {
       // user-vivo:isento — aqui não se RESOLVE uma pessoa, se procura CONFLITO de nome:
       // a lápide tem de ser IGNORADA (nome de conta morta não bloqueia ninguém), não seguida.
-      var snap = await this.db.collection('users').where('displayName_lower', '==', q).limit(8).get();
+      var snap = await this.db.collection(window._COLECAO_PERFIL_PUBLICO).where('displayName_lower', '==', q).limit(8).get();
       var conflict = null;
       snap.forEach(function (doc) {
         var data = doc.data() || {};
@@ -2841,7 +2861,7 @@ window.FirestoreDB = {
     try {
       // user-vivo:isento — candidatos pra ESCOLHA humana entre homônimos: lápide não entra
       // na lista (seria oferecer uma conta morta), e o filtro abaixo já a descarta.
-      var snap = await this.db.collection('users').where('displayName_lower', '==', q).limit(8).get();
+      var snap = await this.db.collection(window._COLECAO_PERFIL_PUBLICO).where('displayName_lower', '==', q).limit(8).get();
       var cands = [];
       snap.forEach(function (doc) {
         var d = doc.data() || {};
@@ -2925,14 +2945,14 @@ window.FirestoreDB = {
     // user-vivo:isento — searchUsers devolve uma LISTA pra pessoa escolher: lápide é
     // DESCARTADA no addFromSnap (nem aparece), nunca redirecionada pro sobrevivente.
     var queries = [
-      this.db.collection('users')
+      this.db.collection(window._COLECAO_PERFIL_PUBLICO)
         .where('displayName_lower', '>=', q)
         .where('displayName_lower', '<', end)
         .limit(perQueryLimit).get().then(addFromSnap).catch(function(e) {
           window._warn('displayName search error:', e && e.message);
         }),
       // user-vivo:isento — idem: lista pra escolha, lápide descartada no addFromSnap.
-      this.db.collection('users')
+      this.db.collection(window._COLECAO_PERFIL_PUBLICO)
         .where('email_lower', '>=', q)
         .where('email_lower', '<', end)
         .limit(perQueryLimit).get().then(addFromSnap).catch(function(e) {
@@ -2968,7 +2988,7 @@ window.FirestoreDB = {
     var PUBLIC_FIELDS = window._CAMPOS_DE_LISTA.concat(['city', 'preferredLocations']);
     var out = [];
     try {
-      var snap = await this.db.collection('users').limit(2000).get();
+      var snap = await this.db.collection(window._COLECAO_PERFIL_PUBLICO).limit(2000).get();
       try { if (window._noteFsReads) window._noteFsReads(snap.size, 'searchUsers-scan'); } catch (e) {}
       snap.forEach(function(doc) {
         var data = doc.data();

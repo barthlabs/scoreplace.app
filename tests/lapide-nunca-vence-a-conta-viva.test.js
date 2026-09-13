@@ -207,7 +207,12 @@ function querySnap(base, uids) {
   }
   const addFrom = corpo('var addFromSnap = function(snap) {', 'var end = q +');
   ok(/mergedInto/.test(addFrom), 'searchUsers descarta lápide na FONTE (o sanitize apaga mergedInto depois)');
-  const invit = corpo("collection('users').limit(2000)", 'window._invitableUsersCache =');
+  /* ⚠️ A ÂNCORA MUDOU EM 13/set/2026: a varredura saiu de `users` e foi para o espelho
+   * público `usersPublic` (a leva que tirou e-mail e telefone das listas de pessoas). O que
+   * este portão cobra NÃO mudou — o descarte da lápide segue tendo de ser na FONTE —, mas a
+   * âncora antiga apontava para a linha trocada e o portão passou a medir uma string vazia.
+   * Ancorar em `.limit(2000)`, que é o que identifica a varredura, e não na coleção. */
+  const invit = corpo('.limit(2000)', 'window._invitableUsersCache =');
   ok(/mergedInto/.test(invit), 'listInvitableUsers descarta lápide na FONTE (PUBLIC_FIELDS não leva mergedInto)');
 
   // ── B3. Nos cross-refs de login, o PRÓPRIO doc sai ANTES de resolver ──

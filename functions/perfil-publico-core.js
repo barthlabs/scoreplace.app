@@ -34,7 +34,7 @@ const CAMPOS_PUBLICOS = [
   'gender', 'skillBySport', 'defaultCategory', 'birthDate',
   'acceptFriendRequests', 'preferredSports',
   'mergedInto', 'mergedAt',
-  'lastSeenAt', 'updatedAt',
+  'lastSeenAt', 'updatedAt', 'createdAt',
 ];
 
 /* ⛔ A LISTA DE VETO existe só para o PORTÃO cobrar, não para filtrar: filtrar por veto é o

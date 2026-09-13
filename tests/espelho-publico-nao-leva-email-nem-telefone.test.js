@@ -99,4 +99,27 @@ must(/allow read: if request\.auth != null;/.test(blocoU),
   '⑦ ⛔ `users` segue legível por autenticado — DE PROPÓSITO: o bundle das lojas lê `users` '
   + 'direto, e fechar antes de uma nativa publicada cortaria quem está na loja');
 
+// ── ⑧ o CLIENTE lê o espelho para gente desconhecida ───────────────────────
+const DB = fs.readFileSync(path.join(raiz, 'js/firebase-db.js'), 'utf8');
+must(/window\._COLECAO_PERFIL_PUBLICO = 'usersPublic';/.test(DB),
+  '⑧ o nome da coleção mora numa constante só');
+const lidasDoEspelho = (DB.match(/collection\(window\._COLECAO_PERFIL_PUBLICO\)/g) || []).length;
+must(lidasDoEspelho >= 6,
+  '⑧ ⭐ as leituras de gente desconhecida vêm do espelho (' + lidasDoEspelho + ')');
+must(!/collection\('users'\)\.limit\(2000\)/.test(DB),
+  '⑧ ⛔ sumiu a varredura de 2000 perfis INTEIROS — era a maior exposição da coleção');
+must(!/collection\('users'\)\.where\('displayName_lower'/.test(DB),
+  '⑧ ⛔ e a busca por nome não lê mais o documento cheio');
+/* ⛔ CONTROLE DE ESCOPO: `loadUserProfile` NÃO foi trocada. Ela serve também ao PRÓPRIO
+ * perfil, que precisa dos campos privados, e tem 93 chamadas a separar uma a uma. */
+must(/var doc = await this\.db\.collection\('users'\)\.doc\(uid\)\.get\(\);/.test(DB),
+  '⑧ ⛔ `loadUserProfile` segue em `users` — é a leva seguinte, e mexer nela agora seria '
+  + 'trocar 93 chamadas sem separar o próprio perfil do alheio');
+
+// ── ⑨ o espelho tem o que as consultas FILTRAM e ORDENAM ───────────────────
+['displayName_lower', 'createdAt', 'updatedAt', 'acceptFriendRequests'].forEach((k) => {
+  must(C.CAMPOS_PUBLICOS.indexOf(k) >= 0,
+    '⑨ `' + k + '` está no espelho — sem ele a consulta que o usa devolve vazio');
+});
+
 console.log('\n✅ espelho público não leva e-mail nem telefone — ' + ok + ' verificações');
