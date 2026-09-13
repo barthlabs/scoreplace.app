@@ -1,3 +1,15 @@
+## 2.2.97 — 12/set/2026
+
+O aviso de placar chegava marcado como "Fundamental" para todo mundo, inclusive para quem
+organiza o torneio e não joga aquela partida.
+
+Agora a importância depende de quem recebe: é fundamental para quem joga aquele jogo,
+importante para o organizador e para os co-organizadores, e geral para os demais. Isso vale
+tanto para o aviso dentro do app quanto para o e-mail — e, no e-mail, também define a rapidez
+com que a mensagem sai, porque a fila agrupa por importância.
+
+Os outros tipos de aviso não mudam.
+
 ## 2.2.96 — 12/set/2026
 
 Abrir os detalhes de um torneio agora leva direto ao seu jogo.

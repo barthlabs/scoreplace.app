@@ -251,8 +251,37 @@ window._sendUserNotification = async function(uid, notifData, _skipDispatch) {
                 if (_laFriends.indexOf(uid) === -1) return;
             }
         }
+        /* ⛔ O NÍVEL É DE QUEM RECEBE, não do tipo — nos avisos de PLACAR.
+         * Relato do dono (12/set/2026): _"aqui quem lançou foi o organizador e só é
+         * fundamental para os participantes desse jogo. para os demais é geral. para o
+         * organizador importante"_. O e-mail chegava 🔴 Fundamental para ele, que organiza e
+         * não joga aquele jogo. A regra mora em `_nivelDoAviso` (notification-catalog.js),
+         * que é pura; aqui só se resolve o PAPEL desta pessoa NAQUELE jogo, pela régua
+         * canônica de uid — nunca por nome. [[project_uid_identity_canon_locked]] */
+        var _papelNoAviso = '';
+        if (window._TIPOS_DE_PLACAR && window._TIPOS_DE_PLACAR[notifData.type]) {
+            var _tAviso = (typeof window._findTournamentById === 'function')
+                ? window._findTournamentById(String(notifData.tournamentId || '')) : null;
+            if (_tAviso) {
+                var _quemRecebe = { uid: uid };
+                var _mAviso = null;
+                if (notifData.matchId && typeof window._collectAllMatches === 'function') {
+                    try {
+                        _mAviso = (window._collectAllMatches(_tAviso) || []).filter(function (x) {
+                            return x && x.id === notifData.matchId;
+                        })[0] || null;
+                    } catch (e) { _mAviso = null; }
+                }
+                if (_mAviso && typeof window._userTeamInMatch === 'function' &&
+                    window._userTeamInMatch(_tAviso, _mAviso, _quemRecebe) > 0) _papelNoAviso = 'jogador';
+                else if (typeof window._isUserOrgOrCoHost === 'function' &&
+                         window._isUserOrgOrCoHost(_tAviso, _quemRecebe)) _papelNoAviso = 'organizador';
+            }
+        }
         var userLevel = profile.notifyLevel || 'todas';
-        var notifLevel = notifData.level || 'all';
+        var notifLevel = (typeof window._nivelDoAviso === 'function')
+            ? window._nivelDoAviso(notifData.type, _papelNoAviso, notifData.level)
+            : (notifData.level || 'all');
         if (!window._notifLevelAllowed(userLevel, notifLevel)) return;
 
         // LGPD: identidade de quem envia deve ser verificada contra Firebase Auth
@@ -326,7 +355,13 @@ window._sendUserNotification = async function(uid, notifData, _skipDispatch) {
             // v1.8.1-beta: pass ALL notifData fields so rich email templates
             // can access player1/player2/score1/score2/matchLines/playerMatch etc.
             var _tplData = Object.assign({}, notifData);
-            delete _tplData.level; // local-only filter, not needed in template
+            /* ⛔ O NÍVEL PRECISA CHEGAR AO E-MAIL. Ele era APAGADO aqui ("local-only filter")
+             * e o `_dispatchChannels` lia o nível da TABELA do catálogo — então o cálculo por
+             * PESSOA feito acima morria antes de virar e-mail, e a janela do digest
+             * (5/15/30 min) também saía pelo nível do tipo. Viaja com nome próprio (`_nivel`)
+             * pra não se confundir com o `level` cru do payload, que segue sendo local. */
+            delete _tplData.level;
+            _tplData._nivel = notifLevel;
             _tplData.tournamentUrl = _tplData.tournamentUrl || tUrl;
             _tplData.subject = 'scoreplace.app — ' + (notifData.tournamentName || 'Notificação');
             if (!_tplData.message) _tplData.message = '';
@@ -514,7 +549,8 @@ window._dispatchChannels = function(channelResult, templateType, templateData) {
     // pro envio individual antigo se queueNotifEmail não existir.
     if (channelResult.emails && channelResult.emails.length > 0) {
         var _emCat = (window.NOTIF_CATALOG && window.NOTIF_CATALOG[templateType]) || {};
-        var _emLvl = _emCat.level || 'all';
+        // ⭐ o nível JÁ RESOLVIDO para esta pessoa ganha do nível do tipo (ver `_nivelDoAviso`)
+        var _emLvl = templateData._nivel || _emCat.level || 'all';
         var _emMsg = templateData.message || templateData.tournamentName || 'Notificação';
         // v2.8.51: CTA por tipo no email também (botão no digest). ctaUrl pode ir pra
         // #bracket/#venues/#casual conforme o tipo; o digest usa ctaLabel/ctaUrl e cai

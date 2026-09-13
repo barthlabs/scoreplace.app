@@ -129,3 +129,37 @@ window.NOTIF_CATALOG = {
 // WhatsApp (imediato/agrupado/nenhum) não tem mais canal pra reger — número banido,
 // apelação negada, portfólio Meta morto. Ver project_whatsapp_meta_2fa_block.
 
+
+/* ⛔ O NÍVEL DO AVISO DE PLACAR DEPENDE DE QUEM RECEBE — não é constante do tipo.
+ *
+ * Relato do dono (12/set/2026, e-mail do Confra): _"aqui quem lançou foi o organizador e só é
+ * fundamental para os participantes desse jogo. para os demais é geral. para o organizador
+ * importante"_. O e-mail chegava marcado 🔴 Fundamental para ele, que é o ORGANIZADOR e não
+ * joga aquele jogo.
+ *
+ * O nível era `result`/`match-pending-approval` = 'fundamental' na tabela acima, igual para
+ * todo mundo — e o e-mail ainda lia a TABELA, não o aviso (`_dispatchChannels` usava
+ * `NOTIF_CATALOG[type].level` e o `_sendUserNotification` até apagava `level` do template).
+ * Resultado: nível nenhum sobrevivia até o e-mail, e a janela do digest (5/15/30 min) saía
+ * pelo nível errado também.
+ *
+ * A REGRA, para os avisos de PLACAR:
+ *   • quem JOGA aquele jogo  → fundamental (é a partida dele, precisa ver)
+ *   • organizador/co-org     → importante  (é a competição dele, mas não é a partida dele)
+ *   • qualquer outro         → geral
+ * Para todo o resto do catálogo, nada muda: vale o nível da tabela.
+ *
+ * ⚠️ PURA de propósito: recebe o que precisa por parâmetro (nenhum acesso a `window`), então
+ * o portão a executa sem montar meia aplicação. Quem resolve "joga este jogo?" e "é
+ * organizador?" continua sendo a régua canônica por UID de quem chama.
+ */
+window._TIPOS_DE_PLACAR = { 'result': 1, 'match-pending-approval': 1, 'match-rejected': 1 };
+
+window._nivelDoAviso = function (tipo, papel, nivelBase) {
+  var _cat = (window.NOTIF_CATALOG && window.NOTIF_CATALOG[tipo]) || null;
+  var base = nivelBase || (_cat && _cat.level) || 'all';
+  if (!window._TIPOS_DE_PLACAR[tipo]) return base;
+  if (papel === 'jogador') return 'fundamental';
+  if (papel === 'organizador') return 'important';
+  return 'all';
+};
