@@ -1,3 +1,4 @@
+// 2.3.0 — o aviso passa a carregar a identidade conferida de quem mandou.
 // 2.2.99 — o aviso de "vou jogar" passa a dizer o dia certo, com a data.
 // 2.2.98 — a raridade dos troféus volta a aparecer, e com o número certo.
 // 2.2.97 — aviso de placar: fundamental só para quem joga o jogo.
@@ -246,6 +247,20 @@ window._RELEASE_NOTES_HTML = (function () {
     // quem está com a 2.0.4 no iPhone lê um torneio que o banco não guarda mais desse jeito.
     // Mesma lição da 1.7.35: quando o formato do dado muda, a ida à loja É o conserto.
     // Os itens abaixo são consolidados por tema, como manda a convenção do arquivo.
+    // v2.3 — a faixa que nasce da AUDITORIA: o que mudou aqui quase não se vê na tela, e é
+    // justamente por isso que precisa estar escrito. Cada item abaixo saiu de uma MEDIDA em
+    // produção, não de uma impressão.
+    '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
+      '<div style="font-weight:800; color:var(--sp-c-fde68a,#fde68a); font-size:1rem; margin-bottom:8px;">🎾 v2.3 — Classificação que conta do fim para o começo, avisos que não se repetem e a raridade dos troféus de volta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(Setembro, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🏅 Quem cai numa rodada vai para o fim da chave:</b> a classificação parcial da eliminatória colocava quem perdia logo abaixo do pódio — numa chave de 36 duplas, cinco derrotas viravam "5º ao 9º lugar". Agora a colocação se conta do fim, e só aparece quando a rodada inteira termina: fechado o último placar, os critérios de desempate do torneio ordenam os perdedores, os melhores ocupam as vagas de repescagem e os que sobram recebem os últimos lugares.</li>' +
+        '<li><b>🔔 O mesmo aviso não chega duas vezes:</b> salvar de novo o mesmo link de grupo de WhatsApp parava de avisar todo mundo outra vez, e a fila de e-mail passou a reconhecer a mensagem repetida antes de enviá-la. O aviso de placar também deixou de chegar como "fundamental" para quem organiza e não joga aquele jogo.</li>' +
+        '<li><b>🗓️ O aviso de "vou jogar" diz o dia certo:</b> ele dizia "hoje" para planos da semana seguinte, ou "amanhã" para qualquer dia que não fosse hoje. Agora vem com a data junto, e continua correto quando você abre o aviso dias depois.</li>' +
+        '<li><b>🏆 A raridade dos troféus voltou a aparecer:</b> o "x% têm este troféu" mostrava 0% em tudo, para todo mundo — o app não conseguia ler a estatística. E o número guardado estava errado: agora é recontado a partir dos troféus que existem de verdade.</li>' +
+        '<li><b>🎯 Abrir o torneio leva ao seu jogo:</b> ao entrar nos detalhes, a tela para no seu próximo jogo; sem próximo, no último; antes do sorteio, no seu card.</li>' +
+        '<li><b>🔒 Portas de e-mail com limite:</b> pedir link de acesso, confirmação de e-mail ou redefinição de senha passou a ter limite por endereço — antes era possível fazer o app despejar mensagem ilimitada em qualquer caixa.</li>' +
+      '</ul>' +
+    '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:var(--sp-c-fde68a,#fde68a); font-size:1rem; margin-bottom:8px;">🎾 v2.2 — Busca da chave que leva até o resultado, “Propor datas” de volta e a chave de torneio grande sem sumir <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(Setembro, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +

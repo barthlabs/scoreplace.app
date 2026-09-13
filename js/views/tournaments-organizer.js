@@ -314,7 +314,23 @@ window._sendUserNotification = async function(uid, notifData, _skipDispatch) {
             });
             // Canonical fields — set last so they win over any caller override
             _notifPayload.type = notifData.type || 'info';
-            _notifPayload.fromUid = cu.uid || cu.email || '';
+            /* ⛔ `cu.uid || cu.email || ''` — IDENTIDADE É O UID, e aqui ela caía para E-MAIL
+             * e depois para VAZIO. Um e-mail gravado num campo chamado `fromUid` é a mesma
+             * confusão que o app já pagou caro em outras frentes: quem lê depois trata como
+             * uid, não acha ninguém, e o aviso fica órfão de autor.
+             * ⭐ E é PRÉ-REQUISITO de fechar a porta: `users/{uid}/notifications` aceita
+             * `create` de QUALQUER autenticado (firestore.rules:1031), então hoje dá para
+             * escrever aviso na lista de qualquer pessoa com o autor que se quiser. A trava
+             * natural é a regra exigir `fromUid == request.auth.uid` — e ela só pode entrar
+             * depois que todo cliente que publicamos gravar exatamente isso.
+             * ⚠️ Sem uid, NÃO grava: um aviso sem autor conferível é pior que nenhum, e
+             * falhar aqui é observável (o warn abaixo), não silencioso.
+             *   [[feedback_uid_controls_everything_name_only_ficticio]] */
+            if (!cu.uid) {
+                window._warn('[notif] sem uid verificado — aviso não enviado (tipo ' + (notifData.type || '?') + ')');
+                return;
+            }
+            _notifPayload.fromUid = cu.uid;
             _notifPayload.fromName = cu.displayName || '';
             _notifPayload.tournamentId = notifData.tournamentId || '';
             _notifPayload.tournamentName = notifData.tournamentName || '';

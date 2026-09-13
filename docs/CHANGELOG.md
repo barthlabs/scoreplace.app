@@ -1,3 +1,16 @@
+## 2.3.0 — 13/set/2026
+
+Cada aviso guarda quem o mandou. Esse campo aceitava, como alternativa, o e-mail da pessoa —
+ou nada. Como o resto do app identifica todo mundo por um código único de conta, um e-mail
+gravado ali deixava o aviso sem autor localizável.
+
+Agora só entra a identidade conferida contra o login. Sem ela, o aviso não é gravado e a falha
+aparece no registro, em vez de passar despercebida.
+
+Isso é preparação: o objetivo é a regra do banco passar a exigir que o autor do aviso seja
+quem de fato está logado — hoje ainda é possível escrever um aviso na lista de outra pessoa.
+A regra só pode ser apertada depois que os aplicativos das lojas estiverem gravando assim.
+
 ## 2.2.99 — 13/set/2026
 
 Quando alguém planeja uma ida e avisa os amigos, o aviso dizia a hora e o dia. O dia estava
