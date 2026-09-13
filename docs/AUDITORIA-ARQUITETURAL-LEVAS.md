@@ -3620,11 +3620,43 @@ Rule abriu `get` **só** em `_meta/trophyStats` (`list` e escrita negados) — a
 versão nenhuma. Conferido no ar: `get` = 200, `list` = 403.
 ⏳ O número em produção se corrige sozinho na próxima passada do agendado (todo dia, 02:00).
 
+### L14.P8 — as portas de e-mail de conta eram ABERTAS e sem limite nenhum (13/set/2026)
+
+Fui ler as rotinas agendadas que enviam, pela ótica da reentrega. O caminho passou pelas
+portas que elas alimentam e o achado maior estava ali.
+
+**MEDIDO:** `sendMagicLink`, `sendVerificationEmail` e `sendPasswordReset` são `onCall`
+**sem `request.auth`** — de propósito, porque quem precisa entrar ainda não entrou — e recebem
+o **endereço de destino do payload do cliente**. Nenhuma das três tinha cooldown, throttle ou
+contador. Qualquer pessoa na internet podia fazer o **nosso remetente** despejar mensagem
+ilimitada em **qualquer endereço** que digitasse: enche a caixa de terceiro, custa dinheiro e
+queima a reputação do nosso domínio de envio.
+
+⭐ Só `sendVerificationCode` tinha freio (45 s) — e por ler-e-depois-gravar, fora de transação.
+
+E não era abuso só teórico: em `mail` há **25 pares** de *"Confirme seu e-mail"* /
+*"Redefinir sua senha"* para o MESMO endereço a menos de 3 horas, **vários no mesmo segundo**.
+
+**Pago aqui (só servidor):** `_barraSeAbusar` reusa `_throttleHit` — o limitador que a L14.P1
+consertou, e que trata **disputa como batida**; sem isso, quanto mais rápido o ataque, menos
+ele limitaria. A chave é **porta + endereço de destino**; conta toda tentativa, exista conta ou
+não, para que a recusa **não vire enumeração** (a lição da L14.P2, em que era a *forma* da
+resposta que vazava); o teto é 3/min numa constante única; e vem **antes** de gerar link ou
+enfileirar e-mail — limite depois do trabalho caro não é limite.
+
+⭐ **Provado em PRODUÇÃO, não no teste:** cinco chamadas seguidas a `sendMagicLink` com um
+endereço de domínio reservado — as três primeiras passaram, a quarta e a quinta voltaram
+`RESOURCE_EXHAUSTED`, e o contador apareceu em `accountEmailThrottle`. ⚠️ As três mensagens do
+ensaio saíram e foram apagadas da fila em seguida; o domínio é reservado e não entrega.
+
 ### O que a L14 ainda não cobriu
-- Reentrega das **CFs agendadas e de gatilho** que ENVIAM: `sendTournamentReminders`,
-  `nudgeMissingPhones`, `drainPendingVerifications` e `drainPendingPasswordResets` não foram
-  lidas por essa ótica. As de e-mail de conta e de convite já têm id determinístico +
-  `create()`.
+- **Reentrega** de `sendTournamentReminders` e `nudgeMissingPhones` (as agendadas que enviam):
+  lidas por cima, **não auditadas** por essa ótica. `drainPendingVerifications` foi lida — a
+  ordem é *enfileirar e depois marcar "enviado"*, então uma falha na marcação re-manda na
+  volta seguinte (a cada 2 min); ⚠️ MEDIDO: a fila está **vazia**, ninguém preso, então o
+  defeito é latente, não ativo.
+- **Texto** de aviso que não distingue o evento (o *"hoje"* persistido, o *"um participante se
+  inscreveu"* sem dizer quem) — achado da P6, é defeito de redação, não de entrega.
 
 ## L6 — ESTÁ PRATICAMENTE FECHADA, E O REGISTRO DIZIA O CONTRÁRIO (12/set/2026)
 
