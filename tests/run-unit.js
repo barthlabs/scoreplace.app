@@ -97,6 +97,7 @@ const SUITES = [
   'tests/trofeu-e-ranking-nao-abrem-a-ficha.test.js',
   'tests/cep-preferido-tem-uma-forma-so.test.js',
   'tests/parte-que-nao-chegou-nao-vira-lista-vazia.test.js',
+  'tests/sorteio-nao-sorteia-meio-elenco.test.js',
   'tests/stb-aparece-para-quem-lancou.test.js',
   'tests/espera-e-fora-usam-a-grade-e-a-cor-canonicas.test.js',
   'tests/l16-auditor-nao-mente-quando-nao-consegue-olhar.test.js',

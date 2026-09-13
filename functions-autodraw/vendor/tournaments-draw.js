@@ -2524,6 +2524,44 @@ window._setPhaseLateEnrollment = function (tId, mode) {
 window.generateDrawFunction = function (tId) {
     const t = window._findTournamentById(tId);
     if (!t) { if (window._dtrace) window._dtrace('generateDraw:NO-TOURNAMENT', { tId: String(tId) }); return; }
+
+    /* ⛔⛔ NÃO SORTEAR COM MEIO ELENCO. ESTA É A CONSEQUÊNCIA MAIS CARA DA CLASSE.
+     *
+     * O elenco mora FORA do documento em 41 dos 61 torneios (`_semPesados`), e volta por uma
+     * subcoleção. Entre o documento chegar e a subcoleção chegar, `t.participants` é uma
+     * lista PARCIAL — e este arquivo tem CINCO `if (!Array.isArray(t.participants))
+     * t.participants = []`, ou seja, ele não distingue "elenco vazio" de "elenco ainda não
+     * chegou". Sem esta porta, o sorteio montava a chave com QUEM ESTAVA NA MÃO: gente de
+     * fora da chave, e um evento inteiro para refazer.
+     *
+     * ⭐ A MÁQUINA QUE RESPONDE ISTO JÁ EXISTIA — `_elencoCarregado`, escrita para o
+     * "estou inscrito?" — e o sorteio nunca perguntou. Varredura antes de escrever: ZERO
+     * ocorrências de `_elencoCarregado`, `_parteFalta` ou `_faltamPesados` neste arquivo e no
+     * `tournaments-draw-prep.js`. Rede que cobre a LEITURA e não cobre a AÇÃO.
+     *
+     * ⚠️ E ELA NÃO SÓ RECUSA: manda buscar o que falta e diz para tentar de novo. Recusar sem
+     * caminho de volta transforma um atraso de rede em "o botão não funciona".
+     * [[project_dividir_exige_todo_escritor_ciente]] · [[feedback_a_defesa_vaza_pela_borda]] */
+    if (typeof window._elencoCarregado === 'function' && !window._elencoCarregado(t)) {
+        try {
+            if (window.AppStore && typeof window.AppStore._montaPesadosQueFaltam === 'function') {
+                window.AppStore._montaPesadosQueFaltam([String(tId)]);
+            }
+        } catch (_e) {}
+        if (typeof window.showNotification === 'function') {
+            window.showNotification('Elenco ainda carregando',
+                'A lista de inscritos deste torneio ainda não chegou por inteiro. Buscando agora — tente o sorteio de novo em instantes.',
+                'warning');
+        }
+        if (window._dtrace) window._dtrace('generateDraw:ELENCO-INCOMPLETO', { tId: String(tId), tenho: (t.participants || []).length, falta: (t._faltaOQue || []) });
+        /* ⛔ SOLTAR O BOTÃO. O `onclick` já chamou `_drawBtnBusy` ANTES desta função, então
+         * o botão está girando "Sorteando…". Sair daqui sem `_drawBtnDone` deixaria o
+         * organizador olhando um spinner eterno — recusa que parece travamento é pior que
+         * recusa. (Escrevi `_drawBtnBusy(null,false)` na primeira versão: é o método que
+         * LIGA o giro, não o que desliga.) */
+        if (typeof window._drawBtnDone === 'function') { try { window._drawBtnDone(); } catch (_e2) {} }
+        return;
+    }
     if (window._dtrace) window._dtrace('generateDraw', { fmt: t.format, parts: (t.participants || []).length });
     // v1.3.40: PRÉ-CARREGA os perfis por uid ANTES do sorteio — gênero/skill/idade/nome
     // resolvem pelo PERFIL (users/{uid}), não pelo snapshot gravado no inscrito. Sem isto,
