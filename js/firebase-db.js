@@ -3331,9 +3331,20 @@ window.FirestoreDB = {
     var now = Date.now();
     try {
       for (var i = 0; i < emails.length; i++) {
-        if (!emails[i]) continue;
+        var _d = emails[i];
+        if (!_d) continue;
+        /* ⛔ O DESTINO PODE SER UID. Antes esta fila só aceitava e-mail, e por isso o navegador
+         * de quem avisa precisava conhecer a caixa de quem recebe — a maior leitura de ficha
+         * alheia que existia. Agora o item leva `uid` e quem resolve o endereço é o SERVIDOR,
+         * na descarga (`flushNotifEmailDigest`), que lê `users` pelo Admin SDK.
+         * ⚠️ A forma antiga (string de e-mail) continua aceita: o app das lojas ainda a envia,
+         * e cortar agora calaria o e-mail de quem está na loja. */
+        var _uid = (typeof _d === 'object' && _d) ? (_d.uid || '') : '';
+        var _mail = (typeof _d === 'string') ? _d : ((_d && _d.email) || '');
+        if (!_uid && !_mail) continue;
         await this.db.collection('notif_email_queue').add({
-          email: emails[i],
+          uid: _uid || null,
+          email: _mail || null,
           level: level || 'all',
           message: message || '',
           tournamentName: opts.tournamentName || '',

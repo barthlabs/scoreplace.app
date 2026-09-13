@@ -231,7 +231,15 @@ window._sendUserNotification = async function(uid, notifData, _skipDispatch) {
         return;
     }
     try {
-        var profile = await window.FirestoreDB.loadUserProfile(uid);
+        /* ⛔ AVISAR ALGUÉM NÃO PRECISA DA FICHA DELE. Esta linha lia `users/{uid}` INTEIRO —
+         * com e-mail, telefone e data de nascimento — para decidir se a pessoa quer o aviso e
+         * para onde mandar. Era a maior leitura de ficha alheia que restava no navegador.
+         * ⭐ As PREFERÊNCIAS (`notifyLevel`, `notifyPlatform`, `notifyEmail`, `liveAlerts`)
+         * passaram a viver no espelho público: são ajuste de canal, não dado pessoal.
+         * ⭐ E o ENDEREÇO deixou de ser resolvido aqui: a fila de e-mail passa a levar o UID,
+         * e quem resolve para qual caixa mandar é o SERVIDOR, na hora de enviar. Ver
+         * `queueNotifEmail` e `flushNotifEmailDigest`. */
+        var profile = await window.FirestoreDB.carregarPerfilPublico(uid);
         if (!profile) return;
         // 🔴 O DESLIGAMENTO DO "AO VIVO" É POR TIPO, e mora aqui — a porta única por onde
         // TODA notificação passa. Pôr o teste em quem dispara (a vitrine) deixaria de
@@ -349,14 +357,17 @@ window._sendUserNotification = async function(uid, notifData, _skipDispatch) {
         // _notifyTournamentParticipants monte `allEmails`. Antes (regressão v2.4.82) o
         // `!_skipEmail` anulava `email` no caminho skip → allEmails saía VAZIO → e-mail
         // de torneio (grupo WhatsApp, sorteio, rodada…) NUNCA disparava.
+        /* ⛔ O ENDEREÇO SAIU DAQUI. Antes este trecho lia `profile.email` e `linkedEmails` e
+         * montava a lista de caixas — ou seja, o navegador de quem AVISA precisava conhecer o
+         * e-mail de quem RECEBE. Agora o destino é o UID, e quem resolve para qual caixa
+         * mandar é o servidor, que já lê `users` pelo Admin SDK e ignora as rules.
+         * ⚠️ O opt-out continua sendo respeitado DUAS vezes: aqui (para nem enfileirar) e no
+         * servidor (que relê a preferência na hora de enviar). Barato, e fecha a janela entre
+         * o clique e a descarga. */
         var _optedIn = (profile.notifyEmail !== false);
-        var _seenEm = {}, emails = [];
-        var _pushEm = function(e) { var k = String(e == null ? '' : e).trim().toLowerCase(); if (k && !_seenEm[k]) { _seenEm[k] = true; emails.push(k); } };
-        if (_optedIn) {
-            _pushEm(profile.email);
-            if (Array.isArray(profile.linkedEmails)) profile.linkedEmails.forEach(_pushEm);
-        }
-        var email = emails.length ? emails[0] : null;
+        var destinos = _optedIn ? [{ uid: uid }] : [];
+        var emails = [];   // só participante SEM conta tem e-mail aqui — ver o lote abaixo
+        var email = null;
         // v1.2.9: a resolução de telefone saiu — não há canal de WhatsApp pra onde
         // mandar (número banido, portfólio Meta morto). Ver project_whatsapp_meta_2fa_block.
 
@@ -366,7 +377,7 @@ window._sendUserNotification = async function(uid, notifData, _skipDispatch) {
         // WhatsApp ("Olá, Rodrigo."). Primeiro nome só: o template é curto e
         // "Olá, Rodrigo" lê melhor que "Olá, Rodrigo Barth".
         var _toName = String(profile.displayName || '').trim().split(/\s+/)[0] || '';
-        if (!_skipEmail && emails.length && typeof window._dispatchChannels === 'function') {
+        if (!_skipEmail && destinos.length && typeof window._dispatchChannels === 'function') {
             var tUrl = notifData.tournamentId ? 'https://scoreplace.app/#tournaments/' + notifData.tournamentId : 'https://scoreplace.app';
             // v1.8.1-beta: pass ALL notifData fields so rich email templates
             // can access player1/player2/score1/score2/matchLines/playerMatch etc.
@@ -382,13 +393,15 @@ window._sendUserNotification = async function(uid, notifData, _skipDispatch) {
             _tplData.subject = 'scoreplace.app — ' + (notifData.tournamentName || 'Notificação');
             if (!_tplData.message) _tplData.message = '';
             window._dispatchChannels(
-                { emails: emails.slice() },
+                { destinos: destinos.slice() },
                 notifData.type || 'info',
                 _tplData
             );
         }
 
-        return { email: email, emails: emails, name: _toName };
+        // ⚠️ `emails` continua no retorno, VAZIO, porque o lote antigo o lia. Quem viaja agora
+        // é `destinos` — a troca é de forma, e a forma velha não pode virar `undefined` no meio.
+        return { email: email, emails: emails, destinos: destinos, name: _toName };
     } catch(e) {
         window._warn('_sendUserNotification error:', e);
         return null;
@@ -446,7 +459,11 @@ window._notifyTournamentParticipants = async function(tournament, notifData, exc
     }
 
     var nd = Object.assign({}, notifData, { tournamentId: String(t.id), tournamentName: t.name || '' });
-    var allEmails = [];
+    /* ⛔ O LOTE JUNTA DESTINOS, NÃO CAIXAS. Antes juntava `allEmails` — o navegador de quem
+     * avisa precisava do e-mail de cada participante. Agora junta UID; o e-mail só entra para
+     * o participante INFORMAL, que não tem conta e cujo endereço foi digitado pelo próprio
+     * organizador (aí não há ficha alheia a ler: o dado veio dele). */
+    var allDestinos = [];
 
     for (var i = 0; i < recipients.length; i++) {
         try {
@@ -462,21 +479,24 @@ window._notifyTournamentParticipants = async function(tournament, notifData, exc
                 var result = await window._sendUserNotification(uid, nd, true); // skip individual dispatch; batch below
                 // v1.3.28: coleta TODOS os e-mails do usuário (principal + linkedEmails)
                 // pro lote — não só o principal.
-                if (result && Array.isArray(result.emails)) result.emails.forEach(function(e){ allEmails.push(e); });
+                if (result && Array.isArray(result.destinos)) result.destinos.forEach(function(d){ allDestinos.push(d); });
             } else if (r.email) {
                 // Participante informal (sem conta): sem perfil pra ler linkedEmails/opt-out,
                 // mas o e-mail do próprio participante é destinatário válido.
-                allEmails.push(r.email);
+                allDestinos.push({ email: r.email });   // sem conta: o e-mail é o que existe
             }
         } catch(e) { window._warn('Notify participant error:', e); }
     }
 
     // Auto-dispatch email channel — dedup case-insensitive (dois participantes podem
     // compartilhar um e-mail; o mesmo linkedEmail pode reaparecer em outro perfil).
-    var _seenAll = {}, _emailsDedup = [];
-    allEmails.forEach(function(e){ var k = String(e == null ? '' : e).trim().toLowerCase(); if (k && !_seenAll[k]) { _seenAll[k] = true; _emailsDedup.push(k); } });
-    var channelResult = { emails: _emailsDedup };
-    if (_emailsDedup.length > 0 && typeof window._dispatchChannels === 'function') {
+    var _seenAll = {}, _destinosDedup = [];
+    allDestinos.forEach(function (d) {
+        var k = d && d.uid ? ('u:' + d.uid) : ('e:' + String((d && d.email) || '').trim().toLowerCase());
+        if (k.length > 2 && !_seenAll[k]) { _seenAll[k] = true; _destinosDedup.push(d); }
+    });
+    var channelResult = { destinos: _destinosDedup, emails: [] };
+    if (_destinosDedup.length > 0 && typeof window._dispatchChannels === 'function') {
         var tUrl = 'https://scoreplace.app/#tournaments/' + String(t.id);
         // v1.8.1-beta: pass all nd fields so rich email templates receive full payload
         var _tplData = Object.assign({}, nd);
@@ -563,7 +583,12 @@ window._dispatchChannels = function(channelResult, templateType, templateData) {
     // importância 5/15/30 min) em vez de um e-mail por evento. A Cloud Function
     // flushNotifEmailDigest consolida num e-mail só por pessoa. Mantém fallback
     // pro envio individual antigo se queueNotifEmail não existir.
-    if (channelResult.emails && channelResult.emails.length > 0) {
+    /* ⛔ DESTINO É UID (ou, para quem não tem conta, o e-mail digitado pelo organizador).
+     * `channelResult.emails` continua aceito para não quebrar chamador antigo em cache. */
+    var _destinos = (channelResult.destinos && channelResult.destinos.length)
+        ? channelResult.destinos
+        : (channelResult.emails || []).map(function (e) { return { email: e }; });
+    if (_destinos.length > 0) {
         var _emCat = (window.NOTIF_CATALOG && window.NOTIF_CATALOG[templateType]) || {};
         // ⭐ o nível JÁ RESOLVIDO para esta pessoa ganha do nível do tipo (ver `_nivelDoAviso`)
         var _emLvl = templateData._nivel || _emCat.level || 'all';
@@ -573,7 +598,7 @@ window._dispatchChannels = function(channelResult, templateType, templateData) {
         // no tournamentUrl genérico se ausentes.
         var _emCta = window._notifCta(templateType, templateData);
         if (window.FirestoreDB && typeof window.FirestoreDB.queueNotifEmail === 'function') {
-            window.FirestoreDB.queueNotifEmail(channelResult.emails, _emLvl, _emMsg, {
+            window.FirestoreDB.queueNotifEmail(_destinos, _emLvl, _emMsg, {
                 tournamentName: templateData.tournamentName || '',
                 tournamentUrl: templateData.tournamentUrl || '',
                 ctaLabel: (_emCta && _emCta.label) || '',

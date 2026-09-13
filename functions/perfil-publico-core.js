@@ -35,6 +35,11 @@ const CAMPOS_PUBLICOS = [
   'acceptFriendRequests', 'preferredSports',
   'mergedInto', 'mergedAt',
   'lastSeenAt', 'updatedAt', 'createdAt',
+  /* ⭐ PREFERÊNCIA DE AVISO não é dado pessoal — é ajuste de canal, e QUEM MANDA precisa
+   * dela para decidir se manda. Sem isto no espelho, avisar alguém obrigaria a ler o
+   * documento inteiro (com e-mail e telefone) só para saber se a pessoa quer ser avisada —
+   * que é exatamente a leitura que esta frente existe para acabar. */
+  'notifyLevel', 'notifyPlatform', 'notifyEmail', 'liveAlerts', 'liveAlertsWho',
 ];
 
 /* ⛔ A LISTA DE VETO existe só para o PORTÃO cobrar, não para filtrar: filtrar por veto é o

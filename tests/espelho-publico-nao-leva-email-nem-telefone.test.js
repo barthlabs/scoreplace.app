@@ -143,6 +143,45 @@ const EXP = fs.readFileSync(path.join(raiz, 'js/views/explore.js'), 'utf8');
 must(/loadUserProfile\(/.test(EXP),
   '⑧b ⛔ `explore` segue no documento cheio — ele usa o e-mail como NOME de quem não tem nome');
 
+// ── ⑧c AVISAR ALGUÉM NÃO LÊ MAIS A FICHA DELE ──────────────────────────────
+/* Era a maior leitura de ficha alheia que restava no navegador: para decidir se a pessoa
+ * quer o aviso e para qual caixa mandar, `_sendUserNotification` lia `users/{uid}` INTEIRO.
+ * Agora as PREFERÊNCIAS vêm do espelho (ajuste de canal não é dado pessoal) e o ENDEREÇO é
+ * resolvido no SERVIDOR, na hora de enviar. */
+const ORG = fs.readFileSync(path.join(raiz, 'js/views/tournaments-organizer.js'), 'utf8');
+const semC = semComentario(ORG);
+must(/var profile = await window\.FirestoreDB\.carregarPerfilPublico\(uid\);/.test(semC),
+  '⑧c ⭐ a decisão de avisar lê o ESPELHO, não a ficha cheia');
+must(!/loadUserProfile\(uid\);\s*\n\s*if \(!profile\) return;/.test(semC),
+  '⑧c ⛔ e não sobrou a leitura da ficha cheia nesse caminho');
+must(!/_pushEm\(profile\.email\)/.test(semC),
+  '⑧c ⛔ o navegador não monta mais a lista de CAIXAS de quem recebe');
+must(/var destinos = _optedIn \? \[\{ uid: uid \}\] : \[\];/.test(semC),
+  '⑧c ⭐ o destino é o UID');
+['notifyLevel', 'notifyPlatform', 'notifyEmail', 'liveAlerts', 'liveAlertsWho'].forEach((k) => {
+  must(C.CAMPOS_PUBLICOS.indexOf(k) >= 0,
+    '⑧c a preferência `' + k + '` está no espelho — sem ela ninguém decide sem ler a ficha');
+});
+
+// a fila aceita as DUAS formas, e é de propósito
+const DBq = fs.readFileSync(path.join(raiz, 'js/firebase-db.js'), 'utf8');
+must(/uid: _uid \|\| null,\s*\n\s*email: _mail \|\| null,/.test(DBq),
+  '⑧c a fila grava uid OU e-mail');
+must(/typeof _d === 'string'/.test(DBq),
+  '⑧c ⛔ e a forma ANTIGA (string de e-mail) continua aceita — o app das lojas ainda a envia, '
+  + 'e cortar agora calaria o aviso de quem está na loja');
+
+// o servidor resolve, relê o opt-out e não deixa item órfão na fila
+const FN2 = fs.readFileSync(path.join(raiz, 'functions/index.js'), 'utf8');
+const iFl = FN2.indexOf('exports.flushNotifEmailDigest');
+const fl = semComentario(FN2.slice(iFl, FN2.indexOf('\nexports.', iFl + 10)));
+must(/async function enderecosDoUid\(uid\)/.test(fl), '⑧c o servidor resolve uid → caixa');
+must(/p\.notifyEmail !== false/.test(fl),
+  '⑧c ⭐ e RELÊ o opt-out na hora de enviar — entre o clique e a descarga a pessoa pode ter desligado');
+must(/linkedEmails/.test(fl), '⑧c inclusive os e-mails vinculados por união de contas');
+must(/semDestino\.forEach\(\(it\) => lote\.delete/.test(fl),
+  '⑧c ⛔ item sem destino SAI da fila — senão ela cresceria sem fim e seria relida a cada 5 min');
+
 // ── ⑨ o espelho tem o que as consultas FILTRAM e ORDENAM ───────────────────
 ['displayName_lower', 'createdAt', 'updatedAt', 'acceptFriendRequests'].forEach((k) => {
   must(C.CAMPOS_PUBLICOS.indexOf(k) >= 0,

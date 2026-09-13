@@ -1,3 +1,17 @@
+## 2.3.5 — 13/set/2026
+
+Para mandar um aviso — de placar, de sorteio, de grupo de WhatsApp — o app precisava abrir o
+cadastro completo de quem ia receber, com e-mail, telefone e data de nascimento. Era a maior
+leitura de dado alheio que ainda existia no aplicativo.
+
+Agora não precisa. Se a pessoa quer ou não receber é uma preferência, e passou a ficar na
+versão pública do perfil. E o endereço de e-mail deixou de ser descoberto pelo aparelho de quem
+avisa: a fila passa a levar apenas a identificação da pessoa, e quem sabe para qual caixa
+mandar é o servidor, na hora de enviar.
+
+Isso também corrigiu uma brecha de tempo: a preferência é lida de novo no momento do envio.
+Quem desligou o aviso depois que a fila foi montada deixa de recebê-lo.
+
 ## 2.3.4 — 13/set/2026
 
 Três coisas no placar por sets, todas no super tie-break.

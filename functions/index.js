@@ -1260,17 +1260,76 @@ exports.flushNotifEmailDigest = onSchedule(
       console.log("[flushNotifEmailDigest] nada vencido");
       return;
     }
-    const dueEmails = new Set();
-    dueSnap.forEach((d) => { const e = d.data().email; if (e) dueEmails.add(e); });
+    /* ⛔ O ENDEREÇO É RESOLVIDO AQUI, NÃO NO NAVEGADOR.
+     * Até a 2.3.4 o item da fila trazia o E-MAIL do destinatário — ou seja, quem avisava
+     * precisava LER a ficha de quem recebia para descobrir a caixa. Era a maior leitura de
+     * ficha alheia que restava no cliente. Agora o item traz o UID e quem resolve é este
+     * ponto, que lê `users` pelo Admin SDK e ignora as rules.
+     * ⚠️ A FORMA ANTIGA CONTINUA VALENDO: o app das lojas ainda enfileira por e-mail, e
+     * cortar agora calaria o aviso de quem está na loja. Item com `email` segue pelo caminho
+     * de sempre; item com `uid` passa pela resolução.
+     * ⚠️ E o opt-out é relido AQUI: entre o clique e a descarga a pessoa pode ter desligado
+     * o canal, e quem manda é o estado do envio, não o do clique. */
+    const _cacheDeEnderecos = new Map();
+    async function enderecosDoUid(uid) {
+      if (_cacheDeEnderecos.has(uid)) return _cacheDeEnderecos.get(uid);
+      let out = [];
+      try {
+        const u = await db.collection("users").doc(uid).get();
+        const p = u.exists ? (u.data() || {}) : null;
+        if (p && p.notifyEmail !== false) {
+          const vistos = new Set();
+          const por = (e) => {
+            const k = String(e == null ? "" : e).trim().toLowerCase();
+            if (k && !vistos.has(k)) { vistos.add(k); out.push(k); }
+          };
+          por(p.email);
+          if (Array.isArray(p.linkedEmails)) p.linkedEmails.forEach(por);
+        }
+      } catch (e) {
+        console.warn("[flushNotifEmailDigest] não resolvi o endereço de " + uid + ":", e && e.message);
+      }
+      _cacheDeEnderecos.set(uid, out);
+      return out;
+    }
+
+    /* Carrega a fila INTEIRA e agrupa por endereço já resolvido. Antes a consolidação era
+     * `where('email','==',…)` por destinatário; com item por uid isso não alcança. A fila é
+     * pequena por desenho (ela se esvazia a cada 5 min), então uma leitura só é mais barata
+     * que uma consulta por pessoa — e evita o caso em que o MESMO aviso, enfileirado por uid
+     * numa aba e por e-mail noutra, viraria dois e-mails. */
+    const todosSnap = await db.collection("notif_email_queue").get();
+    const porEndereco = new Map();
+    const semDestino = [];
+    for (const d of todosSnap.docs) {
+      const it = Object.assign({ _id: d.id }, d.data());
+      let enderecos = it.email ? [String(it.email).trim().toLowerCase()] : [];
+      if (!enderecos.length && it.uid) enderecos = await enderecosDoUid(String(it.uid));
+      if (!enderecos.length) { semDestino.push(it); continue; }
+      enderecos.forEach((e) => {
+        if (!porEndereco.has(e)) porEndereco.set(e, []);
+        porEndereco.get(e).push(it);
+      });
+    }
+    /* ⛔ ITEM SEM DESTINO NÃO FICA NA FILA PARA SEMPRE. Sem conta, sem e-mail, ou com o canal
+     * desligado: não há para onde mandar, e mantê-lo faria a fila crescer sem fim e a
+     * consolidação relê-lo a cada 5 minutos. Sai, e o motivo fica no log. */
+    if (semDestino.length) {
+      let lote = db.batch();
+      semDestino.forEach((it) => lote.delete(db.collection("notif_email_queue").doc(it._id)));
+      await lote.commit().catch((e) => console.warn("[flushNotifEmailDigest] limpeza sem-destino:", e && e.message));
+      console.log("[flushNotifEmailDigest] " + semDestino.length + " item(ns) sem destino removidos (sem conta, sem e-mail ou canal desligado)");
+    }
+
+    /* Só descarrega quem tem item VENCIDO — o resto espera a própria janela, como antes. */
+    const vencidos = new Set();
+    dueSnap.forEach((d) => { vencidos.add(d.id); });
 
     let sent = 0;
     let repetidos = 0;
-    for (const email of dueEmails) {
-      // Consolida TODOS os itens pendentes dessa pessoa (vencidos ou não).
-      const allSnap = await db.collection("notif_email_queue").where("email", "==", email).get();
-      const items = [];
-      allSnap.forEach((d) => items.push(Object.assign({ _id: d.id }, d.data())));
-      if (items.length === 0) continue;
+    for (const [email, itensDoEndereco] of porEndereco) {
+      if (!itensDoEndereco.some((it) => vencidos.has(it._id))) continue;
+      const items = itensDoEndereco.slice();
       items.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
       // v3.0.56: tema do destinatário (profile.theme) → e-mail segue claro/escuro
       // escolhido no app. Default dark (tema padrão). Busca por e-mail (com fallback
@@ -1352,7 +1411,8 @@ exports.flushNotifEmailDigest = onSchedule(
         console.error("[flushNotifEmailDigest] falha pra", email, err);
       }
     }
-    console.log("[flushNotifEmailDigest] digests enviados:", sent, "| repetidos cortados:", repetidos, "| destinatários vencidos:", dueEmails.size);
+    console.log("[flushNotifEmailDigest] digests enviados:", sent, "| repetidos cortados:", repetidos,
+      "| endereços com item vencido:", porEndereco.size, "| itens vencidos:", vencidos.size);
   }
 );
 
