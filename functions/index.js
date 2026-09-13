@@ -9786,6 +9786,37 @@ exports.setParticipantContactPhone = onCall(
       throw new HttpsError(code, humano);
     }
 
+    /* ⛔ ESSE NÚMERO JÁ É DE ALGUÉM? — o furo que criou 4 cadastros duplicados.
+     *
+     * MEDIDO na produção em 13/set/2026: **4 telefones aparecem em DUAS contas vivas**, e o
+     * padrão é o mesmo nos quatro — numa delas o número foi digitado pelo organizador, na
+     * outra ele é a identidade da pessoa. Ou seja, o organizador registrou o contato na
+     * conta ERRADA, e a pessoa ficou com dois cadastros: os resultados dela se dividem, e
+     * o convite vai para a metade errada.
+     *
+     * ⛔ Esta porta nunca perguntou se o número já tinha dono. Agora pergunta, e RECUSA —
+     * porque o certo, quando a pessoa já tem conta, não é carimbar o telefone dela num
+     * segundo cadastro: é convidar ou unir. Duplicar é o caminho que não tem volta fácil.
+     *
+     * ⚠️ A recusa NÃO conta quem é o outro dono: o organizador não precisa (e não deve)
+     * receber o cadastro alheio para saber que deve convidar em vez de digitar. */
+    const _fone = String((r.update && r.update.phone) || "").replace(/\D/g, "");
+    if (_fone.length >= 10) {
+      const _mesmos = await db.collection("users").where("phone", "==", r.update.phone).get();
+      const _outroDono = _mesmos.docs.some((d) => {
+        if (d.id === targetUid) return false;            // é o próprio alvo
+        const o = d.data() || {};
+        if (o.mergedInto) return false;                  // lápide não é dono de nada
+        return true;
+      });
+      if (_outroDono) {
+        throw new HttpsError("already-exists",
+          "Esse celular já pertence a uma conta no scoreplace. Convide a pessoa pelo número " +
+          "em vez de registrar o contato aqui — assim ela entra na conta que já tem, e os " +
+          "resultados dela não se dividem em dois cadastros.");
+      }
+    }
+
     await db.collection("users").doc(targetUid).set(r.update, { merge: true });
 
     // A pessoa PRECISA saber. Sem este aviso, isto vira "mexeram no meu cadastro".

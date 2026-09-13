@@ -103,6 +103,7 @@ const SUITES = [
   'tests/escrita-que-falha-nao-some.test.js',
   'tests/aviso-de-placar-diz-quem-lancou.test.js',
   'tests/inscricao-nao-usa-email-como-nome.test.js',
+  'tests/contato-nao-duplica-cadastro.test.js',
   'tests/rules-mudou-tem-de-ser-testada.test.js',
 
   /* ⭐ AS 9 DO AUTODRAW SAÍRAM DO LIMBO "MANUAL" (13/set/2026).
