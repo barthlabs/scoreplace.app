@@ -703,7 +703,7 @@
     db.collection('users').doc(uid)
       .collection('milestones').doc(milestoneId)
       .set({ level: newLevel, awardedAt: new Date().toISOString() }, { merge: true })
-      .catch(function() {});
+      .catch(window._falhouCalado('trofeu-rankStats'));
 
     if (!_cache.milestones[uid]) _cache.milestones[uid] = {};
     _cache.milestones[uid][milestoneId] = _cache.milestones[uid][milestoneId] || {};
@@ -929,7 +929,7 @@
                 };
                 _rdb.collection('users').doc(uid)
                   .update({ _rankStats: _rankSnap })
-                  .catch(function() {});
+                  .catch(window._falhouCalado('trofeu-concedido'));
               }
 
               // Se ganhou troféus retroativos, mostra resumo único

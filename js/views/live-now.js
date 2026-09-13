@@ -103,7 +103,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (!db || !id) return Promise.resolve();
     var patch = { lastActivityAt: Date.now(), status: 'live' };
     if (state) patch.state = state;
-    return db.collection(COL).doc(id).set(patch, { merge: true }).catch(function () {});
+    return db.collection(COL).doc(id).set(patch, { merge: true }).catch(window._falhouCalado('ao-vivo-patch'));
   };
 
   window._liveNowFinish = function (id, state) {
@@ -113,7 +113,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (state) patch.state = state;
     // ⚠️ NÃO apaga o doc: quem está assistindo precisa ver as ESTATÍSTICAS do jogo que
     // acabou de acompanhar (pedido do dono). A faxina é por tempo, não por evento.
-    return db.collection(COL).doc(id).set(patch, { merge: true }).catch(function () {});
+    return db.collection(COL).doc(id).set(patch, { merge: true }).catch(window._falhouCalado('ao-vivo-patch'));
   };
 
   // Heartbeat: enquanto o placar está aberto, renova o sinal mesmo sem ponto novo

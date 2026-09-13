@@ -100,6 +100,7 @@ const SUITES = [
   'tests/sorteio-nao-sorteia-meio-elenco.test.js',
   'tests/porta-de-wo-e-de-quem-joga.test.js',
   'tests/import-do-letzplay-sai-do-perfil.test.js',
+  'tests/escrita-que-falha-nao-some.test.js',
   'tests/stb-aparece-para-quem-lancou.test.js',
   'tests/espera-e-fora-usam-a-grade-e-a-cor-canonicas.test.js',
   'tests/l16-auditor-nao-mente-quando-nao-consegue-olhar.test.js',

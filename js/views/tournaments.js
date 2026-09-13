@@ -3600,10 +3600,10 @@ function renderTournaments(container, tournamentId = null) {
         if (_canReconcile && _reconcile) {
             window.FirestoreDB._callFn('deduplicateTournamentParticipants', { tournamentId: String(visible[0].id) })
                 .then(function(result) { if (result && result.tournament && typeof window._applyCFTournament === 'function') window._applyCFTournament(visible[0].id, result.tournament); })
-                .catch(function() {});
+                .catch(window._falhouCalado('torneio-3603'));
             window.FirestoreDB._callFn('drainTournamentWaitlists', { tournamentId: String(visible[0].id) })
                 .then(function(result) { if (result && result.tournament && typeof window._applyCFTournament === 'function') window._applyCFTournament(visible[0].id, result.tournament); })
-                .catch(function() {});
+                .catch(window._falhouCalado('torneio-3606'));
         }
     }
 

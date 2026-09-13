@@ -8504,7 +8504,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
       try {
         window.FirestoreDB.db.collection('casualMatches').doc(_casualDocId)
           .update({ hostClosed: true, closePending: firebase.firestore.FieldValue.delete() })
-          .catch(function() {});
+          .catch(window._falhouCalado('casual-update'));
       } catch (e) {}
     }
     // 3b) Dissolve a sala se a partida NÃO está finalizada (mid-game).
@@ -8672,7 +8672,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
             // mandou tirar voltaria a prender justamente nas salas antigas.
             var _dbCPL = window.FirestoreDB && window.FirestoreDB.db;
             if (_dbCPL && _casualDocId) {
-              try { _dbCPL.collection('casualMatches').doc(_casualDocId).update({ closePending: null }).catch(function () {}); } catch (e) {}
+              try { _dbCPL.collection('casualMatches').doc(_casualDocId).update({ closePending: null }).catch(window._falhouCalado('casual-closePending')); } catch (e) {}
             }
             var _bannerVelho = document.getElementById('close-pending-banner');
             if (_bannerVelho) _bannerVelho.remove();
@@ -10350,7 +10350,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
       // nextRoomCode no listener do placar (v2.2.30).
       try {
         window.FirestoreDB.db.collection('casualMatches').doc(oldDocId)
-          .update({ nextRoomCode: newRoom }).catch(function() {});
+          .update({ nextRoomCode: newRoom }).catch(window._falhouCalado('casual-nextRoomCode'));
       } catch (e) {}
       // Navega EU pra nova sala (mesmo caminho do seguidor).
       _casualCancelled = true;
@@ -10952,7 +10952,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
     if (isCasual && _isHostCS && _casualDocId && state.isFinished && window.FirestoreDB && window.FirestoreDB.db) {
       try {
         window.FirestoreDB.db.collection('casualMatches').doc(_casualDocId)
-          .update({ hostClosed: true }).catch(function() {});
+          .update({ hostClosed: true }).catch(window._falhouCalado('casual-hostClosed'));
       } catch(_e2) {}
     }
     // v2.2.20-beta ROOT FIX (Request 3): limpa o ponteiro activeCasualRoom do
@@ -11092,12 +11092,12 @@ window._openLiveScoring = function(tId, matchId, opts) {
             if (_matchIsComplete) {
               window.FirestoreDB.db.collection('casualMatches').doc(_casualDocId)
                 .update({ hostClosed: true })
-                .catch(function() {});
+                .catch(window._falhouCalado('casual-sessao'));
             } else {
               // Mid-game: sinaliza retorno ao lobby sem encerrar a sala
               window.FirestoreDB.db.collection('casualMatches').doc(_casualDocId)
                 .update({ status: 'setup', setupAt: Date.now() })
-                .catch(function() {});
+                .catch(window._falhouCalado('casual-sessao'));
             }
           } catch(e) {}
         }
@@ -14213,7 +14213,7 @@ window._openCasualMatch = function(restoreOpts) {
     try {
       var _upd = {};
       _upd['participantGenders.' + _cuPG.uid] = _cuPG.gender;
-      window.FirestoreDB.db.collection('casualMatches').doc(_sessionDocId).update(_upd).catch(function() {});
+      window.FirestoreDB.db.collection('casualMatches').doc(_sessionDocId).update(_upd).catch(window._falhouCalado('casual-sessao-upd'));
     } catch (e) {}
   }
   // Exposed for oninput handlers on name fields

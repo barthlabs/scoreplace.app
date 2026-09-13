@@ -1538,7 +1538,7 @@ function _onAppleAuthError(error) {
 function _patchProfileIfExists(uid, fields) {
   try {
     if (!(window.FirestoreDB && window.FirestoreDB.db && uid)) return;
-    window.FirestoreDB.db.collection('users').doc(uid).update(fields).catch(function () {});
+    window.FirestoreDB.db.collection('users').doc(uid).update(fields).catch(window._falhouCalado('perfil-campos'));
   } catch (e) {}
 }
 
@@ -3327,7 +3327,7 @@ window._doCreatePassword = function() {
         window.FirestoreDB.db.collection('users').doc(cu.uid).update({
           authProvider: 'emailLink+password',
           updatedAt: new Date().toISOString()
-        }).catch(function() {});
+        }).catch(window._falhouCalado('perfil-update'));
       }
     })
     .catch(function(err) {
@@ -3772,7 +3772,7 @@ window._resetSaveNewPassword = function() {
       if (window.FirestoreDB && window.FirestoreDB.db && u.uid) {
         window.FirestoreDB.db.collection('users').doc(u.uid).set({
           authProvider: 'password', emailVerified: true, updatedAt: new Date().toISOString()
-        }, { merge: true }).catch(function() {});
+        }, { merge: true }).catch(window._falhouCalado('perfil-merge'));
       }
       if (typeof _resetPhoneRecaptcha === 'function') { try { _resetPhoneRecaptcha(); } catch (e) {} }
       var ov = document.getElementById('reset-newpwd-overlay'); if (ov) ov.remove();
@@ -8503,7 +8503,7 @@ function setupProfileModal() {
         };
         if (err) rec.err = String((err && (err.code || err.message)) || err).slice(0, 200);
         db.collection('users').doc(cu.uid).collection('phoneVerifyAttempts').add(rec)
-          .catch(function () {});
+          .catch(window._falhouCalado('phoneVerifyAttempts'));
       } catch (e) { /* telemetria não quebra nada */ }
     };
 
@@ -8693,7 +8693,7 @@ function setupProfileModal() {
               var _lp = Array.isArray(_cu.linkedPhones) ? _cu.linkedPhones.slice() : [];
               if (_lp.indexOf(_ctx.e164) === -1) _lp.push(_ctx.e164);
               _cu.linkedPhones = _lp;
-              _db.collection('users').doc(_cu.uid).update({ linkedPhones: _lp }).catch(function(){});
+              _db.collection('users').doc(_cu.uid).update({ linkedPhones: _lp }).catch(window._falhouCalado('linkedPhones'));
             }
           }
         } catch (e) {}

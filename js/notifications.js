@@ -69,7 +69,7 @@ function _bindNativePushListeners() {
           fcmToken: token,
           fcmTokenUpdatedAt: new Date().toISOString(),
           fcmTokenPlatform: 'native-' + (window.Capacitor.getPlatform ? window.Capacitor.getPlatform() : 'app')
-        }, { merge: true }).catch(function() {});
+        }, { merge: true }).catch(window._falhouCalado('fcmToken'));
       }
     } catch (e) { window._warn('[FCM native] tokenReceived error:', e); }
   });

@@ -181,7 +181,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
           .where('type', '==', typ).where('tournamentId', '==', String(tId)).where('read', '==', false)
           .get().then(function(snap) {
             snap.forEach(function(d) { d.ref.update({ read: true }); });
-          }).catch(function() {});
+          }).catch(window._falhouCalado('aviso-transferencia'));
       });
       if (typeof window._updateNotificationBadge === 'function') {
         setTimeout(window._updateNotificationBadge, 500);

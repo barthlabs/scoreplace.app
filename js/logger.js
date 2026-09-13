@@ -82,6 +82,36 @@
     _sendBreadcrumb('error', arguments);
   };
 
+  /* ⛔ ESCRITA QUE FALHA CALADA É PONTO CEGO — e havia 23 delas.
+   *
+   * MEDIDO em 13/set/2026, varrendo `js/`: 23 gravações no Firestore terminavam em
+   * `.catch(function () {})`. São escritas de "melhor esforço" de propósito — salvar o
+   * token de push, os locais preferidos, o telefone vinculado, o estado da sessão ao vivo —
+   * e é certo que elas NÃO derrubem a tela. O errado é sumirem: no dia em que uma delas
+   * passar a falhar sempre (regra, rede, cota), o sintoma chega como "não salva meus clubes"
+   * ou "não recebo notificação" e não há UMA linha em lugar nenhum para começar a olhar.
+   *
+   * ⭐ ESTA PORTA NÃO MUDA O COMPORTAMENTO: continua engolindo, a tela segue igual. O que
+   * muda é que passa a deixar rastro — console + breadcrumb, e exceção reportada a partir da
+   * segunda falha do MESMO ponto (a primeira pode ser rede de alguém no elevador; a segunda
+   * já é sinal). [[feedback_try_catch_nao_pega_promessa]]
+   *
+   * Uso:  .catch(window._falhouCalado('preferredLocations'))
+   */
+  var _mudosVistos = {};
+  window._falhouCalado = function (onde) {
+    return function (err) {
+      var n = (_mudosVistos[onde] = (_mudosVistos[onde] || 0) + 1);
+      var cod = (err && (err.code || err.message)) || err;
+      window._warn('[falhou calado] ' + onde + ' (' + n + 'ª): ' + cod);
+      if (n >= 2 && typeof window._captureException === 'function') {
+        try { window._captureException(err instanceof Error ? err : new Error(String(cod)),
+          { area: 'escrita-melhor-esforco', onde: onde, vezes: n }); } catch (e) {}
+      }
+      return null;   // ⚠️ devolve para a cadeia continuar resolvida, como o `{}` fazia
+    };
+  };
+
   // Expor um snapshot do modo atual pra debug
   window._loggerMode = isProd ? (forceDebug ? 'prod-debug' : 'prod-quiet') : 'dev';
 })();
