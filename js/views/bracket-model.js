@@ -1197,10 +1197,37 @@
    * ter menos espaço entre os placares dos sets em melhor de 3; isso dará mais espaço para os
    * nomes nas duplas"_. O piso do STB não se mexe: lá o limite continua sendo o rótulo.
    * ⛔ As duas linhas continuam casadas: a conta é por COLUNA e lê o mesmo set dos dois lados. */
+  /* ⭐ 13/set/2026 — O NÚMERO DO SET ALCANÇA O NÚMERO SIMPLES (1,45rem), E A COLUNA ABRE.
+   * Relato do dono, comparando as DUAS seções da tela inicial na mesma foto: _"no novidades
+   * os números dos placares estão menores do que os números dos meus últimos resultados. e
+   * olha que ali tem apenas 2 sets enquanto aqui tem 3 com tiebreak"_ — e a ordem:
+   * _"use o tamanho do de baixo na seção de cima e dê um pouco mais de folga no espaçamento
+   * entre os placares dos sets quando isso for possível"_.
+   *
+   * ⛔ ELE ESTAVA VENDO DOIS RENDERIZADORES, não uma variação de tamanho. MEDIDO no Chromium
+   * a 375px, antes de mexer: a GRADE (próximo/novidades) desenhava a 19,2px e "Seus últimos
+   * resultados" a 23,2px — porque aquele caminho herda `--sp-num-fs` (1,45rem) e este lia a
+   * escada aqui (1,30/1,20). Ou seja, o card com MENOS sets saía com a fonte MENOR.
+   *
+   * ⭐ E 1,45rem não é número escolhido: é o `--sp-num-fs`, o tamanho do número simples, que
+   * é o cânone que o próprio dono fixou em 2.0.47 (_"em todos os cards de jogos, em qualquer
+   * fase"_) e que a 2.1.101 já tinha unificado no caminho de 1 set.
+   *
+   * ⛔ OS PISOS SUBIRAM JUNTO, E ISSO É A "FOLGA". A coluna é `text-align:right`, então
+   * largura sobrando vira ar ANTES do número — a folga que o olho vê é entre os DÍGITOS, não
+   * entre as caixas. MEDIDO, dígito a dígito, no navegador:
+   *     hoje      2 sets 11,4px · 3 sets 13,8px
+   *     só a fonte 12,4px · 15,4px     (quase nada a mais)
+   *     ESTE       14,4px · 17,4px     ⟵ "um pouco mais"
+   *     mais aberto 17,4px · 20,4px    (é o que ele REJEITOU no outro caminho, em 12/set)
+   *
+   * ⚠️ 4-5 COLUNAS SOBEM MENOS (1,20), de propósito: lá o que divide espaço com o nome são
+   * cinco colunas, não duas. MEDIDO a 375px: 2 sets 50px · 3 sets 115px · 5 sets 142px de
+   * placar — e quem diz se cabe é o teste de nome, não esta conta. */
   window._SET_COL_ESCALA = [
-    { ate: 2, digito: 14.0, piso: 18, pisoStb: 24, tb: 21, fs: 1.30 },   // 1 ou 2 colunas
-    { ate: 3, digito: 13.0, piso: 16, pisoStb: 22, tb: 20, fs: 1.20 },   // 3 colunas (melhor de 3)
-    { ate: 5, digito: 10.3, piso: 14, pisoStb: 20, tb: 16, fs: 0.95 }    // 4 ou 5 colunas
+    { ate: 2, digito: 14.4, piso: 26, pisoStb: 30, tb: 23, fs: 1.45 },   // 1 ou 2 colunas
+    { ate: 3, digito: 14.4, piso: 24, pisoStb: 28, tb: 22, fs: 1.45 },   // 3 colunas (melhor de 3)
+    { ate: 5, digito: 11.7, piso: 14, pisoStb: 20, tb: 18, fs: 1.18 }    // 4 ou 5 colunas
   ];
   window._setColEscala = function (nCols) {
     var e = window._SET_COL_ESCALA;

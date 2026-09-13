@@ -461,11 +461,72 @@ async function correcoesDoSandbox() {
   await browser.close();
 }
 
+/* ⛔ AS DUAS SEÇÕES DA TELA INICIAL DESENHAM NO MESMO TAMANHO — MEDIDO EM PIXEL.
+ *
+ * Este é o defeito que o dono fotografou em 13/set/2026, e ele reapareceu porque cada portão
+ * media UM caminho só. A tela inicial tem DOIS renderizadores de placar:
+ *   · a GRADE (`_setGridHtml`) — serve "próximo jogo" e "📣 Novidades", e lê a escada
+ *     `_SET_COL_ESCALA`;
+ *   · "🏅 Seus últimos resultados" (`_colunaDeSetHtml` dentro de `.sp-mc-num`) — herda
+ *     `--sp-num-fs`, 1,45rem.
+ * Medido antes do conserto: a grade saía a **19,2px** e os últimos a **23,2px**. Ou seja, o
+ * card com DOIS sets ficava MENOR que o card com TRÊS sets e tie-break — que é exatamente o
+ * que ele relatou: _"no novidades os números dos placares estão menores… e olha que ali tem
+ * apenas 2 sets enquanto aqui tem 3 com tiebreak"_.
+ *
+ * ⚠️ LER O CÓDIGO NÃO PEGA ISTO. Os dois caminhos estão certos cada um por si; o defeito só
+ * existe na COMPARAÇÃO, e só aparece em pixel. [[feedback_unify_dual_entry_points]]
+ */
+async function duasSecoesMesmoTamanho() {
+  const s3 = [{ gamesP1: 5, gamesP2: 6, tiebreak: { p1: 7, p2: 9 } },
+              { gamesP1: 6, gamesP2: 3 }, { gamesP1: 7, gamesP2: 10 }];
+  const s2 = [{ gamesP1: 2, gamesP2: 6 }, { gamesP1: 1, gamesP2: 6 }];
+  const plano = (sets) => W._matchSetPlan({ type: 'sets', setsToWin: 2, superTiebreak: true },
+    { sets: sets }, { sets: sets, done: true });
+  const grade = (sets) => '<div class="secA">' + W._setGridHtml(plano(sets), 1, {}) + '</div>';
+  /* ⚠️ A MARCAÇÃO TEM DE SER A REAL, senão o portão mede um fixture e não o produto.
+   * Em "Seus últimos resultados" o número é um `<span>` SIMPLES dentro de `.sp-mc-num` — ele
+   * HERDA 1,45rem. Escrevi `class="sp-set-num"` na primeira versão e medi 11,4px: essa classe
+   * lê `--sp-num-fs-set`, outra variável. O portão acusou uma diferença que era minha. */
+  const ultimos = (sets) => '<div class="secB"><div class="sp-mc-num" style="display:flex;justify-content:flex-end;">' +
+    sets.map((x) => W._colunaDeSetHtml('<span class="num">' + x.gamesP1 + '</span>', x)).join('') +
+    '</div></div>';
+
+  const browser = await chromium.launch();
+  const page = await browser.newPage({ viewport: { width: 390, height: 900 } });
+  await page.setContent('<style>' + CSS + '</style><body style="background:#0b1220;margin:0;">' +
+    grade(s2) + ultimos(s3) + '</body>', { waitUntil: 'load' });
+  const m = await page.evaluate(() => {
+    const fs1 = (sel) => {
+      const e = document.querySelector(sel);
+      return e ? Math.round(parseFloat(getComputedStyle(e).fontSize) * 10) / 10 : null;
+    };
+    return {
+      grade: fs1('.secA .sp-set-num'),
+      ultimos: fs1('.secB .sp-set-col .num'),
+      raiz: Math.round(parseFloat(getComputedStyle(document.documentElement).fontSize) * 10) / 10,
+      numSimples: fs1('.secB .sp-mc-num'),
+    };
+  });
+  await browser.close();
+
+  ok(m.grade != null && m.ultimos != null,
+    '⑥ consegui medir as duas seções (grade=' + m.grade + ' últimos=' + m.ultimos + ')');
+  ok(m.grade === m.ultimos,
+    '⑥ ⭐⭐ a GRADE (2 sets) e "Seus últimos" (3 sets + STB) desenham no MESMO tamanho — ' +
+    'grade ' + m.grade + 'px vs últimos ' + m.ultimos + 'px (antes: 19,2 vs 23,2)');
+  ok(m.grade === m.numSimples,
+    '⑥ ⭐ e é o tamanho do NÚMERO SIMPLES (`.sp-mc-num` = ' + m.numSimples + 'px), não um terceiro valor');
+  ok(Math.abs(m.grade - 1.45 * m.raiz) < 0.6,
+    '⑥ que é 1,45rem sobre a raiz de ' + m.raiz + 'px (obtido ' + m.grade + 'px)');
+}
+
 (async function () {
   regua();
   decisao();
   await tela();
   await correcoesDoSandbox();
+  await duasSecoesMesmoTamanho();
   console.log('\n' + (falhas ? '✗ ' + falhas + '/' + testes + ' falharam' : '✓ ' + testes + '/' + testes + ' passaram'));
   process.exit(falhas ? 1 : 0);
 })();

@@ -87,7 +87,22 @@ E.forEach(function (d, i) {
 
 /* ── ③ o degrau sai do FORMATO e cresce quando há menos colunas ───────────── */
 ok(W._setColEscala(1).fs === W._setColEscala(2).fs, '③ 1 e 2 colunas usam o mesmo degrau');
-ok(W._setColEscala(3).fs < W._setColEscala(2).fs, '③ melhor de 3 é menor que 1-2 colunas');
+/* ⭐ 13/set/2026 — O DEGRAU DE 3 COLUNAS ALCANÇOU O TETO, e por isso deixou de ser MENOR.
+ * Relato do dono, comparando as duas seções da tela inicial na MESMA foto: _"no novidades os
+ * números dos placares estão menores do que os números dos meus últimos resultados. e olha
+ * que ali tem apenas 2 sets enquanto aqui tem 3 com tiebreak"_ — ordem: _"use o tamanho do
+ * de baixo na seção de cima"_.
+ * O "tamanho do de baixo" é `--sp-num-fs` (1,45rem), o número simples, que é o TETO do cânone
+ * da 2.0.47. Um degrau não pode passar dele; pode EMPATAR. Por isso a régua virou "não CRESCE
+ * com mais colunas" em vez de "encolhe sempre".
+ * ⚠️ A prova de que as DUAS seções desenham igual é em PIXEL e está em
+ * `tests/placar-por-sets-no-card.test.js` — comparar por leitura de código não pega, porque
+ * os dois caminhos estão certos cada um por si. [[feedback_unify_dual_entry_points]] */
+ok(W._setColEscala(3).fs <= W._setColEscala(2).fs, '③ mais colunas nunca aumenta a fonte');
+ok(W._setColEscala(2).fs === 1.45 && W._setColEscala(3).fs === 1.45,
+  '③ ⭐ 1-3 colunas chegam ao TETO (1,45rem = `--sp-num-fs`), o tamanho do número simples');
+ok(W._setColEscala(5).fs < 1.45,
+  '③ ⛔ e 4-5 colunas NÃO chegam: lá são cinco colunas dividindo espaço com o nome, não duas');
 ok(W._setColEscala(5).fs < W._setColEscala(3).fs, '③ e melhor de 5 é o mais apertado');
 ok(W._setColEscala(9).fs === W._setColEscala(5).fs, '③ acima de 5 não encolhe mais (não há degrau)');
 
@@ -97,10 +112,23 @@ ok(W._setColEscala(9).fs === W._setColEscala(5).fs, '③ acima de 5 não encolhe
 /* ⭐ 2.2.77 — o que não se mexe sem decisão passa a ser o PISO, não a largura cheia:
  * é ele que garante o rótulo ("STB") numa linha só — abaixo disso o cabeçalho engorda e os
  * cards ficam de alturas diferentes (o defeito da 2.0.35). A largura acima do piso é do DADO. */
-ok(E[0].piso === 18 && E[1].piso === 16 && E[2].piso === 14,
-   '④ ⭐ os pisos de SET seguem 18/16/14px — o rótulo de um set é só o algarismo, que é estreito');
-ok(E[0].pisoStb === 24 && E[1].pisoStb === 22 && E[2].pisoStb === 20,
-   '④ ⭐ e o do STB não se mexe: lá o limite é o rótulo "STB" numa linha só');
+/* ⭐ 13/set/2026 — OS PISOS DE 1-3 COLUNAS SUBIRAM, E ISSO É A "FOLGA" PEDIDA.
+ * Ordem: _"dê um pouco mais de folga no espaçamento entre os placares dos sets quando isso
+ * for possível"_.
+ * ⛔ A folga que o olho vê NÃO é a largura da caixa: a coluna é `text-align:right`, então
+ * largura acima do natural vira ar ANTES do número — entre um dígito e o anterior. MEDIDO no
+ * Chromium a 375px, dígito a dígito:
+ *     antes    2 sets 11,4px · 3 sets 13,8px · 5 sets 11,4px
+ *     agora    2 sets 14,4px · 3 sets 17,4px · 5 sets 10,6px
+ * ⚠️ E ISTO CONVIVE COM A ORDEM DE 2.2.78, não a revoga. Lá ele pediu _"menos espaço entre os
+ * placares dos sets em melhor de 3; isso dará mais espaço para os nomes nas duplas"_ — o ALVO
+ * era o nome. O bloco de 3 sets foi de 94px para 109px, e quem diz se o nome ainda cabe é o
+ * teste de nome: ele passou. Se um dia reprovar, o piso volta.
+ * ⚠️ 4-5 COLUNAS NÃO SUBIRAM: lá o espaço é de cinco colunas. */
+ok(E[0].piso === 26 && E[1].piso === 24 && E[2].piso === 14,
+   '④ ⭐ pisos de SET 26/24/14px — os dois primeiros abriram a pedido do dono; o de 5 colunas não');
+ok(E[0].pisoStb === 30 && E[1].pisoStb === 28 && E[2].pisoStb === 20,
+   '④ ⭐ e o do STB acompanha (30/28/20): o rótulo "STB" cabe numa linha só');
 ok(E.every(function (d) { return d.pisoStb >= d.piso; }),
    '④ o piso do super tie-break é maior ou igual (o rótulo "STB" é o mais largo)');
 ok(E.every(function (d) { return d.tb > d.digito; }),
