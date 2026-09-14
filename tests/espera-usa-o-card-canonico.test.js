@@ -38,6 +38,8 @@ must(/toggle-switch/.test(html), '② o toggle de presença continua no card');
 must(/_markAbsent|Aplicar W\.O\./.test(html), '② e o "Aplicar W.O." também');
 must(!/\d+º na fila|Quem fizer check-in primeiro|Próximo a entrar/.test(html),
   '② a ordem visual dos cards basta: não há rótulo de posição, chamada por check-in ou próximo da fila');
+must(!/inscrições abertas\s*·\s*R1|R1 superior/.test(html),
+  '② a lista não expõe a sigla técnica da rodada; o estado útil é somente "inscrições abertas"');
 must(/data-players="[^"]*Adriana Rosa/.test(html) && /data-player-uids="[^"]*u-adriana/.test(html),
   '② e a busca do painel continua enxergando quem está na fila (nome E uid no wrapper)');
 

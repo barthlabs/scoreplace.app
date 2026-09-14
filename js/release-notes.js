@@ -1,3 +1,4 @@
+// 2.3.14 — a lista de espera ocupa duas colunas quando há espaço, os cards têm altura uniforme e a interface deixa de mostrar a sigla interna da rodada.
 // 2.3.13 — listas de espera, inativos e W.O. usam duas colunas quando há espaço e removem rótulos redundantes de chamada e posição.
 // 2.3.12 — o estado do torneio só aparece após confirmação do servidor: espera, inativos, W.O., duplas, jogos, grupos e resultados não aceitam cópia local como dado atual.
 // 2.3.11 — troca de dupla, saída e W.O. passam a aparecer na hora em todas as telas abertas do torneio.

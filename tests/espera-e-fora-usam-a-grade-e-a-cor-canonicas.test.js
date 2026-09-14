@@ -22,8 +22,8 @@ const semComentario = (s) => s.split('\n').filter((l) => !/^\s*(\*|\/\/|\/\*)/.t
 // ── ① a grade é UMA, declarada num lugar só ─────────────────────────────────
 must(/^window\._GRADE_DE_CARDS = '/m.test(PART),
   '① a constante é atribuída no TOPO do arquivo (coluna 0) — dentro de função ela não existiria');
-must(/window\._GRADE_DE_CARDS\s*=\s*'display:grid;grid-template-columns:repeat\(auto-fill, minmax\(min\(100%, 400px\), 1fr\)\);gap:1rem;'/.test(PART),
-  '① a grade canônica é uma constante única, com o min(100%,400px) que mantém duas colunas em tela larga e uma no celular');
+must(/window\._GRADE_DE_CARDS\s*=\s*'display:grid;grid-template-columns:repeat\(auto-fit,minmax\(320px,1fr\)\);gap:1rem;'/.test(PART),
+  '① a grade canônica é uma constante única: 320px permite duas colunas no painel largo e uma no celular');
 const decls = (PART + BRK).match(/_GRADE_DE_CARDS\s*=/g) || [];
 must(decls.length === 1, '① ⛔ e é declarada UMA vez só (achei ' + decls.length + ') — duas réguas divergem');
 
@@ -42,8 +42,8 @@ must(colunaUnica === 0,
   '③ ⛔ nenhum contêiner de cards ficou em coluna única no painel (achei ' + colunaUnica + ')');
 must(/display:grid;grid-template-rows:minmax\(0,1fr\);min-width:0;height:100%;/.test(painel),
   '③ cada wrapper da espera preenche a célula da grade, mantendo os cards da mesma altura');
-must(/height:100%;box-sizing:border-box;/.test(PART),
-  '③ o card canônico ocupa integralmente a altura oferecida pela grade');
+must(/min-height:168px;height:100%;box-sizing:border-box;/.test(PART),
+  '③ o card canônico tem a altura mínima comum e ocupa integralmente a célula da grade');
 
 // ── ④ a cor do ESTADO vence a da presença ───────────────────────────────────
 const part = semComentario(PART);

@@ -1,3 +1,7 @@
+## 2.3.14 — 14/set/2026
+
+- **Listas mais legíveis:** a espera, os inativos e os W.O. passam a usar uma grade estável de duas colunas quando há espaço, com cards de altura uniforme. O rótulo técnico “R1” saiu da lista de espera; fica apenas o estado útil das inscrições.
+
 ## 2.3.13 — 14/set/2026
 
 - **Painel de espera mais compacto:** remove a frase de chamada por check-in e os rótulos “1º/2º na fila”; a ordem é a própria sequência dos cards. A grade canônica passa a usar colunas de 400 px, exibindo duas colunas para espera, inativos e W.O. quando houver espaço e uma no celular.

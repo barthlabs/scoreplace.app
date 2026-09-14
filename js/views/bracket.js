@@ -2094,22 +2094,14 @@ window._lateGrowthGapBanner = function (gap) {
 };
 
 // ─── PORTA do tardio: qual é a etapa AGORA (v1.5.9) ──────────────────────────────────
-// A pill dizia sempre "inscrições abertas · R1" — mas "R1" de qual chave? Numa Dupla
-// Eliminatória a entrada é na R1 SUPERIOR (o novo confronto nasce lá; quem perde cai para a
-// chave inferior). Fechada a porta, quem está na espera é SUPLENTE — entra só por W.O./
-// substituição, não abre jogo novo. O rótulo passa a dizer a etapa REAL.
-//
-// ⚠️ "R1 inferior" NÃO é uma etapa que existe hoje: `_collectLateCandidates` devolve VAZIO
-// assim que a 2ª rodada superior tem resultado (`_lateEnrollR2Started`) — nenhuma porta fica
-// aberta depois disso, nem a inferior. O cânone [[project_late_entry_door_upper_then_lower]]
-// prevê essa porta, mas ela não está no motor. Rotular "R1 inferior" aqui seria prometer uma
-// entrada que não acontece; quando o motor abrir essa porta, é UM caso a mais neste switch.
+// A pessoa precisa saber se ainda pode se inscrever, não a nomenclatura interna da rodada.
+// `code` conserva a etapa para as decisões do motor; a interface mostra só o estado útil.
+// Só a R1 superior existe hoje; a inferior continua planejada em
+// [[project_late_entry_door_upper_then_lower]].
 window._lateDoorStage = function (t) {
   if (!t) return null;
   var _aberta = (typeof window._lateEnrollWindowOpen === 'function') && window._lateEnrollWindowOpen(t);
-  var _dupla = /dupla elimina/i.test(String(t.format || '')) ||
-    (Array.isArray(t.matches) && t.matches.some(function (m) { return m && m.bracket === 'lower'; }));
-  if (_aberta) return { code: 'r1sup', label: 'inscrições abertas · ' + (_dupla ? 'R1 superior' : 'R1') };
+  if (_aberta) return { code: 'r1sup', label: 'inscrições abertas' };
   return { code: 'suplentes', label: 'suplentes' };
 };
 

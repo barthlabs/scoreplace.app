@@ -11,9 +11,10 @@ var _t = window._t || function(k) { return k; };
  * A grade dos inscritos era esta string, escrita AQUI e só aqui; o painel da espera usava
  * `flex-direction:column`, ou seja UMA coluna em qualquer largura. Duas réguas para a mesma
  * coisa divergem na primeira mudança — então a régua passa a ser esta constante, e quem
- * desenha card de inscrito a usa. `min(100%,400px)` mantém duas colunas na tela larga do
- * torneio e uma coluna no celular, sem estourar a largura. [[project_card_de_jogo_geometria_canon]] */
-window._GRADE_DE_CARDS = 'display:grid;grid-template-columns:repeat(auto-fill, minmax(min(100%, 400px), 1fr));gap:1rem;';
+ * desenha card de inscrito a usa. O mínimo de 320px produz duas colunas no painel largo e
+ * uma no celular sem depender de uma porcentagem dentro de `auto-fill` (que alguns layouts
+ * resolviam como a largura inteira e devolviam uma coluna). [[project_card_de_jogo_geometria_canon]] */
+window._GRADE_DE_CARDS = 'display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1rem;';
 
 // v0.17.33: adicionado suporte a #bracket/ — Lista de Espera vive em
 // bracket.js e o toggle Presente daí precisa re-renderizar a view de
@@ -1635,8 +1636,10 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
   var _metaSlots = (typeof window._profileMetaSlots === 'function') ? window._profileMetaSlots(p, pName, isTeam, t, isOrg, { inline: true }) : '';
   var _wmNum = (function () { var _n = (typeof _fOrder === 'number') ? (_fOrder + 1) : ''; return (typeof window._enrollNumberBadge === 'function') ? window._enrollNumberBadge(_n, 'right') : ''; })();
 
+  // 168px acomoda cabeçalho, até três badges e a linha de ação sem deixar os cards
+  // de inativos menores que os cards da espera; conteúdo excepcional ainda pode crescer.
   return '' +
-    '<div class="participant-card" data-part-card="1" data-part-org="' + (_isOrgP ? '1' : '0') + '" data-part-vip="' + (isVip ? '1' : '0') + '" data-part-standby="' + (_isStandbyEntry ? '1' : '0') + '" data-part-name="' + _fNameAttr + '" data-participant-name="' + window._safeHtml(_dragName) + '" data-card-key="' + window._safeHtml(String((typeof p === 'object' && p && p.uid) ? p.uid : pName)) + '" data-card-idx="' + idx + '" data-part-uid="' + window._safeHtml(String((typeof p === 'object' && p && p.uid && !isTeam) ? p.uid : '')) + '" data-part-inactive="' + _fInactive + '" data-part-gender="' + _fGender + '" data-part-skill="' + String(_fSkill).replace(/"/g, '&quot;') + '" data-part-order="' + _fOrder + '" ' + dragProps + ' style="' + cardStyle + ' height:100%;box-sizing:border-box;border-radius:12px;padding:12px;position:relative;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.1);transition:all 0.2s;' + (isOrg ? 'cursor:grab;' : '') + _rcCardExtra + '" onmouseover="this.style.transform=\'translateY(-2px)\'" onmouseout="this.style.transform=\'none\'">' +
+    '<div class="participant-card" data-part-card="1" data-part-org="' + (_isOrgP ? '1' : '0') + '" data-part-vip="' + (isVip ? '1' : '0') + '" data-part-standby="' + (_isStandbyEntry ? '1' : '0') + '" data-part-name="' + _fNameAttr + '" data-participant-name="' + window._safeHtml(_dragName) + '" data-card-key="' + window._safeHtml(String((typeof p === 'object' && p && p.uid) ? p.uid : pName)) + '" data-card-idx="' + idx + '" data-part-uid="' + window._safeHtml(String((typeof p === 'object' && p && p.uid && !isTeam) ? p.uid : '')) + '" data-part-inactive="' + _fInactive + '" data-part-gender="' + _fGender + '" data-part-skill="' + String(_fSkill).replace(/"/g, '&quot;') + '" data-part-order="' + _fOrder + '" ' + dragProps + ' style="' + cardStyle + ' min-height:168px;height:100%;box-sizing:border-box;border-radius:12px;padding:12px;position:relative;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.1);transition:all 0.2s;' + (isOrg ? 'cursor:grab;' : '') + _rcCardExtra + '" onmouseover="this.style.transform=\'translateY(-2px)\'" onmouseout="this.style.transform=\'none\'">' +
       _wmNum +
       '<div style="position:relative;z-index:1;">' +
         pNameHtml +
@@ -2597,7 +2600,7 @@ function renderParticipants(container, tournamentId) {
       const _riNum = (typeof _ciOrder === 'number' && _ciOrder !== 9999) ? (_ciOrder + 1) : '';
       const _riWoBadge = isWOOrphan ? '<div style="font-size:0.64rem;font-weight:800;padding:3px 9px;border-radius:8px;background:rgba(239,68,68,0.18);color:var(--sp-c-f87171,#f87171);border:1px solid rgba(239,68,68,0.35);">W.O.</div>' : woBadge;
       return `
-        <div class="participant-card" data-part-card="1" data-panel-card="1" data-card-key="${String(ind.uid || ind.name || '').replace(/"/g, '&quot;')}" data-part-org="${_isOrgPC ? '1' : '0'}" data-part-vip="${isVipPlayer ? '1' : '0'}" data-part-standby="${isStandby ? '1' : '0'}" data-part-name="${(ind.name || '').toLowerCase().replace(/"/g, '&quot;')}" data-part-inactive="${_ciInactive}" data-part-gender="${_ciGender}" data-part-skill="${String(_ciSkillVal).replace(/"/g, '&quot;')}" data-part-order="${_ciOrder}" style="height:100%;box-sizing:border-box;background:${window._spCor(_riGrad, 'background')};border:${_riBorder};border-radius:12px;padding:12px;position:relative;overflow:hidden;${_riGlow}${_riDim}transition:all 0.2s;">
+        <div class="participant-card" data-part-card="1" data-panel-card="1" data-card-key="${String(ind.uid || ind.name || '').replace(/"/g, '&quot;')}" data-part-org="${_isOrgPC ? '1' : '0'}" data-part-vip="${isVipPlayer ? '1' : '0'}" data-part-standby="${isStandby ? '1' : '0'}" data-part-name="${(ind.name || '').toLowerCase().replace(/"/g, '&quot;')}" data-part-inactive="${_ciInactive}" data-part-gender="${_ciGender}" data-part-skill="${String(_ciSkillVal).replace(/"/g, '&quot;')}" data-part-order="${_ciOrder}" style="min-height:168px;height:100%;box-sizing:border-box;background:${window._spCor(_riGrad, 'background')};border:${_riBorder};border-radius:12px;padding:12px;position:relative;overflow:hidden;${_riGlow}${_riDim}transition:all 0.2s;">
             ${(typeof window._enrollNumberBadge === 'function') ? window._enrollNumberBadge(_riNum, 'right') : ''}
             <div style="position:relative;z-index:1;">
                 <!-- HEADER: avatar + nome + estrela (Jogo N foi pro match strip, na linha do 2º time) -->

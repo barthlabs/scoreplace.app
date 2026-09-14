@@ -20,7 +20,7 @@
 //     sync in-place depende de achá-los no DOM;
 //   • a AMARRA COM O MOTOR, invertida: a tela cala porque o adapter ACEITA o tardio solo. Se um
 //     dia o motor voltar a recusar, esta amarra quebra antes de a tela ficar muda por engano.
-// A pill de etapa da porta do tardio não mudou e segue travada no fim do arquivo.
+// A pill da porta do tardio mostra apenas o estado útil, e segue travada no fim do arquivo.
 // Ver [[project_pow2_growth_frozen_prefix]] / [[project_new_matchups_independent]].
 const { window: W, sandbox, load, E } = require('./headless');
 sandbox.document = { getElementById: () => null, querySelector: () => null, querySelectorAll: () => [], body: {} };
@@ -127,21 +127,20 @@ ok(/display:none/.test(tag), 'a etiqueta "aguardando" nasce oculta');
   });
 })();
 
-// ── PILL DE ETAPA: "R1 superior" enquanto a porta é essa; depois "suplentes" ─────────────
-// Dono: _"seria legal constar R1 superior (enquanto for isso) depois R1 inferior e depois
-// suplentes"_. "R1 inferior" NÃO é etapa do motor hoje — `_collectLateCandidates` devolve vazio
-// assim que a 2ª superior tem resultado; a porta fecha, não muda de chave. A pill não pode
-// prometer entrada que não existe. Ver [[project_late_entry_door_upper_then_lower]].
+// ── PILL DE ETAPA: só o estado que interessa; depois "suplentes" ─────────────────────────
+// A rodada continua em `code` para o motor, mas a lista não expõe a sigla R1: para quem
+// organiza, a informação útil é se as inscrições seguem abertas. Quando a 2ª superior recebe
+// resultado, a porta fecha e quem está na fila passa a ser suplente.
 (function () {
   const tD = build(8);
   tD.format = 'Dupla Eliminatória';
   tD.matches.push({ id: 'p0-LB-R1-P1', bracket: 'lower', round: 1, phaseIndex: 0, p1: 'TBD', p2: 'TBD' });
-  ok(W._lateDoorStage(tD).label === 'inscrições abertas · R1 superior',
-    'pill: Dupla Elim com janela aberta → "inscrições abertas · R1 superior" — got ' + W._lateDoorStage(tD).label);
+  ok(W._lateDoorStage(tD).label === 'inscrições abertas',
+    'pill: Dupla Elim com janela aberta → "inscrições abertas" — got ' + W._lateDoorStage(tD).label);
 
-  const tS = build(8);   // eliminatória simples: não existe "superior", é só R1
-  ok(W._lateDoorStage(tS).label === 'inscrições abertas · R1',
-    'pill: Elim Simples → "inscrições abertas · R1" — got ' + W._lateDoorStage(tS).label);
+  const tS = build(8);
+  ok(W._lateDoorStage(tS).label === 'inscrições abertas',
+    'pill: Elim Simples → "inscrições abertas" — got ' + W._lateDoorStage(tS).label);
 
   // 1º resultado na 2ª rodada superior → porta fecha → quem está na espera é SUPLENTE
   const tF = build(8);
