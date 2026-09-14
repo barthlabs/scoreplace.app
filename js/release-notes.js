@@ -1,4 +1,5 @@
-// 2.3.22 — a auditoria passa a compartilhar contratos verificados para espera e classificação entre navegador, sorteio e a Function de disponibilidade; é uma base de integridade, sem mudança de regra para quem joga.
+// 2.3.23 — o shell carimba os domínios gerados com a versão atual da entrega; aparelhos que atualizaram recebem os contratos novos sem reutilizar ponte antiga do cache.
+// 2.3.22 — a auditoria passa a compartilhar contratos verificados para espera e classificação entre navegador, sorteio e a Function de disponibilidade; o shell também carimba esses domínios com a versão da entrega para que o cache não reutilize uma ponte antiga. É uma base de integridade, sem mudança de regra para quem joga.
 // 2.3.21 — identidade de participante tem um contrato TypeScript único para navegador e motor de sorteio; UIDs e duplas estruturais deixam de ter implementações independentes.
 // 2.3.20 — a atualização web passa a verificar o pacote que será servido antes de montar; o site publica só esse pacote, e as regras de prazo de rodada ganham fonte única tipada, preservando a tela atual.
 // 2.3.19 — o nome já nasce acessível no primeiro render; não depende da atualização posterior do perfil.

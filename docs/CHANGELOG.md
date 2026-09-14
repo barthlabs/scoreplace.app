@@ -1,3 +1,8 @@
+## 2.3.23 — 14/set/2026
+
+- O shell passa a carimbar os domínios gerados de espera e classificação com a versão atual da entrega. A atualização troca o cache do service worker e impede que um aparelho reutilize uma URL de contrato anterior.
+- Esta publicação é somente web; os projetos iOS e Android permanecem sem alteração.
+
 ## 2.3.22 — 14/set/2026
 
 - A etapa 2 da auditoria consolida contratos TypeScript estritos para identidade e composição de participantes, lista de espera e classificação. O navegador, o motor de sorteio e a Function que confirma disponibilidade usam a mesma regra gerada, com adaptadores compatíveis para a aplicação atual.
