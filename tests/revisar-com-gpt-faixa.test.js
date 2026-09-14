@@ -165,7 +165,10 @@ r = runLab(labCLAUDE, ['plano', planoAdapt], { CLAUDE_BIN: fakeClaude, FAKE_EFFO
 ok(r.code !== 0, 'Claude pede investigação: bloqueia sem gastar outra chamada — code ' + r.code);
 ok(fs.readFileSync(efforts, 'utf8') === 'medium\n', 'Claude faz apenas a primeira tentativa medium, sem escalada automática');
 
-ok(NUCLEO.includes('--max-budget-usd 1') && NUCLEO.includes('--no-session-persistence'), 'Claude possui teto por chamada e sessão efêmera');
+ok(NUCLEO.includes('SP_CLAUDE_MAX_BUDGET_USD_NORMAL:-0.25') &&
+   NUCLEO.includes('SP_CLAUDE_MAX_BUDGET_USD_CRITICA:-0.60') &&
+   NUCLEO.includes('--max-budget-usd "$CLAUDE_ORCAMENTO"') &&
+   NUCLEO.includes('--no-session-persistence'), 'Claude possui tetos econômicos por faixa e sessão efêmera');
 ok(NUCLEO.includes('MODELO=haiku') && NUCLEO.includes('MODELO=sonnet'), 'padrões econômicos distintos por faixa');
 fs.rmSync(lab, { recursive: true, force: true });
 console.log(fail ? '❌ revisar (faixa/interruptor/auto): ' + fail + ' falha(s), ' + pass + ' ok' : '✅ revisar (faixa/interruptor/auto): ' + pass + ' ok');

@@ -115,15 +115,26 @@ deploy_dir() { # $1=dir(de onde rodar o firebase) $2=targets $3=descrição $4=p
   # package in your source code" (aconteceu num worktree limpo, 04/ago/2026). Checar o pacote
   # em vez da pasta também cobre node_modules pela metade.
   [ -d "$pkgdir/node_modules/firebase-functions" ] || (cd "$pkgdir" && npm ci)
-  # ⛔ MESMA ARMADILHA DO HOSTING (medida em 12/set/2026): o CLI imprime "Deploy complete!" e
-  # SAI NÃO-ZERO. Com `set -e` o script morria aqui — e, num deploy `all`, os codebases seguintes
-  # nem rodavam, sem ninguém dizer por quê. Quem julga é a lista de funções, conferida depois.
+  # ⛔ O CLI pode imprimir "Deploy complete!" e sair não-zero. Isso não pode derrubar um
+  # deploy que chegou ao fim, mas também não pode transformar QUALQUER erro em sucesso: sem o
+  # marcador explícito, não há evidência de publicação e o próximo codebase não deve rodar.
   local _rc=0
-  (cd "$dir" && firebase deploy --project "$PROJECT" --non-interactive --only "$targets") || _rc=$?
-  if [[ "$_rc" != "0" ]]; then
-    echo "⚠ firebase saiu com código $_rc — confira o que subiu com:"
-    echo "   gcloud functions list --project $PROJECT --format='value(name,updateTime)'"
+  local _log
+  _log="$(mktemp)"
+  if (cd "$dir" && firebase deploy --project "$PROJECT" --non-interactive --only "$targets") >"$_log" 2>&1; then
+    _rc=0
+  else
+    _rc=$?
   fi
+  cat "$_log"
+  if [[ "$_rc" != "0" ]]; then
+    if ! grep -q 'Deploy complete!' "$_log"; then
+      rm -f "$_log"
+      die "$desc: firebase saiu com código $_rc sem confirmar 'Deploy complete!' — abortando"
+    fi
+    echo "⚠ firebase saiu com código $_rc DEPOIS de confirmar o deploy; seguindo pela evidência do CLI."
+  fi
+  rm -f "$_log"
 }
 
 do_main() {

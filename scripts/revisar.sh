@@ -22,7 +22,7 @@
 #
 # A FAIXA é o PISO do esforço — regra sobre os arquivos tocados, não opinião de modelo:
 #   trivial  — só CSS/texto/notas/ícones, ou (SÓ no diff) só o bump em store.js → SEM revisão.
-#   normal   — telas, componentes, fluxo de UI → GPT `revisao-normal` (medium) · Claude sonnet/medium.
+#   normal   — telas, componentes, fluxo de UI → GPT `revisao-normal` (medium) · Claude haiku/medium.
 #   critica  — functions*/, rules, firebase.json, sw.js, store.js, router, main, DB, chave/sorteio/
 #              placar/inscrição/perfil/auth/W.O./fases, scripts de deploy e check, extensions/,
 #              arquivo NOVO nesses lugares, ou diff > 300 linhas (não rastreados contam)
@@ -378,8 +378,15 @@ executar_revisor() {
   # aguardava confirmação e terminava sem stdout. A allowlist é só leitura; stderr vai
   # separado porque o parser abaixo procura o 1º `{` do stdout.
   CLAUDE_EXTRA=(); [[ "$MODELO" != haiku ]] && CLAUDE_EXTRA+=(--effort "$ESFORCO")
+  # Teto separado por motor: Haiku recebe US$ 0.25; Sonnet crítico, US$ 0.60. Um override
+  # explícito continua possível só para diagnóstico operacional, sem mudar o padrão econômico.
+  if [[ "$MODELO" == haiku ]]; then
+    CLAUDE_ORCAMENTO="${SP_CLAUDE_MAX_BUDGET_USD_NORMAL:-0.25}"
+  else
+    CLAUDE_ORCAMENTO="${SP_CLAUDE_MAX_BUDGET_USD_CRITICA:-0.60}"
+  fi
   env -u CLAUDECODE "$CLAUDE" -p --model "$MODELO" ${CLAUDE_EXTRA[@]+"${CLAUDE_EXTRA[@]}"} \
-    --max-budget-usd 1 --no-session-persistence --disable-slash-commands \
+    --max-budget-usd "$CLAUDE_ORCAMENTO" --no-session-persistence --disable-slash-commands \
     --strict-mcp-config --mcp-config '{"mcpServers":{}}' \
     --permission-mode dontAsk --tools Read Glob Grep --output-format json \
     < "$PROMPT" > "$log_exec" 2> "$err_exec"

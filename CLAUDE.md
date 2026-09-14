@@ -495,7 +495,8 @@ store.js). Números queimados (não usar): `+55 11 91693-6454` e `+55 11 96658-1
 
 **Atualização autorizada em 11/set/2026:** revisão Claude reativada. Padrão econômico:
 Haiku para faixa normal, Sonnet/medium para crítica, sem Opus/Fable automático nem
-repetição automática em high. Teto de US$ 1 estimado pelo CLI por chamada; não é saldo
+repetição automática em high. O teto padrão é US$ 0,25 para Haiku e US$ 0,60 para Sonnet;
+é estimado pelo CLI por chamada, não é saldo
 da assinatura. Parecer aprovado só é reutilizado com o diff idêntico. As alterações
 já preparadas durante a suspensão passam pela revisão do diff antes de publicar.
 
@@ -522,8 +523,8 @@ classifica), não opinião de modelo:
 | faixa | o que toca | revisor GPT | revisor Claude |
 |---|---|---|---|
 | **trivial** | só CSS/texto/notas/ícones, ou (só no diff) só o bump em `store.js` | não roda | não roda |
-| **normal** | telas, componentes, fluxo de UI | perfil `revisao-normal` (medium) | sonnet, medium |
-| **crítica** | `functions*/`, `firestore.rules`, `firebase.json`, `sw.js`, `store.js`, `router.js`, `main.js`, DB/presença/venue, chave/sorteio/format2/placar/inscrição/perfil/auth/W.O./fases, `scripts/deploy-*`, `scripts/check-*`, `scripts/revisar*`, `extensions/`, arquivo NOVO nesses lugares, ou diff > 300 linhas (não rastreados contam) | perfil `revisao-critica` (medium primeiro; high se o parecer pedir) | opus, medium primeiro; high se o parecer pedir |
+| **normal** | telas, componentes, fluxo de UI | perfil `revisao-normal` (medium) | haiku, medium |
+| **crítica** | `functions*/`, `firestore.rules`, `firebase.json`, `sw.js`, `store.js`, `router.js`, `main.js`, DB/presença/venue, chave/sorteio/format2/placar/inscrição/perfil/auth/W.O./fases, `scripts/deploy-*`, `scripts/check-*`, `scripts/revisar*`, `extensions/`, arquivo NOVO nesses lugares, ou diff > 300 linhas (não rastreados contam) | perfil `revisao-critica` (medium primeiro; high se o parecer pedir) | sonnet, medium (`ESCALAR: SIM` se medium não concluiu) |
 
 **Custo adaptativo:** cada revisão normal ou crítica começa em `medium`, inclusive quando é
 crítica. O parecer é obrigado a escrever `ESCALAR: SIM|NAO`. Só `SIM`, por incerteza técnica
@@ -544,8 +545,9 @@ ou `/model` no Codex) ou executa por subagente com `model:` correspondente. Perf
 2. **Só `VEREDITO: APROVADO` libera** (exit 0). RESSALVAS (exit 1) e BLOQUEIO (exit 2)
    ⇒ atenda os pontos NO PLANO (seção "Resposta ao parecer": o que mudou e, se discorda, por
    quê) e **submeta de novo** — o script anexa o parecer anterior pra conferência ponto a ponto.
-   Repita até APROVADO. ⛔ Nenhuma edição de código antes disso. Na faixa crítica o Claude
-   pede também o subagente `revisor-critico` (Opus, high) e leva as divergências pro plano.
+   Repita até APROVADO. ⛔ Nenhuma edição de código antes disso. Na faixa crítica, um pedido
+   `ESCALAR: SIM` do Claude bloqueia a mudança para investigação concreta; não dispara outra
+   chamada automaticamente.
 3. **Diff antes de publicar.** O `deploy-hosting.sh` roda `revisar.sh diff` (auto) no passo
    1.8 (origin/main..HEAD + sujo). Só APROVADO deixa passar; o resto **para o deploy antes do
    push** — "abort é o aviso". Sem veredito (exit 3) e cota esgotada (exit 4) NÃO são aprovação.

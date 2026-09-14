@@ -61,6 +61,7 @@ const SUITES = [
   'tests/l16-disponibilidade-deixa-rastro.test.js',
   'tests/ir-para-o-torneio-leva-ao-jogo.test.js',
   'tests/sessao-do-firebase-nao-da-falso-negativo.test.js',
+  'tests/deploy-functions-nao-confirma-falha.test.js',
   'tests/zero-do-set-em-disputa-vira-travessao.test.js',
   'tests/placar-alinha-os-sets-em-coluna.test.js',
   'tests/regua-das-rodadas-nao-encavala.test.js',
