@@ -1,3 +1,11 @@
+## 2.3.11 — 14/set/2026
+
+Substituições de dupla, entradas e saídas por W.O. agora chegam em tempo real para cada tela
+aberta do torneio. Antes, o elenco dividido em subcoleção era carregado ao abrir, mas não era
+assinado depois disso: uma tela já aberta podia manter a composição anterior mesmo quando o
+registro canônico havia mudado. O ouvinte passa a acompanhar também o elenco; a primeira entrega
+repete a leitura dele e as seguintes levam apenas as alterações.
+
 ## 2.3.5 — 13/set/2026
 
 Para mandar um aviso — de placar, de sorteio, de grupo de WhatsApp — o app precisava abrir o

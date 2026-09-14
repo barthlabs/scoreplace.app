@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.3.10';
+window.SCOREPLACE_VERSION = '2.3.11';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -13121,13 +13121,15 @@ window.AppStore = {
    * (`montarDoBanco`). Um ouvinte por parte pagaria essa leitura DE NOVO na primeira entrega
    * — o Firestore manda tudo como 'added'. No Confra seria reler 148 inscritos e o histórico
    * inteiro a cada abertura, sem que nada disso mude enquanto a tela está aberta.
-   * ⇒ Ouve só o que MUDA COM A TELA ABERTA: os jogos (placar sendo lançado) e a presença
-   * (chamada acontecendo na quadra). O resto chega na abertura e basta.
+   * ⇒ Inscritos é a exceção: substituição, saída e W.O. mudam o elenco depois da montagem.
+   * Aceitamos a primeira leitura repetida para que essas decisões cheguem a todas as telas;
+   * depois dela, as entregas são só os deltas que importam enquanto a tela está aberta.
+   * Jogos, grupos e presença também mudam durante a tela aberta.
    * [[project_dividir_exige_todo_escritor_ciente]] [[project_porta_unica_de_escrita_cf]] */
 
   ouvirJogosDoTorneio(tournamentId) { return this.ouvirPartesDoTorneio(tournamentId); },
 
-  _partesQueMudamAoVivo() { return ['matches', 'grupos', 'checkedIn']; },
+  _partesQueMudamAoVivo() { return ['matches', 'grupos', 'checkedIn', 'participants']; },
 
   ouvirPartesDoTorneio(tournamentId) {
     var id = String(tournamentId || '');
@@ -13177,7 +13179,10 @@ window.AppStore = {
                 // com o de antes. Mesmo motivo da busca e do `_ensureTournamentLoaded`.
                 Object.keys(montado).forEach(function (kk) { vivo[kk] = montado[kk]; });
               }
-              if (nome === 'matches') delete vivo._faltamPesados;
+              if (nome === 'matches' || nome === 'participants') {
+                delete vivo._faltamPesados;
+                delete vivo._faltaOQue;
+              }
               try { if (window._noteFsReads) window._noteFsReads(mudou, nome + '-delta'); } catch (e) {}
             } catch (e) {
               if (window._error) window._error('[fase2] ouvinte de ' + nome + ' de ' + id, e);

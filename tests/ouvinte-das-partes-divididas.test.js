@@ -8,7 +8,8 @@
  * ⛔ MAS NÃO OUVE TUDO, e a razão é custo: abrir o torneio já busca todas as partes. Um
  * ouvinte por parte pagaria essa leitura DE NOVO na primeira entrega (o Firestore manda tudo
  * como 'added') — no Confra, reler 148 inscritos e o histórico a cada abertura, sem que nada
- * disso mude com a tela aberta. Ouve o que muda ao vivo: jogos e presença.
+ * disso mude com a tela aberta. Inscritos também entram: substituição, saída e W.O. precisam
+ * chegar a quem já está com a tela aberta; aceitamos a primeira leitura repetida por isso.
  */
 const fs = require('fs');
 const path = require('path');
@@ -28,6 +29,9 @@ ok('⛔ deriva de `_semPesados`, não de um nome escrito à mão',
   'com o nome fixo, a parte seguinte a sair do documento nunca chegaria na tela');
 ok('⭐ e cruza com o que muda AO VIVO (custo: a abertura já buscou tudo)',
   /_partesQueMudamAoVivo\(\)\.filter/.test(corpo));
+ok('⭐ inscritos também chegam ao vivo para substituição, saída e W.O.',
+  /_partesQueMudamAoVivo\(\) \{ return \['matches', 'grupos', 'checkedIn', 'participants'\]; \}/.test(src),
+  'aceitamos a primeira leitura repetida para que o elenco não congele depois da montagem');
 ok('  → torneio inteiro sai cedo, sem assinar nada', /if \(!fora\.length\) return;/.test(corpo));
 ok('  → e sem alvo também', /if \(!alvos\.length\) return;/.test(corpo));
 
@@ -38,9 +42,9 @@ ok('⛔ parte VAZIA esvazia de verdade — `remontar` nunca apaga, e pra um ouvi
 ok('⭐ escreve NO LUGAR (as telas guardam o objeto)',
   /Object\.keys\(montado\)\.forEach/.test(corpo));
 ok('  → e repinta depois', /_softRefreshView/.test(corpo));
-ok('  → `_faltamPesados` só some quando quem chegou foram os JOGOS',
-  /if \(nome === 'matches'\) delete vivo\._faltamPesados;/.test(corpo),
-  'apagar a marca quando chega a presença diria que os jogos chegaram — e eles podem não ter');
+ok('  → `_faltamPesados` some quando jogos ou inscritos completos chegam',
+  /if \(nome === 'matches' \|\| nome === 'participants'\)/.test(corpo) && /delete vivo\._faltaOQue;/.test(corpo),
+  'o snapshot completo de inscritos resolve a parte que a tela aguardava; presença isolada não');
 
 // ── soltar TODAS as assinaturas ───────────────────────────────────────────────
 const iP = src.indexOf('  pararDeOuvirJogos() {');
