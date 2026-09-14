@@ -36,7 +36,8 @@ must(/Adriana Rosa/.test(html) && /Eliane Cinelli/.test(html), '① com os nomes
 // ── ② nada do que a linha à mão fazia se perdeu ─────────────────────────────
 must(/toggle-switch/.test(html), '② o toggle de presença continua no card');
 must(/_markAbsent|Aplicar W\.O\./.test(html), '② e o "Aplicar W.O." também');
-must(/na fila/.test(html), '② ⭐ a POSIÇÃO NA FILA continua visível — o número do card é o de INSCRIÇÃO, não o da fila');
+must(!/\d+º na fila|Quem fizer check-in primeiro|Próximo a entrar/.test(html),
+  '② a ordem visual dos cards basta: não há rótulo de posição, chamada por check-in ou próximo da fila');
 must(/data-players="[^"]*Adriana Rosa/.test(html) && /data-player-uids="[^"]*u-adriana/.test(html),
   '② e a busca do painel continua enxergando quem está na fila (nome E uid no wrapper)');
 

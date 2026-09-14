@@ -2708,16 +2708,6 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
       '</div>'
     : '';
 
-  // "Próximo a entrar": no modo travado é o primeiro presente (não-ausente) na
-  // ordem sorteada; no modo presença é simplesmente o topo (índice 0). Aplica à lista de SOLOS.
-  let nextIdx = 0;
-  if (_policy === 'locked') {
-    nextIdx = -1;
-    for (let _k = 0; _k < _solosWL.length; _k++) {
-      if (window._idMapHas(t, ci, _solosWL[_k]) && !window._idMapHas(t, ab, _solosWL[_k])) { nextIdx = _k; break; }
-    }
-  }
-
   /* ── ⭐ A ESPERA USA O CARD CANÔNICO, IGUAL AO RESTO DO APP ────────────────────────────
    * Ordem do dono (12/set/2026, painel da Lista de Espera): _"os cards da lista de espera
    * deveriam ser canônicos e como estão aqui os do W.O."_ — e, olhando o resultado: _"não são
@@ -2729,8 +2719,7 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
    * O QUE O CARD JÁ SABE FAZER, e por isso não se perde nada: a presença (Presente/Ausente,
    * toggle e "Aplicar W.O.") vem do MESMO factory que a chamada usa (`_rollCallPresenceCtx`),
    * o número de inscrição vem do mapa de ordem, e a pele âmbar de quem espera vaga já existe
-   * (`waitSet`). O que é só desta tela — a POSIÇÃO NA FILA e o "Próximo a entrar" — fica numa
-   * etiqueta acima do card, do mesmo jeito que as duplas da espera já faziam.
+   * (`waitSet`). A ordem continua sendo a dos cards; não repetimos números de fila na interface.
    * ⛔ O FILTRO DA CHAMADA NÃO VALE AQUI: `cardPresence` pode pedir para PULAR quem não casa com
    * o filtro de presença (que é da tela de elenco). Numa lista de espera isso APAGARIA gente da
    * fila. O `skip` é neutralizado — a fila mostra a fila inteira, sempre.
@@ -2750,7 +2739,6 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
   const listItems = _solosWL.map((p, i) => {
     const name = getName(p);
     const isAb = window._idMapHas(t, ab, p);
-    const isNext = (i === nextIdx);
     const dimAbsent = (_policy === 'locked' && isAb); // travado: ausente mantém posição, mas esmaecido
 
     // v4.0.96: handle de ARRASTAR — só p/ org e jogador REAL solo (uid de conta, não
@@ -2768,13 +2756,6 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
       ? `data-ph-drag="${name.replace(/"/g, '&quot;').replace(/'/g, '&#39;')}" data-ph-uid="${String(_pUid).replace(/"/g, '&quot;')}" title="Arraste sobre uma vaga (Jogador NN) na chave para ocupá-la" `
       : '';
 
-    // a posição na FILA (e o "Próximo a entrar") é informação desta tela, não do card:
-    // o número grande do card é o de INSCRIÇÃO, e os dois não são a mesma coisa.
-    const _fila = `<div style="display:flex;align-items:center;gap:6px;">` +
-      `<span style="min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:${window._spCor(isNext ? 'linear-gradient(135deg,#f59e0b,#d97706)' : 'rgba(255,255,255,0.08)', 'background')};display:inline-flex;align-items:center;justify-content:center;font-size:0.66rem;font-weight:800;color:${window._spCor(isNext ? '#000' : '#94a3b8', 'color')};flex-shrink:0;">${i + 1}º na fila</span>` +
-      (isNext && _policy === 'locked' ? `<span style="font-size:0.62rem;font-weight:700;color:var(--sp-c-fbbf24,#fbbf24);background:rgba(245,158,11,0.15);padding:1px 6px;border-radius:6px;white-space:nowrap;">Próximo a entrar</span>` : '') +
-    `</div>`;
-
     const _card = (typeof window._inscritoIndividualCard === 'function')
       ? window._inscritoIndividualCard(t, p, i, {
           isOrg: isOrg, drawDone: true, cardPresence: _presencaWL,
@@ -2782,7 +2763,7 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
         })
       : '';
 
-    return `<div ${_standbySearchAttrs(p)}${_phDragAttrs}style="display:flex;flex-direction:column;gap:4px;min-width:0;${dimAbsent ? 'opacity:0.5;' : ''}${_phDragAttrs ? 'cursor:grab;touch-action:none;' : ''}">${_fila}${_card}</div>`;
+    return `<div ${_standbySearchAttrs(p)}${_phDragAttrs}style="display:grid;grid-template-rows:minmax(0,1fr);min-width:0;height:100%;${dimAbsent ? 'opacity:0.5;' : ''}${_phDragAttrs ? 'cursor:grab;touch-action:none;' : ''}">${_card}</div>`;
   }).join('');
 
   /* ── ABAIXO DA ESPERA: INATIVOS E W.O. ────────────────────────────────────────────────
@@ -2896,7 +2877,6 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
         <span style="font-size:0.75rem;background:rgba(245,158,11,0.15);color:var(--sp-c-f59e0b,#f59e0b);padding:2px 10px;border-radius:10px;font-weight:700;">${(function () { var n = 0; sorted.forEach(function (p) { var nm = getName(p); if (p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) n += 2; else if (p && typeof p === 'object' && Array.isArray(p.participants) && p.participants.length) n += p.participants.length; else if (nm.indexOf('/') !== -1) n += nm.split('/').filter(function (x) { return x.trim(); }).length; else n += 1; }); return n; })()}
       </div>
       ${(typeof window._lateGrowthGapBanner === 'function') ? window._lateGrowthGapBanner(_sbGap) : ''}
-      <div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:0.75rem;">${_policy === 'locked' ? '🔒 Ordem do sorteio travada — entra o próximo presente na ordem.' : '🏃 Quem fizer check-in primeiro é o próximo a entrar.'}</div>
       ${_duplaCardsWL ? ('<div style="font-size:0.72rem;font-weight:700;color:var(--sp-c-34d399,#34d399);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:8px;">👫 Duplas na espera (' + _duplasWL.length + ')</div>' + _duplaCardsWL) : ''}
       ${(_duplaCardsWL && listItems) ? '<div style="font-size:0.72rem;font-weight:700;color:var(--sp-c-fbbf24,#fbbf24);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:8px;">🙋 Sem dupla</div>' : ''}
       <!-- MESMA GRADE DOS INSCRITOS: em tela larga o painel vira varias colunas, no celular

@@ -1,3 +1,7 @@
+## 2.3.13 — 14/set/2026
+
+- **Painel de espera mais compacto:** remove a frase de chamada por check-in e os rótulos “1º/2º na fila”; a ordem é a própria sequência dos cards. A grade canônica passa a usar colunas de 400 px, exibindo duas colunas para espera, inativos e W.O. quando houver espaço e uma no celular.
+
 ## 2.3.12 — 14/set/2026
 
 - O estado operacional de torneios agora só é exibido após confirmação remota: inscrições, espera, inativos, W.O., duplas, jogos, grupos e resultados não aceitam cópias locais como dados atuais.
