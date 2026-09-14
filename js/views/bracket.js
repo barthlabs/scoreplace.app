@@ -2820,7 +2820,22 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
           }
         }
       }
-      var _origem = _grupoOrigem ? ('Grupo anterior: ' + _grupoOrigem) : '';
+      /* O mesmo registro de W.O. também preserva o jogo que a pessoa deixou. Sem esse
+       * contexto, um card como o da Angel parecia uma desativação sem relação com a chave,
+       * embora a substituição tivesse ocorrido no Jogo 120. `woHistory` é indexado por uid
+       * desde a migração do store; não há busca por nome, que poderia atribuir o W.O. a outra
+       * pessoa homônima. */
+      var _jogoOrigem = '';
+      if (isWo && _uid && t.woHistory && typeof t.woHistory === 'object' && !Array.isArray(t.woHistory)) {
+        var _metaWo = t.woHistory[_uid];
+        if (_metaWo && _metaWo.matchNum !== undefined && _metaWo.matchNum !== null && String(_metaWo.matchNum).trim() !== '') {
+          _jogoOrigem = 'Jogo ' + String(_metaWo.matchNum).trim();
+        }
+      }
+      var _origemPartes = [];
+      if (_jogoOrigem) _origemPartes.push(_jogoOrigem);
+      if (_grupoOrigem) _origemPartes.push('Grupo anterior: ' + _grupoOrigem);
+      var _origem = _origemPartes.join(' · ');
       /* nome SEMPRE por uid (data-uid-name hidrata com o nome vivo do perfil); o texto
        * inicial só existe pra quem não tem conta. */
       var _txt = _uid ? window._safeHtml(window._displayName(_uid, '') || '') : window._safeHtml(getName(pp));
@@ -4921,24 +4936,21 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
       window._safeHtml(c.label) + '</span></div>';
   }).join('');
   // A LINHA NOVA: "MELHOR DE 3 · SET 2" à esquerda, os rótulos das colunas à direita —
-  // em cima dos boxes, no mesmo recuo de 10px que a linha do jogador usa.
-  // ⛔ JOGO TERMINADO NÃO PRECISA DA LINHA. Ordem do dono (23/ago/2026): _"depois que o jogo
-  // termina, pode eliminar a linha do melhor de 3/5 e deixar apenas os placares dos sets"_.
-  // Ela existe pra dizer o que está EM DISPUTA agora; com o jogo fechado vira ruído em cima
-  // de um placar que já se explica sozinho, e o card decidido volta a ser enxuto.
-  // ⭐ MAS O PLACAR PENDENTE PRECISA DELA. Ordem do dono (23/ago/2026): _"o sistema de
+  // em cima dos boxes, no mesmo recuo de 10px que a linha do jogador usa. Ela fica também
+  // depois do resultado: em partida de mais de um set, os números sozinhos não dizem qual
+  // coluna é cada set. Jogo de um set segue fora deste caminho (`_multiSet === false`).
+  // ⭐ O PLACAR PENDENTE PRECISA DELA. Ordem do dono (23/ago/2026): _"o sistema de
   // aprovar placar que já funciona para 1 set deve rodar para melhor de 3 ou 5 também da
   // mesma forma."_ MEDIDO: quem aprovava via `6 6` e `4 3` — dois números nus, sem saber
   // qual coluna era o Set 2 e qual era o SUPER TIE-BREAK. Em 1 set isso nunca apareceu
   // porque há um número só e ele se explica. Aprovar é DECIDIR sobre o placar; decidir sem
   // saber o que cada número é não é aprovar. Aqui a linha volta, e com ela a headline
   // ("Melhor de 3 · 2 × 0") e os rótulos coluna a coluna.
-  // ⛔ Jogo FECHADO segue sem a linha — ali ela é ruído, como o dono pediu.
   // A grade carrega o tamanho do número do SEU degrau (window._setColEscala): com poucas
   // colunas o número é maior, com cinco ele encolhe. Vai como variável no elemento pra o
   // rótulo, o box e o número lerem a MESMA fonte sem um segundo lugar decidindo.
   const _numFsVar = (_plan && _plan.numFs) ? ('--sp-num-fs-set:' + _plan.numFs + 'rem;') : '';
-  const _mostraCabecaSet = _multiSet && (!!_plan.live || hasPending);
+  const _mostraCabecaSet = _multiSet;
   const _setHeadHtml = _mostraCabecaSet
     ? '<div id="sethead-' + m.id + '" class="sp-set-head">' +
         '<span class="sp-set-head-ttl">' + window._safeHtml(_plan.headline) + '</span>' +

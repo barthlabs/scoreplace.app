@@ -445,17 +445,21 @@ async function correcoesDoSandbox() {
     '(d) a linha de cima tem cor de DESTAQUE, não a cinza de texto secundário (' + res.cor + ')');
   await page2.close();
 
-  // (e) jogo TERMINADO: sem a linha do "Melhor de N", só os placares
+  // (e) jogo TERMINADO: a linha continua para identificar cada set do placar final.
   const decidido = cardHtml(MELHOR3, [S(6, 4), S(3, 6), S(10, 8)], { winner: 'Ana Cattani / Maria Helena' });
   const page3 = await browser.newPage({ viewport: { width: 430, height: 700 } });
   await page3.setContent('<style>' + CSS + '</style><body style="background:#0b1220;padding:8px;">' + decidido + '</body>', { waitUntil: 'load' });
   const fim = await page3.evaluate(() => ({
     temLinha: !!document.querySelector('.sp-set-head'),
+    titulo: (document.querySelector('.sp-set-head-ttl') || {}).textContent || '',
+    rotulos: [...document.querySelectorAll('.sp-set-head .sp-set-lbl')].map((e) => e.textContent.trim()),
     colunas: document.querySelectorAll('#score-p1-M1 .sp-set-col').length,
     numeros: [...document.querySelectorAll('#score-p1-M1 .sp-set-num')].map((e) => e.textContent.trim())
   }));
-  ok(!fim.temLinha, '(e) jogo terminado: a linha do "Melhor de 3" SOME');
-  ok(fim.colunas === 3, '(e) e os 3 placares de set continuam lá (obtido ' + fim.colunas + ')');
+  ok(fim.temLinha, '(e) jogo terminado mantém a linha de sets');
+  ok(/Melhor de 3.*2 × 1/.test(fim.titulo), '(e) o cabeçalho resume a vitória por sets: "' + fim.titulo + '"');
+  eq(fim.rotulos, ['1', '2', 'STB'], '(e) e identifica as três colunas acima dos placares');
+  ok(fim.colunas === 3, '(e) os 3 placares de set continuam lá (obtido ' + fim.colunas + ')');
   eq(fim.numeros, ['6', '3', '10'], '(e) com os números dos sets, na ordem');
   await page3.close();
   await browser.close();

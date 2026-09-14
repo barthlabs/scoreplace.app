@@ -23,6 +23,42 @@
 | resolver **e-mail → conta** no cliente | 13 chamadas | o espelho não tem e-mail **de propósito**; sair daqui é capability no servidor, não troca de coleção |
 | Rule de `linkedEmails` | — | esperar o Google aprovar a 2.2.84 |
 
+### Reconferência read-only — 14/set/2026
+
+O conferidor foi executado novamente contra produção, antes de escolher nova leva. O resultado
+separa o que é risco presente do que já está estacionado por decisão:
+
+| verificação | resultado atual | consequência |
+|---|---|---|
+| `usersPublic` | 279 perfis · 0 sem espelho · 0 divergentes · 0 campos vetados | a projeção pública segue íntegra |
+| torneios divididos | 41 de 61 · 0 incompletos com prova · 0 tarjas por ausência de prova | não há nova divergência de partes a corrigir |
+| jogos → `results` | 9 torneios · 281 jogos canônicos · 0 ausentes · 0 divergentes · 0 órfãos com placar/W.O./replay/pendência | os 14 órfãos apontados pelo censo genérico não pertencem ao conjunto canônico ativo; não são incidente de placar |
+| formatos L9 | 61 torneios · 41 divididos · 20 inteiros · 0 por eixos · 11 Liga legada | fallback de eixos não tem leitor vivo, mas ainda é escrito; fallback de Liga continua necessário |
+| catálogo de testes | 837 arquivos, todos com comando conhecido | não há nova suíte fora dos gates |
+| corte nativo | iOS e Android ainda sem mínimo ativado | Rules dependentes do pacote embarcado continuam bloqueadas corretamente |
+
+Os seis alertas do conferidor geral continuam estacionados por evidência: dois formatos legados
+de perfil, doze imports grandes aguardando a publicação que os migra, resultados históricos sem
+risco canônico, cinco avisos antigos sem remetente, dois de conta extinta e quatro telefones
+compartilhados entre contas vivas.
+
+### Fechamento do escopo atual — 14/set/2026
+
+Esta auditoria não abre nova leva enquanto não surgir evidência nova. O quadro final separa
+trabalho encerrado de dependências externas, para não transformar uma pendência conhecida em
+varredura repetida:
+
+| escopo | estado | próxima condição concreta |
+|---|---|---|
+| L0–L9, L14 e L15 | encerrados por código, testes e conferidores read-only | manter os gates nas próximas levas |
+| L12 | hardening contínuo | validar atualização e offline em aparelhos reais a cada versão nativa |
+| L16 | código e runbook entregues; políticas de alerta não foram reconferidas | conceder leitura de Cloud Monitoring à credencial usada pelo conferidor; a consulta atual retornou `Permission denied` |
+| L2, Rule residual de L4, L5 e L13 | bloqueados pelo bundle nativo sem auto-update | ativar mínimos iOS/Android, medir adoção e autorizar o cutover |
+| L10 e L11 | propostas futuras, fora desta auditoria | decidir fronteiras de módulos/build antes de iniciar migração |
+
+O bloqueio de Monitoring não é ausência de alerta: é ausência de prova atual. O runbook e o
+registro histórico existem, mas esta auditoria não declara uma política ativa sem conseguir lê-la.
+
 ⭐ **Mas o que o APP BAIXA já mudou, e isso é independente da Rule.** Chave, inscritos,
 sorteio, categorias, fotos, nomes, troféus, ranking, ficha pública, busca, lista de
 convidáveis e o contador de jogadores leem o **espelho público** (`usersPublic`), que não tem
@@ -161,7 +197,7 @@ a doença que ele veio curar.
 | L6 | writers excessivamente amplos de `tournaments` | **FECHADA em 13/set/2026.** O achado central era que as duas allowlists do documento pai autorizam por CHAVE e **nunca por valor**. PROVADO no emulador, contra as Rules reais e com controles nos dois lados: um INSCRITO apagava outro do elenco, e quem **nem era inscrito** apagava o elenco inteiro — não pela tela (o app nunca ofereceu), mas escrevendo direto com a credencial da própria sessão. ⭐ Fechado com checagem de VALOR (`memberUids` não perde ninguém, `participants` não encolhe), preservando inscrição solo e de dupla. E a lista encolheu de 43 para 38 campos, com medida nas DUAS pontas: os cinco cortados têm zero escritores no cliente de hoje **e zero menções no bundle instalado (2.2.4)** — cortar não tirou permissão de quem não recebe atualização. `polls` ficou, porque aparece 3× nesse bundle. ⚠️ **Medido e NÃO cortado:** um inscrito ainda mexe em `status` — quem lança o placar da final fecha o torneio, e encodar a máquina de estados na Rule é mais risco do que ganho. | `tests/rules-elenco-nao-se-apaga.test.js` (17 verificações, no emulador). |
 | L7 | `saveTournament` / `AppStore` e caminhos paralelos | **FECHADA em 13/set/2026.** O censo de 93 chamadas caiu para **4**, e das 4 só uma era caminho paralelo de verdade: `AppStore.sync()`, que gravava o documento INTEIRO de TODOS os torneios do organizador "a cada mutação", com `skipParticipants:true` — o mesmo desenho que já derrubara os inscritos do sandbox da Confra. ⭐ MEDIDO antes de remover: **um** chamador em todo o repositório, e era o ramo MORTO de uma ferramenta de dev (o `else` de um `if` que pergunta se `saveTournament` existe); por nome dinâmico, zero. Removido com a queda morta junto. Sobram `saveTournament` (a porta), o simulador de dev e a definição. ⚠️ O portão `sandbox-sync-nao-apaga-partes` continua valendo — ele sempre exercitou `saveTournament` direto, nunca dependeu de `sync()`. | Nada de Rules nem nativo aqui; escrita fina segue pela CF. |
 | L8 | representações múltiplas de match + custo Firestore | **FECHADA em 13/set/2026.** A parte de consistência já estava feita (`matches` fonte, `results` projeção; 0 ausentes e 0 divergentes). O que faltava era o portão: *"medir e reduzir as leituras completas da dashboard"*. **MEDIDO no dado real:** a tela inicial de quem está logado NÃO lê torneio nenhum — lê `tournaments_summary` filtrado por `memberUids`, e os **61 torneios têm resumo (0 sem)**. O resumo pesa **1,5 KB de média (11,4 KB o maior)** contra **3,4 KB (51,1 KB)** do documento cheio, e a mediana de torneios por pessoa é **1** (máximo 9) — ou seja, abrir a dashboard custa ~1,5 KB, não 205 KB. A leitura completa (`loadAllTournaments`) só roda **sem uid**, e o contador de jogadores parou de baixar os 279 perfis no mesmo dia. | Conferidor read-only permanece; `scripts/conferir-producao.js` mede o peso a cada rodada. |
-| L9 | código morto, fallbacks e aliases | **Em execução. L9.P0 concluída em 11/set:** três aliases globais sem chamador foram removidos; aliases com leitor, dado histórico ou rota ainda ativa foram preservados. **L9.P1:** censo read-only de formatos reais registrado em `scripts/censo-formatos-legados.js`; ele mede antes de qualquer retirada de fallback. | Prova de ausência de chamadores **e censo de dados vivos** antes de remover compatibilidade. |
+| L9 | código morto, fallbacks e aliases | **CONCLUÍDA em 14/set/2026 (P0–P2).** Três aliases sem chamador foram removidos; os demais foram preservados por leitor, rota ou dado histórico. O censo atual mede 61 torneios, 0 formatos só por eixos e 11 Ligas legadas; o fallback de eixos permanece por custo nulo e writers semânticos, e o de Liga porque há dependentes vivos. | O censo read-only continua como trava antes de qualquer retirada futura. |
 | L10 | ES Modules, source → dist e Vite | **Proposta futura.** Nenhuma migração iniciada. | Definir fronteiras de módulos e build reproduzível antes de introduzir bundler. |
 | L11 | TypeScript progressivo + Firebase compat → modular | **Proposta futura.** | Plano incremental por fronteira, sem reescrita geral. |
 | L12 | PWA, service worker e cache | **Parcial/hardening contínuo.** Gates de versão/cache existem; não é encerrado por uma release. | Teste de atualização e navegação offline em aparelho real. |

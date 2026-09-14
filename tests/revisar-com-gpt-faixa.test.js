@@ -146,30 +146,29 @@ ok(r.code === 4, 'ligado de novo, sem Codex volta a falhar com exit 4 — code '
 
 // ── Claude econômico: uma chamada; pedido de investigação não escala automaticamente ─────────
 const fakeClaude = path.join(lab, 'claude-falso.sh');
-const efforts = path.join(lab, 'efforts.txt');
+const modelos = path.join(lab, 'modelos.txt');
 fs.writeFileSync(fakeClaude, `#!/usr/bin/env bash
 for ((i=1; i<=$#; i++)); do
-  if [[ "${'$'}{!i}" == "--effort" ]]; then j=$((i+1)); echo "${'$'}{!j}" >> "${'$'}FAKE_EFFORTS"; fi
+  if [[ "${'$'}{!i}" == "--model" ]]; then j=$((i+1)); echo "${'$'}{!j}" >> "${'$'}FAKE_MODELOS"; fi
 done
-if grep -q '^medium$' "${'$'}FAKE_EFFORTS" && ! grep -q '^high$' "${'$'}FAKE_EFFORTS"; then
-  result=$'VEREDITO: RESSALVAS\\nEXECUTOR: modelo=gpt-5.6-terra esforco=medium — precisa investigar uma fronteira\\nESCALAR: SIM\\nInvestigue a fronteira.'
-else
-  result=$'VEREDITO: APROVADO\\nEXECUTOR: modelo=gpt-5.6-terra esforco=medium — análise concluída\\nESCALAR: NAO'
-fi
+result=$'VEREDITO: RESSALVAS\\nEXECUTOR: modelo=gpt-5.6-terra esforco=medium — precisa investigar uma fronteira\\nESCALAR: SIM\\nInvestigue a fronteira.'
 node -e 'process.stdout.write(JSON.stringify({result:process.argv[1],usage:{input_tokens:1,output_tokens:1},total_cost_usd:0}))' "${'$'}result"
 `);
 fs.chmodSync(fakeClaude, 0o755);
 const planoAdapt = path.join(lab, 'plano-adaptativo.md');
 fs.writeFileSync(planoAdapt, '# plano\n\nTocar `js/store.js`.\n');
-r = runLab(labCLAUDE, ['plano', planoAdapt], { CLAUDE_BIN: fakeClaude, FAKE_EFFORTS: efforts });
-ok(r.code !== 0, 'Claude pede investigação: bloqueia sem gastar outra chamada — code ' + r.code);
-ok(fs.readFileSync(efforts, 'utf8') === 'medium\n', 'Claude faz apenas a primeira tentativa medium, sem escalada automática');
+r = runLab(labCLAUDE, ['plano', planoAdapt], { CLAUDE_BIN: fakeClaude, FAKE_MODELOS: modelos });
+ok(r.code === 2, 'Claude pede investigação: bloqueia sem gastar outra chamada — code ' + r.code);
+ok(fs.readFileSync(modelos, 'utf8') === 'haiku\n', 'Claude faz uma única chamada Haiku, sem escalada automática');
 
 ok(NUCLEO.includes('SP_CLAUDE_MAX_BUDGET_USD_NORMAL:-0.25') &&
    NUCLEO.includes('SP_CLAUDE_MAX_BUDGET_USD_CRITICA:-0.60') &&
    NUCLEO.includes('--max-budget-usd "$CLAUDE_ORCAMENTO"') &&
    NUCLEO.includes('--no-session-persistence'), 'Claude possui tetos econômicos por faixa e sessão efêmera');
-ok(NUCLEO.includes('MODELO=haiku') && NUCLEO.includes('MODELO=sonnet'), 'padrões econômicos distintos por faixa');
+ok(NUCLEO.includes('MODELO=haiku') &&
+   NUCLEO.includes('Sonnet só entra se for pedido explicitamente') &&
+   NUCLEO.includes('[[ "$MODELO" != haiku ]]'),
+  'Haiku é o padrão econômico; Sonnet só entra por pedido explícito');
 fs.rmSync(lab, { recursive: true, force: true });
 console.log(fail ? '❌ revisar (faixa/interruptor/auto): ' + fail + ' falha(s), ' + pass + ' ok' : '✅ revisar (faixa/interruptor/auto): ' + pass + ' ok');
 process.exit(fail ? 1 : 0);

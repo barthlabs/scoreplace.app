@@ -31,7 +31,7 @@ must(W._woLogGrupoDoWo(t, 'u-claudia', 'Claudia Kohl Pessoal') === null,
 
 // ── ② o card pergunta ao registro ANTES do claim ────────────────────────────
 const ini = BRK.indexOf('    var _linha = function (pp, isWo) {');
-const fim = BRK.indexOf("var _origem = _grupoOrigem", ini);
+const fim = BRK.indexOf('      var _origemPartes = [];', ini);
 assert.ok(ini > 0 && fim > ini, 'âncoras do card de W.O.');
 const bloco = BRK.slice(ini, fim);
 must(bloco.indexOf('window._woLogGrupoDoWo') > 0, '② o card usa o leitor canônico do registro');
@@ -45,7 +45,18 @@ must(/_memberUidByName/.test(bloco) &&
 must(/R' \+ \(\(_reg\.roundIndex \|\| 0\) \+ 1\)/.test(bloco),
   '② e a rodada entra no rótulo quando o nome do grupo não a traz');
 
-// ── ③ a cor diz o estado ────────────────────────────────────────────────────
+// ── ③ a substituição conserva também o número do jogo ─────────────────────
+const inicioContexto = BRK.indexOf('      var _jogoOrigem', ini);
+const ateTxt = BRK.indexOf('      /* nome SEMPRE por uid', inicioContexto);
+const contexto = BRK.slice(inicioContexto, ateTxt);
+must(/t\.woHistory\[_uid\]/.test(contexto),
+  '③ o card lê o contexto do mesmo registro de W.O., indexado por uid');
+must(/_metaWo\.matchNum/.test(contexto) && /Jogo '\s*\+\s*String\(_metaWo\.matchNum\)/.test(contexto),
+  '③ mostra o número do jogo em que a substituição ocorreu');
+must(/_origemPartes\.join\('\s*·\s*'\)/.test(contexto),
+  '③ combina jogo e grupo quando os dois dados existirem, sem descartar a origem já exibida');
+
+// ── ④ a cor diz o estado ────────────────────────────────────────────────────
 must(/ctx\.pele === 'fora'/.test(PART), '③ o card canônico tem a pele de QUEM ESTÁ FORA da disputa');
 const peleIni = PART.indexOf("if (ctx.pele === 'fora')");
 must(PART.indexOf("if (ctx.lateJoin)") < peleIni,
