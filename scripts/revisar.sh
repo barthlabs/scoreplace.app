@@ -266,10 +266,10 @@ if [[ "$REVISOR" == gpt ]]; then
 else
   { [[ -x "$CLAUDE" ]] || command -v "$CLAUDE" >/dev/null 2>&1; } || { echo "✗ Claude Code CLI não encontrado ('$CLAUDE'; exporte CLAUDE_BIN)"; exit 4; }
   [[ "$ESFORCO" == xhigh ]] && ESFORCO=max
-  # Ordem do dono (11/set): motores econômicos e sem escalada automática.
-  # Haiku para revisão comum; Sonnet/medium somente quando a faixa é crítica.
+  # Ordem do dono (14/set): revisão econômica em todas as faixas, sem escalada
+  # automática. Sonnet só entra se for pedido explicitamente com --modelo.
   if [[ -z "$MODELO" ]]; then
-    if [[ "$FAIXA" == critica ]]; then MODELO=sonnet; else MODELO=haiku; fi
+    MODELO=haiku
   fi
   [[ -n "$ESFORCO" ]] || ESFORCO="$PISO"
   EXECUTOR_DICA='modelo=<gpt-5.6-terra|outro> esforco=<low|medium|high|xhigh>  (é o GPT/Codex que vai executar: low pra mudança mecânica e local; high pra lógica com concorrência, dados de usuário, torneio dividido; xhigh só quando errar custa dado de produção)'
