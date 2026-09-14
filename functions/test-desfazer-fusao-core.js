@@ -23,6 +23,7 @@ ok('nunca negativo', D.diasQueRestam(agora - 90 * DIA, agora) === 0);
 
 // ── ② o que se guarda ao desligar ──────────────────────────────────────────
 const conta = {
+  uid: 'uid_x',
   email: 'ela@gmail.com', emailVerified: true, phoneNumber: '+5511988906144',
   providerData: [{ providerId: 'apple.com', uid: 'sub-apple-1' }, { providerId: 'phone', uid: '+5511988906144' }],
 };
@@ -33,19 +34,28 @@ ok('② guarda o e-mail e o celular', plano.guardado.email === 'ela@gmail.com' &
 ok('② ⭐⭐ guarda o identificador do provedor federado (só existe agora)',
   plano.guardado.provedores.some((p) => p.providerId === 'apple.com' && p.uid === 'sub-apple-1'));
 ok('② ⭐ e a conta é DESLIGADA, não apagada', plano.desligar.disabled === true);
-ok('② ⭐ soltando a credencial, que é o que precisava ficar livre',
-  plano.desligar.email === null && plano.desligar.phoneNumber === null);
+/* ⛔ O E-MAIL NÃO SE APAGA NO FIREBASE — só se troca. Pedir `email: null` é recusado, e a
+ * recusa derrubava o desligamento inteiro: a conta ficava ligada, com o endereço, e movê-lo
+ * para a sobrevivente falhava por "já em uso". Medido no emulador em 14/set/2026. */
+ok('② ⭐ o telefone é solto de verdade (esse aceita nulo)', plano.desligar.phoneNumber === null);
+ok('② ⭐⭐ e o e-mail é TROCADO por um interno, não apagado',
+  /@phone\.scoreplace\.app$/.test(String(plano.desligar.email || '')));
+ok('② ⛔ com o uid dentro, para dois desligamentos nunca colidirem',
+  String(plano.desligar.email).indexOf('uid_x') >= 0);
 
 // ── ③ a volta só devolve o que a união levou ───────────────────────────────
 const volta = D.planejarVolta(plano.guardado,
-  { email: 'ela@gmail.com', phoneNumber: '' });
+  { email: 'ela@gmail.com', phoneNumber: '' }, 'uid_sobreviveu');
 ok('③ devolve o e-mail, que a sobrevivente recebeu na união', volta.paraOAbsorvido.email === 'ela@gmail.com');
 ok('③ e religa a conta', volta.paraOAbsorvido.disabled === false);
 /* ⛔⛔ A trava que impede roubar login: o celular NÃO foi levado pela união (a sobrevivente já
  * tinha o dela). Devolvê-lo tiraria dela um login que sempre foi seu. */
 ok('③ ⛔⛔ NÃO devolve o celular, que a união não levou',
   volta.paraOAbsorvido.phoneNumber === undefined && volta.tirarDaSobrevivente.phoneNumber === undefined);
-ok('③ e tira da sobrevivente só o que veio emprestado', volta.tirarDaSobrevivente.email === null);
+/* ⛔ Pelo mesmo motivo do desligamento: o endereço sai por TROCA, nunca por remoção. */
+ok('③ e tira da sobrevivente só o que veio emprestado, trocando por um interno',
+  /@phone\.scoreplace\.app$/.test(String(volta.tirarDaSobrevivente.email || '')) &&
+  volta.tirarDaSobrevivente.emailVerified === false);
 ok('③ os provedores federados vão junto', volta.provedores.length === 2);
 
 // ── ④ devolver campo que não existia é REMOVER, não gravar nulo ────────────

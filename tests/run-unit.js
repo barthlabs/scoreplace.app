@@ -107,6 +107,7 @@ const SUITES = [
   'tests/segunda-conta-explica-e-age.test.js',
   'tests/o-site-nao-publica-o-repositorio.test.js',
   'tests/fusao-tem-volta.test.js',
+  'tests/fusao-e-volta-no-emulador.test.js',
   'functions/test-desfazer-fusao-core.js',
   'tests/telefone-do-organizador-caduca.test.js',
   'tests/rules-mudou-tem-de-ser-testada.test.js',

@@ -109,10 +109,21 @@ async function adquirir(db, uids, estado, opts) {
 
     const docs = await Promise.all(lista.map((u) => tx.get(ref(db, u))));
     // 1) confere TODOS antes de escrever QUALQUER um
+    /* ⛔⛔ UMA ÚNICA EXCEÇÃO AO ESTADO TERMINAL, E ELA É A OPERAÇÃO QUE O DESFAZ.
+     *
+     * `merged` nunca expira, e é assim que tem de ser: conta absorvida não volta a ser tocada
+     * por engano. Só que DESFAZER a união é exatamente a operação cujo trabalho é fazer aquela
+     * conta deixar de ser absorvida — barrá-la aqui é barrar o conserto pelo próprio defeito
+     * que ele conserta. MEDIDO em 14/set/2026 no emulador: a separação morria aqui, e nenhum
+     * portão de texto pegava isso.
+     *
+     * ⚠️ A exceção é NOMEADA e pedida caso a caso (`aceitaTerminal`), nunca um relaxamento
+     * geral: quem não pedir continua batendo na trava. */
+    const _perdoa = (opts && Array.isArray(opts.aceitaTerminal)) ? opts.aceitaTerminal : [];
     for (let i = 0; i < lista.length; i++) {
       const d = docs[i].exists ? docs[i].data() : null;
       const est = estadoDe(d, agoraMs);
-      if (est !== 'active') throw new LockOcupado(lista[i], est);
+      if (est !== 'active' && _perdoa.indexOf(est) === -1) throw new LockOcupado(lista[i], est);
       if (d && d.estado && d.estado !== 'active' && est === 'active') {
         console.warn('[lifecycle] lease VENCIDO tomado em ' + lista[i] +
           ' (op anterior ' + (d.operationId || '?') + ' de ' + (d.acquiredAt || '?') + ')');

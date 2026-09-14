@@ -7739,35 +7739,58 @@ exports.desfazerFusao = onCall(
 
     /* ⛔ A TRAVA É A MESMA DA FUSÃO. Separar mexe nos mesmos documentos que unir — deixar as
      * duas correrem juntas embaralharia os dois uids em metade das coleções. */
-    const posse = await _amizadeLock.adquirir(db, [u.sobreviveu, absorvida], "merging");
+    /* ⛔ `aceitaTerminal: ['merged']` — a conta absorvida está marcada como unificada, e esse
+     * estado não expira. É correto que não expire; e é correto que ESTA operação, que existe
+     * para desfazer a união, seja a única a poder assumi-la. */
+    const posse = await _amizadeLock.adquirir(db, [u.sobreviveu, absorvida], "merging",
+      { aceitaTerminal: ["merged"] });
     try {
       const DEL = admin.firestore.FieldValue.delete();
 
-      /* ① Devolve os documentos ao que eram, pelo registro. */
+      /* ① Devolve os documentos ao que eram, pelo registro.
+       *
+       * ⛔ DUAS PASSADAS, E A ORDEM IMPORTA. MEDIDO em 14/set/2026 no emulador: numa passada
+       * só, o Firestore recusa o lote inteiro com "Cannot delete then update an entity in the
+       * same request" — o espelho `participants/{uid}` aparece nas DUAS formas de anotação
+       * (mudou de nome E teve campo trocado), e apagar e alterar o mesmo documento no mesmo
+       * lote é proibido. Primeiro os campos, depois os nomes: assim o documento que vai ser
+       * apagado nunca é alterado no mesmo lote.
+       *
+       * ⚠️ E o que vai ser apagado é PULADO na passada de campos — alterar um documento que
+       * some em seguida é trabalho jogado fora, e era o que colidia. */
       let voltaram = 0;
       const passos = await ref.collection("passos").get();
-      for (const passo of passos.docs) {
-        const itens = (passo.data() || {}).itens || [];
+      const renomear = [];
+      const vaoSumir = {};
+      const porPasso = passos.docs.map((p) => ((p.data() || {}).itens || []));
+      porPasso.forEach((itens) => itens.forEach((it) => {
+        if (it && it.mudouDeNome) {
+          renomear.push(it);
+          if (!it.jaExistia) vaoSumir[String(it.col) + "/" + String(it.para)] = true;
+        }
+      }));
+
+      // passada 1 — campos
+      for (const itens of porPasso) {
         let b = db.batch(); let n = 0;
         for (const it of itens) {
-          if (!it || !it.col) continue;
-          /* ⛔ DUAS FORMAS DE ANOTAÇÃO, PORQUE A FUSÃO FAZ DUAS COISAS: troca campo dentro do
-           * documento, e MUDA documento de nome (o espelho `participants/{uid}`). Tratar a
-           * segunda como se fosse a primeira deixaria o espelho sob o uid errado. */
-          if (it.mudouDeNome) {
-            const plano = _desfazer.planejarVoltaDoNome(it);
-            b.set(db.collection(plano.recriar.col).doc(plano.recriar.id), plano.recriar.dados);
-            n++; voltaram++;
-            if (plano.apagar) {
-              b.delete(db.collection(plano.apagar.col).doc(plano.apagar.id));
-              n++;
-            }
-            if (n >= 400) { await b.commit(); b = db.batch(); n = 0; }
-            continue;
-          }
-          if (!it.id) continue;
+          if (!it || !it.col || !it.id || it.mudouDeNome) continue;
+          if (vaoSumir[String(it.col) + "/" + String(it.id)]) continue;
           b.update(db.collection(it.col).doc(it.id), _desfazer.reverterCampos(it.antes, DEL));
           n++; voltaram++;
+          if (n >= 400) { await b.commit(); b = db.batch(); n = 0; }
+        }
+        if (n) await b.commit();
+      }
+
+      // passada 2 — documentos que mudaram de nome
+      {
+        let b = db.batch(); let n = 0;
+        for (const it of renomear) {
+          const plano = _desfazer.planejarVoltaDoNome(it);
+          b.set(db.collection(plano.recriar.col).doc(plano.recriar.id), plano.recriar.dados);
+          n++; voltaram++;
+          if (plano.apagar) { b.delete(db.collection(plano.apagar.col).doc(plano.apagar.id)); n++; }
           if (n >= 400) { await b.commit(); b = db.batch(); n = 0; }
         }
         if (n) await b.commit();
@@ -7788,7 +7811,7 @@ exports.desfazerFusao = onCall(
       /* ③ A conta de autenticação volta a existir de verdade: religada, com a credencial
        * que ela tinha — tirada de volta da sobrevivente, que só a tem porque a união a
        * moveu. E os provedores federados religados pelo identificador guardado. */
-      const volta = _desfazer.planejarVolta(u.guardado, u.recebidasPelaSobrevivente);
+      const volta = _desfazer.planejarVolta(u.guardado, u.recebidasPelaSobrevivente, u.sobreviveu);
       if (Object.keys(volta.tirarDaSobrevivente).length) {
         try { await admin.auth().updateUser(u.sobreviveu, volta.tirarDaSobrevivente); }
         catch (e) { console.error("[desfazerFusao] soltar credencial do sobrevivente:", e.code || e.message); }

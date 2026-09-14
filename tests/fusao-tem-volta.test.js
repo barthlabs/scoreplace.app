@@ -101,7 +101,7 @@ must(/_amizadeLock\.adquirir\(db, \[u\.sobreviveu, absorvida\]/.test(PORTA),
 must(/it\.mudouDeNome/.test(PORTA) && /planejarVoltaDoNome\(it\)/.test(PORTA),
   '④ ⭐⭐ e a porta sabe desfazer as DUAS formas: campo trocado e documento renomeado');
 
-must(/planejarVolta\(u\.guardado, u\.recebidasPelaSobrevivente\)/.test(PORTA),
+must(/planejarVolta\(u\.guardado, u\.recebidasPelaSobrevivente/.test(PORTA),
   '④ ⭐⭐ e só devolve a credencial que a união LEVOU — devolver outra roubaria um login');
 must(/collection\("loginRedirects"\)\.doc\(String\(cred\)\.toLowerCase\(\)\)\.delete\(\)/.test(PORTA),
   '④ ⭐ o desvio de login some junto: sem isso, entrar pela credencial devolvida cairia de ' +

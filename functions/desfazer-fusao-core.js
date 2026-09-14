@@ -44,6 +44,7 @@ function diasQueRestam(feitaEmMs, agoraMs) {
  */
 function planejarDesligamento(authDrop) {
   const a = authDrop || {};
+  const uid = a.uid || '';
   const guardado = {
     email: a.email || '',
     emailVerified: !!a.emailVerified,
@@ -52,9 +53,17 @@ function planejarDesligamento(authDrop) {
       .filter((p) => p && p.providerId && p.uid)
       .map((p) => ({ providerId: p.providerId, uid: p.uid })),
   };
-  // O que se manda para o Auth agora: solta a credencial e desliga a conta.
+  /* ⛔ O E-MAIL NÃO PODE SER APAGADO — SÓ TROCADO. MEDIDO em 14/set/2026 no emulador:
+   * `updateUser({ email: null })` é recusado pelo Firebase (o endereço não é um campo
+   * opcional que se remova), e o `catch` engolia a recusa — a conta ficava LIGADA e com o
+   * e-mail, e o passo seguinte, que move o endereço para a sobrevivente, falhava por
+   * "já em uso". O telefone, esse sim, aceita `null`.
+   *
+   * ⭐ Então o endereço é trocado por um INTERNO, no mesmo formato que o projeto já usa para
+   * conta de telefone (`@phone.scoreplace.app`) — que todo o código reconhece como "não é
+   * endereço de ninguém". O de verdade fica guardado aqui para voltar. */
   const desligar = { disabled: true };
-  if (guardado.email) desligar.email = null;
+  if (guardado.email) desligar.email = 'absorvida-' + String(uid || 'x') + '@phone.scoreplace.app';
   if (guardado.phoneNumber) desligar.phoneNumber = null;
   return { guardado, desligar };
 }
@@ -64,7 +73,7 @@ function planejarDesligamento(authDrop) {
  * ⚠️ Só volta a credencial que a SOBREVIVENTE recebeu na fusão — repor uma credencial que a
  * sobrevivente já tinha antes roubaria dela o login que sempre foi seu.
  */
-function planejarVolta(guardado, recebidasPelaSobrevivente) {
+function planejarVolta(guardado, recebidasPelaSobrevivente, uidSobrevivente) {
   const g = guardado || {};
   const rec = recebidasPelaSobrevivente || {};
   const paraOAbsorvido = { disabled: false };
@@ -72,7 +81,13 @@ function planejarVolta(guardado, recebidasPelaSobrevivente) {
   if (g.email && rec.email && String(rec.email).toLowerCase() === String(g.email).toLowerCase()) {
     paraOAbsorvido.email = g.email;
     paraOAbsorvido.emailVerified = g.emailVerified;
-    tirarDaSobrevivente.email = null;
+    /* ⛔ AQUI TAMBÉM NÃO SE APAGA O E-MAIL — SÓ SE TROCA, e eu tinha consertado só o outro
+     * lado. MEDIDO no emulador: `email: null` era recusado, a sobrevivente CONTINUAVA com o
+     * endereço, e devolvê-lo à conta separada falhava com "já em uso" — a separação abortava
+     * no fim, depois de já ter mexido em tudo. Endereço interno solta o de verdade, e é o que
+     * uma conta de telefone tem por padrão de qualquer jeito. */
+    tirarDaSobrevivente.email = 'liberado-' + String(uidSobrevivente || 'x') + '@phone.scoreplace.app';
+    tirarDaSobrevivente.emailVerified = false;
   }
   if (g.phoneNumber && rec.phoneNumber && rec.phoneNumber === g.phoneNumber) {
     paraOAbsorvido.phoneNumber = g.phoneNumber;
