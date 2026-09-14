@@ -722,6 +722,8 @@ const SUITES = [
   // rodadas) volta sozinho pra divisão igual — nunca vira rodada que começa depois de
   // terminar. O que se guarda é a intenção; a validação é toda na leitura.
   'tests/divisao-das-rodadas-e-ajuste-fino.test.js',
+  'tests/round-bounds-domain-build.test.js',
+  'tests/build-www-deterministico.test.js',
   'tests/divisao-rodadas-por-fase.test.js',
   // 2.1.99 — o runner passou a rodar em PARALELO. Três suítes corrompem arquivo do repo
   // de propósito (store.js, index.html) e precisam rodar SOZINHAS; quem ler esses arquivos

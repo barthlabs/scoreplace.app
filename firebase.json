@@ -7,13 +7,14 @@
     "rules": "storage.rules"
   },
   "hosting": {
-    "public": ".",
+    "public": "www",
     "predeploy": [
       "node scripts/check-deploy-alignment.js",
       "node scripts/check-version-ahead.js",
       "node scripts/check-release-notes.js",
       "node scripts/predeploy-test.js",
-      "npm run prerender"
+      "npm run prerender",
+      "npm run build:hosting"
     ],
     "ignore": [
       "firebase.json",
@@ -32,7 +33,6 @@
       "android/**",
       "android-signing/**",
       "ios/**",
-      "www/**",
       "tests/**",
       "scripts/**",
       "tools/**",

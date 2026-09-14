@@ -16,14 +16,15 @@
 const assert = require('assert/strict'), fs = require('fs'), path = require('path'), vm = require('vm');
 const root = path.join(__dirname, '..');
 const RB = fs.readFileSync(path.join(root, 'js/views/round-bounds-core.js'), 'utf8');
+const DOMAIN = fs.readFileSync(path.join(root, 'js/domain/round-bounds.js'), 'utf8');
 const CSS = fs.readFileSync(path.join(root, 'css/components.css'), 'utf8');
 const F2 = fs.readFileSync(path.join(root, 'js/views/format2-ui.js'), 'utf8');
 let ok = 0; const must = (v, m) => { assert.ok(v, m); ok++; console.log('  ✓ ' + m); };
 
 const ctx = { window: {} };
-const i = RB.indexOf('  window._rbFaixas = function'), f = RB.indexOf('\n  /* Mede os rótulos', i);
-assert.ok(i > 0 && f > i, 'âncoras de _rbFaixas');
-vm.runInNewContext(RB.slice(i, f), ctx);
+vm.runInNewContext(DOMAIN, ctx);
+ctx.window.ScoreplaceRoundBounds = ctx.ScoreplaceRoundBounds;
+vm.runInNewContext(RB, ctx);
 const faixas = ctx.window._rbFaixas;
 
 // ── ① a regra na letra do dono ───────────────────────────────────────────────

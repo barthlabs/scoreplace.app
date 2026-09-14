@@ -469,8 +469,6 @@ body, .topbar, .card {
   transform: translateX(-100%);
 }
 
-[data-theme="light"] .skeleton-shimmer::after,
-
 @keyframes skeleton-shimmer {
   0% { transform: translateX(-100%); }
   100% { transform: translateX(100%); }

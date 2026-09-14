@@ -1,3 +1,9 @@
+## 2.3.20 — 14/set/2026
+
+- Inicia a modernização incremental: limites de rodadas passam a ter uma fonte TypeScript estrita, com ponte compatível para o browser clássico e contrato CommonJS para testes e futuros consumidores de servidor.
+- O pacote web agora valida referências e ordem essencial do shell antes de montar, registra hashes determinísticos e é a única árvore que o Hosting pode publicar. Código interno, testes e arquivos auxiliares deixam de depender de uma lista manual de exclusão.
+- Esta publicação é somente web. Os projetos iOS e Android permanecem na versão já submetida, sem novo build nem sincronização nativa até a aprovação Google.
+
 ## 2.3.19 — 14/set/2026
 
 - **Acesso imediato à ficha:** nomes identificados já nascem como controles de

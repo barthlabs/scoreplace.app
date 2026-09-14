@@ -19,8 +19,8 @@
 #      ⚠️ É o main que passa a descrever o ar, então ele é atualizado ANTES do upload:
 #      falhar aqui é barato; falhar depois de publicar deixa exatamente o desalinhamento
 #      que este script existe pra impedir.
-#   3. extrai o commit com `git archive` (só o que está commitado — o Drive tem lixo solto
-#      e `hosting.public` é ".", então tudo que estiver na pasta iria pro ar)
+#   3. extrai o commit com `git archive`; o Hosting só serve `www/`, artefato Vite gerado
+#      no predeploy a partir dessa cópia, nunca a raiz com código, testes ou dados auxiliares
 #   4. liga node_modules do repo (o predeploy roda testes com Chromium)
 #   5. escreve o CARIMBO de alinhamento — é o que o check aceita numa cópia sem .git
 #   6. firebase deploy --only hosting  (o predeploy roda testes + prerender + os checks)
@@ -188,7 +188,7 @@ mkdir -p "$DEST/functions"
 ln -s "$NM_FN" "$DEST/functions/node_modules"
 echo "  ▸ firebase-admin ligado na cópia ($NM_FN) — as provas de escrita/Rules rodam no predeploy"
 
-# lixo que o Drive cria e que iria pro ar junto (hosting.public = ".")
+# lixo que o Drive cria não compõe o artefato Vite; ainda assim bloqueamos cópia contaminada
 LIXO="$(find "$DEST" \( -name '* 2' -o -name '* 3' -o -name '.DS_Store' \) | head -5 || true)"
 if [[ -n "$LIXO" ]]; then echo "✗ lixo na extração:"; echo "$LIXO"; exit 1; fi
 
@@ -415,7 +415,8 @@ if ! ( cd "$PRE" && SP_EXIGE_CORRIDA_REAL=1 PATH="/opt/homebrew/opt/openjdk/bin:
     && node scripts/check-version-ahead.js \
     && node scripts/check-release-notes.js \
     && npm test \
-    && npm run prerender ); then
+    && npm run prerender \
+    && npm run build:hosting ); then
   PRE_OK=0
 fi
 if [[ $PRE_OK -ne 1 ]]; then

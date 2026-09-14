@@ -20,6 +20,8 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 const { sandbox } = require('./render-harness');
+vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', 'domain', 'round-bounds.js'), 'utf8'),
+  sandbox, { filename: 'round-bounds.js' });
 vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'round-bounds-core.js'), 'utf8'),
   sandbox, { filename: 'round-bounds-core.js' });
 const W = sandbox;

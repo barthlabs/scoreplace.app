@@ -1,3 +1,4 @@
+// 2.3.20 — a atualização web passa a verificar o pacote que será servido antes de montar; o site publica só esse pacote, e as regras de prazo de rodada ganham fonte única tipada, preservando a tela atual.
 // 2.3.19 — o nome já nasce acessível no primeiro render; não depende da atualização posterior do perfil.
 // 2.3.18 — nos cards administrativos e na espera, o nome abre a ficha; editar continua num botão próprio.
 // 2.3.17 — cada nome que abre ficha tem um único alvo acessível; o marcador interno de atualização não aparece como segundo botão.
