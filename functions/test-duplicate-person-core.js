@@ -174,8 +174,10 @@ const achou = (c, p) => D.detectarMesmaPessoa(c, p).suspeito;
   const _corpo = idx.slice(_ini, idx.indexOf('exports.', _ini));
   ok('a detecção do cadastro NÃO usa findDisplayNameConflict (aquela BLOQUEIA)',
     _ini > 0 && _corpo.indexOf('findDisplayNameConflict') === -1);
+  /* ⛔ DENTRO DO CORPO DA FUNÇÃO, não numa janela de 6000 caracteres: a janela estourou
+   * assim que a função ganhou a pista do torneio, e ficou vermelha sem defeito nenhum. */
   ok('  → e ela é FAIL-OPEN (erro nunca barra cadastro nem inscrição)',
-    /_detectarDuplicataNaBase[\s\S]{0,6000}fail-open[\s\S]{0,120}return null/.test(idx));
+    /fail-open[\s\S]{0,120}return null/.test(_corpo));
 
   // ── "SEMPRE AUTENTICADO" — em TODOS os caminhos que fundem sozinhos ──
   ok('auto-merge por perfil RECUSA sem credencial autenticada nos dois lados',
@@ -223,8 +225,15 @@ const achou = (c, p) => D.detectarMesmaPessoa(c, p).suspeito;
   // A armadilha da 1.7.41: loadUserProfile copia campo a campo — sem plugar, nunca chega.
   ok('  → e dupSuspect é copiado pro currentUser (senão a tela nunca vê)',
     /currentUser\.dupSuspect = profile\.dupSuspect/.test(store));
-  ok('  → o texto NUNCA afirma ("PARECE")',
-    /_askDuplicateAccount[\s\S]{0,1800}PARECE já ter outra conta/.test(auth));
+  /* ⛔ A RÉGUA É O INVARIANTE, NÃO A FRASE. Isto travava a redação exata ("PARECE já ter
+   * outra conta") e reprovou o texto novo, que hedge do mesmo jeito. O que não pode mudar é
+   * AFIRMAR: dizer "você já tem outra conta" mente quando são dois homônimos de verdade. */
+  const _iPop = auth.indexOf('window._askDuplicateAccount = function');
+  const _popup = auth.slice(_iPop, auth.indexOf('window._askNameConflict = function', _iPop));
+  ok('  → o texto NUNCA afirma: ele hedge',
+    _iPop > 0 && /(PARECE|[Pp]arece|tudo indica)/.test(_popup));
+  ok('  → e não diz de saída que a conta é dela',
+    !/Você já tem outra conta|Essa conta é sua\./.test(_popup));
   ok('  → "não sou eu" vai pro servidor anotar (o cliente não sabe o uid do outro)',
     /dismissDuplicateAccount/.test(auth) && /exports\.dismissDuplicateAccount = onCall/.test(idx));
   ok('  → e o dismiss do cadastro grava a FORÇA do sinal',

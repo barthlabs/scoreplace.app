@@ -8920,27 +8920,105 @@ window._askDuplicateAccount = function () {
     if (window._dupAccountAsked) return;        // uma vez por sessão
     window._dupAccountAsked = true;
 
+    /* ⛔⛔ A PERGUNTA TEM DE DESCREVER A SITUAÇÃO, NÃO SÓ FAZER A PERGUNTA.
+     *
+     * Ordem do dono (13/set/2026): _"se ela esta entrando na conta nova e nao esta dizendo nem
+     * sim nem nao a comunicacao nao esta clara e efetiva"_ · _"precisa nesse caso de um popup
+     * na tela explicando a situacao dela. com detalhes. mencionando como é a outra conta
+     * abandonada. que a outra conta esta no torneio tal e essa conta nao"_.
+     *
+     * ⛔ O QUE ESTAVA ESCRITO AQUI NÃO COMUNICAVA NADA. Identificava a outra conta por
+     * `p8***@privaterelay.appleid.com` — o e-mail OCULTO que a Apple cria e que a pessoa nunca
+     * viu na vida. MEDIDO no caso real: a pergunta apareceu nas duas contas em 25/ago e
+     * continuava sem resposta 19 dias depois, com a pessoa usando o aplicativo. Ela não
+     * respondia nem sim nem não porque não dava para saber do que se tratava.
+     *
+     * ⭐ AGORA ELA CONTA A SITUAÇÃO: qual torneio está na outra conta, que ESTA aqui não tem
+     * nenhum, e por onde aquela conta entra. Tudo coisa que a pessoa reconhece sozinha. */
+    var p = ds.pista || {};
+    var torneios = (p.torneios || []).filter(Boolean);
     var contato = ds.maskedEmail || ds.maskedPhone || '';
-    // NUNCA AFIRMA — mesma doutrina do texto da inscrição: dizer "você já tem outra conta"
-    // MENTE quando são dois homônimos de verdade (o par "Nelson Barth"), e não diz COM QUAL
-    // conta, que é a única informação acionável.
+    var esc = window._safeHtml;
+
+    var situacao = '';
+    if (torneios.length) {
+      var lista = torneios.map(function (t) { return '<strong>' + esc(t) + '</strong>'; }).join(', ');
+      situacao =
+        '<div style="margin-top:10px;padding:10px 12px;border-radius:10px;background:var(--surface-2,rgba(148,163,184,.12));font-size:0.84rem;line-height:1.5;">' +
+          '📋 A outra conta ' + (torneios.length > 1 ? 'está inscrita nestes torneios: ' : 'está inscrita em ') + lista + '.' +
+          (p.euTenhoTorneios === 0
+            ? '<br>⚠️ <strong>Nesta conta aqui você não está em torneio nenhum</strong> — seus jogos, avisos e resultados estão na outra.'
+            : '') +
+        '</div>';
+    }
+
+    var comoEntra = p.comoEntra
+      ? ('Naquela conta você ' +
+         (p.comoEntra === 'Apple' ? 'entrou com a <strong>Apple</strong>' :
+          p.comoEntra === 'Google' ? 'entrou com o <strong>Google</strong>' :
+          'entrou pelo <strong>celular</strong>') +
+         (p.comoEntra === 'Apple' ? ' — por isso o endereço dela é aquele código estranho que a Apple cria para esconder seu e-mail de verdade.' : '.'))
+      : '';
+
+    // NUNCA AFIRMA: dizer "você já tem outra conta" MENTE quando são dois homônimos de
+    // verdade (o par "Nelson Barth"). Descrever os fatos, sim; afirmar quem ela é, não.
     var corpo =
       '<div style="font-size:0.86rem;line-height:1.5;">' +
-        'Você PARECE já ter outra conta aqui' +
-        (contato ? (', a <strong>' + window._safeHtml(contato) + '</strong>') : '') +
-        ', cadastrada como <strong>' + window._safeHtml(ds.nome) + '</strong>.' +
+        'Existe outra conta aqui cadastrada como <strong>' + esc(ds.nome) + '</strong>' +
+        (contato ? (' (' + esc(contato) + ')') : '') + ', e tudo indica que é <strong>sua</strong>.' +
       '</div>' +
+      situacao +
+      (comoEntra ? '<div style="margin-top:10px;font-size:0.8rem;color:var(--text-muted);line-height:1.45;">' + comoEntra + '</div>' : '') +
       '<div style="margin-top:10px;font-size:0.8rem;color:var(--text-muted);line-height:1.45;">' +
-        'Se for <strong>sua</strong>, dá pra unir as duas — seus torneios, jogos e histórico ficam num lugar só. ' +
-        'A união só acontece depois que você confirmar a posse daquela conta (link no e-mail ou código no celular dela). ' +
-        'Se for outra pessoa, é só dizer que não é você — não perguntamos de novo.' +
+        'Unindo as duas, tudo fica num lugar só e você continua entrando do jeito que preferir. ' +
+        'Para ter certeza de que é você, mandamos uma confirmação para o contato daquela conta — ' +
+        'é só abrir e tocar no botão. <strong>Você não precisa saber o endereço dela</strong>, nós cuidamos disso. ' +
+        'Se for outra pessoa, diga que não é você e não perguntamos mais.' +
       '</div>';
 
-    showConfirmDialog('👥 Essa outra conta é sua?', corpo, function () {
+    showConfirmDialog('👥 Parece que você tem duas contas', corpo, function () {
+      /* ⛔ O "SIM" AGORA AGE. Antes ele só abria o perfil e pedia que a pessoa "confirmasse a
+       * posse" digitando o e-mail da outra conta — que o próprio aplicativo mostra MASCARADO.
+       * Era um beco sem saída por desenho. O servidor sabe qual é a outra conta e manda a
+       * confirmação ele mesmo. [[project_duplicata_o_sim_tem_que_agir]] */
+      if (typeof window._callCF !== 'function') { window.location.hash = '#profile'; return; }
       if (typeof showNotification === 'function') {
-        showNotification('Confirme a posse', 'Abrimos seu perfil: confirme pelo e-mail ou pelo celular da outra conta pra unir as duas.', 'info');
+        showNotification('Enviando confirmação…', 'Só um instante.', 'info');
       }
-      window.location.hash = '#profile';
+      window._callCF('pedirProvaDaSegundaConta', {}).then(function (r) {
+        var d = (r && r.data) || r || {};
+        if (d.ok && d.masked) {
+          showConfirmDialog('📧 Confirmação enviada', 
+            '<div style="font-size:0.86rem;line-height:1.5;">' +
+              'Mandamos um e-mail para <strong>' + esc(d.masked) + '</strong>, que é o contato da outra conta.' +
+            '</div>' +
+            '<div style="margin-top:10px;font-size:0.8rem;color:var(--text-muted);line-height:1.45;">' +
+              'Abra a mensagem e toque em <strong>Unir minhas contas</strong>. O link vale por 1 hora. ' +
+              'Se você entrou com a Apple usando e-mail oculto, ela repassa a mensagem para a sua caixa de sempre — ' +
+              'procure por <strong>scoreplace</strong>.' +
+            '</div>', null, null, { confirmText: 'Entendi', cancelText: 'Fechar', type: 'info' });
+          return;
+        }
+        if (d.reason === 'so-por-celular') {
+          showConfirmDialog('📱 Confirme pelo celular',
+            '<div style="font-size:0.86rem;line-height:1.5;">' +
+              'A outra conta não tem e-mail — ela entra só pelo celular' +
+              (d.maskedPhone ? (' <strong>' + esc(d.maskedPhone) + '</strong>') : '') + '.' +
+            '</div>' +
+            '<div style="margin-top:10px;font-size:0.8rem;color:var(--text-muted);line-height:1.45;">' +
+              'Saia e entre por esse número: a partir daí as duas contas se reconhecem e a união acontece.' +
+            '</div>', null, null, { confirmText: 'Entendi', cancelText: 'Fechar', type: 'info' });
+          return;
+        }
+        /* ⛔ NÃO FICAR CALADO. Sem isto a pessoa toca em "sim" e nada acontece — que é
+         * exatamente o defeito que estamos consertando. */
+        showNotification('Não deu para enviar agora',
+          'Tente de novo daqui a pouco — a pergunta continua aqui esperando.', 'warning');
+      }).catch(function (e) {
+        if (window._warn) window._warn('[dupAccount] prova falhou:', e);
+        showNotification('Não deu para enviar agora',
+          (e && e.message) || 'Tente de novo daqui a pouco.', 'warning');
+      });
     }, function () {
       // "Não sou eu" → o servidor redescobre o par e anota COM a força do sinal, pra não
       // perguntar de novo sem dado novo. O cliente nunca soube o uid do outro.
@@ -8951,7 +9029,7 @@ window._askDuplicateAccount = function () {
             .catch(function (e) { if (window._warn) window._warn('[dupAccount] dismiss falhou:', e); });
         }
       } catch (e) { if (window._warn) window._warn('[dupAccount] dismiss falhou:', e); }
-    }, { confirmText: 'Sim, é minha outra conta', cancelText: 'Não sou eu' });
+    }, { confirmText: 'Sim, unir as duas', cancelText: 'Não sou eu' });
   } catch (e) { if (window._warn) window._warn('[dupAccount] pergunta falhou:', e); }
 };
 

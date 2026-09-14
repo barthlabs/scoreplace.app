@@ -2764,6 +2764,70 @@ const { replicateRosterToSandbox: _replicateRosterToSandbox } = require("./sandb
  * emergência; quem desligou "só fundamentais" não é incomodado.
  * Best-effort: falhar aqui não desfaz a inscrição, que já está gravada.
  */
+/* ⛔ O REFORÇO FORA DA CAIXA NA TELA.
+ *
+ * Ordem do dono (13/set/2026): _"temos que reforcar isso. mandar email, sms o que for e
+ * colocar um popup na conta nao abandonada"_.
+ *
+ * ⛔ POR QUE NÃO BASTA O POPUP: ele aparece 9 segundos depois de entrar e some ao ser fechado.
+ * Quem fecha no X não diz sim nem não, e não sobra rastro nenhum para a pessoa voltar. MEDIDO:
+ * a pergunta ficou 19 dias sem resposta com a pessoa usando o aplicativo.
+ *
+ * ⭐ Então o mesmo aviso também FICA: no sininho, que não desaparece, e por e-mail para quem
+ * tem endereço. O id é determinístico — o gatilho roda a cada mudança de nome/telefone/e-mail
+ * e não pode encher a caixa de avisos repetidos.
+ *
+ * ⚠️ Nada de contato alheio aqui: vai o nome, o torneio e o contato MASCARADO, os mesmos que
+ * a pergunta na tela já mostra. */
+async function _avisarSegundaContaNoCadastro(db, uid, perfil, dup) {
+  try {
+    const p = perfil || {};
+    const torneios = ((dup.pista && dup.pista.torneios) || []).filter(Boolean);
+    const contato = dup.maskedEmail || dup.maskedPhone || "";
+    const msg = "Existe outra conta aqui cadastrada como \"" + (dup.nome || "") + "\"" +
+      (contato ? (" (" + contato + ")") : "") + ", e tudo indica que é sua. " +
+      (torneios.length
+        ? ("Ela está inscrita em " + torneios.slice(0, 2).join(" e ") + "" +
+           (dup.pista && dup.pista.euTenhoTorneios === 0
+             ? ", e nesta conta aqui você não está em torneio nenhum — seus jogos e avisos estão lá. "
+             : ". "))
+        : "") +
+      "Abra o aplicativo e responda \"sim, unir as duas\": mandamos a confirmação para o " +
+      "contato daquela conta e você não precisa saber qual é. Se for outra pessoa, diga que " +
+      "não é você e não perguntamos mais.";
+
+    const notifId = ("dup_cadastro__" + dup.uid).replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 200);
+    if (p.notifyPlatform !== false) {
+      await db.collection("users").doc(uid).collection("notifications").doc(notifId).set({
+        type: "duplicate_account_suspected",
+        title: "👥 Parece que você tem duas contas",
+        message: msg,
+        createdAt: new Date().toISOString(),
+        read: false,
+      }, { merge: true });
+    }
+    /* O e-mail sai UMA vez por par — reenviar a cada toque no perfil viraria perseguição. */
+    if (p.notifyEmail !== false && p.email && !_isSyntheticAuthEmail(p.email)) {
+      const marca = db.collection("users").doc(uid).collection("avisosEnviados").doc(notifId);
+      const ja = await marca.get();
+      if (!ja.exists) {
+        const nowMs = Date.now();
+        await db.collection("notif_email_queue").add({
+          email: String(p.email).toLowerCase(), level: "important", message: msg,
+          tournamentName: torneios[0] || "", tournamentUrl: "https://scoreplace.app/",
+          createdAt: nowMs, flushAtMs: nowMs + 15 * 60 * 1000,
+        });
+        await marca.set({ em: new Date().toISOString() });
+      }
+    }
+    return true;
+  } catch (e) {
+    /* ⛔ Não derruba o gatilho: o aviso é reforço, a pergunta na tela continua de pé. */
+    console.error("[dup-cadastro] aviso falhou (best-effort):", e && e.message);
+    return false;
+  }
+}
+
 async function _avisarDuplicataSuspeita(db, alvoUid, tournamentId, tournamentName, dup) {
   try {
     if (!alvoUid || !dup) return false;
@@ -7341,6 +7405,91 @@ exports.checkNameConflict = onCall(
 // Dispara a PROVA para a outra conta. `channel`: 'email' (pronto) — 'phone' ainda não.
 // Rate limit por caller: a mensagem vai pra caixa de outra pessoa quando o homônimo é
 // coincidência, então o botão não pode virar gerador de spam.
+/* ⛔⛔ O "SIM, É MINHA OUTRA CONTA" TEM DE AGIR — ANTES ELE SÓ ABRIA O PERFIL.
+ *
+ * Ordem do dono (13/set/2026): _"temos que reforcar isso. mandar email, sms o que for e
+ * colocar um popup na conta nao abandonada para ela tomar a providencia de confirmar e dai
+ * fazer a mesclagem... do sistema ser inteligente e funcional. facilitar a vida das pessoas
+ * e nao dificultar."_
+ *
+ * ⛔ O BECO SEM SAÍDA, MEDIDO no caso real (Deborah, 25/ago): a pergunta apareceu nas DUAS
+ * contas em 90 segundos e continua pendurada 19 dias depois. Responder "sim" levava a pessoa
+ * ao perfil com a instrução de "confirmar a posse da outra conta pelo e-mail ou pelo celular".
+ * Só que o e-mail da outra conta é mostrado MASCARADO (`p8***@…`, e está certo que seja) — e
+ * a porta de união pedia que ela DIGITASSE esse endereço. Ela não tem como saber. Não havia
+ * caminho nenhum, por desenho.
+ *
+ * ⭐ AQUI O SERVIDOR FAZ O QUE SÓ ELE PODE: ele já sabe qual é a outra conta (redescobre pelo
+ * mesmo detector, e o uid nunca sai daqui), então manda a prova ELE MESMO para o contato
+ * daquela conta. A pessoa só precisa abrir o e-mail e tocar no botão — a união acontece pela
+ * porta de sempre (`confirmEmailMerge` → `_mergeAccountsKeepOlder`), que leva histórico,
+ * credencial e torneios junto.
+ *
+ * ⚠️ A PROVA CONTINUA SENDO EXIGIDA. Dizer "sim" não une nada: quem une é quem RECEBE a
+ * mensagem na outra conta. Sem isso, bastaria um homônimo dizer "sim" para engolir a conta
+ * alheia. [[project_duplicata_o_sim_tem_que_agir]] */
+exports.pedirProvaDaSegundaConta = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError("unauthenticated", "Login obrigatório");
+    const db = admin.firestore();
+
+    const me = await db.collection("users").doc(callerUid).get();
+    if (!me.exists) throw new HttpsError("failed-precondition", "perfil não encontrado");
+
+    /* O cliente NUNCA manda quem é o suspeito — ele nem sabe. Redescobrir aqui também
+     * garante que a decisão usa o estado de AGORA, não o retrato de quando a pergunta
+     * nasceu, que pode ter dias. */
+    const alvo = await _detectarDuplicataNaBase(db, callerUid, me.data() || {});
+    if (!alvo || !alvo.uid) return { ok: false, reason: "no-suspect" };
+
+    // Mesmo limite da prova por homônimo: 3 envios por hora.
+    const rlRef = db.collection("mergeProofLimits").doc(callerUid);
+    const rl = await rlRef.get();
+    const agora = Date.now();
+    const janela = (rl.exists && rl.data().windowStart && rl.data().windowStart.toMillis)
+      ? rl.data().windowStart.toMillis() : 0;
+    const n = (rl.exists && janela && (agora - janela) < 3600000) ? (rl.data().count || 0) : 0;
+    if (n >= 3) throw new HttpsError("resource-exhausted", "Muitas tentativas. Tente de novo daqui a pouco.");
+
+    /* ⛔ O ENDEREÇO VEM DO AUTH PRIMEIRO. O campo do perfil pode estar velho, e é o Auth que
+     * diz por onde a pessoa realmente entra. E-mail interno (o sintético de conta por
+     * telefone) não é endereço de ninguém — ninguém recebe nada lá. */
+    let email = "";
+    try {
+      const c = await admin.auth().getUser(alvo.uid);
+      if (c && c.email && !_isSyntheticAuthEmail(c.email)) email = c.email;
+    } catch (e) {
+      const cod = String((e && e.code) || "");
+      if (cod !== "auth/user-not-found") {
+        console.error("[pedirProvaDaSegundaConta] não deu para ler a outra conta:", cod, e && e.message);
+        throw new HttpsError("unavailable", "Não foi possível agora. Tente de novo em instantes.");
+      }
+    }
+    if (!email) {
+      const p = await db.collection("users").doc(alvo.uid).get();
+      const pe = String(((p.exists && p.data()) || {}).email || "");
+      if (pe && !_isSyntheticAuthEmail(pe)) email = pe;
+    }
+
+    if (!email) {
+      /* A outra conta não tem endereço nenhum — entrou só por telefone. A prova possível ali
+       * é entrar nela pelo celular; quem diz isso à pessoa é o cliente, com o número
+       * MASCARADO que já veio na pergunta. */
+      return { ok: false, reason: "so-por-celular", maskedPhone: alvo.maskedPhone || null };
+    }
+
+    await _sendMergeProofEmail(db, callerUid, alvo.uid, email);
+    await rlRef.set({
+      count: n + 1,
+      windowStart: (n === 0) ? admin.firestore.FieldValue.serverTimestamp() : (rl.data() || {}).windowStart,
+    }, { merge: true });
+    console.log(`[pedirProvaDaSegundaConta] prova enviada: req=${callerUid} target=${alvo.uid}`);
+    return { ok: true, sent: true, canal: "email", masked: _nameUnique.maskEmail(email) };
+  }
+);
+
 exports.requestNameMergeProof = onCall(
   { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
   async (request) => {
@@ -8712,6 +8861,7 @@ async function _detectarDuplicataNaBase(db, uid, meu) {
         if (x.mergedInto) return;
         vistos[d.id] = true;
         pessoas.push({ uid: d.id, nome: x.displayName || "", telefone: x.phone || "",
+          authProvider: x.authProvider || "",   // vira a pista "entra com a Apple" na pergunta
           email: x.email || "", linkedEmails: x.linkedEmails || [],
           letzplayHandle: x.letzplayHandle || "" });
       });
@@ -8752,9 +8902,46 @@ async function _detectarDuplicataNaBase(db, uid, meu) {
 
     const alvo = pessoas.filter((p) => p.uid === r.suspeito.uid)[0] || {};
     const emailReal = (alvo.email && !_nameUnique.isSyntheticEmail(alvo.email)) ? alvo.email : "";
+
+    /* ⛔⛔ UMA PISTA QUE A PESSOA RECONHEÇA — SEM ISSO A PERGUNTA NÃO COMUNICA NADA.
+     *
+     * Ordem do dono (13/set/2026): _"se ela esta entrando na conta nova e nao esta dizendo nem
+     * sim nem nao a comunicacao nao esta clara e efetiva"_.
+     *
+     * ⛔ MEDIDO no caso real: a pergunta identificava a outra conta por
+     * `p8***@privaterelay.appleid.com` — o e-mail OCULTO da Apple, que a pessoa nunca viu na
+     * vida e não tem como associar a nada. Ela abriu o aplicativo várias vezes em 19 dias e
+     * não respondeu nem sim nem não: não dava para reconhecer do que se tratava.
+     *
+     * ⭐ O QUE ELA RECONHECE É O TORNEIO. "A conta que está inscrita na Confra BT Alta da
+     * Clínica 2026" é uma frase que qualquer pessoa entende e confere sozinha. Quando não há
+     * torneio, a segunda melhor pista é POR ONDE aquela conta entra (Apple, Google, celular) —
+     * ainda concreto, ainda sem revelar contato de ninguém.
+     *
+     * ⚠️ Nada aqui vaza dado alheio: nome do torneio é público para quem está nele, e "entrou
+     * com a Apple" não é contato. O uid continua nunca saindo do servidor. */
+    let pista = null;
+    try {
+      const [ts, meus] = await Promise.all([
+        db.collection("tournaments").where("memberUids", "array-contains", r.suspeito.uid).limit(4).get(),
+        db.collection("tournaments").where("memberUids", "array-contains", uid).limit(4).get(),
+      ]);
+      const prov = String(alvo.authProvider || "");
+      pista = {
+        torneios: ts.docs.map((d) => String((d.data() || {}).name || "")).filter(Boolean).slice(0, 3),
+        euTenhoTorneios: meus.size,
+        comoEntra: /apple/.test(prov) ? "Apple"
+          : /google/.test(prov) ? "Google"
+            : /phone/.test(prov) ? "celular" : "",
+      };
+    } catch (e) {
+      console.warn("[dup-cadastro] não deu para montar a pista:", e && e.message);
+    }
+
     return {
       uid: r.suspeito.uid, motivo: r.suspeito.motivo, semelhanca: r.suspeito.semelhanca || null,
       nome: alvo.nome || "",
+      pista: pista,
       maskedEmail: _nameUnique.maskEmail(emailReal) || null,
       maskedPhone: _nameUnique.maskPhone(alvo.telefone) || null,
     };
@@ -8845,12 +9032,15 @@ exports.enforceUniqueDisplayName = onDocumentWritten(
           await db.collection("users").doc(uid).set({
             dupSuspect: {
               nome: _dup.nome, motivo: _dup.motivo, semelhanca: _dup.semelhanca,
+              // ⭐ a pista é o que torna a pergunta reconhecível — ver _detectarDuplicataNaBase
+              pista: _dup.pista || null,
               maskedEmail: _dup.maskedEmail, maskedPhone: _dup.maskedPhone,
               at: new Date().toISOString(),
             },
           }, { merge: true });
+          await _avisarSegundaContaNoCadastro(db, uid, a, _dup);
           console.log(`[enforceUniqueDisplayName] uid=${uid}: possível segunda conta ` +
-            `(${_dup.motivo}/${_dup.semelhanca || "-"}) → dupSuspect gravado`);
+            `(${_dup.motivo}/${_dup.semelhanca || "-"}) → dupSuspect gravado + avisada`);
         } else if (a.dupSuspect) {
           // Resolvido (fundiu, dispensou, ou a outra sumiu) → o sinal não pode ficar pendurado.
           await db.collection("users").doc(uid).set(
