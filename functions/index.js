@@ -239,7 +239,7 @@ function _replaceNameInMatches(matches, oldUid, newName, newUid) {
  *
  * Best-effort: falhar aqui não desfaz a fusão, que já gravou o essencial.
  */
-async function _sweepTournamentSubcollections(db, tourRef, dropUid, keepUid) {
+async function _sweepTournamentSubcollections(db, tourRef, dropUid, keepUid, registro) {
   if (!dropUid || !keepUid) return 0;
   let n = 0;
   let cols = [];
@@ -253,6 +253,18 @@ async function _sweepTournamentSubcollections(db, tourRef, dropUid, keepUid) {
         const novo = await novoRef.get();
         if (!novo.exists) await novoRef.set(velho.data());   // cópia PRIMEIRO
         await velho.ref.delete();
+        /* ⛔ ESTE NÃO É UM CAMPO TROCADO — É UM DOCUMENTO QUE MUDOU DE NOME.
+         * O espelho do inscrito é `participants/{uid}`: a fusão cria sob o uid vivo e apaga o
+         * do morto. Anotar campo por campo não descreveria isso, e a volta deixaria o espelho
+         * sob o uid errado — que é o mesmo defeito de 05/ago/2026, ao contrário. */
+        if (registro) {
+          registro.push({
+            mudouDeNome: true,
+            col: col.path, de: dropUid, para: keepUid,
+            conteudo: velho.data(),
+            jaExistia: novo.exists,
+          });
+        }
         n++;
       }
       // (b) uid dentro do conteúdo
@@ -268,6 +280,11 @@ async function _sweepTournamentSubcollections(db, tourRef, dropUid, keepUid) {
           if (JSON.stringify(swept.value[campo]) !== JSON.stringify(atual[campo])) payload[campo] = swept.value[campo];
         }
         if (!Object.keys(payload).length) continue;
+        if (registro) {
+          const antes = {};
+          Object.keys(payload).forEach((campo) => { antes[campo] = atual[campo] === undefined ? null : atual[campo]; });
+          registro.push({ col: col.path, id: doc.id, antes: antes });
+        }
         b.update(doc.ref, payload);
         k++; n++;
         if (k % 400 === 0) { await b.commit(); b = db.batch(); }
@@ -281,7 +298,7 @@ async function _sweepTournamentSubcollections(db, tourRef, dropUid, keepUid) {
   return n;
 }
 
-async function _repairTournaments(db, dropUid, dropEmail, dropName, keepUid, keepEmail, keepName) {
+async function _repairTournaments(db, dropUid, dropEmail, dropName, keepUid, keepEmail, keepName, registro) {
   const tourSnaps = await db.collection("tournaments").get();
   let tourFixed = 0;
   let batch = db.batch();
@@ -367,9 +384,20 @@ async function _repairTournaments(db, dropUid, dropEmail, dropName, keepUid, kee
     // MORTO — o doc respondia 200 no uid apagado e 404 no sobrevivente. O espelho existe
     // justamente pra ser a rede contra perda de inscrito; apontando pra uid morto, ele não
     // protege ninguém. Roda pra todo torneio, não só os que o sweep do doc alterou.
-    await _sweepTournamentSubcollections(db, tourDoc.ref, dropUid, keepUid);
+    await _sweepTournamentSubcollections(db, tourDoc.ref, dropUid, keepUid, registro);
 
     if (!Object.keys(payload).length) continue;
+
+    /* ⛔ ANOTA O TORNEIO TAMBÉM — sem isto a volta não devolvia o que mais importa.
+     * A varredura genérica EXCLUI `tournaments` de propósito (tem regra própria, aqui), e eu
+     * tinha anotado só o que ela toca. Uma reversão que deixa todos os torneios apontando
+     * para o sobrevivente não reverte nada do que faz alguém querer separar as contas.
+     * [[feedback_a_defesa_vaza_pela_borda]] */
+    if (registro) {
+      const antes = {};
+      Object.keys(payload).forEach((k) => { antes[k] = t[k] === undefined ? null : t[k]; });
+      registro.push({ col: "tournaments", id: tourDoc.id, antes: antes });
+    }
 
     batch.update(tourDoc.ref, payload);
     tourFixed++;
@@ -534,8 +562,13 @@ async function _executeMergeInterno(db, keepDoc, dropDoc) {
 
   console.log(`[_executeMerge] keep=${keepUid}(${keepName}) ← drop=${dropUid}(${dropName})`);
 
+  /* ⛔ O CADERNO NASCE AQUI, ANTES DO PRIMEIRO PASSO QUE MUDA DADO. Ele estava sendo criado
+   * mais adiante, só para a varredura genérica — e os torneios, que são reescritos ANTES e por
+   * outra função, ficavam de fora da volta. */
+  const anotacoes = [];
+
   const tourFixed = await _repairTournaments(
-    db, dropUid, dropEmail, dropName, keepUid, keepEmail, keepName
+    db, dropUid, dropEmail, dropName, keepUid, keepEmail, keepName, anotacoes
   );
 
   // v1.7.11 — NADA SE PERDE: o perfil do drop é absorvido pelo sobrevivente.
@@ -621,7 +654,6 @@ async function _executeMergeInterno(db, keepDoc, dropDoc) {
   // (o lock `merging` já está posto por `_executeMerge`, que envolve tudo)
   const amizadeFixed = await _amizadeNoMerge(db, dropUid, keepUid);
 
-  const anotacoes = [];
   const sweptFixed = await _sweepAllCollectionsByUid(db, dropUid, keepUid, anotacoes);
   const casualFixed = sweptFixed.casualMatches || 0;
   const colFixed = sweptFixed;
@@ -7718,10 +7750,25 @@ exports.desfazerFusao = onCall(
         const itens = (passo.data() || {}).itens || [];
         let b = db.batch(); let n = 0;
         for (const it of itens) {
-          if (!it || !it.col || !it.id) continue;
+          if (!it || !it.col) continue;
+          /* ⛔ DUAS FORMAS DE ANOTAÇÃO, PORQUE A FUSÃO FAZ DUAS COISAS: troca campo dentro do
+           * documento, e MUDA documento de nome (o espelho `participants/{uid}`). Tratar a
+           * segunda como se fosse a primeira deixaria o espelho sob o uid errado. */
+          if (it.mudouDeNome) {
+            const plano = _desfazer.planejarVoltaDoNome(it);
+            b.set(db.collection(plano.recriar.col).doc(plano.recriar.id), plano.recriar.dados);
+            n++; voltaram++;
+            if (plano.apagar) {
+              b.delete(db.collection(plano.apagar.col).doc(plano.apagar.id));
+              n++;
+            }
+            if (n >= 400) { await b.commit(); b = db.batch(); n = 0; }
+            continue;
+          }
+          if (!it.id) continue;
           b.update(db.collection(it.col).doc(it.id), _desfazer.reverterCampos(it.antes, DEL));
           n++; voltaram++;
-          if (n % 400 === 0) { await b.commit(); b = db.batch(); n = 0; }
+          if (n >= 400) { await b.commit(); b = db.batch(); n = 0; }
         }
         if (n) await b.commit();
       }

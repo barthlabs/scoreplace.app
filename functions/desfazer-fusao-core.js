@@ -117,7 +117,25 @@ function fatiar(entradas, limiteBytes) {
   return out;
 }
 
+/**
+ * ⛔ COMO DESFAZER UM DOCUMENTO QUE MUDOU DE NOME (o espelho `participants/{uid}`).
+ *
+ * A fusão copia o documento do uid morto para o uid vivo e apaga o antigo. Para voltar, o
+ * antigo é recriado com o conteúdo guardado. O novo só é apagado se ele **não existia antes** —
+ * se existia, a fusão não o criou nem o sobrescreveu, e apagá-lo destruiria o espelho que
+ * sempre foi do sobrevivente.
+ *
+ * Devolve `{ recriar: {col, id, dados}, apagar: {col, id}|null }`.
+ */
+function planejarVoltaDoNome(entrada) {
+  const e = entrada || {};
+  return {
+    recriar: { col: e.col, id: e.de, dados: e.conteudo || {} },
+    apagar: e.jaExistia ? null : { col: e.col, id: e.para },
+  };
+}
+
 module.exports = {
   JANELA_DIAS, dentroDoPrazo, diasQueRestam,
-  planejarDesligamento, planejarVolta, reverterCampos, fatiar,
+  planejarDesligamento, planejarVolta, planejarVoltaDoNome, reverterCampos, fatiar,
 };

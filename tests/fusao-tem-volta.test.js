@@ -57,6 +57,28 @@ const iAnota = EXEC.indexOf('collection("mergeUndo")');
 const iLapide = EXEC.indexOf('mergedInto: keepUid');
 must(iAnota > 0 && iLapide > 0 && iAnota < iLapide,
   '③ ⛔ o caderno é gravado ANTES da lápide — ela é que declara a união feita');
+/* ⛔⛔ A FALHA QUE ESTE PORTÃO NÃO PEGOU DA PRIMEIRA VEZ, e por isso está aqui agora:
+ * eu anotei só o que a varredura genérica toca — e ela EXCLUI `tournaments` de propósito,
+ * porque o torneio tem reparo próprio. A volta deixaria todos os torneios apontando para o
+ * sobrevivente, que é exatamente o que faz alguém querer separar as contas.
+ * [[feedback_a_defesa_vaza_pela_borda]] */
+const iR = CODIGO.indexOf('async function _repairTournaments(');
+const REPARO = CODIGO.slice(iR, CODIGO.indexOf('\nasync function', iR + 10));
+must(/registro\.push\(\{ col: "tournaments", id: tourDoc\.id/.test(REPARO),
+  '③ ⭐⭐ o TORNEIO entra no caderno — a varredura genérica não o cobre, ele tem reparo próprio');
+const iSub = CODIGO.indexOf('async function _sweepTournamentSubcollections(');
+const SUB = CODIGO.slice(iSub, CODIGO.indexOf('\nasync function', iSub + 10));
+must(/registro\.push\(\{ col: col\.path, id: doc\.id/.test(SUB),
+  '③ ⭐ e as subcoleções do torneio também');
+must(/mudouDeNome: true/.test(SUB),
+  '③ ⭐⭐ inclusive o espelho `participants\/{uid}`, que MUDA DE NOME em vez de mudar de campo');
+must(/jaExistia: novo\.exists/.test(SUB),
+  '③ ⛔⛔ anotando se o do sobrevivente já existia — sem isso a volta apagaria o espelho que sempre foi dele');
+const iCad = EXEC.indexOf('const anotacoes = []');
+const iRep = EXEC.indexOf('_repairTournaments(');
+must(iCad > 0 && iRep > 0 && iCad < iRep,
+  '③ ⛔ o caderno nasce ANTES do primeiro passo que muda dado');
+
 must(/perfilAbsorvido: dropData/.test(EXEC) && /perfilSobreviventeAntes: keepData/.test(EXEC),
   '③ ⭐ os dois perfis de antes vão no caderno — a união COPIA campos de um para o outro');
 must(/completo: false/.test(EXEC),
@@ -76,6 +98,9 @@ must(/dentroDoPrazo\(u\.emMs, Date\.now\(\)\)/.test(PORTA),
 must(/u\.desfeita/.test(PORTA), '④ e não separa duas vezes');
 must(/_amizadeLock\.adquirir\(db, \[u\.sobreviveu, absorvida\]/.test(PORTA),
   '④ ⭐ com a MESMA trava da união — as duas mexem nos mesmos documentos');
+must(/it\.mudouDeNome/.test(PORTA) && /planejarVoltaDoNome\(it\)/.test(PORTA),
+  '④ ⭐⭐ e a porta sabe desfazer as DUAS formas: campo trocado e documento renomeado');
+
 must(/planejarVolta\(u\.guardado, u\.recebidasPelaSobrevivente\)/.test(PORTA),
   '④ ⭐⭐ e só devolve a credencial que a união LEVOU — devolver outra roubaria um login');
 must(/collection\("loginRedirects"\)\.doc\(String\(cred\)\.toLowerCase\(\)\)\.delete\(\)/.test(PORTA),

@@ -54,6 +54,25 @@ ok('④ campo que existia volta com o valor de antes', JSON.stringify(rev.friend
 ok('④ ⭐ campo que NÃO existia volta como remoção — gravar nulo deixaria lixo',
   rev.apelido === '<DEL>');
 
+// ── ④b documento que MUDOU DE NOME (o espelho `participants/{uid}`) ───────
+/* ⛔ A fusão copia o espelho do uid morto para o vivo e apaga o antigo. Isso não é campo
+ * trocado — é documento renomeado, e tratar como campo deixaria o espelho sob o uid errado. */
+const nasceu = D.planejarVoltaDoNome({
+  col: 'tournaments/t1/participants', de: 'uidMorto', para: 'uidVivo',
+  conteudo: { uid: 'uidMorto', name: 'Ela' }, jaExistia: false,
+});
+ok('④b recria o documento sob o uid de antes', nasceu.recriar.id === 'uidMorto' && nasceu.recriar.dados.name === 'Ela');
+ok('④b ⭐ e apaga o que a fusão criou', nasceu.apagar && nasceu.apagar.id === 'uidVivo');
+
+const jaTinha = D.planejarVoltaDoNome({
+  col: 'tournaments/t1/participants', de: 'uidMorto', para: 'uidVivo',
+  conteudo: { uid: 'uidMorto' }, jaExistia: true,
+});
+ok('④b recria o de antes também quando o outro já existia', jaTinha.recriar.id === 'uidMorto');
+/* ⛔⛔ A trava: se o espelho do sobrevivente JÁ existia, a fusão não o criou nem o
+ * sobrescreveu. Apagá-lo destruiria o que sempre foi dele. */
+ok('④b ⛔⛔ mas NÃO apaga o espelho que já era do sobrevivente', jaTinha.apagar === null);
+
 // ── ⑤ o registro cabe no documento ─────────────────────────────────────────
 const muitos = Array.from({ length: 500 }, (_, i) => ({ col: 'tournaments', id: 't' + i, antes: { memberUids: ['x'.repeat(200)] } }));
 const fatias = D.fatiar(muitos, 50000);
