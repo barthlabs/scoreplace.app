@@ -36,10 +36,24 @@ set -euo pipefail
 # ⚠️ Só entra quando a chave durável existe. Sem ela, o comportamento antigo continua, e a
 # mensagem de "não autenticado" segue explicando o caminho que dura.
 if [ -n "${GOOGLE_APPLICATION_CREDENTIALS:-}" ] && [ -r "${GOOGLE_APPLICATION_CREDENTIALS}" ]; then
+  # ⛔ E SÓ SE ELA REALMENTE CONSEGUIR PUBLICAR. MEDIDO em 14/set/2026: a conta de serviço
+  # autentica, mas não tem acesso aos SEGREDOS que três funções declaram — e o deploy morre
+  # com 403 do Secret Manager. Esconder a sessão de usuário nesse caso troca um problema por
+  # outro: some a credencial que funciona. O teste abaixo é uma leitura barata que usa
+  # exatamente a permissão que falta; se passar, a conta de serviço assume (e não expira). Se
+  # não, o script segue com a sessão de usuário e DIZ por quê, em vez de falhar no meio.
   _SP_CFG="$(mktemp -d)"
-  export XDG_CONFIG_HOME="$_SP_CFG"
-  trap 'rm -rf "$_SP_CFG"' EXIT
-  echo "▸ credencial: conta de serviço ($(basename "$GOOGLE_APPLICATION_CREDENTIALS")) — sessão de usuário ignorada"
+  if XDG_CONFIG_HOME="$_SP_CFG" firebase --project "${PROJECT:-scoreplace-app}" \
+       functions:secrets:get SIGNIN_API_KEY >/dev/null 2>&1; then
+    export XDG_CONFIG_HOME="$_SP_CFG"
+    trap 'rm -rf "$_SP_CFG"' EXIT
+    echo "▸ credencial: conta de serviço ($(basename "$GOOGLE_APPLICATION_CREDENTIALS")) — não expira"
+  else
+    rm -rf "$_SP_CFG"
+    echo "▸ credencial: sessão de usuário (a conta de serviço não alcança os segredos)"
+    echo "  Para a publicação parar de depender de sessão que expira, a conta de serviço"
+    echo "  precisa de um papel de Secret Manager no projeto."
+  fi
 fi
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
