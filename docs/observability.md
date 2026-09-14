@@ -1,24 +1,21 @@
 # Observability — Sentry boilerplate
 
-**Status:** boilerplate plugado, **DSN não configurado** (silent no-op).
+**Status:** Sentry ativo no bundle público. A versão 2.3.14 declara o DSN
+antes de carregar `js/sentry-init.js`; os helpers de captura, portanto, não
+estão em modo no-op em produção. O modo sem DSN continua sendo uma reserva
+para previews e desenvolvimento local.
 **Arquivo:** `js/sentry-init.js`
 **Carregamento:** sync no `<head>`, antes de qualquer outro script — captura
 erros em qualquer ponto do boot, inclusive em scripts deferidos.
 
 ---
 
-## Como ativar (produção)
+## Estado sem DSN
 
-1. Crie projeto em https://sentry.io (free tier serve pra começar).
-2. Copie o DSN público (formato `https://abc123@o000.ingest.sentry.io/000`).
-3. No `index.html`, descomente esta linha (logo antes de `sentry-init.js`):
-   ```html
-   <script>window.SENTRY_DSN = "https://SEU_DSN_AQUI";</script>
-   ```
-4. Bumpe versão + cache buster, deploy.
-
-Sem DSN o app boota normal. Os helpers `_captureException`/`_captureMessage`
-ficam expostos como no-op — callers podem usar sem checar disponibilidade.
+Sem DSN o app boota normal. Os helpers `_captureException`/
+`_captureMessage` ficam expostos como no-op — callers podem usá-los sem
+ramificar o fluxo. Essa reserva atende previews e desenvolvimento local; não
+descreve a produção atual.
 
 ## Como ativar em DEV (sem commitar DSN)
 
@@ -127,8 +124,20 @@ quando fizer sentido.
 
 ## Próximos passos (não-bloqueantes pra beta)
 
-- [ ] Plugar DSN real quando usuários reais começarem a testar (beta).
 - [ ] Adicionar Sentry Releases via GitHub Action no deploy (`sentry-cli releases`).
 - [ ] Source maps upload se algum dia vier minificação/build step.
 - [ ] Migrar `console.log/warn/error` em arquivos críticos pra `window._log/_warn/_error`
       progressivamente — começar por `auth.js` (81 calls) e `firebase-db.js` (40 calls).
+
+## Resposta operacional
+
+| Sinal | Primeira verificação | Ação se persistir |
+|---|---|---|
+| Erro novo no Sentry | release, rota e primeiro stack trace; confirmar que não há dado pessoal no evento | interromper nova publicação da mesma linha e abrir correção reproduzível |
+| Pico de leituras ou escritas Firestore | intervalo de tempo, métrica afetada e última release | comparar com tráfego e identificar a consulta/escrita antes de mexer em quota ou Rules |
+| Erros de Cloud Functions | nome da função, código e `cloud_run_revision` da execução | conferir logs da execução; recusar reprocessamento manual até distinguir falha transitória de efeito parcial |
+| Alerta de orçamento | serviço que cresceu e tendência diária | pausar trabalho que aumente consumo e definir limite ou correção com base na métrica |
+
+Não registrar tokens, e-mails, documentos de torneio ou mensagens de pessoas
+na investigação. A identificação operacional é versão, rota, função, janela
+de tempo e código de erro.

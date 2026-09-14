@@ -70,14 +70,13 @@ Hoje o CLAUDE.md autoriza dropar torneios/venues/users livremente. Antes de beta
 - [ ] Documentar a partir daqui: "regra de não-quebrar-compat ativa"
 
 #### 2. **Sentry DSN ativada**
-Boilerplate plugado em `js/sentry-init.js` (v0.17.59). `_captureException`
-plugado em 8 catches críticos (v0.17.61). Sem DSN, tudo é no-op.
-- [x] Boilerplate Sentry inativo (silent no-op sem DSN)
+O bootstrap está em `js/sentry-init.js` e o bundle público atual declara o
+DSN antes dele. O caminho no-op é somente a reserva para preview e
+desenvolvimento local.
+- [x] Sentry ativo na versão pública; helpers continuam seguros sem DSN fora de produção
 - [x] `_captureException` em saves críticos (store, firebase-db, presence, auth, casual)
-- [ ] Criar projeto em sentry.io (free tier)
-- [ ] Descomentar a linha em `index.html` (`<script>window.SENTRY_DSN = "..."</script>`)
-- [ ] Validar primeiro erro chegando ao dashboard do Sentry
-- [ ] Smoke-test ainda passando após ativação
+- [x] Projeto e DSN configurados; evento de teste já foi recebido (registro de v0.17.80)
+- [x] Smoke-test ainda passando após ativação
 
 #### 3. **Backup automatizado do Firestore** ✅ scaffolding pronto
 - [x] `backupFirestore` scheduled function em `functions/index.js` (v0.17.71)
@@ -103,7 +102,7 @@ plugado em 8 catches críticos (v0.17.61). Sem DSN, tudo é no-op.
 - [x] **Alert: Firestore writes spike** — `policies/17513956699707412338`, dispara se writes >5/s sustentado; free tier = 0.23/s sustentado
 - [x] **Alert: Cloud Functions errors** — `policies/11184669359630448312`, dispara se >1/min de execuções com `status != "ok"` por 5min (catches autoDraw, stripeWebhook, backupFirestore, sendPushNotification)
 - [x] Notification channel: `projects/scoreplace-app/notificationChannels/15889107672722760766` (rstbarth email)
-- [ ] Documentar plano de ação se um alarme dispara (1 página) — **deferred pra beta** (responder ad-hoc com Sentry+logs nos primeiros 7d)
+- [x] Plano de ação por sinal documentado em `docs/observability.md`: Sentry, leituras, escritas, Functions e orçamento. A resposta começa pela métrica e pelo log, sem PII.
 
 ### 🟡 Importantes
 
