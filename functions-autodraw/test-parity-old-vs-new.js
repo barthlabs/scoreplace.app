@@ -29,6 +29,28 @@ function ok(name, cond, got) {
 }
 const gitShow = (file) => execFileSync('git', ['show', `${OLD_REF}:${file}`], { cwd: REPO, maxBuffer: 64e6 }).toString();
 
+/* ⛔ ESTA CONFERÊNCIA PRECISA DO HISTÓRICO — E NA PUBLICAÇÃO ELE NÃO EXISTE.
+ *
+ * O que ela faz é comparar o código de hoje com a versão 1.2.24 lida DO GIT. A publicação
+ * roda a bateria numa cópia extraída com `git archive`, que por desenho não leva o `.git`
+ * junto (é o mesmo motivo de o alinhamento ir por carimbo, e não por consulta ao repositório).
+ * Lá o `git show` estoura e a suíte ficava VERMELHA sem defeito nenhum — barrando a
+ * publicação por falta de um arquivo que não deveria estar lá.
+ *
+ * ⛔ E NÃO PODE SER SILÊNCIO: uma suíte que se cala quando não consegue medir é uma suíte
+ * que um dia para de medir sem ninguém notar. Ela DIZ que não mediu, e diz por quê. Onde há
+ * histórico — a máquina de quem trabalha, que é onde a bateria roda o dia inteiro — ela mede
+ * normalmente. [[feedback_engolir_erro_custa_horas_do_dono]] */
+try {
+  execFileSync('git', ['rev-parse', '--git-dir'], { cwd: REPO, stdio: 'ignore' });
+} catch (e) {
+  console.log('\n──── paridade com a 1.2.24 ────\n');
+  console.log('  ⏭️  SEM HISTÓRICO AQUI: esta cópia não tem `.git` (é o caso da publicação,');
+  console.log('      que extrai a árvore com `git archive`). A comparação com a versão');
+  console.log('      antiga é feita a cada rodada no repositório de trabalho.');
+  process.exit(0);
+}
+
 // ── LADO NOVO ───────────────────────────────────────────────────────────────
 const NEW = require('./draw-core.js')._window;
 
