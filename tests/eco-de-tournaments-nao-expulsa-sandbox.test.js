@@ -109,7 +109,7 @@ const snapDe = (colecao, ids) => {
 };
 const q = (nome) => ({
   where() { return this; }, limit() { return this; }, orderBy() { return this; },
-  onSnapshot(cb) { (CB[nome] = CB[nome] || []).push(cb); return function () {}; },
+  onSnapshot(opts, cb) { const receber = typeof opts === 'function' ? opts : cb; (CB[nome] = CB[nome] || []).push(receber); return function () {}; },
   get() { return Promise.resolve(snapDe(nome, [])); },
   doc(id) { return { get: () => Promise.resolve({ exists: false, data: () => null }), collection: () => q(nome) }; }
 });

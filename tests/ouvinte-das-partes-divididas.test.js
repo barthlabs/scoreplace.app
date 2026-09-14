@@ -27,11 +27,11 @@ const corpo = src.slice(i, src.indexOf('\n  pararDeOuvirJogos()', i));
 ok('⛔ deriva de `_semPesados`, não de um nome escrito à mão',
   /_semPesados/.test(corpo) && !/colecaoDaParte\('matches'\)/.test(corpo),
   'com o nome fixo, a parte seguinte a sair do documento nunca chegaria na tela');
-ok('⭐ e cruza com o que muda AO VIVO (custo: a abertura já buscou tudo)',
-  /_partesQueMudamAoVivo\(\)\.filter/.test(corpo));
-ok('⭐ inscritos também chegam ao vivo para substituição, saída e W.O.',
-  /_partesQueMudamAoVivo\(\) \{ return \['matches', 'grupos', 'checkedIn', 'participants'\]; \}/.test(src),
-  'aceitamos a primeira leitura repetida para que o elenco não congele depois da montagem');
+ok('⭐ toda parte declarada pelo torneio chega ao vivo (sem lista manual incompleta)',
+  /_partesQueMudamAoVivo\(fora\)/.test(corpo) && /return Array\.isArray\(partes\) \? partes\.slice\(\) : \[\];/.test(src));
+ok('⭐ espera, inativos, W.O., duplas, jogos, grupos e resultados recebem confirmação remota',
+  /includeMetadataChanges: true/.test(corpo) && /snap\.metadata\.fromCache\) return;/.test(corpo),
+  'o cache não pode reverter nenhuma parte operacional antes de o servidor confirmar');
 ok('  → torneio inteiro sai cedo, sem assinar nada', /if \(!fora\.length\) return;/.test(corpo));
 ok('  → e sem alvo também', /if \(!alvos\.length\) return;/.test(corpo));
 

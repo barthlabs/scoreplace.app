@@ -30,9 +30,9 @@ ok(i > 0, 'o ouvinte existe');
 const j = store.indexOf('  pararDeOuvirJogos() {');
 const corpo = store.slice(i, store.indexOf('\n  },', j) + 4);
 
-let soltas = 0, assinou = null;
+let soltas = 0, assinou = null, opcoesDoOuvinte = null;
 const fakeDb = { collection: () => ({ doc: () => ({ collection: () => ({
-  onSnapshot: (f, e) => { assinou = f; return function () { soltas++; }; } }) }) }) };
+  onSnapshot: (opts, f, e) => { opcoesDoOuvinte = opts; assinou = f; return function () { soltas++; }; } }) }) }) };
 /* ⚠️ 2.1.87: o ouvinte passou a pedir a subcoleção por `FirestoreDB._tSub(id, parte)` — a
  * porta única que decide entre `tournaments` e `sandboxes`. O harness dá a MESMA porta (o
  * roteamento em si é provado em sandbox-cliente-roteia-e-nao-fabrica). */
@@ -57,6 +57,9 @@ ok(!API._jogosSub, '⛔ torneio NÃO dividido não abre assinatura nenhuma — o
 API.tournaments = [alvo];
 API.ouvirJogosDoTorneio('t1');
 ok(API._jogosSub && API._jogosSub.id === 't1', '⭐ torneio dividido abre a assinatura');
+ok(JSON.stringify(API._partesQueMudamAoVivo(['matches', 'participants', 'opponentHistory'])) ===
+   JSON.stringify(['matches', 'participants', 'opponentHistory']),
+  'toda parte declarada no torneio recebe atualização remota; não existe lista manual incompleta');
 
 // ── ③ ouvir o MESMO não reabre; ouvir OUTRO solta o anterior ───────────────
 API.ouvirJogosDoTorneio('t1');
@@ -71,15 +74,22 @@ const vivo = API.tournaments[0];
 API.tournaments = [vivo]; API._jogosSub = null;
 API.ouvirJogosDoTorneio('t1');
 const snap = { forEach: (f) => { f({ data: () => ({ _chave: 'm1' }) }); },
-               docChanges: () => [{}] };
+               docChanges: () => [{}], metadata: { fromCache: false } };
 assinou(snap);
 ok(vivo._montado === 1, '⭐ o delta é remontado e escrito NO LUGAR (mesma referência que as telas guardam)');
 ok(!vivo._faltamPesados, '   e a marca de incompleto sai');
+ok(opcoesDoOuvinte && opcoesDoOuvinte.includeMetadataChanges === true,
+  'o ouvinte recebe a confirmação remota mesmo quando ela só muda metadata');
 
 // nada mudou → não repinta
 let antes = vivo._montado;
-assinou({ forEach: () => {}, docChanges: () => [] });
+assinou({ forEach: () => {}, docChanges: () => [], metadata: { fromCache: false } });
 ok(vivo._montado === antes, '⛔ entrega sem mudança nenhuma não repinta — o eco do próprio save não pode custar render');
+
+// Cache nunca pode reverter uma chave já confirmada pelo servidor.
+const antesCache = vivo._montado;
+assinou({ forEach: (f) => { f({ data: () => ({ _chave: 'velho' }) }); }, docChanges: () => [{}], metadata: { fromCache: true } });
+ok(vivo._montado === antesCache, '⛔ snapshot do cache não altera a chave nem a lista de W.O.');
 
 // ── ⑤ soltar ao sair ────────────────────────────────────────────────────────
 soltas = 0; API.pararDeOuvirJogos();

@@ -2598,7 +2598,13 @@ window.FirestoreDB = {
     try {
       var t = await S.montarDoBanco(config, async function (colecao) {
         // pela porta única (`_tSub`): é ela que decide entre tournaments e sandboxes
-        var snap = await self._tSub(id, colecao).get();
+        /* A abertura de uma chave decide W.O., dupla e placar. A resposta padrão do
+         * Firestore pode ser o IndexedDB local; tratá-la como "carregado" transforma
+         * um retrato antigo em verdade e a tela passa a divergir do servidor. Para uma
+         * parte dividida, só o servidor pode satisfazer a abertura. Sem rede, a chamada
+         * falha e a interface permanece em carregamento/erro — nunca exibe o elenco
+         * antigo como se estivesse confirmado. */
+        var snap = await self._tSub(id, colecao).get({ source: 'server' });
         lidos += snap.size;
         var arr = []; snap.forEach(function (d) { var v = d.data(); if (v) arr.push(v); });
         return arr;
@@ -2707,7 +2713,10 @@ window.FirestoreDB = {
        * snapshot vazio. Por isso o erro é guardado, não relançado: quem decide se é "não
        * encontrado" é o fim desta função, depois de perguntar também a `sandboxes`. */
       var doc = null, _erro1 = null;
-      try { doc = await this._tRef(id).get(); } catch (_e1) { _erro1 = _e1; }
+      /* Não promover a cópia persistida do aparelho a dado confirmado. `get()` sem
+       * source pode resolver no cache, inclusive antes de o SDK alcançar as mudanças
+       * de W.O. feitas por outro aparelho. */
+      try { doc = await this._tRef(id).get({ source: 'server' }); } catch (_e1) { _erro1 = _e1; }
       /* ⭐ ABERTURA FRIA DE SANDBOX — O LINK DIRETO NÃO TEM CONTEXTO (2.1.88).
        * `_ehSandbox` decide por FATO: o ouvinte registrou o id, ou o objeto em memória diz
        * `isSandbox`. Num navegador que ACABOU DE ABRIR em `#tournaments/{sbId}` não existe

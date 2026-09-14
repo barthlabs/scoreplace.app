@@ -49,7 +49,8 @@ ok(/Array\.isArray\(_t\._semPesados\)/.test(fn),
 ok(!/!_t\.rounds|rounds\s*===\s*undefined/.test(fn),
   'NÃO dispara por ausência de rounds (torneio novo também não tem jogo e abriria vazio)');
 ok(/_montaDeSubcolecoes/.test(db), 'existe o montador');
-const mont = db.slice(db.indexOf('async _montaDeSubcolecoes'), db.indexOf('async _montaDeSubcolecoes') + 1600);
+const _iMont = db.indexOf('async _montaDeSubcolecoes');
+const mont = db.slice(_iMont, db.indexOf('\n  /* ── ENFILEIRA A INTENÇÃO', _iMont));
 /* ⭐ UM CAMINHO SÓ (26/ago, pergunta do dono: _"por que 7 caminhos? não deveria ser 1
  * caminho único canônico?"_). Eram SEIS cópias da mesma operação — ler as partes que
  * `_semPesados` nomeia e remontar: leitor do app, leitor da CF, resumo, salto, volta e
@@ -62,6 +63,10 @@ const mont = db.slice(db.indexOf('async _montaDeSubcolecoes'), db.indexOf('async
 ok(/montarDoBanco/.test(mont), '⭐ o montador usa o CAMINHO ÚNICO — não uma cópia da montagem');
 ok(!/S\.remontar\(/.test(mont), '   e não chama `remontar` por fora dele');
 ok(/_noteFsReads/.test(mont), 'e contabiliza as leituras (a Fase 2 troca 1 leitura por N — isso tem que ser visível)');
+ok(/get\(\{ source: 'server' \}\)/.test(mont),
+  '⛔ a montagem da chave exige resposta do servidor; cache local não pode virar elenco, W.O. ou placar');
+ok(/_tRef\(id\)\.get\(\{ source: 'server' \}\)/.test(fn),
+  'e o documento-base também é remoto antes de a tela aceitar o torneio');
 /* ⛔ E O CONTRATO DE FALHA MUDOU, PRA MELHOR. Antes: "se falhar, devolve o documento cru".
  * ⚠️ Documento cru de um torneio dividido é um torneio SEM JOGOS — e devolver isso em
  * silêncio foi EXATAMENTE o que pintou chave vazia pra todo mundo em 26/ago. A tela não

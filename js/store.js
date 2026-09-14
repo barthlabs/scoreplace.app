@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.3.11';
+window.SCOREPLACE_VERSION = '2.3.12';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -11083,9 +11083,12 @@ window.AppStore = {
       if (!raw) return false;
       var data = JSON.parse(raw);
       // Cache valid for 24h
-      if (data && data.tournaments && (Date.now() - data.ts) < 86400000) {
+      /* Cache local não entra mais em `tournaments`. Um torneio é um estado operacional:
+       * espera, inativos, W.O., dupla, chave e placares têm de concordar com o banco no
+       * instante em que aparecem. Mantemos o formato legado abaixo somente para não perder
+       * compatibilidade de leitura durante a migração, mas ele não é caminho de produto. */
+      if (false && data && data.tournaments && (Date.now() - data.ts) < 86400000) {
         var _cached = window._dropSandboxForNonDev(data.tournaments);
-        this.tournaments = _cached;
         /* ⛔ O QUE VEIO DO CACHE É RÁPIDO, NÃO É FRESCO — e a diferença tem sintoma.
          * Relato do dono (25/ago/2026), depois de aprovar um placar: _"pelo que vejo foi
          * aprovado, mas quando abri de novo não estava. Mas daí reiniciei e estava.
@@ -12133,7 +12136,11 @@ window.AppStore = {
         window._softRefreshView();
     }
     this._realtimeUnsubscribe = query
-      .onSnapshot(function(snap) {
+      .onSnapshot({ includeMetadataChanges: true }, function(snap) {
+        // O IndexedDB pode responder antes da rede. Nunca use essa resposta para pintar
+        // estado operacional; aguardamos a confirmação remota, mesmo que ela só altere
+        // metadata e não tenha delta de documentos.
+        if (snap && snap.metadata && snap.metadata.fromCache) return;
         window._snapCount = (window._snapCount || 0) + 1;
         if (window._medirTrecho) return window._medirTrecho('snapshot-torneios', function () { _aplicaSnapTorneios(snap); });
         return _aplicaSnapTorneios(snap);
@@ -13129,7 +13136,12 @@ window.AppStore = {
 
   ouvirJogosDoTorneio(tournamentId) { return this.ouvirPartesDoTorneio(tournamentId); },
 
-  _partesQueMudamAoVivo() { return ['matches', 'grupos', 'checkedIn', 'participants']; },
+  _partesQueMudamAoVivo(partes) {
+    // A lista que o documento declara como dividida é a fonte única. Filtrar por uma
+    // enumeração manual fez inscritos passarem despercebidos; amanhã faria o mesmo com
+    // qualquer parte nova. Todas são operacionais e só podem mudar por snapshot remoto.
+    return Array.isArray(partes) ? partes.slice() : [];
+  },
 
   ouvirPartesDoTorneio(tournamentId) {
     var id = String(tournamentId || '');
@@ -13141,23 +13153,31 @@ window.AppStore = {
     if (!fora.length) return;      // torneio inteiro: o doc já traz tudo
     var S = window._tSplit;
     if (!S || typeof S.remontar !== 'function') return;
-    var alvos = this._partesQueMudamAoVivo().filter(function (n) { return fora.indexOf(n) !== -1; });
+    var alvos = this._partesQueMudamAoVivo(fora);
     if (!alvos.length) return;
 
     var self = this, uns = [];
     alvos.forEach(function (nome) {
       try {
         var _col = (typeof S.colecaoDaParte === 'function') ? S.colecaoDaParte(nome) : nome;
+        /* O primeiro snapshot pode vir do IndexedDB. Ele é útil para o SDK sincronizar,
+         * mas não pode alterar elenco, W.O. ou chave: uma cópia antiga faria a tela
+         * divergir do banco até a confirmação chegar. Com metadata, esperamos o snapshot
+         * remoto e aplicamos o conjunto inteiro uma vez, mesmo se a confirmação não tiver
+         * delta de documentos. */
+        var recebeuServidor = false;
         var un = window.FirestoreDB._tSub(id, _col)
-          .onSnapshot(function (snap) {
+          .onSnapshot({ includeMetadataChanges: true }, function (snap) {
             try {
+              if (snap && snap.metadata && snap.metadata.fromCache) return;
               var vivo = (self.tournaments || []).find(function (x) { return x && String(x.id) === id; });
               if (!vivo) return;
               /* ⚠️ `docChanges` e não o snapshot inteiro: é o delta que faz isto valer a
                * pena. Na PRIMEIRA entrega o Firestore manda tudo como 'added' — e tudo bem,
                * é a mesma leitura que a busca faria; o ganho está nas entregas seguintes. */
               var mudou = snap.docChanges().length;
-              if (!mudou) return;
+              if (!mudou && recebeuServidor) return;
+              recebeuServidor = true;
               var regs = [];
               snap.forEach(function (d) { var v = d.data(); if (v) regs.push(v); });
               if (!regs.length) {

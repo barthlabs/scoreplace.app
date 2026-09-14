@@ -39,7 +39,8 @@ function deferred(){let resolve,reject;const promise=new Promise((a,b)=>{resolve
  const cacheStore=vm.runInNewContext('({'+Object.values(cacheMethods).join(',')+'})',{localStorage:storage,window:{_dropSandboxForNonDev:x=>x,_marcaPartesQueFaltam:()=>false},Date});
  cacheStore.tournaments=[{id:'t',_resultsHydrating:true,_resultsHydrated:'completa'}];cacheStore._saveToCache();
  assert.equal(JSON.parse(saved).tournaments[0]._resultsHydrating,undefined);assert.equal(JSON.parse(saved).tournaments[0]._resultsHydrated,undefined,'escopo em string também sai do cache');assert.equal(cacheStore.tournaments[0]._resultsHydrating,true);
- saved=JSON.stringify({ts:Date.now(),tournaments:[{id:'t',_resultsHydrating:true,_resultsHydrated:'parcial'}]});assert.equal(cacheStore._loadFromCache(),true);
- assert.equal(cacheStore.tournaments[0]._resultsHydrating,undefined);assert.equal(cacheStore.tournaments[0]._resultsHydrated,undefined);
+ saved=JSON.stringify({ts:Date.now(),tournaments:[{id:'t',_resultsHydrating:true,_resultsHydrated:'parcial'}]});assert.equal(cacheStore._loadFromCache(),false);
+ assert.equal(cacheStore.tournaments[0]._resultsHydrating,true);assert.equal(cacheStore.tournaments[0]._resultsHydrated,'completa',
+   'cache local não altera o estado operacional: somente a confirmação remota pode fazê-lo');
  console.log('✅ L8: retry, coalescência, snapshot fresco, troca de conta, remoção, datas ISO e sandbox');
 })().catch(e=>{console.error(e);process.exitCode=1;});

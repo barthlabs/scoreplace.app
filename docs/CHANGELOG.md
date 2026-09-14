@@ -1,3 +1,9 @@
+## 2.3.12 — 14/set/2026
+
+- O estado operacional de torneios agora só é exibido após confirmação remota: inscrições, espera, inativos, W.O., duplas, jogos, grupos e resultados não aceitam cópias locais como dados atuais.
+- A abertura busca o documento e todas as partes divididas diretamente no servidor; as assinaturas aplicam a primeira confirmação remota completa e acompanham todas as partes declaradas pelo torneio.
+- Em ausência de rede, a tela aguarda ou informa a indisponibilidade em vez de apresentar uma cópia persistida como se fosse atual.
+
 ## 2.3.11 — 14/set/2026
 
 Substituições de dupla, entradas e saídas por W.O. agora chegam em tempo real para cada tela
