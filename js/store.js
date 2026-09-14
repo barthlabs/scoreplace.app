@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.3.16';
+window.SCOREPLACE_VERSION = '2.3.17';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -6022,6 +6022,27 @@ window._activatePlayerProfileLinks = function (root) {
         var uid = el.getAttribute('data-player-profile-uid') || el.getAttribute('data-uid-name');
         var inline = el.getAttribute('onclick') || '';
         if (!uid || el.getAttribute('data-player-profile-disabled') === '1' || inline.indexOf('_editParticipantName') !== -1) return;
+        // `_personNameHtml` conserva o marcador `data-uid-name` dentro do link
+        // canônico para a hidratação. Esse filho é dado, não outro controle: somente
+        // o wrapper abre a ficha, evitando um botão dentro de outro para leitor de tela.
+        var parent = el.parentNode;
+        var nestedInProfileLink = false;
+        while (parent && parent !== root) {
+            if (parent.getAttribute && parent.getAttribute('data-player-profile-uid')) {
+                nestedInProfileLink = true;
+                break;
+            }
+            parent = parent.parentNode;
+        }
+        if (nestedInProfileLink) {
+            if (el.classList) el.classList.remove('sp-person-name-link');
+            if (el.removeAttribute) {
+                el.removeAttribute('role');
+                el.removeAttribute('tabindex');
+                if ((el.getAttribute('title') || '').indexOf('Ver estatísticas de ') === 0) el.removeAttribute('title');
+            }
+            return;
+        }
         if (el.classList) el.classList.add('sp-person-name-link');
         if (!el.getAttribute('role')) el.setAttribute('role', 'button');
         if (!el.getAttribute('tabindex')) el.setAttribute('tabindex', '0');

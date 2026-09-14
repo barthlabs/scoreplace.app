@@ -1,3 +1,9 @@
+## 2.3.17 — 14/set/2026
+
+- **Ficha acessível em todo lugar:** cada nome abre estatísticas por um único alvo
+  de teclado e leitor de tela. O marcador interno que atualiza o nome ao vivo não
+  é mais anunciado como um segundo botão.
+
 ## 2.3.16 — 14/set/2026
 
 - **Ficha e comunicação em qualquer lista:** todo participante identificado por UID

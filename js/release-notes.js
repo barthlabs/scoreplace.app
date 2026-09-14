@@ -1,3 +1,4 @@
+// 2.3.17 — cada nome que abre ficha tem um único alvo acessível; o marcador interno de atualização não aparece como segundo botão.
 // 2.3.16 — tocar no nome de cada participante identificado abre a ficha e as estatísticas, na classificação, nos jogos e nas listas; o balão de contato abre WhatsApp ou e-mail.
 // 2.3.15 — o diagnóstico de falhas remove contexto pessoal antes de chegar ao Sentry, e uma reentrega técnica de e-mail pendente não cria segunda mensagem. Quem sai por W.O. vê o jogo de onde saiu; resultados de melhor de 3/5 mantêm o cabeçalho que identifica cada set.
 // 2.3.14 — a lista de espera ocupa duas colunas quando há espaço, os cards têm altura uniforme e a interface deixa de mostrar a sigla interna da rodada.

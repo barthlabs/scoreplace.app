@@ -22,6 +22,7 @@ ok(/window\._personNameHtml[\s\S]{0,900}window\._personProfileLinkHtml/.test(sto
 ok(/document\.addEventListener\('click',[\s\S]{0,600}true\)/.test(store), 'o clique é delegado na captura, antes da ação do card');
 ok(/document\.addEventListener\('keydown'/.test(store) && /ev\.key !== 'Enter' && ev\.key !== ' '/.test(store), 'Enter e Espaço também abrem a ficha');
 ok(/_editParticipantName/.test(store), 'o atalho de edição administrativa continua protegido');
+ok(/botão dentro de outro para leitor de tela/.test(store), 'o marcador interno de hidratação não vira um segundo botão');
 ok(/\.sp-person-name-link,[\s\S]{0,240}\[data-uid-name\]/.test(css), 'o sublinhado pontilhado vale para helper e renders legados');
 ok(/\[data-theme="light"\] \.sp-person-name-link,[\s\S]{0,180}text-decoration-color: var\(--primary-color, #007aff\)/.test(css) && /\[data-theme="light"\][\s\S]{0,1200}--primary-color: #007aff/.test(style),
   'no tema claro o sublinhado usa a tinta primária com contraste');
@@ -43,9 +44,33 @@ const documentFixture = {
 };
 const W = { window: null, document: documentFixture };
 W.window = W;
+const activationStart = store.indexOf('window._activatePlayerProfileLinks = function');
+const activationEnd = store.indexOf('\n\nwindow._openPlayerProfileFromNameElement', activationStart);
+vm.createContext(W);
+vm.runInContext(store.slice(activationStart, activationEnd), W, { filename: 'player-profile-activation' });
+function fixtureElement(attributes, parent) {
+  const attrs = Object.assign({}, attributes);
+  const classes = {};
+  return {
+    parentNode: parent,
+    textContent: 'Ana',
+    getAttribute(key) { return attrs[key] || ''; },
+    setAttribute(key, value) { attrs[key] = String(value); },
+    removeAttribute(key) { delete attrs[key]; },
+    classList: { add(key) { classes[key] = true; }, remove(key) { delete classes[key]; } },
+    attrs,
+    classes
+  };
+}
+const activationRoot = { querySelectorAll() { return [profileWrapper, nameMarker]; } };
+const profileWrapper = fixtureElement({ 'data-player-profile-uid': 'u-ana' }, activationRoot);
+const nameMarker = fixtureElement({ 'data-uid-name': 'u-ana' }, profileWrapper);
+W._activatePlayerProfileLinks(activationRoot);
+ok(profileWrapper.attrs.role === 'button' && profileWrapper.attrs.tabindex === '0' &&
+  !nameMarker.attrs.role && !nameMarker.attrs.tabindex,
+  'o wrapper é o único botão; o marcador interno continua só para hidratação');
 const start = store.indexOf('window._openPlayerProfileFromNameElement = function');
 const end = store.indexOf('\nwindow._profileAvatarUrl', start);
-vm.createContext(W);
 vm.runInContext(store.slice(start, end), W, { filename: 'player-profile-delegation' });
 let opened = 0, cardOpened = 0;
 W._openPlayerProfile = function (name, opts) { if (name === 'Ana' && opts.uid === 'u-ana') opened++; };
