@@ -108,6 +108,7 @@ const SUITES = [
   'tests/o-site-nao-publica-o-repositorio.test.js',
   'tests/fusao-tem-volta.test.js',
   'tests/fusao-e-volta-no-emulador.test.js',
+  'tests/celular-do-casal-no-emulador.test.js',
   'functions/test-desfazer-fusao-core.js',
   'tests/telefone-do-organizador-caduca.test.js',
   'tests/rules-mudou-tem-de-ser-testada.test.js',
@@ -1950,6 +1951,11 @@ const PRENDEM_PORTA = [
   // Abre dois emuladores em sequência; sob carga paralela o Firebase CLI pode esperar
   // sem devolver controle, portanto precisa da mesma exclusividade dos demais emuladores.
   'tests/rules-contencao-avanco-de-fase.test.js',
+  /* Sobem Firestore + Auth nas portas do firebase.sandbox.json (8093/9092) e carregam as
+   * Cloud Functions de verdade. Duas delas ao mesmo tempo disputam a MESMA porta — medido em
+   * 14/set/2026: passavam sozinhas e caíam na bateria, sem defeito nenhum. */
+  'tests/fusao-e-volta-no-emulador.test.js',
+  'tests/celular-do-casal-no-emulador.test.js',
 ];
 const EXCLUSIVAS = new Set(MEXEM_NO_REPO.concat(PRENDEM_PORTA));
 
