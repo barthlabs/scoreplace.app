@@ -1,3 +1,4 @@
+// 2.3.15 — o diagnóstico de falhas remove contexto pessoal antes de chegar ao Sentry, e uma reentrega técnica de e-mail pendente não cria segunda mensagem.
 // 2.3.14 — a lista de espera ocupa duas colunas quando há espaço, os cards têm altura uniforme e a interface deixa de mostrar a sigla interna da rodada.
 // 2.3.13 — listas de espera, inativos e W.O. usam duas colunas quando há espaço e removem rótulos redundantes de chamada e posição.
 // 2.3.12 — o estado do torneio só aparece após confirmação do servidor: espera, inativos, W.O., duplas, jogos, grupos e resultados não aceitam cópia local como dado atual.
