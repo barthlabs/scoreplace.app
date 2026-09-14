@@ -1,3 +1,9 @@
+## 2.3.21 — 14/set/2026
+
+- Identidade de participante passa a ter contrato TypeScript estrito compartilhado: UIDs e a composição estrutural de duplas são decididos pela mesma regra no navegador e no motor de sorteio.
+- O JavaScript gerado é conferido byte a byte no vendor do servidor, e a ordem do shell garante o domínio antes de seus adaptadores clássicos.
+- Esta publicação é somente web. Não há sincronização, build ou submissão dos projetos iOS e Android.
+
 ## 2.3.20 — 14/set/2026
 
 - Inicia a modernização incremental: limites de rodadas passam a ter uma fonte TypeScript estrita, com ponte compatível para o browser clássico e contrato CommonJS para testes e futuros consumidores de servidor.

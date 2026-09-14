@@ -14,9 +14,12 @@ const fs = require('fs');
 const path = require('path');
 
 const SRC_DIR = path.resolve(__dirname, '..', 'js', 'views');
+const DOMAIN_DIR = path.resolve(__dirname, '..', 'js', 'domain');
 const OUT_DIR = path.resolve(__dirname, 'vendor');
 
 // Ordem não importa pra cópia; o draw-core carrega na ordem certa.
+const DOMAIN_FILES = ['participant-identity.js'];
+
 const FILES = [
   // ⭐ FASE 2 — o tradutor documento ⇄ subcoleções. Mora aqui (js/views/) porque agora
   // os DOIS lados usam: o gatilho `tournamentMirror` DIVIDE, e o app REMONTA ao abrir um
@@ -81,6 +84,14 @@ for (const f of FILES) {
   console.log(`[copy-vendor] ${f} (${fs.statSync(dst).size} bytes)`);
 }
 console.log(`[copy-vendor] ✓ ${copied} arquivos sincronizados em vendor/`);
+
+for (const f of DOMAIN_FILES) {
+  const src = path.join(DOMAIN_DIR, f);
+  const dst = path.join(OUT_DIR, f);
+  if (!fs.existsSync(src)) { console.error(`[copy-vendor] DOMÍNIO AUSENTE: ${src}`); process.exit(1); }
+  fs.copyFileSync(src, dst);
+  console.log(`[copy-vendor] ${f} (domínio TypeScript gerado)`);
+}
 
 /* ── O TRADUTOR TAMBÉM VAI PRO functions/ (2.0.120) ───────────────────────────
  * ⛔ MEDIDO: `functions/index.js` tinha ZERO menção à divisão (`grep -c` = 0). O

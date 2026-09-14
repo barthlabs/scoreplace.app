@@ -23,9 +23,13 @@
 // Helper canônico: retorna TODOS os UIDs de um participante.
 // Duplas têm p1Uid/p2Uid além de uid. Garante individualidade.
 window._participantUids = function(p) {
+  var domain = window.ScoreplaceParticipantIdentity;
+  if (domain && typeof domain.participantUids === 'function') return domain.participantUids(p);
+  // Falhar em silêncio aqui faria uma versão parcial decidir identidade por nome. A ordem
+  // do shell e do motor garante o domínio antes deste adaptador; a reserva só mantém
+  // harnesses legados isolados executáveis sem alterar a semântica histórica.
   if (typeof p !== 'object' || !p) return [];
-  var seen = {};
-  var uids = [];
+  var seen = {}, uids = [];
   function _add(u) { if (u && !seen[u]) { seen[u] = true; uids.push(u); } }
   _add(p.uid); _add(p.p1Uid); _add(p.p2Uid);
   if (Array.isArray(p.participants)) p.participants.forEach(function(s) { if (s) _add(s.uid); });
@@ -323,15 +327,13 @@ window._entryHasVip = function(t, entry) {
 // O '/' num displayName é PURAMENTE exibição ("Kelly / Rodrigo") e NUNCA define dupla.
 // Uma string solta também nunca é dupla. (lista participants[] cobre o formato de array.)
 window._entryTeamMembers = function (p) {
-  if (!p || typeof p !== 'object') return null; // string/individual — '/' é só exibição
+  var domain = window.ScoreplaceParticipantIdentity;
+  if (domain && typeof domain.entryTeamMembers === 'function') return domain.entryTeamMembers(p);
+  if (!p || typeof p !== 'object') return null;
   if (Array.isArray(p.participants) && p.participants.length) {
     return p.participants.map(function (s) { return (s && (s.displayName || s.name)) || String(s || ''); }).filter(Boolean);
   }
-  var hasP1 = !!(p.p1Uid || p.p1Name); // slot 1 ocupado: uid (real) ou nome (informal)
-  var hasP2 = !!(p.p2Uid || p.p2Name); // slot 2 ocupado
-  if (hasP1 && hasP2) {
-    return [p.p1Name || p.p1Uid || '', p.p2Name || p.p2Uid || ''];
-  }
+  if (!!(p.p1Uid || p.p1Name) && !!(p.p2Uid || p.p2Name)) return [p.p1Name || p.p1Uid || '', p.p2Name || p.p2Uid || ''];
   return null;
 };
 

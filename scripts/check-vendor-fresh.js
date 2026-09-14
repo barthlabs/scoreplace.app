@@ -37,6 +37,7 @@ const root = path.resolve(argRoot !== -1 && process.argv[argRoot + 1]
 
 const COPY_VENDOR = path.join(root, 'functions-autodraw', 'copy-vendor.js');
 const SRC_DIR = path.join(root, 'js', 'views');
+const DOMAIN_DIR = path.join(root, 'js', 'domain');
 const VENDOR_DIR = path.join(root, 'functions-autodraw', 'vendor');
 const RECEITA = 'node functions-autodraw/copy-vendor.js';
 
@@ -83,6 +84,7 @@ function lerListaNomeada(fonte, nome) {
   for (const m of bloco[1].matchAll(/'([^']+)'|"([^"]+)"/g)) nomes.push(m[1] || m[2]);
   return nomes;
 }
+const DOMAIN_FILES = lerListaNomeada(fs.readFileSync(COPY_VENDOR, 'utf8'), 'DOMAIN_FILES');
 const DE_FUNCTIONS = lerListaNomeada(fs.readFileSync(COPY_VENDOR, 'utf8'), 'DE_FUNCTIONS');
 
 // Sanidade da própria trava: renomear/reformatar o `const FILES` no copy-vendor.js faria a
@@ -127,11 +129,23 @@ for (const f of FILES) {
   });
 }
 
+// Domínios TypeScript compilados também chegam ao servidor. Comparar o JavaScript gerado
+// evita que o browser execute uma regra e o autoDraw execute outra.
+for (const f of DOMAIN_FILES) {
+  const src = path.join(DOMAIN_DIR, f);
+  const dst = path.join(VENDOR_DIR, f);
+  if (!fs.existsSync(src)) { fail.push('js/domain/' + f + ': FONTE AUSENTE — rode node scripts/build-domain.js.'); continue; }
+  if (!fs.existsSync(dst)) { divergentes.push({ f, motivo: 'domínio ausente no vendor/ (roda `node functions-autodraw/copy-vendor.js`)' }); continue; }
+  if (!fs.readFileSync(src).equals(fs.readFileSync(dst))) {
+    divergentes.push({ f, motivo: 'vendor/ diverge de js/domain/' + f });
+  }
+}
+
 // Arquivo que saiu da lista mas continua no vendor/: o copy-vendor só COPIA, nunca apaga.
 // Se o draw-core.js ainda der require nele, o servidor roda um arquivo que o app já não
 // tem — drift na direção contrária, e igualmente silencioso.
 if (fs.existsSync(VENDOR_DIR)) {
-  const naLista = new Set(FILES.concat(DE_FUNCTIONS));
+  const naLista = new Set(FILES.concat(DOMAIN_FILES, DE_FUNCTIONS));
   // E o que vem de `functions/` também é conferido byte a byte — divergir ali é ter
   // duas cópias do formato do subdoc, que é o defeito que essa lista veio evitar.
   for (const f of DE_FUNCTIONS) {
@@ -160,7 +174,7 @@ if (fs.existsSync(VENDOR_DIR)) {
 }
 
 if (divergentes.length) {
-  fail.push('VENDOR VELHO — ' + divergentes.length + ' de ' + FILES.length + ' arquivo(s):\n' +
+  fail.push('VENDOR VELHO — ' + divergentes.length + ' de ' + (FILES.length + DOMAIN_FILES.length) + ' arquivo(s):\n' +
     divergentes.map((d) => '      · ' + d.f + ' — ' + d.motivo).join('\n') + '\n\n' +
     '    O `functions-autodraw/vendor/` é a cópia que o autoDraw (servidor) roda de\n' +
     '    verdade, e 52 suítes carregam ELA por draw-core.js — não o fonte. Com o vendor\n' +

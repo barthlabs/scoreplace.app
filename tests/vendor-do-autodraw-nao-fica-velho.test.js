@@ -76,6 +76,7 @@ const SB = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-vendor-'));
 function montarSandbox() {
   fs.rmSync(SB, { recursive: true, force: true });
   fs.mkdirSync(path.join(SB, 'js', 'views'), { recursive: true });
+  fs.mkdirSync(path.join(SB, 'js', 'domain'), { recursive: true });
   fs.mkdirSync(path.join(SB, 'functions-autodraw', 'vendor'), { recursive: true });
   fs.copyFileSync(COPY_VENDOR, path.join(SB, 'functions-autodraw', 'copy-vendor.js'));
   const nomes = listaDoCopyVendor();
@@ -84,7 +85,17 @@ function montarSandbox() {
     fs.writeFileSync(path.join(SB, 'js', 'views', n), conteudo);
     fs.writeFileSync(path.join(SB, 'functions-autodraw', 'vendor', n), conteudo);
   }
+  for (const n of listaNomeada('DOMAIN_FILES')) {
+    const conteudo = '// domínio stub de ' + n + '\nwindow._x = 1;\n';
+    fs.writeFileSync(path.join(SB, 'js', 'domain', n), conteudo);
+    fs.writeFileSync(path.join(SB, 'functions-autodraw', 'vendor', n), conteudo);
+  }
   return nomes;
+}
+function listaNomeada(nome) {
+  const text = fs.readFileSync(COPY_VENDOR, 'utf8');
+  const bloco = text.match(new RegExp('const\\s+' + nome + '\\s*=\\s*\\[([^\\]]*)\\]'));
+  return bloco ? Array.from(bloco[1].matchAll(/'([^']+)'/g), (m) => m[1]) : [];
 }
 function listaDoCopyVendor() {
   const bloco = fs.readFileSync(COPY_VENDOR, 'utf8').match(/const\s+FILES\s*=\s*\[([\s\S]*?)^\];/m);
