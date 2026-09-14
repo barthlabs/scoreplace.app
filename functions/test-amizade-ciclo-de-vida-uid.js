@@ -54,7 +54,9 @@ const corpoMerge = idx.slice(idx.indexOf('async function _executeMerge'), idx.in
 ok(/_amizadeNoMerge\(db, dropUid, keepUid\)/.test(corpoMerge),
   '⛔ _executeMerge CHAMA a porta única (senão a fusão deixa o cânone pra trás)');
 const iAmz = corpoMerge.indexOf('_amizadeNoMerge(db, dropUid, keepUid)');
-const iSweep = corpoMerge.indexOf('_sweepAllCollectionsByUid(db, dropUid, keepUid)');
+/* ⛔ SEM A LISTA DE ARGUMENTOS: isto casava a chamada inteira e ficou vermelho quando a
+ * varredura ganhou um caderno de anotações como 4º argumento. O que importa é a ORDEM. */
+const iSweep = corpoMerge.indexOf('_sweepAllCollectionsByUid(db, dropUid, keepUid');
 ok(iAmz > 0 && iSweep > 0 && iAmz < iSweep, 'e chama ANTES da varredura genérica');
 
 // ligado no deleteAccount

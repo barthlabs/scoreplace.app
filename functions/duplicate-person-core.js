@@ -436,12 +436,27 @@ function compararPessoa(candidato, pessoa, opts) {
   if ((mesmoTel || mesmoEmail) && parecidoNome) corroboracoes.push('nome');
   if (mesmoLz) corroboracoes.push('letzplay');
 
+  /* ⛔⛔ TELEFONE DIGITADO PELO ORGANIZADOR NÃO É CREDENCIAL — E A FORÇA TEM DE DIZER ISSO.
+   *
+   * Ordem do dono (13/set/2026): _"o celular que o organizador registra deve gerar a pergunta
+   * de serem a mesma pessoa se o nome bater (nome e sobrenome)"_.
+   *
+   * ⛔ POR QUE NÃO BASTA DEIXAR ENTRAR COMO 'celular': o motivo vira a FORÇA gravada quando a
+   * pessoa responde "não sou eu" (`FORCA_SINAL`), e 'celular' é 9, o topo da escala. Um "não"
+   * dado sobre um número que o organizador digitou trancaria a pergunta até contra prova MUITO
+   * mais forte que aparecesse depois. O número fraco entra como REFORÇO do nome, e a força
+   * gravada é a do nome — que é o que de fato disparou.
+   *
+   * ⭐ Quando os DOIS lados confirmaram o número por SMS, aí sim é credencial e o motivo é
+   * 'celular'. [[project_telefone_repetido_e_casa_dividida]] */
+  const telEhProva = mesmoTel && !!candidato.telefoneProvado && !!pessoa.telefoneProvado;
+  if (mesmoTel && !telEhProva && corroboracoes.indexOf('celular') === -1) corroboracoes.push('celular');
+
   return {
-    // E-mail é CREDENCIAL de verdade. Celular, aqui, NÃO é: o campo do perfil aceita o
-    // número digitado pelo organizador, e aparelho dividido em casa é normal. Ele continua
-    // à frente do nome na ordem porque, QUANDO vem junto de nome parecido, é o sinal mais
-    // forte que existe — mas sozinho não chega mais até aqui.
-    motivo: mesmoTel ? 'celular' : (mesmoEmail ? 'email' : 'nome'),
+    // E-mail é CREDENCIAL de verdade. Celular só quando confirmado por SMS dos DOIS lados —
+    // o campo do perfil aceita o número digitado pelo organizador, e aparelho dividido em
+    // casa é normal.
+    motivo: telEhProva ? 'celular' : (mesmoEmail ? 'email' : 'nome'),
     // Como os nomes se parecem — o index.js usa isto no log e o texto da pergunta muda
     // quando a grafia é diferente (afirmar "o mesmo nome" seria falso ali).
     semelhanca: parecidoNome || null,

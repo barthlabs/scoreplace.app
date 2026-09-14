@@ -145,6 +145,7 @@ const _userVivo = require("./user-vivo-core");
 // `isIdentityPhone` é a porta que impede esse número de virar identidade (recuperação
 // de senha, dedup, fusão). Ver functions/contact-phone-core.js.
 const _contactPhone = require("./contact-phone-core");
+const _desfazer = require("./desfazer-fusao-core");
 const fetch = require("node-fetch");
 
 admin.initializeApp();
@@ -620,12 +621,46 @@ async function _executeMergeInterno(db, keepDoc, dropDoc) {
   // (o lock `merging` já está posto por `_executeMerge`, que envolve tudo)
   const amizadeFixed = await _amizadeNoMerge(db, dropUid, keepUid);
 
-  const sweptFixed = await _sweepAllCollectionsByUid(db, dropUid, keepUid);
+  const anotacoes = [];
+  const sweptFixed = await _sweepAllCollectionsByUid(db, dropUid, keepUid, anotacoes);
   const casualFixed = sweptFixed.casualMatches || 0;
   const colFixed = sweptFixed;
 
   // ── Notificações: a caixa da conta absorvida vai pra do sobrevivente, SEM duplicar ──
   const notifFixed = await _migrateNotifications(db, dropUid, keepUid);
+
+  /* ⛔ O REGISTRO DA VOLTA É GRAVADO ANTES DA LÁPIDE.
+   * Se a fusão morrer no meio, o que já mudou nos documentos precisa estar anotado — a lápide
+   * é o último passo justamente porque é ela que declara a fusão feita. Anotar depois dela
+   * deixaria uma janela em que a fusão vale e a volta não existe. */
+  try {
+    const _fatias = _desfazer.fatiar(anotacoes);
+    const _base = db.collection("mergeUndo").doc(dropUid);
+    for (let i = 0; i < _fatias.length; i++) {
+      await _base.collection("passos").doc("p" + i).set({ itens: _fatias[i] });
+    }
+    await _base.set({
+      sobreviveu: keepUid, absorvida: dropUid,
+      emMs: Date.now(), em: admin.firestore.FieldValue.serverTimestamp(),
+      passos: _fatias.length, documentos: anotacoes.length,
+      /* ⭐ O perfil de antes vai inteiro: a varredura de perfil COPIA campos do absorvido
+       * para o sobrevivente, e sem o retrato não há como saber o que era de quem. */
+      perfilAbsorvido: dropData,
+      perfilSobreviventeAntes: keepData,
+      completo: true, desfeita: false,
+    }, { merge: true });
+  } catch (e) {
+    /* ⛔ NÃO ENGOLIR, E NÃO MENTIR DEPOIS. Sem o registro a fusão continua válida, mas não
+     * pode mais ser prometida como reversível — e é a marca `completo` que a porta de
+     * reversão lê para dizer isso à pessoa, em vez de tentar e estragar. */
+    console.error("[_executeMerge] registro da volta FALHOU — esta fusão não será reversível:", e && e.message);
+    try {
+      await db.collection("mergeUndo").doc(dropUid).set({
+        sobreviveu: keepUid, absorvida: dropUid, emMs: Date.now(),
+        completo: false, porque: String((e && e.message) || e), desfeita: false,
+      }, { merge: true });
+    } catch (e2) { console.error("[_executeMerge] nem a marca de incompleto gravou:", e2 && e2.message); }
+  }
 
   // Mark old doc as merged
   await db.collection("users").doc(dropUid).set(
@@ -693,7 +728,7 @@ const _reconstruirCacheAmizade = (db, uids) => _amizadeVida.reconstruirCache(db,
 const _amizadeNoMerge = (db, o, k) => _amizadeVida.amizadeNoMerge(db, o, k);
 const _excluirAmizade = (db, uid) => _amizadeVida.excluirAmizade(db, uid);
 
-async function _sweepAllCollectionsByUid(db, dropUid, keepUid) {
+async function _sweepAllCollectionsByUid(db, dropUid, keepUid, registro) {
   const out = {};
   if (!dropUid || !keepUid) return out;
   let cols = [];
@@ -750,6 +785,16 @@ async function _sweepAllCollectionsByUid(db, dropUid, keepUid) {
           delete payload[k];
         }
         if (!Object.keys(payload).length) continue;
+        /* ⛔ REGISTRA O QUE ESTAVA ANTES — é isto que torna a reversão possível.
+         * A varredura troca o uid morto pelo vivo em todo lugar. Para desfazer não basta
+         * trocar de volta: seria preciso saber EM QUAIS documentos ela mexeu, senão a volta
+         * levaria junto os dados que sempre foram do sobrevivente. Guardamos só os campos
+         * tocados, com o valor de antes. [[project_fusao_indevida_cilone]] */
+        if (registro) {
+          const antes = {};
+          Object.keys(payload).forEach((k) => { antes[k] = atual[k] === undefined ? null : atual[k]; });
+          registro.push({ col: nome, id: doc.id, antes: antes });
+        }
         b.update(doc.ref, payload);
         n++;
         out[nome]++;
@@ -961,9 +1006,42 @@ async function _mergeAccountsKeepOlder(db, uidA, uidB) {
       { mergedInto: keepU.uid, mergedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
   }
 
-  // 2) Apaga o usuário Auth mais novo — libera e-mail/celular dele.
-  try { await admin.auth().deleteUser(dropU.uid); }
-  catch (e) { console.error("[mergeKeepOlder] deleteUser(drop) falhou:", e.code || e.message); }
+  /* ⛔⛔ 2) A CONTA ABSORVIDA NÃO É MAIS APAGADA NA HORA — ELA É DESLIGADA.
+   *
+   * Ordem do dono (13/set/2026): _"essa mesclagem deveria ter uma possivel reversão dentro de
+   * 30 dias caso a pessoa responda sim equivocadamente"_.
+   *
+   * ⛔ APAGAR ERA O QUE TORNAVA A REVERSÃO IMPOSSÍVEL. `deleteUser` existia por um motivo real
+   * — o Firebase não deixa duas contas com o mesmo celular ou e-mail, e a credencial precisa
+   * ficar livre para ir à sobrevivente. Só que apagar faz muito mais do que liberar: destrói a
+   * conta. Desligar e RETIRAR a credencial libera exatamente o que precisava ser liberado, e
+   * deixa a conta de pé para o caso de ter sido engano.
+   *
+   * ⚠️ DESLIGADA de propósito: enquanto a fusão vale, ninguém entra por ela. Quem tentar cai
+   * no sobrevivente por `loginRedirects`, como sempre. Passados os 30 dias, a varredura
+   * `apagarContasAbsorvidasVencidas` termina o serviço. */
+  const _plano = _desfazer.planejarDesligamento(dropU);
+  try {
+    await admin.auth().updateUser(dropU.uid, _plano.desligar);
+    await db.collection("mergeUndo").doc(dropU.uid).set({
+      sobreviveu: keepU.uid, absorvida: dropU.uid,
+      em: admin.firestore.FieldValue.serverTimestamp(),
+      emMs: Date.now(),
+      guardado: _plano.guardado,
+      /* O que a sobrevivente RECEBEU: é só isso que pode voltar. Repor uma credencial que ela
+       * já tinha antes seria tirar dela um login que sempre foi seu. */
+      recebidasPelaSobrevivente: {
+        email: (dropEmail && (!keepU.email || _isSyntheticAuthEmail(keepU.email))) ? dropEmail : "",
+        phoneNumber: (dropPhone && !keepU.phoneNumber) ? dropPhone : "",
+      },
+      desfeita: false,
+    }, { merge: true });
+  } catch (e) {
+    /* ⛔ NÃO ENGOLIR: sem desligar, a credencial não fica livre e o passo seguinte (movê-la
+     * para a sobrevivente) falha em silêncio — a pessoa ficaria sem o login de nenhum dos
+     * dois lados. Registrar alto é o mínimo. */
+    console.error("[mergeKeepOlder] desligar a conta absorvida falhou:", e.code || e.message);
+  }
 
   // 3) Move a credencial que faltava pro keep (agora livre).
   const upd = {};
@@ -1557,7 +1635,12 @@ exports.cleanupAbandonedAuth = onSchedule(
     const db = admin.firestore();
     const auth = admin.auth();
     const ABANDONED_THRESHOLD_MS = 30 * 24 * 60 * 60 * 1000; // 30 dias
-    const GHOST_THRESHOLD_MS     =  7 * 24 * 60 * 60 * 1000; //  7 dias
+    /* ⛔⛔ O PRAZO É O MESMO DA REVERSÃO, E SAI DO MESMO LUGAR.
+     * Isto eram 7 dias fixos. Quando a fusão passou a poder ser desfeita em 30
+     * (ordem do dono, 13/set/2026), esta varredura teria apagado a conta absorvida no 8º dia
+     * — e a reversão prometida na tela não teria mais o que restaurar. Dois prazos escritos
+     * em lugares diferentes divergem; este LÊ o da reversão. */
+    const GHOST_THRESHOLD_MS     = _desfazer.JANELA_DIAS * 24 * 60 * 60 * 1000;
     const now = Date.now();
     let totalChecked = 0;
     let deletedAbandoned = 0;
@@ -2981,8 +3064,14 @@ async function _detectarDuplicataNoTorneio(db, callerUid, tData) {
         vistos[d.id] = true;
         pessoas.push({
           uid: d.id, nome: x.displayName || "",
-          // mesma regra do lado de cá: número do organizador não conta como evidência
-          telefone: _contactPhone.isIdentityPhone(x) ? (x.phone || "") : "",
+          /* ⛔ O NÚMERO DO ORGANIZADOR ENTRA, MAS MARCADO COMO FRACO.
+           * Ordem do dono (13/set/2026): _"o celular que o organizador registra deve gerar a
+           * pergunta de serem a mesma pessoa se o nome bater (nome e sobrenome)"_. Antes ele
+           * era JOGADO FORA aqui, e com isso a pessoa com dois cadastros e o número digitado
+           * nos dois passava batido. `telefoneProvado` diz se foi confirmado por SMS: sem
+           * isso ele só reforça o nome, e nunca vira credencial sozinho. */
+          telefone: x.phone || "",
+          telefoneProvado: _contactPhone.isIdentityPhone(x),
           letzplayHandle: x.letzplayHandle || "", email: x.email || "",
         });
       });
@@ -2997,6 +3086,7 @@ async function _detectarDuplicataNoTorneio(db, callerUid, tData) {
     // 1 caractere sem piso de comprimento, e 2 caracteres em nome longo. Ver compararNomes.
     const r = _dupPerson.detectarMesmaPessoa({
       uid: callerUid, nome: meu.displayName || "", telefone: meu.phone || "",
+      telefoneProvado: _contactPhone.isIdentityPhone(meu),   // SMS confirmado × digitado
       letzplayHandle: meu.letzplayHandle || "",
       // Memória do "não sou eu": a RICA (com força) manda; o array legado entra junto e
       // vale como força 0 — reabre uma vez, porque não se sabe de que sinal ele era.
@@ -7529,6 +7619,166 @@ exports.requestNameMergeProof = onCall(
 
 // Confirma a união ao clicar no link do e-mail. SEM exigir login (o token, enviado só
 // pro e-mail da conta B, é a prova de posse). Funde mantendo a conta mais antiga.
+/* ⛔ O AVISO DE QUE AS CONTAS FORAM UNIDAS — com o caminho de volta.
+ *
+ * Vai para TODOS os endereços conhecidos das duas contas: quem clicou no link pode não ser
+ * quem usa a conta no dia a dia, e é justamente a pessoa que NÃO clicou que precisa saber.
+ * [[project_fusao_indevida_cilone]] */
+async function _avisarFusaoFeita(db, sobreviveuUid, absorvidaUid) {
+  const und = await db.collection("mergeUndo").doc(absorvidaUid).get();
+  const u = und.exists ? (und.data() || {}) : {};
+  const podeDesfazer = u.completo === true;
+  const dias = _desfazer.JANELA_DIAS;
+
+  const prof = await db.collection("users").doc(sobreviveuUid).get();
+  const p = prof.exists ? (prof.data() || {}) : {};
+  const nome = p.displayName || "";
+
+  const link = "https://scoreplace.app/?desfazer=" + encodeURIComponent(absorvidaUid);
+  const html =
+    '<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:480px;margin:0 auto;">' +
+    '<h2 style="color:#0f172a;">Suas contas foram unidas</h2>' +
+    '<p style="color:#1f2937;font-size:15px;line-height:1.5;">Pronto' + (nome ? (", " + nome) : "") +
+    ': suas duas contas no scoreplace.app viraram uma só. Seus torneios, jogos e histórico ' +
+    'estão todos juntos agora, e você continua entrando do jeito que preferir.</p>' +
+    (podeDesfazer
+      ? ('<p style="color:#1f2937;font-size:15px;line-height:1.5;"><strong>Não era para ter acontecido?</strong> ' +
+         'Dá para separar as duas de novo nos próximos <strong>' + dias + ' dias</strong>.</p>' +
+         '<p style="text-align:center;margin:24px 0;"><a href="' + link + '" style="background:#475569;color:#fff;' +
+         'text-decoration:none;padding:12px 24px;border-radius:10px;font-weight:700;font-size:15px;display:inline-block;">' +
+         'Separar as contas de novo</a></p>' +
+         '<p style="color:#64748b;font-size:13px;">Passados os ' + dias + ' dias a união fica definitiva. ' +
+         'Separar devolve o que a união moveu — o que você fizer daqui para a frente fica na conta onde aconteceu.</p>')
+      : '<p style="color:#64748b;font-size:13px;">Se algo não parecer certo, fale com a gente em contato@barthlabs.com.</p>') +
+    '</div>';
+  const text = "Suas contas no scoreplace.app foram unidas." +
+    (podeDesfazer ? (" Para separar de novo (até " + dias + " dias): " + link) : "");
+
+  /* Todos os endereços que conhecemos dos dois lados, sem repetir e sem os internos. */
+  const alvos = {};
+  [p.email, (u.perfilAbsorvido || {}).email].concat(
+    Array.isArray(p.linkedEmails) ? p.linkedEmails : []
+  ).forEach((e) => {
+    const x = String(e || "").trim().toLowerCase();
+    if (x && !_isSyntheticAuthEmail(x)) alvos[x] = true;
+  });
+  const lista = Object.keys(alvos);
+  if (!lista.length) {
+    console.warn("[fusao-feita] nenhuma conta tem endereço — ninguém foi avisado por e-mail");
+    return false;
+  }
+  await _enqueueMail(db, { to: lista, message: { subject: "Suas contas no scoreplace.app foram unidas", html, text } });
+  console.log("[fusao-feita] avisados:", lista.length, "endereço(s)");
+  return true;
+}
+
+/* ⛔⛔ SEPARAR DE NOVO AS CONTAS UNIDAS — dentro do prazo, e só o que a união moveu.
+ *
+ * Ordem do dono (13/set/2026): _"essa mesclagem deveria ter uma possivel reversão dentro de 30
+ * dias caso a pessoa responda sim equivocadamente"_.
+ *
+ * ⛔ QUEM PODE PEDIR: quem está logado na conta SOBREVIVENTE. É a única pessoa que, por
+ * definição, tem acesso às duas — foi ela que provou a posse para unir. Aceitar o pedido de
+ * qualquer um seria entregar a chave de separar contas alheias.
+ *
+ * ⚠️ O QUE ELA DESFAZ, e o que está dito no e-mail e na tela: o que a UNIÃO moveu. O que a
+ * pessoa fez depois, já na conta unida, aconteceu ali e fica ali. Prometer "volta tudo como
+ * era" seria mentira. [[feedback_nao_prometer_no_botao_o_que_nao_se_pode_conferir]]
+ */
+exports.desfazerFusao = onCall(
+  { region: "us-central1", memory: "512MiB", timeoutSeconds: 540, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError("unauthenticated", "Login obrigatório");
+    const absorvida = String((request.data && request.data.absorvida) || "").trim();
+    if (!absorvida) throw new HttpsError("invalid-argument", "falta dizer qual união desfazer");
+
+    const db = admin.firestore();
+    const ref = db.collection("mergeUndo").doc(absorvida);
+    const snap = await ref.get();
+    if (!snap.exists) return { ok: false, reason: "sem-registro" };
+    const u = snap.data() || {};
+    if (u.desfeita) return { ok: false, reason: "ja-desfeita" };
+    if (u.sobreviveu !== callerUid) throw new HttpsError("permission-denied", "só de dentro da conta que sobreviveu");
+    if (u.completo !== true) return { ok: false, reason: "registro-incompleto" };
+    if (!_desfazer.dentroDoPrazo(u.emMs, Date.now())) {
+      return { ok: false, reason: "fora-do-prazo", dias: 0 };
+    }
+
+    /* ⛔ A TRAVA É A MESMA DA FUSÃO. Separar mexe nos mesmos documentos que unir — deixar as
+     * duas correrem juntas embaralharia os dois uids em metade das coleções. */
+    const posse = await _amizadeLock.adquirir(db, [u.sobreviveu, absorvida], "merging");
+    try {
+      const DEL = admin.firestore.FieldValue.delete();
+
+      /* ① Devolve os documentos ao que eram, pelo registro. */
+      let voltaram = 0;
+      const passos = await ref.collection("passos").get();
+      for (const passo of passos.docs) {
+        const itens = (passo.data() || {}).itens || [];
+        let b = db.batch(); let n = 0;
+        for (const it of itens) {
+          if (!it || !it.col || !it.id) continue;
+          b.update(db.collection(it.col).doc(it.id), _desfazer.reverterCampos(it.antes, DEL));
+          n++; voltaram++;
+          if (n % 400 === 0) { await b.commit(); b = db.batch(); n = 0; }
+        }
+        if (n) await b.commit();
+      }
+
+      /* ② O perfil do sobrevivente volta ao retrato de antes da união, e o da conta
+       * absorvida deixa de ser lápide. */
+      if (u.perfilSobreviventeAntes) {
+        await db.collection("users").doc(u.sobreviveu).set(u.perfilSobreviventeAntes);
+      }
+      if (u.perfilAbsorvido) {
+        const p = Object.assign({}, u.perfilAbsorvido);
+        delete p.mergedInto; delete p.mergedAt;
+        await db.collection("users").doc(absorvida).set(p);
+      }
+      await db.collection("users").doc(absorvida).update({ mergedInto: DEL, mergedAt: DEL });
+
+      /* ③ A conta de autenticação volta a existir de verdade: religada, com a credencial
+       * que ela tinha — tirada de volta da sobrevivente, que só a tem porque a união a
+       * moveu. E os provedores federados religados pelo identificador guardado. */
+      const volta = _desfazer.planejarVolta(u.guardado, u.recebidasPelaSobrevivente);
+      if (Object.keys(volta.tirarDaSobrevivente).length) {
+        try { await admin.auth().updateUser(u.sobreviveu, volta.tirarDaSobrevivente); }
+        catch (e) { console.error("[desfazerFusao] soltar credencial do sobrevivente:", e.code || e.message); }
+      }
+      try { await admin.auth().updateUser(absorvida, volta.paraOAbsorvido); }
+      catch (e) {
+        /* ⛔ SEM A CONTA DE AUTENTICAÇÃO A SEPARAÇÃO NÃO SE COMPLETA — e ficar calado aqui
+         * deixaria a pessoa com um cadastro por onde não se entra. */
+        console.error("[desfazerFusao] religar a conta absorvida FALHOU:", e.code || e.message);
+        throw new HttpsError("failed-precondition",
+          "Não foi possível reativar a conta separada. Fale com a gente em contato@barthlabs.com.");
+      }
+      for (const pv of volta.provedores) {
+        try { await admin.auth().updateUser(absorvida, { providerToLink: pv }); }
+        catch (e) { console.warn("[desfazerFusao] religar provedor", pv.providerId, e.code || e.message); }
+      }
+
+      /* ④ Os desvios de login apontavam para a sobrevivente; sem isso, entrar pela credencial
+       * devolvida cairia de novo na conta unida. */
+      for (const cred of [u.guardado && u.guardado.email, u.guardado && u.guardado.phoneNumber]) {
+        if (!cred) continue;
+        try { await db.collection("loginRedirects").doc(String(cred).toLowerCase()).delete(); }
+        catch (e) { console.warn("[desfazerFusao] desvio de login", e && e.message); }
+      }
+
+      await ref.set({
+        desfeita: true, desfeitaEm: admin.firestore.FieldValue.serverTimestamp(),
+        documentosDevolvidos: voltaram,
+      }, { merge: true });
+      console.log(`[desfazerFusao] ${absorvida} separada de ${u.sobreviveu} — ${voltaram} documento(s)`);
+      return { ok: true, separada: absorvida, documentos: voltaram };
+    } finally {
+      try { await _amizadeLock.liberar(db, posse); } catch (e) { console.error("[desfazerFusao] soltar trava:", e && e.message); }
+    }
+  }
+);
+
 exports.confirmEmailMerge = onCall(
   { region: "us-central1", memory: "512MiB", timeoutSeconds: 300, cors: APP_ORIGINS },
   async (request) => {
@@ -7547,6 +7797,15 @@ exports.confirmEmailMerge = onCall(
     const res = await _mergeAccountsKeepOlder(db, t.requesterUid, t.targetUid);
     await ref.set({ used: true, usedAt: admin.firestore.FieldValue.serverTimestamp(), survivorUid: res.survivorUid }, { merge: true });
     console.log("[confirmEmailMerge] survivor=", res.survivorUid, "dropped=", res.droppedUid, "already=", res.already);
+    /* ⛔ AVISAR DEPOIS DE FEITO, COM A SAÍDA JUNTO.
+     * Ordem do dono (13/set/2026): _"um email de confirmacao com a possibilidade de reversao
+     * pode ajudar"_. Unir contas é irreversível na prática se ninguém souber que aconteceu —
+     * e quem clicou pode ter clicado errado. O aviso diz o que foi feito e traz o caminho de
+     * volta, enquanto ele existe. */
+    if (res.droppedUid) {
+      await _avisarFusaoFeita(db, res.survivorUid, res.droppedUid).catch((e) =>
+        console.error("[confirmEmailMerge] aviso da fusão falhou:", e && e.message));
+    }
     return { ok: true, survivorUid: res.survivorUid, dropped: res.droppedUid, already: res.already };
   }
 );
@@ -8861,6 +9120,7 @@ async function _detectarDuplicataNaBase(db, uid, meu) {
         if (x.mergedInto) return;
         vistos[d.id] = true;
         pessoas.push({ uid: d.id, nome: x.displayName || "", telefone: x.phone || "",
+          telefoneProvado: _contactPhone.isIdentityPhone(x),  // SMS confirmado × digitado
           authProvider: x.authProvider || "",   // vira a pista "entra com a Apple" na pergunta
           email: x.email || "", linkedEmails: x.linkedEmails || [],
           letzplayHandle: x.letzplayHandle || "" });
@@ -8873,6 +9133,7 @@ async function _detectarDuplicataNaBase(db, uid, meu) {
 
     const r = _dupPerson.detectarMesmaPessoa({
       uid: uid, nome: nome, telefone: meu.phone || "", email: meu.email || "",
+      telefoneProvado: _contactPhone.isIdentityPhone(meu),   // SMS confirmado × digitado
       linkedEmails: meu.linkedEmails || [], letzplayHandle: meu.letzplayHandle || "",
       dispensados: [].concat(
         Array.isArray(meu.dupDismissedInfo) ? meu.dupDismissedInfo : [],

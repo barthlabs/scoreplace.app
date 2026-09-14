@@ -160,6 +160,72 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
 // morto — nenhum link desses é gerado desde então. Login por celular = SMS.
 // Ver project_whatsapp_meta_2fa_block.
 
+/* ⛔⛔ SEPARAR AS CONTAS DE NOVO — o link `?desfazer=` do e-mail de confirmação.
+ *
+ * Ordem do dono (13/set/2026): _"um email de confirmacao com a possibilidade de reversao pode
+ * ajudar"_. O e-mail que avisa "suas contas foram unidas" traz este link por 30 dias.
+ *
+ * ⛔ AO CONTRÁRIO DO LINK QUE UNE, ESTE EXIGE LOGIN. Unir é provado pelo e-mail que só chega
+ * na outra conta; separar não tem prova equivalente, e a única pessoa que comprovadamente tem
+ * as duas é quem está dentro da conta que sobreviveu. Por isso o servidor confere o login —
+ * e aqui a pessoa é mandada entrar quando a sessão não existe. */
+(function _handleDesfazerFusaoLink() {
+  try {
+    var qs = (typeof URLSearchParams === 'function') ? new URLSearchParams(window.location.search) : null;
+    var alvo = qs && qs.get('desfazer');
+    if (!alvo) return;
+    var bg = '#0f172a';
+    document.documentElement.style.background = bg;
+    var tela = function (emoji, titulo, texto, erro, extra) {
+      document.body.innerHTML = '<div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:' + window._spCor(bg, 'background') + ';color:#fff;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;flex-direction:column;gap:14px;padding:24px;text-align:center;">' +
+        '<div style="font-size:2.4rem;line-height:1;">' + emoji + '</div>' +
+        '<div style="font-size:1.05rem;font-weight:700;color:' + window._spCor((erro ? '#ef4444' : '#10b981'), 'color') + ';">' + titulo + '</div>' +
+        (texto ? '<div style="font-size:0.85rem;color:var(--sp-c-94a3b8,#94a3b8);max-width:380px;line-height:1.5;">' + texto + '</div>' : '') +
+        (extra || '') +
+        '<a href="/" style="margin-top:8px;color:' + window._spCor('#10b981', 'color') + ';font-size:0.85rem;text-decoration:none;border:1px solid ' + window._spCor('#10b981', 'borda') + ';padding:8px 18px;border-radius:8px;">Ir pro app</a>' +
+        '</div>';
+    };
+    tela('↩️', 'Separando suas contas…', 'Devolvendo cada coisa para onde estava antes da união');
+    var tentativas = 0;
+    var vai = function () {
+      var pronto = window.firebase && window.firebase.apps && window.firebase.apps.length;
+      var usuario = pronto && window.firebase.auth && window.firebase.auth().currentUser;
+      if (!pronto || !usuario) {
+        if (tentativas++ < 80) return setTimeout(vai, 100);   // até 8s esperando a sessão
+        tela('🔒', 'Entre para separar as contas',
+          'Só dá para separar de dentro da conta que ficou — é a única que comprovadamente tem as duas. ' +
+          'Entre e abra este link de novo.', true);
+        return;
+      }
+      window.firebase.functions().httpsCallable('desfazerFusao')({ absorvida: alvo }).then(function (r) {
+        var d = (r && r.data) || {};
+        if (d.ok) {
+          tela('✅', 'Contas separadas',
+            'Devolvemos o que a união tinha movido' + (d.documentos ? (' (' + d.documentos + ' registros)') : '') +
+            '. A outra conta voltou a funcionar com o login que ela tinha. ' +
+            'O que você fez depois da união continua nesta conta aqui.');
+          setTimeout(function () { window.location.replace('/#dashboard'); }, 3200);
+          return;
+        }
+        /* ⛔ CADA RECUSA TEM O SEU MOTIVO NA TELA. "Não deu" sem dizer por quê faz a pessoa
+         * tentar de novo para sempre. */
+        var porque = {
+          'fora-do-prazo': 'O prazo de 30 dias para separar já passou — a união agora é definitiva.',
+          'ja-desfeita': 'Estas contas já tinham sido separadas.',
+          'sem-registro': 'Não encontrei o registro desta união. Fale com a gente em contato@barthlabs.com.',
+          'registro-incompleto': 'O registro desta união ficou incompleto, e separar às cegas estragaria seus dados. Fale com a gente em contato@barthlabs.com.',
+        }[d.reason] || 'Não foi possível separar agora. Tente de novo daqui a pouco.';
+        tela('⚠️', 'Não deu para separar', porque, true);
+      }).catch(function (e) {
+        var msg = (e && (e.message || e.code)) || 'falha';
+        if (typeof window._captureException === 'function') { try { window._captureException(e, { area: 'desfazerFusao' }); } catch (_e) {} }
+        tela('⚠️', 'Não deu para separar', window._safeHtml ? window._safeHtml(String(msg)) : String(msg), true);
+      });
+    };
+    vai();
+  } catch (e) { if (window._error) window._error('[desfazerFusao] handler quebrou:', e); }
+})();
+
 // v3.0.59: União de contas por e-mail — ?mh=TOKEN gerado por requestEmailMerge.
 // Clicar no link (que só chegou no e-mail da conta B) PROVA a posse dessa conta.
 // Chama confirmEmailMerge → funde A+B mantendo a conta MAIS ANTIGA. Depois desloga

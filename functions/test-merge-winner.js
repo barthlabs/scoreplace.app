@@ -184,10 +184,17 @@ ok('index.js: a réplica local da regra saiu (sem _profileScore duplicado)',
 // ── Fiação da transferência no index.js ─────────────────────────────────────
 (() => {
   const bloco = src.slice(src.indexOf('async function _mergeAccountsKeepOlder'), src.indexOf('async function _scanAndMergeByField'));
-  ok('index.js: planeja a transferência ANTES do deleteUser (o sub some depois)',
-    bloco.indexOf('planProviderTransfer') < bloco.indexOf('deleteUser(dropU.uid)'));
-  ok('index.js: LINKA depois do deleteUser (o provedor precisa estar livre)',
-    bloco.indexOf('providerToLink') > bloco.indexOf('deleteUser(dropU.uid)'));
+  /* ⛔ A ÂNCORA É O MOMENTO EM QUE A CONTA ABSORVIDA DEIXA DE TER OS PROVEDORES, não o nome
+   * da chamada. Isto apontava para `deleteUser(dropU.uid)` e ficou vermelho quando a fusão
+   * parou de APAGAR a conta e passou a DESLIGÁ-LA (para a união poder ser desfeita em 30
+   * dias) — o invariante nunca mudou: o identificador do provedor só existe ANTES, e o link
+   * no sobrevivente só cabe DEPOIS de o provedor ficar livre. */
+  const iSolta = bloco.indexOf('planejarDesligamento(dropU)');
+  ok('index.js: o momento em que a conta absorvida solta os provedores existe', iSolta > 0);
+  ok('index.js: planeja a transferência ANTES disso (o sub some depois)',
+    bloco.indexOf('planProviderTransfer') < iSolta);
+  ok('index.js: LINKA depois disso (o provedor precisa estar livre)',
+    bloco.indexOf('providerToLink') > iSolta);
   ok('index.js: um updateUser por provedor (a API aceita um providerToLink por chamada)',
     /for \(const _p of _fedToLink\)/.test(bloco));
   ok('index.js: falha ao linkar NÃO desfaz a fusão (best-effort com catch)',

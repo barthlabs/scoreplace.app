@@ -69,8 +69,12 @@ const achou = (c, p) => D.detectarMesmaPessoa(c, p).suspeito;
 // inclusive contra evidência muito mais forte depois. Agora guarda a FORÇA do sinal
 // dispensado, e só algo ESTRITAMENTE mais forte volta a perguntar.
 (() => {
-  const eu = { uid: 'a', nome: 'Rodrigo Barth', telefone: '11999998888' };
-  const ele = { uid: 'b', nome: 'Rodrigo Barth', telefone: '11999998888' };
+  /* ⛔ `telefoneProvado` é o que separa CREDENCIAL de contato: só o número confirmado por SMS
+   * dos dois lados vale como celular. O digitado pelo organizador entra como reforço do nome
+   * — é a ordem do dono de 13/set/2026, e é o que impede um "não sou eu" dado sobre um número
+   * fraco de trancar a pergunta contra prova mais forte depois. */
+  const eu = { uid: 'a', nome: 'Rodrigo Barth', telefone: '11999998888', telefoneProvado: true };
+  const ele = { uid: 'b', nome: 'Rodrigo Barth', telefone: '11999998888', telefoneProvado: true };
   const semTel = (x) => Object.assign({}, x, { telefone: '' });
   const dispNome = [{ uid: 'b', forca: D.FORCA_SINAL.identico }];
   const dispCel = [{ uid: 'b', forca: D.FORCA_SINAL.celular }];
@@ -360,9 +364,16 @@ const achou = (c, p) => D.detectarMesmaPessoa(c, p).suspeito;
   ok('mesmo número em formatos diferentes, com nome parecido → dispara',
     !!achou({ uid: 'a', nome: 'Deborah Monteiro', telefone: '+55 (11) 99978-6253' },
       [{ uid: 'b', nome: 'Deborah Perestrello Monteiro', telefone: '11999786253' }]));
-  ok('  → motivo é "celular" (mais forte que nome)',
-    achou({ uid: 'a', nome: 'Ana Silva', telefone: '+5511999786253' },
-      [{ uid: 'b', nome: 'Ana Silva', telefone: '+5511999786253' }]).motivo === 'celular');
+  ok('  → com o número CONFIRMADO dos dois lados, o motivo é "celular" (credencial)',
+    achou({ uid: 'a', nome: 'Ana Silva', telefone: '+5511999786253', telefoneProvado: true },
+      [{ uid: 'b', nome: 'Ana Silva', telefone: '+5511999786253', telefoneProvado: true }]).motivo === 'celular');
+  /* ⭐ ORDEM DO DONO: o número que o ORGANIZADOR digitou também dispara — desde que nome e
+   * sobrenome batam. Mas ele não vira credencial: o motivo é o NOME, e o celular corrobora. */
+  const soDigitado = achou({ uid: 'a', nome: 'Ana Silva', telefone: '+5511999786253' },
+    [{ uid: 'b', nome: 'Ana Silva', telefone: '+5511999786253' }]);
+  ok('  → o número DIGITADO pelo organizador dispara com nome igual', !!soDigitado);
+  ok('  → mas o motivo é "nome" e o celular fica como reforço',
+    soDigitado.motivo === 'nome' && soDigitado.corroboracoes.indexOf('celular') !== -1);
 
   // A regra do dono: "considere todos os dígitos e não apenas os 8 últimos".
   ok('números DIFERENTES que compartilham os 8 últimos dígitos NÃO disparam',
@@ -392,9 +403,9 @@ const achou = (c, p) => D.detectarMesmaPessoa(c, p).suspeito;
   /* ⛔ O NOME DIFERENTE COM O MESMO NÚMERO SUMIU DA LISTA (casal, mãe e filho). Quem compara
    * agora são dois candidatos que JÁ passam pelo nome — e entre eles o celular desempata. */
   const r = D.detectarMesmaPessoa(
-    { uid: 'a', nome: 'Nome Igual', telefone: '+5511911112222' },
+    { uid: 'a', nome: 'Nome Igual', telefone: '+5511911112222', telefoneProvado: true },
     [{ uid: 'so_nome', nome: 'Nome Igual' },
-      { uid: 'com_tel', nome: 'Nome Igual', telefone: '11911112222' }]);
+      { uid: 'com_tel', nome: 'Nome Igual', telefone: '11911112222', telefoneProvado: true }]);
   ok('acha os dois', r.todos.length === 2);
   ok('  → o suspeito principal é o do CELULAR (prova prática)', r.suspeito.uid === 'com_tel');
 
