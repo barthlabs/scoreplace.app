@@ -52,12 +52,20 @@ varredura repetida:
 |---|---|---|
 | L0–L9, L14 e L15 | encerrados por código, testes e conferidores read-only | manter os gates nas próximas levas |
 | L12 | hardening contínuo | validar atualização e offline em aparelhos reais a cada versão nativa |
-| L16 | código e runbook entregues; políticas de alerta não foram reconferidas | conceder leitura de Cloud Monitoring à credencial usada pelo conferidor; a consulta atual retornou `Permission denied` |
+| L16 | **encerrada por medição em 14/set**: três políticas ativas, canal verificado e séries reais conferidas | revalidar a cada mudança de Functions ou de política de alerta |
 | L2, Rule residual de L4, L5 e L13 | bloqueados pelo bundle nativo sem auto-update | ativar mínimos iOS/Android, medir adoção e autorizar o cutover |
 | L10 e L11 | propostas futuras, fora desta auditoria | decidir fronteiras de módulos/build antes de iniciar migração |
 
-O bloqueio de Monitoring não é ausência de alerta: é ausência de prova atual. O runbook e o
-registro histórico existem, mas esta auditoria não declara uma política ativa sem conseguir lê-la.
+**⭐ L16 revalidada em 14/set/2026 — políticas e cobertura reais.** A CLI estável devolveu
+lista vazia, mas a mesma API pela trilha `gcloud beta monitoring` confirmou as três políticas
+ativas, todas no canal de e-mail verificado `rstbarth email`: leituras Firestore acima de 100/s,
+escritas acima de 5/s e erros de Cloud Functions acima de 1/min por cinco minutos. A série real
+de `cloudfunctions.googleapis.com/function/execution_count` usa `resource.type=cloud_function`
+mesmo nas Functions Gen 2; portanto o filtro da política cobre a produção atual. Não há incidente
+aberto. Os dois erros de 10/set em `backfillMatchResultDocs` foram tentativas de deploy que
+falharam no healthcheck; a revisão saudável `backfillmatchresultdocs-00088-wag` recebe 100% do
+tráfego desde 14/set 11:13, sem erro posterior. A consulta futura deve usar a trilha beta até a
+CLI estável voltar a listar as políticas corretamente.
 
 ⭐ **Mas o que o APP BAIXA já mudou, e isso é independente da Rule.** Chave, inscritos,
 sorteio, categorias, fotos, nomes, troféus, ranking, ficha pública, busca, lista de
