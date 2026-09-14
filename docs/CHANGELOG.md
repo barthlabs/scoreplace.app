@@ -1,3 +1,12 @@
+## 2.3.16 — 14/set/2026
+
+- **Ficha e comunicação em qualquer lista:** todo participante identificado por UID
+  recebe o mesmo sublinhado pontilhado e abre sua ficha com estatísticas na
+  classificação de grupos, cards de jogos, dashboard e listas de inscritos.
+  O acesso também funciona por teclado. Os cards de inscritos passam a manter o
+  balão de contato ao lado do nome, priorizando WhatsApp e usando e-mail quando
+  não houver telefone disponível.
+
 ## 2.3.15 — 14/set/2026
 
 - **E-mails pendentes sem duplicidade:** se uma reentrega ocorrer depois de o

@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.3.15';
+window.SCOREPLACE_VERSION = '2.3.16';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -1390,6 +1390,9 @@ window._displayName = function (uid, guestName) {
 window._hydrateUidNames = function (root) {
   root = root || (typeof document !== 'undefined' ? document : null);
   if (!root || !root.querySelectorAll) return Promise.resolve();
+  // Dá semântica de botão e foco aos links de ficha já presentes, mesmo quando não há
+  // perfil pendente para baixar nesta passada (por exemplo, classificação já resolvida).
+  if (typeof window._activatePlayerProfileLinks === 'function') window._activatePlayerProfileLinks(root);
   var els = root.querySelectorAll('[data-uid-name]');
   var roleEls = root.querySelectorAll('[data-uid-role]');
   // ── ⭐ O ICONE HIDRATA JUNTO COM O NOME (1.9.113) ──────────────────────────
@@ -5980,6 +5983,23 @@ window._personAvatarHtml = function (uid, name, css, extraAttrs) {
         (extraAttrs || '') + ' style="' + (css || '') + '" />';
 };
 
+// O NOME de uma pessoa é também o ponto único para abrir sua ficha e estatísticas.
+// `html` permite reaproveitar o link em tabelas que preservam coroas e quebras de dupla.
+// A identidade continua sendo exclusivamente o UID; o nome é apenas o rótulo visível.
+window._personProfileLinkHtml = function (uid, name, html, css, cls, extraAttrs) {
+    var nm = String(name || '');
+    var content = html == null ? window._safeHtml(nm) : html;
+    if (!uid) {
+        return '<span' + (cls ? ' class="' + cls + '"' : '') + (extraAttrs || '') +
+            ' style="' + (css || '') + '">' + content + '</span>';
+    }
+    return '<span class="sp-person-name-link' + (cls ? ' ' + cls : '') + '"' +
+        ' data-player-profile-uid="' + window._safeHtml(String(uid)) + '"' +
+        ' data-player-profile-name="' + window._safeHtml(nm) + '"' +
+        ' title="Ver estatísticas de ' + window._safeHtml(nm || 'jogador') + '"' +
+        (extraAttrs || '') + ' style="' + (css || '') + '">' + content + '</span>';
+};
+
 // O <span> do NOME de uma pessoa, com o marcador que a hidratação cura. Mesmo motivo
 // do avatar acima: nome escrito no render congela vazio quando o perfil não chegou.
 window._personNameHtml = function (uid, name, css, cls, extraAttrs) {
@@ -5987,11 +6007,65 @@ window._personNameHtml = function (uid, name, css, cls, extraAttrs) {
     // ⚠️ `extraAttrs` existe por causa do `.sp-name-fit`: o encolhedor de nome lê
     // `data-maxrem`/`data-minrem` do PRÓPRIO span. Um helper que os perdesse trocaria um
     // defeito por outro — o nome voltaria a vazar da caixa. [[project_name_fit_box_canonical]]
-    return '<span' + (cls ? ' class="' + cls + '"' : '') +
-        (uid ? ' data-uid-name="' + window._safeHtml(String(uid)) + '"' : '') +
-        (extraAttrs || '') +
-        ' style="' + (css || '') + '">' + window._safeHtml(nm) + '</span>';
+    var content = '<span' + (uid ? ' data-uid-name="' + window._safeHtml(String(uid)) + '"' : '') +
+        '>' + window._safeHtml(nm) + '</span>';
+    return window._personProfileLinkHtml(uid, nm, content, css, cls, extraAttrs);
 };
+
+// Há nomes em renders legados que já declaram `data-uid-name`, mas não passam pelo
+// helper acima. A delegação preserva um único comportamento para todos eles, inclusive
+// para cards inseridos após o primeiro paint. Nomes sem UID são texto: não há identidade
+// segura para abrir a ficha de uma pessoa fictícia ou digitada manualmente.
+window._activatePlayerProfileLinks = function (root) {
+    if (!root || !root.querySelectorAll) return;
+    Array.prototype.forEach.call(root.querySelectorAll('[data-player-profile-uid], [data-uid-name]'), function (el) {
+        var uid = el.getAttribute('data-player-profile-uid') || el.getAttribute('data-uid-name');
+        var inline = el.getAttribute('onclick') || '';
+        if (!uid || el.getAttribute('data-player-profile-disabled') === '1' || inline.indexOf('_editParticipantName') !== -1) return;
+        if (el.classList) el.classList.add('sp-person-name-link');
+        if (!el.getAttribute('role')) el.setAttribute('role', 'button');
+        if (!el.getAttribute('tabindex')) el.setAttribute('tabindex', '0');
+        if (!el.getAttribute('title')) el.setAttribute('title', 'Ver estatísticas de ' + (el.textContent || 'jogador'));
+    });
+};
+
+window._openPlayerProfileFromNameElement = function (el, ev) {
+    if (!el || el.getAttribute('data-player-profile-disabled') === '1') return false;
+    var inline = el.getAttribute('onclick') || '';
+    // Na lista administrativa o nome ainda é o atalho de edição. Ela conserva essa ação
+    // até que a edição ganhe um controle próprio, sem falsear a semântica de um botão.
+    if (inline.indexOf('_editParticipantName') !== -1) return false;
+    var uid = el.getAttribute('data-player-profile-uid') || el.getAttribute('data-uid-name');
+    if (!uid || typeof window._openPlayerProfile !== 'function') return false;
+    if (ev) {
+        if (typeof ev.preventDefault === 'function') ev.preventDefault();
+        if (typeof ev.stopPropagation === 'function') ev.stopPropagation();
+    }
+    var name = el.getAttribute('data-player-profile-name') || el.textContent || '';
+    var tournamentId = el.getAttribute('data-player-profile-tournament') || '';
+    window._openPlayerProfile(name, tournamentId ? { uid: uid, tournamentId: tournamentId } : { uid: uid });
+    return true;
+};
+
+if (typeof document !== 'undefined' && document.addEventListener && !window._playerProfileLinkDelegationInstalled) {
+    window._playerProfileLinkDelegationInstalled = true;
+    var _profileNameTarget = function (node) {
+        while (node && node !== document) {
+            if (node.getAttribute && (node.getAttribute('data-player-profile-uid') || node.getAttribute('data-uid-name'))) return node;
+            node = node.parentNode;
+        }
+        return null;
+    };
+    document.addEventListener('click', function (ev) {
+        var el = _profileNameTarget(ev.target);
+        if (el) window._openPlayerProfileFromNameElement(el, ev);
+    }, true);
+    document.addEventListener('keydown', function (ev) {
+        if (ev.key !== 'Enter' && ev.key !== ' ') return;
+        var el = _profileNameTarget(ev.target);
+        if (el && window._openPlayerProfileFromNameElement(el, ev) && typeof ev.stopPropagation === 'function') ev.stopPropagation();
+    }, true);
+}
 
 window._profileAvatarUrl = function(name, photoURL, size) {
     if (photoURL && typeof photoURL === 'string' && photoURL.indexOf('dicebear.com') === -1) {

@@ -2466,7 +2466,9 @@ function renderDashboard(container) {
         // encolhia a FONTE do nome pra caber os dois — o box de quem sou eu ficava com o
         // nome menor que o dos outros, e a linha desalinhava. Quem identifica é a cor
         // (#f1f5f9) + o peso 700, que continuam.
-        var _interno = '<span' + _uidAttr + '>' + _sf(_disp) + '</span>';
+        var _interno = uid && typeof window._personNameHtml === 'function'
+          ? window._personNameHtml(uid, _disp)
+          : '<span' + _uidAttr + '>' + _sf(_disp) + '</span>';
         // O cartão de próximo jogo e os cartões de resultados são jogos MEUS:
         // participantes podem falar com os envolvidos, e organizadores continuam
         // cobertos pelo mesmo gate canônico. Não reimplementa permissão aqui.
@@ -2938,7 +2940,8 @@ function renderDashboard(container) {
                   var _u3=(Array.isArray(m2.team1Uids)&&m2.team1Uids[_pi])||'';
                   var av3=window._personAvatarHtml(_u3, n, 'width:26px;height:26px;border-radius:50%;object-fit:cover;flex-shrink:0;');
                   var ct3=typeof window._contactPersonIconHtml==='function'?window._contactPersonIconHtml(tRef2,_u3,n,{sameGroup:true,dentroDaCaixa:true}):'';
-                  ph+='<div style="display:flex;align-items:center;gap:6px;">'+av3+'<span style="font-size:0.78rem;font-weight:'+(isMe3?'700':'400')+';color:' + window._spCor((isMe3?'#f1f5f9':'#94a3b8'), 'color')+';">'+_sf(n)+ct3+'</span></div>';
+                  var nm3=typeof window._personNameHtml==='function'?window._personNameHtml(_u3,n):_sf(n);
+                  ph+='<div style="display:flex;align-items:center;gap:6px;">'+av3+'<span style="font-size:0.78rem;font-weight:'+(isMe3?'700':'400')+';color:' + window._spCor((isMe3?'#f1f5f9':'#94a3b8'), 'color')+';">'+nm3+ct3+'</span></div>';
                 });
                 ph+='</div>';
                 var sc3 = m2.scoreP1 != null ? '<div class="sp-mc-num" style="color:' + window._spCor(_corPlacar2(p1IsWinner), 'color')+';flex-shrink:0;text-align:right;">'+_placarLado(1)+'</div>' : '';
@@ -2959,7 +2962,8 @@ function renderDashboard(container) {
                   var _u4=(Array.isArray(m2.team2Uids)&&m2.team2Uids[_pi])||'';
                   var av4=window._personAvatarHtml(_u4, n, 'width:26px;height:26px;border-radius:50%;object-fit:cover;flex-shrink:0;');
                   var ct4=typeof window._contactPersonIconHtml==='function'?window._contactPersonIconHtml(tRef2,_u4,n,{sameGroup:true,dentroDaCaixa:true}):'';
-                  ph+='<div style="display:flex;align-items:center;gap:6px;">'+av4+'<span style="font-size:0.78rem;font-weight:'+(isMe4?'700':'400')+';color:' + window._spCor((isMe4?'#f1f5f9':'#94a3b8'), 'color')+';">'+_sf(n)+ct4+'</span></div>';
+                  var nm4=typeof window._personNameHtml==='function'?window._personNameHtml(_u4,n):_sf(n);
+                  ph+='<div style="display:flex;align-items:center;gap:6px;">'+av4+'<span style="font-size:0.78rem;font-weight:'+(isMe4?'700':'400')+';color:' + window._spCor((isMe4?'#f1f5f9':'#94a3b8'), 'color')+';">'+nm4+ct4+'</span></div>';
                 });
                 ph+='</div>';
                 var sc4 = m2.scoreP2 != null ? '<div class="sp-mc-num" style="color:' + window._spCor(_corPlacar2(p2IsWinner), 'color')+';flex-shrink:0;text-align:right;">'+_placarLado(2)+'</div>' : '';

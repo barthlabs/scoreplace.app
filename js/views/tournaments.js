@@ -70,9 +70,12 @@ window._duplaCard = function (t, p, draggable, ctx) {
       // em vez de nascer mudo quando o perfil ainda não resolveu.
       nameHtml = members.map(function (n, _mi) {
         var _mUid = (_pairMembers && _pairMembers[_mi] && _pairMembers[_mi].uid) || '';
+        var _mContact = (typeof window._contactPersonIconHtml === 'function')
+          ? window._contactPersonIconHtml(t, _mUid, n, { sameGroup: true }) : '';
         return '<div style="display:flex;align-items:center;gap:6px;overflow:hidden;margin-bottom:2px;">' +
           window._personAvatarHtml(_mUid, n, 'width:24px;height:24px;border-radius:50%;object-fit:cover;flex-shrink:0;') +
           window._personNameHtml(_mUid, n, 'font-weight:700;font-size:' + (window._INSCRITO_NAME_FONT_PX || 17) + 'px;color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;') +
+          _mContact +
           '</div>';
       }).join('');
     } else {
@@ -80,8 +83,10 @@ window._duplaCard = function (t, p, draggable, ctx) {
       var _soloUidAttr = uid ? (' data-uid-name="' + window._safeHtml(uid) + '"') : '';
       // ⭐ PONTO ÚNICO: o `uid` está em escopo (linha do topo desta função) e o nome já
       // hidratava pelo span (_soloUidAttr) — faltava o ÍCONE, que nascia mudo sem perfil.
+      var _soloContact = (typeof window._contactPersonIconHtml === 'function')
+        ? window._contactPersonIconHtml(t, uid, _soloDisp, { sameGroup: true }) : '';
       nameHtml = '<div style="display:flex;align-items:center;gap:8px;overflow:hidden;">' +
-        window._personAvatarHtml(uid, nm, 'width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;') + '<span' + _soloUidAttr + ' style="font-weight:700;font-size:' + (window._INSCRITO_NAME_FONT_PX || 17) + 'px;color:var(--text-bright);text-overflow:ellipsis;white-space:nowrap;overflow:hidden;">' + window._safeHtml(_soloDisp) + '</span>' + _crown + '</div>';
+        window._personAvatarHtml(uid, nm, 'width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;') + '<span' + _soloUidAttr + ' style="font-weight:700;font-size:' + (window._INSCRITO_NAME_FONT_PX || 17) + 'px;color:var(--text-bright);text-overflow:ellipsis;white-space:nowrap;overflow:hidden;">' + window._safeHtml(_soloDisp) + '</span>' + _soloContact + _crown + '</div>';
     }
     var bgStyle = draggable
       ? 'background:linear-gradient(135deg,rgba(67,56,202,0.6),rgba(99,102,241,0.6));border:1px solid rgba(99,102,241,0.5);'

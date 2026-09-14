@@ -1519,11 +1519,13 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
       var _mUidJs = _mUid ? (',{uid:\'' + _mUid + '\',tournamentId:\'' + t.id + '\'}') : (',{tournamentId:\'' + t.id + '\'}');
       var _mDisp = _mUid ? window._safeHtml(window._displayName(_mUid, _nm)) : _nmH;
       var _mUidAttr = _mUid ? ' data-uid-name="' + window._safeHtml(_mUid) + '"' : '';
+      var _mContact = (typeof window._contactPersonIconHtml === 'function')
+        ? window._contactPersonIconHtml(t, _mUid, _nm, { sameGroup: true }) : '';
       var _editAttr = isOrg ? 'onclick="event.stopPropagation();window._editParticipantName(\'' + t.id + '\',\'' + _nmSafe + '\',\'' + _mUid + '\')" title="Clique para editar" style="font-weight:700;font-size:' + _FONT + 'px;color:var(--text-bright);white-space:normal;overflow-wrap:anywhere;word-break:break-word;min-width:0;cursor:text;"' : 'style="font-weight:700;font-size:' + _FONT + 'px;color:var(--text-bright);white-space:normal;overflow-wrap:anywhere;word-break:break-word;min-width:0;cursor:pointer;" onclick="event.stopPropagation();if(typeof window._openPlayerProfile===\'function\')window._openPlayerProfile(\'' + _nmSafe + '\'' + _mUidJs + ');else if(typeof window._showPlayerStats===\'function\')window._showPlayerStats(\'' + _nmSafe + '\')" onmouseover="this.style.textDecoration=\'underline\'" onmouseout="this.style.textDecoration=\'none\'" title="Ver perfil de ' + _nmH + '"';
       // ⭐ ponto único: o nome já hidratava (_mUidAttr), o ÍCONE não — e era ele que
       // nascia mudo quando o perfil ainda não tinha chegado.
       return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;overflow:hidden;">' +
-        window._personAvatarHtml(_mUid, _nm, 'width:24px;height:24px;border-radius:50%;object-fit:cover;flex-shrink:0;') + '<span' + _mUidAttr + ' ' + _editAttr + '>' + _mDisp + '</span></div>';
+        window._personAvatarHtml(_mUid, _nm, 'width:24px;height:24px;border-radius:50%;object-fit:cover;flex-shrink:0;') + '<span' + _mUidAttr + ' ' + _editAttr + '>' + _mDisp + '</span>' + _mContact + '</div>';
     }).join('') + (_orgStar ? '<div style="margin-top:2px;">' + _orgStar + '</div>' : '');
   } else {
     var _pSafe = pName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
@@ -1554,9 +1556,11 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
     var _pUidJs = _pUid ? (',{uid:\'' + _pUid + '\',tournamentId:\'' + t.id + '\'}') : (',{tournamentId:\'' + t.id + '\'}');
     var _pDisp = _pUid ? window._safeHtml(window._displayName(_pUid, pName)) : _pNameH;
     var _pUidAttr = _pUid ? ' data-uid-name="' + window._safeHtml(_pUid) + '"' : '';
+    var _pContact = (typeof window._contactPersonIconHtml === 'function')
+      ? window._contactPersonIconHtml(t, _pUid, pName, { sameGroup: true }) : '';
     var _editAttrN = isOrg ? 'onclick="event.stopPropagation();window._editParticipantName(\'' + t.id + '\',\'' + _pSafe + '\',\'' + _pUid + '\')" title="Clique para editar" style="font-weight:700;font-size:' + _FONT + 'px;color:var(--text-bright);white-space:normal;overflow-wrap:anywhere;word-break:break-word;min-width:0;cursor:text;"' : 'style="font-weight:700;font-size:' + _FONT + 'px;color:var(--text-bright);white-space:normal;overflow-wrap:anywhere;word-break:break-word;min-width:0;cursor:pointer;" onclick="event.stopPropagation();if(typeof window._openPlayerProfile===\'function\')window._openPlayerProfile(\'' + _pSafe + '\'' + _pUidJs + ');else if(typeof window._showPlayerStats===\'function\')window._showPlayerStats(\'' + _pSafe + '\')" onmouseover="this.style.textDecoration=\'underline\'" onmouseout="this.style.textDecoration=\'none\'" title="Ver perfil de ' + _pNameH + '"';
     pNameHtml = '<div style="display:flex;align-items:center;gap:8px;overflow:hidden;">' +
-      window._personAvatarHtml(_pUid, pName, 'width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;') + '<span' + _pUidAttr + ' ' + _editAttrN + '>' + _pDisp + '</span>' + _orgStar + '</div>';
+      window._personAvatarHtml(_pUid, pName, 'width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;') + '<span' + _pUidAttr + ' ' + _editAttrN + '>' + _pDisp + '</span>' + _pContact + _orgStar + '</div>';
   }
 
   var safeP = pName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");

@@ -1316,6 +1316,8 @@ const SUITES = [
   // O NOME EXIBIDO sai do PERFIL (uid), nunca do rótulo gravado no sorteio. Print do dono:
   // a mesma pessoa como "Fabi2401@" na classificação e "Dani Bataglia" nos jogos.
   'tests/nome-vem-do-perfil-nao-do-sorteio.test.js',
+  // Nome com UID abre a ficha/estatísticas em toda tela; o balão mantém WhatsApp → e-mail.
+  'tests/nome-sempre-abre-estatisticas.test.js',
   'functions/test-merge-collections-core.js',
   // v2.1.48 — a autoridade da amizade (fechou a escalada de privilégio da 2.1.47)
   'functions/test-amizade-authority-core.js',

@@ -4570,10 +4570,8 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint, m) {
     }
     html += `<div class="sp-mc-side">` +
       `<img src="${photoSrc}"${_avatarUid} ${onerror} data-player-name="${window._safeHtml(name)}" class="sp-av" style="--sp-av:${size}">` +
-      // v1.6.98 (decisão do dono): o nome no CARD DA CHAVE não abre mais ficha —
-      // "faça funcionar na classificação e não na chave". Na quadra o card é área de
-      // toque pra placar/confirmar; abrir perfil ali atrapalhava. A ficha vive no nome
-      // da CLASSIFICAÇÃO (grupo e geral), que agora abre _openPlayerProfile.
+      // Cada participante abre sua ficha pelo próprio nome, inclusive no card da chave.
+      // O clique delegado para antes da ação do card, portanto não aciona placar/confirmar.
       // ── O NOME É DO PERFIL, E SE ATUALIZA (1.8.29) ────────────────────────
       // Com uid, o texto vive num span `data-uid-name`: ele nasce com o nome do perfil
       // se já está em cache e VAZIO se não está, e `_hydrateUidNames` o preenche quando
@@ -4588,14 +4586,17 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint, m) {
       // `_fitEmLote` devolve `whiteSpace=''` contando com ele. MEDIDO antes de juntar
       // (0 a 9 sobrenomes, com/sem coroa, claro/escuro, 390/768/1280): a fronteira do
       // corte não se move. Trava: tests/nome-do-card-da-chave-nao-perde-a-classe.test.js.
-      `<div class="sp-mc-box" style="${_boxNome}"><span class="sp-name-fit sp-mc-nm" data-fit-group="${_grupoNome}" data-maxrem="${_nomeMaxRem}" data-minrem="${_nomeMinRem}">${
+      /* A faixa interna delimita somente o nome dentro do conteúdo que o auto-fit mede.
+       * O 💬 continua irmão dela dentro de .sp-name-fit: assim o toque no nome abre a
+       * ficha, o toque no 💬 abre contato, e os dois seguem cabendo na mesma caixa. */
+      `<div class="sp-mc-box" style="${_boxNome}"><span class="sp-name-fit sp-mc-nm" data-fit-group="${_grupoNome}" data-maxrem="${_nomeMaxRem}" data-minrem="${_nomeMinRem}"><span class="sp-person-name-content">${
         _slotUid
-          ? `<span data-uid-name="${window._safeHtml(_slotUid)}">${window._safeHtml(name)}</span>` +
+          ? window._personNameHtml(_slotUid, name) +
             ((name && typeof window._isOrgName === 'function' && window._currentBracketTournament &&
               window._isOrgName(name, window._currentBracketTournament)) ? (' ' + (window._CROWN_MINI || '')) : '')
           : (typeof window._nameWithCrown === 'function' && window._currentBracketTournament
               ? window._nameWithCrown(name, window._currentBracketTournament) : window._safeHtml(name))
-      }` +
+      }</span>` +
       /* ⭐ DENTRO DA CAIXA **E DENTRO DA MEDIÇÃO**. Ordem do dono (02/set/2026): _"os
        * balõezinhos devem ficar junto do nome de cada atleta e não colado no placar"_ — o que
        * o trouxe pra dentro da caixa. E relato dele em 12/set/2026, olhando a tela inicial:
@@ -7142,11 +7143,8 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
                 // resolução por NOME — que nem funciona aqui, porque o save stripa o nome de
                 // toda entrada com uid. Sem uid = fictício/nome digitado: só texto.
                 if (!s.uid) return _txt;
-                return '<span onclick="event.stopPropagation();window._openPlayerProfile(\'' + _gstEsc(s.name) +
-                  '\',{uid:\'' + _gstEsc(s.uid || '') + '\',tournamentId:\'' + _gstEsc(t.id) + '\'})"' +
-                  ' title="' + ((typeof window._plainRowName === 'function' ? window._plainRowName : function (s) { return (s && s.name) || ''; })(s) ? ('Ver ficha de ' + window._safeHtml((typeof window._plainRowName === 'function' ? window._plainRowName : function (s) { return (s && s.name) || ''; })(s))) : 'Ver ficha') + '"' +
-                  ' style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;">' +
-                  _txt + '</span>';
+                return window._personProfileLinkHtml(s.uid, s.name, _txt,
+                  '', '', ' data-player-profile-tournament="' + window._safeHtml(String(t.id || '')) + '"');
               };
               var _gstRows = _gst.map(function(s, idx) {
                 var _pos = idx + 1, _md = _pos === 1 ? '🥇' : _pos === 2 ? '🥈' : _pos === 3 ? '🥉' : '';

@@ -925,6 +925,29 @@ button[style*="linear-gradient"]:not(.btn):active {
    Some assim que a hidratação/re-render preenche o nome vivo. */
 [data-uid-name]:empty::after { content: "…"; opacity: 0.4; font-weight: 400; letter-spacing: 1px; }
 
+/* Participante com UID: o mesmo sinal visual e o mesmo foco em qualquer tela.
+ * O clique é delegado por store.js para também cobrir renderizadores legados. */
+.sp-person-name-link,
+[data-uid-name] {
+  cursor: pointer;
+  text-decoration-line: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+}
+.sp-person-name-link:focus-visible,
+[data-uid-name]:focus-visible {
+  outline: 2px solid var(--primary-color, #818cf8);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+/* No tema claro, o sublinhado não pode herdar uma tinta secundária e desaparecer
+ * sobre o card branco. A cor de destaque já é AA nesse tema (css/style.css). */
+[data-theme="light"] .sp-person-name-link,
+[data-theme="light"] [data-uid-name] {
+  text-decoration-color: var(--primary-color, #007aff);
+}
+
 /* --- Variantes Transparentes (SOMENTE Add Bot e Apagar) --- */
 .btn-danger-ghost {
   background: var(--btn-danger-ghost-bg, rgba(239,68,68,0.15));
