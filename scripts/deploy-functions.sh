@@ -16,6 +16,8 @@
 #   scripts/deploy-functions.sh stripe          # Pro/pagamentos (functions-stripe/)
 #   scripts/deploy-functions.sh all             # os três, em sequência
 #   scripts/deploy-functions.sh main --dry-run  # só mostra o comando, não roda
+#   scripts/deploy-functions.sh main --only drainPendingVerifications,drainPendingPasswordResets
+#                                              # publica somente funções principais nomeadas
 #
 # NUNCA rodar `firebase deploy --only functions` puro nem `--force` na mão.
 
@@ -86,10 +88,23 @@ fi
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PROJECT="scoreplace-app"
 DRY=0
-ALVO="${1:-}"
-[ "${2:-}" = "--dry-run" ] && DRY=1
+ONLY=""
 
 die() { echo "✗ $*" >&2; exit 1; }
+
+ALVO="${1:-}"
+shift || true
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --dry-run) DRY=1; shift ;;
+    --only)
+      [ "$#" -ge 2 ] || die "--only exige uma lista de nomes de funções"
+      ONLY="$2"
+      shift 2
+      ;;
+    *) die "opção desconhecida: $1" ;;
+  esac
+done
 
 # Monta "functions:a,functions:b,…" a partir dos exports CJS (^exports.nome).
 targets_cjs() { # $1=arquivo $2=prefixo (ex.: "functions:" ou "functions:stripe:")
@@ -98,6 +113,25 @@ targets_cjs() { # $1=arquivo $2=prefixo (ex.: "functions:" ou "functions:stripe:
 # Idem pra exports ESM (^export const nome).
 targets_esm() {
   grep -o '^export const [A-Za-z0-9_]*' "$1" | sed "s/export const /$2/" | sort -u | paste -sd, -
+}
+
+# Limita o deploy a exports existentes. O prefixo faz a mesma validação servir
+# tanto ao codebase principal quanto aos codebases nomeados.
+selected_targets() { # $1=todos os alvos, $2=prefixo do codebase
+  local all="$1" prefix="$2"
+  [ -n "$ONLY" ] || { printf '%s' "$all"; return 0; }
+
+  local out="" name candidate
+  local IFS=','
+  read -r -a names <<< "$ONLY"
+  for name in "${names[@]}"; do
+    [[ "$name" =~ ^[A-Za-z0-9_]+$ ]] || die "nome de função inválido em --only: $name"
+    candidate="${prefix}${name}"
+    [[ ",$all," == *",$candidate,"* ]] || die "--only pediu export inexistente: $name"
+    out="${out:+$out,}$candidate"
+  done
+  [ -n "$out" ] || die "--only não selecionou nenhuma função"
+  printf '%s' "$out"
 }
 
 deploy_dir() { # $1=dir(de onde rodar o firebase) $2=targets $3=descrição $4=pkgdir(deps; default=$1)
@@ -138,7 +172,10 @@ deploy_dir() { # $1=dir(de onde rodar o firebase) $2=targets $3=descrição $4=p
 }
 
 do_main() {
-  deploy_dir "$ROOT" "$(targets_cjs "$ROOT/functions/index.js" 'functions:')" \
+  local all targets
+  all="$(targets_cjs "$ROOT/functions/index.js" 'functions:')"
+  targets="$(selected_targets "$all" 'functions:')" || return $?
+  deploy_dir "$ROOT" "$targets" \
     "principal (functions/)" "$ROOT/functions"
 }
 do_autodraw() {
@@ -162,6 +199,6 @@ case "$ALVO" in
   autodraw) do_autodraw ;;
   stripe)   do_stripe ;;
   all)      do_main; do_autodraw; do_stripe ;;
-  *) die "uso: scripts/deploy-functions.sh [main|autodraw|stripe|all] [--dry-run]" ;;
+  *) die "uso: scripts/deploy-functions.sh [main|autodraw|stripe|all] [--dry-run] [--only nome[,nome]]" ;;
 esac
 echo "✓ deploy alvejado concluído — conferir com: firebase functions:list --project $PROJECT"

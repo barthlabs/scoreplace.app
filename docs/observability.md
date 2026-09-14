@@ -133,12 +133,13 @@ quando fizer sentido.
 
 | Sinal | Primeira verificação | Ação se persistir |
 |---|---|---|
-| Erro novo no Sentry | release, rota e primeiro stack trace; confirmar que não há dado pessoal no evento | interromper nova publicação da mesma linha e abrir correção reproduzível |
+| Erro novo no Sentry | release, rota e primeiro stack trace; confirmar antes de compartilhar ou registrar que o evento não traz dado pessoal | interromper nova publicação da mesma linha e abrir correção reproduzível |
 | Pico de leituras ou escritas Firestore | intervalo de tempo, métrica afetada e última release | comparar com tráfego e identificar a consulta/escrita antes de mexer em quota ou Rules |
 | Erros de Cloud Functions | nome da função, código e `cloud_run_revision` da execução | conferir logs da execução; recusar reprocessamento manual até distinguir falha transitória de efeito parcial |
 | Dois e-mails de verificação ou reset próximos | horários, release e erros/retries de `sendVerificationEmail` ou `sendPasswordReset` na mesma janela | preservar os dois IDs de outbox para análise; não reenfileirar manualmente antes de distinguir retry do cliente de reentrega do servidor |
 | Alerta de orçamento | serviço que cresceu e tendência diária | pausar trabalho que aumente consumo e definir limite ou correção com base na métrica |
 
-Não registrar tokens, e-mails, documentos de torneio ou mensagens de pessoas
-na investigação. A identificação operacional é versão, rota, função, janela
-de tempo e código de erro.
+Antes de compartilhar ou transcrever um evento do Sentry, conferir `extra`,
+breadcrumbs e stack trace. Não registrar tokens, e-mails, documentos de
+torneio ou mensagens de pessoas na investigação manual. A identificação
+operacional é versão, rota, função, janela de tempo e código de erro.

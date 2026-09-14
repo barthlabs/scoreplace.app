@@ -61,6 +61,65 @@
   // Sem DSN — sai limpo. Os no-ops acima já estão ativos.
   if (!DSN) return;
 
+  // O Sentry precisa explicar a falha sem receber o contexto de quem a viveu.
+  // Não tentar reconhecer nomes é frágil: a barreira é estrutural. Eventos levam
+  // somente release, rota, tipo de exceção e a pilha sem payload, query ou vars.
+  function _sentryFrame(frame) {
+    var safe = {};
+    if (frame && frame.filename) {
+      safe.filename = String(frame.filename).split(/[?#]/)[0].slice(0, 240);
+    }
+    if (frame && frame.function) {
+      safe.function = String(frame.function).replace(/[^A-Za-z0-9_.$<>]/g, '').slice(0, 120);
+    }
+    if (frame && typeof frame.lineno === 'number') safe.lineno = frame.lineno;
+    if (frame && typeof frame.colno === 'number') safe.colno = frame.colno;
+    if (frame && frame.in_app === true) safe.in_app = true;
+    return safe;
+  }
+
+  function _sanitizeSentryEvent(event) {
+    event = event || {};
+    var route = event.tags && event.tags.route;
+    event.tags = route ? { route: route } : {};
+
+    delete event.user;
+    delete event.extra;
+    delete event.contexts;
+    delete event.request;
+    delete event.fingerprint;
+    delete event.spans;
+    event.transaction = route ? ('route:' + route) : 'route:unknown';
+    event.message = '[mensagem suprimida por privacidade]';
+
+    if (Array.isArray(event.breadcrumbs)) {
+      event.breadcrumbs = event.breadcrumbs.slice(-10).map(function (crumb) {
+        var safe = { category: 'breadcrumb' };
+        if (crumb && crumb.level) safe.level = String(crumb.level).slice(0, 20);
+        if (crumb && typeof crumb.timestamp === 'number') safe.timestamp = crumb.timestamp;
+        return safe;
+      });
+    } else {
+      delete event.breadcrumbs;
+    }
+
+    if (event.exception && Array.isArray(event.exception.values)) {
+      event.exception = {
+        values: event.exception.values.map(function (value) {
+          var safe = {
+            type: String((value && value.type) || 'Error').replace(/[^A-Za-z0-9_.]/g, '').slice(0, 80) || 'Error',
+            value: '[detalhe suprimido por privacidade]'
+          };
+          if (value && value.stacktrace && Array.isArray(value.stacktrace.frames)) {
+            safe.stacktrace = { frames: value.stacktrace.frames.map(_sentryFrame) };
+          }
+          return safe;
+        })
+      };
+    }
+    return event;
+  }
+
   // ── 2b. Recuperação do bug FATAL do Firestore (SDK <10.12) ─────────────────
   // "INTERNAL ASSERTION FAILED: Unexpected state": a AsyncQueue do Firestore "falha" e
   // NÃO se recupera — TODA chamada seguinte morre em cascata (Sentry SCOREPLACE-WEB-66/67).
@@ -246,12 +305,10 @@
           // store.js defer carregar, todo evento sai com release correto assim
           // que store.js termina de parsear (~ms depois).
           event.release = 'scoreplace@' + (window.SCOREPLACE_VERSION || 'unknown');
-          // Anonimização: jamais enviar email/displayName ao Sentry
-          if (event.user) {
-            delete event.user.email;
-            delete event.user.username;
-          }
-          return event;
+          return _sanitizeSentryEvent(event);
+        },
+        beforeSendTransaction: function (event) {
+          return _sanitizeSentryEvent(event);
         }
       });
 

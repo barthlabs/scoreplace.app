@@ -1617,6 +1617,8 @@ const SUITES = [
   'tests/login-um-caminho-so.test.js',
   // e-mail de consolidação da conta (assinatura anti-spam, conteúdo, gatilho, backfill)
   'functions/test-account-email-core.js',
+  // Eventos enviados ao Sentry passam por uma barreira que remove payloads e identificadores.
+  'tests/sentry-privacy-filter.test.js',
   // Uma reentrega das filas de e-mail usa o mesmo documento de outbox: após
   // criar a mensagem, falhar ao marcar a pendência como sent não dobra o envio.
   'tests/pending-email-outbox-idempotent.test.js',

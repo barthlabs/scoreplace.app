@@ -1,3 +1,12 @@
+## 2.3.15 — 14/set/2026
+
+- **E-mails pendentes sem duplicidade:** se uma reentrega ocorrer depois de o
+  e-mail já entrar na outbox, cada pendência reutiliza a mesma identidade de
+  mensagem. A atualização posterior do status não cria um segundo envio.
+- **Diagnóstico sem contexto pessoal:** o Sentry remove usuário, payloads,
+  mensagens livres, breadcrumbs, queries e variáveis da pilha antes de enviar
+  um evento. Ficam somente versão, rota, tipo de erro e estrutura técnica.
+
 ## 2.3.14 — 14/set/2026
 
 - **Listas mais legíveis:** a espera, os inativos e os W.O. passam a usar uma grade estável de duas colunas quando há espaço, com cards de altura uniforme. O rótulo técnico “R1” saiu da lista de espera; fica apenas o estado útil das inscrições.
