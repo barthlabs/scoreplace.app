@@ -36,6 +36,7 @@ const _uidSweep = require("./uid-sweep");
 const _mergeCols = require("./merge-collections-core");
 const _dupPerson = require("./duplicate-person-core");
 const _casualStats = require("./casual-stats-core");
+const _pendingMail = require("./pending-mail-core");
 
 // v1.8.38 — RARIDADE DO TOKEN, em UM lugar só (os dois caminhos de detecção usam este).
 // O subconjunto de 1 token só vira sinal quando o token existe SÓ nas duas contas
@@ -183,6 +184,11 @@ async function _enqueueMail(dbRef, doc) {
   return dbRef.collection("mail").add(doc);
 }
 
+/* Uma pendência agendada pode ser reentregue depois de o e-mail ter entrado na
+ * outbox, mas antes de a pendência receber status=sent. O id é estável por
+ * pendência: create() transforma essa janela em "já enfileirado", em vez de
+ * criar um segundo e-mail. Não serve para envios diretos, que são pedidos
+ * distintos e continuam usando _enqueueMail. */
 // ═══════════════════════════════════════════════════════════════════════════
 // MODULE-LEVEL HELPERS — account deduplication (phone + email)
 // ═══════════════════════════════════════════════════════════════════════════
@@ -2299,10 +2305,15 @@ async function _wrapVerificationLink(firebaseLink, email) {
   return "https://scoreplace.app/?vt=" + encodeURIComponent(token);
 }
 
-async function _queueVerificationEmail(db, email, link, name) {
+async function _queueVerificationEmail(db, email, link, name, pendingId) {
+  const mailId = pendingId ? _pendingMail.mailId("verification", pendingId) : "";
+  const ref = mailId ? db.collection("mail").doc(mailId) : null;
+  // Evita até criar outro wrapper magicLink quando uma entrega anterior já
+  // chegou à outbox e só a marcação da pendência ficou para trás.
+  if (ref && (await ref.get()).exists) return { alreadyQueued: true };
   link = await _wrapVerificationLink(link, email);
   const { html, text } = _buildVerificationEmailContent(link, name);
-  await _enqueueMail(db, {
+  const message = {
     to: [email],
     replyTo: "scoreplace.app@gmail.com",
     message: {
@@ -2311,7 +2322,12 @@ async function _queueVerificationEmail(db, email, link, name) {
       text: text,
     },
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
-  });
+  };
+  if (!ref) {
+    await _enqueueMail(db, message);
+    return { alreadyQueued: false };
+  }
+  return _pendingMail.createOnce(ref, message);
 }
 
 exports.sendVerificationEmail = onCall(
@@ -2339,6 +2355,10 @@ exports.sendVerificationEmail = onCall(
         return { ok: true };
       } catch (err) {
         console.error("[sendVerificationEmail] falha ao enfileirar email:", err);
+        // Não cria pendingEmailVerifications aqui: a pendência só representa
+        // falha ANTES de existir outbox (generateEmailVerificationLink=null).
+        // Criá-la depois de _enqueueMail abriria exatamente o segundo envio que
+        // o dreno protege.
         throw new HttpsError("internal", "não foi possível enfileirar o email: " + (err.code || err.message));
       }
     }
@@ -2470,7 +2490,7 @@ exports.drainPendingVerifications = onSchedule(
       const link = await _genVerificationLink(email);
       if (link) {
         try {
-          await _queueVerificationEmail(db, email, link, d.name || "");
+          await _queueVerificationEmail(db, email, link, d.name || "", doc.id);
           await doc.ref.update({ status: "sent", sentAt: admin.firestore.FieldValue.serverTimestamp() });
           console.log("[drainPendingVerifications] enviado:", email);
         } catch (e) {
@@ -2596,9 +2616,12 @@ function _buildPasswordResetEmail(link, name) {
 }
 
 // Enfileira o e-mail de redefinição de senha na coleção mail/ (SMTP). Lança se falhar.
-async function _queuePasswordResetEmail(db, email, link, name) {
+async function _queuePasswordResetEmail(db, email, link, name, pendingId) {
+  const mailId = pendingId ? _pendingMail.mailId("password-reset", pendingId) : "";
+  const ref = mailId ? db.collection("mail").doc(mailId) : null;
+  if (ref && (await ref.get()).exists) return { alreadyQueued: true };
   const built = _buildPasswordResetEmail(link, name);
-  await _enqueueMail(db, {
+  const message = {
     to: [email],
     replyTo: "scoreplace.app@gmail.com",
     message: {
@@ -2610,7 +2633,12 @@ async function _queuePasswordResetEmail(db, email, link, name) {
       headers: { "List-Unsubscribe": "<mailto:scoreplace.app@gmail.com?subject=Unsubscribe>" },
     },
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
-  });
+  };
+  if (!ref) {
+    await _enqueueMail(db, message);
+    return { alreadyQueued: false };
+  }
+  return _pendingMail.createOnce(ref, message);
 }
 
 exports.sendPasswordReset = onCall(
@@ -2679,7 +2707,7 @@ exports.drainPendingPasswordResets = onSchedule(
         await doc.ref.update({ status: "sent", reason: "user-not-found", sentAt: admin.firestore.FieldValue.serverTimestamp() });
       } else if (linkResult) {
         try {
-          await _queuePasswordResetEmail(db, email, linkResult, d.name || "");
+          await _queuePasswordResetEmail(db, email, linkResult, d.name || "", doc.id);
           await doc.ref.update({ status: "sent", sentAt: admin.firestore.FieldValue.serverTimestamp() });
           console.log("[drainPendingPasswordResets] enviado:", email);
         } catch (e) {

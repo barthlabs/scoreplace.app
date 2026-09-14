@@ -1617,6 +1617,9 @@ const SUITES = [
   'tests/login-um-caminho-so.test.js',
   // e-mail de consolidação da conta (assinatura anti-spam, conteúdo, gatilho, backfill)
   'functions/test-account-email-core.js',
+  // Uma reentrega das filas de e-mail usa o mesmo documento de outbox: após
+  // criar a mensagem, falhar ao marcar a pendência como sent não dobra o envio.
+  'tests/pending-email-outbox-idempotent.test.js',
   // O "Entrar" da landing responde ao PRIMEIRO toque mesmo com o JS ainda na rede —
   // era isso que ficava mudo logo depois de uma atualização (cache zerado). v1.8.37.
   'tests/entrar-nunca-fica-mudo.test.js',
