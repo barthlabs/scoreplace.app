@@ -388,7 +388,11 @@ ok(/FASES_CONGELADAS = \['not_started', 'frozen', 'backfilled'\]/.test(faseS2),
   'e `backfilled` está entre as congeladas');
 
 // ponto 2 — ordem no deleteAccount
-const corpoDel3 = idx.slice(idx.indexOf('exports.deleteAccount = onCall'), idx.indexOf('exports.deleteAccount = onCall') + 16000);
+/* ⛔ O CORPO DA FUNÇÃO, NÃO UMA JANELA DE 16.000 CARACTERES. A janela estourou quando a
+ * `deleteAccount` ganhou linhas legítimas (L16, 14/set/2026) e `finalizarPeloFato` saiu do
+ * recorte — vermelho sem defeito nenhum. O fim é o próximo `exports.`. */
+const _iDel3 = idx.indexOf('exports.deleteAccount = onCall');
+const corpoDel3 = idx.slice(_iDel3, idx.indexOf('\nexports.', _iDel3 + 10));
 const _oFase = corpoDel3.indexOf('exigirLiberado'), _oLock = corpoDel3.indexOf('adquirir(db, [uid]');
 const _oGuard = corpoDel3.indexOf('mensagemBloqueio'), _oEscrita = corpoDel3.indexOf('ref.delete()');
 ok(_oFase > 0 && _oLock > _oFase && _oGuard > _oLock && _oEscrita > _oGuard,

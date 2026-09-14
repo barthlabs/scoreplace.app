@@ -2379,8 +2379,10 @@ exports.sendVerificationCode = onCall(
     const uid = request.auth && request.auth.uid;
     if (!uid) throw new HttpsError("unauthenticated", "precisa estar autenticado");
     const db = admin.firestore();
-    let email = "";
-    try { const u = await admin.auth().getUser(uid); email = (u.email || "").toLowerCase(); } catch (e) {}
+    /* ⛔ Antes, uma leitura que falhasse deixava `email = ""` e a pessoa era informada de que
+     * a CONTA DELA não tem e-mail — mentira, e ela ficaria tentando trocar algo que está certo. */
+    const _u = await _contaOuNulo(uid, "sendVerificationCode");
+    const email = ((_u && _u.email) || "").toLowerCase();
     if (!email) throw new HttpsError("failed-precondition", "conta sem e-mail");
 
     const crypto = require("crypto");
@@ -6345,6 +6347,40 @@ async function _recontarTrofeus(db, deOnde) {
   return { ids: Object.keys(contagem).length, trofeus: snap.size, totalUsers };
 }
 
+/* ⛔⛔ LER A CONTA: "NÃO EXISTE" É A ÚNICA RESPOSTA QUE A EXCEÇÃO PODE DAR.
+ *
+ * `admin.auth().getUser(uid)` falha por DOIS motivos muito diferentes: a conta não existe
+ * (e aí a exceção É a resposta) ou a leitura não deu (rede, cota, prazo). Um `catch` que
+ * engole os dois transforma "não consegui olhar" em "não tem" — e foi assim que uma leitura
+ * com prazo estourado virou "ninguém autenticou esse telefone" nesta mesma semana.
+ *
+ * ⭐ Esta porta separa os dois: devolve a conta, ou `null` quando ela comprovadamente não
+ * existe, ou LANÇA quando não deu para saber. Quem chama decide o que fazer com cada caso —
+ * mas não pode mais confundir os dois sem querer.
+ * [[feedback_engolir_erro_custa_horas_do_dono]] [[feedback_nao_afirmar_causa_sem_medir]] */
+async function _contaOuNulo(uid, onde) {
+  try {
+    return await admin.auth().getUser(uid);
+  } catch (e) {
+    if (String((e && e.code) || "") === "auth/user-not-found") return null;
+    console.error("[" + onde + "] não deu para ler a conta " + uid + ":", (e && (e.code || e.message)) || e);
+    throw new HttpsError("unavailable", "Não foi possível concluir agora. Tente de novo em instantes.");
+  }
+}
+
+/* ⛔ UM TROFÉU QUEBRADO APARECE UMA VEZ, NÃO A CADA PESSOA.
+ *
+ * A varredura roda sobre a base inteira: registrar a cada falha encheria o log com centenas
+ * de linhas iguais e o ruído esconderia o resto. Guardando quais já reclamaram, cada troféu
+ * com defeito rende UMA linha por execução — visível e suportável. */
+const _trofeusJaReclamados = {};
+function _trofeuQueFalhou(id, e) {
+  if (_trofeusJaReclamados[id]) return;
+  _trofeusJaReclamados[id] = true;
+  console.error("[trofeus] a regra do troféu \"" + id + "\" falhou e ele NÃO está sendo " +
+    "concedido a ninguém:", (e && (e.message || e.code)) || e);
+}
+
 exports.backfillAllUserTrophies = onCall(
   {
     region: "us-central1",
@@ -6401,7 +6437,14 @@ exports.backfillAllUserTrophies = onCall(
           if (existTrophies[def.id]) continue;
           try {
             if (def.check(userData, stats)) newTrophies.push(def.id);
-          } catch (_) {}
+          } catch (e) {
+            /* ⛔ TROFÉU COM DEFEITO DEIXAVA DE SER CONCEDIDO PARA TODO MUNDO, CALADO.
+             * Engolir aqui é certo — um troféu quebrado não pode derrubar a concessão dos
+             * outros. O que estava errado era o SILÊNCIO: a regra com defeito nunca premiava
+             * ninguém e nada no registro dizia qual era. Dizer QUAL troféu falhou transforma
+             * "os troféus pararam" em uma linha que se conserta. [[feedback_engolir_erro_custa_horas_do_dono]] */
+            _trofeuQueFalhou(def.id, e);
+          }
         }
 
         // ── 3.5. Check category-completion trophies ────────────────────────
@@ -6560,7 +6603,9 @@ exports.scheduledTrophyCheck = onSchedule(
         const newTrophies = [];
         for (const def of BACKFILL_TROPHY_DEFS) {
           if (existTrophies[def.id]) continue;
-          try { if (def.check(userData, stats)) newTrophies.push(def.id); } catch (_) {}
+          /* Mesmo motivo do backfill: engolir sim, calar não. */
+          try { if (def.check(userData, stats)) newTrophies.push(def.id); }
+          catch (e) { _trofeuQueFalhou(def.id, e); }
         }
 
         // Category-completion trophies (second pass)
@@ -6747,8 +6792,9 @@ exports.deleteAccount = onCall(
       const _pre = await db.collection("users").doc(uid).get();
       const _pd = _pre.exists ? (_pre.data() || {}) : null;
       if (_pd && (_pd.deleted === true || _pd.deletedAt)) {
-        let _authVivo = false;
-        try { await admin.auth().getUser(uid); _authVivo = true; } catch (e) {}
+        /* ⛔ AQUI O SILÊNCIO DIZIA "JÁ FOI EXCLUÍDA" quando o que houve foi uma leitura que
+         * não deu. A pessoa ouvia que a conta dela não existe mais — sobre uma conta viva. */
+        const _authVivo = !!(await _contaOuNulo(uid, "deleteAccount/retomada"));
         if (!_authVivo) throw new HttpsError("failed-precondition", "esta conta já foi excluída");
         console.warn("[deleteAccount] " + uid + ": tombstone existe e o Auth sobreviveu — retomando SÓ o passo do Auth");
         try { await admin.auth().deleteUser(uid); }
@@ -6787,7 +6833,10 @@ exports.deleteAccount = onCall(
           throw new HttpsError("failed-precondition", "esta conta já foi excluída");
         }
       }
-      try { const au = await admin.auth().getUser(uid); email = (au.email || "").toLowerCase(); } catch (e) {}
+      /* O e-mail é do AVISO de exclusão. Falhar a leitura e seguir sem ele fazia a pessoa
+       * não ser avisada de que a própria conta foi apagada. */
+      const _au = await _contaOuNulo(uid, "deleteAccount");
+      email = ((_au && _au.email) || "").toLowerCase();
 
     // 0) PORTA — jogo pendente BLOQUEIA a exclusão (ordem do dono, ago/2026).
     // Sem isto, a pessoa apaga a conta estando SORTEADA e leva o grupo dos outros

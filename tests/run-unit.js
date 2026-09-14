@@ -104,6 +104,7 @@ const SUITES = [
   'tests/aviso-de-placar-diz-quem-lancou.test.js',
   'tests/inscricao-nao-usa-email-como-nome.test.js',
   'tests/telefone-repetido-nao-une-conta.test.js',
+  'tests/erro-de-leitura-nao-vira-resposta.test.js',
   'tests/segunda-conta-explica-e-age.test.js',
   'tests/o-site-nao-publica-o-repositorio.test.js',
   'tests/fusao-tem-volta.test.js',
