@@ -280,6 +280,25 @@ const comPlacar = (l) => l.filter((m) => m && (m.winner || m.sets || m.scoreP1 !
   // ⭐ quantos jogos moram fora — é o que separa "não sorteou" de "não carregou" na tela.
   // Sem ele, todo torneio dividido é acusado de incompleto (e o vazio de verdade também).
   if (FORA.indexOf('matches') !== -1) config._nJogos = (partes.matches || []).length;
+  /* ⛔⛔ E OS OUTROS DOIS CONTADORES, QUE ESTE SCRIPT ESQUECIA — MEDIDO em 14/set/2026:
+   * dos 41 torneios divididos da produção, 41 tinham `_nJogos` e ZERO tinham `_nPartes` ou
+   * `_nGrupos`. Não era coincidência: todo torneio dividido passou por aqui, e aqui só o
+   * `_nJogos` era recolocado. Como a gravação é `set()` (substitui, não mescla), o
+   * `_nPartes` que o aplicativo tivesse gravado antes era APAGADO junto.
+   *
+   * ⛔ O QUE ISSO CUSTA, e é grave: `_nPartes` é o único contador que fala do ELENCO.
+   * Sem ele o aplicativo não distingue "este torneio não tem inscrito" de "o elenco ainda
+   * não chegou" — e um cache com os jogos dentro faz ele concluir "não falta nada" e nunca
+   * buscar o elenco. É o "0 INSCRITOS / você não está inscrito" que o dono relatou e que
+   * ficou sem veredito. A trava de gravação que exige prova numérica também nunca dispara
+   * sem ele: vira código morto, calado.
+   *
+   * ⭐ Os três saem daqui juntos, derivados da mesma lista, para não haver de novo um
+   * contador lembrado e outro esquecido. */
+  if (FORA.indexOf('grupos') !== -1) config._nGrupos = (partes.grupos || []).length;
+  config._nPartes = FORA.reduce(function (acc, nome) {
+    acc[nome] = (partes[nome] || []).length; return acc;
+  }, {});
   await ref.set(config);
   const conf = (await ref.get()).data();
   console.log('  ✓ documento dividido: ' + kb(t) + ' → ' + kb(conf) +
