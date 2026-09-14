@@ -262,7 +262,7 @@
        Em prod silencia _log/_debug, manda breadcrumbs pro Sentry quando
        DSN estiver plugada. localStorage.scoreplace_debug='1' força verbose.
        Ver docs/observability.md. -->
-  <script src="js/logger.js?v=2.3.7"></script>
+  <script src="js/logger.js?v=2.3.8"></script>
 
   <!-- Google Maps Places API (New) — dynamic loader with importLibrary support -->
   <script>
@@ -619,7 +619,7 @@
   <!-- UMA porta pra "qual é a conta VIVA": a fusão deixa LÁPIDE (mergedInto) com os MESMOS
        e-mail/telefone/nome do sobrevivente, e toda busca ampla em users/ podia devolver a
        conta morta. Antes do store.js e das views, que consultam — ver user-vivo-core.js -->
-  <script src="js/views/user-vivo-core.js?v=2.3.7" defer></script>
+  <script src="js/views/user-vivo-core.js?v=2.3.8" defer></script>
   <!-- Normalizações do limite de persistência (extraídas do firebase-db.js). Puro, e o
        servidor carrega o MESMO arquivo antes de gravar — ver persist-core.js -->
   <script src="js/views/persist-core.js?v=2.1.88" defer></script>
@@ -636,7 +636,7 @@
   <!-- ⭐ TABELA DE COR, lado dinâmico: traduz `cor -> var(--token, cor)` quando a cor
        chega por variável (`'color:' + cor`). Tem que vir ANTES de quem desenha. -->
   <script src="js/paleta-tabela.js?v=2.0.118"></script>
-  <script src="js/store.js?v=2.3.7-x2.07" defer></script>
+  <script src="js/store.js?v=2.3.8-x2.07" defer></script>
   <!-- Fonte única das regras das modalidades (antes de create-tournament.js e bracket-ui.js, que derivam dela) -->
   <script src="js/views/sport-rules.js?v=2.0.118" defer></script>
   <!-- ⭐ FASE 2 — o tradutor documento ⇄ subcoleções. ANTES do firebase-db.js: é ele que
@@ -645,11 +645,11 @@
   <script src="js/views/tournament-split-core.js?v=2.1.41" defer></script>
   <!-- A cópia FIEL do sandbox e a prova de que ela é fiel (FIX.SANDBOX.P1). Depende do
        tradutor acima (_tSplit) pra conferir as partes; por isso vem logo depois dele. -->
-  <script src="js/firebase-db.js?v=2.3.7" defer></script>
+  <script src="js/firebase-db.js?v=2.3.8" defer></script>
   <script src="js/presence-db.js?v=2.0.118" defer></script>
   <script src="js/presence-geo.js?v=2.0.118" defer></script>
   <script src="js/venue-db.js?v=2.0.118" defer></script>
-  <script src="js/notifications.js?v=2.3.7" defer></script>
+  <script src="js/notifications.js?v=2.3.8" defer></script>
   <script src="js/email-templates.js?v=2.0.118" defer></script>
   <script src="js/ui.js?v=2.0.118" defer></script>
   <script src="js/views/landing.js?v=2.0.118" defer></script>
@@ -657,18 +657,18 @@
   <script src="js/views/terms.js?v=2.0.118" defer></script>
   <script src="js/views/delete-account.js?v=2.0.118" defer></script>
   <script src="js/views/terms-acceptance.js?v=2.0.118" defer></script>
-  <script src="js/views/dashboard.js?v=2.3.7" defer></script>
+  <script src="js/views/dashboard.js?v=2.3.8" defer></script>
   <script src="js/views/presence.js?v=2.2.99" defer></script>
-  <script src="js/views/venues.js?v=2.3.7" defer></script>
+  <script src="js/views/venues.js?v=2.3.8" defer></script>
   <script src="js/views/tournaments-utils.js?v=2.2.39" defer></script>
   <script src="js/views/weather.js?v=2.1.27" defer></script>
   <script src="js/views/tournaments-sharing.js?v=2.2.35" defer></script>
-  <script src="js/views/tournaments-analytics.js?v=2.3.7" defer></script>
-  <script src="js/views/tournaments-organizer.js?v=2.3.7" defer></script>
-  <script src="js/views/host-transfer.js?v=2.3.7" defer></script>
+  <script src="js/views/tournaments-analytics.js?v=2.3.8" defer></script>
+  <script src="js/views/tournaments-organizer.js?v=2.3.8" defer></script>
+  <script src="js/views/host-transfer.js?v=2.3.8" defer></script>
   <script src="js/views/tournaments-categories.js?v=2.2.63" defer></script>
-  <script src="js/views/tournaments.js?v=2.3.7" defer></script>
-  <script src="js/views/tournaments-enrollment.js?v=2.3.7" defer></script>
+  <script src="js/views/tournaments.js?v=2.3.8" defer></script>
+  <script src="js/views/tournaments-enrollment.js?v=2.3.8" defer></script>
   <script src="js/views/tournaments-org-tools.js?v=2.2.49" defer></script>
   <script src="js/views/tournaments-enrollment-report.js?v=2.2.39" defer></script>
   <script src="js/views/opinion-poll.js?v=2.2.43" defer></script>
@@ -676,7 +676,7 @@
   <script src="js/views/wa-group.js?v=2.2.94" defer></script>
   <script src="js/views/tournaments-draw-prep.js?v=2.2.63" defer></script>
   <script src="js/views/draw-cores.js?v=2.0.118" defer></script>
-  <script src="js/views/tournaments-draw.js?v=2.3.7" defer></script>
+  <script src="js/views/tournaments-draw.js?v=2.3.8" defer></script>
   <!-- Núcleos PUROS da aplicação das decisões do pré-sorteio (resto/pow2/ímpar/sem-dupla/
        chamada). Os painéis chamam DAQUI e a Cloud Function drawRound carrega o MESMO
        arquivo (vendorado) — um dono só pra cada conta. Ver docs/sorteio-ciclo-decisoes.md -->
@@ -688,10 +688,10 @@
   <script src="js/views/format2.js?v=2.2.39" defer></script>
   <script src="js/views/format2-ui.js?v=2.2.73" defer></script>
   <script src="js/views/bracket-logic.js?v=2.2.96" defer></script>
-  <script src="js/views/bracket-model.js?v=2.3.7" defer></script>
-  <script src="js/views/bracket.js?v=2.3.7" defer></script>
-  <script src="js/views/live-now.js?v=2.3.7" defer></script>
-  <script src="js/views/bracket-ui.js?v=2.3.7" defer></script>
+  <script src="js/views/bracket-model.js?v=2.3.8" defer></script>
+  <script src="js/views/bracket.js?v=2.3.8" defer></script>
+  <script src="js/views/live-now.js?v=2.3.8" defer></script>
+  <script src="js/views/bracket-ui.js?v=2.3.8" defer></script>
   <script src="js/pwa-migrate-banner.js?v=2.0.118" defer></script>
   <!-- Ponte pro smartwatch (fase 4). Inerte na web; só liga no app nativo. -->
   <script src="js/watch-bridge.js?v=2.2.6" defer></script>
@@ -706,18 +706,18 @@
        e quem aplica/reverte grava nele no ato. Puro, sem DOM. -->
   <script src="js/views/wo-log.js?v=2.0.118" defer></script>
   <script src="js/views/liga-substitution.js?v=2.2.64" defer></script>
-  <script src="js/views/wo-claim.js?v=2.3.7" defer></script>
+  <script src="js/views/wo-claim.js?v=2.3.8" defer></script>
   <!-- wo-core ANTES de participants: ele define o motor (_applyWO / _applyWoSubsToTournament)
        que a view usa. Saiu de dentro dela pra poder ser vendorado pela CF. v1.8.0 -->
   <script src="js/views/wo-core.js?v=2.2.47" defer></script>
-  <script src="js/views/participants.js?v=2.3.7" defer></script>
+  <script src="js/views/participants.js?v=2.3.8" defer></script>
   <script src="js/views/rules.js?v=2.0.118" defer></script>
   <script src="js/views/explore.js?v=2.1.49" defer></script>
   <script src="js/views/todos-torneios.js?v=2.1.15" defer></script>
   <script src="js/views/todas-pessoas.js?v=2.1.20" defer></script>
   <script src="js/views/notifications-view.js?v=2.2.22" defer></script>
   <script src="js/views/venue-owner.js?v=2.0.118" defer></script>
-  <script src="js/views/auth.js?v=2.3.7" defer></script>
+  <script src="js/views/auth.js?v=2.3.8" defer></script>
   <script src="js/views/letzplay-profile.js?v=2.0.118" defer></script>
   <!-- COLOCAÇÃO FINAL (window._lzPlacement). Nasceu na 1.8.6, provado por 37 asserções
        contra a chave real do T&F 449729 — e ficou dois dias SEM ESTA LINHA: o arquivo
@@ -736,11 +736,11 @@
   <!-- Gamification / Trophies system (v1.5.0-beta) -->
   <script src="js/casual-stats-core.js?v=2.2.28" defer></script>
   <script src="js/trophy-catalog.js?v=2.2.28" defer></script>
-  <script src="js/trophies.js?v=2.3.7" defer></script>
-  <script src="js/views/trophies-view.js?v=2.3.7" defer></script>
+  <script src="js/trophies.js?v=2.3.8" defer></script>
+  <script src="js/views/trophies-view.js?v=2.3.8" defer></script>
 
   <!-- Árbitros do torneio (v1.6.1-beta) -->
-  <script src="js/views/arbitros.js?v=2.3.7" defer></script>
+  <script src="js/views/arbitros.js?v=2.3.8" defer></script>
 
   <script src="js/router.js?v=2.2.83" defer></script>
   <script src="js/main.js?v=2.2.66" defer></script>
