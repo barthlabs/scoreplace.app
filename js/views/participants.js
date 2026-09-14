@@ -1516,16 +1516,23 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
         else if (_mPart.p2Name && _nm === String(_mPart.p2Name).trim()) _mUid = _mPart.p2Uid || '';
         else _mUid = _mPart.uid || '';
       }
-      var _mUidJs = _mUid ? (',{uid:\'' + _mUid + '\',tournamentId:\'' + t.id + '\'}') : (',{tournamentId:\'' + t.id + '\'}');
-      var _mDisp = _mUid ? window._safeHtml(window._displayName(_mUid, _nm)) : _nmH;
+      var _mShown = _mUid ? window._displayName(_mUid, _nm) : _nm;
+      var _mDisp = window._safeHtml(_mShown);
       var _mUidAttr = _mUid ? ' data-uid-name="' + window._safeHtml(_mUid) + '"' : '';
       var _mContact = (typeof window._contactPersonIconHtml === 'function')
         ? window._contactPersonIconHtml(t, _mUid, _nm, { sameGroup: true }) : '';
-      var _editAttr = isOrg ? 'onclick="event.stopPropagation();window._editParticipantName(\'' + t.id + '\',\'' + _nmSafe + '\',\'' + _mUid + '\')" title="Clique para editar" style="font-weight:700;font-size:' + _FONT + 'px;color:var(--text-bright);white-space:normal;overflow-wrap:anywhere;word-break:break-word;min-width:0;cursor:text;"' : 'style="font-weight:700;font-size:' + _FONT + 'px;color:var(--text-bright);white-space:normal;overflow-wrap:anywhere;word-break:break-word;min-width:0;cursor:pointer;" onclick="event.stopPropagation();if(typeof window._openPlayerProfile===\'function\')window._openPlayerProfile(\'' + _nmSafe + '\'' + _mUidJs + ');else if(typeof window._showPlayerStats===\'function\')window._showPlayerStats(\'' + _nmSafe + '\')" onmouseover="this.style.textDecoration=\'underline\'" onmouseout="this.style.textDecoration=\'none\'" title="Ver perfil de ' + _nmH + '"';
+      // O nome abre a ficha também para o organizador. A edição ganha botão próprio:
+      // um mesmo alvo não pode significar duas ações diferentes conforme quem olha a tela.
+      var _mNameHtml = (typeof window._personNameHtml === 'function')
+        ? window._personNameHtml(_mUid, _mShown, 'font-weight:700;font-size:' + _FONT + 'px;color:var(--text-bright);white-space:normal;overflow-wrap:anywhere;word-break:break-word;min-width:0;')
+        : '<span' + _mUidAttr + ' style="font-weight:700;font-size:' + _FONT + 'px;color:var(--text-bright);white-space:normal;overflow-wrap:anywhere;word-break:break-word;min-width:0;">' + _mDisp + '</span>';
+      var _mEditBtn = isOrg
+        ? '<button type="button" title="Editar ' + _nmH + '" aria-label="Editar ' + _nmH + '" style="border:0;background:transparent;color:var(--text-muted);font-size:0.86rem;line-height:1;padding:3px;cursor:pointer;flex-shrink:0;" onclick="event.stopPropagation();window._editParticipantName(\'' + t.id + '\',\'' + _nmSafe + '\',\'' + _mUid + '\')">✏️</button>'
+        : '';
       // ⭐ ponto único: o nome já hidratava (_mUidAttr), o ÍCONE não — e era ele que
       // nascia mudo quando o perfil ainda não tinha chegado.
       return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;overflow:hidden;">' +
-        window._personAvatarHtml(_mUid, _nm, 'width:24px;height:24px;border-radius:50%;object-fit:cover;flex-shrink:0;') + '<span' + _mUidAttr + ' ' + _editAttr + '>' + _mDisp + '</span>' + _mContact + '</div>';
+        window._personAvatarHtml(_mUid, _nm, 'width:24px;height:24px;border-radius:50%;object-fit:cover;flex-shrink:0;') + _mNameHtml + _mContact + _mEditBtn + '</div>';
     }).join('') + (_orgStar ? '<div style="margin-top:2px;">' + _orgStar + '</div>' : '');
   } else {
     var _pSafe = pName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
@@ -1553,14 +1560,19 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
     if (!_pUid && typeof window._memberUidByName === 'function') {
       try { _pUid = window._memberUidByName(t, pName) || ''; } catch (_eU) { _pUid = ''; }
     }
-    var _pUidJs = _pUid ? (',{uid:\'' + _pUid + '\',tournamentId:\'' + t.id + '\'}') : (',{tournamentId:\'' + t.id + '\'}');
-    var _pDisp = _pUid ? window._safeHtml(window._displayName(_pUid, pName)) : _pNameH;
+    var _pShown = _pUid ? window._displayName(_pUid, pName) : pName;
+    var _pDisp = window._safeHtml(_pShown);
     var _pUidAttr = _pUid ? ' data-uid-name="' + window._safeHtml(_pUid) + '"' : '';
     var _pContact = (typeof window._contactPersonIconHtml === 'function')
       ? window._contactPersonIconHtml(t, _pUid, pName, { sameGroup: true }) : '';
-    var _editAttrN = isOrg ? 'onclick="event.stopPropagation();window._editParticipantName(\'' + t.id + '\',\'' + _pSafe + '\',\'' + _pUid + '\')" title="Clique para editar" style="font-weight:700;font-size:' + _FONT + 'px;color:var(--text-bright);white-space:normal;overflow-wrap:anywhere;word-break:break-word;min-width:0;cursor:text;"' : 'style="font-weight:700;font-size:' + _FONT + 'px;color:var(--text-bright);white-space:normal;overflow-wrap:anywhere;word-break:break-word;min-width:0;cursor:pointer;" onclick="event.stopPropagation();if(typeof window._openPlayerProfile===\'function\')window._openPlayerProfile(\'' + _pSafe + '\'' + _pUidJs + ');else if(typeof window._showPlayerStats===\'function\')window._showPlayerStats(\'' + _pSafe + '\')" onmouseover="this.style.textDecoration=\'underline\'" onmouseout="this.style.textDecoration=\'none\'" title="Ver perfil de ' + _pNameH + '"';
+    var _pNameLinkHtml = (typeof window._personNameHtml === 'function')
+      ? window._personNameHtml(_pUid, _pShown, 'font-weight:700;font-size:' + _FONT + 'px;color:var(--text-bright);white-space:normal;overflow-wrap:anywhere;word-break:break-word;min-width:0;')
+      : '<span' + _pUidAttr + ' style="font-weight:700;font-size:' + _FONT + 'px;color:var(--text-bright);white-space:normal;overflow-wrap:anywhere;word-break:break-word;min-width:0;">' + _pDisp + '</span>';
+    var _pEditBtn = isOrg
+      ? '<button type="button" title="Editar ' + _pNameH + '" aria-label="Editar ' + _pNameH + '" style="border:0;background:transparent;color:var(--text-muted);font-size:0.86rem;line-height:1;padding:3px;cursor:pointer;flex-shrink:0;" onclick="event.stopPropagation();window._editParticipantName(\'' + t.id + '\',\'' + _pSafe + '\',\'' + _pUid + '\')">✏️</button>'
+      : '';
     pNameHtml = '<div style="display:flex;align-items:center;gap:8px;overflow:hidden;">' +
-      window._personAvatarHtml(_pUid, pName, 'width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;') + '<span' + _pUidAttr + ' ' + _editAttrN + '>' + _pDisp + '</span>' + _pContact + _orgStar + '</div>';
+      window._personAvatarHtml(_pUid, pName, 'width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;') + _pNameLinkHtml + _pContact + _pEditBtn + _orgStar + '</div>';
   }
 
   var safeP = pName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");

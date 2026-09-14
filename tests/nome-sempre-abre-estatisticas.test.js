@@ -31,6 +31,10 @@ ok(/window\._personNameHtml\(_slotUid, name\)/.test(bracket), 'os nomes dos card
 ok(/A faixa interna delimita somente o nome[\s\S]{0,480}sp-person-name-content/.test(bracket), 'o card documenta a faixa do nome separada do balão de contato');
 ok((dashboard.match(/window\._personNameHtml\(/g) || []).length >= 3, 'dashboard usa o helper nos nomes de todos os lados do jogo');
 ok((participants.match(/_contactPersonIconHtml\(t,/g) || []).length >= 2, 'cards de inscritos exibem o balão ao lado do nome');
+ok(/O nome abre a ficha também para o organizador[\s\S]{0,1500}_personNameHtml/.test(participants),
+  'na lista administrativa o nome abre a ficha e a edição fica em botão próprio');
+ok((participants.match(/aria-label="Editar /g) || []).length >= 2,
+  'o organizador mantém um controle de edição explícito para pessoa e dupla');
 ok(/_contactPersonByUid[\s\S]{0,1200}c\.useWhatsApp[\s\S]{0,1000}mailto:/.test(read('js/views/tournaments-organizer.js')),
   'o balão mantém WhatsApp como prioridade e e-mail como fallback');
 

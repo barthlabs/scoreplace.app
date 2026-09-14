@@ -1,3 +1,9 @@
+## 2.3.18 — 14/set/2026
+
+- **Nome sempre abre estatísticas:** nos cards administrativos, inclusive a lista de
+  espera, o nome agora abre a ficha como em qualquer outro lugar. A edição permanece
+  disponível em um botão próprio ao lado do nome.
+
 ## 2.3.17 — 14/set/2026
 
 - **Ficha acessível em todo lugar:** cada nome abre estatísticas por um único alvo
