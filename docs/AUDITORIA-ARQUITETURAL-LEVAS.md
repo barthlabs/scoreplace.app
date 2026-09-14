@@ -77,6 +77,24 @@ num deles produz um "achado" que não existe. [[feedback_busca_truncada_nao_e_bu
   contra os 49: **resolveria 1**. Custo sem retorno, e afrouxaria a regra *"fuso não se
   adivinha"*. O que destrava é o evento declarar fuso ou local.
 
+## 🅿️ ESTACIONADO — achados fora de leva, para DEPOIS de a auditoria fechar
+
+Ordem do dono (14/set/2026): _"podemos concluir a auditoria primeiro e depois ir atras dessas
+derivacoes? deixar tudo anotado para fazer depois de concluir a auditoria? a menos que seja algo
+urgente em producao?"_ — nenhum destes é urgente; todos foram medidos e nenhum quebra nada hoje.
+
+| achado | medida | por que NÃO é urgente |
+|---|---|---|
+| Fase de grupos apagada ao avançar (Torneio Misto FUTVOLEI) | 12 placares de 02/jul sobrevivem em `results` sem jogo correspondente; mais 2 `match-3rd` sem placar em outros dois torneios | ⛔ **NÃO APAGAR.** Nenhum inscrito tem uid (8 de 8 sem), então histórico de pessoa nenhuma é afetado. É pergunta de PRODUTO: a fase de grupos deve continuar visível depois de classificar? Só o dono decide |
+| `preferredCeps` e `mergedAt` com dois tipos | 2 campos na base | o código já lê as duas formas (`_cepsDoPerfil`, `unirCeps`); normalizar é cosmético |
+| 12 perfis acima de 50 KB | todos por `letzplayImport`; maior 500,8 KB | passo ① (copiar) FEITO e conferido byte a byte; passo ② (apagar do perfil) espera a Rule, que espera o piso das lojas |
+| 5 avisos sem remetente · 2 de conta extinta | de 645 | resíduo antigo; a autoria passou a ser gravada na 2.3.0 |
+| 4 telefones em duas contas vivas | medido pessoa a pessoa | **é o comportamento certo** — casal e mãe/filho dividem aparelho |
+
+⛔ **LIÇÃO DE MÉTODO (14/set/2026):** eu parti de uma varredura que rotula "órfão" e tratei o
+RÓTULO como veredito — ia apagar 12 placares reais. Rótulo de varredura é hipótese; o veredito
+vem de olhar o dado. [[feedback_medir_com_dado_real_antes_de_teorizar]]
+
 ## 📦 A LISTA DO DIA DA VERSÃO NATIVA
 
 Ordem do dono (13/set/2026): _"deixaremos apenas os nativos para fazer imediatamente antes de
