@@ -6,6 +6,10 @@
 - **Diagnóstico sem contexto pessoal:** o Sentry remove usuário, payloads,
   mensagens livres, breadcrumbs, queries e variáveis da pilha antes de enviar
   um evento. Ficam somente versão, rota, tipo de erro e estrutura técnica.
+- **Histórico de W.O. completo:** o card informa também o jogo de onde a pessoa
+  saiu, usando o registro canônico indexado por identidade.
+- **Placar final identificável:** partidas com mais de um set mantêm o cabeçalho
+  e os rótulos de cada coluna mesmo depois de concluídas.
 
 ## 2.3.14 — 14/set/2026
 
