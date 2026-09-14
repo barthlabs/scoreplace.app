@@ -20,6 +20,28 @@
 # NUNCA rodar `firebase deploy --only functions` puro nem `--force` na mão.
 
 set -euo pipefail
+
+# ⛔⛔ A CONTA DE SERVIÇO TEM DE VENCER A SESSÃO DE USUÁRIO VELHA.
+#
+# MEDIDO em 14/set/2026: com a chave durável LIGADA, o deploy mesmo assim morreu em
+# "For CI servers and headless environments, generate a new token" — a CLI do Firebase
+# PREFERE a sessão de usuário guardada (`~/.config/configstore/firebase-tools.json`), e
+# aquela sessão tinha expirado. Ou seja: ter a credencial durável não bastava; era preciso
+# a CLI não achar a outra.
+#
+# `XDG_CONFIG_HOME` aponta o cofre de credenciais da CLI para um diretório vazio: sem sessão
+# de usuário para achar, ela usa a conta de serviço. Mexe SÓ nisso — trocar `HOME` também
+# resolveria, mas levaria junto cache do npm e tudo o mais.
+#
+# ⚠️ Só entra quando a chave durável existe. Sem ela, o comportamento antigo continua, e a
+# mensagem de "não autenticado" segue explicando o caminho que dura.
+if [ -n "${GOOGLE_APPLICATION_CREDENTIALS:-}" ] && [ -r "${GOOGLE_APPLICATION_CREDENTIALS}" ]; then
+  _SP_CFG="$(mktemp -d)"
+  export XDG_CONFIG_HOME="$_SP_CFG"
+  trap 'rm -rf "$_SP_CFG"' EXIT
+  echo "▸ credencial: conta de serviço ($(basename "$GOOGLE_APPLICATION_CREDENTIALS")) — sessão de usuário ignorada"
+fi
+
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PROJECT="scoreplace-app"
 DRY=0
