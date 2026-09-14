@@ -724,6 +724,7 @@ const SUITES = [
   'tests/divisao-das-rodadas-e-ajuste-fino.test.js',
   'tests/round-bounds-domain-build.test.js',
   'tests/participant-identity-domain.test.js',
+  'tests/waitlist-domain.test.js',
   'tests/build-www-deterministico.test.js',
   'tests/divisao-rodadas-por-fase.test.js',
   // 2.1.99 — o runner passou a rodar em PARALELO. Três suítes corrompem arquivo do repo
@@ -1180,6 +1181,8 @@ const SUITES = [
   // ordem de varredura dos grupos. MEDIDO no sandbox do Confra: 132 classificados e 80
   // posições em que as duas discordavam. Agora as duas chamam _standingsCompare. v1.8.59.
   'tests/classificacao-uma-regra-so.test.js',
+  // O domínio tipado preserva todos os desempates e viaja igual ao motor de sorteio.
+  'tests/standings-domain.test.js',
   // OS CRITÉRIOS DE DESEMPATE SÃO OS QUE O ORGANIZADOR CONFIGUROU — em qualquer fase.
   // Duas das quatro funções de classificação ignoravam `t.tiebreakers` (a tabela do
   // Rei/Rainha e a ordem de quem sobe de fase). E `antiguidade`/`juventude` NUNCA

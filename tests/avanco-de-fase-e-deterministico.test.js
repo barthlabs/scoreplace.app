@@ -41,6 +41,8 @@ function motor() {
   g.parseFloat = parseFloat; g.isNaN = isNaN; g.RegExp = RegExp; g.Set = Set; g.Map = Map;
   vm.createContext(g);
   const RAIZ = path.join(__dirname, '..', 'js', 'views');
+  const DOMAINS = path.join(__dirname, '..', 'js', 'domain');
+  vm.runInContext(fs.readFileSync(path.join(DOMAINS, 'standings.js'), 'utf8'), g, { filename: 'standings.js' });
   ['identity-core.js', 'persist-core.js', 'waitlist-core.js', 'standings-core.js',
    'sport-rules.js', 'tournament-split-core.js', 'bracket-model.js', 'chaves.js',
    'chaves-adapter.js', 'tournaments-draw-prep.js', 'tournaments-draw.js',

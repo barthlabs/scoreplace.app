@@ -78,6 +78,7 @@ function montarSandbox() {
   fs.mkdirSync(path.join(SB, 'js', 'views'), { recursive: true });
   fs.mkdirSync(path.join(SB, 'js', 'domain'), { recursive: true });
   fs.mkdirSync(path.join(SB, 'functions-autodraw', 'vendor'), { recursive: true });
+  fs.mkdirSync(path.join(SB, 'functions', 'vendor'), { recursive: true });
   fs.copyFileSync(COPY_VENDOR, path.join(SB, 'functions-autodraw', 'copy-vendor.js'));
   const nomes = listaDoCopyVendor();
   for (const n of nomes) {
@@ -89,6 +90,10 @@ function montarSandbox() {
     const conteudo = '// domínio stub de ' + n + '\nwindow._x = 1;\n';
     fs.writeFileSync(path.join(SB, 'js', 'domain', n), conteudo);
     fs.writeFileSync(path.join(SB, 'functions-autodraw', 'vendor', n), conteudo);
+  }
+  for (const n of listaNomeada('DOMAIN_TO_FUNCTIONS')) {
+    const conteudo = '// domínio stub de ' + n + '\nwindow._x = 1;\n';
+    fs.writeFileSync(path.join(SB, 'functions', 'vendor', n), conteudo);
   }
   return nomes;
 }
@@ -130,6 +135,14 @@ montarSandbox();
 fs.rmSync(path.join(SB, 'functions-autodraw', 'vendor', ALVO));
 r = rodar(SB);
 ok(r.status === 1 && r.saida.includes(ALVO), 'arquivo da lista ausente do vendor/ → sai 1');
+
+// (c2) a Function isolada recebe o domínio gerado; faltar essa cópia recriaria uma
+//      implementação local divergente da fila.
+montarSandbox();
+const DOMINIO_FN = listaNomeada('DOMAIN_TO_FUNCTIONS')[0];
+fs.rmSync(path.join(SB, 'functions', 'vendor', DOMINIO_FN));
+r = rodar(SB);
+ok(r.status === 1 && r.saida.includes('functions/vendor/' + DOMINIO_FN), 'domínio ausente na Function isolada → sai 1');
 
 // (d) órfão: saiu da lista, ficou no vendor/. O copy só copia, nunca apaga — se o
 //     draw-core ainda o carrega, o servidor roda um arquivo que o app já não tem.

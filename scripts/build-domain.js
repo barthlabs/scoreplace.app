@@ -14,6 +14,8 @@ const CHECK = process.argv.includes('--check');
 const entries = [
   { source: 'src/domain/round-bounds.ts', output: 'js/domain/round-bounds.js' },
   { source: 'src/domain/participant-identity.ts', output: 'js/domain/participant-identity.js' },
+  { source: 'src/domain/waitlist.ts', output: 'js/domain/waitlist.js' },
+  { source: 'src/domain/standings.ts', output: 'js/domain/standings.js' },
 ];
 let failures = 0;
 

@@ -39,6 +39,7 @@ const COPY_VENDOR = path.join(root, 'functions-autodraw', 'copy-vendor.js');
 const SRC_DIR = path.join(root, 'js', 'views');
 const DOMAIN_DIR = path.join(root, 'js', 'domain');
 const VENDOR_DIR = path.join(root, 'functions-autodraw', 'vendor');
+const FUNCTIONS_VENDOR_DIR = path.join(root, 'functions', 'vendor');
 const RECEITA = 'node functions-autodraw/copy-vendor.js';
 
 const fail = [];
@@ -86,6 +87,7 @@ function lerListaNomeada(fonte, nome) {
 }
 const DOMAIN_FILES = lerListaNomeada(fs.readFileSync(COPY_VENDOR, 'utf8'), 'DOMAIN_FILES');
 const DE_FUNCTIONS = lerListaNomeada(fs.readFileSync(COPY_VENDOR, 'utf8'), 'DE_FUNCTIONS');
+const DOMAIN_TO_FUNCTIONS = lerListaNomeada(fs.readFileSync(COPY_VENDOR, 'utf8'), 'DOMAIN_TO_FUNCTIONS');
 
 // Sanidade da própria trava: renomear/reformatar o `const FILES` no copy-vendor.js faria a
 // leitura voltar vazia e a trava passar a conferir NADA — verde sobre zero arquivo. Uma
@@ -139,6 +141,19 @@ for (const f of DOMAIN_FILES) {
   if (!fs.readFileSync(src).equals(fs.readFileSync(dst))) {
     divergentes.push({ f, motivo: 'vendor/ diverge de js/domain/' + f });
   }
+}
+
+// A Function de disponibilidade é outro codebase e não pode importar o autoDraw. Os
+// mesmos domínios gerados precisam viajar para functions/vendor/, ou ela voltaria a manter
+// uma cópia reduzida da regra de espera.
+for (const f of DOMAIN_TO_FUNCTIONS) {
+  const src = path.join(DOMAIN_DIR, f);
+  const dst = path.join(FUNCTIONS_VENDOR_DIR, f);
+  const hasSrc = fs.existsSync(src), hasDst = fs.existsSync(dst);
+  if (!hasSrc && !hasDst) continue; // sandbox mínimo do meta-teste
+  if (!hasSrc) { fail.push('js/domain/' + f + ': FONTE AUSENTE para functions/vendor/.'); continue; }
+  if (!hasDst) { divergentes.push({ f: 'functions/vendor/' + f, motivo: 'domínio ausente (roda `node functions-autodraw/copy-vendor.js`)' }); continue; }
+  if (!fs.readFileSync(src).equals(fs.readFileSync(dst))) divergentes.push({ f: 'functions/vendor/' + f, motivo: 'diverge de js/domain/' + f });
 }
 
 // Arquivo que saiu da lista mas continua no vendor/: o copy-vendor só COPIA, nunca apaga.

@@ -1,3 +1,9 @@
+## 2.3.22 — 14/set/2026
+
+- A etapa 2 da auditoria consolida contratos TypeScript estritos para identidade e composição de participantes, lista de espera e classificação. O navegador, o motor de sorteio e a Function que confirma disponibilidade usam a mesma regra gerada, com adaptadores compatíveis para a aplicação atual.
+- O build confere que os domínios copiados para o servidor são idênticos à fonte; a classificação preserva todos os critérios existentes e a lista de espera preserva as regras de entrada, saída e prioridade.
+- Esta publicação permanece somente web e Functions: não há sincronização, build ou submissão dos projetos iOS e Android.
+
 ## 2.3.21 — 14/set/2026
 
 - Identidade de participante passa a ter contrato TypeScript estrito compartilhado: UIDs e a composição estrutural de duplas são decididos pela mesma regra no navegador e no motor de sorteio.

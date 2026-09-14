@@ -1,53 +1,54 @@
 'use strict';
 
-// Adaptador mínimo, autocontido no codebase principal. A disponibilidade não
-// pode importar functions-autodraw: cada codebase é empacotado isoladamente.
-function uids(p) {
-  const out = []; [p && p.uid, p && p.p1Uid, p && p.p2Uid].forEach(u => { if (u && !out.includes(String(u))) out.push(String(u)); });
-  (Array.isArray(p && p.participants) ? p.participants : []).forEach(x => { if (x && x.uid && !out.includes(String(x.uid))) out.push(String(x.uid)); });
-  return out;
+// Adaptador mínimo para o codebase principal das Functions. Ele não importa o
+// autoDraw (cada codebase é empacotado isoladamente), mas usa os mesmos domínios
+// TypeScript gerados que o navegador e o motor vendorizado.
+const identity = require('./vendor/participant-identity.js');
+const waitlist = require('./vendor/waitlist.js');
+
+function name(value) {
+  if (typeof value === 'string') return value.trim();
+  return String((value && (value.displayName || value.name || value.email)) || '').trim();
 }
-function name(p) { return typeof p === 'string' ? p.trim() : String((p && (p.displayName || p.name || p.email)) || '').trim(); }
-function forms(p) { return [name(p), p && p.displayName, p && p.name, p && p.email].filter(Boolean).map(x => String(x).trim().toLowerCase()); }
-function allWait(t) {
-  const out = [], seen = new Set();
-  function add(p) { if (!p) return; const key = uids(p).join('|') || name(p).toLowerCase(); if (key && !seen.has(key)) { seen.add(key); out.push(p); } }
-  [t.waitlist, t.standbyParticipants].forEach(a => (Array.isArray(a) ? a : []).forEach(add));
-  if (t.monarchWaitlist && typeof t.monarchWaitlist === 'object') Object.values(t.monarchWaitlist).forEach(a => (Array.isArray(a) ? a : []).forEach(add));
-  return out;
+function memberUidByName(tournament, rawName) {
+  const wanted = String(rawName || '').trim().toLowerCase();
+  if (!wanted) return '';
+  return (Array.isArray(tournament && tournament.participants) ? tournament.participants : []).find((entry) =>
+    waitlist.nameForms(entry, helpers(tournament)).includes(wanted)
+  )?.uid || '';
 }
-function removeWait(t, target) {
-  const needle = String(target || '').trim().toLowerCase(); if (!needle) return false;
-  let removed = false; const keep = p => { const hit = forms(p).includes(needle); removed = removed || hit; return !hit; };
-  ['waitlist', 'standbyParticipants'].forEach(k => { if (Array.isArray(t[k])) t[k] = t[k].filter(keep); });
-  if (t.monarchWaitlist && typeof t.monarchWaitlist === 'object') Object.keys(t.monarchWaitlist).forEach(k => { if (Array.isArray(t.monarchWaitlist[k])) t.monarchWaitlist[k] = t.monarchWaitlist[k].filter(keep); });
-  return removed;
+function helpers(tournament) {
+  return {
+    participantUids: identity.participantUids,
+    displayName: name,
+    memberUidByName: (tour, rawName) => memberUidByName(tour || tournament, rawName),
+  };
 }
-function playing(t, entry) {
-  const ids = uids(entry), nm = name(entry).toLowerCase(); let hit = false;
-  function check(m) { if (!m || m.isSitOut) return; const mi = [].concat(m.team1Uids || [], m.team2Uids || [], m.p1Uid || [], m.p2Uid || []).filter(Boolean).map(String); if (ids.length ? mi.some(x => ids.includes(x)) : [m.p1, m.p2].some(x => String(x || '').toLowerCase() === nm)) hit = true; }
-  (t.rounds || []).forEach(r => { (r && r.matches || []).forEach(check); (r && r.monarchGroups || []).forEach(g => { if ((g.playersUids || []).map(String).some(x => ids.includes(x))) hit = true; }); });
-  (t.matches || []).forEach(check); return hit;
-}
-function sanitize(t) {
-  const inactive = new Set((t.participants || []).filter(p => p && p.ligaActive === false).flatMap(uids));
-  const waiting = new Set(allWait(t).flatMap(uids));
-  (t.rounds || []).forEach(r => {
-    if (!r || !Array.isArray(r.matches)) return;
-    const inGroups = new Set((r.monarchGroups || []).flatMap(g => (g.playersUids || []).map(String)));
-    r.matches = r.matches.filter(m => {
-      if (!m || !m.isSitOut) return true;
-      const uid = String(m.p1Uid || '');
-      if (m.sitOutReason === 'inactive') return inactive.has(uid);
-      if (m.sitOutReason === 'wo') return !(waiting.has(uid) && !inGroups.has(uid));
+function allWait(tournament) { return waitlist.getWaitlist(tournament, helpers(tournament)); }
+function removeWait(tournament, target) { return waitlist.removeByName(tournament, target, helpers(tournament)); }
+function playing(tournament, entry) { return waitlist.isPlayingCurrentPhase(tournament, entry, helpers(tournament)); }
+function sanitize(tournament) {
+  const inactive = new Set((tournament.participants || []).filter((entry) => entry && entry.ligaActive === false).flatMap(identity.participantUids));
+  const waiting = new Set(allWait(tournament).flatMap(identity.participantUids));
+  (tournament.rounds || []).forEach((round) => {
+    if (!round || !Array.isArray(round.matches)) return;
+    const inGroups = new Set((round.monarchGroups || []).flatMap((group) => (group.playersUids || []).map(String)));
+    round.matches = round.matches.filter((match) => {
+      if (!match || !match.isSitOut) return true;
+      const uid = String(match.p1Uid || '');
+      if (match.sitOutReason === 'inactive') return inactive.has(uid);
+      if (match.sitOutReason === 'wo') return !(waiting.has(uid) && !inGroups.has(uid));
       return true;
     });
   });
 }
 module.exports = {
-  _participantUids: uids, _pName: name, _getWaitlist: allWait,
+  _participantUids: identity.participantUids,
+  _pName: name,
+  _getWaitlist: allWait,
   _removeFromWaitlist: removeWait,
-  _waitlistPushBack: (t, p) => { if (!Array.isArray(t.standbyParticipants)) t.standbyParticipants = []; const ids = uids(p); if (allWait(t).some(x => uids(x).some(u => ids.includes(u)))) return false; t.standbyParticipants.push(p); return true; },
-  _phaseDrawDone: t => !!(t && (t.hasDraw === true || (t.matches || []).length || (t.rounds || []).length || (t.groups || []).length)),
-  _isPlayingCurrentPhase: playing, _sanitizeSitOutsVsRoster: sanitize
+  _waitlistPushBack: (tournament, entry) => waitlist.pushBack(tournament, entry, helpers(tournament)),
+  _phaseDrawDone: waitlist.phaseDrawDone,
+  _isPlayingCurrentPhase: playing,
+  _sanitizeSitOutsVsRoster: sanitize,
 };

@@ -44,8 +44,9 @@ ok(/x\.uid \|\| x\.name/.test(bloco),
  * desempatar por identidade. Isso quebraria a invariante que existe desde que o
  * `Math.random` saiu dali — e o teste `desempate-do-organizador-vale` pega. */
 const core = fs.readFileSync(path.join(ROOT, 'js', 'views', 'standings-core.js'), 'utf8');
-const iCfg = core.indexOf('function standingsCompareConfig');
-const cfg = core.slice(iCfg, core.indexOf('\n  }', iCfg));
+const typed = fs.readFileSync(path.join(ROOT, 'src/domain/standings.ts'), 'utf8');
+const iCfg = typed.indexOf('export function standingsCompareConfig');
+const cfg = typed.slice(iCfg, typed.indexOf('\n  }', iCfg));
 ok(/return 0;/.test(cfg),
   '⛔ o comparador SEGUE devolvendo 0 quando os critérios se esgotam — quem resolve o ' +
   'empate é a entrada canônica, não um critério inventado');
@@ -55,6 +56,8 @@ ok(!/uid.*<.*uid|String\(ka\) < String\(kb\)/.test(cfg),
 // ── ③ a prova do comportamento, com o caso REAL do grupo dele ──────────────
 const vm = require('vm');
 const ctx = { window: {} }; vm.createContext(ctx);
+vm.runInContext(fs.readFileSync(path.join(ROOT, 'js/domain/standings.js'), 'utf8'), ctx, { filename: 'standings.js' });
+ctx.window.ScoreplaceStandings = ctx.ScoreplaceStandings;
 vm.runInContext(core, ctx, { filename: 'standings-core.js' });
 const cmp = ctx.window._standingsCompareConfig;
 

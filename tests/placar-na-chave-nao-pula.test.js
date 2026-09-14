@@ -47,7 +47,7 @@ const CSS = ['style.css','components.css','layout.css','bracket.css','responsive
 /* Mesma ordem do index.html — o render de verdade, não uma montagem de HTML à mão. */
 const JS = ['js/logger.js','js/i18n.js','js/i18n-pt.js',
   'js/views/identity-core.js','js/views/persist-core.js','js/views/waitlist-core.js',
-  'js/views/standings-core.js','js/views/gender-ratio-core.js','js/views/sport-rules.js',
+  'js/domain/standings.js','js/views/standings-core.js','js/views/gender-ratio-core.js','js/views/sport-rules.js',
   'js/views/tournaments-utils.js','js/views/tournaments-draw.js','js/views/tournaments.js',
   'js/store.js','js/views/create-tournament.js','js/views/format2.js',
   'js/views/bracket-logic.js','js/views/bracket-model.js','js/views/bracket.js',

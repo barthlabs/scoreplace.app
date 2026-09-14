@@ -36,6 +36,17 @@ function _wlName(e) {
   return String((e && (e.displayName || e.name || e.email)) || '').trim();
 }
 
+// Ponte temporária: o contrato tipado é carregado antes deste adaptador no shell e no
+// motor. Os fallbacks abaixo mantêm apenas harnesses legados isolados executáveis.
+function _wlDomainHelpers(t) {
+  return {
+    participantUids: function (entry) { return (typeof window._participantUids === 'function') ? window._participantUids(entry) : []; },
+    displayName: _wlName,
+    memberUidByName: function (tour, name) { return (typeof window._memberUidByName === 'function') ? window._memberUidByName(tour, name) : ''; }
+  };
+}
+function _wlDomain() { return window.ScoreplaceWaitlist; }
+
 // LISTA DE ESPERA CANÔNICA: une os 3 storages, deduplicado por nome (lowercase).
 // Entrada objeto volta como está; string vira {name, displayName}.
 // ⚠️ O DEDUP É POR IDENTIDADE, NUNCA POR NOME (v1.7.61). Desde que `monarchWaitlist`
@@ -51,6 +62,8 @@ function _wlName(e) {
 // identidade que existe.
 window._getWaitlist = function (t) {
   if (!t) return [];
+  var domain = _wlDomain();
+  if (domain && typeof domain.getWaitlist === 'function') return domain.getWaitlist(t, _wlDomainHelpers(t));
   var out = [], seen = {};
   function push(e, key) {
     if (!key || seen[key]) return;
@@ -114,6 +127,8 @@ window._getWaitlist = function (t) {
 // (ex.: precisa atender a categoria do ausente) SEM furar a ordem: continua sendo o
 // primeiro que serve, nunca o "melhor".
 window._waitlistFirst = function (t, filterFn) {
+  var domain = _wlDomain();
+  if (domain && typeof domain.first === 'function') return domain.first(t, _wlDomainHelpers(t), filterFn);
   var q = window._getWaitlist(t);
   for (var i = 0; i < q.length; i++) {
     if (typeof filterFn !== 'function' || filterFn(q[i])) return q[i];
@@ -125,6 +140,8 @@ window._waitlistFirst = function (t, filterFn) {
 // chamar duas vezes não duplica nem promove ninguém. Retorna true se entrou agora.
 window._waitlistPushBack = function (t, entry) {
   if (!t || !entry) return false;
+  var domain = _wlDomain();
+  if (domain && typeof domain.pushBack === 'function') return domain.pushBack(t, entry, _wlDomainHelpers(t));
   if (!Array.isArray(t.standbyParticipants)) t.standbyParticipants = [];
   var uids = (typeof window._participantUids === 'function') ? window._participantUids(entry)
            : ((entry && entry.uid) ? [entry.uid] : []);
@@ -145,6 +162,8 @@ window._waitlistPushBack = function (t, entry) {
 // _pName), em lowercase. Casa nomes que aparecem em formas diferentes (ex.: telefone cru
 // "+5511981933576" vs formatado "+55 (11) 98193-3576").
 window._nameForms = function (e) {
+  var domain = _wlDomain();
+  if (domain && typeof domain.nameForms === 'function') return domain.nameForms(e, _wlDomainHelpers(null));
   var forms = [];
   if (typeof window._pName === 'function') { var f = String(window._pName(e, '') || ''); if (f) forms.push(f); }
   if (e && typeof e === 'object') {
@@ -157,6 +176,8 @@ window._nameForms = function (e) {
 // Retorna true se removeu algo.
 window._removeFromWaitlist = function (t, name) {
   if (!t || !name) return false;
+  var domain = _wlDomain();
+  if (domain && typeof domain.removeByName === 'function') return domain.removeByName(t, name, _wlDomainHelpers(t));
   var target = String(name).trim().toLowerCase();
   var removed = false;
   function matches(e) { return window._nameForms(e).indexOf(target) !== -1; }
@@ -182,6 +203,8 @@ window._removeFromWaitlist = function (t, name) {
 // devolvê-las ao pool.
 window._clearAllWaitlists = function (t) {
   if (!t) return [];
+  var domain = _wlDomain();
+  if (domain && typeof domain.clear === 'function') return domain.clear(t, _wlDomainHelpers(t));
   var collected = window._getWaitlist(t);
   t.waitlist = [];
   t.standbyParticipants = [];
@@ -209,6 +232,8 @@ window._clearAllWaitlists = function (t) {
 // espelhado na CF (functions/enroll-core.js). Ver [[project_sitout_vs_waitlist_canon]].
 window._phaseDrawDone = function (t) {
   if (!t) return false;
+  var domain = _wlDomain();
+  if (domain && typeof domain.phaseDrawDone === 'function') return domain.phaseDrawDone(t);
   // ⭐ 2.1.11 — O RESUMO TAMBÉM SABE RESPONDER. `tournaments_summary` (2.0.90) não carrega
   // matches/rounds/groups: perguntar por array a um resumo devolvia SEMPRE false, ou seja
   // "não sorteado" — e quem depende disto (`_enrollmentOpenState`) concluía "inscrições
@@ -251,6 +276,8 @@ window._phaseDrawDone = function (t) {
 // paralela é a próxima pessoa bloqueada. [[feedback_unify_dual_entry_points]]
 window._enrollmentOpenState = function (t, nowMs) {
   if (!t) return { open: false, ligaOpen: false, sorteio: false, deadlinePassed: false };
+  var domain = _wlDomain();
+  if (domain && typeof domain.enrollmentOpenState === 'function') return domain.enrollmentOpenState(t, nowMs);
   var now = (typeof nowMs === 'number') ? nowMs : Date.now();
   var isLiga = !!(t.format && (t.format === 'Liga' || t.format === 'Ranking' || t.format === 'liga' || t.format === 'ranking'));
   var ligaOpen = isLiga && t.ligaOpenEnrollment !== false && t.status !== 'finished';
@@ -306,6 +333,8 @@ window._isPlayingCurrentPhase = function (t, entry) {
 
 // Conjunto de nomes (lowercase) na espera — inclui membros de duplas "A / B".
 window._waitlistNameSet = function (t) {
+  var domain = _wlDomain();
+  if (domain && typeof domain.nameSet === 'function') return domain.nameSet(t, _wlDomainHelpers(t));
   var s = {};
   window._getWaitlist(t).forEach(function (e) {
     var nm = _wlName(e).toLowerCase();
@@ -476,6 +505,8 @@ function _nameForms(e) {
 // Chave canônica de UMA entrada da espera. Objeto → uid, senão nome. Nunca devolve
 // rótulo-fantasma: `_pName` só é consultado quando a entrada não tem uid.
 window._wlKey = function (e) {
+  var domain = _wlDomain();
+  if (domain && typeof domain.key === 'function') return domain.key(e, _wlDomainHelpers(null));
   if (e == null) return '';
   if (typeof e === 'string') return e.trim();
   if (typeof e !== 'object') return '';
@@ -490,6 +521,8 @@ window._wlKey = function (e) {
 // Entrada da espera a partir de uma chave (uid OU nome). É o inverso de _wlKey e a
 // única forma de sair da chave de volta pra pessoa.
 window._wlEntryByKey = function (t, key) {
+  var domain = _wlDomain();
+  if (domain && typeof domain.entryByKey === 'function') return domain.entryByKey(t, key, _wlDomainHelpers(t));
   if (!t || !key) return null;
   var k = String(key).trim();
   if (!k) return null;
@@ -513,6 +546,8 @@ window._wlEntryByKey = function (t, key) {
 // Devolve '' quando o item não corresponde a ninguém que esteja na espera — é o
 // descarte dos fantasmas.
 window._wlNormalizeKey = function (t, item) {
+  var domain = _wlDomain();
+  if (domain && typeof domain.normalizeKey === 'function') return domain.normalizeKey(t, item, _wlDomainHelpers(t));
   var raw = String(item == null ? '' : (typeof item === 'object' ? window._wlKey(item) : item)).trim();
   if (!raw) return '';
   // Já é a chave de alguém da espera?
@@ -555,6 +590,8 @@ window._wlDisplayName = function (t, key) {
 // Remove da espera pela CHAVE (uid quando há conta, nome só pro informal). Espelha
 // _removeFromWaitlist, que continua existindo pros caminhos que só têm o nome em mãos.
 window._removeFromWaitlistByKey = function (t, key) {
+  var domain = _wlDomain();
+  if (domain && typeof domain.removeByKey === 'function') return domain.removeByKey(t, key, _wlDomainHelpers(t));
   if (!t || !key) return false;
   var k = String(key).trim();
   if (!k) return false;

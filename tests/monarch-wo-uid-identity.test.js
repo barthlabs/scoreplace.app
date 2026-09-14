@@ -57,7 +57,7 @@ vm.createContext(sandbox);
 const ROOT = path.join(__dirname, '..');
 // standings-core entra na frente: é dele que sai a cadeia de desempate PADRÃO que o
 // _computeMonarchStandings usa pra ordenar a tabela (a MESMA que decide quem sobe de fase).
-['js/views/standings-core.js', 'js/views/bracket-model.js', 'js/views/bracket-logic.js', 'js/views/liga-substitution.js'].forEach((rel) => {
+['js/domain/standings.js', 'js/views/standings-core.js', 'js/views/bracket-model.js', 'js/views/bracket-logic.js', 'js/views/liga-substitution.js'].forEach((rel) => {
   vm.runInContext(fs.readFileSync(path.join(ROOT, rel), 'utf8'), sandbox, { filename: rel });
 });
 const W = sandbox;

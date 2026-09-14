@@ -18,7 +18,7 @@ const DOMAIN_DIR = path.resolve(__dirname, '..', 'js', 'domain');
 const OUT_DIR = path.resolve(__dirname, 'vendor');
 
 // Ordem não importa pra cópia; o draw-core carrega na ordem certa.
-const DOMAIN_FILES = ['participant-identity.js'];
+const DOMAIN_FILES = ['participant-identity.js', 'waitlist.js', 'standings.js'];
 
 const FILES = [
   // ⭐ FASE 2 — o tradutor documento ⇄ subcoleções. Mora aqui (js/views/) porque agora
@@ -109,10 +109,15 @@ const OUT_FN = path.resolve(__dirname, '..', 'functions', 'vendor');
 // `amizade-core.js` foi removida quando a autoridade de amizade foi consolidada no
 // servidor; mantê-la nesta lista fazia todo deploy do autoDraw abortar por fonte ausente.
 const SO_FUNCTIONS = ['tournament-split-core.js'];
+const DOMAIN_TO_FUNCTIONS = ['participant-identity.js', 'waitlist.js'];
 if (!fs.existsSync(OUT_FN)) fs.mkdirSync(OUT_FN, { recursive: true });
 for (const f of SO_FUNCTIONS) {
   fs.copyFileSync(path.join(SRC_DIR, f), path.join(OUT_FN, f));
   console.log(`[copy-vendor] functions/vendor/${f}`);
+}
+for (const f of DOMAIN_TO_FUNCTIONS) {
+  fs.copyFileSync(path.join(DOMAIN_DIR, f), path.join(OUT_FN, f));
+  console.log(`[copy-vendor] functions/vendor/${f} (domínio TypeScript gerado)`);
 }
 
 /* ── E O CONSTRUTOR DO SUBDOC DE RESULTADO VIAJA NA MÃO CONTRÁRIA (2.1.30) ────

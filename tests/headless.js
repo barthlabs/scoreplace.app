@@ -131,6 +131,7 @@ sandbox.localStorage = {
 vm.createContext(sandbox);
 
 const VIEWS = path.join(__dirname, '..', 'js', 'views');
+const DOMAINS = path.join(__dirname, '..', 'js', 'domain');
 function load(rel) {
   const full = path.join(VIEWS, rel);
   vm.runInContext(fs.readFileSync(full, 'utf8'), sandbox, { filename: full });
@@ -141,7 +142,13 @@ function load(rel) {
   sandbox._callCloseRound = _closeRoundStub;
 }
 
-// Ordem importa (mesma do index.html / draw-core.js): utils → categorias → model → logic
+function loadDomain(rel) {
+  const full = path.join(DOMAINS, rel);
+  vm.runInContext(fs.readFileSync(full, 'utf8'), sandbox, { filename: full });
+}
+
+// Ordem importa (mesma do index.html / draw-core.js): contrato → adaptador → consumidores
+loadDomain('standings.js');
 load('waitlist-core.js');        // _getWaitlist/_removeFromWaitlist/_nameForms — cânone da espera
 load('wo-log.js');               // REGISTRO de W.O. (t.woLog) — o histórico é gravado, não deduzido
 load('standings-core.js');       // _standingsCompare — cadeia de desempate padrão

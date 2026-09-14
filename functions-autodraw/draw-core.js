@@ -194,6 +194,8 @@ g.window._expandFormationAllowed = function (t) {
 // no servidor (toca document no load), e espelhar as funções aqui criaria uma 2ª versão do
 // código — o bug de versão que a canonização quer matar. Agora é UM arquivo só, vendored.
 g.window.ScoreplaceParticipantIdentity = require('./vendor/participant-identity.js');
+g.window.ScoreplaceWaitlist = require('./vendor/waitlist.js');
+g.window.ScoreplaceStandings = require('./vendor/standings.js');
 require('./vendor/identity-core.js');
 require('./vendor/schedule-poll.js');      // grade estimada: só o núcleo puro é chamado pela CF
 require('./vendor/team-formation.js');     // convite de dupla: máquina pura compartilhada
