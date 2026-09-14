@@ -106,6 +106,12 @@ must(/planejarVolta\(u\.guardado, u\.recebidasPelaSobrevivente\)/.test(PORTA),
 must(/collection\("loginRedirects"\)\.doc\(String\(cred\)\.toLowerCase\(\)\)\.delete\(\)/.test(PORTA),
   '④ ⭐ o desvio de login some junto: sem isso, entrar pela credencial devolvida cairia de ' +
   'volta na conta unida');
+/* ⛔ A união tem DOIS caminhos: o interativo, que desliga a conta e anota o que tirou; e o
+ * AUTOMÁTICO, por gatilho, que não mexe na autenticação e não anota nada. Os dois gravam
+ * desvio de login. Limpar só pelo que o interativo anota deixava o automático sem volta. */
+must(/_absorvido\.email, _absorvido\.phone/.test(PORTA),
+  '④ ⛔⛔ e as credenciais saem TAMBÉM do perfil absorvido — a união automática não anota nada, ' +
+  'e sem isso ela ficaria sem volta');
 must(/throw new HttpsError\("failed-precondition"/.test(PORTA),
   '④ ⛔ se a conta não religar, a porta FALA — ficar calado deixaria um cadastro sem entrada');
 

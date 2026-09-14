@@ -7807,8 +7807,20 @@ exports.desfazerFusao = onCall(
       }
 
       /* ④ Os desvios de login apontavam para a sobrevivente; sem isso, entrar pela credencial
-       * devolvida cairia de novo na conta unida. */
-      for (const cred of [u.guardado && u.guardado.email, u.guardado && u.guardado.phoneNumber]) {
+       * devolvida cairia de novo na conta unida.
+       *
+       * ⛔ AS CREDENCIAIS VÊM DAS DUAS FONTES, E ISSO NÃO É REDUNDÂNCIA. A união acontece por
+       * dois caminhos: o interativo, que desliga a conta absorvida e anota o que tirou dela
+       * (`guardado`); e o AUTOMÁTICO, disparado por gatilho, que não mexe na autenticação e
+       * portanto não anota nada. Os dois gravam desvio de login. Limpar só pelo `guardado`
+       * deixava o caminho automático sem volta — a pessoa separava as contas e continuava
+       * caindo na unida ao entrar. O perfil absorvido, que está no caderno, cobre esse caso. */
+      const _absorvido = u.perfilAbsorvido || {};
+      const _creds = [
+        u.guardado && u.guardado.email, u.guardado && u.guardado.phoneNumber,
+        _absorvido.email, _absorvido.phone,
+      ];
+      for (const cred of _creds) {
         if (!cred) continue;
         try { await db.collection("loginRedirects").doc(String(cred).toLowerCase()).delete(); }
         catch (e) { console.warn("[desfazerFusao] desvio de login", e && e.message); }
