@@ -1,3 +1,9 @@
+## 2.3.19 — 14/set/2026
+
+- **Acesso imediato à ficha:** nomes identificados já nascem como controles de
+  teclado e leitor de tela no primeiro render; a atualização posterior do perfil
+  não é mais necessária para habilitar essa ação.
+
 ## 2.3.18 — 14/set/2026
 
 - **Nome sempre abre estatísticas:** nos cards administrativos, inclusive a lista de

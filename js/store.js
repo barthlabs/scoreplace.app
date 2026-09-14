@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.3.18';
+window.SCOREPLACE_VERSION = '2.3.19';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -5994,6 +5994,7 @@ window._personProfileLinkHtml = function (uid, name, html, css, cls, extraAttrs)
             ' style="' + (css || '') + '">' + content + '</span>';
     }
     return '<span class="sp-person-name-link' + (cls ? ' ' + cls : '') + '"' +
+        ' role="button" tabindex="0"' +
         ' data-player-profile-uid="' + window._safeHtml(String(uid)) + '"' +
         ' data-player-profile-name="' + window._safeHtml(nm) + '"' +
         ' title="Ver estatísticas de ' + window._safeHtml(nm || 'jogador') + '"' +

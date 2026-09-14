@@ -17,6 +17,8 @@ const participants = read('js/views/participants.js');
 
 ok(/window\._personProfileLinkHtml = function/.test(store), 'há um wrapper canônico de ficha por UID');
 ok(/data-player-profile-uid=/.test(store), 'o wrapper carrega a identidade por UID');
+ok(/sp-person-name-link[\s\S]{0,120}role="button" tabindex="0"/.test(store),
+  'o wrapper já nasce acessível, sem depender da hidratação posterior');
 ok(/window\._personNameHtml = function \(uid, name, css, cls, extraAttrs\)/.test(store), 'o helper público preserva sua assinatura');
 ok(/window\._personNameHtml[\s\S]{0,900}window\._personProfileLinkHtml/.test(store), 'todo nome emitido pelo helper vira acesso à ficha');
 ok(/document\.addEventListener\('click',[\s\S]{0,600}true\)/.test(store), 'o clique é delegado na captura, antes da ação do card');

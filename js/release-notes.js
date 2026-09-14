@@ -1,3 +1,4 @@
+// 2.3.19 — o nome já nasce acessível no primeiro render; não depende da atualização posterior do perfil.
 // 2.3.18 — nos cards administrativos e na espera, o nome abre a ficha; editar continua num botão próprio.
 // 2.3.17 — cada nome que abre ficha tem um único alvo acessível; o marcador interno de atualização não aparece como segundo botão.
 // 2.3.16 — tocar no nome de cada participante identificado abre a ficha e as estatísticas, na classificação, nos jogos e nas listas; o balão de contato abre WhatsApp ou e-mail.
