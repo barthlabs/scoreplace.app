@@ -36,6 +36,7 @@ set -euo pipefail
 # ⚠️ Só entra quando a chave durável existe. Sem ela, o comportamento antigo continua, e a
 # mensagem de "não autenticado" segue explicando o caminho que dura.
 if [ -n "${GOOGLE_APPLICATION_CREDENTIALS:-}" ] && [ -r "${GOOGLE_APPLICATION_CREDENTIALS}" ]; then
+  export _SP_RAIZ="$(cd "$(dirname "$0")/.." && pwd)"
   # ⛔ E SÓ SE ELA REALMENTE CONSEGUIR PUBLICAR. MEDIDO em 14/set/2026: a conta de serviço
   # autentica, mas não tem acesso aos SEGREDOS que três funções declaram — e o deploy morre
   # com 403 do Secret Manager. Esconder a sessão de usuário nesse caso troca um problema por
@@ -43,16 +44,42 @@ if [ -n "${GOOGLE_APPLICATION_CREDENTIALS:-}" ] && [ -r "${GOOGLE_APPLICATION_CR
   # exatamente a permissão que falta; se passar, a conta de serviço assume (e não expira). Se
   # não, o script segue com a sessão de usuário e DIZ por quê, em vez de falhar no meio.
   _SP_CFG="$(mktemp -d)"
+  # ⛔ O TESTE TEM DE COBRIR TUDO QUE O DEPLOY USA, não só o que me mordeu da última vez.
+  # MEDIDO em 14/set/2026: a conta de serviço passou no teste do segredo e MESMO ASSIM o deploy
+  # morreu depois, em `cloudbilling.googleapis.com ... 403` — a API de faturamento está
+  # DESATIVADA no projeto, e a CLI a consulta antes de subir função. Um teste que valida metade
+  # dá confiança falsa e falha no meio, que é o pior lugar para falhar.
+  # ⛔ A SEGUNDA CONDIÇÃO É A API DE FATURAMENTO, e ela não se testa pela CLI: a consulta só
+  # acontece lá dentro do deploy. MEDIDO em 14/set/2026: a conta de serviço passou no teste do
+  # segredo e o deploy morreu depois em `cloudbilling.googleapis.com ... 403` — a API está
+  # DESATIVADA no projeto. Um teste que valida metade dá confiança falsa e falha no meio.
   if XDG_CONFIG_HOME="$_SP_CFG" firebase --project "${PROJECT:-scoreplace-app}" \
-       functions:secrets:get SIGNIN_API_KEY >/dev/null 2>&1; then
+       functions:secrets:get SIGNIN_API_KEY >/dev/null 2>&1 \
+     && _SP_RAIZ="$(cd "$(dirname "$0")/.." && pwd)" && node -e '
+       const {GoogleAuth}=require(process.env._SP_RAIZ+"/functions/node_modules/google-auth-library");
+       (async()=>{const a=new GoogleAuth({scopes:["https://www.googleapis.com/auth/cloud-platform"]});
+        const t=(await (await a.getClient()).getAccessToken()).token;
+        const r=await fetch("https://serviceusage.googleapis.com/v1/projects/scoreplace-app/services/cloudbilling.googleapis.com",
+          {headers:{Authorization:"Bearer "+t}});
+        const j=await r.json();
+        process.exit(r.ok && j.state==="ENABLED" ? 0 : 1);})().catch(()=>process.exit(1));' >/dev/null 2>&1; then
     export XDG_CONFIG_HOME="$_SP_CFG"
     trap 'rm -rf "$_SP_CFG"' EXIT
     echo "▸ credencial: conta de serviço ($(basename "$GOOGLE_APPLICATION_CREDENTIALS")) — não expira"
   else
     rm -rf "$_SP_CFG"
-    echo "▸ credencial: sessão de usuário (a conta de serviço não alcança os segredos)"
-    echo "  Para a publicação parar de depender de sessão que expira, a conta de serviço"
-    echo "  precisa de um papel de Secret Manager no projeto."
+    # ⛔ DIZER O QUE DE FATO FALTOU, não o último motivo que eu conheci. Esta mensagem já
+    # culpou os segredos quando o que faltava era a API de faturamento — e mandar consertar a
+    # coisa errada custa mais caro que não dizer nada.
+    echo "▸ credencial: sessão de usuário (a conta de serviço não passou no teste)"
+    if ! XDG_CONFIG_HOME="$_SP_CFG" firebase --project scoreplace-app \
+         functions:secrets:get SIGNIN_API_KEY >/dev/null 2>&1; then
+      echo "  Falta: papel de Secret Manager para a conta de serviço."
+    else
+      echo "  Falta: a API cloudbilling.googleapis.com está DESATIVADA no projeto — a CLI a"
+      echo "  consulta antes de subir função, e só a sessão de usuário passa por ela hoje."
+    fi
+    echo "  Enquanto isso, publicar depende de uma sessão que expira."
   fi
 fi
 
