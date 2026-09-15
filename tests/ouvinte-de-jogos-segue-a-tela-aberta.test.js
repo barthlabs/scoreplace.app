@@ -40,7 +40,8 @@ const _tSub = () => fakeDb.collection().doc().collection();
 const ctx = {
   window: { FirestoreDB: { db: fakeDb, _tSub: _tSub }, _tSplit: {
       remontar: (p) => Object.assign({}, p.config, { _montado: p.matches.length }) },
-    _softRefreshView: () => {}, _error: () => {}, _warn: () => {}, _noteFsReads: () => {} },
+    _softRefreshView: () => {}, _error: () => {}, _warn: () => {}, _noteFsReads: () => {},
+    _isRemoteFirestoreSnapshot: (snap) => !(snap && snap.metadata && snap.metadata.fromCache === true) },
   JSON: JSON
 };
 vm.createContext(ctx);

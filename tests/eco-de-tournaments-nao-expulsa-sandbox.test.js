@@ -32,6 +32,7 @@ const path = require('path');
 const H = require('./render-harness');
 const W = H.sandbox;
 const S = require('../js/views/tournament-split-core.js');
+W._isRemoteFirestoreSnapshot = (snap) => !(snap && snap.metadata && snap.metadata.fromCache === true);
 
 let falhas = 0;
 const ok = (n, c, x) => { if (c) console.log('  ✓ ' + n); else { console.log('  ✗ ' + n + (x ? '\n      ' + x : '')); falhas++; } };

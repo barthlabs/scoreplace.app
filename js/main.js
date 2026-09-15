@@ -2326,6 +2326,25 @@ window._log("scoreplace.app v" + (window.SCOREPLACE_VERSION || '?') + " Iniciali
     }
   }
 
+  // Estado da leitura operacional: a interface só chama algo de atual após o
+  // Firestore confirmar um snapshot remoto. Enquanto isso, o app não promove cache.
+  window._setServerFreshness = function(state) {
+    if (state === 'waiting') {
+      showBanner('Atualizando dados do servidor…', 'rgba(245,158,11,0.96)', '#16120a', false);
+      return;
+    }
+    if (state === 'unavailable') {
+      showBanner('Sem confirmação do servidor — os dados não foram atualizados.', 'rgba(239,68,68,0.96)', '#fff', false);
+      return;
+    }
+    if (state === 'current') {
+      var text = document.getElementById('offline-banner-text');
+      if (text && /Atualizando dados|Sem confirmação/.test(text.textContent || '')) {
+        showBanner('Dados atualizados pelo servidor', 'rgba(16,185,129,0.95)', '#fff', true);
+      }
+    }
+  };
+
   window.addEventListener('offline', function() {
     showBanner('Sem conexão — modo offline', 'rgba(239,68,68,0.95)', '#fff', false);
   });

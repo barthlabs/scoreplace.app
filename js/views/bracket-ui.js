@@ -8597,7 +8597,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
     if (!_casualDocId || !window.FirestoreDB || !window.FirestoreDB.db) return;
     try {
       _unsubFirestore = window.FirestoreDB.db.collection('casualMatches').doc(_casualDocId)
-        .onSnapshot(function(doc) {
+        .onSnapshot({ includeMetadataChanges: true }, function(doc) {
+          if (!window._isRemoteFirestoreSnapshot(doc)) return;
           // Organizer cancelled (deleted doc) or doc disappeared — evacuate everyone
           // still watching so they don't get stuck on a ghost match.
           if (!doc.exists) {
@@ -9016,7 +9017,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
     if (opts && opts.liveId && window.FirestoreDB && window.FirestoreDB.db) {
       try {
         window.__liveSpecUnsub = window.FirestoreDB.db.collection('liveScores').doc(opts.liveId)
-          .onSnapshot(function (doc) {
+          .onSnapshot({ includeMetadataChanges: true }, function (doc) {
+            if (!window._isRemoteFirestoreSnapshot(doc)) return;
             if (!doc.exists) return;
             var _d = doc.data() || {};
             if (_d.state) {

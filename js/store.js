@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.3.23';
+window.SCOREPLACE_VERSION = '2.3.24';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -11914,11 +11914,14 @@ window.AppStore = {
     // v1.9.43: sinaliza que estamos aguardando o primeiro snapshot antes de
     // esconder o boot loader. router.js respeita esse flag e não esconde antes.
     window._waitingForFirstSnapshot = true;
-    // Fallback: se o Firestore nunca responder (offline/erro), revela após 5s.
+    // Até a primeira resposta remota, não chamamos nenhum dado persistido de atual.
+    if (typeof window._setServerFreshness === 'function') window._setServerFreshness('waiting');
+    // Fallback: se o Firestore nunca responder (offline/erro), revela a interface como
+    // indisponível. Nunca promove cache a dado atual enquanto aguarda a reconexão.
     setTimeout(function() {
       if (window._waitingForFirstSnapshot) {
         window._waitingForFirstSnapshot = false;
-        // Sem dados do servidor — revela o que houver (cache) mesmo assim.
+        if (typeof window._setServerFreshness === 'function') window._setServerFreshness('unavailable');
         window._markBootReady('5s-fallback');
         if (typeof window._hideBootLoader === 'function') window._hideBootLoader();
       }
@@ -11934,7 +11937,11 @@ window.AppStore = {
     // Ver [[project_uid_primary_identity]].
     var _cuNow = window.AppStore && window.AppStore.currentUser;
     var _uid = _cuNow && _cuNow.uid ? _cuNow.uid : '';
-    if (!_uid) { window._warn('[realtime] sem uid — listener não inicia (identidade é uid)'); return; }
+    if (!_uid) {
+      if (typeof window._setServerFreshness === 'function') window._setServerFreshness('unavailable');
+      window._warn('[realtime] sem uid — listener não inicia (identidade é uid)');
+      return;
+    }
     var query = coll.where('memberUids', 'array-contains', _uid);
     /* ═══ O OUVINTE DE SANDBOX É OUTRO, E EM OUTRA COLEÇÃO (FIX.SANDBOX.P2, 2.1.87) ═══
      * ⭐ O ouvinte acima fica EXCLUSIVO de torneio real: o sandbox não está mais em
@@ -11951,7 +11958,8 @@ window.AppStore = {
       window._sbIdsConhecidos = window._sbIdsConhecidos || {};
       window._sbUnsub = window.FirestoreDB.db.collection('sandboxes')
         .where('sandboxOwnerUid', '==', _uid)
-        .onSnapshot(function (snap) {
+        .onSnapshot({ includeMetadataChanges: true }, function (snap) {
+          if (!window._isRemoteFirestoreSnapshot(snap)) return;
           try { if (window._noteFsReads) window._noteFsReads(snap.docChanges().length, 'rt-sandboxes'); } catch (e) {}
           /* ⭐ 2.1.89 — UMA CHAMADA, E QUEM DECIDE É `_sbIngest`. Aqui havia um laço sobre
            * `docChanges` que registrava/desregistrava ids por conta própria: uma SEGUNDA
@@ -12236,13 +12244,15 @@ window.AppStore = {
         // O IndexedDB pode responder antes da rede. Nunca use essa resposta para pintar
         // estado operacional; aguardamos a confirmação remota, mesmo que ela só altere
         // metadata e não tenha delta de documentos.
-        if (snap && snap.metadata && snap.metadata.fromCache) return;
+        if (!window._isRemoteFirestoreSnapshot(snap)) return;
+        if (typeof window._setServerFreshness === 'function') window._setServerFreshness('current');
         window._snapCount = (window._snapCount || 0) + 1;
         if (window._medirTrecho) return window._medirTrecho('snapshot-torneios', function () { _aplicaSnapTorneios(snap); });
         return _aplicaSnapTorneios(snap);
       }, function(err) {
         window._warn('Real-time listener error:', err);
-        // Fallback to one-time load
+        if (typeof window._setServerFreshness === 'function') window._setServerFreshness('unavailable');
+        // Fallback to one-time load, que só aceita resposta do servidor.
         store.loadFromFirestore();
       });
 
@@ -12265,7 +12275,8 @@ window.AppStore = {
     var isFirst = true;
     try {
       this._discoveryUnsub = window.FirestoreDB.db.collection('discoveryFeed')
-        .onSnapshot(function(snap) {
+        .onSnapshot({ includeMetadataChanges: true }, function(snap) {
+          if (!window._isRemoteFirestoreSnapshot(snap)) return;
           try { if (window._noteFsReads) window._noteFsReads(snap.docChanges().length, 'rt-discovery'); } catch (e) {}
           // Primeiro snapshot já está coberto pelo loadPublicDiscovery inicial.
           if (isFirst) { isFirst = false; return; }
@@ -12337,7 +12348,8 @@ window.AppStore = {
     this._notifUnsubscribe = window.FirestoreDB.db
       .collection('users').doc(cu.uid).collection('notifications')
       .orderBy('createdAt', 'desc').limit(20)
-      .onSnapshot(function(snap) {
+      .onSnapshot({ includeMetadataChanges: true }, function(snap) {
+        if (!window._isRemoteFirestoreSnapshot(snap)) return;
         try { if (window._noteFsReads) window._noteFsReads(snap.docChanges().length, 'rt-snap'); } catch (e) {}
         // Skip the initial snapshot (already loaded via polling)
         if (isFirst) { isFirst = false; return; }
@@ -12396,7 +12408,8 @@ window.AppStore = {
     var lastCasualRoom = null;
     this._profileUnsubscribe = window.FirestoreDB.db
       .collection('users').doc(cu.uid)
-      .onSnapshot(function(doc) {
+      .onSnapshot({ includeMetadataChanges: true }, function(doc) {
+        if (!window._isRemoteFirestoreSnapshot(doc)) return;
         // v2.7.35: PERFIL É A FONTE DA VERDADE e propaga PRA TUDO dinamicamente.
         // A cada mudança do perfil do usuário, atualiza o cache _partProfileByName
         // (que alimenta os badges gênero·nível·idade E o filtro/sort dos Inscritos)
@@ -12573,7 +12586,8 @@ window.AppStore = {
     try {
       var res = await loader.call(window.FirestoreDB, {
         limit: opts.limit || 50,
-        cursor: cursor
+        cursor: cursor,
+        requireRemote: true
       });
       // Drop tournaments the user already has a relationship with — they
       // already see those via the scoped listener. Usa o denormalizado
@@ -12599,14 +12613,16 @@ window.AppStore = {
   // Scoped to the current user's own tournaments via `memberEmails[]`.
   async loadFromFirestore() {
     if (!window.FirestoreDB || !window.FirestoreDB.db) return;
+    if (typeof window._setServerFreshness === 'function') window._setServerFreshness('waiting');
     this._loading = true;
     try {
       // v1.2.2: UID ONLY — o escopo dos "meus torneios" é memberUids.
       var _uid = this.currentUser && this.currentUser.uid;
       var tournaments = _uid
-        ? await window.FirestoreDB.loadMyTournaments(_uid)
-        : await window.FirestoreDB.loadAllTournaments();
+        ? await window.FirestoreDB.loadMyTournaments(_uid, { requireRemote: true })
+        : await window.FirestoreDB.loadAllTournaments({ requireRemote: true });
       this.tournaments = window._dropSandboxForNonDev(tournaments);
+      if (typeof window._setServerFreshness === 'function') window._setServerFreshness('current');
       this._saveToCache();
       // v4.4.69 Rei/Rainha: reidrata group.matches como refs de round.matches (fonte única).
       if (typeof window._hydrateMonarchGroups === 'function') {
@@ -12618,7 +12634,10 @@ window.AppStore = {
       if (typeof window._captureException === 'function') {
         window._captureException(e, { area: 'loadTournaments', code: e && e.code });
       }
-      this.tournaments = [];
+      // Mantém somente o último snapshot remoto já confirmado. Falha de rede não
+      // inventa uma lista vazia nem promove uma cópia local a estado atual.
+      this._lastRemoteLoadError = (e && (e.code || e.message)) || 'unavailable';
+      if (typeof window._setServerFreshness === 'function') window._setServerFreshness('unavailable');
     }
     this._loading = false;
   },
@@ -13265,7 +13284,7 @@ window.AppStore = {
         var un = window.FirestoreDB._tSub(id, _col)
           .onSnapshot({ includeMetadataChanges: true }, function (snap) {
             try {
-              if (snap && snap.metadata && snap.metadata.fromCache) return;
+              if (!window._isRemoteFirestoreSnapshot(snap)) return;
               var vivo = (self.tournaments || []).find(function (x) { return x && String(x.id) === id; });
               if (!vivo) return;
               /* ⚠️ `docChanges` e não o snapshot inteiro: é o delta que faz isto valer a

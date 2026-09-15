@@ -1,3 +1,10 @@
+## 2.3.24 — 14/set/2026
+
+- Dados operacionais só passam a valer na tela depois de uma confirmação remota. Os 12 ouvintes ativos de torneios, presença, jogos e placar recusam eventos do cache; leituras iniciais de torneios, resultados e perfis usam o servidor.
+- Sem conexão, a tela mantém apenas o último estado confirmado e informa que não houve atualização; nunca substitui esse estado por cópia local ou uma lista vazia. Ao reconectar, a atualização remota volta a valer automaticamente.
+- A regra foi verificada com dois clientes independentes no emulador: enquanto um ficou offline, ele não aplicou a troca; na reconexão recebeu o W.O., a dupla e o jogo canônicos.
+- Esta publicação é somente web. Não há geração, sincronização nem submissão dos projetos iOS e Android.
+
 ## 2.3.23 — 14/set/2026
 
 - O shell passa a carimbar os domínios gerados de espera e classificação com a versão atual da entrega. A atualização troca o cache do service worker e impede que um aparelho reutilize uma URL de contrato anterior.

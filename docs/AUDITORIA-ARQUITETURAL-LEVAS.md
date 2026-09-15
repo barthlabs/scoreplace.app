@@ -63,6 +63,10 @@ Capacitor ficam intocados até a aprovação da versão já submetida ao Google.
 silenciosa ao contrato nativo: o pacote instalado continua consultando a política remota e a
 versão servida pelo Hosting; o corte de versão mínima e o próximo build nativo pertencem à L13.
 
+### Recalibração — encerramento da etapa 3 (14/set/2026)
+
+A etapa 3 encerra a fronteira de frescor operacional: os 12 ouvintes ativos recusam eventos vindos do cache, e as leituras iniciais de torneios, resultados e perfis pedem explicitamente o servidor. Quando a conexão não confirma o estado, a interface preserva somente o último dado remoto e informa a indisponibilidade; ela não mostra uma cópia local como atual nem substitui dados por uma lista vazia. A prova de integração usa dois clientes independentes no emulador: um permanece offline durante a troca de dupla/W.O. e, ao reconectar, recebe o jogo, a lista e o W.O. canônicos. O lote segue exclusivamente web; nenhuma árvore nativa foi gerada, sincronizada ou submetida.
+
 ### Recalibração — encerramento da etapa 2
 
 A etapa 2 foi concluída no mesmo ciclo operacional de 14/set. Ela fechou os quatro domínios previstos para a primeira fronteira: limites de rodadas, identidade/composição, espera e classificação. A duração humana detalhada não foi medida por relógio; fica registrado o dado verificável: o lote foi fechado em um dia de trabalho e a bateria final executou 825 suítes. O PDF recalibrado passa a usar esse fato, sem inventar horas exatas, para reduzir o prazo restante quando cada nova etapa fechar.

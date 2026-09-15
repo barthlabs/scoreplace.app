@@ -386,7 +386,8 @@ window.PresenceDB = {
     if (!this.db || !uid || typeof callback !== 'function') return function() {};
     var unsub = this.db.collection('presences')
       .where('uid', '==', uid)
-      .onSnapshot(function(snap) {
+      .onSnapshot({ includeMetadataChanges: true }, function(snap) {
+        if (!window._isRemoteFirestoreSnapshot(snap)) return;
         var now = Date.now();
         var list = [];
         snap.forEach(function(doc) {
@@ -430,7 +431,8 @@ window.PresenceDB = {
     chunks.forEach(function(chunk, idx) {
       var u = self.db.collection('presences')
         .where('uid', 'in', chunk)
-        .onSnapshot(function(snap) {
+        .onSnapshot({ includeMetadataChanges: true }, function(snap) {
+          if (!window._isRemoteFirestoreSnapshot(snap)) return;
           var arr = [];
           snap.forEach(function(doc) {
             var d = doc.data();

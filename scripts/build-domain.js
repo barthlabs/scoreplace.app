@@ -16,6 +16,7 @@ const entries = [
   { source: 'src/domain/participant-identity.ts', output: 'js/domain/participant-identity.js' },
   { source: 'src/domain/waitlist.ts', output: 'js/domain/waitlist.js' },
   { source: 'src/domain/standings.ts', output: 'js/domain/standings.js' },
+  { source: 'src/domain/realtime-freshness.ts', output: 'js/domain/realtime-freshness.js' },
 ];
 let failures = 0;
 

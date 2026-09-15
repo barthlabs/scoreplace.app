@@ -18,7 +18,10 @@ const DOMAIN_DIR = path.resolve(__dirname, '..', 'js', 'domain');
 const OUT_DIR = path.resolve(__dirname, 'vendor');
 
 // Ordem não importa pra cópia; o draw-core carrega na ordem certa.
-const DOMAIN_FILES = ['participant-identity.js', 'waitlist.js', 'standings.js'];
+// A cópia de bracket-ui também é carregada pelo shim do autoDraw. Mesmo que o motor
+// não abra o placar ao vivo, o domínio precisa acompanhá-la para que nenhum caminho do
+// arquivo vendorizado encontre um helper indefinido.
+const DOMAIN_FILES = ['participant-identity.js', 'waitlist.js', 'standings.js', 'realtime-freshness.js'];
 
 const FILES = [
   // ⭐ FASE 2 — o tradutor documento ⇄ subcoleções. Mora aqui (js/views/) porque agora

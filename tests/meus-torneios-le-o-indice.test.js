@@ -21,7 +21,7 @@ let pass = 0, fail = 0;
 function ok(c, m) { if (c) pass++; else { fail++; console.error('  ✗', m); } }
 
 const src = fs.readFileSync(path.join(ROOT, 'js', 'firebase-db.js'), 'utf8');
-const i = src.indexOf('async loadMyTournaments(uid)');
+const i = src.indexOf('async loadMyTournaments(uid, opts)');
 ok(i > 0, 'loadMyTournaments existe');
 // a função inteira: até o próximo membro do objeto no mesmo nível
 const corpo = src.slice(i, src.indexOf('\n  async ', i + 10));

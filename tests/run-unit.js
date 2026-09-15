@@ -1901,6 +1901,10 @@ const SUITES = [
   // Quem barra é `scripts/check-vendor-fresh.js`, ANTES desta lista (package.json). Este
   // teste guarda as duas metades: a trava está ligada e o vendor daqui está em dia, e ela
   // detecta de verdade (sandbox com o script REAL, não réplica).
+  // A memória local só acelera a conexão; nenhuma lista, jogo, W.O., presença, placar,
+  // perfil, aviso ou descoberta é tratado como atual antes da confirmação remota. Fecha o
+  // inventário de ouvintes e as leituras de recuperação com `source: 'server'`.
+  'tests/estado-operacional-confirmado-pelo-servidor.test.js',
   'tests/vendor-do-autodraw-nao-fica-velho.test.js',
 ];
 

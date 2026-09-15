@@ -183,7 +183,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var q = db.collection(COL).where('status', '==', 'live')
       .where('audience', 'array-contains-any', _plateia).limit(30);
     try {
-      return q.onSnapshot(function (snap) {
+      return q.onSnapshot({ includeMetadataChanges: true }, function (snap) {
+        if (!window._isRemoteFirestoreSnapshot(snap)) return;
         var agora = Date.now(), out = [];
         snap.forEach(function (doc) {
           var d = Object.assign({ id: doc.id }, doc.data() || {});

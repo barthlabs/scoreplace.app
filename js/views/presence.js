@@ -812,7 +812,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       window._presenceUnsubscribe = db.collection('presences')
         .where('placeId', '==', state.venue.placeId)
         .where('dayKey', '==', state.dayKey)
-        .onSnapshot(function(snap) {
+        .onSnapshot({ includeMetadataChanges: true }, function(snap) {
+          if (!window._isRemoteFirestoreSnapshot(snap)) return;
           var list = [];
           snap.forEach(function(doc) {
             var d = doc.data();

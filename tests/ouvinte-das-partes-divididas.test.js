@@ -30,7 +30,7 @@ ok('⛔ deriva de `_semPesados`, não de um nome escrito à mão',
 ok('⭐ toda parte declarada pelo torneio chega ao vivo (sem lista manual incompleta)',
   /_partesQueMudamAoVivo\(fora\)/.test(corpo) && /return Array\.isArray\(partes\) \? partes\.slice\(\) : \[\];/.test(src));
 ok('⭐ espera, inativos, W.O., duplas, jogos, grupos e resultados recebem confirmação remota',
-  /includeMetadataChanges: true/.test(corpo) && /snap\.metadata\.fromCache\) return;/.test(corpo),
+  /includeMetadataChanges: true/.test(corpo) && /_isRemoteFirestoreSnapshot\(snap\)\) return;/.test(corpo),
   'o cache não pode reverter nenhuma parte operacional antes de o servidor confirmar');
 ok('  → torneio inteiro sai cedo, sem assinar nada', /if \(!fora\.length\) return;/.test(corpo));
 ok('  → e sem alvo também', /if \(!alvos\.length\) return;/.test(corpo));

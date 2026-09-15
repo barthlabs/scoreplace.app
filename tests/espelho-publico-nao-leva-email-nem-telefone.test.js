@@ -157,11 +157,12 @@ must(!/collection\('users'\)\.limit\(2000\)/.test(DB),
   '⑧ ⛔ sumiu a varredura de 2000 perfis INTEIROS — era a maior exposição da coleção');
 must(!/collection\('users'\)\.where\('displayName_lower'/.test(DB),
   '⑧ ⛔ e a busca por nome não lê mais o documento cheio');
-/* ⛔ CONTROLE DE ESCOPO: `loadUserProfile` NÃO foi trocada. Ela serve também ao PRÓPRIO
- * perfil, que precisa dos campos privados, e tem 93 chamadas a separar uma a uma. */
-must(/var doc = await this\.db\.collection\('users'\)\.doc\(uid\)\.get\(\);/.test(DB),
-  '⑧ ⛔ `loadUserProfile` segue em `users` — é a leva seguinte, e mexer nela agora seria '
-  + 'trocar 93 chamadas sem separar o próprio perfil do alheio');
+/* ⛔ CONTROLE DE ESCOPO: `loadUserProfile` segue em `users`. Ela serve também ao PRÓPRIO
+ * perfil, que precisa dos campos privados, e tem 93 chamadas a separar uma a uma. A etapa de
+ * frescor só exige o servidor; ela não troca a coleção nem amplia a projeção pública. */
+must(/var doc = await this\.db\.collection\('users'\)\.doc\(uid\)\.get\(\{ source: 'server' \}\);/.test(DB),
+  '⑧ ⛔ `loadUserProfile` segue em `users` e exige o servidor — esta leva não troca as 93 chamadas '
+  + 'nem mistura perfil próprio com ficha pública');
 
 // ── ⑧b a ficha de TERCEIRO na tela vem do espelho ──────────────────────────
 must(/async carregarPerfilPublico\(uid\)/.test(DB),

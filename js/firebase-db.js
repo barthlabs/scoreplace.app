@@ -1751,7 +1751,7 @@ window.FirestoreDB = {
     var limite = (opts && Number(opts.limit) > 0) ? Number(opts.limit) : 0;
     var consulta = this._tSub(tournamentId, 'results');
     if (limite) consulta = consulta.orderBy('updatedAt', 'desc').limit(limite);
-    var snap = await consulta.get();
+    var snap = await consulta.get({ source: 'server' });
     var out = {};
     snap.forEach(function (d) { out[d.id] = d.data(); });
     return out;
@@ -1763,7 +1763,7 @@ window.FirestoreDB = {
   async loadMatchResult(tournamentId, matchId) {
     if (!this.ensureDb()) return null;
     if (matchId == null || matchId === '') return null;
-    var d = await this._tSub(tournamentId, 'results').doc(String(matchId)).get();
+    var d = await this._tSub(tournamentId, 'results').doc(String(matchId)).get({ source: 'server' });
     return d.exists ? d.data() : null;
   },
 
@@ -1777,7 +1777,7 @@ window.FirestoreDB = {
     var q = this.db.collectionGroup('results').where('playerUids', 'array-contains', uid);
     try { q = q.orderBy('updatedAt', 'desc'); } catch (e) {}
     if (opts && opts.limit) q = q.limit(opts.limit);
-    var snap = await q.get();
+    var snap = await q.get({ source: 'server' });
     var out = [];
     snap.forEach(function (d) {
       var data = d.data() || {};
@@ -2246,10 +2246,14 @@ window.FirestoreDB = {
     return this._callFn('deleteTournament', { tournamentId: tId });
   },
 
-  async loadAllTournaments() {
-    if (!this.db) return [];
+  async loadAllTournaments(opts) {
+    opts = opts || {};
+    if (!this.db) {
+      if (opts.requireRemote) throw Object.assign(new Error('Servidor indisponível para carregar torneios.'), { code: 'unavailable' });
+      return [];
+    }
     try {
-      var snap = await this.db.collection('tournaments').get();
+      var snap = await this.db.collection('tournaments').get({ source: 'server' });
       try { if (window._noteFsReads) window._noteFsReads(snap.size, 'load-all-tourns'); } catch (e) {}
       var tournaments = [];
       snap.forEach(function(doc) {
@@ -2263,6 +2267,7 @@ window.FirestoreDB = {
       if (typeof window._captureException === 'function') {
         window._captureException(e, { area: 'loadAllTournaments', code: e && e.code });
       }
+      if (opts.requireRemote) throw e;
       return [];
     }
   },
@@ -2273,8 +2278,12 @@ window.FirestoreDB = {
   // backfill is complete and the composite index is live. Kept side-by-side
   // for now so the swap is a one-line change.
   // v1.2.2: UID ONLY (era loadMyTournaments(email) → where memberEmails).
-  async loadMyTournaments(uid) {
-    if (!this.db || !uid) return [];
+  async loadMyTournaments(uid, opts) {
+    opts = opts || {};
+    if (!this.db || !uid) {
+      if (opts.requireRemote) throw Object.assign(new Error('Servidor indisponível para carregar torneios.'), { code: 'unavailable' });
+      return [];
+    }
     // ⭐ 2.0.95 — "MEUS TORNEIOS" LÊ O ÍNDICE, não o torneio inteiro.
     //
     // Esta tela desenha CARTÕES, e cartão não usa jogos, inscritos nem histórico. Lendo o
@@ -2290,7 +2299,7 @@ window.FirestoreDB = {
     try {
       var snapS = await this.db.collection('tournaments_summary')
         .where('memberUids', 'array-contains', uid)
-        .get();
+        .get({ source: 'server' });
       try { if (window._noteFsReads) window._noteFsReads(snapS.size, 'meus-torneios-resumo'); } catch (e) {}
       snapS.forEach(function (doc) {
         var d = doc.data();
@@ -2310,7 +2319,7 @@ window.FirestoreDB = {
     try {
       var snap = await this.db.collection('tournaments')
         .where('memberUids', 'array-contains', uid)
-        .get();
+        .get({ source: 'server' });
       try { if (window._noteFsReads) window._noteFsReads(snap.size, 'meus-torneios-completo'); } catch (e) {}
       var tournaments = [];
       snap.forEach(function(doc) {
@@ -2320,6 +2329,7 @@ window.FirestoreDB = {
       return tournaments;
     } catch (e) {
       window._error('Erro ao carregar torneios do usuário:', e);
+      if (opts.requireRemote) throw e;
       return [];
     }
   },
@@ -2483,7 +2493,7 @@ window.FirestoreDB = {
         var qs = this.db.collection('tournaments_summary')
           .where('isPublic', '==', true)
           .limit(limit + 1);
-        var snapS = await qs.get();
+        var snapS = await qs.get({ source: 'server' });
         _lidos = snapS.size;
         try { if (window._noteFsReads) window._noteFsReads(snapS.size, 'load-all-public-resumo'); } catch (e) {}
         snapS.forEach(function (doc) {
@@ -2505,7 +2515,7 @@ window.FirestoreDB = {
         var q = this.db.collection('tournaments')
           .where('isPublic', '==', true)
           .limit(limit + 1);
-        var snap = await q.get();
+        var snap = await q.get({ source: 'server' });
         _lidos = snap.size;
         try { if (window._noteFsReads) window._noteFsReads(snap.size, 'load-all-public'); } catch (e) {}
         snap.forEach(function(doc) {
@@ -2532,6 +2542,7 @@ window.FirestoreDB = {
       };
     } catch (e) {
       window._error('Erro ao carregar todos os torneios públicos:', e);
+      if (opts.requireRemote) throw e;
       return { tournaments: [], nextCursor: null, hasMore: false };
     }
   },
@@ -2850,7 +2861,7 @@ window.FirestoreDB = {
   async carregarPerfilPublico(uid) {
     if (!this.db || !uid) return null;
     try {
-      var doc = await this.db.collection(window._COLECAO_PERFIL_PUBLICO).doc(uid).get();
+      var doc = await this.db.collection(window._COLECAO_PERFIL_PUBLICO).doc(uid).get({ source: 'server' });
       return doc.exists ? doc.data() : null;
     } catch (e) {
       window._warn('[perfil público] não carregou ' + uid + ':', e && e.message);
@@ -2865,7 +2876,7 @@ window.FirestoreDB = {
   async loadUserProfile(uid) {
     if (!this.db || !uid) return null;
     try {
-      var doc = await this.db.collection('users').doc(uid).get();
+      var doc = await this.db.collection('users').doc(uid).get({ source: 'server' });
       return doc.exists ? doc.data() : null;
     } catch (e) {
       window._error('Erro ao carregar perfil:', e);
