@@ -77,6 +77,19 @@ A tela abre torneio e lista pelo servidor, usa apenas `usersPublic` para nome, f
 
 A atualização do PWA agora mantém o mesmo princípio da leitura operacional: uma falha parcial não pode trocar um estado conhecido por uma cópia sem confirmação. O caminho excepcional de troca de service worker deixou de apagar caches e desregistrar o controlador antes de recarregar. Se não há suporte, registro, resposta de `update()` ou ativação dentro do prazo, o app revalida o HTML e recarrega pela navegação rede-primeiro, preservando o worker e o shell coerente que ainda podem atender a abertura. Navegação offline só entrega um shell cujo `head` inteiro existe sob as URLs exatas; sem ele, mostra a página explícita de sem conexão. A simulação executa os quatro erros de handoff, o prazo, a rede pendurada, cache vazio e cache incompleto. Duas baterias completas passaram: 826 suítes em 322 s e, após os ajustes da revisão, 826 em 327 s. Esta etapa é somente web; não há build, sync nem submissão nativa.
 
+### Recalibração — encerramento da etapa 6 (14/set/2026)
+
+Observabilidade e privacidade foram revalidadas contra o que está no ar, sem ler
+dados de pessoas. As três políticas de produção seguem habilitadas: erros de
+Cloud Functions acima de 1/min por cinco minutos, escritas Firestore acima de
+5/s e leituras acima de 100/s, todas com o canal de notificação associado. No
+cliente, erro e transação passam pela mesma identificação tardia: versão atual
+e somente uma rota reconhecida pelo router. Uma hash com texto arbitrário não
+entra como tag e vira `unknown`; o filtro continua removendo contexto, payload,
+mensagem, query, variável de pilha e conteúdo de breadcrumb. A prova percorre
+as 37 rotas reais e inclui hash hostil, totalizando 48 asserções. Esta etapa é
+somente web; não há build, sync nem submissão nativa.
+
 ### Recalibração — encerramento da etapa 2
 
 A etapa 2 foi concluída no mesmo ciclo operacional de 14/set. Ela fechou os quatro domínios previstos para a primeira fronteira: limites de rodadas, identidade/composição, espera e classificação. A duração humana detalhada não foi medida por relógio; fica registrado o dado verificável: o lote foi fechado em um dia de trabalho e a bateria final executou 825 suítes. O PDF recalibrado passa a usar esse fato, sem inventar horas exatas, para reduzir o prazo restante quando cada nova etapa fechar.

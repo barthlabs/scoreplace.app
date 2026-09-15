@@ -78,10 +78,29 @@
     return safe;
   }
 
+  /* A hash é controlada pelo navegador e pode conter texto arbitrário. A rota de
+   * telemetria só pode ser uma das chaves que o router entende; qualquer outra
+   * coisa perde o valor antes de chegar ao evento. */
+  var _rotasSentry = {
+    dashboard: 1, tournament: 1, tournaments: 1, pair: 1, cohost: 1,
+    bracket: 1, match: 1, formato: 1, participants: 1, rules: 1,
+    explore: 1, 'todos-torneios': 1, 'todas-pessoas': 1, notifications: 1,
+    live: 1, casual: 1, presence: 1, venues: 1, place: 1, 'my-venues': 1,
+    profile: 1, analise: 1, categorias: 1, comunicados: 1, participantes: 1,
+    help: 1, 'novo-torneio': 1, support: 1, invite: 1, privacy: 1, terms: 1,
+    'delete-account': 1, trofeus: 1, arbitros: 1, historico: 1,
+    'importar-letzplay': 1, 'fase-final': 1
+  };
+
+  function _rotaSentrySegura(route) {
+    route = String(route || '').toLowerCase();
+    return _rotasSentry[route] ? route : 'unknown';
+  }
+
   function _sanitizeSentryEvent(event) {
     event = event || {};
-    var route = event.tags && event.tags.route;
-    event.tags = route ? { route: route } : {};
+    var route = _rotaSentrySegura(event.tags && event.tags.route);
+    event.tags = { route: route };
 
     delete event.user;
     delete event.extra;
@@ -118,6 +137,16 @@
       };
     }
     return event;
+  }
+
+  function _identificarEventoSentry(event) {
+    event = event || {};
+    var hash = (location.hash || '').replace('#', '').split('/')[0] || 'dashboard';
+    event.tags = { route: _rotaSentrySegura(hash) };
+    // A versão também é tardia: store.js pode ainda não ter terminado de carregar
+    // quando o SDK CDN inicia, mas estará disponível ao enviar o evento.
+    event.release = 'scoreplace@' + (window.SCOREPLACE_VERSION || 'unknown');
+    return _sanitizeSentryEvent(event);
   }
 
   // ── 2b. Recuperação do bug FATAL do Firestore (SDK <10.12) ─────────────────
@@ -296,19 +325,10 @@
           /Test event from beta-readiness/i     // eventos de teste manual (#7)
         ],
         beforeSend: function (event) {
-          // Tag útil pra agrupar issues por área do app
-          var hash = (location.hash || '').replace('#', '').split('/')[0] || 'dashboard';
-          event.tags = event.tags || {};
-          event.tags.route = hash;
-          // v1.0.4-beta: release lazy. Lê SCOREPLACE_VERSION na hora do envio,
-          // não no init. Isso garante que mesmo se Sentry init rodar antes do
-          // store.js defer carregar, todo evento sai com release correto assim
-          // que store.js termina de parsear (~ms depois).
-          event.release = 'scoreplace@' + (window.SCOREPLACE_VERSION || 'unknown');
-          return _sanitizeSentryEvent(event);
+          return _identificarEventoSentry(event);
         },
         beforeSendTransaction: function (event) {
-          return _sanitizeSentryEvent(event);
+          return _identificarEventoSentry(event);
         }
       });
 

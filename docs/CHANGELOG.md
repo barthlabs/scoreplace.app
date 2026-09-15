@@ -1,3 +1,10 @@
+## 2.3.27 — 14/set/2026
+
+- A telemetria só identifica uma tela por rotas que o router reconhece. Uma hash arbitrária deixa de poder aparecer como tag no Sentry; ela vira `unknown`, sem texto livre.
+- Erros e transações agora recebem a mesma rota validada e a versão da aplicação no instante do envio. O filtro continua removendo pessoas, payloads, mensagens, queries, variáveis da pilha e breadcrumbs com conteúdo.
+- As três políticas operacionais foram revalidadas em produção: erros de Functions, pico de leituras e pico de escritas seguem habilitados, com seus limiares e canal de notificação associados.
+- Esta publicação é somente web. Não há geração, sincronização nem submissão dos projetos iOS e Android.
+
 ## 2.3.26 — 14/set/2026
 
 - A atualização web passa a preservar o service worker e o cache coerente também quando a troca do worker falha, demora ou não encontra registro. O HTML é revalidado pela rede e a recarga segue pela navegação rede-primeiro, sem abrir uma janela em que o app perde seu próprio shell.

@@ -1,3 +1,4 @@
+// 2.3.27 — a telemetria usa somente a rota reconhecida pelo aplicativo e a versão atual, tanto em erros quanto em transações; hashes arbitrárias não carregam texto para o diagnóstico.
 // 2.3.26 — falhas da troca de versão preservam o service worker e o shell coerente; não há reset destrutivo antes da recarga.
 // 2.3.25 — a escala de árbitros é confirmada no servidor e a lista mostra apenas os dados públicos necessários; a abertura também recusa fotografia local como dado atual.
 // 2.3.24 — estado de torneios, presença, jogos e placar só se atualiza após confirmação remota; sem rede, o app informa a indisponibilidade e preserva apenas o último estado confirmado. A reconexão aplica o estado canônico.

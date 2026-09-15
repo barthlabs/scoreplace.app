@@ -58,6 +58,19 @@ must(sanitized.exception.values[0].type === 'TypeError' && sanitized.exception.v
 must(sanitized.exception.values[0].stacktrace.frames[0].filename === 'https://scoreplace.app/js/auth.js', 'remove query e variáveis da pilha');
 
 const transaction = config.beforeSendTransaction({ transaction: 'Ana/ana@example.com', breadcrumbs: [{ message: 'Ana' }] });
-must(transaction.transaction === 'route:unknown' && transaction.message === '[mensagem suprimida por privacidade]', 'transação também não preserva nome nem mensagem livre');
+must(transaction.transaction === 'route:tournaments' && transaction.release === 'scoreplace@2.3.15' && transaction.message === '[mensagem suprimida por privacidade]', 'transação recebe rota e versão seguras sem preservar nome nem mensagem livre');
+
+context.location.hash = '#ana@example.com/segredo';
+const hostile = config.beforeSend({ message: 'falha', tags: { route: 'ana@example.com' } });
+must(hostile.tags.route === 'unknown' && hostile.transaction === 'route:unknown', 'hash e tag fora do router viram rota desconhecida');
+must(!/ana@example\.com|segredo/.test(JSON.stringify(hostile)), 'a rota arbitrária não vaza texto livre para a telemetria');
+
+const router = fs.readFileSync(path.join(__dirname, '..', 'js', 'router.js'), 'utf8');
+const routes = [...router.matchAll(/case '([^']*)':/g)].map((m) => m[1]).filter(Boolean);
+for (const route of routes) {
+  context.location.hash = '#' + route + '/identificador-que-nao-importa';
+  const routed = config.beforeSend({ message: 'falha' });
+  must(routed.tags.route === route, 'rota do router preservada na telemetria: ' + route);
+}
 
 console.log('✅ sentry-privacy-filter: ' + ok + ' asserções, 0 falha(s)');

@@ -41,6 +41,18 @@ localStorage.removeItem('scoreplace_sentry_dsn');
 | `ignoreErrors` | Filtra `ResizeObserver`, `chrome-extension://`, etc. | Ruído conhecido do ecossistema |
 | `beforeSend` | Anonimiza email/displayName, adiciona tag `route` | Privacy + agrupa por área |
 
+## Garantias de identificação (2.3.27)
+
+A rota usada em erros e transações sai exclusivamente da lista de caminhos que o
+router atende. A hash do navegador é entrada livre: se o primeiro segmento não
+for uma rota conhecida, a telemetria registra apenas `unknown`. Cada evento
+também recebe a release lida no instante do envio, depois que `store.js`
+declara a versão atual.
+
+O gate `tests/sentry-privacy-filter.test.js` percorre todas as rotas reais do
+router e recusa uma alteração que deixe alguma sem identificação ou que permita
+texto arbitrário em `tags.route`.
+
 ## Pré-init buffer
 
 Errors entre o boot do app e o load do SDK CDN (~100ms-1s) são bufferizados.
