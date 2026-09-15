@@ -179,13 +179,15 @@ do_main() {
     "principal (functions/)" "$ROOT/functions"
 }
 do_autodraw() {
+  local all targets
+  all="$(targets_cjs "$ROOT/functions-autodraw/index.js" 'functions:')"
+  targets="$(selected_targets "$all" 'functions:')" || return $?
   if [ "$DRY" != 1 ]; then
     [ -d "$ROOT/functions-autodraw/node_modules" ] || (cd "$ROOT/functions-autodraw" && npm ci)
     (cd "$ROOT/functions-autodraw" && node copy-vendor.js && node test-draw.js) \
       || die "autodraw: test-draw.js falhou — NÃO deployar sorteio quebrado"
   fi
-  deploy_dir "$ROOT/functions-autodraw" \
-    "$(targets_cjs "$ROOT/functions-autodraw/index.js" 'functions:')" "autodraw (functions-autodraw/)"
+  deploy_dir "$ROOT/functions-autodraw" "$targets" "autodraw (functions-autodraw/)"
   [ "$DRY" = 1 ] || echo "⚠️  commitar o diff de functions-autodraw/vendor/ (o predeploy re-sincroniza)"
 }
 do_stripe() {

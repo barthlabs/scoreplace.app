@@ -1917,6 +1917,21 @@ input[type="date"].form-control::-webkit-calendar-picker-indicator:hover {
   }
 }
 
+/* Em telas estreitas, cada rodada ocupa a largura útil. As colunas nascem com
+   min-width inline no renderer; este é o único lugar que pode vencê-las sem criar
+   outro desenho de card. O próximo jogo continua acessível pelo gesto horizontal. */
+@media (max-width:767px) {
+  .bracket-scroll-content { gap:1rem !important; min-width:100% !important; }
+  .bracket-scroll-content > .bracket-round-column {
+    box-sizing:border-box;
+    width:calc(100vw - 4rem);
+    min-width:calc(100vw - 4rem) !important;
+    flex:0 0 calc(100vw - 4rem);
+  }
+  .bracket-round-column > .sp-match-card,
+  .bracket-round-column .sp-match-card { box-sizing:border-box; width:100%; }
+}
+
 /* Barra de scroll fixa (fallback para sticky scroll via JS) */
 .bracket-fixed-scrollbar {
   position: fixed;

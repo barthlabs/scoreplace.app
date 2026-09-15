@@ -25,6 +25,9 @@ ok(r.ok && r.apply && r.choice === 'advance', 'adversário aceita e pede aplica�
 const self = fixture();
 r = transition(self.t, { action:'declare', uid:'ua', absentUid:'ua', byName:'A', claimId:'self', context:self.context });
 ok(r.ok && !r.apply && r.claim.outcomeStage === 'awaiting-proposal', 'auto-W.O. de dupla preserva negociação do desfecho');
+const organizer = fixture();
+r = transition(organizer.t, { action:'declare', uid:'org', isAdmin:true, absentUid:'ua', byName:'Organização', claimId:'org-direct', context:organizer.context });
+ok(r.ok && r.apply && r.forceWaitlistSub && r.claim.adminDeclared && r.claim.factConfirmed, 'organizador aplica W.O. direto e promove a fila sem consenso');
 const denied = fixture();
 r = transition(denied.t, { action:'declare', uid:'outsider', absentUid:'ua', byName:'X', claimId:'bad', context:denied.context });
 ok(!r.ok && r.reason === 'permission-denied', 'estranho não cria apontamento');

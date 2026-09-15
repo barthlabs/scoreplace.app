@@ -291,6 +291,15 @@ window._applyWoSubsToTournament = function(t) {
         if (ent.p1Uid === absentUid) { ent.p1Uid = subUid; if (ent.p1Name) ent.p1Name = subName; }
         if (ent.p2Uid === absentUid) { ent.p2Uid = subUid; if (ent.p2Name) ent.p2Name = subName; }
         ent.displayName = newEntry; ent.name = newEntry;
+      } else if (subUid && ent.uid === absentUid) {
+        // Entrada individual: a identidade do elenco acompanha a substituta. Trocar
+        // apenas o rótulo deixaria o UID do ausente ativo nos próximos fluxos.
+        const subEntry = (sub && sub.p && typeof sub.p === 'object') ? sub.p : {};
+        partsArr[pIdx] = Object.assign({}, ent, subEntry, {
+          uid: subUid, displayName: subName, name: subName,
+          woSubstituteFor: absentName, woSubstituteForUid: absentUid,
+          woSubstituteAt: new Date().toISOString()
+        });
       } else { ent.displayName = newEntry; ent.name = newEntry; }
     }
     t.participants = partsArr;
@@ -617,6 +626,11 @@ window._applyWO = function (t, opts) {
   // "A / B" por um solo "Suplente" (bug). Escopo individual substitui o membro
   // ausente (dupla) ou o solo (torneio individual); teamSize 1 é sempre individual.
   const pool = (typeof window._getStandbyPool === 'function') ? window._getStandbyPool(t) : [];
+  // Uma decisão explícita do organizador promove a primeira pessoa da fila mesmo
+  // sem check-in. O sinal só chega da Cloud Function depois de validar a organização.
+  if (opts.forceWaitlistSub && pool.length && typeof window._idMapSet === 'function') {
+    window._idMapSet(t, t.checkedIn, pool[0], Date.now());
+  }
   const _isPresent = p => { const ci = window._idMapGet(t, t.checkedIn, p); return typeof ci === 'number' ? ci > 0 : !!ci; };
   const presentInPool = pool.filter(_isPresent);
   // outcomeChoice (Stage 1 — project_wo_outcome_negotiation_canon): 'advance' | 'waitlistSub'

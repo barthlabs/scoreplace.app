@@ -632,6 +632,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   window._woDeclare = function (tId, ctxKey, absentName, absentUid) {
     var t = _findT(tId); if (!t) return;
     var ctx = _ctxReg[ctxKey]; if (!ctx) return;
+    // UID é identidade, nunca texto de interface. A Function repete a normalização
+    // no torneio fresco antes de persistir o claim.
+    absentName = _nameOfUid(t, absentUid, absentName);
     var rc = _resolveCtx(t, ctx); if (!rc) return;
     var cu = _cu(); if (!cu || !cu.uid) { if (typeof showNotification === 'function') showNotification('Entre para apontar', '', 'warning'); return; }
     if (_allCtxUids(t, rc).indexOf(cu.uid) === -1 && !_canManage(t)) { if (typeof showNotification === 'function') showNotification('Só os jogadores', 'Só quem joga (ou o organizador) pode apontar.', 'warning'); return; }

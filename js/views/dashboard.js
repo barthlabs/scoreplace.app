@@ -4572,10 +4572,38 @@ function renderDashboard(container) {
   // demorar e os cards de Novidades permaneciam com reticências até a pessoa abrir
   // o torneio. `_hydrateUidNames` já lê os perfis públicos em lote por uid; iniciá-la
   // agora faz os nomes dos jogos visíveis chegarem independentemente das fotos.
+  // A dashboard precisa resolver a identidade ANTES de a pessoa abrir o torneio.
+  // Ela reúne tanto duplas (`team*Uids`) quanto jogos individuais (`p*Uid`): o segundo
+  // formato era a lacuna que deixava alguns cards presos em reticências.
+  function _dashProfileUids() {
+    var vistos = {}, out = [];
+    function add(uid) {
+      if (!uid || typeof uid !== 'string' || uid.indexOf(' ') !== -1 || vistos[uid]) return;
+      vistos[uid] = true; out.push(uid);
+    }
+    try {
+      (_dashMyTournaments || []).forEach(function (t) {
+        var jogos = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : [];
+        jogos.forEach(function (m) {
+          ['team1Uids', 'team2Uids'].forEach(function (campo) {
+            var lista = Array.isArray(m && m[campo]) ? m[campo] : [];
+            lista.forEach(add);
+          });
+          add(m && m.p1Uid); add(m && m.p2Uid);
+        });
+      });
+    } catch (_eProfileUids) {}
+    return out;
+  }
   function _dashHydrateNames() {
     if (typeof window._hydrateUidNames !== 'function') return Promise.resolve();
-    try { return Promise.resolve(window._hydrateUidNames(container)).catch(function () {}); }
-    catch (e) { return Promise.resolve(); }
+    try {
+      var perfis = (typeof window._preloadUserProfiles === 'function')
+        ? window._preloadUserProfiles(_dashProfileUids()) : Promise.resolve();
+      return Promise.resolve(perfis).catch(function () {}).then(function () {
+        return window._hydrateUidNames(container);
+      }).catch(function () {});
+    } catch (e) { return Promise.resolve(); }
   }
   // O resultado traz uid e nome armazenado no mesmo slot. Guardamos essa associação
   // apenas como reserva para perfis que o preload confirmou inexistentes; um perfil
@@ -4586,8 +4614,9 @@ function renderDashboard(container) {
       (_dashMyTournaments || []).forEach(function (t) {
         var jogos = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : [];
         jogos.forEach(function (m) {
-          [['team1Uids', 'p1'], ['team2Uids', 'p2']].forEach(function (lado) {
-            var uids = Array.isArray(m && m[lado[0]]) ? m[lado[0]] : [];
+          [['team1Uids', 'p1', 'p1Uid'], ['team2Uids', 'p2', 'p2Uid']].forEach(function (lado) {
+            var uids = Array.isArray(m && m[lado[0]]) ? m[lado[0]].slice() : [];
+            if (!uids.length && m && m[lado[2]]) uids = [m[lado[2]]];
             var nomes = String((m && m[lado[1]]) || '').split(/\s*\/\s*/).map(function (n) { return n.trim(); });
             uids.forEach(function (uid, i) {
               var nome = nomes[i] || '';

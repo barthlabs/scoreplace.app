@@ -53,13 +53,21 @@ function transition(t, input) {
       absentUids: target.uid ? [String(target.uid)] : [], status: 'pending', confirms: {}, createdAt: now
     };
     const self = !!absentUid && absentUid === uid;
+    // A organização é a autoridade final do torneio: seu apontamento aplica o W.O.
+    // na mesma transação, sem criar uma etapa de confirmação para os demais jogadores.
+    // Quando houver fila, o motor promove a primeira pessoa elegível mesmo sem check-in,
+    // porque esta é uma decisão expressa do organizador, não uma chamada automática.
+    const directByAdmin = admin && !self;
     const outcome = self ? outcomeContext(t, claim, ctx) : null;
     if (self) {
       claim.selfDeclared = true; claim.factConfirmed = true; claim.confirms[uid] = true;
       if (outcome) { claim.outcomeStage = 'awaiting-proposal'; claim.outcomePartnerUid = outcome.partnerUid; claim.outcomeOppUids = outcome.oppUids; }
+    } else if (directByAdmin) {
+      claim.adminDeclared = true; claim.factConfirmed = true; claim.confirms[uid] = true;
     }
     claimsOf(t).push(claim);
-    return { ok: true, changed: true, claim, apply: self && !outcome, outcome };
+    return { ok: true, changed: true, claim, apply: (self && !outcome) || directByAdmin, outcome,
+      forceWaitlistSub: directByAdmin };
   }
   const claim = claimOf(t, input.claimId);
   if (!claim || !ctx) return { ok: false, reason: 'claim-not-found' };
@@ -85,7 +93,9 @@ function transition(t, input) {
   }
   if (action === 'resolve') {
     if (!admin || !['pending', 'disputed'].includes(claim.status)) return { ok: false, reason: 'permission-denied' };
-    return { ok: true, changed: false, claim, apply: true, offerOutcomeChoice: true, outcome: outcomeContext(t, claim, ctx) };
+    // Botão "Aplicar agora (org.)": decisão final, sem consenso adicional.
+    claim.adminDeclared = true; claim.factConfirmed = true; claim.confirms = claim.confirms || {}; claim.confirms[uid] = true;
+    return { ok: true, changed: true, claim, apply: true, forceWaitlistSub: true };
   }
   if (action === 'propose') {
     if (claim.outcomeStage !== 'awaiting-proposal' || (uid !== String(claim.outcomePartnerUid || '') && !admin)) return { ok: false, reason: 'permission-denied' };

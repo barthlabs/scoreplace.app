@@ -1888,12 +1888,17 @@ exports.manageWOClaim = onCall(async request => {
     let motor = null;
     if (step.apply) {
       const claim = step.claim;
+      // A tela pode ter aberto antes dos perfis e enviado um UID como rótulo.
+      // O servidor rederiva o nome no torneio fresco antes de chamar o motor.
+      const canonicalAbsentName = (claim.absentUids && claim.absentUids[0] && typeof drawWindow._memberNameByUid === 'function')
+        ? (drawWindow._memberNameByUid(t, claim.absentUids[0]) || claim.absentName) : claim.absentName;
+      claim.absentName = canonicalAbsentName;
       const motorOpts = {
-        absentName: claim.absentName, absentUids: claim.absentUids, scope: ctx.scope,
+        absentName: canonicalAbsentName, absentUids: claim.absentUids, scope: ctx.scope,
         matches: ctx.scope === 'group' ? ctx.matchIds.map(id => (typeof drawWindow._collectAllMatches === 'function' ? drawWindow._collectAllMatches(t) : []).find(m => String(m.id) === id)).filter(Boolean) : [ctx.match],
         roundIndex: ctx.roundIndex, groupName: ctx.groupName, noSubBehavior: 'escalate',
         woScope: t.woScope || 'individual', offerOutcomeChoice: !!step.offerOutcomeChoice,
-        outcomeChoice: step.choice || null
+        outcomeChoice: step.choice || null, forceWaitlistSub: !!step.forceWaitlistSub
       };
       // `needsOutcomeChoice` é uma sondagem: o motor marca ausência antes de
       // chegar nessa decisão. Rodá-lo numa cópia impede que uma escolha ainda não
@@ -1961,8 +1966,11 @@ exports.applyTournamentWO = onCall(async (request) => {
       absentName: canonicalName,
       absentUids: targetUids,
       scope: 'match',
-      noSubBehavior: 'wait',
-      woScope: t.woScope || 'individual'
+      noSubBehavior: 'escalate',
+      woScope: t.woScope || 'individual',
+      // Esta callable é administrativa: a organização decide a vaga e promove
+      // a primeira pessoa elegível da espera, sem aguardar check-in.
+      forceWaitlistSub: true
     });
     if (!result || !result.ok) return { ok: false, result: result || { outcome: 'error' } };
     const boundary = _gravaTorneio(tx, ref, t, before, { agoraIso });

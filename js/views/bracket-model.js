@@ -1133,10 +1133,12 @@
   // [[project_name_fit_box_canonical]] · [[feedback_unify_dual_entry_points]]
   window._cardNomeGeo = function (nMembros) {
     var dupla = (parseInt(nMembros, 10) || 1) > 1;
-    var teto = dupla ? 0.78 : 0.85;
+    // Card estreito não deve cobrar legibilidade: a coluna móvel ocupa a tela e
+    // a caixa reserva duas linhas. Assim o ajuste quebra o nome antes de reduzi-lo.
+    var teto = dupla ? 0.86 : 0.94;
     return {
-      avatar: dupla ? '20px' : '24px',   // altura da linha sai daqui: a foto é a mais alta
-      boxH: +(teto * 1.35).toFixed(2),   // caixa de UMA linha
+      avatar: dupla ? '22px' : '26px',
+      boxH: +(teto * 2.2).toFixed(2),
       maxRem: teto,
       /* ⭐ O PISO DESCE ANTES DE QUEBRAR. Relato do dono (12/set/2026, jogos 112 e 159):
        * _"Fernando Bernacchi poderia ter fonte menor ou quebrar em 2 linhas"_ e _"nomes duplos

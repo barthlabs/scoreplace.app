@@ -114,3 +114,22 @@ console.log('wo-server-core: OK');
   assert.equal(reverted.ok, true);
   assert.equal(t.absent.ana, undefined);
 }
+
+// A decisão expressa da organização promove a primeira pessoa da fila sem exigir
+// check-in e troca também a identidade do elenco ativo (não só o nome do card).
+{
+  const t = tournament({
+    standbyParticipants: [{ uid: 'clara', displayName: 'Clara', name: 'Clara' }],
+    checkedIn: {}
+  });
+  const r = applyTournamentWO(t, {
+    absentName: 'Ana', absentUids: ['ana'], scope: 'match', noSubBehavior: 'escalate',
+    woScope: 'individual', forceWaitlistSub: true
+  });
+  assert.equal(r.ok, true);
+  assert.equal(r.outcome, 'subbed');
+  assert.equal(t.matches[0].p1Uid, 'clara');
+  assert.equal(t.participants.some(p => p.uid === 'ana'), false);
+  assert.equal(t.participants.some(p => p.uid === 'clara'), true);
+  assert.equal(t.standbyParticipants.some(p => p.uid === 'clara'), false);
+}
