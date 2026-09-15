@@ -52,7 +52,7 @@
     "vite": "8.3.0"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "dependencies": {
     "@capacitor-community/apple-sign-in": "^7.1.0",
