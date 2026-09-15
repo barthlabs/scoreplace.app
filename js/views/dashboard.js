@@ -2832,6 +2832,11 @@ function renderDashboard(container) {
         // Ler m2.scoreP1 cru perdia o TB — o número dos games é o mesmo, o que some
         // é o (7). Fonte única de formatação: window._formatSetForPlayer.
         function _placarLado(n) {
+          // A mesma grade dos cards concluídos de Novidades. Evita duas contas de largura
+          // e mantém o respiro entre sets idêntico nas duas seções da dashboard.
+          var _gradeConcluida = (typeof window._completedSetGridHtml === 'function')
+            ? window._completedSetGridHtml(m2, n) : '';
+          if (_gradeConcluida) return _gradeConcluida;
           if (Array.isArray(m2.sets) && m2.sets.length > 0 && typeof window._formatSetForPlayer === 'function') {
             // A cor é de CADA set (fonte única `_corDoSetLado`), não da linha: quem venceu o set
             // fica verde mesmo tendo perdido a partida. ⛔ Sempre por `_spCor` — hex cru aqui
@@ -3135,7 +3140,7 @@ function renderDashboard(container) {
         // (adversário / organizador / proponente / em disputa); pra quem não pode agir,
         // nada muda. O resto do card segue em somente-leitura.
         var _card = (typeof window.renderMatchCard === 'function')
-          ? window.renderMatchCard(it.m, false, it.tId, (it.m && it.m._gameNum != null) ? it.m._gameNum : null, false, null, { readOnly: true, dashConsensus: true })
+          ? window.renderMatchCard(it.m, false, it.tId, (it.m && it.m._gameNum != null) ? it.m._gameNum : null, false, null, { readOnly: true, dashConsensus: true, dashFeedResult: true })
           : '';
         return '<div data-nov-card="1"' + _spCard() + ' style="min-width:0;">' +
           (cabecalhoInline || '') +

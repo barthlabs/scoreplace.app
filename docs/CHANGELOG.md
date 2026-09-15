@@ -1,3 +1,9 @@
+## 2.3.30 — 15/set/2026
+
+- Em Novidades, resultados encerrados de melhor de 3 ou de 5 agora usam a mesma grade de placar de Seus últimos resultados: as colunas de sets recebem a largura do conteúdo e o espaço entre elas fica igual nas duas seções.
+- O cabeçalho “SETS 1 2…” deixa de ser repetido nesses resultados encerrados em Novidades. Jogos pendentes ou em andamento mantêm os rótulos que orientam o lançamento.
+- Esta publicação é somente web. O ajuste já está no código que os próximos binários iOS e Android vão incorporar, sem gerar nem enviar nova versão às lojas.
+
 ## 2.3.29 — 15/set/2026
 
 - Os cards de jogo passam a usar a largura que já têm: em cartões largos, o espaço entre os placares dos sets abre gradualmente, preservando o mínimo compacto nos cartões estreitos. Cabeçalho e placares seguem alinhados pela mesma régua.

@@ -4649,6 +4649,9 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   // Quem decide QUEM vê O QUÊ continua sendo a mesma régua de papel de baixo — e a
   // permissão de verdade é a de `_approveResult`/`_contestResult`, no servidor do fluxo.
   var _dashConsensus = !!(opts && opts.dashConsensus);
+  // O feed de Novidades mostra somente partidas encerradas. Ele não precisa reservar
+  // o próximo set nem repetir os rótulos: reutiliza a grade de resultado da dashboard.
+  var _dashFeedResult = !!(opts && opts.dashFeedResult);
 
   // ⚠️ O `const t` tem que vir ANTES do branch de Folga: a 4.0.84 (nome ao vivo
   // por uid) pôs `t ? _resolveSideLive(…)` dentro do card de Folga com esta
@@ -4951,7 +4954,9 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   // colunas o número é maior, com cinco ele encolhe. Vai como variável no elemento pra o
   // rótulo, o box e o número lerem a MESMA fonte sem um segundo lugar decidindo.
   const _numFsVar = (_plan && _plan.numFs) ? ('--sp-num-fs-set:' + _plan.numFs + 'rem;') : '';
-  const _mostraCabecaSet = _multiSet;
+  const _compactCompletedFeed = _dashFeedResult && isDecided && Array.isArray(m.sets) && m.sets.length > 1 &&
+    typeof window._completedSetGridHtml === 'function';
+  const _mostraCabecaSet = _multiSet && !_compactCompletedFeed;
   const _setHeadHtml = _mostraCabecaSet
     ? '<div id="sethead-' + m.id + '" class="sp-set-head">' +
         '<span class="sp-set-head-ttl">' + window._safeHtml(_plan.headline) + '</span>' +
@@ -4962,6 +4967,9 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
       '</div>'
     : '';
   const _setGridHtml = (side) => '<div class="sp-set-grid" style="' + _numFsVar + '">' + _setCellsHtml(side) + '</div>';
+  const _scoreSetGridHtml = (side) => _compactCompletedFeed
+    ? window._completedSetGridHtml(m, side)
+    : _setGridHtml(side);
 
   const p1Score = showInputs
     ? `<input type="number" id="s1-${m.id}" min="0" placeholder="0"
@@ -5046,7 +5054,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
       ${ciDot(p1ci)}<div style="flex:1;overflow:hidden;min-width:0;">${_teamAvatarHtml(m.p1AguardaMelhor ? 'TBD' : m.p1, pendingSub, t, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p1', t) : (m.p1Uid || m.team1Uids)), m)}</div>
       ${_p1PromotedBadge}${_p1RepBadge}${_p1ByeBadge}
       <div id="score-p1-${m.id}" class="sp-mc-sc">
-        ${_multiSet ? _setGridHtml(1) : (showInputs ? p1Score : (p1ScoreVal || ''))}
+        ${_multiSet ? _scoreSetGridHtml(1) : (showInputs ? p1Score : (p1ScoreVal || ''))}
       </div>
     </div>`;
 
@@ -5055,7 +5063,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
       ${ciDot(p2ci)}<div style="flex:1;overflow:hidden;min-width:0;">${_teamAvatarHtml(m.p2AguardaMelhor ? 'TBD' : m.p2, pendingSub, t, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p2', t) : (m.p2Uid || m.team2Uids)), m)}</div>
       ${_p2PromotedBadge}${_p2RepBadge}${_p2ByeBadge}
       <div id="score-p2-${m.id}" class="sp-mc-sc">
-        ${_multiSet ? _setGridHtml(2) : (showInputs ? p2Score : (p2ScoreVal || ''))}
+        ${_multiSet ? _scoreSetGridHtml(2) : (showInputs ? p2Score : (p2ScoreVal || ''))}
       </div>
     </div>`;
 

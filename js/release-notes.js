@@ -1,3 +1,5 @@
+// 2.3.30 — resultados encerrados em Novidades usam a mesma grade de placar de Seus últimos
+// resultados: os sets ocupam só o necessário, com a mesma folga elegante e sem repetir SETS.
 // 2.3.29 — os sets respiram de acordo com a largura disponível e um resultado esperando
 // confirmação usa o selo único "Aprovação pendente", preservando a autoria em uma linha.
 // 2.3.28 — Novidades da dashboard resolvem os perfis já na abertura, sem esperar fotos; e o

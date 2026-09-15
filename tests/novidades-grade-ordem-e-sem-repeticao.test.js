@@ -351,6 +351,23 @@ ok(cardT1.indexOf('APROVAÇÃO PENDENTE') !== -1, 'C5. o card de hoje mostra "AP
 ok(cardT1.indexOf('Aguardando aprovação') === -1, 'C6. o status é uma frase única, sem rótulo duplicado');
 ok(cardT1.indexOf('Elide Luccas') !== -1, 'C7. o card de hoje diz quem propôs');
 
+// Resultado concluído em Novidades reaproveita a grade solta de "Seus últimos resultados":
+// mostra somente os sets jogados, sem reservar o próximo set nem repetir SETS / 1 / 2 / STB.
+const torneioResultadoComSets = confra();
+torneioResultadoComSets.id = 'tour_confra_resultado_com_sets';
+torneioResultadoComSets.scoring = { type: 'sets', setsToWin: 2, gamesPerSet: 6, tiebreakEnabled: true, superTiebreak: true };
+W.AppStore.tournaments = [torneioResultadoComSets];
+const resultadoComDoisSets = torneioResultadoComSets.rounds[0].matches.find(m => m.id === 'm-S1');
+resultadoComDoisSets.sets = [{ gamesP1: 6, gamesP2: 3 }, { gamesP1: 6, gamesP2: 4 }];
+resultadoComDoisSets.setsWonP1 = 2;
+resultadoComDoisSets.setsWonP2 = 0;
+const cardEncerradoNov = W.renderMatchCard(resultadoComDoisSets, false, torneioResultadoComSets.id, 57, false, null,
+  { readOnly: true, dashFeedResult: true });
+ok(cardEncerradoNov.indexOf('sp-set-grid--result') !== -1,
+  'C7b. Novidades concluída usa a mesma grade compacta dos últimos resultados');
+ok(cardEncerradoNov.indexOf('sp-set-head') === -1 && cardEncerradoNov.indexOf('>SETS<') === -1,
+  'C7c. Novidades concluída não repete cabeçalho SETS / números das colunas');
+
 // ── O SUBPLACAR DO TIE-BREAK NO PLACAR PENDENTE ────────────────────────────
 // Pergunta do dono vendo a chave (14/ago): "cadê o placar do tie-break no 5-6?".
 // O card pendente montava o placar à mão (`sets.map(s => s.gamesP1)`) e descartava
