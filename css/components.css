@@ -2488,11 +2488,17 @@ html, body,
    alinhada com os boxes de baixo. `align-self:flex-end` deixa a palavra na linha de base dos
    rótulos, não flutuando acima deles. */
 .sp-set-head-sets{align-self:flex-end;font-size:0.46rem;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-muted);white-space:nowrap;margin-right:1px;line-height:1.05;flex-shrink:0;}
-/* ⭐ 2px de vão: o mínimo pra dois números não colarem. Ordem do dono (12/set/2026):
-   _"pode ter menos espaço entre os placares de cada set (espaço mínimo entre eles para não
-   colar)"_. O resto do respiro é a folga que cada coluna já reserva ao redor do número
-   (ver `_SET_COL_ESCALA`); somados, dão ~7px entre um número e o seguinte — medido. */
+/* O vão mínimo é 2px: em cards estreitos ele preserva a área dos nomes. Em cards largos,
+   porém, deixar o mesmo vão fazia os sets parecerem colados mesmo com folga lateral — como
+   no card de Novidades visto pelo dono. Cada card vira seu próprio contêiner: acima de 430px
+   a grade abre de forma gradual (4–7px), sem uma largura fixa que castigue telas menores.
+   Cabeçalho e as duas linhas de placar usam a MESMA classe, portanto cada rótulo continua
+   exatamente acima de sua coluna. */
+.sp-match-card{container-type:inline-size;}
 .sp-set-grid{display:flex;align-items:flex-end;gap:2px;flex-shrink:0;}
+@container (min-width:430px){
+  .sp-set-grid{gap:clamp(4px,1.25cqi,7px);}
+}
 /* ⛔ PLACAR ALINHA À DIREITA, NÃO AO CENTRO. Ordem do dono (13/set/2026, olhando um jogo
    com super tie-break): _"os placares parecem alinhados nas colunas pela esquerda; faça o
    alinhamento na direita de cada coluna de placares"_.

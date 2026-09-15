@@ -343,18 +343,11 @@ async function difDoisPontos(browser) {
   await page.close();
 }
 
-/* ── ⑤ O CABEÇALHO DO PENDENTE CABE EM 2 LINHAS ─────────────────────────────────────
- * Ordem do dono (23/ago/2026), com o print do JOGO 79: _"aqui dá pra economizar espaço em
- * linhas. Alinhado na direita em 2 linhas, esse 'aguardando aprovação' no topo, com a
- * ampulheta na esquerda do 'aguardando' e o PENDENTE na esquerda da ampulheta. Assim em 2
- * linhas fica fechado o cabeçalho. Na esquerda continua o JOGO X e embaixo o 'proposto
- * por… há xh'."_
- * MEDIDO antes: na escala de fonte dele (raiz 22px) o bloco da direita gastava QUATRO linhas
- * — tag / ⏳ / AGUARDANDO / APROVAÇÃO — porque um `max-width:104px` na frase não deixava
- * "⏳ Aguardando" caber junto. Por isso o teste mede nas DUAS escalas: na normal o defeito
- * quase não aparece (3 linhas), e é justamente a escala grande que o denuncia. */
-async function cabecalhoEmDuasLinhas(browser) {
-  console.log('\n⑤ O cabeçalho do card pendente fecha em 2 linhas');
+/* ── ⑤ O CABEÇALHO DO PENDENTE USA UM ÚNICO SELO ─────────────────────────────────────
+ * O selo "APROVAÇÃO PENDENTE" ocupa uma única linha e a autoria também não quebra:
+ * quando um nome excepcionalmente longo não cabe, ele recebe reticências. */
+async function cabecalhoPendenteEmUmaLinha(browser) {
+  console.log('\n⑤ O cabeçalho pendente preserva uma linha por informação');
   const t = montaTorneio();
   t.resultEntry = 'players';
   const alvo = (t.matches||[]).filter(m => m.round === 2)[3];
@@ -381,9 +374,9 @@ async function cabecalhoEmDuasLinhas(browser) {
                larguraCard: Math.round(card.getBoundingClientRect().width),
                esquerdaTexto: esquerda.textContent.replace(/\s+/g,' ').trim().slice(0, 60) };
     }, alvo.id);
-    ok(r.linhas <= 2, 'raiz ' + raiz + 'px: o bloco da direita cabe em 2 linhas (obtido ' + r.linhas + ')');
-    ok(/PENDENTE/.test(r.texto) && /⏳/.test(r.texto) && /Aguardando aprovação/.test(r.texto),
-      'raiz ' + raiz + 'px: e leva os três — PENDENTE, ampulheta e a frase: "' + r.texto + '"');
+    ok(r.linhas === 1, 'raiz ' + raiz + 'px: o selo ocupa uma linha (obtido ' + r.linhas + ')');
+    ok(r.texto === 'APROVAÇÃO PENDENTE',
+      'raiz ' + raiz + 'px: mostra somente "APROVAÇÃO PENDENTE" — "' + r.texto + '"');
     ok(r.transbordo <= 0, 'raiz ' + raiz + 'px: o card não transborda (' + r.transbordo + 'px)');
     ok(/JOGO/i.test(r.esquerdaTexto) && /proposto por/i.test(r.esquerdaTexto),
       'raiz ' + raiz + 'px: a esquerda segue com JOGO N e "proposto por…" — "' + r.esquerdaTexto + '"');
@@ -464,7 +457,7 @@ async function numeroDoPlacar(browser) {
     simularJogaOFormato();
     await aprovacao(browser);
     await difDoisPontos(browser);
-    await cabecalhoEmDuasLinhas(browser);
+    await cabecalhoPendenteEmUmaLinha(browser);
     await numeroDoPlacar(browser);
   } finally {
     await browser.close();

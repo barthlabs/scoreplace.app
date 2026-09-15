@@ -5287,8 +5287,9 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   let cardBorder = isDecided ? 'rgba(16,185,129,0.2)' : hasTBD ? 'rgba(255,255,255,0.05)' : 'var(--border-color)';
   let readyBadge = '';
   if (hasPending) {
-    // Jogo com placar pendente: nem PRONTO nem PARCIAL — tag âmbar PENDENTE
-    readyBadge = `<span style="font-size:0.6rem;font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);background:rgba(251,191,36,0.15);padding:2px 6px;border-radius:4px;text-transform:uppercase;">PENDENTE</span>`;
+    // Um estado, um selo. Separar "PENDENTE" de "Aguardando aprovação" gastava
+    // duas linhas e roubava espaço de quem propôs e quando.
+    readyBadge = `<span style="font-size:0.6rem;font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);background:rgba(251,191,36,0.15);padding:2px 6px;border-radius:4px;text-transform:uppercase;white-space:nowrap;">APROVAÇÃO PENDENTE</span>`;
   } else if (!isDecided && !isByeMatch && !hasTBD) {
     if (matchReady) {
       cardBorder = 'rgba(16,185,129,0.5)';
@@ -5413,19 +5414,9 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     }
   }
 
-  // v1.9.95: estado pendente não-disputado tem cabeçalho próprio que QUEBRA
-  // LINHA pra preservar a largura do card (antes o conteúdo esticava a coluna
-  // do bracket porque o scroll-content é min-width:max-content). Layout:
-  //  - Esquerda: JOGO N + "proposto por X · agora" (empilhados).
-  //  - Direita: tag PENDENTE, a ampulheta e "Aguardando aprovação" no MESMO fluxo,
-  //    alinhados à direita e quebrando naturalmente — 2 linhas, do jeito que o dono
-  //    desenhou: `PENDENTE ⏳ AGUARDANDO` em cima, `APROVAÇÃO` embaixo.
-  //    ⛔ ANTES eram QUATRO linhas (tag / ⏳ / AGUARDANDO / APROVAÇÃO), e a culpa era de um
-  //    `max-width:104px` na frase: com o teto, "⏳ Aguardando" não cabia e a ampulheta caía
-  //    sozinha numa linha só pra ela. Ordem do dono (23/ago/2026): _"aqui dá pra economizar
-  //    espaço em linhas… em 2 linhas fica fechado o cabeçalho"_. O teto saiu; quem limita
-  //    agora é a COLUNA (`max-width:62%`), que é o que deixa a esquerda respirar.
-  //    A ampulheta gruda em "Aguardando" com `&nbsp;` — separar as duas foi o defeito.
+  // Estado pendente não-disputado tem cabeçalho próprio: JOGO N e autoria à
+  // esquerda, selo único "APROVAÇÃO PENDENTE" à direita. Ambos ficam em uma
+  // linha; em largura extrema a autoria recebe reticências, nunca uma linha extra.
   //  - Abaixo: linha própria com os botões (Contestar vermelho à esquerda,
   //    Confirmar verde à direita), com flex:1 pra dividir a largura e quebrar.
   // ⚰️ REMOVIDO (1.8.46) o `max-width:280px` que o card ganhava SÓ quando pendente.
@@ -5523,12 +5514,11 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px;border-bottom:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));padding-bottom:6px;">
         <div style="display:flex;flex-direction:column;gap:2px;min-width:0;flex:1;">
           <span style="font-size:0.7rem;font-weight:700;color:var(--sp-c-38bdf8,#38bdf8);text-transform:uppercase;">${window._safeHtml(matchLabel)}</span>
-          <span style="font-size:0.6rem;color:var(--text-muted);line-height:1.3;">proposto por <b style="color:var(--sp-c-fbbf24,#fbbf24);">${_proposerName}</b> · ${_agoLabel}</span>
+          <span title="proposto por ${window._safeHtml(_proposerName)} · ${_agoLabel}" style="font-size:0.6rem;color:var(--text-muted);line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">proposto por <b style="color:var(--sp-c-fbbf24,#fbbf24);">${_proposerName}</b> · ${_agoLabel}</span>
         </div>
-        <div id="header-btns-${m.id}" style="display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:4px 6px;flex-shrink:1;min-width:0;max-width:62%;text-align:right;">
+        <div id="header-btns-${m.id}" style="display:flex;flex-wrap:nowrap;justify-content:flex-end;align-items:center;gap:4px 6px;flex-shrink:0;min-width:0;text-align:right;">
           ${readyBadge}
           ${_presenceTag}
-          <span style="font-size:0.56rem;font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);text-transform:uppercase;letter-spacing:0.02em;line-height:1.3;text-align:right;">⏳&nbsp;Aguardando aprovação</span>
         </div>
       </div>`;
   } else {
@@ -5622,7 +5612,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   var _tierLC = { gold: '#fbbf24', silver: '#cbd5e1', line3: '#cd7f32', line4: '#3b82f6', upper: '#10b981', lower: '#f59e0b' };
   var _lineLeftBorder = _tierLC[m.bracket] ? ('border-left:4px solid ' + window._spCor(_tierLC, 'borda')[m.bracket] + ';') : '';
   return `
-    <div id="card-${m.id}" data-players="${_searchNames}" data-player-uids="${_searchUids}" data-my-match="${_isMyMatch ? '1' : '0'}" data-my-pending="${_isMyMatch && !isDecided && !isByeMatch ? '1' : '0'}" data-match-num="${matchNum != null ? matchNum : ''}" style="scroll-margin-top:var(--scroll-anchor,120px);background:${window._spCor(_isMyMatch ? 'rgba(99,102,241,0.06)' : 'var(--bg-card)', 'background')};border:${_isMyMatch ? '2px' : '1px'} solid ${hasPending && _pr && _pr.disputed ? 'rgba(239,68,68,0.55)' : hasPending ? 'rgba(251,191,36,0.5)' : cardBorder};${_lineLeftBorder}border-radius:12px;padding:14px;${_cardMax}box-shadow:${_isMyMatch ? '0 0 20px rgba(99,102,241,0.25),0 0 8px rgba(99,102,241,0.12),0 4px 12px rgba(0,0,0,0.15)' : hasPending && _pr && _pr.disputed ? '0 0 14px rgba(239,68,68,0.2),0 4px 12px rgba(0,0,0,0.15)' : hasPending ? '0 0 14px rgba(251,191,36,0.18),0 4px 12px rgba(0,0,0,0.15)' : matchReady ? '0 0 16px rgba(16,185,129,0.15),0 4px 12px rgba(0,0,0,0.15)' : matchPartial ? '0 0 10px rgba(245,158,11,0.1),0 4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.15)'};${hasTBD ? 'opacity:0.6;' : ''}">
+    <div id="card-${m.id}" class="sp-match-card" data-players="${_searchNames}" data-player-uids="${_searchUids}" data-my-match="${_isMyMatch ? '1' : '0'}" data-my-pending="${_isMyMatch && !isDecided && !isByeMatch ? '1' : '0'}" data-match-num="${matchNum != null ? matchNum : ''}" style="scroll-margin-top:var(--scroll-anchor,120px);background:${window._spCor(_isMyMatch ? 'rgba(99,102,241,0.06)' : 'var(--bg-card)', 'background')};border:${_isMyMatch ? '2px' : '1px'} solid ${hasPending && _pr && _pr.disputed ? 'rgba(239,68,68,0.55)' : hasPending ? 'rgba(251,191,36,0.5)' : cardBorder};${_lineLeftBorder}border-radius:12px;padding:14px;${_cardMax}box-shadow:${_isMyMatch ? '0 0 20px rgba(99,102,241,0.25),0 0 8px rgba(99,102,241,0.12),0 4px 12px rgba(0,0,0,0.15)' : hasPending && _pr && _pr.disputed ? '0 0 14px rgba(239,68,68,0.2),0 4px 12px rgba(0,0,0,0.15)' : hasPending ? '0 0 14px rgba(251,191,36,0.18),0 4px 12px rgba(0,0,0,0.15)' : matchReady ? '0 0 16px rgba(16,185,129,0.15),0 4px 12px rgba(0,0,0,0.15)' : matchPartial ? '0 0 10px rgba(245,158,11,0.1),0 4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.15)'};${hasTBD ? 'opacity:0.6;' : ''}">
       ${_headerHtml}
       ${_pendingBtnsRow}
       ${pendingBanner}

@@ -1,3 +1,5 @@
+// 2.3.29 — os sets respiram de acordo com a largura disponível e um resultado esperando
+// confirmação usa o selo único "Aprovação pendente", preservando a autoria em uma linha.
 // 2.3.28 — Novidades da dashboard resolvem os perfis já na abertura, sem esperar fotos; e o
 // campo de placar pendente preserva a mesma escala dos sets lançados no app nativo.
 // 2.3.27 — a telemetria usa somente a rota reconhecida pelo aplicativo e a versão atual, tanto em erros quanto em transações; hashes arbitrárias não carregam texto para o diagnóstico.

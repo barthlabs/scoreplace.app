@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.3.28';
+window.SCOREPLACE_VERSION = '2.3.29';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -6291,7 +6291,7 @@ window._friendlyUserName = function(user) {
   return null;
 };
 
-// v2.3.28: APENAS para a saudação da hero box e o nome no link de perfil da
+// v2.3.29: APENAS para a saudação da hero box e o nome no link de perfil da
 // topbar (os 2 únicos lugares que só o próprio usuário vê). Extrai o primeiro
 // nome quando é um nome de verdade; mantém telefone/email/identificadores
 // intactos (não dá pra "encurtar"). NÃO usar em nenhum outro lugar — nomes de

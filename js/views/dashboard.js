@@ -2627,7 +2627,7 @@ function renderDashboard(container) {
               '<span style="font-weight:400;color:var(--text-muted);font-size:0.65rem;margin-left:6px;">' + _sf(item.tName) + '</span>' +
             '</h4>' +
           '</div>') +
-        '<div id="card-' + mId + '" style="background:' + window._spCor(cardBgStr, 'background') + ';border:2px solid ' + window._spCor(cardBorderStr, 'borda') + ';border-radius:12px;padding:14px;box-shadow:' + cardShadow + ';">' +
+        '<div id="card-' + mId + '" class="sp-match-card" style="background:' + window._spCor(cardBgStr, 'background') + ';border:2px solid ' + window._spCor(cardBorderStr, 'borda') + ';border-radius:12px;padding:14px;box-shadow:' + cardShadow + ';">' +
           '<div class="btn-row" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;border-bottom:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));padding-bottom:8px;gap:8px;flex-wrap:wrap;">' +
             '<span style="font-size:0.7rem;font-weight:700;color:var(--sp-c-38bdf8,#38bdf8);text-transform:uppercase;flex-shrink:0;display:inline-flex;align-items:center;">' + (item.m.isMonarch ? '<span style="font-size:1.05rem;line-height:1;margin-right:5px;">👑</span>' : '') + _sf(_monarchBoxLabel || opts.boxLabelOverride || matchLabel) + '</span>' +
             '<div style="display:flex;align-items:center;gap:6px;flex-wrap:nowrap;justify-content:flex-end;min-width:0;margin-left:auto;">' +
@@ -2921,7 +2921,7 @@ function renderDashboard(container) {
         var _gJogoNum2 = (m2 && m2.isMonarch && m2._gameNum != null) ? m2._gameNum : null;
         var _boxLabel = (_gJogoNum2 != null) ? ('Jogo ' + _gJogoNum2) : (_fp2.jogo || matchLabel2);
         var _body = _posBadge +
-          '<div onclick="window.location.hash=\'#bracket/' + _esc2(item.tId) + '\'" style="cursor:pointer;background:var(--bg-card);border:1px solid rgba(16,185,129,0.3);border-radius:12px;padding:14px;box-shadow:0 4px 12px rgba(0,0,0,0.15);">' +
+          '<div class="sp-match-card" onclick="window.location.hash=\'#bracket/' + _esc2(item.tId) + '\'" style="cursor:pointer;background:var(--bg-card);border:1px solid rgba(16,185,129,0.3);border-radius:12px;padding:14px;box-shadow:0 4px 12px rgba(0,0,0,0.15);">' +
             // Header: label + badge resultado
             '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;border-bottom:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));padding-bottom:5px;">' +
               '<span style="font-size:0.7rem;font-weight:700;color:var(--sp-c-38bdf8,#38bdf8);text-transform:uppercase;">' + _sf(_boxLabel) + '</span>' +

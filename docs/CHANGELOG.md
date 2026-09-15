@@ -1,3 +1,9 @@
+## 2.3.29 — 15/set/2026
+
+- Os cards de jogo passam a usar a largura que já têm: em cartões largos, o espaço entre os placares dos sets abre gradualmente, preservando o mínimo compacto nos cartões estreitos. Cabeçalho e placares seguem alinhados pela mesma régua.
+- Um resultado aguardando confirmação mostra somente “Aprovação pendente”, em uma linha. A autoria e o horário também ficam em uma linha e usam reticências somente se o nome não couber.
+- Esta publicação é somente web. Não há geração, sincronização nem submissão dos projetos iOS e Android.
+
 ## 2.3.28 — 15/set/2026
 
 - A dashboard começa a resolver nomes e avatares dos cartões de Novidades imediatamente após o render. A leitura dos perfis públicos não espera as consultas de foto por nome, portanto uma abertura fria não depende de entrar no torneio para completar os cartões.

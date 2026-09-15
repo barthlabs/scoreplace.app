@@ -347,8 +347,8 @@ ok(NOV.indexOf('há 5min') !== -1 || NOV.indexOf('agora há pouco') !== -1,
 
 // ...e ele NÃO é apresentado como placar final
 const cardT1 = NOV.slice(posSegundo, posOntem > posSegundo ? posOntem : undefined);
-ok(cardT1.indexOf('PENDENTE') !== -1, 'C5. o card de hoje mostra a tag PENDENTE — não se passa por resultado final');
-ok(cardT1.indexOf('Aguardando aprovação') !== -1, 'C6. o card de hoje diz "⏳ Aguardando aprovação"');
+ok(cardT1.indexOf('APROVAÇÃO PENDENTE') !== -1, 'C5. o card de hoje mostra "APROVAÇÃO PENDENTE" — não se passa por resultado final');
+ok(cardT1.indexOf('Aguardando aprovação') === -1, 'C6. o status é uma frase única, sem rótulo duplicado');
 ok(cardT1.indexOf('Elide Luccas') !== -1, 'C7. o card de hoje diz quem propôs');
 
 // ── O SUBPLACAR DO TIE-BREAK NO PLACAR PENDENTE ────────────────────────────

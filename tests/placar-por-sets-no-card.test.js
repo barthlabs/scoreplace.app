@@ -525,12 +525,40 @@ async function duasSecoesMesmoTamanho() {
     '⑥ que é 1,45rem sobre a raiz de ' + m.raiz + 'px (obtido ' + m.grade + 'px)');
 }
 
+/* ── ⑦ A FOLGA DOS SETS ACOMPANHA O TAMANHO DO CARD ──────────────────────────────── */
+async function espacoDosSetsResponsivo() {
+  const decidido = cardHtml(MELHOR3, [S(6, 4), S(6, 3)], { winner: 'Ana Cattani / Maria Helena' });
+  const browser = await chromium.launch();
+  async function mede(largura) {
+    const page = await browser.newPage({ viewport: { width: largura, height: 700 } });
+    await page.setContent('<style>' + CSS + '</style><body style="background:#0b1220;margin:0;padding:8px;">' + decidido + '</body>', { waitUntil: 'load' });
+    const r = await page.evaluate(() => {
+      const card = document.querySelector('.sp-match-card');
+      const grids = [...card.querySelectorAll('.sp-set-grid')];
+      return { card: card.getBoundingClientRect().width, gaps: grids.map((g) => parseFloat(getComputedStyle(g).columnGap)) };
+    });
+    await page.close();
+    return r;
+  }
+  const estreito = await mede(390);
+  const largo = await mede(560);
+  await browser.close();
+
+  ok(estreito.card < 430 && estreito.gaps.every((g) => Math.abs(g - 2) < 0.1),
+    '⑦ card estreito preserva o vão mínimo de 2px (' + estreito.card.toFixed(1) + 'px)');
+  ok(largo.card >= 430 && largo.gaps.every((g) => g > 4 && g <= 7),
+    '⑦ card largo abre os sets de modo proporcional (' + largo.gaps.map((g) => g.toFixed(1)).join(', ') + 'px)');
+  ok(new Set(largo.gaps.map((g) => g.toFixed(2))).size === 1,
+    '⑦ cabeçalho e os dois lados mantêm o mesmo vão entre colunas');
+}
+
 (async function () {
   regua();
   decisao();
   await tela();
   await correcoesDoSandbox();
   await duasSecoesMesmoTamanho();
+  await espacoDosSetsResponsivo();
   console.log('\n' + (falhas ? '✗ ' + falhas + '/' + testes + ' falharam' : '✓ ' + testes + '/' + testes + ' passaram'));
   process.exit(falhas ? 1 : 0);
 })();
