@@ -49,6 +49,10 @@ concurrency:
 jobs:
   validate:
     name: Compilar iOS e Watch sem assinatura
+    # No envio manual, o archive assinado abaixo já recompila e valida o mesmo
+    # binário. Evitar a compilação sem assinatura economiza cerca de cinco
+    # minutos, sem reduzir a cobertura final do release.
+    if: github.event_name != 'workflow_dispatch'
     runs-on: macos-26
     timeout-minutes: 45
     env:
@@ -91,7 +95,6 @@ jobs:
 
   testflight:
     name: Archive assinado e TestFlight
-    needs: validate
     if: github.event_name == 'workflow_dispatch'
     runs-on: macos-26
     timeout-minutes: 60
@@ -110,7 +113,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 1
 
       - uses: actions/setup-node@v4
         with:
