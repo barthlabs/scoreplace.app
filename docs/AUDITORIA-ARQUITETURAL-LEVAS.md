@@ -67,6 +67,12 @@ versão servida pelo Hosting; o corte de versão mínima e o próximo build nati
 
 A etapa 3 encerra a fronteira de frescor operacional: os 12 ouvintes ativos recusam eventos vindos do cache, e as leituras iniciais de torneios, resultados e perfis pedem explicitamente o servidor. Quando a conexão não confirma o estado, a interface preserva somente o último dado remoto e informa a indisponibilidade; ela não mostra uma cópia local como atual nem substitui dados por uma lista vazia. A prova de integração usa dois clientes independentes no emulador: um permanece offline durante a troca de dupla/W.O. e, ao reconectar, recebe o jogo, a lista e o W.O. canônicos. O lote segue exclusivamente web; nenhuma árvore nativa foi gerada, sincronizada ou submetida.
 
+### Recalibração — encerramento da etapa 4 (14/set/2026)
+
+A etapa 4 fecha a próxima porta residual de escrita de torneio sem antecipar o corte de Rules que depende dos aplicativos das lojas. A escala de árbitros agora tem contrato TypeScript único, copiado e conferido para navegador e Function. Convidar, autocofirmar e remover entram em `manageTournamentReferee`: a Function relê o torneio dentro da transação, autoriza por UID, limita o dado gravado ao contrato da escala e persiste as partes divididas junto da atualização. A confirmação ignora o UID exibido pelo navegador e usa a identidade autenticada.
+
+A tela abre torneio e lista pelo servidor, usa apenas `usersPublic` para nome, foto, cidade e `refereeSports`, e deixou de baixar perfil privado, contatos ou coordenadas. O campo público novo é re-semeado pelo mesmo contrato do gatilho depois da publicação. Também saíram a recuperação histórica de `adminEmails` disparada no boot e as três escritas diretas da página. A compatibilidade com os apps nativos permanece preservada: não houve build, sync nem submissão nativa. A evidência inclui censo de writers, testes de contrato/privacidade, checagens de vendor e bateria completa; a revisão econômica do Claude acontece uma vez neste fechamento.
+
 ### Recalibração — encerramento da etapa 2
 
 A etapa 2 foi concluída no mesmo ciclo operacional de 14/set. Ela fechou os quatro domínios previstos para a primeira fronteira: limites de rodadas, identidade/composição, espera e classificação. A duração humana detalhada não foi medida por relógio; fica registrado o dado verificável: o lote foi fechado em um dia de trabalho e a bateria final executou 825 suítes. O PDF recalibrado passa a usar esse fato, sem inventar horas exatas, para reduzir o prazo restante quando cada nova etapa fechar.

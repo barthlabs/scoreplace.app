@@ -56,7 +56,7 @@ const CAMPOS_PUBLICOS = [
    *   • `letzplayHandle` (26 de 279) — é um @ público de outra plataforma, por natureza.
    * ⛔ SE O DONO DISCORDAR DE QUALQUER UM: tirar é apagar a linha e re-semear; o espelho é
    * derivado, nada se perde. [[project_email_no_doc_publico]] */
-  'city', '_trophyIds', 'letzplayHandle',
+  'city', 'refereeSports', '_trophyIds', 'letzplayHandle',
   /* ⚠️ E MAIS DOIS, achados SEGUINDO O LEITOR em vez de adivinhando: o ranking entre amigos
    * ("quem jogou mais", "quem fez mais check-in") lê `_rankStats` e `xpSnapshot`, e sem eles
    * ele baixaria a ficha inteira dos amigos para somar contador de jogo.

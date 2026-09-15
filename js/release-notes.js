@@ -1,3 +1,4 @@
+// 2.3.25 — a escala de árbitros é confirmada no servidor e a lista mostra apenas os dados públicos necessários; a abertura também recusa fotografia local como dado atual.
 // 2.3.24 — estado de torneios, presença, jogos e placar só se atualiza após confirmação remota; sem rede, o app informa a indisponibilidade e preserva apenas o último estado confirmado. A reconexão aplica o estado canônico.
 // 2.3.23 — o shell carimba os domínios gerados com a versão atual da entrega; aparelhos que atualizaram recebem os contratos novos sem reutilizar ponte antiga do cache.
 // 2.3.22 — a auditoria passa a compartilhar contratos verificados para espera e classificação entre navegador, sorteio e a Function de disponibilidade; o shell também carimba esses domínios com a versão da entrega para que o cache não reutilize uma ponte antiga. É uma base de integridade, sem mudança de regra para quem joga.

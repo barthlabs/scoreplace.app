@@ -26,7 +26,7 @@ const perfilCheio = {
   displayName: 'Fulana', displayName_lower: 'fulana', photoURL: 'https://x/y.jpg',
   gender: 'F', skillBySport: { beach_tennis: 'B' }, defaultCategory: 'B',
   birthDate: '1985-04-02', acceptFriendRequests: true, preferredSports: ['beach_tennis'],
-  mergedInto: null, lastSeenAt: 111, updatedAt: 222,
+  mergedInto: null, lastSeenAt: 111, updatedAt: 222, refereeSports: ['beach_tennis'],
   // ⛔ nada abaixo desta linha pode aparecer no espelho
   email: 'fulana@exemplo.invalid', email_lower: 'fulana@exemplo.invalid',
   phone: '+5511999999999', phoneCountry: 'BR', phoneSetBy: 'org', phoneSource: 'organizador',
@@ -45,7 +45,7 @@ must(!JSON.stringify(esp).includes('+55'), '① ⭐ nenhum telefone sobrevive');
 must(!JSON.stringify(esp).includes('token-de-push'), '① ⭐ nem o token de notificação');
 
 // ── ② e leva o que a tela de terceiro precisa ───────────────────────────────
-['displayName', 'photoURL', 'gender', 'skillBySport', 'defaultCategory'].forEach((k) => {
+['displayName', 'photoURL', 'gender', 'skillBySport', 'defaultCategory', 'refereeSports'].forEach((k) => {
   must(esp[k] !== undefined, '② `' + k + '` continua disponível — é o que a chave e a busca mostram');
 });
 must(C.CAMPOS_PUBLICOS.indexOf('mergedInto') >= 0,
@@ -93,10 +93,11 @@ C.CAMPOS_PUBLICOS.forEach((k) => {
 });
 // e os três que entraram em 13/set/2026, com a conta de quem os usa
 [['city', 'a ficha pública mostra a cidade onde a pessoa joga'],
+ ['refereeSports', 'a escala de arbitragem consulta só o espelho público'],
  ['_trophyIds', 'a tela de comparar troféus EXISTE para mostrar isto'],
  ['letzplayHandle', 'é um @ público de outra plataforma, por natureza']].forEach(([k, porque]) => {
   must(C.CAMPOS_PUBLICOS.indexOf(k) >= 0, '②b `' + k + '` está no espelho — ' + porque);
-  must(C.perfilPublico(Object.assign({}, perfilCheio, { [k]: k === '_trophyIds' ? ['t1'] : 'x' }))[k] !== undefined,
+  must(C.perfilPublico(Object.assign({}, perfilCheio, { [k]: (k === '_trophyIds' || k === 'refereeSports') ? ['t1'] : 'x' }))[k] !== undefined,
     '②b e o espelho realmente o carrega');
 });
 
@@ -128,8 +129,8 @@ must(/_perfilPublico\.perfilPublico\(depois\)/.test(gat), '⑤ e grava só a pro
 must(/espelhoRef\.delete\(\)/.test(gat),
   '⑤ ⭐ perfil apagado ⇒ espelho some junto (espelho órfão é gente que não existe mais aparecendo na busca)');
 must(/espelhoPrecisaMudar\(antes, depois\)/.test(gat), '⑤ e a porta que evita reescrita à toa está ligada');
-const escritores = (FN.match(/collection\("usersPublic"\)/g) || []).length;
-must(escritores === 1, '⑤ ⛔ UM escritor só no servidor — duas autoridades sobre a mesma projeção já custou caro (achei ' + escritores + ')');
+const escritores = (gat.match(/collection\("usersPublic"\)/g) || []).length;
+must(escritores === 1, '⑤ ⛔ o gatilho continua sendo o único escritor do espelho (achados: ' + escritores + ')');
 
 // ── ⑥ a Rule: lê quem está logado, escreve ninguém ──────────────────────────
 const iR = RULES.indexOf('match /usersPublic/{uid}');

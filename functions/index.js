@@ -68,6 +68,7 @@ async function _freqDosTokensSoltos(db, dup, nomeMeu, pessoas) {
 }
 const _enrollCore = require("./enroll-core");
 const _splitParts = require("./split-parts.js");   // torneio dividido: elenco na subcoleção
+const _refereeRoster = require("./vendor/referee-roster.js"); // escala de arbitragem: contrato puro e sem contato
 
 /* ═══ QUEM PERGUNTA "ESTA PESSOA ESTÁ INSCRITA?" TEM QUE LER O ELENCO ONDE ELE MORA ═══
  *
@@ -4209,6 +4210,62 @@ exports.setTournamentParticipantVip = onCall(
       }
       tx.update(ref, { vips, updatedAt: new Date().toISOString() });
       return { ok: true, isVip: !wasVip, vips };
+    });
+  }
+);
+
+/* ═══ ESCALA DE ARBITRAGEM · porta transacional única ══════════════════════
+ * A tela não monta mais nem grava arbitros[]. Ela manda intenção e UID; esta Function
+ * relê o torneio fresco, confere organização por UID, busca o espelho público e aplica
+ * o contrato puro dentro da mesma transação. Isso impede que uma aba atrasada apague
+ * uma escala ou reintroduza e-mail/telefone no documento compartilhado. */
+exports.manageTournamentReferee = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
+    const data = request.data || {};
+    const tournamentId = String(data.tournamentId || "").trim();
+    const action = String(data.action || "").trim();
+    if (!tournamentId || !["invite", "self-confirm", "remove"].includes(action)) {
+      throw new HttpsError("invalid-argument", "torneio e ação de arbitragem são obrigatórios");
+    }
+    const requestedUid = String(data.uid || "").trim();
+    const targetUid = action === "self-confirm" ? callerUid : requestedUid;
+    if (!targetUid) throw new HttpsError("invalid-argument", "árbitro é obrigatório");
+    const db = admin.firestore();
+    const ref = db.collection("tournaments").doc(tournamentId);
+    console.log("[manageTournamentReferee] pedido uid=" + callerUid + " tid=" + tournamentId + " action=" + action + " target=" + targetUid);
+    return db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
+      const t = await _splitParts.hidratar(tx, ref, snap.data() || {});
+      if (!_isTournamentOrgCaller(t, callerUid)) {
+        throw new HttpsError("permission-denied", "só a organização gerencia árbitros");
+      }
+      let profile = null;
+      if (action !== "remove") {
+        const profileSnap = await tx.get(db.collection("usersPublic").doc(targetUid));
+        if (!profileSnap.exists) throw new HttpsError("not-found", "perfil público do árbitro não existe");
+        profile = profileSnap.data() || {};
+      }
+      let outcome;
+      try {
+        outcome = _refereeRoster.apply(t.arbitros, {
+          action, targetUid, callerUid, profile, now: new Date().toISOString()
+        });
+      } catch (err) {
+        throw new HttpsError("failed-precondition", err && err.message ? err.message : "não foi possível alterar a escala");
+      }
+      if (outcome.changed) {
+        const before = JSON.parse(JSON.stringify(t));
+        _splitParts.gravar(tx, ref, before, {
+          arbitros: outcome.arbitros,
+          updatedAt: new Date().toISOString()
+        });
+      }
+      console.log("[manageTournamentReferee] ok uid=" + callerUid + " tid=" + tournamentId + " action=" + action + " changed=" + outcome.changed);
+      return { ok: true, changed: outcome.changed, action };
     });
   }
 );

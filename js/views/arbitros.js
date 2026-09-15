@@ -18,12 +18,6 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
 (function() {
   'use strict';
 
-  // ─── Haversine distance (km) ────────────────────────────────────────────────
-  // v2.8.36: delega ao canônico window._haversineKm (store.js).
-  function _haversineKm(lat1, lon1, lat2, lon2) {
-    return window._haversineKm(lat1, lon1, lat2, lon2);
-  }
-
   // ─── Avatar helper ───────────────────────────────────────────────────────────
   function _arbAvatar(name, photoURL, size) {
     size = size || 38;
@@ -161,7 +155,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     }
 
     // Fetch tournament
-    window.FirestoreDB._tRef(tId).get()
+    window.FirestoreDB._tRef(tId).get({ source: 'server' })
       .then(function(doc) {
         if (!doc.exists) throw new Error('Torneio não encontrado');
         var t = Object.assign({ id: doc.id }, doc.data());
@@ -180,9 +174,6 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         }
 
         var sport  = t.sport || '';
-        var tLat   = t.venueLat   ? parseFloat(t.venueLat)   : null;
-        var tLon   = t.venueLon   ? parseFloat(t.venueLon)   : null;
-
         // Current arbitros array
         var arbitros = Array.isArray(t.arbitros) ? t.arbitros : [];
         var confirmedUids = {};
@@ -196,42 +187,28 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
          * MEDIDO em 13/set/2026: **0 de 279 perfis** têm `refereeSports`. Com esporte, a
          * consulta já voltava vazia; SEM esporte ela caía no `.limit(80)` e listava **80
          * pessoas quaisquer** como "árbitros disponíveis" — uma lista FALSA — baixando a
-         * ficha INTEIRA das 80, o que inclui `preferredLocations`, que são COORDENADAS de
-         * onde a pessoa joga.
+         * ficha INTEIRA das 80, inclusive contato e localização precisa. A consulta agora usa
+         * somente o espelho `usersPublic`, que contém a marca de arbitragem e a cidade.
          * ⭐ Exigir a marca sempre tira a lista falsa E o download no mesmo gesto. A tela
          * passa a dizer honestamente que não há árbitro cadastrado, que é o estado real.
          * ⚠️ Sem esporte definido o torneio não filtra por modalidade, mas ainda exige a
          * marca: `orderBy(refereeSports)` devolve só quem TEM o campo. */
         var refQuery = sport
-          ? db.collection('users').where('refereeSports', 'array-contains', sport)
-          : db.collection('users').orderBy('refereeSports');   // só quem TEM a marca
-        return refQuery.limit(80).get().then(function(snap) {
+          ? db.collection(window._COLECAO_PERFIL_PUBLICO || 'usersPublic').where('refereeSports', 'array-contains', sport)
+          : db.collection(window._COLECAO_PERFIL_PUBLICO || 'usersPublic').orderBy('refereeSports');   // só quem TEM a marca
+        return refQuery.limit(80).get({ source: 'server' }).then(function(snap) {
           var available = [];
           snap.forEach(function(d) {
             var u = Object.assign({ uid: d.id }, d.data());
             var uid = u.uid || d.id;
             // Skip already confirmed/invited (but NOT self — organizer can arbitrate own tournament)
             if (confirmedUids[uid] || invitedUids[uid]) return;
-            // Distance filter: if tournament has coordinates and user has preferredLocations
-            if (tLat !== null && tLon !== null && Array.isArray(u.preferredLocations) && u.preferredLocations.length > 0) {
-              var minDist = Infinity;
-              u.preferredLocations.forEach(function(loc) {
-                if (loc.lat && loc.lng) {
-                  var d2 = _haversineKm(tLat, tLon, parseFloat(loc.lat), parseFloat(loc.lng));
-                  if (d2 < minDist) minDist = d2;
-                }
-              });
-              u._distKm = minDist;
-              if (minDist > 100) return; // skip > 100 km
-            }
             available.push(u);
           });
 
-          // Sort available by distance if known
+          // Sem coordenadas privadas: ordenação estável pelo nome público.
           available.sort(function(a, b) {
-            var da = typeof a._distKm === 'number' ? a._distKm : 9999;
-            var db2 = typeof b._distKm === 'number' ? b._distKm : 9999;
-            return da - db2;
+            return String(a.displayName || a.name || '').localeCompare(String(b.displayName || b.name || ''), 'pt-BR');
           });
 
           // Build confirmed/invited cards using t.arbitros data enriched by Firestore
@@ -259,127 +236,47 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       });
   };
 
-  // ─── Invite árbitro ─────────────────────────────────────────────────────────
+  // ─── Intenções de arbitragem: a Function é a única escritora do torneio ───
+  function _refreshArbitros(tId) {
+    if (typeof window.renderArbitrosPage !== 'function') return;
+    var view = document.getElementById('view-container');
+    if (view) window.renderArbitrosPage(view, tId);
+  }
+
+  function _callArbitro(action, uid, tId, title, message) {
+    if (!uid || !tId) return;
+    var db = window.FirestoreDB;
+    if (!db || typeof db.manageTournamentReferee !== 'function') {
+      if (typeof window.showNotification === 'function') {
+        window.showNotification('Erro', 'Serviço de arbitragem indisponível.', 'error');
+      }
+      return;
+    }
+    db.manageTournamentReferee(tId, action, uid)
+      .then(function() {
+        if (typeof window.showNotification === 'function') window.showNotification(title, message, 'success');
+        _refreshArbitros(tId);
+      })
+      .catch(function(err) {
+        if (typeof window.showNotification === 'function') {
+          window.showNotification('Erro', String(err.message || err), 'error');
+        }
+      });
+  }
+
   window._arbitrosInvite = function(uid, tId) {
-    var db = window.FirestoreDB && window.FirestoreDB.db;
-    var cu = window.AppStore && window.AppStore.currentUser;
-    if (!db || !cu || !uid || !tId) return;
-
-    /* ⛔ O E-MAIL SAIU DAQUI, E ELE NEM DEVIA ESTAR. Este convite gravava
-     * `email: u.email` DENTRO de `tournaments/{id}.arbitros[]` — copiar contato de uma
-     * pessoa para o documento do torneio é exatamente o que esta auditoria existe para
-     * acabar, e aqui era pior: o cabeçalho deste arquivo DOCUMENTA a forma da entrada
-     * (`{uid, name, photoURL, status, invitedAt, confirmedAt}`) e o e-mail não está nela.
-     * Campo que o contrato não tem e ninguém lê — varredura do repositório: ZERO leitores.
-     * ⭐ MEDIDO em 13/set/2026 antes de mexer: 61 torneios, ZERO com árbitros, ZERO entradas.
-     * Nunca vazou — era armadilha armada, não vazamento aberto. Quem identifica o árbitro é
-     * o `uid` (é assim que `bracket.js` confere quem pode apitar).
-     * ⭐ E a leitura passou para o espelho: o convite usa `displayName` e `photoURL`, só. */
-    db.collection(window._COLECAO_PERFIL_PUBLICO || 'usersPublic').doc(uid).get()
-      .then(function(snap) {
-        if (!snap.exists) throw new Error('Usuário não encontrado');
-        var u = snap.data();
-        var entry = {
-          uid:       uid,
-          name:      u.displayName || u.name || uid,
-          photoURL:  u.photoURL || '',
-          status:    'invited',
-          invitedAt: new Date().toISOString(),
-          /* ⛔ A QUEDA PARA E-MAIL SAIU. `cu.uid || cu.email` só podia gravar e-mail no
-           * documento do torneio quando não houvesse uid — e usuário autenticado SEMPRE tem
-           * uid: medido em 13/set/2026 sobre os 5.792 avisos de produção, a queda análoga
-           * nunca disparou uma vez. Queda que nunca acontece e que, se acontecesse, vazaria
-           * contato, não é rede de segurança: é a porta destrancada dos fundos. */
-          invitedBy: cu.uid || ''
-        };
-        return window.FirestoreDB._tRef(tId).update({
-          arbitros: firebase.firestore.FieldValue.arrayUnion(entry)
-        });
-      })
-      .then(function() {
-        if (typeof window.showNotification === 'function') {
-          window.showNotification('Convite enviado', 'O convite de arbitragem foi enviado com sucesso.', 'success');
-        }
-        // Refresh page
-        if (typeof window.renderArbitrosPage === 'function') {
-          var vc = document.getElementById('view-container');
-          if (vc) window.renderArbitrosPage(vc, tId);
-        }
-      })
-      .catch(function(err) {
-        if (typeof window.showNotification === 'function') {
-          window.showNotification('Erro', String(err.message || err), 'error');
-        }
-      });
+    _callArbitro('invite', uid, tId, 'Convite enviado', 'O convite de arbitragem foi enviado com sucesso.');
   };
 
-  // ─── Self-confirm (organizer arbitrates own tournament) ─────────────────────
   window._arbitrosSelfConfirm = function(uid, tId) {
-    var db = window.FirestoreDB && window.FirestoreDB.db;
-    var cu = window.AppStore && window.AppStore.currentUser;
-    if (!db || !cu || !tId) return;
-    /* ⛔ A GÊMEA DO CONVITE, com o mesmo defeito — e ela grava o e-mail do PRÓPRIO
-     * organizador no documento do torneio. Consertar só o convite deixaria o vazamento
-     * vivo no caminho do "eu mesmo apito", que é o mais usado dos dois. */
-    var entry = {
-      uid:         cu.uid || uid,
-      name:        cu.displayName || cu.name || uid,
-      photoURL:    cu.photoURL || '',
-      status:      'confirmed',
-      confirmedAt: new Date().toISOString(),
-      invitedBy:   cu.uid || uid
-    };
-    window.FirestoreDB._tRef(tId).update({
-      arbitros: firebase.firestore.FieldValue.arrayUnion(entry)
-    }).then(function() {
-      if (typeof window.showNotification === 'function') {
-        window.showNotification('Árbitro confirmado', 'Você está confirmado como árbitro deste torneio.', 'success');
-      }
-      if (typeof window.renderArbitrosPage === 'function') {
-        var vc = document.getElementById('view-container');
-        if (vc) window.renderArbitrosPage(vc, tId);
-      }
-    }).catch(function(err) {
-      if (typeof window.showNotification === 'function') {
-        window.showNotification('Erro', String(err.message || err), 'error');
-      }
-    });
+    var current = window.AppStore && window.AppStore.currentUser;
+    if (!current || !current.uid) return;
+    // O UID exibido não é autoridade: a Function usa o UID autenticado para confirmar a si.
+    _callArbitro('self-confirm', current.uid, tId, 'Árbitro confirmado', 'Você está confirmado como árbitro deste torneio.');
   };
 
-  // ─── Remove / cancel invite ──────────────────────────────────────────────────
   window._arbitrosRemove = function(uid, tId) {
-    var db = window.FirestoreDB && window.FirestoreDB.db;
-    if (!db || !uid || !tId) return;
-
-    // We need to find the exact entry to remove (arrayRemove needs deep equality)
-    window.FirestoreDB._tRef(tId).get()
-      .then(function(snap) {
-        if (!snap.exists) throw new Error('Torneio não encontrado');
-        var t = snap.data();
-        var arbitros = Array.isArray(t.arbitros) ? t.arbitros : [];
-        var entry = null;
-        for (var i = 0; i < arbitros.length; i++) {
-          if (arbitros[i].uid === uid) { entry = arbitros[i]; break; }
-        }
-        if (!entry) throw new Error('Árbitro não encontrado');
-        return window.FirestoreDB._tRef(tId).update({
-          arbitros: firebase.firestore.FieldValue.arrayRemove(entry)
-        });
-      })
-      .then(function() {
-        if (typeof window.showNotification === 'function') {
-          window.showNotification('Árbitro removido', 'Árbitro removido do torneio.', 'success');
-        }
-        if (typeof window.renderArbitrosPage === 'function') {
-          var vc = document.getElementById('view-container');
-          if (vc) window.renderArbitrosPage(vc, tId);
-        }
-      })
-      .catch(function(err) {
-        if (typeof window.showNotification === 'function') {
-          window.showNotification('Erro', String(err.message || err), 'error');
-        }
-      });
+    _callArbitro('remove', uid, tId, 'Árbitro removido', 'Árbitro removido do torneio.');
   };
 
 })();

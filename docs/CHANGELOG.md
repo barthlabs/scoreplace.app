@@ -1,3 +1,10 @@
+## 2.3.25 — 14/set/2026
+
+- A escala de árbitros passa a ser alterada por uma única operação transacional no servidor. Convidar, confirmar e remover usam o estado recém-lido do torneio, não uma cópia aberta na aba; convites repetidos não criam duplicatas.
+- A tela de árbitros abre somente depois de confirmar o torneio e a lista no servidor. Ela consulta apenas o espelho público necessário para exibir nome, foto, cidade e especialidade, sem baixar contatos ou localização precisa de outras pessoas.
+- A manutenção obsoleta que regravava `adminEmails` de cada torneio durante o boot foi retirada. A identidade administrativa continua autorizada por UID.
+- Esta publicação é somente web e Functions. Não há geração, sincronização nem submissão dos projetos iOS e Android.
+
 ## 2.3.24 — 14/set/2026
 
 - Dados operacionais só passam a valer na tela depois de uma confirmação remota. Os 12 ouvintes ativos de torneios, presença, jogos e placar recusam eventos do cache; leituras iniciais de torneios, resultados e perfis usam o servidor.

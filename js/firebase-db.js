@@ -1820,6 +1820,13 @@ window.FirestoreDB = {
     return (j && j.result) || {};
   },
 
+  // Escala de arbitragem: intenção mínima; autorização, perfil e transação vivem na Function.
+  async manageTournamentReferee(tournamentId, action, uid) {
+    return this._callFn('manageTournamentReferee', {
+      tournamentId: String(tournamentId || ''), action: String(action || ''), uid: String(uid || '')
+    });
+  },
+
   // Inscrição via Cloud Function (Admin SDK, servidor) com FALLBACK pra transação
   // do cliente. A CF não passa pela fila IndexedDB quebrada do SDK 10.8.1 (bug
   // fatal no iOS Safari que fazia a inscrição falhar) nem pelas rules. O fallback

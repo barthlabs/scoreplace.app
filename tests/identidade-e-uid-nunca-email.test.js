@@ -112,10 +112,14 @@ for (const arq of ['functions/index.js', 'js/trophies.js']) {
   ok(!/where\(\s*["']organizerEmail["']/.test(src),
     '⛔ ' + arq + ' não CONSULTA torneio por organizerEmail');
 }
-// o portão da "recuperação" de adminEmails: ela CONCEDE poder, então tem que ser por uid
+// O reparo one-shot de adminEmails já foi executado e não pode voltar a escrever o
+// torneio no boot. Identidade e autorização vivem em UID; esse dado derivado é renovado
+// apenas pelas mutações canônicas que já passam pela Function/transação.
 const st = semComentario(leia('js/store.js'));
-ok(/t\.creatorUid !== cu\.uid\) return/.test(st),
-  '⭐ a recuperação de adminEmails (que CONCEDE admin) é portada por creatorUid, não por e-mail');
+ok(!/_recoverWipedAdminEmails/.test(st),
+  '⭐ o reparo legado de adminEmails não escreve mais no navegador a cada sessão');
+ok(!/adminEmails:\s*newAdminEmails/.test(st),
+  '⛔ store não reintroduz uma escrita direta de adminEmails');
 ok(!/var creator = tournament\.creatorEmail/.test(st),
   '⛔ isCreator não guarda creatorEmail em variável pra comparar depois');
 

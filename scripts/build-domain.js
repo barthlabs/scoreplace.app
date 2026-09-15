@@ -17,6 +17,7 @@ const entries = [
   { source: 'src/domain/waitlist.ts', output: 'js/domain/waitlist.js' },
   { source: 'src/domain/standings.ts', output: 'js/domain/standings.js' },
   { source: 'src/domain/realtime-freshness.ts', output: 'js/domain/realtime-freshness.js' },
+  { source: 'src/domain/referee-roster.ts', output: 'js/domain/referee-roster.js' },
 ];
 let failures = 0;
 

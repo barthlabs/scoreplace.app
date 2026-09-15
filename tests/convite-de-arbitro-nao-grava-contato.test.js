@@ -1,86 +1,55 @@
 'use strict';
-/* ⛔ CONVIDAR UM ÁRBITRO NÃO GRAVA O CONTATO DELE NO TORNEIO.
- *
- * O convite montava a entrada do árbitro com `email: u.email` e a gravava dentro de
- * `tournaments/{id}.arbitros[]`. Copiar o contato de uma pessoa para o documento do torneio é
- * o que esta auditoria existe para acabar — e aqui era pior: o CABEÇALHO do próprio arquivo
- * documenta a forma da entrada (`{uid, name, photoURL, status, invitedAt, confirmedAt}`), e
- * `email` não está nela. Campo que o contrato não tem, que ninguém lê (varredura do
- * repositório: zero leitores) e que quem identifica o árbitro nem usa — quem identifica é o
- * `uid`, é assim que a chave confere quem pode apitar.
- *
- * ⭐ MEDIDO ANTES DE MEXER, em 13/set/2026: 61 torneios, **ZERO** com árbitros, **ZERO**
- * entradas gravadas. Nunca vazou — era armadilha armada, não vazamento aberto. É por isso que
- * este conserto é barato: não há dado antigo para migrar.
- *
- * ⚠️ E FICA UM ACHADO ABERTO, ANOTADO DE PROPÓSITO: a LISTA de árbitros disponíveis. Medido,
- * 0 de 279 perfis têm `refereeSports`; com esporte a consulta volta vazia, e SEM esporte ela
- * lista 80 pessoas quaisquer como "árbitros disponíveis", baixando a ficha inteira das 80 —
- * inclusive `preferredLocations`, que são coordenadas. Não foi consertado aqui porque o
- * conserto é decisão de produto (exigir a marca de árbitro), e coordenada de jogador é
- * justamente o tipo de campo que o espelho existe para NÃO carregar.
- */
+/* A escala de arbitragem passa pela Function transacional; o navegador manda só intenção.
+ * O contrato puro barra contato e impede duplicata, e a CF autoriza com estado fresco. */
 const assert = require('assert/strict');
 const fs = require('fs');
 const path = require('path');
-
-const raiz = path.join(__dirname, '..');
+const ROOT = path.join(__dirname, '..');
+const roster = require(path.join(ROOT, 'js/domain/referee-roster.js'));
 let ok = 0;
-const must = (v, m) => { assert.ok(v, m); ok++; console.log('  ✓ ' + m); };
-const SRC = fs.readFileSync(path.join(raiz, 'js/views/arbitros.js'), 'utf8');
-const codigo = SRC.split('\n').filter((l) => !/^\s*(\*|\/\/|\/\*)/.test(l)).join('\n');
-const BRACKET = fs.readFileSync(path.join(raiz, 'js/views/bracket.js'), 'utf8');
+const must = (value, message) => { assert.ok(value, message); ok++; console.log('  ✓ ' + message); };
 
-console.log('\n──── convite de árbitro não grava contato ────\n');
-
-/* ── ① AS DUAS ENTRADAS GRAVADAS NO TORNEIO ─────────────────────────────────
- * ⚠️ SÃO DUAS, e é por isso que o portão as varre em vez de olhar a primeira: o convite e a
- * auto-confirmação do organizador montam a MESMA estrutura em lugares diferentes. A segunda
- * é a mais usada ("eu mesmo apito") e gravava o e-mail do PRÓPRIO organizador. Consertar só
- * a primeira teria deixado o vazamento vivo no caminho principal.
- * [[feedback_unify_dual_entry_points]] */
-const entradas = [];
-for (let p = codigo.indexOf('var entry = {'); p >= 0; p = codigo.indexOf('var entry = {', p + 1)) {
-  entradas.push(codigo.slice(p, codigo.indexOf('};', p)));
-}
-must(entradas.length === 2, '① são DUAS entradas (achadas: ' + entradas.length + ') — convite e auto-confirmação');
-entradas.forEach((entry, k) => {
-  must(!/email/i.test(entry), '① ⭐ ⛔ entrada ' + (k + 1) + ': nenhum e-mail entra no documento do torneio');
-  must(!/phone|celular/i.test(entry), '① ⛔ entrada ' + (k + 1) + ': nem telefone');
-  ['uid', 'name', 'photoURL', 'status'].forEach((f) => {
-    must(new RegExp('\\b' + f + ':').test(entry),
-      '① entrada ' + (k + 1) + ': `' + f + '` continua — é a forma que o cabeçalho documenta');
-  });
+console.log('\n──── arbitragem transacional, sem contato no torneio ────\n');
+const invite = roster.apply([], {
+  action: 'invite', targetUid: 'ref-1', callerUid: 'org-1', now: '2026-09-14T12:00:00.000Z',
+  profile: { displayName: 'Árbitra Pública', photoURL: 'https://example.test/a.png', email: 'nao-pode-ir@teste.com', phone: '+5511999999999' }
 });
-const entry = entradas[0];
+must(invite.changed && invite.arbitros.length === 1, '① convite cria uma única entrada');
+must(JSON.stringify(invite.arbitros).indexOf('nao-pode-ir@teste.com') === -1 && JSON.stringify(invite.arbitros).indexOf('99999999') === -1,
+  '① contato do perfil nunca entra em arbitros[]');
+must(invite.arbitros[0].uid === 'ref-1' && invite.arbitros[0].status === 'invited', '① UID e status são a identidade persistida');
+const duplicate = roster.apply(invite.arbitros, {
+  action: 'invite', targetUid: 'ref-1', callerUid: 'org-1', now: '2026-09-14T12:01:00.000Z', profile: { displayName: 'Outro nome' }
+});
+must(!duplicate.changed && duplicate.arbitros.length === 1, '② convite repetido não duplica árbitro');
+const confirmed = roster.apply(invite.arbitros, {
+  action: 'self-confirm', targetUid: 'org-1', callerUid: 'org-1', now: '2026-09-14T12:02:00.000Z', profile: { displayName: 'Organizador' }
+});
+must(confirmed.arbitros.some((entry) => entry.uid === 'org-1' && entry.status === 'confirmed'), '③ autoconfirmação só produz status confirmado para o próprio UID');
+assert.throws(() => roster.apply([], { action: 'self-confirm', targetUid: 'outra-pessoa', callerUid: 'org-1', now: '2026-09-14T12:02:00.000Z', profile: {} }));
+ok++; console.log('  ✓ ③ contrato recusa autoconfirmação de outra pessoa');
+const scrubbed = roster.apply([{ uid: 'legado', name: 'Legado', email: 'vazamento@teste.com', phone: '123' }], {
+  action: 'remove', targetUid: 'ausente', callerUid: 'org-1', now: '2026-09-14T12:03:00.000Z', profile: null
+});
+must(scrubbed.changed && JSON.stringify(scrubbed.arbitros).indexOf('vazamento@teste.com') === -1, '④ qualquer alteração saneia contato legado');
 
-// ── ② e a leitura que monta a entrada vem do espelho ───────────────────────
-must(/collection\(window\._COLECAO_PERFIL_PUBLICO \|\| 'usersPublic'\)\.doc\(uid\)\.get\(\)/.test(codigo),
-  '② ⭐ o convite lê o espelho — ele usa `displayName` e `photoURL`, só');
+const client = fs.readFileSync(path.join(ROOT, 'js/views/arbitros.js'), 'utf8');
+const fn = fs.readFileSync(path.join(ROOT, 'functions/index.js'), 'utf8');
+const actionBlock = client.slice(client.indexOf('function _callArbitro'), client.lastIndexOf('\n})();'));
+must((actionBlock.match(/manageTournamentReferee\(tId, action, uid\)/g) || []).length === 1, '⑤ as três ações usam a única porta semântica de arbitragem');
+must(!/\.update\(|arrayUnion|arrayRemove|usersPublic|firebase\.functions|_callFn\(/.test(actionBlock), '⑤ a aba não lê nem escreve a escala diretamente nem conhece o transporte Firebase');
+must(/_tRef\(tId\)\.get\(\{ source: 'server' \}\)/.test(client) && /refQuery\.limit\(80\)\.get\(\{ source: 'server' \}\)/.test(client),
+  '⑤ a abertura recusa fotografia de cache para escala e árbitros disponíveis');
+must(!/collection\('users'\)/.test(client) && /_COLECAO_PERFIL_PUBLICO \|\| 'usersPublic'/.test(client),
+  '⑤ a lista de árbitros lê só o espelho público');
+must(!/preferredLocations|venueLat|venueLon/.test(client),
+  '⑤ coordenadas privadas não entram na escala');
 
-// ── ③ quem identifica o árbitro é o uid, não o contato ─────────────────────
-must(/Array\.isArray\(t\.arbitros\)/.test(BRACKET) && /a\.uid/.test(BRACKET),
-  '③ ⭐ a chave confere quem pode apitar pelo `uid` — tirar o e-mail não tira poder de ninguém');
-
-// ── ④ o que SOBRA de `users` aqui é o achado aberto, e é UM ────────────────
-/* ⭐ 13/set/2026 — O ACHADO DA LISTA FOI CONSERTADO, não só anotado.
- * MEDIDO: 0 de 279 perfis têm `refereeSports`. Com esporte a consulta já voltava vazia; SEM
- * esporte ela caía no `.limit(80)` e listava 80 pessoas QUAISQUER como "árbitros
- * disponíveis" — lista falsa — baixando a ficha inteira das 80, com `preferredLocations`,
- * que são coordenadas. Exigir a marca SEMPRE tira a lista falsa e o download no mesmo gesto. */
-const fichas = (codigo.match(/collection\('users'\)/g) || []).length;
-must(fichas === 2,
-  '④ as ' + fichas + ' leituras de `users` restantes são as duas pontas da MESMA lista de árbitros');
-must(/where\('refereeSports', 'array-contains', sport\)/.test(codigo),
-  '④ com esporte, filtra pela modalidade');
-must(/orderBy\('refereeSports'\)/.test(codigo),
-  '④ ⭐⭐ SEM esporte, ainda exige a MARCA (`orderBy` só devolve quem TEM o campo) — antes listava 80 pessoas quaisquer');
-must(!/db\.collection\('users'\);\s*\n\s*if \(sport\)/.test(codigo),
-  '④ ⛔ e a coleção crua sem filtro não existe mais neste caminho');
-
-// ── ⑤ CONTROLE: o portão tem dentes ───────────────────────────────────────
-const comEmail = entry.replace('uid:', "email:     u.email || '',\n          uid:");
-must(/email/i.test(comEmail),
-  '⑤ ⭐ um `email` de volta na entrada iria vermelho na asserção ①');
+const gateway = fs.readFileSync(path.join(ROOT, 'js/firebase-db.js'), 'utf8');
+must(/async manageTournamentReferee\(tournamentId, action, uid\)/.test(gateway) && /_callFn\('manageTournamentReferee'/.test(gateway), '⑤ o gateway concentra nome e payload da callable');
+must(/exports\.manageTournamentReferee = onCall\(/.test(fn) && /db\.runTransaction\(/.test(fn), '⑥ a Function altera a escala em transação');
+must(/_isTournamentOrgCaller\(t, callerUid\)/.test(fn) && /collection\("usersPublic"\)\.doc\(targetUid\)/.test(fn), '⑥ autorização e perfil público são conferidos no servidor');
+must(/_splitParts\.gravar\(tx, ref, before/.test(fn) && /arbitros: outcome\.arbitros/.test(fn), '⑥ a gravação preserva as partes do torneio');
+must(/action === "self-confirm" \? callerUid : requestedUid/.test(fn), '⑥ o servidor ignora UID exibido ao autoconfirmar');
 
 console.log('\n✅ ' + ok + ' verificações');

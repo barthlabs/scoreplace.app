@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.3.24';
+window.SCOREPLACE_VERSION = '2.3.25';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -10240,45 +10240,6 @@ window._autoCloseExpiredEnrollments = function() {
   });
 };
 
-// v1.6.68-beta: recupera torneios com adminEmails/memberEmails apagados pelo
-// bug v1.6.66. Roda silenciosamente uma vez por sessão após o primeiro snapshot.
-// Usa regra Firestore isAdminEmailsRecovery (escrita restrita a esses 2 campos).
-window._recoverWipedAdminEmails = function() {
-  if (!window.AppStore || !window.AppStore.tournaments) return;
-  if (!window.FirestoreDB || !window.FirestoreDB.db) return;
-  var cu = window.AppStore.currentUser;
-  if (!cu || !cu.email) return;
-  var myEmail = cu.email.toLowerCase();
-
-  window.AppStore.tournaments.forEach(function(t) {
-    // Só age quando adminEmails está ausente ou vazio E o usuário é o organizador
-    var adminList = Array.isArray(t.adminEmails) ? t.adminEmails : [];
-    if (adminList.length > 0) return; // já está OK
-    /* ⛔ SÓ UID. Esta recuperação CONCEDE admin (`adminEmails`) — e o portão dela era
-     * "o e-mail do torneio é igual ao meu". Ou seja: quem tivesse a string recuperava
-     * poder de organizador sobre o torneio de outro. É o pior dos casos que sobraram.
-     * ⚠️ E ela também escapou da varredura por guardar o campo numa variável. */
-    if (!cu.uid || !t.creatorUid || t.creatorUid !== cu.uid) return; // só o DONO recupera
-
-    // Recomputa usando os mesmos helpers de firebase-db.js
-    // v1.2.2: só adminEmails — memberEmails saiu do schema (membro é uid, via memberUids).
-    var newAdminEmails = window.FirestoreDB._computeAdminEmails(t);
-
-    // Escrita cirúrgica — só adminEmails (Firestore rule permite)
-    window.FirestoreDB._tRef(t.id)
-      .update({ adminEmails: newAdminEmails })
-      .then(function() {
-        // Atualiza AppStore em memória para que a sessão atual funcione
-        t.adminEmails = newAdminEmails;
-        window._log('[Recovery v1.6.68] restaurado adminEmails para torneio', t.id,
-          '→', newAdminEmails);
-      })
-      .catch(function(e) {
-        window._warn('[Recovery v1.6.68] falhou para torneio', t.id, e);
-      });
-  });
-};
-
 // ─── Temas: SÓ 2 — escuro ↔ claro (v2.6.27, simplificado) ───────────────────
 window._themeOrder = ['dark', 'light'];
 window._themeIcons = { dark: '🌙', light: '☀️' };
@@ -12226,8 +12187,6 @@ window.AppStore = {
           // reads/carga).
           // Auto-close tournaments whose registration deadline has passed
           window._autoCloseExpiredEnrollments();
-          // Recupera adminEmails/memberEmails apagados pelo bug v1.6.66
-          setTimeout(function() { window._recoverWipedAdminEmails(); }, 2000);
           // v1.2.2: a busca complementar por `memberEmails` saiu. Existia pra achar torneio
           // antigo sem memberUids preenchido — não há mais nenhum, e o campo saiu do schema
           // (identidade é uid; o listener por memberUids já traz tudo). Sem ela, nada mais
