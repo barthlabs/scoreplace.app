@@ -30,6 +30,8 @@ qualquer um deles em arquivo, commit, log ou comentário.
 | `ASC_PRIVATE_KEY_BASE64` | Conteúdo do arquivo `AuthKey_<KEY_ID>.p8`, codificado em Base64. |
 | `IOS_DISTRIBUTION_CERTIFICATE_BASE64` | Certificado Apple Distribution exportado em `.p12`, codificado em Base64. |
 | `IOS_DISTRIBUTION_CERTIFICATE_PASSWORD` | Senha usada na exportação do `.p12`. |
+| `IOS_APP_PROVISIONING_PROFILE_BASE64` | Perfil App Store do bundle `app.scoreplace`, em Base64. |
+| `IOS_WATCH_PROVISIONING_PROFILE_BASE64` | Perfil App Store do bundle `app.scoreplace.watchapp`, em Base64. |
 
 Para gerar Base64 localmente sem expor o valor na tela, use redirecionamento
 direto para a área de transferência ou para o formulário de segredo. O

@@ -102,6 +102,8 @@ jobs:
       ASC_PRIVATE_KEY_BASE64: ${{ secrets.ASC_PRIVATE_KEY_BASE64 }}
       IOS_DISTRIBUTION_CERTIFICATE_BASE64: ${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_BASE64 }}
       IOS_DISTRIBUTION_CERTIFICATE_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_PASSWORD }}
+      IOS_APP_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_APP_PROVISIONING_PROFILE_BASE64 }}
+      IOS_WATCH_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_WATCH_PROVISIONING_PROFILE_BASE64 }}
       # /tmp é efêmero no runner hospedado. O contexto `runner` não é válido
       # neste bloco de ambiente de job (só dentro de etapas).
       TMPDIR: /tmp
