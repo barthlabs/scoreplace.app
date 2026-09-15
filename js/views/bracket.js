@@ -3507,7 +3507,7 @@ function renderDoubleElimBracket(t, canEnterResult, standbyHtml) {
       // Nome da rodada + cards JUNTOS no TOPO (align-self:flex-start) — "deixe no topo como
       // sempre foi" (dono). Centralizar só os cards afastava o nome deles nas colunas curtas.
       return `
-      <div style="display:flex;flex-direction:column;gap:1rem;min-width:280px;align-self:flex-start;">
+      <div class="bracket-round-column" style="display:flex;flex-direction:column;gap:1rem;min-width:280px;align-self:flex-start;">
         <h5 style="color:${window._spCor(color, 'color')};font-size:0.7rem;text-transform:uppercase;letter-spacing:2px;margin-bottom:.5rem;border-left:3px solid ${color};padding-left:8px;">${rname}</h5>
         ${reais.map(m => renderMatchCard(m, canEnterResult, t.id, m._gameNum)).join('')}
       </div>`;
@@ -3515,7 +3515,7 @@ function renderDoubleElimBracket(t, canEnterResult, standbyHtml) {
     return `
       <div style="margin-bottom:2rem;">
         <h4 style="color:var(--text-bright);font-size:0.8rem;text-transform:uppercase;letter-spacing:2px;border-left:3px solid ${color};padding-left:10px;margin-bottom:1rem;">${title}</h4>
-        <div class="bracket-scroll-container" data-hscroll="sec:${_hsKey(title)}" style="display:flex;gap:32px;overflow-x:auto;padding-bottom:8px;"><div style="display:flex;gap:32px;min-width:max-content;">${colsHtml}${trailingColHtml || ''}<div style="min-width:200px;flex-shrink:0;">&nbsp;</div></div></div>
+        <div class="bracket-scroll-container" data-hscroll="sec:${_hsKey(title)}" style="display:flex;gap:32px;overflow-x:auto;padding-bottom:8px;"><div class="bracket-columns-track" style="display:flex;gap:32px;min-width:max-content;">${colsHtml}${trailingColHtml || ''}<div style="min-width:200px;flex-shrink:0;">&nbsp;</div></div></div>
       </div>`;
   };
 
@@ -3796,7 +3796,7 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
       var hideBtn = (!isFinalCol && _roundComplete(col))
         ? '<button class="btn btn-micro btn-outline" onclick="window._tierHideRound(\'' + _tIdEsc + '\',\'' + _bkEsc + '\',' + col.round + ')" style="flex-shrink:0;">Ocultar</button>'
         : '';
-      return '<div style="display:flex;flex-direction:column;gap:1rem;min-width:280px;">' +
+      return '<div class="bracket-round-column" style="display:flex;flex-direction:column;gap:1rem;min-width:280px;">' +
         '<h5 style="display:flex;align-items:center;justify-content:space-between;gap:8px;color:' + window._spCor(color, 'color') + ';font-size:0.7rem;text-transform:uppercase;letter-spacing:2px;margin-bottom:.5rem;border-left:3px solid ' + window._spCor(color, 'borda') + ';padding-left:8px;"><span>' + label + '</span>' + hideBtn + '</h5>' +
         cards + thirdHtml + '</div>';
     }).join('');
@@ -3812,7 +3812,7 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
       (showClassif === false ? '' : _tierClassifHtml(bracketKey, color)) +
       '<div style="display:flex;align-items:flex-start;gap:10px;">' +
         showHiddenBtn +
-        '<div class="bracket-scroll-container" data-hscroll="tier:' + _hsKey(bracketKey) + '" style="display:flex;gap:32px;overflow-x:auto;padding-bottom:8px;flex:1;min-width:0;"><div style="display:flex;gap:32px;min-width:max-content;">' + colsHtml + '<div style="min-width:120px;flex-shrink:0;">&nbsp;</div></div></div>' +
+        '<div class="bracket-scroll-container" data-hscroll="tier:' + _hsKey(bracketKey) + '" style="display:flex;gap:32px;overflow-x:auto;padding-bottom:8px;flex:1;min-width:0;"><div class="bracket-columns-track" style="display:flex;gap:32px;min-width:max-content;">' + colsHtml + '<div style="min-width:120px;flex-shrink:0;">&nbsp;</div></div></div>' +
       '</div>' +
       '</div>';
   }

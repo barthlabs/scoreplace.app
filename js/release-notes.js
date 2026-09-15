@@ -1,3 +1,4 @@
+// 2.3.35 — toda chave usa a largura útil: uma coluna inteira, duas ou três só quando os cards continuam legíveis.
 // 2.3.34 — W.O. mantém jogo, fila de espera e lista de ausentes na mesma transação; a substituição atualiza também a identidade exibida da dupla. A chave usa toda a largura útil em uma coluna e duas apenas quando ambas cabem.
 // 2.3.33 — o W.O. da organização pede confirmação, troca somente a pessoa escolhida e a chave ocupa uma ou duas colunas conforme a largura útil do painel.
 // 2.3.32 — a dashboard pré-carrega identidades também de jogos individuais, e os cards estreitos usam a largura disponível com duas linhas para cada nome.
