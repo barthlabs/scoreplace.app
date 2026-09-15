@@ -431,6 +431,14 @@ body, .topbar, .card {
   input[type="number"].sp-mc-inp {
     font-size: var(--sp-num-fs, 1.45rem) !important;
   }
+  /* A regra geral acima também atingia os campos de SET e os reduzia para
+     16px só no WebView nativo. A grade já fornece a régua do formato no
+     pai (`--sp-num-fs-set`); preservá-la aqui deixa 0–0 e o placar lançado
+     com a mesma leitura em melhor de 3 e melhor de 5, sem reativar o zoom
+     automático do iOS (os degraus usados são todos >= 16px). */
+  input[type="number"].sp-set-inp {
+    font-size: var(--sp-num-fs-set, 1rem) !important;
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════════

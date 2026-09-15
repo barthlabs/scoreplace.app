@@ -4542,10 +4542,17 @@ function renderDashboard(container) {
   // carrega as fotos reais (por uid) dos torneios em que o usuário participa
   // e troca os avatares iniciais pelas fotos de perfil. Mesmo padrão de
   // participants.js (swap por data-player-name).
-  // v4.5.67: hidrata NOMES por uid (data-uid-name) — resolve do perfil vivo. Roda
-  // PÓS-render (chained no preload de fotos). _preloadPlayerPhotos já popula
-  // _profileNameByUid, que _nameForUid lê → nome vivo nos cards de Meus Resultados.
-  function _dashHydrateNames() { if (typeof window._hydrateUidNames === 'function') { try { window._hydrateUidNames(container); } catch (e) {} } }
+  // v4.5.67: hidrata NOMES por uid (data-uid-name) — resolve do perfil vivo.
+  // ⛔ A identidade não espera a foto. Antes esta chamada ficava no fim de
+  // `_preloadPlayerPhotos`: numa abertura fria as consultas por nome/foto podiam
+  // demorar e os cards de Novidades permaneciam com reticências até a pessoa abrir
+  // o torneio. `_hydrateUidNames` já lê os perfis públicos em lote por uid; iniciá-la
+  // agora faz os nomes dos jogos visíveis chegarem independentemente das fotos.
+  function _dashHydrateNames() {
+    if (typeof window._hydrateUidNames !== 'function') return Promise.resolve();
+    try { return Promise.resolve(window._hydrateUidNames(container)).catch(function () {}); }
+    catch (e) { return Promise.resolve(); }
+  }
   // 🔴 Ao vivo agora — assina os placares abertos e pinta/apaga o slot sozinho.
   // A assinatura é trocada a cada render da dashboard (o render recria o slot), então
   // desinscreve a anterior: sem isso cada re-render deixaria um listener vivo pendurado.
@@ -4556,8 +4563,14 @@ function renderDashboard(container) {
     }
   } catch (_eLive) {}
 
-  if (typeof _preloadPlayerPhotos === 'function' && typeof participacoes !== 'undefined' && Array.isArray(participacoes)) {
-    var _phTournaments = participacoes.slice(0, 20);
+  // Dispara a identidade antes das fotos: é o dado que dá sentido ao card e não
+  // depende da consulta legada por displayName. A segunda passada, ao fim das fotos,
+  // atualiza avatares que eventualmente chegaram depois.
+  var _dashNamesReady = _dashHydrateNames();
+  if (typeof _preloadPlayerPhotos === 'function' && typeof _dashMyTournaments !== 'undefined' && Array.isArray(_dashMyTournaments)) {
+    // A mesma união que alimenta Novidades e Últimos Resultados. Organizadores que
+    // acompanham um torneio sem jogar também recebem nomes e fotos corretos na abertura.
+    var _phTournaments = _dashMyTournaments.slice(0, 20);
     Promise.all(_phTournaments.map(function(t) {
       try { return _preloadPlayerPhotos(t); } catch(e) { return Promise.resolve(); }
     })).then(function() {
@@ -4571,8 +4584,8 @@ function renderDashboard(container) {
           img.src = real;
         }
       });
-    }).catch(function() {}).then(_dashHydrateNames);
-  } else { setTimeout(_dashHydrateNames, 0); }
+    }).catch(function() {}).then(function () { return _dashNamesReady; }).then(_dashHydrateNames);
+  }
 
   // Auto-scroll para resultados pendentes de aprovação.
   // 600ms = após todos os _jumpTop do router (último em 350ms) e após a

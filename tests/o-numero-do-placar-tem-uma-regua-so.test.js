@@ -32,6 +32,7 @@ console.log('──── o número do placar tem uma régua só ────');
 
 const ROOT = path.join(__dirname, '..');
 const css = fs.readFileSync(path.join(ROOT, 'css', 'components.css'), 'utf8');
+const style = fs.readFileSync(path.join(ROOT, 'css', 'style.css'), 'utf8');
 const model = fs.readFileSync(path.join(ROOT, 'js', 'views', 'bracket-model.js'), 'utf8');
 
 /* ── ① UMA RÉGUA: ninguém cravado ─────────────────────────────────────────── */
@@ -47,6 +48,12 @@ ok(/font-size:var\(--sp-num-fs-set/.test(inp),
    '① ⭐ o CAMPO de digitar lê a régua — era 0,9rem cravado');
 ok(/font-size:var\(--sp-num-fs/.test(regra('.sp-mc-num')) && /font-size:var\(--sp-num-fs/.test(regra('.sp-mc-inp')),
    '① e o caminho de UM SET segue lendo a régua dele (`--sp-num-fs`)');
+// No WebView nativo a proteção contra auto-zoom usa `!important`; ela não pode
+// rebaixar o campo de set para 16px enquanto o número confirmado fica na escala
+// do formato. Este portão guarda o caminho que só existe em aparelhos touch.
+const mobileSetInput = style.match(/input\[type="number"\]\.sp-set-inp\s*\{[^}]*\}/);
+ok(!!mobileSetInput && /font-size:\s*var\(--sp-num-fs-set/.test(mobileSetInput[0]) && /!important/.test(mobileSetInput[0]),
+   '① ⭐ no touch o campo de SET mantém a régua da grade, em vez de cair em 16px');
 
 /* ── ② a escada: quem decide o degrau, e se ele cabe ──────────────────────── */
 const W = { window: null };
