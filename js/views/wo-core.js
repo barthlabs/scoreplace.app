@@ -32,7 +32,8 @@
 // Núcleo PURO das substituições de W.O.: muta só o `t` passado (sem fetch, sem
 // save). Histórico via t.history.push direto (transaction-safe — logAction do
 // AppStore acha por id no store LOCAL, o que não serve pro doc fresco da txn).
-window._applyWoSubsToTournament = function(t) {
+window._applyWoSubsToTournament = function(t, opts) {
+  opts = opts || {};
   if (!t) return { ok: false, reason: 'no-tournament', subCount: 0 };
   if (!t.absent || Object.keys(t.absent).length === 0) return { ok: false, reason: 'no-absent', subCount: 0 };
   if (!t.checkedIn) return { ok: false, reason: 'no-checkedIn', subCount: 0 };
@@ -42,6 +43,18 @@ window._applyWoSubsToTournament = function(t) {
 
   // Pool de standby CANÔNICO (store.js) — merge standbyParticipants+waitlist dedup por nome.
   const standbyPool = window._getStandbyPool(t);
+  const allMatches = (typeof window._collectAllMatches === 'function')
+    ? window._collectAllMatches(t)
+    : (Array.isArray(t.matches) ? t.matches.slice() : []);
+  const _candidateAlreadyPlays = (p) => {
+    const candidateUids = (typeof window._participantUids === 'function' ? window._participantUids(p) : (p && p.uid ? [p.uid] : [])).filter(Boolean);
+    if (!candidateUids.length) return false;
+    return allMatches.some((m) => {
+      if (!m || m.winner) return false;
+      const uids = (typeof window._slotUids === 'function' ? window._slotUids(m, 'p1').concat(window._slotUids(m, 'p2')) : []).filter(Boolean);
+      return candidateUids.some((uid) => uids.indexOf(uid) !== -1);
+    });
+  };
 
   // Política de chamada da fila (Sorteio de Vagas): 'present' (padrão/legado) =
   // FIFO por check-in; 'locked' = ordem travada do sorteio (t.waitlistOrder),
@@ -54,15 +67,20 @@ window._applyWoSubsToTournament = function(t) {
   // Build presentList. Tolerant a TIMESTAMP (number) OU TRUE (boolean):
   // _toggleCheckIn seta Date.now() (number truthy), handlers de sub setam true.
   const presentList = standbyPool
-    .map(p => {
+    .map((p, queueIndex) => {
       const name = _getName(p);
       // uid-first: lê pelo uid da pessoa (objeto p tem uid), nome só fallback legado.
       const ci = window._idMapGet(t, t.checkedIn, p);
       const ts = typeof ci === 'number' ? ci : (ci ? 1 : 0);
-      return { p, name, ts };
+      return { p, name, ts, queueIndex };
     })
-    .filter(o => o.ts > 0 && !(_policy === 'locked' && window._idMapHas(t, t.absent, o.p)));
-  if (_policy === 'locked') {
+    // A fila elegível nasce sem ausentes e sem quem já ocupa jogo: eles não
+    // consomem posição nem entram na ordenação. Quando a organização escolhe
+    // preencher a vaga, a ordem restante vale sem check-in.
+    .filter(o => (opts.forceWaitlistSub || o.ts > 0) && !window._idMapHas(t, t.absent, o.p) && !_candidateAlreadyPlays(o.p));
+  if (opts.forceWaitlistSub) {
+    presentList.sort((a, b) => a.queueIndex - b.queueIndex);
+  } else if (_policy === 'locked') {
     const _ordOf = (o) => {
       if (_ord[o.name] !== undefined) return _ord[o.name];
       if (o.p && typeof o.p === 'object' && typeof o.p.drawOrder === 'number') return o.p.drawOrder;
@@ -85,10 +103,6 @@ window._applyWoSubsToTournament = function(t) {
     } catch (_e) {}
     return { ok: false, reason: 'no-presente', subCount: 0, standbyPoolCount: standbyPool.length };
   }
-
-  const allMatches = (typeof window._collectAllMatches === 'function')
-    ? window._collectAllMatches(t)
-    : (Array.isArray(t.matches) ? t.matches.slice() : []);
 
   const woScope = t.woScope || 'individual';
   let subCount = 0;
@@ -154,7 +168,8 @@ window._applyWoSubsToTournament = function(t) {
   // t.absent agora é chaveado por uid (uid-first); traduz cada chave de volta pro
   // NOME pra cruzar com os slots da chave (m.p1/m.p2 são nomes). Chave legada que
   // já é nome (sem uid correspondente) resolve pra '' → cai no próprio k.
-  const absentUidKeys = Object.keys(t.absent);
+  const onlyAbsentUids = Array.isArray(opts.onlyAbsentUids) ? opts.onlyAbsentUids.map(String).filter(Boolean) : [];
+  const absentUidKeys = Object.keys(t.absent).filter((uid) => !onlyAbsentUids.length || onlyAbsentUids.indexOf(String(uid)) !== -1);
   const absentNames = absentUidKeys.map(function(k){ return window._memberNameByUid(t, k) || k; });
   for (let _ai = 0; _ai < absentNames.length; _ai++) {
     const absentName = absentNames[_ai];
@@ -626,13 +641,8 @@ window._applyWO = function (t, opts) {
   // "A / B" por um solo "Suplente" (bug). Escopo individual substitui o membro
   // ausente (dupla) ou o solo (torneio individual); teamSize 1 é sempre individual.
   const pool = (typeof window._getStandbyPool === 'function') ? window._getStandbyPool(t) : [];
-  // Uma decisão explícita do organizador promove a primeira pessoa da fila mesmo
-  // sem check-in. O sinal só chega da Cloud Function depois de validar a organização.
-  if (opts.forceWaitlistSub && pool.length && typeof window._idMapSet === 'function') {
-    window._idMapSet(t, t.checkedIn, pool[0], Date.now());
-  }
   const _isPresent = p => { const ci = window._idMapGet(t, t.checkedIn, p); return typeof ci === 'number' ? ci > 0 : !!ci; };
-  const presentInPool = pool.filter(_isPresent);
+  const presentInPool = opts.forceWaitlistSub ? pool : pool.filter(_isPresent);
   // outcomeChoice (Stage 1 — project_wo_outcome_negotiation_canon): 'advance' | 'waitlistSub'
   // | 'ghost'. null = fluxo legado (consenso de participante / chamadas antigas) → inalterado.
   const _choice = opts.outcomeChoice || null;
@@ -645,7 +655,7 @@ window._applyWO = function (t, opts) {
     // o wrapper é encanamento de cliente e não vai pro vendor, então o guard seria FALSO e
     // a substituição por W.O. seria PULADA EM SILÊNCIO — o pior desfecho possível, porque
     // o W.O. seria aplicado sem chamar o suplente. Guard e chamada agora olham a MESMA função.
-    const r = window._applyWoSubsToTournament(t);
+    const r = window._applyWoSubsToTournament(t, { onlyAbsentUids: absentUids, forceWaitlistSub: !!opts.forceWaitlistSub });
     if (r && r.subCount > 0) return { ok: true, outcome: 'subbed', subCount: r.subCount, subDetails: r.subDetails || [] };
     // Há suplente presente, mas NENHUM atende a categoria do ausente → NÃO escala pra W.O.
     // do time: a decisão é do organizador (aceitar a quebra ou o próximo que atenda).

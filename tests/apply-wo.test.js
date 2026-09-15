@@ -110,6 +110,36 @@ function register(t) { W.AppStore.tournaments = [t]; return t; }
   ok(!t.matches[0].winner, 'sub: jogo continua sem vencedor (segue sendo jogado)');
 })();
 
+// ── 1b. DECISÃO DA ORG: só o alvo atual entra na transação, e a fila pula
+// ausente antigo e quem já ocupa jogo. Reproduz o incidente Flávia/Eliane sem
+// depender de cache ou da tela: uma transição não pode reprocessar outro W.O.
+(function () {
+  const t = register({
+    id: 't1b', format: 'Eliminatórias Simples', woScope: 'individual',
+    participants: [
+      { displayName: 'Ausente atual', uid: 'ua' }, { displayName: 'Adversária', uid: 'ub' },
+      { displayName: 'Ausente antigo', uid: 'uold' }, { displayName: 'Já joga', uid: 'uplaying' },
+      { displayName: 'Próxima elegível', uid: 'us' }
+    ],
+    standbyParticipants: [
+      { displayName: 'Ausente antigo', uid: 'uold' }, { displayName: 'Já joga', uid: 'uplaying' },
+      { displayName: 'Próxima elegível', uid: 'us' }
+    ],
+    // O legado ainda admite nome como chave; a proteção precisa funcionar nas
+    // duas formas, além do UID usado no documento atual.
+    checkedIn: {}, absent: { 'Ausente antigo': Date.now() },
+    matches: [
+      { id: 'alvo', p1: 'Ausente atual', p2: 'Adversária', team1Uids: ['ua'], team2Uids: ['ub'], winner: null },
+      { id: 'outro', p1: 'Já joga', p2: 'X', team1Uids: ['uplaying'], team2Uids: ['ux'], winner: null }
+    ],
+  });
+  const r = W._applyWO(t, { absentName: 'Ausente atual', absentUids: ['ua'], scope: 'match', noSubBehavior: 'escalate', forceWaitlistSub: true, onlyAbsentUids: ['ua'] });
+  eq(r.outcome, 'subbed', 'org-direto: há substituição');
+  eq(t.matches[0].p1, 'Próxima elegível', 'org-direto: a fila elegível exclui ausente antigo e pessoa já alocada');
+  ok(!!t.absent['Ausente antigo'], 'org-direto: ausência antiga é preservada');
+  ok(!t.matches[1].winner, 'org-direto: outro jogo não é reprocessado');
+})();
+
 // ── 2. SEM SUB, lista VAZIA → adversário vence por W.O. (escalate) ─────────────
 (function () {
   const t = register({

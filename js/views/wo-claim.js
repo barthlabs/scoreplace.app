@@ -629,7 +629,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     _overlay(_header('Confirmar o seu W.O.') + '<div style="padding:1.1rem;">' + aviso + '</div>');
   };
 
-  window._woDeclare = function (tId, ctxKey, absentName, absentUid) {
+  window._woDeclare = function (tId, ctxKey, absentName, absentUid, confirmedByOrganizer) {
     var t = _findT(tId); if (!t) return;
     var ctx = _ctxReg[ctxKey]; if (!ctx) return;
     // UID é identidade, nunca texto de interface. A Function repete a normalização
@@ -638,6 +638,19 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var rc = _resolveCtx(t, ctx); if (!rc) return;
     var cu = _cu(); if (!cu || !cu.uid) { if (typeof showNotification === 'function') showNotification('Entre para apontar', '', 'warning'); return; }
     if (_allCtxUids(t, rc).indexOf(cu.uid) === -1 && !_canManage(t)) { if (typeof showNotification === 'function') showNotification('Só os jogadores', 'Só quem joga (ou o organizador) pode apontar.', 'warning'); return; }
+    // A organização pode aplicar direto, mas nunca por um toque acidental. A
+    // confirmação descreve a consequência antes de mandar a intenção ao servidor.
+    if (_canManage(t) && String(absentUid || '') !== String(cu.uid) && !confirmedByOrganizer) {
+      var _targetName = _nameOfUid(t, absentUid, absentName);
+      _overlay(_header('Confirmar W.O.') + '<div style="padding:1.1rem;">' +
+        '<div style="font-weight:800;font-size:1rem;color:var(--text-bright);">🚫 Aplicar W.O. em ' + _esc(_targetName) + '</div>' +
+        '<div style="font-size:0.86rem;line-height:1.45;color:var(--text-muted);margin-top:10px;">A pessoa sai deste jogo e a próxima elegível da lista de espera assume a vaga. Esta ação será aplicada imediatamente pela organização.</div>' +
+        '<div style="display:flex;gap:8px;margin-top:16px;">' +
+          '<button type="button" onclick="window._woOpenClaim(\'' + _attr(t.id) + '\',\'' + _attr(ctxKey) + '\')" class="btn" style="flex:1;background:rgba(148,163,184,.12);color:var(--text-bright);border:1px solid rgba(148,163,184,.4);font-weight:800;border-radius:10px;padding:10px;">Cancelar</button>' +
+          '<button type="button" onclick="window._woDeclare(\'' + _attr(t.id) + '\',\'' + _attr(ctxKey) + '\',\'' + _attr(absentName) + '\',\'' + _attr(absentUid) + '\',true)" class="btn btn-danger" style="flex:1;font-weight:800;border-radius:10px;padding:10px;">Confirmar W.O.</button>' +
+        '</div></div>');
+      return;
+    }
     var c = {
       id: 'wo_' + Date.now() + '_' + _rand(),
       scope: rc.scope,

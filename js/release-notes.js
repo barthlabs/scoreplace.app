@@ -1,3 +1,4 @@
+// 2.3.33 — o W.O. da organização pede confirmação, troca somente a pessoa escolhida e a chave ocupa uma ou duas colunas conforme a largura útil do painel.
 // 2.3.32 — a dashboard pré-carrega identidades também de jogos individuais, e os cards estreitos usam a largura disponível com duas linhas para cada nome.
 // 2.3.31 — a dashboard preserva a escala grande dos placares, identifica os sets nos
 // resultados e aplica aprovação de resultado vinda de outro aparelho sem recarregar.

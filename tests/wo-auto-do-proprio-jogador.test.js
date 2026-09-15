@@ -5,4 +5,5 @@ const t={woScope:'individual',woClaims:[]}; const r=transition(t,{action:'declar
 assert(r.ok && r.claim.selfDeclared && r.claim.factConfirmed,'auto-W.O. confirma o fato no servidor');
 assert(r.claim.outcomeStage==='awaiting-proposal' && r.claim.outcomePartnerUid==='ub','dupla preserva proposta do parceiro');
 const src=fs.readFileSync('js/views/wo-claim.js','utf8'); assert(src.includes("_claimServer(tId, {\n      action: 'declare'"),'tela só dispara a Function'); assert(!src.includes('function _applyClaimViaGate'),'aplicação local foi removida');
-console.log('wo-auto-do-proprio-jogador: 4 asserts OK');
+assert(src.includes("_header('Confirmar W.O.')") && src.includes('confirmedByOrganizer'),'organizador confirma antes da aplicação direta');
+console.log('wo-auto-do-proprio-jogador: 5 asserts OK');

@@ -1849,6 +1849,9 @@ input[type="date"].form-control::-webkit-calendar-picker-indicator:hover {
 /* ==== BRACKET SCROLL — scrollbar fixa no bottom da viewport ==== */
 .bracket-sticky-scroll-wrapper {
   overflow-x: auto !important;
+  /* A largura que decide a grade é a do painel que sobrou na tela, não a da
+     viewport. Em split-screen, modal e desktop estreito a viewport mente. */
+  container-type: inline-size;
   /* ── ⚠️ A CHAVE NAO PODE VIRAR UM ROLADOR COM CAMADA PROPRIA (1.9.104) ────
      Relato do dono, teimoso desde a 1.9.89: _"entra e scrollando corta"_ — a
      chave aparece cortada ao rolar e "se conserta" depois da primeira vez.
@@ -1917,19 +1920,28 @@ input[type="date"].form-control::-webkit-calendar-picker-indicator:hover {
   }
 }
 
-/* Em telas estreitas, cada rodada ocupa a largura útil. As colunas nascem com
-   min-width inline no renderer; este é o único lugar que pode vencê-las sem criar
-   outro desenho de card. O próximo jogo continua acessível pelo gesto horizontal. */
-@media (max-width:767px) {
+/* Cada rodada usa a largura útil do PAINEL. As colunas nascem com min-width
+   inline no renderer; esta é a única regra que pode vencê-las sem outro desenho
+   de card. Quando cabem duas colunas legíveis, elas dividem o painel; quando não,
+   uma ocupa tudo e a próxima continua acessível pelo gesto horizontal. */
+.bracket-scroll-content { gap:1rem !important; min-width:100% !important; }
+.bracket-scroll-content > .bracket-round-column {
+  box-sizing:border-box;
+  width:100cqi;
+  min-width:100cqi !important;
+  flex:0 0 100cqi;
+}
+.bracket-round-column > .sp-match-card,
+.bracket-round-column .sp-match-card { box-sizing:border-box; width:100%; }
+
+@container (min-width:760px) {
   .bracket-scroll-content { gap:1rem !important; min-width:100% !important; }
   .bracket-scroll-content > .bracket-round-column {
     box-sizing:border-box;
-    width:calc(100vw - 4rem);
-    min-width:calc(100vw - 4rem) !important;
-    flex:0 0 calc(100vw - 4rem);
+    width:calc((100cqi - 1rem) / 2);
+    min-width:calc((100cqi - 1rem) / 2) !important;
+    flex:0 0 calc((100cqi - 1rem) / 2);
   }
-  .bracket-round-column > .sp-match-card,
-  .bracket-round-column .sp-match-card { box-sizing:border-box; width:100%; }
 }
 
 /* Barra de scroll fixa (fallback para sticky scroll via JS) */
