@@ -471,8 +471,9 @@ function renderDashboard(container) {
   // Organizador também acompanha novidades mesmo quando não joga: limitar a hidratação só
   // às participações deixava o placar novo fora da dashboard dele. A união é deduplicada
   // por torneio, preserva o teto pequeno e cada coleção só é hidratada uma vez por sessão.
+  var _dashResultTournaments = [];
   try {
-    _dashMyTournaments.filter(function (t) { return t.tournamentStarted || t.status === 'active'; })
+    _dashResultTournaments = _dashMyTournaments.filter(function (t) { return t.tournamentStarted || t.status === 'active'; })
       .filter(function (t) { return !window._isSandboxRef || !window._isSandboxRef(t.id, t.name); })
       .sort(function (a, b) {
         function stamp(t) {
@@ -483,7 +484,8 @@ function renderDashboard(container) {
         }
         return stamp(b) - stamp(a);
       })
-      .slice(0, 5).forEach(function (t) {
+      .slice(0, 5);
+    _dashResultTournaments.forEach(function (t) {
         if (t._resultsHydrated || t._resultsHydrating || !window.AppStore || typeof window.AppStore.hydrateMatchResults !== 'function') return;
         t._resultsHydrating = true;
         // L8.P5: a dashboard pede a JANELA RECENTE, não a coleção inteira. "Novidades" só
@@ -497,6 +499,9 @@ function renderDashboard(container) {
           if (window._warn) window._warn('[dashboard] hidratação de resultados falhou', e);
         }).finally(function () { t._resultsHydrating = false; });
       });
+    if (window.AppStore && typeof window.AppStore.ouvirResultadosDaDashboard === 'function') {
+      window.AppStore.ouvirResultadosDaDashboard(_dashResultTournaments.map(function (t) { return t.id; }));
+    }
   } catch (e) { if (window._warn) window._warn('[dashboard] hidratação de resultados falhou', e); }
   /* ⛔ `organizadosCount` REMOVIDO (2.1.67): alimentava só a pílula "Organizados".
    * O filtro `organizados` em si segue existindo mais abaixo. */
@@ -2832,11 +2837,6 @@ function renderDashboard(container) {
         // Ler m2.scoreP1 cru perdia o TB — o número dos games é o mesmo, o que some
         // é o (7). Fonte única de formatação: window._formatSetForPlayer.
         function _placarLado(n) {
-          // A mesma grade dos cards concluídos de Novidades. Evita duas contas de largura
-          // e mantém o respiro entre sets idêntico nas duas seções da dashboard.
-          var _gradeConcluida = (typeof window._completedSetGridHtml === 'function')
-            ? window._completedSetGridHtml(m2, n) : '';
-          if (_gradeConcluida) return _gradeConcluida;
           if (Array.isArray(m2.sets) && m2.sets.length > 0 && typeof window._formatSetForPlayer === 'function') {
             // A cor é de CADA set (fonte única `_corDoSetLado`), não da linha: quem venceu o set
             // fica verde mesmo tendo perdido a partida. ⛔ Sempre por `_spCor` — hex cru aqui
@@ -2866,6 +2866,24 @@ function renderDashboard(container) {
           }
           var v = (n === 1 ? m2.scoreP1 : m2.scoreP2);
           return v == null ? '' : _sf(String(v));
+        }
+
+        // Resultados concluídos também precisam dizer qual número pertence a cada set.
+        // A régua da coluna vem do PRÓPRIO set, igual ao placar logo abaixo: cabeçalho e
+        // números continuam alinhados mesmo quando há 10 ou subplacar de tie-break.
+        function _cabecaSetsConcluidos() {
+          if (!Array.isArray(m2.sets) || m2.sets.length < 2 || typeof window._colunaDeSetHtml !== 'function') return '';
+          var _rotulos = [];
+          try {
+            var _score = (typeof window._effectiveScoring === 'function') ? window._effectiveScoring(tRef2, m2) : (tRef2 && tRef2.scoring);
+            var _plano = (typeof window._matchSetPlan === 'function') ? window._matchSetPlan(_score, m2, { sets:m2.sets, done:true }) : null;
+            _rotulos = _plano && Array.isArray(_plano.columns) ? _plano.columns.map(function (c) { return c.label; }) : [];
+          } catch (_eSetHead) {}
+          var _cols = m2.sets.map(function (s, i) {
+            var _label = _rotulos[i] || String(i + 1);
+            return window._colunaDeSetHtml('<span class="sp-set-lbl">' + _sf(_label) + '</span>', s);
+          }).join('');
+          return '<div class="sp-set-head"><div class="sp-set-head-linha2"><span class="sp-set-head-sets">SETS</span><div class="sp-set-grid" style="justify-content:flex-end;">' + _cols + '</div></div></div>';
         }
 
         // mesmo estilo de coluna que _miniBracketCard — JOGO N GLOBAL (fonte única).
@@ -2932,6 +2950,7 @@ function renderDashboard(container) {
               '<span style="font-size:0.7rem;font-weight:700;color:var(--sp-c-38bdf8,#38bdf8);text-transform:uppercase;">' + _sf(_boxLabel) + '</span>' +
               '<span style="font-size:0.75rem;font-weight:800;color:' + window._spCor(resultColor, 'color') + ';">' + resultLabel + '</span>' +
             '</div>' +
+            _cabecaSetsConcluidos() +
             // P1 row com placar
             '<div style="' + rowStyle2 + (p1IsWinner ? 'background:rgba(16,185,129,0.12);border-left:3px solid #10b981;' : 'background:var(--sp-g-255-255-255-002,rgba(255,255,255,0.02));') + 'justify-content:space-between;">' +
               (function(){
@@ -3140,7 +3159,7 @@ function renderDashboard(container) {
         // (adversário / organizador / proponente / em disputa); pra quem não pode agir,
         // nada muda. O resto do card segue em somente-leitura.
         var _card = (typeof window.renderMatchCard === 'function')
-          ? window.renderMatchCard(it.m, false, it.tId, (it.m && it.m._gameNum != null) ? it.m._gameNum : null, false, null, { readOnly: true, dashConsensus: true, dashFeedResult: true })
+          ? window.renderMatchCard(it.m, false, it.tId, (it.m && it.m._gameNum != null) ? it.m._gameNum : null, false, null, { readOnly: true, dashConsensus: true })
           : '';
         return '<div data-nov-card="1"' + _spCard() + ' style="min-width:0;">' +
           (cabecalhoInline || '') +
@@ -4558,6 +4577,27 @@ function renderDashboard(container) {
     try { return Promise.resolve(window._hydrateUidNames(container)).catch(function () {}); }
     catch (e) { return Promise.resolve(); }
   }
+  // O resultado traz uid e nome armazenado no mesmo slot. Guardamos essa associação
+  // apenas como reserva para perfis que o preload confirmou inexistentes; um perfil
+  // válido continua tendo precedência em `_nameForUid` e nunca é trocado pelo nome antigo.
+  function _dashSeedStoredNames() {
+    try {
+      var destino = window._nomeGravadoPorUid = window._nomeGravadoPorUid || {};
+      (_dashMyTournaments || []).forEach(function (t) {
+        var jogos = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : [];
+        jogos.forEach(function (m) {
+          [['team1Uids', 'p1'], ['team2Uids', 'p2']].forEach(function (lado) {
+            var uids = Array.isArray(m && m[lado[0]]) ? m[lado[0]] : [];
+            var nomes = String((m && m[lado[1]]) || '').split(/\s*\/\s*/).map(function (n) { return n.trim(); });
+            uids.forEach(function (uid, i) {
+              var nome = nomes[i] || '';
+              if (uid && nome && !destino[uid]) destino[uid] = nome;
+            });
+          });
+        });
+      });
+    } catch (_eStoredNames) {}
+  }
   // 🔴 Ao vivo agora — assina os placares abertos e pinta/apaga o slot sozinho.
   // A assinatura é trocada a cada render da dashboard (o render recria o slot), então
   // desinscreve a anterior: sem isso cada re-render deixaria um listener vivo pendurado.
@@ -4571,6 +4611,7 @@ function renderDashboard(container) {
   // Dispara a identidade antes das fotos: é o dado que dá sentido ao card e não
   // depende da consulta legada por displayName. A segunda passada, ao fim das fotos,
   // atualiza avatares que eventualmente chegaram depois.
+  _dashSeedStoredNames();
   var _dashNamesReady = _dashHydrateNames();
   if (typeof _preloadPlayerPhotos === 'function' && typeof _dashMyTournaments !== 'undefined' && Array.isArray(_dashMyTournaments)) {
     // A mesma união que alimenta Novidades e Últimos Resultados. Organizadores que

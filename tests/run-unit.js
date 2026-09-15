@@ -146,6 +146,7 @@ const SUITES = [
   'tests/l8-escopo-da-hidratacao.test.js',
   'tests/l8-hydration-boundaries.test.js',
   'tests/l8-hydration-recovery.test.js',
+  'tests/dashboard-resultados-tempo-real.test.js',
   'tests/l7-form-confirmation-browser.test.js',
   'tests/l7-creation-replay-emulator.test.js',
   'tests/l7-creation-replay-behavior.test.js',

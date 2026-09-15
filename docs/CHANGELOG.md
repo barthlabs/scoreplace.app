@@ -1,8 +1,15 @@
+## 2.3.31 — 15/set/2026
+
+- A dashboard volta a usar a escala grande e aprovada para os placares de “Seus últimos resultados”. Em partidas de mais de um set, os rótulos “SETS 1 2…” passam a acompanhar as colunas do resultado, inclusive super tie-break.
+- Novidades preserva o card canônico do torneio: os nomes e placares não são compactados por um renderizador paralelo.
+- A dashboard assina os resultados recentes dos torneios ativos. Aprovar ou editar um placar em outro aparelho atualiza Novidades e Seus últimos resultados sem recarregar a página.
+- Quando o perfil público de um participante não existe, a dashboard usa o nome gravado no próprio jogo somente depois da consulta confirmar essa ausência; perfis válidos continuam sendo a fonte do nome e da foto.
+- Cards de jogo ocupam toda a coluna disponível no celular, preservando espaço para os nomes.
+- Esta publicação é somente web. Não há geração, sincronização nem submissão de binários iOS ou Android.
+
 ## 2.3.30 — 15/set/2026
 
-- Em Novidades, resultados encerrados de melhor de 3 ou de 5 agora usam a mesma grade de placar de Seus últimos resultados: as colunas de sets recebem a largura do conteúdo e o espaço entre elas fica igual nas duas seções.
-- O cabeçalho “SETS 1 2…” deixa de ser repetido nesses resultados encerrados em Novidades. Jogos pendentes ou em andamento mantêm os rótulos que orientam o lançamento.
-- Esta publicação é somente web. O ajuste já está no código que os próximos binários iOS e Android vão incorporar, sem gerar nem enviar nova versão às lojas.
+- Versão de transição substituída pela 2.3.31 após uma regressão visual nos placares.
 
 ## 2.3.29 — 15/set/2026
 

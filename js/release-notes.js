@@ -1,5 +1,6 @@
-// 2.3.30 — resultados encerrados em Novidades usam a mesma grade de placar de Seus últimos
-// resultados: os sets ocupam só o necessário, com a mesma folga elegante e sem repetir SETS.
+// 2.3.31 — a dashboard preserva a escala grande dos placares, identifica os sets nos
+// resultados e aplica aprovação de resultado vinda de outro aparelho sem recarregar.
+// 2.3.30 — versão de transição substituída pela 2.3.31 após uma regressão visual nos placares.
 // 2.3.29 — os sets respiram de acordo com a largura disponível e um resultado esperando
 // confirmação usa o selo único "Aprovação pendente", preservando a autoria em uma linha.
 // 2.3.28 — Novidades da dashboard resolvem os perfis já na abertura, sem esperar fotos; e o

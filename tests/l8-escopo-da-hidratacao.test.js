@@ -72,7 +72,7 @@ function novaStore(respostas) {
   // ④ os dois chamadores, no código real: quem pede o quê, e ninguém carimba a marca.
   {
     const dash = fs.readFileSync(path.join(root, 'js/views/dashboard.js'), 'utf8');
-    const ds = dash.indexOf('  try {\n    _dashMyTournaments.filter'), de = dash.indexOf('\n  /* ⛔ `organizadosCount`', ds);
+    const ds = dash.indexOf('  var _dashResultTournaments = [];\n  try {'), de = dash.indexOf('\n  /* ⛔ `organizadosCount`', ds);
     const dashCode = dash.slice(ds, de);
     assert(ds >= 0 && de > ds);
     assert(/hydrateMatchResults\(t\.id, \{ limit: 40 \}\)/.test(dashCode), 'a dashboard pede a janela recente');

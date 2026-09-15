@@ -389,6 +389,8 @@ function initRouter() {
   try {
     if (window.AppStore && typeof window.AppStore.pararDeOuvirJogos === 'function'
         && view !== 'tournaments') window.AppStore.pararDeOuvirJogos();
+    if (window.AppStore && typeof window.AppStore.pararDeOuvirResultadosDaDashboard === 'function'
+        && view !== '' && view !== 'dashboard') window.AppStore.pararDeOuvirResultadosDaDashboard();
   } catch (_eSolta) {}
 
     switch (view) {

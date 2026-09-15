@@ -362,11 +362,11 @@ resultadoComDoisSets.sets = [{ gamesP1: 6, gamesP2: 3 }, { gamesP1: 6, gamesP2: 
 resultadoComDoisSets.setsWonP1 = 2;
 resultadoComDoisSets.setsWonP2 = 0;
 const cardEncerradoNov = W.renderMatchCard(resultadoComDoisSets, false, torneioResultadoComSets.id, 57, false, null,
-  { readOnly: true, dashFeedResult: true });
-ok(cardEncerradoNov.indexOf('sp-set-grid--result') !== -1,
-  'C7b. Novidades concluída usa a mesma grade compacta dos últimos resultados');
-ok(cardEncerradoNov.indexOf('sp-set-head') === -1 && cardEncerradoNov.indexOf('>SETS<') === -1,
-  'C7c. Novidades concluída não repete cabeçalho SETS / números das colunas');
+  { readOnly: true });
+ok(cardEncerradoNov.indexOf('sp-set-grid--result') === -1,
+  'C7b. Novidades concluída não troca o placar canônico pela grade compacta');
+ok(cardEncerradoNov.indexOf('sp-set-head') !== -1 && cardEncerradoNov.indexOf('sp-set-lbl') !== -1,
+  'C7c. Novidades concluída mantém o cabeçalho SETS e as colunas do placar');
 
 // ── O SUBPLACAR DO TIE-BREAK NO PLACAR PENDENTE ────────────────────────────
 // Pergunta do dono vendo a chave (14/ago): "cadê o placar do tie-break no 5-6?".

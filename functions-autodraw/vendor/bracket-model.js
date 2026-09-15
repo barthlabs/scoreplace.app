@@ -1656,28 +1656,6 @@ window._assignGlobalGameNumbers = function (t) {
       dentro + '</div>';
   };
 
-  /* Grade de resultado ENCERRADO. A chave precisa da grade do plano da partida, pois ela
-   * ainda pode ganhar uma coluna; o feed só mostra sets já jogados e usa esta grade mais
-   * leve, que é a mesma de "Seus últimos resultados". Assim números de dois dígitos e
-   * subpontos mantêm a própria largura, sem apertar a folga entre sets. */
-  window._completedSetGridHtml = function (match, side) {
-    var sets = match && Array.isArray(match.sets) ? match.sets : [];
-    if (sets.length < 2) return '';
-    var temVencedor = !match.draw && typeof window._matchWinnerSide === 'function' &&
-      window._matchWinnerSide(match) != null;
-    var cels = sets.map(function (set) {
-      var txt = (typeof window._formatSetForPlayer === 'function')
-        ? window._formatSetForPlayer(set, side, { html: true })
-        : String(side === 1 ? set.gamesP1 : set.gamesP2);
-      var cor = (typeof window._corDoSetLado === 'function')
-        ? window._corDoSetLado(set, side, temVencedor)
-        : 'var(--text-muted)';
-      var corSegura = (typeof window._spCor === 'function') ? window._spCor(cor, 'color') : cor;
-      return window._colunaDeSetHtml('<span class="sp-set-num" style="color:' + corSegura + ';">' + txt + '</span>', set);
-    });
-    return '<div class="sp-set-grid sp-set-grid--result" style="justify-content:flex-end;">' + cels.join('') + '</div>';
-  };
-
   // ── SIMULAR UMA PARTIDA INTEIRA (dev) — pela MESMA régua que desenha o card ──────
   // Ordem do dono (23/ago/2026): _"o simular fase (dev) está simulando 1 set e entregando o
   // ganhador do jogo com apenas 1 set. O certo seria simular o melhor de 3 ou de 5 quando

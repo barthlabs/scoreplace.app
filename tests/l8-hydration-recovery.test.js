@@ -10,7 +10,7 @@ const cIni=source.indexOf('  _carimboDeLote: function (map) {');
 const cFim=source.indexOf('\n  },',cIni)+4;
 const storeCode='({'+source.slice(start,end).replace(/[\s,]*$/,'')+',\n'+source.slice(cIni,cFim).replace(/[\s,]*$/,'')+'})';
 const dash=fs.readFileSync(path.join(root,'js/views/dashboard.js'),'utf8');
-const ds=dash.indexOf('  try {\n    _dashMyTournaments.filter');
+const ds=dash.indexOf('  var _dashResultTournaments = [];\n  try {');
 const de=dash.indexOf('\n  /* ⛔ `organizadosCount`',ds);
 const dashCode=dash.slice(ds,de);
 const drain=async()=>{for(let i=0;i<12;i++)await Promise.resolve();};

@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.3.30';
+window.SCOREPLACE_VERSION = '2.3.31';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -11756,6 +11756,64 @@ window.AppStore = {
     this._hydrateResultPromises[requestKey] = task;
     task.then(function () { delete self._hydrateResultPromises[requestKey]; }, function () { delete self._hydrateResultPromises[requestKey]; });
     return task;
+  },
+
+  /* Resultados da dashboard vivem numa subcoleção. O ouvinte do documento do
+   * torneio não recebe essas mudanças, portanto aprovar um placar em outro aparelho
+   * só aparecia depois de atualizar a página. A dashboard acompanha somente a mesma
+   * janela pequena que ela hidrata (até cinco torneios, quarenta resultados cada). */
+  ouvirResultadosDaDashboard(tournamentIds) {
+    var ids = (Array.isArray(tournamentIds) ? tournamentIds : []).map(String)
+      .filter(Boolean).filter(function (id, i, all) { return all.indexOf(id) === i; }).sort();
+    var assinatura = ids.join('|');
+    if (this._dashboardResultsSub && this._dashboardResultsSub.assinatura === assinatura) return;
+    this.pararDeOuvirResultadosDaDashboard();
+    if (!ids.length || !window.FirestoreDB || !window.FirestoreDB.db) return;
+    var self = this, uns = [];
+    ids.forEach(function (id) {
+      try {
+        var recebeuServidor = false;
+        var consulta = window.FirestoreDB._tSub(id, 'results').orderBy('updatedAt', 'desc').limit(40);
+        var un = consulta.onSnapshot({ includeMetadataChanges:true }, function (snap) {
+          if (typeof window._isRemoteFirestoreSnapshot === 'function' && !window._isRemoteFirestoreSnapshot(snap)) return;
+          var mudou = snap.docChanges();
+          if (!mudou.length && recebeuServidor) return;
+          recebeuServidor = true;
+          var vivo = (self.tournaments || []).find(function (t) { return t && String(t.id) === id; });
+          if (!vivo) return;
+          vivo._results = vivo._results || {};
+          var todos = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(vivo) : [];
+          var lote = self._carimboDeLote(vivo._results);
+          mudou.forEach(function (change) {
+            var mid = String(change.doc.id);
+            if (change.type === 'removed') {
+              delete vivo._results[mid];
+              todos.forEach(function (m) {
+                if (!m || String(m.id) !== mid) return;
+                ['scoreP1','scoreP2','sets','setsWonP1','setsWonP2','winner','draw','pendingResult','confirmedAt'].forEach(function (k) { delete m[k]; });
+              });
+              return;
+            }
+            var result = change.doc.data() || {};
+            vivo._results[mid] = result;
+            todos.forEach(function (m) {
+              if (m && String(m.id) === mid) self._overlayResultOnMatch(m, result, lote);
+            });
+          });
+          try { if (window._noteFsReads) window._noteFsReads(mudou.length, 'rt-dashboard-results'); } catch (_eReads) {}
+          self._saveToCache();
+          if (typeof window._dashPedirRepintura === 'function') window._dashPedirRepintura('resultados-remotos');
+        }, function (err) { if (window._warn) window._warn('[dashboard] listener de resultados falhou', err); });
+        uns.push(un);
+      } catch (e) { if (window._warn) window._warn('[dashboard] não consegui ouvir resultados', e); }
+    });
+    if (uns.length) this._dashboardResultsSub = { assinatura:assinatura, uns:uns };
+  },
+
+  pararDeOuvirResultadosDaDashboard() {
+    var sub = this._dashboardResultsSub;
+    if (sub && Array.isArray(sub.uns)) sub.uns.forEach(function (un) { try { if (typeof un === 'function') un(); } catch (e) {} });
+    this._dashboardResultsSub = null;
   },
 
   // Grava o resultado de UM jogo no doc próprio (transação, sem lost-update) +
