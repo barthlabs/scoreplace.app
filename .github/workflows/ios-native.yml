@@ -1,0 +1,136 @@
+name: iOS nativo — validação e TestFlight
+
+# A validação roda em toda mudança que pode alterar o binário. O upload só ocorre
+# por disparo manual e com a opção explícita marcada: subir um build é uma ação de
+# loja, não consequência implícita de um push.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ios/**'
+      - 'js/**'
+      - 'css/**'
+      - 'src/**'
+      - 'tools/**'
+      - 'scripts/**'
+      - 'index.html'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'version.txt'
+      - '.github/workflows/ios-native.yml'
+  pull_request:
+    paths:
+      - 'ios/**'
+      - 'js/**'
+      - 'css/**'
+      - 'src/**'
+      - 'tools/**'
+      - 'scripts/**'
+      - 'index.html'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'version.txt'
+      - '.github/workflows/ios-native.yml'
+  workflow_dispatch:
+    inputs:
+      upload_testflight:
+        description: 'Enviar esta build validada ao TestFlight'
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-native-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Compilar iOS e Watch sem assinatura
+    runs-on: macos-26
+    timeout-minutes: 45
+    env:
+      # Xcode 27 exclui watchOS 8 e o Apple Watch Series 3. A imagem macOS 26
+      # inclui 26.6 em paralelo; o caminho explícito impede regressão silenciosa.
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Conferir Xcode fixado e versão nativa
+        run: |
+          test -x "$DEVELOPER_DIR/usr/bin/xcodebuild"
+          xcodebuild -version
+          xcodebuild -showsdks | grep -E 'watchos(8|9|10|11|26)'
+          node scripts/check-versao-nativa.js ios
+          node scripts/check-release-notes.js
+
+      - name: Instalar dependências e montar assets Capacitor
+        run: |
+          npm ci --ignore-scripts
+          npm run cap:sync
+          scripts/check-embedded-www.sh ios
+
+      - name: Compilar iPhone e Apple Watch sem assinatura
+        run: |
+          xcodebuild \
+            -project ios/App/App.xcodeproj \
+            -scheme App \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+  testflight:
+    name: Archive assinado e TestFlight
+    needs: validate
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_PRIVATE_KEY_BASE64: ${{ secrets.ASC_PRIVATE_KEY_BASE64 }}
+      IOS_DISTRIBUTION_CERTIFICATE_BASE64: ${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_BASE64 }}
+      IOS_DISTRIBUTION_CERTIFICATE_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_PASSWORD }}
+      TMPDIR: ${{ runner.temp }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci --ignore-scripts
+
+      - name: Criar archive assinado e validar companion do Watch
+        shell: bash
+        run: |
+          source scripts/ios-ci-signing.sh
+          if [ '${{ inputs.upload_testflight }}' = 'true' ]; then
+            scripts/ios-archive.sh --export
+          else
+            scripts/ios-archive.sh
+          fi
+
+      - name: Preservar archive para diagnóstico
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scoreplace-ios-${{ github.run_number }}
+          path: ${{ runner.temp }}/scoreplace-*.xcarchive
+          if-no-files-found: warn
+          retention-days: 7
