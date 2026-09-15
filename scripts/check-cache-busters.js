@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* check-cache-busters.js — trava de deploy: todo JS ALTERADO tem que ter o cache-buster
+/* check-cache-busters.js — trava de deploy: todo JS ou CSS ALTERADO tem que ter o cache-buster
  * na versão atual, senão o service worker serve a cópia velha e o deploy é fantasma.
  *
  * POR QUE ISTO EXISTE (14/jul/2026): editei js/views/match-history.js e esqueci de bumpar
@@ -46,8 +46,8 @@ try {
     // comparar com o release anterior arrasta os JS da leva JÁ publicada e faz
     // o `--fix` rebatizar arquivos intactos. A fonte de verdade aqui é o
     // worktree: só ele contém a mudança que será o próximo commit.
-    const locais = execSync('git diff --name-only HEAD -- js/', { cwd: root })
-      .toString().split('\n').map((s) => s.trim()).filter((s) => s.endsWith('.js'));
+    const locais = execSync('git diff --name-only HEAD -- js/ css/', { cwd: root })
+      .toString().split('\n').map((s) => s.trim()).filter((s) => /\.(?:js|css)$/.test(s));
     if (locais.length) {
       mudados = locais;
       _de = ' (alterações locais desde ' + head.slice(0, 8) + ')';
@@ -67,8 +67,8 @@ try {
     }
   }
   if (!mudados.length) {
-    mudados = execSync('git diff --name-only ' + base + ' -- js/', { cwd: root })
-      .toString().split('\n').map((s) => s.trim()).filter((s) => s.endsWith('.js'));
+    mudados = execSync('git diff --name-only ' + base + ' -- js/ css/', { cwd: root })
+      .toString().split('\n').map((s) => s.trim()).filter((s) => /\.(?:js|css)$/.test(s));
   }
 } catch (e) {
   console.log('⚠ sem origin/main pra comparar — pulando (' + (e.message || '').split('\n')[0] + ')');
@@ -128,4 +128,4 @@ if (falhas.length) {
   console.error('      node scripts/check-cache-busters.js --fix\n');
   process.exit(1);
 }
-console.log('✓ cache-busters ok (' + mudados.length + ' js alterado(s), versão ' + versao + ')');
+console.log('✓ cache-busters ok (' + mudados.length + ' recurso(s) JS/CSS alterado(s), versão ' + versao + ')');

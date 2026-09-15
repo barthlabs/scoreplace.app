@@ -541,13 +541,16 @@ async function espacoDosSetsResponsivo() {
     return r;
   }
   const estreito = await mede(390);
-  const largo = await mede(560);
+  const medio = await mede(560);
+  const largo = await mede(920);
   await browser.close();
 
   ok(estreito.card < 430 && estreito.gaps.every((g) => Math.abs(g - 2) < 0.1),
     '⑦ card estreito preserva o vão mínimo de 2px (' + estreito.card.toFixed(1) + 'px)');
-  ok(largo.card >= 430 && largo.gaps.every((g) => g > 4 && g <= 7),
-    '⑦ card largo abre os sets de modo proporcional (' + largo.gaps.map((g) => g.toFixed(1)).join(', ') + 'px)');
+  ok(medio.card >= 430 && medio.card < 600 && medio.gaps.every((g) => g >= 5 && g <= 8),
+    '⑦ card médio abre os sets sem roubar a área dos nomes (' + medio.gaps.map((g) => g.toFixed(1)).join(', ') + 'px)');
+  ok(largo.card >= 600 && largo.gaps.every((g) => g >= 12 && g <= 16),
+    '⑦ card largo usa a folga disponível entre os sets (' + largo.gaps.map((g) => g.toFixed(1)).join(', ') + 'px)');
   ok(new Set(largo.gaps.map((g) => g.toFixed(2))).size === 1,
     '⑦ cabeçalho e os dois lados mantêm o mesmo vão entre colunas');
 }

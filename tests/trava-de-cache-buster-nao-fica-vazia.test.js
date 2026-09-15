@@ -49,8 +49,8 @@ ok(String((pkg.scripts || {}).test || '').indexOf('node scripts/check-cache-bust
 // ── 2. a régua não fica vazia quando não há nada à frente do main ────────────────────
 ok(/if \(base === head\)/.test(src),
   'quando não há nada à frente do main, a base muda (senão o diff é vazio)');
-ok(/git diff --name-only HEAD -- js\//.test(src),
-  'com JS ainda não commitado, a trava usa somente o worktree — não rebatiza a leva anterior');
+ok(/git diff --name-only HEAD -- js\/ css\//.test(src),
+  'com JS ou CSS ainda não commitado, a trava usa somente o worktree — não rebatiza a leva anterior');
 ok(/git log -3 --format=%H -- version\.txt/.test(src),
   '  → a base vira o release ANTERIOR, achado pelo version.txt');
 ok(/rels\.filter\(\(h\) => h !== head\)\[0\]/.test(src),
@@ -112,21 +112,21 @@ try {
   try {
     _base = execSync('git merge-base HEAD origin/main', { cwd: ROOT, stdio: 'pipe' }).toString().trim();
   } catch (e) { /* sem origin/main (clone solto): a base é o release anterior, abaixo */ }
-  const _locais = execSync('git diff --name-only HEAD -- js/', { cwd: ROOT })
-    .toString().split('\n').map((s) => s.trim()).filter((s) => s.endsWith('.js'));
+  const _locais = execSync('git diff --name-only HEAD -- js/ css/', { cwd: ROOT })
+    .toString().split('\n').map((s) => s.trim()).filter((s) => /\.(?:js|css)$/.test(s));
   if (_base === _head && !_locais.length) _base = _relAnterior;
   ok((_base && _base !== _head) || _locais.length,
     '  → a fonte é release anterior ou worktree local (base ' + String(_base).slice(0, 8) + ', locais=' + _locais.length + ')');
   // O arquivo adulterado precisa vir da MESMA base que o gate real vai usar.
   // Escolher desde o release anterior podia pegar um JS já presente em origin/main;
   // nessa situação o gate corretamente o ignora e o teste acusava falso negativo.
-  const mudados = _locais.length ? _locais : execSync('git diff --name-only ' + _base + ' -- js/', { cwd: ROOT })
-    .toString().split('\n').map((s) => s.trim()).filter((s) => s.endsWith('.js'));
+  const mudados = _locais.length ? _locais : execSync('git diff --name-only ' + _base + ' -- js/ css/', { cwd: ROOT })
+    .toString().split('\n').map((s) => s.trim()).filter((s) => /\.(?:js|css)$/.test(s));
   const um = mudados.map((f) => new RegExp(f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\?v=[0-9.]+'))
     .map((re) => (original.match(re) || [])[0]).filter(Boolean)[0];
   if (um) {
     fs.writeFileSync(idx, original.replace(um, um.replace(/\?v=[0-9.]+/, '?v=0.0.1')));
-    ok(rodar() === 1, '  → e REPROVA quando um js alterado fica com o ?v= velho (o incidente)');
+    ok(rodar() === 1, '  → e REPROVA quando um JS ou CSS alterado fica com o ?v= velho (o incidente)');
   } else {
     console.log('  ⏭  esta leva não tem js alterado (ex.: bump só do iOS) — nada pra rebaixar');
   }

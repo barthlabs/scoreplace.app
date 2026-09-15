@@ -2544,16 +2544,18 @@ html, body,
    alinhada com os boxes de baixo. `align-self:flex-end` deixa a palavra na linha de base dos
    rótulos, não flutuando acima deles. */
 .sp-set-head-sets{align-self:flex-end;font-size:0.46rem;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-muted);white-space:nowrap;margin-right:1px;line-height:1.05;flex-shrink:0;}
-/* O vão mínimo é 2px: em cards estreitos ele preserva a área dos nomes. Em cards largos,
-   porém, deixar o mesmo vão fazia os sets parecerem colados mesmo com folga lateral — como
-   no card de Novidades visto pelo dono. Cada card vira seu próprio contêiner: acima de 430px
-   a grade abre de forma gradual (4–7px), sem uma largura fixa que castigue telas menores.
-   Cabeçalho e as duas linhas de placar usam a MESMA classe, portanto cada rótulo continua
-   exatamente acima de sua coluna. */
+/* O vão mínimo é 2px: em cards estreitos ele preserva a área dos nomes. A partir de
+   430px a grade respira um pouco; a partir de 600px, quando o card inteiro já tem largura
+   para a dupla e para o placar, a folga cresce até 16px. Isto separa visualmente 6 | 6 sem
+   inventar uma segunda geometria: cabeçalho e os dois lados usam a MESMA grade, então cada
+   rótulo permanece exatamente acima da sua coluna. */
 .sp-match-card{container-type:inline-size;}
 .sp-set-grid{display:flex;align-items:flex-end;gap:2px;flex-shrink:0;}
 @container (min-width:430px){
-  .sp-set-grid{gap:clamp(4px,1.25cqi,7px);}
+  .sp-set-grid{gap:clamp(5px,1.35cqi,8px);}
+}
+@container (min-width:600px){
+  .sp-set-grid{gap:clamp(12px,1.85cqi,16px);}
 }
 /* ⛔ PLACAR ALINHA À DIREITA, NÃO AO CENTRO. Ordem do dono (13/set/2026, olhando um jogo
    com super tie-break): _"os placares parecem alinhados nas colunas pela esquerda; faça o
