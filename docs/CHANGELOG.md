@@ -1,3 +1,9 @@
+## 2.3.26 — 14/set/2026
+
+- A atualização web passa a preservar o service worker e o cache coerente também quando a troca do worker falha, demora ou não encontra registro. O HTML é revalidado pela rede e a recarga segue pela navegação rede-primeiro, sem abrir uma janela em que o app perde seu próprio shell.
+- A suíte executa o fluxo real de atualização para as falhas de suporte, consulta do registro, atualização e prazo. Em todos eles confirma que não há `unregister` nem limpeza de cache antes da recarga.
+- Esta publicação é somente web. Não há geração, sincronização nem submissão dos projetos iOS e Android.
+
 ## 2.3.25 — 14/set/2026
 
 - A escala de árbitros passa a ser alterada por uma única operação transacional no servidor. Convidar, confirmar e remover usam o estado recém-lido do torneio, não uma cópia aberta na aba; convites repetidos não criam duplicatas.

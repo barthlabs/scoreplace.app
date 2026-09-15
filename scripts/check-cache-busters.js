@@ -42,6 +42,16 @@ try {
   let base = execSync('git merge-base HEAD origin/main', { cwd: root }).toString().trim();
   const head = execSync('git rev-parse HEAD', { cwd: root }).toString().trim();
   if (base === head) {
+    // Ainda sem commit novo, a leva pode estar em fechamento local. Nesse caso
+    // comparar com o release anterior arrasta os JS da leva JÁ publicada e faz
+    // o `--fix` rebatizar arquivos intactos. A fonte de verdade aqui é o
+    // worktree: só ele contém a mudança que será o próximo commit.
+    const locais = execSync('git diff --name-only HEAD -- js/', { cwd: root })
+      .toString().split('\n').map((s) => s.trim()).filter((s) => s.endsWith('.js'));
+    if (locais.length) {
+      mudados = locais;
+      _de = ' (alterações locais desde ' + head.slice(0, 8) + ')';
+    } else {
     // Nada à frente do main → a base vira o RELEASE ANTERIOR (exclusive): o último commit que
     // mexeu em `version.txt` e que não seja o próprio HEAD. Assim o diff é exatamente ESTA
     // leva.
@@ -54,9 +64,12 @@ try {
       .toString().split('\n').map((x) => x.trim()).filter(Boolean);
     const anterior = rels.filter((h) => h !== head)[0];
     if (anterior) { base = anterior; _de = ' (desde o release anterior ' + anterior.slice(0, 8) + ' — nada à frente do main)'; }
+    }
   }
-  mudados = execSync('git diff --name-only ' + base + ' -- js/', { cwd: root })
-    .toString().split('\n').map((s) => s.trim()).filter((s) => s.endsWith('.js'));
+  if (!mudados.length) {
+    mudados = execSync('git diff --name-only ' + base + ' -- js/', { cwd: root })
+      .toString().split('\n').map((s) => s.trim()).filter((s) => s.endsWith('.js'));
+  }
 } catch (e) {
   console.log('⚠ sem origin/main pra comparar — pulando (' + (e.message || '').split('\n')[0] + ')');
   process.exit(0);

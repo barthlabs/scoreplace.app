@@ -481,10 +481,15 @@ const CACHE_QUENTE = {
   }
   const fonteApply = extrairFuncao(storeSrc, 'window._applyUpdate = function');
   ok('dá pra extrair o _applyUpdate real do store.js', !!fonteApply);
+  const iRevalidar = fonteApply ? fonteApply.indexOf('var _revalidarHtml = function()') : -1;
+  const iFallbackSeguro = fonteApply ? fonteApply.indexOf('var _recarregarSemDestruirHandoff') : -1;
+  ok('a revalidação do HTML existe dentro do _applyUpdate real, antes de todo fallback',
+    iRevalidar >= 0 && iFallbackSeguro > iRevalidar);
 
   // Monta um navegador de mentira e roda o _applyUpdate de verdade dentro dele.
   function rodarApplyUpdate(cenario) {
     const atos = [];
+    const timers = [];
     const worker = {
       state: cenario.estadoInicial || 'installing',
       _handlers: {},
@@ -500,7 +505,14 @@ const CACHE_QUENTE = {
       waiting: null,
       _handlers: {},
       addEventListener(t, fn) { (this._handlers[t] = this._handlers[t] || []).push(fn); },
-      update() { atos.push({ ato: 'reg.update' }); return cenario.updateFalha ? Promise.reject(new Error('x')) : Promise.resolve(); }
+      update() {
+        atos.push({ ato: 'reg.update' });
+        if (cenario.updateFalha) {
+          atos.push({ ato: 'reg.update.falhou' });
+          return Promise.reject(new Error('update indisponível'));
+        }
+        return Promise.resolve();
+      }
     };
     const win = {
       _isSafeToReload: () => true,
@@ -510,14 +522,20 @@ const CACHE_QUENTE = {
     };
     const sandbox = {
       window: win, Promise, Date, Error, JSON,
-      setTimeout: (fn, ms) => { atos.push({ ato: 'timeout', ms }); return { _fn: fn, ms }; },
+      setTimeout: (fn, ms) => {
+        const timer = { _fn: fn, ms };
+        atos.push({ ato: 'timeout', ms }); timers.push(timer);
+        return timer;
+      },
       clearTimeout: () => { atos.push({ ato: 'clearTimeout' }); },
       caches: { keys: () => { atos.push({ ato: 'caches.keys' }); return Promise.resolve(['c1']); },
                 delete: (k) => { atos.push({ ato: 'CACHES.DELETE', alvo: k }); return Promise.resolve(true); } },
       fetch: (u, o) => { atos.push({ ato: 'fetch', url: u, cache: o && o.cache }); return Promise.resolve({}); },
       navigator: {
         serviceWorker: cenario.semSW ? undefined : {
-          getRegistration: () => Promise.resolve(cenario.semReg ? null : reg),
+          getRegistration: () => cenario.getRegFalha
+            ? Promise.reject(new Error('consulta indisponível'))
+            : Promise.resolve(cenario.semReg ? null : reg),
           getRegistrations: () => { atos.push({ ato: 'getRegistrations' }); return Promise.resolve([{ unregister() { atos.push({ ato: 'SW.UNREGISTER' }); return Promise.resolve(true); } }]); }
         }
       }
@@ -527,7 +545,7 @@ const CACHE_QUENTE = {
     vm.createContext(sandbox);
     vm.runInContext(fonteApply, sandbox, { filename: 'store.js#_applyUpdate' });
     win._applyUpdate(true);
-    return { atos, worker, reg };
+    return { atos, worker, reg, timers };
   }
 
   // 3a) CAMINHO NORMAL: espera o SW novo ativar; NUNCA apaga cache nem desregistra.
@@ -553,26 +571,43 @@ const CACHE_QUENTE = {
       !r.atos.some((a) => a.ato === 'SW.UNREGISTER' || a.ato === 'CACHES.DELETE'));
   }
 
-  // 3b) O FALLBACK CONTINUA EXISTINDO — sem ele, SW quebrado prenderia o usuário
-  //     na versão velha pra sempre. Aqui o reset completo é o comportamento certo.
-  {
-    const r = rodarApplyUpdate({ semReg: true });
+  // 3b) FALHA NO HANDOFF: o fallback também preserva o controlador. Antes esta
+  //     porta apagava os caches e desregistrava o SW, justamente antes do reload que
+  //     precisava deles. Rede instável não pode fabricar um carregamento sem shell.
+  for (const [nome, cenario] of [
+    ['sem suporte a SW', { semSW: true }],
+    ['sem SW registrado', { semReg: true }],
+    ['consulta do registro falhando', { getRegFalha: true }],
+    ['reg.update() falhando', { updateFalha: true }]
+  ]) {
+    const r = rodarApplyUpdate(cenario);
     await new Promise((res) => setTimeout(res, 30));
-    ok('sem SW registrado: cai no reset completo (não trava na versão velha)',
-      r.atos.some((a) => a.ato === 'CACHES.DELETE') && r.atos.some((a) => a.ato === 'SW.UNREGISTER'));
-  }
-  {
-    const r = rodarApplyUpdate({ updateFalha: true });
-    await new Promise((res) => setTimeout(res, 30));
-    ok('reg.update() falhando: idem — reset completo em vez de ficar preso',
-      r.atos.some((a) => a.ato === 'CACHES.DELETE'));
+    ok(nome + ': revalida o HTML antes de recarregar',
+      r.atos.some((a) => a.ato === 'fetch' && a.cache === 'reload'));
+    ok(nome + ': não desregistra o worker durante a recuperação',
+      !r.atos.some((a) => a.ato === 'SW.UNREGISTER'));
+    ok(nome + ': não apaga caches durante a recuperação',
+      !r.atos.some((a) => a.ato === 'CACHES.DELETE'));
+    ok(nome + ': recarrega pela rota rede-primeiro',
+      r.atos.some((a) => a.ato === 'location.reload'));
+    if (cenario.updateFalha) {
+      ok(nome + ': a rejeição simulada de reg.update alcança a recuperação',
+        r.atos.some((a) => a.ato === 'reg.update.falhou'));
+    }
   }
   {
     // Prazo: SW que nunca ativa não pode prender ninguém.
     const r = rodarApplyUpdate({});
-    const prazo = r.atos.find((a) => a.ato === 'timeout');
+    const prazo = r.timers.find((t) => t.ms === 8000);
     ok('existe prazo pro SW ativar (SW travado não prende o usuário)',
       !!prazo && prazo.ms > 0 && prazo.ms <= 15000);
+    if (prazo) prazo._fn();
+    await new Promise((res) => setTimeout(res, 30));
+    ok('prazo do handoff: preserva cache e worker antes de recarregar',
+      !r.atos.some((a) => a.ato === 'SW.UNREGISTER' || a.ato === 'CACHES.DELETE'));
+    ok('prazo do handoff: revalida e recarrega pela rota rede-primeiro',
+      r.atos.some((a) => a.ato === 'fetch' && a.cache === 'reload') &&
+      r.atos.some((a) => a.ato === 'location.reload'));
   }
 
   // 3c) O MOTIVO FICA ESCRITO ONDE O DEFEITO MORAVA — senão alguém "simplifica"

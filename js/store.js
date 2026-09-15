@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.3.25';
+window.SCOREPLACE_VERSION = '2.3.26';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -3854,26 +3854,12 @@ window._devWhatsAppBtnHtml = function (opts) {
     // (o `install` dele já precacheou o <head>, e o `activate` faz
     // `clients.claim()`), e só então recarrega — assim o reload nasce
     // controlado e pinta do cache. `tests/sw-abre-sem-tela-branca.test.js`
-    // trava isto; se você reintroduzir unregister/nuke no caminho normal, ele
+    // trava isto; se você reintroduzir unregister/nuke em qualquer caminho de
     // fica vermelho.
     //
     // Apagar cache velho NÃO é necessário aqui: o `activate` do sw.js já apaga
     // toda chave ≠ CACHE_NAME (que carrega a versão), e o cache-first casa a
     // URL EXATA com `?v=` — versão nova nunca é servida da antiga.
-
-    var _hardResetEReload = function(motivo) {
-      // FALLBACK — só quando o caminho do SW não existe ou não respondeu. Aqui
-      // a carga descontrolada é o preço de não deixar o usuário preso na versão
-      // velha; no caminho normal (acima) ela não acontece.
-      window._warn('[AutoUpdate] handoff do SW indisponível (' + motivo + ') — reset completo.');
-      var p1 = ('caches' in window) ? caches.keys().then(function(keys) {
-        return Promise.all(keys.map(function(k) { return caches.delete(k); }));
-      }) : Promise.resolve();
-      var p2 = ('serviceWorker' in navigator) ? navigator.serviceWorker.getRegistrations().then(function(regs) {
-        return Promise.all(regs.map(function(r) { return r.unregister(); }));
-      }) : Promise.resolve();
-      Promise.all([p1, p2, _revalidarHtml()]).then(_recarregar);
-    };
 
     // v1.3.64: CRÍTICO — o hosting serve index.html com `cache-control` de minutos
     // e SEM cache-buster no próprio HTML. `location.reload()` é SOFT → poderia servir
@@ -3881,15 +3867,27 @@ window._devWhatsAppBtnHtml = function (opts) {
     // anterior; só hard-refresh resolvia). Revalidar o documento com `cache:'reload'`
     // ANTES do reload baixa o HTML fresco E atualiza a entrada do cache HTTP.
     // Ver [[project_pwa_auto_update]].
-    function _revalidarHtml() {
+    var _revalidarHtml = function() {
       try { return fetch(window.location.pathname, { cache: 'reload' }).catch(function() {}); }
       catch (e) { return Promise.resolve(); }
-    }
+    };
     // Marca o guard ANTES do reload pra o handler de controllerchange (index.html)
     // não disparar um segundo reload — só pode existir UM caminho de reload (v2.6.16).
     function _recarregar() { window._swReloading = true; window.location.reload(); }
 
-    if (!('serviceWorker' in navigator)) { _hardResetEReload('sem suporte a SW'); return; }
+    // Se a troca do worker não puder ser confirmada, a recuperação ainda precisa
+    // preservar o worker que controla ESTA página e o cache coerente que ele
+    // consegue servir. Apagar cache/desregistrar antes de recarregar reabre a
+    // janela sem controlador e faz o próximo load depender de dezenas de requests.
+    // A navegação do worker é rede-primeiro; portanto revalidar o HTML e recarregar
+    // por ele é suficiente para buscar a versão publicada sem fabricar um shell
+    // híbrido. A correção excepcional de JavaScript truncado fica fora desta porta.
+    var _recarregarSemDestruirHandoff = function(motivo) {
+      window._warn('[AutoUpdate] handoff do SW indisponível (' + motivo + ') — preservando worker e cache coerente.');
+      _revalidarHtml().then(_recarregar);
+    };
+
+    if (!('serviceWorker' in navigator)) { _recarregarSemDestruirHandoff('sem suporte a SW'); return; }
 
     // CAMINHO NORMAL: passa o bastão pro SW novo e recarrega CONTROLADO.
     var _entregue = false;
@@ -3904,7 +3902,7 @@ window._devWhatsAppBtnHtml = function (opts) {
     var _prazo = setTimeout(function() {
       if (_entregue) return;
       _entregue = true;
-      _hardResetEReload('o SW novo não ativou em 8s');
+      _recarregarSemDestruirHandoff('o SW novo não ativou em 8s');
     }, 8000);
     var _pronto = function() {
       if (_entregue) return;
@@ -3913,7 +3911,7 @@ window._devWhatsAppBtnHtml = function (opts) {
     };
 
     navigator.serviceWorker.getRegistration().then(function(reg) {
-      if (!reg) { clearTimeout(_prazo); _entregue = true; _hardResetEReload('nenhum SW registrado'); return; }
+      if (!reg) { clearTimeout(_prazo); _entregue = true; _recarregarSemDestruirHandoff('nenhum SW registrado'); return; }
       // Se já há um SW novo esperando/instalando, acompanha; senão provoca a busca.
       // SW parado em `installed` fica esperando as abas antigas fecharem. O
       // sw.js chama skipWaiting sozinho no install, mas cutucar aqui elimina o
@@ -3936,10 +3934,10 @@ window._devWhatsAppBtnHtml = function (opts) {
       if (_observar(reg.waiting) || _observar(reg.installing)) { /* já a caminho */ }
       reg.addEventListener('updatefound', function() { _observar(reg.installing); });
       reg.update().catch(function() {
-        clearTimeout(_prazo); _entregue = true; _hardResetEReload('reg.update() falhou');
+        clearTimeout(_prazo); _entregue = true; _recarregarSemDestruirHandoff('reg.update() falhou');
       });
     }).catch(function() {
-      clearTimeout(_prazo); _entregue = true; _hardResetEReload('getRegistration() falhou');
+      clearTimeout(_prazo); _entregue = true; _recarregarSemDestruirHandoff('getRegistration() falhou');
     });
   };
 
