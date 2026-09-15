@@ -102,7 +102,9 @@ jobs:
       ASC_PRIVATE_KEY_BASE64: ${{ secrets.ASC_PRIVATE_KEY_BASE64 }}
       IOS_DISTRIBUTION_CERTIFICATE_BASE64: ${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_BASE64 }}
       IOS_DISTRIBUTION_CERTIFICATE_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_PASSWORD }}
-      TMPDIR: ${{ runner.temp }}
+      # /tmp é efêmero no runner hospedado. O contexto `runner` não é válido
+      # neste bloco de ambiente de job (só dentro de etapas).
+      TMPDIR: /tmp
     steps:
       - uses: actions/checkout@v4
         with:
