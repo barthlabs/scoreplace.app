@@ -1,3 +1,5 @@
+// 2.3.28 — Novidades da dashboard resolvem os perfis já na abertura, sem esperar fotos; e o
+// campo de placar pendente preserva a mesma escala dos sets lançados no app nativo.
 // 2.3.27 — a telemetria usa somente a rota reconhecida pelo aplicativo e a versão atual, tanto em erros quanto em transações; hashes arbitrárias não carregam texto para o diagnóstico.
 // 2.3.26 — falhas da troca de versão preservam o service worker e o shell coerente; não há reset destrutivo antes da recarga.
 // 2.3.25 — a escala de árbitros é confirmada no servidor e a lista mostra apenas os dados públicos necessários; a abertura também recusa fotografia local como dado atual.
@@ -280,6 +282,8 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:var(--sp-c-fde68a,#fde68a); font-size:1rem; margin-bottom:8px;">🎾 v2.3 — Classificação que conta do fim para o começo, avisos que não se repetem e a raridade dos troféus de volta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(Setembro, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>📣 Novidades completas desde a abertura:</b> a dashboard agora carrega os nomes e fotos dos jogos do torneio sem precisar abrir a chave antes. A leitura de identidade acontece em paralelo às fotos, para que o card não fique com reticências enquanto a tela já mostra seus resultados.</li>' +
+        '<li><b>🎾 Placar inicial mais legível:</b> em partidas de melhor de 3 e melhor de 5, os campos ainda sem placar usam no aplicativo nativo a mesma escala dos sets já lançados. O 0–0 deixa de parecer menor apenas por estar pendente.</li>' +
         '<li><b>🏅 Quem cai numa rodada vai para o fim da chave:</b> a classificação parcial da eliminatória colocava quem perdia logo abaixo do pódio — numa chave de 36 duplas, cinco derrotas viravam "5º ao 9º lugar". Agora a colocação se conta do fim, e só aparece quando a rodada inteira termina: fechado o último placar, os critérios de desempate do torneio ordenam os perdedores, os melhores ocupam as vagas de repescagem e os que sobram recebem os últimos lugares.</li>' +
         '<li><b>🔔 O mesmo aviso não chega duas vezes:</b> salvar de novo o mesmo link de grupo de WhatsApp parava de avisar todo mundo outra vez, e a fila de e-mail passou a reconhecer a mensagem repetida antes de enviá-la. O aviso de placar também deixou de chegar como "fundamental" para quem organiza e não joga aquele jogo.</li>' +
         '<li><b>🗓️ O aviso de "vou jogar" diz o dia certo:</b> ele dizia "hoje" para planos da semana seguinte, ou "amanhã" para qualquer dia que não fosse hoje. Agora vem com a data junto, e continua correto quando você abre o aviso dias depois.</li>' +

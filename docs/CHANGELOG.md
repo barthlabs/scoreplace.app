@@ -1,3 +1,8 @@
+## 2.3.28 — 15/set/2026
+
+- A dashboard começa a resolver nomes e avatares dos cartões de Novidades imediatamente após o render. A leitura dos perfis públicos não espera as consultas de foto por nome, portanto uma abertura fria não depende de entrar no torneio para completar os cartões.
+- Em iOS e Android, os campos de placar ainda pendentes em jogos de melhor de 3 e melhor de 5 preservam a escala do set. O ajuste está somente no código-fonte nativo para a próxima build; esta publicação não gera nem envia binários às lojas.
+
 ## 2.3.27 — 14/set/2026
 
 - A telemetria só identifica uma tela por rotas que o router reconhece. Uma hash arbitrária deixa de poder aparecer como tag no Sentry; ela vira `unknown`, sem texto livre.
