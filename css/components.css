@@ -1924,23 +1924,37 @@ input[type="date"].form-control::-webkit-calendar-picker-indicator:hover {
    inline no renderer; esta é a única regra que pode vencê-las sem outro desenho
    de card. Quando cabem duas colunas legíveis, elas dividem o painel; quando não,
    uma ocupa tudo e a próxima continua acessível pelo gesto horizontal. */
-.bracket-scroll-content { gap:1rem !important; min-width:100% !important; }
+/* O trilho chega com `display:inline-flex;min-width:max-content` inline. Só trocar
+   a largura da coluna não bastava: a porcentagem era calculada no próprio conteúdo
+   encolhido, e sobrava uma faixa vazia à direita. O trilho passa a ter a largura EXATA
+   do rolador; a coluna de uma rodada ocupa 100% dessa largura. */
+.bracket-scroll-content {
+  display:flex !important;
+  box-sizing:border-box;
+  width:100% !important;
+  min-width:100% !important;
+  gap:1rem !important;
+}
 .bracket-scroll-content > .bracket-round-column {
   box-sizing:border-box;
-  width:100cqi;
-  min-width:100cqi !important;
-  flex:0 0 100cqi;
+  width:100% !important;
+  min-width:100% !important;
+  max-width:none !important;
+  flex:0 0 100% !important;
 }
 .bracket-round-column > .sp-match-card,
-.bracket-round-column .sp-match-card { box-sizing:border-box; width:100%; }
+.bracket-round-column .sp-match-card {
+  box-sizing:border-box;
+  width:100% !important;
+  max-width:none !important;
+}
 
+/* Duas colunas somente quando duas continuam legíveis dentro do painel útil. */
 @container (min-width:760px) {
-  .bracket-scroll-content { gap:1rem !important; min-width:100% !important; }
   .bracket-scroll-content > .bracket-round-column {
-    box-sizing:border-box;
-    width:calc((100cqi - 1rem) / 2);
-    min-width:calc((100cqi - 1rem) / 2) !important;
-    flex:0 0 calc((100cqi - 1rem) / 2);
+    width:calc((100% - 1rem) / 2) !important;
+    min-width:calc((100% - 1rem) / 2) !important;
+    flex:0 0 calc((100% - 1rem) / 2) !important;
   }
 }
 

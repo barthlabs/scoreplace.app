@@ -140,6 +140,35 @@ function register(t) { W.AppStore.tournaments = [t]; return t; }
   ok(!t.matches[1].winner, 'org-direto: outro jogo não é reprocessado');
 })();
 
+// ── 1c. O objeto auxiliar do time acompanha a substituição ────────────────────
+// A interface prefere `team*Obj` quando ele existe. O incidente real deixou
+// `p2`/UID corretos e o objeto com Flávia, então a tela continuou mentindo.
+(function () {
+  const t = register({
+    id: 't1c', format: 'Eliminatórias Simples', woScope: 'individual',
+    participants: [
+      { displayName: 'Ausente', uid: 'ua' }, { displayName: 'Parceira', uid: 'up' },
+      { displayName: 'Substituta', uid: 'us' }, { displayName: 'Adversária', uid: 'uo' }
+    ],
+    standbyParticipants: [{ displayName: 'Substituta', uid: 'us' }],
+    checkedIn: {}, absent: {},
+    matches: [{
+      id: 'objeto-vivo', p1: 'Ausente / Parceira', p2: 'Adversária',
+      team1Uids: ['ua', 'up'], team2Uids: ['uo'], winner: null,
+      team1Obj: {
+        displayName: 'Ausente / Parceira', name: 'Ausente / Parceira',
+        p1Name: 'Ausente', p1Uid: 'ua', p2Name: 'Parceira', p2Uid: 'up',
+        participants: [{ uid: 'ua', name: 'Ausente' }, { uid: 'up', name: 'Parceira' }]
+      }
+    }],
+  });
+  const r = W._applyWO(t, { absentName: 'Ausente', absentUids: ['ua'], scope: 'match', noSubBehavior: 'escalate', forceWaitlistSub: true, onlyAbsentUids: ['ua'] });
+  eq(r.outcome, 'subbed', 'objeto-vivo: a substituição foi aplicada');
+  eq(t.matches[0].team1Obj.displayName, 'Substituta / Parceira', 'objeto-vivo: display do objeto acompanha o slot');
+  eq(t.matches[0].team1Obj.p1Uid, 'us', 'objeto-vivo: UID da substituta acompanha o objeto');
+  eq(t.matches[0].team1Obj.participants[0].name, 'Substituta', 'objeto-vivo: membro exibido não fica com o nome ausente');
+})();
+
 // ── 2. SEM SUB, lista VAZIA → adversário vence por W.O. (escalate) ─────────────
 (function () {
   const t = register({

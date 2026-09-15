@@ -270,12 +270,51 @@ window._applyWoSubsToTournament = function(t, opts) {
       const su = (typeof window._slotUids === 'function') ? window._slotUids(m, side).filter(Boolean) : [];
       if (su.length && absentUid && subUid && su.indexOf(absentUid) !== -1) {
         const nu = su.map(u => (u === absentUid ? subUid : u));
-        // escreve a identidade canônica: team*Uids sempre; p*Uid quando 1v1 (1 uid). É o
-        // que _resolveSideLive/standings leem — sem isto, o slot 1v1 (só p1Uid) mostrava o
-        // nome novo mas mantinha o uid do AUSENTE, quebrando identidade depois.
-        if (typeof window._setSlot === 'function') window._setSlot(m, side, nu, null);
-        else { const k = side === 'p1' ? 'team1Uids' : 'team2Uids'; m[k] = nu; m[side === 'p1' ? 'p1Uid' : 'p2Uid'] = nu.length === 1 ? nu[0] : null; }
-        m[side] = _displayOf(nu, newEntry);
+        let label = _displayOf(nu, newEntry);
+        // `_displayOf` depende do cache de perfis. Se ele ainda não chegou, não
+        // pode reduzir uma dupla a só a substituta: recompõe os nomes conhecidos
+        // do próprio slot, que é a fonte persistida desta transação.
+        const labelParts = String(label || '').split(/\s*\/\s*/).map(n => n.trim()).filter(Boolean);
+        if (nu.length > 1 && labelParts.length !== nu.length) {
+          const oldParts = String(m[side] || oldEntry || '').split(/\s*\/\s*/).map(n => n.trim());
+          label = nu.map((uid, ix) => {
+            if (uid === subUid) return subName;
+            const resolved = typeof window._displayNameForUid === 'function'
+              ? window._displayNameForUid(uid, '') : '';
+            return resolved || oldParts[ix] || '';
+          }).filter(Boolean).join(' / ') || label;
+        }
+        /* O slot tem três representações históricas: `p1/p2`, `team*Uids` e
+         * `team*Obj`. A tela privilegia o objeto quando ele existe. Antes o W.O.
+         * atualizava as duas primeiras e deixava o objeto com a pessoa ausente;
+         * o banco então dizia Eliane/Adriana e o card ainda desenhava Flávia/Marcos.
+         * Reconstituir o objeto pelo UID e pelo rótulo vivo mantém as três formas
+         * coerentes na mesma transação. */
+        const objKey = side === 'p1' ? 'team1Obj' : 'team2Obj';
+        const oldObj = m[objKey] && typeof m[objKey] === 'object' ? m[objKey] : null;
+        let nextObj = null;
+        if (oldObj) {
+          const memberNames = label.split(/\s*\/\s*/).map(n => n.trim()).filter(Boolean);
+          const previous = Array.isArray(oldObj.participants) ? oldObj.participants : [];
+          nextObj = Object.assign({}, oldObj, {
+            displayName: label, name: label,
+            p1Name: memberNames[0] || label, p1Uid: nu[0] || null,
+            p2Name: memberNames[1] || null, p2Uid: nu[1] || null,
+            participants: memberNames.map((name, ix) => Object.assign({}, previous[ix] || {}, {
+              key: nu[ix] ? ('uid:' + nu[ix]) : (previous[ix] || {}).key,
+              uid: nu[ix] || null, name: name, displayName: name
+            }))
+          });
+        }
+        // escreve a identidade canônica: team*Uids sempre; p*Uid quando 1v1. O
+        // objeto auxiliar acompanha a escrita, para que nenhum leitor veja o elenco velho.
+        if (typeof window._setSlot === 'function') window._setSlot(m, side, nu, nextObj);
+        else {
+          const k = side === 'p1' ? 'team1Uids' : 'team2Uids';
+          m[k] = nu; m[side === 'p1' ? 'p1Uid' : 'p2Uid'] = nu.length === 1 ? nu[0] : null;
+          if (nextObj) m[objKey] = nextObj;
+        }
+        m[side] = label;
         return true;
       }
       if (!su.length && m[side] === oldEntry) { m[side] = newEntry; return true; } // guest/legado

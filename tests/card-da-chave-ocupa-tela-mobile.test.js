@@ -21,8 +21,9 @@ must(dupla.maxRem >= 0.86 && solo.maxRem >= 0.94,
 must(dupla.boxH >= dupla.maxRem * 2.1 && solo.boxH >= solo.maxRem * 2.1,
   'a caixa canônica reserva duas linhas antes de reduzir a fonte');
 must(/\.bracket-sticky-scroll-wrapper\s*\{[\s\S]{0,900}container-type\s*:\s*inline-size/.test(css) &&
-  /\.bracket-scroll-content\s*>\s*\.bracket-round-column[\s\S]{0,280}width\s*:\s*100cqi[\s\S]{0,280}min-width\s*:\s*100cqi\s*!important/.test(css) &&
-  /@container\s*\(min-width\s*:\s*760px\)[\s\S]{0,600}width\s*:\s*calc\(\(100cqi - 1rem\) \/ 2\)/.test(css),
+  /\.bracket-scroll-content\s*\{[\s\S]{0,340}width\s*:\s*100%\s*!important[\s\S]{0,160}min-width\s*:\s*100%\s*!important/.test(css) &&
+  /\.bracket-scroll-content\s*>\s*\.bracket-round-column[\s\S]{0,360}flex\s*:\s*0\s+0\s+100%\s*!important/.test(css) &&
+  /@container\s*\(min-width\s*:\s*760px\)[\s\S]{0,500}width\s*:\s*calc\(\(100% - 1rem\) \/ 2\)\s*!important/.test(css),
   'a grade usa a largura útil do painel: uma coluna cheia ou duas quando cabem');
 must(/_dashProfileUids[\s\S]{0,900}add\(m && m\.p1Uid\)[\s\S]{0,80}add\(m && m\.p2Uid\)/.test(dashboard),
   'a dashboard pré-carrega também os UIDs de jogos individuais');
