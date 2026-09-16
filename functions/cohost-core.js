@@ -75,6 +75,15 @@ function coHostsArray(data) {
   return Array.isArray(data && data.coHosts) ? data.coHosts : [];
 }
 
+// Coorganização é uma relação de conta: o documento guarda uid + estado, jamais uma
+// fotografia de perfil. Campos de contato e display sobreviviam em documentos antigos e
+// eram reenviados a cada convite/cancelamento; limpar a cópia aqui impede essa regressão.
+function coHostUidRecord(entry) {
+  const out = Object.assign({}, entry || {});
+  if (out.uid) ['displayName', 'name', 'email', 'phone'].forEach(function (field) { delete out[field]; });
+  return out;
+}
+
 // Índice do convite de co-host PENDENTE do uid. SÓ POR UID (cânone de identidade).
 function pendingCoHostIndex(data, uid) {
   if (!uid) return -1;
@@ -124,14 +133,10 @@ function computeRespondHostInvite(data, callerUid, inviteType, action) {
     }
 
     // ACEITE: o organizador atual vira co-host ativo; quem aceita assume a organização.
-    // SÓ UID: a entrada do organizador que sai guarda o uid dele. Sem `email` — nada casa
-    // co-host por e-mail. `displayName` fica como âncora pra quem não tem perfil; o choke
-    // point de persistência do cliente o remove quando o perfil é resolvível.
-    const coHosts = coHostsArray(data).slice();
-    coHosts.push({
-      uid: pt.fromUid || '', displayName: data.organizerName || '',
-      status: 'active', type: 'cohost', invitedAt: new Date().toISOString()
-    });
+    // O vínculo do organizador que sai guarda somente UID e estado; a interface resolve o
+    // perfil vivo quando precisar mostrá-lo.
+    const coHosts = coHostsArray(data).map(coHostUidRecord);
+    coHosts.push({ uid: pt.fromUid || '', status: 'active', type: 'cohost', invitedAt: new Date().toISOString() });
     const next = Object.assign({}, data, {
       coHosts: coHosts, pendingTransfer: null,
       creatorUid: callerUid, organizerEmail: '', organizerName: '', creatorEmail: ''
@@ -150,7 +155,7 @@ function computeRespondHostInvite(data, callerUid, inviteType, action) {
   if (inviteType === 'cohost') {
     const idx = pendingCoHostIndex(data, callerUid);
     if (idx === -1) return nothing;
-    const coHosts = coHostsArray(data).map(function (ch) { return Object.assign({}, ch); });
+    const coHosts = coHostsArray(data).map(coHostUidRecord);
 
     if (action === 'reject') {
       coHosts.splice(idx, 1);
@@ -230,7 +235,7 @@ function computeMutateHostOrganization(data, callerUid, input) {
   if ((inviteType !== 'cohost' && inviteType !== 'transfer') ||
       (action !== 'invite' && action !== 'cancel' && action !== 'remove')) return nothing;
 
-  const coHosts = coHostsArray(data).map(function (ch) { return Object.assign({}, ch); });
+  const coHosts = coHostsArray(data).map(coHostUidRecord);
   if (action === 'invite') {
     if (!targetUid || targetUid === callerUid || !tournamentHasMember(data, targetUid)) {
       return { outcome: 'invalidTarget', updateData: null, tournamentName: data.name || '' };
@@ -238,13 +243,13 @@ function computeMutateHostOrganization(data, callerUid, input) {
     if (inviteType === 'transfer') {
       if (data.pendingTransfer && data.pendingTransfer.targetUid === targetUid) return nothing;
       const next = Object.assign({}, data, { pendingTransfer: {
-        targetUid: targetUid, targetName: targetName, fromUid: callerUid, createdAt: new Date().toISOString()
+        targetUid: targetUid, fromUid: callerUid, createdAt: new Date().toISOString()
       } });
       return _hostOutcome(data, action, inviteType, targetUid, targetName,
         withDerived(next, { pendingTransfer: next.pendingTransfer }));
     }
     if (coHosts.some(function (ch) { return ch && ch.uid === targetUid; })) return nothing;
-    coHosts.push({ uid: targetUid, displayName: targetName, status: 'pending', type: 'cohost', invitedAt: new Date().toISOString() });
+    coHosts.push({ uid: targetUid, status: 'pending', type: 'cohost', invitedAt: new Date().toISOString() });
     const next = Object.assign({}, data, { coHosts: coHosts });
     return _hostOutcome(data, action, inviteType, targetUid, targetName, withDerived(next, { coHosts: coHosts }));
   }
@@ -254,14 +259,14 @@ function computeMutateHostOrganization(data, callerUid, input) {
       const pending = data.pendingTransfer;
       if (!pending || (targetUid && pending.targetUid !== targetUid)) return nothing;
       const next = Object.assign({}, data, { pendingTransfer: null });
-      return _hostOutcome(data, action, inviteType, pending.targetUid, pending.targetName,
+      return _hostOutcome(data, action, inviteType, pending.targetUid, participantDisplayName(data, pending.targetUid),
         withDerived(next, { pendingTransfer: null }));
     }
     const idx = coHosts.findIndex(function (ch) { return ch && ch.status === 'pending' && ch.uid === targetUid; });
     if (idx < 0) return nothing;
     const removed = coHosts.splice(idx, 1)[0];
     const next = Object.assign({}, data, { coHosts: coHosts });
-    return _hostOutcome(data, action, inviteType, removed.uid, removed.displayName,
+    return _hostOutcome(data, action, inviteType, removed.uid, participantDisplayName(data, removed.uid),
       withDerived(next, { coHosts: coHosts }));
   }
 
@@ -271,7 +276,7 @@ function computeMutateHostOrganization(data, callerUid, input) {
   if (idx < 0) return nothing;
   const removed = coHosts.splice(idx, 1)[0];
   const next = Object.assign({}, data, { coHosts: coHosts });
-  return _hostOutcome(data, action, 'cohost', removed.uid, removed.displayName,
+  return _hostOutcome(data, action, 'cohost', removed.uid, participantDisplayName(data, removed.uid),
     withDerived(next, { coHosts: coHosts }));
 }
 

@@ -2544,33 +2544,19 @@ html, body,
    alinhada com os boxes de baixo. `align-self:flex-end` deixa a palavra na linha de base dos
    rótulos, não flutuando acima deles. */
 .sp-set-head-sets{align-self:flex-end;font-size:0.46rem;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-muted);white-space:nowrap;margin-right:1px;line-height:1.05;flex-shrink:0;}
-/* O vão mínimo é 2px: em cards estreitos ele preserva a área dos nomes. A partir de
-   430px a grade respira um pouco; a partir de 600px, quando o card inteiro já tem largura
-   para a dupla e para o placar, a folga cresce sem reduzir a área dos nomes. Em cards com
-   múltiplos sets e 430px ou mais, cada coluna recebe 32px de respiro. Isto separa visualmente 6 | 6 sem
-   inventar uma segunda geometria: cabeçalho e os dois lados usam a MESMA grade, então cada
-   rótulo permanece exatamente acima da sua coluna. */
+/* Uma grade canônica de placar precisa conhecer quantas colunas ela carrega.
+   `data-sp-set-count` é escrito por TODOS os renderizadores (chave, Novidades e Últimos
+   resultados), portanto cabeçalho e os dois lados recebem a mesma geometria sem depender da
+   estrutura interna de cada card. Melhor de 3 usa 32px quando a largura útil do card permite;
+   melhor de 5 mantém uma folga menor para preservar os nomes. */
 .sp-match-card{container-type:inline-size;}
 .sp-set-grid{display:flex;align-items:flex-end;gap:2px;flex-shrink:0;}
 @container (min-width:430px){
   .sp-set-grid{gap:clamp(5px,1.35cqi,8px);}
-}
-@container (min-width:600px){
-  /* Duas colunas têm folga real para respirar; conforme entram mais sets, a mesma
-     área é repartida sem roubar legibilidade das duplas. `:has()` é suportado nos
-     navegadores que o Scoreplace atende e conta as colunas renderizadas, não o estado
-     do jogo — cabeçalho e os dois lados recebem exatamente a mesma regra. */
-  .sp-set-grid{gap:clamp(12px,2.4cqi,24px);}
-  .sp-set-grid:has(> .sp-set-col:nth-child(2):last-child){gap:clamp(28px,5cqi,48px);}
-  .sp-set-grid:has(> .sp-set-col:nth-child(3):last-child){gap:clamp(18px,3.25cqi,32px);}
-  .sp-set-grid:has(> .sp-set-col:nth-child(4):last-child){gap:clamp(12px,2.5cqi,24px);}
-  .sp-set-grid:has(> .sp-set-col:nth-child(5):last-child){gap:clamp(8px,1.85cqi,18px);}
-}
-@container (min-width:430px){
-  /* Card com largura útil: cada coluna visível de set recebe os 32px pedidos. Vale tanto para
-     uma partida encerrada em 2 sets quanto para Set 1, Set 2 e STB. */
-  .sp-set-grid:has(> .sp-set-col:nth-child(2):last-child),
-  .sp-set-grid:has(> .sp-set-col:nth-child(3):last-child){gap:32px;}
+  .sp-set-grid[data-sp-set-count="2"],
+  .sp-set-grid[data-sp-set-count="3"]{gap:32px;}
+  .sp-set-grid[data-sp-set-count="4"]{gap:clamp(12px,2.5cqi,24px);}
+  .sp-set-grid[data-sp-set-count="5"]{gap:clamp(8px,1.85cqi,18px);}
 }
 /* ⛔ PLACAR ALINHA À DIREITA, NÃO AO CENTRO. Ordem do dono (13/set/2026, olhando um jogo
    com super tie-break): _"os placares parecem alinhados nas colunas pela esquerda; faça o

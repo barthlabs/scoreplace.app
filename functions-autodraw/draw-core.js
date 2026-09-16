@@ -252,9 +252,16 @@ g.window._woHistSet = function (t, who, meta) {
   if (!t || who == null) return;
   if (!t.woHistory) t.woHistory = {};
   var k = g.window._idMapKey(t, who);
-  if (meta && typeof meta === 'object' && !meta.name) meta.name = k.name || '';
-  if (k.uid) { t.woHistory[k.uid] = meta; if (k.name && k.name !== k.uid && t.woHistory[k.name] != null) delete t.woHistory[k.name]; }
-  else if (k.name) t.woHistory[k.name] = meta;
+  var next = {}; var source = (meta && typeof meta === 'object') ? meta : {};
+  for (var field in source) if (Object.prototype.hasOwnProperty.call(source, field)) next[field] = source[field];
+  if (k.uid) {
+    ['name', 'originalTeam', 'partner', 'replacedBy'].forEach(function (field) { delete next[field]; });
+    t.woHistory[k.uid] = next;
+    if (k.name && k.name !== k.uid && t.woHistory[k.name] != null) delete t.woHistory[k.name];
+  } else if (k.name) {
+    if (!next.name) next.name = k.name;
+    t.woHistory[k.name] = next;
+  }
 };
 g.window._woHistDel = function (t, who) {
   if (!t || !t.woHistory || who == null) return;

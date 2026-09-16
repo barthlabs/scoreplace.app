@@ -43,8 +43,10 @@ function baseDoc() {
     r.updateData.adminUids.indexOf(CO) !== -1);
   ok('aceite mantém o criador em adminUids', r.updateData.adminUids.indexOf(ORG) !== -1);
   ok('aceite recomputa memberUids', Array.isArray(r.updateData.memberUids) && r.updateData.memberUids.indexOf(CO) !== -1);
-  ok('aceite recomputa adminEmails (derivado, compat das regras)',
-    r.updateData.adminEmails.indexOf('co@example.com') !== -1);
+  ok('aceite não usa e-mail do co-host para formar a relação',
+    r.updateData.adminEmails.indexOf('co@example.com') === -1);
+  ok('aceite regrava o vínculo sem foto de perfil',
+    !('displayName' in r.updateData.coHosts[0]) && !('email' in r.updateData.coHosts[0]));
   // A prova de que a regra antiga NÃO cobria este write:
   const chaves = Object.keys(r.updateData).sort();
   ok('updateData vai ALÉM de [coHosts, adminEmails] — o que a regra antiga proibia',
@@ -95,6 +97,8 @@ function baseDoc() {
   eq('transferência → pendingTransfer limpo', r.updateData.pendingTransfer, null);
   ok('transferência → organizador antigo vira co-host ativo',
     r.updateData.coHosts.some(function (ch) { return ch.uid === ORG && ch.status === 'active'; }));
+  ok('transferência → co-host gravado sem nome ou e-mail',
+    r.updateData.coHosts.filter(function (ch) { return ch.uid === ORG; }).every(function (ch) { return !('displayName' in ch) && !('email' in ch); }));
   ok('transferência → novo organizador em adminUids', r.updateData.adminUids.indexOf(CO) !== -1);
 })();
 

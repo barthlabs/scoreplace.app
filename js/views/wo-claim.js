@@ -700,7 +700,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     _claimServer(tId, {
       action: 'declare',
       context: rc.scope === 'match' ? { scope: 'match', matchId: rc.matchId } : { scope: 'group', roundIndex: rc.roundIndex, groupName: rc.groupName },
-      absentUid: String(absentUid || ''), absentName: String(absentName || ''), byName: c.byName
+      // Conta identificada por UID: não envie textos de perfil para persistência.
+      absentUid: String(absentUid || ''), absentName: absentUid ? '' : String(absentName || '')
     }, function (saved) {
       if (!saved || !saved.ok) return;
       var savedClaim = saved.claim || c;
@@ -821,7 +822,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       // outcomeChoice executa a escolha (advance / waitlistSub / ghost).
       if (typeof window._applyWO !== 'function') return { ok: false, reason: 'motor de W.O. indisponível' };
       var r = window._applyWO(t, {
-        absentName: c.absentName,
+        absentName: _nameOfUid(t, (c.absentUids || [])[0], c.absentName),
         absentUids: c.absentUids,
         scope: rc.scope,
         matches: rc.matches,
@@ -867,7 +868,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var _octx = (ctx.partnerUid || ctx.oppName) ? ctx : (_outcomeCtx(t, c) || ctx);
     var _pUid = _octx.partnerUid || c.outcomePartnerUid || null;
     var partnerName = (_pUid && typeof window._displayNameForUid === 'function') ? window._displayNameForUid(_pUid, '') : '';
-    var absDisp = _esc(c.absentName || ctx.absentName || 'ausente');
+    var absDisp = _esc(_nameOfUid(t, (c.absentUids || [])[0], c.absentName || ctx.absentName || 'ausente'));
     var oppDisp = _esc(_octx.oppName || '');
     var pool = (typeof window._getStandbyPool === 'function') ? (window._getStandbyPool(t) || []) : [];
     var hasPresentSub = pool.some(function (p) {

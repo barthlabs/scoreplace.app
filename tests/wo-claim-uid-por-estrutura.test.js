@@ -28,13 +28,16 @@ ok(context.members[2].uid === UID.arn, 'uid do ausente vem do mesmo índice de p
 ok(context.memberUids.includes(UID.cyn), 'jogador do grupo tem identidade mesmo sem displayName em participants');
 
 const created = transition(tournament, {
-  action: 'declare', uid: UID.cyn, absentName: 'Arnaldo Menezes', byName: 'Cynthia',
+  action: 'declare', uid: UID.cyn, absentUid: UID.arn, absentName: 'Arnaldo Menezes', byName: 'Cynthia',
   claimId: 'wo-structural', context, now: '2026-09-10T12:00:00Z'
 });
 ok(created.ok, 'participante do grupo cria apontamento no contexto fresco');
-ok(created.claim.absentName === 'Arnaldo Menezes', 'claim aponta o ausente certo');
 ok(created.claim.absentUids.length === 1, 'absentUids não fica vazio');
 ok(created.claim.absentUids[0] === UID.arn, 'claim guarda o uid estrutural do ausente');
+ok(!Object.prototype.hasOwnProperty.call(created.claim, 'absentName'), 'claim de conta não persiste o nome do ausente');
+ok(!Object.prototype.hasOwnProperty.call(created.claim, 'byName'), 'claim de conta não persiste nome de quem apontou');
+ok(!Object.prototype.hasOwnProperty.call(created.claim, 'players'), 'claim de conta não persiste a lista textual de jogadores');
+ok(created.claim.playerUids.join(',') === [UID.marj, UID.cyn, UID.arn, UID.mari].join(','), 'claim conserva só os UIDs do contexto');
 
 const guestContext = Object.assign({}, context, {
   members: context.members.concat([{ name: 'Jogador X', uid: '' }]),
@@ -45,7 +48,7 @@ const guest = transition(guestTournament, {
   action: 'declare', uid: UID.cyn, absentName: 'Jogador X', byName: 'Cynthia',
   claimId: 'wo-guest', context: guestContext, now: '2026-09-10T12:00:00Z'
 });
-ok(guest.ok && guest.claim.absentUids.length === 0, 'convidado sem conta permanece identificado pelo nome');
+ok(guest.ok && guest.claim.absentUids.length === 0 && guest.claim.absentName === 'Jogador X', 'convidado sem conta permanece identificado pelo nome');
 
 const source = fs.readFileSync('js/views/wo-claim.js', 'utf8');
 const begin = source.indexOf('window._woDeclare = function');
@@ -54,6 +57,7 @@ const declareBody = source.slice(begin, end);
 ok(declareBody.includes("action: 'declare'"), 'browser envia apenas a intenção de declarar');
 ok(declareBody.includes("scope: 'group', roundIndex: rc.roundIndex, groupName: rc.groupName"), 'browser envia somente a chave do grupo');
 ok(!declareBody.includes('_commit('), 'browser não grava claim nem identidade localmente');
+ok(declareBody.includes("absentName: absentUid ? ''"), 'browser não envia nome de perfil quando já tem UID');
 
 const server = fs.readFileSync('functions-autodraw/index.js', 'utf8');
 ok(server.includes("players.map((name, index) => ({ uid: String(playerUids[index] || ''), name: String(name || '') }))"),

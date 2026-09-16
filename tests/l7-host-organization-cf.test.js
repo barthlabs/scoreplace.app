@@ -13,6 +13,7 @@ function base() { return { name: 'Torneio', creatorUid: UID_A, organizerName: 'O
 test('convite de co-host exige inscrito e não promove até o aceite', () => {
   const t = base(); const r = core.computeMutateHostOrganization(t, UID_A, { action: 'invite', inviteType: 'cohost', targetUid: UID_B });
   assert.equal(r.outcome, 'applied'); assert.equal(r.updateData.coHosts[0].uid, UID_B); assert.equal(r.updateData.coHosts[0].status, 'pending');
+  assert.equal('displayName' in r.updateData.coHosts[0], false); assert.equal('email' in r.updateData.coHosts[0], false);
   assert.deepEqual(r.updateData.adminUids, [UID_A]);
   assert.equal(r.targetName, 'Bia');
 });

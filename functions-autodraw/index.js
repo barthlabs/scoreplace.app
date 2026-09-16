@@ -664,6 +664,10 @@ function _applyWriteBoundary(data) {
     if (Array.isArray(clean[k])) stripped[k] = w._stripStoredNamesForUidEntries(clean[k]);
   });
   if (Object.keys(stripped).length) persist = Object.assign({}, clean, stripped);
+  // Claims, ausências e histórico de W.O. de contas também são relações UID-only.
+  // O rótulo de perfil continua no `clean` da sessão; o payload persistido não congela nomes.
+  if (typeof w._stripStoredWoAccountLabels === 'function') persist = w._stripStoredWoAccountLabels(persist);
+  if (typeof w._stripStoredOrganizationAccountLabels === 'function') persist = w._stripStoredOrganizationAccountLabels(persist);
   // ⚠️ NÃO hidratar `clean` aqui: Object.assign é RASO, então persist.rounds É clean.rounds —
   // hidratar devolveria group.matches pro persist e o Firestore gravaria cada jogo Rei/Rainha
   // EM DOBRO (o incidente que o fold existe pra evitar). O cliente escapa por ORDEM (dá o set
@@ -1880,7 +1884,7 @@ exports.manageWOClaim = onCall(async request => {
     const before = _antesDoMotor(t);
     const step = _woClaimCore.transition(t, {
       action, uid, isAdmin: _isTournamentAdmin(t, uid), context: ctx,
-      absentUid: String(data.absentUid || ''), absentName: String(data.absentName || ''), byName: String(data.byName || ''),
+      absentUid: String(data.absentUid || ''), absentName: String(data.absentName || ''),
       claimId: action === 'declare' ? ('wo_' + Date.now() + '_' + Math.floor(Math.random() * 1e6)) : String(data.claimId || ''),
       choice: String(data.choice || ''), now: agoraIso
     });
@@ -1891,8 +1895,8 @@ exports.manageWOClaim = onCall(async request => {
       // A tela pode ter aberto antes dos perfis e enviado um UID como rótulo.
       // O servidor rederiva o nome no torneio fresco antes de chamar o motor.
       const canonicalAbsentName = (claim.absentUids && claim.absentUids[0] && typeof drawWindow._memberNameByUid === 'function')
-        ? (drawWindow._memberNameByUid(t, claim.absentUids[0]) || claim.absentName) : claim.absentName;
-      claim.absentName = canonicalAbsentName;
+        ? (drawWindow._memberNameByUid(t, claim.absentUids[0]) || '') : String(claim.absentName || '');
+      if (!canonicalAbsentName) throw _drawFail('not-found', 'Perfil do participante não foi encontrado.', { tId, claimId: claim.id });
       const motorOpts = {
         absentName: canonicalAbsentName, absentUids: claim.absentUids, scope: ctx.scope,
         matches: ctx.scope === 'group' ? ctx.matchIds.map(id => (typeof drawWindow._collectAllMatches === 'function' ? drawWindow._collectAllMatches(t) : []).find(m => String(m.id) === id)).filter(Boolean) : [ctx.match],

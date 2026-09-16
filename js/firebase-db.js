@@ -460,6 +460,15 @@ window.FirestoreDB = {
       // perfil é resolvível (o strip preserva o nome de quem NÃO tem perfil).
       if (Array.isArray(cleanData.coHosts)) cleanData.coHosts = window._stripStoredNamesForUidEntries(cleanData.coHosts);
     }
+    // W.O. de contas também é uma relação por UID. Este write door recebe snapshots
+    // antigos de abas abertas; sem a limpeza aqui, um save posterior ressuscita nomes
+    // que a Function já havia removido do claim/ausência/histórico.
+    if (typeof window !== 'undefined' && typeof window._stripStoredWoAccountLabels === 'function') {
+      cleanData = window._stripStoredWoAccountLabels(cleanData);
+    }
+    if (typeof window !== 'undefined' && typeof window._stripStoredOrganizationAccountLabels === 'function') {
+      cleanData = window._stripStoredOrganizationAccountLabels(cleanData);
+    }
     // v1.4.30: CHOKE POINT da cura de rótulo cru — "Jogador sem perfil (…)" gravado em
     // m.p1/m.p2/team1/team2 por corrida de cache no sorteio/integração é reescrito pro
     // nome vivo em TODO save que passa aqui com o perfil resolvível. Best-effort.
@@ -1615,6 +1624,15 @@ window.FirestoreDB = {
         if (Array.isArray(clean.coHosts)) _stripped.coHosts = window._stripStoredNamesForUidEntries(clean.coHosts);
         if (Array.isArray(clean.waitlist)) _stripped.waitlist = window._stripStoredNamesForUidEntries(clean.waitlist);
         if (Object.keys(_stripped).length) _persist = Object.assign({}, clean, _stripped);
+      }
+      // Paridade com saveTournament: transações também recebem snapshots que podem
+      // carregar rótulos W.O. legados. A cópia persistida é UID-only; `clean` continua
+      // íntegro para a renderização imediata da aba que iniciou a mutação.
+      if (typeof window !== 'undefined' && typeof window._stripStoredWoAccountLabels === 'function') {
+        _persist = window._stripStoredWoAccountLabels(_persist);
+      }
+      if (typeof window !== 'undefined' && typeof window._stripStoredOrganizationAccountLabels === 'function') {
+        _persist = window._stripStoredOrganizationAccountLabels(_persist);
       }
       /* ⛔ TORNEIO DIVIDIDO: ESTA PORTA NÃO DEVOLVE PARTE PESADA PRO DOCUMENTO (2.1.67).
        * `saveTournament` já fazia isso desde a Fase 2; esta aqui, não — e o estrago foi

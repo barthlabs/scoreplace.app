@@ -370,12 +370,15 @@ window._applyWoSubsToTournament = function(t, opts) {
     // uid-first via o objeto do substituto (sub.p tem uid).
     window._idMapSet(t, t.checkedIn, (sub && typeof sub.p === 'object') ? sub.p : subName, Date.now());
 
-    // Record woHistory (uid-keyed; _woHistSet grava meta.name pro display robusto)
-    window._woHistSet(t, absentName, {
-      originalTeam: oldEntry,
-      partner: partner,
+    // Histórico de conta é só-UID: a tela resolve os nomes pelo perfil atual.
+    // O contexto do jogo permanece estrutural para reverter e explicar a saída.
+    const partnerUid = oldUids.find(u => u !== absentUid) || null;
+    window._woHistSet(t, absentUid ? { uid: absentUid, displayName: absentName } : absentName, {
+      originalTeamUids: oldUids,
+      partnerUid: partnerUid,
+      substituteUid: subUid || null,
+      matchId: foundMatch.id || null,
       matchNum: foundIdx + 1,
-      replacedBy: subName,
       timestamp: Date.now()
     });
 
@@ -483,8 +486,11 @@ window._applyAbsenceToggle = function (t, who, wantAbsent) {
     // Desmarcar ausência → volta ao estado "sem confirmação"
     window._idMapDel(t, t.absent, who);
     if (_woMeta) {
-      const _replacedBy = _woMeta.replacedBy;
-      const _origTeam = _woMeta.originalTeam;
+      const _replacedBy = _woMeta.substituteUid && typeof window._displayNameForUid === 'function'
+        ? window._displayNameForUid(_woMeta.substituteUid, '') : _woMeta.replacedBy;
+      const _origTeam = Array.isArray(_woMeta.originalTeamUids) && _woMeta.originalTeamUids.length && typeof window._displayNameForUid === 'function'
+        ? _woMeta.originalTeamUids.map(function (uid) { return window._displayNameForUid(uid, ''); }).filter(Boolean).join(' / ')
+        : _woMeta.originalTeam;
       const _matchNum = _woMeta.matchNum;
       if (_replacedBy && _origTeam && _matchNum) {
         // Restaura time original em todas as estruturas
@@ -641,9 +647,13 @@ window._applyWO = function (t, opts) {
     const _entry0 = _preMatch[_slot0] || '';
     if (_entry0.includes('/') && _entry0 !== absentName) {
       const _mem0 = _entry0.split(/\s*\/\s*/).map(n => n.trim());
-      window._woHistSet(t, absentName, {
-        originalTeam: _entry0,
-        partner: _mem0.find(n => n !== absentName) || '',
+      const _slotUids0 = (typeof window._slotUids === 'function') ? window._slotUids(_preMatch, _slot0).filter(Boolean) : [];
+      const _absUid0 = absentUids[0] || null;
+      const _partnerUid0 = _slotUids0.find(u => String(u) !== String(_absUid0 || '')) || null;
+      window._woHistSet(t, _absUid0 ? { uid: _absUid0, displayName: absentName } : absentName, {
+        originalTeamUids: _slotUids0,
+        partnerUid: _partnerUid0,
+        matchId: _preMatch.id || null,
         matchNum: _friendlyOf(_preAll, _preMatch),
         timestamp: Date.now()
       });

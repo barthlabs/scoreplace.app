@@ -327,14 +327,17 @@ if (TEM_MEDICAO) (function () {
 
 // ── D2. os cards da prévia DIVIDEM a linha (o resto do buraco) ─────────────
 // Um grupo de 3 jogos numa tela de 4 colunas deixava 1/4 de linha vazio — a queixa do
-// print, de novo. Fechada, os N cards passam a dividir a linha, até um teto de largura;
-// batendo no teto a fileira fica CENTRADA (sobra igual dos dois lados). Aberta, a grade
+// print, de novo. Fechada, os N cards passam a dividir TODA a linha; um card único ocupa
+// toda a largura útil. Aberta, a grade
 // volta a ser a régua canônica `auto-fill minmax(280px,1fr)` — que não pode ser apagada
 // por engano, porque ela mora no style INLINE da grade.
 if (TEM_MEDICAO) (function () {
   const c = cenario(4, [3, 2], 3);
-  ok(c.novTpl === 'repeat(3,minmax(0,460px))' && c.novJustify === 'center',
-    'D9 — fechada com 3 cards na prévia: os 3 dividem a linha (teto 460px, centrada) — vi "' + c.novTpl + '"');
+  ok(c.novTpl === 'repeat(3,minmax(0,1fr))' && !c.novJustify,
+    'D9 — fechada com 3 cards na prévia: os 3 dividem toda a largura útil — vi "' + c.novTpl + '"');
+  const unico = cenario(1, [1], 1);
+  ok(unico.novTpl === 'repeat(1,minmax(0,1fr))' && !unico.novJustify,
+    'D9b — card único de Novidades ocupa toda a largura útil, sem teto nem centralização — vi "' + unico.novTpl + '"');
   const aberta = cenario(4, [3, 2], 3, false);
   ok(aberta.novTpl === 'repeat(auto-fill,minmax(280px,1fr))' && !aberta.novJustify,
     'D10 — aberta, a grade volta à régua canônica auto-fill (a original NÃO é apagada) — vi "' + aberta.novTpl + '"');

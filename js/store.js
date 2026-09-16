@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.3.41';
+window.SCOREPLACE_VERSION = '2.3.42';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -5879,13 +5879,18 @@ window._woHistSet = function(t, who, meta) {
   if (!t || who == null) return;
   if (!t.woHistory) t.woHistory = {};
   var k = window._idMapKey(t, who);
-  // Garante display robusto: grava o nome da pessoa no próprio meta.
-  if (meta && typeof meta === 'object' && !meta.name) meta.name = k.name || '';
+  var next = {}; var source = (meta && typeof meta === 'object') ? meta : {};
+  for (var field in source) if (Object.prototype.hasOwnProperty.call(source, field)) next[field] = source[field];
   if (k.uid) {
-    t.woHistory[k.uid] = meta;
+    // Conta = UID. Nunca congele no histórico o nome, o time ou o substituto;
+    // a tela resolve cada rótulo pelos UIDs no perfil atual.
+    ['name', 'originalTeam', 'partner', 'replacedBy'].forEach(function (field) { delete next[field]; });
+    t.woHistory[k.uid] = next;
     if (k.name && k.name !== k.uid && t.woHistory[k.name] != null) delete t.woHistory[k.name];
   } else if (k.name) {
-    t.woHistory[k.name] = meta;
+    // Convidado sem conta: o nome é a única identidade disponível.
+    if (!next.name) next.name = k.name;
+    t.woHistory[k.name] = next;
   }
 };
 window._woHistDel = function(t, who) {
@@ -5894,12 +5899,10 @@ window._woHistDel = function(t, who) {
   if (k.uid && t.woHistory[k.uid] != null) delete t.woHistory[k.uid];
   if (k.name && t.woHistory[k.name] != null) delete t.woHistory[k.name];
 };
-// Display name pra um entry de woHistory (card órfão). meta.name é canônico
-// (gravado na escrita); fallback traduz a chave uid→nome, senão usa a própria
-// chave (key = nome em docs legados).
+// Display de W.O.: conta é resolvida pelo UID vivo; meta.name só existe em legado
+// e em convidado sem conta.
 window._woHistDisplayName = function(t, key, meta) {
-  if (meta && meta.name) return meta.name;
-  return window._memberNameByUid(t, key) || key;
+  return window._memberNameByUid(t, key) || (meta && meta.name) || key;
 };
 
 // v2.4.72-beta: pontuação de "interação" entre o usuário logado e um amigo

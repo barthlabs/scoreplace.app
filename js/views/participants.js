@@ -2541,7 +2541,9 @@ function renderParticipants(container, tournamentId) {
       // Faixa do jogo FULL-WIDTH abaixo do header (libera largura pros nomes dos times).
       let _matchStrip = '';
       if (isWOOrphan && ind.woMeta) {
-        const _woNameSafe = (ind.woMeta.partner || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const _woPartner = ind.woMeta.partnerUid && typeof window._displayNameForUid === 'function'
+          ? window._displayNameForUid(ind.woMeta.partnerUid, '') : (ind.woMeta.partner || '');
+        const _woNameSafe = String(_woPartner || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         const _woMatchNum = ind.woMeta.matchNum || '?';
         _matchStrip = `<div style="font-size:0.68rem;color:var(--sp-c-f87171,#f87171);margin-top:6px;font-weight:600;">❌ W.O. — Estava no Jogo ${_woMatchNum}${_woNameSafe ? ` com <span style="color:var(--sp-c-94a3b8,#94a3b8);font-weight:500;">${_woNameSafe}</span>` : ''}</div>`;
       } else if (teamLine || opponentLine) {

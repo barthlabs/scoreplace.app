@@ -157,6 +157,71 @@ window._woLogCobreGrupo = function (t, roundIndex, groupName) {
   return _woLogArr(t).some(function (ev) { return _mesmoGrupo(ev, roundIndex, groupName); });
 };
 
+/* LISTA ATIVA DE W.O. — fonte canônica para o quadro “Ficaram de fora”.
+ *
+ * Um W.O. de jogo pode substituir a pessoa no confronto imediatamente. Nesse caso não há
+ * razão para manter um `sitOutReason:'wo'` na rodada: ela já não está no slot. A lista antiga
+ * lia somente esse marcador e, por isso, escondia justamente quem foi trocado com sucesso.
+ * A ausência atual (`t.absent`) confirma que o W.O. ainda vale; `woHistory` ou um claim
+ * aplicado confirma que essa ausência é W.O., e não outra indisponibilidade. Os marcadores
+ * legados continuam entrando e tudo é deduplicado por UID.
+ */
+function _woLooksUid(v) {
+  return /^[A-Za-z0-9_-]{16,}$/.test(String(v == null ? '' : v));
+}
+function _woSlotUid(m) {
+  if (!m) return '';
+  if (m.p1Uid) return String(m.p1Uid);
+  if (Array.isArray(m.team1Uids) && m.team1Uids[0]) return String(m.team1Uids[0]);
+  return '';
+}
+function _woHistoryForUid(t, uid) {
+  var all = (t && t.woHistory && typeof t.woHistory === 'object') ? t.woHistory : {};
+  if (all[uid] && typeof all[uid] === 'object') return all[uid];
+  var keys = Object.keys(all);
+  for (var i = 0; i < keys.length; i++) {
+    var h = all[keys[i]];
+    if (h && typeof h === 'object' && (String(h.absentUid || '') === String(uid) || String(h.uid || '') === String(uid))) return h;
+  }
+  return null;
+}
+function _woAppliedClaimForUid(t, uid) {
+  var claims = Array.isArray(t && t.woClaims) ? t.woClaims : [];
+  for (var i = claims.length - 1; i >= 0; i--) {
+    var c = claims[i];
+    if (!c || ['applied', 'resolved'].indexOf(String(c.status || '')) === -1) continue;
+    if (Array.isArray(c.absentUids) && c.absentUids.some(function (u) { return String(u) === String(uid); })) return c;
+  }
+  return null;
+}
+window._activeWoList = function (t, legacyMarkers) {
+  var out = [], seen = {};
+  function put(m) {
+    if (!m) return;
+    var uid = _woSlotUid(m);
+    var key = uid ? ('u:' + uid) : ('n:' + String(m.p1 || '').trim().toLowerCase());
+    if (!key || seen[key]) return;
+    seen[key] = true;
+    out.push(m);
+  }
+  (Array.isArray(legacyMarkers) ? legacyMarkers : []).forEach(put);
+  var absent = (t && t.absent && typeof t.absent === 'object') ? t.absent : {};
+  Object.keys(absent).forEach(function (uid) {
+    var absence = absent[uid];
+    var hist = _woHistoryForUid(t, uid);
+    var claim = _woAppliedClaimForUid(t, uid);
+    if (!hist && !claim) return;
+    var name = (absence && typeof absence === 'object' && absence.name) ||
+      (hist && !_woLooksUid(hist.name) && hist.name) ||
+      (claim && !_woLooksUid(claim.absentName) && claim.absentName) || '';
+    if (!name && typeof window._displayNameForUid === 'function') name = window._displayNameForUid(uid, '');
+    if (!name) name = uid;
+    put({ id: 'wo-canon-' + uid, isSitOut: true, sitOutReason: 'wo', sitOutPoints: 0,
+      p1: String(name), p1Uid: String(uid), team1Uids: [String(uid)], woCanonical: true });
+  });
+  return out;
+};
+
 /* ⛔ 2.0.93 · ONDE O W.O. ACONTECEU — o W.O. é do GRUPO, não da PESSOA que substituiu.
  * MEDIDO no doc ao vivo do Confra (25/ago): a Carol substituiu a Denise no R1 Grupo A em
  * 09/ago; em 24/ago ela voltou pra fila (`woSentToWaitlistAt`) e entrou num grupo NOVO,

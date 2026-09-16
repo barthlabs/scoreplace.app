@@ -4951,17 +4951,18 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   // colunas o número é maior, com cinco ele encolhe. Vai como variável no elemento pra o
   // rótulo, o box e o número lerem a MESMA fonte sem um segundo lugar decidindo.
   const _numFsVar = (_plan && _plan.numFs) ? ('--sp-num-fs-set:' + _plan.numFs + 'rem;') : '';
+  const _setCountAttr = (_plan && _plan.columns) ? (' data-sp-set-count="' + _plan.columns.length + '"') : '';
   const _mostraCabecaSet = _multiSet;
   const _setHeadHtml = _mostraCabecaSet
     ? '<div id="sethead-' + m.id + '" class="sp-set-head">' +
         '<span class="sp-set-head-ttl">' + window._safeHtml(_plan.headline) + '</span>' +
         '<div class="sp-set-head-linha2">' +
           '<span class="sp-set-head-sets">' + window._safeHtml(_t('bracket.setsLabel')) + '</span>' +
-          '<div class="sp-set-grid" style="' + _numFsVar + '">' + _setLabelsHtml() + '</div>' +
+          '<div class="sp-set-grid"' + _setCountAttr + ' style="' + _numFsVar + '">' + _setLabelsHtml() + '</div>' +
         '</div>' +
       '</div>'
     : '';
-  const _setGridHtml = (side) => '<div class="sp-set-grid" style="' + _numFsVar + '">' + _setCellsHtml(side) + '</div>';
+  const _setGridHtml = (side) => '<div class="sp-set-grid"' + _setCountAttr + ' style="' + _numFsVar + '">' + _setCellsHtml(side) + '</div>';
 
   const p1Score = showInputs
     ? `<input type="number" id="s1-${m.id}" min="0" placeholder="0"
@@ -6551,7 +6552,10 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         // Reparos legados são solicitados uma vez no topo do render por
         // `reconcileBracket`. Esta tela nunca altera nem salva a chave local.
         var _inactive = _sitOuts.filter(function(m) { return m.sitOutReason === 'inactive'; });
-        var _wo = _sitOuts.filter(function(m) { return m.sitOutReason === 'wo'; }); // v2.4.30
+        var _woLegacy = _sitOuts.filter(function(m) { return m.sitOutReason === 'wo'; });
+        // W.O. de jogo com substituição não permanece como folga: o ausente sai do confronto.
+        // A lista ativa une esses casos ao marcador legado por UID, sem ressuscitar W.O. revertido.
+        var _wo = (typeof window._activeWoList === 'function') ? window._activeWoList(t, _woLegacy) : _woLegacy;
         var _remainder = _sitOuts.filter(function(m) { return m.sitOutReason !== 'inactive' && m.sitOutReason !== 'wo'; });
         // v2.4.73: invariante — quem entrou num grupo desta rodada NUNCA é "Sem
         // grupo". Quando um folga substitui um W.O. (Rei/Rainha), ele é vinculado

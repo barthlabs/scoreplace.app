@@ -40,7 +40,10 @@ function transition(t, input) {
     if (!ctx || !isMember(ctx, uid) && !admin) return { ok: false, reason: 'permission-denied' };
     const absentUid = String(input.absentUid || '');
     const absentName = String(input.absentName || '');
-    const target = (ctx.members || []).find(m => (absentUid && String(m.uid || '') === absentUid) || (!absentUid && String(m.name || '') === absentName)) || null;
+    // A identidade de uma conta entra sempre pelo UID. Nome só pode localizar
+    // convidado sem conta, cujo nome é a única identidade possível.
+    const target = (ctx.members || []).find(m => (absentUid && String(m.uid || '') === absentUid) ||
+      (!absentUid && !m.uid && String(m.name || '') === absentName)) || null;
     if (!target) return { ok: false, reason: 'target-not-in-context' };
     const existing = claimsOf(t).find(c => c && c.status !== 'cancelled' && c.status !== 'applied' && String(c.contextKey) === String(ctx.key));
     if (existing) return { ok: true, changed: false, claim: existing, reason: 'already-open' };
@@ -48,10 +51,13 @@ function transition(t, input) {
       id: String(input.claimId || ''), contextKey: ctx.key, scope: ctx.scope,
       matchId: ctx.matchId || null, roundIndex: ctx.roundIndex == null ? null : ctx.roundIndex,
       groupName: ctx.groupName || null, matchIds: (ctx.matchIds || []).slice(),
-      players: (ctx.members || []).map(m => m.name), playerUids: (ctx.members || []).map(m => m.uid || ''),
-      byUid: uid, byName: String(input.byName || ''), absentName: target.name,
+      // Relações de conta: somente UID. A interface resolve os textos ao ler o perfil.
+      playerUids: unique((ctx.members || []).map(m => m.uid || '')),
+      byUid: uid,
       absentUids: target.uid ? [String(target.uid)] : [], status: 'pending', confirms: {}, createdAt: now
     };
+    // Convidado sem conta é a única exceção: seu nome é a própria identidade.
+    if (!target.uid) claim.absentName = target.name;
     const self = !!absentUid && absentUid === uid;
     // A organização é a autoridade final do torneio: seu apontamento aplica o W.O.
     // na mesma transação, sem criar uma etapa de confirmação para os demais jogadores.

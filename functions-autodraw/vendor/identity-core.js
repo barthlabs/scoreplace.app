@@ -442,3 +442,91 @@ window._cureRawMatchLabels = function (t) {
   });
   return n;
 };
+
+// ── FRONTEIRA UID-ONLY · organização de contas ──────────────────────────────
+// coHosts e pendingTransfer são relações de autorização. Quem tem UID não pode carregar
+// uma segunda identidade no documento; os textos pertencem ao perfil e são resolvidos na UI.
+window._stripStoredOrganizationAccountLabels = function(t) {
+  if (!t || typeof t !== 'object') return t;
+  var next = Object.assign({}, t), changed = false;
+  if (Array.isArray(t.coHosts)) {
+    var coChanged = false;
+    var coHosts = t.coHosts.map(function (entry) {
+      if (!entry || typeof entry !== 'object' || !entry.uid) return entry;
+      var out = Object.assign({}, entry), dirty = false;
+      ['name', 'displayName', 'email', 'phone'].forEach(function (field) {
+        if (Object.prototype.hasOwnProperty.call(out, field)) { delete out[field]; dirty = true; }
+      });
+      coChanged = coChanged || dirty;
+      return out;
+    });
+    if (coChanged) { next.coHosts = coHosts; changed = true; }
+  }
+  if (t.pendingTransfer && typeof t.pendingTransfer === 'object' && t.pendingTransfer.targetUid) {
+    var pending = Object.assign({}, t.pendingTransfer), pendingChanged = false;
+    ['targetName', 'targetEmail', 'targetPhone'].forEach(function (field) {
+      if (Object.prototype.hasOwnProperty.call(pending, field)) { delete pending[field]; pendingChanged = true; }
+    });
+    if (pendingChanged) { next.pendingTransfer = pending; changed = true; }
+  }
+  return changed ? next : t;
+};
+
+// ── FRONTEIRA UID-ONLY · W.O. de contas ─────────────────────────────────────
+// Claim, ausência e histórico de W.O. são relações entre pessoas. Se existe UID,
+// qualquer nome copiado aqui apodrece quando o perfil muda e reabre a divergência
+// entre telas. A função devolve cópia para que a sessão ainda possa exibir seu
+// snapshot atual; somente o payload de persistência é limpo.
+window._stripStoredWoAccountLabels = function(t) {
+  if (!t || typeof t !== 'object') return t;
+  var next = Object.assign({}, t), changed = false;
+  var looksUid = function(v) { return /^[A-Za-z0-9_-]{16,}$/.test(String(v || '')); };
+  var accountUids = {};
+  ['participants', 'standbyParticipants', 'waitlist'].forEach(function (pool) {
+    (Array.isArray(t[pool]) ? t[pool] : []).forEach(function (entry) {
+      window._participantUids(entry).forEach(function (uid) { if (uid) accountUids[String(uid)] = true; });
+    });
+  });
+  ['creatorUid', 'organizerUid'].forEach(function (field) { if (t[field]) accountUids[String(t[field])] = true; });
+  var isAccountUid = function(uid) { return !!uid && (accountUids[String(uid)] || looksUid(uid)); };
+  var strip = function(source, fields) {
+    var copy = {}, did = false;
+    for (var key in source) if (Object.prototype.hasOwnProperty.call(source, key)) copy[key] = source[key];
+    fields.forEach(function (field) { if (Object.prototype.hasOwnProperty.call(copy, field)) { delete copy[field]; did = true; } });
+    return { value: copy, changed: did };
+  };
+
+  if (Array.isArray(t.woClaims)) {
+    var claimsChanged = false;
+    var claims = t.woClaims.map(function (claim) {
+      if (!claim || typeof claim !== 'object' || !Array.isArray(claim.absentUids) || !claim.absentUids.some(isAccountUid)) return claim;
+      var out = strip(claim, ['absentName', 'substituteName', 'byName', 'players']);
+      claimsChanged = claimsChanged || out.changed;
+      return out.value;
+    });
+    if (claimsChanged) { next.woClaims = claims; changed = true; }
+  }
+  if (t.absent && typeof t.absent === 'object' && !Array.isArray(t.absent)) {
+    var absentChanged = false, absent = {};
+    Object.keys(t.absent).forEach(function (uid) {
+      var value = t.absent[uid];
+      if (isAccountUid(uid) && value && typeof value === 'object') {
+        var out = strip(value, ['name', 'displayName', 'email', 'phone']);
+        absent[uid] = out.value; absentChanged = absentChanged || out.changed;
+      } else absent[uid] = value;
+    });
+    if (absentChanged) { next.absent = absent; changed = true; }
+  }
+  if (t.woHistory && typeof t.woHistory === 'object' && !Array.isArray(t.woHistory)) {
+    var historyChanged = false, history = {};
+    Object.keys(t.woHistory).forEach(function (uid) {
+      var value = t.woHistory[uid];
+      if (isAccountUid(uid) && value && typeof value === 'object') {
+        var out = strip(value, ['name', 'originalTeam', 'partner', 'replacedBy']);
+        history[uid] = out.value; historyChanged = historyChanged || out.changed;
+      } else history[uid] = value;
+    });
+    if (historyChanged) { next.woHistory = history; changed = true; }
+  }
+  return changed ? next : t;
+};

@@ -29,7 +29,8 @@ const claimDeclareEnd = choiceSource.indexOf('// As transições do consenso', c
 assert(claimDeclareBegin >= 0 && claimDeclareEnd > claimDeclareBegin, 'recorte do apontamento participativo existe');
 const claimDeclare = choiceSource.slice(claimDeclareBegin, claimDeclareEnd);
 assert(claimDeclare.includes('_claimServer('), 'apontamento participativo despacha o consenso à CF');
-assert(claimDeclare.includes('absentName: String(absentName ||'), 'apontamento preserva nome apenas para convidado sem UID');
+assert(claimDeclare.includes("absentUid: String(absentUid || '')"), 'apontamento participativo envia a identidade por UID');
+assert(claimDeclare.includes("absentName: absentUid ? '' : String(absentName || '')"), 'apontamento preserva nome apenas para convidado sem UID');
 assert(!claimDeclare.includes('_commit('), 'apontamento participativo não grava claim no navegador');
 const choiceBegin = choiceSource.indexOf('window._woResolveSubChoiceUI = function');
 const choiceEnd = choiceSource.indexOf('// ─── APLICAÇÃO do W.O.', choiceBegin);

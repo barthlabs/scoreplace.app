@@ -1587,6 +1587,7 @@ window._assignGlobalGameNumbers = function (t) {
       catch (e) { return fb; }
     };
     var fsVar = plan.numFs ? ('--sp-num-fs-set:' + plan.numFs + 'rem;') : '';
+    var countAttr = ' data-sp-set-count="' + plan.columns.length + '"';
     var labels = plan.columns.map(function (c) {
       return '<div class="sp-set-col" style="--w:' + c.w + 'px;">' +
         '<span class="sp-set-lbl' + (c.state === 'live' ? ' sp-set-lbl--live' : '') + '">' +
@@ -1596,7 +1597,7 @@ window._assignGlobalGameNumbers = function (t) {
         '<span class="sp-set-head-ttl">' + _sf(plan.headline) + '</span>' +
         '<div class="sp-set-head-linha2">' +
           '<span class="sp-set-head-sets">' + _sf(_tr('bracket.setsLabel', 'SETS')) + '</span>' +
-          '<div class="sp-set-grid" style="' + fsVar + '">' + labels + '</div>' +
+          '<div class="sp-set-grid"' + countAttr + ' style="' + fsVar + '">' + labels + '</div>' +
         '</div>' +
       '</div>';
   };
@@ -1612,13 +1613,14 @@ window._assignGlobalGameNumbers = function (t) {
     opts = opts || {};
     if (!plan || !plan.multi || !plan.columns || !plan.columns.length) return '';
     var fsVar = plan.numFs ? ('--sp-num-fs-set:' + plan.numFs + 'rem;') : '';
+    var countAttr = ' data-sp-set-count="' + plan.columns.length + '"';
     var cels = plan.columns.map(function (c) {
       var dentro = (c.state === 'live')
         ? '<span class="sp-set-zero">\u2013</span>'
         : _spSetNum(c, side, !!opts.italico);
       return '<div class="sp-set-col" style="--w:' + c.w + 'px;">' + dentro + '</div>';
     }).join('');
-    return '<div class="sp-set-grid" style="' + fsVar + '">' + cels + '</div>';
+    return '<div class="sp-set-grid"' + countAttr + ' style="' + fsVar + '">' + cels + '</div>';
   };
 
   /* ── ⭐ CADA SET É UMA COLUNA — TAMBÉM NO PLACAR JÁ ENCERRADO ──────────────────

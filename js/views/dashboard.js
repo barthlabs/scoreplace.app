@@ -2844,6 +2844,7 @@ function renderDashboard(container) {
             // UM set não precisa de grade: uma coluna só já está alinhada com ela mesma, e
             // envolvê-la mudaria o desenho do card de 1 set, que está aprovado como está.
             var _emColuna = (m2.sets.length > 1 && typeof window._colunaDeSetHtml === 'function');
+            var _setCountAttr = _emColuna ? (' data-sp-set-count="' + m2.sets.length + '"') : '';
             var _cels = m2.sets.map(function(s) {
               var _txt = window._formatSetForPlayer(s, n, { html: true });
               if (typeof window._corDoSetLado !== 'function') return _txt;
@@ -2861,7 +2862,7 @@ function renderDashboard(container) {
               return _emColuna ? window._colunaDeSetHtml(_num, s) : _num;
             });
             return _emColuna
-              ? '<div class="sp-set-grid" style="justify-content:flex-end;">' + _cels.join('') + '</div>'
+              ? '<div class="sp-set-grid"' + _setCountAttr + ' style="justify-content:flex-end;">' + _cels.join('') + '</div>'
               : _cels.join(' ');
           }
           var v = (n === 1 ? m2.scoreP1 : m2.scoreP2);
@@ -2883,7 +2884,7 @@ function renderDashboard(container) {
             var _label = _rotulos[i] || String(i + 1);
             return window._colunaDeSetHtml('<span class="sp-set-lbl">' + _sf(_label) + '</span>', s);
           }).join('');
-          return '<div class="sp-set-head"><div class="sp-set-head-linha2"><span class="sp-set-head-sets">SETS</span><div class="sp-set-grid" style="justify-content:flex-end;">' + _cols + '</div></div></div>';
+          return '<div class="sp-set-head"><div class="sp-set-head-linha2"><span class="sp-set-head-sets">SETS</span><div class="sp-set-grid" data-sp-set-count="' + m2.sets.length + '" style="justify-content:flex-end;">' + _cols + '</div></div></div>';
         }
 
         // mesmo estilo de coluna que _miniBracketCard — JOGO N GLOBAL (fonte única).
@@ -5097,16 +5098,14 @@ function _spGridCols(grid) {
   } catch (e) { return 1; }
 }
 
-// Teto da largura do card na prévia. A linha fechada tem N cards e a grade pode ter aberto
-// MAIS colunas que isso (um grupo de 3 jogos numa tela de 4 colunas) — aí sobraria de novo
-// um pedaço de linha vazio, que é exatamente a queixa do print. Os N cards passam a dividir
-// a linha inteira, mas até este teto: sem ele, um grupo de 1 jogo viraria um card de 1250px
-// com dois nomes e um placar dentro. Batendo no teto, a fileira fica CENTRADA — sobra igual
-// dos dois lados, que lê como escolha, não como buraco.
-var _SP_CARD_MAX = '460px';
+// A prévia fechada usa exatamente toda a largura útil da seção. Um card único ocupa a
+// linha inteira; dois ou mais dividem a mesma linha em frações iguais. Nunca há teto ou
+// centralização: ambos criavam a falsa impressão de coluna extra e reduziam os nomes.
+// A geometria interna do card já responde à largura disponível, portanto é ela — e não
+// uma largura máxima arbitrária — que preserva legibilidade em web, celular e tablet.
 
 // Aplica a prévia numa grade: tira `data-sp-extra` de quem entra na linha, põe em quem
-// não entra, e faz os que entraram dividirem a linha. Devolve quantos ficaram à vista.
+// não entra, e faz os que entraram dividirem toda a largura útil. Devolve quantos ficaram à vista.
 function _spFitGrid(grid, colapsada) {
   // ⚠️ Mede SEMPRE com a régua ORIGINAL da grade. Medindo com o `repeat(N,...)` da prévia,
   // a resposta seria o próprio N de antes — a linha nunca voltaria a crescer quando a tela
@@ -5129,8 +5128,8 @@ function _spFitGrid(grid, colapsada) {
     // segundo plano, evento perdido), `minmax(280px,…)` com N trilhas maiores que a tela
     // ESTOURA a linha na horizontal — e barra de rolagem lateral é quebra visível. Com
     // piso 0 o pior caso é card mais estreito por um instante, que ninguém percebe.
-    grid.style.gridTemplateColumns = 'repeat(' + r.cards + ',minmax(0,' + _SP_CARD_MAX + '))';
-    grid.style.justifyContent = 'center';
+    grid.style.gridTemplateColumns = 'repeat(' + r.cards + ',minmax(0,1fr))';
+    grid.style.justifyContent = '';
   }
   return r.cards;
 }

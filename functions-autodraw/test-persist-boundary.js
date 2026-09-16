@@ -27,6 +27,8 @@ console.log('──── 1. os helpers do boundary EXISTEM no servidor ──�
 // Os 7 passos de FirestoreDB.mutateTournament. Sem qualquer um deles a drawRound grava
 // diferente do cliente — e como todo call site é guardado, a falha seria SILENCIOSA.
 ok(typeof w._stripStoredNamesForUidEntries === 'function', '_stripStoredNamesForUidEntries alcançável (era store.js — não carrega em Node)');
+ok(typeof w._stripStoredWoAccountLabels === 'function', '_stripStoredWoAccountLabels alcançável no servidor');
+ok(typeof w._stripStoredOrganizationAccountLabels === 'function', '_stripStoredOrganizationAccountLabels alcançável no servidor');
 ok(typeof w._hydrateMonarchGroups === 'function', '_hydrateMonarchGroups alcançável (era bracket.js — render, não vendorado)');
 ok(typeof w._foldMonarchGroups === 'function', '_foldMonarchGroups alcançável');
 ok(typeof w._nextOwedDrawMs === 'function', '_nextOwedDrawMs alcançável');
@@ -130,6 +132,11 @@ if (bi !== -1) {
     participants: [{ uid: 'uid_A_longo', displayName: 'Ana Lima' }, { displayName: 'Zé Guest' },
                    { uid: 'uid_B_longo', displayName: 'Bruno Sá' }],
     rounds: [{ matches: [mm1], monarchGroups: [{ name: 'G1', matches: [mm1] }] }],
+    absent: { uid_A_longo: { name: 'Ana Lima', matchId: 'm1' } },
+    woHistory: { uid_A_longo: { name: 'Ana Lima', partner: 'Bruno Sá', replacedBy: 'Zé', partnerUid: 'uid_B_longo', substituteUid: 'uid_B_longo' } },
+    woClaims: [{ absentUids: ['uid_A_longo'], absentName: 'Ana Lima', byName: 'Bruno Sá', players: ['Ana Lima', 'Bruno Sá'], playerUids: ['uid_A_longo', 'uid_B_longo'] }],
+    coHosts: [{ uid: 'uid_B_longo', status: 'active', displayName: 'Bruno Sá', email: 'b@x.com' }],
+    pendingTransfer: { targetUid: 'uid_B_longo', targetName: 'Bruno Sá', targetEmail: 'b@x.com' }
   };
   const b = boundary(doc2);
 
@@ -144,9 +151,18 @@ if (bi !== -1) {
   ok(!has(b.clean.rounds[0].monarchGroups[0], 'matches'),
      'CLEAN: também foldado (é como o doc É no Firestore; o ingest do cliente hidrata)');
   ok(JSON.stringify(b.persist.rounds[0].monarchGroups[0].matchIds) === '["m1"]', 'PERSIST: matchIds preservados');
-  ok(JSON.stringify(b.persist.adminUids) === '["uid_A_longo"]', 'denormalizado adminUids recomputado no boundary');
+  ok(JSON.stringify(b.persist.adminUids.slice().sort()) === '["uid_A_longo","uid_B_longo"]', 'denormalizado adminUids recomputado no boundary');
   ok(b.persist.memberUids.length === 2 && b.persist.memberUids.indexOf('uid_B_longo') !== -1,
      'denormalizado memberUids recomputado (só quem tem uid)');
+  ok(!has(b.persist.absent.uid_A_longo, 'name') && !has(b.persist.woHistory.uid_A_longo, 'name') && !has(b.persist.woHistory.uid_A_longo, 'partner'),
+     'PERSIST: ausência e histórico de W.O. de conta não congelam nomes');
+  ok(!has(b.persist.woClaims[0], 'absentName') && !has(b.persist.woClaims[0], 'byName') && !has(b.persist.woClaims[0], 'players'),
+     'PERSIST: claim de W.O. de conta só mantém relações por UID');
+  ok(b.clean.woClaims[0].absentName === 'Ana Lima', 'CLEAN: snapshot de tela conserva o rótulo já carregado');
+  ok(!has(b.persist.coHosts[0], 'displayName') && !has(b.persist.coHosts[0], 'email') && !has(b.persist.pendingTransfer, 'targetName'),
+     'PERSIST: coorganização e transferência não congelam contatos ou nome');
+  ok(b.clean.coHosts[0].displayName === 'Bruno Sá' && b.clean.pendingTransfer.targetName === 'Bruno Sá',
+     'CLEAN: snapshot de tela conserva os rótulos legados até a leitura resolver o perfil');
 }
 
 console.log('──── 6. re-sorteio: o servidor usa o RESET CANÔNICO, não uma limpeza à mão ────');
