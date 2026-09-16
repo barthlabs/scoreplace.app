@@ -2544,20 +2544,15 @@ html, body,
    alinhada com os boxes de baixo. `align-self:flex-end` deixa a palavra na linha de base dos
    rótulos, não flutuando acima deles. */
 .sp-set-head-sets{align-self:flex-end;font-size:0.46rem;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-muted);white-space:nowrap;margin-right:1px;line-height:1.05;flex-shrink:0;}
-/* Uma grade canônica de placar precisa conhecer quantas colunas ela carrega.
-   `data-sp-set-count` é escrito por TODOS os renderizadores (chave, Novidades e Últimos
-   resultados), portanto cabeçalho e os dois lados recebem a mesma geometria sem depender da
-   estrutura interna de cada card. Melhor de 3 usa 32px quando a largura útil do card permite;
-   melhor de 5 mantém uma folga menor para preservar os nomes. */
+/* A geometria é do FORMATO da partida, nunca da sessão que a desenhou nem do número
+   parcial de sets. `data-sp-best-of` sai do mesmo plano que gera cabeçalho e placar em
+   chave, Novidades e Últimos resultados. Assim cada rótulo fica exatamente sobre sua coluna:
+   melhor de 3 usa 32px; melhor de 5 usa 16px. A regra não depende de container query — o
+   card pode mudar de largura sem Novidades voltar ao vão compacto. */
 .sp-match-card{container-type:inline-size;}
 .sp-set-grid{display:flex;align-items:flex-end;gap:2px;flex-shrink:0;}
-@container (min-width:430px){
-  .sp-set-grid{gap:clamp(5px,1.35cqi,8px);}
-  .sp-set-grid[data-sp-set-count="2"],
-  .sp-set-grid[data-sp-set-count="3"]{gap:32px;}
-  .sp-set-grid[data-sp-set-count="4"]{gap:clamp(12px,2.5cqi,24px);}
-  .sp-set-grid[data-sp-set-count="5"]{gap:clamp(8px,1.85cqi,18px);}
-}
+.sp-set-grid[data-sp-best-of="3"]{gap:32px;}
+.sp-set-grid[data-sp-best-of="5"]{gap:16px;}
 /* ⛔ PLACAR ALINHA À DIREITA, NÃO AO CENTRO. Ordem do dono (13/set/2026, olhando um jogo
    com super tie-break): _"os placares parecem alinhados nas colunas pela esquerda; faça o
    alinhamento na direita de cada coluna de placares"_.

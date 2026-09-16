@@ -4952,17 +4952,18 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   // rótulo, o box e o número lerem a MESMA fonte sem um segundo lugar decidindo.
   const _numFsVar = (_plan && _plan.numFs) ? ('--sp-num-fs-set:' + _plan.numFs + 'rem;') : '';
   const _setCountAttr = (_plan && _plan.columns) ? (' data-sp-set-count="' + _plan.columns.length + '"') : '';
+  const _setFormatAttr = (_plan && _plan.bestOf) ? (' data-sp-best-of="' + _plan.bestOf + '"') : '';
   const _mostraCabecaSet = _multiSet;
   const _setHeadHtml = _mostraCabecaSet
     ? '<div id="sethead-' + m.id + '" class="sp-set-head">' +
         '<span class="sp-set-head-ttl">' + window._safeHtml(_plan.headline) + '</span>' +
         '<div class="sp-set-head-linha2">' +
           '<span class="sp-set-head-sets">' + window._safeHtml(_t('bracket.setsLabel')) + '</span>' +
-          '<div class="sp-set-grid"' + _setCountAttr + ' style="' + _numFsVar + '">' + _setLabelsHtml() + '</div>' +
+          '<div class="sp-set-grid"' + _setCountAttr + _setFormatAttr + ' style="' + _numFsVar + '">' + _setLabelsHtml() + '</div>' +
         '</div>' +
       '</div>'
     : '';
-  const _setGridHtml = (side) => '<div class="sp-set-grid"' + _setCountAttr + ' style="' + _numFsVar + '">' + _setCellsHtml(side) + '</div>';
+  const _setGridHtml = (side) => '<div class="sp-set-grid"' + _setCountAttr + _setFormatAttr + ' style="' + _numFsVar + '">' + _setCellsHtml(side) + '</div>';
 
   const p1Score = showInputs
     ? `<input type="number" id="s1-${m.id}" min="0" placeholder="0"

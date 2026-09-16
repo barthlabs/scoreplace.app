@@ -266,7 +266,7 @@ ok(SO_CONFIRMADOS.indexOf('[data-mr-first] [data-sp-extra]{display:none !importa
 })();
 (function () {
   // A régua sai do próprio fonte: se uma seção mudar de grade sem a outra, fica vermelho.
-  const gradeNov = /id="novidades-grid"[^']*?(repeat\(auto-fill,minmax\(\d+px,1fr\)\))/.exec(SRC);
+  const gradeNov = /id="novidades-grid"[^']*?(repeat\(auto-fit,minmax\(\d+px,1fr\)\))/.exec(SRC);
   ok(!!gradeNov, 'E3 — a grade das Novidades é legível no fonte');
   if (gradeNov) {
     ok(contar(SO_CONFIRMADOS, gradeNov[1]) >= 1,

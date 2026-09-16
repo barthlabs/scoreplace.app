@@ -1,3 +1,4 @@
+// 2.3.45 — todos os cards de jogo usam a mesma grade de placar: melhor de 3 mantém 32 px entre os sets e melhor de 5, 16 px. Cabeçalho e placar ficam alinhados em Novidades, Últimos resultados e chave.
 // 2.3.44 — em Novidades, o primeiro card já ocupa toda a largura útil ao abrir a dashboard; duas ou mais colunas entram somente quando realmente cabem. A medida segue a largura do painel, inclusive em web, celular e tablet.
 // 2.3.43 — a grade base de cards de jogo e o W.O. receberam correções de consistência; a largura inicial de Novidades foi concluída na 2.3.44.
 // 2.3.41 — a folga de 32px entre sets passa a considerar a largura do card, inclusive em janelas estreitas onde ele já cabe sem cortar nomes.

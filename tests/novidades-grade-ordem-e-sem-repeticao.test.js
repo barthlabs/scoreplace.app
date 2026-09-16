@@ -13,7 +13,7 @@
  * tinham causas DIFERENTES, e nenhuma era a que o sintoma sugeria:
  *
  * (1) GRADE: os cards da seção eram empilhados um por linha (`margin-bottom`), enquanto a
- *     seção vizinha "Seus últimos resultados" usava `repeat(auto-fill,minmax(280px,1fr))`.
+ *     seção vizinha "Seus últimos resultados" usa a mesma grade `repeat(auto-fit,minmax(280px,1fr))`.
  *     Mesmo conteúdo, duas larguras. O colapso agravava: os "anteriores" viviam num
  *     `<div id="novidades-body">`, e um wrapper no meio QUEBRA qualquer grade.
  *
@@ -227,14 +227,17 @@ ok(NOV.length > 0, 'a seção 📣 Novidades é renderizada');
 // ═══════════════════════════════════════════════════════════════════════════
 // A. GRADE — "se cabe 1 jogo na largura da tela é 1 jogo, se cabem 3 são 3"
 // ═══════════════════════════════════════════════════════════════════════════
-// A régua é lida do PRÓPRIO fonte da outra seção: se alguém mudar uma e não a outra,
-// as duas voltam a divergir e este teste acusa. Foi a divergência do relato.
-const REGUA = 'grid-template-columns:repeat(auto-fill,minmax(280px,1fr))';
-ok(contar(SRC, REGUA) >= 2,
-  'A1. Novidades e "Seus últimos resultados" usam a MESMA régua de grade (' + REGUA + ') — vi ' + contar(SRC, REGUA) + ' ocorrência(s)');
+// Novidades começa recolhida com um único card visível. Por isso usa `auto-fit`: se só
+// uma coluna é necessária, ela ocupa a largura útil; ao abrir os anteriores, as colunas
+// adicionais entram quando a largura realmente comportar cards de 280px.
+const REGUA_NOVIDADES = 'grid-template-columns:repeat(auto-fit,minmax(280px,1fr))';
+const REGUA_RESULTADOS = 'grid-template-columns:repeat(auto-fit,minmax(280px,1fr))';
+ok(SRC.indexOf(REGUA_NOVIDADES) !== -1 && SRC.indexOf(REGUA_RESULTADOS) !== -1,
+  'A1. Novidades e resultados usam a mesma grade que preenche toda a largura útil');
 ok(NOV.indexOf('id="novidades-grid"') !== -1, 'A2. a seção tem a grade #novidades-grid');
 const GRID = bloco(NOV, 'novidades-grid');
-ok(GRID.indexOf(REGUA) !== -1, 'A3. a grade das Novidades usa auto-fill/minmax(280px,1fr) — nunca um card por linha');
+ok(GRID.indexOf(REGUA_NOVIDADES) !== -1 && GRID.indexOf('data-sp-preview-min="280"') !== -1,
+  'A3. Novidades usa auto-fit/minmax(280px,1fr) com a medida explícita da prévia — um card ocupa a linha inteira');
 ok(NOV.indexOf('id="novidades-body"') === -1,
   'A4. NÃO existe mais o wrapper #novidades-body — um <div> no meio quebra a grade (os anteriores ficariam noutra grade e o 1º card sozinho numa linha)');
 ok(NOV.indexOf('data-nov-collapsed=') !== -1,

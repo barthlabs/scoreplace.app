@@ -2653,7 +2653,7 @@ function renderDashboard(container) {
       html += '<div' + _mrBlockAttrs() + ' style="margin-bottom:10px;">';
       html += '<p style="margin:0 0 8px;font-size:0.72rem;font-weight:700;color:var(--sp-c-fbbf24,#fbbf24);text-transform:uppercase;letter-spacing:0.04em;">⏳ Aguardando sua aprovação (' + pendingForMe.length + ')</p>';
       _spReset();
-      html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;align-items:start;">';
+      html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;align-items:start;">';
       var _pendTag = '<span style="font-size:0.58rem;font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);background:rgba(251,191,36,0.15);padding:2px 5px;border-radius:4px;text-transform:uppercase;letter-spacing:0.03em;flex-shrink:0;">PENDENTE</span>';
       var _btnStyle = function(r,g,b) { return 'border:1px solid rgba('+r+','+g+','+b+',0.4);color:rgba('+r+','+g+','+b+',1);border-radius:6px;padding:2px 7px;font-size:0.65rem;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;background:rgba('+r+','+g+','+b+',0.15);'; };
       pendingForMe.forEach(function(item) {
@@ -2687,7 +2687,7 @@ function renderDashboard(container) {
       html += '<div' + _mrBlockAttrs() + ' style="margin-bottom:10px;">';
       html += '<p style="margin:0 0 8px;font-size:0.72rem;font-weight:700;color:var(--sp-c-94a3b8,#94a3b8);text-transform:uppercase;letter-spacing:0.04em;">🕐 Aguardando confirmação do adversário (' + pendingByMe.length + ')</p>';
       _spReset();
-      html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;align-items:start;">';
+      html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;align-items:start;">';
       var _pendTag2 = '<span style="font-size:0.6rem;font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);background:rgba(251,191,36,0.15);padding:2px 6px;border-radius:4px;text-transform:uppercase;letter-spacing:0.04em;">PENDENTE</span>';
       pendingByMe.forEach(function(item) {
         var pr = item.m.pendingResult || {};
@@ -2711,7 +2711,7 @@ function renderDashboard(container) {
       html += '<div' + _mrBlockAttrs() + ' style="margin-bottom:10px;">';
       html += '<p style="margin:0 0 8px;font-size:0.72rem;font-weight:700;color:var(--sp-c-f87171,#f87171);text-transform:uppercase;letter-spacing:0.04em;">🚨 Em disputa — aguardando organizador (' + disputedMatches.length + ')</p>';
       _spReset();
-      html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;align-items:start;">';
+      html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;align-items:start;">';
       var _dispTag = '<span style="font-size:0.6rem;font-weight:800;color:var(--sp-c-f87171,#f87171);background:rgba(239,68,68,0.15);padding:2px 6px;border-radius:4px;text-transform:uppercase;letter-spacing:0.04em;flex-shrink:0;">EM DISPUTA</span>';
       disputedMatches.forEach(function(item) {
         var pr = item.m.pendingResult || {};
@@ -2789,7 +2789,7 @@ function renderDashboard(container) {
        * `min-width:0`, o card esticava para a largura inteira da seção enquanto todos os
        * outros ocupavam uma coluna de `minmax(280px,1fr)`. Card de jogo tem geometria
        * canônica em todo lugar — inclusive a caixa que o segura. */
-      _upHtml += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;align-items:start;">' +
+      _upHtml += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;align-items:start;">' +
         '<div data-mr-card="1" style="min-width:0;">' +
         _miniBracketCard(_ng, _ngEntry.canLaunch, { hideFaseHeader: true, boxLabelOverride: _boxU }) +
         '</div></div>';
@@ -2800,7 +2800,7 @@ function renderDashboard(container) {
     if (recentConfirmed.length > 0) {
       html += '<div' + _mrBlockAttrs() + '>';
       _spReset();
-      html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;align-items:start;">';
+      html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;align-items:start;">';
       // v2.3.52: agrupa resultados que compartilham GRUPO + TORNEIO. Quando
       // 2+ chaves repetem "R2 GRUPO A … TESTE DE LIGA", mostra esse rótulo uma
       // única vez numa linha e só "JOGO N" acima de cada chave.
@@ -2837,6 +2837,14 @@ function renderDashboard(container) {
         // Ler m2.scoreP1 cru perdia o TB — o número dos games é o mesmo, o que some
         // é o (7). Fonte única de formatação: window._formatSetForPlayer.
         function _placarLado(n) {
+          // O construtor é usado isoladamente por testes e por cartões hidratados; por isso
+          // resolve o formato no próprio escopo, sem depender de uma variável de render externo.
+          var _setFormatAttr2 = '';
+          try {
+            var _scoreFmt2 = (typeof window._effectiveScoring === 'function') ? window._effectiveScoring(tRef2, m2) : (tRef2 && tRef2.scoring);
+            var _planFmt2 = (typeof window._matchSetPlan === 'function') ? window._matchSetPlan(_scoreFmt2, m2, { sets:m2.sets, done:true }) : null;
+            if (_planFmt2 && _planFmt2.bestOf > 1) _setFormatAttr2 = ' data-sp-best-of="' + _planFmt2.bestOf + '"';
+          } catch (_eSetFormat2) {}
           if (Array.isArray(m2.sets) && m2.sets.length > 0 && typeof window._formatSetForPlayer === 'function') {
             // A cor é de CADA set (fonte única `_corDoSetLado`), não da linha: quem venceu o set
             // fica verde mesmo tendo perdido a partida. ⛔ Sempre por `_spCor` — hex cru aqui
@@ -2862,7 +2870,7 @@ function renderDashboard(container) {
               return _emColuna ? window._colunaDeSetHtml(_num, s) : _num;
             });
             return _emColuna
-              ? '<div class="sp-set-grid"' + _setCountAttr + ' style="justify-content:flex-end;">' + _cels.join('') + '</div>'
+              ? '<div class="sp-set-grid"' + _setCountAttr + _setFormatAttr2 + ' style="justify-content:flex-end;">' + _cels.join('') + '</div>'
               : _cels.join(' ');
           }
           var v = (n === 1 ? m2.scoreP1 : m2.scoreP2);
@@ -2875,16 +2883,18 @@ function renderDashboard(container) {
         function _cabecaSetsConcluidos() {
           if (!Array.isArray(m2.sets) || m2.sets.length < 2 || typeof window._colunaDeSetHtml !== 'function') return '';
           var _rotulos = [];
+          var _setFormatAttr2 = '';
           try {
             var _score = (typeof window._effectiveScoring === 'function') ? window._effectiveScoring(tRef2, m2) : (tRef2 && tRef2.scoring);
             var _plano = (typeof window._matchSetPlan === 'function') ? window._matchSetPlan(_score, m2, { sets:m2.sets, done:true }) : null;
             _rotulos = _plano && Array.isArray(_plano.columns) ? _plano.columns.map(function (c) { return c.label; }) : [];
+            if (_plano && _plano.bestOf > 1) _setFormatAttr2 = ' data-sp-best-of="' + _plano.bestOf + '"';
           } catch (_eSetHead) {}
           var _cols = m2.sets.map(function (s, i) {
             var _label = _rotulos[i] || String(i + 1);
             return window._colunaDeSetHtml('<span class="sp-set-lbl">' + _sf(_label) + '</span>', s);
           }).join('');
-          return '<div class="sp-set-head"><div class="sp-set-head-linha2"><span class="sp-set-head-sets">SETS</span><div class="sp-set-grid" data-sp-set-count="' + m2.sets.length + '" style="justify-content:flex-end;">' + _cols + '</div></div></div>';
+          return '<div class="sp-set-head"><div class="sp-set-head-linha2"><span class="sp-set-head-sets">SETS</span><div class="sp-set-grid" data-sp-set-count="' + m2.sets.length + '"' + _setFormatAttr2 + ' style="justify-content:flex-end;">' + _cols + '</div></div></div>';
         }
 
         // mesmo estilo de coluna que _miniBracketCard — JOGO N GLOBAL (fonte única).
@@ -3176,7 +3186,7 @@ function renderDashboard(container) {
       // jogo na largura da tela é 1 jogo, se cabem 3 são 3". Antes cada card ocupava uma
       // linha inteira (empilhados num `margin-bottom`), então em tela larga sobrava metade
       // da tela vazia enquanto a seção vizinha, com o MESMO conteúdo, usava 3 colunas.
-      // `auto-fill` + `minmax(280px,1fr)` é a régua canônica do app.
+      // `auto-fit` + `minmax(280px,1fr)` é a régua canônica do app.
       // ⚠️ O colapso passou a ser por ATRIBUTO na seção, não por um `<div>` separado com
       // os "anteriores": um wrapper no meio QUEBRA a grade (os cards de dentro dele
       // formariam outra grade, e o primeiro card ficaria sozinho numa linha própria).
@@ -5061,7 +5071,7 @@ window._applyDashSearchInPlace = function() {
 // colocar 2 cards de jogo ou até 3 na sessão novidades e seus últimos resultados, em vez
 // de deixar o buraco ali. e o botão 'ver os X jogos...' ajustado de acordo."
 //
-// A grade das duas seções é `repeat(auto-fill, minmax(280px,1fr))` — em tela larga ela
+// A grade das duas seções é `repeat(auto-fit, minmax(280px,1fr))` — em tela larga ela
 // abre 2, 3 ou 4 colunas. Fechada, a seção mostrava UM card e deixava o resto da linha
 // vazio. Agora a prévia vai até o número de COLUNAS que a tela abriu: é a MESMA régua da
 // seção aberta ("se cabe 1 jogo na largura da tela é 1 jogo, se cabem 3 são 3") e a mesma
