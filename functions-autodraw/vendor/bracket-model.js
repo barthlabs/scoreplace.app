@@ -1140,6 +1140,11 @@
       avatar: dupla ? '22px' : '26px',
       boxH: +(teto * 2.2).toFixed(2),
       maxRem: teto,
+      // A caixa continua tendo duas linhas para TODOS os participantes, mas só quem
+      // realmente precisa delas paga a fonte menor. O teto próprio da forma em duas
+      // linhas impede que "Lucia Helena Silva Cerri" pareça do mesmo tamanho que
+      // "Leila Arida" quando ambos ocupam caixas iguais.
+      twoLineMaxRem: +(teto * 0.82).toFixed(2),
       /* ⭐ O PISO DESCE ANTES DE QUEBRAR. Relato do dono (12/set/2026, jogos 112 e 159):
        * _"Fernando Bernacchi poderia ter fonte menor ou quebrar em 2 linhas"_ e _"nomes duplos
        * cortados"_.

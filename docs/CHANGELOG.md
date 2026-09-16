@@ -1,3 +1,10 @@
+## 2.3.49 — 16/set/2026
+
+- Todos os cards de jogo passam a tratar cada integrante da dupla de forma independente: nomes curtos ficam em uma linha na fonte máxima; nomes longos usam as duas linhas já reservadas, com fonte menor e sem truncamento.
+- Dashboard e chave usam o mesmo espaço vertical de 2 px entre integrantes da dupla. A altura reservada para cada nome continua igual, sem forçar a quebra do parceiro.
+- A confirmação de um set em partida em andamento atualiza o placar mostrado no próprio card sem exigir recarregar a página.
+- Esta publicação é somente web. Não há geração, sincronização nem submissão de binários iOS ou Android.
+
 ## 2.3.31 — 15/set/2026
 
 - A dashboard volta a usar a escala grande e aprovada para os placares de “Seus últimos resultados”. Em partidas de mais de um set, os rótulos “SETS 1 2…” passam a acompanhar as colunas do resultado, inclusive super tie-break.

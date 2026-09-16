@@ -4480,16 +4480,9 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint, m) {
   // vazio de VERDADE: nem uid que resolva, nem rótulo. Aí sim o slot está aberto.
   if (members.length === 0) return `<span style="font-weight:600;font-size:0.85rem;opacity:0.4;font-style:italic;">A definir</span>`;
 
-  // ⭐ 2.0.35 · OS DOIS NOMES DA DUPLA QUEBRAM JUNTOS. Relato do dono no melhor de 5:
-  // _"por que Raquel Unger quebrou em 2 linhas e Monica Rossi não? Quebra para as duas nesses
-  // casos."_ E ele está certo: o ajuste é POR NOME, então numa mesma dupla um nome que não
-  // cabia virava duas linhas e o parceiro, que cabia por um fio, ficava numa — as duas
-  // metades do mesmo time saíam com formas diferentes, e o olho lê isso como defeito.
-  // `data-fit-group` marca os nomes que são do MESMO lado; o motor (store.js) iguala o grupo
-  // no fim do ajuste. É um contador por render, não o nome do time: o mesmo time aparece em
-  // vários cards da chave e cada card decide a sua largura.
-  window._fitGroupSeq = (window._fitGroupSeq || 0) + 1;
-  const _grupoNome = 'g' + window._fitGroupSeq;
+  // Cada participante decide a própria forma: nome curto fica inteiro em uma linha;
+  // nome longo usa as duas linhas já reservadas na mesma caixa, com fonte menor. Forçar
+  // a quebra do parceiro fazia "Leila Arida" ocupar duas linhas sem necessidade.
   let html = members.length > 1 ? '<div class="sp-mc-col">' : '';
   members.forEach(function(_mb) {
     // `_mb` = { uid, nome }. `nome` pode vir VAZIO quando há uid e o perfil ainda não
@@ -4563,7 +4556,7 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint, m) {
     if (_isPendingSlot) {
       html += `<div style="display:flex;align-items:center;gap:5px;overflow:hidden;flex-wrap:wrap;">` +
         `<img src="${photoSrc}"${_avatarUid} ${onerror} data-player-name="${window._safeHtml(dispName)}" class="sp-av sp-av-p" style="--sp-av:${size}">` +
-        `<div class="sp-mc-box" style="${_boxNome}"><span class="sp-name-fit" data-maxrem="${_nomeMaxRem}" data-minrem="${_nomeMinRem}" style="font-weight:700;color:var(--sp-c-fbbf24,#fbbf24);white-space:nowrap;">${window._safeHtml(dispName)}</span></div>` +
+        `<div class="sp-mc-box" style="${_boxNome}"><span class="sp-name-fit" data-maxrem="${_nomeMaxRem}" data-minrem="${_nomeMinRem}" data-two-line-maxrem="${_geo.twoLineMaxRem}" style="font-weight:700;color:var(--sp-c-fbbf24,#fbbf24);white-space:nowrap;">${window._safeHtml(dispName)}</span></div>` +
         `<span style="font-size:0.52rem;font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.4);padding:1px 5px;border-radius:5px;letter-spacing:0.3px;text-transform:uppercase;white-space:nowrap;flex-shrink:0;">aguardando resposta</span>` +
       `</div>`;
       return;
@@ -4589,7 +4582,7 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint, m) {
       /* A faixa interna delimita somente o nome dentro do conteúdo que o auto-fit mede.
        * O 💬 continua irmão dela dentro de .sp-name-fit: assim o toque no nome abre a
        * ficha, o toque no 💬 abre contato, e os dois seguem cabendo na mesma caixa. */
-      `<div class="sp-mc-box" style="${_boxNome}"><span class="sp-name-fit sp-mc-nm" data-fit-group="${_grupoNome}" data-maxrem="${_nomeMaxRem}" data-minrem="${_nomeMinRem}"><span class="sp-person-name-content">${
+      `<div class="sp-mc-box" style="${_boxNome}"><span class="sp-name-fit sp-mc-nm" data-maxrem="${_nomeMaxRem}" data-minrem="${_nomeMinRem}" data-two-line-maxrem="${_geo.twoLineMaxRem}"><span class="sp-person-name-content">${
         _slotUid
           ? window._personNameHtml(_slotUid, name) +
             ((name && typeof window._isOrgName === 'function' && window._currentBracketTournament &&

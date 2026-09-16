@@ -45,9 +45,9 @@ t(/window\._cardNomeGeo = function/.test(MD),
 const _geoIni = MD.indexOf('window._cardNomeGeo = function');
 const _geoFim = MD.indexOf('\n  };', _geoIni);
 const GEO = (_geoIni > 0 && _geoFim > _geoIni) ? MD.slice(_geoIni, _geoFim) : '';
-t(GEO && ['avatar:', 'boxH:', 'maxRem:', 'minRem:'].every((k, i, arr) =>
+t(GEO && ['avatar:', 'boxH:', 'maxRem:', 'twoLineMaxRem:', 'minRem:'].every((k, i, arr) =>
     GEO.indexOf(k) > 0 && (i === 0 || GEO.indexOf(arr[i - 1]) < GEO.indexOf(k))),
-  'e devolve as quatro medidas: foto, altura da caixa, teto e piso da fonte');
+  'e devolve foto, altura da caixa, teto de uma e duas linhas e piso da fonte');
 
 console.log('\n② Os dois desenhos de card leem a régua (nenhum crava número)');
 t(/window\._cardNomeGeo\(members\.length\)/.test(BR), 'o card da CHAVE lê _cardNomeGeo');
@@ -62,16 +62,14 @@ t(/class="sp-mc-box"/.test(BR) && /class="sp-mc-box"/.test(DB),
   'os dois põem o nome dentro da caixa de tamanho fixo (.sp-mc-box)');
 t(/sp-name-fit/.test(BR) && /sp-name-fit/.test(DB),
   'os dois marcam o nome com .sp-name-fit — é o que faz a fonte ceder em vez de cortar');
-t(/data-fit-group/.test(BR) && /data-fit-group/.test(DB),
-  'os dois marcam o grupo da dupla, pra os dois nomes do time quebrarem juntos');
+t(/data-two-line-maxrem/.test(BR) && /data-two-line-maxrem/.test(DB),
+  'os dois passam o teto de duas linhas, para só o nome longo ceder');
 t(!/text-overflow:ellipsis;white-space:nowrap;"><span' \+ _uidAttr/.test(DB),
   '⛔ E A DASHBOARD PAROU DE CORTAR O NOME com reticências — era a violação mais grave');
 
-console.log('\n④ O grupo da quebra é por LADO, nunca por card');
-t(/um grupo por LADO/.test(DB) && /_grupoMini = 'd' \+ window\._fitGroupSeq/.test(DB),
-  'na dashboard o contador anda dentro de _teamHtml (um por time), não uma vez por card');
-t(/window\._fitGroupSeq = \(window\._fitGroupSeq \|\| 0\) \+ 1;/.test(BR),
-  'e na chave idem, dentro do desenho de um lado');
+console.log('\n④ A quebra é individual, não contagia o parceiro');
+t(!/data-fit-group/.test(BR) && !/data-fit-group/.test(DB),
+  'chave e dashboard não forçam o nome curto a quebrar junto com o nome longo');
 
 console.log('\n⑤ O número do placar sai da mesma classe nos dois');
 t(/class="sp-mc-num"/.test(BR), 'a chave usa .sp-mc-num');

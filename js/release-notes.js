@@ -1,3 +1,4 @@
+// 2.3.49 — em todos os cards de jogo, nomes curtos permanecem em uma linha; nomes longos usam as duas linhas reservadas com fonte menor, sem aumentar o espaço entre os integrantes da dupla. Ao confirmar um set de partida em andamento, o placar aceito aparece no card imediatamente; não é necessário recarregar para ver o set seguinte.
 // 2.3.48 — ao confirmar um set de partida em andamento, o placar aceito aparece no card imediatamente; não é necessário recarregar para ver o set seguinte.
 // 2.3.47 — Seus Últimos Resultados passou a reutilizar a mesma grade de cabeçalho e placar de Novidades; em melhor de 3, sets e números ficam alinhados com a mesma folga de 16 px.
 // 2.3.46 — melhor de 3 usa 16 px entre os placares dos sets, liberando espaço para nomes maiores; a mesma regra canônica vale em Novidades, Últimos resultados e chave.

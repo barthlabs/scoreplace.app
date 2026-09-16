@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.3.48';
+window.SCOREPLACE_VERSION = '2.3.49';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -6407,10 +6407,12 @@ window._firstNameOnly = function(name) {
     // (a) só ESCRITA — veste a forma de duas linhas e volta ao TETO da fonte: duas linhas
     //     podem sustentar uma fonte MAIOR que a linha única, então a busca recomeça do alto.
     itens.forEach(function (d) {
+      var limiteDuas = parseFloat(d.el.getAttribute('data-two-line-maxrem'));
+      d.max2R = (limiteDuas > 0) ? Math.min(d.maxR, limiteDuas) : d.maxR;
       d.el.style.whiteSpace = 'normal';
       d.el.style.wordBreak = '';
       d.el.style.textWrap = 'balance';
-      d.el.style.fontSize = d.maxR + 'rem';
+      d.el.style.fontSize = d.max2R + 'rem';
     });
     // (b) só LEITURA — mede a caixa (que pode ter crescido) e o texto (um layout p/ o lote)
     var vivos = [];
@@ -6418,8 +6420,8 @@ window._firstNameOnly = function(name) {
       d.bw2 = d.box.clientWidth; d.bh2 = d.box.clientHeight;
       if (!d.bw2 || !d.bh2) { d.best2 = null; return; }
       d.fixa = !(d.bh2 > d.bh0 + 1);
-      if (_cabe(d)) { d.best2 = d.maxR; return; }
-      d.lo = _PISO_QUEBRA; d.hi = d.maxR; d.best2 = null;
+      if (_cabe(d)) { d.best2 = d.max2R; return; }
+      d.lo = _PISO_QUEBRA; d.hi = d.max2R; d.best2 = null;
       vivos.push(d);
     });
     // (c) busca binária EM LOTE, igual à fase 3: um par escrita+leitura por iteração para
@@ -6444,7 +6446,7 @@ window._firstNameOnly = function(name) {
     //      linha nunca custe fonte. Um par escrita+leitura pro lote inteiro resolve.
     //      ⛔ Não é afrouxar o `_cabe` — o degrau só é aceito se COUBER de verdade.
     var _subir = [];
-    itens.forEach(function (d) { if (d.best2 != null && d.best2 + 0.03 <= d.maxR + 0.001) _subir.push(d); });
+    itens.forEach(function (d) { if (d.best2 != null && d.best2 + 0.03 <= d.max2R + 0.001) _subir.push(d); });
     if (_subir.length) {
       _subir.forEach(function (d) { d.el.style.fontSize = (d.best2 + 0.03).toFixed(2) + 'rem'; });
       _subir.forEach(function (d) { if (_cabe(d)) d.best2 = +(d.best2 + 0.03).toFixed(2); });
@@ -6464,7 +6466,11 @@ window._firstNameOnly = function(name) {
         // ⛔ Se a linha única TRUNCAVA, as duas linhas ficam de qualquer jeito: mostrar o
         // nome todo menor vale mais que mostrar metade dele maior — é a decisão da 2.0.30 e
         // ela não muda aqui.
-        if (d.coube && d.best2 < d.fs - 0.001) {
+        // Cartões de jogo declaram um teto próprio para duas linhas: quando o nome
+        // passou desse limite em uma única linha, a forma de duas linhas é intencional
+        // e não deve voltar ao fio menor só porque ele ainda caberia no piso.
+        var prefereDuas = parseFloat(d.el.getAttribute('data-two-line-maxrem')) > 0;
+        if (!prefereDuas && d.coube && d.best2 < d.fs - 0.001) {
           d.el.style.whiteSpace = '';
           d.el.style.wordBreak = '';
           d.el.style.textWrap = '';
@@ -6636,7 +6642,8 @@ window._firstNameOnly = function(name) {
     // no teste do card: 400 vs 600 diferem em até 2 passos de 0,03rem).
     return (el.textContent || '') + '|' + el.childElementCount + '|' + (el.className || '') + '|' +
       bw + 'x' + bh + '|' +
-      (el.getAttribute('data-maxrem') || '') + '|' + (el.getAttribute('data-minrem') || '');
+      (el.getAttribute('data-maxrem') || '') + '|' + (el.getAttribute('data-minrem') || '') + '|' +
+      (el.getAttribute('data-two-line-maxrem') || '');
   }
   function _fitAplica(el, s, bw, bh) {
     el.style.fontSize = s.fs;

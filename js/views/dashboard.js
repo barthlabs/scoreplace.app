@@ -2439,11 +2439,6 @@ function renderDashboard(container) {
       // comentário que descreve algo que não existe mais é o que faz a próxima leitura
       // concluir errado.) [[project_name_fit_box_canonical]]
       var _geoMini = (typeof window._cardNomeGeo === 'function') ? window._cardNomeGeo(2) : null;
-      // ⛔ O GRUPO É POR LADO, NUNCA POR CARD. Se fosse por card, os dois TIMES entrariam no
-      // mesmo grupo e a quebra de um nome do time A forçaria a quebra no time B — que não
-      // tem nada com isso. O que se iguala é a dupla, não o confronto. Por isso o contador
-      // anda dentro de `_teamHtml`, uma vez por lado.
-      var _grupoMini = '';
       // Um jogador (linha): avatar + nome
       function _playerRow(name, uid) {
         var isMe = _isMe(name);
@@ -2484,8 +2479,8 @@ function renderDashboard(container) {
             '<span style="font-size:0.8rem;font-weight:' + _peso + ';color:' + window._spCor(_cor, 'color') + ';">' + _interno + _contato + '</span></div>';
         }
         var nameEl = '<div class="sp-mc-box" style="--sp-box-h:' + _geoMini.boxH + 'rem">' +
-          '<span class="sp-name-fit sp-mc-nm" data-fit-group="' + _grupoMini + '"' +
-          ' data-maxrem="' + _geoMini.maxRem + '" data-minrem="' + _geoMini.minRem + '"' +
+          '<span class="sp-name-fit sp-mc-nm"' +
+          ' data-maxrem="' + _geoMini.maxRem + '" data-minrem="' + _geoMini.minRem + '" data-two-line-maxrem="' + _geoMini.twoLineMaxRem + '"' +
           ' style="font-weight:' + _peso + ';color:' + window._spCor(_cor, 'color') + ';">' + _interno + _contato + '</span></div>';
         return '<div style="display:flex;align-items:center;gap:6px;min-width:0;">' + avatarEl + nameEl + '</div>';
       }
@@ -2498,9 +2493,7 @@ function renderDashboard(container) {
             '<span>a definir</span></div>';
         }
         var parts = String(teamStr).split(/\s*\/\s*/).filter(Boolean);
-        window._fitGroupSeq = (window._fitGroupSeq || 0) + 1;
-        _grupoMini = 'd' + window._fitGroupSeq;      // um grupo por LADO
-        return '<div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:0;">' +
+        return '<div class="sp-mc-col" style="flex:1;min-width:0;">' +
           parts.map(function(n, i) { return _playerRow(n, uids && uids[i]); }).join('') +
         '</div>';
       }

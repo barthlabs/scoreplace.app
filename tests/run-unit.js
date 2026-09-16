@@ -141,6 +141,7 @@ const SUITES = [
   'tests/l16-hidratacao-que-falha-nao-fica-calada.test.js',
   'tests/l4-inscricao-propria-nao-grava-email.test.js',
   'tests/balao-fica-junto-do-nome-em-duas-linhas.test.js',
+  'tests/nome-curto-e-longo-usam-o-mesmo-box.test.js',
   'tests/l4-desvincular-email-e-do-servidor.test.js',
   'tests/lista-de-pessoas-nao-entrega-a-ficha-inteira.test.js',
   'tests/limpeza-do-link-magico-roda-o-que-promete.test.js',
