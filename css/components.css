@@ -2492,7 +2492,11 @@ html, body,
 .sp-mc-nm{font-weight:600;white-space:nowrap;display:inline-block;}
 .sp-mc-side{display:flex;align-items:center;gap:5px;overflow:hidden;}
 .sp-mc-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;margin-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:5px;}
-.sp-mc-col{display:flex;flex-direction:column;gap:2px;overflow:hidden;}
+/* Espaçamento canônico entre os integrantes de uma dupla em TODO card de jogo.
+   O valor vem da geometria aprovada em “Seus últimos resultados”; dashboard, próximo
+   jogo, novidades e chave usam esta mesma classe, nunca um gap local. */
+:root{--sp-match-team-member-gap:4px;}
+.sp-mc-col{display:flex;flex-direction:column;gap:var(--sp-match-team-member-gap);overflow:hidden;}
 .sp-mc-vs{text-align:center;font-size:0.65rem;color:var(--text-muted);font-weight:800;letter-spacing:2px;padding:3px 0;}
 .sp-mc-acts{display:flex;align-items:flex-start;gap:6px;flex-wrap:wrap;justify-content:flex-end;margin-left:auto;}
 .sp-mc-sc{display:flex;align-items:center;flex-shrink:0;margin-left:8px;}

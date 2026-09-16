@@ -24,8 +24,8 @@ must(/data-two-line-maxrem/.test(BRACKET) && /data-two-line-maxrem/.test(DASHBOA
   'chave e dashboard passam o mesmo teto ao motor');
 must(!/data-fit-group/.test(BRACKET) && !/data-fit-group/.test(DASHBOARD),
   'nenhum render força o nome curto a acompanhar a quebra do parceiro');
-must(/\.sp-mc-col\{[^}]*gap:2px/.test(CSS) && /class="sp-mc-col" style="flex:1;min-width:0;"/.test(DASHBOARD),
-  'dashboard e chave usam o mesmo vão vertical de 2px entre integrantes da dupla');
+must(/--sp-match-team-member-gap:4px/.test(CSS) && /\.sp-mc-col\{[^}]*gap:var\(--sp-match-team-member-gap\)/.test(CSS) && (DASHBOARD.match(/class="sp-mc-col" style="flex:1;min-width:0;"/g) || []).length >= 3,
+  'dashboard e chave usam a mesma variável canônica de 4px entre integrantes da dupla');
 
 (async function () {
   const b = await chromium.launch();
@@ -52,7 +52,7 @@ must(/\.sp-mc-col\{[^}]*gap:2px/.test(CSS) && /class="sp-mc-col" style="flex:1;m
   must(m.lucia.lines === 2, 'Lucia Helena Silva Cerri usa duas linhas');
   must(m.leila.fs > m.lucia.fs, 'o nome curto fica maior que o nome longo');
   must(Math.abs(m.leila.height - m.lucia.height) < 0.5, 'os dois nomes ocupam caixas de mesma altura');
-  must(m.gap === 2, 'o espaço entre participantes foi reduzido para 2px');
+  must(m.gap === 4, 'o espaço canônico entre participantes é 4px');
   must(!m.leila.cut && !m.lucia.cut, 'nenhum dos dois nomes é truncado');
   console.log('\n✅ nome curto e longo no mesmo box — ' + ok + ' verificações');
 })();

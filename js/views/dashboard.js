@@ -2969,7 +2969,7 @@ function renderDashboard(container) {
             '<div style="' + rowStyle2 + (p1IsWinner ? 'background:rgba(16,185,129,0.12);border-left:3px solid #10b981;' : 'background:var(--sp-g-255-255-255-002,rgba(255,255,255,0.02));') + 'justify-content:space-between;">' +
               (function(){
                 var parts3 = String(m2.p1||'').split(/\s*\/\s*/).filter(Boolean);
-                var ph = '<div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:0;">';
+                var ph = '<div class="sp-mc-col" style="flex:1;min-width:0;">';
                 parts3.forEach(function(n, _pi){
                   // ⭐ O UID DO JOGO CHEGA AQUI, por índice: `m2.team1Uids` casa com a ordem
                   // de `p1` partida em ' / '. Antes o ícone era semeado só pelo NOME e, com o
@@ -2991,7 +2991,7 @@ function renderDashboard(container) {
             '<div style="' + rowStyle2 + (p2IsWinner ? 'background:rgba(16,185,129,0.12);border-left:3px solid #10b981;' : 'background:var(--sp-g-255-255-255-002,rgba(255,255,255,0.02));') + 'justify-content:space-between;">' +
               (function(){
                 var parts4 = String(m2.p2||'').split(/\s*\/\s*/).filter(Boolean);
-                var ph = '<div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:0;">';
+                var ph = '<div class="sp-mc-col" style="flex:1;min-width:0;">';
                 parts4.forEach(function(n, _pi){
                   // ⭐ O UID DO JOGO CHEGA AQUI, por índice: `m2.team2Uids` casa com a ordem
                   // de `p2` partida em ' / '. Antes o ícone era semeado só pelo NOME e, com o
