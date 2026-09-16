@@ -31,7 +31,10 @@ ok(/\[data-theme="light"\] \.sp-person-name-link,[\s\S]{0,180}text-decoration-co
 ok(/window\._personProfileLinkHtml\(s\.uid, s\.name, _txt/.test(bracket), 'a classificação de cada grupo usa o wrapper canônico');
 ok(/window\._personNameHtml\(_slotUid, name\)/.test(bracket), 'os nomes dos cards de jogo também usam o helper');
 ok(/A faixa interna delimita somente o nome[\s\S]{0,480}sp-person-name-content/.test(bracket), 'o card documenta a faixa do nome separada do balão de contato');
-ok((dashboard.match(/window\._personNameHtml\(/g) || []).length >= 3, 'dashboard usa o helper nos nomes de todos os lados do jogo');
+ok(/function _resultadoMembroHtml[\s\S]{0,1000}window\._personNameHtml/.test(dashboard) &&
+  /_resultadoMembroHtml\(n, _u3, _isMe\(n\), parts3\.length\)/.test(dashboard) &&
+  /_resultadoMembroHtml\(n, _u4, _isMe\(n\), parts4\.length\)/.test(dashboard),
+  'dashboard usa um único helper canônico de ficha nos dois lados de Últimos Resultados');
 ok((participants.match(/_contactPersonIconHtml\(t,/g) || []).length >= 2, 'cards de inscritos exibem o balão ao lado do nome');
 ok(/O nome abre a ficha também para o organizador[\s\S]{0,1500}_personNameHtml/.test(participants),
   'na lista administrativa o nome abre a ficha e a edição fica em botão próprio');

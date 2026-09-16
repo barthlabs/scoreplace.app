@@ -1,8 +1,8 @@
 'use strict';
 /* A dupla não pode punir o nome curto por ter uma parceira de nome longo.
  * Cenário real informado: "Leila Arida" cabe em uma linha; "Lucia Helena Silva Cerri"
- * ocupa as duas linhas reservadas, com fonte menor. Os dois boxes têm a mesma altura e
- * o vão entre participantes é o mesmo em dashboard e chave. */
+ * usa duas linhas com fonte menor. A caixa curta encolhe depois do fit; a longa preserva
+ * duas linhas, e o vão entre participantes permanece canônico em todos os cards. */
 const assert = require('assert/strict');
 const fs = require('fs');
 const path = require('path');
@@ -20,8 +20,9 @@ function must(v, m) { assert.ok(v, m); ok++; console.log('  ✓ ' + m); }
 
 must(/twoLineMaxRem/.test(read('js/views/bracket-model.js')),
   'a geometria canônica declara um teto específico para duas linhas');
-must(/data-two-line-maxrem/.test(BRACKET) && /data-two-line-maxrem/.test(DASHBOARD),
-  'chave e dashboard passam o mesmo teto ao motor');
+must(/data-two-line-maxrem/.test(BRACKET) && /data-two-line-maxrem/.test(DASHBOARD) &&
+  /data-sp-card-name-box/.test(BRACKET) && /data-sp-card-name-box/.test(DASHBOARD),
+  'chave e dashboard usam o mesmo contrato adaptativo de uma ou duas linhas');
 must(!/data-fit-group/.test(BRACKET) && !/data-fit-group/.test(DASHBOARD),
   'nenhum render força o nome curto a acompanhar a quebra do parceiro');
 must(/--sp-match-team-member-gap:4px/.test(CSS) && /\.sp-mc-col\{[^}]*gap:var\(--sp-match-team-member-gap\)/.test(CSS) && (DASHBOARD.match(/class="sp-mc-col" style="flex:1;min-width:0;"/g) || []).length >= 3,
@@ -31,7 +32,7 @@ must(/--sp-match-team-member-gap:4px/.test(CSS) && /\.sp-mc-col\{[^}]*gap:var\(-
   const b = await chromium.launch();
   const p = await b.newPage({ viewport: { width: 390, height: 300 } });
   const pessoa = (id, nome) => '<div class="sp-mc-side"><i style="width:22px;height:22px;flex:0 0 22px"></i>' +
-    '<div class="sp-mc-box" style="--sp-box-h:1.89rem"><span id="' + id + '" class="sp-name-fit sp-mc-nm" ' +
+    '<div class="sp-mc-box" data-sp-card-name-box data-sp-one-line-h="1.03rem" data-sp-two-line-h="1.89rem" style="--sp-box-h:1.89rem"><span id="' + id + '" class="sp-name-fit sp-mc-nm" ' +
     'data-maxrem="0.86" data-minrem="0.44" data-two-line-maxrem="0.71">' + nome + '</span></div></div>';
   await p.setContent('<style>' + CSS + '</style><main style="width:130px"><div class="sp-mc-col" id="dupla">' +
     pessoa('leila', 'Leila Arida') + pessoa('lucia', 'Lucia Helena Silva Cerri') + '</div></main>');
@@ -45,14 +46,16 @@ must(/--sp-match-team-member-gap:4px/.test(CSS) && /\.sp-mc-col\{[^}]*gap:var\(-
       return { lines: [...range.getClientRects()].length, fs: parseFloat(cs.fontSize) / root,
         height: box.getBoundingClientRect().height, cut: el.scrollWidth > box.clientWidth + 1 || el.scrollHeight > box.clientHeight + 1 };
     };
-    return { leila: one('leila'), lucia: one('lucia'), gap: parseFloat(getComputedStyle(document.getElementById('dupla')).gap) };
+    const a = document.getElementById('leila').parentElement.parentElement.getBoundingClientRect();
+    const b = document.getElementById('lucia').parentElement.parentElement.getBoundingClientRect();
+    return { leila: one('leila'), lucia: one('lucia'), gap: parseFloat(getComputedStyle(document.getElementById('dupla')).gap), rowGap: b.top - a.bottom };
   });
   await b.close();
   must(m.leila.lines === 1, 'Leila Arida permanece em uma linha');
   must(m.lucia.lines === 2, 'Lucia Helena Silva Cerri usa duas linhas');
   must(m.leila.fs > m.lucia.fs, 'o nome curto fica maior que o nome longo');
-  must(Math.abs(m.leila.height - m.lucia.height) < 0.5, 'os dois nomes ocupam caixas de mesma altura');
-  must(m.gap === 4, 'o espaço canônico entre participantes é 4px');
+  must(m.leila.height < m.lucia.height, 'a caixa do nome curto encolhe e a do nome longo preserva duas linhas');
+  must(m.gap === 4 && Math.abs(m.rowGap - 4) < 0.5, 'o espaço canônico entre participantes é 4px, sem linha vazia');
   must(!m.leila.cut && !m.lucia.cut, 'nenhum dos dois nomes é truncado');
   console.log('\n✅ nome curto e longo no mesmo box — ' + ok + ' verificações');
 })();

@@ -37,8 +37,9 @@ ok(/var _cor = isMe \? '#f1f5f9' : '#94a3b8';/.test(cod),
    'a COR continua destacando quem está olhando (é ela que identifica agora)');
 ok(/var _peso = isMe \? '700' : '500';/.test(cod),
    'e o PESO da fonte também');
-ok(/isMe\d\?'700':'400'/.test(cod.replace(/\s/g, '')),
-   'nos dois lados do outro card de jogo, idem');
+ok(/_resultadoMembroHtml\(n, _u3, _isMe\(n\), parts3\.length\)/.test(cod) &&
+   /_resultadoMembroHtml\(n, _u4, _isMe\(n\), parts4\.length\)/.test(cod),
+   'nos dois lados de Últimos Resultados a cor, sem rótulo, continua identificando quem está olhando');
 ok(/_isMe\(name\)\n?\s*\? '<b style="color:var\(--sp-c-e2e8f0/.test(cod),
    'na linha de confronto, o negrito claro segue marcando o usuário');
 

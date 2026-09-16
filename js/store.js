@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.3.51';
+window.SCOREPLACE_VERSION = '2.3.52';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -6645,6 +6645,24 @@ window._firstNameOnly = function(name) {
       (el.getAttribute('data-maxrem') || '') + '|' + (el.getAttribute('data-minrem') || '') + '|' +
       (el.getAttribute('data-two-line-maxrem') || '');
   }
+  // Só os nomes de cards de jogo recebem esta compactação. A caixa começa alta para
+  // permitir a busca em duas linhas; depois ela ocupa uma ou duas linhas conforme o
+  // resultado real. Não há regra por tela: o atributo vem do mesmo contrato canônico.
+  function _compactaCaixaNomeDeCard(el) {
+    var box = el && el.parentElement;
+    if (!box || !box.hasAttribute('data-sp-card-name-box')) return null;
+    var one = box.getAttribute('data-sp-one-line-h');
+    var two = box.getAttribute('data-sp-two-line-h');
+    if (!one || !two) return null;
+    var cs = getComputedStyle(el);
+    var lh = parseFloat(cs.lineHeight) || ((parseFloat(cs.fontSize) || 0) * 1.1);
+    var duasLinhas = el.style.whiteSpace === 'normal' && lh > 0 && el.scrollHeight > (lh * 1.45);
+    var altura = duasLinhas ? two : one;
+    if (box.style.getPropertyValue('--sp-box-h') !== altura) box.style.setProperty('--sp-box-h', altura);
+    el.setAttribute('data-sp-name-lines', duasLinhas ? '2' : '1');
+    return { bw: box.clientWidth, bh: box.clientHeight };
+  }
+
   function _fitAplica(el, s, bw, bh) {
     el.style.fontSize = s.fs;
     el.style.whiteSpace = s.ws;
@@ -6653,8 +6671,9 @@ window._firstNameOnly = function(name) {
     el.style.maxWidth = s.mw;
     el.setAttribute('data-fitted', '1');
     el.setAttribute('data-fit-cached', '1');
-    el.setAttribute('data-fitw', bw);
-    el.setAttribute('data-fith', bh);
+    var medida = _compactaCaixaNomeDeCard(el);
+    el.setAttribute('data-fitw', medida ? medida.bw : bw);
+    el.setAttribute('data-fith', medida ? medida.bh : bh);
     if (_ro && el.parentElement) { try { _ro.observe(el.parentElement); } catch (e) {} }
   }
   function _fitMemoriza(root) {
@@ -6728,8 +6747,9 @@ window._firstNameOnly = function(name) {
     }
     el.setAttribute('data-fitted', '1');
     el.removeAttribute('data-fit-cached');   // recalculado agora
-    el.setAttribute('data-fitw', bw);
-    el.setAttribute('data-fith', bh);
+    var medidaFinal = _compactaCaixaNomeDeCard(el);
+    el.setAttribute('data-fitw', medidaFinal ? medidaFinal.bw : bw);
+    el.setAttribute('data-fith', medidaFinal ? medidaFinal.bh : bh);
     if (_ro) { try { _ro.observe(box); } catch (e) {} }
     return true;
   }
@@ -6858,6 +6878,15 @@ window._firstNameOnly = function(name) {
           }
         });
         _tentaDuasLinhasEmLote(_pQuebrar);
+        // A quebra já está decidida; só agora a caixa curta pode encolher sem impedir
+        // que o nome longo use duas linhas. Atualiza a medida para não disparar refit.
+        dados.forEach(function (d) {
+          if (!d.bw || !d.bh) return;
+          var medida = _compactaCaixaNomeDeCard(d.el);
+          if (!medida) return;
+          d.el.setAttribute('data-fitw', medida.bw);
+          d.el.setAttribute('data-fith', medida.bh);
+        });
       };
       window._fitNamesLote = _fitEmLote;   // exposto p/ medição e teste
       var _lote = function (fila, aoFim) {

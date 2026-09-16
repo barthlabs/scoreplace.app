@@ -4540,23 +4540,14 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint, m) {
     // impede que o nome vire ilegível pra quem só está LENDO a chave).
     const _nomeMaxRem = _geo.maxRem;
     const _nomeMinRem = _geo.minRem;
-    // 1.9.39: o volume desta caixa virou CLASSE (`sp-mc-box`); só a ALTURA, que depende
-    // do teto de fonte do nome, continua inline — como variável, que é o mínimo possível.
-    // ── 2.0.30 · A CAIXA PASSA A TER ALTURA DE DUAS LINHAS, PRA TODO MUNDO ─────────
-    // Era `× 1.35`: UMA linha. Com uma linha de altura, "quebrar em duas" é geometria
-    // impossível — pra duas linhas caberem, a fonte tem que descer ABAIXO do que uma linha
-    // já dava, então o ajuste (corretamente) escolhia uma linha e o nome longo virava o fio
-    // que o dono viu no print, minúsculo ao lado do nome curto do parceiro.
-    // Ordem do dono (23/ago/2026): _"diminui a fonte e quebra linhas sempre mantendo o box
-    // do mesmo tamanho para cada participante"_ — o box igual é ENTRE PARTICIPANTES, não
-    // igual ao de ontem. Com `× 2.2` (duas linhas de `line-height:1.1`) o nome longo cabe
-    // em duas linhas equilibradas com fonte legível, o nome curto fica centrado numa linha
-    // só, e a caixa continua exatamente do mesmo tamanho pros dois — que é o cânone.
-    const _boxNome = `--sp-box-h:${_geo.boxH}rem`;
+    // A caixa começa com duas linhas para o motor testar a quebra e, depois do fit,
+    // volta para uma linha se o nome couber. A decisão é a mesma em chave e dashboard.
+    const _boxNome = `--sp-box-h:${_geo.twoLineBoxH}rem`;
+    const _boxNomeAttrs = ` data-sp-card-name-box data-sp-one-line-h="${_geo.oneLineBoxH}rem" data-sp-two-line-h="${_geo.twoLineBoxH}rem"`;
     if (_isPendingSlot) {
       html += `<div style="display:flex;align-items:center;gap:5px;overflow:hidden;flex-wrap:wrap;">` +
         `<img src="${photoSrc}"${_avatarUid} ${onerror} data-player-name="${window._safeHtml(dispName)}" class="sp-av sp-av-p" style="--sp-av:${size}">` +
-        `<div class="sp-mc-box" style="${_boxNome}"><span class="sp-name-fit" data-maxrem="${_nomeMaxRem}" data-minrem="${_nomeMinRem}" data-two-line-maxrem="${_geo.twoLineMaxRem}" style="font-weight:700;color:var(--sp-c-fbbf24,#fbbf24);white-space:nowrap;">${window._safeHtml(dispName)}</span></div>` +
+        `<div class="sp-mc-box"${_boxNomeAttrs} style="${_boxNome}"><span class="sp-name-fit" data-maxrem="${_nomeMaxRem}" data-minrem="${_nomeMinRem}" data-two-line-maxrem="${_geo.twoLineMaxRem}" style="font-weight:700;color:var(--sp-c-fbbf24,#fbbf24);white-space:nowrap;">${window._safeHtml(dispName)}</span></div>` +
         `<span style="font-size:0.52rem;font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.4);padding:1px 5px;border-radius:5px;letter-spacing:0.3px;text-transform:uppercase;white-space:nowrap;flex-shrink:0;">aguardando resposta</span>` +
       `</div>`;
       return;
@@ -4582,7 +4573,7 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint, m) {
       /* A faixa interna delimita somente o nome dentro do conteúdo que o auto-fit mede.
        * O 💬 continua irmão dela dentro de .sp-name-fit: assim o toque no nome abre a
        * ficha, o toque no 💬 abre contato, e os dois seguem cabendo na mesma caixa. */
-      `<div class="sp-mc-box" style="${_boxNome}"><span class="sp-name-fit sp-mc-nm" data-maxrem="${_nomeMaxRem}" data-minrem="${_nomeMinRem}" data-two-line-maxrem="${_geo.twoLineMaxRem}"><span class="sp-person-name-content">${
+      `<div class="sp-mc-box"${_boxNomeAttrs} style="${_boxNome}"><span class="sp-name-fit sp-mc-nm" data-maxrem="${_nomeMaxRem}" data-minrem="${_nomeMinRem}" data-two-line-maxrem="${_geo.twoLineMaxRem}"><span class="sp-person-name-content">${
         _slotUid
           ? window._personNameHtml(_slotUid, name) +
             ((name && typeof window._isOrgName === 'function' && window._currentBracketTournament &&

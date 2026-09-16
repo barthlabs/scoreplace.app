@@ -2478,7 +2478,7 @@ function renderDashboard(container) {
           return '<div style="display:flex;align-items:center;gap:6px;min-width:0;">' + avatarEl +
             '<span style="font-size:0.8rem;font-weight:' + _peso + ';color:' + window._spCor(_cor, 'color') + ';">' + _interno + _contato + '</span></div>';
         }
-        var nameEl = '<div class="sp-mc-box" style="--sp-box-h:' + _geoMini.boxH + 'rem">' +
+        var nameEl = '<div class="sp-mc-box" data-sp-card-name-box data-sp-one-line-h="' + _geoMini.oneLineBoxH + 'rem" data-sp-two-line-h="' + _geoMini.twoLineBoxH + 'rem" style="--sp-box-h:' + _geoMini.twoLineBoxH + 'rem">' +
           '<span class="sp-name-fit sp-mc-nm"' +
           ' data-maxrem="' + _geoMini.maxRem + '" data-minrem="' + _geoMini.minRem + '" data-two-line-maxrem="' + _geoMini.twoLineMaxRem + '"' +
           ' style="font-weight:' + _peso + ';color:' + window._spCor(_cor, 'color') + ';">' + _interno + _contato + '</span></div>';
@@ -2906,6 +2906,22 @@ function renderDashboard(container) {
           ? ('Jogo ' + m2._gameNum)
           : (m2.label || 'JOGO 1');
         var rowStyle2 = 'display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:8px;margin-bottom:4px;';
+        // Mesmo contrato de nome usado pela chave, Novidades e Próximo Jogo. Este trecho
+        // substitui o desenho antigo de Últimos Resultados, que tinha altura própria e
+        // portanto nunca podia acompanhar a compactação de uma/duas linhas.
+        function _resultadoMembroHtml(n, uid, sou, membrosNoTime) {
+          var geo = (typeof window._cardNomeGeo === 'function') ? window._cardNomeGeo(membrosNoTime) : null;
+          if (!geo) return '';
+          var av = window._personAvatarHtml(uid || '', n,
+            'width:' + geo.avatar + ';height:' + geo.avatar + ';border-radius:50%;object-fit:cover;flex-shrink:0;');
+          var contato = typeof window._contactPersonIconHtml === 'function'
+            ? window._contactPersonIconHtml(tRef2, uid, n, {sameGroup:true,dentroDaCaixa:true}) : '';
+          var nome = typeof window._personNameHtml === 'function' ? window._personNameHtml(uid, n) : _sf(n);
+          return '<div class="sp-mc-side">' + av +
+            '<div class="sp-mc-box" data-sp-card-name-box data-sp-one-line-h="' + geo.oneLineBoxH + 'rem" data-sp-two-line-h="' + geo.twoLineBoxH + 'rem" style="--sp-box-h:' + geo.twoLineBoxH + 'rem">' +
+              '<span class="sp-name-fit sp-mc-nm" data-maxrem="' + geo.maxRem + '" data-minrem="' + geo.minRem + '" data-two-line-maxrem="' + geo.twoLineMaxRem + '" style="font-weight:' + (sou ? '700' : '400') + ';color:' + window._spCor((sou ? '#f1f5f9' : '#94a3b8'), 'color') + ';">' + nome + contato + '</span>' +
+            '</div></div>';
+        }
 
         var p1IsWinner = !m2.draw && window._matchWinnerSide(m2) === 1;
         var p2IsWinner = !m2.draw && window._matchWinnerSide(m2) === 2;
@@ -2974,12 +2990,8 @@ function renderDashboard(container) {
                   // ⭐ O UID DO JOGO CHEGA AQUI, por índice: `m2.team1Uids` casa com a ordem
                   // de `p1` partida em ' / '. Antes o ícone era semeado só pelo NOME e, com o
                   // perfil ainda não resolvido, virava o mesmo círculo mudo pra todo mundo.
-                  var isMe3=_isMe(n);
                   var _u3=(Array.isArray(m2.team1Uids)&&m2.team1Uids[_pi])||'';
-                  var av3=window._personAvatarHtml(_u3, n, 'width:26px;height:26px;border-radius:50%;object-fit:cover;flex-shrink:0;');
-                  var ct3=typeof window._contactPersonIconHtml==='function'?window._contactPersonIconHtml(tRef2,_u3,n,{sameGroup:true,dentroDaCaixa:true}):'';
-                  var nm3=typeof window._personNameHtml==='function'?window._personNameHtml(_u3,n):_sf(n);
-                  ph+='<div style="display:flex;align-items:center;gap:6px;">'+av3+'<span style="font-size:0.78rem;font-weight:'+(isMe3?'700':'400')+';color:' + window._spCor((isMe3?'#f1f5f9':'#94a3b8'), 'color')+';">'+nm3+ct3+'</span></div>';
+                  ph += _resultadoMembroHtml(n, _u3, _isMe(n), parts3.length);
                 });
                 ph+='</div>';
                 var sc3 = m2.scoreP1 != null ? '<div class="sp-mc-num" style="color:' + window._spCor(_corPlacar2(p1IsWinner), 'color')+';flex-shrink:0;text-align:right;">'+_placarLado(1)+'</div>' : '';
@@ -2996,12 +3008,8 @@ function renderDashboard(container) {
                   // ⭐ O UID DO JOGO CHEGA AQUI, por índice: `m2.team2Uids` casa com a ordem
                   // de `p2` partida em ' / '. Antes o ícone era semeado só pelo NOME e, com o
                   // perfil ainda não resolvido, virava o mesmo círculo mudo pra todo mundo.
-                  var isMe4=_isMe(n);
                   var _u4=(Array.isArray(m2.team2Uids)&&m2.team2Uids[_pi])||'';
-                  var av4=window._personAvatarHtml(_u4, n, 'width:26px;height:26px;border-radius:50%;object-fit:cover;flex-shrink:0;');
-                  var ct4=typeof window._contactPersonIconHtml==='function'?window._contactPersonIconHtml(tRef2,_u4,n,{sameGroup:true,dentroDaCaixa:true}):'';
-                  var nm4=typeof window._personNameHtml==='function'?window._personNameHtml(_u4,n):_sf(n);
-                  ph+='<div style="display:flex;align-items:center;gap:6px;">'+av4+'<span style="font-size:0.78rem;font-weight:'+(isMe4?'700':'400')+';color:' + window._spCor((isMe4?'#f1f5f9':'#94a3b8'), 'color')+';">'+nm4+ct4+'</span></div>';
+                  ph += _resultadoMembroHtml(n, _u4, _isMe(n), parts4.length);
                 });
                 ph+='</div>';
                 var sc4 = m2.scoreP2 != null ? '<div class="sp-mc-num" style="color:' + window._spCor(_corPlacar2(p2IsWinner), 'color')+';flex-shrink:0;text-align:right;">'+_placarLado(2)+'</div>' : '';
