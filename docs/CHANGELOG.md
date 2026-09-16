@@ -1,3 +1,8 @@
+## 2.3.50 — 16/set/2026
+
+- Após a confirmação da Callable, o card lê `results/{matchId}` diretamente do servidor antes de repintar. Assim o set aceito aparece sem recarregar, sem reaplicar payload nem rodar motor de resultado no cliente.
+- Esta publicação é somente web. Não há geração, sincronização nem submissão de binários iOS ou Android.
+
 ## 2.3.49 — 16/set/2026
 
 - Todos os cards de jogo passam a tratar cada integrante da dupla de forma independente: nomes curtos ficam em uma linha na fonte máxima; nomes longos usam as duas linhas já reservadas, com fonte menor e sem truncamento.

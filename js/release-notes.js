@@ -1,3 +1,4 @@
+// 2.3.50 — depois de a Callable confirmar um placar, o card lê o documento canônico do jogo no servidor antes de repintar. Nenhum payload nem motor local recalcula resultado, sets ou chave.
 // 2.3.49 — em todos os cards de jogo, nomes curtos permanecem em uma linha; nomes longos usam as duas linhas reservadas com fonte menor, sem aumentar o espaço entre os integrantes da dupla. Ao confirmar um set de partida em andamento, o placar aceito aparece no card imediatamente; não é necessário recarregar para ver o set seguinte.
 // 2.3.48 — ao confirmar um set de partida em andamento, o placar aceito aparece no card imediatamente; não é necessário recarregar para ver o set seguinte.
 // 2.3.47 — Seus Últimos Resultados passou a reutilizar a mesma grade de cabeçalho e placar de Novidades; em melhor de 3, sets e números ficam alinhados com a mesma folga de 16 px.

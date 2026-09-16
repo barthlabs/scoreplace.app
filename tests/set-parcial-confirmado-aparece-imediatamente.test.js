@@ -6,7 +6,8 @@
  * até atualizar a página. A resposta da CF carrega só o torneio limpo, sem `matches`.
  * Este teste reproduz exatamente essa fronteira: a tela começa no Set 1, a Function
  * confirma o Set 2 e o estado usado pelo render passa a conter os dois sets na mesma
- * promessa — sem leitura, recarga ou novo lançamento.
+ * promessa, depois de ler o documento canônico `results/{matchId}` do servidor — sem
+ * recarga ou novo lançamento.
  */
 'use strict';
 const fs = require('fs');
@@ -24,7 +25,7 @@ const source = fs.readFileSync(path.join(ROOT, 'js/store.js'), 'utf8');
 const start = source.indexOf('  async commitResultTx(tournamentId, matchId, payload, logMessage) {');
 ok(start >= 0, 'commitResultTx existe');
 const method = R.ateOFim(source, start);
-ok(method.indexOf('setsInProgress') >= 0, 'a confirmação de set parcial tem caminho próprio');
+ok(method.indexOf('loadMatchResult') >= 0, 'a confirmação usa a leitura canônica do resultado');
 
 const tournament = {
   id: 'T1', name: 'Confra',
@@ -35,14 +36,11 @@ let renders = 0;
 const sandbox = {
   window: {
     _callApplyMatchResult: async () => ({ data: { ok: true, tournament: { id: 'T1', updatedAt: 'server' } } }),
-    _applyResultToTournament(t, matchId, payload) {
-      const match = (t.matches || []).find(m => String(m.id) === String(matchId));
-      if (!match || !payload.setsInProgress) return null;
-      match.sets = payload.sets.slice();
-      match.setsWonP1 = payload.setsWonP1;
-      match.setsWonP2 = payload.setsWonP2;
-      match.startedAt = payload.at;
-      return match;
+    FirestoreDB: {
+      loadMatchResult: async () => ({
+        sets: [{ gamesP1: 4, gamesP2: 6 }, { gamesP1: 2, gamesP2: 6 }],
+        setsWonP1: 0, setsWonP2: 2, startedAt: 123
+      })
     },
     location: { hash: '#tournaments/T1' },
     _softRefreshView() { renders++; },

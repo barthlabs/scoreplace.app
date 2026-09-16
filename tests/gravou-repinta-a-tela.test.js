@@ -59,7 +59,7 @@ ok(/delete _lt\._resultsHydrating/.test(bloco),
 {
   // o CATCH do applyMatchResult não pode apagar a marca: tentativa perdida não vira releitura
   // ⛔ ÂNCORA, não tamanho fixo. O catch vai até a linha que decide seguir sem a CF.
-  const iC = src.indexOf('catch', src.indexOf('_callApplyMatchResult'));
+  const iC = src.indexOf('} catch (e) {', src.indexOf('_callApplyMatchResult'));
   const fC = src.indexOf('_viaCF', iC);
   ok(iC > 0 && fC > iC, 'âncoras do catch do applyMatchResult');
   const catchBloco = src.slice(iC, fC);

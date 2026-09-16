@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.3.49';
+window.SCOREPLACE_VERSION = '2.3.50';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -11403,29 +11403,31 @@ window.AppStore = {
             var _lt = this.tournaments.find(function (x) { return String(x.id) === String(tournamentId); });
             if (_lt) {
               Object.keys(_d.tournament).forEach(function (k) { _lt[k] = _d.tournament[k]; });
-              /* A callable confirma o set, mas a fronteira do torneio não devolve `matches`.
-               * Se repintarmos agora só com a estrutura que já estava em memória, o card
-               * reaparece com o set anterior até o ouvinte chegar. Isso é especialmente
-               * perigoso no placar por sets: o toast diz "confirmado", os números ainda
-               * mostram 0-0 e alguém lança de novo. Para um set PARCIAL já aceito pela CF,
-               * aplicamos a mesma mutação pura também no objeto que a tela está usando e
-               * no espelho local. Não é uma segunda gravação nem uma antecipação: este ramo
-               * só roda DEPOIS de `_d.ok`, ou seja, após a transação canônica do servidor.
-               * O snapshot remoto continua sendo a confirmação durável para os outros
-               * aparelhos; ele apenas deixa de ser necessário para o primeiro desenho. */
-              if (payload && payload.setsInProgress &&
-                  typeof window._applyResultToTournament === 'function') {
-                var _midConfirmado = String(matchId);
-                var _jogoConfirmado = window._applyResultToTournament(_lt, _midConfirmado, payload);
-                if (_jogoConfirmado) {
-                  _lt._results = _lt._results || {};
-                  var _espelhoConfirmado = Object.assign({}, _lt._results[_midConfirmado] || {});
-                  ['sets', 'setsWonP1', 'setsWonP2', 'startedAt'].forEach(function (k) {
-                    if (Object.prototype.hasOwnProperty.call(_jogoConfirmado, k)) {
-                      _espelhoConfirmado[k] = _jogoConfirmado[k];
-                    }
-                  });
-                  _lt._results[_midConfirmado] = _espelhoConfirmado;
+              /* A callable confirma a transação, mas a fronteira leve do torneio não
+               * carrega o resultado de cada jogo. O card não pode voltar a desenhar o set
+               * anterior enquanto espera o ouvinte: depois de uma confirmação o usuário pode
+               * lançar de novo achando que falhou. A saída é ler O DOCUMENTO CANÔNICO que a
+               * própria CF acabou de gravar (`results/{matchId}`), sempre com source:server.
+               * Não reaplicamos payload, não calculamos vencedor e não avançamos chave no
+               * cliente: só espelhamos campos que o servidor já confirmou. */
+              var _midConfirmado = String(matchId);
+              if (window.FirestoreDB && typeof window.FirestoreDB.loadMatchResult === 'function') {
+                try {
+                  var _resultadoConfirmado = await window.FirestoreDB.loadMatchResult(
+                    String(tournamentId), _midConfirmado);
+                  if (_resultadoConfirmado) {
+                    var _jogoConfirmado = (typeof window._findMatch === 'function')
+                      ? window._findMatch(_lt, _midConfirmado)
+                      : (_lt.matches || []).find(function (m) { return String(m.id) === _midConfirmado; });
+                    if (_jogoConfirmado) Object.keys(_resultadoConfirmado).forEach(function (k) {
+                      _jogoConfirmado[k] = _resultadoConfirmado[k];
+                    });
+                    _lt._results = _lt._results || {};
+                    _lt._results[_midConfirmado] = Object.assign(
+                      {}, _lt._results[_midConfirmado] || {}, _resultadoConfirmado);
+                  }
+                } catch (_eResultadoConfirmado) {
+                  if (window._warn) window._warn('[applyMatchResult] não consegui reler o resultado confirmado');
                 }
               }
               /* ⛔ TORNEIO DIVIDIDO: o documento que a CF devolve NÃO traz os jogos — eles moram
