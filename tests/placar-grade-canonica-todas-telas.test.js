@@ -9,8 +9,8 @@ const css = fs.readFileSync('css/components.css', 'utf8');
 const model = fs.readFileSync('js/views/bracket-model.js', 'utf8');
 const bracket = fs.readFileSync('js/views/bracket.js', 'utf8');
 const dashboard = fs.readFileSync('js/views/dashboard.js', 'utf8');
-ok(css.includes('.sp-set-grid[data-sp-best-of="3"]{gap:32px;}'),
-  'melhor de 3 usa sempre 32px de separação, sem depender da largura ou da tela');
+ok(css.includes('.sp-set-grid[data-sp-best-of="3"]{gap:16px;}'),
+  'melhor de 3 usa sempre 16px de separação, sem depender da largura ou da tela');
 ok(css.includes('.sp-set-grid[data-sp-best-of="5"]{gap:16px;}'),
   'melhor de 5 usa sempre 16px de separação');
 ok(!css.includes('@container (min-width:430px)'),

@@ -2547,11 +2547,11 @@ html, body,
 /* A geometria é do FORMATO da partida, nunca da sessão que a desenhou nem do número
    parcial de sets. `data-sp-best-of` sai do mesmo plano que gera cabeçalho e placar em
    chave, Novidades e Últimos resultados. Assim cada rótulo fica exatamente sobre sua coluna:
-   melhor de 3 usa 32px; melhor de 5 usa 16px. A regra não depende de container query — o
+   melhor de 3 e melhor de 5 usam 16px. A regra não depende de container query — o
    card pode mudar de largura sem Novidades voltar ao vão compacto. */
 .sp-match-card{container-type:inline-size;}
 .sp-set-grid{display:flex;align-items:flex-end;gap:2px;flex-shrink:0;}
-.sp-set-grid[data-sp-best-of="3"]{gap:32px;}
+.sp-set-grid[data-sp-best-of="3"]{gap:16px;}
 .sp-set-grid[data-sp-best-of="5"]{gap:16px;}
 /* ⛔ PLACAR ALINHA À DIREITA, NÃO AO CENTRO. Ordem do dono (13/set/2026, olhando um jogo
    com super tie-break): _"os placares parecem alinhados nas colunas pela esquerda; faça o

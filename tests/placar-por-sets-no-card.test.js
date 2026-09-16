@@ -549,14 +549,14 @@ async function espacoDosSetsResponsivo() {
   const largo5 = await mede(920, decidido5);
   await browser.close();
 
-  ok(estreito.overflow <= 0 && estreito.gaps.every((g) => Math.abs(g - 32) < 0.1),
-    '⑦ melhor de 3 estreito preserva 32px sem transbordar (' + estreito.gaps.map((g) => g.toFixed(1)).join(', ') + 'px)');
-  ok(medio.overflow <= 0 && medio.gaps.every((g) => Math.abs(g - 32) < 0.1),
-    '⑦ melhor de 3 médio preserva 32px sem transbordar (' + medio.gaps.map((g) => g.toFixed(1)).join(', ') + 'px)');
-  ok(largo2.gaps.every((g) => Math.abs(g - 32) < 0.1),
-    '⑦ dois sets em melhor de 3 usam 32px (' + largo2.gaps.map((g) => g.toFixed(1)).join(', ') + 'px)');
-  ok(largo3.gaps.every((g) => Math.abs(g - 32) < 0.1),
-    '⑦ três sets em melhor de 3 usam 32px (' + largo3.gaps.map((g) => g.toFixed(1)).join(', ') + 'px)');
+  ok(estreito.overflow <= 0 && estreito.gaps.every((g) => Math.abs(g - 16) < 0.1),
+    '⑦ melhor de 3 estreito preserva 16px sem transbordar (' + estreito.gaps.map((g) => g.toFixed(1)).join(', ') + 'px)');
+  ok(medio.overflow <= 0 && medio.gaps.every((g) => Math.abs(g - 16) < 0.1),
+    '⑦ melhor de 3 médio preserva 16px sem transbordar (' + medio.gaps.map((g) => g.toFixed(1)).join(', ') + 'px)');
+  ok(largo2.gaps.every((g) => Math.abs(g - 16) < 0.1),
+    '⑦ dois sets em melhor de 3 usam 16px (' + largo2.gaps.map((g) => g.toFixed(1)).join(', ') + 'px)');
+  ok(largo3.gaps.every((g) => Math.abs(g - 16) < 0.1),
+    '⑦ três sets em melhor de 3 usam 16px (' + largo3.gaps.map((g) => g.toFixed(1)).join(', ') + 'px)');
   ok(largo5.gaps.every((g) => Math.abs(g - 16) < 0.1),
     '⑦ cinco sets usam os 16px definidos para melhor de 5 (' + largo5.gaps.map((g) => g.toFixed(1)).join(', ') + 'px)');
   ok(new Set(largo2.gaps.map((g) => g.toFixed(2))).size === 1 && new Set(largo3.gaps.map((g) => g.toFixed(2))).size === 1 && new Set(largo5.gaps.map((g) => g.toFixed(2))).size === 1,
