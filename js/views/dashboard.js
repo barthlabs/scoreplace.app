@@ -3286,7 +3286,10 @@ function renderDashboard(container) {
           : '') +
         '</h3>';
       _spReset();
-      _novHtml += '<div id="novidades-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;align-items:start;margin-top:12px;">';
+      // `auto-fit` elimina trilhas vazias logo no primeiro paint: com uma só
+      // novidade, o card ocupa toda a largura útil mesmo se o sincronizador
+      // ainda não tiver executado. A prévia mede esse mesmo piso de 280px.
+      _novHtml += '<div id="novidades-grid" data-sp-preview-min="280" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;align-items:start;margin-top:12px;">';
       // A ordem aqui é a do FEED, nunca a de grupos. Agrupar globalmente parecia econômico,
       // mas reordenava A(novo), B(segundo), A(antigo) para A(novo), A(antigo), B(segundo).
       // O contexto de fase/torneio vai dentro de cada cartão: assim qualquer novidade nova
@@ -5092,7 +5095,19 @@ window._spPreviewLen = function(kinds, cols) {
 // dá pra contar e o certo é assumir 1 — errar mostrando de menos, nunca de mais.
 function _spGridCols(grid) {
   try {
-    var tpl = (window.getComputedStyle(grid).gridTemplateColumns || '').trim();
+    var cs = window.getComputedStyle(grid);
+    // `auto-fit` permite que o primeiro paint preencha a linha. Como os cards
+    // extras estão ocultos enquanto a prévia está fechada, o CSS computado vê
+    // só uma trilha; esta grade declarada mede então a largura real pelo piso
+    // que ela mesma informa, sem depender de breakpoint de viewport.
+    if (grid && grid.getAttribute && grid.getAttribute('data-sp-preview-min')) {
+      var box = grid.getBoundingClientRect && grid.getBoundingClientRect();
+      var largura = box && Number(box.width);
+      var piso = Number(grid.getAttribute('data-sp-preview-min')) || 280;
+      var vao = parseFloat(cs.columnGap || cs.gap || '0') || 0;
+      if (largura > 0) return Math.max(1, Math.floor((largura + vao) / (piso + vao)));
+    }
+    var tpl = (cs.gridTemplateColumns || '').trim();
     if (!tpl || tpl === 'none' || tpl.indexOf('(') !== -1) return 1;
     return Math.max(1, tpl.split(/\s+/).length);
   } catch (e) { return 1; }

@@ -225,7 +225,12 @@ El.prototype.querySelector = function (sel) { return this.querySelectorAll(sel)[
 function cenario(cols, gruposNov, cardsMr, colapsada) {
   const byId = {};
   const novSec = new El({ 'data-nov-collapsed': colapsada === false ? '0' : '1' });
-  const novGrid = new El({});
+  const novGrid = new El({ 'data-sp-preview-min': '280' });
+  // A Novidades usa auto-fit no primeiro paint. Com os extras ocultos, o
+  // navegador computaria uma só trilha; a função real conta pelo retângulo
+  // útil + piso declarado. Esta medida reproduz N colunas de 280px e 12px de
+  // vão para que o caminho específico também seja exercitado.
+  novGrid.getBoundingClientRect = function () { return { width: cols * 280 + Math.max(0, cols - 1) * 12 }; };
   novSec.add(novGrid);
   gruposNov.forEach(function (n) {
     novGrid.add(new El({ 'data-nov-head': '1' }));
@@ -248,7 +253,7 @@ function cenario(cols, gruposNov, cardsMr, colapsada) {
   byId['meus-resultados-section'] = mrSec; byId['meus-resultados-body'] = mrBody;
   byId['mr-toggle-tag'] = mrTag; byId['meus-resultados-hint'] = mrHint;
 
-  novGrid.style.gridTemplateColumns = 'repeat(auto-fill,minmax(280px,1fr))';
+  novGrid.style.gridTemplateColumns = 'repeat(auto-fit,minmax(280px,1fr))';
   mrGrid.style.gridTemplateColumns = 'repeat(auto-fill,minmax(280px,1fr))';
   const win = {
     // A régua REAL é sempre lida da grade original (o código restaura `__spBase` antes de
@@ -329,7 +334,7 @@ if (TEM_MEDICAO) (function () {
 // Um grupo de 3 jogos numa tela de 4 colunas deixava 1/4 de linha vazio — a queixa do
 // print, de novo. Fechada, os N cards passam a dividir TODA a linha; um card único ocupa
 // toda a largura útil. Aberta, a grade
-// volta a ser a régua canônica `auto-fill minmax(280px,1fr)` — que não pode ser apagada
+// volta a ser a régua canônica `auto-fit minmax(280px,1fr)` — que não pode ser apagada
 // por engano, porque ela mora no style INLINE da grade.
 if (TEM_MEDICAO) (function () {
   const c = cenario(4, [3, 2], 3);
@@ -339,8 +344,17 @@ if (TEM_MEDICAO) (function () {
   ok(unico.novTpl === 'repeat(1,minmax(0,1fr))' && !unico.novJustify,
     'D9b — card único de Novidades ocupa toda a largura útil, sem teto nem centralização — vi "' + unico.novTpl + '"');
   const aberta = cenario(4, [3, 2], 3, false);
-  ok(aberta.novTpl === 'repeat(auto-fill,minmax(280px,1fr))' && !aberta.novJustify,
-    'D10 — aberta, a grade volta à régua canônica auto-fill (a original NÃO é apagada) — vi "' + aberta.novTpl + '"');
+  ok(aberta.novTpl === 'repeat(auto-fit,minmax(280px,1fr))' && !aberta.novJustify,
+    'D10 — aberta, a grade volta à régua canônica auto-fit (a original NÃO é apagada) — vi "' + aberta.novTpl + '"');
+})();
+
+// ── D3. o primeiro paint também ocupa a largura útil ───────────────────────
+// A sincronização decide quantos cards revelar. A largura do primeiro não pode
+// depender dela: auto-fill conserva pistas vazias, auto-fit as colapsa.
+(function () {
+  const inicio = 'id="novidades-grid" data-sp-preview-min="280" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))';
+  ok(SRC.indexOf(inicio) !== -1,
+    'D10b — Novidades nasce com auto-fit e piso declarado: card único preenche a linha antes do sincronizador');
 })();
 
 // ── E. sobrando ZERO, o convite some ───────────────────────────────────────
