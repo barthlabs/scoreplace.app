@@ -74,6 +74,25 @@ ok(/Propor/i.test(cardHtml), 'o card RENDERIZADO traz o "Propor datas" (fiação
 ok(/Criar grupo/i.test(cardHtml), 'o card RENDERIZADO traz o botão de CRIAR o grupo (ainda sem link)');
 ok(/_waGrpOpen\(/.test(cardHtml), 'o botão do grupo está fiado na ação real (_waGrpOpen)');
 
+// Data definida substitui a ação no mesmo slot canônico, em azul-claro. O card
+// não pode continuar dizendo "Propor datas" depois de o organizador marcar.
+m.scheduledAt = '2026-09-18T14:00:00.000Z';
+m.scheduledKind = 'organizer';
+const scheduledCard = W.renderMatchCard(m, true, t.id, 1);
+ok(/18\/09 às 11:00/.test(scheduledCard), 'data e hora definidas aparecem no card');
+ok(!/Propor datas/.test(scheduledCard), 'data definida substitui o botão "Propor datas"');
+ok(/#7dd3fc/.test(scheduledCard), 'a data definida usa azul-claro');
+ok(/button/.test(scheduledCard) && /_schOpenMatch/.test(scheduledCard), 'o horário definido continua sendo botão para reagendar');
+ok(/data-schedule-chip/.test(scheduledCard), 'o card expõe o slot canônico do agendamento');
+const slotAgendado = { innerHTML: '', getAttribute: function (k) { return k === 'data-schedule-match-id' ? m.id : null; } };
+const queryOriginal = W.document.querySelectorAll;
+W.document.querySelectorAll = function (q) { return q === '[data-schedule-chip]' ? [slotAgendado] : []; };
+W._schRefreshCardChip(t, m);
+W.document.querySelectorAll = queryOriginal;
+ok(/18\/09 às 11:00/.test(slotAgendado.innerHTML) && !/Propor datas/.test(slotAgendado.innerHTML),
+  'ao definir, o slot do card aberto é atualizado antes do snapshot remoto');
+m.scheduledAt = ''; m.scheduledKind = '';
+
 let tLink = mkLiga();
 tLink.rounds[0].matches[0].waGroup = { link: 'https://chat.whatsapp.com/ABC123', byName: 'J1' };
 comUsuario(tLink, { uid: 'u1', displayName: 'J1' });

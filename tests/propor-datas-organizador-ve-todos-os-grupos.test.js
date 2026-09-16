@@ -172,6 +172,12 @@ ok(/_podeGerirJogo[\s\S]{0,400}window\._schPodeGerirJogo/.test(srcWa),
 // o overlay abre pelo chip, e o chip estava escondido. Guardado aqui pra que "definir
 // direto" não seja reinventado como um segundo caminho.
 ok(typeof W._schOrgDefinir === 'function', 'o organizador tem caminho de DEFINIR a data direto');
+const srcSch = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'schedule-poll.js'), 'utf8');
+const orgBlockSrc = srcSch.slice(srcSch.indexOf('function _orgBloco'), srcSch.indexOf('window._schOrgDefinir'));
+ok(/_schYmdNoFuso\(Date\.now\(\), t\)/.test(orgBlockSrc) &&
+   /function _schFuso[\s\S]{0,700}window\._venueGeo\.resolverFuso/.test(srcSch) &&
+   /function _schMsNoFuso/.test(srcSch),
+   'sem data no jogo, o formulário abre hoje no fuso do local; sem local, organizador/usuário — nunca na data inicial nem no fuso do aparelho');
 
 console.log(pass + ' ok, ' + fail + ' falhas');
 process.exit(fail ? 1 : 0);

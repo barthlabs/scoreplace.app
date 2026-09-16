@@ -5630,7 +5630,12 @@ function _cardFooterChips(t, m, opts) {
    * alinhados na esquerda de cada card"_. Centralizado, cada card punha o botão num lugar
    * diferente conforme a largura dele — numa lista de cards a coluna de botões ficava serpenteando.
    * À esquerda todos começam na mesma linha vertical, que é o que o olho procura. */
-  return '<div class="btn-row" style="display:flex;justify-content:flex-start;align-items:center;gap:6px;flex-wrap:wrap;margin:8px 0 2px;">' + sch + wa + '</div>';
+  /* O slot da agenda tem identidade própria: ao definir uma data, schedule-poll
+   * troca SOMENTE este trecho do card já aberto. Assim o "Propor datas" não fica
+   * visível até a pessoa recarregar a página; se o servidor rejeitar, ele volta. */
+  var _schSlot = '<span data-schedule-chip data-schedule-match-id="' +
+    window._safeHtml(String(m && m.id || '')) + '" style="display:contents;">' + sch + '</span>';
+  return '<div class="btn-row" style="display:flex;justify-content:flex-start;align-items:center;gap:6px;flex-wrap:wrap;margin:8px 0 2px;">' + _schSlot + wa + '</div>';
 }
 // v2.3.46: exposto pra que _saveResultInline possa re-renderizar UM card
 // individual in-place (sem re-render do bracket inteiro), preservando scroll,

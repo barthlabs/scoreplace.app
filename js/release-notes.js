@@ -1,3 +1,4 @@
+// 2.3.53 — ao marcar data e hora, o card troca imediatamente “Propor datas” pelo horário em azul-claro, tanto na chave quanto em Novidades; se o servidor recusar, o estado anterior volta.
 // 2.3.52 — card de jogo usa a mesma geometria em Novidades, Próximo Jogo, Últimos Resultados e chave: nome curto ocupa uma linha; nome longo só reserva duas quando precisa.
 // 2.3.51 — entrega web da geometria única dos cards: substituída pela correção adaptativa da 2.3.52.
 // 2.3.50 — depois de a Callable confirmar um placar, o card lê o documento canônico do jogo no servidor antes de repintar. Nenhum payload nem motor local recalcula resultado, sets ou chave. A distância vertical entre integrantes de uma dupla passa a usar a mesma regra em Novidades, Próximo Jogo, Últimos Resultados e chave.

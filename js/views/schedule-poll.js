@@ -108,10 +108,50 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   }
   function _isOrg(t) { return !!(window.AppStore && ((window.AppStore.isOrganizer && window.AppStore.isOrganizer(t)) || (window.AppStore.isCreator && window.AppStore.isCreator(t)))); }
 
-  // ─── datas / formatação (BRT) ────────────────────────────────────────────────
+  // ─── datas / formatação (BRT + fuso do torneio) ─────────────────────────────
   function _brtYmd(ms) {
     try { return new Date(ms).toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }); }
     catch (e) { return new Date(ms).toISOString().slice(0, 10); }
+  }
+
+  // A agenda não pode escolher o dia a partir do relógio do aparelho. A mesma regra
+  // do formulário de torneio resolve primeiro o local do evento; sem local, usa o
+  // perfil de quem está agendando (organizador ou jogador). Não há fallback de UTC.
+  function _schFuso(t) {
+    var perfil = _cu() || {};
+    try {
+      if (window._venueGeo && typeof window._venueGeo.resolverFuso === 'function') {
+        var r = window._venueGeo.resolverFuso(t || {}, perfil);
+        if (r && r.tz) return r.tz;
+      }
+    } catch (e) {}
+    // Perfis antigos podem não ter cidade/fuso. O calendário histórico do app usa
+    // São Paulo; preservamos esse último recurso explícito, nunca o fuso do aparelho.
+    return 'America/Sao_Paulo';
+  }
+  function _schYmdNoFuso(ms, t) {
+    try { return new Date(ms).toLocaleDateString('en-CA', { timeZone: _schFuso(t) }); }
+    catch (e) { return _brtYmd(ms); }
+  }
+  function _schHmNoFuso(ms, t) {
+    try { return new Date(ms).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: _schFuso(t) }); }
+    catch (e) { return _brtHm(ms); }
+  }
+  // Converte parede local (YYYY-MM-DD HH:mm no fuso do torneio) em instante UTC.
+  // Date.parse sem offset usaria o fuso do aparelho, que é precisamente o que não
+  // pode decidir o horário de um torneio remoto.
+  function _schMsNoFuso(ymd, hm, t) {
+    var a = String(ymd || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    var b = String(hm || '').match(/^(\d{2}):(\d{2})$/);
+    if (!a || !b) return NaN;
+    var nominal = Date.UTC(+a[1], +a[2] - 1, +a[3], +b[1], +b[2]);
+    try {
+      var fmt = new Intl.DateTimeFormat('en-CA', { timeZone: _schFuso(t), year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+      var ps = fmt.formatToParts(new Date(nominal)), d = {};
+      ps.forEach(function (x) { if (x.type !== 'literal') d[x.type] = x.value; });
+      var noFusoComoUtc = Date.UTC(+d.year, +d.month - 1, +d.day, +d.hour, +d.minute);
+      return nominal - (noFusoComoUtc - nominal);
+    } catch (e) { return _ms(ymd, hm); }
   }
   function _fmtDateTime(iso) {
     try {
@@ -752,17 +792,32 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   };
 
   // ─── chip / botão no card ──────────────────────────────────────────────────────
-  // Pílula da data já definida. Verde = gente marcou (organizador ou consenso);
+  // Pílula da data já definida. Azul-claro = gente marcou (organizador ou consenso),
   // âmbar com "≈" = conta do sistema (grade estimada). Cor NUNCA é o único sinal —
   // o "≈" e o title dizem a mesma coisa em texto, pra quem não distingue as duas.
-  function _chipData(iso, kind) {
+  function _chipData(iso, kind, onClick) {
     var est = (kind === 'estimate');
-    var cor = est ? '245,158,11' : '16,185,129';
-    var txt = est ? '#fbbf24' : '#34d399';
+    var cor = est ? '245,158,11' : '56,189,248';
+    var txt = est ? '#fbbf24' : '#7dd3fc';
     var tit = est ? 'Horário estimado pelo sistema — muda quando o organizador aponta ou os jogadores combinam' : 'Horário definido';
-    return '<span title="' + tit + '" style="display:inline-flex;align-items:center;gap:5px;background:rgba(' + cor + ',0.14);border:1px solid rgba(' + cor + ',0.45);color:' + window._spCor(txt, 'color') + ';font-weight:800;font-size:0.78rem;border-radius:999px;padding:5px 12px;">📅 ' + (est ? '≈ ' : '') + _esc(_fmtDateTime(iso)) + '</span>';
+    var tag = onClick ? 'button type="button" class="btn btn-micro hover-lift" onclick="' + onClick + '"' : 'span';
+    return '<' + tag + ' title="' + tit + (onClick ? ' — toque para alterar' : '') + '" style="display:inline-flex;align-items:center;gap:5px;background:rgba(' + cor + ',0.14);border:1px solid rgba(' + cor + ',0.45);color:' + window._spCor(txt, 'color') + ';font-weight:800;font-size:0.78rem;border-radius:999px;padding:5px 12px;">📅 ' + (est ? '≈ ' : '') + _esc(_fmtDateTime(iso)) + '</' + (onClick ? 'button' : 'span') + '>';
   }
   window._schChipData = _chipData;
+
+  // Atualização otimista do trecho canônico do card. A chave e Novidades usam o
+  // mesmo render; trocar este slot evita deixar o botão "Propor datas" na tela
+  // depois de o organizador ou os jogadores já terem marcado o horário.
+  window._schRefreshCardChip = function (t, m) {
+    try {
+      if (!m || m.id == null || !document || typeof document.querySelectorAll !== 'function') return;
+      var slots = document.querySelectorAll('[data-schedule-chip]');
+      var html = window._schCardChip(t, m);
+      for (var i = 0; i < slots.length; i++) {
+        if (String(slots[i].getAttribute('data-schedule-match-id')) === String(m.id)) slots[i].innerHTML = html;
+      }
+    } catch (e) {}
+  };
 
   window._schCardChip = function (t, m) {
     try {
@@ -778,7 +833,10 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       // (renderMatchCard), não o cabeçalho. Pedido do dono: a data aparece no botão
       // _inclusive nas novidades_. A supressão do monarch continua valendo pra AÇÃO
       // (propor é único por grupo); ela só não vale mais pra INFORMAÇÃO.
-      if (m.scheduledAt) return _chipData(m.scheduledAt, m.scheduledKind);
+      if (m.scheduledAt) {
+        var open = 'event.stopPropagation(); window._schOpenMatch(\'' + _attr(t.id) + '\',\'' + _attr(m.id) + '\')';
+        return _chipData(m.scheduledAt, m.scheduledKind, open);
+      }
       if (m.isMonarch) return '';
       if (m.winner || m.isBye || m.isSitOut) return '';
       if (!m.p1 || !m.p2 || m.p1 === 'BYE' || m.p2 === 'BYE' || m.p1 === 'TBD' || m.p2 === 'TBD') return '';
@@ -983,8 +1041,12 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   }
   function _orgBloco(t, m) {
     var ms = m.scheduledAt ? new Date(m.scheduledAt).getTime() : NaN;
-    var ymd = isNaN(ms) ? (_dtParts(t.startDate, '09:00') || {}).ymd || _brtYmd(Date.now()) : _brtYmd(ms);
-    var hm = isNaN(ms) ? ((_dtParts(t.startDate, '09:00') || {}).hm || '09:00') : _brtHm(ms);
+    // Sem horário no jogo, abrir no DIA DE HOJE. Abrir na data de início de um
+    // torneio longo levava o organizador para meses atrás (no Confra, 02/08),
+    // justamente quando ele quer marcar a semana corrente. Se já está marcado,
+    // preserva a própria data para facilitar a alteração.
+    var ymd = isNaN(ms) ? _schYmdNoFuso(Date.now(), t) : _schYmdNoFuso(ms, t);
+    var hm = isNaN(ms) ? '09:00' : _schHmNoFuso(ms, t);
     return '<div style="margin-top:14px;background:rgba(59,130,246,0.10);border:1px solid rgba(59,130,246,0.35);border-radius:12px;padding:12px;">' +
       '<div style="font-size:0.78rem;font-weight:800;color:var(--sp-c-60a5fa,#60a5fa);margin-bottom:2px;">🛠️ Organizador</div>' +
       '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:9px;">Apontar a data/hora aqui DEFINE o jogo na hora e encerra as propostas. Dá pra desfazer.</div>' +
@@ -1008,7 +1070,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       if (typeof showNotification === 'function') showNotification('Data inválida', 'Escolha a data e a hora.', 'warning');
       return;
     }
-    var ms = _ms(ymd, hm);
+    var ms = _schMsNoFuso(ymd, hm, t);
     if (isNaN(ms)) { if (typeof showNotification === 'function') showNotification('Data inválida', 'Não consegui ler essa data.', 'warning'); return; }
     var prev = { schedule: JSON.parse(JSON.stringify(m.schedule || {})), scheduledAt: m.scheduledAt, scheduledBy: m.scheduledBy, scheduledKind: m.scheduledKind };
     m.scheduledAt = new Date(ms).toISOString();
@@ -1219,7 +1281,11 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   }
   function _saveSchedule(t, m, prevClone, scheduledNow) {
     var _espelhar = !!(_schGroupMode && String(m.id) === _schGroupMode);
+    // O valor acabou de ser escolhido no dispositivo. Pinta-o já no card e só
+    // desfaz se a Callable recusar — esperar o snapshot contradizia o toast.
+    if (typeof window._schRefreshCardChip === 'function') window._schRefreshCardChip(t, m);
     return _persistJogos(t, [m], _espelhar).then(function () {
+      if (typeof window._schRefreshCardChip === 'function') window._schRefreshCardChip(t, m);
       _renderMatch(t, m);
       if (scheduledNow) { try { _schNotifyScheduled(t, m); } catch (e) {} }
       if (typeof window._softRefreshView === 'function') window._softRefreshView();
@@ -1229,6 +1295,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     }).catch(function (err) {
       m.schedule = prevClone.schedule; m.scheduledAt = prevClone.scheduledAt; m.scheduledBy = prevClone.scheduledBy; m.scheduledKind = prevClone.scheduledKind;
       _schMirrorToGroup(t, m); // reverte também o espelho nos jogos do grupo
+      if (typeof window._schRefreshCardChip === 'function') window._schRefreshCardChip(t, m);
       var _msg = (err && (err.code || err.message)) ? String(err.code || err.message) : 'tente novamente';
       if (typeof showNotification === 'function') showNotification('⚠️ Não salvou', 'Não foi possível registrar no servidor (' + _msg + ').', 'error');
       try { console.error('[schedule-poll] rejeitado:', err); } catch (e) {}
