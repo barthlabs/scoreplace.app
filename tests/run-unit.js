@@ -530,6 +530,7 @@ const SUITES = [
   'tests/detalhe-nao-morre-por-funcao-ausente.test.js',
   'tests/numero-de-inscricao-sobrevive-a-dupla.test.js',
   'tests/gravou-repinta-a-tela.test.js',
+  'tests/set-parcial-confirmado-aparece-imediatamente.test.js',
   'tests/previsao-conta-times-e-o-terceiro-lugar.test.js',
   // ⭐ FASE 2b — o jogo espelhado diz QUEM JOGA (insumo de autorização da CF).
   'tests/jogo-espelhado-diz-quem-joga.test.js',

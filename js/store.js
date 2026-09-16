@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.3.47';
+window.SCOREPLACE_VERSION = '2.3.48';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -11396,6 +11396,31 @@ window.AppStore = {
             var _lt = this.tournaments.find(function (x) { return String(x.id) === String(tournamentId); });
             if (_lt) {
               Object.keys(_d.tournament).forEach(function (k) { _lt[k] = _d.tournament[k]; });
+              /* A callable confirma o set, mas a fronteira do torneio não devolve `matches`.
+               * Se repintarmos agora só com a estrutura que já estava em memória, o card
+               * reaparece com o set anterior até o ouvinte chegar. Isso é especialmente
+               * perigoso no placar por sets: o toast diz "confirmado", os números ainda
+               * mostram 0-0 e alguém lança de novo. Para um set PARCIAL já aceito pela CF,
+               * aplicamos a mesma mutação pura também no objeto que a tela está usando e
+               * no espelho local. Não é uma segunda gravação nem uma antecipação: este ramo
+               * só roda DEPOIS de `_d.ok`, ou seja, após a transação canônica do servidor.
+               * O snapshot remoto continua sendo a confirmação durável para os outros
+               * aparelhos; ele apenas deixa de ser necessário para o primeiro desenho. */
+              if (payload && payload.setsInProgress &&
+                  typeof window._applyResultToTournament === 'function') {
+                var _midConfirmado = String(matchId);
+                var _jogoConfirmado = window._applyResultToTournament(_lt, _midConfirmado, payload);
+                if (_jogoConfirmado) {
+                  _lt._results = _lt._results || {};
+                  var _espelhoConfirmado = Object.assign({}, _lt._results[_midConfirmado] || {});
+                  ['sets', 'setsWonP1', 'setsWonP2', 'startedAt'].forEach(function (k) {
+                    if (Object.prototype.hasOwnProperty.call(_jogoConfirmado, k)) {
+                      _espelhoConfirmado[k] = _jogoConfirmado[k];
+                    }
+                  });
+                  _lt._results[_midConfirmado] = _espelhoConfirmado;
+                }
+              }
               /* ⛔ TORNEIO DIVIDIDO: o documento que a CF devolve NÃO traz os jogos — eles moram
                * na subcoleção, e o placar fino do card vem do ESPELHO, que a dashboard hidrata
                * uma vez por sessão. Sem apagar a marca, o card repinta com o espelho ANTIGO.
