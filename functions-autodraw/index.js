@@ -68,6 +68,7 @@ function _hidrataGrupos(t, onde, tId) {
 // L6.R1 (2.1.80): a agenda do sorteio no FUSO DO EVENTO — janela de 1 minuto, calendário
 // em dias civis e a trava de slot. Puro e testado à parte (test-agenda-core.js).
 const _agenda = require('./agenda-core.js');
+const _matchReadyNotifications = require('./match-ready-notifications-core.js');
 const _leagueSeasonCore = require('./league-season-core.js');
 /* Quais campos de `fmt2` um torneio JÁ SORTEADO ainda aceita mudar (os prazos).
  * ⛔ O require mora AQUI EM CIMA, com os outros: o bloco de configuração lá embaixo é
@@ -1763,6 +1764,103 @@ function _matchReopenedNotificationEvent(t, m, outcome, actor, at) {
 function _outboxDocIdPart(v) {
   return String(v || '').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 500);
 }
+
+/*
+ * Um jogo não "nasce" apenas na primeira gravação da chave: ele pode receber o
+ * segundo lado depois do resultado anterior, de um W.O. ou de uma substituição.
+ * Por isso este leitor sempre vê o torneio já montado e tenta criar recibos com
+ * chave determinística. `create()` é a trava: outra invocação pode reexaminar o
+ * mesmo jogo, mas jamais gera uma segunda mensagem para o mesmo UID.
+ */
+async function _criarOutboxDeJogoLiberado(tournamentId, tournament, specs, nowMs) {
+  const at = new Date(nowMs || Date.now()).toISOString();
+  for (const spec of specs || []) {
+    if (!spec || !spec.eventId || !spec.recipientUid) continue;
+    const ref = db.collection('tournaments').doc(String(tournamentId)).collection('notificationOutbox')
+      .doc(_outboxDocIdPart(spec.eventId));
+    const item = {
+      schema: 1,
+      kind: 'tournament-notification',
+      type: spec.type,
+      title: spec.title,
+      message: spec.message,
+      tournamentId: String(tournamentId),
+      tournamentName: String((tournament && tournament.name) || ''),
+      matchId: String(spec.matchId || ''),
+      matchUids: Array.isArray(spec.matchUids) ? spec.matchUids.map(String) : [],
+      recipients: [String(spec.recipientUid)],
+      roundDeadlineAtMs: spec.deadlineMs || null,
+      roundDeadlineLabel: spec.deadlineText || '',
+      level: 'fundamental',
+      ctaLabel: 'Ver jogo',
+      ctaUrl: 'https://scoreplace.app/#tournaments/' + encodeURIComponent(String(tournamentId)),
+      createdAt: at,
+      createdAtMs: Date.parse(at),
+      dispatchStatus: 'pending'
+    };
+    try {
+      await ref.create(item);
+    } catch (error) {
+      // 6 / already-exists é o recibo que já garantiu a entrega deste jogo para este UID.
+      if (!error || (error.code !== 6 && error.code !== 'already-exists')) {
+        console.error('[match-ready] não criou outbox', tournamentId, spec.eventId, error && error.message);
+      }
+    }
+  }
+}
+
+async function _notificarJogosProntosDoTorneio(tournamentId, rawTournament, includeDeadlineReminders) {
+  if (!rawTournament || !drawWindow || typeof drawWindow._collectAllMatches !== 'function') return;
+  let tournament = rawTournament;
+  const ref = db.collection('tournaments').doc(String(tournamentId));
+  // Torneio dividido carrega os jogos nas subcoleções. Ler o doc magro faria o aviso
+  // desaparecer justamente nos torneios grandes; a mesma porta `_leTorneio` já usada
+  // pelo motor remonta a forma canônica antes de decidir qualquer coisa.
+  if (Array.isArray(rawTournament._semPesados) && rawTournament._semPesados.length) {
+    tournament = await _leTorneio(_TX_LEITURA, ref, String(tournamentId));
+    if (!tournament) return;
+  }
+  const matches = drawWindow._collectAllMatches(tournament);
+  const now = Date.now();
+  const ready = _matchReadyNotifications.readySpecs(tournament, matches);
+  await _criarOutboxDeJogoLiberado(tournamentId, tournament, ready, now);
+  if (includeDeadlineReminders) {
+    const reminders = _matchReadyNotifications.deadlineReminderSpecs(tournament, matches, now);
+    await _criarOutboxDeJogoLiberado(tournamentId, tournament, reminders, now);
+  }
+}
+
+// Todo write no documento raiz é uma oportunidade para a chave ter preenchido o segundo
+// lado de um confronto. O recibo por `jogo + uid` permite varrer todos os jogos sem
+// depender de uma comparação frágil entre snapshots de torneios divididos.
+exports.queueMatchReadyNotifications = onDocumentWritten(
+  { document: 'tournaments/{tournamentId}', region: 'us-central1', memory: '512MiB', timeoutSeconds: 300 },
+  async (event) => {
+    const after = event.data && event.data.after;
+    if (!after || !after.exists) return;
+    const tournamentId = String(event.params && event.params.tournamentId || '');
+    if (!tournamentId) return;
+    try {
+      await _notificarJogosProntosDoTorneio(tournamentId, after.data() || {}, false);
+    } catch (error) {
+      console.error('[match-ready] falhou ao examinar confronto liberado', tournamentId, error && error.stack || error);
+    }
+  }
+);
+
+// Backfill de confrontos que já estavam definidos quando esta regra entrou no ar, e
+// lembrete único para partidas pendentes a até sete dias do prazo da sua rodada. A mesma
+// chave determinística torna cada execução idempotente; não há "reaviso" fora da janela.
+exports.reconcileMatchReadyNotifications = onSchedule('every 15 minutes', async () => {
+  const snapshot = await db.collection('tournaments').get();
+  for (const doc of snapshot.docs) {
+    try {
+      await _notificarJogosProntosDoTorneio(doc.id, doc.data() || {}, true);
+    } catch (error) {
+      console.error('[match-ready] reconciliação falhou', doc.id, error && error.stack || error);
+    }
+  }
+});
 
 // A transação só escreve o fato. Este gatilho faz I/O depois do commit e pode
 // repetir sem duplicar: cada aviso e cada item da fila usa o id da outbox.
