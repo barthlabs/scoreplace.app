@@ -1,3 +1,4 @@
+// 2.3.43 — todos os cards de jogo usam a mesma grade responsiva: uma coluna ocupa a largura útil e mais colunas só entram quando cabem. Em melhor de 3, cabeçalho e placares preservam 32px entre os sets em cards largos. O W.O. registra ausência e substituição por UID, evitando nomes divergentes.
 // 2.3.41 — a folga de 32px entre sets passa a considerar a largura do card, inclusive em janelas estreitas onde ele já cabe sem cortar nomes.
 // 2.3.40 — cards largos de melhor de 3 usam 80px entre cada set visível, seja a partida encerrada em dois sets ou com STB.
 // 2.3.39 — em cards largos de três sets, Set 1, Set 2 e STB ganham 80px de distância, preservando nomes e alinhamento.
