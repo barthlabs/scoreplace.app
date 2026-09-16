@@ -553,8 +553,8 @@ async function espacoDosSetsResponsivo() {
     '⑦ card médio abre os sets sem roubar a área dos nomes (' + medio.gaps.map((g) => g.toFixed(1)).join(', ') + 'px)');
   ok(largo2.card >= 600 && largo2.gaps.every((g) => g >= 40 && g <= 48),
     '⑦ dois sets em card largo usam a folga visível disponível (' + largo2.gaps.map((g) => g.toFixed(1)).join(', ') + 'px)');
-  ok(largo3.gaps.every((g) => g >= 28 && g <= 32),
-    '⑦ três sets repartem o espaço sem comprimir nomes (' + largo3.gaps.map((g) => g.toFixed(1)).join(', ') + 'px)');
+  ok(largo3.card >= 800 && largo3.gaps.every((g) => Math.abs(g - 80) < 0.1),
+    '⑦ três sets em card largo usam os 80px pedidos (' + largo3.gaps.map((g) => g.toFixed(1)).join(', ') + 'px)');
   ok(new Set(largo2.gaps.map((g) => g.toFixed(2))).size === 1 && new Set(largo3.gaps.map((g) => g.toFixed(2))).size === 1,
     '⑦ cabeçalho e os dois lados mantêm o mesmo vão entre colunas');
 }
