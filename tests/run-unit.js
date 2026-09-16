@@ -88,6 +88,7 @@ const SUITES = [
   'tests/abrir-o-torneio-cai-no-meu-jogo.test.js',
   'tests/nivel-do-aviso-de-placar-e-de-quem-recebe.test.js',
   'tests/liberar-versao-da-apple-nao-fica-parada.test.js',
+  'tests/app-store-release-sempre-automatica.test.js',
   'tests/contador-de-trofeu-se-reconta.test.js',
   'tests/porta-de-email-de-conta-tem-limite.test.js',
   'tests/aviso-guardado-nao-diz-hoje-e-pronto.test.js',

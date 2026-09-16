@@ -18,6 +18,22 @@ compila o Scoreplace em um runner macOS hospedado pelo GitHub. Ele fixa o
 O envio ao TestFlight não submete o app à revisão da App Store. A validação em
 um iPhone continua obrigatória antes da submissão à loja.
 
+## Submissão e lançamento após aprovação
+
+Depois que a build for validada no TestFlight, a submissão deve ser feita pelo
+script, nunca pela opção manual da interface do App Store Connect:
+
+```sh
+node scripts/asc.js checar-auto
+node scripts/asc.js submeter <versão> --apply
+```
+
+`submeter` cria ou corrige a versão para `AFTER_APPROVAL` antes de enviá-la à
+revisão. `checar-auto` falha quando houver uma versão ainda pendente em
+lançamento manual; nesse caso, corrija-a com `node scripts/asc.js auto --apply`
+e rode a checagem de novo. Assim, a aprovação da Apple publica a versão sem
+depender de alguém voltar à interface para liberá-la.
+
 ## Segredos do repositório
 
 Criar em **GitHub → Settings → Secrets and variables → Actions**. Nunca colocar

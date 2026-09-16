@@ -8,6 +8,7 @@
  *
  * Uso:
  *   node scripts/asc.js estado                 → app, versões e a última build
+ *   node scripts/asc.js checar-auto            → falha se uma versão pendente estiver MANUAL
  *   node scripts/asc.js submeter <versao> --apply
  *   node scripts/asc.js liberar  <versao> --apply   → publica uma versão APROVADA e parada
  */
@@ -76,13 +77,28 @@ if (require.main === module) {
     // dele. O padrão da conta é MANUAL — então TODA versão que não passa pelo
     // script fica parada. Corrigir só no ramo que CRIA a versão não bastava.
     //
-    // `auto` conserta a liberação de tudo que ainda não saiu. `estado` grita
-    // quando acha uma parada, em vez de listar e seguir em frente.
+    // `auto` conserta a liberação de tudo que ainda não saiu. `checar-auto`
+    // torna a regra executável: uma versão pendente MANUAL encerra o fluxo antes
+    // de ir à revisão, em vez de depender de alguém lembrar da configuração na UI.
+    const pendentesManuais = (versions) => (versions || []).filter((x) =>
+      x.attributes.appStoreState !== 'READY_FOR_SALE' &&
+      x.attributes.releaseType !== 'AFTER_APPROVAL');
+    if (cmd === 'checar-auto') {
+      const vs = await api(`/apps/${app.id}/appStoreVersions?limit=20`);
+      const presas = pendentesManuais(vs.data);
+      if (!presas.length) {
+        console.log('✓ todas as versões pendentes estão em AFTER_APPROVAL.');
+        return;
+      }
+      console.error('✗ publicação automática bloqueada por versão(ões) MANUAL:');
+      presas.forEach((x) => console.error(
+        `  · ${x.attributes.versionString} — ${x.attributes.appStoreState} (release: ${x.attributes.releaseType})`));
+      console.error('  corrija com: node scripts/asc.js auto --apply');
+      process.exit(1);
+    }
     if (cmd === 'auto') {
-      const vs = await api(`/apps/${app.id}/appStoreVersions?limit=10`);
-      const presas = vs.data.filter(x =>
-        x.attributes.appStoreState !== 'READY_FOR_SALE' &&
-        x.attributes.releaseType !== 'AFTER_APPROVAL');
+      const vs = await api(`/apps/${app.id}/appStoreVersions?limit=20`);
+      const presas = pendentesManuais(vs.data);
       if (!presas.length) { console.log('✓ nada preso em liberação manual.'); return; }
       for (const x of presas) {
         console.log(`  ${x.attributes.versionString}: ${x.attributes.releaseType} → AFTER_APPROVAL`);
@@ -178,10 +194,13 @@ if (require.main === module) {
         if (ver.attributes.releaseType !== 'AFTER_APPROVAL') {
           console.log(`   liberação estava ${ver.attributes.releaseType} — corrigindo para AFTER_APPROVAL`);
           if (APLICAR) {
-            await api(`/appStoreVersions/${ver.id}`, { method: 'PATCH', body: { data: {
+            const patched = await api(`/appStoreVersions/${ver.id}`, { method: 'PATCH', body: { data: {
               type: 'appStoreVersions', id: ver.id, attributes: { releaseType: 'AFTER_APPROVAL' },
             } } });
-            ver.attributes.releaseType = 'AFTER_APPROVAL';
+            ver = patched.data || ver;
+            if (ver.attributes.releaseType !== 'AFTER_APPROVAL') {
+              throw new Error(`a Apple não confirmou AFTER_APPROVAL para ${versao}; recuso submeter manualmente.`);
+            }
             console.log('   ✓ liberação automática após aprovação');
           } else {
             console.log('   (corrigiria com --apply)');
@@ -198,6 +217,12 @@ if (require.main === module) {
         console.log(`✓ versão ${versao} criada (id=${ver.id})`);
       }
       if (!APLICAR) { console.log('\n(dry-run — rode com --apply)\n'); return; }
+      // ⛔ Fail closed: a submissão nunca pode seguir se a Apple não devolveu
+      // AFTER_APPROVAL. Sem esta confirmação, a versão pode ser aprovada e ficar
+      // invisível em PENDING_DEVELOPER_RELEASE.
+      if (!ver || ver.attributes.releaseType !== 'AFTER_APPROVAL') {
+        throw new Error(`recuso submeter ${versao} sem lançamento automático AFTER_APPROVAL.`);
+      }
 
       // 3. anexa a build
       await api(`/appStoreVersions/${ver.id}/relationships/build`, { method: 'PATCH',

@@ -6,6 +6,7 @@
   "scripts": {
     "test": "node scripts/check-rules-testadas.js && node scripts/check-ext-version.js && node scripts/check-vendor-fresh.js && node scripts/check-shell-version.js && node scripts/check-release-version-fresh.js && node scripts/check-cache-busters.js && node scripts/build-domain.js --check && node scripts/check-web-entry-contract.js && node scripts/check-casual-stats-core-fresh.js && node scripts/check-test-catalog.js && node scripts/check-magiclinks-get-only.js && node scripts/check-amizade-client-writes.js && node scripts/check-runbook-amizade.js && node tests/run-unit.js",
     "test:unit": "node tests/run-unit.js",
+    "apple:check-auto": "node scripts/asc.js checar-auto",
     "test:ext": "node tests/lz-extensao-real.test.js",
     "test:concurrency": "node scripts/rodar-emulador.js --only firestore --config firebase.emulator.json --project demo-scoreplace \"node tests/concurrency/run.js\"",
     "test:realtime": "node scripts/rodar-emulador.js --only firestore --config firebase.emulator.json --project demo-scoreplace \"node tests/realtime-dois-clientes-emulador.test.js\"",
