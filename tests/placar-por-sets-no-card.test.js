@@ -536,7 +536,7 @@ async function espacoDosSetsResponsivo() {
     const r = await page.evaluate(() => {
       const card = document.querySelector('.sp-match-card');
       const grids = [...card.querySelectorAll('.sp-set-grid')];
-      return { card: card.getBoundingClientRect().width, gaps: grids.map((g) => parseFloat(getComputedStyle(g).columnGap)) };
+      return { card: card.getBoundingClientRect().width, overflow: card.scrollWidth - card.clientWidth, gaps: grids.map((g) => parseFloat(getComputedStyle(g).columnGap)) };
     });
     await page.close();
     return r;
@@ -549,12 +549,12 @@ async function espacoDosSetsResponsivo() {
 
   ok(estreito.card < 430 && estreito.gaps.every((g) => Math.abs(g - 2) < 0.1),
     '⑦ card estreito preserva o vão mínimo de 2px (' + estreito.card.toFixed(1) + 'px)');
-  ok(medio.card >= 430 && medio.card < 600 && medio.gaps.every((g) => g >= 5 && g <= 8),
-    '⑦ card médio abre os sets sem roubar a área dos nomes (' + medio.gaps.map((g) => g.toFixed(1)).join(', ') + 'px)');
-  ok(largo2.card >= 800 && largo2.gaps.every((g) => Math.abs(g - 80) < 0.1),
-    '⑦ dois sets em card largo usam os 80px pedidos (' + largo2.gaps.map((g) => g.toFixed(1)).join(', ') + 'px)');
-  ok(largo3.card >= 800 && largo3.gaps.every((g) => Math.abs(g - 80) < 0.1),
-    '⑦ três sets em card largo usam os 80px pedidos (' + largo3.gaps.map((g) => g.toFixed(1)).join(', ') + 'px)');
+  ok(medio.card >= 430 && medio.card < 600 && medio.overflow <= 0 && medio.gaps.every((g) => Math.abs(g - 32) < 0.1),
+    '⑦ card de 560px usa 32px sem transbordar nem cortar a área dos nomes (' + medio.gaps.map((g) => g.toFixed(1)).join(', ') + 'px)');
+  ok(largo2.card >= 800 && largo2.gaps.every((g) => Math.abs(g - 32) < 0.1),
+    '⑦ dois sets em card largo usam os 32px pedidos (' + largo2.gaps.map((g) => g.toFixed(1)).join(', ') + 'px)');
+  ok(largo3.card >= 800 && largo3.gaps.every((g) => Math.abs(g - 32) < 0.1),
+    '⑦ três sets em card largo usam os 32px pedidos (' + largo3.gaps.map((g) => g.toFixed(1)).join(', ') + 'px)');
   ok(new Set(largo2.gaps.map((g) => g.toFixed(2))).size === 1 && new Set(largo3.gaps.map((g) => g.toFixed(2))).size === 1,
     '⑦ cabeçalho e os dois lados mantêm o mesmo vão entre colunas');
 }

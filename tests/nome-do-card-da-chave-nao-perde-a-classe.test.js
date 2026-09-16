@@ -170,7 +170,7 @@ async function medir() {
   const page = await browser.newPage();
   const saida = {};
   for (const tema of ['dark', 'light']) {
-    for (const w of [390, 768, 1280]) {
+    for (const w of [390, 560, 768, 1280]) {
       await page.setViewportSize({ width: w, height: 900 });
       const cards = CASOS.map((c) =>
         card('quebrado-' + c.id, c.nomes, { coroa: c.coroa, quebrado: true }) +

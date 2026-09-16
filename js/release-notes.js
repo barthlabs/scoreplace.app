@@ -1,3 +1,4 @@
+// 2.3.41 — a folga de 32px entre sets passa a considerar a largura do card, inclusive em janelas estreitas onde ele já cabe sem cortar nomes.
 // 2.3.40 — cards largos de melhor de 3 usam 80px entre cada set visível, seja a partida encerrada em dois sets ou com STB.
 // 2.3.39 — em cards largos de três sets, Set 1, Set 2 e STB ganham 80px de distância, preservando nomes e alinhamento.
 // 2.3.38 — a folga entre dois placares de set agora usa de fato a largura livre do card; três ou mais sets repartem esse espaço proporcionalmente.

@@ -2547,7 +2547,7 @@ html, body,
 /* O vão mínimo é 2px: em cards estreitos ele preserva a área dos nomes. A partir de
    430px a grade respira um pouco; a partir de 600px, quando o card inteiro já tem largura
    para a dupla e para o placar, a folga cresce sem reduzir a área dos nomes. Em cards com
-   três sets e 800px ou mais, cada coluna recebe 80px de respiro. Isto separa visualmente 6 | 6 sem
+   múltiplos sets e 430px ou mais, cada coluna recebe 32px de respiro. Isto separa visualmente 6 | 6 sem
    inventar uma segunda geometria: cabeçalho e os dois lados usam a MESMA grade, então cada
    rótulo permanece exatamente acima da sua coluna. */
 .sp-match-card{container-type:inline-size;}
@@ -2566,11 +2566,11 @@ html, body,
   .sp-set-grid:has(> .sp-set-col:nth-child(4):last-child){gap:clamp(12px,2.5cqi,24px);}
   .sp-set-grid:has(> .sp-set-col:nth-child(5):last-child){gap:clamp(8px,1.85cqi,18px);}
 }
-@container (min-width:800px){
-  /* Card largo: cada coluna visível de set recebe os 80px pedidos. Vale tanto para
+@container (min-width:430px){
+  /* Card com largura útil: cada coluna visível de set recebe os 32px pedidos. Vale tanto para
      uma partida encerrada em 2 sets quanto para Set 1, Set 2 e STB. */
   .sp-set-grid:has(> .sp-set-col:nth-child(2):last-child),
-  .sp-set-grid:has(> .sp-set-col:nth-child(3):last-child){gap:80px;}
+  .sp-set-grid:has(> .sp-set-col:nth-child(3):last-child){gap:32px;}
 }
 /* ⛔ PLACAR ALINHA À DIREITA, NÃO AO CENTRO. Ordem do dono (13/set/2026, olhando um jogo
    com super tie-break): _"os placares parecem alinhados nas colunas pela esquerda; faça o
