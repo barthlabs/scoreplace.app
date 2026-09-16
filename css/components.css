@@ -2555,7 +2555,7 @@ html, body,
   .sp-set-grid{gap:clamp(5px,1.35cqi,8px);}
 }
 @container (min-width:600px){
-  .sp-set-grid{gap:clamp(12px,1.85cqi,16px);}
+  .sp-set-grid{gap:clamp(14px,2.2cqi,20px);}
 }
 /* ⛔ PLACAR ALINHA À DIREITA, NÃO AO CENTRO. Ordem do dono (13/set/2026, olhando um jogo
    com super tie-break): _"os placares parecem alinhados nas colunas pela esquerda; faça o

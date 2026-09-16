@@ -1,3 +1,4 @@
+// 2.3.37 — cards largos ganham mais espaço entre os placares de cada set, preservando o alinhamento e a área dos nomes.
 // 2.3.36 — quando o card tem largura, as colunas dos sets ganham mais respiro sem perder o alinhamento entre cabeçalho e placares.
 // 2.3.35 — toda chave usa a largura útil: uma coluna inteira, duas ou três só quando os cards continuam legíveis.
 // 2.3.34 — W.O. mantém jogo, fila de espera e lista de ausentes na mesma transação; a substituição atualiza também a identidade exibida da dupla. A chave usa toda a largura útil em uma coluna e duas apenas quando ambas cabem.
