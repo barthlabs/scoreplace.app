@@ -52,16 +52,61 @@ module.exports = { api, token };
 if (require.main === module) {
   (async () => {
     const cmd = process.argv[2] || 'estado';
-    const apps = await api('/apps?limit=5');
-    const app = (apps.data || [])[0];
-    if (!app) { console.error('✗ nenhum app na conta.'); process.exit(1); }
+    // ⛔ ERA `apps.data[0]` — o PRIMEIRO app que a Apple devolvesse. Funcionou
+    // enquanto o scoreplace era o único; em 16/set/2026, com o kleaner na
+    // conta, `asc.js estado` rodado DENTRO do scoreplace passou a mostrar o
+    // kleaner. `liberar` teria publicado o app errado. O app deste repositório
+    // é fixo: escolhe-se por bundle id, e se não achar, PARA.
+    const BUNDLE = process.env.ASC_BUNDLE_ID || 'app.scoreplace';
+    const apps = await api('/apps?limit=200');
+    const app = (apps.data || []).find(a => a.attributes.bundleId === BUNDLE);
+    if (!app) {
+      console.error(`✗ não achei o app ${BUNDLE} nesta conta.`);
+      console.error('  apps vistos: ' + (apps.data||[]).map(a => a.attributes.bundleId).join(', '));
+      process.exit(1);
+    }
     console.log(`app: ${app.attributes.name} (${app.attributes.bundleId})  id=${app.id}`);
+
+    // ⛔ POR QUE ISTO EXISTE (medido em 16/set/2026): a 2.3.27 ficou APROVADA e
+    // PARADA esperando o botão, e o dono só descobriu dias depois — por mim,
+    // que fiquei repetindo "aguardando revisão" sem reconferir.
+    //
+    // A causa está nos dados: 2.1.28, 2.2.0 e 2.2.8 nasceram AFTER_APPROVAL
+    // (criadas por ESTE script); 2.2.81 e 2.3.27 nasceram MANUAL, criadas fora
+    // dele. O padrão da conta é MANUAL — então TODA versão que não passa pelo
+    // script fica parada. Corrigir só no ramo que CRIA a versão não bastava.
+    //
+    // `auto` conserta a liberação de tudo que ainda não saiu. `estado` grita
+    // quando acha uma parada, em vez de listar e seguir em frente.
+    if (cmd === 'auto') {
+      const vs = await api(`/apps/${app.id}/appStoreVersions?limit=10`);
+      const presas = vs.data.filter(x =>
+        x.attributes.appStoreState !== 'READY_FOR_SALE' &&
+        x.attributes.releaseType !== 'AFTER_APPROVAL');
+      if (!presas.length) { console.log('✓ nada preso em liberação manual.'); return; }
+      for (const x of presas) {
+        console.log(`  ${x.attributes.versionString}: ${x.attributes.releaseType} → AFTER_APPROVAL`);
+        if (!process.argv.includes('--apply')) continue;
+        await api('/appStoreVersions/' + x.id, { method: 'PATCH', body: { data: {
+          type: 'appStoreVersions', id: x.id, attributes: { releaseType: 'AFTER_APPROVAL' } } } });
+      }
+      if (!process.argv.includes('--apply')) console.log('\n(sem --apply: nada foi escrito)');
+      return;
+    }
 
     if (cmd === 'estado') {
       const vs = await api(`/apps/${app.id}/appStoreVersions?limit=5`);
       console.log('\nversões na App Store Connect:');
       (vs.data || []).forEach((v) => {
         console.log(`  · ${String(v.attributes.versionString).padEnd(10)} ${v.attributes.appStoreState}  (release: ${v.attributes.releaseType})  id=${v.id}`);
+        if (v.attributes.appStoreState === 'PENDING_DEVELOPER_RELEASE') {
+          console.log(`    ⛔ APROVADA E PARADA esperando o botão — publique com:`);
+          console.log(`       node scripts/asc.js liberar ${v.attributes.versionString} --apply`);
+        } else if (v.attributes.appStoreState !== 'READY_FOR_SALE'
+                   && v.attributes.releaseType !== 'AFTER_APPROVAL') {
+          console.log(`    ⚠️ liberação MANUAL: quando a Apple aprovar, esta VAI FICAR PARADA.`);
+          console.log(`       conserte com: node scripts/asc.js auto --apply`);
+        }
       });
       const bs = await api(`/apps/${app.id}/builds?limit=5`);
       console.log('\núltimas builds:');
