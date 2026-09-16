@@ -44,6 +44,10 @@ const corpo = semComentario.slice(i, fim > i ? fim : undefined);
 
 must(/var COL = window\._COLECAO_PERFIL_PUBLICO \|\| 'usersPublic';/.test(corpo),
   '① ⭐ ele resolve a coleção pelo espelho público, não escreve `users` na mão');
+must(/else if \(p && typeof p === 'object'\)/.test(corpo),
+  '① entradas nulas no elenco são ignoradas antes de ler displayName — repintar após placar não pode quebrar a tela');
+must(/if \(!p \|\| typeof p !== 'object'\) return;/.test(corpo),
+  '① os dois percursos de hidratação também descartam entradas nulas');
 
 // ── ② os TRÊS caminhos de leitura por nome/uid vão ao espelho ───────────────
 const porNome = /collection\(COL\)\s*\n?\s*\.where\('displayName', '==', name\)/.test(corpo);

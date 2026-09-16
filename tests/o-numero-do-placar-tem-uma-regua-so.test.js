@@ -83,7 +83,7 @@ const PX_POR_DIGITO_POR_REM = 9.9;   // no meio de um número de 2 algarismos
  * agora a conta é `dígitos × digito + folga`, com piso no RÓTULO. */
 E.forEach(function (d, i) {
   const largura2Digitos = 2 * PX_POR_DIGITO_POR_REM * d.fs;
-  const coluna2Digitos = Math.max(d.piso, Math.ceil(2 * d.digito) + 6);
+  const coluna2Digitos = Math.max(d.piso, Math.ceil(2 * d.digito) + 10);
   ok(largura2Digitos <= coluna2Digitos + 0.5,
      '② ⭐ degrau ' + (i + 1) + ' (até ' + d.ate + ' colunas): 2 dígitos a ' + d.fs +
      'rem ≈ ' + largura2Digitos.toFixed(1) + 'px cabem na coluna de ' + coluna2Digitos + 'px');
@@ -134,8 +134,8 @@ ok(W._setColEscala(9).fs === W._setColEscala(5).fs, '③ acima de 5 não encolhe
  * ⚠️ 4-5 COLUNAS NÃO SUBIRAM: lá o espaço é de cinco colunas. */
 ok(E[0].piso === 26 && E[1].piso === 24 && E[2].piso === 14,
    '④ ⭐ pisos de SET 26/24/14px — os dois primeiros abriram a pedido do dono; o de 5 colunas não');
-ok(E[0].pisoStb === 30 && E[1].pisoStb === 28 && E[2].pisoStb === 20,
-   '④ ⭐ e o do STB acompanha (30/28/20): o rótulo "STB" cabe numa linha só');
+ok(E[0].pisoStb === 30 && E[1].pisoStb === 40 && E[2].pisoStb === 20,
+   '④ ⭐ e o do STB acompanha (30/40/20): o rótulo "STB" cabe numa linha só');
 ok(E.every(function (d) { return d.pisoStb >= d.piso; }),
    '④ o piso do super tie-break é maior ou igual (o rótulo "STB" é o mais largo)');
 ok(E.every(function (d) { return d.tb > d.digito; }),

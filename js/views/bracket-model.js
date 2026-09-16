@@ -1238,7 +1238,7 @@
    * placar — e quem diz se cabe é o teste de nome, não esta conta. */
   window._SET_COL_ESCALA = [
     { ate: 2, digito: 14.4, piso: 26, pisoStb: 30, tb: 23, fs: 1.45 },   // 1 ou 2 colunas
-    { ate: 3, digito: 14.4, piso: 24, pisoStb: 28, tb: 22, fs: 1.45 },   // 3 colunas (melhor de 3)
+    { ate: 3, digito: 14.4, piso: 24, pisoStb: 40, tb: 22, fs: 1.45 },   // 3 colunas (melhor de 3)
     { ate: 5, digito: 11.7, piso: 14, pisoStb: 20, tb: 18, fs: 1.18 }    // 4 ou 5 colunas
   ];
   window._setColEscala = function (nCols) {
@@ -1366,7 +1366,7 @@
        * (root 17px): 3px davam 3,8px entre dois números (perto demais de colar), 4px davam
        * 4,8px e ele pediu _"um pouco mais do que está agora, mas não o que estava antes"_ —
        * 6px levam o vão a ~7px, contra os ~15px do desenho original. */
-      return Math.max(piso, Math.ceil(dig * esc.digito) + 6) + extraTb;
+      return Math.max(piso, Math.ceil(dig * esc.digito) + 10) + extraTb;
     };
 
     var cols = [], i;

@@ -4203,7 +4203,7 @@ async function _preloadPlayerPhotos(tournament) {
   participants.forEach(function(p) {
     if (typeof p === 'string') {
       p.split(' / ').forEach(function(n) { n = n.trim(); if (n && n !== 'TBD' && n !== 'BYE') names.add(n); });
-    } else {
+    } else if (p && typeof p === 'object') {
       var name = p.displayName || p.name || '';
       // Para times de dupla ("Kelly / Rodrigo Barth"), adicionar cada membro
       // individualmente — é assim que os perfis estão no Firestore.
@@ -4217,7 +4217,7 @@ async function _preloadPlayerPhotos(tournament) {
   if (tournament.organizerName) names.add(tournament.organizerName);
   if (Array.isArray(tournament.coHosts)) {
     tournament.coHosts.forEach(function(ch) {
-      if (ch.status === 'active' && ch.displayName) names.add(ch.displayName);
+      if (ch && ch.status === 'active' && ch.displayName) names.add(ch.displayName);
     });
   }
 
@@ -4277,7 +4277,7 @@ async function _preloadPlayerPhotos(tournament) {
   // 1 leitura por uid ÚNICO (top-level + slots p1/p2 + sub-participants) — popula foto + nome
   var _uidsToLoad = {};
   _pools.forEach(function(arr) { arr.forEach(function(p) {
-    if (typeof p !== 'object') return;
+    if (!p || typeof p !== 'object') return;
     [p.uid, p.p1Uid, p.p2Uid].forEach(function(u) { if (u) _uidsToLoad[u] = 1; });
     if (Array.isArray(p.participants)) p.participants.forEach(function(s) { if (s && s.uid) _uidsToLoad[s.uid] = 1; });
   }); });
@@ -4338,7 +4338,7 @@ async function _preloadPlayerPhotos(tournament) {
    * ⛔ E É UMA SÓ: o portão conta as ocorrências de `collection('users')` neste arquivo e
    * reprova na segunda. Sem isso, "só mais uma" volta a alargar a porta sem ninguém ver. */
   participants.forEach(function(p) {
-    if (typeof p !== 'object' || p.uid || !p.email) return;
+    if (!p || typeof p !== 'object' || p.uid || !p.email) return;
     promises.push(
       window.FirestoreDB.db.collection('users')
         .where('email', '==', p.email)
@@ -4368,7 +4368,7 @@ async function _preloadPlayerPhotos(tournament) {
   var _c = window._profileNameByUid, _hy = false;
   function _setIf(obj, key, val) { if (val && obj[key] !== val) { obj[key] = val; _hy = true; } }
   _pools.forEach(function(arr) { arr.forEach(function(p) {
-    if (typeof p !== 'object') return;
+    if (!p || typeof p !== 'object') return;
     if (p.p1Uid && _c[p.p1Uid]) _setIf(p, 'p1Name', _c[p.p1Uid]);
     if (p.p2Uid && _c[p.p2Uid]) _setIf(p, 'p2Name', _c[p.p2Uid]);
     if (Array.isArray(p.participants)) p.participants.forEach(function(s) {

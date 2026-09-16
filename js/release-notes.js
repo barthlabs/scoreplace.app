@@ -1,3 +1,4 @@
+// 2.3.55 — confirmar um set não derruba mais a tela: entradas de participante nulas são ignoradas na hidratação. O campo de Super Tie-Break comporta 10 e segue a mesma coluna dos placares já lançados.
 // 2.3.54 — o organizador escolhe W.O. individual ou da dupla diretamente no jogo: o individual promove suplente elegível; desclassificar a dupla não chama suplente e dá a vitória ao adversário. A escolha antiga saiu das configurações.
 // 2.3.53 — ao marcar data e hora, o card troca imediatamente “Propor datas” pelo horário em azul-claro, tanto na chave quanto em Novidades; se o servidor recusar, o estado anterior volta.
 // 2.3.52 — card de jogo usa a mesma geometria em Novidades, Próximo Jogo, Últimos Resultados e chave: nome curto ocupa uma linha; nome longo só reserva duas quando precisa.
