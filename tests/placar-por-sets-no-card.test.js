@@ -527,11 +527,12 @@ async function duasSecoesMesmoTamanho() {
 
 /* ── ⑦ A FOLGA DOS SETS ACOMPANHA O TAMANHO DO CARD ──────────────────────────────── */
 async function espacoDosSetsResponsivo() {
-  const decidido = cardHtml(MELHOR3, [S(6, 4), S(6, 3)], { winner: 'Ana Cattani / Maria Helena' });
+  const decidido2 = cardHtml(MELHOR3, [S(6, 4), S(6, 3)], { winner: 'Ana Cattani / Maria Helena' });
+  const decidido3 = cardHtml(MELHOR3, [S(6, 4), S(3, 6), S(10, 8)], { winner: 'Ana Cattani / Maria Helena' });
   const browser = await chromium.launch();
-  async function mede(largura) {
+  async function mede(largura, html) {
     const page = await browser.newPage({ viewport: { width: largura, height: 700 } });
-    await page.setContent('<style>' + CSS + '</style><body style="background:#0b1220;margin:0;padding:8px;">' + decidido + '</body>', { waitUntil: 'load' });
+    await page.setContent('<style>' + CSS + '</style><body style="background:#0b1220;margin:0;padding:8px;">' + html + '</body>', { waitUntil: 'load' });
     const r = await page.evaluate(() => {
       const card = document.querySelector('.sp-match-card');
       const grids = [...card.querySelectorAll('.sp-set-grid')];
@@ -540,18 +541,21 @@ async function espacoDosSetsResponsivo() {
     await page.close();
     return r;
   }
-  const estreito = await mede(390);
-  const medio = await mede(560);
-  const largo = await mede(920);
+  const estreito = await mede(390, decidido2);
+  const medio = await mede(560, decidido2);
+  const largo2 = await mede(920, decidido2);
+  const largo3 = await mede(920, decidido3);
   await browser.close();
 
   ok(estreito.card < 430 && estreito.gaps.every((g) => Math.abs(g - 2) < 0.1),
     '⑦ card estreito preserva o vão mínimo de 2px (' + estreito.card.toFixed(1) + 'px)');
   ok(medio.card >= 430 && medio.card < 600 && medio.gaps.every((g) => g >= 5 && g <= 8),
     '⑦ card médio abre os sets sem roubar a área dos nomes (' + medio.gaps.map((g) => g.toFixed(1)).join(', ') + 'px)');
-  ok(largo.card >= 600 && largo.gaps.every((g) => g >= 14 && g <= 20),
-    '⑦ card largo usa a folga disponível entre os sets (' + largo.gaps.map((g) => g.toFixed(1)).join(', ') + 'px)');
-  ok(new Set(largo.gaps.map((g) => g.toFixed(2))).size === 1,
+  ok(largo2.card >= 600 && largo2.gaps.every((g) => g >= 40 && g <= 48),
+    '⑦ dois sets em card largo usam a folga visível disponível (' + largo2.gaps.map((g) => g.toFixed(1)).join(', ') + 'px)');
+  ok(largo3.gaps.every((g) => g >= 28 && g <= 32),
+    '⑦ três sets repartem o espaço sem comprimir nomes (' + largo3.gaps.map((g) => g.toFixed(1)).join(', ') + 'px)');
+  ok(new Set(largo2.gaps.map((g) => g.toFixed(2))).size === 1 && new Set(largo3.gaps.map((g) => g.toFixed(2))).size === 1,
     '⑦ cabeçalho e os dois lados mantêm o mesmo vão entre colunas');
 }
 
