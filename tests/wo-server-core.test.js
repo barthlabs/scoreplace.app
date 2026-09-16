@@ -133,3 +133,34 @@ console.log('wo-server-core: OK');
   assert.equal(t.participants.some(p => p.uid === 'clara'), true);
   assert.equal(t.standbyParticipants.some(p => p.uid === 'clara'), false);
 }
+
+// A desclassificação explícita da dupla usa os dois UIDs do lado, não consulta
+// a espera e concede o jogo por W.O. ao adversário.
+{
+  const t = tournament({
+    participants: [
+      { uid: 'ana', displayName: 'Ana', name: 'Ana' },
+      { uid: 'bia', displayName: 'Bia', name: 'Bia' },
+      { uid: 'clara', displayName: 'Clara', name: 'Clara' },
+      { uid: 'dora', displayName: 'Dora', name: 'Dora' }
+    ],
+    standbyParticipants: [{ uid: 'eva', displayName: 'Eva', name: 'Eva' }],
+    checkedIn: { eva: Date.now() },
+    matches: [{
+      id: 'dupla-1', p1: 'Ana / Bia', p2: 'Clara / Dora',
+      team1Uids: ['ana', 'bia'], team2Uids: ['clara', 'dora']
+    }]
+  });
+  const r = applyTournamentWO(t, {
+    absentName: 'Ana / Bia', absentUids: ['ana', 'bia'], scope: 'match',
+    matches: [t.matches[0]], noSubBehavior: 'escalate', woScope: 'team',
+    _forceNoSub: true, forceWaitlistSub: false
+  });
+  assert.equal(r.ok, true);
+  assert.equal(r.outcome, 'woApplied');
+  assert.equal(t.matches[0].winner, 'Clara / Dora');
+  assert.equal(t.matches[0].scoreP1, 'W.O.');
+  assert.equal(t.absent.ana > 0 && t.absent.bia > 0, true);
+  assert.equal(t.standbyParticipants.some(p => p.uid === 'eva'), true, 'W.O. do time não consome suplente');
+  assert.equal(t.matches[0].team1Uids.join(','), 'ana,bia', 'o slot perdedor não é substituído');
+}

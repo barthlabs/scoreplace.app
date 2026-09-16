@@ -111,7 +111,7 @@ try {
 
 // Versão DESTE código de function. Sobe junto com a do app a cada deploy — é o que prova,
 // no log, qual build atendeu a chamada. Ver [[feedback_indicate_version_on_deploy]].
-const CF_VERSION = '2.2.65';
+const CF_VERSION = '2.2.66';
 
 initializeApp();
 const db = getFirestore();
@@ -1934,8 +1934,16 @@ exports.applyTournamentWO = onCall(async (request) => {
   const tId = String(data.tournamentId || '').trim();
   const absentName = String(data.absentName || '').trim();
   const requestedUid = String(data.absentUid || '').trim();
+  const matchId = String(data.matchId || '').trim();
+  const forceTeamWO = data.forceTeamWO === true;
+  const teamSide = data.teamSide === 'p1' || data.teamSide === 'p2' ? data.teamSide : '';
   if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
-  if (!tId || (!absentName && !requestedUid)) throw new HttpsError('invalid-argument', 'Torneio e participante são obrigatórios.');
+  if (!tId || (!forceTeamWO && !absentName && !requestedUid)) {
+    throw new HttpsError('invalid-argument', 'Torneio e participante são obrigatórios.');
+  }
+  if (forceTeamWO && (!matchId || !teamSide)) {
+    throw new HttpsError('invalid-argument', 'Jogo e time são obrigatórios para desclassificar a dupla.');
+  }
   if (typeof applyWoFn !== 'function' || !drawWindow) throw _drawFail('internal', 'Motor de W.O. indisponível no servidor.', { tId });
 
   const ref = db.collection('tournaments').doc(tId);
@@ -1951,33 +1959,78 @@ exports.applyTournamentWO = onCall(async (request) => {
     if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Sem permissão (doc fresco).', { tId, uid });
     _enrichParticipantsFromProfiles(t);
 
-    // O nome recebido é somente o alvo de interface. Ele precisa existir no roster
-    // fresco; uid(s) são derivados aqui para que homônimos não possam redirecionar W.O.
-    const entries = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
-    const entry = entries.find((p) => {
-      const uids = typeof drawWindow._participantUids === 'function' ? drawWindow._participantUids(p).filter(Boolean) : [];
-      if (requestedUid) return uids.includes(requestedUid);
-      const display = typeof drawWindow._pName === 'function' ? drawWindow._pName(p, '') : String((p && (p.displayName || p.name)) || '');
-      return display === absentName || display.split('/').map(x => x.trim()).includes(absentName);
-    });
-    if (!entry) throw _drawFail('not-found', 'Participante não pertence mais ao torneio.', { tId, uid, absentName, requestedUid });
-    const entryUids = typeof drawWindow._participantUids === 'function' ? drawWindow._participantUids(entry).filter(Boolean) : [];
-    const targetUids = requestedUid ? [requestedUid] : (typeof drawWindow._memberUidByName === 'function' ? [drawWindow._memberUidByName(t, absentName)].filter(Boolean) : entryUids);
-    const canonicalName = requestedUid && typeof drawWindow._memberNameByUid === 'function'
-      ? (drawWindow._memberNameByUid(t, requestedUid) || absentName) : absentName;
-    if (!canonicalName) throw _drawFail('not-found', 'Participante não pertence mais ao torneio.', { tId, uid, requestedUid });
+    // A intenção sempre aponta para um jogo fresco. Isso impede que um clique antigo
+    // afete outra partida futura do mesmo inscrito.
+    const allMatches = typeof drawWindow._collectAllMatches === 'function'
+      ? drawWindow._collectAllMatches(t) : (Array.isArray(t.matches) ? t.matches : []);
+    const selectedMatch = matchId
+      ? (allMatches || []).find(m => m && String(m.id) === matchId)
+      : null;
+    if (matchId && (!selectedMatch || selectedMatch.winner || selectedMatch.isBye || selectedMatch.isSitOut)) {
+      throw _drawFail('failed-precondition', 'Este jogo não está mais disponível para W.O.', { tId, matchId });
+    }
+
+    let canonicalName;
+    let targetUids;
+    let result;
     const before = _antesDoMotor(t);
-    const result = applyWoFn(t, {
-      absentName: canonicalName,
-      absentUids: targetUids,
-      scope: 'match',
-      noSubBehavior: 'escalate',
-      woScope: t.woScope || 'individual',
-      // Esta callable é administrativa: a organização decide a vaga e promove
-      // a primeira pessoa elegível da espera, sem aguardar check-in.
-      forceWaitlistSub: true,
-      onlyAbsentUids: targetUids
-    });
+
+    if (forceTeamWO) {
+      const opponentSide = teamSide === 'p1' ? 'p2' : 'p1';
+      const teamName = String(selectedMatch[teamSide] || '').trim();
+      const opponentName = String(selectedMatch[opponentSide] || '').trim();
+      const teamUids = _slotUidsOf(selectedMatch, teamSide);
+      const isTeam = teamUids.length > 1 || teamName.split(/\s*\/\s*/).filter(Boolean).length > 1;
+      if (!teamName || teamName === 'TBD' || teamName === 'BYE' || !opponentName || opponentName === 'TBD' || opponentName === 'BYE' || !isTeam) {
+        throw _drawFail('failed-precondition', 'Só uma dupla ativa contra adversário definido pode ser desclassificada.', { tId, matchId, teamSide });
+      }
+      // W.O. de time é uma decisão expressa: nunca consome a lista de espera.
+      result = applyWoFn(t, {
+        absentName: teamName,
+        absentUids: teamUids,
+        scope: 'match',
+        matches: [selectedMatch],
+        noSubBehavior: 'escalate',
+        woScope: 'team',
+        _forceNoSub: true,
+        forceWaitlistSub: false
+      });
+    } else {
+      // O texto vindo da tela só localiza o alvo. O UID e o nome vivo são
+      // rederivados no torneio fresco, para que homônimos não redirecionem W.O.
+      const entries = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
+      const entry = entries.find((p) => {
+        const uids = typeof drawWindow._participantUids === 'function' ? drawWindow._participantUids(p).filter(Boolean) : [];
+        if (requestedUid) return uids.includes(requestedUid);
+        const display = typeof drawWindow._pName === 'function' ? drawWindow._pName(p, '') : String((p && (p.displayName || p.name)) || '');
+        return display === absentName || display.split('/').map(x => x.trim()).includes(absentName);
+      });
+      if (!entry) throw _drawFail('not-found', 'Participante não pertence mais ao torneio.', { tId, uid, absentName, requestedUid });
+      const entryUids = typeof drawWindow._participantUids === 'function' ? drawWindow._participantUids(entry).filter(Boolean) : [];
+      targetUids = requestedUid ? [requestedUid] : (typeof drawWindow._memberUidByName === 'function' ? [drawWindow._memberUidByName(t, absentName)].filter(Boolean) : entryUids);
+      canonicalName = requestedUid && typeof drawWindow._memberNameByUid === 'function'
+        ? (drawWindow._memberNameByUid(t, requestedUid) || absentName) : absentName;
+      if (!canonicalName) throw _drawFail('not-found', 'Participante não pertence mais ao torneio.', { tId, uid, requestedUid });
+      if (selectedMatch) {
+        const inMatch = ['p1', 'p2'].some(side => {
+          const slotUids = _slotUidsOf(selectedMatch, side);
+          return targetUids.length ? slotUids.some(u => targetUids.includes(u)) : String(selectedMatch[side] || '').split(/\s*\/\s*/).map(x => x.trim()).includes(canonicalName);
+        });
+        if (!inMatch) throw _drawFail('failed-precondition', 'A pessoa não está mais neste jogo.', { tId, matchId, requestedUid });
+      }
+      // Individual é sempre uma ação disponível para a organização. Com elegível,
+      // promove a primeira pessoa da espera; sem ela, o motor concede o W.O.
+      result = applyWoFn(t, {
+        absentName: canonicalName,
+        absentUids: targetUids,
+        scope: 'match',
+        matches: selectedMatch ? [selectedMatch] : undefined,
+        noSubBehavior: 'escalate',
+        woScope: 'individual',
+        forceWaitlistSub: true,
+        onlyAbsentUids: targetUids
+      });
+    }
     if (!result || !result.ok) return { ok: false, result: result || { outcome: 'error' } };
     const boundary = _gravaTorneio(tx, ref, t, before, { agoraIso });
     return { ok: true, result, tournament: boundary.clean };

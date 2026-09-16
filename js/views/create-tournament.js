@@ -775,11 +775,12 @@ function setupCreateTournamentModal() {
                   <!-- v2.6.91: aviso quando formação manual liga Times mas Individual segue marcado (misto) -->
                   <div id="manual-pairing-notice" style="display:none;margin-top:8px;"></div>
                 </div>
-                <!-- W.O. (Ausência) — movido pra cá, logo após formação de duplas (v3.1.34) -->
+                <!-- W.O. é uma decisão pontual do organizador no card do jogo. A escolha
+                     antiga individual/time foi removida do formulário: ambas as ações ficam
+                     sempre disponíveis, com confirmação que explica o efeito. -->
                 <div id="wo-scope-container" style="margin-top:0.9rem;padding-top:0.85rem;border-top:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));">
-                  <p style="margin: 0 0 0.6rem; font-size: 0.78rem; color: var(--sp-c-f87171,#f87171); font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">⚠️ ${_t('create.woSection')}</p>
                   <input type="hidden" id="wo-scope" value="individual">
-                  ${window._woButtonsHtml(0)}
+                  <div style="font-size:0.78rem;line-height:1.45;color:var(--text-muted);"><b style="color:var(--sp-c-fca5a5,#fca5a5);">⚠️ W.O.</b> No jogo, a organização escolhe entre W.O. individual (com suplente elegível) e desclassificação da dupla inteira (sem suplente).</div>
                 </div>
               </div>
 
@@ -4765,10 +4766,9 @@ function setupCreateTournamentModal() {
     if (typeof window._syncCallPolicy === 'function') window._syncCallPolicy();
     if (typeof window._syncEnrollLimitMode === 'function') window._syncEnrollLimitMode();
     window._setVisibility(t.isPublic !== false ? 'public' : 'private');
-    // W.O. Scope — v2.6.61: render canônica (botões). Normaliza legado 'team' → 'time'.
-    var _woScope = t.woScope || 'individual';
-    if (_woScope === 'team') _woScope = 'time';
-    if (typeof window._setPhaseWo === 'function') window._setPhaseWo(0, _woScope);
+    // W.O. não é mais configuração: sempre inicia em individual; a organização escolhe
+    // individual ou dupla inteira diretamente no card, com confirmação explícita.
+    var _woEl = document.getElementById('wo-scope'); if (_woEl) _woEl.value = 'individual';
     // Late Enrollment (Fechadas + Novos Confrontos)
     var _lateEnroll = t.lateEnrollment || 'closed';
     // v1.3.x: "Novos Confrontos" é INDEPENDENTE de "Fechadas". Vem de t.newMatchups; compat: torneios
@@ -5621,7 +5621,8 @@ window._saveTournamentClickHandler = async function() {
           targetSlots: isDrawMode ? targetSlotsVal : null,
           callPolicy: isDrawMode ? callPolicyVal : 'present',
           resultEntry: resultEntryVal,
-          woScope: (document.getElementById('wo-scope') || {}).value || 'individual',
+          // Política fixa: a escolha individual/time acontece no card do jogo.
+          woScope: 'individual',
           lateEnrollment: (document.getElementById('late-enrollment') || {}).value || 'closed',
           newMatchups: ((document.getElementById('new-matchups') || {}).value === 'true'), // v1.3.x: independente de Abertas
           venue: venueVal,
@@ -7172,10 +7173,8 @@ window._prefillFromTemplate = function(tpl) {
     window._gsmApplyConfig(tpl.scoring);
   }
 
-  // W.O. Scope — v2.6.61: render canônica (botões); normaliza legado 'team' → 'time'.
-  if (tpl.woScope && typeof window._setPhaseWo === 'function') {
-    window._setPhaseWo(0, tpl.woScope === 'team' ? 'time' : tpl.woScope);
-  }
+  // W.O. é uma ação por jogo; templates antigos não escolhem mais o seu escopo.
+  var _tplWo = document.getElementById('wo-scope'); if (_tplWo) _tplWo.value = 'individual';
 
   // Late Enrollment (Fechadas + Novos Confrontos)
   if (tpl.lateEnrollment) {
@@ -7670,7 +7669,7 @@ window._saveCurrentFormAsTemplate = function() {
       targetSlots: parseInt(get('tourn-target-slots')) || '',
       callPolicy: get('call-policy') || 'present',
       resultEntry: get('select-result-entry') || 'organizer',
-      woScope: get('wo-scope') || 'individual',
+      woScope: 'individual',
       lateEnrollment: get('late-enrollment') || 'closed',
       newMatchups: (get('new-matchups') === 'true'), // v1.3.x: "Novos Confrontos" independente de "Abertas"
       courtCount: parseInt(get('tourn-court-count')) || '',

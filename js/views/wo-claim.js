@@ -202,8 +202,10 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   //
   // Lado com 0 ou 1 uid (guest/fictício, que só tem nome) fica como LADO — é a exceção
   // canônica: sem uid não há pessoa a apontar individualmente.
-  function _matchMembers(t, m) {
-    var indiv = (t.woScope || 'individual') === 'individual';
+  function _matchMembers(t, m, forceIndividual) {
+    // Para a organização, W.O. individual é sempre uma escolha explícita do
+    // modal, sem depender da antiga configuração global do torneio.
+    var indiv = !!forceIndividual || (t.woScope || 'individual') === 'individual';
     var out = [];
     ['p1', 'p2'].forEach(function (side) {
       var s = m[side];
@@ -518,26 +520,22 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       return;
     }
 
-    // ── sem claim: declarar quem faltou ──
-    var canDeclare = (uid && _allCtxUids(t, rc).indexOf(uid) !== -1) || _canManage(t);
+    // ── sem claim: escolher a ação de W.O. ──
+    var isManager = _canManage(t);
+    var canDeclare = (uid && _allCtxUids(t, rc).indexOf(uid) !== -1) || isManager;
     if (!canDeclare) { _woCloseOverlay(); return; }
-    // Um botão por ALVO. No W.O. individual de duplas isso são as 4 PESSOAS do jogo (não os
-    // 2 lados): o organizador aponta uma por vez — podendo, no limite, as duas da mesma dupla
-    // levarem W.O., mas cada uma por escolha. O uid viaja junto (é ele que identifica).
-    var picks = rc.members.map(function (mb) {
+    // A organização sempre vê pessoas individualmente, mesmo em torneios antigos que
+    // guardaram `woScope: time`. W.O. individual e de dupla são duas ações explícitas,
+    // não uma preferência escondida nas configurações do torneio.
+    var selectable = isManager && rc.scope === 'match' ? _matchMembers(t, rc.m, true) : rc.members;
+    var picks = selectable.map(function (mb) {
       var _u = (mb.uids || [])[0] || '';
-      // ⚠️ NOME DE EXIBIÇÃO SEMPRE PELO UID (perfil vivo). Aqui saía `mb.name` — o rótulo
-      // GRAVADO no dia do sorteio — e quem trocou o nome no perfil aparecia com o antigo:
-      // o caso "Fabi2401@" no lugar de "Dani Bataglia" (13/ago), a MESMA classe que a
-      // 1.7.46/1.7.47 fechou na classificação e na busca. O uid já estava aqui, ao lado,
-      // sem uso. Fictício (sem uid) cai no nome gravado, que é a única identidade que tem.
-      // O PAYLOAD do clique não muda de propósito: `_woDeclare` já recebe nome E uid, e
-      // mexer no contrato dele seria mexer no W.O. [[project_uid_identity_canon_locked]]
       var _nm = (typeof window._liveRowName === 'function')
         ? (window._liveRowName({ name: mb.name, uid: _u }) || mb.name)
         : mb.name;
-      // AUTO-W.O.: o meu próprio botão diz que vale na hora — a diferença é de REGRA
-      // (não precisa de aprovação de ninguém), então tem que estar escrita no botão.
+      if (isManager && rc.scope === 'match') {
+        return '<button type="button" onclick="window._woDeclareIndividual(\'' + _attr(t.id) + '\',\'' + _attr(ctxKey) + '\',\'' + _attr(mb.name) + '\',\'' + _attr(_u) + '\')" class="btn hover-lift" style="display:block;width:100%;text-align:left;margin-bottom:8px;background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.3);color:var(--text-bright);font-weight:700;border-radius:11px;padding:11px 13px;font-size:0.92rem;">🚫 W.O. individual · ' + _esc(_nm) + '<span style="display:block;font-size:0.7rem;font-weight:600;color:var(--text-muted);margin-top:2px;">entra suplente elegível; sem suplente, o adversário vence</span></button>';
+      }
       var _euMesmo = !!(uid && _u && String(_u) === String(uid));
       var _sel = _euMesmo
         ? 'background:rgba(239,68,68,0.14);border:1px solid rgba(239,68,68,0.55);'
@@ -547,10 +545,26 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         : '';
       return '<button type="button" onclick="window.' + (_euMesmo ? '_woSelfConfirm' : '_woDeclare') + '(\'' + _attr(t.id) + '\',\'' + _attr(ctxKey) + '\',\'' + _attr(mb.name) + '\',\'' + _attr(_u) + '\')" class="btn hover-lift" style="display:block;width:100%;text-align:left;margin-bottom:8px;' + _sel + 'color:var(--text-bright);font-weight:700;border-radius:11px;padding:11px 13px;font-size:0.92rem;">🚫 ' + _esc(_nm) + _tag + '</button>';
     }).join('');
-    _overlay(_header('Faltou alguém?') +
+    var teamPicks = '';
+    if (isManager && rc.scope === 'match' && rc.m) {
+      ['p1', 'p2'].forEach(function (side) {
+        var name = String(rc.m[side] || '').trim();
+        var sideUids = (typeof window._slotUids === 'function') ? window._slotUids(rc.m, side).filter(Boolean) : [];
+        var isTeam = sideUids.length > 1 || name.split(/\s*\/\s*/).filter(Boolean).length > 1;
+        if (!isTeam || !name || name === 'TBD' || name === 'BYE') return;
+        var opp = String(rc.m[side === 'p1' ? 'p2' : 'p1'] || '').trim();
+        if (!opp || opp === 'TBD' || opp === 'BYE') return;
+        teamPicks += '<button type="button" onclick="window._woDeclareTeam(\'' + _attr(t.id) + '\',\'' + _attr(ctxKey) + '\',\'' + side + '\')" class="btn hover-lift" style="display:block;width:100%;text-align:left;margin-bottom:8px;background:rgba(127,29,29,0.20);border:1px solid rgba(248,113,113,0.55);color:var(--text-bright);font-weight:800;border-radius:11px;padding:11px 13px;font-size:0.9rem;">🏳️ Desclassificar ' + _esc(name) + '<span style="display:block;font-size:0.7rem;font-weight:600;color:var(--sp-c-fca5a5,#fca5a5);margin-top:2px;">sem suplente · ' + _esc(opp) + ' vence por W.O.</span></button>';
+      });
+    }
+    var intro = isManager && rc.scope === 'match'
+      ? 'Escolha a ação. <b style="color:var(--text-bright);">W.O. individual</b> procura suplente elegível. <b style="color:var(--text-bright);">Desclassificar dupla</b> não consulta a espera e dá a vitória ao adversário.'
+      : 'Quem não pôde vir? <b style="color:var(--text-bright);">Se for você, só a sua confirmação basta</b> — ninguém mais precisa aprovar. Apontando outra pessoa, o outro lado confirma antes.';
+    _overlay(_header(isManager && rc.scope === 'match' ? 'Aplicar W.O.' : 'Faltou alguém?') +
       '<div style="padding:1.1rem;">' +
-        '<div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:12px;">Quem não pôde vir? <b style="color:var(--text-bright);">Se for você, só a sua confirmação basta</b> — ninguém mais precisa aprovar. Apontando outra pessoa, o outro lado confirma antes.</div>' +
+        '<div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:12px;">' + intro + '</div>' +
         picks +
+        (teamPicks ? '<div style="font-size:0.76rem;color:var(--sp-c-fca5a5,#fca5a5);font-weight:800;text-transform:uppercase;letter-spacing:.06em;border-top:1px solid rgba(248,113,113,.25);padding-top:12px;margin:12px 0 8px;">W.O. do time inteiro</div>' + teamPicks : '') +
       '</div>');
   };
 
@@ -585,6 +599,76 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     });
   }
   function _isLigaGroup(t, c) { return c && c.scope === 'group' && (_isLiga(t) || _isMonarchFmt(t)); }
+
+  // Ação administrativa direta: o servidor relê o jogo e executa o mesmo motor
+  // transacional. Não há mutação otimista de chave, lista de espera ou placar no cliente.
+  function _orgWoServer(tId, payload, onDone, loadingMsg) {
+    if (!window.FirestoreDB || typeof window.FirestoreDB._callFn !== 'function') {
+      if (typeof showNotification === 'function') showNotification('⚠️ Não salvou', 'A conexão com o servidor não está disponível.', 'error');
+      return Promise.resolve(null);
+    }
+    if (typeof window._showLoading === 'function') window._showLoading(loadingMsg || 'Aplicando W.O.…');
+    return window.FirestoreDB._callFn('applyTournamentWO', Object.assign({ tournamentId: String(tId) }, payload)).then(function (data) {
+      if (typeof window._hideLoading === 'function') window._hideLoading();
+      if (typeof onDone === 'function') onDone(data || {});
+      if (typeof window._rerenderBracket === 'function') window._rerenderBracket(String(tId));
+      else if (typeof window._softRefreshView === 'function') window._softRefreshView();
+      return data || {};
+    }).catch(function (err) {
+      if (typeof window._hideLoading === 'function') window._hideLoading();
+      if (typeof showNotification === 'function') showNotification('⚠️ Não salvou', (err && err.message) || 'Tente de novo.', 'error');
+      return null;
+    });
+  }
+
+  window._woDeclareIndividual = function (tId, ctxKey, absentName, absentUid, confirmed) {
+    var t = _findT(tId); var ctx = _ctxReg[ctxKey];
+    if (!t || !ctx || !_canManage(t)) return;
+    var rc = _resolveCtx(t, ctx); if (!rc || rc.scope !== 'match' || !rc.m || rc.done) return;
+    var liveName = _nameOfUid(t, absentUid, absentName);
+    if (!confirmed) {
+      _overlay(_header('Confirmar W.O. individual') + '<div style="padding:1.1rem;">' +
+        '<div style="font-weight:800;font-size:1rem;color:var(--text-bright);">🚫 Aplicar W.O. em ' + _esc(liveName) + '</div>' +
+        '<div style="font-size:0.86rem;line-height:1.45;color:var(--text-muted);margin-top:10px;">A pessoa sai deste jogo. A primeira pessoa elegível da lista de espera assume a vaga; se não houver, o adversário vence por W.O.</div>' +
+        '<div style="display:flex;gap:8px;margin-top:16px;">' +
+          '<button type="button" onclick="window._woOpenClaim(\'' + _attr(t.id) + '\',\'' + _attr(ctxKey) + '\')" class="btn" style="flex:1;background:rgba(148,163,184,.12);color:var(--text-bright);border:1px solid rgba(148,163,184,.4);font-weight:800;border-radius:10px;padding:10px;">Cancelar</button>' +
+          '<button type="button" onclick="window._woDeclareIndividual(\'' + _attr(t.id) + '\',\'' + _attr(ctxKey) + '\',\'' + _attr(absentName) + '\',\'' + _attr(absentUid) + '\',true)" class="btn btn-danger" style="flex:1;font-weight:800;border-radius:10px;padding:10px;">Confirmar W.O.</button>' +
+        '</div></div>');
+      return;
+    }
+    _orgWoServer(tId, { absentName: String(liveName || ''), absentUid: String(absentUid || ''), matchId: String(rc.matchId || rc.m.id || '') }, function (saved) {
+      if (!saved || !saved.ok) return;
+      if (typeof window._woCloseOverlay === 'function') window._woCloseOverlay();
+      var r = saved.result || {};
+      var msg = r.outcome === 'subbed' ? 'A vaga foi ocupada pela lista de espera.' : ((r.winner || 'O adversário') + ' vence por W.O.');
+      if (typeof showNotification === 'function') showNotification('W.O. individual aplicado', msg, 'success');
+    }, 'Aplicando W.O. individual…');
+  };
+
+  window._woDeclareTeam = function (tId, ctxKey, side, confirmed) {
+    var t = _findT(tId); var ctx = _ctxReg[ctxKey];
+    if (!t || !ctx || !_canManage(t) || (side !== 'p1' && side !== 'p2')) return;
+    var rc = _resolveCtx(t, ctx); if (!rc || rc.scope !== 'match' || !rc.m || rc.done) return;
+    var teamName = String(rc.m[side] || '').trim();
+    var opponent = String(rc.m[side === 'p1' ? 'p2' : 'p1'] || '').trim();
+    if (!teamName || !opponent || teamName === 'TBD' || teamName === 'BYE' || opponent === 'TBD' || opponent === 'BYE') return;
+    if (!confirmed) {
+      _overlay(_header('Confirmar W.O. do time') + '<div style="padding:1.1rem;">' +
+        '<div style="font-weight:800;font-size:1rem;color:var(--text-bright);">🏳️ Desclassificar ' + _esc(teamName) + '</div>' +
+        '<div style="font-size:0.86rem;line-height:1.45;color:var(--text-muted);margin-top:10px;">A dupla inteira sai deste jogo. Nenhum suplente será chamado. <b style="color:var(--text-bright);">' + _esc(opponent) + '</b> vence por W.O. e avança na chave quando houver próxima rodada.</div>' +
+        '<div style="display:flex;gap:8px;margin-top:16px;">' +
+          '<button type="button" onclick="window._woOpenClaim(\'' + _attr(t.id) + '\',\'' + _attr(ctxKey) + '\')" class="btn" style="flex:1;background:rgba(148,163,184,.12);color:var(--text-bright);border:1px solid rgba(148,163,184,.4);font-weight:800;border-radius:10px;padding:10px;">Cancelar</button>' +
+          '<button type="button" onclick="window._woDeclareTeam(\'' + _attr(t.id) + '\',\'' + _attr(ctxKey) + '\',\'' + _attr(side) + '\',true)" class="btn btn-danger" style="flex:1;font-weight:800;border-radius:10px;padding:10px;">Desclassificar time</button>' +
+        '</div></div>');
+      return;
+    }
+    _orgWoServer(tId, { matchId: String(rc.matchId || rc.m.id || ''), forceTeamWO: true, teamSide: side }, function (saved) {
+      if (!saved || !saved.ok) return;
+      if (typeof window._woCloseOverlay === 'function') window._woCloseOverlay();
+      var winner = (saved.result || {}).winner || opponent;
+      if (typeof showNotification === 'function') showNotification('W.O. do time aplicado', winner + ' vence por W.O.', 'success');
+    }, 'Desclassificando o time…');
+  };
 
   // ─── ações ─────────────────────────────────────────────────────────────────────
   // absentUid: o uid da PESSOA apontada (vem do botão do picker). É a identidade real do

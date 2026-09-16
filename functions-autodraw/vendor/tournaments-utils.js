@@ -2939,8 +2939,7 @@ window._buildTournamentConfigBox = function (t, opts) {
 
     add('Formato da partida', fmtScoring());
     add('Lançamento dos resultados', fmtResultEntry());
-    add('Forma do W.O.', (t.woScope || 'individual') === 'time'
-        ? 'Time inteiro leva W.O.' : 'Individual (substitui só o ausente)');
+    add('W.O.', 'A organização escolhe no jogo: individual com suplente elegível ou dupla inteira sem suplente.');
     // Inscrições após início / novos confrontos (formatos de chave; Liga já tratou acima)
     if (!isLiga) {
         var le = (window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t) : t.lateEnrollment) || 'closed';

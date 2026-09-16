@@ -1,3 +1,4 @@
+// 2.3.54 — o organizador escolhe W.O. individual ou da dupla diretamente no jogo: o individual promove suplente elegível; desclassificar a dupla não chama suplente e dá a vitória ao adversário. A escolha antiga saiu das configurações.
 // 2.3.53 — ao marcar data e hora, o card troca imediatamente “Propor datas” pelo horário em azul-claro, tanto na chave quanto em Novidades; se o servidor recusar, o estado anterior volta.
 // 2.3.52 — card de jogo usa a mesma geometria em Novidades, Próximo Jogo, Últimos Resultados e chave: nome curto ocupa uma linha; nome longo só reserva duas quando precisa.
 // 2.3.51 — entrega web da geometria única dos cards: substituída pela correção adaptativa da 2.3.52.
