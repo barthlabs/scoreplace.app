@@ -2846,6 +2846,13 @@ function renderDashboard(container) {
             if (_planFmt2 && _planFmt2.bestOf > 1) _setFormatAttr2 = ' data-sp-best-of="' + _planFmt2.bestOf + '"';
           } catch (_eSetFormat2) {}
           if (Array.isArray(m2.sets) && m2.sets.length > 0 && typeof window._formatSetForPlayer === 'function') {
+            // Resultado encerrado não pode manter uma segunda geometria: o mesmo plano que
+            // alimenta Novidades também desenha suas colunas, fonte e folga. Só o título é
+            // omitido aqui porque o resultado já tem seu próprio cabeçalho de card.
+            if (_planFmt2 && _planFmt2.multi && typeof window._setGridHtml === 'function') {
+              return window._setGridHtml(_planFmt2, n);
+            }
+            // Reserva para carregamento legado; o caminho normal acima é o canônico.
             // A cor é de CADA set (fonte única `_corDoSetLado`), não da linha: quem venceu o set
             // fica verde mesmo tendo perdido a partida. ⛔ Sempre por `_spCor` — hex cru aqui
             // reintroduziria o verde ilegível no tema claro.
@@ -2890,6 +2897,9 @@ function renderDashboard(container) {
             _rotulos = _plano && Array.isArray(_plano.columns) ? _plano.columns.map(function (c) { return c.label; }) : [];
             if (_plano && _plano.bestOf > 1) _setFormatAttr2 = ' data-sp-best-of="' + _plano.bestOf + '"';
           } catch (_eSetHead) {}
+          if (_plano && _plano.multi && typeof window._setHeadHtml === 'function') {
+            return window._setHeadHtml(_plano, { hideHeadline:true });
+          }
           var _cols = m2.sets.map(function (s, i) {
             var _label = _rotulos[i] || String(i + 1);
             return window._colunaDeSetHtml('<span class="sp-set-lbl">' + _sf(_label) + '</span>', s);

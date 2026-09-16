@@ -1595,7 +1595,7 @@ window._assignGlobalGameNumbers = function (t) {
         _sf(c.label) + '</span></div>';
     }).join('');
     return '<div class="sp-set-head"' + (opts.id ? ' id="' + _sf(opts.id) + '"' : '') + '>' +
-        '<span class="sp-set-head-ttl">' + _sf(plan.headline) + '</span>' +
+        (opts.hideHeadline ? '' : '<span class="sp-set-head-ttl">' + _sf(plan.headline) + '</span>') +
         '<div class="sp-set-head-linha2">' +
           '<span class="sp-set-head-sets">' + _sf(_tr('bracket.setsLabel', 'SETS')) + '</span>' +
           '<div class="sp-set-grid"' + countAttr + formatAttr + ' style="' + fsVar + '">' + labels + '</div>' +

@@ -1,3 +1,4 @@
+// 2.3.47 — Seus Últimos Resultados passou a reutilizar a mesma grade de cabeçalho e placar de Novidades; em melhor de 3, sets e números ficam alinhados com a mesma folga de 16 px.
 // 2.3.46 — melhor de 3 usa 16 px entre os placares dos sets, liberando espaço para nomes maiores; a mesma regra canônica vale em Novidades, Últimos resultados e chave.
 // 2.3.45 — todos os cards de jogo usam a mesma grade de placar: melhor de 3 mantém 32 px entre os sets e melhor de 5, 16 px. Cabeçalho e placar ficam alinhados em Novidades, Últimos resultados e chave.
 // 2.3.44 — em Novidades, o primeiro card já ocupa toda a largura útil ao abrir a dashboard; duas ou mais colunas entram somente quando realmente cabem. A medida segue a largura do painel, inclusive em web, celular e tablet.
