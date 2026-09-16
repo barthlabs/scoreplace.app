@@ -2567,7 +2567,9 @@ html, body,
   .sp-set-grid:has(> .sp-set-col:nth-child(5):last-child){gap:clamp(8px,1.85cqi,18px);}
 }
 @container (min-width:800px){
-  /* Três sets em card largo: o pedido é 80px entre Set 1, Set 2 e STB. */
+  /* Card largo: cada coluna visível de set recebe os 80px pedidos. Vale tanto para
+     uma partida encerrada em 2 sets quanto para Set 1, Set 2 e STB. */
+  .sp-set-grid:has(> .sp-set-col:nth-child(2):last-child),
   .sp-set-grid:has(> .sp-set-col:nth-child(3):last-child){gap:80px;}
 }
 /* ⛔ PLACAR ALINHA À DIREITA, NÃO AO CENTRO. Ordem do dono (13/set/2026, olhando um jogo

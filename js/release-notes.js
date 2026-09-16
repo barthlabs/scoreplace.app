@@ -1,3 +1,4 @@
+// 2.3.40 — cards largos de melhor de 3 usam 80px entre cada set visível, seja a partida encerrada em dois sets ou com STB.
 // 2.3.39 — em cards largos de três sets, Set 1, Set 2 e STB ganham 80px de distância, preservando nomes e alinhamento.
 // 2.3.38 — a folga entre dois placares de set agora usa de fato a largura livre do card; três ou mais sets repartem esse espaço proporcionalmente.
 // 2.3.37 — cards largos ganham mais espaço entre os placares de cada set, preservando o alinhamento e a área dos nomes.
