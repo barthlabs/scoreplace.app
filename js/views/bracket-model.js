@@ -1444,6 +1444,22 @@ window._assignGlobalGameNumbers = function (t) {
     _contarEstrutura(rd && rd.matches);
     (rd && rd.monarchGroups || []).forEach(function (g) { _contarEstrutura(g && g.matches); });
   });
+  // O carimbo persistido é a autoridade quando esta rota abre sem `_nJogos`.
+  // A tela recebe alguns cards já numerados antes da coleção inteira; recontar
+  // localmente substitui o número verdadeiro por outro. Não há escrita de
+  // `_gameNum` no cliente: se ele já veio do servidor, apenas o exibimos.
+  var _temCarimboServidor = false;
+  function _acharCarimbo(lista) {
+    (lista || []).forEach(function (m) {
+      if (m && Number.isInteger(m._gameNum) && m._gameNum > 0) _temCarimboServidor = true;
+    });
+  }
+  _acharCarimbo(t.matches);
+  (t.rounds || []).forEach(function (rd) {
+    _acharCarimbo(rd && rd.matches);
+    (rd && rd.monarchGroups || []).forEach(function (g) { _acharCarimbo(g && g.matches); });
+  });
+  if (_temCarimboServidor) return;
   // `phaseRounds` e `groups` podem conter cópias já carregadas para desenhar a
   // tela, mas não são as fontes que este numerador percorre abaixo. Contá-las aqui
   // liberaria um recálculo sobre `t.matches` ainda parcial — exatamente o segundo
