@@ -3685,8 +3685,9 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
       .map(function (r) { return { round: r, matches: byRound[r] }; });
   }
 
-  // v4.1.19: numeração GLOBAL do torneio — começa após os jogos das fases anteriores.
-  var globalNum = (typeof window._phaseGameOffset === 'function') ? window._phaseGameOffset(t, curPhase) : 0;
+  // O card recebe somente o carimbo canônico `m._gameNum`. Um contador desta tela
+  // começava no recorte de fase e renumerava Ouro R2 como 124, embora a Prata R1
+  // seja o 124 do torneio. Nenhum renderer pode calcular "Jogo N" localmente.
   function roundLabel(cols, idx) {
     var col = cols[idx];
     var games = window._realGameCount(col.matches);   // bye não é jogo — v1.5.18
@@ -3781,15 +3782,13 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
       var isHidden = !isFinalCol && hiddenSet && hiddenSet.has(col.round);
       if (isHidden) {
         hiddenCount++;
-        globalNum += realMatches.length; // preserva a numeração dos JOGOs visíveis
         return '';
       }
       // coluna que sobrou só com BYEs (nenhum jogo real) não é exibida
       if (realMatches.length === 0 && !(isFinalCol && thirdM)) return '';
       var label = roundLabel(cols, idx);
-      var thirdNum = 0;
-      if (isFinalCol && thirdM) { globalNum++; thirdNum = globalNum; } // reserva o nº (final-1) ANTES da final
-      var cards = realMatches.map(function (m) { globalNum++; return renderMatchCard(m, canEnterResult, t.id, globalNum); }).join('');
+      var thirdNum = thirdM && thirdM._gameNum;
+      var cards = realMatches.map(function (m) { return renderMatchCard(m, canEnterResult, t.id, m._gameNum); }).join('');
       var thirdHtml = (isFinalCol && thirdM)
         ? '<h5 style="color:var(--sp-c-cd7f32,#cd7f32);font-size:0.7rem;text-transform:uppercase;letter-spacing:2px;margin:1rem 0 .5rem;border-left:3px solid #cd7f32;padding-left:8px;">🥉 3º lugar</h5>' + renderMatchCard(thirdM, canEnterResult, t.id, thirdNum)
         : '';
@@ -3821,7 +3820,7 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
   function renderFinalBox(bracketKey, title, color) {
     var ms = pm.filter(function (m) { return m.bracket === bracketKey; });
     if (!ms.length) return '';
-    var cards = ms.map(function (m) { globalNum++; return renderMatchCard(m, canEnterResult, t.id, globalNum); }).join('');
+    var cards = ms.map(function (m) { return renderMatchCard(m, canEnterResult, t.id, m._gameNum); }).join('');
     return '<div style="margin-top:1rem;padding-top:1.5rem;border-top:1px solid var(--border-color);">' +
       '<h4 style="color:' + window._spCor(color, 'color') + ';font-size:0.85rem;text-transform:uppercase;letter-spacing:2px;margin-bottom:1rem;border-left:4px solid ' + window._spCor(color, 'borda') + ';padding-left:10px;">' + title + '</h4>' +
       '<div style="max-width:300px;">' + cards + '</div></div>';

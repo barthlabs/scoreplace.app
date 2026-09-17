@@ -22,6 +22,9 @@ function ok(c, m) { if (c) pass++; else { fail++; console.log('  ✗ ' + m); } }
 console.log('\n== "Jogo N" — fonte única ==');
 
 ok(typeof W._assignGlobalGameNumbers === 'function', '_assignGlobalGameNumbers existe (o canônico)');
+const bracketSource = require('fs').readFileSync(require('path').join(__dirname, '..', 'js', 'views', 'bracket.js'), 'utf8');
+ok(!/renderMatchCard\(m, canEnterResult, t\.id, globalNum\)/.test(bracketSource),
+  '[ANTI-2º] a chave passa m._gameNum ao card, nunca contador local');
 
 // ── [ANTI-2º-CONTADOR] o numerador rogue de Rei/Rainha NÃO pode voltar ──────────
 // store.js É carregado por este harness, então isto testa de verdade.
