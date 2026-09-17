@@ -26,8 +26,9 @@ ok(/_origemPrincipal/.test(gate) && /_destinoPrincipal/.test(gate),
 ok(!/classList\.add\('sp-route-transitioning'\)/.test(gate), 'a tela anterior continua interativa durante a troca');
 ok(/!_shouldPreservePrerender && !_reentrada && !_trocaPrincipal/.test(router),
   'o container não é limpo enquanto o destino ainda está carregando');
-ok(/!window\._isSoftRefresh && !_trocaPrincipal && typeof window\._showLoading/.test(router),
-  'o loader de tela cheia não encobre uma tela que já existe');
+ok(!/window\._showLoading\('Carregando…'\)/.test(router) &&
+   !/window\._showLoading\('Abrindo o torneio…'\)/.test(router),
+  'a navegação não cria loader de tela cheia sobre uma tela que já existe');
 ok(/finally \{ _finalizarTrocaPrincipal\(\); \}/.test(router),
   'dashboard encerra a transição assim que termina de renderizar');
 ok(/_finalizarTrocaPrincipal\(\);\s*\/\/ ── O LOADER SÓ SAI COM OS NOMES/s.test(router),
@@ -41,7 +42,11 @@ ok(!/#view-container\.sp-route-transitioning\s*\{\s*pointer-events:\s*none;/s.te
   'nenhuma transição desativa cliques no quadro inteiro');
 ok(/var _sairDaDashboard = String\(window\.location\.hash \|\| ''\)\.split\('\/'\)\[0\] === '#dashboard';/.test(store),
   'a abertura a partir da dashboard detecta que há uma tela completa para preservar');
-ok(/if \(!_sairDaDashboard && typeof window\._showLoading === 'function'\)/.test(store),
-  'a abertura a partir da dashboard não lança o overlay de tela inteira por cima dela');
+const navStart = store.indexOf('window._navTorneioComAvisoAgora');
+const navEnd = store.indexOf('// ── O AVISO PINTA ANTES', navStart);
+const nav = store.slice(navStart, navEnd);
+ok(/if \(!_sairDaDashboard\) \{[\s\S]*?window\._spLoadingOwnedByNav = false;/.test(nav) &&
+   !/window\._showLoading\(/.test(nav),
+  'a abertura a partir da dashboard preserva o feedback do card sem overlay de tela inteira');
 console.log('\n' + (fail ? '❌ ' + fail + ' falha(s)' : '✅ transição estável sem tela de carregamento') + '\n');
 process.exit(fail ? 1 : 0);
