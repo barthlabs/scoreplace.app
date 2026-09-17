@@ -23,21 +23,21 @@ ok(/dashboard/.test(gate) && /tournaments/.test(gate) && /tournament/.test(gate)
   'o gate cobre os dois sentidos e os aliases tournament/tournaments');
 ok(/_origemPrincipal/.test(gate) && /_destinoPrincipal/.test(gate),
   'o gate normaliza os aliases antes de decidir se preserva a tela');
-ok(/classList\.add\('sp-route-transitioning'\)/.test(gate), 'a tela anterior fica inerte durante a troca');
+ok(!/classList\.add\('sp-route-transitioning'\)/.test(gate), 'a tela anterior continua interativa durante a troca');
 ok(/!_shouldPreservePrerender && !_reentrada && !_trocaPrincipal/.test(router),
   'o container não é limpo enquanto o destino ainda está carregando');
 ok(/!window\._isSoftRefresh && !_trocaPrincipal && typeof window\._showLoading/.test(router),
   'o loader de tela cheia não encobre uma tela que já existe');
 ok(/finally \{ _finalizarTrocaPrincipal\(\); \}/.test(router),
-  'dashboard remove a inércia assim que termina de renderizar');
+  'dashboard encerra a transição assim que termina de renderizar');
 ok(/_finalizarTrocaPrincipal\(\);\s*\/\/ ── O LOADER SÓ SAI COM OS NOMES/s.test(router),
-  'detalhe remove a inércia ao entregar o render completo');
+  'detalhe encerra a transição ao entregar o render completo');
 ok(/!viewContainer\.firstChild && !_trocaPrincipal/.test(router),
   'a rede de segurança não injeta o spinner pequeno durante a transição válida');
 ok(/window\._ultimaRotaPintada = _rotaKey;/.test(gate) && /if \(!_trocaPrincipal\) window\._ultimaRotaPintada = _rotaKey;/.test(router),
   'a rota só é carimbada depois que a troca assíncrona realmente entregou o destino');
-ok(/#view-container\.sp-route-transitioning\s*\{\s*pointer-events:\s*none;/s.test(css),
-  'o quadro anterior não aceita clique enquanto representa a rota antiga');
+ok(!/#view-container\.sp-route-transitioning\s*\{\s*pointer-events:\s*none;/s.test(css),
+  'nenhuma transição desativa cliques no quadro inteiro');
 ok(/var _sairDaDashboard = String\(window\.location\.hash \|\| ''\)\.split\('\/'\)\[0\] === '#dashboard';/.test(store),
   'a abertura a partir da dashboard detecta que há uma tela completa para preservar');
 ok(/if \(!_sairDaDashboard && typeof window\._showLoading === 'function'\)/.test(store),

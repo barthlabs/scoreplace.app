@@ -129,6 +129,10 @@ function initRouter() {
       window._warn('[router] view-container missing on handleRoute — aborting');
       return;
     }
+    // Uma versão anterior podia deixar este marcador preso enquanto aguardava a
+    // carga assíncrona do destino. Ele não é uma trava de interação: o quadro
+    // anterior continua legível e clicável até o novo quadro existir.
+    try { viewContainer.classList.remove('sp-route-transitioning'); } catch (e) {}
     // ── RE-ENTRADA NA MESMA ROTA = SOFT-REFRESH (1.9.74) ─────────────────────
     // Relato do dono: _"carrega, mostra uns instantes, volta a carregar, mostra de
     // novo, volta a carregar. varias vezes. uma merda total."_
@@ -190,9 +194,9 @@ function initRouter() {
       // reentrada durante a busca confundir o quadro antigo com o detalhe novo.
       window._ultimaRotaPintada = _rotaKey;
     };
-    if (_trocaPrincipal) {
-      try { viewContainer.classList.add('sp-route-transitioning'); } catch (e) {}
-    }
+    // A tela anterior permanece funcional enquanto o destino hidrata. Não use
+    // pointer-events:none aqui: se a carga atrasar, isso transforma toda a página
+    // em uma tela morta.
     /* ⭐ E QUANDO AINDA ASSIM FOR NAVEGAÇÃO POR CIMA DE CONTEÚDO, FICA O RASTRO.
      * Se um dia a tela de alguém for esvaziada sem a pessoa ter navegado, isto diz o que
      * mudou — sem custo: uma comparação de texto e um aviso, só quando acontece.
@@ -589,7 +593,14 @@ function initRouter() {
               setTimeout(_pintaUmaVez, 32);     // sem rAF / aba de fundo: segue no timer
             }
           } else {
-            renderTournaments(viewContainer, cleanParam);
+            try {
+              renderTournaments(viewContainer, cleanParam);
+            } finally {
+              // Na troca dashboard → torneio este é o caminho normal. Sem esta
+              // finalização o marcador de transição ficava preso e bloqueava todos
+              // os controles da página.
+              _finalizarTrocaPrincipal();
+            }
           }
         } else {
           window.location.replace('#dashboard');

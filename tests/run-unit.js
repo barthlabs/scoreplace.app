@@ -639,6 +639,8 @@ const SUITES = [
   // Busca nas CHAVES: filtro DOM dos cards de jogo (acento-insensitive, membro de dupla,
   // coluna vazia some, limpar restaura). Verificado também no navegador real.
   'tests/bracket-search.test.js',
+  // Com teclado virtual aberto, busca deve usar o viewport VISÍVEL, não o layout inteiro.
+  'tests/busca-rola-no-viewport-visivel.test.js',
   // Globais das views existem DEPOIS do load. Pega definição presa dentro de template
   // literal (vira texto) — que o `node --check` NÃO pega, porque string é sintaxe válida.
   'tests/view-globals-smoke.test.js',
@@ -1687,6 +1689,7 @@ const SUITES = [
   // aberto porque o lado que CARIMBA e o lado que COMPARA usavam formatos diferentes —
   // re-render a cada snapshot, sem nem passar pelo debounce.
   'tests/dashboard-nao-repinta-sozinha.test.js',
+  'tests/transicao-nao-bloqueia-cliques.test.js',
   // de onde sai a LETRA (medalha, nome da competição como reserva) e o "+" de quem está
   // no pódio do ranking da própria categoria — a regra por fração era inerte sem o
   // tamanho do campo, que o footprint não traz.

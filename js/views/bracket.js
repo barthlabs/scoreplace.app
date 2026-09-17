@@ -8855,8 +8855,18 @@ window._bracketApplyFilter = function () {
       if (_primeiro && typeof _primeiro.getBoundingClientRect === 'function') {
         var _rc = _primeiro.getBoundingClientRect();
         var _ancora = parseFloat(window.getComputedStyle(document.documentElement).getPropertyValue('--scroll-anchor')) || 120;
+        /* No iOS, `innerHeight` pode continuar sendo a altura do layout inteiro enquanto
+         * o teclado ocupa a metade de baixo. Assim o card é encontrado e filtrado, mas
+         * parece "sumir" atrás do teclado. A área que a pessoa de fato enxerga é a
+         * Visual Viewport; use-a quando existir, com o offset para zoom/scroll nativo. */
+        var _vv = window.visualViewport;
+        var _vpTopo = 0;
         var _alturaVp = window.innerHeight || document.documentElement.clientHeight || 0;
-        if (_rc.top < _ancora || _rc.bottom > _alturaVp) _primeiro.scrollIntoView({ block: 'start', behavior: 'auto' });
+        if (_vv && Number(_vv.height) > 0) {
+          _vpTopo = Number(_vv.offsetTop) || 0;
+          _alturaVp = _vpTopo + Number(_vv.height);
+        }
+        if (_rc.top < (_vpTopo + _ancora) || _rc.bottom > _alturaVp) _primeiro.scrollIntoView({ block: 'start', behavior: 'auto' });
       }
     } catch (_es) {}
   }

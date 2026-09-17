@@ -479,8 +479,11 @@ function _buildOrganizerAnalyticsForModal(playerName) {
     organizados.forEach(function(tr) {
         var parts = tr.participants || [];
         parts.forEach(function(p) {
-            var key = (typeof p === 'string') ? p : (p.email || p.displayName || p.uid || JSON.stringify(p));
-            participantSet[key] = true;
+            // Snapshots parciais podem conter lacunas transitórias. Elas não são um
+            // participante e jamais podem derrubar a tela ao montar a analítica.
+            if (!p) return;
+            var key = (typeof p === 'string') ? p : (p.uid || p.email || p.displayName || JSON.stringify(p));
+            if (key) participantSet[key] = true;
         });
         totalParts += parts.length;
     });
