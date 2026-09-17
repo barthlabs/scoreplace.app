@@ -300,6 +300,21 @@ async function tela() {
   ok(!/sp-set-editor/.test(editNoCard), 'Editar não cria uma tela/modal separado');
   ok(/sp-edit-set-M1-0-1/.test(editNoCard) && /sp-edit-set-M1-2-2/.test(editNoCard),
     'os placares existentes viram campos no mesmo lugar dos Sets e do STB');
+  ok(/id="sp-edit-set-M1-0-1"[^>]*value="6"|value="6"[^>]*id="sp-edit-set-M1-0-1"/.test(editNoCard),
+    'a edição preserva o 6 do primeiro set');
+  ok(/id="sp-edit-set-M1-1-1"[^>]*value="3"|value="3"[^>]*id="sp-edit-set-M1-1-1"/.test(editNoCard),
+    'a edição preserva o 3 do segundo set');
+
+  // Regressão do Jogo 113: 0 é placar, não ausência. Ao abrir Editar, 0–6 e
+  // 3–6 devem continuar preenchidos, sem induzir o organizador a relançar.
+  W._setsEditState = { tId: 'T1', matchId: 'M1' };
+  const editComZero = cardHtml(MELHOR3, [S(0, 6), S(3, 6)], { winner: 'C / D' });
+  delete W._setsEditState;
+  ok(/id="sp-edit-set-M1-0-1"[^>]*value="0"|value="0"[^>]*id="sp-edit-set-M1-0-1"/.test(editComZero) &&
+    /id="sp-edit-set-M1-0-2"[^>]*value="6"|value="6"[^>]*id="sp-edit-set-M1-0-2"/.test(editComZero) &&
+    /id="sp-edit-set-M1-1-1"[^>]*value="3"|value="3"[^>]*id="sp-edit-set-M1-1-1"/.test(editComZero) &&
+    /id="sp-edit-set-M1-1-2"[^>]*value="6"|value="6"[^>]*id="sp-edit-set-M1-1-2"/.test(editComZero),
+    'editar 0–6 e 3–6 mantém os quatro games preenchidos');
   ok(/_cancelSetsEdit/.test(editNoCard) && /_saveEditedSetsInCard/.test(editNoCard),
     'o cabeçalho do mesmo card oferece Cancelar e Salvar');
   ok(/btn-danger btn-micro/.test(editNoCard) && /color:#fff/.test(editNoCard),

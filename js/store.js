@@ -9020,7 +9020,10 @@ window.renderSupportPage = function(container) {
 
 // Global HTML escape utility (XSS protection)
 window._safeHtml = function(str) {
-  if (!str) return '';
+  // Zero é um valor válido de placar. A antiga guarda `!str` o transformava em
+  // vazio e, ao abrir a edição de um 0–6, o campo do lado perdedor parecia sem
+  // placar. Só ausência real de valor deve gerar texto vazio.
+  if (str === null || str === undefined) return '';
   return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
 };
 

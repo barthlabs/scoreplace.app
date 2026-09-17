@@ -1770,7 +1770,14 @@ window._commitSetsResult = function (tId, matchId, sets, p1Sets, p2Sets, isFixed
   return Promise.resolve(window.AppStore.commitResultTx(tId, matchId, {
     gsmFinal: true, sets: sets, setsWonP1: p1Sets, setsWonP2: p2Sets, isFixedSet: !!isFixedSet
   }, _gsmLogMsg)).then(function (ok) {
-    if (ok === true) showNotification(_t('result.saved'), _winnerName + ' vence ' + p1Sets + '-' + p2Sets + '!', 'success');
+    // Explicita games e sets. "vence 0-2" sozinho parece 0–2 games, quando é
+    // 0–2 em sets; foi exatamente o que fez o placar correto do Jogo 113 parecer
+    // corrompido depois do salvamento.
+    if (ok === true) showNotification(
+      _t('result.saved'),
+      scoreText + ' — ' + _winnerName + ' vence por ' + p1Sets + '–' + p2Sets + ' em sets.',
+      'success'
+    );
     return ok;
   });
 };
