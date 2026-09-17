@@ -43,3 +43,8 @@ Web/PWA não consultam essa política. No nativo, o cliente consulta o manifest 
 O cliente não apaga caches, sessão ou dados para forçar atualização. O botão usa o catálogo de lojas do app. Mudanças de autorização continuam nos respectivos runbooks e dependem de evidência operacional, não só desta configuração.
 
 A revisão Claude foi reativada pelo dono durante esta execução, com motores econômicos e teto por chamada. Esta entrega não declara aprovação das lojas nem cutover executado.
+## Limite do pacote já publicado
+
+A versão 2.3.27 contém um validador que exige sete dias completos entre a disponibilidade/validação registradas e a obrigatoriedade. Por ordem expressa do responsável, o corte imediato de 17/09 usa marcos de compatibilidade de sete dias para que os clientes 2.3.27 consigam interpretar a política e exigir a atualização das versões abaixo do mínimo.
+
+Esta é uma exceção operacional, acompanhada do plano de contingência aceito pelo responsável. O próximo pacote nativo deve incluir uma exceção explícita de emergência no protocolo, para que uma decisão futura não dependa desses marcos de compatibilidade.
