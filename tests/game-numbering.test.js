@@ -97,5 +97,26 @@ ok(typeof W._monarchGlobalJogoNum === 'undefined',
     '[CANON] categoria mais baixa completa primeiro; dentro dela R1 Ouro/Prata, depois R2 Ouro/Prata — got ' + JSON.stringify(got));
 })();
 
+// ── Posição P<n>: IDs do Firestore ordenam P10 antes de P2 se tratados como texto. ──
+(function () {
+  const match = function (id, bracket) { return { id, bracket, round: 1, p1: id + ' A', p2: id + ' B' }; };
+  const t = {
+    matches: [
+      // É a ordem que uma leitura lexical do Firestore pode fornecer.
+      match('tour-gold-R1-P10', 'gold'), match('tour-silver-R1-P2', 'silver'),
+      match('tour-gold-R1-P2', 'gold'), match('tour-silver-R1-P1', 'silver'),
+      match('tour-gold-R1-P1', 'gold')
+    ]
+  };
+  W._assignGlobalGameNumbers(t);
+  const got = Object.fromEntries(t.matches.map(function (m) { return [m.id, m._gameNum]; }));
+  const expected = {
+    'tour-gold-R1-P1': 1, 'tour-gold-R1-P2': 2, 'tour-gold-R1-P10': 3,
+    'tour-silver-R1-P1': 4, 'tour-silver-R1-P2': 5
+  };
+  ok(Object.keys(expected).every(function (id) { return got[id] === expected[id]; }),
+    '[CANON] dentro da rodada, P1/P2/P10 usa posição numérica; depois vem a mesma rodada da Prata — got ' + JSON.stringify(got));
+})();
+
 console.log('\n' + (fail === 0 ? '✅' : '❌') + ' game-numbering: ' + pass + ' ok, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);

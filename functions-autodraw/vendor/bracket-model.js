@@ -1469,6 +1469,23 @@ window._assignGlobalGameNumbers = function (t) {
     return !!(m && (m.isThirdPlace || m.bracket === 'thirdplace' || m.bracket === 'grand3'));
   }
   function _ehExtra(m) { return !!(m && (m.isExtra || m.condicional)); }
+  // IDs das chaves carregam a posição visível do confronto como sufixo `-P<n>`.
+  // O Firestore devolve IDs em ordem lexical (P1, P10, ..., P2), que não é a
+  // ordem do torneio. Só reordenamos quando há esse sufixo explícito; os demais
+  // formatos preservam exatamente a ordem que o organizador definiu.
+  function _ordemDaPosicao(m) {
+    var hit = String((m && m.id) || '').match(/-P(\d+)$/i);
+    return hit ? Number(hit[1]) : null;
+  }
+  function _ordenarJogosDaChave(lista) {
+    return (lista || []).map(function (m, indice) { return { m: m, indice: indice, pos: _ordemDaPosicao(m) }; })
+      .sort(function (a, b) {
+        if (a.pos != null && b.pos != null && a.pos !== b.pos) return a.pos - b.pos;
+        if (a.pos != null && b.pos == null) return -1;
+        if (a.pos == null && b.pos != null) return 1;
+        return a.indice - b.indice;
+      }).map(function (item) { return item.m; });
+  }
   function _emitir() {
     // 3º/4º vem imediatamente antes da final DA MESMA CATEGORIA. Antes todos os
     // terceiros eram retirados juntos e recolocados antes da última final do
@@ -1577,8 +1594,8 @@ window._assignGlobalGameNumbers = function (t) {
         var upRounds = _distinct('upper'), loRounds = _distinct('lower');
         var maxCols = Math.max(upRounds.length, loRounds.length);
         for (var i = 0; i < maxCols; i++) {
-          if (upRounds[i] != null) ms.filter(function (m) { return m.bracket === 'upper' && !_ehTerceiro(m) && _rnd(m) === upRounds[i]; }).forEach(stamp);
-          if (loRounds[i] != null) ms.filter(function (m) { return m.bracket === 'lower' && !_ehTerceiro(m) && _rnd(m) === loRounds[i]; }).forEach(stamp);
+          if (upRounds[i] != null) _ordenarJogosDaChave(ms.filter(function (m) { return m.bracket === 'upper' && !_ehTerceiro(m) && _rnd(m) === upRounds[i]; })).forEach(stamp);
+          if (loRounds[i] != null) _ordenarJogosDaChave(ms.filter(function (m) { return m.bracket === 'lower' && !_ehTerceiro(m) && _rnd(m) === loRounds[i]; })).forEach(stamp);
         }
         ms.filter(_ehTerceiro).forEach(stamp);
         ms.filter(function (m) { return m.bracket === 'grand'; }).forEach(stamp);
@@ -1604,7 +1621,7 @@ window._assignGlobalGameNumbers = function (t) {
       // Rodada é o eixo externo: R2 Ouro → R2 Prata → R3 Ouro → R3 Prata.
       Object.keys(rodadas).map(Number).sort(function (a, b) { return a - b; }).forEach(function (rn) {
         tierKeys.forEach(function (bk) {
-          ((porLinhaERodada[bk][rn] || [])).filter(function (m) { return !isBye(m); }).forEach(stamp);
+          _ordenarJogosDaChave((porLinhaERodada[bk][rn] || [])).filter(function (m) { return !isBye(m); }).forEach(stamp);
         });
       });
       ms.filter(_ehTerceiro).forEach(stamp);
