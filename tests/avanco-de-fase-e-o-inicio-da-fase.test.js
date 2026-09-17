@@ -80,7 +80,7 @@ const base = () => ({ id:'x', format:'Fase de Grupos + Eliminatórias', status:'
 {
   const t = base(); t.currentPhaseIndex = 0; t.phases[0] = { name:'Grupos', rounds:1 };
   ok(s._inicioDaFase(t,0) === s._tProgParseMs('2026-08-02'), '⑤ fase 0 SEM datas próprias herda t.startDate');
-  ok(s._fimDaFase(t,0) === s._tProgParseMs('2026-08-19'), '⑤ fase 0 herda t.endDate');
+  ok(s._fimDaFase(t,0) === s._tProgParseMs('2026-08-19T19:40'), '⑤ fase 0 herda também o horário final configurado');
 }
 // ── ⑥ A RÉGUA DO DONO: fatia a fase pelas rodadas, em dias ───────────────────
 {

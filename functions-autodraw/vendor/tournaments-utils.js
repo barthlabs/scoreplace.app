@@ -2210,9 +2210,18 @@ window._fimDaFase = function (t, idx) {
   if (!t) return null;
   var i = (idx == null) ? (t.currentPhaseIndex || 0) : idx;
   var ph = (Array.isArray(t.phases) && t.phases[i]) || {};
-  var e = ph.endDate ? window._tProgParseMs(ph.endDate + (ph.endTime ? ('T' + ph.endTime) : '')) : null;
+  // Data final sem hora significa fim do dia, não meio-dia. A função também é a
+  // fonte dos prazos mostrados nos cards e das janelas das rodadas; usar o default
+  // genérico de `_tProgParseMs` aqui encurtava silenciosamente a rodada em 12 horas.
+  var _endAt = function (date, time) {
+    if (!date) return null;
+    var value = String(date);
+    if (value.indexOf('T') === -1) value += 'T' + (time || '23:59:59');
+    return window._tProgParseMs(value);
+  };
+  var e = _endAt(ph.endDate, ph.endTime);
   if (e) return e;
-  return (i === 0) ? (window._tProgParseMs(t.endDate) || null) : null;
+  return (i === 0) ? (_endAt(t.endDate, t.endTime) || null) : null;
 };
 
 window._phaseRoundWindow = function (phaseStartMs, phaseEndMs, roundNum, roundsTotal, limites) {

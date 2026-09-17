@@ -816,6 +816,17 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       for (var i = 0; i < slots.length; i++) {
         if (String(slots[i].getAttribute('data-schedule-match-id')) === String(m.id)) slots[i].innerHTML = html;
       }
+      // O mesmo card exibe a data abaixo de "JOGO N". Atualiza-a no instante da
+      // confirmação local, antes de qualquer snapshot do Firestore chegar, para a
+      // pessoa não continuar vendo o prazo antigo depois de agendar.
+      var timelineSlots = document.querySelectorAll('[data-match-time-status]');
+      var timelineHtml = (typeof window._matchCardTimelineTextHtml === 'function')
+        ? window._matchCardTimelineTextHtml(t, m) : '';
+      for (var j = 0; j < timelineSlots.length; j++) {
+        var sameMatch = String(timelineSlots[j].getAttribute('data-match-time-match-id')) === String(m.id);
+        var sameTournament = !t || t.id == null || String(timelineSlots[j].getAttribute('data-match-time-tournament-id')) === String(t.id);
+        if (sameMatch && sameTournament) timelineSlots[j].innerHTML = timelineHtml;
+      }
     } catch (e) {}
   };
 

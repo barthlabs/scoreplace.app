@@ -84,14 +84,57 @@ ok(!/Propor datas/.test(scheduledCard), 'data definida substitui o botão "Propo
 ok(/#7dd3fc/.test(scheduledCard), 'a data definida usa azul-claro');
 ok(/button/.test(scheduledCard) && /_schOpenMatch/.test(scheduledCard), 'o horário definido continua sendo botão para reagendar');
 ok(/data-schedule-chip/.test(scheduledCard), 'o card expõe o slot canônico do agendamento');
+ok(/data-match-time-status/.test(scheduledCard) && /Agendado:/.test(scheduledCard),
+  'o mesmo horário aparece abaixo do número do jogo no cabeçalho canônico');
 const slotAgendado = { innerHTML: '', getAttribute: function (k) { return k === 'data-schedule-match-id' ? m.id : null; } };
+const slotLinhaDoTempo = {
+  innerHTML: '',
+  getAttribute: function (k) {
+    if (k === 'data-match-time-match-id') return m.id;
+    if (k === 'data-match-time-tournament-id') return t.id;
+    return null;
+  }
+};
 const queryOriginal = W.document.querySelectorAll;
-W.document.querySelectorAll = function (q) { return q === '[data-schedule-chip]' ? [slotAgendado] : []; };
+W.document.querySelectorAll = function (q) {
+  if (q === '[data-schedule-chip]') return [slotAgendado];
+  if (q === '[data-match-time-status]') return [slotLinhaDoTempo];
+  return [];
+};
 W._schRefreshCardChip(t, m);
 W.document.querySelectorAll = queryOriginal;
 ok(/18\/09 às 11:00/.test(slotAgendado.innerHTML) && !/Propor datas/.test(slotAgendado.innerHTML),
   'ao definir, o slot do card aberto é atualizado antes do snapshot remoto');
+ok(/Agendado:/.test(slotLinhaDoTempo.innerHTML) && /18\/09 11:00/.test(slotLinhaDoTempo.innerHTML),
+  'a linha sob o número do jogo também atualiza antes do snapshot remoto');
 m.scheduledAt = ''; m.scheduledKind = '';
+
+// ─── a linha abaixo de JOGO N tem uma única precedência ───────────────────────
+const tLinhaDoTempo = mkLiga();
+tLinhaDoTempo.phases = [{
+  rounds: 2,
+  startDate: '2026-10-01T00:00:00-03:00',
+  endDate: '2026-10-16T23:59:00-03:00'
+}];
+const mLinhaDoTempo = tLinhaDoTempo.rounds[0].matches[0];
+mLinhaDoTempo.round = 2;
+comUsuario(tLinhaDoTempo, { uid: 'u1', displayName: 'J1' });
+const cardComPrazo = W.renderMatchCard(mLinhaDoTempo, true, tLinhaDoTempo.id, 1);
+ok(/Jogar até/.test(cardComPrazo) && /16\/10 23:59/.test(cardComPrazo),
+  'jogo não disputado mostra o prazo da rodada configurada abaixo de JOGO N');
+
+mLinhaDoTempo.scheduledAt = '2026-10-12T22:00:00.000Z';
+const cardMarcado = W.renderMatchCard(mLinhaDoTempo, true, tLinhaDoTempo.id, 1);
+ok(/Agendado:/.test(cardMarcado) && /12\/10 19:00/.test(cardMarcado) && !/Jogar até/.test(cardMarcado),
+  'horário marcado vence o prazo da rodada no mesmo slot do cabeçalho');
+
+mLinhaDoTempo.winner = 'J1';
+mLinhaDoTempo.completedAt = '2026-10-11T00:00:00.000Z';
+mLinhaDoTempo.resultAt = '2026-10-13T00:31:00.000Z';
+const cardJogado = W.renderMatchCard(mLinhaDoTempo, false, tLinhaDoTempo.id, 1);
+ok(/Jogado em/.test(cardJogado) && /12\/10 21:31/.test(cardJogado) &&
+  !/Agendado:|Jogar até/.test(cardJogado),
+  'placar concluído vence agendamento e prazo pela hora do último resultado, não por data anterior');
 
 let tLink = mkLiga();
 tLink.rounds[0].matches[0].waGroup = { link: 'https://chat.whatsapp.com/ABC123', byName: 'J1' };

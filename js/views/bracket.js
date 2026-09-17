@@ -4602,6 +4602,97 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint, m) {
   return html;
 }
 
+/* ── LINHA DE TEMPO DO JOGO ─────────────────────────────────────────────────────
+ * O card da chave, o da dashboard e o de "seus resultados" são o MESMO
+ * renderizador. Portanto a leitura de prazo/agendamento/resultado mora aqui, não
+ * em cada tela. A precedência é intencional: resultado real > horário marcado >
+ * prazo da rodada. Assim um prazo antigo jamais sobrepõe um jogo já combinado ou
+ * concluído.
+ */
+function _matchCardTimestamp(value) {
+  if (value == null || value === '') return null;
+  if (typeof value === 'number') return isFinite(value) ? value : null;
+  var parsed = new Date(value).getTime();
+  return isNaN(parsed) ? null : parsed;
+}
+
+function _matchCardTimeZone(t) {
+  try {
+    var profile = window.AppStore && window.AppStore.currentUser ? window.AppStore.currentUser : {};
+    if (window._venueGeo && typeof window._venueGeo.resolverFuso === 'function') {
+      var zone = window._venueGeo.resolverFuso(t || {}, profile);
+      if (zone && zone.tz) return zone.tz;
+    }
+  } catch (e) {}
+  return 'America/Sao_Paulo';
+}
+
+function _matchCardDateTime(ms, t) {
+  try {
+    var date = new Date(ms);
+    if (isNaN(date.getTime())) return '';
+    var zone = _matchCardTimeZone(t);
+    var day = date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: zone });
+    var hour = date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: zone });
+    return day + ' ' + hour;
+  } catch (e) { return ''; }
+}
+
+function _matchCardRoundDeadlineMs(t, m) {
+  try {
+    if (!t || !m || typeof window._inicioDaFase !== 'function' ||
+        typeof window._fimDaFase !== 'function' || typeof window._phaseRoundWindow !== 'function') return null;
+    var phaseIndex = parseInt(m.phaseIndex, 10);
+    if (isNaN(phaseIndex) || phaseIndex < 0) phaseIndex = 0;
+    var round = parseInt(m.round, 10);
+    if (isNaN(round) || round < 1) round = 1;
+    var rounds = (typeof window._phasePlannedRounds === 'function')
+      ? window._phasePlannedRounds(t, phaseIndex) : 0;
+    if (!(rounds > 0) && typeof window._rodadasVisiveisDaFase === 'function') {
+      rounds = window._rodadasVisiveisDaFase(t, phaseIndex);
+    }
+    rounds = Math.max(round, parseInt(rounds, 10) || 1);
+    var start = window._inicioDaFase(t, phaseIndex);
+    var end = window._fimDaFase(t, phaseIndex);
+    if (!(end > 0) || (rounds > 1 && !(start > 0))) return null;
+    // Rodada única termina no fim declarado da fase; não exige uma data inicial
+    // apenas para repetir a mesma ponta da janela.
+    if (rounds === 1) return end;
+    var cuts = (typeof window._limitesDasRodadas === 'function' && start > 0)
+      ? window._limitesDasRodadas(t, phaseIndex, start, end, rounds) : null;
+    var windowOfRound = window._phaseRoundWindow(start, end, round, rounds, cuts);
+    return windowOfRound && windowOfRound.endMs ? windowOfRound.endMs : null;
+  } catch (e) { return null; }
+}
+
+function _matchCardTimelineTextHtml(t, m) {
+  try {
+    if (!m) return '';
+    // `resultAt` é escrito no instante em que o último placar é salvo. Os outros
+    // carimbos são só recuperação de partidas históricas que ainda não o tinham.
+    var resultAt = _matchCardTimestamp(m.resultAt) ||
+      _matchCardTimestamp(m.pendingResult && m.pendingResult.proposedAt) ||
+      _matchCardTimestamp(m.completedAt) ||
+      ((m.winner || m.wo) ? _matchCardTimestamp(m.updatedAt) : null);
+    if (resultAt) {
+      var played = _matchCardDateTime(resultAt, t);
+      return played ? '<span style="font-size:0.62rem;font-weight:700;color:var(--text-muted);line-height:1.2;white-space:nowrap;">Jogado em <b style="color:var(--sp-c-cbd5e1,#cbd5e1);">' + window._safeHtml(played) + '</b></span>' : '';
+    }
+    var scheduled = _matchCardTimestamp(m.scheduledAt);
+    if (scheduled) {
+      var scheduledText = _matchCardDateTime(scheduled, t);
+      return scheduledText ? '<span style="font-size:0.62rem;font-weight:700;color:var(--sp-c-86efac,#86efac);line-height:1.2;white-space:nowrap;">Agendado: ' + window._safeHtml(scheduledText) + '</span>' : '';
+    }
+    var deadline = _matchCardRoundDeadlineMs(t, m);
+    var deadlineText = deadline ? _matchCardDateTime(deadline, t) : '';
+    return deadlineText ? '<span style="font-size:0.62rem;font-weight:700;color:var(--text-muted);line-height:1.2;white-space:nowrap;">Jogar até <b style="color:var(--sp-c-7dd3fc,#7dd3fc);">' + window._safeHtml(deadlineText) + '</b></span>' : '';
+  } catch (e) { return ''; }
+}
+
+// A agenda atualiza este fragmento no DOM logo após marcar o horário; expor só o
+// conteúdo evita que dashboard e chave tenham um segundo template para o mesmo dado.
+window._matchCardTimelineTextHtml = _matchCardTimelineTextHtml;
+
 function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingSub, opts) {
   var _t = window._t || function(k) { return k; };
   if (!m) return '';
@@ -5496,6 +5587,10 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     }
   }
   var _headerActions = (_readOnly ? _dashEditBtn : `${_woHeaderChip}${_arrivedBtn}${liveBtn}${headerConfirmBtn}${headerEditBtn}${headerWoRevertBtn}`) + _replayBtn;
+  // O slot existe mesmo quando falta configuração antiga: a agenda pode preencher a
+  // data marcada sem reabrir/re-renderizar toda a tela.
+  var _timelineSlot = '<span data-match-time-status data-match-time-tournament-id="' + window._safeHtml(String(tId || '')) +
+    '" data-match-time-match-id="' + window._safeHtml(String(m.id || '')) + '">' + _matchCardTimelineTextHtml(t, m) + '</span>';
 
   var _headerHtml;
   if (_showHeaderPending) {
@@ -5503,6 +5598,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px;border-bottom:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));padding-bottom:6px;">
         <div style="display:flex;flex-direction:column;gap:2px;min-width:0;flex:1;">
           <span style="font-size:0.7rem;font-weight:700;color:var(--sp-c-38bdf8,#38bdf8);text-transform:uppercase;">${window._safeHtml(matchLabel)}</span>
+          ${_timelineSlot}
           <span title="proposto por ${window._safeHtml(_proposerName)} · ${_agoLabel}" style="font-size:0.6rem;color:var(--text-muted);line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">proposto por <b style="color:var(--sp-c-fbbf24,#fbbf24);">${_proposerName}</b> · ${_agoLabel}</span>
         </div>
         <div id="header-btns-${m.id}" style="display:flex;flex-wrap:nowrap;justify-content:flex-end;align-items:center;gap:4px 6px;flex-shrink:0;min-width:0;text-align:right;">
@@ -5515,6 +5611,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
       <div class="sp-mc-head">
         <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-start;min-width:0;">
           <span style="font-size:0.7rem;font-weight:700;color:var(--sp-c-38bdf8,#38bdf8);text-transform:uppercase;">${window._safeHtml(matchLabel)}</span>
+          ${_timelineSlot}
           ${readyBadge}
         </div>
         <div id="header-btns-${m.id}" class="btn-row sp-mc-acts">${_headerActions}</div>
