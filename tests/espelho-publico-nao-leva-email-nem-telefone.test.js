@@ -182,15 +182,20 @@ must(!/FirestoreDB\.loadUserProfile\(/.test(BU),
 must((BU.match(/carregarPerfilPublico\(/g) || []).length === 4,
   '⑧b e as quatro passaram para o espelho');
 
-/* ⛔ CONTROLE DE ESCOPO — o que NÃO foi trocado, e por quê, MEDIDO:
- *  • `explore.js` mostra o E-MAIL no lugar do nome de quem não tem nome, e ordena por ele.
- *    Trocar mudaria o que aparece na tela — decisão do dono, não minha.
- *  • `tournaments.js` casa inscrito por e-mail (`profile.email`).
- *  • `tournaments-organizer.js` resolve o e-mail do DESTINATÁRIO para mandar a notificação —
- *    sai quando a fila de e-mail migrar para o servidor (a leva L2). */
+/* A etapa 7 também tira a ficha privada de Amigos e Convites. `displayName` é único entre
+ * contas vivas, então o caso legado (id antigo por e-mail + uid atual) é agrupado pelo nome
+ * público e cancelado em conjunto. Não há motivo para o card levar o endereço que antes era
+ * usado como rótulo de ausência. Permanecem fora deste bloco os fluxos que realmente entregam
+ * contato (organização e relatórios): eles precisam de callable autorizada antes do corte da
+ * Rule, nunca de um fallback silencioso para o documento inteiro. */
 const EXP = fs.readFileSync(path.join(raiz, 'js/views/explore.js'), 'utf8');
-must(/loadUserProfile\(/.test(EXP),
-  '⑧b ⛔ `explore` segue no documento cheio — ele usa o e-mail como NOME de quem não tem nome');
+const semExp = semComentario(EXP);
+must(!/loadUserProfile\(/.test(semExp),
+  '⑧b ⭐ Amigos e Convites não baixam mais ficha privada');
+must((semExp.match(/carregarPerfilPublico\(uid\)/g) || []).length >= 5,
+  '⑧b ⭐ cartões e fichas de Pessoas usam o espelho público (recebidos, enviados, amigos e detalhes)');
+must(/var byPublicName = \{\}/.test(semExp) && !/var byEmail = \{\}/.test(semExp),
+  '⑧b ⛔ convite legado é deduplicado pelo nome público único, sem e-mail');
 
 // ── ⑧c AVISAR ALGUÉM NÃO LÊ MAIS A FICHA DELE ──────────────────────────────
 /* Era a maior leitura de ficha alheia que restava no navegador: para decidir se a pessoa

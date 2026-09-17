@@ -957,7 +957,9 @@ function _renderPendingRequests(myUid, receivedIds) {
   if (!div || !receivedIds || receivedIds.length === 0) { if (div) div.innerHTML = ''; return; }
 
   var promises = receivedIds.map(function(uid) {
-    return window.FirestoreDB.loadUserProfile(uid).then(function(profile) {
+    // Cartão e ficha de convite só mostram nome, foto, cidade e nível. Nunca há
+    // motivo para baixar e-mail, telefone ou preferências privadas do remetente.
+    return window.FirestoreDB.carregarPerfilPublico(uid).then(function(profile) {
       if (profile) profile._docId = uid;
       return profile;
     });
@@ -1011,7 +1013,9 @@ function _renderSentRequests(myUid, sentIds) {
   var _t = window._t || function(k){return k;};
 
   var promises = sentIds.map(function(uid) {
-    return window.FirestoreDB.loadUserProfile(uid).then(function(profile) {
+    // Convite enviado é também uma ficha de exibição. O id continua vindo da
+    // relação de amizade; o perfil vem do espelho público.
+    return window.FirestoreDB.carregarPerfilPublico(uid).then(function(profile) {
       if (profile) profile._docId = uid;
       return profile;
     }).catch(function() { return null; });
@@ -1028,30 +1032,32 @@ function _renderSentRequests(myUid, sentIds) {
     // um carrega um profile separado mas com mesmo email. Render mostra 2
     // cards.
     //
-    // Fix: agrupa por email-lower. Pra cada email, escolhe o doc cujo
-    // _docId NÃO parece email (preferindo o uid real). cancelBtn cancela
-    // TODOS os uids do grupo de uma vez.
-    var byEmail = {};
+    // Fix: agrupa pelo nome público único. Antes usava e-mail para reunir o
+    // doc legado (id=e-mail) e o uid atual; isso obrigava a ficha privada a
+    // viajar só para desenhar um convite. A unicidade de displayName garante
+    // a mesma deduplicação sem expor contato. Pra cada grupo, escolhe o doc
+    // cujo _docId NÃO parece e-mail; o botão cancela TODOS os ids do grupo.
+    var byPublicName = {};
     profiles.forEach(function(p) {
-      var email = (p.email || '').toLowerCase();
-      if (!email) {
-        // sem email — usa o _docId como chave única (não dedup)
-        byEmail['_no_email_' + p._docId] = { profile: p, uids: [p._docId] };
+      var publicName = String(p.displayName_lower || p.displayName || '').trim().toLowerCase();
+      if (!publicName) {
+        // Sem nome no espelho: mantém uma linha por uid, sem inventar vínculo.
+        byPublicName['_no_name_' + p._docId] = { profile: p, uids: [p._docId] };
         return;
       }
-      if (!byEmail[email]) {
-        byEmail[email] = { profile: p, uids: [p._docId] };
+      if (!byPublicName[publicName]) {
+        byPublicName[publicName] = { profile: p, uids: [p._docId] };
       } else {
-        byEmail[email].uids.push(p._docId);
+        byPublicName[publicName].uids.push(p._docId);
         // Prefere doc cujo _docId NÃO parece email (uid real é mais robusto)
-        var existingLooksLikeEmail = (byEmail[email].profile._docId || '').indexOf('@') !== -1;
+        var existingLooksLikeEmail = (byPublicName[publicName].profile._docId || '').indexOf('@') !== -1;
         var newLooksLikeEmail = (p._docId || '').indexOf('@') !== -1;
         if (existingLooksLikeEmail && !newLooksLikeEmail) {
-          byEmail[email].profile = p;
+          byPublicName[publicName].profile = p;
         }
       }
     });
-    var dedupedGroups = Object.keys(byEmail).map(function(k) { return byEmail[k]; });
+    var dedupedGroups = Object.keys(byPublicName).map(function(k) { return byPublicName[k]; });
 
     // Cache profiles + store invite groups + sentAt timestamps for instant sheet open
     var _sentAtMap = (window.AppStore && window.AppStore.currentUser && window.AppStore.currentUser.friendRequestsSentAt) || {};
@@ -1130,20 +1136,20 @@ function _renderMyFriends(myUid, friendIds) {
   div.innerHTML = '<div style="text-align: center; padding: 1rem; color: var(--text-muted);">' + (window._t || function(k){return k;})('explore.loadingFriends') + '</div>';
 
   var promises = friendIds.map(function(uid) {
-    return window.FirestoreDB.loadUserProfile(uid).then(function(profile) {
+    // Amigos recebem a ficha pública: o card, a comparação e a estatística não
+    // precisam de nenhum dos campos de contato do documento privado.
+    return window.FirestoreDB.carregarPerfilPublico(uid).then(function(profile) {
       if (profile) profile._docId = uid;
       return profile;
     });
   });
 
   return Promise.all(promises).then(function(profiles) {
-    // v1.9.90: descarta perfis-fantasma — sem nome, sem e-mail e sem telefone
-    // (contas deletadas/órfãs) apareciam como "Usuário" na lista de amigos.
+    // Descarta perfis-fantasma: sem nome público não há pessoa que possa ser
+    // apresentada. E-mail e telefone não participam mais dessa decisão.
     profiles = profiles.filter(function(p) {
       if (!p) return false;
-      var hasId = (p.displayName && String(p.displayName).trim()) ||
-                  (p.email && String(p.email).trim()) ||
-                  (p.phone && String(p.phone).trim());
+      var hasId = p.displayName && String(p.displayName).trim();
       return !!hasId;
     });
 
@@ -1153,11 +1159,11 @@ function _renderMyFriends(myUid, friendIds) {
       if (uid) { window._exploreProfileCache = window._exploreProfileCache || {}; window._exploreProfileCache[uid] = p; }
     });
 
-    // Store friend emails and names for dedup in conhecidos/search
+    // Nomes são únicos entre contas vivas; a busca e a deduplicação não
+    // precisam mais de e-mail de amigos.
     window._friendEmails = [];
     window._friendNames = [];
     profiles.forEach(function(p) {
-      if (p.email) window._friendEmails.push(p.email);
       if (p.displayName) window._friendNames.push(p.displayName);
     });
 
@@ -1179,7 +1185,9 @@ function _renderMyFriends(myUid, friendIds) {
           return _participantMatchesUser(pp, _myEmail, _myName, _myUid);
         });
         var hasFriend = parts.some(function(pp) {
-          return _participantMatchesUser(pp, p.email || '', p.displayName || '', uid);
+          // Perfil de amigo vem do espelho público; identidade do participante
+          // é o UID, nunca o e-mail privado de outra conta.
+          return _participantMatchesUser(pp, '', p.displayName || '', uid);
         });
         if (hasMe && hasFriend) sharedCount++;
       });
@@ -1567,7 +1575,7 @@ window._openUserProfile = function (uid) {
   if (!uid) return;
   var cached = window._exploreProfileCache && window._exploreProfileCache[uid];
   if (cached) { _renderUserProfileSheet(cached); return; }
-  window.FirestoreDB.loadUserProfile(uid)
+  window.FirestoreDB.carregarPerfilPublico(uid)
     .then(function (p) {
       if (p) { p._docId = uid; window._exploreProfileCache = window._exploreProfileCache || {}; window._exploreProfileCache[uid] = p; }
       _renderUserProfileSheet(p || { _docId: uid, displayName: 'Usuário' });
@@ -1579,7 +1587,7 @@ window._openPendingInviteDetail = function (uid) {
   if (!uid) return;
   var cached = window._exploreProfileCache && window._exploreProfileCache[uid];
   if (cached) { _renderInviteDetailSheet(cached); return; }
-  window.FirestoreDB.loadUserProfile(uid)
+  window.FirestoreDB.carregarPerfilPublico(uid)
     .then(function (p) {
       if (p) { p._docId = uid; window._exploreProfileCache = window._exploreProfileCache || {}; window._exploreProfileCache[uid] = p; }
       _renderInviteDetailSheet(p || { _docId: uid, displayName: 'Usuário' });
