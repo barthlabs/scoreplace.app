@@ -2072,26 +2072,30 @@ function renderTournaments(container, tournamentId = null) {
 
             var inviteUrl = window._tournamentUrl(t.id) + '?ref=' + encodeURIComponent(myUid);
             var sent = 0;
-            var whatsappNumbers = [];
-            var emailRecipients = [];
-
             for (var i = 0; i < cu.friends.length; i++) {
                 var friendUid = cu.friends[i];
                 try {
-                    var profile = await window.FirestoreDB.loadUserProfile(friendUid);
+                    // Convite não precisa baixar telefone ou e-mail de amigo. Nome/foto e
+                    // preferências de aviso vivem no espelho; a entrega por e-mail é
+                    // resolvida no servidor a partir do UID por `_sendUserNotification`.
+                    var profile = await window.FirestoreDB.carregarPerfilPublico(friendUid);
                     if (!profile) continue;
 
                     // Check if already enrolled
                     var parts = Array.isArray(t.participants) ? t.participants : [];
                     var alreadyIn = parts.some(function(p) {
-                        var str = typeof p === 'string' ? p : (p.email || p.displayName || '');
-                        return str && profile.email && str === profile.email;
+                        if (!p || typeof p !== 'object') return false;
+                        if (String(p.uid || '') === String(friendUid) ||
+                            String(p.p1Uid || '') === String(friendUid) ||
+                            String(p.p2Uid || '') === String(friendUid)) return true;
+                        return String(p.displayName || p.name || '') === String(profile.displayName || '');
                     });
                     if (alreadyIn) continue;
 
-                    // Send platform notification (always)
-                    if (profile.notifyPlatform !== false) {
-                        await window.FirestoreDB.addNotification(friendUid, {
+                    // A porta canônica decide plataforma/e-mail com as preferências do
+                    // destinatário; o navegador entrega somente seu UID.
+                    if (typeof window._sendUserNotification === 'function') {
+                        await window._sendUserNotification(friendUid, {
                             type: 'tournament_invite',
                             fromUid: myUid,
                             fromName: cu.displayName || '',
@@ -2104,18 +2108,6 @@ function renderTournaments(container, tournamentId = null) {
                         });
                         sent++;
                     }
-
-                    // Collect WhatsApp numbers for bulk share
-                    if (profile.notifyWhatsApp !== false && profile.phone) {
-                        var countryCode = profile.phoneCountry || '55';
-                        var phoneDigits = (profile.phone || '').replace(/\D/g, '');
-                        if (phoneDigits) whatsappNumbers.push(countryCode + phoneDigits);
-                    }
-
-                    // Collect emails for notification
-                    if (profile.notifyEmail !== false && profile.email) {
-                        emailRecipients.push(profile.email);
-                    }
                 } catch(e) {
                     window._warn('Error inviting friend', friendUid, e);
                 }
@@ -2124,27 +2116,13 @@ function renderTournaments(container, tournamentId = null) {
             // Update UI
             if (btn) { btn.disabled = false; btn.style.opacity = '1'; btn.innerHTML = '👥 Convites Enviados!'; }
             var statusParts = [];
-            if (sent > 0) statusParts.push(sent + ' convite' + (sent !== 1 ? 's' : '') + ' na plataforma');
-            if (emailRecipients.length > 0) statusParts.push(emailRecipients.length + ' por e-mail');
-            if (whatsappNumbers.length > 0) statusParts.push(whatsappNumbers.length + ' por WhatsApp');
+            if (sent > 0) statusParts.push(sent + ' convite' + (sent !== 1 ? 's' : '') + ' enviado' + (sent !== 1 ? 's' : ''));
             var statusMsg = statusParts.length > 0 ? statusParts.join(', ') + '.' : _t('tourn.noInvitesSent');
             if (statusDiv) statusDiv.textContent = statusMsg;
             if (typeof showNotification !== 'undefined') {
                 showNotification(_t('tourn.invitesSent'), statusMsg, 'success');
             }
 
-            // Open email with all recipients (bcc for privacy)
-            if (emailRecipients.length > 0) {
-                var emailSubject = encodeURIComponent('🏆 Convite para torneio: ' + t.name);
-                var emailBody = encodeURIComponent('Olá!\n\nVocê foi convidado para o torneio "' + t.name + '" no scoreplace.app.\n\nAcesse o link abaixo para se inscrever:\n' + inviteUrl + '\n\nBoas partidas! 🎾');
-                window.open('mailto:?bcc=' + emailRecipients.join(',') + '&subject=' + emailSubject + '&body=' + emailBody, '_self');
-            }
-
-            // Open WhatsApp with invite message
-            if (whatsappNumbers.length > 0) {
-                var inviteMsg = '🏆 Torneio: ' + t.name + '\nAcesse o link abaixo para se inscrever:\n' + inviteUrl;
-                window.open(window._whatsappShareUrl(inviteMsg), '_blank');
-            }
         };
         window.switchInviteTab = function (btn, tabName, id) {
             const modal = btn.closest('.invite-modal-container');

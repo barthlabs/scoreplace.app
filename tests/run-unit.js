@@ -99,6 +99,7 @@ const SUITES = [
   'tests/partner-picker-le-perfil-publico.test.js',
   'tests/enquete-contato-usa-elenco-restrito.test.js',
   'tests/contato-direto-do-torneio-e-restrito.test.js',
+  'tests/convite-de-amigos-nao-baixa-contatos.test.js',
   'tests/foto-da-chave-nao-abre-a-ficha.test.js',
   'tests/contar-gente-nao-e-baixar-gente.test.js',
   'tests/saber-quem-e-nao-abre-a-ficha.test.js',
