@@ -1,4 +1,4 @@
-// 2.3.63 — A chave revalida a hidratação antes de numerar, impedindo que um marcador antigo mantenha os números anteriores após todos os jogos carregarem.
+// 2.3.64 — A chave revalida a hidratação antes de numerar, impedindo que um marcador antigo mantenha os números anteriores após todos os jogos carregarem.
 // 2.3.61 — Numeração de jogos usa a posição numérica da chave (P1, P2, …, P10), nunca a ordem lexical do Firestore; por isso Ouro e Prata seguem rodada a rodada em todos os torneios.
 // 2.3.60 — Seus Últimos Resultados usa o card canônico da chave, inclusive “Jogado em”. A numeração segue rodada e linha (Ouro/Prata) dentro de cada categoria, da menor à maior; a transição reconhece os dois links de detalhe sem cair em carregamento.
 // 2.3.59 — inscrições durante a fase usam o mesmo seletor explícito em criar, editar e chave: Fechadas/Abertas e Suplentes/Novos Confrontos ficam dos dois lados, com cor e brilho no estado ativo.

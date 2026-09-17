@@ -1428,6 +1428,28 @@ window._isByeMatch = function(m) {
    * recalcular sobre o resumo — que é o que produzia 168 na tela inicial e 169 na chave. */
 window._assignGlobalGameNumbers = function (t) {
   if (!t) return;
+  // A chave pode abrir por blocos visíveis. Nesse momento ela já traz o carimbo
+  // persistido de cada jogo, porém não traz todos os `_nJogos` do torneio. Recontar
+  // sobre esse bloco troca números certos por uma sequência curta (Confra: Ouro R2
+  // virou 124 antes de a Prata R1 entrar). Só calculamos localmente quando a coleção
+  // estrutural inteira está presente; antes disso preservamos o número do servidor.
+  var _idsConhecidos = {};
+  function _contarEstrutura(lista) {
+    (lista || []).forEach(function (m) {
+      if (m && m.id != null) _idsConhecidos[String(m.id)] = true;
+    });
+  }
+  _contarEstrutura(t.matches);
+  (t.rounds || []).forEach(function (rd) {
+    _contarEstrutura(rd && rd.matches);
+    (rd && rd.monarchGroups || []).forEach(function (g) { _contarEstrutura(g && g.matches); });
+  });
+  (t.groups || []).forEach(function (g) { _contarEstrutura(g && g.matches); });
+  Object.keys(t.phaseRounds || {}).forEach(function (key) {
+    ((t.phaseRounds[key] && t.phaseRounds[key].rounds) || []).forEach(function (rd) { _contarEstrutura(rd && rd.matches); });
+  });
+  var _esperados = Number(t._nJogos);
+  if (Number.isFinite(_esperados) && _esperados > 0 && Object.keys(_idsConhecidos).length < _esperados) return;
   /* ⛔ TORNEIO INCOMPLETO NÃO SE NUMERA. Esta função conta 1,2,3… na ordem do render,
    * então o número de um jogo depende de QUANTOS jogos vieram antes dele. Rodar sobre um
    * torneio a que faltam partes (banco dividido: os jogos moram em subcoleções e chegam

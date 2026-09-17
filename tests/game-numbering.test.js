@@ -126,6 +126,20 @@ ok(typeof W._monarchGlobalJogoNum === 'undefined',
     '[HIDRATAÇÃO] parte não estrutural pendente não bloqueia a numeração da chave');
 })();
 
+// ── Chave entregue em lote preserva o carimbo do servidor. ───────────────────────
+(function () {
+  const t = {
+    _nJogos: 3,
+    matches: [
+      { id: 'loaded-gold-R1-P1', bracket: 'gold', round: 1, p1: 'A', p2: 'B', _gameNum: 123 },
+      { id: 'loaded-gold-R2-P1', bracket: 'gold', round: 2, p1: 'C', p2: 'D', _gameNum: 141 }
+    ]
+  };
+  W._assignGlobalGameNumbers(t);
+  ok(t.matches[0]._gameNum === 123 && t.matches[1]._gameNum === 141,
+    '[LOTE PARCIAL] não recomeça em 1 nem sobrescreve o número persistido enquanto falta jogo');
+})();
+
 // ── Posição P<n>: IDs do Firestore ordenam P10 antes de P2 se tratados como texto. ──
 (function () {
   const match = function (id, bracket) { return { id, bracket, round: 1, p1: id + ' A', p2: id + ' B' }; };
