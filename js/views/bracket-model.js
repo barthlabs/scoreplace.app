@@ -1439,6 +1439,14 @@ window._assignGlobalGameNumbers = function (t) {
    * partes; quando elas chegam a tela repinta e a numeração roda completa. Até lá o jogo
    * fica SEM número — que é a resposta honesta ("ainda não sei"), não um número errado.
    * [[project_derivado_nao_se_guarda_standings]] */
+  // A montagem das subcoleções substitui os arrays no mesmo objeto. Um eco anterior
+  // pode deixar `_faltamPesados` nele mesmo DEPOIS de os 213 jogos já terem chegado;
+  // confiar cegamente nesse carimbo congela os `_gameNum` antigos na tela. Revalida pela
+  // contagem canônica antes de recusar a numeração. Se algo de fato ainda faltar, segue
+  // sem número — nunca numera um subconjunto.
+  if (t._faltamPesados && typeof window._marcaPartesQueFaltam === 'function') {
+    try { window._marcaPartesQueFaltam(t); } catch (e) {}
+  }
   if (t._faltamPesados) return;
   if (typeof window._hydrateMonarchGroups === 'function') window._hydrateMonarchGroups(t); // FONTE ÚNICA
   var isBye = window._isByeMatch || function () { return false; };

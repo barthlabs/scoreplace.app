@@ -97,6 +97,20 @@ ok(typeof W._monarchGlobalJogoNum === 'undefined',
     '[CANON] categoria mais baixa completa primeiro; dentro dela R1 Ouro/Prata, depois R2 Ouro/Prata — got ' + JSON.stringify(got));
 })();
 
+// ── Marca de partes velha não pode congelar números depois da hidratação. ────────
+(function () {
+  const t = {
+    _semPesados: ['matches'], _nJogos: 2, _faltamPesados: true,
+    matches: [
+      { id: 'late-gold-R1-P2', bracket: 'gold', round: 1, p1: 'A', p2: 'B' },
+      { id: 'late-gold-R1-P1', bracket: 'gold', round: 1, p1: 'C', p2: 'D' }
+    ]
+  };
+  W._assignGlobalGameNumbers(t);
+  ok(!t._faltamPesados && t.matches[1]._gameNum === 1 && t.matches[0]._gameNum === 2,
+    '[HIDRATAÇÃO] marcador velho é recalculado antes de numerar a chave completa');
+})();
+
 // ── Posição P<n>: IDs do Firestore ordenam P10 antes de P2 se tratados como texto. ──
 (function () {
   const match = function (id, bracket) { return { id, bracket, round: 1, p1: id + ' A', p2: id + ' B' }; };
