@@ -1,3 +1,4 @@
+// 2.3.59 — inscrições durante a fase usam o mesmo seletor explícito em criar, editar e chave: Fechadas/Abertas e Suplentes/Novos Confrontos ficam dos dois lados, com cor e brilho no estado ativo.
 // 2.3.58 — transição entre dashboard e detalhe preserva a tela anterior até o destino completo renderizar; não troca mais o conteúdo por “Carregando…”.
 // 2.3.57 — ‘Jogar até’ usa o limite configurado da rodada do jogo (inclusive os cortes ajustados da eliminatória), nunca o encerramento global do torneio.
 // 2.3.56 — todo card de jogo mostra abaixo de “Jogo N” o prazo da rodada, o horário agendado ou, após o resultado, a hora do último placar lançado. A mesma linha é usada na chave e na dashboard e atualiza na hora ao agendar.

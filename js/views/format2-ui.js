@@ -155,8 +155,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   // Painel "Inscrições durante a fase" DA ELIMINATÓRIA (2ª fase). Espelha visualmente o bloco do
   // form (#late-enroll-box), mas grava em cfg.eliminatoria.lateEnrollment (não em t.lateEnrollment,
   // que é da fase inicial). Mesma semântica de 2 toggles → 3 valores: closed | standby | expand.
-  //   master: ligado = Fechadas (🚫) · desligado = Abertas (🔓)
-  //   conf  : ligado = Novos Confrontos (➕) · desligado = Suplentes Apenas (🪑)  [só aparece quando aberta]
+  //   inscrição: desligado = Fechadas · ligado = Abertas
+  //   espera:    desligado = Suplentes · ligado = Novos Confrontos
   function _lateEnrollElimBlock(e) {
     var T = window._t || function (k) { return k; };
     // 'inherit' (default) = a elim SEGUE a inscrição da fase inicial (#late-enrollment do form).
@@ -170,31 +170,37 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     // sumia quando fechava. Agora tem flag PRÓPRIA (e.newMatchups) e as duas linhas convivem.
     var _nmInh = (function () { var el = document.getElementById('new-matchups'); if (el) return el.value === 'true'; return _inh === 'expand'; })();
     var isExpand = (e.newMatchups === true || e.newMatchups === false) ? e.newMatchups : _nmInh;
-    var onRow = 'border:1px solid rgba(251,191,36,0.25);background:rgba(251,191,36,0.08);';
-    var offRow = 'border:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));background:var(--sp-g-255-255-255-003,rgba(255,255,255,0.03));';
-    function _tg(checked, on) {
-      return '<label class="toggle-switch" style="--toggle-on-bg:#fbbf24;--toggle-on-glow:rgba(251,191,36,0.3);--toggle-on-border:#fbbf24;flex-shrink:0;"><input type="checkbox"' + (checked ? ' checked' : '') + ' onchange="' + on + '"><span class="toggle-slider"></span></label>';
-    }
-    function _row(active, icon, title, desc, tg) {
-      return '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 12px;border-radius:10px;' + (active ? onRow : offRow) + '">' +
-        '<div style="display:flex;gap:8px;align-items:flex-start;min-width:0;"><span style="font-size:1rem;line-height:1.2;">' + icon + '</span>' +
-        '<div style="min-width:0;"><div style="font-weight:600;color:var(--text-main);font-size:0.88rem;">' + title + '</div>' +
-        '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px;line-height:1.4;">' + desc + '</div></div></div>' + tg + '</div>';
-    }
-    var masterRow = _row(isClosed, isClosed ? '🚫' : '🔓',
-      T(isClosed ? 'create.lateEnrollClosed' : 'create.lateEnrollOpen'),
-      T(isClosed ? 'create.lateEnrollClosedOnDesc' : 'create.lateEnrollClosedOffDesc'),
-      _tg(isClosed, 'window._f2ElimLateMaster(this.checked)'));
-    // SEMPRE renderizada (mesmo com inscrições fechadas): suplente/dupla formada entra na chave
-    // na hora independentemente de aceitar NOVOS inscritos.
-    var confRow = ('<div style="margin-top:8px;">' + _row(isExpand, isExpand ? '➕' : '🪑',
-      T(isExpand ? 'create.lateEnrollExpand' : 'create.lateEnrollSuplentesOnly'),
-      T(isExpand ? 'create.lateEnrollExpandOnDesc' : 'create.lateEnrollExpandOffDesc'),
-      _tg(isExpand, 'window._f2ElimLateConf(this.checked)')) + '</div>');
+    // A mesma estrutura de dois rótulos existe no form e no atalho da chave.
+    // `on` é sempre o estado da direita: Abertas / Novos Confrontos.
+    // Alguns testes de render carregam esta tela sem o construtor completo. A
+    // página real sempre recebe a fábrica canônica de create-tournament; este
+    // fallback conserva a mesma marcação até ela estar disponível.
+    var modeSwitch = window._lateEnrollmentModeSwitchHtml || function (opts) {
+      opts = opts || {};
+      var on = !!opts.on;
+      return '<div' + (opts.id ? ' id="' + opts.id + '"' : '') + ' class="sp-late-mode-row" data-late-mode="' + (opts.mode || 'late-mode') + '" data-late-active="' + (on ? 'right' : 'left') + '" style="--late-left:' + (opts.leftColor || '#f87171') + ';--late-right:' + (opts.rightColor || '#4ade80') + ';--toggle-off-bg:' + (opts.leftToggleBg || 'rgba(248,113,113,0.28)') + ';--toggle-off-border:' + (opts.leftColor || '#f87171') + ';--toggle-on-bg:' + (opts.rightColor || '#4ade80') + ';--toggle-on-border:' + (opts.rightColor || '#4ade80') + ';--toggle-on-glow:' + (opts.rightGlow || 'rgba(74,222,128,0.36)') + ';">'
+        + '<span class="sp-late-mode-label sp-late-mode-left">' + (opts.left || '') + '</span><label class="toggle-switch sp-late-mode-switch"><input type="checkbox"' + (opts.inputId ? ' id="' + opts.inputId + '"' : '') + (on ? ' checked' : '') + (opts.onchange ? ' onchange="' + opts.onchange + '"' : '') + '><span class="toggle-slider"></span></label><span class="sp-late-mode-label sp-late-mode-right">' + (opts.right || '') + '</span>'
+        + (opts.desc ? '<div class="sp-late-mode-desc">' + opts.desc + '</div>' : '') + '</div>';
+    };
+    var masterRow = modeSwitch({
+      id: 'f2-late-mode-enrollment', mode: 'enrollment', on: !isClosed,
+      left: T('create.lateEnrollClosed'), right: T('create.lateEnrollOpen'),
+      leftColor: '#f87171', rightColor: '#4ade80', leftToggleBg: 'rgba(248,113,113,0.28)', rightGlow: 'rgba(74,222,128,0.36)',
+      ariaPrefix: 'Inscrições durante a eliminatória', onchange: 'window._f2ElimLateMaster(this.checked)',
+      desc: T(isClosed ? 'create.lateEnrollClosedOnDesc' : 'create.lateEnrollClosedOffDesc')
+    });
+    // Sempre renderizado: novos confrontos é independente de aceitar inscrições.
+    var confRow = modeSwitch({
+      id: 'f2-late-mode-matchups', mode: 'matchups', on: isExpand,
+      left: T('create.lateEnrollSuplentesOnly'), right: T('create.lateEnrollExpand'),
+      leftColor: '#fbbf24', rightColor: '#60a5fa', leftToggleBg: 'rgba(251,191,36,0.24)', rightGlow: 'rgba(96,165,250,0.36)',
+      ariaPrefix: 'Entradas da lista de espera', onchange: 'window._f2ElimLateConf(this.checked)',
+      desc: T(isExpand ? 'create.lateEnrollExpandOnDesc' : 'create.lateEnrollExpandOffDesc')
+    });
     var inheritHint = _explicit ? '' : ('<div style="font-size:0.72rem;color:var(--sp-c-93c5fd,#93c5fd);margin:0 0 8px;display:flex;align-items:flex-start;gap:5px;line-height:1.4;"><span>🔗</span><span>' + T('create.lateEnrollInheritHint') + '</span></div>');
     return '<div style="background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.15);border-radius:12px;padding:1rem;margin-top:14px;">' +
       '<p style="margin:0 0 0.75rem;font-size:0.8rem;color:var(--sp-c-fbbf24,#fbbf24);font-weight:600;text-transform:uppercase;letter-spacing:1px;">⏱️ ' + T('create.lateEnrollSection') + '</p>' +
-      inheritHint + masterRow + confRow + '</div>';
+      inheritHint + '<div class="sp-late-mode-stack">' + masterRow + confRow + '</div></div>';
   }
 
   // TÉRMINO da fase eliminatória (v1.6.80). Só existe quando ela é 2ª fase: o box "📅 Datas
@@ -1234,12 +1240,11 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   window._f2GrandFinal = function (checked) { if (!S) return; S.cfg.eliminatoria.grandFinal = !!checked; _norm(); _rerender(); };
   // v4.4.58: Dupla Eliminatória (repescagem). ON força 1 linha (chave única) no normalize.
   window._f2ElimDupla = function (checked) { S.cfg.eliminatoria.dupla = !!checked; _norm(); _rerender(); };
-  // "Inscrições durante a fase" DA ELIMINATÓRIA (cfg.eliminatoria.lateEnrollment). master ON =
-  // Fechadas; master OFF preserva o conf (expand/standby). conf só vale com inscrição aberta.
-  window._f2ElimLateMaster = function (closedOn) {
+  // A direita do seletor é Abertas: ON abre inscrições; OFF fecha. Novos
+  // Confrontos continua independente e não é alterado por esta escolha.
+  window._f2ElimLateMaster = function (openOn) {
     if (!S) return; var e = S.cfg.eliminatoria;
-    // Só mexe na INSCRIÇÃO. "Novos Confrontos" (e.newMatchups) NÃO é tocado aqui — são ortogonais.
-    if (closedOn) e.lateEnrollment = 'closed';
+    if (!openOn) e.lateEnrollment = 'closed';
     else e.lateEnrollment = (e.newMatchups === true) ? 'expand' : 'standby';
     _norm(); _rerender();
   };

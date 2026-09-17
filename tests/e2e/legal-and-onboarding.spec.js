@@ -208,49 +208,45 @@ test.describe('Sport icons — Beach Tennis hue-rotate', () => {
   });
 });
 
-test.describe('Toggle "Fechadas" + "Novos Confrontos" mutuamente exclusivos', () => {
-  test('window._syncLateEnrollment respeita source argument', async ({ page }) => {
+test.describe('Controle canônico de inscrições durante a fase', () => {
+  test('desligado fecha inscrições; ligado abre, sem alterar novos confrontos', async ({ page }) => {
     await page.goto('/', { waitUntil: 'load' });
     await page.waitForTimeout(800);
-
-    // Abrir modal-create-tournament pra que os toggles existam
     await page.evaluate(() => window.openModal && window.openModal('modal-create-tournament'));
     await page.waitForTimeout(500);
 
     const modal = page.locator('#modal-create-tournament');
     await expect(modal).toBeVisible();
-
-    // Estado inicial: closed=ON, expand=OFF
     const initial = await page.evaluate(() => ({
-      closed: document.getElementById('late-toggle-closed').checked,
-      expand: document.getElementById('late-toggle-expand').checked
+      open: document.getElementById('late-toggle-closed').checked,
+      expand: document.getElementById('late-toggle-expand').checked,
+      mode: document.getElementById('late-enrollment').value,
+      visual: document.getElementById('late-mode-enrollment').dataset.lateActive
     }));
-    expect(initial.closed).toBe(true);
-    expect(initial.expand).toBe(false);
+    expect(initial).toEqual({ open: false, expand: false, mode: 'closed', visual: 'left' });
 
-    // Liga expand → closed deve ir pra OFF
+    await page.evaluate(() => {
+      document.getElementById('late-toggle-closed').checked = true;
+      window._syncLateEnrollment('open');
+    });
+    const afterOpen = await page.evaluate(() => ({
+      open: document.getElementById('late-toggle-closed').checked,
+      expand: document.getElementById('late-toggle-expand').checked,
+      mode: document.getElementById('late-enrollment').value,
+      visual: document.getElementById('late-mode-enrollment').dataset.lateActive
+    }));
+    expect(afterOpen).toEqual({ open: true, expand: false, mode: 'standby', visual: 'right' });
+
     await page.evaluate(() => {
       document.getElementById('late-toggle-expand').checked = true;
       window._syncLateEnrollment('expand');
     });
     const afterExpand = await page.evaluate(() => ({
-      closed: document.getElementById('late-toggle-closed').checked,
-      expand: document.getElementById('late-toggle-expand').checked
+      mode: document.getElementById('late-enrollment').value,
+      enrollmentVisual: document.getElementById('late-mode-enrollment').dataset.lateActive,
+      matchupsVisual: document.getElementById('late-mode-matchups').dataset.lateActive
     }));
-    expect(afterExpand.closed).toBe(false);
-    expect(afterExpand.expand).toBe(true);
-
-    // Liga closed → expand deve ir pra OFF
-    await page.evaluate(() => {
-      document.getElementById('late-toggle-closed').checked = true;
-      window._syncLateEnrollment('closed');
-    });
-    const afterClosed = await page.evaluate(() => ({
-      closed: document.getElementById('late-toggle-closed').checked,
-      expand: document.getElementById('late-toggle-expand').checked
-    }));
-    expect(afterClosed.closed).toBe(true);
-    expect(afterClosed.expand).toBe(false);
+    expect(afterExpand).toEqual({ mode: 'expand', enrollmentVisual: 'right', matchupsVisual: 'right' });
   });
 });
 

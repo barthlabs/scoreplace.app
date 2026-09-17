@@ -1,5 +1,45 @@
 /* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
 if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
+
+
+// ── Controle canônico: inscrições durante a fase ────────────────────────────
+// Uma única estrutura visual para criação/edição, fase eliminatória e atalho da
+// chave. `on` sempre significa o rótulo da DIREITA; por isso desligado deixa
+// Fechadas/Suplentes à esquerda e ligado ativa Abertas/Novos Confrontos à direita.
+window._lateEnrollmentModeSwitchHtml = function (opts) {
+  opts = opts || {};
+  var esc = window._safeHtml || function (v) { return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); };
+  var on = !!opts.on;
+  var left = String(opts.left || '');
+  var right = String(opts.right || '');
+  var id = String(opts.id || '');
+  var inputId = String(opts.inputId || (id ? id + '-input' : ''));
+  var mode = String(opts.mode || 'late-mode');
+  var ariaPrefix = String(opts.ariaPrefix || 'Opção');
+  var change = String(opts.onchange || '');
+  var desc = opts.desc == null ? '' : String(opts.desc);
+  var descId = opts.descId ? ' id="' + esc(opts.descId) + '"' : '';
+  return '<div' + (id ? ' id="' + esc(id) + '"' : '') + ' class="sp-late-mode-row" data-late-mode="' + esc(mode) + '" data-late-active="' + (on ? 'right' : 'left') + '" data-late-aria-prefix="' + esc(ariaPrefix) + '"'
+    + ' style="--late-left:' + esc(opts.leftColor || '#f87171') + ';--late-right:' + esc(opts.rightColor || '#4ade80') + ';--toggle-off-bg:' + esc(opts.leftToggleBg || 'rgba(248,113,113,0.28)') + ';--toggle-off-border:' + esc(opts.leftColor || '#f87171') + ';--toggle-on-bg:' + esc(opts.rightColor || '#4ade80') + ';--toggle-on-border:' + esc(opts.rightColor || '#4ade80') + ';--toggle-on-glow:' + esc(opts.rightGlow || 'rgba(74,222,128,0.36)') + ';">'
+    + '<span class="sp-late-mode-label sp-late-mode-left">' + esc(left) + '</span>'
+    + '<label class="toggle-switch sp-late-mode-switch">'
+    + '<input type="checkbox"' + (inputId ? ' id="' + esc(inputId) + '"' : '') + (on ? ' checked' : '') + ' aria-label="' + esc(ariaPrefix + ': ' + (on ? right : left)) + '"' + (change ? ' onchange="' + esc(change) + '"' : '') + '><span class="toggle-slider"></span></label>'
+    + '<span class="sp-late-mode-label sp-late-mode-right">' + esc(right) + '</span>'
+    + (desc ? '<div class="sp-late-mode-desc"' + descId + '>' + desc + '</div>' : '')
+    + '</div>';
+};
+window._setLateEnrollmentModeVisual = function (row, on) {
+  if (!row) return;
+  row.setAttribute('data-late-active', on ? 'right' : 'left');
+  var input = row.querySelector('input[type="checkbox"]');
+  if (input) {
+    input.checked = !!on;
+    var left = (row.querySelector('.sp-late-mode-left') || {}).textContent || '';
+    var right = (row.querySelector('.sp-late-mode-right') || {}).textContent || '';
+    var prefix = row.getAttribute('data-late-aria-prefix') || 'Opção';
+    input.setAttribute('aria-label', prefix + ': ' + (on ? right : left));
+  }
+};
 // ── Game Set Match Scoring Defaults by Sport ──
 // DERIVADO da FONTE ÚNICA window.SPORT_RULES (js/views/sport-rules.js, carregado antes deste).
 // Regra de uma modalidade mudou/estava errada? Mude LÁ, num lugar só — propaga pra cá (torneio)
@@ -439,15 +479,9 @@ function setupCreateTournamentModal() {
                 <p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: var(--sp-c-fbbf24,#fbbf24); font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">⏱️ ${_t('create.lateEnrollSection')}</p>
                 <input type="hidden" id="late-enrollment" value="closed">
                 <input type="hidden" id="new-matchups" value="false">
-                <div style="display:flex;flex-direction:column;gap:8px;" id="late-enrollment-buttons">
-                  <div class="toggle-row" style="padding:8px 12px;border-radius:10px;border:1px solid rgba(251,191,36,0.25);background:rgba(251,191,36,0.08);">
-                    <div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon" id="late-closed-icon">🚫</span><div><span id="late-closed-title" style="font-weight:600;color:var(--text-color);font-size:0.88rem;">${_t('create.lateEnrollClosed')}</span><div class="toggle-desc" id="late-closed-desc" style="font-size:0.72rem;margin-top:2px;">${_t('create.lateEnrollClosedOnDesc')}</div></div></div>
-                    <label class="toggle-switch" style="--toggle-on-bg:#fbbf24;--toggle-on-glow:rgba(251,191,36,0.3);--toggle-on-border:#fbbf24;"><input type="checkbox" id="late-toggle-closed" aria-label="Inscrições fora do prazo fechadas" checked onchange="window._syncLateEnrollment('closed')"><span class="toggle-slider"></span></label>
-                  </div>
-                  <div class="toggle-row" style="padding:8px 12px;border-radius:10px;border:1px solid rgba(251,191,36,0.25);background:rgba(251,191,36,0.08);">
-                    <div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon" id="late-expand-icon">➕</span><div><span id="late-expand-title" style="font-weight:600;color:var(--text-color);font-size:0.88rem;">${_t('create.lateEnrollExpand')}</span><div class="toggle-desc" id="late-expand-desc" style="font-size:0.72rem;margin-top:2px;">${_t('create.lateEnrollExpandDisabledDesc')}</div></div></div>
-                    <label class="toggle-switch" style="--toggle-on-bg:#fbbf24;--toggle-on-glow:rgba(251,191,36,0.3);--toggle-on-border:#fbbf24;"><input type="checkbox" id="late-toggle-expand" aria-label="Inscrições fora do prazo expandem lista" onchange="window._syncLateEnrollment('expand')"><span class="toggle-slider"></span></label>
-                  </div>
+                <div class="sp-late-mode-stack" id="late-enrollment-buttons">
+                  ${window._lateEnrollmentModeSwitchHtml({ id: 'late-mode-enrollment', inputId: 'late-toggle-closed', mode: 'enrollment', on: false, left: _t('create.lateEnrollClosed'), right: _t('create.lateEnrollOpen'), leftColor: '#f87171', rightColor: '#4ade80', leftToggleBg: 'rgba(248,113,113,0.28)', rightGlow: 'rgba(74,222,128,0.36)', ariaPrefix: 'Inscrições durante a fase', onchange: "window._syncLateEnrollment('open')", descId: 'late-closed-desc', desc: _t('create.lateEnrollClosedOnDesc') })}
+                  ${window._lateEnrollmentModeSwitchHtml({ id: 'late-mode-matchups', inputId: 'late-toggle-expand', mode: 'matchups', on: false, left: _t('create.lateEnrollSuplentesOnly'), right: _t('create.lateEnrollExpand'), leftColor: '#fbbf24', rightColor: '#60a5fa', leftToggleBg: 'rgba(251,191,36,0.24)', rightGlow: 'rgba(96,165,250,0.36)', ariaPrefix: 'Entradas da lista de espera', onchange: "window._syncLateEnrollment('expand')", descId: 'late-expand-desc', desc: _t('create.lateEnrollExpandDisabledDesc') })}
                 </div>
               </div>
 
@@ -1906,84 +1940,34 @@ function setupCreateTournamentModal() {
     indiv.setAttribute('aria-label', indiv.checked ? 'W.O. individual' : 'W.O. de time inteiro');
   };
 
-  // ── Late Enrollment sync (mutually exclusive toggles) ──
-  // Fechadas ON  → 'closed' (no one can enroll after deadline)
-  // Fechadas OFF + Expand OFF → 'standby' (new enrollments go to waitlist, no auto-matchups)
-  // Fechadas OFF + Expand ON  → 'expand' (waitlist auto-expands into new matchups)
-  //
-  // v0.17.76: tornados mutuamente exclusivos. Antes ambos podiam estar ON
-  // simultaneamente, criando estado inconsistente — "Fechadas" (sem
-  // inscrições) com "Novos Confrontos" (auto-expand) ativos juntos não fazia
-  // sentido. Agora: ligar um desliga o outro automaticamente. Defaults pra
-  // estado inicial: closed=ON, expand=OFF.
-  // ── Rótulos canônicos dos toggles de "Inscrições durante a fase" (v3.1.20) ──
-  // O título E o ícone de cada toggle acompanham a POSIÇÃO — mesma regra na Fase 1,
-  // no construtor de fases e em qualquer formato que use este bloco:
-  //   master ('closed'):  ligado → Fechadas (🚫) | desligado → Abertas (🔓)
-  //   conf   ('expand'):  ligado → Novos Confrontos (➕) | desligado → Suplentes Apenas (🪑)
-  // A descrição já é dinâmica (lateEnroll*OnDesc / *OffDesc) e explica cada posição.
-  window._lateEnrollLabel = function(which, on) {
-    var T = window._t || function(k){ return k; };
-    if (which === 'master') return { title: T(on ? 'create.lateEnrollClosed' : 'create.lateEnrollOpen'), icon: on ? '🚫' : '🔓' };
-    return { title: T(on ? 'create.lateEnrollExpand' : 'create.lateEnrollSuplentesOnly'), icon: on ? '➕' : '🪑' };
-  };
-
+  // ── Inscrições durante a fase ──
+  // A inscrição (Fechadas/Abertas) e o destino da espera
+  // (Suplentes/Novos Confrontos) são escolhas independentes.
+  // `late-toggle-closed` conserva o id de compatibilidade, mas agora o seu
+  // estado visual é natural: desligado = Fechadas, ligado = Abertas.
   window._syncLateEnrollment = function(source) {
-    var closed = document.getElementById('late-toggle-closed');
+    var open = document.getElementById('late-toggle-closed');
     var expand = document.getElementById('late-toggle-expand');
-    if (!closed || !expand) return;
+    if (!open || !expand) return;
 
-    // v1.3.x (dono): "Fechadas" (Abertas) e "Novos Confrontos" são INDEPENDENTES — não há mais
-    // exclusão mútua. Fechadas = aceitar novos inscritos após o sorteio. Novos Confrontos = suplentes/
-    // duplas formadas entram na chave na hora, MESMO com as inscrições fechadas. Ver _allowsNewMatchups.
-    // lateEnrollment carrega o estado de INSCRIÇÃO (closed x open); new-matchups é o flag independente.
-    var value;
-    if (closed.checked) value = 'closed';
-    else value = expand.checked ? 'expand' : 'standby';
+    var isOpen = !!open.checked;
+    var isClosed = !isOpen;
+    var value = isClosed ? 'closed' : (expand.checked ? 'expand' : 'standby');
     var hidden = document.getElementById('late-enrollment');
     if (hidden) hidden.value = value;
     var nmHidden = document.getElementById('new-matchups');
     if (nmHidden) nmHidden.value = expand.checked ? 'true' : 'false';
-    // Update visual active state independently per toggle
-    var rows = document.querySelectorAll('#late-enrollment-buttons .toggle-row');
-    if (rows[0]) {
-      rows[0].style.border = closed.checked ? '1px solid rgba(251,191,36,0.25)' : '1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08))';
-      rows[0].style.background = closed.checked ? 'rgba(251,191,36,0.08)' : 'rgba(255,255,255,0.03)';
-    }
-    if (rows[1]) {
-      var expandEffective = expand.checked; // v1.3.x: independente de "Fechadas"
-      rows[1].style.border = expandEffective ? '1px solid rgba(251,191,36,0.25)' : '1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08))';
-      rows[1].style.background = expandEffective ? 'rgba(251,191,36,0.08)' : 'rgba(255,255,255,0.03)';
-      // v1.3.98 (dono, "inscrições durante a fase travadas"): "Novos Confrontos" SEMPRE visível —
-      // antes sumia quando Fechadas estava ON (display:none), então o organizador via só "Fechadas"
-      // e achava que não dava pra mudar. Agora as duas opções aparecem; ligar uma desliga a outra
-      // (1 clique). Quando Fechadas está ON, esta fica dim (não-efetiva) mas VISÍVEL e clicável.
-      rows[1].style.display = '';
-      rows[1].style.opacity = '1'; // v1.3.x: sempre efetivo (independente de "Fechadas")
-    }
-    // Título + ícone canônicos acompanham a posição de cada toggle (v3.1.20).
-    var mLbl = window._lateEnrollLabel('master', closed.checked);
-    var closedTitle = document.getElementById('late-closed-title');
-    if (closedTitle) closedTitle.textContent = mLbl.title;
-    var closedIcon = document.getElementById('late-closed-icon');
-    if (closedIcon) closedIcon.textContent = mLbl.icon;
-    // v1.3.x: rótulo do 2º toggle segue SÓ o próprio estado (independente de "Fechadas").
-    var cLbl = window._lateEnrollLabel('conf', expand.checked);
-    var expandTitle = document.getElementById('late-expand-title');
-    if (expandTitle) expandTitle.textContent = cLbl.title;
-    var expandIcon = document.getElementById('late-expand-icon');
-    if (expandIcon) expandIcon.textContent = cLbl.icon;
+
+    window._setLateEnrollmentModeVisual(document.getElementById('late-mode-enrollment'), isOpen);
+    window._setLateEnrollmentModeVisual(document.getElementById('late-mode-matchups'), !!expand.checked);
+
     var closedDesc = document.getElementById('late-closed-desc');
-    if (closedDesc) closedDesc.textContent = _t(closed.checked ? 'create.lateEnrollClosedOnDesc' : 'create.lateEnrollClosedOffDesc');
+    if (closedDesc) closedDesc.textContent = _t(isClosed ? 'create.lateEnrollClosedOnDesc' : 'create.lateEnrollClosedOffDesc');
     var expandDesc = document.getElementById('late-expand-desc');
     if (expandDesc) {
-      // v3.0.x: na Fase de Grupos o "Novos Confrontos" tem comportamento próprio
-      // (dupla da espera é sorteada pro grupo com menos gente e as chaves daquele
-      // grupo são refeitas). E se "grupos de mesmo tamanho" estiver ligado, esta
-      // opção PREVALECE e flexibiliza aquela — deixamos isso explícito.
       var _isGrupos = ((document.getElementById('select-formato') || {}).value === 'grupos_mata');
       var _eqOnly = !!(document.getElementById('grupos-equal-only') || {}).checked;
-      if (closed.checked) {
+      if (isClosed) {
         expandDesc.innerHTML = _t('create.lateEnrollExpandDisabledDesc');
       } else if (expand.checked) {
         if (_isGrupos) {
@@ -1997,16 +1981,10 @@ function setupCreateTournamentModal() {
         expandDesc.innerHTML = _t(_isGrupos ? 'create.lateEnrollExpandGruposOffDesc' : 'create.lateEnrollExpandOffDesc');
       }
     }
-    // v2.6.52: Fechadas ON → mostra prazo de encerramento das inscrições (DATAS DA FASE);
-    // Aberta → esconde o prazo (inscrição segue durante a fase, sem corte fixo).
     var regBox = document.getElementById('reg-date-container');
-    if (regBox) regBox.style.display = closed.checked ? 'flex' : 'none'; // 'flex' preserva o card em coluna
-    // v2.6.56: "Pontuação de Novos Inscritos" só faz sentido com inscrição ABERTA durante a
-    // fase (há novos inscritos pra pontuar). Fechadas → esconde.
+    if (regBox) regBox.style.display = isClosed ? 'flex' : 'none';
     var npsBox = document.getElementById('liga-nps-container');
-    if (npsBox) npsBox.style.display = closed.checked ? 'none' : '';
-    // v3.0.x: o texto sob "grupos de mesmo tamanho" depende deste estado (expand)
-    // — re-sincroniza pra mostrar/ocultar o aviso de override.
+    if (npsBox) npsBox.style.display = isClosed ? 'none' : '';
     if (typeof window._updateGruposEqualHelper === 'function') { try { window._updateGruposEqualHelper(); } catch (e) {} }
   };
 
@@ -4775,7 +4753,7 @@ function setupCreateTournamentModal() {
     // antigos só têm lateEnrollment ('expand' implicava Novos Confrontos ON).
     var _newMatch = (t.newMatchups != null) ? (t.newMatchups === true) : (_lateEnroll === 'expand');
     document.getElementById('late-enrollment').value = _lateEnroll;
-    document.getElementById('late-toggle-closed').checked = _lateEnroll === 'closed';
+    document.getElementById('late-toggle-closed').checked = _lateEnroll !== 'closed';
     document.getElementById('late-toggle-expand').checked = _newMatch;
     var _nmEl0 = document.getElementById('new-matchups'); if (_nmEl0) _nmEl0.value = _newMatch ? 'true' : 'false';
     window._syncLateEnrollment();
@@ -7179,7 +7157,7 @@ window._prefillFromTemplate = function(tpl) {
   // Late Enrollment (Fechadas + Novos Confrontos)
   if (tpl.lateEnrollment) {
     document.getElementById('late-enrollment').value = tpl.lateEnrollment;
-    document.getElementById('late-toggle-closed').checked = tpl.lateEnrollment === 'closed';
+    document.getElementById('late-toggle-closed').checked = tpl.lateEnrollment !== 'closed';
     var _tplNM = (tpl.newMatchups != null) ? (tpl.newMatchups === true) : (tpl.lateEnrollment === 'expand'); // v1.3.x independente
     document.getElementById('late-toggle-expand').checked = _tplNM;
     var _nmElT = document.getElementById('new-matchups'); if (_nmElT) _nmElT.value = _tplNM ? 'true' : 'false';

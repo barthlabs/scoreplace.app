@@ -2555,39 +2555,40 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
      * seria apenas um atalho para ela ficar fácil de configurar e de lembrar o organizador da
      * configuração"_.
      * As duas perguntas são as MESMAS do bloco "Inscrições Durante a Fase" do construtor:
-     *    master ('closed') → Fechadas (🚫) × Abertas (🔓)
-     *    conf   ('expand') → Novos Confrontos (➕) × Suplentes Apenas (🪑)
-     * ⛔ RÓTULO E ÍCONE SAEM DE `window._lateEnrollLabel` (create-tournament.js), que já é a
-     * fonte única deles — escrever texto próprio aqui criaria a segunda régua, e o organizador
-     * leria uma palavra na tela de edição e outra na chave para a MESMA configuração.
+     *    inscrição: desligado = Fechadas · ligado = Abertas
+     *    espera:    desligado = Suplentes · ligado = Novos Confrontos
+     * ⛔ O HTML sai de `window._lateEnrollmentModeSwitchHtml` (create-tournament.js): uma
+     * única régua de rótulos, cores e estado ativo para edição e chave.
      * Antes disto a chave tinha um toggle de DOIS estados sobre um campo de TRÊS: desligar
      * pulava de 'expand' direto pra 'closed' e "Suplentes Apenas" era inalcançável aqui. */
     var _leFechadas = (_leCur === 'closed');
     var _leConf = (_leCur !== 'closed' && _leCur !== 'standby');   // legado (undefined) = permite
-    var _rot = (typeof window._lateEnrollLabel === 'function') ? window._lateEnrollLabel : function (w, on) {
-      return { title: (w === 'master') ? (on ? 'Fechadas' : 'Abertas') : (on ? 'Novos Confrontos' : 'Suplentes Apenas'), icon: '' };
+    // O atalho pode ser renderizado isoladamente nos testes. No produto a
+    // fábrica canônica vem de create-tournament; o fallback mantém exatamente
+    // a mesma estrutura enquanto esse módulo ainda não foi carregado.
+    var _modeSwitch = window._lateEnrollmentModeSwitchHtml || function (opts) {
+      opts = opts || {};
+      var on = !!opts.on;
+      return '<div' + (opts.id ? ' id="' + opts.id + '"' : '') + ' class="sp-late-mode-row" data-late-mode="' + (opts.mode || 'late-mode') + '" data-late-active="' + (on ? 'right' : 'left') + '" style="--late-left:' + (opts.leftColor || '#f87171') + ';--late-right:' + (opts.rightColor || '#4ade80') + ';--toggle-off-bg:' + (opts.leftToggleBg || 'rgba(248,113,113,0.28)') + ';--toggle-off-border:' + (opts.leftColor || '#f87171') + ';--toggle-on-bg:' + (opts.rightColor || '#4ade80') + ';--toggle-on-border:' + (opts.rightColor || '#4ade80') + ';--toggle-on-glow:' + (opts.rightGlow || 'rgba(74,222,128,0.36)') + ';">'
+        + '<span class="sp-late-mode-label sp-late-mode-left">' + (opts.left || '') + '</span><label class="toggle-switch sp-late-mode-switch"><input type="checkbox"' + (opts.inputId ? ' id="' + opts.inputId + '"' : '') + (on ? ' checked' : '') + (opts.onchange ? ' onchange="' + opts.onchange + '"' : '') + '><span class="toggle-slider"></span></label><span class="sp-late-mode-label sp-late-mode-right">' + (opts.right || '') + '</span>'
+        + (opts.desc ? '<div class="sp-late-mode-desc">' + opts.desc + '</div>' : '') + '</div>';
     };
-    var _linhaTog = function (which, on, valLigado, valDesligado, cor) {
-      var r = _rot(which, on);
-      return '<div style="display:flex;align-items:center;gap:9px;justify-content:space-between;padding:7px 2px;min-width:0;">' +
-        '<div style="display:flex;align-items:center;gap:7px;min-width:0;">' +
-          '<span style="font-size:0.95rem;flex-shrink:0;">' + window._safeHtml(r.icon || '') + '</span>' +
-          '<span style="font-weight:700;font-size:0.8rem;color:' + window._spCor((on ? cor : 'var(--text-color)'), 'color') + ';min-width:0;">' +
-            window._safeHtml(r.title) + '</span>' +
-        '</div>' +
-        '<label class="toggle-switch toggle-sm" style="--toggle-on-bg:' + cor + ';--toggle-on-border:' + cor + ';flex-shrink:0;" onclick="event.stopPropagation();">' +
-          '<input type="checkbox" ' + (on ? 'checked' : '') +
-            ' onclick="event.stopPropagation(); window._setPhaseLateEnrollment(\'' + _tIdTog + '\', this.checked ? \'' + valLigado + '\' : \'' + valDesligado + '\');">' +
-          '<span class="toggle-slider"></span>' +
-        '</label>' +
-      '</div>';
+    var _linhaTog = function (opts) {
+      return _modeSwitch(opts);
     };
+    var _leOpen = !_leFechadas;
     var _tSec = (window._t ? window._t('create.lateEnrollSection') : 'Inscrições Durante a Fase');
     _lateToggleHtml =
       '<div style="margin-bottom:0.9rem;padding:10px 12px;background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.22);border-radius:12px;">' +
         '<div style="font-weight:800;font-size:0.8rem;color:var(--sp-c-fbbf24,#fbbf24);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:2px;">⏱️ ' + window._safeHtml(_tSec) + '</div>' +
-        _linhaTog('master', _leFechadas, 'closed', 'standby', '#f87171') +
-        (_leFechadas ? '' : _linhaTog('conf', _leConf, 'expand', 'standby', '#4ade80')) +
+        '<div class="sp-late-mode-stack">' +
+        _linhaTog({ id: 'bracket-late-mode-enrollment', mode: 'enrollment', on: _leOpen,
+          left: 'Fechadas', right: 'Abertas', leftColor: '#f87171', rightColor: '#4ade80', leftToggleBg: 'rgba(248,113,113,0.28)', rightGlow: 'rgba(74,222,128,0.36)',
+          ariaPrefix: 'Inscrições durante a fase', onchange: "event.stopPropagation(); window._setPhaseLateEnrollment('" + _tIdTog + "', this.checked ? '" + (_leConf ? 'expand' : 'standby') + "' : 'closed');" }) +
+        _linhaTog({ id: 'bracket-late-mode-matchups', mode: 'matchups', on: _leConf,
+          left: 'Suplentes', right: 'Novos Confrontos', leftColor: '#fbbf24', rightColor: '#60a5fa', leftToggleBg: 'rgba(251,191,36,0.24)', rightGlow: 'rgba(96,165,250,0.36)',
+          ariaPrefix: 'Entradas da lista de espera', onchange: "event.stopPropagation(); window._setPhaseLateEnrollment('" + _tIdTog + "', this.checked ? 'expand' : 'standby');" }) +
+        '</div>' +
       '</div>';
   }
 

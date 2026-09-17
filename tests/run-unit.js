@@ -916,6 +916,7 @@ const SUITES = [
   'tests/wo-outcome-wiring.test.js',
   'tests/wo-auto-do-proprio-jogador.test.js',
   'tests/wo-outcome-negotiation.test.js',
+  'tests/late-enrollment-switch-canonical.test.js',
   'tests/late-enroll-inherit.test.js',
   'tests/late-enroll-window-r2-result.test.js',
   'tests/dash-enroll-late-window.test.js',

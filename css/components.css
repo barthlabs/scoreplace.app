@@ -2838,3 +2838,47 @@ dialog.sp-native-update::backdrop { background: var(--bg-overlay, rgba(0,0,0,0.6
 #view-container.sp-route-transitioning {
   pointer-events: none;
 }
+
+/* ─── Inscrições durante a fase: dois estados explícitos ────────────────────
+   O mesmo controle aparece no formulário, na edição, na eliminatória e na
+   chave. A esquerda é o estado desligado; a direita, o ligado. */
+.sp-late-mode-stack { display:flex; flex-direction:column; gap:10px; }
+.sp-late-mode-row {
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);
+  align-items:center;
+  column-gap:10px;
+  row-gap:4px;
+  padding:9px 2px;
+  min-width:0;
+}
+.sp-late-mode-label {
+  min-width:0;
+  font-size:clamp(.66rem, 3vw, .9rem);
+  font-weight:800;
+  line-height:1.15;
+  white-space:nowrap;
+  opacity:.3;
+  filter:saturate(.55);
+  transition:opacity .18s ease, filter .18s ease, text-shadow .18s ease;
+}
+.sp-late-mode-left { color:var(--late-left); text-align:right; }
+.sp-late-mode-right { color:var(--late-right); text-align:left; }
+.sp-late-mode-row[data-late-active="left"] .sp-late-mode-left,
+.sp-late-mode-row[data-late-active="right"] .sp-late-mode-right {
+  opacity:1;
+  filter:saturate(1.25);
+  text-shadow:0 0 7px currentColor;
+}
+.sp-late-mode-switch { grid-column:2; grid-row:1; }
+.sp-late-mode-desc {
+  grid-column:1 / -1;
+  color:var(--text-muted);
+  font-size:.72rem;
+  line-height:1.4;
+  text-align:center;
+}
+@media (max-width:390px) {
+  .sp-late-mode-row { column-gap:7px; }
+  .sp-late-mode-label { font-size:.72rem; }
+}
