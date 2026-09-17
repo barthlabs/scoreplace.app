@@ -96,6 +96,7 @@ const SUITES = [
   'tests/espelho-publico-nao-leva-email-nem-telefone.test.js',
   'tests/ver-a-chave-nao-baixa-a-ficha-de-ninguem.test.js',
   'tests/explorar-nao-baixa-ficha-privada.test.js',
+  'tests/partner-picker-le-perfil-publico.test.js',
   'tests/foto-da-chave-nao-abre-a-ficha.test.js',
   'tests/contar-gente-nao-e-baixar-gente.test.js',
   'tests/saber-quem-e-nao-abre-a-ficha.test.js',

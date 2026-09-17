@@ -4545,17 +4545,17 @@ window._partnerPickerInit = async function(tId) {
   if (!friendUids.length) return;
   var cache = window._friendProfilesCache || {};
   var toLoad = friendUids.filter(function(uid) { return !cache[uid]; });
-  // Carrega perfis ainda não em cache (em paralelo, até 10 por vez)
-  var batches = [];
-  for (var i = 0; i < toLoad.length; i += 10) batches.push(toLoad.slice(i, i + 10));
-  for (var b = 0; b < batches.length; b++) {
+  // Só precisamos de nome e foto. A carga canônica lê `usersPublic`; buscar os
+  // documentos completos aqui faria o picker de parceiro voltar a baixar e-mail,
+  // telefone e preferências privadas de cada amigo.
+  if (toLoad.length && typeof window._preloadUserProfiles === 'function') {
     try {
-      var snap = await window.FirestoreDB.db.collection('users')
-        .where(window.firebase.firestore.FieldPath.documentId(), 'in', batches[b]).get();
-      snap.forEach(function(doc) {
-        var d = doc.data();
+      await window._preloadUserProfiles(toLoad);
+      var publicCache = window._userProfileCache || {};
+      toLoad.forEach(function(uid) {
+        var d = publicCache[uid] || {};
         if (!window._friendProfilesCache) window._friendProfilesCache = {};
-        window._friendProfilesCache[doc.id] = { displayName: d.displayName || '', photoURL: d.photoURL || '' };
+        window._friendProfilesCache[uid] = { displayName: d.displayName || '', photoURL: d.photoURL || '' };
       });
     } catch(e) { window._warn('[partnerPicker] load friends:', e && e.message); }
   }

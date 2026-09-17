@@ -1785,7 +1785,7 @@ function renderParticipants(container, tournamentId) {
     });
     if (!_falta) return;
     window[_k] = true;
-    window.FirestoreDB.carregarContatosDoElenco(_uids).then(function (n) {
+    window.FirestoreDB.carregarContatosDoElenco(t.id, _uids).then(function (n) {
       window[_k] = false;
       // ⚠️ Só redesenha se ALGO chegou: re-render sem novidade voltaria aqui e pediria de novo.
       if (n > 0 && (window.location.hash || '').indexOf('participants') !== -1 && typeof window._softRefreshView === 'function') {

@@ -147,6 +147,7 @@ const _userVivo = require("./user-vivo-core");
 // `isIdentityPhone` é a porta que impede esse número de virar identidade (recuperação
 // de senha, dedup, fusão). Ver functions/contact-phone-core.js.
 const _contactPhone = require("./contact-phone-core");
+const _tournamentContacts = require("./tournament-contact-core");
 const _desfazer = require("./desfazer-fusao-core");
 const fetch = require("node-fetch");
 
@@ -10410,6 +10411,53 @@ exports.purgeTournamentCopies = onDocumentDeleted(
 
     const resumo = Object.keys(conta).map((k) => `${k}=${conta[k]}`).join(" · ") || "nada a apagar";
     console.log(`[purgeTournamentCopies] ${tid} → ${resumo}`);
+  }
+);
+
+// ─── getTournamentRosterContacts (etapa 7) ────────────────────────────────────
+// A organização pode ver SOMENTE os dados de contato necessários do SEU elenco.
+// A autorização não vem do botão que a tela decidiu mostrar: ela é refeita aqui,
+// contra o torneio hidratado, antes de qualquer perfil ser lido.
+exports.getTournamentRosterContacts = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError("unauthenticated", "Login obrigatório");
+
+    const data = request.data || {};
+    const tournamentId = String(data.tournamentId || "").trim();
+    if (!tournamentId) throw new HttpsError("invalid-argument", "tournamentId é obrigatório");
+
+    const db = admin.firestore();
+    const tournament = await _lerTorneioComElenco(db, tournamentId);
+    if (!tournament) throw new HttpsError("not-found", "Torneio não encontrado");
+    if (!_isTournamentOrgCaller(tournament, callerUid)) {
+      throw new HttpsError("permission-denied", "Só a organização pode consultar o contato do elenco");
+    }
+
+    const elenco = _tournamentContacts.uidsDoElenco(tournament);
+    const elegiveis = new Set(elenco);
+    const requested = Array.isArray(data.uids) ? data.uids.map((uid) => String(uid || '').trim()) : elenco;
+    const uids = [];
+    const seen = new Set();
+    requested.forEach((uid) => {
+      if (uid && elegiveis.has(uid) && !seen.has(uid)) { seen.add(uid); uids.push(uid); }
+    });
+
+    const contacts = {};
+    // getAll em lotes limita a leitura e evita que um torneio grande exceda o
+    // tamanho de uma chamada. Cada resposta passa pela allowlist do módulo puro.
+    for (let i = 0; i < uids.length; i += 250) {
+      const refs = uids.slice(i, i + 250).map((uid) => db.collection("users").doc(uid));
+      const docs = refs.length ? await db.getAll(...refs) : [];
+      docs.forEach((snap) => {
+        if (!snap.exists) return;
+        const profile = snap.data() || {};
+        if (profile.mergedInto) return;
+        contacts[snap.id] = _tournamentContacts.contatoDoPerfil(profile);
+      });
+    }
+    return { contacts, count: Object.keys(contacts).length };
   }
 );
 

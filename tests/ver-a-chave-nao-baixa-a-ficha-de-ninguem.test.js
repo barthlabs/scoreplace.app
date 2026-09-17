@@ -13,8 +13,9 @@
  * telefones, medido em 13/set/2026).
  *
  * ⚠️ O QUE O ORGANIZADOR PRECISA CONTINUA CHEGANDO, por uma porta estreita
- * (`carregarContatosDoElenco`) que só a tela de inscritos abre, e só para quem manda no
- * torneio. E essa porta conserta um silêncio medido: `omitPhone`, `phoneSource` e
+ * (`getTournamentRosterContacts`) que só a tela de inscritos chama, e só para quem manda no
+ * torneio. A callable confirma isso no servidor antes de ler qualquer ficha. E essa porta
+ * conserta um silêncio medido: `omitPhone`, `phoneSource` e
  * `letzplayHandle` NUNCA estiveram no cache, então a tela lia `undefined` e decidia errado
  * sem erro nenhum — o balãozinho do WhatsApp aparecia inclusive para quem marcou "não
  * mostrar meu telefone".
@@ -116,17 +117,38 @@ const DOCS = { uid1: FICHA, uid2: Object.assign({}, FICHA, { displayName: 'Beltr
   must(semDoc.cache.uidFantasma && semDoc.cache.uidFantasma.displayName === '',
     '③ uid sem documento continua entrando VAZIO — é o que separa "carregando" de "não existe"');
 
-  /* ── ④ A PORTA ESTREITA EXISTE E LÊ A FICHA DE PROPÓSITO ────────────────── */
+  /* ── ④ A PORTA ESTREITA É UMA CALLABLE, NÃO UMA LEITURA DO NAVEGADOR ────── */
   const DB = fs.readFileSync(path.join(raiz, 'js/firebase-db.js'), 'utf8');
   const iPorta = DB.indexOf('async carregarContatosDoElenco');
   must(iPorta > 0, '④ `carregarContatosDoElenco` existe');
   const porta = DB.slice(iPorta, DB.indexOf('\n  },', iPorta));
-  must(porta.includes("collection('users')"),
-    '④ ⭐ ela lê `users` DE PROPÓSITO — celular e @ são privados e não estão no espelho');
-  ['phone', 'phoneCountry', 'phoneSource', 'omitPhone', 'letzplayHandle'].forEach((k) => {
-    must(new RegExp('alvo\\.' + k + ' =').test(porta),
-      '④ ela entrega `' + k + '` — a tela do organizador lê exatamente este campo');
-  });
+  must(porta.includes("_callFn('getTournamentRosterContacts'"),
+    '④ ⭐ o navegador pede a projeção privada pela callable restrita');
+  must(!porta.includes("collection('users')"),
+    '④ ⛔ a tela NÃO lê mais `users` diretamente');
+  const CORE = require(path.join(raiz, 'functions/tournament-contact-core'));
+  const contato = CORE.contatoDoPerfil(Object.assign({}, FICHA, {
+    phoneCountry: 'BR', phoneSource: 'organizer', omitPhone: true,
+    letzplayHandle: '@fulana', letzplaySource: 'profile', mergedInto: 'uid-vivo',
+  }));
+  assert.deepEqual(Object.keys(contato).sort(), [
+    'letzplayHandle', 'letzplaySource', 'omitPhone', 'phone', 'phoneCountry', 'phoneSource',
+  ]); ok++; console.log('  ✓ ④ a projeção devolve SOMENTE os seis campos de contato necessários');
+  must(!('email' in contato) && !('fcmToken' in contato) && !('preferredCeps' in contato),
+    '④ ⛔ e-mail, push e endereço jamais atravessam a porta estreita');
+  assert.deepEqual(CORE.uidsDoElenco({ participants: [
+    { uid: 'a', p1Uid: 'b', p2Uid: 'c', participants: [{ uid: 'd' }, { uid: 'a' }] },
+    { uid: 'e' },
+  ] }), ['a', 'b', 'c', 'd', 'e'],
+  ); ok++; console.log('  ✓ ④ a callable só aceita UIDs que pertencem ao elenco hidratado');
+  const FUNCOES = fs.readFileSync(path.join(raiz, 'functions/index.js'), 'utf8');
+  const iCallable = FUNCOES.indexOf('exports.getTournamentRosterContacts = onCall');
+  must(iCallable > 0, '④ `getTournamentRosterContacts` existe no servidor');
+  const callable = FUNCOES.slice(iCallable, FUNCOES.indexOf('// ─── setParticipantContactPhone', iCallable));
+  must(callable.includes('_lerTorneioComElenco(db, tournamentId)') && callable.includes('_isTournamentOrgCaller(tournament, callerUid)'),
+    '④ o servidor relê o torneio e confirma o organizador, sem confiar na tela');
+  must(callable.includes('_tournamentContacts.contatoDoPerfil(profile)') && !/profile\.email/.test(callable),
+    '④ o servidor aplica a allowlist antes de responder e não inclui e-mail');
 
   /* ── ⑤ E SÓ O ORGANIZADOR A ABRE ────────────────────────────────────────── */
   const P = fs.readFileSync(path.join(raiz, 'js/views/participants.js'), 'utf8');
@@ -137,6 +159,8 @@ const DOCS = { uid1: FICHA, uid2: Object.assign({}, FICHA, { displayName: 'Beltr
     '⑤ ⭐ ela sai na hora se quem abriu NÃO é o organizador');
   const chamadas = (P.match(/carregarContatosDoElenco\(/g) || []).length;
   must(chamadas === 1, '⑤ ⛔ existe UMA chamada só (achadas: ' + chamadas + ') — duas telas divergem');
+  must(/carregarContatosDoElenco\(t\.id, _uids\)/.test(bloco),
+    '⑤ a chamada envia o torneio, para o servidor confirmar que os UIDs pertencem a ele');
 
   /* ── ⑥ OS CAMPOS QUE A TELA LÊ SÃO OS QUE A PORTA TRAZ ──────────────────── */
   // Era exatamente aqui que o silêncio morava: a tela lia quatro campos que a carga

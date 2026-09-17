@@ -2951,14 +2951,12 @@ window.FirestoreDB = {
    * organização era pintado de verde como se a pessoa tivesse confirmado por SMS, e o botão
    * "🎾 letzplay" era oferecido para quem já tinha o @ preenchido.
    *
-   * ⚠️ NÃO É FRONTEIRA DE SEGURANÇA, é redução de superfície: `users` segue legível por
-   * qualquer autenticado até a Rule fechar, e fechá-la depende de versão nativa nas lojas.
-   * O que muda aqui é o que o APP baixa, que é o vazamento real do dia a dia.
+   * ⭐ A FRONTEIRA É A CALLABLE `getTournamentRosterContacts`: o navegador não lê mais
+   * `users` nem decide a autorização. O servidor relê o torneio hidratado, confirma o UID
+   * da organização e entrega uma projeção com seis campos — nunca e-mail ou perfil inteiro.
    * [[project_email_no_doc_publico]] */
-  async carregarContatosDoElenco(uids) {
-    if (!this.db || !Array.isArray(uids) || !uids.length) return 0;
-    var _fb = (typeof firebase !== 'undefined' && firebase.firestore && firebase.firestore.FieldPath)
-      ? firebase.firestore.FieldPath.documentId() : null;
+  async carregarContatosDoElenco(tournamentId, uids) {
+    if (!tournamentId || !Array.isArray(uids) || !uids.length) return 0;
     var alvos = [];
     uids.forEach(function (u) {
       if (u && typeof u === 'string' && u.indexOf(' ') === -1 && alvos.indexOf(u) === -1) alvos.push(u);
@@ -2986,22 +2984,14 @@ window.FirestoreDB = {
     };
     var n = 0;
     try {
-      // ⚠️ `documentId() in [...]` aceita 10 por consulta — o mesmo lote da hidratação.
-      var lotes = [];
-      for (var i = 0; i < alvos.length; i += 10) lotes.push(alvos.slice(i, i + 10));
-      await Promise.all(lotes.map(function (lote) {
-        var q = _fb
-          ? this.db.collection('users').where(_fb, 'in', lote).get()
-          : Promise.all(lote.map(function (u) { return this.db.collection('users').doc(u).get(); }, this))
-              .then(function (docs) { return { forEach: function (f) { docs.forEach(f); } }; });
-        return q.then(function (snap) {
-          snap.forEach(function (doc) {
-            if (doc && doc.exists && cache[doc.id]) { vestir(doc.id, doc.data() || {}); n++; }
-          });
-        }).catch(function (e) {
-          window._warn('[contatos do elenco] lote falhou:', e && (e.code || e.message));
-        });
-      }, this));
+      var resposta = await this._callFn('getTournamentRosterContacts', {
+        tournamentId: String(tournamentId), uids: alvos
+      });
+      var contatos = (resposta && resposta.contacts && typeof resposta.contacts === 'object') ? resposta.contacts : {};
+      Object.keys(contatos).forEach(function (uid) {
+        if (!cache[uid]) return;
+        vestir(uid, contatos[uid] || {}); n++;
+      });
     } catch (e) {
       window._warn('[contatos do elenco] falhou:', e && e.message);
     }
