@@ -149,16 +149,12 @@ window._cloneTournament = async function(tournamentId) {
 
 /**
  * Resolve the organizer uid of a tournament.
- * Uses creatorUid directly if available, falls back to email lookup.
+ * UID é a única identidade aceita. Torneios legados sem `creatorUid` precisam
+ * ser corrigidos pelo organizador, sem consultar a ficha privada por e-mail.
  */
 window._resolveOrganizerUid = async function(t) {
     if (t.creatorUid) return t.creatorUid;
-    if (!t.organizerEmail || !window.FirestoreDB || !window.FirestoreDB.db) return null;
-    try {
-        var snap = await window.FirestoreDB.db.collection('users').where('email', '==', t.organizerEmail).limit(1).get();
-        var vivo = await window._userVivo(snap);   // e-mail casa com a LÁPIDE também
-        return vivo ? vivo.uid : null;
-    } catch(e) { return null; }
+    return null;
 };
 
 /**
@@ -469,12 +465,6 @@ window._notifyTournamentParticipants = async function(tournament, notifData, exc
         try {
             var r = recipients[i];
             var uid = r.uid;
-            // If uid not available, fall back to email lookup
-            if (!uid && r.email) {
-                var snap = await window.FirestoreDB.db.collection('users').where('email', '==', r.email).limit(1).get();
-                var vivo = await window._userVivo(snap);   // nunca avisar a conta absorvida
-                if (vivo) uid = vivo.uid;
-            }
             if (uid) {
                 var result = await window._sendUserNotification(uid, nd, true); // skip individual dispatch; batch below
                 // v1.3.28: coleta TODOS os e-mails do usuário (principal + linkedEmails)
@@ -1348,13 +1338,6 @@ window._dispatchOrgPlatformNotification = async function(t, fullMsg, useWhatsApp
   var seen = {};
   for (var i = 0; i < targets.length; i++) {
     var o = targets[i]; var uid = o.uid;
-    if (!uid && o.email && window.FirestoreDB && window.FirestoreDB.db) {
-      try {
-        var snap = await window.FirestoreDB.db.collection('users').where('email', '==', o.email).limit(1).get();
-        var vivo = await window._userVivo(snap);   // nunca avisar a conta absorvida
-        if (vivo) uid = vivo.uid;
-      } catch (e) {}
-    }
     if (uid && !seen[uid]) {
       seen[uid] = true;
       try {
