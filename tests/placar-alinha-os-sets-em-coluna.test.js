@@ -40,47 +40,18 @@ must(parseFloat(larg({ gamesP1: 5, gamesP2: 6, tiebreak: { pointsP1: 7, pointsP2
 must(/ch$/.test(larg({ gamesP1: 6, gamesP2: 3 })),
   '⛔ a medida é em `ch` (acompanha a fonte), nunca px cravado');
 
-// ── ② o RENDERIZADOR REAL, com o placar REAL do jogo 168 ────────────────────
-const pIni = DASH.indexOf('        function _placarLado(n) {');
-const pFim = DASH.indexOf('\n        }\n', pIni);
-assert.ok(pIni > 0 && pFim > pIni, 'âncoras do _placarLado');
-const jogo168 = {
-  draw: false, winner: 'p2', scoreP1: 1, scoreP2: 2,
-  sets: [
-    { gamesP1: 5, gamesP2: 6, tiebreak: { pointsP1: 7, pointsP2: 9 } },
-    { gamesP1: 6, gamesP2: 3 },
-    { gamesP1: 7, gamesP2: 10 }
-  ]
-};
-const render = (m) => {
-  const ctx = {
-    window: Object.assign({}, w, {
-      _corDoSetLado: () => '#4ade80',
-      _matchWinnerSide: (x) => (x.winner ? 2 : null)
-    }),
-    m2: m, _sf: (x) => String(x == null ? '' : x), out: null
-  };
-  vm.runInNewContext(DASH.slice(pIni, pFim) + '\n}\nout = [_placarLado(1), _placarLado(2)];', ctx);
-  return ctx.out;
-};
-const [l1, l2] = render(jogo168);
-const larguras = (h) => (h.match(/--w:([0-9.]+ch)/g) || []);
-must(larguras(l1).length === 3 && larguras(l2).length === 3,
-  'as DUAS linhas saem com uma coluna por set (3 sets ⇒ 3 colunas, contadas)');
-must(larguras(l1).join('|') === larguras(l2).join('|'),
-  '⛔ coluna a coluna, as duas linhas medem EXATAMENTE o mesmo — é isso que alinha o set 1 com o set 1');
-must(/sp-set-grid/.test(l1) && /sp-set-grid/.test(l2), 'e usam a grade canônica da chave (.sp-set-grid)');
-must(l1.indexOf('7') > 0 && l2.indexOf('10') > 0 && l1.indexOf('(7)') > 0,
-  'sem perder nada do placar: games, o 10 do super tie-break e o subponto do tie-break');
-
-// ── ③ UM set continua como estava (não se conserta o que não quebrou) ───────
-const [u1] = render({ draw: false, winner: 'p1', sets: [{ gamesP1: 6, gamesP2: 4 }] });
-must(!/sp-set-grid/.test(u1), 'placar de 1 set não ganha grade — uma coluna só já está alinhada');
-
-// ── ④ o texto corrido não volta ──────────────────────────────────────────────
-const bloco = DASH.slice(pIni, pFim);
-must(!/\}\)\.join\(' '\);/.test(bloco.replace(/_cels\.join\(' '\)/g, '')),
-  '⛔ o `map(...).join(" ")` — o texto corrido que desalinhava — não voltou pro caminho de vários sets');
-must(/window\._corDoSetLado\(s, n,/.test(bloco), 'e a cor continua vindo da fonte única, por set');
+// ── ② Últimos Resultados delega ao mesmo renderer da chave ───────────────────
+const BRK = fs.readFileSync(path.join(root, 'js/views/bracket.js'), 'utf8');
+const recentIni = DASH.indexOf('// ── Últimos resultados confirmados');
+const recentFim = DASH.indexOf('// Agrupa por (grupo + torneio)', recentIni);
+const recent = DASH.slice(recentIni, recentFim);
+must(recent.includes('window.renderMatchCard(m2'),
+  'Últimos Resultados chama o card canônico, sem reconstruir o placar');
+must(/var _c = window\._corDoSetLado\(s, playerNum, _temV\)/.test(BRK),
+  'o card canônico colore cada set pela fonte única');
+must(/window\._setGridHtml/.test(BM) && /sp-set-grid/.test(BM),
+  'a grade canônica preserva uma coluna por set para as duas linhas');
+must(!/function _placarLado\(n\)/.test(recent),
+  '⛔ o renderer antigo de texto corrido não voltou a Últimos Resultados');
 
 console.log('✅ ' + ok + ' asserções — cada set é uma coluna, e as duas linhas medem igual');

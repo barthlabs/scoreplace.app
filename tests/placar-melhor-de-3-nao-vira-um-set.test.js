@@ -124,14 +124,10 @@ const must = (v, m) => { assert.ok(v, m); ok++; };
   must(cor({ gamesP1: 6, gamesP2: 6 }, 1, true) === cor(null, 1, true), 'set sem vencedor legível fica neutro');
   must(cor(sets[1], 1, false) === cor(null, 1, true), 'partida sem vencedor: tudo neutro');
 
-  // e o card emite a cor SEMPRE por _spCor — hex cru aqui traria de volta o verde ilegível
-  const DASH = fs.readFileSync(path.join(root, 'js/views/dashboard.js'), 'utf8');
-  const pIni = DASH.indexOf('        function _placarLado(n) {');
-  const pFim = DASH.indexOf('\n        }\n', pIni);
-  const bloco = DASH.slice(pIni, pFim);
-  must(/_spCor\(\s*window\._corDoSetLado\(/.test(bloco.replace(/\s+/g, ' ')) ||
-       /_spCor\(_c,/.test(bloco), '⛔ a cor do set passa por `_spCor` (tema), nunca hex cru');
-  must(/window\._corDoSetLado\(s, n,/.test(bloco), 'o card usa a fonte única da cor');
+  // O card canônico emite a cor por _spCor — hex cru aqui traria de volta o verde ilegível.
+  const BRK = fs.readFileSync(path.join(root, 'js/views/bracket.js'), 'utf8');
+  must(/var _c = window\._corDoSetLado\(s, playerNum, _temV\)/.test(BRK) &&
+       /window\._spCor\(_c, 'color'\)/.test(BRK), '⛔ a cor do set passa por `_spCor` (tema), nunca hex cru');
 }
 
 // ── ⑥ o aviso não pode mostrar a CHAVE de tradução ao usuário ───────────────
@@ -156,8 +152,10 @@ const must = (v, m) => { assert.ok(v, m); ok++; };
 {
   const DASH = fs.readFileSync(path.join(root, 'js/views/dashboard.js'), 'utf8');
   const BRK = fs.readFileSync(path.join(root, 'js/views/bracket.js'), 'utf8');
-  const FN = fs.readFileSync(path.join(root, 'functions/index.js'), 'utf8');
-  must(/window\._corDoSetLado\(s, n,/.test(DASH), 'dashboard (Novidades e Seus últimos resultados)');
+  const recentIni = DASH.indexOf('// ── Últimos resultados confirmados');
+  const recentFim = DASH.indexOf('// Agrupa por (grupo + torneio)', recentIni);
+  const recent = DASH.slice(recentIni, recentFim);
+  must(recent.includes('window.renderMatchCard(m2'), 'dashboard delega Seus últimos resultados ao card canônico');
   must(/window\._corDoSetLado\(s, playerNum, _temV\)/.test(BRK), 'card da CHAVE');
   const DIGEST = fs.readFileSync(path.join(root, 'functions/digest-core.js'), 'utf8');
   must(/const corDoSet = \(s, side\)/.test(DIGEST), 'e-mail de notificação');

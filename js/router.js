@@ -171,9 +171,17 @@ function initRouter() {
     // Assim não há tela vazia, spinner bloqueante nem ação aplicada na página errada.
     var _viewAnterior = String(window._ultimaRotaPintada || '').split('|')[0]
       .replace(/^#/, '').split('/')[0];
+    // `#tournament/:id` e `#tournaments/:id` são aliases públicos do mesmo
+    // detalhe. O gate anterior só conhecia o plural: ao chegar por um link no
+    // singular ele limpava o quadro pronto e a guarda abaixo desenhava o spinner
+    // pequeno sem fim enquanto o documento completo ainda era buscado.
+    var _origemPrincipal = (_viewAnterior === 'tournament' || _viewAnterior === 'tournaments')
+      ? 'tournament' : (_viewAnterior === 'dashboard' ? 'dashboard' : '');
+    var _destinoPrincipal = (view === 'tournament' || view === 'tournaments')
+      ? 'tournament' : ((view === '' || view === 'dashboard') ? 'dashboard' : '');
     var _trocaPrincipal = !!viewContainer.firstElementChild &&
-      ((_viewAnterior === 'dashboard' && view === 'tournaments') ||
-       (_viewAnterior === 'tournaments' && (view === '' || view === 'dashboard')));
+      ((_origemPrincipal === 'dashboard' && _destinoPrincipal === 'tournament') ||
+       (_origemPrincipal === 'tournament' && _destinoPrincipal === 'dashboard'));
     var _finalizarTrocaPrincipal = function () {
       if (!_trocaPrincipal) return;
       _trocaPrincipal = false;

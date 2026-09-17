@@ -19,9 +19,13 @@ ok(model.includes('data-sp-set-count="') && model.includes('data-sp-best-of="') 
   'modelo canônico declara formato e quantidade em cards estáticos');
 ok(bracket.includes('const _setCountAttr') && bracket.includes('const _setFormatAttr') && bracket.includes('data-sp-best-of="'),
   'chave interativa declara formato no cabeçalho e nos dois placares');
-ok(dashboard.includes('window._setHeadHtml(_plano, { hideHeadline:true })') && dashboard.includes('window._setGridHtml(_planFmt2, n)'),
-  'Seus Últimos Resultados delega cabeçalho e placares à mesma grade canônica de Novidades');
-const renderers = [model, bracket, dashboard];
-ok(renderers.every(source => source.includes('sp-set-grid') && source.includes('data-sp-best-of')),
+const resultsStart = dashboard.indexOf('// ── Últimos resultados confirmados');
+const resultsEnd = dashboard.indexOf('// Agrupa por (grupo + torneio)', resultsStart);
+const resultsSection = dashboard.slice(resultsStart, resultsEnd);
+ok(resultsSection.includes('window.renderMatchCard(m2') && !resultsSection.includes("'<div class=\"sp-match-card\""),
+  'Seus Últimos Resultados usa o mesmo renderMatchCard da chave e não redesenha o card');
+ok(bracket.includes('_matchCardTimelineTextHtml(t, m)'),
+  'o card canônico inclui a linha de prazo, agendamento ou “Jogado em”');
+ok(model.includes('sp-set-grid') && model.includes('data-sp-best-of') && bracket.includes('sp-set-grid') && bracket.includes('data-sp-best-of') && resultsSection.includes('window.renderMatchCard(m2'),
   'nenhuma das três telas fica fora da grade canônica de espaçamento');
 console.log('✅ ' + n + ' asserções — grade de sets canônica em dashboard, resultados e chave');

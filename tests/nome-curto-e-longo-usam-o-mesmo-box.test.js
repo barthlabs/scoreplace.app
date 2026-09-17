@@ -20,12 +20,15 @@ function must(v, m) { assert.ok(v, m); ok++; console.log('  ✓ ' + m); }
 
 must(/twoLineMaxRem/.test(read('js/views/bracket-model.js')),
   'a geometria canônica declara um teto específico para duas linhas');
-must(/data-two-line-maxrem/.test(BRACKET) && /data-two-line-maxrem/.test(DASHBOARD) &&
-  /data-sp-card-name-box/.test(BRACKET) && /data-sp-card-name-box/.test(DASHBOARD),
-  'chave e dashboard usam o mesmo contrato adaptativo de uma ou duas linhas');
+const recentIni = DASHBOARD.indexOf('// ── Últimos resultados confirmados');
+const recentFim = DASHBOARD.indexOf('// Agrupa por (grupo + torneio)', recentIni);
+const recent = DASHBOARD.slice(recentIni, recentFim);
+must(/data-two-line-maxrem/.test(BRACKET) && /data-sp-card-name-box/.test(BRACKET) &&
+  recent.includes('window.renderMatchCard(m2'),
+  'Últimos Resultados usa o mesmo contrato adaptativo da chave, por delegação');
 must(!/data-fit-group/.test(BRACKET) && !/data-fit-group/.test(DASHBOARD),
   'nenhum render força o nome curto a acompanhar a quebra do parceiro');
-must(/--sp-match-team-member-gap:4px/.test(CSS) && /\.sp-mc-col\{[^}]*gap:var\(--sp-match-team-member-gap\)/.test(CSS) && (DASHBOARD.match(/class="sp-mc-col" style="flex:1;min-width:0;"/g) || []).length >= 3,
+must(/--sp-match-team-member-gap:4px/.test(CSS) && /\.sp-mc-col\{[^}]*gap:var\(--sp-match-team-member-gap\)/.test(CSS) && recent.includes('window.renderMatchCard(m2'),
   'dashboard e chave usam a mesma variável canônica de 4px entre integrantes da dupla');
 
 (async function () {

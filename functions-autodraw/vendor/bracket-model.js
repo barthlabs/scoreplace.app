@@ -1455,12 +1455,14 @@ window._assignGlobalGameNumbers = function (t) {
   // garantia sem um segundo contador.
   var ordem = [];        // 1ª ocorrência de cada jogo, em ordem cronológica
   var copiasPorId = {};  // id -> todos os objetos com esse id (grupo + array plano)
+  var seriePorId = {};   // id -> categoria cuja sequência este jogo integra
+  var serieAtual = '__sem_categoria__';
   function stamp(m) {
     if (!m) return;
     if (m.isSitOut || isBye(m)) { m._gameNum = null; return; }
     var k = (m.id != null) ? String(m.id) : null;
     if (k == null) { ordem.push(m); return; }
-    if (!copiasPorId[k]) { copiasPorId[k] = []; ordem.push(m); }
+    if (!copiasPorId[k]) { copiasPorId[k] = []; seriePorId[k] = serieAtual; ordem.push(m); }
     copiasPorId[k].push(m);   // cópias do MESMO jogo recebem o MESMO número
   }
   function _ehTerceiro(m) {
@@ -1468,17 +1470,30 @@ window._assignGlobalGameNumbers = function (t) {
   }
   function _ehExtra(m) { return !!(m && (m.isExtra || m.condicional)); }
   function _emitir() {
-    // INVERSÃO ÚNICA DO TORNEIO: tira o 3º lugar de onde estiver e recoloca
-    // imediatamente ANTES da final (o último jogo que não é a final-extra
-    // condicional da Dupla Eliminatória). Vale pra qualquer formato.
-    var terceiros = ordem.filter(_ehTerceiro);
-    if (terceiros.length) {
-      ordem = ordem.filter(function (m) { return !_ehTerceiro(m); });
-      var iFinal = -1;
-      for (var z = ordem.length - 1; z >= 0; z--) { if (!_ehExtra(ordem[z])) { iFinal = z; break; } }
-      if (iFinal < 0) iFinal = ordem.length;
-      Array.prototype.splice.apply(ordem, [iFinal, 0].concat(terceiros));
-    }
+    // 3º/4º vem imediatamente antes da final DA MESMA CATEGORIA. Antes todos os
+    // terceiros eram retirados juntos e recolocados antes da última final do
+    // torneio: com A/B/C/D, a categoria baixa deixava de ser uma sequência fechada.
+    var porSerie = {}, ordemSeries = [];
+    ordem.forEach(function (m) {
+      var k = (m && m.id != null && seriePorId[String(m.id)]) || '__sem_categoria__';
+      if (!porSerie[k]) { porSerie[k] = []; ordemSeries.push(k); }
+      porSerie[k].push(m);
+    });
+    ordem = [];
+    ordemSeries.forEach(function (serie) {
+      var bloco = porSerie[serie];
+      var terceiros = bloco.filter(_ehTerceiro);
+      var semTerceiro = bloco.filter(function (m) { return !_ehTerceiro(m); });
+      if (terceiros.length) {
+        var iFinal = -1;
+        for (var z = semTerceiro.length - 1; z >= 0; z--) {
+          if (!_ehExtra(semTerceiro[z])) { iFinal = z; break; }
+        }
+        if (iFinal < 0) iFinal = semTerceiro.length;
+        Array.prototype.splice.apply(semTerceiro, [iFinal, 0].concat(terceiros));
+      }
+      ordem = ordem.concat(semTerceiro);
+    });
     ordem.forEach(function (m, i) {
       var num = i + 1;
       var k = (m.id != null) ? String(m.id) : null;
@@ -1500,62 +1515,106 @@ window._assignGlobalGameNumbers = function (t) {
       (((rd && rd.matches) || [])).forEach(stamp);
     }
   });
-  // (2) Fases canônicas (t.matches) por phaseIndex asc.
-  var byPhase = {};
-  (t.matches || []).forEach(function (m) { var p = (m && m.phaseIndex) || 0; (byPhase[p] = byPhase[p] || []).push(m); });
-  Object.keys(byPhase).map(Number).sort(function (a, b) { return a - b; }).forEach(function (p) {
-    var ms = byPhase[p];
-    // Dupla Eliminatória: intercala upper/lower por rodada, grand no fim.
-    var hasDE = ms.some(function (m) { return m.bracket === 'upper' || m.bracket === 'lower' || m.bracket === 'grand'; });
-    if (hasDE) {
-      // Intercala por POSIÇÃO DE COLUNA (1ª sup, 1ª inf, 2ª sup…), NÃO por nº de rodada — a
-      // repescagem adiciona uma coluna a mais no upper (round 0). Mesma ordem do render
-      // (_assignGameNums) → dashboard e chave mostram o MESMO "Jogo N". (pedido do dono)
-      var _rnd = function (m) { return (m.round == null) ? 1 : m.round; };
-      var _distinct = function (br) {
-        var seen = {}, out = [];
-        ms.forEach(function (m) { if (m.bracket === br) { var r = _rnd(m); if (!seen[r]) { seen[r] = 1; out.push(r); } } });
-        return out.sort(function (a, b) { return a - b; });
-      };
-      var upRounds = _distinct('upper'), loRounds = _distinct('lower');
-      var maxCols = Math.max(upRounds.length, loRounds.length);
-      for (var i = 0; i < maxCols; i++) {
-        if (upRounds[i] != null) ms.filter(function (m) { return m.bracket === 'upper' && _rnd(m) === upRounds[i]; }).forEach(stamp);
-        if (loRounds[i] != null) ms.filter(function (m) { return m.bracket === 'lower' && _rnd(m) === loRounds[i]; }).forEach(stamp);
-      }
-      // 3º/4º da Dupla Eliminatória: entra na coleta aqui; _emitir() garante que
-      // ele fica um número ABAIXO da Grande Final. Antes este caminho ignorava o
-      // 3º lugar por completo — ele ficava sem número nenhum.
-      ms.filter(_ehTerceiro).forEach(stamp);
-      ms.filter(function (m) { return m.bracket === 'grand'; }).forEach(stamp);
-      return;
-    }
-    // Tiers na ordem de render.
-    var tierOrder = ['gold', 'silver', 'main', 'line3', 'line4'];
-    var present = {};
-    ms.forEach(function (m) { var bk = m.bracket || 'main'; if (bk !== 'grandfinal' && bk !== 'thirdplace') present[bk] = 1; });
-    var tierKeys = tierOrder.filter(function (k) { return present[k]; });
-    Object.keys(present).forEach(function (k) { if (tierKeys.indexOf(k) === -1) tierKeys.push(k); });
-    tierKeys.forEach(function (bk) {
-      var byRound = {};
-      ms.filter(function (m) { return (m.bracket || 'main') === bk && !m.isThirdPlace; }).forEach(function (m) {
-        var r = (m.round == null) ? 1 : m.round; (byRound[r] = byRound[r] || []).push(m);
-      });
-      var rounds = Object.keys(byRound).map(Number).sort(function (a, b) { return a - b; });
-      var thirdM = ms.filter(function (m) { return (m.bracket || 'main') === bk && m.isThirdPlace; })[0];
-      rounds.forEach(function (rn, idx) {
-        var real = byRound[rn].filter(function (m) { return !isBye(m); });
-        real.forEach(stamp);
-      });
-      if (thirdM) stamp(thirdM);   // posição final é decidida por _emitir()
+  // (2) Fases canônicas (t.matches). A sequência do torneio é categoria
+  // por categoria: termina a mais baixa antes de iniciar a seguinte. Dentro de
+  // cada uma, é rodada → linha (ouro, prata, ...), nunca linha → todas rodadas.
+  var phaseMatches = (t.matches || []).slice();
+  if (t.thirdPlaceMatch && phaseMatches.indexOf(t.thirdPlaceMatch) === -1) phaseMatches.push(t.thirdPlaceMatch);
+  var categoriesPresentes = {};
+  phaseMatches.forEach(function (m) {
+    var cat = (m && m.category != null) ? String(m.category) : '';
+    categoriesPresentes[cat] = true;
+  });
+  var categorias = Object.keys(categoriesPresentes);
+  // A configuração enumera habilidade da mais alta para a mais baixa (A, B, C,
+  // D, FUN). Para a numeração, a linha mais baixa abre o torneio e a mais alta
+  // fecha; categorias sem habilidade respeitam a ordem declarada pelo organizador.
+  var categoriasConfiguradas = Array.isArray(t.combinedCategories) && t.combinedCategories.length
+    ? t.combinedCategories.slice()
+    : (Array.isArray(t.categories) ? t.categories.slice() : []);
+  var habilidades = Array.isArray(t.skillCategories) && t.skillCategories.length
+    ? t.skillCategories.slice() : ['A', 'B', 'C', 'D', 'FUN'];
+  function _rankCategoria(cat) {
+    var texto = String(cat || '');
+    var skill = -1;
+    var tokens = texto.split(/[\s/]+/).map(function (v) { return v.toLocaleLowerCase(); });
+    habilidades.forEach(function (h, i) {
+      if (tokens.indexOf(String(h).toLocaleLowerCase()) !== -1) skill = Math.max(skill, i);
     });
-    ms.filter(function (m) { return (m.bracket || '') === 'grandfinal'; }).forEach(stamp);
+    var declarada = categoriasConfiguradas.indexOf(texto);
+    return { skill: skill, declarada: declarada < 0 ? 9999 : declarada, texto: texto.toLocaleLowerCase() };
+  }
+  categorias.sort(function (a, b) {
+    var ra = _rankCategoria(a), rb = _rankCategoria(b);
+    if (ra.skill !== rb.skill) return rb.skill - ra.skill; // D antes de C, B, A
+    if (ra.declarada !== rb.declarada) return ra.declarada - rb.declarada;
+    return ra.texto < rb.texto ? -1 : (ra.texto > rb.texto ? 1 : 0);
+  });
+  categorias.forEach(function (cat) {
+    serieAtual = 'categoria:' + cat;
+    var catMatches = phaseMatches.filter(function (m) {
+      return String((m && m.category != null) ? m.category : '') === cat;
+    });
+    var byPhase = {};
+    catMatches.forEach(function (m) {
+      var p = (m && m.phaseIndex) || 0;
+      (byPhase[p] = byPhase[p] || []).push(m);
+    });
+    Object.keys(byPhase).map(Number).sort(function (a, b) { return a - b; }).forEach(function (p) {
+      var ms = byPhase[p];
+      var hasDE = ms.some(function (m) { return m.bracket === 'upper' || m.bracket === 'lower' || m.bracket === 'grand'; });
+      if (hasDE) {
+        var _rnd = function (m) { return (m.round == null) ? 1 : m.round; };
+        var _distinct = function (br) {
+          var seen = {}, out = [];
+          ms.forEach(function (m) {
+            if (m.bracket === br && !_ehTerceiro(m)) {
+              var r = _rnd(m); if (!seen[r]) { seen[r] = 1; out.push(r); }
+            }
+          });
+          return out.sort(function (a, b) { return a - b; });
+        };
+        var upRounds = _distinct('upper'), loRounds = _distinct('lower');
+        var maxCols = Math.max(upRounds.length, loRounds.length);
+        for (var i = 0; i < maxCols; i++) {
+          if (upRounds[i] != null) ms.filter(function (m) { return m.bracket === 'upper' && !_ehTerceiro(m) && _rnd(m) === upRounds[i]; }).forEach(stamp);
+          if (loRounds[i] != null) ms.filter(function (m) { return m.bracket === 'lower' && !_ehTerceiro(m) && _rnd(m) === loRounds[i]; }).forEach(stamp);
+        }
+        ms.filter(_ehTerceiro).forEach(stamp);
+        ms.filter(function (m) { return m.bracket === 'grand'; }).forEach(stamp);
+        return;
+      }
+      var tierOrder = ['gold', 'silver', 'main', 'line3', 'line4'];
+      var present = {};
+      ms.forEach(function (m) {
+        var bk = m.bracket || 'main';
+        if (bk !== 'grandfinal' && bk !== 'thirdplace' && !_ehTerceiro(m)) present[bk] = 1;
+      });
+      var tierKeys = tierOrder.filter(function (k) { return present[k]; });
+      Object.keys(present).forEach(function (k) { if (tierKeys.indexOf(k) === -1) tierKeys.push(k); });
+      var porLinhaERodada = {}, rodadas = {};
+      tierKeys.forEach(function (bk) {
+        porLinhaERodada[bk] = {};
+        ms.filter(function (m) { return (m.bracket || 'main') === bk && !_ehTerceiro(m); }).forEach(function (m) {
+          var r = (m.round == null) ? 1 : m.round;
+          (porLinhaERodada[bk][r] = porLinhaERodada[bk][r] || []).push(m);
+          rodadas[r] = true;
+        });
+      });
+      // Rodada é o eixo externo: R2 Ouro → R2 Prata → R3 Ouro → R3 Prata.
+      Object.keys(rodadas).map(Number).sort(function (a, b) { return a - b; }).forEach(function (rn) {
+        tierKeys.forEach(function (bk) {
+          ((porLinhaERodada[bk][rn] || [])).filter(function (m) { return !isBye(m); }).forEach(stamp);
+        });
+      });
+      ms.filter(_ehTerceiro).forEach(stamp);
+      ms.filter(function (m) { return (m.bracket || '') === 'grandfinal'; }).forEach(stamp);
+    });
   });
 
-  // t.thirdPlaceMatch mora FORA de t.matches (_appendCanonicalColumn grava nesse
-  // campo próprio) — sem isto ele NUNCA recebia número. _emitir() o coloca logo
-  // abaixo da final.
-  if (t.thirdPlaceMatch) stamp(t.thirdPlaceMatch);
+
+  // `thirdPlaceMatch` entrou em phaseMatches acima para receber a posição da
+  // própria categoria, em vez de ser empurrado para o fim do torneio.
 
   _emitir();
 };

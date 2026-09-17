@@ -70,5 +70,32 @@ ok(typeof W._monarchGlobalJogoNum === 'undefined',
   ok(flatOk, '[CANON] array plano e grupo dão o MESMO número pro mesmo id');
 })();
 
+
+// ── Eliminatórias por linha: rodada é o eixo externo ──────────────────────────
+(function () {
+  const match = function (id, category, bracket, round) {
+    return { id, category, bracket, round, p1: id + ' A', p2: id + ' B' };
+  };
+  const t = {
+    skillCategories: ['A', 'B', 'C', 'D'],
+    matches: [
+      // Inserção deliberadamente fora da ordem: o canônico não pode depender dela.
+      match('a-g2', 'Fem A', 'gold', 2), match('d-s2', 'Fem D', 'silver', 2),
+      match('d-g1', 'Fem D', 'gold', 1), match('a-s1', 'Fem A', 'silver', 1),
+      match('d-g2', 'Fem D', 'gold', 2), match('a-g1', 'Fem A', 'gold', 1),
+      match('d-s1', 'Fem D', 'silver', 1), match('a-s2', 'Fem A', 'silver', 2)
+    ]
+  };
+  W._assignGlobalGameNumbers(t);
+  const got = Object.fromEntries(t.matches.map(function (m) { return [m.id, m._gameNum]; }));
+  const expected = {
+    'd-g1': 1, 'd-s1': 2, 'd-g2': 3, 'd-s2': 4,
+    'a-g1': 5, 'a-s1': 6, 'a-g2': 7, 'a-s2': 8
+  };
+  const sequenceOk = Object.keys(expected).every(function (id) { return got[id] === expected[id]; });
+  ok(sequenceOk,
+    '[CANON] categoria mais baixa completa primeiro; dentro dela R1 Ouro/Prata, depois R2 Ouro/Prata — got ' + JSON.stringify(got));
+})();
+
 console.log('\n' + (fail === 0 ? '✅' : '❌') + ' game-numbering: ' + pass + ' ok, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);

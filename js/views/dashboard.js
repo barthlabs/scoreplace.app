@@ -2800,224 +2800,33 @@ function renderDashboard(container) {
       // v1.8.78: `_splitFase` subiu pro topo de _buildMyResultsHtml (fonte única —
       // as Novidades agrupam pelo mesmo critério e não podem ter outra cópia).
       var _units = [];
+      // O card é o mesmo componente da chave e de Novidades. Esta seção antes
+      // redesenhava nomes, cabeçalho, placares e resultado; qualquer melhoria no
+      // card canônico ficava de fora daqui (inclusive “Jogado em”).
       recentConfirmed.forEach(function(item) {
-        var m2 = item.m;
-        var _esc2 = function(s) { return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); };
+        var m2 = item.m || {};
         var tRef2 = participacoes.find(function(tt) { return tt.id === item.tId; });
         var faseStr2 = tRef2 ? _elabFaseLabel(tRef2, m2) : (item.subLine || '');
         var faseLower2 = faseStr2.toLowerCase();
         var faseColor2 = faseLower2.indexOf('final') !== -1 ? '#fbbf24'
           : faseLower2.indexOf('semi') !== -1 ? '#06b6d4'
           : faseLower2.indexOf('quarta') !== -1 ? '#4ade80' : '#818cf8';
-
-        // vitória/derrota/empate
-        var myTeamStr = item.inP1 ? (m2.p1 || '') : (m2.p2 || '');
-        var isWinner = !!m2.winner && !m2.draw && (
-          m2.winner === myTeamStr ||
-          String(myTeamStr).split(/\s*\/\s*/).some(function(n) { return _isMe(n) && m2.winner.indexOf(n) !== -1; })
-        );
-        var resultColor = m2.draw ? '#94a3b8' : (isWinner ? '#4ade80' : '#f87171');
-        var resultLabel = m2.draw ? 'Empate' : (isWinner ? '🏆 Vitória' : 'Derrota');
-
-        // placar — mostra pelo lado do usuário (p1 ou p2)
-        // ⚰️ REMOVIDO (1.8.44): `_scoreDisplay` + `scoresHtml` eram montados aqui e
-        // NUNCA consumidos — quem desenha o placar deste card é o bloco "VS" mais
-        // abaixo, que lê m2.scoreP1/scoreP2. Ficavam como decoy: mexer neles parecia
-        // mexer no placar e não mudava um pixel (foi o que aconteceu ao consertar o
-        // subplacar do tie-break). O placar com tie-break vive em `_placarLado`.
-
-        // Placar de UM lado, com o subplacar do tie-break quando houver (6⁽⁷⁾).
-        // Ler m2.scoreP1 cru perdia o TB — o número dos games é o mesmo, o que some
-        // é o (7). Fonte única de formatação: window._formatSetForPlayer.
-        function _placarLado(n) {
-          // O construtor é usado isoladamente por testes e por cartões hidratados; por isso
-          // resolve o formato no próprio escopo, sem depender de uma variável de render externo.
-          var _setFormatAttr2 = '';
-          try {
-            var _scoreFmt2 = (typeof window._effectiveScoring === 'function') ? window._effectiveScoring(tRef2, m2) : (tRef2 && tRef2.scoring);
-            var _planFmt2 = (typeof window._matchSetPlan === 'function') ? window._matchSetPlan(_scoreFmt2, m2, { sets:m2.sets, done:true }) : null;
-            if (_planFmt2 && _planFmt2.bestOf > 1) _setFormatAttr2 = ' data-sp-best-of="' + _planFmt2.bestOf + '"';
-          } catch (_eSetFormat2) {}
-          if (Array.isArray(m2.sets) && m2.sets.length > 0 && typeof window._formatSetForPlayer === 'function') {
-            // Resultado encerrado não pode manter uma segunda geometria: o mesmo plano que
-            // alimenta Novidades também desenha suas colunas, fonte e folga. Só o título é
-            // omitido aqui porque o resultado já tem seu próprio cabeçalho de card.
-            if (_planFmt2 && _planFmt2.multi && typeof window._setGridHtml === 'function') {
-              return window._setGridHtml(_planFmt2, n);
-            }
-            // Reserva para carregamento legado; o caminho normal acima é o canônico.
-            // A cor é de CADA set (fonte única `_corDoSetLado`), não da linha: quem venceu o set
-            // fica verde mesmo tendo perdido a partida. ⛔ Sempre por `_spCor` — hex cru aqui
-            // reintroduziria o verde ilegível no tema claro.
-            // UM set não precisa de grade: uma coluna só já está alinhada com ela mesma, e
-            // envolvê-la mudaria o desenho do card de 1 set, que está aprovado como está.
-            var _emColuna = (m2.sets.length > 1 && typeof window._colunaDeSetHtml === 'function');
-            var _setCountAttr = _emColuna ? (' data-sp-set-count="' + m2.sets.length + '"') : '';
-            var _cels = m2.sets.map(function(s) {
-              var _txt = window._formatSetForPlayer(s, n, { html: true });
-              if (typeof window._corDoSetLado !== 'function') return _txt;
-              // ⛔ NÃO depender de `_temVencedor2`: ele é declarado ADIANTE (`var`, içado) e, se
-              // um dia alguém chamar `_placarLado` antes daquela linha, chegaria `undefined` e
-              // TODO set ficaria cinza — em silêncio. Aqui a pergunta é feita na hora.
-              var _c = window._corDoSetLado(s, n, !m2.draw && window._matchWinnerSide(m2) != null);
-              var _num = '<span style="color:' + window._spCor(_c, 'color') + ';">' + _txt + '</span>';
-              /* ⭐ UMA COLUNA POR SET, também aqui — ordem do dono (12/set/2026): _"os números
-               * dos placares na coluna não estão alinhados… set 1, 2, 3, 4 e 5 sempre alinhados
-               * na coluna"_. O `join(' ')` de antes era texto corrido: o `10` do super
-               * tie-break é mais largo que o `7` e empurrava a linha de baixo inteira.
-               * A largura vem do SET (fonte única `_larguraDaColunaDoSet`), então as duas
-               * linhas chegam à mesma medida sem se conhecerem. */
-              return _emColuna ? window._colunaDeSetHtml(_num, s) : _num;
-            });
-            return _emColuna
-              ? '<div class="sp-set-grid"' + _setCountAttr + _setFormatAttr2 + ' style="justify-content:flex-end;">' + _cels.join('') + '</div>'
-              : _cels.join(' ');
-          }
-          var v = (n === 1 ? m2.scoreP1 : m2.scoreP2);
-          return v == null ? '' : _sf(String(v));
-        }
-
-        // Resultados concluídos também precisam dizer qual número pertence a cada set.
-        // A régua da coluna vem do PRÓPRIO set, igual ao placar logo abaixo: cabeçalho e
-        // números continuam alinhados mesmo quando há 10 ou subplacar de tie-break.
-        function _cabecaSetsConcluidos() {
-          if (!Array.isArray(m2.sets) || m2.sets.length < 2 || typeof window._colunaDeSetHtml !== 'function') return '';
-          var _rotulos = [];
-          var _setFormatAttr2 = '';
-          try {
-            var _score = (typeof window._effectiveScoring === 'function') ? window._effectiveScoring(tRef2, m2) : (tRef2 && tRef2.scoring);
-            var _plano = (typeof window._matchSetPlan === 'function') ? window._matchSetPlan(_score, m2, { sets:m2.sets, done:true }) : null;
-            _rotulos = _plano && Array.isArray(_plano.columns) ? _plano.columns.map(function (c) { return c.label; }) : [];
-            if (_plano && _plano.bestOf > 1) _setFormatAttr2 = ' data-sp-best-of="' + _plano.bestOf + '"';
-          } catch (_eSetHead) {}
-          if (_plano && _plano.multi && typeof window._setHeadHtml === 'function') {
-            return window._setHeadHtml(_plano, { hideHeadline:true });
-          }
-          var _cols = m2.sets.map(function (s, i) {
-            var _label = _rotulos[i] || String(i + 1);
-            return window._colunaDeSetHtml('<span class="sp-set-lbl">' + _sf(_label) + '</span>', s);
-          }).join('');
-          return '<div class="sp-set-head"><div class="sp-set-head-linha2"><span class="sp-set-head-sets">SETS</span><div class="sp-set-grid" data-sp-set-count="' + m2.sets.length + '"' + _setFormatAttr2 + ' style="justify-content:flex-end;">' + _cols + '</div></div></div>';
-        }
-
-        // mesmo estilo de coluna que _miniBracketCard — JOGO N GLOBAL (fonte única).
-        // v1.2.37: sem exceção pra Rei/Rainha (ver matchLabel acima).
-        var matchLabel2 = (m2 && m2._gameNum != null)
-          ? ('Jogo ' + m2._gameNum)
-          : (m2.label || 'JOGO 1');
-        var rowStyle2 = 'display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:8px;margin-bottom:4px;';
-        // Mesmo contrato de nome usado pela chave, Novidades e Próximo Jogo. Este trecho
-        // substitui o desenho antigo de Últimos Resultados, que tinha altura própria e
-        // portanto nunca podia acompanhar a compactação de uma/duas linhas.
-        function _resultadoMembroHtml(n, uid, sou, membrosNoTime) {
-          var geo = (typeof window._cardNomeGeo === 'function') ? window._cardNomeGeo(membrosNoTime) : null;
-          if (!geo) return '';
-          var av = window._personAvatarHtml(uid || '', n,
-            'width:' + geo.avatar + ';height:' + geo.avatar + ';border-radius:50%;object-fit:cover;flex-shrink:0;');
-          var contato = typeof window._contactPersonIconHtml === 'function'
-            ? window._contactPersonIconHtml(tRef2, uid, n, {sameGroup:true,dentroDaCaixa:true}) : '';
-          var nome = typeof window._personNameHtml === 'function' ? window._personNameHtml(uid, n) : _sf(n);
-          return '<div class="sp-mc-side">' + av +
-            '<div class="sp-mc-box" data-sp-card-name-box data-sp-one-line-h="' + geo.oneLineBoxH + 'rem" data-sp-two-line-h="' + geo.twoLineBoxH + 'rem" style="--sp-box-h:' + geo.twoLineBoxH + 'rem">' +
-              '<span class="sp-name-fit sp-mc-nm" data-maxrem="' + geo.maxRem + '" data-minrem="' + geo.minRem + '" data-two-line-maxrem="' + geo.twoLineMaxRem + '" style="font-weight:' + (sou ? '700' : '400') + ';color:' + window._spCor((sou ? '#f1f5f9' : '#94a3b8'), 'color') + ';">' + nome + contato + '</span>' +
-            '</div></div>';
-        }
-
-        var p1IsWinner = !m2.draw && window._matchWinnerSide(m2) === 1;
-        var p2IsWinner = !m2.draw && window._matchWinnerSide(m2) === 2;
-        // ⭐ 2.0.5 — A COR DO NÚMERO AQUI É A MESMA DA CHAVE. Relato do dono, olhando "Seus
-        // últimos resultados": _"quando eu disse como os placares devem aparecer cobrimos todas
-        // as situações. por que nos seus últimos resultados está diferente? sem número perdedor
-        // vermelho?"_. Ele está certo: a regra da 1.9.112 (tarja diz o ESTADO, número diz QUEM
-        // GANHOU) foi aplicada no card da CHAVE (renderMatchCard) e este bloco da dashboard é
-        // OUTRO renderizador — ficou com o perdedor em CINZA. É a mesma doença das duas pontas.
-        // Cânone, na letra do dono: sem resultado = tudo cinza; com resultado = vencedor VERDE,
-        // perdedor VERMELHO. O cinza só sobra pra jogo sem vencedor resolvido (ou empate).
-        var _temVencedor2 = !m2.draw && window._matchWinnerSide(m2) != null;
-        var _corPlacar2 = function (venceu) {
-          return venceu ? '#4ade80' : (_temVencedor2 ? '#f87171' : '#94a3b8');
-        };
-
-        // v1.9.99: posição final do usuário no torneio (quando a participação já
-        // está definida em t.classification — ex.: vice = 2º). Mostrada abaixo do
-        // nome do torneio e acima da chave.
-        var _finalPos = null;
-        if (tRef2 && tRef2.classification && typeof tRef2.classification === 'object') {
-          if (tRef2.classification[myTeamStr] != null) {
-            _finalPos = tRef2.classification[myTeamStr];
-          } else {
-            Object.keys(tRef2.classification).forEach(function(k) {
-              if (_finalPos == null && String(k).split(/\s*\/\s*/).some(function(n) { return _isMe(n); })) {
-                _finalPos = tRef2.classification[k];
-              }
-            });
-          }
-        }
-        var _posBadge = '';
-        if (_finalPos != null && !isNaN(Number(_finalPos))) {
-          var _fp = Number(_finalPos);
-          var _posMedal = _fp === 1 ? '🥇' : _fp === 2 ? '🥈' : _fp === 3 ? '🥉' : '🏅';
-          var _posCol = _fp === 1 ? '#fbbf24' : _fp === 2 ? '#cbd5e1' : _fp === 3 ? '#d97706' : '#94a3b8';
-          // v2.0.3: mais destaque — "2º lugar" + medalha, sem "Você terminou em",
-          // fonte ~2x maior.
-          _posBadge = '<div style="font-size:1.45rem;font-weight:900;color:' + window._spCor(_posCol, 'color') + ';margin:4px 0 8px;display:flex;align-items:center;gap:8px;line-height:1.1;">' +
-            '<span>' + _fp + 'º lugar</span>' +
-            '<span style="font-size:1.6rem;">' + _posMedal + '</span></div>';
-        }
-
         var _fp2 = _splitFase(faseStr2);
-        // v2.3.63: no header de cada box mostra só "JOGO N" (o grupo+torneio já
-        // aparece no cabeçalho compartilhado). Fallback pro label completo
-        // quando não há "jogo N" (ex.: eliminatórias "Final").
-        // v1.2.37: Rei/Rainha usa o número GLOBAL da FONTE ÚNICA (m._gameNum), igual ao
-        // bracket. Antes vinha do _monarchGlobalJogoNum (2º numerador, já removido).
-        var _gJogoNum2 = (m2 && m2.isMonarch && m2._gameNum != null) ? m2._gameNum : null;
-        var _boxLabel = (_gJogoNum2 != null) ? ('Jogo ' + _gJogoNum2) : (_fp2.jogo || matchLabel2);
-        var _body = _posBadge +
-          '<div class="sp-match-card" onclick="window.location.hash=\'#bracket/' + _esc2(item.tId) + '\'" style="cursor:pointer;background:var(--bg-card);border:1px solid rgba(16,185,129,0.3);border-radius:12px;padding:14px;box-shadow:0 4px 12px rgba(0,0,0,0.15);">' +
-            // Header: label + badge resultado
-            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;border-bottom:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));padding-bottom:5px;">' +
-              '<span style="font-size:0.7rem;font-weight:700;color:var(--sp-c-38bdf8,#38bdf8);text-transform:uppercase;">' + _sf(_boxLabel) + '</span>' +
-              '<span style="font-size:0.75rem;font-weight:800;color:' + window._spCor(resultColor, 'color') + ';">' + resultLabel + '</span>' +
-            '</div>' +
-            _cabecaSetsConcluidos() +
-            // P1 row com placar
-            '<div style="' + rowStyle2 + (p1IsWinner ? 'background:rgba(16,185,129,0.12);border-left:3px solid #10b981;' : 'background:var(--sp-g-255-255-255-002,rgba(255,255,255,0.02));') + 'justify-content:space-between;">' +
-              (function(){
-                var parts3 = String(m2.p1||'').split(/\s*\/\s*/).filter(Boolean);
-                var ph = '<div class="sp-mc-col" style="flex:1;min-width:0;">';
-                parts3.forEach(function(n, _pi){
-                  // ⭐ O UID DO JOGO CHEGA AQUI, por índice: `m2.team1Uids` casa com a ordem
-                  // de `p1` partida em ' / '. Antes o ícone era semeado só pelo NOME e, com o
-                  // perfil ainda não resolvido, virava o mesmo círculo mudo pra todo mundo.
-                  var _u3=(Array.isArray(m2.team1Uids)&&m2.team1Uids[_pi])||'';
-                  ph += _resultadoMembroHtml(n, _u3, _isMe(n), parts3.length);
-                });
-                ph+='</div>';
-                var sc3 = m2.scoreP1 != null ? '<div class="sp-mc-num" style="color:' + window._spCor(_corPlacar2(p1IsWinner), 'color')+';flex-shrink:0;text-align:right;">'+_placarLado(1)+'</div>' : '';
-                return ph+sc3;
-              })() +
-            '</div>' +
-            '<div style="text-align:center;font-size:0.65rem;color:var(--text-muted);font-weight:800;letter-spacing:2px;padding:3px 0;">VS</div>' +
-            // P2 row com placar
-            '<div style="' + rowStyle2 + (p2IsWinner ? 'background:rgba(16,185,129,0.12);border-left:3px solid #10b981;' : 'background:var(--sp-g-255-255-255-002,rgba(255,255,255,0.02));') + 'justify-content:space-between;">' +
-              (function(){
-                var parts4 = String(m2.p2||'').split(/\s*\/\s*/).filter(Boolean);
-                var ph = '<div class="sp-mc-col" style="flex:1;min-width:0;">';
-                parts4.forEach(function(n, _pi){
-                  // ⭐ O UID DO JOGO CHEGA AQUI, por índice: `m2.team2Uids` casa com a ordem
-                  // de `p2` partida em ' / '. Antes o ícone era semeado só pelo NOME e, com o
-                  // perfil ainda não resolvido, virava o mesmo círculo mudo pra todo mundo.
-                  var _u4=(Array.isArray(m2.team2Uids)&&m2.team2Uids[_pi])||'';
-                  ph += _resultadoMembroHtml(n, _u4, _isMe(n), parts4.length);
-                });
-                ph+='</div>';
-                var sc4 = m2.scoreP2 != null ? '<div class="sp-mc-num" style="color:' + window._spCor(_corPlacar2(p2IsWinner), 'color')+';flex-shrink:0;text-align:right;">'+_placarLado(2)+'</div>' : '';
-                return ph+sc4;
-              })() +
-            '</div>' +
-          '</div>';
-        _units.push({ group: _fp2.group, jogo: _fp2.jogo, tName: item.tName, color: faseColor2, faseStr2: faseStr2, body: _body, tId: item.tId });
+        var _body = (typeof window.renderMatchCard === 'function')
+          ? window.renderMatchCard(m2, false, item.tId,
+              m2._gameNum != null ? m2._gameNum : null, false, null,
+              { readOnly:true, dashConsensus:true })
+          : '';
+        _units.push({
+          group: _fp2.group,
+          jogo: _fp2.jogo,
+          tName: item.tName,
+          color: faseColor2,
+          faseStr2: faseStr2,
+          body: _body,
+          tId: item.tId,
+          m: m2
+        });
       });
 
       // Agrupa por (grupo + torneio) preservando a ordem original.

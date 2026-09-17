@@ -94,9 +94,13 @@ ok(/font-style:italic/.test(pend),
 (function () {
   const fs2 = require('fs'), path2 = require('path');
   const dash = fs2.readFileSync(path2.join(__dirname, '..', 'js/views/dashboard.js'), 'utf8');
-  ok(/_corPlacar2/.test(dash), 'a dashboard tem a mesma regra de cor do número');
-  ok(/venceu \? '#4ade80' : \(_temVencedor2 \? '#f87171' : '#94a3b8'\)/.test(dash),
-     'vencedor VERDE · perdedor VERMELHO · sem vencedor resolvido (ou empate) CINZA');
+  const bracket = fs2.readFileSync(path2.join(__dirname, '..', 'js/views/bracket.js'), 'utf8');
+  const recentIni = dash.indexOf('// ── Últimos resultados confirmados');
+  const recentFim = dash.indexOf('// Agrupa por (grupo + torneio)', recentIni);
+  ok(dash.slice(recentIni, recentFim).includes('window.renderMatchCard(m2'),
+     'a dashboard delega Seus últimos resultados ao card canônico');
+  ok(/var _c = window\._corDoSetLado\(s, playerNum, _temV\)/.test(bracket),
+     'vencedor VERDE · perdedor VERMELHO · sem vencedor resolvido (ou empate) vêm da mesma regra');
 
   // VARREDURA: nenhum renderizador pode voltar a pintar o perdedor de cinza num placar.
   const raiz = path2.join(__dirname, '..', 'js');

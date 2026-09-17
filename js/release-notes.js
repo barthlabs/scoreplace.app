@@ -1,3 +1,4 @@
+// 2.3.60 — Seus Últimos Resultados usa o card canônico da chave, inclusive “Jogado em”. A numeração segue rodada e linha (Ouro/Prata) dentro de cada categoria, da menor à maior; a transição reconhece os dois links de detalhe sem cair em carregamento.
 // 2.3.59 — inscrições durante a fase usam o mesmo seletor explícito em criar, editar e chave: Fechadas/Abertas e Suplentes/Novos Confrontos ficam dos dois lados, com cor e brilho no estado ativo.
 // 2.3.58 — transição entre dashboard e detalhe preserva a tela anterior até o destino completo renderizar; não troca mais o conteúdo por “Carregando…”.
 // 2.3.57 — ‘Jogar até’ usa o limite configurado da rodada do jogo (inclusive os cortes ajustados da eliminatória), nunca o encerramento global do torneio.

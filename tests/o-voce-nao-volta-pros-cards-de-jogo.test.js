@@ -23,6 +23,13 @@ const ok = (c, m) => { if (c) pass++; else { fail++; console.error('  ✗', m); 
 console.log('──── o "(você)" não volta pros cards de jogo ────');
 
 const src = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'dashboard.js'), 'utf8');
+const bracket = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'bracket.js'), 'utf8');
+const recentIni = src.indexOf('// ── Últimos resultados confirmados');
+const recentFim = src.indexOf('// Agrupa por (grupo + torneio)', recentIni);
+const recent = src.slice(recentIni, recentFim);
+const cardIni = bracket.indexOf('function renderMatchCard');
+const cardFim = bracket.indexOf('window.renderMatchCard', cardIni);
+const canonicalCard = bracket.slice(cardIni, cardFim);
 // tira comentários: a justificativa da remoção CITA o rótulo, e sem isto o teste se
 // acusaria sozinho lendo o próprio texto que explica a remoção.
 const cod = src.split('\n').filter(l => !/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n');
@@ -33,13 +40,10 @@ ok(cod.indexOf('(você)') === -1,
 // ── o que IDENTIFICA o usuário tem que continuar de pé ───────────────────────
 // Sem isto, "passou verde" poderia significar que alguém tirou o rótulo E o destaque —
 // e aí ninguém acha o próprio jogo, que é pior que o desalinhamento.
-ok(/var _cor = isMe \? '#f1f5f9' : '#94a3b8';/.test(cod),
-   'a COR continua destacando quem está olhando (é ela que identifica agora)');
-ok(/var _peso = isMe \? '700' : '500';/.test(cod),
-   'e o PESO da fonte também');
-ok(/_resultadoMembroHtml\(n, _u3, _isMe\(n\), parts3\.length\)/.test(cod) &&
-   /_resultadoMembroHtml\(n, _u4, _isMe\(n\), parts4\.length\)/.test(cod),
-   'nos dois lados de Últimos Resultados a cor, sem rótulo, continua identificando quem está olhando');
+ok(recent.includes('window.renderMatchCard(m2'),
+   'Últimos Resultados delega ao card canônico, sem renderer próprio');
+ok(/_isMyMatch/.test(canonicalCard) && /data-my-match/.test(canonicalCard),
+   'o card canônico mantém a marca visual de quem está olhando, sem rótulo textual');
 ok(/_isMe\(name\)\n?\s*\? '<b style="color:var\(--sp-c-e2e8f0/.test(cod),
    'na linha de confronto, o negrito claro segue marcando o usuário');
 

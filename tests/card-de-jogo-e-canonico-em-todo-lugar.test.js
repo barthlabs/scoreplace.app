@@ -35,6 +35,9 @@ function t(cond, msg) {
 const BR = read('js/views/bracket.js');
 const DB = read('js/views/dashboard.js');
 const MD = read('js/views/bracket-model.js');
+const recentIni = DB.indexOf('// ── Últimos resultados confirmados');
+const recentFim = DB.indexOf('// Agrupa por (grupo + torneio)', recentIni);
+const RECENT = DB.slice(recentIni, recentFim);
 
 console.log('\n① A régua existe, e é UMA');
 t(/window\._cardNomeGeo = function/.test(MD),
@@ -58,12 +61,12 @@ t(!/width:28px;height:28px;border-radius:50%;object-fit:cover/.test(DB),
   '⛔ a dashboard não tem mais a foto de 28px cravada');
 
 console.log('\n③ A caixa invisível e o ajuste de nome valem nos DOIS');
-t(/class="sp-mc-box"/.test(BR) && /class="sp-mc-box"/.test(DB),
-  'os dois põem o nome dentro da caixa de tamanho fixo (.sp-mc-box)');
-t(/sp-name-fit/.test(BR) && /sp-name-fit/.test(DB),
-  'os dois marcam o nome com .sp-name-fit — é o que faz a fonte ceder em vez de cortar');
-t(/data-two-line-maxrem/.test(BR) && /data-two-line-maxrem/.test(DB),
-  'os dois passam o teto de duas linhas, para só o nome longo ceder');
+t(/class="sp-mc-box"/.test(BR) && RECENT.includes('window.renderMatchCard(m2'),
+  'Últimos Resultados recebe a caixa de tamanho fixo do card canônico (.sp-mc-box)');
+t(/sp-name-fit/.test(BR) && RECENT.includes('window.renderMatchCard(m2'),
+  'Últimos Resultados recebe .sp-name-fit do card canônico — a fonte cede em vez de cortar');
+t(/data-two-line-maxrem/.test(BR) && RECENT.includes('window.renderMatchCard(m2'),
+  'Últimos Resultados recebe o teto de duas linhas do card canônico');
 t(!/text-overflow:ellipsis;white-space:nowrap;"><span' \+ _uidAttr/.test(DB),
   '⛔ E A DASHBOARD PAROU DE CORTAR O NOME com reticências — era a violação mais grave');
 
@@ -73,8 +76,8 @@ t(!/data-fit-group/.test(BR) && !/data-fit-group/.test(DB),
 
 console.log('\n⑤ O número do placar sai da mesma classe nos dois');
 t(/class="sp-mc-num"/.test(BR), 'a chave usa .sp-mc-num');
-t((DB.match(/sp-mc-num/g) || []).length >= 4,
-  'a dashboard usa .sp-mc-num no placar pendente E no decidido (' + (DB.match(/sp-mc-num/g) || []).length + ' usos)');
+t(RECENT.includes('window.renderMatchCard(m2') && /class="sp-mc-num"/.test(BR),
+  'a dashboard recebe .sp-mc-num do card canônico no placar decidido');
 t(!/font-size:1rem;font-weight:800;color:'\+_corPlacar2/.test(DB),
   '⛔ e não sobrou 1rem cravado no placar decidido da dashboard');
 t(/\.sp-mc-num\{[^}]*font-size:var\(--sp-num-fs\)/.test(read('css/components.css')),

@@ -19,7 +19,10 @@ const end = router.indexOf('/* ⭐ E QUANDO', start);
 const gate = router.slice(start, end);
 ok(start >= 0, 'a troca dashboard ↔ torneio tem um gate próprio');
 ok(/_viewAnterior/.test(gate) && /_trocaPrincipal/.test(gate), 'o gate compara origem e destino');
-ok(/dashboard/.test(gate) && /tournaments/.test(gate), 'o gate cobre os dois sentidos');
+ok(/dashboard/.test(gate) && /tournaments/.test(gate) && /tournament/.test(gate),
+  'o gate cobre os dois sentidos e os aliases tournament/tournaments');
+ok(/_origemPrincipal/.test(gate) && /_destinoPrincipal/.test(gate),
+  'o gate normaliza os aliases antes de decidir se preserva a tela');
 ok(/classList\.add\('sp-route-transitioning'\)/.test(gate), 'a tela anterior fica inerte durante a troca');
 ok(/!_shouldPreservePrerender && !_reentrada && !_trocaPrincipal/.test(router),
   'o container não é limpo enquanto o destino ainda está carregando');
