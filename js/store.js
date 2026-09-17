@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.3.69';
+window.SCOREPLACE_VERSION = '2.3.70';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -11030,9 +11030,10 @@ if (typeof window !== 'undefined' && /[?&]diag=1/.test(String(window.location &&
 window._ensureTournamentLoaded = function (tId, cb) {
   var local = window._findTournamentById(tId);
   // ⭐ 2.0.90 — RESUMO NÃO SERVE PRA ABRIR. A lista passou a receber o documento
-  // LEVE (`_resumo: true`, ~11 KB no Confra contra 236 KB), que tem o que o CARTÃO
-  // mostra e não tem jogos, inscritos nem histórico. Quem chega aqui quer o torneio
-  // de VERDADE — então um resumo conta como "não carregado" e vai buscar o completo.
+  // LEVE (`_resumo: true`, ~11 KB no Confra contra 236 KB), que tem o que o
+  // CARTÃO mostra e não tem jogos, inscritos nem histórico. Quem chega aqui quer o
+  // torneio de VERDADE — então um resumo conta como "não carregado" e vai buscar
+  // o completo.
   // ⛔ Sem esta linha, abrir um torneio da vitrine mostraria chave vazia.
   if (local && local._resumo === true) local = null;
   // ⛔ E O QUE VEIO DO CACHE TAMBÉM NÃO SERVE PRA ABRIR (ver `_doCache` em _loadFromCache):
@@ -11049,10 +11050,31 @@ window._ensureTournamentLoaded = function (tId, cb) {
    * [[feedback_cache_quente_satisfaz_metade_da_pergunta]] */
   if (local && local._faltamPesados === true) local = null;
   if (local) { cb(local); return; }
+
   var DB = window.FirestoreDB;
   if (!DB || typeof DB.loadTournamentById !== 'function') { cb(null); return; }
+
+  // Uma leitura pendurada não pode deixar a rota sem dono. Antes, a Promise podia
+  // nunca resolver (rede/IndexedDB em recuperação), o loader da rota saía em 6s e
+  // sobrava a tela genérica "Carregando…" para sempre. Um único término entrega o
+  // fallback recuperável; quando a leitura velha enfim voltar, ela não reabre uma
+  // rota que o usuário já abandonou.
+  var _acabou = false;
+  var _tempo = setTimeout(function () {
+    _terminar(null, 'tempo esgotado');
+  }, 8000);
+  var _terminar = function (torneio, motivo) {
+    if (_acabou) return;
+    _acabou = true;
+    try { clearTimeout(_tempo); } catch (e) {}
+    if (!torneio && motivo && window._warn) {
+      window._warn('[_ensureTournamentLoaded] ' + motivo + ':', String(tId));
+    }
+    cb(torneio || null);
+  };
+
   DB.loadTournamentById(tId).then(function (t) {
-    if (!t) { cb(null); return; }
+    if (!t) { _terminar(null, 'torneio não encontrado'); return; }
     if (!t.id) t.id = String(tId);
     // Uma segunda busca pode ter resolvido enquanto a leitura estava em voo — nunca
     // duplicar: quem chegou primeiro é a referência viva que a tela já pode estar usando.
@@ -11060,9 +11082,10 @@ window._ensureTournamentLoaded = function (tId, cb) {
     /* ⛔ A MESMA PERGUNTA DAS TRÊS LINHAS LÁ EM CIMA — e eu tinha consertado só uma das
      * duas portas. O teste `abrir-torneio-nao-usa-o-cache` pegou: aqui é a corrida (outra
      * busca resolveu enquanto esta estava em voo), e aceitar um objeto com parte faltando
-     * devolve à tela exatamente o que a busca completa foi evitar.
-     * [[feedback_unify_dual_entry_points]] */
-    if (jaTem && jaTem._resumo !== true && jaTem._doCache !== true && jaTem._faltamPesados !== true) { cb(jaTem); return; }
+     * devolve à tela exatamente o que a busca completa foi evitar. */
+    if (jaTem && jaTem._resumo !== true && jaTem._doCache !== true && jaTem._faltamPesados !== true) {
+      _terminar(jaTem); return;
+    }
     var A = window.AppStore;
     if (A) {
       // ⭐ 2.0.90 — o completo SUBSTITUI o resumo, no lugar dele. Empurrar pro fim
@@ -11080,10 +11103,10 @@ window._ensureTournamentLoaded = function (tId, cb) {
         A.publicDiscovery.push(t);
       }
     }
-    cb(t);
+    _terminar(t);
   }).catch(function (e) {
     if (window._warn) window._warn('[_ensureTournamentLoaded] falhou:', e && e.message);
-    cb(null);
+    _terminar(null, 'falha de leitura');
   });
 };
 

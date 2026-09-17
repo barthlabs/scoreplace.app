@@ -1657,6 +1657,7 @@ function renderTournaments(container, tournamentId = null) {
             var byUid = arr.findIndex(function(p) { return typeof p === 'object' && p && p.uid === uidOrName; });
             if (byUid !== -1) return byUid;
             return arr.findIndex(function(p) {
+                if (p == null) return false;
                 var n = typeof p === 'string' ? p : (p.displayName || p.name || '');
                 return n === uidOrName;
             });
@@ -3862,7 +3863,9 @@ function renderTournaments(container, tournamentId = null) {
         const t = visible[0];
         const isOrg = typeof window.AppStore.isOrganizer === 'function' ? window.AppStore.isOrganizer(t) : false;
         const _hasTournCats = (t.combinedCategories && t.combinedCategories.length > 0) || (t.genderCategories && t.genderCategories.length > 0) || (t.skillCategories && t.skillCategories.length > 0) || (t.ageCategories && t.ageCategories.length > 0);
-        const parts = typeof window._getCompetitors === 'function' ? window._getCompetitors(t) : (t.participants ? (Array.isArray(t.participants) ? t.participants : Object.values(t.participants)) : []);
+        // Snapshot de transição pode conter lacunas. A lista canônica que alimenta cards,
+        // ordenação e perfis nunca carrega uma entrada nula para o restante da tela.
+        const parts = (typeof window._getCompetitors === 'function' ? window._getCompetitors(t) : (t.participants ? (Array.isArray(t.participants) ? t.participants : Object.values(t.participants)) : [])).filter(function (p) { return p != null; });
 
         // v4.5.63: PERFIS DOS PARTICIPANTES = PRÉ-REQUISITO DO RENDER. Junta os uids de
         // TODOS os inscritos (incl. p1Uid/p2Uid de dupla) e garante os perfis no cache.

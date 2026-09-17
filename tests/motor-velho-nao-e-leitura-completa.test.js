@@ -79,55 +79,28 @@ function motor() {
      'CRITÉRIO · a checagem do motor vem ANTES da contagem (não adianta contar dado errado)');
 }
 
-/* ── 2. a tela nunca fica preta ────────────────────────────────────────────────────── */
-function telaPreta() {
+/* ── 2. rota assíncrona não vira carregamento genérico ─────────────────────── */
+function telaEstavel() {
   const r = read('js/router.js');
   const iEsvazia = r.indexOf("viewContainer.innerHTML = '';");
-  const iGuarda = r.indexOf('!viewContainer.firstChild');
-  ok(iEsvazia > 0, 'PRETA · o router ainda esvazia o container (é o desenho atual)');
-  ok(iGuarda > iEsvazia, 'PRETA · existe uma guarda DEPOIS do render que olha se sobrou vazio');
-
-  // a guarda tem que rodar FORA do catch — o caso do dono não lança exceção nenhuma
-  const iCatch = r.indexOf('} catch (_erroRender) {');
-  const iFimCatch = r.indexOf('} catch (_e3) {}', iCatch);
-  ok(iGuarda > iFimCatch,
-     'PRETA · a guarda roda mesmo SEM exceção (o Sentry ficou mudo no caso relatado)');
-
-  // e tem que ser à prova de erro ela mesma: se ela lançar, volta a tela preta
-  const trecho = r.slice(iFimCatch, iGuarda + 1400);
-  ok(/try \{[\s\S]*!viewContainer\.firstChild[\s\S]*\} catch \(_e4\) \{\}/.test(trecho),
-     'PRETA · a própria guarda é protegida (não pode ser ela a derrubar a tela)');
-  ok(/Carregando/.test(trecho),
-     'PRETA · o que entra no lugar do vazio é "Carregando", que é honesto e não é preto');
-  ok(/viewContainer && !viewContainer\.firstChild/.test(trecho),
-     'PRETA · a guarda checa o container antes de mexer nele');
-
-  // ⚠️ o teste olha RESULTADO, não mecanismo: simula o container vazio e roda a guarda.
-  const nós = [];
-  const fakeContainer = {
-    firstChild: null,
-    set innerHTML(v) { nós.push(v); this.firstChild = { v: v }; },
-    get innerHTML() { return nós[nós.length - 1] || ''; }
-  };
-  const guarda = new Function('viewContainer', `
-    try {
-      if (viewContainer && !viewContainer.firstChild) {
-        viewContainer.innerHTML = '<div class="sp-view-vazia">Carregando…</div>';
-      }
-    } catch (_e4) {}
-    return viewContainer.innerHTML;
-  `);
-  ok(guarda(fakeContainer).indexOf('Carregando') >= 0,
-     'PRETA · container vazio recebe conteúdo (a tela deixa de ser o fundo da página)');
-  const cheio = { firstChild: { já: 1 }, innerHTML: '<div>a dashboard</div>' };
-  guarda(cheio);
-  ok(cheio.innerHTML === '<div>a dashboard</div>',
-     'PRETA · container que JÁ tem conteúdo não é tocado (a guarda não apaga a tela boa)');
+  const iEpoch = r.indexOf('var _routeIsCurrent = function');
+  const iSemFallback = r.indexOf('Não há fallback genérico de "Carregando…" aqui.');
+  ok(iEsvazia > 0, 'ROTA · o renderer ainda pode trocar o conteúdo quando o destino está pronto');
+  ok(iEpoch > 0 && iEpoch < iEsvazia,
+     'ROTA · callbacks assíncronos recebem uma época antes de qualquer troca de tela');
+  ok(iSemFallback > iEsvazia,
+     'ROTA · container vazio não é mais convertido no spinner genérico sem fim');
+  ok(!/sp-view-vazia/.test(r),
+     'ROTA · não existe mais a tela genérica sp-view-vazia que escondia a leitura pendurada');
+  ok(/_ensureTournamentLoaded\(cleanParam[\s\S]{0,180}_routeIsCurrent\(\)/.test(r),
+     'ROTA · retorno de leitura só pinta se a rota original continuar atual');
+  ok(/_quadroSeguro && _quadroSeguro\.trim\(\)/.test(r),
+     'ROTA · uma exceção restaura o quadro anterior em vez de deixar o app numa página morta');
 }
 
 console.log('\n═══ motor velho não é leitura completa · a tela não fica preta ═══\n');
 motor();
 console.log('');
-telaPreta();
+telaEstavel();
 console.log('\n' + (falhas ? '❌ ' + falhas + ' falha(s) de ' + testes : '✅ ' + testes + ' asserções, 0 falhas') + '\n');
 process.exit(falhas ? 1 : 0);

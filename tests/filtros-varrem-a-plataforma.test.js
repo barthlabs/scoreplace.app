@@ -377,9 +377,9 @@ if (codPools && codCont) {
   ok(/tags: \{ view:/.test(bloco), 'o relatório diz QUAL tela falhou');
   ok(/viewContainer\.innerHTML =/.test(bloco),
     'o container é PREENCHIDO com um aviso — nunca fica vazio');
-  ok(/Não consegui desenhar esta tela/.test(bloco), 'o aviso diz o que aconteceu, em português');
-  ok(/window\.location\.reload\(\)/.test(bloco) && /#dashboard/.test(bloco),
-    'e oferece caminho de volta (tentar de novo / início)');
+  ok(/Não consegui abrir esta tela agora/.test(bloco), 'o aviso diz o que aconteceu, em português');
+  ok(/_quadroSeguro/.test(bloco) && /window.initRouter/.test(bloco) && /#dashboard/.test(bloco),
+    'mantém a tela íntegra e oferece caminho de volta (tentar de novo / início)');
   // a ordem importa: reportar ANTES de desenhar
   ok(bloco.indexOf('_captureException') < bloco.indexOf('viewContainer.innerHTML ='),
     'reporta ANTES de desenhar — se o próprio aviso falhar, o erro original já está no Sentry');

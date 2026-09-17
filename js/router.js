@@ -67,6 +67,21 @@ function initRouter() {
     // Clean param from query string if present
     var cleanParam = param ? param.split('?')[0] : null;
 
+    // Cada abertura recebe uma época. Retornos assíncronos de uma tela que o
+    // usuário já deixou não podem escrever por cima do destino atual, nem esconder
+    // o loader pertencente ao destino novo.
+    var _routeRequestKey = hash + '|' + ((window.AppStore && window.AppStore.currentUser) ? '1' : '0');
+    if (window._spRouteRequestKey !== _routeRequestKey) {
+      window._spRouteRequestKey = _routeRequestKey;
+      window._spRouteEpoch = (window._spRouteEpoch || 0) + 1;
+    }
+    var _routeEpoch = window._spRouteEpoch || 0;
+    var _routeIsCurrent = function () {
+      return window._spRouteEpoch === _routeEpoch &&
+        window._spRouteRequestKey === _routeRequestKey &&
+        String(window.location.hash || '#dashboard') === String(hash);
+    };
+
     // --- Track invited tournament IDs for visibility (memory + sessionStorage) ---
     if (view === 'tournaments' && cleanParam && window.AppStore) {
       if (window.AppStore._invitedTournamentIds.indexOf(cleanParam) === -1) {
@@ -208,6 +223,7 @@ function initRouter() {
           window._ultimaRotaPintada + ' → ' + _rotaKey);
       } catch (e) {}
     }
+    var _quadroSeguro = viewContainer.innerHTML;
     if (!_shouldPreservePrerender && !_reentrada && !_trocaPrincipal) {
       viewContainer.innerHTML = '';
     }
@@ -524,13 +540,15 @@ function initRouter() {
             window._bracketNamesPromise = null;
             var _saiuTour = false;
             var _fecharTour = function () {
-              if (_saiuTour) return; _saiuTour = true;
+              if (_saiuTour || !_routeIsCurrent()) return; _saiuTour = true;
               if (typeof window._hideLoading === 'function') { try { window._hideLoading(); } catch (e) {} }
             };
-            // teto de segurança: loader preso é pior que abertura feia. O backstop
-            // global de 15s do _showLoading continua valendo por baixo deste.
-            setTimeout(_fecharTour, 6000);
+            // A leitura tem teto próprio em _ensureTournamentLoaded. Este backstop só
+            // protege o loader depois que a rota ainda é a atual; ele nunca derruba o
+            // loader de uma navegação posterior.
+            setTimeout(_fecharTour, 9000);
             var _pintaTorneio = function () {
+              if (!_routeIsCurrent()) return;
               try {
                 if (window._medirTrecho) window._medirTrecho('rota-torneio', function () { renderTournaments(viewContainer, cleanParam); });
                 else renderTournaments(viewContainer, cleanParam);
@@ -568,7 +586,7 @@ function initRouter() {
               // o que há é resumo. ⛔ Sem isto, abrir um torneio da vitrine mostraria
               // chave e inscritos vazios.
               if (typeof window._ensureTournamentLoaded === 'function' && cleanParam) {
-                window._ensureTournamentLoaded(cleanParam, function () { _pintaTorneio(); });
+                window._ensureTournamentLoaded(cleanParam, function () { if (_routeIsCurrent()) _pintaTorneio(); });
                 return;
               }
               _pintaTorneio();
@@ -899,25 +917,25 @@ function initRouter() {
       } catch (_e2) {}
       try {
         var _msg = (_erroRender && _erroRender.message) ? String(_erroRender.message) : 'erro desconhecido';
-        viewContainer.innerHTML =
-          '<div style="max-width:520px;margin:2.5rem auto;padding:1.25rem;text-align:center;' +
-          'background:var(--bg-card,#1e2235);border:1px solid var(--border-color,#333);border-radius:14px;">' +
-            '<div style="font-size:2rem;line-height:1;margin-bottom:10px;">😕</div>' +
-            '<div style="font-size:1rem;font-weight:800;color:var(--text-bright,#fff);margin-bottom:6px;">' +
-              'Não consegui desenhar esta tela</div>' +
-            '<div style="font-size:0.86rem;color:var(--text-muted,#94a3b8);line-height:1.5;margin-bottom:14px;">' +
-              'O problema já foi reportado. Você pode tentar de novo ou voltar ao início.</div>' +
-            '<div style="font-size:0.72rem;color:var(--text-muted,#94a3b8);opacity:0.8;font-family:ui-monospace,Menlo,monospace;' +
-            'word-break:break-word;margin-bottom:16px;">' + (window._safeHtml ? window._safeHtml(_msg) : _msg) + '</div>' +
-            '<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">' +
-              '<button class="btn" style="background:var(--primary-color,#007aff);color:#fff;border:none;' +
-              'padding:10px 20px;border-radius:10px;font-weight:700;cursor:pointer;" ' +
-              'onclick="window.location.reload()">Tentar de novo</button>' +
-              '<button class="btn" style="background:transparent;color:var(--text-main,#ddd);' +
-              'border:1px solid var(--border-color,#444);padding:10px 20px;border-radius:10px;' +
-              'font-weight:600;cursor:pointer;" onclick="window.location.hash=\'#dashboard\'">Início</button>' +
-            '</div>' +
-          '</div>';
+        if (_quadroSeguro && _quadroSeguro.trim()) {
+          // A pessoa continua na última tela íntegra e pode seguir navegando. O erro
+          // já foi enviado ao Sentry; trocar tudo por uma parede sem contexto era o
+          // que transformava uma falha pontual em app inutilizável.
+          viewContainer.innerHTML = _quadroSeguro;
+          if (typeof window.showNotification === 'function') {
+            window.showNotification('Não consegui abrir esta tela agora', 'Sua tela anterior foi mantida. Tente novamente em instantes.', 'warning');
+          }
+        } else {
+          viewContainer.innerHTML =
+            '<div style="max-width:520px;margin:2.5rem auto;padding:1.25rem;text-align:center;background:var(--bg-card,#1e2235);border:1px solid var(--border-color,#333);border-radius:14px;">' +
+              '<div style="font-size:1rem;font-weight:800;color:var(--text-bright,#fff);margin-bottom:6px;">Não consegui abrir esta tela agora</div>' +
+              '<div style="font-size:0.86rem;color:var(--text-muted,#94a3b8);line-height:1.5;margin-bottom:14px;">Tente de novo ou volte ao início.</div>' +
+              '<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">' +
+                '<button class="btn" style="background:var(--primary-color,#007aff);color:#fff;border:none;padding:10px 20px;border-radius:10px;font-weight:700;cursor:pointer;" onclick="if(window.initRouter)window.initRouter()">Tentar de novo</button>' +
+                '<button class="btn" style="background:transparent;color:var(--text-main,#ddd);border:1px solid var(--border-color,#444);padding:10px 20px;border-radius:10px;font-weight:600;cursor:pointer;" onclick="window.location.hash=\'#dashboard\'">Início</button>' +
+              '</div>' +
+            '</div>';
+        }
       } catch (_e3) {}
     } finally {
       // Carimba a rota pintada e devolve o flag — inclusive nos `return` do meio do
@@ -927,32 +945,10 @@ function initRouter() {
       window._isSoftRefresh = _prevSoftRefresh;
     }
 
-    // ── 4ª ENCARNAÇÃO DA TELA PRETA: A JANELA ENTRE ESVAZIAR E PINTAR ──────────
-    // Relato do dono (17/ago/2026): "abrir a dash e tela preta E VOLTA". O "e volta"
-    // é a assinatura do defeito: não há exceção (o Sentry ficou mudo, e a guarda
-    // acima só pega EXCEÇÃO), não há travamento — o container é esvaziado lá em cima
-    // e fica VAZIO até alguém escrever nele. Enquanto isso o que se vê é o fundo da
-    // página, ou seja, preto. Depois o dado chega, re-renderiza, e "volta".
-    //
-    // Cada encarnação anterior travou o seu próprio MECANISMO e o sintoma voltou por
-    // outro caminho. Esta guarda não olha mecanismo nenhum: ela olha o RESULTADO.
-    // Se depois de renderizar o container está vazio, isso já é a tela preta — e aí
-    // pinta o "Carregando", que é honesto (o dado não chegou) e nunca é preto.
-    // Um render posterior sobrescreve isto normalmente, porque toda view escreve o
-    // container inteiro.
-    try {
-      if (viewContainer && !viewContainer.firstChild && !_trocaPrincipal) {
-        viewContainer.innerHTML =
-          '<div class="sp-view-vazia" style="display:flex;flex-direction:column;align-items:center;' +
-          'justify-content:center;gap:12px;min-height:50vh;color:var(--text-muted,#94a3b8);">' +
-            '<div style="width:26px;height:26px;border:3px solid var(--border-color,#333);' +
-            'border-top-color:var(--primary-color,#007aff);border-radius:50%;' +
-            'animation:sp-gira 0.8s linear infinite;"></div>' +
-            '<div style="font-size:0.9rem;font-weight:600;">Carregando…</div>' +
-          '</div>' +
-          '<style>@keyframes sp-gira{to{transform:rotate(360deg)}}</style>';
-      }
-    } catch (_e4) {}
+    // Não há fallback genérico de "Carregando…" aqui. Uma rota assíncrona tem
+    // carregador próprio e término com retry; transformar qualquer intervalo vazio em
+    // spinner escondia a causa e podia permanecer para sempre quando a Promise travava.
+    // O guard de 5s no fim do initRouter continua como última proteção para tela realmente vazia.
   };
 
   if (window._routerHandler) {

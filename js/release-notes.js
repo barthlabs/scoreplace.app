@@ -1,3 +1,4 @@
+// 2.3.70 — a navegação preserva a tela já válida enquanto o torneio abre; leituras que não respondem encerram com recuperação e snapshots parciais sem participante nulo não derrubam a tela.
 // 2.3.69 — um slot nulo de inscrição em snapshot parcial é ignorado ao abrir o torneio; não derruba mais o detalhe nem deixa a tela em “Carregando…”.
 // 2.3.61 — Numeração de jogos usa a posição numérica da chave (P1, P2, …, P10), nunca a ordem lexical do Firestore; por isso Ouro e Prata seguem rodada a rodada em todos os torneios.
 // 2.3.60 — Seus Últimos Resultados usa o card canônico da chave, inclusive “Jogado em”. A numeração segue rodada e linha (Ouro/Prata) dentro de cada categoria, da menor à maior; a transição reconhece os dois links de detalhe sem cair em carregamento.

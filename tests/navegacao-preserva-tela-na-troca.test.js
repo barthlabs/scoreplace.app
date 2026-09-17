@@ -32,8 +32,9 @@ ok(/finally \{ _finalizarTrocaPrincipal\(\); \}/.test(router),
   'dashboard encerra a transição assim que termina de renderizar');
 ok(/_finalizarTrocaPrincipal\(\);\s*\/\/ ── O LOADER SÓ SAI COM OS NOMES/s.test(router),
   'detalhe encerra a transição ao entregar o render completo');
-ok(/!viewContainer\.firstChild && !_trocaPrincipal/.test(router),
-  'a rede de segurança não injeta o spinner pequeno durante a transição válida');
+ok(!/sp-view-vazia/.test(router) &&
+   !/innerHTML\s*=\s*['\"][^'\"]*Carregando/.test(router),
+  'a rede de segurança não injeta um spinner genérico durante a transição válida');
 ok(/window\._ultimaRotaPintada = _rotaKey;/.test(gate) && /if \(!_trocaPrincipal\) window\._ultimaRotaPintada = _rotaKey;/.test(router),
   'a rota só é carimbada depois que a troca assíncrona realmente entregou o destino');
 ok(!/#view-container\.sp-route-transitioning\s*\{\s*pointer-events:\s*none;/s.test(css),
