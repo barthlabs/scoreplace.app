@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.3.70';
+window.SCOREPLACE_VERSION = '2.3.71';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -3301,7 +3301,7 @@ window._sbRebuildCleanRoster = function (list, isTeamEnroll) {
   var ALLOW_P = ALLOW_I.concat(['p1Uid', 'p1Name', 'p1Email', 'p1Photo', 'p1Seq', 'p1Gender', 'p1BirthDate',
     'p2Uid', 'p2Name', 'p2Email', 'p2Photo', 'p2Seq', 'p2Gender', 'p2BirthDate',
     'p1Placeholder', 'p2Placeholder']);
-  var isPair = function (p) { return !!((p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)); };
+  var isPair = function (p) { return !!(p && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)); };
   var member = function (p, n) {
     var g = function (suf) { return p['p' + n + suf]; };
     var o = { uid: g('Uid'), name: g('Name'), displayName: g('Name'), email: g('Email'),
@@ -3313,6 +3313,7 @@ window._sbRebuildCleanRoster = function (list, isTeamEnroll) {
   // 1) inscrição individual desmonta as duplas formadas em pessoas
   var expanded = [];
   (list || []).forEach(function (p) {
+    if (p == null) return;
     if (isPair(p) && !isTeamEnroll) { expanded.push(member(p, 1)); expanded.push(member(p, 2)); }
     else expanded.push(p);
   });
@@ -9263,16 +9264,12 @@ window._navTorneioComAvisoAgora = function (tournamentId, evento) {
   // esse quadro inerte até renderizar o destino; aqui só evitamos esconder esse
   // comportamento com uma tela de carregamento inteira.
   var _sairDaDashboard = String(window.location.hash || '').split('/')[0] === '#dashboard';
-  if (!_sairDaDashboard && typeof window._showLoading === 'function') {
-    try {
-      window._showLoading('Abrindo o torneio…');
-      // marca a posse: o `hashchange` logo abaixo NÃO pode apagar este loader —
-      // quem o tira é a rota do torneio, quando a tela estiver pronta.
-      window._spLoadingOwnedByNav = true;
-      // o overlay já cobre a tela: o realce cumpriu o papel dele e SAI, senão
-      // o card fica esmaecido pra sempre quando a pessoa voltar (2.0.68).
-      setTimeout(window._limpaRealceAbrindo, 0);
-    } catch (e) {}
+  // Navegar não pode criar um overlay full-screen: se a hidratação falhar, ele
+  // interceptava todos os cliques até o timeout. O realce do card já dá feedback
+  // imediato e a tela atual fica disponível enquanto o destino é preparado.
+  if (!_sairDaDashboard) {
+    window._spLoadingOwnedByNav = false;
+    try { setTimeout(window._limpaRealceAbrindo, 240); } catch (e) {}
   }
   // ── O AVISO PINTA ANTES DE A NAVEGAÇÃO COMEÇAR (1.9.55) ─────────────────────
   // Relato do dono: _"demora um pouco, não é instantâneo, mas aparece o abrindo o
@@ -9887,6 +9884,8 @@ window._loadParticipantProfilesByName = function(list) {
   var db = window.FirestoreDB.db;
   var pairs = [];
   (list || []).forEach(function(p) {
+    // Snapshot parcial pode conter slots nulos: ignora só o slot inválido.
+    if (p == null) return;
     if (typeof p === 'string') { p.split(' / ').forEach(function(n) { n = n.trim(); if (n) pairs.push({ name: n, uid: '' }); }); return; }
     // v2.8.66: DUPLA ESTRUTURAL (p1Name/p2Name) — carrega os DOIS membros com seus uids,
     // mesmo quando displayName é só o p1 (duplas do aceite gravam só o p1). Sem isto, o

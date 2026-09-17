@@ -229,6 +229,7 @@ function renderExplore(container) {
 
 // ---- Helper: check if a participant entry matches a given user (by email OR displayName) ----
 function _participantMatchesUser(p, email, displayName, uid) {
+  if (p == null) return false;
   // v2.8.80: uid é a identidade primária — casa por uid antes de email/nome.
   if (uid && p && typeof p === 'object') {
     if (typeof window._participantUids === 'function') {

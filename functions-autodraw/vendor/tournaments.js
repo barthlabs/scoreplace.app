@@ -38,6 +38,7 @@ window._duplaEntryKey = function (p) {
   return 'solo:' + (p.uid || p.name || p.displayName || '');
 };
 window._duplaCard = function (t, p, draggable, ctx) {
+  if (p == null) return '';
   ctx = ctx || {};
   var isOrg = !!ctx.isOrg, drawDone = !!ctx.drawDone;
   var _orgUidsShared = ctx.orgUids || {}, _orgEmailsShared = ctx.orgEmails || {};
@@ -243,6 +244,7 @@ window._buildDoublesInscritosSection = function (t, ctx) {
     else if (pp.p2Name) _pairedMemberKeys['n:' + String(pp.p2Name).trim().toLowerCase()] = 1;
   });
   var _soloParticipants = _allParts.filter(function (p) {
+    if (p == null) return false;
     if (_isPairEntry(p)) return false;
     var u = typeof p === 'object' ? (p.uid || '') : '';
     if (u) return !_pairedMemberKeys['u:' + u];

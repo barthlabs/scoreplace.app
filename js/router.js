@@ -471,8 +471,7 @@ function initRouter() {
         // piscada na abertura. Enquanto isso assenta, o CARREGANDO fica por cima.
         // ⚠️ TETO CURTO E DURO (1,2s): esta é a tela inicial do app; loader presa aqui é
         // pior que qualquer piscada. Se os blocos demorarem, a tela aparece do mesmo jeito.
-        if (!window._isSoftRefresh && !_trocaPrincipal && typeof window._showLoading === 'function') {
-          try { window._showLoading('Carregando…'); } catch (e) {}
+        if (!window._isSoftRefresh && !_trocaPrincipal) {
           var _saiuDash = false;
           var _fecharDash = function () {
             if (_saiuDash) return; _saiuDash = true;
@@ -532,8 +531,7 @@ function initRouter() {
           // a diferença entre "travou" e "está abrindo".
           // Só em NAVEGAÇÃO: soft-refresh (onSnapshot) segue síncrono, senão a tela
           // de quem está lendo pisca a cada placar alheio.
-          if (!window._isSoftRefresh && !_trocaPrincipal && typeof window._showLoading === 'function') {
-            try { window._showLoading('Abrindo o torneio…'); } catch (e) {}
+          if (!window._isSoftRefresh && !_trocaPrincipal) {
             window._spLoadingOwnedByNav = false; // a rota assumiu; a marca já serviu
             // zera a promessa da navegação ANTERIOR: se ESTE torneio não tiver
             // chave, o loader não pode esperar a hidratação de outro
