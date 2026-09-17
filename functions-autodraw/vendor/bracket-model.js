@@ -1444,10 +1444,11 @@ window._assignGlobalGameNumbers = function (t) {
     _contarEstrutura(rd && rd.matches);
     (rd && rd.monarchGroups || []).forEach(function (g) { _contarEstrutura(g && g.matches); });
   });
-  (t.groups || []).forEach(function (g) { _contarEstrutura(g && g.matches); });
-  Object.keys(t.phaseRounds || {}).forEach(function (key) {
-    ((t.phaseRounds[key] && t.phaseRounds[key].rounds) || []).forEach(function (rd) { _contarEstrutura(rd && rd.matches); });
-  });
+  // `phaseRounds` e `groups` podem conter cópias já carregadas para desenhar a
+  // tela, mas não são as fontes que este numerador percorre abaixo. Contá-las aqui
+  // liberaria um recálculo sobre `t.matches` ainda parcial — exatamente o segundo
+  // caminho que manteve Ouro R2 em 124. A condição precisa medir as MESMAS fontes
+  // usadas na travessia canônica: `rounds` e `matches`.
   var _esperados = Number(t._nJogos);
   if (Number.isFinite(_esperados) && _esperados > 0 && Object.keys(_idsConhecidos).length < _esperados) return;
   /* ⛔ TORNEIO INCOMPLETO NÃO SE NUMERA. Esta função conta 1,2,3… na ordem do render,

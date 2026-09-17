@@ -130,6 +130,7 @@ ok(typeof W._monarchGlobalJogoNum === 'undefined',
 (function () {
   const t = {
     _nJogos: 3,
+    phaseRounds: { '1': { rounds: [{ matches: [{ id: 'copied-silver-R1-P1' }] }] } },
     matches: [
       { id: 'loaded-gold-R1-P1', bracket: 'gold', round: 1, p1: 'A', p2: 'B', _gameNum: 123 },
       { id: 'loaded-gold-R2-P1', bracket: 'gold', round: 2, p1: 'C', p2: 'D', _gameNum: 141 }
