@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.3.57';
+window.SCOREPLACE_VERSION = '2.3.58';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -9257,7 +9257,13 @@ window._navTorneioComAvisoAgora = function (tournamentId, evento) {
       if (_d >= 0 && _d < 60000) _inDelay = Math.round(_d);
     }
   } catch (eIn) {}
-  if (typeof window._showLoading === 'function') {
+  // Dashboard → detalhe já tem um quadro completo na tela. Cobri-lo com o
+  // overlay global e depois limpar o container fazia a troca parecer uma travada,
+  // mesmo quando a busca do documento completo seguia normalmente. O router mantém
+  // esse quadro inerte até renderizar o destino; aqui só evitamos esconder esse
+  // comportamento com uma tela de carregamento inteira.
+  var _sairDaDashboard = String(window.location.hash || '').split('/')[0] === '#dashboard';
+  if (!_sairDaDashboard && typeof window._showLoading === 'function') {
     try {
       window._showLoading('Abrindo o torneio…');
       // marca a posse: o `hashchange` logo abaixo NÃO pode apagar este loader —

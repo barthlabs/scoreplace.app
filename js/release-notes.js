@@ -1,3 +1,4 @@
+// 2.3.58 — transição entre dashboard e detalhe preserva a tela anterior até o destino completo renderizar; não troca mais o conteúdo por “Carregando…”.
 // 2.3.57 — ‘Jogar até’ usa o limite configurado da rodada do jogo (inclusive os cortes ajustados da eliminatória), nunca o encerramento global do torneio.
 // 2.3.56 — todo card de jogo mostra abaixo de “Jogo N” o prazo da rodada, o horário agendado ou, após o resultado, a hora do último placar lançado. A mesma linha é usada na chave e na dashboard e atualiza na hora ao agendar.
 // 2.3.55 — confirmar um set não derruba mais a tela: entradas de participante nulas são ignoradas na hidratação. O campo de Super Tie-Break comporta 10 e segue a mesma coluna dos placares já lançados.

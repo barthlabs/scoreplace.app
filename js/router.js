@@ -160,6 +160,31 @@ function initRouter() {
     var _temUser = (window.AppStore && window.AppStore.currentUser) ? '1' : '0';
     var _rotaKey = hash + '|' + _temUser + '|' + (window._lang || '');
     var _reentrada = (window._ultimaRotaPintada === _rotaKey) && !!viewContainer.firstElementChild;
+    // ── TROCA DASHBOARD ↔ TORNEIO NÃO PODE APAGAR A TELA ANTERIOR ───────────
+    // O detalhe pode precisar buscar o documento completo. Antes o router limpava
+    // o container, agendava essa busca e caía logo abaixo na "rede de tela preta",
+    // que desenhava o spinner pequeno visto na produção. Não era ausência de dados:
+    // era uma transição normal tratada como conteúdo perdido.
+    //
+    // Mantemos o quadro já pronto até o destino poder substituir o DOM de uma vez.
+    // A classe só corta cliques no quadro antigo; ela sai no exato render do destino.
+    // Assim não há tela vazia, spinner bloqueante nem ação aplicada na página errada.
+    var _viewAnterior = String(window._ultimaRotaPintada || '').split('|')[0]
+      .replace(/^#/, '').split('/')[0];
+    var _trocaPrincipal = !!viewContainer.firstElementChild &&
+      ((_viewAnterior === 'dashboard' && view === 'tournaments') ||
+       (_viewAnterior === 'tournaments' && (view === '' || view === 'dashboard')));
+    var _finalizarTrocaPrincipal = function () {
+      if (!_trocaPrincipal) return;
+      _trocaPrincipal = false;
+      try { viewContainer.classList.remove('sp-route-transitioning'); } catch (e) {}
+      // Só agora a nova rota passou a existir na tela. Carimbar antes fazia uma
+      // reentrada durante a busca confundir o quadro antigo com o detalhe novo.
+      window._ultimaRotaPintada = _rotaKey;
+    };
+    if (_trocaPrincipal) {
+      try { viewContainer.classList.add('sp-route-transitioning'); } catch (e) {}
+    }
     /* ⭐ E QUANDO AINDA ASSIM FOR NAVEGAÇÃO POR CIMA DE CONTEÚDO, FICA O RASTRO.
      * Se um dia a tela de alguém for esvaziada sem a pessoa ter navegado, isto diz o que
      * mudou — sem custo: uma comparação de texto e um aviso, só quando acontece.
@@ -171,7 +196,7 @@ function initRouter() {
           window._ultimaRotaPintada + ' → ' + _rotaKey);
       } catch (e) {}
     }
-    if (!_shouldPreservePrerender && !_reentrada) {
+    if (!_shouldPreservePrerender && !_reentrada && !_trocaPrincipal) {
       viewContainer.innerHTML = '';
     }
     const fixedBar = document.getElementById('bracket-fixed-scrollbar');
@@ -418,7 +443,7 @@ function initRouter() {
         // piscada na abertura. Enquanto isso assenta, o CARREGANDO fica por cima.
         // ⚠️ TETO CURTO E DURO (1,2s): esta é a tela inicial do app; loader presa aqui é
         // pior que qualquer piscada. Se os blocos demorarem, a tela aparece do mesmo jeito.
-        if (!window._isSoftRefresh && typeof window._showLoading === 'function') {
+        if (!window._isSoftRefresh && !_trocaPrincipal && typeof window._showLoading === 'function') {
           try { window._showLoading('Carregando…'); } catch (e) {}
           var _saiuDash = false;
           var _fecharDash = function () {
@@ -426,7 +451,9 @@ function initRouter() {
             if (typeof window._hideLoading === 'function') { try { window._hideLoading(); } catch (e) {} }
           };
           setTimeout(_fecharDash, 1200);
-          if (window._medirTrecho) window._medirTrecho('rota-dash', function () { renderDashboard(viewContainer); }); else renderDashboard(viewContainer);
+          try {
+            if (window._medirTrecho) window._medirTrecho('rota-dash', function () { renderDashboard(viewContainer); }); else renderDashboard(viewContainer);
+          } finally { _finalizarTrocaPrincipal(); }
           // sai quando o perfil chegou (é ele que destrava os blocos) + 2 quadros pra eles
           // pintarem; ou no teto acima, o que vier primeiro.
           var _apos = function () {
@@ -435,7 +462,9 @@ function initRouter() {
           if (window._profileLoaded) _apos();
           else document.addEventListener('scoreplace:profile-loaded', _apos, { once: true });
         } else {
-          if (window._medirTrecho) window._medirTrecho('rota-dash', function () { renderDashboard(viewContainer); }); else renderDashboard(viewContainer);
+          try {
+            if (window._medirTrecho) window._medirTrecho('rota-dash', function () { renderDashboard(viewContainer); }); else renderDashboard(viewContainer);
+          } finally { _finalizarTrocaPrincipal(); }
         }
         break;
       case 'tournament':
@@ -475,7 +504,7 @@ function initRouter() {
           // a diferença entre "travou" e "está abrindo".
           // Só em NAVEGAÇÃO: soft-refresh (onSnapshot) segue síncrono, senão a tela
           // de quem está lendo pisca a cada placar alheio.
-          if (!window._isSoftRefresh && typeof window._showLoading === 'function') {
+          if (!window._isSoftRefresh && !_trocaPrincipal && typeof window._showLoading === 'function') {
             try { window._showLoading('Abrindo o torneio…'); } catch (e) {}
             window._spLoadingOwnedByNav = false; // a rota assumiu; a marca já serviu
             // zera a promessa da navegação ANTERIOR: se ESTE torneio não tiver
@@ -495,6 +524,7 @@ function initRouter() {
                 else renderTournaments(viewContainer, cleanParam);
               }
               finally {
+                _finalizarTrocaPrincipal();
                 // ── O LOADER SÓ SAI COM OS NOMES NOS LUGARES (2.0.41) ─────────
                 // Ordem do dono (24/ago, Confra): a classificação vinha com nomes
                 // e a chave ainda pipocava os dela depois. Se o render publicou a
@@ -831,6 +861,7 @@ function initRouter() {
         return;
     }
     } catch (_erroRender) {
+      _finalizarTrocaPrincipal();
       // Reporta ANTES de desenhar: se o próprio desenho de erro falhar, o Sentry
       // já tem o original — que é o que interessa pra consertar.
       try {
@@ -873,7 +904,7 @@ function initRouter() {
       // Carimba a rota pintada e devolve o flag — inclusive nos `return` do meio do
       // switch e no erro de render (a próxima re-entrada da MESMA rota reconcilia
       // por cima, o que é exatamente o desejado).
-      window._ultimaRotaPintada = _rotaKey;
+      if (!_trocaPrincipal) window._ultimaRotaPintada = _rotaKey;
       window._isSoftRefresh = _prevSoftRefresh;
     }
 
@@ -891,7 +922,7 @@ function initRouter() {
     // Um render posterior sobrescreve isto normalmente, porque toda view escreve o
     // container inteiro.
     try {
-      if (viewContainer && !viewContainer.firstChild) {
+      if (viewContainer && !viewContainer.firstChild && !_trocaPrincipal) {
         viewContainer.innerHTML =
           '<div class="sp-view-vazia" style="display:flex;flex-direction:column;align-items:center;' +
           'justify-content:center;gap:12px;min-height:50vh;color:var(--text-muted,#94a3b8);">' +

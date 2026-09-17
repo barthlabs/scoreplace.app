@@ -2831,3 +2831,10 @@ dialog.sp-native-update { margin: auto; width: calc(100% - 32px); box-sizing: bo
 dialog.sp-native-update::backdrop { background: var(--bg-overlay, rgba(0,0,0,0.6)); }
 
 .sp-native-update .btn-primary { background: var(--text-primary); color: var(--bg-card); }
+
+/* A troca dashboard ↔ detalhe conserva o quadro anterior até o destino estar
+   pronto. Ele fica inerte nesse intervalo para nenhum clique atingir a página
+   que acabou de sair; o router remove a classe no render atômico do destino. */
+#view-container.sp-route-transitioning {
+  pointer-events: none;
+}

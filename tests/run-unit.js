@@ -1705,6 +1705,7 @@ const SUITES = [
   // feedback nenhum. Guarda a PORTA ÚNICA (todo card abre por `_openTournamentCard`) e
   // o realce `:active`, que é o único que responde sem depender de JS rodar.
   'tests/card-de-torneio-responde-ao-toque.test.js',
+  'tests/navegacao-preserva-tela-na-troca.test.js',
   // MEDIDO nos docs de produção: logo+capa em base64 são 62% do peso dos torneios (num
   // doc, 305 KB de 311). Como o save mandava o objeto inteiro, um placar de ~50 bytes
   // reenviava ~147 KB de imagem e devolvia isso a cada listener. Trava que imagem só
