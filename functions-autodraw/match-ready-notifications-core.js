@@ -8,7 +8,9 @@
  * régua das rodadas no aplicativo; assim o texto da notificação não inventa uma
  * data diferente da configurada pelo organizador.
  */
-const RoundBounds = require('../js/domain/round-bounds.js');
+// O codebase das Functions recebe somente a própria árvore. Esta cópia é gerada
+// por copy-vendor.js e é verificada byte a byte contra js/domain/round-bounds.js.
+const RoundBounds = require('./vendor/round-bounds.js');
 
 function unique(values) {
   return Array.from(new Set((values || []).filter(Boolean).map(String)));
