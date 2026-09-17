@@ -9,7 +9,7 @@
  */
 const CAMPOS_CONTATO_ELENCO = [
   'phone', 'phoneCountry', 'phoneSource', 'omitPhone',
-  'letzplayHandle', 'letzplaySource',
+  'letzplayHandle', 'letzplaySource', 'notifyWhatsApp',
 ];
 
 function uidsDoElenco(tournament) {
@@ -39,4 +39,32 @@ function contatoDoPerfil(profile) {
   return out;
 }
 
-module.exports = { CAMPOS_CONTATO_ELENCO, uidsDoElenco, contatoDoPerfil };
+function uidsDaOrganizacao(tournament) {
+  const out = [];
+  const put = (uid) => {
+    const value = String(uid || '').trim();
+    if (value && out.indexOf(value) === -1) out.push(value);
+  };
+  put(tournament && tournament.creatorUid);
+  (Array.isArray(tournament && tournament.coHosts) ? tournament.coHosts : []).forEach((host) => {
+    if (host && host.status === 'active') put(host.uid);
+  });
+  return out;
+}
+
+/* Quem pode abrir o contato de alguém no contexto daquele torneio.
+ * O organizador vê todo o elenco. Participantes veem outros participantes e a
+ * organização; quem só está navegando pode falar com o organizador, mas não
+ * recebe contato de jogador algum. */
+function podeVerContatoDoTorneio(tournament, callerUid, targetUid, isOrganizer) {
+  const caller = String(callerUid || '').trim();
+  const target = String(targetUid || '').trim();
+  const elenco = uidsDoElenco(tournament);
+  const organizacao = uidsDaOrganizacao(tournament);
+  if (!caller || !target || (elenco.indexOf(target) === -1 && organizacao.indexOf(target) === -1)) return false;
+  if (isOrganizer) return true;
+  if (organizacao.indexOf(target) !== -1) return true;
+  return elenco.indexOf(caller) !== -1 && elenco.indexOf(target) !== -1;
+}
+
+module.exports = { CAMPOS_CONTATO_ELENCO, uidsDoElenco, uidsDaOrganizacao, podeVerContatoDoTorneio, contatoDoPerfil };

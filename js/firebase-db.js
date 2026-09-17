@@ -2998,6 +2998,23 @@ window.FirestoreDB = {
     return n;
   },
 
+  /* Contato de UMA pessoa no contexto de um torneio. A função no servidor aceita
+   * participante↔participante, participante→organização e organização→elenco;
+   * ela não transforma `loadUserProfile` numa ficha privada disponível a todos. */
+  async carregarContatoDoTorneio(tournamentId, uid) {
+    if (!tournamentId || !uid) return null;
+    try {
+      var resposta = await this._callFn('getTournamentParticipantContact', {
+        tournamentId: String(tournamentId), uid: String(uid)
+      });
+      if (!resposta || !resposta.contact || typeof resposta.contact !== 'object') return null;
+      return Object.assign({ uid: String(resposta.uid || uid) }, resposta.contact);
+    } catch (e) {
+      window._warn('[contato do torneio] falhou:', e && e.message);
+      return null;
+    }
+  },
+
   // Recently-active users (created or updated in the last N days). Used to
   // populate the Explore page with suggestions when the search box is empty —
   // feels better than a "Nenhum usuário encontrado" dead end. Ordered by the

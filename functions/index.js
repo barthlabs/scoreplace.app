@@ -10461,6 +10461,38 @@ exports.getTournamentRosterContacts = onCall(
   }
 );
 
+// ─── getTournamentParticipantContact (etapa 7) ─────────────────────────────
+// Contato contextual para o botão de falar com organizador/jogador. Diferente
+// do elenco completo acima, esta porta devolve UM alvo e prova que o solicitante
+// pertence ao torneio ou que o alvo é da organização do torneio público.
+exports.getTournamentParticipantContact = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError("unauthenticated", "Login obrigatório");
+    const data = request.data || {};
+    const tournamentId = String(data.tournamentId || "").trim();
+    const targetUid = String(data.uid || "").trim();
+    if (!tournamentId || !targetUid) {
+      throw new HttpsError("invalid-argument", "tournamentId e uid são obrigatórios");
+    }
+
+    const db = admin.firestore();
+    const tournament = await _lerTorneioComElenco(db, tournamentId);
+    if (!tournament) throw new HttpsError("not-found", "Torneio não encontrado");
+    const isOrganizer = _isTournamentOrgCaller(tournament, callerUid);
+    if (!_tournamentContacts.podeVerContatoDoTorneio(tournament, callerUid, targetUid, isOrganizer)) {
+      throw new HttpsError("permission-denied", "Contato indisponível neste torneio");
+    }
+
+    const snap = await db.collection("users").doc(targetUid).get();
+    if (!snap.exists || (snap.data() || {}).mergedInto) {
+      throw new HttpsError("not-found", "Contato não encontrado");
+    }
+    return { uid: targetUid, contact: _tournamentContacts.contatoDoPerfil(snap.data() || {}) };
+  }
+);
+
 // ─── setParticipantContactPhone (v1.9.97) ─────────────────────────────────────
 // CAMADA 3 da campanha de celular: o ORGANIZADOR registra o contato de um inscrito
 // que o SMS não alcança.

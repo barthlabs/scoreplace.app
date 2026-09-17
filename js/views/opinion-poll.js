@@ -872,7 +872,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var poll = _findPoll(t, pollId); if (!poll) return;
     var secs = window._opSections(poll);
     var info = _opVoterInfoMap(t);
-    // ── Pré-carrega telefones (uids de inscritos + votantes) → window._opWa ──
+    // ── Pré-carrega contatos do elenco (uids de inscritos + votantes) → window._opWa ──
     window._opWa = {};
     var _uidSet = {};
     Object.keys(info).forEach(function (u) { _uidSet[u] = 1; });
@@ -882,18 +882,23 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var _q = (secs[0] && secs[0].question) ? secs[0].question : '';
     var _tName = t.name || 'nosso torneio';
     try {
-      await Promise.all(Object.keys(_uidSet).map(function (u) {
-        if (!window.FirestoreDB || !window.FirestoreDB.loadUserProfile) return null;
-        return window.FirestoreDB.loadUserProfile(u).then(function (prof) {
-          var ph = _opPhoneFull(prof);
-          if (!ph) return;
-          var nm = (info[u] && info[u].name) || window._opVoterName(t, u) || '';
-          var first = String(nm).trim().split(/\s+/)[0] || '';
-          var msg = 'Oi ' + first + '! 👋 Aqui é ' + _orgName + ', organizador do torneio "' + _tName + '"' +
-            (_q ? '. Sobre a enquete "' + _q + '": ' : '. ');
-          window._opWa[u] = { phone: ph, msg: msg };
-        }).catch(function () {});
-      }));
+      // A callable confirma no servidor que quem pediu é a organização e devolve
+      // só contato do elenco. A enquete não volta a abrir `users/{uid}` para cada
+      // voto, que carregaria a ficha privada inteira de todos os participantes.
+      if (window.FirestoreDB && typeof window.FirestoreDB.carregarContatosDoElenco === 'function') {
+        await window.FirestoreDB.carregarContatosDoElenco(t.id, Object.keys(_uidSet));
+      }
+      var _contatos = window._userProfileCache || {};
+      Object.keys(_uidSet).forEach(function (u) {
+        var prof = _contatos[u] || null;
+        var ph = _opPhoneFull(prof);
+        if (!ph) return;
+        var nm = (info[u] && info[u].name) || window._opVoterName(t, u) || '';
+        var first = String(nm).trim().split(/\s+/)[0] || '';
+        var msg = 'Oi ' + first + '! 👋 Aqui é ' + _orgName + ', organizador do torneio "' + _tName + '"' +
+          (_q ? '. Sobre a enquete "' + _q + '": ' : '. ');
+        window._opWa[u] = { phone: ph, msg: msg };
+      });
     } catch (e) {}
     // v3.1.68: chip normal (índigo, quem marcou ✅) OU vermelho (quem marcou ❌). Em
     // multiseleção cada opção lista os dois grupos; em escolha única só há ✅.

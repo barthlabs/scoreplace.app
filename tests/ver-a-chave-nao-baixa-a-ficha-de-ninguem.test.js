@@ -129,11 +129,11 @@ const DOCS = { uid1: FICHA, uid2: Object.assign({}, FICHA, { displayName: 'Beltr
   const CORE = require(path.join(raiz, 'functions/tournament-contact-core'));
   const contato = CORE.contatoDoPerfil(Object.assign({}, FICHA, {
     phoneCountry: 'BR', phoneSource: 'organizer', omitPhone: true,
-    letzplayHandle: '@fulana', letzplaySource: 'profile', mergedInto: 'uid-vivo',
+    letzplayHandle: '@fulana', letzplaySource: 'profile', notifyWhatsApp: false, mergedInto: 'uid-vivo',
   }));
   assert.deepEqual(Object.keys(contato).sort(), [
-    'letzplayHandle', 'letzplaySource', 'omitPhone', 'phone', 'phoneCountry', 'phoneSource',
-  ]); ok++; console.log('  ✓ ④ a projeção devolve SOMENTE os seis campos de contato necessários');
+    'letzplayHandle', 'letzplaySource', 'notifyWhatsApp', 'omitPhone', 'phone', 'phoneCountry', 'phoneSource',
+  ]); ok++; console.log('  ✓ ④ a projeção devolve SOMENTE os sete campos de contato necessários');
   must(!('email' in contato) && !('fcmToken' in contato) && !('preferredCeps' in contato),
     '④ ⛔ e-mail, push e endereço jamais atravessam a porta estreita');
   assert.deepEqual(CORE.uidsDoElenco({ participants: [
@@ -141,6 +141,17 @@ const DOCS = { uid1: FICHA, uid2: Object.assign({}, FICHA, { displayName: 'Beltr
     { uid: 'e' },
   ] }), ['a', 'b', 'c', 'd', 'e'],
   ); ok++; console.log('  ✓ ④ a callable só aceita UIDs que pertencem ao elenco hidratado');
+  const torneioDeContato = { creatorUid: 'org', coHosts: [{ uid: 'co', status: 'active' }], participants: [
+    { uid: 'a', p1Uid: 'b' }, { uid: 'c' },
+  ] };
+  must(CORE.podeVerContatoDoTorneio(torneioDeContato, 'a', 'c', false),
+    '④ participante só recebe contato de outro participante do mesmo torneio');
+  must(CORE.podeVerContatoDoTorneio(torneioDeContato, 'visitante', 'org', false),
+    '④ visitante pode falar com a organização do torneio');
+  must(!CORE.podeVerContatoDoTorneio(torneioDeContato, 'visitante', 'a', false),
+    '④ ⛔ visitante não recebe contato de participante');
+  must(!CORE.podeVerContatoDoTorneio(torneioDeContato, 'a', 'estranho', false),
+    '④ ⛔ ninguém consulta UID que não está no torneio');
   const FUNCOES = fs.readFileSync(path.join(raiz, 'functions/index.js'), 'utf8');
   const iCallable = FUNCOES.indexOf('exports.getTournamentRosterContacts = onCall');
   must(iCallable > 0, '④ `getTournamentRosterContacts` existe no servidor');
@@ -149,6 +160,10 @@ const DOCS = { uid1: FICHA, uid2: Object.assign({}, FICHA, { displayName: 'Beltr
     '④ o servidor relê o torneio e confirma o organizador, sem confiar na tela');
   must(callable.includes('_tournamentContacts.contatoDoPerfil(profile)') && !/profile\.email/.test(callable),
     '④ o servidor aplica a allowlist antes de responder e não inclui e-mail');
+  const iContact = FUNCOES.indexOf('exports.getTournamentParticipantContact = onCall');
+  const contactCallable = FUNCOES.slice(iContact, FUNCOES.indexOf('// ─── setParticipantContactPhone', iContact));
+  must(iContact > 0 && contactCallable.includes('podeVerContatoDoTorneio(tournament, callerUid, targetUid, isOrganizer)'),
+    '④ o contato individual também passa pela autorização contextual no servidor');
 
   /* ── ⑤ E SÓ O ORGANIZADOR A ABRE ────────────────────────────────────────── */
   const P = fs.readFileSync(path.join(raiz, 'js/views/participants.js'), 'utf8');

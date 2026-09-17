@@ -1086,7 +1086,7 @@ window._contactOrgButtonHtml = function(t, opts) {
   var uid = window._safeHtml(String(t.creatorUid || ''));
   var full = opts.fullWidth ? 'width:100%;' : '';
   var mt = (opts.marginTop != null) ? opts.marginTop : '10px';
-  var html = '<button type="button" class="sp-contact-org-btn hover-lift" data-contact-org-uid="' + uid + '" ' +
+  var html = '<button type="button" class="sp-contact-org-btn hover-lift" data-contact-org-uid="' + uid + '" data-contact-tournament-id="' + tId + '" ' +
     'onclick="event.stopPropagation();window._contactOrganizerDirect(\'' + tId + '\')" ' +
     'style="' + full + 'margin-top:' + mt + ';display:inline-flex;align-items:center;justify-content:center;gap:8px;background:rgba(59,130,246,0.12);color:var(--sp-c-60a5fa,#60a5fa);border:1px solid rgba(59,130,246,0.38);border-radius:10px;padding:9px 14px;font-size:0.82rem;font-weight:700;cursor:pointer;transition:background 0.15s,border-color 0.15s,color 0.15s;">' +
     '<span class="sp-contact-org-ic" style="display:inline-flex;align-items:center;">💬</span>' +
@@ -1109,12 +1109,14 @@ window._hydrateContactOrgButtons = async function(root) {
     if (btn._spHydrated) continue;
     btn._spHydrated = true;
     var uid = btn.getAttribute('data-contact-org-uid');
-    if (!uid) continue;
-    var prof = cache[uid];
+    var tournamentId = btn.getAttribute('data-contact-tournament-id');
+    if (!uid || !tournamentId) continue;
+    var cacheKey = tournamentId + '|' + uid;
+    var prof = cache[cacheKey];
     if (prof === undefined) {
-      try { prof = (window.FirestoreDB && window.FirestoreDB.loadUserProfile) ? await window.FirestoreDB.loadUserProfile(uid) : null; }
+      try { prof = (window.FirestoreDB && window.FirestoreDB.carregarContatoDoTorneio) ? await window.FirestoreDB.carregarContatoDoTorneio(tournamentId, uid) : null; }
       catch (e) { prof = null; }
-      cache[uid] = prof || null;
+      cache[cacheKey] = prof || null;
     }
     var phone = (prof && prof.phone) ? String(prof.phone).replace(/\D/g, '') : '';
     // v1.2.9: REVERTE a v4.0.36 — que dizia "contato direto não depende de
@@ -1219,19 +1221,21 @@ window._buildPersonGreeting = function (t, personName) {
 // bloquear em silêncio. Mesmo padrão do _hydrateContactOrgButtons.
 window._hydrateContactPersonButtons = function (rootEl) {
   var root = rootEl || document;
-  var uids = [];
+  var targets = [];
   Array.prototype.forEach.call(root.querySelectorAll('[data-contact-uid]'), function (el) {
     var u = el.getAttribute('data-contact-uid');
-    if (u && !Object.prototype.hasOwnProperty.call(window._spPersonProfileCache, u) &&
-        uids.indexOf(u) === -1) uids.push(u);
+    var tId = el.getAttribute('data-contact-tournament-id');
+    var key = tId + '|' + u;
+    if (u && tId && !Object.prototype.hasOwnProperty.call(window._spPersonProfileCache, key) &&
+        !targets.some(function(x) { return x.key === key; })) targets.push({ uid: u, tournamentId: tId, key: key });
   });
-  if (!uids.length) return Promise.resolve();
-  return Promise.all(uids.map(function (u) {
-    var p = (window.FirestoreDB && typeof window.FirestoreDB.loadUserProfile === 'function')
-      ? window.FirestoreDB.loadUserProfile(u) : Promise.resolve(null);
+  if (!targets.length) return Promise.resolve();
+  return Promise.all(targets.map(function (target) {
+    var p = (window.FirestoreDB && typeof window.FirestoreDB.carregarContatoDoTorneio === 'function')
+      ? window.FirestoreDB.carregarContatoDoTorneio(target.tournamentId, target.uid) : Promise.resolve(null);
     return Promise.resolve(p)
-      .then(function (prof) { window._spPersonProfileCache[u] = prof || null; })
-      .catch(function () { window._spPersonProfileCache[u] = null; });
+      .then(function (prof) { window._spPersonProfileCache[target.key] = prof || null; })
+      .catch(function () { window._spPersonProfileCache[target.key] = null; });
   })).then(function () {});
 };
 
@@ -1264,15 +1268,16 @@ window._contactPersonByUid = function (uid, personName, tId) {
     if (typeof showNotification === 'function') showNotification('Sem contato cadastrado',
       _nm + ' não cadastrou telefone com WhatsApp nem e-mail.', 'info');
   };
-  if (Object.prototype.hasOwnProperty.call(window._spPersonProfileCache, uid)) {
-    return _open(window._spPersonProfileCache[uid]); // caminho normal: síncrono, gesto preservado
+  var _contactKey = String(tId || '') + '|' + String(uid);
+  if (Object.prototype.hasOwnProperty.call(window._spPersonProfileCache, _contactKey)) {
+    return _open(window._spPersonProfileCache[_contactKey]); // caminho normal: síncrono, gesto preservado
   }
   // Não hidratado (render recém-pintado ou carga falhou): busca e abre. Pode ser
   // bloqueado no iOS por perder o gesto — daí o aviso explícito em vez de silêncio.
-  var _p = (window.FirestoreDB && typeof window.FirestoreDB.loadUserProfile === 'function')
-    ? window.FirestoreDB.loadUserProfile(uid) : Promise.resolve(null);
+  var _p = (window.FirestoreDB && typeof window.FirestoreDB.carregarContatoDoTorneio === 'function')
+    ? window.FirestoreDB.carregarContatoDoTorneio(tId, uid) : Promise.resolve(null);
   Promise.resolve(_p)
-    .then(function (prof) { window._spPersonProfileCache[uid] = prof || null; _open(prof || null); })
+    .then(function (prof) { window._spPersonProfileCache[_contactKey] = prof || null; _open(prof || null); })
     .catch(function () {
       if (typeof showNotification === 'function') showNotification('Não deu pra abrir',
         'Falha ao carregar o contato de ' + _nm + '. Tente de novo.', 'warning');
@@ -1292,7 +1297,7 @@ window._contactPersonIconHtml = function (t, entryUid, entryName, opts) {
   var _u = String(entryUid).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
   var _n = String(entryName || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
   var _tid = String((t && t.id) || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-  return '<span data-contact-uid="' + window._safeHtml(String(entryUid)) + '"' +
+  return '<span data-contact-uid="' + window._safeHtml(String(entryUid)) + '" data-contact-tournament-id="' + window._safeHtml(String((t && t.id) || '')) + '"' +
     ' onclick="event.stopPropagation();window._contactPersonByUid(\'' + _u + '\',\'' + _n + '\',\'' + _tid + '\')"' +
     ' title="Falar com ' + window._safeHtml(entryName || '') + '"' +
     ' style="cursor:pointer;font-size:0.78rem;margin-left:' + (o.dentroDaCaixa ? '4px' : '6px') +
@@ -1374,12 +1379,13 @@ window._contactOrganizerDirect = function(tId) {
   var t = window._findTournamentById(tId);
   if (!t) { if (typeof showNotification !== 'undefined') showNotification('Torneio não encontrado', '', 'error'); return; }
   var cache = window._spOrgProfileCache = window._spOrgProfileCache || {};
-  var cached = t.creatorUid && Object.prototype.hasOwnProperty.call(cache, t.creatorUid);
+  var _orgKey = String(t.id) + '|' + String(t.creatorUid || '');
+  var cached = t.creatorUid && Object.prototype.hasOwnProperty.call(cache, _orgKey);
   // Perfil ainda não carregado → não dá pra abrir o WhatsApp sincronamente (o
   // await perderia o gesto). Cai no resolvedor assíncrono (diálogo) como rede de
   // segurança. Na prática o botão já hidratou no render, então isto é raro.
   if (!cached) return window._contactOrganizer(tId);
-  var info = window._resolveOrgContact(t, cache[t.creatorUid]);
+  var info = window._resolveOrgContact(t, cache[_orgKey]);
   // Sem canal externo (org só tem conta in-app) → diálogo/notificação tradicional.
   if (!info.useWhatsApp && !(info.email && info.email.indexOf('@') !== -1)) {
     return window._contactOrganizer(tId);
@@ -1418,13 +1424,14 @@ window._contactOrganizer = async function(tId) {
   // travar no `await` (numa rede lenta o clique parecia "não fazer nada"). Sem
   // cache, cai no await normal e popula o cache.
   var _ocache = window._spOrgProfileCache = window._spOrgProfileCache || {};
-  if (t.creatorUid && Object.prototype.hasOwnProperty.call(_ocache, t.creatorUid)) {
-    profile = _ocache[t.creatorUid];
+  var _orgKey = String(t.id) + '|' + String(t.creatorUid || '');
+  if (t.creatorUid && Object.prototype.hasOwnProperty.call(_ocache, _orgKey)) {
+    profile = _ocache[_orgKey];
   } else {
     try {
-      if (t.creatorUid && window.FirestoreDB && window.FirestoreDB.loadUserProfile) {
-        profile = await window.FirestoreDB.loadUserProfile(t.creatorUid);
-        _ocache[t.creatorUid] = profile || null;
+      if (t.creatorUid && window.FirestoreDB && window.FirestoreDB.carregarContatoDoTorneio) {
+        profile = await window.FirestoreDB.carregarContatoDoTorneio(t.id, t.creatorUid);
+        _ocache[_orgKey] = profile || null;
       }
     } catch (e) { profile = null; }
   }
