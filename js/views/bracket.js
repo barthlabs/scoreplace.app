@@ -4646,11 +4646,32 @@ function _matchCardRoundDeadlineMs(t, m) {
     if (isNaN(phaseIndex) || phaseIndex < 0) phaseIndex = 0;
     var round = parseInt(m.round, 10);
     if (isNaN(round) || round < 1) round = 1;
+    var phase = (Array.isArray(t.phases) && t.phases[phaseIndex]) || {};
+    // A régua do organizador É a quantidade de rodadas da chave. Em eliminatória,
+    // `phase.rounds` pode vir vazio (a chave materializada é que sabe quantas há);
+    // usar só `_phasePlannedRounds` a reduzia falsamente a uma rodada e mostrava o
+    // fim inteiro do torneio. Torneios já gravados antes de `phases[].roundBounds`
+    // também continuam lendo a cópia em fmt2.
+    var rawBounds = Array.isArray(phase.roundBounds) ? phase.roundBounds :
+      (phaseIndex === 0 && Array.isArray(t.roundBounds) ? t.roundBounds : null);
+    var isLastPhase = !Array.isArray(t.phases) || !t.phases.length || phaseIndex === t.phases.length - 1;
+    if ((!rawBounds || !rawBounds.length) && isLastPhase && t.fmt2 && t.fmt2.eliminatoria &&
+        Array.isArray(t.fmt2.eliminatoria.roundBounds)) {
+      rawBounds = t.fmt2.eliminatoria.roundBounds;
+    }
     var rounds = (typeof window._phasePlannedRounds === 'function')
       ? window._phasePlannedRounds(t, phaseIndex) : 0;
-    if (!(rounds > 0) && typeof window._rodadasVisiveisDaFase === 'function') {
-      rounds = window._rodadasVisiveisDaFase(t, phaseIndex);
+    if (typeof window._rodadasVisiveisDaFase === 'function') {
+      rounds = Math.max(parseInt(rounds, 10) || 0, window._rodadasVisiveisDaFase(t, phaseIndex) || 0);
     }
+    if (Array.isArray(rawBounds) && rawBounds.length) rounds = Math.max(parseInt(rounds, 10) || 0, rawBounds.length + 1);
+    var phaseMatches = (t.matches || []).filter(function (candidate) {
+      return candidate && (parseInt(candidate.phaseIndex, 10) || 0) === phaseIndex;
+    });
+    phaseMatches.forEach(function (candidate) {
+      var candidateRound = parseInt(candidate.round, 10);
+      if (candidateRound > 0) rounds = Math.max(rounds, candidateRound);
+    });
     rounds = Math.max(round, parseInt(rounds, 10) || 1);
     var start = window._inicioDaFase(t, phaseIndex);
     var end = window._fimDaFase(t, phaseIndex);
@@ -4658,8 +4679,21 @@ function _matchCardRoundDeadlineMs(t, m) {
     // Rodada única termina no fim declarado da fase; não exige uma data inicial
     // apenas para repetir a mesma ponta da janela.
     if (rounds === 1) return end;
-    var cuts = (typeof window._limitesDasRodadas === 'function' && start > 0)
-      ? window._limitesDasRodadas(t, phaseIndex, start, end, rounds) : null;
+    var cuts = (typeof window._rbNormaliza === 'function' && Array.isArray(rawBounds))
+      ? window._rbNormaliza(rawBounds, start, end, rounds) : null;
+    // `round-bounds-core` está no shell antes deste arquivo. Este fallback protege
+    // ambientes legados/headless que ainda não o carregaram, sem aceitar uma régua
+    // inválida: só entra se tiver exatamente N−1 cortes crescentes dentro da fase.
+    if (!cuts && Array.isArray(rawBounds) && rawBounds.length === rounds - 1) {
+      var parsedBounds = rawBounds.map(_matchCardTimestamp);
+      var validBounds = parsedBounds.length === rawBounds.length && parsedBounds.every(function (bound, index) {
+        return bound > start && bound < end && (!index || bound > parsedBounds[index - 1]);
+      });
+      if (validBounds) cuts = parsedBounds;
+    }
+    // Não reenvie a régua já validada para um segundo adaptador: em shells antigos
+    // ele pode não conhecer `round-bounds-core`, mas a data salva continua válida.
+    if (cuts && cuts.length === rounds - 1) return round === rounds ? end : cuts[round - 1];
     var windowOfRound = window._phaseRoundWindow(start, end, round, rounds, cuts);
     return windowOfRound && windowOfRound.endMs ? windowOfRound.endMs : null;
   } catch (e) { return null; }

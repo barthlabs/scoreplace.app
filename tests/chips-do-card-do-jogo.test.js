@@ -112,16 +112,26 @@ m.scheduledAt = ''; m.scheduledKind = '';
 // ─── a linha abaixo de JOGO N tem uma única precedência ───────────────────────
 const tLinhaDoTempo = mkLiga();
 tLinhaDoTempo.phases = [{
-  rounds: 2,
-  startDate: '2026-10-01T00:00:00-03:00',
-  endDate: '2026-10-16T23:59:00-03:00'
+  startDate: '2026-09-02T00:00:00-03:00',
+  endDate: '2026-11-12T23:00:00-03:00',
+  // A eliminatória não precisa de `rounds` duplicado: os cinco cortes dizem que
+  // existem seis rodadas e são a fonte do prazo de cada confronto.
+  roundBounds: [
+    '2026-09-30T23:00:00-03:00', '2026-10-16T23:00:00-03:00',
+    '2026-10-26T23:00:00-03:00', '2026-11-05T23:00:00-03:00',
+    '2026-11-11T23:00:00-03:00'
+  ]
 }];
 const mLinhaDoTempo = tLinhaDoTempo.rounds[0].matches[0];
-mLinhaDoTempo.round = 2;
+mLinhaDoTempo.round = 1;
 comUsuario(tLinhaDoTempo, { uid: 'u1', displayName: 'J1' });
 const cardComPrazo = W.renderMatchCard(mLinhaDoTempo, true, tLinhaDoTempo.id, 1);
-ok(/Jogar até/.test(cardComPrazo) && /16\/10 23:59/.test(cardComPrazo),
-  'jogo não disputado mostra o prazo da rodada configurada abaixo de JOGO N');
+ok(/Jogar até/.test(cardComPrazo) && /30\/09 23:00/.test(cardComPrazo),
+  'R2 mostra o primeiro limite configurado, não o fim do torneio');
+mLinhaDoTempo.round = 2;
+const cardDaR3 = W.renderMatchCard(mLinhaDoTempo, true, tLinhaDoTempo.id, 1);
+ok(/Jogar até/.test(cardDaR3) && /16\/10 23:00/.test(cardDaR3),
+  'R3 mostra o segundo limite configurado, sem depender de phases[].rounds');
 
 mLinhaDoTempo.scheduledAt = '2026-10-12T22:00:00.000Z';
 const cardMarcado = W.renderMatchCard(mLinhaDoTempo, true, tLinhaDoTempo.id, 1);
