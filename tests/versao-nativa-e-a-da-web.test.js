@@ -55,6 +55,16 @@ const cpv = [...new Set([...pbx.matchAll(/CURRENT_PROJECT_VERSION = ([^;]+);/g)]
 ok(cpv.length === 1 && /^\d+$/.test(cpv[0]),
    'e o BUILD é um inteiro único (ele é da Apple, segue independente) — veio: ' + cpv.join(', '));
 
+// ── Android: telefone E Wear têm a mesma versão de produto ─────────────────
+const androidVersions = ['app', 'wear'].flatMap((target) => {
+  const src = fs.readFileSync(path.join(ROOT, 'android', target, 'build.gradle'), 'utf8');
+  return [...src.matchAll(/versionName\s+["']([^"']+)["']/g)].map((m) => m[1].trim());
+});
+ok(androidVersions.length === 2 && androidVersions.every((v) => /^\d+\.\d+\.\d+$/.test(v)),
+  'Android: telefone e Wear usam versão X.Y.Z — veio: ' + androidVersions.join(', '));
+ok(new Set(androidVersions).size === 1,
+  'Android: telefone e Wear carregam a mesma versão de produto — veio: ' + androidVersions.join(', '));
+
 // ── o gate REPROVA de verdade (não é decoração) ─────────────────────────────
 // Roda o script real contra uma árvore de mentira com a versão errada.
 const os = require('os');

@@ -20,8 +20,9 @@ um iPhone continua obrigatória antes da submissão à loja.
 
 ## Submissão e lançamento após aprovação
 
-Depois que a build for validada no TestFlight, a submissão deve ser feita pelo
-script, nunca pela opção manual da interface do App Store Connect:
+Depois que a build for validada no TestFlight **e o dono der o OK explícito**,
+a submissão deve ser feita pelo script, nunca pela opção manual da interface do
+App Store Connect:
 
 ```sh
 node scripts/asc.js checar-auto
@@ -32,7 +33,8 @@ node scripts/asc.js submeter <versão> --apply
 revisão. `checar-auto` falha quando houver uma versão ainda pendente em
 lançamento manual; nesse caso, corrija-a com `node scripts/asc.js auto --apply`
 e rode a checagem de novo. Assim, a aprovação da Apple publica a versão sem
-depender de alguém voltar à interface para liberá-la.
+depender de alguém voltar à interface para liberá-la. O automatismo começa
+somente depois do OK do dono para sair do TestFlight; ele nunca pula essa etapa.
 
 ## Segredos do repositório
 

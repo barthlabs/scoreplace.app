@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "noticeDays": 7,
   "platforms": {
-    "ios": { "minimumVersion": null, "availableAt": null, "deviceValidatedAt": null, "enforceAt": null },
-    "android": { "minimumVersion": null, "availableAt": null, "deviceValidatedAt": null, "enforceAt": null }
+    "ios": { "minimumVersion": "2.3.27", "availableAt": "2026-09-17T21:44:55Z", "deviceValidatedAt": "2026-09-17T21:44:55Z", "enforceAt": "2026-09-24T21:44:55Z" },
+    "android": { "minimumVersion": "2.3.27", "availableAt": "2026-09-17T21:44:55Z", "deviceValidatedAt": "2026-09-17T21:44:55Z", "enforceAt": "2026-09-24T21:44:55Z" }
   }
 }

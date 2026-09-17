@@ -4,7 +4,28 @@ O dono aprovou nesta conversa: mínimo independente para iOS e Android; somente 
 
 ## Estado
 
-O cliente está preparado no source. `native-update-policy.json` permanece com mínimos e datas nulos: ninguém foi bloqueado e o prazo ainda não começou. Os bundles locais encontrados nesta execução são 2.2.8; isso não mede a versão disponível ou instalada nas lojas. O branch nativo exige sua fiação própria de login e os scripts de release existentes — não gerar binários a partir do main sem esse fluxo.
+Em 17/set/2026, o dono confirmou em aparelho iOS e Android a versão pública
+**2.3.27**. O manifesto ativa esse mínimo com o instante conservador da
+confirmação (`2026-09-17T21:44:55Z`) e aviso até
+`2026-09-24T21:44:55Z`. Esse horário não afirma quando cada loja publicou a
+build; registra quando ambas foram efetivamente observadas e validadas, para
+que o prazo não seja menor que sete dias.
+
+O mínimo não encerra o corte: ainda é preciso medir adoção real por plataforma
+e cobrir os organizadores ativos antes de publicar Rules restritivas. Os
+bundles locais não medem a versão disponível ou instalada nas lojas. O branch
+nativo exige sua fiação própria de login e os scripts de release existentes —
+não gerar binários a partir do main antes de concluir a auditoria atual.
+
+## Distribuição de builds
+
+- **iOS:** toda build vai primeiro para o **TestFlight**. Depois da validação e do
+  OK explícito do dono, ela é submetida à revisão. A submissão configura
+  `AFTER_APPROVAL`, portanto a Apple publica automaticamente quando aprovar.
+- **Android:** toda build vai primeiro para a **faixa fechada**. A promoção da
+  mesma release para Produção só acontece depois do OK explícito do dono.
+
+Nenhum script, pipeline ou ação manual pode pular essas etapas.
 
 ## Ativação por plataforma
 

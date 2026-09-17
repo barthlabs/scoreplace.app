@@ -43,9 +43,14 @@ if (plat === 'ios') {
   const src = fs.readFileSync(p, 'utf8');
   achadas = [...src.matchAll(/MARKETING_VERSION = ([^;]+);/g)].map((m) => m[1].trim());
 } else {
-  const p = path.join(root, 'android', 'app', 'build.gradle');
-  const src = fs.readFileSync(p, 'utf8');
-  achadas = [...src.matchAll(/versionName\s+["']([^"']+)["']/g)].map((m) => m[1].trim());
+  const paths = [
+    path.join(root, 'android', 'app', 'build.gradle'),
+    path.join(root, 'android', 'wear', 'build.gradle')
+  ];
+  achadas = paths.flatMap((p) => {
+    const src = fs.readFileSync(p, 'utf8');
+    return [...src.matchAll(/versionName\s+["']([^"']+)["']/g)].map((m) => m[1].trim());
+  });
 }
 
 if (!achadas.length) {
@@ -60,7 +65,7 @@ if (erradas.length) {
   console.error(`\n  Desde 27/ago/2026 elas são a MESMA string — ordem do dono, porque com`);
   console.error(`  dois esquemas "alinhado" virava julgamento e a build 265 chegou a subir`);
   console.error(`  como "2.1" carregando o código da 2.1.6.`);
-  console.error(`\n  CONSERTO: ponha ${web} em ${plat === 'ios' ? 'MARKETING_VERSION (todos os alvos do pbxproj)' : 'versionName (android/app/build.gradle)'}.`);
+  console.error(`\n  CONSERTO: ponha ${web} em ${plat === 'ios' ? 'MARKETING_VERSION (todos os alvos do pbxproj)' : 'versionName (android/app e android/wear)'}.`);
   console.error(`  (o número de BUILD é outra coisa e segue independente)\n`);
   process.exit(1);
 }

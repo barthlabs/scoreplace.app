@@ -1,10 +1,13 @@
 'use strict';
 const assert=require('assert/strict'),fs=require('fs'),path=require('path'),{chromium}=require('playwright');
 const root=path.join(__dirname,'..'),core=require('../js/native-update-policy-core');
-const inactive=JSON.parse(fs.readFileSync(path.join(root,'native-update-policy.json')));
+// A fixture inativa não pode ler o manifest real: a produção alterna de
+// propósito entre inativo e mínimo ativo durante o cutover nativo.
+const inactive={schemaVersion:1,noticeDays:7,platforms:{ios:{minimumVersion:null,availableAt:null,deviceValidatedAt:null,enforceAt:null},android:{minimumVersion:null,availableAt:null,deviceValidatedAt:null,enforceAt:null}}};
+const live=JSON.parse(fs.readFileSync(path.join(root,'native-update-policy.json')));
 const available='2026-09-01T00:00:00.000Z',enforce='2026-09-08T00:00:00.000Z';
 const policy={schemaVersion:1,noticeDays:7,platforms:{ios:{minimumVersion:null,availableAt:null,deviceValidatedAt:null,enforceAt:null},android:{minimumVersion:'2.2.67',availableAt:available,deviceValidatedAt:available,enforceAt:enforce}}};
-assert(core.validate(inactive));assert(core.validate(policy));
+assert(core.validate(inactive));assert(core.validate(live));assert(core.validate(policy));
 assert.equal(core.compare('2.2.9','2.2.67'),-1);assert.equal(core.compare('2.10.0','2.9.99'),1);assert.equal(core.compare('2.2','2.2.67'),null);
 assert.equal(core.evaluate(policy,'android','2.2.66',Date.parse(available)+1).mode,'notice');
 assert.equal(core.evaluate(policy,'android','2.2.66',Date.parse(enforce)).mode,'required');
