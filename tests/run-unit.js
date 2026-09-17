@@ -641,6 +641,8 @@ const SUITES = [
   'tests/bracket-search.test.js',
   // Com teclado virtual aberto, busca deve usar o viewport VISÍVEL, não o layout inteiro.
   'tests/busca-rola-no-viewport-visivel.test.js',
+  // Snapshot parcial não pode derrubar o detalhe ao encontrar um participante nulo.
+  'tests/participante-nulo-nao-derruba-detalhe.test.js',
   // Globais das views existem DEPOIS do load. Pega definição presa dentro de template
   // literal (vira texto) — que o `node --check` NÃO pega, porque string é sintaxe válida.
   'tests/view-globals-smoke.test.js',

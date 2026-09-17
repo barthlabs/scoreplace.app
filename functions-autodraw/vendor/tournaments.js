@@ -2538,6 +2538,9 @@ function renderTournaments(container, tournamentId = null) {
         // Participantes já inscritos individualmente (sem "/" = sem dupla ainda)
         const _enrolledSolo = (Array.isArray(t.participants) ? t.participants : [])
           .filter(function(p) {
+            // Snapshot parcial pode carregar uma posição nula antes da subcoleção terminar.
+            // Ela não é inscrição e nunca pode derrubar a tela inteira por `displayName`.
+            if (p == null) return false;
             var n = typeof p === 'string' ? p : (p.displayName || p.name || '');
             var cu = window.AppStore && window.AppStore.currentUser;
             if (cu && (n === cu.displayName || (typeof p === 'object' && p.uid === cu.uid))) return false;
