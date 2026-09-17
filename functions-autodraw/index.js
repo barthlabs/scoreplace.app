@@ -1851,10 +1851,7 @@ exports.queueMatchReadyNotifications = onDocumentWritten(
 // Backfill de confrontos que já estavam definidos quando esta regra entrou no ar, e
 // lembrete único para partidas pendentes a até sete dias do prazo da sua rodada. A mesma
 // chave determinística torna cada execução idempotente; não há "reaviso" fora da janela.
-// Nome novo para criar uma agenda limpa: a agenda anterior ficou presa a uma revisão
-// que falhou antes de carregar o módulo de prazo e a credencial de deploy não pode
-// alterar o job residual.
-exports.reconcileMatchReadyNotificationsSweep = onSchedule('every 15 minutes', async () => {
+exports.reconcileMatchReadyNotifications = onSchedule('every 15 minutes', async () => {
   const snapshot = await db.collection('tournaments').get();
   for (const doc of snapshot.docs) {
     try {
