@@ -72,12 +72,13 @@ if [ -n "${GOOGLE_APPLICATION_CREDENTIALS:-}" ] && [ -r "${GOOGLE_APPLICATION_CR
        functions:secrets:get SIGNIN_API_KEY >/dev/null 2>&1 \
      && _SP_RAIZ="$(cd "$(dirname "$0")/.." && pwd)" && node -e '
        const {GoogleAuth}=require(process.env._SP_RAIZ+"/functions/node_modules/google-auth-library");
+       const timer=setTimeout(()=>process.exit(1),15000);
        (async()=>{const a=new GoogleAuth({scopes:["https://www.googleapis.com/auth/cloud-platform"]});
         const t=(await (await a.getClient()).getAccessToken()).token;
         const r=await fetch("https://serviceusage.googleapis.com/v1/projects/scoreplace-app/services/cloudbilling.googleapis.com",
           {headers:{Authorization:"Bearer "+t}});
-        const j=await r.json();
-        process.exit(r.ok && j.state==="ENABLED" ? 0 : 1);})().catch(()=>process.exit(1));' >/dev/null 2>&1; then
+        const j=await r.json(); clearTimeout(timer);
+        process.exit(r.ok && j.state==="ENABLED" ? 0 : 1);})().catch(()=>{clearTimeout(timer);process.exit(1);});' >/dev/null 2>&1; then
     export XDG_CONFIG_HOME="$_SP_CFG"
     trap 'rm -rf "$_SP_CFG"' EXIT
     echo "▸ credencial: conta de serviço ($(basename "$GOOGLE_APPLICATION_CREDENTIALS")) — não expira"
