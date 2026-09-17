@@ -111,6 +111,21 @@ ok(typeof W._monarchGlobalJogoNum === 'undefined',
     '[HIDRATAÇÃO] marcador velho é recalculado antes de numerar a chave completa');
 })();
 
+// ── Inscritos/histórico pendentes não podem bloquear a chave já completa. ─────────
+(function () {
+  const t = {
+    _semPesados: ['participants'], _nPartes: { participants: 1 },
+    _faltamPesados: true, _faltaOQue: ['participants'],
+    matches: [
+      { id: 'complete-gold-R1-P2', bracket: 'gold', round: 1, p1: 'A', p2: 'B' },
+      { id: 'complete-gold-R1-P1', bracket: 'gold', round: 1, p1: 'C', p2: 'D' }
+    ]
+  };
+  W._assignGlobalGameNumbers(t);
+  ok(t.matches[1]._gameNum === 1 && t.matches[0]._gameNum === 2,
+    '[HIDRATAÇÃO] parte não estrutural pendente não bloqueia a numeração da chave');
+})();
+
 // ── Posição P<n>: IDs do Firestore ordenam P10 antes de P2 se tratados como texto. ──
 (function () {
   const match = function (id, bracket) { return { id, bracket, round: 1, p1: id + ' A', p2: id + ' B' }; };

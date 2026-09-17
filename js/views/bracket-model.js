@@ -1447,7 +1447,14 @@ window._assignGlobalGameNumbers = function (t) {
   if (t._faltamPesados && typeof window._marcaPartesQueFaltam === 'function') {
     try { window._marcaPartesQueFaltam(t); } catch (e) {}
   }
-  if (t._faltamPesados) return;
+  // A numeração depende apenas da chave: jogos e, no Rei/Rainha, grupos. Inscritos,
+  // histórico de adversários e outras partes podem carregar em seguida sem congelar
+  // um número já determinável. Antes essa dependência indevida fez a Confra continuar
+  // mostrando 156 mesmo com todos os 213 jogos no objeto.
+  var _faltasDeChave = (t._faltaOQue || []).filter(function (nome) {
+    return nome === 'matches' || nome === 'grupos';
+  });
+  if (t._faltamPesados && _faltasDeChave.length) return;
   if (typeof window._hydrateMonarchGroups === 'function') window._hydrateMonarchGroups(t); // FONTE ÚNICA
   var isBye = window._isByeMatch || function () { return false; };
   var n = 0;
