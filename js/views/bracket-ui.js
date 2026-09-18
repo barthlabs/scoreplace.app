@@ -8346,6 +8346,19 @@ window._openLiveScoring = function(tId, matchId, opts) {
       var data = snap.data();
       var pending = Array.isArray(data.pendingLinkRequests) ? data.pendingLinkRequests.slice() : [];
       // Idempotente: não duplica
+      /* ⛔ QUEM JÁ ESTÁ NA PARTIDA NÃO PODE SER "SUGERIDO" COMO OUTRA PESSOA (18/set/2026).
+       * Caso real (sala NABY4T): a Kelly já jogava na partida e o organizador sugeriu que a
+       * convidada "Ciça Mange" era ela — a Kelly recebeu "o organizador sugeriu que Ciça era
+       * você", que não faz sentido nenhum. A mesma conta não pode ocupar dois lugares. */
+      var _jaNaPartida = (Array.isArray(data.players) && data.players.some(function (p, i) {
+        return p && String(p.uid || '') === String(friendUid) && i !== slotIndex;
+      })) || (Array.isArray(data.slotLinkedUid) && data.slotLinkedUid.some(function (u, i) {
+        return u && String(u) === String(friendUid) && i !== slotIndex;
+      }));
+      if (_jaNaPartida) {
+        if (typeof showNotification === 'function') showNotification('Já está na partida', (friend.displayName || 'Essa pessoa') + ' já é jogador(a) desta partida — não pode ser outra pessoa ao mesmo tempo.', 'warning');
+        return;
+      }
       var dup = pending.some(function(r) { return r.slotIndex === slotIndex && r.suggestedUid === friendUid; });
       if (dup) {
         if (typeof showNotification === 'function') showNotification('Sugestão já enviada', 'Aguardando confirmação de ' + friend.displayName + '.', 'info');

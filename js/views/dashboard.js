@@ -5266,6 +5266,26 @@ function _hydrateCasualLinkWidget() {
         d._id = doc.id;
         if (d.casualMatchDocId) pending.push(d);
       });
+      /* ⛔ O BANNER SÓ VALE ENQUANTO A SUGESTÃO EXISTIR NA PARTIDA (18/set/2026). A Kelly viu
+       * "Você jogou esta partida?" por semanas: a sugestão já tinha saído de
+       * `pendingLinkRequests`, mas o aviso ficou não-lido para sempre. A partida é a fonte;
+       * aviso sem sugestão viva é marcado como lido e some. */
+      return Promise.all(pending.map(function (n) {
+        return window.FirestoreDB.db.collection('casualMatches').doc(String(n.casualMatchDocId)).get()
+          .then(function (ms) {
+            var d = ms.exists ? (ms.data() || {}) : {};
+            var viva = Array.isArray(d.pendingLinkRequests) && d.pendingLinkRequests.some(function (r) {
+              return r && String(r.suggestedUid) === String(cu.uid) &&
+                (n.casualSlotIndex == null || r.slotIndex === n.casualSlotIndex);
+            });
+            if (viva) return n;
+            try { window.FirestoreDB.db.collection('users').doc(cu.uid).collection('notifications').doc(n._id).update({ read: true, readAt: new Date().toISOString() }); } catch (e) {}
+            return null;
+          }).catch(function () { return n; });   // sem resposta, não esconde: quem decide é a partida, não a rede
+      })).then(function (vivos) { return vivos.filter(Boolean); });
+    })
+    .then(function(pending) {
+      if (!Array.isArray(pending)) return;
 
       var widgetBox = document.getElementById('dashboard-casual-link-widget');
       if (!widgetBox) return;
