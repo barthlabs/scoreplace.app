@@ -1,3 +1,4 @@
+// 2.3.79 — "Parcial"/"Prontos" de presença só aparecem em torneio de um dia ou em jogo marcado para as próximas 24 horas; e "proposto por" mostra o nome inteiro e há quanto tempo, sem cortar.
 // 2.3.78 — uma versão nova não apaga mais a tela no meio do torneio: a atualização espera você voltar à tela inicial (ou o toque na pílula); a tela que você está olhando fica como está.
 // 2.3.77 — "Seu próximo jogo" na dashboard volta a mostrar "Jogar até" com o prazo da rodada, igual ao card da chave.
 // 2.3.76 — os rótulos SETS e 1/2/3 acima dos placares ficam do mesmo tamanho do título "Melhor de 3"; o ícone desce 16 px para a estrela não encostar no topo; o favicon passa a sair do mesmo gerador dos demais ícones e o navegador recebe o novo em vez do guardado em cache.

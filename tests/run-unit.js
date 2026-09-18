@@ -485,6 +485,7 @@ const SUITES = [
   'tests/prazo-da-rodada-eliminatoria.test.js',
   'tests/prazo-do-card-sem-round-usa-o-id.test.js',
   'tests/troca-de-versao-nao-apaga-a-tela.test.js',
+  'tests/presenca-so-quando-o-jogo-e-iminente.test.js',
   // o cronômetro da Liga mira o fim da rodada
   'tests/liga-countdown-round-end.test.js',
   // o relógio do meio (RODADA e TORNEIO COMPLETO) vira REGRESSIVA quando há fim programado

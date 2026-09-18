@@ -4837,8 +4837,20 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   const _setsEmCurso = !!(_multiSet && _plan.played.length > 0 && !isDecided && !hasPending);
 
   // Check-in status for match readiness
-  const p1ci = _getCheckInStatus(tId, m.p1);
-  const p2ci = _getCheckInStatus(tId, m.p2);
+  /* ⛔ PRESENÇA SÓ FAZ SENTIDO QUANDO O JOGO É IMINENTE (18/set/2026). Relato do dono, print
+   * do Confra: "PARCIAL" num jogo com prazo em 16/10 — "passa a ideia errada de que há algo
+   * parcial num jogo que não acontecerá nas próximas horas ou dias". A presença (chegada no
+   * local) é informação de torneio de UM DIA, ou de jogo com horário marcado para as
+   * próximas 24h. Fora disso o card não pinta prontos/parcial nem as bolinhas. */
+  const _presencaImporta = (function () {
+    try {
+      if (typeof window._tournamentIsSameDay !== 'function' || window._tournamentIsSameDay(t)) return true;
+      const _sch = _matchCardTimestamp(m.scheduledAt);
+      return !!(_sch && Math.abs(_sch - Date.now()) <= 24 * 60 * 60 * 1000);
+    } catch (e) { return true; }
+  })();
+  const p1ci = _presencaImporta ? _getCheckInStatus(tId, m.p1) : 'none';
+  const p2ci = _presencaImporta ? _getCheckInStatus(tId, m.p2) : 'none';
   const hasAnyCheckIn = (p1ci !== 'none' || p2ci !== 'none');
   // Match ready = both sides fully checked in, not decided yet, not BYE, not TBD
   const matchReady = !isDecided && !isByeMatch && !hasTBD && p1ci === 'full' && p2ci === 'full';
@@ -5625,7 +5637,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
         <div style="display:flex;flex-direction:column;gap:2px;min-width:0;flex:1;">
           <span style="font-size:0.7rem;font-weight:700;color:var(--sp-c-38bdf8,#38bdf8);text-transform:uppercase;">${window._safeHtml(matchLabel)}</span>
           ${_timelineSlot}
-          <span title="proposto por ${window._safeHtml(_proposerName)} · ${_agoLabel}" style="font-size:0.6rem;color:var(--text-muted);line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">proposto por <b style="color:var(--sp-c-fbbf24,#fbbf24);">${_proposerName}</b> · ${_agoLabel}</span>
+          <span title="proposto por ${window._safeHtml(_proposerName)} · ${_agoLabel}" style="font-size:0.6rem;color:var(--text-muted);line-height:1.3;white-space:normal;overflow-wrap:anywhere;">proposto por <b style="color:var(--sp-c-fbbf24,#fbbf24);">${_proposerName}</b> · ${_agoLabel}</span>
         </div>
         <div id="header-btns-${m.id}" style="display:flex;flex-wrap:nowrap;justify-content:flex-end;align-items:center;gap:4px 6px;flex-shrink:0;min-width:0;text-align:right;">
           ${readyBadge}
