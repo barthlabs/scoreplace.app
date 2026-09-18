@@ -1,3 +1,7 @@
+// 2.3.75 — o navegador deixa de baixar a ficha privada de outras pessoas: nome e foto vêm do perfil público, e contato de inscrito, organizador ou co-organizador passa por porta no servidor que confere quem pede. Localizar o organizador por e-mail saiu do navegador. Editar placar por sets preserva os zeros já lançados.
+// 2.3.74 — convidar amigos monta o convite sem baixar contato de ninguém.
+// 2.3.73 — contato dentro do torneio (card de jogo, enquete de datas) usa a porta restrita ao elenco, não a ficha completa do perfil.
+// 2.3.72 — escolher parceiro e ver a chave leem o perfil público; a lista de elenco não baixa mais a ficha de cada pessoa.
 // 2.3.71 — snapshots parciais com participante nulo são ignorados em toda a renderização; navegar entre dashboard e torneio não cobre mais a tela com uma camada que bloqueia cliques.
 // 2.3.70 — a navegação preserva a tela já válida enquanto o torneio abre; leituras que não respondem encerram com recuperação e snapshots parciais sem participante nulo não derrubam a tela.
 // 2.3.69 — um slot nulo de inscrição em snapshot parcial é ignorado ao abrir o torneio; não derruba mais o detalhe nem deixa a tela em “Carregando…”.
