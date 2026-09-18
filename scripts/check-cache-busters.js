@@ -46,8 +46,8 @@ try {
     // comparar com o release anterior arrasta os JS da leva JÁ publicada e faz
     // o `--fix` rebatizar arquivos intactos. A fonte de verdade aqui é o
     // worktree: só ele contém a mudança que será o próximo commit.
-    const locais = execSync('git diff --name-only HEAD -- js/ css/', { cwd: root })
-      .toString().split('\n').map((s) => s.trim()).filter((s) => /\.(?:js|css)$/.test(s));
+    const locais = execSync('git diff --name-only HEAD -- js/ css/ icons/', { cwd: root })
+      .toString().split('\n').map((s) => s.trim()).filter((s) => /\.(?:js|css|png)$/.test(s));
     if (locais.length) {
       mudados = locais;
       _de = ' (alterações locais desde ' + head.slice(0, 8) + ')';
@@ -67,8 +67,10 @@ try {
     }
   }
   if (!mudados.length) {
-    mudados = execSync('git diff --name-only ' + base + ' -- js/ css/', { cwd: root })
-      .toString().split('\n').map((s) => s.trim()).filter((s) => /\.(?:js|css)$/.test(s));
+    // 18/set/2026: ícones entram na trava — os <link rel="icon"> ficaram em ?v=2.3.1 por duas
+    // trocas de ícone e o dono viu o favicon velho. [[project_cache_buster_gate_so_confere_js]]
+    mudados = execSync('git diff --name-only ' + base + ' -- js/ css/ icons/', { cwd: root })
+      .toString().split('\n').map((s) => s.trim()).filter((s) => /\.(?:js|css|png)$/.test(s));
   }
 } catch (e) {
   console.log('⚠ sem origin/main pra comparar — pulando (' + (e.message || '').split('\n')[0] + ')');

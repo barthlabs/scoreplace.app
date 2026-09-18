@@ -34,7 +34,16 @@
     ⚠️ O portão antigo media o SVG e só o CABEÇALHO do PNG; por isso deu verde com a
     tela errada. Agora mede o desenho dentro do PNG. [[feedback_unify_dual_entry_points]]
   -->
-  <g transform="translate(256,214.00) scale(1.432) translate(-256,-256)">
+    <!--
+    2.3.76 — O PÓDIO DESCE 12px (ordem do dono, 18/set/2026, print do ícone: "a estrela está
+    quase encostando no topo e embaixo tem um pouquinho de espaço"). Ele tinha razão e a conta
+    explica: com translate 214 / scale 1,432 a PONTA DA ESTRELA ficava em y=0,6 de 512 e os
+    cantos das barras a 255,9 do raio 256 — pinado nas duas pontas do círculo, zero folga.
+    Descer sem sair do círculo exige encolher: translate 230 / scale 1,375 (16px abaixo do original; o dono pediu
+    mais que os 12 primeiros) leva a estrela a y≈25 e os cantos a ≈255,4. Largura cai de 78% para ~74,7% — acima do piso de 74% do
+    gerador, que segue medindo o PNG e recusando pixel fora do círculo.
+  -->
+  <g transform="translate(256,230.00) scale(1.375) translate(-256,-256)">
     <!-- Pódio: prata (2º), ouro (1º), bronze (3º) -->
     <rect x="117" y="267" width="85" height="139" rx="13" fill="#CBD5E1"/>
     <rect x="213" y="181" width="86" height="225" rx="13" fill="#F59E0B"/>

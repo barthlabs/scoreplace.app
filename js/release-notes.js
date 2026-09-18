@@ -1,3 +1,4 @@
+// 2.3.76 — o ícone desce 16 px para a estrela não encostar no topo; o favicon passa a sair do mesmo gerador dos demais ícones e o navegador recebe o novo em vez do guardado em cache.
 // 2.3.75 — o navegador deixa de baixar a ficha privada de outras pessoas: nome e foto vêm do perfil público, e contato de inscrito, organizador ou co-organizador passa por porta no servidor que confere quem pede. Localizar o organizador por e-mail saiu do navegador. Editar placar por sets preserva os zeros já lançados. E as seis telas reescritas nesta leva chegam mesmo ao navegador: estavam marcadas com versão antiga e seriam servidas do cache velho.
 // 2.3.74 — convidar amigos monta o convite sem baixar contato de ninguém.
 // 2.3.73 — contato dentro do torneio (card de jogo, enquete de datas) usa a porta restrita ao elenco, não a ficha completa do perfil.

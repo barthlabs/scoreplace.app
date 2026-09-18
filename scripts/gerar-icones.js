@@ -130,8 +130,40 @@ ANDROID.forEach(([dpi, legado, adapt]) => {
 alvos.push({ f: 'ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png', n: 1024, tipo: 'cheio', minimo: 0.74 });
 alvos.push({ f: 'ios/App/Watch/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png', n: 1024, tipo: 'cheio', minimo: 0.74 });
 
+/* ── favicon.ico TAMBÉM SAI DAQUI (18/set/2026) ─────────────────────────────────────────
+ * Relato do dono: _"o favicon parece que nunca foi mudado e continua naquela versão antiga
+ * pequena"_. Ele estava certo por DOIS motivos, os dois medidos:
+ *   • `favicon.ico` na raiz não estava no catálogo — ficou na 1,25x de 12/set enquanto
+ *     todos os PNGs passaram por 1,432 e agora 1,375;
+ *   • os <link rel="icon"> do index.html estavam com `?v=2.3.1` desde a 2.3.1 — o navegador
+ *     seguia servindo o PNG velho do cache. A trava de cache-buster só olhava JS/CSS.
+ * O .ico é montado com Pillow a partir dos PNGs que este script acabou de renderizar E
+ * medir (16/32 + um 48 renderizado aqui), então não tem como divergir deles. */
+function gerarFavicon() {
+  const tmp48 = path.join(os.tmpdir(), 'sp-icone-48-' + process.pid + '.png');
+  const tmpSvg = path.join(os.tmpdir(), 'sp-icone-48-' + process.pid + '.svg');
+  fs.writeFileSync(tmpSvg, svgCheio(48));
+  execFileSync('rsvg-convert', ['-w', '48', '-h', '48', tmpSvg, '-o', tmp48]);
+  const py = [
+    'from PIL import Image',
+    'import sys',
+    // ⚠️ o Pillow DESCARTA tamanhos maiores que a imagem-base: com o 16 na frente saía um
+    // .ico de 1 imagem só (medido). A base é o MAIOR; os menores vêm por append_images.
+    'imgs=sorted([Image.open(p).convert("RGBA") for p in sys.argv[2:]], key=lambda i: -i.width)',
+    'imgs[0].save(sys.argv[1], format="ICO", sizes=[(i.width,i.height) for i in imgs], append_images=imgs[1:])',
+  ].join('\n');
+  execFileSync('python3', ['-c', py, path.join(ROOT, 'favicon.ico'),
+    path.join(ROOT, 'icons/icon-16.png'), path.join(ROOT, 'icons/icon-32.png'), tmp48]);
+  fs.unlinkSync(tmpSvg); fs.unlinkSync(tmp48);
+  const ico = fs.readFileSync(path.join(ROOT, 'favicon.ico'));
+  const qtd = ico.readUInt16LE(4);
+  if (ico.readUInt16LE(2) !== 1 || qtd !== 3) throw new Error('favicon.ico inválido: ' + qtd + ' imagens');
+  console.log('  ✓ favicon.ico                                              3 tamanhos (16/32/48), dos PNGs medidos');
+}
+
 let ruins = 0;
 console.log((APLICAR ? '▸ REGERANDO' : '▸ ENSAIO — medindo o que existe hoje') + '\n');
+if (APLICAR) gerarFavicon();
 for (const a of alvos) {
   if (!fs.existsSync(path.join(ROOT, a.f))) { console.log('  (não existe) ' + a.f); continue; }
   if (APLICAR) {
