@@ -774,9 +774,22 @@ console.log('\n── janela de 3 meses ──');
 {
   const fs = require('fs'), pth = require('path');
   const src = fs.readFileSync(pth.join(__dirname, '..', 'js', 'views', 'tournaments-enrollment-report.js'), 'utf8');
-  const carga = src.slice(src.indexOf('_fetchProfiles(parts).then'), src.indexOf('_fetchProfiles(parts).then') + 1400);
+  /* ⛔ A ÂNCORA NÃO PODE SER A ASSINATURA. Era `_fetchProfiles(parts).then` com uma fatia de
+   * 1400 chars; na etapa 7 (17/set/2026) a busca de perfis passou pela porta restrita e a
+   * chamada virou `_fetchProfiles(tId, parts)`. O `indexOf` devolveu -1, a fatia foi parar no
+   * COMEÇO do arquivo e o portão reprovou um código que estava certo — a ordem continuava
+   * busca→render. Ancorar na chamada por regex, sem os argumentos, e fechar a janela no FIM
+   * do construto (`_doneLoading()` encerra o carregamento), nunca num tamanho fixo — janela
+   * fixa reprova sozinha assim que um comentário empurra a linha pra fora. */
+  const mCarga = /_fetchProfiles\([^)]*\)\s*\.then/.exec(src);
+  ok(!!mCarga, 'achei o carregamento da página (_fetchProfiles ... .then)');
+  const fimCarga = mCarga ? src.indexOf('_lzReabrirFichaSeVoltou', mCarga.index) : -1;
+  ok(fimCarga > 0, 'achei o fim do carregamento (_lzReabrirFichaSeVoltou)');
+  const carga = mCarga ? src.slice(mCarga.index, fimCarga) : '';
   ok(/_fetchGlobalScans\(candUids\)/.test(carga), 'a página busca os letzplayScans do banco no carregamento');
-  ok(carga.indexOf('_fetchGlobalScans') < carga.indexOf('_renderPage'), 'e busca ANTES de renderizar');
+  const iScans = carga.indexOf('_fetchGlobalScans');
+  const iRender = carga.indexOf('_renderPage');
+  ok(iScans >= 0 && iRender > iScans, 'e busca ANTES de renderizar');
   const render = src.slice(src.indexOf('function _renderCategoriesSection'), src.indexOf('function _renderCategoriesSection') + 400);
   ok(/_erApplyLzToRows\(rows, profileMap, scanMap\)/.test(render), 'as cores são aplicadas com o que veio do banco');
 

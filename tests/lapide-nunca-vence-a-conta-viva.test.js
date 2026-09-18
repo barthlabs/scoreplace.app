@@ -195,7 +195,12 @@ function querySnap(base, uids) {
       escapou.push(path.relative(path.join(__dirname, '..'), f) + ':' + (i + 1) + '  ' + L[i].trim().slice(0, 80));
     }
   }
-  ok(vistos >= 20, 'a varredura achou as buscas por identidade (got ' + vistos + ')');
+  /* ⛔ ESTE É UM PISO DE SANIDADE, não uma meta: ele só garante que a varredura ACHOU algo —
+   * uma varredura que encontra zero passaria vazia em `escapou.length === 0` e não protegeria
+   * nada. Era 20; na etapa 7 (17/set/2026) caiu para 10 porque metade das buscas por
+   * identidade SAIU do navegador para o servidor. Baixar o piso acompanha a realidade; quem
+   * tem dentes aqui é a asserção seguinte, que exige ZERO escapadas. */
+  ok(vistos >= 8, 'a varredura achou as buscas por identidade (got ' + vistos + ')');
   if (escapou.length) {
     console.error('  ↓ buscas amplas em users/ que NÃO passam por _userVivo:');
     escapou.forEach((e) => console.error('     ' + e));
@@ -224,18 +229,37 @@ function querySnap(base, uids) {
   const invit = corpo('.limit(2000)', 'window._invitableUsersCache =');
   ok(/mergedInto/.test(invit), 'listInvitableUsers descarta lápide na FONTE (PUBLIC_FIELDS não leva mergedInto)');
 
-  // ── B3. Nos cross-refs de login, o PRÓPRIO doc sai ANTES de resolver ──
+  // ── B3. Quem resolve candidato de fusão exclui o PRÓPRIO doc ANTES de resolver ──
   // Se a conta em que a pessoa está logada FOR a lápide, resolvê-la devolve o SOBREVIVENTE —
   // que passa no teste `!== uid atual` e vira "conta anterior a mesclar". O app fundiria a
-  // conta VIVA dentro da morta. Por isso os 4 cross-refs do auth.js filtram o próprio doc
-  // na ENTRADA da porta, não na saída.
+  // conta VIVA dentro da morta.
+  //
+  /* ⛔ A ÂNCORA MUDOU DE LADO NA ETAPA 7 (17/set/2026). Eram 4 cross-refs no `auth.js`, e
+   * este portão os contava. A resolução por e-mail SAIU do navegador: hoje ela mora na
+   * callable `getOwnEmailMergeCandidates`, que só aceita quem tem `email_verified` e chama a
+   * porta com `excludeUid: callerUid`. O `auth.js` ficou com ZERO — e contar 4 ali passou a
+   * reprovar exatamente a migração que fecha o vazamento.
+   * A PROPRIEDADE é a mesma e continua cobrada, agora onde ela vive: no servidor. E o
+   * cliente segue vigiado — se um cross-ref voltar para o `auth.js`, ele tem de filtrar. */
   const authSrc = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'auth.js'), 'utf8');
   const chamadas = authSrc.split('\n').filter((l) => /window\._userVivo\(/.test(l));
-  ok(chamadas.length === 4, 'auth.js tem os 4 cross-refs passando pela porta (got ' + chamadas.length + ')');
   const semFiltro = chamadas.filter((l) => !/docs\.filter\(/.test(l));
   if (semFiltro.length) semFiltro.forEach((l) => console.error('     ' + l.trim().slice(0, 100)));
   ok(semFiltro.length === 0,
-    '🔒 todo cross-ref exclui o próprio doc ANTES de resolver (senão o merge inverte de lado)');
+    '🔒 cross-ref que sobrar no auth.js exclui o próprio doc ANTES de resolver ' +
+    '(' + chamadas.length + ' no arquivo; a resolução por e-mail vive na CF)');
+
+  /* A janela fecha no PRÓXIMO `exports.` — o fim real do construto —, nunca num tamanho fixo:
+   * janela fixa reprova sozinha quando um comentário empurra a linha pra fora. */
+  const fnSrc = fs.readFileSync(path.join(__dirname, '..', 'functions', 'index.js'), 'utf8');
+  const iCf = fnSrc.indexOf('exports.getOwnEmailMergeCandidates');
+  const fimCf = iCf >= 0 ? fnSrc.indexOf('\nexports.', iCf + 1) : -1;
+  const cf = iCf >= 0 ? fnSrc.slice(iCf, fimCf > 0 ? fimCf : fnSrc.length) : '';
+  ok(cf.length > 100, 'a callable getOwnEmailMergeCandidates existe (é ela que resolve hoje)');
+  ok(/excludeUid:\s*callerUid/.test(cf),
+    '🔒 a CF exclui o PRÓPRIO uid ao resolver a lápide (excludeUid: callerUid)');
+  ok(/email_verified\s*!==\s*true/.test(cf),
+    '🔒 e só atende quem provou o e-mail — sem isso qualquer um pediria os candidatos de outro');
 
   // A porta tem de estar CARREGADA no app, senão o call site chama undefined.
   const idx = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');

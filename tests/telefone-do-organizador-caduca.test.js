@@ -51,7 +51,20 @@ while ((m = re.exec(codigo)) !== null) {
    * das chaves. Recortar no fecha-chaves deixava o conserto certo de fora e reprovava. */
   const ini = codigo.lastIndexOf('{', m.index);
   const fim = codigo.indexOf(';', m.index);
-  gravamProvado.push(codigo.slice(ini, fim < 0 ? codigo.length : fim));
+  const bloco = codigo.slice(ini, fim < 0 ? codigo.length : fim);
+  /* ⛔ LER NÃO É GRAVAR (etapa 7, 17/set/2026). `phone` + `phoneCountry` lado a lado também
+   * é a forma de uma PROJEÇÃO DE LEITURA: `getOwnEmailMergeCandidates` devolve o perfil do
+   * candidato com esses dois campos e não escreve nada. Cobrar `apagarCarimboDeTerceiro`
+   * de uma leitura é exigir que ela apague carimbo — reprovava o código certo.
+   *
+   * ⭐ O QUE SEPARA OS DOIS está IMEDIATAMENTE ANTES da chave, e não dentro dela: a gravação
+   * é aberta por um verbo (`Object.assign(`, `.set(`, `.update(`, `.create(`), a leitura por
+   * um `return`. Olhar dentro do bloco não serve — o recorte para no `;` e o `.set(` que
+   * abriu a chamada fica de fora.
+   * O portão não perde os dentes: gravação nova nasce com um desses verbos e cai aqui. */
+  const abertura = codigo.slice(Math.max(0, ini - 160), ini);
+  if (!/(Object\.assign|\.\s*(set|update|create))\s*\(\s*$/.test(abertura)) continue;
+  gravamProvado.push(bloco);
 }
 must(gravamProvado.length >= 2,
   '② achei os lugares que gravam um número já provado (' + gravamProvado.length + ')');

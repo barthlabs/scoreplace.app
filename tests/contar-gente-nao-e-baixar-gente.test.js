@@ -50,21 +50,26 @@ must(/collection\('users'\)/.test(desfeito),
   '③ ⭐ apontado de volta para `users`, a asserção ① iria vermelha — o portão tem dentes');
 
 // ── ④ O QUE SOBRA NO ARQUIVO, E É OUTRO ASSUNTO ───────────────────────────
-/* ⚠️ HONESTIDADE SOBRE O ESCOPO: esta leva é o CONTADOR. Sobram QUATRO usos de `users` na
+/* ⚠️ HONESTIDADE SOBRE O ESCOPO: esta leva é o CONTADOR. Sobram DOIS usos de `users` na
  * dashboard, e eles foram olhados um a um — não estimados:
  *   • 2 no documento do PRÓPRIO usuário (`.doc(cu.uid)` — caixa de avisos e o perfil dele),
- *     que não são ficha de terceiro e não têm por que sair daqui;
- *   • 2 resolvendo E-MAIL → conta (`email_lower` e `email`), que é OUTRA frente — o espelho
- *     não tem e-mail de propósito, então essa resolução não se muda trocando de coleção.
+ *     que não são ficha de terceiro e não têm por que sair daqui.
+ *
+ * ⭐ ERAM QUATRO até a etapa 7 (17/set/2026). Os outros 2 resolviam E-MAIL → conta
+ * (`email_lower` e `email`) e SAÍRAM do navegador: a resolução por e-mail passou para o
+ * servidor, na callable `getOwnEmailMergeCandidates`, que exige `email_verified` e exclui o
+ * próprio uid (`excludeUid`). Baixar o teto de 4 para 2 não afrouxa o portão — aperta: a
+ * asserção logo abaixo prova que os DOIS que ficaram são o doc do PRÓPRIO usuário, e a
+ * terceira prova que NENHUMA resolução por e-mail sobrou no navegador.
  * O número fica travado aqui para que crescer seja VISÍVEL. */
 const restantes = (semComentario.match(/collection\('users'\)/g) || []).length;
-must(restantes === 4,
-  '④ restam ' + restantes + ' usos de `users` na dashboard (2 no doc PRÓPRIO, 2 resolvendo e-mail→conta)');
+must(restantes === 2,
+  '④ restam ' + restantes + ' usos de `users` na dashboard (esperado 2, ambos no doc PRÓPRIO)');
 const proprios = (semComentario.match(/collection\('users'\)\s*\n?\s*\.?doc\(cu\.uid\)/g) || []).length;
 must(proprios === 2,
-  '④ ⭐ dois deles são o documento do PRÓPRIO usuário — não é ficha de terceiro (achados: ' + proprios + ')');
+  '④ ⭐ os dois são o documento do PRÓPRIO usuário — não é ficha de terceiro (achados: ' + proprios + ')');
 const porEmail = (semComentario.match(/collection\('users'\)\.where\('email(?:_lower)?', '==',/g) || []).length;
-must(porEmail === 2,
-  '④ ⭐ e dois resolvem e-mail→conta, que o espelho NÃO pode atender (achados: ' + porEmail + ')');
+must(porEmail === 0,
+  '④ ⭐ e NENHUMA resolução e-mail→conta sobrou no navegador — ela vive na CF (achados: ' + porEmail + ')');
 
 console.log('\n✅ ' + ok + ' verificações');
