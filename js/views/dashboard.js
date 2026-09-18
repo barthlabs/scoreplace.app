@@ -5264,6 +5264,7 @@ function _hydrateCasualLinkWidget() {
       snap.forEach(function(doc) {
         var d = doc.data();
         d._id = doc.id;
+        d._ref = doc.ref;   // o próprio doc lido — marcar como lido não abre outra leitura de `users`
         if (d.casualMatchDocId) pending.push(d);
       });
       /* ⛔ O BANNER SÓ VALE ENQUANTO A SUGESTÃO EXISTIR NA PARTIDA (18/set/2026). A Kelly viu
@@ -5279,7 +5280,7 @@ function _hydrateCasualLinkWidget() {
                 (n.casualSlotIndex == null || r.slotIndex === n.casualSlotIndex);
             });
             if (viva) return n;
-            try { window.FirestoreDB.db.collection('users').doc(cu.uid).collection('notifications').doc(n._id).update({ read: true, readAt: new Date().toISOString() }); } catch (e) {}
+            try { if (n._ref) n._ref.update({ read: true, readAt: new Date().toISOString() }); } catch (e) {}
             return null;
           }).catch(function () { return n; });   // sem resposta, não esconde: quem decide é a partida, não a rede
       })).then(function (vivos) { return vivos.filter(Boolean); });
