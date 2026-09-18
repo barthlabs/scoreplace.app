@@ -140,12 +140,17 @@ const bloco = RULES.slice(iR, RULES.indexOf('match /', iR + 10));
 must(/allow read: if request\.auth != null;/.test(bloco), '⑥ lê quem está logado');
 must(/allow write: if false;/.test(bloco), '⑥ ⛔ escrita NEGADA a todos — quem mantém é a Function, pelo Admin SDK');
 
-// ── ⑦ CONTROLE DE ESCOPO: `users` NÃO foi fechado nesta leva ────────────────
+// ── ⑦ A FICHA PRIVADA FECHOU: só o dono, com migração do doc legado ─────────
 const iU = RULES.indexOf('match /users/{userId}');
 const blocoU = RULES.slice(iU, RULES.indexOf('match /', iU + 10));
-must(/allow read: if request\.auth != null;/.test(blocoU),
-  '⑦ ⛔ `users` segue legível por autenticado — DE PROPÓSITO: o bundle das lojas lê `users` '
-  + 'direto, e fechar antes de uma nativa publicada cortaria quem está na loja');
+must(/function canReadOwnPrivateProfile\(\)/.test(blocoU),
+  '⑦ existe uma regra explícita para leitura da ficha privada');
+must(/request\.auth\.uid == userId/.test(blocoU),
+  '⑦ ⭐ o uid só lê a própria ficha');
+must(/request\.auth\.token\.email\.lower\(\) == userId\.lower\(\)/.test(blocoU),
+  '⑦ o documento legado só abre para o mesmo e-mail autenticado');
+must(!/allow read: if request\.auth != null;/.test(blocoU),
+  '⑦ ⛔ pessoa autenticada não lê mais ficha privada de terceiro');
 
 // ── ⑧ o CLIENTE lê o espelho para gente desconhecida ───────────────────────
 const DB = fs.readFileSync(path.join(raiz, 'js/firebase-db.js'), 'utf8');
@@ -161,9 +166,10 @@ must(!/collection\('users'\)\.where\('displayName_lower'/.test(DB),
 /* ⛔ CONTROLE DE ESCOPO: `loadUserProfile` segue em `users`. Ela serve também ao PRÓPRIO
  * perfil, que precisa dos campos privados, e tem 93 chamadas a separar uma a uma. A etapa de
  * frescor só exige o servidor; ela não troca a coleção nem amplia a projeção pública. */
+must(/String\(me\.uid\) !== String\(uid\)\) return null;/.test(DB),
+  '⑧ `loadUserProfile` recusa uid de terceiro antes de tocar no Firestore');
 must(/var doc = await this\.db\.collection\('users'\)\.doc\(uid\)\.get\(\{ source: 'server' \}\);/.test(DB),
-  '⑧ ⛔ `loadUserProfile` segue em `users` e exige o servidor — esta leva não troca as 93 chamadas '
-  + 'nem mistura perfil próprio com ficha pública');
+  '⑧ a ficha própria continua vindo do servidor, sem misturar com perfil público');
 
 // ── ⑧b a ficha de TERCEIRO na tela vem do espelho ──────────────────────────
 must(/async carregarPerfilPublico\(uid\)/.test(DB),

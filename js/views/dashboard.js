@@ -5451,63 +5451,15 @@ function _hydrateFriendsPresenceWidget() {
     friendsRawCount: friendsRaw.length,
     friendsRaw: friendsRaw,
     friendsLikeUidCount: friendsLikeUid.length,
-    friendsLikeEmailCount: friendsLikeEmail.length,
-    friendsLikeEmail: friendsLikeEmail
+    friendsLikeEmailCount: friendsLikeEmail.length
   });
   var friends = friendsLikeUid;
 
-  // v0.16.43: tenta resolver emails antigos → uid via query Firestore.
-  // Faz best-effort: pra cada email no array friends, busca em users where
-  // email_lower == email; se acha, adiciona o uid em `friends` E também
-  // grava a migração no perfil do usuário (arrayUnion uid + arrayRemove email)
-  // pra não precisar refazer a query toda vez.
-  if (friendsLikeEmail.length > 0 && window.FirestoreDB && window.FirestoreDB.db) {
-    var resolvePromises = friendsLikeEmail.map(function(em) {
-      var emLower = String(em).toLowerCase();
-      return window.FirestoreDB.db.collection('users').where('email_lower', '==', emLower).limit(1).get()
-        .then(function(snap) {
-          if (snap.empty) {
-            // Fallback: alguns docs antigos usam 'email' em vez de 'email_lower'
-            return window.FirestoreDB.db.collection('users').where('email', '==', em).limit(1).get();
-          }
-          return snap;
-        })
-        .then(function(snap) { return window._userVivo(snap); })   // lápide guarda o mesmo e-mail
-        .then(function(v) {
-          if (!v) {
-            window._warn('[FriendsWidget] email não resolvido pra uid:', em);
-            return null;
-          }
-          var resolvedUid = v.uid;
-          window._log('[FriendsWidget] email resolvido:', em, '→', resolvedUid);
-          /* ⛔ v2.1.48 — A PERSISTÊNCIA SAIU DAQUI (3ª auditoria, ponto 3).
-           * Este era o writer client-side esquecido: ele gravava `friends` do próprio
-           * perfil (arrayUnion do uid + arrayRemove do e-mail) pra "não refazer a query".
-           * `friends` é CACHE do cânone desde a 2.1.48 e é campo privilegiado — a escrita
-           * seria recusada, e o `.catch` acima transformaria isso em aviso a cada abertura
-           * do dashboard. Pior: se passasse, o cliente estaria decidindo metade de uma
-           * relação sem a outra metade e sem `friendAccess`.
-           * ⭐ A conversão e-mail → uid é do BACKFILL (scripts/backfill-amizade.js), que
-           * resolve pela porta da conta viva, e da fusão no servidor. Aqui a resolução
-           * segue valendo só pra ESTA sessão, na memória — que é o que a tela precisa. */
-          return resolvedUid;
-        })
-        .catch(function(e) { window._warn('[FriendsWidget] resolve query falhou pra', em, e); return null; });
-    });
-    Promise.all(resolvePromises).then(function(resolved) {
-      var added = resolved.filter(function(u) { return u && friends.indexOf(u) === -1; });
-      if (added.length > 0) {
-        window._log('[FriendsWidget] re-querying com uids resolvidos:', added);
-        // Atualiza cache local também
-        if (Array.isArray(cu.friends)) {
-          added.forEach(function(u) { if (cu.friends.indexOf(u) === -1) cu.friends.push(u); });
-        }
-        // Re-dispara a hidratação com a lista completa — o caminho normal
-        // abaixo já vai pegar (friends agora tem os uids resolvidos).
-        setTimeout(_hydrateFriendsPresenceWidget, 100);
-      }
-    });
-  }
+  // Relação social não é inferida por e-mail no navegador. O vínculo canônico vive em
+  // `friendships` e a recuperação de cadastros legados passa pela callable restrita
+  // `listLegacyFriendships`; um e-mail antigo no cache não autoriza abrir a ficha privada
+  // de outra pessoa para tentar adivinhar seu UID. Enquanto a reconfirmação não acontece,
+  // ele simplesmente não entra no filtro de presença desta sessão.
   // v0.16.73: removido o diag block (DIAG_VERSION/SELF_PROBE_SLOT/_diagLine/
   // _diagBlock/_runSelfProbe) introduzido nas v0.16.43-64. Cumpriu a missão
   // (debug iterativo de email→uid migration, query empty, self-presence

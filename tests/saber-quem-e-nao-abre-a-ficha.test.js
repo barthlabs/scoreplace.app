@@ -15,8 +15,7 @@
  * "a mitigação cobre um caminho e não o irmão". [[feedback_unify_dual_entry_points]]
  *
  * ⚠️ O QUE NÃO ENTROU NESTA LEVA, E POR QUÊ (medido, não estimado):
- *   • resolução por E-MAIL (13 lugares) — o espelho não tem e-mail, de propósito;
- *   • o relatório de inscritos do organizador — ele MOSTRA e-mail, é o roster dele;
+ *   • a própria caixa de notificações — cada conta segue lendo somente a sua;
  *   • a ficha pública da análise — lê `city`, que ainda não está no espelho (98 de 279
  *     perfis têm cidade preenchida, então tirar o campo da tela seria regressão real).
  */
@@ -63,15 +62,15 @@ const _iq = DB.indexOf("where('displayName_lower', '==', q)");
 must(/_COLECAO_PERFIL_PUBLICO/.test(DB.slice(DB.lastIndexOf('var snap', _iq), _iq)),
   '② ⭐ e a gêmea `isDisplayNameTaken` continua no espelho — as duas na MESMA coleção');
 
-// ── ③ transferência de organização: existência e conta viva, nunca campo ───
+// ── ③ transferência de organização: existência e conta viva, nunca ficha ───
 const htEspelho = (HT.match(/collection\(window\._COLECAO_PERFIL_PUBLICO \|\| 'usersPublic'\)/g) || []).length;
-must(htEspelho === 3,
-  '③ ⭐ os 3 caminhos que só perguntam "existe?/quem está vivo?" leem o espelho (achados: ' + htEspelho + ')');
+must(htEspelho === 1,
+  '③ ⭐ o caminho que só pergunta "existe?/quem está vivo?" lê o espelho (achados: ' + htEspelho + ')');
 const htFicha = (HT.match(/collection\('users'\)/g) || []).length;
-must(htFicha === 3,
-  '③ restam ' + htFicha + ' em `users`: as 2 resoluções por E-MAIL e a caixa de avisos do destinatário');
-must((HT.match(/collection\('users'\)\.where\('email', '==',/g) || []).length === 2,
-  '③ ⭐ e as duas por e-mail são mesmo por e-mail — o espelho não tem e-mail, de propósito');
+must(htFicha === 1,
+  '③ resta só a caixa de avisos da própria conta (achados: ' + htFicha + ')');
+must(!/collection\('users'\)\.where\('email', '==',/.test(HT),
+  '③ ⛔ transferência não resolve conta por e-mail no navegador');
 
 // ── ④ CONTROLE: os portões têm dentes ─────────────────────────────────────
 const desfeito = STORE.replace("var _col = window._COLECAO_PERFIL_PUBLICO || 'usersPublic';",
@@ -80,7 +79,7 @@ must(!/var _col = window\._COLECAO_PERFIL_PUBLICO/.test(desfeito),
   '④ ⭐ apontado de volta para `users`, a asserção ① iria vermelha');
 const htDesfeito = HT.replace(/collection\(window\._COLECAO_PERFIL_PUBLICO \|\| 'usersPublic'\)/g,
   "collection('users')");
-must((htDesfeito.match(/collection\('users'\)/g) || []).length === 6,
-  '④ ⭐ e desfeitas as 3 da transferência, a contagem do ③ iria de 3 para 6');
+must((htDesfeito.match(/collection\('users'\)/g) || []).length === 2,
+  '④ ⭐ desfeita a consulta pública, a contagem do ③ iria de 1 para 2');
 
 console.log('\n✅ ' + ok + ' verificações');

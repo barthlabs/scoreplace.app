@@ -11,12 +11,8 @@
  * a consulta por nome dá resultado **idêntico nos 263 nomes distintos**, e as **144 fotos**
  * estão todas no espelho. Nada na tela muda.
  *
- * ⚠️ SOBRA UMA LEITURA DE FICHA, E É PROPOSITAL: inscrito antigo sem uid só se reconhece pelo
- * e-mail gravado na inscrição, e o espelho não tem e-mail — é o que ele existe para não ter.
- * MEDIDO sobre os 269 inscritos de produção: 190 têm uid, 78 não têm uid NEM e-mail, e **UM**
- * cai nessa queda (dupla de um torneio ENCERRADO de junho, cujo e-mail resolve para conta com
- * foto). Este portão TRAVA em uma: na segunda, reprova — senão "só mais uma" alarga a porta
- * sem ninguém ver. [[feedback_a_defesa_vaza_pela_borda]]
+ * Inscrito legado sem UID pode ficar sem foto, mas abrir uma chave não autoriza procurar
+ * uma ficha privada por e-mail. O portão exige zero leituras de `users` neste arquivo.
  */
 const assert = require('assert/strict');
 const fs = require('fs');
@@ -62,15 +58,13 @@ const travessias = (corpo.match(/_userVivo\([^)]*\{ publico: true \}\)/g) || [])
 must(travessias === 3,
   '③ ⭐ as 3 leituras do espelho atravessam a lápide SEM baixar ficha (achadas: ' + travessias + ')');
 const todas = (corpo.match(/_userVivo\(/g) || []).length;
-must(todas === 4 && todas - travessias === 1,
-  '③ das ' + todas + ' travessias de lápide, exatamente UMA usa o leitor real — a da queda por e-mail');
+must(todas === 3 && todas === travessias,
+  '③ as ' + todas + ' travessias de lápide usam somente o espelho público');
 
-// ── ④ SOBRA EXATAMENTE UMA leitura de ficha, e é a queda por e-mail ─────────
+// ── ④ nenhuma leitura de ficha privada ─────────────────────────────────────
 const fichas = (semComentario.match(/collection\('users'\)/g) || []).length;
-must(fichas === 1,
-  '④ ⛔ o arquivo inteiro tem UMA leitura de `users` (achadas: ' + fichas + ') — na segunda, este portão reprova');
-must(/collection\('users'\)\s*\n?\s*\.where\('email', '==', p\.email\)/.test(semComentario),
-  '④ ⭐ e ela é exatamente a queda por e-mail do inscrito SEM uid — o espelho não tem e-mail, de propósito');
+must(fichas === 0,
+  '④ ⛔ o arquivo inteiro não lê `users` (achadas: ' + fichas + ')');
 
 // ── ⑤ CONTROLE: o portão tem dentes ────────────────────────────────────────
 // ⛔ Um portão que só vê verde não prova nada.
@@ -79,10 +73,9 @@ const desfeito = semComentario.replace("var COL = window._COLECAO_PERFIL_PUBLICO
 must(desfeito !== semComentario, '⑤ o controle de fato alterou a fonte');
 must(!/var COL = window\._COLECAO_PERFIL_PUBLICO/.test(desfeito),
   '⑤ ⭐ desfeita a troca, a asserção ① iria vermelha — o portão tem dentes');
-const aMais = semComentario.replace("window.FirestoreDB.db.collection('users')",
-  "window.FirestoreDB.db.collection('users')\n      /*extra*/ && window.FirestoreDB.db.collection('users')");
-must((aMais.match(/collection\('users'\)/g) || []).length === 2 &&
+const aMais = semComentario + "\nwindow.FirestoreDB.db.collection('users');";
+must((aMais.match(/collection\('users'\)/g) || []).length === 1 &&
      (aMais.match(/collection\('users'\)/g) || []).length !== fichas,
-  '⑤ ⭐ e uma segunda leitura de ficha mudaria a contagem — a trava do ④ é real');
+  '⑤ ⭐ uma leitura privada reintroduzida faria a trava do ④ falhar');
 
 console.log('\n✅ ' + ok + ' verificações');

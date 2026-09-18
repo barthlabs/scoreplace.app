@@ -232,10 +232,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
 
   // ─── Profile fetch ───────────────────────────────────────────────────
   //
-  // v1.3.24-beta: agora resolve perfil em 3 camadas pra recuperar inscritos
-  // que perderam uid no participantObj por bug em algum path de enrollment
-  // (não é "manual add" — bug reportado pelo dono: "AS pessoas entraram
-  // tem perfil"):
+  // Resolve perfil em 3 camadas para recuperar inscrições legadas sem uid.
+  // A resolução acontece na callable restrita ao organizador: o navegador não
+  // lê nem pesquisa `users`, e recebe só a projeção que a análise consome.
   //
   //   1. Direct uid fetch (caminho normal)
   //   2. Email lookup — se participantObj.email existe e não temos uid,
@@ -249,78 +248,30 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   // {uid, profile, resolvedVia}} } — o caller usa resolvedFor pra saber
   // que aquele inscrito foi rescued e via qual mecanismo.
 
-  function _fetchProfiles(parts) {
+  function _fetchProfiles(tId, parts) {
     if (!parts || parts.length === 0) return Promise.resolve({ byUid: {}, resolvedFor: {} });
-    if (!window.firebase || !firebase.firestore) return Promise.resolve({ byUid: {}, resolvedFor: {} });
-    var db = firebase.firestore();
+    if (!window.FirestoreDB || typeof window.FirestoreDB.carregarPerfisDaAnalise !== 'function') {
+      return Promise.resolve({ byUid: {}, resolvedFor: {} });
+    }
     var byUid = {};
     var resolvedFor = {};
-
-    // ─ Camada 1: direct uid fetch ────────────────────────────────────
-    // Busca TODOS os uids — inclusive p1Uid/p2Uid das duplas (senão o nome do
-    // parceiro sai "(sem nome)": a inscrição guarda só uid, o nome vem do perfil).
-    var uids = {};
-    parts.forEach(function (p) {
-      if (!p) return;
-      if (p.uid) uids[p.uid] = 1;
-      if (p.p1Uid) uids[p.p1Uid] = 1;
-      if (p.p2Uid) uids[p.p2Uid] = 1;
+    var requested = parts.map(function (p, idx) {
+      p = p || {};
+      return {
+        key: String(idx), uid: p.uid || '', email: p.email || '',
+        name: p.displayName || p.name || ''
+      };
     });
-    var uidPromises = Object.keys(uids).map(function (uid) {
-      return db.collection('users').doc(uid).get()
-        .then(function (doc) { if (doc.exists) byUid[uid] = doc.data(); })
-        .catch(function () { /* per-user err — silencioso */ });
-    });
-
-    return Promise.all(uidPromises).then(function () {
-      // ─ Camada 2 + 3: rescue inscritos sem uid ──────────────────────
-      var rescueIdxs = [];
-      parts.forEach(function (p, idx) {
-        if (!p || p.uid) return; // já tem uid; nada a fazer
-        // Pular orgs adições reais — heuristic: orgs add manual quase
-        // sempre tem só name+displayName, sem email. Mas vamos tentar
-        // mesmo assim: se não houver match, deixa não-vinculado.
-        rescueIdxs.push(idx);
+    return window.FirestoreDB.carregarPerfisDaAnalise(tId, requested).then(function (rows) {
+      (rows || []).forEach(function (row) {
+        if (!row || !row.uid || !row.profile) return;
+        byUid[row.uid] = row.profile;
+        var idx = parseInt(row.key, 10);
+        if (!isNaN(idx) && parts[idx] && !parts[idx].uid) {
+          resolvedFor[idx] = { uid: row.uid, profile: row.profile, via: 'legado' };
+        }
       });
-
-      if (rescueIdxs.length === 0) return { byUid: byUid, resolvedFor: resolvedFor };
-
-      var rescuePromises = rescueIdxs.map(function (idx) {
-        var p = parts[idx];
-        var email = p && p.email ? String(p.email).trim().toLowerCase() : '';
-        var name = p && (p.displayName || p.name) ? String(p.displayName || p.name).trim() : '';
-
-        // Camada 2: email lookup (alta confiança)
-        var emailQ = email
-          ? db.collection('users').where('email', '==', email).limit(2).get()
-          : Promise.resolve(null);
-
-        return emailQ.then(function (snap) { return window._userVivo(snap); }).then(function (v) {
-          // `count` é depois do colapso lápide→sobrevivente: os DOIS docs da mesma pessoa
-          // casam pelo mesmo e-mail e davam size 2 — a pessoa ficava sem vínculo nenhum.
-          if (v && v.count === 1) {
-            byUid[v.uid] = v.data;
-            resolvedFor[idx] = { uid: v.uid, profile: v.data, via: 'email' };
-            return null;
-          }
-          // Camada 3: displayName lookup (média confiança — só se 1 match)
-          if (!name) return null;
-          // Tenta displayName primeiro (campo comum em users).
-          return db.collection('users').where('displayName', '==', name).limit(2).get()
-            .then(function (nameSnap) { return window._userVivo(nameSnap); })
-            .then(function (vn) {
-              if (vn && vn.count === 1) {
-                byUid[vn.uid] = vn.data;
-                resolvedFor[idx] = { uid: vn.uid, profile: vn.data, via: 'displayName' };
-              }
-            })
-            .catch(function () { /* swallow */ });
-        }).catch(function () { /* swallow */ });
-      });
-
-      return Promise.all(rescuePromises).then(function () {
-        return { byUid: byUid, resolvedFor: resolvedFor };
-      });
+      return { byUid: byUid, resolvedFor: resolvedFor };
     });
   }
 
@@ -5092,7 +5043,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     // v1.3.24-beta: _fetchProfiles tenta rescue por email/displayName sem uid.
     // v1.15.35: os scans letzplay são GLOBAIS por uid (letzplayScans/{uid}) — precisamos
     // dos perfis primeiro pra saber quem autorizou-sem-import, e só então buscar os scans.
-    _fetchProfiles(parts).then(function (fetchResult) {
+    _fetchProfiles(tId, parts).then(function (fetchResult) {
       if (window.location.hash !== '#analise/' + tId) { _doneLoading(); return; }
       var byUid = fetchResult.byUid || {};
       // Candidatos = TODO inscrito com @ no perfil (2.0.50: letzplay é público, o

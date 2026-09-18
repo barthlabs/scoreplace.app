@@ -61,6 +61,11 @@ const S = v => ({ stringValue: v });
   // setup (o create do próprio perfil é legítimo e tem que passar)
   out.criaProprioPerfil = await req('PATCH', 'users/' + A, A, { fields: { displayName: S('Atacante') } });
   out.criaVitima        = await req('PATCH', 'users/' + V, V, { fields: { displayName: S('Vitima') } });
+  // Documento legado: a chave era o e-mail. Só o token daquele e-mail pode lê-lo.
+  out.criaLegadoEmail   = await req('PATCH', 'users/' + A + '%40x.com', 'owner', { fields: { displayName: S('Perfil legado') } });
+  out.leProprioPerfil   = await req('GET', 'users/' + A, A);
+  out.lePerfilVitima    = await req('GET', 'users/' + V, A);
+  out.leLegadoDoProprio = await req('GET', 'users/' + A + '%40x.com', A);
 
   // ── O ATAQUE: mergedInto no PRÓPRIO doc → custom token da vítima ──
   out.ataqueMergedInto = await req('PATCH', 'users/' + A + '?updateMask.fieldPaths=mergedInto', A,
@@ -146,6 +151,9 @@ function ok(c, m) { if (c) pass++; else { fail++; console.error('  ✗', m); } }
 const novo = runAgainst(path.join(ROOT, 'firestore.rules'), 'atual');
 
 ok(novo.criaProprioPerfil === 200, 'setup: criar o próprio perfil é permitido (got ' + novo.criaProprioPerfil + ')');
+ok(novo.leProprioPerfil === 200, 'legítimo: o dono lê a própria ficha (got ' + novo.leProprioPerfil + ')');
+ok(novo.lePerfilVitima === 403, '🔒 perfil privado de terceiro é NEGADO (got ' + novo.lePerfilVitima + ')');
+ok(novo.leLegadoDoProprio === 200, 'legítimo: o token lê seu documento legado por e-mail (got ' + novo.leLegadoDoProprio + ')');
 ok(novo.ataqueMergedInto === 403,
   '🔒 SEQUESTRO: escrever mergedInto no próprio perfil é NEGADO (got ' + novo.ataqueMergedInto + ')');
 ok(novo.ataqueMergedAt === 403, '🔒 mergedAt negado (got ' + novo.ataqueMergedAt + ')');
@@ -191,6 +199,8 @@ service cloud.firestore {
 const tmpOld = path.join(os.tmpdir(), 'sp-rules-antigas.rules');
 fs.writeFileSync(tmpOld, antigas);
 const velho = runAgainst(tmpOld, 'antigas');
+ok(velho.lePerfilVitima === 200,
+  '⚠️  REGRESSÃO-GUARD: nas rules ANTIGAS a ficha da vítima abria (got ' + velho.lePerfilVitima + ')');
 ok(velho.ataqueMergedInto === 200,
   '⚠️  REGRESSÃO-GUARD: nas rules ANTIGAS o ataque PASSAVA (got ' + velho.ataqueMergedInto + ') — o teste prova o fix');
 ok(velho.ataquePlan === 200, '⚠️  nas ANTIGAS o Pro de graça PASSAVA (got ' + velho.ataquePlan + ')');

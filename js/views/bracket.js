@@ -4227,8 +4227,8 @@ async function _preloadPlayerPhotos(tournament) {
    * 94 campos, para usar DOIS: `displayName` e `photoURL`. Passa a ler o espelho público.
    * MEDIDO em 13/set/2026, comparando as duas coleções: a consulta por nome dá resultado
    * IDÊNTICO nos 263 nomes distintos, e as 144 fotos estão todas no espelho.
-   * ⚠️ A única exceção fica lá embaixo e está anotada: a queda por E-MAIL, que o espelho não
-   * pode atender porque e-mail não mora nele — de propósito. [[project_email_no_doc_publico]] */
+   * Inscrição legada sem UID não busca ficha privada por e-mail: pode faltar foto,
+   * mas abrir uma chave nunca justifica expor uma conta inteira. */
   var COL = window._COLECAO_PERFIL_PUBLICO || 'usersPublic';
 
   // Query Firestore for each unique name to get their photoURL
@@ -4326,38 +4326,6 @@ async function _preloadPlayerPhotos(tournament) {
       );
     });
   }
-
-  /* ⚠️ A ÚNICA LEITURA DE `users` QUE SOBRA AQUI — E É PROPOSITAL.
-   * Inscrito antigo sem uid só pode ser reconhecido pelo e-mail gravado na inscrição, e o
-   * espelho público NÃO tem e-mail (é exatamente o que ele existe para não ter). Então esta
-   * queda continua na ficha.
-   * ⭐ MEDIDA ANTES DE DECIDIR, sobre os 269 inscritos de produção: 190 têm uid, 78 não têm
-   * uid NEM e-mail, e **UM** cai aqui — uma dupla de um torneio ENCERRADO de junho, cujo
-   * e-mail resolve para uma conta que tem foto. Tirar a queda custaria a foto dessa pessoa;
-   * mantê-la custa a leitura de UMA ficha, e só quando essa entrada aparece na tela.
-   * ⛔ E É UMA SÓ: o portão conta as ocorrências de `collection('users')` neste arquivo e
-   * reprova na segunda. Sem isso, "só mais uma" volta a alargar a porta sem ninguém ver. */
-  participants.forEach(function(p) {
-    if (!p || typeof p !== 'object' || p.uid || !p.email) return;
-    promises.push(
-      window.FirestoreDB.db.collection('users')
-        .where('email', '==', p.email)
-        .limit(1)
-        .get()
-        .then(function(snap) { return window._userVivo(snap); })   // lápide guarda o mesmo e-mail
-        .then(function(v) {
-          if (v) {
-            var data = v.data;
-            if (data.photoURL && data.photoURL.indexOf('dicebear.com') === -1) {
-              // Cacheia sob o displayName real do Firestore — não sob o nome do participante
-              var realName = (data.displayName || '').trim().toLowerCase();
-              if (realName) window._playerPhotoCache[realName] = data.photoURL;
-            }
-          }
-        })
-        .catch(function() {})
-    );
-  });
 
   await Promise.all(promises);
 

@@ -148,6 +148,7 @@ const _userVivo = require("./user-vivo-core");
 // de senha, dedup, fusão). Ver functions/contact-phone-core.js.
 const _contactPhone = require("./contact-phone-core");
 const _tournamentContacts = require("./tournament-contact-core");
+const _enrollmentProfiles = require("./tournament-enrollment-profile-core");
 const _desfazer = require("./desfazer-fusao-core");
 const fetch = require("node-fetch");
 
@@ -10490,6 +10491,109 @@ exports.getTournamentParticipantContact = onCall(
       throw new HttpsError("not-found", "Contato não encontrado");
     }
     return { uid: targetUid, contact: _tournamentContacts.contatoDoPerfil(snap.data() || {}) };
+  }
+);
+
+// ─── getTournamentEnrollmentProfiles (etapa 7) ─────────────────────────────
+// A análise de inscritos precisa de alguns atributos de perfil para calcular
+// gênero, idade e habilidade. O navegador não recebe a ficha privada nem pode
+// pesquisar `users`: a callable confere que quem pediu organiza o torneio e que
+// CADA linha solicitada pertence ao elenco hidratado deste torneio.
+exports.getTournamentEnrollmentProfiles = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError("unauthenticated", "Login obrigatório");
+    const data = request.data || {};
+    const tournamentId = String(data.tournamentId || "").trim();
+    const requested = Array.isArray(data.rows) ? data.rows.slice(0, 500) : [];
+    if (!tournamentId) throw new HttpsError("invalid-argument", "tournamentId é obrigatório");
+    if (!requested.length) return { rows: [] };
+
+    const db = admin.firestore();
+    const tournament = await _lerTorneioComElenco(db, tournamentId);
+    if (!tournament) throw new HttpsError("not-found", "Torneio não encontrado");
+    if (!_isTournamentOrgCaller(tournament, callerUid)) {
+      throw new HttpsError("permission-denied", "Só a organização pode analisar os inscritos");
+    }
+
+    const entries = _enrollmentProfiles.entradasDoRelatorio(tournament);
+    const cache = new Map();
+    const resolve = async (candidate) => {
+      const uid = String(candidate.uid || "").trim();
+      const email = _enrollmentProfiles.norm(candidate.email);
+      const name = String(candidate.name || "").trim();
+      const key = uid ? "uid:" + uid : (email ? "email:" + email : "name:" + _enrollmentProfiles.norm(name));
+      if (cache.has(key)) return cache.get(key);
+
+      let found = null;
+      if (uid) {
+        found = await _userVivo.userVivo(db, uid);
+      } else if (email) {
+        let snap = await db.collection("users").where("email_lower", "==", email).limit(2).get();
+        if (snap.empty) snap = await db.collection("users").where("email", "==", email).limit(2).get();
+        found = await _userVivo.userVivo(db, snap);
+      } else if (name) {
+        const folded = _enrollmentProfiles.norm(name);
+        let snap = await db.collection("users").where("displayName_lower", "==", folded).limit(2).get();
+        if (snap.empty) snap = await db.collection("users").where("displayName", "==", name).limit(2).get();
+        found = await _userVivo.userVivo(db, snap);
+      }
+      // Ambiguidade e lápide nunca viram uma pessoa no relatório.
+      const answer = found && found.count === 1 && found.data && !found.data.mergedInto
+        ? { uid: found.uid, profile: _enrollmentProfiles.perfilDaAnalise(found.data) }
+        : null;
+      cache.set(key, answer);
+      return answer;
+    };
+
+    const rows = [];
+    for (const raw of requested) {
+      const candidate = {
+        key: String(raw && raw.key != null ? raw.key : ""),
+        uid: String(raw && raw.uid || "").trim(),
+        email: String(raw && raw.email || "").trim(),
+        name: String(raw && raw.name || "").trim(),
+      };
+      if (!candidate.key || !_enrollmentProfiles.pertenceAoRelatorio(entries, candidate)) continue;
+      const resolved = await resolve(candidate);
+      if (resolved) rows.push({ key: candidate.key, uid: resolved.uid, profile: resolved.profile });
+    }
+    return { rows };
+  }
+);
+
+// ─── getOwnEmailMergeCandidates (etapa 7) ──────────────────────────────────
+// A conta recém-autenticada pode precisar encontrar uma conta anterior com o
+// mesmo e-mail verificado para continuar a fusão. O token é a prova; o
+// navegador não pesquisa `users` por e-mail e recebe só o bootstrap necessário.
+exports.getOwnEmailMergeCandidates = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    const tokenEmail = request.auth && request.auth.token && request.auth.token.email;
+    if (!callerUid || !tokenEmail || request.auth.token.email_verified !== true) {
+      throw new HttpsError("unauthenticated", "É necessário entrar com e-mail verificado");
+    }
+    const email = String(tokenEmail).trim().toLowerCase();
+    if (!email) throw new HttpsError("invalid-argument", "E-mail inválido");
+
+    const db = admin.firestore();
+    const snap = await db.collection("users").where("email_lower", "==", email).limit(5).get();
+    const alive = await _userVivo.userVivo(db, snap.docs, { excludeUid: callerUid });
+    const matches = (alive && Array.isArray(alive.docs) ? alive.docs : []).map((entry) => {
+      const profile = entry.data || {};
+      return { uid: entry.uid, profile: {
+        displayName: profile.displayName || "",
+        photoURL: profile.photoURL || "",
+        phone: profile.phone || "",
+        phoneCountry: profile.phoneCountry || "",
+        acceptedTerms: profile.acceptedTerms === true,
+        acceptedTermsAt: profile.acceptedTermsAt || null,
+        acceptedTermsVersion: profile.acceptedTermsVersion || "",
+      }};
+    });
+    return { matches };
   }
 );
 

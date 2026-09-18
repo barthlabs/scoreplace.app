@@ -13066,7 +13066,7 @@ window.AppStore = {
 
     // Categoriza
     var uidEntries = {}; // uid → true
-    var emailsToResolve = []; // emails únicos pra resolver
+    var emailsToResolve = []; // restos legados: serão descartados localmente
     var emailSet = {};
     var hasSelfRef = false;
     for (var i = 0; i < friends.length; i++) {
@@ -13094,32 +13094,10 @@ window.AppStore = {
       hasSelfRef: hasSelfRef
     });
 
-    var db = window.FirestoreDB.db;
-    var resolvedMap = {}; // email → uid (or null se não resolveu)
-
-    // Resolve emails em paralelo
-    await Promise.all(emailsToResolve.map(async function(email) {
-      try {
-        var emLower = String(email).toLowerCase();
-        var snap = await db.collection('users')
-          .where('email_lower', '==', emLower).limit(1).get();
-        if (snap.empty) {
-          // Fallback: campo legacy 'email' (não-lowercase)
-          snap = await db.collection('users').where('email', '==', email).limit(1).get();
-        }
-        var vivo = await window._userVivo(snap);   // lápide guarda o mesmo e-mail
-        if (vivo) {
-          // Se o id é também email (legacy doc keyed por email), preserva
-          // como está — usuário ainda não migrou. Se não, é uid resolvido.
-          resolvedMap[email] = vivo.uid;
-        } else {
-          resolvedMap[email] = null; // órfão, dropar
-        }
-      } catch (e) {
-        window._warn('[selfHealFriends] resolve falhou pra', email, e);
-        resolvedMap[email] = null;
-      }
-    }));
+    // Relações sociais já têm o cânone em `friendships`. Resolver e-mail aqui
+    // reabria uma pesquisa privada de terceiros a cada login; os restos legados
+    // são descartados e os vínculos que existirem aparecem via listLegacyFriendships.
+    var resolvedMap = {};
 
     // Constrói lista limpa
     var clean = [];
@@ -13127,17 +13105,7 @@ window.AppStore = {
     Object.keys(uidEntries).forEach(function(u) {
       if (!added[u]) { added[u] = true; clean.push(u); }
     });
-    emailsToResolve.forEach(function(em) {
-      var resolved = resolvedMap[em];
-      // v0.17.8: filtra também se email resolve pro próprio uid (caso edge —
-      // user pode ter o próprio email antigo na lista por bug histórico). Se
-      // entra aqui, ownUid acabaria em cu.friends e o user notificaria a si
-      // mesmo nas chamadas de presence_checkin/plan.
-      if (resolved && resolved !== uid && !added[resolved]) {
-        added[resolved] = true;
-        clean.push(resolved);
-      }
-    });
+    // E-mail nunca é identidade social. Não há queda por e-mail/nome no cliente.
 
     // Se nada mudou (clean tem mesmo conteúdo de friends original), bail
     var origSet = {};

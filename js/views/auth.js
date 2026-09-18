@@ -2670,22 +2670,12 @@ function _completeEmailLinkSignIn() {
         if (window._realEmailOrEmpty(user.email)) profileData.email = user.email;
         try {
           if (user.email) {
-            var snap = await window.FirestoreDB.db.collection('users')
-              .where('email_lower', '==', String(user.email).toLowerCase())
-              .limit(5).get();
-            // A LÁPIDE carrega o MESMO e-mail do sobrevivente. Sem resolver, o "melhor match"
-            // podia ser a conta morta — e aí o merge automático nem era agendado (a guarda
-            // `mergedInto` abaixo o barrava), deixando a duplicata de pé.
-            // ⚠️ O PRÓPRIO doc sai ANTES de resolver: se a conta em que a pessoa está logada
-            // FOR a lápide, resolvê-la devolveria o sobrevivente — que passaria no teste
-            // `!== user.uid` e viraria "conta anterior a mesclar", fundindo a conta VIVA
-            // dentro da morta. Vale pros 4 cross-refs deste arquivo.
-            var _vivos = await window._userVivo(snap.docs.filter(function(d) { return d.id !== user.uid; }));
-            var matches = [];
-            var matchIds = [];
-            ((_vivos && _vivos.docs) || []).forEach(function(e) {
-              if (e.uid !== user.uid) { matches.push(e.data); matchIds.push(e.uid); }
-            });
+            // O token prova que este e-mail é da conta corrente. A busca por outra
+            // conta e a travessia de lápide ficam no servidor; o navegador recebe só
+            // os campos necessários para compor o bootstrap e agendar a fusão.
+            var candidates = await window.FirestoreDB.carregarCandidatasDeFusaoDaConta();
+            var matches = candidates.map(function(c) { return c.profile || {}; });
+            var matchIds = candidates.map(function(c) { return c.uid; });
             if (matches.length > 0) {
               var best = matches.find(function(m) {
                 return m.displayName && !/^\+?\d{6,}$/.test(String(m.displayName).trim());
@@ -2983,68 +2973,9 @@ function handlePhoneVerifyCode() {
             : user.phoneNumber;
         }
 
-        // Lookup cross-reference por telefone. Tenta achar um user EXISTENTE
-        // (uid diferente) com este phone — pode ser conta Google/email do
-        // mesmo human que já cadastrou o telefone no perfil.
-        try {
-          if (user.phoneNumber) {
-            // v1.4.7-beta: banco normalizado — todos os phones são E.164 (+55...).
-            // Mantém fallback local (sem +55) por backward-compat com docs ainda
-            // não migrados que possam existir fora da janela de migração.
-            var _e164Phone = profileData.phone || user.phoneNumber;
-            var _localFallback = _e164Phone.replace(/^\+55/, '');
-            var _crossRefPhones = [_e164Phone];
-            if (_localFallback !== _e164Phone) _crossRefPhones.push(_localFallback);
-            var snap = await window.FirestoreDB.db.collection('users')
-              .where('phone', 'in', _crossRefPhones)
-              .limit(5).get();
-            // Caso real (M. Delia Fernandez): doc vivo e lápide com o MESMO +5511996019191.
-            // Sem resolver, o match escolhido podia ser a lápide.
-            var _vivosPhone = await window._userVivo(snap.docs.filter(function(d) { return d.id !== user.uid; }));
-            var matches = [];
-            var matchIds = [];
-            ((_vivosPhone && _vivosPhone.docs) || []).forEach(function(e) {
-              if (e.uid !== user.uid) { matches.push(e.data); matchIds.push(e.uid); }
-            });
-            if (matches.length > 0) {
-              // Pega o match com mais info (preferência: tem displayName não-vazio
-              // e não-numérico, e tem photoURL real).
-              var best = matches.find(function(m) {
-                return m.displayName && !/^\+?\d{6,}$/.test(String(m.displayName).trim());
-              }) || matches[0];
-              if (best.displayName && !user.displayName) {
-                profileData.displayName = best.displayName;
-                // Sincroniza Firebase Auth displayName também — saudação puxa daí.
-                try { await user.updateProfile({ displayName: best.displayName }); } catch(_e) {}
-              }
-              if (best.photoURL && !user.photoURL) {
-                profileData.photoURL = best.photoURL;
-                try { await user.updateProfile({ photoURL: best.photoURL }); } catch(_e) {}
-              }
-              if (best.acceptedTerms === true) {
-                profileData.acceptedTerms = true;
-                if (best.acceptedTermsAt) profileData.acceptedTermsAt = best.acceptedTermsAt;
-                if (best.acceptedTermsVersion) profileData.acceptedTermsVersion = best.acceptedTermsVersion;
-              }
-              // v1.0.49-beta: stash cross-ref data em window pra simulateLoginSuccess
-              // mergear no existingProfile/currentUser ANTES do terms gate. Sem isso
-              // existe race entre saveUserProfile (assíncrono) e a leitura do
-              // existingProfile em simulateLoginSuccess — terms eram pedidos de
-              // novo mesmo o human já tendo aceitado em outra conta.
-              window._pendingCrossRef = Object.assign({}, profileData, { uid: user.uid });
-              // v1.7.9-beta: SMS = número verificado → agendar merge automático
-              var _bestPhoneMatchIdx = matches.indexOf(best);
-              var _bestPhoneMatchId = matchIds[_bestPhoneMatchIdx >= 0 ? _bestPhoneMatchIdx : 0];
-              if (_bestPhoneMatchId) {   // já é conta VIVA — _userVivo resolveu lápide acima
-                window._pendingCrossRefOldUid = _bestPhoneMatchId;
-              }
-              window._log('[phone-login] cross-ref encontrado, herdando:',
-                Object.keys(profileData).filter(function(k){ return k !== 'authProvider' && k !== 'updatedAt' && k !== 'phone'; }));
-            }
-          }
-        } catch (e) {
-          window._warn('[phone-login] cross-ref por phone falhou:', e);
-        }
+        // Identidade de outra conta não é inferida por telefone no navegador.
+        // O celular recém-confirmado salva o perfil atual; uma fusão de conta exige
+        // o fluxo explícito do servidor, que prova a posse sem abrir ficha privada.
 
         // Fallback: se ainda não temos displayName e não achamos cross-ref,
         // deixa null pra que o nudge "Complete seu perfil" peça depois —
@@ -4761,14 +4692,10 @@ async function simulateLoginSuccess(user) {
   if (user.email && _method === 'google' && uid &&
       window.FirestoreDB && window.FirestoreDB.db) {
     (function() {
-      var _gCrossEmail = String(user.email).toLowerCase();
       var _gCrossUid = uid;
-      window.FirestoreDB.db.collection('users')
-        .where('email_lower', '==', _gCrossEmail)
-        .limit(5).get()
-        .then(function(gSnap) { return window._userVivo(gSnap.docs.filter(function(d) { return d.id !== _gCrossUid; })); })   // lápide guarda o mesmo e-mail
-        .then(function(gVivos) {
-          ((gVivos && gVivos.docs) || []).forEach(function(e) {
+      window.FirestoreDB.carregarCandidatasDeFusaoDaConta()
+        .then(function(candidates) {
+          (candidates || []).forEach(function(e) {
             if (e.uid !== _gCrossUid) {
               setTimeout(function() {
                 if (typeof window._executePhoneAccountMerge === 'function') {
@@ -8271,45 +8198,11 @@ function setupProfileModal() {
 
     // v0.16.9: reescrita do save de perfil, do zero.
     //
-    // ── Helper: detecta e mescla conta antiga de celular ──────────────────
-    // Quando o usuário salva um phone no perfil, verifica no Firestore se
-    // existe outro doc de usuário com o mesmo phone (conta phone-auth anterior).
-    // Se encontrar, oferece mesclagem via Cloud Function mergePhoneAccount.
-    window._checkPhoneAccountMerge = function(phone, currentUid) {
-      if (!phone || !currentUid) return;
-      if (!window.FirestoreDB || !window.FirestoreDB.db) return;
-      var db = window.FirestoreDB.db;
-      db.collection('users')
-        .where('phone', '==', phone)
-        .limit(5)
-        .get()
-        .then(function(snap) { return window._userVivo(snap.docs.filter(function(d) { return d.id !== currentUid; })); })   // lápide guarda o mesmo telefone
-        .then(function(vivos) {
-          var oldDoc = null;
-          ((vivos && vivos.docs) || []).forEach(function(e) {
-            if (e.uid !== currentUid) { oldDoc = { id: e.uid, data: e.data }; }
-          });
-          if (!oldDoc) return;
-          var oldData = oldDoc.data;
-          var oldName = oldData.displayName || oldData.name || '';
-          var label = oldName ? ' (nome: ' + oldName + ')' : '';
-          var confirmMsg = 'Encontramos uma conta anterior vinculada a este celular' + label + '.\n\nDeseja mesclar? As inscrições em torneios e o histórico de partidas daquela conta serão transferidos para a sua conta atual.';
-          if (typeof showConfirmDialog === 'function') {
-            showConfirmDialog(
-              '📱 Conta anterior encontrada',
-              confirmMsg,
-              function() { window._executePhoneAccountMerge(oldDoc.id); },
-              function() {},
-              'Mesclar contas',
-              'Não, ignorar'
-            );
-          } else if (confirm(confirmMsg)) {
-            window._executePhoneAccountMerge(oldDoc.id);
-          }
-        })
-        .catch(function(e) {
-          window._warn('[PhoneMerge] query error:', e);
-        });
+    // ── Helper de compatibilidade: salvar um telefone digitado não autoriza
+    // procurar outra conta por esse dado privado. A fusão continua disponível
+    // depois que o telefone for confirmado pelo fluxo de identidade do servidor.
+    window._checkPhoneAccountMerge = function() {
+      window._log('[PhoneMerge] detecção por telefone digitado desativada; exige prova de posse no servidor');
     };
 
     window._executePhoneAccountMerge = function(oldUid) {

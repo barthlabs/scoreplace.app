@@ -169,40 +169,23 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   };
 
   // ─── Accept host invite ───────────────────────────────────────────────────
-  // Helper: mark all pending invite notifications as read for a user+tournament
-  // Accepts a UID or email; if email (or UID doc not found), looks up the user by email first.
-  function _markInviteNotifsRead(uidOrEmail, tId, types) {
-    if (!uidOrEmail || !tId || !window.FirestoreDB || !window.FirestoreDB.db) return;
+  // Marca apenas as notificações da PRÓPRIA conta. O aceite é confirmado pela
+  // callable; marcar a caixa de outra pessoa no navegador exigia atravessar
+  // users/{uid} e não faz parte da ação que a pessoa acabou de tomar.
+  function _markInviteNotifsRead(uid, tId, types) {
+    var me = window.AppStore && window.AppStore.currentUser;
+    if (!uid || !me || String(uid) !== String(me.uid) || !tId || !window.FirestoreDB || !window.FirestoreDB.db) return;
     var db = window.FirestoreDB.db;
-    function _doMark(uid) {
-      if (!uid) return;
-      types.forEach(function(typ) {
-        db.collection('users').doc(uid).collection('notifications')
-          .where('type', '==', typ).where('tournamentId', '==', String(tId)).where('read', '==', false)
-          .get().then(function(snap) {
-            snap.forEach(function(d) { d.ref.update({ read: true }); });
-          }).catch(window._falhouCalado('aviso-transferencia'));
-      });
-      if (typeof window._updateNotificationBadge === 'function') {
-        setTimeout(window._updateNotificationBadge, 500);
-      }
+    types.forEach(function(typ) {
+      db.collection('users').doc(me.uid).collection('notifications')
+        .where('type', '==', typ).where('tournamentId', '==', String(tId)).where('read', '==', false)
+        .get().then(function(snap) {
+          snap.forEach(function(d) { d.ref.update({ read: true }); });
+        }).catch(window._falhouCalado('aviso-transferencia'));
+    });
+    if (typeof window._updateNotificationBadge === 'function') {
+      setTimeout(window._updateNotificationBadge, 500);
     }
-    // Looks like an email? Resolve to UID via users collection.
-    if (String(uidOrEmail).indexOf('@') !== -1) {
-      db.collection('users').where('email', '==', uidOrEmail).limit(1).get()
-        .then(function(snap) { return window._userVivo(snap); })
-        .then(function(v) { if (v) _doMark(v.uid); })
-        .catch(function() {});
-      return;
-    }
-    // Assume UID — verify the doc exists; if not, nothing to do. O uid guardado no torneio
-    // pode ser LÁPIDE (a conta foi fundida depois) — _userVivo devolve quem está vivo.
-    /* ⭐ Só se pergunta EXISTE e QUEM ESTÁ VIVO — nunca um campo. O espelho responde as
-     * duas (ele carrega `mergedInto`), sem trazer e-mail nem telefone junto. */
-    db.collection(window._COLECAO_PERFIL_PUBLICO || 'usersPublic').doc(uidOrEmail).get()
-      .then(function(doc) { return window._userVivo(doc, { publico: true }); })
-      .then(function(v) { if (v) _doMark(v.uid); })
-      .catch(function() { _doMark(uidOrEmail); });
   }
 
   window._acceptHostInvite = function(tId, inviteType) {
@@ -406,7 +389,10 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
 
   // ─── Helper: send notification — uses _sendUserNotification (proven path) with fallback ──
   function _notifyByEmail(uidOrEmail, data) {
-    if (!uidOrEmail) { window._warn('[host-transfer] _notifyByEmail: no uidOrEmail'); return; }
+    if (!uidOrEmail || String(uidOrEmail).indexOf('@') !== -1) {
+      window._warn('[host-transfer] notificação sem uid válido');
+      return;
+    }
     var cu = window.AppStore.currentUser || {};
     var payload = {
       type: data.type || 'info',
@@ -451,56 +437,15 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       }
     }
 
-    function _lookupByEmail(email, fallbackName) {
-      if (!window.FirestoreDB || !window.FirestoreDB.db) return;
-      window.FirestoreDB.db.collection('users').where('email', '==', email).limit(1).get()
-        .then(function(snap) { return window._userVivo(snap); })
-        .then(function(v) {
-        if (v) {
-          _resolveAndSend(v.uid);
-        } else if (fallbackName) {
-          window.FirestoreDB.db.collection(window._COLECAO_PERFIL_PUBLICO || 'usersPublic')
-            .where('displayName', '==', fallbackName).limit(1).get()
-            .then(function(snap2) { return window._userVivo(snap2, { publico: true }); })
-            .then(function(v2) {
-            if (v2) {
-              _resolveAndSend(v2.uid);
-            } else {
-              window._warn('[host-transfer] No user found for email:', email, 'or name:', fallbackName);
-            }
-          }).catch(function(e) { window._error('[host-transfer] Name lookup FAILED:', e); });
-        } else {
-          window._warn('[host-transfer] No user found for email:', email);
-        }
-      }).catch(function(e) { window._error('[host-transfer] Email lookup FAILED:', e); });
-    }
-
-    // If it looks like a UID (no @), try direct send + verify the doc exists
-    if (uidOrEmail.indexOf('@') === -1) {
-      if (window.FirestoreDB && window.FirestoreDB.db) {
-        // ⭐ idem: existência + conta viva, do espelho.
-        window.FirestoreDB.db.collection(window._COLECAO_PERFIL_PUBLICO || 'usersPublic').doc(uidOrEmail).get()
-          .then(function(doc) { return window._userVivo(doc, { publico: true }); })
-          .then(function(v) {
-          if (v) {
-            _resolveAndSend(v.uid);   // uid guardado pode ser LÁPIDE — manda pra conta viva
-          } else {
-            window._warn('[host-transfer] UID doc not found:', uidOrEmail, '— trying email/name fallback');
-            var fallbackEmail = data._fallbackEmail || '';
-            var fallbackName = data._fallbackName || '';
-            if (fallbackEmail) {
-              _lookupByEmail(fallbackEmail, fallbackName);
-            } else {
-              window._warn('[host-transfer] No fallback email available for uid:', uidOrEmail);
-            }
-          }
-        }).catch(function() { _resolveAndSend(uidOrEmail); });
-      } else {
-        _resolveAndSend(uidOrEmail);
-      }
+    if (window.FirestoreDB && window.FirestoreDB.db) {
+      // Existência e lápide vêm do espelho público; convite novo sempre nasce
+      // com UID, portanto não há queda por e-mail/nome.
+      window.FirestoreDB.db.collection(window._COLECAO_PERFIL_PUBLICO || 'usersPublic').doc(uidOrEmail).get()
+        .then(function(doc) { return window._userVivo(doc, { publico: true }); })
+        .then(function(v) { if (v) _resolveAndSend(v.uid); })
+        .catch(function() { _resolveAndSend(uidOrEmail); });
       return;
     }
-    // Input has @ — it's an email, lookup uid
-    _lookupByEmail(uidOrEmail, data._fallbackName || '');
+    _resolveAndSend(uidOrEmail);
   }
 })();

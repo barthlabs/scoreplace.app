@@ -2900,6 +2900,13 @@ window.FirestoreDB = {
    * Para MOSTRAR alguém na tela, use `carregarPerfilPublico`. */
   async loadUserProfile(uid) {
     if (!this.db || !uid) return null;
+    // Documento privado é exclusivamente da conta autenticada. Para pessoas
+    // na tela, use carregarPerfilPublico; não transforme uma falha de espelho
+    // numa leitura ampla da ficha.
+    try {
+      var me = (typeof firebase !== 'undefined' && firebase.auth) ? firebase.auth().currentUser : null;
+      if (!me || String(me.uid) !== String(uid)) return null;
+    } catch (e) { return null; }
     try {
       var doc = await this.db.collection('users').doc(uid).get({ source: 'server' });
       return doc.exists ? doc.data() : null;
@@ -3012,6 +3019,44 @@ window.FirestoreDB = {
     } catch (e) {
       window._warn('[contato do torneio] falhou:', e && e.message);
       return null;
+    }
+  },
+
+  /* Perfis mínimos para a Análise de inscritos. A callable confirma no servidor
+   * que o solicitante organiza o torneio e que cada linha pertence ao elenco;
+   * não há leitura de `users` pelo navegador e nenhum e-mail retorna. */
+  async carregarPerfisDaAnalise(tournamentId, rows) {
+    if (!tournamentId || !Array.isArray(rows) || !rows.length) return [];
+    var clean = rows.slice(0, 500).map(function (row, index) {
+      row = row || {};
+      return {
+        key: String(row.key != null ? row.key : index),
+        uid: String(row.uid || '').trim(),
+        email: String(row.email || '').trim(),
+        name: String(row.name || '').trim()
+      };
+    });
+    try {
+      var resposta = await this._callFn('getTournamentEnrollmentProfiles', {
+        tournamentId: String(tournamentId), rows: clean
+      });
+      return resposta && Array.isArray(resposta.rows) ? resposta.rows : [];
+    } catch (e) {
+      window._warn('[análise de inscritos] perfis restritos falharam:', e && e.message);
+      return [];
+    }
+  },
+
+  /* Candidatas a fusão da PRÓPRIA conta autenticada. A prova do e-mail vem do
+   * token do Firebase; por isso o navegador não recebe autorização para buscar
+   * `users` por e-mail nem recebe campos fora dos usados no bootstrap. */
+  async carregarCandidatasDeFusaoDaConta() {
+    try {
+      var resposta = await this._callFn('getOwnEmailMergeCandidates', {});
+      return resposta && Array.isArray(resposta.matches) ? resposta.matches : [];
+    } catch (e) {
+      window._warn('[fusão de conta] candidatas restritas falharam:', e && e.message);
+      return [];
     }
   },
 

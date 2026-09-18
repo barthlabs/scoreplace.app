@@ -1008,10 +1008,17 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      // Authenticated only — strips PII (email, phone, preferredCeps,
-      // fcmToken, etc.) from anonymous visitors. Needed for friend search
-      // (searchUsers range query) and participant detail views.
-      allow read: if request.auth != null;
+      // Documento privado: só o dono. A exceção de docId=e-mail existe para
+      // a migração de cadastros antigos e exige o MESMO e-mail no token; ela
+      // não dá a uma conta autenticada uma busca ou leitura de terceiros.
+      function canReadOwnPrivateProfile() {
+        return request.auth != null && (
+          request.auth.uid == userId ||
+          (request.auth.token.email != null
+            && request.auth.token.email.lower() == userId.lower())
+        );
+      }
+      allow read: if canReadOwnPrivateProfile();
 
       // v1.2.9 — CAMPOS PRIVILEGIADOS: só o Admin SDK (Cloud Functions) escreve.
       //
