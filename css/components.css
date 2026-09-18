@@ -2547,7 +2547,7 @@ html, body,
    entra no `space-between` do cabeçalho: vira o par da grade, e é a GRADE que continua
    alinhada com os boxes de baixo. `align-self:flex-end` deixa a palavra na linha de base dos
    rótulos, não flutuando acima deles. */
-.sp-set-head-sets{align-self:flex-end;font-size:0.46rem;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-muted);white-space:nowrap;margin-right:1px;line-height:1.05;flex-shrink:0;}
+.sp-set-head-sets{align-self:flex-end;font-size:0.6rem;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-muted);white-space:nowrap;margin-right:1px;line-height:1.05;flex-shrink:0;}
 /* A geometria é do FORMATO da partida, nunca da sessão que a desenhou nem do número
    parcial de sets. `data-sp-best-of` sai do mesmo plano que gera cabeçalho e placar em
    chave, Novidades e Últimos resultados. Assim cada rótulo fica exatamente sobre sua coluna:
@@ -2565,7 +2565,7 @@ html, body,
    do `10` — e a leitura de cima pra baixo desalinha. À direita, a unidade fica sob a
    unidade, que é como placar se lê. [[project_card_de_jogo_geometria_canon]] */
 .sp-set-col{width:var(--w,34px);flex:0 0 var(--w,34px);text-align:right;}
-.sp-set-lbl{display:block;font-size:0.46rem;font-weight:800;line-height:1.05;letter-spacing:0.02em;text-transform:uppercase;color:var(--text-muted);}
+.sp-set-lbl{display:block;font-size:0.6rem;font-weight:800;line-height:1.05;letter-spacing:0.02em;text-transform:uppercase;color:var(--text-muted);}
 .sp-set-lbl--live{color:#38bdf8;}
 /* o rótulo do set já CONFIRMADO recua — quem tem que saltar é a coluna em disputa */
 .sp-set-col:not(.sp-set-col--fix) .sp-set-lbl{opacity:1;}

@@ -61,7 +61,10 @@ function geometria(arquivo, lado) {
 [['icons/icon-512.svg', 512], ['icons/icon-192.svg', 192], ['icons/icon-maskable.svg', 512]].forEach(([f, lado]) => {
   const g = geometria(f, lado);
   must(g.pts >= 13, f + ': a geometria foi lida (' + g.pts + ' pontos)');
-  must(g.escala >= 1.40, f + ': o pódio está AMPLIADO (' + g.escala + 'x) — o fundo é preenchimento, não conteúdo');
+  // 18/set/2026: o piso desce de 1,40 para 1,37. O dono pediu o pódio 16px mais baixo (a
+  // estrela encostava no topo) e, dentro do círculo, descer custa escala: 1,375. Quem mede
+  // se o ícone enche o quadro é o gerador, no PNG (75% ≥ 74%); este piso só barra regressão.
+  must(g.escala >= 1.37, f + ': o pódio está AMPLIADO (' + g.escala + 'x) — o fundo é preenchimento, não conteúdo');
   must(g.subiu > 0, f + ': ⭐ e o conjunto SOBE ' + g.subiu.toFixed(1) + 'px — foi subir que permitiu crescer sem cortar');
   must(g.raio <= g.c, f + ': ⛔ e NÃO é cortado pelo recorte redondo — raio ' + g.raio.toFixed(1) + ' de ' + g.c);
   must(g.raio / g.c >= 0.9, f + ': enche o círculo de verdade (' + Math.round(100 * g.raio / g.c) + '% do raio)');
