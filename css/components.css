@@ -1953,10 +1953,15 @@ input[type="date"].form-control::-webkit-calendar-picker-indicator:hover {
   max-width:none !important;
 }
 
-/* A coluna só divide espaço quando a largura útil comporta cards legíveis de
-   pelo menos 280px. Os mesmos limites atendem web, celular e tablet porque são
-   medidos no painel disponível, não no tamanho do aparelho. */
-@container (min-width:600px) {
+/* A coluna só divide espaço quando a largura útil comporta cards LEGÍVEIS.
+   ⭐ 2.3.81 · MEDIDO com o jogo real da Confra (melhor de 3 com 3 sets lançados):
+   o placar de 3 colunas ocupa 144px fixos; num card de 279px (3 colunas a 880px)
+   sobravam 52px para o nome e a dupla caía a 7px — ilegível. A 360px o nome
+   inteiro volta ao tamanho canônico. Logo cada coluna precisa de 360px:
+   2 colunas a partir de 736px (2×360+1rem), 3 a partir de 1112px (3×360+2rem).
+   Os limites atendem web, celular e tablet porque são medidos no painel
+   disponível, não no tamanho do aparelho. */
+@container (min-width:736px) {
   .bracket-scroll-content > .bracket-round-column,
   .bracket-columns-track > .bracket-round-column {
     width:calc((100% - 1rem) / 2) !important;
@@ -1964,7 +1969,7 @@ input[type="date"].form-control::-webkit-calendar-picker-indicator:hover {
     flex:0 0 calc((100% - 1rem) / 2) !important;
   }
 }
-@container (min-width:880px) {
+@container (min-width:1112px) {
   .bracket-scroll-content > .bracket-round-column,
   .bracket-columns-track > .bracket-round-column {
     width:calc((100% - 2rem) / 3) !important;

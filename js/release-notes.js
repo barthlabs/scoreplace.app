@@ -1,3 +1,4 @@
+// 2.3.81 — chave: cada coluna precisa de 360px (2 colunas a partir de 736px, 3 a partir de 1112px) — com 3 sets lançados o placar toma 144px e o nome da dupla caía a 7px em coluna de 280px; sem espaço, o nome encolhe ou quebra em duas linhas, nunca corta
 // 2.3.80 — partida casual: não dá mais para sugerir que um convidado "era" alguém que já joga a mesma partida; e o aviso "Você jogou esta partida?" some sozinho quando a sugestão deixa de existir (sem abrir nenhuma leitura extra do seu perfil).
 // 2.3.79 — "Parcial"/"Prontos" de presença só aparecem em torneio de um dia ou em jogo marcado para as próximas 24 horas; e "proposto por" mostra o nome inteiro e há quanto tempo, sem cortar.
 // 2.3.78 — uma versão nova não apaga mais a tela no meio do torneio: a atualização espera você voltar à tela inicial (ou o toque na pílula); a tela que você está olhando fica como está.
