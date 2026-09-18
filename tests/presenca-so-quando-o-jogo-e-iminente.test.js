@@ -27,6 +27,8 @@ must(/PARCIAL|Parcial|PRONTOS|Prontos/.test(html3.replace(/<[^>]+>/g, ' ')) || /
   '③ mesmo torneio longo, jogo marcado para daqui a 3h: a presença volta a aparecer');
 const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'js', 'views', 'bracket.js'), 'utf8');
 const i = src.indexOf('<span title="proposto por');
-must(i > 0 && /white-space:normal/.test(src.slice(i, i + 400)) && !/text-overflow:ellipsis/.test(src.slice(i, i + 400)),
+const fimSpan = src.indexOf('</span>', i);   // fecha no FIM do construto, nunca em tamanho fixo
+const spanProposto = src.slice(i, fimSpan > 0 ? fimSpan : src.length);
+must(i > 0 && /white-space:normal/.test(spanProposto) && !/text-overflow:ellipsis/.test(spanProposto),
   '④ "proposto por" quebra linha em vez de cortar o nome (o "há quanto tempo" fica visível)');
 console.log('\n✅ ' + ok + ' verificações');
