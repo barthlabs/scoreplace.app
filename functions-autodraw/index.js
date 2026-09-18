@@ -1827,6 +1827,9 @@ async function _notificarJogosProntosDoTorneio(tournamentId, rawTournament, incl
   if (includeDeadlineReminders) {
     const reminders = _matchReadyNotifications.deadlineReminderSpecs(tournament, matches, now);
     await _criarOutboxDeJogoLiberado(tournamentId, tournament, reminders, now);
+    // placar lançado e sem confirmação há 24h (e a cada 24h) — ordem do dono, 18/set/2026
+    const pendentes = _matchReadyNotifications.pendingApprovalReminderSpecs(tournament, matches, now);
+    await _criarOutboxDeJogoLiberado(tournamentId, tournament, pendentes, now);
   }
 }
 

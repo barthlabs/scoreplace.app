@@ -173,6 +173,47 @@ function deadlineReminderSpecs(tournament, matches, nowMs) {
   return specs;
 }
 
+/* ⏳ PLACAR LANÇADO E NÃO CONFIRMADO (ordem do dono, 18/set/2026): "24h de proposta sem que
+ * haja o aceite do outro time deve disparar uma notificação para que aceitem, e a partir daí
+ * outra a cada 24h". O aviso vai para o lado que NÃO propôs (quem tem de confirmar). O
+ * eventId carrega o dia inteiro decorrido (1, 2, 3…), então cada 24h nasce um recibo novo e
+ * a mesma janela nunca avisa duas vezes — mesma mecânica dos outros avisos daqui. */
+function pendingApprovalReminderSpecs(tournament, matches, nowMs) {
+  const specs = [];
+  const now = Number(nowMs);
+  const day = RoundBounds.DAY_MS;
+  (matches || []).forEach((match) => {
+    const pr = match && match.pendingResult;
+    if (!match || !match.id || !pr || match.winner || match.isBye || match.isSitOut) return;
+    const proposedAt = Number(pr.proposedAt) || 0;
+    if (!proposedAt || now - proposedAt < day) return;
+    const dias = Math.floor((now - proposedAt) / day);
+    const p1 = slotUids(match, 'p1');
+    const p2 = slotUids(match, 'p2');
+    const proposer = String(pr.proposedBy || pr.proposedByUid || '');
+    let recipients;
+    if (proposer && p1.includes(proposer)) recipients = p2;
+    else if (proposer && p2.includes(proposer)) recipients = p1;
+    else recipients = unique(p1.concat(p2)).filter((u) => u !== proposer);   // sem lado conhecido: os dois
+    const matchUids = unique(p1.concat(p2));
+    recipients.forEach((uid) => {
+      specs.push({
+        eventId: 'pending-approval-' + String(match.id) + '-' + dias + '-' + uid,
+        type: 'pending-approval',
+        title: '✅ Placar esperando a sua confirmação',
+        message: 'O placar deste jogo foi lançado há ' + dias + (dias === 1 ? ' dia' : ' dias') +
+          ' e ainda não foi confirmado. Confirme ou edite.',
+        matchId: String(match.id),
+        matchUids,
+        recipientUid: uid,
+        deadlineMs: null,
+        deadlineText: ''
+      });
+    });
+  });
+  return specs;
+}
+
 module.exports = {
   slotUids,
   phaseStartMs,
@@ -181,5 +222,6 @@ module.exports = {
   isReady,
   isUnfinished,
   readySpecs,
-  deadlineReminderSpecs
+  deadlineReminderSpecs,
+  pendingApprovalReminderSpecs
 };
