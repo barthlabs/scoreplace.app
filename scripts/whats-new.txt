@@ -1,19 +1,17 @@
-Esta versão chega com o conserto do batimento cardíaco no Apple Watch e vários acertos de leitura no iPhone.
+Esta versão traz mais privacidade, cards de jogo iguais em toda parte e uma navegação que não trava.
 
-• Batimento no Apple Watch: durante a partida o número podia ficar atrasado e mostrar um valor mais baixo do que o esforço real. O relógio desligava a sessão de treino a cada aviso passageiro do celular e, ao recomeçar, a leitura caía numa fonte mais lenta — o batimento de segundos atrás, quase sempre o vale entre dois pontos. Agora um aviso passageiro não derruba mais o treino, e isso também protege os anéis de atividade.
+• Privacidade: o app deixa de baixar a ficha privada de outras pessoas. Nome e foto vêm do perfil público, e o contato de inscrito, organizador ou co-organizador passa por uma porta no servidor que confere quem está pedindo. Convidar amigos e escolher parceiro também não baixam mais contato de ninguém.
 
-• O card do jogo parou de ser cortado no celular: em tela estreita, o "Ao Vivo", o botão do grupo e a caixa do placar ficavam fora da tela. A largura passou a ser medida no espaço real e acompanha o giro do aparelho.
+• Card de jogo: a mesma geometria na chave, em Novidades, Próximo Jogo e Últimos Resultados. Abaixo de "Jogo N" aparece o prazo da rodada ("Jogar até"), o horário marcado ou, depois do resultado, a hora do último placar. Ao confirmar um set de partida em andamento, o placar aceito aparece na hora — sem recarregar. O Super Tie-Break aceita 10 e fica na mesma coluna dos sets.
 
-• "Ver mais / ver menos" parou de abrir o torneio sem querer, e a área de toque ficou maior.
+• Placar: um resultado esperando confirmação usa o selo "Aprovação pendente"; a aprovação feita em outro aparelho aparece sem recarregar; editar um placar por sets preserva os zeros já lançados.
 
-• "Só meus jogos" ficou útil: ao ligar, a chave rola até a sua partida e o vão em branco some; ao desligar, tudo volta ao lugar sem tirar você do seu jogo. E quando você não tem jogos naquela chave, a tela diz isso em vez de parecer quebrada.
+• W.O.: o organizador escolhe, no próprio jogo, entre W.O. individual ou da dupla. O individual promove o suplente elegível; desclassificar a dupla dá a vitória ao adversário. Jogo, fila de espera e lista de ausentes mudam juntos, numa só operação.
 
-• "Propor datas" voltou a gravar em torneio grande: a proposta aparecia e sumia na próxima abertura. Agora ela vai para onde o jogo mora — quem joga vê e edita a sua, e o organizador pode apontar a data.
+• Chave: a numeração dos jogos segue rodada e linha (Ouro/Prata) dentro de cada categoria, da menor à maior. A chave usa toda a largura útil — uma, duas ou três colunas só quando os cards continuam legíveis.
 
-• Com horário na mesa, o botão avisa: passa a mostrar "Veja data proposta" e o número de propostas, para ninguém deixar passar um horário esperando resposta.
+• Datas: ao marcar data e hora, o card troca "Propor datas" pelo horário imediatamente, na chave e em Novidades.
 
-• A etiqueta PROMO acompanha a dupla promovida até o fim da chave, e as cabeças de chave passaram a considerar o desempenho da dupla inteira.
+• Inscrições durante a fase: o mesmo seletor em criar, editar e na chave — Fechadas/Abertas e Suplentes/Novos Confrontos, com o estado ativo destacado.
 
-• Central de Ajuda: uma seção nova diz quais relógios funcionam — Apple Watch a partir do watchOS 7 e relógios Android a partir do Wear OS 3.
-
-• Ícones de calendário e relógio voltaram a ficar visíveis no tema escuro.
+• Navegação: abrir um torneio não cobre mais a tela com uma camada que bloqueia toques, não troca o conteúdo por "Carregando…" e não trava quando uma inscrição chega incompleta. Novidades resolve os perfis já na abertura, sem esperar as fotos.
