@@ -2745,7 +2745,7 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
       !(window._isPlaceholderName && window._isPlaceholderName(name)));
     // v1.2.31 (dono): o card INTEIRO é a área de arrasto — sem ícone de handle. Card nenhum
     // no app anuncia arrasto com "pontinhos"; ter só aqui quebra o padrão e não ajuda.
-    const _phDragAttrs = (isOrg && _isSoloRealLate)
+    const _phDragAttrs = (isOrg && _isSoloRealLate && typeof window._chaveTemVaga === 'function' && window._chaveTemVaga(t))
       ? `data-ph-drag="${name.replace(/"/g, '&quot;').replace(/'/g, '&#39;')}" data-ph-uid="${String(_pUid).replace(/"/g, '&quot;')}" title="Arraste sobre uma vaga (Jogador NN) na chave para ocupá-la" `
       : '';
 

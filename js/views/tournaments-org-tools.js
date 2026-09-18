@@ -352,6 +352,23 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   //    Mouse + touch unificados (clone flutuante). Detecção da vaga por elementFromPoint
   //    (não amarra a formato). Fiado por _wirePlaceholderDnD após cada render (bracket.js).
   window._isPlaceholderName = function (n) { return /^(Jogador|Placeholder)\s+\d+$/i.test(String(n == null ? '' : n).trim()); };
+  // ⭐ 2.3.82 · O arraste "ocupar vaga" SÓ existe quando há vaga. Relato do dono (18/set/2026):
+  // na Confra (0 vagas "Jogador NN") o toque longo no card da lista de espera levantava o
+  // balão "👤 Nome" sem ter para onde soltar — parecia formar dupla ou nomear co-organizador.
+  // Porta única: quem renderiza o handle e quem arma o gesto perguntam AQUI.
+  window._chaveTemVaga = function (t) {
+    if (!t) return false;
+    var ms = Array.isArray(t.matches) ? t.matches : [];
+    for (var i = 0; i < ms.length; i++) {
+      var m = ms[i]; if (!m || m.winner) continue;
+      var nomes = [m.p1, m.p2, m.team1 && m.team1.name, m.team2 && m.team2.name];
+      for (var k = 0; k < nomes.length; k++) {
+        var partes = String(nomes[k] == null ? '' : nomes[k]).split('/');
+        for (var j = 0; j < partes.length; j++) { if (window._isPlaceholderName(partes[j])) return true; }
+      }
+    }
+    return false;
+  };
 
   window._placeholderNameAtPoint = function (x, y) {
     var el = document.elementFromPoint(x, y);
@@ -453,6 +470,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var t = window._currentBracketTournament;
     if (!t) return;
     if (!(window.AppStore && window.AppStore.isOrganizer && window.AppStore.isOrganizer(t))) return;
+    if (!window._chaveTemVaga(t)) return;   // 2.3.82: sem vaga, nada a armar
     var handles = document.querySelectorAll('[data-ph-drag]');
     for (var i = 0; i < handles.length; i++) {
       var h = handles[i];
