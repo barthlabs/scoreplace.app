@@ -1,3 +1,4 @@
+// 2.3.83 — card de jogo (chave, Novidades, Últimos Resultados, Próximo Jogo): "Melhor de 3 · 0 × 2" sobe para logo abaixo de "Jogo N" e a linha "Jogado em" / "Agendado" / "Jogar até" desce para o cabeçalho de sets
 // 2.3.82 — lista de espera na chave: o toque longo só levanta o arraste "ocupar vaga" quando existe vaga "Jogador NN" aberta; sem vaga, nada acontece (não é dupla nem co-organizador)
 // 2.3.81 — chave: cada coluna precisa de 360px (2 colunas a partir de 736px, 3 a partir de 1112px) — com 3 sets lançados o placar toma 144px e o nome da dupla caía a 7px em coluna de 280px; sem espaço, o nome encolhe ou quebra em duas linhas, nunca corta
 // 2.3.80 — partida casual: não dá mais para sugerir que um convidado "era" alguém que já joga a mesma partida; e o aviso "Você jogou esta partida?" some sozinho quando a sugestão deixa de existir (sem abrir nenhuma leitura extra do seu perfil).

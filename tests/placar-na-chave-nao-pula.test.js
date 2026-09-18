@@ -238,7 +238,7 @@ async function aprovacao(browser) {
     const card = document.getElementById('card-'+id);
     return { temBotao: /Confirmar|Aprovar/i.test((card?card.textContent:'')),
              rotulos: head ? [...head.querySelectorAll('.sp-set-col')].map(e=>e.textContent.trim()) : null,
-             linha: head ? head.querySelector('.sp-set-head-ttl').textContent.trim() : null };
+             linha: card && card.querySelector('.sp-set-head-ttl') ? card.querySelector('.sp-set-head-ttl').textContent.trim() : null };
   }, alvo.id);
   ok(outro.temBotao, 'o adversário recebe o botão de confirmar');
   ok(outro.rotulos && outro.rotulos.join('|') === '1|2',
@@ -274,7 +274,8 @@ async function difDoisPontos(browser) {
 
   const anuncio = await page.evaluate((id) => {
     const h = document.getElementById('sethead-'+id);
-    return { linha: h ? h.querySelector('.sp-set-head-ttl').textContent.trim() : null,
+    const c = document.getElementById('card-'+id);
+    return { linha: c && c.querySelector('.sp-set-head-ttl') ? c.querySelector('.sp-set-head-ttl').textContent.trim() : null,
              rotulos: h ? [...h.querySelectorAll('.sp-set-col')].map(e=>e.textContent.trim()) : null };
   }, alvo.id);
   ok(/Super Tie-Break \(dif 2 pts\)$/.test(anuncio.linha || ''),

@@ -1924,6 +1924,7 @@ const SUITES = [
   'tests/card-da-chave-ocupa-tela-mobile.test.js',
   'tests/coluna-da-chave-comporta-tres-sets.test.js',
   'tests/arraste-de-vaga-so-existe-com-vaga.test.js',
+  'tests/formato-sobe-e-linha-do-tempo-desce-no-card.test.js',
   // O `functions-autodraw/vendor/` é cópia de js/views/* que só o PREDEPLOY re-sincroniza —
   // e 52 suítes carregam o servidor por draw-core.js, que dá require() na CÓPIA. Vendor
   // velho = suíte verde sobre código que o servidor não tem: mexi em identity-core/

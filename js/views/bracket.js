@@ -5067,9 +5067,17 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   const _setCountAttr = (_plan && _plan.columns) ? (' data-sp-set-count="' + _plan.columns.length + '"') : '';
   const _setFormatAttr = (_plan && _plan.bestOf) ? (' data-sp-best-of="' + _plan.bestOf + '"') : '';
   const _mostraCabecaSet = _multiSet;
+  /* ⭐ 2.3.83 · Ordem do dono (18/set/2026): no card canônico, "Melhor de 3 · 0 × 2" sobe
+     para debaixo de "Jogo N" e a linha do tempo ("Jogado em" / "Agendado" / "Jogar até")
+     desce para a primeira linha do cabeçalho de sets — a informação compõe melhor.
+     A linha do tempo continua sendo UM slot (data-match-time-status) atualizado ao vivo
+     por schedule-poll, onde quer que ele more. Card de set único não muda. */
+  var _timelineSlot = '<span data-match-time-status data-match-time-tournament-id="' + window._safeHtml(String(tId || '')) +
+    '" data-match-time-match-id="' + window._safeHtml(String(m.id || '')) + '">' + _matchCardTimelineTextHtml(t, m) + '</span>';
+  const _headlineSlot = _mostraCabecaSet ? '<span class="sp-set-head-ttl">' + window._safeHtml(_plan.headline) + '</span>' : '';
   const _setHeadHtml = _mostraCabecaSet
     ? '<div id="sethead-' + m.id + '" class="sp-set-head">' +
-        '<span class="sp-set-head-ttl">' + window._safeHtml(_plan.headline) + '</span>' +
+        _timelineSlot +
         '<div class="sp-set-head-linha2">' +
           '<span class="sp-set-head-sets">' + window._safeHtml(_t('bracket.setsLabel')) + '</span>' +
           '<div class="sp-set-grid"' + _setCountAttr + _setFormatAttr + ' style="' + _numFsVar + '">' + _setLabelsHtml() + '</div>' +
@@ -5627,8 +5635,6 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   var _headerActions = (_readOnly ? _dashEditBtn : `${_woHeaderChip}${_arrivedBtn}${liveBtn}${headerConfirmBtn}${headerEditBtn}${headerWoRevertBtn}`) + _replayBtn;
   // O slot existe mesmo quando falta configuração antiga: a agenda pode preencher a
   // data marcada sem reabrir/re-renderizar toda a tela.
-  var _timelineSlot = '<span data-match-time-status data-match-time-tournament-id="' + window._safeHtml(String(tId || '')) +
-    '" data-match-time-match-id="' + window._safeHtml(String(m.id || '')) + '">' + _matchCardTimelineTextHtml(t, m) + '</span>';
 
   var _headerHtml;
   if (_showHeaderPending) {
@@ -5636,7 +5642,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px;border-bottom:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));padding-bottom:6px;">
         <div style="display:flex;flex-direction:column;gap:2px;min-width:0;flex:1;">
           <span style="font-size:0.7rem;font-weight:700;color:var(--sp-c-38bdf8,#38bdf8);text-transform:uppercase;">${window._safeHtml(matchLabel)}</span>
-          ${_timelineSlot}
+          ${_mostraCabecaSet ? _headlineSlot : _timelineSlot}
           <span title="proposto por ${window._safeHtml(_proposerName)} · ${_agoLabel}" style="font-size:0.6rem;color:var(--text-muted);line-height:1.3;white-space:normal;overflow-wrap:anywhere;">proposto por <b style="color:var(--sp-c-fbbf24,#fbbf24);">${_proposerName}</b> · ${_agoLabel}</span>
         </div>
         <div id="header-btns-${m.id}" style="display:flex;flex-wrap:nowrap;justify-content:flex-end;align-items:center;gap:4px 6px;flex-shrink:0;min-width:0;text-align:right;">
@@ -5649,7 +5655,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
       <div class="sp-mc-head">
         <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-start;min-width:0;">
           <span style="font-size:0.7rem;font-weight:700;color:var(--sp-c-38bdf8,#38bdf8);text-transform:uppercase;">${window._safeHtml(matchLabel)}</span>
-          ${_timelineSlot}
+          ${_mostraCabecaSet ? _headlineSlot : _timelineSlot}
           ${readyBadge}
         </div>
         <div id="header-btns-${m.id}" class="btn-row sp-mc-acts">${_headerActions}</div>
