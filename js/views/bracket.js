@@ -4606,13 +4606,37 @@ function _matchCardDateTime(ms, t) {
   } catch (e) { return ''; }
 }
 
+// Coordenadas (fase, rodada) lidas do id ESTRUTURAL do jogo — a única fonte que sobrevive
+// a qualquer cópia do jogo (doc, subcoleção `matches`, espelho `results`, dashboard).
+window._matchCoordsFromId = function (id) {
+  var s = String(id || '');
+  var m = /-(\d+)-[a-z0-9]+-(?:VC|PD|GF|3P)-R(\d+)-/i.exec(s);
+  if (m) return { phaseIndex: parseInt(m[1], 10), round: parseInt(m[2], 10) };
+  m = /^match-rr-r(\d+)-/i.exec(s);
+  if (m) return { phaseIndex: 0, round: parseInt(m[1], 10) };
+  return null;
+};
 function _matchCardRoundDeadlineMs(t, m) {
   try {
     if (!t || !m || typeof window._inicioDaFase !== 'function' ||
         typeof window._fimDaFase !== 'function' || typeof window._phaseRoundWindow !== 'function') return null;
     var phaseIndex = parseInt(m.phaseIndex, 10);
-    if (isNaN(phaseIndex) || phaseIndex < 0) phaseIndex = 0;
     var round = parseInt(m.round, 10);
+    /* ⛔ O JOGO DA DASHBOARD NÃO TRAZ round/phaseIndex (18/set/2026). Relato do dono: o card
+     * na chave mostra "Jogar até", o mesmo jogo em "Seu próximo jogo" não. MEDIDO no Confra:
+     * os 97 docs da eliminatória em `matches` e `results` têm round e phaseIndex ausentes —
+     * quem os preenche é o motor da chave, que a dashboard não roda. Sem eles caía em fase 0,
+     * rodada 1, e o prazo saía vazio ou errado. O id ESTRUTURAL carrega as duas coordenadas
+     * (`…-1-gold-VC-R2-P5` = fase 1, rodada 2; `match-rr-r1-…` = fase 0, rodada 1): quando o
+     * objeto não diz, o id diz. [[project_chaves_deterministic_engine]] */
+    if (isNaN(phaseIndex) || isNaN(round)) {
+      var _coord = window._matchCoordsFromId ? window._matchCoordsFromId(m.id) : null;
+      if (_coord) {
+        if (isNaN(phaseIndex) && _coord.phaseIndex != null) phaseIndex = _coord.phaseIndex;
+        if (isNaN(round) && _coord.round != null) round = _coord.round;
+      }
+    }
+    if (isNaN(phaseIndex) || phaseIndex < 0) phaseIndex = 0;
     if (isNaN(round) || round < 1) round = 1;
     var phase = (Array.isArray(t.phases) && t.phases[phaseIndex]) || {};
     // A régua do organizador É a quantidade de rodadas da chave. Em eliminatória,

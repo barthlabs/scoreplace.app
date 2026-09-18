@@ -483,6 +483,7 @@ const SUITES = [
   'tests/regressiva-e-da-rodada-nao-da-fase.test.js',
   // A rodada eliminatória anuncia a janela configurada, sem inventar datas pelo ritmo dos placares.
   'tests/prazo-da-rodada-eliminatoria.test.js',
+  'tests/prazo-do-card-sem-round-usa-o-id.test.js',
   // o cronômetro da Liga mira o fim da rodada
   'tests/liga-countdown-round-end.test.js',
   // o relógio do meio (RODADA e TORNEIO COMPLETO) vira REGRESSIVA quando há fim programado
