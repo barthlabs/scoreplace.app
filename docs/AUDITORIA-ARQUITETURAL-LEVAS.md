@@ -1532,7 +1532,7 @@ contar** — o schema não tem marcador de consumo, e isso é resultado, não la
 
 **(6) Testes: zero. Medido, não estimado.** Walker sobre `tests/` e `functions/test-*.js`
 procurando `magicLink`, `?ml=`, `?vt=`, `wrapVerification` e `sendMagicLink`: **nenhum
-arquivo**. Nenhum dos 13 specs de Playwright cita magic link. As lacunas que a leva pediu para
+arquivo**. Nenhum dos 13 specs de Playwright cita o fluxo de acesso por e-mail sem senha. As lacunas que a leva pediu para
 levantar (**sem escrever os testes**):
 
 | Lacuna | O que precisaria provar | Existe hoje |

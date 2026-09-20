@@ -3359,8 +3359,8 @@ function renderTournaments(container, tournamentId = null) {
                ${(typeof window._buildTournamentConfigBox === 'function')
                  ? window._buildTournamentConfigBox(t, { bg: _pReadBg || '', open: true })
                  : ''}
-               ${(t.ligaSeasonMonths || t.rankingSeasonMonths) ? (() => {
-                    const _sm = t.ligaSeasonMonths || t.rankingSeasonMonths;
+               ${t.ligaSeasonMonths ? (() => {
+                    const _sm = t.ligaSeasonMonths;
                     if (!t.startDate) return '';
                     const _sd = new Date(t.startDate);
                     if (isNaN(_sd.getTime())) return '';

@@ -149,7 +149,7 @@ function setupHelpModal() {
             '<li>Se pedir permissões, clique em <b>"Permitir"</b> — usamos apenas para identificar você</li>' +
             '<li>Pronto! Você já está logado. Seu nome e foto aparecem no canto superior direito</li>' +
           '</ol>' +
-          '<p style="font-size:0.75rem;color:var(--text-muted);margin-top:6px;">Outras opções: Link Mágico (recebe um link por e-mail, sem senha), SMS (código no celular), ou E-mail e Senha tradicional.</p>' +
+          '<p style="font-size:0.75rem;color:var(--text-muted);margin-top:6px;">Outras opções: SMS (código no celular) ou e-mail e senha.</p>' +
         '</div>' +
         '<div style="background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.15);border-radius:10px;padding:12px;margin-bottom:12px;">' +
           '<div style="font-weight:700;font-size:0.85rem;color:var(--text-bright);margin-bottom:8px;">Passo 2: Completar o Perfil</div>' +

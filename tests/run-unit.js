@@ -171,6 +171,7 @@ const SUITES = [
   // numa lista à mão caía em trivial, SP_SEM_GPT liberava sem motivo. Não chama o Codex.
   'tests/revisar-com-gpt-faixa.test.js',
   'tests/l9-censo-formatos-legados.test.js',
+  'tests/etapa8-ranking-legado-para-liga.test.js',
   'tests/l7-rename-participant-core.test.js',
   'tests/l7-liga-availability-cf.test.js',
   'tests/l7-liga-availability-package-boundary.test.js',

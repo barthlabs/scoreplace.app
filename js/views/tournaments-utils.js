@@ -2006,8 +2006,8 @@ window._ligaSeasonEndMs = function(t) {
         var endMs = _brt(t.endDate, '23:59:59');
         if (!isNaN(endMs)) return endMs;
     }
-    // 2) ligaSeasonMonths / rankingSeasonMonths a partir de startDate
-    var months = parseInt(t.ligaSeasonMonths || t.rankingSeasonMonths);
+    // 2) ligaSeasonMonths a partir de startDate
+    var months = parseInt(t.ligaSeasonMonths);
     if (months && t.startDate) {
         var startMs = _brt(t.startDate, '00:00:00');
         if (!isNaN(startMs)) {
@@ -2561,7 +2561,7 @@ window._ligaCountdownEvent = function (t) {
     // Fim (ms): endDate ou temporada; multi-fase = fim da ÚLTIMA fase (janela programada).
     var tEnd = null;
     if (t.endDate) { var _ed = new Date(String(t.endDate).indexOf('T') > -1 ? t.endDate : (t.endDate + 'T23:59:59')).getTime(); if (!isNaN(_ed)) tEnd = _ed; }
-    if (tEnd == null) { var _sm = t.ligaSeasonMonths || t.rankingSeasonMonths; if (_sm && t.startDate) { var _ss = new Date(t.startDate); if (!isNaN(_ss.getTime())) { var _se = new Date(_ss); _se.setMonth(_se.getMonth() + parseInt(_sm)); tEnd = _se.getTime(); } } }
+    if (tEnd == null) { var _sm = t.ligaSeasonMonths; if (_sm && t.startDate) { var _ss = new Date(t.startDate); if (!isNaN(_ss.getTime())) { var _se = new Date(_ss); _se.setMonth(_se.getMonth() + parseInt(_sm)); tEnd = _se.getTime(); } } }
     if (window._isMultiPhase && window._isMultiPhase(t) && typeof window._tournamentScheduledWindow === 'function') { var _w = window._tournamentScheduledWindow(t); if (_w && _w.endMs) tEnd = _w.endMs; }
     // 2) Sorteado + próximo sorteio AUTO agendado (≤ fim) → próximo sorteio.
     if (drew && typeof window._ligaNextDrawEventTs === 'function') {
@@ -2909,7 +2909,7 @@ window._buildTournamentConfigBox = function (t, opts) {
     add('Máximo de participantes', maxp > 0 ? String(maxp) : 'Sem limite');
 
     if (isLiga) {
-        var season = t.ligaSeasonMonths || t.rankingSeasonMonths;
+        var season = t.ligaSeasonMonths;
         add('Temporada contínua', (t.temporada !== false)
             ? ('Sim' + (season ? ' — ' + season + ' meses' : '')) : 'Não (evento único)');
         var equil = (t.equilibrado !== false);
@@ -2919,18 +2919,17 @@ window._buildTournamentConfigBox = function (t, opts) {
             var bb = t.balanceBy || 'individual';
             add('Equilibra por', bb === 'team' ? 'Time' : 'Jogador');
         }
-        var nps = t.ligaNewPlayerScore || t.rankingNewPlayerScore;
+        var nps = t.ligaNewPlayerScore;
         var NPS = { zero: 'Zero', min: 'Mínima do grupo', avg: 'Média do grupo', organizer: 'Organizador decide' };
         if (nps) add('Pontuação de novos inscritos', NPS[nps] || nps);
-        var inact = t.ligaInactivity || t.rankingInactivity;
+        var inact = t.ligaInactivity;
         var INA = { keep: 'Manter pontos', decay: 'Decaimento', remove: 'Remover da temporada' };
         if (inact) {
-            var ix = t.ligaInactivityX || t.rankingInactivityX;
+            var ix = t.ligaInactivityX;
             add('Regra de inatividade', (INA[inact] || inact) +
                 ((inact !== 'keep' && ix) ? ' (após ' + ix + ' rodadas)' : ''));
         }
-        var openEnroll = (t.ligaOpenEnrollment !== undefined) ? t.ligaOpenEnrollment
-            : (t.rankingOpenEnrollment !== undefined ? t.rankingOpenEnrollment : true);
+        var openEnroll = (t.ligaOpenEnrollment !== undefined) ? t.ligaOpenEnrollment : true;
         add('Inscrição durante a temporada', openEnroll !== false ? 'Permitida' : 'Fechada após início');
         // v2.6.29: fase final virou fase do construtor de fases — só exibimos quando
         // a Liga legada já tinha o flag ligado, pra não poluir ligas novas.

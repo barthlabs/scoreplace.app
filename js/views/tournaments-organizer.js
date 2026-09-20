@@ -116,7 +116,7 @@ window._cloneTournament = async function(tournamentId) {
 
     // Liga-specific fields
     if (window._isLigaFormat && window._isLigaFormat(t)) {
-        newT.ligaSeasonMonths = t.ligaSeasonMonths || t.rankingSeasonMonths || '';
+        newT.ligaSeasonMonths = t.ligaSeasonMonths || '';
         newT.ligaOpenEnrollment = t.ligaOpenEnrollment !== false;
         newT.ligaInactivity = t.ligaInactivity || '';
         newT.ligaInactivityX = t.ligaInactivityX || 3;

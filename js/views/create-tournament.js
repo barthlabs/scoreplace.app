@@ -4871,12 +4871,11 @@ function setupCreateTournamentModal() {
     // L6.R2.1: agenda repovoada → reavalia o aviso com o estado REAL do torneio editado.
     try { if (typeof window._atualizarAvisoFuso === 'function') window._atualizarAvisoFuso(); } catch (_e) {}
 
-    // Liga (unificado — carrega dados de Liga e antigo Ranking)
-    // Backward compat: migrar campos ranking* → liga* se necessário
-    var _nps = t.ligaNewPlayerScore || t.rankingNewPlayerScore;
-    var _inact = t.ligaInactivity || t.rankingInactivity;
-    var _inactX = t.ligaInactivityX || t.rankingInactivityX;
-    var _season = t.ligaSeasonMonths || t.rankingSeasonMonths;
+    // Liga: desde a etapa 8, só o contrato `liga*` chega à interface.
+    var _nps = t.ligaNewPlayerScore;
+    var _inact = t.ligaInactivity;
+    var _inactX = t.ligaInactivityX;
+    var _season = t.ligaSeasonMonths;
 
     // NPS: activate correct button
     if (_nps) {
@@ -5705,12 +5704,6 @@ window._saveTournamentClickHandler = async function() {
             // Invalidate pre-generated schedule when mode changes
             tourData.ligaRRSchedule = null;
           }
-          // Limpeza de campos legados do formato Ranking (migrados para liga-*)
-          tourData.rankingNewPlayerScore = null;
-          tourData.rankingInactivity = null;
-          tourData.rankingInactivityX = null;
-          tourData.rankingSeasonMonths = null;
-          tourData.rankingOpenEnrollment = null;
           tourData.ligaSeasonMonths = null;
         }
 

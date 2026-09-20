@@ -328,8 +328,8 @@ function _ligaSeasonEnded(t, now) {
     const endD = _parseBrt(t.endDate, '23:59:59');
     if (!isNaN(endD.getTime()) && endD < now) return true;
   }
-  // 2) ligaSeasonMonths / rankingSeasonMonths a partir de startDate
-  const months = parseInt(t.ligaSeasonMonths || t.rankingSeasonMonths);
+  // 2) ligaSeasonMonths a partir de startDate
+  const months = parseInt(t.ligaSeasonMonths);
   if (months && t.startDate) {
     const start = _parseBrt(t.startDate, '00:00:00');
     if (!isNaN(start.getTime())) {
@@ -3135,8 +3135,7 @@ const _CAMPOS_CONFIG_TORNEIO = new Set([
   'drawFirstDate','drawFirstTime','drawIntervalDays','drawManual','temporada','equilibrado',
   'clusterSize','balanceBy','genderRatio','wlGroupBalance','ligaNewPlayerScore',
   'ligaInactivity','ligaInactivityX','allowSelfDeactivation','ligaOpenEnrollment',
-  'ligaRoundFormat','ligaDrawMode','ligaTurnos','ligaRRSchedule','rankingNewPlayerScore',
-  'rankingInactivity','rankingInactivityX','rankingSeasonMonths','rankingOpenEnrollment',
+  'ligaRoundFormat','ligaDrawMode','ligaTurnos','ligaRRSchedule',
   'ligaSeasonMonths','elimRankingType','gruposCount','gruposClassified','gruposEqualOnly',
   'gruposSeedVip','gruposSeedCategory','drawMode','reiRainhaGroupsBy','monarchAdvanceToElim',
   'phase1Name','tiebreakers','tiebreakersExcluded','advancedScoring','genderCategories',

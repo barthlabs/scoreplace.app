@@ -1,7 +1,7 @@
 // scoreplace.app — CENÁRIO Fase 2: LOGIN (escopo reduzido — UI/validação).
 //
 // Os 3 caminhos de login dependem de serviços EXTERNOS que não são E2E-áveis de ponta a ponta:
-//   • celular → SMS/WhatsApp (Evolution API) • Google → popup OAuth • e-mail → link mágico (Brevo).
+//   • celular → SMS/WhatsApp (Evolution API) • Google → popup OAuth • e-mail → senha.
 // O que É testável de forma determinística e sem rede é a LÓGICA DE UI do modal, onde os bugs de
 // login historicamente moraram (ver project_login_ux): o campo unificado (login-identifier) que
 // detecta e-mail vs celular, a máscara BR do telefone, e o seletor de DDI que aparece só no modo
@@ -26,7 +26,7 @@ test.describe('LOGIN — UI do modal (validação, sem round-trip externo)', () 
     await expect(page.locator('#modal-login')).toBeVisible();
 
     // os 3 caminhos existem no modal
-    await expect(page.locator('#login-identifier')).toBeAttached();       // e-mail OU celular (link mágico/SMS)
+    await expect(page.locator('#login-identifier')).toBeAttached();       // e-mail OU celular (senha/SMS)
     await expect(page.locator('#login-password')).toBeAttached();         // e-mail + senha
     await expect(page.locator('#login-google-btn')).toBeAttached();       // Google
     await expect(page.locator('#btn-entrar')).toBeAttached();             // ação principal

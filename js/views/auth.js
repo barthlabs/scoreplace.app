@@ -1139,7 +1139,7 @@ function handleGoogleLogin() {
         // workaround. Antes era sempre "Não foi possível realizar o login
         // com Google" — usuário ficava sem direção. Bug reportado: esposa
         // em Paris recebeu erro genérico, sem saber que poderia tentar
-        // SMS ou Link Mágico, ou que Safari Private Browsing pode estar
+        // SMS ou e-mail e senha, ou que Safari Private Browsing pode estar
         // bloqueando Firebase Auth IndexedDB.
         var code = (error && error.code) || 'unknown';
         var msg = _t('auth.googleErrorMsg');
@@ -2144,7 +2144,7 @@ window._entrarShowGoogleSuggestion = function(provider) {
 // porque o reset NATIVO do Firebase só sabe mandar e-mail e a conta não tem e-mail
 // real. Em vez disso, pra celular disparamos o login por celular: a pessoa entra com
 // o código do SMS e depois define uma senha nova no perfil.
-// v1.2.9: era "link mágico do WhatsApp + SMS" — o WhatsApp saiu, sobrou o SMS.
+// v1.2.9: a recuperação por celular segue exclusivamente pelo SMS.
 window._entrarPhoneRecoveryFallback = function(raw) {
   var country = (document.getElementById('login-identifier-country') || {}).value || '55';
   var e164 = window._entrarPhoneE164(raw, country);
@@ -2794,7 +2794,7 @@ function _resetPhoneLoginUI() {
 }
 
 // v1.9.75: quando o login por e-mail+senha falha, checa o provedor do e-mail.
-// Se a conta é Google (ou só link mágico, sem senha), orienta o caminho certo
+// Se a conta é Google, orienta o caminho certo
 // em vez de só dizer "senha errada". fallbackFn() roda quando não há sugestão
 // melhor (mostra a mensagem de erro normal).
 function _showGoogleSuggestDialog() {
@@ -5745,8 +5745,8 @@ window._quickReturnLogin = function() {
 // v1.7.50 — O OLHINHO PASSA A EXISTIR EM TODA TELA DE SENHA, não só na de entrar.
 // Sugestão de usuária: _"queria sugerir para colocar o olhinho para a troca de senha.
 // Eu vejo para entrar mas pra trocar a senha não tinha"_. Ela viu UM ponto; eram TRÊS
-// telas e SEIS campos (criar senha depois do link mágico, redefinir senha pelo link, e
-// trocar senha no perfil) — e é justamente onde o olhinho vale MAIS: senha nova se
+// telas e SEIS campos (criar senha, redefinir senha e trocar senha no perfil) — e é
+// justamente onde o olhinho vale MAIS: senha nova se
 // digita às cegas, DUAS vezes, e o erro de digitação só aparece depois de confirmar.
 //
 // O botão é FONTE ÚNICA. Repetir esse markup em seis lugares é o jeito garantido de um
@@ -5830,15 +5830,15 @@ function setupLoginModal() {
           // Google/Apple ganham a badge direto — window._applyLastLoginBadge).
           '<div id="login-lastmethod-hint" style="font-size:0.78rem;color:var(--sp-c-6ee7b7,#6ee7b7);margin-bottom:8px;line-height:1.45;"></div>' +
 
-          // --- 1. Entrar com 1 clique (email mágico OU SMS — campo único) ---
-          // v1.0.22-beta: feedback do user — ter 2 campos (Link Mágico e SMS)
+          // --- 1. Entrar por e-mail/senha ou SMS — campo único ---
+          // v1.0.22-beta: feedback do user — concentrar e-mail e SMS no mesmo campo
           // O formulário atual aceita e-mail ou celular; senha é exigida para
           // e-mail, e celular segue a confirmação por SMS.
           // v2.4.98-beta: cadastro/login SÓ COM CELULAR (sem e-mail) — pra quem
           // usa UOL/Hotmail e não recebe e-mail de forma confiável. Reusa o motor
           // handlePhoneLogin (SMS Firebase + link WhatsApp em paralelo). Este
           // bloco estava oculto desde v1.9.73; voltou visível e agora é phone-only
-          // (sem o input de link mágico por e-mail, que tinha o mesmo problema).
+          // (sem fluxo de acesso por e-mail sem senha).
           // --- Entrar OU cadastrar: e-mail OU celular + senha (v2.5.x) ---
           // Um único campo aceita e-mail OU celular (peso igual). Celular faz
           // aparecer o DDI 🇧🇷+55 à esquerda. Senha única. Botão Entrar resolve
@@ -5924,7 +5924,7 @@ function setupLoginModal() {
 
           // v0.17.72: aceite implícito de Termos+Privacy (LGPD-ready alpha→beta).
           // Texto pequeno embaixo do bloco de login: ao escolher qualquer
-          // método (link mágico, SMS, email, Google), usuário implicitamente
+          // método (SMS, e-mail, Google), usuário implicitamente
           // aceita os termos. Conformidade legal mínima sem modal extra.
           '<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border-color);font-size:0.7rem;color:var(--text-muted);text-align:center;line-height:1.5;">' +
             'Ao continuar, você concorda com os <a href="#terms" onclick="document.getElementById(\'modal-login\').classList.remove(\'active\')" style="color:var(--sp-c-var-primary-color-,var(--primary-color));">Termos de Uso</a> e a <a href="#privacy" onclick="document.getElementById(\'modal-login\').classList.remove(\'active\')" style="color:var(--sp-c-var-primary-color-,var(--primary-color));">Política de Privacidade</a>.' +

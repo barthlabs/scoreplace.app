@@ -49,7 +49,7 @@ Este checklist guia uma validação manual completa antes de subir pra beta.
 > **Pré-requisito:** ter conta Google de teste E-mail/senha de teste.
 
 - [ ] Click "Login" no canto direito → modal abre
-- [ ] Modal mostra 4 métodos: Link Mágico, SMS, Email/Senha, Google
+- [ ] Modal mostra 3 métodos: SMS, e-mail/senha e Google
 - [ ] **Disclaimer no fim do modal:** "Ao continuar, você concorda com os Termos de Uso e a Política de Privacidade"
 - [ ] Click no link "Termos de Uso" do disclaimer → abre `#terms` em nova aba
 

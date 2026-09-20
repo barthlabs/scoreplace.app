@@ -882,7 +882,7 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // ─── Magic Links wrapper (v1.0.30-beta) ──────────────────────────────────
+    // ─── Wrapper histórico de verificação de e-mail (v1.0.30-beta) ────────────
     // Cloud Function `sendMagicLink` cria docs aqui com o link Firebase
     // assinado. Usuário NÃO autenticado clica no email, abre /?ml=TOKEN no
     // browser, e o JS do app lê esse doc pra resolver o firebaseLink real e

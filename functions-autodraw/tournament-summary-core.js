@@ -136,7 +136,6 @@ function buildSummary(t, id, H) {
     lateEnrollment: t.lateEnrollment || null,
     registrationLimit: (t.registrationLimit != null) ? t.registrationLimit : null,
     ligaSeasonMonths: (t.ligaSeasonMonths != null) ? t.ligaSeasonMonths : null,
-    rankingSeasonMonths: (t.rankingSeasonMonths != null) ? t.rankingSeasonMonths : null,
     combinedCategories: t.combinedCategories === true,
     categoryNames: _arr(t.categories).map(function (c) {
       return String((c && (c.name || c.label || c)) || '');
@@ -171,7 +170,7 @@ var CAMPOS_QUE_IMPORTAM = [
   'venuePlaceId', 'startDate', 'endDate', 'createdAt', 'updatedAt', 'finishedAt',
   'autoClosed', 'tournamentStarted', 'creatorUid', 'coHosts', 'memberUids',
   'enrollmentMode', 'lateEnrollment', 'registrationLimit', 'ligaSeasonMonths',
-  'rankingSeasonMonths', 'combinedCategories', 'categories', 'participants',
+  'combinedCategories', 'categories', 'participants',
   'waitlist', 'standbyParticipants', 'matches', 'rounds', 'groups', 'phases',
   'coverUrl', 'logoUrl'
 ];

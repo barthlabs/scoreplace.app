@@ -56,7 +56,7 @@ pra rastreio** — não há IDFA, ad SDK, nem data broker.
 | **Google / Firebase** (Auth, Firestore, Cloud Functions, FCM, Hosting/GitHub Pages) | Praticamente todos os dados acima | Backend, auth, banco, push. Subprocessador principal. |
 | **Stripe** | Dados de pagamento da assinatura Pro | Processar pagamento. **⚠️ Hoje só no site (web-only)** — ver [[project_native_app_roadmap]] §2. Stripe é PCI, não expõe cartão ao app. |
 | **Google Places / Maps API** | Texto de busca + localização aproximada | Sugerir/encontrar locais e quadras |
-| **Evolution API (WhatsApp, self-hosted Railway)** | Número de telefone + conteúdo da mensagem | Enviar magic link e notificações via WhatsApp (opt-in) |
+| **Evolution API (WhatsApp, self-hosted Railway)** | Número de telefone + conteúdo da mensagem | Enviar notificações via WhatsApp (opt-in) |
 | **OpenWeatherMap** | Lat/lng do local do torneio | Previsão do tempo no card do torneio |
 | **Sentry** | Telemetria de erro (stack, contexto técnico) | Monitoramento de bugs. Public DSN só permite SEND. |
 | **Google Analytics (GA4)** **⚠️ CONFIRMAR** | Eventos de uso | Analytics de produto |

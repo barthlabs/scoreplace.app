@@ -50,7 +50,7 @@ As features estão construídas, não "em andamento". Não há nada a cortar nem
   - criar torneio → sortear → lançar resultado → encerrar
   - partida casual ao vivo (placar GSM)
   - presença / check-in (GPS)
-  - login: celular (SMS/WhatsApp), Google, magic link
+  - login: celular (SMS), Google, e-mail e senha
   - fluxo de aprovação de resultado por participantes (4 fases)
 - [ ] Testes do **motor de sorteio** (ponto mais frágil; já tem paridade server via `autoDraw`/`vendor` — testar os dois).
 - [ ] Sentry limpo + backup Firestore diário + quotas (já configurados — validar).

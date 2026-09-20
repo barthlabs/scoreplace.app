@@ -26,7 +26,7 @@ window._requestExpiredLeagueSeasonClose = window._requestExpiredLeagueSeasonClos
         typeof window.AppStore.isOrganizer !== 'function' || !window.AppStore.isOrganizer(t) ||
         typeof window._callCF !== 'function') return;
     var isLeague = typeof window._isLigaFormat === 'function' ? window._isLigaFormat(t) : (t.format === 'Liga' || t.format === 'Ranking');
-    if (!isLeague || !(t.ligaSeasonMonths || t.rankingSeasonMonths) || !t.startDate || requested[t.id]) return;
+    if (!isLeague || !t.ligaSeasonMonths || !t.startDate || requested[t.id]) return;
     requested[t.id] = true;
     window._callCF('closeExpiredLeagueSeason', { tournamentId: String(t.id) }, 'Entre na sua conta para atualizar a temporada.').catch(function() {
       delete requested[t.id];

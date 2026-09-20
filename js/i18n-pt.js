@@ -1389,7 +1389,7 @@ window._translations['pt'] = {
   'casual.loginToJoin': 'Faça login para participar',
   'casual.loginToJoinMsg': 'Entre para participar desta partida.',
   'casual.loginBtn': 'Entrar',
-  'casual.loginMethodsHint': 'Google · E-mail · SMS · Link mágico',
+  'casual.loginMethodsHint': 'Google · E-mail · SMS',
   'casual.youreIn': 'Você está na partida!',
   'casual.waitOrganizerStart': 'Aguarde o organizador iniciar o jogo',
   'casual.slotLeft': '{n} vaga restante',
