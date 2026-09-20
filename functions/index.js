@@ -1772,20 +1772,18 @@ exports.cleanupAbandonedAuth = onSchedule(
   }
 );
 
-// ─── Scheduled cleanup: expired magic link wrappers ──────────────────────────
-// v1.0.34-beta: docs em magicLinks/{token} guardam o firebaseLink resolvido
-// pelo wrapper-URL no clique do email. Cada doc tem expiresAt = createdAt+90min
-// (oobCode em si expira em 1h via Firebase). Sem cleanup, a coleção cresce
-// 1 doc por magic link request.
+// ─── Scheduled cleanup: expired proof tokens ─────────────────────────────────
+// Os tokens de confirmação de e-mail guardam o link oficial por prazo curto
+// para impedir que um scanner o consuma antes do navegador da pessoa.
 /* ⛔ L4.P13 — O COMENTÁRIO PROMETIA 3x AO DIA E O CÓDIGO RODAVA 1x.
  * Achado da auditoria (L4, item c) e reconferido em 12/set/2026: a linha acima já dizia
  * "04:30, 12:30, 20:30" desde a v1.0.34-beta, mas o agendamento era `every day 04:30`.
- * Não é cosmético: cada documento carrega o LINK ASSINADO DE ENTRADA e um e-mail, e expira
+ * Não é cosmético: cada documento carrega o código de confirmação encapsulado e expira
  * em 90 minutos. Rodando 1x ao dia, um documento já vencido ficava guardado por até ~24h em
  * vez de ~8h — três vezes a janela de exposição que alguém tinha decidido aceitar.
  * O código passa a cumprir o que estava escrito. ⚠️ Varri as OUTRAS 11 funções agendadas
  * comparando comentário e cadência: esta era a única divergente. */
-exports.cleanupOldMagicLinks = onSchedule(
+exports.cleanupExpiredProofTokens = onSchedule(
   {
     schedule: "30 4,12,20 * * *",
     timeZone: "America/Sao_Paulo",
@@ -1796,8 +1794,8 @@ exports.cleanupOldMagicLinks = onSchedule(
     // expiresAt foi salvo como JS Date (Timestamp no Firestore). Comparação
     // direta com new Date() funciona via Timestamp.fromDate equivalência.
     const now = new Date();
-    const query = db.collection("magicLinks").where("expiresAt", "<", now);
-    const deleted = await _batchDeleteQuery(query);
+    const delVerificationLinks = await _batchDeleteQuery(
+      db.collection("emailVerificationLinks").where("expiresAt", "<", now));
     // v2.4.24: limpa também os tokens/códigos expirados da autenticação por
     // celular no gate (gateTokens/{token} e gateVerifications/{uid}).
     const delGateTokens = await _batchDeleteQuery(
@@ -1825,8 +1823,8 @@ exports.cleanupOldMagicLinks = onSchedule(
       db.collection("mergeTokens").where("expiresAt", "<", now));             // Timestamp
     const delCodes = await _batchDeleteQuery(
       db.collection("emailVerifyCodes").where("expiresAt", "<", nowMs));      // número (epoch ms)
-    console.log(`[cleanupOldMagicLinks] provas de posse vencidas: emailVerifications=${delVerif} mergeTokens=${delMerge} emailVerifyCodes=${delCodes}`);
-    console.log(`[cleanupOldMagicLinks] deleted magicLinks=${deleted} gateTokens=${delGateTokens} gateVerifications=${delGateVerif} (threshold: ${now.toISOString()})`);
+    console.log(`[cleanupExpiredProofTokens] provas vencidas: emailVerificationLinks=${delVerificationLinks} emailVerifications=${delVerif} mergeTokens=${delMerge} emailVerifyCodes=${delCodes}`);
+    console.log(`[cleanupExpiredProofTokens] gateTokens=${delGateTokens} gateVerifications=${delGateVerif} (threshold: ${now.toISOString()})`);
   }
 );
 
@@ -1990,22 +1988,9 @@ exports.healOrphanProfiles = onSchedule(
   async () => { await _runOrphanProfiles(admin.auth(), admin.firestore(), Date.now()); }
 );
 
-// ─── Magic Link via Custom Email (firestore-send-email extension) ────────────
-// v1.0.20-beta: substituí firebase.auth().sendSignInLinkToEmail() (que envia
-// email feio do firebaseapp.com sem botão estilizado, parando no spam) por
-// fluxo custom — gera o link via Admin SDK e enfileira email rico HTML com
-// botão grande na collection `mail/` (a extension firestore-send-email envia).
-//
-// Bug reportado: "magic link continua indo pra spam e sem destaque num botão
-// pra clicar". Os emails de notificação do app (criados pelo client via
-// FirestoreDB.queueEmail → extension) já têm botões CTA estilizados —
-// agora magic link segue o mesmo padrão.
-//
-// Deploy:  firebase deploy --only functions:sendMagicLink
-
-/* ⛔ AS TRÊS PORTAS DE E-MAIL DE CONTA ERAM ABERTAS E SEM LIMITE NENHUM.
+/* ⛔ AS DUAS PORTAS DE E-MAIL DE CONTA ERAM ABERTAS E SEM LIMITE NENHUM.
  *
- * MEDIDO em 13/set/2026: `sendMagicLink`, `sendVerificationEmail` e `sendPasswordReset` são
+ * MEDIDO em 13/set/2026: `sendVerificationEmail` e `sendPasswordReset` são
  * `onCall` **sem `request.auth`** — de propósito, porque quem precisa entrar ainda não entrou
  * — e recebem o endereço de destino do PAYLOAD DO CLIENTE. Nenhuma delas tinha cooldown,
  * throttle ou contador: qualquer pessoa na internet podia fazer o NOSSO remetente despejar
@@ -2030,156 +2015,6 @@ async function _barraSeAbusar(db, porta, email) {
     throw new HttpsError("resource-exhausted", "muitos pedidos para este e-mail. aguarde um minuto.");
   }
 }
-
-exports.sendMagicLink = onCall(
-  {
-    region: "us-central1",
-    memory: "256MiB",
-    timeoutSeconds: 30,
-    cors: APP_ORIGINS,
-  },
-  async (request) => {
-    const email = (request.data && request.data.email || "").trim().toLowerCase();
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      throw new HttpsError("invalid-argument", "email inválido");
-    }
-    await _barraSeAbusar(admin.firestore(), "sendMagicLink", email);
-
-    // Gera o link assinado oficial do Firebase. O frontend depois usará
-    // `signInWithEmailLink(email, link)` pra completar — mesmo flow do
-    // legacy.
-    const actionCodeSettings = {
-      url: `https://scoreplace.app/?eml=${encodeURIComponent(email)}#dashboard`,
-      handleCodeInApp: true,
-    };
-
-    let firebaseLink;
-    try {
-      firebaseLink = await admin.auth().generateSignInWithEmailLink(email, actionCodeSettings);
-    } catch (err) {
-      console.error("[sendMagicLink] generateSignInWithEmailLink falhou:", err);
-      throw new HttpsError("internal", "não foi possível gerar o link: " + (err.code || err.message));
-    }
-
-    // v1.0.30-beta: WRAPPER URL pra evitar prefetch consumindo o oobCode.
-    // Bug reportado: usuários recebendo o email e clicando, mas vendo "link
-    // expirado" porque algum scanner anti-phishing (Gmail/Outlook/corp
-    // security) prefetcha o link pra checar e consume o oobCode antes do
-    // humano clicar. Firebase oobCode é one-time-use → quem chega antes
-    // ganha. Solução: o email aponta pra https://scoreplace.app/?ml=TOKEN
-    // (URL nossa, prefetch não consome nada server-side); só quando o
-    // browser real do humano carrega a página, o JS busca o firebaseLink
-    // do Firestore e redireciona. Scanners fazem GET/HEAD da nossa URL,
-    // não executam JS, então nunca alcançam o oobCode.
-    const crypto = require("crypto");
-    const token = crypto.randomBytes(18).toString("base64url");
-    try {
-      await admin.firestore().collection("magicLinks").doc(token).set({
-        firebaseLink: firebaseLink,
-        email: email,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        // expiresAt é só pra cleanup eventual — o oobCode em si tem expiry
-        // próprio do Firebase (1h).
-        expiresAt: new Date(Date.now() + 90 * 60 * 1000),
-      });
-    } catch (err) {
-      console.error("[sendMagicLink] falha ao salvar magicLinks/" + token, err);
-      throw new HttpsError("internal", "não foi possível registrar o link: " + (err.code || err.message));
-    }
-    const wrapperUrl = "https://scoreplace.app/?ml=" + encodeURIComponent(token);
-    // Nome `link` mantido nas referências do HTML pra não mexer no template.
-    const link = wrapperUrl;
-
-    // HTML do email — botão grande âmbar, sem padrão "promocional" pra
-    // reduzir spam classification. Header escuro + branding scoreplace.app +
-    // CTA dominante + texto explicativo em copy direto.
-    const html =
-      '<!DOCTYPE html><html><head><meta charset="UTF-8">' +
-      '<meta name="viewport" content="width=device-width,initial-scale=1.0">' +
-      '<title>Entrar no scoreplace.app</title></head>' +
-      '<body style="margin:0;padding:0;background:#0f172a;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;">' +
-        '<table cellspacing="0" cellpadding="0" border="0" width="100%" style="background:#0f172a;padding:40px 16px;">' +
-          '<tr><td align="center">' +
-            '<table cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width:520px;background:#111827;border-radius:14px;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,0.3);">' +
-              // Header discreto — branding sem cor de destaque (só o botão
-              // CTA recebe o âmbar pra não competir visualmente)
-              '<tr><td style="padding:20px 32px 4px;text-align:center;">' +
-                '<div style="font-size:1.4rem;line-height:1;margin-bottom:2px;">🎾</div>' +
-                '<div style="font-size:0.92rem;font-weight:700;color:#fbbf24;letter-spacing:0.2px;">scoreplace.app</div>' +
-              '</td></tr>' +
-              // CTA primeiro — frase curta + botão grande, antes de qualquer
-              // outra coisa. Pedido do user: "coloque o botao de entrar acima
-              // de tudo só com a frase clico no botao para entrar acima dele".
-              '<tr><td style="padding:24px 32px 8px;text-align:center;color:#e5e7eb;">' +
-                '<p style="margin:0 0 16px;font-size:1rem;font-weight:600;color:#fff;">Clique no botão para entrar:</p>' +
-                // Botão grande — table-based pra render consistente em Gmail/Outlook/Apple
-                '<table cellspacing="0" cellpadding="0" border="0" align="center" style="margin:0 auto;">' +
-                  '<tr><td style="background:#f59e0b;background:linear-gradient(180deg,#fcd34d 0%,#f59e0b 60%,#d97706 100%);border-bottom:4px solid #b45309;border-radius:12px;box-shadow:0 4px 12px rgba(245,158,11,0.35);">' +
-                    '<a href="' + link.replace(/"/g, '&quot;') + '" style="display:inline-block;padding:18px 48px;color:#3a2300;text-decoration:none;font-weight:800;font-size:1.05rem;letter-spacing:0.3px;text-shadow:0 1px 0 rgba(255,255,255,0.3);">' +
-                      '🎾 Entrar no scoreplace.app' +
-                    '</a>' +
-                  '</td></tr>' +
-                '</table>' +
-              '</td></tr>' +
-              // Detalhes secundários — só depois do CTA principal
-              '<tr><td style="padding:20px 32px 28px;color:#cbd5e1;">' +
-                '<p style="margin:0 0 16px;font-size:0.84rem;line-height:1.55;color:#94a3b8;text-align:center;">' +
-                  'O link expira em 1 hora e só funciona uma vez.' +
-                '</p>' +
-                // Fallback link em texto (alguns clientes não renderizam o botão)
-                '<p style="margin:16px 0 0;font-size:0.76rem;color:#94a3b8;line-height:1.5;border-top:1px solid #374151;padding-top:16px;">' +
-                  'Não consegue clicar no botão? Copie e cole este endereço no navegador:<br>' +
-                  '<span style="color:#cbd5e1;word-break:break-all;font-family:monospace;font-size:0.7rem;">' + link.replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</span>' +
-                '</p>' +
-                '<p style="margin:16px 0 0;font-size:0.74rem;color:#94a3b8;line-height:1.5;">' +
-                  'Não foi você? Pode ignorar — o link expira sozinho. ' +
-                  'Se receber muitos desses sem ter pedido, contate <a href="mailto:scoreplace.app@gmail.com" style="color:#fbbf24;">scoreplace.app@gmail.com</a>.' +
-                '</p>' +
-              '</td></tr>' +
-              // Footer minimalista
-              '<tr><td style="padding:14px 32px;text-align:center;background:#0f172a;border-top:1px solid #1e293b;">' +
-                '<p style="margin:0;font-size:0.7rem;color:#64748b;">scoreplace.app · Jogue em outro nível · ' + new Date().getFullYear() + '</p>' +
-              '</td></tr>' +
-            '</table>' +
-          '</td></tr>' +
-        '</table>' +
-      '</body></html>';
-
-    // Versão texto puro — filtros de spam penalizam HTML-only. Alternativa
-    // plain/text garante que qualquer cliente de e-mail renderize algo e
-    // melhora o spam score.
-    const textBody =
-      "scoreplace.app — seu link de acesso\n\n" +
-      "Acesse o app clicando no link abaixo (ou copie e cole no navegador):\n\n" +
-      link + "\n\n" +
-      "O link expira em 1 hora e só funciona uma vez.\n\n" +
-      "Não foi você? Pode ignorar — o link expira sozinho.\n" +
-      "Dúvidas: scoreplace.app@gmail.com\n\n" +
-      "scoreplace.app · Jogue em outro nível";
-
-    // Enfileira na mail/ collection — extension firestore-send-email pega
-    // e envia via SMTP configurado (scoreplace.app@gmail.com nesse momento).
-    // v1.3.82-beta: subject menos "phishing-like" + text/plain alternativo
-    // pra melhorar deliverability (emails HTML-only têm score de spam maior).
-    try {
-      await _enqueueMail(admin.firestore(), {
-        to: [email],
-        replyTo: "scoreplace.app@gmail.com",
-        message: {
-          subject: "scoreplace.app — seu link de acesso",
-          html: html,
-          text: textBody,
-        },
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
-      console.log("[sendMagicLink] queued for", email);
-      return { ok: true };
-    } catch (err) {
-      console.error("[sendMagicLink] falha ao enfileirar email:", err);
-      throw new HttpsError("internal", "não foi possível enfileirar o email: " + (err.code || err.message));
-    }
-  }
-);
 
 // ─── sendVerificationEmail (v1.9.83) ────────────────────────────────────────
 // Substitui o e-mail de verificação PADRÃO do Firebase (remetente
@@ -2279,30 +2114,33 @@ function _buildVerificationEmailContent(link, name) {
 
 // Enfileira o e-mail rico de verificação na coleção mail/ (SMTP via extensão
 // firestore-send-email). Lança se o add falhar.
-// v1.2.4: WRAPPER URL no e-mail de confirmação — mesma correção que a v1.0.30 fez no magic
-// link, que nunca chegou aqui. `generateEmailVerificationLink` devolve uma URL com oobCode de
+// O redirecionamento no e-mail de confirmação protege o código de uso único que
+// `generateEmailVerificationLink` devolve contra prefetch de scanner.
 // USO ÚNICO; scanner anti-phishing (Outlook/corp, e o Gmail também) prefetcha o link pra
 // checar e CONSOME o código antes do humano clicar → "link inválido" e a pessoa nunca entra.
 // Evidência em prod (jul/2026): 7 contas travadas no gate — Val pediu 3 confirmações,
 // Paulo 3 resets de senha (culpando a senha), Zilda recebia 32 e-mails do app mas não
 // conseguia entrar, e está inscrita na Confra. Agora o e-mail aponta pra
-// scoreplace.app/?vt=TOKEN: o scanner faz GET/HEAD na NOSSA URL (não executa JS, não
-// consome nada) e só o browser real resolve o oobCode. Reusa a coleção magicLinks —
-// mesmas rules (leitura pública: o token de 24 chars É o segredo) e mesmo cleanup
-// (cleanupOldMagicLinks). Ver [[project_email_deliverability_hotmail]].
-async function _wrapVerificationLink(firebaseLink, email) {
+// scoreplace.app/?vt=TOKEN: o scanner faz GET/HEAD na nossa URL e só o navegador
+// da pessoa resolve o código. A coleção é exclusiva de confirmação de e-mail.
+async function _wrapVerificationLink(firebaseLink) {
+  // Esta coleção nunca pode transportar URL de login. A guarda fica ao lado da
+  // escrita para que qualquer novo chamador seja recusado antes de persistir.
+  if (!firebaseLink || !/[?&]mode=verifyEmail(?:&|$)/.test(firebaseLink)) {
+    throw new Error("emailVerificationLinks aceita apenas links de confirmação de e-mail");
+  }
   const crypto = require("crypto");
   const token = crypto.randomBytes(18).toString("base64url");
   try {
-    await admin.firestore().collection("magicLinks").doc(token).set({
+    await admin.firestore().collection("emailVerificationLinks").doc(token).set({
       firebaseLink: firebaseLink,
-      email: email,
-      kind: "verify",   // distingue do magic link de login (o handler trata igual: redireciona)
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),  // oobCode de verificação dura mais que o de login
+      // Janela curta própria do produto. A validade do código oficial continua
+      // sendo conferida pelo Firebase quando a confirmação é aplicada.
+      expiresAt: new Date(Date.now() + 55 * 60 * 1000),
     });
   } catch (err) {
-    console.error("[verifyLink] falha ao salvar magicLinks/" + token + " — caindo no link direto", err);
+    console.error("[verifyLink] falha ao salvar emailVerificationLinks/" + token + " — caindo no link direto", err);
     return firebaseLink;   // degrada pro comportamento antigo em vez de não mandar e-mail
   }
   return "https://scoreplace.app/?vt=" + encodeURIComponent(token);
@@ -2311,10 +2149,10 @@ async function _wrapVerificationLink(firebaseLink, email) {
 async function _queueVerificationEmail(db, email, link, name, pendingId) {
   const mailId = pendingId ? _pendingMail.mailId("verification", pendingId) : "";
   const ref = mailId ? db.collection("mail").doc(mailId) : null;
-  // Evita até criar outro wrapper magicLink quando uma entrega anterior já
+  // Evita criar outro token de confirmação quando uma entrega anterior já
   // chegou à outbox e só a marcação da pendência ficou para trás.
   if (ref && (await ref.get()).exists) return { alreadyQueued: true };
-  link = await _wrapVerificationLink(link, email);
+  link = await _wrapVerificationLink(link);
   const { html, text } = _buildVerificationEmailContent(link, name);
   const message = {
     to: [email],
@@ -2529,7 +2367,7 @@ exports.drainPendingVerifications = onSchedule(
 // Reset de senha enviado pelo NOSSO SMTP (extensão firestore-send-email) em vez
 // do remetente padrão do Firebase (noreply@…firebaseapp.com), que Hotmail/Outlook
 // jogam no spam/bloqueiam. Caso real: Marisa Roriz (hotmail) nunca recebia o reset.
-// Também cobre ex-usuários do magic link (provider 'password' SEM senha setada):
+// Também cobre contas antigas com provider 'password' sem senha definida:
 // generatePasswordResetLink gera o link e clicar permite DEFINIR a senha.
 //
 // Deploy:  firebase deploy --only functions:sendPasswordReset
@@ -5976,7 +5814,7 @@ exports.dispatchAccountRecovery = onCall(
     // no Firestore) em vez do oobCode CRU do Firebase. Scanners anti-phishing
     // (Gmail/Outlook/UOL) pré-carregam o link do e-mail e consumiam o oobCode de
     // uso único → a pessoa clicava e dava "link expirado". O wrapper resolve do
-    // mesmo jeito que o magic link (v1.0.30): scanner faz GET na wrapper URL, não
+    // o mesmo redirecionamento da confirmação: scanner faz GET na URL, não
     // executa JS, então nunca alcança o código real.
     if (realEmail) {
       try {

@@ -187,7 +187,7 @@ async function entrar(op, user) {
   ok(cura.perfil && cura.perfil.displayName === 'Bruna Verga Sá',
      'perfil que JÁ tinha o e-mail como nome se conserta sozinho quando o provedor devolve o nome (sem migração)');
 
-  // ── 6. Magic link / e-mail+senha NÃO foram tocados ─────────────────────────
+  // ── 6. E-mail e senha NÃO foram tocados ───────────────────────────────────
   // Ali o endereço É o identificador que a pessoa digitou e reconhece.
   const magico = await entrar({
     fbUser: { uid: 'U_MAIL', email: 'alguem@gmail.com', displayName: null, emailVerified: true,

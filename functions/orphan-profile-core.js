@@ -68,7 +68,7 @@ function montarSemente(conta) {
   var pid = String((conta && conta.providerId) || '').toLowerCase();
   var email = emailReal(conta && conta.email);
   var nome = nomeUtil(conta && conta.displayName);
-  if (!nome && email && !isSocial(pid)) nome = email;   // e-mail/senha e magic link: o endereço é o identificador digitado
+  if (!nome && email && !isSocial(pid)) nome = email;   // e-mail e senha: o endereço é o identificador digitado
 
   var nasceu = new Date(conta && conta.creationTimeMs ? conta.creationTimeMs : Date.now()).toISOString();
   var semente = {

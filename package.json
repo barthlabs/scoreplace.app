@@ -4,7 +4,7 @@
   "private": true,
   "description": "scoreplace.app — SPA com migração progressiva de scripts clássicos para domínios tipados. Vite gera o artefato isolado do Hosting e do Capacitor.",
   "scripts": {
-    "test": "node scripts/check-rules-testadas.js && node scripts/check-ext-version.js && node scripts/check-vendor-fresh.js && node scripts/check-shell-version.js && node scripts/check-release-version-fresh.js && node scripts/check-cache-busters.js && node scripts/build-domain.js --check && node scripts/check-web-entry-contract.js && node scripts/check-casual-stats-core-fresh.js && node scripts/check-test-catalog.js && node scripts/check-magiclinks-get-only.js && node scripts/check-amizade-client-writes.js && node scripts/check-runbook-amizade.js && node tests/run-unit.js",
+    "test": "node scripts/check-rules-testadas.js && node scripts/check-ext-version.js && node scripts/check-vendor-fresh.js && node scripts/check-shell-version.js && node scripts/check-release-version-fresh.js && node scripts/check-cache-busters.js && node scripts/build-domain.js --check && node scripts/check-web-entry-contract.js && node scripts/check-casual-stats-core-fresh.js && node scripts/check-test-catalog.js && node scripts/check-email-verification-links.js && node scripts/check-amizade-client-writes.js && node scripts/check-runbook-amizade.js && node tests/run-unit.js",
     "test:unit": "node tests/run-unit.js",
     "apple:check-auto": "node scripts/asc.js checar-auto",
     "test:ext": "node tests/lz-extensao-real.test.js",
@@ -12,7 +12,7 @@
     "test:realtime": "node scripts/rodar-emulador.js --only firestore --config firebase.emulator.json --project demo-scoreplace \"node tests/realtime-dois-clientes-emulador.test.js\"",
     "test:purge": "node scripts/rodar-emulador.js --only firestore,functions --config firebase.purge.json --project demo-scoreplace \"node tests/purge/run.js\"",
     "test:amizade": "node scripts/rodar-emulador.js --only firestore,functions,auth --config firebase.amizade.json --project demo-scoreplace \"node tests/amizade/run.js\"",
-    "test:rules": "node tests/rules-privileged-fields.test.js && node tests/rules-sandbox-read.test.js && node tests/rules-sandbox-partes-intactas.test.js && node tests/rules-cohost-uid-only.test.js && node tests/rules-inscricao-espera.test.js && node tests/rules-amizade-nao-cross-user.test.js && node tests/rules-mail-server-only.test.js && node tests/rules-magiclinks-sem-enumeracao.test.js && node tests/rules-aviso-so-em-nome-proprio.test.js && node tests/rules-elenco-nao-se-apaga.test.js && node scripts/check-rules-testadas.js --carimbar",
+    "test:rules": "node tests/rules-privileged-fields.test.js && node tests/rules-sandbox-read.test.js && node tests/rules-sandbox-partes-intactas.test.js && node tests/rules-cohost-uid-only.test.js && node tests/rules-inscricao-espera.test.js && node tests/rules-amizade-nao-cross-user.test.js && node tests/rules-mail-server-only.test.js && node tests/rules-email-verification-links.test.js && node tests/rules-aviso-so-em-nome-proprio.test.js && node tests/rules-elenco-nao-se-apaga.test.js && node scripts/check-rules-testadas.js --carimbar",
     "test:rules:sandbox": "node tests/rules-sandbox-read.test.js",
     "test:sandbox": "node tests/sandbox-cf-emulador.test.js",
     "test:e2e": "playwright test",

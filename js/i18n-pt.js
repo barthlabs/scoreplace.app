@@ -1432,7 +1432,6 @@ window._translations['pt'] = {
   'auth.invalidEmail': 'E-mail Inválido',
   'auth.invalidEmailMsg': 'O formato do e-mail está incorreto.',
   'auth.notAvailable': 'Não Disponível',
-  'auth.emailLinkUnavailable': 'Login por link de e-mail não está habilitado. Tente outro método.',
   'auth.error': 'Erro',
   'auth.linkExpired': 'Link Expirado',
   'auth.linkExpiredMsg': 'Este link de acesso já foi usado ou expirou. Solicite um novo.',

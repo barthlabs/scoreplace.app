@@ -1594,7 +1594,7 @@ function renderDashboard(container) {
     var cu = window.AppStore && window.AppStore.currentUser;
     if (!cu || !cu.uid) return '';
     // v1.0.41-beta: aguarda profile load real do Firestore antes de avaliar
-    // completude. Bug reportado: ao logar via magic link, dashboard renderiza
+    // completude. Bug reportado: ao autenticar por e-mail, dashboard renderiza
     // antes do loadUserProfile terminar — currentUser tem só os campos do
     // Google login (uid, email, displayName, photoURL), e os campos extras
     // (gender, birthDate, city, preferredSports) chegam depois async.

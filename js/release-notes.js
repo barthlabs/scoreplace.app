@@ -1,3 +1,4 @@
+// 2.3.85 — acesso por e-mail exige senha ou recuperação de senha; a confirmação de e-mail continua disponível e não cria sessão.
 // 2.3.84 — melhor de 3 abre Set 1 e Set 2 juntos; STB só aparece em 1×1, o placar final resume sets e valores impossíveis recebem aviso antes de gravar.
 // 2.3.83 — card de jogo (chave, Novidades, Últimos Resultados, Próximo Jogo): "Melhor de 3 · 0 × 2" sobe para logo abaixo de "Jogo N" e a linha "Jogado em" / "Agendado" / "Jogar até" desce para o cabeçalho de sets
 // 2.3.82 — lista de espera na chave: o toque longo só levanta o arraste "ocupar vaga" quando existe vaga "Jogador NN" aberta; sem vaga, nada acontece (não é dupla nem co-organizador)
@@ -250,7 +251,7 @@ window._RELEASE_NOTES_HTML = (function () {
     // comportamento novo pra quem joga. A trava (check-release-notes) pega OMISSÃO e não sabe
     // julgar isso; a justificativa fica aqui, pro próximo leitor não achar que faltou.
     // ⚠️ 2.1.78 NÃO ganhou item, e é DECISÃO — mesma razão da 2.1.64 e da 1.8.27. Ela é
-    // 100% AUTORIZAÇÃO E FERRAMENTA: a regra de `magicLinks` trocou `allow read` (que em
+    // 100% AUTORIZAÇÃO E FERRAMENTA: a regra de confirmação trocou `allow read` (que em
     // Rules do Firestore é `get` + `list`) por `allow get` + `allow list: if false`,
     // fechando a ENUMERAÇÃO pública da coleção e preservando exatamente o que o produto
     // usa — o `get` por token, que é como o link do e-mail abre. Medido antes (L4.P2):

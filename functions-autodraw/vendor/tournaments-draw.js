@@ -2169,7 +2169,7 @@ window._buildPhase0Cfg = function (t) {
 // to FCM…") e a promise REJEITA sem a requisição sair: a CF nunca é tocada e o usuário vê
 // um erro de push no lugar do sorteio. Deslogado o SDK pula esse passo — por isso o teste
 // anônimo passava e o do organizador não.
-// Este projeto JÁ foi mordido por isso: v1.0.40 filtrou o ruído "Messaging:" no magic link
+// Este projeto JÁ foi mordido por isso: v1.0.40 filtrou o ruído "Messaging:" no login
 // e a v1.3.86 trocou httpsCallable por fetch() direto pelo MESMO motivo. Filtrar não basta
 // — a chamada nem sai. Aqui falamos o protocolo callable na mão: POST {data}, resposta
 // {result} ou {error:{status,message}}.

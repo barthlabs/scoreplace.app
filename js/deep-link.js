@@ -42,16 +42,16 @@
     if (host !== 'scoreplace.app' && host !== 'www.scoreplace.app') return;
 
     var hash = u.hash || '';       // ex.: #tournaments/ID?ref=UID  (rota + referrer)
-    var search = u.search || '';   // ex.: ?ml=TOKEN (link mágico) ou ?ref=UID (convite app)
+    var search = u.search || '';   // ex.: ?ref=UID (convite app)
 
-    // (1) Link mágico (?ml=TOKEN): o wrapper de auth.js lê ?ml= no boot e resolve o
-    // token → precisa recarregar a webview na URL COMPLETA pra esse handler rodar.
-    if (search && /[?&]ml=/.test(search)) {
-      try { window.location.replace(u.pathname + search + hash); } catch (e) {}
+    // Links de acesso antigos ainda precisam chegar ao handler de auth.js, que
+    // exibe uma orientação em vez de deixar a pessoa numa rota sem contexto.
+    if (new URLSearchParams(search).get('ml')) {
+      try { window.location.replace('/' + search); } catch (e) {}
       return;
     }
 
-    // (2) Caso comum — convite de torneio: rota por hash (#tournaments/ID[?ref=UID]).
+    // (1) Caso comum — convite de torneio: rota por hash (#tournaments/ID[?ref=UID]).
     // O router (router.js) lê o ?ref= tanto do hash quanto da query.
     if (hash) {
       if (window.location.hash !== hash) {
@@ -63,7 +63,7 @@
       return;
     }
 
-    // (3) Convite do app sem hash (…/?ref=UID): recarrega mantendo a query pro
+    // (2) Convite do app sem hash (…/?ref=UID): recarrega mantendo a query pro
     // router/auth consumir o referrer, caindo no dashboard.
     if (search) {
       try { window.location.replace('/' + search); } catch (e) {}

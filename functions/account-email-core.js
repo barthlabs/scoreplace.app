@@ -26,7 +26,6 @@ var NOMES_PROVEDOR = {
   'google.com': 'Google',
   'apple.com': 'Apple',
   'password': 'e-mail e senha',
-  'emailLink': 'link por e-mail',
   'phone': 'celular (SMS)',
   'facebook.com': 'Facebook'
 };

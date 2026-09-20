@@ -5,27 +5,23 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
 // ========================================
 // Project: scoreplace-app (Firebase Console)
 
-// v1.0.30-beta: Magic Link Wrapper Resolver — corre antes de qualquer outra
-// coisa pra interceptar URLs no formato /?ml=TOKEN. Bug reportado por múltiplos
-// beta testers: "entrou mas deu link expirado pelo magic link". Causa: email
-// scanners (Gmail, Outlook, corporate security) prefetcham os links pra
-// análise anti-phishing — Firebase oobCode é one-time-use, então quem chega
-// antes do usuário humano consume. Solução: o email aponta pra wrapper URL
-// nossa que SÓ executa o redirect via JS no browser real do humano. Scanners
-// fazem GET/HEAD e param antes do JS rodar, então não tocam no oobCode.
-// v1.2.4: o MESMO resolver atende ?vt=TOKEN (confirmação de conta). O e-mail de
-// confirmação mandava o oobCode CRU e caía no bug idêntico ao de cima — 7 pessoas em prod
-// travadas no gate porque o scanner queimava o link antes delas (Val pediu 3 confirmações,
-// Paulo 3 resets de senha achando que era a senha). Generalizado em vez de duplicado: o
-// fluxo é o mesmo (busca o token, redireciona o browser real), só muda a copy.
-// Ver [[project_orphan_uid_entries]] / [[project_email_deliverability_hotmail]].
-(function _handleMagicLinkWrapper() {
+// Redirecionamento da confirmação de e-mail. O token não autentica e não cria
+// sessão: ele apenas protege o código de verificação do prefetch por scanners
+// de e-mail. A autenticação continua exigindo senha, provedor vinculado ou SMS.
+(function _handleEmailVerificationRedirect() {
   try {
     var qs = (typeof URLSearchParams === 'function') ? new URLSearchParams(window.location.search) : null;
-    var token = qs && qs.get('ml');
-    var vToken = qs && qs.get('vt');
-    var isVerify = !token && !!vToken;
-    if (!token && vToken) token = vToken;
+    var legacyAccessToken = qs && qs.get('ml');
+    var token = qs && qs.get('vt');
+    if (legacyAccessToken) {
+      document.body.innerHTML = '<div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#0f172a;color:#fff;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;flex-direction:column;gap:14px;padding:24px;text-align:center;">' +
+        '<div style="font-size:2.4rem;line-height:1;">🔐</div>' +
+        '<div style="font-size:1.05rem;font-weight:700;color:#fbbf24;">Este acesso por link não está mais disponível</div>' +
+        '<div style="font-size:0.85rem;color:#94a3b8;max-width:340px;line-height:1.5;">Entre com seu e-mail e senha ou redefina sua senha para continuar.</div>' +
+        '<a href="/" style="margin-top:8px;color:#fbbf24;font-size:0.85rem;text-decoration:none;border:1px solid #fbbf24;padding:8px 18px;border-radius:8px;">Ir para entrar</a>' +
+        '</div>';
+      return;
+    }
     if (!token) return;
 
     // Loading screen — usuário sabe que tá entrando, não acha que travou.
@@ -40,9 +36,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         (isError ? '<a href="/" style="margin-top:8px;color:' + window._spCor(fg, 'color') + ';font-size:0.85rem;text-decoration:none;border:1px solid ' + window._spCor(fg, 'borda') + ';padding:8px 18px;border-radius:8px;">Voltar e pedir novo link</a>' : '') +
         '</div>';
     };
-    showStatus('🎾',
-      isVerify ? 'Confirmando seu e-mail...' : 'Entrando no scoreplace.app...',
-      isVerify ? 'Ativando sua conta no scoreplace.app' : 'Carregando seu acesso seguro');
+    showStatus('🎾', 'Confirmando seu e-mail...', 'Ativando sua conta no scoreplace.app');
 
     // Aguarda Firestore estar pronto (firebase-db.js carrega antes deste).
     var tries = 0;
@@ -50,44 +44,33 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       var db = window.FirestoreDB && window.FirestoreDB.db;
       if (!db) {
         if (tries++ < 60) return setTimeout(resolve, 100); // até 6s
-        showStatus('⚠️', 'Não foi possível carregar', 'Verifique sua conexão e tente abrir o link de novo, ou peça um novo link.', true);
+        showStatus('⚠️', 'Não foi possível carregar', 'Verifique sua conexão e tente abrir a confirmação de novo.', true);
         return;
       }
-      db.collection('magicLinks').doc(token).get().then(function(doc) {
+      db.collection('emailVerificationLinks').doc(token).get().then(function(doc) {
         if (!doc.exists) {
-          showStatus('🔗', 'Link inválido ou expirado',
-            isVerify
-              ? 'Esse link de confirmação não existe mais. Entre com seu e-mail e senha — a tela de confirmação tem um botão pra reenviar.'
-              : 'Esse link não existe mais. Volte e peça um novo no campo de login.', true);
+          showStatus('🔗', 'Confirmação inválida ou expirada',
+            'Esse link de confirmação não existe mais. Entre com seu e-mail e senha e peça outro na tela de confirmação.', true);
           return;
         }
         var data = doc.data() || {};
         if (!data.firebaseLink) {
-          showStatus('🔗', 'Link inválido', 'Esse link está corrompido. Peça um novo.', true);
+          showStatus('🔗', 'Confirmação inválida', 'Esse link está corrompido. Peça uma nova confirmação.', true);
           return;
         }
-        // Salva email no localStorage pra signInWithEmailLink completar
-        // sem perguntar. Cross-device também: o Firebase auth handler
-        // anexa ?eml=email ao continueUrl (já no actionCodeSettings).
-        // v1.2.4: só no LOGIN — o link de confirmação (?vt=) não faz signIn,
-        // então gravar isto ali só deixaria lixo no localStorage.
-        if (data.email && !isVerify) {
-          try { window.localStorage.setItem('scoreplace_emailForSignIn', data.email); } catch(_){}
-        }
-        // Redireciona o BROWSER pro firebaseLink real — só agora o oobCode
-        // será efetivamente consumido. Scanners não chegam aqui.
+        // Só agora o código oficial é aberto pelo navegador da pessoa.
         window.location.replace(data.firebaseLink);
       }).catch(function(err) {
-        window._error('[magicLink] erro ao buscar token:', err);
+        window._error('[emailVerificationRedirect] erro ao buscar token:', err);
         if (typeof window._captureException === 'function') {
-          window._captureException(err, { area: 'magicLinkWrapper', token: token.substring(0, 6) + '...' });
+          window._captureException(err, { area: 'emailVerificationRedirect', token: token.substring(0, 6) + '...' });
         }
-        showStatus('⚠️', 'Erro ao validar o link', 'Tente abrir de novo. Se persistir, peça um novo link.', true);
+        showStatus('⚠️', 'Erro ao validar a confirmação', 'Tente abrir de novo. Se persistir, peça outra confirmação.', true);
       });
     };
     resolve();
   } catch (e) {
-    window._error('[magicLink] handler crashed:', e);
+    window._error('[emailVerificationRedirect] handler crashed:', e);
   }
 })();
 
@@ -155,9 +138,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   } catch(e) {}
 })();
 
-// v1.2.9: o handler do magic link por WhatsApp (?wt=) saiu junto com a Cloud
-// Function sendWhatsAppMagicLink. Número banido, apelação negada, portfólio Meta
-// morto — nenhum link desses é gerado desde então. Login por celular = SMS.
+// v1.2.9: o handler de acesso por WhatsApp (?wt=) saiu junto com a Cloud
+// Function correspondente. Número banido, apelação negada, portfólio Meta
+// morto — nenhum acesso desses é gerado desde então. Login por celular = SMS.
 // Ver project_whatsapp_meta_2fa_block.
 
 /* ⛔⛔ SEPARAR AS CONTAS DE NOVO — o link `?desfazer=` do e-mail de confirmação.
@@ -857,7 +840,7 @@ if (typeof firebase !== 'undefined' && firebase.auth) {
       // Cache login state for instant restore on next page load
       try {
         // v2.1.94: guarda authProvider para o banner "Bem-vindo de volta"
-        // mostrar o botão correto (Google, senha ou telefone) sem magic link.
+        // mostrar o botão correto (Google, senha ou telefone).
         var _cachedProvider = (user.providerData && user.providerData[0] && user.providerData[0].providerId) || '';
         var _existingCache = JSON.parse(localStorage.getItem('scoreplace_authCache') || '{}');
         localStorage.setItem('scoreplace_authCache', JSON.stringify({
@@ -1701,7 +1684,7 @@ window._providerDisplayName = function (user) {
 };
 
 // E-MAIL NÃO É NOME quando a pessoa não escolheu entrar por ele.
-// Em conta de e-mail/senha ou magic link o endereço É o identificador que ela
+// Em conta de e-mail e senha o endereço É o identificador que ela
 // digitou e reconhece — ali continua valendo. Já num login social ela nunca
 // pediu pra publicar o endereço: no melhor caso o organizador vê um e-mail em
 // vez de um nome; no caso da Apple com e-mail oculto vê "7hsc6fn77d@
@@ -1735,7 +1718,7 @@ window._seedProfileFromAuth = function (user) {
   if (user && user.photoURL) seed.photoURL = user.photoURL;
   var nome = window._providerDisplayName(user);
   if (!nome && email && !window._isSocialProvider(pid)) {
-    // e-mail/senha e magic link: o endereço É o identificador que a pessoa
+    // e-mail e senha: o endereço É o identificador que a pessoa
     // digitou e reconhece. Login social não — ver _isSocialProvider.
     nome = email;
   }
@@ -1870,12 +1853,9 @@ window._verifiedCurrentUser = function() {
   });
 };
 
-// ─── Unified Login Input (email magic link OR SMS) ──────────────────────────
-// v1.0.22-beta: feedback do user — ter dois campos (Link Mágico e SMS) com
-// dois "Enviar" estava confundindo. Botão verde do SMS parecia mais
-// destacado que o transparente do magic link, induzindo escolha errada.
-// Agora um único campo detecta automaticamente:
-//   - input contém '@' → email magic link (Cloud Function sendMagicLink)
+// ─── Unified Login Input (email OR SMS) ─────────────────────────────────────
+// Um único campo detecta automaticamente:
+//   - input contém '@' → e-mail
 //   - 8-15 dígitos → SMS (handlePhoneLogin com DDI do dropdown que aparece)
 //   - ambíguo → erro com instrução clara
 // Notação SMS comunicada de forma explícita via placeholder + helper text
@@ -2518,241 +2498,7 @@ window._entrarPhonePasswordLogin = function(identifier, pw) {
 };
 
 // ─── Email Link (Passwordless) Login ────────────────────────────────────────
-function handleEmailLinkLogin() {
-  var emailEl = document.getElementById('login-email-link');
-  var email = emailEl ? emailEl.value.trim() : '';
-  if (!email) {
-    showNotification(_t('auth.enterEmail'), _t('auth.enterEmailMsg'), 'warning');
-    if (emailEl) emailEl.focus();
-    return;
-  }
-
-  // v1.0.20-beta: troca firebase.auth().sendSignInLinkToEmail() (envia email
-  // feio via firebaseapp.com sem botão estilizado, parando no spam) por
-  // Cloud Function `sendMagicLink` que gera o link via Admin SDK e enfileira
-  // email rico HTML com botão grande na collection `mail/` (extension
-  // firestore-send-email envia). Mesmo padrão dos emails de notificação que
-  // já têm boa renderização.
-  showNotification(_t('auth.sending'), _t('auth.sendingLinkMsg', {email: email}), 'info');
-  var sendMagicLinkFn = firebase.functions().httpsCallable('sendMagicLink');
-  sendMagicLinkFn({ email: email })
-    .then(function() {
-      // Save the email locally so we can complete sign-in when user clicks the link
-      window.localStorage.setItem('scoreplace_emailForSignIn', email);
-      // v1.0.14-beta: substituir o conteúdo do modal-login por um painel
-      // persistente "verifique seu e-mail" em vez de toast efêmero. Bug
-      // reportado: usuária recebeu link mas foi pra spam, e a toast com a
-      // dica "(e spam)" sumiu rápido demais. Painel persistente fica visível
-      // até o usuário fechar manualmente, com info do remetente pra
-      // whitelistear pra próximas vezes.
-      var modalBody = document.querySelector('#modal-login .modal-body');
-      var safeEmail = (window._safeHtml || function(s){return s;})(email);
-      if (modalBody) {
-        modalBody.innerHTML =
-          '<div style="text-align:center;padding:1rem 0;">' +
-            '<div style="font-size:3rem;margin-bottom:0.5rem;">📬</div>' +
-            '<div style="font-size:1.05rem;font-weight:800;color:var(--text-bright);margin-bottom:0.5rem;">Link enviado!</div>' +
-            '<p style="font-size:0.88rem;color:var(--text-color);margin:0 0 1rem 0;">Enviamos um link de acesso pra <b>' + safeEmail + '</b>. Clique no link do e-mail pra entrar.</p>' +
-            '<div style="background:rgba(245,158,11,0.10);border:1px solid rgba(245,158,11,0.35);border-radius:10px;padding:10px 12px;margin-bottom:0.75rem;text-align:left;">' +
-              '<div style="font-size:0.8rem;font-weight:700;color:var(--sp-c-fbbf24,#fbbf24);margin-bottom:4px;">⚠️ Não chegou? Cheque o spam.</div>' +
-              '<div style="font-size:0.76rem;color:var(--text-muted);line-height:1.45;">' +
-                'Primeira vez geralmente cai lá. O remetente é <code style="background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));padding:1px 4px;border-radius:3px;font-size:0.72rem;">scoreplace.app@gmail.com</code>. ' +
-                'Adicione aos contatos pra próximas vezes não cair no spam.' +
-              '</div>' +
-            '</div>' +
-            '<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">' +
-              '<button class="btn btn-outline btn-sm" onclick="document.getElementById(\'modal-login\').classList.remove(\'active\')" style="font-size:0.82rem;">Fechar</button>' +
-              '<button class="btn btn-primary btn-sm" id="resend-magic-btn" onclick="window._resendMagicLink && window._resendMagicLink()" style="font-size:0.82rem;">Reenviar</button>' +
-            '</div>' +
-          '</div>';
-        // v1.3.82-beta: botão Reenviar chama a função de envio real em vez de
-        // recarregar a página (que não reenviar nada, só ia pro router).
-        window._resendMagicLink = function() {
-          var btn = document.getElementById('resend-magic-btn');
-          if (btn) { btn.disabled = true; btn.textContent = 'Enviando…'; }
-          var sendMagicLinkFnR = firebase.functions().httpsCallable('sendMagicLink');
-          sendMagicLinkFnR({ email: email })
-            .then(function() {
-              if (btn) { btn.disabled = false; btn.textContent = 'Enviado ✓'; }
-              showNotification('📬', 'Novo link enviado pra ' + email, 'success');
-            })
-            .catch(function() {
-              if (btn) { btn.disabled = false; btn.textContent = 'Reenviar'; }
-              showNotification('⚠️', 'Não foi possível reenviar. Tente de novo.', 'error');
-            });
-        };
-      } else {
-        // Fallback se modal não existe — toast normal.
-        showNotification(_t('auth.linkSent'), _t('auth.linkSentMsg', {email: email}), 'success');
-      }
-    })
-    .catch(function(error) {
-      window._error('Email link send error:', error);
-      // v1.0.40-beta: filtra erros do Firebase Messaging que vazam pra cá.
-      // Bug reportado via screenshot: usuário clicou Enviar e viu "Erro:
-      // Messaging: We are unable to register the default service worker..."
-      // Isso é o FCM tentando registrar /firebase-messaging-sw.js (path
-      // default que não existe — usamos /sw.js). Erro irrelevante pro fluxo
-      // de magic link, mas estava sendo surfaced confundindo o usuário.
-      var msg = error && error.message;
-      var code = error && error.code;
-      var isMessagingNoise = (typeof msg === 'string' && msg.indexOf('Messaging:') === 0)
-                          || (typeof code === 'string' && code.indexOf('messaging/') === 0);
-      if (isMessagingNoise) {
-        window._warn('[handleEmailLinkLogin] Ignoring FCM messaging noise:', msg || code);
-        // Tenta novamente — provavelmente o magic link ENVIOU OK mas o erro
-        // de FCM veio depois. Só não conseguimos confirmar; mostra panel
-        // otimista pro usuário.
-        var modalBody2 = document.querySelector('#modal-login .modal-body');
-        var safeEmail2 = (window._safeHtml || function(s){return s;})(email);
-        if (modalBody2) {
-          modalBody2.innerHTML =
-            '<div style="text-align:center;padding:1rem 0;">' +
-              '<div style="font-size:3rem;margin-bottom:0.5rem;">📬</div>' +
-              '<div style="font-size:1.05rem;font-weight:800;color:var(--text-bright);margin-bottom:0.5rem;">Confira seu e-mail</div>' +
-              '<p style="font-size:0.88rem;color:var(--text-color);margin:0 0 1rem 0;">Se o link foi enviado pra <b>' + safeEmail2 + '</b>, deve chegar em até 1 minuto. Cheque inbox e spam.</p>' +
-              '<div style="display:flex;gap:8px;justify-content:center;">' +
-                '<button class="btn btn-outline btn-sm" onclick="document.getElementById(\'modal-login\').classList.remove(\'active\')" style="font-size:0.82rem;">Fechar</button>' +
-                '<button class="btn btn-primary btn-sm" onclick="window.location.reload()" style="font-size:0.82rem;">Tentar novamente</button>' +
-              '</div>' +
-            '</div>';
-        }
-        return;
-      }
-      if (error.code === 'auth/invalid-email') {
-        showNotification(_t('auth.invalidEmail'), _t('auth.invalidEmailMsg'), 'error');
-      } else if (error.code === 'auth/operation-not-allowed') {
-        showNotification(_t('auth.notAvailable'), _t('auth.emailLinkUnavailable'), 'warning');
-      } else {
-        showNotification(_t('auth.error'), error.message || _t('auth.loginErrorMsg'), 'error');
-      }
-    });
-}
-
-// Complete email link sign-in when user arrives via the link
-function _completeEmailLinkSignIn() {
-  if (!firebase.auth().isSignInWithEmailLink(window.location.href)) return;
-
-  var email = window.localStorage.getItem('scoreplace_emailForSignIn');
-  // v1.0.17-beta: fallback chain pro email, em ordem de confiança:
-  //   1. localStorage (mesmo browser que pediu o link) — preferred
-  //   2. URL param `?eml=` (incluído pelo handleEmailLinkLogin v1.0.17)
-  //      pra cobrir cross-device (clicou no link no celular, pediu no
-  //      desktop)
-  //   3. window.prompt() — último recurso, só pra users muito antigos
-  //      (links pré-v1.0.17 não têm `eml` no URL).
-  if (!email) {
-    try {
-      var urlSearch = window.location.search || '';
-      var emlMatch = urlSearch.match(/[?&]eml=([^&]+)/);
-      if (emlMatch) email = decodeURIComponent(emlMatch[1]);
-    } catch (e) {}
-  }
-  if (!email) {
-    email = window.prompt('Por favor, confirme seu e-mail para completar o login:');
-    if (!email) return;
-  }
-
-  firebase.auth().signInWithEmailLink(email, window.location.href)
-    .then(async function(result) {
-      // Clear stored email
-      window.localStorage.removeItem('scoreplace_emailForSignIn');
-      var user = result.user;
-      // Save auth provider to Firestore.
-      // v1.0.43-beta: cross-reference por email (mesma lógica que phone) —
-      // se já existe outro doc users com este email, herda displayName,
-      // photoURL, phone, phoneCountry e acceptedTerms. Pra emails idênticos
-      // o Firebase Auth normalmente já retorna o mesmo uid (setting "One
-      // account per email" default), mas em edge cases (migração, conta
-      // criada por bug) podem existir 2 docs distintos.
-      if (window.FirestoreDB && window.FirestoreDB.db && user.uid) {
-        var profileData = { authProvider: 'emailLink', updatedAt: new Date().toISOString() };
-        if (window._realEmailOrEmpty(user.email)) profileData.email = user.email;
-        try {
-          if (user.email) {
-            // O token prova que este e-mail é da conta corrente. A busca por outra
-            // conta e a travessia de lápide ficam no servidor; o navegador recebe só
-            // os campos necessários para compor o bootstrap e agendar a fusão.
-            var candidates = await window.FirestoreDB.carregarCandidatasDeFusaoDaConta();
-            var matches = candidates.map(function(c) { return c.profile || {}; });
-            var matchIds = candidates.map(function(c) { return c.uid; });
-            if (matches.length > 0) {
-              var best = matches.find(function(m) {
-                return m.displayName && !/^\+?\d{6,}$/.test(String(m.displayName).trim());
-              }) || matches[0];
-              if (best.displayName && !user.displayName) {
-                profileData.displayName = best.displayName;
-                try { await user.updateProfile({ displayName: best.displayName }); } catch(_e) {}
-              }
-              if (best.photoURL && !user.photoURL) {
-                profileData.photoURL = best.photoURL;
-                try { await user.updateProfile({ photoURL: best.photoURL }); } catch(_e) {}
-              }
-              if (best.phone) profileData.phone = best.phone;
-              if (best.phoneCountry) profileData.phoneCountry = best.phoneCountry;
-              if (best.acceptedTerms === true) {
-                profileData.acceptedTerms = true;
-                if (best.acceptedTermsAt) profileData.acceptedTermsAt = best.acceptedTermsAt;
-                if (best.acceptedTermsVersion) profileData.acceptedTermsVersion = best.acceptedTermsVersion;
-              }
-              // v1.0.49-beta: stash cross-ref data pra simulateLoginSuccess mergear
-              // antes do terms gate (evita race com Firestore save assíncrono).
-              window._pendingCrossRef = Object.assign({}, profileData, { uid: user.uid });
-              // v1.7.9-beta: email magic link = ownership verificado → agendar merge automático
-              var _bestMatchIdx = matches.indexOf(best);
-              var _bestMatchId = matchIds[_bestMatchIdx >= 0 ? _bestMatchIdx : 0];
-              if (_bestMatchId) {   // já é conta VIVA — _userVivo resolveu lápide acima
-                window._pendingCrossRefOldUid = _bestMatchId;
-              }
-              window._log('[email-link] cross-ref por email encontrado, herdando:',
-                Object.keys(profileData).filter(function(k){ return k !== 'authProvider' && k !== 'updatedAt' && k !== 'email'; }));
-            }
-          }
-        } catch (e) {
-          window._warn('[email-link] cross-ref por email falhou:', e);
-        }
-        // Fallback: se não temos displayName herdado nem do Firebase, usa
-        // o email completo como nome inicial (mais identificável que o local-part).
-        // O usuário pode trocar no perfil a qualquer momento.
-        if (!profileData.displayName && !user.displayName && email) {
-          profileData.displayName = email;
-        }
-        // Fix retroativo: se o Firebase Auth tem um nome genérico ("Usuário" etc),
-        // substituir pelo email enquanto a pessoa não preenche o perfil.
-        if (profileData.displayName && typeof window._isUnfriendlyName === 'function' &&
-            window._isUnfriendlyName(profileData.displayName) && email) {
-          profileData.displayName = email;
-        }
-        window.FirestoreDB.saveUserProfile(user.uid, profileData).catch(function() {});
-      }
-      showNotification(_t('auth.loginDone'), user.displayName ? _t('auth.welcomeName', {greeting: window._welcomeWord(user), name: user.displayName}) : _t('auth.welcome', {greeting: window._welcomeWord(user)}), 'success');
-      // v1.8.65: verificar se este login é resultado de um pedido de vinculação de email
-      // v1.8.74: sugerir criação de senha após login via magic link
-      if (user.email) {
-        setTimeout(function() {
-          if (typeof window._suggestCreatePassword === 'function') window._suggestCreatePassword(user.email);
-        }, 2500);
-      }
-      // Clean the URL (remove sign-in link parameters)
-      if (window.history && window.history.replaceState) {
-        window.history.replaceState(null, '', window.location.pathname + '#dashboard');
-      }
-    })
-    .catch(function(error) {
-      window._error('Email link sign-in error:', error);
-      window.localStorage.removeItem('scoreplace_emailForSignIn');
-      if (error.code === 'auth/invalid-action-code') {
-        showNotification(_t('auth.linkExpired'), _t('auth.linkExpiredMsg'), 'error');
-      } else if (error.code === 'auth/invalid-email') {
-        showNotification(_t('auth.emailMismatch'), _t('auth.emailMismatchMsg'), 'error');
-      } else {
-        showNotification(_t('auth.loginError'), error.message || _t('auth.loginErrorMsg'), 'error');
-      }
-    });
-}
-
-// Run email link check on page load
-try { _completeEmailLinkSignIn(); } catch(e) { window._warn('Email link check error:', e); }
+// Login por link sem senha foi removido. O acesso por e-mail exige senha ou recuperação de senha.
 
 // ─── Phone/SMS Login ────────────────────────────────────────────────────────
 window._phoneConfirmationResult = null;
@@ -3081,17 +2827,6 @@ function _maybeSuggestGoogleLogin(email, fallbackFn) {
       var isGoogle = methods.indexOf('google.com') !== -1;
       if (isGoogle && !hasPassword) {
         _showGoogleSuggestDialog();
-      } else if (!hasPassword && methods.indexOf('emailLink') !== -1) {
-        // Conta só com link mágico (sem senha) → orienta a criar uma senha.
-        if (typeof showConfirmDialog === 'function') {
-          showConfirmDialog(
-            'Defina sua senha',
-            'Essa conta ainda não tem senha — você entrava por link de e-mail. Clique abaixo para criar uma senha agora.',
-            function() { if (typeof handlePasswordReset === 'function') handlePasswordReset(); },
-            null,
-            { confirmText: '🔑 Criar senha', cancelText: 'Fechar', type: 'info' }
-          );
-        } else { fallbackFn(); }
       } else if (methods.length === 0 && isGmail) {
         // Proteção contra enumeração de e-mail pode esconder os métodos.
         // Como é @gmail, sugere Google (atende o pedido do usuário).
@@ -3268,101 +3003,7 @@ function handleEmailRegister() {
     });
 }
 
-// ─── Criar senha após magic link ─────────────────────────────────────────────
-// Aparece uma vez após login via link mágico para contas sem senha.
-// Permite que o browser salve email+senha para logins futuros com Face ID / Touch ID.
-window._suggestCreatePassword = function(email) {
-  if (!email) return;
-  // Só mostrar uma vez por sessão
-  try { if (sessionStorage.getItem('_passwordSuggested')) return; } catch(e) {}
-  // Verificar se já tem provider 'password'
-  var fbUser = typeof firebase !== 'undefined' && firebase.auth && firebase.auth().currentUser;
-  if (!fbUser) return;
-  var hasPassword = (fbUser.providerData || []).some(function(p) { return p.providerId === 'password'; });
-  if (hasPassword) return;
-  try { sessionStorage.setItem('_passwordSuggested', '1'); } catch(e) {}
-
-  // Mostrar overlay
-  var old = document.getElementById('create-password-overlay');
-  if (old) old.remove();
-  var overlay = document.createElement('div');
-  overlay.id = 'create-password-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);z-index:20000;display:flex;align-items:center;justify-content:center;padding:20px;';
-  overlay.innerHTML =
-    '<div style="background:var(--bg-card,#1e293b);border-radius:16px;padding:24px;max-width:380px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.5);">' +
-      '<div style="font-size:1.4rem;text-align:center;margin-bottom:6px;">🔑</div>' +
-      '<h3 style="margin:0 0 6px;text-align:center;color:var(--text-bright,#f1f5f9);font-size:1rem;">Entre mais fácil na próxima vez</h3>' +
-      '<p style="font-size:0.8rem;color:var(--text-muted,#94a3b8);text-align:center;margin:0 0 16px;">Crie uma senha para entrar com Face ID ou Touch ID — sem precisar de link no e-mail.</p>' +
-      // Form real para o browser detectar e oferecer "Salvar senha"
-      '<form id="create-password-form" autocomplete="on" onsubmit="event.preventDefault();window._doCreatePassword()">' +
-        '<input type="email" name="email" autocomplete="username" value="' + email.replace(/"/g,'') + '" readonly style="display:none;">' +
-        '<div style="position:relative;margin-bottom:10px;">' +
-          '<input type="password" id="cp-password" name="password" autocomplete="new-password" placeholder="Nova senha (mín. 6 caracteres)" class="form-control" style="font-size:0.9rem;padding-right:44px;" minlength="6" required>' +
-          window._pwdEyeBtn('cp-password') +
-        '</div>' +
-        '<div style="position:relative;margin-bottom:16px;">' +
-          '<input type="password" id="cp-confirm" name="password-confirm" autocomplete="new-password" placeholder="Confirmar senha" class="form-control" style="font-size:0.9rem;padding-right:44px;" minlength="6" required>' +
-          window._pwdEyeBtn('cp-confirm') +
-        '</div>' +
-        '<div id="cp-error" style="font-size:0.78rem;color:var(--sp-c-f87171,#f87171);margin-bottom:10px;display:none;"></div>' +
-        '<button type="submit" id="cp-submit" class="btn btn-primary" style="width:100%;font-size:0.9rem;padding:10px;">Criar senha</button>' +
-      '</form>' +
-      '<div style="text-align:center;margin-top:12px;">' +
-        '<button onclick="document.getElementById(\'create-password-overlay\').remove()" style="background:none;border:none;color:var(--text-muted,#94a3b8);cursor:pointer;font-size:0.8rem;">Agora não</button>' +
-      '</div>' +
-    '</div>';
-  document.body.appendChild(overlay);
-  setTimeout(function() { var el = document.getElementById('cp-password'); if (el) el.focus(); }, 100);
-};
-
-window._doCreatePassword = function() {
-  var pwd = (document.getElementById('cp-password') || {}).value || '';
-  var confirm = (document.getElementById('cp-confirm') || {}).value || '';
-  var errEl = document.getElementById('cp-error');
-  var btn = document.getElementById('cp-submit');
-  var showErr = function(msg) { if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; } };
-
-  if (pwd.length < 6) { showErr('A senha precisa ter pelo menos 6 caracteres.'); return; }
-  if (pwd !== confirm) { showErr('As senhas não coincidem.'); return; }
-  if (errEl) errEl.style.display = 'none';
-  if (btn) { btn.disabled = true; btn.textContent = 'Salvando...'; }
-
-  var fbUser = typeof firebase !== 'undefined' && firebase.auth && firebase.auth().currentUser;
-  if (!fbUser) { showErr('Sessão expirada. Faça login novamente.'); if (btn) { btn.disabled = false; btn.textContent = 'Criar senha'; } return; }
-
-  fbUser.updatePassword(pwd)
-    .then(function() {
-      // Submeter o form para o browser detectar e oferecer "Salvar senha"
-      var form = document.getElementById('create-password-form');
-      if (form) {
-        // Preencher campos visíveis para o browser capturar
-        var pwdInp = document.getElementById('cp-password');
-        // Disparar evento de submit nativo para acionar o gerenciador de senhas do browser
-        var submitEvent = new Event('submit', { bubbles: true, cancelable: true });
-        // Não prevenir o default desta vez — browser precisa ver o submit
-      }
-      if (typeof showNotification !== 'undefined') {
-        showNotification('✅ Senha criada!', 'Salve no seu browser para entrar com Face ID nas próximas vezes.', 'success');
-      }
-      document.getElementById('create-password-overlay').remove();
-      // Atualizar authProvider no Firestore
-      var cu = window.AppStore && window.AppStore.currentUser;
-      if (cu && cu.uid && window.FirestoreDB && window.FirestoreDB.db) {
-        window.FirestoreDB.db.collection('users').doc(cu.uid).update({
-          authProvider: 'emailLink+password',
-          updatedAt: new Date().toISOString()
-        }).catch(window._falhouCalado('perfil-update'));
-      }
-    })
-    .catch(function(err) {
-      if (btn) { btn.disabled = false; btn.textContent = 'Criar senha'; }
-      var msg = 'Erro ao criar senha.';
-      if (err.code === 'auth/requires-recent-login') msg = 'Sessão muito antiga. Faça login de novo e tente novamente.';
-      else if (err.code === 'auth/weak-password') msg = 'Senha muito fraca. Use pelo menos 6 caracteres.';
-      showErr(msg);
-    });
-};
-
+// O acesso por e-mail exige senha; recuperação de senha é tratada abaixo.
 // ─── Password Reset ──────────────────────────────────────────────────────────
 // v1.8.69: abre painel inline no modal de login com campo de email pré-preenchido.
 function handlePasswordReset() {
@@ -3503,7 +3144,7 @@ function _sendPasswordResetEmail(email) {
 
   // v2.1.78: envia o reset pelo NOSSO SMTP (Cloud Function sendPasswordReset),
   // que NÃO cai no spam como o remetente default do Firebase. Cobre também
-  // ex-usuários do magic link (provider 'password' sem senha setada). Se a
+  // contas antigas sem senha definida. Se a
   // function falhar/indisponível, cai no envio nativo do Firebase.
   var _name = '';
   try { var _cu = window.AppStore && window.AppStore.currentUser; _name = (_cu && _cu.displayName) || ''; } catch (e) {}
@@ -4718,7 +4359,7 @@ async function simulateLoginSuccess(user) {
     try {
       var _notifyPatch = {};
       var _ep = existingProfile || {};
-      // notifyEmail = true para contas com e-mail (emailLink, Google, password)
+      // notifyEmail = true para contas com e-mail (Google ou senha)
       if (typeof _ep.notifyEmail === 'undefined' && user.email) {
         _notifyPatch.notifyEmail = true;
       }
@@ -4846,7 +4487,7 @@ async function simulateLoginSuccess(user) {
         // O provedor tem um nome de verdade (Google, Apple no 1º consentimento)
         _betterDN = _liveDN;
       } else if (_profEmail && !window._isSocialProvider(_pidLogin)) {
-        // E-mail/senha e magic link: o endereço É o identificador que a pessoa
+        // E-mail e senha: o endereço É o identificador que a pessoa
         // digitou e reconhece. LOGIN SOCIAL NÃO — ela nunca pediu pra publicar o
         // endereço, e com o e-mail oculto da Apple ele não identifica ninguém.
         // Sem nome aqui, o app PERGUNTA (_askMissingName) em vez de inventar.
@@ -5984,7 +5625,7 @@ window._applyLastLoginBadge = function () {
         b.style.cssText = 'margin-left:8px;font-size:0.64rem;font-weight:800;padding:2px 7px;border-radius:999px;background:#10b981;color:#fff;vertical-align:middle;white-space:nowrap;';
         btn.appendChild(b);
       }
-    } else if (hint && (m === 'password' || m === 'emailLink' || m === 'phone')) {
+    } else if (hint && (m === 'password' || m === 'phone')) {
       hint.innerHTML = '✓ Da última vez você entrou com <b>' + (m === 'phone' ? 'celular' : 'e-mail e senha') + '</b> — use o mesmo caminho abaixo.';
     }
   } catch (e) {}
@@ -6002,7 +5643,7 @@ window._decorateLoginModal = function () {
 // v1.8.70: retorno rápido — quando sessão Firebase expirou mas temos cache do usuário,
 // v2.1.94: banner "Bem-vindo de volta" mostra o botão de login correto
 // para o provider usado da última vez (Google, senha ou telefone).
-// Magic link removido — o app não usa mais esse fluxo para retorno.
+// Acesso sem senha por e-mail foi removido; este módulo não trata retornos dele.
 window._showQuickReturnBanner = function() {
   try {
     var cached = JSON.parse(localStorage.getItem('scoreplace_authCache') || '{}');
@@ -6191,18 +5832,8 @@ function setupLoginModal() {
 
           // --- 1. Entrar com 1 clique (email mágico OU SMS — campo único) ---
           // v1.0.22-beta: feedback do user — ter 2 campos (Link Mágico e SMS)
-          // com 2 botões "Enviar" estava confundindo. Botão verde do SMS
-          // parecia mais destacado que o transparente do magic link, induzindo
-          // escolha errada. Agora um único input detecta automaticamente:
-          //   - tem '@' → email magic link
-          //   - 8-15 dígitos → SMS
-          //   - ambíguo → erro
-          // O DDI dropdown só aparece quando phone detectado. Hidden inputs
-          // delegam pros handlers existentes (handleEmailLinkLogin /
-          // handlePhoneLogin) sem duplicar lógica.
-          // v1.9.73: link mágico + SMS REMOVIDOS do login. Login agora é só
-          // e-mail+senha ou Google. Bloco mantido oculto (display:none) por
-          // segurança — sua lógica não é mais acionada por nenhuma UI visível.
+          // O formulário atual aceita e-mail ou celular; senha é exigida para
+          // e-mail, e celular segue a confirmação por SMS.
           // v2.4.98-beta: cadastro/login SÓ COM CELULAR (sem e-mail) — pra quem
           // usa UOL/Hotmail e não recebe e-mail de forma confiável. Reusa o motor
           // handlePhoneLogin (SMS Firebase + link WhatsApp em paralelo). Este
@@ -6275,7 +5906,6 @@ function setupLoginModal() {
             '</div>' +
           '</div>' +
           '<div id="recaptcha-container" style="display:none;"></div>' +
-          '<div id="login-panel-emaillink" style="display:none;"></div>' +
           '<div id="login-panel-phone" style="display:none;"></div>' +
 
           // --- Bloco antigo "E-mail e Senha" removido (v2.5.x) ---

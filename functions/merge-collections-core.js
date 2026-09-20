@@ -47,7 +47,6 @@ const SWEEP_EXCLUDED_COLLECTIONS = {
   loginRedirects: 'chave é o e-mail/telefone; escrita por _recordLoginRedirects',
   mergeTokens: 'prova de posse, efêmera e de uso único',
   mergeProofLimits: 'rate limit por caller, efêmero',
-  magicLinks: 'token de login, efêmero',
   // Filas de saída: o que está nelas já foi endereçado e some em minutos
   mail: 'fila de e-mail (extension firestore-send-email)',
   notif_email_queue: 'fila de digest de e-mail',

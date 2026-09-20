@@ -1,0 +1,12 @@
+'use strict';
+const assert = require('assert/strict');
+const fs = require('fs');
+const path = require('path');
+const F = fs.readFileSync(path.join(__dirname, '..', 'functions/index.js'), 'utf8');
+const start = F.indexOf('exports.cleanupExpiredProofTokens = onSchedule(');
+assert.ok(start > 0, 'âncora: limpeza de confirmações');
+const block = F.slice(start, F.indexOf('// ─── Scheduled backup', start));
+assert.match(block, /schedule: "30 4,12,20 \* \* \*"/);
+assert.match(block, /collection\("emailVerificationLinks"\)\.where\("expiresAt", "<", now\)/);
+assert.match(block, /timeZone: "America\/Sao_Paulo"/);
+console.log('✅ limpeza das confirmações expiradas: agenda e coleção corretas');

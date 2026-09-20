@@ -1,7 +1,7 @@
 'use strict';
-/* ⛔ AS TRÊS PORTAS DE E-MAIL DE CONTA ERAM ABERTAS E SEM LIMITE NENHUM.
+/* ⛔ AS PORTAS DE E-MAIL DE CONTA ERAM ABERTAS E SEM LIMITE NENHUM.
  *
- * MEDIDO em 13/set/2026: `sendMagicLink`, `sendVerificationEmail` e `sendPasswordReset` são
+ * MEDIDO em 13/set/2026: `sendVerificationEmail` e `sendPasswordReset` são
  * `onCall` SEM `request.auth` — de propósito, porque quem precisa entrar ainda não entrou — e
  * recebem o endereço de destino do PAYLOAD DO CLIENTE. Nenhuma tinha cooldown, throttle ou
  * contador: qualquer pessoa na internet podia fazer o NOSSO remetente despejar mensagem
@@ -20,8 +20,8 @@ const RULES = fs.readFileSync(path.join(raiz, 'firestore.rules'), 'utf8');
 let ok = 0; const must = (v, m) => { assert.ok(v, m); ok++; console.log('  ✓ ' + m); };
 const semComentario = (s) => s.split('\n').filter((l) => !/^\s*(\*|\/\/|\/\*)/.test(l)).join('\n');
 
-// ── ① as três portas passam pelo limitador ──────────────────────────────────
-['sendMagicLink', 'sendVerificationEmail', 'sendPasswordReset'].forEach((porta) => {
+// ── ① as portas passam pelo limitador ───────────────────────────────────────
+['sendVerificationEmail', 'sendPasswordReset'].forEach((porta) => {
   const i = FN.indexOf('exports.' + porta + ' = onCall(');
   assert.ok(i > 0, 'âncora: ' + porta);
   // ⛔ ÂNCORA, não orçamento de caracteres: fatiar por tamanho já escondeu o `return` de uma
@@ -34,9 +34,8 @@ const semComentario = (s) => s.split('\n').filter((l) => !/^\s*(\*|\/\/|\/\*)/.t
   // e passa ANTES de qualquer coisa cara/externa
   const iBarra = corpo.indexOf('_barraSeAbusar');
   const iEnvio = corpo.indexOf('_enqueueMail');
-  const iLink = corpo.indexOf('generateSignInWithEmailLink');
   const iGen = corpo.indexOf('_genVerificationLink');
-  const primeiroCaro = [iEnvio, iLink, iGen].filter((x) => x > 0).sort((a, b) => a - b)[0];
+  const primeiroCaro = [iEnvio, iGen].filter((x) => x > 0).sort((a, b) => a - b)[0];
   must(iBarra > 0 && (primeiroCaro === undefined || iBarra < primeiroCaro),
     '① ⭐ ' + porta + ': o limite vem ANTES de gerar link ou enfileirar e-mail');
 });

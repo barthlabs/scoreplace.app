@@ -46,7 +46,7 @@ d = core.decidir(Object.assign({}, APPLE_RELAY, { email: 'brupoti@gmail.com', di
 ok(d.semente.displayName === 'Bruna Verga Sá', 'com nome no Auth, é ELE que vai pro perfil');
 ok(d.semente.displayName_lower === 'bruna verga sá', '  → com o _lower junto, senão ela fica invisível na busca');
 
-// ── 3. Conta de e-mail/senha e magic link seguem como eram ──────────────────
+// ── 3. Conta de e-mail e senha segue como era ───────────────────────────────
 d = core.decidir({ uid: 'U2', email: 'alguem@gmail.com', displayName: '', providerId: 'password', creationTimeMs: HORAS(96) }, false, null, AGORA);
 ok(d.semente.displayName === 'alguem@gmail.com',
    'e-mail/senha: o endereço É o identificador que a pessoa digitou e reconhece (nada regrediu)');

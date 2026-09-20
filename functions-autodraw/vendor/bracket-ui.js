@@ -15929,7 +15929,7 @@ window._renderCasualJoin = function(container, roomCode) {
       var html;
       if (!isLoggedIn) {
         // Elegant login-first screen: minimal header + login buttons at top.
-        // All sign-in methods (Google, email/password, magic link, SMS) via modal-login.
+        // All sign-in methods (Google, email/password, SMS) via modal-login.
         html =
           '<div style="max-width:440px;margin:0 auto;padding:1.5rem 1rem;">' +
             // Elegant minimal header — just sport + creator, no giant icons
