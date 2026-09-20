@@ -33,14 +33,14 @@ Os rótulos exibidos podem continuar livres para o organizador. Eles não substi
 O sorteio é uma regra de uma fase, não um tipo de torneio nem uma rota paralela. Ele possui operações independentes, aplicadas na ordem adequada à fase:
 
 - formação de equipe: participantes individuais podem ser sorteados em duplas; duplas já formadas não passam por este sorteio;
-- persistência da dupla: uma dupla sorteada pode permanecer fixa ou ser sorteada novamente a cada rodada;
+- persistência da dupla classificatória: uma dupla sorteada pode permanecer fixa durante toda a fase ou ser desfeita ao fim de cada rodada; neste último caso, a rodada seguinte sorteia novas duplas a partir dos participantes ativos e, em seguida, sorteia os novos confrontos;
 - formação de confrontos: depois de existirem equipes, o sistema pode sortear quais duplas se enfrentam; numa eliminatória, os confrontos posteriores são definidos pela chave;
 - modalidade da rodada: o sorteio padrão de duplas e confrontos pode ser substituído por Rei/Rainha ou Super 8 quando a fase o permitir;
 - critério de pareamento/semeadura: desempenho, equilíbrio ou sorteio;
 - repetição: rodada única, número fixo de rodadas ou todos contra todos;
 - política de espera e novas entradas, por fase.
 
-Assim, Rei/Rainha e Super 8 são modalidades adicionais, não alternativas à simples formação de duplas ou ao sorteio de confrontos. Rei/Rainha sorteia grupos de quatro participantes, produz três jogos por grupo e pontua individualmente. Quando abrir uma eliminatória, a rodada de formação é uma fase classificatória de uma rodada, seguida da fase eliminatória; não é uma exceção fora do modelo de fases.
+Assim, Rei/Rainha e Super 8 são modalidades adicionais, não alternativas à simples formação de duplas ou ao sorteio de confrontos. Na classificatória padrão com dupla não persistente, há dois sorteios sucessivos em toda rodada: primeiro as duplas, depois os confrontos. Rei/Rainha sorteia grupos de quatro participantes, produz três jogos por grupo e pontua individualmente. Quando abrir uma eliminatória, a rodada de formação é uma fase classificatória de uma rodada, seguida da fase eliminatória; não é uma exceção fora do modelo de fases.
 
 Super 8 é uma modalidade classificatória para oito duplas. Essas duplas podem ter sido formadas previamente pelo organizador ou por sorteio. O Super 8 gera o todos-contra-todos de sete rodadas e produz a classificação pela mesma interface de standings. Não será adicionado antes de o contrato comum de formação de dupla e de confrontos estar extraído e coberto por testes.
 
