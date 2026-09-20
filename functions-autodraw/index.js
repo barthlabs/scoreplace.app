@@ -2729,7 +2729,7 @@ exports.applyCategoryCommunicationMarkers = onCall(async (request) => {
     if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização registra comunicação de categorias.', { tId, uid });
     const before = _antesDoMotor(t), parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
     let changed = false;
-    const identityOf = p => String((p && (p.uid || p.p1Uid || p.email || p.displayName || p.name)) || '');
+    const identityOf = p => String((p && (p.uid || p.p1Uid || p.displayName || p.name)) || '');
     for (const update of updates) {
       const participant = parts.find(p => identityOf(p) === update.identity);
       if (!participant) continue;

@@ -39,6 +39,18 @@ ok(/e\.uid\?u\.includes\(e\.uid\):\(!u\.length&&e\.name/.test(handler),
   'handler casa uid primeiro e só usa nome quando a entrada não tem uid');
 ok(/\(!x\.uid&&!x\.name\)/.test(handler), 'pedido sem uid exige nome de participante manual');
 
+const commStart = client.indexOf('function _categoryCommIdentity');
+const commEnd = client.indexOf('// Persist only communication markers', commStart);
+const commClient = commStart >= 0 && commEnd > commStart ? client.slice(commStart, commEnd) : '';
+const commServerStart = server.indexOf('exports.applyCategoryCommunicationMarkers = onCall');
+const commServerEnd = server.indexOf('function _queueProfileCategoryNotice', commServerStart);
+const commServer = commServerStart >= 0 && commServerEnd > commServerStart ? server.slice(commServerStart, commServerEnd) : '';
+ok(!!commClient && !!commServer, 'cliente e Function de marcadores foram encontrados');
+ok(!/\.email/.test(commClient), 'cliente não usa e-mail para identificar marcador de categoria');
+ok(!/\.email/.test(commServer), 'Function não usa e-mail para identificar marcador de categoria');
+ok(/p\.uid \|\| p\.p1Uid \|\| p\.displayName \|\| p\.name/.test(commClient),
+  'cliente usa uid e reserva nome para participante manual');
+
 if (fail) {
   console.error('\n❌ atribuição de categoria uid-only: ' + pass + ' ok, ' + fail + ' falharam');
   process.exit(1);

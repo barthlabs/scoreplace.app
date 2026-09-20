@@ -2804,7 +2804,7 @@ window._autoAssignCategoriesAsync = async function(tId) {
 // de campos faltantes mudou.
 function _categoryCommIdentity(p) {
     if (!p || typeof p !== 'object') return '';
-    return p.uid || p.p1Uid || p.email || p.displayName || p.name || '';
+    return p.uid || p.p1Uid || p.displayName || p.name || '';
 }
 
 // Persist only communication markers on the fresh participant. The notification
