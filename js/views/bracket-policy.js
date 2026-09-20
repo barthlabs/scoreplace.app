@@ -20,6 +20,73 @@
     return _isInteger(n) && n > 0 && (n & (n - 1)) === 0;
   }
 
+  function _pow2Below(n) {
+    var p = 1;
+    while (p * 2 <= n) p *= 2;
+    return p;
+  }
+
+  function _pow2Above(n) {
+    var p = 1;
+    while (p < n) p *= 2;
+    return p;
+  }
+
+  function _finalRound(entrants) { return { entrants: entrants, games: 2, kind: 'final' }; }
+
+  // BYE clássico: a rodada preliminar elimina o excedente antes da chave cheia.
+  function planClassicBye(entrants) {
+    if (!_isInteger(entrants) || entrants < 2) throw new Error('entrants deve ser inteiro maior ou igual a 2');
+    var target = _pow2Below(entrants);
+    var excess = entrants - target;
+    var rounds = [];
+    if (excess > 0) rounds.push({ entrants: excess * 2, games: excess, kind: 'playin', byes: target - excess * 2 });
+    for (var n = target; n > 2; n /= 2) rounds.push({ entrants: n, games: n / 2, kind: 'eliminatoria' });
+    rounds.push(_finalRound(2));
+    return { policy: POLICIES.BYE, entrants: entrants, target: target, byes: target - excess * 2, rounds: rounds,
+      totalGames: rounds.reduce(function (sum, r) { return sum + r.games; }, 0) };
+  }
+
+  // Repescagem: todas jogam a primeira; perdedoras retornam somente para
+  // completar a potência de dois imediatamente acima do número de vencedoras.
+  function planRepechage(entrants) {
+    if (!_isInteger(entrants) || entrants < 2) throw new Error('entrants deve ser inteiro maior ou igual a 2');
+    if (isPowerOfTwo(entrants)) return planClassicBye(entrants);
+    var firstWinners = Math.ceil(entrants / 2);
+    var target = _pow2Above(firstWinners);
+    var returning = target - firstWinners;
+    var rounds = [{ entrants: entrants, games: firstWinners, kind: 'eliminatoria', returning: 0 }];
+    for (var n = target; n > 2; n /= 2) rounds.push({ entrants: n, games: n / 2, kind: 'eliminatoria', returning: n === target ? returning : 0 });
+    rounds.push(_finalRound(2));
+    return { policy: POLICIES.REPESCAGEM, entrants: entrants, target: target, returning: returning, rounds: rounds,
+      totalGames: rounds.reduce(function (sum, r) { return sum + r.games; }, 0) };
+  }
+
+  // Sobra única não cria alvo de potência. Cada rodada recebe os vencedores
+  // anteriores; uma entrada ímpar é a única intervenção daquela rodada.
+  function planSingleSurplus(entrants) {
+    if (!_isInteger(entrants) || entrants < 2) throw new Error('entrants deve ser inteiro maior ou igual a 2');
+    var rounds = [], n = entrants, oddRounds = 0;
+    while (n > 2) {
+      var odd = n % 2 === 1;
+      if (odd) oddRounds++;
+      rounds.push({
+        entrants: n,
+        gamesWithBye: Math.floor(n / 2),
+        gamesWithRepechage: Math.ceil(n / 2),
+        kind: 'eliminatoria',
+        surplus: odd ? (n === 3 ? 'repescagem_obrigatoria' : 'sobra_unica') : null
+      });
+      n = Math.ceil(n / 2);
+    }
+    rounds.push(_finalRound(2));
+    return {
+      policy: POLICIES.SOBRA_UNICA, entrants: entrants, rounds: rounds, oddRounds: oddRounds,
+      totalGamesWithBye: rounds.reduce(function (sum, r) { return sum + (r.gamesWithBye == null ? r.games : r.gamesWithBye); }, 0),
+      totalGamesWithRepechage: rounds.reduce(function (sum, r) { return sum + (r.gamesWithRepechage == null ? r.games : r.gamesWithRepechage); }, 0)
+    };
+  }
+
   function requiresPolicy(entrants) {
     if (!_isInteger(entrants) || entrants < 2) throw new Error('entrants deve ser inteiro maior ou igual a 2');
     return !isPowerOfTwo(entrants);
@@ -90,6 +157,9 @@
     isPowerOfTwo: isPowerOfTwo,
     requiresPolicy: requiresPolicy,
     assertPolicy: assertPolicy,
+    planClassicBye: planClassicBye,
+    planRepechage: planRepechage,
+    planSingleSurplus: planSingleSurplus,
     selectSurplusRecipient: selectSurplusRecipient,
     planRound: planRound
   });
