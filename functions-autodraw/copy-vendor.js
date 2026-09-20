@@ -48,6 +48,7 @@ const FILES = [
   'format2.js',                // FORMAT2.normalize/compileToPhases — CONFIGURADOR canônico (fmt2 → phases)
   'bracket-model.js',          // _appendCanonicalColumn
   'bracket-logic.js',          // _computeStandings, _generateNextRound, geradores Rei/Rainha + padrão + round-robin
+  'bracket-policy.js',         // contrato puro: políticas fechadas de chave e sobra única
   'chaves.js',                 // window._chaves — desenho determinístico da chave: f(N, formato). Sem estado.
   'chaves-adapter.js',         // window._chavesAdapter — desenho → matches do app, com id ESTRUTURAL (p0-VC-R1-P3)
   'bracket-ui.js',             // _applyResultToTournament (fecho de rodada re-aplica o placar deferido) — DOM só em funções que o servidor não chama

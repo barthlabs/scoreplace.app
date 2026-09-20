@@ -222,6 +222,7 @@ require('./vendor/tournaments-categories.js');  // _displayCategoryName, _sortCa
 require('./vendor/format2.js');                 // FORMAT2.normalize/compileToPhases (precisa de SPORT_RULES)
 require('./vendor/bracket-model.js');           // _appendCanonicalColumn
 require('./vendor/bracket-logic.js');           // _computeStandings, _generateNextRound, geradores
+require('./vendor/bracket-policy.js');          // _bracketPolicy — contrato de política, ainda sem alterar o desenho legado
 require('./vendor/chaves.js');                  // _chaves — desenho determinístico: chave = f(N, formato)
 require('./vendor/chaves-adapter.js');          // _chavesAdapter — desenho → matches (id ESTRUTURAL) + tardio
 require('./vendor/phases-engine.js');           // _phasesEngine.generatePhase/storePhase
