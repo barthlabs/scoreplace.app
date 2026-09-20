@@ -1421,14 +1421,6 @@ window.showUnifiedResolutionPanel = function(tId) {
         info = window._diagnoseAll(t);
         if (window._dtrace) window._dtrace('resolutionPanel:diag', { hasIssues: !!info.hasIssues, isPow2: !!info.isPowerOf2, isOdd: !!info.isOdd, remainder: info.remainder, incompl: (info.incompleteTeams || []).length });
 
-        // POW2/ÍMPAR é AUTO-resolvido (Eliminatória): se a ÚNICA pendência é pow2/ímpar (sem
-        // incompleto nem remainder), o programa decide sozinho (bye/play-in) — NÃO abre painel,
-        // sorteia direto. Ver _autoResolvesPow2 / project_bye_rep_auto_resolution.
-        if (window._autoResolvesPow2 && window._autoResolvesPow2(t) && info.hasIssues &&
-            (info.remainder || 0) === 0 && (info.incompleteTeams || []).length === 0) {
-            info = Object.assign({}, info, { hasIssues: false });
-        }
-
         // If no issues, proceed directly to actual draw (skip Final Review step)
         if (!info.hasIssues) {
             if (window._dtrace) window._dtrace('resolutionPanel:noIssues→draw');
@@ -1717,8 +1709,8 @@ window.showUnifiedResolutionPanel = function(tId) {
 
         // v4.0.52: seleção default = recomendado (maior Nash). Mantém a escolha do
         // usuário enquanto a opção continuar ativa; senão recai no recomendado.
-        if (!window._unifiedSel || excludedKeys.indexOf(window._unifiedSel) !== -1 || !activeOptions.some(function(o){ return o.key === window._unifiedSel; })) {
-            window._unifiedSel = bestKey;
+        if (window._unifiedSel && (excludedKeys.indexOf(window._unifiedSel) !== -1 || !activeOptions.some(function(o){ return o.key === window._unifiedSel; }))) {
+            window._unifiedSel = null;
         }
 
         // Sort by Nash score descending (highest recommendation first)
@@ -2587,15 +2579,7 @@ window._autoP2Resolution = function (t) {
 // máquina decide sozinha. Só o "RESTO" (times incompletos, remainder de grupos) precisa de painel.
 // Eliminatória Simples E Dupla. Grupos/Liga/Suíço/Rei-Rainha NÃO (têm resolução própria).
 // Ver project_bye_rep_auto_resolution.
-window._autoResolvesPow2 = function (t) {
-    if (!t) return false;
-    if (typeof window._isMonarchFormat === 'function' && window._isMonarchFormat(t)) return false; // Rei/Rainha agrupa de 4
-    var f = String(t.format || '');
-    if (/Grupo|Liga|Su[íi][çc]o|Ranking|Pontos Corridos/i.test(f)) return false;
-    if (typeof window._isLigaFormat === 'function' && window._isLigaFormat(t)) return false;
-    var code = t.formatCode || '';
-    return code === 'elim_simples' || code === 'elim_dupla' || /Eliminat[óo]ria|Dupla Elimin/i.test(f);
-};
+window._autoResolvesPow2 = function (t) { return false; };
 
 window.showPowerOf2Panel = function (tId) {
     // Redirect to unified resolution panel
