@@ -2107,7 +2107,7 @@ function _executeRemoveFromCategory(tId, pIdx, category) {
     window.FirestoreDB._callFn('applyEnrollmentAssignments', {
         tournamentId: tId,
         sport: t.sport || '',
-        edits: [{ uid: p.uid || '', email: p.email || '', name: p.displayName || p.name || '', category: '', uncategorizedByOrganizer: true }]
+        edits: [{ uid: p.uid || '', name: p.displayName || p.name || '', category: '', uncategorizedByOrganizer: true }]
     }).then(function() {
         if (typeof showNotification === 'function') showNotification(_t('cat.participantRemoved'), _t('cat.removedMsg', { name: pName, cat: window._displayCategoryName(category) }), 'success');
         setTimeout(function() { window._refreshCatMgr(tId); }, 100);
@@ -2131,7 +2131,7 @@ window._moveBetweenCategories = function(tId, pIdx, sourceCat, targetCat) {
     window.FirestoreDB._callFn('applyEnrollmentAssignments', {
         tournamentId: tId,
         sport: t.sport || '',
-        edits: [{ uid: p.uid || '', email: p.email || '', name: p.displayName || p.name || '', category: targetCat }]
+        edits: [{ uid: p.uid || '', name: p.displayName || p.name || '', category: targetCat }]
     }).then(function() {
         if (typeof showNotification === 'function') showNotification('✅ Categoria atualizada', pName + ': ' + window._displayCategoryName(sourceCat) + ' → ' + window._displayCategoryName(targetCat), 'success');
         setTimeout(function() { window._refreshCatMgr(tId); }, 100);
@@ -2586,9 +2586,9 @@ function _assignParticipantCategory(tId, pIdx, category) {
     if (pIdx < 0 || pIdx >= parts.length) return;
     var p = parts[pIdx];
     var pName = typeof p === 'string' ? p : (p.displayName || p.name || '');
-    var _assignKey = (p && typeof p === 'object') ? (p.uid || p.email || p.displayName || p.name || '') : String(p || '');
+    var _assignKey = (p && typeof p === 'object') ? (p.uid || p.displayName || p.name || '') : String(p || '');
     if (!window.FirestoreDB || typeof window.FirestoreDB._callFn !== 'function') return;
-    window.FirestoreDB._callFn('applyEnrollmentAssignments', { tournamentId: tId, sport: t.sport || '', edits: [{ uid: (p && p.uid) || '', email: (p && p.email) || '', name: _assignKey, category: category, markWasUncategorized: true, notifyCategory: true }] })
+    window.FirestoreDB._callFn('applyEnrollmentAssignments', { tournamentId: tId, sport: t.sport || '', edits: [{ uid: (p && p.uid) || '', name: _assignKey, category: category, markWasUncategorized: true, notifyCategory: true }] })
         .then(function() { if (typeof showNotification === 'function') showNotification(_t('cat.assigned'), _t('cat.assignedMsg', { name: pName, cat: window._displayCategoryName(category) }), 'success'); setTimeout(function() { window._refreshCatMgr(tId); }, 100); })
         .catch(function(e) { if (typeof showNotification === 'function') showNotification('Erro', (e && e.message) || 'Não foi possível atribuir a categoria.', 'error'); });
 }

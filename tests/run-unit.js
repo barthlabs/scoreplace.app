@@ -435,6 +435,7 @@ const SUITES = [
   'tests/cache-quente-nao-esconde-parte-que-falta.test.js',
   'tests/teste-nao-recorta-por-tamanho-fixo.test.js',
   'tests/identidade-e-uid-nunca-email.test.js',
+  'tests/atribuicao-categoria-uid-only.test.js',
   // ⛔ A máscara do celular do perfil mora no MARKUP (2.0.54, caso Vanessa) —
   // addEventListener se perde em re-render e deixava campo cru + Verificar apagado.
   'tests/mascara-do-celular-mora-no-markup.test.js',
