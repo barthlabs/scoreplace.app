@@ -134,8 +134,13 @@ async function naoPula(browser) {
   ok(pre.rolavel > 200, 'a cena tem rolagem horizontal de verdade (' + pre.rolavel + 'px) — sem isso o teste não prova nada');
 
   const pos = await page.evaluate((id) => {
-    document.getElementById('s1-'+id).value = '6';
-    document.getElementById('s2-'+id).value = '4';
+    // Melhor de 3 abre os dois sets desde o início: a confirmação grava a partida
+    // completa (e só revela STB se os sets empatarem 1×1).
+    document.getElementById('s1-'+id+'-0').value = '6';
+    document.getElementById('s2-'+id+'-0').value = '4';
+    document.getElementById('s1-'+id+'-1').value = '6';
+    document.getElementById('s2-'+id+'-1').value = '4';
+    window._highlightWinner(id);
     document.getElementById('confirm-'+id).click();
     return null;
   }, ALVO);
@@ -203,18 +208,10 @@ async function aprovacao(browser) {
   const eu = (t.participants||[]).find(p => (p.displayName||p.name) === alvo.p1);
   const page = await abreChave(browser, t, { uid: eu.uid, displayName: eu.displayName||eu.name, org:false });
 
-  const set1 = await page.evaluate((id) => {
-    document.getElementById('s1-'+id).value='6'; document.getElementById('s2-'+id).value='4';
-    document.getElementById('confirm-'+id).click();
-    const m = (window.AppStore.tournaments[0].matches||[]).find(x=>x.id===id);
-    return { sets:(m.sets||[]).length, vencedor:m.winner||null, pendente:!!m.pendingResult };
-  }, alvo.id);
-  await page.waitForTimeout(600);
-  ok(set1.sets === 1 && !set1.vencedor && !set1.pendente,
-    'set 1 é JOGO EM ANDAMENTO: grava o set, não grava vencedor e não pede aprovação');
-
   const fecho = await page.evaluate((id) => {
-    document.getElementById('s1-'+id).value='6'; document.getElementById('s2-'+id).value='3';
+    document.getElementById('s1-'+id+'-0').value='6'; document.getElementById('s2-'+id+'-0').value='4';
+    document.getElementById('s1-'+id+'-1').value='6'; document.getElementById('s2-'+id+'-1').value='3';
+    window._highlightWinner(id);
     document.getElementById('confirm-'+id).click();
     const m = (window.AppStore.tournaments[0].matches||[]).find(x=>x.id===id);
     return { vencedor:m.winner||null, pr: m.pendingResult ? {
@@ -223,7 +220,7 @@ async function aprovacao(browser) {
   }, alvo.id);
   await page.waitForTimeout(600);
   ok(!fecho.vencedor && fecho.pr && fecho.pr.kind === 'gsm',
-    'o set que FECHA a partida vai pra aprovação, não carimba vencedor');
+    'os dois sets que fecham a partida vão para aprovação, sem carimbar vencedor');
   ok(fecho.pr && fecho.pr.sets === 2 && fecho.pr.setsWonP1 === 2 && fecho.pr.setsWonP2 === 0,
     'a proposta leva os DOIS sets e o 2×0 — não só o último');
 
@@ -290,14 +287,15 @@ async function difDoisPontos(browser) {
   const noSet = await page.evaluate((id) => {
     const vis = e => !!e && getComputedStyle(e).display !== 'none';
     const antes = vis(document.getElementById('tbhint-'+id));
-    document.getElementById('s1-'+id).value='7'; document.getElementById('s2-'+id).value='6';
+    document.getElementById('s1-'+id+'-0').value='7'; document.getElementById('s2-'+id+'-0').value='6';
     window._highlightWinner(id);
     const el = document.getElementById('tbhint-'+id);
-    return { antes: antes, depois: vis(el), texto: el ? el.textContent.trim() : null,
-             camposTb: vis(document.getElementById('tb1-'+id)) };
+    return { antes: antes, depois: vis(el), hintStyle: el && el.style.display, texto: el ? el.textContent.trim() : null,
+             camposTb: vis(document.getElementById('tb1-'+id+'-0')),
+             tbStyle: (document.getElementById('tb1-'+id+'-0') || {}).style && (document.getElementById('tb1-'+id+'-0') || {}).style.display };
   }, zerado.id);
   ok(!noSet.antes, 'o aviso do tie-break de SET nasce escondido');
-  ok(noSet.depois && noSet.camposTb, 'e aparece NO MESMO instante que os campos de tie-break');
+  ok(noSet.hintStyle === 'block' && noSet.tbStyle === 'inline-block', 'e aparece NO MESMO instante que os campos de tie-break (' + noSet.tbStyle + ')');
   ok(/dif 2 pts/.test(noSet.texto || ''), 'dizendo o que precisa: "' + noSet.texto + '"');
 
   const recusa = await page.evaluate((id) => {

@@ -5006,7 +5006,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
         ' class="sp-set-tb" style="display:none;" oninput="window._highlightWinner(\'' + _esc(m.id) + '\')">'
       : '';
     return '<input type="number" id="s' + side + '-' + m.id + '" min="0" placeholder="0" class="sp-set-inp sp-set-inp--live"' +
-      ' oninput="window._highlightWinner(\'' + _esc(m.id) + '\')">' + tb;
+      ' oninput="window._highlightWinner(\'' + _esc(m.id) + '\')" onchange="window._warnGrossSetScore(\'' + _esc(m.id) + '\')">' + tb;
   };
   // Correção de resultado é o MESMO placar do card, no MESMO lugar. Nenhum diálogo
   // paralelo: os números viram campos já preenchidos e o restante do card não se move.
@@ -5036,8 +5036,22 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   // Set confirmado é CLICÁVEL pra corrigir enquanto o jogo não fechou — sem isso um 6-4
   // digitado errado no set 1 fica preso até o fim da partida.
   const _podeCorrigirSet = !isDecided && !hasPending && canEnterResult && !_readOnly;
-  const _setCellsHtml = (side) => _plan.columns.map(function (c, idx) {
+  const _initialTwoSetEntry = !!_plan.initialTwoSetEntry && showInputs && !hasPending && !_setsEdit;
+  const _entryColumns = _initialTwoSetEntry ? [
+    { i: 0, kind: 'set', label: '1', w: _plan.columns[0] ? _plan.columns[0].w : 34, state: 'entry' },
+    { i: 1, kind: 'set', label: '2', w: _plan.columns[0] ? _plan.columns[0].w : 34, state: 'entry' },
+    { i: 2, kind: _plan.superTiebreak ? 'stb' : 'set', label: _plan.superTiebreak ? 'STB' : '3', w: _plan.columns[0] ? _plan.columns[0].w : 34, state: 'stb-entry' }
+  ] : _plan.columns;
+  const _initialEntryCell = (c, side) => {
+    const hidden = c.state === 'stb-entry';
+    const wrap = hidden ? ' id="stbcol-' + side + '-' + m.id + '" style="display:none;--w:' + c.w + 'px;"' : ' style="--w:' + c.w + 'px;"';
+    const input = '<input type="number" id="s' + side + '-' + m.id + '-' + c.i + '" min="0" placeholder="0" class="sp-set-inp sp-set-inp--live" oninput="window._highlightWinner(\'' + _esc(m.id) + '\')" onchange="window._warnGrossSetScore(\'' + _esc(m.id) + '\',' + c.i + ')">';
+    const tb = c.kind === 'set' && _tbEnabled ? '<input type="number" id="tb' + side + '-' + m.id + '-' + c.i + '" min="0" placeholder="tb" title="Tie-break" class="sp-set-tb" style="display:none;" oninput="window._highlightWinner(\'' + _esc(m.id) + '\')">' : '';
+    return '<div class="sp-set-col"' + wrap + '>' + input + tb + '</div>';
+  };
+  const _setCellsHtml = (side) => _entryColumns.map(function (c, idx) {
     if (_setsEdit) return _setColOpen(c) + _setEditHtml(c, side, idx) + '</div>';
+    if (c.state === 'entry' || c.state === 'stb-entry') return _initialEntryCell(c, side);
     if (c.state === 'live') return _setColOpen(c) + _setLiveHtml(c, side) + '</div>';
     const fix = _podeCorrigirSet
       ? ' sp-set-col--fix" title="Editar placar"' +
@@ -5045,7 +5059,8 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
       : '';
     return '<div class="sp-set-col' + fix + '" style="--w:' + c.w + 'px;">' + _setNumHtml(c, side) + '</div>';
   }).join('');
-  const _setLabelsHtml = () => _plan.columns.map(function (c) {
+  const _setLabelsHtml = () => _entryColumns.map(function (c) {
+    if (c.state === 'stb-entry') return '<div id="stblbl-' + m.id + '" class="sp-set-col" style="display:none;--w:' + c.w + 'px;"><span class="sp-set-lbl">' + window._safeHtml(c.label) + '</span></div>';
     return _setColOpen(c) + '<span class="sp-set-lbl' + (c.state === 'live' ? ' sp-set-lbl--live' : '') + '">' +
       window._safeHtml(c.label) + '</span></div>';
   }).join('');
@@ -5089,7 +5104,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   const p1Score = showInputs
     ? `<input type="number" id="s1-${m.id}" min="0" placeholder="0"
         class="sp-mc-inp"
-        oninput="window._highlightWinner('${_esc(m.id)}')">${p1TbInput}`
+        oninput="window._highlightWinner('${_esc(m.id)}')" onchange="window._warnGrossSetScore('${_esc(m.id)}')">${p1TbInput}`
     : null;
   // v0.17.1: quando pending, lê scoreP1/scoreP2 (ou sets) do _pr em vez do m.
   // v2.1.89: para partidas W.O., deriva o lado ausente de woAbsentSide (ou do
@@ -5132,7 +5147,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   const p2Score = showInputs
     ? `<input type="number" id="s2-${m.id}" min="0" placeholder="0"
         class="sp-mc-inp"
-        oninput="window._highlightWinner('${_esc(m.id)}')">${p2TbInput}`
+        oninput="window._highlightWinner('${_esc(m.id)}')" onchange="window._warnGrossSetScore('${_esc(m.id)}')">${p2TbInput}`
     : null;
   const _p2Display = hasPending
     ? formatSetScores(_prFmt, 2)   // mesmo formatador do lado 1 — ver o comentário acima

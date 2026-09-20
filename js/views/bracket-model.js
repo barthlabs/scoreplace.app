@@ -1382,6 +1382,10 @@
       cols.push(live);
     }
 
+    // Melhor de 3 abre com os dois sets normais disponíveis. O espaço seguinte
+    // fica reservado ao STB e só é revelado pelo card quando o placar fica 1 × 1.
+    var initialTwoSetEntry = multi && bestOf === 3 && !done && played.length === 0;
+
     // ⭐ A LINHA DE CIMA ANUNCIA O SUPER TIE-BREAK ASSIM QUE EMPATA. Ordem do dono
     // (23/ago/2026), corrigindo a minha 1ª versão que dizia "Set 3": _"não pode ser set 3
     // ou set 5. tem que estar super tie break assim que empata para as pessoas saberem que
@@ -1399,7 +1403,7 @@
           : (_tr('bracket.setN', 'Set') + ' ' + (live.i + 1)))
       : (wonP1 + ' × ' + wonP2);
     for (var _c = 0; _c < cols.length; _c++) if (cols[_c].kind === 'stb') _temStbCol = true;
-    var _stbNoTitulo = (_temStbCol && !(live && live.kind === 'stb'))
+    var _stbNoTitulo = (!done && _temStbCol && !(live && live.kind === 'stb'))
       ? (' · ' + _tr('bracket.stbCurto', 'STB') + ' ' + stbPts) : '';
     return {
       multi: multi, setsToWin: setsToWin, bestOf: bestOf,
@@ -1407,7 +1411,7 @@
       numFs: esc.fs,      // tamanho do número desta grade (degrau da escala)
       difPtsAviso: _avisoDif,
       played: played, setsWonP1: wonP1, setsWonP2: wonP2,
-      done: done, columns: cols, live: live,
+      done: done, columns: cols, live: live, initialTwoSetEntry: initialTwoSetEntry,
       headline: head + ' · ' + atual + _stbNoTitulo
     };
   };

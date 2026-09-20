@@ -1481,6 +1481,43 @@ window._tbLoserGames = function (scoring, sport) {
   return gp;
 };
 
+// Validação única de um set normal. Evita que dois placares digitados no mesmo
+// campo (por exemplo 66–42) sejam gravados como um resultado impossível.
+window._validateNormalSetScore = function (scoring, sport, a, b) {
+  a = Number(a); b = Number(b);
+  if (!Number.isInteger(a) || !Number.isInteger(b) || a < 0 || b < 0) return { ok: false, detail: 'Preencha os dois placares do set com números válidos.' };
+  if (a === b) return { ok: false, detail: 'Um set não pode terminar empatado.' };
+  var gp = parseInt(scoring && scoring.gamesPerSet, 10) || 6;
+  var high = Math.max(a, b), low = Math.min(a, b);
+  var hasTb = !scoring || scoring.tiebreakEnabled !== false;
+  var trigger = window._tbLoserGames(scoring, sport);
+  var regular = high === gp && low <= gp - 2;
+  var byTb = hasTb && high === trigger + 1 && low === trigger;
+  var extended = !hasTb && high >= gp && high - low >= 2;
+  if (regular || byTb || extended) return { ok: true };
+  return { ok: false, detail: (high >= 20 || low >= 20)
+    ? 'Parece que dois placares foram colocados no mesmo set. Lance cada set na sua própria coluna, por exemplo 6–3 e 6–4.'
+    : 'Confira o placar do set. Com esta regra, use um resultado válido como 6–4 ou 7–6.' };
+};
+function _showSetScoreProblem(problem) {
+  showAlertDialog('Placar de set inválido', (problem && problem.detail) || 'Confira o placar informado.', null, { type: 'warning' });
+}
+window._warnGrossSetScore = function (matchId, idx) {
+  var suffix = (idx === undefined || idx === null || idx === '') ? '' : ('-' + idx);
+  var aEl = document.getElementById('s1-' + matchId + suffix), bEl = document.getElementById('s2-' + matchId + suffix);
+  if (!aEl || !bEl || !String(aEl.value).trim() || !String(bEl.value).trim()) return;
+  var a = parseInt(aEl.value, 10), b = parseInt(bEl.value, 10);
+  if (isNaN(a) || isNaN(b) || (a < 20 && b < 20)) return;
+  var tour = null, match = null;
+  (window.AppStore && window.AppStore.tournaments || []).some(function (t) {
+    var matches = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (t.matches || []);
+    return matches.some(function (m) { if (m && m.id === matchId) { tour = t; match = m; return true; } return false; });
+  });
+  var sc = tour && ((typeof window._effectiveScoring === 'function') ? window._effectiveScoring(tour, match) : tour.scoring);
+  var problem = window._validateNormalSetScore(sc, tour && tour.sport, a, b);
+  if (!problem.ok && aEl.getAttribute('data-score-warning') !== (a + '-' + b)) { aEl.setAttribute('data-score-warning', a + '-' + b); _showSetScoreProblem(problem); }
+};
+
 // FONTE ÚNICA do SET gravado no lançamento manual (sempre 1 set): games + o tie-break quando
 // houver. Existe porque o subplacar do TB só APARECE na tela se o jogo tiver `m.sets` — quem
 // desenha é `_formatSetForPlayer` (6⁽⁵⁾), e ele lê `sets[0].tiebreak`. Guardar só `tbP1/tbP2`
@@ -1506,8 +1543,29 @@ window._buildManualSet = function (s1, s2, opts) {
  * lado só, confirmar gravaria um placar incompleto. Zero é valor VÁLIDO (6-0 existe), então
  * o teste é sobre a string estar preenchida, NUNCA sobre o número ser verdadeiro — `!0` é
  * `true` e engoliria todo 6-0. */
+window._syncInitialBestOfThree = function (matchId) {
+  // `stblbl` é o marcador exclusivo da entrada inicial de melhor de 3. Não use
+  // somente o id indexado: alguns renderizadores legados e mocks resolvem prefixos
+  // de input e fariam o fluxo especial sequestrar um placar normal.
+  if (!document.getElementById('stblbl-' + matchId) || !document.getElementById('s1-' + matchId + '-0')) return false;
+  var read = function (idx) {
+    var a = document.getElementById('s1-' + matchId + '-' + idx), b = document.getElementById('s2-' + matchId + '-' + idx);
+    return { a: a ? parseInt(a.value, 10) : NaN, b: b ? parseInt(b.value, 10) : NaN, full: !!(a && b && String(a.value).trim() && String(b.value).trim()) };
+  };
+  var first = read(0), second = read(1);
+  var tied = first.full && second.full && !isNaN(first.a) && !isNaN(first.b) && !isNaN(second.a) && !isNaN(second.b) && ((first.a > first.b) !== (second.a > second.b));
+  ['1', '2'].forEach(function (side) { var col = document.getElementById('stbcol-' + side + '-' + matchId); if (col) col.style.display = tied ? '' : 'none'; });
+  var label = document.getElementById('stblbl-' + matchId); if (label) label.style.display = tied ? '' : 'none';
+  var btn = document.getElementById('confirm-' + matchId), third = read(2);
+  if (btn) btn.style.display = first.full && second.full && (!tied || third.full) ? '' : 'none';
+  return true;
+};
 window._syncConfirmBtn = function (matchId) {
   try {
+    // Alguns caminhos de edição e os testes de contrato carregam somente este helper.
+    // O card especial é opcional nesse contexto; o card simples não pode deixar de
+    // sincronizar por causa disso.
+    if (typeof window._syncInitialBestOfThree === 'function' && window._syncInitialBestOfThree(matchId)) return;
     var btn = document.getElementById('confirm-' + matchId);
     if (!btn) return;
     var s1 = document.getElementById('s1-' + matchId);
@@ -1527,6 +1585,30 @@ window._syncConfirmBtn = function (matchId) {
 
 window._highlightWinner = function (matchId) {
   window._syncConfirmBtn(matchId);
+  if (document.getElementById('stblbl-' + matchId) && document.getElementById('s1-' + matchId + '-0')) {
+    try {
+      var tour = null, match = null;
+      (window.AppStore && window.AppStore.tournaments || []).some(function (t) {
+        var matches = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (t.matches || []);
+        return matches.some(function (m) { if (m && m.id === matchId) { tour = t; match = m; return true; } return false; });
+      });
+      var sc = tour && ((typeof window._effectiveScoring === 'function') ? window._effectiveScoring(tour, match) : tour.scoring);
+      var trigger = sc && sc.tiebreakEnabled !== false ? window._tbLoserGames(sc, tour.sport) : null;
+      [0, 1, 2].forEach(function (idx) {
+        var aEl = document.getElementById('s1-' + matchId + '-' + idx), bEl = document.getElementById('s2-' + matchId + '-' + idx);
+        var ta = document.getElementById('tb1-' + matchId + '-' + idx), tb = document.getElementById('tb2-' + matchId + '-' + idx);
+        if (!aEl || !bEl) return;
+        var a = parseInt(aEl.value, 10), b = parseInt(bEl.value, 10);
+        if (ta && tb && trigger !== null && window._isTiebreakSetScore(a, b, trigger)) {
+          ta.style.display = 'inline-block'; tb.style.display = 'inline-block';
+          var initialHint = document.getElementById('tbhint-' + matchId);
+          if (initialHint) initialHint.style.display = 'block';
+        }
+        if (!isNaN(a) && !isNaN(b)) { aEl.style.color = a > b ? '#4ade80' : a < b ? '#f87171' : 'var(--text-bright)'; bEl.style.color = b > a ? '#4ade80' : b < a ? '#f87171' : 'var(--text-bright)'; }
+      });
+    } catch (e) {}
+    return;
+  }
   const s1El = document.getElementById(`s1-${matchId}`);
   const s2El = document.getElementById(`s2-${matchId}`);
   if (!s1El || !s2El) return;
@@ -1864,6 +1946,10 @@ window._confirmSetFromCard = function (tId, matchId, o) {
     if (!v || v === k) { v = fb; Object.keys(par || {}).forEach(function (x) { v = v.replace('{' + x + '}', par[x]); }); }
     return v;
   };
+  if (col.kind === 'set') {
+    var setProblem = window._validateNormalSetScore(o.scoring, t.sport, s1, s2);
+    if (!setProblem.ok) { _showSetScoreProblem(setProblem); return; }
+  }
   // ⛔ SET NÃO EMPATA — nem em grupo, onde a PARTIDA pode empatar. O empate é do jogo,
   // nunca de um set: 6-6 é tie-break, e tie-break tem vencedor.
   if (s1 === s2) {
@@ -2208,6 +2294,36 @@ window._applyResultToTournament = function (t, matchId, payload) {
   return m;
 };
 
+window._saveInitialBestOfThreeFromCard = function (tId, matchId, t, m, scoring) {
+  var plan = window._matchSetPlan(scoring, m); if (!plan || !plan.initialTwoSetEntry) return false;
+  var read = function (idx) { var a = document.getElementById('s1-' + matchId + '-' + idx), b = document.getElementById('s2-' + matchId + '-' + idx); return { a: a ? parseInt(a.value, 10) : NaN, b: b ? parseInt(b.value, 10) : NaN }; };
+  var raw = [read(0), read(1)];
+  if (isNaN(raw[0].a) || isNaN(raw[0].b) || isNaN(raw[1].a) || isNaN(raw[1].b)) { _showSetScoreProblem({ detail: 'Preencha os dois sets para registrar o melhor de 3.' }); return true; }
+  var sets = [], p1 = 0, p2 = 0;
+  for (var i = 0; i < 2; i++) {
+    var problem = window._validateNormalSetScore(scoring, t.sport, raw[i].a, raw[i].b);
+    if (!problem.ok) { _showSetScoreProblem(problem); return true; }
+    var isTb = scoring.tiebreakEnabled !== false && window._isTiebreakSetScore(raw[i].a, raw[i].b, window._tbLoserGames(scoring, t.sport));
+    var tb1 = parseInt((document.getElementById('tb1-' + matchId + '-' + i) || {}).value, 10), tb2 = parseInt((document.getElementById('tb2-' + matchId + '-' + i) || {}).value, 10);
+    if (isTb && (isNaN(tb1) || isNaN(tb2) || (raw[i].a > raw[i].b ? tb1 <= tb2 : tb2 <= tb1))) { _showSetScoreProblem({ detail: 'Informe o tie-break e mantenha o vencedor igual ao do set.' }); return true; }
+    sets.push(window._buildManualSet(raw[i].a, raw[i].b, { isTiebreakEntry: isTb, tbP1: tb1, tbP2: tb2 }).sets[0]);
+    if (raw[i].a > raw[i].b) p1++; else p2++;
+  }
+  if (p1 === 1 && p2 === 1) {
+    var finalSet = read(2); if (isNaN(finalSet.a) || isNaN(finalSet.b)) { _showSetScoreProblem({ detail: plan.superTiebreak ? 'Os sets estão em 1 × 1. Informe o Super Tie-Break.' : 'Os sets estão em 1 × 1. Informe o terceiro set.' }); return true; }
+    if (plan.superTiebreak) {
+      var min = plan.superTiebreakPoints || 10, margin = plan.tiebreakMargin || 2;
+      if (finalSet.a === finalSet.b || Math.max(finalSet.a, finalSet.b) < min || Math.abs(finalSet.a - finalSet.b) < margin) { _showSetScoreProblem({ detail: 'O Super Tie-Break vai até ' + min + ' pontos e termina com diferença de ' + margin + '.' }); return true; }
+      var stbSet = window._buildManualSet(finalSet.a, finalSet.b).sets[0]; stbSet.superTiebreak = true; sets.push(stbSet);
+    } else {
+      var finalProblem = window._validateNormalSetScore(scoring, t.sport, finalSet.a, finalSet.b); if (!finalProblem.ok) { _showSetScoreProblem(finalProblem); return true; }
+      sets.push(window._buildManualSet(finalSet.a, finalSet.b).sets[0]);
+    }
+    if (finalSet.a > finalSet.b) p1++; else p2++;
+  }
+  return window._commitSetsResult(tId, matchId, sets, p1, p2, false) || true;
+};
+
 window._saveResultInline = function (tId, matchId) {
   const t = window._findTournamentById(tId);
   if (!t) return;
@@ -2233,6 +2349,9 @@ window._saveResultInline = function (tId, matchId) {
     _rerenderBracket(tId, matchId);   // derruba a tela velha que ainda mostrava os campos
     return;
   }
+
+  var initialScoring = (typeof window._effectiveScoring === 'function') ? window._effectiveScoring(t, m) : t.scoring;
+  if (document.getElementById('s1-' + matchId + '-0')) return window._saveInitialBestOfThreeFromCard(tId, matchId, t, m, initialScoring);
 
   const s1El = document.getElementById(`s1-${matchId}`);
   const s2El = document.getElementById(`s2-${matchId}`);
@@ -2261,6 +2380,15 @@ window._saveResultInline = function (tId, matchId) {
   // tbTrigger = games do PERDEDOR no set decidido no TB, conforme a regra do torneio
   // (scoring.tiebreakAt: 'g-1' → 6-5; 'g' → 7-6; fallback por esporte). vencedor = tbTrigger+1.
   const tbTrigger = tbEnabled ? window._tbLoserGames(_isc, t.sport) : null;
+  // A coluna viva do melhor de N pode ser o Super Tie-Break: seus pontos não
+  // obedecem à regra de games do set normal (11–9 é válido, por exemplo).
+  var _planSave = (typeof window._matchSetPlan === 'function') ? window._matchSetPlan(_isc, m) : null;
+  var _isStbEntry = !!(_planSave && _planSave.multi && _planSave.live && _planSave.live.kind === 'stb');
+
+  if (useSets && !isFixedSet && !_isStbEntry) {
+    var normalSetProblem = window._validateNormalSetScore(_isc, t.sport, s1, s2);
+    if (!normalSetProblem.ok) { _showSetScoreProblem(normalSetProblem); return; }
+  }
 
   // Tiebreak mode: o placar final (gamesPerSet+1, gamesPerSet), ex.: 7-6, implica que o set foi
   // decidido no tie-break. O vencedor já é conhecido por s1/s2; só pedimos os pontos do TB.
@@ -2296,7 +2424,6 @@ window._saveResultInline = function (tId, matchId) {
   // que é o que esta função acabou de ler. Quem decide se este set fecha o jogo é o plano
   // (window._matchSetPlan) — a MESMA régua que desenhou as colunas. Em 1 set (e em Beach
   // Tennis) `multi` é falso e nada abaixo muda. [[project_placar_por_sets_no_card]]
-  var _planSave = (typeof window._matchSetPlan === 'function') ? window._matchSetPlan(_isc, m) : null;
   if (_planSave && _planSave.multi && _planSave.live) {
     return window._confirmSetFromCard(tId, matchId, {
       s1: s1, s2: s2, tbP1: tbP1, tbP2: tbP2, isTiebreakEntry: isTiebreakEntry,

@@ -1,4 +1,4 @@
-/* MELHOR DE 3 E MELHOR DE 5 NO CARD: UMA COLUNA POR SET, CONFIRMADA UMA POR VEZ.
+/* MELHOR DE 3 E MELHOR DE 5 NO CARD: SETS VISÍVEIS DESDE O INÍCIO.
  *
  * ORDEM DO DONO (23/ago/2026): _"esses cards de jogos estão perfeitos para disputas de 1
  * set, mas aqui temos melhor de 3. nesse caso precisava de mais uma linha indicando melhor
@@ -287,7 +287,7 @@ function cardHtml(scoring, sets, extra) {
 async function tela() {
   console.log('\n④ A tela — Chromium com o CSS real: rótulo EM CIMA do box');
   const casos = [
-    { nome: 'melhor de 3 · Set 1 em disputa', sc: MELHOR3, sets: [], cols: 1 },
+    { nome: 'melhor de 3 · Set 1 e Set 2 prontos para lançar', sc: MELHOR3, sets: [], cols: 2 },
     { nome: 'melhor de 3 · Set 1 confirmado', sc: MELHOR3, sets: [S(6, 4)], cols: 2 },
     { nome: 'melhor de 3 · 1-1, super tie-break', sc: MELHOR3, sets: [S(6, 4), S(3, 6)], cols: 3 },
     { nome: 'melhor de 5 · 2-2, super tie-break', sc: MELHOR5, sets: [S(6, 4), S(3, 6), S(6, 2), S(4, 6)], cols: 5 }
@@ -331,11 +331,12 @@ async function tela() {
   const r = await page.evaluate(() => {
     const out = [];
     document.querySelectorAll('.caso').forEach((box) => {
-      const lbls = [...box.querySelectorAll('.sp-set-head .sp-set-col')].map((e) => {
+      const visiveis = (sel) => [...box.querySelectorAll(sel)].filter((e) => getComputedStyle(e).display !== 'none');
+      const lbls = visiveis('.sp-set-head .sp-set-col').map((e) => {
         const q = e.getBoundingClientRect();
         return { x: +q.left.toFixed(1), w: +q.width.toFixed(1), txt: e.textContent.trim() };
       });
-      const linha = (n) => [...box.querySelectorAll('#score-p' + n + '-M1 .sp-set-col')].map((e) => {
+      const linha = (n) => visiveis('#score-p' + n + '-M1 .sp-set-col').map((e) => {
         const q = e.getBoundingClientRect();
         return { x: +q.left.toFixed(1), w: +q.width.toFixed(1) };
       });
