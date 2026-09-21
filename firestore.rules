@@ -1080,11 +1080,10 @@ service cloud.firestore {
           .hasAny(privilegedUserFields());
       }
 
-      // Create: only the user themselves (first-time profile creation).
-      // O bloqueio precisa valer no CREATE também — senão o buraco reabre: apagar o próprio
-      // perfil e recriá-lo já com `mergedInto` seria o mesmo sequestro por outro caminho.
-      allow create: if request.auth != null && request.auth.uid == userId
-        && !request.resource.data.keys().hasAny(privilegedUserFields());
+      // A criação inicial só ocorre pela Function initializeUserProfile. Ela reserva
+      // o displayName em transação antes de criar users/{uid}; permitir create no
+      // cliente reabriria a corrida que aceita dois cadastros com o mesmo nome.
+      allow create: if false;
 
       // Update: SÓ o dono, e nunca os campos privilegiados. O caminho cross-user que
       // existia aqui pra amizade morreu em 29/ago/2026 — ver isFriendArrayDiff acima.

@@ -2764,6 +2764,12 @@ window.FirestoreDB = {
 
   // ---- User Profiles ----
 
+  // Criação inicial é exclusivamente no servidor: ele reserva o nome e grava o
+  // perfil na mesma transação. O navegador nunca cria users/{uid} diretamente.
+  async initializeUserProfile(profileData) {
+    return this._callFn('initializeUserProfile', { profile: profileData || {} });
+  },
+
   async saveUserProfile(uid, profileData) {
     if (!this.db || !uid) return;
     // Denormalize lowercase copies for server-side search. Range queries

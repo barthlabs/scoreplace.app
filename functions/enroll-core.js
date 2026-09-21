@@ -113,12 +113,26 @@ function enrollmentOpen(data, nowMs) {
 }
 
 // Inscrição só deduplica por identificador estável. Uma conta é sempre o UID; uma
-// vaga manual do organizador é sempre manualParticipantId. Nome, e-mail e telefone
+// participante sem conta incluído pelo organizador usa manualParticipantId. Nome, e-mail e telefone
 // são atributos de apresentação e jamais podem ocupar a vaga de outra pessoa.
 function isAlreadyEnrolled(participants, participantObj) {
   var pUid = participantObj.uid || '';
   var pManualId = participantObj.manualParticipantId || '';
   if (!pUid && !pManualId) return false;
+
+  // Participante sem conta não representa uma conta, mas seu rótulo também é exclusivo
+  // naquele torneio: o organizador não pode criar duas pessoas com o mesmo nome.
+  var pManualName = !pUid && pManualId
+    ? String(participantObj.displayName || participantObj.name || '').trim().toLocaleLowerCase()
+    : '';
+  function manualNameMatches(m) {
+    if (!pManualName || !m) return false;
+    if (typeof m === 'string') return m.trim().toLocaleLowerCase() === pManualName;
+    if (typeof m !== 'object') return false;
+    if (m.uid) return false;
+    var n = String(m.displayName || m.name || '').trim().toLocaleLowerCase();
+    return !!n && n === pManualName;
+  }
 
   function memberMatches(m) {
     return !!(m && typeof m === 'object' &&
@@ -126,6 +140,7 @@ function isAlreadyEnrolled(participants, participantObj) {
   }
   return participants.some(function (p) {
     if (memberMatches(p)) return true;
+    if (manualNameMatches(p)) return true;
     if (Array.isArray(p.participants) && p.participants.some(memberMatches)) return true;
     if (pUid && ((p.p1Uid && p.p1Uid === pUid) || (p.p2Uid && p.p2Uid === pUid))) return true;
     return false;

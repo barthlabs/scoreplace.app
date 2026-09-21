@@ -29,6 +29,7 @@ const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https")
 const { onDocumentCreated, onDocumentWritten, onDocumentDeleted } = require("firebase-functions/v2/firestore");
 const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
+const crypto = require("crypto");
 const _mergeRules = require("./merge-rules");
 const _mergeSweep = require("./merge-sweep-core");
 const _profileMerge = require("./profile-merge-core");
@@ -2954,7 +2955,7 @@ exports.enrollParticipant = onCall(
     if (!tournamentId || !participantObj || typeof participantObj !== "object") {
       throw new HttpsError("invalid-argument", "tournamentId e participantObj são obrigatórios");
     }
-    // Uma inscrição é uma conta (uid) ou uma vaga manual (id estável criado pelo
+    // Uma inscrição é uma conta (uid) ou participante sem conta (id estável criado pelo
     // organizador). Nome, e-mail e telefone nunca são identidade de inscrição.
     const participantUid = String(participantObj.uid || "");
     const manualParticipantId = String(participantObj.manualParticipantId || "");
@@ -2990,7 +2991,7 @@ exports.enrollParticipant = onCall(
         throw new HttpsError("permission-denied", "só o organizador pode inscrever outra pessoa");
       }
       if (!participantUid && !_preIsOrganizer) {
-        throw new HttpsError("permission-denied", "só o organizador pode criar vaga manual");
+        throw new HttpsError("permission-denied", "só o organizador pode incluir participante sem conta");
       }
     }
 
@@ -3037,7 +3038,7 @@ exports.enrollParticipant = onCall(
         throw new HttpsError("permission-denied", "só o organizador pode inscrever outra pessoa");
       }
       if (!participantUid && !isOrganizer) {
-        throw new HttpsError("permission-denied", "só o organizador pode criar vaga manual");
+        throw new HttpsError("permission-denied", "só o organizador pode incluir participante sem conta");
       }
       const r = _enrollCore.computeEnroll(_dados, participantObj, extraUpdates, nowMs);
       if (r.updateData) _splitParts.gravar(tx, docRef, _dados, r.updateData);
@@ -3143,6 +3144,49 @@ exports.checkDisplayNameAvailability = onCall(
     let ok = false;
     try { ok = pedido ? await livre(pedido) : false; } catch (e) { ok = false; }
     return { livre: ok, sugestoes };
+  }
+);
+
+// Criação inicial do perfil: o cliente pede, o servidor reserva o nome e grava
+// ambos na mesma transação. A reserva impede a corrida de dois cadastros com o
+// mesmo nome, algo que uma consulta seguida de escrita no navegador não resolve.
+function _displayNameClaimId(name) {
+  return crypto.createHash("sha256").update(String(name).trim().toLocaleLowerCase("pt-BR")).digest("hex");
+}
+
+exports.initializeUserProfile = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
+  async (request) => {
+    const uid = request.auth && request.auth.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Login obrigatório");
+    const input = (request.data && request.data.profile) || {};
+    const name = String(input.displayName || "").trim().replace(/\s+/g, " ");
+    if (!name || _nameUnique.isUnfriendlyName(name)) {
+      throw new HttpsError("invalid-argument", "informe um nome de exibição válido");
+    }
+
+    const db = admin.firestore();
+    const existingConflict = await _nameUnique.findDisplayNameConflict(db, name, uid);
+    if (existingConflict) throw new HttpsError("already-exists", _nameUnique.buildConflictMessage(existingConflict));
+
+    const profileRef = db.collection("users").doc(uid);
+    const claimRef = db.collection("displayNameClaims").doc(_displayNameClaimId(name));
+    const allowed = ["authProvider", "email", "photoURL"];
+    const profile = { createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    allowed.forEach((key) => { if (typeof input[key] === "string" && input[key]) profile[key] = input[key]; });
+    if (profile.email) profile.email_lower = profile.email.toLowerCase();
+    _nameUnique.denormalizeDisplayName(profile, name);
+
+    return await db.runTransaction(async (tx) => {
+      const [current, claim] = await Promise.all([tx.get(profileRef), tx.get(claimRef)]);
+      if (current.exists) return { ok: true, existing: true };
+      if (claim.exists && String((claim.data() || {}).uid || "") !== uid) {
+        throw new HttpsError("already-exists", "este nome já está em uso; escolha outro nome de exibição");
+      }
+      tx.set(claimRef, { uid: uid, displayName: name, claimedAt: admin.firestore.FieldValue.serverTimestamp() });
+      tx.set(profileRef, profile);
+      return { ok: true, created: true };
+    });
   }
 );
 

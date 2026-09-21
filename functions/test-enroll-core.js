@@ -35,18 +35,12 @@ function eq(name, a, b) { ok(name + ' (' + JSON.stringify(a) + ' === ' + JSON.st
   eq('mesmo uid após alterar perfil → already', r.outcome, 'already');
 })();
 
-// ── Homônimos são pessoas distintas: nome/e-mail não ocupam vaga ────────────
-(() => {
-  const data = { status: 'open', participants: [{ uid: 'ana-uid-1', displayName: 'Ana', email: 'ana@example.test' }] };
-  const r = C.computeEnroll(data, { uid: 'ana-uid-2', displayName: 'Ana', email: 'ana@example.test' }, null, NOW);
-  eq('uid diferente com mesmos atributos → enrolled', r.outcome, 'enrolled');
-})();
-
-// ── Vaga manual tem chave própria; texto repetido não é identidade ───────────
+// ── Participante sem conta tem chave própria e nome exclusivo no torneio ─────
 (() => {
   const data = { status: 'open', participants: [{ manualParticipantId: 'manual-a', displayName: 'Convidado' }] };
   eq('mesma vaga manual → already', C.computeEnroll(data, { manualParticipantId: 'manual-a', displayName: 'Outro nome' }, null, NOW).outcome, 'already');
-  eq('manual distinto com mesmo nome → enrolled', C.computeEnroll(data, { manualParticipantId: 'manual-b', displayName: 'Convidado' }, null, NOW).outcome, 'enrolled');
+  eq('manual distinto com mesmo nome → already', C.computeEnroll(data, { manualParticipantId: 'manual-b', displayName: 'Convidado' }, null, NOW).outcome, 'already');
+  eq('manual distinto com outro nome → enrolled', C.computeEnroll(data, { manualParticipantId: 'manual-b', displayName: 'Outra pessoa' }, null, NOW).outcome, 'enrolled');
 })();
 
 // ── Já inscrito por SLOT de dupla (uid é o p2 de uma dupla) ───────────────────

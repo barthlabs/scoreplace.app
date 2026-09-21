@@ -58,9 +58,12 @@ const S = v => ({ stringValue: v });
 (async () => {
   const out = {};
   const A = 'uid_atacante', V = 'uid_vitima';
-  // setup (o create do próprio perfil é legítimo e tem que passar)
+  // Criação pelo cliente é negada: o perfil inicial nasce exclusivamente na
+  // Function initializeUserProfile, que reserva o nome antes de gravar.
   out.criaProprioPerfil = await req('PATCH', 'users/' + A, A, { fields: { displayName: S('Atacante') } });
-  out.criaVitima        = await req('PATCH', 'users/' + V, V, { fields: { displayName: S('Vitima') } });
+  // Admin monta os perfis para testar os updates abaixo; não é a operação medida.
+  await req('PATCH', 'users/' + A, 'owner', { fields: { displayName: S('Atacante') } });
+  await req('PATCH', 'users/' + V, 'owner', { fields: { displayName: S('Vitima') } });
   // Documento legado: a chave era o e-mail. Só o token daquele e-mail pode lê-lo.
   out.criaLegadoEmail   = await req('PATCH', 'users/' + A + '%40x.com', 'owner', { fields: { displayName: S('Perfil legado') } });
   out.leProprioPerfil   = await req('GET', 'users/' + A, A);
@@ -150,7 +153,7 @@ function ok(c, m) { if (c) pass++; else { fail++; console.error('  ✗', m); } }
 // ── 1. RULES ATUAIS: o ataque tem que FALHAR ─────────────────────────────────
 const novo = runAgainst(path.join(ROOT, 'firestore.rules'), 'atual');
 
-ok(novo.criaProprioPerfil === 200, 'setup: criar o próprio perfil é permitido (got ' + novo.criaProprioPerfil + ')');
+ok(novo.criaProprioPerfil === 403, '🔒 criação direta de perfil é negada (a Function é a única porta) (got ' + novo.criaProprioPerfil + ')');
 ok(novo.leProprioPerfil === 200, 'legítimo: o dono lê a própria ficha (got ' + novo.leProprioPerfil + ')');
 ok(novo.lePerfilVitima === 403, '🔒 perfil privado de terceiro é NEGADO (got ' + novo.lePerfilVitima + ')');
 ok(novo.leLegadoDoProprio === 200, 'legítimo: o token lê seu documento legado por e-mail (got ' + novo.leLegadoDoProprio + ')');

@@ -94,7 +94,7 @@ const CORPO = { fields: {
   out.notifQueueLe   = await req('GET', 'notif_email_queue/q1', U);
 
   // ── CONTROLE DE VIDA: as rules estão mesmo ligadas? algo legítimo tem que passar ─
-  out.criaProprioPerfil = await req('PATCH', 'users/' + U, U, { fields: { displayName: S('Fulano') } });
+  out.criaProprioPerfil = await req('PATCH', 'users/' + U, 'owner', { fields: { displayName: S('Fulano') } });
 
   console.log('__JSON__' + JSON.stringify(out));
   process.exit(0);
