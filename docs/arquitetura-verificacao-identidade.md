@@ -217,6 +217,41 @@ personalizado para o `canonicalUid`; cliente conclui a sessão com
 `signInWithCustomToken`. Assim não há segundo UID para cada aparelho nem
 credencial nativa que contorne as Rules.
 
+### Experiência diária de entrada
+
+Para uma pessoa já migrada, a tela inicial não oferece formulário de senha,
+escolha de provedor nem uma nova captura remota. Ela inicia a solicitação de
+passkey assim que o aplicativo é aberto ou quando a sessão expira:
+
+```
+abrir Scoreplace
+  → folha nativa de passkey
+  → Face ID / Touch ID / biometria Android do próprio aparelho
+  → assinatura do desafio de uso único
+  → sessão do canonicalUid
+  → tela onde a pessoa estava
+```
+
+No iPhone, a folha e a animação são do sistema; o Scoreplace não simula uma
+tela facial, não acessa a câmera e não recebe dado biométrico. Com Face ID
+configurado, a experiência é a mesma classe de gesto rápido usada para
+desbloquear o aparelho. A mesma regra usa Touch ID quando este for o método
+configurado. No Android, o Credential Manager apresenta a interface nativa da
+passkey e aciona o autenticador disponível no aparelho.
+
+O aplicativo só abre a câmera para a verificação facial remota em quatro
+situações: primeiro cadastro, migração de conta antiga, recuperação sem outra
+passkey e revalidação desencadeada por risco. Essa captura sempre informa o
+motivo antes de começar e termina ao receber o resultado; não há observação
+contínua de câmera nem reconhecimento facial em segundo plano.
+
+Para não transformar conveniência em falha de segurança, a política de sessão
+é separada da identidade: reabrir o app em aparelho confiável pode chamar a
+passkey imediatamente; operações de alto impacto pedem nova assinatura de
+passkey; perda, troca ou alteração de biometria do aparelho invalidam o
+vínculo local e levam à recuperação do mesmo `canonicalUid`. Não existe botão
+de criar uma nova conta nessa tela de recuperação.
+
 Google e Apple podem continuar como provedores auxiliares de recuperação ou
 vínculo, mas nunca criam perfil paralelo: antes de qualquer perfil novo, o
 servidor resolve ou exige o `canonicalUid` já existente.
