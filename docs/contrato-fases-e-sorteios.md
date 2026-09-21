@@ -84,7 +84,9 @@ sequência global do torneio, não por índice de fase ou rodada.
 ## Fronteira de implementação
 
 1. Manter `fmt2`, `formatCode`, `format`, `ligaRoundFormat` e campos afins só
-   no adaptador de entrada/leitura histórica.
+   no adaptador de entrada/leitura histórica. **Parcialmente implementado:**
+   `functions/legacy-phase-adapter-core.js` classifica o legado sem regravá-lo
+   e bloqueia `elim_simples` sem política histórica confirmada.
 2. Introduzir normalizador puro de `phaseConfig` e fixtures equivalentes para
    cada configuração suportada de `format2`. **Parcialmente implementado:**
    `functions/phase-config-core.js` valida o schema fechado e rejeita Super 8
