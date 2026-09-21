@@ -87,7 +87,7 @@ const S = v => ({ stringValue: v });
   // que cada chave é recusada no update e no create.
   const extras = ['dupDismissed', 'dupDismissedInfo', 'dupSuspect', 'nameConflict',
     'phoneSource', 'phoneSetBy', 'phoneSetAt', 'friends', 'friendRequestsSent',
-    'friendRequestsReceived', 'friendRequestsSentAt', 'theme', 'uiScale', 'activeCasualRoom', 'liveScorePrefs', 'casualLast'];
+    'friendRequestsReceived', 'friendRequestsSentAt', 'theme', 'uiScale', 'activeCasualRoom', 'liveScorePrefs', 'casualLast', 'casualPrefs'];
   out.ataquesExtras = {};
   out.criaComExtras = {};
   for (const field of extras) {

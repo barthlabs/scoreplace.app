@@ -2788,6 +2788,10 @@ window.FirestoreDB = {
     return this._callFn('updateOwnCasualLast', { preference: preference || {} });
   },
 
+  async saveCasualScoringPreferences(preferences) {
+    return this._callFn('updateOwnCasualScoringPreferences', { preferences: preferences || {} });
+  },
+
   async saveUserProfile(uid, profileData) {
     if (!this.db || !uid) return;
     // Denormalize lowercase copies for server-side search. Range queries

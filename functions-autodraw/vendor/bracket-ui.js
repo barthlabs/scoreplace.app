@@ -12520,8 +12520,16 @@ window._openCasualMatch = function(restoreOpts) {
     try { localStorage.setItem('scoreplace_casual_prefs', JSON.stringify(prefs)); } catch(e) {}
     var _cu = window.AppStore && window.AppStore.currentUser;
     if (_cu) _cu.casualPrefs = prefs;
-    if (_cu && _cu.uid && window.FirestoreDB && window.FirestoreDB.saveUserProfile) {
-      try { window.FirestoreDB.saveUserProfile(_cu.uid, { casualPrefs: prefs }).catch(function(){}); } catch(e) {}
+    if (_cu && _cu.uid && window.FirestoreDB && window.FirestoreDB.saveCasualScoringPreferences) {
+      try {
+        window.FirestoreDB.saveCasualScoringPreferences(prefs).then(function(result) {
+          // O servidor remove regras derivadas do cache legado; o perfil e o
+          // cache passam a refletir exatamente o contrato persistido.
+          if (!result || !result.preferences) return;
+          if (_cu) _cu.casualPrefs = result.preferences;
+          try { localStorage.setItem('scoreplace_casual_prefs', JSON.stringify(result.preferences)); } catch (_e) {}
+        }).catch(function(){});
+      } catch(e) {}
     }
   }
 
