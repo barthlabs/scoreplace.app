@@ -1044,6 +1044,7 @@ service cloud.firestore {
                 'theme', 'uiScale', 'activeCasualRoom', 'liveScorePrefs', 'casualLast', 'casualPrefs', 'preferredLocations', 'notifyPlatform', 'notifyEmail', 'notifyWhatsApp', 'notifyLevel',
                 'presenceVisibility', 'statsVisibility', 'presenceMuteDays', 'presenceMuteUntil', 'presenceAutoCheckin',
                 'acceptedTerms', 'acceptedTermsAt', 'acceptedTermsVersion', 'acceptedTermsGrandfathered',
+                'lastSeenAt', 'lastClientVersion', 'lastClientPlatform',
                 // v2.1.48 — os três arrays de amizade viraram CACHE DE EXIBIÇÃO. A relação
                 // mora em `friendships/{pairId}` e a prova em `friendAccess/**`. Nem o dono
                 // do próprio perfil escreve mais por cliente: quem escrevesse o próprio

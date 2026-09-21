@@ -2700,11 +2700,7 @@ window.FirestoreDB = {
     } catch (e) {}
     this._sessaoMarcada = carimbo;
     var self = this;
-    this.db.collection('users').doc(uid).set({
-      lastSeenAt: agora.toISOString(),
-      lastClientVersion: versao,
-      lastClientPlatform: plataforma
-    }, { merge: true }).then(function () {
+    this._callFn('markOwnSession', { version: versao, platform: plataforma }).then(function () {
       try { if (typeof localStorage !== 'undefined') localStorage.setItem('sp_sessao_marcada', carimbo); } catch (e) {}
     }).catch(function (e) {
       self._sessaoMarcada = null;   // falhou: a próxima sessão tenta de novo

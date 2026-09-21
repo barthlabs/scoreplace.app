@@ -25,7 +25,7 @@ function novaPorta(versao, plataforma, loja) {
   ctx.window.localStorage = loja;
   const db = vm.runInNewContext('({' + property('js/firebase-db.js', 'marcarSessao') + '})', ctx);
   db.ensureDb = () => true;
-  db.db = { collection: () => ({ doc: () => ({ set: (dados) => { escritas.push(dados); return promessa; } }) }) };
+  db._callFn = (_nome, dados) => { escritas.push(dados); return promessa; };
   return { db, escritas, resolver, rejeitar };
 }
 const lojaFalsa = () => { const m = {}; return { getItem: (k) => (k in m ? m[k] : null), setItem: (k, v) => { m[k] = String(v); }, _m: m }; };
@@ -37,9 +37,8 @@ const lojaFalsa = () => { const m = {}; return { getItem: (k) => (k in m ? m[k] 
     const { db, escritas, resolver } = novaPorta('2.2.69', 'ios', loja);
     assert.equal(db.marcarSessao('u1'), true, 'a primeira sessão carimba');
     assert.equal(escritas.length, 1);
-    assert.equal(escritas[0].lastClientVersion, '2.2.69');
-    assert.equal(escritas[0].lastClientPlatform, 'ios', 'usa SCOREPLACE_PLATFORM, não re-detecta');
-    assert.ok(/^\d{4}-\d{2}-\d{2}T/.test(escritas[0].lastSeenAt), 'ISO, igual a updatedAt na base');
+    assert.equal(escritas[0].version, '2.2.69');
+    assert.equal(escritas[0].platform, 'ios', 'usa SCOREPLACE_PLATFORM, não re-detecta');
     assert.equal(db.marcarSessao('u1'), false, 'no mesmo dia e versão não escreve de novo');
     assert.equal(escritas.length, 1);
     resolver();
@@ -52,7 +51,7 @@ const lojaFalsa = () => { const m = {}; return { getItem: (k) => (k in m ? m[k] 
     const a = novaPorta('2.2.69', 'android', loja); a.db.marcarSessao('u1'); a.resolver(); await Promise.resolve(); await Promise.resolve();
     const b = novaPorta('2.2.70', 'android', loja);
     assert.equal(b.db.marcarSessao('u1'), true, 'versão nova = carimbo novo');
-    assert.equal(b.escritas[0].lastClientVersion, '2.2.70');
+    assert.equal(b.escritas[0].version, '2.2.70');
   }
   // ③ ⛔ LÁPIDE NÃO É CONTA VIVA
   {
@@ -81,7 +80,7 @@ const lojaFalsa = () => { const m = {}; return { getItem: (k) => (k in m ? m[k] 
   // ⑥ o CAMPO-FANTASMA ganhou writer — e o call-site está DEPOIS dos três returns
   {
     const fdb = fs.readFileSync(path.join(root, 'js/firebase-db.js'), 'utf8');
-    assert.ok(/lastSeenAt:/.test(fdb), '⛔ `lastSeenAt` precisa ter writer — era lido em 4 lugares e escrito em nenhum');
+    assert.ok(/markOwnSession/.test(fdb), '⛔ `lastSeenAt` precisa ter escritor server-only');
     const auth = fs.readFileSync(path.join(root, 'js/views/auth.js'), 'utf8');
     const gate = auth.indexOf("} catch (e) { window._warn('[verify] gate check failed:', e); }");
     const chamada = auth.indexOf('FirestoreDB.marcarSessao(');

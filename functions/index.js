@@ -43,6 +43,7 @@ const _profileLocations = require("./profile-locations-core");
 const _profileNotifications = require("./profile-notifications-core");
 const _profilePresence = require("./profile-presence-core");
 const _profileTerms = require("./profile-terms-core");
+const _profileSession = require("./profile-session-core");
 const _casualRoomPointer = require("./casual-room-pointer-core");
 const _liveScorePreferences = require("./live-score-preferences-core");
 const _casualLastPreferences = require("./casual-last-preferences-core");
@@ -3280,6 +3281,25 @@ exports.acceptOwnTerms = onCall(
       tx.update(ref, update);
     });
     return { ok: true, acceptedTerms: true, acceptedTermsVersion: _profileTerms.CURRENT_TERMS_VERSION, grandfathered: mode === 'grandfather' };
+  }
+);
+
+exports.markOwnSession = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
+  async (request) => {
+    const uid = request.auth && request.auth.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Login obrigatório");
+    let stamp;
+    try { stamp = _profileSession.normalizeSessionStamp(request.data); }
+    catch (error) { throw new HttpsError("invalid-argument", error.message); }
+    const db = admin.firestore(); const ref = db.collection("users").doc(uid);
+    await db.runTransaction(async (tx) => {
+      const profile = await tx.get(ref);
+      if (!profile.exists) throw new HttpsError("failed-precondition", "Perfil inexistente");
+      if ((profile.data() || {}).mergedInto) throw new HttpsError("failed-precondition", "Conta incorporada");
+      tx.update(ref, { lastSeenAt: admin.firestore.FieldValue.serverTimestamp(), lastClientVersion: stamp.version, lastClientPlatform: stamp.platform });
+    });
+    return { ok: true };
   }
 );
 
