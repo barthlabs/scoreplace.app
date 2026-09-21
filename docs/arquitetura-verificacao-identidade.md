@@ -106,13 +106,16 @@ no provedor contratado, sob contrato de tratamento e política aprovada.
 1. Firebase cria um UID e `accountIdentity/{uid}` em estado `provisional`.
 2. O app pede ao servidor `beginIdentityVerification`. O servidor aplica
    rate limit, cria `verificationId` e sessão curta de captura do provedor.
-3. O app nativo abre a captura de selfie/prova de vida. A mídia vai ao
-   provedor, não ao Firestore nem a uma coleção do Scoreplace.
+3. O app nativo abre a captura de documento oficial e selfie com prova de
+   vida. A mídia vai ao provedor, não ao Firestore nem a uma coleção do
+   Scoreplace.
 4. O provedor chama webhook autenticado do servidor com resultado assinado.
-5. Sem candidato, a Function cria a claim e promove o UID a `verified`.
+5. Documento autêntico, prova de vida, comparação selfie-documento, controles
+   antifraude e ausência de candidato facial promovem automaticamente o UID a
+   `verified` e criam a claim.
 6. Com candidato, a Function marca `duplicate_review`, revoga as capacidades
-   de participação do UID provisório e oferece recuperação da conta já
-   existente, sem revelar dados privados dela.
+   de participação do UID provisório e oferece recuperação/vínculo pela
+   credencial da conta já existente, sem revelar dados privados dela.
 7. A pessoa comprova controle da conta existente ou solicita revisão. Só uma
    decisão auditada faz vínculo de credenciais e deixa um UID canônico.
 
@@ -120,6 +123,21 @@ Se a plataforma quiser garantia universal, nenhuma inscrição — inclusive a d
 torneio casual — é `confirmed` antes de `verified`. Permitir inscrição casual
 sem essa etapa é uma decisão possível de produto, mas abre uma exceção explícita
 à garantia de pessoa única.
+
+### Decisão automática e exceções
+
+O caminho normal é automático. O provedor executa leitura/autenticidade de
+documento, prova de vida, comparação facial um-para-um (selfie × documento),
+busca facial um-para-muitos, sinais de fraude de aparelho e devolve resposta
+assinada. Se tudo satisfaz os limiares da política, a aprovação é imediata e
+sem analista.
+
+Revisão humana é exceção: só entra em candidato facial já existente, leitura
+documental inconclusiva, divergência de dados, risco de fraude, falha técnica,
+rota de acessibilidade ou contestação. Um candidato em busca um-para-muitos
+mantém a conta pendente; nunca provoca recusa definitiva ou fusão automática.
+O sistema mede falso positivo, falso negativo, abandono, tempo de resolução e
+discrepâncias por grupo para ajustar limiares e fornecedor.
 
 ## Biometria nativa do aparelho
 
@@ -156,6 +174,45 @@ Usos obrigatórios da chave biométrica nativa após a implantação:
 
 Há fallback acessível por reautenticação forte e revisão. Falta de biometria,
 acessibilidade ou aparelho incompatível não pode excluir pessoa legítima.
+
+## Acesso sem senha: passkey como credencial principal
+
+Depois da primeira verificação de identidade aprovada, o Scoreplace cria uma
+passkey para o `canonicalUid`. A passkey é a credencial principal de acesso;
+senha deixa de ser exigida no fluxo normal.
+
+```
+primeiro cadastro
+  → documento + prova de vida + deduplicação facial automática
+  → canonicalUid
+  → criação de passkey
+
+acessos seguintes
+  → Face ID / Touch ID / biometria Android ou PIN do aparelho
+  → chave privada assina desafio único
+  → servidor valida a assinatura e emite sessão do canonicalUid
+```
+
+A chave privada fica no autenticador do sistema, e o servidor guarda somente
+a chave pública, identificador de credencial e contador de uso. O Scoreplace
+não recebe senha, face ou digital. Em iPhone/iPad a passkey usa Authentication
+Services e domínio associado; no Android usa Credential Manager; na web usa
+WebAuthn. As três superfícies seguem o mesmo protocolo de desafio e resposta.
+
+O Firebase Auth atual continua como emissor de sessão e fonte do UID. Após
+validar a assertion WebAuthn/passkey no servidor, a Function emite token
+personalizado para o `canonicalUid`; cliente conclui a sessão com
+`signInWithCustomToken`. Assim não há segundo UID para cada aparelho nem
+credencial nativa que contorne as Rules.
+
+Google e Apple podem continuar como provedores auxiliares de recuperação ou
+vínculo, mas nunca criam perfil paralelo: antes de qualquer perfil novo, o
+servidor resolve ou exige o `canonicalUid` já existente.
+
+Recuperação sem senha segue ordem forte: outra passkey já registrada, credencial
+vinculada comprovada, nova verificação de documento+prova de vida; revisão
+humana é a exceção final. SMS, e-mail ou código isolado não recuperam sozinho
+um UID verificado, pois isso reabriria a porta para conta paralela.
 
 ## Controles contra fraude
 
