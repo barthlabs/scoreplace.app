@@ -283,7 +283,7 @@ window._enrollmentOpenState = function (t, nowMs) {
   var ligaOpen = isLiga && t.ligaOpenEnrollment !== false && t.status !== 'finished';
   var sorteio = window._phaseDrawDone(t);
   var deadlinePassed = !!(t.registrationLimit && new Date(t.registrationLimit).getTime() < now);
-  var open = (t.status !== 'closed' && t.status !== 'finished' && !sorteio && !deadlinePassed) || ligaOpen;
+  var open = (t.status !== 'closed' && t.status !== 'finished' && !sorteio && !deadlinePassed) || !!ligaOpen;
   return { open: open, ligaOpen: ligaOpen, sorteio: sorteio, deadlinePassed: deadlinePassed };
 };
 

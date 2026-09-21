@@ -216,7 +216,7 @@ namespace ScoreplaceWaitlist {
     const sorteio = phaseDrawDone(tournament);
     const deadline = new Date(String(tournament.registrationLimit || '')).getTime();
     const deadlinePassed = Boolean(tournament.registrationLimit && Number.isFinite(deadline) && deadline < (typeof nowMs === 'number' ? nowMs : Date.now()));
-    return { open: (tournament.status !== 'closed' && tournament.status !== 'finished' && !sorteio && !deadlinePassed) || ligaOpen, ligaOpen, sorteio, deadlinePassed };
+    return { open: (tournament.status !== 'closed' && tournament.status !== 'finished' && !sorteio && !deadlinePassed) || !!ligaOpen, ligaOpen, sorteio, deadlinePassed };
   }
 
   /** Quem ocupa confronto ou grupo da fase atual; folga nunca conta como jogo. */

@@ -108,7 +108,7 @@ function enrollmentOpen(data, nowMs) {
     (Array.isArray(data.rounds) && data.rounds.length > 0) ||
     (Array.isArray(data.groups) && data.groups.length > 0);
   var deadlinePassed = !!(data.registrationLimit && new Date(data.registrationLimit).getTime() < nowMs);
-  var open = (data.status !== 'closed' && data.status !== 'finished' && !sorteioRealizado && !deadlinePassed) || ligaOpen;
+  var open = (data.status !== 'closed' && data.status !== 'finished' && !sorteioRealizado && !deadlinePassed) || !!ligaOpen;
   return { open: open, deadlinePassed: deadlinePassed };
 }
 

@@ -116,6 +116,16 @@ function eq(name, a, b) { ok(name + ' (' + JSON.stringify(a) + ' === ' + JSON.st
   eq('prazo vencido → grava status closed', r.updateData && r.updateData.status, 'closed');
 })();
 
+// ── A porta canônica consulta esta mesma janela antes de criar o registro ────
+(() => {
+  eq('janela canônica: status closed bloqueia', C.enrollmentOpen({ status: 'closed' }, NOW).open, false);
+  eq('janela canônica: status finished bloqueia', C.enrollmentOpen({ status: 'finished' }, NOW).open, false);
+  const expired = C.enrollmentOpen({ status: 'open', registrationLimit: '2026-07-16T00:00:00Z' }, NOW);
+  eq('janela canônica: prazo vencido bloqueia', expired.open, false);
+  eq('janela canônica: prazo vencido é identificável', expired.deadlinePassed, true);
+  eq('janela canônica: torneio aberto aceita', C.enrollmentOpen({ status: 'open' }, NOW).open, true);
+})();
+
 // ── Desinscrição self (solo) ─────────────────────────────────────────────────
 (() => {
   const data = { status: 'open', participants: [{ uid: 'nelson-uid' }, { uid: 'other-uid' }] };

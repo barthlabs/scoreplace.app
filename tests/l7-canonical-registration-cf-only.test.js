@@ -7,6 +7,7 @@ const end = source.indexOf('\nexports.', start + 8);
 const body = source.slice(start, end < 0 ? source.length : end);
 ok(start >= 0 && body.includes('db.runTransaction') && body.includes('request.auth && request.auth.uid'), 'registro canônico decide em Function transacional pelo UID autenticado');
 ok(body.includes('_canonicalRegistrationCanStart') && body.includes('failed-precondition'), 'registro canônico não mistura torneio legado ou já sorteado');
+ok(body.includes('_enrollCore.enrollmentOpen(tournament, Date.now())') && body.includes('registration_deadline_passed'), 'registro canônico respeita prazo e encerramento antes do create');
 ok(body.includes('_categoryEligibility.decideEnrollment') && body.includes('tx.get(profileRef)'), 'perfil e rigor são decididos no servidor');
 ok(body.includes('_amizadeLock.exigirAtivos(tx, db, [callerUid]'), 'inscrição lê o lifecycle dentro da mesma transação antes de criar');
 ok(body.includes('existingCategoryIds: existing') && body.includes('registrationId("uid:" + callerUid'), 'idempotência e exclusividade usam UID e categoria estáveis');

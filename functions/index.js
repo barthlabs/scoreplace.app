@@ -3992,6 +3992,17 @@ exports.requestCanonicalRegistration = onCall(
       if (!_canonicalRegistrationCanStart(tournament)) {
         throw new HttpsError("failed-precondition", "registro canônico exige torneio novo e ainda não sorteado");
       }
+      // A porta canônica usa a mesma janela temporal da inscrição consolidada,
+      // mas não cai no caminho legado (participants/espera). Assim, um prazo,
+      // encerramento ou conclusão nunca pode ser contornado por esta nova
+      // subcoleção privada.
+      const enrollmentWindow = _enrollCore.enrollmentOpen(tournament, Date.now());
+      if (!enrollmentWindow.open) {
+        return {
+          outcome: "closed",
+          reasons: [enrollmentWindow.deadlinePassed ? "registration_deadline_passed" : "registration_closed"],
+        };
+      }
       let definitions;
       try { definitions = _categoryEligibility.normalizeCategoryDefinitions(tournament.categoryDefinitions); }
       catch (_) { throw new HttpsError("failed-precondition", "torneio sem categorias tipadas válidas"); }
