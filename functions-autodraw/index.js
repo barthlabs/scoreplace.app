@@ -1525,7 +1525,10 @@ async function _aplicaPlacarNaTransacao(db, tId, matchId, payload, ator, logMess
   // fonte confiável para esse fato: ele pode ainda ter o card anterior na memória
   // (o incidente Fabio/Priscila, que enviou `?` apesar de 6-2, 6-2 já estar no
   // servidor). O gatilho abaixo consome esta caixa de saída de forma idempotente.
-  const notifOutboxRef = ref.collection('notificationOutbox').doc(auditRef.id);
+  // Resultado pode ser corrigido logo em seguida. Para esse tipo de aviso a caixa
+  // usa uma chave por jogo: a correção substitui o rascunho pendente, em vez de
+  // produzir um segundo e-mail com o placar que deixou de existir.
+  const notifOutboxRef = ref.collection('notificationOutbox').doc('score-final-' + _outboxDocIdPart(matchId));
   /* ⛔ INSTANTE ESTÁVEL DA OPERAÇÃO — calculado UMA VEZ, FORA do callback.
    * O Firestore RE-EXECUTA o callback no retry; um `new Date()` lá dentro faria
    * cada tentativa produzir espelho e plano diferentes. */
@@ -1583,7 +1586,19 @@ async function _aplicaPlacarNaTransacao(db, tId, matchId, payload, ator, logMess
       ? _disputeNotificationEvent(t, _matchDepois, ator, _agoraIsoTx)
       : (res.outcome === 'match-reset' || res.outcome === 'result-reopened' || res.outcome === 'wo-reverted')
         ? _matchReopenedNotificationEvent(t, _matchDepois, res.outcome, ator, _agoraIsoTx) : null;
-    if (_notif || _transitionNotif) tx.set(notifOutboxRef, _notif || _transitionNotif);
+    if (_notif) {
+      tx.set(notifOutboxRef, Object.assign({}, _notif, {
+        // Cada gravação ganha revisão nova. O entregador só envia se esta revisão
+        // continuar atual depois da janela; uma revisão anterior simplesmente morre.
+        consolidationRevision: auditRef.id,
+        consolidateAfterMs: Date.parse(_agoraIsoTx) + 60 * 1000,
+        dispatchStatus: 'pending'
+      }), { merge: true });
+    } else if (_transitionNotif) {
+      // Disputa/reabertura não carregam placar consolidado e permanecem eventos
+      // próprios, com id do recibo para não colidir com o próximo resultado.
+      tx.set(ref.collection('notificationOutbox').doc(auditRef.id), _transitionNotif);
+    }
     return { ok: true, outcome: res.outcome, tournament: b.clean };
   });
 }
@@ -1865,15 +1880,65 @@ exports.reconcileMatchReadyNotifications = onSchedule('every 15 minutes', async 
   }
 });
 
+const SCORE_NOTIFICATION_CONSOLIDATION_MS = 60 * 1000;
+
+function _sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, Math.max(0, ms)));
+}
+
+async function _freshConsolidatedScoreNotification(tournamentId, item) {
+  if (!item || item.kind !== 'score-notification' ||
+      !['result', 'match-pending-approval'].includes(item.type)) return item;
+  const ref = db.collection('tournaments').doc(String(tournamentId));
+  const raw = await ref.get();
+  if (!raw.exists) return null;
+  const tournament = await _leTorneio(_TX_LEITURA, ref, String(tournamentId));
+  const match = tournament && typeof drawWindow._findMatch === 'function'
+    ? drawWindow._findMatch(tournament, String(item.matchId || '')) : null;
+  if (!match) return null;
+  const pending = item.type === 'match-pending-approval';
+  // Uma aprovação ou reabertura durante a janela torna a proposta antiga obsoleta.
+  if (pending ? !match.pendingResult : (!!match.pendingResult || (!match.winner && !match.draw))) return null;
+  const scoreboard = _notificationScoreboard(match, pending);
+  if (!scoreboard || !scoreboard.p1 || !scoreboard.p2) return null;
+  const prefix = String(item.message || '').split('\n')[0] || 'Resultado atualizado:';
+  const compact = side => scoreboard.sets.map(s => String(s[side])).join(' ');
+  return Object.assign({}, item, {
+    message: prefix + '\n' + scoreboard.p1 + ' ' + compact('p1') + '\nvs\n' + scoreboard.p2 + ' ' + compact('p2'),
+    scoreboard,
+    matchUids: _slotUidsOf(match, 'p1').concat(_slotUidsOf(match, 'p2')).map(String),
+    recipients: _scoreNotificationRecipients(tournament, match, pending)
+  });
+}
+
 // A transação só escreve o fato. Este gatilho faz I/O depois do commit e pode
-// repetir sem duplicar: cada aviso e cada item da fila usa o id da outbox.
-exports.deliverScoreNotification = onDocumentCreated(
+// repetir sem duplicar. Resultado de placar espera a janela de consolidação e
+// relê o jogo canônico; os demais avisos seguem imediatos.
+exports.deliverScoreNotification = onDocumentWritten(
   { document: 'tournaments/{tournamentId}/notificationOutbox/{eventId}', region: 'us-central1', timeoutSeconds: 120 },
   async (event) => {
-    const item = event.data && event.data.data();
+    const after = event.data && event.data.after;
+    let item = after && after.exists ? after.data() : null;
     if (!item || !['score-notification', 'tournament-notification'].includes(item.kind)) return;
+    if (item.dispatchStatus !== 'pending') return;
     const tId = String(event.params.tournamentId || item.tournamentId || '');
     const eventId = String(event.params.eventId || '');
+    const revision = String(item.consolidationRevision || '');
+    if (revision) {
+      const due = Number(item.consolidateAfterMs || 0);
+      const waitMs = Math.min(SCORE_NOTIFICATION_CONSOLIDATION_MS, Math.max(0, due - Date.now()));
+      if (waitMs) await _sleep(waitMs);
+      const fresh = await after.ref.get();
+      if (!fresh.exists) return;
+      item = fresh.data() || {};
+      // Uma edição posterior substituiu este rascunho e possui sua própria execução.
+      if (item.dispatchStatus !== 'pending' || String(item.consolidationRevision || '') !== revision) return;
+      item = await _freshConsolidatedScoreNotification(tId, item);
+      if (!item) {
+        await fresh.ref.set({ dispatchStatus: 'superseded', supersededAt: new Date().toISOString() }, { merge: true });
+        return;
+      }
+    }
     const recipients = Array.isArray(item.recipients) ? Array.from(new Set(item.recipients.map(String).filter(Boolean))) : [];
     const profiles = await _loadLiveNames(new Set(recipients));
     const now = Date.now();
@@ -1918,7 +1983,7 @@ exports.deliverScoreNotification = onDocumentCreated(
       }
     }
     await commit();
-    await event.data.ref.set({ dispatchStatus: 'dispatched', dispatchedAt: new Date().toISOString() }, { merge: true });
+    await after.ref.set({ dispatchStatus: 'dispatched', dispatchedAt: new Date().toISOString() }, { merge: true });
   }
 );
 

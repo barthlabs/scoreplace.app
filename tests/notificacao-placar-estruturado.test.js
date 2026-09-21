@@ -15,11 +15,13 @@ const digest = read('functions/digest-core.js');   // 12/set: o desenho do e-mai
 const app = read('js/views/notifications-view.js');
 
 ok(/function _notificationScoreboard/.test(auto) && /Number\.isFinite\(p1\)/.test(auto), 'CF só cria aviso com sets canônicos completos');
-ok(/collection\('notificationOutbox'\)/.test(auto) && /tx\.set\(notifOutboxRef, _notif \|\| _transitionNotif\)/.test(auto), 'placar e outbox nascem na mesma transação');
+ok(/collection\('notificationOutbox'\)/.test(auto) && /score-final-/.test(auto) && /consolidationRevision/.test(auto), 'placar usa um rascunho único por jogo na outbox');
 ok(/const _pendingAntes/.test(auto) && /pendingBefore: _pendingAntes/.test(auto), 'aprovação preserva autoria da proposta antes de consumi-la');
 ok(/confirmou o resultado lançado por/.test(auto) && /function _notificationPersonName/.test(auto), 'confirmação identifica quem confirmou e nunca expõe e-mail como autoria');
 ok(/liveIdentity = await _loadLiveNames/.test(auto) && /callerName =/.test(auto), 'CF resolve nome de exibição antes de comunicar o resultado');
-ok(/exports\.deliverScoreNotification\s*=\s*onDocumentCreated/.test(auto), 'CF entrega a outbox depois do commit');
+ok(/exports\.deliverScoreNotification\s*=\s*onDocumentWritten/.test(auto) && /SCORE_NOTIFICATION_CONSOLIDATION_MS/.test(auto), 'CF espera a consolidação antes de entregar placar');
+ok(/_freshConsolidatedScoreNotification/.test(auto) && /_leTorneio\(_TX_LEITURA/.test(auto), 'antes de enviar, CF relê o placar canônico persistido');
+ok(/dispatchStatus: 'superseded'/.test(auto), 'placar reaberto ou substituído durante a janela não é enviado');
 ok(/scoreboard: item\.scoreboard/.test(auto) && /scoreboard: item\.scoreboard/.test(auto), 'plataforma e fila recebem o mesmo placar estruturado da CF');
 ok(!/try\s*\{\s*_notifyPendingApproval\(/.test(bracket), 'cliente não dispara aviso a partir do card potencialmente velho');
 ok(/scoreboard:\s*templateData\.scoreboard/.test(dispatch), 'canal de e-mail encaminha o payload');
