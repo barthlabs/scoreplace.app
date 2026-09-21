@@ -313,6 +313,11 @@ numeração e resultado; ela precisa ser confirmada como decisão de produto.
 
 ## Sequência de implementação
 
+O levantamento executável inicial, seus comandos de repetição e os riscos que
+ele encontrou estão registrados em
+[`m0-inventario-executavel.md`](m0-inventario-executavel.md). Ele é a linha de
+base do marco 0 e deve ser atualizado por evidência, não por suposição.
+
 ### 0. Contenção de identidade, congelamento e linha de base
 
 - Desligar a execução de fusão automática em gatilhos e agendas, preservando
