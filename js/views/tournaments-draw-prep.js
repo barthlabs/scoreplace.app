@@ -1709,8 +1709,10 @@ window.showUnifiedResolutionPanel = function(tId) {
 
         // v4.0.52: seleção default = recomendado (maior Nash). Mantém a escolha do
         // usuário enquanto a opção continuar ativa; senão recai no recomendado.
-        if (window._unifiedSel && (excludedKeys.indexOf(window._unifiedSel) !== -1 || !activeOptions.some(function(o){ return o.key === window._unifiedSel; }))) {
-            window._unifiedSel = null;
+        // A recomendação vem destacada, com o percentual de Nash já visível no
+        // cartão. A organização pode trocar a opção antes de confirmar.
+        if (!window._unifiedSel || excludedKeys.indexOf(window._unifiedSel) !== -1 || !activeOptions.some(function(o){ return o.key === window._unifiedSel; })) {
+            window._unifiedSel = bestKey;
         }
 
         // Sort by Nash score descending (highest recommendation first)
