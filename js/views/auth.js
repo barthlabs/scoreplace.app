@@ -7128,10 +7128,9 @@ function setupProfileModal() {
       // anteriormente no Firestore, sobrescrevendo a escolha do usuário.
       try {
         var cu = window.AppStore && window.AppStore.currentUser;
-        var uid = cu && (cu.uid || cu.email);
         if (cu) cu.theme = theme;
-        if (uid && window.FirestoreDB && window.FirestoreDB.saveUserProfile) {
-          window.FirestoreDB.saveUserProfile(uid, { theme: theme }).catch(function() {});
+        if (cu && cu.uid && window.FirestoreDB && window.FirestoreDB.saveInterfacePreferences) {
+          window.FirestoreDB.saveInterfacePreferences({ theme: theme }).catch(function() {});
         }
       } catch (e) {}
     };

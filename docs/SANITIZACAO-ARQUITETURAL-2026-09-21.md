@@ -194,8 +194,8 @@ quando era matematicamente inviável.
 
 ## Inventário que orienta o próximo bloco
 
-Após o commit P0, há 51 chamadas de `FirestoreDB.saveUserProfile` no cliente:
-7 em `js/store.js`, 10 em `js/views/auth.js`, 4 em
+Após o primeiro recorte P1, há 47 chamadas de `FirestoreDB.saveUserProfile` no cliente:
+4 em `js/store.js`, 9 em `js/views/auth.js`, 4 em
 `js/views/tournaments-categories.js` e 30 em `js/views/bracket-ui.js`.
 `js/firebase-db.js` ainda contém mutações diretas de torneio, placar,
 notificações, modelos, amistosos e histórico. P1 começa por perfil porque ele

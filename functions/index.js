@@ -38,6 +38,7 @@ const _mergeCols = require("./merge-collections-core");
 const _dupPerson = require("./duplicate-person-core");
 const _casualStats = require("./casual-stats-core");
 const _pendingMail = require("./pending-mail-core");
+const _profilePreferences = require("./profile-preferences-core");
 
 // v1.8.38 — RARIDADE DO TOKEN, em UM lugar só (os dois caminhos de detecção usam este).
 // O subconjunto de 1 token só vira sinal quando o token existe SÓ nas duas contas
@@ -3187,6 +3188,33 @@ exports.initializeUserProfile = onCall(
       tx.set(profileRef, profile);
       return { ok: true, created: true };
     });
+  }
+);
+
+// Preferências visuais são o primeiro recorte de update de perfil migrado para
+// o servidor. O contrato é fechado: não serve como atalho para campos de
+// identidade ou elegibilidade e `update` impede ressuscitar perfil inexistente.
+exports.updateOwnInterfacePreferences = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
+  async (request) => {
+    const uid = request.auth && request.auth.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Login obrigatório");
+    let patch;
+    try {
+      patch = _profilePreferences.normalizeInterfacePreferences(request.data && request.data.preferences);
+    } catch (error) {
+      throw new HttpsError("invalid-argument", error.message);
+    }
+
+    const profileRef = admin.firestore().collection("users").doc(uid);
+    await admin.firestore().runTransaction(async (tx) => {
+      const profile = await tx.get(profileRef);
+      if (!profile.exists) throw new HttpsError("failed-precondition", "Perfil inexistente");
+      tx.update(profileRef, Object.assign({}, patch, {
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }));
+    });
+    return { ok: true, preferences: patch };
   }
 );
 

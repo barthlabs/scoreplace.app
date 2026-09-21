@@ -2770,6 +2770,12 @@ window.FirestoreDB = {
     return this._callFn('initializeUserProfile', { profile: profileData || {} });
   },
 
+  // Preferências de interface também são gravadas pelo servidor. O uid vem do
+  // token da chamada; o navegador não escolhe o documento de destino.
+  async saveInterfacePreferences(preferences) {
+    return this._callFn('updateOwnInterfacePreferences', { preferences: preferences || {} });
+  },
+
   async saveUserProfile(uid, profileData) {
     if (!this.db || !uid) return;
     // Denormalize lowercase copies for server-side search. Range queries

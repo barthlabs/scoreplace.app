@@ -10410,9 +10410,8 @@ window._uiScaleMarcarReset = function () {
     // Grava a base no perfil TAMBÉM: sem isto o valor velho continua no Firestore e
     // volta no próximo aparelho em que a pessoa entrar.
     try {
-      var uid = cu.uid;
-      if (uid && window.FirestoreDB && typeof window.FirestoreDB.saveUserProfile === 'function') {
-        window.FirestoreDB.saveUserProfile(uid, { uiScale: window._UI_SCALE_BASE }).catch(function () {});
+      if (cu.uid && window.FirestoreDB && typeof window.FirestoreDB.saveInterfacePreferences === 'function') {
+        window.FirestoreDB.saveInterfacePreferences({ uiScale: window._UI_SCALE_BASE }).catch(function () {});
       }
     } catch (e) {}
   }
@@ -10439,9 +10438,8 @@ window._setUiScale = function(scale) {
   var cu = window.AppStore && window.AppStore.currentUser;
   if (cu) cu.uiScale = s;
   try {
-    var uid = cu && (cu.uid || cu.email);
-    if (uid && window.FirestoreDB && window.FirestoreDB.saveUserProfile) {
-      window.FirestoreDB.saveUserProfile(uid, { uiScale: s }).catch(function() {});
+    if (cu && cu.uid && window.FirestoreDB && window.FirestoreDB.saveInterfacePreferences) {
+      window.FirestoreDB.saveInterfacePreferences({ uiScale: s }).catch(function() {});
     }
   } catch (e) {}
   return s;
@@ -10459,9 +10457,8 @@ window._toggleTheme = function() {
   // Sync theme to Firestore so other devices pick it up
   try {
     var cu = window.AppStore && window.AppStore.currentUser;
-    var uid = cu && (cu.uid || cu.email);
-    if (uid && window.FirestoreDB && window.FirestoreDB.saveUserProfile) {
-      window.FirestoreDB.saveUserProfile(uid, { theme: next }).catch(function() {});
+    if (cu && cu.uid && window.FirestoreDB && window.FirestoreDB.saveInterfacePreferences) {
+      window.FirestoreDB.saveInterfacePreferences({ theme: next }).catch(function() {});
     }
   } catch (e) {}
 };
