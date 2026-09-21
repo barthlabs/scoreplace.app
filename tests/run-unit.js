@@ -126,6 +126,7 @@ const SUITES = [
   'tests/fusao-e-volta-no-emulador.test.js',
   'tests/celular-do-casal-no-emulador.test.js',
   'functions/test-desfazer-fusao-core.js',
+  'functions/test-category-eligibility-core.js',
   'tests/telefone-do-organizador-caduca.test.js',
   'tests/rules-mudou-tem-de-ser-testada.test.js',
 
