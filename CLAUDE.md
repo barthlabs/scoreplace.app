@@ -409,13 +409,12 @@ nunca o código-fonte. **TRÊS** codebases (o 3º nasceu depois deste texto):
 
 - **`functions/`** — codebase `default` (**nodejs22**, ver `firebase.json`). É o grande
   (`functions/index.js`). ~52 exports; conferir a lista viva com
-  `grep -o '^exports\.[A-Za-z0-9_]*' functions/index.js`. Entre elas: `sendMagicLink`,
+  `grep -o '^exports\.[A-Za-z0-9_]*' functions/index.js`. Entre elas:
   `setParticipantsProfile`, `backupFirestore`, `enrollParticipant`/`deenrollParticipant`,
   `applyLetzplayScans`, `respondHostInvite`, `sweepAbandonedTournaments`, os triggers
   `autoMergeOnProfileUpdate`/`enforceUniqueDisplayName`/`syncMatchRosters`, e vários
   `cleanup*`/`scheduled*`.
-  ⚠️ **As CFs de WhatsApp SAÍRAM** (`processWhatsAppQueue`, `notifyLeagueRoundWhatsApp`,
-  `sendWhatsAppMagicLink`): o canal morreu com o bloqueio da Meta — ver
+  ⚠️ **As CFs de WhatsApp SAÍRAM**: o canal morreu com o bloqueio da Meta — ver
   `project_whatsapp_meta_2fa_block`. Hoje "WhatsApp" no app é só link `wa.me` + grupo
   (`project_whatsapp_is_wame_only`). **O servidor NÃO envia SMS**: quem envia é o Firebase,
   pelo cliente (`signInWithPhoneNumber`) — saber isso evita projetar fluxo que não existe.
