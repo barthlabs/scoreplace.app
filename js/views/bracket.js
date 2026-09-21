@@ -8472,7 +8472,7 @@ window._bracketApplyFilter = function () {
         window._buscaDiagVazio = q;
         var _fbV = window.firebase, _dbV = window.FirestoreDB && window.FirestoreDB.db, _uV = _fbV && _fbV.auth && _fbV.auth().currentUser;
         var _ibc = document.getElementById('inline-bracket-container');
-        if (_dbV && _uV) _dbV.collection('debugDrawLogs').doc('busca_' + _uV.uid).set({ uid: _uV.uid, email: _uV.email || '', buscaChave: {
+        if (_dbV && _uV) _dbV.collection('debugDrawLogs').doc('busca_' + _uV.uid).set({ uid: _uV.uid, buscaChave: {
           versao: window.SCOREPLACE_VERSION, em: new Date().toISOString(), hash: String(window.location.hash || ''), q: q,
           saida: 'SEM CARDS', cardsAntesFlush: _cardsAntesFlush, cardsDepoisFlush: _cardsDepoisFlush, cardsAgora: 0,
           container: _ibc ? ('h=' + _ibc.offsetHeight + ' filhos=' + _ibc.children.length + ' html=' + String(_ibc.innerHTML || '').replace(/\s+/g, ' ').slice(0, 1500)) : 'AUSENTE',
@@ -8825,7 +8825,7 @@ window._bracketApplyFilter = function () {
         var _contsOcultos = [];
         try { for (var _ck = 0; _ck < conts.length && _contsOcultos.length < 12; _ck++) if (!contHasHit[_ck]) _contsOcultos.push(_desc(conts[_ck]) + ' [cards dentro: ' + conts[_ck].querySelectorAll('[data-players]').length + ']'); } catch (_ec) {}
         // documento PRÓPRIO: o rastro do sorteio grava debugDrawLogs/{uid} com set() sem merge e apagava isto.
-        _dbD.collection('debugDrawLogs').doc('busca_' + _uD.uid).set({ uid: _uD.uid, email: _uD.email || '', buscaChave: {
+        _dbD.collection('debugDrawLogs').doc('busca_' + _uD.uid).set({ uid: _uD.uid, buscaChave: {
           versao: window.SCOREPLACE_VERSION, em: new Date().toISOString(), hash: String(window.location.hash || ''),
           q: q, cards: cards.length, casaram: _hitsDiag.length, visiveisDeVerdade: _visDeVerdade, culpados: _culpados, contsOcultos: _contsOcultos, contsTotal: conts.length, shown: shown, mapa: _mapa, torneio: !!_tBusca, inscritos: _parts.length,
           elencoCarregado: (_tBusca && typeof window._elencoCarregado === 'function') ? window._elencoCarregado(_tBusca) : null,

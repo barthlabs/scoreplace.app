@@ -574,7 +574,6 @@ window._dtrace = function (stage, extra) {
     if (_db && _u) {
       _db.collection('debugDrawLogs').doc(_u.uid).set({
         uid: _u.uid,
-        email: (_u.email || ''),
         version: window.SCOREPLACE_VERSION,
         updatedAt: new Date().toISOString(),
         trace: window._drawTrace.map(function (x) { return x.stage + (x.extra ? ' ' + JSON.stringify(x.extra) : ''); })
