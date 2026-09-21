@@ -34,6 +34,31 @@ Essas afirmações são sobre o código inspecionado em 20/09/2026, especialment
 `js/views/phases-engine.js`, `js/views/tournaments-draw.js` e
 `js/views/tournaments-draw-prep.js`.
 
+### Gate para retirar a propagação de nome
+
+Em 21/09/2026, a inspeção de `propagateDisplayName` confirmou que ele só casa
+slots pelo UID, mas ainda regrava `rounds`, `matches`, grupos e classificação
+para atualizar rótulos de exibição. Isso não pode ser removido por simples
+desativação: há leitores legados em sorteio e entrada tardia que ainda usam
+`displayName`/`name` e `p1Name`/`p2Name` como fallback.
+
+Antes de desligar o gatilho, cada leitor precisa obedecer a este contrato:
+
+1. se houver UID, toda chave, deduplicação, presença, inscrição e decisão usa
+   exclusivamente UID; o nome é resolvido para exibição pelo perfil;
+2. fallback por nome é permitido apenas quando não houver UID e a entrada for
+   explicitamente manual/convidada, com `manualParticipantId` quando persistida;
+3. histórico materializado pode conservar o rótulo como snapshot de partida,
+   mas não pode usá-lo para localizar, autorizar ou alterar uma conta;
+4. o teste de retirada deve provar que a troca de nome não escreve torneios e
+   que os caminhos com UID continuam desenhando, sorteando e deduplicando.
+
+O primeiro corte é a entrada tardia e a formação de duplas: esses módulos já
+priorizam `participantUids` em vários caminhos, porém ainda têm chaves por
+nome como contingência. A migração deve substituir apenas a contingência de
+entrada autenticada, preservando convidados sem conta; não autoriza apagar
+rótulos históricos em massa.
+
 ## Modelo de domínio definitivo
 
 ### Identidade e perfil
