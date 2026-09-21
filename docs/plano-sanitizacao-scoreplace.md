@@ -322,6 +322,10 @@ O contrato de escrita que deve anteceder o piloto da fonte canônica está em
 [`contrato-registro-canonico.md`](contrato-registro-canonico.md). Ele não
 autoriza dual-write nem migração em torneio ativo.
 
+O contrato de fase, modalidade de sorteio e adaptação do legado está em
+[`contrato-fases-e-sorteios.md`](contrato-fases-e-sorteios.md). Ele precede
+qualquer renomeação de `liga`, Rei/Rainha ou política de chave.
+
 ### 0. Contenção de identidade, congelamento e linha de base
 
 - Desligar a execução de fusão automática em gatilhos e agendas, preservando
