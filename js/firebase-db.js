@@ -2780,6 +2780,10 @@ window.FirestoreDB = {
     return this._callFn('setOwnActiveCasualRoom', { roomCode: roomCode == null ? null : roomCode });
   },
 
+  async saveLiveScorePreferences(preferences) {
+    return this._callFn('updateOwnLiveScorePreferences', { preferences: preferences || {} });
+  },
+
   async saveUserProfile(uid, profileData) {
     if (!this.db || !uid) return;
     // Denormalize lowercase copies for server-side search. Range queries

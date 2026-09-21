@@ -348,12 +348,11 @@
         }
         break;
       case 'setServer':
-        // Escolha do sacador nos 2 primeiros jogos (o equivalente no relógio ao
-        // arrastar a bola no celular). Dirige a MESMA função — o hard lock de
-        // "após 2 jogos ninguém muda" vive lá, nunca aqui.
+        // Compatibilidade com relógios antigos: selecionar não confirma. Passar
+        // pelo mesmo estado do telefone impede avanço isolado no relógio.
         if ((intent.team === 1 || intent.team === 2) && typeof intent.playerIdx === 'number') {
-          if (typeof window._liveSetServer === 'function') {
-            window._liveSetServer(intent.team, intent.playerIdx);
+          if (typeof window._liveServeSelect === 'function') {
+            window._liveServeSelect(intent.team, intent.playerIdx);
           } else {
             // Ainda no LOBBY: o placar não abriu, então _liveSetServer nem existe e a
             // escolha do relógio caía no vazio. Guarda pra aplicar no `start`.

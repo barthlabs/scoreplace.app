@@ -40,6 +40,7 @@ const _casualStats = require("./casual-stats-core");
 const _pendingMail = require("./pending-mail-core");
 const _profilePreferences = require("./profile-preferences-core");
 const _casualRoomPointer = require("./casual-room-pointer-core");
+const _liveScorePreferences = require("./live-score-preferences-core");
 
 // v1.8.38 — RARIDADE DO TOKEN, em UM lugar só (os dois caminhos de detecção usam este).
 // O subconjunto de 1 token só vira sinal quando o token existe SÓ nas duas contas
@@ -3245,6 +3246,23 @@ exports.setOwnActiveCasualRoom = onCall(
       tx.update(profileRef, { activeCasualRoom: roomCode });
     });
     return { ok: true, roomCode };
+  }
+);
+
+exports.updateOwnLiveScorePreferences = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
+  async (request) => {
+    const uid = request.auth && request.auth.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Login obrigatório");
+    let preferences;
+    try { preferences = _liveScorePreferences.normalize(request.data && request.data.preferences); }
+    catch (error) { throw new HttpsError("invalid-argument", error.message); }
+    const ref = admin.firestore().collection("users").doc(uid);
+    await admin.firestore().runTransaction(async (tx) => {
+      if (!(await tx.get(ref)).exists) throw new HttpsError("failed-precondition", "Perfil inexistente");
+      tx.update(ref, { liveScorePrefs: preferences });
+    });
+    return { ok: true, preferences };
   }
 );
 

@@ -6291,7 +6291,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
         '<span style="min-width:0;flex:1;font-size:clamp(1rem,4.2vw,1.25rem);font-weight:800;' +
           'color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + title + '</span>' +
         '<button id="live-serve-confirm" onclick="window._liveServeConfirm()" ' +
-          'style="flex:0 0 auto;padding:10px 22px;border-radius:12px;border:none;cursor:pointer;' +
+          'style="flex:0 0 auto;min-height:52px;padding:12px 24px;border-radius:12px;border:none;cursor:pointer;' +
           'background:linear-gradient(135deg,#10b981,#059669);color:#fff;font-size:clamp(0.95rem,3.8vw,1.1rem);' +
           'font-weight:800;box-shadow:0 2px 12px rgba(16,185,129,0.3);-webkit-tap-highlight-color:transparent;">' +
           confirmLabel + '</button>' +
@@ -10819,8 +10819,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
     try { localStorage.setItem('scoreplace_livescore_prefs', JSON.stringify(prefs)); } catch(e) {}
     var _cu = window.AppStore && window.AppStore.currentUser;
     if (_cu) _cu.liveScorePrefs = prefs;
-    if (_cu && _cu.uid && window.FirestoreDB && window.FirestoreDB.saveUserProfile) {
-      try { window.FirestoreDB.saveUserProfile(_cu.uid, { liveScorePrefs: prefs }).catch(function(){}); } catch(e) {}
+    if (_cu && _cu.uid && window.FirestoreDB && window.FirestoreDB.saveLiveScorePreferences) {
+      try { window.FirestoreDB.saveLiveScorePreferences(prefs).catch(function(){}); } catch(e) {}
     }
   }
   var _liveScorePrefs = _loadLiveScorePrefs();
