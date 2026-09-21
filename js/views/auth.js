@@ -4313,42 +4313,11 @@ async function simulateLoginSuccess(user) {
     }
   }
 
-  // v1.7.9-beta: auto-merge conta antiga — cross-ref de email-link ou SMS
-  // marcou window._pendingCrossRefOldUid com o uid da conta anterior.
-  // Executa com delay de 3s pra dar tempo do login completar e do modal fechar.
+  // Uma referência cruzada é somente um sinal para revisão explícita. Nunca
+  // move, apaga ou mescla dados durante o login: a posse de um identificador
+  // não autoriza alterar duas contas sem confirmação da pessoa.
   if (window._pendingCrossRefOldUid) {
-    var _autoMergeOldUid = window._pendingCrossRefOldUid;
     window._pendingCrossRefOldUid = null;
-    setTimeout(function() {
-      if (typeof window._executePhoneAccountMerge === 'function') {
-        window._log('[scoreplace-auth] auto-merge cross-ref account:', _autoMergeOldUid);
-        window._executePhoneAccountMerge(_autoMergeOldUid);
-      }
-    }, 3000);
-  }
-
-  // v1.7.9-beta: cross-ref por e-mail para login Google — mescla conta anterior
-  // se existir outro doc com o mesmo email_lower (conta phone/email criada antes).
-  // Só roda se login é Google (não duplica a verificação do email-link acima).
-  if (user.email && _method === 'google' && uid &&
-      window.FirestoreDB && window.FirestoreDB.db) {
-    (function() {
-      var _gCrossUid = uid;
-      window.FirestoreDB.carregarCandidatasDeFusaoDaConta()
-        .then(function(candidates) {
-          (candidates || []).forEach(function(e) {
-            if (e.uid !== _gCrossUid) {
-              setTimeout(function() {
-                if (typeof window._executePhoneAccountMerge === 'function') {
-                  window._log('[google-login] auto-merge conta anterior por email:', e.uid);
-                  window._executePhoneAccountMerge(e.uid);
-                }
-              }, 3000);
-            }
-          });
-        })
-        .catch(function(e) { window._warn('[google-login] email cross-ref error:', e); });
-    })();
   }
 
   // v1.7.9-beta: defaults de notificação — ativa notifyEmail/notifyWhatsApp

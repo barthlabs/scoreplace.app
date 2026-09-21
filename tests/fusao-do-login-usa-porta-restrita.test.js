@@ -19,8 +19,12 @@ must(!/collection\('users'\)\s*\.where\('email_lower'/.test(AUTH),
   '① ⛔ o login no navegador não pesquisa users por e-mail');
 must(!/collection\('users'\)\s*\.where\('phone'/.test(AUTH),
   '① ⛔ telefone digitado ou autenticado não abre ficha privada no navegador');
-must(/carregarCandidatasDeFusaoDaConta\(\)/.test(AUTH),
-  '① os logins por link e Google chamam a porta restrita');
+must(!/carregarCandidatasDeFusaoDaConta\(\)/.test(AUTH),
+  '① suspeita no login não consulta candidatas para iniciar fusão');
+const crossRefStart = AUTH.indexOf('if (window._pendingCrossRefOldUid)');
+const crossRefEnd = AUTH.indexOf('if (uid && window.FirestoreDB', crossRefStart);
+must(crossRefStart >= 0 && crossRefEnd > crossRefStart && !/_executePhoneAccountMerge\(/.test(AUTH.slice(crossRefStart, crossRefEnd)),
+  '① referência cruzada no login não chama fusão automaticamente');
 must(/_callFn\('getOwnEmailMergeCandidates', \{\}\)/.test(DB),
   '② o client chama a callable sem receber e-mail como argumento');
 const i = FN.indexOf('exports.getOwnEmailMergeCandidates = onCall(');
