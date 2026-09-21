@@ -133,6 +133,17 @@ de preparação são configurações de `classification`; playoff é uma fase
 `elimination` posterior. Uma eliminatória direta é uma única fase
 `elimination`.
 
+O modelo de grupos seguido de mata-mata é, portanto, uma composição normal de
+duas fases — não um formato paralelo. Na primeira, a configuração
+`classification.structure: 'groups'` define quantidade ou tamanho dos grupos,
+distribuição de cabeças de chave, todos-contra-todos dentro de cada grupo,
+pontuação e desempates. A fase eliminatória declara sua fonte por colocação:
+por exemplo, primeiro do Grupo A contra segundo do Grupo B. A fonte pode
+classificar mais posições por grupo e, se necessário, enviar as posições
+restantes à política de chave escolhida para completar a eliminatória. O
+resultado da classificatória permanece a classificação final de quem não
+avançar; a eliminatória só redefine as posições que ela disputa.
+
 Cada fase terá um `phaseConfig` validado por schema fechado. A forma alvo é:
 
 ```
@@ -287,7 +298,9 @@ numeração e resultado; ela precisa ser confirmada como decisão de produto.
 
 ### 5. Formatos classificatórios e entradas tardias
 
-- Levar pontos corridos, grupos, suíço e Rei/Rainha ao planejador comum.
+- Levar pontos corridos, grupos, suíço e Rei/Rainha ao planejador comum,
+  incluindo o mapeamento explícito de colocação de grupos para confrontos da
+  eliminatória.
 - Implementar clusters, anti-repetição e justiça de sobras como restrições
   mensuráveis do algoritmo, com motivo de fallback quando a combinação perfeita
   não existir.
