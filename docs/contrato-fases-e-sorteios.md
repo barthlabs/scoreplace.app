@@ -86,7 +86,10 @@ sequência global do torneio, não por índice de fase ou rodada.
 1. Manter `fmt2`, `formatCode`, `format`, `ligaRoundFormat` e campos afins só
    no adaptador de entrada/leitura histórica.
 2. Introduzir normalizador puro de `phaseConfig` e fixtures equivalentes para
-   cada configuração suportada de `format2`.
+   cada configuração suportada de `format2`. **Parcialmente implementado:**
+   `functions/phase-config-core.js` valida o schema fechado e rejeita Super 8
+   enquanto sua matemática não estiver definida; ele ainda não adapta nem
+   substitui `format2`.
 3. Fazer a Function compilar o intent novo e gravar plano imutável antes do
    primeiro sorteio. O cliente usa a mesma biblioteca apenas para prévia.
 4. Extrair os planejadores testados de grupos, classificação, Rei/Rainha e
