@@ -2610,6 +2610,10 @@ window.FirestoreDB = {
     return this._callFn('updateOwnNotificationPreferences', { preferences: preferences || {} });
   },
 
+  async savePresencePreferences(preferences) {
+    return this._callFn('updateOwnPresencePreferences', { preferences: preferences || {} });
+  },
+
   async setActiveCasualRoom(roomCode) {
     return this._callFn('setOwnActiveCasualRoom', { roomCode: roomCode == null ? null : roomCode });
   },

@@ -41,6 +41,7 @@ const _pendingMail = require("./pending-mail-core");
 const _profilePreferences = require("./profile-preferences-core");
 const _profileLocations = require("./profile-locations-core");
 const _profileNotifications = require("./profile-notifications-core");
+const _profilePresence = require("./profile-presence-core");
 const _casualRoomPointer = require("./casual-room-pointer-core");
 const _liveScorePreferences = require("./live-score-preferences-core");
 const _casualLastPreferences = require("./casual-last-preferences-core");
@@ -3243,6 +3244,20 @@ exports.updateOwnNotificationPreferences = onCall(
   }
 );
 
+exports.updateOwnPresencePreferences = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
+  async (request) => {
+    const uid = request.auth && request.auth.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Login obrigatório");
+    let preferences;
+    try { preferences = _profilePresence.normalizePresencePreferences(request.data && request.data.preferences); }
+    catch (error) { throw new HttpsError("invalid-argument", error.message); }
+    const db = admin.firestore(); const ref = db.collection("users").doc(uid);
+    await db.runTransaction(async (tx) => { if (!(await tx.get(ref)).exists) throw new HttpsError("failed-precondition", "Perfil inexistente"); tx.update(ref, Object.assign({}, preferences, { updatedAt: admin.firestore.FieldValue.serverTimestamp() })); });
+    return { ok: true, preferences: preferences };
+  }
+);
+
 exports.setOwnActiveCasualRoom = onCall(
   { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
   async (request) => {
@@ -3252,6 +3267,8 @@ exports.setOwnActiveCasualRoom = onCall(
     try { roomCode = _casualRoomPointer.normalizeRoomCode(request.data && request.data.roomCode); }
     catch (error) { throw new HttpsError("invalid-argument", error.message); }
     const db = admin.firestore();
+    // user-vivo:isento — UID vem do token autenticado e esta leitura pontual
+    // só atualiza a preferência da própria conta; não resolve pessoa por busca ampla.
     const profileRef = db.collection("users").doc(uid);
     if (roomCode) {
       const rooms = await db.collection("casualMatches").where("roomCode", "==", roomCode).limit(2).get();

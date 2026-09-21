@@ -87,7 +87,7 @@ const S = v => ({ stringValue: v });
   // que cada chave é recusada no update e no create.
   const extras = ['dupDismissed', 'dupDismissedInfo', 'dupSuspect', 'nameConflict',
     'phoneSource', 'phoneSetBy', 'phoneSetAt', 'friends', 'friendRequestsSent',
-    'friendRequestsReceived', 'friendRequestsSentAt', 'theme', 'uiScale', 'activeCasualRoom', 'liveScorePrefs', 'casualLast', 'casualPrefs', 'preferredLocations', 'notifyPlatform', 'notifyEmail', 'notifyWhatsApp', 'notifyLevel'];
+    'friendRequestsReceived', 'friendRequestsSentAt', 'theme', 'uiScale', 'activeCasualRoom', 'liveScorePrefs', 'casualLast', 'casualPrefs', 'preferredLocations', 'notifyPlatform', 'notifyEmail', 'notifyWhatsApp', 'notifyLevel', 'presenceVisibility', 'statsVisibility', 'presenceMuteDays', 'presenceMuteUntil', 'presenceAutoCheckin'];
   out.ataquesExtras = {};
   out.criaComExtras = {};
   for (const field of extras) {
@@ -162,8 +162,7 @@ ok(novo.ataqueMergedInto === 403,
 ok(novo.ataqueMergedAt === 403, '🔒 mergedAt negado (got ' + novo.ataqueMergedAt + ')');
 ok(novo.ataquePlan === 403, '🔒 plan=pro (Pro de graça) negado (got ' + novo.ataquePlan + ')');
 ok(novo.ataquePlanExp === 403, '🔒 planExpiresAt negado (got ' + novo.ataquePlanExp + ')');
-['dupDismissed', 'dupDismissedInfo', 'dupSuspect', 'nameConflict', 'phoneSource', 'phoneSetBy', 'phoneSetAt',
-  'friends', 'friendRequestsSent', 'friendRequestsReceived', 'friendRequestsSentAt'].forEach((field) => {
+Object.keys(novo.ataquesExtras).forEach((field) => {
   ok(novo.ataquesExtras[field] === 403,
     '🔒 update de ' + field + ' negado (got ' + novo.ataquesExtras[field] + ')');
   ok(novo.criaComExtras[field] === 403,

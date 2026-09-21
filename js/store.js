@@ -13182,11 +13182,6 @@ window.AppStore = {
       // defaultCategory removed v1.3.98-beta — skill lives in skillBySport
       acceptFriendRequests: user.acceptFriendRequests,
       preferredCeps: user.preferredCeps,
-      presenceVisibility: user.presenceVisibility,
-      statsVisibility: user.statsVisibility,
-      presenceMuteDays: user.presenceMuteDays,
-      presenceMuteUntil: user.presenceMuteUntil,
-      presenceAutoCheckin: user.presenceAutoCheckin,
       omitEmail: user.omitEmail,
       omitPhone: user.omitPhone,
       updatedAt: new Date().toISOString()
@@ -13236,6 +13231,9 @@ window.AppStore = {
       var _notifyPrefs = {};
       ['notifyPlatform', 'notifyEmail', 'notifyWhatsApp', 'notifyLevel'].forEach(function(k) { if (user[k] !== undefined) _notifyPrefs[k] = user[k]; });
       if (Object.keys(_notifyPrefs).length) await window.FirestoreDB.saveNotificationPreferences(_notifyPrefs);
+      var _presencePrefs = {};
+      ['presenceVisibility', 'statsVisibility', 'presenceMuteDays', 'presenceMuteUntil', 'presenceAutoCheckin'].forEach(function(k) { if (user[k] !== undefined) _presencePrefs[k] = user[k]; });
+      if (Object.keys(_presencePrefs).length) await window.FirestoreDB.savePresencePreferences(_presencePrefs);
       window._lastProfileSave.ok = true;
       // Verificação round-trip: lê de volta e confirma que os VALORES chegaram.
       try {

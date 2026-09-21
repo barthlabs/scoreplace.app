@@ -9553,7 +9553,6 @@ window._profileHydrateNameConflict = function () {
 
       // Arrays: só envia se tem pelo menos 1 item
       if (sportsArr.length > 0) payload.preferredSports = sportsArr;
-      if (preferredLocations.length > 0) payload.preferredLocations = preferredLocations;
       // v1.3.6-beta: skillBySport — só envia se tem pelo menos 1 entrada.
       // Sempre envia o campo (mesmo vazio) pra possibilitar reset quando user
       // deseleciona todas as modalidades — Firestore merge preserva
@@ -9577,15 +9576,6 @@ window._profileHydrateNameConflict = function () {
       // Booleans / defaults: sempre envia (UI tem valor definido)
       payload.phoneCountry = phoneCountry;
       payload.acceptFriendRequests = acceptFriends;
-      payload.notifyPlatform = notifyPlatform;
-      payload.notifyEmail = notifyEmail;
-      payload.notifyWhatsApp = notifyWhatsApp;
-      payload.notifyLevel = notifyLevel;
-      payload.presenceVisibility = presenceVisibility;
-      payload.statsVisibility = statsVisibility;
-      payload.presenceMuteDays = muteDays;
-      payload.presenceMuteUntil = muteUntil;
-      payload.presenceAutoCheckin = presenceAutoCheckin;
       payload.liveAlerts = liveAlerts;
       payload.liveAlertsWho = liveAlertsWho;
       // v2.4.3: privacidade de contato (default OFF).
@@ -9621,8 +9611,7 @@ window._profileHydrateNameConflict = function () {
             hrMax: hrMaxRaw,
             letzplayHandle: letzplayHandleIn,
             preferredCeps: preferredCeps,
-            preferredSports: sportsArr,
-            preferredLocations: preferredLocations
+            preferredSports: sportsArr
           });
           _erased.forEach(function (k) { payload[k] = _delSentinel; });
         }
@@ -9630,6 +9619,12 @@ window._profileHydrateNameConflict = function () {
         _erased = [];
         window._warn && window._warn('[Profile] apagamento de campo falhou (segue sem apagar):', _eraseErr);
       }
+
+      // Localizações, notificações e presença têm escritores server-only. A
+      // escrita ampla abaixo permanece apenas para o restante do perfil.
+      var _saveLocations = preferredLocations.length > 0 || _erased.indexOf('preferredLocations') !== -1;
+      var _notificationPreferences = { notifyPlatform: notifyPlatform, notifyEmail: notifyEmail, notifyWhatsApp: notifyWhatsApp, notifyLevel: notifyLevel };
+      var _presencePreferences = { presenceVisibility: presenceVisibility, statsVisibility: statsVisibility, presenceMuteDays: muteDays, presenceMuteUntil: muteUntil, presenceAutoCheckin: presenceAutoCheckin };
 
       // Denormalizados para lookups case-insensitive
       if (payload.displayName) payload.displayName_lower = String(payload.displayName).toLowerCase();
@@ -9667,6 +9662,9 @@ window._profileHydrateNameConflict = function () {
       var saveError = null;
       try {
         await window.FirestoreDB.db.collection('users').doc(uid).set(payload, { merge: true });
+        if (_saveLocations) await window.FirestoreDB.savePreferredLocations(preferredLocations);
+        await window.FirestoreDB.saveNotificationPreferences(_notificationPreferences);
+        await window.FirestoreDB.savePresencePreferences(_presencePreferences);
         window._lastProfileSave.ok = true;
         window._log('[Profile v0.16.9] save ok');
         // v1.8.39-beta: limpar flag de foto pendente após save bem-sucedido
