@@ -1091,7 +1091,7 @@ service cloud.firestore {
         return ['authProvider', 'photoURL', 'displayName', 'displayName_lower', 'email', 'email_lower',
                 'gender', 'birthDate', 'age', 'city', 'hrMax', 'letzplayHandle', 'letzplaySource',
                 'phone', 'phoneCountry', 'preferredCeps', 'preferredSports', 'skillBySport',
-                'canRefereeBySport', 'refereeSports', 'updatedAt', 'fcmToken',
+                'canRefereeBySport', 'refereeSports', 'updatedAt', 'emailVerified', 'fcmToken',
                 'fcmTokenPlatform', 'fcmTokenUpdatedAt', 'linkedPhones'];
       }
 

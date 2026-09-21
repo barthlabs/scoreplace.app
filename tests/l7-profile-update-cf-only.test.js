@@ -48,5 +48,10 @@ ok(/exports\.unlinkOwnLinkedPhone = onCall\([\s\S]*?runTransaction/.test(fn) &&
 ok(/unlinkOwnLinkedPhone\(cu\.uid, phone\)/.test(auth) &&
   !/collection\(['"]users['"]\)\.doc\(_cu\.uid\)\.update\(\{ linkedPhones/.test(auth),
   'cliente não tem escrita direta de celular vinculado');
+const patchStart = auth.indexOf('function _patchProfileIfExists');
+const patchEnd = auth.indexOf('// ─── CONTA ÓRFÃ', patchStart);
+const patchBlock = auth.slice(patchStart, patchEnd);
+ok(/saveUserProfile\(uid, identity\)/.test(patchBlock) && !/\.doc\(uid\)\.update\(fields\)/.test(patchBlock),
+  'patch de identidade do login social usa a Function');
 
 process.exitCode = failed ? 1 : 0;

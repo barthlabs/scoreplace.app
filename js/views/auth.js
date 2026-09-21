@@ -1580,7 +1580,16 @@ function _onAppleAuthError(error) {
 function _patchProfileIfExists(uid, fields) {
   try {
     if (!(window.FirestoreDB && window.FirestoreDB.db && uid)) return;
-    window.FirestoreDB.db.collection('users').doc(uid).update(fields).catch(window._falhouCalado('perfil-campos'));
+    var identity = {};
+    ['authProvider', 'displayName', 'photoURL'].forEach(function(field) {
+      if (fields && fields[field]) identity[field] = fields[field];
+    });
+    // updateOwnProfile usa update em transação, portanto preserva a semântica
+    // "só se já existir" deste helper e não cria perfil antes do resgate.
+    if (Object.keys(identity).length) window.FirestoreDB.saveUserProfile(uid, identity).catch(window._falhouCalado('perfil-campos'));
+    if (fields && Object.prototype.hasOwnProperty.call(fields, 'hasGooglePhotoReal')) {
+      window.FirestoreDB.db.collection('users').doc(uid).update({ hasGooglePhotoReal: fields.hasGooglePhotoReal }).catch(window._falhouCalado('perfil-foto-google'));
+    }
   } catch (e) {}
 }
 
@@ -3334,9 +3343,7 @@ window._resetSaveNewPassword = function() {
   u.updatePassword(pwd)
     .then(function() {
       if (window.FirestoreDB && window.FirestoreDB.db && u.uid) {
-        window.FirestoreDB.db.collection('users').doc(u.uid).set({
-          authProvider: 'password', emailVerified: true, updatedAt: new Date().toISOString()
-        }, { merge: true }).catch(window._falhouCalado('perfil-merge'));
+        window.FirestoreDB.saveUserProfile(u.uid, { authProvider: 'password' }).catch(window._falhouCalado('perfil-merge'));
       }
       if (typeof _resetPhoneRecaptcha === 'function') { try { _resetPhoneRecaptcha(); } catch (e) {} }
       var ov = document.getElementById('reset-newpwd-overlay'); if (ov) ov.remove();
@@ -4265,7 +4272,7 @@ async function simulateLoginSuccess(user) {
         if (legacyData.photoURL && (!existingProfile || !existingProfile.photoURL)) mergeData.photoURL = legacyData.photoURL;
         if (Object.keys(mergeData).length > 0) {
           if (window._realEmailOrEmpty(user.email)) mergeData.email = user.email;
-          await window.FirestoreDB.db.collection('users').doc(uid).set(mergeData, { merge: true });
+          await window.FirestoreDB.saveUserProfile(uid, mergeData);
           /* ⛔ v2.1.48 — a limpeza da invariante saiu junto: ela existia porque a UNIÃO
            * acima trazia amigo e convite no mesmo merge. Sem a união, não há o que
            * reconciliar aqui — e a escrita seria recusada de qualquer forma.

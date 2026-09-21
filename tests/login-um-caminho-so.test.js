@@ -31,6 +31,7 @@ const semComent = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$
 console.log('──── login: um caminho só ────');
 
 const auth = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'auth.js'), 'utf8');
+const functions = fs.readFileSync(path.join(__dirname, '..', 'functions', 'index.js'), 'utf8');
 const authCode = semComent(auth);
 const ui = semComent(fs.readFileSync(path.join(__dirname, '..', 'js', 'ui.js'), 'utf8'));
 
@@ -77,7 +78,9 @@ ok(/_pendingLinkCredential = pendingCred/.test(linkBody),
 
 // ── 4. CORRIDA DO RESGATE ─────────────────────────────────────────────────────
 ok(/function _patchProfileIfExists\(/.test(auth), '_patchProfileIfExists existe');
-ok(/\.update\(fields\)\.catch/.test(auth), 'patch usa update() — falha silenciosa quando o doc NÃO existe (nunca cria)');
+ok(/saveUserProfile\(uid, identity\)/.test(auth) &&
+   /exports\.updateOwnProfile = onCall\([\s\S]*?if \(!current\.exists\) throw new HttpsError\("failed-precondition"/.test(functions),
+  'patch usa Function com update transacional — perfil ausente nunca é criado');
 // nenhum handler social pode gravar saveUserProfile ANTES do simulateLoginSuccess
 const gStart = auth.indexOf('firebase.auth().signInWithPopup(authProvider)');
 const gEnd = auth.indexOf('function _googleNativeLogin');
