@@ -24,7 +24,7 @@ ok('lê o torneio e a parte participants em transação', /db\.runTransaction/.t
 ok('autoriza organização contra dado fresco', /_isTournamentOrgCaller\(tournament, callerUid\)/.test(fn));
 ok('usa o núcleo puro para o censo', /_registrationCore\.dryRunLegacyRoster\(tournamentId, tournament\.participants\)/.test(fn));
 ok('prévia não cria nem atualiza documentos', !/\btx\.(?:set|update|delete)\b/.test(fn));
-ok('retorno contém contadores e exceções', /summary: \{/.test(fn) && /conflicts: report\.conflicts/.test(fn) && /unsupported: report\.unsupported/.test(fn));
+ok('retorno contém contadores, exceções e fingerprint', /summary: \{/.test(fn) && /conflicts: report\.conflicts/.test(fn) && /unsupported: report\.unsupported/.test(fn) && /fingerprint: report\.fingerprint/.test(fn));
 
 console.log((fail ? '❌' : '✅') + ' registro-canonico-dry-run-cf: ' + pass + ' ok, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);

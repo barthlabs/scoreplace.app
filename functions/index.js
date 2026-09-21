@@ -3692,6 +3692,7 @@ exports.previewCanonicalRegistrationMigration = onCall(
       registrations: report.registrations,
       conflicts: report.conflicts,
       unsupported: report.unsupported,
+      fingerprint: report.fingerprint,
       summary: {
         registrations: report.registrations.length,
         conflicts: report.conflicts.length,

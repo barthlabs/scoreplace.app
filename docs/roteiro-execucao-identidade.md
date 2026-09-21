@@ -70,6 +70,11 @@ para a organização do torneio. A Function relê o elenco (inclusive em torneio
 dividido) numa transação e devolve candidatos, conflitos e incompatibilidades;
 ela não grava documentos de inscrição nem altera projeções legadas.
 
+A prévia também devolve um fingerprint SHA-256 calculado apenas de chaves de
+registro e exceções estruturais. A aprovação de uma migração futura deve
+referenciar esse fingerprint; qualquer mudança de elenco, categoria ou
+incompatibilidade exige novo censo.
+
 ## Entrega I2 — estado de identidade e barreira de autorização
 
 **Objetivo:** criar a estrutura sem ainda exigir captura facial de usuários.

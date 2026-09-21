@@ -1,5 +1,7 @@
 'use strict';
 
+const crypto = require('crypto');
+
 /*
  * Núcleo puro do registro canônico de inscrição.
  *
@@ -81,7 +83,14 @@ function dryRunLegacyRoster(tournamentId, entries) {
       registrations.push(registration);
     });
   });
-  return { registrations: registrations, conflicts: conflicts, unsupported: unsupported };
+  // O fingerprint amarra a aprovação humana ao censo exato. Ele não inclui
+  // nome, foto, e-mail ou telefone: só IDs de registro e posições de exceção.
+  const fingerprint = crypto.createHash('sha256').update(JSON.stringify({
+    registrations: registrations.map((item) => item.registrationId).sort(),
+    conflicts: conflicts.map((item) => item.registrationId).sort(),
+    unsupported: unsupported.map((item) => item.reason + ':' + item.index).sort(),
+  })).digest('hex');
+  return { registrations: registrations, conflicts: conflicts, unsupported: unsupported, fingerprint: fingerprint };
 }
 
 module.exports = {

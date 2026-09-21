@@ -34,6 +34,13 @@ const census = C.dryRunLegacyRoster('torneio-1', [
 ok('dry-run gera uma inscrição por categoria', census.registrations.length === 3);
 ok('dry-run aponta duplicata sem apagá-la', census.conflicts.length === 1);
 ok('dry-run bloqueia equipe composta e entrada sem identidade', census.unsupported.length === 2);
+ok('fingerprint é estável apesar da ordem dos rótulos', census.fingerprint === C.dryRunLegacyRoster('torneio-1', [
+  { uid: 'ana', categories: ['Masc B', 'Fem A'] },
+  { manualParticipantId: 'manual-1', displayName: 'Outro rótulo' },
+  { uid: 'ana', category: 'Fem A' },
+  { p1Uid: 'u1', p2Uid: 'u2', category: 'Outro' },
+  { displayName: 'Sem identidade' },
+]).fingerprint);
 
 console.log((fail ? '❌' : '✅') + ' registration-core: ' + pass + ' ok, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);
