@@ -65,11 +65,8 @@ function _bindNativePushListeners() {
       var token = ev && ev.token;
       var user = window.AppStore && window.AppStore.currentUser;
       if (token && user && user.uid && window.FirestoreDB && window.FirestoreDB.db) {
-        window.FirestoreDB.db.collection('users').doc(user.uid).set({
-          fcmToken: token,
-          fcmTokenUpdatedAt: new Date().toISOString(),
-          fcmTokenPlatform: 'native-' + (window.Capacitor.getPlatform ? window.Capacitor.getPlatform() : 'app')
-        }, { merge: true }).catch(window._falhouCalado('fcmToken'));
+        window.FirestoreDB.savePushToken(user.uid, token,
+          'native-' + (window.Capacitor.getPlatform ? window.Capacitor.getPlatform() : 'app')).catch(window._falhouCalado('fcmToken'));
       }
     } catch (e) { window._warn('[FCM native] tokenReceived error:', e); }
   });
@@ -96,11 +93,8 @@ window._registerFCMTokenNative = async function() {
     var res = await FM.getToken();
     var token = res && res.token;
     if (token && window.FirestoreDB && window.FirestoreDB.db) {
-      await window.FirestoreDB.db.collection('users').doc(user.uid).set({
-        fcmToken: token,
-        fcmTokenUpdatedAt: new Date().toISOString(),
-        fcmTokenPlatform: 'native-' + (window.Capacitor.getPlatform ? window.Capacitor.getPlatform() : 'app')
-      }, { merge: true });
+      await window.FirestoreDB.savePushToken(user.uid, token,
+        'native-' + (window.Capacitor.getPlatform ? window.Capacitor.getPlatform() : 'app'));
     } else if (!token) {
       window._warn('[FCM native] No token received');
     }
@@ -146,15 +140,9 @@ window._registerFCMToken = async function() {
     if (token) {
       // Token obtained successfully
       if (window.FirestoreDB && window.FirestoreDB.db) {
-        await window.FirestoreDB.db.collection('users').doc(user.uid).set({
-          fcmToken: token,
-          fcmTokenUpdatedAt: new Date().toISOString(),
-          // 'web' explícito: se o usuário tinha logado no app nativo (token
-          // com fcmTokenPlatform='native-*') e volta pra web, este overwrite
-          // reseta o flag → o CF sabe que agora é token WEB e NÃO adiciona
-          // payload `notification` (contrato data-only anti-duplicata).
-          fcmTokenPlatform: 'web'
-        }, { merge: true });
+        // 'web' explícito: se o usuário tinha logado no app nativo, esta
+        // intenção troca a plataforma sem abrir escrita direta no perfil.
+        await window.FirestoreDB.savePushToken(user.uid, token, 'web');
         // Token saved to Firestore
       }
     } else {

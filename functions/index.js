@@ -39,6 +39,7 @@ const _dupPerson = require("./duplicate-person-core");
 const _casualStats = require("./casual-stats-core");
 const _pendingMail = require("./pending-mail-core");
 const _profilePreferences = require("./profile-preferences-core");
+const _pushToken = require("./push-token-core");
 const _profileLocations = require("./profile-locations-core");
 const _profileNotifications = require("./profile-notifications-core");
 const _profilePresence = require("./profile-presence-core");
@@ -3245,6 +3246,29 @@ exports.updateOwnProfile = onCall(
       }
       if (patch.email) update.email_lower = patch.email.toLowerCase();
       tx.update(profileRef, update);
+    });
+    return { ok: true };
+  }
+);
+
+// Token FCM é dado privado de entrega. O cliente declara o token; o servidor
+// valida, exige perfil existente e grava o carimbo na mesma transação.
+exports.updateOwnPushToken = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
+  async (request) => {
+    const uid = request.auth && request.auth.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Login obrigatório");
+    let push;
+    try { push = _pushToken.normalize(request.data); }
+    catch (error) { throw new HttpsError("invalid-argument", error.message); }
+    const ref = admin.firestore().collection("users").doc(uid);
+    await admin.firestore().runTransaction(async (tx) => {
+      if (!(await tx.get(ref)).exists) throw new HttpsError("failed-precondition", "Perfil inexistente");
+      tx.update(ref, {
+        fcmToken: push.token,
+        fcmTokenPlatform: push.platform,
+        fcmTokenUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
     });
     return { ok: true };
   }

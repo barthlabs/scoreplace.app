@@ -2581,6 +2581,12 @@ window.FirestoreDB = {
     return await this._callFn('updateOwnProfile', { profile: toSave, eraseFields: eraseFields || [] });
   },
 
+  async savePushToken(uid, token, platform) {
+    var current = window.firebase && window.firebase.auth && window.firebase.auth().currentUser;
+    if (!uid || !current || String(uid) !== String(current.uid)) throw new Error('savePushToken exige o próprio uid autenticado');
+    return await this._callFn('updateOwnPushToken', { token: token, platform: platform });
+  },
+
   /* L13.P2 — O ÚNICO SINAL DE PARQUE QUE O PRODUTO TEM.
    *
    * MEDIDO em 11/set/2026: 277 perfis, 91 campos, NENHUM de versão do app — a política de corte

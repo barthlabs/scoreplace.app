@@ -130,6 +130,7 @@ const SUITES = [
   'functions/test-registration-lifecycle-core.js',
   'functions/test-registration-merge-core.js',
   'functions/test-phase-config-core.js',
+  'functions/test-push-token-core.js',
   'functions/test-legacy-phase-adapter-core.js',
   'tests/l7-phase-config-cf-only.test.js',
   'tests/no-magic-link-login.test.js',

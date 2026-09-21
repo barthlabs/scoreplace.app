@@ -87,7 +87,7 @@ const S = v => ({ stringValue: v });
   // que cada chave é recusada no update e no create.
   const extras = ['dupDismissed', 'dupDismissedInfo', 'dupSuspect', 'nameConflict',
     'phoneSource', 'phoneSetBy', 'phoneSetAt', 'friends', 'friendRequestsSent',
-    'friendRequestsReceived', 'friendRequestsSentAt', 'theme', 'uiScale', 'activeCasualRoom', 'liveScorePrefs', 'casualLast', 'casualPrefs', 'preferredLocations', 'notifyPlatform', 'notifyEmail', 'notifyWhatsApp', 'notifyLevel', 'presenceVisibility', 'statsVisibility', 'presenceMuteDays', 'presenceMuteUntil', 'presenceAutoCheckin', 'acceptedTerms', 'acceptedTermsAt', 'acceptedTermsVersion', 'acceptedTermsGrandfathered', 'lastSeenAt', 'lastClientVersion', 'lastClientPlatform', 'favorites', 'hiddenTournaments', 'acceptFriendRequests', 'omitEmail', 'omitPhone', 'liveAlerts', 'liveAlertsWho'];
+    'friendRequestsReceived', 'friendRequestsSentAt', 'theme', 'uiScale', 'activeCasualRoom', 'liveScorePrefs', 'casualLast', 'casualPrefs', 'preferredLocations', 'notifyPlatform', 'notifyEmail', 'notifyWhatsApp', 'notifyLevel', 'presenceVisibility', 'statsVisibility', 'presenceMuteDays', 'presenceMuteUntil', 'presenceAutoCheckin', 'acceptedTerms', 'acceptedTermsAt', 'acceptedTermsVersion', 'acceptedTermsGrandfathered', 'lastSeenAt', 'lastClientVersion', 'lastClientPlatform', 'favorites', 'hiddenTournaments', 'acceptFriendRequests', 'omitEmail', 'omitPhone', 'liveAlerts', 'liveAlertsWho', 'fcmToken', 'fcmTokenPlatform', 'fcmTokenUpdatedAt'];
   out.ataquesExtras = {};
   out.criaComExtras = {};
   for (const field of extras) {
