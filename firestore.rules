@@ -1071,7 +1071,7 @@ service cloud.firestore {
                 // Preferências visuais já usam updateOwnInterfacePreferences. O
                 // cliente pode aplicar localmente, mas a sincronização do perfil
                 // passa pela Function e não por escrita direta.
-                'theme', 'uiScale',
+                'theme', 'uiScale', 'activeCasualRoom',
                 // v2.1.48 — os três arrays de amizade viraram CACHE DE EXIBIÇÃO. A relação
                 // mora em `friendships/{pairId}` e a prova em `friendAccess/**`. Nem o dono
                 // do próprio perfil escreve mais por cliente: quem escrevesse o próprio

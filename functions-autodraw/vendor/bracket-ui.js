@@ -8630,9 +8630,9 @@ window._openLiveScoring = function(tId, matchId, opts) {
     // 1) Limpa o ponteiro de resume ANTES de qualquer await — suppress de 10s
     //    cobre a janela até a navegação assentar.
     try {
-      if (_cuFC && _cuFC.uid && window.FirestoreDB && window.FirestoreDB.saveUserProfile) {
+      if (_cuFC && _cuFC.uid && window.FirestoreDB && window.FirestoreDB.setActiveCasualRoom) {
         window._suppressCasualResumeUntil = Date.now() + 10000;
-        window.FirestoreDB.saveUserProfile(_cuFC.uid, { activeCasualRoom: null }).catch(function() {});
+        window.FirestoreDB.setActiveCasualRoom(null).catch(function() {});
       }
       if (_cuFC) _cuFC.activeCasualRoom = null;
     } catch (e) {}
@@ -8800,8 +8800,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
               try {
                 window._suppressCasualResumeUntil = Date.now() + 6000;
                 sessionStorage.removeItem('_activeCasualRoom');
-                if (_cuHC && _cuHC.uid && window.FirestoreDB && window.FirestoreDB.saveUserProfile) {
-                  window.FirestoreDB.saveUserProfile(_cuHC.uid, { activeCasualRoom: null }).catch(function(){});
+                if (_cuHC && _cuHC.uid && window.FirestoreDB && window.FirestoreDB.setActiveCasualRoom) {
+                  window.FirestoreDB.setActiveCasualRoom(null).catch(function(){});
                 }
               } catch(e) {}
               if (typeof showNotification === 'function') showNotification('Partida encerrada', 'O host encerrou a partida.', 'info');
@@ -10510,8 +10510,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
       try { _releaseWakeLock(); } catch(e) {}
       var ovR = document.getElementById('live-scoring-overlay'); if (ovR) ovR.remove();
       try { sessionStorage.setItem('_activeCasualRoom', newRoom); } catch(e) {}
-      if (_cuR && _cuR.uid && window.FirestoreDB.saveUserProfile) {
-        window.FirestoreDB.saveUserProfile(_cuR.uid, { activeCasualRoom: newRoom }).catch(function() {});
+      if (_cuR && _cuR.uid && window.FirestoreDB.setActiveCasualRoom) {
+        window.FirestoreDB.setActiveCasualRoom(newRoom).catch(function() {});
       }
       if (typeof window._navigateToScannedRoute === 'function') {
         window._navigateToScannedRoute('#casual/' + newRoom);
@@ -11114,9 +11114,9 @@ window._openLiveScoring = function(tId, matchId, opts) {
     // por 6s pra um snapshot stale não puxar de volta logo após o clear.
     if (isCasual) {
       try {
-        if (_cuCS && _cuCS.uid && window.FirestoreDB && window.FirestoreDB.saveUserProfile) {
+        if (_cuCS && _cuCS.uid && window.FirestoreDB && window.FirestoreDB.setActiveCasualRoom) {
           window._suppressCasualResumeUntil = Date.now() + 6000;
-          window.FirestoreDB.saveUserProfile(_cuCS.uid, { activeCasualRoom: null }).catch(function(){});
+          window.FirestoreDB.setActiveCasualRoom(null).catch(function(){});
         }
         if (_cuCS) _cuCS.activeCasualRoom = null;
       } catch(_eACR) {}
@@ -11261,9 +11261,9 @@ window._openLiveScoring = function(tId, matchId, opts) {
         if (isCasual) {
           try {
             var _cuC = window.AppStore && window.AppStore.currentUser;
-            if (_cuC && _cuC.uid && window.FirestoreDB && window.FirestoreDB.saveUserProfile) {
+            if (_cuC && _cuC.uid && window.FirestoreDB && window.FirestoreDB.setActiveCasualRoom) {
               window._suppressCasualResumeUntil = Date.now() + 6000;
-              window.FirestoreDB.saveUserProfile(_cuC.uid, { activeCasualRoom: null }).catch(function(){});
+              window.FirestoreDB.setActiveCasualRoom(null).catch(function(){});
             }
           } catch(e) {}
           // v0.17.48: limpa sessionStorage também — sem isto, o boot
@@ -14915,8 +14915,8 @@ window._openCasualMatch = function(restoreOpts) {
     // outro dispositivo" (o celular cai durante o placar ao vivo). Movido do
     // abrir-setup pra cá pra não criar fantasmas em setups abandonados.
     try {
-      if (cu && cu.uid && window.FirestoreDB && window.FirestoreDB.saveUserProfile) {
-        window.FirestoreDB.saveUserProfile(cu.uid, { activeCasualRoom: _sessionRoomCode }).catch(function() {});
+      if (cu && cu.uid && window.FirestoreDB && window.FirestoreDB.setActiveCasualRoom) {
+        window.FirestoreDB.setActiveCasualRoom(_sessionRoomCode).catch(function() {});
       }
       sessionStorage.setItem('_activeCasualRoom', _sessionRoomCode);
     } catch (e) {}
@@ -15021,13 +15021,12 @@ window._openCasualMatch = function(restoreOpts) {
       // Clear active casual room from profile
       try {
         var _cu = window.AppStore && window.AppStore.currentUser;
-        var _uid = _cu && (_cu.uid || _cu.email);
-        if (_uid && window.FirestoreDB && window.FirestoreDB.saveUserProfile) {
+        if (_cu && _cu.uid && window.FirestoreDB && window.FirestoreDB.setActiveCasualRoom) {
           // Suppress profile-listener resume for 6s so a stale snapshot
           // delivered after this close doesn't hijack navigation back
           // into the match the user just left.
           window._suppressCasualResumeUntil = Date.now() + 6000;
-          window.FirestoreDB.saveUserProfile(_uid, { activeCasualRoom: null }).catch(function() {});
+          window.FirestoreDB.setActiveCasualRoom(null).catch(function() {});
         }
         // v0.17.48: limpa sessionStorage backup também
         try { sessionStorage.removeItem('_activeCasualRoom'); } catch(e) {}
@@ -15454,7 +15453,7 @@ window._openCasualMatch = function(restoreOpts) {
     try { if (window._casualSetupCleanup) window._casualSetupCleanup(); } catch(e) {}
 
     var _cu2 = window.AppStore && window.AppStore.currentUser;
-    var _uid2 = _cu2 && (_cu2.uid || _cu2.email);
+    var _uid2 = _cu2 && _cu2.uid;
     // v1.6.33-beta: filter nulls — após leave, _lobbyParticipants tem null nos slots
     // liberados. Contar length bruto causava _isSolo=false mesmo com 1 real participante.
     var _participantsCount = Array.isArray(_lobbyParticipants) ? _lobbyParticipants.filter(Boolean).length : 0;
@@ -15487,9 +15486,9 @@ window._openCasualMatch = function(restoreOpts) {
 
     // 3. Clear active-room marker on profile so no device auto-resumes this room
     try {
-      if (_uid2 && window.FirestoreDB && window.FirestoreDB.saveUserProfile) {
+      if (_uid2 && window.FirestoreDB && window.FirestoreDB.setActiveCasualRoom) {
         window._suppressCasualResumeUntil = Date.now() + 6000;
-        window.FirestoreDB.saveUserProfile(_uid2, { activeCasualRoom: null }).catch(function() {});
+        window.FirestoreDB.setActiveCasualRoom(null).catch(function() {});
       }
       sessionStorage.removeItem('_activeCasualRoom');
     } catch(e) {}
@@ -15620,8 +15619,8 @@ window._renderCasualJoin = function(container, roomCode) {
         var _acr = _cuNF && _cuNF.activeCasualRoom;
         if (_cuNF && _cuNF.uid && _acr && String(_acr).toUpperCase() === String(roomCode).toUpperCase()) {
           window._suppressCasualResumeUntil = Date.now() + 8000;
-          if (window.FirestoreDB && window.FirestoreDB.saveUserProfile) {
-            window.FirestoreDB.saveUserProfile(_cuNF.uid, { activeCasualRoom: null }).catch(function () {});
+          if (window.FirestoreDB && window.FirestoreDB.setActiveCasualRoom) {
+            window.FirestoreDB.setActiveCasualRoom(null).catch(function () {});
           }
           _cuNF.activeCasualRoom = null;
         }
@@ -15672,9 +15671,9 @@ window._renderCasualJoin = function(container, roomCode) {
         } catch(e) {}
         // Limpa marca de "partida ativa" do perfil + sessionStorage
         try {
-          if (_myUid && window.FirestoreDB && window.FirestoreDB.saveUserProfile) {
+          if (_myUid && window.FirestoreDB && window.FirestoreDB.setActiveCasualRoom) {
             window._suppressCasualResumeUntil = Date.now() + 6000;
-            window.FirestoreDB.saveUserProfile(_myUid, { activeCasualRoom: null }).catch(function(){});
+            window.FirestoreDB.setActiveCasualRoom(null).catch(function(){});
           }
         } catch(e) {}
         if (typeof showNotification === 'function') {
@@ -15810,8 +15809,8 @@ window._renderCasualJoin = function(container, roomCode) {
           var _cuStale = window.AppStore && window.AppStore.currentUser;
           if (_cuStale && _cuStale.uid) {
             window._suppressCasualResumeUntil = Date.now() + 8000;
-            if (window.FirestoreDB && window.FirestoreDB.saveUserProfile) {
-              window.FirestoreDB.saveUserProfile(_cuStale.uid, { activeCasualRoom: null }).catch(function () {});
+            if (window.FirestoreDB && window.FirestoreDB.setActiveCasualRoom) {
+              window.FirestoreDB.setActiveCasualRoom(null).catch(function () {});
             }
             _cuStale.activeCasualRoom = null;
             // Só o criador apaga o doc (evita corrida). cancelCasualMatch pula
