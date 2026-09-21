@@ -85,6 +85,7 @@ const _enrollCore = require("./enroll-core");
 const _categoryEligibility = require("./category-eligibility-core");
 const _registrationCore = require("./registration-core");
 const _registrationLifecycle = require("./registration-lifecycle-core");
+const _phaseConfig = require("./phase-config-core");
 const _splitParts = require("./split-parts.js");   // torneio dividido: elenco na subcoleção
 const _refereeRoster = require("./vendor/referee-roster.js"); // escala de arbitragem: contrato puro e sem contato
 
@@ -3876,6 +3877,47 @@ function _categoryDefinitionsCanChange(tournament) {
     tournament.phaseRounds
   ].some((value) => Array.isArray(value) ? value.length > 0 : (value && typeof value === 'object' && Object.keys(value).length > 0));
 }
+
+// `phaseConfig` não convive com phases/fmt2 legados: aceitar os dois seria criar
+// duas autoridades para a mesma topologia. O adaptador histórico só lê; esta
+// porta atende exclusivamente um torneio ainda sem configuração de fases.
+function _phaseConfigCanChange(tournament) {
+  if (!_categoryDefinitionsCanChange(tournament)) return false;
+  return !['phases', 'fmt2'].some((key) => {
+    const value = tournament && tournament[key];
+    return Array.isArray(value) ? value.length > 0 : !!value;
+  });
+}
+
+exports.setTournamentPhaseConfig = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
+    const data = request.data || {};
+    const tournamentId = String(data.tournamentId || "").trim();
+    if (!tournamentId) throw new HttpsError("invalid-argument", "tournamentId é obrigatório");
+    let phaseConfig;
+    try { phaseConfig = _phaseConfig.normalizePhaseConfig(data.phaseConfig); }
+    catch (error) { throw new HttpsError("invalid-argument", error.message); }
+
+    const db = admin.firestore();
+    const ref = db.collection("tournaments").doc(tournamentId);
+    return await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
+      const tournament = snap.data() || {};
+      if (!_isTournamentOrgCaller(tournament, callerUid)) {
+        throw new HttpsError("permission-denied", "só a organização configura fases");
+      }
+      if (!_phaseConfigCanChange(tournament)) {
+        throw new HttpsError("failed-precondition", "phaseConfig exige torneio sem fases legadas ou materializadas");
+      }
+      tx.update(ref, { phaseConfig: phaseConfig, updatedAt: _FV.serverTimestamp() });
+      return { ok: true, phaseConfig: phaseConfig };
+    });
+  }
+);
 
 exports.setTournamentCategoryDefinitions = onCall(
   { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },

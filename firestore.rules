@@ -456,6 +456,13 @@ service cloud.firestore {
                  == resource.data.get('enrollmentRigor', null);
       }
 
+      // Configuração canônica de fase é validada, autorizada e persistida pela
+      // Function transacional. Não existe criação/edição direta equivalente.
+      function phaseConfigIntacta() {
+        return request.resource.data.get('phaseConfig', null)
+                 == resource.data.get('phaseConfig', null);
+      }
+
       /* ⭐ A ÚNICA SAÍDA LEGÍTIMA: O RESET PARA INSCRIÇÕES.
        * `window._clearTournamentDraw` (js/views/tournaments-draw.js:75) é o único caminho do
        * cliente que MUDA `currentPhaseIndex`/`_phaseMaterialized` sem ser avanço — ele volta o
@@ -584,7 +591,8 @@ service cloud.firestore {
         && request.resource.data.get('_phaseMaterialized', 0) == 0
         && !('_semPesados' in request.resource.data)
         && !('phaseStartedAt' in request.resource.data)
-        && !('phaseRounds' in request.resource.data);
+        && !('phaseRounds' in request.resource.data)
+        && !('phaseConfig' in request.resource.data);
 
       // Update permitido em 3 caminhos:
       //   1. Admin (creator/co-host ativo) — qualquer mudança. SÓ POR UID
@@ -607,7 +615,8 @@ service cloud.firestore {
           || (isTournamentParticipant(resource.data) && isParticipantBracketDiff())
         )
         && (faseIntacta() || ehResetOk())
-        && categoriasTipadasIntactas();
+        && categoriasTipadasIntactas()
+        && phaseConfigIntacta();
 
       // Delete: admins only.
       // ⛔ E TORNEIO DIVIDIDO NÃO SE APAGA PELO CLIENTE. Apagar o documento aqui deixaria

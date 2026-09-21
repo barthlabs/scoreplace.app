@@ -130,6 +130,7 @@ const SUITES = [
   'functions/test-registration-lifecycle-core.js',
   'functions/test-phase-config-core.js',
   'functions/test-legacy-phase-adapter-core.js',
+  'tests/l7-phase-config-cf-only.test.js',
   'tests/l7-canonical-registration-cf-only.test.js',
   'tests/l7-category-definitions-cf-only.test.js',
   'tests/telefone-do-organizador-caduca.test.js',
