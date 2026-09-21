@@ -22,10 +22,10 @@ a mesma pessoa em dois aparelhos.
 - Uma identidade humana aprovada possui um único `canonicalUid` ativo.
 - Um UID provisório não pode ser organizador, integrar equipe, receber vaga,
   confirmar inscrição, lançar resultado ou votar em operação de torneio.
-- Uma inscrição confirmada requer `canonicalUid` e usa documento de chave
+- Uma inscrição confirmada requer `canonicalUid` e usa registro de chave
   determinística `registration/{canonicalUid}__{categoryId}`.
 - Nenhum torneio, jogo, fila, convite ou perfil público armazena imagem,
-  vetor facial, documento de identidade, e-mail ou telefone para decidir
+  vetor facial, e-mail ou telefone para decidir
   identidade.
 - Uma coincidência facial é um sinal de revisão, nunca uma fusão, exclusão ou
   recusa definitiva automática.
@@ -96,7 +96,7 @@ transformado com chave de servidor. Ele serve para apontar a identidade já
 verificada; não é imagem, embedding facial nem substituto de biometria. A
 chave de hash fica em gestão de segredos, com rotação planejada.
 
-Não serão armazenados no Firebase selfie, vídeo, foto de documento, vetor
+Não serão armazenados no Firebase selfie, vídeo, vetor
 facial, resposta crua do provedor ou qualquer identificador técnico que
 permita reconstruir a biometria. Evidência, prazo de retenção e exclusão ficam
 no provedor contratado, sob contrato de tratamento e política aprovada.
@@ -106,13 +106,12 @@ no provedor contratado, sob contrato de tratamento e política aprovada.
 1. Firebase cria um UID e `accountIdentity/{uid}` em estado `provisional`.
 2. O app pede ao servidor `beginIdentityVerification`. O servidor aplica
    rate limit, cria `verificationId` e sessão curta de captura do provedor.
-3. O app nativo abre a captura de documento oficial e selfie com prova de
-   vida. A mídia vai ao provedor, não ao Firestore nem a uma coleção do
-   Scoreplace.
+3. O app nativo abre a captura facial com prova de vida. A mídia vai ao
+   provedor, não ao Firestore nem a uma coleção do Scoreplace.
 4. O provedor chama webhook autenticado do servidor com resultado assinado.
-5. Documento autêntico, prova de vida, comparação selfie-documento, controles
-   antifraude e ausência de candidato facial promovem automaticamente o UID a
-   `verified` e criam a claim.
+5. Prova de vida, qualidade facial, controles antifraude e ausência de
+   candidato facial promovem automaticamente o UID a `verified` e criam a
+   claim.
 6. Com candidato, a Function marca `duplicate_review`, revoga as capacidades
    de participação do UID provisório e oferece recuperação/vínculo pela
    credencial da conta já existente, sem revelar dados privados dela.
@@ -126,15 +125,14 @@ sem essa etapa é uma decisão possível de produto, mas abre uma exceção expl
 
 ### Decisão automática e exceções
 
-O caminho normal é automático. O provedor executa leitura/autenticidade de
-documento, prova de vida, comparação facial um-para-um (selfie × documento),
-busca facial um-para-muitos, sinais de fraude de aparelho e devolve resposta
-assinada. Se tudo satisfaz os limiares da política, a aprovação é imediata e
-sem analista.
+O caminho normal é automático. O provedor executa prova de vida, qualidade e
+unicidade facial, busca facial um-para-muitos, sinais de fraude de aparelho e
+devolve resposta assinada. Se tudo satisfaz os limiares da política, a
+aprovação é imediata e sem analista. É o mesmo modelo de identificação facial
+usado em controle de acesso, adaptado para captura remota com prova de vida.
 
-Revisão humana é exceção: só entra em candidato facial já existente, leitura
-documental inconclusiva, divergência de dados, risco de fraude, falha técnica,
-rota de acessibilidade ou contestação. Um candidato em busca um-para-muitos
+Revisão humana é exceção: só entra em candidato facial já existente, risco de
+fraude, falha técnica, rota de acessibilidade ou contestação. Um candidato em busca um-para-muitos
 mantém a conta pendente; nunca provoca recusa definitiva ou fusão automática.
 O sistema mede falso positivo, falso negativo, abandono, tempo de resolução e
 discrepâncias por grupo para ajustar limiares e fornecedor.
@@ -183,7 +181,7 @@ senha deixa de ser exigida no fluxo normal.
 
 ```
 primeiro cadastro
-  → documento + prova de vida + deduplicação facial automática
+  → prova de vida + deduplicação facial automática
   → canonicalUid
   → criação de passkey
 
@@ -210,7 +208,7 @@ vínculo, mas nunca criam perfil paralelo: antes de qualquer perfil novo, o
 servidor resolve ou exige o `canonicalUid` já existente.
 
 Recuperação sem senha segue ordem forte: outra passkey já registrada, credencial
-vinculada comprovada, nova verificação de documento+prova de vida; revisão
+vinculada comprovada, nova verificação facial com prova de vida; revisão
 humana é a exceção final. SMS, e-mail ou código isolado não recuperam sozinho
 um UID verificado, pois isso reabriria a porta para conta paralela.
 
@@ -277,7 +275,7 @@ política antes de alterar estado.
   sem liberar um UID novo.
 - Fallback não facial conclui o fluxo por revisão sem degradar autorização.
 - Auditoria permite reconstruir cada transição sem conter selfie, vetor facial,
-  digital, documento ou contato em claro.
+  digital ou contato em claro.
 
 ## Sequência de entrega
 
