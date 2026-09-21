@@ -42,6 +42,7 @@ const _profilePreferences = require("./profile-preferences-core");
 const _profileLocations = require("./profile-locations-core");
 const _profileNotifications = require("./profile-notifications-core");
 const _profilePresence = require("./profile-presence-core");
+const _profileTerms = require("./profile-terms-core");
 const _casualRoomPointer = require("./casual-room-pointer-core");
 const _liveScorePreferences = require("./live-score-preferences-core");
 const _casualLastPreferences = require("./casual-last-preferences-core");
@@ -3255,6 +3256,30 @@ exports.updateOwnPresencePreferences = onCall(
     const db = admin.firestore(); const ref = db.collection("users").doc(uid);
     await db.runTransaction(async (tx) => { if (!(await tx.get(ref)).exists) throw new HttpsError("failed-precondition", "Perfil inexistente"); tx.update(ref, Object.assign({}, preferences, { updatedAt: admin.firestore.FieldValue.serverTimestamp() })); });
     return { ok: true, preferences: preferences };
+  }
+);
+
+exports.acceptOwnTerms = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
+  async (request) => {
+    const uid = request.auth && request.auth.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Login obrigatório");
+    let mode;
+    try { mode = _profileTerms.normalizeTermsAcceptance(request.data); }
+    catch (error) { throw new HttpsError("invalid-argument", error.message); }
+    const db = admin.firestore(); const ref = db.collection("users").doc(uid);
+    await db.runTransaction(async (tx) => {
+      const profile = await tx.get(ref);
+      if (!profile.exists) throw new HttpsError("failed-precondition", "Perfil inexistente");
+      if (mode === 'grandfather' && !_profileTerms.hasGrandfatherEvidence(profile.data())) {
+        throw new HttpsError("failed-precondition", "Perfil sem evidência de uso anterior");
+      }
+      const update = { acceptedTerms: true, acceptedTermsAt: admin.firestore.FieldValue.serverTimestamp(), acceptedTermsVersion: _profileTerms.CURRENT_TERMS_VERSION, updatedAt: admin.firestore.FieldValue.serverTimestamp() };
+      if (mode === 'grandfather') update.acceptedTermsGrandfathered = true;
+      else update.acceptedTermsGrandfathered = admin.firestore.FieldValue.delete();
+      tx.update(ref, update);
+    });
+    return { ok: true, acceptedTerms: true, acceptedTermsVersion: _profileTerms.CURRENT_TERMS_VERSION, grandfathered: mode === 'grandfather' };
   }
 );
 

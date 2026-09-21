@@ -5378,13 +5378,12 @@ async function simulateLoginSuccess(user) {
       'fields present:', Object.keys(_profile).sort().slice(0, 20).join(','));
     if (_hasUsageEvidence && window.FirestoreDB && window.FirestoreDB.db && uid) {
       try {
+        await window.FirestoreDB.acceptCurrentTerms(true);
         var _grandfatherPayload = {
           acceptedTerms: true,
-          acceptedTermsAt: new Date().toISOString(),
           acceptedTermsVersion: window._CURRENT_TERMS_VERSION,
           acceptedTermsGrandfathered: true
         };
-        await window.FirestoreDB.db.collection('users').doc(uid).set(_grandfatherPayload, { merge: true });
         // Sincroniza estado local
         Object.assign(_termsCheckProfile, _grandfatherPayload);
         if (window.AppStore.currentUser) Object.assign(window.AppStore.currentUser, _grandfatherPayload);

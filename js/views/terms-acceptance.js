@@ -158,12 +158,6 @@
           return;
         }
 
-        var payload = {
-          acceptedTerms: true,
-          acceptedTermsAt: new Date().toISOString(),
-          acceptedTermsVersion: window._CURRENT_TERMS_VERSION
-        };
-
         // v1.0.52-beta: NUNCA fingir sucesso sem persistir. Antes a
         // condição `if (FirestoreDB && db)` SEM else fazia o save ser
         // pulado silenciosamente quando o SDK não estava pronto (race
@@ -187,7 +181,7 @@
           return; // não resolve — modal continua aberto pra retry
         }
         try {
-          await window.FirestoreDB.db.collection('users').doc(cu.uid).set(payload, { merge: true });
+          await window.FirestoreDB.acceptCurrentTerms(false);
           // Round-trip verification: lê de volta e confirma que persistiu.
           // Sem isso, save aparentemente OK (sem throw) mas Firestore podia
           // ter rejeitado silenciosamente em rules → próximo login gate
@@ -199,7 +193,7 @@
           }
           window._log('[TermsAccept v1.0.52] saved + verified, acceptedTermsVersion=' + verifyData.acceptedTermsVersion);
           // Atualiza estado local
-          Object.assign(cu, payload);
+          Object.assign(cu, { acceptedTerms: true, acceptedTermsAt: verifyData.acceptedTermsAt, acceptedTermsVersion: verifyData.acceptedTermsVersion });
           cleanup();
           resolve(true);
         } catch (err) {

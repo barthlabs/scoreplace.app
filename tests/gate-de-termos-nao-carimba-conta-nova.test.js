@@ -89,8 +89,8 @@ ok(evidencia({ friends: [], preferredSports: [], preferredLocations: [], matchHi
 // ── E o modal continua sendo chamado quando não há evidência ─────────────────
 ok(SRC.indexOf('await window._showTermsAcceptanceModal()') !== -1,
    'o gate continua abrindo o modal de aceite');
-ok(SRC.indexOf("acceptedTermsGrandfathered: true") !== -1,
-   'o carimbo continua marcado como grandfather (analytics distingue do aceite real)');
+ok(/acceptCurrentTerms\(true\)/.test(SRC),
+   'o grandfather chama a porta server-only (o servidor preserva o marcador de analytics)');
 
 console.log((fail === 0 ? '✅' : '❌') + ' gate-de-termos: ' + pass + ' asserções, ' + fail + ' falha(s)');
 process.exit(fail === 0 ? 0 : 1);

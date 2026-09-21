@@ -2614,6 +2614,10 @@ window.FirestoreDB = {
     return this._callFn('updateOwnPresencePreferences', { preferences: preferences || {} });
   },
 
+  async acceptCurrentTerms(grandfathered) {
+    return this._callFn('acceptOwnTerms', { mode: grandfathered === true ? 'grandfather' : 'explicit' });
+  },
+
   async setActiveCasualRoom(roomCode) {
     return this._callFn('setOwnActiveCasualRoom', { roomCode: roomCode == null ? null : roomCode });
   },
