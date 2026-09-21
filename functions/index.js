@@ -3274,6 +3274,26 @@ exports.updateOwnPushToken = onCall(
   }
 );
 
+exports.unlinkOwnLinkedPhone = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
+  async (request) => {
+    const uid = request.auth && request.auth.uid;
+    const phone = String(request.data && request.data.phone || '').trim();
+    if (!uid) throw new HttpsError("unauthenticated", "Login obrigatório");
+    if (!/^\+\d{8,15}$/.test(phone)) throw new HttpsError("invalid-argument", "celular vinculado inválido");
+    const ref = admin.firestore().collection("users").doc(uid);
+    await admin.firestore().runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) throw new HttpsError("failed-precondition", "Perfil inexistente");
+      const profile = snap.data() || {};
+      if (String(profile.phone || '') === phone) throw new HttpsError("failed-precondition", "o celular principal não é desvinculado por esta porta");
+      const linked = (Array.isArray(profile.linkedPhones) ? profile.linkedPhones : []).filter((item) => String(item) !== phone);
+      tx.update(ref, { linkedPhones: linked, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+    });
+    return { ok: true };
+  }
+);
+
 // Preferências visuais são o primeiro recorte de update de perfil migrado para
 // o servidor. O contrato é fechado: não serve como atalho para campos de
 // identidade ou elegibilidade e `update` impede ressuscitar perfil inexistente.
@@ -8894,6 +8914,11 @@ exports.mergePhoneAccount = onCall(
         surv.phoneSetBy = admin.firestore.FieldValue.delete();
         surv.phoneSetAt = admin.firestore.FieldValue.delete();
       }
+    } else if (_oldPhone) {
+      // A prova SMS de oldUid foi revalidada acima. Com telefone principal já
+      // existente, o número absorvido só pode entrar como identificador secundário.
+      const secondary = _profileMerge.computeLinkedIdentifiers(newData, null, _oldPhone);
+      if (secondary.linkedPhones) surv.linkedPhones = secondary.linkedPhones;
     }
     // PLANO/Pro — nunca rebaixar: Pro vence; mantém a validade mais longa.
     const _exp = (d) => { const v = d && d.planExpiresAt; const n = v ? Date.parse(v) : 0; return isNaN(n) ? 0 : n; };

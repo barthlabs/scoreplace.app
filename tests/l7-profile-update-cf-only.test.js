@@ -42,5 +42,11 @@ ok(/FirestoreDB\.saveUserProfile\(uid, _profilePatch, _erased\)/.test(authBlock)
 ok(/function serverOwnedProfileFields\(\)/.test(rules) &&
   /affectedKeys\(\)\.hasAny\(serverOwnedProfileFields\(\)\)/.test(rules),
   'Rules recusam a escrita direta equivalente');
+ok(/exports\.unlinkOwnLinkedPhone = onCall\([\s\S]*?runTransaction/.test(fn) &&
+  /mergePhoneAccount[\s\S]*?computeLinkedIdentifiers/.test(fn),
+  'celular secundário só nasce após prova de mesclagem e sai em transação');
+ok(/unlinkOwnLinkedPhone\(cu\.uid, phone\)/.test(auth) &&
+  !/collection\(['"]users['"]\)\.doc\(_cu\.uid\)\.update\(\{ linkedPhones/.test(auth),
+  'cliente não tem escrita direta de celular vinculado');
 
 process.exitCode = failed ? 1 : 0;

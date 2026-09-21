@@ -8143,21 +8143,8 @@ function setupProfileModal() {
       }
       function finishOk(merged) {
         try { sapp.auth().signOut(); } catch(e){}
-        // Celular VINCULADO secundário: grava o número em linkedPhones[] do sobrevivente
-        // pra que "celular + senha" resolva pra esta conta (via _uidByProfilePhone no server).
-        try {
-          var _ctx = window._profilePhoneCtx;
-          if (_ctx && _ctx.linked && _ctx.e164) {
-            var _cu = window.AppStore && window.AppStore.currentUser;
-            var _db = window.FirestoreDB && window.FirestoreDB.db;
-            if (_cu && _db && _cu.uid) {
-              var _lp = Array.isArray(_cu.linkedPhones) ? _cu.linkedPhones.slice() : [];
-              if (_lp.indexOf(_ctx.e164) === -1) _lp.push(_ctx.e164);
-              _cu.linkedPhones = _lp;
-              _db.collection('users').doc(_cu.uid).update({ linkedPhones: _lp }).catch(window._falhouCalado('linkedPhones'));
-            }
-          }
-        } catch (e) {}
+        // mergePhoneAccount revalida o proofIdToken e grava o identificador
+        // secundário no servidor quando já existe telefone principal.
         if (otpEl) otpEl.innerHTML = '<div style="color:var(--sp-c-6ee7b7,#6ee7b7);font-size:0.82rem;">' +
           (merged ? '✅ Contas unidas e celular vinculado! Atualizando…' : '✅ Celular verificado e vinculado! Atualizando…') + '</div>';
         setTimeout(function() { window.location.reload(); }, 1600);
@@ -8918,13 +8905,8 @@ window._profileHydrateNameConflict = function () {
       var cu = window.AppStore && window.AppStore.currentUser;
       if (!cu || !cu.uid || !window.FirestoreDB || !window.FirestoreDB.db) return;
       if (!confirm('Remover ' + phone + ' dos seus celulares vinculados?')) return;
-      var linked = Array.isArray(cu.linkedPhones) ? cu.linkedPhones.slice() : [];
-      var idx = linked.indexOf(phone);
-      if (idx !== -1) linked.splice(idx, 1);
-      cu.linkedPhones = linked;
-      window.FirestoreDB.db.collection('users').doc(cu.uid).update({
-        linkedPhones: linked
-      }).then(function() {
+      window.FirestoreDB.unlinkOwnLinkedPhone(cu.uid, phone).then(function() {
+        cu.linkedPhones = (Array.isArray(cu.linkedPhones) ? cu.linkedPhones : []).filter(function(item) { return item !== phone; });
         window._profileRenderLinkedPhones();
         if (window.showNotification) window.showNotification('Celular removido', phone, 'info');
       }).catch(function(e) { window._warn('[LinkedPhone] unlink error:', e); });

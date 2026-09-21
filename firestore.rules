@@ -1092,7 +1092,7 @@ service cloud.firestore {
                 'gender', 'birthDate', 'age', 'city', 'hrMax', 'letzplayHandle', 'letzplaySource',
                 'phone', 'phoneCountry', 'preferredCeps', 'preferredSports', 'skillBySport',
                 'canRefereeBySport', 'refereeSports', 'updatedAt', 'fcmToken',
-                'fcmTokenPlatform', 'fcmTokenUpdatedAt'];
+                'fcmTokenPlatform', 'fcmTokenUpdatedAt', 'linkedPhones'];
       }
 
       // A criação inicial só ocorre pela Function initializeUserProfile. Ela reserva
