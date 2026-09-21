@@ -303,6 +303,119 @@ política antes de alterar estado.
 7. migrar contas existentes por convite progressivo, sem bloquear torneio já
    em andamento nem apagar dados automaticamente.
 
+## Migração das contas existentes e corte de acesso
+
+As contas existentes não podem ser tratadas como se já tivessem passado pela
+verificação. Elas recebem uma migração explícita, auditável e reversível; a
+data de criação, o e-mail, o telefone, a foto ou uma sessão prévia não são
+prova de identidade facial.
+
+### Princípio do corte
+
+Após a data de corte, somente um `canonicalUid` com identidade facial aprovada
+e pelo menos uma passkey ativa pode obter sessão operacional. A regra vale para
+atleta, organizador, coorganizador e árbitro. Uma conta que ainda não concluiu
+a migração pode entrar apenas na tela de migração e de suporte; não pode ler ou
+alterar conteúdo privado do torneio, inscrever-se, lançar resultado nem exercer
+papel de organização.
+
+"Usar a facial para entrar" possui dois controles distintos e ambos são
+obrigatórios na arquitetura:
+
+1. a pessoa precisa ter concluído a captura facial remota com prova de vida,
+   que estabelece sua identidade única na plataforma;
+2. cada sessão posterior é aberta por uma passkey, cuja chave privada é
+   liberada pelo sistema do aparelho após autenticação biométrica local.
+
+O Scoreplace não recebe a face nem a digital do aparelho nessa segunda etapa.
+Em aparelhos com Face ID, a liberação normalmente é facial; em aparelhos com
+Touch ID ou biometria Android, pode ser digital. Onde houver somente PIN de
+aparelho ou não houver biometria, a política deve exigir uma rota de recuperação
+ou revisão — não permitir uma credencial fraca silenciosa. Uma nova filmagem
+facial remota em todo login não substitui passkey, não é fornecida por Face ID e
+não deve ser o fluxo ordinário.
+
+### Estados adicionais da migração
+
+```
+legacy_uninvited → migration_invited → migration_in_progress → verified
+                                  │              │
+                                  │              ├→ duplicate_review
+                                  │              ├→ manual_review
+                                  │              └→ migration_deferred
+                                  └→ migration_overdue → restricted
+```
+
+- `legacy_uninvited`: conta antiga ainda fora da coorte; conserva o acesso
+  anterior durante a preparação controlada.
+- `migration_invited`: o servidor já exige a mensagem de migração no próximo
+  acesso, mas ainda respeita a janela de carência daquela coorte.
+- `migration_in_progress`: captura, análise ou criação de passkey em curso.
+- `migration_deferred`: falha temporária ou impossibilidade técnica registrada;
+  só recebe extensão curta e auditada, nunca renovação automática indefinida.
+- `migration_overdue` e `restricted`: a janela terminou sem verificação;
+  sessão limitada exclusivamente à conclusão da migração e suporte.
+
+Esses estados vivem em `accountIdentity/{uid}` e são alterados apenas no
+servidor. O token de sessão carrega ou consulta o estado atual; o cliente não
+decide que uma conta legada continua apta.
+
+### Execução por coortes
+
+1. **Censo e preparação.** Gerar uma contagem imutável de UIDs ativos, papéis,
+   participações futuras, aparelhos/passkeys já registrados e contas que têm
+   torneio em andamento. Fazer backup verificável das referências e publicar a
+   versão da política antes de convidar alguém.
+2. **Piloto interno.** Migrar equipe, organizadores voluntários e uma coorte
+   pequena de atletas sem torneio crítico. Medir conclusão, abandono, falhas de
+   prova de vida, candidatos duplicados e recuperação antes de expandir.
+3. **Convite progressivo.** O servidor marca coortes por risco operacional,
+   dando prioridade a quem vai organizar ou participar de evento futuro. O
+   aplicativo explica que é uma atualização de identidade e conduz, na mesma
+   sessão, captura facial com prova de vida e criação da passkey.
+4. **Janela com proteção.** Até o prazo individual, a conta existente conserva
+   acesso, mas ações de alto impacto já pedem conclusão antecipada. Nenhum UID
+   novo é liberado para inscrição sem verificação desde o início da implantação.
+5. **Corte por coorte.** Findo o prazo, aplicar `restricted` no servidor. Não
+   apagar perfil, torneio, inscrição ou credencial; concluir a migração restaura
+   o mesmo `canonicalUid` e suas referências.
+6. **Exigência geral.** Só depois de a coorte atingir critérios de conclusão e
+   de não haver incidente aberto de precisão ou acessibilidade, tornar o corte
+   global. O calendário concreto é uma decisão de operação aprovada a partir
+   das métricas do piloto, não uma constante escondida no aplicativo.
+
+Torneios já em disputa exigem tratamento próprio: o organizador pode migrar
+durante a janela, mas uma restrição não pode retirar unilateralmente uma dupla
+de uma partida materializada. A Function registra a pendência e permite ao
+organizador aplicar a regra de substituição já configurada para aquele torneio,
+sem criar um segundo participante ou alterar resultados históricos.
+
+### Recuperação e aparelhos novos
+
+Uma pessoa migrada que perde o aparelho não cria outro cadastro. Ela começa em
+`recoverCanonicalAccount`, informa um identificador de conta apenas para
+localização e prova controle por outra passkey ou credencial já vinculada. Se
+isso não for possível, realiza nova captura facial com prova de vida; candidato,
+risco ou inconclusão vão para revisão. Somente após resolver o mesmo
+`canonicalUid` o novo aparelho registra uma passkey. O fluxo não oferece a
+opção de "criar conta" como atalho de recuperação.
+
+### Critérios de aceite da migração
+
+- Uma conta antiga sem verificação não consegue obter sessão operacional após
+  seu corte, mesmo usando credencial antiga válida.
+- A conclusão da migração mantém o mesmo `canonicalUid`, inscrições, histórico
+  e papéis; não cria nem funde UIDs automaticamente.
+- Uma conta em `duplicate_review` não confirma inscrição, mas consegue acessar
+  recuperação e contestação sem revelar a identidade do possível candidato.
+- Perder ou trocar aparelho exige uma nova passkey no mesmo UID, nunca uma nova
+  conta.
+- A alteração do prazo de uma coorte é auditada, exige autorização operacional
+  e não é feita pelo cliente.
+- Testes de regressão cobrem simultaneamente conta legada, conta nova,
+  organizador com torneio ativo, gêmeos em exceção e recuperação após perda de
+  aparelho.
+
 ## Mapa de intervenção no código existente
 
 Esta seção é um mapa de migração, não autorização para alteração direta antes
