@@ -8,6 +8,7 @@ const leave=db.slice(db.indexOf('async leaveStandby'),db.indexOf('async deenroll
 ok(enroll.includes("this._callFn('enrollParticipant'")&&!enroll.includes('_enrollParticipantTx('),'inscrição não volta a escrever pelo cliente');
 ok(!db.includes('async _enrollParticipantTx'),'fallback de transação de inscrição não existe no cliente');
 ok(deenroll.includes("this._callFn('deenrollParticipant'")&&!deenroll.includes('_deenrollParticipantTx('),'desinscrição não volta a escrever pelo cliente');
+ok(!db.includes('async _deenrollParticipantTx'),'fallback de transação de desinscrição não existe no cliente');
 ok(leave.includes("this._callFn('leaveStandby'")&&!leave.includes('runTransaction'),'saída da espera não volta a escrever pelo cliente');
 const e=fs.readFileSync('js/views/tournaments-enrollment.js','utf8');
 const add=e.slice(e.indexOf('window._doAddParticipant'),e.indexOf('window.addTeamFunction'));
