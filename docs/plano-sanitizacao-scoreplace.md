@@ -74,9 +74,57 @@ Autenticação biométrica do aparelho pode proteger o desbloqueio local de uma
 sessão ou credencial. Ela não revela à aplicação uma biometria que identifique
 uma pessoa entre aparelhos e não prova que duas contas pertencem à mesma
 pessoa. Portanto não entra como mecanismo de deduplicação ou fusão. Coleta de
-biometria, imagem documental ou dados especialmente sensíveis fica fora desta
-reforma; exigiria especificação própria de consentimento, segurança, retenção,
-contestação e base legal.
+biometria, imagem documental ou dados especialmente sensíveis será uma entrega
+própria do programa de identidade, com especificação de consentimento,
+segurança, retenção, contestação e base legal; nunca um efeito colateral de
+uma tela de cadastro.
+
+### Verificação facial própria do Scoreplace
+
+Caso a plataforma adote garantia de uma pessoa por inscrição, a verificação
+facial será uma capacidade própria do produto, fornecida por serviço de prova
+de vida e comparação biométrica contratado e auditado. Não é Face ID, Touch ID
+ou BiometricPrompt: essas APIs apenas confirmam localmente quem desbloqueou o
+aparelho e não fornecem uma face ou digital comparável ao Scoreplace.
+
+O fluxo proposto é:
+
+1. no primeiro cadastro elegível a inscrição, o aplicativo coleta uma sessão
+   curta de selfie com prova de vida; a captura vai diretamente ao provedor por
+   canal autenticado;
+2. o provedor faz verificação e busca de duplicidade facial um-para-muitos;
+3. se não houver candidato, o servidor cria uma `identityClaim` privada que
+   aponta para o `canonicalUid`; torneios continuam referenciando somente esse
+   UID;
+4. se houver candidato, o novo UID fica `provisional` e não pode confirmar
+   inscrição. A pessoa é levada à recuperação/vinculação da conta existente;
+5. coincidência facial nunca funde contas, apaga dados ou recusa alguém de modo
+   definitivo sozinha. Ela exige prova de controle da conta existente ou
+   revisão humana com alternativa de contestação;
+6. depois de resolvido, apenas o `canonicalUid` fica ativo para perfil,
+   organizador e inscrição. O UID provisório é tombstoned ou tem suas
+   credenciais vinculadas de forma auditada.
+
+O Scoreplace não guardará imagem facial bruta, vetor facial ou digital no
+Firestore. Guardará apenas estado da verificação, identificador opaco do
+provedor, versão da política, data, decisão humana quando houver e os eventos
+de auditoria mínimos. O fornecedor biométrico deve ser escolhido depois de
+avaliação de precisão, prova de vida contra fraude, retenção/exclusão,
+localização de dados, contrato de tratamento e procedimento de incidente.
+
+A verificação deve ter rota acessível não facial e revisão humana. Falha de
+câmera, deficiência, aparência alterada ou falso positivo não podem excluir
+alguém do produto. Para preservar a garantia sem prejudicar pessoa legítima, a
+conta fica pendente até a revisão; ela não obtém inscrição confirmada enquanto
+isso.
+
+Biometria do aparelho complementa, mas não substitui, esse fluxo: cada
+dispositivo pode registrar uma chave não exportável no Keychain/Keystore,
+desbloqueada pelo sistema com Face ID/Touch ID ou biometria Android. O servidor
+envia um desafio e aceita a confirmação somente se a chave vinculada ao UID o
+assinar após autenticação local. Isso protege cadastro, vínculo de conta e
+confirmação de inscrição contra sessão roubada; não é uma chave de unicidade de
+pessoa.
 
 ### Inscrição e equipe
 
