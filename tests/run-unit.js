@@ -1562,6 +1562,7 @@ const SUITES = [
   'functions/test-profile-presence-core.js',
   'functions/test-profile-terms-core.js',
   'functions/test-profile-session-core.js',
+  'functions/test-profile-tournament-preferences-core.js',
   'functions/test-casual-room-pointer-core.js',
   'functions/test-live-score-preferences-core.js',
   'functions/test-casual-last-preferences-core.js',

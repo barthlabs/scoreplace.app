@@ -2618,6 +2618,10 @@ window.FirestoreDB = {
     return this._callFn('acceptOwnTerms', { mode: grandfathered === true ? 'grandfather' : 'explicit' });
   },
 
+  async saveTournamentPreference(field, tournamentId, add) {
+    return this._callFn('updateOwnTournamentPreference', { field: field, tournamentId: String(tournamentId || ''), add: add === true });
+  },
+
   async setActiveCasualRoom(roomCode) {
     return this._callFn('setOwnActiveCasualRoom', { roomCode: roomCode == null ? null : roomCode });
   },

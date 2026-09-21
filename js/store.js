@@ -10548,13 +10548,9 @@ function _prefList(kind, field) {
 function _prefPersist(field, id, add) {
   var cu = window.AppStore && window.AppStore.currentUser;
   if (!cu || !cu.uid) return Promise.resolve(false);   // deslogado → só espelho
-  var db = window.FirestoreDB && (window.FirestoreDB.db || (window.FirestoreDB.ensureDb && window.FirestoreDB.ensureDb()));
-  if (!db) return Promise.resolve(false);
+  if (!window.FirestoreDB || typeof window.FirestoreDB.saveTournamentPreference !== 'function') return Promise.resolve(false);
   try {
-    var fv = firebase.firestore.FieldValue;
-    var patch = {};
-    patch[field] = add ? fv.arrayUnion(String(id)) : fv.arrayRemove(String(id));
-    return db.collection('users').doc(cu.uid).set(patch, { merge: true }).then(function () { return true; });
+    return window.FirestoreDB.saveTournamentPreference(field, String(id), add === true).then(function () { return true; });
   } catch (e) { return Promise.reject(e); }
 }
 // Migração 1x POR DEVICE: sobe o que já existia no localStorage pra conta. Guardada por
