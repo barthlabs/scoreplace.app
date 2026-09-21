@@ -1588,7 +1588,7 @@ function _patchProfileIfExists(uid, fields) {
     // "só se já existir" deste helper e não cria perfil antes do resgate.
     if (Object.keys(identity).length) window.FirestoreDB.saveUserProfile(uid, identity).catch(window._falhouCalado('perfil-campos'));
     if (fields && Object.prototype.hasOwnProperty.call(fields, 'hasGooglePhotoReal')) {
-      window.FirestoreDB.db.collection('users').doc(uid).update({ hasGooglePhotoReal: fields.hasGooglePhotoReal }).catch(window._falhouCalado('perfil-foto-google'));
+      window.FirestoreDB.saveGooglePhotoMarker(uid, fields.hasGooglePhotoReal).catch(window._falhouCalado('perfil-foto-google'));
     }
   } catch (e) {}
 }

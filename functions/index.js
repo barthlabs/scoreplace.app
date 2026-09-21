@@ -3294,6 +3294,26 @@ exports.unlinkOwnLinkedPhone = onCall(
   }
 );
 
+exports.updateOwnGooglePhotoMarker = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
+  async (request) => {
+    const uid = request.auth && request.auth.uid;
+    const hasReal = request.data && request.data.hasGooglePhotoReal;
+    if (!uid) throw new HttpsError("unauthenticated", "Login obrigatório");
+    if (typeof hasReal !== "boolean") throw new HttpsError("invalid-argument", "marcador de foto inválido");
+    const authUser = await admin.auth().getUser(uid);
+    if (!(authUser.providerData || []).some((provider) => provider && provider.providerId === "google.com")) {
+      throw new HttpsError("permission-denied", "marcador exige conta Google vinculada");
+    }
+    const ref = admin.firestore().collection("users").doc(uid);
+    await admin.firestore().runTransaction(async (tx) => {
+      if (!(await tx.get(ref)).exists) throw new HttpsError("failed-precondition", "Perfil inexistente");
+      tx.update(ref, { hasGooglePhotoReal: hasReal, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+    });
+    return { ok: true };
+  }
+);
+
 // Preferências visuais são o primeiro recorte de update de perfil migrado para
 // o servidor. O contrato é fechado: não serve como atalho para campos de
 // identidade ou elegibilidade e `update` impede ressuscitar perfil inexistente.

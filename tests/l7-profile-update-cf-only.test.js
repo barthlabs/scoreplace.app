@@ -53,5 +53,8 @@ const patchEnd = auth.indexOf('// ─── CONTA ÓRFÃ', patchStart);
 const patchBlock = auth.slice(patchStart, patchEnd);
 ok(/saveUserProfile\(uid, identity\)/.test(patchBlock) && !/\.doc\(uid\)\.update\(fields\)/.test(patchBlock),
   'patch de identidade do login social usa a Function');
+ok(/exports\.updateOwnGooglePhotoMarker = onCall\([\s\S]*?providerId === "google\.com"[\s\S]*?runTransaction/.test(fn) &&
+  /saveGooglePhotoMarker\(uid, fields\.hasGooglePhotoReal\)/.test(patchBlock),
+  'marcador de foto Google exige provedor vinculado e usa Function');
 
 process.exitCode = failed ? 1 : 0;
