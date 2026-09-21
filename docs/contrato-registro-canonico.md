@@ -112,6 +112,11 @@ redesenho automático de jogo iniciado.
   `withdrawn/account_deleted`, remove `participantUid` e não expõe a coleção
   ao cliente. O ID técnico permanece apenas como âncora interna não legível
   pelas Rules.
+- Se uma falha excepcional produzir, na fusão explícita de contas, inscrições
+  em categorias distintas do mesmo `exclusiveGroup`, o caso é submetido ao
+  organizador. A pessoa fica fora do sorteio até a decisão; o sistema não
+  escolhe uma categoria por conta própria. Isso não é evidência de caso legado
+  existente nem autoriza migrar torneios antigos.
 - Cliente autenticado não cria, atualiza ou apaga `registrations` diretamente.
 - Censo, fingerprint, registros e projeção têm contagens reconciliadas antes e
   depois da mudança de autoridade.

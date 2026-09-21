@@ -128,6 +128,7 @@ const SUITES = [
   'functions/test-desfazer-fusao-core.js',
   'functions/test-category-eligibility-core.js',
   'functions/test-registration-lifecycle-core.js',
+  'functions/test-registration-merge-core.js',
   'functions/test-phase-config-core.js',
   'functions/test-legacy-phase-adapter-core.js',
   'tests/l7-phase-config-cf-only.test.js',
