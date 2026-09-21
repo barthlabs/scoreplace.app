@@ -13679,8 +13679,8 @@ window._openCasualMatch = function(restoreOpts) {
     // localStorage e some quando o iOS limpa o storage. Espelha _saveLiveScorePrefs.
     var _cu = window.AppStore && window.AppStore.currentUser;
     if (_cu) _cu.casualLast = _last;
-    if (_cu && _cu.uid && window.FirestoreDB && window.FirestoreDB.saveUserProfile) {
-      try { window.FirestoreDB.saveUserProfile(_cu.uid, { casualLast: _last }).catch(function(){}); } catch(e) {}
+    if (_cu && _cu.uid && window.FirestoreDB && window.FirestoreDB.saveCasualLast) {
+      try { window.FirestoreDB.saveCasualLast(_last).catch(function(){}); } catch(e) {}
     }
   }
 

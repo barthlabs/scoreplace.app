@@ -1557,6 +1557,7 @@ const SUITES = [
   'functions/test-profile-preferences-core.js',
   'functions/test-casual-room-pointer-core.js',
   'functions/test-live-score-preferences-core.js',
+  'functions/test-casual-last-preferences-core.js',
   'tests/watch-serve-confirmation-sync.test.js',
   'tests/interface-preferences-server-only.test.js',
   // Item 7: janelas do lembrete de torneio (7d/2d/0d) ESPELHAM o cliente; data-only BRT.
