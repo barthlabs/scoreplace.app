@@ -1,0 +1,12 @@
+'use strict';
+const fs = require('fs'); let fail = 0;
+const ok = (value, message) => { console.log((value ? '✓ ' : '✗ ') + message); if (!value) fail++; };
+const source = fs.readFileSync('functions/index.js', 'utf8');
+const start = source.indexOf('exports.setTournamentCategoryDefinitions = onCall');
+const end = source.indexOf('\nexports.', start + 8);
+const body = source.slice(start, end < 0 ? source.length : end);
+ok(start >= 0 && body.includes('db.runTransaction') && body.includes('_isTournamentOrgCaller'), 'Function autoriza e grava definições em transação');
+ok(body.includes('_categoryEligibility.normalizeCategoryDefinitions') && body.includes('_categoryEligibility.RIGORS'), 'Function valida definição e rigor fechados');
+ok(body.includes('_categoryDefinitionsCanChange') && body.includes('failed-precondition'), 'Function bloqueia alteração após sorteio');
+ok(body.includes('categoryDefinitions: definitions') && body.includes('enrollmentRigor: rigor'), 'Function grava somente o contrato tipado');
+process.exit(fail ? 1 : 0);

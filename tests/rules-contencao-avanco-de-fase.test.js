@@ -405,7 +405,7 @@ function regrasSemTrava() {
     old = old.replace(de, para);
     if (old === antes) throw new Error('controle: não achei ' + nome + ' em firestore.rules');
   };
-  troca('&& (faseIntacta() || ehResetOk());', '&& (faseIntacta() || ehResetOk() || true);', 'a trava do update');
+  troca('&& (faseIntacta() || ehResetOk())', '&& (faseIntacta() || ehResetOk() || true)', 'a trava do update');
   troca('&& !dividido();', '&& (!dividido() || true);', 'a trava do delete');
   troca(/\n        && request\.resource\.data\.get\('currentPhaseIndex', 0\) == 0[\s\S]*?&& !\('phaseRounds' in request\.resource\.data\);/,
     ';', 'as exigências do create');

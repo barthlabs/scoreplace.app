@@ -16,7 +16,10 @@ function block(source, start, end) {
   return source.slice(from, to === -1 ? source.length : to);
 }
 
-const fn = block(index, 'exports.previewCanonicalRegistrationMigration', '/* ─── deleteTournament');
+// A prévia termina antes da próxima porta de escrita. Não use o comentário de
+// deleteTournament como limite: novas Functions entre as duas fariam o teste
+// atribuir a escrita delas à prévia, mascarando a intenção desta sonda.
+const fn = block(index, 'exports.previewCanonicalRegistrationMigration', '// Configuração tipada das categorias novas.');
 ok('Function de prévia existe', fn.length > 300);
 ok('identidade vem exclusivamente do token', /request\.auth && request\.auth\.uid/.test(fn));
 ok('exige tournamentId', /tournamentId é obrigatório/.test(fn));

@@ -82,6 +82,7 @@ async function _freqDosTokensSoltos(db, dup, nomeMeu, pessoas) {
   return out;
 }
 const _enrollCore = require("./enroll-core");
+const _categoryEligibility = require("./category-eligibility-core");
 const _registrationCore = require("./registration-core");
 const _splitParts = require("./split-parts.js");   // torneio dividido: elenco na subcoleção
 const _refereeRoster = require("./vendor/referee-roster.js"); // escala de arbitragem: contrato puro e sem contato
@@ -3858,6 +3859,56 @@ exports.previewCanonicalRegistrationMigration = onCall(
         unsupported: report.unsupported.length,
       },
     };
+  }
+);
+
+// Configuração tipada das categorias novas. O formulário legado continua com seus
+// rótulos compostos até a migração de inscrições; esta porta não os reinterpreta
+// nem faz dual-write. Depois de materializada a primeira fase, trocar a definição
+// mudaria a elegibilidade do que já foi sorteado, então a decisão fica congelada.
+function _categoryDefinitionsCanChange(tournament) {
+  if (!tournament) return false;
+  if (Number(tournament._phaseMaterialized || 0) > 0 || Number(tournament.currentPhaseIndex || 0) > 0) return false;
+  if (tournament.phaseStartedAt) return false;
+  return ![
+    tournament.matches, tournament.rounds, tournament.groups,
+    tournament.phaseRounds
+  ].some((value) => Array.isArray(value) ? value.length > 0 : (value && typeof value === 'object' && Object.keys(value).length > 0));
+}
+
+exports.setTournamentCategoryDefinitions = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
+    const data = request.data || {};
+    const tournamentId = String(data.tournamentId || "").trim();
+    if (!tournamentId) throw new HttpsError("invalid-argument", "tournamentId é obrigatório");
+    let definitions;
+    try { definitions = _categoryEligibility.normalizeCategoryDefinitions(data.definitions); }
+    catch (error) { throw new HttpsError("invalid-argument", error.message); }
+    const rigor = String(data.rigor || "casual");
+    if (!_categoryEligibility.RIGORS.has(rigor)) throw new HttpsError("invalid-argument", "rigor inválido");
+
+    const db = admin.firestore();
+    const ref = db.collection("tournaments").doc(tournamentId);
+    return await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
+      const tournament = snap.data() || {};
+      if (!_isTournamentOrgCaller(tournament, callerUid)) {
+        throw new HttpsError("permission-denied", "só a organização configura categorias");
+      }
+      if (!_categoryDefinitionsCanChange(tournament)) {
+        throw new HttpsError("failed-precondition", "categorias só podem mudar antes do primeiro sorteio");
+      }
+      tx.update(ref, {
+        categoryDefinitions: definitions,
+        enrollmentRigor: rigor,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      return { ok: true, categoryDefinitions: definitions, enrollmentRigor: rigor };
+    });
   }
 );
 

@@ -446,6 +446,16 @@ service cloud.firestore {
           && (!divideParte('matches') || listaVazia('matches'));
       }
 
+      // Categoria tipada e rigor são decisão do servidor: o callable valida IDs,
+      // critérios e a janela pré-sorteio numa transação. Mesmo a organização não
+      // pode regravar esses campos diretamente pelo SDK do navegador.
+      function categoriasTipadasIntactas() {
+        return request.resource.data.get('categoryDefinitions', null)
+                 == resource.data.get('categoryDefinitions', null)
+          && request.resource.data.get('enrollmentRigor', null)
+                 == resource.data.get('enrollmentRigor', null);
+      }
+
       /* ⭐ A ÚNICA SAÍDA LEGÍTIMA: O RESET PARA INSCRIÇÕES.
        * `window._clearTournamentDraw` (js/views/tournaments-draw.js:75) é o único caminho do
        * cliente que MUDA `currentPhaseIndex`/`_phaseMaterialized` sem ser avanço — ele volta o
@@ -596,7 +606,8 @@ service cloud.firestore {
           || isTournamentAdminByUid(resource.data)
           || (isTournamentParticipant(resource.data) && isParticipantBracketDiff())
         )
-        && (faseIntacta() || ehResetOk());
+        && (faseIntacta() || ehResetOk())
+        && categoriasTipadasIntactas();
 
       // Delete: admins only.
       // ⛔ E TORNEIO DIVIDIDO NÃO SE APAGA PELO CLIENTE. Apagar o documento aqui deixaria
