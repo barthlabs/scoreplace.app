@@ -318,6 +318,10 @@ ele encontrou estão registrados em
 [`m0-inventario-executavel.md`](m0-inventario-executavel.md). Ele é a linha de
 base do marco 0 e deve ser atualizado por evidência, não por suposição.
 
+O contrato de escrita que deve anteceder o piloto da fonte canônica está em
+[`contrato-registro-canonico.md`](contrato-registro-canonico.md). Ele não
+autoriza dual-write nem migração em torneio ativo.
+
 ### 0. Contenção de identidade, congelamento e linha de base
 
 - Desligar a execução de fusão automática em gatilhos e agendas, preservando
