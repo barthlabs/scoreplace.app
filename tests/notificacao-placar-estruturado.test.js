@@ -15,6 +15,8 @@ const digest = read('functions/digest-core.js');   // 12/set: o desenho do e-mai
 const app = read('js/views/notifications-view.js');
 
 ok(/function _notificationScoreboard/.test(auto) && /Number\.isFinite\(p1\)/.test(auto), 'CF só cria aviso com sets canônicos completos');
+ok(/ctx\.action === 'approve-pending'/.test(auto) && /if \(!isApproval\) return null;/.test(auto), 'só a confirmação de proposta cria notificação de placar');
+ok(!/type: pending \? 'match-pending-approval'/.test(auto), 'proposta e correção não viram aviso de placar');
 ok(/collection\('notificationOutbox'\)/.test(auto) && /score-final-/.test(auto) && /consolidationRevision/.test(auto), 'placar usa um rascunho único por jogo na outbox');
 ok(/const _pendingAntes/.test(auto) && /pendingBefore: _pendingAntes/.test(auto), 'aprovação preserva autoria da proposta antes de consumi-la');
 ok(/confirmou o resultado lançado por/.test(auto) && /function _notificationPersonName/.test(auto), 'confirmação identifica quem confirmou e nunca expõe e-mail como autoria');

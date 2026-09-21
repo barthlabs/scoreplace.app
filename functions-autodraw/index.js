@@ -1650,10 +1650,16 @@ function _scoreNotificationEvent(t, m, outcome, actor, at, context) {
   // Disputa nunca é confirmação: mesmo que o jogo conserve sets de um placar
   // anterior, só a notificação própria da transição pode sair da transação.
   if (!m || outcome === 'in-progress' || outcome === 'disputed') return null;
-  const pending = outcome === 'pending';
   const ctx = context || {};
-  const proposal = pending ? m.pendingResult : ctx.pendingBefore;
-  const scoreboard = _notificationScoreboard(m, pending);
+  /* Um resultado só é comunicado quando a proposta foi confirmada. Proposta,
+   * lançamento direto e correção são passos de trabalho do placar; avisá-los
+   * cria versões concorrentes no e-mail. A confirmação é o único fato que
+   * consolida a autoria de quem lançou e de quem validou. */
+  const isApproval = outcome === 'applied' && ctx.action === 'approve-pending' && !!ctx.pendingBefore;
+  if (!isApproval) return null;
+  const pending = false;
+  const proposal = ctx.pendingBefore;
+  const scoreboard = _notificationScoreboard(m, false);
   if (!scoreboard || !scoreboard.p1 || !scoreboard.p2) return null;
   const compact = (side) => scoreboard.sets.map(s => String(s[side])).join(' ');
   /* ⛔ "JOGADOR LANÇOU:" — O AVISO NÃO DIZIA O NOME DE NINGUÉM.
@@ -1693,22 +1699,19 @@ function _scoreNotificationEvent(t, m, outcome, actor, at, context) {
   const confirmerName = (actorEhOrg && confirmerBase !== 'Organizador')
     ? confirmerBase + ' (org.)'
     : confirmerBase;
-  const isApproval = !pending && ctx.action === 'approve-pending' && !!proposal;
-  const authorName = pending || !isApproval ? proposerName : confirmerName;
-  const type = pending ? 'match-pending-approval' : 'result';
-  const messagePrefix = isApproval
-    ? confirmerName + ' confirmou o resultado lançado por ' + proposerName + ':'
-    : proposerName + ' lançou:';
+  const authorName = confirmerName;
+  const type = 'result';
+  const messagePrefix = confirmerName + ' confirmou o resultado lançado por ' + proposerName + ':';
   return {
     schema: 1,
     kind: 'score-notification',
     type,
-    title: pending ? '⏳ Resultado precisa de aprovação' : '✅ Resultado confirmado',
+    title: '✅ Resultado confirmado',
     message: messagePrefix + '\n' + scoreboard.p1 + ' ' + compact('p1') + '\nvs\n' + scoreboard.p2 + ' ' + compact('p2'),
     tournamentId: String(t.id || ''),
     tournamentName: String(t.name || ''),
     matchId: String(m.id || ''),
-    fromUid: String((isApproval ? actor && actor.uid : proposerUid || actor && actor.uid) || ''),
+    fromUid: String((actor && actor.uid) || ''),
     fromName: authorName,
     level: 'fundamental',
     /* ⛔ FUNDAMENTAL É SÓ PARA QUEM JOGA AQUELE JOGO. Ordem do dono (12/set/2026): _"essas
