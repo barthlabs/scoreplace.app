@@ -84,6 +84,9 @@ uma tela de cadastro.
 O desenho operacional, estados, dados privados, plugin nativo, controles de
 fraude e testes desta entrega está em
 [`arquitetura-verificacao-identidade.md`](arquitetura-verificacao-identidade.md).
+O fatiamento seguro da implementação, seus critérios de aceite e os gates de
+decisão externos ao código estão em
+[`roteiro-execucao-identidade.md`](roteiro-execucao-identidade.md).
 
 Caso a plataforma adote garantia de uma pessoa por inscrição, a verificação
 facial será uma capacidade própria do produto, fornecida por serviço de prova
