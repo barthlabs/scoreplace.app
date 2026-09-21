@@ -1587,11 +1587,13 @@ async function _aplicaPlacarNaTransacao(db, tId, matchId, payload, ator, logMess
       : (res.outcome === 'match-reset' || res.outcome === 'result-reopened' || res.outcome === 'wo-reverted')
         ? _matchReopenedNotificationEvent(t, _matchDepois, res.outcome, ator, _agoraIsoTx) : null;
     if (_notif) {
+      const _proposalWaitMs = _notif.type === 'match-pending-approval'
+        ? PENDING_SCORE_APPROVAL_MS : SCORE_NOTIFICATION_CONSOLIDATION_MS;
       tx.set(notifOutboxRef, Object.assign({}, _notif, {
         // Cada gravação ganha revisão nova. O entregador só envia se esta revisão
         // continuar atual depois da janela; uma revisão anterior simplesmente morre.
         consolidationRevision: auditRef.id,
-        consolidateAfterMs: Date.parse(_agoraIsoTx) + 60 * 1000,
+        consolidateAfterMs: Date.parse(_agoraIsoTx) + _proposalWaitMs,
         dispatchStatus: 'pending'
       }), { merge: true });
     } else if (_transitionNotif) {
@@ -1651,15 +1653,15 @@ function _scoreNotificationEvent(t, m, outcome, actor, at, context) {
   // anterior, só a notificação própria da transição pode sair da transação.
   if (!m || outcome === 'in-progress' || outcome === 'disputed') return null;
   const ctx = context || {};
-  /* Um resultado só é comunicado quando a proposta foi confirmada. Proposta,
-   * lançamento direto e correção são passos de trabalho do placar; avisá-los
-   * cria versões concorrentes no e-mail. A confirmação é o único fato que
-   * consolida a autoria de quem lançou e de quem validou. */
+  /* Lançamento direto e correção são passos de trabalho do placar e não geram
+   * aviso. A proposta só vira aviso se continuar pendente por uma hora; nesse
+   * caso o agendador a libera. A confirmação é comunicada após consolidar. */
+  const isPending = outcome === 'pending' && !!m.pendingResult;
   const isApproval = outcome === 'applied' && ctx.action === 'approve-pending' && !!ctx.pendingBefore;
-  if (!isApproval) return null;
-  const pending = false;
-  const proposal = ctx.pendingBefore;
-  const scoreboard = _notificationScoreboard(m, false);
+  if (!isPending && !isApproval) return null;
+  const pending = isPending;
+  const proposal = pending ? m.pendingResult : ctx.pendingBefore;
+  const scoreboard = _notificationScoreboard(m, pending);
   if (!scoreboard || !scoreboard.p1 || !scoreboard.p2) return null;
   const compact = (side) => scoreboard.sets.map(s => String(s[side])).join(' ');
   /* ⛔ "JOGADOR LANÇOU:" — O AVISO NÃO DIZIA O NOME DE NINGUÉM.
@@ -1699,19 +1701,21 @@ function _scoreNotificationEvent(t, m, outcome, actor, at, context) {
   const confirmerName = (actorEhOrg && confirmerBase !== 'Organizador')
     ? confirmerBase + ' (org.)'
     : confirmerBase;
-  const authorName = confirmerName;
-  const type = 'result';
-  const messagePrefix = confirmerName + ' confirmou o resultado lançado por ' + proposerName + ':';
+  const authorName = pending ? proposerName : confirmerName;
+  const type = pending ? 'match-pending-approval' : 'result';
+  const messagePrefix = pending
+    ? proposerName + ' lançou um resultado que ainda precisa de confirmação:'
+    : confirmerName + ' confirmou o resultado lançado por ' + proposerName + ':';
   return {
     schema: 1,
     kind: 'score-notification',
     type,
-    title: '✅ Resultado confirmado',
+    title: pending ? '⏳ Resultado aguardando confirmação' : '✅ Resultado confirmado',
     message: messagePrefix + '\n' + scoreboard.p1 + ' ' + compact('p1') + '\nvs\n' + scoreboard.p2 + ' ' + compact('p2'),
     tournamentId: String(t.id || ''),
     tournamentName: String(t.name || ''),
     matchId: String(m.id || ''),
-    fromUid: String((actor && actor.uid) || ''),
+    fromUid: String((pending ? proposerUid : actor && actor.uid) || ''),
     fromName: authorName,
     level: 'fundamental',
     /* ⛔ FUNDAMENTAL É SÓ PARA QUEM JOGA AQUELE JOGO. Ordem do dono (12/set/2026): _"essas
@@ -1884,6 +1888,7 @@ exports.reconcileMatchReadyNotifications = onSchedule('every 15 minutes', async 
 });
 
 const SCORE_NOTIFICATION_CONSOLIDATION_MS = 60 * 1000;
+const PENDING_SCORE_APPROVAL_MS = 60 * 60 * 1000;
 
 function _sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, Math.max(0, ms)));
@@ -1914,6 +1919,29 @@ async function _freshConsolidatedScoreNotification(tournamentId, item) {
   });
 }
 
+// Libera propostas somente depois de uma hora. A releitura canônica descarta a
+// proposta se ela foi aprovada, contestada, corrigida ou reaberta nesse intervalo.
+exports.releasePendingScoreApprovalNotifications = onSchedule('every 1 minutes', async () => {
+  const due = await db.collectionGroup('notificationOutbox')
+    .where('dispatchStatus', '==', 'pending')
+    .limit(200)
+    .get();
+  const now = Date.now();
+  for (const snap of due.docs) {
+    const item = snap.data() || {};
+    if (item.kind !== 'score-notification' || item.type !== 'match-pending-approval') continue;
+    if (Number(item.consolidateAfterMs || 0) > now) continue;
+    const tournamentId = String((snap.ref.parent.parent && snap.ref.parent.parent.id) || item.tournamentId || '');
+    const fresh = await _freshConsolidatedScoreNotification(tournamentId, item);
+    if (!fresh || fresh.type !== 'match-pending-approval') {
+      await snap.ref.set({ dispatchStatus: 'superseded', supersededAt: new Date().toISOString() }, { merge: true });
+      continue;
+    }
+    // A escrita acorda o entregador; ele relê mais uma vez antes de efetivar.
+    await snap.ref.set({ dispatchStatus: 'ready', releasedAt: new Date().toISOString() }, { merge: true });
+  }
+});
+
 // A transação só escreve o fato. Este gatilho faz I/O depois do commit e pode
 // repetir sem duplicar. Resultado de placar espera a janela de consolidação e
 // relê o jogo canônico; os demais avisos seguem imediatos.
@@ -1923,13 +1951,17 @@ exports.deliverScoreNotification = onDocumentWritten(
     const after = event.data && event.data.after;
     let item = after && after.exists ? after.data() : null;
     if (!item || !['score-notification', 'tournament-notification'].includes(item.kind)) return;
-    if (item.dispatchStatus !== 'pending') return;
+    if (!['pending', 'ready'].includes(item.dispatchStatus)) return;
     const tId = String(event.params.tournamentId || item.tournamentId || '');
     const eventId = String(event.params.eventId || '');
     const revision = String(item.consolidationRevision || '');
     if (revision) {
       const due = Number(item.consolidateAfterMs || 0);
-      const waitMs = Math.min(SCORE_NOTIFICATION_CONSOLIDATION_MS, Math.max(0, due - Date.now()));
+      // Proposta pendente aguarda o agendador de uma hora; a confirmação final
+      // usa a janela curta de consolidação no próprio gatilho.
+      if (item.type === 'match-pending-approval' && item.dispatchStatus !== 'ready') return;
+      const waitMs = item.type === 'match-pending-approval'
+        ? 0 : Math.min(SCORE_NOTIFICATION_CONSOLIDATION_MS, Math.max(0, due - Date.now()));
       if (waitMs) await _sleep(waitMs);
       const fresh = await after.ref.get();
       if (!fresh.exists) return;
