@@ -400,6 +400,56 @@ risco ou inconclusão vão para revisão. Somente após resolver o mesmo
 `canonicalUid` o novo aparelho registra uma passkey. O fluxo não oferece a
 opção de "criar conta" como atalho de recuperação.
 
+### Barreira de sessão e autorização
+
+O aplicativo atual aceita mais de um provedor Firebase e mantém sessão local.
+Por isso, trocar a tela de login não é uma barreira de migração: uma sessão
+restaurada, um redirecionamento de provedor ou uma chamada direta à API não
+podem recuperar capacidade operacional sem a verificação.
+
+O servidor mantém, além do estado privado, um conjunto pequeno de claims de
+autorização no Firebase Auth:
+
+```
+identityGate: "legacy" | "migration" | "verified" | "restricted"
+identityEpoch: inteiro monotônico
+canonicalUid: uid somente quando for necessário redirecionar conta legada
+```
+
+Os claims não carregam dado facial, e-mail, telefone, referência de captura ou
+decisão de revisão. A operação que os atualiza lê e preserva todos os claims de
+papel já existentes; a API de claims do Firebase substitui o objeto inteiro,
+portanto uma escrita parcial que apague permissões de organização é proibida.
+
+Há três barreiras complementares:
+
+1. **Rules:** leitura e escrita de recursos operacionais exigem
+   `request.auth.token.identityGate == "verified"`, além das regras de UID e
+   papel já existentes. As poucas rotas de migração ficam numa área mínima e
+   isolada; claims e verificações privadas não têm acesso direto do cliente.
+2. **Functions:** toda operação que muda inscrição, torneio, partida, perfil
+   sensível ou resultado resolve o estado vivo de `accountIdentity` no começo
+   da transação. Não confia só no claim, pois uma sessão emitida antes da troca
+   de estado pode ainda existir.
+3. **Troca de estado:** ao convidar, restringir, aprovar, revogar ou resolver
+   uma conta, o servidor atualiza claims, incrementa `identityEpoch`, revoga os
+   refresh tokens e manda o cliente renovar o ID token. A janela residual de
+   um ID token já emitido é limitada pela expiração do Firebase; Functions
+   sensíveis verificam também o estado vivo para não aceitar essa janela.
+
+O login por Google, Apple, telefone ou senha só pode servir para localizar a
+conta e iniciar `getIdentityVerificationStatus` ou recuperação. Depois da
+exigência geral, ele não libera a interface operacional. O único caminho que
+emite uma sessão operacional nova é a assertion de passkey validada para o
+`canonicalUid`, seguida de token personalizado Firebase com o claim atual.
+
+O rollout das Rules não pode ocorrer antes de existirem as Functions de
+migração e a tela de recuperação. A ordem segura é: publicar Functions e
+observabilidade em modo de auditoria, criar claims para a coorte piloto,
+publicar cliente que renova token e oferece migração, aplicar Rules à coorte e
+só então ampliar. Cada etapa possui chave de reversão que devolve a coorte a
+`migration` — nunca a `verified` sem prova.
+
 ### Critérios de aceite da migração
 
 - Uma conta antiga sem verificação não consegue obter sessão operacional após
@@ -412,6 +462,10 @@ opção de "criar conta" como atalho de recuperação.
   conta.
 - A alteração do prazo de uma coorte é auditada, exige autorização operacional
   e não é feita pelo cliente.
+- Uma sessão Firebase obtida por qualquer provedor antigo não lê, escreve nem
+  invoca operação operacional quando `identityGate` não é `verified`.
+- Atualizar claims preserva todos os papéis existentes e revoga tokens de modo
+  que o servidor nunca aceite ação sensível baseada apenas em token antigo.
 - Testes de regressão cobrem simultaneamente conta legada, conta nova,
   organizador com torneio ativo, gêmeos em exceção e recuperação após perda de
   aparelho.
