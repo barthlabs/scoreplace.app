@@ -9574,7 +9574,6 @@ window._profileHydrateNameConflict = function () {
 
       // Booleans / defaults: sempre envia (UI tem valor definido)
       payload.phoneCountry = phoneCountry;
-      payload.acceptFriendRequests = acceptFriends;
       payload.liveAlerts = liveAlerts;
       payload.liveAlertsWho = liveAlertsWho;
       // v2.4.3: privacidade de contato (default OFF).
@@ -9664,6 +9663,7 @@ window._profileHydrateNameConflict = function () {
         if (_saveLocations) await window.FirestoreDB.savePreferredLocations(preferredLocations);
         await window.FirestoreDB.saveNotificationPreferences(_notificationPreferences);
         await window.FirestoreDB.savePresencePreferences(_presencePreferences);
+        await window.FirestoreDB.saveFriendRequestPreference(acceptFriends);
         window._lastProfileSave.ok = true;
         window._log('[Profile v0.16.9] save ok');
         // v1.8.39-beta: limpar flag de foto pendente após save bem-sucedido

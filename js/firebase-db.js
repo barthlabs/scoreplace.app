@@ -2622,6 +2622,10 @@ window.FirestoreDB = {
     return this._callFn('updateOwnTournamentPreference', { field: field, tournamentId: String(tournamentId || ''), add: add === true });
   },
 
+  async saveFriendRequestPreference(accept) {
+    return this._callFn('updateOwnFriendRequestPreference', { accept: accept === true });
+  },
+
   async setActiveCasualRoom(roomCode) {
     return this._callFn('setOwnActiveCasualRoom', { roomCode: roomCode == null ? null : roomCode });
   },

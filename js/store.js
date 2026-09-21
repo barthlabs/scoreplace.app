@@ -13176,7 +13176,6 @@ window.AppStore = {
       phoneCountry: user.phoneCountry,
       preferredSports: user.preferredSports,
       // defaultCategory removed v1.3.98-beta — skill lives in skillBySport
-      acceptFriendRequests: user.acceptFriendRequests,
       preferredCeps: user.preferredCeps,
       omitEmail: user.omitEmail,
       omitPhone: user.omitPhone,
@@ -13230,6 +13229,7 @@ window.AppStore = {
       var _presencePrefs = {};
       ['presenceVisibility', 'statsVisibility', 'presenceMuteDays', 'presenceMuteUntil', 'presenceAutoCheckin'].forEach(function(k) { if (user[k] !== undefined) _presencePrefs[k] = user[k]; });
       if (Object.keys(_presencePrefs).length) await window.FirestoreDB.savePresencePreferences(_presencePrefs);
+      if (user.acceptFriendRequests !== undefined) await window.FirestoreDB.saveFriendRequestPreference(user.acceptFriendRequests);
       window._lastProfileSave.ok = true;
       // Verificação round-trip: lê de volta e confirma que os VALORES chegaram.
       try {
