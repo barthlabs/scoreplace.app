@@ -137,6 +137,20 @@ mantém a conta pendente; nunca provoca recusa definitiva ou fusão automática.
 O sistema mede falso positivo, falso negativo, abandono, tempo de resolução e
 discrepâncias por grupo para ajustar limiares e fornecedor.
 
+#### Exceção de gêmeos
+
+Gêmeos idênticos podem produzir candidato facial recíproco mesmo em um sistema
+bem calibrado. Eles não são fundidos. O caso abre exceção privada e exige duas
+capturas de prova de vida independentes, duas passkeys/dispositivos registrados
+e confirmação humana de que há duas pessoas distintas. A exceção permite dois
+`canonicalUid` separados e deixa marca de auditoria para que futuras capturas
+não voltem a bloquear os dois automaticamente.
+
+Impressões digitais distinguem gêmeos idênticos, mas Face ID, Touch ID e o
+leitor biométrico Android não entregam a digital nem seu template ao aplicativo:
+apenas confirmam que a autenticação local foi bem-sucedida. Portanto são usadas
+para liberar passkeys e ações sensíveis, não para deduplicar a base facial.
+
 ## Biometria nativa do aparelho
 
 Será criado um plugin Capacitor próprio, `ScoreplaceBiometry`, em vez de uma
