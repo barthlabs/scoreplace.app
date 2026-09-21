@@ -38,6 +38,7 @@ const PROJECT = 'demo-scoreplace';
 
 const ORG = 'uid_organizador';
 const NOVA = 'uid_mariana';   // recém-chegada: NÃO está em memberUids
+const PARTICIPANTE = 'uid_participante';
 
 const DRIVER = `
 const P = '${PROJECT}', H = 'http://127.0.0.1:${PORT}';
@@ -65,6 +66,7 @@ const S = v => ({ stringValue: v });
 const B = v => ({ booleanValue: v });
 const I = v => ({ integerValue: String(v) });
 const L = a => ({ arrayValue: { values: a.map(S) } });
+const M = fields => ({ mapValue: { fields } });
 // entrada de inscrito: mapa (é assim que participants/standbyParticipants são no doc real)
 const P1 = uid => ({ mapValue: { fields: { uid: S(uid), selfEnrolled: B(true) } } });
 
@@ -74,7 +76,7 @@ const mask = paths => 'updateMask.fieldPaths=' + paths.join('&updateMask.fieldPa
 
 (async () => {
   const out = {};
-  const ORG = '${ORG}', NOVA = '${NOVA}';
+  const ORG = '${ORG}', NOVA = '${NOVA}', PARTICIPANTE = '${PARTICIPANTE}';
 
   // ⚠️ CADA CENÁRIO NO SEU PRÓPRIO DOC. A 1ª versão deste teste reusou um doc só e as
   // escritas rodaram EM SEQUÊNCIA: a primeira (permitida) já punha a NOVA em memberUids,
@@ -85,9 +87,9 @@ const mask = paths => 'updateMask.fieldPaths=' + paths.join('&updateMask.fieldPa
     return req('PATCH', 'tournaments/' + doc, 'owner', { fields: {
       name: S('Confra BT Alta da Clínica 2026'), creatorUid: S(ORG), isPublic: B(true),
       status: S('active'), format: S('Liga'),
-      participants: { arrayValue: { values: [P1(ORG)] } },
+      participants: { arrayValue: { values: [P1(ORG), P1(PARTICIPANTE)] } },
       standbyParticipants: { arrayValue: { values: [] } },
-      memberUids: L([ORG])   // a NOVA NÃO é membro — é uma recém-chegada
+      memberUids: L([ORG, PARTICIPANTE])   // a NOVA NÃO é membro — é uma recém-chegada
     }});
   }
   const ESPERA = { standbyParticipants: { arrayValue: { values: [P1(NOVA)] } },
@@ -120,6 +122,15 @@ const mask = paths => 'updateMask.fieldPaths=' + paths.join('&updateMask.fieldPa
   out.novaViraAdmin = await req('PATCH',
     'tournaments/t_admin?' + mask(['standbyParticipants', 'adminUids']), NOVA, {
       fields: { standbyParticipants: { arrayValue: { values: [P1(NOVA)] } }, adminUids: L([NOVA]) } });
+
+  // pendingMerges é escrito exclusivamente pela Function requestParticipantMerge.
+  // Mesmo um inscrito não pode forjar pedido, alvo ou ID de vaga diretamente.
+  await nova('t_pending_merge');
+  out.participanteForjaPendingMerge = await req('PATCH',
+    'tournaments/t_pending_merge?' + mask(['pendingMerges']), PARTICIPANTE, {
+      fields: { pendingMerges: { arrayValue: { values: [M({
+        id: S('forjado'), realUid: S(PARTICIPANTE), manualParticipantId: S('manual-forjado')
+      })] } } } });
 
   console.log('__JSON__' + JSON.stringify(out));
   process.exit(0);
@@ -187,6 +198,8 @@ ok(atual.esperaEscrevendoNextDrawAt === 403,
 // inscrever-se não pode virar porta pra mexer no torneio.
 ok(atual.novaMudaNome === 403, 'inscrever-se NUNCA pode mudar o nome do torneio — veio ' + atual.novaMudaNome);
 ok(atual.novaViraAdmin === 403, 'inscrever-se NUNCA pode escrever adminUids — veio ' + atual.novaViraAdmin);
+ok(atual.participanteForjaPendingMerge === 403,
+   'inscrito não cria pendingMerges direto; requestParticipantMerge é a única porta — veio ' + atual.participanteForjaPendingMerge);
 
 console.log(fail === 0 ? '  ✓ ' + pass + ' asserções' : '  ' + pass + ' ok / ' + fail + ' falhas');
 process.exit(fail === 0 ? 0 : 1);

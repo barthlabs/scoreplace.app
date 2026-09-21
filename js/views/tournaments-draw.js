@@ -3587,6 +3587,8 @@ window.handleDropTeam = function (e, targetIdx) {
 
         const uid1 = typeof p1snap === 'object' ? (p1snap.uid || '') : '';
         const uid2 = typeof p2snap === 'object' ? (p2snap.uid || '') : '';
+        const manualParticipantId1 = typeof p1snap === 'object' ? (p1snap.manualParticipantId || '') : '';
+        const manualParticipantId2 = typeof p2snap === 'object' ? (p2snap.manualParticipantId || '') : '';
         const newName = name1 + ' / ' + name2;
 
         // v2.7.75: organizador SEMPRE recebe o overlay com 🔵 Formar equipe +
@@ -3608,8 +3610,8 @@ window.handleDropTeam = function (e, targetIdx) {
         }
         window._showDropChoiceOverlay({
             tId: tId,
-            sourceName: name1, sourceUid: uid1,
-            targetName: name2, targetUid: uid2,
+            sourceName: name1, sourceUid: uid1, sourceManualParticipantId: manualParticipantId1,
+            targetName: name2, targetUid: uid2, targetManualParticipantId: manualParticipantId2,
             ruleAllowsTeam: (t.enrollmentMode !== 'individual'),
             drawDone: _drawDoneD,
             canMerge: _oneRealOneGeneric
@@ -3818,18 +3820,22 @@ window._mergeParticipantConfirm = function(tId, personName, personUid, placehold
 window._requestMergeAcceptance = function(opts) {
     var t = window.AppStore.tournaments.find(function(tour) { return tour.id.toString() === opts.tId.toString(); });
     if (!t) return;
-    var realName, realUid, genericName;
-    if (opts.sourceUid && !opts.targetUid) { realName = opts.sourceName; realUid = opts.sourceUid; genericName = opts.targetName; }
-    else if (!opts.sourceUid && opts.targetUid) { realName = opts.targetName; realUid = opts.targetUid; genericName = opts.sourceName; }
+    var realName, realUid, genericName, manualParticipantId;
+    if (opts.sourceUid && !opts.targetUid) { realName = opts.sourceName; realUid = opts.sourceUid; genericName = opts.targetName; manualParticipantId = opts.targetManualParticipantId; }
+    else if (!opts.sourceUid && opts.targetUid) { realName = opts.targetName; realUid = opts.targetUid; genericName = opts.sourceName; manualParticipantId = opts.sourceManualParticipantId; }
     else {
         if (typeof showNotification === 'function') showNotification('Não dá pra mesclar', 'A mescla só vincula UM participante genérico a UM usuário real (com conta).', 'warning');
+        return;
+    }
+    if (!manualParticipantId) {
+        if (typeof showNotification === 'function') showNotification('Vaga sem identificador', 'Atualize a inscrição manual antes de vinculá-la a uma conta.', 'warning');
         return;
     }
     showConfirmDialog('🔴 Mesclar jogador',
         '“' + window._safeHtml(realName) + '” (usuário real) vai assumir os jogos de “' + window._safeHtml(genericName) + '” <b>só neste torneio</b>. Vamos enviar um pedido de aceite pra <b>' + window._safeHtml(realName) + '</b> — a mescla só acontece se ele aceitar. Enviar o pedido?',
         function() {
             if (typeof window._callCF !== 'function') return;
-            window._callCF('requestParticipantMerge', { tournamentId: String(opts.tId), realUid: String(realUid), genericName: String(genericName) })
+            window._callCF('requestParticipantMerge', { tournamentId: String(opts.tId), realUid: String(realUid), manualParticipantId: String(manualParticipantId) })
               .then(function(out) {
                 if (!out || !out.ok) return;
                 if (typeof window._sendUserNotification === 'function') window._sendUserNotification(realUid, {

@@ -129,6 +129,10 @@ window._executeMerge = function(sourceName, targetName, tId) {
         var p = arr.find(function(x) { return x && typeof x === 'object' && (x.displayName || x.name) === nm; });
         return p ? (p.uid || '') : '';
     };
+    var manualIdOf = function(nm) {
+        var matches = arr.filter(function(x) { return x && typeof x === 'object' && !x.uid && (x.displayName || x.name) === nm && x.manualParticipantId; });
+        return matches.length === 1 ? matches[0].manualParticipantId : '';
+    };
     var hasMatches = (Array.isArray(t.matches) && t.matches.length) ||
                      (Array.isArray(t.rounds) && t.rounds.length) ||
                      (Array.isArray(t.groups) && t.groups.length);
@@ -138,8 +142,8 @@ window._executeMerge = function(sourceName, targetName, tId) {
     if (typeof window._showDropChoiceOverlay === 'function') {
         window._showDropChoiceOverlay({
             tId: tId,
-            sourceName: personName, sourceUid: uidOf(personName),
-            targetName: placeholderName, targetUid: uidOf(placeholderName),
+            sourceName: personName, sourceUid: uidOf(personName), sourceManualParticipantId: manualIdOf(personName),
+            targetName: placeholderName, targetUid: uidOf(placeholderName), targetManualParticipantId: manualIdOf(placeholderName),
             allowTeam: allowTeam
         });
     }
