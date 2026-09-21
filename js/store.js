@@ -12888,8 +12888,6 @@ window.AppStore = {
         // similar: usuário Pro virava Free temporariamente após token refresh.
         if (profile.plan) this.currentUser.plan = profile.plan;
         if (profile.planExpiresAt) this.currentUser.planExpiresAt = profile.planExpiresAt;
-        // previousDisplayNames pra auto-fix de orfãos (v0.17.x)
-        if (Array.isArray(profile.previousDisplayNames)) this.currentUser.previousDisplayNames = profile.previousDisplayNames;
         // Theme sync across devices
         if (profile.theme && window._themeOrder.indexOf(profile.theme) !== -1) {
           this.currentUser.theme = profile.theme;

@@ -9737,21 +9737,6 @@ window._profileHydrateNameConflict = function () {
 
       // Propagate name change to all tournaments if displayName changed
       if (name && _oldDisplayName && name !== _oldDisplayName) {
-        // Save previousDisplayName to Firestore for future auto-fix of orphaned names
-        try {
-          var user = window.AppStore.currentUser;
-          if (user && user.uid && window.FirestoreDB && window.FirestoreDB.db) {
-            var _prevNames = Array.isArray(user.previousDisplayNames) ? user.previousDisplayNames.slice() : [];
-            if (_prevNames.indexOf(_oldDisplayName) === -1) _prevNames.push(_oldDisplayName);
-            // Keep last 5
-            if (_prevNames.length > 5) _prevNames = _prevNames.slice(_prevNames.length - 5);
-            window.FirestoreDB.db.collection('users').doc(user.uid).update({
-              previousDisplayNames: _prevNames
-            }).catch(function(e) { window._warn('[Profile] Failed to save previousDisplayNames:', e); });
-            window.AppStore.currentUser.previousDisplayNames = _prevNames;
-          }
-        } catch(e) { window._warn('[Profile] previousDisplayNames error:', e); }
-
         _propagateNameChange(_oldDisplayName, name);
         // Invalidar cache de foto para o nome antigo E novo — força re-fetch
         // na próxima renderização via _preloadPlayerPhotos

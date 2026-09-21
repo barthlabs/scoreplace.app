@@ -63,5 +63,8 @@ ok(/exports\.updateOwnBlockedUser = onCall\([\s\S]*?normalizeBlockedUserMutation
   /setOwnBlockedUser\(uid, true\)/.test(blockBlock) && /setOwnBlockedUser\(uid, false\)/.test(blockBlock) &&
   !/collection\(['"]users['"]\)/.test(blockBlock),
   'bloqueio de usuário passa pela Function, sem escrita direta no perfil');
+const store = fs.readFileSync('js/store.js', 'utf8');
+ok(!/previousDisplayNames/.test(auth) && !/previousDisplayNames/.test(store),
+  'histórico morto de nomes anteriores não cria nem hidrata resíduos de perfil');
 
 process.exitCode = failed ? 1 : 0;
