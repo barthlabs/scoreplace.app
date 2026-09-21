@@ -122,34 +122,14 @@ const achou = (c, p) => D.detectarMesmaPessoa(c, p).suspeito;
     /privilegedUserFields[\s\S]{0,300}'dupDismissedInfo'/.test(rules));
 })();
 
-// ── 2c · CELULAR AUTENTICADO FUNDE, NEM PERGUNTA (v1.8.3) ──────────────────
-// Regra do dono (11/ago/2026): _"no mesmo celular autenticado, já mescla, nem pergunta."_
-// (Aqui vale varredura de código: fundir toca Auth + Firestore e o comportamento ponta a
-//  ponta não roda em teste puro. O que se trava é a REGRA e os limites dela.)
+// ── 2c · SINAL DE DUPLICIDADE NUNCA FUNDE AUTOMATICAMENTE ──────────────────
 (() => {
   const idx = require('fs').readFileSync(require('path').join(__dirname, 'index.js'), 'utf8');
-  ok('celular OU e-mail iguais disparam FUSÃO em vez de pergunta',
-    /r\.suspeito\.motivo === "celular" \|\| r\.suspeito\.motivo === "email"[\s\S]{0,2200}_mergeAccountsKeepOlder\(db, callerUid/.test(idx));
-  ok('  → e-mail também exige VERIFICADO no Auth (emailVerified), não o campo do perfil',
-    /_meuAuth\.emailVerified && _dupPerson\.normalizarEmail/.test(idx) &&
-    /_outroAuth\.emailVerified && _dupPerson\.normalizarEmail/.test(idx));
-  // ⚠️ O QUE IMPEDE ISSO DE APAGAR A CONTA DE UM TERCEIRO: a prova é o telefone do AUTH
-  // (SMS conferido), NUNCA o campo `phone` do perfil, que é texto digitado — um dígito
-  // errado cairia no número de outra pessoa, e fusão apaga do Auth sem volta.
-  ok('  → a prova é o telefone do AUTH (getUser().phoneNumber), não o campo do perfil',
-    /motivo === "celular"[\s\S]{0,900}admin\.auth\(\)\.getUser\(callerUid\)[\s\S]{0,300}phoneNumber/.test(idx));
-  ok('  → e os DOIS lados precisam provar (um só não diz nada sobre o outro)',
-    /_p1 && _p2 &&\s*\n?\s*_dupPerson\.normalizarTelefone\(_p1\) === _dupPerson\.normalizarTelefone\(_p2\)/.test(idx) &&
-    /_e1 && _e2 && _e1 === _e2/.test(idx));
-  ok('  → compara TODOS os dígitos (normalizarTelefone), nunca sufixo',
-    !/phoneNumber[\s\S]{0,200}slice\(-\d/.test(idx));
-  ok('  → falhar a fusão NÃO barra a inscrição: cai na pergunta',
-    /fusão por credencial autenticada falhou[\s\S]{0,140}\}/.test(idx));
-  ok('  → depois de fundir não sobra pergunta (retorna null)',
-    /fusão automática por credencial autenticada[\s\S]{0,200}return null;/.test(idx));
-  // E o e-mail é CREDENCIAL na escala de força — igual ao celular, acima de qualquer nome.
-  ok('  → e-mail tem a mesma força do celular (credencial, não indício)',
-    D.FORCA_SINAL.email === D.FORCA_SINAL.celular && D.FORCA_SINAL.email > D.FORCA_SINAL.identico);
+  const ini = idx.indexOf('async function _detectarDuplicataNoTorneio');
+  const corpo = idx.slice(ini, idx.indexOf('exports.enrollParticipant', ini));
+  ok('sinal no torneio abre caso privado de revisão',
+    /_recordIdentityReviewCase\(db,[\s\S]{0,500}tournament_duplicate_signal/.test(corpo));
+  ok('  → e não chama fusão de conta', corpo.indexOf('_mergeAccountsKeepOlder') === -1);
 })();
 
 // ── 2d · A PERGUNTA NO CADASTRO + "SEMPRE AUTENTICADO" (v1.8.3) ─────────────
@@ -183,43 +163,17 @@ const achou = (c, p) => D.detectarMesmaPessoa(c, p).suspeito;
   ok('  → e ela é FAIL-OPEN (erro nunca barra cadastro nem inscrição)',
     /fail-open[\s\S]{0,120}return null/.test(_corpo));
 
-  // ── "SEMPRE AUTENTICADO" — em TODOS os caminhos que fundem sozinhos ──
-  ok('auto-merge por perfil RECUSA sem credencial autenticada nos dois lados',
-    /autoMergeOnProfileUpdate[\s\S]{0,4000}RECUSADO[\s\S]{0,200}credencial AUTENTICADA/.test(idx));
-  // v2.0.5: a prova saiu do corpo do trigger pra `credentialsProveSamePerson` (merge-rules),
-  // atrás da porta única `_provenSamePerson`. O invariante é o MESMO — quem prova é o AUTH,
-  // não o campo do perfil —, mudou o lugar onde ele mora. Ver test-merge-proof.js.
-  const mrules = require('fs').readFileSync(require('path').join(__dirname, 'merge-rules.js'), 'utf8');
-  ok('  → e a prova é o AUTH (phoneNumber / emailVerified), não o campo do perfil',
-    /function credentialsProveSamePerson[\s\S]{0,900}phoneNumber[\s\S]{0,600}emailVerified/.test(mrules));
-  ok('  → e a porta única delega pra essa regra (nada de gate escrito à mão)',
-    /async function _mayAutoMerge[\s\S]{0,700}_mergeRules\.mayAutoMerge/.test(idx));
-  // O "não somos a mesma pessoa" da tela vale contra o cron: era lido só pela DETECÇÃO.
-  ok('  → e o DISPENSADO bloqueia fusão automática (era lido só pela detecção)',
-    /function dismissalBlocksMerge/.test(mrules) &&
-    /function mayAutoMerge[\s\S]{0,400}dismissalBlocksMerge/.test(mrules));
-  ok('  → o detector da BASE também só funde com credencial do AUTH',
-    /_detectarDuplicataNaBase[\s\S]{0,6000}a1\.emailVerified/.test(idx));
-
-  // ⚠️ NENHUM caminho automático pode voltar a fundir por texto digitado — e agora a
-  // asserção é POR CAMINHO. A versão anterior terminava em `|| /credencial AUTENTICADA/
-  // .test(idx)`, ou seja: bastava a FRASE existir em qualquer lugar do arquivo pra passar.
-  // Foi por esse buraco que a varredura diária ficou meses sem gate e, em 19/ago/2026,
-  // fundiu mãe e filha que dividem o celular. Cada porta que chama _executeMerge tem que
-  // passar pela prova ANTES de chamar.
-  const _ateOMerge = (marcador) => {
-    const i = idx.indexOf(marcador);
-    if (i < 0) return null;
-    const j = idx.indexOf('_executeMerge(', i);
-    return (j < 0) ? null : idx.slice(i, j);
-  };
-  const _trigger = _ateOMerge('exports.autoMergeOnProfileUpdate');
-  const _varredura = _ateOMerge('async function _scanAndMergeByField');
-  ok('trigger: passa pela prova ANTES de fundir',
-    !!_trigger && _trigger.indexOf('_mayAutoMerge') >= 0);
-  ok('varredura diária: passa pela prova ANTES de fundir (era o caminho sem gate)',
-    !!_varredura && _varredura.indexOf('planSweepMerges') >= 0 &&
-    /for\s*\(\s*const\s+\w+\s+of\s+plano\.merges\s*\)/.test(_varredura));
+  const corpoBase = idx.slice(_ini, idx.indexOf('exports.', _ini));
+  const inicioTrigger = idx.indexOf('exports.autoMergeOnProfileUpdate');
+  const corpoTrigger = idx.slice(inicioTrigger, idx.indexOf('exports.enforceUniqueDisplayName', inicioTrigger));
+  const inicioSweep = idx.indexOf('async function _scanAndMergeByField');
+  const corpoSweep = idx.slice(inicioSweep, idx.indexOf('// ─── One-shot', inicioSweep));
+  ok('detector da base abre caso privado, sem fundir',
+    /registration_duplicate_signal/.test(corpoBase) && corpoBase.indexOf('_mergeAccountsKeepOlder') === -1);
+  ok('trigger de perfil abre caso privado, sem chamar fusão',
+    /profile_duplicate_signal/.test(corpoTrigger) && corpoTrigger.indexOf('_executeMerge(') === -1);
+  ok('varredura diária cria caso privado, sem plano de fusão',
+    /scheduled_duplicate_signal/.test(corpoSweep) && corpoSweep.indexOf('planSweepMerges') === -1 && corpoSweep.indexOf('_executeMerge(') === -1);
 
   // ── O sinal é PRIVILEGIADO e CHEGA na tela ──
   ok('dupSuspect é privilegiado nas firestore.rules',

@@ -135,8 +135,9 @@ deixava de descrever o estado que o backfill iria ler. Se for preciso reverter a
 antes do backfill, nada foi destruído e o backup nem é necessário.
 
 ⛔ **A agendada também conta.** `scheduledAutoMergeCleanup` roda por cron e passa por
-`_scanAndMergeByField`, que consulta a fase e **pula** enquanto congelado — não basta olhar
-as callables.
+`_scanAndMergeByField`. A partir da contenção de identidade, ela apenas registra sinais
+privados de possível duplicidade: não funde, remove, tombstona ou redireciona UIDs — não
+basta olhar as callables.
 
 O que muda com as Rules da Etapa A:
 

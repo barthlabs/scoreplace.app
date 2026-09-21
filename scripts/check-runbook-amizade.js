@@ -84,13 +84,14 @@ const iLive = runbook.lastIndexOf('--fase=live --aplicar');
 const iHosting = runbook.lastIndexOf('deploy-hosting.sh');
 ok(iLive > iHosting, '⛔ e `--fase=live` é o ÚLTIMO passo (depois do Hosting)');
 
-// ── 6. contrato de retorno da varredura (ponto 7) ───────────────────────────
+// ── 6. contenção de duplicidade: a varredura não pode fundir UIDs ───────────
 const idxSrc = fs.readFileSync(path.join(ROOT, 'functions', 'index.js'), 'utf8');
 const iScan = idxSrc.indexOf('async function _scanAndMergeByField');
 const corpoScan = idxSrc.slice(iScan, idxSrc.indexOf('\nasync function ', iScan + 10));
-ok(!/return \{ pulado: true/.test(corpoScan),
-  '⛔ `_scanAndMergeByField` NÃO devolve objeto quando congelado (o caller faz .length)');
-ok(/return \[\];/.test(corpoScan), 'e devolve ARRAY, como nas demais saídas');
+ok(/scheduled_duplicate_signal/.test(corpoScan),
+  '⛔ `_scanAndMergeByField` registra caso privado de duplicidade');
+ok(!/planSweepMerges/.test(corpoScan) && !/_executeMerge\(/.test(corpoScan),
+  'e não planeja nem executa fusão automática');
 
 // ── 7. UMA aquisição `deleting` em deleteAccount (10ª auditoria, ponto 1) ───
 /* Uma segunda aquisição do mesmo lock fazia o CAMINHO FELIZ travar contra si mesmo, depois

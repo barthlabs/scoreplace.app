@@ -235,8 +235,10 @@ ok(/friendships\.uidA \(relação com uid morto\)/.test(idx) && /friendAccess re
 ok(fs.existsSync(path.join(ROOT, 'functions', 'amizade-lock.js')), 'o módulo de lock existe');
 ok(/_lock\.exigirAtivos\(tx, db/.test(svc),
   '⛔ o estado das contas é lido DENTRO da transação (é o que força retry na corrida)');
-ok(/guardaDeMerge\(db, HttpsError, \[dropDoc\.id, keepDoc\.id\]/.test(idx),
-  '⛔ e `_executeMerge` passa pela guarda (fase + lock) que cobre a fusão INTEIRA');
+const _iDisabledMerge = idx.indexOf('async function _executeMerge(db, keepDoc, dropDoc)');
+const _disabledMerge = idx.slice(_iDisabledMerge, idx.indexOf('\n}', _iDisabledMerge));
+ok(/fusão automática de contas está desativada/.test(_disabledMerge),
+  '⛔ a antiga porta genérica de fusão está explicitamente desativada');
 const _iG = vida.indexOf('async function guardaDeMerge');
 const _corpoG = vida.slice(_iG, vida.indexOf('\nmodule.exports', _iG));
 ok(_iG > 0 && _corpoG.indexOf('_fase.exigirLiberado') < _corpoG.indexOf('_lock.adquirir'),
@@ -332,7 +334,8 @@ ok(/assumindo CONGELADO/.test(faseS), '⛔ falhando FECHADO se não der pra ler 
 ['amizade:', 'mergePhoneAccount', 'mergeAccountsKeepOlder', 'deleteAccount'].forEach((op) => {
   ok(new RegExp('exigirLiberado\\([\\s\\S]{0,80}"?' + op).test(idx + svc), 'a trava cobre ' + op);
 });
-ok(/_amizadeFase\.liberado\(db\)/.test(idx), 'e a varredura automática/agendada também consulta a fase');
+ok(/scheduled_duplicate_signal/.test(idx) && !/planSweepMerges/.test(idx),
+  'a varredura agendada só registra sinais e não participa mais de fusões');
 /* ⚠️ REVOGADO na 10ª auditoria: a ordem antiga (drain ANTES das Rules) deixava o cliente
  * exposto à escalada por ~10 min. Rules não interferem em invocações Admin em andamento,
  * então fechar o cliente vem primeiro e o drain acontece igual, depois. */
@@ -417,9 +420,8 @@ ok(/dA\.mergedInto/.test(svc) && /dC\.mergedInto/.test(svc), 'e recusa lápide d
 ok(/acao === 'enviar' && dA\.acceptFriendRequests === false/.test(svc),
   'e confere `acceptFriendRequests` AQUI, não no retrato externo');
 
-// ponto 5 — revalidação pós-lock
-ok(/RELÊ E REAVALIA DEPOIS DO LOCK/.test(idx), '`_executeMerge` revalida depois do lock');
-ok(/const prova = await _mayAutoMerge\(fk, fd\);/.test(idx), 'e reavalia a REGRA com dado fresco');
+// ponto 5 — fusões só sobrevivem em comandos explícitos
+ok(!/async function _mayAutoMerge/.test(idx), 'não existe mais porta de fusão automática');
 // ⚠️ v2.1.48 (10ª auditoria): `_mergeAccountsKeepOlder` não precisa mais RELER — ele passou
 // a ler TUDO já sob a posse, então não existe snapshot pré-lock a revalidar.
 // fatia LOCAL: `_koBody` só é declarado no bloco da 10ª auditoria, mais abaixo — usar aqui
@@ -428,17 +430,19 @@ const _iKOa = idx.indexOf('async function _mergeAccountsKeepOlder');
 const _koLocal = idx.slice(_iKOa, idx.indexOf('\nasync function ', _iKOa + 10));
 ok(/tombstone no Firestore/.test(_koLocal) && /already: true/.test(_koLocal),
   '`_mergeAccountsKeepOlder` confere tombstone sob o lock e não cria um SEGUNDO');
-ok(/já foi fundido\/removido por outra operação/.test(idx),
-  'e `_executeMerge` aborta quando o drop já foi fundido por outra operação');
+ok(/fusão automática de contas está desativada/.test(idx),
+  'a porta automática não chega a alterar um UID já fundido');
 
 // ponto 6 — fase dentro da aquisição
 ok(/const mSnap = await tx\.get\(db\.doc\(_fase\.DOC\)\)/.test(lockS2),
   '⛔ a AQUISIÇÃO lê o marcador dentro da transação (ligar manutenção força retry)');
 ok(/tx\.get\(db\.doc\(_fase\.DOC\)\)/.test(svc), 'e a transação de amizade também');
 
-// ponto 7 — contrato de retorno
-ok(/PULADO \(' \+ field \+ '\)/.test(idx) && !/return \{ pulado: true/.test(idx),
-  '⛔ `_scanAndMergeByField` devolve ARRAY quando congelado');
+// ponto 7 — a varredura registra caso, sem alterar conta
+const _iSweep = idx.indexOf('async function _scanAndMergeByField');
+const _sweepBody = idx.slice(_iSweep, idx.indexOf('// ─── One-shot', _iSweep));
+ok(/scheduled_duplicate_signal/.test(_sweepBody) && _sweepBody.indexOf('_executeMerge(') === -1,
+  '⛔ `_scanAndMergeByField` só registra caso privado');
 
 // ponto 8 — runbook
 ok(/backfilled` NÃO libera nada/.test(cut4), 'o runbook diz que `backfilled` não libera');
@@ -455,10 +459,9 @@ const _corpoDelH = idx.slice(_iDelH, idx.indexOf('\n);', _iDelH));
 ok((_corpoDelH.match(/adquirir\(db, \[uid\], "deleting"\)/g) || []).length === 1,
   '⛔ deleteAccount adquire `deleting` UMA vez (a segunda travava o caminho feliz)');
 
-// ponto 2 — vencedor recalculado sob o lock
-ok(/_determineMergeWinner\(fk, fd\)/.test(idx),
-  '⛔ `_executeMerge` RECALCULA o vencedor sob o lock (não só confere que existem)');
-ok(/a direção MUDOU sob o lock/.test(idx), 'e registra quando a direção inverte');
+// ponto 2 — vencedor só é relevante na fusão explicitamente autorizada
+ok(!/_determineMergeWinner\(fk, fd\)/.test(idx),
+  '⛔ a porta automática não escolhe sobrevivente');
 const _iKO2 = idx.indexOf('async function _mergeAccountsKeepOlder');
 const _koBody = idx.slice(_iKO2, idx.indexOf('\nasync function ', _iKO2 + 10));
 const _pos = (re) => _koBody.search(re);

@@ -496,64 +496,12 @@ function _dedupKey(field, value) {
  * keepDoc and dropDoc are Firestore DocumentSnapshot instances.
  * Returns { tourFixed, casualFixed }.
  */
-/* ⛔ FRONTEIRA DO LOCK (7ª auditoria, ponto 3): EXTERNA adquire, INTERNA pressupõe.
- * `_executeMerge` é o ponto de entrada para quem AINDA NÃO tem o lock. Quem já tem —
- * `_mergeAccountsKeepOlder`, que precisa cobrir as duas ramificações dele, inclusive a
- * rara em que `keepDoc` não existe e só se grava a lápide — chama `_executeMergeInterno`
- * direto. Adquirir duas vezes o mesmo uid na mesma cadeia seria deadlock consigo mesmo:
- * a segunda aquisição veria `merging` e falharia. */
+/* Não existe mais porta genérica de fusão automática. Os únicos fluxos de
+ * fusão sobreviventes exigem prova explícita de controle e chamam o protocolo
+ * dedicado; esta função fica como trava contra reintrodução acidental. */
 async function _executeMerge(db, keepDoc, dropDoc) {
-  /* ⛔ 8ª auditoria (ponto 1): A TRAVA DE FASE MORA AQUI, não em cada caller.
-   * `autoMergeOnProfileUpdate` chama `_executeMerge` DIRETO — ele não passa por
-   * `_scanAndMergeByField` nem por `_mergeAccountsKeepOlder`, que eram os únicos gates.
-   * Ou seja: uma edição de perfil disparava o gatilho e a fusão atravessava o freeze,
-   * contradizendo o runbook. Pôr a trava na fronteira comum faz QUALQUER caller futuro
-   * nascer protegido — gate por caller apodrece na primeira chamada nova. */
-  return _amizadeVida.guardaDeMerge(db, HttpsError, [dropDoc.id, keepDoc.id], async () => {
-    /* ⛔ 9ª auditoria (ponto 5): RELÊ E REAVALIA DEPOIS DO LOCK.
-     * Os callers (`autoMergeOnProfileUpdate`, `_scanAndMergeByField`) escolheram o par com
-     * snapshots capturados ANTES da aquisição. Lock impede simultaneidade, não atualiza
-     * retrato: entre a escolha e a aquisição outra operação pode ter fundido o drop — e
-     * fundi-lo de novo criaria um SEGUNDO tombstone e reescreveria amizade usando um uid
-     * morto. */
-    const [fk, fd] = await Promise.all([
-      db.collection("users").doc(keepDoc.id).get(),
-      db.collection("users").doc(dropDoc.id).get(),
-    ]);
-    if (!fd.exists || (fd.data() || {}).mergedInto) {
-      console.log("[_executeMerge] " + dropDoc.id + " já foi fundido/removido por outra operação — abortado");
-      return { resultado: { pulado: true, motivo: "drop-ja-fundido" }, finais: null };
-    }
-    if (!fk.exists || (fk.data() || {}).mergedInto) {
-      console.log("[_executeMerge] o sobrevivente " + keepDoc.id + " virou lápide — abortado");
-      return { resultado: { pulado: true, motivo: "keep-virou-lapide" }, finais: null };
-    }
-    if ((fd.data() || {}).deleted === true || (fk.data() || {}).deleted === true) {
-      console.log("[_executeMerge] uma das contas foi excluída — abortado");
-      return { resultado: { pulado: true, motivo: "conta-excluida" }, finais: null };
-    }
-    // e a REGRA também é reavaliada com o dado de agora
-    const prova = await _mayAutoMerge(fk, fd);
-    if (!prova.allowed) {
-      console.log("[_executeMerge] reavaliação pós-lock RECUSOU " + keepDoc.id + " × " + dropDoc.id + ": " + prova.reason);
-      return { resultado: { pulado: true, motivo: "reavaliacao-" + prova.reason }, finais: null };
-    }
-    /* ⛔ 10ª auditoria (ponto 2): O VENCEDOR É RECALCULADO AQUI, sob o lock.
-     * Confirmar que os dois perfis existem não bastava: `pickSurvivorByActivity` decide por
-     * PROVEDOR do Auth, atividade e CONTAGEM DE TORNEIOS — tudo isso muda enquanto a
-     * operação espera o lock. Manter a direção escolhida antes pode fundir na direção
-     * errada e apagar a conta que deveria sobreviver, que é irreversível.
-     * `_determineMergeWinner` relê Auth e recontagem, então rodá-lo aqui é a decisão de
-     * agora, não a de antes. */
-    const { keepDoc: kNovo, dropDoc: dNovo } = await _determineMergeWinner(fk, fd);
-    if (kNovo.id !== keepDoc.id) {
-      console.warn("[_executeMerge] a direção MUDOU sob o lock: antes keep=" + keepDoc.id +
-        ", agora keep=" + kNovo.id + " — seguindo a decisão de AGORA");
-    }
-    const r = await _executeMergeInterno(db, kNovo, dNovo);
-    // o drop (o de AGORA) virou lápide: estado TERMINAL, não `active`
-    return { resultado: r, finais: { [dNovo.id]: "merged", [kNovo.id]: "active" } };
-  });
+  void db; void keepDoc; void dropDoc;
+  throw new HttpsError("failed-precondition", "fusão automática de contas está desativada");
 }
 
 /** ⚠️ PRESSUPÕE (a) a trava de fase JÁ conferida e (b) o lock JÁ adquirido pelos dois uids.
@@ -1133,43 +1081,37 @@ async function _mergeAccountsKeepOlder(db, uidA, uidB) {
   }
 }
 
-/**
- * Scan all users for duplicate values of `field` ("phone" or "email").
- * For each duplicate group, merge every less-complete account into the
- * most-complete one.  Returns an array of merge result objects.
- */
-/**
- * PORTA ÚNICA das fusões automáticas: busca os dois UserRecords e delega a decisão pra
- * `mayAutoMerge` (merge-rules.js, pura e testada) — credencial AUTENTICADA dos dois lados
- * E ninguém tendo dispensado o outro. Os DOIS caminhos automáticos — o trigger
- * `autoMergeOnProfileUpdate` e a varredura diária `_scanAndMergeByField` — passam por aqui.
- * Foi a SEGUNDA porta, sem gate, que fundiu duas pessoas diferentes em 19/ago/2026 — e
- * fundiu 8h43 DEPOIS de uma delas ter respondido "não somos a mesma pessoa" na tela.
- * Auth ausente (conta já apagada) → não autoriza, que é o lado seguro.
- */
-async function _mayAutoMerge(docA, docB) {
-  const [autA, autB] = await Promise.all([
-    admin.auth().getUser(docA.id).catch(() => null),
-    admin.auth().getUser(docB.id).catch(() => null),
-  ]);
-  return _mergeRules.mayAutoMerge(
-    { uid: docA.id, auth: autA, data: (docA.data && docA.data()) || {} },
-    { uid: docB.id, auth: autB, data: (docB.data && docB.data()) || {} });
+/* Registra um sinal privado sem alterar nenhuma conta. O documento tem somente
+ * UIDs internos e hash do sinal: contato, imagem e biometria nunca entram nele.
+ * O id determinístico torna trigger e varredura idempotentes. */
+async function _recordIdentityReviewCase(db, { source, field, value, uids }) {
+  const subjectUids = Array.from(new Set((uids || []).filter(Boolean))).sort();
+  if (subjectUids.length < 2) return null;
+  const crypto = require("crypto");
+  const signalHash = crypto.createHash("sha256")
+    .update(String(field || "") + "\\n" + String(_dedupKey(field, value) || ""))
+    .digest("hex");
+  const caseId = crypto.createHash("sha256")
+    .update(String(source || "") + "\\n" + signalHash + "\\n" + subjectUids.join("\\n"))
+    .digest("hex");
+  const ref = db.collection("identityReviewCases").doc(caseId);
+  await ref.set({
+    status: "pending",
+    source: String(source || "unknown"),
+    field: String(field || "unknown"),
+    signalHash,
+    subjectUids,
+    firstSeenAt: _FV.serverTimestamp(),
+    lastSeenAt: _FV.serverTimestamp(),
+    sightings: _FV.increment(1),
+  }, { merge: true });
+  return caseId;
 }
 
+/* Varre sinais de possível duplicidade. Esta rotina deliberadamente nunca funde,
+ * tombstona, redireciona ou remove um UID; a resolução requer o fluxo explícito
+ * de prova de controle ou revisão humana da entrega de identidade. */
 async function _scanAndMergeByField(db, field) {
-  /* ⛔ 7ª auditoria (ponto 4): a varredura automática e a agendada passam por aqui. Elas
-   * não têm HttpsError nem quem as escute — então simplesmente NÃO RODAM enquanto a
-   * migração estiver congelada. Voltam sozinhas quando a fase liberar. */
-  if (!(await _amizadeFase.liberado(db))) {
-    /* ⛔ 9ª auditoria (ponto 7): devolve ARRAY, como em toda outra saída desta função.
-     * Antes devolvia `{pulado:true,...}` e o `scheduledAutoMergeCleanup` fazia
-     * `phoneResults.length` — que num objeto sem `length` vira `undefined`, e a soma vira
-     * `NaN` no log. Função que às vezes é array e às vezes é objeto é armadilha pro
-     * próximo caller. */
-    console.warn('[_scanAndMergeByField] PULADO (' + field + '): migração de amizade em manutenção');
-    return [];
-  }
   const allSnap = await db.collection("users").get();
   const byKey = {};
 
@@ -1186,41 +1128,13 @@ async function _scanAndMergeByField(db, field) {
 
   for (const [key, docs] of Object.entries(byKey)) {
     if (docs.length < 2) continue;
-
-    // ⚠️ QUEM DECIDE É O `merge-sweep-core` — MESMA PORTA DO TRIGGER (`_mayAutoMerge`).
-    // Sem credencial AUTENTICADA batendo dos dois lados o par fica de pé: quem resolve é o
-    // fluxo interativo de duplicata, que sabe pedir prova de posse. Duplicata não fundida é
-    // incômodo reversível; fusão errada apaga uma conta do Auth e não tem volta. A decisão
-    // mora num módulo puro porque enquanto morava AQUI nenhum teste alcançava ela — e foi
-    // assim que a varredura fundiu duas pessoas diferentes em 19/ago/2026.
-    const plano = await _mergeSweep.planSweepMerges(docs, {
-      pickKeep: async (a, b) => (await _determineMergeWinner(a, b)).keepDoc,
-      proof: _mayAutoMerge,
+    const caseId = await _recordIdentityReviewCase(db, {
+      source: "scheduled_duplicate_signal",
+      field,
+      value: key,
+      uids: docs.map((doc) => doc.id),
     });
-    if (!plano.keepUid) continue;
-
-    plano.refused.forEach((r) => {
-      console.log(`[scanAndMergeByField] RECUSADO ${plano.keepUid} × ${r.dropUid}: ` +
-        `"${field}" bate no PERFIL mas não há credencial AUTENTICADA nos dois lados — ` +
-        `fundir por texto digitado apagaria conta de terceiro.`);
-      results.push({ field, key, keepUid: plano.keepUid, dropUid: r.dropUid, refused: r.reason });
-    });
-
-    // Executa o plano (re-fetch a cada par, pra pegar estado fresco)
-    for (const m of plano.merges) {
-      const [freshKeep, freshDrop] = await Promise.all([
-        db.collection("users").doc(plano.keepUid).get(),
-        db.collection("users").doc(m.dropUid).get(),
-      ]);
-      if (!freshDrop.exists || freshDrop.data().mergedInto) continue;
-      try {
-        const r = await _executeMerge(db, freshKeep, freshDrop);
-        results.push({ field, key, keepUid: plano.keepUid, dropUid: m.dropUid, by: m.by, ...r });
-      } catch (err) {
-        results.push({ field, key, keepUid: plano.keepUid, dropUid: m.dropUid,
-                       error: String(err.message) });
-      }
-    }
+    results.push({ field, reviewCaseId: caseId, subjects: docs.length });
   }
 
   return results;
@@ -2999,47 +2913,17 @@ async function _detectarDuplicataNoTorneio(db, callerUid, tData) {
     }, pessoas, { rigor: "torneio", freqTokens: await _freqDosTokensSoltos(db, _dupPerson, meu.displayName || "", pessoas) });
     if (!r.suspeito) return null;
 
-    // ─── CELULAR AUTENTICADO NÃO PERGUNTA: FUNDE (v1.8.3) ──────────────────────────
-    // Regra do dono (11/ago/2026): _"no mesmo celular autenticado, já mescla, nem pergunta."_
-    //
-    // ⚠️ "AUTENTICADO" É O TELEFONE DO **AUTH**, NUNCA O CAMPO `phone` DO PERFIL.
-    // O campo do perfil é TEXTO DIGITADO: a pessoa pode errar um dígito e cair no número de
-    // outra, ou digitar o do marido. Fundir por isso apagaria a conta de um terceiro — e
-    // fusão apaga do Auth, não tem volta. O `phoneNumber` do Auth só existe depois de um SMS
-    // conferido: é posse provada, que é exatamente o que o dono qualificou com "autenticado".
-    // (O `autoMergeOnProfileUpdate` funde pelo campo do PERFIL — mais frouxo que isto de
-    // propósito? não: é dívida conhecida, ver [[project-automerge-trigger-footgun]].)
-    //
-    // Os DOIS lados precisam ter o número no Auth. Um só provando não diz nada sobre o outro.
-    if (r.suspeito.motivo === "celular" || r.suspeito.motivo === "email") {
-      try {
-        const [_meuAuth, _outroAuth] = await Promise.all([
-          admin.auth().getUser(callerUid).catch(() => null),
-          admin.auth().getUser(r.suspeito.uid).catch(() => null),
-        ]);
-        const _p1 = _meuAuth && _meuAuth.phoneNumber;
-        const _p2 = _outroAuth && _outroAuth.phoneNumber;
-        const _telProvado = !!(_p1 && _p2 &&
-          _dupPerson.normalizarTelefone(_p1) === _dupPerson.normalizarTelefone(_p2));
-        // E-MAIL vale igual ao celular, com a MESMA exigência: verificado NO AUTH dos dois
-        // lados. `emailVerified` é o que separa "provou que recebe nesse endereço" de
-        // "digitou esse endereço" — sem ele, fundir por e-mail apagaria a conta de quem
-        // teve o endereço digitado por engano.
-        const _e1 = _meuAuth && _meuAuth.emailVerified && _dupPerson.normalizarEmail(_meuAuth.email);
-        const _e2 = _outroAuth && _outroAuth.emailVerified && _dupPerson.normalizarEmail(_outroAuth.email);
-        const _mailProvado = !!(_e1 && _e2 && _e1 === _e2);
-        if (_telProvado || _mailProvado) {
-          console.log(`[dup] ${_telProvado ? "celular" : "e-mail"} AUTENTICADO igual nos dois ` +
-            `(${callerUid} × ${r.suspeito.uid}) — fundindo sem perguntar`);
-          const _res = await _mergeAccountsKeepOlder(db, callerUid, r.suspeito.uid);
-          console.log(`[dup] fusão automática por credencial autenticada:`, JSON.stringify(_res));
-          return null;   // não há o que perguntar — as contas viraram uma
-        }
-      } catch (e) {
-        // Falhar aqui NÃO pode barrar a inscrição: cai na pergunta, que é o caminho seguro.
-        console.error("[dup] fusão por credencial autenticada falhou (segue pra pergunta):", e && e.message);
-      }
-    }
+    // O sinal no mesmo torneio é mais forte, mas ainda não autoriza fundir UIDs.
+    // A inscrição exibe a pendência e a resolução passa por prova explícita de posse
+    // ou revisão humana; nunca transfere histórico no meio do sorteio.
+    await _recordIdentityReviewCase(db, {
+      source: "tournament_duplicate_signal",
+      field: r.suspeito.motivo === "celular" ? "phone" :
+        (r.suspeito.motivo === "email" ? "email" : "profile"),
+      value: r.suspeito.motivo === "celular" ? meu.phone :
+        (r.suspeito.motivo === "email" ? meu.email : meu.displayName),
+      uids: [callerUid, r.suspeito.uid],
+    });
 
     const alvo = pessoas.filter((p) => p.uid === r.suspeito.uid)[0] || {};
     const emailReal = (alvo.email && !_nameUnique.isSyntheticEmail(alvo.email)) ? alvo.email : "";
@@ -8983,19 +8867,12 @@ exports.accountDeletionEmail = onDocumentWritten(
   }
 );
 
-// ─── autoMergeOnProfileUpdate (Firestore trigger) ─────────────────────────
-// Dispara sempre que um doc users/{uid} é criado ou atualizado.
-// Se phone ou email mudou, varre o banco por outros usuários com o mesmo
-// valor e mescla automaticamente (conta mais completa ganha; empate → mais nova).
-//
-// Proteção anti-loop:
-//   • Docs com mergedInto ignorados (já mesclados).
-//   • _executeMerge só altera matchHistory e mergedInto — phone/email não mudam,
-//     então o trigger não dispara novamente para os docs atualizados.
+// ─── autoMergeOnProfileUpdate (sinal privado; não funde) ───────────────────
+// Dispara quando phone ou email muda e registra possível duplicidade para
+// revisão. Coincidência de contato nunca altera, remove ou redireciona um UID.
 exports.autoMergeOnProfileUpdate = onDocumentWritten(
   { document: "users/{uid}", region: "us-central1", memory: "256MiB", timeoutSeconds: 120 },
   async (event) => {
-    // v4.4.116: merge por uid (_scanAndMergeByField/_executeMerge/_replaceNameInMatches uid-scoped).
     const after  = event.data.after;
     const before = event.data.before;
 
@@ -9022,11 +8899,7 @@ exports.autoMergeOnProfileUpdate = onDocumentWritten(
       const key = _dedupKey(field, value);
       if (!key || key.length < 5) continue;
 
-      // Busca outros usuários com o mesmo valor no campo
-      // user-vivo:isento (vale pro bloco abaixo) — este é o PRÓPRIO caminho de fusão: ele
-      // precisa dos docs CRUS pra decidir quem funde com quem. Descarta lápide e o próprio
-      // uid na linha seguinte (`d.id !== uid && !d.data().mergedInto`), que é a semântica da
-      // porta aplicada na fonte — seguir a corrente aqui fundiria uma conta já fundida.
+      // Busca outros usuários com o mesmo valor. Lápides não são candidatas novas.
       const snap = await db.collection("users").where(field, "==", value).get();
       const others = snap.docs.filter(d => d.id !== uid && !d.data().mergedInto);
 
@@ -9045,43 +8918,14 @@ exports.autoMergeOnProfileUpdate = onDocumentWritten(
 
       if (others.length === 0) continue;
 
-      // Re-fetch conta atual (pode ter sido atualizada desde que o trigger disparou)
-      const currentDoc = await db.collection("users").doc(uid).get();
-      if (!currentDoc.exists || currentDoc.data().mergedInto) continue;
-
       for (const other of others) {
-        const freshOther = await db.collection("users").doc(other.id).get();
-        if (!freshOther.exists || freshOther.data().mergedInto) continue;
-
-        // ⚠️ v1.8.3 — FUNDIR EXIGE CREDENCIAL AUTENTICADA. SEMPRE.
-        // Regra do dono (11/ago/2026), ao ver que este trigger fundia sem isso:
-        // _"tem que autenticar email ou celular. sempre autenticado. nada disso de ser
-        // frouxo."_ E ele tem razão: até aqui bastava o campo `phone`/`email` do PERFIL
-        // bater — texto DIGITADO. Um dígito errado cai no número de outra pessoa, e a
-        // fusão APAGA uma conta do Auth, sem volta. Ou seja: dava pra apagar a conta de um
-        // terceiro digitando o telefone dele no próprio perfil.
-        // A prova é o AUTH: `phoneNumber` só existe depois de SMS conferido, e o e-mail
-        // precisa de `emailVerified`. Os DOIS lados têm que provar — um só não diz nada
-        // sobre o outro. Sem prova, NÃO funde (e não pergunta aqui: quem pergunta é o
-        // fluxo de duplicata, que sabe mascarar o contato).
-        // v2.0.5: a regra saiu daqui pra `_mayAutoMerge` → merge-rules. Estava escrita
-        // SÓ neste caminho, e a varredura diária (a outra porta) fundiu duas pessoas
-        // diferentes por não ter a cópia. Uma regra, dois chamadores.
-        const _prova = await _mayAutoMerge(currentDoc, freshOther);
-        if (!_prova.allowed) {
-          console.log(`[autoMergeOnProfileUpdate] RECUSADO ${uid} × ${other.id}: ` +
-            `"${field}" bate no PERFIL mas não há credencial AUTENTICADA nos dois lados — ` +
-            `fundir por texto digitado apagaria conta de terceiro.`);
-          continue;
-        }
-
-        const { keepDoc, dropDoc } = await _determineMergeWinner(currentDoc, freshOther);
-        try {
-          const r = await _executeMerge(db, keepDoc, dropDoc);
-          console.log(`[autoMergeOnProfileUpdate] Merged by ${field}: drop=${dropDoc.id} → keep=${keepDoc.id}`, r);
-        } catch (err) {
-          console.error(`[autoMergeOnProfileUpdate] Merge error for uid=${uid}:`, err);
-        }
+        const caseId = await _recordIdentityReviewCase(db, {
+          source: "profile_duplicate_signal",
+          field,
+          value,
+          uids: [uid, other.id],
+        });
+        console.log(`[autoMergeOnProfileUpdate] possível duplicidade ${uid} × ${other.id} → caso ${caseId}`);
       }
     }
   }
@@ -9197,25 +9041,17 @@ async function _detectarDuplicataNaBase(db, uid, meu) {
     }, pessoas, { freqTokens: freqTokens });
     if (!r.suspeito) return null;
 
-    // CREDENCIAL AUTENTICADA nem pergunta: funde. Mesma regra da inscrição — a prova é o
-    // AUTH (SMS conferido / emailVerified), nunca o campo do perfil.
-    if (r.suspeito.motivo === "celular" || r.suspeito.motivo === "email") {
-      try {
-        const [a1, a2] = await Promise.all([
-          admin.auth().getUser(uid).catch(() => null),
-          admin.auth().getUser(r.suspeito.uid).catch(() => null),
-        ]);
-        const t1 = a1 && a1.phoneNumber, t2 = a2 && a2.phoneNumber;
-        const e1 = a1 && a1.emailVerified && _dupPerson.normalizarEmail(a1.email);
-        const e2 = a2 && a2.emailVerified && _dupPerson.normalizarEmail(a2.email);
-        if ((t1 && t2 && _dupPerson.normalizarTelefone(t1) === _dupPerson.normalizarTelefone(t2)) ||
-            (e1 && e2 && e1 === e2)) {
-          console.log(`[dup-cadastro] credencial AUTENTICADA igual (${uid} × ${r.suspeito.uid}) — fundindo`);
-          await _mergeAccountsKeepOlder(db, uid, r.suspeito.uid);
-          return null;
-        }
-      } catch (e) { console.error("[dup-cadastro] fusão falhou (segue pra pergunta):", e && e.message); }
-    }
+    // Mesmo quando o sinal vem de uma credencial autenticada, ele só abre caso de
+    // revisão. Login comprovado não prova que duas contas devem ser fundidas e nunca
+    // autoriza tombstone ou transferência automática de inscrições.
+    await _recordIdentityReviewCase(db, {
+      source: "registration_duplicate_signal",
+      field: r.suspeito.motivo === "celular" ? "phone" :
+        (r.suspeito.motivo === "email" ? "email" : "profile"),
+      value: r.suspeito.motivo === "celular" ? meu.phone :
+        (r.suspeito.motivo === "email" ? meu.email : nome),
+      uids: [uid, r.suspeito.uid],
+    });
 
     const alvo = pessoas.filter((p) => p.uid === r.suspeito.uid)[0] || {};
     const emailReal = (alvo.email && !_nameUnique.isSyntheticEmail(alvo.email)) ? alvo.email : "";
@@ -9333,8 +9169,8 @@ exports.enforceUniqueDisplayName = onDocumentWritten(
     // Regra do dono: _"essa verificação deve acontecer quando a pessoa se cadastra"_.
     // Roda quando o NOME, o CELULAR ou o E-MAIL mudam — que é quando aparece dado novo
     // capaz de revelar a segunda conta. Grava `dupSuspect` (só o contato MASCARADO), que
-    // o cliente lê e transforma em pergunta. Se a credencial estiver AUTENTICADA nos dois
-    // lados, `_detectarDuplicataNaBase` já funde e não sobra nada pra perguntar.
+    // o cliente lê e transforma em pergunta. O detector também abre caso privado, mas
+    // nunca funde as contas por conta própria.
     // ⚠️ Separado de `nameConflict` DE PROPÓSITO: aquele é UNICIDADE (nome idêntico → a
     // saída é trocar de nome); este é DUPLICATA (nome parecido → a saída é unir ou dizer
     // "não sou eu"). "Rodrigo Terra Barth" não precisa trocar de nome por existir
@@ -9413,11 +9249,9 @@ exports.enforceUniqueDisplayName = onDocumentWritten(
   }
 );
 
-// ─── scheduledAutoMergeCleanup (diário 04:45 BRT) ─────────────────────────
-// Varre toda a coleção users em busca de phones E emails duplicados e mescla
-// automaticamente os pares encontrados. Garante que duplicatas que existiam
-// antes do trigger ser deployado (e qualquer caso que escapou do trigger)
-// sejam resolvidas.
+// ─── scheduledAutoMergeCleanup (sinais diários, 04:45 BRT) ─────────────────
+// Varre a coleção users e registra casos privados para contatos duplicados.
+// Não funde, remove, tombstona ou redireciona contas.
 exports.scheduledAutoMergeCleanup = onSchedule(
   {
     // v4.4.117: BUG corrigido — o cron "45 7" estava em UTC (07:45) mas o timeZone é
@@ -9430,9 +9264,8 @@ exports.scheduledAutoMergeCleanup = onSchedule(
     timeoutSeconds: 540,
   },
   async () => {
-    // v4.4.116: merge por uid (_scanAndMergeByField/_repairTournaments/_replaceNameInMatches uid-scoped).
     const db = admin.firestore();
-    console.log("[scheduledAutoMergeCleanup] Iniciando varredura diária de duplicatas");
+    console.log("[scheduledAutoMergeCleanup] Iniciando varredura diária de sinais de duplicidade");
 
     const [phoneResults, emailResults] = await Promise.all([
       _scanAndMergeByField(db, "phone"),
@@ -9441,8 +9274,8 @@ exports.scheduledAutoMergeCleanup = onSchedule(
 
     const total = phoneResults.length + emailResults.length;
     console.log(
-      `[scheduledAutoMergeCleanup] Concluído: phone_merges=${phoneResults.length} ` +
-      `email_merges=${emailResults.length}`
+      `[scheduledAutoMergeCleanup] Concluído: phone_cases=${phoneResults.length} ` +
+      `email_cases=${emailResults.length}`
     );
     if (total > 0) {
       console.log("[scheduledAutoMergeCleanup] phone:", JSON.stringify(phoneResults));

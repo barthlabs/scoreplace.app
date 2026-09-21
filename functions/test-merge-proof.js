@@ -149,30 +149,26 @@ console.log('\n=== 2. a VARREDURA sobre o par real da Confra (planSweepMerges) =
   const planoSemDeps = await sweep.planSweepMerges(DOCS_CILONE, {});
   ok('sem as dependências injetadas → NÃO funde', planoSemDeps.merges.length === 0);
 
-  console.log('\n=== 3. as DUAS portas automáticas passam pela MESMA regra ===');
+  console.log('\n=== 3. portas automáticas apenas sinalizam revisão ===');
 
   const src = fs.readFileSync(path.join(__dirname, 'index.js'), 'utf8');
-  function trechoAteOMerge(marcador) {
+  function trechoDaPorta(marcador, fim) {
     const i = src.indexOf(marcador);
     if (i < 0) return null;
-    const j = src.indexOf('_executeMerge(', i);
-    return (j < 0) ? null : src.slice(i, j);
+    const j = src.indexOf(fim, i);
+    return src.slice(i, j < 0 ? src.length : j);
   }
-  const tSweep = trechoAteOMerge('async function _scanAndMergeByField');
-  const tTrigger = trechoAteOMerge('exports.autoMergeOnProfileUpdate');
+  const tSweep = trechoDaPorta('async function _scanAndMergeByField', '// ─── One-shot');
+  const tTrigger = trechoDaPorta('exports.autoMergeOnProfileUpdate', 'exports.enforceUniqueDisplayName');
 
-  ok('_scanAndMergeByField existe e chama _executeMerge', !!tSweep);
-  ok('autoMergeOnProfileUpdate existe e chama _executeMerge', !!tTrigger);
-  ok('VARREDURA DIÁRIA decide pelo merge-sweep-core (nada de gate escrito à mão)',
-    !!tSweep && tSweep.indexOf('planSweepMerges') >= 0);
-  ok('VARREDURA DIÁRIA só funde o que o plano autorizou (itera plano.merges)',
-    !!tSweep && /for\s*\(\s*const\s+\w+\s+of\s+plano\.merges\s*\)/.test(tSweep));
-  ok('TRIGGER passa por _mayAutoMerge antes de fundir',
-    !!tTrigger && tTrigger.indexOf('_mayAutoMerge') >= 0);
-  ok('_mayAutoMerge delega pra regra pura (nada de decisão escrita à mão no index)', (function () {
-    const i = src.indexOf('async function _mayAutoMerge');
-    return i >= 0 && src.slice(i, i + 700).indexOf('_mergeRules.mayAutoMerge') >= 0;
-  })());
+  ok('_scanAndMergeByField existe e registra caso privado',
+    !!tSweep && tSweep.indexOf('scheduled_duplicate_signal') >= 0);
+  ok('varredura diária não contém plano nem chamada de fusão',
+    !!tSweep && tSweep.indexOf('planSweepMerges') === -1 && tSweep.indexOf('_executeMerge(') === -1);
+  ok('trigger de perfil registra caso privado',
+    !!tTrigger && tTrigger.indexOf('profile_duplicate_signal') >= 0);
+  ok('trigger de perfil não chama fusão',
+    !!tTrigger && tTrigger.indexOf('_executeMerge(') === -1 && tTrigger.indexOf('_mergeAccountsKeepOlder(') === -1);
 
   console.log('\n' + (falhas === 0 ? '✅ merge-proof: todas as asserções passaram' : '❌ merge-proof: ' + falhas + ' falha(s)'));
   process.exit(falhas === 0 ? 0 : 1);

@@ -110,7 +110,7 @@ ok('trima o base', V.buildVariant('  Nelson Barth  ', 3) === 'Nelson Barth 3');
   const src = fs.readFileSync(path.join(__dirname, 'index.js'), 'utf8');
   ok('index.js exporta o trigger enforceUniqueDisplayName',
     /exports\.enforceUniqueDisplayName\s*=\s*onDocumentWritten/.test(src));
-  const bloco = src.slice(src.indexOf('exports.enforceUniqueDisplayName'), src.indexOf('scheduledAutoMergeCleanup (diário'));
+  const bloco = src.slice(src.indexOf('exports.enforceUniqueDisplayName'), src.indexOf('scheduledAutoMergeCleanup (sinais'));
   ok('ANTI-LOOP: só age quando o displayName MUDOU nesta escrita',
     /nome === String\(b\.displayName/.test(bloco));
   ok('ignora tombstone de fusão', /a\.mergedInto/.test(bloco));
