@@ -3364,19 +3364,6 @@ window._resetSaveNewPassword = function() {
     });
 };
 
-// ─── Toggle between login and register mode ──────────────────────────────────
-function toggleEmailMode(mode) {
-  var loginDiv = document.getElementById('email-login-mode');
-  var registerDiv = document.getElementById('email-register-mode');
-  if (mode === 'register') {
-    if (loginDiv) loginDiv.style.display = 'none';
-    if (registerDiv) registerDiv.style.display = 'block';
-  } else {
-    if (loginDiv) loginDiv.style.display = 'block';
-    if (registerDiv) registerDiv.style.display = 'none';
-  }
-}
-
 // ── Moderação: bloquear usuário (Apple App Store Guideline 1.2 — UGC) ───────
 // Adiciona o uid à lista blockedUids do PRÓPRIO perfil (arrayUnion no doc do
 // dono — regra Firestore já permite o dono editar o próprio doc). Conteúdo de
