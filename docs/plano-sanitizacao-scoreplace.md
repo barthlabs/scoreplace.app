@@ -326,6 +326,11 @@ O contrato de fase, modalidade de sorteio e adaptação do legado está em
 [`contrato-fases-e-sorteios.md`](contrato-fases-e-sorteios.md). Ele precede
 qualquer renomeação de `liga`, Rei/Rainha ou política de chave.
 
+O contrato de categorias, rigor e elegibilidade está em
+[`contrato-categorias-e-elegibilidade.md`](contrato-categorias-e-elegibilidade.md).
+Ele antecede a inscrição múltipla por categoria e impede que o cliente seja a
+autoridade de elegibilidade.
+
 ### 0. Contenção de identidade, congelamento e linha de base
 
 - Desligar a execução de fusão automática em gatilhos e agendas, preservando
