@@ -50,6 +50,21 @@ facial.
 mesma conta deixam exatamente uma inscrição; participante manual não colide
 com conta autenticada; alterar nome/foto não reescreve dados competitivos.
 
+### Contrato preparatório de migração
+
+Enquanto o produto suporta seleção múltipla de categorias, cada categoria
+selecionada corresponde a um registro canônico distinto. A ausência explícita
+de categoria usa o identificador reservado `__uncategorized__`; não é
+convertida em categoria escolhida pelo servidor. A chave do participante é
+sempre `uid:<uid>` ou `manual:<manualParticipantId>`.
+
+Antes de qualquer escrita, o dry-run deve enumerar os registros derivados do
+elenco legado, duplicatas e entradas incompatíveis. Entradas compostas (dupla
+ou equipe) e entradas sem identidade estável ficam no relatório de exceção e
+interrompem a ativação: não podem ser desmembradas por inferência. A primeira
+ativação continua condicionada ao censo aprovado de um torneio inativo de
+teste; este contrato não autoriza migração nem dual-write em produção.
+
 ## Entrega I2 — estado de identidade e barreira de autorização
 
 **Objetivo:** criar a estrutura sem ainda exigir captura facial de usuários.

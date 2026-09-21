@@ -23,7 +23,10 @@ a mesma pessoa em dois aparelhos.
 - Um UID provisório não pode ser organizador, integrar equipe, receber vaga,
   confirmar inscrição, lançar resultado ou votar em operação de torneio.
 - Uma inscrição confirmada requer `canonicalUid` e usa registro de chave
-  determinística `registration/{canonicalUid}__{categoryId}`.
+  determinística por torneio, categoria e participante. A representação de
+  participante é discriminada (`uid:<uid>` ou `manual:<manualParticipantId>`);
+  categorias múltiplas produzem um registro por categoria e ausência explícita
+  usa `__uncategorized__` durante a migração controlada.
 - Nenhum torneio, jogo, fila, convite ou perfil público armazena imagem,
   vetor facial, e-mail ou telefone para decidir
   identidade.
