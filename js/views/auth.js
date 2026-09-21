@@ -8002,7 +8002,8 @@ function setupProfileModal() {
         show('✅ Senha atualizada.', '#6ee7b7');
         var a = document.getElementById('profile-new-password'); if (a) a.value = '';
         var b = document.getElementById('profile-new-password2'); if (b) b.value = '';
-        try { if (window.FirestoreDB && u.uid) window.FirestoreDB.saveUserProfile(u.uid, { hasPassword: true, updatedAt: new Date().toISOString() }).catch(function(){}); } catch (e) {}
+        // Não persiste um marcador no perfil: a fonte de verdade para saber se
+        // há senha é o provedor autenticado, consultado exclusivamente no servidor.
       }).catch(function(err) {
         var code = err && err.code;
         var msg = 'Não foi possível salvar a senha.';
