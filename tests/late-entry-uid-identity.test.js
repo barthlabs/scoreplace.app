@@ -70,6 +70,17 @@ const freshIntegrated = {};
 W._markLateIntegrated(freshIntegrated, mesmaDupla);
 ok(freshIntegrated.lateIntegrated[W._lateEntryKey(mesmaDupla)] > 0,
    'escrita nova usa somente chave tipada');
+const lateHomonyms = {
+  format: 'Eliminatórias Simples', teamSize: 1, enrollmentMode: 'individual',
+  newMatchups: true, checkedIn: { uidAna1: Date.now(), uidAna2: Date.now() }, absent: {},
+  matches: [], participants: [], standbyParticipants: [
+    { uid: 'uidAna1', displayName: 'Ana', name: 'Ana', _lateJoin: true },
+    { uid: 'uidAna2', displayName: 'Ana', name: 'Ana', _lateJoin: true }
+  ], waitlist: []
+};
+const homonymCandidates = W._collectLateCandidates(lateHomonyms);
+ok(homonymCandidates.length === 2 && homonymCandidates[0].e.uid !== homonymCandidates[1].e.uid,
+   'dois homônimos com UIDs distintos permanecem candidatos tardios distintos');
 
 // e o coletor não a recolhe pra criar um 2º jogo
 t.waitlist = [Object.assign({ _lateJoin: true }, mesmaDupla)];

@@ -1090,11 +1090,11 @@ window._createExtraGamesFromWaitlist = function(t) {
   var seen = {}; var pool = [];
   var _brkSet = window._bracketUidKeySet(t);   // membership POR UID (nome não identifica)
   _sp.concat(_wl).forEach(function(p){
-    var n = _name(p);
-    if (!n || seen[n]) return;
+    var n = _name(p), key = window._lateEntryKey(p);
+    if (!n || !key || seen[key]) return;
     if (window._lateAlreadyIntegrated(t, p)) return;   // já COLOCADA antes → não cria 2º jogo
     if (window._entryInBracket(t, p, _brkSet)) return; // já ESTÁ na chave (por uid)
-    seen[n] = true; pool.push(p);
+    seen[key] = true; pool.push(p);
   });
   // v1.3.146: ÓRFÃO DE ROSTER (dupla FORMADA à mão, `teamOrigins==='formada'`, que entrou em
   // t.participants sem passar pela espera) também entra por AQUI — jogo NOVO vs "a definir", com os
@@ -1108,12 +1108,12 @@ window._createExtraGamesFromWaitlist = function(t) {
       if (m) { if (m.p1) _brk[m.p1] = 1; if (m.p2) _brk[m.p2] = 1; }
     });
     t.participants.forEach(function (p) {
-      var n = _name(p);
-      if (!n || seen[n]) return;
+      var n = _name(p), key = window._lateEntryKey(p);
+      if (!n || !key || seen[key]) return;
       if (window._entryInBracket(t, p, _brkSet)) return;  // já na chave (POR UID)
       if (t.teamOrigins[n] !== 'formada') return;        // só dupla formada à mão
       if (window._lateAlreadyIntegrated(t, p)) return;   // já COLOCADA antes
-      seen[n] = true; pool.push(p);
+      seen[key] = true; pool.push(p);
     });
   })();
   // v1.2.56: duplas JÁ FORMADAS (nome "A / B") TAMBÉM entram na Eliminatória Simples — mesmo
@@ -5272,11 +5272,9 @@ window._collectLateCandidates = function (t, _theCat) {
   var _pu = function (x) { return (typeof window._participantUids === 'function') ? window._participantUids(x) : []; };
   // dupla = ESTRUTURA (p1/p2), nunca includes('/') — [[project_dupla_entry_structural_not_slash]]
   var _isPairEntry = function (p) { return !!(p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)); };
-  var _key = function (p) {
-    if (!p || typeof p !== 'object') return String(p || '');
-    var a = String(p.p1Uid || p.p1Name || ''), b = String(p.p2Uid || p.p2Name || '');
-    return (a && b) ? [a, b].sort().join('|') : (_nm(p) || '');
-  };
+  // Uma conta, uma vaga manual e um guest de mesmo rótulo são entradas diferentes. Reusa a
+  // chave global também empregada no registro de idempotência; não recria um deduplicador local.
+  var _key = function (p) { return window._lateEntryKey(p); };
   // presença: mesmo-dia exige todos os membros presentes (cânone "só presentes")
   var _present = function (p) {
     if ((typeof window._tournamentIsSameDay === 'function') && !window._tournamentIsSameDay(t)) return true;
