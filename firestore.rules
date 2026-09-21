@@ -1087,6 +1087,12 @@ service cloud.firestore {
         return request.resource.data.diff(resource.data).affectedKeys()
           .hasAny(privilegedUserFields());
       }
+      function serverOwnedProfileFields() {
+        return ['authProvider', 'photoURL', 'displayName', 'displayName_lower', 'email', 'email_lower',
+                'gender', 'birthDate', 'age', 'city', 'hrMax', 'letzplayHandle', 'letzplaySource',
+                'phone', 'phoneCountry', 'preferredCeps', 'preferredSports', 'skillBySport',
+                'canRefereeBySport', 'refereeSports', 'updatedAt'];
+      }
 
       // A criação inicial só ocorre pela Function initializeUserProfile. Ela reserva
       // o displayName em transação antes de criar users/{uid}; permitir create no
@@ -1096,7 +1102,8 @@ service cloud.firestore {
       // Update: SÓ o dono, e nunca os campos privilegiados. O caminho cross-user que
       // existia aqui pra amizade morreu em 29/ago/2026 — ver isFriendArrayDiff acima.
       allow update: if request.auth != null
-        && request.auth.uid == userId && !touchesPrivileged();
+        && request.auth.uid == userId && !touchesPrivileged()
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(serverOwnedProfileFields());
 
       // Delete: owner only.
       allow delete: if request.auth != null && request.auth.uid == userId;

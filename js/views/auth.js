@@ -9539,10 +9539,12 @@ window._profileHydrateNameConflict = function () {
         fields: Object.keys(payload).sort()
       };
 
-      // ── 5. GRAVAR DIRETO NO FIRESTORE ───────────────────────────────────
+      // ── 5. GRAVAR PELA FUNCTION CANÔNICA ────────────────────────────────
       var saveError = null;
       try {
-        await window.FirestoreDB.db.collection('users').doc(uid).set(payload, { merge: true });
+        var _profilePatch = Object.assign({}, payload);
+        _erased.forEach(function (field) { delete _profilePatch[field]; });
+        await window.FirestoreDB.saveUserProfile(uid, _profilePatch, _erased);
         if (_saveLocations) await window.FirestoreDB.savePreferredLocations(preferredLocations);
         await window.FirestoreDB.saveNotificationPreferences(_notificationPreferences);
         await window.FirestoreDB.savePresencePreferences(_presencePreferences);

@@ -95,7 +95,7 @@ const ARR = vs => ({ arrayValue: { values: vs.map(S) } });
     'users/' + VITIMA + '?updateMask.fieldPaths=friends', VITIMA,
     { fields: { friends: ARR([ESTRANHO]) } });
 
-  // ── Perfil comum continua editável pelo dono ─────────────────────────────
+  // ── Identidade do perfil é decisão da Function ──────────────────────────
   out.donoEditaNome = await req('PATCH',
     'users/' + VITIMA + '?updateMask.fieldPaths=displayName', VITIMA,
     { fields: { displayName: S('Vitima Nova') } });
@@ -162,8 +162,8 @@ ok(novo.donoLeProprio === 200,
 
 ok(novo.donoEscreveProprioFriends === 403,
   '🔒 nem o DONO escreve o próprio friends — virou cache do servidor (got ' + novo.donoEscreveProprioFriends + ')');
-ok(novo.donoEditaNome === 200,
-  '✅ o dono continua editando o próprio perfil (got ' + novo.donoEditaNome + ')');
+ok(novo.donoEditaNome === 403,
+  '🔒 dono não altera displayName direto; updateOwnProfile reserva a claim (got ' + novo.donoEditaNome + ')');
 
 ok(novo.clienteEscreveFriendship === 403,
   '🔒 cliente NÃO forja friendships/{pairId} (got ' + novo.clienteEscreveFriendship + ')');

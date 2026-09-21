@@ -4,7 +4,7 @@
 // chegam à escrita privilegiada da Function; preferências que já têm Functions
 // específicas também não entram aqui.
 const STRING_FIELDS = new Set([
-  'authProvider', 'photoURL', 'gender', 'birthDate', 'city', 'hrMax',
+  'authProvider', 'photoURL', 'displayName', 'email', 'gender', 'birthDate', 'city', 'hrMax',
   'letzplayHandle', 'letzplaySource', 'phone', 'phoneCountry'
 ]);
 const ARRAY_FIELDS = new Set(['preferredCeps', 'preferredSports', 'refereeSports']);
@@ -41,6 +41,11 @@ function normalize(input) {
     if (MAP_FIELDS.has(field)) {
       if (!isPlainObject(value)) throw new Error(field + ' deve ser objeto');
       patch[field] = value;
+      return;
+    }
+    if (field === 'age') {
+      if (!Number.isInteger(value) || value < 0 || value > 130) throw new Error('age deve ser inteiro plausível');
+      patch.age = value;
       return;
     }
     throw new Error('campo de perfil não permitido: ' + field);

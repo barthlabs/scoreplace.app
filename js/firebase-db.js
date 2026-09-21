@@ -2566,35 +2566,19 @@ window.FirestoreDB = {
     return this._callFn('updateOwnCasualScoringPreferences', { preferences: preferences || {} });
   },
 
-  async saveUserProfile(uid, profileData) {
-    if (!this.db || !uid) return;
-    // Denormalize lowercase copies for server-side search. Range queries
-    // on `displayName_lower` / `email_lower` replace the
-    // scan-the-whole-users-collection pattern in searchUsers(). Only write
-    // the `_lower` fields when the source field is present in this update,
-    // so merge-saves that don't touch displayName/email don't clobber them.
-    //
-    // v0.16.8: removido try/catch que engolia silenciosamente erros do
-    // Firestore (security rules reject, offline, etc). O caller
-    // (saveUserProfileToFirestore em store.js) depende de que o promise
-    // rejeite para surfaçar "⚠️ Falhou" no toast em vez de "✅ salvou".
-    // Erro aqui virava ok=true mentiroso — causa-raiz do bug "o perfil
-    // continua não salvando" reportado em v0.16.6 e v0.16.7.
-    var toSave = Object.assign({}, profileData);
-    if (toSave.displayName) {
-      // v1.7.88: saneia aqui TAMBÉM — este é o último portão antes do Firestore e
-      // nem todo caminho passa pelo saveUserProfileToFirestore do store.js. Sem isto
-      // o `displayName_lower` seria derivado do nome sujo, e é ele que a BUSCA usa:
-      // "Juliana Dal+Sasso" ficaria inalcançável por quem digitasse "Dal Sasso".
-      if (typeof window !== 'undefined' && typeof window._normalizeDisplayName === 'function') {
-        toSave.displayName = window._normalizeDisplayName(toSave.displayName);
-      }
-      toSave.displayName_lower = String(toSave.displayName).toLowerCase();
+  async saveUserProfile(uid, profileData, eraseFields) {
+    var current = window.firebase && window.firebase.auth && window.firebase.auth().currentUser;
+    if (!uid || !current || String(uid) !== String(current.uid)) throw new Error('saveUserProfile exige o próprio uid autenticado');
+    var toSave = Object.assign({}, profileData || {});
+    ['updatedAt', 'email_lower', 'emailVerified'].forEach(function (field) { delete toSave[field]; });
+    if (toSave.displayName && typeof window._normalizeDisplayName === 'function') {
+      toSave.displayName = window._normalizeDisplayName(toSave.displayName);
+      // Mantém a derivação imediatamente após o saneamento como contrato de
+      // busca; a Function recalcula e não aceita este campo do navegador.
+      toSave.displayName_lower = toSave.displayName.toLowerCase();
     }
-    if (toSave.email) {
-      toSave.email_lower = String(toSave.email).toLowerCase();
-    }
-    await this.db.collection('users').doc(uid).set(toSave, { merge: true });
+    delete toSave.displayName_lower;
+    return await this._callFn('updateOwnProfile', { profile: toSave, eraseFields: eraseFields || [] });
   },
 
   /* L13.P2 — O ÚNICO SINAL DE PARQUE QUE O PRODUTO TEM.

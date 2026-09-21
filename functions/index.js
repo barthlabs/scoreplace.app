@@ -150,6 +150,7 @@ const _amizadeVida = require("./amizade-lifecycle");
 // Os 4 campos de cache social: quem os escreve é SÓ o amizade-lifecycle (e o backfill).
 const _AMIZADE_CACHE_CAMPOS = new Set(["friends", "friendRequestsSent", "friendRequestsReceived", "friendRequestsSentAt"]);
 const _nameUnique = require("./name-unique-core");
+const _profileUpdate = require("./profile-update-core");
 const _nameVariant = require("./name-variant-core");
 // v1.7.36: vigia estrutural — quem troca jogadores de um jogo que JÁ EXISTE sem ter
 // autoridade pra isso. Pendurado no syncMatchRosters (mesmo gatilho, custo zero).
@@ -3192,6 +3193,60 @@ exports.initializeUserProfile = onCall(
       tx.set(profileRef, profile);
       return { ok: true, created: true };
     });
+  }
+);
+
+// Atualização canônica do próprio perfil. A tela envia intenção; o servidor
+// relê, valida, reserva eventual novo nome e grava tudo na mesma transação.
+exports.updateOwnProfile = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
+  async (request) => {
+    const uid = request.auth && request.auth.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Login obrigatório");
+    let patch, eraseFields;
+    try {
+      patch = _profileUpdate.normalize((request.data && request.data.profile) || {});
+      eraseFields = _profileUpdate.normalizeEraseFields(request.data && request.data.eraseFields);
+    } catch (error) {
+      throw new HttpsError("invalid-argument", error.message);
+    }
+    const db = admin.firestore();
+    const profileRef = db.collection("users").doc(uid);
+    await db.runTransaction(async (tx) => {
+      const current = await tx.get(profileRef);
+      if (!current.exists) throw new HttpsError("failed-precondition", "Perfil inexistente");
+      const old = current.data() || {};
+      if (patch.email && String(request.auth.token.email || "").toLowerCase() !== patch.email.toLowerCase()) {
+        throw new HttpsError("permission-denied", "e-mail só é atualizado pela credencial autenticada");
+      }
+      if (patch.phone && String(old.phone || "") !== patch.phone) {
+        throw new HttpsError("permission-denied", "telefone novo exige verificação");
+      }
+      const update = Object.assign({}, patch, { updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+      eraseFields.forEach((field) => { delete update[field]; update[field] = admin.firestore.FieldValue.delete(); });
+      if (patch.displayName && patch.displayName !== old.displayName) {
+        const conflict = await _nameUnique.findDisplayNameConflict(db, patch.displayName, uid);
+        if (conflict) throw new HttpsError("already-exists", _nameUnique.buildConflictMessage(conflict));
+        const newClaim = db.collection("displayNameClaims").doc(_displayNameClaimId(patch.displayName));
+        const oldClaimRef = old.displayName ? db.collection("displayNameClaims").doc(_displayNameClaimId(old.displayName)) : null;
+        const [claim, oldClaim] = await Promise.all([
+          tx.get(newClaim),
+          oldClaimRef ? tx.get(oldClaimRef) : Promise.resolve(null),
+        ]);
+        if (claim.exists && String((claim.data() || {}).uid || "") !== uid) throw new HttpsError("already-exists", "este nome já está em uso; escolha outro nome de exibição");
+        _nameUnique.denormalizeDisplayName(update, patch.displayName);
+        tx.set(newClaim, { uid, displayName: patch.displayName, claimedAt: admin.firestore.FieldValue.serverTimestamp() });
+        if (oldClaimRef && oldClaimRef.path !== newClaim.path) {
+          // Não apaga uma reserva que não pertence ao perfil corrente: dados
+          // legados podem estar inconsistentes, mas nunca justificam liberar o
+          // nome de outra pessoa.
+          if (oldClaim.exists && String((oldClaim.data() || {}).uid || "") === uid) tx.delete(oldClaimRef);
+        }
+      }
+      if (patch.email) update.email_lower = patch.email.toLowerCase();
+      tx.update(profileRef, update);
+    });
+    return { ok: true };
   }
 );
 

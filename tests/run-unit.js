@@ -1112,6 +1112,7 @@ const SUITES = [
   'tests/l7-format2-page-cf-only.test.js',                 // Format 2 só declara intent para a CF
   'tests/l7-vip-cf-only.test.js',                          // VIP só muda pelo servidor
   'tests/l7-profile-propagation-server-only.test.js',       // perfil não regrava torneio no browser
+  'tests/l7-profile-update-cf-only.test.js',                // dados canônicos do próprio perfil só passam pela Function
   'tests/propor-datas-persiste-no-dividido.test.js',        // a porta setMatchSchedule grava na subcoleção
   'tests/rechavear-nao-apaga-o-grupo-de-whats.test.js',      // rechavear não leva o link junto
   'tests/chave-magra-nao-desenha-vazia.test.js',

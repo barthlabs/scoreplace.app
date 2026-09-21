@@ -97,7 +97,7 @@ const S = v => ({ stringValue: v });
       { fields: { displayName: S('Novo'), [field]: S('forjado') } });
   }
 
-  // ── USO LEGÍTIMO tem que continuar passando (senão o fix quebra o app) ──
+  // ── Limite explícito: identidade usa Function; dado não privilegiado segue permitido ──
   out.editaProprioNome = await req('PATCH', 'users/' + A + '?updateMask.fieldPaths=displayName', A,
     { fields: { displayName: S('Novo Nome') } });
   out.editaProprioTelefone = await req('PATCH', 'users/' + A + '?updateMask.fieldPaths=phone', A,
@@ -171,9 +171,10 @@ Object.keys(novo.ataquesExtras).forEach((field) => {
 ok(novo.createComMergedInto === 403,
   '🔒 CREATE já com mergedInto negado — senão bastava apagar e recriar o perfil (got ' + novo.createComMergedInto + ')');
 
-// uso legítimo intacto — o fix não pode custar funcionalidade
-ok(novo.editaProprioNome === 200, 'legítimo: editar o próprio nome ainda funciona (got ' + novo.editaProprioNome + ')');
-ok(novo.editaProprioTelefone === 200, 'legítimo: editar o próprio telefone ainda funciona (got ' + novo.editaProprioTelefone + ')');
+// Nome e telefone são decisões do servidor: nome reserva claim em transação e
+// telefone novo exige prova de posse. O SDK não mantém uma porta paralela.
+ok(novo.editaProprioNome === 403, '🔒 cliente não edita nome direto; updateOwnProfile é a única porta (got ' + novo.editaProprioNome + ')');
+ok(novo.editaProprioTelefone === 403, '🔒 cliente não edita telefone direto; verificação é a única porta (got ' + novo.editaProprioTelefone + ')');
 ok(novo.editaLinkedEmails === 200, 'legítimo: vincular e-mail secundário ainda funciona (got ' + novo.editaLinkedEmails + ')');
 ok(novo.crossUser === 403, 'controle: editar o perfil de OUTRO segue negado (got ' + novo.crossUser + ')');
 

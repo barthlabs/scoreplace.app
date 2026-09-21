@@ -130,15 +130,15 @@ const cfSrc = fs.readFileSync(path.join(__dirname, '..', 'functions', 'index.js'
 ok(/exports\.deleteAccount = onCall\(/.test(cfSrc), 'a CF deleteAccount existe');
 ok(cfSrc.includes('_uidSweep.findUidPaths'), 'a CF usa o cânone de varredura de uid');
 
-// ── deenrollParticipant: uid only e SÓ memberUids ─────────────────────────────
+// ── Desinscrição client-side só declara intenção; Functions fazem a mutação ──
 const dbSrc = fs.readFileSync(path.join(__dirname, '..', 'js', 'firebase-db.js'), 'utf8');
 const deBlock = dbSrc.slice(dbSrc.indexOf('async deenrollParticipant'), dbSrc.indexOf('async deleteTournament'));
-ok(deBlock.length > 0, 'bloco deenrollParticipant localizado');
-ok(/_computeMemberEmails/.test(deBlock) === false,
-  'deenroll NÃO recomputa memberEmails (só uid decide quem é membro)');
-ok(/_computeMemberUids/.test(deBlock), 'deenroll recomputa memberUids');
-ok(/userDisplayName/.test(deBlock) === false, 'deenroll não casa por nome (sem fallback)');
-ok(/_emailLc/.test(deBlock) === false, 'deenroll não casa por e-mail (sem fallback)');
+ok(/_callFn\('deenrollParticipant'/.test(deBlock) && !/collection\(['"]tournaments['"]\)/.test(deBlock),
+  'cliente pede desinscrição à Function, sem fallback de escrita direta');
+ok(/exports\.deenrollParticipant = onCall\(/.test(cfSrc) && /computeDeenroll/.test(cfSrc),
+  'Function de desinscrição usa o núcleo canônico por uid');
+ok(/_purgeUidEverywhere/.test(cfSrc) && /next\.memberUids\s*=\s*\(next\.memberUids \|\| \[\]\)\.filter/.test(cfSrc),
+  'deleteAccount limpa referências por uid e recompõe memberUids no servidor');
 
 console.log(fail === 0
   ? '✅ delete-account-dupla-orphan: ' + pass + ' ok, 0 falharam'
