@@ -51,6 +51,33 @@ uma decisão documental separada, para não apagar evidência de incidentes.
    alterar identidade e referências. Eles ficam fora de qualquer migração de
    inscrição até que M1 aprove seu contrato de prova, confirmação e auditoria.
 
+## Auditoria da prévia canônica de M1
+
+`previewCanonicalRegistrationMigration` é uma Function callable de leitura.
+Ela exige `request.auth.uid`, exige `tournamentId`, lê a raiz e a parte
+`participants` dentro de transação e autoriza contra o torneio hidratado. O
+relatório vem do núcleo puro `registration-core.js` e contém candidatos,
+conflitos, entradas sem suporte e fingerprint SHA-256. O fingerprint não
+inclui nome, foto, e-mail ou telefone.
+
+Limites confirmados:
+
+- a prévia não cria `registrations`, nem atualiza lista, espera, partida ou
+  projeção;
+- entrada composta, sem UID/`manualParticipantId`, ou que possua as duas
+  identidades, entra como exceção e bloqueia ativação por inferência;
+- categoria ausente vira somente a sentinela de migração
+  `__uncategorized__`; ela não é uma categoria escolhida pelo sistema;
+- a prévia não é ativação. Só um censo aprovado de torneio inativo e um comando
+  posterior com fingerprint correspondente poderão escrever a estrutura nova.
+
+Os testes `functions/test-registration-core.js`,
+`tests/registro-canonico-dry-run-cf.test.js` e
+`functions/test-enroll-core.js` passaram nesta linha de base. Eles cobrem,
+respectivamente, identidade/categoria/fingerprint, fronteira somente leitura
+da Function e comportamento legado de inscrição. Não constituem ainda prova
+de migração nem de esquema novo em produção.
+
 ## Travas já executadas nesta linha de base
 
 - `node tests/acesso-sem-senha-removido.test.js`
