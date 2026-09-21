@@ -216,7 +216,8 @@ service cloud.firestore {
     // desenvolvedor LER direto no Firestore (sem depender de print de tela). Doc por uid.
     // Remover quando o bug do fluxo de sorteio estiver fechado.
     match /debugDrawLogs/{docId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if request.auth != null &&
+        (docId == request.auth.uid || docId == 'busca_' + request.auth.uid);
     }
 
     // ── ⭐ RESUMO DO TORNEIO (25/ago/2026) ────────────────────────────────────

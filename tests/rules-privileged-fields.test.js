@@ -118,6 +118,12 @@ const S = v => ({ stringValue: v });
   out.escreveLoginRedirect = await req('PATCH', 'loginRedirects/vitima%40gmail.com', A,
     { fields: { ownerUid: S(A) } });
   out.leLoginRedirect = await req('GET', 'loginRedirects/vitima%40gmail.com', A);
+  // Logs de diagnóstico só pertencem à sessão que os produziu. Os dois IDs
+  // usados pelo cliente são uid e busca_uid; terceiro não lê nem sobrescreve.
+  out.debugProprio = await req('PATCH', 'debugDrawLogs/' + A, A, { fields: { uid: S(A) } });
+  out.debugBuscaProprio = await req('PATCH', 'debugDrawLogs/busca_' + A, A, { fields: { uid: S(A) } });
+  out.debugEscreveOutro = await req('PATCH', 'debugDrawLogs/' + V, A, { fields: { uid: S(V) } });
+  out.debugLeOutro = await req('GET', 'debugDrawLogs/' + V, A);
 
   console.log('__JSON__' + JSON.stringify(out));
   process.exit(0);
@@ -185,6 +191,10 @@ ok(novo.escreveLoginRedirect === 403,
   '🔒 loginRedirects: escrita NEGADA — senão bastava reivindicar o e-mail de outro (got ' + novo.escreveLoginRedirect + ')');
 ok(novo.leLoginRedirect === 403,
   '🔒 loginRedirects: leitura NEGADA (mapa e-mail→uid é PII) (got ' + novo.leLoginRedirect + ')');
+ok(novo.debugProprio === 200 && novo.debugBuscaProprio === 200,
+  'legítimo: sessão grava seus dois logs de diagnóstico');
+ok(novo.debugEscreveOutro === 403 && novo.debugLeOutro === 403,
+  '🔒 log de diagnóstico de terceiro não lê nem sobrescreve');
 
 // ── 2. RULES ANTIGAS: o ataque tem que PASSAR ────────────────────────────────
 // Sem isto o teste não prova nada: se ele passasse nos dois, não estaria testando o fix.
