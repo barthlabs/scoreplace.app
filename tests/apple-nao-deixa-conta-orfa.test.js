@@ -68,6 +68,12 @@ function montar(op) {
     },
     FirestoreDB: {
       db,
+      initializeUserProfile: async (d) => {
+        if (op.saveRejeita) throw new Error('Missing or insufficient permissions.');
+        const t = Object.assign({}, d);
+        if (t.displayName) t.displayName_lower = String(t.displayName).toLowerCase();
+        await ref('users', (op.fbUser && op.fbUser.uid) || 'U_APPLE').set(t);
+      },
       saveUserProfile: async (uid, d) => {
         if (op.saveRejeita) throw new Error('Missing or insufficient permissions.');
         const t = Object.assign({}, d);

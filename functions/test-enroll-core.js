@@ -191,5 +191,20 @@ function eq(name, a, b) { ok(name + ' (' + JSON.stringify(a) + ' === ' + JSON.st
   eq('deenroll mantém guest string (valor)', r.participants[0], 'Fulano Guest');
 })();
 
+// ── Saída da lista de espera é UID-only e recalcula membros ─────────────────
+(() => {
+  const data = {
+    creatorUid: 'org-uid',
+    standbyParticipants: [{ uid: 'waiting-uid' }, { uid: 'other-uid' }],
+    waitlist: [{ uid: 'waiting-uid' }]
+  };
+  const r = C.computeLeaveStandby(data, 'waiting-uid');
+  eq('leave standby → removed', r.outcome, 'removed');
+  eq('leave standby → remove das duas filas', [r.standbyParticipants.length, r.waitlist.length], [1, 0]);
+  eq('leave standby → mantém outro na fila', r.standbyParticipants[0].uid, 'other-uid');
+  eq('leave standby → remove uid de memberUids', r.updateData.memberUids.indexOf('waiting-uid'), -1);
+  eq('leave standby ausente → notFound', C.computeLeaveStandby(data, 'ghost-uid').outcome, 'notFound');
+})();
+
 console.log('\nenroll-core: ' + pass + ' passaram, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);

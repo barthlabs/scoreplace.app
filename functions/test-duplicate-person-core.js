@@ -407,9 +407,10 @@ const achou = (c, p) => D.detectarMesmaPessoa(c, p).suspeito;
   ok('  → e RECUSA antes de gravar (alreadyEnrolled), não só avisa',
     /RECUSADO por duplicata[\s\S]{0,400}alreadyEnrolled: true/.test(idx));
   ok('  → a detecção roda ANTES da transação (senão já teria gravado)',
-    idx.indexOf('_detectarDuplicataNoTorneio(db, _alvoUid0') < idx.indexOf('await db.runTransaction'));
+    idx.indexOf('_detectarDuplicataNoTorneio(db, participantUid') < idx.indexOf('await db.runTransaction'));
   ok('  → o ORGANIZADOR inscrevendo TERCEIRO passa pela porta (saída sempre existe)',
-    /_euMesmo = _alvoUid0 === callerUid/.test(idx) && /if \(_euMesmo\)/.test(idx));
+    /participantUid && participantUid !== callerUid && !_preIsOrganizer/.test(idx) &&
+    /if \(participantUid === callerUid && _pre\.exists\)/.test(idx));
   ok('  → devolve dupSuspect ao cliente novo (o velho já mostra "Já Inscrito")',
     /dupSuspect: \{\s*\/\/[\s\S]{0,200}motivo: _d0\.motivo/.test(idx));
   // O cliente NUNCA recebe o uid da outra conta — só o contato mascarado.
@@ -438,9 +439,9 @@ const achou = (c, p) => D.detectarMesmaPessoa(c, p).suspeito;
   // Regra do dono (06/ago): "esse é o tipo de coisa que deveria rodar em CF e não no
   // cliente". O app NATIVO embarca o JS e não tem auto-update — a pergunta da 1.7.41 só
   // chega numa submissão nova, dias depois. Notificação é DADO: alcança toda versão.
-  ok('a CF AVISA a pessoa (não depende da tela nova)', /_avisarDuplicataSuspeita\(db, _alvoUid/.test(idx));
+  ok('a CF AVISA a pessoa (não depende da tela nova)', /_avisarDuplicataSuspeita\(db, participantUid/.test(idx));
   ok('  → e o aviso sai no MESMO ponto da porta',
-    /_avisarDuplicataSuspeita\(db, _alvoUid0[\s\S]{0,400}RECUSADO por duplicata/.test(idx));
+    /_avisarDuplicataSuspeita\(db, participantUid[\s\S]{0,400}RECUSADO por duplicata/.test(idx));
   ok('  → usa a MESMA fila de e-mail do app (nunca escrita direta em `mail`)',
     /_avisarDuplicataSuspeita[\s\S]{0,3000}collection\("notif_email_queue"\)/.test(idx));
   ok('  → id determinístico: reinscrever não vira spam',

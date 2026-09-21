@@ -13,13 +13,10 @@
  * ⚠️ NÃO É PELA TELA: o app nunca ofereceu isso a um inscrito. É escrevendo direto no
  * Firestore com a credencial da própria sessão — e "o app não oferece" nunca foi fronteira.
  *
- * ⭐ O CORTE É O MÍNIMO QUE MATA A DESTRUIÇÃO SEM QUEBRAR A INSCRIÇÃO:
- *   ① ninguém é REMOVIDO de `memberUids` por essas duas portas (apagar é o que não tem
- *      volta; tirar gente é do organizador, por outro ramo, ou da CF);
- *   ② quem se inscreve tem de TERMINAR DENTRO de `memberUids`.
- * A inscrição SOLO e a de DUPLA (dois uids de uma vez) continuam passando — é o que as
- * asserções de PRODUTO abaixo guardam. Portão sem elas viraria "cortei e não sei o que
- * quebrei".
+ * ⭐ O CORTE FINAL elimina a porta inteira: inscrição e desinscrição agora passam
+ * exclusivamente por Cloud Function. As duas tentativas de inscrição direta abaixo
+ * precisam ser negadas; a cobertura de produto está no núcleo puro e no contrato do
+ * cliente com a Function, não em uma permissão de Rules que qualquer SDK poderia explorar.
  *
  * ⚠️ FICA MEDIDO E NÃO CORTADO: um inscrito ainda pode mexer em `status`. É de propósito —
  * quem lança o placar da final FECHA o torneio, e encodar a máquina de estados na Rule é
@@ -93,8 +90,8 @@ const ok=(c,m)=>{ if(c){pass++;console.log('  ✓ '+m);} else {fail++;console.er
 console.log('\n──── ninguém apaga o elenco alheio ────\n');
 ok(r.apaga_outro===403, '① ⭐⭐ um INSCRITO não apaga outro do elenco (got '+r.apaga_outro+')');
 ok(r.estranho_apaga===403, '① ⭐⭐ quem NEM É INSCRITO não APAGA o elenco (got '+r.estranho_apaga+')');
-ok(r.entra_sozinho===200, '② ⭐ o PRODUTO continua: um novo se inscreve (got '+r.entra_sozinho+')');
-ok(r.entra_dupla===200, '② ⭐ e a DUPLA também, dois uids de uma vez (got '+r.entra_dupla+')');
+ok(r.entra_sozinho===403, '② ⭐ inscrição direta solo é negada; a Function é a única porta (got '+r.entra_sozinho+')');
+ok(r.entra_dupla===403, '② ⭐ inscrição direta de dupla também é negada (got '+r.entra_dupla+')');
 ok(r.anonimo===403, '③ CONTROLE: anônimo é negado — a sonda está valendo as Rules (got '+r.anonimo+')');
 ok(r.campo_fora===403, '③ CONTROLE: campo fora da lista é negado (got '+r.campo_fora+')');
 ok(r.muda_status===200, '④ ⚠️ MEDIDO E NÃO CORTADO: inscrito ainda mexe em `status` — quem lança a final fecha o torneio');

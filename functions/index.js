@@ -3166,29 +3166,31 @@ exports.initializeUserProfile = onCall(
     if (!uid) throw new HttpsError("unauthenticated", "Login obrigatório");
     const input = (request.data && request.data.profile) || {};
     const name = String(input.displayName || "").trim().replace(/\s+/g, " ");
-    if (!name || _nameUnique.isUnfriendlyName(name)) {
+    if (name && _nameUnique.isUnfriendlyName(name)) {
       throw new HttpsError("invalid-argument", "informe um nome de exibição válido");
     }
 
     const db = admin.firestore();
-    const existingConflict = await _nameUnique.findDisplayNameConflict(db, name, uid);
+    const existingConflict = name ? await _nameUnique.findDisplayNameConflict(db, name, uid) : null;
     if (existingConflict) throw new HttpsError("already-exists", _nameUnique.buildConflictMessage(existingConflict));
 
+    // user-vivo:isento — UID vem do token autenticado; a leitura é pontual e a
+    // consulta seguinte é de casualMatches, não uma busca de pessoas.
     const profileRef = db.collection("users").doc(uid);
-    const claimRef = db.collection("displayNameClaims").doc(_displayNameClaimId(name));
+    const claimRef = name ? db.collection("displayNameClaims").doc(_displayNameClaimId(name)) : null;
     const allowed = ["authProvider", "email", "photoURL"];
     const profile = { createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
     allowed.forEach((key) => { if (typeof input[key] === "string" && input[key]) profile[key] = input[key]; });
     if (profile.email) profile.email_lower = profile.email.toLowerCase();
-    _nameUnique.denormalizeDisplayName(profile, name);
+    if (name) _nameUnique.denormalizeDisplayName(profile, name);
 
     return await db.runTransaction(async (tx) => {
-      const [current, claim] = await Promise.all([tx.get(profileRef), tx.get(claimRef)]);
+      const [current, claim] = await Promise.all([tx.get(profileRef), claimRef ? tx.get(claimRef) : Promise.resolve(null)]);
       if (current.exists) return { ok: true, existing: true };
       if (claim.exists && String((claim.data() || {}).uid || "") !== uid) {
         throw new HttpsError("already-exists", "este nome já está em uso; escolha outro nome de exibição");
       }
-      tx.set(claimRef, { uid: uid, displayName: name, claimedAt: admin.firestore.FieldValue.serverTimestamp() });
+      if (claimRef) tx.set(claimRef, { uid: uid, displayName: name, claimedAt: admin.firestore.FieldValue.serverTimestamp() });
       tx.set(profileRef, profile);
       return { ok: true, created: true };
     });
@@ -3600,6 +3602,41 @@ exports.deenrollParticipant = onCall(
 
     if (out.outcome === "notFound") return { notFound: true, participants: out.participants };
     return { notFound: false, participants: out.participants };
+  }
+);
+
+// Sair da lista de espera é uma escrita de elenco. Não há fallback no cliente:
+// a Function relê o documento, autoriza pelo UID autenticado e grava a decisão
+// na transação. Isso impede que uma sessão altere a espera de outra pessoa via
+// Firestore direto.
+exports.leaveStandby = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
+    const tournamentId = String((request.data && request.data.tournamentId) || "");
+    if (!tournamentId) throw new HttpsError("invalid-argument", "tournamentId é obrigatório");
+
+    const db = admin.firestore();
+    const docRef = db.collection("tournaments").doc(tournamentId);
+    const out = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(docRef);
+      if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
+      const t = await _splitParts.hidratar(tx, docRef, snap.data());
+      const r = _enrollCore.computeLeaveStandby(t, callerUid);
+      if (r.updateData) _splitParts.gravar(tx, docRef, t, r.updateData);
+      return r;
+    });
+
+    await _replicateRosterToSandbox(db, tournamentId, function (sbData) {
+      return _enrollCore.computeLeaveStandby(sbData, callerUid);
+    });
+
+    return {
+      removed: out.outcome === "removed",
+      standbyParticipants: out.standbyParticipants,
+      waitlist: out.waitlist
+    };
   }
 );
 
@@ -9077,6 +9114,8 @@ exports.autoMergeOnProfileUpdate = onDocumentWritten(
       const key = _dedupKey(field, value);
       if (!key || key.length < 5) continue;
 
+      // user-vivo:isento — esta é uma varredura de sinais de duplicidade. Lápides
+      // são descartadas como candidatas; não se resolve um UID para agir sobre ele.
       // Busca outros usuários com o mesmo valor. Lápides não são candidatas novas.
       const snap = await db.collection("users").where(field, "==", value).get();
       const others = snap.docs.filter(d => d.id !== uid && !d.data().mergedInto);

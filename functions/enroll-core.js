@@ -338,7 +338,35 @@ function computeDeenroll(data, userUid) {
   };
 }
 
+// Retira a própria inscrição da lista de espera sem usar nome ou e-mail como
+// identidade. A Function aplica o update dentro da mesma transação que leu o
+// torneio; o navegador só envia a intenção.
+function computeLeaveStandby(data, userUid) {
+  var standby = Array.isArray(data.standbyParticipants) ? data.standbyParticipants : [];
+  var waitlist = Array.isArray(data.waitlist) ? data.waitlist : [];
+  var matchesUid = function (p) { return participantUids(p).indexOf(userUid) !== -1; };
+  var newStandby = standby.filter(function (p) { return !matchesUid(p); });
+  var newWaitlist = waitlist.filter(function (p) { return !matchesUid(p); });
+  if (newStandby.length === standby.length && newWaitlist.length === waitlist.length) {
+    return { outcome: 'notFound', standbyParticipants: standby, waitlist: waitlist, updateData: null };
+  }
+  var updated = Object.assign({}, data, {
+    standbyParticipants: newStandby,
+    waitlist: newWaitlist
+  });
+  return {
+    outcome: 'removed',
+    standbyParticipants: newStandby,
+    waitlist: newWaitlist,
+    updateData: {
+      standbyParticipants: newStandby,
+      waitlist: newWaitlist,
+      memberUids: computeMemberUids(updated)
+    }
+  };
+}
+
 module.exports = {
   participantUids, computeMemberUids, cleanUndefined, phaseDrawDone, isPlacedInDraw,
-  enrollmentOpen, isAlreadyEnrolled, computeEnroll, computeDeenroll
+  enrollmentOpen, isAlreadyEnrolled, computeEnroll, computeDeenroll, computeLeaveStandby
 };

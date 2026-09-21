@@ -72,11 +72,8 @@ const CLIENTE = fs.readFileSync(path.join(raiz, 'js/views/auth.js'), 'utf8');
 must(!/assumirContaDoTelefone/.test(CLIENTE),
   '④ ⛔ e o aplicativo não chama nada disso na entrada por SMS');
 
-/* ⛔ A ÚNICA união automática que continua existindo exige credencial AUTENTICADA NOS DOIS
- * LADOS e igual — e mesmo essa é a porta antiga, que o dono não mandou mexer. O que este
- * portão proíbe é união disparada por telefone DIGITADO ou por número simplesmente repetido. */
-must(/_telProvado \|\| _mailProvado/.test(CODIGO),
-  '④ a união automática que resta exige credencial confirmada, não número digitado');
+must(/fusão automática de contas está desativada/.test(CODIGO),
+  '④ nenhuma união automática resta: até credencial confirmada abre caso/revisão, não funde contas');
 
 // ── ⑤ o carimbo do organizador continua caducando ──────────────────────────
 must(/apagarCarimboDeTerceiro/.test(CODIGO),

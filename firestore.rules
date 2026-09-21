@@ -31,9 +31,6 @@ service cloud.firestore {
       );
     }
 
-    // Keys legitimately touched by the enroll/deenroll transactions when run
-    // by a non-admin (i.e. a participant joining or leaving). Anything
-    // outside this set requires admin rights.
     /* ⛔⛔ ESTA REGRA OLHAVA SÓ *QUAIS* CAMPOS MUDARAM — NUNCA QUEM ESCREVE NEM O QUÊ.
      *
      * PROVADO NO EMULADOR em 13/set/2026, contra estas Rules, com controles nos dois lados
@@ -57,34 +54,9 @@ service cloud.firestore {
      * ⛔ E `status` continua na lista porque a inscrição que ATINGE O TETO fecha o torneio
      * (`status: 'closed'`, js/firebase-db.js) — mas agora só quem está entrando consegue.
      * [[project_porta_unica_de_escrita_cf]] */
-    function inscricaoNaoRemove() {
-      return request.resource.data.get('memberUids', []).toSet()
-               .hasAll(resource.data.get('memberUids', []).toSet())
-        /* ⛔ E O ELENCO TAMBÉM NÃO ENCOLHE. Só `memberUids` não bastava: a sonda mostrou
-         * que dava para zerar `participants` deixando `memberUids` intacto — e quem some da
-         * lista de inscritos some do torneio. Inscrição ACRESCENTA; tirar alguém é do
-         * organizador (outro ramo) ou da CF de saída. */
-        && request.resource.data.get('participants', []).size()
-             >= resource.data.get('participants', []).size();
-    }
-
-    function isEnrollmentOnlyDiff() {
-      return inscricaoNaoRemove()
-        && request.resource.data.diff(resource.data).affectedKeys()
-        .hasOnly(['participants', 'memberUids', 'status', 'teamOrigins',
-          // v2.1.5: inscrição tardia (standby/expand) — um NOVO inscrito que
-          // ainda não está em participants escreve a si mesmo na lista de
-          // espera. isParticipantBracketDiff exige já-ser-participante, então
-          // sem isto a escrita era negada (permission-denied silencioso) e o
-          // inscrito via "lista de espera" localmente mas nada persistia.
-          'standbyParticipants', 'waitlist',
-          // v1.8.40: a transação de FALLBACK do cliente (_enrollParticipantTx) grava
-          // `waitlistNoticeSent: true` na inscrição que ATINGE o teto no modo Vagas-por-
-          // sorteio (enrollmentLimitMode 'draw'). O campo não estava nesta lista, então
-          // SEMPRE que a CF falhava e o torneio estava no teto, a escrita inteira caía
-          // com permission-denied — determinístico, e a pessoa não conseguia se inscrever.
-          'waitlistNoticeSent']);
-    }
+    // Inscrição, desinscrição e saída da espera são operações de servidor: a
+    // Cloud Function autoriza pelo UID, valida o documento fresco e grava na
+    // transação. Não existe caminho equivalente por Rules para cliente.
 
     // Participante aceita convite de co-organização (muda seu próprio status
     // de 'pending' para 'active' em coHosts + atualiza adminEmails).
@@ -607,8 +579,7 @@ service cloud.firestore {
       // Update permitido em 3 caminhos:
       //   1. Admin (creator/co-host ativo) — qualquer mudança. SÓ POR UID
       //      (creatorUid / adminUids); e-mail não decide mais permissão.
-      //   2. Qualquer authed pode fazer enrollment-only diff (entrar/sair)
-      //   3. Participante pode atualizar campos do bracket (placar, check-in,
+      //   2. Participante pode atualizar campos do bracket (placar, check-in,
       //      aprovação de resultado, voto em poll, etc.) — lista positiva
       //      em isParticipantBracketDiff. Bloqueia mudanças em nome/datas/
       //      formato/regras/organizador/etc. mesmo pra participantes.
@@ -623,7 +594,6 @@ service cloud.firestore {
           isTournamentAdmin(resource.data)
           // v1.8.62: admin por uid (organizador phone-only sem email)
           || isTournamentAdminByUid(resource.data)
-          || isEnrollmentOnlyDiff()
           || (isTournamentParticipant(resource.data) && isParticipantBracketDiff())
         )
         && (faseIntacta() || ehResetOk());

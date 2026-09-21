@@ -51,7 +51,7 @@ must(/_secEmail\.normalizaEmail/.test(porta),
 
 // ── ③ o que esta leva NÃO fez, dito por escrito ─────────────────────────────
 const R = fs.readFileSync(path.join(raiz, 'firestore.rules'), 'utf8');
-const priv = /function privilegedUserFields\(\)[\s\S]{0,900}?\]/.exec(R);
+const priv = /function privilegedUserFields\(\)[\s\S]{0,2200}?\]/.exec(R);
 assert.ok(priv, 'âncora: a lista de campos privilegiados');
 must(!/'linkedEmails'/.test(priv[0]),
   '③ a Rule AINDA permite o campo — fechar antes de a versão nova circular quebraria quem está em build velha');

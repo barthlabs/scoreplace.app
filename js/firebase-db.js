@@ -1865,36 +1865,11 @@ window.FirestoreDB = {
     }
   },
 
-  // v1.8.40: SAIR DA LISTA DE ESPERA por transação de CAMPOS (standby/waitlist/memberUids
-  // recomputado do doc FRESCO). Antes o _leaveStandby gravava o documento INTEIRO via
-  // saveTournament a partir da cópia em memória — a mesma classe do bug da Mariana (um
-  // campo divergente derruba a escrita toda). As 3 chaves estão na allowlist de
-  // isEnrollmentOnlyDiff() das rules, então o participante consegue gravar.
+  // Sair da lista de espera é decidido no servidor contra o documento fresco.
+  // Não há transação ou fallback de escrita no navegador.
   async leaveStandby(tournamentId, user) {
-    if (!this.db) throw new Error('Firestore not initialized');
-    var self = this;
-    var docRef = this._tRef(tournamentId);
-    return this.db.runTransaction(async function (tx) {
-      var doc = await tx.get(docRef);
-      if (!doc.exists) throw new Error('Tournament not found');
-      var data = doc.data();
-      var match = function (p) {
-        if (!p) return false;
-        if (typeof window !== 'undefined' && typeof window._userMatchesParticipant === 'function') {
-          return window._userMatchesParticipant(user, p);
-        }
-        if (typeof p === 'string') return p === user.email || p === user.displayName;
-        return !!(p.uid && user.uid && p.uid === user.uid);
-      };
-      var sb = Array.isArray(data.standbyParticipants) ? data.standbyParticipants.filter(function (p) { return !match(p); }) : [];
-      var wl = Array.isArray(data.waitlist) ? data.waitlist.filter(function (p) { return !match(p); }) : [];
-      var changed = (Array.isArray(data.standbyParticipants) && sb.length !== data.standbyParticipants.length) ||
-                    (Array.isArray(data.waitlist) && wl.length !== data.waitlist.length);
-      if (!changed) return { removed: false };
-      var next = Object.assign({}, data, { standbyParticipants: sb, waitlist: wl });
-      tx.update(docRef, { standbyParticipants: sb, waitlist: wl, memberUids: self._computeMemberUids(next) });
-      return { removed: true, standbyParticipants: sb, waitlist: wl };
-    });
+    void user;
+    return await this._callFn('leaveStandby', { tournamentId: String(tournamentId) });
   },
 
   async _enrollParticipantTx(tournamentId, participantObj, extraUpdates) {

@@ -161,8 +161,8 @@ const atual = runAgainst(path.join(ROOT, 'firestore.rules'), 'atual');
 console.log('  regras ATUAIS :', JSON.stringify(atual));
 
 ok(atual.setup === 200, 'setup do torneio deveria passar (organizador) — veio ' + atual.setup);
-ok(atual.esperaSemNextDrawAt === 200,
-   'CONTROLE: entrar na espera sem tocar nextDrawAt deveria passar — veio ' + atual.esperaSemNextDrawAt);
+ok(atual.esperaSemNextDrawAt === 403,
+   'escrita direta de inscrição é negada; a Function é a única porta — veio ' + atual.esperaSemNextDrawAt);
 
 // ── HIPÓTESE DESCARTADA, e o resultado fica travado aqui pra ninguém repetir ─────────
 // Eu apostei que o `nextDrawAt` era a causa: o `saveTournament` manda
@@ -170,8 +170,8 @@ ok(atual.esperaSemNextDrawAt === 200,
 // **apagar um campo AUSENTE não entra em `diff().affectedKeys()`** — não há mudança de
 // estado, logo não há chave afetada. A regra atual já deixa essa escrita passar.
 // Escrever `nextDrawAt` COM VALOR, aí sim, é negado (é mudança de verdade).
-ok(atual.esperaComDeleteDoNada === 200,
-   'apagar campo AUSENTE não conta como chave afetada — esperava 200, veio ' + atual.esperaComDeleteDoNada);
+ok(atual.esperaComDeleteDoNada === 403,
+   'escrita direta continua negada mesmo ao apagar campo ausente — veio ' + atual.esperaComDeleteDoNada);
 ok(atual.esperaEscrevendoNextDrawAt === 403,
    'escrever nextDrawAt COM VALOR é negado (a lista do hasOnly vale) — veio ' + atual.esperaEscrevendoNextDrawAt);
 

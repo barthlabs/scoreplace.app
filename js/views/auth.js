@@ -1729,7 +1729,7 @@ window._seedProfileFromAuth = function (user) {
 // Cria/garante o doc de perfil. ESPERA, REPETE UMA VEZ e AVISA — ao contrário do
 // `.catch(function(){})` que engolia a única escrita que fazia a conta existir.
 window._ensureProfileDoc = async function (uid, seed) {
-  if (!(window.FirestoreDB && window.FirestoreDB.initializeUserProfile && uid && seed && seed.displayName)) return false;
+  if (!(window.FirestoreDB && window.FirestoreDB.initializeUserProfile && uid && seed)) return false;
   for (var tentativa = 0; tentativa < 2; tentativa++) {
     try {
       await window.FirestoreDB.initializeUserProfile(seed);

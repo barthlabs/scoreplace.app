@@ -46,7 +46,7 @@ must(/proposerBase !== 'Organizador'/.test(codigo) && /confirmerBase !== 'Organi
   '③ ⛔ quando nem o nome resolveu, o rótulo já É "Organizador" — nada de "Organizador (org.)"');
 
 // ── ④ o texto continua sendo o mesmo em tudo o mais ────────────────────────
-must(/proposerName \+ ' lançou:'/.test(codigo),
+must(/proposerName \+ ' lançou um resultado que ainda precisa de confirmação:'/.test(codigo),
   '④ a frase segue "<quem> lançou:" — mudou QUEM, não a forma');
 must(/confirmerName \+ ' confirmou o resultado lançado por ' \+ proposerName/.test(codigo),
   '④ e a de confirmação continua nomeando os DOIS');

@@ -97,8 +97,8 @@ const wait = (ms) => new Promise(r => setTimeout(r, ms));
   await wait(400);
   const before = d.calls.length;
   d.win.WatchBridge.applyIntent({ type: 'setServer', team: 1, playerIdx: 0, id: 'i6' });
-  ok(d.calls.indexOf('setServer:1,0') !== -1,
-     'com placar aberto, setServer dirige _liveSetServer direto (regra de saque segue no motor)');
+  ok(d.calls.indexOf('serveSelect:1,0') !== -1,
+     'com placar aberto, setServer passa pela seleção canônica de saque');
   ok(d.calls.length > before, 'a intenção não foi engolida');
 
   console.log('  ' + pass + ' asserts OK, ' + fail + ' falhas');

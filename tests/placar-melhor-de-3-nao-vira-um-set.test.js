@@ -18,10 +18,10 @@ const must = (v, m) => { assert.ok(v, m); ok++; };
 
 // ── ① a bifurcação do Confirmar, rodando de verdade ──────────────────────────
 {
-  const ini = BUI.indexOf('  var _planSave = (typeof window._matchSetPlan');
-  const fim = BUI.indexOf('\n  }\n', BUI.indexOf('if (_planSave && _planSave.multi && !_planSave.live)', ini));
+  const ini = BUI.indexOf('  if (_planSave && _planSave.multi && _planSave.live)');
+  const fim = BUI.indexOf('\n  if (s1 === s2', ini);
   assert.ok(ini > 0 && fim > ini, 'âncoras da bifurcação');
-  const trecho = BUI.slice(ini, fim + 4);
+  const trecho = BUI.slice(ini, fim);
 
   function decide(plan) {
     let avisou = false, multi = null;
@@ -32,7 +32,8 @@ const must = (v, m) => { assert.ok(v, m); ok++; };
       },
       showAlertDialog: () => { avisou = true; },
       _t: () => null, _isc: {}, m: {}, tId: 't', matchId: 'x',
-      s1: 7, s2: 10, tbP1: null, tbP2: null, isTiebreakEntry: false
+      s1: 7, s2: 10, tbP1: null, tbP2: null, isTiebreakEntry: false,
+      _planSave: plan, useSets: true, isFixedSet: false, _isStbEntry: false
     };
     const r = vm.runInNewContext('(function () {' + trecho + '\nreturn "CAIU_NO_SET_UNICO";})()', ctx);
     return { r, avisou, multi };

@@ -2,10 +2,12 @@
 const fs=require('fs');
 let f=0;const ok=(v,s)=>{console.log((v?'✓ ':'✗ ')+s);if(!v)f++;};
 const db=fs.readFileSync('js/firebase-db.js','utf8');
-const enroll=db.slice(db.indexOf('async enrollParticipant'),db.indexOf('// v1.8.40: SAIR',db.indexOf('async enrollParticipant')));
+const enroll=db.slice(db.indexOf('async enrollParticipant'),db.indexOf('async leaveStandby',db.indexOf('async enrollParticipant')));
 const deenroll=db.slice(db.indexOf('async deenrollParticipant'),db.indexOf('// Formar/desfazer',db.indexOf('async deenrollParticipant')));
+const leave=db.slice(db.indexOf('async leaveStandby'),db.indexOf('async _enrollParticipantTx',db.indexOf('async leaveStandby')));
 ok(enroll.includes("this._callFn('enrollParticipant'")&&!enroll.includes('_enrollParticipantTx('),'inscrição não volta a escrever pelo cliente');
 ok(deenroll.includes("this._callFn('deenrollParticipant'")&&!deenroll.includes('_deenrollParticipantTx('),'desinscrição não volta a escrever pelo cliente');
+ok(leave.includes("this._callFn('leaveStandby'")&&!leave.includes('runTransaction'),'saída da espera não volta a escrever pelo cliente');
 const e=fs.readFileSync('js/views/tournaments-enrollment.js','utf8');
 const add=e.slice(e.indexOf('window._doAddParticipant'),e.indexOf('window.addTeamFunction'));
 ok(add.includes("_callCF('reconcileMonarchEnrollment'")&&!add.includes('saveTournament(t)'),'Rei/Rainha despacha intenção sem salvar o torneio no navegador');
