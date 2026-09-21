@@ -697,16 +697,32 @@ window._entryInBracket = function (t, p, set) {
   var nm = window._pName ? window._pName(p, '') : ((p && (p.displayName || p.name)) || '');
   return !!(nm && set['NM:' + nm]);
 };
-window._lateEntryKey = function (p) {
+// Chaves novas são tipadas: um UID, um manualParticipantId e um rótulo legado podem ter o
+// mesmo texto, mas nunca podem representar a mesma entrada. A função legada fica apenas na
+// leitura para não reabrir entradas já integradas antes desta migração local.
+window._lateLegacyEntryKey = function (p) {
   if (!p || typeof p !== 'object') return String(p || '');
   var a = String(p.p1Uid || p.p1Name || ''), b = String(p.p2Uid || p.p2Name || '');
   if (a && b) return [a, b].sort().join('|');
   var u = String(p.uid || '');
   return u || (window._pName ? window._pName(p, '') : (p.displayName || p.name || ''));
 };
+window._lateEntryKey = function (p) {
+  if (!p || typeof p !== 'object') return p ? 'n:' + String(p) : '';
+  var memberKey = function (uid, name) {
+    return uid ? 'u:' + String(uid) : (name ? 'n:' + String(name) : '');
+  };
+  var a = memberKey(p.p1Uid, p.p1Name), b = memberKey(p.p2Uid, p.p2Name);
+  if (a && b) return 't:' + [a, b].sort().join('|');
+  if (p.uid) return 'u:' + String(p.uid);
+  if (p.manualParticipantId) return 'm:' + String(p.manualParticipantId);
+  var name = window._pName ? window._pName(p, '') : (p.displayName || p.name || '');
+  return name ? 'n:' + String(name) : '';
+};
 window._lateAlreadyIntegrated = function (t, p) {
   var k = window._lateEntryKey(p);
-  return !!(k && t && t.lateIntegrated && t.lateIntegrated[k]);
+  var legacy = window._lateLegacyEntryKey(p);
+  return !!(k && t && t.lateIntegrated && (t.lateIntegrated[k] || (legacy && t.lateIntegrated[legacy])));
 };
 window._markLateIntegrated = function (t, p) {
   var k = window._lateEntryKey(p);

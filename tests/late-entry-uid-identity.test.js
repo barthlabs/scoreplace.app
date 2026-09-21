@@ -49,6 +49,28 @@ ok(W._entryInBracket(t, { displayName: 'A / B', name: 'A / B' }) === true, 'gues
 ok(W._entryInBracket(t, { p1Uid: 'zz1', p2Uid: 'zz2', displayName: 'Z / W', name: 'Z / W' }) === false,
    'quem NÃO está na chave segue fora (não vira falso-positivo)');
 
+console.log('── chave de integração tardia preserva o tipo de identidade ──');
+ok(typeof W._lateEntryKey === 'function', '_lateEntryKey existe');
+const sameTextUid = { uid: 'ana', displayName: 'Ana' };
+const sameTextManual = { manualParticipantId: 'ana', displayName: 'Ana' };
+const sameTextGuest = { displayName: 'ana', name: 'ana' };
+ok(W._lateEntryKey(sameTextUid) === 'u:ana', 'conta usa chave UID tipada');
+ok(W._lateEntryKey(sameTextManual) === 'm:ana', 'vaga manual usa chave manual tipada');
+ok(W._lateEntryKey(sameTextGuest) === 'n:ana', 'guest legado usa chave de rótulo tipada');
+ok(W._lateEntryKey(sameTextUid) !== W._lateEntryKey(sameTextManual) &&
+   W._lateEntryKey(sameTextUid) !== W._lateEntryKey(sameTextGuest),
+   'UID, manual e guest de mesmo texto não colidem');
+ok(W._lateEntryKey(mesmaDupla) === 't:u:' + [U1, U2].sort().join('|u:'),
+   'dupla usa membros UID tipados e ordem estável');
+const legacyIntegrated = { lateIntegrated: {} };
+legacyIntegrated.lateIntegrated[[U1, U2].sort().join('|')] = 1;
+ok(W._lateAlreadyIntegrated(legacyIntegrated, mesmaDupla) === true,
+   'chave de dupla legada ainda bloqueia duplicação');
+const freshIntegrated = {};
+W._markLateIntegrated(freshIntegrated, mesmaDupla);
+ok(freshIntegrated.lateIntegrated[W._lateEntryKey(mesmaDupla)] > 0,
+   'escrita nova usa somente chave tipada');
+
 // e o coletor não a recolhe pra criar um 2º jogo
 t.waitlist = [Object.assign({ _lateJoin: true }, mesmaDupla)];
 const before = t.matches.length;

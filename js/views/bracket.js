@@ -2004,13 +2004,20 @@ window._lateGrowthPairGap = function (t) {
   return null;
 };
 
-// Chave de identidade de uma entrada da espera (uids ordenados; fictício cai no nome).
-window._lateEntryKey = function (p) {
-  if (!p || typeof p !== 'object') return String(p || '');
-  var u = (typeof window._participantUids === 'function') ? window._participantUids(p) : [];
-  if (u.length) return 'u:' + u.slice().sort().join('+');
-  return 'n:' + ((typeof window._pName === 'function') ? window._pName(p, '') : (p.displayName || p.name || ''));
-};
+// A chave canônica é definida em tournaments-draw.js, carregado antes deste arquivo. Não a
+// sobrescreva: UID, manualParticipantId e rótulo legado precisam continuar distintos durante
+// toda a tela. O fallback só existe para testes/carregamentos isolados de bracket.js.
+if (typeof window._lateEntryKey !== 'function') {
+  window._lateEntryKey = function (p) {
+    if (!p || typeof p !== 'object') return p ? 'n:' + String(p) : '';
+    var members = (typeof window._participantUids === 'function') ? window._participantUids(p) : [];
+    if (members.length > 1) return 't:' + members.map(function (u) { return 'u:' + String(u); }).sort().join('|');
+    if (members.length === 1) return 'u:' + String(members[0]);
+    if (p.manualParticipantId) return 'm:' + String(p.manualParticipantId);
+    var name = (typeof window._pName === 'function') ? window._pName(p, '') : (p.displayName || p.name || '');
+    return name ? 'n:' + String(name) : '';
+  };
+}
 
 // v1.5.15 (dono: "dei presença... veio o toast de falta 1, mas o texto indicativo não mudou"):
 // o toggle de presença atualiza o card NO LUGAR e SUPRIME o re-render de propósito (cânone dos
