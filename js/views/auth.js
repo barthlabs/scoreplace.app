@@ -2902,97 +2902,6 @@ function handleEmailLogin() {
     });
 }
 
-// ─── Email/Password Registration ─────────────────────────────────────────────
-function handleEmailRegister() {
-  var name = document.getElementById('register-name').value.trim();
-  var email = document.getElementById('register-email').value.trim();
-  var password = document.getElementById('register-password').value;
-  // v1.9.74: confirmação de senha (senha 2x).
-  var confirmEl = document.getElementById('register-password-confirm');
-  var passwordConfirm = confirmEl ? confirmEl.value : password;
-  if (!name || !email || !password) {
-    showNotification(_t('auth.requiredFields'), _t('auth.fillNameEmailPassword'), 'warning');
-    return;
-  }
-  // v1.1.3-beta: validação anti-placeholder revertida. User: 'as pessoas
-  // já tem dificuldade de entrar no programa (por incompetencia delas
-  // muitas vezes) e vc vai implementar uma trava? melhor deixar entrar
-  // e depois editamos o nome do usuário.' Trade-off correto: friction
-  // no onboarding > qualidade do nome cadastrado.
-  if (password.length < 6) {
-    showNotification(_t('auth.weakPassword'), _t('auth.weakPasswordMsg'), 'warning');
-    return;
-  }
-  // v1.9.74: senha e confirmação devem bater.
-  if (password !== passwordConfirm) {
-    showNotification('Senhas diferentes', 'A senha e a confirmação não são iguais. Digite a mesma senha nos dois campos.', 'warning');
-    return;
-  }
-
-  showNotification(_t('auth.creatingAccount'), _t('auth.creatingAccountMsg'), 'info');
-  // Flag to delay onAuthStateChanged until profile is updated with displayName
-  window._pendingProfileUpdate = true;
-  firebase.auth().createUserWithEmailAndPassword(email, password)
-    .then(function(result) {
-      var user = result.user;
-      // Update profile with display name FIRST, then let onAuthStateChanged handle login
-      return user.updateProfile({ displayName: name }).then(function() {
-        // v1.9.78: verificação de e-mail OBRIGATÓRIA na criação. Envia o link
-        // de confirmação (com retorno pro app) e mostra o GATE de verificação.
-        // NÃO grava o perfil no Firestore nem entra no app até confirmar — assim
-        // o sistema não mescla nem sugere nada antes da verificação. O perfil é
-        // gravado depois, em _checkEmailVerified.
-        window._pendingVerifyName = name;
-        try {
-          _sendRichVerificationEmail(user, name);
-        } catch(e) { window._warn('Email verification send error:', e); }
-        var modal = document.getElementById('modal-login');
-        if (modal) modal.classList.remove('active');
-        window._pendingProfileUpdate = false;
-        if (typeof window._showEmailVerificationGate === 'function') {
-          window._showEmailVerificationGate(email, name);
-        }
-        return;
-      });
-    })
-    .catch(function(error) {
-      window._pendingProfileUpdate = false;
-      window._error('Email register error:', error);
-      var code = (error && error.code) || 'unknown';
-      // v1.3.23-beta: NÃO mandar pra Sentry códigos esperados de UX
-      // (user errou senha, email já cadastrado, etc.) — esses já têm
-      // tratamento no client e poluiam digest do scoreplace-sentry-check.
-      // Bugs reais (network-request-failed transient com count alto,
-      // operation-not-allowed, unknown) continuam reportados.
-      var EXPECTED_AUTH_CODES = ['auth/email-already-in-use', 'auth/invalid-email', 'auth/weak-password'];
-      if (typeof window._captureException === 'function' && EXPECTED_AUTH_CODES.indexOf(code) === -1) {
-        window._captureException(error, { area: 'emailRegister', code: code });
-      }
-      // v1.0.19-beta: msgs específicas + sugere fallback. Bug reportado por
-      // beta tester (Cátia) com auth/network-request-failed travando criação
-      // de conta sem indicar o que tentar.
-      if (code === 'auth/email-already-in-use') {
-        showNotification(_t('auth.emailInUse'), _t('auth.emailInUseMsg'), 'error');
-      } else if (code === 'auth/invalid-email') {
-        showNotification(_t('auth.invalidEmail'), _t('auth.invalidEmailMsg'), 'error');
-      } else if (code === 'auth/weak-password') {
-        showNotification(_t('auth.weakPassword'), _t('auth.weakPasswordMsg'), 'warning');
-      } else if (code === 'auth/operation-not-allowed') {
-        showNotification(_t('auth.notAvailable'), _t('auth.registerUnavailable'), 'warning');
-      } else if (code === 'auth/network-request-failed') {
-        showNotification('Sem conexão com Firebase',
-          'Network blip ou bloqueio. Tente:\n' +
-          '1. Trocar Wi-Fi ↔ 4G/5G\n' +
-          '2. Desabilitar VPN/ad-blocker\n' +
-          '3. Entrar com Google', 'error');
-      } else {
-        showNotification('Erro no Registro',
-          (error.message || 'Não foi possível criar conta') +
-          '\n\n(código: ' + code + ')\n\nTente entrar com Google.', 'error');
-      }
-    });
-}
-
 // O acesso por e-mail exige senha; recuperação de senha é tratada abaixo.
 // ─── Password Reset ──────────────────────────────────────────────────────────
 // v1.8.69: abre painel inline no modal de login com campo de email pré-preenchido.
@@ -5868,9 +5777,8 @@ function setupLoginModal() {
 
           // --- Bloco antigo "E-mail e Senha" removido (v2.5.x) ---
           // Unificado no #login-block-main acima (campo único e-mail/celular +
-          // senha + cadastro inline). handleEmailLogin/toggleEmailMode/
-          // handleEmailRegister continuam DEFINIDOS (compat ?wt=/reset) mas não
-          // são mais acionados por nenhuma UI visível.
+          // senha + cadastro inline). O cadastro por e-mail tem uma única porta:
+          // _entrarDoRegister. Helpers antigos de painel ficam isolados até remoção.
           '<div id="login-panel-email" style="display:none;"></div>' +
 
           // v1.8.40: Apple/Google SUBIRAM pro topo do modal (ver bloco no início).

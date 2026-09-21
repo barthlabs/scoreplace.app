@@ -31,5 +31,7 @@ function visit(dir) {
 roots.forEach((relative) => visit(path.join(ROOT, relative)));
 const index = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
 banned.forEach((pattern) => { if (pattern.test(index)) { console.error('✗ login mágico ativo: index.html (' + pattern + ')'); fail++; } });
+const authSource = fs.readFileSync(path.join(ROOT, 'js', 'views', 'auth.js'), 'utf8');
+if (/function\s+handleEmailRegister\b/.test(authSource)) { console.error('✗ cadastro e-mail legado duplicado: handleEmailRegister'); fail++; }
 console.log((fail ? '❌' : '✅') + ' no-magic-link-login: ' + files + ' arquivos executáveis, ' + fail + ' ocorrência(s)');
 process.exit(fail ? 1 : 0);
