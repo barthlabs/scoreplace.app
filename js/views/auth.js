@@ -4247,10 +4247,10 @@ async function simulateLoginSuccess(user) {
         var pid = pd[0].providerId;
         if (pid === 'google.com') _method = 'google';
         else if (pid === 'phone') _method = 'sms';
-        else if (pid === 'password') _method = 'email_link';
+        else if (pid === 'password') _method = 'password';
         else _method = pid;
       } else if (user && user.email) {
-        _method = 'email_link';
+        _method = 'password';
       } else if (user && user.phoneNumber) {
         _method = 'sms';
       }

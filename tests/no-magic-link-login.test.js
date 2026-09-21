@@ -11,7 +11,7 @@ const extensions = new Set(['.js', '.html']);
 const banned = [
   /sendMagicLink\b/, /signInWithEmailLink\b/, /isSignInWithEmailLink\b/,
   /generateSignInWithEmailLink\b/, /collection\(\s*['"]magicLinks['"]\s*\)/,
-  /[?&]ml=/,
+  /[?&]ml=/, /['"]email_link['"]/,
 ];
 let fail = 0, files = 0;
 function visit(dir) {
