@@ -1526,7 +1526,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (Array.isArray(window._profileLocations)) window._profileLocations = arr.slice();
     try {
       if (window.FirestoreDB && window.FirestoreDB.db) {
-        window.FirestoreDB.db.collection('users').doc(cu.uid).set({ preferredLocations: arr }, { merge: true }).catch(window._falhouCalado('preferredLocations'));
+        window.FirestoreDB.savePreferredLocations(arr).catch(window._falhouCalado('preferredLocations'));
       }
     } catch (e) {}
     return true;
@@ -1556,7 +1556,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       var arr = (Array.isArray(cu.preferredLocations) ? cu.preferredLocations : []).filter(function(pl){ return pl !== existing; });
       cu.preferredLocations = arr;
       if (Array.isArray(window._profileLocations)) window._profileLocations = arr.slice();
-      try { if (window.FirestoreDB && window.FirestoreDB.db) window.FirestoreDB.db.collection('users').doc(cu.uid).set({ preferredLocations: arr }, { merge: true }).catch(window._falhouCalado('preferredLocations')); } catch (e) {}
+      try { if (window.FirestoreDB) window.FirestoreDB.savePreferredLocations(arr).catch(window._falhouCalado('preferredLocations')); } catch (e) {}
       if (typeof showNotification === 'function') showNotification('Removido dos preferidos', v.name || '', 'info');
     } else {
       if (Array.isArray(cu.preferredLocations) && cu.preferredLocations.length >= 5) { if (typeof showNotification === 'function') showNotification('Limite de preferidos', 'Você já tem 5 locais preferidos. Remova um pra adicionar este.', 'warning'); return; }
@@ -1585,7 +1585,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var arr = (Array.isArray(cu.preferredLocations) ? cu.preferredLocations : []).filter(function(pl){ return pl !== existing; });
     cu.preferredLocations = arr;
     if (Array.isArray(window._profileLocations)) window._profileLocations = arr.slice();
-    try { if (window.FirestoreDB && window.FirestoreDB.db) window.FirestoreDB.db.collection('users').doc(cu.uid).set({ preferredLocations: arr }, { merge: true }).catch(window._falhouCalado('preferredLocations')); } catch (e) {}
+    try { if (window.FirestoreDB) window.FirestoreDB.savePreferredLocations(arr).catch(window._falhouCalado('preferredLocations')); } catch (e) {}
     if (typeof showNotification === 'function') showNotification('Removido dos preferidos', vname || '', 'info');
     try { renderResults(); } catch (e) {}
   };

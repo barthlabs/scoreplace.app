@@ -6142,9 +6142,9 @@ window._resolveRegisteredVenueDoc = async function(placeId, name) {
 // Persiste preferredLocations corrigidos no perfil (Firestore).
 window._persistPreferredLocations = async function() {
   var cu = window.AppStore && window.AppStore.currentUser;
-  if (!cu || !cu.uid || !window.FirestoreDB || !window.FirestoreDB.db) return;
+  if (!cu || !cu.uid || !window.FirestoreDB) return;
   try {
-    await window.FirestoreDB.db.collection('users').doc(cu.uid).update({ preferredLocations: cu.preferredLocations || [] });
+    await window.FirestoreDB.savePreferredLocations(cu.preferredLocations || []);
   } catch (e) { window._warn && window._warn('[pref backfill] persist falhou:', e && e.message); }
 };
 

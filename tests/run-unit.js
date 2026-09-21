@@ -1557,6 +1557,7 @@ const SUITES = [
   'functions/test-registration-core.js',
   'tests/registro-canonico-dry-run-cf.test.js',
   'functions/test-profile-preferences-core.js',
+  'functions/test-profile-locations-core.js',
   'functions/test-casual-room-pointer-core.js',
   'functions/test-live-score-preferences-core.js',
   'functions/test-casual-last-preferences-core.js',

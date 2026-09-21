@@ -474,8 +474,8 @@
     cu.preferredLocations = arr;
     if (Array.isArray(window._profileLocations)) window._profileLocations = arr.slice();
     try {
-      if (window.FirestoreDB && window.FirestoreDB.db) {
-        window.FirestoreDB.db.collection('users').doc(cu.uid).set({ preferredLocations: arr }, { merge: true })
+      if (window.FirestoreDB) {
+        window.FirestoreDB.savePreferredLocations(arr)
           .then(function() { if (window.showNotification) window.showNotification('⭐ Local adicionado', entry.label + ' agora é um dos seus preferidos.', 'success'); })
           .catch(function(e) { if (window._warn) window._warn('add preferred falhou:', e); if (window.showNotification) window.showNotification('Erro ao salvar', 'Não foi possível salvar o local agora.', 'error'); });
       }

@@ -39,6 +39,7 @@ const _dupPerson = require("./duplicate-person-core");
 const _casualStats = require("./casual-stats-core");
 const _pendingMail = require("./pending-mail-core");
 const _profilePreferences = require("./profile-preferences-core");
+const _profileLocations = require("./profile-locations-core");
 const _casualRoomPointer = require("./casual-room-pointer-core");
 const _liveScorePreferences = require("./live-score-preferences-core");
 const _casualLastPreferences = require("./casual-last-preferences-core");
@@ -3207,6 +3208,23 @@ exports.updateOwnInterfacePreferences = onCall(
       }));
     });
     return { ok: true, preferences: patch };
+  }
+);
+
+exports.updateOwnPreferredLocations = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
+  async (request) => {
+    const uid = request.auth && request.auth.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Login obrigatório");
+    let locations;
+    try { locations = _profileLocations.normalizePreferredLocations(request.data && request.data.locations); }
+    catch (error) { throw new HttpsError("invalid-argument", error.message); }
+    const db = admin.firestore(); const ref = db.collection("users").doc(uid);
+    await db.runTransaction(async (tx) => {
+      if (!(await tx.get(ref)).exists) throw new HttpsError("failed-precondition", "Perfil inexistente");
+      tx.update(ref, { preferredLocations: locations, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+    });
+    return { ok: true, locations: locations };
   }
 );
 

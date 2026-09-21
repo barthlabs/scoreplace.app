@@ -13186,7 +13186,6 @@ window.AppStore = {
       notifyWhatsApp: user.notifyWhatsApp,
       notifyLevel: user.notifyLevel,
       preferredCeps: user.preferredCeps,
-      preferredLocations: user.preferredLocations,
       presenceVisibility: user.presenceVisibility,
       statsVisibility: user.statsVisibility,
       presenceMuteDays: user.presenceMuteDays,
@@ -13211,7 +13210,7 @@ window.AppStore = {
     // (default "todas") continuam sendo escritos sempre.
     var _optionalTextFields = ['gender', 'birthDate', 'city', 'state', 'country',
                                'phone', 'preferredCeps'];
-    var _optionalArrayFields = ['preferredSports', 'preferredLocations'];
+    var _optionalArrayFields = ['preferredSports'];
     _optionalTextFields.forEach(function(k) {
       if (payload[k] === '') delete payload[k];
     });
@@ -13237,6 +13236,7 @@ window.AppStore = {
     };
     try {
       await window.FirestoreDB.saveUserProfile(uid, payload);
+      if (Array.isArray(user.preferredLocations)) await window.FirestoreDB.savePreferredLocations(user.preferredLocations);
       window._lastProfileSave.ok = true;
       // Verificação round-trip: lê de volta e confirma que os VALORES chegaram.
       try {
