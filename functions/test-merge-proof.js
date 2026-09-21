@@ -160,6 +160,7 @@ console.log('\n=== 2. a VARREDURA sobre o par real da Confra (planSweepMerges) =
   }
   const tSweep = trechoDaPorta('async function _scanAndMergeByField', '// ─── One-shot');
   const tTrigger = trechoDaPorta('exports.autoMergeOnProfileUpdate', 'exports.enforceUniqueDisplayName');
+  const tConfirm = trechoDaPorta('exports.confirmEmailMerge', '// ─── mergePhoneAccount');
 
   ok('_scanAndMergeByField existe e registra caso privado',
     !!tSweep && tSweep.indexOf('scheduled_duplicate_signal') >= 0);
@@ -169,6 +170,9 @@ console.log('\n=== 2. a VARREDURA sobre o par real da Confra (planSweepMerges) =
     !!tTrigger && tTrigger.indexOf('profile_duplicate_signal') >= 0);
   ok('trigger de perfil não chama fusão',
     !!tTrigger && tTrigger.indexOf('_executeMerge(') === -1 && tTrigger.indexOf('_mergeAccountsKeepOlder(') === -1);
+  ok('confirmação de fusão exige a sessão da conta destinatária',
+    !!tConfirm && /const confirmerUid = request\.auth && request\.auth\.uid;/.test(tConfirm) &&
+    /confirmerUid !== t\.targetUid/.test(tConfirm) && /permission-denied/.test(tConfirm));
 
   console.log('\n' + (falhas === 0 ? '✅ merge-proof: todas as asserções passaram' : '❌ merge-proof: ' + falhas + ' falha(s)'));
   process.exit(falhas === 0 ? 0 : 1);

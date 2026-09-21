@@ -200,10 +200,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
 })();
 
 // v3.0.59: União de contas por e-mail — ?mh=TOKEN gerado por requestEmailMerge.
-// Clicar no link (que só chegou no e-mail da conta B) PROVA a posse dessa conta.
-// Chama confirmEmailMerge → funde A+B mantendo a conta MAIS ANTIGA. Depois desloga
-// e manda entrar de novo: a credencial fica na conta sobrevivente e o login (celular
-// OU e-mail) cai nela via resolveMergedLogin. Sem precisar logar na outra conta.
+// O link só leva o pedido até o app; a confirmação exige que a conta B esteja
+// autenticada neste aparelho. Assim ele não é login mágico nem autorização suficiente
+// para uma operação destrutiva.
 (function _handleEmailMergeLink() {
   try {
     var qs = (typeof URLSearchParams === 'function') ? new URLSearchParams(window.location.search) : null;
@@ -220,7 +219,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         '<a href="/" style="margin-top:8px;color:' + window._spCor(fg, 'color') + ';font-size:0.85rem;text-decoration:none;border:1px solid ' + window._spCor(fg, 'borda') + ';padding:8px 18px;border-radius:8px;">Ir pro app</a>' +
         '</div>';
     };
-    showStatus('🔗', 'Unindo suas contas...', 'Confirmando e juntando seus dados numa conta só');
+    showStatus('🔗', 'Confirmação de união', 'Entre na conta que recebeu este e-mail para confirmar a união.');
     var tries = 0;
     var run = function() {
       var _appReady = window.firebase && window.firebase.apps && window.firebase.apps.length;
@@ -241,6 +240,10 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         // Desloga a sessão atual (pode ser a conta absorvida) e manda reentrar.
         if (auth && auth.signOut) { auth.signOut().then(finish).catch(finish); } else { finish(); }
       }).catch(function(err) {
+        if (err && (err.code === 'permission-denied' || err.code === 'functions/permission-denied' || err.code === 'unauthenticated' || err.code === 'functions/unauthenticated')) {
+          showStatus('🔒', 'Entre na outra conta', 'Para proteger suas contas, entre primeiro na conta que recebeu este e-mail e abra o link novamente.', true);
+          return;
+        }
         var msg = (err && (err.message || err.code)) || 'falha';
         if (typeof window._captureException === 'function') { try { window._captureException(err, { area: 'mhMerge' }); } catch (_e) {} }
         showStatus('⚠️', 'Não deu pra unir', window._safeHtml ? window._safeHtml(String(msg)) : String(msg), true);

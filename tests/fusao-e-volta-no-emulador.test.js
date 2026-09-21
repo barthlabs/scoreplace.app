@@ -94,7 +94,10 @@ const TOUR='tour_prova';
   await db.doc('mergeTokens/'+token).set({requesterUid:NOVA,targetUid:VELHA,
     email:'ela@gmail.com',expiresAt:new Date(Date.now()+3600000),used:false});
 
-  try{ const d=await chamarCF('confirmEmailMerge',{token:token});
+  try{ const d=await chamarCF('confirmEmailMerge',{token:token},NOVA);
+    R['tentativaDaSolicitante']={ok:true,d:d}; }
+  catch(e){ R['tentativaDaSolicitante']={ok:false,erro:String(e&&e.message),codigo:String(e&&e.code)}; }
+  try{ const d=await chamarCF('confirmEmailMerge',{token:token},VELHA);
     R['uniu']={ok:true,d:d}; }
   catch(e){ R['uniu']={ok:false,erro:String(e&&e.message),codigo:String(e&&e.code)}; }
 
@@ -184,6 +187,7 @@ const J = (v) => JSON.stringify(v);
 
 console.log('\n──── unir e separar, no emulador de verdade ────\n');
 console.log('── ① a união fez o que tinha de fazer ──');
+ok('a solicitante sozinha não consome a prova da outra conta', R.tentativaDaSolicitante.ok === false, J(R.tentativaDaSolicitante));
 ok('a união rodou', R.uniu.ok, R.uniu.erro);
 ok('⭐ quem ficou foi a conta mais ativa (a que está no torneio)',
   R.quemFicou.sobrevivente && R.quemFicou.absorvida && R.quemFicou.sobrevivente !== R.quemFicou.absorvida,

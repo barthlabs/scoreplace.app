@@ -8342,6 +8342,8 @@ exports.confirmEmailMerge = onCall(
   { region: "us-central1", memory: "512MiB", timeoutSeconds: 300, cors: APP_ORIGINS },
   async (request) => {
     // v4.4.116: usa _repairTournaments/_replaceNameInMatches uid-scoped (marcador força redeploy).
+    const confirmerUid = request.auth && request.auth.uid;
+    if (!confirmerUid) throw new HttpsError("unauthenticated", "entre na conta que recebeu a confirmação");
     const token = String((request.data && request.data.token) || "").trim();
     if (!token) throw new HttpsError("invalid-argument", "token ausente");
     const db = admin.firestore();
@@ -8352,6 +8354,12 @@ exports.confirmEmailMerge = onCall(
     if (t.used) throw new HttpsError("failed-precondition", "este link já foi usado");
     const exp = (t.expiresAt && t.expiresAt.toMillis) ? t.expiresAt.toMillis() : Number(t.expiresAt || 0);
     if (exp && exp < Date.now()) throw new HttpsError("deadline-exceeded", "link expirado — peça de novo no perfil");
+    // A solicitante já provou a sessão ao pedir o token. O link nunca é, por si,
+    // autorização de uma operação destrutiva: a conta destinatária também precisa
+    // estar autenticada neste aparelho e coincidir com o alvo imutável do token.
+    if (confirmerUid !== t.targetUid) {
+      throw new HttpsError("permission-denied", "entre na conta que recebeu a confirmação");
+    }
 
     const res = await _mergeAccountsKeepOlder(db, t.requesterUid, t.targetUid);
     await ref.set({ used: true, usedAt: admin.firestore.FieldValue.serverTimestamp(), survivorUid: res.survivorUid }, { merge: true });
