@@ -102,10 +102,10 @@ ok((dash.match(/_enrollmentOpenState/g) || []).length >= 3, 'dashboard usa a fon
 ok(/isAberto = _openSt\.open \|\| lateEnrollOpen/.test(tour),
   'o auto-close do render deriva do isAberto canônico (Liga aberta não é mais auto-fechada)');
 
-// o fallback do cliente (firebase-db) e o servidor têm o MESMO ligaOpen com finished
+// inscrição não possui mais uma implementação paralela no cliente.
 const fdb = semComent(fs.readFileSync(path.join(__dirname, '..', 'js', 'firebase-db.js'), 'utf8'));
-ok(/ligaOpenEnrollment !== false && data\.status !== 'finished'/.test(fdb),
-  'fallback do cliente (_enrollParticipantTx) exclui finished do ligaOpen');
+ok(!/_enrollParticipantTx/.test(fdb),
+  'inscrição não mantém fallback de transação no cliente');
 
 console.log(fail === 0 ? '✅ inscricao-aberta-uma-regra: ' + (pass + casos) + ' verificações, 0 falha(s)'
                        : '❌ inscricao-aberta-uma-regra: ' + fail + ' falha(s)');

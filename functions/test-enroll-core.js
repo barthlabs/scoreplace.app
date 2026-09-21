@@ -35,11 +35,11 @@ function eq(name, a, b) { ok(name + ' (' + JSON.stringify(a) + ' === ' + JSON.st
   eq('mesmo uid após alterar perfil → already', r.outcome, 'already');
 })();
 
-// ── Participante sem conta tem chave própria e nome exclusivo no torneio ─────
+// ── Participante sem conta deduplica só pela chave estável ───────────────────
 (() => {
   const data = { status: 'open', participants: [{ manualParticipantId: 'manual-a', displayName: 'Convidado' }] };
   eq('mesma vaga manual → already', C.computeEnroll(data, { manualParticipantId: 'manual-a', displayName: 'Outro nome' }, null, NOW).outcome, 'already');
-  eq('manual distinto com mesmo nome → already', C.computeEnroll(data, { manualParticipantId: 'manual-b', displayName: 'Convidado' }, null, NOW).outcome, 'already');
+  eq('manual distinto com mesmo nome → enrolled', C.computeEnroll(data, { manualParticipantId: 'manual-b', displayName: 'Convidado' }, null, NOW).outcome, 'enrolled');
   eq('manual distinto com outro nome → enrolled', C.computeEnroll(data, { manualParticipantId: 'manual-b', displayName: 'Outra pessoa' }, null, NOW).outcome, 'enrolled');
 })();
 
