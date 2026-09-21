@@ -10,6 +10,8 @@ const oldClientApi = 'signInWith' + 'EmailLink';
 const oldServerApi = 'generateSignInWith' + 'EmailLink';
 const oldCallable = String.fromCharCode(115, 101, 110, 100, 77, 97, 103, 105, 99, 76, 105, 110, 107);
 const oldCollection = String.fromCharCode(109, 97, 103, 105, 99, 76, 105, 110, 107, 115);
+const retiredQueryParameter = String.fromCharCode(109, 108);
+const retiredNotice = 'Este acesso por ' + 'link não está mais disponível';
 
 async function main() {
   assert.ok(!auth.includes(oldClientApi), 'o cliente não autentica por URL');
@@ -19,8 +21,8 @@ async function main() {
   assert.match(functions, /generateEmailVerificationLink/);
   assert.match(functions, /mode=verifyEmail/);
   assert.match(functions, /55 \* 60 \* 1000/);
-  assert.match(auth, /qs\.get\('ml'\)/);
-  assert.match(auth, /Este acesso por link não está mais disponível/);
+  assert.ok(!auth.includes("qs.get('" + retiredQueryParameter + "')"), 'o cliente não preserva rota de acesso retirada');
+  assert.ok(!auth.includes(retiredNotice), 'o cliente não preserva tela do acesso retirado');
 
   const begin = functions.indexOf('async function _wrapVerificationLink');
   const end = functions.indexOf('\nasync function _queueVerificationEmail', begin);

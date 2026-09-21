@@ -11,17 +11,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
 (function _handleEmailVerificationRedirect() {
   try {
     var qs = (typeof URLSearchParams === 'function') ? new URLSearchParams(window.location.search) : null;
-    var legacyAccessToken = qs && qs.get('ml');
     var token = qs && qs.get('vt');
-    if (legacyAccessToken) {
-      document.body.innerHTML = '<div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#0f172a;color:#fff;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;flex-direction:column;gap:14px;padding:24px;text-align:center;">' +
-        '<div style="font-size:2.4rem;line-height:1;">🔐</div>' +
-        '<div style="font-size:1.05rem;font-weight:700;color:#fbbf24;">Este acesso por link não está mais disponível</div>' +
-        '<div style="font-size:0.85rem;color:#94a3b8;max-width:340px;line-height:1.5;">Entre com seu e-mail e senha ou redefina sua senha para continuar.</div>' +
-        '<a href="/" style="margin-top:8px;color:#fbbf24;font-size:0.85rem;text-decoration:none;border:1px solid #fbbf24;padding:8px 18px;border-radius:8px;">Ir para entrar</a>' +
-        '</div>';
-      return;
-    }
     if (!token) return;
 
     // Loading screen — usuário sabe que tá entrando, não acha que travou.
@@ -1900,7 +1890,7 @@ window._isUnreliableEmailDomain = function(email) {
 };
 
 // v4.3.19: REMOVIDOS _detectLoginInputMode, _loginMutualExclude e handleUnifiedLogin
-// (modal de login ANTIGO baseado no campo #login-unified / #btn-enviar-magic / blocos
+// (modal de login ANTIGO baseado no campo #login-unified e blocos
 // #login-unified-step + #login-block-email). Substituídos pelo modal atual com campo
 // único #login-identifier + window._onIdentifierInput() (~linha 1506). Zero callers em
 // grep recursivo (js/ + index.html) quando removidos. Não recriar: o único caminho de
@@ -2496,9 +2486,6 @@ window._entrarPhonePasswordLogin = function(identifier, pw) {
       return false;
     });
 };
-
-// ─── Email Link (Passwordless) Login ────────────────────────────────────────
-// Login por link sem senha foi removido. O acesso por e-mail exige senha ou recuperação de senha.
 
 // ─── Phone/SMS Login ────────────────────────────────────────────────────────
 window._phoneConfirmationResult = null;
@@ -9574,8 +9561,6 @@ window._profileHydrateNameConflict = function () {
 
       // Booleans / defaults: sempre envia (UI tem valor definido)
       payload.phoneCountry = phoneCountry;
-      payload.liveAlerts = liveAlerts;
-      payload.liveAlertsWho = liveAlertsWho;
       // v2.4.3: privacidade de contato (default OFF).
 
       // ── 3b. APAGAR TAMBÉM É UM ATO ──────────────────────────────────────
@@ -9622,6 +9607,7 @@ window._profileHydrateNameConflict = function () {
       var _notificationPreferences = { notifyPlatform: notifyPlatform, notifyEmail: notifyEmail, notifyWhatsApp: notifyWhatsApp, notifyLevel: notifyLevel };
       var _presencePreferences = { presenceVisibility: presenceVisibility, statsVisibility: statsVisibility, presenceMuteDays: muteDays, presenceMuteUntil: muteUntil, presenceAutoCheckin: presenceAutoCheckin };
       var _contactPrivacy = { omitEmail: omitEmail, omitPhone: omitPhone };
+      var _liveAlertsWho = liveAlertsWho;
 
       // Denormalizados para lookups case-insensitive
       if (payload.displayName) payload.displayName_lower = String(payload.displayName).toLowerCase();
@@ -9664,6 +9650,7 @@ window._profileHydrateNameConflict = function () {
         await window.FirestoreDB.savePresencePreferences(_presencePreferences);
         await window.FirestoreDB.saveFriendRequestPreference(acceptFriends);
         await window.FirestoreDB.saveContactPrivacy(_contactPrivacy);
+        await window.FirestoreDB.saveLiveAlerts(_liveAlertsWho);
         window._lastProfileSave.ok = true;
         window._log('[Profile v0.16.9] save ok');
         // v1.8.39-beta: limpar flag de foto pendente após save bem-sucedido

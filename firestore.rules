@@ -1048,6 +1048,7 @@ service cloud.firestore {
                 'favorites', 'hiddenTournaments',
                 'acceptFriendRequests',
                 'omitEmail', 'omitPhone',
+                'liveAlerts', 'liveAlertsWho',
                 // v2.1.48 — os três arrays de amizade viraram CACHE DE EXIBIÇÃO. A relação
                 // mora em `friendships/{pairId}` e a prova em `friendAccess/**`. Nem o dono
                 // do próprio perfil escreve mais por cliente: quem escrevesse o próprio

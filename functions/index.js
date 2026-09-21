@@ -47,6 +47,7 @@ const _profileSession = require("./profile-session-core");
 const _profileTournamentPreferences = require("./profile-tournament-preferences-core");
 const _profileFriendRequests = require("./profile-friend-requests-core");
 const _profileContactPrivacy = require("./profile-contact-privacy-core");
+const _profileLiveAlerts = require("./profile-live-alerts-core");
 const _casualRoomPointer = require("./casual-room-pointer-core");
 const _liveScorePreferences = require("./live-score-preferences-core");
 const _casualLastPreferences = require("./casual-last-preferences-core");
@@ -3352,6 +3353,17 @@ exports.updateOwnContactPrivacy = onCall(
     const db = admin.firestore(); const ref = db.collection("users").doc(uid);
     await db.runTransaction(async (tx) => { if (!(await tx.get(ref)).exists) throw new HttpsError("failed-precondition", "Perfil inexistente"); tx.update(ref, Object.assign({}, privacy, { updatedAt: admin.firestore.FieldValue.serverTimestamp() })); });
     return { ok: true, privacy: privacy };
+  }
+);
+
+exports.updateOwnLiveAlerts = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
+  async (request) => {
+    const uid=request.auth&&request.auth.uid; if(!uid) throw new HttpsError("unauthenticated","Login obrigatório");
+    let who; try { who=_profileLiveAlerts.normalizeLiveAlerts(request.data); } catch(error) { throw new HttpsError("invalid-argument",error.message); }
+    const db=admin.firestore(),ref=db.collection("users").doc(uid);
+    await db.runTransaction(async(tx)=>{if(!(await tx.get(ref)).exists)throw new HttpsError("failed-precondition","Perfil inexistente");tx.update(ref,{liveAlertsWho:who,liveAlerts:who!=="none",updatedAt:admin.firestore.FieldValue.serverTimestamp()});});
+    return {ok:true,who:who};
   }
 );
 
