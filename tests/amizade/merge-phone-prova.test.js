@@ -67,9 +67,9 @@ module.exports = (async () => {
   await admin.auth().createUser({ uid: CALLER, email: 'mesma@x.com' });
   await admin.auth().createUser({ uid: OLD, email: OLD + '@x.com' });
   await db.collection('users').doc(CALLER).set({ displayName: 'Caller', email: 'mesma@x.com' });
-  await db.collection('users').doc(OLD).set({ displayName: 'Antiga', email: 'mesma@x.com' });
+  await db.collection('users').doc(OLD).set({ displayName: 'Antiga', email: 'mesma@x.com', linkedEmails: ['mesma@x.com'], phone: FONE });
   r = await chamar('mergePhoneAccount', CALLER, { oldUid: OLD, dryRun: true }, { email: 'mesma@x.com' });
-  ok(r.status === 200, 'com prova (e-mail do perfil antigo bate): ACEITO no dryRun (status ' + r.status + ')');
+  ok(r.status === 403 || r.status >= 400, 'e-mail, telefone ou vínculo copiados no perfil antigo: RECUSADO (status ' + r.status + ')');
   ok((await lifecycleDocs()).length === 0, 'e o dryRun não adquire lock');
 
   // ══ 3) GHOST BEM-SUCEDIDO ════════════════════════════════════════════════

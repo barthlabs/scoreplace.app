@@ -60,7 +60,9 @@ const iSweep = corpoMerge.indexOf('_sweepAllCollectionsByUid(db, dropUid, keepUi
 ok(iAmz > 0 && iSweep > 0 && iAmz < iSweep, 'e chama ANTES da varredura genérica');
 
 // ligado no deleteAccount
-const corpoDel = idx.slice(idx.indexOf('exports.deleteAccount'), idx.indexOf('exports.deleteAccount') + 12000);
+const iDeleteAccount = idx.indexOf('exports.deleteAccount = onCall');
+const fimDeleteAccount = idx.indexOf('\nexports.', iDeleteAccount + 10);
+const corpoDel = idx.slice(iDeleteAccount, fimDeleteAccount < 0 ? idx.length : fimDeleteAccount);
 ok(/_excluirAmizade\(db, uid\)/.test(corpoDel),
   '⛔ deleteAccount CHAMA _excluirAmizade (projeção órfã concede leitura pra sempre)');
 

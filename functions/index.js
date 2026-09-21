@@ -8408,18 +8408,12 @@ async function _provaDePosseDeOld(request, callerUid, oldUid, oldData) {
 
   const email = String((request.auth.token && request.auth.token.email) || "").toLowerCase();
   const fone = request.auth.token && request.auth.token.phone_number;
-  const d = oldData || {};
   if (email) {
-    if (oldAuth && oldAuth.email && oldAuth.email.toLowerCase() === email) return { proven: true, via: "email-auth", oldAuth };
-    if (d.email && String(d.email).toLowerCase() === email) return { proven: true, via: "email-perfil", oldAuth };
-    if (Array.isArray(d.linkedEmails) && d.linkedEmails.map((e) => String(e).toLowerCase()).indexOf(email) !== -1) {
-      return { proven: true, via: "email-vinculado", oldAuth };
-    }
+    if (oldAuth && oldAuth.emailVerified && request.auth.token.email_verified === true &&
+        oldAuth.email && oldAuth.email.toLowerCase() === email) return { proven: true, via: "email-auth", oldAuth };
   }
   if (fone) {
     if (oldAuth && oldAuth.phoneNumber && _phoneDigitsMatch(fone, oldAuth.phoneNumber)) return { proven: true, via: "phone-auth", oldAuth };
-    const op = await _registeredPhoneFor(oldUid, oldAuth);
-    if (op && _phoneDigitsMatch(fone, op)) return { proven: true, via: "phone-perfil", oldAuth };
   }
   return { proven: false, via: null, oldAuth };
 }
