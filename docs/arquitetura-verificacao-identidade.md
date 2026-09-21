@@ -233,3 +233,28 @@ política antes de alterar estado.
    verificação para todas as inscrições;
 7. migrar contas existentes por convite progressivo, sem bloquear torneio já
    em andamento nem apagar dados automaticamente.
+
+## Mapa de intervenção no código existente
+
+Esta seção é um mapa de migração, não autorização para alteração direta antes
+da entrega 1 estar revisada.
+
+| Área atual | Papel na migração | Mudança necessária |
+| --- | --- | --- |
+| `functions/index.js` — `autoMergeOnProfileUpdate` | Hoje pode chamar `_executeMerge` após coincidência de telefone/e-mail. | Trocar o efeito por criação idempotente de caso privado de identidade; remover toda chamada automática a `_executeMerge`. |
+| `functions/index.js` — `scheduledAutoMergeCleanup` e `_scanAndMergeByField` | Varredura agendada ainda pode materializar fusões. | Desativar fusão; emitir somente métricas/casos pendentes até existir prova de identidade e revisão. |
+| `functions/index.js` — `enrollParticipant` | É a autoridade atual da inscrição e já usa transação. | Antes de `computeEnroll`, resolver `canonicalUid`, recusar estados não verificados e nunca aceitar UID do payload diferente do UID autorizado sem comando de organizador específico. |
+| `functions/enroll-core.js` | Mantém compatibilidade por `uid`, nome e e-mail. | Reduzir o core novo a chaves de inscrição e membro por UID/ID manual; compatibilidade de nome/e-mail fica em adaptador de leitura, não no predicado de unicidade. |
+| `functions/tournament-enrollment-profile-core.js` | Relatório ainda acha entradas por e-mail/nome. | Resolver perfis por UID; participante manual usa `manualParticipantId`; remover fallback como caminho de autorização. |
+| `functions-autodraw/index.js` — `requestParticipantMerge` | Localiza vaga manual pelo nome. | Trocar `genericName` por `manualParticipantId`, registrar decisão e não manipular identidade de conta por rótulo. |
+| `functions/profile-merge-core.js` e comandos de merge explícito | Contêm partes reaproveitáveis de movimentação auditada. | Preservar somente para fluxo que prova controle dos dois lados ou decisão humana; consolidar em um único comando de fusão. |
+| `android/app/src/main/java/app/scoreplace/MainActivity.java` | Já registra `ScoreplaceWatchPlugin`. | Registrar `ScoreplaceBiometryPlugin` no mesmo ponto, com testes instrumentados. |
+| `ios/App/App/MainViewController.swift` | Já registra instância nativa do plugin de relógio. | Registrar `ScoreplaceBiometryPlugin` em `capacitorDidLoad`, com acesso ao Keychain/Secure Enclave. |
+| `js/views/auth.js` | Centraliza os fluxos nativos de autenticação. | Adicionar adaptador fino para chave biométrica e estados de identidade; nenhuma decisão facial no JavaScript. |
+| `firestore.rules` | Hoje protege perfis e torneios, mas não há entidade de identidade proposta. | Negar leitura/escrita direta de claims/verificações; permitir somente projeção mínima do próprio estado, se necessária. |
+
+Os testes existentes de fusão automática não serão simplesmente mantidos. Eles
+serão reescritos para provar o inverso: alteração de telefone/e-mail e
+varredura diária jamais fundem, tombstonam ou movem referência de UID. A suíte
+nova cobre a criação de caso de revisão e a ausência de efeitos em torneio,
+perfil e Firebase Auth.
