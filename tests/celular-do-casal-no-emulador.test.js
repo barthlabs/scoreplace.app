@@ -178,11 +178,13 @@ ok('⛔⛔ o organizador NÃO sobrescreve número confirmado por SMS',
   R.tentouTrocarDaVal.ok === false, J(R.tentouTrocarDaVal));
 ok('⭐ e o número dela continua o mesmo', R.foneDaValDepois === '+5511982012440', R.foneDaValDepois);
 
-console.log('\n── ③ a pergunta de segunda conta ──');
-ok('⭐⭐ nome e sobrenome iguais + o número da casa → PERGUNTA, que é a ordem do dono',
+console.log('\n── ③ o sinal de segunda conta ──');
+ok('⭐⭐ nome e sobrenome iguais + o número da casa → sinaliza para revisão',
   !!(R.inscreveuHomonima.dup), J(R.inscreveuHomonima));
 ok('⛔ e ela é registrada como NOME, não como celular — a força de um "não sou eu" tem de ser honesta',
   R.inscreveuHomonima.dup && R.inscreveuHomonima.dup.motivo === 'nome', J(R.inscreveuHomonima));
+ok('⭐ o sinal não bloqueia a inscrição da homônima', R.inscreveuHomonima.recusou === false,
+  J(R.inscreveuHomonima));
 ok('⛔⛔ mesmo número com nome sem nada a ver NÃO vira pergunta (casal, mãe e filho)',
   R.inscreveuSoMesmoFone.ok === true && !R.inscreveuSoMesmoFone.dup, J(R.inscreveuSoMesmoFone));
 ok('⭐ e essa pessoa entra no torneio normalmente', R.inscreveuSoMesmoFone.recusou === false,

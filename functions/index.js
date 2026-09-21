@@ -2971,23 +2971,10 @@ exports.enrollParticipant = onCall(
     const db = admin.firestore();
     const docRef = db.collection("tournaments").doc(tournamentId);
     const nowMs = Date.now();
+    let duplicateSignal = null;
 
-    // ── PORTA: esta pessoa já não está aqui com OUTRA conta? ─────────────────
-    // Roda ANTES de gravar e RECUSA, devolvendo o desfecho `alreadyEnrolled` — que TODO
-    // cliente já sabe exibir ("Já Inscrito — Você já está inscrito neste torneio"),
-    // inclusive o nativo velho, que embarca o JS e não tem auto-update.
-    //
-    // POR QUE NÃO BASTA AVISAR (regra do dono, 06/ago): _"as pessoas não leem as
-    // notificações… nem os emails"_. Notificação informa quem lê; a recusa intercepta
-    // todo mundo, na hora, na tela em que a pessoa está. E é literalmente o que ele pediu
-    // na primeira conversa: "indicar que a pessoa já está inscrita".
-    //
-    // ⚠️ ISTO É EXCEÇÃO AO FAIL-OPEN da inscrição ([[feedback_enrollment_fail_open]]), e só
-    // se justifica porque os sinais que disparam são os FORTES (celular integral, nome
-    // idêntico) e porque o erro tem saída: o "não sou eu" (dismissDuplicateSuspicion) apaga
-    // a suspeita pros dois lados, e o ORGANIZADOR pode inscrever a pessoa direto — o gate
-    // não vale pra quem inscreve OUTRA pessoa. Erro de detecção nunca deixa alguém de fora
-    // sem caminho.
+    // A leitura prévia só confirma a autorização do intent. Unicidade de inscrição é
+    // decidida na transação pelo UID/manualParticipantId, nunca por sinal de perfil.
     const _pre = await docRef.get();
     if (_pre.exists) {
       const _preTournament = _pre.data() || {};
@@ -3000,25 +2987,20 @@ exports.enrollParticipant = onCall(
       }
     }
 
-    // Esta detecção só é aplicável à inscrição da própria conta e só roda DEPOIS
-    // da autorização. Assim um chamador não consegue provocar aviso para terceiro.
+    // Sinais de possível segunda conta são privados e não bloqueiam inscrição. A pessoa
+    // continua pelo mesmo UID; revisão/prova de posse é um fluxo separado.
     if (participantUid === callerUid && _pre.exists) {
       try {
         const _d0 = await _detectarDuplicataNoTorneio(db, participantUid, _pre.data());
         if (_d0) {
           const _tNome0 = (_pre.data() || {}).name || "";
           await _avisarDuplicataSuspeita(db, participantUid, tournamentId, _tNome0, _d0);
-          console.log(`[enrollParticipant] RECUSADO por duplicata: ${participantUid} ~ ${_d0.uid} (${_d0.motivo}) em ${tournamentId}`);
-          const _parts0 = Array.isArray((_pre.data() || {}).participants) ? _pre.data().participants : [];
-          return {
-            alreadyEnrolled: true,
-            participants: _parts0,
-            dupSuspect: {   // ⚠️ SEM uid e SEM contato cheio
-              motivo: _d0.motivo, nome: _d0.nome,
-              maskedEmail: _d0.maskedEmail, maskedPhone: _d0.maskedPhone,
-              texto: _dupPerson.textoDaPergunta(_d0.nome, _d0.maskedEmail || _d0.maskedPhone, _d0.motivo, _d0.semelhanca),
-            },
+          duplicateSignal = { // sem UID nem contato completo da outra conta
+            motivo: _d0.motivo, nome: _d0.nome,
+            maskedEmail: _d0.maskedEmail, maskedPhone: _d0.maskedPhone,
+            texto: _dupPerson.textoDaPergunta(_d0.nome, _d0.maskedEmail || _d0.maskedPhone, _d0.motivo, _d0.semelhanca),
           };
+          console.log(`[enrollParticipant] sinal de duplicata: ${participantUid} ~ ${_d0.uid} (${_d0.motivo}) em ${tournamentId}`);
         }
       } catch (e) { console.error("[enrollParticipant] porta de duplicata falhou (fail-open):", e && e.message); }
     }
@@ -3049,6 +3031,9 @@ exports.enrollParticipant = onCall(
       if (r.updateData) _splitParts.gravar(tx, docRef, _dados, r.updateData);
       return r;
     });
+    const withDuplicateSignal = (payload) => duplicateSignal
+      ? Object.assign(payload, { dupSuspect: duplicateSignal })
+      : payload;
 
     // Sandbox: a MESMA CF replica a inscrição no SB via o MESMO core (best-effort).
     await _replicateRosterToSandbox(db, tournamentId, function (sbData) {
@@ -3080,26 +3065,26 @@ exports.enrollParticipant = onCall(
       } catch (e) { console.error("[enrollParticipant] espelho do roster falhou:", e && e.message); }
     }
 
-    if (out.outcome === "capacityFull") return { capacityFull: true, participants: out.participants };
-    if (out.outcome === "already") return { alreadyEnrolled: true, participants: out.participants };
-    if (out.outcome === "closed") return { alreadyEnrolled: false, enrollmentClosed: true, participants: out.participants };
+    if (out.outcome === "capacityFull") return withDuplicateSignal({ capacityFull: true, participants: out.participants });
+    if (out.outcome === "already") return withDuplicateSignal({ alreadyEnrolled: true, participants: out.participants });
+    if (out.outcome === "closed") return withDuplicateSignal({ alreadyEnrolled: false, enrollmentClosed: true, participants: out.participants });
     // v1.6.86: fase já sorteada → a pessoa entrou na LISTA DE ESPERA (não no roster).
     // No caminho normal o cliente já detecta e chama a espera direto; este ramo cobre a
     // CORRIDA (o sorteio disparou entre a checagem do cliente e a escrita do servidor),
     // que é exatamente como o caso do Confra nasceu — 57s de diferença.
     if (out.outcome === "waitlisted" || out.outcome === "alreadyWaitlisted") {
-      return {
+      return withDuplicateSignal({
         alreadyEnrolled: false, waitlisted: true,
         alreadyWaitlisted: out.outcome === "alreadyWaitlisted",
         participants: out.participants, standbyParticipants: out.standbyParticipants || null
-      };
+      });
     }
-    return {
+    return withDuplicateSignal({
       alreadyEnrolled: false,
       participants: out.participants,
       autoCloseTriggered: !!out.autoClose,
       reachedCapacityDraw: !!out.reachedDraw
-    };
+    });
   }
 );
 

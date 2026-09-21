@@ -400,23 +400,21 @@ const achou = (c, p) => D.detectarMesmaPessoa(c, p).suspeito;
 (() => {
   const fs = require('fs'); const path = require('path');
   const idx = fs.readFileSync(path.join(__dirname, 'index.js'), 'utf8');
-  ok('enrollParticipant roda a detecção', /_detectarDuplicataNoTorneio\(/.test(idx));
-  // A PORTA: recusa ANTES de gravar, com o desfecho que TODO cliente já sabe exibir
-  // ("Já Inscrito"). Regra do dono: "as pessoas não leem as notificações… nem os emails" —
-  // avisar informa quem lê; recusar intercepta todo mundo, na hora, sem depender da loja.
-  ok('  → e RECUSA antes de gravar (alreadyEnrolled), não só avisa',
-    /RECUSADO por duplicata[\s\S]{0,400}alreadyEnrolled: true/.test(idx));
-  ok('  → a detecção roda ANTES da transação (senão já teria gravado)',
+  ok('enrollParticipant roda a detecção apenas como sinal', /_detectarDuplicataNoTorneio\(/.test(idx));
+  // O sinal chega na mesma resposta, mas a decisão de inscrição permanece no core por UID.
+  ok('  → não transforma sinal em recusa de inscrição',
+    !/RECUSADO por duplicata/.test(idx) && !/duplicateSignal[\s\S]{0,300}alreadyEnrolled: true/.test(idx));
+  ok('  → a detecção roda antes da transação, sem substituir a decisão por UID',
     idx.indexOf('_detectarDuplicataNoTorneio(db, participantUid') < idx.indexOf('await db.runTransaction'));
-  ok('  → o ORGANIZADOR inscrevendo TERCEIRO passa pela porta (saída sempre existe)',
+  ok('  → o ORGANIZADOR inscrevendo TERCEIRO não aciona o sinal da própria conta',
     /participantUid && participantUid !== callerUid && !_preIsOrganizer/.test(idx) &&
     /if \(participantUid === callerUid && _pre\.exists\)/.test(idx));
-  ok('  → devolve dupSuspect ao cliente novo (o velho já mostra "Já Inscrito")',
-    /dupSuspect: \{\s*\/\/[\s\S]{0,200}motivo: _d0\.motivo/.test(idx));
+  ok('  → devolve dupSuspect junto do resultado normal',
+    /withDuplicateSignal[\s\S]{0,160}dupSuspect: duplicateSignal/.test(idx));
   // O cliente NUNCA recebe o uid da outra conta — só o contato mascarado.
   ok('  → SEM o uid da outra conta (só mascarado)',
-    /dupSuspect: \{[\s\S]{0,400}maskedEmail/.test(idx) &&
-    !/dupSuspect: \{[\s\S]{0,400}uid: _d0\.uid/.test(idx));
+    /duplicateSignal = \{[\s\S]{0,400}maskedEmail/.test(idx) &&
+    !/duplicateSignal = \{[\s\S]{0,400}uid: _d0\.uid/.test(idx));
   // ⚠️ ASSERÇÃO REVISADA (v1.8.3), com o motivo aqui pra não parecer afrouxamento.
   // Ela ancorava no texto literal `displayName_lower", "==", nomeLower` dentro de uma
   // janela de 1500 chars. A janela quebrou quando a busca ganhou as chaves novas
@@ -440,8 +438,8 @@ const achou = (c, p) => D.detectarMesmaPessoa(c, p).suspeito;
   // cliente". O app NATIVO embarca o JS e não tem auto-update — a pergunta da 1.7.41 só
   // chega numa submissão nova, dias depois. Notificação é DADO: alcança toda versão.
   ok('a CF AVISA a pessoa (não depende da tela nova)', /_avisarDuplicataSuspeita\(db, participantUid/.test(idx));
-  ok('  → e o aviso sai no MESMO ponto da porta',
-    /_avisarDuplicataSuspeita\(db, participantUid[\s\S]{0,400}RECUSADO por duplicata/.test(idx));
+  ok('  → o aviso é acompanhado de sinal, não de recusa',
+    /_avisarDuplicataSuspeita\(db, participantUid[\s\S]{0,700}duplicateSignal/.test(idx));
   ok('  → usa a MESMA fila de e-mail do app (nunca escrita direta em `mail`)',
     /_avisarDuplicataSuspeita[\s\S]{0,3000}collection\("notif_email_queue"\)/.test(idx));
   ok('  → id determinístico: reinscrever não vira spam',
