@@ -21,20 +21,16 @@ function perfilDaAnalise(profile) {
   return out;
 }
 
-function norm(value) {
-  return String(value || '').trim().toLocaleLowerCase('pt-BR');
-}
-
 function entradasDoRelatorio(tournament) {
   const out = [];
   const add = (entry) => {
     if (!entry || typeof entry !== 'object') return;
     if (entry.p1Name && entry.p2Name) {
-      out.push({ uid: entry.p1Uid || '', email: entry.p1Email || '', name: entry.p1Name || '' });
-      out.push({ uid: entry.p2Uid || '', email: entry.p2Email || '', name: entry.p2Name || '' });
+      out.push({ uid: entry.p1Uid || '', name: entry.p1Name || '' });
+      out.push({ uid: entry.p2Uid || '', name: entry.p2Name || '' });
       return;
     }
-    out.push({ uid: entry.uid || '', email: entry.email || '', name: entry.displayName || entry.name || '' });
+    out.push({ uid: entry.uid || '', name: entry.displayName || entry.name || '' });
   };
   ['participants', 'standbyParticipants', 'waitlist'].forEach((field) => {
     const entries = tournament && tournament[field];
@@ -52,12 +48,7 @@ function entradasDoRelatorio(tournament) {
 
 function pertenceAoRelatorio(entries, candidate) {
   const uid = String(candidate && candidate.uid || '').trim();
-  const email = norm(candidate && candidate.email);
-  const name = norm(candidate && candidate.name);
-  if (uid) return entries.some((entry) => String(entry.uid || '').trim() === uid);
-  if (email) return entries.some((entry) => norm(entry.email) === email);
-  if (!name) return false;
-  return entries.filter((entry) => norm(entry.name) === name).length === 1;
+  return !!uid && entries.some((entry) => String(entry.uid || '').trim() === uid);
 }
 
-module.exports = { CAMPOS_ANALISE, perfilDaAnalise, entradasDoRelatorio, pertenceAoRelatorio, norm };
+module.exports = { CAMPOS_ANALISE, perfilDaAnalise, entradasDoRelatorio, pertenceAoRelatorio };

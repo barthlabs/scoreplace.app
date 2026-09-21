@@ -232,21 +232,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
 
   // ─── Profile fetch ───────────────────────────────────────────────────
   //
-  // Resolve perfil em 3 camadas para recuperar inscrições legadas sem uid.
-  // A resolução acontece na callable restrita ao organizador: o navegador não
-  // lê nem pesquisa `users`, e recebe só a projeção que a análise consome.
-  //
-  //   1. Direct uid fetch (caminho normal)
-  //   2. Email lookup — se participantObj.email existe e não temos uid,
-  //      query users where email == X. Se único match, vincula.
-  //   3. DisplayName lookup — último recurso quando não tem email nem uid.
-  //      Só vincula se houver EXATAMENTE 1 match no users collection
-  //      (case-insensitive trim) — caso contrário deixa não-vinculado pra
-  //      evitar falso positivo.
-  //
-  // Retorna { byUid: {uid: profileData}, resolvedFor: {participantIdx:
-  // {uid, profile, resolvedVia}} } — o caller usa resolvedFor pra saber
-  // que aquele inscrito foi rescued e via qual mecanismo.
+  // Perfil de conta é resolvido exclusivamente pelo UID já gravado no elenco.
+  // Participante manual permanece sem perfil de conta; nome é só apresentação.
 
   function _fetchProfiles(tId, parts) {
     if (!parts || parts.length === 0) return Promise.resolve({ byUid: {}, resolvedFor: {} });
@@ -258,8 +245,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var requested = parts.map(function (p, idx) {
       p = p || {};
       return {
-        key: String(idx), uid: p.uid || '', email: p.email || '',
-        name: p.displayName || p.name || ''
+        key: String(idx), uid: p.uid || ''
       };
     });
     return window.FirestoreDB.carregarPerfisDaAnalise(tId, requested).then(function (rows) {
@@ -267,9 +253,6 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         if (!row || !row.uid || !row.profile) return;
         byUid[row.uid] = row.profile;
         var idx = parseInt(row.key, 10);
-        if (!isNaN(idx) && parts[idx] && !parts[idx].uid) {
-          resolvedFor[idx] = { uid: row.uid, profile: row.profile, via: 'legado' };
-        }
       });
       return { byUid: byUid, resolvedFor: resolvedFor };
     });

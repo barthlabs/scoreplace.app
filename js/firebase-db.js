@@ -2854,9 +2854,7 @@ window.FirestoreDB = {
       row = row || {};
       return {
         key: String(row.key != null ? row.key : index),
-        uid: String(row.uid || '').trim(),
-        email: String(row.email || '').trim(),
-        name: String(row.name || '').trim()
+        uid: String(row.uid || '').trim()
       };
     });
     try {

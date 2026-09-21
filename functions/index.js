@@ -10409,24 +10409,11 @@ exports.getTournamentEnrollmentProfiles = onCall(
     const cache = new Map();
     const resolve = async (candidate) => {
       const uid = String(candidate.uid || "").trim();
-      const email = _enrollmentProfiles.norm(candidate.email);
-      const name = String(candidate.name || "").trim();
-      const key = uid ? "uid:" + uid : (email ? "email:" + email : "name:" + _enrollmentProfiles.norm(name));
+      if (!uid) return null;
+      const key = "uid:" + uid;
       if (cache.has(key)) return cache.get(key);
 
-      let found = null;
-      if (uid) {
-        found = await _userVivo.userVivo(db, uid);
-      } else if (email) {
-        let snap = await db.collection("users").where("email_lower", "==", email).limit(2).get();
-        if (snap.empty) snap = await db.collection("users").where("email", "==", email).limit(2).get();
-        found = await _userVivo.userVivo(db, snap);
-      } else if (name) {
-        const folded = _enrollmentProfiles.norm(name);
-        let snap = await db.collection("users").where("displayName_lower", "==", folded).limit(2).get();
-        if (snap.empty) snap = await db.collection("users").where("displayName", "==", name).limit(2).get();
-        found = await _userVivo.userVivo(db, snap);
-      }
+      const found = await _userVivo.userVivo(db, uid);
       // Ambiguidade e lápide nunca viram uma pessoa no relatório.
       const answer = found && found.count === 1 && found.data && !found.data.mergedInto
         ? { uid: found.uid, profile: _enrollmentProfiles.perfilDaAnalise(found.data) }
@@ -10440,8 +10427,6 @@ exports.getTournamentEnrollmentProfiles = onCall(
       const candidate = {
         key: String(raw && raw.key != null ? raw.key : ""),
         uid: String(raw && raw.uid || "").trim(),
-        email: String(raw && raw.email || "").trim(),
-        name: String(raw && raw.name || "").trim(),
       };
       if (!candidate.key || !_enrollmentProfiles.pertenceAoRelatorio(entries, candidate)) continue;
       const resolved = await resolve(candidate);
