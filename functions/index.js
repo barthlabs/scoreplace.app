@@ -84,6 +84,7 @@ async function _freqDosTokensSoltos(db, dup, nomeMeu, pessoas) {
 const _enrollCore = require("./enroll-core");
 const _categoryEligibility = require("./category-eligibility-core");
 const _registrationCore = require("./registration-core");
+const _registrationLifecycle = require("./registration-lifecycle-core");
 const _splitParts = require("./split-parts.js");   // torneio dividido: elenco na subcoleção
 const _refereeRoster = require("./vendor/referee-roster.js"); // escala de arbitragem: contrato puro e sem contato
 
@@ -3938,6 +3939,11 @@ exports.requestCanonicalRegistration = onCall(
     const tournamentRef = db.collection("tournaments").doc(tournamentId);
     const profileRef = db.collection("users").doc(callerUid);
     return await db.runTransaction(async (tx) => {
+      // A inscrição não pode atravessar uma exclusão/fusão que adquiriu a
+      // trava depois de a chamada chegar. A leitura fica na MESMA transação
+      // do create; se o lifecycle mudar, o Firestore repete e recusa.
+      try { await _amizadeLock.exigirAtivos(tx, db, [callerUid], Date.now()); }
+      catch (error) { throw new HttpsError("aborted", error.message); }
       const tournamentSnap = await tx.get(tournamentRef);
       if (!tournamentSnap.exists) throw new HttpsError("not-found", "torneio não existe");
       const tournament = tournamentSnap.data() || {};
@@ -3996,6 +4002,27 @@ exports.requestCanonicalRegistration = onCall(
     });
   }
 );
+
+// A exclusão preserva o fato de uma inscrição canônica, mas elimina a ligação
+// direta com a conta. Cada documento é relido e alterado em transação: uma
+// forma inesperada interrompe a exclusão antes do tombstone/Auth, em vez de
+// deixar um UID pessoal escondido na subcoleção privada.
+async function _anonymizeCanonicalRegistrations(db, uid) {
+  const snap = await db.collectionGroup("registrations").where("participantUid", "==", uid).get();
+  let anonymized = 0;
+  for (const doc of snap.docs) {
+    await db.runTransaction(async (tx) => {
+      const fresh = await tx.get(doc.ref);
+      if (!fresh.exists) return;
+      const registration = fresh.data() || {};
+      if (registration.participantUid !== uid) return;
+      const transition = _registrationLifecycle.anonymizeForDeletedAccount(registration, uid);
+      tx.update(doc.ref, Object.assign({}, transition, { updatedAt: _FV.serverTimestamp() }));
+      anonymized++;
+    });
+  }
+  return anonymized;
+}
 
 /* ─── deleteTournament (servidor, confirmado) ───────────────────────────────────
  * O botão de apagar jamais pode esconder o torneio antes de o banco confirmar. A antiga
@@ -7113,6 +7140,7 @@ exports.deleteAccount = onCall(
     if (!uid) throw new HttpsError("unauthenticated", "login obrigatório");
     const db = admin.firestore();
     const out = { uid, tournamentsLeft: 0, tournamentsAnonymized: 0, tournamentsDeleted: 0,
+      canonicalRegistrationsAnonymized: 0,
       friendsCleaned: 0, presencesDeleted: 0, notificationsDeleted: 0, casualLeft: 0 };
 
     /* ⛔ 9ª auditoria (ponto 2): FASE E LOCK ANTES DA PRIMEIRA ESCRITA.
@@ -7287,7 +7315,10 @@ exports.deleteAccount = onCall(
       await doc.ref.set(next).catch((e) => console.error("[deleteAccount] torneio " + doc.id, e.message));
     }
 
-    // 3a) A AUTORIDADE da amizade (v2.1.48): relações + as DUAS direções da projeção.
+    // 3a) Inscrições canônicas: fato histórico anonimizado, nunca documento apagado.
+    out.canonicalRegistrationsAnonymized = await _anonymizeCanonicalRegistrations(db, uid);
+
+    // 3b) A AUTORIDADE da amizade (v2.1.48): relações + as DUAS direções da projeção.
     // ⛔ Antes daqui só se limpava o CACHE (`friends[]` dos outros, logo abaixo). Isso
     // deixaria `friendships/{pairId}` e `friendAccess/{outro}/accepted/{uid}` de pé —
     // projeção órfã de conta apagada continua CONCEDENDO leitura. Autoridade sem dono

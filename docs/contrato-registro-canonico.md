@@ -12,7 +12,8 @@ O registro novo vive em:
 tournaments/{tournamentId}/registrations/{registrationId}
 ```
 
-`registrations` não existe hoje no código executável. O nome não reutiliza
+`registrations` já existe para torneios novos que adotaram as categorias
+tipadas. O nome não reutiliza
 `inscritos`, que é a parte dividida do elenco legado. O identificador do
 documento é determinístico:
 
@@ -24,27 +25,30 @@ participantKey = "uid:" + uid | "manual:" + manualParticipantId
 Portanto, uma conta tem no máximo um documento por categoria de torneio. Nome,
 e-mail, telefone, foto e rótulo digitado não entram na chave.
 
-## Forma do documento v1
+## Forma implementada nesta etapa
 
 ```js
 {
-  schemaVersion: 1,
+  registrationId,
   tournamentId,
   categoryId,
-  participantRef: { kind: 'account', uid } // ou { kind: 'manual', manualParticipantId }
-  status: 'pending' | 'confirmed' | 'waitlisted' | 'withdrawn' | 'rejected' | 'replaced',
-  origin: 'self' | 'organizer' | 'migration',
-  createdByUid,
+  participantKind: 'account',
+  participantUid,
+  status: 'pending' | 'confirmed',
+  validationState: 'approved' | 'pending_review',
   createdAt,
-  updatedAt,
-  decision: { commandId, actorUid, policyVersion }
+  updatedAt
 }
 ```
 
+Na exclusão de conta, o mesmo documento passa para `participantKind:
+'deleted_account'`, `status: 'withdrawn'`, `validationState: 'withdrawn'` e
+`withdrawnReason: 'account_deleted'`; `participantUid` é removido.
+
 O documento não guarda nome, foto, e-mail, telefone, data de nascimento,
-habilidade nem cópia de perfil. Um participante manual guarda somente a
-referência estável. Seu rótulo local, caso necessário para apresentação, fica
-em entidade manual do torneio e não se torna uma chave de identidade.
+habilidade nem cópia de perfil. Participante manual, decisões de organização,
+lista de espera e migração ainda são extensões planejadas — não devem ser
+inferidos nem gravados pelo cliente.
 
 `team`, `roundAssignment` e `match` são entidades posteriores. Criar uma dupla
 ou sorteá-la não cria nem duplica registro de inscrição.
@@ -56,7 +60,7 @@ resultado, sem fallback direto no Firestore.
 
 | Comando proposto | Autoridade | Transação e validações |
 | --- | --- | --- |
-| `enrollCanonical` | Próprio UID; organizador só na vaga manual. | Lê torneio, configuração de categoria, exclusões e documento determinístico. Recusa categoria inválida, duplicata e fase fechada. |
+| `requestCanonicalRegistration` | Próprio UID. | Lê torneio, configuração de categoria, exclusões, lifecycle e documento determinístico. Recusa categoria inválida, duplicata, fase não elegível e conta em exclusão/fusão. |
 | `withdrawCanonical` | Próprio UID ou organização. | Faz transição fechada; não remove fatos de jogo nem libera inscrição materializada sem fluxo de substituição. |
 | `decideCanonicalRegistration` | Organização autorizada. | Aplica rigor moderado/oficial, com motivo permitido e auditoria. |
 | `migrateCanonicalRegistrations` | Organização de torneio piloto inativo. | Exige fingerprint atual da prévia, zero exceções e confirmação explícita. Grava somente a coleção nova. |
@@ -104,6 +108,10 @@ redesenho automático de jogo iniciado.
   duas do mesmo `exclusiveGroup`.
 - Manual e conta autenticada nunca colidem, mesmo com o mesmo rótulo.
 - Alterar nome ou foto do perfil não muda documentos de inscrição.
+- Na exclusão de conta, a Function preserva o documento como histórico
+  `withdrawn/account_deleted`, remove `participantUid` e não expõe a coleção
+  ao cliente. O ID técnico permanece apenas como âncora interna não legível
+  pelas Rules.
 - Cliente autenticado não cria, atualiza ou apaga `registrations` diretamente.
 - Censo, fingerprint, registros e projeção têm contagens reconciliadas antes e
   depois da mudança de autoridade.
