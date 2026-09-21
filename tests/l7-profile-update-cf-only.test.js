@@ -56,5 +56,12 @@ ok(/saveUserProfile\(uid, identity\)/.test(patchBlock) && !/\.doc\(uid\)\.update
 ok(/exports\.updateOwnGooglePhotoMarker = onCall\([\s\S]*?providerId === "google\.com"[\s\S]*?runTransaction/.test(fn) &&
   /saveGooglePhotoMarker\(uid, fields\.hasGooglePhotoReal\)/.test(patchBlock),
   'marcador de foto Google exige provedor vinculado e usa Function');
+const blockStart = auth.indexOf('window._blockUser = function');
+const blockEnd = auth.indexOf('// Auto-amizade', blockStart);
+const blockBlock = auth.slice(blockStart, blockEnd);
+ok(/exports\.updateOwnBlockedUser = onCall\([\s\S]*?normalizeBlockedUserMutation[\s\S]*?runTransaction/.test(fn) &&
+  /setOwnBlockedUser\(uid, true\)/.test(blockBlock) && /setOwnBlockedUser\(uid, false\)/.test(blockBlock) &&
+  !/collection\(['"]users['"]\)/.test(blockBlock),
+  'bloqueio de usuário passa pela Function, sem escrita direta no perfil');
 
 process.exitCode = failed ? 1 : 0;

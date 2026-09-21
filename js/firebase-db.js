@@ -2599,6 +2599,12 @@ window.FirestoreDB = {
     return await this._callFn('updateOwnGooglePhotoMarker', { hasGooglePhotoReal: hasGooglePhotoReal });
   },
 
+  async setOwnBlockedUser(targetUid, block) {
+    var current = window.firebase && window.firebase.auth && window.firebase.auth().currentUser;
+    if (!current || !current.uid) throw new Error('setOwnBlockedUser exige sessão autenticada');
+    return await this._callFn('updateOwnBlockedUser', { targetUid: targetUid, block: block });
+  },
+
   /* L13.P2 — O ÚNICO SINAL DE PARQUE QUE O PRODUTO TEM.
    *
    * MEDIDO em 11/set/2026: 277 perfis, 91 campos, NENHUM de versão do app — a política de corte

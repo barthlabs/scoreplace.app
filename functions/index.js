@@ -53,6 +53,7 @@ const _casualRoomPointer = require("./casual-room-pointer-core");
 const _liveScorePreferences = require("./live-score-preferences-core");
 const _casualLastPreferences = require("./casual-last-preferences-core");
 const _casualScoringPreferences = require("./casual-scoring-preferences-core");
+const _blockedUsers = require("./blocked-users-core");
 
 // v1.8.38 — RARIDADE DO TOKEN, em UM lugar só (os dois caminhos de detecção usam este).
 // O subconjunto de 1 token só vira sinal quando o token existe SÓ nas duas contas
@@ -3311,6 +3312,36 @@ exports.updateOwnGooglePhotoMarker = onCall(
       tx.update(ref, { hasGooglePhotoReal: hasReal, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
     });
     return { ok: true };
+  }
+);
+
+// Bloquear conteúdo é uma preferência do dono, mas a lista afeta leitores em
+// várias telas. O cliente declara a intenção; o servidor confere os dois
+// perfis e atualiza atomica e exclusivamente o próprio perfil.
+exports.updateOwnBlockedUser = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
+  async (request) => {
+    const uid = request.auth && request.auth.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Login obrigatório");
+    let mutation;
+    try { mutation = _blockedUsers.normalizeBlockedUserMutation(request.data, uid); }
+    catch (error) { throw new HttpsError("invalid-argument", error.message); }
+    const db = admin.firestore();
+    const ownRef = db.collection("users").doc(uid);
+    const targetRef = db.collection("users").doc(mutation.targetUid);
+    await db.runTransaction(async (tx) => {
+      const own = await tx.get(ownRef);
+      if (!own.exists) throw new HttpsError("failed-precondition", "Perfil inexistente");
+      if (mutation.block && !(await tx.get(targetRef)).exists) {
+        throw new HttpsError("not-found", "Usuário alvo inexistente");
+      }
+      const blocked = Array.isArray((own.data() || {}).blockedUids) ? (own.data() || {}).blockedUids : [];
+      const next = mutation.block
+        ? Array.from(new Set(blocked.concat([mutation.targetUid])))
+        : blocked.filter((item) => String(item) !== mutation.targetUid);
+      tx.update(ownRef, { blockedUids: next, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+    });
+    return { ok: true, blocked: mutation.block };
   }
 );
 

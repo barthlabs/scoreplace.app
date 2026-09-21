@@ -3383,14 +3383,13 @@ window._blockUser = function(uid, name) {
   var nm = name || 'este usuário';
   var doBlock = function() {
     try {
-      window.FirestoreDB.db.collection('users').doc(cu.uid).set({
-        blockedUids: firebase.firestore.FieldValue.arrayUnion(uid)
-      }, { merge: true });
+      window.FirestoreDB.setOwnBlockedUser(uid, true).then(function() {
+        if (!Array.isArray(cu.blockedUids)) cu.blockedUids = [];
+        if (cu.blockedUids.indexOf(uid) === -1) cu.blockedUids.push(uid);
+        if (window.showNotification) window.showNotification('Usuário bloqueado', 'Você não verá mais o conteúdo dessa pessoa. Desbloqueie no seu perfil quando quiser.', 'success');
+        if (typeof window._venuesRehydrateReviews === 'function') window._venuesRehydrateReviews();
+      }).catch(function(e) { window._error('block user:', e); });
     } catch (e) { window._error('block user:', e); }
-    if (!Array.isArray(cu.blockedUids)) cu.blockedUids = [];
-    if (cu.blockedUids.indexOf(uid) === -1) cu.blockedUids.push(uid);
-    if (window.showNotification) window.showNotification('Usuário bloqueado', 'Você não verá mais o conteúdo dessa pessoa. Desbloqueie no seu perfil quando quiser.', 'success');
-    if (typeof window._venuesRehydrateReviews === 'function') window._venuesRehydrateReviews();
   };
   if (typeof window.showConfirmDialog === 'function') {
     window.showConfirmDialog('Bloquear ' + nm + '?', 'Você não verá mais avaliações e conteúdo dessa pessoa. É possível desbloquear depois no seu perfil.', doBlock, null, { confirmText: 'Bloquear', cancelText: 'Cancelar', type: 'danger' });
@@ -3403,12 +3402,11 @@ window._unblockUser = function(uid) {
   var cu = window.AppStore && window.AppStore.currentUser;
   if (!cu || !cu.uid || !uid) return;
   try {
-    window.FirestoreDB.db.collection('users').doc(cu.uid).set({
-      blockedUids: firebase.firestore.FieldValue.arrayRemove(uid)
-    }, { merge: true });
+    window.FirestoreDB.setOwnBlockedUser(uid, false).then(function() {
+      if (Array.isArray(cu.blockedUids)) { var i = cu.blockedUids.indexOf(uid); if (i !== -1) cu.blockedUids.splice(i, 1); }
+      if (typeof window._venuesRehydrateReviews === 'function') window._venuesRehydrateReviews();
+    }).catch(function(e) { window._error('unblock user:', e); });
   } catch (e) { window._error('unblock user:', e); }
-  if (Array.isArray(cu.blockedUids)) { var i = cu.blockedUids.indexOf(uid); if (i !== -1) cu.blockedUids.splice(i, 1); }
-  if (typeof window._venuesRehydrateReviews === 'function') window._venuesRehydrateReviews();
 };
 
 // Auto-amizade quando alguém aceita convite de torneio (com ?ref=UID no link)
