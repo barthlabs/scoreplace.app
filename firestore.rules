@@ -806,6 +806,13 @@ service cloud.firestore {
         allow write: if false;
       }
 
+      // Registro canônico de inscrição: a Function valida perfil, rigor,
+      // exclusividade e idempotência dentro da transação. O SDK do navegador
+      // não cria, altera nem remove essas decisões diretamente.
+      match /registrations/{registrationId} {
+        allow read, write: if false;
+      }
+
       // ─── HISTÓRICO ESPELHADO: LEITURA, PRA AGUENTAR A PODA ────────────────
       // `tournaments/{id}/history/{k}` é onde o log de auditoria vive INTEIRO. O
       // documento do torneio tem teto de 1 MB e o histórico é o único campo que cresce

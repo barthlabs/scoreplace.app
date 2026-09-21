@@ -99,7 +99,10 @@ não existir para todos os critérios que o formulário expõe.
 2. Criar Function de configuração de categorias que valida e grava a definição
    antes do primeiro sorteio; Rules negam a escrita direta equivalente.
 3. Criar a inscrição canônica por UID/categoria, ainda sem dual-write para
-   torneios ativos.
+   torneios ativos. **Implementado:** `requestCanonicalRegistration` só admite
+   torneio novo, sem elenco/sorteio legado; grava
+   `tournaments/{tid}/registrations/{registrationId}` com UID, categoria e
+   estado de validação. A tela legada ainda não chama essa porta.
 4. Migrar um torneio inativo autorizado, validar contagens e só então trocar a
    tela para chamar a Function nova.
 5. Retirar o fallback client-side de categoria depois que a Function cobrir os

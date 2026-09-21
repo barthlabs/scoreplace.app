@@ -23,4 +23,10 @@ r = C.decideEnrollment({ definitions, rigor: 'moderate', categoryIds: ['skill-c'
 ok('moderado aceita pendente para revisão', r.outcome === 'accepted' && r.validationState === 'pending_review' && r.reasons.includes('skill-not-eligible'));
 r = C.decideEnrollment({ definitions, rigor: 'official', categoryIds: ['age-50'], profile: {}, now: at });
 ok('oficial recusa sem nascimento', r.outcome === 'rejected' && r.reasons.includes('missing-birth-date'));
+r = C.decideEnrollment({ definitions, rigor: 'casual', categoryIds: ['skill-b'], existingCategoryIds: ['skill-b'], profile, sport: 'Beach Tennis', now: at });
+ok('repetir categoria existente é idempotente', r.outcome === 'accepted');
+r = C.decideEnrollment({ definitions, rigor: 'casual', categoryIds: ['age-50'], existingCategoryIds: ['skill-b'], profile, sport: 'Beach Tennis', now: at });
+ok('categoria paralela nova continua válida', r.outcome === 'accepted');
+r = C.decideEnrollment({ definitions, rigor: 'casual', categoryIds: ['skill-c'], existingCategoryIds: ['skill-b'], profile, sport: 'Beach Tennis', now: at });
+ok('categoria nova do mesmo grupo conflita', r.outcome === 'conflict');
 console.log((fail ? '❌' : '✅') + ' category-eligibility-core: ' + pass + ' ok, ' + fail + ' falharam'); process.exit(fail ? 1 : 0);

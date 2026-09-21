@@ -127,6 +127,7 @@ const SUITES = [
   'tests/celular-do-casal-no-emulador.test.js',
   'functions/test-desfazer-fusao-core.js',
   'functions/test-category-eligibility-core.js',
+  'tests/l7-canonical-registration-cf-only.test.js',
   'tests/l7-category-definitions-cf-only.test.js',
   'tests/telefone-do-organizador-caduca.test.js',
   'tests/rules-mudou-tem-de-ser-testada.test.js',

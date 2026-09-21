@@ -3912,6 +3912,91 @@ exports.setTournamentCategoryDefinitions = onCall(
   }
 );
 
+// Registro canônico de inscrição por UID e categoria. Esta porta é deliberadamente
+// separada de enrollParticipant: o roster legado é uma projeção polimórfica e não
+// suporta categorias paralelas sem ambiguidade. Até a migração-piloto autorizada,
+// só torneios novos, ainda sem elenco ou sorteio legado, entram aqui.
+function _canonicalRegistrationCanStart(tournament) {
+  if (!_categoryDefinitionsCanChange(tournament)) return false;
+  return !['participants', 'standbyParticipants', 'waitlist'].some((key) => {
+    const value = tournament && tournament[key];
+    return Array.isArray(value) ? value.length > 0 : (value && typeof value === 'object' && Object.keys(value).length > 0);
+  });
+}
+
+exports.requestCanonicalRegistration = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
+    const data = request.data || {};
+    const tournamentId = String(data.tournamentId || "").trim();
+    const categoryIds = Array.isArray(data.categoryIds) ? data.categoryIds.map(String) : [];
+    if (!tournamentId) throw new HttpsError("invalid-argument", "tournamentId é obrigatório");
+
+    const db = admin.firestore();
+    const tournamentRef = db.collection("tournaments").doc(tournamentId);
+    const profileRef = db.collection("users").doc(callerUid);
+    return await db.runTransaction(async (tx) => {
+      const tournamentSnap = await tx.get(tournamentRef);
+      if (!tournamentSnap.exists) throw new HttpsError("not-found", "torneio não existe");
+      const tournament = tournamentSnap.data() || {};
+      if (!_canonicalRegistrationCanStart(tournament)) {
+        throw new HttpsError("failed-precondition", "registro canônico exige torneio novo e ainda não sorteado");
+      }
+      let definitions;
+      try { definitions = _categoryEligibility.normalizeCategoryDefinitions(tournament.categoryDefinitions); }
+      catch (_) { throw new HttpsError("failed-precondition", "torneio sem categorias tipadas válidas"); }
+
+      const registrationRefs = definitions.map((definition) => tournamentRef.collection("registrations").doc(
+        _registrationCore.registrationId("uid:" + callerUid, definition.id)
+      ));
+      const reads = await Promise.all([tx.get(profileRef)].concat(registrationRefs.map((ref) => tx.get(ref))));
+      const profile = reads[0].exists ? (reads[0].data() || {}) : {};
+      const existing = definitions.filter((definition, index) => reads[index + 1].exists).map((definition) => definition.id);
+      let decision;
+      try {
+        decision = _categoryEligibility.decideEnrollment({
+          definitions: definitions,
+          rigor: tournament.enrollmentRigor || "casual",
+          categoryIds: categoryIds,
+          existingCategoryIds: existing,
+          profile: profile,
+          sport: tournament.sport,
+          now: new Date(),
+        });
+      } catch (error) { throw new HttpsError("invalid-argument", error.message); }
+      if (decision.outcome === "rejected" || decision.outcome === "conflict") {
+        return { outcome: decision.outcome, reasons: decision.reasons || [] };
+      }
+
+      const existingSet = new Set(existing);
+      const createdCategoryIds = decision.categoryIds.filter((categoryId) => !existingSet.has(categoryId));
+      createdCategoryIds.forEach((categoryId) => {
+        const registrationId = _registrationCore.registrationId("uid:" + callerUid, categoryId);
+        tx.create(tournamentRef.collection("registrations").doc(registrationId), {
+          registrationId: registrationId,
+          tournamentId: tournamentId,
+          categoryId: categoryId,
+          participantKind: "account",
+          participantUid: callerUid,
+          status: decision.validationState === "pending_review" ? "pending" : "confirmed",
+          validationState: decision.validationState,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      });
+      return {
+        outcome: createdCategoryIds.length ? "accepted" : "already_registered",
+        categoryIds: decision.categoryIds,
+        createdCategoryIds: createdCategoryIds,
+        validationState: decision.validationState,
+        reasons: decision.reasons || [],
+      };
+    });
+  }
+);
+
 /* ─── deleteTournament (servidor, confirmado) ───────────────────────────────────
  * O botão de apagar jamais pode esconder o torneio antes de o banco confirmar. A antiga
  * rota fazia `doc.delete()` no navegador, engolia `permission-denied` e removia apenas a

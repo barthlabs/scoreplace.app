@@ -71,9 +71,13 @@ function decideEnrollment(input) {
   const byId = new Map(definitions.map((definition) => [definition.id, definition]));
   const selected = requested.map((id) => byId.get(id));
   if (selected.some((definition) => !definition || !definition.enabled)) return { outcome: 'rejected', reasons: ['unknown-or-disabled-category'] };
-  const existing = Array.isArray(input.existingCategoryIds) ? input.existingCategoryIds.map(String) : [];
+  const existing = Array.isArray(input.existingCategoryIds) ? Array.from(new Set(input.existingCategoryIds.map(String))) : [];
+  // Repetir a mesma chave é idempotente. Ela não pode transformar a própria
+  // inscrição já gravada em conflito de exclusividade; somente categorias novas
+  // disputam espaço com as que já existem.
+  const newRequested = requested.filter((id) => !existing.includes(id));
   const groups = new Set();
-  for (const id of existing.concat(requested)) {
+  for (const id of existing.concat(newRequested)) {
     const definition = byId.get(id);
     if (!definition || !definition.exclusivityGroup) continue;
     if (groups.has(definition.exclusivityGroup)) return { outcome: 'conflict', reasons: ['exclusive-category-conflict'] };

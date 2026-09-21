@@ -5265,11 +5265,12 @@ exports.tournamentMirror = onDocumentWritten(
          * estrago dos 151 `results` órfãos de 01/ago. Agora sai de `_tSplit` (PESADOS,
          * traduzidos por `colecaoDaParte` — senão limpa `participants` e deixa `inscritos`),
          * mais as que não são "parte": `matches`, `grupos`, a fila do placar e as duas do
-         * avanço, que nasceram com `read, write: if false` e portanto SÓ o servidor apaga. */
+         * avanço e o registro canônico, que nasceram com `read, write: if false` e
+         * portanto SÓ o servidor apaga. */
         const _partes = (_tSplit && Array.isArray(_tSplit.PESADOS))
           ? _tSplit.PESADOS.map((n) => (typeof _tSplit.colecaoDaParte === 'function' ? _tSplit.colecaoDaParte(n) : n))
           : ['inscritos', 'history', 'opponentHistory', 'checkedIn', 'woClaims', 'woLog', 'categoryNotifications'];
-        const _limpar = _partes.concat(['matches', 'grupos', 'resultQueue', 'advanceReceipts', 'outbox'])
+        const _limpar = _partes.concat(['matches', 'grupos', 'resultQueue', 'advanceReceipts', 'outbox', 'registrations'])
           .filter((n, idx, a) => n && a.indexOf(n) === idx);
         for (const nome of _limpar) {
           const col = db.collection('tournaments').doc(id).collection(nome);
