@@ -529,3 +529,43 @@ serão reescritos para provar o inverso: alteração de telefone/e-mail e
 varredura diária jamais fundem, tombstonam ou movem referência de UID. A suíte
 nova cobre a criação de caso de revisão e a ausência de efeitos em torneio,
 perfil e Firebase Auth.
+
+## Pré-requisitos nativos já constatados
+
+Este levantamento é do repositório em 20/09/2026. Ele evita supor que links
+profundos existentes já habilitam passkeys.
+
+| Plataforma | Já existe | Falta para entrada por passkey | Falta para chave biométrica de ação sensível |
+| --- | --- | --- | --- |
+| iOS | `App.entitlements` declara `applinks:scoreplace.app`; `MainViewController` já registra plugin Capacitor próprio. | Adicionar `webcredentials:scoreplace.app` aos Associated Domains e publicar o arquivo de associação Apple com o identificador exato do aplicativo; integrar Authentication Services/passkey ao adaptador. | Criar `ScoreplaceBiometryPlugin` com Keychain/Secure Enclave e LocalAuthentication; adicionar descrição de uso de Face ID em `Info.plist`. |
+| Android | `AndroidManifest.xml` já declara App Link verificado para `scoreplace.app`; `MainActivity` já registra plugin próprio. | Publicar/verificar a relação de credenciais no `assetlinks.json` com certificado de produção e integrar Credential Manager/passkey. | Criar `ScoreplaceBiometryPlugin` com Android Keystore e `BiometricPrompt`; declarar a permissão biométrica se a implementação final da chave a exigir. |
+
+O `applinks:` do iOS e o App Link Android resolvem abrir URLs no aplicativo.
+Eles não autorizam uma passkey. A associação de credenciais é uma configuração
+adicional de segurança e deve ser validada em compilação de distribuição, não
+somente em simulador ou build de desenvolvimento.
+
+A descrição atual de câmera do iOS e os textos de privacidade Android informam
+uso para QR code. Antes da captura de identidade entrar em produção, esses
+textos e a política de privacidade precisam ser atualizados para explicar a
+captura facial de prova de vida, o motivo, o fornecedor, retenção e rota de
+contestação. O aplicativo não pede câmera de surpresa nem reutiliza uma
+autorização obtida para QR como consentimento para identidade.
+
+### Ordem técnica da implantação nativa
+
+1. Publicar em ambiente de teste os arquivos de associação de domínio e
+   validar que iOS e Android reconhecem o mesmo domínio e identificadores de
+   aplicativo de distribuição.
+2. Criar no servidor os desafios de registro e assertion WebAuthn, com origem,
+   RP ID, `challenge`, contador, expiração e idempotência validados.
+3. Integrar passkey primeiro, em uma coorte interna, sem torná-la ainda a única
+   entrada; testar criação, entrada, reinstalação, segundo aparelho e
+   revogação.
+4. Implementar o plugin Capacitor de chave biométrica para reautenticação de
+   comandos sensíveis. Ele não substitui nem duplica a passkey.
+5. Só então conectar a captura facial remota e iniciar a migração de contas;
+   nenhum dado de captura passa pela ponte Capacitor para JavaScript.
+6. Exercitar em aparelhos físicos: Face ID, Touch ID, Android com biometria
+   forte, Android sem biometria, biometria alterada, aparelho perdido e usuário
+   com duas passkeys. A aprovação de loja não substitui esses testes.
