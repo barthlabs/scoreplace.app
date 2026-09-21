@@ -65,6 +65,11 @@ interrompem a ativação: não podem ser desmembradas por inferência. A primeir
 ativação continua condicionada ao censo aprovado de um torneio inativo de
 teste; este contrato não autoriza migração nem dual-write em produção.
 
+O censo é obtido por `previewCanonicalRegistrationMigration`, callable somente
+para a organização do torneio. A Function relê o elenco (inclusive em torneio
+dividido) numa transação e devolve candidatos, conflitos e incompatibilidades;
+ela não grava documentos de inscrição nem altera projeções legadas.
+
 ## Entrega I2 — estado de identidade e barreira de autorização
 
 **Objetivo:** criar a estrutura sem ainda exigir captura facial de usuários.

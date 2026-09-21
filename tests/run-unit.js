@@ -1555,6 +1555,7 @@ const SUITES = [
   // Inscrição/desinscrição no servidor (CF) — espelha a transação do cliente.
   'functions/test-enroll-core.js',
   'functions/test-registration-core.js',
+  'tests/registro-canonico-dry-run-cf.test.js',
   'functions/test-profile-preferences-core.js',
   'functions/test-casual-room-pointer-core.js',
   'functions/test-live-score-preferences-core.js',

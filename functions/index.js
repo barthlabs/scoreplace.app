@@ -73,6 +73,7 @@ async function _freqDosTokensSoltos(db, dup, nomeMeu, pessoas) {
   return out;
 }
 const _enrollCore = require("./enroll-core");
+const _registrationCore = require("./registration-core");
 const _splitParts = require("./split-parts.js");   // torneio dividido: elenco na subcoleção
 const _refereeRoster = require("./vendor/referee-roster.js"); // escala de arbitragem: contrato puro e sem contato
 
@@ -3661,6 +3662,44 @@ function _isTournamentOrgCaller(t, callerUid) {
   const ch = Array.isArray(t.coHosts) ? t.coHosts : [];
   return ch.some((c) => c && c.uid === callerUid && (c.status === 'active' || c.status === 'accepted'));
 }
+
+// Prévia da migração I1: lê o elenco fresco e devolve somente o censo que
+// antecede uma migração-piloto. Não cria `registrations`, não altera projeções
+// legadas e não aceita um elenco enviado pelo navegador.
+exports.previewCanonicalRegistrationMigration = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
+    const tournamentId = String((request.data && request.data.tournamentId) || "").trim();
+    if (!tournamentId) throw new HttpsError("invalid-argument", "tournamentId é obrigatório");
+
+    const db = admin.firestore();
+    const ref = db.collection("tournaments").doc(tournamentId);
+    const report = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
+      const tournament = await _splitParts.hidratar(tx, ref, snap.data() || {}, ["participants"]);
+      if (!_isTournamentOrgCaller(tournament, callerUid)) {
+        throw new HttpsError("permission-denied", "só a organização consulta a prévia de migração");
+      }
+      return _registrationCore.dryRunLegacyRoster(tournamentId, tournament.participants);
+    });
+
+    return {
+      tournamentId: tournamentId,
+      generatedAt: new Date().toISOString(),
+      registrations: report.registrations,
+      conflicts: report.conflicts,
+      unsupported: report.unsupported,
+      summary: {
+        registrations: report.registrations.length,
+        conflicts: report.conflicts.length,
+        unsupported: report.unsupported.length,
+      },
+    };
+  }
+);
 
 /* ─── deleteTournament (servidor, confirmado) ───────────────────────────────────
  * O botão de apagar jamais pode esconder o torneio antes de o banco confirmar. A antiga
