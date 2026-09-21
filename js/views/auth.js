@@ -9577,8 +9577,6 @@ window._profileHydrateNameConflict = function () {
       payload.liveAlerts = liveAlerts;
       payload.liveAlertsWho = liveAlertsWho;
       // v2.4.3: privacidade de contato (default OFF).
-      payload.omitEmail = omitEmail;
-      payload.omitPhone = omitPhone;
 
       // ── 3b. APAGAR TAMBÉM É UM ATO ──────────────────────────────────────
       // "Campo vazio = campo omitido = valor preservado" fechou o buraco em
@@ -9623,6 +9621,7 @@ window._profileHydrateNameConflict = function () {
       var _saveLocations = preferredLocations.length > 0 || _erased.indexOf('preferredLocations') !== -1;
       var _notificationPreferences = { notifyPlatform: notifyPlatform, notifyEmail: notifyEmail, notifyWhatsApp: notifyWhatsApp, notifyLevel: notifyLevel };
       var _presencePreferences = { presenceVisibility: presenceVisibility, statsVisibility: statsVisibility, presenceMuteDays: muteDays, presenceMuteUntil: muteUntil, presenceAutoCheckin: presenceAutoCheckin };
+      var _contactPrivacy = { omitEmail: omitEmail, omitPhone: omitPhone };
 
       // Denormalizados para lookups case-insensitive
       if (payload.displayName) payload.displayName_lower = String(payload.displayName).toLowerCase();
@@ -9664,6 +9663,7 @@ window._profileHydrateNameConflict = function () {
         await window.FirestoreDB.saveNotificationPreferences(_notificationPreferences);
         await window.FirestoreDB.savePresencePreferences(_presencePreferences);
         await window.FirestoreDB.saveFriendRequestPreference(acceptFriends);
+        await window.FirestoreDB.saveContactPrivacy(_contactPrivacy);
         window._lastProfileSave.ok = true;
         window._log('[Profile v0.16.9] save ok');
         // v1.8.39-beta: limpar flag de foto pendente após save bem-sucedido

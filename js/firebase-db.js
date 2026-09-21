@@ -2626,6 +2626,10 @@ window.FirestoreDB = {
     return this._callFn('updateOwnFriendRequestPreference', { accept: accept === true });
   },
 
+  async saveContactPrivacy(privacy) {
+    return this._callFn('updateOwnContactPrivacy', { privacy: privacy || {} });
+  },
+
   async setActiveCasualRoom(roomCode) {
     return this._callFn('setOwnActiveCasualRoom', { roomCode: roomCode == null ? null : roomCode });
   },

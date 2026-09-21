@@ -13177,8 +13177,6 @@ window.AppStore = {
       preferredSports: user.preferredSports,
       // defaultCategory removed v1.3.98-beta — skill lives in skillBySport
       preferredCeps: user.preferredCeps,
-      omitEmail: user.omitEmail,
-      omitPhone: user.omitPhone,
       updatedAt: new Date().toISOString()
     };
     // Strip undefined so merge-save preserves existing Firestore values
@@ -13230,6 +13228,9 @@ window.AppStore = {
       ['presenceVisibility', 'statsVisibility', 'presenceMuteDays', 'presenceMuteUntil', 'presenceAutoCheckin'].forEach(function(k) { if (user[k] !== undefined) _presencePrefs[k] = user[k]; });
       if (Object.keys(_presencePrefs).length) await window.FirestoreDB.savePresencePreferences(_presencePrefs);
       if (user.acceptFriendRequests !== undefined) await window.FirestoreDB.saveFriendRequestPreference(user.acceptFriendRequests);
+      var _contactPrivacy = {};
+      ['omitEmail', 'omitPhone'].forEach(function(k) { if (user[k] !== undefined) _contactPrivacy[k] = user[k]; });
+      if (Object.keys(_contactPrivacy).length) await window.FirestoreDB.saveContactPrivacy(_contactPrivacy);
       window._lastProfileSave.ok = true;
       // Verificação round-trip: lê de volta e confirma que os VALORES chegaram.
       try {
