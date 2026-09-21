@@ -24,6 +24,8 @@ censo antes/depois e aprovação específica.
 | Inscrição | `functions/enroll-core.js` ainda testa identidade por `uid`, nome e e-mail; a Function mantém uma detecção adicional de contas suspeitas. | Há fontes de identidade incompatíveis com UID como chave exclusiva. |
 | Dados de perfil | Há cópias de nome, e-mail e foto em participantes e pares; `tournament-enrollment-profile-core.js` ainda usa e-mail/nome como fallback de relatório. | A regra de perfil único ainda não está completa; precisa de migração por fronteira, não de nova varredura textual isolada. |
 | Elenco | O produto mantém lista embutida, espera embutida, espelho `participants` e, em torneios divididos, `inscritos`. | A duplicação é uma causa raiz de regressões; o cadastro deve ter uma fonte canônica única. |
+| Fusão de contas | `autoMergeOnProfileUpdate` e a rotina agendada de limpeza podem executar fusão a partir de coincidência de credenciais; `requestParticipantMerge` usa o rótulo de um participante manual como identificador da vaga. | Fusão automática e vaga manual identificada por nome precisam ser contidas antes da migração de identidade. |
+| Propagação de perfil | `propagateDisplayName` ainda varre torneios e regrava rótulos quando o nome muda. | Demonstra que o torneio continua contendo cópia de perfil e cria escrita concorrente sobre dados de competição. |
 | Super 8 | Não há implementação fora da documentação de reforma. | É funcionalidade nova e entra depois do núcleo comum de rodadas. |
 
 Essas afirmações são sobre o código inspecionado em 20/09/2026, especialmente
@@ -61,6 +63,12 @@ solução correta é separada:
 3. usar sinais de duplicidade apenas para revisão humana ou pedido de
    confirmação. Nome, foto, telefone ou semelhança não autorizam fusão
    automática nem exclusão.
+
+Como contenção, gatilhos e rotinas agendadas de fusão automática deixam de
+executar fusão. Enquanto a nova entrega não existir, podem no máximo criar uma
+pendência privada para análise, sem modificar perfis, autenticação, inscrições
+ou partidas. O vínculo de uma vaga manual passa a receber `manualParticipantId`,
+nunca o nome digitado como chave de busca.
 
 Autenticação biométrica do aparelho pode proteger o desbloqueio local de uma
 sessão ou credencial. Ela não revela à aplicação uma biometria que identifique
@@ -250,8 +258,13 @@ numeração e resultado; ela precisa ser confirmada como decisão de produto.
 
 ## Sequência de implementação
 
-### 0. Congelamento e linha de base
+### 0. Contenção de identidade, congelamento e linha de base
 
+- Desligar a execução de fusão automática em gatilhos e agendas, preservando
+  somente registro de suspeita sem efeito sobre contas ou torneios. Esta é a
+  primeira mudança de código, isolada, revisada e coberta por emulador.
+- Bloquear novas escritas que usam nome ou e-mail como identidade de uma conta
+  fora de adaptadores de leitura histórica.
 - Congelar mudanças funcionais nos caminhos de inscrição, fases, sorteio e
   chave, exceto correção P0 de segurança/indisponibilidade.
 - Executar e salvar censo de produção: documentos, formatos, campos, versões
@@ -327,6 +340,9 @@ numeração e resultado; ela precisa ser confirmada como decisão de produto.
   participante autenticado; todas as referências são por UID.
 - Dois `uid`s distintos nunca são fundidos ou bloqueados definitivamente por
   foto, nome ou sinal probabilístico.
+- Nenhum gatilho ou tarefa agendada pode alterar ou apagar conta, inscrição ou
+  partida por coincidência de atributo de perfil; toda fusão possui comando,
+  prova dos dois lados, recibo de auditoria e reversão validada.
 - O mesmo intent e semente produzem exatamente o mesmo plano no cliente e no
   servidor.
 - Tipo de fase, modalidade, política, estado e transição fora da lista fechada
