@@ -432,6 +432,26 @@ autoridade de elegibilidade.
 
 ## Critérios de aceite
 
+### Histórico de partidas: fonte e materialização
+
+`users/{uid}/matchHistory/{matchId}` é uma projeção de leitura, não uma fonte
+que o navegador possa declarar. O cliente não envia jogadores, placar, vencedor
+ou estatísticas para essa coleção.
+
+- Para torneio, a origem é o resultado autoritativo já confirmado na partida
+  canônica; a materialização deve nascer na mesma Function/transação que
+  confirma o resultado, ou em gatilho idempotente desse resultado.
+- Para casual, a origem é `casualMatches/{casualMatchId}` em estado final. A
+  Function relê elenco, resultado e identificador antes de materializar.
+- O identificador é determinístico (`t_<tournamentId>_<matchId>` ou
+  `casual_<casualMatchId>`). Reexecução substitui a mesma projeção, nunca cria
+  nova estatística.
+- A Function deriva destinatários exclusivamente dos UIDs presentes na fonte;
+  um payload do cliente não escolhe em quais perfis o histórico é gravado.
+- Antes de negar `matchHistory/**` nas Rules, todos os atuais escritores devem
+  estar migrados para a Function e cobertos por teste de emulador. Nenhuma
+  regra parcial por convenção de ID é aceitável.
+
 - Nenhuma conta autenticada consegue duas inscrições ativas na mesma categoria
   do mesmo torneio, inclusive em chamadas concorrentes.
 - Nenhum dado pessoal de perfil é escrito em entidade viva de torneio para

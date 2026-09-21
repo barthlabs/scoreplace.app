@@ -160,6 +160,27 @@ andamento não perde resultado nem ganha participante duplicado.
 
 ## Não-regressões obrigatórias
 
+## Entrega S1 — materialização de histórico por fonte canônica
+
+**Objetivo:** retirar do navegador a capacidade de registrar estatísticas para
+qualquer UID.
+
+1. Inventariar os três construtores atuais de `saveUserMatchRecords` e as
+   exclusões de vínculo casual.
+2. Para resultado de torneio, materializar `matchHistory` na confirmação
+   autoritativa do resultado, com ID determinístico e reexecução idempotente.
+3. Para partida casual, reler `casualMatches/{id}` no servidor e materializar
+   somente se estiver finalizada e o chamador for participante autorizado.
+4. Migrar a rejeição de vínculo casual para uma Function que valida o vínculo
+   antes de apagar somente `casual_<id>` do próprio perfil.
+5. Negar toda escrita direta em `users/{uid}/matchHistory/**` e provar no
+   emulador: cliente não cria, altera ou apaga; Function não aceita jogadores
+   ou placar declarados pelo navegador; reexecução não duplica registros.
+
+**Aceite:** nenhum usuário pode gravar histórico em perfil de terceiro; uma
+partida confirmada gera exatamente uma projeção por participante com UID; um
+resultado que falhe ou seja substituído não deixa estatística divergente.
+
 - Nenhuma alteração de perfil propaga nome, e-mail ou foto como identidade de
   participante.
 - Nenhuma rota antiga produz um segundo UID operacional para pessoa já
