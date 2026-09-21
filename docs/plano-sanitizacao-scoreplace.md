@@ -81,6 +81,10 @@ uma tela de cadastro.
 
 ### Verificação facial própria do Scoreplace
 
+O desenho operacional, estados, dados privados, plugin nativo, controles de
+fraude e testes desta entrega está em
+[`arquitetura-verificacao-identidade.md`](arquitetura-verificacao-identidade.md).
+
 Caso a plataforma adote garantia de uma pessoa por inscrição, a verificação
 facial será uma capacidade própria do produto, fornecida por serviço de prova
 de vida e comparação biométrica contratado e auditado. Não é Face ID, Touch ID

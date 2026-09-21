@@ -1,0 +1,235 @@
+# Arquitetura de verificação de identidade e biometria
+
+## Objetivo
+
+Impedir que uma pessoa mantenha mais de uma identidade ativa e se inscreva
+mais de uma vez na mesma categoria, inclusive usando credenciais, aparelhos,
+nomes ou fotografias diferentes. O identificador operacional de toda pessoa
+no Scoreplace continua sendo `uid`. A verificação de identidade decide qual
+é o único `canonicalUid` elegível a participar.
+
+O mecanismo tem duas camadas diferentes:
+
+1. **verificação facial remota com prova de vida**, para deduplicar pessoas;
+2. **biometria local do aparelho**, para provar presença ao proteger uma chave
+   do dispositivo e autorizar ações sensíveis.
+
+Elas não são intercambiáveis. A segunda não produz dado facial nem identifica
+a mesma pessoa em dois aparelhos.
+
+## Invariantes
+
+- Uma identidade humana aprovada possui um único `canonicalUid` ativo.
+- Um UID provisório não pode ser organizador, integrar equipe, receber vaga,
+  confirmar inscrição, lançar resultado ou votar em operação de torneio.
+- Uma inscrição confirmada requer `canonicalUid` e usa documento de chave
+  determinística `registration/{canonicalUid}__{categoryId}`.
+- Nenhum torneio, jogo, fila, convite ou perfil público armazena imagem,
+  vetor facial, documento de identidade, e-mail ou telefone para decidir
+  identidade.
+- Uma coincidência facial é um sinal de revisão, nunca uma fusão, exclusão ou
+  recusa definitiva automática.
+- O serviço não cria uma segunda inscrição enquanto uma possível duplicidade
+  está pendente.
+
+## Estados
+
+### Conta
+
+```
+new → provisional → identity_pending → verified
+                              │             │
+                              ├→ duplicate_review ─→ verified_existing
+                              ├→ manual_review ────→ verified | rejected
+                              └→ abandoned
+```
+
+`verified_existing` redireciona para o `canonicalUid`; não cria novo perfil
+ativo. `rejected` bloqueia apenas a tentativa de verificação até a revisão de
+suporte; não apaga a conta nem seus dados por automação.
+
+### Verificação
+
+```
+created → capture_started → provider_pending → approved
+                                          │       │
+                                          ├→ candidate_match
+                                          ├→ retryable_failure
+                                          └→ failed_review
+```
+
+Estados e transições são uma lista fechada no servidor. A tela apenas exibe o
+estado devolvido pela Function; ela não consegue gravar aprovação, UID
+canônico ou resultado de prova de vida.
+
+## Dados privados
+
+Coleções propostas, inacessíveis diretamente pelo cliente:
+
+```
+identityClaims/{providerSubjectHash}
+  canonicalUid
+  provider
+  policyVersion
+  verificationStatus
+  verifiedAt
+  auditRef
+
+identityVerifications/{verificationId}
+  subjectUid
+  state
+  providerSessionRef
+  policyVersion
+  candidateClaimRefs[]       // referências opacas; nunca imagem ou vetor
+  reviewerDecision
+  createdAt / resolvedAt
+
+accountIdentity/{uid}
+  state
+  canonicalUid               // presente apenas quando o uid não é canônico
+  verificationId
+  blockedCapabilities[]
+```
+
+O `providerSubjectHash` é um identificador opaco retornado pelo provedor,
+transformado com chave de servidor. Ele serve para apontar a identidade já
+verificada; não é imagem, embedding facial nem substituto de biometria. A
+chave de hash fica em gestão de segredos, com rotação planejada.
+
+Não serão armazenados no Firebase selfie, vídeo, foto de documento, vetor
+facial, resposta crua do provedor ou qualquer identificador técnico que
+permita reconstruir a biometria. Evidência, prazo de retenção e exclusão ficam
+no provedor contratado, sob contrato de tratamento e política aprovada.
+
+## Fluxo de cadastro
+
+1. Firebase cria um UID e `accountIdentity/{uid}` em estado `provisional`.
+2. O app pede ao servidor `beginIdentityVerification`. O servidor aplica
+   rate limit, cria `verificationId` e sessão curta de captura do provedor.
+3. O app nativo abre a captura de selfie/prova de vida. A mídia vai ao
+   provedor, não ao Firestore nem a uma coleção do Scoreplace.
+4. O provedor chama webhook autenticado do servidor com resultado assinado.
+5. Sem candidato, a Function cria a claim e promove o UID a `verified`.
+6. Com candidato, a Function marca `duplicate_review`, revoga as capacidades
+   de participação do UID provisório e oferece recuperação da conta já
+   existente, sem revelar dados privados dela.
+7. A pessoa comprova controle da conta existente ou solicita revisão. Só uma
+   decisão auditada faz vínculo de credenciais e deixa um UID canônico.
+
+Se a plataforma quiser garantia universal, nenhuma inscrição — inclusive a de
+torneio casual — é `confirmed` antes de `verified`. Permitir inscrição casual
+sem essa etapa é uma decisão possível de produto, mas abre uma exceção explícita
+à garantia de pessoa única.
+
+## Biometria nativa do aparelho
+
+Será criado um plugin Capacitor próprio, `ScoreplaceBiometry`, em vez de uma
+biblioteca JavaScript que tente imitar recurso nativo. Ele expõe apenas
+operações sem dado biométrico:
+
+```
+availability() -> { available, modality, deviceCredentialFallback }
+enrollKey({ keyId, policy }) -> { publicKey, keyAttestation? }
+signChallenge({ keyId, nonce, purpose }) -> { signature, counter }
+invalidateKey({ keyId })
+```
+
+- **iOS:** chave não exportável no Keychain/Secure Enclave, protegida por
+  `LocalAuthentication`; mudança no conjunto biométrico invalida a chave.
+- **Android:** chave não exportável no Android Keystore, liberada com
+  `BiometricPrompt` e operação criptográfica vinculada ao desafio.
+- **Web:** não recebe biometria do sistema. Usa reautenticação forte e, em
+  etapa posterior, passkey/WebAuthn compatível.
+
+O servidor entrega `nonce` de uso único, curto e vinculado a `uid`, aparelho,
+ação e versão do aplicativo. A assinatura só autoriza um comando específico;
+nunca vira sessão permanente. Perda, troca ou reset de aparelho exige
+reautenticação da conta e novo registro de chave, sem criar novo UID.
+
+Usos obrigatórios da chave biométrica nativa após a implantação:
+
+- iniciar ou confirmar a verificação de identidade;
+- vincular ou fundir credenciais;
+- alterar e-mail, telefone ou meios de recuperação;
+- confirmar inscrição e ações de organizador de alto impacto;
+- aprovar recuperação em aparelho novo.
+
+Há fallback acessível por reautenticação forte e revisão. Falta de biometria,
+acessibilidade ou aparelho incompatível não pode excluir pessoa legítima.
+
+## Controles contra fraude
+
+| Ameaça | Controle |
+| --- | --- |
+| Foto, vídeo ou máscara para burlar captura | Prova de vida certificada pelo provedor, desafio de sessão curta e detecção de apresentação. |
+| Reenvio de resposta de captura | Webhook assinado, idempotência por `verificationId`, nonce e expiração. |
+| Sessão roubada | Reautenticação e assinatura por chave protegida por biometria local para operações sensíveis. |
+| Pessoa cria outro e-mail/aparelho | Deduplicação facial antes de liberar inscrição; candidato vai para revisão. |
+| Falso positivo facial | Nenhuma fusão automática; recuperação da conta existente ou revisão humana. |
+| Falso negativo | Nova tentativa orientada; revisão manual; nenhuma regra presume fraude só por falha técnica. |
+| Vazamento de biometria | Mídia e template fora do Firestore, minimização de metadados, contrato, retenção curta e revogação/eliminação. |
+| Abuso de API | Rate limits por conta/aparelho/IP, detecção de repetição, auditoria e limites de tentativas. |
+
+## Seleção do provedor
+
+O fornecedor só poderá ser escolhido após prova de conceito com dados de teste
+consentidos e avaliação documentada dos critérios abaixo:
+
+- prova de vida passiva/ativa e resistência a apresentação;
+- busca facial um-para-muitos e retorno de candidato sem expor biometria;
+- webhook assinado, idempotência e localização/eliminação de dados;
+- métricas de falso positivo/falso negativo no público relevante, com corte
+  escolhido para não tomar decisão automática adversa;
+- suporte a revisão humana, exportação de auditoria e contestação;
+- contrato de tratamento, suboperadores, resposta a incidente e SLA;
+- SDK nativo estável para iOS e Android, ou captura web segura compatível com
+  Capacitor.
+
+Não haverá compromisso com fornecedor antes desses critérios. O algoritmo não
+será implementado nem treinado pelo Scoreplace.
+
+## Comandos do servidor
+
+Todos autenticados e idempotentes:
+
+- `beginIdentityVerification`
+- `getIdentityVerificationStatus`
+- `registerDeviceKey`
+- `authorizeSensitiveAction`
+- `recoverCanonicalAccount`
+- `requestIdentityReview`
+- `reviewIdentityCase` (papel interno segregado)
+- `confirmEnrollment`
+
+O webhook do provedor é a única entrada capaz de propor `approved` ou
+`candidate_match`; a Function valida assinatura, sessão, expiração e versão da
+política antes de alterar estado.
+
+## Testes de aceite
+
+- Duas tentativas concorrentes para a mesma identidade só deixam uma claim e
+  um UID verificado.
+- UID em `provisional`, `identity_pending` ou `duplicate_review` não confirma
+  inscrição, mesmo chamando a API diretamente.
+- Coincidência facial não altera UID, perfil, torneio nem credencial sem decisão
+  humana ou prova de controle da conta existente.
+- Webhook inválido, repetido, expirado ou de outra sessão não muda estado.
+- Chave nativa só assina nonce válido para o UID, aparelho e ação corretos;
+  replay falha.
+- Reset biométrico do aparelho invalida a chave local e exige novo vínculo,
+  sem liberar um UID novo.
+- Fallback não facial conclui o fluxo por revisão sem degradar autorização.
+- Auditoria permite reconstruir cada transição sem conter selfie, vetor facial,
+  digital, documento ou contato em claro.
+
+## Sequência de entrega
+
+1. conter fusão automática existente e criar os estados privados de identidade;
+2. implantar os comandos e as Rules que bloqueiam inscrição sem UID verificado;
+3. construir e testar o plugin nativo de chave biométrica em iOS/Android;
+4. integrar um provedor em ambiente isolado com webhook e revisão;
+5. realizar teste de precisão, acessibilidade, recuperação e incidente;
+6. liberar por coorte, acompanhar falsos positivos/negativos e só então exigir
+   verificação para todas as inscrições;
+7. migrar contas existentes por convite progressivo, sem bloquear torneio já
+   em andamento nem apagar dados automaticamente.
