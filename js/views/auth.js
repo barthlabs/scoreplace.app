@@ -4337,7 +4337,7 @@ async function simulateLoginSuccess(user) {
         _notifyPatch.notifyWhatsApp = true;
       }
       if (Object.keys(_notifyPatch).length > 0) {
-        window.FirestoreDB.saveUserProfile(uid, _notifyPatch).catch(function() {});
+        window.FirestoreDB.saveNotificationPreferences(_notifyPatch).catch(function() {});
         if (window.AppStore.currentUser) Object.assign(window.AppStore.currentUser, _notifyPatch);
         if (existingProfile) Object.assign(existingProfile, _notifyPatch);
         window._log('[scoreplace-auth] notify defaults set:', _notifyPatch);

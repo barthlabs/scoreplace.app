@@ -2606,6 +2606,10 @@ window.FirestoreDB = {
     return this._callFn('updateOwnPreferredLocations', { locations: Array.isArray(locations) ? locations : [] });
   },
 
+  async saveNotificationPreferences(preferences) {
+    return this._callFn('updateOwnNotificationPreferences', { preferences: preferences || {} });
+  },
+
   async setActiveCasualRoom(roomCode) {
     return this._callFn('setOwnActiveCasualRoom', { roomCode: roomCode == null ? null : roomCode });
   },

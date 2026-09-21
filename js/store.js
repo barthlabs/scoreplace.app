@@ -13181,10 +13181,6 @@ window.AppStore = {
       preferredSports: user.preferredSports,
       // defaultCategory removed v1.3.98-beta — skill lives in skillBySport
       acceptFriendRequests: user.acceptFriendRequests,
-      notifyPlatform: user.notifyPlatform,
-      notifyEmail: user.notifyEmail,
-      notifyWhatsApp: user.notifyWhatsApp,
-      notifyLevel: user.notifyLevel,
       preferredCeps: user.preferredCeps,
       presenceVisibility: user.presenceVisibility,
       statsVisibility: user.statsVisibility,
@@ -13237,6 +13233,9 @@ window.AppStore = {
     try {
       await window.FirestoreDB.saveUserProfile(uid, payload);
       if (Array.isArray(user.preferredLocations)) await window.FirestoreDB.savePreferredLocations(user.preferredLocations);
+      var _notifyPrefs = {};
+      ['notifyPlatform', 'notifyEmail', 'notifyWhatsApp', 'notifyLevel'].forEach(function(k) { if (user[k] !== undefined) _notifyPrefs[k] = user[k]; });
+      if (Object.keys(_notifyPrefs).length) await window.FirestoreDB.saveNotificationPreferences(_notifyPrefs);
       window._lastProfileSave.ok = true;
       // Verificação round-trip: lê de volta e confirma que os VALORES chegaram.
       try {
