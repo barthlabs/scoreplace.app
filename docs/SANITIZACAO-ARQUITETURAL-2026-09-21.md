@@ -79,7 +79,7 @@ outro caminho.
 | Bloco | Superfície atual encontrada | Correção canônica | Critério de aceite |
 |---|---|---|---|
 | P0 | criação de perfil | concluído no commit `57005894` | Rules negam create e Function reserva nome |
-| P1 | 51 chamadas a `saveUserProfile` em `auth`, `tournaments-categories`, `store` e `bracket-ui` | `patchOwnProfile` com allowlist por domínio; renomear chama `renameDisplayName` transacional | Rules negam todo update direto em `users/{uid}`; testes de cada campo permitido |
+| P1 | escritores de perfil em `auth`, `tournaments-categories`, `store`, `bracket-ui`, notificações, locais, presença e termos | comandos fechados por domínio; renomear chama `renameDisplayName` transacional | Rules negam todo update direto em `users/{uid}`; testes de cada campo permitido |
 | P2 | inscrição, retirada, lista de espera e pares | canonizar chamadas existentes em Functions e remover helpers transacionais do cliente | idem: cliente não escreve torneio, inscrição ou pares |
 | P3 | criação/edição/materialização/remoção de torneio e resultados | Commands separados por transição de estado, com projeções controladas no servidor | Rules fecham `tournaments`, subcoleções e resultados contra mutação direta |
 | P4 | notificações, modelos, amistosos e histórico | comandos específicos, recibos idempotentes e filas somente do servidor | Rules fecham subcoleções e filas correspondentes |
@@ -194,13 +194,21 @@ quando era matematicamente inviável.
 
 ## Inventário que orienta o próximo bloco
 
-Após os dois primeiros recortes P1, há 34 chamadas de `FirestoreDB.saveUserProfile` no cliente:
-4 em `js/store.js`, 9 em `js/views/auth.js`, 4 em
-`js/views/tournaments-categories.js` e 30 em `js/views/bracket-ui.js`.
-`js/firebase-db.js` ainda contém mutações diretas de torneio, placar,
-notificações, modelos, amistosos e histórico. P1 começa por perfil porque ele
-contém nome e atributos de elegibilidade; P2 e P3 vêm antes de qualquer
-alteração de formato de fase.
+A varredura de 21/set/2026 encontrou 11 chamadas atuais de
+`FirestoreDB.saveUserProfile`: 8 em `js/views/auth.js`, 2 em
+`js/views/tournaments-categories.js`, 1 em `js/views/bracket-ui.js` e o ponto
+amplo de salvamento em `js/store.js`. Há também escritores que contornam esse
+helper: `js/notifications.js`, `js/views/venues.js`, `js/presence-geo.js`,
+`js/views/terms-acceptance.js`, `js/views/create-tournament.js` e caminhos de
+recuperação em `js/views/auth.js` usam `collection('users').doc(...).set` ou
+`update` diretamente.
+
+P1 não pode fechar campos isolados enquanto esses escritores coexistirem: a
+ordem executável é inventariar o payload de cada domínio, criar Function com
+allowlist e transação, redirecionar todos os chamadores daquele domínio e só
+então negar os campos equivalentes nas Rules. Começar por perfil evita que
+nome e elegibilidade continuem em cópias concorrentes; P2 e P3 vêm antes de
+qualquer alteração de formato de fase.
 
 ## Gates de execução
 
