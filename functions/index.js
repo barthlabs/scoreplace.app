@@ -2954,10 +2954,13 @@ exports.enrollParticipant = onCall(
     if (!tournamentId || !participantObj || typeof participantObj !== "object") {
       throw new HttpsError("invalid-argument", "tournamentId e participantObj são obrigatórios");
     }
-    // Espelha o guard do cliente: recusa objeto sem NENHUM identificador.
-    const hasId = !!(participantObj.uid || participantObj.email ||
-      participantObj.displayName || participantObj.name || participantObj.phone);
-    if (!hasId) throw new HttpsError("invalid-argument", "participantObj sem identificador válido");
+    // Uma inscrição é uma conta (uid) ou uma vaga manual (id estável criado pelo
+    // organizador). Nome, e-mail e telefone nunca são identidade de inscrição.
+    const participantUid = String(participantObj.uid || "");
+    const manualParticipantId = String(participantObj.manualParticipantId || "");
+    if (!participantUid && !manualParticipantId) {
+      throw new HttpsError("invalid-argument", "a inscrição precisa de uid ou manualParticipantId");
+    }
 
     const db = admin.firestore();
     const docRef = db.collection("tournaments").doc(tournamentId);
@@ -2979,32 +2982,40 @@ exports.enrollParticipant = onCall(
     // a suspeita pros dois lados, e o ORGANIZADOR pode inscrever a pessoa direto — o gate
     // não vale pra quem inscreve OUTRA pessoa. Erro de detecção nunca deixa alguém de fora
     // sem caminho.
-    let _dupSuspect = null;
-    try {
-      const _alvoUid0 = String((participantObj && participantObj.uid) || callerUid);
-      const _euMesmo = _alvoUid0 === callerUid;   // organizador inscrevendo TERCEIRO passa
-      if (_euMesmo) {
-        const _pre = await docRef.get();
-        if (_pre.exists) {
-          const _d0 = await _detectarDuplicataNoTorneio(db, _alvoUid0, _pre.data());
-          if (_d0) {
-            const _tNome0 = (_pre.data() || {}).name || "";
-            await _avisarDuplicataSuspeita(db, _alvoUid0, tournamentId, _tNome0, _d0);
-            console.log(`[enrollParticipant] RECUSADO por duplicata: ${_alvoUid0} ~ ${_d0.uid} (${_d0.motivo}) em ${tournamentId}`);
-            const _parts0 = Array.isArray((_pre.data() || {}).participants) ? _pre.data().participants : [];
-            return {
-              alreadyEnrolled: true,
-              participants: _parts0,
-              dupSuspect: {   // ⚠️ SEM uid e SEM contato cheio
-                motivo: _d0.motivo, nome: _d0.nome,
-                maskedEmail: _d0.maskedEmail, maskedPhone: _d0.maskedPhone,
-                texto: _dupPerson.textoDaPergunta(_d0.nome, _d0.maskedEmail || _d0.maskedPhone, _d0.motivo, _d0.semelhanca),
-              },
-            };
-          }
-        }
+    const _pre = await docRef.get();
+    if (_pre.exists) {
+      const _preTournament = _pre.data() || {};
+      const _preIsOrganizer = _isTournamentOrgCaller(_preTournament, callerUid);
+      if (participantUid && participantUid !== callerUid && !_preIsOrganizer) {
+        throw new HttpsError("permission-denied", "só o organizador pode inscrever outra pessoa");
       }
-    } catch (e) { console.error("[enrollParticipant] porta de duplicata falhou (fail-open):", e && e.message); }
+      if (!participantUid && !_preIsOrganizer) {
+        throw new HttpsError("permission-denied", "só o organizador pode criar vaga manual");
+      }
+    }
+
+    // Esta detecção só é aplicável à inscrição da própria conta e só roda DEPOIS
+    // da autorização. Assim um chamador não consegue provocar aviso para terceiro.
+    if (participantUid === callerUid && _pre.exists) {
+      try {
+        const _d0 = await _detectarDuplicataNoTorneio(db, participantUid, _pre.data());
+        if (_d0) {
+          const _tNome0 = (_pre.data() || {}).name || "";
+          await _avisarDuplicataSuspeita(db, participantUid, tournamentId, _tNome0, _d0);
+          console.log(`[enrollParticipant] RECUSADO por duplicata: ${participantUid} ~ ${_d0.uid} (${_d0.motivo}) em ${tournamentId}`);
+          const _parts0 = Array.isArray((_pre.data() || {}).participants) ? _pre.data().participants : [];
+          return {
+            alreadyEnrolled: true,
+            participants: _parts0,
+            dupSuspect: {   // ⚠️ SEM uid e SEM contato cheio
+              motivo: _d0.motivo, nome: _d0.nome,
+              maskedEmail: _d0.maskedEmail, maskedPhone: _d0.maskedPhone,
+              texto: _dupPerson.textoDaPergunta(_d0.nome, _d0.maskedEmail || _d0.maskedPhone, _d0.motivo, _d0.semelhanca),
+            },
+          };
+        }
+      } catch (e) { console.error("[enrollParticipant] porta de duplicata falhou (fail-open):", e && e.message); }
+    }
 
     /* ── TORNEIO DIVIDIDO: O ELENCO MORA FORA DO DOCUMENTO (2.0.120) ────────────
      * ⛔ Aqui era `computeEnroll(snap.data(), …)` direto. Num torneio dividido o campo
@@ -3021,6 +3032,13 @@ exports.enrollParticipant = onCall(
       const snap = await tx.get(docRef);
       if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
       const _dados = await _splitParts.hidratar(tx, docRef, snap.data());
+      const isOrganizer = _isTournamentOrgCaller(_dados, callerUid);
+      if (participantUid && participantUid !== callerUid && !isOrganizer) {
+        throw new HttpsError("permission-denied", "só o organizador pode inscrever outra pessoa");
+      }
+      if (!participantUid && !isOrganizer) {
+        throw new HttpsError("permission-denied", "só o organizador pode criar vaga manual");
+      }
       const r = _enrollCore.computeEnroll(_dados, participantObj, extraUpdates, nowMs);
       if (r.updateData) _splitParts.gravar(tx, docRef, _dados, r.updateData);
       return r;

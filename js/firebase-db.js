@@ -1899,14 +1899,9 @@ window.FirestoreDB = {
 
   async _enrollParticipantTx(tournamentId, participantObj, extraUpdates) {
     if (!this.db) throw new Error('Firestore not initialized');
-    // Guard: rejeitar participante completamente sem identificador.
-    // Evita objetos fantasmas {name:null,email:null,displayName:null} causados
-    // por race condition entre login e inscrição (AppStore.currentUser ainda
-    // não carregado quando _doEnrollCurrentUser rodou).
-    var _hasId = !!(participantObj && (
-      participantObj.uid || participantObj.email ||
-      participantObj.displayName || participantObj.name || participantObj.phone
-    ));
+    // Conta = uid; vaga digitada pelo organizador = manualParticipantId. Texto e
+    // atributos de perfil nunca são identidade e não podem deduplicar uma vaga.
+    var _hasId = !!(participantObj && (participantObj.uid || participantObj.manualParticipantId));
     if (!_hasId) throw new Error('enrollParticipant: participantObj sem identificador válido');
     var docRef = this._tRef(tournamentId);
     var self = this;
@@ -1916,9 +1911,6 @@ window.FirestoreDB = {
       var data = doc.data();
       var participants = Array.isArray(data.participants) ? data.participants : (data.participants ? Object.values(data.participants) : []);
 
-      // Check if already enrolled (by email or displayName)
-      var pEmail = participantObj.email || '';
-      var pName = participantObj.displayName || participantObj.name || '';
       // Block enrollment if tournament is closed, active (draw done), or finished
       // Liga with open enrollment is the only exception
       var _isLiga = data.format && (data.format === 'Liga' || data.format === 'Ranking' || data.format === 'liga' || data.format === 'ranking');
@@ -1946,38 +1938,15 @@ window.FirestoreDB = {
       }
 
       var pUid = participantObj.uid || '';
+      var pManualId = participantObj.manualParticipantId || '';
       function _memberMatches(m) {
-        if (!m) return false;
-        if (typeof m === 'string') {
-          var s = m.trim();
-          return (pEmail && s.toLowerCase() === pEmail.toLowerCase()) || (pName && s === pName);
-        }
-        if (pUid && m.uid && m.uid === pUid) return true;
-        if (pEmail && m.email && m.email.toLowerCase() === pEmail.toLowerCase()) return true;
-        if (pName && m.displayName && m.displayName === pName) return true;
-        if (pName && m.name && m.name === pName) return true;
-        return false;
+        return !!(m && typeof m === 'object' &&
+          ((pUid && m.uid === pUid) || (pManualId && m.manualParticipantId === pManualId)));
       }
       var already = participants.some(function(p) {
-        if (typeof p === 'string') {
-          var parts = p.split(' / ').map(function(s) { return s.trim(); }).filter(Boolean);
-          return parts.some(_memberMatches);
-        }
         if (_memberMatches(p)) return true;
         if (Array.isArray(p.participants) && p.participants.some(_memberMatches)) return true;
-        // v3.0.x: IDENTIDADE POR SLOT (uid > nome > email). A dupla formada por aceite grava
-        // p1Uid/p2Uid/p1Name/p2Name com displayName = só o p1 (ex.: "Kelly Barth", sem "/").
-        // Sem checar os slots aqui (dentro da TRANSAÇÃO atômica), o p2 (ex.: Rodrigo) era visto
-        // como NÃO-inscrito → inscrição em DOBRO no banco. Espelha store.js _userMatchesParticipant.
         if (pUid && ((p.p1Uid && p.p1Uid === pUid) || (p.p2Uid && p.p2Uid === pUid))) return true;
-        if (pName && ((p.p1Name && p.p1Name === pName) || (p.p2Name && p.p2Name === pName))) return true;
-        if (pEmail && ((p.p1Email && p.p1Email.toLowerCase() === pEmail.toLowerCase()) || (p.p2Email && p.p2Email.toLowerCase() === pEmail.toLowerCase()))) return true;
-        // Fallback SÓ pra time em forma de STRING legada "A / B" (sem campos de slot) — '/' nunca
-        // define dupla, mas pra string legada é a única forma de checar pertencimento.
-        var label = p.displayName || p.name || '';
-        if (label && label.indexOf(' / ') !== -1) {
-          return label.split(' / ').map(function(s) { return s.trim(); }).filter(Boolean).some(_memberMatches);
-        }
         return false;
       });
       if (already) return { alreadyEnrolled: true, participants: participants };
@@ -1988,8 +1957,8 @@ window.FirestoreDB = {
       // Vem antes do teto de vagas: a espera é o lugar de quem não tem vaga.
       if (_sorteioRealizado) {
         var _sbArr = Array.isArray(data.standbyParticipants) ? data.standbyParticipants : [];
-        var _jaNaEspera = _sbArr.some(function(p) {
-          if (typeof p === 'string') return _memberMatches(p);
+        var _legacyWaitlist = Array.isArray(data.waitlist) ? data.waitlist : [];
+        var _jaNaEspera = _sbArr.concat(_legacyWaitlist).some(function(p) {
           if (_memberMatches(p)) return true;
           return !!(pUid && ((p.p1Uid && p.p1Uid === pUid) || (p.p2Uid && p.p2Uid === pUid)));
         });

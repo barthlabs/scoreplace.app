@@ -28,6 +28,27 @@ function eq(name, a, b) { ok(name + ' (' + JSON.stringify(a) + ' === ' + JSON.st
   eq('já inscrito solo', r.outcome, 'already');
 })();
 
+// ── UID é a única identidade de conta: renomear não cria 2ª vaga ────────────
+(() => {
+  const data = { status: 'open', participants: [{ uid: 'nelson-uid-0001', displayName: 'Nome antigo', email: 'old@example.test' }] };
+  const r = C.computeEnroll(data, { uid: 'nelson-uid-0001', displayName: 'Nome novo', email: 'new@example.test' }, null, NOW);
+  eq('mesmo uid após alterar perfil → already', r.outcome, 'already');
+})();
+
+// ── Homônimos são pessoas distintas: nome/e-mail não ocupam vaga ────────────
+(() => {
+  const data = { status: 'open', participants: [{ uid: 'ana-uid-1', displayName: 'Ana', email: 'ana@example.test' }] };
+  const r = C.computeEnroll(data, { uid: 'ana-uid-2', displayName: 'Ana', email: 'ana@example.test' }, null, NOW);
+  eq('uid diferente com mesmos atributos → enrolled', r.outcome, 'enrolled');
+})();
+
+// ── Vaga manual tem chave própria; texto repetido não é identidade ───────────
+(() => {
+  const data = { status: 'open', participants: [{ manualParticipantId: 'manual-a', displayName: 'Convidado' }] };
+  eq('mesma vaga manual → already', C.computeEnroll(data, { manualParticipantId: 'manual-a', displayName: 'Outro nome' }, null, NOW).outcome, 'already');
+  eq('manual distinto com mesmo nome → enrolled', C.computeEnroll(data, { manualParticipantId: 'manual-b', displayName: 'Convidado' }, null, NOW).outcome, 'enrolled');
+})();
+
 // ── Já inscrito por SLOT de dupla (uid é o p2 de uma dupla) ───────────────────
 (() => {
   const data = { status: 'open', participants: [
@@ -35,6 +56,22 @@ function eq(name, a, b) { ok(name + ' (' + JSON.stringify(a) + ' === ' + JSON.st
   ] };
   const r = C.computeEnroll(data, { uid: 'rodrigo-uid', displayName: 'Rodrigo' }, null, NOW);
   eq('já inscrito como p2 da dupla', r.outcome, 'already');
+})();
+
+// ── Depois do sorteio, o mesmo UID não reaparece na espera ──────────────────
+(() => {
+  const data = { format: 'Liga', status: 'active', ligaOpenEnrollment: true,
+    participants: [{ uid: 'already-rostered' }], rounds: [{ id: 1 }] };
+  const r = C.computeEnroll(data, { uid: 'already-rostered' }, null, NOW);
+  eq('sorteado no elenco → already, não espera', r.outcome, 'already');
+})();
+
+// ── Espera e waitlist legado também são o mesmo destino lógico ───────────────
+(() => {
+  const data = { format: 'Liga', status: 'active', ligaOpenEnrollment: true, participants: [], rounds: [{ id: 1 }],
+    waitlist: [{ uid: 'waiting-uid' }] };
+  const r = C.computeEnroll(data, { uid: 'waiting-uid' }, null, NOW);
+  eq('waitlist legado → alreadyWaitlisted', r.outcome, 'alreadyWaitlisted');
 })();
 
 // ── Inscrição bloqueada: sorteio já realizado (matches) ──────────────────────

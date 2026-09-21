@@ -112,36 +112,22 @@ function enrollmentOpen(data, nowMs) {
   return { open: open, deadlinePassed: deadlinePassed };
 }
 
-// Espelha o "already enrolled" de enrollParticipant (identidade por slot: uid > nome > email).
+// Inscrição só deduplica por identificador estável. Uma conta é sempre o UID; uma
+// vaga manual do organizador é sempre manualParticipantId. Nome, e-mail e telefone
+// são atributos de apresentação e jamais podem ocupar a vaga de outra pessoa.
 function isAlreadyEnrolled(participants, participantObj) {
-  var pEmail = participantObj.email || '';
-  var pName = participantObj.displayName || participantObj.name || '';
   var pUid = participantObj.uid || '';
+  var pManualId = participantObj.manualParticipantId || '';
+  if (!pUid && !pManualId) return false;
+
   function memberMatches(m) {
-    if (!m) return false;
-    if (typeof m === 'string') {
-      var s = m.trim();
-      return (pEmail && s.toLowerCase() === pEmail.toLowerCase()) || (pName && s === pName);
-    }
-    if (pUid && m.uid && m.uid === pUid) return true;
-    if (pEmail && m.email && m.email.toLowerCase() === pEmail.toLowerCase()) return true;
-    if (pName && m.displayName && m.displayName === pName) return true;
-    if (pName && m.name && m.name === pName) return true;
-    return false;
+    return !!(m && typeof m === 'object' &&
+      ((pUid && m.uid === pUid) || (pManualId && m.manualParticipantId === pManualId)));
   }
   return participants.some(function (p) {
-    if (typeof p === 'string') {
-      return p.split(' / ').map(function (s) { return s.trim(); }).filter(Boolean).some(memberMatches);
-    }
     if (memberMatches(p)) return true;
     if (Array.isArray(p.participants) && p.participants.some(memberMatches)) return true;
     if (pUid && ((p.p1Uid && p.p1Uid === pUid) || (p.p2Uid && p.p2Uid === pUid))) return true;
-    if (pName && ((p.p1Name && p.p1Name === pName) || (p.p2Name && p.p2Name === pName))) return true;
-    if (pEmail && ((p.p1Email && p.p1Email.toLowerCase() === pEmail.toLowerCase()) || (p.p2Email && p.p2Email.toLowerCase() === pEmail.toLowerCase()))) return true;
-    var label = p.displayName || p.name || '';
-    if (label && label.indexOf(' / ') !== -1) {
-      return label.split(' / ').map(function (s) { return s.trim(); }).filter(Boolean).some(memberMatches);
-    }
     return false;
   });
 }
@@ -169,7 +155,8 @@ function computeEnroll(data, participantObj, extraUpdates, nowMs) {
   // fora dos grupos, fora da espera (Confra ago/2026). Ver waitlist-core._phaseDrawDone.
   if (phaseDrawDone(data)) {
     var standby = Array.isArray(data.standbyParticipants) ? data.standbyParticipants : [];
-    if (isAlreadyEnrolled(standby, participantObj)) {
+    var waitlist = Array.isArray(data.waitlist) ? data.waitlist : [];
+    if (isAlreadyEnrolled(standby, participantObj) || isAlreadyEnrolled(waitlist, participantObj)) {
       return { outcome: 'alreadyWaitlisted', participants: participants, updateData: null };
     }
     var newStandby = standby.concat([cleanUndefined(participantObj)]);

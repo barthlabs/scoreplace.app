@@ -1529,6 +1529,9 @@ window._doAddParticipant = function (tId, pName, selectedUid, selectedPhoto, onD
             var _cu = window.AppStore && window.AppStore.currentUser;
             var participantObj = {
                 name: pName.trim(), displayName: pName.trim(), ligaActive: true,
+                // Nome manual não é identidade. Esta chave persiste a vaga sem
+                // confundir homônimos e permite deduplicar reenvios da mesma ação.
+                manualParticipantId: selectedUid ? null : 'manual-' + ((window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID() : Date.now().toString(36) + '-' + Math.random().toString(36).slice(2)),
                 selfEnrolled: false,
                 addedByUid:  (_cu && _cu.uid)   || null,
                 addedByName: (_cu && (_cu.displayName || _cu.email)) || null,
@@ -1597,7 +1600,10 @@ window.addTeamFunction = function (tId) {
             const teamString = teamNames.join(' / ');
             // If late enrollment, add to standby
             if (_closedOrDrawn2) {
-                _enrollToStandby(t, tId, { name: teamString, displayName: teamString }, function() {
+                _enrollToStandby(t, tId, {
+                    name: teamString, displayName: teamString,
+                    manualParticipantId: 'manual-team-' + ((window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID() : Date.now().toString(36) + '-' + Math.random().toString(36).slice(2))
+                }, function() {
                     var container = document.getElementById('view-container');
                     if (container && typeof renderTournaments === 'function') renderTournaments(container, window.location.hash.split('/')[1]);
                 });
@@ -1611,7 +1617,10 @@ window.addTeamFunction = function (tId) {
             // e o resultado passa pelo leitor único.
             if (!t.teamOrigins) t.teamOrigins = {};
             t.teamOrigins[teamString] = 'formada';
-            var _teamObj = { name: teamString, displayName: teamString };
+            var _teamObj = {
+                name: teamString, displayName: teamString,
+                manualParticipantId: 'manual-team-' + ((window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID() : Date.now().toString(36) + '-' + Math.random().toString(36).slice(2))
+            };
             if (window.FirestoreDB && typeof window.FirestoreDB.enrollParticipant === 'function') {
                 window.FirestoreDB.enrollParticipant(tId, _teamObj, { teamOrigins: t.teamOrigins }).then(function(result) {
                     window._applyEnrollResult(t, tId, result, { name: teamString, self: false, successToast: false, refresh: true });
