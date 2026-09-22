@@ -143,6 +143,22 @@ ok(typeof W._monarchGlobalJogoNum === 'undefined',
     '[LOTE PARCIAL] não recomeça em 1 nem sobrescreve o número persistido enquanto falta jogo');
 })();
 
+// ── Confra: a eliminatória começa DEPOIS dos jogos já materializados. ───────────
+// O censo real da fase Rei/Rainha tem 27 grupos, 81 jogos e duas folgas. Quando a
+// eliminatória nascer, os carimbos históricos continuam 1..81 e o primeiro jogo
+// novo recebe 82; nunca pode ficar sem número por existir um carimbo anterior.
+(function () {
+  const t = JSON.parse(JSON.stringify(require('./fixtures/confra-pos-sorteio.json')));
+  t.matches = [{ id: 'confra-elim-R1-P1', phaseIndex: 1, round: 1, p1: 'A', p2: 'B' }];
+  W._assignGlobalGameNumbers(t);
+  const monarch = t.rounds[0].matches.filter(function (m) { return !m.isSitOut; });
+  const nums = monarch.map(function (m) { return m._gameNum; });
+  ok(monarch.length === 81 && new Set(nums).size === 81 && Math.min.apply(null, nums) === 1 && Math.max.apply(null, nums) === 81,
+    '[CONFRA] censo da classificatória preserva os 81 jogos numerados');
+  ok(t.matches[0]._gameNum === 82,
+    '[CONFRA] primeiro jogo da eliminatória recebe Jogo 82, não fica sem número');
+})();
+
 // ── Posição P<n>: IDs do Firestore ordenam P10 antes de P2 se tratados como texto. ──
 (function () {
   const match = function (id, bracket) { return { id, bracket, round: 1, p1: id + ' A', p2: id + ' B' }; };

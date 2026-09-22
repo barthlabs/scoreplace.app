@@ -1453,9 +1453,16 @@ window._assignGlobalGameNumbers = function (t) {
   // localmente substitui o número verdadeiro por outro. Não há escrita de
   // `_gameNum` no cliente: se ele já veio do servidor, apenas o exibimos.
   var _temCarimboServidor = false;
+  var _temJogoRealSemNumero = false;
   function _acharCarimbo(lista) {
     (lista || []).forEach(function (m) {
       if (m && Number.isInteger(m._gameNum) && m._gameNum > 0) _temCarimboServidor = true;
+      // Um carimbo existente protege um LOTE PARCIAL, mas não pode impedir a
+      // fase seguinte de receber números. A travessia abaixo é global (rodadas
+      // classificatórias antes de matches eliminatórios), portanto um jogo novo
+      // sem carimbo só é numerado quando a estrutura completa estiver disponível.
+      if (m && !m.isSitOut && !window._isByeMatch(m) &&
+          !(Number.isInteger(m._gameNum) && m._gameNum > 0)) _temJogoRealSemNumero = true;
     });
   }
   _acharCarimbo(t.matches);
@@ -1463,7 +1470,7 @@ window._assignGlobalGameNumbers = function (t) {
     _acharCarimbo(rd && rd.matches);
     (rd && rd.monarchGroups || []).forEach(function (g) { _acharCarimbo(g && g.matches); });
   });
-  if (_temCarimboServidor) return;
+  if (_temCarimboServidor && !_temJogoRealSemNumero) return;
   // `phaseRounds` e `groups` podem conter cópias já carregadas para desenhar a
   // tela, mas não são as fontes que este numerador percorre abaixo. Contá-las aqui
   // liberaria um recálculo sobre `t.matches` ainda parcial — exatamente o segundo
