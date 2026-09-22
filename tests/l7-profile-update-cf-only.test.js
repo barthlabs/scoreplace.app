@@ -67,6 +67,12 @@ ok(/exports\.updateOwnBlockedUser = onCall\([\s\S]*?normalizeBlockedUserMutation
   !/collection\(['"]users['"]\)/.test(blockBlock),
   'bloqueio de usuário passa pela Function, sem escrita direta no perfil');
 const store = fs.readFileSync('js/store.js', 'utf8');
+const legacyStoreSaveStart = store.indexOf('async saveUserProfileToFirestore()');
+const legacyStoreSaveEnd = store.indexOf('\n  },', legacyStoreSaveStart);
+const legacyStoreSave = store.slice(legacyStoreSaveStart, legacyStoreSaveEnd);
+ok(legacyStoreSaveStart >= 0 && /FirestoreDB\.saveUserProfile\(uid, payload\)/.test(legacyStoreSave) &&
+  !/state:\s*user\.state/.test(legacyStoreSave) && !/country:\s*user\.country/.test(legacyStoreSave) && !/locale:\s*user\.locale/.test(legacyStoreSave),
+  'auto-salvamento legado não envia campos fora do contrato e não invalida o lote inteiro');
 ok(!/previousDisplayNames/.test(auth) && !/previousDisplayNames/.test(store),
   'histórico morto de nomes anteriores não cria nem hidrata resíduos de perfil');
 

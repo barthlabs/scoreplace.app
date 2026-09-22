@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.3.87';
+window.SCOREPLACE_VERSION = '2.3.88';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -13166,9 +13166,9 @@ window.AppStore = {
       birthDate: user.birthDate,
       age: user.age,
       city: user.city,
-      state: user.state,
-      country: user.country,
-      locale: user.locale,
+      // state/country/locale eram restos do gravador direto legado. Não fazem
+      // parte do contrato updateOwnProfile; enviá-los faz a validação atômica
+      // recusar TODO o perfil, inclusive os campos válidos deste payload.
       phone: user.phone,
       phoneCountry: user.phoneCountry,
       preferredSports: user.preferredSports,
