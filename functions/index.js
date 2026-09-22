@@ -2983,6 +2983,9 @@ exports.enrollParticipant = onCall(
     if (!participantUid && !manualParticipantId) {
       throw new HttpsError("invalid-argument", "a inscrição precisa de uid ou manualParticipantId");
     }
+    // Uma única forma sanitizada atravessa roster principal, réplica sandbox e
+    // espelho. Usar o payload bruto em qualquer um deles reintroduziria PII.
+    const sanitizedParticipantObj = _enrollCore.sanitizeAccountParticipant(participantObj);
 
     const db = admin.firestore();
     const docRef = db.collection("tournaments").doc(tournamentId);
@@ -3043,7 +3046,7 @@ exports.enrollParticipant = onCall(
       if (!participantUid && !isOrganizer) {
         throw new HttpsError("permission-denied", "só o organizador pode incluir participante sem conta");
       }
-      const r = _enrollCore.computeEnroll(_dados, participantObj, extraUpdates, nowMs);
+      const r = _enrollCore.computeEnroll(_dados, sanitizedParticipantObj, extraUpdates, nowMs);
       if (r.updateData) _splitParts.gravar(tx, docRef, _dados, r.updateData);
       return r;
     });
@@ -3053,7 +3056,7 @@ exports.enrollParticipant = onCall(
 
     // Sandbox: a MESMA CF replica a inscrição no SB via o MESMO core (best-effort).
     await _replicateRosterToSandbox(db, tournamentId, function (sbData) {
-      return _enrollCore.computeEnroll(sbData, participantObj, extraUpdates, nowMs);
+      return _enrollCore.computeEnroll(sbData, sanitizedParticipantObj, extraUpdates, nowMs);
     });
 
     // ── ESPELHO DO ROSTER (v1.7.40) ─────────────────────────────────────────
@@ -3075,7 +3078,7 @@ exports.enrollParticipant = onCall(
             uid: _alvo,
             status: (out.outcome === "waitlisted") ? "waitlisted" : "enrolled",
             at: new Date().toISOString(),
-            entry: _enrollCore.cleanUndefined(participantObj),
+            entry: _enrollCore.cleanUndefined(sanitizedParticipantObj),
           }, { merge: true });
         }
       } catch (e) { console.error("[enrollParticipant] espelho do roster falhou:", e && e.message); }
