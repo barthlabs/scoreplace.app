@@ -35,10 +35,12 @@ ok(/merge --ff-only origin\/main/.test(sh),
    'e o alinha por fast-forward');
 
 // ORDEM: só depois de o main ter sido atualizado — alinhar antes copiaria o estado velho
-const iPush = sh.indexOf('git push origin "HEAD:main"');
+// ⚠️ MARCO, não o texto do comando: o push virou push com lease e mudou de lugar (passou a
+// acontecer ANTES do upload). O que este teste guarda é a ORDEM, não a escrita.
+const iPush = sh.indexOf('# MARCO: confirmacao-remota');
 const iAlinha = sh.indexOf('git worktree list --porcelain');
 ok(iPush > 0 && iAlinha > iPush,
-   'e isso acontece DEPOIS do push pro main (antes, copiaria o estado velho)');
+   'e isso acontece DEPOIS de o remoto CONFIRMAR o commit (antes, copiaria o estado velho)');
 
 // ⛔ as três recusas — alinhar não pode virar descartar trabalho alheio
 const bloco = sh.slice(iAlinha - 200, iAlinha + 2200);

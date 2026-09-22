@@ -70,7 +70,8 @@ console.log('▸ ③ o deploy marca o caminho e a corrida deixa de poder ser "pu
 console.log('▸ ④ a checagem vem ANTES do upload (e depois do push do main)');
 {
   const pos = {
-    push: sh.indexOf('git push origin "HEAD:main"'),
+    // ⚠️ MARCO, não o texto do comando (o push virou push com lease em 22/set/2026).
+    push: sh.indexOf('# MARCO: push-do-main'),
     check: sh.indexOf('firebase-admin NÃO existe no ambiente-fonte'),
     link: sh.indexOf('ln -s "$NM_AD"'),
     // ⚠️ o COMANDO, não a menção: o cabeçalho do script documenta a linha 6 do fluxo com o

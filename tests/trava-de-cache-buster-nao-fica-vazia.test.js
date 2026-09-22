@@ -39,7 +39,11 @@ const corpoDoGate = hook.slice(hook.indexOf('# ── 2. pro main'));
 ok(!/SP_HOOK_SKIP_TEST/.test(corpoDoGate), 'não há variável booleana que pule a suíte no push');
 ok(/SP_PREFLIGHT_OK.*==.*\$PREFLIGHT_HEAD/.test(corpoDoGate),
   'o reuso compara o carimbo do preflight com o SHA exato do HEAD');
-ok(deploy.indexOf('export SP_PREFLIGHT_OK="$COMMIT"') < deploy.indexOf('git push origin "HEAD:main"'),
+/* ⚠️ MARCO, NÃO O TEXTO DO COMANDO. Até 22/set/2026 esta linha procurava
+ * `git push origin "HEAD:main"` literalmente. O comando virou push com lease, e a busca por
+ * literal teria reprovado o CONSERTO — provando ordem por acidente de escrita. Os marcos
+ * existem para serem citados aqui: mudar o comando não os move. */
+ok(deploy.indexOf('export SP_PREFLIGHT_OK="$COMMIT"') < deploy.indexOf('# MARCO: push-do-main'),
   'o deploy carimba o SHA aprovado antes do push normal');
 ok(!/SP_HOOK_SKIP_TEST=1\s+git push/.test(deploy),
   'o deploy não injeta bypass booleano no push');

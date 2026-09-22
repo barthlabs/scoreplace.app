@@ -15,10 +15,22 @@
 #      arquivo gerado vai pro ar e nunca volta pro repo. Medido na 1.9.106 — commit com
 #      version.txt 1.9.105 e o ar em 1.9.106. Com o pre-commit instalado
 #      (scripts/install-hooks.sh) não há o que commitar aqui e o passo é um no-op.
-#   2. empurra HEAD pro `main` — fast-forward. Divergiu? ABORTA e diz o que fazer.
+#   2. ATUALIZA origin/main e CONGELA a base; classifica a topologia nos QUATRO estados
+#      (igual · main atrás · main À FRENTE ⇒ aborta · divergiu ⇒ aborta). O terceiro é o
+#      que faltava até 22/set/2026: o script dizia "já contém este commit" e publicava o
+#      estado ANTIGO por cima do novo, anunciando sucesso.
+#   2.5 roda TODOS os portões (preflight). O `--dry-run` sai AQUI, sem tocar no remoto.
+#   2.8 empurra o commit pro `main` com `--force-with-lease` sobre a base congelada, e
+#      confirma no REMOTO por `ls-remote`.
 #      ⚠️ É o main que passa a descrever o ar, então ele é atualizado ANTES do upload:
 #      falhar aqui é barato; falhar depois de publicar deixa exatamente o desalinhamento
 #      que este script existe pra impedir.
+#      ⛔ ISTO JÁ ESTEVE ERRADO DOS DOIS LADOS. Antes de 01/set/2026 o push vinha antes dos
+#      PORTÕES (2.1.81 reprovou com o main já adiantado). O conserto o empurrou longe demais,
+#      para DEPOIS do upload — e aí o ar passou a ficar à frente do main (medido em
+#      22/set/2026: ar 2.3.85, main 2.3.83). A ordem certa é a do meio:
+#         portões → push do main → upload
+#      As duas bordas valem ao mesmo tempo.
 #   3. extrai o commit com `git archive`; o Hosting só serve `www/`, artefato Vite gerado
 #      no predeploy a partir dessa cópia, nunca a raiz com código, testes ou dados auxiliares
 #   4. liga node_modules do repo (o predeploy roda testes com Chromium)
@@ -108,9 +120,16 @@ fi
 # variável depois da chamada. Sem `local`, o comportamento antigo é preservado byte a byte.
 montar_copia() {
 # (corpo do antigo passo 3-5, agora compartilhado com o preflight)
+#
+# ⛔ A REFERÊNCIA É ARGUMENTO, NÃO `HEAD`. `HEAD` é MÓVEL: com o push do main passando a
+# acontecer ANTES do upload, um commit local criado no meio faria o `main` remoto apontar
+# para um SHA e o pacote publicado conter OUTRO — com tudo na tela dizendo que deu certo.
+# Quem chama passa `$COMMIT`, a identidade congelada. Sucesso passa a significar uma coisa
+# só: SHA publicado no remoto = SHA arquivado = SHA carimbado.
 DEST="$1"
+REF="${2:?montar_copia exige a referência a arquivar (use \"$COMMIT\")}"
 rm -rf "$DEST"; mkdir -p "$DEST"
-git archive HEAD | tar -x -C "$DEST"
+git archive "$REF" | tar -x -C "$DEST"
 # ⚠️ Procura o node_modules SUBINDO os diretórios, como o Node faz. Publicar de uma
 # WORKTREE do git é caso normal aqui, e worktree NÃO tem node_modules próprio — os
 # testes só passam nela porque o Node sobe até o do repo pai. Fixar em "$RAIZ" fazia
@@ -388,6 +407,58 @@ echo "  ✓ sessão do Firebase válida"
 # uma versão MAIOR que a que vai subir. Na cópia extraída não há `.git`, então lá ele passa
 # vazio — por isso ele roda AQUI, no repositório de verdade, antes de tudo.
 fase "sessão firebase"
+
+# ── 1.87 · BASE FRESCA E TOPOLOGIA — antes de QUALQUER gate de versão ────────────────
+# ⛔ POR QUE AQUI E POR QUE BLOQUEANTE. A BASE (o SHA de origin/main) passa a valer para o
+# lease do push, para a confirmação remota e para a revisão. Um fetch tolerante deixaria a
+# BASE ser uma referência local VELHA, e tudo o que se apoia nela passaria a valer sobre um
+# retrato antigo sem nada na tela dizer isso. Sem referência fresca não se decide o que
+# publicar — então falhar aqui é parar, não avisar.
+#
+# ⛔ REFSPEC EXPLÍCITO E FORÇADO. Não depende da configuração de tracking da cópia, que varia
+# entre clone e worktree e é justamente o que faz a referência envelhecer calada.
+#
+# ⛔ A BASE VEM DA REFERÊNCIA LOCAL RECÉM-ATUALIZADA, não de `git ls-remote`: o ls-remote
+# devolve um NOME (o SHA) cujo OBJETO pode não existir aqui, e as conferências de topologia
+# trabalham sobre o GRAFO. O ls-remote fica para a confirmação pós-push, onde o que importa
+# é o estado do servidor naquele instante.
+# MARCO: fetch-e-base
+echo "▸ atualizando origin/main e congelando a base…"
+if ! git fetch -q --no-tags origin '+refs/heads/main:refs/remotes/origin/main'; then
+  echo
+  echo "✗ não consegui atualizar origin/main — não publico decidindo por uma referência velha."
+  exit 1
+fi
+BASE="$(git rev-parse refs/remotes/origin/main)"
+echo "  ✓ base congelada: ${BASE:0:8}"
+
+# ── 1.88 · OS QUATRO ESTADOS DE TOPOLOGIA ────────────────────────────────────────────
+# ⛔ O TERCEIRO ESTADO É O QUE FALTAVA E O QUE MACHUCA. Até 22/set/2026 este trecho dizia
+# apenas "✓ origin/main já contém este commit" e SEGUIA — e o que era empacotado adiante é o
+# COMMIT LOCAL. Com o remoto à frente (alguém publicou de outra árvore, que é o caso real
+# deste repositório), o script publicava o estado ANTIGO por cima do novo, anunciando
+# sucesso. "Estar contido" foi tratado como "estar em dia".
+#
+# Esta classificação é PORTA DE ENTRADA BARATA — evita gastar o preflight inteiro num caso
+# obviamente perdido. A GARANTIA contra corrida é o `--force-with-lease` do push.
+# MARCO: topologia
+if [[ "$BASE" == "$COMMIT" ]]; then
+  echo "  ✓ origin/main e HEAD são o mesmo commit"
+elif git merge-base --is-ancestor "$BASE" "$COMMIT" 2>/dev/null; then
+  echo "  ✓ origin/main avança por fast-forward até este commit"
+elif git merge-base --is-ancestor "$COMMIT" "$BASE" 2>/dev/null; then
+  echo
+  echo "✗ origin/main está À FRENTE deste commit — publicar aqui REBAIXARIA o ar."
+  echo "  origin/main: ${BASE:0:8}   ·   HEAD: ${COMMIT:0:8}"
+  echo "  Atualize o HEAD (git pull --ff-only) e rode de novo."
+  exit 1
+else
+  echo
+  echo "✗ HEAD e origin/main DIVERGIRAM — não publico um estado que o backup não alcança."
+  echo "  origin/main: ${BASE:0:8}   ·   HEAD: ${COMMIT:0:8}"
+  exit 1
+fi
+
 echo "▸ preflight: nenhum branch/remoto está à frente desta versão?"
 if ! node "$RAIZ/scripts/check-version-ahead.js"; then
   echo
@@ -406,7 +477,7 @@ SP_RELEASE_PRODUCTION_VERSION="$VERSAO_NO_AR" node "$RAIZ/scripts/check-release-
 fase "gates de versão"
 echo "▸ preflight: montando a cópia e rodando os gates ANTES de tocar no main…"
 PRE="${TMPDIR:-/tmp}/sp-preflight-$$"
-montar_copia "$PRE"
+montar_copia "$PRE" "$COMMIT"
 PRE_OK=1
 # Os MESMOS comandos do `hosting.predeploy` (firebase.json), na mesma ordem, na cópia.
 # `SP_EXIGE_CORRIDA_REAL=1` proíbe o desfecho "pulada" da corrida manual × automático:
@@ -440,33 +511,61 @@ echo "  ✓ preflight VERDE — pode alinhar o main e publicar"
 # ⛔ Exportado AQUI, depois do preflight passar — nunca antes, e nunca fora dele.
 export SP_PREFLIGHT_OK="$COMMIT"
 
-# ── 2. conferir se o backup PODE avançar (sem depender dele) ───────────────
-# GitHub é backup, mas uma divergência real continua sendo bloqueio: publicar um
-# commit que o main não alcança por fast-forward deixaria o ar irreconciliável.
 fase "PREFLIGHT (suíte+prerender)"
-echo "▸ conferindo se origin/main pode acompanhar este commit…"
-git fetch -q origin main || echo "  ⚠️  não deu pra atualizar origin/main (rede?) — conferindo a referência disponível"
-BACKUP_PENDENTE=0
-if git merge-base --is-ancestor "$COMMIT" origin/main 2>/dev/null; then
-  echo "  ✓ origin/main já contém este commit"
-elif git merge-base --is-ancestor origin/main "$COMMIT" 2>/dev/null; then
-  BACKUP_PENDENTE=1
-  echo "  ✓ origin/main pode avançar por fast-forward depois do Hosting"
-else
-  echo
-  echo "✗ HEAD e origin/main DIVERGIRAM — não publico um estado que o backup não alcança."
-  echo "  origin/main: $(git rev-parse --short origin/main)   ·   HEAD: ${COMMIT:0:8}"
-  exit 1
-fi
 
-# ── 3-5. cópia limpa + carimbo (a MESMA função que o preflight usou) ─────────
-montar_copia "${TMPDIR:-/tmp}/sp-deploy-$$"
-
+# ── 2. O ENSAIO PARA AQUI — antes de encostar no remoto ──────────────────────
+# ⛔ Com o push passando a vir ANTES do upload, o `--dry-run` teria começado a empurrar de
+# verdade: o ensaio deixaria de ser ensaio. A saída fica antes de QUALQUER `git push`.
+# MARCO: saida-do-ensaio
 if [[ $DRY -eq 1 ]]; then
-  echo "✓ dry-run completo — nada foi publicado."
+  montar_copia "${TMPDIR:-/tmp}/sp-deploy-$$" "$COMMIT"
+  echo "✓ dry-run completo — nada foi empurrado e nada foi publicado."
   echo "  (a cópia ficou em $DEST)"
   exit 0
 fi
+
+# ── 3. O `main` DESCREVE O AR — então ele é atualizado ANTES do upload ───────
+#
+# ⛔ ESTA ORDEM JÁ ESTEVE ERRADA DOS DOIS LADOS. Em 01/set/2026 o push acontecia ANTES dos
+# portões: na 2.1.81 um portão reprovou com o `main` já adiantado e consertar virou um
+# commit a mais (é a invariante que `tests/preflight-antes-do-push.test.js` guarda). O push
+# foi corretamente tirado de antes dos portões — e passou longe demais, parando DEPOIS do
+# upload. Aí veio o defeito oposto, medido em 22/set/2026: o ar servindo 2.3.85 com
+# origin/main em 2.3.83, porque o upload sobe e o push não.
+#
+# A ordem certa é a do meio, e é esta:  portões → push do main → upload.
+# Ambas as bordas valem: nenhum commit de release entra no `main` antes dos portões, E nada
+# é publicado antes de o `main` descrever aquilo.
+#
+# ⛔ `--force-with-lease` SOBRE A BASE CONGELADA é a GARANTIA, não as conferências acima.
+# Qualquer avanço do remoto depois da amostra faz o push RECUSAR — e sem push não há upload.
+# MARCO: push-do-main
+echo "▸ empurrando o main ANTES do upload (falhar aqui é barato)…"
+if ! git push --force-with-lease="refs/heads/main:$BASE" origin "$COMMIT:refs/heads/main"; then
+  echo
+  echo "✗ o push do main foi RECUSADO — o remoto mudou depois da conferência."
+  echo "  NADA foi publicado. Atualize (git pull --ff-only) e rode de novo."
+  exit 1
+fi
+
+# ── 3.5 · CONFIRMAR NO REMOTO, não na referência local ──────────────────────
+# ⛔ `origin/main` local pode estar obsoleta exatamente no instante em que a confirmação
+# importa. Quem responde é o servidor.
+# ⚠️ ESTE CASO É DIFERENTE DA RECUSA DO LEASE e pede conduta diferente: lease recusado =
+# "ninguém tocou no ar, atualize e recomece"; divergência aqui = "seu commit ENTROU e já foi
+# ultrapassado". Uma mensagem só para os dois faria tratar o segundo como o primeiro.
+# MARCO: confirmacao-remota
+REMOTO="$(git ls-remote origin refs/heads/main 2>/dev/null | awk '{print $1}')"
+if [[ "$REMOTO" != "$COMMIT" ]]; then
+  echo
+  echo "✗ DIVERGÊNCIA PÓS-PUSH: o main remoto é '${REMOTO:0:8}' e este commit é '${COMMIT:0:8}'."
+  echo "  Seu commit entrou e já foi ultrapassado por outro publicador. NADA foi publicado."
+  exit 1
+fi
+echo "  ✓ main remoto confirmado em ${COMMIT:0:8}"
+
+# ── 4-5. cópia limpa + carimbo, do SHA CONFIRMADO (não de HEAD) ─────────────
+montar_copia "${TMPDIR:-/tmp}/sp-deploy-$$" "$COMMIT"
 
 # ── 6. publicar ──────────────────────────────────────────────────────────────
 # ⚠️ SEM PIPE. Pipe transforma o exit code no do último comando e o gate do predeploy
@@ -477,6 +576,7 @@ cd "$DEST"
 # `set -e` o script morreu ALI, depois de publicar e antes de empurrar o main e o backup. Ficou o
 # pior dos mundos: o ar novo e o repositório atrás (exatamente o que a trava de alinhamento existe
 # para impedir). Quem julga se publicou é O AR, conferido logo abaixo — não o código de saída.
+# MARCO: upload
 _DEPLOY_RC=0
 firebase deploy --only hosting --project scoreplace-app || _DEPLOY_RC=$?
 if [[ "$_DEPLOY_RC" != "0" ]]; then
@@ -492,27 +592,26 @@ for _ in $(seq 1 30); do
   [[ "$AR" == "$VERSAO" ]] && break
   sleep 5
 done
+# ⛔ O CÓDIGO DE SAÍDA DO CLI NÃO DECIDE — quem decide é O AR, conferido acima. Só
+# divergência ou esgotamento do prazo caracterizam upload não confirmado, e sucesso NUNCA é
+# anunciado sem a versão no ar bater.
+# MARCO: conferencia-do-ar
 if [[ "${AR:-}" != "$VERSAO" ]]; then
-  echo "✗ o ar responde '${AR:-vazio}' e era esperado '$VERSAO' — confira antes de anunciar."
+  echo
+  echo "✗ o ar responde '${AR:-vazio}' e era esperado '$VERSAO' — o upload NÃO foi confirmado."
+  echo "  O main JÁ está em ${COMMIT:0:8}, ou seja, à frente do ar. Este é o lado seguro:"
+  echo "  ninguém foi rebaixado. Para reconciliar, rode a publicação DESTE MESMO commit de novo."
   exit 1
 fi
 echo "✓ NO AR: $VERSAO  ·  main alinhado em ${COMMIT:0:8}"
 
-# ── 8. atualizar o backup depois do ar confirmado ───────────────────────────
-# O Hosting já foi conferido. Falha de GitHub/Drive é visível, mas não desfaz uma
-# correção de produção saudável.
-if [[ $BACKUP_PENDENTE -eq 1 && $DRY -eq 0 ]]; then
-  echo "▸ atualizando o backup no origin/main…"
-  if git push origin "HEAD:main"; then
-    echo "  ✓ origin/main alinhado em ${COMMIT:0:8}"
-  else
-    echo "⚠️  Hosting está publicado, mas o backup GitHub falhou."
-    echo "   origin/main ficou atrás do ar; quando a rede voltar: git push origin HEAD:main"
-  fi
-fi
+# ── 8. o backup JÁ FOI — o push aconteceu no passo 3, antes do upload ───────
+# ⛔ Não há push aqui. Ele saiu daqui de propósito: enquanto morou depois do upload, uma
+# falha de rede deixava o AR À FRENTE do main, que é o desalinhamento que este script existe
+# para impedir — e foi exatamente o que aconteceu (ar 2.3.85, main 2.3.83).
 
-# O checkout principal só acompanha depois de o backup remoto confirmar o commit.
-if [[ $BACKUP_PENDENTE -eq 1 ]] && git merge-base --is-ancestor "$COMMIT" origin/main 2>/dev/null; then
+# O checkout principal acompanha; o remoto já foi confirmado no passo 3.5.
+if git merge-base --is-ancestor "$COMMIT" refs/remotes/origin/main 2>/dev/null || [[ "$REMOTO" == "$COMMIT" ]]; then
   PRINCIPAL="$(git worktree list --porcelain | awk '/^worktree /{print $2; exit}')"
   if [[ -n "$PRINCIPAL" && "$PRINCIPAL" != "$RAIZ" ]]; then
     BRANCH_PRINCIPAL="$(git -C "$PRINCIPAL" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
