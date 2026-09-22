@@ -320,7 +320,11 @@ window._suggestFriendsForGuestName = function(typedName, excludeUids) {
 // load), então mutar round.matches já muta o grupo. Nada a propagar/sincronizar.
 function _propagateMatchUpdate(t, m) {
   if (!t || !m || !m.id) return;
-  var FIELDS = ['winner', 'draw', 'scoreP1', 'scoreP2', 'sets', 'setsWonP1', 'setsWonP2', 'totalGamesP1', 'totalGamesP2', 'fixedSet', 'isBye', 'pendingResult', 'wo', 'woAbsentSide'];
+  // `winnerUid(s)` viaja com o placar. Ele é a identidade canônica do vencedor;
+  // `winner` permanece somente como rótulo de apresentação para estruturas legadas.
+  // Sem estes campos, cópias do mesmo jogo podiam conservar só o nome e qualquer
+  // consumidor posterior voltava a inferir identidade por texto.
+  var FIELDS = ['winner', 'winnerUid', 'winnerUids', 'draw', 'scoreP1', 'scoreP2', 'sets', 'setsWonP1', 'setsWonP2', 'totalGamesP1', 'totalGamesP2', 'fixedSet', 'isBye', 'pendingResult', 'wo', 'woAbsentSide'];
   var updateRef = function(ref) {
     if (!ref || ref === m) return; // skip self (already mutated)
     if (ref.id !== m.id) return;
@@ -2251,8 +2255,17 @@ window._applyResultToTournament = function (t, matchId, payload) {
 
   if (!payload.gsmFinal) {
     if (s1 === s2 && allowDraw) {
+      // Empate não tem vencedor. Limpar os carimbos evita carregar para uma
+      // correção o UID de um resultado anterior.
       m.winner = 'draw'; m.draw = true;
+      delete m.winnerUid; delete m.winnerUids;
+    } else if (typeof window._stampWinner === 'function') {
+      // Escritor único do vencedor: persiste o rótulo legado e a identidade do
+      // lado vencedor. A Function usa esta mesma cópia vendorizada.
+      window._stampWinner(m, s1 > s2 ? 1 : 2);
     } else {
+      // Ambiente legado sem bracket-model não recebe um UID inventado. O
+      // servidor recusa materializar histórico sem identidade estrutural.
       m.winner = s1 > s2 ? m.p1 : m.p2; m.draw = false;
     }
   }

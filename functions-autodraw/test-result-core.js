@@ -55,6 +55,18 @@ console.log('\n──── result-core: autorização ────');
   const T = mkT();
   const r = core.applyResult(T, { matchId: 'm1', payload: PAYLOAD, actor: { uid: UID_ORG }, now: 1 });
   t('organizador lança direto (applied)', r.ok && r.outcome === 'applied', JSON.stringify(r));
+  const m = win._findMatch(T, 'm1');
+  t('resultado padrão carimba vencedores pelo UID', Array.isArray(m.winnerUids) && m.winnerUids.join('|') === UID_A1 + '|' + UID_A2 && m.winnerUid == null);
+}
+
+// A mesma partida pode ter referências separadas em estruturas legadas. A cópia
+// não pode receber só o rótulo de vencedor, senão a próxima leitura volta a nome.
+{
+  const T = mkT();
+  const espelho = JSON.parse(JSON.stringify(T.rounds[0].matches[0]));
+  T.matches.push(espelho);
+  core.applyResult(T, { matchId: 'm1', payload: PAYLOAD, actor: { uid: UID_ORG }, now: 1 });
+  t('propagação leva winnerUids a toda referência do jogo', Array.isArray(espelho.winnerUids) && espelho.winnerUids.join('|') === UID_A1 + '|' + UID_A2, JSON.stringify(espelho));
 }
 
 // 2) Fase 'organizer' → participante do jogo é RECUSADO. É o buraco central.
@@ -227,6 +239,14 @@ console.log('\n──── result-core: reabertura administrativa ────'
   T.matches = [m];
   const r = core.applyResult(T, { matchId: 'm1', payload: PAYLOAD, actor: { uid: UID_ORG }, now: 1 });
   t('resultado final encerra eliminatória na CF', r.ok && T.status === 'finished' && !!T.finishedAt, JSON.stringify({ r, status: T.status }));
+}
+
+// 18) Empate não herda o UID de um vencedor que existia antes da correção.
+{
+  const T = mkT(); const m = win._findMatch(T, 'm1');
+  m.winner = 'Ana / Bia'; m.winnerUid = UID_A1; m.winnerUids = [UID_A1, UID_A2];
+  const r = core.applyResult(T, { matchId: 'm1', payload: { s1: 6, s2: 6, useSets: false }, actor: { uid: UID_ORG }, now: 1 });
+  t('empate apaga o carimbo de vencedor anterior', r.ok && r.outcome === 'applied' && m.draw === true && !m.winnerUid && !m.winnerUids, JSON.stringify(m));
 }
 
 console.log('\n──── paridade com o cliente ────');

@@ -1957,7 +1957,12 @@ window._assignGlobalGameNumbers = function (t) {
     if (!m || (side !== 1 && side !== 2)) return;
     m.winner = (side === 1) ? m.p1 : m.p2;
     m.draw = false;
-    var uids = (typeof window._slotUids === 'function') ? window._slotUids(m, side) : null;
+    // `_slotUids` recebe o nome estrutural do slot, não o ordinal da tela.
+    // Passar `1`/`2` fazia todo vencedor carimbar o lado 2 porque o helper só
+    // reconhece `p1`; a projeção por UID detectou a inversão antes de ela virar
+    // estatística persistida.
+    var uids = (typeof window._slotUids === 'function')
+      ? window._slotUids(m, side === 1 ? 'p1' : 'p2') : null;
     // Guest sem conta não tem uid, e a string É a identidade legítima dele — nesse caso não
     // há o que carimbar (e um array vazio mentiria dizendo "resolvi por uid").
     if (uids && uids.length) m.winnerUids = uids.slice();
