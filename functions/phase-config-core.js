@@ -87,18 +87,4 @@ function normalizePhaseConfig(input) {
   return { schemaVersion: 1, kind, entrants: { source: entrants.source, categoryIds: entrants.categoryIds.slice() }, competition: { teamSize: competition.teamSize }, draw: { modality, teamFormation, pairPersistence, pairing, antiRepeat: Object.assign({}, antiRepeat) }, schedule: { mode: scheduleMode, firstAt, intervalDays: schedule.intervalDays == null ? null : schedule.intervalDays, rounds: schedule.rounds }, lateEnrollment, seeding, bracketPolicy };
 }
 
-// Um torneio é um plano ordenado, não uma fase solta. Mantemos o normalizador
-// unitário para a UI por fase, mas a persistência canônica usa este envelope.
-function normalizePhasePlan(input) {
-  const raw = object(input, 'phasePlan inválido');
-  only(raw, new Set(['schemaVersion', 'phases']), 'campo de phasePlan não permitido');
-  if (raw.schemaVersion !== 1 || !Array.isArray(raw.phases) || raw.phases.length < 1) fail('phases inválidas');
-  const phases = raw.phases.map((phase) => normalizePhaseConfig(phase));
-  if (phases[0].entrants.source !== 'enrollments') fail('primeira fase deve partir das inscrições');
-  for (let i = 1; i < phases.length; i++) {
-    if (phases[i].entrants.source !== 'previous_phase') fail('fase posterior deve partir da fase anterior');
-  }
-  return { schemaVersion: 1, phases };
-}
-
-module.exports = { KINDS, DRAW_MODALITIES, BRACKET_POLICIES, normalizePhaseConfig, normalizePhasePlan };
+module.exports = { KINDS, DRAW_MODALITIES, BRACKET_POLICIES, normalizePhaseConfig };
