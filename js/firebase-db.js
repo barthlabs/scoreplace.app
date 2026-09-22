@@ -2534,6 +2534,14 @@ window.FirestoreDB = {
     return this._callFn('recordPhoneVerificationAttempt', attempt || {});
   },
 
+  async materializeOwnCasualMatchHistory(casualMatchId) {
+    return this._callFn('materializeOwnCasualMatchHistory', { casualMatchId: String(casualMatchId || '') });
+  },
+
+  async removeOwnCasualMatchHistory(casualMatchId) {
+    return this._callFn('removeOwnCasualMatchHistory', { casualMatchId: String(casualMatchId || '') });
+  },
+
   async saveTournamentPreference(field, tournamentId, add) {
     return this._callFn('updateOwnTournamentPreference', { field: field, tournamentId: String(tournamentId || ''), add: add === true });
   },
@@ -3760,32 +3768,6 @@ window.FirestoreDB = {
       window._error('Erro ao carregar partidas casuais:', e);
       return [];
     }
-  },
-
-  // ── User match history (persistent per-user stats across casual + tournament) ──
-  // Writes one copy of the match record into each registered player's profile
-  // subcollection so the record survives deletion of the original tournament
-  // or casual match document.
-  async saveUserMatchRecords(record) {
-    if (!this.db || !record || !Array.isArray(record.players)) return false;
-    var self = this;
-    var clean = self._cleanUndefined(record);
-    var recordId = clean.matchId || ('m_' + Date.now() + '_' + Math.floor(Math.random() * 1e6));
-    clean.matchId = recordId;
-    var writers = [];
-    for (var i = 0; i < clean.players.length; i++) {
-      (function(p) {
-        if (!p || !p.uid) return;
-        writers.push((async function() {
-          try {
-            await self.db.collection('users').doc(p.uid)
-              .collection('matchHistory').doc(recordId)
-              .set(clean, { merge: true });
-          } catch (e) { window._warn('saveUserMatchRecords for', p.uid, 'failed', e); }
-        })());
-      })(clean.players[i]);
-    }
-    try { await Promise.all(writers); return true; } catch (e) { return false; }
   },
 
   async loadUserMatchHistory(uid, options) {

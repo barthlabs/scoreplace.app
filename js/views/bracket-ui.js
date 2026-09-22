@@ -205,8 +205,7 @@ window._confirmCasualLinkRequest = async function(notif, accept) {
     // Rejeição: apaga o registro do matchHistory do usuário que recusou
     if (!accept) {
       try {
-        await window.FirestoreDB.db.collection('users').doc(cu.uid)
-          .collection('matchHistory').doc('casual_' + notif.casualMatchDocId).delete();
+        await window.FirestoreDB.removeOwnCasualMatchHistory(notif.casualMatchDocId);
       } catch (_mhE) { window._warn('[casual link] delete matchHistory err:', _mhE); }
     }
     // Marca notif como lida + envia confirmação de volta pro solicitante
@@ -1163,7 +1162,6 @@ function _buildMatchPlayersList(t, m) {
 function _persistInlineTournamentMatchRecord(t, m, s1, s2, tbP1, tbP2, isTiebreakEntry, useSets) {
   // Sandbox: resultados do SB NÃO vazam pro matchHistory (nem stats, nem troféus).
   if (window._isSandboxTournament && window._isSandboxTournament(t)) return;
-  if (!window.FirestoreDB || !window.FirestoreDB.saveUserMatchRecords) return;
   var pl = _buildMatchPlayersList(t, m);
   if (!pl) return;
   var players = pl.players;
@@ -1202,10 +1200,7 @@ function _persistInlineTournamentMatchRecord(t, m, s1, s2, tbP1, tbP2, isTiebrea
     stats: { team1: team1, team2: team2 },
     playerStats: {}
   };
-  try {
-    var prom = window.FirestoreDB.saveUserMatchRecords(record);
-    if (prom && typeof prom.catch === 'function') prom.catch(function(){});
-  } catch(e) {}
+  // A projeção agora nasce da transação `applyMatchResult` no servidor.
 }
 
 // GSM (set-by-set) variant used by _saveSetResult. m.sets already holds the
@@ -1213,7 +1208,6 @@ function _persistInlineTournamentMatchRecord(t, m, s1, s2, tbP1, tbP2, isTiebrea
 function _persistGSMTournamentMatchRecord(t, m, sets, p1Sets, p2Sets, totalGamesP1, totalGamesP2) {
   // Sandbox: resultados do SB NÃO vazam pro matchHistory (nem stats, nem troféus).
   if (window._isSandboxTournament && window._isSandboxTournament(t)) return;
-  if (!window.FirestoreDB || !window.FirestoreDB.saveUserMatchRecords) return;
   var pl = _buildMatchPlayersList(t, m);
   if (!pl) return;
   var winnerTeam = 0;
@@ -1256,10 +1250,7 @@ function _persistGSMTournamentMatchRecord(t, m, sets, p1Sets, p2Sets, totalGames
     stats: { team1: team1, team2: team2 },
     playerStats: {}
   };
-  try {
-    var prom = window.FirestoreDB.saveUserMatchRecords(record);
-    if (prom && typeof prom.catch === 'function') prom.catch(function(){});
-  } catch(e) {}
+  // A projeção agora nasce da transação `applyMatchResult` no servidor.
 }
 
 
@@ -5738,12 +5729,6 @@ window._openLiveScoring = function(tId, matchId, opts) {
       // não têm como voltar, porque o dado nunca foi gravado.
       replay: _buildReplayPayload()
     };
-    if (typeof window.FirestoreDB !== 'undefined' && window.FirestoreDB.saveUserMatchRecords) {
-      try {
-        var p = window.FirestoreDB.saveUserMatchRecords(record);
-        if (p && typeof p.catch === 'function') p.catch(function(){});
-      } catch(e) {}
-    }
     // v1.8.79 (REPLAY PÚBLICO): além do matchHistory (que é do jogador e obedece ao
     // `statsVisibility`), o ponto a ponto de jogo de TORNEIO vai também pro doc DO JOGO
     // — o único lugar que qualquer pessoa consegue ler. É isso que faz o botão Replay
@@ -5879,7 +5864,12 @@ window._openLiveScoring = function(tId, matchId, opts) {
         var _finishedAt = new Date().toISOString();
 
         // Helper to trigger history refresh after write confirms
-        function _afterSave() {
+        function _afterSave(savedCasualMatchId) {
+          if (savedCasualMatchId && window.FirestoreDB && window.FirestoreDB.materializeOwnCasualMatchHistory) {
+            window.FirestoreDB.materializeOwnCasualMatchHistory(savedCasualMatchId).catch(function(e) {
+              window._warn('[casual history] materialization err:', e);
+            });
+          }
           _statsSlotWriteConfirmed = true;
           setTimeout(function() {
             if (typeof window._casualLoadLastMatches === 'function') window._casualLoadLastMatches();
@@ -5907,7 +5897,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
           } catch(_e) {}
           var _updatePromise = window.FirestoreDB.updateCasualMatch(_casualDocId, _updatePayload);
           if (_updatePromise && typeof _updatePromise.then === 'function') {
-            _updatePromise.then(_afterSave).catch(function() {
+            _updatePromise.then(function() { _afterSave(_casualDocId); }).catch(function() {
               // v1.7.7-beta: mesmo em erro de write, tenta mostrar seção
               _statsSlotWriteConfirmed = true;
               setTimeout(function() {
@@ -5938,10 +5928,10 @@ window._openLiveScoring = function(tId, matchId, opts) {
           if (_createPromise && typeof _createPromise.then === 'function') {
             _createPromise.then(function(newId) {
               try { window._lastCasualSaveResult = { docId: newId, fallback: true, winner: state.winner, at: _finishedAt }; } catch(_e) {}
-              _afterSave();
+              _afterSave(newId);
             }).catch(function(e) {
               window._warn('[Casual] fallback-save err:', e);
-              _afterSave();
+              _afterSave(null);
             });
           }
         }

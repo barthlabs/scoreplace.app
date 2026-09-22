@@ -10,6 +10,7 @@ const { rebaseRounds } = require('./rebase-core.js');
 const _tourSummary = require('./tournament-summary-core.js');
 const _wp = require('./write-plan.js');
 const _woClaimCore = require('./wo-claim-core.js');
+const _matchHistory = require('./match-history-core.js');
 const _tSplit = require('./vendor/tournament-split-core.js');   // fonte única: js/views/ (copy-vendor)
 // fonte única: functions/match-roster.js (copy-vendor) — monta o subdoc de resultado,
 // incluindo o carregar-adiante do `replay`, que o servidor não sabe recalcular.
@@ -1577,6 +1578,22 @@ async function _aplicaPlacarNaTransacao(db, tId, matchId, payload, ator, logMess
     });
     const _matchDepois = (typeof drawWindow._findMatch === 'function')
       ? drawWindow._findMatch(t, matchId) : null;
+    // Histórico é projeção derivada da partida aceita pelo motor dentro desta
+    // mesma transação. O payload do navegador nunca escolhe jogadores, vencedor
+    // ou destinatários. Reabrir/reverter remove a projeção determinística.
+    const _history = res.outcome === 'applied'
+      ? _matchHistory.buildTournamentRecord(t, _matchDepois, _agoraIsoTx)
+      : null;
+    if (_history) {
+      _history.recipients.forEach((historyUid) => {
+        tx.set(db.collection('users').doc(historyUid).collection('matchHistory').doc(_history.matchId), _history.record);
+      });
+    } else if (res.outcome === 'match-reset' || res.outcome === 'result-reopened' || res.outcome === 'wo-reverted') {
+      const _historyId = 't_' + String(tId) + '_' + String(matchId);
+      _slotUidsOf(_matchDepois, 'p1').concat(_slotUidsOf(_matchDepois, 'p2')).forEach((historyUid) => {
+        tx.delete(db.collection('users').doc(historyUid).collection('matchHistory').doc(_historyId));
+      });
+    }
     const _notif = _scoreNotificationEvent(t, _matchDepois, res.outcome, ator, _agoraIsoTx, {
       action: payload && payload.action,
       pendingBefore: _pendingAntes,

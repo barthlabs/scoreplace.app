@@ -55,6 +55,7 @@ const _casualLastPreferences = require("./casual-last-preferences-core");
 const _casualScoringPreferences = require("./casual-scoring-preferences-core");
 const _blockedUsers = require("./blocked-users-core");
 const _phoneVerificationAttempt = require("./phone-verification-attempt-core");
+const _casualMatchHistory = require("./casual-match-history-core");
 
 // v1.8.38 — RARIDADE DO TOKEN, em UM lugar só (os dois caminhos de detecção usam este).
 // O subconjunto de 1 token só vira sinal quando o token existe SÓ nas duas contas
@@ -3273,6 +3274,64 @@ exports.recordPhoneVerificationAttempt = onCall(
       }));
     });
     return { ok: true };
+  }
+);
+
+// Histórico casual é projeção do documento final já existente. O navegador não
+// manda jogadores, placar ou destinatários: declara somente qual partida ele
+// próprio confirma ter jogado. Como a criação de salas ainda aceita nomes/UIDs
+// pré-preenchidos, esta porta grava EXCLUSIVAMENTE a cópia do próprio token;
+// atribuição para terceiros exige confirmação individual.
+exports.materializeOwnCasualMatchHistory = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
+  async (request) => {
+    const uid = request.auth && request.auth.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Login obrigatório.");
+    const casualMatchId = String((request.data && request.data.casualMatchId) || "").trim();
+    if (!casualMatchId || casualMatchId.length > 200) {
+      throw new HttpsError("invalid-argument", "casualMatchId é obrigatório.");
+    }
+    const db = admin.firestore();
+    const matchRef = db.collection("casualMatches").doc(casualMatchId);
+    const historyRef = db.collection("users").doc(uid).collection("matchHistory").doc("casual_" + casualMatchId);
+    return db.runTransaction(async (tx) => {
+      const matchSnap = await tx.get(matchRef);
+      if (!matchSnap.exists) throw new HttpsError("not-found", "Partida não encontrada.");
+      const match = matchSnap.data() || {};
+      const projection = _casualMatchHistory.buildCasualRecord(casualMatchId, match);
+      if (!projection || projection.recipients.indexOf(String(uid)) === -1) {
+        throw new HttpsError("permission-denied", "Você não é participante confirmado desta partida.");
+      }
+      tx.set(historyRef, projection.record);
+      return { ok: true, matchId: projection.matchId };
+    });
+  }
+);
+
+// A retirada de uma atribuição casual só remove a cópia da própria conta. A
+// Function fixa o UID pelo token; o navegador não escolhe outro perfil.
+exports.removeOwnCasualMatchHistory = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
+  async (request) => {
+    const uid = request.auth && request.auth.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Login obrigatório.");
+    const casualMatchId = String((request.data && request.data.casualMatchId) || "").trim();
+    if (!casualMatchId || casualMatchId.length > 200) {
+      throw new HttpsError("invalid-argument", "casualMatchId é obrigatório.");
+    }
+    const db = admin.firestore();
+    const matchRef = db.collection("casualMatches").doc(casualMatchId);
+    const historyRef = db.collection("users").doc(uid).collection("matchHistory").doc("casual_" + casualMatchId);
+    return db.runTransaction(async (tx) => {
+      const matchSnap = await tx.get(matchRef);
+      if (!matchSnap.exists) throw new HttpsError("not-found", "Partida não encontrada.");
+      const uids = _casualMatchHistory.uniqueUids((matchSnap.data() || {}).playerUids || []);
+      if (uids.indexOf(String(uid)) !== -1) {
+        throw new HttpsError("failed-precondition", "A participação ainda está confirmada.");
+      }
+      tx.delete(historyRef);
+      return { ok: true };
+    });
   }
 );
 
