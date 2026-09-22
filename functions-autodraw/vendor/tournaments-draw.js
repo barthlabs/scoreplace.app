@@ -2660,9 +2660,19 @@ window.generateDrawFunction = function (tId) {
     //    o organizador já decidiu o que fazer com o resto.
 
     // ── Verificação de número ímpar (formatos não-eliminatórios, exceto Grupos, Suíço e Liga) ──────
-    const isElim = t.format === 'Eliminatórias Simples' || t.format === 'Dupla Eliminatória';
-    const isGruposFmt = t.format === 'Fase de Grupos + Eliminatórias' || (t.format || '').indexOf('Grupo') !== -1;
-    const isSuicoOrLiga = t.format === 'Suíço Clássico' || t.classifyFormat === 'swiss' || t.currentStage === 'swiss' || (window._isLigaFormat && window._isLigaFormat(t));
+    // Fases novas decidem pelo contrato de domínio; o formato do topo só lê
+    // torneios materializados antes de `phases[].kind`.
+    const _drawPhase = (t.phases || [])[t.currentPhaseIndex || 0] || null;
+    const _hasCanonicalKind = !!(_drawPhase && (_drawPhase.kind === 'classification' || _drawPhase.kind === 'elimination'));
+    const isElim = _hasCanonicalKind
+      ? _drawPhase.kind === 'elimination'
+      : (t.format === 'Eliminatórias Simples' || t.format === 'Dupla Eliminatória');
+    const isGruposFmt = _hasCanonicalKind
+      ? (_drawPhase.kind === 'classification' && _drawPhase.classification && _drawPhase.classification.structure === 'groups')
+      : (t.format === 'Fase de Grupos + Eliminatórias' || (t.format || '').indexOf('Grupo') !== -1);
+    const isSuicoOrLiga = _hasCanonicalKind
+      ? _drawPhase.kind === 'classification'
+      : (t.format === 'Suíço Clássico' || t.classifyFormat === 'swiss' || t.currentStage === 'swiss' || (window._isLigaFormat && window._isLigaFormat(t)));
     if (!isElim && !isGruposFmt && !isSuicoOrLiga && !t.oddResolution && typeof window.checkOddEntries === 'function') {
         const oddInfo = window.checkOddEntries(t);
         if (oddInfo.isOdd) {
