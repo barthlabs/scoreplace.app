@@ -4937,12 +4937,37 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
    * ⛔ NADA DE UID NO DOM nesta seção. O servidor já não manda uid, e-mail nem telefone
    * inteiro — aqui não se reintroduz nenhum dos três.
    */
-  var _dupEstado = { cursor: null, pares: [], naoMedidos: 0, carregando: false, erro: '' };
+  /* ⛔ ESTADO POR TORNEIO, E TOKEN POR PEDIDO. Um estado global vazava entre torneios:
+   * abrir a análise de A, navegar para B antes da resposta, e a resposta de A pintava os
+   * NOMES E PISTAS de A dentro da tela de B — que é um vazamento entre torneios, não um
+   * susto visual. Pior: a carga de B era recusada pelo `carregando` de A.
+   * A tela já protegia as outras respostas assíncronas com o hash; esta seção não
+   * reaplicava o padrão. Agora são TRÊS condições juntas, e todas antes de tocar no DOM. */
+  var _dupPorTorneio = Object.create(null);
+  var _dupToken = 0;
 
-  function _dupPintar(tId) {
+  function _dupEstadoDe(tId) {
+    if (!_dupPorTorneio[tId]) {
+      _dupPorTorneio[tId] = { cursor: null, pares: [], naoMedidos: 0, carregando: false, erro: '', token: 0 };
+    }
+    return _dupPorTorneio[tId];
+  }
+
+  /* As três condições: a rota ainda é a deste torneio, o elemento no DOM ainda é o deste
+   * torneio, e esta resposta é a MAIS RECENTE deste torneio. Qualquer uma falhando, a
+   * resposta é descartada em silêncio — ela pertence a uma tela que não está mais aí. */
+  function _dupPodePintar(tId, token) {
+    if (window.location.hash !== '#analise/' + tId) return null;
     var box = document.getElementById('er-dup-secao');
+    if (!box || box.getAttribute('data-tid') !== String(tId)) return null;
+    if (token != null && token !== _dupEstadoDe(tId).token) return null;
+    return box;
+  }
+
+  function _dupPintar(tId, token) {
+    var box = _dupPodePintar(tId, token);
     if (!box) return;
-    var e = _dupEstado;
+    var e = _dupEstadoDe(tId);
     var topo = '<div style="font-weight:800;color:var(--text-bright);font-size:0.95rem;margin-bottom:8px;">' +
       '👥 Possíveis contas duplicadas</div>';
 
@@ -5014,23 +5039,27 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
 
   window._erCarregarDuplicatas = function (tId, recomecar) {
     if (!tId) return;
-    var e = _dupEstado;
+    var e = _dupEstadoDe(tId);
     if (e.carregando) return;
     if (recomecar) { e.cursor = null; e.pares = []; e.naoMedidos = 0; }
     e.carregando = true; e.erro = '';
-    _dupPintar(tId);
+    var meuToken = (e.token = ++_dupToken);
+    _dupPintar(tId, meuToken);
     var db = window.FirestoreDB;
     if (!db || typeof db.carregarDuplicatasDoElenco !== 'function') {
-      e.carregando = false; e.erro = 'Esta versão do app não sabe consultar duplicatas.'; _dupPintar(tId); return;
+      e.carregando = false; e.erro = 'Esta versão do app não sabe consultar duplicatas.';
+      _dupPintar(tId, meuToken); return;
     }
     db.carregarDuplicatasDoElenco(tId, { cursor: e.cursor }).then(function (r) {
       e.carregando = false;
+      if (meuToken !== e.token) return;            // resposta velha: descarta
       e.pares = e.pares.concat(r.pairs || []);
       e.cursor = r.nextCursor || null;
       e.naoMedidos = r.unmeasuredCount || 0;
-      _dupPintar(tId);
+      _dupPintar(tId, meuToken);
     }).catch(function (err) {
       e.carregando = false;
+      if (meuToken !== e.token) return;            // resposta velha: descarta
       var codigo = (err && (err.code || err.message)) || '';
       // ⚠️ `failed-precondition` NÃO é erro: a análise mudou no meio da paginação. Recomeça.
       if (String(codigo).indexOf('failed-precondition') !== -1) {
@@ -5043,7 +5072,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       } else {
         e.erro = 'Não consegui conferir agora. Isto NÃO quer dizer que está tudo certo.';
       }
-      _dupPintar(tId);
+      _dupPintar(tId, meuToken);
     });
   };
 

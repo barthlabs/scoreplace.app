@@ -921,6 +921,9 @@ const SUITES = [
   // existia e só falava com o atleta; quem enxerga as duas inscrições lado a lado não
   // era avisado — foi por isso que a mesclagem falhou em todos os incidentes.
   'tests/duplicata-no-elenco-do-organizador.test.js',
+  // A análise de UM torneio não pode pintar na tela de OUTRO: estado global fazia os
+  // nomes e as pistas mascaradas do torneio A aparecerem dentro do torneio B.
+  'tests/duplicata-nao-vaza-entre-torneios.test.js',
   // Leitura de perfil GRANDE do letzplay, ponta a ponta com o content.js REAL da extensão
   // num Chromium contra um letzplay sintético. Trava o que quebrava no perfil da Camila
   // (472 jogos): rodada time-boxed em 240s pra um trabalho de ~9 min, etapa dos jogos
