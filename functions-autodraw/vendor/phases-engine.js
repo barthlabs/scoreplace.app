@@ -6,8 +6,7 @@
  * uma ou duas chaves (ex.: Ouro/Prata) que convergem numa grande final.
  *
  * Este arquivo concentra a LÓGICA PURA (seeding, pareamento, geração de chaves,
- * convergência) para ser testável headless (Node). A integração com o fluxo de
- * sorteio/encerramento de rodada do app chama window._maybeAdvanceMultiPhase(t).
+ * convergência) para ser testável headless (Node).
  *
  * Convenção de campos novos em matches:
  *   bracket: 'gold' | 'silver' | 'grandfinal' | 'thirdplace' | 'main'
@@ -2741,29 +2740,9 @@
   if (typeof window !== 'undefined') {
     window._phasesEngine = api;
     window._isMultiPhase = isMultiPhase;
-    window._roundRobinSchedule = roundRobinSchedule; // núcleo compartilhado Fase 0/N (inc 7)
     window._phasesPhaseComplete = phaseComplete;
-    window._phasesPendingMatches = pendingMatches;
     window._advanceMultiPhase = advanceMultiPhase;
     window._resolveRepFills = resolveRepFills;
-    // v4.2.2 (pedido do dono): o AUTO-AVANÇO foi REMOVIDO — o organizador avança pelo
-    // botão "🏆 Avançar" (bracket.js), que chama _advanceMultiPhase direto. Esta função
-    // NÃO é mais disparada pelo render; fica exposta só por compat/idempotência (guardas
-    // de fase-completa + já-materializada + reentrância) caso algo externo ainda chame.
-    window._maybeAdvanceMultiPhase = function (tId) {
-      try {
-        var t = (typeof window._findTournamentById === 'function') ? window._findTournamentById(tId) : null;
-        if (!t || !isMultiPhase(t)) return;
-        var cur = t.currentPhaseIndex || 0;
-        if (cur + 1 >= (t.phases || []).length) return;          // sem próxima fase
-        if ((t._phaseMaterialized || 0) > cur) return;           // próxima já materializada
-        if (!phaseComplete(t)) return;                           // fase atual ainda não terminou
-        if (window._autoAdvancingPhaseId === String(tId)) return; // reentrância
-        window._autoAdvancingPhaseId = String(tId);
-        setTimeout(function () { if (window._autoAdvancingPhaseId === String(tId)) window._autoAdvancingPhaseId = null; }, 6000);
-        advanceMultiPhase(tId);
-      } catch (e) {}
-    };
   }
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = api;
