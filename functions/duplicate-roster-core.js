@@ -125,8 +125,21 @@ function enumerarPares(input) {
         motivo: r.motivo,
         semelhanca: r.semelhanca || null,
         forca: _dup.forcaDoSinal(r.motivo, r.semelhanca),
-        emailMascarado: mascararEmail(a.email) || mascararEmail(b.email) || null,
-        telefoneMascarado: mascararTelefone(a.telefone) || mascararTelefone(b.telefone) || null,
+        // ⛔ PISTA SÓ COM PERMISSÃO DOS DOIS LADOS, e só de CREDENCIAL.
+        //
+        // Duas coisas estavam erradas aqui. A primeira: a máscara saía do `perfil.phone`,
+        // que aceita o número DIGITADO PELO ORGANIZADOR — expor os quatro últimos dígitos
+        // dele é expor contato de alguém que nunca o confirmou. Agora a pista de telefone
+        // vem do número VALIDADO contra o Auth, o mesmo que decide credencial.
+        //
+        // A segunda: o perfil tem os controles "Divulgar" (`omitPhone`, `omitEmail`) e esta
+        // porta os ignorava. O app respeita esses controles ATÉ para organizador, e uma
+        // tela nova não é motivo para abrir exceção. Basta UM dos dois lados pedir sigilo
+        // para a pista sumir — o par continua aparecendo, que é o que importa aqui.
+        emailMascarado: (a.podeDivulgarEmail && b.podeDivulgarEmail)
+          ? (mascararEmail(a.email) || mascararEmail(b.email) || null) : null,
+        telefoneMascarado: (a.podeDivulgarTelefone && b.podeDivulgarTelefone)
+          ? (mascararTelefone(a.telefoneCredencial) || mascararTelefone(b.telefoneCredencial) || null) : null,
         dispensado: disp.dispensado,
         dismissedAt: disp.dismissedAt,
       });

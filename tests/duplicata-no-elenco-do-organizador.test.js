@@ -145,6 +145,49 @@ const P = (uid, nome, extra) => Object.assign({ uid: uid, nome: nome, perfil: {}
   ok(ordenado[0].forca >= ordenado[1].forca, '⭐ o mais forte vem primeiro — é a ordem de olhar');
 }
 
+console.log('\n── "Divulgar" do perfil vale AQUI também, inclusive para o organizador ──');
+{
+  const base = (uid, extra) => Object.assign({
+    uid: uid, nome: 'Rodrigo Barth', perfil: {},
+    email: 'rodrigo@x.com', telefone: '11999998888', telefoneProvado: true,
+    telefoneCredencial: '11999998888',
+    podeDivulgarEmail: true, podeDivulgarTelefone: true,
+  }, extra || {});
+
+  const liberado = core.enumerarPares({ pessoas: [base('a'), base('b')], freqTokens: {} });
+  ok(liberado[0].telefoneMascarado && liberado[0].emailMascarado,
+    'com os dois liberando, as duas pistas aparecem');
+
+  const semTel = core.enumerarPares({
+    pessoas: [base('a', { podeDivulgarTelefone: false }), base('b')], freqTokens: {} });
+  eq(semTel[0].telefoneMascarado, null,
+    '⭐ UM dos dois pedindo sigilo de telefone já apaga a pista — e o par CONTINUA aparecendo');
+  ok(semTel.length === 1, 'o par não some por causa do sigilo');
+
+  const semMail = core.enumerarPares({
+    pessoas: [base('a'), base('b', { podeDivulgarEmail: false })], freqTokens: {} });
+  eq(semMail[0].emailMascarado, null, '⭐ idem para o e-mail');
+
+  const nenhum = core.enumerarPares({
+    pessoas: [base('a', { podeDivulgarEmail: false, podeDivulgarTelefone: false }),
+              base('b', { podeDivulgarEmail: false, podeDivulgarTelefone: false })],
+    freqTokens: {} });
+  ok(nenhum[0].telefoneMascarado === null && nenhum[0].emailMascarado === null,
+    'com os dois pedindo sigilo, nenhuma pista sai');
+
+  // ⛔ O NÚMERO DIGITADO PELO ORGANIZADOR NÃO É PISTA. Ele entra no comparador como
+  // reforço de nome, mas expor os 4 últimos dígitos dele é expor contato de quem nunca
+  // confirmou aquele número.
+  const doOrganizador = core.enumerarPares({
+    pessoas: [base('a', { telefoneProvado: false, telefoneCredencial: '' }),
+              base('b', { telefoneProvado: false, telefoneCredencial: '' })],
+    freqTokens: {} });
+  eq(doOrganizador[0].telefoneMascarado, null,
+    '⭐⭐ telefone NÃO confirmado (digitado pelo organizador) não vira pista, nem mascarado');
+  ok(JSON.stringify(doOrganizador).indexOf('8888') === -1,
+    '⭐⭐ nem os quatro últimos dígitos dele');
+}
+
 console.log('\n── slots de pessoa: a tabela do contrato, forma por forma ──');
 {
   const S = require('../js/domain/participant-identity.js');

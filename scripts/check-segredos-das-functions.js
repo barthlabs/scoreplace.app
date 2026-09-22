@@ -65,15 +65,20 @@ async function conferir(nome, token) {
     const { GoogleAuth } = require(path.join(RAIZ, 'functions', 'node_modules', 'google-auth-library'));
     auth = new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/cloud-platform'] });
   } catch (e) {
-    console.log('⚠️  google-auth-library indisponível — pulando (rode dentro do repo com node_modules)');
-    return;
+    // ⛔ FALHA FECHADA. Sair com sucesso aqui deixaria publicar sem NUNCA confirmar o
+    // segredo — e o desfecho disso não é deploy quebrado, é a função subir e morrer em
+    // produção na primeira consulta. "Não consegui conferir" nunca é "está tudo certo".
+    console.error('✗ google-auth-library indisponível — NÃO dá para conferir os segredos.');
+    console.error('  Rode dentro do repo, com as dependências de functions/ instaladas.');
+    process.exit(1);
   }
   let token;
   try {
     token = (await (await auth.getClient()).getAccessToken()).token;
   } catch (e) {
-    console.log('⚠️  sem credencial para conferir segredos — pulando');
-    return;
+    console.error('✗ sem credencial para conferir os segredos — NÃO publico às cegas.');
+    console.error('  Ligue a conta de serviço: GOOGLE_APPLICATION_CREDENTIALS=<deploy-sa.json>');
+    process.exit(1);
   }
 
   const ruins = [];

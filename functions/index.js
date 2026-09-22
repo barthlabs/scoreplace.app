@@ -11163,6 +11163,13 @@ exports.getTournamentDuplicateAccounts = onCall(
         telefoneProvado: telefoneProvado,
         email: email,
         letzplayHandle: perfil.letzplayHandle || "",
+        // ⛔ A PISTA exibível é SÓ a credencial validada — nunca o número digitado pelo
+        // organizador, que o comparador ainda usa como reforço de nome mas que ninguém
+        // confirmou. E os controles "Divulgar" do perfil valem aqui como valem no resto do
+        // app, inclusive para o organizador.
+        telefoneCredencial: telefoneProvado ? (perfil.phone || "") : "",
+        podeDivulgarTelefone: perfil.omitPhone !== true,
+        podeDivulgarEmail: perfil.omitEmail !== true,
         perfil: perfil,
       });
     });
