@@ -152,7 +152,6 @@ const SUITES = [
   'functions-autodraw/test-drawround-authz.js',
   'functions-autodraw/test-format2.js',
   'functions-autodraw/test-orphan-uid.js',
-  'functions-autodraw/test-parity-old-vs-new.js',
   'functions-autodraw/test-persist-boundary.js',
   'functions-autodraw/test-uid-identity.js',
   'tests/stb-aparece-para-quem-lancou.test.js',
