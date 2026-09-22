@@ -48,10 +48,23 @@
     }
     if (typeof window._openLiveScoring !== 'function') return;
 
+    // Registros sanitizados guardam identidade por UID. O histórico já pré-carrega
+    // os perfis públicos desses UIDs; aqui só resolve o rótulo que vai para o placar.
+    // `name` continua exclusivamente como compatibilidade de registros antigos.
+    function nomeDoJogador(p) {
+      if (!p) return '';
+      if (p.uid && typeof window._nameForUid === 'function') {
+        var nomeAtual = window._nameForUid(p.uid);
+        if (nomeAtual) return nomeAtual;
+      }
+      return p.name || '';
+    }
+
     var t1 = [], t2 = [];
     (record.players || []).forEach(function (p) {
-      if (!p || !p.name) return;
-      (p.team === 2 ? t2 : t1).push(p.name);
+      var nome = nomeDoJogador(p);
+      if (!nome) return;
+      (p.team === 2 ? t2 : t1).push(nome);
     });
 
     window._openLiveScoring(null, null, {
@@ -61,8 +74,8 @@
       // (partida longa): ali o diário começa no meio e o motor precisa ser semeado
       // com os sets anteriores, senão reproduziria um placar menor que o real.
       recordSets: Array.isArray(record.sets) ? record.sets : [],
-      p1Name: t1.join(' / '),
-      p2Name: t2.join(' / '),
+      p1Name: t1.join(' / ') || 'Time 1',
+      p2Name: t2.join(' / ') || 'Time 2',
       isDoubles: t1.length > 1 || t2.length > 1,
       sportName: record.sport || '',
       // A regra da partida vem do REGISTRO (v:2). Sem ela — registro v:1, de

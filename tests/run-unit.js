@@ -846,6 +846,7 @@ const SUITES = [
   'tests/letzplay-game-cards.test.js',
   'tests/match-history-uid-reader.test.js',
   'tests/tournaments-analytics-uid-reader.test.js',
+  'tests/match-replay-uid-reader.test.js',
   'tests/letzplay-open-profile.test.js',
   'tests/person-gender-not-misto.test.js',
   'tests/rr-gender-balance.test.js',
