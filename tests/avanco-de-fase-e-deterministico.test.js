@@ -46,7 +46,7 @@ function motor() {
   ['identity-core.js', 'persist-core.js', 'waitlist-core.js', 'standings-core.js',
    'sport-rules.js', 'tournament-split-core.js', 'bracket-model.js', 'chaves.js',
    'chaves-adapter.js', 'tournaments-draw-prep.js', 'tournaments-draw.js',
-   'bracket-logic.js', 'phase-generators.js', 'phases-engine.js'].forEach((f) => {
+   'bracket-logic.js', 'phases-engine.js'].forEach((f) => {
     const p = path.join(RAIZ, f);
     if (!fs.existsSync(p)) return;
     try { vm.runInContext(fs.readFileSync(p, 'utf8'), g, { filename: f }); } catch (e) { /* módulo opcional */ }

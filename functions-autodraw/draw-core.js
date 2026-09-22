@@ -226,7 +226,6 @@ require('./vendor/bracket-policy.js');          // _bracketPolicy — contrato d
 require('./vendor/chaves.js');                  // _chaves — desenho determinístico: chave = f(N, formato)
 require('./vendor/chaves-adapter.js');          // _chavesAdapter — desenho → matches (id ESTRUTURAL) + tardio
 require('./vendor/phases-engine.js');           // _phasesEngine.generatePhase/storePhase
-require('./vendor/phase-generators.js');        // _phaseGen (precisa de phases-engine)
 // Helpers do SORTEIO INICIAL (_buildPhase0Cfg/_buildPhase0Pool/_formDoublesTeams/
 // _buildDoubleElimBracket/_buildRepechageDoubleElim/_applyMixedOriginCategories). O arquivo
 // tem DOM, mas só dentro de funções que o servidor nunca chama — no load é limpo.

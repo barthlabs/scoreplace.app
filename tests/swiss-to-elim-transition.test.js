@@ -41,7 +41,7 @@ const ROOT = path.join(__dirname, '..');
  'js/views/bracket-model.js', 'js/views/bracket-logic.js', 'js/views/team-formation.js',
  // motor de chaves determinístico — ANTES do phases-engine, que o consome
  'js/views/chaves.js', 'js/views/chaves-adapter.js',
- 'js/views/phases-engine.js', 'js/views/phase-generators.js', 'js/views/tournaments-draw-prep.js',
+ 'js/views/phases-engine.js', 'js/views/tournaments-draw-prep.js',
  'js/views/tournaments-draw.js', 'js/views/bracket-ui.js'].forEach((rel) => {
   vm.runInContext(fs.readFileSync(path.join(ROOT, rel), 'utf8'), sb, { filename: rel });
 });

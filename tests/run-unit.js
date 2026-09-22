@@ -1445,7 +1445,6 @@ const SUITES = [
   // dateISO), enquanto os 3 testes acima executavam a cópia morta e seguiam verdes.
   'tests/letzplay-single-source.test.js',
   'js/views/phases-engine.test.js',
-  'js/views/phase-generators.test.js',
   'js/views/team-formation.test.js',
   'js/views/phase-brick4.test.js',
   'tests/venue-geo-core.test.js',                 // L6.R2.1: tipo canônico do local + espelho do resolvedor

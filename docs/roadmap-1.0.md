@@ -34,7 +34,7 @@ Produto web = "feature-complete + polimento". O que falta pro 1.0-lojas-watch é
 **FEATURE FREEZE: 4.0.22-beta.** Daqui pro 1.0 = só bug e polimento, nenhuma feature nova.
 As features estão construídas, não "em andamento". Não há nada a cortar nem a construir antes de testar.
 
-- ✅ Construtor/motor de fases — canônico, schema `phases[0]` unificado, pódio canônico, **com testes unitários** (`phases-engine.test.js`, `phase-generators.test.js`, `phase-brick4.test.js`).
+- ✅ Construtor/motor de fases — canônico, schema `phases[0]` unificado, pódio canônico, **com testes unitários** (`phases-engine.test.js`, `phase-brick4.test.js`).
 - ✅ Enquete de combinar jogos — `schedule-poll.js` (3.1.70).
 - ✅ W.O. apontado por participante — canônico e commitado (3.1.72).
 - ✅ Formação manual de duplas — motor + UI drag-drop + pendência/aceite + rules (dono confirmou pronto e testado).

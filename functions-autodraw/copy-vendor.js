@@ -53,7 +53,6 @@ const FILES = [
   'chaves-adapter.js',         // window._chavesAdapter — desenho → matches do app, com id ESTRUTURAL (p0-VC-R1-P3)
   'bracket-ui.js',             // _applyResultToTournament (fecho de rodada re-aplica o placar deferido) — DOM só em funções que o servidor não chama
   'phases-engine.js',          // _phasesEngine.generatePhase — motor multi-fase (lógica pura)
-  'phase-generators.js',       // _phaseGen — geradores de fase (depende de phases-engine)
   // _buildPhase0Cfg/_buildPhase0Pool/_formDoublesTeams/_buildDoubleElimBracket/
   // _buildRepechageDoubleElim/_applyMixedOriginCategories — os helpers do SORTEIO INICIAL.
   // O arquivo tem DOM (painéis/diálogos), mas só dentro de funções que o servidor NUNCA

@@ -51,7 +51,7 @@ const JS = ['js/logger.js','js/i18n.js','js/i18n-pt.js',
   'js/views/tournaments-utils.js','js/views/tournaments-draw.js','js/views/tournaments.js',
   'js/store.js','js/views/create-tournament.js','js/views/format2.js',
   'js/views/bracket-logic.js','js/views/bracket-model.js','js/views/bracket.js',
-  'js/views/bracket-ui.js','js/views/phases-engine.js','js/views/phase-generators.js','js/views/wo-core.js'];
+  'js/views/bracket-ui.js','js/views/phases-engine.js','js/views/wo-core.js'];
 
 /* A CENA: eliminatória de 32 em melhor de 3, R1 inteira decidida, R2 esperando placar. */
 function montaTorneio() {

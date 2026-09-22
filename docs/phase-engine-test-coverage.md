@@ -21,7 +21,7 @@
 | `grandFinal` | true \| false | 434, 461 |
 | `thirdPlace` | true \| false | 435, 462 |
 | `gruposCount` | inteiro | tournaments-draw.js |
-| `rounds` / `ligaTurnos` | inteiro | phase-generators.js:61 |
+| `rounds` / `ligaTurnos` | inteiro | phases-engine.js |
 | `ligaCadence` | `all-at-once` \| `incremental` | 699, 1060 |
 | `tiebreakers[]` | confronto_direto, saldo_pontos/sets/games, vitorias, buchholz, sonneborn_berger, antiguidade, juventude, sorteio… | 801-822 |
 | nº participantes | par/ímpar/potência-de-2/resto | genTierBracket 229-262 |
