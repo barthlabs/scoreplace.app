@@ -1898,12 +1898,6 @@ window._gdSetLock = function(travada){
   window._gdCtx.locked = !!travada;
   window._gdPaintRatio();
 };
-// Nome antigo mantido: havia chamador fora daqui.
-window._gdToggleLock = function(){
-  if (!window._gdCtx) return;
-  var cb = document.getElementById('gd-lock');
-  window._gdSetLock(cb ? !!cb.checked : !window._gdCtx.locked);
-};
 window._gdCancel = function(){
   var ctx = window._gdCtx; window._gdCtx = null;
   var o = document.getElementById('gender-draw-overlay'); if (o) o.remove();
