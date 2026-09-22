@@ -37,6 +37,9 @@ await env.withSecurityRulesDisabled(async (ctx) => {
     await db.doc(`users/${u}/trophies/t1`).set({ tier: 'ouro' });
     await db.doc(`users/${u}/milestones/ms1`).set({ level: 1 });
   }
+  // A amizade canônica deixou de ser o array legado no perfil. A regra consulta
+  // esta projeção privada para decidir a visibilidade `friends`.
+  await db.doc('friendAccess/soAmigos/accepted/amigo').set({ since: 'seed' });
 });
 
 const amigo    = env.authenticatedContext('amigo').firestore();
