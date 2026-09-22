@@ -847,6 +847,7 @@ const SUITES = [
   'tests/match-history-uid-reader.test.js',
   'tests/tournaments-analytics-uid-reader.test.js',
   'tests/match-replay-uid-reader.test.js',
+  'functions/test-casual-match-history-core.js',
   'tests/letzplay-open-profile.test.js',
   'tests/person-gender-not-misto.test.js',
   'tests/rr-gender-balance.test.js',
