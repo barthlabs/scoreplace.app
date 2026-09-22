@@ -2589,6 +2589,10 @@ window.FirestoreDB = {
     return await this._callFn('updateOwnProfile', { profile: toSave, eraseFields: eraseFields || [] });
   },
 
+  async completeOwnEligibilityProfile(eligibility) {
+    return this._callFn('completeOwnEligibilityProfile', { eligibility: eligibility || {} });
+  },
+
   async savePushToken(uid, token, platform) {
     var current = window.firebase && window.firebase.auth && window.firebase.auth().currentUser;
     if (!uid || !current || String(uid) !== String(current.uid)) throw new Error('savePushToken exige o próprio uid autenticado');

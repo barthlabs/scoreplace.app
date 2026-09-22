@@ -53,6 +53,9 @@ const patchEnd = auth.indexOf('// ─── CONTA ÓRFÃ', patchStart);
 const patchBlock = auth.slice(patchStart, patchEnd);
 ok(/saveUserProfile\(uid, identity\)/.test(patchBlock) && !/\.doc\(uid\)\.update\(fields\)/.test(patchBlock),
   'patch de identidade do login social usa a Function');
+const categories = fs.readFileSync('js/views/tournaments-categories.js', 'utf8');
+ok(/completeOwnEligibilityProfile\(patch\)/.test(categories) && /completeOwnEligibilityProfile\(\{ birthDate: val \}\)/.test(categories) && !/saveUserProfile\(/.test(categories),
+  'inscrição completa elegibilidade por porta fechada, sem gravador genérico');
 ok(/exports\.updateOwnGooglePhotoMarker = onCall\([\s\S]*?providerId === "google\.com"[\s\S]*?runTransaction/.test(fn) &&
   /saveGooglePhotoMarker\(uid, fields\.hasGooglePhotoReal\)/.test(patchBlock),
   'marcador de foto Google exige provedor vinculado e usa Function');

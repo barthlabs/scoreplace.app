@@ -155,6 +155,7 @@ const _amizadeVida = require("./amizade-lifecycle");
 const _AMIZADE_CACHE_CAMPOS = new Set(["friends", "friendRequestsSent", "friendRequestsReceived", "friendRequestsSentAt"]);
 const _nameUnique = require("./name-unique-core");
 const _profileUpdate = require("./profile-update-core");
+const _profileEligibility = require("./profile-eligibility-core");
 const _nameVariant = require("./name-variant-core");
 // v1.7.36: vigia estrutural — quem troca jogadores de um jogo que JÁ EXISTE sem ter
 // autoridade pra isso. Pendurado no syncMatchRosters (mesmo gatilho, custo zero).
@@ -3253,6 +3254,32 @@ exports.updateOwnProfile = onCall(
       tx.update(profileRef, update);
     });
     return { ok: true };
+  }
+);
+
+// Completa somente dados de elegibilidade que ainda não existem no perfil.
+// É deliberadamente separada de updateOwnProfile: a inscrição não ganha uma
+// porta genérica para alterar cidade, contato, nome ou credenciais.
+exports.completeOwnEligibilityProfile = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
+  async (request) => {
+    const uid = request.auth && request.auth.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Login obrigatório");
+    let intent;
+    try { intent = _profileEligibility.normalize((request.data && request.data.eligibility) || {}); }
+    catch (error) { throw new HttpsError("invalid-argument", error.message); }
+    const ref = admin.firestore().collection("users").doc(uid);
+    const patch = await admin.firestore().runTransaction(async (tx) => {
+      const current = await tx.get(ref);
+      if (!current.exists) throw new HttpsError("failed-precondition", "Perfil inexistente");
+      const update = _profileEligibility.missingOnly(current.data() || {}, intent);
+      if (Object.keys(update).length) {
+        update.updatedAt = admin.firestore.FieldValue.serverTimestamp();
+        tx.update(ref, update);
+      }
+      return update;
+    });
+    return { ok: true, profilePatch: patch };
   }
 );
 

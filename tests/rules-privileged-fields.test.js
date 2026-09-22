@@ -86,6 +86,9 @@ const S = v => ({ stringValue: v });
   // esta fronteira: Rules decide por chave, então uma string basta para provar
   // que cada chave é recusada no update e no create.
   const extras = ['dupDismissed', 'dupDismissedInfo', 'dupSuspect', 'nameConflict',
+    // Elegibilidade da inscrição só é escrita pela Function fechada
+    // completeOwnEligibilityProfile. O navegador não pode fabricá-la direto.
+    'gender', 'birthDate', 'skillBySport',
     'phoneSource', 'phoneSetBy', 'phoneSetAt', 'friends', 'friendRequestsSent',
     'friendRequestsReceived', 'friendRequestsSentAt', 'theme', 'uiScale', 'activeCasualRoom', 'liveScorePrefs', 'casualLast', 'casualPrefs', 'preferredLocations', 'notifyPlatform', 'notifyEmail', 'notifyWhatsApp', 'notifyLevel', 'presenceVisibility', 'statsVisibility', 'presenceMuteDays', 'presenceMuteUntil', 'presenceAutoCheckin', 'acceptedTerms', 'acceptedTermsAt', 'acceptedTermsVersion', 'acceptedTermsGrandfathered', 'lastSeenAt', 'lastClientVersion', 'lastClientPlatform', 'favorites', 'hiddenTournaments', 'acceptFriendRequests', 'omitEmail', 'omitPhone', 'liveAlerts', 'liveAlertsWho', 'blockedUids', 'emailVerified', 'fcmToken', 'fcmTokenPlatform', 'fcmTokenUpdatedAt', 'linkedPhones', 'hasGooglePhotoReal'];
   out.ataquesExtras = {};

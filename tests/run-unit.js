@@ -1577,6 +1577,7 @@ const SUITES = [
   'tests/registro-canonico-dry-run-cf.test.js',
   'functions/test-profile-preferences-core.js',
   'functions/test-profile-update-core.js',
+  'functions/test-profile-eligibility-core.js',
   'functions/test-profile-locations-core.js',
   'functions/test-profile-notifications-core.js',
   'functions/test-profile-presence-core.js',

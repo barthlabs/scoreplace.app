@@ -232,8 +232,8 @@ window._applyCategoryToProfile = async function(cat, t) {
     }
     if (Object.keys(patch).length === 0) return;
     try {
-        if (user.uid && window.FirestoreDB && window.FirestoreDB.saveUserProfile) {
-            await window.FirestoreDB.saveUserProfile(user.uid, patch);
+        if (user.uid && window.FirestoreDB && window.FirestoreDB.completeOwnEligibilityProfile) {
+            await window.FirestoreDB.completeOwnEligibilityProfile(patch);
         }
     } catch (e) { window._warn('[_applyCategoryToProfile] save falhou', e); }
 };
@@ -265,8 +265,8 @@ window._askBirthDateForEnroll = function(t, cb) {
         if (user) {
             user.birthDate = val;
             try {
-                if (user.uid && window.FirestoreDB && window.FirestoreDB.saveUserProfile) {
-                    window.FirestoreDB.saveUserProfile(user.uid, { birthDate: val });
+                if (user.uid && window.FirestoreDB && window.FirestoreDB.completeOwnEligibilityProfile) {
+                    window.FirestoreDB.completeOwnEligibilityProfile({ birthDate: val });
                 }
             } catch (_e) {}
         }
