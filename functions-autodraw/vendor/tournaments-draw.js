@@ -635,11 +635,10 @@ window._buildPhase0Pool = function (t, isMon, ts) {
 // correto é APPEND por progressão: 2 duplas (ou 1 numa vaga sem adversário) → jogo na R1 do UPPER
 // se a R2 do upper não começou; se a R2 do upper já começou → jogo na R1 do LOWER; se a R2 do
 // lower já começou → suplentes individuais (duplas desfeitas). Sendo reconstruída nesse modelo.
-// Modelo de APPEND por progressão (repescagem/playin). window._lastIntegrateTier guarda o tier
-// (1 ou 2) do último append bem-sucedido pro caller escolher a mensagem. Retorno:
+// Modelo de APPEND por progressão (repescagem/playin). Retorno:
 //   >0  = nº de duplas integradas — Tier 1 (R2 upper não começou → R1 do upper, vencedor sobe/
 //         derrotado cai) OU Tier 2 (R2 upper já começou → R1 da chave inferior, vencedor segue/
-//         derrotado eliminado). Diferencie pelo window._lastIntegrateTier.
+//         derrotado eliminado).
 //    0  = nada a fazer (sem duplas formadas, ou 1 dupla sem par disponível → aguarda)
 //   -3  = Tier 3 (R2 do lower já começou) → suplentes individuais (caller dissolve as duplas)
 // CÂNONE (dono, 21/jul): "Novos Confrontos" e "Abertas" são INDEPENDENTES. Abertas = aceitar
@@ -929,7 +928,6 @@ window._integrateLateDuplas = function (t) {
       window.AppStore.logAction(t.id, integrated2 + ' dupla(s) tardia(s) → R1 da chave inferior (append) — chave estendida');
     }
     if (!integrated2) return 0;
-    window._lastIntegrateTier = 2;
     return integrated2;
   }
 
@@ -1040,7 +1038,6 @@ window._integrateLateDuplas = function (t) {
   if (window.AppStore && typeof window.AppStore.logAction === 'function') {
     window.AppStore.logAction(t.id, integrated + ' dupla(s) tardia(s) → R1 upper (append) — chave estendida');
   }
-  window._lastIntegrateTier = 1;
   return integrated;
 };
 
