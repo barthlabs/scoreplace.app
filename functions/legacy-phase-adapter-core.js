@@ -6,7 +6,7 @@
  * O resultado é um diagnóstico, não uma migração nem um plano de sorteio. Em
  * especial, `elim_simples` não ganha uma política inventada: o motor antigo
  * ignorava bracketResolution, portanto ela precisa de confirmação humana antes
- * de virar phaseConfig canônico.
+ * de virar o modelo canônico que substituirá definitivamente o legado.
  */
 
 function classifyLegacyPhase(phase) {
