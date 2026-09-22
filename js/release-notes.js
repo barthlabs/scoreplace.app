@@ -1179,8 +1179,8 @@ window._RELEASE_NOTES_HTML = (function () {
         // ERRADA: `<option>🎾 Beach Tennis</option>` não tinha `value`, então o valor
         // ERA o texto, emoji incluído. MEDIDO: 6 grafias pra 4 modalidades
         // ("Beach Tennis"=27 e "🎾 Beach Tennis"=7 como se fossem coisas diferentes).
-        // Corrigido nos dois caminhos de criação; 9 documentos normalizados por
-        // scripts/normalizar-modalidade.js. O emoji continua no RÓTULO.
+        // Corrigido nos dois caminhos de criação; documentos históricos foram
+        // normalizados. O emoji continua no RÓTULO.
         //
         // FASE 2a (inerte): o leitor aprendeu a montar o torneio das SUBCOLEÇÕES quando
         // o documento disser `_semPesados`. Nada muda enquanto nenhum documento disser —

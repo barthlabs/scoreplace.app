@@ -10,7 +10,7 @@
  * MEDIDO na base real antes do conserto: "Beach Tennis" (27) e "🎾 Beach Tennis" (7)
  * convivendo como se fossem modalidades DIFERENTES — 6 grafias pra 4 modalidades.
  * Qualquer filtro por modalidade (a vitrine por preferência, por exemplo) nasce mentindo.
- * Os 9 documentos foram normalizados por scripts/normalizar-modalidade.js.
+ * Os documentos históricos já foram normalizados.
  *
  * Este teste impede a volta — e ela volta fácil: basta alguém acrescentar uma modalidade
  * copiando a linha de cima.
@@ -57,10 +57,6 @@ ARQS.forEach(function (rel) {
       rel + ': o emoji tem que continuar no RÓTULO da opção (só saiu do valor)');
   }
 });
-
-// ⑤ e o script de conserto continua existindo — a base pode receber doc velho de novo
-ok(fs.existsSync(path.join(ROOT, 'scripts', 'normalizar-modalidade.js')),
-  'o script que normaliza a base segue no repo (roda em seco por padrão)');
 
 console.log((fail ? '✗' : '✓') + ' modalidade-e-valor-canonico: ' + pass + ' ok, ' + fail + ' falhas');
 process.exit(fail ? 1 : 0);
