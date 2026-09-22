@@ -1845,12 +1845,8 @@ window.FirestoreDB = {
     });
   },
 
-  // Inscrição via Cloud Function (Admin SDK, servidor) com FALLBACK pra transação
-  // do cliente. A CF não passa pela fila IndexedDB quebrada do SDK 10.8.1 (bug
-  // fatal no iOS Safari que fazia a inscrição falhar) nem pelas rules. O fallback
-  // preserva o comportamento anterior se a CF estiver fora — e é IDEMPOTENTE:
-  // se a CF gravou mas a resposta se perdeu, a transação relê e o "já inscrito"
-  // pega (sem duplicar). Ver [[project_firestore_assertion_bug]].
+  // Inscrição via Cloud Function (Admin SDK, servidor). Não há fallback de escrita
+  // no cliente: autorização, validação e transação pertencem à única porta canônica.
   async enrollParticipant(tournamentId, participantObj, extraUpdates) {
     try {
       return await this._callFn('enrollParticipant', {

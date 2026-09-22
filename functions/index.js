@@ -2979,15 +2979,12 @@ exports.enrollParticipant = onCall(
       throw new HttpsError("invalid-argument", "tournamentId e participantObj são obrigatórios");
     }
     // Uma inscrição é uma conta (uid) ou participante sem conta (id estável criado pelo
-    // organizador). Nome, e-mail e telefone nunca são identidade de inscrição.
-    const participantUid = String(participantObj.uid || "");
-    const manualParticipantId = String(participantObj.manualParticipantId || "");
-    if (!participantUid && !manualParticipantId) {
-      throw new HttpsError("invalid-argument", "a inscrição precisa de uid ou manualParticipantId");
-    }
-    // Uma única forma sanitizada atravessa roster principal, réplica sandbox e
-    // espelho. Usar o payload bruto em qualquer um deles reintroduziria PII.
-    const sanitizedParticipantObj = _enrollCore.sanitizeAccountParticipant(participantObj);
+    // organizador). A intenção é validada uma única vez; autoria e data são do servidor.
+    let sanitizedParticipantObj;
+    try { sanitizedParticipantObj = _enrollCore.normalizeParticipantIntent(participantObj, callerUid, new Date().toISOString()); }
+    catch (error) { throw new HttpsError("invalid-argument", error.message); }
+    const participantUid = String(sanitizedParticipantObj.uid || "");
+    const manualParticipantId = String(sanitizedParticipantObj.manualParticipantId || "");
 
     const db = admin.firestore();
     const docRef = db.collection("tournaments").doc(tournamentId);
@@ -3074,7 +3071,7 @@ exports.enrollParticipant = onCall(
     // Best-effort: falhar aqui não desfaz a inscrição, que já está gravada.
     if (out.outcome === "enrolled" || out.outcome === "waitlisted") {
       try {
-        const _alvo = String((participantObj && participantObj.uid) || "");
+        const _alvo = String(sanitizedParticipantObj.uid || "");
         if (_alvo) {
           await docRef.collection("participants").doc(_alvo).set({
             uid: _alvo,

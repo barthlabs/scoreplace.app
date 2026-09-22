@@ -132,18 +132,73 @@ function isAlreadyEnrolled(participants, participantObj) {
   });
 }
 
-// Conta autenticada é identificada pelo UID. Não replica PII nem atributos de
-// elegibilidade no torneio; nome fica somente como adaptação de exibição legada.
+// Conta autenticada é identificada pelo UID. Nome, foto, contato e atributos de
+// perfil não são uma projeção do perfil dentro do torneio. A entrada manual é a
+// exceção: sem UID, o nome é a própria referência daquela vaga.
 function sanitizeAccountParticipant(participantObj) {
   if (!participantObj || typeof participantObj !== 'object') return participantObj;
   var out = Object.assign({}, participantObj);
   var strip = function (target, fields) { fields.forEach(function (field) { delete target[field]; }); };
-  if (out.uid) strip(out, ['email', 'phone', 'photoURL', 'photoUrl', 'gender', 'birthDate', 'age', 'skillBySport', 'defaultCategory']);
+  if (out.uid) strip(out, ['name', 'displayName', 'email', 'phone', 'photoURL', 'photoUrl', 'gender', 'birthDate', 'age', 'skillBySport', 'defaultCategory', 'addedByName']);
   [1, 2].forEach(function (slot) {
-    if (out['p' + slot + 'Uid']) strip(out, ['p' + slot + 'Email', 'p' + slot + 'Phone', 'p' + slot + 'Photo', 'p' + slot + 'PhotoURL', 'p' + slot + 'Gender', 'p' + slot + 'BirthDate', 'p' + slot + 'SkillBySport']);
+    if (out['p' + slot + 'Uid']) strip(out, ['p' + slot + 'Name', 'p' + slot + 'Email', 'p' + slot + 'Phone', 'p' + slot + 'Photo', 'p' + slot + 'PhotoURL', 'p' + slot + 'Gender', 'p' + slot + 'BirthDate', 'p' + slot + 'SkillBySport']);
   });
   if (Array.isArray(out.participants)) out.participants = out.participants.map(sanitizeAccountParticipant);
   return out;
+}
+
+// O navegador só expressa a intenção mínima. Este contrato impede que qualquer
+// chamador acrescente estado de torneio, PII ou auditoria ao payload; a Function
+// deriva autoria e instante depois de autenticar o chamador.
+function normalizeParticipantIntent(participantObj, callerUid, addedAt) {
+  if (!participantObj || typeof participantObj !== 'object' || Array.isArray(participantObj)) throw new Error('participantObj inválido');
+  var allowed = {
+    uid: true, manualParticipantId: true, name: true, displayName: true,
+    ligaActive: true, p1Uid: true, p1Name: true, p2Uid: true, p2Name: true,
+    categories: true, category: true, categorySource: true
+  };
+  if (Object.keys(participantObj).some(function (key) { return !allowed[key]; })) throw new Error('campo de participante não permitido');
+  var text = function (key, max) {
+    var value = participantObj[key];
+    if (value == null) return '';
+    if (typeof value !== 'string') throw new Error(key + ' inválido');
+    value = value.trim();
+    if (!value || value.length > max) throw new Error(key + ' inválido');
+    return value;
+  };
+  var uid = text('uid', 128), manualId = text('manualParticipantId', 200);
+  if ((uid && manualId) || (!uid && !manualId)) throw new Error('a inscrição precisa de uid ou manualParticipantId');
+  if (manualId && manualId.indexOf('manual-') !== 0) throw new Error('manualParticipantId inválido');
+  if (participantObj.ligaActive != null && typeof participantObj.ligaActive !== 'boolean') throw new Error('ligaActive inválido');
+  var out = {};
+  ['name', 'displayName', 'p1Name', 'p2Name', 'category', 'categorySource'].forEach(function (key) {
+    var value = text(key, key === 'categorySource' ? 80 : 240);
+    if (value) out[key] = value;
+  });
+  ['p1Uid', 'p2Uid'].forEach(function (key) {
+    var value = text(key, 128);
+    if (value) out[key] = value;
+  });
+  if (participantObj.categories != null) {
+    if (!Array.isArray(participantObj.categories) || participantObj.categories.length > 30) throw new Error('categories inválido');
+    out.categories = participantObj.categories.map(function (value) {
+      if (typeof value !== 'string' || !(value = value.trim()) || value.length > 120) throw new Error('categories inválido');
+      return value;
+    });
+  }
+  out.ligaActive = participantObj.ligaActive !== false;
+  out.addedAt = String(addedAt || '');
+  if (!out.addedAt) throw new Error('addedAt inválido');
+  if (uid) {
+    out.uid = uid;
+    out.selfEnrolled = uid === callerUid;
+    if (!out.selfEnrolled) out.addedByUid = callerUid;
+  } else {
+    out.manualParticipantId = manualId;
+    out.selfEnrolled = false;
+    out.addedByUid = callerUid;
+  }
+  return sanitizeAccountParticipant(out);
 }
 
 function normalizeExtraUpdates(extraUpdates) {
@@ -384,5 +439,5 @@ function computeLeaveStandby(data, userUid) {
 
 module.exports = {
   participantUids, computeMemberUids, cleanUndefined, phaseDrawDone, isPlacedInDraw,
-  enrollmentOpen, isAlreadyEnrolled, sanitizeAccountParticipant, normalizeExtraUpdates, computeEnroll, computeDeenroll, computeLeaveStandby
+  enrollmentOpen, isAlreadyEnrolled, sanitizeAccountParticipant, normalizeParticipantIntent, normalizeExtraUpdates, computeEnroll, computeDeenroll, computeLeaveStandby
 };

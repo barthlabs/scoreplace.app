@@ -31,9 +31,29 @@ try { C.normalizeExtraUpdates({ status: 'finished' }); ok('extraUpdates recusa p
   const end = index.indexOf('exports.deenrollParticipant = onCall(', start);
   const block = index.slice(start, end);
   ok('Function reutiliza inscrição sanitizada no roster, sandbox e espelho',
-    /const sanitizedParticipantObj = _enrollCore\.sanitizeAccountParticipant\(participantObj\)/.test(block) &&
+    /_enrollCore\.normalizeParticipantIntent\(participantObj, callerUid, new Date\(\)\.toISOString\(\)\)/.test(block) &&
     !/computeEnroll\([^\n]*participantObj/.test(block) &&
     /entry: _enrollCore\.cleanUndefined\(sanitizedParticipantObj\)/.test(block));
+})();
+
+(() => {
+  try {
+    C.normalizeParticipantIntent({ uid: 'ana-uid', email: 'forjada@example.test' }, 'ana-uid', '2026-07-17T12:00:00.000Z');
+    ok('contrato recusa campo de perfil declarado pelo cliente', false);
+  } catch (_) { ok('contrato recusa campo de perfil declarado pelo cliente', true); }
+  try {
+    C.normalizeParticipantIntent({ uid: 'ana-uid', addedByUid: 'forjado' }, 'ana-uid', '2026-07-17T12:00:00.000Z');
+    ok('contrato recusa auditoria declarada pelo cliente', false);
+  } catch (_) { ok('contrato recusa auditoria declarada pelo cliente', true); }
+  const self = C.normalizeParticipantIntent({ uid: 'ana-uid', name: 'Ana declarada', ligaActive: true }, 'ana-uid', '2026-07-17T12:00:00.000Z');
+  eq('conta persiste apenas uid e atributos da inscrição', self, {
+    ligaActive: true, addedAt: '2026-07-17T12:00:00.000Z', uid: 'ana-uid', selfEnrolled: true
+  });
+  const manual = C.normalizeParticipantIntent({ manualParticipantId: 'manual-convidada-01', name: 'Convidada' }, 'org-uid', '2026-07-17T12:00:00.000Z');
+  eq('vaga manual conserva nome e recebe auditoria do servidor', manual, {
+    name: 'Convidada', ligaActive: true, addedAt: '2026-07-17T12:00:00.000Z',
+    manualParticipantId: 'manual-convidada-01', selfEnrolled: false, addedByUid: 'org-uid'
+  });
 })();
 
 (() => {
@@ -54,7 +74,7 @@ try { C.normalizeExtraUpdates({ status: 'finished' }); ok('extraUpdates recusa p
   }, null, NOW);
   const saved = r.updateData.participants[0];
   ok('uid não carrega atributos de perfil para o torneio', !['email', 'phone', 'photoURL', 'gender', 'birthDate', 'skillBySport', 'defaultCategory'].some(function(k) { return Object.prototype.hasOwnProperty.call(saved, k); }));
-  eq('nome legado de exibição permanece até migrar leitores', saved.displayName, 'Nome legado');
+  ok('uid não carrega nome duplicado de perfil para o torneio', !Object.prototype.hasOwnProperty.call(saved, 'displayName') && !Object.prototype.hasOwnProperty.call(saved, 'name'));
 })();
 
 // ── Já inscrito (solo, mesmo uid) ────────────────────────────────────────────

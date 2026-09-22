@@ -570,10 +570,8 @@ function _enrollToStandby(t, tId, participantObj, callback) {
   // seja, o defeito não é a regra — é depender de que 125 campos estejam idênticos pra
   // conseguir acrescentar um nome numa lista. É a mesma classe do save atrasado.
   //
-  // `enrollParticipant` é a porta certa e já existia: tenta a CF (Admin SDK, lê fresco,
-  // grava só `standbyParticipants`+`memberUids`) e, se ela falhar, cai na transação do
-  // cliente — que TAMBÉM escreve só esses dois campos, por `transaction.update`. Os dois
-  // lados já tratam "fase sorteada → fila" (v1.6.86) e devolvem o MESMO shape.
+  // `enrollParticipant` é a porta única: a CF lê fresco e grava somente
+  // `standbyParticipants`+`memberUids`. Ela também decide “fase sorteada → fila”.
   // Ver [[project_enroll_after_draw_goes_to_waitlist]] e [[feedback_unify_dual_entry_points]].
   //
   // ⚠️ SEM PUSH OTIMISTA: quem decide o destino é o servidor, olhando o doc fresco. Empurrar
@@ -581,9 +579,8 @@ function _enrollToStandby(t, tId, participantObj, callback) {
   // caso de sucesso parcial deixaria a tela afirmando algo que o banco não tem.
   window.FirestoreDB.enrollParticipant(tId, participantObj).then(function(res) {
     res = res || {};
-    // Fallback antigo sem lista devolvida: adota o push local só no waitlisted NOVO —
-    // `alreadyWaitlisted` significa "o doc fresco JÁ tem essa pessoa": empurrar aqui
-    // duplicaria a entrada na tela.
+    // Compatibilidade de resposta: versões antigas da Function não devolviam a lista.
+    // Isto atualiza somente a UI; jamais persiste uma inscrição pelo navegador.
     if (res.waitlisted && !res.alreadyWaitlisted && !Array.isArray(res.standbyParticipants) && t.standbyParticipants.indexOf(participantObj) === -1) {
       t.standbyParticipants.push(participantObj);
     }
@@ -954,14 +951,7 @@ window._doEnrollCurrentUser = function(tId, selectedCategories, _onSuccess) {
      *    lá o e-mail ainda é a única âncora, e tirá-lo quebraria a deduplicação do sorteio.
      * ⏳ Esta leva estanca a ENTRADA. Os e-mails já gravados continuam no documento até a
      *    migração de remoção — que é outra leva e precisa de autorização. */
-    const participantObj = { name: _dispName, displayName: _dispName, uid: user.uid, selfEnrolled: true, ligaActive: true };
-    // Audit trail: timestamp de inscrição própria
-    participantObj.addedAt = new Date().toISOString();
-    if (user.gender) participantObj.gender = user.gender;
-    // Store profile fields needed for auto-assignment by age and skill
-    if (user.birthDate) participantObj.birthDate = user.birthDate;
-    if (user.skillBySport && typeof user.skillBySport === 'object') participantObj.skillBySport = user.skillBySport;
-    if (user.defaultCategory) participantObj.defaultCategory = user.defaultCategory;
+    const participantObj = { uid: user.uid, ligaActive: true };
     if (catsArr) {
         participantObj.categories = catsArr;
         participantObj.category = catsArr[0]; // backward compat
@@ -971,8 +961,7 @@ window._doEnrollCurrentUser = function(tId, selectedCategories, _onSuccess) {
     // condition entre login e inscrição), o participantObj pode ter todos os
     // identificadores nulos. Nesse caso, abortar silenciosamente — o _tryAutoEnroll
     // em auth.js vai retomar a inscrição quando o perfil estiver disponível.
-    var _hasAnyId = !!(participantObj.uid || participantObj.email ||
-                       participantObj.displayName || participantObj.name || participantObj.phone);
+    var _hasAnyId = !!participantObj.uid;
     if (!_hasAnyId) {
         window._warn('[enroll] participantObj sem identificador — aguardando perfil carregar');
         return;
@@ -1026,7 +1015,7 @@ window._doEnrollCurrentUser = function(tId, selectedCategories, _onSuccess) {
     // Add to local state immediately
     // ⚠️ v1.8.1 — O PUSH É DA TELA, NÃO DO BANCO. Marca transiente `_pendingEnroll`:
     // este objeto existe pra a interface responder na hora, mas NÃO é inscrição
-    // confirmada — quem confirma é a CF (ou a transação de fallback), que devolve o
+    // confirmada — quem confirma é a CF, que devolve o
     // array autoritativo logo abaixo. Sem a marca, quando a resposta NUNCA chega (4G
     // caindo na quadra, aba fechada, timeout) o push ficava e qualquer save posterior
     // o gravava: a pessoa virava "inscrita" sem nunca ter passado pela LISTA DE ESPERA,
@@ -1181,7 +1170,6 @@ window.submitTeamEnroll = function (tId) {
                 p1Name: teamNames2[0] || '', p1Uid: user.uid,
                 p2Name: teamNames2[1] || '', p2Uid: _sbP2Uid
             };
-            if (user.email) partObj.email = user.email;
             _enrollToStandby(t, tId, partObj, function() {
                 var mod2 = document.getElementById('team-enroll-modal-' + tId);
                 if (mod2) mod2.style.display = 'none';
@@ -1223,7 +1211,6 @@ window.submitTeamEnroll = function (tId) {
         p1Name: teamNames[0] || '', p1Uid: user.uid,
         p2Name: teamNames[1] || '', p2Uid: partnerUids[0] || ''
     };
-    if (user.email) participantObj.email = user.email;
     // Registrar origem da equipe via extraUpdates
     var _teamOrigins = t.teamOrigins || {};
     _teamOrigins[teamString] = 'inscrita';
@@ -1234,7 +1221,7 @@ window.submitTeamEnroll = function (tId) {
     // --- Optimistic UI: update locally FIRST, then sync to Firestore ---
     // ⚠️ v1.8.1 — O PUSH É DA TELA, NÃO DO BANCO. Marca transiente `_pendingEnroll`:
     // este objeto existe pra a interface responder na hora, mas NÃO é inscrição
-    // confirmada — quem confirma é a CF (ou a transação de fallback), que devolve o
+    // confirmada — quem confirma é a CF, que devolve o
     // array autoritativo logo abaixo. Sem a marca, quando a resposta NUNCA chega (4G
     // caindo na quadra, aba fechada, timeout) o push ficava e qualquer save posterior
     // o gravava: a pessoa virava "inscrita" sem nunca ter passado pela LISTA DE ESPERA,
@@ -1524,22 +1511,15 @@ window._doAddParticipant = function (tId, pName, selectedUid, selectedPhoto, onD
     };
     {
         if (!pName || !pName.trim()) return;
-            // Audit trail: quem adicionou manualmente e quando.
-            // selfEnrolled=false distingue de inscrição própria (selfEnrolled=true).
-            var _cu = window.AppStore && window.AppStore.currentUser;
+            // A Function autentica o organizador e cria autoria/horário no servidor.
             var participantObj = {
                 name: pName.trim(), displayName: pName.trim(), ligaActive: true,
                 // Nome manual não é identidade. Esta chave persiste a vaga sem
                 // confundir homônimos e permite deduplicar reenvios da mesma ação.
-                manualParticipantId: selectedUid ? null : 'manual-' + ((window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID() : Date.now().toString(36) + '-' + Math.random().toString(36).slice(2)),
-                selfEnrolled: false,
-                addedByUid:  (_cu && _cu.uid)   || null,
-                addedByName: (_cu && (_cu.displayName || _cu.email)) || null,
-                addedAt:     new Date().toISOString()
+                manualParticipantId: selectedUid ? null : 'manual-' + ((window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID() : Date.now().toString(36) + '-' + Math.random().toString(36).slice(2))
             };
-            // Se foi selecionado via autocomplete, incluir uid e photo
+            // Se foi selecionado via autocomplete, incluir somente o uid.
             if (selectedUid) participantObj.uid = selectedUid;
-            if (selectedPhoto) participantObj.photoURL = selectedPhoto;
             // If late enrollment, add to standby instead
             if (_closedOrDrawn) {
                 _enrollToStandby(t, tId, participantObj, function() { _refresh(); });
