@@ -4907,11 +4907,17 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       // drag-and-drop). Visão geral, distribuição por categoria e lista de inscritos
       // foram consolidadas aqui (v1.15.44).
       _renderCategoriesSection(rows, t, profileMap, scanMap) +
+      // ⛔ A CONTA DUPLICADA CHEGA A QUEM ENXERGA AS DUAS INSCRIÇÕES. A detecção já
+      // existia e só falava com o ATLETA; o organizador nunca sabia — foi por isso que a
+      // mesclagem falhou em todos os incidentes. A seção nasce com o estado de carregando
+      // e é preenchida pela porta do servidor logo abaixo.
+      '<div id="er-dup-secao" data-tid="' + _esc(t.id) + '"></div>' +
       _renderDiagnostic(t, rows, profileMap || {}, parts || [], resolvedFor || {}) +
       '</div>';
 
     // Popula a lista (defaults: ordem de inscrição ↑, sem filtros).
     if (typeof window._erRenderInscritos === 'function') window._erRenderInscritos();
+    if (typeof window._erCarregarDuplicatas === 'function') window._erCarregarDuplicatas(t.id);
 
     if (typeof window._reflowChrome === 'function') window._reflowChrome();
     // Reaplica a busca depois que este HTML aterrissa no DOM (aqui ainda é string) e
@@ -4921,6 +4927,125 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       if (typeof window._syncStickyBarOffset === 'function') window._syncStickyBarOffset();
     }, 0);
   }
+
+  /* ═══ CONTA DUPLICADA NO ELENCO — a seção do ORGANIZADOR ════════════════════════
+   *
+   * ⛔ SÓ LEITURA. Não há botão de unir: pedir a união exige revalidação por uid, par
+   * derivado no servidor e registro auditável, e o organizador não pode disparar prova
+   * em nome de terceiro. Aqui ele VÊ; a ação é leva própria.
+   *
+   * ⛔ NADA DE UID NO DOM nesta seção. O servidor já não manda uid, e-mail nem telefone
+   * inteiro — aqui não se reintroduz nenhum dos três.
+   */
+  var _dupEstado = { cursor: null, pares: [], naoMedidos: 0, carregando: false, erro: '' };
+
+  function _dupPintar(tId) {
+    var box = document.getElementById('er-dup-secao');
+    if (!box) return;
+    var e = _dupEstado;
+    var topo = '<div style="font-weight:800;color:var(--text-bright);font-size:0.95rem;margin-bottom:8px;">' +
+      '👥 Possíveis contas duplicadas</div>';
+
+    // ⛔ ERRO NÃO PODE PARECER "nada encontrado". A porta propaga a falha justamente
+    // porque, nesta tela, "não consegui olhar" e "está tudo limpo" são opostos.
+    if (e.erro) {
+      box.innerHTML = '<div style="margin-top:14px;border:1px solid rgba(239,68,68,0.35);background:rgba(239,68,68,0.08);' +
+        'border-radius:10px;padding:12px 14px;">' + topo +
+        '<div style="font-size:0.84rem;color:var(--sp-c-f87171,#f87171);line-height:1.45;">⚠️ ' + _esc(e.erro) +
+        '</div><button class="btn btn-micro btn-outline" style="margin-top:9px;" ' +
+        'onclick="window._erCarregarDuplicatas(\'' + _esc(tId) + '\', true)">Tentar de novo</button></div>';
+      return;
+    }
+    if (e.carregando && !e.pares.length) {
+      box.innerHTML = '<div style="margin-top:14px;border:1px solid rgba(148,163,184,0.18);border-radius:10px;padding:12px 14px;">' +
+        topo + '<div style="font-size:0.82rem;color:var(--text-muted);">Procurando…</div></div>';
+      return;
+    }
+
+    // ⚠️ O NÃO MEDIDO APARECE, sempre. É agregado de propósito: marcar individualmente
+    // exigiria devolver identidade correlacionável, que é o que esta porta não faz.
+    var naoMedido = e.naoMedidos
+      ? '<div style="font-size:0.78rem;color:var(--sp-c-fbbf24,#fbbf24);margin-top:9px;line-height:1.45;">' +
+        'ℹ️ <b>' + e.naoMedidos + '</b> ' + (e.naoMedidos === 1 ? 'inscrição não pôde' : 'inscrições não puderam') +
+        ' ser medida' + (e.naoMedidos === 1 ? '' : 's') + ' — em geral participante incluído sem conta.</div>'
+      : '';
+
+    if (!e.pares.length) {
+      box.innerHTML = '<div style="margin-top:14px;border:1px solid rgba(148,163,184,0.18);border-radius:10px;padding:12px 14px;">' +
+        topo + '<div style="font-size:0.82rem;color:var(--text-muted);">Nenhum par parecido entre os inscritos.</div>' +
+        naoMedido + '</div>';
+      return;
+    }
+
+    var linhas = e.pares.map(function (p) {
+      var pista = [];
+      if (p.telefoneMascarado) pista.push('📱 ' + _esc(p.telefoneMascarado));
+      if (p.emailMascarado) pista.push('✉️ ' + _esc(p.emailMascarado));
+      var forte = p.motivo === 'celular' || p.motivo === 'email';
+      var selo = forte
+        ? '<span style="font-size:0.6rem;padding:2px 7px;border-radius:5px;background:rgba(239,68,68,0.16);color:var(--sp-c-f87171,#f87171);font-weight:700;">MESMO CONTATO</span>'
+        : '<span style="font-size:0.6rem;padding:2px 7px;border-radius:5px;background:rgba(251,191,36,0.16);color:var(--sp-c-fbbf24,#fbbf24);font-weight:700;">NOME PARECIDO</span>';
+      // ⚠️ A negativa aparece SEM dizer quem respondeu: a pergunta aqui é sobre o PAR.
+      var disp = p.dispensado
+        ? '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px;">' +
+          'Já respondido como "não sou eu"' + (p.dismissedAt ? ' em ' + _esc(String(p.dismissedAt).slice(0, 10).split('-').reverse().join('/')) : '') +
+          ' — continua aqui para você decidir.</div>'
+        : '';
+      return '<div style="padding:9px 10px;border-radius:8px;background:var(--sp-g-0-0-0-015,rgba(0,0,0,0.15));margin-top:7px;">' +
+        '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' +
+        '<b style="color:var(--text-bright);font-size:0.85rem;">' + _esc(p.nomes[0]) + '</b>' +
+        '<span style="color:var(--text-muted);font-size:0.78rem;">×</span>' +
+        '<b style="color:var(--text-bright);font-size:0.85rem;">' + _esc(p.nomes[1]) + '</b>' + selo + '</div>' +
+        (pista.length ? '<div style="font-size:0.75rem;color:var(--text-muted);margin-top:3px;">' + pista.join(' · ') + '</div>' : '') +
+        disp + '</div>';
+    }).join('');
+
+    var mais = e.cursor
+      ? '<button class="btn btn-micro btn-outline" style="margin-top:10px;" ' +
+        'onclick="window._erCarregarDuplicatas(\'' + _esc(tId) + '\')">Ver mais</button>'
+      : '';
+
+    box.innerHTML = '<div style="margin-top:14px;border:1px solid rgba(251,191,36,0.30);background:rgba(251,191,36,0.06);' +
+      'border-radius:10px;padding:12px 14px;">' + topo +
+      '<div style="font-size:0.78rem;color:var(--text-muted);line-height:1.45;margin-bottom:4px;">' +
+      'Duas inscrições que parecem a mesma pessoa. Confira antes do sorteio.</div>' +
+      linhas + naoMedido + mais + '</div>';
+  }
+
+  window._erCarregarDuplicatas = function (tId, recomecar) {
+    if (!tId) return;
+    var e = _dupEstado;
+    if (e.carregando) return;
+    if (recomecar) { e.cursor = null; e.pares = []; e.naoMedidos = 0; }
+    e.carregando = true; e.erro = '';
+    _dupPintar(tId);
+    var db = window.FirestoreDB;
+    if (!db || typeof db.carregarDuplicatasDoElenco !== 'function') {
+      e.carregando = false; e.erro = 'Esta versão do app não sabe consultar duplicatas.'; _dupPintar(tId); return;
+    }
+    db.carregarDuplicatasDoElenco(tId, { cursor: e.cursor }).then(function (r) {
+      e.carregando = false;
+      e.pares = e.pares.concat(r.pairs || []);
+      e.cursor = r.nextCursor || null;
+      e.naoMedidos = r.unmeasuredCount || 0;
+      _dupPintar(tId);
+    }).catch(function (err) {
+      e.carregando = false;
+      var codigo = (err && (err.code || err.message)) || '';
+      // ⚠️ `failed-precondition` NÃO é erro: a análise mudou no meio da paginação. Recomeça.
+      if (String(codigo).indexOf('failed-precondition') !== -1) {
+        e.cursor = null; e.pares = []; window._erCarregarDuplicatas(tId, true); return;
+      }
+      if (String(codigo).indexOf('resource-exhausted') !== -1) {
+        e.erro = 'O elenco é grande demais para esta análise.';
+      } else if (String(codigo).indexOf('permission-denied') !== -1) {
+        e.erro = 'Só a organização do torneio vê esta análise.';
+      } else {
+        e.erro = 'Não consegui conferir agora. Isto NÃO quer dizer que está tudo certo.';
+      }
+      _dupPintar(tId);
+    });
+  };
 
   function _renderLoading(container, t) {
     if (!container) return;

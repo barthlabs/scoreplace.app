@@ -8450,8 +8450,10 @@ window._askDuplicateAccount = function () {
           (e && e.message) || 'Tente de novo daqui a pouco.', 'warning');
       });
     }, function () {
-      // "Não sou eu" → o servidor redescobre o par e anota COM a força do sinal, pra não
-      // perguntar de novo sem dado novo. O cliente nunca soube o uid do outro.
+      /* "Não sou eu" → o servidor redescobre o par e anota COM a força do sinal, pra não
+       * perguntar de novo sem dado novo. O cliente nunca soube o uid do outro.
+       * ⛔ Isto silencia a PERGUNTA, não encerra o CASO: o organizador do torneio continua
+       * vendo o par na Análise de inscritos. */
       try {
         if (typeof window._callCF === 'function') {
           window._callCF('dismissDuplicateAccount', {})

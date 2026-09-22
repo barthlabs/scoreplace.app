@@ -10979,6 +10979,320 @@ exports.getTournamentRosterContacts = onCall(
   }
 );
 
+
+// ═══ DUPLICATA NO ELENCO — O ORGANIZADOR PASSA A VER (leva 1 da reforma) ═══════════
+//
+// ⛔ O DEFEITO. A detecção de conta duplicada já existe, já roda no cadastro e já pergunta
+// à própria pessoa. Mas `dupSuspect` só é lido em tela de ATLETA. Quem tem as duas
+// inscrições lado a lado — o organizador — NUNCA era avisado. É por isso que a mesclagem
+// falhou em todos os incidentes.
+//
+// ⛔ ISTO É SÓ LEITURA. Não funde, não pede fusão, não devolve uid, e-mail ou telefone.
+// "Pedir a união" é leva própria: exige revalidação por uid, par derivado no servidor e
+// registro auditável — o organizador não pode disparar prova em nome de terceiro.
+
+const _dupRoster = require("./duplicate-roster-core");
+const DUP_CURSOR_SECRET = defineSecret("DUP_CURSOR_SECRET");
+
+// Tetos de servidor. Valores de PARTIDA, ancorados no maior torneio real conhecido (a
+// Confra, com 111 inscritos). Cada fronteira é travada em teste.
+const DUP_MAX_UIDS = 300;
+const DUP_MAX_PARES = 45000;
+const DUP_MAX_TOKENS_RAROS = 150;
+const DUP_MAX_DISMISSAL_TARGETS = 600;
+const DUP_POOL = 8;                    // pool das count() de token
+const DUP_POOL_VIVO = 8;               // pool SEPARADO das resoluções de conta viva
+const DUP_PAGE_PADRAO = 50;
+const DUP_PAGE_TETO = 200;
+
+// Executa `tarefas` com no máximo `limite` em voo. Falha de qualquer uma FALHA tudo:
+// rebaixar credencial em silêncio entregaria ao organizador um par mais fraco do que ele é.
+async function _emLotesConcorrentes(itens, limite, fn) {
+  const saida = new Array(itens.length);
+  let i = 0;
+  const trabalhadores = new Array(Math.min(limite, itens.length)).fill(0).map(async () => {
+    while (i < itens.length) {
+      const meu = i++;
+      saida[meu] = await fn(itens[meu], meu);
+    }
+  });
+  await Promise.all(trabalhadores);
+  return saida;
+}
+
+function _hmac(segredo, texto) {
+  return require("crypto").createHmac("sha256", segredo).update(String(texto)).digest("hex");
+}
+
+/* ⛔ LEITURA DO ELENCO **LIMITADA**, e não `splitParts.hidratar`.
+ * `hidratar` faz `col.get()` SEM `limit()`: um elenco legado enorme consumiria leituras,
+ * memória e os 30 s ANTES de o teto ser consultado, e o `resource-exhausted` chegaria
+ * tarde demais para proteger. Aqui a consulta para no primeiro registro acima do teto. */
+async function _lerElencoLimitado(db, tournamentId, teto) {
+  const ref = db.collection("tournaments").doc(tournamentId);
+  const snap = await ref.get();
+  if (!snap.exists) return null;
+  const data = snap.data() || {};
+  const divididas = _splitParts.partesDivididas(data);
+  if (divididas.indexOf("participants") === -1) {
+    if ((data.participants || []).length > teto) {
+      throw new HttpsError("resource-exhausted", "Elenco grande demais para a análise de duplicata");
+    }
+    return data;
+  }
+  const col = ref.collection(_tSplitFn.colecaoDaParte("participants"));
+  const parcial = await col.limit(teto + 1).get();
+  if (parcial.size > teto) {
+    throw new HttpsError("resource-exhausted", "Elenco grande demais para a análise de duplicata");
+  }
+  const montado = _tSplitFn.remontar({ config: { participants: [] }, participants: parcial.docs.map((d) => d.data()) });
+  if (!montado) throw new HttpsError("internal", "remontar do elenco falhou");
+  data.participants = montado.participants || [];
+  return data;   // ⛔ NÃO chamar hidratar depois: desfaria o limite que acabou de valer.
+}
+
+exports.getTournamentDuplicateAccounts = onCall(
+  { region: "us-central1", memory: "512MiB", timeoutSeconds: 60, cors: APP_ORIGINS, secrets: [DUP_CURSOR_SECRET] },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError("unauthenticated", "Login obrigatório");
+    const data = request.data || {};
+    const tournamentId = String(data.tournamentId || "").trim();
+    if (!tournamentId) throw new HttpsError("invalid-argument", "tournamentId é obrigatório");
+    const pageSize = Math.min(DUP_PAGE_TETO, Math.max(1, parseInt(data.pageSize, 10) || DUP_PAGE_PADRAO));
+
+    // ⛔ Segredo SEM fallback: assinar com valor padrão é NÃO assinar.
+    const segredo = DUP_CURSOR_SECRET.value();
+    if (!segredo) throw new HttpsError("failed-precondition", "segredo do cursor não provisionado");
+
+    const db = admin.firestore();
+
+    // ── (a) PRÉ-AUTORIZAÇÃO no documento cru ────────────────────────────────────────
+    // Barra a leitura pesada de quem não tem nada a ver com o torneio. Autorizar só DEPOIS
+    // de hidratar deixaria qualquer autenticado provocar a leitura da subcoleção inteira.
+    const cru = await db.collection("tournaments").doc(tournamentId).get();
+    if (!cru.exists) throw new HttpsError("not-found", "Torneio não encontrado");
+    if (!_isTournamentOrgCaller(cru.data() || {}, callerUid)) {
+      throw new HttpsError("permission-denied", "Só a organização do torneio pode ver esta análise");
+    }
+
+    // ── (b) elenco, por leitura LIMITADA ────────────────────────────────────────────
+    const t = await _lerElencoLimitado(db, tournamentId, DUP_MAX_UIDS);
+    if (!t) throw new HttpsError("not-found", "Torneio não encontrado");
+
+    // ── (c) RE-AUTORIZAÇÃO: co-org removido durante a hidratação não passa ───────────
+    if (!_isTournamentOrgCaller(t, callerUid)) {
+      throw new HttpsError("permission-denied", "Só a organização do torneio pode ver esta análise");
+    }
+
+    // ── elenco ESTRUTURAL: principal + fila canônica, COM procedência ────────────────
+    // ⚠️ Direto do adaptador local: `_ligaDrawWindow` pode vir do motor do autoDraw, que
+    // não expõe esta porta nova.
+    const _filaPorta = require("./liga-availability-window.js");
+    const fila = _filaPorta._getWaitlistWithSource(t) || [];
+    const entradas = [].concat(t.participants || []);
+    const entradasFila = [];
+    fila.forEach((sourced) => {
+      // ⚠️ A procedência serve para auditoria e deduplicação — NUNCA para apagar alguém da
+      // conta. Nome manual entra venha de onde vier, inclusive de `monarchWaitlist`; o que
+      // o coletor já descarta (uid órfão, resíduo) segue descartado.
+      entradasFila.push(sourced.entry);
+    });
+    const elenco = _dupRoster.montarElenco(entradas.concat(entradasFila));
+    if (elenco.uids.length > DUP_MAX_UIDS) {
+      throw new HttpsError("resource-exhausted", "Elenco grande demais para a análise de duplicata");
+    }
+    const paresPrevistos = (elenco.uids.length * (elenco.uids.length - 1)) / 2;
+    if (paresPrevistos > DUP_MAX_PARES) {
+      throw new HttpsError("resource-exhausted", "Elenco grande demais para a análise de duplicata");
+    }
+    let unmeasuredCount = elenco.unmeasuredCount;
+
+    // ── conta VIVA, em modo ESTRITO, e deduplicação pelo uid CANÔNICO ────────────────
+    // ⛔ Lápide não se descarta: `mergedInto` APONTA para a conta viva. E sem deduplicar
+    // depois de resolver, uid antigo e sobrevivente no mesmo elenco virariam um "par" que
+    // é a mesma conta.
+    const resolvidos = await _emLotesConcorrentes(elenco.uids, DUP_POOL_VIVO, async (uid) => {
+      return await _userVivo.uidVivo(db, uid, { strict: true });   // erro de leitura SOBE
+    });
+    const canonicos = [];
+    const vistosCanon = new Set();
+    resolvidos.forEach((uid) => {
+      if (!uid) { unmeasuredCount++; return; }        // ausente, ciclo ou corrente quebrada
+      if (vistosCanon.has(uid)) return;
+      vistosCanon.add(uid);
+      canonicos.push(uid);
+    });
+
+    // ── perfis (lotes de 250) ───────────────────────────────────────────────────────
+    const perfis = new Map();
+    for (let i = 0; i < canonicos.length; i += 250) {
+      const refs = canonicos.slice(i, i + 250).map((uid) => db.collection("users").doc(uid));
+      const docs = refs.length ? await db.getAll(...refs) : [];
+      docs.forEach((snap) => { if (snap.exists) perfis.set(snap.id, snap.data() || {}); });
+    }
+
+    // ── Auth (lotes de 100 — teto da biblioteca; a ordem NÃO é preservada) ───────────
+    const auths = new Map();
+    for (let i = 0; i < canonicos.length; i += 100) {
+      const ids = canonicos.slice(i, i + 100).map((uid) => ({ uid: uid }));
+      if (!ids.length) continue;
+      const r = await admin.auth().getUsers(ids);   // falha de lote ABORTA (não rebaixa)
+      (r.users || []).forEach((u) => { if (u && u.uid) auths.set(u.uid, u); });
+    }
+
+    // ── adaptador: CREDENCIAL vem do Auth, nunca do texto do perfil ─────────────────
+    const pessoas = [];
+    canonicos.forEach((uid) => {
+      const perfil = perfis.get(uid);
+      if (!perfil) { unmeasuredCount++; return; }
+      const auth = auths.get(uid) || null;
+      const telPerfil = _dupPerson.normalizarTelefone(perfil.phone || "");
+      const telAuth = auth ? _dupPerson.normalizarTelefone(auth.phoneNumber || "") : "";
+      // ⛔ `isIdentityPhone()` NÃO serve aqui: ela aceita qualquer número com 8 dígitos cuja
+      // procedência não seja `organizer` — prova boa para PINTAR, fraca demais para decidir
+      // credencial. A prova é o número BATER com o do Auth daquela conta.
+      const telefoneProvado = !!(telPerfil && telAuth && telPerfil === telAuth);
+      // ⛔ E-mail só de `UserRecord.email` VERIFICADO. `linkedEmails` cru viraria motivo
+      // `email` com força de credencial sem checagem nenhuma.
+      const email = (auth && auth.emailVerified && auth.email) ? auth.email : "";
+      pessoas.push({
+        uid: uid,
+        nome: perfil.displayName || "",
+        telefone: perfil.phone || "",
+        telefoneProvado: telefoneProvado,
+        email: email,
+        letzplayHandle: perfil.letzplayHandle || "",
+        perfil: perfil,
+      });
+    });
+
+    // ── raridade de token: teto + pool ──────────────────────────────────────────────
+    const tokensRaros = new Set();
+    pessoas.forEach((p) => {
+      const tk = _dupPerson.tokensNome(p.nome || "");
+      if (tk.length === 1) tokensRaros.add(tk[0]);
+    });
+    if (tokensRaros.size > DUP_MAX_TOKENS_RAROS) {
+      throw new HttpsError("resource-exhausted", "Elenco com nomes demais para a análise de duplicata");
+    }
+    const freqTokens = {};
+    const listaTokens = Array.from(tokensRaros);
+    const contagens = await _emLotesConcorrentes(listaTokens, DUP_POOL, async (tk) => {
+      // user-vivo:isento — CONTAGEM de raridade, devolve número, nunca uid.
+      const c = await db.collection("users").where("displayName_tokens", "array-contains", tk).count().get();
+      return c.data().count;
+    });
+    listaTokens.forEach((tk, idx) => { freqTokens[tk] = contagens[idx]; });
+
+    // ── dispensas: coletar CRU, deduplicar, conferir teto, SÓ ENTÃO resolver ────────
+    // ⛔ O alvo da dispensa também envelhece: ele guarda o uid de QUANDO a negativa foi
+    // dada. Se aquela conta fundiu depois, comparar o uid cru com o canônico não casa e a
+    // dispensa DESAPARECE — o organizador veria como caso novo algo que a pessoa já negou.
+    const alvosCrus = new Map();   // uid cru → maior data válida
+    pessoas.forEach((p) => {
+      const perfil = p.perfil || {};
+      (Array.isArray(perfil.dupDismissed) ? perfil.dupDismissed : []).forEach((uid) => {
+        if (uid && !alvosCrus.has(uid)) alvosCrus.set(uid, null);
+      });
+      (Array.isArray(perfil.dupDismissedInfo) ? perfil.dupDismissedInfo : []).forEach((r) => {
+        if (!r || !r.uid) return;
+        const t0 = Date.parse(r.at || "");
+        const atual = alvosCrus.get(r.uid);
+        if (!alvosCrus.has(r.uid) || (!isNaN(t0) && (atual === null || t0 > atual))) {
+          alvosCrus.set(r.uid, isNaN(t0) ? (atual === undefined ? null : atual) : t0);
+        }
+      });
+    });
+    if (alvosCrus.size > DUP_MAX_DISMISSAL_TARGETS) {
+      throw new HttpsError("resource-exhausted", "Dispensas demais para a análise de duplicata");
+    }
+    const listaAlvos = Array.from(alvosCrus.keys());
+    const alvosVivos = await _emLotesConcorrentes(listaAlvos, DUP_POOL_VIVO, async (uid) => {
+      return await _userVivo.uidVivo(db, uid, { strict: true });
+    });
+    const canonDoAlvo = new Map();
+    listaAlvos.forEach((cru0, idx) => { if (alvosVivos[idx]) canonDoAlvo.set(cru0, alvosVivos[idx]); });
+    // Reescreve as dispensas de cada perfil para o uid CANÔNICO, antes da comparação.
+    pessoas.forEach((p) => {
+      const perfil = p.perfil || {};
+      const legado = (Array.isArray(perfil.dupDismissed) ? perfil.dupDismissed : [])
+        .map((uid) => canonDoAlvo.get(uid) || uid);
+      const info = (Array.isArray(perfil.dupDismissedInfo) ? perfil.dupDismissedInfo : [])
+        .map((r) => (r && r.uid) ? Object.assign({}, r, { uid: canonDoAlvo.get(r.uid) || r.uid }) : r);
+      p.perfil = Object.assign({}, perfil, { dupDismissed: legado, dupDismissedInfo: info });
+    });
+
+    // ── enumeração ──────────────────────────────────────────────────────────────────
+    const todos = _dupRoster.enumerarPares({ pessoas: pessoas, freqTokens: freqTokens });
+
+    // ── ordenação por chave HMAC (não reversível a uid) e paginação assinada ─────────
+    const comChave = todos.map((par, idx) => Object.assign({}, par, {
+      _chave: _hmac(segredo, tournamentId + "|" + idx + "|" + par.nomes.join("|") + "|" + par.motivo),
+    }));
+    comChave.sort((a, b) => a._chave < b._chave ? -1 : (a._chave > b._chave ? 1 : 0));
+
+    // Fingerprint dos INSUMOS EFETIVOS — não só do elenco. Perfil, credencial do Auth,
+    // dispensa e `freqTokens` mudam SEM a inscrição mudar, e um par novo poderia nascer
+    // antes da chave do cursor e ser pulado na página seguinte.
+    const insumos = JSON.stringify({
+      elenco: canonicos.slice().sort(),
+      perfis: canonicos.slice().sort().map((uid) => {
+        const p = perfis.get(uid) || {};
+        return [uid, p.displayName || "", p.phone || "", p.letzplayHandle || ""];
+      }),
+      auth: canonicos.slice().sort().map((uid) => {
+        const a = auths.get(uid);
+        return [uid, a ? (a.phoneNumber || "") : "", a ? ((a.emailVerified && a.email) || "") : ""];
+      }),
+      dispensas: Array.from(alvosCrus.entries()).sort(),
+      canon: Array.from(canonDoAlvo.entries()).sort(),
+      freq: Object.keys(freqTokens).sort().map((k) => [k, freqTokens[k]]),
+    });
+    const fingerprint = _hmac(segredo, insumos);
+
+    let inicio = 0;
+    if (data.cursor) {
+      let c = null;
+      try { c = JSON.parse(Buffer.from(String(data.cursor), "base64").toString("utf8")); } catch (e) { c = null; }
+      const assinaturaOk = c && c.sig === _hmac(segredo, [c.t, c.k, c.f].join("|"));
+      if (!assinaturaOk || c.t !== tournamentId || c.f !== fingerprint) {
+        // ⚠️ `failed-precondition` é o código que a tela trata como REINICIAR — nunca como
+        // erro genérico e nunca como lista vazia.
+        throw new HttpsError("failed-precondition", "A análise mudou; recomece a listagem");
+      }
+      inicio = comChave.findIndex((p) => p._chave > c.k);
+      if (inicio < 0) inicio = comChave.length;
+    }
+
+    const pagina = comChave.slice(inicio, inicio + pageSize);
+    const ultima = pagina.length ? pagina[pagina.length - 1]._chave : null;
+    const temMais = inicio + pagina.length < comChave.length;
+    const nextCursor = (temMais && ultima)
+      ? Buffer.from(JSON.stringify({
+          t: tournamentId, k: ultima, f: fingerprint,
+          sig: _hmac(segredo, [tournamentId, ultima, fingerprint].join("|")),
+        })).toString("base64")
+      : null;
+
+    // ── (d) AUTORIZAÇÃO FINAL: revogação DURANTE a análise não passa ────────────────
+    const conferir = await db.collection("tournaments").doc(tournamentId).get();
+    if (!conferir.exists || !_isTournamentOrgCaller(conferir.data() || {}, callerUid)) {
+      throw new HttpsError("permission-denied", "Só a organização do torneio pode ver esta análise");
+    }
+
+    return {
+      pairs: pagina.map((p) => ({
+        nomes: p.nomes, motivo: p.motivo, semelhanca: p.semelhanca, forca: p.forca,
+        emailMascarado: p.emailMascarado, telefoneMascarado: p.telefoneMascarado,
+        dispensado: p.dispensado, dismissedAt: p.dismissedAt,
+      })),
+      nextCursor: nextCursor,
+      unmeasuredCount: unmeasuredCount,
+    };
+  }
+);
+
 // ─── getTournamentParticipantContact (etapa 7) ─────────────────────────────
 // Contato contextual para o botão de falar com organizador/jogador. Diferente
 // do elenco completo acima, esta porta devolve UM alvo e prova que o solicitante

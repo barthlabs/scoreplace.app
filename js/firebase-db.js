@@ -2832,6 +2832,30 @@ window.FirestoreDB = {
     }
   },
 
+  /* Pares de CONTA DUPLICADA no elenco, para o ORGANIZADOR.
+   *
+   * ⛔ ESTA PONTE PROPAGA O ERRO, ao contrário da de cima. `carregarPerfisDaAnalise`
+   * devolve `[]` em qualquer falha — e aqui isso seria o pior desfecho possível: falha de
+   * leitura ficaria IDÊNTICA a "nenhuma duplicata encontrada", numa tela cujo assunto é
+   * exatamente "existe duplicata aqui?". Quem chama tem de conseguir pintar a faixa de
+   * erro em vez de dizer que está tudo limpo.
+   *
+   * ⚠️ `failed-precondition` significa que a análise MUDOU no meio da paginação (alguém
+   * se inscreveu, um perfil mudou, uma dispensa entrou). Não é erro: é REINICIAR. */
+  async carregarDuplicatasDoElenco(tournamentId, opcoes) {
+    if (!tournamentId) throw new Error('tournamentId é obrigatório');
+    var o = opcoes || {};
+    var payload = { tournamentId: String(tournamentId) };
+    if (o.cursor) payload.cursor = String(o.cursor);
+    if (o.pageSize) payload.pageSize = o.pageSize;
+    var r = await this._callFn('getTournamentDuplicateAccounts', payload);
+    return {
+      pairs: (r && Array.isArray(r.pairs)) ? r.pairs : [],
+      nextCursor: (r && r.nextCursor) || null,
+      unmeasuredCount: (r && r.unmeasuredCount) || 0
+    };
+  },
+
   /* Candidatas a fusão da PRÓPRIA conta autenticada. A prova do e-mail vem do
    * token do Firebase; por isso o navegador não recebe autorização para buscar
    * `users` por e-mail nem recebe campos fora dos usados no bootstrap. */

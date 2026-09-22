@@ -89,13 +89,17 @@ window._askDuplicatePerson = function (tId, dup) {
       }
     });
   }, function () {
-    // NÃO — registra pros dois lados e nunca mais pergunta sobre esta pessoa.
+    /* NÃO — registra pros dois lados e para de FAZER ESTA PERGUNTA a esta pessoa.
+     * ⛔ NÃO É ENCERRAMENTO DO CASO. O organizador continua vendo o par na Análise de
+     * inscritos: é ele quem tem as duas inscrições lado a lado, e a mesclagem falhou em
+     * todos os incidentes justamente porque só o suspeito era consultado. Prometer
+     * "nunca mais" seria prometer o que o app não cumpre. */
     try {
       var fns = (window.firebase && firebase.functions) ? firebase.functions() : null;
       if (!fns) return;
       fns.httpsCallable('dismissDuplicateSuspicion')({ tournamentId: tId }).then(function () {
         if (typeof showNotification !== 'undefined') {
-          showNotification('Entendido', 'Não perguntamos mais sobre essa conta.', 'success');
+          showNotification('Entendido', 'Não perguntamos mais isso a você.', 'success');
         }
       }).catch(function (e) { if (window._warn) window._warn('[dupSuspect] dismiss falhou:', e); });
     } catch (e) { if (window._warn) window._warn('[dupSuspect] dismiss falhou:', e); }

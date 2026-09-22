@@ -145,6 +145,73 @@ const P = (uid, nome, extra) => Object.assign({ uid: uid, nome: nome, perfil: {}
   ok(ordenado[0].forca >= ordenado[1].forca, '⭐ o mais forte vem primeiro — é a ordem de olhar');
 }
 
+console.log('\n── slots de pessoa: a tabela do contrato, forma por forma ──');
+{
+  const S = require('../js/domain/participant-identity.js');
+  const n = (v) => S.participantSlots(v).length;
+  const manual = (v) => S.participantSlots(v).filter((x) => !x.uid).length;
+  eq(n({ uid: 'a' }), 1, 'solo com uid ⇒ um slot');
+  eq(n({ displayName: 'Ana' }), 1, 'solo com nome ⇒ um slot');
+  eq(manual({ displayName: 'Ana' }), 1, 'e ele é manual');
+  eq(n({ p1Uid: 'a', p2Uid: 'b' }), 2, 'dupla com dois uids ⇒ dois slots');
+  eq(n({ p1Uid: 'a', p2Name: 'Bia' }), 2, 'dupla MISTA ⇒ dois slots');
+  eq(manual({ p1Uid: 'a', p2Name: 'Bia' }), 1, '⭐ e exatamente UM deles é manual');
+  eq(n({ participants: [{ uid: 'a' }, { displayName: 'Bia' }] }), 2, 'equipe composta ⇒ dois slots');
+  eq(manual({ participants: [{ uid: 'a' }, { displayName: 'Bia' }] }), 1,
+    '⭐ o membro TEXTUAL da equipe não desaparece (era o que `participantUids` perdia)');
+  eq(n('Ana'), 1, 'entrada TEXTUAL legada ⇒ um slot');
+  eq(manual('Ana'), 1, 'e ele é manual');
+  eq(n({ p1Uid: 'a' }), 1, '`p1Uid` sozinho ⇒ um slot');
+  eq(n({ p2Name: 'Bia' }), 1, '`p2Name` sozinho ⇒ um slot');
+  eq(n(''), 0, '⭐ string vazia ⇒ NENHUM slot');
+  eq(n(null), 0, '⭐ null ⇒ NENHUM slot');
+  eq(n({ foo: 1 }), 0, '⭐ objeto sem uid e sem nome ⇒ NENHUM slot: é VAGA, não pessoa');
+}
+
+console.log('\n── fila COM procedência: origem preservada, e ninguém sumindo ──');
+{
+  const A = require('../functions/liga-availability-window.js');
+  const t = {
+    waitlist: ['Ana Manual'],
+    standbyParticipants: [{ uid: 'u2', displayName: 'Bia' }],
+    monarchWaitlist: { 'Cat A': ['Carla Manual'] },
+  };
+  const com = A._getWaitlistWithSource(t);
+  eq(com.length, 3, 'os três storages entram');
+  eq(com[2].source, 'monarchWaitlist', '⭐ a origem chega a quem lê (a porta antiga a perdia)');
+  ok(com.some((x) => x.source === 'waitlist') && com.some((x) => x.source === 'standbyParticipants'),
+    'e as outras duas também');
+  const carla = com.filter((x) => x.source === 'monarchWaitlist')[0];
+  ok(carla && JSON.stringify(carla.entry).indexOf('Carla Manual') !== -1,
+    '⭐ nome MANUAL em monarchWaitlist é PESSOA — procedência não apaga ninguém da conta');
+  eq(JSON.stringify(A._getWaitlist(t)), JSON.stringify(com.map((x) => x.entry)),
+    '⛔ a porta antiga continua devolvendo EXATAMENTE o mesmo (não podem divergir)');
+}
+
+console.log('\n── conta viva em modo ESTRITO: erro de leitura ABORTA ──');
+{
+  const UV = require('../functions/user-vivo-core.js');
+  const dbErro = { collection: () => ({ doc: () => ({ get: () => Promise.reject(new Error('banco piscou')) }) }) };
+  const dbVazio = { collection: () => ({ doc: () => ({ get: () => Promise.resolve({ exists: false }) }) }) };
+  const provas = [];
+  provas.push(UV.uidVivo(dbErro, 'a').then((r) => ok(r === '',
+    '⛔ modo NORMAL com erro continua devolvendo vazio — nenhum outro chamador muda')));
+  provas.push(UV.uidVivo(dbErro, 'a', { strict: true })
+    .then(() => ok(false, 'modo ESTRITO tinha de LANÇAR no erro de leitura'))
+    .catch((e) => ok(/banco piscou/.test(e.message),
+      '⭐ modo ESTRITO LANÇA no erro de leitura REAL de users/{uid}.get()')));
+  provas.push(UV.uidVivo(dbVazio, 'a', { strict: true }).then((r) => ok(r === '',
+    '⭐ documento AUSENTE continua sendo resposta (vazio), não erro — ausência ≠ falha')));
+  module.exports = Promise.all(provas).then(() => {
+    if (fail) {
+      console.error('\n❌ duplicata-no-elenco-do-organizador: ' + pass + ' ok, ' + fail + ' falharam');
+      process.exit(1);
+    }
+    console.log('\n✅ duplicata-no-elenco-do-organizador: ' + pass + ' ok');
+  });
+  return;
+}
+
 if (fail) {
   console.error('\n❌ duplicata-no-elenco-do-organizador: ' + pass + ' ok, ' + fail + ' falharam');
   process.exit(1);

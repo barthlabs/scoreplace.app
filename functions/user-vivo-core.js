@@ -93,13 +93,24 @@ function _normalizar(x) {
 async function userVivo(db, x, opts) {
   opts = opts || {};
   const excluir = (typeof opts.excludeUid === 'string' && opts.excludeUid) ? opts.excludeUid : '';
-  const get = typeof opts.get === 'function' ? opts.get : (uid) => _leitorFirestore(db, uid);
+  /* ⛔ MODO ESTRITO — só para quem PRECISA distinguir "não achei" de "não consegui olhar".
+   *
+   * No modo normal, falha de leitura e documento inexistente devolvem os DOIS `null`, de
+   * propósito: os caminhos de fusão preferem seguir a vida do que morrer por uma piscada
+   * do banco. Mas quem MOSTRA uma contagem — "N inscrições não puderam ser medidas" —
+   * mentiria: diria "não achei essa pessoa" quando a verdade é "o banco piscou".
+   *
+   * Com `strict`, erro de LEITURA sobe; documento ausente, ciclo e corrente quebrada
+   * continuam devolvendo `null`, que é resposta, não falha. O comportamento de todos os
+   * outros chamadores fica exatamente como está. */
+  const strict = !!opts.strict;
+  const get = typeof opts.get === 'function' ? opts.get : (uid) => _leitorFirestore(db, uid, strict);
 
   let entradas = _normalizar(x);
   if (excluir) entradas = entradas.filter((e) => e.uid !== excluir);
   if (!entradas.length) return null;
 
-  const resolvidas = await Promise.all(entradas.map((e) => _seguir(get, e)));
+  const resolvidas = await Promise.all(entradas.map((e) => _seguir(get, e, strict)));
 
   // Colapsa lápide+sobrevivente, VIVA-DIRETA primeiro: quando a busca casou os dois docs da
   // mesma pessoa, o representante é o que já veio vivo.
@@ -118,7 +129,7 @@ async function userVivo(db, x, opts) {
 }
 
 // Leitor padrão: users/{uid}. Null quando não há doc — o chamador trata como "não achei".
-function _leitorFirestore(db, uid) {
+function _leitorFirestore(db, uid, strict) {
   if (!db) return Promise.resolve(null);
   return db.collection('users').doc(uid).get().then((doc) => {
     if (!doc || !doc.exists) return null;
@@ -126,11 +137,16 @@ function _leitorFirestore(db, uid) {
     // verdadeiro e já está na mão — não vale perder a resolução por causa da forma do
     // snapshot (foi o que quebrou ao plugar isto no harness da resolveLoginRedirect).
     return { uid: doc.id || uid, data: doc.data() || {} };
-  }).catch(() => null);
+  }).catch((err) => {
+    // ⛔ É AQUI que o erro morria. Converter em `null` ANTES de `_seguir()` tornava
+    // impossível, um nível acima, distinguir falha de documento ausente.
+    if (strict) throw err;
+    return null;
+  });
 }
 
 // Segue a corrente de UMA entrada. Devolve {uid,data,viaLapide} ou null (morta/quebrada).
-async function _seguir(get, e) {
+async function _seguir(get, e, strict) {
   try {
     const atual = e.data ? e : await get(e.uid);
     if (!atual || !atual.data) return null;
@@ -164,6 +180,9 @@ async function _seguir(get, e) {
     console.warn('[user-vivo] corrente de lápide longa demais a partir de ' + origem + ' — descartada');
     return null;
   } catch (err) {
+    // ⛔ `_seguir` tem catch PRÓPRIO: sem o `strict` aqui, o erro relançado pelo leitor
+    // seria engolido neste nível e voltaria como `null` — "não medido" de novo.
+    if (strict) throw err;
     console.warn('[user-vivo] resolução falhou:', err && err.message);
     return null;
   }
