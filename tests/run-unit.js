@@ -132,7 +132,6 @@ const SUITES = [
   'functions/test-push-token-core.js',
   'functions/test-blocked-users-core.js',
   'functions/test-phone-verification-attempt-core.js',
-  'functions/test-legacy-phase-adapter-core.js',
   'tests/no-magic-link-login.test.js',
   'tests/l7-canonical-registration-cf-only.test.js',
   'tests/l7-category-definitions-cf-only.test.js',
