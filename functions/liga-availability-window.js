@@ -25,6 +25,11 @@ function helpers(tournament) {
   };
 }
 function allWait(tournament) { return waitlist.getWaitlist(tournament, helpers(tournament)); }
+/* Fila COM PROCEDÊNCIA. A porta sem `source` perde de qual storage a entrada veio já na
+ * normalização do texto órfão, e depois não há como recuperar — quem lê não distingue um
+ * manual real da fila de um espelho textual de Rei/Rainha. Os dois saem do MESMO coletor,
+ * então não divergem. */
+function allWaitWithSource(tournament) { return waitlist.getWaitlistWithSource(tournament, helpers(tournament)); }
 function removeWait(tournament, target) { return waitlist.removeByName(tournament, target, helpers(tournament)); }
 function playing(tournament, entry) { return waitlist.isPlayingCurrentPhase(tournament, entry, helpers(tournament)); }
 function sanitize(tournament) {
@@ -46,6 +51,7 @@ module.exports = {
   _participantUids: identity.participantUids,
   _pName: name,
   _getWaitlist: allWait,
+  _getWaitlistWithSource: allWaitWithSource,
   _removeFromWaitlist: removeWait,
   _waitlistPushBack: (tournament, entry) => waitlist.pushBack(tournament, entry, helpers(tournament)),
   _phaseDrawDone: waitlist.phaseDrawDone,

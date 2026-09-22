@@ -72,48 +72,68 @@ var ScoreplaceWaitlist;
         }
         return /^[A-Za-z0-9_-]{20,}$/.test(candidate);
     }
-    /** Leitura única e ordenada dos três storages, sem índices órfãos. */
-    function getWaitlist(tournament, helpers) {
+    /**
+     * Leitura única e ordenada dos três storages, sem índices órfãos, PRESERVANDO
+     * de qual storage cada entrada veio.
+     *
+     * ⛔ POR QUE A PROCEDÊNCIA TEM DE SAIR DAQUI. `getWaitlist()` normaliza texto
+     * órfão em `{name, displayName}` e, a partir daí, a origem NÃO dá mais para
+     * recuperar — quem lê depois não distingue um manual real da fila de um
+     * espelho textual de Rei/Rainha. Este é o COLETOR ÚNICO, e ele carrega
+     * `source` ATRAVÉS da deduplicação; `getWaitlist()` passa a ser um invólucro
+     * dele, para as duas leituras nunca divergirem.
+     *
+     * ⚠️ A procedência serve para AUDITORIA e DEDUPLICAÇÃO — nunca para apagar
+     * alguém da contagem. Nome manual não resolvível continua entrando, venha de
+     * onde vier; o que se descarta é UID órfão e resíduo, como já era.
+     */
+    function getWaitlistWithSource(tournament, helpers) {
         if (!tournament)
             return [];
         const output = [];
         const seen = new Set();
-        const push = (entry, entryKey) => {
+        const push = (entry, entryKey, source) => {
             if (!entryKey || seen.has(entryKey))
                 return;
             seen.add(entryKey);
-            output.push(entry);
+            output.push({ entry: entry, source: source });
         };
-        const addText = (raw) => {
+        const addText = (raw, source) => {
             const value = text(raw);
             if (!value)
                 return;
             const existing = entryByKeyFromPools(tournament, value, helpers);
             if (existing) {
-                push(existing, key(existing, helpers));
+                push(existing, key(existing, helpers), source);
                 return;
             }
             if (helpers.memberUidByName && helpers.memberUidByName(tournament, value))
                 return;
             if (looksLikeUid(tournament, value))
                 return;
-            push({ name: value, displayName: value }, value);
+            push({ name: value, displayName: value }, value, source);
         };
-        const addEntry = (entry) => {
+        const addEntry = (entry, source) => {
             if (!entry)
                 return;
             if (typeof entry === 'string') {
-                addText(entry);
+                addText(entry, source);
                 return;
             }
-            push(entry, key(entry, helpers));
+            push(entry, key(entry, helpers), source);
         };
-        array(tournament.waitlist).forEach(addEntry);
-        array(tournament.standbyParticipants).forEach(addEntry);
+        array(tournament.waitlist).forEach((e) => addEntry(e, 'waitlist'));
+        array(tournament.standbyParticipants).forEach((e) => addEntry(e, 'standbyParticipants'));
         const monarch = object(tournament.monarchWaitlist);
-        if (monarch)
-            Object.keys(monarch).forEach((category) => array(monarch[category]).forEach(addEntry));
+        if (monarch) {
+            Object.keys(monarch).forEach((category) => array(monarch[category]).forEach((e) => addEntry(e, 'monarchWaitlist')));
+        }
         return output;
+    }
+    ScoreplaceWaitlist.getWaitlistWithSource = getWaitlistWithSource;
+    /** Leitura única e ordenada dos três storages, sem índices órfãos. */
+    function getWaitlist(tournament, helpers) {
+        return getWaitlistWithSource(tournament, helpers).map((sourced) => sourced.entry);
     }
     ScoreplaceWaitlist.getWaitlist = getWaitlist;
     function first(tournament, helpers, filter) {

@@ -51,6 +51,73 @@ var ScoreplaceParticipantIdentity;
     }
     ScoreplaceParticipantIdentity.participantUids = participantUids;
     /**
+     * Cada SLOT DE PESSOA de uma entrada, com ou sem conta.
+     *
+     * ⛔ POR QUE NÃO BASTA `participantUids()`. Ele devolve só os UIDs, então numa
+     * equipe composta `[{uid}, {displayName}]` o slot manual DESAPARECE. Quem
+     * precisa saber "quantas pessoas existem aqui e quantas eu consigo medir"
+     * — a análise de conta duplicada do organizador — teria de adivinhar a
+     * diferença, e adivinhar aqui significa deixar gente de fora da contagem em
+     * silêncio.
+     *
+     * ⛔ Slot VAZIO não vira slot: sem UID e sem nome é VAGA, não pessoa. Contar
+     * vaga como "não medida" diria que faltou olhar alguém que não existe.
+     *
+     * Convidado sem conta é identidade legítima e limitada ao torneio; ele entra
+     * com `uid: null` e o nome que o organizador escreveu. Nome NUNCA é
+     * convertido em UID.
+     */
+    function participantSlots(value) {
+        const slots = [];
+        const vistosUid = new Set();
+        const vistosNome = new Set();
+        const add = (rawUid, rawName) => {
+            const uid = uidOf(rawUid);
+            const name = nameOf(rawName);
+            if (!uid && !name)
+                return; // vaga, não pessoa
+            if (uid) {
+                if (vistosUid.has(uid))
+                    return;
+                vistosUid.add(uid);
+                slots.push({ uid: uid, name: name });
+                return;
+            }
+            const chave = name.toLowerCase();
+            if (vistosNome.has(chave))
+                return;
+            vistosNome.add(chave);
+            slots.push({ uid: null, name: name });
+        };
+        // Entrada TEXTUAL — a fila legada guarda nome solto. É pessoa, não lixo.
+        if (typeof value === 'string') {
+            add(null, value);
+            return slots;
+        }
+        if (!value || typeof value !== 'object')
+            return slots;
+        const entry = value;
+        add(entry.uid, entry.displayName || entry.name);
+        if (Array.isArray(entry.participants) && entry.participants.length > 0) {
+            // Equipe composta: `participants[]` MANDA sobre p1/p2.
+            entry.participants.forEach((slot) => {
+                if (typeof slot === 'string') {
+                    add(null, slot);
+                    return;
+                }
+                if (slot && typeof slot === 'object') {
+                    const person = slot;
+                    add(person.uid, person.displayName || person.name);
+                }
+            });
+            return slots;
+        }
+        add(entry.p1Uid, entry.p1Name);
+        add(entry.p2Uid, entry.p2Name);
+        return slots;
+    }
+    ScoreplaceParticipantIdentity.participantSlots = participantSlots;
+    /**
      * Uma dupla existe quando os dois slots estão ocupados por UID ou, no caso de
      * convidado sem conta, por nome. Uma barra no texto não transforma alguém em
      * dupla: ela é somente apresentação.
