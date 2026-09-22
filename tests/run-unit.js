@@ -1479,6 +1479,8 @@ const SUITES = [
   // lado do jogador por uid, fase da negociação). Antes existia só no navegador, com as
   // rules liberando `matches` pro participante — regra sem autoridade nenhuma.
   'functions-autodraw/test-result-core.js',
+  // S1: registro de histórico nasce apenas de jogo canônico, com destinatários UID-only.
+  'functions-autodraw/test-match-history-core.js',
   'tests/l8-ficha-results-fallback.test.js', // L8: fallback local só em falha da consulta global
   'tests/l8-limpeza-orfaos-falha-fechada.test.js', // L8: limpeza só após prova canônica e pós-condição
   'tests/l9-aliases-mortos-removidos.test.js', // L9: aliases sem chamadores não retornam
