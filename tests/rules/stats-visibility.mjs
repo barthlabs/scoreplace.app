@@ -84,8 +84,8 @@ await t("'private': amigo BARRADO",        assertFails(trof(amigo, 'fechado')));
 await t("'private': o dono lê os seus",    assertSucceeds(trof(dono('fechado'), 'fechado')));
 await t("'private': amigo barrado nos marcos", assertFails(marco(amigo, 'fechado')));
 
-console.log('\nESCRITA não muda: visibilidade decide quem LÊ');
-await t('o dono escreve no próprio',       assertSucceeds(dono('aberto').doc('users/aberto/matchHistory/m2').set({ x: 1 })));
+console.log('\nESCRITA é de Function: visibilidade decide somente quem LÊ');
+await t('nem o dono escreve no próprio histórico', assertFails(dono('aberto').doc('users/aberto/matchHistory/m2').set({ x: 1 })));
 await t('terceiro NÃO escreve (nem público)', assertFails(estranho.doc('users/aberto/matchHistory/m3').set({ x: 1 })));
 await t('terceiro NÃO escreve troféu alheio', assertFails(estranho.doc('users/aberto/trophies/t9').set({ tier: 'ouro' })));
 
