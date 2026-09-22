@@ -1246,8 +1246,6 @@
     for (var i = 0; i < e.length; i++) if (nCols <= e[i].ate) return e[i];
     return e[e.length - 1];
   };
-  // compat: quem lia a constante antiga continua lendo o degrau mais apertado
-  window._SET_COL_W = { set: 25, stb: 27 };
   // O AVISO DA MARGEM, escrito UMA vez. Margem 1 (morte súbita) não avisa nada — anunciar
   // "dif 1 pt" seria ruído sobre a regra que a pessoa já espera.
   // A MARGEM EFETIVA, resolvida num lugar só. Nasceu porque eu tinha deixado DOIS defaults
