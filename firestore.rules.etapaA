@@ -882,18 +882,6 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // ─── Wrapper histórico de verificação de e-mail (v1.0.30-beta) ────────────
-    // Cloud Function `sendMagicLink` cria docs aqui com o link Firebase
-    // assinado. Usuário NÃO autenticado clica no email, abre /?ml=TOKEN no
-    // browser, e o JS do app lê esse doc pra resolver o firebaseLink real e
-    // redirecionar. Token é 24 chars random base64url — segredo suficiente
-    // pra leitura pública (igual unlisted YouTube link). Escrita só via
-    // Admin SDK (Cloud Function bypassa rules).
-    match /magicLinks/{token} {
-      allow read: if true;
-      allow write: if false;
-    }
-
     // ─── Presences (check-ins + planned "I'll play here") ─────────────────────
     // Any authenticated user may read; client filters by visibility and friends.
     // Create: must match caller's uid. Update/delete: owner only.

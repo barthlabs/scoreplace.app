@@ -31,6 +31,16 @@ function visit(dir) {
 roots.forEach((relative) => visit(path.join(ROOT, relative)));
 const index = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
 banned.forEach((pattern) => { if (pattern.test(index)) { console.error('✗ login mágico ativo: index.html (' + pattern + ')'); fail++; } });
+// Rules de produção e a cópia de transição também são código publicável. A
+// segunda pode voltar a ser aplicada no corte de amizade; por isso não pode
+// ressuscitar uma coleção pública de login por link.
+['firestore.rules', 'firestore.rules.etapaA'].forEach((file) => {
+  const source = fs.readFileSync(path.join(ROOT, file), 'utf8');
+  if (/magicLinks|sendMagicLink|[?&]ml=/.test(source)) {
+    console.error('✗ login mágico presente em Rules: ' + file);
+    fail++;
+  }
+});
 const authSource = fs.readFileSync(path.join(ROOT, 'js', 'views', 'auth.js'), 'utf8');
 if (/function\s+(?:handleEmailRegister|toggleEmailMode)\b/.test(authSource)) { console.error('✗ helper legado de cadastro: handleEmailRegister/toggleEmailMode'); fail++; }
 console.log((fail ? '❌' : '✅') + ' no-magic-link-login: ' + files + ' arquivos executáveis, ' + fail + ' ocorrência(s)');
