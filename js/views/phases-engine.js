@@ -1236,6 +1236,13 @@
   }
   function classifyPhaseFormat(cfg) {
     if (!cfg) return 'elim';
+    // Fases novas declaram o tipo de domínio. `formatCode` abaixo é somente a
+    // leitura de torneios já materializados antes deste contrato.
+    if (cfg.kind === 'elimination') return 'elim';
+    if (cfg.kind === 'classification') {
+      if (cfg.classification && cfg.classification.structure === 'groups') return 'groups';
+      return 'league';
+    }
     var f = String(cfg.format || cfg.formatCode || '').toLowerCase();
     if (cfg.formatCode === 'grupos_mata' || /grupo/.test(f)) return 'groups';
     if (cfg.formatCode === 'liga' || /\bliga\b|pontos corridos|ranking|su[ií]ç?o|swiss/.test(f)) return 'league';

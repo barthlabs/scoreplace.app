@@ -328,7 +328,7 @@
     var cutRR = e0.reiRainhaCut;               // 2 (top-2 → 1 dupla) | 4 (todos → 2 duplas)
     var daInscricao = !(sourceRR && sourceRR.type === 'previous_phase');
     var pRR = Object.assign(_phaseBase(re), {
-      name: 'Rei/Rainha', formatCode: 'liga', format: 'Liga',
+      kind: 'classification', classification: { structure: 'round_robin' }, name: 'Rei/Rainha', formatCode: 'liga', format: 'Liga',
       drawMode: 'rei_rainha', reiRainha: true, rounds: 1, groupsBy: 'sorteio',
       source: sourceRR,
       fixedPairs: false, gruposCount: 1, gruposClassified: cutRR,
@@ -347,7 +347,7 @@
     var seedRR = ({ performance: 'seed', equilibrio: 'balanced', sorteio: 'seed' }[e0.formacao] || 'seed');
     var elimDuplaRR = !!e0.dupla;
     var pElimRR = Object.assign(_phaseBase(re), {
-      name: 'Eliminatória',
+      kind: 'elimination', name: 'Eliminatória',
       formatCode: elimDuplaRR ? 'elim_dupla' : 'elim_simples',
       format: elimDuplaRR ? 'Dupla Eliminatória' : 'Eliminatórias Simples',
       reiRainha: false, drawMode: 'sorteio', rounds: 1,
@@ -414,7 +414,7 @@
       top.manualPairing = (formadas0 && cfg.manualPairingOpen) ? 'open' : 'organizer_only';
       var d0 = _LINE_DESTS[e0.linhas] || ['main'];
       p0 = Object.assign(_phaseBase(re), {
-        name: 'Eliminatória',
+        kind: 'elimination', name: 'Eliminatória',
         formatCode: elimDupla0 ? 'elim_dupla' : 'elim_simples',
         format: elimDupla0 ? 'Dupla Eliminatória' : 'Eliminatórias Simples',
         reiRainha: false, drawMode: 'sorteio', rounds: 1,
@@ -457,7 +457,7 @@
         top.drawIntervalDays = (cfg.rodadas.drawIntervalDays >= 1) ? cfg.rodadas.drawIntervalDays : null; // vazio = sem repetição
       }
       p0 = Object.assign(_phaseBase(re), {
-        name: isRR ? 'Rei/Rainha' : 'Pontos Corridos',
+        kind: 'classification', classification: { structure: 'round_robin' }, name: isRR ? 'Rei/Rainha' : 'Pontos Corridos',
         formatCode: 'liga', format: 'Liga',
         drawMode: top.drawMode, reiRainha: isRR,
         rounds: cfg.rodadas.n, groupsBy: 'sorteio',
@@ -481,7 +481,7 @@
       top.turnos = idaVolta ? 'ida_volta' : 'ida';   // _buildPhase0Cfg propaga p/ genGroupsFromPool
       if (idaVolta) top.ligaTurnos = 2;
       p0 = Object.assign(_phaseBase(re), {
-        name: cfg.grupos === 1 ? 'Pontos Corridos' : 'Fase de Grupos',
+        kind: 'classification', classification: { structure: 'groups' }, name: cfg.grupos === 1 ? 'Pontos Corridos' : 'Fase de Grupos',
         formatCode: 'grupos_mata', format: 'Fase de Grupos',
         drawMode: 'sorteio', reiRainha: false,
         gruposCount: cfg.grupos, gruposClassified: cfg.classificados,
@@ -575,7 +575,7 @@
       var qAll = !!e.qualifyAll;
       var elimDupla = !!e.dupla; // v4.4.58: Dupla Eliminatória (repescagem)
       var p1 = Object.assign(_phaseBase(re), {
-        name: 'Eliminatória',
+        kind: 'elimination', name: 'Eliminatória',
         formatCode: elimDupla ? 'elim_dupla' : 'elim_simples',
         format: elimDupla ? 'Dupla Eliminatória' : 'Eliminatórias Simples',
         reiRainha: false, drawMode: 'sorteio', rounds: 1,

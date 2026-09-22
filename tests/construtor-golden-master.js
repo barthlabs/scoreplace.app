@@ -126,7 +126,7 @@ const CASOS = [
 function retratoDaFase(p) {
   if (!p) return null;
   return {
-    name: p.name, formatCode: p.formatCode, format: p.format,
+    kind: p.kind, name: p.name, formatCode: p.formatCode, format: p.format,
     drawMode: p.drawMode, reiRainha: !!p.reiRainha, rounds: p.rounds,
     groupsBy: p.groupsBy, gruposCount: p.gruposCount, gruposClassified: p.gruposClassified,
     fixedPairs: p.fixedPairs, pairingStrategy: p.pairingStrategy,
