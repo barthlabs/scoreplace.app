@@ -914,6 +914,9 @@ const SUITES = [
   'tests/letzplay-model.test.js',
   'tests/letzplay-eta.test.js',
   'tests/letzplay-scan-order.test.js',
+  // Núcleo puro do autopreenchimento pelo scan do letzplay (categoria apurada
+  // corrigindo a declarada). Ainda SEM chamador: a ligação é do bloco 2 da reforma.
+  'tests/letzplay-self-populate.test.js',
   // Leitura de perfil GRANDE do letzplay, ponta a ponta com o content.js REAL da extensão
   // num Chromium contra um letzplay sintético. Trava o que quebrava no perfil da Camila
   // (472 jogos): rodada time-boxed em 240s pra um trabalho de ~9 min, etapa dos jogos
