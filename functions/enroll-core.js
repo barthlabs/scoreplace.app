@@ -146,6 +146,22 @@ function sanitizeAccountParticipant(participantObj) {
   return out;
 }
 
+function normalizeExtraUpdates(extraUpdates) {
+  if (extraUpdates == null) return null;
+  if (!extraUpdates || typeof extraUpdates !== 'object' || Array.isArray(extraUpdates)) throw new Error('extraUpdates inválido');
+  var keys = Object.keys(extraUpdates);
+  if (keys.some(function (key) { return key !== 'teamOrigins'; })) throw new Error('campo extra de inscrição não permitido');
+  var origins = extraUpdates.teamOrigins;
+  if (!origins || typeof origins !== 'object' || Array.isArray(origins) || Object.keys(origins).length > 500) throw new Error('teamOrigins inválido');
+  var clean = {};
+  Object.keys(origins).forEach(function (key) {
+    var name = String(key).trim(), value = String(origins[key]).trim();
+    if (!name || name.length > 240 || !value || value.length > 40) throw new Error('teamOrigins inválido');
+    clean[name] = value;
+  });
+  return { teamOrigins: clean };
+}
+
 // Decide a inscrição a partir do doc atual. Retorna { outcome, participants, updateData, ... }.
 // A CF aplica updateData dentro da transação. NÃO stripa nomes (o servidor não tem
 // perfil vivo pra reidratar — preservar o nome é o comportamento conservador que o
@@ -368,5 +384,5 @@ function computeLeaveStandby(data, userUid) {
 
 module.exports = {
   participantUids, computeMemberUids, cleanUndefined, phaseDrawDone, isPlacedInDraw,
-  enrollmentOpen, isAlreadyEnrolled, sanitizeAccountParticipant, computeEnroll, computeDeenroll, computeLeaveStandby
+  enrollmentOpen, isAlreadyEnrolled, sanitizeAccountParticipant, normalizeExtraUpdates, computeEnroll, computeDeenroll, computeLeaveStandby
 };

@@ -2972,7 +2972,9 @@ exports.enrollParticipant = onCall(
 
     const tournamentId = String((request.data && request.data.tournamentId) || "");
     const participantObj = request.data && request.data.participantObj;
-    const extraUpdates = (request.data && request.data.extraUpdates) || null;
+    let extraUpdates;
+    try { extraUpdates = _enrollCore.normalizeExtraUpdates(request.data && request.data.extraUpdates); }
+    catch (error) { throw new HttpsError("invalid-argument", error.message); }
     if (!tournamentId || !participantObj || typeof participantObj !== "object") {
       throw new HttpsError("invalid-argument", "tournamentId e participantObj são obrigatórios");
     }

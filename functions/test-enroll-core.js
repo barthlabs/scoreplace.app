@@ -22,6 +22,9 @@ function eq(name, a, b) { ok(name + ' (' + JSON.stringify(a) + ' === ' + JSON.st
     r.updateData.memberUids.indexOf('nelson-uid-0001') !== -1 && r.updateData.memberUids.indexOf('org-uid-0001') !== -1);
 })();
 
+ok('extraUpdates aceita somente teamOrigins', JSON.stringify(C.normalizeExtraUpdates({ teamOrigins: { 'Ana / Bia': 'formada' } })) === JSON.stringify({ teamOrigins: { 'Ana / Bia': 'formada' } }));
+try { C.normalizeExtraUpdates({ status: 'finished' }); ok('extraUpdates recusa patch arbitrário', false); } catch (_) { ok('extraUpdates recusa patch arbitrário', true); }
+
 (() => {
   const index = fs.readFileSync(require.resolve('./index.js'), 'utf8');
   const start = index.indexOf('exports.enrollParticipant = onCall(');
