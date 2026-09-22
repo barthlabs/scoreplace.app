@@ -8156,8 +8156,11 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
       // v4.1.29: só a eliminatória SIMPLES mostra o preview TBD (Quartas/Semis/Final). A
       // DUPLA (upper/lower/grande final) tem estrutura diferente — mostrar colunas de
       // simples enganaria; ela materializa no auto-avanço quando o Suíço termina.
-      var _nIsDupla = /dupla/i.test(_nfmt) || (_nextCfg && _nextCfg.formatCode === 'elim_dupla');
-      if (_nextCfg && /Eliminat/i.test(_nfmt) && !_nIsDupla) {
+      var _nextIsElimination = _nextCfg && (_nextCfg.kind === 'elimination' || /Eliminat/i.test(_nfmt));
+      var _nIsDupla = _nextCfg && _nextCfg.kind === 'elimination'
+        ? !!(_nextCfg.elimination && _nextCfg.elimination.bracketType === 'double')
+        : (/dupla/i.test(_nfmt) || _nextCfg && _nextCfg.formatCode === 'elim_dupla');
+      if (_nextIsElimination && !_nIsDupla) {
         var _map = _nextCfg.source && _nextCfg.source.mapping;
         var _tot = 0;
         if (Array.isArray(_map) && _map.length) {
