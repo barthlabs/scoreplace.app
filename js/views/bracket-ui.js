@@ -6387,15 +6387,6 @@ window._openLiveScoring = function(tId, matchId, opts) {
    * Apagada em vez de virar no-op: função sem chamador é DECOY, e decoy faz o próximo
    * leitor consertar o lugar errado — foi assim que perdi tempo no jogo 63. */
 
-  // Confirm the proposed order
-  window._liveConfirmServeOrder = function() {
-    state.serveOrder = _proposedOrder.map(function(p) { return { team: p.team, name: p.name, pIdx: p.pIdx }; });
-    state.serveSkipped = false;
-    state.servePending = false;
-    _render();
-    _watchNotify(); // relógio sai do "Iniciar" e passa a mostrar o placar/sacador
-  };
-
   // Skip serve tracking
   window._liveSkipServe = function() {
     state.serveSkipped = true;
@@ -9113,7 +9104,6 @@ window._openLiveScoring = function(tId, matchId, opts) {
       }
     }, 600);
   }
-  window._liveNowSyncCurrent = _lnSync;   // pro teardown do overlay alcançar
 
   // ⭐ FECHAR O PLACAR TEM QUE APAGAR A BATIDA (relato do dono, 27/ago/2026: _"esse ao vivo
   // não some nunca; já foi cancelada no meio e não some"_).
@@ -9141,7 +9131,6 @@ window._openLiveScoring = function(tId, matchId, opts) {
     }
     _lnPub = false;
   }
-  window._liveNowTeardownCurrent = _lnTeardown;
 
   // ── ESPECTADOR: o estado ENTRA do doc público e a tela vira leitura ────────────
   // Mesmo render, mesma placa, mesmas cores — o que muda é a direção do dado. E a
@@ -9166,7 +9155,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
     }
     if (opts && opts.liveId && window.FirestoreDB && window.FirestoreDB.db) {
       try {
-        window.__liveSpecUnsub = window.FirestoreDB.db.collection('liveScores').doc(opts.liveId)
+        window.FirestoreDB.db.collection('liveScores').doc(opts.liveId)
           .onSnapshot({ includeMetadataChanges: true }, function (doc) {
             if (!window._isRemoteFirestoreSnapshot(doc)) return;
             if (!doc.exists) return;

@@ -1041,31 +1041,6 @@ window._integrateLateDuplas = function (t) {
   return integrated;
 };
 
-// TIER 3: desfaz as duplas formadas na lista de espera de volta em suplentes INDIVIDUAIS.
-// Usado quando a R2 da chave inferior já começou (tarde demais pra formar confronto novo).
-// Retorna nº de duplas desfeitas.
-window._dissolveLateDuplas = function (t) {
-  if (!t) return 0;
-  var _isPair = function (p) { return p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name); };
-  var undone = 0;
-  ['standbyParticipants', 'waitlist'].forEach(function (k) {
-    if (!Array.isArray(t[k])) return;
-    var out = [];
-    t[k].forEach(function (p) {
-      if (_isPair(p) && p._lateJoin) {
-        // FASE 2: nome do membro pelo uid quando há conta; nome gravado só p/ guest
-        var _dn1 = p.p1Uid ? (window._displayNameForUid ? window._displayNameForUid(p.p1Uid, p.p1Name) : (p.p1Name || p.p1Uid || '')) : null;
-        var _dn2 = p.p2Uid ? (window._displayNameForUid ? window._displayNameForUid(p.p2Uid, p.p2Name) : (p.p2Name || p.p2Uid || '')) : null;
-        out.push(p.p1Uid ? { displayName: _dn1, name: _dn1, uid: p.p1Uid, _lateJoin: true } : p.p1Name);
-        out.push(p.p2Uid ? { displayName: _dn2, name: _dn2, uid: p.p2Uid, _lateJoin: true } : p.p2Name);
-        undone++;
-      } else { out.push(p); }
-    });
-    t[k] = out;
-  });
-  return undone;
-};
-
 window._createExtraGamesFromWaitlist = function(t) {
   if (!t) return 0;
   if (!window._allowsNewMatchups(t)) return 0; // v1.3.x: gate independente (ver _allowsNewMatchups)

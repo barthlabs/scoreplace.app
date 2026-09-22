@@ -629,7 +629,7 @@ function drawInitial(t, opts) {
 // v1.2.57: INTEGRAÇÃO DE TARDIOS no SERVIDOR (cânone-no-servidor, dono 17/jul). Roda as MESMAS
 // funções vendoradas que o cliente rodava em bracket.js ao abrir o bracket (isOrg):
 //   • _createExtraGamesFromWaitlist  → Eliminatória Simples (avulsos + DUPLAS já formadas, v1.2.56)
-//   • _integrateLateDuplas           → Dupla Eliminatória (Tier 1/2; Tier 3 → _dissolveLateDuplas)
+//   • _integrateLateDuplas           → Dupla Eliminatória
 //   • _expandMonarchFromWaitlist     → Rei/Rainha (novos grupos)
 // São MUTUAMENTE EXCLUSIVAS por guarda de formato — no máximo uma age. O cliente só DISPARA;
 // a mutação + persistência vivem aqui (project_canon_runs_on_server). NÃO faz o commit — quem
