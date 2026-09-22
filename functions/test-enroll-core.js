@@ -5,6 +5,7 @@
  * já rolou, dedup por slot de dupla (uid do p2), e desinscrever a dupla inteira
  * quando UM membro sai. */
 const C = require('./enroll-core');
+const fs = require('fs');
 const NOW = new Date('2026-07-17T12:00:00Z').getTime();
 
 let pass = 0, fail = 0;
@@ -19,6 +20,17 @@ function eq(name, a, b) { ok(name + ' (' + JSON.stringify(a) + ' === ' + JSON.st
   eq('enroll aberto → 1 participante', r.participants.length, 1);
   ok('enroll aberto → memberUids tem org+nelson',
     r.updateData.memberUids.indexOf('nelson-uid-0001') !== -1 && r.updateData.memberUids.indexOf('org-uid-0001') !== -1);
+})();
+
+(() => {
+  const index = fs.readFileSync(require.resolve('./index.js'), 'utf8');
+  const start = index.indexOf('exports.enrollParticipant = onCall(');
+  const end = index.indexOf('exports.deenrollParticipant = onCall(', start);
+  const block = index.slice(start, end);
+  ok('Function reutiliza inscrição sanitizada no roster, sandbox e espelho',
+    /const sanitizedParticipantObj = _enrollCore\.sanitizeAccountParticipant\(participantObj\)/.test(block) &&
+    !/computeEnroll\([^\n]*participantObj/.test(block) &&
+    /entry: _enrollCore\.cleanUndefined\(sanitizedParticipantObj\)/.test(block));
 })();
 
 (() => {
