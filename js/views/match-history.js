@@ -231,10 +231,20 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (!mySlot) return null;
     var myTeam = mySlot.team;
     var opp = [], partner = [];
+    // Registros novos persistem somente uid+time. O rótulo é resolvido no
+    // espelho público já carregado, sem buscar perfil privado nem usar uid como
+    // texto de tela. `name` permanece apenas para o acervo legado.
+    var displayName = function(p) {
+      if (p && p.uid && typeof window._nameForUid === 'function') {
+        var live = window._nameForUid(p.uid);
+        if (live) return live;
+      }
+      return (p && p.name) || '';
+    };
     r.players.forEach(function (p) {
       if (!p) return;
-      if (p.team === myTeam) { if (p.uid !== myUid) partner.push(p.name || ''); }
-      else opp.push(p.name || '');
+      if (p.team === myTeam) { if (p.uid !== myUid) partner.push(displayName(p)); }
+      else opp.push(displayName(p));
     });
     if (!opp.filter(Boolean).length) return null;   // jogo sem adversário não é jogo
     var w = r.winnerTeam;
@@ -301,6 +311,20 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         v2.forEach(function (r) { if (r && (!r.matchId || !seen[r.matchId])) records.push(r); });
       }
     } catch (e) {}
+    // A projeção UID-only só é renderizada depois da hidratação do espelho
+    // público. Sem fallback ao documento `users/{uid}`, falta de espelho fica
+    // como rótulo vazio, não como vazamento de dado privado.
+    if (typeof window._preloadUserProfiles === 'function') {
+      var profileUids = [];
+      records.forEach(function (record) {
+        (record && Array.isArray(record.players) ? record.players : []).forEach(function (player) {
+          if (player && player.uid) profileUids.push(player.uid);
+        });
+      });
+      if (profileUids.length) {
+        try { await window._preloadUserProfiles(profileUids); } catch (e) {}
+      }
+    }
     var out = [];
     records.forEach(function (r) {
       var it = _scoreplaceRecordToItem(r, uid);
