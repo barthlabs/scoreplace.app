@@ -2251,11 +2251,4 @@ window._translations['en'] = {
   'predraw.backLabel': '← Back',
   'predraw.confirmLabel': '✓ Confirm',
 
-  // Hints
-  'hints.disabled': 'Hints Disabled',
-  'hints.disabledMsg': 'You can re-enable them in your profile settings.',
-  'hints.enabled': 'Hints Enabled',
-  'hints.enabledMsg': 'Visual hints will appear after a few seconds of inactivity.',
-  'hints.reset': 'Hints Reset',
-  'hints.resetMsg': 'All hints will be shown again.'
 };

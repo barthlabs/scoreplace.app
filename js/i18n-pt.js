@@ -2268,11 +2268,4 @@ window._translations['pt'] = {
   'predraw.backLabel': '← Voltar',
   'predraw.confirmLabel': '✓ Confirmar',
 
-  // Hints
-  'hints.disabled': 'Dicas Desativadas',
-  'hints.disabledMsg': 'Você pode reativar nas configurações do perfil.',
-  'hints.enabled': 'Dicas Ativadas',
-  'hints.enabledMsg': 'Dicas visuais aparecerão após alguns segundos de inatividade.',
-  'hints.reset': 'Dicas Resetadas',
-  'hints.resetMsg': 'Todas as dicas serão exibidas novamente.'
 };
