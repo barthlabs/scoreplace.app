@@ -407,8 +407,8 @@ function regrasSemTrava() {
   };
   troca('&& (faseIntacta() || ehResetOk())', '&& (faseIntacta() || ehResetOk() || true)', 'a trava do update');
   troca('&& !dividido();', '&& (!dividido() || true);', 'a trava do delete');
-  troca(/\n        && request\.resource\.data\.get\('currentPhaseIndex', 0\) == 0[\s\S]*?&& !\('phaseRounds' in request\.resource\.data\)(?:\s*&& !\('phaseConfig' in request\.resource\.data\))?;/,
-    ';', 'as exigências do create');
+    troca(/\n        && request\.resource\.data\.get\('currentPhaseIndex', 0\)[\s\S]*?&& !\('phaseRounds' in request\.resource\.data\);/,
+      ';', 'as exigências do create');
   const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'sp-fase-old-')), 'sem-trava.rules');
   fs.writeFileSync(file, old);
   return file;
