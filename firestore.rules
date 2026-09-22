@@ -981,6 +981,12 @@ service cloud.firestore {
       allow create, update: if request.auth != null
         && request.auth.uid != scanUid
         && request.resource.data.keys().hasOnly(['handle', 'scan', 'scannedAt', 'scannedBy', 'scannedByName', 'tournamentId', 'tournamentName', 'fullImport', 'lzCursorParcial', 'totaisLetzplay']);
+      /* ✅ PUBLICADA em 22/set/2026, ANTES do Hosting — a ordem importa: `deploy-hosting.sh`
+       * sobe SOMENTE o Hosting, então sem `firebase deploy --only firestore:rules` a
+       * proteção não existiria em produção e a tela falaria de trava que não está no ar.
+       * Ruleset no ar: f4efce77-8eb5-4546-a4cb-3fda307995c3 — conferido pela API de
+       * releases, não pelo repositório: `request.auth.uid != scanUid` presente e
+       * `allow delete: if false` ativo. */
       /* ⛔ E NINGUÉM APAGA. Estava `request.auth != null`: qualquer autenticado destruía o
        * scan de qualquer pessoa. Travar a escrita e deixar o apagar aberto seria proteger o
        * conteúdo e permitir DESTRUIR a evidência — pior, porque não sobra o que comparar.
