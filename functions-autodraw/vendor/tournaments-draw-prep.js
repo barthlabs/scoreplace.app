@@ -1533,7 +1533,6 @@ window.showUnifiedResolutionPanel = function(tId) {
     });
     window._unifiedCourts = _uCourts;
     window._unifiedDur = _uDur;
-    window._unifiedTId = tIdSafe;
     // v4.0.68: resumo por opção = TÍTULO (nome da opção) + passos (processo → chave).
     // A estimativa de tempo vem do _unifiedEstData. Mostrado no detalhe sticky ao
     // selecionar. Formato pedido pelo dono (ex. Play-in).
@@ -2033,12 +2032,6 @@ window._soloContinueDraw = function (tId, isAberto) {
     // skipGates=true: o gate "Encerrar Inscrições?" já foi mostrado quando o usuário
     // clicou Sortear — não repetir ao confirmar a resolução dos sem-dupla. (v4.0.100)
     if (typeof window._handleSortearClick === 'function') window._handleSortearClick(tId, !!isAberto, true);
-};
-window._soloCancel = function () {
-    var a = document.getElementById('solo-resolution-panel'); if (a) a.remove();
-    var b = document.getElementById('solo-manual-pair-panel'); if (b) b.remove();
-    window._soloPairState = null;
-    document.body.style.overflow = '';
 };
 // Mutator PURO (re-executável sobre o doc fresco): remove os sem-dupla de participants e,
 // se toWaitlist, os empurra pra waitlist (dedup por nome). Usado por _soloResolveWaitlist e

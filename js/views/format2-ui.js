@@ -960,7 +960,6 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     _norm();
     _rerender();
   };
-  window._f2Parceria = function (v) { S.cfg.parceria = v; _norm(); _rerender(); };
   window._f2Form = function (v) { S.cfg.formacaoDupla = v; _norm(); _rerender(); };
   window._f2ElimManualPairing = function (checked) { S.cfg.manualPairingOpen = !!checked; _norm(); _rerender(); };
   // v4.4.19: "Formação das equipes" — 1 controle: Montadas (fixa+manual) / Sorteio
@@ -1268,7 +1267,6 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     _norm(); _rerenderSemAtrapalhar(el);
   };
   window._f2ElimEndTime = function (v, el) { if (!S) return; S.cfg.eliminatoria.endTime = String(v || ''); _norm(); _rerenderSemAtrapalhar(el); };
-  window._f2Origem = function (v) { S.cfg.eliminatoria.origem = v; _norm(); _rerender(); };
   // v4.5.51: abrir a eliminatória com rodada Rei/Rainha (grupos de 4 formam as duplas).
   window._f2ElimOpenRR = function (checked) { if (!S) return; S.cfg.eliminatoria.openReiRainha = !!checked; _norm(); _rerender(); };
   window._f2ElimRRCut = function (n) { if (!S) return; S.cfg.eliminatoria.reiRainhaCut = (parseInt(n, 10) === 2) ? 2 : 4; _norm(); _rerender(); };
@@ -1295,9 +1293,6 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   };
   // Config atual (pro save do form). null se não montado em modo form.
   window._f2GetConfig = function () { return (S && S.mode === 'form') ? window.FORMAT2.normalize(S.cfg, S.sport) : null; };
-  // Atualiza a modalidade sem perder a config (quando o form troca o esporte).
-  window._f2SetSport = function (sport) { if (S) { S.sport = sport || S.sport; _norm(); _rerender(); } };
-
   // ── MODO PAGE (legado): página #formato/:tId ──
   window.renderFormatoPage = function (container) {
     var tId = _tid();
