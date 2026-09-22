@@ -214,7 +214,6 @@ window._mergeDragStart = function(e, name, tId) {
             });
         }
         window._participantDragData = (pObj && typeof pObj === 'object') ? pObj : { displayName: name, name: name };
-        window._participantDragTId = tId;
         var crownBtn = document.getElementById('crown-org-btn');
         if (crownBtn) crownBtn.style.display = 'flex';
         window._setOrgDropActive(true);

@@ -3512,7 +3512,6 @@ window.handleDragStart = function (e, idx, tId) {
     var t = (window.AppStore.tournaments || []).find(function(x) { return String(x.id) === String(tId); });
     if (t && Array.isArray(t.participants) && t.participants[idx]) {
       window._participantDragData = t.participants[idx];
-      window._participantDragTId = tId;
     }
     // Show crown drop target while dragging
     var crownBtn = document.getElementById('crown-org-btn');

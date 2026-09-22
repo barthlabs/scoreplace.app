@@ -1637,7 +1637,6 @@ function renderTournaments(container, tournamentId = null) {
             });
           }
           window._participantDragData = (_pd && typeof _pd === 'object') ? _pd : { displayName: uidOrName, name: uidOrName };
-          window._participantDragTId = tId;
           if (window._setOrgDropActive) window._setOrgDropActive(true);
         } catch (e) {}
     };
