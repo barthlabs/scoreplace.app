@@ -181,6 +181,42 @@ qualquer UID.
 partida confirmada gera exatamente uma projeção por participante com UID; um
 resultado que falhe ou seja substituído não deixa estatística divergente.
 
+### Evidência de implementação e contrato de corte — 21/09/2026
+
+A confirmação de resultado de torneio já possui uma única autoridade:
+`applyMatchResult`, em `functions-autodraw/index.js`, delega para
+`_aplicaPlacarNaTransacao`. Ela lê o torneio fresco, aplica o motor puro e
+grava o estado da chave, o espelho de resultados e a auditoria no mesmo commit.
+Os desfechos relevantes são `applied`, `pending`, `in-progress`, `disputed`,
+`match-reset`, `result-reopened` e `wo-reverted`. Portanto, a projeção de
+histórico de torneio só pode nascer depois de `applied` e deve ser apagada no
+mesmo commit nas três reaberturas; propostas, disputa e placar em andamento
+não geram histórico.
+
+O identificador da cópia continua determinístico, `t_<tournamentId>_<matchId>`.
+Os destinatários vêm exclusivamente dos slots canônicos
+`team1Uids`/`team2Uids` ou `p1Uid`/`p2Uid`; nomes de `p1`, `p2`, `team1` e
+`team2` não participam da decisão, do destinatário nem da deduplicação.
+
+O leitor atual ainda não está pronto para uma projeção sem rótulos:
+`match-history.js`, `match-replay.js` e `tournaments-analytics.js` usam
+`players[].name` para apresentar parceiro/adversário, e a análise detalhada
+ainda indexa `playerStats` por nome. Assim, o corte deve entregar junto:
+
+1. um núcleo puro que derive o registro somente de uma partida canônica;
+2. a projeção transacional no resultado de torneio e a porta de releitura para
+   partida casual encerrada;
+3. leitores que resolvam rótulos vivos por UID e usem `playerStats` por UID;
+4. substituição dos três construtores do navegador e da exclusão casual por
+   chamadas de Function; e
+5. a negação total de escrita direta nas Rules, com provas no emulador.
+
+Não é aceitável introduzir uma permissão parcial por prefixo de ID, tipo de
+partida ou campo declarado pelo cliente. Enquanto existir uma única escrita
+direta de `matchHistory`, qualquer cliente autenticado ainda poderá fabricar
+uma estatística própria; por isso a alteração das Rules é o último passo da
+mesma entrega, nunca uma promessa para depois.
+
 - Nenhuma alteração de perfil propaga nome, e-mail ou foto como identidade de
   participante.
 - Nenhuma rota antiga produz um segundo UID operacional para pessoa já
