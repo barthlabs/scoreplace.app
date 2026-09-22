@@ -1605,8 +1605,9 @@ function _formTrendHtml(casualRecs, tournRecs, lpGames, uid, lpImp) {
         var partner = null, opps = [];
         (r.players || []).forEach(function (p) {
             if (p.uid === uid) return;
-            if (p.team === me.team) { if (p.name) partner = p.name; }
-            else if (p.name) opps.push(p.name);
+            var label = _historyPlayerName(p);
+            if (p.team === me.team) { if (label) partner = label; }
+            else if (label) opps.push(label);
         });
         ev.push({ ts: (r.finishedAt ? (Date.parse(r.finishedAt) || 0) : 0), win: r.winnerTeam === me.team, t: t,
             comp: r.tournamentName || r.tournament || (t === 't' ? 'Torneio' : 'Casual'), official: t === 't',
@@ -1655,6 +1656,16 @@ function _formTrendHtml(casualRecs, tournRecs, lpGames, uid, lpImp) {
 // Splits casual vs tournament, aggregates serve/receive/killer/breaks/streaks,
 // and produces head-to-head + partnership tables. Records are written per-player
 // to users/{uid}/matchHistory so they survive tournament/casual deletion.
+// Histórico novo guarda somente uid+time. A apresentação resolve o nome vivo do
+// espelho público; nome gravado existe só em registros anteriores ao corte.
+function _historyPlayerName(player) {
+    if (player && player.uid && typeof window._nameForUid === 'function') {
+        var live = window._nameForUid(player.uid);
+        if (live) return live;
+    }
+    return (player && player.name) || '';
+}
+
 window._renderPersistentMatchStats = function(records, uid) {
     var _safe = window._safeHtml || function(s) { return String(s == null ? '' : s); };
     var casual = [], tournament = [];
@@ -1753,8 +1764,10 @@ window._renderPersistentMatchStats = function(records, uid) {
                     if (agg.tbMinPoints === null || _myPts < agg.tbMinPoints) agg.tbMinPoints = _myPts;
                 }
             }
-            // Per-player holds (saque mantido) — lives in playerStats[name], keyed by display name.
-            var myPs = r.playerStats && mySlot.name && r.playerStats[mySlot.name];
+            // Schema novo indexa estatística individual por UID. O nome só lê o
+            // acervo anterior, em que a chave ainda era o rótulo de exibição.
+            var myPs = r.playerStats && (mySlot.uid ? r.playerStats[mySlot.uid] : null);
+            if (!myPs && r.playerStats && mySlot.name) myPs = r.playerStats[mySlot.name];
             if (myPs) {
                 agg.holdsServed += myPs.served || 0;
                 agg.holdsWon += myPs.held || 0;
@@ -1804,12 +1817,12 @@ window._renderPersistentMatchStats = function(records, uid) {
             var didWin = w === myTeam, didDraw = w === 0;
             for (var j = 0; j < ps.length; j++) {
                 var pj = ps[j];
-                if (pj === me || pj.name === me.name) continue;
+                if (pj === me || (pj.uid && me.uid && pj.uid === me.uid)) continue;
                 // Skip placeholder names with no uid — anonymous empty slots from casual setup.
                 if (!pj.uid && _isPlaceholderName(pj.name)) continue;
                 var key = pj.uid || ('name:' + (pj.name || ''));
                 var map = pj.team === myTeam ? partners : h2h;
-                if (!map[key]) map[key] = { name: pj.name, uid: pj.uid || null, photoURL: pj.photoURL || null, played:0, wins:0, losses:0, draws:0 };
+                if (!map[key]) map[key] = { name: _historyPlayerName(pj), uid: pj.uid || null, photoURL: pj.photoURL || null, played:0, wins:0, losses:0, draws:0 };
                 map[key].played++;
                 if (didDraw) map[key].draws++;
                 else if (didWin) map[key].wins++;

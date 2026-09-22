@@ -3812,6 +3812,21 @@ window.FirestoreDB = {
         if (_rajada && _rajada(d)) return;   // descartada: não é jogo disputado
         out.push(d);
       });
+      // A projeção nova armazena somente uid+time. Centralizar a hidratação aqui
+      // mantém todos os consumidores (histórico, ficha e análise) no mesmo
+      // contrato de apresentação, via `usersPublic`, sem nunca consultar o perfil
+      // privado de outra pessoa.
+      if (typeof window !== 'undefined' && typeof window._preloadUserProfiles === 'function') {
+        var profileUids = [];
+        out.forEach(function(record) {
+          (record && Array.isArray(record.players) ? record.players : []).forEach(function(player) {
+            if (player && player.uid) profileUids.push(player.uid);
+          });
+        });
+        if (profileUids.length) {
+          try { await window._preloadUserProfiles(profileUids); } catch (e) {}
+        }
+      }
       return out;
     } catch (e) {
       // v1.7.51 — RECUSA NÃO É LISTA VAZIA. `users/{uid}/matchHistory` agora é lido
