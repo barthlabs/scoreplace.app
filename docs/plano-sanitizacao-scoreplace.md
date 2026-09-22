@@ -24,6 +24,8 @@ censo antes/depois e aprovação específica.
 | Inscrição | `functions/enroll-core.js` deduplica contas por `uid` e vagas manuais por `manualParticipantId`; sinais de conta suspeita não decidem inscrição. | Ainda falta o registro canônico por categoria, mas nome/e-mail/telefone não são chaves de unicidade. |
 | Dados de perfil | Há cópias de nome, e-mail e foto em participantes e pares; a análise de inscritos resolve perfis somente por UID. | A regra de perfil único ainda não está completa; precisa de migração por fronteira, não de nova varredura textual isolada. |
 | Elenco | O produto mantém lista embutida, espera embutida, espelho `participants` e, em torneios divididos, `inscritos`. | A duplicação é uma causa raiz de regressões; o cadastro deve ter uma fonte canônica única. |
+| Telemetria de SMS | O cliente anteriormente criava `users/{uid}/phoneVerifyAttempts` e duplicava telefone no rastro. Em 21/09/2026, `recordPhoneVerificationAttempt` passou a validar o intent, fixar o UID do token e gravar somente desfecho operacional. | A subcoleção está fechada a escrita direta nas Rules; telefone e mensagem crua não entram mais nessa projeção. |
+| Histórico de partidas | Há três construtores no navegador: `_persistInlineTournamentMatchRecord`, `_persistGSMTournamentMatchRecord` e `_buildAndPersistMatchRecord`. Todos chamam `saveUserMatchRecords`, que hoje pode escrever em qualquer `users/{uid}/matchHistory`. | Não migrar por simples wrapper: primeiro o resultado confirmado precisa ser uma fonte canônica server-side; depois a projeção é derivada dela, sem jogadores, placar ou estatísticas no payload. |
 | Fusão de contas | `autoMergeOnProfileUpdate` e a rotina agendada de limpeza podem executar fusão a partir de coincidência de credenciais; `requestParticipantMerge` usa o rótulo de um participante manual como identificador da vaga. | Fusão automática e vaga manual identificada por nome precisam ser contidas antes da migração de identidade. |
 | Propagação de perfil | `propagateDisplayName` ainda varre torneios e regrava rótulos quando o nome muda. | Demonstra que o torneio continua contendo cópia de perfil e cria escrita concorrente sobre dados de competição. |
 | Super 8 | Não há implementação fora da documentação de reforma. | É funcionalidade nova e entra depois do núcleo comum de rodadas. |
@@ -451,6 +453,30 @@ ou estatísticas para essa coleção.
 - Antes de negar `matchHistory/**` nas Rules, todos os atuais escritores devem
   estar migrados para a Function e cobertos por teste de emulador. Nenhuma
   regra parcial por convenção de ID é aceitável.
+
+#### Evidência de dependência — 21/09/2026
+
+O inventário confirmou exatamente três construtores que convergem em
+`FirestoreDB.saveUserMatchRecords(record)`: o caminho inline de torneio, o
+caminho set-a-set de torneio e o placar ao vivo compartilhado entre casual e
+torneio. A operação atual recebe do navegador a lista `record.players`, o
+vencedor, o placar e estatísticas; portanto uma Function que apenas recebesse
+esse mesmo objeto continuaria aceitando uma projeção forjável.
+
+A ordem obrigatória da S1 é:
+
+1. materializar a confirmação de resultado de torneio em uma Function ou
+   gatilho idempotente que leia a partida canônica, inclusive quando o legado
+   ainda mantiver a chave no documento do torneio;
+2. mover a finalização casual para uma Function que relê
+   `casualMatches/{id}` e aceita o comando somente de participante autorizado;
+3. derivar destinatários pelos UIDs da fonte, gravar IDs determinísticos e
+   testar reexecução/substituição do resultado;
+4. só então retirar `saveUserMatchRecords` do cliente e negar toda escrita em
+   `matchHistory/**` pelas Rules.
+
+Enquanto o passo 1 não existir, bloquear a subcoleção quebraria a projeção;
+aceitá-la por payload numa nova Function apenas deslocaria a vulnerabilidade.
 
 - Nenhuma conta autenticada consegue duas inscrições ativas na mesma categoria
   do mesmo torneio, inclusive em chamadas concorrentes.
