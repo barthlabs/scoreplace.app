@@ -63,7 +63,8 @@ function creator(db,time=clock){return makeCreateTournament({db,HttpsError,Field
  });
  await test('compilador real cria fases vazias a partir de Format2 declarativo',async()=>{
   const db=fakeDB();const cfg=win.FORMAT2.defaultConfig();
-  const out=await creator(db)({auth,data:{...payload,config:{...payload.config,fmt2:cfg}}});
+  const declarative={...payload.config,fmt2:cfg};delete declarative.format;
+  const out=await creator(db)({auth,data:{...payload,config:declarative}});
   assert(out.tournament.phases.length);assert.deepEqual(out.tournament.matches,[]);assert(out.tournament.fmt2);
  });
  const replay={v:2,totalPoints:1,points:[{w:1,a:0,b:0}],scoring:{setsToWin:1},truncated:false};

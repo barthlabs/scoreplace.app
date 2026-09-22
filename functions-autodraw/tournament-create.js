@@ -41,9 +41,10 @@ function makeCreateTournament({ db, HttpsError, FieldValue, fields, cloneConfig,
       config[key] = cloneConfig(raw[key]);
     });
     checkNested(config, fail);
+    const hasFmt2 = !!(config.fmt2 && typeof config.fmt2 === 'object' && !Array.isArray(config.fmt2));
     if (typeof config.name !== 'string' || !config.name.trim() || config.name.length > 240 ||
         typeof config.sport !== 'string' || !config.sport.trim() || config.sport.length > 120 ||
-        typeof config.format !== 'string' || !config.format.trim()) fail('invalid-argument', 'Informe nome, modalidade e formato.');
+        (!hasFmt2 && (typeof config.format !== 'string' || !config.format.trim()))) fail('invalid-argument', 'Informe nome, modalidade e formato.');
     if (Buffer.byteLength(JSON.stringify(config)) > 96 * 1024) fail('invalid-argument', 'Configuração grande demais.');
     const hash = createHash('sha256').update(JSON.stringify(canonical(config))).digest('hex');
     const ref = db.collection('tournaments').doc(id);
