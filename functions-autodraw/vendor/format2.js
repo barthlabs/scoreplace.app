@@ -347,7 +347,7 @@
     var seedRR = ({ performance: 'seed', equilibrio: 'balanced', sorteio: 'seed' }[e0.formacao] || 'seed');
     var elimDuplaRR = !!e0.dupla;
     var pElimRR = Object.assign(_phaseBase(re), {
-      kind: 'elimination', name: 'Eliminatória',
+      kind: 'elimination', elimination: { bracketType: elimDuplaRR ? 'double' : 'single' }, name: 'Eliminatória',
       formatCode: elimDuplaRR ? 'elim_dupla' : 'elim_simples',
       format: elimDuplaRR ? 'Dupla Eliminatória' : 'Eliminatórias Simples',
       reiRainha: false, drawMode: 'sorteio', rounds: 1,
@@ -414,7 +414,7 @@
       top.manualPairing = (formadas0 && cfg.manualPairingOpen) ? 'open' : 'organizer_only';
       var d0 = _LINE_DESTS[e0.linhas] || ['main'];
       p0 = Object.assign(_phaseBase(re), {
-        kind: 'elimination', name: 'Eliminatória',
+        kind: 'elimination', elimination: { bracketType: elimDupla0 ? 'double' : 'single' }, name: 'Eliminatória',
         formatCode: elimDupla0 ? 'elim_dupla' : 'elim_simples',
         format: elimDupla0 ? 'Dupla Eliminatória' : 'Eliminatórias Simples',
         reiRainha: false, drawMode: 'sorteio', rounds: 1,
@@ -575,7 +575,7 @@
       var qAll = !!e.qualifyAll;
       var elimDupla = !!e.dupla; // v4.4.58: Dupla Eliminatória (repescagem)
       var p1 = Object.assign(_phaseBase(re), {
-        kind: 'elimination', name: 'Eliminatória',
+        kind: 'elimination', elimination: { bracketType: elimDupla ? 'double' : 'single' }, name: 'Eliminatória',
         formatCode: elimDupla ? 'elim_dupla' : 'elim_simples',
         format: elimDupla ? 'Dupla Eliminatória' : 'Eliminatórias Simples',
         reiRainha: false, drawMode: 'sorteio', rounds: 1,

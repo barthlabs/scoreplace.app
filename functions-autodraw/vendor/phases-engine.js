@@ -938,7 +938,8 @@
     // R2+, o lower e a grande final são montados por _buildDoubleElimBracket (phase-aware),
     // chamado no advanceMultiPhase após storePhase. (Duas linhas Ouro/Prata continua sendo
     // a semântica de "chaves independentes que convergem" — só a linha única vira clássica.)
-    var _duplaClassic = !!(phaseCfg && (phaseCfg.formatCode === 'elim_dupla' || /dupla/i.test(String(phaseCfg.format || '')))) &&
+    var _duplaClassic = !!(phaseCfg && ((phaseCfg.elimination && phaseCfg.elimination.bracketType === 'double') ||
+      (phaseCfg.kind !== 'elimination' && (phaseCfg.formatCode === 'elim_dupla' || /dupla/i.test(String(phaseCfg.format || '')))))) &&
       byDest.main && !byDest.upper && !byDest.lower;
     if (_duplaClassic) {
       // Fonte única compartilhada com a Fase 0 (_genElimFromPool) — inclui a repescagem
@@ -1467,7 +1468,8 @@
 
   function _genElimFromPool(pool, cfg, idPrefix) {
     var _third = (cfg ? cfg.thirdPlace !== false : true);   // parâmetro interno — ver a nota acima
-    var dupla = !!(cfg && (cfg.formatCode === 'elim_dupla' || /dupla/i.test(String(cfg.format || ''))));
+    var dupla = !!(cfg && ((cfg.elimination && cfg.elimination.bracketType === 'double') ||
+      (cfg.kind !== 'elimination' && (cfg.formatCode === 'elim_dupla' || /dupla/i.test(String(cfg.format || ''))))));
     if (pool.length === 1) {
       // 1 inscrito → campeão por BYE (preserva o legado da Fase 0).
       // v4.5.71: identidade por uid no slot real (p1 = campeão).
