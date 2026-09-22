@@ -957,9 +957,36 @@ service cloud.firestore {
       // torneios/rankings/jogos existem). Eu subi o código e esqueci a whitelist: toda
       // escrita virou permission-denied e a leitura "avançava" na tela sem gravar nada.
       // Campo novo no cliente sem campo novo aqui = escrita rejeitada, sempre.
+      /* ⛔ NINGUÉM ESCREVE O PRÓPRIO SCAN (22/set/2026).
+       *
+       * O QUE ESTAVA EXPOSTO, e era caminho de passos todos rotineiros: qualquer autenticado
+       * gravava `letzplayScans/{qualquer uid}`, INCLUSIVE o próprio. Bastava forjar o
+       * próprio scan com `profileSkill: 'A'`, inscrever-se num torneio e esperar o
+       * organizador apertar o botão que aplica as categorias — `applyLetzplayScans` confere
+       * quem CHAMA e nunca quem ESCREVEU. A categoria inventada entrava no perfil marcada
+       * como apurada pelo letzplay.
+       *
+       * Este scan é ATESTADO DE TERCEIRO: o organizador varre o perfil público de quem está
+       * inscrito. Ninguém atesta a si mesmo. Quem quer o próprio histórico usa o caminho do
+       * atleta, que grava no PERFIL (js/views/letzplay-bridge.js), não aqui.
+       *
+       * ⚠️ O QUE ISTO **NÃO** FECHA, e está escrito para ninguém ler como resolvido:
+       *   • scan JÁ PLANTADO antes desta regra continua na coleção e continua sendo
+       *     aplicado — `scannedBy` e `scannedAt` são do cliente, então não há como separar
+       *     legítimo de forjado sem procedência carimbada pelo servidor;
+       *   • qualquer conta B ainda grava scan forjado para o uid A;
+       *   • `applyLetzplayScans` ainda aplica para alguém que NEM ESTÁ no torneio de quem
+       *     chama — ela não valida o elenco.
+       * O conserto disso é a porta de gravação com procedência, no plano da leva 2a. */
       allow create, update: if request.auth != null
+        && request.auth.uid != scanUid
         && request.resource.data.keys().hasOnly(['handle', 'scan', 'scannedAt', 'scannedBy', 'scannedByName', 'tournamentId', 'tournamentName', 'fullImport', 'lzCursorParcial', 'totaisLetzplay']);
-      allow delete: if request.auth != null;
+      /* ⛔ E NINGUÉM APAGA. Estava `request.auth != null`: qualquer autenticado destruía o
+       * scan de qualquer pessoa. Travar a escrita e deixar o apagar aberto seria proteger o
+       * conteúdo e permitir DESTRUIR a evidência — pior, porque não sobra o que comparar.
+       * Não existe apagar legítimo pelo cliente; remoção administrativa usa o Admin SDK,
+       * que não passa por aqui. (Escopo: só esta coleção GLOBAL.) */
+      allow delete: if false;
     }
 
     // ─── User profiles ───────────────────────────────────────────────────────

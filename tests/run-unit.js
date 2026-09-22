@@ -924,6 +924,9 @@ const SUITES = [
   // A análise de UM torneio não pode pintar na tela de OUTRO: estado global fazia os
   // nomes e as pistas mascaradas do torneio A aparecerem dentro do torneio B.
   'tests/duplicata-nao-vaza-entre-torneios.test.js',
+  // Ninguém varre a si mesmo: o scan do letzplay é atestado de TERCEIRO, e varrer-se seria
+  // auto-atestar categoria. O filtro fica na fronteira de lote, antes de qualquer efeito.
+  'tests/letzplay-ninguem-varre-a-si-mesmo.test.js',
   // Leitura de perfil GRANDE do letzplay, ponta a ponta com o content.js REAL da extensão
   // num Chromium contra um letzplay sintético. Trava o que quebrava no perfil da Camila
   // (472 jogos): rodada time-boxed em 240s pra um trabalho de ~9 min, etapa dos jogos

@@ -3467,6 +3467,18 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     try { window.postMessage({ __sp_lp: 'lz-keep-tab', on: !!on }, window.location.origin); } catch (e) {}
   }
   window._lzAthleteImport = function (uid) {
+    /* ⛔ GUARDA ANTES DE SEGURAR A ABA. Segurar a aba por uma ação que a Rule vai recusar
+     * deixaria o organizador preso numa leitura que nunca grava. Defesa para chamada
+     * direta: a tela já não oferece o botão na própria linha. */
+    if (!window._lzNaoEhEuMesmo(uid)) {
+      if (typeof window.showConfirmDialog === 'function') {
+        window.showConfirmDialog('🎾 Sua categoria vem do seu perfil',
+          'Esta busca lê o perfil público de quem está inscrito — ninguém varre a si mesmo.\n\n' +
+          'Para atualizar a sua, puxe o seu histórico pelo seu próprio perfil.',
+          null, null, { confirmText: 'Entendi', cancelText: 'Fechar', type: 'info' });
+      }
+      return;
+    }
     window._lzGravouOk = true; window._lzUltimoErroGravacao = null;
     _lzSegurarAba(true);
     if (window._log) window._log('[letzplay] iniciar leitura de', uid, '· travaAtiva=', !!window._lzScanRunning,
@@ -3927,7 +3939,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     // precedência (scan mais novo) só sobrescreve quando de fato é mais recente.
     var targets = (rows || []).filter(function (r) {
       var prof = r.uid && profileMap[r.uid];
-      return !!(prof && prof.letzplayHandle);
+      // ⛔ O organizador NÃO entra nos próprios alvos: varrer a si mesmo é auto-atestar
+      // categoria, e a Rule recusa. Sem isto a linha dele falharia com permission-denied.
+      return !!(prof && prof.letzplayHandle) && window._lzNaoEhEuMesmo(r.uid);
     }).map(function (r) { return { uid: r.uid, handle: profileMap[r.uid].letzplayHandle, name: r.name }; });
     // v1.1.21: FIM do lote (Essencial/Completa em batch) — travava e não trazia nada.
     // A busca virou INDIVIDUAL: clicar num nome autorizado abre a tela de puxar o
@@ -4676,8 +4690,26 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       .catch(function () { _lzMaxJogos[uid] = Math.max(pico, agora); return doc; });
   }
 
+  /* ⛔ NINGUÉM VARRE A SI MESMO — o predicado, definido UMA vez.
+   *
+   * O scan do letzplay é ATESTADO DE TERCEIRO: o organizador varre quem está inscrito.
+   * Varrer a si mesmo seria auto-atestar categoria, e a Rule passou a recusar isso
+   * (`firestore.rules`, `letzplayScans`). Sem este filtro, a linha do próprio organizador
+   * falharia com erro de permissão — e erro engolido é o defeito que este projeto já pagou.
+   *
+   * ⛔ Ele PARTICIONA antes de QUALQUER efeito, e não é repetido em cada `set()`: as duas
+   * rotas de persistência têm uma fronteira única de lote, e é nela que se filtra. Filtrar
+   * em quatro lugares é garantir que um fique para trás na próxima mudança.
+   * Pular só a gravação deixaria a linha mexendo em histórico, na Callable e na pintura. */
+  window._lzNaoEhEuMesmo = function (uid) {
+    var meu = (window.AppStore && window.AppStore.currentUser && window.AppStore.currentUser.uid) || null;
+    return !!uid && (!meu || String(uid) !== String(meu));
+  };
+
   function _lzPersistScans(tId, scans, gamesDelta) {
-    var ok = (scans || []).filter(function (s) { return s.uid && s.scan; });
+    var ok = (scans || []).filter(function (s) {
+      return s.uid && s.scan && window._lzNaoEhEuMesmo(s.uid);
+    });
     if (!ok.length) return Promise.resolve(0);
     var db = firebase.firestore();
     var meUid = (window.AppStore && window.AppStore.currentUser && window.AppStore.currentUser.uid) || null;
@@ -4747,7 +4779,10 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     })).then(function () { return ok.length; });
   }
   function _saveScansAndReload(tId, scans, onFail) {
-    var ok = scans.filter(function (s) { return s.uid && s.scan; });
+    // Mesma fronteira única: particiona ANTES de persistir, arquivar, chamar a CF e pintar.
+    var ok = scans.filter(function (s) {
+      return s.uid && s.scan && window._lzNaoEhEuMesmo(s.uid);
+    });
     var failed = scans.filter(function (s) { return !(s.uid && s.scan); });
     if (!ok.length) {
       if (typeof window._hideLoading === 'function') window._hideLoading();
