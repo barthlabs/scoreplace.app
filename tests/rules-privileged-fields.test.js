@@ -104,6 +104,10 @@ const S = v => ({ stringValue: v });
     { fields: { phone: S('+5511999999999') } });
   out.editaLinkedEmails = await req('PATCH', 'users/' + A + '?updateMask.fieldPaths=linkedEmails', A,
     { fields: { linkedEmails: { arrayValue: { values: [S('outro@x.com')] } } } });
+  // O rastro de SMS é gravado exclusivamente pela Function, que fixa o uid
+  // autenticado e não aceita telefone/mensagem crua no payload.
+  out.escrevePhoneVerifyAttempt = await req('PATCH', 'users/' + A + '/phoneVerifyAttempts/forjado', A,
+    { fields: { status: S('sent'), phone: S('+5511999999999') } });
 
   // ── CONTROLE: cross-user continua bloqueado (prova que as rules estão ativas) ──
   out.crossUser = await req('PATCH', 'users/' + V + '?updateMask.fieldPaths=displayName', A,
@@ -182,6 +186,7 @@ ok(novo.createComMergedInto === 403,
 ok(novo.editaProprioNome === 403, '🔒 cliente não edita nome direto; updateOwnProfile é a única porta (got ' + novo.editaProprioNome + ')');
 ok(novo.editaProprioTelefone === 403, '🔒 cliente não edita telefone direto; verificação é a única porta (got ' + novo.editaProprioTelefone + ')');
 ok(novo.editaLinkedEmails === 200, 'legítimo: vincular e-mail secundário ainda funciona (got ' + novo.editaLinkedEmails + ')');
+ok(novo.escrevePhoneVerifyAttempt === 403, '🔒 cliente não forja rastro de SMS; a Function é a única porta (got ' + novo.escrevePhoneVerifyAttempt + ')');
 ok(novo.crossUser === 403, 'controle: editar o perfil de OUTRO segue negado (got ' + novo.crossUser + ')');
 
 // ── loginRedirects (v1.2.9): mapa credencial→dono que o merge grava ─────────

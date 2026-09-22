@@ -2530,6 +2530,10 @@ window.FirestoreDB = {
     return this._callFn('acceptOwnTerms', { mode: grandfathered === true ? 'grandfather' : 'explicit' });
   },
 
+  async recordPhoneVerificationAttempt(attempt) {
+    return this._callFn('recordPhoneVerificationAttempt', attempt || {});
+  },
+
   async saveTournamentPreference(field, tournamentId, add) {
     return this._callFn('updateOwnTournamentPreference', { field: field, tournamentId: String(tournamentId || ''), add: add === true });
   },

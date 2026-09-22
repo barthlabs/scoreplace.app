@@ -54,6 +54,7 @@ const _liveScorePreferences = require("./live-score-preferences-core");
 const _casualLastPreferences = require("./casual-last-preferences-core");
 const _casualScoringPreferences = require("./casual-scoring-preferences-core");
 const _blockedUsers = require("./blocked-users-core");
+const _phoneVerificationAttempt = require("./phone-verification-attempt-core");
 
 // v1.8.38 — RARIDADE DO TOKEN, em UM lugar só (os dois caminhos de detecção usam este).
 // O subconjunto de 1 token só vira sinal quando o token existe SÓ nas duas contas
@@ -3249,6 +3250,27 @@ exports.updateOwnProfile = onCall(
       }
       if (patch.email) update.email_lower = patch.email.toLowerCase();
       tx.update(profileRef, update);
+    });
+    return { ok: true };
+  }
+);
+
+// Telemetria de verificação de SMS: o cliente informa apenas o desfecho. A
+// Function fixa o uid pelo token, elimina número/mensagem crua e cria o registro.
+exports.recordPhoneVerificationAttempt = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
+  async (request) => {
+    const uid = request.auth && request.auth.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Login obrigatório");
+    let attempt;
+    try { attempt = _phoneVerificationAttempt.normalize(request.data || {}); }
+    catch (error) { throw new HttpsError("invalid-argument", error.message); }
+    const profileRef = admin.firestore().collection("users").doc(uid);
+    await admin.firestore().runTransaction(async (tx) => {
+      if (!(await tx.get(profileRef)).exists) throw new HttpsError("failed-precondition", "Perfil inexistente");
+      tx.set(profileRef.collection("phoneVerifyAttempts").doc(), Object.assign({}, attempt, {
+        at: admin.firestore.FieldValue.serverTimestamp()
+      }));
     });
     return { ok: true };
   }

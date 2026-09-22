@@ -19,7 +19,9 @@ const obj = E.slice(i, E.indexOf('\n', i));
 
 must(!/email:/.test(obj), '⛔ o objeto gravado na inscrição própria NÃO carrega e-mail');
 must(/uid: user\.uid/.test(obj), 'e continua carregando o uid — que é a identidade');
-must(/selfEnrolled: true/.test(obj), 'e a marca de inscrição própria, que não mudou');
+must(!/selfEnrolled:/.test(obj), 'a marca de inscrição própria não é declarada pelo cliente');
+const F = fs.readFileSync(path.join(__dirname, '..', 'functions', 'enroll-core.js'), 'utf8');
+must(/out\.selfEnrolled = uid === callerUid/.test(F), 'a Function deriva a marca de inscrição própria do uid autenticado');
 must(!/_safeEmail/.test(E), '⛔ a variável que carregava o e-mail não sobrou em lugar nenhum');
 
 /* ③ O FALLBACK SEM UID CONTINUA DE PÉ — tirá-lo quebraria a deduplicação do sorteio.

@@ -281,10 +281,17 @@ ok('a leva grava quem tentou com o número MASCARADO',
 ok('leitura do rastro é fail-open (subcoleção ausente não derruba a rodada)',
   /rastro ilegível/.test(run));
 
-// ── FIAÇÃO DO CLIENTE: sem isto a subcoleção nasce vazia pra sempre ─────────
+// ── FIAÇÃO DO CLIENTE: a Function é a única escritora ───────────────────────
 const authJs = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'auth.js'), 'utf8');
-ok('o cliente grava a tentativa em phoneVerifyAttempts',
-  /collection\('phoneVerifyAttempts'\)/.test(authJs));
+const dbJs = fs.readFileSync(path.join(__dirname, '..', 'js', 'firebase-db.js'), 'utf8');
+const idxJs = fs.readFileSync(path.join(__dirname, '..', 'functions', 'index.js'), 'utf8');
+ok('o cliente pede o registro à Function, sem abrir a subcoleção',
+  /recordPhoneVerificationAttempt\(rec\)/.test(authJs) &&
+  !/collection\('phoneVerifyAttempts'\)/.test(authJs));
+ok('o adaptador chama a Function e o servidor grava o rastro',
+  /_callFn\('recordPhoneVerificationAttempt'/.test(dbJs) &&
+  /exports\.recordPhoneVerificationAttempt = onCall/.test(idxJs) &&
+  /collection\("phoneVerifyAttempts"\)/.test(idxJs));
 ok('grava nos TRÊS desfechos: enviado, falha no envio e código errado',
   /_profilePhoneLogAttempt\('sent'\)/.test(authJs) &&
   /_profilePhoneLogAttempt\('send-failed'/.test(authJs) &&

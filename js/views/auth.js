@@ -7950,26 +7950,22 @@ function setupProfileModal() {
       window._profilePhoneResendTimer = setInterval(paint, 1000);
     };
 
-    // Rastro da tentativa — CAMADA 2. Grava em users/{uid}/phoneVerifyAttempts.
-    // É a única coisa que responde "quem tentou e não conseguiu?" sem garimpar
-    // métrica do Cloud Monitoring. Fail-open por definição: telemetria NUNCA pode
-    // derrubar o fluxo que ela observa.
+    // Rastro da tentativa — CAMADA 2. A Function registra o uid do token e só o
+    // desfecho operacional; telefone e mensagem crua não saem do perfil.
+    // Telemetria é fail-open: nunca derruba o fluxo que ela observa.
     window._profilePhoneLogAttempt = function (status, err) {
       try {
         var cu = window.AppStore && window.AppStore.currentUser;
-        var db = window.FirestoreDB && window.FirestoreDB.db;
-        if (!cu || !cu.uid || !db) return;
+        var api = window.FirestoreDB;
+        if (!cu || !cu.uid || !api || typeof api.recordPhoneVerificationAttempt !== 'function') return;
         var ctx = window._profilePhoneCtx || {};
         var rec = {
-          at: new Date().toISOString(),
-          phone: window._profilePhoneE164 || '',
           status: status,
-          fluxo: ctx.conflict ? 'homonimo' : (ctx.linked ? 'vinculado' : 'principal'),
+          flow: ctx.conflict ? 'homonimo' : (ctx.linked ? 'vinculado' : 'principal'),
           client: (typeof _isNativeAuthAvailable === 'function' && _isNativeAuthAvailable()) ? 'nativo' : 'web'
         };
-        if (err) rec.err = String((err && (err.code || err.message)) || err).slice(0, 200);
-        db.collection('users').doc(cu.uid).collection('phoneVerifyAttempts').add(rec)
-          .catch(window._falhouCalado('phoneVerifyAttempts'));
+        if (err) rec.errorCode = String((err && (err.code || err.message)) || err).slice(0, 200);
+        api.recordPhoneVerificationAttempt(rec).catch(window._falhouCalado('phoneVerifyAttempts'));
       } catch (e) { /* telemetria não quebra nada */ }
     };
 
