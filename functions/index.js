@@ -90,6 +90,7 @@ const _categoryEligibility = require("./category-eligibility-core");
 const _registrationCore = require("./registration-core");
 const _registrationLifecycle = require("./registration-lifecycle-core");
 const _phaseConfig = require("./phase-config-core");
+const _legacyPhaseAdapter = require("./legacy-phase-adapter-core");
 const _splitParts = require("./split-parts.js");   // torneio dividido: elenco na subcoleção
 const _refereeRoster = require("./vendor/referee-roster.js"); // escala de arbitragem: contrato puro e sem contato
 
@@ -4148,6 +4149,28 @@ function _phaseConfigCanChange(tournament) {
     return Array.isArray(value) ? value.length > 0 : !!value;
   });
 }
+
+// Diagnóstico server-side das fases legadas. Não grava, não infere política de
+// chave e não devolve dados de outros usuários: dá ao organizador o veredito
+// necessário antes de uma migração canônica.
+exports.previewTournamentLegacyPhaseMigration = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
+    const tournamentId = String((request.data || {}).tournamentId || "").trim();
+    if (!tournamentId) throw new HttpsError("invalid-argument", "tournamentId é obrigatório");
+    const snap = await admin.firestore().collection("tournaments").doc(tournamentId).get();
+    if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
+    const tournament = snap.data() || {};
+    if (!_isTournamentOrgCaller(tournament, callerUid)) throw new HttpsError("permission-denied", "só a organização consulta a migração");
+    const phases = Array.isArray(tournament.phases) && tournament.phases.length
+      ? tournament.phases
+      : [{ formatCode: tournament.formatCode, format: tournament.format, drawMode: tournament.drawMode, ligaRoundFormat: tournament.ligaRoundFormat }];
+    const diagnostics = phases.map((phase, index) => Object.assign({ index }, _legacyPhaseAdapter.classifyLegacyPhase(phase)));
+    return { tournamentId, canMigrate: diagnostics.length > 0 && diagnostics.every((item) => item.migratable === true), diagnostics };
+  }
+);
 
 exports.setTournamentPhaseConfig = onCall(
   { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
