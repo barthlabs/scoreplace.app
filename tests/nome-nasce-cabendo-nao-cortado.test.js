@@ -41,6 +41,12 @@ const H = require('./render-harness');
 const w = H.window;
 const fixture = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'confra-pos-sorteio.json'), 'utf8'));
 const tour = fixture.tournament || fixture;
+/* ⛔ O PASSO QUE FALTAVA. A fixture guarda o grupo como o BANCO guarda: `matchIds`, não
+ * os jogos. Quem os devolve é `_hydrateMonarchGroups`, e o app a chama em TODA carga de
+ * torneio (`store.js`, 4 lugares). Sem ela, `g.matches` fica vazio: a chave desenhava a
+ * classificação e NENHUM card de jogo, e a contagem de nomes dava 0. Não era defeito do
+ * renderizador — era o teste pulando o que o app faz antes de renderizar. */
+if (typeof w._hydrateMonarchGroups === 'function') w._hydrateMonarchGroups(tour);
 w.AppStore = { tournaments: [tour], currentUser: { uid: tour.creatorUid || 'u1', email: 'x@x.com', displayName: 'Dono' } };
 w._currentBracketTournament = tour;
 let html = '';
@@ -62,8 +68,12 @@ const CSS = ['css/style.css', 'css/components.css', 'css/layout.css', 'css/brack
   let browser;
   try { browser = await webkit.launch(); }
   catch (e) {
-    console.log('  · motor WebKit indisponível — teste PULADO (rode: npx playwright install webkit)');
-    process.exit(0);
+    console.log('  · motor WebKit indisponível — a parte VISUAL foi pulada (rode: npx playwright install webkit)');
+    /* ⛔ `process.exit(0)` aqui ENGOLIA as asserções que já tinham rodado e falhado antes
+     * do navegador: o ✗ era impresso e a suíte seguia verde. Foi assim que a contagem de
+     * nomes ficou em 0 sem ninguém ver. Pular a parte visual é legítimo; aprovar o que já
+     * reprovou, não. */
+    process.exit(fail ? 1 : 0);
   }
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, deviceScaleFactor: 3 });
   const page = await ctx.newPage();
