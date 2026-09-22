@@ -228,7 +228,6 @@
   _roundCloseAt?: number,
 
   // Compat fields (legacy, manter ler/limpar pós-beta)
-  rankingSeasonMonths?: number, // antigo Ranking — unificado em Liga
   drawVisibility?: 'public' | 'private',
   gruposClassified?: number, // 1 ou 2
   combinedCategoriesOriginal?: string[],
