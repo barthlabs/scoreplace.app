@@ -183,7 +183,7 @@ classificar() { # lê caminhos no stdin; imprime trivial|normal|critica
       scripts/deploy-*|scripts/hooks/*|scripts/check-*|scripts/revisar*.sh|extensions/*)
         crit=1 ;;
       *.css|*.md|*.txt|*.png|*.jpg|*.jpeg|*.svg|*.webp|*.ico|*.pdf|docs/*|icons/*|\
-      js/release-notes.js|js/i18n-*.js|js/hints.js|js/coachmarks.js|js/trophy-catalog.js|js/notification-catalog.js|\
+      js/release-notes.js|js/i18n-*.js|js/coachmarks.js|js/trophy-catalog.js|js/notification-catalog.js|\
       index.html|version.txt|README*)
         ;;
       *) nontriv=1 ;;

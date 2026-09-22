@@ -78,9 +78,9 @@
   // Ordem do dono, repetida (1.6.88 e de novo em ago/2026): "aparecer as dicas
   // durante o uso do placar não pode ocorrer de forma alguma. nunca!".
   //
-  // A trava foi escrita no hints.js (_hintFreeZoneIds) — mas quem ESCURECE a
-  // tela é ESTE arquivo: as .coach-mask são 4 retângulos rgba(2,6,23,0.70) em
-  // volta do alvo. O coachmarks nasceu depois e nunca soube que o placar existe.
+  // Quem escurece a tela é ESTE arquivo: as .coach-mask são 4 retângulos
+  // rgba(2,6,23,0.70) em volta do alvo. A proteção precisa ficar no sistema
+  // ativo de dicas, não em um catálogo inerte.
   //
   // Por que dispara justamente aqui: o placar ao vivo e a partida casual são
   // overlays FULL-SCREEN sem hash próprio (bracket-ui.js: 'live-scoring-overlay'
@@ -666,14 +666,8 @@
     dismiss: function () { _hide(); },
     forceShow: function () {}
   };
-  // v1.7.74: esta linha ligava o OUTRO sistema de dicas (js/hints.js), que tem o
-  // próprio gate `window._HINTS_ENABLED !== true`. Com ela, os DOIS apareciam —
-  // e o catálogo do hints.js é o mais antigo dos dois, que é justamente o que o
-  // dono chamou de defasado. Ela sai junto, então o hints.js volta a ficar
-  // inerte. De brinde, o toggle "Dicas visuais" do perfil some sozinho: ele já
-  // é montado sob `window._HINTS_ENABLED === true` (auth.js) — sem isso, o
-  // controle ficaria na tela prometendo algo que nunca aconteceria.
-  // window._HINTS_ENABLED = true;   ← religar SÓ quando as dicas forem reescritas
+  // O catálogo antigo foi removido; o toggle do perfil continua atendido por
+  // este shim, que é a única implementação de dicas carregada.
 
   window._coach = {
     autoStartDashboard: autoStartDashboard,

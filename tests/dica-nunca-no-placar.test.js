@@ -3,11 +3,8 @@
  * BUG REAL (ago/2026, relato do dono): "a tela fica escura e aparece uma dica"
  * durante o placar ao vivo. Ordem, repetida: "isso não pode acontecer. nunca".
  *
- * CAUSA: a trava existia SÓ no js/hints.js (_hintFreeZoneIds). Quem escurece a
- * tela é o js/coachmarks.js — as .coach-mask são 4 retângulos rgba(2,6,23,0.70)
- * em volta do alvo — e ele nasceu DEPOIS, sem saber que o placar existe. Pior:
- * é o próprio coachmarks que faz `window._HINTS_ENABLED = true`, ou seja ele
- * religa o hints.js e ainda assim ficava de fora da regra.
+ * CAUSA: quem escurece a tela é o js/coachmarks.js — as .coach-mask são quatro
+ * retângulos em volta do alvo — e ele não conhecia os overlays do placar.
  *
  * POR QUE JUSTAMENTE ALI: 'live-scoring-overlay' e 'casual-match-overlay' são
  * full-screen SEM hash próprio, então o `hashchange` que para o tour NUNCA
@@ -212,12 +209,6 @@ function resetTour() { COACH._stop(); COACH.reset(); timers = []; }
   });
   ok((COACH._courtOverlayIds || []).length === 2, 'a lista de overlays de quadra mudou de tamanho — revise a trava');
 
-  // hints.js (o outro sistema de dicas, religado pelo próprio coachmarks via
-  // window._HINTS_ENABLED) precisa cobrir EXATAMENTE os mesmos overlays.
-  const hints = fs.readFileSync(path.join(__dirname, '..', 'js', 'hints.js'), 'utf8');
-  (COACH._courtOverlayIds || []).forEach(id => {
-    ok(hints.indexOf("'" + id + "'") !== -1, 'hints.js não trava "' + id + '" — os dois sistemas divergiram');
-  });
 })();
 
 console.log((fail === 0 ? '✅' : '❌') + ' dica-nunca-no-placar: ' + pass + ' asserções, ' + fail + ' falha(s)');

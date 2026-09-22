@@ -70,12 +70,6 @@ const tiraRamo = (s, tema) =>
   return s.replace(/\(_theme === 'light' \|\| _theme === 'sunset'\)/g, "(_theme === 'light')");
 }));
 
-/* hints.js: cadeia de ternários por tema. Tira os dois ramos mortos de qualquer forma que
- * eles apareçam (os valores diferem entre as duas linhas), em vez de casar o texto exato —
- * foi assim que a primeira versão deste script deixou a linha 795 passar. */
-edita('js/hints.js', (s) => s.replace(
-  /theme === '(?:sunset|ocean)' \? '[^']*' : /g, ''));
-
 /* auth.js: mapa de cor POR TEMA — as chaves mortas nunca são consultadas. */
 edita('js/views/auth.js', (s) => s.replace(
   /(\{\s*dark: '[^']*', light: '[^']*'), sunset: '[^']*', ocean: '[^']*'(\s*\})/,

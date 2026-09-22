@@ -10684,8 +10684,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
   var overlay = document.createElement('div');
   overlay.id = 'live-scoring-overlay';
   if (_spectate) overlay.setAttribute('data-spectate', '1');
-  // v1.6.88 (dono): dica NUNCA aparece durante o placar ao vivo. hints.js já se
-  // recusa a criar dica com este overlay no DOM; aqui matamos o balão que já
+  // Dica NUNCA aparece durante o placar ao vivo; aqui matamos o balão que já
   // estivesse aberto no instante do clique que abriu o placar.
   try { if (window._hintSystem && window._hintSystem.dismiss) window._hintSystem.dismiss(); } catch (e) {}
   // v0.17.52: bg respeita tema (var(--bg-darker)) em vez de hardcoded.
