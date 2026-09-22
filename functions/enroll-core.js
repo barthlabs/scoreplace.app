@@ -132,11 +132,22 @@ function isAlreadyEnrolled(participants, participantObj) {
   });
 }
 
+// Conta autenticada é identificada pelo UID. Não replica PII nem atributos de
+// elegibilidade no torneio; nome fica somente como adaptação de exibição legada.
+function sanitizeAccountParticipant(participantObj) {
+  if (!participantObj || typeof participantObj !== 'object' || !participantObj.uid) return participantObj;
+  var out = Object.assign({}, participantObj);
+  ['email', 'phone', 'photoURL', 'photoUrl', 'gender', 'birthDate', 'age', 'skillBySport', 'defaultCategory']
+    .forEach(function (field) { delete out[field]; });
+  return out;
+}
+
 // Decide a inscrição a partir do doc atual. Retorna { outcome, participants, updateData, ... }.
 // A CF aplica updateData dentro da transação. NÃO stripa nomes (o servidor não tem
 // perfil vivo pra reidratar — preservar o nome é o comportamento conservador que o
 // próprio cliente adota quando _stripStoredNamesForUidEntries está indisponível).
 function computeEnroll(data, participantObj, extraUpdates, nowMs) {
+  participantObj = sanitizeAccountParticipant(participantObj);
   var participants = asParticipantsArray(data);
   var openState = enrollmentOpen(data, nowMs);
   if (!openState.open) {
@@ -353,5 +364,5 @@ function computeLeaveStandby(data, userUid) {
 
 module.exports = {
   participantUids, computeMemberUids, cleanUndefined, phaseDrawDone, isPlacedInDraw,
-  enrollmentOpen, isAlreadyEnrolled, computeEnroll, computeDeenroll, computeLeaveStandby
+  enrollmentOpen, isAlreadyEnrolled, sanitizeAccountParticipant, computeEnroll, computeDeenroll, computeLeaveStandby
 };

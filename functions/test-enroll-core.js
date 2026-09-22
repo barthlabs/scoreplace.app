@@ -21,6 +21,18 @@ function eq(name, a, b) { ok(name + ' (' + JSON.stringify(a) + ' === ' + JSON.st
     r.updateData.memberUids.indexOf('nelson-uid-0001') !== -1 && r.updateData.memberUids.indexOf('org-uid-0001') !== -1);
 })();
 
+// ── Conta usa UID; atributos de perfil não vão ao torneio ──────────────────
+(() => {
+  const r = C.computeEnroll({ status: 'open', participants: [] }, {
+    uid: 'perfil-uid', displayName: 'Nome legado', email: 'privado@example.test', phone: '+5511999999999',
+    photoURL: 'https://foto.test/a.jpg', gender: 'feminino', birthDate: '1980-01-01',
+    skillBySport: { 'Beach Tennis': 'A' }, defaultCategory: 'A'
+  }, null, NOW);
+  const saved = r.updateData.participants[0];
+  ok('uid não carrega atributos de perfil para o torneio', !['email', 'phone', 'photoURL', 'gender', 'birthDate', 'skillBySport', 'defaultCategory'].some(function(k) { return Object.prototype.hasOwnProperty.call(saved, k); }));
+  eq('nome legado de exibição permanece até migrar leitores', saved.displayName, 'Nome legado');
+})();
+
 // ── Já inscrito (solo, mesmo uid) ────────────────────────────────────────────
 (() => {
   const data = { status: 'open', participants: [{ uid: 'nelson-uid-0001', displayName: 'Nelson' }] };
