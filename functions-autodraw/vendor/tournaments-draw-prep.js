@@ -1578,7 +1578,9 @@ window.showUnifiedResolutionPanel = function(tId) {
         var _phaseNextIsDupla = false;
         if (t._phaseResInfo) {
             var _pCfg = (t.phases && t._phaseResInfo.nextIdx != null) ? (t.phases[t._phaseResInfo.nextIdx] || {}) : {};
-            var _isDuplaFmt = /dupla/i.test(String(_pCfg.format || '')) || _pCfg.formatCode === 'elim_dupla';
+            var _isDuplaFmt = _pCfg.kind === 'elimination'
+                ? !!(_pCfg.elimination && _pCfg.elimination.bracketType === 'double')
+                : (/dupla/i.test(String(_pCfg.format || '')) || _pCfg.formatCode === 'elim_dupla');
             var _isMultiLine = (t._phaseResInfo.lines || []).length >= 2;
             _phaseNextIsDupla = _isDuplaFmt && !_isMultiLine;
         }
@@ -1619,7 +1621,10 @@ window.showUnifiedResolutionPanel = function(tId) {
         // "perdedor" p/ dropar na chave inferior → fluxo assimétrico → vagas mortas). Repescagem
         // (todos jogam), Exclusão e Lista de Espera (cortam pra pow2) resolvem. Enquanto o BYE-em-
         // dupla não tiver algoritmo robusto, ocultamos a opção só nesse caso. feedback_resolution_one_logic.
-        var _isDuplaElim = ((t.format || '').indexOf('Dupla') !== -1) || (t.formatCode === 'elim_dupla');
+        var _currentCfg = (t.phases || [])[t.currentPhaseIndex || 0] || null;
+        var _isDuplaElim = _currentCfg && _currentCfg.kind === 'elimination'
+            ? !!(_currentCfg.elimination && _currentCfg.elimination.bracketType === 'double')
+            : (((t.format || '').indexOf('Dupla') !== -1) || (t.formatCode === 'elim_dupla'));
         let activeOptions = allOptions.filter(function(o) {
             if (excludedKeys.indexOf(o.key) !== -1) return false;
             if (t._phaseResInfo) {
