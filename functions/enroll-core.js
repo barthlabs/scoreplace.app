@@ -135,10 +135,14 @@ function isAlreadyEnrolled(participants, participantObj) {
 // Conta autenticada é identificada pelo UID. Não replica PII nem atributos de
 // elegibilidade no torneio; nome fica somente como adaptação de exibição legada.
 function sanitizeAccountParticipant(participantObj) {
-  if (!participantObj || typeof participantObj !== 'object' || !participantObj.uid) return participantObj;
+  if (!participantObj || typeof participantObj !== 'object') return participantObj;
   var out = Object.assign({}, participantObj);
-  ['email', 'phone', 'photoURL', 'photoUrl', 'gender', 'birthDate', 'age', 'skillBySport', 'defaultCategory']
-    .forEach(function (field) { delete out[field]; });
+  var strip = function (target, fields) { fields.forEach(function (field) { delete target[field]; }); };
+  if (out.uid) strip(out, ['email', 'phone', 'photoURL', 'photoUrl', 'gender', 'birthDate', 'age', 'skillBySport', 'defaultCategory']);
+  [1, 2].forEach(function (slot) {
+    if (out['p' + slot + 'Uid']) strip(out, ['p' + slot + 'Email', 'p' + slot + 'Phone', 'p' + slot + 'Photo', 'p' + slot + 'PhotoURL', 'p' + slot + 'Gender', 'p' + slot + 'BirthDate', 'p' + slot + 'SkillBySport']);
+  });
+  if (Array.isArray(out.participants)) out.participants = out.participants.map(sanitizeAccountParticipant);
   return out;
 }
 

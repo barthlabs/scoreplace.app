@@ -21,6 +21,15 @@ function eq(name, a, b) { ok(name + ' (' + JSON.stringify(a) + ' === ' + JSON.st
     r.updateData.memberUids.indexOf('nelson-uid-0001') !== -1 && r.updateData.memberUids.indexOf('org-uid-0001') !== -1);
 })();
 
+(() => {
+  const r = C.computeEnroll({ status: 'open', participants: [] }, {
+    displayName: 'Dupla', p1Uid: 'u1', p1Name: 'Ana', p1Email: 'ana@example.test', p1Gender: 'feminino',
+    p2Uid: 'u2', p2Name: 'Bia', p2Email: 'bia@example.test', p2PhotoURL: 'https://foto.test/b.jpg'
+  }, null, NOW);
+  const saved = r.updateData.participants[0];
+  ok('slots com uid não carregam perfil para o torneio', !['p1Email', 'p1Gender', 'p2Email', 'p2PhotoURL'].some(function(k) { return Object.prototype.hasOwnProperty.call(saved, k); }));
+})();
+
 // ── Conta usa UID; atributos de perfil não vão ao torneio ──────────────────
 (() => {
   const r = C.computeEnroll({ status: 'open', participants: [] }, {
