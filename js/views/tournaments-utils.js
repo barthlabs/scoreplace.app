@@ -4,6 +4,10 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
 var _t = window._t || function(k) { return k; };
 // Defined at top level so it's available immediately on script load
 window._isLigaFormat = window._isLigaFormat || function(t) {
+    var phase = t && Array.isArray(t.phases) ? t.phases[t.currentPhaseIndex || 0] : null;
+    if (phase && phase.kind === 'classification') {
+        return !phase.classification || phase.classification.structure !== 'groups';
+    }
     return t && (t.format === 'Liga' || t.format === 'Ranking');
 };
 
@@ -900,7 +904,9 @@ function _materializedPhaseGames(t, phaseIdx) {
     // Rei/Rainha = MODO de sorteio (reiRainha/drawMode), nunca formato — não lê o format string
     // (regex apagada na campanha kill-monarch-format, jul/2026).
     var _isMon0 = _cfg0.reiRainha === true || _cfg0.drawMode === 'rei_rainha';
-    var _isLg0 = (_cfg0.formatCode === 'liga') || /liga|su[ií]ç|ranking|pontos/.test(_fmt0);
+    var _isLg0 = _cfg0.kind === 'classification'
+      ? (!_cfg0.classification || _cfg0.classification.structure !== 'groups')
+      : ((_cfg0.formatCode === 'liga') || /liga|su[ií]ç|ranking|pontos/.test(_fmt0));
     // v4.x: Pontos Corridos rodada-a-rodada — INDEPENDE do modo (Rei/Rainha, sorteio simples
     // OU duplas formadas). Se a fase 0 Liga tem AGENDAMENTO (1º sorteio + repetição), o total
     // é `rodadas PLANEJADAS × jogos-por-rodada` (estável durante a fase). Rodadas planejadas =
