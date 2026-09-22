@@ -234,7 +234,9 @@ restantes à política de chave escolhida para completar a eliminatória. O
 resultado da classificatória permanece a classificação final de quem não
 avançar; a eliminatória só redefine as posições que ela disputa.
 
-Cada fase terá um `phaseConfig` validado por schema fechado. A forma alvo é:
+Cada fase terá uma configuração canônica validada por schema fechado, integrada
+ao modelo definitivo de torneio — não um campo paralelo chamado `phaseConfig`.
+A forma alvo é:
 
 ```
 {
