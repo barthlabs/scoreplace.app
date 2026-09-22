@@ -350,6 +350,14 @@ window._RELEASE_NOTES_HTML = (function () {
         '<li><b>🧹 Peso morto fora do aplicativo:</b> foram removidos controles internos do sorteio, da chave e do placar ao vivo que não eram mais lidos por nenhuma tela — sobras de versões anteriores. Nenhum botão, ajuste ou informação deixou de existir; o que saiu já não fazia nada.</li>' +
         '<li><b>👥 O organizador passa a ver quando duas inscrições são a mesma pessoa:</b> o aplicativo já detectava conta duplicada e já perguntava à própria pessoa no cadastro — mas quem tem as duas inscrições lado a lado, o organizador, nunca era avisado. Era por isso que a junção das contas falhava. Agora a <b>Análise de inscritos</b> mostra os pares que parecem a mesma pessoa, com o contato <b>parcialmente escondido</b> o bastante para reconhecer. É só informação: o aplicativo continua <b>não unindo conta sozinho</b>.</li>' +
         '<li><b>🗣️ “Não sou eu” deixa de encerrar o assunto:</b> quando alguém responde que não é a mesma pessoa, o aplicativo <b>para de perguntar aquilo a ela</b> — e só isso. O organizador continua vendo o par, com a data da resposta, para decidir com a informação na mão. O aviso antigo dizia “não perguntamos mais sobre essa conta”, que prometia mais do que o aplicativo cumpria.</li>' +
+    // ⛔ SEM ITEM NOVO, DE PROPÓSITO (22/set/2026). A revisão do diff pegou, ANTES de
+    // publicar, que a seção de duplicatas guardava estado global: a resposta do torneio A
+    // pintava nomes e pistas na tela do torneio B. Foi consertada com estado por torneio e
+    // token por pedido, e travada em teste com prova de mutação.
+    // Nada disso chegou ao usuário — o defeito nasceu e morreu entre dois commits desta
+    // mesma leva. Escrever "corrigimos um vazamento" aqui descreveria um problema que
+    // ninguém viveu, e nota de versão que conta o que não aconteceu gasta a confiança de
+    // quem lê. O item abaixo continua sendo a descrição correta do que existe.
         '<li><b>⚠️ Quando não dá para conferir, a tela DIZ:</b> se a verificação falhar, aparece um aviso explicando que não foi possível conferir e que isso <b>não</b> significa que está tudo certo — em vez de uma lista vazia parecendo “nenhuma duplicata”. Participante incluído <b>sem conta</b> também é contado à parte, para ninguém sumir da conferência em silêncio.</li>' +
       '</ul>' +
     '</div>' +
