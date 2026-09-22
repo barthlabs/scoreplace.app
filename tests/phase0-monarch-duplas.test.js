@@ -45,7 +45,6 @@ window._entryTeamMembers = function (p) {
 window._entryHasVip = function () { return false; };
 window._isMonarchFormat = function (t) { return !!(t && (t.drawMode === 'rei_rainha' || t.ligaRoundFormat === 'rei_rainha')); };
 
-load('draw-cores.js');
 load('tournaments-draw.js');
 
 let pass = 0, fail = 0;

@@ -165,7 +165,6 @@ var STATIC_ASSETS = [
   '/js/views/tournaments-enrollment-report.js',
   '/js/views/tournaments-draw-prep.js',
   '/js/views/draw-decisions.js',
-  '/js/views/draw-cores.js',
   '/js/views/tournaments-draw.js',
   '/js/views/landing.js',
   '/js/views/privacy.js',

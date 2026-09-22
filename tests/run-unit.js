@@ -631,7 +631,6 @@ const SUITES = [
   // Trava a canonização: o cliente NÃO sorteia a Liga agendada (fim da corrida
   // cliente×CF). Se alguém religar o poller, esta suíte fica vermelha.
   'tests/liga-autodraw-server-only.test.js',
-  'tests/draw-cores.test.js',
   // Cânone da LISTA DE ESPERA no AMBIENTE DO SERVIDOR (CF). Falha se alguém devolver
   // as funções pro store.js (não vendorado) — o tardio voltaria a ficar preso na espera.
   'tests/waitlist-core-server.test.js',

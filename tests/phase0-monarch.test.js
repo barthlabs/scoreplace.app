@@ -35,7 +35,6 @@ window._pName = function (p) { return typeof p === 'string' ? p : (p.displayName
 window._entryTeamMembers = function () { return null; };
 window._entryHasVip = function () { return false; };
 
-load('draw-cores.js');
 load('tournaments-draw.js');
 
 let pass = 0, fail = 0;

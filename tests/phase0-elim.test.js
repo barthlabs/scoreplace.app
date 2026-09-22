@@ -45,7 +45,6 @@ window._entryHasVip = function (t, p) {
 };
 window._formDoublesTeams = function (parts) { return { participants: parts, newTeamsCount: 0, leftoverCount: 0, allMaleCount: 0 }; };
 
-load('draw-cores.js');
 load('tournaments-draw.js');
 
 let pass = 0, fail = 0;
