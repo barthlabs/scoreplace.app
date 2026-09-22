@@ -6131,23 +6131,16 @@ function renderGroupStage(t, isOrg, canEnterResult, opts) {
     return (sg.matches || []).every(function(m) { return m.winner || m.isBye || m.isSitOut; });
   });
 
-  // v1.0.97-beta: faltava ')' fechando a chamada — onclick virava JS inválido
-  // 'window._advanceToElimination(\'id_123\'' sem o paren final, browser ignorava
-  // o clique. User: 'o botao avancar para fase eliminatoria nao faz nada'.
-  // v2.6.25: Copa do Mundo — se o torneio é multi-fase (Grupos → fase de
-  // eliminatória configurada), o avanço usa o MOTOR DE FASES (monta a chave
-  // puxando os classificados de cada grupo, com o formato/pareamento/trilhas que
-  // o organizador definiu), em vez da eliminatória embutida. Single-phase
-  // (grupos_mata legado) segue usando _advanceToElimination, sem mudança.
+  // O único avanço possível é o de uma fase configurada: o motor de fases monta
+  // a eliminatória a partir dos classificados e da política declarada. A antiga
+  // eliminatória embutida não tem writer nem chamador e não pode deixar um botão
+  // que aponta para uma função inexistente.
   const _gMulti = (typeof window._isMultiPhase === 'function') && window._isMultiPhase(t) && (t.currentPhaseIndex || 0) === 0;
-  const _gAdvFn = _gMulti ? 'window._advanceMultiPhase' : 'window._advanceToElimination';
-  const _gAdvLbl = _gMulti ? '⏭️ Avançar para a próxima fase' : _t('bracket.advanceToElim');
-  // v4.1.33 (decisão do dono): "Fase de Grupos" sozinho = SÓ grupos, sem eliminatória
-  // embutida (a elim se adiciona como FASE = construtor). Então o botão "Avançar" só
-  // aparece quando há elim de verdade: construtor multi-fase (_gMulti, usa
-  // _advanceMultiPhase) OU torneio LEGADO com grupos em t.groups (embedded elim antiga,
-  // _advanceToElimination). Grupos canônico sem fase de elim → botão OCULTO (não há pra onde).
-  const _gHasElimTarget = _gMulti || (Array.isArray(t.groups) && t.groups.length > 0);
+  const _gAdvFn = 'window._advanceMultiPhase';
+  const _gAdvLbl = '⏭️ Avançar para a próxima fase';
+  // Fase de grupos isolada termina na própria classificação. Sem uma fase seguinte
+  // configurada, não há chave implícita nem botão de avanço.
+  const _gHasElimTarget = _gMulti;
   // v3.1.7: quando reusado por uma FASE POSTERIOR de grupos (opts.suppressAutoAdvance),
   // o botão de avanço é omitido — o motor de fases (renderBracket) já mostra o banner
   // "próxima fase" e cuida da transição. Fase 0 / single-phase legado: inalterado.

@@ -203,7 +203,6 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     { id: 'score-edit', selector: '[onclick*="_editResult"]', text: 'Edite o resultado de uma partida já registrada.', context: 'bracket', priority: 4, position: 'top' },
     { id: 'bracket-round-hide', selector: '[onclick*="_toggleRoundVisibility"]', text: 'Oculte ou mostre rodadas já concluídas para economizar espaço na tela.', context: 'bracket', priority: 3, position: 'top' },
     { id: 'org-close-round', selector: '[onclick*="_closeRound"]', text: 'Feche a rodada atual e gere a próxima automaticamente com base nos resultados.', context: 'bracket', priority: 8, position: 'top' },
-    { id: 'org-advance-elimination', selector: '[onclick*="_advanceToElimination"]', text: 'Avance os classificados dos grupos para a fase eliminatória (mata-mata).', context: 'bracket', priority: 8, position: 'top' },
     { id: 'player-stats', selector: '[onclick*="_showPlayerStats"]', text: 'Clique no nome de um jogador para ver suas estatísticas globais em todos os torneios!', context: 'bracket', priority: 5, position: 'top' },
     { id: 'player-history', selector: '[onclick*="_showPlayerHistory"]', text: 'Veja o histórico completo de partidas deste jogador no torneio: adversários, placares e resultados.', context: 'bracket', priority: 4, position: 'top' },
     { id: 'my-matches-toggle', selector: '#my-matches-toggle', text: 'Filtre para ver apenas as suas partidas no chaveamento.', context: 'bracket', priority: 5, position: 'top' },
