@@ -26,10 +26,11 @@ PLAT="${1:-}"
 REPO_ROOT="${2:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 
 case "$PLAT" in
-  ios)     EMBEDDED_STORE="$REPO_ROOT/ios/App/App/public/js/store.js" ;;
-  android) EMBEDDED_STORE="$REPO_ROOT/android/app/src/main/assets/public/js/store.js" ;;
+  ios)     EMBEDDED_PUBLIC="$REPO_ROOT/ios/App/App/public" ;;
+  android) EMBEDDED_PUBLIC="$REPO_ROOT/android/app/src/main/assets/public" ;;
   *)       echo "uso: $0 <ios|android> [repo_root]" >&2; exit 2 ;;
 esac
+EMBEDDED_STORE="$EMBEDDED_PUBLIC/js/store.js"
 
 REPO_VER="$(tr -d '[:space:]' < "$REPO_ROOT/version.txt" 2>/dev/null || true)"
 if [ -z "$REPO_VER" ]; then
@@ -56,5 +57,18 @@ if [ "$EMBEDDED_VER" != "$REPO_VER" ]; then
   echo "  O www/ não foi montado NESTA leva. Rode 'npm run cap:sync'." >&2
   exit 1
 fi
+
+# ── E O PACOTE NÃO PODE LEVAR LOGIN POR LINK ────────────────────────────────────────
+# A FONTE já é vigiada por `tests/no-magic-link-login.test.js`, mas ela varre `js/`,
+# `functions/` e `functions-autodraw/` — NÃO enxerga o pacote embarcado. E o pacote é
+# artefato não rastreado: um pacote velho volta com o fluxo inteiro e vai para a loja.
+# MEDIDO em 22/set/2026: fonte com 0 ocorrências, pacotes de iOS e Android com o fluxo em
+# TRÊS arquivos cada (index.html, js/deep-link.js e js/views/auth.js).
+# A lista de padrões é a MESMA da fonte (scripts/magic-link-patterns.js): duas listas
+# divergem, e foi assim que a regra do cap sync já ficou copiada e errada nos dois scripts.
+# ⛔ O verificador vem do DIRETÓRIO DESTE SCRIPT, não de `$REPO_ROOT`: o `repo_root` existe
+# para os testes apontarem a uma árvore de CONTEÚDO de mentira, não para trocar a
+# ferramenta. Resolver por ele fazia a trava procurar o verificador dentro do fixture.
+node "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/check-bundle-sem-link-magico.js" "$EMBEDDED_PUBLIC"
 
 echo "▶ Embarcado conferido ($PLAT): SCOREPLACE_VERSION=$EMBEDDED_VER."

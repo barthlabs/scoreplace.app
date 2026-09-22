@@ -39,13 +39,22 @@ const PATHS = {
 
 /* Monta uma árvore de mentira: version.txt na raiz + (opcionalmente) o store.js
  * embarcado. `embeddedVersion === null` = www/ não montado, o caso do incidente. */
-function fakeTree(plat, repoVersion, embeddedVersion) {
+/* `sujeira` planta o padrão de login por link num arquivo DENTRO do public/, num
+ * subdiretório — é o que prova a varredura recursiva e a mensagem com caminho. */
+function fakeTree(plat, repoVersion, embeddedVersion, sujeira) {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-embarcado-'));
     fs.writeFileSync(path.join(dir, 'version.txt'), repoVersion + '\n');
     if (embeddedVersion !== null) {
         const store = path.join(dir, PATHS[plat]);
         fs.mkdirSync(path.dirname(store), { recursive: true });
         fs.writeFileSync(store, "window.SCOREPLACE_VERSION = '" + embeddedVersion + "';\n");
+        // Um arquivo LIMPO, em subdiretório, sempre presente: sem ele a varredura poderia
+        // estar olhando um diretório vazio e o teste não notaria.
+        const outro = path.join(path.dirname(store), 'views', 'auth.js');
+        fs.mkdirSync(path.dirname(outro), { recursive: true });
+        fs.writeFileSync(outro, sujeira
+            ? "// pacote velho\n" + sujeira + "\n"
+            : "window._auth = function () { return true; };\n");
     }
     return dir;
 }
@@ -103,6 +112,45 @@ console.log('\n📋 os dois scripts de release usam a MESMA trava');
         pair[0] + ': NÃO usa o `npx cap sync` puro (só copia, não monta)');
     assert(!/seguindo com o www já presente/.test(src),
         pair[0] + ': sem o fallback que engolia a falha');
+});
+
+// ─── O PACOTE NÃO PODE LEVAR LOGIN POR LINK ───────────────────────────────────────
+// A fonte já é vigiada, mas ela não enxerga o pacote embarcado — e o pacote é artefato
+// não rastreado: um pacote velho volta com o fluxo inteiro e vai para a loja. Medido em
+// 22/set/2026: fonte com 0 ocorrências, pacotes de iOS e Android com o fluxo em TRÊS
+// arquivos cada.
+console.log('\n📋 login por link no pacote embarcado');
+const { PADROES } = require('../scripts/magic-link-patterns.js');
+
+['ios', 'android'].forEach(function (plat) {
+    // limpo passa
+    const limpo = runGate(plat, fakeTree(plat, '1.9.70', '1.9.70', null));
+    assert(limpo.status === 0, plat + ': pacote LIMPO passa na trava');
+
+    // ⛔ UM CASO POR PADRÃO. Um laço que deixasse de aplicar uma entrada específica
+    // continuaria verde, e eu não saberia qual furou.
+    const amostras = {
+        'sendMagicLink': 'window.sendMagicLink(x);',
+        'signInWithEmailLink': 'auth.signInWithEmailLink(a, b);',
+        'isSignInWithEmailLink': 'if (auth.isSignInWithEmailLink(u)) {}',
+        'generateSignInWithEmailLink': 'admin.auth().generateSignInWithEmailLink(e, s);',
+        "collection('magicLinks')": "db.collection('magicLinks').doc(x);",
+        '?ml= / &ml=': 'var u = "/entrar?ml=" + token;',
+        "'email_link'": "var m = 'email_link';",
+        'sendSignInLinkToEmail': 'auth.sendSignInLinkToEmail(e, s);',
+    };
+    PADROES.forEach(function (p) {
+        const amostra = amostras[p.nome];
+        if (!amostra) { assert(false, plat + ': FALTA amostra para o padrão ' + p.nome); return; }
+        const r = runGate(plat, fakeTree(plat, '1.9.70', '1.9.70', amostra));
+        const saida = (r.stdout || '') + (r.stderr || '');
+        assert(r.status !== 0, plat + ': pacote SUJO com `' + p.nome + '` REPROVA');
+        assert(saida.indexOf('views/auth.js') !== -1,
+            plat + ': e a mensagem nomeia o ARQUIVO (varredura recursiva) — ' + p.nome);
+        assert(saida.indexOf(p.nome) !== -1,
+            plat + ': e nomeia o PADRÃO — ' + p.nome);
+        assert(/cap:sync/.test(saida), plat + ': e diz o conserto — ' + p.nome);
+    });
 });
 
 console.log('\n' + '─'.repeat(40));

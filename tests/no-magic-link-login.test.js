@@ -8,11 +8,12 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..');
 const roots = ['js', 'functions', 'functions-autodraw'];
 const extensions = new Set(['.js', '.html']);
-const banned = [
-  /sendMagicLink\b/, /signInWithEmailLink\b/, /isSignInWithEmailLink\b/,
-  /generateSignInWithEmailLink\b/, /collection\(\s*['"]magicLinks['"]\s*\)/,
-  /[?&]ml=/, /['"]email_link['"]/,
-];
+/* ⛔ A LISTA NÃO MORA AQUI (22/set/2026). Ela vem de `scripts/magic-link-patterns.js`,
+ * a MESMA que a trava do pacote embarcado usa (`scripts/check-bundle-sem-link-magico.js`,
+ * chamada por `check-embedded-www.sh` nos dois releases nativos).
+ * Duas listas divergem: a fonte ficaria limpa e o pacote que vai à loja, não — que é
+ * exatamente o estado medido naquele dia (fonte com 0, pacotes com o fluxo em 3 arquivos). */
+const banned = require('../scripts/magic-link-patterns.js').PADROES.map((p) => p.re);
 let fail = 0, files = 0;
 function visit(dir) {
   for (const item of fs.readdirSync(dir, { withFileTypes: true })) {
