@@ -950,7 +950,10 @@ service cloud.firestore {
     match /letzplayScans/{scanUid} {
       allow read: if request.auth != null;
       // scannedByName + tournamentId/Name identificam quem/qual torneio puxou; fullImport
-      // é o histórico COMPLETO (só no scan "completo") que vira o letzplayImport do dono.
+      // é o histórico COMPLETO (só no scan "completo").
+      // ⚠️ 23/set/2026: ele NÃO vira mais o `letzplayImport` do dono — o auto-preenchimento e a
+      // porta que aplicava scan em perfil alheio foram REMOVIDOS. O scan é evidência lida pela
+      // Análise; o perfil só muda pelo que a pessoa declara.
       //
       // `lzCursorParcial` e `totaisLetzplay` entraram na 1.6.64, quando o PARCIAL deixou de
       // gravar histórico e passou a gravar só PROGRESSO (onde parou) e ESTRUTURA (quantos
@@ -1126,6 +1129,11 @@ service cloud.firestore {
                  * caminho falhar calado. Primeiro a porta, depois a Rule. */
                 'genderSetBy', 'genderSetAt', 'skillSetBy', 'profileSetAt',
                 'letzplayAppliedBy', 'letzplayAppliedAt',
+                /* ⛔ 23/set/2026 — A MARCA DE "APURADA" FECHOU. Ela ficou aberta enquanto o
+                 * auto-preenchimento do navegador precisava gravá-la; esse método foi REMOVIDO
+                 * junto com a porta que aplicava scan em perfil alheio, e com ele sumiu o único
+                 * escritor no cliente. Aberta, qualquer conta carimbava a própria procedência. */
+                'skillBySportSource',
                 'gender', 'birthDate', 'age', 'city', 'hrMax', 'letzplayHandle', 'letzplaySource',
                 'phone', 'phoneCountry', 'preferredCeps', 'preferredSports', 'skillBySport',
                 'canRefereeBySport', 'refereeSports', 'updatedAt', 'emailVerified', 'fcmToken',

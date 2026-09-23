@@ -52,12 +52,18 @@ must(/carregarLetzplayImport\(resolvedUid\)/.test(AN),
 must(!/collection\('users'\)/.test(AN),
   '③ ⭐⭐ …e não lê mais NENHUMA ficha inteira — era a última deste arquivo');
 
-// ── ④ a escrita vai para o documento próprio ──────────────────────────────
+// ── ④ o SCAN não escreve import nenhum (23/set/2026) ──────────────────────
+/* ⛔ INVERTIDO. Este caso exigia que o import vindo do scan fosse para o documento próprio — hoje
+ * ele não vai para lugar nenhum: o auto-preenchimento foi REMOVIDO, porque `letzplayScans/{uid}` é
+ * escrito pelo navegador e qualquer conta autenticada planta um scan no nome de terceiro. Bastava a
+ * vítima abrir o app para o histórico dela virar o que o atacante escreveu. */
 const ST = codigo('js/store.js');
-must(/collection\('letzplay'\)\.doc\('import'\)\s*\n?\s*\.set\(_impParaSubdoc\)/.test(ST),
-  '④ ⭐ o import gravado pelo scan vai para o documento próprio');
+must(!/_impParaSubdoc/.test(ST),
+  '④ ⛔ o cliente NÃO grava mais import a partir do scan');
 must(!/patch\.letzplayImport = fi;/.test(ST),
-  '④ ⛔ e NÃO entra mais no patch do perfil');
+  '④ ⛔ e não entra no patch do perfil');
+must(!/_selfPopulateFromLetzplayScan/.test(ST),
+  '④ ⛔⛔ e o método que fazia isso não existe mais');
 
 // ── ⑤ a Rule existe, e a escrita é só do dono ─────────────────────────────
 const RULES = fs.readFileSync(path.join(raiz, 'firestore.rules'), 'utf8');

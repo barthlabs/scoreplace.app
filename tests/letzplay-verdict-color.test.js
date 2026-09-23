@@ -4,8 +4,11 @@
  * A Flavia Campion autorizou, o scan leu o perfil dela com sucesso (Fem D+/C-, apurado D),
  * e mesmo assim o nome ficou ROXO ("autorizou, aguardando verificação"). A Kelly Barth,
  * com scan equivalente, ficou VERDE. A única diferença: a Kelly tinha logado no app depois
- * do scan, então o _selfPopulate gravou skillBySport={'Beach Tennis':'C'} — a Flavia tinha
+ * do scan, e o auto-preenchimento gravou skillBySport={'Beach Tennis':'C'} — a Flavia tinha
  * skillBySport={} e nunca logou.
+ * ⚠️ 23/set/2026: aquele auto-preenchimento NÃO EXISTE MAIS (ele aplicava um scan que qualquer
+ * conta planta). O veredito passou a sair do scan, e é por isso que os casos abaixo continuam
+ * valendo sem ninguém logar.
  *
  * Causa: _lzVerdict(declRank=null) devolvia 'white' ("sem info pra comparar") → não marcava
  * _lzVerified → o nome caía no roxo. Ou seja, a LEITURA DO ORGANIZADOR dependia do INSCRITO
@@ -349,7 +352,7 @@ function run(row, profileMap, scanMap) { apply([row], profileMap, scanMap); retu
   ok(r._lzColor === COL.violet, 'sem histórico puxado → ROXO (veio: ' + r._lzColor + ')');
 }
 {
-  // vence quem tem MAIS jogos (mesma regra da applyLetzplayScans)
+  // vence quem tem MAIS jogos (a regra de precedência do import, que a porta aposentada também usava)
   const pequeno = { games: new Array(10), officialCategory: { categoryRaw: 'Feminina C', skill: 'C' }, rating: {}, rankings: [], tournaments: [] };
   const grande = { games: new Array(152), officialCategory: { categoryRaw: 'Feminina B', skill: 'B' }, rating: {}, rankings: [], tournaments: [] };
   const r = run({ uid: 'm9', effectiveSkills: [] },
@@ -865,6 +868,45 @@ console.log('\n── data mostrada = data do histórico em uso ──');
     'o guard do motor está no caminho do IMPORT');
   ok(/v2\.key === 'green' && !_lzMotorAtual\(sc\)/.test(src),
     '  → e no caminho do SCAN');
+}
+
+// ── 12. O @ NÃO MORA MAIS SÓ NO PERFIL (23/set/2026) ──
+/* ⛔ POR QUE ESTES CASOS EXISTEM. Quem gravava `letzplayHandle` no perfil era a porta que aplicava
+ * o scan — aposentada por deixar qualquer conta escrever no cadastro de qualquer pessoa. Sem um
+ * resolvedor, o efeito NÃO seria "a cor muda": a Análise pararia de BUSCAR o scan de quem tem o
+ * perfil vazio (os candidatos eram filtrados pelo @ do perfil) e a pessoa voltaria a violeta AO
+ * RECARREGAR a rota — antes parecia certo só porque o mapa ficava mesclado em memória.
+ * ⚠️ Os casos acima usam um perfil que JÁ traz o @; por isso eles encobriam este buraco. */
+{
+  const semPerfil = {};   // perfil sem @ nenhum — o estado de quem nunca declarou
+  const r = run({ uid: 'h1', effectiveSkills: [] }, { h1: semPerfil },
+    { h1: { handle: 'atleta', scan: scanKelly } });
+  ok(r._lzAuthorized === true, '@ só no SCAN já autoriza (perfil vazio) — veio: ' + r._lzAuthorized);
+  ok(r._lzColor !== COL.white, '  → e a cor NÃO cai para branco (veio: ' + r._lzColor + ')');
+}
+{
+  const r = run({ uid: 'h2', effectiveSkills: [] }, { h2: {} },
+    { h2: { fullImport: { handle: 'atleta', games: [] }, scan: scanKelly } });
+  ok(r._lzAuthorized === true, '@ no fullImport do scan também autoriza');
+}
+{
+  /* ⛔ DADO PLANTADO NÃO VIRA FONTE DE NAVEGAÇÃO: `letzplayScans` ainda aceita escrita de
+   * terceiro, então handle ausente, vazio ou de outro tipo tem de dar BRANCO e sem alvo. */
+  /* ⚠️ O scan da fixture TRAZ `scan.handle` — usar ele aqui provaria o contrário do que eu quero.
+   * Estes casos usam um scan SEM @ em lugar nenhum. */
+  const scanSemArroba = Object.assign({}, scanKelly); delete scanSemArroba.handle;
+  const vazio = run({ uid: 'h3', effectiveSkills: [] }, { h3: {} }, { h3: { handle: '   ', scan: scanSemArroba } });
+  ok(vazio._lzAuthorized === false, '@ em branco NÃO autoriza');
+  const tipo = run({ uid: 'h4', effectiveSkills: [] }, { h4: {} }, { h4: { handle: 42, scan: scanSemArroba } });
+  ok(tipo._lzAuthorized === false, '@ de tipo errado NÃO autoriza');
+  const nada = run({ uid: 'h5', effectiveSkills: [] }, { h5: {} }, { h5: { scan: scanSemArroba } });
+  ok(nada._lzAuthorized === false, 'sem @ em lugar nenhum: branco, como antes');
+}
+{
+  // o perfil continua tendo precedência quando a pessoa declarou o próprio @
+  const r = run({ uid: 'h6', effectiveSkills: [] }, { h6: { letzplayHandle: 'meu' } },
+    { h6: { handle: 'do-scan', scan: scanKelly } });
+  ok(r._lzAuthorized === true, 'o @ declarado no perfil continua valendo e vem primeiro');
 }
 
 console.log((fail ? '✗' : '✓') + ' letzplay-verdict-color: ' + pass + ' passaram, ' + fail + ' falharam');

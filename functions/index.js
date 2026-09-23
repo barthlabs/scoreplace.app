@@ -5251,87 +5251,29 @@ exports.mutateHostOrganization = onCall(
   }
 );
 
-// O servidor RELÊ letzplayScans/{uid} — não confia em payload do cliente (qualquer authed
-// escreve nessa coleção; sem reler, dava pra forjar o nível de terceiros via esta função).
-// Deploy:  firebase deploy --only functions:applyLetzplayScans
-exports.applyLetzplayScans = onCall(
-  { region: "us-central1", memory: "256MiB", timeoutSeconds: 120, cors: APP_ORIGINS },
-  async (request) => {
-    const callerUid = request.auth && request.auth.uid;
-    const callerEmail = ((request.auth && request.auth.token && request.auth.token.email) || "").toLowerCase();
-    if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
-
-    const tournamentId = String((request.data && request.data.tournamentId) || "");
-    const uids = (request.data && request.data.uids) || [];
-    if (!tournamentId || !Array.isArray(uids) || uids.length === 0) {
-      throw new HttpsError("invalid-argument", "tournamentId e uids são obrigatórios");
-    }
-
-    const db = admin.firestore();
-    const tSnap = await db.collection("tournaments").doc(tournamentId).get();
-    if (!tSnap.exists) throw new HttpsError("not-found", "torneio não existe");
-    const t = tSnap.data();
-    const isOrg = _isTournamentOrgCaller(t, callerUid);
-    if (!isOrg) throw new HttpsError("permission-denied", "só o organizador pode aplicar a busca letzplay");
-
-    // letzplay é Beach Tennis — mesma constante do cliente (_selfPopulateFromLetzplayScan).
-    const SPORT = "Beach Tennis";
-    let written = 0; const skipped = [];
-
-    for (const rawUid of uids) {
-      const uid = rawUid ? String(rawUid) : "";
-      if (!uid) { skipped.push({ uid, reason: "no-uid" }); continue; }
-
-      const scanSnap = await db.collection("letzplayScans").doc(uid).get();
-      if (!scanSnap.exists) { skipped.push({ uid, reason: "no-scan" }); continue; }
-      const data = scanSnap.data() || {};
-      const scan = data.scan || {};
-
-      const userRef = db.collection("users").doc(uid);
-      const userSnap = await userRef.get();
-      if (!userSnap.exists) { skipped.push({ uid, reason: "no-user" }); continue; }
-      const cur = userSnap.data() || {};
-
-      const upd = {};
-      if (scan.gender === "masculino" || scan.gender === "feminino") upd.gender = scan.gender;
-
-      // profileSkill = borda MAIS FRACA da banda ativa (conservador — ver _spDeriveScan).
-      const checked = scan.profileSkill || scan.skill;
-      if (checked) {
-        const sbs = (cur.skillBySport && typeof cur.skillBySport === "object") ? Object.assign({}, cur.skillBySport) : {};
-        const src = (cur.skillBySportSource && typeof cur.skillBySportSource === "object") ? Object.assign({}, cur.skillBySportSource) : {};
-        sbs[SPORT] = checked;
-        src[SPORT] = "letzplay";
-        upd.skillBySport = sbs;
-        upd.skillBySportSource = src;
-      }
-
-      // Histórico: só entra se trouxer MAIS jogos que o atual (nunca regride o perfil).
-      const fi = data.fullImport;
-      if (fi && typeof fi === "object" && Array.isArray(fi.footprint)) {
-        const fiGames = Array.isArray(fi.games) ? fi.games.length : 0;
-        const curGames = (cur.letzplayImport && Array.isArray(cur.letzplayImport.games)) ? cur.letzplayImport.games.length : 0;
-        if (fiGames > curGames) {
-          fi.importedVia = "organizer";
-          fi.importedByName = data.scannedByName || null;
-          fi.importedTournamentName = data.tournamentName || null;
-          fi.importedAt = data.scannedAt || fi.importedAt || null;
-          upd.letzplayImport = fi;
-          if (!cur.letzplayHandle && fi.handle) upd.letzplayHandle = fi.handle;
-        }
-      }
-
-      if (Object.keys(upd).length === 0) { skipped.push({ uid, reason: "nothing" }); continue; }
-      upd.letzplayAppliedBy = callerUid;
-      upd.letzplayAppliedAt = admin.firestore.FieldValue.serverTimestamp();
-      await userRef.update(upd);
-      written++;
-    }
-
-    console.log("[applyLetzplayScans] torneio", tournamentId, "gravados:", written, "pulados:", skipped.length, JSON.stringify(skipped));
-    return { ok: true, written, skipped };
-  }
-);
+/* ⚰️ APOSENTADA EM 23/set/2026: `applyLetzplayScans`, e com ela o auto-preenchimento do navegador.
+ *
+ * ⛔ O QUE ELA FAZIA E POR QUE SAIU. Aplicava um scan do letzplay no PERFIL GLOBAL de cada inscrito
+ * — gênero, categoria apurada, marca de procedência e histórico — por Admin SDK. E o documento que
+ * ela lia, `letzplayScans/{uid}`, é escrito pelo NAVEGADOR: as Rules permitem que qualquer conta
+ * autenticada escreva no scan de QUALQUER uid diferente da dela. Como criar torneio é livre, uma
+ * conta qualquer alterava o cadastro de qualquer pessoa.
+ *
+ * ⛔ E NÃO DAVA PARA CONSERTAR COM CARIMBO. Duas saídas foram tentadas antes desta e caíram:
+ *   · uma porta para a pessoa aplicar o PRÓPRIO scan PIORAVA o ataque — o scan forjado passaria a
+ *     ser aplicado sozinho quando a vítima apenas abrisse o app (hoje as Rules barram a gravação);
+ *   · carimbar procedência no servidor prova que UM ORGANIZADOR CHAMOU, não que o dado veio do
+ *     letzplay: o payload é dele. Procedência de verdade exigiria o servidor falar com o letzplay.
+ *
+ * ⭐ A SAÍDA é a decisão do dono: o que o organizador traz vale DENTRO DO TORNEIO. A Análise lê o
+ * scan direto (`scanMap`) e continua pintando sem ninguém logar — que era a regra original. O que
+ * se perde é o scan preencher o perfil da pessoa; no perfil entra o que ela declarar.
+ *
+ * ⚠️ RESIDUAL declarado: app já instalado continua com a cópia velha e ainda grava o próprio
+ * import até atualizar — inclusive por fila offline, depois do deploy.
+ * ⛔ NÃO REINTRODUZIR: `tests/portas-aposentadas-nao-voltam.test.js` reprova o nome e o método no
+ * servidor e nos três bundles, e o teste de emulador prova o ataque ponta a ponta.
+ * [[project_categoria_do_organizador_vale_no_torneio]] */
 
 // ─── Comunicado do organizador (fan-out server-side) ────────────────────────
 // v2.4.61: ANTES o "Comunicar Inscritos" notificava cada inscrito num loop

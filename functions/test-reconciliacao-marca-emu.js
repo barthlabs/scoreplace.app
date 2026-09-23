@@ -168,6 +168,66 @@ const catDe = async (uid) => ((await db.collection("users").doc(uid).get()).data
   eq(fFonte, { "Beach Tennis": "letzplay", "Padel": "letzplay", "Squash": "letzplay" },
     "⭐ marca conservada/viajada/apagada exatamente como manda a regra — e ÓRFÃ (Vôlei) some de verdade");
 
+  console.log("\n── ATAQUE PONTA A PONTA: scan plantado NÃO alcança o perfil ──");
+  /* ⛔ ESTE É O CENÁRIO QUE VALE, e ele tem de atravessar as FRONTEIRAS REAIS. Operar o Firestore
+   * pelo Admin SDK aqui seria tautologia: o Admin IGNORA Rules, então plantar por ali não provaria
+   * que a conta B consegue plantar, e não chamar a porta pelo HTTP não provaria que ela saiu.
+   * Então: B planta com o TOKEN DELE, por PATCH na API do Firestore; e a porta é chamada por HTTP. */
+  const vitima = "marca-vitima", atacante = "marca-atacante";
+  const tokenVitima = await criarConta(vitima, "vitima@teste.local");
+  const tokenAtacante = await criarConta(atacante, "atacante@teste.local");
+  await db.collection("users").doc(vitima).set({
+    displayName: "Vítima", uid: vitima,
+    skillBySport: { "Beach Tennis": "D" }, gender: "feminino",
+  });
+  await db.collection("users").doc(vitima).collection("letzplay").doc("import")
+    .set({ games: [{ id: "g1" }], gamesTotal: 1 });
+
+  /* ⛔ RETRATO ANTES DO PLANTIO. Depois seria tarde: se alguma escrita reagisse ao scan, o retrato
+   * tardio viraria a nova base e o teste passaria por cima do estrago. */
+  const retrato = async () => {
+    const u = (await db.collection("users").doc(vitima).get()).data() || {};
+    const imp = (await db.collection("users").doc(vitima).collection("letzplay").doc("import").get());
+    return JSON.stringify({
+      skillBySport: u.skillBySport || null, skillBySportSource: u.skillBySportSource || null,
+      gender: u.gender || null, letzplayHandle: u.letzplayHandle || null,
+      letzplayImport: u.letzplayImport || null, letzplayAppliedBy: u.letzplayAppliedBy || null,
+      import: imp.exists ? imp.data() : null,
+    });
+  };
+  const antesDoAtaque = await retrato();
+
+  const FS = "http://" + (process.env.FIRESTORE_EMULATOR_HOST || "127.0.0.1:8080")
+    + "/v1/projects/" + PROJECT + "/databases/(default)/documents/letzplayScans/" + vitima;
+  const plantio = await fetch(FS + "?updateMask.fieldPaths=scan&updateMask.fieldPaths=handle", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", Authorization: "Bearer " + tokenAtacante },
+    body: JSON.stringify({ fields: {
+      handle: { stringValue: "atleta-forjado" },
+      scan: { mapValue: { fields: {
+        gender: { stringValue: "masculino" },
+        skill: { stringValue: "A" },
+        profileSkill: { stringValue: "A" },
+      } } },
+    } }),
+  });
+  /* ⛔ EXIGE 200: se o plantio falhar, o cenário não provou abuso nenhum e NÃO pode passar por isso. */
+  ok(plantio.status === 200, "a conta B CONSEGUE plantar o scan no nome de A (é o buraco que resta: "
+    + plantio.status + ")");
+
+  /* A porta que aplicava o scan não existe mais: a chamada tem de falhar com NOT FOUND — e não
+   * "qualquer coisa diferente de 200", que passaria até por erro de rede. */
+  const tentativa = await fetch(FN + "applyLetzplayScans", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: "Bearer " + tokenVitima },
+    body: JSON.stringify({ data: { tournamentId: "marca-t1", uids: [vitima] } }),
+  });
+  ok(tentativa.status === 404, "⛔ a porta que aplicava o scan NÃO existe mais (esperado 404, veio "
+    + tentativa.status + ")");
+
+  ok((await retrato()) === antesDoAtaque,
+    "⛔⛔ e o perfil e o histórico da vítima ficaram BYTE A BYTE iguais depois do scan plantado");
+
   console.log("\n── sem token não passa (a porta é autenticada de verdade) ──");
   const semToken = await fetch(FN + "updateOwnProfile", {
     method: "POST", headers: { "Content-Type": "application/json" },

@@ -19,10 +19,10 @@
  * ⛔ E SÓ NAS MODALIDADES MEXIDAS. Apagar o mapa inteiro derrubaria a marca de esportes
  * que ninguém tocou — conserto que estraga mais do que arruma.
  *
- * ⚠️ O que este núcleo NÃO faz: tornar a marca confiável. `skillBySportSource` continua
- * gravável pelo navegador (ela não está em `serverOwnedProfileFields()`), e
- * `applyLetzplayScans` continua atribuindo a partir de scan sem procedência. Isso é a leva
- * da procedência, não esta. [[project_email_no_doc_publico]] é da mesma família: campo que
+ * ⚠️ ATUALIZADO EM 23/set/2026: a marca **fechou** — `skillBySportSource` entrou em
+ * `serverOwnedProfileFields()`, e `applyLetzplayScans` foi **aposentada** (ela aplicava scan no
+ * perfil de terceiro a partir de documento que qualquer conta planta). Hoje quem escreve a marca é
+ * só o servidor, e este núcleo continua sendo quem a **apaga** quando a categoria muda. [[project_email_no_doc_publico]] é da mesma família: campo que
  * parece inofensivo porque nenhuma tela o lê.
  *
  * ⛔ DOIS CONTRATOS, porque a pergunta é diferente:

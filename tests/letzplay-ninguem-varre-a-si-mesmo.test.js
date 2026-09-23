@@ -42,7 +42,9 @@ console.log('── as duas fronteiras de lote filtram ANTES de qualquer efeito 
 console.log('── a rota residual não monta o próprio uid como alvo ──');
 {
   const i = fonte.indexOf('var targets = (rows || []).filter');
-  const bloco = fonte.slice(i, i + 500);
+  /* ⚠️ A JANELA CRESCEU: o bloco ganhou comentário quando o @ passou a sair do resolvedor
+   * (23/set/2026). Janela curta demais reprova por causa de comentário, não de defeito. */
+  const bloco = fonte.slice(i, i + 1200);
   ok(/_lzNaoEhEuMesmo\(r\.uid\)/.test(bloco),
     '⭐ a montagem de alvos exclui o uid do solicitante');
 }

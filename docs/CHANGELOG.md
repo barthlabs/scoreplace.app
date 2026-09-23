@@ -1,4 +1,11 @@
-## 2.3.92 (acumulando) — 23/set/2026
+## 2.3.92 — 23/set/2026
+
+- **A busca do letzplay parou de escrever no cadastro de quem foi buscado.** A porta que aplicava o scan no perfil global (gênero, categoria, selo de "apurada" e histórico) foi **aposentada**, e o auto-preenchimento que rodava no login **saiu junto** — ele lia o mesmo documento e gravava o histórico da pessoa. O documento de scan é escrito pelo navegador e as Rules permitem que qualquer conta autenticada escreva no scan de **qualquer** uid: bastava a vítima abrir o app.
+- **Nada disso dava para consertar com carimbo**: carimbar no servidor prova que um organizador chamou, não que o dado veio do letzplay — o payload é dele. E uma porta para a pessoa aplicar o próprio scan **pioraria**, porque passaria a aplicar sozinha o scan forjado.
+- **A Análise não perde nada**: cor e veredito saem do scan, não do perfil. Para isso, o **@ do atleta** passou a ter um resolvedor único (perfil → scan → histórico do scan, com validação), e a tela passou a buscar o scan de **todo inscrito**, não só de quem tinha @ no perfil — antes, sem a porta, a pessoa voltaria a violeta ao recarregar.
+- **O selo de "categoria apurada" virou campo de servidor** nas Rules: com o auto-preenchimento removido, ele não tinha mais escritor no cliente.
+- Prova ponta a ponta no emulador, atravessando Rules e HTTP de verdade: uma conta planta o scan de outra (ainda é possível) e o perfil e o histórico da vítima ficam **byte a byte iguais**.
+
 
 - **A categoria que o organizador define parou de invadir o perfil global.** A porta da Análise gravava `skillBySport` em `users/{uid}` de terceiro; agora ela mexe só no torneio, que é onde a decisão dele vale. A Análise já dava precedência à categoria do torneio, então nada muda na tela. E uma atribuição só de categoria deixou de carimbar `profileSetAt` no cadastro alheio.
 - ⚠️ O **gênero** continua indo ao perfil, de propósito: hoje ele só vale no sorteio porque foi empurrado para lá. São 19 arquivos lendo gênero, cada um com precedência própria — tirar a escrita sem migrar todos regrediria o sorteio em silêncio. Isso é consolidação própria, com inventário já levantado.

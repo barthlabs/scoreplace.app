@@ -916,7 +916,6 @@ const SUITES = [
   'tests/letzplay-scan-order.test.js',
   // Núcleo puro do autopreenchimento pelo scan do letzplay (categoria apurada
   // corrigindo a declarada). Ainda SEM chamador: a ligação é do bloco 2 da reforma.
-  'tests/letzplay-self-populate.test.js',
   'tests/marca-da-categoria-nao-sobrevive.test.js',
   'tests/portas-aposentadas-nao-voltam.test.js',
   // O ORGANIZADOR passa a ver o par de conta duplicada do elenco dele. A detecção já

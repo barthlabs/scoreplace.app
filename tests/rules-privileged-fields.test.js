@@ -95,16 +95,11 @@ const S = v => ({ stringValue: v });
     // de fora.
     'genderSetBy', 'genderSetAt', 'skillSetBy', 'profileSetAt',
     'letzplayAppliedBy', 'letzplayAppliedAt',
+    // ⛔ 23/set/2026: a marca de "apurada" fechou junto com a remoção do auto-preenchimento,
+    // que era o único escritor dela no cliente.
+    'skillBySportSource',
     'phoneSource', 'phoneSetBy', 'phoneSetAt', 'friends', 'friendRequestsSent',
     'friendRequestsReceived', 'friendRequestsSentAt', 'theme', 'uiScale', 'activeCasualRoom', 'liveScorePrefs', 'casualLast', 'casualPrefs', 'preferredLocations', 'notifyPlatform', 'notifyEmail', 'notifyWhatsApp', 'notifyLevel', 'presenceVisibility', 'statsVisibility', 'presenceMuteDays', 'presenceMuteUntil', 'presenceAutoCheckin', 'acceptedTerms', 'acceptedTermsAt', 'acceptedTermsVersion', 'acceptedTermsGrandfathered', 'lastSeenAt', 'lastClientVersion', 'lastClientPlatform', 'favorites', 'hiddenTournaments', 'acceptFriendRequests', 'omitEmail', 'omitPhone', 'liveAlerts', 'liveAlertsWho', 'blockedUids', 'emailVerified', 'fcmToken', 'fcmTokenPlatform', 'fcmTokenUpdatedAt', 'linkedPhones', 'hasGooglePhotoReal'];
-  /* ⚠️ A MARCA DE "APURADA" CONTINUA GRAVÁVEL, e isso é DELIBERADO nesta leva: o
-   * auto-preenchimento do navegador ainda precisa dela, e fechar antes de existir porta de
-   * servidor para a pessoa aplicar o próprio scan faria aquele caminho falhar calado. Sem este
-   * caso, a ausência dela na lista pareceria esquecimento. */
-  out.marcaDeApuradaSegueGravavel = await req('PATCH',
-    'users/' + A + '?updateMask.fieldPaths=skillBySportSource', A,
-    { fields: { skillBySportSource: { mapValue: { fields: { 'Beach Tennis': S('letzplay') } } } } });
-
   out.ataquesExtras = {};
   out.criaComExtras = {};
   for (const field of extras) {
@@ -201,10 +196,6 @@ Object.keys(novo.ataquesExtras).forEach((field) => {
   ok(novo.criaComExtras[field] === 403,
     '🔒 create com ' + field + ' negado (got ' + novo.criaComExtras[field] + ')');
 });
-ok(novo.marcaDeApuradaSegueGravavel === 200,
-  '⚠️ DELIBERADO: skillBySportSource (marca de "apurada") CONTINUA gravável pelo dono — fechar antes'
-  + ' da porta de servidor do próprio scan faria o auto-preenchimento falhar calado (got '
-  + novo.marcaDeApuradaSegueGravavel + ')');
 ok(novo.createComMergedInto === 403,
   '🔒 CREATE já com mergedInto negado — senão bastava apagar e recriar o perfil (got ' + novo.createComMergedInto + ')');
 

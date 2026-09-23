@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.3.91';
+window.SCOREPLACE_VERSION = '2.3.92';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -12924,9 +12924,12 @@ window.AppStore = {
             window._warn('[selfHealFriends] background failed:', e);
           });
         }, 0);
-        // v1.15.37: alimenta gênero/habilidade do PRÓPRIO scan letzplay (quando um
-        // organizador buscou o perfil público). Só self-write, só o que falta.
-        setTimeout(function() { self._selfPopulateFromLetzplayScan().catch(function() {}); }, 0);
+        /* ⚰️ 23/set/2026 — O AUTO-PREENCHIMENTO PELO SCAN SAIU DAQUI, e o agendamento com ele.
+         * `letzplayScans/{uid}` é escrito pelo navegador e as Rules permitem que QUALQUER conta
+         * autenticada escreva no scan de qualquer uid diferente do dela. Com o agendamento, bastava
+         * a vítima ABRIR O APP para um scan forjado virar o histórico dela (o import é subcoleção
+         * que o próprio dono pode escrever). O perfil só muda pelo que a pessoa declara.
+         * [[project_categoria_do_organizador_vale_no_torneio]] */
       }
       // v0.17.3: sinaliza que o profile load attempt completou (sucesso OU
       // doc inexistente — first-time user). Views que dependem de campos do
@@ -12971,80 +12974,6 @@ window.AppStore = {
       } catch (e2) {}
       return null;
     }
-  },
-
-  // v0.17.6: normaliza cu.friends — resolve emails legados → uid, dropa
-  // órfãos (email não casa com nenhum user), dedup. Persiste a lista limpa
-  // no Firestore. Disparado em background após loadUserProfile. Resolve a
-  // causa-raiz das "várias notificações em cada evento" — antes da v0.17.5
-  // o dedup era só no momento de notificar; agora a lista persistida é
-  // canônica. Não bloqueia render — usuário pode usar o app enquanto roda.
-  // Idempotente: pode chamar várias vezes, só faz write quando há mudança.
-  // v1.15.37: alimenta gênero + habilidade (Beach Tennis) do PRÓPRIO scan letzplay
-  // (letzplayScans/{uid}, gravado por um organizador na busca ativa). Self-write, só
-  // preenche o que falta no perfil — nunca sobrescreve o que a pessoa já definiu.
-  async _selfPopulateFromLetzplayScan() {
-    var cu = this.currentUser; if (!cu || !cu.uid) return;
-    var db = window.FirestoreDB && (window.FirestoreDB.db || (window.FirestoreDB.ensureDb && window.FirestoreDB.ensureDb()));
-    if (!db) return;
-    var snap;
-    try { snap = await db.collection('letzplayScans').doc(cu.uid).get(); } catch (e) { return; }
-    if (!snap.exists) return;
-    var data = snap.data() || {};
-    var scan = data.scan || {};
-    var patch = {};
-    if (!cu.gender && scan.gender) patch.gender = scan.gender;
-    // CATEGORIA CHECADA: a apurada do letzplay VIRA a oficial e SOBRESCREVE a declarada
-    // (a declarada só vale pra quem nunca puxou histórico). Conservadora: profileSkill
-    // (borda mais fraca da banda ativa). Marca a fonte = 'letzplay' → o app sabe que é
-    // checada, não declarada.
-    var checked = scan.profileSkill || scan.skill;
-    if (checked) {
-      var sport = 'Beach Tennis'; // letzplay = beach tennis
-      var sbs = (cu.skillBySport && typeof cu.skillBySport === 'object') ? Object.assign({}, cu.skillBySport) : {};
-      var src = (cu.skillBySportSource && typeof cu.skillBySportSource === 'object') ? Object.assign({}, cu.skillBySportSource) : {};
-      if (sbs[sport] !== checked || src[sport] !== 'letzplay') {
-        sbs[sport] = checked; src[sport] = 'letzplay';
-        patch.skillBySport = sbs; patch.skillBySportSource = src;
-      }
-    }
-    // Import COMPLETO trazido por organizador (scan "completo"): vira o letzplayImport
-    // do PRÓPRIO dono, com procedência. Precedência: vence o MAIS RECENTE — um org-scan
-    // antigo nunca sobrescreve um self-import mais novo.
-    var _impParaSubdoc = null;
-    var fi = data.fullImport;
-    if (fi && typeof fi === 'object' && Array.isArray(fi.footprint)) {
-      // "Só atualiza se desatualizado": aplica o scan só quando ele traz MAIS jogos que o
-      // perfil atual (ou quando não há perfil). Um re-scan que não trouxe jogo novo não
-      // mexe no perfil (nem troca a procedência à toa).
-      var fiGames = window._lzGamesTotal(fi);
-      var curImp = cu.letzplayImport;
-      var curGames = window._lzGamesTotal(curImp);
-      if (!curImp || fiGames > curGames) {
-        fi.importedVia = 'organizer';
-        fi.importedByName = data.scannedByName || null;
-        fi.importedTournamentName = data.tournamentName || null;
-        fi.importedAt = data.scannedAt || fi.importedAt || null;
-        /* ⭐ O IMPORT VAI PARA DOCUMENTO PRÓPRIO (`users/{uid}/letzplay/import`), não para o
-         * perfil: ele chega a 499 KB e o perfil é lido inteiro em todo login. Gravado logo
-         * abaixo, fora do `patch`. */
-        _impParaSubdoc = fi;
-        if (!cu.letzplayHandle && fi.handle) patch.letzplayHandle = fi.handle;
-      }
-    }
-    if (_impParaSubdoc) {
-      try {
-        await db.collection('users').doc(cu.uid).collection('letzplay').doc('import')
-          .set(_impParaSubdoc);
-        cu.letzplayImport = _impParaSubdoc;
-      } catch (e) { window._warn('[letzplay] não gravou o import:', e && e.message); }
-    }
-    if (!Object.keys(patch).length) return;
-    try {
-      await db.collection('users').doc(cu.uid).set(patch, { merge: true });
-      Object.assign(cu, patch);
-      window._log('[letzplay self-populate] categoria checada do scan:', Object.keys(patch).join(', '));
-    } catch (e) { window._warn('[letzplay self-populate] falhou', e); }
   },
 
   async _selfHealFriendsList() {

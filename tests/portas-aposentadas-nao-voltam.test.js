@@ -9,8 +9,10 @@
  * nomeando o que não existe (e aí o deploy falha no pior momento). Este teste é o portão.
  *
  * ⚠️ Ele NÃO prova a remoção REMOTA — isso é pós-condição do release
- * (`firebase functions:list` não pode listar nenhuma das duas). Um teste de código fica verde
+ * (`firebase functions:list` não pode listar nenhuma das TRÊS). Um teste de código fica verde
  * mesmo se o `functions:delete` tiver falhado.
+ * ⚠️ E não prova a fronteira de comportamento: quem prova que um scan plantado não alcança o perfil
+ * é o teste de emulador, que atravessa Rules e HTTP de verdade.
  */
 'use strict';
 const fs = require('fs');
@@ -18,7 +20,13 @@ const path = require('path');
 const { execFileSync } = require('child_process');
 const RAIZ = path.join(__dirname, '..');
 
-const APOSENTADAS = ['setParticipantsGender', 'setParticipantsProfile'];
+const APOSENTADAS = ['setParticipantsGender', 'setParticipantsProfile', 'applyLetzplayScans'];
+
+/* ⚰️ 23/set/2026 — O AUTO-PREENCHIMENTO PELO SCAN também não volta. Ele lia `letzplayScans/{uid}`
+ * (que qualquer conta autenticada escreve no nome de terceiro) e gravava o histórico da pessoa no
+ * login dela. ⛔ Procurar só por chamada de porta NÃO o veria voltar: ele é um MÉTODO. */
+const METODO_MORTO = '_selfPopulateFromLetzplayScan';
+const NUCLEO_MORTO = 'functions/letzplay-self-populate-core.js';
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) { pass++; console.log('  ✓', m); } else { fail++; console.error('  ✗', m); } };
 
@@ -39,7 +47,14 @@ try {
   ok(false, 'functions/index.js QUEBROU: ' + String((e && e.stderr) || e).slice(0, 300));
 }
 
-/* ③ Nenhum CLIENTE as chama — nem a web, nem o pacote embarcado dos dois nativos.
+/* ③ O NÚCLEO inseguro não existe mais — por NOME. Prova de ausência é sempre por padrão; esta é a
+ * parte precisa dela, e é barata. */
+ok(!fs.existsSync(path.join(RAIZ, NUCLEO_MORTO)),
+  NUCLEO_MORTO + ': o núcleo que virava scan em patch de perfil não existe mais');
+
+/* ④ Nenhum CLIENTE as chama — nem a web, nem o pacote embarcado dos dois nativos —, e o MÉTODO
+ * morto não reaparece em lugar nenhum, inclusive no SERVIDOR: é lá que religar é mais fácil
+ * (Admin SDK ignora Rules) e mais grave.
  * ⛔ Varredura recursiva de verdade: `js/` é onde o app vive, e `ios/`/`android/` carregam a CÓPIA
  * embarcada, que é o que roda no aparelho. Olhar só `js/` deixaria o irmão.
  * [[feedback_enumerar_todos_os_caminhos_antes_de_dar_por_pronto]] */
@@ -63,11 +78,18 @@ function varrer(dir, achados) {
         achados.push(path.relative(RAIZ, p) + ' → ' + nome);
       }
     });
+    /* ⛔ O MÉTODO é outra coisa: ele volta como DEFINIÇÃO ou como AGENDAMENTO, nunca como
+     * `httpsCallable`. Este arquivo pode citá-lo em comentário (é o que estou fazendo aqui), então
+     * o que se proíbe é a forma executável. */
+    if (path.relative(RAIZ, p) !== 'tests/portas-aposentadas-nao-voltam.test.js'
+      && new RegExp('[.\\s]' + METODO_MORTO + '\\s*[(:=]').test(txt)) {
+      achados.push(path.relative(RAIZ, p) + ' → ' + METODO_MORTO);
+    }
   });
   return achados;
 }
-const chamadas = ['js', 'ios', 'android'].reduce((acc, d) => varrer(path.join(RAIZ, d), acc), []);
-ok(chamadas.length === 0, 'nenhum cliente (web, iOS embarcado, Android embarcado) chama as duas'
+const chamadas = ['js', 'ios', 'android', 'functions'].reduce((acc, d) => varrer(path.join(RAIZ, d), acc), []);
+ok(chamadas.length === 0, 'nenhum cliente (web, iOS e Android embarcados) nem o servidor chamam as portas'
   + (chamadas.length ? ' — achou: ' + JSON.stringify(chamadas) : ''));
 
 /* ④ Nenhum script de deploy as nomeia: deploy que pede função inexistente falha na hora errada. */

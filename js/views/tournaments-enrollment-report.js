@@ -2410,14 +2410,14 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       // 2.0.50 (dono): o letzplay é PÚBLICO e criar a conta já autoriza a consulta
       // (termos de uso) — o toggle de autorização MORREU. "Autorizado" = tem o @
       // indicado no perfil. É o que separa violeta (consultável) de branco (sem @).
-      r._lzAuthorized = !!(prof && prof.letzplayHandle);
+      r._lzAuthorized = !!window._lzHandleDe(prof, r.uid && scanMap[r.uid]);
       // O HISTÓRICO PODE ESTAR EM DOIS LUGARES, e eu só olhava um:
       //   • users/{uid}.letzplayImport      → a pessoa fez o autoimport dela;
       //   • letzplayScans/{uid}.fullImport  → o ORGANIZADOR puxou por ela (busca completa).
       // Caso real (14/jul 17:57): a Kelly tinha 152 jogos COMPLETOS no fullImport do scan e
       // aparecia ROXA — porque ela nunca fez autoimport, então eu caía no scan resumido
       // (torneios 2/8), julgava incompleto e não absolvia. O dado estava lá; a tela mentia.
-      // Não dá pra depender do letzplayImport: ele só é preenchido pela applyLetzplayScans
+      // Não dá pra depender do letzplayImport do perfil: ele é do PRÓPRIO dono e pode nem existir
       // (que roda depois) ou pelo login da própria pessoa — de novo fazendo a leitura do
       // organizador depender do inscrito. Vence o que tem MAIS jogos (mesma regra da CF).
       var _fi = (r.uid && scanMap[r.uid] && scanMap[r.uid].fullImport) || null;
@@ -3941,8 +3941,12 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       var prof = r.uid && profileMap[r.uid];
       // ⛔ O organizador NÃO entra nos próprios alvos: varrer a si mesmo é auto-atestar
       // categoria, e a Rule recusa. Sem isto a linha dele falharia com permission-denied.
-      return !!(prof && prof.letzplayHandle) && window._lzNaoEhEuMesmo(r.uid);
-    }).map(function (r) { return { uid: r.uid, handle: profileMap[r.uid].letzplayHandle, name: r.name }; });
+      /* ⛔ O @ SAI DO RESOLVEDOR, não do perfil: depois que a porta que gravava `letzplayHandle`
+       * foi aposentada, filtrar pelo perfil deixaria violeta CLICÁVEL e impossível de revarrer. */
+      return !!window._lzHandleDe(prof, r.uid && (scanMap || {})[r.uid]) && window._lzNaoEhEuMesmo(r.uid);
+    }).map(function (r) {
+      return { uid: r.uid, handle: window._lzHandleDe(profileMap[r.uid], (scanMap || {})[r.uid]), name: r.name };
+    });
     // v1.1.21: FIM do lote (Essencial/Completa em batch) — travava e não trazia nada.
     // A busca virou INDIVIDUAL: clicar num nome autorizado abre a tela de puxar o
     // histórico DAQUELE atleta (caminho do autoimport, pelo @ público). O hover no
@@ -4701,7 +4705,35 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
    * rotas de persistência têm uma fronteira única de lote, e é nela que se filtra. Filtrar
    * em quatro lugares é garantir que um fique para trás na próxima mudança.
    * Pular só a gravação deixaria a linha mexendo em histórico, na Callable e na pintura. */
-  window._lzNaoEhEuMesmo = function (uid) {
+  /* ⭐ O @ DA PESSOA — UM RESOLVEDOR SÓ, usado por autorização, cor e montagem dos alvos.
+ *
+ * ⛔ POR QUE ELE EXISTE (23/set/2026). Até aqui o @ vinha **só do perfil**, e quem o gravava lá era
+ * a porta que aplicava o scan — aposentada por permitir que qualquer conta escrevesse no cadastro
+ * de qualquer pessoa. Sem o resolvedor, o efeito não seria "a cor muda": seria a Análise **parar de
+ * buscar o scan** de quem tem o perfil vazio (os candidatos eram filtrados pelo @ do perfil), e a
+ * pessoa voltaria a violeta **ao recarregar a rota** — a tela parecia certa antes só porque o mapa
+ * de scans ficava mesclado em memória.
+ *
+ * PRECEDÊNCIA: perfil (o que a pessoa declarou) → `scan.handle` → `fullImport.handle`.
+ *
+ * ⛔ E ELE VALIDA, porque `letzplayScans` ainda aceita escrita de terceiro: só string não vazia,
+ * normalizada. Handle ausente, vazio ou de outro tipo ⇒ **sem @** (branco e sem alvo). Promover
+ * dado plantado a fonte de navegação seria trocar um buraco por outro. */
+window._lzHandleDe = function (perfil, scanDoc) {
+  var limpa = function (v) {
+    if (typeof v !== 'string') return '';
+    var t = v.trim().replace(/^@+/, '');
+    return t ? t : '';
+  };
+  var doPerfil = limpa(perfil && perfil.letzplayHandle);
+  if (doPerfil) return doPerfil;
+  var sd = scanDoc || {};
+  var doScan = limpa(sd.handle) || limpa(sd.scan && sd.scan.handle);
+  if (doScan) return doScan;
+  return limpa(sd.fullImport && sd.fullImport.handle);
+};
+
+window._lzNaoEhEuMesmo = function (uid) {
     var meu = (window.AppStore && window.AppStore.currentUser && window.AppStore.currentUser.uid) || null;
     return !!uid && (!meu || String(uid) !== String(meu));
   };
@@ -4780,6 +4812,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   }
   function _saveScansAndReload(tId, scans, onFail) {
     // Mesma fronteira única: particiona ANTES de persistir, arquivar, chamar a CF e pintar.
+    /* ⚠️ 23/set/2026: o resultado da busca fica no SCAN e na tela. Ele não vai mais para o perfil
+     * de ninguém — a porta que fazia isso foi aposentada. */
     var ok = scans.filter(function (s) {
       return s.uid && s.scan && window._lzNaoEhEuMesmo(s.uid);
     });
@@ -4848,23 +4882,10 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         });
     });
     Promise.all(writes).then(function () {
-      // APLICA no perfil de cada inscrito (gênero + nível + histórico) AGORA, via Cloud
-      // Function — as rules não deixam o organizador escrever em users/{uid} alheio, e
-      // esperar a pessoa logar (o _selfPopulate) fazia a Análise depender do login dela.
-      // Best-effort: se a CF falhar, os scans já estão gravados e a cor já sai do scan;
-      // o _selfPopulate continua existindo como rede de segurança no login.
-      try {
-        if (window.firebase && firebase.functions) {
-          firebase.functions().httpsCallable('applyLetzplayScans')({
-            tournamentId: String(tId), uids: ok.map(function (s) { return s.uid; })
-          }).then(function (res) {
-            var r = (res && res.data) || {};
-            window._log && window._log('[applyLetzplayScans] perfis gravados:', r.written, 'pulados:', (r.skipped || []).length);
-          }).catch(function (err) {
-            window._log && window._log('[applyLetzplayScans] falhou (não bloqueia):', (err && err.message) || err);
-          });
-        }
-      } catch (e) {}
+      /* ⚰️ 23/set/2026 — A CHAMADA QUE APLICAVA O SCAN NO PERFIL DE CADA INSCRITO SAIU DAQUI, com a
+       * porta. Ela gravava gênero, categoria e histórico no cadastro GLOBAL de terceiro a partir de
+       * um documento que qualquer conta autenticada pode plantar. A Análise não perde nada: a cor e
+       * o veredito saem do `scanMap`, que é lido logo abaixo. */
       if (typeof window._hideLoading === 'function') window._hideLoading();
       // re-render a seção Categorias in-place, mesclando os scans novos no scanMap.
       var rctx = window._lzRenderCtx, el = document.getElementById('er-categories-section');
@@ -5223,10 +5244,11 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       // v1.1.18: inclui quem já tem import próprio — sem isso a página não sabia QUANDO
       // cada um foi verificado (regra dos 6 dias). O veredito não muda: em
       // _erApplyLzToRows o import próprio continua tendo precedência sobre o scan.
-      var candUids = parts.filter(function (p) {
-        var prof = p.uid && byUid[p.uid];
-        return prof && prof.letzplayHandle;
-      }).map(function (p) { return p.uid; });
+      /* ⛔ CANDIDATOS = TODO INSCRITO COM UID, e não só quem tem @ no perfil. Era este filtro que
+       * fazia a Análise nem BUSCAR o scan de quem tinha o perfil vazio — e, aposentada a porta que
+       * gravava o @ no perfil, ele apagaria a cor de todo mundo ao recarregar. A busca já é em
+       * lote: custa um documento por inscrito, do tamanho do elenco. */
+      var candUids = parts.filter(function (p) { return !!p.uid; }).map(function (p) { return p.uid; });
       _fetchGlobalScans(candUids).then(function (scanMap) {
         if (window.location.hash !== '#analise/' + tId) { _doneLoading(); return; }
         var rows = _buildRows(t, parts, fetchResult);
