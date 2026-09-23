@@ -627,10 +627,16 @@ if [[ -n "$_LISTA" ]]; then
   for _f in $_APOSENTADAS; do
     if echo "$_LISTA" | grep -q "$_f"; then
       echo "  ▸ aposentada ainda no ar: $_f — apagando…"
-      firebase functions:delete "$_f" --region us-central1 --project scoreplace-app --force || true
+      firebase functions:delete "$_f" --region us-central1 --project scoreplace-app --force \
+        || { echo "✗ falhei ao apagar $_f — abortando antes de publicar."; exit 1; }
     fi
   done
-  _LISTA2="$(firebase functions:list --project scoreplace-app 2>/dev/null || true)"
+  # ⛔ A RECONFERÊNCIA TAMBÉM ABORTA EM FALHA: engolir o erro aqui deixava `_LISTA2` vazia e o
+  # Hosting subia "sem encontrar nada" — falha ABERTA, a pior forma de trava.
+  if ! _LISTA2="$(firebase functions:list --project scoreplace-app 2>&1)"; then
+    echo "✗ não consegui reconferir as Functions — abortando."
+    exit 1
+  fi
   _VIVAS=""
   for _f in $_APOSENTADAS; do
     if echo "$_LISTA2" | grep -q "$_f"; then _VIVAS="$_VIVAS $_f"; fi

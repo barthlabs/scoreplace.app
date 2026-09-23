@@ -1367,8 +1367,12 @@ window._pGenderMembro = function (p, lado) {
   if (!p || typeof p !== 'object') return '';
   var campo = lado === 'p2' ? 'p2Gender' : 'p1Gender';
   if (window._generoDecididoPeloOrganizador(p, campo, campo + 'Source')) return p[campo];
+  /* ⛔ SEM MARCA, O PERFIL VEM ANTES DO VALOR LEGADO — igual ao individual. Eu tinha deixado o
+   * legado primeiro "para não mudar o que cada leitor fazia"; só que os leitores foram migrados
+   * para cá, e manter aquilo fazia um retrato VELHO vencer o perfil vivo bem onde a decisão passou
+   * a valer. Duas precedências no mesmo conceito é como o defeito volta. */
   var uid = lado === 'p2' ? p.p2Uid : p.p1Uid;
-  return p[campo] || (uid && window._genderForUid(uid)) || '';
+  return (uid && window._genderForUid(uid)) || p[campo] || '';
 };
 window._pBirth = function (p) { if (!p || typeof p !== 'object') return ''; return (p.uid && window._birthForUid(p.uid)) || p.birthDate || ''; };
 window._pSkillMap = function (p) { if (!p || typeof p !== 'object') return null; return (p.uid && window._skillMapForUid(p.uid)) || (p.skillBySport && typeof p.skillBySport === 'object' ? p.skillBySport : null); };

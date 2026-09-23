@@ -82,8 +82,14 @@ ok(window._pGender({ uid: 'u1', gender: 'misto', genderSource: 'organizador' }) 
   '⛔ `misto` marcado não vira gênero de pessoa: cai no perfil');
 ok(window._pGenderMembro({ p1Uid: 'u1', p1Gender: 'masculino', p1GenderSource: 'organizador' }, 'p1') === 'masculino',
   '⭐ por membro de dupla, idem');
-ok(window._pGenderMembro({ p1Uid: 'u1', p1Gender: 'masculino' }, 'p1') === 'masculino',
-  'sem marca, o membro mantém o que cada leitor já fazia (campo local)');
+/* ⛔ INVERTIDO: sem marca, o PERFIL vem antes do valor legado — igual ao individual. Eu havia
+ * deixado o legado primeiro "para não mudar o que cada leitor fazia"; só que os leitores foram
+ * migrados para este resolvedor, e manter aquilo fazia um retrato VELHO vencer o perfil vivo bem
+ * onde a decisão passou a valer. Duas precedências no mesmo conceito é como o defeito volta. */
+ok(window._pGenderMembro({ p1Uid: 'u1', p1Gender: 'masculino' }, 'p1') === 'feminino',
+  'sem marca, o PERFIL vence o valor legado do membro');
+ok(window._pGenderMembro({ p1Uid: 'zz', p1Gender: 'masculino' }, 'p1') === 'masculino',
+  '  → e sem perfil, o legado ainda serve de última âncora');
 
 /* ── A COROA de Rei/Rainha respeita a decisão ──────────────────────────────── */
 console.log('\n── Rei/Rainha: a coroa não pode ignorar a decisão do organizador ──');

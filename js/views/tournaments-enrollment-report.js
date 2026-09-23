@@ -2429,10 +2429,16 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       // Não dá pra depender do letzplayImport do perfil: ele é do PRÓPRIO dono e pode nem existir
       // (que roda depois) ou pelo login da própria pessoa — de novo fazendo a leitura do
       // organizador depender do inscrito. Vence o que tem MAIS jogos (mesma regra da CF).
-      var _fi = (r.uid && scanMap[r.uid] && scanMap[r.uid].fullImport) || null;
+      /* ⛔ SEM @ DECLARADO, CONTEÚDO DE SCAN NÃO PRODUZ VEREDITO (23/set/2026). Marcar
+       * `_lzAuthorized = false` não bastava: os ramos abaixo pintavam cor e `_lzVerified` a partir
+       * do scan mesmo assim — e o scan é gravável por QUALQUER conta no nome de qualquer pessoa.
+       * Um terceiro forjava o veredito que orienta a atribuição de categoria do organizador.
+       * ⚠️ O import do PRÓPRIO dono (`letzplayImport` no perfil) continua valendo: ele não é
+       * plantável — só a própria pessoa escreve o próprio perfil. */
+      var _fi = (r._lzAuthorized && r.uid && scanMap[r.uid] && scanMap[r.uid].fullImport) || null;
       var _own = prof && prof.letzplayImport;
       var li = _lzMelhorImport(_fi, _own);
-      var sc = (r.uid && scanMap[r.uid] && scanMap[r.uid].scan) ? scanMap[r.uid].scan : null;
+      var sc = (r._lzAuthorized && r.uid && scanMap[r.uid] && scanMap[r.uid].scan) ? scanMap[r.uid].scan : null;
       if (li) {
         var oc = li.officialCategory, band = li.rating && li.rating.band;
         // ── A EVIDÊNCIA MORA NO FOOTPRINT, NÃO EM `tournaments` ────────────────────

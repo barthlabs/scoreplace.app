@@ -206,7 +206,10 @@ esac
 # ⭐ CARIMBA — e SÓ o escopo que realmente foi publicado, SÓ em deploy de verdade.
 # ⛔ Carimbar em `--dry-run`, ou carimbar "backend" ao publicar o codebase `main`, faria o carimbo
 # provar o que não aconteceu: a web subiria contra Rules ou sorteio velhos com o portão verde.
-if [ "$DRY" != "1" ] && { [ "$ALVO" = "autodraw" ] || [ "$ALVO" = "all" ]; }; then
+# ⛔ E SÓ EM DEPLOY COMPLETO DO CODEBASE: com `--only X` publica-se UMA função, mas o carimbo diria
+# que todo o `functions-autodraw` está no ar no SHA mais novo — uma função alterada e não
+# selecionada continuaria velha com o portão verde.
+if [ "$DRY" != "1" ] && [ -z "${ONLY:-}" ] && { [ "$ALVO" = "autodraw" ] || [ "$ALVO" = "all" ]; }; then
   node "$(dirname "$0")/check-backend-publicado.js" --carimbar autodraw || true
 fi
 echo "✓ deploy alvejado concluído — conferir com: firebase functions:list --project $PROJECT"
