@@ -590,16 +590,24 @@ if ! _LISTA="$(firebase functions:list --project scoreplace-app 2>&1)"; then
   echo "$_LISTA" | tail -5
   exit 1
 fi
+# ⚠️ INSTRUIR A DELEÇÃO NÃO BASTA: quem instrui depende de alguém lembrar, e a função fica no ar
+# enquanto o repositório diz que fechou. Aqui o fluxo APAGA o que achar e CONFERE de novo.
+for _f in $_APOSENTADAS; do
+  if echo "$_LISTA" | grep -q "$_f"; then
+    echo "  ▸ aposentada ainda no ar: $_f — apagando…"
+    firebase functions:delete "$_f" --region us-central1 --project scoreplace-app --force || true
+  fi
+done
+if ! _LISTA2="$(firebase functions:list --project scoreplace-app 2>&1)"; then
+  echo "✗ não consegui reconferir a lista das Functions — abortando."
+  exit 1
+fi
 _VIVAS=""
 for _f in $_APOSENTADAS; do
-  if echo "$_LISTA" | grep -q "$_f"; then _VIVAS="$_VIVAS $_f"; fi
+  if echo "$_LISTA2" | grep -q "$_f"; then _VIVAS="$_VIVAS $_f"; fi
 done
 if [[ -n "$_VIVAS" ]]; then
-  echo "✗ AINDA NO AR:$_VIVAS"
-  echo "  Apague nominalmente antes de publicar:"
-  for _f in $_VIVAS; do
-    echo "    firebase functions:delete $_f --region us-central1 --project scoreplace-app --force"
-  done
+  echo "✗ AINDA NO AR depois da deleção:$_VIVAS — abortando antes de publicar."
   exit 1
 fi
 echo "  ✓ nenhuma das três está publicada"

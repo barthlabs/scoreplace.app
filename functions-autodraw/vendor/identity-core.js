@@ -404,6 +404,11 @@ function _stripUidEntryNames(p) {
     if (!o || typeof o !== 'object') return;
     if (_decidiuOrganizador(o, campo, campoFonte)) return;          // par válido: fica inteiro
     if (Object.prototype.hasOwnProperty.call(o, campoFonte)) delete o[campoFonte];
+    /* ⛔ E O VALOR INVÁLIDO SAI JUNTO quando a marca existia — senão sobra `misto` (ou lixo) como
+     * gênero da pessoa, agora sem marca, e o leitor o trataria como retrato do perfil. Limpar só a
+     * marca é meio conserto: era o que este caminho fazia com o cache FRIO. */
+    if (o[campoFonte] === undefined && !_GENEROS_DE_PESSOA[o[campo]]
+      && Object.prototype.hasOwnProperty.call(o, campo)) delete o[campo];
   };
   var _delProfile = function (o) {
     _PROFILE_FIELDS.forEach(function (f) {

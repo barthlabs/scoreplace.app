@@ -85,6 +85,39 @@ ok(window._pGenderMembro({ p1Uid: 'u1', p1Gender: 'masculino', p1GenderSource: '
 ok(window._pGenderMembro({ p1Uid: 'u1', p1Gender: 'masculino' }, 'p1') === 'masculino',
   'sem marca, o membro mantém o que cada leitor já fazia (campo local)');
 
+/* ── A COROA de Rei/Rainha respeita a decisão ──────────────────────────────── */
+console.log('\n── Rei/Rainha: a coroa não pode ignorar a decisão do organizador ──');
+{
+  /* ⛔ É AQUI QUE A DECISÃO MAIS APARECE: a coroa. Sem esta precedência, o organizador define o
+   * gênero e o torneio coroa pelo perfil — decisão que não vale onde ela é vista. */
+  /* ⚠️ `eval` de declaração de função dentro de bloco não a expõe fora do escopo do eval — por isso
+   * a função é devolvida por expressão, e não "declarada e usada depois". */
+  const bl = fs.readFileSync(path.join(RAIZ, 'js/views/bracket-logic.js'), 'utf8');
+  const fonte = bl.slice(bl.indexOf('function _monarchGenderOf'), bl.indexOf('// Espalha a MINORIA'));
+  const _monarchGenderOf = eval('(' + fonte.slice(0, fonte.lastIndexOf('}') + 1) + ')');
+  window._displayNameForUid = function (uid, n) { return n; };
+  const t = { participants: [
+    { uid: 'u1', displayName: 'Solo', gender: 'masculino', genderSource: 'organizador' },
+    { p1Uid: 'u1', p1Name: 'Membro', p1Gender: 'masculino', p1GenderSource: 'organizador',
+      p2Uid: 'zz', p2Name: 'Outro', p2Gender: 'feminino' },
+  ] };
+  ok(_monarchGenderOf(t, 'Solo') === 'm', '⭐ solo: a decisão do organizador vence o perfil (que diz feminino)');
+  ok(_monarchGenderOf(t, 'Membro') === 'm', '⭐ membro de dupla: idem, pela marca do próprio membro');
+  ok(_monarchGenderOf(t, 'Outro') === 'f', 'sem marca, segue como antes');
+  const tMisto = { participants: [{ uid: 'u1', displayName: 'X', gender: 'misto', genderSource: 'organizador' }] };
+  ok(_monarchGenderOf(tMisto, 'X') === 'f', '⛔ `misto` marcado não coroa ninguém: cai no perfil');
+}
+
+/* ── O sanitizador com cache FRIO tira o par INTEIRO ───────────────────────── */
+console.log('\n── cache frio: valor inválido não fica órfão ──');
+{
+  window._nameForUid = function () { return ''; };
+  const e = limpar({ uid: 'u1', gender: 'misto', genderSource: 'organizador' });
+  ok(e.gender === undefined && e.genderSource === undefined,
+    '⛔ com o cache vazio, `misto` sai INTEIRO — limpar só a marca deixaria lixo passando por perfil');
+  window._nameForUid = function () { return 'Fulano'; };
+}
+
 /* ── As portas não escrevem mais perfil ────────────────────────────────────── */
 console.log('\n── as duas portas do sorteio não tocam em perfil de ninguém ──');
 const ad = fs.readFileSync(path.join(RAIZ, 'functions-autodraw/index.js'), 'utf8');

@@ -287,8 +287,11 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         // t.participants, _duplaSide = 'p1'/'p2') pra o SAVE conseguir gravar o gênero
         // de volta (p1Gender/p2Gender no doc da dupla). Lê o override per-membro que já
         // exista (p1Gender/p2Gender) pra o relatório mostrar o que foi atribuído.
-        out.push({ uid: p.p1Uid || '', displayName: p.p1Name, name: p.p1Name, email: p.p1Email || '', categories: baseCats.slice(), category: p.category || '', gender: p.p1Gender || '', genderSource: p.p1Gender ? 'organizador' : '', _fromDupla: true, _duplaIdx: idx, _duplaSide: 'p1' });
-        out.push({ uid: p.p2Uid || '', displayName: p.p2Name, name: p.p2Name, email: p.p2Email || '', categories: baseCats.slice(), category: p.category || '', gender: p.p2Gender || '', genderSource: p.p2Gender ? 'organizador' : '', _fromDupla: true, _duplaIdx: idx, _duplaSide: 'p2' });
+        /* ⛔ VALOR LEGADO NÃO É DECISÃO (23/set/2026). Isto marcava QUALQUER `pNGender` antigo como
+         * "do organizador" — e com a precedência nova isso poria gênero velho da dupla ACIMA do
+         * perfil vivo. A marca agora é a do próprio membro, que a porta grava junto do valor. */
+        out.push({ uid: p.p1Uid || '', displayName: p.p1Name, name: p.p1Name, email: p.p1Email || '', categories: baseCats.slice(), category: p.category || '', gender: p.p1Gender || '', genderSource: p.p1GenderSource === 'organizador' ? 'organizador' : '', _fromDupla: true, _duplaIdx: idx, _duplaSide: 'p1' });
+        out.push({ uid: p.p2Uid || '', displayName: p.p2Name, name: p.p2Name, email: p.p2Email || '', categories: baseCats.slice(), category: p.category || '', gender: p.p2Gender || '', genderSource: p.p2GenderSource === 'organizador' ? 'organizador' : '', _fromDupla: true, _duplaIdx: idx, _duplaSide: 'p2' });
       } else {
         out.push(p);
       }

@@ -5274,16 +5274,28 @@ function _monarchGenderOf(t, nome) {
   var parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
   for (var i = 0; i < parts.length; i++) {
     var p = parts[i]; if (!p) continue;
+    /* ⛔ A DECISÃO MARCADA DO ORGANIZADOR VEM ANTES DO PERFIL (23/set/2026) — e aqui ela decide a
+     * COROA. As portas do sorteio pararam de empurrar gênero ao perfil de terceiro, então a decisão
+     * vive no inscrito com `genderSource`/`pNGenderSource`. Sem esta preferência, Rei/Rainha
+     * continuaria coroando pelo gênero do perfil e a decisão não valeria onde mais aparece.
+     * ⛔ `misto` nunca é gênero de pessoa: é categoria. */
+    var _GEN_OK = { feminino: 1, masculino: 1, outro: 1 };
+    var _decidido = function (obj, campo, fonte) {
+      return (obj && obj[fonte] === 'organizador' && _GEN_OK[obj[campo]] === 1) ? obj[campo] : '';
+    };
     var cands = [
-      { n: p.displayName || p.name, uid: p.uid, g: p.gender },
-      { n: p.p1Name, uid: p.p1Uid, g: p.p1Gender || p.gender },
-      { n: p.p2Name, uid: p.p2Uid, g: p.p2Gender || p.gender }
+      { n: p.displayName || p.name, uid: p.uid, g: p.gender, dec: _decidido(p, 'gender', 'genderSource') },
+      { n: p.p1Name, uid: p.p1Uid, g: p.p1Gender || p.gender,
+        dec: _decidido(p, 'p1Gender', 'p1GenderSource') || _decidido(p, 'gender', 'genderSource') },
+      { n: p.p2Name, uid: p.p2Uid, g: p.p2Gender || p.gender,
+        dec: _decidido(p, 'p2Gender', 'p2GenderSource') || _decidido(p, 'gender', 'genderSource') }
     ];
     for (var k = 0; k < cands.length; k++) {
       var c = cands[k];
       var nm = (c.n && typeof window._displayNameForUid === 'function') ? window._displayNameForUid(c.uid, c.n) : c.n;
       if (!nm || String(nm).trim().toLowerCase() !== alvo) continue;
-      var g = (c.uid && typeof window._genderForUid === 'function' && window._genderForUid(c.uid)) || c.g || '';
+      /* ⛔ DECIDIDO PELO ORGANIZADOR VENCE: só depois dele vem o perfil, e por último o campo solto. */
+      var g = c.dec || (c.uid && typeof window._genderForUid === 'function' && window._genderForUid(c.uid)) || c.g || '';
       g = String(g).toLowerCase().trim();
       // "misto" é CATEGORIA, não gênero de pessoa — não serve pra equilibrar nada.
       if (g.indexOf('misto') === 0) return '';
