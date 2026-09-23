@@ -382,11 +382,43 @@ function _stripUidEntryNames(p) {
   // enrollSeq, category/categories/categorySource (atribuição do TORNEIO, não perfil),
   // ligaActive, selfEnrolled, addedAt, p1Uid/p2Uid. Guest sem uid = intacto (nome é a identidade).
   var _PROFILE_FIELDS = ['email', 'phone', 'gender', 'birthDate', 'skillBySport', 'defaultCategory', 'photoURL'];
-  var _delProfile = function (o) { _PROFILE_FIELDS.forEach(function (f) { if (Object.prototype.hasOwnProperty.call(o, f)) delete o[f]; }); };
+  /* ⭐ 23/set/2026 — O GÊNERO DECIDIDO PELO ORGANIZADOR SOBREVIVE AO SAVE.
+   *
+   * ⛔ POR QUE. As portas do sorteio pararam de escrever gênero no perfil global de terceiro (ser
+   * organizador não prova consentimento). A decisão dele agora vive AQUI, no inscrito, marcada com
+   * `genderSource: 'organizador'` — e este sanitizador apagava justamente o campo de quem tem uid.
+   * Sem esta exceção, a decisão evaporava no PRÓXIMO SAVE e o conserto viraria enfeite.
+   *
+   * ⛔ E ELE TRATA O PAR, NÃO O CAMPO: sem `{gênero válido + marca}` os DOIS saem. Marca órfã
+   * (fonte sem valor) viraria "o organizador decidiu" sem valor nenhum, e valor sem marca é o
+   * retrato velho do perfil, que é o que este sanitizador existe para tirar.
+   * ⛔ `misto` NUNCA é gênero de pessoa (é categoria) — cânone do projeto, com teste próprio. */
+  var _GENEROS_DE_PESSOA = { feminino: 1, masculino: 1, outro: 1 };
+  var _decidiuOrganizador = function (o, campo, campoFonte) {
+    return !!(o && o[campoFonte] === 'organizador'
+      && typeof o[campo] === 'string' && _GENEROS_DE_PESSOA[o[campo]] === 1);
+  };
+  /* Roda ANTES de qualquer ramo de `_resolves`: com o cache de perfis frio aquele caminho nem é
+   * percorrido, e a limpeza do par não aconteceria. */
+  var _sanearParDeGenero = function (o, campo, campoFonte) {
+    if (!o || typeof o !== 'object') return;
+    if (_decidiuOrganizador(o, campo, campoFonte)) return;          // par válido: fica inteiro
+    if (Object.prototype.hasOwnProperty.call(o, campoFonte)) delete o[campoFonte];
+  };
+  var _delProfile = function (o) {
+    _PROFILE_FIELDS.forEach(function (f) {
+      if (f === 'gender' && _decidiuOrganizador(o, 'gender', 'genderSource')) return;
+      if (Object.prototype.hasOwnProperty.call(o, f)) delete o[f];
+    });
+  };
+  /* ⛔ FORA do ramo de perfil, de propósito (ver acima): par inválido ou marca órfã saem sempre. */
+  _sanearParDeGenero(q, 'gender', 'genderSource');
+  _sanearParDeGenero(q, 'p1Gender', 'p1GenderSource');
+  _sanearParDeGenero(q, 'p2Gender', 'p2GenderSource');
   var isPair = !!(q.p1Uid || q.p2Uid || q.p1Name || q.p2Name);
   if (isPair) {
-    if (_resolves(q.p1Uid)) { delete q.p1Name; delete q.p1Gender; }   // membro 1 tem perfil → vem de lá
-    if (_resolves(q.p2Uid)) { delete q.p2Name; delete q.p2Gender; }   // membro 2 tem perfil → idem
+    if (_resolves(q.p1Uid)) { delete q.p1Name; if (!_decidiuOrganizador(q, 'p1Gender', 'p1GenderSource')) delete q.p1Gender; }
+    if (_resolves(q.p2Uid)) { delete q.p2Name; if (!_decidiuOrganizador(q, 'p2Gender', 'p2GenderSource')) delete q.p2Gender; }
     // name/displayName da dupla é o teamString derivado ("A / B") → o display reconstrói
     // via _entryDisplayName (p1Uid vivo / p2Uid vivo / p*Name só do guest). Remove sempre
     // que ao menos um membro tem perfil (o outro, se guest/órfão, resolve pelo p*Name mantido).

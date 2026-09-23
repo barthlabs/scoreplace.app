@@ -287,17 +287,25 @@ function _enrichParticipantsFromProfiles(t) {
     if (!Object.keys(prof).length) return;
     const _one = (p) => {
       if (!p || typeof p !== 'object') return;
+      /* ⛔ A DECISÃO DO ORGANIZADOR NÃO É SOBRESCRITA PELO PERFIL (23/set/2026). As portas pararam
+       * de empurrar gênero para o perfil de terceiro; a decisão vive no inscrito, marcada. Sem esta
+       * guarda, a hidratação a apagaria aqui e o SORTEIO usaria o gênero do perfil — regressão
+       * silenciosa, no pior lugar. ⛔ `misto` nunca é gênero de pessoa. */
+      const _GEN_OK = { feminino: 1, masculino: 1, outro: 1 };
+      const _doOrg = (o, campo, fonte) => !!(o && o[fonte] === 'organizador' && _GEN_OK[o[campo]] === 1);
       const d = p.uid && prof[p.uid];
       if (d) {
-        if (d.gender) p.gender = d.gender;
+        if (d.gender && !_doOrg(p, 'gender', 'genderSource')) p.gender = d.gender;
         if (d.skillBySport && typeof d.skillBySport === 'object') p.skillBySport = d.skillBySport;
         if (d.birthDate) p.birthDate = d.birthDate;
         if (d.defaultCategory) p.defaultCategory = d.defaultCategory;
         if (d.email) p.email = d.email;
         if (d.phone) p.phone = d.phone;
       }
-      const d1 = p.p1Uid && prof[p.p1Uid]; if (d1 && d1.gender) p.p1Gender = d1.gender;
-      const d2 = p.p2Uid && prof[p.p2Uid]; if (d2 && d2.gender) p.p2Gender = d2.gender;
+      const d1 = p.p1Uid && prof[p.p1Uid];
+      if (d1 && d1.gender && !_doOrg(p, 'p1Gender', 'p1GenderSource')) p.p1Gender = d1.gender;
+      const d2 = p.p2Uid && prof[p.p2Uid];
+      if (d2 && d2.gender && !_doOrg(p, 'p2Gender', 'p2GenderSource')) p.p2Gender = d2.gender;
     };
     ['participants', 'standbyParticipants', 'waitlist'].forEach((k) => { if (Array.isArray(t[k])) t[k].forEach(_one); });
   } catch (e) { /* best-effort */ }
@@ -2821,7 +2829,7 @@ exports.applyEnrollmentAssignments = onCall(async (request) => {
   return db.runTransaction(async tx=>{
     const t=await _leTorneio(tx,ref,tId); if(!t) throw new HttpsError('not-found','Torneio não encontrado.');
     if(!_isTournamentAdmin(t,uid)) throw _drawFail('permission-denied','Só a organização altera inscrições.',{tId,uid});
-    const before=_antesDoMotor(t), valid=new Set(Array.isArray(t.combinedCategories)?t.combinedCategories:[]); let changed=0,profiles={};
+    const before=_antesDoMotor(t), valid=new Set(Array.isArray(t.combinedCategories)?t.combinedCategories:[]); let changed=0;
     const find=(arr,e)=>{let hit=null; (arr||[]).forEach(p=>{if(hit||!p||typeof p!=='object')return; const u=[p.uid,p.p1Uid,p.p2Uid].filter(Boolean).map(String); if(Array.isArray(p.participants))p.participants.forEach(q=>q&&q.uid&&u.push(String(q.uid))); if(e.uid?u.includes(e.uid):(!u.length&&e.name&&(p.name===e.name||p.displayName===e.name)))hit=p;});return hit;};
     for(const e of clean){const pools=e.waitlist?[t.waitlist,t.standbyParticipants,t.monarchWaitlist]:[t.participants]; let target=null; for(const pool of pools){target=find(pool,e);if(target)break;} if(!target) continue;
       if(e.gender!==undefined){if(e.pairMember){if(e.gender)target[e.pairMember+'Gender']=e.gender;else delete target[e.pairMember+'Gender'];}else if(e.gender){target.gender=e.gender;target.genderSource='organizador';}else{delete target.gender;delete target.genderSource;} changed++;}
@@ -2829,20 +2837,19 @@ exports.applyEnrollmentAssignments = onCall(async (request) => {
       const profileUid=e.uid||((e.pairMember&&target[e.pairMember+'Uid'])||target.uid);
       // Uma dupla pode ter duas alterações na mesma chamada. Junta por UID antes de
       // escrever: assim cada perfil recebe uma única atualização transacional.
-      /* ⛔ 23/set/2026 — A CATEGORIA PAROU DE INVADIR O PERFIL GLOBAL. Decisão do dono: o que o
-       * organizador define vale DENTRO do torneio; o perfil é da pessoa. E o mapa só ganha entrada
-       * quando há GÊNERO: com `e.category` aqui, uma atribuição só de categoria ainda carimbava
-       * `profileSetAt` no perfil de terceiro — "mexeram no seu cadastro" sem ninguém ter mexido em
-       * nada que importe.
-       * ⚠️ O GÊNERO CONTINUA sendo gravado, de propósito: hoje ele só "cola" no sorteio porque foi
-       * empurrado ao perfil — 19 arquivos leem gênero, cada um com precedência própria, e tirar a
-       * escrita sem migrar todos regrediria o sorteio em silêncio. Isso é consolidação própria.
+      /* ⛔ 23/set/2026 — NADA DO ORGANIZADOR ENTRA NO PERFIL GLOBAL. Primeiro saiu a categoria;
+       * agora sai o GÊNERO, que era o último. Decisão do dono: o que o organizador define vale
+       * DENTRO do torneio; o perfil é da pessoa. E ser organizador não prova consentimento —
+       * inscrever terceiro é fluxo suportado (`selfEnrolled:false`, `addedByUid`).
+       * ⭐ MEDIDO ANTES DE TIRAR, em toda a base: 181 slots com uid, **zero** divergências entre o
+       * gênero do inscrito e o do perfil (174 só têm no perfil, 2 iguais). Ou seja, a escrita não
+       * estava sustentando nada — o medo dos "19 leitores" era teórico.
+       * ⚠️ Para a decisão NOVA do organizador valer no sorteio, quem decide é `genderSource` no
+       * inscrito, respeitado pelo sanitizador e pelas duas hidratações.
        * [[project_categoria_do_organizador_vale_no_torneio]] */
-      if(profileUid&&e.gender){const k=String(profileUid), prior=profiles[k]||{uid:k}; prior.gender=e.gender; profiles[k]=prior;}
     }
-    /* ⛔ SÓ GÊNERO. O ramo de categoria saiu daqui em 23/set/2026 (ver acima): a categoria do
-     * organizador vive no torneio, não no perfil global de terceiro. */
-    for(const k of Object.keys(profiles)){const a=profiles[k], uref=db.collection('users').doc(a.uid), us=await tx.get(uref); if(!us.exists)continue; if(!a.gender)continue; tx.update(uref,{gender:a.gender,genderSetBy:uid,profileSetAt:FieldValue.serverTimestamp()});}
+    /* ⚰️ O LAÇO QUE ESCREVIA `users/{uid}` SAIU INTEIRO em 23/set/2026 — categoria primeiro, gênero
+     * depois. Esta porta não toca mais em perfil de ninguém. */
     if(!changed)return {ok:true,changed:0}; const b=_gravaTorneio(tx,ref,t,before,{agoraIso}); return {ok:true,changed,tournament:b.clean};
   });
 });
@@ -3100,13 +3107,13 @@ exports.setDrawBalanceChoice = onCall(async (request) => {
       if (item.uid) return String(participant.uid || '') === item.uid;
       return !participant.uid && (String(participant.displayName || participant.name || '') === item.name);
     });
-    const profiles = new Map();
     for (const item of assignments) {
       const participant = find(item);
       if (!participant) continue;
       participant.gender = item.gender;
+      /* ⭐ A DECISÃO FICA AQUI, no inscrito, e é `genderSource` que a faz valer: o sanitizador
+       * preserva o par marcado e as duas hidratações não o sobrescrevem pelo perfil. */
       participant.genderSource = 'organizador';
-      if (item.uid) profiles.set(item.uid, item.gender);
     }
     // Os dois campos são consumidos por motores diferentes. Mantê-los juntos aqui
     // impede que a formação de duplas e o espalhamento por grupo leiam decisões opostas.
@@ -3120,10 +3127,9 @@ exports.setDrawBalanceChoice = onCall(async (request) => {
       else t.genderRatio = ratio;
       t.wlGroupBalance = locked ? 'equilibrado' : 'livre';
     }
-    for (const [profileUid, gender] of profiles) {
-      const userRef = db.collection('users').doc(profileUid), user = await tx.get(userRef);
-      if (user.exists) tx.update(userRef, { gender, genderSetBy: uid, profileSetAt: FieldValue.serverTimestamp() });
-    }
+    /* ⚰️ A ESCRITA NO PERFIL SAIU DAQUI em 23/set/2026, junto com a da outra porta. O equilíbrio da
+     * proporção é decisão DO TORNEIO; o gênero no cadastro global é da pessoa. Ser organizador não
+     * prova consentimento — inscrever terceiro é fluxo suportado. */
     const b = _gravaTorneio(tx, ref, t, before, { agoraIso });
     return { ok: true, changed: true, tournament: b.clean };
   });

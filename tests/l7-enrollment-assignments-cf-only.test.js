@@ -13,10 +13,13 @@ ok(a>=0&&srv.includes('db.runTransaction')&&srv.includes('_isTournamentAdmin')&&
  * Sem afirmar isso aqui, um corte errado (tirar os dois) passaria no teste. */
 ok(!srv.includes('skillBySport')&&!srv.includes('skillSetBy')&&!srv.includes('skillBySportSource'),
   '⛔ a categoria NÃO vai para o perfil global: nem o mapa, nem o carimbo, nem a marca de procedência');
-ok(srv.includes("collection('users')")&&srv.includes('genderSetBy')&&srv.includes('Object.keys(profiles)'),
-  '⚠️ o GÊNERO segue sendo gravado no perfil, uma vez por pessoa (a metade que ainda depende disso)');
-ok(srv.includes('profileUid&&e.gender'),
-  '⛔ e o perfil só é tocado quando há GÊNERO: atribuir só categoria não carimba cadastro alheio');
+/* ⛔ INVERTIDO DE NOVO, e agora até o fim: a escrita de GÊNERO no perfil também saiu (23/set).
+ * Medido antes de tirar: 181 slots com uid na base, ZERO divergências entre o gênero do inscrito e
+ * o do perfil — a escrita não sustentava nada. A decisão vale pelo `genderSource` no inscrito. */
+ok(!srv.includes("collection('users')") && !srv.includes('genderSetBy'),
+  '⛔ a porta NÃO escreve em perfil de terceiro: nem categoria, nem gênero, nem carimbo');
+ok(srv.includes("target.genderSource='organizador'"),
+  '⭐ e a decisão de gênero fica no INSCRITO, marcada com a procedência');
 ok(srv.includes('uncategorizedByOrganizer')&&srv.includes("target.categorySource='organizador'")&&srv.includes('target.wasUncategorized=true'),'remoção administrativa preserva no servidor a marca de inscrito sem categoria');
 ok(srv.includes('markWasUncategorized')&&srv.includes('notifyCategory')&&srv.includes('categoryNotifications')&&srv.includes('slice(-200)'),'atribuição direta preserva marca e limita o histórico de aviso na mesma transação');
 ok(fn.includes('exports.mergeTournamentCategories')&&fn.includes('_categoryMutationsCore.merge')&&fn.includes('_isTournamentAdmin'),'mesclagem relê e aplica o núcleo no servidor autorizado');

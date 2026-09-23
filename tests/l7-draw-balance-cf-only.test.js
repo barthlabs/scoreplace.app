@@ -13,6 +13,12 @@ const server = fs.readFileSync(path.join(root, 'functions-autodraw/index.js'), '
 const cf = block(server, 'exports.setDrawBalanceChoice = onCall', '\n// ─── Metadados');
 ok(/request\.auth/.test(cf) && /_isTournamentAdmin/.test(cf), 'Function exige autenticação e organização');
 ok(/db\.runTransaction/.test(cf) && /_leTorneio/.test(cf) && /_gravaTorneio/.test(cf), 'Function relê e grava o torneio fresco transacionalmente');
-ok(/participant\.gender/.test(cf) && /users'\)\.doc/.test(cf), 'Function atualiza inscrição e perfil de gênero juntos');
+/* ⛔ INVERTIDO EM 23/set/2026. Este caso exigia que o equilíbrio gravasse o gênero no PERFIL
+ * GLOBAL do inscrito — ou seja, exigia o defeito: ser organizador não prova consentimento, e
+ * inscrever terceiro é fluxo suportado, então qualquer conta reescrevia o cadastro da vítima.
+ * A decisão do organizador agora vive no INSCRITO, marcada com `genderSource`. */
+ok(/participant\.gender/.test(cf) && /genderSource/.test(cf),
+  'a decisão de gênero fica no INSCRITO, marcada com a procedência');
+ok(!/users'\)\.doc/.test(cf), '⛔ e a Function NÃO toca no perfil global de ninguém');
 ok(/t\._drawBalanceMode/.test(cf) && /t\.equilibrado/.test(cf) && /wlGroupBalance/.test(cf), 'Function mantém todos os campos consumidos pelo motor coerentes');
 process.exitCode = bad ? 1 : 0;

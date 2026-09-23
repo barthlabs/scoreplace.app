@@ -1347,7 +1347,29 @@ window._defaultCatForUid = function (uid) { var p = uid && window._userProfileCa
 // categoria-padrão pelo UID (perfil), FALLBACK pro campo gravado só enquanto a migração
 // "gravar só uid" não termina. Swap 1:1 nos leitores: p.gender→_pGender(p), etc. Meta:
 // parar de depender do snapshot gravado no inscrito. Ver project_uid_identity_canon_locked.
-window._pGender = function (p) { if (!p || typeof p !== 'object') return ''; return (p.uid && window._genderForUid(p.uid)) || p.gender || ''; };
+/* ⛔ A DECISÃO DO ORGANIZADOR VENCE O PERFIL (23/set/2026), e só ela: as portas do sorteio pararam
+ * de escrever gênero no perfil global de terceiro, então a decisão vive no inscrito, marcada com
+ * `genderSource: 'organizador'`. Sem marca, nada muda — o perfil continua vindo primeiro, como
+ * sempre. ⛔ `misto` nunca é gênero de pessoa: é categoria. */
+window._GENEROS_DE_PESSOA = { feminino: 1, masculino: 1, outro: 1 };
+window._generoDecididoPeloOrganizador = function (p, campo, fonte) {
+  return !!(p && typeof p === 'object' && p[fonte] === 'organizador'
+    && typeof p[campo] === 'string' && window._GENEROS_DE_PESSOA[p[campo]] === 1);
+};
+window._pGender = function (p) {
+  if (!p || typeof p !== 'object') return '';
+  if (window._generoDecididoPeloOrganizador(p, 'gender', 'genderSource')) return p.gender;
+  return (p.uid && window._genderForUid(p.uid)) || p.gender || '';
+};
+/* Irmã por MEMBRO de dupla — ela não existia, e é por isso que cada tela inventou a própria
+ * precedência. Sem marca, mantém o que cada leitor já fazia: o campo local do membro. */
+window._pGenderMembro = function (p, lado) {
+  if (!p || typeof p !== 'object') return '';
+  var campo = lado === 'p2' ? 'p2Gender' : 'p1Gender';
+  if (window._generoDecididoPeloOrganizador(p, campo, campo + 'Source')) return p[campo];
+  var uid = lado === 'p2' ? p.p2Uid : p.p1Uid;
+  return p[campo] || (uid && window._genderForUid(uid)) || '';
+};
 window._pBirth = function (p) { if (!p || typeof p !== 'object') return ''; return (p.uid && window._birthForUid(p.uid)) || p.birthDate || ''; };
 window._pSkillMap = function (p) { if (!p || typeof p !== 'object') return null; return (p.uid && window._skillMapForUid(p.uid)) || (p.skillBySport && typeof p.skillBySport === 'object' ? p.skillBySport : null); };
 window._pDefaultCat = function (p) { if (!p || typeof p !== 'object') return ''; return (p.uid && window._defaultCatForUid(p.uid)) || p.defaultCategory || ''; };

@@ -3941,11 +3941,18 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       var prof = r.uid && profileMap[r.uid];
       // ⛔ O organizador NÃO entra nos próprios alvos: varrer a si mesmo é auto-atestar
       // categoria, e a Rule recusa. Sem isto a linha dele falharia com permission-denied.
-      /* ⛔ O @ SAI DO RESOLVEDOR, não do perfil: depois que a porta que gravava `letzplayHandle`
-       * foi aposentada, filtrar pelo perfil deixaria violeta CLICÁVEL e impossível de revarrer. */
-      return !!window._lzHandleDe(prof, r.uid && (scanMap || {})[r.uid]) && window._lzNaoEhEuMesmo(r.uid);
+      /* ⛔ ALVO DE BUSCA SÓ COM @ DECLARADO PELO DONO — e isto é deliberado, contra a minha própria
+       * versão anterior. O @ do SCAN pode ter sido PLANTADO (qualquer conta escreve o scan de
+       * qualquer uid), e o alvo não é enfeite: ele vira navegação e raspagem na extensão
+       * (`lz-open-profile`, `run-athlete-import`). Promover valor plantado a alvo daria ao atacante
+       * o poder de fazer o app buscar o perfil que ELE escolher. "String não vazia" não é
+       * procedência.
+       * ⚠️ Preço declarado: quem tem @ só no scan aparece CONSULTÁVEL (a cor sai do scan) mas não é
+       * revarrido até declarar o @. Menos recurso, não menos segurança. */
+      return !!(prof && typeof prof.letzplayHandle === 'string' && prof.letzplayHandle.trim())
+        && window._lzNaoEhEuMesmo(r.uid);
     }).map(function (r) {
-      return { uid: r.uid, handle: window._lzHandleDe(profileMap[r.uid], (scanMap || {})[r.uid]), name: r.name };
+      return { uid: r.uid, handle: String(profileMap[r.uid].letzplayHandle).trim().replace(/^@+/, ''), name: r.name };
     });
     // v1.1.21: FIM do lote (Essencial/Completa em batch) — travava e não trazia nada.
     // A busca virou INDIVIDUAL: clicar num nome autorizado abre a tela de puxar o

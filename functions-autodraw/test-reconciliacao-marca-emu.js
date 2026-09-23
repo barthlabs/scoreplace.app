@@ -110,6 +110,12 @@ const perfil = async (uid) => (await db.collection('users').doc(uid).get()).data
   await db.collection('tournaments').doc(tDiv).collection('inscritos').doc(outro)
     .set({ _idx: 0, item: { uid: outro, displayName: 'Inscrito 2', category: 'B', categories: ['B'] } });
 
+  const retratoDoPerfil = async (uid) => {
+    const u = (await db.collection('users').doc(uid).get()).data() || {};
+    return JSON.stringify({ skillBySport: u.skillBySport || null, skillBySportSource: u.skillBySportSource || null,
+      gender: u.gender || null, genderSetBy: u.genderSetBy || null, skillSetBy: u.skillSetBy || null,
+      profileSetAt: String(u.profileSetAt || '') });
+  };
   const antes = (await db.collection('users').doc(outro).get()).data() || {};
   r = await chamar('applyEnrollmentAssignments', tokenOrg, {
     tournamentId: tDiv, sport: 'Beach Tennis', edits: [{ uid: outro, category: 'A' }],
@@ -125,18 +131,27 @@ const perfil = async (uid) => (await db.collection('users').doc(uid).get()).data
   ok(JSON.stringify(Object.keys(depois).sort()) === JSON.stringify(Object.keys(antes).sort()),
     '⛔ o documento do perfil não ganhou nem perdeu campo');
 
-  console.log('\n── SÓ GÊNERO: essa metade SEGUE de pé ──');
-  /* ⚠️ O gênero continua indo ao perfil DE PROPÓSITO: hoje ele só "cola" no sorteio porque foi
-   * empurrado para lá. Sem este caso, um corte errado (tirar os dois) passaria despercebido. */
+  console.log('\n── SÓ GÊNERO: também não encosta no perfil (23/set) ──');
+  /* ⛔ INVERTIDO. Este caso exigia que o gênero FOSSE ao perfil global. Saiu: ser organizador não
+   * prova consentimento — inscrever terceiro é fluxo suportado, então qualquer conta reescrevia o
+   * cadastro da vítima. Medido antes de tirar: 181 slots com uid na base, ZERO divergências entre o
+   * gênero do inscrito e o do perfil. A decisão dele vive no INSCRITO, marcada. */
+  const antesDoGenero = await retratoDoPerfil(outro);
   r = await chamar('applyEnrollmentAssignments', tokenOrg, {
     tournamentId: tDiv, sport: 'Beach Tennis', edits: [{ uid: outro, gender: 'masculino' }],
   });
   ok(r.status === 200, 'atribuição só de gênero respondeu 200 (' + r.status + ')');
-  const comGenero = (await db.collection('users').doc(outro).get()).data() || {};
-  ok(comGenero.gender === 'masculino', 'o gênero FOI gravado no perfil');
-  ok(comGenero.genderSetBy === org, 'com o carimbo de quem atribuiu');
-  ok(!!comGenero.profileSetAt, 'e aí sim `profileSetAt` existe');
-  eq(comGenero.skillBySport, antes.skillBySport, '⛔ e a categoria do perfil continua intacta');
+  ok((await retratoDoPerfil(outro)) === antesDoGenero,
+    '⛔⛔ o perfil do alvo ficou BYTE A BYTE igual — nem gênero, nem carimbo, nem data');
+  const tDepois = (await db.collection('tournaments').doc(tDiv).get()).data() || {};
+  /* ⚠️ A CHAVE do documento da parte é decidida pelo motor (`chaveDoInscrito`), não é o uid — por
+   * isso se varre a subcoleção em vez de adivinhar o id. */
+  const subDepois = await db.collection('tournaments').doc(tDiv).collection('inscritos').get();
+  let alvoNoElenco = null;
+  subDepois.docs.forEach((d) => { const it = (d.data() || {}).item || {}; if (it.uid === outro) alvoNoElenco = it; });
+  if (!alvoNoElenco) alvoNoElenco = (tDepois.participants || []).find((x) => x && x.uid === outro) || {};
+  ok(alvoNoElenco.gender === 'masculino', '⭐ e a decisão vale NO TORNEIO');
+  ok(alvoNoElenco.genderSource === 'organizador', '⭐ marcada com a procedência, que é o que a faz valer');
 
   console.log('\n── sem token a porta não abre ──');
   r = await chamar('applyEnrollmentAssignments', null, {
