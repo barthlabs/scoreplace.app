@@ -401,11 +401,20 @@ function _formDoublesTeams(origParticipants, teamSize, teamOrigins, balanceMode)
     });
     var displayName = subs.map(function(s) { return s.displayName || s.name || ''; }).join(' / ');
     var obj = { displayName: displayName, name: displayName, participants: subs };
+    /* ⛔ A DECISÃO DE GÊNERO DO ORGANIZADOR ATRAVESSA A FORMAÇÃO DA DUPLA (23/set/2026). Cada
+     * membro entra aqui como inscrito individual, e se o par {valor, marca} não for projetado para
+     * `pNGender`/`pNGenderSource` a decisão some ao formar a dupla — e o sanitizador, que exige a
+     * marca, apagaria o resto no save seguinte. ⛔ `misto` nunca é gênero de pessoa. */
+    var _GEN_OK = { feminino: 1, masculino: 1, outro: 1 };
     subs.forEach(function(s, i) {
       obj['p' + (i + 1) + 'Name'] = s.displayName || s.name || '';
       if (s.uid) obj['p' + (i + 1) + 'Uid'] = s.uid;        // uid AUTORITATIVO do objeto
       if (s.email) obj['p' + (i + 1) + 'Email'] = s.email;
       if (s.photoURL) obj['p' + (i + 1) + 'Photo'] = s.photoURL;
+      if (s.genderSource === 'organizador' && _GEN_OK[s.gender] === 1) {
+        obj['p' + (i + 1) + 'Gender'] = s.gender;
+        obj['p' + (i + 1) + 'GenderSource'] = 'organizador';
+      }
     });
     return obj;
   }
@@ -606,8 +615,23 @@ window._buildPhase0Pool = function (t, isMon, ts) {
       if (p && typeof p === 'object' && Array.isArray(p.participants) && p.participants.length) {
         p.participants.forEach(function (s) { var nm = (s && (s.displayName || s.name)) || String(s || ''); pool.push((s && typeof s === 'object') ? Object.assign({ displayName: nm }, s) : { displayName: nm }); });
       } else if (p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) {
-        pool.push({ displayName: (window._displayNameForUid ? window._displayNameForUid(p.p1Uid, p.p1Name) : (p.p1Name || p.p1Uid || '')), uid: p.p1Uid || null, name: p.p1Name || null, gender: p.p1Gender || (p.p1Uid && window._genderForUid(p.p1Uid)) || p.gender });
-        pool.push({ displayName: (window._displayNameForUid ? window._displayNameForUid(p.p2Uid, p.p2Name) : (p.p2Name || p.p2Uid || '')), uid: p.p2Uid || null, name: p.p2Name || null, gender: p.p2Gender || (p.p2Uid && window._genderForUid(p.p2Uid)) || p.gender });
+        /* ⛔ AQUI A DUPLA VIRA PESSOAS DE NOVO, e é onde a decisão do organizador se perdia: o
+         * `pNGender` entrava SEM a marca, o sanitizador o apagaria no save seguinte, e antes disso
+         * um valor LEGADO sem marca venceria o perfil vivo. Então o par viaja junto — e só ele
+         * ganha precedência; sem marca, o perfil vem primeiro, como em todo o resto. */
+        var _GEN_OK = { feminino: 1, masculino: 1, outro: 1 };
+        var _lado = function (n) {
+          var g = p['p' + n + 'Gender'], f = p['p' + n + 'GenderSource'];
+          var uid = p['p' + n + 'Uid'];
+          var decidido = (f === 'organizador' && _GEN_OK[g] === 1);
+          var o = { displayName: (window._displayNameForUid ? window._displayNameForUid(uid, p['p' + n + 'Name']) : (p['p' + n + 'Name'] || uid || '')),
+            uid: uid || null, name: p['p' + n + 'Name'] || null,
+            gender: decidido ? g : ((uid && window._genderForUid(uid)) || g || p.gender) };
+          if (decidido) o.genderSource = 'organizador';
+          return o;
+        };
+        pool.push(_lado(1));
+        pool.push(_lado(2));
       } else {
         var nm = _pName(p); pool.push((typeof p === 'object') ? Object.assign({ displayName: nm }, p) : { displayName: nm });
       }

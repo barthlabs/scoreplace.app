@@ -64,7 +64,7 @@ ok(typeof window._stripStoredNamesForUidEntries === 'function',
 
 /* ── O resolvedor do cliente ───────────────────────────────────────────────── */
 console.log('\n── o resolvedor: decidido vence o perfil; sem marca, nada muda ──');
-const perfis = { u1: { gender: 'feminino' } };
+const perfis = { u1: { gender: 'feminino' }, u2: { gender: 'feminino' } };
 global.window._userProfileCache = perfis;
 global.window._genderForUid = function (uid) { const p = uid && perfis[uid]; return (p && p.gender) || ''; };
 const storeSrc = fs.readFileSync(path.join(RAIZ, 'js/store.js'), 'utf8');
@@ -129,6 +129,41 @@ console.log('\n── cache frio: valor inválido não fica órfão ──');
   const e4 = limpar({ p1Uid: 'a', p1Gender: 'masculino', p2Uid: 'b' });
   ok(e4.p1Gender === 'masculino', 'sem fonte alguma, o valor legado do membro permanece');
   window._nameForUid = function () { return 'Fulano'; };
+}
+
+/* ── FORMAR e DESFAZER a dupla não perdem a decisão ────────────────────────── */
+console.log('\n── a decisão atravessa formar/desfazer dupla ──');
+{
+  /* ⛔ É a transição que perde dado, não o estado parado: dois solos marcados viram uma dupla
+   * (`mkTeamObj`) e depois voltam a ser pessoas (`_buildPhase0Pool`). Se o par {valor, marca} não
+   * viajar nas duas pontas, a decisão some — e o sanitizador apaga o resto no save seguinte. */
+  const td = fs.readFileSync(path.join(RAIZ, 'js/views/tournaments-draw.js'), 'utf8');
+  const fonteMk = td.slice(td.indexOf('function mkTeamObj'), td.indexOf('var individuals = []'));
+  const mkTeamObj = eval('(' + fonteMk.slice(0, fonteMk.lastIndexOf('}') + 1) + ')');
+  const dupla = mkTeamObj([
+    { uid: 'u1', displayName: 'Um', gender: 'masculino', genderSource: 'organizador' },
+    { uid: 'u2', displayName: 'Dois', gender: 'feminino' },
+  ]);
+  ok(dupla.p1Gender === 'masculino' && dupla.p1GenderSource === 'organizador',
+    '⭐ FORMAR: o par do membro marcado atravessa');
+  ok(dupla.p2Gender === undefined, 'e o membro sem marca não ganha marca nenhuma');
+  /* O sanitizador não pode desfazer o que a formação acabou de preservar. */
+  const salva = limpar(dupla);
+  ok(salva.p1Gender === 'masculino' && salva.p1GenderSource === 'organizador',
+    '⭐ e sobrevive ao save');
+
+  const fontePool = td.slice(td.indexOf('window._buildPhase0Pool = function'), td.indexOf('// INCREMENT 2'));
+  const _buildPhase0Pool = eval('(' + fontePool.slice(fontePool.indexOf('function'), fontePool.lastIndexOf('}') + 1) + ')');
+  window._pName = (p) => (typeof p === 'string' ? p : (p && (p.displayName || p.name)) || '');
+  const pool = _buildPhase0Pool({ participants: [salva] }, true, 1);
+  const um = pool.find((x) => x.uid === 'u1') || {};
+  const dois = pool.find((x) => x.uid === 'u2') || {};
+  ok(um.gender === 'masculino' && um.genderSource === 'organizador',
+    '⭐⭐ DESFAZER: a decisão volta com a pessoa, marcada');
+  /* ⚠️ Quem NÃO tinha marca volta sem gênero local — o save já o tirou, porque era retrato velho
+   * do perfil. Quem resolve é o resolvedor, pelo uid: é assim que o sorteio lê. */
+  ok(dois.gender === undefined, 'quem não tinha marca volta SEM gênero local (o save o tirou)');
+  ok(window._pGender(dois) === 'feminino', '  → e o resolvedor o traz do perfil, como sempre');
 }
 
 /* ── As portas não escrevem mais perfil ────────────────────────────────────── */
