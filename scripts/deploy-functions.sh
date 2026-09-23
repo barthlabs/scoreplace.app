@@ -203,4 +203,7 @@ case "$ALVO" in
   all)      do_main; do_autodraw; do_stripe ;;
   *) die "uso: scripts/deploy-functions.sh [main|autodraw|stripe|all] [--dry-run] [--only nome[,nome]]" ;;
 esac
+# ⭐ CARIMBA: o backend foi publicado depois da última mudança nele. Quem confere é o publicador
+# da web, que se recusa a subir tela nova contra servidor velho.
+node "$(dirname "$0")/check-backend-publicado.js" --carimbar || true
 echo "✓ deploy alvejado concluído — conferir com: firebase functions:list --project $PROJECT"

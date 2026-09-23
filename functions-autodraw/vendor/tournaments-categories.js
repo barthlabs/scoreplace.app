@@ -550,8 +550,15 @@ window._entryGenderList = function(p) {
     if (uids.length === 0) push(p.uid);
     // Guest (sem conta, sem uid): só o gênero gravado na inscrição.
     if (uids.length === 0) return [canon(p.gender)];
+    /* ⛔ PELO RESOLVEDOR CENTRAL, não pelo perfil cru (23/set/2026): é esta contagem que decide
+     * categoria mista e elegibilidade, e ignorar a decisão do organizador punha a tela contra o
+     * sorteio. Sem marca, o resolvedor devolve o perfil — comportamento de sempre. */
     return uids.map(function(u) {
-        var g = (typeof window._genderForUid === 'function') ? window._genderForUid(u) : '';
+        var g = '';
+        if (u === p.p1Uid && window._pGenderMembro) g = window._pGenderMembro(p, 'p1');
+        else if (u === p.p2Uid && window._pGenderMembro) g = window._pGenderMembro(p, 'p2');
+        else if (u === p.uid && window._pGender) g = window._pGender(p);
+        if (!g && typeof window._genderForUid === 'function') g = window._genderForUid(u) || '';
         if (!g && u === p.uid) g = p.gender || '';   // fallback do doc legado
         return canon(g);
     });

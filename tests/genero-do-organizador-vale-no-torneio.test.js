@@ -190,6 +190,20 @@ console.log('\n── badge e filtro do membro de dupla ──');
     'valor legado sem marca NÃO vira decisão (ele perderia para o perfil, como sempre)');
 }
 
+/* ── O caminho LOCAL do equilíbrio também marca ────────────────────────────── */
+console.log('\n── equilíbrio local (editar torneio, sem persistir na hora) ──');
+{
+  /* ⛔ Este caminho grava em memória e só depois é salvo. Gravar só o valor fazia o sanitizador
+   * apagá-lo no save seguinte: a escolha sumia entre a tela e o banco. */
+  const td = fs.readFileSync(path.join(RAIZ, 'js/views/tournaments-draw.js'), 'utf8');
+  const i = td.indexOf('window._applyDrawBalanceChoice = function');
+  const trecho = td.slice(i, td.indexOf('t._drawBalanceMode = mode;', i));
+  ok(/p\.genderSource = 'organizador'/.test(trecho),
+    '⭐ a atribuição local grava a marca junto do valor');
+  ok(/delete p\.genderSource/.test(trecho),
+    '⛔ e limpar o gênero tira a marca junto (marca órfã viraria decisão sem decisão)');
+}
+
 /* ── As portas não escrevem mais perfil ────────────────────────────────────── */
 console.log('\n── as duas portas do sorteio não tocam em perfil de ninguém ──');
 const ad = fs.readFileSync(path.join(RAIZ, 'functions-autodraw/index.js'), 'utf8');

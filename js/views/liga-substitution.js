@@ -496,8 +496,11 @@ function _entryGender(t, entry) {
       ? ((window._participantUids(entry) || [])[0] || '')
       : (entry.uid || '');
   }
+  /* ⛔ RESOLVEDOR CENTRAL PRIMEIRO (23/set/2026): a escolha de suplente respeita a proporção, e a
+   * proporção tem de enxergar a decisão do organizador. Sem marca, cai no perfil, como antes. */
   var g = '';
-  if (u && typeof window._genderForUid === 'function') g = String(window._genderForUid(u) || '');
+  if (entry && typeof entry === 'object' && window._pGender) g = String(window._pGender(entry) || '');
+  if (!g && u && typeof window._genderForUid === 'function') g = String(window._genderForUid(u) || '');
   if (!g && entry && entry.gender) g = String(entry.gender);
   if (!g) {
     var src = entry;

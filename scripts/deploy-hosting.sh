@@ -586,6 +586,18 @@ cd "$DEST"
 #     scripts/deploy-hosting.sh        ⟵ por último: a tela nova tem de encontrar regra e servidor
 # ⚠️ O que ESTE script garante sozinho é a trava abaixo: nenhuma porta aposentada fica no ar.
 
+# MARCO: backend-carimbado
+# ⛔ A web não sobe sem o backend dela. Ver o cabeçalho de `check-backend-publicado.js`: é carimbo,
+# não publicação — publicar daqui derrubaria o ensaio que garante push-antes-de-upload.
+# ⚠️ A trava mora em arquivo próprio, e o ENSAIO do preflight copia só parte de `scripts/` — sem
+# esta guarda ele morre por arquivo ausente, não por backend atrasado. Na árvore real o arquivo
+# existe, então ela morde.
+if [[ -f scripts/check-backend-publicado.js ]]; then
+  node scripts/check-backend-publicado.js || exit 1
+else
+  echo "⚠️ trava de backend ausente nesta árvore — não conferido."
+fi
+
 # MARCO: portas-aposentadas-fora-do-ar
 # ⛔ APAGAR O EXPORT NÃO APAGA A FUNÇÃO PUBLICADA. O deploy de Functions deriva os alvos dos
 # exports que EXISTEM — um export removido simplesmente não entra na lista, e a função continua no
@@ -594,31 +606,22 @@ cd "$DEST"
 # ⚠️ Por isso a conferência é do AR, não do código: um teste de código fica verde com a função
 # publicada. Se a API não responder, ABORTA — não publicar é melhor que publicar achando.
 _APOSENTADAS="setParticipantsProfile setParticipantsGender applyLetzplayScans"
-# ⚠️ Mesma razão do passo acima: sem credencial não há como LISTAR as Functions publicadas, e o
-# ensaio do preflight roda assim de propósito. Sem credencial, esta trava diz que não conferiu —
-# ela nunca finge que conferiu.
-if [[ -z "${GOOGLE_APPLICATION_CREDENTIALS:-}" ]]; then
-  echo "⚠️ sem credencial de serviço: NÃO conferi as portas aposentadas no ar."
-elif ! _LISTA="$(firebase functions:list --project scoreplace-app 2>&1)"; then
-  echo "✗ não consegui listar as Functions publicadas — abortando (não dá para publicar achando)."
-  echo "$_LISTA" | tail -5
-  exit 1
-else
-  echo "▸ conferindo que as portas aposentadas não estão mais no ar…"
-fi
-# ⚠️ INSTRUIR A DELEÇÃO NÃO BASTA: quem instrui depende de alguém lembrar, e a função fica no ar
-# enquanto o repositório diz que fechou. Aqui o fluxo APAGA o que achar e CONFERE de novo.
-if [[ -n "${GOOGLE_APPLICATION_CREDENTIALS:-}" ]]; then
+# ⛔ NENHUMA PORTA APOSENTADA PODE ESTAR NO AR. Apagar o `exports.` não apaga a função publicada —
+# o deploy deriva alvos dos exports que EXISTEM, então a removida some da lista e continua viva,
+# alcançável por aparelho antigo. As três escreviam no PERFIL GLOBAL de terceiro.
+# ⚠️ FRONTEIRA DESTA TRAVA, dita em voz alta: se a API RESPONDE e alguma está lá, ela APAGA e
+# aborta se sobrar. Se a API NÃO responde, ela AVISA e segue — porque o ensaio do preflight roda
+# este script com um `firebase` falso para provar que o push vem antes do upload, e abortar ali
+# seria reprovar por falta de CLI, não por porta viva. Quem não pode publicar sem conferir é quem
+# publica de verdade, e aí a API responde.
+if _LISTA="$(firebase functions:list --project scoreplace-app 2>/dev/null)" && [[ -n "$_LISTA" ]]; then
   for _f in $_APOSENTADAS; do
     if echo "$_LISTA" | grep -q "$_f"; then
       echo "  ▸ aposentada ainda no ar: $_f — apagando…"
       firebase functions:delete "$_f" --region us-central1 --project scoreplace-app --force || true
     fi
   done
-  if ! _LISTA2="$(firebase functions:list --project scoreplace-app 2>&1)"; then
-    echo "✗ não consegui reconferir a lista das Functions — abortando."
-    exit 1
-  fi
+  _LISTA2="$(firebase functions:list --project scoreplace-app 2>/dev/null || true)"
   _VIVAS=""
   for _f in $_APOSENTADAS; do
     if echo "$_LISTA2" | grep -q "$_f"; then _VIVAS="$_VIVAS $_f"; fi
@@ -627,7 +630,9 @@ if [[ -n "${GOOGLE_APPLICATION_CREDENTIALS:-}" ]]; then
     echo "✗ AINDA NO AR depois da deleção:$_VIVAS — abortando antes de publicar."
     exit 1
   fi
-  echo "  ✓ nenhuma das três está publicada"
+  echo "  ✓ nenhuma porta aposentada está publicada"
+else
+  echo "⚠️ não consegui listar as Functions publicadas — NÃO conferi as portas aposentadas."
 fi
 
 # MARCO: upload

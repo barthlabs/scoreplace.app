@@ -1766,7 +1766,14 @@ window._applyDrawBalanceChoice = function (t, mode, assigned, opts) {
       var assignment = assigned.find(function (r) {
         return (r.uid && p.uid && r.uid === p.uid) || (!r.uid && (p.displayName || p.name) === r.name);
       });
-      if (assignment) p.gender = assignment.gender;
+      /* ⛔ O PAR, também aqui (23/set/2026). Este é o caminho LOCAL do equilíbrio (editar torneio,
+       * sem persistir na hora): gravar só o valor fazia o sanitizador apagá-lo no save seguinte —
+       * a escolha do organizador sumiria entre a tela e o banco. */
+      if (assignment) {
+        p.gender = assignment.gender;
+        if (assignment.gender) p.genderSource = 'organizador';
+        else delete p.genderSource;
+      }
     });
     t._drawBalanceMode = mode;
     t.equilibrado = (mode === 'equilibrado');
