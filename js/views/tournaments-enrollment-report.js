@@ -2413,7 +2413,13 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       // 2.0.50 (dono): o letzplay é PÚBLICO e criar a conta já autoriza a consulta
       // (termos de uso) — o toggle de autorização MORREU. "Autorizado" = tem o @
       // indicado no perfil. É o que separa violeta (consultável) de branco (sem @).
-      r._lzAuthorized = !!window._lzHandleDe(prof, r.uid && scanMap[r.uid]);
+      /* ⛔ AUTORIZAÇÃO SÓ PELO @ DECLARADO PELO DONO (23/set/2026). Eu havia aceitado o @ vindo do
+       * SCAN, e o scan é plantável por qualquer conta: aceitar aquilo deixava um terceiro fazer a
+       * pessoa aparecer como "consultável" e dar veredito a partir de conteúdo forjado — que é o
+       * que orienta a atribuição do organizador. Conteúdo gravável por terceiro não autoriza nada.
+       * ⚠️ Preço declarado: quem nunca declarou o @ fica BRANCO, mesmo com scan gravado. Era assim
+       * antes de a porta (aposentada) escrever o @ no perfil; voltar a isso é o lado seguro. */
+      r._lzAuthorized = !!(prof && typeof prof.letzplayHandle === 'string' && prof.letzplayHandle.trim());
       // O HISTÓRICO PODE ESTAR EM DOIS LUGARES, e eu só olhava um:
       //   • users/{uid}.letzplayImport      → a pessoa fez o autoimport dela;
       //   • letzplayScans/{uid}.fullImport  → o ORGANIZADOR puxou por ela (busca completa).

@@ -878,16 +878,21 @@ console.log('\n── data mostrada = data do histórico em uso ──');
  * RECARREGAR a rota — antes parecia certo só porque o mapa ficava mesclado em memória.
  * ⚠️ Os casos acima usam um perfil que JÁ traz o @; por isso eles encobriam este buraco. */
 {
-  const semPerfil = {};   // perfil sem @ nenhum — o estado de quem nunca declarou
+  /* ⛔ INVERTIDO EM 23/set/2026, e contra a minha própria versão de horas antes. Eu tinha feito o @
+   * do SCAN autorizar, para não perder a cor de quem não declarou o @. Mas o scan é gravável por
+   * QUALQUER conta no nome de qualquer pessoa: aceitar aquilo deixava um terceiro fazer alguém
+   * aparecer como "consultável" e produzir VEREDITO a partir de conteúdo forjado — e é o veredito
+   * que orienta a atribuição de categoria do organizador.
+   * ⚠️ Preço declarado: quem nunca declarou o @ fica BRANCO, mesmo com scan gravado. */
+  const semPerfil = {};
   const r = run({ uid: 'h1', effectiveSkills: [] }, { h1: semPerfil },
     { h1: { handle: 'atleta', scan: scanKelly } });
-  ok(r._lzAuthorized === true, '@ só no SCAN já autoriza (perfil vazio) — veio: ' + r._lzAuthorized);
-  ok(r._lzColor !== COL.white, '  → e a cor NÃO cai para branco (veio: ' + r._lzColor + ')');
+  ok(r._lzAuthorized === false, '⛔ @ que só existe no SCAN NÃO autoriza (é plantável por terceiro)');
 }
 {
   const r = run({ uid: 'h2', effectiveSkills: [] }, { h2: {} },
     { h2: { fullImport: { handle: 'atleta', games: [] }, scan: scanKelly } });
-  ok(r._lzAuthorized === true, '@ no fullImport do scan também autoriza');
+  ok(r._lzAuthorized === false, '⛔ nem o @ do histórico do scan');
 }
 {
   /* ⛔ DADO PLANTADO NÃO VIRA FONTE DE NAVEGAÇÃO: `letzplayScans` ainda aceita escrita de

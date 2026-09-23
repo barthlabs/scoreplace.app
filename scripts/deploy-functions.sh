@@ -203,7 +203,10 @@ case "$ALVO" in
   all)      do_main; do_autodraw; do_stripe ;;
   *) die "uso: scripts/deploy-functions.sh [main|autodraw|stripe|all] [--dry-run] [--only nome[,nome]]" ;;
 esac
-# ⭐ CARIMBA: o backend foi publicado depois da última mudança nele. Quem confere é o publicador
-# da web, que se recusa a subir tela nova contra servidor velho.
-node "$(dirname "$0")/check-backend-publicado.js" --carimbar || true
+# ⭐ CARIMBA — e SÓ o escopo que realmente foi publicado, SÓ em deploy de verdade.
+# ⛔ Carimbar em `--dry-run`, ou carimbar "backend" ao publicar o codebase `main`, faria o carimbo
+# provar o que não aconteceu: a web subiria contra Rules ou sorteio velhos com o portão verde.
+if [ "$DRY" != "1" ] && { [ "$ALVO" = "autodraw" ] || [ "$ALVO" = "all" ]; }; then
+  node "$(dirname "$0")/check-backend-publicado.js" --carimbar autodraw || true
+fi
 echo "✓ deploy alvejado concluído — conferir com: firebase functions:list --project $PROJECT"

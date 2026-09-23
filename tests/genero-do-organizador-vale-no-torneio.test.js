@@ -204,6 +204,33 @@ console.log('\n── equilíbrio local (editar torneio, sem persistir na hora) 
     '⛔ e limpar o gênero tira a marca junto (marca órfã viraria decisão sem decisão)');
 }
 
+/* ── A Liga acha o LADO da dupla ───────────────────────────────────────────── */
+console.log('\n── suplente da Liga: a proporção enxerga a decisão por membro ──');
+{
+  /* ⛔ Pegar o primeiro uid e resolver pelo perfil fazia a decisão sobre `p1`/`p2` perder — e a
+   * Liga escolhia suplente contra a proporção que o organizador definiu. */
+  const lg = fs.readFileSync(path.join(RAIZ, 'js/views/liga-substitution.js'), 'utf8');
+  const i = lg.indexOf('function _entryGender');
+  const trecho = lg.slice(i >= 0 ? i : 0, (i >= 0 ? i : 0) + 1600);
+  ok(/_pGenderMembro\(entry, 'p1'\)/.test(trecho) && /_pGenderMembro\(entry, 'p2'\)/.test(trecho),
+    '⭐ a Liga resolve o LADO do membro, não só o primeiro uid');
+}
+
+/* ── Autorização NÃO nasce de dado gravável por terceiro ───────────────────── */
+console.log('\n── o @ do scan não autoriza ninguém ──');
+{
+  /* ⛔ Qualquer conta escreve o scan de qualquer pessoa. Se o @ de lá autorizasse, um terceiro
+   * faria a pessoa aparecer como consultável e daria veredito a partir de conteúdo forjado — que é
+   * o que orienta a atribuição do organizador. */
+  const an = fs.readFileSync(path.join(RAIZ, 'js/views/tournaments-enrollment-report.js'), 'utf8');
+  /* ⚠️ A primeira ocorrência é a inicialização (`= false`); a que decide é a outra. */
+  const i = an.indexOf('r._lzAuthorized = !!');
+  const linha = an.slice(i, an.indexOf('\n', i));
+  ok(/prof && typeof prof\.letzplayHandle === 'string'/.test(linha),
+    '⭐ autorização sai SÓ do @ declarado no perfil');
+  ok(!/scanMap/.test(linha), '⛔ e não do scan, que é gravável por terceiro');
+}
+
 /* ── As portas não escrevem mais perfil ────────────────────────────────────── */
 console.log('\n── as duas portas do sorteio não tocam em perfil de ninguém ──');
 const ad = fs.readFileSync(path.join(RAIZ, 'functions-autodraw/index.js'), 'utf8');

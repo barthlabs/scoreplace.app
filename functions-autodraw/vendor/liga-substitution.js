@@ -498,8 +498,15 @@ function _entryGender(t, entry) {
   }
   /* ⛔ RESOLVEDOR CENTRAL PRIMEIRO (23/set/2026): a escolha de suplente respeita a proporção, e a
    * proporção tem de enxergar a decisão do organizador. Sem marca, cai no perfil, como antes. */
+  /* ⛔ E O LADO DA DUPLA IMPORTA: pegar o primeiro uid e resolver pelo perfil fazia a decisão do
+   * organizador sobre `p1`/`p2` perder na proporção da Liga — suplente escolhido contra o que o
+   * organizador definiu. Aqui se acha o SLOT antes de resolver. */
   var g = '';
-  if (entry && typeof entry === 'object' && window._pGender) g = String(window._pGender(entry) || '');
+  if (entry && typeof entry === 'object') {
+    if (u && u === entry.p1Uid && window._pGenderMembro) g = String(window._pGenderMembro(entry, 'p1') || '');
+    else if (u && u === entry.p2Uid && window._pGenderMembro) g = String(window._pGenderMembro(entry, 'p2') || '');
+    else if (window._pGender) g = String(window._pGender(entry) || '');
+  }
   if (!g && u && typeof window._genderForUid === 'function') g = String(window._genderForUid(u) || '');
   if (!g && entry && entry.gender) g = String(entry.gender);
   if (!g) {

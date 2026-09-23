@@ -23,54 +23,63 @@ const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
 const RAIZ = path.join(__dirname, '..');
-const CARIMBO = path.join(RAIZ, '.backend-publicado');
-const CAMINHOS = ['firestore.rules', 'functions-autodraw', 'functions'];
+/* ⛔ UM CARIMBO POR ESCOPO. Um carimbo único era furado: qualquer execução do publicador de
+ * Functions — inclusive `--dry-run` ou o codebase `main` — o gravava, e ele passava a "provar" que
+ * as Rules e o sorteio foram publicados. Carimbo que prova o que não aconteceu é pior que nenhum.
+ * Cada escopo tem o seu, e cada um só é gravado pelo deploy REAL daquele escopo. */
+const ESCOPOS = {
+  rules: { carimbo: '.backend-publicado-rules', caminhos: ['firestore.rules'] },
+  autodraw: { carimbo: '.backend-publicado-autodraw', caminhos: ['functions-autodraw'] },
+};
 
 const git = (args) => execFileSync('git', args, { cwd: RAIZ, encoding: 'utf8' }).trim();
 
-let ultimoDoBackend = '';
-try { ultimoDoBackend = git(['log', '-1', '--format=%H', '--'].concat(CAMINHOS)); } catch (e) {
-  console.log('⚠️ sem git aqui — trava de backend pulada.');
-  process.exit(0);
-}
-if (!ultimoDoBackend) { console.log('✓ backend nunca mudou neste repositório.'); process.exit(0); }
-
-if (process.argv.indexOf('--carimbar') !== -1) {
-  fs.writeFileSync(CARIMBO, ultimoDoBackend + '\n');
-  console.log('✓ carimbado: backend publicado em ' + ultimoDoBackend.slice(0, 8));
-  process.exit(0);
+const iCarimbar = process.argv.indexOf('--carimbar');
+const escopoPedido = iCarimbar !== -1 ? String(process.argv[iCarimbar + 1] || '') : '';
+if (iCarimbar !== -1 && !ESCOPOS[escopoPedido]) {
+  console.error('✗ --carimbar exige o ESCOPO: rules | autodraw');
+  process.exit(1);
 }
 
-const carimbado = fs.existsSync(CARIMBO) ? fs.readFileSync(CARIMBO, 'utf8').trim() : '';
-/* ⚠️ SEM CARIMBO NENHUM ela AVISA, não bloqueia — e isso é decisão, não frouxidão: árvore recém
- * clonada (ou o repositório de mentira do ensaio do preflight) nunca teve carimbo, e reprovar ali
- * seria a trava acusando ausência de histórico em vez de backend atrasado. A partir do primeiro
- * carimbo ela morde: carimbo VELHO aborta. */
-if (!carimbado) {
-  console.log('⚠️ sem carimbo de backend ainda — publique o backend e rode com --carimbar.');
-  process.exit(0);
+function ultimoDe(caminhos) {
+  try { return git(['log', '-1', '--format=%H', '--'].concat(caminhos)); } catch (e) { return null; }
 }
-if (carimbado === ultimoDoBackend) {
-  console.log('✓ backend publicado depois da última mudança nele (' + ultimoDoBackend.slice(0, 8) + ')');
+
+if (iCarimbar !== -1) {
+  const e = ESCOPOS[escopoPedido];
+  const sha = ultimoDe(e.caminhos);
+  if (!sha) { console.log('⚠️ sem git/mudança aqui — nada a carimbar em ' + escopoPedido + '.'); process.exit(0); }
+  fs.writeFileSync(path.join(RAIZ, e.carimbo), sha + '\n');
+  console.log('✓ carimbado (' + escopoPedido + '): publicado em ' + sha.slice(0, 8));
   process.exit(0);
 }
 
-/* ⚠️ O carimbo pode estar em um ANCESTRAL: se o commit carimbado já contém a última mudança do
- * backend, está publicado. É o caso de quem publicou e depois só mexeu na web. */
-let jaContem = false;
-try {
-  if (carimbado) { git(['merge-base', '--is-ancestor', ultimoDoBackend, carimbado]); jaContem = true; }
-} catch (e) { jaContem = false; }
-if (jaContem) {
-  console.log('✓ backend publicado (carimbo ' + carimbado.slice(0, 8) + ' já contém a mudança)');
-  process.exit(0);
+let falhou = false;
+Object.keys(ESCOPOS).forEach((nome) => {
+  const e = ESCOPOS[nome];
+  const ultimo = ultimoDe(e.caminhos);
+  if (ultimo === null) { console.log('⚠️ sem git aqui — ' + nome + ' não conferido.'); return; }
+  if (!ultimo) { console.log('✓ ' + nome + ' nunca mudou neste repositório.'); return; }
+  const arq = path.join(RAIZ, e.carimbo);
+  const carimbado = fs.existsSync(arq) ? fs.readFileSync(arq, 'utf8').trim() : '';
+  /* ⚠️ SEM CARIMBO NENHUM ela AVISA, não bloqueia: árvore recém clonada (ou o repositório de
+   * mentira do ensaio do preflight) nunca teve carimbo, e reprovar ali seria acusar ausência de
+   * histórico em vez de backend atrasado. A partir do primeiro carimbo ela morde. */
+  if (!carimbado) { console.log('⚠️ ' + nome + ': sem carimbo ainda — publique e rode --carimbar ' + nome + '.'); return; }
+  if (carimbado === ultimo) { console.log('✓ ' + nome + ' publicado (' + ultimo.slice(0, 8) + ')'); return; }
+  /* O carimbo pode estar num DESCENDENTE: quem publicou e depois só mexeu na web. */
+  let jaContem = false;
+  try { git(['merge-base', '--is-ancestor', ultimo, carimbado]); jaContem = true; } catch (e2) { jaContem = false; }
+  if (jaContem) { console.log('✓ ' + nome + ' publicado (carimbo ' + carimbado.slice(0, 8) + ' já contém)'); return; }
+  console.error('\n✗ ' + nome.toUpperCase() + ' MUDOU E NÃO FOI PUBLICADO.');
+  console.error('  última mudança: ' + ultimo.slice(0, 8) + '   ·   carimbo: ' + carimbado.slice(0, 8));
+  falhou = true;
+});
+if (falhou) {
+  console.error('\n  Publique nesta ordem e carimbe cada escopo:');
+  console.error('    firebase deploy --only firestore:rules --project scoreplace-app');
+  console.error('    node scripts/check-backend-publicado.js --carimbar rules');
+  console.error('    scripts/deploy-functions.sh autodraw   (carimba autodraw sozinho)\n');
+  process.exit(1);
 }
-
-console.error('\n✗ O BACKEND MUDOU E NÃO FOI PUBLICADO.\n');
-console.error('  última mudança no backend: ' + ultimoDoBackend.slice(0, 8));
-console.error('  carimbo:                   ' + (carimbado ? carimbado.slice(0, 8) : '(nenhum)'));
-console.error('\n  Publique nesta ordem e carimbe:');
-console.error('    firebase deploy --only firestore:rules --project scoreplace-app');
-console.error('    scripts/deploy-functions.sh autodraw');
-console.error('    node scripts/check-backend-publicado.js --carimbar\n');
-process.exit(1);
+process.exit(0);

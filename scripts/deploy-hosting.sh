@@ -614,7 +614,16 @@ _APOSENTADAS="setParticipantsProfile setParticipantsGender applyLetzplayScans"
 # este script com um `firebase` falso para provar que o push vem antes do upload, e abortar ali
 # seria reprovar por falta de CLI, não por porta viva. Quem não pode publicar sem conferir é quem
 # publica de verdade, e aí a API responde.
-if _LISTA="$(firebase functions:list --project scoreplace-app 2>/dev/null)" && [[ -n "$_LISTA" ]]; then
+# ⛔ FALHA DE LISTAGEM ABORTA. Avisar e publicar assim mesmo era o pior dos dois mundos: a tela
+# nova no ar e ninguém sabendo se as portas vulneráveis saíram. O único caso tolerado é a listagem
+# RESPONDER e vir VAZIA — projeto sem Function nenhuma, onde não há o que apagar (e é o que o
+# `firebase` de mentira do ensaio do preflight devolve).
+if ! _LISTA="$(firebase functions:list --project scoreplace-app 2>&1)"; then
+  echo "✗ não consegui listar as Functions publicadas — abortando (publicar sem conferir é pior)."
+  echo "$_LISTA" | tail -5
+  exit 1
+fi
+if [[ -n "$_LISTA" ]]; then
   for _f in $_APOSENTADAS; do
     if echo "$_LISTA" | grep -q "$_f"; then
       echo "  ▸ aposentada ainda no ar: $_f — apagando…"
@@ -632,7 +641,7 @@ if _LISTA="$(firebase functions:list --project scoreplace-app 2>/dev/null)" && [
   fi
   echo "  ✓ nenhuma porta aposentada está publicada"
 else
-  echo "⚠️ não consegui listar as Functions publicadas — NÃO conferi as portas aposentadas."
+  echo "  ⚠️ listagem vazia: nenhuma Function publicada neste projeto — nada a apagar."
 fi
 
 # MARCO: upload
