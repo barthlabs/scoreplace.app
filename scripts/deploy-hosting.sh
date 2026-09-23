@@ -576,6 +576,16 @@ cd "$DEST"
 # `set -e` o script morreu ALI, depois de publicar e antes de empurrar o main e o backup. Ficou o
 # pior dos mundos: o ar novo e o repositório atrás (exatamente o que a trava de alinhamento existe
 # para impedir). Quem julga se publicou é O AR, conferido logo abaixo — não o código de saída.
+# ⛔ RULES E FUNCTIONS NÃO SÃO PUBLICADAS AQUI — e isso é decisão, não esquecimento.
+# Publicar o backend daqui de dentro quebra o ENSAIO do preflight (`tests/preflight-antes-do-push`),
+# que roda este script com `firebase` falso para provar que o push vem ANTES do upload. Essa
+# garantia — não publicar o que não está no remoto — vale mais que automatizar dois comandos.
+# ⛔ A ORDEM DA LEVA, quando há backend novo, é:
+#     firebase deploy --only firestore:rules --project scoreplace-app
+#     scripts/deploy-functions.sh autodraw
+#     scripts/deploy-hosting.sh        ⟵ por último: a tela nova tem de encontrar regra e servidor
+# ⚠️ O que ESTE script garante sozinho é a trava abaixo: nenhuma porta aposentada fica no ar.
+
 # MARCO: portas-aposentadas-fora-do-ar
 # ⛔ APAGAR O EXPORT NÃO APAGA A FUNÇÃO PUBLICADA. O deploy de Functions deriva os alvos dos
 # exports que EXISTEM — um export removido simplesmente não entra na lista, e a função continua no
@@ -583,34 +593,42 @@ cd "$DEST"
 # terceiro; deixar uma delas viva é manter o buraco aberto enquanto o repositório diz que fechou.
 # ⚠️ Por isso a conferência é do AR, não do código: um teste de código fica verde com a função
 # publicada. Se a API não responder, ABORTA — não publicar é melhor que publicar achando.
-echo "▸ conferindo que as portas aposentadas não estão mais no ar…"
 _APOSENTADAS="setParticipantsProfile setParticipantsGender applyLetzplayScans"
-if ! _LISTA="$(firebase functions:list --project scoreplace-app 2>&1)"; then
+# ⚠️ Mesma razão do passo acima: sem credencial não há como LISTAR as Functions publicadas, e o
+# ensaio do preflight roda assim de propósito. Sem credencial, esta trava diz que não conferiu —
+# ela nunca finge que conferiu.
+if [[ -z "${GOOGLE_APPLICATION_CREDENTIALS:-}" ]]; then
+  echo "⚠️ sem credencial de serviço: NÃO conferi as portas aposentadas no ar."
+elif ! _LISTA="$(firebase functions:list --project scoreplace-app 2>&1)"; then
   echo "✗ não consegui listar as Functions publicadas — abortando (não dá para publicar achando)."
   echo "$_LISTA" | tail -5
   exit 1
+else
+  echo "▸ conferindo que as portas aposentadas não estão mais no ar…"
 fi
 # ⚠️ INSTRUIR A DELEÇÃO NÃO BASTA: quem instrui depende de alguém lembrar, e a função fica no ar
 # enquanto o repositório diz que fechou. Aqui o fluxo APAGA o que achar e CONFERE de novo.
-for _f in $_APOSENTADAS; do
-  if echo "$_LISTA" | grep -q "$_f"; then
-    echo "  ▸ aposentada ainda no ar: $_f — apagando…"
-    firebase functions:delete "$_f" --region us-central1 --project scoreplace-app --force || true
+if [[ -n "${GOOGLE_APPLICATION_CREDENTIALS:-}" ]]; then
+  for _f in $_APOSENTADAS; do
+    if echo "$_LISTA" | grep -q "$_f"; then
+      echo "  ▸ aposentada ainda no ar: $_f — apagando…"
+      firebase functions:delete "$_f" --region us-central1 --project scoreplace-app --force || true
+    fi
+  done
+  if ! _LISTA2="$(firebase functions:list --project scoreplace-app 2>&1)"; then
+    echo "✗ não consegui reconferir a lista das Functions — abortando."
+    exit 1
   fi
-done
-if ! _LISTA2="$(firebase functions:list --project scoreplace-app 2>&1)"; then
-  echo "✗ não consegui reconferir a lista das Functions — abortando."
-  exit 1
+  _VIVAS=""
+  for _f in $_APOSENTADAS; do
+    if echo "$_LISTA2" | grep -q "$_f"; then _VIVAS="$_VIVAS $_f"; fi
+  done
+  if [[ -n "$_VIVAS" ]]; then
+    echo "✗ AINDA NO AR depois da deleção:$_VIVAS — abortando antes de publicar."
+    exit 1
+  fi
+  echo "  ✓ nenhuma das três está publicada"
 fi
-_VIVAS=""
-for _f in $_APOSENTADAS; do
-  if echo "$_LISTA2" | grep -q "$_f"; then _VIVAS="$_VIVAS $_f"; fi
-done
-if [[ -n "$_VIVAS" ]]; then
-  echo "✗ AINDA NO AR depois da deleção:$_VIVAS — abortando antes de publicar."
-  exit 1
-fi
-echo "  ✓ nenhuma das três está publicada"
 
 # MARCO: upload
 _DEPLOY_RC=0

@@ -166,6 +166,30 @@ console.log('\n── a decisão atravessa formar/desfazer dupla ──');
   ok(window._pGender(dois) === 'feminino', '  → e o resolvedor o traz do perfil, como sempre');
 }
 
+/* ── O BADGE do membro mostra a decisão, não o perfil ──────────────────────── */
+console.log('\n── badge e filtro do membro de dupla ──');
+{
+  /* ⛔ A MESMA PESSOA NÃO PODE TER DOIS GÊNEROS NA TELA. O badge nasce no primeiro paint e é
+   * repintado depois que o perfil carrega — se a decisão valer só no primeiro, a tela troca o
+   * gênero na frente da pessoa. Por isso a decisão viaja no atributo e o repinte a respeita. */
+  const st = fs.readFileSync(path.join(RAIZ, 'js/store.js'), 'utf8');
+  window._profileMetaBadgesHtml = (g) => '[' + (g || '') + ']';
+  window._profileMetaExtractSkill = () => '';
+  /* ⚠️ A função usa um helper de escape do próprio arquivo; aqui ele entra como dublê simples —
+   * o que este caso prova é a PRECEDÊNCIA e o atributo, não o escape (que tem teste próprio). */
+  const _attrEscMeta = (v) => String(v == null ? '' : v);
+  const fonte = st.slice(st.indexOf('window._profileMetaSlots = function'), st.indexOf('// Carrega perfis (por uid'));
+  eval(fonte.slice(0, fonte.lastIndexOf('};') + 2));
+  const dupla = { p1Uid: 'u1', p2Uid: 'u2', p1Gender: 'masculino', p1GenderSource: 'organizador' };
+  const html = window._profileMetaSlots(dupla, 'Um / Dois', true, { sport: 'Beach Tennis' }, true);
+  ok(html.indexOf('[masculino]') !== -1, '⭐ o badge do membro nasce com a decisão do organizador');
+  ok(html.indexOf('data-pmeta-gender-org="1"') !== -1,
+    '⭐⭐ e a decisão viaja no atributo — é o que impede o repinte de trocá-la pelo perfil');
+  const semMarca = window._profileMetaSlots({ p1Uid: 'u1', p1Gender: 'masculino' }, 'Um / Dois', true, {}, true);
+  ok(semMarca.indexOf('data-pmeta-gender-org="1"') === -1,
+    'valor legado sem marca NÃO vira decisão (ele perderia para o perfil, como sempre)');
+}
+
 /* ── As portas não escrevem mais perfil ────────────────────────────────────── */
 console.log('\n── as duas portas do sorteio não tocam em perfil de ninguém ──');
 const ad = fs.readFileSync(path.join(RAIZ, 'functions-autodraw/index.js'), 'utf8');

@@ -138,7 +138,17 @@ window._duplaCard = function (t, p, draggable, ctx) {
         var _av = right
           ? '<div style="display:flex;align-items:center;gap:7px;max-width:100%;min-width:0;justify-content:flex-end;">' + _nmSpan + _img + '</div>'
           : '<div style="display:flex;align-items:center;gap:7px;max-width:100%;min-width:0;">' + _img + _nmSpan + '</div>';
-        var _meta = (typeof window._profileMetaSlots === 'function') ? window._profileMetaSlots({ uid: _mm.uid, displayName: _metaName, name: _metaName }, _metaName, false, t, isOrg) : '';
+        /* ⛔ O MEMBRO LEVA A DECISÃO DO ORGANIZADOR consigo (23/set/2026). Aqui a dupla é desenhada
+         * membro a membro, e o objeto montado só tinha uid e nome: o badge caía no perfil e
+         * contradizia o que o torneio decidiu para aquele lado. */
+        var _mLado = (_mm && _mm._lado) || (right ? 'p2' : 'p1');
+        var _mObj = { uid: _mm.uid, displayName: _metaName, name: _metaName };
+        if (p && typeof p === 'object' && window._generoDecididoPeloOrganizador
+          && window._generoDecididoPeloOrganizador(p, _mLado + 'Gender', _mLado + 'GenderSource')) {
+          _mObj.gender = p[_mLado + 'Gender'];
+          _mObj.genderSource = 'organizador';
+        }
+        var _meta = (typeof window._profileMetaSlots === 'function') ? window._profileMetaSlots(_mObj, _metaName, false, t, isOrg) : '';
         // v4.5.75: presença POR MEMBRO na dupla — o toggle Presente do jogador fica
         // DENTRO do bloco dele (esquerda p/ o da esquerda, direita p/ o da direita).
         var _mPres = (typeof ctx.memberPresence === 'function') ? ctx.memberPresence(_mm, right) : null;

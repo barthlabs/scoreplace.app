@@ -9898,13 +9898,24 @@ window._profileMetaSlots = function(p, pName, isTeam, t, isOrg, opts) {
     var _pmUid = '';
     if (!isTeam && p && typeof p === 'object') _pmUid = p.uid || '';
     else if (isTeam && p && typeof p === 'object') _pmUid = (mi === 0) ? (p.p1Uid || '') : (mi === 1 ? (p.p2Uid || '') : '');
-    // Gênero inicial resolve por uid (perfil-first) — aparece já no 1º paint se o cache está quente.
-    var fbGender = (!isTeam && p && typeof p === 'object') ? ((window._pGender && window._pGender(p)) || p.gender || '') : '';
+    /* Gênero inicial resolve por uid (perfil-first) — aparece já no 1º paint se o cache está quente.
+     * ⛔ E AGORA TAMBÉM PARA O LADO DA DUPLA (23/set/2026): o organizador pode ter decidido o gênero
+     * daquele membro, e a decisão vale sobre o perfil. Sem isto, o badge e o filtro mostravam o
+     * perfil e contradiziam o que o torneio decidiu — a mesma pessoa com dois gêneros na tela. */
+    var _ladoDupla = isTeam ? (mi === 0 ? 'p1' : (mi === 1 ? 'p2' : '')) : '';
+    var _decidido = '';
+    if (p && typeof p === 'object') {
+      _decidido = _ladoDupla
+        ? (window._generoDecididoPeloOrganizador && window._generoDecididoPeloOrganizador(p, _ladoDupla + 'Gender', _ladoDupla + 'GenderSource') ? p[_ladoDupla + 'Gender'] : '')
+        : (window._generoDecididoPeloOrganizador && window._generoDecididoPeloOrganizador(p, 'gender', 'genderSource') ? p.gender : '');
+    }
+    var fbGender = _decidido
+      || ((!isTeam && p && typeof p === 'object') ? ((window._pGender && window._pGender(p)) || p.gender || '') : '');
     var fbCat = (!isTeam && p && typeof p === 'object') ? (p.category || '') : '';
     var prefixName = isTeam ? String(mn).split(' ')[0] : '';
     var initial = window._profileMetaBadgesHtml(fbGender, window._profileMetaExtractSkill(fbCat, t), '', prefixName, t);
     var _mt = _inline ? '0' : (mi === 0 ? '5px' : '3px');
-    return '<div class="participant-meta" data-pmeta-name="' + _attrEscMeta(lc) + '" data-pmeta-uid="' + _attrEscMeta(_pmUid) + '" data-pmeta-gender="' + _attrEscMeta(fbGender) + '" data-pmeta-cat="' + _attrEscMeta(fbCat) + '" data-pmeta-prefix="' + _attrEscMeta(prefixName) + '" style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-top:' + _mt + ';">' + initial + '</div>';
+    return '<div class="participant-meta" data-pmeta-name="' + _attrEscMeta(lc) + '" data-pmeta-uid="' + _attrEscMeta(_pmUid) + '" data-pmeta-gender="' + _attrEscMeta(fbGender) + '" data-pmeta-gender-org="' + (_decidido ? '1' : '') + '" data-pmeta-cat="' + _attrEscMeta(fbCat) + '" data-pmeta-prefix="' + _attrEscMeta(prefixName) + '" style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-top:' + _mt + ';">' + initial + '</div>';
   }).join('');
 };
 
@@ -10031,7 +10042,10 @@ window._patchProfileMetaSlots = function(container, t) {
     var fbGender = slot.getAttribute('data-pmeta-gender') || '';
     var fbCat = slot.getAttribute('data-pmeta-cat') || '';
     var prefixName = slot.getAttribute('data-pmeta-prefix') || '';
-    var gender = (prof && prof.gender) || fbGender;
+    /* ⛔ DECISÃO DO ORGANIZADOR VENCE O PERFIL também no repinte (23/set/2026) — senão o primeiro
+     * paint mostrava a decisão e a hidratação a trocava pelo perfil, na frente da pessoa. */
+    var _decidiuOrg = slot.getAttribute('data-pmeta-gender-org') === '1';
+    var gender = (_decidiuOrg && fbGender) || (prof && prof.gender) || fbGender;
     var skillRaw = (prof && prof.skillBySport && t && t.sport && prof.skillBySport[t.sport]) || '';
     var skill = window._profileMetaExtractSkill(skillRaw, t) || window._profileMetaExtractSkill(fbCat, t);
     var birth = (prof && prof.birthDate) || '';
