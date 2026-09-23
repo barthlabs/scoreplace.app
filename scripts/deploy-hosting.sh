@@ -576,6 +576,34 @@ cd "$DEST"
 # `set -e` o script morreu ALI, depois de publicar e antes de empurrar o main e o backup. Ficou o
 # pior dos mundos: o ar novo e o repositório atrás (exatamente o que a trava de alinhamento existe
 # para impedir). Quem julga se publicou é O AR, conferido logo abaixo — não o código de saída.
+# MARCO: portas-aposentadas-fora-do-ar
+# ⛔ APAGAR O EXPORT NÃO APAGA A FUNÇÃO PUBLICADA. O deploy de Functions deriva os alvos dos
+# exports que EXISTEM — um export removido simplesmente não entra na lista, e a função continua no
+# ar, alcançável por qualquer aparelho antigo. As três abaixo escreviam no PERFIL GLOBAL de
+# terceiro; deixar uma delas viva é manter o buraco aberto enquanto o repositório diz que fechou.
+# ⚠️ Por isso a conferência é do AR, não do código: um teste de código fica verde com a função
+# publicada. Se a API não responder, ABORTA — não publicar é melhor que publicar achando.
+echo "▸ conferindo que as portas aposentadas não estão mais no ar…"
+_APOSENTADAS="setParticipantsProfile setParticipantsGender applyLetzplayScans"
+if ! _LISTA="$(firebase functions:list --project scoreplace-app 2>&1)"; then
+  echo "✗ não consegui listar as Functions publicadas — abortando (não dá para publicar achando)."
+  echo "$_LISTA" | tail -5
+  exit 1
+fi
+_VIVAS=""
+for _f in $_APOSENTADAS; do
+  if echo "$_LISTA" | grep -q "$_f"; then _VIVAS="$_VIVAS $_f"; fi
+done
+if [[ -n "$_VIVAS" ]]; then
+  echo "✗ AINDA NO AR:$_VIVAS"
+  echo "  Apague nominalmente antes de publicar:"
+  for _f in $_VIVAS; do
+    echo "    firebase functions:delete $_f --region us-central1 --project scoreplace-app --force"
+  done
+  exit 1
+fi
+echo "  ✓ nenhuma das três está publicada"
+
 # MARCO: upload
 _DEPLOY_RC=0
 firebase deploy --only hosting --project scoreplace-app || _DEPLOY_RC=$?

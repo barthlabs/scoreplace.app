@@ -105,8 +105,19 @@ const alvosDeDeploy = [];
       if (!/\.(sh|js|ya?ml)$/.test(e.name)) return;
       let txt = '';
       try { txt = fs.readFileSync(p, 'utf8'); } catch (err) { return; }
-      APOSENTADAS.forEach((nome) => {
-        if (txt.indexOf(nome) !== -1) alvosDeDeploy.push(path.relative(RAIZ, p) + ' → ' + nome);
+      /* ⚠️ CITAR NÃO É PUBLICAR. O `deploy-hosting.sh` nomeia as três de propósito: ele CONFERE que
+       * elas não estão mais no ar antes de subir, e aborta se estiverem. Proibir a menção
+       * derrubaria justamente a trava que garante a remoção.
+       * ⛔ O que se proíbe é o nome como ALVO DE PUBLICAÇÃO: `--only functions:NOME` ou um `deploy`
+       * na mesma linha. `functions:delete` e `functions:list` são o contrário disso. */
+      txt.split('\n').forEach((linha) => {
+        if (/functions:(delete|list)/.test(linha)) return;
+        APOSENTADAS.forEach((nome) => {
+          if (linha.indexOf(nome) === -1) return;
+          if (/--only|\bdeploy\b/.test(linha)) {
+            alvosDeDeploy.push(path.relative(RAIZ, p) + ' → ' + nome);
+          }
+        });
       });
     });
   };

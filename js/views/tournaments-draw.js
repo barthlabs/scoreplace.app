@@ -1610,8 +1610,14 @@ window._hydrateParticipantGenders = function (t) {
     var n = 0;
     ((alvo && alvo.participants) || []).forEach(function (p) {
       if (!p || typeof p !== 'object') return;
-      [['uid', 'gender'], ['p1Uid', 'p1Gender'], ['p2Uid', 'p2Gender']].forEach(function (par) {
+      [['uid', 'gender', 'genderSource'], ['p1Uid', 'p1Gender', 'p1GenderSource'],
+        ['p2Uid', 'p2Gender', 'p2GenderSource']].forEach(function (par) {
         var uid = p[par[0]]; if (!uid) return;
+        /* ⛔ DECISÃO DO ORGANIZADOR NÃO É SOBRESCRITA (23/set/2026). As portas do sorteio pararam
+         * de empurrar gênero ao perfil de terceiro; a decisão vive aqui, marcada. Sem esta guarda
+         * a hidratação a apagava e o SORTEIO usaria o gênero do perfil — regressão silenciosa. */
+        if (window._generoDecididoPeloOrganizador
+          && window._generoDecididoPeloOrganizador(p, par[1], par[2])) return;
         var g = _limpo(window._genderForUid && window._genderForUid(uid));
         if (!g || _limpo(p[par[1]]) === g) return;
         p[par[1]] = g; n++;

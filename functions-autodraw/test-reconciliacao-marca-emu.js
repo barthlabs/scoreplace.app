@@ -153,6 +153,44 @@ const perfil = async (uid) => (await db.collection('users').doc(uid).get()).data
   ok(alvoNoElenco.gender === 'masculino', '⭐ e a decisão vale NO TORNEIO');
   ok(alvoNoElenco.genderSource === 'organizador', '⭐ marcada com a procedência, que é o que a faz valer');
 
+  console.log('\n── MEMBRO DE DUPLA: a decisão sai da porta já MARCADA ──');
+  /* ⛔ POR QUE ESTE CASO. A porta gravava `p1Gender`/`p2Gender` SEM a procedência — e o sanitizador
+   * novo exige o par. A decisão do organizador sobre um membro evaporaria no próximo save, em
+   * silêncio. Aqui ela sai da porta de verdade, não injetada à mão no teste. */
+  const tDupla = 'ad-marca-t-dupla';
+  await db.collection('tournaments').doc(tDupla).set({
+    id: tDupla, name: 'Dupla', creatorUid: org, sport: 'Beach Tennis', combinedCategories: ['A'],
+    participants: [{ p1Uid: inscrito, p1Name: 'Um', p2Uid: outro, p2Name: 'Dois', name: 'Um / Dois' }],
+  });
+  r = await chamar('applyEnrollmentAssignments', tokenOrg, {
+    tournamentId: tDupla, sport: 'Beach Tennis',
+    edits: [{ uid: inscrito, pairMember: 'p1', gender: 'feminino' }],
+  });
+  ok(r.status === 200, 'atribuição por membro respondeu 200 (' + r.status + ')');
+  const tD = (await db.collection('tournaments').doc(tDupla).get()).data() || {};
+  const dupla = (tD.participants || [])[0] || {};
+  ok(dupla.p1Gender === 'feminino', 'o gênero do membro 1 foi gravado');
+  ok(dupla.p1GenderSource === 'organizador', '⭐⭐ e COM a marca — sem ela o save seguinte apagaria');
+  ok(dupla.p2Gender === undefined && dupla.p2GenderSource === undefined, 'o outro membro não foi tocado');
+
+  r = await chamar('applyEnrollmentAssignments', tokenOrg, {
+    tournamentId: tDupla, sport: 'Beach Tennis',
+    edits: [{ uid: inscrito, pairMember: 'p1', gender: '' }],
+  });
+  ok(r.status === 200, 'limpar o gênero do membro respondeu 200');
+  const tD2 = (await db.collection('tournaments').doc(tDupla).get()).data() || {};
+  const dupla2 = (tD2.participants || [])[0] || {};
+  ok(dupla2.p1Gender === undefined && dupla2.p1GenderSource === undefined,
+    '⛔ e apagar é SIMÉTRICO: valor e marca saem juntos (marca órfã viraria "decidiu" sem decisão)');
+
+  r = await chamar('applyEnrollmentAssignments', tokenOrg, {
+    tournamentId: tDupla, sport: 'Beach Tennis',
+    edits: [{ uid: inscrito, pairMember: 'p1', gender: 'misto' }],
+  });
+  const tD3 = (await db.collection('tournaments').doc(tDupla).get()).data() || {};
+  const dupla3 = (tD3.participants || [])[0] || {};
+  ok(dupla3.p1Gender !== 'misto', '⛔ `misto` NÃO entra como gênero de pessoa (é categoria)');
+
   console.log('\n── sem token a porta não abre ──');
   r = await chamar('applyEnrollmentAssignments', null, {
     tournamentId: tId, sport: 'Beach Tennis', edits: [{ uid: inscrito, category: 'B' }],

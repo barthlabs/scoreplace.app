@@ -3313,20 +3313,27 @@ window._sbCollectRealEnrollees = function (t) {
 // vira inscrito individual com o SEU uid/nome/enrollSeq (p1Seq/p2Seq). Ver
 // project_dupla_entry_structural_not_slash, project_enrollmode_teams_vs_time_drift.
 window._sbRebuildCleanRoster = function (list, isTeamEnroll) {
-  var ALLOW_I = ['uid', 'name', 'displayName', 'email', 'photoURL', 'gender', 'birthDate',
+  /* ⛔ `genderSource` ENTRA NA LISTA (23/set/2026): sem ela, a reconstrução devolvia o gênero SEM
+   * a marca, e o sanitizador — que agora exige o par — o apagaria no save seguinte. A decisão do
+   * organizador evaporaria dentro do Sandbox, em silêncio. */
+  var ALLOW_I = ['uid', 'name', 'displayName', 'email', 'photoURL', 'gender', 'genderSource', 'birthDate',
     'skillBySport', 'categories', 'category', 'defaultCategory', 'categorySource',
     'wasUncategorized', 'selfEnrolled', 'addedAt', 'enrollSeq', 'isPlaceholder'];
   /* 2.1.41: `isPlaceholder` (e o par p1/p2Placeholder) entram na lista. Fora dela a
    * limpeza APAGAVA a marca de "vaga", e a vaga voltava como pessoa comum — o mesmo
    * tipo de perda que fazia o nº de inscrição sumir no desfazer da dupla. */
-  var ALLOW_P = ALLOW_I.concat(['p1Uid', 'p1Name', 'p1Email', 'p1Photo', 'p1Seq', 'p1Gender', 'p1BirthDate',
-    'p2Uid', 'p2Name', 'p2Email', 'p2Photo', 'p2Seq', 'p2Gender', 'p2BirthDate',
+  var ALLOW_P = ALLOW_I.concat(['p1Uid', 'p1Name', 'p1Email', 'p1Photo', 'p1Seq', 'p1Gender', 'p1GenderSource', 'p1BirthDate',
+    'p2Uid', 'p2Name', 'p2Email', 'p2Photo', 'p2Seq', 'p2Gender', 'p2GenderSource', 'p2BirthDate',
     'p1Placeholder', 'p2Placeholder']);
   var isPair = function (p) { return !!(p && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)); };
   var member = function (p, n) {
     var g = function (suf) { return p['p' + n + suf]; };
+    /* ⛔ A PROCEDÊNCIA VIAJA COM O GÊNERO ao desmembrar a dupla: o membro vira inscrito individual,
+     * e sem `genderSource` o sanitizador apagaria o valor no save seguinte — a decisão do
+     * organizador sumiria justamente ao desmontar. */
     var o = { uid: g('Uid'), name: g('Name'), displayName: g('Name'), email: g('Email'),
-      photoURL: g('Photo'), gender: g('Gender'), birthDate: g('BirthDate'), enrollSeq: g('Seq'),
+      photoURL: g('Photo'), gender: g('Gender'), genderSource: g('GenderSource'),
+      birthDate: g('BirthDate'), enrollSeq: g('Seq'),
       isPlaceholder: (g('Placeholder') ? true : undefined) };
     Object.keys(o).forEach(function (k) { if (o[k] === undefined || o[k] === null) delete o[k]; });
     return o;
