@@ -65,7 +65,16 @@ Object.keys(ESCOPOS).forEach((nome) => {
   /* ⚠️ SEM CARIMBO NENHUM ela AVISA, não bloqueia: árvore recém clonada (ou o repositório de
    * mentira do ensaio do preflight) nunca teve carimbo, e reprovar ali seria acusar ausência de
    * histórico em vez de backend atrasado. A partir do primeiro carimbo ela morde. */
-  if (!carimbado) { console.log('⚠️ ' + nome + ': sem carimbo ainda — publique e rode --carimbar ' + nome + '.'); return; }
+  /* ⛔ SEM CARIMBO, COM HISTÓRICO: ABORTA. A versão anterior desta trava apenas AVISAVA, e isso é
+   * falha ABERTA — árvore sem carimbo publicaria tela nova contra backend de idade desconhecida.
+   * ⚠️ O caso tolerado é o de cima (`ultimo` vazio): caminho que nunca existiu nesta árvore, que é
+   * o repositório de mentira do ensaio do preflight. Aí não há o que publicar. */
+  if (!carimbado) {
+    console.error('\n✗ ' + nome.toUpperCase() + ': SEM CARIMBO de publicação, e o caminho tem histórico.');
+    console.error('  última mudança: ' + ultimo.slice(0, 8));
+    falhou = true;
+    return;
+  }
   if (carimbado === ultimo) { console.log('✓ ' + nome + ' publicado (' + ultimo.slice(0, 8) + ')'); return; }
   /* O carimbo pode estar num DESCENDENTE: quem publicou e depois só mexeu na web. */
   let jaContem = false;

@@ -2429,7 +2429,20 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       // Não dá pra depender do letzplayImport do perfil: ele é do PRÓPRIO dono e pode nem existir
       // (que roda depois) ou pelo login da própria pessoa — de novo fazendo a leitura do
       // organizador depender do inscrito. Vence o que tem MAIS jogos (mesma regra da CF).
-      /* ⛔ SEM @ DECLARADO, CONTEÚDO DE SCAN NÃO PRODUZ VEREDITO (23/set/2026). Marcar
+      /* ⛔ FRONTEIRA DE CONFIANÇA DO LETZPLAY — o que ESTA tela pode e o que ela NÃO pode afirmar.
+       *
+       * ⚠️ ANTERIOR A ESTA LEVA E NÃO FECHADO AQUI: não existe vínculo verificável entre o @ que a
+       * pessoa declarou e o CONTEÚDO do scan. Qualquer conta escreve `letzplayScans/{uid}` de
+       * terceiro, e o import "próprio" também é gravável pelo dono (a ponte aceita `postMessage` e
+       * as Rules deixam o dono escrever o campo). Ou seja: o veredito nasce de dado COLETADO NO
+       * NAVEGADOR, e nenhum arranjo de precedência aqui muda isso.
+       * ⛔ Fechar de verdade exige o SERVIDOR falar com o letzplay — coleta server-side. Não é o
+       * caso, e não finjo que é. [[project_scan_do_letzplay_nao_escreve_perfil]]
+       * ⭐ O que esta leva MELHOROU, medido: antes o scan plantado ia ao PERFIL global da vítima
+       * (gênero, categoria, marca e histórico) por uma porta com Admin SDK — aquilo acabou. Hoje o
+       * estrago possível é a LEITURA desta tela.
+       *
+       * ⛔ SEM @ DECLARADO, CONTEÚDO DE SCAN NÃO PRODUZ VEREDITO (23/set/2026). Marcar
        * `_lzAuthorized = false` não bastava: os ramos abaixo pintavam cor e `_lzVerified` a partir
        * do scan mesmo assim — e o scan é gravável por QUALQUER conta no nome de qualquer pessoa.
        * Um terceiro forjava o veredito que orienta a atribuição de categoria do organizador.

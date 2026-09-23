@@ -594,8 +594,13 @@ cd "$DEST"
 # existe, então ela morde.
 if [[ -f scripts/check-backend-publicado.js ]]; then
   node scripts/check-backend-publicado.js || exit 1
+elif [[ -f firestore.rules ]]; then
+  # ⛔ ÁRVORE REAL SEM A TRAVA = FALHA ABERTA. Se o backend existe aqui, a trava tem de existir;
+  # avisar e publicar deixaria a web subir contra Rules e sorteio de idade desconhecida.
+  echo "✗ trava de backend AUSENTE numa árvore que tem backend — abortando."
+  exit 1
 else
-  echo "⚠️ trava de backend ausente nesta árvore — não conferido."
+  echo "⚠️ árvore sem backend: trava de publicação não se aplica."
 fi
 
 # MARCO: portas-aposentadas-fora-do-ar
