@@ -89,8 +89,22 @@ const S = v => ({ stringValue: v });
     // Elegibilidade da inscrição só é escrita pela Function fechada
     // completeOwnEligibilityProfile. O navegador não pode fabricá-la direto.
     'gender', 'birthDate', 'skillBySport',
+    // ⛔ 23/set/2026 — O RASTRO de que um ORGANIZADOR mexeu no cadastro alheio. Enquanto o dono
+    // do perfil podia gravá-los, ele apagava o rastro ou plantava o nome de outro, e o rastro
+    // deixava de valer como prova. Um caso POR CAMPO: lista fechada em bloco esconde qual ficou
+    // de fora.
+    'genderSetBy', 'genderSetAt', 'skillSetBy', 'profileSetAt',
+    'letzplayAppliedBy', 'letzplayAppliedAt',
     'phoneSource', 'phoneSetBy', 'phoneSetAt', 'friends', 'friendRequestsSent',
     'friendRequestsReceived', 'friendRequestsSentAt', 'theme', 'uiScale', 'activeCasualRoom', 'liveScorePrefs', 'casualLast', 'casualPrefs', 'preferredLocations', 'notifyPlatform', 'notifyEmail', 'notifyWhatsApp', 'notifyLevel', 'presenceVisibility', 'statsVisibility', 'presenceMuteDays', 'presenceMuteUntil', 'presenceAutoCheckin', 'acceptedTerms', 'acceptedTermsAt', 'acceptedTermsVersion', 'acceptedTermsGrandfathered', 'lastSeenAt', 'lastClientVersion', 'lastClientPlatform', 'favorites', 'hiddenTournaments', 'acceptFriendRequests', 'omitEmail', 'omitPhone', 'liveAlerts', 'liveAlertsWho', 'blockedUids', 'emailVerified', 'fcmToken', 'fcmTokenPlatform', 'fcmTokenUpdatedAt', 'linkedPhones', 'hasGooglePhotoReal'];
+  /* ⚠️ A MARCA DE "APURADA" CONTINUA GRAVÁVEL, e isso é DELIBERADO nesta leva: o
+   * auto-preenchimento do navegador ainda precisa dela, e fechar antes de existir porta de
+   * servidor para a pessoa aplicar o próprio scan faria aquele caminho falhar calado. Sem este
+   * caso, a ausência dela na lista pareceria esquecimento. */
+  out.marcaDeApuradaSegueGravavel = await req('PATCH',
+    'users/' + A + '?updateMask.fieldPaths=skillBySportSource', A,
+    { fields: { skillBySportSource: { mapValue: { fields: { 'Beach Tennis': S('letzplay') } } } } });
+
   out.ataquesExtras = {};
   out.criaComExtras = {};
   for (const field of extras) {
@@ -187,6 +201,10 @@ Object.keys(novo.ataquesExtras).forEach((field) => {
   ok(novo.criaComExtras[field] === 403,
     '🔒 create com ' + field + ' negado (got ' + novo.criaComExtras[field] + ')');
 });
+ok(novo.marcaDeApuradaSegueGravavel === 200,
+  '⚠️ DELIBERADO: skillBySportSource (marca de "apurada") CONTINUA gravável pelo dono — fechar antes'
+  + ' da porta de servidor do próprio scan faria o auto-preenchimento falhar calado (got '
+  + novo.marcaDeApuradaSegueGravavel + ')');
 ok(novo.createComMergedInto === 403,
   '🔒 CREATE já com mergedInto negado — senão bastava apagar e recriar o perfil (got ' + novo.createComMergedInto + ')');
 

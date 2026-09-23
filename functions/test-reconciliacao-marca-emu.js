@@ -106,29 +106,10 @@ const catDe = async (uid) => ((await db.collection("users").doc(uid).get()).data
   eq(await catDe(dono), { "Tênis": "3ª" }, "Beach Tennis saiu do mapa de categorias");
   eq(await fonteDe(dono), { "Tênis": "letzplay" }, "REMOVER a modalidade apaga só a marca dela");
 
-  console.log("\n── setParticipantsProfile: o ORGANIZADOR digita a categoria de um inscrito ──");
-  const org = "marca-org", inscrito = "marca-inscrito";
-  const tokenOrg = await criarConta(org, "org@teste.local");
-  await db.collection("users").doc(org).set({ displayName: "Organizador", uid: org });
-  await db.collection("users").doc(inscrito).set({
-    displayName: "Inscrito", uid: inscrito,
-    skillBySport: { "Beach Tennis": "B", "Tênis": "3ª" },
-    skillBySportSource: { "Beach Tennis": "letzplay", "Tênis": "letzplay" },
-  });
-  await db.collection("tournaments").doc("marca-t1").set({
-    name: "Torneio da Marca", creatorUid: org, sport: "Beach Tennis",
-    participants: [{ uid: inscrito, displayName: "Inscrito" }],
-  });
-
-  r = await chamar("setParticipantsProfile", tokenOrg, {
-    tournamentId: "marca-t1", sport: "Beach Tennis",
-    assignments: [{ uid: inscrito, category: "A" }],
-  });
-  ok(r.status === 200 && r.body && r.body.result && r.body.result.written === 1,
-    "organizador gravou 1 perfil (" + JSON.stringify(r.body).slice(0, 160) + ")");
-  eq(await catDe(inscrito), { "Beach Tennis": "A", "Tênis": "3ª" }, "categoria digitada pelo organizador gravada");
-  eq(await fonteDe(inscrito), { "Tênis": "letzplay" },
-    "categoria DIGITADA pelo organizador não fica com selo de apurada");
+  /* ⚰️ O CENÁRIO DE `setParticipantsProfile` SAIU EM 23/set/2026, junto com a porta. Ela gravava
+   * categoria no perfil global de qualquer conta sem conferir o torneio; foi apagada do projeto.
+   * Quem faz esse trabalho é `applyEnrollmentAssignments` (autodraw), coberta no teste de lá.
+   * ⛔ Manter o cenário aqui reprovaria o `test:emu:fn` pedindo a porta de volta. */
 
   console.log("\n── completeOwnEligibilityProfile: marca ÓRFÃ + modalidade ausente ──");
   const eleg = "marca-eleg";

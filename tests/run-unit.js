@@ -918,6 +918,7 @@ const SUITES = [
   // corrigindo a declarada). Ainda SEM chamador: a ligação é do bloco 2 da reforma.
   'tests/letzplay-self-populate.test.js',
   'tests/marca-da-categoria-nao-sobrevive.test.js',
+  'tests/portas-aposentadas-nao-voltam.test.js',
   // O ORGANIZADOR passa a ver o par de conta duplicada do elenco dele. A detecção já
   // existia e só falava com o atleta; quem enxerga as duas inscrições lado a lado não
   // era avisado — foi por isso que a mesclagem falhou em todos os incidentes.

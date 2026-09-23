@@ -1115,6 +1115,17 @@ service cloud.firestore {
       }
       function serverOwnedProfileFields() {
         return ['authProvider', 'photoURL', 'displayName', 'displayName_lower', 'email', 'email_lower',
+                /* ⛔ 23/set/2026 — O RASTRO DE QUEM MEXEU É DO SERVIDOR. Estes seis dizem que um
+                 * ORGANIZADOR escreveu no cadastro de outra pessoa; enquanto o próprio dono do
+                 * perfil podia gravá-los, ele apagava esse rastro ou plantava o nome de terceiro —
+                 * ou seja, o rastro não valia como prova. Medido antes de fechar: nenhum é escrito
+                 * pelo navegador, e as Functions usam Admin SDK, que ignora Rules.
+                 * ⚠️ `skillBySportSource` (a marca de "apurada") NÃO está aqui de propósito: o
+                 * auto-preenchimento do navegador ainda consegue gravá-la sozinha, e fechar antes
+                 * de existir porta de servidor para a pessoa aplicar o próprio scan faria aquele
+                 * caminho falhar calado. Primeiro a porta, depois a Rule. */
+                'genderSetBy', 'genderSetAt', 'skillSetBy', 'profileSetAt',
+                'letzplayAppliedBy', 'letzplayAppliedAt',
                 'gender', 'birthDate', 'age', 'city', 'hrMax', 'letzplayHandle', 'letzplaySource',
                 'phone', 'phoneCountry', 'preferredCeps', 'preferredSports', 'skillBySport',
                 'canRefereeBySport', 'refereeSports', 'updatedAt', 'emailVerified', 'fcmToken',

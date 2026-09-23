@@ -410,7 +410,7 @@ nunca o código-fonte. **TRÊS** codebases (o 3º nasceu depois deste texto):
 - **`functions/`** — codebase `default` (**nodejs22**, ver `firebase.json`). É o grande
   (`functions/index.js`). ~52 exports; conferir a lista viva com
   `grep -o '^exports\.[A-Za-z0-9_]*' functions/index.js`. Entre elas:
-  `setParticipantsProfile`, `backupFirestore`, `enrollParticipant`/`deenrollParticipant`,
+  `backupFirestore`, `enrollParticipant`/`deenrollParticipant`,
   `applyLetzplayScans`, `respondHostInvite`, `sweepAbandonedTournaments`, os triggers
   `autoMergeOnProfileUpdate`/`enforceUniqueDisplayName`/`syncMatchRosters`, e vários
   `cleanup*`/`scheduled*`.

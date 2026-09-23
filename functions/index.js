@@ -2522,111 +2522,31 @@ exports.drainPendingPasswordResets = onSchedule(
 );
 
 // ─── setParticipantsGender (v2.1.20) ─────────────────────────────────────────
-// O organizador de um torneio atribui o gênero de inscritos que estavam SEM
-// gênero. As regras do Firestore só deixam a pessoa editar o próprio perfil, então
-// essa escrita em users/{uid} de OUTRA pessoa passa por aqui (Admin SDK ignora
-// rules). Verifica: caller é organizador/co-host do torneio, o alvo NÃO tinha
-// gênero ainda (não sobrescreve quem já declarou) e o valor é masculino/feminino.
-// Deploy:  firebase deploy --only functions:setParticipantsGender
-exports.setParticipantsGender = onCall(
-  { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
-  async (request) => {
-    const callerUid = request.auth && request.auth.uid;
-    const callerEmail = ((request.auth && request.auth.token && request.auth.token.email) || "").toLowerCase();
-    if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
+/* ⚰️ APOSENTADAS EM 23/set/2026: `setParticipantsGender` e `setParticipantsProfile`.
+ *
+ * ⛔ POR QUE SAÍRAM. Elas gravavam `gender` e `skillBySport` no PERFIL GLOBAL de outra pessoa a
+ * pedido do organizador, e **não conferiam se o alvo estava no torneio dele**. Criar torneio é
+ * livre, então qualquer conta autenticada virava "organizador" e alcançava o perfil de QUALQUER
+ * outra conta da base — uma chamada, sem rastro do lado da vítima.
+ *
+ * ⛔ E CONFERIR O ELENCO NÃO RESOLVERIA: o organizador **inscreve** o uid no próprio torneio
+ * (`enrollParticipant` aceita inscrever terceiro — grava `selfEnrolled:false` e `addedByUid`), e o
+ * alvo passaria a conferência. Endurecer a porta custou 22 rodadas de revisão e não fechava nada;
+ * apagar fecha.
+ *
+ * ⭐ E DAVA PARA APAGAR porque elas estavam MORTAS: a chamada saiu do cliente em 09/set/2026
+ * (`08c1e80a`) e o iOS publicado é 2.3.75, de 17-18/set — posterior. Varredura em `js/`, `ios/` e
+ * `android/` não acha nenhuma referência. Quem faz esse trabalho hoje é
+ * `applyEnrollmentAssignments` (autodraw), que só mexe em quem ela ACHA nas listas do torneio.
+ *
+ * ⚠️ RISCO ACEITO PELO DONO: cópia INSTALADA de 2.2.x (a loja publicou 2.2.0, 2.2.8 e 2.2.81)
+ * ainda chama — nessas, a atribuição de perfil pela Análise antiga passa a falhar.
+ *
+ * ⛔ NÃO REINTRODUZIR. `tests/portas-aposentadas-nao-voltam.test.js` reprova se o nome voltar ao
+ * código, ao cliente ou a script de deploy. A decisão do dono é que a categoria e o gênero que o
+ * organizador define valem DENTRO DO TORNEIO; o perfil global é da pessoa.
+ * [[project_porta_unica_de_escrita_cf]] [[feedback_enumerar_todos_os_caminhos_antes_de_dar_por_pronto]] */
 
-    const tournamentId = String((request.data && request.data.tournamentId) || "");
-    const assignments = (request.data && request.data.assignments) || [];
-    if (!tournamentId || !Array.isArray(assignments) || assignments.length === 0) {
-      throw new HttpsError("invalid-argument", "tournamentId e assignments são obrigatórios");
-    }
-
-    const db = admin.firestore();
-    const tSnap = await db.collection("tournaments").doc(tournamentId).get();
-    if (!tSnap.exists) throw new HttpsError("not-found", "torneio não existe");
-    const t = tSnap.data();
-    const isOrg = _isTournamentOrgCaller(t, callerUid);
-    if (!isOrg) throw new HttpsError("permission-denied", "só o organizador pode atribuir gênero");
-
-    let written = 0; const skipped = [];
-    for (const a of assignments) {
-      const uid = a && a.uid ? String(a.uid) : "";
-      const g = a && a.gender ? String(a.gender) : "";
-      if (!uid || (g !== "masculino" && g !== "feminino")) { skipped.push({ uid, reason: "invalid" }); continue; }
-      const ref = db.collection("users").doc(uid);
-      const snap = await ref.get();
-      if (!snap.exists) { skipped.push({ uid, reason: "no-user" }); continue; }
-      const cur = snap.data().gender;
-      if (cur && String(cur).trim()) { skipped.push({ uid, reason: "already-set" }); continue; }
-      await ref.update({ gender: g, genderSetBy: callerUid, genderSetAt: admin.firestore.FieldValue.serverTimestamp() });
-      written++;
-    }
-    console.log("[setParticipantsGender] torneio", tournamentId, "gravados:", written, "pulados:", skipped.length);
-    return { ok: true, written, skipped };
-  }
-);
-
-// ─── setParticipantsProfile (v2.1.46) ────────────────────────────────────────
-// O organizador, pela Análise de Inscritos, atribui GÊNERO e CATEGORIA (skill por
-// modalidade) aos participantes. Diferente de setParticipantsGender (que só grava
-// se vazio), aqui SOBRESCREVE o perfil global em users/{uid} — o organizador está
-// atribuindo, e o jogador pode reajustar depois no próprio perfil. Verifica que o
-// caller é organizador/co-host. Admin SDK ignora as rules (escrita em perfil alheio).
-// Deploy:  firebase deploy --only functions:setParticipantsProfile
-exports.setParticipantsProfile = onCall(
-  { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
-  async (request) => {
-    const callerUid = request.auth && request.auth.uid;
-    const callerEmail = ((request.auth && request.auth.token && request.auth.token.email) || "").toLowerCase();
-    if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
-
-    const tournamentId = String((request.data && request.data.tournamentId) || "");
-    const sport = String((request.data && request.data.sport) || "").trim();
-    const assignments = (request.data && request.data.assignments) || [];
-    if (!tournamentId || !Array.isArray(assignments) || assignments.length === 0) {
-      throw new HttpsError("invalid-argument", "tournamentId e assignments são obrigatórios");
-    }
-
-    const db = admin.firestore();
-    const tSnap = await db.collection("tournaments").doc(tournamentId).get();
-    if (!tSnap.exists) throw new HttpsError("not-found", "torneio não existe");
-    const t = tSnap.data();
-    const isOrg = _isTournamentOrgCaller(t, callerUid);
-    if (!isOrg) throw new HttpsError("permission-denied", "só o organizador pode atribuir perfil");
-
-    let written = 0; const skipped = [];
-    for (const a of assignments) {
-      const uid = a && a.uid ? String(a.uid) : "";
-      if (!uid) { skipped.push({ uid, reason: "no-uid" }); continue; }
-      const ref = db.collection("users").doc(uid);
-      const snap = await ref.get();
-      if (!snap.exists) { skipped.push({ uid, reason: "no-user" }); continue; }
-      const upd = {};
-      const g = a && a.gender ? String(a.gender) : "";
-      if (g === "masculino" || g === "feminino" || g === "outro") {
-        upd.gender = g;
-        upd.genderSetBy = callerUid;
-      }
-      const cat = a && a.category ? String(a.category).trim() : "";
-      if (cat && sport) {
-        const curData = snap.data() || {};
-        const sbs = (curData.skillBySport && typeof curData.skillBySport === "object") ? Object.assign({}, curData.skillBySport) : {};
-        sbs[sport] = cat;
-        upd.skillBySport = sbs;
-        // Organizador digitando categoria não produz procedência: a marca daquela
-        // modalidade sai, as outras ficam.
-        upd.skillBySportSource = _skillSource.reconciliar(curData.skillBySport, sbs, curData.skillBySportSource);
-        upd.skillSetBy = callerUid;
-      }
-      if (Object.keys(upd).length === 0) { skipped.push({ uid, reason: "nothing" }); continue; }
-      upd.profileSetAt = admin.firestore.FieldValue.serverTimestamp();
-      await ref.update(upd);
-      written++;
-    }
-    console.log("[setParticipantsProfile] torneio", tournamentId, "sport", sport, "gravados:", written, "pulados:", skipped.length);
-    return { ok: true, written, skipped };
-  }
-);
 
 // ─── applyLetzplayScans (v1.1.19) ────────────────────────────────────────────
 // Aplica o resultado da busca letzplay do organizador NO PERFIL de cada inscrito

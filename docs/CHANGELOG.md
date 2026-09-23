@@ -1,3 +1,10 @@
+## 2.3.92 (acumulando) — 23/set/2026
+
+- **Aposentadas `setParticipantsProfile` e `setParticipantsGender`.** As duas gravavam `gender` e `skillBySport` no perfil GLOBAL de outra pessoa a pedido do organizador, sem conferir se o alvo estava no torneio dele — e criar torneio é livre, então qualquer conta autenticada alcançava o perfil de qualquer outra. Estavam mortas: a chamada saiu do cliente em 09/set (`08c1e80a`) e o iOS publicado é 2.3.75, de 17-18/set. Conferir o elenco não resolveria, porque o organizador pode inscrever o uid no próprio torneio (`enrollParticipant` aceita terceiro); apagar resolve. Risco aceito pelo dono: cópia instalada de 2.2.x ainda chama e passa a falhar nessa atribuição.
+- **Rules: o rastro de quem mexeu virou campo de servidor** — `genderSetBy`, `genderSetAt`, `skillSetBy`, `profileSetAt`, `letzplayAppliedBy`, `letzplayAppliedAt`. O próprio dono do perfil podia apagar esse rastro ou plantar o nome de outro, ou seja, ele não valia como prova. Nenhum é escrito pelo navegador (medido).
+- `skillBySportSource` (a marca de "apurada") **continua** gravável, deliberadamente: o auto-preenchimento do navegador ainda precisa dela, e fechar antes de existir porta de servidor para a pessoa aplicar o próprio scan faria aquele caminho falhar calado. Há teste afirmando isso.
+- Novo portão `tests/portas-aposentadas-nao-voltam.test.js`: reprova se o nome voltar ao código, a um cliente (web ou pacote embarcado dos dois nativos) ou a script de deploy.
+
 ## 2.3.91 — 22/set/2026
 
 - A marca de procedência da categoria (`skillBySportSource`) deixa de sobreviver a uma mudança manual. Toda porta do servidor que altera `skillBySport` passa pelo mesmo núcleo puro (`functions/skill-source-core.js`, copiado para `functions-autodraw/vendor/`): a marca da modalidade mexida é apagada, a das intocadas fica, e nenhuma marca é atribuída.
