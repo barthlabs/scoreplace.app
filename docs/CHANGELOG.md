@@ -1,4 +1,4 @@
-## 2.3.94 — 23/set/2026 (scan do letzplay: assinatura, vínculo e elenco)
+## 2.3.94 — 23/set/2026 (scan do letzplay: assinatura e vínculo)
 
 - **O scan passou a ser ASSINADO e DO ORGANIZADOR do torneio que ele nomeia.** Antes bastava estar autenticado: qualquer conta gravava o scan de qualquer pessoa, e `scannedBy` era texto livre — dava para plantar **assinando com o uid de um terceiro**. Agora quem grava assina com o próprio uid, e o `tournamentId` declarado no documento tem de existir e ter o autor como organizador (no Sandbox, o dono). Nenhuma mudança de app: os dois caminhos de escrita já mandavam os dois campos desde antes da versão que está na loja.
 - ⛔⛔ **A trava de ELENCO foi tentada e RETIRADA — com a medida, não por cansaço.** Eu havia acrescentado "o alvo tem de estar no elenco do torneio nomeado" e escrito que aquilo *colapsava* o ataque. Estava errado em duas frentes, e a revisão do diff mostrou as duas:

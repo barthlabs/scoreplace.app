@@ -219,6 +219,8 @@ ok(novo.donoDeOutroTorneio === 200,
   '⚠️ ABERTO: organizador de torneio próprio ainda escreve scan de quem não está nele (got ' + novo.donoDeOutroTorneio + ')');
 ok(novo.sandboxForaDoElenco === 200,
   '⚠️ ABERTO: e pelo sandbox também (got ' + novo.sandboxForaDoElenco + ')');
+ok(novo.donoDeOutroTorneioFull === 200,
+  '⚠️ ABERTO: inclusive com `fullImport`, que é o que pesa no veredito (got ' + novo.donoDeOutroTorneioFull + ')');
 ok(novo.orgDoTorneioCerto === 200,
   '⭐ CONTROLE do elenco: o mesmo uid passa pelo organizador do torneio onde ele ESTÁ (got ' + novo.orgDoTorneioCerto + ')');
 

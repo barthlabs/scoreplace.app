@@ -895,6 +895,28 @@ console.log('\n── data mostrada = data do histórico em uso ──');
   ok(r._lzAuthorized === false, '⛔ nem o @ do histórico do scan');
 }
 {
+  /* ⚠️⚠️ MEDIDO E NÃO CORTADO — A FRONTEIRA QUE FALTA, ADVERSARIAL (23/set/2026).
+   * O import "próprio" (`users/{uid}.letzplayImport`) NÃO é atestado: a ponte do letzplay
+   * aceita `postMessage` da PRÓPRIA página (js/views/letzplay-bridge.js) e as Rules deixam o
+   * dono escrever o campo. Ou seja, a pessoa pode FORJAR o próprio histórico e a Análise
+   * produz cor e selo a partir dele — auto-atestado, exatamente o que a regra do scan proíbe
+   * para terceiros.
+   * ⛔ ESTE TESTE NÃO CONSERTA: ele FIXA o estado real, para ninguém ler a suíte verde como
+   * "isto está fechado". O dono decidiu MANTER a cor: ela ORIENTA e não prova (é o que a nota
+   * da 2.3.92 diz em público), e o cadastro global já não é mais tocado. O fecho de verdade é
+   * COLETA NO SERVIDOR. Quando ela existir, a asserção abaixo VIRA — e é para virar. */
+  /* Um import que a pessoa poderia ter escrito sozinha, no formato que a tela aceita. */
+  const impForjado = { handle: 'euMesmo', officialCategory: { categoryRaw: 'Masculina D', skill: 'D' },
+    importedAt: AGORA, extVersion: MOTOR, rating: { band: 'D+/C-' }, rankings: [], tournaments: [],
+    games: new Array(81), declaredGames: 81 };
+  const r = run({ uid: 'f1', effectiveSkills: [] },
+    { f1: Object.assign({ letzplayImport: impForjado }, profAuthorized) }, {});
+  ok(r._lzVerified === true,
+    '⚠️ ABERTO: import do PRÓPRIO dono (forjável por postMessage) ainda produz selo de verificado');
+  ok(!!r._lzColor,
+    '⚠️ ABERTO: e produz cor — o dono decidiu manter (orienta, não prova); fecho = coleta no servidor');
+}
+{
   /* ⛔ DADO PLANTADO NÃO VIRA FONTE DE NAVEGAÇÃO: `letzplayScans` ainda aceita escrita de
    * terceiro, então handle ausente, vazio ou de outro tipo tem de dar BRANCO e sem alvo. */
   /* ⚠️ O scan da fixture TRAZ `scan.handle` — usar ele aqui provaria o contrário do que eu quero.
