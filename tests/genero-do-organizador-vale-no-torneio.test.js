@@ -115,6 +115,19 @@ console.log('\n── cache frio: valor inválido não fica órfão ──');
   const e = limpar({ uid: 'u1', gender: 'misto', genderSource: 'organizador' });
   ok(e.gender === undefined && e.genderSource === undefined,
     '⛔ com o cache vazio, `misto` sai INTEIRO — limpar só a marca deixaria lixo passando por perfil');
+  /* ⛔ VALOR VÁLIDO COM FONTE ESTRANGEIRA, NO FRIO: os dois saem. Conservar o valor porque ele é
+   * "um gênero válido" deixava um retrato VELHO, sem marca, vencendo o perfil vivo nos leitores de
+   * dupla — o defeito que o revisor mediu. */
+  const e2 = limpar({ uid: 'u1', gender: 'masculino', genderSource: 'perfil' });
+  ok(e2.gender === undefined && e2.genderSource === undefined,
+    '⛔ solo: valor válido com fonte estrangeira sai INTEIRO no cache frio');
+  const e3 = limpar({ p1Uid: 'a', p1Gender: 'masculino', p1GenderSource: 'perfil', p2Uid: 'b' });
+  ok(e3.p1Gender === undefined && e3.p1GenderSource === undefined,
+    '⛔ membro de dupla: idem');
+  /* ⚠️ E sem fonte NENHUMA o fallback legado continua — é o comportamento de sempre, e mexer nele
+   * seria mudar produto de carona. */
+  const e4 = limpar({ p1Uid: 'a', p1Gender: 'masculino', p2Uid: 'b' });
+  ok(e4.p1Gender === 'masculino', 'sem fonte alguma, o valor legado do membro permanece');
   window._nameForUid = function () { return 'Fulano'; };
 }
 

@@ -403,12 +403,18 @@ function _stripUidEntryNames(p) {
   var _sanearParDeGenero = function (o, campo, campoFonte) {
     if (!o || typeof o !== 'object') return;
     if (_decidiuOrganizador(o, campo, campoFonte)) return;          // par válido: fica inteiro
-    if (Object.prototype.hasOwnProperty.call(o, campoFonte)) delete o[campoFonte];
-    /* ⛔ E O VALOR INVÁLIDO SAI JUNTO quando a marca existia — senão sobra `misto` (ou lixo) como
-     * gênero da pessoa, agora sem marca, e o leitor o trataria como retrato do perfil. Limpar só a
-     * marca é meio conserto: era o que este caminho fazia com o cache FRIO. */
-    if (o[campoFonte] === undefined && !_GENEROS_DE_PESSOA[o[campo]]
-      && Object.prototype.hasOwnProperty.call(o, campo)) delete o[campo];
+    /* ⛔ O QUE DECIDE É SE HAVIA FONTE — e isto foi medida do revisor, não minha. Com
+     * `{gender:'masculino', genderSource:'perfil'}` eu apagava só a marca e CONSERVAVA o valor,
+     * por ele ser um gênero válido. Resultado: um retrato VELHO, agora sem marca nenhuma, vencendo
+     * o perfil vivo nos leitores de dupla. Então: havia fonte e o par não é do organizador ⇒ saem
+     * os DOIS. Sem fonte nenhuma, fica o fallback legado (comportamento de sempre). */
+    var tinhaFonte = Object.prototype.hasOwnProperty.call(o, campoFonte);
+    if (tinhaFonte) {
+      delete o[campoFonte];
+      if (Object.prototype.hasOwnProperty.call(o, campo)) delete o[campo];
+      return;
+    }
+    if (!_GENEROS_DE_PESSOA[o[campo]] && Object.prototype.hasOwnProperty.call(o, campo)) delete o[campo];
   };
   var _delProfile = function (o) {
     _PROFILE_FIELDS.forEach(function (f) {

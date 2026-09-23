@@ -30,7 +30,7 @@ android {
                                                    // já estava em 36 — era ISSO que deixava o
                                                    // relógio um degrau atrás a cada subida.
         versionCode 163
-        versionName "2.3.75"
+        versionName "2.3.92"
     }
 
     buildTypes {
