@@ -437,6 +437,44 @@ service cloud.firestore {
        * ⛔ E `matches` FICA VAZIO no documento dividido: o jogo mora na subcoleção. Se o
        * cliente devolvesse os jogos pro documento voltariam DUAS cópias divergindo, e o teto
        * de 1 MB junto. [[project_teto_do_documento_e_arquitetura_de_dados]] */
+      /* ⛔ O ELENCO NÃO SE ALTERA PELO NAVEGADOR (23/set/2026 — bloco 3 da reforma).
+       *
+       * A inscrição migrou para o servidor há muito tempo: **53 portas** (`onCall`) escrevem elenco
+       * nos dois codebases — inscrever, sair, formar/desfazer dupla, W.O., substituição, reset,
+       * sorteio, fase, Liga. A rota CRUA, porém, continuava aberta, e a regra da reforma é clara:
+       * escrita que migrou para Function tem a rota direta FECHADA aqui.
+       *
+       * ⛔ O CUSTO MEDIDO de deixá-la aberta: qualquer conta cria um torneio e grava `memberUids`
+       * com o uid de quem quiser — foi isso que derrubou, no mesmo dia, a tentativa de exigir "o
+       * alvo está no meu elenco" para gravar scan do letzplay. Campo gravável pelo cliente não é
+       * fronteira de confiança.
+       *
+       * ⭐ É IGUALDADE, não ausência, e a diferença é o que mantém o app vivo: a transação do
+       * navegador REGRAVA `memberUids` em todo save, mesmo sem mudança de elenco. Exigir que o
+       * campo "não venha" mataria qualquer gravação; exigir que ele venha IGUAL não.
+       *
+       * ⛔ E `teamOrigins` está aqui porque ele decide se o reset DISSOLVE ou PRESERVA as duplas:
+       * mexer nele muda o elenco efetivo sem tocar em nenhuma das listas — e hoje até participante
+       * o grava.
+       *
+       * ⚠️ O QUE ISTO **NÃO** FECHA, dito para ninguém ler como resolvido:
+       *   • `allow create` segue aceitando esses campos ⇒ nascer com uid de terceiro continua
+       *     possível; `memberUids` só vira fronteira com as DUAS levas somadas;
+       *   • o `playerUids` que de fato autoriza jogador vive em `results/{matchId}`, que o
+       *     organizador grava direto (e o cliente escreve por `reseedMatchRoster`). Aqui fecha uma
+       *     CÓPIA, não a fronteira.
+       * ⛔ E sem escape de reset: `ehResetOk()` não compara campo de elenco nenhum, então usá-lo
+       * como escape reabriria a rota exatamente pelo reset. O reset tem porta própria. */
+      function elencoIntacto() {
+        return igual('participants')
+          && igual('standbyParticipants')
+          && igual('waitlist')
+          && igual('monarchWaitlist')
+          && igual('memberUids')
+          && igual('playerUids')
+          && igual('teamOrigins');
+      }
+
       function faseIntacta() {
         return igualZeroBase('currentPhaseIndex')
           && igualZeroBase('_phaseMaterialized')
@@ -608,6 +646,7 @@ service cloud.firestore {
           || (isTournamentParticipant(resource.data) && isParticipantBracketDiff())
         )
         && (faseIntacta() || ehResetOk())
+        && elencoIntacto()
         && categoriasTipadasIntactas();
 
       // Delete: admins only.

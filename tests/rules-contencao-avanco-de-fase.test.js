@@ -211,7 +211,15 @@ function payloadReset(extra) {
     currentPhaseIndex: 0, _phaseMaterialized: 0, matches: [],
   }, ['phases', 'currentPhaseIndex', '_phaseMaterialized', 'matches']);
 
-  await fix('p3', baseAvancado());
+  /* ⚠️ A FIXTURE NASCE COM O MESMO ELENCO QUE O RESET ENVIA (bloco 3, 23/set/2026). Antes ela vinha
+   * sem FORA e o payload o injetava em participants: o "reset" MEXIA no elenco, e com a trava
+   * nova isso é 403 — o positivo reprovaria por motivo certo, medindo a coisa errada. O reset que o
+   * cliente pode fazer é o que NÃO toca elenco; o que toca é caso negativo (ELENCO_contorno_reset). */
+  await fix('p3', baseAvancado({
+    participants: [{ uid: ORG }, { uid: JOG }, { uid: FORA }],
+    memberUids: [ORG, JOG],
+    waitlist: [], standbyParticipants: [], monarchWaitlist: {},
+  }));
   out.P3_reset_completo = await patch('p3', ORG, payloadReset(), null);
 
   await fix('p4', baseNaoDividido({ matches: [JOGO] }));
@@ -350,6 +358,63 @@ function payloadReset(extra) {
   await db.doc('tournaments/n21/matches/m1').set({ jogo: JOGO, playerUids: [JOG] });
   out.N21_escrita_em_matches = await patchSub('tournaments/n21/matches/m1', JOG, { placar: '6-4' });
 
+  /* ══ BLOCO 3 DA REFORMA: O ELENCO NÃO SE ALTERA PELO NAVEGADOR ═══════════════════════
+   * A inscrição migrou para o servidor (53 portas onCall escrevem elenco nos dois codebases);
+   * a rota CRUA continuava aberta. Estes casos medem elencoIntacto().
+   * ⛔ SEED ÚNICO com os SETE campos POVOADOS, e cada caso altera EXCLUSIVAMENTE o seu: com campo
+   * ausente, a comparação mediria "apareceu" em vez de "mudou", e ausência/tipo contaminaria. */
+  const SEED_ELENCO = {
+    name: 'Elenco', creatorUid: ORG, isPublic: true, status: 'active', format: 'Liga',
+    participants: [{ uid: ORG }, { uid: JOG }],
+    standbyParticipants: [{ uid: FORA }],
+    waitlist: [{ uid: FORA }],
+    monarchWaitlist: { A: [{ uid: FORA }] },
+    memberUids: [ORG, JOG],
+    playerUids: [ORG, JOG],
+    teamOrigins: { t1: 'sorteio' },
+    currentPhaseIndex: 0,
+  };
+  const CAMPOS_ELENCO = {
+    participants: [{ uid: ORG }],
+    standbyParticipants: [],
+    waitlist: [],
+    monarchWaitlist: {},
+    memberUids: [ORG],
+    playerUids: [ORG],
+    teamOrigins: { t1: 'manual' },
+  };
+  /* ⛔ ATOR = ORGANIZADOR NOS SETE. Trocar de ator troca o RAMO de autorização (admin × diff de
+   * participante) e um 403 deixaria de provar que quem barrou foi a trava do elenco. */
+  let _i = 0;
+  for (const campo of Object.keys(CAMPOS_ELENCO)) {
+    _i++;
+    const doc = 'el' + _i;
+    await fix(doc, SEED_ELENCO);
+    out['ELENCO_' + campo] = await patch(doc, ORG, { [campo]: CAMPOS_ELENCO[campo] }, [campo]);
+  }
+  /* ⛔ E DOIS COMO PARTICIPANTE: sete negativos só como organizador não pegariam a trava posta
+   * apenas no ramo administrativo — e o participante altera estes dois HOJE. */
+  await fix('elp1', SEED_ELENCO);
+  out.ELENCO_participante_standby = await patch('elp1', JOG, { standbyParticipants: [] }, ['standbyParticipants']);
+  await fix('elp2', SEED_ELENCO);
+  out.ELENCO_participante_waitlist = await patch('elp2', JOG, { waitlist: [] }, ['waitlist']);
+
+  /* Contorno clássico: elenco junto de um campo permitido, na mesma escrita. */
+  await fix('elc', SEED_ELENCO);
+  out.ELENCO_contorno_com_campo_ok = await patch('elc', ORG,
+    { name: 'Outro nome', memberUids: [ORG] }, ['name', 'memberUids']);
+
+  /* Contorno pelo RESET: ehResetOk() não compara elenco — se a trava fosse escape dele, bastava
+   * mandar o elenco alterado numa forma válida de reset. */
+  await fix('elr', SEED_ELENCO);
+  out.ELENCO_contorno_reset = await patch('elr', ORG,
+    Object.assign(payloadReset({}), { participants: [{ uid: ORG }] }), null);
+
+  /* CONTROLE POSITIVO: update que NÃO toca elenco continua passando — senão a regra poderia ter
+   * fechado o documento inteiro e o teste não veria. */
+  await fix('elok', SEED_ELENCO);
+  out.ELENCO_sem_tocar_elenco = await patch('elok', ORG, { name: 'Nome novo' }, ['name']);
+
   console.log('__JSON__' + JSON.stringify(out));
   process.exit(0);
 })().catch(e => { console.error(e && e.stack || e); process.exit(1); });
@@ -406,6 +471,9 @@ function regrasSemTrava() {
     if (old === antes) throw new Error('controle: não achei ' + nome + ' em firestore.rules');
   };
   troca('&& (faseIntacta() || ehResetOk())', '&& (faseIntacta() || ehResetOk() || true)', 'a trava do update');
+  /* ⛔ A trava do ELENCO sai por `|| true` também — apagar a chamada deixaria `elencoIntacto()`
+   * órfã e as Rules NÃO COMPILARIAM: o controle morreria por compilação e mediria nada. */
+  troca('&& elencoIntacto()', '&& (elencoIntacto() || true)', 'a trava do elenco');
   troca('&& !dividido();', '&& (!dividido() || true);', 'a trava do delete');
     troca(/\n        && request\.resource\.data\.get\('currentPhaseIndex', 0\)[\s\S]*?&& !\('phaseRounds' in request\.resource\.data\);/,
       ';', 'as exigências do create');
@@ -460,6 +528,22 @@ const neg = [
 neg.forEach(([k, texto]) => ok(A[k] === 403, texto + ' — veio ' + A[k]));
 ok(A.N15a_currentStage_livre === 200, 'N15a controle: currentStage é LIVRE — veio ' + A.N15a_currentStage_livre);
 
+/* ── BLOCO 3: o elenco não se altera pelo navegador ───────────────────────────── */
+const CAMPOS_EL = ['participants', 'standbyParticipants', 'waitlist', 'monarchWaitlist',
+  'memberUids', 'playerUids', 'teamOrigins'];
+CAMPOS_EL.forEach((c) => ok(A['ELENCO_' + c] === 403,
+  '🔒 organizador NÃO altera `' + c + '` pelo navegador — veio ' + A['ELENCO_' + c]));
+ok(A.ELENCO_participante_standby === 403,
+  '🔒 e a trava está ACIMA do ramo: participante não altera `standbyParticipants` — veio ' + A.ELENCO_participante_standby);
+ok(A.ELENCO_participante_waitlist === 403,
+  '🔒 idem `waitlist` — veio ' + A.ELENCO_participante_waitlist);
+ok(A.ELENCO_contorno_com_campo_ok === 403,
+  '🔒 contorno: elenco junto de um campo permitido — veio ' + A.ELENCO_contorno_com_campo_ok);
+ok(A.ELENCO_contorno_reset === 403,
+  '🔒 contorno pelo RESET (ehResetOk não olha elenco) — veio ' + A.ELENCO_contorno_reset);
+ok(A.ELENCO_sem_tocar_elenco === 200,
+  'controle: update que NÃO toca elenco continua passando — veio ' + A.ELENCO_sem_tocar_elenco);
+
 // ── CONTROLE: sem a trava, os bypasses passavam ──────────────────────────────
 console.log('  ── controle (mesmas rules SEM a trava) ──');
 const B = rodar(regrasSemTrava(), PORT_CONTROLE, 'controle');
@@ -473,6 +557,14 @@ console.log('  medido: ' + JSON.stringify(B));
   ['N17_create_com_semPesados', 'nascer "dividido" passava'],
   ['N18_delete_dividido', 'apagar torneio dividido passava'],
 ].forEach(([k, texto]) => ok(B[k] === 200, 'controle: ' + texto + ' — veio ' + B[k]));
+/* ⛔ O A/B DO ELENCO: sem a trava, CADA um dos sete passava. Sem esta metade, um 403 acima
+ * provaria só que ALGUMA regra recusou — e a suíte de inscrição já recusa por outros motivos. */
+CAMPOS_EL.forEach((c) => ok(B['ELENCO_' + c] === 200,
+  'controle: alterar `' + c + '` passava antes desta leva — veio ' + B['ELENCO_' + c]));
+ok(B.ELENCO_participante_standby === 200,
+  'controle: participante alterava `standbyParticipants` — veio ' + B.ELENCO_participante_standby);
+ok(B.ELENCO_participante_waitlist === 200,
+  'controle: participante alterava `waitlist` — veio ' + B.ELENCO_participante_waitlist);
 // N21 é regra antiga (`allow write: if false`): tem que continuar 403 nos DOIS lados.
 ok(B.N21_escrita_em_matches === 403, 'controle: matches já era fechada antes desta leva — veio ' + B.N21_escrita_em_matches);
 

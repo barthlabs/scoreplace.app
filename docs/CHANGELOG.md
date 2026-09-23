@@ -1,3 +1,9 @@
+## Regras — 23/set/2026 (bloco 3 da reforma, sem versão de app)
+
+- **O navegador deixou de alterar o elenco de torneio existente.** `participants`, `standbyParticipants`, `waitlist`, `monarchWaitlist`, `memberUids`, `playerUids` e `teamOrigins` passam a exigir igualdade com o que já está gravado — quem muda elenco são as **53 portas de servidor** que já existem (inscrever, sair, dupla, W.O., substituição, reset, sorteio, fase, Liga).
+- Sem escape pelo reset: a regra de reset não compara elenco, então usá-la como saída reabriria a rota exatamente por ali. O reset tem porta própria no servidor.
+- ⚠️ Não fecha tudo: **criar** torneio ainda aceita esses campos (nascer com uid de terceiro segue possível), e o `playerUids` que de fato autoriza jogador vive no subdocumento do resultado. As duas coisas ficam nomeadas para as próximas levas.
+
 ## 2.3.92 — 23/set/2026
 
 - **Nada que o organizador define entra mais no cadastro global de ninguém.** Primeiro saiu a categoria; agora saiu o **gênero**, que era o último — as duas portas do sorteio não tocam mais em `users/{uid}`. Ser organizador não prova consentimento: inscrever terceiro é fluxo suportado, então qualquer conta inscrevia a vítima no próprio torneio e reescrevia o cadastro dela. **Medido antes de tirar**: 181 inscrições com conta em toda a base, **zero** divergências entre o gênero do inscrito e o do perfil.
