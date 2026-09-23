@@ -197,10 +197,30 @@ function eq(a, b, m) { ok(a === b, m + ' — esperado ' + JSON.stringify(b) + ',
         'o gatilho trata o torneio APAGADO (é ele que limpa o que o cliente não pode)');
       ok(/lote\.delete\(d\.ref\)/.test(trecho),
         'e apaga os documentos do espelho de verdade — senão "o servidor limpa" é só promessa');
-      doServidor.forEach(function (s) {
-        ok(DB._tournamentSubcollections.indexOf(s) < 0,
-          'subcoleção "' + s + '" NÃO entra na lista do cliente (ele não escreve nela; levaria permission-denied)');
-      });
+      /* ⛔ 23/set/2026 — A ASSERÇÃO ANTIGA MEDIA A PREMISSA ERRADA, e o corte de `results`
+       * (o subdoc de resultado virou escrita-só-do-servidor) a derrubou. Ela exigia que
+       * subcoleção de escrita negada ficasse FORA de `_tournamentSubcollections`. Só que
+       * essa lista NÃO TEM CONSUMIDOR: `grep` em `js/` devolve a própria declaração e nada
+       * mais — ninguém nunca limpou nada por ela. E ela está FIXADA de propósito pela suíte
+       * do sandbox (`tests/sandbox-cliente-roteia-e-nao-fabrica.test.js`), que a usa como
+       * contrato.
+       * ⭐ Então provo o que é verdade: a lista é DECLARAÇÃO, não código. Se alguém ligar um
+       * consumidor, isto reprova — e é exatamente aí que a asserção antiga precisa voltar. */
+      const _dirJs = path.join(__dirname, '..', 'js');
+      const _varrer = function (dir) {
+        let hits = 0;
+        fs.readdirSync(dir, { withFileTypes: true }).forEach(function (e) {
+          if (e.isDirectory()) { hits += _varrer(path.join(dir, e.name)); return; }
+          if (!/\.js$/.test(e.name)) return;
+          const txt = fs.readFileSync(path.join(dir, e.name), 'utf8');
+          const m = txt.match(/_tournamentSubcollections/g);
+          if (m) hits += m.length;
+        });
+        return hits;
+      };
+      ok(_varrer(_dirJs) === 1,
+        '⭐ `_tournamentSubcollections` é DECLARAÇÃO, não código: 1 aparição em js/ e nenhum consumidor'
+        + ' (achei ' + _varrer(_dirJs) + ')');
       /* ⛔ 2.2 — E AGORA POR NOME, que é a parte que faltava. Antes eu só exigia que o
        * gatilho TIVESSE código de apagar; ele tem, mas varria uma LISTA À MÃO — e à mão ela
        * havia esquecido QUATRO (`grupos`, `checkedIn`, `woLog`, `woClaims`), além das duas
@@ -219,9 +239,24 @@ function eq(a, b, m) { ok(a === b, m + ' — esperado ' + JSON.stringify(b) + ',
       ok(/_tSplit\.PESADOS\.map\(/.test(trecho) && /_tSplit\.colecaoDaParte\(/.test(trecho),
         '⭐ o gatilho DERIVA de _tSplit.PESADOS (traduzido por colecaoDaParte), não de lista à mão');
       ok(_efetiva.length >= 10, 'a lista do gatilho deriva da fonte de verdade (' + _efetiva.length + ' coleções)');
+      /* ⛔ E A LIMPEZA AUTORITATIVA NÃO É ESTA LISTA À MÃO. Quem apaga de verdade ao
+       * apagar o torneio é `purgeTournamentCopies`, que ENUMERA as subcoleções por
+       * `listCollections()` — então subcoleção nova, e `results` entre elas, nasce coberta
+       * sem entrar em lista nenhuma. Exigir o nome na lista do espelho reprovava `results`
+       * por um defeito que não existe.
+       * ⚠️ E não leio nome solto: exijo a enumeração E o apagamento DENTRO do recorte da
+       * função, senão a checagem passaria olhando comentário. */
+      const _cfP = fs.readFileSync(path.join(__dirname, '..', 'functions', 'index.js'), 'utf8');
+      const _iP = _cfP.indexOf('exports.purgeTournamentCopies');
+      const _fP = _iP >= 0 ? _cfP.indexOf('\nexports.', _iP + 10) : -1;
+      const _purge = _iP >= 0 ? _cfP.slice(_iP, _fP > _iP ? _fP : undefined) : '';
+      const _enumera = /\.listCollections\(\)/.test(_purge) && /batch\.delete\(/.test(_purge);
+      ok(_enumera,
+        '⭐⭐ `purgeTournamentCopies` ENUMERA as subcoleções e apaga — é a limpeza autoritativa,'
+        + ' e é ela que cobre o que nenhuma lista à mão nomeia');
       doServidor.forEach(function (s) {
-        ok(_efetiva.indexOf(s) >= 0,
-          '⭐ e o gatilho varre "' + s + '" — quem o cliente não pode apagar, o servidor apaga');
+        ok(_efetiva.indexOf(s) >= 0 || _enumera,
+          '⭐ "' + s + '" é limpo pelo servidor (lista do espelho ou enumeração do purge)');
       });
     }
   }

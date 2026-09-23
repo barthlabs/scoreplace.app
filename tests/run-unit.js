@@ -1121,6 +1121,7 @@ const SUITES = [
   'tests/mapa-de-perfis-e-isolado-por-invocacao.test.js',   // AsyncLocalStorage sob concorrência
   'tests/recuperar-fase2-no-emulador.test.js',              // emulador 8134 — ordem do dono
   'tests/rules-contencao-avanco-de-fase.test.js',           // emulador 8106/8107, com controle
+  'tests/rules-resultado-do-jogo-e-do-servidor.test.js',   // emulador 8108/8109, com controle
 
   /* ── LEVA 2.2: o link do grupo de WhatsApp passa a ser gravado pela CF ─────────────── */
   'tests/link-do-grupo-do-jogo-persiste.test.js',            // 1 link POR JOGO, em dividido e não dividido
@@ -2053,6 +2054,7 @@ const PRENDEM_PORTA = [
   // Abre dois emuladores em sequência; sob carga paralela o Firebase CLI pode esperar
   // sem devolver controle, portanto precisa da mesma exclusividade dos demais emuladores.
   'tests/rules-contencao-avanco-de-fase.test.js',
+  'tests/rules-resultado-do-jogo-e-do-servidor.test.js',
   /* Sobem Firestore + Auth nas portas do firebase.sandbox.json (8093/9092) e carregam as
    * Cloud Functions de verdade. Duas delas ao mesmo tempo disputam a MESMA porta — medido em
    * 14/set/2026: passavam sozinhas e caíam na bateria, sem defeito nenhum. */

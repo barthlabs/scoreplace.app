@@ -669,33 +669,50 @@ service cloud.firestore {
 
       // ─── Resultado por JOGO em doc próprio (linha 4.1, project_match_result_docs) ───
       // Cada jogo tem seu placar/consenso em tournaments/{id}/results/{matchId}.
-      // Escopo PER-JOGO: só os participantes DAQUELE jogo (ou o organizador) escrevem.
-      // O subdoc carrega `playerUids` = uids dos dois lados do jogo (definidos por
-      // caminho de confiança: o sorteio/avanço, que é admin). O participante do jogo
-      // pode gravar o RESULTADO se seu uid está em playerUids E sem alterar playerUids
-      // (não pode se auto-incluir). Admin (org/co-host) pode tudo (definir playerUids
-      // no sorteio, resolver disputa, refazer). Leitura = quem pode ler o torneio.
+      //
+      // ⛔ LEITURA PELO CLIENTE; `create`/`update`/`delete` RESERVADOS A PROCESSO
+      // PRIVILEGIADO (Cloud Function com Admin SDK, ou manutenção por IAM/REST).
+      // Fechado em 23/set/2026, e o motivo é o campo `playerUids`: ele é o HISTÓRICO
+      // GLOBAL de terceiro. A consulta de "Meus Resultados" é
+      // `collectionGroup('results').where('playerUids','array-contains', uid)` — quem
+      // escreve esse campo escreve o passado de outra pessoa. Com a regra antiga o
+      // organizador criava um jogo com o uid de QUALQUER UM e um placar inventado, e
+      // aquilo aparecia na vida dela; nem precisava estar inscrita. É o irmão do que o
+      // bloco 3 tirou do documento do torneio — e trava de elenco no doc não vale nada
+      // com a porta do subdoc aberta ao lado.
+      //
+      // QUEM ESCREVE, e nenhum deles passa por aqui:
+      //   • automáticos, criação/atualização: o gatilho `syncMatchRosters` (deriva
+      //     `playerUids` da ESTRUTURA do torneio), o gatilho `syncSplitMatchResult`
+      //     (espelha o placar), o plano de escrita do torneio dividido
+      //     (functions-autodraw/write-plan.js) e o backfill HTTP protegido por segredo;
+      //   • rota server-side pedida pelo usuário: a callable de replay;
+      //   • apagamento: `syncSplitMatchResult` remove espelhos e `purgeTournamentCopies`
+      //     remove as subcoleções inteiras.
+      //
+      // ⚠️ MEDIDO ANTES DE FECHAR: o cliente NÃO usava esta porta. A única escrita dele
+      // era `mutateMatchResult` (js/firebase-db.js), chamada só por `commitMatchResult`,
+      // cujos dois chamadores (`reseedMatchRoster`, `seedMatchResultDocs`) não têm
+      // chamador nenhum — nem no main nem na árvore da versão que está no Play. O doc
+      // por jogo está atrás do "incremento 3"; quando ele for ligado, nasce pela porta
+      // do servidor em vez de herdar uma porta já aberta.
+      // ⚠️ O SANDBOX não passa por aqui: `_tSub` roteia `results`→`resultsSandbox`, que
+      // tem bloco próprio mais acima.
+      // Leitura = quem pode ler o torneio (e a query de collection group é autorizada
+      // pelo curinga `match /{path=**}/results/{matchId}`, lá embaixo — outra regra).
       match /results/{matchId} {
         function parentT() {
           return get(/databases/$(database)/documents/tournaments/$(tournamentId)).data;
         }
-        function isAdminOf(pt) { return isTournamentAdmin(pt) || isTournamentAdminByUid(pt); }
         // `request.auth != null` PRIMEIRO no OR: curto-circuita sem o get() do
         // parentT() → deixa a query collectionGroup de `results` (Fase B: ler os
         // jogos de um uid sem carregar torneio) eficiente. Semântica idêntica à
         // ordem anterior (authed já lia qualquer result subdoc); só evita 1 get()
         // por doc na listagem. Público (sem auth) ainda cai no parentT().isPublic.
         allow read: if (request.auth != null) || (parentT().isPublic == true);
-        // Create: só admin (o sorteio cria o doc do jogo já com playerUids).
-        allow create: if request.auth != null && isAdminOf(parentT());
-        // Update: admin OU participante DAQUELE jogo (uid em playerUids) que NÃO mexe
-        // no roster (playerUids imutável pra participante).
-        allow update: if request.auth != null && (
-          isAdminOf(parentT())
-          || ( (resource.data.playerUids is list) && (request.auth.uid in resource.data.playerUids)
-               && (request.resource.data.playerUids == resource.data.playerUids) )
-        );
-        allow delete: if request.auth != null && isAdminOf(parentT());
+        allow create: if false;
+        allow update: if false;
+        allow delete: if false;
       }
 
       // ─── FASE 2 · OS JOGOS FORA DO DOCUMENTO ──────────────────────────────
