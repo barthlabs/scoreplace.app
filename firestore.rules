@@ -1089,7 +1089,12 @@ service cloud.firestore {
        * exigência de elenco "porque lá o dono opera a cópia dele" — e isso abria a mesma
        * fresta pelo lado: quem tem um sandbox escreveria o scan de qualquer pessoa do mundo
        * nomeando o sandbox. O elenco do sandbox é cópia do original, então exigir o alvo
-       * nele custa nada e fecha o desvio. Vale nos DOIS ramos. */
+       * nele custa nada e fecha o desvio. Vale nos DOIS ramos.
+       * ⭐ E A RÉPLICA CARREGA O ELENCO — medido, não suposto: a criação do sandbox copia o
+       * documento do original INTEIRO e só sobrepõe o carimbo técnico
+       * (`functions/index.js:11766`), e o comentário de lá lista `memberUids` entre os
+       * campos que "passam como estão". Se a réplica não trouxesse o elenco, esta exigência
+       * recusaria TODA varredura dentro do sandbox — por isso conferi antes, e não depois. */
       function scanAlvoNoElenco() {
         return scanUid in scanAlvoT().get('memberUids', []);
       }
