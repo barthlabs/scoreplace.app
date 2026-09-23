@@ -1,4 +1,10 @@
 {
+  "//emulators": "O emulador de AUTH só sobe quando a porta está declarada. `test:emu:autodraw` roda daqui e chama a callable com ID token de verdade.",
+  "emulators": {
+    "auth": {
+      "port": 9099
+    }
+  },
   "functions": {
     "source": ".",
     "predeploy": [
@@ -7,6 +13,8 @@
     ],
     "ignore": [
       "firebase.json",
+      "firebase.emulator.json",
+      "firestore.emulator.rules",
       "**/.*",
       "**/node_modules/**",
       "test-*.js"

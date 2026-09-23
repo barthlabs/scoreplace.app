@@ -110,6 +110,12 @@
       }
     ]
   },
+  "//emulators": "O emulador de AUTH só sobe quando a porta está declarada — `--only auth` sozinho NÃO o inicia, e sem ele as portas autenticadas ficariam verdes pelo motivo errado (o teste de marca chama com ID token de verdade). Bloco IGNORADO pelo deploy.",
+  "emulators": {
+    "auth": {
+      "port": 9099
+    }
+  },
   "functions": [
     {
       "source": "functions",

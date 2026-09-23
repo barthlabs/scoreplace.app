@@ -17,6 +17,13 @@ const _tSplit = require('./vendor/tournament-split-core.js');   // fonte única:
 let _mrEspelho = null;
 try { _mrEspelho = require('./vendor/match-roster.js'); }
 catch (e) { console.error('[espelho-result] vendor/match-roster.js indisponível:', e && e.message); }
+/* fonte única: functions/skill-source-core.js (copy-vendor) — apaga a marca
+ * `skillBySportSource` de toda modalidade cuja categoria o servidor muda.
+ * ⛔ REQUIRE DURO, sem `catch`: degradar em silêncio aqui RECRIA exatamente o defeito que
+ * este arquivo vem fechar — o perfil voltaria a dizer "apurada" sobre valor digitado, e
+ * ninguém veria. O `copy-vendor` traz a cópia no predeploy e o `check-vendor-fresh` a
+ * confere byte a byte no `npm test`. [[feedback_engolir_erro_custa_horas_do_dono]] */
+const _skillSource = require('./vendor/skill-source-core.js');
 
 // v2.3.91: lógica de sorteio REAL do cliente (Rei/Rainha, duplas, equilíbrio,
 // categorias, folgas, desempate) carregada via shim Node. Substitui o stub 1×1
@@ -2826,7 +2833,7 @@ exports.applyEnrollmentAssignments = onCall(async (request) => {
       // escrever: assim cada perfil recebe uma única atualização transacional.
       if(profileUid&&(e.gender||e.category)){const k=String(profileUid), prior=profiles[k]||{uid:k}; if(e.gender)prior.gender=e.gender; if(e.category)prior.category=e.category; profiles[k]=prior;}
     }
-    for(const k of Object.keys(profiles)){const a=profiles[k], uref=db.collection('users').doc(a.uid), us=await tx.get(uref); if(!us.exists)continue; const upd={profileSetAt:FieldValue.serverTimestamp()}; if(a.gender)upd.gender=a.gender,upd.genderSetBy=uid; if(a.category&&sport){const sb=Object.assign({},(us.data().skillBySport||{}));sb[sport]=a.category;upd.skillBySport=sb;upd.skillSetBy=uid;} tx.update(uref,upd);}
+    for(const k of Object.keys(profiles)){const a=profiles[k], uref=db.collection('users').doc(a.uid), us=await tx.get(uref); if(!us.exists)continue; const upd={profileSetAt:FieldValue.serverTimestamp()}; if(a.gender)upd.gender=a.gender,upd.genderSetBy=uid; if(a.category&&sport){const cur=us.data()||{};const sb=Object.assign({},(cur.skillBySport||{}));sb[sport]=a.category;upd.skillBySport=sb;upd.skillBySportSource=_skillSource.reconciliar(cur.skillBySport,sb,cur.skillBySportSource);upd.skillSetBy=uid;} tx.update(uref,upd);}
     if(!changed)return {ok:true,changed:0}; const b=_gravaTorneio(tx,ref,t,before,{agoraIso}); return {ok:true,changed,tournament:b.clean};
   });
 });

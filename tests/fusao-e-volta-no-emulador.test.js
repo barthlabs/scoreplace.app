@@ -50,11 +50,25 @@ const TOUR='tour_prova';
    * torneio. A NOVA nasceu por telefone. Espelha os pares medidos na base real. */
   await admin.auth().createUser({uid:VELHA,email:'ela@gmail.com',emailVerified:true,password:'senha123'});
   await admin.auth().createUser({uid:NOVA,phoneNumber:'+5511988906144'});
+  /* ⛔ OS DOIS MAPAS DE CATEGORIA, NOS DOIS LADOS. Sem semeá-los, este cenário não tocava na
+   * categoria nem na marca dela, e a fusão podia colar a marca de um lado na categoria
+   * do outro sem ninguém ver. (⛔ sem crase aqui: este bloco vive DENTRO do template literal
+   * do driver — [[feedback_crase_em_template_literal_derruba_a_tela]].) As seis modalidades cobrem, numa fusão só, os seis casos:
+   *   Beach Tennis  keep vence e a marca é DELE                → marca conservada
+   *   Squash        modalidade só na ABSORVIDA, marca pareada   → marca viaja
+   *   Tênis         CONFLITO e vence o keep (sem marca dele)    → marca da absorvida APAGADA
+   *   Vôlei         marca sem categoria em lugar nenhum (órfã)  → apagada
+   *   Padel         EMPATE com marca do keep                    → conservada
+   *   Futevôlei     EMPATE sem marca do keep, marca no drop     → fica SEM marca */
   await db.doc('users/'+VELHA).set({displayName:'Deborah Monteiro',email:'ela@gmail.com',
-    authProvider:'google.com',createdAt:'2026-06-01T00:00:00.000Z',city:'São Paulo'});
+    authProvider:'google.com',createdAt:'2026-06-01T00:00:00.000Z',city:'São Paulo',
+    skillBySport:{'Tênis':'4ª','Squash':'D','Padel':'C','Futevôlei':'E'},
+    skillBySportSource:{'Tênis':'letzplay','Squash':'letzplay','Futevôlei':'letzplay'}});
   await db.doc('users/'+NOVA).set({displayName:'Deborah Perestrello Monteiro',
     phone:'+5511988906144',authProvider:'phone',createdAt:'2026-08-25T00:00:00.000Z',
-    birthDate:'1982-01-13'});
+    birthDate:'1982-01-13',
+    skillBySport:{'Beach Tennis':'A','Tênis':'3ª','Padel':'C','Futevôlei':'E'},
+    skillBySportSource:{'Beach Tennis':'letzplay','Padel':'letzplay','Vôlei':'letzplay'}});
 
   /* ⛔ O TORNEIO TEM DE ESTAR NA CONTA QUE VAI SER ABSORVIDA — senão o teste nao prova nada.
    * Quem sobrevive é a conta MAIS ATIVA (mais torneios). Na primeira versão deste cenário eu
@@ -112,6 +126,12 @@ const TOUR='tour_prova';
   R['quemFicou']={sobrevivente:sobrevivente,absorvida:absorvida,
     porQualCaminho:(R['uniu'].d&&R['uniu'].d.already)?'automatico':'link do e-mail'};
   if(!absorvida){ console.log('__JSON__'+JSON.stringify(R)); process.exit(0); }
+
+  /* ⛔ A MARCA NO DOCUMENTO DO SOBREVIVENTE, logo depois da união — é aqui que se prova que
+   * o par calculado FOI GRAVADO. O núcleo puro sozinho não prova isso: este motor grava o
+   * patch de perfil fora de transação, por update(), e um campo omitido ali permaneceria. */
+  const dSobrevivente=(await db.doc('users/'+sobrevivente).get()).data()||{};
+  R['marcaDepoisDaUniao']={cat:dSobrevivente.skillBySport||null,fonte:dSobrevivente.skillBySportSource||null};
 
   /* A conta absorvida continua existindo? (era isto que o deleteUser impedia) */
   try{ const a=await admin.auth().getUser(absorvida);
@@ -197,6 +217,30 @@ ok('⭐⭐ o torneio passou a apontar para a conta que ficou',
   R.depoisDaUniao.memberUids.indexOf(R.quemFicou.absorvida) < 0, J(R.depoisDaUniao));
 ok('⭐ e o espelho do inscrito mudou de nome junto',
   R.depoisDaUniao.espelhos.indexOf(R.quemFicou.sobrevivente) >= 0, J(R.depoisDaUniao.espelhos));
+
+console.log('── ①b a MARCA da categoria não cola no valor errado ──');
+/* ⛔ O defeito que isto fecha: a varredura genérica fundia `skillBySport` e
+ * `skillBySportSource` como objetos INDEPENDENTES — a categoria ficava com o valor do
+ * sobrevivente e a marca com a do absorvido, ou seja, o selo de uma apuração em cima de um
+ * valor que aquela apuração nunca viu. Agora os dois são calculados juntos. */
+const mCat = (R.marcaDepoisDaUniao && R.marcaDepoisDaUniao.cat) || {};
+const mFonte = (R.marcaDepoisDaUniao && R.marcaDepoisDaUniao.fonte) || {};
+ok('as categorias das duas contas estão todas no sobrevivente',
+  J(Object.keys(mCat).sort()) === J(['Beach Tennis', 'Futevôlei', 'Padel', 'Squash', 'Tênis']), J(mCat));
+ok('em conflito, a categoria do sobrevivente vence (Tênis 3ª, não 4ª)', mCat['Tênis'] === '3ª', J(mCat));
+ok('⭐ marca do sobrevivente, pareada com a categoria dele: CONSERVADA (Beach Tennis)',
+  mFonte['Beach Tennis'] === 'letzplay', J(mFonte));
+ok('⭐ modalidade só da absorvida: a marca VIAJA junto, já pareada (Squash)',
+  mFonte['Squash'] === 'letzplay', J(mFonte));
+ok('⭐⭐ CONFLITO: a marca da absorvida NÃO cola na categoria do sobrevivente (Tênis)',
+  mFonte['Tênis'] === undefined, J(mFonte));
+ok('marca ÓRFÃ, sem categoria em lugar nenhum, é APAGADA (Vôlei)',
+  mFonte['Vôlei'] === undefined, J(mFonte));
+ok('EMPATE com marca do sobrevivente: conservada (Padel)', mFonte['Padel'] === 'letzplay', J(mFonte));
+ok('⭐ EMPATE sem marca do sobrevivente: fica SEM marca, não se completa com a da absorvida (Futevôlei)',
+  mFonte['Futevôlei'] === undefined, J(mFonte));
+ok('⛔ e nenhuma marca foi INVENTADA: só as três que se provaram',
+  J(Object.keys(mFonte).sort()) === J(['Beach Tennis', 'Padel', 'Squash']), J(mFonte));
 
 if (!R.quemFicou || !R.quemFicou.absorvida) {
   console.error('\n❌ a união não aconteceu — nada a medir. ' + J(R.uniu));

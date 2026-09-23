@@ -1,3 +1,10 @@
+## 2.3.91 — 22/set/2026
+
+- A marca de procedência da categoria (`skillBySportSource`) deixa de sobreviver a uma mudança manual. Toda porta do servidor que altera `skillBySport` passa pelo mesmo núcleo puro (`functions/skill-source-core.js`, copiado para `functions-autodraw/vendor/`): a marca da modalidade mexida é apagada, a das intocadas fica, e nenhuma marca é atribuída.
+- Seis portas cobertas: `updateOwnProfile`, `setParticipantsProfile`, `completeOwnEligibilityProfile`, `applyEnrollmentAssignments` (autodraw), fusão por e-mail (`profile-merge-core`) e fusão por telefone (`mergePhoneAccount`).
+- Na fusão, categoria e marca passam a ser calculadas JUNTAS: a marca só sobrevive se vier do lado cuja categoria venceu e continuar pareada com o mesmo valor. Antes, a varredura genérica fundia os dois mapas de forma independente e o selo de uma apuração colava num valor que ela nunca viu.
+- Corrigido na fusão por telefone: ela grava com `set(merge:true)`, cujo merge é PROFUNDO — gravar só o mapa calculado deixava viva a marca que a fusão tinha acabado de apagar. As chaves removidas passam a ir como `delete()` explícito.
+
 ## 2.3.50 — 16/set/2026
 
 - Após a confirmação da Callable, o card lê `results/{matchId}` diretamente do servidor antes de repintar. Assim o set aceito aparece sem recarregar, sem reaplicar payload nem rodar motor de resultado no cliente.

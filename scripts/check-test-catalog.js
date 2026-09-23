@@ -34,6 +34,14 @@ const EMULADOR_MANUAL = {
     'firebase emulators:exec --only functions,firestore --project demo-scoreplace "node functions/test-backfill-emu.js"',
   'functions/test-syncroster-emu.js':
     'firebase emulators:exec --only functions,firestore --project demo-scoreplace "node functions/test-syncroster-emu.js"',
+  /* ⭐ A marca da categoria, nos DOIS codebases. O do principal sobe também o `auth` (as
+   * portas exigem chamador autenticado); o do autodraw roda de DENTRO daquele diretório,
+   * porque o `firebase.json` da raiz declara um único codebase e o emulador da raiz não
+   * serve aquele código. Os dois estão encadeados no `npm run test:emu`. */
+  'functions/test-reconciliacao-marca-emu.js':
+    'firebase emulators:exec --only functions,firestore,auth --project demo-scoreplace "node functions/test-reconciliacao-marca-emu.js"',
+  'functions-autodraw/test-reconciliacao-marca-emu.js':
+    'cd functions-autodraw && firebase emulators:exec --only functions,firestore,auth --config firebase.emulator.json --project demo-scoreplace "node test-reconciliacao-marca-emu.js"',
   'functions/test-pair-replicate.js':
     'firebase emulators:exec --only firestore --config firebase.emulator.json --project demo-scoreplace "FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 node functions/test-pair-replicate.js"',
   'functions/test-sandbox-replicate.js':

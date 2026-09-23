@@ -121,6 +121,20 @@ module.exports = (async () => {
     '⛔ e nenhum estado terminal falso foi marcado (ficou: ' + estG2 + ')');
   try { await admin.auth().deleteUser(TERCEIRO); } catch (e) {}
 
+  /* ══ 5) FUSÃO BEM-SUCEDIDA DE DOIS PERFIS — A PROVA VIVE EM OUTRO LUGAR ═══════════
+   * ⛔ MEDIDO em 22/set/2026, com o cenário escrito e rodado AQUI antes de ser movido: a
+   * fusão de dois perfis de verdade morre neste harness com
+   *     TypeError: Cannot read properties of undefined (reading 'serverTimestamp')
+   *     at functions/index.js:9165   (a lápide da conta antiga)
+   * porque dentro do runtime do emulador de FUNCTIONS o `firebase-admin` é um proxy em que
+   * `admin.firestore.FieldValue` não existe. Linha ANTIGA, que funciona em produção — os
+   * casos 1 a 4 acima nunca chegavam nela, por isso o defeito só apareceu agora.
+   * ⛔ Consertar o produto para agradar o emulador seria estragar o que está certo. Então a
+   * prova do caminho BEM-SUCEDIDO (inclusive a marca da categoria) vive em
+   * `functions/test-reconciliacao-marca-emu.js`, que carrega o índice num processo NORMAL,
+   * com admin de verdade, e roda no `npm run test:emu`. O que fica aqui é o que este
+   * harness prova de fato: recusa, dryRun e ghost. */
+
   console.log('\n  mergePhone prova/ghost: ' + pass + ' ok, ' + fail + ' falhas');
   if (fail) process.exit(1);
 })();

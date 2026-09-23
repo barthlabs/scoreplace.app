@@ -1,0 +1,21 @@
+{
+  "//": "Config DEDICADA ao teste de emulador DESTE codebase (`npm run test:emu:autodraw`). ⛔ Por que ela existe: o `firebase.json` de deploy daqui não tem seção `firestore`, e sem ela o `--only firestore` NÃO sobe o emulador — o processo do teste então falava com o Firestore de VERDADE e morria em PERMISSION_DENIED. Também declara a porta do AUTH, que só sobe quando declarada. ⛔ NÃO usar para deploy.",
+  "functions": [
+    {
+      "source": ".",
+      "codebase": "autodraw",
+      "runtime": "nodejs22",
+      "ignore": ["firebase.json", "firebase.emulator.json", "**/.*", "**/node_modules/**", "test-*.js"]
+    }
+  ],
+  "firestore": {
+    "rules": "firestore.emulator.rules"
+  },
+  "emulators": {
+    "firestore": { "port": 8080 },
+    "functions": { "port": 5001 },
+    "auth": { "port": 9099 },
+    "ui": { "enabled": false },
+    "singleProjectMode": true
+  }
+}

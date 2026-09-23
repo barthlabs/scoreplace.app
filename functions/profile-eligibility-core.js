@@ -8,6 +8,8 @@
  * escreve em users/{uid}; a Function fixa ambos pelo token e por este núcleo.
  */
 
+const _skillSource = require('./skill-source-core');
+
 const GENDERS = new Set(['feminino', 'masculino', 'outro']);
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -63,7 +65,14 @@ function missingOnly(existing, intent) {
     Object.keys(intent.skillBySport).forEach((sport) => {
       if (!current[sport]) add[sport] = intent.skillBySport[sport];
     });
-    if (Object.keys(add).length) patch.skillBySport = Object.assign({}, current, add);
+    if (Object.keys(add).length) {
+      patch.skillBySport = Object.assign({}, current, add);
+      /* ⛔ ESTA PORTA SÓ ACRESCENTA modalidade ausente — nunca altera nem remove. Então o
+       * caso dela é a marca ÓRFÃ: existia `skillBySportSource['Beach Tennis']` sem categoria
+       * de Beach Tennis, e completar a categoria limpa aquela marca (a nova categoria é
+       * DECLARADA, não apurada), preservando a marca das outras modalidades. */
+      patch.skillBySportSource = _skillSource.reconciliar(current, patch.skillBySport, profile.skillBySportSource);
+    }
   }
   return patch;
 }

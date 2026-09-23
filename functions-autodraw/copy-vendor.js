@@ -132,7 +132,12 @@ for (const f of DOMAIN_TO_FUNCTIONS) {
  * que é exatamente o que produziu o estrago do grupo V, com duas cópias do mesmo jogo
  * discordando. Mesma fonte, dois destinos; o gate de vendor acusa se divergirem.
  * ⚠️ A fonte aqui é `functions/`, não `js/views/` — por isso o laço tem SRC próprio. */
-const DE_FUNCTIONS = ['match-roster.js'];
+/* ⭐ E O RECONCILIADOR DA MARCA DA CATEGORIA viaja na mesma mão (2.3.91): a porta
+ * `applyEnrollmentAssignments` grava `skillBySport` no perfil, e a marca
+ * `skillBySportSource` tem de ser apagada pela MESMA regra que as portas do outro
+ * codebase usam. Duas cópias da regra divergiriam em silêncio — o gate de vendor compara
+ * byte a byte justamente para isso. */
+const DE_FUNCTIONS = ['match-roster.js', 'skill-source-core.js'];
 for (const f of DE_FUNCTIONS) {
   const src = path.resolve(__dirname, '..', 'functions', f);
   if (!fs.existsSync(src)) { console.error(`[copy-vendor] FONTE AUSENTE: ${src}`); process.exit(1); }

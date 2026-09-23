@@ -15,8 +15,16 @@
 // que listava campos e sempre ficava incompleto até virar varredura canônica. Aqui a lista é
 // de EXCLUSÃO: tudo que não está nela é preservado por padrão.
 
+const _skillSource = require('./skill-source-core');
+
 // Nunca copiar do drop para o sobrevivente:
 const NUNCA_COPIAR = new Set([
+  /* ⛔ 2.3.91 — A CATEGORIA E A MARCA DELA SAEM DA VARREDURA GENÉRICA. A varredura funde
+   * objeto por chave, cada campo por conta própria: `skillBySport` ficava com o valor do
+   * KEEP e `skillBySportSource` ficava com a marca do DROP — o selo de uma prova colado num
+   * valor que aquela prova nunca viu. Os dois são calculados JUNTOS, logo abaixo, por
+   * `reconciliarMerge`, que só transporta marca já PAREADA com o valor que venceu. */
+  'skillBySport', 'skillBySportSource',
   /* ⛔ v2.1.48 (4ª auditoria, ponto 4A) — OS QUATRO CAMPOS DE AMIZADE.
    * Eles NÃO são dado de perfil: são PROJEÇÃO da autoridade (`friendships` +
    * `friendAccess`), reconstruída por `amizade-lifecycle.reconstruirCache`. Unir aqui,
@@ -105,6 +113,23 @@ function computeProfileMerge(keepData, dropData, keepUid) {
 
     if (isEmpty(kv)) upd[k] = dv;
   });
+
+  /* ⭐ O PAR CATEGORIA+MARCA, calculado junto. A união das categorias é a MESMA de antes
+   * (keep vence por chave); o que muda é a marca, que agora só sobrevive se vier do lado
+   * cuja categoria venceu. ⚠️ `upd` é gravado por `update()`, que não apaga campo omitido —
+   * então a marca entra no patch sempre que DIFERIR da que está no sobrevivente, inclusive
+   * quando o resultado é `{}`. */
+  const catKeep = isPlainObject(keep.skillBySport) ? keep.skillBySport : {};
+  const catDrop = isPlainObject(drop.skillBySport) ? drop.skillBySport : {};
+  const catFinal = Object.assign({}, catDrop, catKeep);
+  if (JSON.stringify(catFinal) !== JSON.stringify(catKeep)) upd.skillBySport = catFinal;
+  const fonteFinal = _skillSource.reconciliarMerge({
+    categoriaKeep: keep.skillBySport, fonteKeep: keep.skillBySportSource,
+    categoriaDrop: drop.skillBySport, fonteDrop: drop.skillBySportSource,
+    categoriaFinal: catFinal,
+  });
+  const fonteKeepAtual = isPlainObject(keep.skillBySportSource) ? keep.skillBySportSource : {};
+  if (JSON.stringify(fonteFinal) !== JSON.stringify(fonteKeepAtual)) upd.skillBySportSource = fonteFinal;
   return upd;
 }
 

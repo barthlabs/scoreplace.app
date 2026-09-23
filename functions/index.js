@@ -155,6 +155,10 @@ const _AMIZADE_CACHE_CAMPOS = new Set(["friends", "friendRequestsSent", "friendR
 const _nameUnique = require("./name-unique-core");
 const _profileUpdate = require("./profile-update-core");
 const _profileEligibility = require("./profile-eligibility-core");
+/* A marca da categoria (`skillBySportSource`) é apagada pela MESMA regra em toda porta que
+ * muda `skillBySport`. Sem isso, categoria digitada por cima de apurada mantinha o selo e o
+ * perfil dizia "apurada" sobre valor escrito à mão. Viaja para o autodraw pelo vendor. */
+const _skillSource = require("./skill-source-core");
 const _nameVariant = require("./name-variant-core");
 // v1.7.36: vigia estrutural — quem troca jogadores de um jogo que JÁ EXISTE sem ter
 // autoridade pra isso. Pendurado no syncMatchRosters (mesmo gatilho, custo zero).
@@ -2609,6 +2613,9 @@ exports.setParticipantsProfile = onCall(
         const sbs = (curData.skillBySport && typeof curData.skillBySport === "object") ? Object.assign({}, curData.skillBySport) : {};
         sbs[sport] = cat;
         upd.skillBySport = sbs;
+        // Organizador digitando categoria não produz procedência: a marca daquela
+        // modalidade sai, as outras ficam.
+        upd.skillBySportSource = _skillSource.reconciliar(curData.skillBySport, sbs, curData.skillBySportSource);
         upd.skillSetBy = callerUid;
       }
       if (Object.keys(upd).length === 0) { skipped.push({ uid, reason: "nothing" }); continue; }
@@ -3229,6 +3236,13 @@ exports.updateOwnProfile = onCall(
         throw new HttpsError("permission-denied", "telefone novo exige verificação");
       }
       const update = Object.assign({}, patch, { updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+      /* ⛔ Categoria mudada à mão NÃO pode ficar com selo de apurada. A marca de cada
+       * modalidade MEXIDA sai; a das intocadas fica. `update` substitui o mapa inteiro, que
+       * é o que se quer — inclusive quando o resultado é `{}`. */
+      if (patch.skillBySport) {
+        update.skillBySportSource = _skillSource.reconciliar(
+          old.skillBySport, patch.skillBySport, old.skillBySportSource);
+      }
       eraseFields.forEach((field) => { delete update[field]; update[field] = admin.firestore.FieldValue.delete(); });
       if (patch.displayName && patch.displayName !== old.displayName) {
         const conflict = await _nameUnique.findDisplayNameConflict(db, patch.displayName, uid);
@@ -9003,6 +9017,28 @@ exports.mergePhoneAccount = onCall(
     surv.preferredCeps = _cepsCore.unirCeps(newData.preferredCeps, oldData.preferredCeps);
     surv.preferredLocations = unionLocations(newData.preferredLocations, oldData.preferredLocations);
     surv.skillBySport = Object.assign({}, oldData.skillBySport || {}, newData.skillBySport || {});
+    /* ⛔ AQUI NÃO BASTA GRAVAR O MAPA CALCULADO — e isso foi MEDIDO, não suposto. Este `surv`
+     * vai por `set(..., {merge:true})`, e o merge do Firestore é PROFUNDO: ele funde o mapa
+     * CHAVE A CHAVE com o que já está lá. Gravar `{BT, Padel, Squash}` por cima de
+     * `{BT, Padel, Vôlei}` deixava `Vôlei` VIVO — a marca que a fusão tinha acabado de
+     * decidir apagar sobrevivia calada. Medido em 22/set/2026 pelo teste que exercita a
+     * fusão de dois perfis de verdade.
+     * ⛔ Então cada chave que SAIU vai explicitamente como `delete()`. Os outros escritores
+     * desta marca usam `update()`, que substitui o campo inteiro; este é o único que não.
+     * [[feedback_a_defesa_vaza_pela_borda]] — a regra estava certa e vazava na GRAVAÇÃO. */
+    const _fonteAlvo = _skillSource.reconciliarMerge({
+      categoriaKeep: newData.skillBySport, fonteKeep: newData.skillBySportSource,
+      categoriaDrop: oldData.skillBySport, fonteDrop: oldData.skillBySportSource,
+      categoriaFinal: surv.skillBySport,
+    });
+    const _fonteAtual = (newData.skillBySportSource && typeof newData.skillBySportSource === "object")
+      ? newData.skillBySportSource : {};
+    surv.skillBySportSource = Object.assign({}, _fonteAlvo);
+    Object.keys(_fonteAtual).forEach((sport) => {
+      if (!Object.prototype.hasOwnProperty.call(_fonteAlvo, sport)) {
+        surv.skillBySportSource[sport] = admin.firestore.FieldValue.delete();
+      }
+    });
     // matchHistory (campo-array legado): união por matchId
     if (Array.isArray(oldData.matchHistory) && oldData.matchHistory.length) {
       const mh = Array.isArray(newData.matchHistory) ? newData.matchHistory.slice() : [];

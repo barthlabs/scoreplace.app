@@ -1,3 +1,4 @@
+// 2.3.91 — o perfil não diz mais que a categoria veio de fora quando alguém a digitou à mão: sempre que o servidor muda a sua categoria numa modalidade, o selo de "apurada" daquela modalidade sai junto, e o das outras fica.
 // 2.3.85 — acesso por e-mail exige senha ou recuperação de senha; a confirmação de e-mail continua disponível e não cria sessão.
 // 2.3.84 — melhor de 3 abre Set 1 e Set 2 juntos; STB só aparece em 1×1, o placar final resume sets e valores impossíveis recebem aviso antes de gravar.
 // 2.3.83 — card de jogo (chave, Novidades, Últimos Resultados, Próximo Jogo): "Melhor de 3 · 0 × 2" sobe para logo abaixo de "Jogo N" e a linha "Jogado em" / "Agendado" / "Jogar até" desce para o cabeçalho de sets
