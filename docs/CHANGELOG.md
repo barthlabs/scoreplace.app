@@ -1,3 +1,12 @@
+## Scan do letzplay — 23/set/2026 (Rules, sem versão de app)
+
+- **O scan passou a ser ASSINADO e DO ORGANIZADOR do torneio que ele nomeia.** Antes bastava estar autenticado: qualquer conta gravava o scan de qualquer pessoa, e `scannedBy` era texto livre — dava para plantar **assinando com o uid de um terceiro**. Agora quem grava assina com o próprio uid, e o `tournamentId` declarado no documento tem de existir e ter o autor como organizador (no Sandbox, o dono). Nenhuma mudança de app: os dois caminhos de escrita já mandavam os dois campos desde antes da versão que está na loja.
+- ⛔ **NÃO fecha, e está nomeado**: organizador de um torneio **próprio** ainda planta scan de qualquer uid nomeando esse torneio. A trava com dentes — exigir que a pessoa esteja no **elenco** — espera uma medida do banco real (a lista de membros está completa em todo torneio?), e a leitura de produção está bloqueada. Recusar por suposição já custou caro aqui.
+
+### Decisão do dono sobre o veredito da Análise
+
+O revisor pediu, duas vezes, que a Análise **parasse de transformar leitura do letzplay em veredito** — sem cor decisória, sem selo de verificado, sem habilidade derivada — porque nem o scan nem o autoimport são atestados. O dono decidiu **manter a cor** e atacar a origem. A razão está registrada: a leitura **orienta, não prova**, e isso já é o que a nota da 2.3.92 diz em público; o estrago possível está confinado à leitura de uma tela (o cadastro global já não é tocado desde a 2.3.92), e o ataque exige escolher a vítima, ter torneio e assinar com o próprio uid. O fecho de verdade é **coleta no servidor**, que fica como destino, não como próximo passo.
+
 ## 2.3.93 — 23/set/2026 (bloco 4, leva a — consolidação, sem mudança de comportamento)
 
 - **UMA casa para "este torneio é uma Liga?".** `window._isLigaFormat` estava definida **duas vezes** — em `js/views/tournaments-utils.js` (versão ciente de FASE, protegida por `|| function`) e em `js/views/tournaments-categories.js` (versão antiga, atribuição sem guarda). O `index.html` carrega utils **antes** de categories e os dois são `defer`, que executa na ordem do documento: **a segunda ganhava**, e o ramo ciente de fase era código morto no navegador. A guarda `||` nunca ajudou — ela roda antes da outra existir.
