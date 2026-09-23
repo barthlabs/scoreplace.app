@@ -1070,44 +1070,26 @@ service cloud.firestore {
       function scanAlvoSb() {
         return get(/databases/$(database)/documents/sandboxes/$(request.resource.data.tournamentId)).data;
       }
-      /* ⭐⭐⭐ E O ALVO TEM DE ESTAR NO ELENCO DAQUELE TORNEIO.
-       * É esta linha que colapsa o ataque. Com assinatura + vínculo, o forjador ainda podia
-       * criar um torneio PRÓPRIO e escrever scan de qualquer pessoa do mundo nomeando ele.
-       * Exigindo o alvo em `memberUids`, para difamar alguém é preciso PRIMEIRO inscrevê-lo
-       * — e aí sobrou "organizador mente sobre o próprio inscrito", que é o caso legítimo e
-       * que NENHUMA coleta no servidor evitaria (ele poderia digitar a categoria à mão).
-       * ⭐ POR QUE `memberUids` PODE SER FRONTEIRA AGORA, e não podia antes: até o bloco 3
-       * o cliente ESCREVIA esse campo — quem forjava o scan forjava a lista junto, e usá-la
-       * como prova seria circular. Hoje o elenco é do servidor: o `update` exige igualdade
-       * (`elencoIntacto()`) e o `create` do cliente está FECHADO. A lista virou testemunha
-       * que o acusado não pode mais escrever.
-       * ⚠️ PREÇO, declarado: se num torneio o `memberUids` estiver atrasado em relação a
-       * `participants`, a varredura daquele inscrito é RECUSADA. O modo de falha é visível
-       * — a tela já mostra o erro real da gravação e avisa —, não silencioso. Recusar à
-       * vista é melhor que aceitar forjado.
-       * ⛔ E O SANDBOX NÃO É PORTA DE FUGA. Eu havia deixado o ramo do sandbox sem a
-       * exigência de elenco "porque lá o dono opera a cópia dele" — e isso abria a mesma
-       * fresta pelo lado: quem tem um sandbox escreveria o scan de qualquer pessoa do mundo
-       * nomeando o sandbox. O elenco do sandbox é cópia do original, então exigir o alvo
-       * nele custa nada e fecha o desvio. Vale nos DOIS ramos.
-       * ⭐ E A RÉPLICA CARREGA O ELENCO — medido, não suposto: a criação do sandbox copia o
-       * documento do original INTEIRO e só sobrepõe o carimbo técnico
-       * (`functions/index.js:11766`), e o comentário de lá lista `memberUids` entre os
-       * campos que "passam como estão". Se a réplica não trouxesse o elenco, esta exigência
-       * recusaria TODA varredura dentro do sandbox — por isso conferi antes, e não depois. */
-      function scanAlvoNoElenco() {
-        return scanUid in scanAlvoT().get('memberUids', []);
-      }
-      function scanAlvoNoElencoSb() {
-        return scanUid in scanAlvoSb().get('memberUids', []);
-      }
+      /* ⛔⛔ O ELENCO NÃO ENTROU — E O MOTIVO É MEDIDO, não recuo por cansaço.
+       * Eu havia acrescentado "o alvo tem de estar no `memberUids` do torneio nomeado" e
+       * disse que aquilo COLAPSAVA o ataque. Estava errado, em duas frentes, e a revisão do
+       * diff mostrou as duas:
+       *   1. NÃO CONFINA NADA. O scan é GLOBAL por uid. O organizador inscreve a vítima no
+       *      torneio dele (inscrever terceiro é fluxo suportado, e a porta de inscrição
+       *      recompõe `memberUids` sozinha), grava o scan — e aquele documento passa a ser
+       *      lido na Análise de TODOS os outros torneios. A trava só obrigava um passo a
+       *      mais, não fechava o caminho.
+       *   2. QUEBRAVA O SANDBOX. A cópia nasce com o elenco do original, mas quem se
+       *      inscreve DEPOIS da cópia não entra na lista da cópia pelo mesmo caminho — e a
+       *      varredura dentro do sandbox passaria a ser recusada. Romper a ferramenta de
+       *      teste do dono para ganhar um passo a mais do atacante é troca ruim.
+       * ⇒ Ficam a ASSINATURA e o VÍNCULO, que são ganho sem preço. O fecho de verdade segue
+       * sendo COLETA NO SERVIDOR. [[project_scan_do_letzplay_nao_escreve_perfil]] */
       function scanDoOrganizador() {
         return (exists(/databases/$(database)/documents/tournaments/$(request.resource.data.tournamentId))
-                && isTournamentAdmin(scanAlvoT())
-                && scanAlvoNoElenco())
+                && isTournamentAdmin(scanAlvoT()))
             || (exists(/databases/$(database)/documents/sandboxes/$(request.resource.data.tournamentId))
-                && scanAlvoSb().get('sandboxOwnerUid', '') == request.auth.uid
-                && scanAlvoNoElencoSb());
+                && scanAlvoSb().get('sandboxOwnerUid', '') == request.auth.uid);
       }
       allow create, update: if request.auth != null
         && request.auth.uid != scanUid
