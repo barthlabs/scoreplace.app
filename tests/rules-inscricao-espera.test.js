@@ -51,8 +51,8 @@ const tok = uid => b64({alg:'none',typ:'JWT'}) + '.' + b64({
 }) + '.';
 const base = H + '/v1/projects/' + P + '/databases/(default)/documents/';
 /* ⚠️ \`uid === 'owner'\` usa o bypass de ADMIN do emulador. Existe só para MONTAR o cenário:
- * a regra de \`create\` de torneio passou a exigir \`_nascidoEm == request.time\` (leva L7,
- * "confirma criação no servidor"), e o setup deste teste criava o torneio como usuário — a
+ * a rota de \`create\` de torneio está FECHADA ao cliente (\`allow create: if false\` — quem
+ * cria é a Function), e o setup deste teste criava o torneio como usuário — a
  * partir dali ele reprovava em TUDO, inclusive nas asserções que não têm nada a ver com
  * criação. Montar o cenário não é o que este teste mede; o que ele mede é o \`update\`. */
 async function req(method, p, uid, body) {

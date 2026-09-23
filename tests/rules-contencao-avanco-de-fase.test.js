@@ -249,8 +249,21 @@ function payloadReset(extra) {
   await fix('p8', divSemMatches);
   out.P8_dividido_sem_campo_matches = await patch('p8', JOG, { checkedIn: { [JOG]: true } }, ['checkedIn']);
 
-  // controle de criação: torneio normal continua nascendo
+  /* C1 INVERTIDO em 23/set/2026: a rota direta de create FECHOU (allow create: if false).
+   * Torneio nasce pela Function. O caso continua aqui porque virou a prova do fechamento. */
   out.C1_create_normal = await patch('c1', ORG, baseNaoDividido(), null);
+
+  /* ══ NASCIMENTO COM ELENCO FORJADO ════════════════════════════════════════════
+   * Os tres satisfazem por INTEIRO as condicoes ANTIGAS do create (uid proprio, carimbo
+   * com transform REQUEST_TIME, fase 0, sem marcador de divisao) — senao o 403 viria da
+   * barreira velha e a prova seria outra. O que eles tinham de arbitrario era o ELENCO:
+   * nascer com o uid de terceiro dentro, e a contencao do update congelar a mentira. */
+  out.C2_create_memberUids_de_terceiro = await patch('c2', ORG,
+    baseNaoDividido({ memberUids: [ORG, JOG, FORA] }), null);
+  out.C3_create_participants_povoado = await patch('c3', ORG,
+    baseNaoDividido({ participants: [{ uid: ORG }, { uid: FORA }] }), null);
+  out.C4_create_waitlist_povoada = await patch('c4', ORG,
+    baseNaoDividido({ waitlist: [{ uid: FORA }] }), null);
 
   // ══ NEGATIVOS — cada um fecha UM bypass ═══════════════════════════════════════
   // N1: o avanço de fase escrito à mão pelo cliente antigo. É O BUG.
@@ -475,8 +488,29 @@ function regrasSemTrava() {
    * órfã e as Rules NÃO COMPILARIAM: o controle morreria por compilação e mediria nada. */
   troca('&& elencoIntacto()', '&& (elencoIntacto() || true)', 'a trava do elenco');
   troca('&& !dividido();', '&& (!dividido() || true);', 'a trava do delete');
-    troca(/\n        && request\.resource\.data\.get\('currentPhaseIndex', 0\)[\s\S]*?&& !\('phaseRounds' in request\.resource\.data\);/,
-      ';', 'as exigências do create');
+  /* ⛔ O CREATE VOLTA A EXISTIR — E SÓ DENTRO DE `tournaments`.
+   * Aqui `|| true` não serve: com `allow create: if false` o controle recusaria igual e os
+   * 403 do lado A não provariam nada. Então o controle RESTAURA o predicado antigo — porém
+   * SEM as cláusulas de fase/divisão, senão N16/N17 (que exigem 200 aqui) morreriam.
+   * ⚠️ E a troca é RECORTADA: depois desta leva existem TRÊS `allow create: if false;` nas
+   * rules; um replace global abriria a porta errada e deixaria `tournaments` fechado. */
+  {
+    const ini = old.indexOf('match /tournaments/{tournamentId}');
+    if (ini < 0) throw new Error('controle: não achei o bloco de tournaments');
+    const fim = old.indexOf('allow update:', ini);
+    if (fim < 0) throw new Error('controle: não achei o allow update de tournaments');
+    const bloco = old.slice(ini, fim);
+    const alvo = 'allow create: if false;';
+    const n = bloco.split(alvo).length - 1;
+    if (n !== 1) throw new Error('controle: esperava 1 `' + alvo + '` no bloco de tournaments, achei ' + n);
+    const antigo = [
+      'allow create: if request.auth != null',
+      '        && request.resource.data.creatorUid is string',
+      '        && request.resource.data.creatorUid == request.auth.uid',
+      '        && request.resource.data._nascidoEm == request.time;',
+    ].join('\n');
+    old = old.slice(0, ini) + bloco.replace(alvo, antigo) + old.slice(fim);
+  }
   const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'sp-fase-old-')), 'sem-trava.rules');
   fs.writeFileSync(file, old);
   return file;
@@ -499,7 +533,14 @@ ok(A.P6_promote_lines === 200, 'P6 phases[0]._promoteLines = 1 — veio ' + A.P6
 ok(A.P7_delete_nao_dividido === 200, 'P7 apagar torneio NÃO dividido — veio ' + A.P7_delete_nao_dividido);
 ok(A.P8_dividido_sem_campo_matches === 200,
    'P8 torneio dividido SEM o campo `matches` no doc segue escrevível — veio ' + A.P8_dividido_sem_campo_matches);
-ok(A.C1_create_normal === 200, 'C1 criar torneio normal — veio ' + A.C1_create_normal);
+ok(A.C1_create_normal === 403,
+   '🔒 C1 criar torneio pela rota DIRETA é negado — quem cria é a Function — veio ' + A.C1_create_normal);
+ok(A.C2_create_memberUids_de_terceiro === 403,
+   '🔒 C2 nascer com `memberUids` de terceiro — veio ' + A.C2_create_memberUids_de_terceiro);
+ok(A.C3_create_participants_povoado === 403,
+   '🔒 C3 nascer com `participants` povoado — veio ' + A.C3_create_participants_povoado);
+ok(A.C4_create_waitlist_povoada === 403,
+   '🔒 C4 nascer com `waitlist` povoada por FORA — veio ' + A.C4_create_waitlist_povoada);
 
 // ── NEGATIVOS ────────────────────────────────────────────────────────────────
 const neg = [
@@ -555,6 +596,10 @@ console.log('  medido: ' + JSON.stringify(B));
   ['N9_matches_cheio_em_dividido', 'devolver jogos pro doc passava'],
   ['N16_create_com_indice', 'nascer na fase 3 passava'],
   ['N17_create_com_semPesados', 'nascer "dividido" passava'],
+  ['C1_create_normal', 'criar torneio DIRETO passava'],
+  ['C2_create_memberUids_de_terceiro', 'nascer com memberUids de terceiro passava'],
+  ['C3_create_participants_povoado', 'nascer com participants povoado passava'],
+  ['C4_create_waitlist_povoada', 'nascer com waitlist povoada passava'],
   ['N18_delete_dividido', 'apagar torneio dividido passava'],
 ].forEach(([k, texto]) => ok(B[k] === 200, 'controle: ' + texto + ' — veio ' + B[k]));
 /* ⛔ O A/B DO ELENCO: sem a trava, CADA um dos sete passava. Sem esta metade, um 403 acima

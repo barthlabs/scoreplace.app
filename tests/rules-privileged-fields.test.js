@@ -42,8 +42,8 @@ const tok = uid => b64({alg:'none',typ:'JWT'}) + '.' + b64({
 }) + '.';
 const url = p => H + '/v1/projects/' + P + '/databases/(default)/documents/' + p;
 /* ⚠️ \`uid === 'owner'\` usa o bypass de ADMIN do emulador, e existe só para MONTAR o
- * cenário. A regra de \`create\` de torneio passou a exigir \`_nascidoEm == request.time\`
- * (leva L7, "confirma criação no servidor") e os setups destes testes criavam o torneio como
+ * cenário. A rota de \`create\` de torneio está FECHADA ao cliente (\`allow create: if false\`
+ * — quem cria é a Function) e os setups destes testes criavam o torneio como
  * usuário — a partir dali eles reprovavam em TUDO, inclusive nas asserções que não têm nada
  * a ver com criação. MEDIDO em 13/set/2026: 4 das 9 suítes de \`test:rules\` estavam
  * vermelhas assim, e ninguém via, porque \`test:rules\` NÃO roda no \`npm test\`.

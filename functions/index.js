@@ -4236,8 +4236,8 @@ async function _anonymizeCanonicalRegistrations(db, uid) {
  *
  * A CF é a única porta: autoriza por UID contra o documento fresco e então apaga a raiz.
  * `purgeTournamentCopies` observa essa exclusão, preserva o log de auditoria e remove as
- * subcoleções e projeções. Um cliente atrasado também não pode recriar o id: a regra de
- * create exige `_nascidoEm == request.time`.
+ * subcoleções e projeções. Um cliente atrasado também não pode recriar o id: a rota de
+ * `create` do cliente está FECHADA (`allow create: if false`) — torneio nasce na Function.
  */
 exports.deleteTournament = onCall(
   { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
@@ -10702,8 +10702,8 @@ exports.purgeTournamentCopies = onDocumentDeleted(
      * ⭐ NÃO É LÁPIDE, e a diferença é o que o dono recusou: lápide é um documento POR
      * DEFUNTO que o app CONSULTA antes de escrever — é isso que vira cemitério. Esta linha
      * ninguém consulta pra decidir nada; se ela sumir amanhã, o comportamento do app não
-     * muda em nada. Quem impede a volta é o `allow create` das rules (`_nascidoEm ==
-     * request.time`), que não guarda e não pergunta nada sobre os mortos.
+     * muda em nada. Quem impede a volta é o `allow create` das rules, FECHADO ao cliente
+     * (`if false`) — que não guarda e não pergunta nada sobre os mortos.
      * Ela existe porque em 04/set o dono perguntou "cadê aquele torneio?" e a resposta
      * custou três medições forenses no `createTime` do servidor.
      *

@@ -577,7 +577,13 @@ service cloud.firestore {
           && (request.auth.uid in resource.data.get('memberUids', [])))
       );
 
-      // Create: quem cria TEM que declarar o próprio uid como creatorUid.
+      // ⛔ CREATE: FECHADO. Torneio NASCE NO SERVIDOR — a porta é a Function
+      // `createTournament` (`functions-autodraw/index.js:3355`), que roda com Admin SDK,
+      // monta o elenco VAZIO e carimba a data de nascimento. Nenhuma versão publicada usa
+      // a rota direta. O histórico de por que ela existia, e do que ela não dava conta,
+      // fica abaixo — é a razão de estar fechada.
+      //
+      // (histórico) Create: quem cria TEM que declarar o próprio uid como creatorUid.
       // SÓ UID (jul/2026). O caminho alternativo por `creatorEmail == authEmail()` foi
       // REMOVIDO: além de identidade por atributo mutável, ele permitia criar um torneio
       // declarando `creatorUid` de OUTRA pessoa (bastava o creatorEmail ser o seu) — doc
@@ -608,22 +614,20 @@ service cloud.firestore {
        *
        * ⭐ E ELA NÃO É UMA LÁPIDE. A regra não pergunta "este torneio já foi apagado?" —
        * isso exigiria guardar os mortos, e o dono recusou com razão: _"vai virar o maior
-       * cemitério do mundo. apagado é apagado"_. Ela pergunta "isto está NASCENDO agora?".
-       * `_nascidoEm` é `serverTimestamp()`, e só o servidor sabe carimbá-lo: no create de
-       * verdade ele É `request.time`; num payload vindo de cache ele não existe (ou é
-       * velho) e o servidor NEGA. Nada é guardado, nada é consultado — a ausência do
-       * documento continua sendo a única verdade.
+       * cemitério do mundo. apagado é apagado"_. Nada é guardado, nada é consultado — a
+       * ausência do documento continua sendo a única verdade.
+       * ⭐⭐ E DESDE 23/set/2026 A DEFESA É MAIOR E MAIS SIMPLES: **o cliente não cria**.
+       * O carimbo `_nascidoEm` barrava o payload de cache, mas deixava passar quem
+       * montasse um create honesto — e nele o elenco (`participants`, `memberUids`,
+       * `waitlist`) era ARBITRÁRIO: dava pra NASCER com o uid de terceiro dentro, e a
+       * contenção do `update` (`elencoIntacto()`) depois CONGELAVA a mentira como
+       * legítima. Trava de mudança só vale com o VALOR INICIAL travado junto — e o jeito
+       * de travar o valor inicial é não deixar o cliente escolhê-lo.
+       * ⚠️ O carimbo CONTINUA, no handler (`functions-autodraw/tournament-create.js:85`),
+       * como invariante de quem cria de verdade. Ele só não é mais a defesa.
        * ⚠️ A exceção declarada pelo dono continua valendo: restaurar de backup roda pelo
        * Admin SDK, que ignora as rules. Recuperar DE PROPÓSITO pode; por acidente, não. */
-      allow create: if request.auth != null
-        && request.resource.data.creatorUid is string
-        && request.resource.data.creatorUid == request.auth.uid
-        && request.resource.data._nascidoEm == request.time
-        && request.resource.data.get('currentPhaseIndex', 0) == 0
-        && request.resource.data.get('_phaseMaterialized', 0) == 0
-        && !('_semPesados' in request.resource.data)
-        && !('phaseStartedAt' in request.resource.data)
-        && !('phaseRounds' in request.resource.data);
+      allow create: if false;
 
       // Update permitido em 3 caminhos:
       //   1. Admin (creator/co-host ativo) — qualquer mudança. SÓ POR UID

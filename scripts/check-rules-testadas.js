@@ -4,7 +4,7 @@
  * ⛔ POR QUE EXISTE. MEDIDO em 13/set/2026: das 9 suítes de `npm run test:rules`, **4
  * estavam VERMELHAS** — e havia tempo. Ninguém viu porque `test:rules` sobe 10 emuladores
  * (~7 min) e por isso NÃO está no `npm test`. Suíte que não roda apodrece: as quatro
- * quebraram quando a regra de `create` passou a exigir `_nascidoEm` (leva L7) e ficaram
+ * quebraram quando a regra de `create` de torneio mudou (leva L7) e ficaram
  * assim, silenciosamente, guardando nada.
  *
  * ⛔ E PÔR AS 10 NO `npm test` É PIOR: acrescenta ~7 min a CADA rodada, e o dono já reclamou

@@ -41,8 +41,8 @@ const tok = uid => b64({alg:'none',typ:'JWT'}) + '.' + b64({
 }) + '.';
 const url = p => H + '/v1/projects/' + P + '/databases/(default)/documents/' + p;
 /* ⚠️ \`uid === 'owner'\` usa o bypass de ADMIN do emulador, e existe só para MONTAR o
- * cenário. A regra de \`create\` de torneio passou a exigir \`_nascidoEm == request.time\`
- * (leva L7, "confirma criação no servidor") e os setups destes testes criavam o torneio como
+ * cenário. A rota de \`create\` de torneio está FECHADA ao cliente (\`allow create: if false\`
+ * — quem cria é a Function) e os setups destes testes criavam o torneio como
  * usuário — a partir dali eles reprovavam em TUDO, inclusive nas asserções que não têm nada
  * a ver com criação. MEDIDO em 13/set/2026: 4 das 9 suítes de \`test:rules\` estavam
  * vermelhas assim, e ninguém via, porque \`test:rules\` NÃO roda no \`npm test\`.
@@ -150,13 +150,13 @@ ok(novo.recoveryPorOrganizerEmail === 403,
 ok(novo.forjaCreate === 403,
   '🔒 CREATE: forjar torneio com creatorUid de OUTRO é negado (got ' + novo.forjaCreate + ')');
 /* ⭐ ESTA ASSERÇÃO VIROU AO CONTRÁRIO, e é o desenho que mudou, não o teste que quebrou.
- * Criar torneio pelo CLIENTE deixou de existir: a regra de `create` exige
- * `_nascidoEm == request.time` (leva L7 — "confirma criação no servidor"), e só o servidor
- * sabe carimbar isso. Quem cria é a CF `createTournament`, que roda com Admin SDK.
+ * Criar torneio pelo CLIENTE deixou de existir: a regra de `create` está FECHADA
+ * (`allow create: if false`, 23/set/2026 — antes disso era o carimbo do servidor que
+ * barrava). Quem cria é a CF `createTournament`, que roda com Admin SDK.
  * ⛔ Deixar a asserção antiga esperando 200 mantinha a suíte vermelha para SEMPRE — e foi
  * exatamente isso que aconteceu: `test:rules` não roda no `npm test`, então ninguém viu. */
 ok(novo.createLegitimo === 403,
-  'criar torneio DIRETO pelo cliente é negado — criação é da CF, que carimba `_nascidoEm` (got ' + novo.createLegitimo + ')');
+  'criar torneio DIRETO pelo cliente é negado — a rota de create está fechada (got ' + novo.createLegitimo + ')');
 
 // ── 2. RULES ANTIGAS: os caminhos por e-mail PASSAVAM ────────────────────────
 // Sem isto o teste não prova nada — se passasse nos dois, não estaria testando a mudança.

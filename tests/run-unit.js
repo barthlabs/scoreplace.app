@@ -460,7 +460,7 @@ const SUITES = [
   'tests/meu-jogo-uid-do-slot-se-recupera.test.js',
   // ⛔ APAGADO É APAGADO (04/set/2026): um torneio que o dono tinha apagado VOLTOU sozinho —
   // `set(merge:true)` num doc inexistente CRIA, e o tick do prazo de inscrição gravava o `t`
-  // que estava na memória da aba. A trava é `_nascidoEm == request.time` no `allow create`,
+  // que estava na memória da aba. A trava é o `allow create` FECHADO ao cliente (`if false`),
   // sem guardar defunto nenhum; a exclusão só deixa uma LINHA DE LOG, que ninguém consulta.
   'tests/rules-torneio-apagado-nao-volta.test.js',
   // ⭐ Jogador X é escolha de PRIMEIRA CLASSE no ato do W.O. (2.0.61, caso Fábio/E2).

@@ -3,7 +3,7 @@
  *
  * MEDIDO em 13/set/2026: das 9 suítes de `npm run test:rules`, **4 estavam VERMELHAS**, e
  * havia tempo. Ninguém viu porque elas sobem 10 emuladores (~7 min) e por isso ficam FORA do
- * `npm test`. As quatro quebraram quando a regra de `create` passou a exigir `_nascidoEm`
+ * `npm test`. As quatro quebraram quando a regra de `create` de torneio mudou
  * (leva L7) e ficaram assim, guardando NADA — que é pior do que não existir, porque a gente
  * acha que está coberto.
  *

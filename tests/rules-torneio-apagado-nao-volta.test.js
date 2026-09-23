@@ -11,7 +11,7 @@
  * da MEMÓRIA da aba, e lá dentro é `set(merge:true)`, que num doc inexistente CRIA.
  * 1 dos 47 torneios tinha a marca.
  *
- * A TRAVA, sem guardar defunto: o `allow create` exige `_nascidoEm == request.time`.
+ * A TRAVA, sem guardar defunto: o `allow create` do cliente está FECHADO (`if false`).
  * `serverTimestamp()` só o SERVIDOR carimba — payload de cache não tem o campo (ou tem um
  * velho) e é negado. A regra nunca pergunta "já foi apagado?"; pergunta "está nascendo?".
  *
@@ -31,7 +31,7 @@ function ok(c, m) { if (c) pass++; else { fail++; console.error('  ✗ ' + m); }
 
 const rules = fs.readFileSync(path.join(RAIZ, 'firestore.rules'), 'utf8');
 
-console.log('\n▸ ① a regra de CREATE de torneio exige o carimbo do servidor');
+console.log('\n▸ ① a rota de CREATE de torneio está FECHADA ao cliente');
 {
   const i = rules.indexOf('match /tournaments/{tournamentId}');
   ok(i > 0, 'achei o bloco de `tournaments`');
@@ -39,8 +39,8 @@ console.log('\n▸ ① a regra de CREATE de torneio exige o carimbo do servidor'
   const atualizar = rules.indexOf('allow update:', criar);
   ok(criar > 0 && atualizar > criar, 'achei o `allow create` antes do `allow update`');
   const corpo = rules.slice(criar, atualizar);
-  ok(/_nascidoEm\s*==\s*request\.time/.test(corpo),
-    '⭐ o create exige `_nascidoEm == request.time` — só o servidor carimba isso');
+  ok(/allow create:\s*if\s+false\s*;/.test(corpo),
+    '⭐ o create do cliente é `if false` — quem cria torneio é a Function, e só ela');
   ok(!/_apagado|tombstone|lapide|deletedAt/i.test(corpo),
     '⛔ e NÃO consulta nenhum registro de defunto (nada de lápide)');
 }
