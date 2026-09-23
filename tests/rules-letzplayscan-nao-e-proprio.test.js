@@ -59,9 +59,24 @@ const PAYLOAD = { fields: {
   tournamentId: S('t1'),
   tournamentName: S('Confra'),
 } };
+const arr = (...xs) => ({ arrayValue: { values: xs } });
 (async () => {
   const out = {};
-  const ORG = 'uid_org', ATLETA = 'uid_atleta';
+  const ORG = 'uid_org', ATLETA = 'uid_atleta', COHOST = 'uid_cohost', FORA = 'uid_fora';
+
+  /* ── CENÁRIO pelo bypass de ADMIN do emulador (Bearer owner): só monta ───────────
+   * t1 = torneio do ORG com o COHOST como co-organizador ATIVO por uid.
+   * s1 = SANDBOX cujo dono é o ORG — e ali quem manda é sandboxOwnerUid, porque
+   * creatorUid/adminUids de um sandbox são CÓPIA do original e não valem. */
+  await req('PATCH', 'tournaments/t1', 'owner', { fields: {
+    name: S('Confra'), creatorUid: S(ORG), adminUids: arr(S(COHOST)),
+    memberUids: arr(S(ORG), S(ATLETA)),
+    _nascidoEm: { timestampValue: new Date().toISOString() },
+  } });
+  await req('PATCH', 'sandboxes/s1', 'owner', { fields: {
+    name: S('SB'), isSandbox: { booleanValue: true }, sandboxOwnerUid: S(ORG),
+    creatorUid: S('uid_de_outro'), adminUids: arr(),
+  } });
 
   // ── O ABUSO: escrever o PRÓPRIO scan ──
   out.criaProprio  = await req('PATCH', 'letzplayScans/' + ATLETA, ATLETA, PAYLOAD);
@@ -73,6 +88,34 @@ const PAYLOAD = { fields: {
   out.criaDeOutro = await req('PATCH', 'letzplayScans/uid_terceiro', ORG, PAYLOAD);
   out.atualizaDeOutro = await req('PATCH', 'letzplayScans/uid_terceiro?updateMask.fieldPaths=handle',
     ORG, { fields: { handle: S('@novo') } });
+
+  /* ── ASSINATURA: quem grava assina com o PRÓPRIO uid ──────────────────────────
+   * scannedBy era texto livre: o forjador plantava assinando com o uid de um terceiro. */
+  out.assinaturaDivergente = await req('PATCH', 'letzplayScans/uid_assin', ORG, { fields:
+    Object.assign({}, PAYLOAD.fields, { scannedBy: S(FORA) }) });
+
+  /* ── VÍNCULO: tem de ser organizador do torneio que o scan NOMEIA ───────────────── */
+  out.foraNoTorneioDoOrg = await req('PATCH', 'letzplayScans/uid_v1', FORA, PAYLOAD);
+  out.torneioInexistente = await req('PATCH', 'letzplayScans/uid_v2', ORG, { fields:
+    Object.assign({}, PAYLOAD.fields, { tournamentId: S('nao_existe') }) });
+  out.cohostGrava = await req('PATCH', 'letzplayScans/uid_v3', COHOST, { fields:
+    Object.assign({}, PAYLOAD.fields, { scannedBy: S(COHOST) }) });
+  out.sandboxGrava = await req('PATCH', 'letzplayScans/uid_v4', ORG, { fields:
+    Object.assign({}, PAYLOAD.fields, { tournamentId: S('s1'), tournamentName: S('SB') }) });
+
+  /* ── UPDATE: a regra protege os DOIS verbos, então o irmão também é medido ──────── */
+  out.foraAtualiza = await req('PATCH', 'letzplayScans/uid_terceiro?updateMask.fieldPaths=handle',
+    FORA, { fields: { handle: S('@forjado') } });
+
+  /* ── DOCUMENTO LEGADO: existe scan gravado SEM vínculo. Atualizar sem trazer o
+   * vínculo é recusado; trazendo o payload inteiro, passa. O que a regra vê num merge é
+   * o documento RESULTANTE. */
+  await req('PATCH', 'letzplayScans/uid_legado', 'owner', { fields: {
+    handle: S('@velho'), scannedAt: S('2026-01-01T00:00:00.000Z'), scannedBy: S(ORG),
+  } });
+  out.legadoSemVinculo = await req('PATCH', 'letzplayScans/uid_legado?updateMask.fieldPaths=handle',
+    ORG, { fields: { handle: S('@novo') } });
+  out.legadoComVinculo = await req('PATCH', 'letzplayScans/uid_legado', ORG, PAYLOAD);
 
   // ── Apagar evidência ──
   out.apagaDeOutro  = await req('DELETE', 'letzplayScans/uid_terceiro', ORG);
@@ -120,6 +163,22 @@ ok(novo.apagaDeOutro !== 200,
   '⭐ APAGAR scan de terceiro é recusado (got ' + novo.apagaDeOutro + ')');
 ok(novo.apagaProprio !== 200,
   '⭐ e apagar o próprio também (got ' + novo.apagaProprio + ')');
+ok(novo.assinaturaDivergente !== 200,
+  '⭐⭐ ASSINATURA: gravar assinando com o uid de OUTRO é recusado (got ' + novo.assinaturaDivergente + ')');
+ok(novo.foraNoTorneioDoOrg !== 200,
+  '⭐⭐ VÍNCULO: quem não é organizador do torneio nomeado é recusado (got ' + novo.foraNoTorneioDoOrg + ')');
+ok(novo.torneioInexistente !== 200,
+  '⭐ VÍNCULO: `tournamentId` que não existe é recusado (got ' + novo.torneioInexistente + ')');
+ok(novo.foraAtualiza !== 200,
+  '⭐ e o irmão: ATUALIZAR sem ser organizador também é recusado (got ' + novo.foraAtualiza + ')');
+ok(novo.cohostGrava === 200,
+  '⭐ CO-ORGANIZADOR grava — mesmo poder do organizador, ou eu quebraria o co-org (got ' + novo.cohostGrava + ')');
+ok(novo.sandboxGrava === 200,
+  '⭐ SANDBOX: o dono grava nomeando o sandbox — é onde o dono testa (got ' + novo.sandboxGrava + ')');
+ok(novo.legadoSemVinculo !== 200,
+  '⭐ LEGADO: atualizar scan antigo sem trazer o vínculo é recusado (got ' + novo.legadoSemVinculo + ')');
+ok(novo.legadoComVinculo === 200,
+  '⭐ LEGADO: com o payload completo, passa (got ' + novo.legadoComVinculo + ')');
 
 console.log('── rules ANTIGAS: o abuso PASSAVA (senão o teste não prova o conserto) ──');
 const antigas = `rules_version = '2';
@@ -140,6 +199,14 @@ ok(velho.criaProprio === 200,
   '⚠️  REGRESSÃO-GUARD: nas ANTIGAS criar o PRÓPRIO scan PASSAVA (got ' + velho.criaProprio + ')');
 ok(velho.apagaDeOutro === 200,
   '⚠️  REGRESSÃO-GUARD: nas ANTIGAS qualquer um APAGAVA scan de terceiro (got ' + velho.apagaDeOutro + ')');
+/* ⛔ O A/B DA LEVA DE 23/set: sem isto, um 403 acima provaria só que ALGUMA regra
+ * recusou — e a suíte já recusa por outros motivos. */
+ok(velho.assinaturaDivergente === 200,
+  '⚠️  REGRESSÃO-GUARD: nas ANTIGAS dava pra assinar com o uid de OUTRO (got ' + velho.assinaturaDivergente + ')');
+ok(velho.foraNoTorneioDoOrg === 200,
+  '⚠️  REGRESSÃO-GUARD: nas ANTIGAS qualquer conta gravava scan de terceiro SEM vínculo (got ' + velho.foraNoTorneioDoOrg + ')');
+ok(velho.torneioInexistente === 200,
+  '⚠️  REGRESSÃO-GUARD: nas ANTIGAS o torneio nomeado nem precisava existir (got ' + velho.torneioInexistente + ')');
 
 console.log(fail === 0
   ? '\n✅ rules-letzplayscan-nao-e-proprio: ' + pass + ' ok, 0 falharam'

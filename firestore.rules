@@ -1041,9 +1041,47 @@ service cloud.firestore {
        *   • `applyLetzplayScans` ainda aplica para alguém que NEM ESTÁ no torneio de quem
        *     chama — ela não valida o elenco.
        * O conserto disso é a porta de gravação com procedência, no plano da leva 2a. */
+      /* ⭐⭐ 23/set/2026 — ASSINADO E DO ORGANIZADOR DO TORNEIO QUE O SCAN NOMEIA.
+       * Decisão do dono: a cor da Análise FICA (ela orienta, não prova — já está na nota da
+       * 2.3.92). Então o conserto vai na ORIGEM, não na leitura:
+       *   • ASSINATURA — `scannedBy == request.auth.uid`. Era texto livre do cliente, então
+       *     o forjador podia plantar ASSINANDO COM O UID DE UM TERCEIRO. Agora quem grava
+       *     assina com o próprio uid, e o ato fica rastreável.
+       *   • VÍNCULO — o `tournamentId` que o próprio documento declara tem de existir, e
+       *     quem grava tem de ser ADMIN dele. Scan é atestado de terceiro DENTRO de um
+       *     torneio; fora de um torneio não tem por que existir. Antes bastava estar
+       *     autenticado: qualquer conta gravava o scan de qualquer pessoa, sem vínculo.
+       * ⚠️ SANDBOX: a gravação do relatório é na coleção GLOBAL (sem roteamento), então num
+       * sandbox o `tournamentId` é o id do SANDBOX — e lá quem manda é `sandboxOwnerUid`
+       * (creatorUid/adminUids são cópia do original e não valem). Sem este ramo eu quebraria
+       * exatamente a tela onde o dono testa.
+       * ⚠️ CLIENTE ANTIGO É CORTADO, declarado: houve versão que mandava só handle/scan/
+       * scannedAt/scannedBy. MEDIDO: a árvore da 2.3.27 (a de produção no Play) já manda
+       * assinatura E vínculo nos dois caminhos de escrita, e os bundles nativos de hoje
+       * também — o corte só alcança quem está ANTES da versão que está na loja, e o efeito é
+       * a varredura falhar, nada mais.
+       * ⛔ O QUE ISTO NÃO FECHA: quem é organizador de um torneio PRÓPRIO ainda planta scan
+       * de qualquer uid nomeando esse torneio. A trava com dentes é exigir que o `scanUid`
+       * esteja no ELENCO — e ela espera a medida do banco real (a lista de membros está
+       * completa em todo torneio?), porque recusar por suposição já custou caro aqui. */
+      function scanAlvoT() {
+        return get(/databases/$(database)/documents/tournaments/$(request.resource.data.tournamentId)).data;
+      }
+      function scanAlvoSb() {
+        return get(/databases/$(database)/documents/sandboxes/$(request.resource.data.tournamentId)).data;
+      }
+      function scanDoOrganizador() {
+        return (exists(/databases/$(database)/documents/tournaments/$(request.resource.data.tournamentId))
+                && isTournamentAdmin(scanAlvoT()))
+            || (exists(/databases/$(database)/documents/sandboxes/$(request.resource.data.tournamentId))
+                && scanAlvoSb().get('sandboxOwnerUid', '') == request.auth.uid);
+      }
       allow create, update: if request.auth != null
         && request.auth.uid != scanUid
-        && request.resource.data.keys().hasOnly(['handle', 'scan', 'scannedAt', 'scannedBy', 'scannedByName', 'tournamentId', 'tournamentName', 'fullImport', 'lzCursorParcial', 'totaisLetzplay']);
+        && request.resource.data.keys().hasOnly(['handle', 'scan', 'scannedAt', 'scannedBy', 'scannedByName', 'tournamentId', 'tournamentName', 'fullImport', 'lzCursorParcial', 'totaisLetzplay'])
+        && request.resource.data.scannedBy == request.auth.uid
+        && request.resource.data.tournamentId is string
+        && scanDoOrganizador();
       /* ✅ PUBLICADA em 22/set/2026, ANTES do Hosting — a ordem importa: `deploy-hosting.sh`
        * sobe SOMENTE o Hosting, então sem `firebase deploy --only firestore:rules` a
        * proteção não existiria em produção e a tela falaria de trava que não está no ar.
