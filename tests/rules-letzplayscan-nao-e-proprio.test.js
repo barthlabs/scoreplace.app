@@ -70,7 +70,20 @@ const arr = (...xs) => ({ arrayValue: { values: xs } });
    * creatorUid/adminUids de um sandbox são CÓPIA do original e não valem. */
   await req('PATCH', 'tournaments/t1', 'owner', { fields: {
     name: S('Confra'), creatorUid: S(ORG), adminUids: arr(S(COHOST)),
-    memberUids: arr(S(ORG), S(ATLETA)),
+    /* O ELENCO de t1 inclui todos os alvos LEGITIMOS deste teste. Nao e enfeite: desde
+     * 23/set a regra exige que o alvo do scan esteja no elenco do torneio nomeado, e um
+     * fixture com elenco curto reprovaria os casos legitimos — foi o que aconteceu ao
+     * escrever isto, e o teste estava certo. */
+    memberUids: arr(S(ORG), S(ATLETA), S('uid_terceiro'), S('uid_assin'), S('uid_v1'),
+      S('uid_v2'), S('uid_v3'), S('uid_v4'), S('uid_legado'), S('uid_full')),
+    _nascidoEm: { timestampValue: new Date().toISOString() },
+  } });
+  /* t2 = torneio do FORA. O ATLETA NAO esta no elenco dele. E o caso que o revisor
+   * cobrou: ser organizador de um torneio PROPRIO nao pode dar direito de escrever o
+   * scan de quem nao esta nele. */
+  await req('PATCH', 'tournaments/t2', 'owner', { fields: {
+    name: S('Torneio do estranho'), creatorUid: S(FORA), adminUids: arr(),
+    memberUids: arr(S(FORA)),
     _nascidoEm: { timestampValue: new Date().toISOString() },
   } });
   await req('PATCH', 'sandboxes/s1', 'owner', { fields: {
@@ -102,6 +115,18 @@ const arr = (...xs) => ({ arrayValue: { values: xs } });
     Object.assign({}, PAYLOAD.fields, { scannedBy: S(COHOST) }) });
   out.sandboxGrava = await req('PATCH', 'letzplayScans/uid_v4', ORG, { fields:
     Object.assign({}, PAYLOAD.fields, { tournamentId: S('s1'), tournamentName: S('SB') }) });
+
+  /* ── ELENCO: o alvo tem de estar no torneio que o scan nomeia ────────────────────
+   * B e organizador do PROPRIO torneio t2 e assina com o proprio uid: assinatura e
+   * vinculo OK. So falta o alvo estar no elenco — e e isso que colapsa o ataque. */
+  out.donoDeOutroTorneio = await req('PATCH', 'letzplayScans/' + ATLETA, FORA, { fields:
+    Object.assign({}, PAYLOAD.fields, { scannedBy: S(FORA), tournamentId: S('t2'), tournamentName: S('Torneio do estranho') }) });
+  /* e o mesmo ataque com o historico COMPLETO, que e o que pesa no veredito */
+  out.donoDeOutroTorneioFull = await req('PATCH', 'letzplayScans/uid_full', FORA, { fields:
+    Object.assign({}, PAYLOAD.fields, { scannedBy: S(FORA), tournamentId: S('t2'),
+      fullImport: { mapValue: { fields: { games: { arrayValue: { values: [] } } } } } }) });
+  /* CONTROLE do elenco: o MESMO uid, agora pelo organizador do torneio onde ele ESTA */
+  out.orgDoTorneioCerto = await req('PATCH', 'letzplayScans/' + ATLETA, ORG, PAYLOAD);
 
   /* ── UPDATE: a regra protege os DOIS verbos, então o irmão também é medido ──────── */
   out.foraAtualiza = await req('PATCH', 'letzplayScans/uid_terceiro?updateMask.fieldPaths=handle',
@@ -179,6 +204,12 @@ ok(novo.legadoSemVinculo !== 200,
   '⭐ LEGADO: atualizar scan antigo sem trazer o vínculo é recusado (got ' + novo.legadoSemVinculo + ')');
 ok(novo.legadoComVinculo === 200,
   '⭐ LEGADO: com o payload completo, passa (got ' + novo.legadoComVinculo + ')');
+ok(novo.donoDeOutroTorneio !== 200,
+  '⭐⭐⭐ ELENCO: organizador do PRÓPRIO torneio não escreve scan de quem NÃO está nele (got ' + novo.donoDeOutroTorneio + ')');
+ok(novo.donoDeOutroTorneioFull !== 200,
+  '⭐⭐⭐ idem com histórico COMPLETO, que é o que pesa no veredito (got ' + novo.donoDeOutroTorneioFull + ')');
+ok(novo.orgDoTorneioCerto === 200,
+  '⭐ CONTROLE do elenco: o mesmo uid passa pelo organizador do torneio onde ele ESTÁ (got ' + novo.orgDoTorneioCerto + ')');
 
 console.log('── rules ANTIGAS: o abuso PASSAVA (senão o teste não prova o conserto) ──');
 const antigas = `rules_version = '2';
@@ -207,6 +238,8 @@ ok(velho.foraNoTorneioDoOrg === 200,
   '⚠️  REGRESSÃO-GUARD: nas ANTIGAS qualquer conta gravava scan de terceiro SEM vínculo (got ' + velho.foraNoTorneioDoOrg + ')');
 ok(velho.torneioInexistente === 200,
   '⚠️  REGRESSÃO-GUARD: nas ANTIGAS o torneio nomeado nem precisava existir (got ' + velho.torneioInexistente + ')');
+ok(velho.donoDeOutroTorneio === 200,
+  '⚠️  REGRESSÃO-GUARD: nas ANTIGAS dava pra escrever scan de quem não estava em torneio nenhum seu (got ' + velho.donoDeOutroTorneio + ')');
 
 console.log(fail === 0
   ? '\n✅ rules-letzplayscan-nao-e-proprio: ' + pass + ' ok, 0 falharam'

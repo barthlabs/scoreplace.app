@@ -1070,9 +1070,29 @@ service cloud.firestore {
       function scanAlvoSb() {
         return get(/databases/$(database)/documents/sandboxes/$(request.resource.data.tournamentId)).data;
       }
+      /* ⭐⭐⭐ E O ALVO TEM DE ESTAR NO ELENCO DAQUELE TORNEIO.
+       * É esta linha que colapsa o ataque. Com assinatura + vínculo, o forjador ainda podia
+       * criar um torneio PRÓPRIO e escrever scan de qualquer pessoa do mundo nomeando ele.
+       * Exigindo o alvo em `memberUids`, para difamar alguém é preciso PRIMEIRO inscrevê-lo
+       * — e aí sobrou "organizador mente sobre o próprio inscrito", que é o caso legítimo e
+       * que NENHUMA coleta no servidor evitaria (ele poderia digitar a categoria à mão).
+       * ⭐ POR QUE `memberUids` PODE SER FRONTEIRA AGORA, e não podia antes: até o bloco 3
+       * o cliente ESCREVIA esse campo — quem forjava o scan forjava a lista junto, e usá-la
+       * como prova seria circular. Hoje o elenco é do servidor: o `update` exige igualdade
+       * (`elencoIntacto()`) e o `create` do cliente está FECHADO. A lista virou testemunha
+       * que o acusado não pode mais escrever.
+       * ⚠️ PREÇO, declarado: se num torneio o `memberUids` estiver atrasado em relação a
+       * `participants`, a varredura daquele inscrito é RECUSADA. O modo de falha é visível
+       * — a tela já mostra o erro real da gravação e avisa —, não silencioso. Recusar à
+       * vista é melhor que aceitar forjado.
+       * ⚠️ SANDBOX não passa por aqui: lá o dono opera a cópia dele, e o elenco é cópia. */
+      function scanAlvoNoElenco() {
+        return scanUid in scanAlvoT().get('memberUids', []);
+      }
       function scanDoOrganizador() {
         return (exists(/databases/$(database)/documents/tournaments/$(request.resource.data.tournamentId))
-                && isTournamentAdmin(scanAlvoT()))
+                && isTournamentAdmin(scanAlvoT())
+                && scanAlvoNoElenco())
             || (exists(/databases/$(database)/documents/sandboxes/$(request.resource.data.tournamentId))
                 && scanAlvoSb().get('sandboxOwnerUid', '') == request.auth.uid);
       }
