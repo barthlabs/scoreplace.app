@@ -88,6 +88,7 @@ const arr = (...xs) => ({ arrayValue: { values: xs } });
   } });
   await req('PATCH', 'sandboxes/s1', 'owner', { fields: {
     name: S('SB'), isSandbox: { booleanValue: true }, sandboxOwnerUid: S(ORG),
+    memberUids: arr(S(ORG), S('uid_v4')),
     creatorUid: S('uid_de_outro'), adminUids: arr(),
   } });
 
@@ -125,6 +126,10 @@ const arr = (...xs) => ({ arrayValue: { values: xs } });
   out.donoDeOutroTorneioFull = await req('PATCH', 'letzplayScans/uid_full', FORA, { fields:
     Object.assign({}, PAYLOAD.fields, { scannedBy: S(FORA), tournamentId: S('t2'),
       fullImport: { mapValue: { fields: { games: { arrayValue: { values: [] } } } } } }) });
+  /* O SANDBOX nao e porta de fuga: dono do sandbox, alvo FORA do elenco dele */
+  out.sandboxForaDoElenco = await req('PATCH', 'letzplayScans/uid_sb_fora', ORG, { fields:
+    Object.assign({}, PAYLOAD.fields, { tournamentId: S('s1'), tournamentName: S('SB') }) });
+
   /* CONTROLE do elenco: o MESMO uid, agora pelo organizador do torneio onde ele ESTA */
   out.orgDoTorneioCerto = await req('PATCH', 'letzplayScans/' + ATLETA, ORG, PAYLOAD);
 
@@ -208,6 +213,8 @@ ok(novo.donoDeOutroTorneio !== 200,
   '⭐⭐⭐ ELENCO: organizador do PRÓPRIO torneio não escreve scan de quem NÃO está nele (got ' + novo.donoDeOutroTorneio + ')');
 ok(novo.donoDeOutroTorneioFull !== 200,
   '⭐⭐⭐ idem com histórico COMPLETO, que é o que pesa no veredito (got ' + novo.donoDeOutroTorneioFull + ')');
+ok(novo.sandboxForaDoElenco !== 200,
+  '⭐⭐ o SANDBOX não é porta de fuga: alvo fora do elenco dele é recusado (got ' + novo.sandboxForaDoElenco + ')');
 ok(novo.orgDoTorneioCerto === 200,
   '⭐ CONTROLE do elenco: o mesmo uid passa pelo organizador do torneio onde ele ESTÁ (got ' + novo.orgDoTorneioCerto + ')');
 

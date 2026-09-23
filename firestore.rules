@@ -1085,16 +1085,24 @@ service cloud.firestore {
        * `participants`, a varredura daquele inscrito é RECUSADA. O modo de falha é visível
        * — a tela já mostra o erro real da gravação e avisa —, não silencioso. Recusar à
        * vista é melhor que aceitar forjado.
-       * ⚠️ SANDBOX não passa por aqui: lá o dono opera a cópia dele, e o elenco é cópia. */
+       * ⛔ E O SANDBOX NÃO É PORTA DE FUGA. Eu havia deixado o ramo do sandbox sem a
+       * exigência de elenco "porque lá o dono opera a cópia dele" — e isso abria a mesma
+       * fresta pelo lado: quem tem um sandbox escreveria o scan de qualquer pessoa do mundo
+       * nomeando o sandbox. O elenco do sandbox é cópia do original, então exigir o alvo
+       * nele custa nada e fecha o desvio. Vale nos DOIS ramos. */
       function scanAlvoNoElenco() {
         return scanUid in scanAlvoT().get('memberUids', []);
+      }
+      function scanAlvoNoElencoSb() {
+        return scanUid in scanAlvoSb().get('memberUids', []);
       }
       function scanDoOrganizador() {
         return (exists(/databases/$(database)/documents/tournaments/$(request.resource.data.tournamentId))
                 && isTournamentAdmin(scanAlvoT())
                 && scanAlvoNoElenco())
             || (exists(/databases/$(database)/documents/sandboxes/$(request.resource.data.tournamentId))
-                && scanAlvoSb().get('sandboxOwnerUid', '') == request.auth.uid);
+                && scanAlvoSb().get('sandboxOwnerUid', '') == request.auth.uid
+                && scanAlvoNoElencoSb());
       }
       allow create, update: if request.auth != null
         && request.auth.uid != scanUid
