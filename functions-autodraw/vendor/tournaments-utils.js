@@ -2,13 +2,41 @@
 if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 // Normalize format: 'Ranking' → 'Liga' (unificado em v0.2.6)
 var _t = window._t || function(k) { return k; };
-// Defined at top level so it's available immediately on script load
-window._isLigaFormat = window._isLigaFormat || function(t) {
-    var phase = t && Array.isArray(t.phases) ? t.phases[t.currentPhaseIndex || 0] : null;
-    if (phase && phase.kind === 'classification') {
-        return !phase.classification || phase.classification.structure !== 'groups';
-    }
+/* ⛔ CASA ÚNICA DE "ESTE TORNEIO É UMA LIGA?" (23/set/2026).
+ *
+ * MEDIDO: esta função estava definida DUAS VEZES — aqui e em
+ * `js/views/tournaments-categories.js`. E a segunda GANHAVA: o `index.html` carrega utils
+ * antes de categories, os dois `defer` (que executa na ordem do documento), e lá a
+ * atribuição era SEM guarda. Ou seja: a guarda `||` daqui nunca protegeu nada — ela roda
+ * ANTES da outra existir. Os 67 chamadores em `js/` não sabiam qual das duas respondia.
+ *
+ * ⭐ E AS DUAS DAVAM RESPOSTAS DIFERENTES: a versão daqui também dizia "é Liga" quando a
+ * FASE CORRENTE era de classificação sem grupos. Esse ramo estava MORTO no navegador.
+ *
+ * ⛔ POR QUE ELE NÃO FOI SIMPLESMENTE LIGADO: ligá-lo mudaria a resposta em 67 leitores de
+ * uma vez, e um deles MEXE EM DADO — o interruptor de disponibilidade de Liga chama a
+ * Function que altera `ligaActive` e pode mover participante para a lista de espera, e ela
+ * não valida formato nem fase. "Uma mudança por leva" existe exatamente para isto.
+ *
+ * ⇒ Aqui fica a pergunta DO TORNEIO, com a semântica que já estava valendo em produção. A
+ * pergunta DA FASE ganhou nome próprio logo abaixo (`_faseCorrenteEhLiga`) e ainda não tem
+ * leitor: os leitores de fase migram UM A UM, que é a ordem do bloco 4.
+ * ⚠️ Atribuição DIRETA, sem `||`: a guarda dava ar de "respeito ao que já existe" e foi ela
+ * que deixou a segunda casa passar em silêncio. */
+window._isLigaFormat = function(t) {
     return t && (t.format === 'Liga' || t.format === 'Ranking');
+};
+
+/* ⭐ "A FASE CORRENTE se comporta como Liga?" — OUTRA pergunta, e é de propósito que ela
+ * tenha outro nome. Fase de classificação que não é por grupos roda como liga (pontos
+ * corridos); por grupos, não.
+ * ⛔ AINDA SEM CHAMADOR, e isso é travado por teste. Cada leitor que hoje pergunta
+ * `_isLigaFormat` querendo saber da FASE passa para cá numa leva própria — e o interruptor
+ * de disponibilidade só migra quando a Function ganhar a sua própria trava. */
+window._faseCorrenteEhLiga = function(t) {
+    var fase = (t && Array.isArray(t.phases)) ? t.phases[t.currentPhaseIndex || 0] : null;
+    if (!fase || fase.kind !== 'classification') return false;
+    return !fase.classification || fase.classification.structure !== 'groups';
 };
 
 // Rei/Rainha é MODO de sorteio/chaveamento (parceiro rotativo), NÃO um formato de fase.

@@ -1,3 +1,10 @@
+## 2.3.93 — 23/set/2026 (bloco 4, leva a — consolidação, sem mudança de comportamento)
+
+- **UMA casa para "este torneio é uma Liga?".** `window._isLigaFormat` estava definida **duas vezes** — em `js/views/tournaments-utils.js` (versão ciente de FASE, protegida por `|| function`) e em `js/views/tournaments-categories.js` (versão antiga, atribuição sem guarda). O `index.html` carrega utils **antes** de categories e os dois são `defer`, que executa na ordem do documento: **a segunda ganhava**, e o ramo ciente de fase era código morto no navegador. A guarda `||` nunca ajudou — ela roda antes da outra existir.
+- ⛔ **E o ramo morto NÃO foi simplesmente ligado.** Ligá-lo mudaria a resposta em **67 leitores** de uma vez, e um deles **mexe em dado**: o interruptor de disponibilidade de Liga chama a Function que altera `ligaActive` e pode **mover participante para a lista de espera** — e ela não valida formato nem fase. Esta leva consolida com a semântica que já estava valendo: **zero mudança de comportamento**.
+- A pergunta da FASE ganhou nome próprio, `window._faseCorrenteEhLiga`, **sem nenhum chamador** (travado por teste). Os leitores de fase migram **um a um** nas levas seguintes, que é a ordem do bloco 4 — e o interruptor de disponibilidade só migra quando a Function ganhar a própria trava.
+- **A divergência é real e está medida no caminho de verdade**: torneio compilado pelo `format2` com classificatória + abertura Rei/Rainha (3 fases, formato de topo "Fase de Grupos"), sorteio real, resultados e avanço pelo motor — na **fase 1** o resolvedor novo diz **sim** e o antigo diz **não**, no mesmo torneio.
+
 ## Regras — 23/set/2026 (bloco 3 da reforma, sem versão de app)
 
 - **O navegador deixou de alterar o elenco de torneio existente.** `participants`, `standbyParticipants`, `waitlist`, `monarchWaitlist`, `memberUids`, `playerUids` e `teamOrigins` passam a exigir igualdade com o que já está gravado — quem muda elenco são as **53 portas de servidor** que já existem (inscrever, sair, dupla, W.O., substituição, reset, sorteio, fase, Liga).

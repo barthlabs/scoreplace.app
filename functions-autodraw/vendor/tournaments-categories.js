@@ -30,10 +30,12 @@ window._userGenderToCatCodes = function(userGender) {
     return codes;
 };
 
-// Normalize format: 'Ranking' → 'Liga' (unificado em v0.2.6)
-window._isLigaFormat = function(t) {
-  return t && (t.format === 'Liga' || t.format === 'Ranking');
-};
+/* ⛔ `_isLigaFormat` SAIU DAQUI (23/set/2026) — era uma SEGUNDA casa, e era ela que ganhava:
+ * o `index.html` carrega `tournaments-utils.js` antes deste arquivo, então esta atribuição
+ * (sem guarda) sobrescrevia a de lá e matava o ramo ciente de FASE que existia nela.
+ * A casa única é `js/views/tournaments-utils.js`, e a pergunta da FASE virou
+ * `window._faseCorrenteEhLiga` no mesmo arquivo. Travado por
+ * tests/uma-definicao-de-liga.test.js. */
 
 // Get participant categories as array (backward compat: string → [string])
 window._getParticipantCategories = function(p) {
