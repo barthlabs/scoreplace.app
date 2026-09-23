@@ -137,7 +137,7 @@ for (const f of DOMAIN_TO_FUNCTIONS) {
  * `skillBySportSource` tem de ser apagada pela MESMA regra que as portas do outro
  * codebase usam. Duas cópias da regra divergiriam em silêncio — o gate de vendor compara
  * byte a byte justamente para isso. */
-const DE_FUNCTIONS = ['match-roster.js', 'skill-source-core.js'];
+const DE_FUNCTIONS = ['match-roster.js'];
 for (const f of DE_FUNCTIONS) {
   const src = path.resolve(__dirname, '..', 'functions', f);
   if (!fs.existsSync(src)) { console.error(`[copy-vendor] FONTE AUSENTE: ${src}`); process.exit(1); }
