@@ -1,4 +1,4 @@
-// 2.3.92 — a busca do letzplay feita pelo organizador para de escrever no cadastro de quem ele buscou: o resultado vale na tela do torneio, e o seu perfil só muda pelo que você declara. O selo de "categoria apurada" passa a ser do servidor.
+// 2.3.92 — nada que o organizador define entra mais no seu cadastro: categoria e gênero que ele atribui valem DENTRO do torneio, e a busca do letzplay também para de escrever no perfil de quem foi buscado. O seu perfil só muda pelo que você declara. O selo de "categoria apurada" e o registro de quem mexeu no seu cadastro passam a ser do servidor, e a busca de um atleta só começa pelo @ que ele mesmo declarou.
 // 2.3.91 — o perfil não diz mais que a categoria veio de fora quando alguém a digitou à mão: sempre que o servidor muda a sua categoria numa modalidade, o selo de "apurada" daquela modalidade sai junto, e o das outras fica.
 // 2.3.85 — acesso por e-mail exige senha ou recuperação de senha; a confirmação de e-mail continua disponível e não cria sessão.
 // 2.3.84 — melhor de 3 abre Set 1 e Set 2 juntos; STB só aparece em 1×1, o placar final resume sets e valores impossíveis recebem aviso antes de gravar.
