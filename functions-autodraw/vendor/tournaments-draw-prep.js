@@ -2771,6 +2771,27 @@ window._showPollCreationDialog = function(tId, context, pollOptions) {
 window._showPollVotingDialog = function(tId, pollId) {
     var t = window._findTournamentById(tId);
     if (!t || !t.polls) return;
+    /* ⛔⛔ O RESUMO NÃO TEM MAIS O MAPA DE VOTOS (24/set/2026) — ele é lido sem
+     * autenticação, e voto legado é chaveado por e-mail. Abrir o diálogo sobre o resumo
+     * mostraria "ninguém votou" e perderia o voto de quem já votou.
+     * ⛔ HIDRATA E RETORNA: `_ensureTournamentLoaded` é por CALLBACK e pode levar segundos
+     * — seguir em frente abriria o diálogo sobre a projeção.
+     * ⛔ E CONFERE o que voltou: essa porta chama `cb(null)` em erro, tempo esgotado ou
+     * banco indisponível. Sem torneio completo, avisa e NÃO abre — errar fechado é o
+     * único jeito honesto quando o dado não chegou.
+     * [[project_email_no_doc_publico]] */
+    if (t._resumo && typeof window._ensureTournamentLoaded === 'function') {
+        window._ensureTournamentLoaded(tId, function (completo) {
+            if (!completo || completo._resumo) {
+                if (typeof showNotification === 'function') {
+                    showNotification('Não deu pra abrir a enquete', 'Falha ao carregar o torneio. Tente de novo.', 'error');
+                }
+                return;
+            }
+            window._showPollVotingDialog(tId, pollId);
+        });
+        return;
+    }
 
     var poll = null;
     for (var i = 0; i < t.polls.length; i++) {

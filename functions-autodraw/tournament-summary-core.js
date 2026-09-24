@@ -88,7 +88,6 @@ function buildSummary(t, id, H) {
     // detalhe) reconhece por ela e vai buscar o documento completo.
     _resumo: true,
     categories: _arr(t.categories).map(function (c) { return String(c || ''); }),
-    organizerEmail: String(t.organizerEmail || ''),
     venuePhotoUrl: String(t.venuePhotoUrl || ''),
     finishNotifiedAt: t.finishNotifiedAt || null,
     // co-organizadores ATIVOS, com o mesmo formato que o cartão espera
@@ -102,10 +101,38 @@ function buildSummary(t, id, H) {
     standbyUids: _arr(t.standbyParticipants).concat(_arr(t.waitlist)).map(function (p) {
       return String((p && (p.uid || p.p1Uid)) || '');
     }).filter(Boolean),
-    // enquetes: vão INTEIRAS. MEDIDO: zero torneios em produção têm enquete, e o
-    // cartão desenha os detalhes dela — resumir seria fazer a enquete sumir da tela
-    // por economia de zero byte.
-    polls: _arr(t.polls),
+    /* ⛔⛔ ESTE DOCUMENTO É LIDO SEM AUTENTICAÇÃO — e o Firestore entrega o documento
+     * INTEIRO ou nada. Não existe "esconder um campo" por regra: quem não pode ser
+     * público não mora aqui. (24/set/2026)
+     *
+     * Saiu `organizerEmail`, que ninguém lia daqui — varri o cliente e as três codebases.
+     * Era carga numa superfície anônima.
+     *
+     * E saiu o mapa de VOTOS das enquetes, que era o vazamento maior: voto legado é
+     * chaveado por E-MAIL, então as CHAVES deste mapa eram e-mails de participantes.
+     * MEDIDO em `js/views/dashboard.js`, que consulta `votes[email]`.
+     *
+     * ⛔ A PROJEÇÃO É POR SUBTRAÇÃO, NUNCA POR LISTA DE CAMPOS. Tentei listar o que o
+     * cartão usa e esqueci `opt.key`, que o leitor chama `.replace()` — a lista quebraria
+     * a tela de quem está com o app ABERTO. Então a enquete é copiada inteira e só o mapa
+     * de votos é trocado.
+     * ⛔ `votes` fica como objeto VAZIO, não ausente: a aba já aberta tem o JS velho e vai
+     * ler este resumo assim que ele for regravado. Sem o campo, ela quebra em
+     * `votes[email]` e em `Object.keys(votes)`. A forma continua; sai o conteúdo.
+     * ⚠️ Preço: a aba velha mostra "0 votos" até recarregar. Contagem errada se conserta
+     * com um F5; exceção derruba a tela.
+     * ⛔ E NÃO se publica a lista de quem votou: num documento anônimo que já expõe
+     * `participantUids`, isso revelaria PARTICIPAÇÃO. Um número não identifica ninguém.
+     * [[project_email_no_doc_publico]] */
+    polls: _arr(t.polls).map(function (poll) {
+      if (!poll || typeof poll !== 'object') return poll;
+      var copia = {};
+      Object.keys(poll).forEach(function (k) { if (k !== 'votes') copia[k] = poll[k]; });
+      var mapa = (poll.votes && typeof poll.votes === 'object') ? poll.votes : null;
+      copia.voteCount = mapa ? Object.keys(mapa).length : 0;
+      copia.votes = {};
+      return copia;
+    }),
 
     // ── identidade e exibição ──────────────────────────────────────────────
     name: nome,

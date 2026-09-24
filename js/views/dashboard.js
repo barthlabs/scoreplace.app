@@ -1226,11 +1226,29 @@ function renderDashboard(container) {
                   var _pHrs = Math.floor(_pRemaining / 3600000);
                   var _pMins = Math.floor((_pRemaining % 3600000) / 60000);
                   var _pTimeStr = _pHrs > 0 ? _pHrs + 'h ' + _pMins + 'm' : _pMins + 'm';
-                  var _pVotes = Object.keys(_activePoll.votes || {}).length;
+                  /* ⛔⛔ O RESUMO PÚBLICO NÃO CARREGA MAIS O MAPA DE VOTOS (24/set/2026).
+                   * Voto legado é chaveado por E-MAIL, e o resumo é lido SEM autenticação:
+                   * as chaves daquele mapa eram e-mails de participantes. Agora o resumo
+                   * traz só `voteCount`, e o mapa vem vazio.
+                   * ⛔ `voteCount` PRIMEIRO, mapa depois: no documento completo o mapa é a
+                   * verdade; no resumo ele é `{}` de propósito. Contar o mapa primeiro
+                   * mostraria zero voto em todo torneio da lista.
+                   * [[project_email_no_doc_publico]] */
+                  var _pVotes = (typeof _activePoll.voteCount === 'number')
+                    ? _activePoll.voteCount
+                    : Object.keys(_activePoll.votes || {}).length;
                   var _pTotal = (t.participants ? (Array.isArray(t.participants) ? t.participants : Object.values(t.participants)).length : 0);
                   var _pUser = window.AppStore.currentUser;
                   var _pUserEmail = (_pUser && _pUser.email) ? _pUser.email : '';
-                  var _pHasVoted = !!(_activePoll.votes && _activePoll.votes[_pUserEmail]);
+                  /* ⛔ UID PRIMEIRO, e-mail só como legado. Esta linha consultava SÓ o
+                   * e-mail, mas a Function grava o voto por uid desde então — ou seja,
+                   * quem votava não via o selo "já votei". E no RESUMO o mapa é vazio de
+                   * propósito: ali não há como saber, e o selo simplesmente não aparece —
+                   * inventar um seria mentir. Ele aparece ao abrir o torneio, que carrega
+                   * o documento completo. */
+                  var _pVotesMap = _activePoll.votes || {};
+                  var _pHasVoted = !!((_pUser && _pUser.uid && _pVotesMap[_pUser.uid])
+                    || (_pUserEmail && _pVotesMap[_pUserEmail]));
                   var _pStatusText = _pHasVoted ? '✅ ' + _t('poll.voted') : '⏳ ' + _t('poll.awaitingVote');
                   _html += '<div onclick="event.stopPropagation();window._showPollVotingDialog(\'' + t.id + '\',\'' + _activePoll.id + '\')" style="margin-top:10px;background:linear-gradient(135deg,rgba(99,102,241,0.15),rgba(139,92,246,0.08));border:2px solid rgba(99,102,241,0.4);border-radius:20px;padding:1rem 1.25rem;cursor:pointer;box-shadow:0 4px 20px rgba(99,102,241,0.1);">';
                   _html += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">';

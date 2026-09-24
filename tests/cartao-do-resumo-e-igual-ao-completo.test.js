@@ -121,12 +121,74 @@ const lista = Array.isArray(arr) ? arr : (arr.tournaments || []);
   ok(iR > 0 && iA > iR, 'nessa ordem: resumo primeiro, documento completo só como rede');
 }
 
-// ── ⑥ enquete vai INTEIRA (o cartão desenha os detalhes dela) ──────────────
+/* ── ⑥ enquete vai inteira MENOS O MAPA DE VOTOS (24/set/2026) ───────────────
+ * Esta asserção exigia a cópia CRUA, e era por ela que o resumo público — lido SEM
+ * autenticação — carregava um mapa cujas CHAVES são e-mails: voto legado é chaveado por
+ * e-mail. O contrato muda: tudo o que o cartão desenha continua, o mapa de votos não.
+ * ⛔ A projeção é por SUBTRAÇÃO: campo novo da enquete passa a acompanhar sozinho. Uma
+ * lista de campos permitidos quebraria a tela no primeiro campo que eu esquecesse — e eu
+ * esqueci `opt.key`, que o leitor chama `.replace()`.
+ * [[project_email_no_doc_publico]] */
 {
-  const t = { id: 'x', polls: [{ q: 'Quando?', opts: ['sáb', 'dom'], votes: { a: 0 } }] };
+  const votos = { 'pessoa@mail.com': ['sab'], 'uid-abc': ['dom'] };
+  const t = { id: 'x', polls: [{ q: 'Quando?', opts: ['sáb', 'dom'],
+    options: [{ key: 'sab', icon: '📅', title: 'Sábado', desc: 'manhã' }],
+    isNash: false, votes: votos }] };
   const r = M.buildSummary(t, 'x', helpers);
-  ok(JSON.stringify(r.polls) === JSON.stringify(t.polls),
-     '⛔ a enquete é copiada inteira — resumir faria ela sumir do cartão');
+  const p = r.polls[0];
+  ok(JSON.stringify(p.q) === JSON.stringify(t.polls[0].q)
+     && JSON.stringify(p.opts) === JSON.stringify(t.polls[0].opts)
+     && JSON.stringify(p.options) === JSON.stringify(t.polls[0].options)
+     && p.isNash === false,
+     '⛔ tudo o que o cartão desenha continua no resumo, campo por campo');
+  ok(JSON.stringify(p.votes) === '{}',
+     '⛔ o mapa de votos vai VAZIO — as chaves dele eram e-mails de participantes');
+  ok(p.voteCount === 2, 'e a contagem vem separada, para o cartão não mostrar zero');
+  /* ⛔ A conferência é por CAMINHO, não por aparência. "Tem @ no JSON" reprovaria dado
+   * legítimo: nome de torneio, local e token são texto livre, e identidade não tem forma
+   * fixa. O vetor abaixo prova que um @ LEGÍTIMO passa. */
+  const caminhosProibidos = (resumo) => {
+    const achados = [];
+    ['organizerEmail', 'creatorEmail', 'adminEmails'].forEach((k) => {
+      if (resumo[k] !== undefined) achados.push(k);
+    });
+    (resumo.polls || []).forEach((poll, i) => {
+      const n = Object.keys((poll && poll.votes) || {}).length;
+      if (n) achados.push('polls[' + i + '].votes (' + n + ' chave(s))');
+    });
+    return achados;
+  };
+  ok(caminhosProibidos(r).length === 0,
+     '⛔ REGRESSÃO: nenhum caminho proibido no resumo — é ele que é público sem login');
+  const legit = M.buildSummary({ id: 'y', name: 'Copa contato@clube.com',
+    participants: [{ uid: 'contato@clube.com' }] }, 'y', helpers);
+  ok(caminhosProibidos(legit).length === 0,
+     '⛔ e um "@" LEGÍTIMO em nome ou identidade NÃO é vazamento — reprovar por aparência pararia o conserto sem motivo');
+  ok(Object.prototype.hasOwnProperty.call(p, 'votes'),
+     '⛔ o campo EXISTE (vazio), não é ausente: a aba já aberta lê `votes[email]` e quebraria');
+  ok(r.organizerEmail === undefined, '⛔ e o e-mail do organizador não está mais no resumo');
+}
+
+/* ── ⑦ o CARTÃO e o DIÁLOGO sabem viver com o resumo projetado ────────────────
+ * Sem isto eu teria tirado o mapa do resumo e deixado a tela mostrando "0 votos" em todo
+ * torneio da lista, ou abrindo a enquete sobre uma projeção sem votos. */
+{
+  const fs2 = require('fs');
+  const dash = fs2.readFileSync(require('path').join(__dirname, '..', 'js/views/dashboard.js'), 'utf8');
+  ok(/typeof _activePoll\.voteCount === 'number'[\s\S]{0,120}Object\.keys\(_activePoll\.votes/.test(dash),
+     '⛔ o cartão usa voteCount PRIMEIRO e o mapa só depois (no resumo o mapa é vazio)');
+  ok(/_pVotesMap\[_pUser\.uid\][\s\S]{0,90}_pVotesMap\[_pUserEmail\]/.test(dash),
+     '⛔ o selo "já votei" é por UID primeiro, e-mail só como legado — antes era só e-mail');
+  const prep = fs2.readFileSync(require('path').join(__dirname, '..', 'js/views/tournaments-draw-prep.js'), 'utf8');
+  const iDlg = prep.indexOf('window._showPollVotingDialog = function');
+  const cabeca = prep.slice(iDlg, iDlg + 1400);
+  ok(/if \(t\._resumo[\s\S]{0,200}_ensureTournamentLoaded\(tId, function/.test(cabeca),
+     '⛔ o diálogo hidrata quando recebe RESUMO, em vez de abrir sobre a projeção');
+  ok(/if \(!completo \|\| completo\._resumo\)/.test(cabeca),
+     '⛔ e CONFERE o retorno: a porta devolve nulo em erro ou tempo esgotado');
+  const iReturn = cabeca.indexOf('        return;\n    }');
+  ok(iReturn > cabeca.indexOf('_ensureTournamentLoaded'),
+     '⛔ e RETORNA em vez de seguir — a carga é por callback e leva segundos');
 }
 
 console.log('\n' + (fail === 0 ? '✅' : '❌') + ' ' + pass + ' ok, ' + fail + ' falha(s)');
