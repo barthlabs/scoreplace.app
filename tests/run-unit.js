@@ -222,6 +222,7 @@ const SUITES = [
   'tests/avancar-de-fase-e-um-botao-so.test.js',
   'tests/uma-definicao-de-liga.test.js',
   'tests/uma-porta-para-chamar-a-cf.test.js',
+  'tests/portas-que-o-app-chama-existem.test.js',
   // ⭐ E ele tem que aparecer TAMBÉM no sandbox do dono. Ali o atalho sumia porque o
   // torneio dividido chega com os grupos apontando pros jogos por `matchIds` e ninguém
   // religava DEPOIS da montagem — `_phasesPhaseComplete` respondia `false` pra sempre.
