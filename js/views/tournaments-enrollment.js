@@ -1073,6 +1073,10 @@ window._doEnrollCurrentUser = function(tId, selectedCategories, _onSuccess) {
              * inscrição. Identidade é uid, nunca texto. */
             if (typeof window._resolveOrganizerUid === 'function') {
                 window._resolveOrganizerUid(t).then(function(orgUid) {
+                    /* ⛔ QUEM DECIDE É O UID, não o e-mail (inscrição INDIVIDUAL). Este aviso comparava
+                     * `t.organizerEmail` com o e-mail do usuário: quem entrou por conta Google não
+                     * recebia, e torneio antigo, sem e-mail gravado, não avisava ninguém.
+                     * Ver tests/pontos-frageis.js. */
                     if (orgUid && orgUid !== (user && user.uid)) {
                         window._sendUserNotification(orgUid, {
                             type: 'enrollment_new',
@@ -1282,6 +1286,10 @@ window.submitTeamEnroll = function (tId) {
              * inscrição. Identidade é uid, nunca texto. */
             if (typeof window._resolveOrganizerUid === 'function') {
                 window._resolveOrganizerUid(t).then(function(orgUid) {
+                    /* ⛔ QUEM DECIDE É O UID, não o e-mail (inscrição de DUPLA). Este aviso comparava
+                     * `t.organizerEmail` com o e-mail do usuário: quem entrou por conta Google não
+                     * recebia, e torneio antigo, sem e-mail gravado, não avisava ninguém.
+                     * Ver tests/pontos-frageis.js. */
                     if (orgUid && orgUid !== (user && user.uid)) {
                         window._sendUserNotification(orgUid, {
                             type: 'enrollment_new',
@@ -1466,6 +1474,10 @@ window.deenrollCurrentUser = function (tId) {
                          * inscrição. Identidade é uid, nunca texto. */
                         if (typeof window._resolveOrganizerUid === 'function') {
                             window._resolveOrganizerUid(t).then(function(orgUid) {
+                                /* ⛔ QUEM DECIDE É O UID, não o e-mail (CANCELAMENTO). Este aviso comparava
+                                 * `t.organizerEmail` com o e-mail do usuário: quem entrou por conta Google não
+                                 * recebia, e torneio antigo, sem e-mail gravado, não avisava ninguém.
+                                 * Ver tests/pontos-frageis.js. */
                                 if (orgUid && orgUid !== (user && user.uid)) {
                                     window._sendUserNotification(orgUid, {
                                         type: 'enrollment_cancelled',

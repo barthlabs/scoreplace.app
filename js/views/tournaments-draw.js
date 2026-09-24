@@ -2246,6 +2246,9 @@ window._callCF = function (fnName, payload, msgs) {
         falha: msgs.falha || ('Falha em ' + fnName),
     };
     var DB = window.FirestoreDB;
+    /* ⛔ CACHE HÍBRIDO: uma aba velha pode ter este arquivo NOVO e o firebase-db VELHO (ou o
+     * contrário). O marcador é o que prova que a casa existe mesmo — sem ele, a casca
+     * chamaria a si própria e entraria em recursão. Ver tests/pontos-frageis.js. */
     if (DB && DB._callFnMarca === 'callfn-canonico-v1' && typeof DB._callFn === 'function') {
         return DB._callFn(fnName, payload, _m).then(function (r) { return { data: r }; });
     }

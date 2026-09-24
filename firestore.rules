@@ -626,7 +626,9 @@ service cloud.firestore {
        * ⚠️ O carimbo CONTINUA, no handler (`functions-autodraw/tournament-create.js:85`),
        * como invariante de quem cria de verdade. Ele só não é mais a defesa.
        * ⚠️ A exceção declarada pelo dono continua valendo: restaurar de backup roda pelo
-       * Admin SDK, que ignora as rules. Recuperar DE PROPÓSITO pode; por acidente, não. */
+       * Admin SDK, que ignora as rules. Recuperar DE PROPÓSITO pode; por acidente, não.
+        * ⛔ CREATE: FECHADO — o cliente criava o torneio direto no banco. Ver
+        * tests/pontos-frageis.js. */
       allow create: if false;
 
       // Update permitido em 3 caminhos:
@@ -710,8 +712,13 @@ service cloud.firestore {
         // ordem anterior (authed já lia qualquer result subdoc); só evita 1 get()
         // por doc na listagem. Público (sem auth) ainda cai no parentT().isPublic.
         allow read: if (request.auth != null) || (parentT().isPublic == true);
+        // ⛔ RESERVADOS A PROCESSO PRIVILEGIADO — o cliente escrevia o resultado do jogo
+        // direto neste documento; quem lança placar hoje fala com a Function. Ver
+        // tests/pontos-frageis.js.
         allow create: if false;
+        // ⛔ RESERVADOS A PROCESSO PRIVILEGIADO (ver a linha acima e tests/pontos-frageis.js).
         allow update: if false;
+        // ⛔ RESERVADOS A PROCESSO PRIVILEGIADO (ver a linha acima e tests/pontos-frageis.js).
         allow delete: if false;
       }
 

@@ -72,7 +72,12 @@ for (let de = 0; ; ) {
 }
 const blocos = inicios.map((k) => ateFechar(src, k));
 ok(blocos.length === 3, '④ achei os três blocos de aviso');
-ok(blocos.every((b) => !/organizerEmail/.test(b)),
+/* ⛔ Procurar no texto CRU faria a própria ANOTAÇÃO reprovar: a nota que explica o defeito
+ * precisa citar o campo pelo nome, e citar não é ler. Então a busca é no código mascarado —
+ * o mesmo leitor da trava de anotação, que apaga comentários e strings preservando o offset.
+ * [[feedback_busca_truncada_nao_e_busca]] */
+const _mascara = require('./pontos-frageis-validador.js').lerJs;
+ok(blocos.every((b) => !/organizerEmail/.test(_mascara('(function(){' + b + '})').mascarado)),
   '④ ⭐⭐ nenhum dos três lê `organizerEmail` — torneio sem o campo volta a avisar o organizador');
 ok(blocos.every((b) => /_sendUserNotification\(orgUid/.test(b)),
   '④ e todos enviam por uid, como já enviavam');

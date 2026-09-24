@@ -1815,9 +1815,15 @@ window.FirestoreDB = {
   // LOGADO o SDK compat tenta montar o token FCM antes de enviar e a promise
   // REJEITA sem a requisição sair ("Messaging: …") — a CF nem é tocada. Ver
   // js/views/tournaments-draw.js (_callDrawRound) e v1.3.86.
-  /* ⛔ DELEGA na casa única do transporte (js/views/tournaments-draw.js `_callCF`),
-   * 23/set/2026. Era a QUINTA cópia do mesmo bloco, e o comentário acima já apontava para a
-   * primeira delas como origem.
+  /* ⛔⛔ A IMPLEMENTAÇÃO MORA AQUI, E NÃO PODE SAIR DAQUI (24/set/2026).
+   * ⚠️ CORREÇÃO DE UM COMENTÁRIO QUE MENTIA: até hoje esta nota dizia que a função
+   * "DELEGA na casa única (tournaments-draw.js `_callCF`)". Era verdade em 23/set, quando
+   * a casa era lá. Na 2.3.95 a seta se inverteu — a casa passou a ser ESTA, e a `_callCF`
+   * virou casca — e a nota ficou apontando para o lado errado. Anotação errada é pior que
+   * anotação ausente: manda o próximo para o lugar errado com confiança.
+   * ⛔ Nada de arquivo de TELA no caminho do transporte: quando a implementação morava lá,
+   * um arquivo de tela que não chegasse inteiro derrubava TUDO que fala com o servidor —
+   * foi assim que a lista de inscritos parou de abrir.
    * ⚠️ E DESEMBRULHA: esta função devolve `j.result` CRU, enquanto `_callCF` devolve
    * `{data: ...}`. Delegar sem o `.data` quebraria quem lê `result.ok`/`result.replay`
    * (js/store.js) e `result.tournament` (js/views/tournaments-draw.js).
@@ -1849,6 +1855,10 @@ window.FirestoreDB = {
    * montar o token FCM e a promessa REJEITA antes de a requisição sair. */
   _callFnMarca: 'callfn-canonico-v1',   // ⛔ a casca procura ESTA marca (ver tournaments-draw.js)
 
+  /* ⛔ A CASA DO TRANSPORTE CALLABLE É AQUI — E NÃO PODE SAIR DAQUI. A casca em
+   * js/views/tournaments-draw.js só encaminha; quem fala o protocolo é esta função.
+   * Mover a implementação para um arquivo de TELA foi o que derrubou a lista de
+   * inscritos em 24/set/2026. Ver o bloco acima e tests/pontos-frageis.js. */
   async _callFn(name, payload, msgs) {
     msgs = (typeof msgs === 'string') ? { unauth: msgs } : (msgs || {});
     var fb = window.firebase;
