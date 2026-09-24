@@ -1815,28 +1815,24 @@ window.FirestoreDB = {
   // LOGADO o SDK compat tenta montar o token FCM antes de enviar e a promise
   // REJEITA sem a requisição sair ("Messaging: …") — a CF nem é tocada. Ver
   // js/views/tournaments-draw.js (_callDrawRound) e v1.3.86.
+  /* ⛔ DELEGA na casa única do transporte (js/views/tournaments-draw.js `_callCF`),
+   * 23/set/2026. Era a QUINTA cópia do mesmo bloco, e o comentário acima já apontava para a
+   * primeira delas como origem.
+   * ⚠️ E DESEMBRULHA: esta função devolve `j.result` CRU, enquanto `_callCF` devolve
+   * `{data: ...}`. Delegar sem o `.data` quebraria quem lê `result.ok`/`result.replay`
+   * (js/store.js) e `result.tournament` (js/views/tournaments-draw.js).
+   * ⚠️ E leva os TRÊS textos próprios: 'login necessário', 'App não inicializado' (SEM ponto
+   * — o genérico tem ponto) e 'Falha' (o genérico diz 'Falha em <fn>'). Refactor não muda
+   * mensagem em produção. */
   async _callFn(name, payload) {
-    var fb = window.firebase;
-    var user = fb && fb.auth && fb.auth().currentUser;
-    if (!user) throw Object.assign(new Error('login necessário'), { code: 'functions/unauthenticated' });
-    var pid = '';
-    try { pid = fb.app().options.projectId; } catch (e) {}
-    if (!pid) throw Object.assign(new Error('App não inicializado'), { code: 'functions/internal' });
-    var url = 'https://us-central1-' + pid + '.cloudfunctions.net/' + name;
-    var tok = await user.getIdToken();
-    var r = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok },
-      body: JSON.stringify({ data: payload })
+    const r = await window._callCF(name, payload, {
+      unauth: 'login necessário',
+      naoInicializado: 'App não inicializado',
+      falha: 'Falha',
     });
-    var j = await r.json().catch(function () { return {}; });
-    if (j && j.error) {
-      var st = String(j.error.status || '').toLowerCase().replace(/_/g, '-');
-      throw Object.assign(new Error(j.error.message || 'Falha'), { code: 'functions/' + (st || 'internal') });
-    }
-    if (!r.ok) throw Object.assign(new Error('HTTP ' + r.status), { code: 'functions/internal' });
-    return (j && j.result) || {};
+    return r.data;
   },
+
 
   // Escala de arbitragem: intenção mínima; autorização, perfil e transação vivem na Function.
   async manageTournamentReferee(tournamentId, action, uid) {
