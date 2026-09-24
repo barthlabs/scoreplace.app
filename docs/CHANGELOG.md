@@ -8,6 +8,8 @@
 
 ### Decisão do dono sobre o veredito da Análise
 
+> **Publicado com a revisão do GPT dispensada, por decisão do dono.** O revisor repetiu **cinco vezes**, no portão do diff, a exigência de a Análise parar de produzir veredito até haver coleta server-side no letzplay. Tudo o que era corrigível foi corrigido nas cinco voltas: assinatura, vínculo, versões nativas alinhadas, `functions-autodraw` publicado, notas certas, a trava de elenco **retirada com a medida** e testes adversariais **fixando** os dois buracos que continuam abertos. O que sobrou é a troca de produto — e essa é do dono.
+
 O revisor pediu, três vezes, que a Análise **parasse de transformar leitura do letzplay em veredito** — sem cor decisória, sem selo de verificado, sem habilidade derivada — porque nem o scan nem o autoimport são atestados. O dono decidiu **manter a cor** e atacar a origem. A razão está registrada: a leitura **orienta, não prova**, e isso já é o que a nota da 2.3.92 diz em público; o estrago possível está confinado à leitura de uma tela (o cadastro global já não é tocado desde a 2.3.92), e o ataque exige escolher a vítima, ter torneio e assinar com o próprio uid. O fecho de verdade é **coleta no servidor**, que fica como destino, não como próximo passo.
 
 ## 2.3.93 — 23/set/2026 (bloco 4, leva a — consolidação, sem mudança de comportamento)
