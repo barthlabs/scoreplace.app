@@ -24,7 +24,18 @@ var ScoreplaceWaitlist;
         return [...new Set(values.map((item) => text(item).toLowerCase()).filter(Boolean))];
     }
     ScoreplaceWaitlist.nameForms = nameForms;
-    /** Chave persistida: uid do participante ou nome do convidado sem conta. */
+    /**
+     * Chave persistida: uid → id do inscrito MANUAL → nome do convidado legado.
+     *
+     * ⛔⛔ O NOME É A ÚLTIMA TENTATIVA, NUNCA A PREFERIDA (24/set/2026).
+     * O inscrito manual (fictício, sem conta) nasce com `manualParticipantId`
+     * (tournaments-enrollment.js). Enquanto a chave caía direto no nome, dois manuais
+     * HOMÔNIMOS colapsavam num só: sumiam um do outro na fila e compartilhavam um único
+     * número de inscrição. É o mesmo casamento por nome que o uid veio matar — e ele
+     * sobrevivia aqui porque quem não tem conta não tem uid.
+     * Nome segue valendo para entrada LEGADA, que não tem nenhum dos dois.
+     * [[feedback_uid_controls_everything_name_only_ficticio]]
+     */
     function key(value, helpers) {
         if (value == null)
             return '';
@@ -36,6 +47,9 @@ var ScoreplaceWaitlist;
         const uid = text(entry.uid);
         if (uid)
             return uid;
+        const manual = text(entry.manualParticipantId);
+        if (manual)
+            return manual;
         const storedName = text(entry.displayName) || text(entry.name);
         return storedName || text(helpers.displayName(value));
     }
@@ -50,7 +64,11 @@ var ScoreplaceWaitlist;
                 const entry = record(candidate);
                 if (entry && text(entry.uid) === wanted)
                     return candidate;
-                if ((!entry || !text(entry.uid)) && nameForms(candidate, helpers).includes(lower))
+                // ⛔ o id do manual vem ANTES do nome, pela mesma razão de `key()`
+                if (entry && !text(entry.uid) && text(entry.manualParticipantId) === wanted)
+                    return candidate;
+                if ((!entry || (!text(entry.uid) && !text(entry.manualParticipantId))) &&
+                    nameForms(candidate, helpers).includes(lower))
                     return candidate;
             }
         }
@@ -131,6 +149,127 @@ var ScoreplaceWaitlist;
         return output;
     }
     ScoreplaceWaitlist.getWaitlistWithSource = getWaitlistWithSource;
+    const numberOrNull = (value) => {
+        if (value == null || value === '')
+            return null;
+        const n = Number(value);
+        return isFinite(n) ? n : null;
+    };
+    /** Uma entrada é DUPLA quando tem os dois lados, por uid OU por nome. */
+    const isPair = (entry) => Boolean((text(entry.p1Uid) || text(entry.p1Name)) && (text(entry.p2Uid) || text(entry.p2Name)));
+    /** Chave de UM lado da dupla — mesma ordem de `key()`: uid → manual → nome. */
+    const sideKey = (entry, n) => text(entry['p' + n + 'Uid']) || text(entry['p' + n + 'ManualId']) || text(entry['p' + n + 'Name']);
+    /**
+     * Todas as pessoas da fila, na ordem canônica `participants` → espera, já deduplicadas
+     * por `key()`, cada uma com TODOS os seus locators.
+     *
+     * ⛔ Conflito de sequência: quando duas cópias da mesma pessoa têm números DIFERENTES,
+     * vence a MENOR — é a que corresponde à chegada real. A outra NÃO é sobrescrita:
+     * reescrever sequência já gravada para acertar exibição é perder dado. O conflito fica
+     * visível para uma leva de reparo, se o dono quiser.
+     */
+    function enumerateEnrollQueue(tournament, helpers) {
+        if (!tournament)
+            return [];
+        const byKey = new Map();
+        const ordem = { n: 0 };
+        const add = (k, seq, locator, source) => {
+            if (!k)
+                return;
+            let pessoa = byKey.get(k);
+            if (!pessoa) {
+                pessoa = { key: k, seq: null, order: ordem.n++, locators: [], source: source };
+                byKey.set(k, pessoa);
+            }
+            if (locator)
+                pessoa.locators.push(locator);
+            // primeira sequência NÃO NULA; entre duas não nulas, a MENOR
+            if (seq != null && (pessoa.seq == null || seq < pessoa.seq))
+                pessoa.seq = seq;
+        };
+        const visita = (raw, storage, index, category, source) => {
+            if (typeof raw === 'string') {
+                /* Texto solto: pode ser o espelho de alguém que TEM entrada real. Se casar, o
+                 * número vai no objeto real; se for órfão, entra sem locator — fica como índice
+                 * de exibição e nada é gravado, que é o contrato de hoje. */
+                const existente = entryByKeyFromPools(tournament, text(raw), helpers);
+                if (existente) {
+                    add(key(existente, helpers), null, null, source);
+                    return;
+                }
+                add(text(raw), null, null, source);
+                return;
+            }
+            const entry = record(raw);
+            if (!entry)
+                return;
+            if (isPair(entry)) {
+                add(sideKey(entry, 1), numberOrNull(entry.p1Seq), { storage, index, category, seqField: 'p1Seq' }, source);
+                add(sideKey(entry, 2), numberOrNull(entry.p2Seq), { storage, index, category, seqField: 'p2Seq' }, source);
+                return;
+            }
+            add(key(entry, helpers), numberOrNull(entry.enrollSeq), { storage, index, category, seqField: 'enrollSeq' }, source);
+        };
+        array(tournament.participants).forEach((e, i) => visita(e, 'participants', i, undefined, 'participants'));
+        array(tournament.waitlist).forEach((e, i) => visita(e, 'waitlist', i, undefined, 'waitlist'));
+        array(tournament.standbyParticipants).forEach((e, i) => visita(e, 'standbyParticipants', i, undefined, 'standbyParticipants'));
+        const monarchQ = object(tournament.monarchWaitlist);
+        if (monarchQ)
+            Object.keys(monarchQ).forEach((category) => {
+                array(monarchQ[category]).forEach((e, i) => visita(e, 'monarchWaitlist', i, category, 'monarchWaitlist'));
+            });
+        return [...byKey.values()].sort((a, b) => a.order - b.order);
+    }
+    ScoreplaceWaitlist.enumerateEnrollQueue = enumerateEnrollQueue;
+    /**
+     * Materializa os números que faltam, na ordem da fila, e devolve quais storages foram
+     * tocados. Operação PURA sobre o objeto do torneio — serve o navegador e o servidor.
+     *
+     * ⛔ Mora aqui, e não no `store.js`, porque o autoDraw roda no servidor e só enxerga o
+     * vendor deste módulo. Duas implementações = cliente e servidor numerando diferente.
+     * ⛔ O novo número é sempre MAIOR que todos os já usados: quem chega depois nunca pega
+     * um número baixo deixado por quem saiu. Fechar a lacuna é papel do rank denso na
+     * exibição, não da alocação.
+     */
+    function allocateEnrollSeqs(tournament, helpers) {
+        if (!tournament)
+            return [];
+        const fila = enumerateEnrollQueue(tournament, helpers);
+        let maior = 0;
+        fila.forEach((p) => { if (p.seq != null && p.seq > maior)
+            maior = p.seq; });
+        const tocados = new Set();
+        const escreve = (loc, valor) => {
+            const lista = loc.category
+                ? array((object(tournament.monarchWaitlist) || {})[loc.category])
+                : array(tournament[loc.storage]);
+            const alvo = record(lista[loc.index]);
+            if (!alvo)
+                return;
+            alvo[loc.seqField] = valor;
+            tocados.add(loc.storage);
+        };
+        fila.forEach((pessoa) => {
+            if (!pessoa.locators.length)
+                return; // resíduo textual: não se grava
+            if (pessoa.seq == null) {
+                pessoa.seq = ++maior;
+            }
+            pessoa.locators.forEach((loc) => {
+                const lista = loc.category
+                    ? array((object(tournament.monarchWaitlist) || {})[loc.category])
+                    : array(tournament[loc.storage]);
+                const alvo = record(lista[loc.index]);
+                if (!alvo)
+                    return;
+                // ⛔ não sobrescreve número já gravado (ver o conflito em `enumerateEnrollQueue`)
+                if (numberOrNull(alvo[loc.seqField]) == null)
+                    escreve(loc, pessoa.seq);
+            });
+        });
+        return [...tocados];
+    }
+    ScoreplaceWaitlist.allocateEnrollSeqs = allocateEnrollSeqs;
     /** Leitura única e ordenada dos três storages, sem índices órfãos. */
     function getWaitlist(tournament, helpers) {
         return getWaitlistWithSource(tournament, helpers).map((sourced) => sourced.entry);
@@ -148,10 +287,16 @@ var ScoreplaceWaitlist;
             tournament.standbyParticipants = standby;
         const uids = helpers.participantUids(entry).filter(Boolean);
         const name = text(helpers.displayName(entry)).toLowerCase();
+        /* ⛔ O id do MANUAL entra aqui pela mesma razão de `key()`: sem ele, devolver à fila
+         * dois fictícios homônimos guardava só o primeiro — o segundo sumia calado. */
+        const manual = text(record(entry) ? record(entry).manualParticipantId : '');
         const exists = getWaitlist(tournament, helpers).some((current) => {
             const currentUids = helpers.participantUids(current).filter(Boolean);
             if (uids.length && currentUids.length)
                 return currentUids.some((uid) => uids.includes(uid));
+            const currentManual = text(record(current) ? record(current).manualParticipantId : '');
+            if (manual || currentManual)
+                return Boolean(manual) && manual === currentManual;
             return Boolean(name) && text(helpers.displayName(current)).toLowerCase() === name;
         });
         if (exists)

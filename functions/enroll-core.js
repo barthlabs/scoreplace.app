@@ -245,15 +245,25 @@ function computeEnroll(data, participantObj, extraUpdates, nowMs) {
     if (isAlreadyEnrolled(standby, participantObj) || isAlreadyEnrolled(waitlist, participantObj)) {
       return { outcome: 'alreadyWaitlisted', participants: participants, updateData: null };
     }
-    var newStandby = standby.concat([cleanUndefined(participantObj)]);
+    var novaEntrada = cleanUndefined(participantObj);
+    var newStandby = standby.concat([novaEntrada]);
     var wlData = Object.assign({}, data, { standbyParticipants: newStandby });
+    /* materializa os legados E numera o recém-chegado, na ordem da fila (ver o bloco no
+     * topo do arquivo). `tocados` diz quais storages precisam ir no pacote de gravação —
+     * pode incluir `participants`, `waitlist` e `monarchWaitlist`, não só a espera. */
+    var tocados = allocateEnrollSeqs(wlData);
     var wlUpdate = { standbyParticipants: newStandby, memberUids: computeMemberUids(wlData) };
+    tocados.forEach(function (k) { if (k !== 'standbyParticipants' && wlData[k] !== undefined) wlUpdate[k] = wlData[k]; });
     if (extraUpdates) {
       Object.keys(extraUpdates).forEach(function (k) { wlUpdate[k] = cleanUndefined(extraUpdates[k]); });
     }
     return {
       outcome: 'waitlisted', participants: participants,
-      standbyParticipants: newStandby, updateData: wlUpdate
+      standbyParticipants: newStandby, updateData: wlUpdate,
+      /* a ENTRADA JÁ NUMERADA — é ela que vai para o espelho do roster, não o objeto de
+       * intenção: o espelho nasceria sem número e divergente do elenco no mesmo instante */
+      entry: novaEntrada,
+      waitlist: wlData.waitlist, monarchWaitlist: wlData.monarchWaitlist
     };
   }
   var capMax = parseInt(data.maxParticipants, 10);
@@ -282,6 +292,38 @@ function computeEnroll(data, participantObj, extraUpdates, nowMs) {
 // window._pairPartnerSolo (js/views/tournaments.js) e o solo() de computeSplitPair
 // (pair-core.js) — o solo herda o que era POR MEMBRO (nº de inscrição, contato,
 // categoria). Fictício (sem uid) volta como a STRING do nome. Sem uid nem nome → null.
+/* ⛔⛔ O NÚMERO DE INSCRIÇÃO NASCE AQUI, DENTRO DA TRANSAÇÃO (24/set/2026).
+ * Relato do dono: quem entra na lista de espera aparecia com 1, 2, 3, 4 num torneio com
+ * 154 inscritos. MEDIDO: a palavra `Seq` aparecia UMA vez neste arquivo, e era só para
+ * herdar o número ao desfazer dupla — ou seja, o servidor NUNCA numerou ninguém. Quem
+ * carimbava era o navegador, e só sobre o elenco.
+ * ⛔ A regra é a do DOMÍNIO vendorizado, nunca uma segunda cópia aqui: é o mesmo código
+ * que o navegador roda, e duas implementações numerariam diferente.
+ * ⛔ ORDEM: primeiro materializa o que falta nos LEGADOS, depois o recém-chegado ganha o
+ * dele. Ao contrário, quem acabou de chegar pegaria número menor que quem espera há
+ * semanas. [[project_numero_de_inscricao_conta_a_espera]] */
+var _waitlistDomain = null;
+try { _waitlistDomain = require('./vendor/waitlist.js'); } catch (e) { _waitlistDomain = null; }
+var _identityDomain = null;
+try { _identityDomain = require('./vendor/participant-identity.js'); } catch (e) { _identityDomain = null; }
+function _seqHelpers() {
+  return {
+    participantUids: function (value) {
+      if (_identityDomain && typeof _identityDomain.participantUids === 'function') return _identityDomain.participantUids(value);
+      return (value && value.uid) ? [String(value.uid)] : [];
+    },
+    displayName: function (value) {
+      if (typeof value === 'string') return value.trim();
+      return String((value && (value.displayName || value.name || value.email)) || '').trim();
+    }
+  };
+}
+/** Numera quem ainda não tem número, na ordem da fila. Devolve os storages tocados. */
+function allocateEnrollSeqs(tournamentLike) {
+  if (!_waitlistDomain || typeof _waitlistDomain.allocateEnrollSeqs !== 'function') return [];
+  try { return _waitlistDomain.allocateEnrollSeqs(tournamentLike, _seqHelpers()) || []; } catch (e) { return []; }
+}
+
 function pairPartnerSolo(entry, n) {
   var g = function (suf) { return entry['p' + n + suf]; };
   var uid = g('Uid') || '';

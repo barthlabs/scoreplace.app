@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.3.98';
+window.SCOREPLACE_VERSION = '2.3.99';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -14109,16 +14109,23 @@ window._ensureEnrollSeqs = function(t) {
    * temos 150 e tantos já"_ — o rank foi calculado sobre o pedaço carregado.
    * Mesma regra do `_assignGlobalGameNumbers`: sem o conjunto inteiro, não se numera. */
   if (t._faltamPesados) return;
+  /* ⛔⛔ A FILA É UMA SÓ: ELENCO + ESPERA (24/set/2026).
+   * Esta função percorria SÓ `t.participants`. Quem estava na lista de espera nunca
+   * recebia número — e o card caía na POSIÇÃO dentro do painel, mostrando 1, 2, 3, 4 num
+   * torneio com 154 inscritos. Relato do dono: _"o numero de inscricao nao esta sendo
+   * preservado… o proximo sera 155"_.
+   * ⛔ A varredura mora no domínio (`_allocateEnrollSeqs` → src/domain/waitlist.ts), que é
+   * o mesmo código que o servidor executa pelo vendor. Voltar a ler array cru aqui é
+   * recriar o defeito. [[project_numero_de_inscricao_conta_a_espera]] */
+  if (typeof window._allocateEnrollSeqs === 'function' && window._allocateEnrollSeqs(t) !== null) return;
+  /* Rede para harness legado sem o domínio carregado: numera ao menos o elenco. */
   var arr = Array.isArray(t.participants) ? t.participants : [];
   var maxSeq = 0;
   arr.forEach(function(p){ if (p && typeof p === 'object') [p.enrollSeq, p.p1Seq, p.p2Seq].forEach(function(s){ if (s != null && !isNaN(s) && s > maxSeq) maxSeq = s; }); });
   var nf = maxSeq;
   function alloc(){ nf += 1; return nf; }
   arr.forEach(function(p){
-    if (!p || typeof p !== 'object') return; // string legada: tratada on-the-fly no map
-    // v4.5.95: dupla por ESTRUTURA = (p1Uid|p1Name) && (p2Uid|p2Name). Antes exigia
-    // p1Name && p2Name, mas o strip do ITEM 3 apaga o nome de quem tem uid → dupla de
-    // contas reais caía no ramo solo e o 2º membro ficava sem número de inscrição.
+    if (!p || typeof p !== 'object') return;
     if ((p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) {
       if (p.p1Seq == null) p.p1Seq = alloc();
       if (p.p2Seq == null) p.p2Seq = alloc();
@@ -14133,21 +14140,36 @@ window._buildEnrollOrderMap = function(t) {
    * certo. Quando as partes chegam a tela repinta e o número aparece correto. */
   if (t && t._faltamPesados) return {};
   if (typeof window._ensureEnrollSeqs === 'function') window._ensureEnrollSeqs(t);
-  var arr = Array.isArray(t.participants) ? t.participants : [];
+  /* ⛔⛔ O MAPA TAMBÉM CONTA A ESPERA (24/set/2026) — mesma causa do bloco acima.
+   * v4.5.91: o número exibido é o RANK DENSO (1..N na ordem da sequência), não a
+   * sequência crua: remover um inscrito re-numera os demais sem deixar buraco. A
+   * sequência guardada segue estável; só o número mostrado é compactado. */
+  var fila = (typeof window._enrollQueue === 'function') ? window._enrollQueue(t) : [];
+  if (fila.length) {
+    var comNumero = fila.filter(function (pessoa) { return pessoa.seq != null; })
+                        .sort(function (a, b) { return a.seq - b.seq; });
+    var mapa = {};
+    comNumero.forEach(function (pessoa, i) {
+      var rank = i + 1;
+      var k = String(pessoa.key || '');
+      if (!k) return;
+      // a chave do domínio é uid, id do manual ou nome — o leitor busca pelos três
+      if (mapa['u:' + k] == null) mapa['u:' + k] = rank;
+      if (mapa['m:' + k] == null) mapa['m:' + k] = rank;
+      if (mapa['n:' + k.toLowerCase()] == null) mapa['n:' + k.toLowerCase()] = rank;
+    });
+    return mapa;
+  }
+  /* Rede para harness legado sem o domínio carregado. */
+  var arr = Array.isArray(t && t.participants) ? t.participants : [];
   var maxSeq = 0;
   arr.forEach(function(p){ if (p && typeof p === 'object') [p.enrollSeq, p.p1Seq, p.p2Seq].forEach(function(s){ if (s != null && s > maxSeq) maxSeq = s; }); });
   var strNext = maxSeq;
-  // v4.5.91: número exibido = RANK DENSO (1..N na ordem do enrollSeq), não o enrollSeq bruto.
-  // Remover um inscrito re-numera os demais sem deixar buraco (o que era 7 vira 6…). O
-  // enrollSeq guardado segue estável (ordem original); só o número mostrado é compactado.
-  var persons = []; // { keys:[u:uid, n:nome], seq }
+  var persons = [];
   function add(uid, name, seq){ if (seq == null) return; var keys=[]; if (uid) keys.push('u:'+uid); if (name) keys.push('n:'+String(name).trim().toLowerCase()); if (keys.length) persons.push({ keys: keys, seq: seq }); }
   arr.forEach(function(p){
     if (typeof p === 'string') { String(p).split(' / ').forEach(function(nm){ nm = nm.trim(); if (nm) add(null, nm, ++strNext); }); return; }
     if (!p || typeof p !== 'object') return;
-    // v4.5.95: dupla por ESTRUTURA (uid OU nome) — o strip do ITEM 3 apaga p1Name/p2Name de
-    // quem tem uid; exigir os dois nomes fazia a dupla cair no ramo solo e o 2º membro (Denise,
-    // Flávia…) ficar SEM número de inscrição. Cada membro entra pelo seu uid+seq.
     if ((p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) { add(p.p1Uid, p.p1Name, p.p1Seq); add(p.p2Uid, p.p2Name, p.p2Seq); }
     else { add(p.uid, p.displayName || p.name, p.enrollSeq); }
   });
@@ -14164,6 +14186,14 @@ window._enrollNumber = function(orderMap, p) {
     if (p.uid)   cand.push('u:' + p.uid);
     if (p.p1Uid) cand.push('u:' + p.p1Uid);
     if (p.p2Uid) cand.push('u:' + p.p2Uid);
+    /* ⛔ O ID DO INSCRITO MANUAL VEM ANTES DO NOME (24/set/2026). Quem não tem conta não
+     * tem uid, e a busca caía direto no nome: dois fictícios HOMÔNIMOS casavam na mesma
+     * chave e dividiam um número de inscrição só. É o casamento por nome que o uid veio
+     * matar, sobrevivendo onde o uid não existe.
+     * [[feedback_uid_controls_everything_name_only_ficticio]] */
+    if (p.manualParticipantId)   cand.push('m:' + p.manualParticipantId);
+    if (p.p1ManualId)            cand.push('m:' + p.p1ManualId);
+    if (p.p2ManualId)            cand.push('m:' + p.p2ManualId);
     [p.displayName, p.name].forEach(function(nm){ if (nm) cand.push('n:' + String(nm).toLowerCase().trim()); });
   } else {
     cand.push('n:' + String(p).toLowerCase().trim());

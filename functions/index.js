@@ -3006,7 +3006,11 @@ exports.enrollParticipant = onCall(
             uid: _alvo,
             status: (out.outcome === "waitlisted") ? "waitlisted" : "enrolled",
             at: new Date().toISOString(),
-            entry: _enrollCore.cleanUndefined(sanitizedParticipantObj),
+            /* ⛔ O ESPELHO LEVA A ENTRADA JÁ NUMERADA (24/set/2026). Aqui ia o objeto de
+             * INTENÇÃO, sem `enrollSeq` — então o espelho do roster nascia divergente do
+             * elenco no mesmo instante em que era criado.
+             * [[project_numero_de_inscricao_conta_a_espera]] */
+            entry: _enrollCore.cleanUndefined(out.entry || sanitizedParticipantObj),
           }, { merge: true });
         }
       } catch (e) { console.error("[enrollParticipant] espelho do roster falhou:", e && e.message); }

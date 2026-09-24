@@ -1724,7 +1724,17 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
   var _fCatStr = (_gPart && typeof _gPart === 'object') ? (_gPart.category || '') : '';
   for (var _fi = 0; _fi < _fSkillCats.length; _fi++) { if (_fCatStr === _fSkillCats[_fi] || _fCatStr.endsWith(' ' + _fSkillCats[_fi])) { _fSkill = _fSkillCats[_fi]; break; } }
   var _fEnrollNum = (typeof window._enrollNumber === 'function') ? window._enrollNumber(_enrollOrderMap, _gPart || pName) : '';
-  var _fOrder = (_fEnrollNum !== '' && _fEnrollNum != null) ? (_fEnrollNum - 1) : idx;
+  /* ⛔⛔ POSIÇÃO NO PAINEL NÃO É NÚMERO DE INSCRIÇÃO (24/set/2026).
+   * Esta linha misturava as duas coisas num valor só: sem número conhecido, ela caía no
+   * `idx` — a posição do card DENTRO do painel — e o crachá mostrava 1, 2, 3, 4 para quem
+   * estava na lista de espera de um torneio com 154 inscritos. Relato do dono.
+   * Agora são duas: `_fOrder` ordena (posição não afirma nada sobre a pessoa) e
+   * `_fNumIns` é o que vai no crachá — vazio quando não se sabe, e aí o crachá NÃO sai.
+   * ⛔ Nunca reunificar: "não sei" é a resposta honesta, e um ordinal inventado tem cara
+   * de certo. [[project_numero_de_inscricao_conta_a_espera]] */
+  var _fTemNum = (_fEnrollNum !== '' && _fEnrollNum != null);
+  var _fOrder = _fTemNum ? (_fEnrollNum - 1) : idx;
+  var _fNumIns = _fTemNum ? _fEnrollNum : '';
   // v1.3.45/48: _dragName = nome de EXIBIÇÃO resolvido POR UID (perfil vivo). Usado em:
   // (a) data-participant-name — o CSS do modo compacto de arraste
   // (body.sp-drag-compact .participant-card::before) le ESTE atributo pra mostrar só o nome ao
@@ -1739,7 +1749,7 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
   var _fNameAttr = (_dragName || pName || '').toLowerCase().replace(/"/g, '&quot;');
   var _fInactive = (t.allowSelfDeactivation !== false && _gPart && _gPart.ligaActive === false) ? '1' : '0';
   var _metaSlots = (typeof window._profileMetaSlots === 'function') ? window._profileMetaSlots(p, pName, isTeam, t, isOrg, { inline: true }) : '';
-  var _wmNum = (function () { var _n = (typeof _fOrder === 'number') ? (_fOrder + 1) : ''; return (typeof window._enrollNumberBadge === 'function') ? window._enrollNumberBadge(_n, 'right') : ''; })();
+  var _wmNum = (function () { if (_fNumIns === '' || _fNumIns == null) return ''; return (typeof window._enrollNumberBadge === 'function') ? window._enrollNumberBadge(_fNumIns, 'right') : ''; })();
 
   // 168px acomoda cabeçalho, até três badges e a linha de ação sem deixar os cards
   // de inativos menores que os cards da espera; conteúdo excepcional ainda pode crescer.

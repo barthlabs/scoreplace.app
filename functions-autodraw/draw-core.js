@@ -850,8 +850,26 @@ function splitLatePairCore(t, opts) {
   const e = arr[idx];
   const _dn1 = e.p1Uid ? (win._displayNameForUid ? win._displayNameForUid(e.p1Uid, e.p1Name) : (e.p1Name || e.p1Uid || '')) : null;
   const _dn2 = e.p2Uid ? (win._displayNameForUid ? win._displayNameForUid(e.p2Uid, e.p2Name) : (e.p2Name || e.p2Uid || '')) : null;
-  const s1 = e.p1Uid ? { displayName: _dn1, name: _dn1, uid: e.p1Uid, _lateJoin: true } : e.p1Name;
-  const s2 = e.p2Uid ? { displayName: _dn2, name: _dn2, uid: e.p2Uid, _lateJoin: true } : e.p2Name;
+  /* ⛔⛔ DESFAZER A DUPLA NÃO PODE APAGAR O NÚMERO DE INSCRIÇÃO (24/set/2026).
+   * O número de cada pessoa mora em `p1Seq`/`p2Seq` da dupla. Ao virar solo, ele morria
+   * junto com a entrada — e o membro MANUAL (sem uid) virava uma STRING, que não carrega
+   * campo nenhum: a pessoa ficava sem número e sem o id que a distingue de um homônimo.
+   * Cada lado volta com o SEU número, e o manual volta como objeto.
+   * [[project_numero_de_inscricao_conta_a_espera]] */
+  const _solo = function (uid, nome, seq, manualId) {
+    if (uid) {
+      const o = { displayName: nome, name: nome, uid: uid, _lateJoin: true };
+      if (seq != null) o.enrollSeq = seq;
+      return o;
+    }
+    if (seq == null && !manualId) return nome;   // legado puro: segue string, como era
+    const o = { displayName: nome, name: nome, _lateJoin: true };
+    if (seq != null) o.enrollSeq = seq;
+    if (manualId) o.manualParticipantId = manualId;
+    return o;
+  };
+  const s1 = _solo(e.p1Uid, e.p1Uid ? _dn1 : e.p1Name, e.p1Seq, e.p1ManualId);
+  const s2 = _solo(e.p2Uid, e.p2Uid ? _dn2 : e.p2Name, e.p2Seq, e.p2ManualId);
   arr.splice(idx, 1, s1, s2);
   t.updatedAt = new Date().toISOString();
   try { if (typeof win._computeMemberUids === 'function') win._computeMemberUids(t); } catch (e2) {}

@@ -790,14 +790,47 @@ window._applyWO = function (t, opts) {
           if (!Array.isArray(t.standbyParticipants)) t.standbyParticipants = [];
           const _has = t.standbyParticipants.some(p => (typeof window._participantUids === 'function')
             ? window._participantUids(p).indexOf(pUid) !== -1 : _getName(p) === partner);
-          if (!_has) t.standbyParticipants.push({ uid: pUid, displayName: partner || undefined });
+          /* ⛔⛔ O PARCEIRO NÃO PODE PERDER O NÚMERO DE INSCRIÇÃO (24/set/2026).
+           * Esta entrada nasce NOVA, e nascia sem sequência. A pessoa já estava inscrita:
+           * o número dela está no `p1Seq`/`p2Seq` da DUPLA — que a esta altura já saiu de
+           * `participants`, então buscar no elenco não acha nada. Tira-se do OBJETO DO
+           * SLOT, que é de onde o uid dela também saiu.
+           * ⛔ Não é alocar número novo: é não perder o que ela já tinha.
+           * [[project_numero_de_inscricao_conta_a_espera]] */
+          const _sObj = (slot === 'p1' ? m.team1Obj : m.team2Obj) || null;
+          let _pSeq = null;
+          if (_sObj && typeof _sObj === 'object') {
+            if (String(_sObj.p1Uid || '') === String(pUid)) _pSeq = _sObj.p1Seq;
+            else if (String(_sObj.p2Uid || '') === String(pUid)) _pSeq = _sObj.p2Seq;
+            else if (String(_sObj.uid || '') === String(pUid)) _pSeq = _sObj.enrollSeq;
+          }
+          if (!_has) t.standbyParticipants.push(_pSeq == null
+            ? { uid: pUid, displayName: partner || undefined }
+            : { uid: pUid, displayName: partner || undefined, enrollSeq: _pSeq });
           partnerToWaitlist = partner || pUid;
         }
       } else {
         partner = members.find(n => n !== absentName);
         if (partner) {
           if (!Array.isArray(t.standbyParticipants)) t.standbyParticipants = [];
-          if (!t.standbyParticipants.some(p => _getName(p) === partner)) t.standbyParticipants.push(partner);
+          /* ⛔ Dupla MANUAL (sem uid): a entrada volta como OBJETO, não como texto. Texto
+           * não carrega número, e a pessoa ficaria sem crachá para sempre. O nome sai do
+           * lado dela no objeto do slot, junto com a sequência. */
+          const _sObjN = (slot === 'p1' ? m.team1Obj : m.team2Obj) || null;
+          let _pSeqN = null, _pManual = null;
+          if (_sObjN && typeof _sObjN === 'object') {
+            if (String(_sObjN.p1Name || '').trim() === String(partner).trim()) { _pSeqN = _sObjN.p1Seq; _pManual = _sObjN.p1ManualId || null; }
+            else if (String(_sObjN.p2Name || '').trim() === String(partner).trim()) { _pSeqN = _sObjN.p2Seq; _pManual = _sObjN.p2ManualId || null; }
+          }
+          if (!t.standbyParticipants.some(p => _getName(p) === partner)) {
+            if (_pSeqN == null && !_pManual) t.standbyParticipants.push(partner);
+            else {
+              const _ent = { name: partner, displayName: partner };
+              if (_pSeqN != null) _ent.enrollSeq = _pSeqN;
+              if (_pManual) _ent.manualParticipantId = _pManual;
+              t.standbyParticipants.push(_ent);
+            }
+          }
           partnerToWaitlist = partner;
         }
       }

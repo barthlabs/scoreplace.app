@@ -60,6 +60,27 @@ function _wlDomain() { return window.ScoreplaceWaitlist; }
 // índice — quem está nela tem que estar em `waitlist`/`standbyParticipants`. Só sobrevive
 // como texto o nome de quem NÃO TEM CONTA, que é a ressalva do dono: ali o nome é a única
 // identidade que existe.
+/* ⛔⛔ A PORTA ÚNICA DO NÚMERO DE INSCRIÇÃO (24/set/2026).
+ * A fila de inscrição é UMA só: elenco + espera. Quem numera e quem exibe passam por
+ * aqui — ⛔ ninguém lê `participants`/`waitlist`/`standbyParticipants`/`monarchWaitlist`
+ * cru para contar gente. Foi ler array cru que deixou a espera fora da conta e fez o
+ * crachá mostrar a POSIÇÃO no painel (1, 2, 3, 4) em vez do número de inscrição.
+ * A regra mora no domínio tipado (src/domain/waitlist.ts) porque o servidor roda a mesma
+ * coisa pelo vendor — duas implementações seriam cliente e servidor numerando diferente. */
+window._enrollQueue = function (t) {
+  var domain = _wlDomain();
+  if (!t || !domain || typeof domain.enumerateEnrollQueue !== 'function') return [];
+  return domain.enumerateEnrollQueue(t, _wlDomainHelpers(t));
+};
+/* ⛔ Devolve NULL — não `[]` — quando o domínio não está carregado. `[]` significa
+ * "rodei e nada mudou", e quem chama trataria isso como sucesso e não numeraria ninguém.
+ * Harness legado sem o domínio cai na rede do `store.js`. */
+window._allocateEnrollSeqs = function (t) {
+  var domain = _wlDomain();
+  if (!t || !domain || typeof domain.allocateEnrollSeqs !== 'function') return null;
+  return domain.allocateEnrollSeqs(t, _wlDomainHelpers(t));
+};
+
 window._getWaitlist = function (t) {
   if (!t) return [];
   var domain = _wlDomain();

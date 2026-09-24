@@ -513,6 +513,23 @@ window._addPlaceholdersCore = function (id, qtd, onDone, opts) {
         t.participants = t.participants.concat(made);
         dest = 'inscritos';
     }
+    /* ⛔⛔ VAGA CRIADA DEPOIS DO SORTEIO TAMBÉM ENTRA NA FILA (24/set/2026).
+     * Depois do sorteio o placeholder nasce direto na lista de espera — e nascia SEM
+     * número de inscrição, então o card dele caía na posição dentro do painel. A fila de
+     * inscrição é uma só (elenco + espera): quem entra recebe o próximo número.
+     * ⛔ Pelo domínio, nunca por conta própria: este núcleo roda TAMBÉM NO SERVIDOR, na
+     * callable `addTournamentPlaceholders` do autoDraw, pelo vendor. Duas contas
+     * diferentes seriam cliente e servidor numerando diferente.
+     * [[project_numero_de_inscricao_conta_a_espera]] */
+    try {
+        var _dom = (typeof window !== 'undefined') && window.ScoreplaceWaitlist;
+        if (_dom && typeof _dom.allocateEnrollSeqs === 'function') {
+            _dom.allocateEnrollSeqs(t, {
+                participantUids: function (e) { return (typeof window._participantUids === 'function') ? window._participantUids(e) : (e && e.uid ? [e.uid] : []); },
+                displayName: function (e) { return (typeof window._pName === 'function') ? window._pName(e, '') : String((e && (e.displayName || e.name)) || e || ''); }
+            });
+        }
+    } catch (_eSeq) {}
     if (!opts.silent && window.AppStore && typeof window.AppStore.logAction === 'function') window.AppStore.logAction(id, qtd + ' placeholder(s) adicionado(s) em ' + dest);
     return { changed: made.length > 0, added: made.length, destination: dest };
 };

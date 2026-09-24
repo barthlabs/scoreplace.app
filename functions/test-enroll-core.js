@@ -30,10 +30,16 @@ try { C.normalizeExtraUpdates({ status: 'finished' }); ok('extraUpdates recusa p
   const start = index.indexOf('exports.enrollParticipant = onCall(');
   const end = index.indexOf('exports.deenrollParticipant = onCall(', start);
   const block = index.slice(start, end);
+  /* ⛔ O espelho leva a entrada JÁ NUMERADA (24/set/2026). Antes esta trava exigia
+   * literalmente `sanitizedParticipantObj`; a intenção dela era barrar o objeto CRU de
+   * entrada, e isso continua valendo. O que mudou: quando a inscrição cai na lista de
+   * espera, o core devolve a MESMA entrada sanitizada já com o número de inscrição, e é
+   * ela que vai para o espelho — senão o espelho nasce divergente do elenco no mesmo
+   * instante. [[project_numero_de_inscricao_conta_a_espera]] */
   ok('Function reutiliza inscrição sanitizada no roster, sandbox e espelho',
     /_enrollCore\.normalizeParticipantIntent\(participantObj, callerUid, new Date\(\)\.toISOString\(\)\)/.test(block) &&
     !/computeEnroll\([^\n]*participantObj/.test(block) &&
-    /entry: _enrollCore\.cleanUndefined\(sanitizedParticipantObj\)/.test(block));
+    /entry: _enrollCore\.cleanUndefined\(out\.entry \|\| sanitizedParticipantObj\)/.test(block));
 })();
 
 (() => {
