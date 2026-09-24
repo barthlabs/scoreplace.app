@@ -1392,6 +1392,7 @@ const SUITES = [
   'tests/reprocessar-resumos.test.js',
   'tests/porta-unica-do-papel.test.js',
   'tests/servidor-e-app-respondem-o-mesmo-papel.test.js',
+  'tests/listas-derivadas-batem-com-os-fatos.test.js',
   'functions/test-merge-collections-core.js',
   // v2.1.48 — a autoridade da amizade (fechou a escalada de privilégio da 2.1.47)
   'functions/test-amizade-authority-core.js',
