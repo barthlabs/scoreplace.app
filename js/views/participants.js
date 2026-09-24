@@ -891,10 +891,57 @@ window._resolveAbsenteesThenDraw = function (tId, mode, proceed) {
   if (typeof proceed === 'function') proceed();
 };
 
-// ── Inline name editing for organizers ──
-window._editParticipantName = function(tId, oldName, targetUid) {
-  var span = event.target;
+/* ── Edição de nome do organizador ────────────────────────────────────────────
+ * ⛔⛔ O ALVO É PASSADO, NUNCA ADIVINHADO (24/set/2026).
+ * Esta função lia `var span = event.target`. Enquanto o NOME carregava o `onclick`, o
+ * alvo calhava de ser o span certo. No instante em que a edição ganhou botão ✏️ próprio
+ * (que é o desenho aprovado: o nome é a porta da FICHA, não da edição), `event.target`
+ * passou a ser o próprio `<button>` — ele virava `contenteditable`, e o salvamento
+ * mandava `newName = "✏️"` para a callable `renameTournamentParticipant`, gravando o
+ * ícone como nome da pessoa no elenco e em todos os jogos.
+ * MEDIDO no código, não deduzido: os dois botões ✏️ que já existiam (o do membro de dupla
+ * e o da pessoa, nesta mesma tela) chamavam a função a partir de si mesmos.
+ * ⛔ Por isso o último argumento é o BOTÃO, e o alvo se resolve a partir do escopo
+ * declarado no HTML. Quem não achar alvo NÃO edita — cair em `event.target` é o defeito.
+ * ⛔ O editável é o span INTERNO `[data-uid-name]`, que é o ponto que a hidratação
+ * reescreve; para convidado (sem uid) não existe esse marcador, e o alvo é o
+ * `[data-edit-name-target]` que o helper do nome carrega no span externo.
+ * ⛔ `oldName` é o nome GRAVADO (o que a Function casa no elenco e nos jogos); o texto que
+ * volta na tela ao cancelar é o nome VIVO que estava lá — os dois divergem sempre que a
+ * pessoa tem perfil, e trocar um pelo outro renomeia errado ou mostra errado.
+ * [[project_uid_identity_canon_locked]] [[feedback_enumerar_todos_os_caminhos_antes_de_dar_por_pronto]] */
+window._resolveEditNameTarget = function (btn, chave) {
+  var escopo = null;
+  if (btn && typeof btn.closest === 'function') escopo = btn.closest('[data-edit-name-scope]');
+  if (!escopo && chave && typeof document !== 'undefined' && document.querySelectorAll) {
+    /* ⛔ NUNCA compor seletor CSS com nome ou uid dentro: nome com aspas/acento derruba o
+     * `querySelector` por SyntaxError. A chave se compara por IGUALDADE de string. */
+    var todos = document.querySelectorAll('[data-edit-name-scope]');
+    for (var i = 0; i < todos.length; i++) {
+      if (todos[i].getAttribute('data-edit-key') === chave) { escopo = todos[i]; break; }
+    }
+  }
+  if (!escopo || typeof escopo.querySelector !== 'function') return null;
+  return escopo.querySelector('[data-uid-name]') || escopo.querySelector('[data-edit-name-target]');
+};
+
+window._editParticipantName = function(tId, oldName, targetUid, btn) {
+  var span = window._resolveEditNameTarget(btn, String(tId) + '|' + String(targetUid || oldName));
+  if (!span) {
+    if (typeof showNotification === 'function') showNotification('Não deu pra editar', 'Recarregue a tela e tente de novo.', 'error');
+    return;
+  }
   if (span.getAttribute('contenteditable') === 'true') return;
+  /* O texto que está na tela é o nome VIVO do perfil; é ELE que volta se a edição não for
+   * adiante. `oldName` vive só dentro do pacote que vai para a Function. */
+  var nomeVivoInicial = span.textContent;
+  /* ⛔ A TRAVA DA FICHA VAI NOS DOIS SPANS. A delegação de clique sobe até o primeiro
+   * ancestral com `data-uid-name` OU `data-player-profile-uid` (store.js): desligar só o
+   * interno deixaria o clique no wrapper abrir a ficha no meio da digitação. */
+  var wrapper = (span.parentNode && span.parentNode.getAttribute &&
+    span.parentNode.getAttribute('data-player-profile-uid')) ? span.parentNode : null;
+  span.setAttribute('data-player-profile-disabled', '1');
+  if (wrapper) wrapper.setAttribute('data-player-profile-disabled', '1');
   span.setAttribute('contenteditable', 'true');
   span.style.background = 'rgba(255,255,255,0.1)';
   span.style.borderRadius = '4px';
@@ -904,13 +951,34 @@ window._editParticipantName = function(tId, oldName, targetUid) {
   span.focus();
   var range = document.createRange(); range.selectNodeContents(span);
   var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
-  var _save = function() {
+  var cancelado = false;
+  /* ⛔ UMA SAÍDA SÓ. Antes cada ramo (cancelar, vazio, sem callable, erro, sucesso)
+   * desfazia a edição por conta própria — e nenhum deles tirava a trava da ficha, porque
+   * a trava não existia. Saída única é o que garante que a tela volta inteira. */
+  var _cleanup = function (textoParaVoltar) {
     span.setAttribute('contenteditable', 'false');
     span.style.background = ''; span.style.padding = ''; span.style.outline = '';
+    span.removeAttribute('data-player-profile-disabled');
+    if (wrapper) wrapper.removeAttribute('data-player-profile-disabled');
+    if (typeof textoParaVoltar === 'string') span.textContent = textoParaVoltar;
+    /* ⛔ Durante a edição o hidratador PULOU este campo (ver `_hydrateUidNames`). Sem este
+     * repinte, cancelar ou falhar deixaria na tela um nome mais velho que o perfil. */
+    if (typeof window._hydrateUidNames === 'function') {
+      try { window._hydrateUidNames(span.parentNode || span); } catch (_eH) {}
+    }
+  };
+  var _save = function() {
+    /* ⛔ ESC + blur: o `blur` vem LOGO DEPOIS do cancelamento e chegava aqui com o texto
+     * restaurado, que difere do `oldName` gravado sempre que a pessoa tem perfil — e
+     * disparava a Function sozinho. A bandeira é o que impede isso. */
+    if (cancelado) return;
     var newName = span.textContent.trim();
-    if (!newName || newName === oldName) { span.textContent = oldName; return; }
+    /* ⛔ ABRIR E FECHAR SEM DIGITAR NÃO É EDIÇÃO. O texto no campo é o nome VIVO; comparar
+     * só com o `oldName` GRAVADO fazia o blur sozinho disparar a Function sempre que os
+     * dois divergissem — que é o caso de todo mundo que tem perfil. */
+    if (!newName || newName === oldName || newName === String(nomeVivoInicial || '').trim()) { _cleanup(nomeVivoInicial); return; }
     if (typeof window._callCF !== 'function') {
-      span.textContent = oldName;
+      _cleanup(nomeVivoInicial);
       if (typeof showNotification === 'function') showNotification('Atualize o aplicativo', 'A edição segura do nome requer a versão atual.', 'error');
       return;
     }
@@ -918,11 +986,29 @@ window._editParticipantName = function(tId, oldName, targetUid) {
     window._callCF('renameTournamentParticipant', { tournamentId: tId, oldName: oldName, newName: newName, uid: targetUid || '' }, 'Salvando nome…')
       .then(function() {
         if (window.AppStore && typeof window.AppStore.logAction === 'function') window.AppStore.logAction(tId, 'Nome editado: "' + oldName + '" → "' + newName + '"');
-        if (typeof showNotification === 'function') showNotification(_t('participants.nameUpdated'), _t('participants.nameUpdatedMsg', { old: oldName, 'new': newName }), 'success');
+        /* ⛔⛔ NÃO PROMETER O QUE A TELA NÃO VAI MOSTRAR (24/set/2026).
+         * Quem tem conta é desenhado pelo nome VIVO do perfil (`_displayName` devolve só
+         * `_nameForUid` quando há uid). A Function troca o rótulo DESTE torneio — elenco e
+         * jogos —, mas o re-render logo abaixo repõe o nome do perfil, e a mensagem
+         * "nome atualizado" fazia o organizador achar que tinha falhado.
+         * Então o aviso diz o que de fato mudou, e por que a tela segue igual. Trocar essa
+         * regra de render (apelido do torneio com preferência, ou editar o perfil) é
+         * decisão do DONO, não minha — está anotada e vai separada.
+         * [[feedback_nao_prometer_no_botao_o_que_nao_se_pode_conferir]]
+         * [[feedback_never_freeze_my_opinion_as_owners_decision]] */
+        if (typeof showNotification === 'function') {
+          if (targetUid) {
+            showNotification('Nome atualizado neste torneio',
+              'Trocado para "' + newName + '" no elenco e nos jogos. Na tela continua aparecendo o nome do perfil de quem tem conta.', 'success');
+          } else {
+            showNotification(_t('participants.nameUpdated'), _t('participants.nameUpdatedMsg', { old: oldName, 'new': newName }), 'success');
+          }
+        }
+        _cleanup();
         _reRenderParticipants();
       })
       .catch(function(err) {
-        span.textContent = oldName;
+        _cleanup(nomeVivoInicial);
         if (typeof showNotification === 'function') showNotification('Não foi possível editar o nome', (err && err.message) || 'Tente novamente.', 'error');
       })
       .finally(function() { span.removeAttribute('aria-busy'); });
@@ -930,7 +1016,7 @@ window._editParticipantName = function(tId, oldName, targetUid) {
   span.addEventListener('blur', _save, { once: true });
   span.addEventListener('keydown', function(e) {
     if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); span.blur(); }
-    if (e.key === 'Escape') { span.textContent = oldName; span.blur(); }
+    if (e.key === 'Escape') { cancelado = true; _cleanup(nomeVivoInicial); span.blur(); }
   });
 };
 
@@ -1524,14 +1610,17 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
       // O nome abre a ficha também para o organizador. A edição ganha botão próprio:
       // um mesmo alvo não pode significar duas ações diferentes conforme quem olha a tela.
       var _mNameHtml = (typeof window._personNameHtml === 'function')
-        ? window._personNameHtml(_mUid, _mShown, 'font-weight:700;font-size:' + _FONT + 'px;color:var(--text-bright);white-space:normal;overflow-wrap:anywhere;word-break:break-word;min-width:0;')
+        ? window._personNameHtml(_mUid, _mShown, 'font-weight:700;font-size:' + _FONT + 'px;color:var(--text-bright);white-space:normal;overflow-wrap:anywhere;word-break:break-word;min-width:0;', '', ' data-edit-name-target="1"')
         : '<span' + _mUidAttr + ' style="font-weight:700;font-size:' + _FONT + 'px;color:var(--text-bright);white-space:normal;overflow-wrap:anywhere;word-break:break-word;min-width:0;">' + _mDisp + '</span>';
       var _mEditBtn = isOrg
-        ? '<button type="button" title="Editar ' + _nmH + '" aria-label="Editar ' + _nmH + '" style="border:0;background:transparent;color:var(--text-muted);font-size:0.86rem;line-height:1;padding:3px;cursor:pointer;flex-shrink:0;" onclick="event.stopPropagation();window._editParticipantName(\'' + t.id + '\',\'' + _nmSafe + '\',\'' + _mUid + '\')">✏️</button>'
+        ? '<button type="button" title="Editar ' + _nmH + '" aria-label="Editar ' + _nmH + '" style="border:0;background:transparent;color:var(--text-muted);font-size:0.86rem;line-height:1;padding:3px;cursor:pointer;flex-shrink:0;" onclick="event.stopPropagation();window._editParticipantName(\'' + t.id + '\',\'' + _nmSafe + '\',\'' + _mUid + '\',this)">✏️</button>'
         : '';
       // ⭐ ponto único: o nome já hidratava (_mUidAttr), o ÍCONE não — e era ele que
       // nascia mudo quando o perfil ainda não tinha chegado.
-      return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;overflow:hidden;">' +
+      /* ⛔ `data-edit-name-scope` é do DIV, nunca do span do nome: o helper do nome só leva
+       * atributos extras ao span externo, e o alvo editável é o marcador INTERNO. A chave
+       * casa por igualdade de string — jamais entra dentro de um seletor CSS. */
+      return '<div data-edit-name-scope data-edit-key="' + window._safeHtml(String(t.id) + '|' + String(_mUid || _nm)) + '" style="display:flex;align-items:center;gap:6px;margin-bottom:2px;overflow:hidden;">' +
         window._personAvatarHtml(_mUid, _nm, 'width:24px;height:24px;border-radius:50%;object-fit:cover;flex-shrink:0;') + _mNameHtml + _mContact + _mEditBtn + '</div>';
     }).join('') + (_orgStar ? '<div style="margin-top:2px;">' + _orgStar + '</div>' : '');
   } else {
@@ -1566,12 +1655,12 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
     var _pContact = (typeof window._contactPersonIconHtml === 'function')
       ? window._contactPersonIconHtml(t, _pUid, pName, { sameGroup: true }) : '';
     var _pNameLinkHtml = (typeof window._personNameHtml === 'function')
-      ? window._personNameHtml(_pUid, _pShown, 'font-weight:700;font-size:' + _FONT + 'px;color:var(--text-bright);white-space:normal;overflow-wrap:anywhere;word-break:break-word;min-width:0;')
+      ? window._personNameHtml(_pUid, _pShown, 'font-weight:700;font-size:' + _FONT + 'px;color:var(--text-bright);white-space:normal;overflow-wrap:anywhere;word-break:break-word;min-width:0;', '', ' data-edit-name-target="1"')
       : '<span' + _pUidAttr + ' style="font-weight:700;font-size:' + _FONT + 'px;color:var(--text-bright);white-space:normal;overflow-wrap:anywhere;word-break:break-word;min-width:0;">' + _pDisp + '</span>';
     var _pEditBtn = isOrg
-      ? '<button type="button" title="Editar ' + _pNameH + '" aria-label="Editar ' + _pNameH + '" style="border:0;background:transparent;color:var(--text-muted);font-size:0.86rem;line-height:1;padding:3px;cursor:pointer;flex-shrink:0;" onclick="event.stopPropagation();window._editParticipantName(\'' + t.id + '\',\'' + _pSafe + '\',\'' + _pUid + '\')">✏️</button>'
+      ? '<button type="button" title="Editar ' + _pNameH + '" aria-label="Editar ' + _pNameH + '" style="border:0;background:transparent;color:var(--text-muted);font-size:0.86rem;line-height:1;padding:3px;cursor:pointer;flex-shrink:0;" onclick="event.stopPropagation();window._editParticipantName(\'' + t.id + '\',\'' + _pSafe + '\',\'' + _pUid + '\',this)">✏️</button>'
       : '';
-    pNameHtml = '<div style="display:flex;align-items:center;gap:8px;overflow:hidden;">' +
+    pNameHtml = '<div data-edit-name-scope data-edit-key="' + window._safeHtml(String(t.id) + '|' + String(_pUid || pName)) + '" style="display:flex;align-items:center;gap:8px;overflow:hidden;">' +
       window._personAvatarHtml(_pUid, pName, 'width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;') + _pNameLinkHtml + _pContact + _pEditBtn + _orgStar + '</div>';
   }
 
@@ -2536,7 +2625,46 @@ function renderParticipants(container, tournamentId) {
       const _niUid = ind.uid || '';
       const _niUidAttr = _niUid ? ` data-uid-name="${window._safeHtml(_niUid)}"` : '';
       const _niDisp = _niUid ? window._safeHtml(window._displayName(_niUid, ind.name)) : _safeName;
-      const _nameRow = `<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;min-width:0;"><span${_niUidAttr} style="font-weight:600;font-size:0.92rem;color:${window._spCor(nameColor, 'color')};line-height:1.18;word-break:break-word;${isAbsent ? 'text-decoration:line-through;text-decoration-color:rgba(248,113,113,0.4);' : ''}${isOrg ? 'cursor:text;' : ''}" ${isOrg ? `onclick="event.stopPropagation();window._editParticipantName('${tId}','${safeName}','${_niUid}')" title="Clique para editar"` : ''}>${_niDisp}</span>${_orgStarC}${isStandby ? presenceDot : ''}</div>`;
+      /* ⛔⛔ O NOME É A PORTA DA FICHA — EM TODA TELA, INCLUSIVE NESTA (24/set/2026).
+       * Relato do dono: _"o nome sublinhado nao funciona dentro dos inscritos e nem aparece
+       * o balaozinho. isso tem que estar presente e funcional sempre em todo o programa.
+       * tem nome, acesso facil a estatisticas e comunicados"_.
+       * CAUSA MEDIDA: esta linha escrevia o span do nome À MÃO e, para o organizador,
+       * pendurava nele o `onclick` de EDITAR. A delegação de ficha (store.js) recusa de
+       * propósito qualquer nome cujo `onclick` chame `_editParticipantName` — então, só
+       * para o organizador, e só aqui, o nome ficava morto. E o sublinhado continuava
+       * aparecendo, porque ele vem do CSS de `[data-uid-name]`: a tela MENTIA que o nome
+       * era clicável. O 💬 nunca existiu nesta lista.
+       * ⛔ `onclick` no span do nome DESLIGA a ficha em silêncio. Edição tem botão próprio.
+       * ⛔ O nome entregue ao helper é CRU (`_niShown`): `_niDisp` já vem escapado e seria
+       * escapado de novo — quem tem "&" no nome veria `&amp;` na tela.
+       * ⛔ `oldName` do botão é o nome GRAVADO (`safeName`), nunca o vivo: é por ele que a
+       * Function acha a pessoa no elenco e nos jogos.
+       * Varredura em `tests/nome-sempre-abre-estatisticas.test.js` impede a volta.
+       * [[project_uid_identity_canon_locked]] [[feedback_rede_que_cobre_o_rerender_nao_cobre_o_primeiro]] */
+      const _niShown = _niUid ? window._displayName(_niUid, ind.name) : (ind.name || '');
+      const _niEstilo = `font-weight:600;font-size:0.92rem;color:${window._spCor(nameColor, 'color')};line-height:1.18;word-break:break-word;${isAbsent ? 'text-decoration:line-through;text-decoration-color:rgba(248,113,113,0.4);' : ''}`;
+      const _niNomeHtml = (typeof window._personNameHtml === 'function')
+        ? window._personNameHtml(_niUid, _niShown, _niEstilo, '', ' data-edit-name-target="1"')
+        : `<span${_niUidAttr} data-edit-name-target="1" style="${_niEstilo}">${_niDisp}</span>`;
+      const _niContato = (typeof window._contactPersonIconHtml === 'function')
+        ? window._contactPersonIconHtml(t, _niUid, ind.name, { sameGroup: true }) : '';
+      /* ⛔⛔ O ORGANIZADOR TEM DE CONSEGUIR CONFERIR O QUE ELE MUDOU (24/set/2026).
+       * Quem tem conta é desenhado pelo nome VIVO do perfil — essa é a regra canônica e ela
+       * FICA. Mas renomear troca o rótulo DESTE torneio (elenco, duplas, jogos), e sem ver
+       * esse rótulo em lugar nenhum o organizador edita às cegas: ele salva, a tela não
+       * muda, e conclui que falhou.
+       * ⛔ NÃO é troca de precedência: o NOME continua sendo o do perfil. Esta linha é
+       * informação secundária, e só aparece quando os dois DIVERGEM — se são iguais, nada
+       * é mostrado, e a lista fica como sempre esteve.
+       * [[feedback_nao_prometer_no_botao_o_que_nao_se_pode_conferir]] */
+      const _niRotuloTorneio = (isOrg && _niUid && ind.name && String(ind.name).trim() && String(ind.name).trim() !== String(_niShown).trim())
+        ? `<div style="font-size:0.63rem;color:var(--text-muted);opacity:0.75;line-height:1.2;margin-top:1px;">neste torneio: ${window._safeHtml(String(ind.name).trim())}</div>`
+        : '';
+      const _niEditBtn = isOrg
+        ? `<button type="button" title="Editar ${_safeName}" aria-label="Editar ${_safeName}" style="border:0;background:transparent;color:var(--text-muted);font-size:0.82rem;line-height:1;padding:3px;cursor:pointer;flex-shrink:0;" onclick="event.stopPropagation();window._editParticipantName('${tId}','${safeName}','${_niUid}',this)">\u270f\ufe0f</button>`
+        : '';
+      const _nameRow = `<div data-edit-name-scope data-edit-key="${window._safeHtml(String(tId) + '|' + String(_niUid || ind.name || ''))}" style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;min-width:0;">${_niNomeHtml}${_niContato}${_niEditBtn}${_orgStarC}${isStandby ? presenceDot : ''}</div>${_niRotuloTorneio}`;
       const _jogoTop = matchLabel ? `<span style="font-weight:${_jogoWeight};color:${window._spCor(_jogoColor, 'color')};opacity:${_jogoOpacity};font-size:0.72rem;white-space:nowrap;">${matchLabel}</span>` : '';
       // Faixa do jogo FULL-WIDTH abaixo do header (libera largura pros nomes dos times).
       let _matchStrip = '';

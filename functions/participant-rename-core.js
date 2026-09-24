@@ -55,12 +55,63 @@ function _forEachMatch(t, fn) {
     else if (r && Array.isArray(r.jogos)) r.jogos.forEach(visit);
   });
 }
+/* ⛔⛔ ENTRADA-OBJETO MUDA POR DENTRO — COMPARAR REFERÊNCIA NÃO VÊ (24/set/2026).
+ * Esta função renomeia o objeto NO LUGAR e devolve o MESMO objeto. Quem detectava a
+ * mudança por `next !== antes` só enxergava as entradas que são STRING. Nas listas
+ * auxiliares (espera, reservas, sorteio realizado) a entrada pode ser objeto: o nome era
+ * trocado na memória e a raiz ficava FORA do `update` — ou seja, a gravação não levava
+ * a lista, e quem estava na espera continuava com o nome velho no banco.
+ * ⛔ Por isso a mudança é REPORTADA, não deduzida. [[feedback_a_defesa_vaza_pela_borda]] */
+function _renameEntradaComAviso(p, oldName, newName) {
+  if (typeof p === 'string') { const v = _replaceLabel(p, oldName, newName); return { valor: v, mudou: v !== p }; }
+  if (!p || typeof p !== 'object') return { valor: p, mudou: false };
+  let mudou = _replaceNameFields(p, oldName, newName, ['displayName', 'name', 'p1Name', 'p2Name']);
+  if (Array.isArray(p.participants)) p.participants.forEach(x => { if (_replaceNameFields(x, oldName, newName, ['displayName', 'name'])) mudou = true; });
+  return { valor: p, mudou: mudou };
+}
 function _renameParticipantEntry(p, oldName, newName) {
-  if (typeof p === 'string') return _replaceLabel(p, oldName, newName);
-  if (!p || typeof p !== 'object') return p;
-  _replaceNameFields(p, oldName, newName, ['displayName', 'name', 'p1Name', 'p2Name']);
-  if (Array.isArray(p.participants)) p.participants.forEach(x => _replaceNameFields(x, oldName, newName, ['displayName', 'name']));
-  return p;
+  return _renameEntradaComAviso(p, oldName, newName).valor;
+}
+/* ⛔⛔ O RÓTULO TEM DE SER DE UMA PESSOA SÓ (24/set/2026).
+ * A substituição abaixo é GLOBAL por rótulo: ela troca `oldName` em cada entrada do
+ * elenco, em cada jogo, dupla, grupo e mapa. O `uid` só servia para ACHAR o alvo —
+ * depois dele, o laço não olhava uid nenhum. Dois inscritos chamados "Ana", com contas
+ * diferentes, tinham os DOIS rótulos trocados: perda de dado, silenciosa, em jogo já
+ * realizado. Dado histórico que só guarda NOME não permite escolher qual lado do jogo
+ * muda — por isso a recusa é a resposta certa, e não um palpite.
+ * ⛔ Falhar FECHADO, ANTES de tocar em qualquer estrutura. [[project_uid_identity_canon_locked]] */
+function _uidsQueCarregamORotulo(t, oldName) {
+  const uids = new Set();
+  let semUid = 0;
+  /* ⛔ O rótulo não mora só no elenco. A substituição global também varre a lista de
+   * espera, as reservas e o sorteio realizado — se um homônimo estiver LÁ e só o elenco
+   * fosse conferido, a trava passava e o nome de outra pessoa era trocado assim mesmo.
+   * Conferir exatamente as mesmas listas que a mutação alcança.
+   * [[feedback_enumerar_todos_os_caminhos_antes_de_dar_por_pronto]] */
+  /* ⚠️ Entrada SEM uid só conta como "outra pessoa" quando vem do ELENCO. Nas listas
+   * auxiliares o normal é a entrada ser um RÓTULO de texto ("Fulano / Beltrano") da mesma
+   * pessoa que já está no elenco — contá-la como principal recusaria toda renomeação de
+   * quem já foi sorteado, que é quase todo mundo. Uid diferente, esse sim, conta de onde
+   * quer que venha. */
+  const listas = [];
+  if (t && typeof t === 'object' && !Array.isArray(t)) {
+    if (Array.isArray(t.participants)) listas.push({ arr: t.participants, elenco: true });
+    ['waitlist', 'standbyParticipants', 'sorteioRealizado'].forEach((k) => {
+      if (Array.isArray(t[k])) listas.push({ arr: t[k], elenco: false });
+    });
+  } else if (Array.isArray(t)) { listas.push({ arr: t, elenco: true }); }
+  listas.forEach((lista) => lista.arr.forEach((p) => {
+    const contaSemUid = lista.elenco;
+    if (typeof p === 'string') { if (contaSemUid && p.split(' / ').some(x => _same(x, oldName))) semUid++; return; }
+    if (!p || typeof p !== 'object') return;
+    const pares = [[p.displayName, p.uid], [p.name, p.uid], [p.p1Name, p.p1Uid], [p.p2Name, p.p2Uid]];
+    if (Array.isArray(p.participants)) p.participants.forEach(x => { if (x) pares.push([x.displayName || x.name, x.uid]); });
+    pares.forEach(([nome, u]) => {
+      if (!_same(nome, oldName)) return;
+      if (u) uids.add(String(u)); else if (contaSemUid) semUid++;
+    });
+  }));
+  return { uids: Array.from(uids), semUid: semUid };
 }
 function renameTournamentParticipant(t, input) {
   const oldName = String(input && input.oldName || '').trim();
@@ -73,6 +124,22 @@ function renameTournamentParticipant(t, input) {
   const candidates = roster.filter(p => _matchesIdentity(p, oldName, uid));
   if (!candidates.length) throw new Error('participante não está inscrito');
   if (!uid && candidates.length !== 1) throw new Error('nome ambíguo: selecione o participante pelo cadastro');
+  /* Recusa fechada ANTES de qualquer mutação — ver o bloco acima. */
+  const _portadores = _uidsQueCarregamORotulo(t, oldName);
+  const _outros = _portadores.uids.filter(u => u !== uid);
+  if (uid && (_outros.length > 0 || _portadores.semUid > 0)) {
+    throw new Error('há mais de um inscrito com esse nome: renomeie pelo cadastro de cada um, um de cada vez');
+  }
+  if (!uid && (_portadores.uids.length + _portadores.semUid) > 1) {
+    throw new Error('há mais de um inscrito com esse nome: renomeie pelo cadastro de cada um, um de cada vez');
+  }
+  /* O nome NOVO também não pode ser de outra pessoa: a troca global fundiria os dois
+   * rótulos e nenhum dos dois jogos saberia mais de quem era. */
+  const _donosDoNovo = _uidsQueCarregamORotulo(t, newName);
+  if (_donosDoNovo.uids.some(u => u !== uid) || (_donosDoNovo.semUid > 0 && !uid) ||
+      (_donosDoNovo.semUid > 0 && uid)) {
+    throw new Error('já há outro inscrito com esse nome neste torneio');
+  }
   const changed = new Set();
   const mark = k => changed.add(k);
   roster.forEach((p, i) => { const next = _renameParticipantEntry(p, oldName, newName); if (next !== p) { roster[i] = next; mark('participants'); } else if (typeof p === 'object' && p && _matchesIdentity(p, oldName, uid)) mark('participants'); });
@@ -99,8 +166,9 @@ function renameTournamentParticipant(t, input) {
   ['sorteioRealizado', 'waitlist', 'standbyParticipants'].forEach(k => {
     if (!Array.isArray(t[k])) return;
     const before = t[k];
-    const next = before.map(p => _renameParticipantEntry(p, oldName, newName));
-    if (next.some((x, i) => x !== before[i])) { t[k] = next; mark(k); }
+    let mudouAlguma = false;
+    const next = before.map((p) => { const r = _renameEntradaComAviso(p, oldName, newName); if (r.mudou) mudouAlguma = true; return r.valor; });
+    if (mudouAlguma) { t[k] = next; mark(k); }
   });
   const update = {};
   changed.forEach(k => { update[k] = t[k]; });

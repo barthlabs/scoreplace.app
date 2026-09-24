@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.3.97';
+window.SCOREPLACE_VERSION = '2.3.98';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -1435,6 +1435,14 @@ window._hydrateUidNames = function (root) {
   avEls.forEach(function (e) { var u = e.getAttribute('data-uid-avatar'); if (u) uids.push(u); });
   return window._preloadUserProfiles(uids).then(function () {
     els.forEach(function (e) {
+      /* ⛔⛔ NÃO ESCREVER POR CIMA DE QUEM ESTÁ DIGITANDO (24/set/2026).
+       * O organizador edita o nome NESTE mesmo span (é ele que carrega o uid). Se o
+       * preload de perfis terminar no meio da digitação, este `textContent =` apagava o
+       * que ele escreveu — e o `blur` seguinte salvaria o nome hidratado, não o dele.
+       * A trava de ficha (`data-player-profile-disabled`) NÃO cobre isto: ela só barra
+       * abrir a ficha. Quem termina a edição repinta o nome vivo no `_cleanup`.
+       * [[feedback_enumerar_todos_os_caminhos_antes_de_dar_por_pronto]] */
+      if (e.getAttribute && e.getAttribute('contenteditable') === 'true') return;
       var u = e.getAttribute('data-uid-name');
       var nm = window._nameForUid(u);
       // ⚡ só escreve (e só MARCA) quando o texto de fato mudou: é a marca que
@@ -6088,8 +6096,17 @@ window._activatePlayerProfileLinks = function (root) {
 window._openPlayerProfileFromNameElement = function (el, ev) {
     if (!el || el.getAttribute('data-player-profile-disabled') === '1') return false;
     var inline = el.getAttribute('onclick') || '';
-    // Na lista administrativa o nome ainda é o atalho de edição. Ela conserva essa ação
-    // até que a edição ganhe um controle próprio, sem falsear a semântica de um botão.
+    /* ⛔⛔ ESTA RECUSA JÁ NÃO TEM EMISSOR — E TEM DE CONTINUAR ASSIM (24/set/2026).
+     * Ela existia porque a lista administrativa de inscritos pendurava o `_editParticipantName`
+     * no PRÓPRIO span do nome. O efeito colateral era invisível e caro: o sublinhado pontilhado
+     * vem do CSS de `[data-uid-name]`, então o nome continuava parecendo clicável e não abria
+     * nada — só para o organizador, só naquela tela. Foi exatamente o defeito relatado.
+     * Hoje NENHUM span de nome emite esse `onclick`: os três pontos de edição são botões ✏️
+     * próprios, que passam a si mesmos como alvo. A recusa fica como rede para render futuro,
+     * e a varredura de `tests/nome-sempre-abre-estatisticas.test.js` reprova quem voltar a
+     * escrever `onclick` dentro de um span que carregue `data-uid-name` ou
+     * `data-player-profile-uid`. ⛔ Não transformar isto em permissão: quem precisa editar
+     * ganha botão, não o nome. [[feedback_unify_dual_entry_points]] */
     if (inline.indexOf('_editParticipantName') !== -1) return false;
     var uid = el.getAttribute('data-player-profile-uid') || el.getAttribute('data-uid-name');
     if (!uid || typeof window._openPlayerProfile !== 'function') return false;
