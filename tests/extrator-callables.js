@@ -70,19 +70,29 @@ function extrair(arquivos) {
     const src = fs.readFileSync(abs, 'utf8');
     let ast; try { ast = parse(src, false); } catch (e) { dinamicos.push({ rel, motivo: 'nao parseou: ' + e.message }); return; }
 
-    /* As duas isenções, pelo NÓ da função — e a do wrapper é ESTREITA: vale só quando o
-     * argumento dinâmico é EXATAMENTE o parâmetro dela. */
+    /* ⛔ AS DUAS ISENÇÕES, pelo NÓ da função — e a regra é a MESMA para as duas:
+     * só é isento o encaminhamento cujo primeiro argumento é EXATAMENTE o parâmetro da
+     * função. Qualquer outra expressão dinâmica ali dentro reprova.
+     *   • a CASA  — `FirestoreDB._callFn` (js/firebase-db.js), método de objeto;
+     *   • a CASCA — `window._callCF` (js/views/tournaments-draw.js), atribuição.
+     * ⚠️ A topologia INVERTEU em 24/set/2026 (a casa era a casca e vice-versa). Se inverter
+     * de novo, é aqui e no `contrato-callables.js` que se mexe — juntos. */
     const isencoes = [];
-    anda(ast, (n) => {
-      if (n.type !== 'FunctionExpression' && n.type !== 'FunctionDeclaration') return;
-      const ehCallCF = rel === C.CONSTRUTOR_DINAMICO.arquivo && src.slice(Math.max(0, n.start - 40), n.start).includes(C.CONSTRUTOR_DINAMICO.funcao);
-      if (ehCallCF) isencoes.push({ start: n.start, end: n.end, param: null });
-    });
-    anda(ast, (n) => {
-      if (n.type !== 'Property' || !n.value || n.value.type !== 'FunctionExpression') return;
-      if (rel !== C.WRAPPER_ENCAMINHA.arquivo || !n.key || n.key.name !== C.WRAPPER_ENCAMINHA.funcao) return;
-      const p0 = n.value.params[0];
-      isencoes.push({ start: n.value.start, end: n.value.end, param: (p0 && p0.type === 'Identifier') ? p0.name : null });
+    const registra = (fnNode) => {
+      const p0 = fnNode.params && fnNode.params[0];
+      isencoes.push({ start: fnNode.start, end: fnNode.end, param: (p0 && p0.type === 'Identifier') ? p0.name : null });
+    };
+    [C.CONSTRUTOR_DINAMICO, C.WRAPPER_ENCAMINHA].forEach((alvo) => {
+      if (rel !== alvo.arquivo) return;
+      anda(ast, (n, pai) => {
+        // atribuição: `window.<funcao> = function (…) {}`
+        if ((n.type === 'FunctionExpression' || n.type === 'FunctionDeclaration')
+            && pai && pai.type === 'AssignmentExpression' && pai.left.type === 'MemberExpression'
+            && pai.left.property && pai.left.property.name === alvo.funcao) registra(n);
+        // método de objeto: `<funcao>(…) {}`
+        if (n.type === 'Property' && n.key && n.key.name === alvo.funcao
+            && n.value && (n.value.type === 'FunctionExpression')) registra(n.value);
+      });
     });
     const isentaPara = (n) => isencoes.find((i) => n.start >= i.start && n.end <= i.end);
 

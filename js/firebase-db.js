@@ -1824,14 +1824,56 @@ window.FirestoreDB = {
    * ⚠️ E leva os TRÊS textos próprios: 'login necessário', 'App não inicializado' (SEM ponto
    * — o genérico tem ponto) e 'Falha' (o genérico diz 'Falha em <fn>'). Refactor não muda
    * mensagem em produção. */
-  async _callFn(name, payload) {
-    const r = await window._callCF(name, payload, {
-      unauth: 'login necessário',
-      naoInicializado: 'App não inicializado',
-      falha: 'Falha',
+  /* ⛔⛔ A CASA DO TRANSPORTE CALLABLE É AQUI — E NÃO PODE SAIR DAQUI. (24/set/2026)
+   *
+   * 🔴 O QUE ACONTECEU: em 2.3.95 eu tirei a implementação daqui e a deixei delegar para
+   * `window._callCF`, que mora em `js/views/tournaments-draw.js`. Parecia arrumação — era
+   * uma DEPENDÊNCIA ENTRE ARQUIVOS no caminho mais quente do app: TODA chamada de servidor
+   * do FirestoreDB passa por aqui, inclusive `getTournamentEnrollmentProfiles`, que é o que
+   * ABRE A LISTA DE INSCRITOS. Faltando aquele arquivo, estoura
+   * `window._callCF is not a function` e a tela morre. Foi o relato do dono no mesmo dia.
+   *
+   * ⚠️ E "faltar arquivo" NÃO é hipótese remota neste projeto: `index.html` (procure por
+   * "JS QUE CHEGOU PELA METADE") registra, medido no Sentry, que os scripts chegam
+   * TRUNCADOS — o Firebase serve chunked+gzip sem `content-length`, e o Service Worker
+   * cacheia um 200 com metade do corpo. Já produziu `_isTeamEnrollMode is not a function`,
+   * com a função existindo em `tournaments-utils.js`. Mesmo modo de falha.
+   *
+   * ⇒ REGRA: esta implementação mora no arquivo que CARREGA PRIMEIRO e é INDISPENSÁVEL.
+   * `window._callCF` (tournaments-draw.js) é CASCA e delega para cá. Se um dia alguém
+   * quiser "unificar de novo", que unifique PARA CÁ — nunca para uma view.
+   *
+   * ⚠️ CONTRATO, e ele é diferente do da casca: aqui o retorno é CRU (`j.result`); a casca
+   * envelopa em `{data}` porque os 52 chamadores dela leem assim. Não normalize os dois.
+   * O SDK `httpsCallable` não serve nestes caminhos: com usuário logado o compat tenta
+   * montar o token FCM e a promessa REJEITA antes de a requisição sair. */
+  _callFnMarca: 'callfn-canonico-v1',   // ⛔ a casca procura ESTA marca (ver tournaments-draw.js)
+
+  async _callFn(name, payload, msgs) {
+    msgs = (typeof msgs === 'string') ? { unauth: msgs } : (msgs || {});
+    var fb = window.firebase;
+    var user = fb && fb.auth && fb.auth().currentUser;
+    if (!user) throw Object.assign(new Error(msgs.unauth || 'login necessário'), { code: 'functions/unauthenticated' });
+    var pid = '';
+    try { pid = fb.app().options.projectId; } catch (e) {}
+    if (!pid) throw Object.assign(new Error(msgs.naoInicializado || 'App não inicializado'), { code: 'functions/internal' });
+    var url = 'https://us-central1-' + pid + '.cloudfunctions.net/' + name;
+    var tok = await user.getIdToken();
+    var r = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok },
+      body: JSON.stringify({ data: payload })
     });
-    return r.data;
+    var j = await r.json().catch(function () { return {}; });
+    if (j && j.error) {
+      // Traduz o status do protocolo callable pro mesmo `code` que o SDK daria.
+      var st = String(j.error.status || '').toLowerCase().replace(/_/g, '-');
+      throw Object.assign(new Error(j.error.message || msgs.falha || 'Falha'), { code: 'functions/' + (st || 'internal') });
+    }
+    if (!r.ok) throw Object.assign(new Error('HTTP ' + r.status), { code: 'functions/internal' });
+    return (j && j.result) || {};
   },
+
 
 
   // Escala de arbitragem: intenção mínima; autorização, perfil e transação vivem na Function.

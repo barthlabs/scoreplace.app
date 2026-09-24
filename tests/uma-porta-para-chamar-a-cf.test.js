@@ -21,6 +21,7 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const vm = require('vm');
 const ROOT = path.join(__dirname, '..');
 
 let pass = 0, fail = 0;
@@ -50,6 +51,12 @@ function mundo(opts) {
   };
   const vm = require('vm');
   vm.createContext(w);
+  /* ⛔ A CASA mora em `js/firebase-db.js` desde 24/set/2026 — carregar só a view NÃO basta,
+   * e foi justamente supor isso que derrubou a tela de inscritos. */
+  const fdb = fs.readFileSync(path.join(ROOT, 'js/firebase-db.js'), 'utf8');
+  const a = fdb.indexOf('  _callFnMarca:');
+  const b = fdb.indexOf('\n  },\n', fdb.indexOf('async _callFn(')) + 5;
+  vm.runInContext('window.FirestoreDB = {' + fdb.slice(a, b) + '};', w, { filename: 'fdb.js' });
   const src = fs.readFileSync(path.join(ROOT, 'js/views/tournaments-draw.js'), 'utf8');
   const i = src.indexOf('window._callDrawRound = function');
   const f = src.indexOf('window._callApplyMatchResult');
@@ -64,8 +71,11 @@ const draw = fs.readFileSync(path.join(ROOT, 'js/views/tournaments-draw.js'), 'u
 const fdb = fs.readFileSync(path.join(ROOT, 'js/firebase-db.js'), 'utf8');
 const urlsDraw = (draw.match(/cloudfunctions\.net\//g) || []).length;
 const urlsFdb = (fdb.match(/cloudfunctions\.net\//g) || []).length;
-ok(urlsDraw === 2, '① no sorteio sobraram DUAS URLs: a casa única e a integração tardia (declarada) — achei ' + urlsDraw);
-ok(urlsFdb === 0, '① e `firebase-db.js` não monta mais URL nenhuma — achei ' + urlsFdb);
+/* ⛔ TOPOLOGIA INVERTIDA em 24/set/2026 (ver o cabeçalho dos dois arquivos): a CASA é
+ * `firebase-db.js`; `tournaments-draw.js` tem a CASCA (com fallback de cache híbrido) e a
+ * integração tardia. */
+ok(urlsFdb === 1, '① a CASA do transporte está em `firebase-db.js` — achei ' + urlsFdb + ' URL');
+ok(urlsDraw === 2, '① e no sorteio sobraram duas: o fallback híbrido da casca e a integração tardia — achei ' + urlsDraw);
 /* ⚠️ Exceções NOMINAIS, com o contrato de cada uma. Portão que as contasse mentiria sobre o
  * que foi unificado; portão que as ignorasse deixaria nascer a sexta cópia calada.
  *   js/views/auth.js  `checkAccount`      → vai SEM Authorization, antes de existir sessão;
@@ -90,6 +100,7 @@ function varrer(dir) {
 const mapa = varrer(path.join(ROOT, 'js'));
 const inesperados = Object.keys(mapa).filter((f) => {
   if (f === 'js/views/tournaments-draw.js') return mapa[f] !== 2;
+  if (f === 'js/firebase-db.js') return mapa[f] !== 1;
   if (EXCECOES[f] !== undefined) return mapa[f] !== EXCECOES[f];
   return true;
 });
@@ -171,12 +182,12 @@ ok(inesperados.length === 0, '① nenhuma casa NOVA de transporte em js/ — ' +
   }
   {
     const fonte = fs.readFileSync(path.join(ROOT, 'js/firebase-db.js'), 'utf8');
-    const i = fonte.indexOf('async _callFn(name, payload)');
+    const i = fonte.indexOf('async _callFn(name, payload, msgs)');
     const corpo = fonte.slice(i, fonte.indexOf('\n  },', i));
-    ok(/return r\.data;/.test(corpo),
-      '⑥ ⭐ e o `_callFn` DESEMBRULHA — sem isto quebraria quem lê `result.ok`/`result.tournament`');
-    ok(/naoInicializado: 'App não inicializado'/.test(corpo) && /unauth: 'login necessário'/.test(corpo) && /falha: 'Falha'/.test(corpo),
-      '⑥ e leva os três textos próprios dele');
+    ok(/return \(j && j\.result\) \|\| \{\};/.test(corpo),
+      '⑥ ⭐ o `_callFn` devolve o resultado CRU — quem lê `result.ok`/`result.tournament` depende disso');
+    ok(/'login necessário'/.test(corpo) && /'App não inicializado'/.test(corpo) && /'Falha'/.test(corpo),
+      '⑥ e mantém os três textos próprios dele (sem ponto no "App não inicializado")');
   }
 
   /* ── ⑦ NENHUM PRAZO nos quatro — a fronteira desta leva ────────────────────── */
@@ -187,6 +198,34 @@ ok(inesperados.length === 0, '① nenhuma casa NOVA de transporte em js/ — ' +
     await new Promise((r) => setImmediate(r));
     ok(resolveu === false,
       '⑦ ⛔ `fetch` pendurado NÃO é cortado: a casa única não tem prazo, e é isso que impede espalhar teto sem classificar idempotência');
+  }
+
+  /* ── ⑧ A REGRESSÃO DE 24/set: a chamada NÃO PODE depender de uma view ──────────
+   * Em 2.3.95 a casa foi para `tournaments-draw.js` e o `_callFn` passou a delegar para lá.
+   * Toda chamada de servidor do FirestoreDB passou a depender de uma VIEW carregar — e a
+   * tela de INSCRITOS quebrou. Aqui o mundo NÃO tem a view. */
+  {
+    const w = {}; w.window = w; vm.createContext(w);
+    w.fetch = () => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ result: { ok: true } }) });
+    w.firebase = { auth: () => ({ currentUser: { getIdToken: () => Promise.resolve('T') } }), app: () => ({ options: { projectId: 'p' } }) };
+    const fdb = fs.readFileSync(path.join(ROOT, 'js/firebase-db.js'), 'utf8');
+    const a = fdb.indexOf('  _callFnMarca:');
+    const b = fdb.indexOf('\n  },\n', fdb.indexOf('async _callFn(')) + 5;
+    vm.runInContext('window.FirestoreDB = {' + fdb.slice(a, b) + '};', w, { filename: 'fdb.js' });
+    const r = await w.FirestoreDB._callFn('fn', {});
+    ok(r && r.ok === true, '⑧ ⭐⭐ `_callFn` responde SEM `tournaments-draw.js` — é a regressão que derrubou os inscritos');
+  }
+
+  /* ── ⑨ CACHE HÍBRIDO: casca nova + firebase-db VELHO ⇒ sem recursão ────────────
+   * O Service Worker pode servir os dois de versões diferentes. Sem a checagem da MARCA,
+   * o `_callFn` velho chamaria a casca, que delegaria de volta: laço infinito. */
+  {
+    const { w, chamadas } = mundo({});
+    w.FirestoreDB._callFnMarca = 'marca-velha';          // finge o firebase-db de 2.3.95
+    const r = await Promise.race([w._callCF('fn', {}), new Promise((res) => setTimeout(() => res('TRAVOU'), 1500))]);
+    ok(r !== 'TRAVOU', '⑨ ⭐⭐ cache híbrido NÃO entra em recursão');
+    ok(r && r.data && r.data.ok === true, '⑨ e a casca fala o protocolo sozinha pelo fallback');
+    ok(chamadas.length === 1, '⑨ uma requisição só');
   }
 
   console.log('\n' + (fail ? '✗ ' + fail + ' falha(s), ' : '✅ ') + pass + ' verificações');

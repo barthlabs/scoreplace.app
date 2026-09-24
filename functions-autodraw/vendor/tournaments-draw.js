@@ -2217,36 +2217,45 @@ window._callCloseRound = function (payload) {
 // Os dois de cima NÃO foram migrados de propósito nesta leva: são o caminho quente do
 // sorteio e do fecho de rodada, já batidos em produção, e trocar o transporte deles
 // junto com a estreia do resultado misturaria dois riscos. Migração é faxina posterior.
-/* ⭐⭐ A CASA ÚNICA DO TRANSPORTE CALLABLE À MÃO (23/set/2026).
- * Eram CINCO cópias do mesmo bloco: `_callDrawRound`, `_callCloseRound`, este genérico, a
- * integração tardia e `FirestoreDB._callFn` (js/firebase-db.js, em outro arquivo). O
- * comentário logo abaixo já pedia esta faxina com estas palavras: os dois primeiros "NÃO
- * foram migrados de propósito nesta leva", "migração é faxina posterior". É esta.
+/* ⛔⛔ ISTO É CASCA — A IMPLEMENTAÇÃO MORA EM `js/firebase-db.js`. (24/set/2026)
  *
- * ⛔ `msgs` EXISTE PORQUE OS TEXTOS DIVERGEM, e texto que o dono vê não muda por refactor.
- * Três chaves, cada uma com o default deste genérico:
- *   unauth          → 'Entre na sua conta.'
- *   naoInicializado → 'App não inicializado.'
- *   falha           → 'Falha em <fnName>'
- * ⚠️ COMPAT: os 52 chamadores de hoje passam o 3º argumento como STRING (a mensagem de
- * "sem login"), e há chamada com DOIS argumentos. String vira `{unauth: string}`; ausente
- * vira `{}`. Sem isso eu quebraria 52 pontos em silêncio.
+ * 🔴 NÃO TRAGA A IMPLEMENTAÇÃO DE VOLTA PRA CÁ. Em 2.3.95 eu fiz o contrário — pus a casa
+ * aqui e o `FirestoreDB._callFn` passou a depender deste arquivo. Resultado: TODA chamada de
+ * servidor do FirestoreDB passou a depender de uma VIEW carregar, e a tela de INSCRITOS
+ * quebrou (`getTournamentEnrollmentProfiles` é o que a abre). Neste projeto script chega
+ * TRUNCADO — está medido no Sentry e documentado no `index.html` ("JS QUE CHEGOU PELA
+ * METADE") —, então "o arquivo sempre estará lá" é falso.
+ * ⇒ A casa é o arquivo que carrega PRIMEIRO e é INDISPENSÁVEL: `js/firebase-db.js`.
  *
- * ⛔ E A INTEGRAÇÃO TARDIA NÃO FOI UNIFICADA — de propósito, e o motivo é medido: ela é a
- * única com PRAZO (25 s), e trazer prazo para cá o espalharia por 52 usos deste genérico e
- * 101 do `_callFn` sem classificar idempotência. Há Function de comunicado que aceita 120 s
- * criando filas de e-mail e manifesto com ids aleatórios (não idempotente) e convites que
- * aceitam 60 s; sem `AbortController` timeout é RESULTADO DESCONHECIDO, não cancelamento; e
- * evitar redisparo exigiria estado de reconciliação por torneio. Isso é um projeto — *prazo e
- * idempotência das chamadas de servidor* —, não uma faxina. Aqui: nenhum prazo, em nenhuma. */
+ * ⚠️ CONTRATO: `_callFn` devolve o resultado CRU; esta casca ENVELOPA em `{data}`, porque é
+ * assim que os 52 chamadores de `_callCF` leem. Não normalize os dois — quebra um dos lados.
+ * `msgs` aceita STRING (a forma dos 52 chamadores: é a mensagem de "sem login") ou objeto
+ * `{unauth, naoInicializado, falha}`; os defaults abaixo são os desta casca.
+ *
+ * ⛔⛔ E O FALLBACK ABAIXO EXISTE POR UM MOTIVO SÓ: CACHE HÍBRIDO. O Service Worker pode
+ * entregar ESTE arquivo novo junto de um `firebase-db.js` VELHO (o de 2.3.95, cujo `_callFn`
+ * chamava `window._callCF`). Sem a checagem da MARCA, teríamos: `_callFn` velho → esta casca
+ * → delega de volta → RECURSÃO INFINITA, pior que o defeito original. A marca resolve: sem
+ * ela, esta casca fala o protocolo sozinha. ⛔ Não apague o fallback achando que é duplicação
+ * — ele só roda em asset híbrido, e é isso que impede o laço. */
 window._callCF = function (fnName, payload, msgs) {
     msgs = (typeof msgs === 'string') ? { unauth: msgs } : (msgs || {});
+    var _m = {
+        unauth: msgs.unauth || 'Entre na sua conta.',
+        naoInicializado: msgs.naoInicializado || 'App não inicializado.',
+        falha: msgs.falha || ('Falha em ' + fnName),
+    };
+    var DB = window.FirestoreDB;
+    if (DB && DB._callFnMarca === 'callfn-canonico-v1' && typeof DB._callFn === 'function') {
+        return DB._callFn(fnName, payload, _m).then(function (r) { return { data: r }; });
+    }
+    /* ── fallback de CACHE HÍBRIDO (ver o bloco acima) ───────────────────────────── */
     var fb = window.firebase;
     var user = fb && fb.auth && fb.auth().currentUser;
-    if (!user) return Promise.reject(Object.assign(new Error(msgs.unauth || 'Entre na sua conta.'), { code: 'functions/unauthenticated' }));
+    if (!user) return Promise.reject(Object.assign(new Error(_m.unauth), { code: 'functions/unauthenticated' }));
     var pid = '';
     try { pid = fb.app().options.projectId; } catch (e) {}
-    if (!pid) return Promise.reject(Object.assign(new Error(msgs.naoInicializado || 'App não inicializado.'), { code: 'functions/internal' }));
+    if (!pid) return Promise.reject(Object.assign(new Error(_m.naoInicializado), { code: 'functions/internal' }));
     var url = 'https://us-central1-' + pid + '.cloudfunctions.net/' + fnName;
     return user.getIdToken().then(function (tok) {
         return fetch(url, {
@@ -2257,11 +2266,8 @@ window._callCF = function (fnName, payload, msgs) {
     }).then(function (r) {
         return r.json().catch(function () { return {}; }).then(function (j) {
             if (j && j.error) {
-                // Mapeia o status do protocolo callable pro mesmo `code` que o SDK daria,
-                // pro catch do chamador não precisar saber que trocamos de transporte.
                 var st = String(j.error.status || '').toLowerCase().replace(/_/g, '-');
-                throw Object.assign(new Error(j.error.message || msgs.falha || ('Falha em ' + fnName)),
-                    { code: 'functions/' + (st || 'internal') });
+                throw Object.assign(new Error(j.error.message || _m.falha), { code: 'functions/' + (st || 'internal') });
             }
             if (!r.ok) throw Object.assign(new Error('HTTP ' + r.status), { code: 'functions/internal' });
             return { data: (j && j.result) || {} };

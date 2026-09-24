@@ -10,12 +10,16 @@
 const path = require('path');
 const ROOT = path.join(__dirname, '..');
 
-/* O ÚNICO construtor dinâmico autorizado: monta a URL a partir do parâmetro. */
-const CONSTRUTOR_DINAMICO = { arquivo: 'js/views/tournaments-draw.js', funcao: '_callCF' };
+/* ⛔ A CASA do transporte (24/set/2026): `FirestoreDB._callFn`, em `js/firebase-db.js` — o
+ * arquivo que carrega PRIMEIRO e é indispensável. Ela monta a URL a partir do parâmetro.
+ * ⚠️ Já esteve em `tournaments-draw.js` (2.3.95) e isso DERRUBOU a tela de inscritos: script
+ * truncado é falha medida neste projeto. Não volte a mover para uma view. */
+const CONSTRUTOR_DINAMICO = { arquivo: 'js/firebase-db.js', funcao: '_callFn' };
 
-/* O wrapper: NÃO monta URL (isso acabou na leva do transporte). A isenção dele vale só
- * para o ENCAMINHAMENTO `name → _callCF(name, …)` — não para a função inteira. */
-const WRAPPER_ENCAMINHA = { arquivo: 'js/firebase-db.js', funcao: '_callFn', delega: '_callCF' };
+/* A CASCA: `window._callCF` delega para a casa e ENVELOPA em `{data}`. Tem um fallback que
+ * também monta URL — ele existe SÓ para cache híbrido (casca nova + firebase-db velho), e sem
+ * ele daria recursão infinita. Por isso é construtor dinâmico AUTORIZADO também. */
+const WRAPPER_ENCAMINHA = { arquivo: 'js/views/tournaments-draw.js', funcao: '_callCF', delega: '_callFn' };
 
 /* As URLs literais que sobreviveram, com a classe de transporte de cada uma. `callable`
  * fala o envelope {data}; `http` é onRequest com corpo próprio. */
