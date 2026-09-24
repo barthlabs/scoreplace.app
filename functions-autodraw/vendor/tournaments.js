@@ -1070,7 +1070,7 @@ window._scrollToBracketSection = function(tId, matchId) {
     }
   }
   var cu = window.AppStore && window.AppStore.currentUser;
-  var isOrg = !!(window.AppStore && typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t));
+  var isOrg = window._souOrganizador(t);
   var matches = (typeof window._collectAllMatches === 'function')
     ? window._collectAllMatches(t) : (t.matches || []);
   var playable = {}, mine = {};
@@ -1706,7 +1706,7 @@ function renderTournaments(container, tournamentId = null) {
         if (!uid1 && sourceUidOrName && !sourceUidOrName.includes(' ')) uid1 = sourceUidOrName;
         if (!uid2 && targetUidOrName && !targetUidOrName.includes(' ')) uid2 = targetUidOrName;
 
-        var isOrg = !!(window.AppStore && typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t));
+        var isOrg = window._souOrganizador(t);
 
         // ── v2.7.78: CANONIZADO — mesmo fluxo do drag de card (handleDropTeam).
         //    Organizador → overlay (🔵 Formar equipe / 🔴 Mesclar / Cancelar);
@@ -3562,7 +3562,7 @@ function renderTournaments(container, tournamentId = null) {
         gridHtml = `<div class="card p-4 text-center" style="grid-column: 1/-1;"><p class="text-muted mt-3 mb-3">${_t('tournament.noTournamentsMsg')}</p></div>`;
     } else {
         gridHtml = visible.map(t => {
-            const isOrg = typeof window.AppStore.isOrganizer === 'function' ? window.AppStore.isOrganizer(t) : false;
+            const isOrg = window._souOrganizador(t);
             return renderTournamentCard(t, isOrg);
         }).join('');
     }
@@ -3610,7 +3610,7 @@ function renderTournaments(container, tournamentId = null) {
 
         // Higiene do elenco é sempre canônica: a tela só pede à Function que
         // deduplique ou promova; ela nunca altera a cópia que está renderizando.
-        var _canReconcile = window.AppStore && typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(visible[0]);
+        var _canReconcile = window.AppStore && window._souOrganizador(visible[0]);
         var _reconcile = window.FirestoreDB && typeof window.FirestoreDB._callFn === 'function';
         if (_canReconcile && _reconcile) {
             window.FirestoreDB._callFn('deduplicateTournamentParticipants', { tournamentId: String(visible[0].id) })
@@ -3827,7 +3827,7 @@ function renderTournaments(container, tournamentId = null) {
         // "Falar com o organizador" — visível só pra quem NÃO faz parte da
         // organização (participantes/visitantes logados). O próprio organizador
         // e co-organizadores não veem o botão.
-        var _viewerIsOrg = (window.AppStore && typeof window.AppStore.isOrganizer === 'function') ? window.AppStore.isOrganizer(_t) : false;
+        var _viewerIsOrg = window._souOrganizador(_t);
         var _contactBtnHtml = '';
         // v2.4.82: botão canônico (padronizado com a dashboard) — azul=e-mail,
         // verde=WhatsApp via hidratação assíncrona conforme o telefone do org.
@@ -3867,7 +3867,7 @@ function renderTournaments(container, tournamentId = null) {
 
     if (tournamentId && visible.length === 1) {
         const t = visible[0];
-        const isOrg = typeof window.AppStore.isOrganizer === 'function' ? window.AppStore.isOrganizer(t) : false;
+        const isOrg = window._souOrganizador(t);
         const _hasTournCats = (t.combinedCategories && t.combinedCategories.length > 0) || (t.genderCategories && t.genderCategories.length > 0) || (t.skillCategories && t.skillCategories.length > 0) || (t.ageCategories && t.ageCategories.length > 0);
         // Snapshot de transição pode conter lacunas. A lista canônica que alimenta cards,
         // ordenação e perfis nunca carrega uma entrada nula para o restante da tela.

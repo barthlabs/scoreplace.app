@@ -136,6 +136,12 @@ function docComoNaProducao() {
   W._nameForUid = function (u) { return u === UID_R ? NOME_VIVO : (u === UID_A ? 'Adriana' : ''); };
   W._displayNameForUid = function (u, fb) { return W._nameForUid(u) || fb || ''; };
   W.AppStore = { tournaments: [t], currentUser: { uid: 'org' }, isOrganizer: function () { return true; } };
+/* ⛔ A PORTA DA PERGUNTA "sou organizador?" MORA NO `store.js`, que este harness não
+ * carrega — então ela é fornecida aqui, delegando no mock. Sem isto o arquivo migrado
+ * chamaria `undefined` e o teste falharia por falta de infraestrutura, não por defeito.
+ * A trava de `porta-unica-do-papel` reprova harness que mocke a regra e esqueça a porta. */
+W._souOrganizador = function (t) { return !!(W.AppStore && typeof W.AppStore.isOrganizer === 'function' && W.AppStore.isOrganizer(t)); };
+
   W._currentBracketTournament = t;
   W._currentBracketTournamentId = 'T1';
   const html = W.renderMatchCard(t.matches[0], true, 'T1', 1) || '';

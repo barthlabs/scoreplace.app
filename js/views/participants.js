@@ -1855,7 +1855,7 @@ function renderParticipants(container, tournamentId) {
     _preloadPlayerPhotos(t).then(window._aplicarFotosInscritos).catch(function() {}).then(_hydrateNamesP);
   } else { setTimeout(_hydrateNamesP, 0); }
 
-  const isOrg = typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t);
+  const isOrg = window._souOrganizador(t);
 
   /* ⭐ CONTATO DO ELENCO — SÓ PARA O ORGANIZADOR, E SÓ AQUI.
    * Celular, DDI, procedência do número, `omitPhone` e o @ do letzplay são privados e não

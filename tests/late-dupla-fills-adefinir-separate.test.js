@@ -8,6 +8,12 @@
 const { window: W, sandbox, load } = require('./headless');
 sandbox.document = { getElementById: () => null, querySelector: () => null, querySelectorAll: () => [], body: {} };
 sandbox.AppStore = { tournaments: [], logAction: () => {}, sync: () => {}, isOrganizer: () => true, isCreator: () => true, currentUser: { uid: 'org' } };
+/* ⛔ A PORTA DA PERGUNTA "sou organizador?" MORA NO `store.js`, que este harness não
+ * carrega — então ela é fornecida aqui, delegando no mock. Sem isto o arquivo migrado
+ * chamaria `undefined` e o teste falharia por falta de infraestrutura, não por defeito.
+ * A trava de `porta-unica-do-papel` reprova harness que mocke a regra e esqueça a porta. */
+sandbox._souOrganizador = function (t) { return !!(sandbox.AppStore && typeof sandbox.AppStore.isOrganizer === 'function' && sandbox.AppStore.isOrganizer(t)); };
+
 load('identity-core.js');
 load('tournaments-draw.js');
 sandbox._displayNameForUid = (uid, fb) => uid ? ('P_' + uid) : (fb || '');

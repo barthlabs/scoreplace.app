@@ -2633,7 +2633,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     // Card do atleta — tamanho padrão (min 150px), nome com ellipsis.
     // v1.1.21: hover mostra a última atualização (< 1 mês); clique em AUTORIZADO
     // (organizador) abre a tela de puxar o histórico individual do letzplay.
-    var _mxIsOrg = !!(window.AppStore && typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t));
+    var _mxIsOrg = window._souOrganizador(t);
     function chip(r) {
       var pe = _pendingEdits[r.order] || {}; var edited = Object.keys(pe).length > 0;
       // _lzColor já vem resolvido por _erApplyLzToRows: veredito verificado, ou
@@ -3959,7 +3959,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     profileMap = profileMap || {}; scanMap = scanMap || {};
     _erApplyLzToRows(rows, profileMap, scanMap);
     window._lzRenderCtx = { t: t, rows: rows, profileMap: profileMap, scanMap: scanMap };
-    var _isOrg = !!(window.AppStore && typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t));
+    var _isOrg = window._souOrganizador(t);
 
     // Alvos da busca = TODO competidor com @ no perfil. 2.0.50 (dono): o letzplay é
     // PÚBLICO e criar a conta já autoriza a consulta (termos de uso) — o consentimento
@@ -4059,7 +4059,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (!rows || rows.length === 0) return '';
     // v2.6.108: barra canônica compartilhada (window._inscritosFilterBar em store.js).
     // Esta é a referência; a tela de Inscritos (#participants) usa a MESMA função.
-    var _isOrgList = !!(window.AppStore && typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t));
+    var _isOrgList = window._souOrganizador(t);
     var _tIdEsc = String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     var _sportEsc = String(t.sport || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     // v2.4.34: barra de salvar (só org) — fica oculta até haver alteração staged.
@@ -4954,7 +4954,7 @@ window._lzNaoEhEuMesmo = function (uid) {
   function _renderPage(container, t, rows, profileMap, parts, resolvedFor, scanMap) {
     if (!container) return;
     scanMap = scanMap || {};
-    var _isOrgHdr = !!(window.AppStore && typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t));
+    var _isOrgHdr = window._souOrganizador(t);
     // Cancelar/Salvar DENTRO da barra Voltar (canônico rightHtml) — sempre visível
     // com a barra fixa, nunca atrás dela. Escondido até haver alteração.
     var _saveInline = _isOrgHdr
@@ -4976,7 +4976,7 @@ window._lzNaoEhEuMesmo = function (uid) {
     var subtitle = '<div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:14px;">' + tName + '</div>';
 
     // Estado vivo pra busca/sort/filtros da lista de inscritos.
-    var _isOrg = !!(window.AppStore && typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t));
+    var _isOrg = window._souOrganizador(t);
     _liveState = { rows: rows, t: t, isOrg: _isOrg };
     _pendingEdits = {}; // v2.4.34: cada carga da página começa sem edições pendentes
 
@@ -5248,7 +5248,7 @@ window._lzNaoEhEuMesmo = function (uid) {
     } catch (e) { if (window._warn) window._warn('[analise] espera não carregou', e); }
 
     // Verifica se user é organizador — relatório é restrito.
-    if (!window.AppStore || !window.AppStore.isOrganizer || !window.AppStore.isOrganizer(t)) {
+    if (!window._souOrganizador(t)) {
       window.location.replace('#tournaments/' + tId);
       return;
     }

@@ -63,6 +63,13 @@ module.exports = [
     marca: RESULT_MARCA, incidente: RESULT_INC, data: '2026-09-23' },
   { id: '11', arquivo: U, ancora: 'window._isLigaFormat = function', marca: 'CASA ÚNICA',
     incidente: 'a resposta "e Liga?" estava espalhada e as copias divergiram', data: '2026-09-23' },
+  { id: '13', arquivo: 'js/store.js', ancora: 'window._souOrganizador = function (t) {',
+    marca: 'A CASCA da pergunta', incidente: 'a mesma guarda estava copiada a mao em 38 telas, e uma '
+      + 'delas chamava por APELIDO e escapava da busca pelo nome do objeto', data: '2026-09-24' },
+  { id: '14', arquivo: 'js/views/bracket-ui.js', ancora: 'function _isUserOrgOrCoHost(t, user) {',
+    marca: 'NÃO HÁ MAIS QUEDA POR E-MAIL AQUI',
+    incidente: 'o comentario-cabecalho descrevia uma queda por e-mail que ja nao existia, e me '
+      + 'levou a conclusao errada: eu li o comentario e nao o codigo', data: '2026-09-24' },
   { id: '12', arquivo: U, ancora: 'window._faseCorrenteEhLiga = function', marca: 'AINDA SEM CHAMADOR',
     incidente: 'funcao criada na unificacao e nunca chamada — sem a nota, sai como codigo morto',
     data: '2026-09-23' }

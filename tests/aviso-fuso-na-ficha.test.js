@@ -59,7 +59,9 @@ function ambiente(t, ehOrg, perfil) {
       'ficha.tzUnknownBody': 'fuso do local não pôde ser determinado · o sorteio manual continua disponível · escolha o local ou preencha a cidade',
       'ficha.tzUnknownCta': '✏️ Editar torneio'
     })[k] || null,
-    AppStore: { isOrganizer: () => ehOrg, currentUser: perfil || null }
+    AppStore: { isOrganizer: () => ehOrg, currentUser: perfil || null },
+    /* ⛔ A porta "sou organizador?" mora no `store.js`, que este harness não carrega. */
+    _souOrganizador: () => !!ehOrg
   };
   const ctx = vm.createContext({ window: win, console });
   vm.runInContext(trecho, ctx, { filename: 'store-aviso.js' });

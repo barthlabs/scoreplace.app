@@ -166,7 +166,7 @@ function renderRules(container, tournamentId) {
       }).join('')
     : `<p style="color:var(--text-muted);font-size:0.85rem;">${_t('rules.noActions')}</p>`;
 
-  const isOrg = typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t);
+  const isOrg = window._souOrganizador(t);
 
   container.innerHTML = `
     ${window._renderBackHeader({ href: '#tournaments/' + t.id, label: _t('rules.back') })}

@@ -5957,7 +5957,7 @@ window._checkLigaAutoDraws = async function() {
 
     // Só o organizador chegava aqui (participante nunca sorteia). Mantido: a
     // auto-cura abaixo mexe no doc e só o organizador tem permissão de gravar.
-    var _isOrg = window.AppStore.isOrganizer(t);
+    var _isOrg = window._souOrganizador(t);
     if (!_isOrg) continue;
 
     // Skip finished
@@ -6037,7 +6037,10 @@ window._renderPendingDrawPreview = function (t) {
 window._renderPendingDrawBanner = function (t) {
   if (!t || !t.pendingDraw) return '';
   var store = window.AppStore;
-  if (!(store && store.isOrganizer && store.isOrganizer(t))) return '';
+  /* ⛔ Aqui a chamada era por APELIDO (`store.isOrganizer`) e escapou das minhas duas
+   * primeiras contagens, que procuravam o nome do objeto. Por isso o portão desta leva
+   * olha a ÁRVORE e o nome do MÉTODO, não o receptor. */
+  if (!window._souOrganizador(t)) return '';
   var esc = window._safeHtml || function (s) { return String(s == null ? '' : s); };
   var preview = window._renderPendingDrawPreview ? window._renderPendingDrawPreview(t) : '';
   return '<div style="border:2px solid #f59e0b;background:rgba(245,158,11,0.10);border-radius:14px;padding:14px 16px;margin:0 0 1rem;">' +

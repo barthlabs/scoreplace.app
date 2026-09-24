@@ -46,6 +46,12 @@ sandbox.AppStore = {
   // guarda o comando para provar que o cliente não muda o torneio por conta própria.
   commitResultTx(tId, matchId, payload, message) { _commands.push({ tId, matchId, payload, message }); return Promise.resolve(true); },
 };
+/* ⛔ A PORTA DA PERGUNTA "sou organizador?" MORA NO `store.js`, que este harness não
+ * carrega — então ela é fornecida aqui, delegando no mock. Sem isto o arquivo migrado
+ * chamaria `undefined` e o teste falharia por falta de infraestrutura, não por defeito.
+ * A trava de `porta-unica-do-papel` reprova harness que mocke a regra e esqueça a porta. */
+sandbox._souOrganizador = function (t) { return !!(sandbox.AppStore && typeof sandbox.AppStore.isOrganizer === 'function' && sandbox.AppStore.isOrganizer(t)); };
+
 sandbox._findTournamentById = (id) => sandbox.AppStore.tournaments.find(t => String(t.id) === String(id)) || null;
 
 vm.createContext(sandbox);

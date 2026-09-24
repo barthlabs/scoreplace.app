@@ -19,7 +19,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   function _guard(tId) {
     var t = window._findTournamentById ? window._findTournamentById(tId) : null;
     if (!t) { window.location.replace('#dashboard'); return null; }
-    if (!window.AppStore || !window.AppStore.isOrganizer || !window.AppStore.isOrganizer(t)) {
+    if (!window._souOrganizador(t)) {
       window.location.replace('#tournaments/' + tId); return null;
     }
     return t;
@@ -469,7 +469,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   window._wirePlaceholderDnD = function () {
     var t = window._currentBracketTournament;
     if (!t) return;
-    if (!(window.AppStore && window.AppStore.isOrganizer && window.AppStore.isOrganizer(t))) return;
+    if (!(window.AppStore && window._souOrganizador(t))) return;
     if (!window._chaveTemVaga(t)) return;   // 2.3.82: sem vaga, nada a armar
     var handles = document.querySelectorAll('[data-ph-drag]');
     for (var i = 0; i < handles.length; i++) {

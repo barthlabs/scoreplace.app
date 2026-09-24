@@ -23,7 +23,7 @@ window._requestExpiredLeagueSeasonClose = window._requestExpiredLeagueSeasonClos
   var requested = {};
   return function(t) {
     if (!t || !t.id || t.status === 'finished' || !window.AppStore ||
-        typeof window.AppStore.isOrganizer !== 'function' || !window.AppStore.isOrganizer(t) ||
+        !window._souOrganizador(t) ||
         typeof window._callCF !== 'function') return;
     var isLeague = typeof window._isLigaFormat === 'function' ? window._isLigaFormat(t) : (t.format === 'Liga' || t.format === 'Ranking');
     if (!isLeague || !t.ligaSeasonMonths || !t.startDate || requested[t.id]) return;
@@ -3676,7 +3676,7 @@ function renderDashboard(container) {
   function _buildCompactList(items) {
     if (!items || items.length === 0) return '<div style="text-align:center;padding:2rem;color:var(--text-muted);opacity:0.6;">' + _t('tournament.emptyState') + '</div>';
     return '<div class="compact-list-container" style="display:flex;flex-direction:column;gap:2px;">' + items.map(function(t) {
-      var isOrg = typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t);
+      var isOrg = window._souOrganizador(t);
       var statusText = '', statusColor = '';
       // v1.3.35-beta: distinguir 'finished' real de 'closed' (inscrições
       // encerradas) e só mostrar "Em Andamento" quando t.tournamentStarted

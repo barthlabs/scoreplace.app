@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.3.101';
+window.SCOREPLACE_VERSION = '2.3.102';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -4763,9 +4763,13 @@ window._checkTopbarWrap = function() {
   function _setViewModeLabel(abbreviated) {
     var vmBtn = document.getElementById('view-mode-selector');
     if (vmBtn && window.AppStore) {
-      var isOrg = window.AppStore.viewMode === 'organizer';
-      var icon = isOrg ? '👁️' : '👤';
-      var label = isOrg ? (abbreviated ? 'Org.' : 'Organizador') : (abbreviated ? 'Part.' : 'Participante');
+      /* ⛔ MODO DE VISÃO, não papel no torneio. Isto se chamava `isOrg` — o MESMO nome que
+       * as telas usam para "sou organizador deste torneio". Nome igual para pergunta
+       * diferente é como um defeito de permissão entra: alguém lê `isOrg` e supõe
+       * autoridade. Aqui só se decide qual RÓTULO o menu mostra. */
+      var souVisaoOrganizador = window.AppStore.viewMode === 'organizer';
+      var icon = souVisaoOrganizador ? '👁️' : '👤';
+      var label = souVisaoOrganizador ? (abbreviated ? 'Org.' : 'Organizador') : (abbreviated ? 'Part.' : 'Participante');
       vmBtn.innerHTML = icon + ' <span style="font-weight:600;">' + label + '</span>';
     }
   }
@@ -6139,6 +6143,13 @@ if (typeof document !== 'undefined' && document.addEventListener && !window._pla
         if (el && window._openPlayerProfileFromNameElement(el, ev) && typeof ev.stopPropagation === 'function') ev.stopPropagation();
     }, true);
 }
+
+/* ⛔ A CASCA da pergunta "sou organizador deste torneio?" — ver o bloco em `isOrganizer`.
+ * A regra NÃO se repete aqui: isto é só a guarda que estava copiada em 38 telas. */
+window._souOrganizador = function (t) {
+  return !!(window.AppStore && typeof window.AppStore.isOrganizer === 'function'
+    && window.AppStore.isOrganizer(t));
+};
 
 window._profileAvatarUrl = function(name, photoURL, size) {
     if (photoURL && typeof photoURL === 'string' && photoURL.indexOf('dicebear.com') === -1) {
@@ -13573,6 +13584,25 @@ window.AppStore = {
     return false;
   },
 
+  /* ⛔⛔ A PORTA ÚNICA DA PERGUNTA "SOU ORGANIZADOR DESTE TORNEIO?" (24/set/2026).
+   *
+   * Ordem do dono: _"corrija essa tecnica para que seja a melhor tecnica em programacao"_.
+   * O que estava errado, medido: 38 lugares nas telas repetiam à mão a MESMA guarda —
+   * `typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t)` —
+   * cada cópia uma chance de esquecer o `!!`, inverter a lógica ou trocar por outra coisa.
+   * E uma delas escapava de qualquer busca pelo nome do objeto: chamava por APELIDO
+   * (`store.isOrganizer(t)`, bracket-logic).
+   *
+   * ⛔ ESTA FUNÇÃO É CASCA: a REGRA mora em `isOrganizer` logo acima e não se repete aqui.
+   * Duas implementações da mesma pergunta já quebraram este app uma vez (o transporte de
+   * chamadas ao servidor, 2.3.95). O que a casca faz é a guarda, UMA vez.
+   * ⛔ Não vira cache: medido barato — as chamadas em laço percorrem a lista de torneios
+   * VISÍVEL, uma por torneio, e cada uma olha os co-organizadores daquele torneio. Cache de
+   * coisa barata é um lugar novo para a resposta envelhecer, e resposta velha dizendo "você é
+   * o organizador" de um torneio que já não é seu é bem pior que o custo que ela pouparia.
+   * ⛔ Para perguntar de OUTRO usuário existe `_isUserOrgOrCoHost` (bracket-ui): pergunta
+   * diferente, função diferente. Trocar uma pela outra responde errado em tela de aprovação.
+   * Trava: tests/porta-unica-do-papel.test.js. [[project_porta_unica_do_papel]] */
   isCreator(tournament) {
     if (!this.currentUser) return false;
     // v2.8.79: uid primeiro (robusto pra criador com conta por telefone/sem email).

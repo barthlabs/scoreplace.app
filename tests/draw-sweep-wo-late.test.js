@@ -5,6 +5,12 @@
 const { window: W, sandbox, load } = require('./headless');
 sandbox.document = { getElementById: () => null, querySelector: () => null, querySelectorAll: () => [], createElement: () => ({ style: {}, setAttribute() {}, appendChild() {} }), addEventListener() {}, body: {}, location: { hash: '' } };
 sandbox.AppStore = { tournaments: [], logAction: () => {}, sync: () => {}, isOrganizer: () => true, isCreator: () => true, currentUser: { uid: 'org' }, mutate: async (id, fn) => { const t = W._findTournamentById ? W._findTournamentById(id) : null; if (t) fn(t); return true; } };
+/* ⛔ A PORTA DA PERGUNTA "sou organizador?" MORA NO `store.js`, que este harness não
+ * carrega — então ela é fornecida aqui, delegando no mock. Sem isto o arquivo migrado
+ * chamaria `undefined` e o teste falharia por falta de infraestrutura, não por defeito.
+ * A trava de `porta-unica-do-papel` reprova harness que mocke a regra e esqueça a porta. */
+sandbox._souOrganizador = function (t) { return !!(sandbox.AppStore && typeof sandbox.AppStore.isOrganizer === 'function' && sandbox.AppStore.isOrganizer(t)); };
+
 sandbox._displayNameForUid = (u, fb) => u ? ('P_' + u) : (fb || '');
 sandbox._pName = (p, fb) => { if (!p) return fb || ''; if (typeof p === 'string') return p; if (p.p1Name || p.p2Name) { const a = p.p1Name || '', b = p.p2Name || ''; if (a && b) return a + ' / ' + b; } return p.displayName || p.name || fb || ''; };
 load('identity-core.js');

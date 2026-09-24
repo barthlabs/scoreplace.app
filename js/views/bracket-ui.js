@@ -521,6 +521,13 @@ function _fechaCorridaDoPlacar(tId, matchId, prVencedora, prMinha) {
 
 // Verifica se user é organizador ou co-host ativo (independente de viewMode —
 // pra approval queremos a permissão real, não a visualização atual).
+// ⛔ PERGUNTA DIFERENTE da de `_souOrganizador` (store.js): esta responde sobre o usuário
+// RECEBIDO como argumento, não sobre quem está logado. Trocar uma pela outra responde errado
+// justamente em tela de aprovação, que é permissão.
+// ⛔ NÃO HÁ MAIS QUEDA POR E-MAIL AQUI — esta função é UID PURO. Até 24/set/2026 o cabeçalho
+// interno ainda descrevia um "fallback por e-mail para o organizador declarado" que já tinha
+// sido removido, e ele me levou à conclusão errada: eu li o comentário e não o código.
+// Anotação que descreve código morto é pior que anotação nenhuma.
 function _isUserOrgOrCoHost(t, user) {
   if (!t || !user) return false;
   var email = user.email;
@@ -532,9 +539,8 @@ function _isUserOrgOrCoHost(t, user) {
       if (t.coHosts.some(function(ch) { return ch.uid === uid && ch.status === 'active'; })) return true;
     }
   }
-  // Fallback por e-mail — SÓ pro organizador declarado (organizerEmail/creatorEmail), que
-  // é campo do torneio. CO-HOST saiu daqui (jul/2026): co-host é identificado SÓ por uid,
-  // igual às Firestore rules (isTournamentAdmin usa creatorUid/adminUids e mais nada).
+  // Co-host saiu por uid em jul/2026, igual às Firestore rules (que usam creatorUid/adminUids
+  // e mais nada); o organizador saiu depois. O bloco abaixo conta a remoção e a medição.
   // Ver [[project_cohost_invite_cf_uid_only]].
   /* ⛔ AQUI HAVIA O ÚLTIMO FALLBACK POR E-MAIL, e ele era o pior: dava true pra quem
    * apresentasse `organizerEmail`/`creatorEmail` iguais. O comentário acima já dizia que
@@ -2129,8 +2135,7 @@ function _finalizeRoundCardInPlace(t, m, tId, matchId) {
   // Contexto que renderMatchCard lê (coroa / sit-out / crown helper).
   window._currentBracketTournament = t;
   window._currentBracketTournamentId = String(tId);
-  var isOrg = window.AppStore && typeof window.AppStore.isOrganizer === 'function'
-    ? window.AppStore.isOrganizer(t) : false;
+  var isOrg = window.AppStore && window._souOrganizador(t);
   var canEnterResult = isOrg
     || (typeof window._resultEntryIncludes === 'function'
         && (window._resultEntryIncludes(t, 'players') || window._resultEntryIncludes(t, 'referee')));

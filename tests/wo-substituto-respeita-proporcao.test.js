@@ -76,7 +76,7 @@ function loadLiga(t, profiles) {
     tournaments: [t],
     currentUser: { uid: 'uid_organizador', displayName: 'Organizador' },
     mutate: (tid, fn) => { fn(t); return Promise.resolve(true); },
-    isOrganizer: () => true,
+    isOrganizer: () => true,   /* a porta _souOrganizador é definida abaixo */
   };
   win.AppStore = store;
   win._spContextoLiga = () => ({ tournament: t, actor: win.AppStore.currentUser });

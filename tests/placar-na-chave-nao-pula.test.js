@@ -103,10 +103,16 @@ async function abreChave(browser, torneio, usuario, raizPx) {
     };
     window.AppStore = Object.assign(window.AppStore||{}, {
       tournaments:[t], currentUser:u, isOrganizer:function(){ return !!u.org; },
+      /* a porta vive no store.js, que este harness não carrega */
       logAction:noop, sync:noop, syncImmediate:tx, commitTournamentTx:tx, commitResultTx:resultTx,
       commitResultApprovalTx:function(tid, mid, log){ return resultTx(tid, mid, { action:'approve-pending' }, log); }, commitDrawTx:tx,
       getTournament:function(id){ return window.AppStore.tournaments.find(x=>String(x.id)===String(id)); }
     });
+    /* ⛔ A porta "sou organizador?" mora no `store.js`, que este harness não carrega:
+     * fornecida aqui delegando no mock. Trava: porta-unica-do-papel. */
+    window._souOrganizador = function (t) { return !!(window.AppStore
+      && typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t)); };
+
     window.FirestoreDB = { saveTournament: function(){ return Promise.resolve(); } };
     window._sendUserNotification = noop;
     window.location.hash = '#tournaments/' + t.id;

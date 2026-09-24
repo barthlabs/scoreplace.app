@@ -50,7 +50,12 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   }
   // (o _save doc-inteiro foi removido na v4.0.116 — wo-claim persiste TUDO pelo
   //  Function transacional: a tela só envia intenção e repinta a resposta.)
-  function _isOrg(t) { return !!(window.AppStore && ((window.AppStore.isOrganizer && window.AppStore.isOrganizer(t)) || (window.AppStore.isCreator && window.AppStore.isCreator(t)))); }
+  /* ⛔ O `|| isCreator(t)` SAIU (24/set/2026) e não fechou porta para ninguém — medido:
+   * `isOrganizer` já devolve true para o criador por uid e para o dono do sandbox, e
+   * `isCreator` é uid puro (dono do sandbox ou `creatorUid === uid`). Não existe caso em
+   * que um diga sim e o outro não; o que existia eram DUAS respostas para a mesma
+   * pergunta, que é como elas divergem depois. */
+  function _isOrg(t) { return window._souOrganizador(t); }
   function _canManage(t) {
     if (_isOrg(t)) return true;
     var cu = _cu();

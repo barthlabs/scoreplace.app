@@ -3616,7 +3616,7 @@ window.handleDropTeam = function (e, targetIdx) {
                            (Array.isArray(t.rounds) && t.rounds.length) ||
                            (Array.isArray(t.groups) && t.groups.length);
         var _drawDoneD = !!_hasMatchesD || t.status === 'started' || t.status === 'in_progress';
-        var _isOrgDrag = !!(window.AppStore && typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t));
+        var _isOrgDrag = window._souOrganizador(t);
         var _oneRealOneGeneric = (!!uid1) !== (!!uid2); // mescla só com 1 real + 1 genérico
 
         if (!_isOrgDrag) {

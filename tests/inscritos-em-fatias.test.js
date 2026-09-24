@@ -86,8 +86,14 @@ function servidor() {
     window.AppStore = Object.assign(window.AppStore || {}, {
       currentUser: { uid: t.creatorUid || 'org', email: t.organizerEmail || 'o@x.com', displayName: 'Org' },
       isOrganizer: () => true, getTournament: () => t, tournaments: [t],
+      /* a porta vive no store.js, que este harness não carrega */
       sync() {}, syncImmediate() { return Promise.resolve(); }, mutate() { return Promise.resolve(); }
     });
+    /* ⛔ A porta "sou organizador?" mora no `store.js`, que este harness não carrega:
+     * fornecida aqui delegando no mock. Trava: porta-unica-do-papel. */
+    window._souOrganizador = function (t) { return !!(window.AppStore
+      && typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t)); };
+
     /* A rota tem de casar com o id que o teste manda pintar. Este teste chama
      * `renderParticipants(c, 'x')` — id fictício, porque `_findTournamentById` está
      * stubado e devolve o fixture para qualquer id. Desde a guarda de rota (2.1.102),

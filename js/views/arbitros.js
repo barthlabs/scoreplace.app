@@ -161,12 +161,12 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         var t = Object.assign({ id: doc.id }, doc.data());
 
         // Check organizer
-        var isOrg = typeof window.AppStore.isOrganizer === 'function'
-          ? window.AppStore.isOrganizer(t)
-          // Fallback uid-first (criador por uid antes do e-mail) — só usado se
-          // AppStore.isOrganizer não existir; espelha store.js isOrganizer.
-          : ((cu.uid && t.creatorUid && t.creatorUid === cu.uid) ||
-             false);   // ⛔ e-mail NÃO identifica organizador (cânone do dono) — só uid, acima
+        /* ⛔ A QUEDA ESCRITA À MÃO SAIU (24/set/2026). Ela repetia, com MENOS verificação
+         * (sem co-organizador, sem dono do sandbox), a regra que já existe — e só se
+         * ativaria se o `store.js` não tivesse carregado, isto é, com o app quebrado.
+         * Conceder poder de organizador com verificação reduzida justamente nesse estado é o
+         * lado errado do erro. Sem a porta, o acesso a esta tela é NEGADO. */
+        var isOrg = window._souOrganizador(t);
         if (!isOrg) {
           document.getElementById('arbitros-content').innerHTML =
             '<div style="color:var(--sp-c-f87171,#f87171);font-size:0.85rem;">Somente o organizador pode gerenciar árbitros.</div>';

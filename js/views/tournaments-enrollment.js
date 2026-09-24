@@ -972,7 +972,7 @@ window._doEnrollCurrentUser = function(tId, selectedCategories, _onSuccess) {
     }
 
     // Feature gate: limite de participantes no plano Free (organizador do torneio)
-    if (window.AppStore.isOrganizer(t) && !window._canAddParticipant(t)) {
+    if (window._souOrganizador(t) && !window._canAddParticipant(t)) {
         window._showUpgradeModal('participants');
         return;
     }

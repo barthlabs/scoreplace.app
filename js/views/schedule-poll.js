@@ -106,7 +106,12 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       return Promise.resolve(DB._callFn('setMatchSchedule', payload)).then(function (r) { _schOpQueimar(k); return r || {}; });
     } catch (e) { return Promise.reject(e); }
   }
-  function _isOrg(t) { return !!(window.AppStore && ((window.AppStore.isOrganizer && window.AppStore.isOrganizer(t)) || (window.AppStore.isCreator && window.AppStore.isCreator(t)))); }
+  /* ⛔ O `|| isCreator(t)` SAIU (24/set/2026) e não fechou porta para ninguém — medido:
+   * `isOrganizer` já devolve true para o criador por uid e para o dono do sandbox, e
+   * `isCreator` é uid puro (dono do sandbox ou `creatorUid === uid`). Não existe caso em
+   * que um diga sim e o outro não; o que existia eram DUAS respostas para a mesma
+   * pergunta, que é como elas divergem depois. */
+  function _isOrg(t) { return window._souOrganizador(t); }
 
   // ─── datas / formatação (BRT + fuso do torneio) ─────────────────────────────
   function _brtYmd(ms) {

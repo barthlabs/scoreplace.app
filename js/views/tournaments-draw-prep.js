@@ -3078,7 +3078,7 @@ window._renderPollBanner = function(t) {
     var userEmail = (user && user.email) ? user.email : '';
     var _vkBanner = (user && user.uid) ? user.uid : userEmail;
     var hasVoted = !!(activePoll.votes[_vkBanner] || activePoll.votes[userEmail]); // uid-first
-    var isOrganizer = window.AppStore.isOrganizer(t); // v2.8.79: uid-primário
+    var isOrganizer = window._souOrganizador(t); // v2.8.79: uid-primário
 
     var btnText = hasVoted ? _t('predraw.pollViewChange') : _t('predraw.pollVoteNow');
     var statusText = hasVoted ? _t('predraw.pollVoted') : _t('predraw.pollWaiting');
@@ -3136,7 +3136,7 @@ window._renderClosedPollBanner = function(t, poll) {
 
     var pct = totalVotes > 0 ? Math.round((winnerCount / totalVotes) * 100) : 0;
     var user = window.AppStore.currentUser;
-    var isOrganizer = window.AppStore.isOrganizer(t); // v2.8.79: uid-primário
+    var isOrganizer = window._souOrganizador(t); // v2.8.79: uid-primário
 
     var applyBtn = isOrganizer
         ? '<button onclick="window._applyPollResult(\'' + t.id + '\',\'' + poll.id + '\')" style="background:linear-gradient(135deg,#10b981,#34d399);color:white;border:none;padding:8px 18px;border-radius:10px;font-weight:700;font-size:0.8rem;cursor:pointer;white-space:nowrap;">' + _t('predraw.pollApply') + '</button>'

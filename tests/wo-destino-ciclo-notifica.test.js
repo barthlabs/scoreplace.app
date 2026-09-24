@@ -53,6 +53,12 @@ let CAP = null, NOTIFS = [], DOM = {};
 function boot(t, quemSou) {
   CAP = null; NOTIFS = []; DOM = {};
   win.AppStore = { tournaments: [t], currentUser: { uid: quemSou || 'org' }, mutate: (i, f) => { f(t); return Promise.resolve(true); }, isOrganizer: () => true };
+/* ⛔ A PORTA DA PERGUNTA "sou organizador?" MORA NO `store.js`, que este harness não
+ * carrega — então ela é fornecida aqui, delegando no mock. Sem isto o arquivo migrado
+ * chamaria `undefined` e o teste falharia por falta de infraestrutura, não por defeito.
+ * A trava de `porta-unica-do-papel` reprova harness que mocke a regra e esqueça a porta. */
+win._souOrganizador = function (t) { return !!(win.AppStore && typeof win.AppStore.isOrganizer === 'function' && win.AppStore.isOrganizer(t)); };
+
   win._spContextoLiga = () => ({ tournament: t, actor: win.AppStore.currentUser });
   win._findTournamentById = () => t;
   win._canManagePresence = () => true;

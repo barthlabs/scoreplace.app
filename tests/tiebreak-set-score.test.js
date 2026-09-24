@@ -24,6 +24,12 @@ sandbox.showNotification = sandbox.showAlertDialog = sandbox.showConfirmDialog =
 sandbox.localStorage = { getItem: () => null, setItem() {}, removeItem() {}, clear() {} };
 sandbox.firebase = { functions: () => ({ httpsCallable: () => (() => Promise.resolve({ data: {} })) }), firestore: () => ({}) };
 sandbox.AppStore = { tournaments: [], currentUser: null, isOrganizer: () => false, isCreator: () => false, logAction() {}, mutate() { return Promise.resolve(true); } };
+/* ⛔ A PORTA DA PERGUNTA "sou organizador?" MORA NO `store.js`, que este harness não
+ * carrega — então ela é fornecida aqui, delegando no mock. Sem isto o arquivo migrado
+ * chamaria `undefined` e o teste falharia por falta de infraestrutura, não por defeito.
+ * A trava de `porta-unica-do-papel` reprova harness que mocke a regra e esqueça a porta. */
+sandbox._souOrganizador = function (t) { return !!(sandbox.AppStore && typeof sandbox.AppStore.isOrganizer === 'function' && sandbox.AppStore.isOrganizer(t)); };
+
 sandbox._findTournamentById = () => null;
 
 vm.createContext(sandbox);

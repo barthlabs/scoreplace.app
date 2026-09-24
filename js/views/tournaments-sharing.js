@@ -549,7 +549,7 @@ window._flyerPersistPrefs = function() {
     var t = (window.AppStore.tournaments || []).find(function(x) { return String(x.id) === String(opts.tournamentId); });
     if (!t) return;
     // Só o organizador/co-organizador grava (Firestore rules bloqueiam terceiros).
-    if (!(window.AppStore.isOrganizer && window.AppStore.isOrganizer(t))) return;
+    if (!(window._souOrganizador(t))) return;
     if (!document.getElementById('flyer-content')) return; // diálogo já fechado
     var o = window._collectFlyerOpts();
     var prefs = { content: o.content, paper: o.paper, color: o.color, orient: o.orient, sizes: o.sizes, phrase: o.phrase || '' };

@@ -55,6 +55,12 @@ sec(function () {
     tournaments: [], currentUser: { uid: 'uid_org', displayName: 'Org' },
     mutate: null, isOrganizer: () => true,
   };
+/* ⛔ A PORTA DA PERGUNTA "sou organizador?" MORA NO `store.js`, que este harness não
+ * carrega — então ela é fornecida aqui, delegando no mock. Sem isto o arquivo migrado
+ * chamaria `undefined` e o teste falharia por falta de infraestrutura, não por defeito.
+ * A trava de `porta-unica-do-papel` reprova harness que mocke a regra e esqueça a porta. */
+win._souOrganizador = function (t) { return !!(win.AppStore && typeof win.AppStore.isOrganizer === 'function' && win.AppStore.isOrganizer(t)); };
+
   win._findTournamentById = (id) => (win.AppStore.tournaments.find((x) => String(x.id) === String(id)) || null);
   win._canManagePresence = () => true;
   win.showNotification = () => {};

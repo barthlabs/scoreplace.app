@@ -13,8 +13,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
  * escrita aqui. [[project_cohost_same_power_as_organizer]] */
 function _ordemDeOrganizador(t) {
   try {
-    return !!(window.AppStore && typeof window.AppStore.isOrganizer === 'function' &&
-              window.AppStore.isOrganizer(t));
+    return window._souOrganizador(t);
   } catch (e) { return false; }
 }
 
@@ -1423,7 +1422,7 @@ function renderBracket(container, tournamentId, isInline) {
     }
   }, 0);
 
-  const isOrg = typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t);
+  const isOrg = window._souOrganizador(t);
 
   // Reparos legados são tratados por `reconcileBracket` na Cloud Function acima.
   // Esta view só lê e renderiza; não salva estado ao abrir.
@@ -1875,7 +1874,7 @@ window._renderReadyMatchesBanner = function _renderReadyMatchesBanner(t) {
   // torneio). Usa courtNames se houver; senão gera "Quadra 1..N" a partir de
   // courtCount. Só o organizador escolhe a quadra de cada jogo pronto.
   const _sh = window._safeHtml || function(s){ return String(s == null ? '' : s); };
-  const _isOrg = (window.AppStore && typeof window.AppStore.isOrganizer === 'function') ? window.AppStore.isOrganizer(t) : false;
+  const _isOrg = window._souOrganizador(t);
   // Robusto: courtNames pode vir como array OU string "A, B, C"; se nenhum,
   // gera "Quadra 1..N" do courtCount — default 1 (antes era 0, o que fazia o
   // seletor sumir em torneios do quick-create / sem quadras configuradas).
@@ -3920,7 +3919,7 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
       // standings) e do status/formato (gate do controle de W.O. por grupo).
       ligaGhosts: t.ligaGhosts, status: t.status, format: t.format, ligaRoundFormat: t.ligaRoundFormat, participants: t.participants, absent: t.absent, checkedIn: t.checkedIn
     };
-    var _mIsOrg = !!(window.AppStore && typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t));
+    var _mIsOrg = window._souOrganizador(t);
     body = (typeof window._renderMonarchStage === 'function')
       ? window._renderMonarchStage(_mFaux, _mIsOrg, canEnterResult, { suppressAutoAdvance: true })
       : '';
@@ -3937,7 +3936,7 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
     // (renderBracket já mostra o banner de próxima fase). O antigo _renderPhaseLeague
     // (tabela pobre P/V/E/D/± via groupTeamStandings, sem %G/PA/medalhas/CLASSIF) foi
     // removido em favor do canônico.
-    var _lIsOrg = !!(window.AppStore && typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t));
+    var _lIsOrg = window._souOrganizador(t);
     var _lRounds, _lOpts, _lMs;
     if (phaseCfg.ligaCadence === 'incremental' && _lSlot) {
       // v3.1.16 (inc 8): rodada a rodada — rodadas REAIS já moram em t.phaseRounds[cur]
@@ -4031,7 +4030,7 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
       scoring: t.scoring, tiebreakers: t.tiebreakers,
       creatorUid: t.creatorUid, organizerEmail: t.organizerEmail, coHosts: t.coHosts
     };
-    var _gIsOrg = !!(window.AppStore && typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t));
+    var _gIsOrg = window._souOrganizador(t);
     body = (typeof window.renderGroupStage === 'function')
       ? window.renderGroupStage(_gFaux, _gIsOrg, canEnterResult, { suppressAutoAdvance: true })
       : '';
@@ -5292,7 +5291,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   // um botão pra autoridade desfazer o W.O. (reabre o jogo + libera ausentes).
   const _isAuthorityCard = (typeof window._isUserAuthority === 'function')
     ? window._isUserAuthority(t, _cu)
-    : (window.AppStore && typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t));
+    : (window.AppStore && window._souOrganizador(t));
   // Some depois que o jogo foi jogado de verdade (placar lançado / placar ao
   // vivo iniciado) — nesse ponto o W.O. não é mais reversível.
   const _woRevertable = !(typeof window._matchHasRealPlay === 'function' && window._matchHasRealPlay(m));
@@ -5453,7 +5452,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   // ligado, QUALQUER logado (inclusive inscrito de outro grupo) via o botão em
   // todo jogo. Agora exige estar em `t.arbitros` com status 'confirmed'
   // (shape em arbitros.js: [{uid, status: 'confirmed'|'invited', …}]).
-  const _isOrgLocal = !!(window.AppStore && typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t));
+  const _isOrgLocal = window._souOrganizador(t);
   const _souArbitroConfirmado = !!(_cu && _cu.uid && Array.isArray(t.arbitros) && t.arbitros.some(function (a) {
     return a && a.uid === _cu.uid && a.status === 'confirmed';
   }));
