@@ -1,3 +1,12 @@
+## 2.3.96 — 24/set/2026 (o aviso ao organizador decide por conta, não por e-mail)
+
+- **Torneio sem o e-mail do organizador no documento voltava a não avisar ninguém.** Os três avisos — inscrição individual, inscrição de dupla e cancelamento — tinham a guarda `t.organizerEmail && t.organizerEmail !== user.email`. O e-mail **nunca foi usado para enviar**: o envio já era por conta (`uid`). Ele só respondia "existe organizador?" e "sou eu?" — e respondia mal: torneio **sem** o campo (legado, ou depois que ele sair do documento público) **nunca** avisava o organizador, mesmo com o dono registrado por uid; e organizador que **trocou o e-mail da conta** passava a receber aviso da própria inscrição.
+- Agora a guarda é **conta contra conta**: resolve o uid do organizador (que é o `creatorUid`, e o resolvedor não consulta e-mail nenhum) e compara com o uid de quem agiu.
+- ⛔ **E o cancelamento ganhou a guarda que faltava**: o aviso saía **mesmo quando o servidor devolvia `notFound`** — ou seja, um cancelamento que **não aconteceu** avisava o organizador. Passava despercebido porque a guarda por e-mail barrava casos por acidente; com a guarda por conta o aviso alcança mais gente, e o defeito apareceria. Agora exige a mesma condição que decide atualizar o elenco.
+- **Nada calado**: os seis vereditos que não são "inscrito" (lotado, fechado, já inscrito, suspeita de duplicata, já na fila, entrou na fila) continuam **sem** gerar aviso de "novo inscrito" — e isso agora está travado em teste. ⚠️ `entrou na fila` é o que mais engana: o app o considera sucesso, mas quem entrou na **fila** não entrou no elenco.
+- 18 verificações novas, as duas guardas falsificadas antes de fechar.
+- ⏳ Nomeado, fora desta leva: o aviso genérico de fechamento automático (`tournaments-organizer.js`) **ainda** lê o e-mail do documento — entra no projeto de tirar o campo da vitrine pública.
+
 ## 2.3.95 — 23/set/2026 (bloco 5, leva a — uma casa para o transporte callable)
 
 - **Cinco cópias do mesmo bloco viraram uma.** O app fala o protocolo das Cloud Functions "na mão" (o SDK não serve nesses caminhos: com usuário logado ele tenta montar o token de notificação e a promessa rejeita antes de a requisição sair). Esse bloco estava copiado em `_callDrawRound`, `_callCloseRound`, no genérico `_callCF`, na integração tardia e em `FirestoreDB._callFn` — a última em **outro arquivo**. O próprio código pedia a faxina: _"não foram migrados de propósito nesta leva"_, _"migração é faxina posterior"_.

@@ -1064,9 +1064,16 @@ window._doEnrollCurrentUser = function(tId, selectedCategories, _onSuccess) {
             if (_verdict !== 'enrolled') return;
 
             // Notify organizer (fire-and-forget)
-            if (t.organizerEmail && t.organizerEmail !== user.email && typeof window._resolveOrganizerUid === 'function') {
+            /* ⛔ QUEM DECIDE É O UID (24/set/2026). A guarda era
+             * `t.organizerEmail && t.organizerEmail !== user.email`, e o e-mail nunca foi usado
+             * pra ENVIAR — o envio já é por uid. Ele só respondia "existe organizador?" e "sou
+             * eu?", e respondia MAL: torneio SEM `organizerEmail` (legado, ou depois que o campo
+             * sair do doc público) NUNCA avisava o organizador, mesmo com `creatorUid` certinho; e
+             * organizador que TROCOU o e-mail da conta passava a receber aviso da própria
+             * inscrição. Identidade é uid, nunca texto. */
+            if (typeof window._resolveOrganizerUid === 'function') {
                 window._resolveOrganizerUid(t).then(function(orgUid) {
-                    if (orgUid) {
+                    if (orgUid && orgUid !== (user && user.uid)) {
                         window._sendUserNotification(orgUid, {
                             type: 'enrollment_new',
                             // v3.1.59: usa _dispName (já resolve displayName→e-mail→telefone via
@@ -1266,9 +1273,16 @@ window.submitTeamEnroll = function (tId) {
             if (_verdictTeam !== 'enrolled') return;
 
             // Notify organizer (fire-and-forget)
-            if (t.organizerEmail && t.organizerEmail !== user.email && typeof window._resolveOrganizerUid === 'function') {
+            /* ⛔ QUEM DECIDE É O UID (24/set/2026). A guarda era
+             * `t.organizerEmail && t.organizerEmail !== user.email`, e o e-mail nunca foi usado
+             * pra ENVIAR — o envio já é por uid. Ele só respondia "existe organizador?" e "sou
+             * eu?", e respondia MAL: torneio SEM `organizerEmail` (legado, ou depois que o campo
+             * sair do doc público) NUNCA avisava o organizador, mesmo com `creatorUid` certinho; e
+             * organizador que TROCOU o e-mail da conta passava a receber aviso da própria
+             * inscrição. Identidade é uid, nunca texto. */
+            if (typeof window._resolveOrganizerUid === 'function') {
                 window._resolveOrganizerUid(t).then(function(orgUid) {
-                    if (orgUid) {
+                    if (orgUid && orgUid !== (user && user.uid)) {
                         window._sendUserNotification(orgUid, {
                             type: 'enrollment_new',
                             message: _t('enroll.orgTeamEnrollMsg', {team: window._safeHtml(teamString), tourn: window._safeHtml(t.name)}),
@@ -1434,10 +1448,25 @@ window.deenrollCurrentUser = function (tId) {
                         if (result && !result.notFound) {
                             t.participants = result.participants;
                         }
+                        /* ⛔ E O AVISO EXIGE QUE A SAÍDA TENHA ACONTECIDO (24/set/2026).
+                         * O `if` acima só decidia ATUALIZAR o elenco; o aviso saía mesmo com
+                         * `notFound` (a Function devolve isso quando não achou a pessoa —
+                         * functions/index.js). Passava despercebido porque a guarda por e-mail
+                         * barrava vários casos por acidente; com a guarda por uid o aviso
+                         * alcança mais gente, e um cancelamento que NÃO ocorreu passaria a
+                         * avisar o organizador. Mesma condição que decide o elenco. */
+                        if (!result || result.notFound) return;
                         // Notify organizer (fire-and-forget)
-                        if (t.organizerEmail && t.organizerEmail !== user.email && typeof window._resolveOrganizerUid === 'function') {
+                        /* ⛔ QUEM DECIDE É O UID (24/set/2026). A guarda era
+                         * `t.organizerEmail && t.organizerEmail !== user.email`, e o e-mail nunca foi usado
+                         * pra ENVIAR — o envio já é por uid. Ele só respondia "existe organizador?" e "sou
+                         * eu?", e respondia MAL: torneio SEM `organizerEmail` (legado, ou depois que o campo
+                         * sair do doc público) NUNCA avisava o organizador, mesmo com `creatorUid` certinho; e
+                         * organizador que TROCOU o e-mail da conta passava a receber aviso da própria
+                         * inscrição. Identidade é uid, nunca texto. */
+                        if (typeof window._resolveOrganizerUid === 'function') {
                             window._resolveOrganizerUid(t).then(function(orgUid) {
-                                if (orgUid) {
+                                if (orgUid && orgUid !== (user && user.uid)) {
                                     window._sendUserNotification(orgUid, {
                                         type: 'enrollment_cancelled',
                                         // com sorteio feito ela NÃO sai do elenco: fica inativa,
