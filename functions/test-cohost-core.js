@@ -43,14 +43,16 @@ function baseDoc() {
     r.updateData.adminUids.indexOf(CO) !== -1);
   ok('aceite mantém o criador em adminUids', r.updateData.adminUids.indexOf(ORG) !== -1);
   ok('aceite recomputa memberUids', Array.isArray(r.updateData.memberUids) && r.updateData.memberUids.indexOf(CO) !== -1);
-  ok('aceite não usa e-mail do co-host para formar a relação',
-    r.updateData.adminEmails.indexOf('co@example.com') === -1);
+  /* ⛔ LGPD (25/set/2026): `adminEmails` NÃO É MAIS GRAVADO. Antes este teste provava que o
+   * e-mail do co-host não entrava na lista; agora prova que a LISTA não existe. Se alguém a
+   * recompor, o endereço de toda a organização volta ao documento público. */
+  ok('aceite NÃO grava lista de e-mails nenhuma', !('adminEmails' in r.updateData));
   ok('aceite regrava o vínculo sem foto de perfil',
     !('displayName' in r.updateData.coHosts[0]) && !('email' in r.updateData.coHosts[0]));
   // A prova de que a regra antiga NÃO cobria este write:
   const chaves = Object.keys(r.updateData).sort();
-  ok('updateData vai ALÉM de [coHosts, adminEmails] — o que a regra antiga proibia',
-    chaves.length > 2 && chaves.indexOf('adminUids') !== -1);
+  ok('updateData vai ALÉM de [coHosts] — o que a regra antiga proibia',
+    chaves.length > 1 && chaves.indexOf('adminUids') !== -1);
 })();
 
 // ── IDENTIDADE SÓ POR UID: e-mail igual não vale ─────────────────────────────

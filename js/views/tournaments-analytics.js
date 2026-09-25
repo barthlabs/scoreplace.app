@@ -462,12 +462,13 @@ function _buildOrganizerAnalyticsForModal(playerName) {
     if (!viewingSelf) return '';
 
     var tours = window._statsEligibleTournaments ? window._statsEligibleTournaments() : ((window.AppStore && Array.isArray(window.AppStore.tournaments)) ? window.AppStore.tournaments : []);
-    var myEmail = (cu.email || '').toLowerCase().trim();
     var myUid = cu.uid || '';
+    /* ⛔ SÓ UID (LGPD, 25/set/2026): a conta dos "torneios que organizo" comparava e-mail, e os
+     * campos saíram do documento público. Medido: 0 dos 78 torneios sem uid de criador — a queda
+     * por e-mail não estava servindo ninguém. */
     var organizados = tours.filter(function(tr) {
-        var oe = String(tr.organizerEmail || tr.creatorEmail || '').toLowerCase().trim();
         var ou = String(tr.organizerUid || tr.creatorUid || '').trim();
-        return (myEmail && oe === myEmail) || (myUid && ou === myUid);
+        return !!(myUid && ou === myUid);
     });
     if (organizados.length < 2) return '';
 

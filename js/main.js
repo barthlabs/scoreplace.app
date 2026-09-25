@@ -1551,8 +1551,11 @@ window.setupQuickCreateModal = function setupQuickCreateModal() {
       createdAt: new Date().toISOString(),
       organizerId: window.AppStore.currentUser ? window.AppStore.currentUser.uid : 'local',
       organizerName: window.AppStore.currentUser ? window.AppStore.currentUser.displayName : 'Organizador',
-      organizerEmail: window.AppStore.currentUser ? window.AppStore.currentUser.email : 'visitante@local',
-      creatorEmail: window.AppStore.currentUser ? window.AppStore.currentUser.email : 'visitante@local',
+/* ⛔⛔ E-MAIL DO ORGANIZADOR NÃO É CAMPO DO DOCUMENTO (LGPD, 25/set/2026).
+ * Medido: 76 dos 78 torneios são públicos e o documento é legível SEM LOGIN — o endereço ia junto.
+ * Nenhuma Rule decide por ele e nenhuma Function autoriza por ele: só a tela usava, e a tela
+ * agora recebe o endereço pela porta autenticada de contato, só para quem está inscrito.
+ * Quem voltar a gravar aqui republica o dado. */
       creatorUid: window.AppStore.currentUser ? window.AppStore.currentUser.uid : '',
       coHosts: [],
       participants: [],

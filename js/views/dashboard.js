@@ -1237,7 +1237,14 @@ function renderDashboard(container) {
                   var _pVotes = (typeof _activePoll.voteCount === 'number')
                     ? _activePoll.voteCount
                     : Object.keys(_activePoll.votes || {}).length;
-                  var _pTotal = (t.participants ? (Array.isArray(t.participants) ? t.participants : Object.values(t.participants)).length : 0);
+                  /* ⛔⛔ NO RESUMO O ELENCO NÃO VEM — O TOTAL SAI DO CONTADOR (25/set/2026).
+                   * A tela inicial lê RESUMO, e o resumo não carrega `participants` (é o ponto
+                   * dele). Contar o array aqui dava ZERO, e o card público exibia "2/0 votos" —
+                   * defeito visível, criado pela própria projeção do resumo. O resumo fornece o
+                   * contador; quem tem o elenco continua contando o elenco. */
+                  var _pTotal = (t.participants && (Array.isArray(t.participants) ? t.participants.length : Object.keys(t.participants).length))
+                    ? (Array.isArray(t.participants) ? t.participants : Object.values(t.participants)).length
+                    : (typeof t.participantsCount === 'number' ? t.participantsCount : 0);
                   var _pUser = window.AppStore.currentUser;
                   var _pUserEmail = (_pUser && _pUser.email) ? _pUser.email : '';
                   /* ⛔ UID PRIMEIRO, e-mail só como legado. Esta linha consultava SÓ o
@@ -1273,7 +1280,7 @@ function renderDashboard(container) {
               var _amOrg = isOrg ||
                 (_cuD && t.creatorUid && _cuD.uid === t.creatorUid) ||
                 (_cuD && Array.isArray(t.coHosts) && t.coHosts.some(function(ch){ return ch.status === 'active' && ch.uid && ch.uid === _cuD.uid; }));
-              if (!_amOrg && (t.creatorUid || t.organizerEmail) && typeof window._contactOrgButtonHtml === 'function') {
+              if (!_amOrg && t.creatorUid && typeof window._contactOrgButtonHtml === 'function') {   // ⛔ só uid (LGPD)
                 _html += '<div style="margin-top:10px;">' + window._contactOrgButtonHtml(t, { fullWidth: true, marginTop: '0' }) + '</div>';
               }
               return _html;
@@ -4832,7 +4839,8 @@ window._dashRerender = function(opts) {
 // texto pesquisável em data-search-blob; aqui só alternamos display.
 window._tournamentSearchBlob = function(t) {
   if (!t) return '';
-  var parts = [t.name || '', t.venueName || '', t.organizerName || '', t.organizerEmail || ''];
+  // ⛔ sem e-mail (LGPD, 25/set/2026): o campo saiu do documento; busca por nome.
+  var parts = [t.name || '', t.venueName || '', t.organizerName || ''];
   var pl = Array.isArray(t.participants) ? t.participants : (t.participants ? Object.values(t.participants) : []);
   for (var i = 0; i < pl.length; i++) {
     var p = pl[i];

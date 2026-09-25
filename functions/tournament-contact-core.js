@@ -67,4 +67,39 @@ function podeVerContatoDoTorneio(tournament, callerUid, targetUid, isOrganizer) 
   return elenco.indexOf(caller) !== -1 && elenco.indexOf(target) !== -1;
 }
 
-module.exports = { CAMPOS_CONTATO_ELENCO, uidsDoElenco, uidsDaOrganizacao, podeVerContatoDoTorneio, contatoDoPerfil };
+/* ⛔⛔ O E-MAIL DA ORGANIZAÇÃO SAI POR AQUI, E SÓ PARA QUEM ESTÁ INSCRITO (25/set/2026).
+ *
+ * Ordem do dono: _"na 3 deve-se observar a LGPD"_. Hoje o e-mail do organizador viaja no
+ * DOCUMENTO do torneio, que é legível SEM AUTENTICAÇÃO — 76 torneios públicos. A régua da LGPD
+ * é necessidade e minimização: medido, nenhuma Rule usa esses campos e nenhuma Function autoriza
+ * por eles; o único consumidor é a TELA, para o participante falar com o organizador.
+ * ⇒ A finalidade é legítima, a exposição não. O endereço passa a sair desta porta autenticada.
+ *
+ * ⚠️ A pessoa ter dado o e-mail AO APLICATIVO não é base para ele ficar legível por estranhos:
+ * consentimento para uma finalidade não vale para outra.
+ *
+ * ⛔ E a régua aqui é MAIS ESTRITA que a dos outros campos de contato. `podeVerContatoDoTorneio`
+ * deixa QUALQUER pessoa autenticada ver o contato da organização (linha 66) — o que faz sentido
+ * para "tem telefone?" numa vitrine pública. E-mail não: ele só vai para quem está no ELENCO, ou
+ * para a própria organização. Minimização é dar a quem precisa, não a quem passa.
+ */
+function emailDaOrganizacaoVisivel(tournament, callerUid, targetUid) {
+  const caller = String(callerUid || '').trim();
+  const target = String(targetUid || '').trim();
+  if (!caller || !target) return false;
+  const organizacao = uidsDaOrganizacao(tournament);
+  /* só faz sentido para o e-mail de quem organiza — participante não expõe e-mail a ninguém */
+  if (organizacao.indexOf(target) === -1) return false;
+  if (organizacao.indexOf(caller) !== -1) return true;      // a própria organização
+  return uidsDoElenco(tournament).indexOf(caller) !== -1;   // inscrito
+}
+
+/** O e-mail vem do PERFIL da pessoa, nunca do documento do torneio. */
+function emailDoPerfil(profile) {
+  const source = profile || {};
+  const v = source.email;
+  return (typeof v === 'string' && v.indexOf('@') > 0) ? v : '';
+}
+
+module.exports = { CAMPOS_CONTATO_ELENCO, uidsDoElenco, uidsDaOrganizacao, podeVerContatoDoTorneio,
+  contatoDoPerfil, emailDaOrganizacaoVisivel, emailDoPerfil };

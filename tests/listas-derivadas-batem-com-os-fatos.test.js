@@ -55,11 +55,15 @@ console.log('──── listas derivadas batem com os fatos ────');
 }
 
 function resto() {
-  // ── C. as três listas estão cobertas, e o conferidor não inventa uma quarta ──
+  /* ── C. as listas cobertas ──
+   * ⛔ ERAM TRÊS, SÃO DUAS (LGPD, 25/set/2026): `adminEmails` saiu do conferidor porque saiu do
+   * documento. Conferir uma lista que deve deixar de existir fazia o modo que conserta REGRAVAR
+   * o e-mail — o conferidor viraria o escritor. */
   const campos = V.LISTAS.map((x) => x[0]);
-  ok(campos.indexOf('adminUids') !== -1 && campos.indexOf('memberUids') !== -1
-    && campos.indexOf('adminEmails') !== -1, 'as três listas derivadas estão no conferidor');
-  ok(V.LISTAS.length === 3, 'e só elas — lista a mais viraria falso positivo');
+  ok(campos.indexOf('adminUids') !== -1 && campos.indexOf('memberUids') !== -1,
+    'as duas listas derivadas que decidem autorização estão no conferidor');
+  ok(campos.indexOf('adminEmails') === -1, '⛔ e a lista de e-mails NÃO está — o conferidor não a ressuscita');
+  ok(V.LISTAS.length === 2, 'e só elas — lista a mais viraria falso positivo');
 
   // ── D. o conferidor não roda ao ser importado ─────────────────────────────
   const fonte = require('fs').readFileSync(

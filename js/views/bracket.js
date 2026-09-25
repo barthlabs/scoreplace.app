@@ -3914,7 +3914,7 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
       id: t.id, matches: _mMs, groups: _mGroups,
       phases: t.phases, currentPhaseIndex: t.currentPhaseIndex,
       scoring: t.scoring, tiebreakers: t.tiebreakers,
-      creatorUid: t.creatorUid, organizerEmail: t.organizerEmail, coHosts: t.coHosts,
+      creatorUid: t.creatorUid, coHosts: t.coHosts,
       // v4.1.39: W.O. canônico monarch — o renderer precisa dos ghosts (excluir do
       // standings) e do status/formato (gate do controle de W.O. por grupo).
       ligaGhosts: t.ligaGhosts, status: t.status, format: t.format, ligaRoundFormat: t.ligaRoundFormat, participants: t.participants, absent: t.absent, checkedIn: t.checkedIn
@@ -3991,7 +3991,7 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
       // sobrepõe o top-level). Faz "avançados numa fase, simples noutra" calcular nas
       // standings (renderStandings/_computeStandings leem t.advancedScoring do faux).
       advancedScoring: (typeof window._effectiveAdvScoring === 'function') ? window._effectiveAdvScoring(t, curPhase) : t.advancedScoring,
-      creatorUid: t.creatorUid, organizerEmail: t.organizerEmail, coHosts: t.coHosts
+      creatorUid: t.creatorUid, coHosts: t.coHosts
     };
     if (_lOpts) _lOpts.standbyHtml = standbyHtml; // espera interposta antes da classificação (dentro de renderStandings)
     body = (typeof window.renderStandings === 'function')
@@ -4028,7 +4028,7 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
       id: t.id, matches: _gMs, groups: _gGroups,
       gruposClassified: phaseCfg.gruposClassified || t.gruposClassified || 2,
       scoring: t.scoring, tiebreakers: t.tiebreakers,
-      creatorUid: t.creatorUid, organizerEmail: t.organizerEmail, coHosts: t.coHosts
+      creatorUid: t.creatorUid, coHosts: t.coHosts
     };
     var _gIsOrg = window._souOrganizador(t);
     body = (typeof window.renderGroupStage === 'function')

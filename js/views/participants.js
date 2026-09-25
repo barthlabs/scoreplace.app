@@ -2805,8 +2805,11 @@ function renderParticipants(container, tournamentId) {
     // formadas), a MESMA da tela de detalhe do torneio, agora com o toggle Presente
     // injetado via ctx.cardPresence. Extirpa o grid antigo ("Equipe Formada" /
     // "Inscrição Individual"). Ver [[project_two_participant_card_renderers]].
+    /* ⛔ A ORGANIZAÇÃO É UM CONJUNTO DE UIDS (LGPD, 25/set/2026). O mapa de e-mails saiu com
+     * `organizerEmail`/`coHosts[].email`: ele só pintava a coroa de quem foi inscrito à mão COM O
+     * ENDEREÇO NO LUGAR DO NOME. `orgEmails` continua viajando no contexto, VAZIO, porque o
+     * renderizador compartilhado ainda o lê — trocar a forma no meio do caminho é que derruba. */
     var _orgEmailsP = {}; var _orgUidsP = {};
-    if (t.organizerEmail) _orgEmailsP[t.organizerEmail] = true;
     if (t.creatorUid) _orgUidsP[t.creatorUid] = true;
     if (Array.isArray(t.coHosts)) t.coHosts.forEach(function (ch) { if (ch && ch.status === 'active' && ch.uid) _orgUidsP[ch.uid] = true; }); // co-host SÓ por uid (jul/2026)
     var _hasTournCatsP = (t.combinedCategories && t.combinedCategories.length > 0) || (t.genderCategories && t.genderCategories.length > 0) || (t.skillCategories && t.skillCategories.length > 0) || (t.ageCategories && t.ageCategories.length > 0);

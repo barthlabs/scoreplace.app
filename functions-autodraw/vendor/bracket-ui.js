@@ -2756,12 +2756,8 @@ function _notifyOrgAndCoHosts(t, notifData) {
   var seen = {};
   var orgUid = t.creatorUid;
   if (orgUid) { seen[orgUid] = true; window._sendUserNotification(orgUid, notifData); }
-  else {
-    var orgEmail = t.organizerEmail || t.creatorEmail;
-    var parts = Array.isArray(t.participants) ? t.participants : [];
-    var orgPart = parts.find(function(p){ return typeof p === 'object' && ((t.creatorUid && p.uid === t.creatorUid) || (orgEmail && p.email === orgEmail)); });
-    if (orgPart && orgPart.uid) { seen[orgPart.uid] = true; window._sendUserNotification(orgPart.uid, notifData); }
-  }
+  /* ⛔ Sem `creatorUid` não há quem avisar por aqui (LGPD, 25/set/2026): a queda que procurava o
+   * organizador pelo e-mail do documento saiu com o campo. Medido: 0 dos 78 torneios sem uid. */
   if (Array.isArray(t.coHosts)) {
     t.coHosts.forEach(function(ch){ if (ch && ch.status === 'active' && ch.uid && !seen[ch.uid]) { seen[ch.uid] = true; window._sendUserNotification(ch.uid, notifData); } });
   }

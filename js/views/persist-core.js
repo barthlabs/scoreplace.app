@@ -69,23 +69,12 @@ window._mergeMemberUids = function (data, prev, next) {
   return Array.from(new Set(p.concat(n)));
 };
 
-window._computeAdminEmails = function (data) {
-  if (!data) return [];
-  var set = {};
-  var push = function(e) {
-    if (!e || typeof e !== 'string') return;
-    var norm = e.trim().toLowerCase();
-    if (norm) set[norm] = true;
-  };
-  push(data.creatorEmail);
-  push(data.organizerEmail);
-  if (Array.isArray(data.coHosts)) {
-    data.coHosts.forEach(function(ch) {
-      if (ch && ch.status === 'active') push(ch.email);
-    });
-  }
-  return Object.keys(set);
-};
+/* ⛔⛔ LÁPIDE: `adminEmails` SAIU DO DOCUMENTO (LGPD, 25/set/2026).
+ * Devolve lista VAZIA de propósito. O campo era derivado "só compatibilidade" e publicava o
+ * endereço de toda a organização num documento legível SEM LOGIN (76 dos 78 torneios). Quem
+ * decide autorização é `adminUids`. A função fica — e vazia — porque três caminhos vendorados
+ * ainda a alcançam; reescrevê-la para calcular e-mails devolve o dado ao documento público. */
+window._computeAdminEmails = function (data) { return []; };
 
 window._computeAdminUids = function (data) {
   if (!data) return [];

@@ -97,8 +97,8 @@ function organiza(t, uid, email) {
   if (!t || !uid) return false;
   if (t.creatorUid === uid || t.organizerUid === uid) return true;
   const em = String(email || '').toLowerCase();
-  if (em && (String(t.organizerEmail || '').toLowerCase() === em ||
-             String(t.creatorEmail || '').toLowerCase() === em)) return true;
+  /* ⛔ SÓ UID (LGPD, 25/set/2026): os dois campos de e-mail saíram do documento, e a medição de
+   * 25/set mostrou 0 dos 78 torneios sem uid de criador — esta queda não guardava ninguém. */
   return false;
 }
 function torneiosQueOrganiza(tournaments, uid, email) {

@@ -100,8 +100,10 @@ const T = {
   participants: [{ uid: 'uid_1_longo' }, { p1Uid: 'uid_2_longo', p2Uid: 'uid_3_longo' },
                  { participants: [{ uid: 'uid_4_longo' }] }, { uid: 'xy' }],
 };
-ok(JSON.stringify(w._computeAdminEmails(T).sort()) === '["a@x.com","b@x.com"]',
-   '_computeAdminEmails: normaliza case e só conta co-host ATIVO');
+/* ⛔ LGPD (25/set/2026): virou lápide. O vendor tem de devolver vazio IGUAL ao original — se um
+ * lado voltar a calcular, o autodraw regrava o e-mail que o app deixou de gravar. */
+ok(w._computeAdminEmails(T).length === 0,
+   '_computeAdminEmails: LÁPIDE — devolve vazio (o campo saiu do documento)');
 ok(JSON.stringify(w._computeAdminUids(T).sort()) === '["uid_A_longo","uid_B_longo"]',
    '_computeAdminUids: criador + co-host ativo (pending fora)');
 const mu = w._computeMemberUids(T).sort();

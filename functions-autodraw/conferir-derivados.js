@@ -5,7 +5,7 @@
  * O desenho guarda FATOS e deriva as respostas. Mas três listas são DERIVADAS E GRAVADAS,
  * porque a regra do Firestore não percorre lista de objetos filtrando por `status`:
  *   · `adminUids`   — criador + co-organizadores ativos (a regra decide por ela);
- *   · `adminEmails` — derivada, só compatibilidade;
+ *   · `adminEmails` — MORTA (LGPD, 25/set/2026): saiu do documento e saiu desta lista;
  *   · `memberUids`  — todo mundo que está no torneio (a regra decide por ela, e a LISTA
  *                     "meus torneios" consulta por ela).
  * Resposta guardada é onde nascem duas verdades. Logo: conferir, e consertar.
@@ -29,7 +29,8 @@ const Split = require('./vendor/tournament-split-core.js');
 
 const LISTAS = [
   ['adminUids',   (t) => Co.computeAdminUids(t)],
-  ['adminEmails', (t) => (typeof Co.computeAdminEmails === 'function' ? Co.computeAdminEmails(t) : null)],
+  /* ⛔ `adminEmails` SAIU da conferência (LGPD, 25/set/2026): o campo não é mais gravado, e
+   * conferir uma lista que deve deixar de existir fazia o `--apply` REGRAVAR o e-mail. */
   ['memberUids',  (t) => (typeof En.computeMemberUids === 'function' ? En.computeMemberUids(t) : null)],
 ];
 

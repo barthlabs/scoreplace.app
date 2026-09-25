@@ -1438,7 +1438,8 @@ window._exportTournamentCSV = function(tournamentId) {
     if (_tEnd(t)) rows.push(['Fim', _tEnd(t)]);   // v1.6.83: fim do TORNEIO (última fase)
     if (t.venue) rows.push(['Local', t.venue]);
     if (t.access) rows.push(['Acesso', t.access]);
-    if (t.organizerEmail) rows.push(['Organizador', t.organizerEmail]);
+    // ⛔ NOME, não endereço (LGPD, 25/set/2026): a planilha sai do app e circula por aí.
+    if (t.organizerName) rows.push(['Organizador', t.organizerName]);
     rows.push(['Exportado em', new Date().toLocaleString('pt-BR')]);
     rows.push([]);
 

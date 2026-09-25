@@ -66,8 +66,12 @@ ok(mergedN.indexOf('uPedro') !== -1, 'D: torneio normal continua NUNCA encolhend
 // admin: mesma regra dos dois lados
 ok(W._computeAdminUids(sbRaw).join(',') === 'uid_organizador_real,uid_cohost',
    'D: ⭐⭐ adminUids do sandbox = os do ORIGINAL (criador + co-host ativo)');
-ok(W._computeAdminEmails(sbRaw).join(',') === 'dono@original.com,co@x.com',
-   'D: ⭐⭐ adminEmails idem — o e-mail do dev não substitui o do organizador');
+/* ⛔ LGPD (25/set/2026): `_computeAdminEmails` virou LÁPIDE e devolve vazio. O que este teste
+ * guardava — "o e-mail do dev não substitui o do organizador no sandbox" — deixou de ter objeto:
+ * não há mais lista de e-mails. Mas a prova de SIMETRIA continua valendo, e é ela que fica: a
+ * função não pode ter ramo por `isSandbox` (o controle vermelho, logo abaixo). */
+ok(W._computeAdminEmails(sbRaw).length === 0 && W._computeAdminEmails({ creatorEmail: 'x@y.com' }).length === 0,
+   'D: ⭐⭐ a lista de e-mails devolve VAZIO nos dois lados — sandbox e normal (LGPD)');
 /* CONTROLE VERMELHO: as três funções não podem ter NENHUM ramo por `isSandbox` — é a única
  * forma de garantir que ninguém reintroduza a troca "só pra esconder o sandbox". */
 var _fsPC = require('fs'), _pathPC = require('path');

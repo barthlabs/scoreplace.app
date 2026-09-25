@@ -5627,9 +5627,12 @@ window._saveTournamentClickHandler = async function() {
           // Formato da partida da FASE INICIAL = t.scoring (fonte única _gsmReadHidden).
           // A fase eliminatória tem o SEU (cfg.eliminatoria.scoring → phases[elim].scoring).
           scoring: window._gsmReadHidden(),
-          organizerEmail: window.AppStore.currentUser ? window.AppStore.currentUser.email : 'visitante@local',
+/* ⛔⛔ E-MAIL DO ORGANIZADOR NÃO É CAMPO DO DOCUMENTO (LGPD, 25/set/2026).
+ * Medido: 76 dos 78 torneios são públicos e o documento é legível SEM LOGIN — o endereço ia junto.
+ * Nenhuma Rule decide por ele e nenhuma Function autoriza por ele: só a tela usava, e a tela
+ * agora recebe o endereço pela porta autenticada de contato, só para quem está inscrito.
+ * Quem voltar a gravar aqui republica o dado. */
           organizerName: window.AppStore.currentUser ? (window.AppStore.currentUser.displayName || window.AppStore.currentUser.email) : 'visitante',
-          creatorEmail: window.AppStore.currentUser ? window.AppStore.currentUser.email : 'visitante@local',
           creatorUid: window.AppStore.currentUser ? window.AppStore.currentUser.uid : '',
           coHosts: []
         };
@@ -5922,7 +5925,7 @@ window._saveTournamentClickHandler = async function() {
               var changeMsg = 'O torneio "' + name + '" foi atualizado: ' + _changes.join(', ') + '.';
               window._notifyTournamentParticipants(_freshEdit, {
                 type: 'tournament_updated', message: changeMsg, level: 'important'
-              }, _freshEdit.organizerEmail);
+              }, _freshEdit.creatorUid);   // ⛔ exclui por UID: o e-mail saiu do documento (LGPD)
             }
           }
           showNotification(window._t('create.tournamentUpdated'), '', 'success');

@@ -54,22 +54,13 @@ function computeAdminUids(data) {
 
 // Espelha window._computeAdminEmails — DERIVADO, só pra compat das regras. Nunca decide
 // identidade (ver cabeçalho).
-function computeAdminEmails(data) {
-  if (!data) return [];
-  const set = {};
-  const push = function (e) {
-    if (!e || typeof e !== 'string') return;
-    const norm = e.trim().toLowerCase();
-    if (norm) set[norm] = true;
-  };
-  if (data.isSandbox === true) { push(data.organizerEmail); return Object.keys(set); }
-  push(data.creatorEmail);
-  push(data.organizerEmail);
-  if (Array.isArray(data.coHosts)) {
-    data.coHosts.forEach(function (ch) { if (ch && ch.status === 'active') push(ch.email); });
-  }
-  return Object.keys(set);
-}
+/* ⛔⛔ LÁPIDE: `adminEmails` SAIU DO DOCUMENTO (LGPD, 25/set/2026).
+ * Devolve lista VAZIA de propósito. O campo era derivado "só compatibilidade" e publicava o
+ * endereço de toda a organização num documento legível SEM LOGIN (76 dos 78 torneios). Quem
+ * decide autorização é `adminUids`. A função fica — e vazia — porque três caminhos vendorados
+ * ainda a alcançam; reescrevê-la para calcular e-mails devolve o dado ao documento público. */
+function computeAdminEmails(data) { return []; }
+
 
 function coHostsArray(data) {
   return Array.isArray(data && data.coHosts) ? data.coHosts : [];
@@ -98,7 +89,8 @@ function pendingCoHostIndex(data, uid) {
 // Denormalizados recomputados a partir do estado FINAL — os mesmos que mutateTournament
 // recomputa no cliente. Ficam explícitos aqui pra o updateData ser completo e atômico.
 function withDerived(next, updateData) {
-  updateData.adminEmails = computeAdminEmails(next);
+  /* ⛔ `adminEmails` saiu do documento (LGPD, 25/set/2026): era derivado "só compatibilidade" e
+   * publicava o endereço de toda a organização. Quem a Rule lê é `adminUids`. */
   updateData.adminUids = computeAdminUids(next);
   updateData.memberUids = computeMemberUids(next);
   return updateData;
@@ -139,10 +131,11 @@ function computeRespondHostInvite(data, callerUid, inviteType, action) {
     coHosts.push({ uid: pt.fromUid || '', status: 'active', type: 'cohost', invitedAt: new Date().toISOString() });
     const next = Object.assign({}, data, {
       coHosts: coHosts, pendingTransfer: null,
-      creatorUid: callerUid, organizerEmail: '', organizerName: '', creatorEmail: ''
+      creatorUid: callerUid, organizerName: ''
     });
-    // organizerEmail/Name/creatorEmail são preenchidos pela CF (que tem o perfil do caller);
-    // aqui só declaramos o uid, que é a identidade. Ver acceptHostInvite em index.js.
+    /* ⛔ `organizerEmail`/`creatorEmail` saíram (LGPD, 25/set/2026). Declará-los vazios AINDA
+     * CRIAVA os campos no documento; e a CF que os preenchia depois deixou de preenchê-los.
+     * `organizerName` fica: nome de exibição não é identidade nem contato. */
     return {
       outcome: 'applied', inviteType: 'transfer', action: 'accept',
       tournamentName, fromUid: pt.fromUid || '', newOrganizerUid: callerUid,

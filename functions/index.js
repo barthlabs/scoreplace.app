@@ -368,8 +368,9 @@ async function _repairTournaments(db, dropUid, dropEmail, dropName, keepUid, kee
     // (o uid acima é a identidade; isto aqui é só higiene de dados antigos)
     const update = {};
     if (dropEmail && keepEmail) {
-      if (String(next.creatorEmail || "").toLowerCase() === dropEmail.toLowerCase())   { update.creatorEmail = keepEmail;   changed = true; }
-      if (String(next.organizerEmail || "").toLowerCase() === dropEmail.toLowerCase()) { update.organizerEmail = keepEmail; changed = true; }
+      /* ⛔ O TORNEIO NÃO GUARDA MAIS O ENDEREÇO DO ORGANIZADOR (LGPD, 25/set/2026), então não há
+       * o que propagar aqui. O e-mail dos PARTICIPANTES informais continua abaixo: ele foi
+       * digitado pelo organizador e é o único jeito de avisar quem não tem conta. */
       const parts = Array.isArray(next.participants) ? next.participants : null;
       if (parts) {
         let hit = false;
@@ -5207,13 +5208,10 @@ exports.respondHostInvite = onCall(
       const upd = Object.assign({}, r.updateData);
       // Transferência aceita: quem assume vira o organizador também nos campos de exibição.
       if (inviteType === "transfer" && action === "accept") {
-        upd.organizerEmail = callerEmail || "";
+        /* ⛔ QUEM ASSUME É UM UID E UM NOME (LGPD, 25/set/2026). A transferência regravava os três
+         * campos de e-mail com o endereço de quem assume — reintroduzindo o dado no documento
+         * público a cada troca de organizador. `creatorUid` (em `r.updateData`) é a identidade. */
         upd.organizerName = callerName || "";
-        upd.creatorEmail = callerEmail || "";
-        // adminEmails recomputado com o e-mail novo do organizador (campo derivado).
-        upd.adminEmails = _coHostCore.computeAdminEmails(
-          Object.assign({}, t, upd, { coHosts: upd.coHosts })
-        );
       }
       upd.updatedAt = new Date().toISOString();
       _splitParts.gravar(tx, docRef, t, upd);
@@ -8754,16 +8752,23 @@ exports.mergePhoneAccount = onCall(
         changed = true;
         report.memberUidsFixed++;
       }
-      // 2a-ter. creatorUid / creatorEmail / organizerEmail / coHosts
+      /* 2a-ter. creatorUid / coHosts
+       * ⛔⛔ A TROCA DE UID FICA; O E-MAIL SAI (LGPD, 25/set/2026).
+       * Duas coisas moravam juntas aqui e são diferentes: trocar o `uid` do organizador e do
+       * co-organizador é o CONSERTO (sem ele a pessoa fica presa à conta absorvida), e regravar
+       * `creatorEmail`/`organizerEmail`/`coHosts[].email` era só copiar endereço para dentro de um
+       * documento público. Apagar o bloco inteiro quebraria o conserto — por isso só a parte do
+       * e-mail saiu, e o registro de co-organização que a troca grava vai SANEADO: com uid, sem
+       * endereço e sem nome (o nome pertence ao perfil e é resolvido na tela). */
       if (t.creatorUid === oldUid) { update.creatorUid = callerUid; changed = true; }
-      if (oldEmail && t.creatorEmail && String(t.creatorEmail).toLowerCase() === oldEmail) { update.creatorEmail = newEmail || t.creatorEmail; changed = true; }
-      if (oldEmail && t.organizerEmail && String(t.organizerEmail).toLowerCase() === oldEmail) { update.organizerEmail = newEmail || t.organizerEmail; changed = true; }
       if (Array.isArray(t.coHosts)) {
         let chHit = false;
         const ch = t.coHosts.map(c => {
           if (c && (c.uid === oldUid || (oldEmail && String(c.email || "").toLowerCase() === oldEmail))) {
             chHit = true;
-            return Object.assign({}, c, { uid: callerUid, email: newEmail || c.email, displayName: newName || c.displayName });
+            const out = Object.assign({}, c, { uid: callerUid });
+            ["email", "phone", "name", "displayName"].forEach((f) => { delete out[f]; });
+            return out;
           }
           return c;
         });
@@ -10778,7 +10783,7 @@ exports.purgeTournamentCopies = onDocumentDeleted(
       await _db.collection("tournamentDeletions").add({
         tournamentId: tid,
         nome: (t && t.name) || null,
-        organizador: (t && (t.organizerName || t.organizerEmail)) || null,
+        organizador: (t && t.organizerName) || null,   // ⛔ sem e-mail (LGPD, 25/set/2026)
         creatorUid: (t && t.creatorUid) || null,
         status: (t && t.status) || null,
         criadoEm: (t && t.createdAt) || null,
@@ -11291,7 +11296,15 @@ exports.getTournamentParticipantContact = onCall(
     if (!snap.exists || (snap.data() || {}).mergedInto) {
       throw new HttpsError("not-found", "Contato não encontrado");
     }
-    return { uid: targetUid, contact: _tournamentContacts.contatoDoPerfil(snap.data() || {}) };
+    const perfilAlvo = snap.data() || {};
+    const contact = _tournamentContacts.contatoDoPerfil(perfilAlvo);
+    /* ⛔ LGPD: o e-mail sai daqui, e SÓ para o elenco (ver tournament-contact-core.js). Não é
+     * campo do contato comum — `contatoDoPerfil` não o inclui de propósito. */
+    if (_tournamentContacts.emailDaOrganizacaoVisivel(tournament, callerUid, targetUid)) {
+      const email = _tournamentContacts.emailDoPerfil(perfilAlvo);
+      if (email) contact.organizerEmail = email;
+    }
+    return { uid: targetUid, contact };
   }
 );
 

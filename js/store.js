@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.3.106';
+window.SCOREPLACE_VERSION = '2.3.107';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -13967,7 +13967,9 @@ window._isOrgParticipant = function (t, p) {
       var ch = t.coHosts[i];
       if (!ch || ch.status !== 'active') continue;
       if (ch.uid && uids.indexOf(ch.uid) >= 0) return true;
-      if (ch.email && emails.indexOf(String(ch.email).toLowerCase()) >= 0) return true;
+      /* ⛔ e-mail da co-organização saiu (LGPD, 25/set/2026): quem tem uid é achado por uid, e
+       * o registro com uid não guarda mais endereço. Convite a quem AINDA não tem conta continua
+       * casando por e-mail nas telas de convite — lá o endereço é o único identificador. */
     }
   }
   return false;
@@ -13999,7 +14001,7 @@ window._isOrgPlayer = function (t, playerName, pObj) {
       var c = t.coHosts[j];
       if (!c || c.status !== 'active') continue;
       if (c.uid && uid && c.uid === uid) return true;
-      if (c.email && email && String(c.email).toLowerCase() === email) return true;
+      /* ⛔ e-mail da co-organização saiu (LGPD, 25/set/2026) — ver _isOrgParticipant, mesma razão. */
     }
   }
   // fallback por NOME (org/co-host sem uid resolvido neste objeto)
@@ -14052,14 +14054,16 @@ window._applyTemplate = function(index) {
 // ─── Crown helper: adds crown SVG next to organizer names ──────────────────
 window._CROWN_MINI = '<svg width="14" height="14" viewBox="0 0 24 24" fill="rgba(251,191,36,0.85)" style="flex-shrink:0;vertical-align:middle;margin-left:2px;"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>';
 
+/* ⛔ A COROA POR NOME NÃO COMPARA E-MAIL (LGPD, 25/set/2026). Comparar um nome de participante
+ * com `organizerEmail`/`coHosts[].email` só acertava quando alguém foi inscrito à mão COM O
+ * E-MAIL NO LUGAR DO NOME — e os dois campos saíram do documento. Quem tem conta é reconhecido
+ * por uid nos caminhos que recebem uid; aqui só o nome existe. */
 window._isOrgName = function(name, tournament) {
   if (!name || !tournament) return false;
-  var orgName = tournament.organizerName || '';
-  var orgEmail = tournament.organizerEmail || '';
-  if (name === orgName || name === orgEmail) return true;
+  if (name === (tournament.organizerName || '')) return true;
   if (Array.isArray(tournament.coHosts)) {
     return tournament.coHosts.some(function(ch) {
-      return ch.status === 'active' && (ch.displayName === name || ch.email === name);
+      return ch.status === 'active' && ch.displayName === name;
     });
   }
   return false;

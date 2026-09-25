@@ -310,8 +310,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
 
     var parts = Array.isArray(t.participants) ? t.participants : [];
     // Filter: only participants with email (can receive notification), exclude self and current org/coHosts
-    var orgEmails = [t.organizerEmail];
-    // co-host NÃO entra por e-mail (jul/2026): a exclusão do picker usa orgUids, abaixo.
+    /* ⛔ A exclusão é por UID (LGPD, 25/set/2026): `t.organizerEmail` saiu do documento. A lista
+     * continua existindo VAZIA porque o filtro abaixo ainda a consulta. */
+    var orgEmails = [];
 
     // v2.8.50: elegível por UID **ou** email (antes exigia email → inscritos só-uid,
     // comuns em torneios de duplas, NÃO apareciam e não dava pra promover). Exclui o

@@ -107,7 +107,11 @@ window._cloneTournament = async function(tournamentId) {
         skillCategories: t.skillCategories || [],
         combinedCategories: t.combinedCategories || [],
         resultEntry: t.resultEntry || 'organizer',
-        organizerEmail: window.AppStore.currentUser.email,
+/* ⛔⛔ E-MAIL DO ORGANIZADOR NÃO É CAMPO DO DOCUMENTO (LGPD, 25/set/2026).
+ * Medido: 76 dos 78 torneios são públicos e o documento é legível SEM LOGIN — o endereço ia junto.
+ * Nenhuma Rule decide por ele e nenhuma Function autoriza por ele: só a tela usava, e a tela
+ * agora recebe o endereço pela porta autenticada de contato, só para quem está inscrito.
+ * Quem voltar a gravar aqui republica o dado. */
         organizerName: window.AppStore.currentUser.displayName,
         participants: [],
         status: 'open',
@@ -408,9 +412,9 @@ window._sendUserNotification = async function(uid, notifData, _skipDispatch) {
  * Notify all enrolled participants of a tournament.
  * @param {object} tournament - tournament object
  * @param {object} notifData - { type, message, level }
- * @param {string} [excludeEmail] - email to exclude (e.g. the person who triggered the event)
+ * @param {string} [excluir] - e-mail OU uid a excluir (quem disparou o evento)
  */
-window._notifyTournamentParticipants = async function(tournament, notifData, excludeEmail) {
+window._notifyTournamentParticipants = async function(tournament, notifData, excluir) {
     if (!window.FirestoreDB || !window.FirestoreDB.db) return;
     var t = tournament;
     // Sandbox/killswitch: torneio com notificações mudas NÃO dispara nada (nem app,
@@ -426,7 +430,13 @@ window._notifyTournamentParticipants = async function(tournament, notifData, exc
     parts.forEach(function(p) {
         if (typeof p === 'string') return;
         var e = p.email || '';
-        if (e && e === excludeEmail) return;
+        /* ⛔⛔ `excluir` É E-MAIL **OU** UID, E O LAÇO TEM DE CONFERIR OS DOIS (25/set/2026).
+         * Eu troquei o chamador para excluir por uid — porque o e-mail saiu do documento (LGPD) —
+         * e deixei este laço comparando SÓ e-mail. Resultado: o organizador que também está
+         * INSCRITO recebia aviso da própria edição. Trocar a chave de um lado e não do outro é o
+         * jeito clássico de criar defeito ao consertar. */
+        if (e && e === excluir) return;
+        if (excluir && _allUids(p).indexOf(excluir) !== -1) return;
         // Notifica TODOS os UIDs do participante (p1Uid + p2Uid para duplas)
         _allUids(p).forEach(function(u) {
             if (u && !seenUids[u]) { seenUids[u] = true; recipients.push({ uid: u, email: e }); }
@@ -444,14 +454,14 @@ window._notifyTournamentParticipants = async function(tournament, notifData, exc
     // `seenEmails` marcava o email mas a dedup ignorava (por causa do `!orgUid`).
     // Resultado: organizador entrava na lista 2x e recebia 2 notifs de fechamento.
     // Fix: checar seenEmails independentemente de orgUid.
-    if (t.organizerEmail && t.organizerEmail !== excludeEmail) {
-        var orgUid = t.creatorUid || '';
-        var orgAlready = (orgUid && seenUids[orgUid]) || seenEmails[t.organizerEmail];
-        if (!orgAlready) {
-            recipients.push({ uid: orgUid, email: t.organizerEmail });
-            if (orgUid) seenUids[orgUid] = true;
-            seenEmails[t.organizerEmail] = true;
-        }
+    /* ⛔ O ORGANIZADOR ENTRA POR UID (LGPD, 25/set/2026). Antes a entrada dependia de
+     * `t.organizerEmail`, que saiu do documento: sem o campo, o organizador deixaria de ser
+     * avisado. `excluir` aceita e-mail (participante informal) ou uid — quem dispara o aviso
+     * não recebe o próprio aviso. */
+    var orgUid = t.creatorUid || '';
+    if (orgUid && orgUid !== excluir && !seenUids[orgUid]) {
+        seenUids[orgUid] = true;
+        recipients.push({ uid: orgUid, email: '' });
     }
 
     var nd = Object.assign({}, notifData, { tournamentId: String(t.id), tournamentName: t.name || '' });
@@ -1079,7 +1089,7 @@ window._WA_ICON_SVG = _WA_ICON_SVG;
 // (WhatsApp) quando o organizador tem telefone.
 window._contactOrgButtonHtml = function(t, opts) {
   opts = opts || {};
-  if (!t || (!t.creatorUid && !t.organizerEmail)) return '';
+  if (!t || !t.creatorUid) return '';   // ⛔ só uid: o e-mail saiu do documento (LGPD)
   var tId = window._safeHtml(String(t.id));
   var uid = window._safeHtml(String(t.creatorUid || ''));
   var full = opts.fullWidth ? 'width:100%;' : '';
@@ -1181,12 +1191,23 @@ window._resolvePersonContact = function(profile, fallbackName, fallbackEmail) {
 // v1.6.98: a decisão de canal mora em _resolvePersonContact; aqui fica só o que é
 // DO ORGANIZADOR (nome/e-mail vindos do torneio quando o perfil não tem).
 window._resolveOrgContact = function(t, profile) {
-  var c = window._resolvePersonContact(profile, t.organizerName, t.organizerEmail);
+  /* ⛔⛔ O E-MAIL VEM DA PORTA, NUNCA DO DOCUMENTO (LGPD, 25/set/2026).
+   *
+   * Aqui havia três quedas para `t.organizerEmail` — campo que viajava no documento
+   * PÚBLICO do torneio, legível sem login. O endereço agora chega em `organizerEmail`
+   * dentro do contato que a porta autenticada devolve, e SÓ para quem está inscrito
+   * (ver functions/tournament-contact-core.js). Reintroduzir a queda aqui devolve o
+   * e-mail ao documento público na prática, porque volta a fazer a tela DEPENDER dele.
+   *
+   * Sem e-mail e sem WhatsApp, quem chama cai no diálogo in-app — que sempre funcionou
+   * e não precisa de endereço nenhum. */
+  var _emailDaPorta = (profile && profile.organizerEmail) || '';
+  var c = window._resolvePersonContact(profile, t.organizerName, _emailDaPorta);
   return {
     orgName: (t.organizerName || (profile && profile.displayName) ||
-              (t.organizerEmail ? String(t.organizerEmail).split('@')[0] : '') || 'o organizador'),
+              (_emailDaPorta ? String(_emailDaPorta).split('@')[0] : '') || 'o organizador'),
     phoneDigits: c.phoneDigits,
-    email: c.email || t.organizerEmail || '',
+    email: c.email || '',
     useWhatsApp: c.useWhatsApp,
     phoneFull: c.phoneFull
   };
@@ -1340,9 +1361,12 @@ window._dispatchOrgPlatformNotification = async function(t, fullMsg, useWhatsApp
   var senderName = (cu && (cu.displayName || cu.name)) || 'Um participante';
   var skipOpt = useWhatsApp ? { skipWhatsApp: true } : true;
   var targets = [];
-  if (t.creatorUid) targets.push({ uid: t.creatorUid, email: t.organizerEmail || '' });
-  (Array.isArray(t.coHosts) ? t.coHosts : []).forEach(function(ch){ if (ch.status === 'active' && ch.uid) targets.push({ uid: ch.uid, email: '' }); }); // co-host SÓ por uid (jul/2026)
-  if (targets.length === 0 && t.organizerEmail) targets.push({ uid: '', email: t.organizerEmail });
+  /* ⛔ SÓ UID. O aviso in-app é escrito em `users/{uid}` — e-mail nunca foi destino aqui:
+   * o `email` que este alvo carregava NÃO era lido pelo laço abaixo, e o alvo de
+   * emergência com `uid: ''` era descartado na primeira condição. Dois campos mortos
+   * mantinham `organizerEmail` vivo na tela; saíram em 25/set/2026 (LGPD). */
+  if (t.creatorUid) targets.push({ uid: t.creatorUid });
+  (Array.isArray(t.coHosts) ? t.coHosts : []).forEach(function(ch){ if (ch.status === 'active' && ch.uid) targets.push({ uid: ch.uid }); }); // co-host SÓ por uid (jul/2026)
   var seen = {};
   for (var i = 0; i < targets.length; i++) {
     var o = targets[i]; var uid = o.uid;

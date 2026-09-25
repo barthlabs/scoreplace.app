@@ -625,7 +625,22 @@ function _applyWriteBoundary(data) {
   // EXCEÇÃO: SANDBOX substitui (não une) — o memberUids do SB é só o dev, senão os uids
   // reais clonados voltam a cada gravação e o Firestore entrega o SB pra todo mundo.
   // _mergeMemberUids é o MESMO helper do cliente (vendorado de persist-core.js).
-  data.adminEmails = w._computeAdminEmails(data);
+  /* ⛔⛔ OS TRÊS CAMPOS DE E-MAIL SAEM AQUI — E AQUI **OMITIR** É O CERTO (LGPD, 25/set/2026).
+   *
+   * Esta fronteira recompunha a lista de e-mails em TODA escrita do autodraw — sorteio, fecho de
+   * rodada, placar e cron. Era ela que ressuscitaria o campo depois de qualquer limpeza.
+   *
+   * ⛔⛔ E A REGRA É O CONTRÁRIO DA DO CLIENTE. Eu pus sentinela aqui também, por simetria, e a
+   * escrita EXPLODIU: o documento do torneio é gravado com `set` SEM mesclagem, e o Firestore
+   * recusa sentinela de remoção fora de `update`/`set({merge:true})`. Num `set` inteiro o campo
+   * ausente já desaparece — omitir APAGA. No cliente é o oposto: lá a gravação é com mesclagem,
+   * o ausente é preservado, e sem sentinela nada sai.
+   * ⇒ Duas portas, duas regras, e a razão é a FORMA DA ESCRITA, não gosto. Copiar a solução de
+   * uma para a outra quebra uma das duas — as duas maneiras já falharam uma vez cada.
+   *
+   * ⚠️ Onde o plano grava COM mesclagem, quem apaga campo é o canal `apagarCampos` do plano.
+   * Quem manda na autorização é `adminUids`, logo abaixo, e ele FICA. */
+  ['organizerEmail', 'creatorEmail', 'adminEmails'].forEach((campo) => { delete data[campo]; });
   data.adminUids = w._computeAdminUids(data);
   data.memberUids = w._mergeMemberUids(data, data.memberUids, w._computeMemberUids(data));
   /* ── L6.R1 · O `nextDrawAt` CANÔNICO SAI DAQUI, e nunca do passado ────────────────────
@@ -741,8 +756,10 @@ exports.drawRound = onCall(async (request) => {
   if (!_isTournamentAdmin(pre.data(), uid)) {
     const _p = pre.data();
     throw _drawFail('permission-denied', 'Só o organizador ou um co-organizador pode sortear.',
-      { tId, uid, email: email || '(sem email)', creatorUid: _p.creatorUid,
-        adminUids: _p.adminUids, adminEmails: _p.adminEmails, organizerEmail: _p.organizerEmail });
+      /* ⛔ O DIAGNÓSTICO NÃO LEVA E-MAIL (LGPD, 25/set/2026). Este payload vai para o navegador de
+       * quem NÃO é organizador: levava a lista de e-mails da organização e o endereço do
+       * organizador. A defesa vazava pela borda do erro. */
+      { tId, uid, creatorUid: _p.creatorUid, adminUids: _p.adminUids });
   }
   await _preloadDrawNames(pre.data()); // popula drawWindow._profileNameByUid
   // L6.R1: o fuso do evento é resolvido FORA da transação (pode custar uma leitura de

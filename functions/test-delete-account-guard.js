@@ -79,7 +79,10 @@ const ORG = 'uidOrg';
 const tOrg = { id: 't1', name: 'Confra', creatorUid: ORG, memberUids: ['a', 'b', ORG], rounds: [] };
 ok(organiza(tOrg, ORG), 'creatorUid identifica o organizador');
 ok(organiza({ organizerUid: ORG, memberUids: ['a', ORG] }, ORG), 'organizerUid também');
-ok(organiza({ organizerEmail: 'X@Y.com', memberUids: ['a', 'b'] }, 'outro', 'x@y.com'), 'e-mail do organizador (legado) também, case-insensitive');
+/* ⛔ LGPD (25/set/2026): a queda por e-mail saiu da guarda. Medido: 0 dos 78 torneios sem uid de
+ * criador — ela não guardava ninguém. Agora o teste prova que NÃO passa por e-mail. */
+ok(!organiza({ organizerEmail: 'X@Y.com', memberUids: ['a', 'b'] }, 'outro', 'x@y.com'),
+   '⛔ e-mail do organizador NÃO autoriza mais — só uid');
 ok(!organiza(tOrg, 'estranho'), 'quem não organiza não é pego');
 
 const orgLista = torneiosQueOrganiza([tOrg], ORG);

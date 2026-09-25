@@ -74,8 +74,12 @@ function makeCreateTournament({ db, HttpsError, FieldValue, fields, cloneConfig,
         const lastBounds = config.fmt2.eliminatoria && config.fmt2.eliminatoria.roundBounds;
         if (Array.isArray(lastBounds) && t.phases.length > 1) t.phases[t.phases.length - 1].roundBounds = lastBounds;
       }
+/* ⛔⛔ O E-MAIL DO ORGANIZADOR NÃO NASCE NO DOCUMENTO (LGPD, 25/set/2026).
+       * O documento do torneio é legível SEM LOGIN em 76 dos 78 torneios. Nenhuma Rule decide por
+       * estes campos e nenhuma Function autoriza por eles: só a tela usava, e a tela recebe o
+       * endereço pela porta autenticada de contato, apenas para quem está inscrito. */
       Object.assign(t, { id, name: config.name.trim(), status: 'open', storageCanonico: true,
-        creatorUid: uid, organizerUid: uid, organizerId: uid, creatorEmail: email, organizerEmail: email,
+        creatorUid: uid, organizerUid: uid, organizerId: uid,
         organizerName: String(user.displayName || token.name || 'Organizador'), coHosts: [],
         participants: [], standbyParticipants: [], matches: [], rounds: [], groups: [],
         currentPhaseIndex: 0, createdAt: iso, updatedAt: iso,

@@ -40,6 +40,13 @@ const EMULADOR_MANUAL = {
    * serve aquele código. Os dois estão encadeados no `npm run test:emu`. */
   'functions/test-reconciliacao-marca-emu.js':
     'firebase emulators:exec --only functions,firestore,auth --project demo-scoreplace "node functions/test-reconciliacao-marca-emu.js"',
+  /* ⭐ A PROVA REAL DA PORTA DE CONTATO (LGPD, 25/set/2026): o e-mail de quem organiza só sai
+   * para quem está inscrito. Precisa de `auth` porque a porta exige chamador autenticado, e de
+   * `firestore` porque o caso que importa é o TORNEIO DIVIDIDO, cujo elenco mora em subcoleção —
+   * sem hidratar, a régua roda com elenco vazio e o inscrito é tratado como estranho. Teste de
+   * função pura não alcança isso. */
+  'functions/test-contato-email-emu.js':
+    'firebase emulators:exec --only functions,firestore,auth --project demo-scoreplace "node functions/test-contato-email-emu.js"',
   'functions-autodraw/test-reconciliacao-marca-emu.js':
     'cd functions-autodraw && firebase emulators:exec --only functions,firestore,auth --config firebase.emulator.json --project demo-scoreplace "node test-reconciliacao-marca-emu.js"',
   'functions/test-pair-replicate.js':

@@ -3739,26 +3739,28 @@ function renderTournaments(container, tournamentId = null) {
         var _orgBgCohost = 'background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);';
 
         // Resolve organizer display name (prefer name, fallback to finding it from participants or current user)
+        /* ⛔⛔ O NOME DA ORGANIZAÇÃO NUNCA É UM E-MAIL (LGPD, 25/set/2026). Este trecho procurava
+         * o nome comparando `_t.organizerEmail` com o e-mail de cada participante e com o do
+         * usuário logado, e — pior — CAÍA para mostrar o próprio endereço como nome na tela.
+         * O campo saiu do documento; a busca agora é por uid, e sem nome a tela diz
+         * "o organizador", nunca um endereço. */
         var _orgDisplayName = _t.organizerName;
-        if (!_orgDisplayName && _t.organizerEmail) {
-          // Try to find name from participants list
+        if (!_orgDisplayName && _t.creatorUid) {
           var _partsArr = Array.isArray(_t.participants) ? _t.participants : (_t.participants ? Object.values(_t.participants) : []);
           for (var _oi = 0; _oi < _partsArr.length; _oi++) {
             var _op = _partsArr[_oi];
-            if (typeof _op === 'object' && _op && (_op.email === _t.organizerEmail || _op.uid === _t.creatorUid)) {
+            if (typeof _op === 'object' && _op && _op.uid === _t.creatorUid) {
               _orgDisplayName = _op.displayName || _op.name || '';
               break;
             }
           }
-          // Try current user if they are the organizer
-          if (!_orgDisplayName && window.AppStore.currentUser && window.AppStore.currentUser.email === _t.organizerEmail) {
+          if (!_orgDisplayName && window.AppStore.currentUser && window.AppStore.currentUser.uid === _t.creatorUid) {
             _orgDisplayName = window.AppStore.currentUser.displayName || '';
           }
         }
-        if (!_orgDisplayName) _orgDisplayName = _t.organizerEmail;
 
         // Backfill organizerName if we found it and it was missing
-        if (_orgDisplayName && _orgDisplayName !== _t.organizerEmail && !_t.organizerName) {
+        if (_orgDisplayName && !_t.organizerName) {
           _t.organizerName = _orgDisplayName;
         }
 
@@ -3770,9 +3772,9 @@ function renderTournaments(container, tournamentId = null) {
         // ("Organizador"/"Co-organizador"); só vira feminino ("Organizadora"/
         // "Co-organizadora") quando TODA a organização é do gênero feminino.
         // Resolve o gênero de cada membro: usuário logado → participante → co-host.
-        var _resolveOrgGender = function(email, uid) {
-          var e = (email || '').toLowerCase();
-          if (_cu2 && ((e && _cu2.email && String(_cu2.email).toLowerCase() === e) || (uid && _cu2.uid === uid)) && _cu2.gender) return _cu2.gender;
+        var _resolveOrgGender = function(uid) {
+          /* ⛔ só uid (LGPD, 25/set/2026): o e-mail que este resolvedor recebia saiu do documento. */
+          if (_cu2 && uid && _cu2.uid === uid && _cu2.gender) return _cu2.gender;
           // O PERFIL DA PESSOA VEM PRIMEIRO. Co-organizadora quase nunca está em
           // `participants` com gênero (o doc deixou de guardar dados de quem tem perfil),
           // então a busca caía na forma neutra e a tela mostrava "Co-organizador(a)" pra
@@ -3786,8 +3788,7 @@ function renderTournaments(container, tournamentId = null) {
           for (var _gi = 0; _gi < _pa.length; _gi++) {
             var _pp = _pa[_gi];
             if (_pp && typeof _pp === 'object' && _pp.gender) {
-              var _pe = (_pp.email || '').toLowerCase();
-              if ((e && _pe === e) || (uid && _pp.uid === uid)) return _pp.gender;
+              if (uid && _pp.uid === uid) return _pp.gender;
             }
           }
           return '';
@@ -3796,7 +3797,7 @@ function renderTournaments(container, tournamentId = null) {
         // pessoa — Organizador/Organizadora pro principal conforme o gênero dele,
         // Co-organizador/Co-organizadora pra cada co-org conforme o gênero dela.
         // Sem gênero conhecido → forma neutra "Organizador(a)" / "Co-organizador(a)".
-        var _primaryGender = _resolveOrgGender(_t.organizerEmail, _t.creatorUid);
+        var _primaryGender = _resolveOrgGender(_t.creatorUid);
         var _orgRoleLabel = _gw(_primaryGender, 'Organizador', 'Organizadora');
         // Card principal vira alvo de soltar só pro CRIADOR (quem pode promover).
         // v2.8.50/52: o card do organizador NÃO é o alvo de soltar (sem dashed em
@@ -3812,7 +3813,7 @@ function renderTournaments(container, tournamentId = null) {
             var _chName = (ch.uid && typeof window._nameForUid === 'function' && window._nameForUid(ch.uid))
               || ch.displayName || ch.email || '';
             if (ch.status === 'active') {
-              var _chGender = ch.gender || _resolveOrgGender(ch.email, ch.uid);
+              var _chGender = ch.gender || _resolveOrgGender(ch.uid);
               var _chLabel = _gw(_chGender, 'Co-organizador', 'Co-organizadora');
               _orgCards += _buildOrgCard(_chName, _chLabel, _orgBgCohost, _isCreatorNow, ch.uid || ch.email, false, ch.uid, 'Co-organizador', 'Co-organizadora');
             } else if (ch.status === 'pending') {
@@ -4026,15 +4027,13 @@ function renderTournaments(container, tournamentId = null) {
             // Build organizer emails + uids sets (shared by check-in and normal modes)
             // _orgUids é necessário para que co-organizadores com uid (mas sem email
             // no participant object) também mostrem a coroa.
+            /* ⛔ ORGANIZAÇÃO POR UID (LGPD, 25/set/2026): os e-mails saíram do documento. O mapa
+             * continua existindo VAZIO porque o card compartilhado ainda o recebe no contexto. */
             var _orgEmailsShared = {};
             var _orgUidsShared = {};
-            _orgEmailsShared[t.organizerEmail] = true;
             if (t.creatorUid) _orgUidsShared[t.creatorUid] = true;
             if (Array.isArray(t.coHosts)) t.coHosts.forEach(function(ch) {
-                if (ch.status === 'active') {
-                    if (ch.email) _orgEmailsShared[ch.email] = true;
-                    if (ch.uid)   _orgUidsShared[ch.uid]   = true;
-                }
+                if (ch.status === 'active' && ch.uid) _orgUidsShared[ch.uid] = true;
             });
 
             // ── Check-in mode: show each individual with checkbox ──

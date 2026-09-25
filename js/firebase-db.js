@@ -254,10 +254,32 @@ window.FirestoreDB = {
   // appear here; only admins.
   // Delega pro cânone em js/views/persist-core.js — a MESMA função que a Cloud Function
   // do sorteio carrega (vendor/) antes de gravar. Uma implementação só, zero drift.
-  _computeAdminEmails(data) {
-    return (typeof window !== 'undefined' && typeof window._computeAdminEmails === 'function')
-      ? window._computeAdminEmails(data) : [];
+  /* ⛔⛔ PORTA ÚNICA DA REMOÇÃO DOS TRÊS CAMPOS DE E-MAIL (LGPD, 25/set/2026).
+   *
+   * Uma função só, chamada por todo caminho de gravação, porque foi ter DUAS ideias sobre o
+   * mesmo campo que criou o problema: um lugar omitia (e não apagava) e outro recompunha.
+   * Sentinela de remoção — `merge:true` preserva o que não vem, então omitir não serve.
+   *
+   * ⚠️ Sem `firebase` carregado (harness, teste de nó) cai no `delete`: não apaga no banco, mas
+   * também não reescreve, e nenhum teste quebra por causa da sentinela. */
+  _apagarEmailDoDocPublico(alvo) {
+    if (!alvo) return alvo;
+    /* ⛔ A GUARDA VAI ATÉ O FIM DA CORRENTE. Eu havia conferido `firebase` e `firebase.firestore`
+     * e parado ali: num dos harnesses o `firestore` existe e o `FieldValue` NÃO, e a gravação
+     * morria com "reading 'delete'" — derrubando a recusa que uma OUTRA rede devia ter dado, e
+     * transformando dois testes verdes em vermelhos por um motivo que não era o deles. */
+    var _fv = (typeof firebase !== 'undefined' && firebase.firestore && firebase.firestore.FieldValue) || null;
+    var apagar = (_fv && typeof _fv.delete === 'function') ? _fv.delete() : null;
+    ['organizerEmail', 'creatorEmail', 'adminEmails'].forEach(function (campo) {
+      if (apagar) alvo[campo] = apagar; else delete alvo[campo];
+    });
+    return alvo;
   },
+
+  /* ⛔⛔ `adminEmails` SAIU DO DOCUMENTO (LGPD, 25/set/2026) e este atalho ficou como lápide:
+   * ele devolve lista VAZIA de propósito. A régua de quem manda é `adminUids`. Se alguém
+   * reescrever isto para calcular e-mails outra vez, o endereço volta ao documento público. */
+  _computeAdminEmails(data) { return []; },
 
   // v2.8.79: adminUids[] — UIDs dos principais de nível organizador (criador +
   // co-hosts ativos). Espelho uid de adminEmails. Necessário porque co-host
@@ -432,7 +454,20 @@ window.FirestoreDB = {
       // campo, e sem isto o save o devolveria intacto — ele nunca sairia dos documentos.
       // Ver [[project_uid_primary_identity]].
       delete cleanData.memberEmails;
-      cleanData.adminEmails  = this._computeAdminEmails(cleanData);
+      /* ⛔⛔ OMITIR NÃO APAGA: `merge:true` PRESERVA O CAMPO AUSENTE (LGPD, 25/set/2026).
+       *
+       * Este é o erro que eu cometi e que a revisão pegou: eu tinha escrito `delete` nos três
+       * campos de e-mail e ANUNCIADO que eles saíam do documento. `delete` só faz parar de
+       * REESCREVER — nos 78 torneios já gravados o endereço continuava lá, intacto, público.
+       * A prova estava neste mesmo arquivo, duas telas acima, escrita por mim: _"`merge:true`
+       * PRESERVA no banco o campo que não vem: omitir aqui não apaga nada"_.
+       *
+       * ⇒ Aqui vai SENTINELA DE REMOÇÃO, que apaga de verdade. Efeito: cada gravação de um
+       * torneio legado tira os três campos dele — a limpeza acontece pelo uso, sem migração e
+       * sem janela. A migração da Parte 2 continua valendo para quem nunca mais for editado.
+       *
+       * ⛔ `adminUids` é quem a regra lê, e FICA. */
+      this._apagarEmailDoDocPublico(cleanData);
       cleanData.adminUids    = this._computeAdminUids(cleanData); // v2.8.79: co-host por uid
       // v1.9.84: memberUids TAMBÉM nunca encolhe — mesma lógica do memberEmails.
       // BUG reportado: depois do sorteio o torneio sumia para os participantes
@@ -1601,7 +1636,7 @@ window.FirestoreDB = {
       // path que não popula participants) não pode sumir e derrubar o listener
       // `array-contains` de quem depende dele. Ver saveTournament (v1.8.96/1.9.84).
       // SANDBOX: _mergeMemberUids SUBSTITUI (não une) — ver saveTournament/persist-core.
-      data.adminEmails  = self._computeAdminEmails(data);
+      self._apagarEmailDoDocPublico(data);   // ⛔ LGPD (25/set/2026): sentinela, ver saveTournament
       data.adminUids    = self._computeAdminUids(data);
       data.memberUids   = window._mergeMemberUids(data, data.memberUids, self._computeMemberUids(data));
       try {
