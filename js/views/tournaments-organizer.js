@@ -1013,13 +1013,21 @@ window._openCommunicationDetail = async function(tId, commId) {
             return '<span style="color:var(--text-muted);" title="' + sentTitle + '">✓</span>';
         }
         var cellSt = 'padding:6px 2px;text-align:center;font-size:0.95rem;';
-        // E-mail (v2.4.86): presume ENTREGUE (✓✓) — só rebaixa pra ✗ vermelho
-        // quando o servidor devolve falha (e-mail inválido / caixa cheia).
-        // Compat: comunicados servidos antes do deploy não trazem emailBounced/
-        // emailDelivered → tratamos como entregue (sem retorno de falha).
+        /* E-mail: presume ENTREGUE (✓✓) e rebaixa quando o servidor devolve falha.
+         *
+         * ⛔⛔ TRÊS ESTADOS, não dois (24/set/2026). Aqui havia ✓✓ ou ✗, e o ✗ dizia "e-mail
+         * inválido ou caixa cheia". MEDIDO na fila: 128 falhas, 75 pessoas, e NENHUMA era isso
+         * — todas eram erro TEMPORÁRIO do provedor (classe 4xx, "tente de novo"). Essas 75
+         * apareciam para o organizador como "não recebeu" por um problema momentâneo de quem
+         * entrega, e ele decide coisa olhando isto.
+         * ⛔ O terceiro estado (⚠) não é "recebeu" nem "não recebeu": houve negativa, mas ela
+         * não diz que a caixa recusou. Dobrá-lo em qualquer um dos dois seria inventar.
+         * Compat: comunicado servido antes deste deploy não traz o campo → segue como antes.
+         * [[feedback_nao_afirmar_causa_sem_medir]] */
         function emailCheck(r) {
             if (!r.email) return '<span style="opacity:0.3;">—</span>';
-            if (r.emailBounced) return '<span style="color:var(--sp-c-f87171,#f87171);font-weight:700;" title="Falha na entrega: e-mail inválido ou caixa cheia (bounce)">✗</span>';
+            if (r.emailIncerto) return '<span style="color:var(--sp-c-fbbf24,#fbbf24);font-weight:700;" title="Sem confirmação: o provedor devolveu falha temporária (tente de novo mais tarde), que não diz se a caixa recusou">⚠</span>';
+            if (r.emailBounced) return '<span style="color:var(--sp-c-f87171,#f87171);font-weight:700;" title="Não recebeu: a caixa recusou (endereço inexistente ou caixa cheia (bounce)">✗</span>';
             return '<span style="color:var(--sp-c-34d399,#34d399);font-weight:700;letter-spacing:-3px;padding-right:3px;white-space:nowrap;" title="Entregue (presumido — sem retorno de falha)">✓✓</span>';
         }
         var rowsHtml = recips.map(function(r) {

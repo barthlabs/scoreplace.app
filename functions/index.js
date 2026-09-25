@@ -86,6 +86,9 @@ async function _freqDosTokensSoltos(db, dup, nomeMeu, pessoas) {
   return out;
 }
 const _enrollCore = require("./enroll-core");
+/* ⛔ Classificação da falha de e-mail: transitória (4xx) x permanente (5xx). Ver o bloco no
+ * relatório de comunicado — 128 docs em erro na fila eram TODOS transitórios. */
+const _emailFail = require("./email-failure-core");
 const _categoryEligibility = require("./category-eligibility-core");
 const _registrationCore = require("./registration-core");
 const _registrationLifecycle = require("./registration-lifecycle-core");
@@ -5568,14 +5571,25 @@ exports.getCommunicationStats = onCall(
     const comm = cSnap.data();
     const recips = Array.isArray(comm.recipients) ? comm.recipients : [];
 
-    // ── Entrega de E-MAIL (v2.4.86): presumimos ENTREGUE (✓✓) quando NÃO há
-    // negativa. A negativa = doc na coleção `mail` (extension firestore-send-
-    // email) com delivery.state==='ERROR' (e-mail inexistente, caixa cheia,
-    // rejeição SMTP) pro endereço do destinatário, criado a partir do envio
-    // deste comunicado. Sem erro → presume-se entregue. Otimização: só
-    // buscamos os endereços dos destinatários se EXISTIR algum bounce — quando
-    // não há bounce (caso comum), todo mundo é ✓✓ sem reads extras.
+    /* ── Entrega de E-MAIL: presumimos ENTREGUE (✓✓) quando NÃO há negativa.
+     *
+     * ⛔⛔ E "negativa" NÃO é todo erro (24/set/2026). Este comentário dizia que a negativa era
+     * "e-mail inexistente, caixa cheia, rejeição SMTP" — e o código pegava TODO
+     * `delivery.state === 'ERROR'`. MEDIDO na fila: 128 docs em erro, 75 pessoas, e nenhum é
+     * disso: todos são `421-4.3.0 Temporary System Problem`, classe 4xx, transitório, o
+     * provedor pedindo para tentar de novo. Resultado: 75 pessoas apareciam para o
+     * organizador como "não recebeu" por um problema momentâneo de quem entrega.
+     * ⛔ Só a falha PERMANENTE (5xx) conta como não-recebeu. Transitória e desconhecida vão
+     * para um terceiro estado: não é "recebeu" nem "não recebeu", e inventar um dos dois é
+     * afirmar o que não foi medido. Classificação em functions/email-failure-core.js.
+     * ⚠️ ATRIBUIÇÃO ainda é por ENDEREÇO + JANELA (`sentAtMs - 60s`), não por referência ao
+     * envio: o doc de `mail` não guarda de qual comunicado nasceu, então um bounce de OUTRO
+     * comunicado ao mesmo endereço, na mesma janela, entra nesta conta. Defeito anterior,
+     * NOMEADO e não consertado aqui — o conserto é carregar o id do comunicado da fila até o
+     * doc, e isso atravessa fila, digest, extensão e relatório. Ver
+     * docs/PLANO-ERRO-TEMPORARIO-DE-EMAIL.md. */
     const bouncedEmails = new Set();
+    const emailsComFalhaIncerta = new Set();
     try {
       const errSnap = await db.collection("mail").where("delivery.state", "==", "ERROR").limit(1000).get();
       const sinceMs = (comm.sentAtMs || 0) - 60 * 1000; // buffer de 1 min antes do envio
@@ -5586,15 +5600,23 @@ exports.getCommunicationStats = onCall(
         // Ignora erros ANTERIORES a este comunicado (não atribuíveis a ele).
         if (createdMs && sinceMs && createdMs < sinceMs) return;
         const tos = Array.isArray(data.to) ? data.to : (data.to ? [data.to] : []);
-        tos.forEach((e) => { if (e) bouncedEmails.add(String(e).toLowerCase()); });
+        const kind = _emailFail.classificarFalhaDeEmail(_emailFail.textoDaFalha(data));
+        tos.forEach((e) => {
+          if (!e) return;
+          const addr = String(e).toLowerCase();
+          if (kind === "permanente") bouncedEmails.add(addr);
+          else emailsComFalhaIncerta.add(addr);
+        });
       });
     } catch (e) { /* sem índice/sem erros → presume tudo entregue */ }
-    const hasBounces = bouncedEmails.size > 0;
+    /* quem tem negativa permanente sai do conjunto incerto — permanente é a informação mais forte */
+    bouncedEmails.forEach((e) => emailsComFalhaIncerta.delete(e));
+    const hasBounces = bouncedEmails.size > 0 || emailsComFalhaIncerta.size > 0;
 
     // "Abriu" na plataforma: lê a notificação de cada destinatário (chunks de 20).
     const out = [];
     let platformOpened = 0;
-    let emailDelivered = 0; let emailBounced = 0;
+    let emailDelivered = 0; let emailBounced = 0; let emailIncerto = 0;
     const CHUNK = 20;
     for (let i = 0; i < recips.length; i += CHUNK) {
       const slice = recips.slice(i, i + CHUNK);
@@ -5610,7 +5632,7 @@ exports.getCommunicationStats = onCall(
         if (opened) platformOpened++;
 
         // E-mail: presume entregue; só rebaixa se o endereço bateu num bounce.
-        let emBounced = false;
+        let emBounced = false, emIncerto = false;
         if (r.email && hasBounces) {
           let addr = (r.emailAddr || "").toLowerCase();
           // Comunicados antigos não guardavam emailAddr — busca no perfil só
@@ -5622,14 +5644,19 @@ exports.getCommunicationStats = onCall(
             } catch (e) { /* sem perfil → presume entregue */ }
           }
           if (addr && bouncedEmails.has(addr)) emBounced = true;
+          /* ⛔ TERCEIRO ESTADO: falha transitória ou de causa desconhecida NÃO é "não recebeu"
+           * — mas também não é "recebeu". Havia uma negativa do provedor; ela só não diz que a
+           * caixa recusou. Dobrar isso em ✓✓ ou em ✗ seria inventar. */
+          if (!emBounced && addr && emailsComFalhaIncerta.has(addr)) emIncerto = true;
         }
-        const emDelivered = !!r.email && !emBounced;
-        if (r.email) { if (emBounced) emailBounced++; else emailDelivered++; }
+        const emDelivered = !!r.email && !emBounced && !emIncerto;
+        if (r.email) { if (emBounced) emailBounced++; else if (emIncerto) emailIncerto++; else emailDelivered++; }
 
         out.push({
           uid: r.uid, name: r.name || "", isOrganizer: !!r.isOrganizer,
           platform: !!r.platform, platformOpened: opened,
           email: !!r.email, emailDelivered: emDelivered, emailBounced: emBounced,
+          emailIncerto: emIncerto,
         });
       }));
     }
@@ -5651,6 +5678,8 @@ exports.getCommunicationStats = onCall(
         emailSent: (comm.counts && comm.counts.emailSent) || 0,
         emailDelivered: emailDelivered,
         emailBounced: emailBounced,
+        /* ⛔ contado à parte, e não somado a nenhum dos dois: é o terceiro estado. */
+        emailIncerto: emailIncerto,
       },
       recipients: out,
     };
