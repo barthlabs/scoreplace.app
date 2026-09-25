@@ -166,11 +166,21 @@ function computeFormPair(data, opts) {
    * inscrito como ele entrou — e o card volta como pessoa comum onde era placeholder. */
   var _ph1 = (_p1 && typeof _p1 === 'object' && _p1.isPlaceholder) ? true : undefined;
   var _ph2 = (_p2 && typeof _p2 === 'object' && _p2.isPlaceholder) ? true : undefined;
+  /* ⛔⛔ E O IDENTIFICADOR DE QUEM NÃO TEM CONTA, pela MESMA razão do nº de inscrição e da
+   * marca de vaga (25/set/2026). Ele estava sendo LIDO no desfazer e GRAVADO em lugar nenhum:
+   * medido, `p1ManualId`/`p2ManualId` tinham 4 leitores e ZERO escritores no programa inteiro.
+   * ⇒ Formar dupla e desfazer APAGAVA a identidade de quem não tem conta: a pessoa voltava só
+   * com o nome. E a porta de inscrição, desde 20/set, EXIGE identidade — então o registro que a
+   * perdia no caminho ficava fora do contrato que o próprio servidor passou a cobrar.
+   * ⚠️ Quem TEM conta não tem nem precisa deste campo: a conta é a identidade. */
+  var _mid1 = (_p1 && typeof _p1 === 'object' && !_u1) ? (_p1.manualParticipantId || undefined) : undefined;
+  var _mid2 = (_p2 && typeof _p2 === 'object' && !_u2) ? (_p2.manualParticipantId || undefined) : undefined;
   var newName = name1 + ' / ' + name2;
   var merged = cleanUndefined({
     displayName: newName, name: newName, uid: _u1 || _u2 || '',
     p1Name: name1, p1Uid: _u1, p2Name: name2, p2Uid: _u2,
     p1Seq: _seq1, p2Seq: _seq2,
+    p1ManualId: _mid1, p2ManualId: _mid2,
     p1Placeholder: _ph1, p2Placeholder: _ph2, ligaActive: true
   });
 
@@ -258,18 +268,21 @@ function computeSplitPair(data, opts) {
    * print. E a string ainda colidia na chave `x` da subcoleção (ver tournament-split-core).
    * ⛔ O que NÃO atravessa segue não atravessando: email/foto/gênero/nascimento continuam
    * fora. O solo herda o que é DO TORNEIO — número, categoria — e o nome. */
-  var solo = function (uid, name, seq, isPh) {
+  var solo = function (uid, name, seq, isPh, manualId) {
     return cleanUndefined({
       uid: (uid || undefined), ligaActive: true,
       displayName: (name || undefined), name: (name || undefined),
       enrollSeq: (seq != null ? seq : undefined),
+      /* ⛔ a identidade de quem não tem conta volta com ela — sem isto o desfazer devolvia só o
+       * nome, e a pessoa deixava de existir para toda busca que prefere identificador. */
+      manualParticipantId: ((!uid && manualId) ? manualId : undefined),
       isPlaceholder: (isPh ? true : undefined),
       category: entry.category, categories: entry.categories,
       categorySource: entry.categorySource
     });
   };
-  var solo1 = solo(p1Uid, p1Name, entry.p1Seq, entry.p1Placeholder);
-  var solo2 = solo(p2Uid, p2Name, entry.p2Seq, entry.p2Placeholder);
+  var solo1 = solo(p1Uid, p1Name, entry.p1Seq, entry.p1Placeholder, entry.p1ManualId);
+  var solo2 = solo(p2Uid, p2Name, entry.p2Seq, entry.p2Placeholder, entry.p2ManualId);
 
   arr.splice(idx, 1, solo1, solo2);
 

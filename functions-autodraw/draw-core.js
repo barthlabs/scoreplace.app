@@ -814,7 +814,19 @@ function formLatePairCore(t, opts) {
   if (typeof win._ensureEnrollSeqs === 'function') { try { win._ensureEnrollSeqs(t); } catch (e) {} }
   const _sqA = (typeof a === 'object' && a && a.enrollSeq != null) ? a.enrollSeq : null;
   const _sqB = (typeof b === 'object' && b && b.enrollSeq != null) ? b.enrollSeq : null;
-  t.standbyParticipants.push({ p1Name: an, p1Uid: (typeof a === 'object' ? (a.uid || '') : ''), p2Name: bn, p2Uid: (typeof b === 'object' ? (b.uid || '') : ''), p1Seq: _sqA, p2Seq: _sqB, displayName: an + ' / ' + bn, name: an + ' / ' + bn, _lateJoin: true });
+  /* ⛔⛔ O IDENTIFICADOR DE QUEM NÃO TEM CONTA ATRAVESSA A DUPLA (25/set/2026).
+   * O desfazer, logo abaixo, LÊ `p1ManualId`/`p2ManualId` — e ninguém os gravava: medido, 4
+   * leitores e ZERO escritores no programa inteiro. Formar dupla tardia e desfazer APAGAVA a
+   * identidade de quem entrou sem conta; a pessoa voltava só com o nome. Mesma trilha do nº de
+   * inscrição, que já atravessa aqui, e mesma correção feita na formação de dupla do servidor
+   * (functions/pair-core.js) — os dois escritores são irmãos, e consertar um só deixaria o outro.
+   * ⚠️ Quem TEM conta não carrega o campo: a conta é a identidade. */
+  var _midA = (typeof a === 'object' && a && !a.uid) ? (a.manualParticipantId || '') : '';
+  var _midB = (typeof b === 'object' && b && !b.uid) ? (b.manualParticipantId || '') : '';
+  var _novaDupla = { p1Name: an, p1Uid: (typeof a === 'object' ? (a.uid || '') : ''), p2Name: bn, p2Uid: (typeof b === 'object' ? (b.uid || '') : ''), p1Seq: _sqA, p2Seq: _sqB, displayName: an + ' / ' + bn, name: an + ' / ' + bn, _lateJoin: true };
+  if (_midA) _novaDupla.p1ManualId = _midA;
+  if (_midB) _novaDupla.p2ManualId = _midB;
+  t.standbyParticipants.push(_novaDupla);
   if (!t.checkedIn || typeof t.checkedIn !== 'object') t.checkedIn = {};
   [a, b].forEach(function (m) {
     const _mUid = (m && typeof m === 'object') ? (m.uid || '') : '';
