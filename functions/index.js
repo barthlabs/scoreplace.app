@@ -1452,11 +1452,18 @@ exports.flushNotifEmailDigest = onSchedule(
         const subject = novos.length === 1
           ? ("scoreplace.app — " + (novos[0].tournamentName || "Notificação"))
           : ("scoreplace.app — " + novos.length + " novidades");
+        /* ⛔⛔ A PROCEDÊNCIA VIAJA COM O DIGEST (24/set/2026). Um digest junta itens de
+         * comunicados DIFERENTES, então o doc de `mail` leva a LISTA de ids — e é por ela que
+         * o relatório de entrega sabe se uma falha é dele, em vez de adivinhar por endereço e
+         * janela de tempo. Item legado sem id simplesmente não entra na lista, e o relatório
+         * trata a falha como INDETERMINADA em vez de acusar alguém. */
+        const commIds = [...new Set(novos.map((x) => String(x.commId || '')).filter(Boolean))];
         await _enqueueMail(db, {
           to: [email],
           replyTo: "scoreplace.app@gmail.com",
           message: { subject, html: _buildDigestHtml(novos, _theme), text: _buildDigestText(novos) },
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          spCommIds: commIds,
         });
         await _limpaAFila();
         repetidos += (items.length - novos.length);
@@ -5487,6 +5494,16 @@ exports.sendOrgCommunication = onCall(
     const WINDOWS = { fundamental: 5, important: 15, all: 30 };
     const mins = WINDOWS[level] != null ? WINDOWS[level] : 30;
     const nowMs = Date.now();
+    /* ⛔⛔ O ID DO COMUNICADO É PRÉ-ALOCADO, e é por isto (24/set/2026).
+     * A fila de e-mail era escrita ANTES de o comunicado existir (`.add()` gerava o id só
+     * depois), então nada ligava um ao outro. Sem essa ligação, o relatório de entrega
+     * atribuía a falha por ENDEREÇO + JANELA DE TEMPO — e um retorno de OUTRO comunicado ao
+     * mesmo endereço, na mesma janela, entrava nesta conta.
+     * Reservar o id antes custa nada e transforma "quem estava por perto" em "quem é deste
+     * envio". [[feedback_chave_de_espelho_nunca_e_posicao]] */
+    const commRef = db.collection("tournaments").doc(tournamentId)
+      .collection("communications").doc();
+    const commId = commRef.id;
     if (emails.length) {
       let batch = db.batch(); let n = 0;
       for (const email of emails) {
@@ -5499,6 +5516,9 @@ exports.sendOrgCommunication = onCall(
           tournamentUrl: tUrl,
           createdAt: nowMs,
           flushAtMs: nowMs + mins * 60 * 1000,
+          /* a procedência viaja com o item até o doc de `mail` (ver o digest) */
+          commId: commId,
+          tournamentId: String(tournamentId),
         });
         if (++n % 400 === 0) { await batch.commit(); batch = db.batch(); }
       }
@@ -5511,8 +5531,7 @@ exports.sendOrgCommunication = onCall(
     // status:failed e mentia no painel ("enviado por WhatsApp").
 
     // ── Manifesto do comunicado (pro painel de controle do organizador) ──
-    const commRef = await db.collection("tournaments").doc(tournamentId)
-      .collection("communications").add({
+    await commRef.set({
         rawMessage: rawMessage,
         fullMessage: fullMsg,
         level: level,
@@ -5582,12 +5601,13 @@ exports.getCommunicationStats = onCall(
      * ⛔ Só a falha PERMANENTE (5xx) conta como não-recebeu. Transitória e desconhecida vão
      * para um terceiro estado: não é "recebeu" nem "não recebeu", e inventar um dos dois é
      * afirmar o que não foi medido. Classificação em functions/email-failure-core.js.
-     * ⚠️ ATRIBUIÇÃO ainda é por ENDEREÇO + JANELA (`sentAtMs - 60s`), não por referência ao
-     * envio: o doc de `mail` não guarda de qual comunicado nasceu, então um bounce de OUTRO
-     * comunicado ao mesmo endereço, na mesma janela, entra nesta conta. Defeito anterior,
-     * NOMEADO e não consertado aqui — o conserto é carregar o id do comunicado da fila até o
-     * doc, e isso atravessa fila, digest, extensão e relatório. Ver
-     * docs/PLANO-ERRO-TEMPORARIO-DE-EMAIL.md. */
+     * ⛔⛔ E A ATRIBUIÇÃO PASSOU A SER POR REFERÊNCIA (2.3.104). Antes era por ENDEREÇO +
+     * JANELA DE TEMPO, então o retorno de OUTRO comunicado ao mesmo endereço, na mesma janela,
+     * entrava nesta conta. Agora o doc de `mail` carrega a lista de comunicados que ele
+     * entregou (`spCommIds`, posta pelo digest), e a pergunta é exata.
+     * ⛔ Doc LEGADO não tem a lista. Para ele a janela continua servindo de aproximação, mas a
+     * falha NUNCA é contada como "não recebeu" — vai para o terceiro estado. Aproximação não
+     * autoriza afirmação sobre uma pessoa. */
     const bouncedEmails = new Set();
     const emailsComFalhaIncerta = new Set();
     try {
@@ -5595,16 +5615,28 @@ exports.getCommunicationStats = onCall(
       const sinceMs = (comm.sentAtMs || 0) - 60 * 1000; // buffer de 1 min antes do envio
       errSnap.forEach((d) => {
         const data = d.data() || {};
-        let createdMs = 0;
-        try { createdMs = (data.createdAt && data.createdAt.toMillis) ? data.createdAt.toMillis() : 0; } catch (e2) { createdMs = 0; }
-        // Ignora erros ANTERIORES a este comunicado (não atribuíveis a ele).
-        if (createdMs && sinceMs && createdMs < sinceMs) return;
+        /* ⛔ PROCEDÊNCIA PRIMEIRO: se o doc carrega a lista de comunicados que ele entregou,
+         * a atribuição é EXATA — é dele ou não é, sem janela de tempo. */
+        const refs = Array.isArray(data.spCommIds) ? data.spCommIds.map(String) : null;
+        if (refs) { if (refs.indexOf(String(commId)) === -1) return; }
+        else {
+          /* Legado (doc criado antes de 2.3.104): não há referência. Cai na janela de tempo,
+           * que é uma APROXIMAÇÃO — e é por isso que a falha sem referência nunca é contada
+           * como "não recebeu", só como indeterminada (ver abaixo). */
+          let createdMs = 0;
+          try { createdMs = (data.createdAt && data.createdAt.toMillis) ? data.createdAt.toMillis() : 0; } catch (e2) { createdMs = 0; }
+          if (createdMs && sinceMs && createdMs < sinceMs) return;
+        }
         const tos = Array.isArray(data.to) ? data.to : (data.to ? [data.to] : []);
         const kind = _emailFail.classificarFalhaDeEmail(_emailFail.textoDaFalha(data));
+        /* ⛔ Sem referência, nem uma falha PERMANENTE acusa a pessoa: a atribuição por janela
+         * pode ter pegado o retorno de outro comunicado ao mesmo endereço. Permanente só é
+         * "não recebeu" quando se sabe que o e-mail era DESTE envio. */
+        const permanenteDaqui = kind === "permanente" && !!refs;
         tos.forEach((e) => {
           if (!e) return;
           const addr = String(e).toLowerCase();
-          if (kind === "permanente") bouncedEmails.add(addr);
+          if (permanenteDaqui) bouncedEmails.add(addr);
           else emailsComFalhaIncerta.add(addr);
         });
       });

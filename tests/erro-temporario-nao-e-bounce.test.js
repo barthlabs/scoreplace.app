@@ -61,8 +61,26 @@ ok(C.textoDaFalha({}) === '', 'doc sem delivery devolve vazio, não estoura');
   ok(/emailsComFalhaIncerta/.test(bloco), 'transitória e desconhecida vão para o terceiro conjunto');
   ok(!/negativa = doc na coleção `mail`[\s\S]{0,200}caixa cheia/.test(src),
     '⛔ o comentário que dizia pegar "caixa cheia / inexistente" foi corrigido — ele sustentou o erro por meses');
-  ok(/ATRIBUIÇÃO ainda é por ENDEREÇO \+ JANELA/.test(src),
-    '⛔ e o defeito anterior de atribuição por janela está NOMEADO, não escondido');
+  /* ── A PROCEDÊNCIA DO ENVIO (2.3.104) ───────────────────────────────────────
+   * Antes a falha era atribuída por ENDEREÇO + JANELA DE TEMPO: o retorno de outro comunicado
+   * ao mesmo endereço, na mesma janela, entrava na conta deste. */
+  ok(/const commRef = db\.collection\("tournaments"\)[\s\S]{0,160}\.doc\(\);/.test(src),
+    '⛔ o id do comunicado é PRÉ-ALOCADO — a fila era escrita antes de o comunicado existir');
+  const iFila = src.indexOf('db.collection("notif_email_queue").doc()');
+  const blocoFila = src.slice(iFila, src.indexOf('});', iFila) + 3);
+  ok(/commId: commId/.test(blocoFila), 'e viaja com cada item da fila');
+  /* ⛔ Recorte ancorado no FIM da chamada, não por tamanho fixo — a trava
+   * `teste-nao-recorta-por-tamanho-fixo` me pegou aqui, pela segunda vez hoje. */
+  const iDigest = src.indexOf('const commIds = [...new Set(');
+  const fimDigest = src.indexOf('});', src.indexOf('_enqueueMail(db, {', iDigest));
+  ok(iDigest > 0 && fimDigest > iDigest && /spCommIds: commIds/.test(src.slice(iDigest, fimDigest)),
+    'o digest propaga a LISTA de comunicados para o doc de e-mail (um digest junta vários)');
+  ok(/refs\.indexOf\(String\(commId\)\) === -1\) return;/.test(src),
+    'o relatório pergunta pela referência exata em vez da janela');
+  ok(/const permanenteDaqui = kind === "permanente" && !!refs;/.test(src),
+    '⛔ e sem referência nem a falha PERMANENTE acusa a pessoa — aproximação não autoriza afirmação');
+  ok(/ATRIBUIÇÃO PASSOU A SER POR REFERÊNCIA/.test(src),
+    'e a anotação conta a mudança, com o motivo');
 }
 
 // ── F. a TELA mostra três estados ────────────────────────────────────────────
