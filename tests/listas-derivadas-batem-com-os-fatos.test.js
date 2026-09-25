@@ -92,6 +92,34 @@ function resto() {
   ok(mapa.size === 6 && ['m1','m2','m3','m4','m5','m6'].every((k) => mapa.has(k)),
     '⛔ o coletor acha jogo nos SEIS lugares do motor — inclusive terceiro lugar e fase posterior');
 
+  /* ── F. QUEM JOGA TEM DE ESTAR NO ELENCO (detecção, não trava) ──────────────
+   * As regras deixam o participante escrever os jogos — é assim que ele lança o próprio
+   * placar — e o idioma delas não itera lista, então não há como exigir que os jogadores de um
+   * jogo existente continuem os mesmos. ⛔ Carimbar uma impressão digital num campo fora da
+   * lista dele não fecha: a regra compara "mudou?", não confere se a impressão CORRESPONDE.
+   * Detector não é portão. MEDIDO em 24/set: zero contas fora do elenco nos 78 torneios. */
+  const uids = (p) => (p && p.uid) ? [String(p.uid)] : [];
+  const limpo = { participants: [{ uid: 'uid-dentro-0001' }],
+    matches: [{ id: 'm1', team1Uids: ['uid-dentro-0001'], team2Uids: [] }] };
+  ok(V.contasForaDoElenco(limpo, uids).length === 0, 'quem está no elenco não é apontado');
+
+  const sujo = { participants: [{ uid: 'uid-dentro-0001' }],
+    matches: [{ id: 'm1', team1Uids: ['uid-dentro-0001'], team2Uids: ['uid-de-fora-001'] }] };
+  const achados = V.contasForaDoElenco(sujo, uids);
+  ok(achados.length === 1 && achados[0] === 'uid-de-fora-001',
+    '⛔ conta jogando sem estar em elenco nenhum é apontada');
+
+  const comFantasma = { participants: [{ uid: 'uid-dentro-0001' }],
+    matches: [{ id: 'm1', team1Uids: ['uid-dentro-0001'], team2Uids: ['ghostwo_x', 'jog_07_y'] }] };
+  ok(V.contasForaDoElenco(comFantasma, uids).length === 0,
+    '⛔ sintético do W.O. e placeholder legado NÃO dão alarme — não são conta, e não estar no elenco é o desenho');
+
+  const emTodosOsLugares = { participants: [{ uid: 'uid-dentro-0001' }],
+    rounds: [{ matches: [{ id: 'r1', team1Uids: ['uid-de-fora-002'] }] }],
+    thirdPlaceMatch: { id: 't3', team2Uids: ['uid-de-fora-003'] } };
+  ok(V.contasForaDoElenco(emTodosOsLugares, uids).length === 2,
+    'e a varredura alcança rodada e terceiro lugar, não só a lista de jogos');
+
   console.log(fail ? `❌ listas-derivadas-batem-com-os-fatos: ${fail} falha(s), ${pass} ok`
                    : `✅ listas-derivadas-batem-com-os-fatos: ${pass} ok`);
   process.exit(fail ? 1 : 0);

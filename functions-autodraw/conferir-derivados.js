@@ -81,7 +81,37 @@ function conferirJogo(doMotor, doCard) {
   return null;
 }
 
-module.exports = { conferirLista, LISTAS, jogosDoMotor, conferirJogo };
+/* ⛔⛔ QUEM JOGA TEM DE ESTAR NO ELENCO — e por enquanto isto é DETECÇÃO, não trava.
+ *
+ * As regras do Firestore deixam o participante escrever `matches`/`rounds`/`classification`
+ * (é assim que ele lança o próprio placar), e o idioma delas NÃO itera lista: não há como
+ * exigir que os jogadores de um jogo que já existe continuem os mesmos.
+ * ⛔ A ideia de carimbar uma impressão digital num campo fora da lista dele NÃO fecha o furo:
+ * a regra sabe comparar "o campo mudou?", mas não sabe conferir se a impressão CORRESPONDE ao
+ * que foi escrito. Quem reescrevesse os jogos e deixasse o carimbo quieto passaria. Isso é
+ * DETECTOR, e detector não é portão — [[feedback_prova_para_pintar_nao_serve_para_recusar]].
+ * ⇒ O fechamento de verdade é o lançamento de placar virar Cloud Function.
+ *
+ * MEDIDO em 24/set/2026, nos 78 torneios: **zero** contas jogando fora do elenco. O furo
+ * existe e não foi usado — e dizer as duas coisas juntas é o que vale. */
+function contasForaDoElenco(t, uidsDe) {
+  const elenco = new Set();
+  [t.participants, t.standbyParticipants, t.waitlist].forEach((a) =>
+    (Array.isArray(a) ? a : []).forEach((p) => uidsDe(p).forEach((u) => elenco.add(u))));
+  const nosJogos = new Set();
+  const põe = (m) => {
+    if (!m || typeof m !== 'object') return;
+    ['team1Uids', 'team2Uids', 'playersUids'].forEach((k) =>
+      (Array.isArray(m[k]) ? m[k] : []).forEach((u) => { if (u) nosJogos.add(String(u)); }));
+    [m.team1Obj, m.team2Obj].forEach((o) => uidsDe(o).forEach((u) => nosJogos.add(u)));
+  };
+  jogosDoMotor(t).forEach(põe);
+  /* ⛔ Sintético do W.O. e placeholder legado NÃO são conta e não estão no elenco por
+   * desenho — contá-los aqui daria alarme falso em todo torneio que teve W.O. */
+  return [...nosJogos].filter((u) => !elenco.has(u) && !/^(ghostwo_|jog_)/.test(u));
+}
+
+module.exports = { conferirLista, LISTAS, jogosDoMotor, conferirJogo, contasForaDoElenco };
 
 if (require.main === module) {
   const apply = process.argv.indexOf('--apply') !== -1;
@@ -141,6 +171,15 @@ if (require.main === module) {
           }
         }
       } catch (e) { console.log('  ⚠️ ' + d.id + ' · não conferi as cópias do jogo: ' + (e && e.message)); }
+
+      /* quem joga sem estar no elenco — detecção, ver o bloco acima */
+      try {
+        const intrusos = contasForaDoElenco(completo, (p) => {
+          try { return (require('./vendor/participant-identity.js').participantUids(p) || []).filter(Boolean).map(String); }
+          catch (e) { return []; }
+        });
+        if (intrusos.length) console.log('  ⚠️ ' + d.id + ' · ' + intrusos.length + ' conta(s) jogando FORA do elenco');
+      } catch (e) {}
 
       if (!relatos.length) continue;
       ruins++;
