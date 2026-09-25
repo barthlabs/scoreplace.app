@@ -1529,7 +1529,7 @@ window._translations['pt'] = {
   'auth.orgShort': 'Org.',
   'auth.friendAcceptedMsg': '{name} aceitou seu convite e agora é seu amigo(a)!',
   'auth.participantEnrolledMsg': '{name} se inscreveu no torneio "{tournament}".',
-  'auth.signInGoogle': 'Entrar com Google',
+  'auth.signInGoogle': 'Continuar com Google',
   'auth.signInApple': 'Entrar com a Apple',
   'auth.loginForStats': 'Faça login para ver suas estatísticas.',
   'auth.disableFundTitle': 'Desativar comunicações fundamentais?',

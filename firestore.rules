@@ -254,6 +254,55 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    /* ═══ O COFRE DO ROSTO — NINGUÉM LÊ, NINGUÉM ESCREVE, NEM O DONO DO ROSTO ═══════════
+     * `faceTemplates/{uid}` guarda o VETOR extraído do rosto (não a foto), que é a chave de
+     * pessoa do cadastro. Ordem do dono: _"quando a pessoa se cadastrar, tiramos uma foto que
+     * vai servir para comparar com a pessoa que está entrando de novo depois"_.
+     *
+     * ⛔⛔ ESTA REGRA VEM ANTES DE EXISTIR UM ÚNICO VETOR, E ISSO É O PONTO. A porta de saída
+     * precede a porta de entrada: ligar a coleta primeiro e fechar depois é como se acumula dado
+     * que ninguém sabia estar guardando. Aqui, no dia em que o primeiro vetor nascer, a regra que
+     * o protege já existe e já foi testada.
+     *
+     * ⛔ NEM O DONO DO ROSTO LÊ. Não é descuido nem excesso: o vetor não tem uso no aparelho —
+     * quem compara é o servidor. Devolvê-lo ao cliente só criaria cópia de dado sensível fora do
+     * cofre, e cópia de biometria em cache de navegador é exatamente o que não se faz.
+     * ⇒ Escrita e leitura SÓ por Admin SDK, que não passa por regra.
+     *
+     * ⚠️ Vetor de rosto é dado pessoal SENSÍVEL pela LGPD (art. 5º, II). Além desta regra, a leva
+     * carrega: consentimento específico e destacado, caminho alternativo para quem recusar (senão
+     * o consentimento não é livre), descarte da foto depois de extrair o vetor, e apagamento junto
+     * com a conta — este último já está em `deleteAccount`, e é por isso que ele entrou primeiro.
+     *
+     * Sem esta regra o Firestore já negaria por omissão. Está escrita para ser uma DECISÃO
+     * visível, e não um esquecimento com o mesmo efeito — igual ao backup congelado acima. */
+    match /faceTemplates/{userId} {
+      allow read, write: if false;
+    }
+
+    /* ═══ AS CHAVES DE ENTRADA SEM SENHA — NINGUÉM LÊ, NINGUÉM ESCREVE ══════════════════
+     * `passkeys/{credencial}` guarda a chave PÚBLICA de cada aparelho, o contador e a conta dona.
+     * `passkeyChallenges/{id}` guarda o desafio de uso único.
+     *
+     * ⛔ CHAVE PÚBLICA NÃO É SEGREDO — e mesmo assim isto fica fechado, por três razões medidas:
+     *  ① o CONTADOR é a defesa contra reuso de assinatura. Cliente que escreve o contador desfaz a
+     *    defesa: bastaria devolvê-lo ao valor anterior para a mesma assinatura entrar de novo;
+     *  ② a LISTA de credenciais de alguém é dado pessoal — diz quantos aparelhos a pessoa tem, se
+     *    usa iPhone e desde quando. Ler por uid alheio seria um censo de aparelhos;
+     *  ③ o campo `uid` liga credencial a conta. Quem lê a coleção descobre quem tem conta aqui.
+     *
+     * ⛔ E O DESAFIO É DE USO ÚNICO: quem pudesse escrever `usadoEm: null` de volta reabriria um
+     * desafio já gasto, e uma assinatura interceptada voltaria a valer. É a mesma razão do contador.
+     *
+     * Só Admin SDK, que não passa por regra. Sem esta regra o Firestore já negaria por omissão —
+     * está escrita para ser DECISÃO visível, e não esquecimento com o mesmo efeito. */
+    match /passkeys/{credencial} {
+      allow read, write: if false;
+    }
+    match /passkeyChallenges/{desafioId} {
+      allow read, write: if false;
+    }
+
     /* ═══ SANDBOX DO DESENVOLVEDOR — COLEÇÃO PRÓPRIA (FIX.SANDBOX.P2, 2.1.87) ═══════
      * O sandbox saiu de `tournaments/{id}` e passou a morar aqui. NÃO é preferência de
      * organização: é a única forma de o invariante do dono ("réplica fiel, inclusive

@@ -74,6 +74,15 @@ assert.match(callable, /emailDaOrganizacaoVisivel\(tournament, callerUid, target
   'a callable decide o e-mail pela porta única');
 assert.match(callable, /contact\.organizerEmail = email/,
   'o e-mail sai em campo próprio, separado do contato comum');
+/* ⛔⛔ E TAMBÉM SOB O NOME QUE O APP INSTALADO LÊ. Medido no pacote embarcado (2.3.92, 18 versões
+ * atrás): ele monta o contato a partir de `profile.email`. Sem este campo, apagar o e-mail do
+ * documento público tiraria o canal de quem não atualizou o app — e era isso que travava a Parte 2
+ * da LGPD atrás de uma nativa nova. A régua de QUEM recebe não muda: é o mesmo guarda. */
+assert.match(callable, /contact\.email = email/,
+  '⭐⭐ e também como `email`, que é o nome que o app instalado lê — sem isso a Parte 2 exigiria nativa');
+const _g = callable.indexOf('emailDaOrganizacaoVisivel');
+assert.ok(_g > 0 && _g < callable.indexOf('contact.email = email'),
+  '⛔ os DOIS campos ficam dentro do MESMO guarda — o nome muda, o direito não');
 const guarda = callable.indexOf('emailDaOrganizacaoVisivel');
 const uso = callable.indexOf('emailDoPerfil');
 assert.ok(guarda < uso, 'a autorização vem ANTES de ler o endereço');
@@ -88,4 +97,4 @@ assert.ok(fs.existsSync(path.join(root, 'functions/test-contato-email-emu.js')),
 assert.match(String(pkg.scripts['test:emu:fn'] || ''), /test-contato-email-emu\.js/,
   'e está registrada no comando de emulador de Functions — senão nunca roda');
 
-console.log('✅ e-mail do organizador só para o elenco — 22 verificações');
+console.log('✅ e-mail do organizador só para o elenco — 24 verificações');

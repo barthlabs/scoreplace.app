@@ -1898,17 +1898,25 @@ window.FirestoreDB = {
     msgs = (typeof msgs === 'string') ? { unauth: msgs } : (msgs || {});
     var fb = window.firebase;
     var user = fb && fb.auth && fb.auth().currentUser;
-    if (!user) throw Object.assign(new Error(msgs.unauth || 'login necessário'), { code: 'functions/unauthenticated' });
+    /* ⛔⛔ EXISTEM PORTAS QUE PRECISAM RODAR DESLOGADO, E ELAS PEDEM ISSO POR ESCRITO.
+     * Quase toda porta exige login, e recusar aqui é a rede que evita chamada inútil. Mas a ENTRADA
+     * sem senha é, por natureza, de quem ainda não entrou: exigir login ali tornava as duas etapas
+     * do passkey CÓDIGO MORTO — elas nunca chegariam ao servidor. Medido na revisão de 25/set/2026,
+     * antes de qualquer pessoa tocar no botão.
+     * ⛔ E a permissão é EXPLÍCITA por chamada (`msgs.semLogin`), nunca por lista de nomes aqui:
+     * lista neste arquivo viraria a segunda verdade sobre quais portas são públicas — quem sabe é a
+     * porta, e o servidor confere de todo jeito. */
+    if (!user && !msgs.semLogin) {
+      throw Object.assign(new Error(msgs.unauth || 'login necessário'), { code: 'functions/unauthenticated' });
+    }
     var pid = '';
     try { pid = fb.app().options.projectId; } catch (e) {}
     if (!pid) throw Object.assign(new Error(msgs.naoInicializado || 'App não inicializado'), { code: 'functions/internal' });
     var url = 'https://us-central1-' + pid + '.cloudfunctions.net/' + name;
-    var tok = await user.getIdToken();
-    var r = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok },
-      body: JSON.stringify({ data: payload })
-    });
+    /* Sem usuário, vai SEM cabeçalho de autorização — e o servidor decide. */
+    var cab = { 'Content-Type': 'application/json' };
+    if (user) cab['Authorization'] = 'Bearer ' + (await user.getIdToken());
+    var r = await fetch(url, { method: 'POST', headers: cab, body: JSON.stringify({ data: payload }) });
     var j = await r.json().catch(function () { return {}; });
     if (j && j.error) {
       // Traduz o status do protocolo callable pro mesmo `code` que o SDK daria.

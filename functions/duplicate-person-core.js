@@ -507,12 +507,46 @@ function forcaDoSinal(motivo, semelhanca) {
  * motivo, então não dá pra afirmar que cobriam o sinal de hoje. Reabrir uma vez e voltar a
  * anotar é melhor que herdar um "não" que ninguém sabe do que era.
  */
-function mapaDeDispensados(lista) {
+/* ⛔⛔ O DIA EM QUE O CELULAR DEIXOU DE VALER COMO CREDENCIAL (14/set/2026).
+ * Antes desta data, "mesmo celular" gravava força 9 — o topo da escala — sem exigir confirmação
+ * por SMS dos dois lados. Depois dela, só conta como credencial o número provado pelos dois.
+ * A data mora aqui, nomeada, porque é ela que separa registro confiável de registro herdado.
+ * Ver o comentário da escala: um "não" dado sobre número digitado pelo organizador trancava a
+ * pergunta até contra prova muito mais forte. */
+const CELULAR_VIROU_PROVA_EM = Date.parse('2026-09-14T00:00:00.000Z');
+
+/** Um registro de dispensa cujo crédito veio da regra ANTIGA do celular? */
+function creditoHerdado(d) {
+  if (!d || d.motivo !== 'celular') return false;
+  const quando = Date.parse(String(d.at || ''));
+  if (!quando) return true;              // sem data: não dá pra afirmar que passou pela regra nova
+  return quando < CELULAR_VIROU_PROVA_EM;
+}
+
+/* @param {string} [self] uid do dono da lista — registro que aponta para ele mesmo é ignorado. */
+function mapaDeDispensados(lista, self) {
   const out = {};
+  const eu = String(self || '').trim();
   (Array.isArray(lista) ? lista : []).forEach((d) => {
     if (!d) return;
-    if (typeof d === 'string') { out[d] = Math.max(out[d] || 0, 0); return; }
-    if (d.uid) out[d.uid] = Math.max(out[d.uid] || 0, Number(d.forca) || 0);
+    if (typeof d === 'string') {
+      if (eu && d === eu) return;        // ⛔ auto-par: dispensar-se de si mesma não diz nada
+      out[d] = Math.max(out[d] || 0, 0); return;
+    }
+    if (!d.uid) return;
+    /* ⛔ AUTO-PAR MEDIDO EM PRODUÇÃO (25/set/2026): um perfil tinha um registro apontando para o
+     * PRÓPRIO uid — o detector devolveu a pessoa como duplicata de si mesma. Ignorar aqui, e a
+     * porta de dispensa recusa gravar, são as duas pontas do mesmo conserto. */
+    if (eu && d.uid === eu) return;
+    /* ⛔⛔ CRÉDITO HERDADO VALE 0 — a MESMA decisão já tomada para a forma legada, e pela mesma
+     * frase: não dá pra afirmar que aquele "não" cobria o sinal de hoje.
+     * MEDIDO: 3 das 4 dispensas existentes têm força 9 por celular, gravadas em 18/ago, ANTES da
+     * regra nova. Como 9 é o teto da escala e a pergunta só volta com sinal ESTRITAMENTE mais
+     * forte, esses pares estavam trancados PARA SEMPRE — inclusive contra e-mail igual.
+     * ⚠️ O "não" da pessoa NÃO é desfeito: ele deixa de ser eterno. A pergunta volta uma vez e a
+     * resposta é regravada pela regra de hoje. */
+    const forca = creditoHerdado(d) ? 0 : (Number(d.forca) || 0);
+    out[d.uid] = Math.max(out[d.uid] || 0, forca);
   });
   return out;
 }
@@ -528,7 +562,9 @@ function mapaDeDispensados(lista) {
  * receberia a mesma pergunta em todo torneio novo, pra sempre.
  */
 function detectarMesmaPessoa(candidato, pessoas, opts) {
-  const dispensados = mapaDeDispensados(candidato && candidato.dispensados);
+  /* ⛔ O UID DO PRÓPRIO CANDIDATO ENTRA: sem ele o auto-par medido em produção (um perfil com
+   * registro apontando para si mesmo) continuaria contando como dispensa. */
+  const dispensados = mapaDeDispensados(candidato && candidato.dispensados, candidato && candidato.uid);
 
   const todos = [];
   for (const p of (Array.isArray(pessoas) ? pessoas : [])) {
@@ -583,4 +619,5 @@ module.exports = {
   compararPessoa, detectarMesmaPessoa, textoDaPergunta,
   FORCA_SINAL, forcaDoSinal, mapaDeDispensados,
   MIN_LEN_1CHAR, MIN_LEN_2CHAR, MIN_TOKENS_SUBCONJUNTO,
+  creditoHerdado, CELULAR_VIROU_PROVA_EM,
 };

@@ -962,6 +962,13 @@ window._loginEmCurso = function () {
 };
 
 function handleGoogleLogin() {
+  /* ⛔⛔ PARA A OFERTA DA CHAVE ANTES DE SEGUIR POR OUTRO CAMINHO (25/set/2026).
+   * A oferta condicional fica ESPERANDO a pessoa escolher a chave no campo. Se ela escolher o Google
+   * e a espera continuar viva, duas coisas ruins acontecem: o navegador recusa a PRÓXIMA chamada de
+   * passkey (só uma por vez), e uma chave escolhida depois trocaria a sessão que acabou de ser
+   * autenticada — a pessoa entraria como outra conta sem entender por quê.
+   * ⚠️ Eu havia escrito o abortador e nunca o chamado. Definir sem ligar é o mesmo que não ter. */
+  try { if (window._passkeyPararOferta) window._passkeyPararOferta(); } catch (_pk4) {}
   var isLocalFile = window.location.protocol === 'file:';
   window._marcarLoginEmCurso();
 
@@ -1448,6 +1455,7 @@ function _appleSha256Hex(str) {
 }
 
 function handleAppleLogin() {
+  try { if (window._passkeyPararOferta) window._passkeyPararOferta(); } catch (_pk5) {}   /* ⛔ ver handleGoogleLogin */
   window._marcarLoginEmCurso();
   if (typeof window._resetLoginGuard === 'function') window._resetLoginGuard();
 
@@ -2506,6 +2514,7 @@ window._phoneRecaptchaWidgetId = null;
 window._phoneLoginInFlight = false;
 
 function handlePhoneLogin() {
+  try { if (window._passkeyPararOferta) window._passkeyPararOferta(); } catch (_pk7) {}   /* ⛔ ver handleGoogleLogin */
   var phoneEl = document.getElementById('login-phone');
   var countryEl = document.getElementById('login-phone-country');
   var rawPhone = phoneEl ? phoneEl.value.trim() : '';
@@ -2841,6 +2850,7 @@ function _maybeSuggestGoogleLogin(email, fallbackFn) {
 
 // ─── Email/Password Login ────────────────────────────────────────────────────
 function handleEmailLogin() {
+  try { if (window._passkeyPararOferta) window._passkeyPararOferta(); } catch (_pkA) {}   /* ⛔ ver handleGoogleLogin */
   var email = document.getElementById('login-email').value.trim();
   var password = document.getElementById('login-password').value;
   if (!email || !password) {
@@ -5664,7 +5674,7 @@ function setupLoginModal() {
               ? '<div style="margin-bottom:8px;">' +
                   '<button type="button" id="login-apple-btn" class="btn hover-lift btn-block" onclick="handleAppleLogin()" style="background:#000;color:#fff;border:1px solid #000;padding:12px 16px;font-size:0.88rem;font-weight:600;">' +
                     '<svg width="18" height="18" viewBox="0 0 384 512" fill="#fff" style="vertical-align:middle;margin-right:8px;"><path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z"/></svg>' +
-                    ((typeof _t === 'function' && _t('auth.signInApple') !== 'auth.signInApple') ? _t('auth.signInApple') : 'Entrar com a Apple') +
+                    'Continuar com a Apple' +
                   '</button>' +
                 '</div>'
               : '';
@@ -5675,6 +5685,29 @@ function setupLoginModal() {
                   _t('auth.signInGoogle') +
                 '</button>' +
               '</div>';
+            /* ⛔⛔ AQUI NÃO HÁ BOTÃO DE PASSKEY, E ISSO É O PADRÃO — NÃO FALTA (25/set/2026).
+             *
+             * ⭐ CORREÇÃO DE UM ERRO MEU, e vale registrar porque me custou quatro rodadas de texto
+             * inventado. Eu havia construído um botão grande "Entrar sem senha", um atalho
+             * "primeira vez aqui?" e um bloco que aparecia depois da falha. A recomendação publicada
+             * para passkey diz o contrário: NADA de botão dedicado — a chave aparece no PRÓPRIO CAMPO
+             * de identificação, junto das senhas guardadas, pelo preenchimento automático do
+             * navegador (`autocomplete="username webauthn"` no campo, logo abaixo).
+             *
+             * ⛔ E ISSO RESOLVE DOIS DEFEITOS QUE O BOTÃO CRIAVA:
+             *  ① quem NUNCA teve conta tocava num botão que não podia funcionar e caía num beco —
+             *    com o campo, quem não tem chave simplesmente não vê nada aparecer;
+             *  ② o bloco revelado depois da falha CONVIDAVA a criar conta, e quem já tinha conta e só
+             *    cancelou o gesto criaria a segunda. Era o defeito que esta leva ataca, embutido na
+             *    própria tela.
+             *
+             * ⚠️ A chave é OFERECIDA por `_passkeyOferecerNoCampo`, chamada quando esta tela monta, e
+             * a CRIAÇÃO é oferecida DEPOIS de a pessoa entrar — nunca antes, porque a chave só nasce
+             * contra uma conta que já existe.
+             *
+             * ⚠️ E os botões de provedor dizem "Continuar", não "Entrar": eles ENTRAM E CRIAM com o
+             * mesmo toque, e a pessoa não descobre qual aconteceu. 4 dos 9 pares de conta duplicada
+             * que eu medi nasceram disso. Rótulo que escolhe um dos dois mente para metade. */
             return (_plat === 'ios') ? (appleBtn + googleBtn) : (googleBtn + appleBtn);
           })() +
 
@@ -5712,7 +5745,7 @@ function setupLoginModal() {
                     return '<option value="' + c.code + '"' + (c.code === '55' ? ' selected' : '') + '>' + c.flag + ' +' + c.code + '</option>';
                   }).join('') : '<option value="55">🇧🇷 +55</option>') +
                 '</select>' +
-                '<input type="text" id="login-identifier" class="form-control" placeholder="seu@email.com.br ou (11) 9999-8888" autocomplete="username" style="width:100%;min-width:0;box-sizing:border-box;font-size:0.95rem;padding:11px 12px;" oninput="window._onIdentifierInput && window._onIdentifierInput()">' +
+                '<input type="text" id="login-identifier" class="form-control" placeholder="seu@email.com.br ou (11) 9999-8888" autocomplete="username webauthn" style="width:100%;min-width:0;box-sizing:border-box;font-size:0.95rem;padding:11px 12px;" oninput="window._onIdentifierInput && window._onIdentifierInput()">' +
               '</div>' +
               '<div id="login-senha-label" style="font-size:0.8rem;color:var(--text-muted);margin-bottom:4px;">Senha <span style="font-style:italic;font-size:0.72rem;">(mín. 6 caracteres)</span></div>' +
               '<div style="position:relative;margin-bottom:6px;">' +
@@ -5798,6 +5831,12 @@ function setupLoginModal() {
   if (btnLogin) {
     btnLogin.addEventListener('click', function() {
       openModal('modal-login');
+      /* ⛔⛔ A CHAVE É OFERECIDA NO CAMPO, SEM BOTÃO — é o padrão publicado para passkey, e foi ele
+       * que me fez arrancar o botão que eu havia inventado. O navegador mostra a chave junto das
+       * senhas guardadas quando a pessoa toca no campo (`autocomplete="username webauthn"`).
+       * ⚠️ Silenciosa por natureza: quem NÃO tem chave não vê nada e não recebe erro nenhum. É isso
+       * que impede o beco em que quem nunca teve conta caía com o botão. */
+      try { if (window._passkeyOferecerNoCampo) window._passkeyOferecerNoCampo(); } catch (_pk3) {}
       // v1.8.70: mostrar banner de retorno rápido se há cache do usuário
       setTimeout(function() {
         if (typeof window._showQuickReturnBanner === 'function') window._showQuickReturnBanner();
@@ -6597,6 +6636,30 @@ function setupProfileModal() {
                 '<div id="profile-link-phone-recaptcha" style="display:none;"></div>' +
               '</div>' +
             '</div>' +
+            /* ── ENTRAR SEM SENHA (25/set/2026) ────────────────────────────────────────
+             * Fica ANTES de "trocar senha" porque é a alternativa a ter senha, não um extra dela.
+             * MEDIDO: 4 dos 9 pares de conta duplicada são Apple+Google — gente que voltou, não
+             * achou a própria conta e criou outra. Cadastrar o aparelho aqui é o que impede isso.
+             * ⚠️ Só aparece onde funciona: no app nativo a origem da WebView não serve para passkey. */
+            (function () {
+              try {
+                if (!(window._passkeyDisponivel && window._passkeyDisponivel())) return '';
+                return '<div style="margin:8px 0 12px;padding:12px 14px;background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.2);border-radius:12px;">' +
+                  '<div style="font-weight:700;font-size:0.82rem;margin-bottom:4px;">🔑 Entrar sem senha neste aparelho</div>' +
+                  /* ⛔ DIZ O GANHO, não o mecanismo: a pessoa não precisa saber o que é uma chave —
+                   * precisa saber que não vai mais errar qual conta é a dela. */
+                  '<div style="font-size:0.74rem;color:var(--text-muted);line-height:1.4;margin-bottom:8px;">' +
+                    'Você passa a entrar pelo rosto ou pela digital do aparelho, sem digitar nada — e sem errar qual conta é a sua.' +
+                  '</div>' +
+                  '<button type="button" id="profile-passkey-btn" class="btn btn-micro" ' +
+                    'onclick="window._cadastrarPasskey && window._cadastrarPasskey()" ' +
+                    'style="background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;font-weight:700;">' +
+                    'Cadastrar este aparelho' +
+                  '</button>' +
+                '</div>';
+              } catch (_pk2) { return ''; }
+            })() +
+
             // ── Senha (v2.6.x): link que expande os campos pra definir/trocar ──
             '<div style="margin:8px 0 12px;">' +
               '<button type="button" id="profile-change-pw-link" class="btn btn-ghost btn-micro" onclick="window._toggleChangePassword && window._toggleChangePassword()" style="text-decoration:underline;">🔒 Trocar senha</button>' +

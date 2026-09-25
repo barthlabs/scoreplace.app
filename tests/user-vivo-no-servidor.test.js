@@ -202,6 +202,31 @@ function fakeDb(base) {
   const RE_WHERE = /\.where\(/;                 // QUALQUER campo, inclusive dinâmico
   const ATRAS = 60, FRENTE = 16;
 
+  /* ⛔⛔ O FILTRO TEM DE ESTAR NA MESMA CORRENTE, não "em até 5 linhas" (25/set/2026).
+   * MEDIDO: a heurística de 5 linhas deu FALSO POSITIVO em código correto —
+   *   const [perfil, minhas] = await Promise.all([
+   *     db.collection("users").doc(uid).get(),          ← leitura PONTUAL
+   *     db.collection("passkeys").where("uid","==",uid).get(),   ← filtro em OUTRA coleção
+   *   ]);
+   * O portão viu `users` e um `.where(` vizinho e acusou busca ampla. Não era.
+   * ⛔ E a saída NÃO foi contorcer o código nem declarar isenção: isenção é para busca ampla
+   * justificada, e usá-la aqui seria rotular leitura pontual de coisa que ela não é. Portão que
+   * reclama do código certo é portão que alguém desliga — e este existe para não ser desligado.
+   * ⇒ Agora o filtro só conta quando está na MESMA cadeia de chamadas que `collection('users')`:
+   * do `collection(` até o fim daquela expressão, sem atravessar vírgula de lista nem nova linha
+   * que comece outra chamada de `db.`. */
+  function buscaAmplaEmUsers(linhas, i) {
+    if (!RE_USERS.test(linhas[i])) return false;
+    // a cadeia começa no `collection('users')` e vai até onde a expressão termina
+    const bloco = linhas.slice(i, i + 5).join('\n');
+    const inicio = bloco.search(RE_USERS);
+    let resto = bloco.slice(inicio);
+    /* corta em qualquer nova chamada de coleção — ali começa OUTRA cadeia */
+    const outra = resto.slice(1).search(/collection\(/);
+    if (outra !== -1) resto = resto.slice(0, outra + 1);
+    return RE_WHERE.test(resto);
+  }
+
   function jsDe(dir, out) {
     out = out || [];
     for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -213,6 +238,26 @@ function fakeDb(base) {
     return out;
   }
 
+  /* ⛔⛔ FALSIFICAÇÃO DO DETECTOR, ANTES DE USÁ-LO (25/set/2026).
+   * Eu afrouxei `buscaAmplaEmUsers` para tirar um falso positivo medido — leitura pontual em
+   * `users` ao lado de um filtro em OUTRA coleção, dentro do mesmo `Promise.all`. Afrouxar portão
+   * de segurança sem provar que ele ainda pega o caso real é desligá-lo sem perceber, e este portão
+   * existe justamente para não ser desligado. Cinco casos, as duas direções. */
+  [
+    ['busca ampla NUA', ['const q = await db.collection("users").where("gender","==","F").get();'], true],
+    ['busca ampla QUEBRADA em linhas', ['const q = await db.collection("users")', '  .where("gender","==","F")', '  .get();'], true],
+    ['leitura PONTUAL', ['const d = await db.collection("users").doc(uid).get();'], false],
+    ['pontual + filtro em OUTRA coleção (era o falso positivo)',
+      ['const [a,b] = await Promise.all([', '  db.collection("users").doc(uid).get(),',
+       '  db.collection("passkeys").where("uid","==",uid).get(),', ']);'], false],
+    ['duas buscas amplas na mesma lista',
+      ['await Promise.all([', '  db.collection("users").where("a","==",1).get(),',
+       '  db.collection("passkeys").where("uid","==",u).get(),', ']);'], true],
+  ].forEach(function (c) {
+    var pegou = c[1].some(function (_, i) { return buscaAmplaEmUsers(c[1], i); });
+    ok(pegou === c[2], 'detector ' + (c[2] ? 'PEGA' : 'ignora') + ': ' + c[0]);
+  });
+
   const alvos = jsDe(path.join(RAIZ, 'functions'))
     .concat(jsDe(path.join(RAIZ, 'functions-autodraw')));
   const escapou = [];
@@ -220,8 +265,7 @@ function fakeDb(base) {
   for (const f of alvos) {
     const L = fs.readFileSync(f, 'utf8').split('\n');
     for (let i = 0; i < L.length; i++) {
-      if (!RE_USERS.test(L[i])) continue;
-      if (!RE_WHERE.test(L.slice(i, i + 5).join('\n'))) continue;   // .doc(uid) não conta
+      if (!buscaAmplaEmUsers(L, i)) continue;   // .doc(uid) não conta, e filtro de OUTRA coleção também não
       vistos++;
       const janela = L.slice(Math.max(0, i - ATRAS), i + FRENTE).join('\n');
       if (/_userVivo|userVivo\(|uidVivo\(|user-vivo:isento/.test(janela)) continue;
@@ -242,7 +286,7 @@ function fakeDb(base) {
   const adBuscas = jsDe(path.join(RAIZ, 'functions-autodraw'))
     .filter((f) => {
       const L = fs.readFileSync(f, 'utf8').split('\n');
-      return L.some((l, i) => RE_USERS.test(l) && RE_WHERE.test(L.slice(i, i + 5).join('\n')));
+      return L.some((l, i) => buscaAmplaEmUsers(L, i));
     });
   ok(adBuscas.length === 0,
     'functions-autodraw/ segue só com .doc(uid) — zero busca ampla (medido em 18/ago/2026)');

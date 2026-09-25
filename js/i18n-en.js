@@ -1514,7 +1514,7 @@ window._translations['en'] = {
   'auth.orgShort': 'Org.',
   'auth.friendAcceptedMsg': '{name} accepted your invite and is now your friend!',
   'auth.participantEnrolledMsg': '{name} enrolled in the tournament "{tournament}".',
-  'auth.signInGoogle': 'Sign in with Google',
+  'auth.signInGoogle': 'Continue with Google',
   'auth.signInApple': 'Sign in with Apple',
   'auth.loginForStats': 'Log in to view your stats.',
   'auth.disableFundTitle': 'Disable essential notifications?',

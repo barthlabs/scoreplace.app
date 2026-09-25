@@ -58,6 +58,16 @@ window._garanteModal = _garanteModal;
 function openModal(modalId) {
   _garanteModal(modalId);            // ⭐ constrói agora, se ainda não existir
   const modal = document.getElementById(modalId);
+  /* ⛔⛔ A OFERTA DA CHAVE COMEÇA AQUI, NÃO NO BOTÃO (25/set/2026).
+   * ⭐ CORREÇÃO DE UM ERRO MEU: eu havia ligado a oferta no ouvinte de UM botão. Mas a tela de
+   * entrada é aberta por vários caminhos — a inscrição sem sessão, a página inicial, telas
+   * protegidas — e todos chamam `openModal` direto. Nesses, a chave simplesmente não era oferecida,
+   * em silêncio: a pessoa não via nada faltando, só continuava digitando senha.
+   * ⛔ ABRIR E FECHAR MORAM NO MESMO PAR (ver `closeModal`), e é o que garante simetria: quem
+   * acrescentar um caminho novo de abrir ganha a oferta sem saber que ela existe. */
+  if (modalId === 'modal-login') {
+    try { if (window._passkeyOferecerNoCampo) window._passkeyOferecerNoCampo(); } catch (_pk8) {}
+  }
   if (modal) {
     // v0.17.92: ao abrir modal-login, cancela timer de signout pendente
     // (deferred 2.5s do auth.js) que mataria o modal antes do user clicar.
@@ -93,7 +103,42 @@ function closeModal(modalId) {
   if (modal) {
     modal.classList.remove('active');
   }
+  /* ⛔⛔ FECHAR A ENTRADA PARA A OFERTA DA CHAVE (25/set/2026).
+   * A oferta condicional do passkey fica ESPERANDO a pessoa escolher a chave no campo. Se a tela de
+   * entrada fecha e a espera continua viva, o navegador recusa a PRÓXIMA chamada de passkey — só uma
+   * por vez — e a pessoa fica sem o caminho na tentativa seguinte, sem erro nenhum na tela.
+   * ⚠️ Fechar por AQUI cobre também o X, o toque fora e o Esc, que não passam por handler de botão.
+   * Ver [[feedback_fechar_por_dentro_do_app_nao_e_fechar_a_aba]]: quem fecha por um caminho e não
+   * pelos outros deixa estado vivo justamente no caso que ninguém testa. */
+  if (modalId === 'modal-login') {
+    try { if (window._passkeyPararOferta) window._passkeyPararOferta(); } catch (_pk6) {}
+  }
 }
+
+/* ⛔⛔ E QUEM FECHA A TELA DE ENTRADA POR FORA DE `closeModal` TAMBÉM PARA A OFERTA.
+ * MEDIDO na revisão: há caminhos que removem a classe `active` direto — o X, os links de Termos e
+ * Privacidade. Neles a espera da chave continuava viva, e uma chave escolhida DEPOIS trocaria a
+ * sessão que acabou de autenticar: a pessoa entraria como outra conta sem entender por quê.
+ * ⇒ Um observador na própria classe cobre todos eles de uma vez, inclusive os que ainda não existem.
+ * É a lição de [[feedback_fechar_por_dentro_do_app_nao_e_fechar_a_aba]]: fechar por um caminho e não
+ * pelos outros deixa estado vivo justamente no caso que ninguém testa. */
+(function vigiarFechamentoDaEntrada() {
+  if (typeof MutationObserver !== 'function' || typeof document === 'undefined') return;
+  function ligar() {
+    var el = document.getElementById('modal-login');
+    if (!el) return false;
+    new MutationObserver(function () {
+      if (!el.classList.contains('active')) {
+        try { if (window._passkeyPararOferta) window._passkeyPararOferta(); } catch (_pk9) {}
+      }
+    }).observe(el, { attributes: true, attributeFilter: ['class'] });
+    return true;
+  }
+  if (!ligar()) {
+    /* A tela pode ser construída depois; tenta de novo quando o documento estiver pronto. */
+    document.addEventListener('DOMContentLoaded', ligar, { once: true });
+  }
+})();
 
 function createInteractiveElement(htmlString) {
   const div = document.createElement('div');

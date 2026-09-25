@@ -168,6 +168,7 @@ const _nameVariant = require("./name-variant-core");
 const _rosterWatch = require("./roster-watch-core");
 const _rosterMirror = require("./roster-mirror-core");
 const _delGuard = require("./delete-account-guard-core");
+const _passkey = require("./passkey-core");   // decisões puras: origem, desafio, contador
 const _renameProp = require("./rename-propagate-core");
 // A PORTA DA CONTA VIVA. Toda busca ampla em users/ por campo de identidade (email /
 // email_lower / phone / displayName / letzplayHandle) que resolva UMA pessoa e AJA sobre ela
@@ -3678,6 +3679,16 @@ exports.dismissDuplicateSuspicion = onCall(
 
     const d = await _detectarDuplicataNoTorneio(db, callerUid, snap.data());
     if (!d) return { ok: true, nada: true };
+    /* ⛔⛔ AUTO-PAR NÃO SE GRAVA (25/set/2026). Medido em produção: um perfil tinha um registro de
+     * dispensa apontando para o PRÓPRIO uid — o detector devolveu a pessoa como duplicata de si
+     * mesma, e as duas escritas de baixo gravaram o par consigo. Dispensar-se de si mesma não diz
+     * nada, e o registro ainda barrava a fusão da conta com ela mesma, que é o caminho da
+     * reivindicação. A leitura ignora (ver mapaDeDispensados); aqui a escrita recusa — as duas
+     * pontas, senão o dado sujo continua nascendo. */
+    if (String(d.uid || '') === String(callerUid)) {
+      console.warn(`[dismissDuplicateSuspicion] auto-par recusado para ${callerUid}`);
+      return { ok: true, nada: true, autoPar: true };
+    }
 
     // ⚠️ O "NÃO SOU EU" GUARDA A FORÇA DO SINAL QUE FOI DISPENSADO (v1.8.3).
     // Regra do dono: _"anotar a resposta pra não ficar perguntando de novo sem dado novo.
@@ -7339,6 +7350,9 @@ exports.scheduledTrophyCheck = onSchedule(
 //     Os nomes gravados nos slots (m.p1/team1[]) são limpos — nome é dado pessoal.
 //   • friends[] de OUTRAS pessoas → o uid sai (senão elas ficam com amigo fantasma).
 //   • presences, notificações, torneios que ela organizou → apagados.
+//   • faceTemplates/{uid} → APAGADO, sem lápide. O vetor do rosto é dado sensível e só serve
+//     para reconhecer a pessoa; quem saiu não pode continuar reconhecível (nem ser barrado ao
+//     voltar, o que seria o oposto de ter saído).
 //
 // Iniciais ("E. M.") foram descartadas de propósito: num torneio pequeno, iniciais + data +
 // adversários re-identificam a pessoa — é pseudonimização, e a LGPD trata isso como dado
@@ -7561,6 +7575,20 @@ exports.deleteAccount = onCall(
     // 4) Presenças/check-ins.
     try { out.presencesDeleted = await _batchDeleteQuery(db.collection("presences").where("uid", "==", uid)); }
     catch (e) { console.error("[deleteAccount] presences:", e.message); }
+
+    /* ⛔⛔ O VETOR DO ROSTO SAI COM A CONTA — SEM EXCEÇÃO E SEM TOMBSTONE (25/set/2026).
+     * O vetor do rosto é dado pessoal SENSÍVEL pela LGPD. Ao contrário do `users/{uid}`, que
+     * fica como lápide anônima para o placar dos adversários não mudar, aqui não há nada a
+     * preservar: o vetor só serve para reconhecer a pessoa, e a pessoa pediu para sair.
+     * ⛔ Deixá-lo seria guardar biometria de quem apagou a conta — e ainda faria a pessoa ser
+     * reconhecida e barrada se um dia voltasse, o que é o oposto de ter saído.
+     * ⚠️ Esta linha entra ANTES de existir vetor nenhum, de propósito: a porta de saída precede
+     * a porta de entrada. Ligar a coleta primeiro e o apagamento depois é como este projeto
+     * acumulou dado que ninguém sabia estar guardando. */
+    try {
+      await db.collection("faceTemplates").doc(uid).delete();
+      out.faceTemplateDeleted = true;
+    } catch (e) { console.error("[deleteAccount] faceTemplates:", e.message); out.faceTemplateFailed = true; }
 
     // 5) Partidas casuais — sai dos participantes; a sala fica pros outros.
     try {
@@ -11302,7 +11330,21 @@ exports.getTournamentParticipantContact = onCall(
      * campo do contato comum — `contatoDoPerfil` não o inclui de propósito. */
     if (_tournamentContacts.emailDaOrganizacaoVisivel(tournament, callerUid, targetUid)) {
       const email = _tournamentContacts.emailDoPerfil(perfilAlvo);
-      if (email) contact.organizerEmail = email;
+      if (email) {
+        contact.organizerEmail = email;
+        /* ⛔⛔ E TAMBÉM SOB O NOME QUE O APP INSTALADO LÊ (25/set/2026).
+         * MEDIDO no pacote embarcado (2.3.92, 18 versões atrás): ele monta o contato do organizador
+         * a partir de `profile.email`, e só cai para o campo do documento quando aquele vem vazio.
+         * ⇒ Devolvendo aqui, apagar `organizerEmail` do documento público NÃO tira o canal de e-mail
+         * de ninguém — nem de quem não atualizou o app. É o que destrava a Parte 2 da LGPD sem
+         * depender de uma nativa nova.
+         * ⭐ Correção de uma medição minha que respondia a pergunta errada: eu havia contado quantos
+         * organizadores ficariam sem canal SUPONDO que a porta não entregava e-mail — e a porta é
+         * nossa, entregar era uma linha.
+         * ⛔ A RÉGUA NÃO AFROUXA: é o MESMO `emailDaOrganizacaoVisivel` acima, então só o elenco
+         * recebe. O que muda é o nome do campo, não quem tem direito a ele. */
+        contact.email = email;
+      }
     }
     return { uid: targetUid, contact };
   }
@@ -11900,5 +11942,366 @@ exports.createSandbox = onCall(
      * verde no dia em que alguém afrouxa a de verdade. */
     return { ok: true, id: sbId, docsCopiados: escritos, subcolecoes: Object.keys(partes).length,
       envelope: SB_ENVELOPE.slice() };
+  }
+);
+
+/* ═══════════════════════════════════════════════════════════════════════════════════════════
+ * PASSKEY — entrar sem senha, e sem a pergunta "qual conta eu usei"
+ *
+ * MEDIDO em 25/set/2026: 9 pares de conta duplicada em 273 contas vivas, e **4 deles são
+ * Apple + Google** — gente que voltou, não achou a própria conta e criou outra. O caminho de hoje é
+ * "três botões de entrada, chuta". A chave é DESCOBRÍVEL: a pessoa não digita nome nem e-mail, e a
+ * pergunta desaparece porque a chave sabe qual é a conta.
+ *
+ * ⛔ FIREBASE AUTH NÃO TEM PASSKEY COMO PROVEDOR. Então a conferência acontece aqui e o resultado é
+ * um TOKEN PRÓPRIO; o app entra com ele. Tudo o que já existe de conta, fusão e lápide continua
+ * valendo — passkey é um caminho de ENTRADA, não uma identidade nova.
+ *
+ * ⛔ AS DUAS PORTAS DE ENTRADA SÃO SEM LOGIN, por natureza: a pessoa ainda não entrou. Uma porta sem
+ * login que emite token é alvo de valor alto, então o desafio é de USO ÚNICO e some ao ser usado —
+ * ver `passkey-core.js`, onde as três recusas estão travadas em teste.
+ *
+ * ⚠️ WEB. A WebView do app nativo roda em origem própria e passkey exige origem https com arquivo de
+ * associação de domínio — a mesma parede que derrubou o seletor do Google aqui. Nativo é leva
+ * própria, medida antes de prometida.
+ * ═══════════════════════════════════════════════════════════════════════════════════════════ */
+
+/* ⛔ A credencial mora no TOPO, chaveada pela própria credencial: é assim que a entrada acha o uid
+ * com UMA leitura por id, sem índice e sem varrer coleção. Guardar sob `users/{uid}` obrigaria a
+ * consultar por grupo de coleções justamente no caminho de quem ainda não está logado. */
+const _PASSKEYS = "passkeys";
+const _DESAFIOS = "passkeyChallenges";
+
+/* ⛔⛔ O DESAFIO É CONSUMIDO DENTRO DE UMA TRANSAÇÃO — ler e depois queimar NÃO basta.
+ *
+ * ⭐ CORREÇÃO DE UM ERRO MEU, apontado na revisão de 25/set/2026. Eu lia o desafio, conferia se
+ * estava livre e então gravava `usadoEm` — e escrevi no comentário que isso resolvia a corrida.
+ * Não resolvia: duas chamadas simultâneas leem `usadoEm: null` AS DUAS, e as duas seguem. A janela
+ * é pequena e é justamente a que um ataque explora, porque ele dispara em paralelo de propósito.
+ *
+ * ⛔ Só a transação fecha: ela relê dentro do escopo e falha se alguém gravou no meio. Quem perde a
+ * corrida recebe recusa, não entrada.
+ * ⚠️ Devolve o desafio para o chamador conferir a assinatura DEPOIS — a transação não pode esperar
+ * criptografia: transação longa é transação que aborta. */
+async function _passkeyConsumirDesafio(db, desafioId, tipo, uidEsperado) {
+  const ref = db.collection(_DESAFIOS).doc(desafioId);
+  return await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const reg = snap.exists ? snap.data() : null;
+    const val = _passkey.desafioValido(reg, Date.now());
+    if (!val.ok) return { ok: false, motivo: val.motivo };
+    if (reg.tipo !== tipo) return { ok: false, motivo: 'tipo-errado' };
+    if (uidEsperado && reg.uid !== uidEsperado) return { ok: false, motivo: 'de-outra-conta' };
+    tx.update(ref, { usadoEm: new Date().toISOString() });
+    return { ok: true, desafio: reg.desafio };
+  });
+}
+
+async function _passkeyLib() {
+  /* require tardio: a biblioteca só carrega em quem usa passkey, e não pesa nas outras 200 portas. */
+  return require("@simplewebauthn/server");
+}
+
+function _origemDoPedido(request) {
+  const h = (request && request.rawRequest && request.rawRequest.headers) || {};
+  return String(h.origin || h.Origin || "");
+}
+
+/* ── 1) a pessoa JÁ LOGADA pede para cadastrar o aparelho dela ────────────────────────── */
+exports.iniciarCadastroDePasskey = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
+  async (request) => {
+    const uid = request.auth && request.auth.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Login obrigatório");
+    const db = admin.firestore();
+
+    const [perfil, minhas] = await Promise.all([
+      db.collection("users").doc(uid).get(),
+      db.collection(_PASSKEYS).where("uid", "==", uid).get(),
+    ]);
+    if (!perfil.exists || (perfil.data() || {}).mergedInto) {
+      throw new HttpsError("not-found", "conta não encontrada");
+    }
+    if (!_passkey.podeCadastrarMais(minhas.size)) {
+      throw new HttpsError("resource-exhausted",
+        "você já tem " + minhas.size + " aparelhos cadastrados; remova um antes de acrescentar");
+    }
+
+    const lib = await _passkeyLib();
+    const opcoes = await lib.generateRegistrationOptions({
+      rpName: "scoreplace",
+      rpID: _passkey.DOMINIO,
+      userID: Buffer.from(uid, "utf8"),
+      userName: String((perfil.data() || {}).displayName || uid),
+      /* ⛔ `residentKey: required` é o que faz a chave ser DESCOBRÍVEL — sem isso a pessoa teria de
+       * dizer quem é antes de entrar, que é exatamente o problema que estamos resolvendo.
+       * ⛔ `userVerification: required` obriga o aparelho a pedir rosto ou digital. Sem isso o
+       * passkey viraria "tocar no botão e entrar". */
+      authenticatorSelection: { residentKey: "required", userVerification: "required" },
+      /* Não pedir atestado: ele identifica o MODELO do aparelho, que não precisamos e é mais dado
+       * pessoal do que o necessário. */
+      attestationType: "none",
+      excludeCredentials: minhas.docs.map((d) => ({ id: d.id })),
+    });
+
+    const ref = db.collection(_DESAFIOS).doc();
+    await ref.set({ desafio: opcoes.challenge, uid: uid, tipo: "cadastro",
+      criadoEmMs: Date.now(), usadoEm: null,
+      expiraEm: new Date(Date.now() + _passkey.DESAFIO_VALE_MS) });   /* ⛔ morre sozinho — ver a porta de entrada */
+    return { desafioId: ref.id, opcoes: opcoes };
+  }
+);
+
+/* ── 2) confere e guarda a chave PÚBLICA ──────────────────────────────────────────────── */
+exports.concluirCadastroDePasskey = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
+  async (request) => {
+    const uid = request.auth && request.auth.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Login obrigatório");
+    const data = request.data || {};
+    const desafioId = String(data.desafioId || "");
+    if (!desafioId || !data.resposta) throw new HttpsError("invalid-argument", "pedido incompleto");
+
+    const origem = _origemDoPedido(request);
+    if (!_passkey.origemAceita(origem)) {
+      console.warn("[passkey] origem recusada no cadastro: " + origem);
+      throw new HttpsError("permission-denied", "origem não autorizada");
+    }
+
+    const db = admin.firestore();
+    const consumo = await _passkeyConsumirDesafio(db, desafioId, "cadastro", uid);
+    if (!consumo.ok) {
+      throw new HttpsError("permission-denied", "desafio inválido (" + consumo.motivo + ")");
+    }
+
+    const lib = await _passkeyLib();
+    let v;
+    try {
+      v = await lib.verifyRegistrationResponse({
+        response: data.resposta,
+        expectedChallenge: consumo.desafio,
+        expectedOrigin: _passkey.ORIGENS,
+        expectedRPID: _passkey.DOMINIO,
+        requireUserVerification: true,
+      });
+    } catch (e) {
+      console.warn("[passkey] cadastro recusado: " + (e && e.message));
+      throw new HttpsError("permission-denied", "não consegui confirmar este aparelho");
+    }
+    if (!v || !v.verified || !v.registrationInfo) {
+      throw new HttpsError("permission-denied", "não consegui confirmar este aparelho");
+    }
+
+    const c = v.registrationInfo.credential || {};
+    const registro = _passkey.registroDaCredencial({
+      credentialId: c.id,
+      publicKey: Buffer.from(c.publicKey).toString("base64url"),
+      counter: c.counter,
+      transports: c.transports,
+      deviceType: v.registrationInfo.credentialDeviceType,
+      backedUp: v.registrationInfo.credentialBackedUp,
+    }, new Date().toISOString());
+
+    await db.collection(_PASSKEYS).doc(registro.credentialId)
+      .set(Object.assign({ uid: uid }, registro));
+    console.log(`[passkey] cadastrado para ${uid} (sincroniza: ${registro.backedUp})`);
+    return { ok: true, sincroniza: registro.backedUp };
+  }
+);
+
+/* ── 3) ENTRADA: devolve desafio SEM perguntar quem é ─────────────────────────────────── */
+exports.iniciarEntradaPorPasskey = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS,
+    /* ⚠️ `maxInstances` limita CONCORRÊNCIA, não requisições nem gravações — eu já escrevi aqui que
+     * ele "protegia" a porta pública e estava ERRADO. O teto de verdade está no corpo, por origem e
+     * por janela de minuto, e o mecanismo padrão (App Check) está nomeado em `passkey-core.js`. */
+    maxInstances: 10 },
+  async (request) => {
+    /* ⛔ SEM LOGIN, por natureza: é a porta de quem ainda não entrou. E sem `allowCredentials` —
+     * dizer quais credenciais existem revelaria se um e-mail tem conta aqui. A chave descobrível
+     * dispensa isso: o aparelho da pessoa sabe qual chave é dele. */
+    const db = admin.firestore();
+
+    /* ⛔⛔ TETO POR ORIGEM E POR MINUTO, com custo de escrita LIMITADO. Um laço de mil chamadas no
+     * mesmo minuto vira UMA gravação de contador, não mil documentos de desafio. Ver a explicação e
+     * os limites do que isto NÃO cobre em `passkey-core.js`. */
+    const _h = (request && request.rawRequest && request.rawRequest.headers) || {};
+    const _origemBruta = String(_h["x-forwarded-for"] || _h["X-Forwarded-For"] || "sem-origem").split(",")[0].trim();
+    /* ⚠️ Guarda o HASH, não o endereço: contador de abuso não precisa saber de quem é, e endereço de
+     * rede é dado pessoal. */
+    const _chaveOrigem = require("crypto").createHash("sha256").update(_origemBruta).digest("hex").slice(0, 32)
+      + "_" + _passkey.janelaDeMinuto(Date.now());
+    const _limRef = db.collection("passkeyRateLimit").doc(_chaveOrigem);
+    const _passou = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(_limRef);
+      const n = snap.exists ? Number((snap.data() || {}).n || 0) : 0;
+      if (_passkey.estourouOTeto(n)) return false;
+      tx.set(_limRef, { n: n + 1, expiraEm: new Date(Date.now() + 5 * 60 * 1000) }, { merge: true });
+      return true;
+    });
+    if (!_passou) {
+      console.warn("[passkey] teto por minuto estourado");
+      throw new HttpsError("resource-exhausted", "muitas tentativas; espere um instante");
+    }
+
+    /* ⛔ E O DESAFIO MORRE SOZINHO. Sem prazo de vida no documento, cada tentativa deixa lixo para
+     * sempre e a coleção cresce sem teto — o custo do abuso ficaria gravado. `expiraEm` é o campo que
+     * a política de expiração do Firestore apaga; o prazo curto já é exigido na conferência. */
+    const lib = await _passkeyLib();
+    const opcoes = await lib.generateAuthenticationOptions({
+      rpID: _passkey.DOMINIO,
+      userVerification: "required",
+    });
+    const ref = db.collection(_DESAFIOS).doc();
+    await ref.set({ desafio: opcoes.challenge, uid: null, tipo: "entrada",
+      criadoEmMs: Date.now(), usadoEm: null,
+      expiraEm: new Date(Date.now() + _passkey.DESAFIO_VALE_MS) });
+    return { desafioId: ref.id, opcoes: opcoes };
+  }
+);
+
+/* ── 4) confere a assinatura, acha o uid pela credencial e emite o token ──────────────── */
+exports.concluirEntradaPorPasskey = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
+  async (request) => {
+    const data = request.data || {};
+    const desafioId = String(data.desafioId || "");
+    const resposta = data.resposta;
+    if (!desafioId || !resposta || !resposta.id) {
+      throw new HttpsError("invalid-argument", "pedido incompleto");
+    }
+    const origem = _origemDoPedido(request);
+    if (!_passkey.origemAceita(origem)) {
+      console.warn("[passkey] origem recusada na entrada: " + origem);
+      throw new HttpsError("permission-denied", "origem não autorizada");
+    }
+
+    const db = admin.firestore();
+    const consumo = await _passkeyConsumirDesafio(db, desafioId, "entrada", null);
+    if (!consumo.ok) {
+      throw new HttpsError("permission-denied", "desafio inválido (" + consumo.motivo + ")");
+    }
+    const cSnap = await db.collection(_PASSKEYS).doc(String(resposta.id)).get();
+
+    if (!cSnap.exists) throw new HttpsError("permission-denied", "aparelho não reconhecido");
+    const cred = cSnap.data() || {};
+
+    /* ⛔ A CONTA TEM DE ESTAR VIVA. Lápide de conta fundida ou excluída não entra por passkey —
+     * senão a chave de uma conta absorvida daria acesso a um uid que não é mais de ninguém.
+     * ⭐ E se a conta foi FUNDIDA, a entrada segue para quem a absorveu: é o mesmo desvio que o
+     * login por provedor já faz, e é o que evita a pessoa criar uma terceira conta. */
+    const perfil = await db.collection("users").doc(String(cred.uid || "")).get();
+    const pd = perfil.exists ? (perfil.data() || {}) : null;
+    if (!pd || pd.deleted === true) throw new HttpsError("not-found", "esta conta não existe mais");
+    const uidFinal = String(pd.mergedInto || cred.uid);
+
+    const lib = await _passkeyLib();
+    let v;
+    try {
+      v = await lib.verifyAuthenticationResponse({
+        response: resposta,
+        expectedChallenge: consumo.desafio,
+        expectedOrigin: _passkey.ORIGENS,
+        expectedRPID: _passkey.DOMINIO,
+        requireUserVerification: true,
+        credential: {
+          id: cSnap.id,
+          publicKey: Buffer.from(String(cred.publicKey || ""), "base64url"),
+          counter: Number(cred.counter || 0),
+          transports: Array.isArray(cred.transports) ? cred.transports : undefined,
+        },
+      });
+    } catch (e) {
+      console.warn("[passkey] entrada recusada: " + (e && e.message));
+      throw new HttpsError("permission-denied", "não consegui confirmar quem é");
+    }
+    if (!v || !v.verified) throw new HttpsError("permission-denied", "não consegui confirmar quem é");
+
+    /* ⛔ O CONTADOR É A DEFESA CONTRA REUSO DE ASSINATURA, e a exceção está anotada no núcleo:
+     * zero dos dois lados é legítimo (Apple não implementa contador). */
+    /* ⛔ O CONTADOR TAMBÉM AVANÇA EM TRANSAÇÃO, pela MESMA razão do desafio: ler, comparar e gravar
+     * em três passos deixa duas assinaturas iguais passarem juntas. Aqui a releitura é dentro do
+     * escopo, então quem perde a corrida apanha. */
+    const novo = Number((v.authenticationInfo || {}).newCounter || 0);
+    const avancou = await db.runTransaction(async (tx) => {
+      const atual = await tx.get(cSnap.ref);
+      const g = Number(((atual.exists ? atual.data() : {}) || {}).counter || 0);
+      if (!_passkey.contadorAvancou(g, novo)) return false;
+      tx.update(cSnap.ref, { counter: novo, ultimoUsoEm: new Date().toISOString() });
+      return true;
+    });
+    if (!avancou) {
+      console.warn(`[passkey] contador não avançou (${cred.counter} → ${novo}) em ${cSnap.id}`);
+      throw new HttpsError("permission-denied", "assinatura repetida");
+    }
+
+    const token = await admin.auth().createCustomToken(uidFinal);
+    console.log(`[passkey] entrada de ${uidFinal}` + (pd.mergedInto ? " (desviado da conta fundida)" : ""));
+    return { token: token, uid: uidFinal };
+  }
+);
+
+/* ⛔⛔ LISTAR E REVOGAR A CHAVE — SEM ISSO A ENTRADA SEM SENHA É UMA PORTA SEM TRANCA.
+ *
+ * ⭐ ACHADO NA REVISÃO DE 25/set/2026, e é o defeito mais grave desta leva: eu entreguei o cadastro
+ * de chaves e a mensagem "remova um antes de acrescentar", **sem existir porta para remover**. E como
+ * a coleção é fechada ao cliente nas Rules — de propósito —, não havia caminho nenhum.
+ * ⇒ Aparelho perdido, vendido ou emprestado continuaria entrando na conta PARA SEMPRE, e a pessoa não
+ * teria o que fazer. Recurso de autenticação sem revogação não é recurso, é risco.
+ *
+ * ⛔ A LISTA NÃO DEVOLVE A CHAVE PÚBLICA nem o contador: quem olha precisa reconhecer o aparelho e
+ * decidir, não auditar criptografia. Devolve o que a pessoa reconhece — quando cadastrou, quando usou
+ * pela última vez, se sincroniza — e um identificador opaco para mandar remover.
+ */
+exports.listarMinhasPasskeys = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
+  async (request) => {
+    const uid = request.auth && request.auth.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Login obrigatório");
+    const db = admin.firestore();
+    const snap = await db.collection(_PASSKEYS).where("uid", "==", uid).get();
+    const lista = snap.docs.map((d) => {
+      const c = d.data() || {};
+      return {
+        id: d.id,
+        criadoEm: c.criadoEm || null,
+        ultimoUsoEm: c.ultimoUsoEm || null,
+        sincroniza: c.backedUp === true,
+      };
+    });
+    /* Mais recente em uso primeiro: é o que a pessoa reconhece como "este aqui sou eu agora". */
+    lista.sort((a, b) => String(b.ultimoUsoEm || b.criadoEm || "").localeCompare(String(a.ultimoUsoEm || a.criadoEm || "")));
+    return { passkeys: lista, teto: _passkey.MAX_POR_CONTA };
+  }
+);
+
+exports.revogarPasskey = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
+  async (request) => {
+    const uid = request.auth && request.auth.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Login obrigatório");
+    const id = String((request.data && request.data.id) || "").trim();
+    if (!id) throw new HttpsError("invalid-argument", "diga qual aparelho");
+
+    const db = admin.firestore();
+    const ref = db.collection(_PASSKEYS).doc(id);
+    /* ⛔ EM TRANSAÇÃO, e conferindo o DONO dentro dela: sem isso, duas revogações simultâneas ou uma
+     * chamada com identificador de chave alheia poderiam apagar a credencial de outra pessoa.
+     * A credencial mora no topo (para a entrada achá-la com uma leitura), então o dono NÃO está no
+     * caminho do documento — conferir é obrigatório, não zelo. */
+    const fora = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) return { ok: false, motivo: "nao-existe" };
+      if (String((snap.data() || {}).uid || "") !== uid) return { ok: false, motivo: "de-outra-conta" };
+      tx.delete(ref);
+      return { ok: true };
+    });
+    if (!fora.ok) {
+      /* ⚠️ A MESMA resposta para "não existe" e "é de outra conta": distinguir contaria a quem
+       * tentou que aquela credencial existe e é de alguém. */
+      throw new HttpsError("not-found", "aparelho não encontrado na sua conta");
+    }
+    console.log(`[passkey] revogada uma chave de ${uid}`);
+    return { ok: true };
   }
 );

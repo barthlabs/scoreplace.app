@@ -309,16 +309,23 @@ module.exports.credentialsProveSamePerson = credentialsProveSamePerson;
  * @returns {{ dismissed: boolean, by: string|null }}
  */
 function dismissalBlocksMerge(dataA, dataB, uidA, uidB) {
-  const dispensou = (data, outroUid) => {
+  /* ⛔⛔ AQUI A FORÇA NÃO IMPORTA, E ISSO É DE PROPÓSITO (25/set/2026).
+   * Esta função decide se a FUSÃO fica barrada. Fusão apaga uma conta e não tem volta, então
+   * qualquer "não sou eu" — mesmo um cujo crédito foi desacreditado por ter nascido sob a regra
+   * antiga do celular — continua barrando. O desconto de crédito serve para VOLTAR A PERGUNTAR,
+   * nunca para autorizar fusão: o mesmo sinal pode bastar para perguntar e não bastar para fundir.
+   * ⚠️ Mas o AUTO-PAR sai: um registro que aponta para o próprio perfil não é dispensa de nada, e
+   * deixá-lo passar barraria a fusão da conta consigo mesma — que é o caminho de reivindicação. */
+  const dispensou = (data, outroUid, euUid) => {
     if (!data || !outroUid) return false;
     const lista = [].concat(
       Array.isArray(data.dupDismissedInfo) ? data.dupDismissedInfo : [],
       Array.isArray(data.dupDismissed) ? data.dupDismissed : []);
     return Object.prototype.hasOwnProperty.call(
-      require("./duplicate-person-core").mapaDeDispensados(lista), outroUid);
+      require("./duplicate-person-core").mapaDeDispensados(lista, euUid), outroUid);
   };
-  if (dispensou(dataA, uidB)) return { dismissed: true, by: uidA || 'a' };
-  if (dispensou(dataB, uidA)) return { dismissed: true, by: uidB || 'b' };
+  if (dispensou(dataA, uidB, uidA)) return { dismissed: true, by: uidA || 'a' };
+  if (dispensou(dataB, uidA, uidB)) return { dismissed: true, by: uidB || 'b' };
   return { dismissed: false, by: null };
 }
 
