@@ -2114,76 +2114,23 @@ window.FirestoreDB = {
     }
   },
 
-  // Paginated discovery feed: public tournaments currently open for
-  // enrollment. Used by the dashboard "Descobrir torneios" section so users
-  // find events they aren't in yet. Server-side filters cap reads to
-  // O(open public tournaments), not O(whole DB). Pass `cursor` (the last
-  // DocumentSnapshot from a previous call) to page; returns { tournaments,
-  // nextCursor, hasMore }.
-  //
-  // Requires a composite index on (isPublic asc, status asc, createdAt desc).
-  // Firestore suggests the exact index via a console link on first query if
-  // it isn't there yet.
-  async loadPublicOpenTournaments(opts) {
-    if (!this.db) return { tournaments: [], nextCursor: null, hasMore: false };
-    opts = opts || {};
-    var limit = Math.max(1, Math.min(50, opts.limit || 20));
-    try {
-      // Query só por isPublic=true + orderBy createdAt desc. Antes filtrávamos
-      // server-side por `status == 'open'`, mas descobrimos que o fluxo de
-      // criação de torneio (create-tournament.js) não setava `status` no
-      // tourData — o campo ficava undefined e a query server-side excluía os
-      // torneios, resultando em count zero na dashboard "Abertos para você".
-      // Agora filtramos client-side: aceita status ausente OU 'open'.
-      // O custo é ler docs a mais (finished/closed) que descartamos na
-      // memória — aceitável na escala alpha; pode ser revertido pra query
-      // estrita depois de uma migration que backfill `status: 'open'` nos
-      // docs antigos.
-      var q = this.db.collection('tournaments')
-        .where('isPublic', '==', true)
-        .orderBy('createdAt', 'desc');
-      if (opts.cursor) q = q.startAfter(opts.cursor);
-      // Busca 3x a mais pra compensar filtragem client-side de docs
-      // encerrados/fechados — evita que o primeiro page fique quase vazio.
-      q = q.limit((limit + 1) * 3);
-      var snap = await q.get();
-      try { if (window._noteFsReads) window._noteFsReads(snap.size, 'load-public-open'); } catch (e) {}
-      var tournaments = [];
-      var lastDoc = null;
-      var kept = 0;
-      snap.forEach(function(doc) {
-        var d = doc.data();
-        if (!d) return;
-        // Aceita status ausente (legacy) ou explicitamente 'open'.
-        // Bloqueia status 'closed', 'finished', 'active' (em andamento) —
-        // EXCETO Liga/Ranking que aceita inscrição mesmo com sorteio iniciado
-        // (status='active') desde que ligaOpenEnrollment !== false.
-        // v0.16.53: bug onde Liga pública sumia do feed de descoberta assim
-        // que o organizador iniciava a 1ª rodada — Nelson não conseguia ver
-        // Liga pública criada por Rodrigo porque status virou 'active'.
-        var st = d.status;
-        var isLigaFmt = d.format === 'Liga' || d.format === 'Ranking' || d.format === 'liga' || d.format === 'ranking';
-        var ligaStillOpen = isLigaFmt && d.ligaOpenEnrollment !== false && st !== 'closed' && st !== 'finished';
-        var isOpen = !st || st === 'open' || ligaStillOpen;
-        if (!isOpen) return;
-        // Lastdoc sempre avança mesmo quando filtrado — precisa pra cursor
-        // funcionar corretamente na próxima página.
-        lastDoc = doc;
-        if (kept < limit) {
-          tournaments.push(d);
-          kept++;
-        }
-      });
-      return {
-        tournaments: tournaments,
-        nextCursor: lastDoc,
-        hasMore: snap.size >= (limit + 1) * 3
-      };
-    } catch (e) {
-      window._error('Erro ao carregar torneios públicos:', e);
-      return { tournaments: [], nextCursor: null, hasMore: false };
-    }
-  },
+  /* ⛔⛔ `loadPublicOpenTournaments` FOI APAGADA (24/set/2026), e ela era uma ARMADILHA.
+   *
+   * Ela já não era usada: quem carrega a descoberta é `loadAllPublicTournaments`, abaixo. Mas
+   * ficava como QUEDA em `store.js` (`loadAllPublicTournaments || loadPublicOpenTournaments`),
+   * e a queda estava quebrada de duas formas — as duas silenciosas:
+   *   ① a consulta era `isPublic == true` + `orderBy('createdAt','desc')`, e o índice declarado
+   *      é `isPublic + status + createdAt`, que NÃO serve essa forma. MEDIDO: rodando a consulta
+   *      no projeto, ela falha com FAILED_PRECONDITION;
+   *   ② o `catch` dela devolvia LISTA VAZIA. Se a função boa faltasse, a descoberta ficaria em
+   *      branco sem uma única mensagem na tela.
+   * ⛔ Queda que devolve dado silenciosamente errado é pior que não ter queda: o repositório já
+   * registra que NÃO FECHAR vence FECHAR ERRADO. E o `orderBy` tinha um segundo defeito
+   * conhecido — exclui em silêncio quem não tem `createdAt`, que é exatamente por que a função
+   * boa o removeu.
+   * ⚠️ Ela também me custou tempo HOJE: li a consulta dela, vi o índice faltando e quase
+   * relatei que a descoberta pública estava quebrada em produção. Não estava.
+   * [[feedback_fallback_local_recria_a_divergencia]] [[feedback_engolir_erro_custa_horas_do_dono]] */
 
   // v0.16.57: novo loader que retorna TODOS os torneios públicos (sem filtro
   // de status). Diferente de `loadPublicOpenTournaments`, que filtra apenas

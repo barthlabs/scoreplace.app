@@ -1,3 +1,4 @@
+// 2.3.105 — arrumação interna, sem mudança na tela: saiu um caminho de reserva da busca de torneios públicos que, se fosse usado, deixaria a lista em branco sem dar erro.
 // 2.3.104 — o relatório de entrega do comunicado passou a saber de QUAL envio cada falha veio: antes ele juntava pelo endereço e pela hora, então o retorno de outro comunicado entrava na conta.
 // 2.3.103 — o relatório de comunicado parou de dizer que 75 pessoas não receberam o e-mail: a falha tinha sido TEMPORÁRIA do provedor, não recusa da caixa delas. Agora há um terceiro estado, que não afirma nem uma coisa nem outra.
 // 2.3.102 — arrumação interna, sem mudança na tela: a pergunta "sou o organizador deste torneio?" tinha a mesma verificação copiada à mão em 38 lugares, e uma delas escapava de qualquer busca. Agora há um ponto só, e um portão impede que volte a se espalhar.

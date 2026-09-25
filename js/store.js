@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.3.104';
+window.SCOREPLACE_VERSION = '2.3.105';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -12754,8 +12754,12 @@ window.AppStore = {
     // fechadas-sem-sorteio → encerrados). Categorização é client-side
     // no dashboard via _classifyDiscoveryTournament.
     if (!window.FirestoreDB) return;
-    var loader = window.FirestoreDB.loadAllPublicTournaments
-      || window.FirestoreDB.loadPublicOpenTournaments;
+    /* ⛔ SEM QUEDA (24/set/2026). Aqui havia `|| loadPublicOpenTournaments`, e aquela função
+     * falhava por falta de índice e devolvia LISTA VAZIA pelo `catch` — a descoberta ficaria em
+     * branco sem nenhum aviso. Ela foi apagada; ver a anotação em js/firebase-db.js.
+     * Se o carregador não existir, sair sem nada é honesto: não há o que mostrar, e a tela não
+     * finge que o mundo está vazio. */
+    var loader = window.FirestoreDB.loadAllPublicTournaments;
     if (typeof loader !== 'function') return;
     opts = opts || {};
     var cursor = opts.append ? this._publicDiscoveryCursor : null;
