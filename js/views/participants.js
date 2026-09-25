@@ -926,6 +926,19 @@ window._resolveEditNameTarget = function (btn, chave) {
 };
 
 window._editParticipantName = function(tId, oldName, targetUid, btn) {
+  /* ⛔⛔ CONTA SE RENOMEIA NO PERFIL DELA, NÃO AQUI (25/set/2026).
+   * Pergunta do dono: _"onde renomeia conta que nao no perfil do usuário?"_ — em lugar nenhum.
+   * O lápis já não é desenhado para quem tem conta; esta recusa é a segunda linha, para o caso
+   * de algum caminho futuro chamar esta função com um uid. Editar o cadastro de outra pessoa
+   * não é poder de organizador, e a tela mostra o nome VIVO do perfil de todo modo — trocar o
+   * rótulo interno do torneio mudava um dado que ninguém vê e ainda dizia "atualizado". */
+  if (targetUid) {
+    if (typeof showNotification === 'function') {
+      showNotification('O nome é da pessoa',
+        'Quem tem conta muda o próprio nome no perfil. Você edita só quem você inscreveu à mão.', 'info');
+    }
+    return;
+  }
   var span = window._resolveEditNameTarget(btn, String(tId) + '|' + String(targetUid || oldName));
   if (!span) {
     if (typeof showNotification === 'function') showNotification('Não deu pra editar', 'Recarregue a tela e tente de novo.', 'error');
@@ -996,13 +1009,11 @@ window._editParticipantName = function(tId, oldName, targetUid, btn) {
          * decisão do DONO, não minha — está anotada e vai separada.
          * [[feedback_nao_prometer_no_botao_o_que_nao_se_pode_conferir]]
          * [[feedback_never_freeze_my_opinion_as_owners_decision]] */
+        /* ⛔ O ramo "com conta" SAIU (25/set/2026): ele explicava por que a tela não mudava
+         * depois de renomear quem tem conta. Agora esse caso nem chega aqui — a edição é só
+         * de quem foi digitado à mão, e para ele o nome gravado É o que a tela mostra. */
         if (typeof showNotification === 'function') {
-          if (targetUid) {
-            showNotification('Nome atualizado neste torneio',
-              'Trocado para "' + newName + '" no elenco e nos jogos. Na tela continua aparecendo o nome do perfil de quem tem conta.', 'success');
-          } else {
-            showNotification(_t('participants.nameUpdated'), _t('participants.nameUpdatedMsg', { old: oldName, 'new': newName }), 'success');
-          }
+          showNotification(_t('participants.nameUpdated'), _t('participants.nameUpdatedMsg', { old: oldName, 'new': newName }), 'success');
         }
         _cleanup();
         _reRenderParticipants();
@@ -1612,7 +1623,15 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
       var _mNameHtml = (typeof window._personNameHtml === 'function')
         ? window._personNameHtml(_mUid, _mShown, 'font-weight:700;font-size:' + _FONT + 'px;color:var(--text-bright);white-space:normal;overflow-wrap:anywhere;word-break:break-word;min-width:0;', '', ' data-edit-name-target="1"')
         : '<span' + _mUidAttr + ' style="font-weight:700;font-size:' + _FONT + 'px;color:var(--text-bright);white-space:normal;overflow-wrap:anywhere;word-break:break-word;min-width:0;">' + _mDisp + '</span>';
-      var _mEditBtn = isOrg
+      /* ⛔⛔ QUEM TEM CONTA NÃO SE RENOMEIA DAQUI (25/set/2026).
+       * Pergunta do dono, e ela é a resposta: _"onde renomeia conta que nao no perfil do
+       * usuário?"_ Em lugar nenhum. O nome de quem tem conta mora no PERFIL DELA, e a tela
+       * já desenha o nome vivo do perfil — então o lápis aqui trocava um rótulo interno do
+       * torneio que a tela nem mostra, e ainda avisava "atualizado". Editar o cadastro de
+       * outra pessoa não é poder de organizador.
+       * ⭐ O lápis FICA para quem o organizador digitou À MÃO: sem conta, o nome escrito é a
+       * única identidade que existe, e corrigi-lo é legítimo. */
+      var _mEditBtn = (isOrg && !_mUid)
         ? '<button type="button" title="Editar ' + _nmH + '" aria-label="Editar ' + _nmH + '" style="border:0;background:transparent;color:var(--text-muted);font-size:0.86rem;line-height:1;padding:3px;cursor:pointer;flex-shrink:0;" onclick="event.stopPropagation();window._editParticipantName(\'' + t.id + '\',\'' + _nmSafe + '\',\'' + _mUid + '\',this)">✏️</button>'
         : '';
       // ⭐ ponto único: o nome já hidratava (_mUidAttr), o ÍCONE não — e era ele que
@@ -1657,7 +1676,9 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
     var _pNameLinkHtml = (typeof window._personNameHtml === 'function')
       ? window._personNameHtml(_pUid, _pShown, 'font-weight:700;font-size:' + _FONT + 'px;color:var(--text-bright);white-space:normal;overflow-wrap:anywhere;word-break:break-word;min-width:0;', '', ' data-edit-name-target="1"')
       : '<span' + _pUidAttr + ' style="font-weight:700;font-size:' + _FONT + 'px;color:var(--text-bright);white-space:normal;overflow-wrap:anywhere;word-break:break-word;min-width:0;">' + _pDisp + '</span>';
-    var _pEditBtn = isOrg
+    /* ⛔ Mesmo motivo do bloco acima: conta se renomeia no perfil dela. O lápis fica só
+     * para inscrito digitado à mão. */
+    var _pEditBtn = (isOrg && !_pUid)
       ? '<button type="button" title="Editar ' + _pNameH + '" aria-label="Editar ' + _pNameH + '" style="border:0;background:transparent;color:var(--text-muted);font-size:0.86rem;line-height:1;padding:3px;cursor:pointer;flex-shrink:0;" onclick="event.stopPropagation();window._editParticipantName(\'' + t.id + '\',\'' + _pSafe + '\',\'' + _pUid + '\',this)">✏️</button>'
       : '';
     pNameHtml = '<div data-edit-name-scope data-edit-key="' + window._safeHtml(String(t.id) + '|' + String(_pUid || pName)) + '" style="display:flex;align-items:center;gap:8px;overflow:hidden;">' +
@@ -2671,7 +2692,8 @@ function renderParticipants(container, tournamentId) {
       const _niRotuloTorneio = (isOrg && _niUid && ind.name && String(ind.name).trim() && String(ind.name).trim() !== String(_niShown).trim())
         ? `<div style="font-size:0.63rem;color:var(--text-muted);opacity:0.75;line-height:1.2;margin-top:1px;">neste torneio: ${window._safeHtml(String(ind.name).trim())}</div>`
         : '';
-      const _niEditBtn = isOrg
+      /* ⛔ Mesmo motivo: conta se renomeia no perfil dela. Lápis só para digitado à mão. */
+      const _niEditBtn = (isOrg && !_niUid)
         ? `<button type="button" title="Editar ${_safeName}" aria-label="Editar ${_safeName}" style="border:0;background:transparent;color:var(--text-muted);font-size:0.82rem;line-height:1;padding:3px;cursor:pointer;flex-shrink:0;" onclick="event.stopPropagation();window._editParticipantName('${tId}','${safeName}','${_niUid}',this)">\u270f\ufe0f</button>`
         : '';
       const _nameRow = `<div data-edit-name-scope data-edit-key="${window._safeHtml(String(tId) + '|' + String(_niUid || ind.name || ''))}" style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;min-width:0;">${_niNomeHtml}${_niContato}${_niEditBtn}${_orgStarC}${isStandby ? presenceDot : ''}</div>${_niRotuloTorneio}`;

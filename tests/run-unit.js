@@ -1396,6 +1396,7 @@ const SUITES = [
   'tests/fantasma-do-wo-mostra-o-rotulo.test.js',
   'tests/erro-temporario-nao-e-bounce.test.js',
   'tests/descoberta-publica-sem-queda-silenciosa.test.js',
+  'tests/rotacao-nao-faz-o-trabalho-duas-vezes.test.js',
   'functions/test-merge-collections-core.js',
   // v2.1.48 — a autoridade da amizade (fechou a escalada de privilégio da 2.1.47)
   'functions/test-amizade-authority-core.js',

@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.3.105';
+window.SCOREPLACE_VERSION = '2.3.106';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -7068,19 +7068,40 @@ window._firstNameOnly = function(name) {
         if (Math.abs(bw - pw) < 2 && Math.abs(bh - ph) < 2) return;
         el.removeAttribute('data-fitted');
         _fitOne(el);
+        /* ⛔ MARCA O QUE ACABEI DE AJUSTAR: o passe de reserva abaixo limpava `data-fitted` de
+         * TODOS e reajustava o documento inteiro, refazendo por cima justamente este trabalho.
+         * No giro do aparelho isso é o dobro do custo, e é o que o dono sente. */
+        el.__fitEm = Date.now();
       });
     });
   }
 
-  // Fallback pra ResizeObserver: re-ajusta tudo em resize de janela (debounced).
-  // Cobre a mudança do `zoom` por área quando a largura da viewport muda.
+  /* Reserva do ResizeObserver: cobre a mudança do `zoom` por área quando a largura da viewport
+   * muda — nesse caso a CAIXA não muda de tamanho, então o observador não dispara e só uma
+   * varredura resolve.
+   *
+   * ⛔⛔ MAS ELA NÃO REFAZ O QUE O OBSERVADOR JÁ FEZ (25/set/2026). Ordem do dono: _"já pedi
+   * inúmeras vezes para acelerar as coisas e parar com redundância inútil"_ — e era isso mesmo.
+   * No giro do aparelho, o `ResizeObserver` reajusta cada caixa que mudou NA HORA; depois este
+   * passe limpava `data-fitted` de TODOS e reajustava o documento inteiro por cima. Trabalho
+   * feito duas vezes, e a segunda é a caríssima (o documento todo).
+   * ⭐ Agora ele PULA quem o observador marcou na mesma rajada. O caso do zoom continua
+   * coberto: ali o observador não dispara, ninguém fica marcado, e a varredura faz tudo.
+   * ⛔ A janela é curta de propósito (a rajada do giro dura pouco): marca velha não deve
+   * impedir um reajuste legítimo mais tarde. */
   var _rt = null;
+  var JANELA_DA_RAJADA_MS = 400;
   if (typeof window.addEventListener === 'function') {
     window.addEventListener('resize', function() {
       if (_rt) clearTimeout(_rt);
       _rt = setTimeout(function() {
+        var agora = Date.now();
         var els = document.querySelectorAll('.sp-name-fit[data-fitted]');
-        Array.prototype.forEach.call(els, function(el) { el.removeAttribute('data-fitted'); });
+        Array.prototype.forEach.call(els, function(el) {
+          var em = el.__fitEm || 0;
+          if (em && (agora - em) < JANELA_DA_RAJADA_MS) return;   // o observador já fez este
+          el.removeAttribute('data-fitted');
+        });
         window._fitNames(document, 0);
       }, 150);
     });

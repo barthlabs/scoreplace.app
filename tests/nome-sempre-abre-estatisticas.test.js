@@ -63,6 +63,14 @@ ok(_nameRowAdmin.length > 0, 'a linha do nome da lista administrativa foi locali
 ok(/\$\{_niNomeHtml\}/.test(_nameRowAdmin), 'a lista administrativa emite o nome pelo helper canônico da ficha');
 ok(/\$\{_niContato\}/.test(_nameRowAdmin), 'a lista administrativa mostra o balão de contato ao lado do nome');
 ok(/\$\{_niEditBtn\}/.test(_nameRowAdmin), 'a edição da lista administrativa é um botão próprio, não o nome');
+/* ⛔ E o botão só existe para quem foi digitado À MÃO (25/set/2026). Pergunta do dono: "onde
+ * renomeia conta que não no perfil do usuário?" — em lugar nenhum. */
+ok(/const _niEditBtn = \(isOrg && !_niUid\)/.test(participants),
+  '⛔ o lápis não aparece para quem tem conta — conta se renomeia no perfil dela');
+ok(/var _pEditBtn = \(isOrg && !_pUid\)/.test(participants) && /var _mEditBtn = \(isOrg && !_mUid\)/.test(participants),
+  'e o mesmo vale no card do inscrito e no membro de dupla — os TRÊS pontos');
+ok(/if \(targetUid\) \{[\s\S]{0,260}O nome é da pessoa/.test(participants),
+  '⛔ e a própria porta RECUSA conta, como segunda linha — caminho futuro não reabre isso');
 ok(!/onclick=/.test(_nameRowAdmin), 'nenhum onclick sobrou dentro da linha do nome');
 ok(/_personNameHtml\(_niUid, _niShown/.test(participants), 'o nome entregue ao helper é o vivo e CRU, não o já escapado');
 ok(/_editParticipantName\('\$\{tId\}','\$\{safeName\}'/.test(participants),
@@ -121,13 +129,13 @@ ok(/cancelado/.test(_corpoEdit) && /if \(cancelado\) return;/.test(_corpoEdit),
 ok(/nomeVivoInicial/.test(_corpoEdit) && !/span\.textContent = oldName/.test(_corpoEdit),
   'o rollback devolve o nome VIVO que estava na tela, não o nome gravado');
 ok((_corpoEdit.match(/_cleanup\(/g) || []).length >= 5, 'todas as saídas passam pela limpeza única');
-/* ⛔ Com conta, a tela é desenhada pelo nome do PERFIL: a Function troca o rótulo do
- * torneio e o re-render repõe o nome vivo. Dizer "nome atualizado" e a tela não mudar faz
- * o organizador achar que falhou. O aviso tem de dizer o que de fato mudou. */
-ok(/if \(targetUid\)[\s\S]{0,400}Nome atualizado neste torneio/.test(_corpoEdit),
-  'com conta, o aviso diz que mudou o rótulo DESTE torneio, não promete mudar a tela');
-ok(/nome do perfil de quem tem conta/.test(_corpoEdit),
-  'o aviso explica por que a tela continua mostrando o nome do perfil');
+/* ⛔ O AVISO ESPECÍFICO DE CONTA SAIU (25/set/2026), com o próprio caso: a edição de quem tem
+ * conta foi eliminada — "onde renomeia conta que não no perfil do usuário?". Aquele aviso
+ * existia para explicar por que a tela não mudava depois de renomear; agora isso nem acontece. */
+ok(!/Nome atualizado neste torneio/.test(_corpoEdit),
+  'o aviso que explicava a renomeação invisível saiu junto com o caso que o exigia');
+ok(/O nome é da pessoa/.test(_corpoEdit),
+  '⛔ e no lugar há a RECUSA: quem tem conta muda o nome no perfil dela');
 /* ⛔ E o organizador tem de CONSEGUIR CONFERIR o que mudou: o rótulo do torneio aparece
  * na linha quando diverge do nome do perfil. Não é troca de precedência — o nome segue
  * sendo o do perfil; isto é informação secundária, e some quando os dois são iguais. */
@@ -253,7 +261,10 @@ ok(listeners.click.capture === true && opened === 1 && click.prevented && click.
     'var _reRenderParticipants = window._reRenderParticipants;' +
     'window._editParticipantName = function(tId, oldName, targetUid, btn) ' + corpoEdit, W2, { filename: 'editar-nome' });
 
-  W2._editParticipantName('t1', 'Ana Gravada', 'u-ana', botao);
+  /* ⛔ A FIXTURE PASSOU A EDITAR QUEM NÃO TEM CONTA. A edição de conta foi eliminada, então
+   * exercitá-la aqui testaria um caminho que já não existe. Sem uid, o nome gravado É a
+   * identidade — e é esse o caso legítimo do lápis. */
+  W2._editParticipantName('t1', 'Ana Gravada', '', botao);
   ok(marcador._attrs['contenteditable'] === 'true', 'o lápis abriu a edição no span do nome, não no botão');
   ok(marcador._attrs['data-player-profile-disabled'] === '1', 'durante a edição a ficha fica travada');
   marcador.blur();
@@ -262,20 +273,29 @@ ok(listeners.click.capture === true && opened === 1 && click.prevented && click.
   ok(!marcador._attrs['data-player-profile-disabled'], 'a trava da ficha sai ao terminar');
 
   // Escape depois de digitar: também não chama, e devolve o nome vivo.
-  W2._editParticipantName('t1', 'Ana Gravada', 'u-ana', botao);
+  W2._editParticipantName('t1', 'Ana Gravada', '', botao);
   marcador.textContent = 'Ana Nova';
   ouvintes.keydown({ key: 'Escape', preventDefault() {} });
   ok(chamouCF === 0 && marcador.textContent === 'Ana Perfil',
     'Escape descarta o que foi digitado e não dispara a renomeação');
 
   // Digitar de verdade e sair: aí sim chama, com o nome GRAVADO como referência.
-  W2._editParticipantName('t1', 'Ana Gravada', 'u-ana', botao);
+  W2._editParticipantName('t1', 'Ana Gravada', '', botao);
   marcador.textContent = 'Ana Souza';
   let pacote = null;
   W2._callCF = function (fn, p2) { chamouCF++; pacote = p2; return { then(f) { f(); return { catch() { return { finally() {} }; } }; } }; };
   marcador.blur();
   ok(chamouCF === 1 && pacote && pacote.oldName === 'Ana Gravada' && pacote.newName === 'Ana Souza',
     'editar de verdade manda o nome GRAVADO como oldName e o digitado como novo');
+
+  /* ⛔ E COM CONTA, RECUSA — sem abrir nada e sem chamar servidor. */
+  marcador._attrs['contenteditable'] = 'false';
+  const antesDaRecusa = chamouCF;
+  W2._editParticipantName('t1', 'Ana Gravada', 'uid-conta-real-01', botao);
+  ok(marcador._attrs['contenteditable'] === 'false' && chamouCF === antesDaRecusa,
+    '⛔ com conta não abre edição nem chama o servidor — o nome é da pessoa');
+  ok(avisos.some((a) => /O nome é da pessoa/.test(a)),
+    'e diz por quê, em vez de falhar calado');
 }
 
 console.log(fail ? `❌ nome-sempre-abre-estatisticas: ${fail} falha(s), ${pass} ok` : `✅ nome-sempre-abre-estatisticas: ${pass} ok`);
