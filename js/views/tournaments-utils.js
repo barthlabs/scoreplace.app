@@ -49,6 +49,53 @@ window._isMonarchFormat = window._isMonarchFormat || function(t) {
     return !!(t && (t.drawMode === 'rei_rainha' || t.ligaRoundFormat === 'rei_rainha'));
 };
 
+/* ⛔⛔ "O SORTEIO DA FASE ATUAL É REI/RAINHA?" — OUTRA PERGUNTA, e é de propósito que tenha
+ * outro nome (25/set/2026, bloco 4 da reforma).
+ *
+ * `_isMonarchFormat`, logo acima, responde "ESTE TORNEIO é um Rei/Rainha?" lendo o TOPO do
+ * documento. Isso está certo para rótulo: o Confra é um Rei/Rainha, inclusive depois de passar
+ * para a eliminatória. E está ERRADO para comportamento, porque o topo descreve a PRIMEIRA fase.
+ *
+ * ⛔ MEDIDO NO DADO REAL, nos 78 torneios: 76 concordam, 1 diverge — o Confra 2026.
+ *     topo:    format 'Liga' · ligaRoundFormat 'rei_rainha' · drawMode 'rei_rainha'  (fase 0)
+ *     está em: currentPhaseIndex 1 → fase 'Eliminatória', reiRainha false, sorteio de duplas
+ *   Quem pergunta ao topo "tem parceiro rotativo?" recebe SIM para uma fase que sorteia DUPLAS.
+ *
+ * ⛔ POR ISSO A PORTA DE CIMA NÃO PODE VIRAR SENSÍVEL À FASE: o rótulo do torneio mudaria no meio
+ * do caminho. Duas intenções, duas portas — o mesmo padrão que este arquivo já usa no outro eixo
+ * (`_isLigaFormat` para o torneio, `_faseCorrenteEhLiga` para a fase).
+ *
+ * ⛔ AINDA SEM CHAMADOR, e isso é travado por teste. Cada leitor de COMPORTAMENTO migra em leva
+ * própria, medindo o que muda na tela. Ligar tudo de uma vez é o que já obrigou reversão aqui.
+ *
+ * ⚠️ Índice fora da faixa é AUSÊNCIA de fase, nunca a fase 0: responder pela fase 0 quando se
+ * perguntou pela fase 2 troca a resposta em silêncio.
+ */
+window._sorteioDaFaseEhReiRainha = function (t, idx) {
+    if (!t) return false;
+    var fases = Array.isArray(t.phases) ? t.phases : null;
+    /* ⛔ LISTA VAZIA É "TEM FASES E ESTA NÃO EXISTE", NÃO "não tem fases".
+     * Eu tinha escrito `fases && fases.length`, e aí `{phases: [], drawMode: 'rei_rainha'}` caía
+     * no topo e respondia SIM. Meu próprio teste cobria a lista vazia SEM os campos do topo, então
+     * passou por vacuidade — falso verde. Só a AUSÊNCIA do campo (ou coisa que não é lista)
+     * autoriza consultar o topo. */
+    if (fases && !fases.length) return false;
+    if (fases) {
+        var i = (typeof idx === 'number') ? idx : Number(t.currentPhaseIndex || 0);
+        if (!(i >= 0 && i < fases.length)) return false;   // índice inválido: sem fase, sem palpite
+        var fase = fases[i];
+        if (fase && typeof fase === 'object') {
+            if (fase.reiRainha === true) return true;
+            if (fase.reiRainha === false) return fase.drawMode === 'rei_rainha';
+            return fase.drawMode === 'rei_rainha';
+        }
+        return false;
+    }
+    /* Sem lista de fases o topo é tudo que existe — e aí ele descreve a única fase que há.
+     * É a mesma régua da porta de cima, reusada de propósito. */
+    return !!(window._isMonarchFormat && window._isMonarchFormat(t));
+};
+
 // v4.4.96: enrollmentMode CANÔNICO — 'time' (legado) e 'teams' (format2, ver
 // format2.js:215/244) são SINÔNIMOS de "equipe/dupla"; 'misto' também permite
 // duplas. Helper único pra matar o drift 'time' vs 'teams' que fazia torneios de
