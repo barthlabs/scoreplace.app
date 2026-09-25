@@ -70,6 +70,28 @@ function resto() {
   ok(/PULADO/.test(fonte),
     '⛔ e PULA o torneio cujas partes não montaram, em vez de acusar divergência que não existe');
 
+  /* ── E. AS DUAS CÓPIAS DO JOGO ────────────────────────────────────────────
+   * O mesmo jogo vive na cópia do MOTOR (classifica e avança) e na do CARD (a tela e "Meus
+   * Resultados"). Divergirem é a tela mostrar um placar e a classificação usar outro.
+   * MEDIDO em 24/set: 270 jogos com as duas cópias, ZERO divergência de vencedor ou placar.
+   * O risco é real, o caso não estava acontecendo — e dizer qual dos dois é a diferença. */
+  ok(V.conferirJogo({ winner: 'A' }, { winner: 'A' }) === null, 'cópias iguais não divergem');
+  ok(/vencedor/.test(V.conferirJogo({ winner: 'A' }, { winner: 'B' }) || ''),
+    'vencedor diferente entre motor e card é acusado, com os dois lados na mensagem');
+  ok(/placar/.test(V.conferirJogo({ winner: 'A', sets: [[6, 4]] }, { winner: 'A', sets: [[6, 3]] }) || ''),
+    'mesmo vencedor e placar diferente também é acusado');
+  ok(V.conferirJogo({ winner: 'A' }, { winner: 'A', sets: [[6, 4]] }) === null,
+    'placar só num lado NÃO é divergência — é dado que a outra cópia não guarda');
+
+  /* ⛔ O motor guarda jogo em TRÊS lugares. Olhar um só inventa órfão: foi assim que eu
+   * "achei" 14 e depois 12, e os 12 são de um torneio encerrado sem conta nenhuma. */
+  const t = { matches: [{ id: 'm1' }], rounds: [{ matches: [{ id: 'm2' }],
+      monarchGroups: [{ matches: [{ id: 'm3' }] }] }], groups: [{ matches: [{ id: 'm4' }] }],
+    thirdPlaceMatch: { id: 'm5' }, phaseRounds: { '1': { rounds: [{ matches: [{ id: 'm6' }] }] } } };
+  const mapa = V.jogosDoMotor(t);
+  ok(mapa.size === 6 && ['m1','m2','m3','m4','m5','m6'].every((k) => mapa.has(k)),
+    '⛔ o coletor acha jogo nos SEIS lugares do motor — inclusive terceiro lugar e fase posterior');
+
   console.log(fail ? `❌ listas-derivadas-batem-com-os-fatos: ${fail} falha(s), ${pass} ok`
                    : `✅ listas-derivadas-batem-com-os-fatos: ${pass} ok`);
   process.exit(fail ? 1 : 0);
