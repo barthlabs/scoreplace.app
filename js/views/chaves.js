@@ -78,13 +78,66 @@
   // Não depende de folga vs repescagem (as duas dão os mesmos números).
   function _pow2Acima(n) { var p = 1; while (p < n) p *= 2; return p; }
 
-  function _topologia(N, formato) {
+  /* ⛔⛔ AS TRÊS POLÍTICAS DE CHAVE — bloco 7 da reforma (25/set/2026).
+   *
+   * Até aqui existia UMA: repescagem até fechar a potência de 2. O dono pediu que voltasse a ser
+   * ESCOLHA DELE, antes do sorteio, entre os três desenhos da planilha. Cada um tem a sua própria
+   * cadeia de rodadas — não é o mesmo desenho com outro rótulo na sobra:
+   *
+   *  · `repescagem`  (o de hoje) todas jogam a 1ª; a 2ª fecha em potência de 2 chamando perdedoras;
+   *  · `bye`         uma rodada de play-in reduz o campo à potência de 2 DE BAIXO e a partir dali a
+   *                  chave é cheia: nenhuma rodada ímpar, nenhuma intervenção, e `N − excesso*2`
+   *                  equipes esperam sem jogar a estreia;
+   *  · `sobra_unica` nenhum alvo de potência em lugar nenhum: cada rodada corta pela metade, e a
+   *                  rodada ímpar tem exatamente UMA sobra. SEM normalização da 2ª rodada — é o que
+   *                  faz as rodadas do meio não serem redondas, preço que a planilha já nomeia.
+   *
+   * ⛔ AUSENTE É `repescagem`, E ISSO NÃO É CONVENIÊNCIA: os 78 torneios que existem não têm o campo,
+   * e nenhum deles pode mudar de desenho por causa desta leva. `plano(N, formato)` sem o terceiro
+   * argumento responde exatamente o que respondia antes — travado por teste próprio, e provado
+   * também pelas duas suítes grandes da chave passarem sem UMA linha alterada.
+   *
+   * ⚠️ PREÇO DO `bye`, declarado: hoje admitir um tardio nunca muda confronto já sorteado (o
+   * emparelhamento é adjacente e o tardio entra na última posição). No bye clássico isso não se
+   * sustenta — o excedente é `N − potência de 2 abaixo`, então 36→37 move uma equipe da chave cheia
+   * para o play-in. É consequência do desenho, não defeito, e é por isso que a escolha é do
+   * organizador e acontece ANTES do sorteio. */
+  var POLITICAS = ['repescagem', 'bye', 'sobra_unica'];
+  function _politica(p) { return POLITICAS.indexOf(p) === -1 ? 'repescagem' : p; }
+  function _pow2Abaixo(n) { var p = 1; while (p * 2 <= n) p *= 2; return p; }
+
+  /* ⛔ A CHAVE INFERIOR É A MESMA NOS TRÊS DESENHOS: ela só recebe quem cai da superior e segue a
+   * recorrência normal. Foi EXTRAÍDA daqui para que as duas topologias usem a MESMA, e não duas
+   * cópias — duas cópias divergiriam e a divergência seria "a inferior do bye não é a inferior da
+   * repescagem", que ninguém pediu. */
+  function _inferior(sup, totSup, formato) {
+    var inf = [];
+    if (formato !== 'dupla') return inf;
+    var vivos = 0, lr = 0;
+    for (var k = 1; k <= totSup + 10; k++) {
+      var caem = (k <= totSup) ? sup[k - 1].desce : 0;
+      var Ein = vivos + caem;
+      if (Ein < 2) { vivos = Ein; if (k > totSup && vivos <= 1) break; continue; }
+      lr++;
+      inf.push({ fase: 'PD', rodada: lr, E: Ein, jogos: Math.ceil(Ein / 2), sobe: Math.ceil(Ein / 2), impar: Ein % 2 === 1, aposSup: k });
+      vivos = Math.ceil(Ein / 2);
+      if (vivos === 1 && k >= totSup) break;
+    }
+    return inf;
+  }
+
+  function _topologia(N, formato, politica) {
+    politica = _politica(politica);
+    if (politica === 'bye') return _topologiaBye(N, formato);
     var sup = [], E = N, r = 0, repR2 = 0;
     while (E > 1) {
       r++;
       var _jogos = Math.ceil(E / 2);
       sup.push({ fase: 'VC', rodada: r, E: E, jogos: _jogos, sobe: _jogos, desce: Math.floor(E / 2), impar: E % 2 === 1 });
-      if (r === 1) {
+      /* ⛔ A normalização da 2ª rodada é DA POLÍTICA `repescagem`. Na sobra única ela não existe por
+       * definição: se existisse, não haveria sobra nenhuma da 2ª rodada em diante e o desenho 3 seria
+       * o desenho 2 com outro nome. */
+      if (r === 1 && politica === 'repescagem') {
         // ── NORMALIZAÇÃO DA 2ª RODADA (regra do dono, jul/2026) ──────────────────
         // A 2ª rodada fecha em POTÊNCIA DE 2, completando com REPESCADOS da 1ª. Daí em
         // diante a chave é limpa: 8 → 4 → 2 → 1, sem uma folga sequer.
@@ -113,22 +166,34 @@
         E = _jogos;
       }
     }
-    var totSup = r, inf = [];
-    if (formato === 'dupla') {
-      var vivos = 0, lr = 0;
-      for (var k = 1; k <= totSup + 10; k++) {
-        var caem = (k <= totSup) ? sup[k - 1].desce : 0;
-        var Ein = vivos + caem;
-        if (Ein < 2) { vivos = Ein; if (k > totSup && vivos <= 1) break; continue; }
-        lr++;
-        inf.push({ fase: 'PD', rodada: lr, E: Ein, jogos: Math.ceil(Ein / 2), sobe: Math.ceil(Ein / 2), impar: Ein % 2 === 1, aposSup: k });
-        vivos = Math.ceil(Ein / 2);
-        if (vivos === 1 && k >= totSup) break;
-      }
-    }
+    var totSup = r, inf = _inferior(sup, totSup, formato);
     sup.forEach(function (x) { x.ateFinalChave = totSup - x.rodada + 1; });
     inf.forEach(function (x) { x.ateFinalChave = inf.length - x.rodada + 1; });
     return { sup: sup, inf: inf, totSup: totSup, totInf: inf.length, repR2: repR2 };
+  }
+
+  /* ⛔ O BYE TEM TOPOLOGIA PRÓPRIA, e por isso não é `if` dentro da recorrência: depois do play-in
+   * TODA rodada é potência de 2, então não existe rodada ímpar, não existe sobra e não existe
+   * repescagem — o desenho inteiro é play-in + halving puro. Misturar isso na recorrência do outro
+   * desenho seria pedir para um dos dois vazar no outro. */
+  function _topologiaBye(N, formato) {
+    var alvo = _pow2Abaixo(N), excesso = N - alvo, sup = [], r = 0;
+    if (excesso > 0) {
+      r++;
+      /* A rodada de play-in tem `excesso` jogos entre `excesso*2` equipes; as outras esperam.
+       * ⛔ Ela NÃO solta perdedor para a chave inferior de forma diferente: quem perde o play-in
+       * perdeu a estreia, igual a quem perde a 1ª rodada de qualquer desenho. */
+      sup.push({ fase: 'VC', rodada: r, E: excesso * 2, jogos: excesso, sobe: excesso,
+        desce: excesso, impar: false, playin: true, esperam: N - excesso * 2 });
+    }
+    for (var E = alvo; E > 1; E = E / 2) {
+      r++;
+      sup.push({ fase: 'VC', rodada: r, E: E, jogos: E / 2, sobe: E / 2, desce: E / 2, impar: false });
+    }
+    var inf = _inferior(sup, r, formato);
+    sup.forEach(function (x) { x.ateFinalChave = r - x.rodada + 1; });
+    inf.forEach(function (x) { x.ateFinalChave = inf.length - x.rodada + 1; });
+    return { sup: sup, inf: inf, totSup: r, totInf: inf.length, repR2: 0 };
   }
 
   /**
@@ -136,14 +201,26 @@
    * `B` é mantido por compatibilidade com a assinatura estrutural do adapter —
    * agora vale o próprio N, porque a chave não é mais inflada.
    */
-  function plano(N, formato) {
+  function plano(N, formato, politica) {
     if (N < 2) throw new Error('N minimo = 2');
     formato = formato === 'dupla' ? 'dupla' : 'simples';
-    var t = _topologia(N, formato);
+    politica = _politica(politica);
+    var t = _topologia(N, formato, politica);
     var teto = tetoFolgas(N), folgas = 0, reps = 0;
     var ordem = _ordemRodadas(t);
     ordem.forEach(function (x) {
       if (!x.impar) { x.acao = null; return; }
+      /* ⛔⛔ NA SOBRA ÚNICA A SOBRA RECEBE FOLGA, e o teto de folgas NÃO se aplica: o desenho é esse —
+       * uma intervenção por rodada ímpar, e no torneio inteiro são três (medido com 36 equipes).
+       * ⛔ A EXCEÇÃO É A SEMIFINAL COM TRÊS: ali a folga é proibida (a regra vale nos três desenhos) e
+       * a sobra joga a repescagem. Sem esta linha, com 36 equipes a semifinal teria uma equipe na
+       * final sem jogar a semifinal — que é exatamente o que o dono vetou. */
+      if (politica === 'sobra_unica') {
+        var semiComTres = (x.ateFinalChave <= 2);
+        if (semiComTres) { x.acao = 'repescagem'; reps++; }
+        else { x.acao = 'bye'; folgas++; }
+        return;
+      }
       // O ÚLTIMO INSCRITO NUNCA GANHA FOLGA (regra do dono, jul/2026).
       //
       // O emparelhamento é adjacente e o tardio entra na PRÓXIMA POSIÇÃO LIVRE,
@@ -165,10 +242,21 @@
       if (!sobraEhOUltimoInscrito && folgas < teto && x.ateFinalChave >= 3) { x.acao = 'bye'; folgas++; }
       else { x.acao = 'repescagem'; reps++; }
     });
+    /* ⛔⛔ FOLGA NÃO É JOGO, e `jogos` nunca foi contagem de jogos — é contagem de POSIÇÕES da rodada.
+     * Na repescagem as duas coisas coincidem (a sobra JOGA a repescagem), e por isso a diferença
+     * passou anos sem aparecer. Na sobra única não coincidem: a rodada de 9 tem 4 jogos e uma folga,
+     * e a planilha do dono conta 4. Eu contei 5 e a matriz acusou na primeira comparação.
+     * ⇒ `jogosReais` é o número que vai para a tela e para a matriz; `jogos` continua sendo posição,
+     * que é o que a montagem da chave usa (a folga OCUPA posição, senão o tardio entraria no lugar
+     * dela). Os dois nomes existem porque as duas contas existem. */
+    ordem.forEach(function (x) { x.jogosReais = x.jogos - (x.acao === 'bye' ? 1 : 0); });
     return {
-      N: N, B: N, formato: formato,
+      N: N, B: N, formato: formato, politica: politica,
       rodadasSup: t.totSup, rodadasInf: t.totInf,
       byes: folgas, repescagens: reps, tetoFolgas: teto,
+      /* ⛔ No bye clássico quem espera NÃO é folga de rodada ímpar: é quem não foi ao play-in. São
+       * duas contagens diferentes e misturá-las foi o erro que a matriz da planilha acusou. */
+      esperamNoPlayin: (t.sup[0] && t.sup[0].playin) ? t.sup[0].esperam : 0,
       repR2: t.repR2,
       modo: (folgas && reps) ? 'misto' : (folgas ? 'bye' : (reps ? 'repescagem' : 'exata')),
       vagas: 0, pool: 0, menor: 0,
@@ -201,9 +289,9 @@
    * @param {'simples'|'dupla'} formato
    * @returns {{plano, rodadas, jogos: Array, porId: Object, totalJogos: number, ordem: string[]}}
    */
-  function chave(N, formato) {
+  function chave(N, formato, politica) {
     formato = formato === 'dupla' ? 'dupla' : 'simples';
-    var pl = plano(N, formato);
+    var pl = plano(N, formato, politica);
     var rodadas = pl.rodadasSup;
     var jogos = [];
     var novo = function (o) { jogos.push(o); return o; };
@@ -278,9 +366,26 @@
         var entrantes;
         if (x.rodada === 1) {
           entrantes = [];
-          for (var s = 1; s <= N; s++) entrantes.push(S(s));
+          /* ⛔⛔ NO BYE CLÁSSICO A 1ª RODADA NÃO É DE TODOS — é o PLAY-IN, e só as últimas
+           * `excesso*2` entram nela. As outras esperam e estreiam na rodada seguinte.
+           * ⭐ ACHADO POR UM TESTE MEU, e é o tipo de defeito que o número de jogos esconde: a
+           * topologia dizia 4 jogos na rodada de play-in e a montagem fazia 18, porque montava a 1ª
+           * rodada com os N inscritos e recalculava o resto a partir dos vencedores. O `plano` estava
+           * certo e a CHAVE era outra — duas verdades, que é o defeito que esta reforma persegue.
+           * ⚠️ São as ÚLTIMAS posições, não as primeiras: é onde o tardio entra, e é a convenção do
+           * resto do arquivo (quem chega por último joga a rodada extra). */
+          var deTras = (x.playin === true) ? x.E : N;
+          for (var s = N - deTras + 1; s <= N; s++) entrantes.push(S(s));
         } else {
           entrantes = VC[x.rodada - 1].map(function (m) { return V(m.id); });
+          /* ⛔ E QUEM ESPEROU ESTREIA AQUI: as sementes que não foram ao play-in entram ANTES dos
+           * vencedores dele. Pôr os vencedores no FIM é a mesma regra da normalização da 2ª rodada —
+           * evita revanche imediata e preserva a posição de quem já estava. */
+          if (x.rodada === 2 && porRodada['VC1'] && porRodada['VC1'].playin === true) {
+            var esperaram = [];
+            for (var e2 = 1; e2 <= N - porRodada['VC1'].E; e2++) esperaram.push(S(e2));
+            entrantes = esperaram.concat(entrantes);
+          }
           // Os repescados escolhidos na R1 entram no FIM da ordem da R2 — assim o
           // emparelhamento adjacente nunca dá revanche imediata (o vencedor do
           // jogo-fonte está no começo da lista).

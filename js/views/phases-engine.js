@@ -977,7 +977,16 @@
       // todas as linhas). Default 'bye' = comportamento legado. Setado pelo painel.
       // Resolução de pow2 é da LÓGICA, não do organizador (menor intervenção):
       // phaseCfg.bracketResolution é ignorado, como na Fase 0.
-      var res = _genElimFromChaves(byDest[dest], { thirdPlace: _tierThird },
+      /* ⛔⛔ A POLÍTICA DA CHAVE TAMBÉM PASSA AQUI — achado na 2ª revisão do plano do bloco 7, e é o
+       * MESMO erro meu duas vezes seguidas. Eu já havia consertado o caminho direto e deixei ESTE:
+       * as chaves POR LINHA/CATEGORIA nasciam com `{ thirdPlace }` e mais nada, então um torneio com
+       * linha Ouro e Prata ignorava a escolha do organizador e desenhava repescagem — inclusive no
+       * vendor que a Cloud Function do sorteio roda.
+       * ⚠️ `bracketResolution` da fase continua IGNORADO de propósito (resolução de pow2 é da lógica,
+       * não do organizador). Não confundir: aquilo é outra coisa, e o comentário acima explica.
+       * [[feedback_enumerar_todos_os_caminhos_antes_de_dar_por_pronto]] — terceira vez nesta leva. */
+      var res = _genElimFromChaves(byDest[dest],
+        { thirdPlace: _tierThird, politicaDaChave: (phaseCfg && phaseCfg.politicaDaChave) || null },
         idPrefix + '-' + bracketKey, false, bracketKey);
       // Nome da chave = o que o ORGANIZADOR digitou (mapping[].label). Sem nome, com 2+ chaves →
       // default POSICIONAL "Chave N" (ordem da chave). NUNCA Ouro/Prata (exemplo ≠ regra,
@@ -1447,6 +1456,11 @@
        * ⛔ Eu apaguei isto junto com a flag na 2.1.41 e dois testes pegaram na hora.
        * A flag do ORGANIZADOR morreu; esta regra de geometria da chave fica. */
       tierThird: (cfg ? cfg.thirdPlace !== false : true),
+      /* ⛔⛔ A ESCOLHA DO ORGANIZADOR ENTRE OS TRÊS DESENHOS (bloco 7 da reforma) passa daqui para o
+       * adapter e do adapter para o motor. Ausente = repescagem, que é o que todo torneio existente é.
+       * ⚠️ A leitura é do DOCUMENTO, não da tela: a política é decidida antes do sorteio e congelada,
+       * e quem desenha é o servidor pela mesma cópia. */
+      politicaDaChave: (cfg && cfg.politicaDaChave) || (cfg && cfg.torneio && cfg.torneio.politicaDaChave) || null,
       ns: _nsDeterministico(idPrefix),
       bracketKey: bracketKey || null,
       semear: !_daInscricao

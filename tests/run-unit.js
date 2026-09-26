@@ -56,6 +56,10 @@ const ROOT = path.join(__dirname, '..');
 const SUITES = [
   'tests/native-update-policy.test.js',
   'tests/bracket-policy.test.js',
+  /* ⛔ Bloco 7: as 61 linhas da planilha do dono, a política ausente e o redesenho nos três desenhos. */
+  'tests/matriz-dos-tres-desenhos.test.js',
+  'tests/politica-ausente-e-a-de-hoje.test.js',
+  'tests/redesenhar-vale-nos-tres-desenhos.test.js',
   'tests/politica-chave-exige-escolha.test.js',
   'tests/casual-dupla-e-segundo-sacador.test.js',
   'tests/placar-melhor-de-3-nao-vira-um-set.test.js',

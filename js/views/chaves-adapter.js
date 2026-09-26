@@ -152,7 +152,15 @@
     if (!C) throw new Error('chaves-adapter: window._chaves não carregado');
     if (N < 2) return { matches: [], meta: { N: N, formato: formato, vazio: true } };
 
-    var desenho = C.chave(N, formato);
+    /* ⛔⛔ A POLÍTICA DA CHAVE ATRAVESSA AQUI, E ISTO FOI ACHADO NA REVISÃO DO PLANO (bloco 7).
+     * Eu havia ensinado as três políticas ao motor (`chaves.js`) e deixado ESTE ponto chamando sem
+     * política — o motor conhecia bye e sobra única, e a produção continuava em repescagem para
+     * sempre. É exatamente [[feedback_enumerar_todos_os_caminhos_antes_de_dar_por_pronto]]: cobri o
+     * motor e deixei o irmão.
+     * ⚠️ Este é o ÚNICO construtor: `phases-engine` chama `build`, `build` chama `C.chave`, e a
+     * Cloud Function do sorteio roda a MESMA cópia por vendor. Quem acrescentar um segundo caminho
+     * para desenhar chave recria o defeito. */
+    var desenho = C.chave(N, formato, opts.politicaDaChave);
     // Namespace determinístico (fase + categoria). Sem ele, a fase 0 e a fase 1 —
     // ou duas categorias — teriam, cada uma, um jogo chamado 'VC-R1-P1', e
     // _findMatch acharia o errado. NUNCA pode conter timestamp: o id precisa
@@ -637,7 +645,10 @@
     }
 
     // ── 4. downstream = chave(K) com as rodadas deslocadas +1 ──
-    var desenho = C.chave(K, formato);
+    /* ⛔⛔ E A POLÍTICA ATRAVESSA AQUI TAMBÉM. Sem isto, admitir um tardio num torneio de bye ou de
+     * sobra única redesenhava o downstream em REPESCAGEM e a chave ficava HÍBRIDA: a 1ª rodada de um
+     * desenho e o resto de outro. É o pior resultado possível — pior que recusar. */
+    var desenho = C.chave(K, formato, opts && opts.politicaDaChave);
     var compR1 = r1.concat(novosR1);          // índice = seed do desenho − 1
     var shift = function (id) { return String(id).replace(/^VC-R(\d+)-/, function (_, r) { return 'VC-R' + (parseInt(r, 10) + 1) + '-'; }); };
 
@@ -1018,6 +1029,12 @@
       var elenco = roster.concat(novos);
       var r = recalcularComTardio(doGrupo, elenco.length, formato, {
         participantes: elenco,
+        /* ⛔ A política vem do DOCUMENTO DO TORNEIO (`t`), que é o parâmetro desta função — e acompanha
+         * o tardio: recalcular sem ela trocaria o desenho no meio do torneio.
+         * ⭐ Eu escrevi `opts` aqui, que não existe neste escopo. O `ReferenceError` era ENGOLIDO por um
+         * catch do integrador, o recálculo devolvia zero jogos, e 16 suítes de tardio ficaram vermelhas
+         * de uma vez. [[feedback_engolir_erro_custa_horas_do_dono]] — e [[feedback_funcao_dentro_de_outra_nao_existe]]. */
+        politicaDaChave: (t && t.politicaDaChave) || null,
         ns: ns || null,
         category: cat,
         phaseIndex: (doGrupo[0] && doGrupo[0].phaseIndex) || 0,

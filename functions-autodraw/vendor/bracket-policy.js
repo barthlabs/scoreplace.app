@@ -34,16 +34,30 @@
 
   function _finalRound(entrants) { return { entrants: entrants, games: 2, kind: 'final' }; }
 
-  // BYE clássico: a rodada preliminar elimina o excedente antes da chave cheia.
+  /* BYE clássico: a rodada preliminar elimina o excedente antes da chave cheia.
+   *
+   * ⛔⛔ A CONTAGEM DE FOLGAS ESTAVA ERRADA, e o sinal denunciava — MEDIDO em 25/set/2026 contra as
+   * 61 linhas da planilha do dono. Eu contava `target − excesso*2`, que com N=7 devolve **−2 folgas**
+   * e com N=36 devolve 24 onde a planilha e a aritmética dizem 28.
+   * ⭐ FOLGA É QUEM ESPERA, e quem espera são as que NÃO foram para o play-in: `N − excesso*2`. O
+   * `target` não tem nada a ver com isso — ele é o tamanho da chave cheia, e as equipes que esperam
+   * saem do total de INSCRITOS, não do tamanho da chave.
+   * ⚠️ O resto do desenho está certo e foi conferido linha a linha: jogos por rodada e entrantes por
+   * rodada batem nas 61 linhas. Era UMA conta. Por isso o teste da matriz existe: erro de uma conta
+   * dentro de um desenho certo não aparece olhando o desenho. */
   function planClassicBye(entrants) {
     if (!_isInteger(entrants) || entrants < 2) throw new Error('entrants deve ser inteiro maior ou igual a 2');
     var target = _pow2Below(entrants);
     var excess = entrants - target;
+    /* ⛔ E EM POTÊNCIA DE 2 NÃO EXISTE FOLGA NENHUMA: sem excedente não há play-in, e sem play-in
+     * ninguém espera. `N − 0` diria que TODAS esperam — o oposto. (Segundo erro na mesma conta,
+     * achado pela própria matriz: 4, 8, 16, 32 e 64 acusaram.) */
+    var esperam = excess > 0 ? entrants - excess * 2 : 0;
     var rounds = [];
-    if (excess > 0) rounds.push({ entrants: excess * 2, games: excess, kind: 'playin', byes: target - excess * 2 });
+    if (excess > 0) rounds.push({ entrants: excess * 2, games: excess, kind: 'playin', byes: esperam });
     for (var n = target; n > 2; n /= 2) rounds.push({ entrants: n, games: n / 2, kind: 'eliminatoria' });
     rounds.push(_finalRound(2));
-    return { policy: POLICIES.BYE, entrants: entrants, target: target, byes: target - excess * 2, rounds: rounds,
+    return { policy: POLICIES.BYE, entrants: entrants, target: target, byes: esperam, rounds: rounds,
       totalGames: rounds.reduce(function (sum, r) { return sum + r.games; }, 0) };
   }
 
