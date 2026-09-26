@@ -869,6 +869,16 @@ window._applyWO = function (t, opts) {
     return { ok: false, outcome: 'noMatch', reason: 'jogo do ausente não encontrado', absentMarked: true };
   }
   if (anyKO && typeof window._maybeFinishElimination === 'function') { try { window._maybeFinishElimination(t); } catch (e) {} }
+  /* ⛔⛔ O W.O. TAMBÉM FECHA LINHA — e por isso congela a classificação final aqui.
+   * ⭐ Achado na revisão de 26/set/2026: a gravação do retrato só existia no lançamento NORMAL de
+   * placar (`bracket-ui`). Quando o último jogo de uma linha era decidido por W.O., ela encerrava sem
+   * retrato — e a classificação final, que é RESULTADO e não desenho de tela, ficava sendo recalculada
+   * para sempre. Bastava a régua de desempate melhorar depois para a ordem publicada mudar sozinha.
+   * ⚠️ É a mesma porta e a mesma guarda: só congela com todo jogo decidido e nenhuma vaga de
+   * repescagem indefinida. W.O. é jogo decidido — o ausente perdeu. */
+  if (typeof window._congelaLinhasEncerradas === 'function') {
+    try { window._congelaLinhasEncerradas(t); } catch (e) {}
+  }
   _log(`W.O.: ${absentName} ausente — ${winner} vence por W.O.` + (partnerToWaitlist ? ` (parceiro ${partnerToWaitlist} → lista de espera)` : ''));
   return { ok: true, outcome: 'woApplied', winner, matchNum, partnerToWaitlist };
 };

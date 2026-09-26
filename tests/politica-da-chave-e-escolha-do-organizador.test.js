@@ -64,17 +64,35 @@ const draw = semCom(fs.readFileSync(path.join(ROOT, 'js/views/tournaments-draw.j
 ok(/politicaDaChave: t\.politicaDaChave/.test(draw),
   '③ ⛔⛔ o sorteio da FASE 0 lê a política do documento do torneio');
 
-/* ── ④ DEPOIS DO SORTEIO, NÃO MUDA ─────────────────────────────────────────── */
+/* ── ④ DEPOIS DO SORTEIO, NÃO MUDA — E A TRAVA É DO SERVIDOR ─────────────────
+ * ⭐ Eu tinha escrito esta trava no CLIENTE, lendo o objeto do formulário em vez do torneio gravado:
+ * ela nunca via que já existia chave, e ainda seria contornável. Trava de cliente não é trava.
+ * ⇒ `politicaDaChave` entra nas duas listas do servidor: a de campos que a ficha pode mandar, e a de
+ * campos ESTRUTURAIS — que o servidor recusa alterar depois do sorteio, como já faz com formato,
+ * esporte e tamanho de time. */
 const ct = semCom(fs.readFileSync(path.join(ROOT, 'js/views/create-tournament.js'), 'utf8'));
-ok(/_jaSorteou/.test(ct), '④ o salvar sabe se o torneio já foi sorteado');
-ok(/tourData\.politicaDaChave = _politicaGravada/.test(ct),
-  '④ ⛔⛔ e com a chave sorteada, o que está GRAVADO manda — o compilador não sobrescreve');
-ok(/p\.kind === 'elimination'\) p\.politicaDaChave = _politicaGravada/.test(ct),
-  '④ ⛔ inclusive nas fases, senão o topo e a fase discordariam');
-const iAssign = ct.indexOf('Object.assign(tourData, _f2out.topLevel)');
-const iGuarda = ct.indexOf('_politicaGravada = tourData.politicaDaChave');
-ok(iGuarda > 0 && iGuarda < iAssign,
-  '④ e a política gravada é lida ANTES do Object.assign que a sobrescreveria');
+const auto = fs.readFileSync(path.join(ROOT, 'functions-autodraw/index.js'), 'utf8');
+const lista = (nome) => {
+  const i = auto.indexOf('const ' + nome + ' = new Set([');
+  return i < 0 ? '' : auto.slice(i, auto.indexOf(']);', i));
+};
+ok(/'politicaDaChave'/.test(lista('_CAMPOS_CONFIG_TORNEIO')),
+  '④ ⛔⛔ o servidor ACEITA o campo — sem isto, criar ou editar com a escolha nova é recusado');
+ok(/'politicaDaChave'/.test(lista('_CONFIG_ESTRUTURAL')),
+  '④ ⛔⛔ e o trata como ESTRUTURAL: recusado depois do sorteio, no servidor');
+ok(!/_jaSorteou/.test(ct),
+  '④ ⛔ e a trava quebrada do cliente não existe mais');
+
+/* ── ⑤ O W.O. TAMBÉM CONGELA A CLASSIFICAÇÃO FINAL ───────────────────────────
+ * ⭐ Achado na mesma revisão: a gravação do retrato só existia no lançamento NORMAL de placar. Linha
+ * decidida por W.O. encerrava sem retrato, e a classificação final — que é resultado — seguia sendo
+ * recalculada para sempre. */
+const wo = fs.readFileSync(path.join(ROOT, 'js/views/wo-core.js'), 'utf8');
+ok(/_congelaLinhasEncerradas\(t\)/.test(wo),
+  '⑤ ⛔⛔ o caminho do W.O. congela a classificação final da linha');
+const ui2 = fs.readFileSync(path.join(ROOT, 'js/views/bracket-ui.js'), 'utf8');
+ok(/_congelaLinhasEncerradas\(t\)/.test(ui2),
+  '⑤ e o lançamento normal de placar continua congelando');
 
 console.log('\n' + (fail ? '✗ ' + fail + ' falha(s), ' : '✅ ') + pass + ' verificações');
 process.exit(fail ? 1 : 0);

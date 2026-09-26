@@ -3299,6 +3299,11 @@ const _CAMPOS_CONFIG_TORNEIO = new Set([
   'ligaRoundFormat','ligaDrawMode','ligaTurnos','ligaRRSchedule',
   'ligaSeasonMonths','elimRankingType','gruposCount','gruposClassified','gruposEqualOnly',
   'gruposSeedVip','gruposSeedCategory','drawMode','reiRainhaGroupsBy','monarchAdvanceToElim',
+  /* ⛔ COMO A CHAVE RESOLVE O RESTO (repescagem · folga · sobra única). É configuração declarativa
+   * e escolha do organizador, então pertence a esta lista — sem ela, criar ou editar um torneio
+   * com a escolha nova é RECUSADO pelo servidor. O valor é fechado no cliente e reconferido pelo
+   * motor, que cai em `repescagem` diante de qualquer coisa que não reconheça. */
+  'politicaDaChave',
   'phase1Name','tiebreakers','tiebreakersExcluded','advancedScoring','genderCategories',
   'skillCategories','ageCategories','customCategories','combinedCategories','rigor','rigorRequire',
   'fmt2','phases'
@@ -3317,7 +3322,14 @@ const _CAMPOS_CONFIG_TORNEIO = new Set([
 const _CONFIG_ESTRUTURAL = new Set([
   'format','sport','teamSize','gameTypes','drawMode','fmt2','phases','swissRounds',
   'gruposCount','gruposClassified','gruposEqualOnly','gruposSeedVip','gruposSeedCategory',
-  'ligaRoundFormat','ligaDrawMode','ligaTurnos','ligaRRSchedule','monarchAdvanceToElim'
+  'ligaRoundFormat','ligaDrawMode','ligaTurnos','ligaRRSchedule','monarchAdvanceToElim',
+  /* ⛔⛔⛔ COMO A CHAVE RESOLVE O RESTO É ESTRUTURAL: ela decide quem espera a estreia, quem volta
+   * depois de perder e onde cai a folga. Trocá-la com a chave já sorteada redesenha confrontos que as
+   * pessoas já viram e muda quem está dentro e quem está fora.
+   * ⇒ Estando nesta lista, o SERVIDOR recusa a alteração depois do sorteio — e é aqui que a trava tem
+   * de morar. Eu a tinha posto no cliente, lendo o objeto do FORMULÁRIO em vez do torneio gravado:
+   * ela nunca via que já havia chave, e ainda seria contornável. Trava de cliente não é trava. */
+  'politicaDaChave'
 ]);
 const _CONFIG_FASE_ATIVA = new Set(['name','startDate','endDate','roundBounds']);
 function _clonaConfigDeclarativa(value, depth) {
