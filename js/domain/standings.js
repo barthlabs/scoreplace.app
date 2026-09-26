@@ -56,6 +56,10 @@ var ScoreplaceStandings;
         const d = ScoreplaceStandings.NIVEIS_DE_SALDO[i];
         return line[d.ganhou] != null || line[d.perdeu] != null;
     };
+    const temNivelNomeado = (line, nivel) => {
+        const i = ScoreplaceStandings.NIVEIS_DE_SALDO.findIndex((x) => x.nivel === nivel);
+        return i >= 0 && temNivel(line, i);
+    };
     /** O nível mais rico que AS DUAS linhas têm. `null` quando nenhuma tem nenhum. */
     function nivelMaisRicoComum(a, b) {
         for (let i = 0; i < ScoreplaceStandings.NIVEIS_DE_SALDO.length; i++) {
@@ -98,9 +102,19 @@ var ScoreplaceStandings;
          * ⚠️ `pointsDiff`/`pointsFor`/`pointsAgainst` continuam como ÚLTIMA reserva, para as linhas antigas
          * que só carregam eles — tirar isso quebraria torneio por pontos corridos, que é outro jogo. */
         saldo_pontos: (a, b) => {
-            const nivel = nivelMaisRicoComum(a, b);
-            if (nivel)
-                return saldoNoNivel(b, nivel) - saldoNoNivel(a, nivel);
+            /* ⛔⛔ DESCE A ESCADA ATÉ ALGUÉM FALAR — e esta parte nasceu de um defeito MEU, pego por teste
+             * no mesmo dia: a primeira versão parava no nível mais rico COMUM e devolvia o que ele dissesse,
+             * inclusive ZERO. Numa linha com games 12-12 e pontos 10-14 contra 20-10, o critério virava
+             * NEUTRO — a diferença real de pontos era engolida por um empate em games.
+             * ⇒ O certo é percorrer do mais rico ao mais pobre e devolver a PRIMEIRA diferença que não é
+             * zero. Nível que empata não decide nada, então não pode calar o nível de baixo. */
+            for (const degrau of ScoreplaceStandings.NIVEIS_DE_SALDO) {
+                if (!temNivelNomeado(a, degrau.nivel) || !temNivelNomeado(b, degrau.nivel))
+                    continue;
+                const d = saldoNoNivel(b, degrau.nivel) - saldoNoNivel(a, degrau.nivel);
+                if (d)
+                    return d;
+            }
             const da = a.pointsDiff != null ? n(a.pointsDiff) : difference(a, 'pointsFor', 'pointsAgainst');
             const db = b.pointsDiff != null ? n(b.pointsDiff) : difference(b, 'pointsFor', 'pointsAgainst');
             return db - da;
