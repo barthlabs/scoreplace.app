@@ -50,6 +50,34 @@
     ? globalThis.window
     : (typeof globalThis !== 'undefined' ? globalThis : this);
 
+/* ⛔⛔⛔ QUE ROTAS MOSTRAM A CHAVE DESTE TORNEIO — PORTA ÚNICA.
+ *
+ * ⭐ NASCEU DE UM DEFEITO MEDIDO em 26/set/2026, relatado pelo dono no jogo 20: _"lancei o resultado,
+ * dei confirmar, ele recarregou mas voltou 0-0, dei refresh e dai apareceu"_.
+ *
+ * A CAUSA, medida: depois de a Function gravar, o cliente APAGA a marca de hidratação dos resultados
+ * (`_resultsHydrated`) e força uma repintura. A repintura acontece ANTES de a hidratação terminar, então
+ * ela pinta o espelho AINDA VAZIO — o 0-0. Quem deveria repintar de novo é o `.then()` da hidratação —
+ * e ele estava guardado por `hash.split('/')[0] !== '#bracket'`. A chave é desenhada em DUAS rotas:
+ * `#bracket/:id` e o DETALHE `#tournaments/:id` (`renderBracket` em tournaments.js). Quem lançou pelo
+ * detalhe nunca recebia a segunda repintura, e a tela ficava no 0-0 até o refresh à mão.
+ *
+ * ⛔ É de novo [[feedback_enumerar_todos_os_caminhos_antes_de_dar_por_pronto]]: a guarda nomeava UMA
+ * rota e a coisa acontece em duas. Por isso a pergunta virou FUNÇÃO, com teste, em vez de um `if`
+ * copiado em cada lugar — quem acrescentar uma terceira rota que desenha chave muda aqui, num lugar só.
+ * ⚠️ A comparação é pelo ID do torneio também: repintar a tela de OUTRO torneio é repintura errada. */
+window._rotaMostraAChaveDeste = function (hash, id) {
+  var h = String(hash || '');
+  if (h.charAt(0) === '#') h = h.slice(1);
+  h = h.split('?')[0];
+  var partes = h.split('/');
+  var rota = partes[0] || '';
+  var alvo = String(partes[1] || '');
+  if (!id) return false;
+  if (rota !== 'bracket' && rota !== 'tournaments') return false;
+  return alvo === String(id);
+};
+
   var LABELS = {
     final: 'Final',
     semi: 'Semifinais',

@@ -1219,8 +1219,21 @@ function renderBracket(container, tournamentId, isInline) {
   if (t && t._resultsHydrated !== 'completa' && !t._resultsHydrating && window.AppStore && typeof window.AppStore.hydrateMatchResults === 'function') {
     t._resultsHydrating = true;
     Promise.resolve().then(function () { return window.AppStore.hydrateMatchResults(t.id); }).then(function (ok) {
-      var routeId = String(window.location.hash || '').split('/')[1];
-      if (!ok || String(window.location.hash || '').split('/')[0] !== '#bracket' || routeId !== String(t.id)) return;
+      /* ⛔⛔ ESTA GUARDA NOMEAVA SÓ `#bracket`, E A CHAVE APARECE EM DUAS ROTAS. Quem lançava placar
+       * pelo DETALHE do torneio não recebia esta repintura: a primeira, forçada logo depois da
+       * gravação, pintava o espelho ainda vazio (0-0), e esta — a que traria o placar — era
+       * descartada. Só o refresh à mão resolvia. Medido em 26/set/2026, jogo 20.
+       * A pergunta agora é uma função só, testada: `_rotaMostraAChaveDeste`. */
+      if (!ok) return;
+      /* ⛔ PORTA AUSENTE NÃO LIBERA REPINTURA. Eu havia escrito o contrário ("se a função não existir,
+       * repinta") e um teste pegou na hora: sem a porta, a repintura acontecia para QUALQUER torneio
+       * aberto, inclusive o errado. Porta ausente é defeito de carregamento (`bracket-model.js` vem
+       * antes deste arquivo no index.html, e há teste dessa ordem) — então grita, e não repinta. */
+      if (typeof window._rotaMostraAChaveDeste !== 'function') {
+        if (window._warn) window._warn('[bracket] _rotaMostraAChaveDeste não carregou — repintura pulada');
+        return;
+      }
+      if (!window._rotaMostraAChaveDeste(window.location.hash, t.id)) return;
       if (typeof window._softRefreshView === 'function') window._softRefreshView();
     }).catch(function (e) {
       if (window._warn) window._warn('[bracket] hidratação de resultados falhou', e);

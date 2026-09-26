@@ -4348,6 +4348,9 @@ window._dashDataSigFor = function (list) {
   };
   return arr.length + '|' + arr.map(function (t) { return (t && t.id) + _hid(t); }).join(',');
 };
+/* ⛔ A porta `_rotaMostraAChaveDeste` mora em `js/views/bracket-model.js` — é pergunta sobre a CHAVE, e
+ * lá ela é alcançável pelo harness de teste (este arquivo não é carregável no sandbox). */
+
 window._softRefreshView = function() {
   // 0. If bracket just re-rendered locally, skip to avoid double-render + scroll jump
   if (window._suppressSoftRefresh) return;

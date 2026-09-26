@@ -16,8 +16,14 @@ async function drain(){for(let i=0;i<12;i++)await Promise.resolve();}
  const first=store.hydrateMatchResults('t');store.currentUser={uid:'b'};const second=store.hydrateMatchResults('t');assert.notEqual(first,second);assert.equal(count,2);
  b.resolve({m:{scoreP1:7}});assert.equal(await second,true);a.resolve({m:{scoreP1:1}});assert.equal(await first,false);assert.equal(store.tournaments[0].matches[0].scoreP1,7);assert.equal(saves,1);
  const text=fs.readFileSync(path.join(root,'js/views/bracket.js'),'utf8');const start=text.indexOf("  if (t && t._resultsHydrated !== 'completa'");const end=text.indexOf('\n  /* ⛔ PORTÃO',start);const code=text.slice(start,end);assert(start>=0&&end>start);
- let attempts=0,refresh=0;const t={id:'abc'};const ctx={t,window:{location:{hash:'#bracket/abcd'},AppStore:{hydrateMatchResults(){attempts++;if(attempts===1)throw new Error('offline');t._resultsHydrated='completa';return Promise.resolve(true);}},_softRefreshView(){refresh++;}}};
- vm.runInNewContext(code,ctx);vm.runInNewContext(code,ctx);await drain();assert.equal(attempts,1);assert.equal(t._resultsHydrating,false);assert(!t._resultsHydrated);
+ /* ⛔ A PORTA DE ROTA ENTRA NO CONTEXTO, e é a REAL (extraída de bracket-model.js), não um stub: o
+ * bloco da hidratação passou a decidir por ela em 26/set/2026 (o placar não aparecia sem refresh quando
+ * se lançava pelo detalhe do torneio). Stub aqui faria este teste medir uma regra que não existe. */
+const _rotaSrc=fs.readFileSync(path.join(root,'js/views/bracket-model.js'),'utf8');
+const _iRota=_rotaSrc.indexOf('window._rotaMostraAChaveDeste = function');
+const _fRota=_rotaSrc.indexOf('\n};',_iRota)+3;
+let attempts=0,refresh=0;const t={id:'abc'};const ctx={t,window:{location:{hash:'#bracket/abcd'},AppStore:{hydrateMatchResults(){attempts++;if(attempts===1)throw new Error('offline');t._resultsHydrated='completa';return Promise.resolve(true);}},_softRefreshView(){refresh++;}}};
+ vm.runInNewContext(_rotaSrc.slice(_iRota,_fRota),ctx);vm.runInNewContext(code,ctx);vm.runInNewContext(code,ctx);await drain();assert.equal(attempts,1);assert.equal(t._resultsHydrating,false);assert(!t._resultsHydrated);
  vm.runInNewContext(code,ctx);await drain();assert.equal(t._resultsHydrated,'completa');assert.equal(refresh,0,'prefixo de outro torneio não é a mesma rota');
  vm.runInNewContext(code,ctx);await drain();assert.equal(attempts,2,'⛔ segunda abertura NÃO re-hidrata: o caller não derrubou o escopo');
  t._resultsHydrated='parcial';vm.runInNewContext(code,ctx);await drain();assert.equal(attempts,3,'⛔ escopo parcial da dashboard NÃO serve pra chave: ela relê a coleção inteira');
