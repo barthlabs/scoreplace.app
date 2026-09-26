@@ -2330,6 +2330,20 @@ window._reassignBestLosersToRepechage = function (t) {
 
       // ── OCUPADO (doc legado, gravado antes desta regra): correção por SWAP simétrico ──
       if (!_vazio(atual)) {
+        /* ⛔⛔ REPESCAGEM DECIDIDA NÃO SE REESCREVE. Relato do dono em 26/set/2026, linha Ouro da
+         * Confra: três vagas voltavam sozinhas para os times errados _"toda vez"_ — e a causa não era
+         * a régua de desempate, era ESTE ramo. Ele pega o melhor candidato da fila e TROCA o ocupante
+         * sempre que discordar dele. Ou seja: repescagem publicada é recalculada e sobrescrita a cada
+         * abertura da chave, em silêncio, e qualquer correção feita nos dados é desfeita.
+         *
+         * ⚠️ Isto vale mesmo quando a régua está CERTA: quem entrou na repescagem já jogou, ou vai
+         * jogar, e a chave foi divulgada. Trocar depois é mudar resultado publicado. É a mesma regra
+         * que já vale para a entrada tardia no desenho de folga (que RECUSA redesenhar confronto
+         * publicado) e para a classificação final (que congela e não regrava).
+         * ⇒ a vaga preenchida com a rodada-fonte FECHADA é RESULTADO: fica marcada e nunca mais é
+         * trocada. O swap continua existindo só para vaga ainda não fixada — doc legado, que é para
+         * o que ele foi escrito. [[project_listas_derivadas_do_torneio]] */
+        if (s.m[s.slot + 'RepescagemFixada']) return;
         if (congelada) return;   // inferior de outro construtor: trocar desalinha o pouso
         var querL = null;
         for (var li = 0; li < fila.length; li++) {
@@ -2368,6 +2382,16 @@ window._reassignBestLosersToRepechage = function (t) {
       s.m[s.slot] = quer;
       jaRepescado[String(quer)] = 1; colocados[String(quer)] = 1;
       if (origem) { origem.m[origem.slot] = 'TBD'; vagados.push(origem); }
+      trocas++;
+    });
+
+    /* ⭐ CARIMBO: a rodada-fonte já fechou (estamos depois do `_fechou`), então toda vaga que está
+     * preenchida agora é decisão tomada. Marca uma vez; a partir daqui o ramo do swap acima devolve
+     * cedo e a repescagem para de se reescrever sozinha. Idempotente: nunca desmarca. */
+    slots.forEach(function (s) {
+      if (_vazio(s.m[s.slot])) return;
+      if (s.m[s.slot + 'RepescagemFixada']) return;
+      s.m[s.slot + 'RepescagemFixada'] = true;
       trocas++;
     });
 
