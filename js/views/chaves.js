@@ -40,22 +40,34 @@
    * ⛔ E NÃO SE ESCREVE "regra do dono" para nada disto: chamar conceito de preferência é o que faz o
    * próximo leitor achar que pode mudar.
    *
-   * ① O PROBLEMA É SEMPRE O MESMO: POTÊNCIA DE 2.
-   *    Uma chave só desce limpa quando o número de equipes da rodada é potência de 2 — aí cada rodada
-   *    corta exatamente a metade, sem resto. Quando não é, existe RESTO, e é só isso que os três
-   *    desenhos resolvem.
+   * ① SÃO DOIS PROBLEMAS DIFERENTES, E CONFUNDI-LOS É ERRO — o dono teve de corrigir isto:
    *
-   * ② OS TRÊS DESENHOS SÃO TRÊS MANEIRAS DE ALCANÇAR A POTÊNCIA DE 2 — nada mais. Alcançada, o resto
-   *    da chave é idêntico nos três.
-   *      · BYE          alcança TIRANDO gente da estreia: parte do campo espera. A chave é a potência
-   *                     de 2 ACIMA (folgas = B − N); dito pela outra ponta, é uma preliminar que reduz
-   *                     à potência de 2 ABAIXO. São o MESMO desenho, com dois nomes — conferido para
-   *                     todo N de 2 a 512.
-   *      · REPESCAGEM   alcança DEVOLVENDO gente: todas jogam a estreia, e perdedoras voltam até
-   *                     completar a potência de 2 acima do número de vencedoras.
-   *      · SOBRA ÚNICA  não força em uma rodada: todas jogam a estreia e cada rodada ímpar carrega UMA
-   *                     sobra, até a descida cair numa potência de 2. ⛔ NÃO TEM RODADA DE ENTRADA —
-   *                     sobra única é sobra única.
+   *    · RESTO é RODADA ÍMPAR. Numa rodada com número ímpar de equipes, uma fica sem par. É problema
+   *      DAQUELA rodada, e a sobra é aquela equipe.
+   *    · NÃO SER POTÊNCIA DE 2 É OUTRA COISA, e acontece com número PAR também. Entre 4 e 64, 26 dos
+   *      31 números pares não são potência de 2. Com 12 equipes a estreia empareelha todas, sem resto
+   *      nenhum — e ainda assim 12 não é potência de 2.
+   *
+   *    A LIGAÇÃO ENTRE OS DOIS, que é a parte exata: escreva N = 2^k · m com m ímpar.
+   *      · m = 1 (N é potência de 2) ⇒ NENHUMA rodada é ímpar, nunca. Não há resto em lugar nenhum.
+   *      · m > 1 ⇒ depois de k divisões por 2 a descida chega em m, que é ÍMPAR. É ali que o primeiro
+   *        resto aparece, mesmo que N seja par.
+   *    Medido, zero contraexemplos em N de 3 a 1024: 12 → primeiro ímpar em 3 · 20 → em 5 · 36 → em 9 ·
+   *    48 → em 3. Ser potência de 2 é EXATAMENTE a condição para nenhuma rodada ter resto.
+   *
+   * ② OS TRÊS DESENHOS DIFEREM EM QUANDO TRATAM O RESTO — e é só isso.
+   *      · BYE          faz o campo virar potência de 2 JÁ NA ESTREIA, tirando gente dela: parte do
+   *                     campo espera. Alcançada a potência de 2, o resto NUNCA MAIS aparece. A chave é
+   *                     a potência de 2 ACIMA (folgas = B − N); dito pela outra ponta, é uma preliminar
+   *                     que reduz à potência de 2 ABAIXO — o MESMO desenho com dois nomes, conferido
+   *                     para todo N de 2 a 512.
+   *      · REPESCAGEM   faz o mesmo, mas DEVOLVENDO gente em vez de tirar: todas jogam a estreia, e
+   *                     perdedoras voltam até completar a potência de 2 acima do número de vencedoras.
+   *                     Depois disso também não há mais resto.
+   *      · SOBRA ÚNICA  NÃO força potência de 2 nenhuma. Todas jogam a estreia, e o resto é tratado
+   *                     ONDE ELE APARECE: cada rodada ímpar tem UMA sobra. Por isso ela tem mais de uma
+   *                     intervenção quando m é grande (36 tem três).
+   *                     ⛔ NÃO TEM RODADA DE ENTRADA — sobra única é sobra única.
    *
    * ③ A DISPUTA DE 3º LUGAR EXISTE SEMPRE, e o 3º colocado existe sempre. É jogo anterior à final,
    *    previsto e contado. Onde a penúltima rodada tem 4 equipes, é o jogo entre os dois perdedores das
