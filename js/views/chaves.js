@@ -40,6 +40,19 @@
    * ⛔ E NÃO SE ESCREVE "regra do dono" para nada disto: chamar conceito de preferência é o que faz o
    * próximo leitor achar que pode mudar.
    *
+   * ⓪ AS VARIÁVEIS, porque fórmula sem legenda não explica nada:
+   *      N              quantas equipes estão inscritas (uma equipe é 1 pessoa ou uma dupla)
+   *      E              quantas equipes ENTRAM numa rodada
+   *      B              o tamanho da chave: a potência de 2 imediatamente ACIMA de N
+   *      P              a potência de 2 imediatamente ABAIXO de N
+   *      k              quantas vezes N pode ser dividido por 2 sem sobrar nada
+   *      m              o que resta dessas divisões — sempre ÍMPAR
+   *      V              quantas equipes vencem a estreia
+   *      A              o alvo da 2ª rodada na repescagem: a potência de 2 acima de V
+   *      vidas extras   quantas equipes voltam a jogar depois de já ter perdido
+   *      log₂ N         a quantas divisões por 2 o N chega ao 1 (é o número de rodadas)
+   *      teto( )        arredonda para CIMA · piso( ) arredonda para BAIXO
+   *
    * ① SÃO DOIS PROBLEMAS DIFERENTES, E CONFUNDI-LOS É ERRO — o dono teve de corrigir isto:
    *
    *    · RESTO é RODADA ÍMPAR. Numa rodada com número ímpar de equipes, uma fica sem par. É problema
@@ -57,16 +70,28 @@
    *
    * ② OS TRÊS DESENHOS DIFEREM EM QUANDO TRATAM O RESTO — e é só isso.
    *      · BYE          faz o campo virar potência de 2 JÁ NA ESTREIA, tirando gente dela: parte do
-   *                     campo espera. Alcançada a potência de 2, o resto NUNCA MAIS aparece. A chave é
-   *                     a potência de 2 ACIMA (folgas = B − N); dito pela outra ponta, é uma preliminar
-   *                     que reduz à potência de 2 ABAIXO — o MESMO desenho com dois nomes, conferido
-   *                     para todo N de 2 a 512.
+   *                     campo espera. Alcançada a potência de 2, o resto NUNCA MAIS aparece.
+   *                        B      = 2^teto(log₂ N)      tamanho da chave
+   *                        folgas = B − N               quantas esperam, sem jogar a estreia
+   *                        jogos  = N − B/2             jogos da estreia  (B/2 seguem para a 2ª rodada)
+   *                        jogam  = 2N − B              quantas entram em quadra na estreia
+   *                     Pela outra ponta, é uma preliminar que reduz à potência de 2 ABAIXO:
+   *                        P         = 2^piso(log₂ N)   a potência de 2 abaixo de N
+   *                        excedente = N − P            jogos da preliminar
+   *                        esperam   = N − 2·excedente
+   *                     Os dois conjuntos dão os MESMOS números — é o mesmo desenho com dois nomes,
+   *                     conferido para todo N de 2 a 512.
    *      · REPESCAGEM   faz o mesmo, mas DEVOLVENDO gente em vez de tirar: todas jogam a estreia, e
    *                     perdedoras voltam até completar a potência de 2 acima do número de vencedoras.
+   *                        V      = teto(N / 2)         quantas vencem a estreia
+   *                        A      = 2^teto(log₂ V)      alvo da 2ª rodada
+   *                        voltam = A − V               perdedoras chamadas de volta
    *                     Depois disso também não há mais resto.
    *      · SOBRA ÚNICA  NÃO força potência de 2 nenhuma. Todas jogam a estreia, e o resto é tratado
-   *                     ONDE ELE APARECE: cada rodada ímpar tem UMA sobra. Por isso ela tem mais de uma
-   *                     intervenção quando m é grande (36 tem três).
+   *                     ONDE ELE APARECE: cada rodada ímpar tem UMA sobra.
+   *                        E(k+1) = teto( E(k) / 2 )    quem entra na rodada seguinte (a sobra segue)
+   *                        E ímpar ⇒ piso(E/2) jogos e UMA sobra · E par ⇒ E/2 jogos e nenhuma sobra
+   *                     Por isso ela tem mais de uma intervenção quando m é grande (36 tem três).
    *                     ⛔ NÃO TEM RODADA DE ENTRADA — sobra única é sobra única.
    *
    * ③ A DISPUTA DE 3º LUGAR EXISTE SEMPRE, e o 3º colocado existe sempre. É jogo anterior à final,
@@ -85,9 +110,14 @@
    * ⑤ FOLGA NÃO É JOGO. Ela ocupa posição na rodada (é onde o tardio entra), mas não é partida: não
    *    conta na soma de jogos nem no nome da rodada.
    *
-   * ⑥ A CONTA QUE FECHA TUDO:   jogos = (N − 1) + vidas extras + 1 pela disputa de 3º lugar.
-   *    Cada jogo elimina uma equipe; para sobrar um campeão é preciso eliminar N − 1; toda vida extra
-   *    concedida exige uma eliminação a mais. Qualquer total que não feche por aqui está errado.
+   * ⑥ A CONTA QUE FECHA TUDO:
+   *        jogos = (N − 1) + vidas extras + 1
+   *      N − 1          cada jogo elimina uma equipe; para sobrar um campeão é preciso eliminar N − 1
+   *      vidas extras   cada equipe que volta depois de perder exige uma eliminação a mais
+   *      + 1            a disputa de 3º lugar, que existe em todo torneio
+   *    Qualquer total que não feche por aqui está errado.
+   *    ⚠️ Na DUPLA ELIMINATÓRIA a conta é outra: jogos = 2N − 2, ou 2N − 1 quando a final precisa de
+   *    jogo de desempate — porque ali toda equipe precisa perder DUAS vezes.
    * ════════════════════════════════════════════════════════════════════════════════════════════════ */
 
   /* ===================================================================
