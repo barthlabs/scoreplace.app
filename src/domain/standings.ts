@@ -23,6 +23,9 @@ namespace ScoreplaceStandings {
     ordem?: NumericMap;
     adv?: boolean;
     primaryField?: string;
+    /* A unidade em que ESTE torneio mede o saldo: 'pontos' | 'games' | 'sets'. Quem informa é o
+     * chamador, porque só ele conhece o torneio. Ausente = comportamento antigo. Ver `saldo_pontos`. */
+    unidadeDoSaldo?: string;
   }
 
   export interface TiebreakExplanation {
@@ -61,38 +64,51 @@ namespace ScoreplaceStandings {
     return direction > 0 ? n(x) - n(y) : n(y) - n(x);
   }
 
-  /* A ESCADA DO SALDO, do mais rico ao mais pobre. Ver a explicação em `saldo_pontos`. */
-  export const NIVEIS_DE_SALDO = [
-    { nivel: 'pontos', ganhou: 'rallyFor', perdeu: 'rallyAgainst' },
-    { nivel: 'games', ganhou: 'gamesWon', perdeu: 'gamesLost' },
-    { nivel: 'sets', ganhou: 'setsWon', perdeu: 'setsLost' },
-  ] as const;
-
-  const temNivel = (line: StandingLine | null | undefined, i: number): boolean => {
-    if (!line) return false;
-    const d = NIVEIS_DE_SALDO[i];
-    return line[d.ganhou] != null || line[d.perdeu] != null;
+  /* ⛔⛔⛔ A UNIDADE DO SALDO — e NÃO é uma escada de tentativas.
+   *
+   * Ordem do dono, 26/set/2026, em duas partes que só fazem sentido juntas:
+   *   ① _"sempre o valor mais rico; sets/games/pontos (no caso de placar ao vivo aplicado). sempre
+   *      isso deve ser considerado como saldo de pontos. em todo o programa."_
+   *   ② _"o criterio de desempate tem que ser rigorosamente como deixou configurado o organizador.
+   *      mudou algo, muda; tirou dali, sai. simples assim. nao tem que ter critério por fora."_
+   *
+   * ⭐ E A SEGUNDA DERRUBOU A MINHA PRIMEIRA IMPLEMENTAÇÃO. Eu havia feito `saldo_pontos` descer uma
+   * ESCADA — rally, depois games, depois sets — até achar diferença. Isso é critério por fora: se o
+   * organizador tirou `saldo_sets` da lista dele, comparar sets dentro do `saldo_pontos` ressuscita um
+   * critério que ele removeu, pela porta dos fundos. Errado, e ele cortou na hora.
+   *
+   * ⇒ O CERTO: `saldo_pontos` tem UMA unidade, a do torneio — a mais rica que aquele torneio de fato
+   * produz. Compara nela e só nela. Empatou, o critério ACABOU: quem decide é o PRÓXIMO da lista do
+   * organizador, não um degrau escondido aqui dentro.
+   *
+   *      placar ao vivo aplicado  →  'pontos'  (rallyFor / rallyAgainst)
+   *      torneio por sets         →  'games'   (gamesWon / gamesLost)
+   *      torneio por pontos       →  'pontos'  (pointsFor / pointsAgainst — o legado)
+   *
+   * ⚠️ Quem informa a unidade é o CHAMADOR (`options.unidadeDoSaldo`), porque só ele conhece o
+   * torneio. Sem a unidade, vale o comportamento antigo — é o que mantém intacto o torneio por pontos
+   * corridos, onde `pointsFor` já É a unidade certa.
+   * ⚠️ E foi a AUSÊNCIA disso que causou o estrago medido na Confra: `saldo_pontos` comparava o placar
+   * de SETS (1×2, 0×2), dava dois valores entre 18 duplas, não separava ninguém, e a repescagem caía
+   * no sorteio — 6-1/6-1 entrou, 6-4/6-4 ficou fora. */
+  export const UNIDADES_DE_SALDO: Record<string, { ganhou: string; perdeu: string }> = {
+    pontos: { ganhou: 'rallyFor', perdeu: 'rallyAgainst' },
+    games: { ganhou: 'gamesWon', perdeu: 'gamesLost' },
+    sets: { ganhou: 'setsWon', perdeu: 'setsLost' },
   };
 
-  const temNivelNomeado = (line: StandingLine | null | undefined, nivel: string): boolean => {
-    const i = NIVEIS_DE_SALDO.findIndex((x) => x.nivel === nivel);
-    return i >= 0 && temNivel(line, i);
-  };
-
-  /** O nível mais rico que AS DUAS linhas têm. `null` quando nenhuma tem nenhum. */
-  export function nivelMaisRicoComum(a: StandingLine, b: StandingLine): string | null {
-    for (let i = 0; i < NIVEIS_DE_SALDO.length; i++) {
-      if (temNivel(a, i) && temNivel(b, i)) return NIVEIS_DE_SALDO[i].nivel;
-    }
-    return null;
-  }
-
-  /** O saldo de uma linha num nível nomeado da escada. */
-  export function saldoNoNivel(line: StandingLine, nivel: string): number {
-    const d = NIVEIS_DE_SALDO.find((x) => x.nivel === nivel);
+  /** O saldo de uma linha numa unidade nomeada. */
+  export function saldoNaUnidade(line: StandingLine, unidade: string): number {
+    const d = UNIDADES_DE_SALDO[unidade];
     if (!d) return 0;
     return difference(line, d.ganhou, d.perdeu);
   }
+
+  const temUnidade = (line: StandingLine | null | undefined, unidade: string): boolean => {
+    const d = UNIDADES_DE_SALDO[unidade];
+    if (!line || !d) return false;
+    return line[d.ganhou] != null || line[d.perdeu] != null;
+  };
 
   export const CRITERIOS: Record<string, Criterion> = {
     pontos_avancados: (a, b) => n(b.points) - n(a.points),
@@ -118,17 +134,12 @@ namespace ScoreplaceStandings {
      * primeiro nível que AMBOS têm. É isso que "o mais rico POSSÍVEL" quer dizer.
      * ⚠️ `pointsDiff`/`pointsFor`/`pointsAgainst` continuam como ÚLTIMA reserva, para as linhas antigas
      * que só carregam eles — tirar isso quebraria torneio por pontos corridos, que é outro jogo. */
-    saldo_pontos: (a, b) => {
-      /* ⛔⛔ DESCE A ESCADA ATÉ ALGUÉM FALAR — e esta parte nasceu de um defeito MEU, pego por teste
-       * no mesmo dia: a primeira versão parava no nível mais rico COMUM e devolvia o que ele dissesse,
-       * inclusive ZERO. Numa linha com games 12-12 e pontos 10-14 contra 20-10, o critério virava
-       * NEUTRO — a diferença real de pontos era engolida por um empate em games.
-       * ⇒ O certo é percorrer do mais rico ao mais pobre e devolver a PRIMEIRA diferença que não é
-       * zero. Nível que empata não decide nada, então não pode calar o nível de baixo. */
-      for (const degrau of NIVEIS_DE_SALDO) {
-        if (!temNivelNomeado(a, degrau.nivel) || !temNivelNomeado(b, degrau.nivel)) continue;
-        const d = saldoNoNivel(b, degrau.nivel) - saldoNoNivel(a, degrau.nivel);
-        if (d) return d;
+    saldo_pontos: (a, b, options) => {
+      /* ⛔ UMA unidade, a do torneio. Empatou nela, o critério acabou — o próximo é o da LISTA do
+       * organizador, nunca um degrau escondido aqui. Ver a explicação acima. */
+      const unidade = options?.unidadeDoSaldo;
+      if (unidade && temUnidade(a, unidade) && temUnidade(b, unidade)) {
+        return saldoNaUnidade(b, unidade) - saldoNaUnidade(a, unidade);
       }
       const da = a.pointsDiff != null ? n(a.pointsDiff) : difference(a, 'pointsFor', 'pointsAgainst');
       const db = b.pointsDiff != null ? n(b.pointsDiff) : difference(b, 'pointsFor', 'pointsAgainst');

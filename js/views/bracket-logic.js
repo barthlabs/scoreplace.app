@@ -1790,6 +1790,33 @@ function _advanceWinner(t, completedMatch) {
 // ─── Repechage helper: rank players using tournament tiebreaker criteria ─────
 // Builds a rich stats object per player from all their matches, then sorts using
 // the same criteria as _updateProgressiveClassification + configured t.tiebreakers.
+/* ⛔⛔⛔ EM QUE RÉGUA O SALDO É MEDIDO — porta única, porque a pergunta aparece em todo lugar que
+ * desempata, e duas respostas para ela é como um critério deixa de valer sem ninguém ver.
+ *
+ * Ordem do dono, 26/set/2026: _"sempre o valor mais rico; sets/games/pontos (no caso de placar ao vivo
+ * aplicado)"_ — e, no mesmo dia, _"o criterio de desempate tem que ser rigorosamente como deixou
+ * configurado o organizador. nao tem que ter critério por fora"_.
+ * ⇒ As duas juntas querem dizer: a LISTA é dele, intocada; o que escolhemos aqui é só a UNIDADE em que
+ * o saldo dele é contado — a mais rica que aquele torneio de fato produz.
+ *   · placar ao vivo aplicado  → pontos de rally
+ *   · torneio por sets/gsm     → games
+ *   · torneio por pontos       → a unidade antiga (pontos corridos), sem mudar nada
+ * ⚠️ Não devolver 'sets' nunca: o saldo em sets é um critério PRÓPRIO (`saldo_sets`) e só vale se o
+ * organizador o tiver na lista. Medir `saldo_pontos` em sets foi exatamente o defeito da Confra. */
+if (typeof window !== 'undefined') window._unidadeDoSaldo = function (t) {
+  var sc = (t && t.scoring) || {};
+  var adv = (t && t.advancedScoring) || {};
+  /* ⛔ A MARCA DO PLACAR AO VIVO mora em `advancedScoring.applyLiveScoring` — eu tinha escrito
+   * `t.liveScoringApplied`, campo que não existe, e o ramo mais rico NUNCA teria disparado. Campo
+   * inventado não falha: só deixa de valer, em silêncio. */
+  var aoVivo = !!(adv.enabled && adv.applyLiveScoring);
+  /* ⚠️ E só vale como unidade se a linha de fato trouxer o ponto de rally — o comparador confere
+   * isso do lado dele e cai na unidade seguinte quando não houver. */
+  if (aoVivo) return 'pontos';
+  if (sc.type === 'sets' || sc.type === 'gsm') return 'games';
+  return null;                        /* ausente = comportamento antigo, para pontos corridos */
+};
+
 function _rankByTiebreakers(t, playerNames) {
   var allMatches = t.matches || [];
   var players = playerNames.map(function(name) {
@@ -1935,7 +1962,14 @@ function _rankByTiebreakers(t, playerNames) {
     var _opts = {
       tiebreakers: tiebreakers,
       primaryField: _advOn ? 'advancedPoints' : 'points',
-      h2h: h2h, birth: birthByName
+      h2h: h2h, birth: birthByName,
+      /* ⛔⛔ A UNIDADE DO SALDO — sem ela, `saldo_pontos` comparava o placar de SETS e a repescagem
+       * saía errada. MEDIDO na Confra (26/set/2026): entre 18 derrotados, o saldo em sets dava só dois
+       * valores (−1 e −2), repetia o critério anterior, não separava ninguém, e a ordem caía no
+       * SORTEIO — quem perdeu 6-1/6-1 entrou e quem perdeu 6-4/6-4 ficou fora.
+       * ⚠️ NÃO é critério a mais: é a unidade do critério que o organizador JÁ configurou. A lista
+       * dele manda, do primeiro ao último; isto só diz em que régua o `saldo_pontos` é medido. */
+      unidadeDoSaldo: (typeof window._unidadeDoSaldo === 'function') ? window._unidadeDoSaldo(t) : null
     };
     players.sort(function (a, b) {
       var d = _cmpStd(a, b, _opts);
