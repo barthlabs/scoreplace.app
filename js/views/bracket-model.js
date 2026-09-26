@@ -72,17 +72,58 @@
     return fallback;
   }
 
-  function _labelElimRound(roundNum, positiveRounds) {
+  /* ⛔⛔ O NOME DA RODADA É CONCEITO, NÃO DISTÂNCIA ATÉ A FINAL.
+   *
+   * O conceito, como a literatura usa e como o número no nome diz:
+   *   FINAL              1 jogo   — define o campeão
+   *   SEMIFINAIS         2 jogos  — definem quem vai à final (e os perdedores, o 3º lugar)
+   *   QUARTAS DE FINAL   4 jogos  — antecedem as semifinais
+   *   OITAVAS DE FINAL   8 jogos  — antecedem as quartas
+   *   qualquer outra     RODADA X
+   *
+   * ⛔ E SÃO DUAS CONDIÇÕES, não uma: a rodada precisa TER aquele número de jogos **e** ser a que
+   * antecede a rodada nomeada seguinte. Faltando qualquer uma, o nome é "Rodada X".
+   *
+   * ⭐ ANTES AQUI SE CONTAVA SÓ A DISTÂNCIA ATÉ O FIM (1ª do fim = Final, 2ª = Semifinais, 3ª =
+   * Quartas, 4ª = Oitavas), e isso MENTE em toda chave que não é potência de 2 exata. Exemplo medido:
+   * numa chave de 36 equipes pela sobra única, os jogos por rodada são 18 · 9 · 4 · 2 · 2 · 1 — a
+   * antepenúltima tem DOIS jogos e era anunciada como "Quartas de Final". Quartas com dois jogos não
+   * existe: aquilo é a Rodada 4.
+   * ⚠️ A folga NÃO é jogo e a disputa de 3º lugar NÃO entra na conta da final: a final tem 1 jogo, o
+   * do campeão. Contar os dois faria a final virar "Semifinais" pelo próprio critério. */
+  var _NOMES_POR_JOGOS = [
+    { jogos: 1, chave: 'bracket.final', txt: LABELS.final },
+    { jogos: 2, chave: 'bracket.semiFinal', txt: LABELS.semi },
+    { jogos: 4, chave: 'bracket.quarterFinal', txt: LABELS.quarter },
+    { jogos: 8, chave: 'bracket.roundOf16', txt: LABELS.r16 }
+  ];
+
+  /** Jogos DE VERDADE da rodada: folga não conta, e o 3º lugar não conta para nomear a final. */
+  function _jogosDeVerdade(matches) {
+    if (!Array.isArray(matches)) return 0;
+    return matches.filter(function (m) {
+      return m && !m.isBye && !m.isSitOut && !m.isThirdPlace;
+    }).length;
+  }
+
+  function _labelElimRound(roundNum, positiveRounds, byRound) {
     if (roundNum === 0) return _tr('bracket.playIn', LABELS.playin);
     if (roundNum < 0) return _tr('bracket.repechage', LABELS.repechage) +
       (Math.abs(roundNum) > 1 ? ' ' + Math.abs(roundNum) : '');
     var idx = positiveRounds.indexOf(roundNum);
-    var fromEnd = positiveRounds.length - idx;
-    if (fromEnd === 1) return _tr('bracket.final', LABELS.final);
-    if (fromEnd === 2) return _tr('bracket.semiFinal', LABELS.semi);
-    if (fromEnd === 3) return _tr('bracket.quarterFinal', LABELS.quarter);
-    if (fromEnd === 4) return _tr('bracket.roundOf16', LABELS.r16);
-    return _tr('bracket.round', 'Rodada ' + roundNum, { n: roundNum });
+    var fromEnd = positiveRounds.length - idx;          // 1 = última
+    var generico = _tr('bracket.round', 'Rodada ' + roundNum, { n: roundNum });
+    if (fromEnd < 1 || fromEnd > _NOMES_POR_JOGOS.length) return generico;
+    /* ⛔ AS DUAS CONDIÇÕES: a posição desde o fim E o número de jogos. E a cadeia não pode ter
+     * buraco — se a rodada mais próxima da final já não merecia o nome dela, esta também não merece,
+     * porque ela deixa de ser "a que antecede as semifinais". */
+    for (var k = 0; k < fromEnd; k++) {
+      var alvo = _NOMES_POR_JOGOS[k];
+      var rod = positiveRounds[positiveRounds.length - 1 - k];
+      if (_jogosDeVerdade(byRound && byRound[rod]) !== alvo.jogos) return generico;
+    }
+    var meu = _NOMES_POR_JOGOS[fromEnd - 1];
+    return _tr(meu.chave, meu.txt);
   }
 
   function _matchComplete(m) {
@@ -287,7 +328,7 @@
 
         var label;
         if (br === null) {
-          label = _labelElimRound(roundNum, positiveRounds);
+          label = _labelElimRound(roundNum, positiveRounds, byRound);
         } else if (br === 'grand') {
           label = _tr('bracket.grandFinal', LABELS.grandfinal);
         } else if (roundNum < 0) {

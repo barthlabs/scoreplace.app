@@ -1449,10 +1449,10 @@
     var _daInscricao = !!(cfg && cfg.source && cfg.source.type === 'enrollment');
     var built = A.build(pool.length, dupla ? 'dupla' : 'simples', {
       participantes: pool,
-      /* ⛔⛔⛔ A DISPUTA DE 3º LUGAR EXISTE SEMPRE. Ordem do dono, repetida em 26/set/2026:
-       * _"todo torneio sempre tem a porra da disputa de 3o lugar. nao deve mais haver qualquer
-       * referencia a isso nao acontecer (...) isso sempre cria problema na contagem de
-       * jogos/classificacao e gera regressao"_.
+      /* ⛔⛔⛔ A DISPUTA DE 3º LUGAR EXISTE SEMPRE — CONCEITO, não regra de ninguém: é o jogo entre os
+       * dois perdedores das semifinais, anterior à final, sempre previsto e sempre contado. O conceito
+       * inteiro (incluindo por que tratá-lo como opcional quebra a contagem de jogos e a classificação)
+       * está escrito em `chaves.js`.
        *
        * ⛔ E POR ISSO ESTA LINHA NÃO LÊ MAIS `cfg.thirdPlace`. Ela lia, e isso era o último buraco:
        * um documento de fase ANTIGO com `thirdPlace: false` gravado (a flag morreu na 2.1.41, mas o

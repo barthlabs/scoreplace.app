@@ -252,8 +252,9 @@
     // ninguém). Aqui os dois perdedores das SEMIFINAIS são roteados pra ele.
     // Na Dupla Eliminatória NÃO existe: o 3º sai naturalmente como perdedor do
     // último jogo da chave inferior, sem partida extra.
-    /* ⛔⛔⛔ AUSENTE É SIM. Ordem do dono (26/set/2026): a disputa de 3º lugar existe em TODO torneio,
-     * é jogo anterior à final, sempre prevista e sempre contada. Antes, quem chamasse este construtor
+    /* ⛔⛔⛔ AUSENTE É SIM. A disputa de 3º lugar existe em TODO torneio — é CONCEITO, não preferência:
+     * jogo anterior à final, entre os dois perdedores das semifinais, sempre previsto e sempre contado.
+     * (O dono teve de reexplicar isto mais de uma vez; o conceito inteiro está escrito em `chaves.js`.) Antes, quem chamasse este construtor
      * SEM passar o parâmetro não recebia o jogo — desligado por esquecimento, em silêncio, e a
      * contagem de jogos daquela chave passava a divergir das fórmulas.
      *

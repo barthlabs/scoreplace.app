@@ -63,6 +63,7 @@ const SUITES = [
   /* ⛔ Portões da ordem do dono: a política atravessa TODOS os caminhos, e o 3º lugar existe sempre. */
   'tests/nenhum-caminho-desenha-chave-sem-politica.test.js',
   'tests/terceiro-lugar-existe-sempre.test.js',
+  'tests/nome-da-rodada-e-conceito.test.js',
   'tests/politica-chave-exige-escolha.test.js',
   'tests/casual-dupla-e-segundo-sacador.test.js',
   'tests/placar-melhor-de-3-nao-vira-um-set.test.js',

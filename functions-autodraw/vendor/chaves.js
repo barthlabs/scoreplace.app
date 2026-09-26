@@ -31,6 +31,53 @@
 (function () {
   'use strict';
 
+  /* ══════════════════════════════════════════════════════════════════════════════════════════════════
+   * OS CONCEITOS DE CHAVE — ESCRITOS AQUI PORQUE REGRIDEM TODA HORA.
+   *
+   * ⛔ Não são convenção deste projeto nem preferência de ninguém: é como a literatura e o esporte
+   * definem. O dono teve de reexplicar cada um destes pontos mais de uma vez, e foi por isso que eles
+   * viraram comentário no código em vez de decisão numa conversa.
+   * ⛔ E NÃO SE ESCREVE "regra do dono" para nada disto: chamar conceito de preferência é o que faz o
+   * próximo leitor achar que pode mudar.
+   *
+   * ① O PROBLEMA É SEMPRE O MESMO: POTÊNCIA DE 2.
+   *    Uma chave só desce limpa quando o número de equipes da rodada é potência de 2 — aí cada rodada
+   *    corta exatamente a metade, sem resto. Quando não é, existe RESTO, e é só isso que os três
+   *    desenhos resolvem.
+   *
+   * ② OS TRÊS DESENHOS SÃO TRÊS MANEIRAS DE ALCANÇAR A POTÊNCIA DE 2 — nada mais. Alcançada, o resto
+   *    da chave é idêntico nos três.
+   *      · BYE          alcança TIRANDO gente da estreia: parte do campo espera. A chave é a potência
+   *                     de 2 ACIMA (folgas = B − N); dito pela outra ponta, é uma preliminar que reduz
+   *                     à potência de 2 ABAIXO. São o MESMO desenho, com dois nomes — conferido para
+   *                     todo N de 2 a 512.
+   *      · REPESCAGEM   alcança DEVOLVENDO gente: todas jogam a estreia, e perdedoras voltam até
+   *                     completar a potência de 2 acima do número de vencedoras.
+   *      · SOBRA ÚNICA  não força em uma rodada: todas jogam a estreia e cada rodada ímpar carrega UMA
+   *                     sobra, até a descida cair numa potência de 2. ⛔ NÃO TEM RODADA DE ENTRADA —
+   *                     sobra única é sobra única.
+   *
+   * ③ A DISPUTA DE 3º LUGAR EXISTE SEMPRE, e o 3º colocado existe sempre. É jogo anterior à final,
+   *    previsto e contado. Onde a penúltima rodada tem 4 equipes, é o jogo entre os dois perdedores das
+   *    semifinais. Onde tem 3, não existe 4º para disputar com ele: o 3º é quem perde o último jogo
+   *    decidido. Em nenhum caso o 3º deixa de existir.
+   *
+   * ④ O NOME DA RODADA DEPENDE DE DUAS COISAS JUNTAS: o número de jogos E a distância até a final.
+   *      FINAL             1 jogo  — define o campeão
+   *      SEMIFINAIS        2 jogos — definem quem vai à final
+   *      QUARTAS DE FINAL  4 jogos — antecedem as semifinais
+   *      OITAVAS DE FINAL  8 jogos — antecedem as quartas
+   *    Faltando qualquer uma das duas condições, o nome é RODADA X. Uma rodada de 2 jogos a três
+   *    rodadas do fim NÃO é "quartas de final". A regra mora em `bracket-model.js` e tem teste próprio.
+   *
+   * ⑤ FOLGA NÃO É JOGO. Ela ocupa posição na rodada (é onde o tardio entra), mas não é partida: não
+   *    conta na soma de jogos nem no nome da rodada.
+   *
+   * ⑥ A CONTA QUE FECHA TUDO:   jogos = (N − 1) + vidas extras + 1 pela disputa de 3º lugar.
+   *    Cada jogo elimina uma equipe; para sobrar um campeão é preciso eliminar N − 1; toda vida extra
+   *    concedida exige uma eliminação a mais. Qualquer total que não feche por aqui está errado.
+   * ════════════════════════════════════════════════════════════════════════════════════════════════ */
+
   /* ===================================================================
    * A CHAVE NÃO É INFLADA ATÉ POTÊNCIA DE 2 (regra do dono, jul/2026).
    *
