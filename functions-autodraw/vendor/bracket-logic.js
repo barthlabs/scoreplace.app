@@ -1593,6 +1593,63 @@ function _jogosDoGrupo(t, r, ri, g, gi) {
 }
 window._jogosDoGrupo = _jogosDoGrupo;
 
+/* ⛔⛔⛔ A CLASSIFICAÇÃO FINAL DA LINHA É GRAVADA — ela é RESULTADO, não desenho de tela.
+ *
+ * Ordem do dono, 26/set/2026: _"deveria ser gravado. é classificacao final de torneio. nao meramente
+ * escrito ou desenhado na hora."_
+ *
+ * ⚠️ E ISTO NÃO CONTRADIZ TER APAGADO A `standings` DO DOCUMENTO — é o oposto, e a diferença é a
+ * única coisa que importa aqui:
+ *   · a classificação PARCIAL é derivada e não se grava. Foi gravá-la que deu o estrago medido em
+ *     26/ago/2026: `standings` existia em 2 de 39 torneios, 120 linhas TODAS zeradas, afirmando
+ *     "0 jogo disputado" num torneio com 115 jogos. Cópia derivada envelhece e passa a mentir;
+ *   · a classificação FINAL é FATO. Quando a linha fecha, aquela ordem é o resultado do torneio:
+ *     não pode mudar depois porque a régua de desempate melhorou, e tem de sobreviver a qualquer
+ *     recálculo. Gravar aqui é o mesmo que já se faz com `classifCongelada` dos grupos.
+ *
+ * ⛔ E SÓ CONGELA QUANDO REALMENTE FECHOU — as duas condições, não uma:
+ *   ① todo jogo real da linha decidido;
+ *   ② NENHUMA vaga de repescagem indefinida. Foi exatamente o caso da Ouro da Confra: a classificação
+ *      se apresentava como definida enquanto ainda não se sabia quem tinha caído. Congelar ali seria
+ *      transformar um chute em registro permanente — o pior resultado possível.
+ * ⚠️ Idempotente: nunca regrava. E as ESTATÍSTICAS seguem vivas; o que congela é a ORDEM. */
+function _congelaLinhasEncerradas(t) {
+  if (!t) return 0;
+  var all = (typeof window._collectAllMatches === 'function') ? (window._collectAllMatches(t) || []) : (t.matches || []);
+  if (!all.length) return 0;
+  var _vaz = function (v) { return !v || v === 'TBD' || /a definir/i.test(String(v)); };
+  var linhas = {};
+  all.forEach(function (m) {
+    if (!m) return;
+    var k = String(m.bracket || 'main');
+    (linhas[k] = linhas[k] || []).push(m);
+  });
+  t.classifFinalDaLinha = t.classifFinalDaLinha || {};
+  var n = 0;
+  Object.keys(linhas).forEach(function (k) {
+    if (Array.isArray(t.classifFinalDaLinha[k])) return;              // idempotente
+    var lm = linhas[k];
+    var pendente = lm.some(function (m) {
+      return ['p1', 'p2'].some(function (sl) {
+        return m[sl + 'AguardaMelhor'] || (m[sl + 'FromRepechage'] && _vaz(m[sl]));
+      });
+    });
+    if (pendente) return;                                             // ② ainda não se sabe quem caiu
+    var reais = lm.filter(function (m) { return m && !m.isSitOut && !m.isBye; });
+    if (!reais.length) return;
+    if (!reais.every(function (m) { return !!m.winner; })) return;    // ① ainda há jogo em aberto
+    var mapa = (typeof window._classifMapFromMatches === 'function') ? window._classifMapFromMatches(t, lm) : null;
+    if (!mapa) return;
+    var ordem = Object.keys(mapa).sort(function (a, b) { return mapa[a] - mapa[b]; });
+    if (!ordem.length) return;
+    t.classifFinalDaLinha[k] = ordem.map(function (nome) { return { name: nome, pos: mapa[nome] }; });
+    t.classifFinalDaLinha[k + '_at'] = new Date().toISOString();
+    n++;
+  });
+  return n;
+}
+if (typeof window !== 'undefined') window._congelaLinhasEncerradas = _congelaLinhasEncerradas;
+
 function _congelaGruposEncerrados(t) {
   if (!t) return;
   (t.rounds || []).forEach(function (r, ri) {

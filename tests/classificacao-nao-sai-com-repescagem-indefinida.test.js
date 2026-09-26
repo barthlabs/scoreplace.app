@@ -67,5 +67,31 @@ ok(/repescagem desta chave ainda não está definida/i.test(src),
 ok(!/confra/i.test(bloco) && !/ouro/i.test(bloco),
   '④ ⛔ a regra não nomeia torneio nem linha: vale para Ouro, Prata e chave única');
 
+/* ══════════════════════════════════════════════════════════════════════════════
+ * ⑤ A CLASSIFICAÇÃO FINAL É GRAVADA — ela é RESULTADO, não desenho de tela.
+ *
+ * Ordem do dono: _"deveria ser gravado. é classificacao final de torneio. nao meramente escrito ou
+ * desenhado na hora."_
+ * ⚠️ E isto NÃO contradiz ter apagado a `standings` do documento em ago/2026 — é o oposto: o que se
+ * apagou foi a PARCIAL, cópia derivada que envelhece e passa a mentir (120 linhas zeradas afirmando
+ * "0 jogo disputado" num torneio com 115 jogos). O que se grava agora é a FINAL, que é fato e não
+ * pode mudar porque a régua de desempate melhorou depois.
+ * ════════════════════════════════════════════════════════════════════════════ */
+const bl = fs.readFileSync(path.join(ROOT, 'js/views/bracket-logic.js'), 'utf8');
+const blCodigo = bl.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+ok(/function _congelaLinhasEncerradas\(/.test(blCodigo), '⑤ a porta que congela a linha existe');
+ok(/classifFinalDaLinha\[k\] = ordem\.map/.test(blCodigo), '⑤ e ela GRAVA a ordem final da linha');
+ok(/if \(Array\.isArray\(t\.classifFinalDaLinha\[k\]\)\) return;/.test(blCodigo),
+  '⑤ ⛔ idempotente: nunca regrava por cima de um resultado já congelado');
+ok(/if \(pendente\) return;/.test(blCodigo),
+  '⑤ ⛔⛔ e NÃO congela com vaga de repescagem indefinida — congelar um chute é pior que não congelar');
+ok(/reais\.every\(function \(m\) \{ return !!m\.winner; \}\)/.test(blCodigo),
+  '⑤ nem com jogo em aberto na linha');
+const ui = fs.readFileSync(path.join(ROOT, 'js/views/bracket-ui.js'), 'utf8');
+ok(/_congelaLinhasEncerradas\(t\)/.test(ui),
+  '⑤ ⭐ e o congelamento acontece na PORTA ÚNICA por onde todo placar lançado passa');
+ok(/t\.classifFinalDaLinha && t\.classifFinalDaLinha\[bracketKey\]/.test(semComentarios),
+  '⑤ ⛔ a tela LÊ o retrato gravado antes de recalcular — senão a ordem publicada mudaria sozinha');
+
 console.log('\n' + (fail ? '✗ ' + fail + ' falha(s), ' : '✅ ') + pass + ' verificações');
 process.exit(fail ? 1 : 0);

@@ -3800,6 +3800,16 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
         'A repescagem desta chave ainda não está definida. A classificação aparece quando as vagas forem preenchidas.' +
         '</div></div>';
     }
+    /* ⛔ CLASSIFICAÇÃO FINAL GRAVADA MANDA. Ela é RESULTADO: uma vez fechada a linha, aquela ordem
+     * não muda porque a régua de desempate melhorou depois. A tela LÊ o retrato, como já faz com a
+     * classificação congelada dos grupos. Recalcular por cima é como a tela passa a discordar do que
+     * as pessoas já viram. */
+    var _cong = t && t.classifFinalDaLinha && t.classifFinalDaLinha[bracketKey];
+    if (Array.isArray(_cong) && _cong.length) {
+      var _mapaCong = {};
+      _cong.forEach(function (x, i) { if (x && x.name) _mapaCong[x.name] = (x.pos != null ? x.pos : i + 1); });
+      return _renderClassifFromMap(_mapaCong, color, '📊 Classificação final', false);
+    }
     var map = _lineClassifMap(bracketKey);
     var fechada = (typeof window._classifIsComplete === 'function') && window._classifIsComplete(lm, map);
     return _renderClassifFromMap(map, color, fechada ? '📊 Classificação final' : '📊 Classificação parcial', false);

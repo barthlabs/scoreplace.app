@@ -2298,6 +2298,12 @@ window._applyResultToTournament = function (t, matchId, payload) {
   if (typeof window._congelaGruposEncerrados === 'function') {
     try { window._congelaGruposEncerrados(t); } catch (e) {}
   }
+  /* ⛔ E A LINHA QUE FECHOU TEM A CLASSIFICAÇÃO FINAL GRAVADA, pela mesma porta: classificação final
+   * é RESULTADO, não desenho de tela. Só congela com todo jogo decidido E nenhuma vaga de repescagem
+   * indefinida — ver `_congelaLinhasEncerradas`. */
+  if (typeof window._congelaLinhasEncerradas === 'function') {
+    try { window._congelaLinhasEncerradas(t); } catch (e) {}
+  }
 
   if (typeof window._propagateMatchUpdate === 'function') window._propagateMatchUpdate(t, m);
   return m;
