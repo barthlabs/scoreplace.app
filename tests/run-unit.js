@@ -60,6 +60,9 @@ const SUITES = [
   'tests/matriz-dos-tres-desenhos.test.js',
   'tests/politica-ausente-e-a-de-hoje.test.js',
   'tests/redesenhar-vale-nos-tres-desenhos.test.js',
+  /* ⛔ Portões da ordem do dono: a política atravessa TODOS os caminhos, e o 3º lugar existe sempre. */
+  'tests/nenhum-caminho-desenha-chave-sem-politica.test.js',
+  'tests/terceiro-lugar-existe-sempre.test.js',
   'tests/politica-chave-exige-escolha.test.js',
   'tests/casual-dupla-e-segundo-sacador.test.js',
   'tests/placar-melhor-de-3-nao-vira-um-set.test.js',

@@ -2148,6 +2148,14 @@ window._buildPhase0Cfg = function (t) {
     var rei = (t.drawMode === 'rei_rainha') || (t.ligaRoundFormat === 'rei_rainha') || /Rei|Rainha/i.test(fmt);
     var cfg = {
         format: fmt, formatCode: code,
+        /* ⛔⛔ A POLÍTICA DA CHAVE ENTRA AQUI, E ESTE É O CAMINHO MAIS IMPORTANTE DE TODOS: a fase 0 é
+         * o SORTEIO INICIAL. Achado na 3ª revisão do plano do bloco 7 — eu já havia consertado o
+         * adapter, as chaves por linha e o recálculo do tardio, e a fase 0 tinha ficado. Sem esta
+         * linha, escolher `bye` ou `sobra_unica` não mudava NADA no sorteio do torneio; mudaria só
+         * em recálculo e em fase posterior, o que é pior que não funcionar — funcionaria pela metade.
+         * ⚠️ A Cloud Function do sorteio monta esta MESMA cfg pelo vendor. Um caminho só.
+         * [[feedback_enumerar_todos_os_caminhos_antes_de_dar_por_pronto]] */
+        politicaDaChave: t.politicaDaChave || null,
         drawMode: t.drawMode || (rei ? 'rei_rainha' : 'sorteio'),
         reiRainha: rei,
         gruposCount: parseInt(t.gruposCount, 10) || 4,

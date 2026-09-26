@@ -71,23 +71,43 @@ for (let N = 2; N <= 64; N++) {
   if (JSON.stringify(C.plano(N, 'simples', 'bye').rodadas.filter((r) => r.fase === 'VC').map((r) => r.E)) !== base) diferemBye++;
   if (JSON.stringify(C.plano(N, 'simples', 'sobra_unica').rodadas.filter((r) => r.fase === 'VC').map((r) => r.E)) !== base) diferemSobra++;
 }
-/* ⛔ OS NÚMEROS SÃO MEDIDOS E TÊM EXPLICAÇÃO — eu havia CHUTADO 57 para os dois e os dois estavam
- * errados. Chute em asserção é pior que asserção nenhuma: vira vermelho que ninguém entende.
+/* ⛔ OS NÚMEROS SÃO MEDIDOS, E JÁ MUDARAM DUAS VEZES NUM DIA — porque o DESENHO mudou duas vezes, não
+ * porque eu chutei (chutei uma vez, no começo, e o teste pegou). Remedir a cada mudança de desenho é a
+ * regra; deixar número velho num teste verde é o que faz o teste mentir.
  *
- * · BYE coincide com repescagem em 6 casos: N = 2, 4, 8, 16, 32, 64. Em potência de 2 não há
- *   excedente, então não há play-in e o desenho é o mesmo halving. ⇒ 63 − 6 = 57.
- * · SOBRA ÚNICA coincide em 11 casos: as mesmas 6 potências de 2 MAIS N = 3, 7, 15, 31, 63. Em
- *   N = 2^k − 1 a primeira rodada produz teto(N/2) = 2^(k−1) vencedoras, que JÁ é potência de 2 — a
- *   normalização da 2ª rodada não tem o que acrescentar, e os dois desenhos descem igual. ⇒ 63 − 11 = 52. */
+ * · BYE coincide com repescagem em 6 casos: N = 2, 4, 8, 16, 32, 64 — em potência de 2 não há
+ *   excedente, não há preliminar, e o desenho é o mesmo halving. ⇒ 63 − 6 = 57.
+ * · SOBRA ÚNICA coincide em 11 casos: as 6 potências de 2 MAIS N = 3, 7, 15, 31, 63. Em N = 2^k − 1 a
+ *   1ª rodada produz teto(N/2) = 2^(k−1) vencedoras, que JÁ é potência de 2 — a normalização da 2ª
+ *   rodada da repescagem não tem o que acrescentar, e os dois desenhos descem igual. ⇒ 63 − 11 = 52. */
 ok(diferemBye === 57, 'o bye difere da repescagem em 57 dos 63 N (achei ' + diferemBye + ')');
 ok(diferemSobra === 52, 'a sobra única difere da repescagem em 52 dos 63 N (achei ' + diferemSobra + ')');
-/* ⛔ E a coincidência é NOMEADA, não estatística: se um dia N=2^k−1 deixar de coincidir, quero saber
- * qual dos dois desenhos mudou. */
 [3, 7, 15, 31, 63].forEach(function (N) {
   const chain = (p) => JSON.stringify(C.plano(N, 'simples', p).rodadas.filter((r) => r.fase === 'VC').map((r) => r.E));
   ok(chain('sobra_unica') === chain('repescagem'),
     'N=' + N + ' (2^k−1): a 1ª rodada já entrega potência de 2, os dois desenhos descem igual');
 });
+
+/* ── A SOBRA ÚNICA NÃO TEM RODADA DE ENTRADA ──────────────────────────────────
+ * ⛔⛔ Ordem do dono, depois de eu ter inventado uma: _"sobra unica é sobra unica porra"_, _"nao tem
+ * rodada de entrada"_. TODAS jogam a estreia, em todo N. É o que separa este desenho do bye, onde a
+ * estreia é um play-in de poucos. */
+for (let N = 4; N <= 64; N++) {
+  const vc = C.plano(N, 'simples', 'sobra_unica').rodadas.filter(function (r) { return r.fase === 'VC'; });
+  ok(vc[0].E === N, 'N=' + N + ': ⛔ na sobra única TODAS jogam a estreia (achei ' + vc[0].E + ' de ' + N + ')');
+  ok(!vc.some(function (r) { return r.entrada === true; }),
+    'N=' + N + ': ⛔ e não existe rodada de entrada neste desenho');
+}
+/* ⚠️ E A CONSEQUÊNCIA MEDIDA, que fica MARCADA e não escondida: em 30 dos 61 N a penúltima rodada tem
+ * TRÊS entrantes. Ali não existe 4º colocado, então não existe jogo de "3º contra 4º" — o 3º colocado é
+ * quem perde o último jogo decidido. O 3º EXISTE; falta a tela derivá-lo da chave. Leva 7.3. */
+let semiDeTres = 0;
+for (let N = 4; N <= 64; N++) {
+  const vc = C.plano(N, 'simples', 'sobra_unica').rodadas.filter(function (r) { return r.fase === 'VC'; });
+  if (vc[vc.length - 2].E === 3) semiDeTres++;
+}
+ok(semiDeTres === 30,
+  '⚠️ em 30 dos 61 N a penúltima rodada tem TRÊS — sem 4º para disputar (achei ' + semiDeTres + ')');
 
 console.log('\n' + (fail ? '✗ ' + fail + ' falha(s), ' : '✅ ') + pass + ' verificações');
 process.exit(fail ? 1 : 0);

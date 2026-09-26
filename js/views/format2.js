@@ -418,6 +418,11 @@
         formatCode: elimDupla0 ? 'elim_dupla' : 'elim_simples',
         format: elimDupla0 ? 'Dupla Eliminatória' : 'Eliminatórias Simples',
         reiRainha: false, drawMode: 'sorteio', rounds: 1,
+        /* ⛔ A política da chave acompanha TODA fase eliminatória que nasce daqui — as duas, e é por
+         * isso que esta linha aparece duas vezes: a eliminatória de fase única e a que vem depois da
+         * classificatória são materializadas em pontos diferentes. Deixar uma sem a política faria o
+         * torneio de duas fases trocar de desenho no meio. */
+        politicaDaChave: (cfg && cfg.politicaDaChave) || null,
         source: { type: 'enrollment' },
         fixedPairs: isDupla, pairingStrategy: 'top', // eliminação direta: inscritos sorteados (sem ranking → semeadura neutra)
         mapping: _buildMapping(d0, e0.nomes, Math.max(e0.linhas, 2) * 8, e0.linhas),
@@ -579,6 +584,11 @@
         formatCode: elimDupla ? 'elim_dupla' : 'elim_simples',
         format: elimDupla ? 'Dupla Eliminatória' : 'Eliminatórias Simples',
         reiRainha: false, drawMode: 'sorteio', rounds: 1,
+        /* ⛔ A política da chave acompanha TODA fase eliminatória que nasce daqui — as duas, e é por
+         * isso que esta linha aparece duas vezes: a eliminatória de fase única e a que vem depois da
+         * classificatória são materializadas em pontos diferentes. Deixar uma sem a política faria o
+         * torneio de duas fases trocar de desenho no meio. */
+        politicaDaChave: (cfg && cfg.politicaDaChave) || null,
         gruposCount: cfg.grupos, gruposClassified: cfg.classificados,
         source: {
           type: 'previous_phase', fromPhaseOffset: 1,

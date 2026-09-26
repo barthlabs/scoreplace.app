@@ -103,10 +103,17 @@ console.log('== 2) o perdedor do jogo-fonte CHEGA na vaga de repescagem (motor r
   // que completam a R2 até a potência de 2 (`repR2`). Cada um é cedido por um jogo-fonte
   // NOMEADO já no sorteio — é essa aresta que a contagem trava. O nº de JOGOS marcados
   // como vaga pode ser menor, porque dois repescados podem cair no mesmo jogo (rep × rep).
+  /* ⛔⛔ E O JOGO DE 3º LUGAR TAMBÉM É CONSUMIDOR DE PERDEDOR — passou a ser SEMPRE, em 26/set/2026,
+   * por ordem do dono. Ele recebe os DOIS perdedores de semifinal pela mesma aresta `loserNextMatchId`,
+   * então a conta de jogos-fonte cresce em 2 quando ele existe.
+   * ⚠️ Antes esta asserção passava porque o jogo de 3º só nascia quando o parâmetro era passado, e aqui
+   * não era — ou seja, ela media um torneio SEM disputa de 3º, que agora não existe mais. */
   var _pl = C.plano(n);
   var fontes = t.matches.filter(function (m) { return m.loserNextMatchId; });
-  ok(fontes.length === _pl.repescagens + _pl.repR2,
-    `N=${n}: ${fontes.length} jogo(s)-fonte, esperado ${_pl.repescagens + _pl.repR2} (rep ${_pl.repescagens} + repR2 ${_pl.repR2})`);
+  var _terceiro = t.matches.filter(function (m) { return m.isThirdPlace === true; }).length;
+  var _esperado = _pl.repescagens + _pl.repR2 + (_terceiro ? 2 : 0);
+  ok(fontes.length === _esperado,
+    `N=${n}: ${fontes.length} jogo(s)-fonte, esperado ${_esperado} (rep ${_pl.repescagens} + repR2 ${_pl.repR2} + 3º ${_terceiro ? 2 : 0})`);
   var vagas = t.matches.filter(function (m) { return m.isRepechageSlot; });
   ok(vagas.length >= 1 && vagas.length <= fontes.length,
     `N=${n}: ${vagas.length} vaga(s) pra ${fontes.length} fonte(s)`);

@@ -138,7 +138,9 @@
    *                                       Cada item: {displayName, uid?, uids?, ...}
    *   @param {number} opts.phaseIndex     carimbo de fase (default 0)
    *   @param {string} opts.category       categoria (opcional)
-   *   @param {boolean} opts.tierThird     gerar disputa de 3º/4º (default false)
+   *   @param {boolean} opts.tierThird     SEMPRE gera a disputa de 3º/4º; só `false` EXPLÍCITO
+   *                                        suprime, e isso significa "o 3º deste torneio mora na
+   *                                        convergência das linhas" (default: SIM)
    * @returns {{matches: Array, meta: Object}}
    */
   function build(N, formato, opts) {
@@ -250,7 +252,20 @@
     // ninguém). Aqui os dois perdedores das SEMIFINAIS são roteados pra ele.
     // Na Dupla Eliminatória NÃO existe: o 3º sai naturalmente como perdedor do
     // último jogo da chave inferior, sem partida extra.
-    if (opts.tierThird && formato !== 'dupla' && desenho.rodadas >= 2) {
+    /* ⛔⛔⛔ AUSENTE É SIM. Ordem do dono (26/set/2026): a disputa de 3º lugar existe em TODO torneio,
+     * é jogo anterior à final, sempre prevista e sempre contada. Antes, quem chamasse este construtor
+     * SEM passar o parâmetro não recebia o jogo — desligado por esquecimento, em silêncio, e a
+     * contagem de jogos daquela chave passava a divergir das fórmulas.
+     *
+     * ⚠️ AS DUAS CONDIÇÕES QUE FICAM NÃO SÃO CIRCUNSTÂNCIA, SÃO ARITMÉTICA — e é a diferença que a
+     * ordem do dono ataca ("não há alternativa" ≠ "não existe onde não cabe"):
+     *  · DUPLA ELIMINATÓRIA: o 3º já sai sem partida extra — é quem perde o último jogo da chave
+     *    inferior. Criar um jogo aqui seria um 3º lugar a MAIS, não a menos;
+     *  · menos de 2 rodadas: não existe semifinal, logo não existem dois perdedores de semifinal
+     *    para disputar. O jogo não deixa de contar — ele não tem como existir.
+     * ⛔ Quem passar `false` de propósito está dizendo "o 3º deste torneio mora na convergência das
+     * linhas", nunca "este torneio não tem". Ver `_terceiroNestaChave` em `phases-engine.js`. */
+    if (opts.tierThird !== false && formato !== 'dupla' && desenho.rodadas >= 2) {
       var rSemi = desenho.rodadas - 1;
       var semis = desenho.ordem
         .map(function (id) { return desenho.porId[id]; })
@@ -1038,7 +1053,11 @@
         ns: ns || null,
         category: cat,
         phaseIndex: (doGrupo[0] && doGrupo[0].phaseIndex) || 0,
-        tierThird: doGrupo.some(function (m) { return m.isThirdPlace; }),
+        /* ⛔⛔ NO RECÁLCULO O 3º TAMBÉM É SEMPRE. Isto perguntava se JÁ existia um jogo de 3º na
+         * chave e só então o recriava — ou seja, perpetuava a ausência: chave que nasceu sem o jogo
+         * (por qualquer um dos buracos que esta leva fechou) ficava sem ele para sempre, e admitir um
+         * tardio era a última chance de consertar e passava batido. */
+        tierThird: true,
         bracketKey: (!dupla && doGrupo[0] && doGrupo[0].bracket !== 'main') ? doGrupo[0].bracket : null
       });
 
@@ -1047,6 +1066,15 @@
       // congela a R1 e abre um jogo novo pros tardios, aos pares. Ver crescerComPrefixo.
       if (!r.ok && r.motivo === 'confronto-publicado-mudaria') {
         var g = crescerComPrefixo(doGrupo, novos, formato, {
+          /* ⛔⛔ E AQUI TAMBÉM — era o último caminho do tardio sem política. Ele redesenha o downstream
+           * chamando o motor, então sem esta linha o crescimento caía em repescagem em SILÊNCIO e a
+           * chave ficava híbrida: 1ª rodada de um desenho, resto de outro.
+           * ⚠️ NO BYE ISTO NÃO DEVERIA NEM TENTAR CRESCER: o play-in é redimensionado e confronto já
+           * sorteado muda (MEDIDO: 60 de 60 incrementos entre 4 e 64 inscritos). O crescimento
+           * automático burla a confirmação que o desenho exige. É o ponto onde a leva 7.3 põe a recusa
+           * com pedido de confirmação — hoje quem barra é o guarda de confronto PUBLICADO, e ele não
+           * cobre o caso de ainda não haver confronto publicado. */
+          politicaDaChave: (t && t.politicaDaChave) || null,
           ns: ns || null, category: cat,
           phaseIndex: (doGrupo[0] && doGrupo[0].phaseIndex) || 0,
           tournamentId: t.id

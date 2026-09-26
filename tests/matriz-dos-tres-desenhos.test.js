@@ -139,30 +139,113 @@ MATRIZ.forEach(function (L) {
   ok(rep.repR2 + rep.repescagens === L[5],
     'N=' + N + ' rep: Voltam = repR2+repescagens (' + (rep.repR2 + rep.repescagens) + ' != ' + L[5] + ')');
 
-  /* ── ③ SOBRA ÚNICA: contrato todo-folga, e o motor MISTO ───────────────── */
-  const su = B.planSingleSurplus(N);
-  ok(su.oddRounds === L[9], 'N=' + N + ' sobra: quantas sobras');
-  ok(su.totalGamesWithBye === L[10], 'N=' + N + ' sobra: total com folga');
-  ok(su.totalGamesWithRepechage === L[11], 'N=' + N + ' sobra: total com repescagem');
-  ok(JSON.stringify(su.rounds.map((r) => (r.gamesWithBye == null ? r.games : r.gamesWithBye))) === JSON.stringify(nums(L[12])),
-    'N=' + N + ' sobra: jogos por rodada (folga)');
-  ok(JSON.stringify(su.rounds.map((r) => r.entrants)) === JSON.stringify(nums(L[13])),
-    'N=' + N + ' sobra: entram por rodada');
+  /* ── ③ SOBRA ÚNICA: ver a tabela própria, logo abaixo do laço ───────────────
+   * ⛔⛔ A COLUNA DE SOBRA ÚNICA DA PLANILHA ANTIGA FICOU OBSOLETA em 26/set/2026, e não por erro
+   * dela: o DONO mudou a regra. Ele travou o FIM da chave — _"na semifinal nao tem mais sobra. 4
+   * disputam quem vai pra final (vencedores) e quem vai pra disputa de 3o (perdedores das semis)"_ e
+   * _"SEMPRE TEM 3o!"_ — e uma trava no fim muda a descida inteira.
+   * ⇒ A referência da sobra única passou a ser a tabela `SOBRA_UNICA` abaixo, derivada das fórmulas.
+   * Ela NÃO vem do motor: vem da escada limpa. */
+});
 
-  /* ⛔ O MOTOR é MISTO de propósito: folga nas rodadas do meio, repescagem OBRIGATÓRIA na semifinal
-   * com três — a regra "folga nunca em semifinal" vale nos três desenhos. Então o total do motor é o
-   * todo-folga da planilha MAIS 1, exatamente quando existe semifinal de três. */
-  const mSu = vcDe(C.plano(N, 'simples', 'sobra_unica'));
-  ok(JSON.stringify(mSu.map((r) => r.E)) === JSON.stringify(nums(L[13])),
-    'N=' + N + ' sobra no MOTOR: entram por rodada');
-  const temSemiDeTres = mSu.some((r) => r.impar && r.ateFinalChave <= 2);
-  const totalMotor = mSu.reduce((s, r) => s + r.jogosReais, 0) + 1;
-  ok(totalMotor === L[10] + (temSemiDeTres ? 1 : 0),
-    'N=' + N + ' sobra no MOTOR: total ' + totalMotor + ' != ' + (L[10] + (temSemiDeTres ? 1 : 0)));
-  mSu.forEach(function (r) {
-    if (r.impar && r.ateFinalChave <= 2) {
-      ok(r.acao === 'repescagem', 'N=' + N + ' sobra: semifinal com tres NAO recebe folga');
-    }
+/* ══════════════════════════════════════════════════════════════════════════════
+ * ③ A SOBRA ÚNICA — DESCIDA PURA, SEM RODADA DE ENTRADA.
+ *
+ * ⭐ ESTA TABELA JÁ FOI TROCADA DUAS VEZES NO MESMO DIA, e o registro é a parte útil:
+ *  ① primeiro ela era a coluna da planilha antiga do dono;
+ *  ② depois eu inventei uma "escada limpa" com rodada de entrada, para forçar a semifinal a ter 4;
+ *  ③ o dono derrubou: _"sobra unica é sobra unica porra"_, _"nao tem rodada de entrada"_.
+ * ⛔ O que eu li errado: ele descrevia o que uma semifinal É (4 equipes, duas à final, duas ao 3º) e
+ * não uma trava para eu forçar a descida. E "SEMPRE TEM 3º" é sobre a CLASSIFICAÇÃO — todo torneio tem
+ * um 3º colocado —, não sobre existir um jogo rotulado "disputa de 3º".
+ *
+ * ⇒ O desenho é o mais simples dos três: cada rodada corta pela metade; rodada ímpar tem UMA sobra;
+ * nenhum alvo de potência de 2; todas jogam a estreia.
+ * ⚠️ E a folga nunca cai a menos de 3 rodadas da final — ali a sobra JOGA, e é esse jogo que decide o
+ * 3º colocado quando não existe um 4º para disputar.
+ * ════════════════════════════════════════════════════════════════════════════ */
+/* N, sobras (folga), vidas extras (sobra que jogou), jogos totais, jogos por rodada, entram por rodada */
+const SOBRA_UNICA = [
+  [4, 0, 0, 3, '2 · 1', '4 · 2'],
+  [5, 1, 1, 5, '2 · 2 · 1', '5 · 3 · 2'],
+  [6, 0, 1, 6, '3 · 2 · 1', '6 · 3 · 2'],
+  [7, 1, 0, 6, '3 · 2 · 1', '7 · 4 · 2'],
+  [8, 0, 0, 7, '4 · 2 · 1', '8 · 4 · 2'],
+  [9, 2, 1, 9, '4 · 2 · 2 · 1', '9 · 5 · 3 · 2'],
+  [10, 1, 1, 10, '5 · 2 · 2 · 1', '10 · 5 · 3 · 2'],
+  [11, 1, 1, 11, '5 · 3 · 2 · 1', '11 · 6 · 3 · 2'],
+  [12, 0, 1, 12, '6 · 3 · 2 · 1', '12 · 6 · 3 · 2'],
+  [13, 2, 0, 12, '6 · 3 · 2 · 1', '13 · 7 · 4 · 2'],
+  [14, 1, 0, 13, '7 · 3 · 2 · 1', '14 · 7 · 4 · 2'],
+  [15, 1, 0, 14, '7 · 4 · 2 · 1', '15 · 8 · 4 · 2'],
+  [16, 0, 0, 15, '8 · 4 · 2 · 1', '16 · 8 · 4 · 2'],
+  [17, 3, 1, 17, '8 · 4 · 2 · 2 · 1', '17 · 9 · 5 · 3 · 2'],
+  [18, 2, 1, 18, '9 · 4 · 2 · 2 · 1', '18 · 9 · 5 · 3 · 2'],
+  [19, 2, 1, 19, '9 · 5 · 2 · 2 · 1', '19 · 10 · 5 · 3 · 2'],
+  [20, 1, 1, 20, '10 · 5 · 2 · 2 · 1', '20 · 10 · 5 · 3 · 2'],
+  [21, 2, 1, 21, '10 · 5 · 3 · 2 · 1', '21 · 11 · 6 · 3 · 2'],
+  [22, 1, 1, 22, '11 · 5 · 3 · 2 · 1', '22 · 11 · 6 · 3 · 2'],
+  [23, 1, 1, 23, '11 · 6 · 3 · 2 · 1', '23 · 12 · 6 · 3 · 2'],
+  [24, 0, 1, 24, '12 · 6 · 3 · 2 · 1', '24 · 12 · 6 · 3 · 2'],
+  [25, 3, 0, 24, '12 · 6 · 3 · 2 · 1', '25 · 13 · 7 · 4 · 2'],
+  [26, 2, 0, 25, '13 · 6 · 3 · 2 · 1', '26 · 13 · 7 · 4 · 2'],
+  [27, 2, 0, 26, '13 · 7 · 3 · 2 · 1', '27 · 14 · 7 · 4 · 2'],
+  [28, 1, 0, 27, '14 · 7 · 3 · 2 · 1', '28 · 14 · 7 · 4 · 2'],
+  [29, 2, 0, 28, '14 · 7 · 4 · 2 · 1', '29 · 15 · 8 · 4 · 2'],
+  [30, 1, 0, 29, '15 · 7 · 4 · 2 · 1', '30 · 15 · 8 · 4 · 2'],
+  [31, 1, 0, 30, '15 · 8 · 4 · 2 · 1', '31 · 16 · 8 · 4 · 2'],
+  [32, 0, 0, 31, '16 · 8 · 4 · 2 · 1', '32 · 16 · 8 · 4 · 2'],
+  [33, 4, 1, 33, '16 · 8 · 4 · 2 · 2 · 1', '33 · 17 · 9 · 5 · 3 · 2'],
+  [34, 3, 1, 34, '17 · 8 · 4 · 2 · 2 · 1', '34 · 17 · 9 · 5 · 3 · 2'],
+  [35, 3, 1, 35, '17 · 9 · 4 · 2 · 2 · 1', '35 · 18 · 9 · 5 · 3 · 2'],
+  [36, 2, 1, 36, '18 · 9 · 4 · 2 · 2 · 1', '36 · 18 · 9 · 5 · 3 · 2'],
+  [37, 3, 1, 37, '18 · 9 · 5 · 2 · 2 · 1', '37 · 19 · 10 · 5 · 3 · 2'],
+  [38, 2, 1, 38, '19 · 9 · 5 · 2 · 2 · 1', '38 · 19 · 10 · 5 · 3 · 2'],
+  [39, 2, 1, 39, '19 · 10 · 5 · 2 · 2 · 1', '39 · 20 · 10 · 5 · 3 · 2'],
+  [40, 1, 1, 40, '20 · 10 · 5 · 2 · 2 · 1', '40 · 20 · 10 · 5 · 3 · 2'],
+  [41, 3, 1, 41, '20 · 10 · 5 · 3 · 2 · 1', '41 · 21 · 11 · 6 · 3 · 2'],
+  [42, 2, 1, 42, '21 · 10 · 5 · 3 · 2 · 1', '42 · 21 · 11 · 6 · 3 · 2'],
+  [43, 2, 1, 43, '21 · 11 · 5 · 3 · 2 · 1', '43 · 22 · 11 · 6 · 3 · 2'],
+  [44, 1, 1, 44, '22 · 11 · 5 · 3 · 2 · 1', '44 · 22 · 11 · 6 · 3 · 2'],
+  [45, 2, 1, 45, '22 · 11 · 6 · 3 · 2 · 1', '45 · 23 · 12 · 6 · 3 · 2'],
+  [46, 1, 1, 46, '23 · 11 · 6 · 3 · 2 · 1', '46 · 23 · 12 · 6 · 3 · 2'],
+  [47, 1, 1, 47, '23 · 12 · 6 · 3 · 2 · 1', '47 · 24 · 12 · 6 · 3 · 2'],
+  [48, 0, 1, 48, '24 · 12 · 6 · 3 · 2 · 1', '48 · 24 · 12 · 6 · 3 · 2'],
+  [49, 4, 0, 48, '24 · 12 · 6 · 3 · 2 · 1', '49 · 25 · 13 · 7 · 4 · 2'],
+  [50, 3, 0, 49, '25 · 12 · 6 · 3 · 2 · 1', '50 · 25 · 13 · 7 · 4 · 2'],
+  [51, 3, 0, 50, '25 · 13 · 6 · 3 · 2 · 1', '51 · 26 · 13 · 7 · 4 · 2'],
+  [52, 2, 0, 51, '26 · 13 · 6 · 3 · 2 · 1', '52 · 26 · 13 · 7 · 4 · 2'],
+  [53, 3, 0, 52, '26 · 13 · 7 · 3 · 2 · 1', '53 · 27 · 14 · 7 · 4 · 2'],
+  [54, 2, 0, 53, '27 · 13 · 7 · 3 · 2 · 1', '54 · 27 · 14 · 7 · 4 · 2'],
+  [55, 2, 0, 54, '27 · 14 · 7 · 3 · 2 · 1', '55 · 28 · 14 · 7 · 4 · 2'],
+  [56, 1, 0, 55, '28 · 14 · 7 · 3 · 2 · 1', '56 · 28 · 14 · 7 · 4 · 2'],
+  [57, 3, 0, 56, '28 · 14 · 7 · 4 · 2 · 1', '57 · 29 · 15 · 8 · 4 · 2'],
+  [58, 2, 0, 57, '29 · 14 · 7 · 4 · 2 · 1', '58 · 29 · 15 · 8 · 4 · 2'],
+  [59, 2, 0, 58, '29 · 15 · 7 · 4 · 2 · 1', '59 · 30 · 15 · 8 · 4 · 2'],
+  [60, 1, 0, 59, '30 · 15 · 7 · 4 · 2 · 1', '60 · 30 · 15 · 8 · 4 · 2'],
+  [61, 2, 0, 60, '30 · 15 · 8 · 4 · 2 · 1', '61 · 31 · 16 · 8 · 4 · 2'],
+  [62, 1, 0, 61, '31 · 15 · 8 · 4 · 2 · 1', '62 · 31 · 16 · 8 · 4 · 2'],
+  [63, 1, 0, 62, '31 · 16 · 8 · 4 · 2 · 1', '63 · 32 · 16 · 8 · 4 · 2'],
+  [64, 0, 0, 63, '32 · 16 · 8 · 4 · 2 · 1', '64 · 32 · 16 · 8 · 4 · 2'],
+];
+console.log('  • a sobra única: descida pura, uma sobra por rodada ímpar');
+ok(SOBRA_UNICA.length === 61, 'a tabela da sobra única cobre 4..64 (achei ' + SOBRA_UNICA.length + ')');
+SOBRA_UNICA.forEach(function (L) {
+  const N = L[0];
+  const pl = C.plano(N, 'simples', 'sobra_unica');
+  const vc = pl.rodadas.filter((r) => r.fase === 'VC');
+  ok(JSON.stringify(vc.map((r) => r.E)) === JSON.stringify(nums(L[5])), 'N=' + N + ' sobra: entram por rodada');
+  ok(JSON.stringify(vc.map((r) => r.jogosReais)) === JSON.stringify(nums(L[4])), 'N=' + N + ' sobra: jogos por rodada');
+  ok(vc.reduce((s, r) => s + r.jogosReais, 0) === L[3], 'N=' + N + ' sobra: total de jogos');
+  /* ⛔ A FÓRMULA MESTRA: total = (N − 1) + vidas extras. A vida extra é a sobra que JOGOU. */
+  ok(L[3] === (N - 1) + L[2], 'N=' + N + ' sobra: total = (N−1) + vidas extras');
+  ok(pl.byes === L[1], 'N=' + N + ' sobra: quantas folgas');
+  ok(pl.repescagens === L[2], 'N=' + N + ' sobra: quantas sobras jogaram');
+  /* ⛔ TODAS jogam a estreia: não existe rodada de entrada neste desenho. */
+  ok(vc[0].E === N, 'N=' + N + ' sobra: ⛔ TODAS jogam a estreia — não há rodada de entrada');
+  /* ⛔ E folga nunca perto da final, nas duas chaves. */
+  C.plano(N, 'dupla', 'sobra_unica').rodadas.forEach(function (r) {
+    if (r.acao === 'bye') ok(r.ateFinalChave >= 3, 'N=' + N + ' sobra/dupla: folga perto da final');
   });
 });
 
@@ -171,7 +254,7 @@ console.log('  \u2022 as 36 equipes da Linha Ouro, rodada a rodada');
 const c36 = {
   bye:   { entram: [8, 32, 16, 8, 4, 2], jogos: [4, 16, 8, 4, 2, 2], total: 36 },
   rep:   { entram: [36, 32, 16, 8, 4, 2], jogos: [18, 16, 8, 4, 2, 2], total: 50 },
-  sobra: { entram: [36, 18, 9, 5, 3, 2], jogos: [18, 9, 4, 2, 1, 2], total: 36 },
+  sobra: { entram: [36, 18, 9, 5, 3, 2], jogos: [18, 9, 4, 2, 2, 1], total: 36 },
 };
 const vc36 = (pol) => C.plano(36, 'simples', pol).rodadas.filter((r) => r.fase === 'VC');
 ok(JSON.stringify(vc36('bye').map((r) => r.E)) === JSON.stringify(c36.bye.entram), '36 bye: entram');
@@ -186,7 +269,9 @@ ok(C.plano(36, 'simples').repR2 === 14, '36 rep: 14 duplas voltam');
 ok(vc36('bye').reduce((s, r) => s + r.jogosReais, 0) + 1 === 36, '36 bye: 36 jogos');
 ok(C.plano(36, 'simples', 'bye').esperamNoPlayin === 28, '36 bye: 28 duplas nao jogam a estreia');
 ok(C.plano(36, 'simples', 'sobra_unica').byes + C.plano(36, 'simples', 'sobra_unica').repescagens === 3,
-  '36 sobra: 3 intervencoes no torneio inteiro');
+  '36 sobra: 3 sobras no torneio inteiro (rodadas de 9, 5 e 3)');
+ok(C.plano(36, 'simples', 'sobra_unica').rodadas.filter((r) => r.fase === 'VC')[0].E === 36,
+  '36 sobra: TODAS as 36 jogam a estreia — contra 8 que jogam no bye clássico');
 
 console.log('\n' + (fail ? '\u2717 ' + fail + ' falha(s), ' : '\u2705 ') + pass + ' verificacoes');
 process.exit(fail ? 1 : 0);

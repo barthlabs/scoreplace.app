@@ -72,14 +72,19 @@ if (A && typeof A.build === 'function') {
          * ⚠️ ISSO É TRABALHO ABERTO da leva 7.2: folga virando card é rodada de 9 mostrando 5 jogos,
          * que é precisamente o incômodo que o dono relatou na Confra. A asserção de hoje registra o
          * estado medido; quando 7.2 tirar o card da folga, ela muda junto e de propósito. */
-        /* ⛔ NO FORMATO DUPLA O ADAPTER TEM EXATAMENTE UMA POSIÇÃO MENOS, e isso é ANTERIOR ao bloco 7:
-         * acontece igual na repescagem de hoje, nos quatro N medidos. Ou seja, não é gap que esta leva
-         * abriu — é como a grande final é materializada. Travo a RELAÇÃO medida em vez de fingir
-         * igualdade: se ela mudar, alguém mexeu na grande final e eu quero saber. */
-        const folga = (f === 'dupla') ? 1 : 0;
-        ok(viaAdapter.matches.length === doMotor.jogos.length - folga,
+        /* ⛔ A RELAÇÃO ENTRE ADAPTER E MOTOR, medida e explicada — não é "igual", e fingir que era daria
+         * falso verde:
+         *  · SIMPLES: o adapter tem UMA posição A MAIS — a disputa de 3º lugar, que o motor não desenha
+         *    (ela não alimenta ninguém na árvore) e que passou a existir em TODO torneio por ordem do
+         *    dono. Onde a penúltima rodada é uma repescagem não há 4º colocado para disputar, e aí a
+         *    diferença é zero;
+         *  · DUPLA: o adapter tem UMA posição A MENOS, e isso é ANTERIOR ao bloco 7 — é como a grande
+         *    final é materializada. Na dupla o 3º sai da chave inferior, sem partida extra. */
+        const terceiros = viaAdapter.matches.filter(function (m) { return m.isThirdPlace === true; }).length;
+        const esperado = (f === 'dupla') ? doMotor.jogos.length - 1 : doMotor.jogos.length + terceiros;
+        ok(viaAdapter.matches.length === esperado,
           '② ' + pol + ' ' + f + ' N=' + N + ': adapter ' + viaAdapter.matches.length +
-          ' posições, motor ' + doMotor.jogos.length + ' (esperado -' + folga + ')');
+          ' posições, esperado ' + esperado + ' (motor ' + doMotor.jogos.length + ' + 3º:' + terceiros + ')');
         /* ⛔⛔ E A PROVA DE QUE A POLÍTICA ATRAVESSOU não é o total — é a COMPOSIÇÃO. Em N=5 os dois
          * desenhos têm 6 posições, e só o TIPO delas denuncia qual desenho rodou: a repescagem põe a
          * sobra a jogar, a sobra única dá folga. Comparar total daria verde com a política perdida. */
@@ -141,10 +146,20 @@ POLITICAS.forEach(function (pol) {
 console.log('  • 1ª rodada trocada ao entrar um inscrito: ' + JSON.stringify(trocam));
 ok(trocam.repescagem === 0,
   '③ ⛔⛔ REPESCAGEM: nenhum confronto já sorteado da 1ª rodada muda ao entrar um tardio (achei ' + trocam.repescagem + ')');
+/* ⛔ E AQUI A DIFERENÇA ENTRE OS TRÊS DESENHOS, MEDIDA e não prometida. Este trecho já foi reescrito
+ * duas vezes no mesmo dia, acompanhando o desenho da sobra única — e a versão que vale é esta:
+ *  · REPESCAGEM e SOBRA ÚNICA: todas jogam a estreia, o emparelhamento é adjacente e o tardio entra na
+ *    última posição ⇒ confronto já sorteado NÃO muda;
+ *  · BYE: a estreia é um play-in dimensionado pela potência de 2 de baixo ⇒ entrar um inscrito muda
+ *    quem joga a estreia, em 60 dos 60 incrementos entre 4 e 64.
+ * ⇒ Só o BYE precisa de confirmação do organizador para admitir tardio depois de haver confronto
+ * publicado. Está dito aqui em vez de prometido na tela. */
+ok(trocam.repescagem === 0,
+  '③ ⛔⛔ REPESCAGEM: nenhum confronto já sorteado muda ao entrar um tardio (achei ' + trocam.repescagem + ')');
 ok(trocam.sobra_unica === 0,
-  '③ ⛔⛔ SOBRA ÚNICA: idem — o tardio entra na última posição e completa o jogo da sobra (achei ' + trocam.sobra_unica + ')');
+  '③ ⛔⛔ SOBRA ÚNICA: idem — todas jogam a estreia e o tardio entra na última posição (achei ' + trocam.sobra_unica + ')');
 ok(trocam.bye > 0,
-  '③ ⚠️ BYE: aqui MUDA, e é do desenho — o play-in é dimensionado pela potência de 2 de baixo (achei ' + trocam.bye + ')');
+  '③ ⚠️ BYE: muda, e é do desenho — o play-in é dimensionado por N (achei ' + trocam.bye + ')');
 
 /* ── ④ E O QUE VALE NOS TRÊS: FOLGA NUNCA EM SEMIFINAL NEM EM FINAL ──────────── */
 POLITICAS.forEach(function (pol) {

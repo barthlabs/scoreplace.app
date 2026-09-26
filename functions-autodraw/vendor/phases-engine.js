@@ -986,7 +986,7 @@
        * não do organizador). Não confundir: aquilo é outra coisa, e o comentário acima explica.
        * [[feedback_enumerar_todos_os_caminhos_antes_de_dar_por_pronto]] — terceira vez nesta leva. */
       var res = _genElimFromChaves(byDest[dest],
-        { thirdPlace: _tierThird, politicaDaChave: (phaseCfg && phaseCfg.politicaDaChave) || null },
+        { _terceiroNestaChave: _tierThird, politicaDaChave: (phaseCfg && phaseCfg.politicaDaChave) || null },
         idPrefix + '-' + bracketKey, false, bracketKey);
       // Nome da chave = o que o ORGANIZADOR digitou (mapping[].label). Sem nome, com 2+ chaves →
       // default POSICIONAL "Chave N" (ordem da chave). NUNCA Ouro/Prata (exemplo ≠ regra,
@@ -1449,13 +1449,24 @@
     var _daInscricao = !!(cfg && cfg.source && cfg.source.type === 'enrollment');
     var built = A.build(pool.length, dupla ? 'dupla' : 'simples', {
       participantes: pool,
-      /* ⚠️ AQUI `cfg.thirdPlace` NÃO é a flag do organizador — é o PARÂMETRO INTERNO que
-       * o chamador passa como `{ thirdPlace: _tierThird }`, e `_tierThird` carrega a regra
-       * ESTRUTURAL: sob convergência (linhas que se juntam numa grande final) o 3º é o do
-       * nível da convergência, não um por linha — senão nasceriam dois "3º lugar".
-       * ⛔ Eu apaguei isto junto com a flag na 2.1.41 e dois testes pegaram na hora.
-       * A flag do ORGANIZADOR morreu; esta regra de geometria da chave fica. */
-      tierThird: (cfg ? cfg.thirdPlace !== false : true),
+      /* ⛔⛔⛔ A DISPUTA DE 3º LUGAR EXISTE SEMPRE. Ordem do dono, repetida em 26/set/2026:
+       * _"todo torneio sempre tem a porra da disputa de 3o lugar. nao deve mais haver qualquer
+       * referencia a isso nao acontecer (...) isso sempre cria problema na contagem de
+       * jogos/classificacao e gera regressao"_.
+       *
+       * ⛔ E POR ISSO ESTA LINHA NÃO LÊ MAIS `cfg.thirdPlace`. Ela lia, e isso era o último buraco:
+       * um documento de fase ANTIGO com `thirdPlace: false` gravado (a flag morreu na 2.1.41, mas o
+       * campo ficou no banco) desligava o jogo em SILÊNCIO, e a contagem de jogos daquela fase
+       * passava a divergir de todas as fórmulas. Campo de configuração morto não pode continuar
+       * mandando no desenho.
+       *
+       * ⚠️ O QUE SOBRA NÃO É OPCIONALIDADE, É GEOMETRIA, e agora tem nome próprio para ninguém
+       * confundir de novo: `_terceiroNestaChave`. Sob CONVERGÊNCIA (linhas que se juntam numa grande
+       * final) existe UM 3º lugar, no nível da convergência — não um por linha, senão nasceriam dois
+       * "3º lugar" no mesmo torneio. Quem passa `false` aqui está dizendo "o 3º deste torneio é lá",
+       * nunca "este torneio não tem". O underscore marca que é PARÂMETRO do chamador, não configuração.
+       * [[project_third_place_always]] */
+      tierThird: (cfg && cfg._terceiroNestaChave === false) ? false : true,
       /* ⛔⛔ A ESCOLHA DO ORGANIZADOR ENTRE OS TRÊS DESENHOS (bloco 7 da reforma) passa daqui para o
        * adapter e do adapter para o motor. Ausente = repescagem, que é o que todo torneio existente é.
        * ⚠️ A leitura é do DOCUMENTO, não da tela: a política é decidida antes do sorteio e congelada,
@@ -1481,7 +1492,9 @@
   }
 
   function _genElimFromPool(pool, cfg, idPrefix) {
-    var _third = (cfg ? cfg.thirdPlace !== false : true);   // parâmetro interno — ver a nota acima
+    /* ⛔ Aqui havia `var _third = cfg.thirdPlace !== false`, DECLARADA E NUNCA USADA — resto da flag
+     * que morreu na 2.1.41. Apagada em 26/set/2026 com o resto: variável morta que lê campo morto é
+     * o convite para alguém "religar" a opcionalidade achando que ela fazia algo. */
     var dupla = !!(cfg && ((cfg.elimination && cfg.elimination.bracketType === 'double') ||
       (cfg.kind !== 'elimination' && (cfg.formatCode === 'elim_dupla' || /dupla/i.test(String(cfg.format || ''))))));
     if (pool.length === 1) {
@@ -2214,6 +2227,13 @@
       built = buildPhaseGroupStage(groups, cfg, cs, _id, det);
     } else {
       built = buildPhaseBrackets(groups, Object.assign({}, cfg, {
+        /* ⛔⛔ A POLÍTICA DA CHAVE DA FASE POSTERIOR, com reserva no DOCUMENTO DO TORNEIO. O compilador
+         * grava a política em cada fase eliminatória, mas torneio compilado ANTES desta leva tem a
+         * fase sem o campo — e aí a fase posterior desenharia repescagem enquanto a fase 0 desenhava
+         * o que o organizador escolheu. Trocar de desenho no meio do torneio é o pior resultado
+         * possível, pior que não ter a funcionalidade.
+         * ⚠️ A cópia é de propósito: a configuração guardada do torneio não é tocada. */
+        politicaDaChave: (cfg && cfg.politicaDaChave) || t.politicaDaChave || null,
         _prevRRRodadaUnica: _prevRRUnica,
         _promotionTiebreakers: t.tiebreakers,
         _promotionBirthByName: (typeof window !== 'undefined' && typeof window._tbBirthByName === 'function') ? window._tbBirthByName(t) : {},

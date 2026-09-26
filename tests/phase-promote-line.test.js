@@ -19,7 +19,7 @@ function csScore(SCORE) {
 }
 function cfgOverall(extra) {
   return Object.assign({
-    name: 'Eliminatória', fixedPairs: false, pairingStrategy: 'top', bracketSeeding: 'seed', grandFinal: true, thirdPlace: false,
+    name: 'Eliminatória', fixedPairs: false, pairingStrategy: 'top', bracketSeeding: 'seed', grandFinal: true,
     source: { scope: 'overall', rankingBasis: 'individual', mapping: [{ dest: 'upper', label: 'Ouro' }, { dest: 'lower', label: 'Prata' }] }
   }, extra || {});
 }

@@ -11,7 +11,9 @@
  *
  * Nota: o 3º lugar é SEMPRE ON no produto (o toggle off foi removido faz tempo —
  * memória project_third_place_always). Por isso só testamos o caminho default (3º presente);
- * o caminho thirdPlace:false não é testado de propósito (não existe mais na UI).
+ * ⛔ NÃO EXISTE caminho para o torneio ficar sem disputa de 3º lugar — nem na tela, nem no
+ * documento, nem por esquecimento de parâmetro. Ordem do dono de 26/set/2026, e há portão:
+ * tests/terceiro-lugar-existe-sempre.test.js.
  */
 const { E } = require('./headless.js');
 

@@ -26,7 +26,7 @@ function cs(g) { return (g.players || []).map(function (p) { return { name: p.na
 function phaseCfg(extra) {
   return Object.assign({
     name: 'Eliminatória', formatCode: 'elim_simples', format: 'Eliminatórias Simples',
-    fixedPairs: true, pairingStrategy: 'top', bracketSeeding: 'seed', grandFinal: true, thirdPlace: false,
+    fixedPairs: true, pairingStrategy: 'top', bracketSeeding: 'seed', grandFinal: true,
     source: { scope: 'per_group', rankingBasis: 'individual', mapping: [{ dest: 'upper', label: 'Ouro' }, { dest: 'lower', label: 'Prata' }] }
   }, extra || {});
 }
@@ -107,7 +107,7 @@ function entrantsInLine(res, lineLabel) {
   var groups = [{ name: 'Geral', groupIdx: 0, players: ['P1', 'P2', 'P3', 'P4', 'P5', 'P6'].map(function (n) { return { name: n, displayName: n }; }) }];
   var cfgOverall = {
     name: 'Eliminatória', formatCode: 'elim_simples', format: 'Eliminatórias Simples',
-    fixedPairs: false, pairingStrategy: 'top', bracketSeeding: 'seed', grandFinal: true, thirdPlace: false,
+    fixedPairs: false, pairingStrategy: 'top', bracketSeeding: 'seed', grandFinal: true,
     source: { scope: 'overall', rankingBasis: 'individual', mapping: [{ dest: 'upper', label: 'Ouro' }, { dest: 'lower', label: 'Prata' }] },
     _includeInactive: [
       { displayName: 'HERO', name: 'HERO', ligaActive: false },
@@ -135,7 +135,7 @@ function entrantsInLine(res, lineLabel) {
   }
   var groups = [{ name: 'Geral', groupIdx: 0, players: ['Q1', 'Q2', 'Q3'].map(function (n) { return { name: n, displayName: n }; }) }];
   var cfg = {
-    name: 'Eliminatória', fixedPairs: false, pairingStrategy: 'top', bracketSeeding: 'seed', grandFinal: true, thirdPlace: false,
+    name: 'Eliminatória', fixedPairs: false, pairingStrategy: 'top', bracketSeeding: 'seed', grandFinal: true,
     source: { scope: 'overall', rankingBasis: 'individual', mapping: [{ dest: 'upper', label: 'Ouro' }, { dest: 'lower', label: 'Prata' }] },
     _includeInactive: [{ displayName: 'Z', name: 'Z', ligaActive: false }]
   };

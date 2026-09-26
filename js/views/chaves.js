@@ -106,6 +106,10 @@
   function _politica(p) { return POLITICAS.indexOf(p) === -1 ? 'repescagem' : p; }
   function _pow2Abaixo(n) { var p = 1; while (p * 2 <= n) p *= 2; return p; }
 
+  /* ⛔ Aqui viveram `_cadeiaDescendo`, `_chegaEmQuatro` e `_jogosDaEntrada` — a "escada limpa" que eu
+   * inventei e o dono derrubou no mesmo dia. Apagadas com a razão registrada em `_topologiaSobraUnica`,
+   * para ninguém reintroduzir rodada de entrada na sobra única achando que resolve o 3º lugar. */
+
   /* ⛔ A CHAVE INFERIOR É A MESMA NOS TRÊS DESENHOS: ela só recebe quem cai da superior e segue a
    * recorrência normal. Foi EXTRAÍDA daqui para que as duas topologias usem a MESMA, e não duas
    * cópias — duas cópias divergiriam e a divergência seria "a inferior do bye não é a inferior da
@@ -129,6 +133,7 @@
   function _topologia(N, formato, politica) {
     politica = _politica(politica);
     if (politica === 'bye') return _topologiaBye(N, formato);
+    if (politica === 'sobra_unica') return _topologiaSobraUnica(N, formato);
     var sup = [], E = N, r = 0, repR2 = 0;
     while (E > 1) {
       r++;
@@ -172,6 +177,41 @@
     return { sup: sup, inf: inf, totSup: totSup, totInf: inf.length, repR2: repR2 };
   }
 
+  /* ⛔⛔⛔ SOBRA ÚNICA É SOBRA ÚNICA: NÃO TEM RODADA DE ENTRADA.
+   *
+   * ⭐ CORREÇÃO DE UM DESENHO MEU QUE O DONO DERRUBOU NO MESMO DIA (26/set/2026). Ele havia dito duas
+   * coisas — _"na semifinal nao tem mais sobra. 4 disputam quem vai pra final"_ e _"SEMPRE TEM 3o!"_ —
+   * e eu concluí que a semifinal TINHA DE TER 4 sempre. Medi que a descida por metade só chega a 4 em
+   * 31 dos 61 números, e inventei uma rodada de entrada para forçar o campo dentro de faixas.
+   * A resposta dele foi direta: _"sobra unica é sobra unica porra"_, _"nao tem rodada de entrada"_.
+   *
+   * ⛔ O QUE EU ERREI NA LEITURA: ele descrevia o que uma semifinal É — 4 equipes, duas à final, duas
+   * ao 3º lugar — e não uma trava para eu forçar a descida. E "SEMPRE TEM 3º" é sobre a CLASSIFICAÇÃO:
+   * todo torneio tem um 3º colocado. Não é sobre existir um jogo rotulado "disputa de 3º".
+   *
+   * ⇒ O DESENHO É ESTE, e é o mais simples dos três: cada rodada corta o campo ao meio; rodada ímpar
+   * tem exatamente UMA sobra; nenhum alvo de potência de 2 em lugar nenhum; todas jogam a estreia.
+   *   Com 36 duplas: 36 → 18 → 9 → 5 → 3 → 2.
+   *
+   * ⚠️ E A CONSEQUÊNCIA QUE SOBRA, QUE É DÍVIDA E NÃO CONSERTO: quando a penúltima rodada tem TRÊS
+   * entrantes, sobram três equipes no fim — 1ª, 2ª e 3ª, sem 4ª. Não existe jogo de "3º contra 4º"
+   * porque não existe 4º; o 3º colocado é quem perde o último jogo decidido. O 3º EXISTE; o que falta é
+   * a tela derivá-lo da chave em vez de ler só o jogo rotulado. É o item aberto da leva 7.3, e está
+   * marcado por teste — [[feedback_tela_parcial_se_diz_pronta]]. */
+  function _topologiaSobraUnica(N, formato) {
+    var sup = [], E = N, r = 0;
+    while (E > 1) {
+      r++;
+      sup.push({ fase: 'VC', rodada: r, E: E, jogos: Math.ceil(E / 2),
+        sobe: Math.ceil(E / 2), desce: Math.floor(E / 2), impar: E % 2 === 1 });
+      E = Math.ceil(E / 2);
+    }
+    var inf = _inferior(sup, r, formato);
+    sup.forEach(function (x) { x.ateFinalChave = r - x.rodada + 1; });
+    inf.forEach(function (x) { x.ateFinalChave = inf.length - x.rodada + 1; });
+    return { sup: sup, inf: inf, totSup: r, totInf: inf.length, repR2: 0 };
+  }
+
   /* ⛔ O BYE TEM TOPOLOGIA PRÓPRIA, e por isso não é `if` dentro da recorrência: depois do play-in
    * TODA rodada é potência de 2, então não existe rodada ímpar, não existe sobra e não existe
    * repescagem — o desenho inteiro é play-in + halving puro. Misturar isso na recorrência do outro
@@ -183,8 +223,11 @@
       /* A rodada de play-in tem `excesso` jogos entre `excesso*2` equipes; as outras esperam.
        * ⛔ Ela NÃO solta perdedor para a chave inferior de forma diferente: quem perde o play-in
        * perdeu a estreia, igual a quem perde a 1ª rodada de qualquer desenho. */
+      /* ⛔ `entrada: true` é o MESMO nome que a sobra única usa — os dois desenhos têm uma rodada de
+       * entrada em que parte do campo espera, e a montagem da chave trata as duas pelo mesmo caminho.
+       * Dois nomes para a mesma coisa era o que fazia a sobra única não materializar quem esperava. */
       sup.push({ fase: 'VC', rodada: r, E: excesso * 2, jogos: excesso, sobe: excesso,
-        desce: excesso, impar: false, playin: true, esperam: N - excesso * 2 });
+        desce: excesso, impar: false, entrada: true, playin: true, esperam: N - excesso * 2 });
     }
     for (var E = alvo; E > 1; E = E / 2) {
       r++;
@@ -216,9 +259,12 @@
        * a sobra joga a repescagem. Sem esta linha, com 36 equipes a semifinal teria uma equipe na
        * final sem jogar a semifinal — que é exatamente o que o dono vetou. */
       if (politica === 'sobra_unica') {
-        var semiComTres = (x.ateFinalChave <= 2);
-        if (semiComTres) { x.acao = 'repescagem'; reps++; }
-        else { x.acao = 'bye'; folgas++; }
+        /* ⛔⛔ FOLGA NUNCA EM SEMIFINAL NEM EM FINAL — vale nas duas chaves e nos três desenhos, e é a
+         * regra que o dono enunciou: _"na semifinal nao tem mais sobra"_. Quando a rodada ímpar cai a
+         * menos de 3 rodadas da final, a sobra JOGA: enfrenta o perdedor do primeiro jogo da própria
+         * rodada. É esse jogo que decide quem é o 3º colocado quando não há um 4º para disputar. */
+        if (x.ateFinalChave >= 3) { x.acao = 'bye'; folgas++; }
+        else { x.acao = 'repescagem'; reps++; }
         return;
       }
       // O ÚLTIMO INSCRITO NUNCA GANHA FOLGA (regra do dono, jul/2026).
@@ -374,16 +420,22 @@
            * certo e a CHAVE era outra — duas verdades, que é o defeito que esta reforma persegue.
            * ⚠️ São as ÚLTIMAS posições, não as primeiras: é onde o tardio entra, e é a convenção do
            * resto do arquivo (quem chega por último joga a rodada extra). */
-          var deTras = (x.playin === true) ? x.E : N;
+          var deTras = (x.entrada === true) ? x.E : N;
           for (var s = N - deTras + 1; s <= N; s++) entrantes.push(S(s));
         } else {
           entrantes = VC[x.rodada - 1].map(function (m) { return V(m.id); });
           /* ⛔ E QUEM ESPEROU ESTREIA AQUI: as sementes que não foram ao play-in entram ANTES dos
            * vencedores dele. Pôr os vencedores no FIM é a mesma regra da normalização da 2ª rodada —
            * evita revanche imediata e preserva a posição de quem já estava. */
-          if (x.rodada === 2 && porRodada['VC1'] && porRodada['VC1'].playin === true) {
+          /* ⛔⛔ VALE PARA OS DOIS DESENHOS COM RODADA DE ENTRADA, e eu tinha escrito só para o bye.
+           * ACHADO POR TESTE, na sobra única com 12 duplas: a topologia dizia 7 entrantes na 2ª rodada
+           * (5 vencedoras + 2 que esperaram) e a montagem punha 5 — as duas que esperaram simplesmente
+           * NUNCA ENTRAVAM. O plano dizia uma coisa e a chave era outra: duas verdades, que é o defeito
+           * que esta reforma existe para desfazer. É a terceira vez nesta leva que eu cubro um caminho
+           * e deixo o irmão. [[feedback_enumerar_todos_os_caminhos_antes_de_dar_por_pronto]] */
+          if (x.rodada === 2 && porRodada['VC1'] && porRodada['VC1'].entrada === true) {
             var esperaram = [];
-            for (var e2 = 1; e2 <= N - porRodada['VC1'].E; e2++) esperaram.push(S(e2));
+            for (var e2 = 1; e2 <= (porRodada['VC1'].esperam || 0); e2++) esperaram.push(S(e2));
             entrantes = esperaram.concat(entrantes);
           }
           // Os repescados escolhidos na R1 entram no FIM da ordem da R2 — assim o
