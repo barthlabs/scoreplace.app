@@ -61,10 +61,61 @@ namespace ScoreplaceStandings {
     return direction > 0 ? n(x) - n(y) : n(y) - n(x);
   }
 
+  /* A ESCADA DO SALDO, do mais rico ao mais pobre. Ver a explicação em `saldo_pontos`. */
+  export const NIVEIS_DE_SALDO = [
+    { nivel: 'pontos', ganhou: 'rallyFor', perdeu: 'rallyAgainst' },
+    { nivel: 'games', ganhou: 'gamesWon', perdeu: 'gamesLost' },
+    { nivel: 'sets', ganhou: 'setsWon', perdeu: 'setsLost' },
+  ] as const;
+
+  const temNivel = (line: StandingLine | null | undefined, i: number): boolean => {
+    if (!line) return false;
+    const d = NIVEIS_DE_SALDO[i];
+    return line[d.ganhou] != null || line[d.perdeu] != null;
+  };
+
+  /** O nível mais rico que AS DUAS linhas têm. `null` quando nenhuma tem nenhum. */
+  export function nivelMaisRicoComum(a: StandingLine, b: StandingLine): string | null {
+    for (let i = 0; i < NIVEIS_DE_SALDO.length; i++) {
+      if (temNivel(a, i) && temNivel(b, i)) return NIVEIS_DE_SALDO[i].nivel;
+    }
+    return null;
+  }
+
+  /** O saldo de uma linha num nível nomeado da escada. */
+  export function saldoNoNivel(line: StandingLine, nivel: string): number {
+    const d = NIVEIS_DE_SALDO.find((x) => x.nivel === nivel);
+    if (!d) return 0;
+    return difference(line, d.ganhou, d.perdeu);
+  }
+
   export const CRITERIOS: Record<string, Criterion> = {
     pontos_avancados: (a, b) => n(b.points) - n(a.points),
     vitorias: (a, b) => n(b.wins) - n(a.wins),
+    /* ⛔⛔⛔ SALDO É SEMPRE O MAIS RICO QUE DER — ordem do dono, 26/set/2026, e vale em TODO o programa:
+     * _"sempre o valor mais rico; sets/games/pontos (no caso de placar ao vivo aplicado). sempre isso
+     * deve ser considerado como saldo de pontos. em todo o programa. falou em saldo temos que ter o
+     * saldo mais rico possivel considerado."_
+     *
+     * ⭐ NASCEU DE UM ERRO CARO: na Confra, `saldo_pontos` era calculado sobre o placar de SETS (1×2,
+     * 0×2). Entre 18 duplas derrotadas isso produzia DOIS valores distintos — repetia o critério
+     * anterior e não separava ninguém —, a lista de critérios se esgotava e a ordem caía no SORTEIO.
+     * Resultado na quadra: quem perdeu 6-1/6-1 entrou na repescagem e quem perdeu 6-4/6-4 ficou fora.
+     * Com o saldo de GAMES, o mesmo critério produz 12 valores distintos e ordena certo.
+     *
+     * ⛔ A ESCADA, do mais rico ao mais pobre:
+     *      ① PONTOS de rally  (só existe com placar ao vivo aplicado)   `rallyFor` / `rallyAgainst`
+     *      ② GAMES                                                     `gamesWon` / `gamesLost`
+     *      ③ SETS                                                      `setsWon`  / `setsLost`
+     *
+     * ⚠️ E O NÍVEL TEM DE SER COMUM AOS DOIS LADOS. Comparar o saldo de rally de um com o saldo de
+     * games do outro não é comparar nada — são unidades diferentes. Então desce-se a escada até o
+     * primeiro nível que AMBOS têm. É isso que "o mais rico POSSÍVEL" quer dizer.
+     * ⚠️ `pointsDiff`/`pointsFor`/`pointsAgainst` continuam como ÚLTIMA reserva, para as linhas antigas
+     * que só carregam eles — tirar isso quebraria torneio por pontos corridos, que é outro jogo. */
     saldo_pontos: (a, b) => {
+      const nivel = nivelMaisRicoComum(a, b);
+      if (nivel) return saldoNoNivel(b, nivel) - saldoNoNivel(a, nivel);
       const da = a.pointsDiff != null ? n(a.pointsDiff) : difference(a, 'pointsFor', 'pointsAgainst');
       const db = b.pointsDiff != null ? n(b.pointsDiff) : difference(b, 'pointsFor', 'pointsAgainst');
       return db - da;
