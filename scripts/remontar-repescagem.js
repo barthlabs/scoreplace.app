@@ -122,7 +122,7 @@ async function patch(nomeDoc, camposDoJogo) {
     const g = d.dados && d.dados.jogo; if (g && g.id) porId[String(g.id)] = d.nome;
   });
 
-  let n = 0;
+  let n = 0, recusadas = 0;
   for (const m of all) {
     if (!daLinha(m)) continue;
     for (const sl of ['p1', 'p2']) {
@@ -132,16 +132,40 @@ async function patch(nomeDoc, camposDoJogo) {
       if (String(antes[String(m.id) + '|' + sl] || '') === String(agora)) continue;
       const doc = porId[String(m.id)];
       if (!doc) { console.log('   ⚠️ sem documento para', m.id, '— pulado'); continue; }
+      /* ⛔⛔ NUNCA GRAVAR UMA VAGA SÓ COM O NOME — foi assim que eu derrubei produção em 26/set/2026.
+       * O nome é rótulo; a IDENTIDADE é o uid, e o slot também carrega o OBJETO DO TIME
+       * (`team1Obj`/`team2Obj`), de onde saem os dados dos jogadores. Gravando só a string, o W.O.
+       * parou de funcionar (precisa do uid para saber de quem é o W.O.) e a tela de inscritos parou de
+       * abrir (varre os slots esperando o objeto). O `if (uids.length)` de antes deixava a gravação
+       * passar CALADA sem identidade nenhuma — condicional em vez de exigência.
+       * ⇒ agora é RECUSA: sem uid e sem objeto do time, esta vaga não é gravada e o script grita.
+       * [[feedback_uid_controls_everything_name_only_ficticio]] */
+      const uids = (sl === 'p1') ? m.team1Uids : m.team2Uids;
+      const obj = (sl === 'p1') ? m.team1Obj : m.team2Obj;
+      const temUid = Array.isArray(uids) && uids.filter(Boolean).length > 0;
+      if (!temUid || !obj) {
+        console.log('   ⛔ RECUSADO ' + m.id + '.' + sl + ' → ' + agora +
+          '  (uid=' + (temUid ? 'sim' : 'NÃO') + ' objeto=' + (obj ? 'sim' : 'NÃO') + ')' +
+          ' — gravar sem identidade quebra W.O. e inscritos');
+        recusadas++;
+        continue;
+      }
       const campos = {};
       campos[sl] = String(agora);
       campos[sl + 'AguardaMelhor'] = null;
-      const uids = (sl === 'p1') ? m.team1Uids : m.team2Uids;
-      if (Array.isArray(uids) && uids.length) campos[(sl === 'p1' ? 'team1Uids' : 'team2Uids')] = uids.map(String);
-      console.log('   ' + (GRAVAR ? 'gravando' : 'gravaria') + ' ' + m.id + '.' + sl + ' → ' + agora);
+      campos[(sl === 'p1' ? 'team1Uids' : 'team2Uids')] = uids.filter(Boolean).map(String);
+      campos[(sl === 'p1' ? 'team1Obj' : 'team2Obj')] = obj;
+      campos[sl + 'Uid'] = (uids.filter(Boolean).length === 1) ? String(uids.filter(Boolean)[0]) : null;
+      console.log('   ' + (GRAVAR ? 'gravando' : 'gravaria') + ' ' + m.id + '.' + sl + ' → ' + agora +
+        ' (' + campos[(sl === 'p1' ? 'team1Uids' : 'team2Uids')].length + ' uid)');
       if (GRAVAR) { await patch(doc, campos); }
       n++;
     }
   }
   console.log('\n' + (GRAVAR ? '✅ ' : 'ensaio: ') + n + ' vaga(s) ' + (GRAVAR ? 'gravadas' : 'seriam gravadas') + '.');
+  if (recusadas) {
+    console.log('⛔ ' + recusadas + ' vaga(s) RECUSADAS por falta de identidade — nada foi gravado nelas.');
+    process.exitCode = 1;
+  }
   if (!GRAVAR) console.log('rode com --gravar para valer.');
 })().catch((e) => { console.error('ERRO:', e && e.message); process.exitCode = 1; });

@@ -955,6 +955,24 @@ function _computeStandings(t, category) {
       // Accumulate GSM (sets/games/tiebreaks) stats from match. v4.4.122: recebe as CHAVES já
       // resolvidas por uid (kP1/kP2) em vez de reler m.p1/m.p2 por nome.
       function _accumulateGSM(m, kP1, kP2) {
+        /* ⛔⛔ PONTO DE RALLY PRIMEIRO, e FORA do `return` dos sets. O saldo vale na unidade mais rica
+         * — rally > games > sets (`RIQUEZA_DO_SALDO`, src/domain/standings.ts) — e este construtor
+         * nunca coletava rally. Pior: sair cedo quando não há `m.sets` descartaria o rally de um jogo
+         * medido só ao vivo. ⇒ coleta antes, e o `return` dos sets continua valendo só para sets/games.
+         * Sem placar ao vivo os dois ficam em 0 e `temUnidade` reprova a régua sozinha, descendo a
+         * escada para games e, sem games, para sets. */
+        if (m.liveStats) {
+          var _rp1 = parseInt(m.liveStats.pointsP1) || 0;
+          var _rp2 = parseInt(m.liveStats.pointsP2) || 0;
+          if (scoreMap[kP1]) {
+            scoreMap[kP1].rallyFor = (scoreMap[kP1].rallyFor || 0) + _rp1;
+            scoreMap[kP1].rallyAgainst = (scoreMap[kP1].rallyAgainst || 0) + _rp2;
+          }
+          if (scoreMap[kP2]) {
+            scoreMap[kP2].rallyFor = (scoreMap[kP2].rallyFor || 0) + _rp2;
+            scoreMap[kP2].rallyAgainst = (scoreMap[kP2].rallyAgainst || 0) + _rp1;
+          }
+        }
         if (!Array.isArray(m.sets) || m.sets.length === 0) return;
         var sw1 = 0, sw2 = 0, gw1 = 0, gw2 = 0, tb1 = 0, tb2 = 0;
         m.sets.forEach(function(s) {
@@ -1642,7 +1660,26 @@ function _congelaLinhasEncerradas(t) {
     if (!mapa) return;
     var ordem = Object.keys(mapa).sort(function (a, b) { return mapa[a] - mapa[b]; });
     if (!ordem.length) return;
-    t.classifFinalDaLinha[k] = ordem.map(function (nome) { return { name: nome, pos: mapa[nome] }; });
+    /* ⛔⛔ O RETRATO GUARDA OS UIDS, não só o rótulo. O mapa de classificação é keyed por RÓTULO
+     * de time — decisão anotada em `_classifMapFromMatches`, porque dupla não tem uid próprio. Mas
+     * RÓTULO ENVELHECE: quem troca de displayName deixa de casar com o retrato congelado, e a
+     * posição some da ficha da pessoa sem que nada fique vermelho. O retrato dos GRUPOS
+     * (`_congelaGruposEncerrados`) já guardava uid; este não guardava — mesmo defeito, um lado só.
+     * ⇒ os uids saem do SLOT do jogo (`_slotUids`), que é a identidade de verdade. */
+    var _uidsDoRotulo = function (rotulo) {
+      var su = (typeof window._slotUids === 'function') ? window._slotUids : null;
+      if (!su) return [];
+      for (var i = 0; i < lm.length; i++) {
+        var m = lm[i];
+        if (!m) continue;
+        if (String(m.p1) === String(rotulo)) { var a = su(m, 'p1'); if (a && a.length) return a; }
+        if (String(m.p2) === String(rotulo)) { var b = su(m, 'p2'); if (b && b.length) return b; }
+      }
+      return [];
+    };
+    t.classifFinalDaLinha[k] = ordem.map(function (nome) {
+      return { name: nome, pos: mapa[nome], uids: _uidsDoRotulo(nome) };
+    });
     t.classifFinalDaLinha[k + '_at'] = new Date().toISOString();
     n++;
   });
@@ -1881,6 +1918,16 @@ function _rankByTiebreakers(t, playerNames) {
     var totalScored = 0, totalConceded = 0, matchesWon = 0, matchesPlayed = 0;
     var setsWon = 0, setsLost = 0, gamesWon = 0, gamesLost = 0, tiebreaksWon = 0;
     var lastScoreDiff = 0, lastPointsScored = 0;
+    /* ⛔⛔ O SALDO É SEMPRE NA UNIDADE MAIS RICA — a escada é PONTO DE RALLY > GAMES > SETS, e vale a
+     * mais rica que EXISTE nos dois lados (`unidadeMaisRicaComum`, em src/domain/standings.ts).
+     * ⭐ Defeito meu, achado em 26/set/2026: esta função juntava sets e games e NUNCA juntava ponto de
+     * rally. Com isso o topo da escada era inalcançável por aqui: mesmo com placar ao vivo aplicado, o
+     * saldo caía para games — e a régua mais rica, que o dono pediu explicitamente, não valia no ponto
+     * que decide a repescagem. Não é o campo faltando no domínio; é o coletor não coletando.
+     * ⇒ o ponto de rally mora em `m.liveStats.pointsP1/pointsP2`, que é onde a pontuação avançada já o
+     * lê. Se não houver, os dois ficam em 0 e `temUnidade` reprova a régua sozinho — é assim que a
+     * escada desce para games e, sem games, para sets. */
+    var rallyFor = 0, rallyAgainst = 0;
 
     allMatches.forEach(function(m) {
       if (!m.winner || m.isBye || m.isSitOut) return;
@@ -1901,6 +1948,12 @@ function _rankByTiebreakers(t, playerNames) {
       // Track last match (most recent = the loss that eliminated them)
       lastPointsScored = scored;
       lastScoreDiff = scored - conceded; // higher = closer game = better
+
+      // PONTO DE RALLY — o degrau mais rico da escada do saldo.
+      if (m.liveStats) {
+        rallyFor     += parseInt(isP1 ? m.liveStats.pointsP1 : m.liveStats.pointsP2) || 0;
+        rallyAgainst += parseInt(isP1 ? m.liveStats.pointsP2 : m.liveStats.pointsP1) || 0;
+      }
 
       // GSM stats
       if (m.sets && Array.isArray(m.sets)) {
@@ -1934,6 +1987,8 @@ function _rankByTiebreakers(t, playerNames) {
       gamesWon: gamesWon,
       gamesLost: gamesLost,
       gamesDiff: gamesWon - gamesLost,
+      rallyFor: rallyFor,
+      rallyAgainst: rallyAgainst,
       tiebreaksWon: tiebreaksWon
     };
   });
