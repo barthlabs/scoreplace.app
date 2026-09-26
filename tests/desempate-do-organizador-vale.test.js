@@ -24,12 +24,24 @@ const C = require('../js/views/standings-core.js');
 let pass = 0, fail = 0; const fails = [];
 function ok(c, m) { if (c) pass++; else { fail++; fails.push(m); } }
 
+/* ⛔⛔ A LINHA-PADRÃO NÃO CARREGA MAIS GAMES/SETS DE ENFEITE, e isto não é detalhe de fixture.
+ *
+ * Ordem do dono (26/set/2026): _"saldo de sets quando nao tem games e saldo de games quando nao tem
+ * pontos ao vivo. assim deve ser considerado o saldo de pontos."_ ⇒ a régua do saldo é escolhida pelo
+ * DADO QUE EXISTE. Uma linha de torneio por PONTOS que viesse com `gamesWon: 12, gamesLost: 12` de
+ * enchimento passaria a ser medida em games — e, empatada ali, o critério acabaria sem decidir nada.
+ * ⚠️ O enchimento não era inocente: ele descrevia um torneio que não existe (pontos corridos com
+ * placar de games). Quem precisa de games nos testes pede games. */
 function linha(nome, uid, o) {
   return Object.assign({
     name: nome, uid: uid, wins: 1, losses: 1, played: 2,
-    setsWon: 1, setsLost: 1, gamesWon: 12, gamesLost: 12,
     tiebreaksWon: 0, tiebreaksLost: 0, pointsFor: 12, pointsAgainst: 12, winRate: 0.5
   }, o || {});
+}
+
+/* Linha de torneio por SETS: tem games, e é neles que o saldo é medido. */
+function linhaComGames(nome, uid, o) {
+  return linha(nome, uid, Object.assign({ setsWon: 1, setsLost: 1, gamesWon: 12, gamesLost: 12 }, o || {}));
 }
 
 console.log('──── 1. TIRAR um critério faz ele deixar de valer ────');
@@ -239,6 +251,54 @@ console.log('──── 10. ENTRE OS QUE CAÍRAM NA MESMA FASE, valem os crit�
     '(10) e o sorteio ali também é a ordem da chave');
   ok(/localeCompare/.test(corpo),
     '(10) a cadeia histórica (terminando em alfabético) fica como fallback pra quem não configurou');
+})();
+
+console.log('──── 10b. A RÉGUA DO SALDO É A MAIS RICA QUE EXISTIR ────');
+/* ⛔⛔⛔ Ordem do dono, 26/set/2026: _"saldo de sets quando nao tem games e saldo de games quando nao
+ * tem pontos ao vivo. assim deve ser considerado o saldo de pontos."_ E, no mesmo dia: _"o criterio de
+ * desempate tem que ser rigorosamente como deixou configurado o organizador. nao tem que ter critério
+ * por fora."_
+ *
+ * As duas juntas definem o desenho: a LISTA é do organizador, intocada; o que o código escolhe é só a
+ * RÉGUA em que o `saldo_pontos` dele é contado — a mais rica que o torneio produz. Escolhida a régua,
+ * compara-se NELA. Empatou, o critério ACABOU e quem decide é o próximo da lista.
+ *
+ * ⭐ POR QUE ISSO EXISTE: na Confra o `saldo_pontos` era medido no placar de SETS (1×2, 0×2). Entre 18
+ * duplas derrotadas isso dava DOIS valores, repetia o critério anterior, não separava ninguém, e a
+ * repescagem caía no sorteio — quem perdeu 6-1/6-1 entrou e quem perdeu 6-4/6-4 ficou fora.
+ * ⚠️ E eu errei o desenho DUAS vezes antes de acertar: primeiro parei no nível mais rico comum mesmo
+ * quando ele empatava (engolia o critério), depois fiz o saldo DESCER a escada quando empatava (isso
+ * ressuscita `saldo_sets` pela porta dos fundos, num torneio em que o organizador o tirou da lista).
+ * A régua se escolhe por DADO QUE EXISTE, nunca por empate. */
+(function () {
+  var so = { tiebreakers: ['saldo_pontos'] };
+  /* ① só sets → o saldo é medido em sets */
+  var s1 = linha('S1', 'u1', { setsWon: 2, setsLost: 0 });
+  var s2 = linha('S2', 'u2', { setsWon: 0, setsLost: 2 });
+  ok(C.standingsCompareConfig(s1, s2, so) < 0, '10b ① só sets: o saldo de SETS decide');
+  /* ② tem games → games manda, mesmo com sets apontando o contrário */
+  var g1 = linha('G1', 'u3', { setsWon: 2, setsLost: 0, gamesWon: 12, gamesLost: 10 });
+  var g2 = linha('G2', 'u4', { setsWon: 2, setsLost: 0, gamesWon: 12, gamesLost: 2 });
+  ok(C.standingsCompareConfig(g1, g2, so) > 0,
+    '10b ② ⛔ havendo games, o saldo é medido em GAMES (era o defeito da Confra)');
+  /* ③ tem ponto de rally → rally manda sobre games */
+  var p1 = linha('P1', 'u5', { gamesWon: 12, gamesLost: 2, rallyFor: 50, rallyAgainst: 90 });
+  var p2 = linha('P2', 'u6', { gamesWon: 12, gamesLost: 10, rallyFor: 95, rallyAgainst: 60 });
+  ok(C.standingsCompareConfig(p1, p2, so) > 0,
+    '10b ③ com placar ao vivo, o saldo é medido nos PONTOS de rally');
+  /* ④ EMPATOU NA RÉGUA ⇒ o critério acabou; NÃO desce para a régua de baixo */
+  var e1 = linhaComGames('E1', 'u7', { gamesWon: 12, gamesLost: 12, setsWon: 2, setsLost: 0 });
+  var e2 = linhaComGames('E2', 'u8', { gamesWon: 12, gamesLost: 12, setsWon: 0, setsLost: 2 });
+  ok(C.standingsCompareConfig(e1, e2, so) === 0,
+    '10b ④ ⛔⛔ empate em games NÃO desce para sets — saldo_sets é critério PRÓPRIO da lista dele');
+  /* ⑤ e aí quem decide é o PRÓXIMO da lista, se ele o tiver posto lá */
+  ok(C.standingsCompareConfig(e1, e2, { tiebreakers: ['saldo_pontos', 'saldo_sets'] }) < 0,
+    '10b ⑤ ⭐ com `saldo_sets` NA LISTA, ele decide o empate — porque o organizador o pôs lá');
+  /* ⑥ a régua tem de existir nos DOIS lados: rally de um contra games do outro não se compara */
+  var m1 = linha('M1', 'u9', { gamesWon: 12, gamesLost: 2, rallyFor: 90, rallyAgainst: 10 });
+  var m2 = linha('M2', 'u10', { gamesWon: 12, gamesLost: 10 });
+  ok(C.standingsCompareConfig(m1, m2, so) < 0,
+    '10b ⑥ um só tem rally ⇒ cai para a régua comum (games), e não compara unidades diferentes');
 })();
 
 console.log('──── 11. SALDO DE PONTOS DE TIE-BREAK (pedido do dono, 27/ago/2026) ────');

@@ -84,12 +84,35 @@ var ScoreplaceStandings;
         return difference(line, d.ganhou, d.perdeu);
     }
     ScoreplaceStandings.saldoNaUnidade = saldoNaUnidade;
+    /* ⛔⛔ "TEM A RÉGUA" NÃO É "O CAMPO EXISTE" — é ter MEDIDA nela.
+     * ⭐ Defeito meu, pego por teste: eu aceitava o campo presente, e `gamesWon: 0, gamesLost: 0` é
+     * presente. Como o construtor das linhas zera esses campos mesmo quando o jogo não tem games
+     * gravados, TODO torneio passava a ser medido em games — numa régua vazia, onde todos empatam em 0.
+     * O efeito era o oposto do pedido: em vez de usar a régua mais rica, o saldo deixava de valer.
+     * ⇒ A régua só conta quando há o que medir: a soma dos dois lados é maior que zero. Partida
+     * disputada sempre tem pelo menos um set; games só existem em torneio que os registra; ponto de
+     * rally, só com placar ao vivo. */
     const temUnidade = (line, unidade) => {
         const d = ScoreplaceStandings.UNIDADES_DE_SALDO[unidade];
         if (!line || !d)
             return false;
-        return line[d.ganhou] != null || line[d.perdeu] != null;
+        if (line[d.ganhou] == null && line[d.perdeu] == null)
+            return false;
+        return (n(line[d.ganhou]) + n(line[d.perdeu])) > 0;
     };
+    /* A ordem da riqueza. O chamador pode dizer a unidade (ele conhece o torneio); quando não diz,
+     * vale o dado que existe — e é a mesma regra: sets só quando não há games, games só quando não há
+     * ponto de rally. A unidade tem de existir nos DOIS lados: comparar rally de um com games do outro
+     * não é comparar nada. */
+    ScoreplaceStandings.RIQUEZA_DO_SALDO = ['pontos', 'games', 'sets'];
+    function unidadeMaisRicaComum(a, b) {
+        for (const unidade of ScoreplaceStandings.RIQUEZA_DO_SALDO) {
+            if (temUnidade(a, unidade) && temUnidade(b, unidade))
+                return unidade;
+        }
+        return null;
+    }
+    ScoreplaceStandings.unidadeMaisRicaComum = unidadeMaisRicaComum;
     ScoreplaceStandings.CRITERIOS = {
         pontos_avancados: (a, b) => n(b.points) - n(a.points),
         vitorias: (a, b) => n(b.wins) - n(a.wins),
@@ -115,9 +138,15 @@ var ScoreplaceStandings;
          * ⚠️ `pointsDiff`/`pointsFor`/`pointsAgainst` continuam como ÚLTIMA reserva, para as linhas antigas
          * que só carregam eles — tirar isso quebraria torneio por pontos corridos, que é outro jogo. */
         saldo_pontos: (a, b, options) => {
-            /* ⛔ UMA unidade, a do torneio. Empatou nela, o critério acabou — o próximo é o da LISTA do
-             * organizador, nunca um degrau escondido aqui. Ver a explicação acima. */
-            const unidade = options?.unidadeDoSaldo;
+            /* ⛔ UMA unidade só, e ela é escolhida por DISPONIBILIDADE, nunca por empate:
+             *      saldo de sets quando não há games · saldo de games quando não há pontos ao vivo.
+             * Escolhida a régua, compara-se nela e pronto. Empatou, o critério ACABOU — quem decide é o
+             * próximo da lista do organizador, nunca um degrau escondido aqui dentro.
+             * ⚠️ A diferença entre "escolher por disponibilidade" e "descer quando empata" é a diferença
+             * entre uma régua e um critério por fora. Eu implementei a segunda primeiro e o dono cortou. */
+            const pedida = options?.unidadeDoSaldo;
+            const unidade = (pedida && temUnidade(a, pedida) && temUnidade(b, pedida))
+                ? pedida : unidadeMaisRicaComum(a, b);
             if (unidade && temUnidade(a, unidade) && temUnidade(b, unidade)) {
                 return saldoNaUnidade(b, unidade) - saldoNaUnidade(a, unidade);
             }
