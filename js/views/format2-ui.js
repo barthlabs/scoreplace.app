@@ -856,8 +856,13 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         var _pol = e.politicaDaChave || 'repescagem';
         var _POLS = [
           ['repescagem', 'Repescagem', 'Todas jogam a estreia e as melhores derrotadas VOLTAM, até fechar a potência de 2. Ninguém fica de fora do primeiro dia, mas o torneio cresce: com 36 duplas são 50 jogos, e 14 das 18 que perdem seguem vivas.'],
-          ['bye', 'Folga', 'Parte das equipes ESPERA a estreia e o campo já entra na potência de 2. É o mais enxuto — com 36 duplas são 36 jogos —, mas 28 delas não jogam o primeiro dia.'],
-          ['sobra_unica', 'Sobra única', 'Ninguém volta e ninguém espera a estreia: cada rodada com número ímpar tem UMA sobra, que folga. Todas jogam o primeiro dia e o torneio não cresce — com 36 duplas são 36 jogos e 3 folgas no meio.']
+          ['bye', 'Folga', 'Parte das equipes ESPERA a estreia e o campo já entra na potência de 2. Com 36 duplas são 36 jogos, os mesmos da sobra única — mas 28 delas não jogam o primeiro dia.'],
+          /* ⛔ O TEXTO FOI CORRIGIDO: ele dizia "3 folgas" com 36 duplas, e o motor faz DUAS folgas e
+           * uma sobra que JOGA — porque folga é proibida perto da final e, na penúltima rodada de três,
+           * a sobra enfrenta o perdedor do jogo daquela rodada. Medido: 36 jogos, 2 folgas, 1 sobra
+           * jogando. Prometer no rótulo o que o motor não faz é o defeito que este projeto mais repete.
+           * [[feedback_nao_prometer_no_botao_o_que_nao_se_pode_conferir]] */
+          ['sobra_unica', 'Sobra única', 'Ninguém volta e ninguém espera a estreia: cada rodada com número ímpar tem UMA sobra. Ela folga, exceto perto da final — aí ela joga, porque folga em semifinal não existe. Todas jogam o primeiro dia e o torneio não cresce: com 36 duplas são 36 jogos, duas folgas no meio e uma sobra jogando na penúltima rodada.']
         ];
         eb += '<div style="margin-top:14px;font-size:0.72rem;color:var(--text-muted);margin-bottom:5px;">' +
           'Quando o número de equipes não fecha a chave</div>';

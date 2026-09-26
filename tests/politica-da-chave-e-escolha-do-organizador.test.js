@@ -94,5 +94,41 @@ const ui2 = fs.readFileSync(path.join(ROOT, 'js/views/bracket-ui.js'), 'utf8');
 ok(/_congelaLinhasEncerradas\(t\)/.test(ui2),
   '⑤ e o lançamento normal de placar continua congelando');
 
+/* ── ⑥ O TEXTO DA TELA NÃO PODE PROMETER O QUE O MOTOR NÃO FAZ ───────────────
+ * ⭐ Achado na revisão: eu escrevi "com 36 duplas são 36 jogos e 3 folgas no meio" e o motor faz DUAS
+ * folgas e uma sobra que JOGA — porque folga é proibida perto da final. Número na tela é promessa; se
+ * ninguém confere contra o motor, ela vira mentira na primeira mudança de desenho.
+ * ⚠️ Este bloco não confere a prosa: confere os NÚMEROS que ela cita, contra o motor de verdade. */
+H.load('bracket-model.js');
+H.load('chaves.js');
+const C = H.window._chaves;
+const vc = (pol) => C.plano(36, 'simples', pol).rodadas.filter(function (r) { return r.fase === 'VC'; });
+const jogos = (pol) => vc(pol).reduce(function (a, r) { return a + r.jogosReais; }, 0);
+const pl = (pol) => C.plano(36, 'simples', pol);
+
+const uiCru = fs.readFileSync(path.join(ROOT, 'js/views/format2-ui.js'), 'utf8');
+const trecho = (chave) => {
+  const i = uiCru.indexOf("['" + chave + "', '");
+  return i < 0 ? '' : uiCru.slice(i, uiCru.indexOf("]", i));
+};
+/* repescagem: 50 jogos (49 + o de 3º) e 14 voltam */
+ok(jogos('repescagem') + 1 === 50 && (pl('repescagem').repR2 + pl('repescagem').repescagens) === 14,
+  '⑥ o motor confirma: repescagem com 36 duplas = 50 jogos e 14 voltam');
+ok(/50 jogos/.test(trecho('repescagem')) && /14 das 18/.test(trecho('repescagem')),
+  '⑥ e a tela diz exatamente isso');
+/* folga: 36 jogos (35 + o de 3º) e 28 esperam */
+ok(jogos('bye') + 1 === 36 && pl('bye').esperamNoPlayin === 28,
+  '⑥ o motor confirma: folga com 36 duplas = 36 jogos e 28 esperam');
+ok(/36 jogos/.test(trecho('bye')) && /28 delas/.test(trecho('bye')),
+  '⑥ e a tela diz exatamente isso');
+/* sobra única: 36 jogos, 2 folgas e 1 sobra que joga (não há jogo de 3º: penúltima com três) */
+ok(jogos('sobra_unica') === 36 && pl('sobra_unica').byes === 2 && pl('sobra_unica').repescagens === 1,
+  '⑥ ⛔ o motor faz 36 jogos, DUAS folgas e UMA sobra jogando (achei ' +
+  jogos('sobra_unica') + '/' + pl('sobra_unica').byes + '/' + pl('sobra_unica').repescagens + ')');
+ok(/36 jogos, duas folgas/.test(trecho('sobra_unica')),
+  '⑥ ⛔⛔ e a tela diz DUAS folgas — dizia três, e três é o que o motor NÃO faz');
+ok(!/3 folgas/.test(trecho('sobra_unica')),
+  '⑥ e a promessa velha não voltou');
+
 console.log('\n' + (fail ? '✗ ' + fail + ' falha(s), ' : '✅ ') + pass + ' verificações');
 process.exit(fail ? 1 : 0);
