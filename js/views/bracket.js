@@ -3765,8 +3765,41 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
   // logo passa por aqui igual. Agora quem decide é `_classifIsComplete`: fechou quando
   // todo mundo que ENTROU EM QUADRA tem posição — espera e ausentes fora, que é a regra
   // que o dono deu. Medido no doc real: 8 definidos / 8 participaram → "final".
+  /* ⛔⛔⛔ CLASSIFICAÇÃO NÃO SE MOSTRA ENQUANTO A LINHA NÃO SABE QUEM ESTÁ NELA.
+   *
+   * ⭐ Relato do dono, 26/set/2026, na linha Ouro da Confra: _"a classificacao definida da ouro esta
+   * errada tambem. considerando que mudaram quem ficou de fora esta errada. oculta até redesenharmos
+   * a repescagem"_ — e, logo depois: _"como ainda estou confirmando o resultado do jogo 120 pode haver
+   * outra mudança"_.
+   *
+   * ⛔ A REGRA, que não é da Confra: enquanto houver VAGA DE REPESCAGEM INDEFINIDA na linha, a
+   * classificação dela é um chute. Quem entra pela repescagem ainda pode jogar e mudar tudo, e quem
+   * ficou de fora já está classificado abaixo de quem entrou. Uma tabela que se apresenta como
+   * "parcial" ou "final" nesse estado afirma o que não se sabe — e alguém age em cima dela.
+   * ⇒ No lugar dela vai uma frase dizendo o que falta. Ausência com explicação, nunca ausência muda.
+   * [[feedback_tela_parcial_se_diz_pronta]]
+   * ⚠️ Vale para QUALQUER linha de QUALQUER torneio — Ouro, Prata, chave única. Não é caso especial. */
+  function _vagaDeRepescagemIndefinida(lm) {
+    var _vaz = function (v) { return !v || v === 'TBD' || /a definir/i.test(String(v)); };
+    return (lm || []).some(function (m) {
+      if (!m) return false;
+      return ['p1', 'p2'].some(function (sl) {
+        if (m[sl + 'AguardaMelhor']) return true;
+        return !!m[sl + 'FromRepechage'] && _vaz(m[sl]);
+      });
+    });
+  }
   function _tierClassifHtml(bracketKey, color) {
     var lm = _lineMatches(bracketKey);
+    if (_vagaDeRepescagemIndefinida(lm)) {
+      return '<div style="margin:10px 0;padding:10px 12px;border-radius:8px;' +
+        'background:var(--sp-bg-subtle,rgba(148,163,184,.12));' +
+        'border-left:3px solid ' + (color || 'var(--text-muted)') + ';">' +
+        '<div style="font-weight:700;font-size:.85rem;color:var(--text-primary);">📊 Classificação indisponível</div>' +
+        '<div style="font-size:.78rem;color:var(--text-muted);margin-top:3px;">' +
+        'A repescagem desta chave ainda não está definida. A classificação aparece quando as vagas forem preenchidas.' +
+        '</div></div>';
+    }
     var map = _lineClassifMap(bracketKey);
     var fechada = (typeof window._classifIsComplete === 'function') && window._classifIsComplete(lm, map);
     return _renderClassifFromMap(map, color, fechada ? '📊 Classificação final' : '📊 Classificação parcial', false);

@@ -65,6 +65,7 @@ const SUITES = [
   'tests/terceiro-lugar-existe-sempre.test.js',
   'tests/nome-da-rodada-e-conceito.test.js',
   'tests/placar-aparece-sem-refresh.test.js',
+  'tests/classificacao-nao-sai-com-repescagem-indefinida.test.js',
   'tests/politica-chave-exige-escolha.test.js',
   'tests/casual-dupla-e-segundo-sacador.test.js',
   'tests/placar-melhor-de-3-nao-vira-um-set.test.js',
