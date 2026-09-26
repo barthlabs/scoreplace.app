@@ -76,6 +76,13 @@
     return base;
   }
 
+  /* ⛔⛔ ESTACIONADO: `e.source !== window` NÃO AUTENTICA A EXTENSÃO — qualquer script da própria
+   * página posta a mesma mensagem e o app aceita. Apontado pelo revisor em quatro rodadas da leva da
+   * entrada sem senha (25/set/2026) e separado aqui: é do bloco do letzplay, junto de
+   * [[project_scan_do_letzplay_nao_escreve_perfil]].
+   * ⚠️ O que limita o dano hoje é o que vem DEPOIS: `looksValid` recusa formato torto e o destino da
+   * escrita é decidido no servidor. Mas "limita" não é "fecha", e fechar exige segredo combinado entre
+   * extensão e página — decisão que pertence àquele bloco, com a versão da loja no meio. */
   window.addEventListener('message', function (e) {
     if (e.source !== window) return;              // só mensagens desta página (content script posta aqui)
     var d = e.data;

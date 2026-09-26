@@ -113,6 +113,14 @@ const KEEP = 'I061h3pJ7ifGgrjjo7dMVQOswOM2';   // eduardo@mange.adv.br (a sobrev
   // sobre quem estava lá. Mesma razão do `mail`. Medido: 76 docs seriam reescritos à toa.
   ok('debugDrawLogs NÃO é varrida (log histórico — reescrever falsifica o registro)',
     !C.shouldSweepCollection('debugDrawLogs'));
+
+  /* ⛔⛔ `passkeys` TEM de ser varrida, e isto é trava de segurança, não de arrumação.
+   * A credencial do aparelho guarda o uid num CAMPO e continua funcionando depois da fusão. Se ela
+   * não for repontada, fica ÓRFÃ: entra na conta sobrevivente (a entrada segue o desvio da lápide)
+   * mas a listagem do dono procura pelo uid novo e não a encontra ⇒ chave que abre a conta e ninguém
+   * consegue revogar. Foi a revisão de 25/set que levantou o risco; medi e a varredura já cobria. */
+  ok('⛔ passkeys É varrida — senão a chave da conta absorvida entra e não pode ser revogada',
+    C.shouldSweepCollection('passkeys'));
   ok('mail NÃO é varrida (histórico do que foi enviado)', !C.shouldSweepCollection('mail'));
 
   ok('toda exclusão declara o MOTIVO (senão vira lista sem dono)',

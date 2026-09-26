@@ -229,6 +229,15 @@ service cloud.firestore {
     // no memberUids dele (mesma regra do doc completo, senão o resumo vazaria o
     // que o documento esconde). [[project_sandbox_tournament]]
     match /tournaments_summary/{tournamentId} {
+      /* ⛔⛔ ESTACIONADO, E COM DONO: **qualquer autenticado lê o torneio INTEIRO** — a projeção
+       * privada não existe. Apontado pelo revisor em quatro rodadas seguidas da leva da entrada sem
+       * senha (25/set/2026) e separado aqui de propósito: NÃO é achado de autenticação, é do bloco de
+       * DADOS da reforma, junto do e-mail no documento público e do resumo público que replica campo.
+       * ⇒ O conserto é escolher o que o documento entrega a quem NÃO está no elenco, e isso mexe em
+       * leitor de tela, no resumo e na porta de contato ao mesmo tempo. Fazer por dentro de outra leva
+       * é o remendo que a reforma existe para desfazer.
+       * ⚠️ Enquanto isto estiver aberto, nada que dependa de privacidade pode ser prometido no rótulo.
+       */
       allow read: if (
         (resource.data.get('isSandbox', false) != true
           && ((resource.data.isPublic == true) || (request.auth != null)))

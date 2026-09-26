@@ -3,6 +3,18 @@
 /*
  * Contrato puro da CAMPANHA DO ROSTO: o que o app faz com cada pessoa, em cada dia.
  *
+ * ⛔⛔⛔ ESTE CONTRATO NÃO ESTÁ LIGADO, E A AUSÊNCIA É DELIBERADA (25/set/2026).
+ * Ninguém o chama: nem o cliente, nem a porta de inscrição. Hoje ele é só a REGRA escrita e travada
+ * em teste; conta nova e conta sem rosto entram no torneio normalmente.
+ * ⚠️ Está assim porque o que falta NÃO é ligar um `if`: falta a coleta do rosto (câmera, prova de
+ * vida contra foto-da-foto, vetor no cofre) — e isso é leva própria, do bloco 2 da reforma, ainda
+ * não construída. Ligar a campanha antes da coleta barraria todo mundo sem oferecer o cadastro.
+ * ⚠️ QUANDO for ligada, o lugar é UM só: a porta de inscrição no SERVIDOR (`enrollParticipant` em
+ * `functions/index.js`), porque bloqueio que mora no cliente não bloqueia nada. O cliente só pinta
+ * o aviso.
+ * ⛔ Não anote aqui que "já está aplicado" antes de existir chamada — foi exatamente assim que este
+ * projeto acumulou proteção que ninguém tinha.
+ *
  * Ordem do dono (25/set/2026): _"pode ir avisando as pessoas para fazerem o cadastro da biometria
  * e dar dias para as pessoas fazerem, indicando as vantagens. para os novos já pede já sem lambuja.
  * para quem já tem conta vai pedindo e damos 1 mês para todos cadastrarem. depois disso endurece."_

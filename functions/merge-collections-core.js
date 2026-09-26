@@ -60,6 +60,13 @@ const SWEEP_EXCLUDED_COLLECTIONS = {
   // `uidA = keepUid` num doc cujo id ainda diz o uid morto — o cânone mentindo sobre si
   // mesmo, e `pairId(keep, terceiro)` deixando de achar a relação que existe.
   friendships: 'a chave é o par; rekey só o _mergeAmizade sabe fazer (e resolver colisão)',
+  /* ⛔⛔ E `passkeys` NÃO PODE ENTRAR AQUI — a ausência é a decisão (25/set/2026).
+   * A credencial guarda o uid num CAMPO, e a varredura genérica o troca: é exatamente o que precisa
+   * acontecer, porque a chave do aparelho continua funcionando depois da fusão e tem de apontar para
+   * a conta sobrevivente.
+   * ⚠️ Se alguém excluir `passkeys` da varredura, a chave fica ÓRFÃ: ela CONTINUA abrindo a conta
+   * (a entrada segue o desvio da lápide) mas a listagem do dono procura pelo uid novo e não a acha —
+   * ou seja, uma chave que entra e ninguém consegue revogar. É travado por teste. */
   // E esta é SUBCOLEÇÃO (`friendAccess/{uid}/accepted/{friendUid}`): o sweep genérico varre
   // documentos de topo e nem chegaria nela — ficaria projeção do uid morto concedendo
   // leitura pra sempre. Excluir aqui é explicitar que o tratamento é outro, não esquecer.

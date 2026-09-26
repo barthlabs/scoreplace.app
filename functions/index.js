@@ -1778,7 +1778,19 @@ exports.cleanupExpiredProofTokens = onSchedule(
     const delCodes = await _batchDeleteQuery(
       db.collection("emailVerifyCodes").where("expiresAt", "<", nowMs));      // número (epoch ms)
     console.log(`[cleanupExpiredProofTokens] provas vencidas: emailVerificationLinks=${delVerificationLinks} emailVerifications=${delVerif} mergeTokens=${delMerge} emailVerifyCodes=${delCodes}`);
-    console.log(`[cleanupExpiredProofTokens] gateTokens=${delGateTokens} gateVerifications=${delGateVerif} (threshold: ${now.toISOString()})`);
+    /* ⛔⛔ A QUEIMA DO DESAFIO DE PASSKEY TAMBÉM VENCE, E TEM DE SER VARRIDA AQUI — achado na 4ª
+     * rodada de revisão da leva (25/set/2026).
+     * Eu havia escrito no código que o documento "morre sozinho por `expiraEm`". Isso só é verdade se
+     * existir uma política de TTL configurada no Firestore, que é passo de CONSOLE — fora do repo,
+     * fora do teste, invisível para quem lê. Ou seja: eu tinha anotado uma limpeza que não existia, e
+     * cada entrada bem-sucedida deixaria um documento para sempre.
+     * ⇒ A limpeza passa a ser ESTA, que é versionada, conferível por teste e roda três vezes ao dia.
+     * ⚠️ O prazo da queima é 10× o do desafio de propósito: ela precisa sobreviver ao desafio, senão
+     * uma assinatura reapresentada tarde não encontraria a queima. Varrer antes disso reabriria a
+     * repetição — por isso a varredura olha `expiraEm`, e não a data de criação. */
+    const delQueimas = await _batchDeleteQuery(
+      db.collection("passkeyChallenges").where("expiraEm", "<", now));        // Timestamp
+    console.log(`[cleanupExpiredProofTokens] gateTokens=${delGateTokens} gateVerifications=${delGateVerif} passkeyChallenges=${delQueimas} (threshold: ${now.toISOString()})`);
   }
 );
 
@@ -7590,6 +7602,16 @@ exports.deleteAccount = onCall(
       out.faceTemplateDeleted = true;
     } catch (e) { console.error("[deleteAccount] faceTemplates:", e.message); out.faceTemplateFailed = true; }
 
+    /* ⛔⛔ E AS CHAVES DE ACESSO SAEM TAMBÉM — achado na revisão de 25/set/2026.
+     * Eu apagava o vetor do rosto e deixava as passkeys. A chave PARA de entrar (o perfil virou
+     * lápide), mas o que fica guardado é chave pública, marca do aparelho e contador de uso: dado de
+     * quem pediu para sair, guardado para sempre, em coleção que ninguém revisita.
+     * ⚠️ E se a pessoa voltasse com conta nova, a credencial antiga do MESMO aparelho continuaria
+     * ocupando o id — o cadastro novo bateria numa credencial de dono que não existe mais.
+     * ⇒ Apagar aqui é a única saída: a lista de aparelhos mora na conta, e a conta acabou. */
+    try { out.passkeysDeleted = await _batchDeleteQuery(db.collection(_PASSKEYS).where("uid", "==", uid)); }
+    catch (e) { console.error("[deleteAccount] passkeys:", e.message); out.passkeysFailed = true; }
+
     // 5) Partidas casuais — sai dos participantes; a sala fica pros outros.
     try {
       const cs = await db.collection("casualMatches").where("playerUids", "array-contains", uid).get();
@@ -11983,17 +12005,43 @@ const _DESAFIOS = "passkeyChallenges";
  * corrida recebe recusa, não entrada.
  * ⚠️ Devolve o desafio para o chamador conferir a assinatura DEPOIS — a transação não pode esperar
  * criptografia: transação longa é transação que aborta. */
-async function _passkeyConsumirDesafio(db, desafioId, tipo, uidEsperado) {
-  const ref = db.collection(_DESAFIOS).doc(desafioId);
+/* ⛔⛔ A QUEIMA DO DESAFIO — e a ORDEM das duas etapas é a parte que importa.
+ *
+ * O desafio não é mais guardado (ver o desenho em `passkey-core.js`): ele se carrega. Então o que
+ * sobrou de estado é UMA coisa, e é a que sustenta tudo: um desafio só serve UMA vez.
+ *
+ * ⇒ São dois passos, nesta ordem, e trocá-los estraga cada um por um motivo diferente:
+ *   ① `_passkeyDesafioAceitavel` — PURO, zero banco. Confere formato, tipo, conta e hora. Pedido
+ *      torto morre aqui sem custar leitura nem gravação: é isto que tira o valor de um laço de abuso;
+ *   ② `_passkeyQueimarDesafio` — só DEPOIS de a assinatura ter sido conferida. Gravar antes deixaria
+ *      qualquer um queimar o desafio de outra pessoa com lixo, e ainda voltaria a cobrar escrita por
+ *      tentativa inválida, que é o defeito que este desenho existe para não ter.
+ * ⚠️ A queima é TRANSACIONAL e o id é a marca do próprio desafio: duas apresentações iguais em
+ * paralelo disputam a criação do mesmo documento, e só uma cria. Ler-e-depois-gravar deixaria as duas
+ * passarem — foi exatamente o defeito da versão anterior.
+ * ⚠️ O prazo da queima é MAIOR que o do desafio de propósito: se ela morresse antes, uma assinatura
+ * repetida depois do prazo não encontraria a queima. Quem barra nesse caso é a hora dentro do
+ * desafio, mas as duas defesas não podem ter buraco entre elas.
+ * ⛔⛔ E QUEM APAGA A QUEIMA VENCIDA É `cleanupExpiredProofTokens`, NÃO O FIRESTORE. Eu já escrevi
+ * aqui que o documento "morre sozinho por `expiraEm`" — e isso só seria verdade com uma política de
+ * TTL configurada no console, fora do repo, fora do teste, invisível para quem lê. Era limpeza
+ * anotada que não existia. `expiraEm` é o CAMPO que a varredura versionada consulta. */
+function _passkeyDesafioAceitavel(resposta, tipo, uidEsperado) {
+  const desafio = _passkey.desafioDaResposta(resposta);
+  if (!desafio) return { ok: false, motivo: "sem-desafio" };
+  const v = _passkey.desafioServeParaUso(desafio, tipo, uidEsperado, Date.now());
+  if (!v.ok) return { ok: false, motivo: v.motivo };
+  return { ok: true, desafio: desafio };
+}
+
+async function _passkeyQueimarDesafio(db, desafio) {
+  const ref = db.collection(_DESAFIOS).doc(_passkey.marcaDoDesafio(desafio));
   return await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
-    const reg = snap.exists ? snap.data() : null;
-    const val = _passkey.desafioValido(reg, Date.now());
-    if (!val.ok) return { ok: false, motivo: val.motivo };
-    if (reg.tipo !== tipo) return { ok: false, motivo: 'tipo-errado' };
-    if (uidEsperado && reg.uid !== uidEsperado) return { ok: false, motivo: 'de-outra-conta' };
-    tx.update(ref, { usadoEm: new Date().toISOString() });
-    return { ok: true, desafio: reg.desafio };
+    if (snap.exists) return { ok: false, motivo: "ja-usado" };
+    tx.set(ref, { queimadoEm: new Date().toISOString(),
+      expiraEm: new Date(Date.now() + 10 * _passkey.DESAFIO_VALE_MS) });
+    return { ok: true };
   });
 }
 
@@ -12031,6 +12079,9 @@ exports.iniciarCadastroDePasskey = onCall(
     const opcoes = await lib.generateRegistrationOptions({
       rpName: "scoreplace",
       rpID: _passkey.DOMINIO,
+      /* ⛔ O desafio é CUNHADO por nós, com tipo, conta e hora dentro — é o que dispensa guardá-lo. */
+      challenge: _passkey.cunharDesafio("cadastro", uid, Date.now(),
+        require("crypto").randomBytes(32).toString("base64url")),
       userID: Buffer.from(uid, "utf8"),
       userName: String((perfil.data() || {}).displayName || uid),
       /* ⛔ `residentKey: required` é o que faz a chave ser DESCOBRÍVEL — sem isso a pessoa teria de
@@ -12044,11 +12095,8 @@ exports.iniciarCadastroDePasskey = onCall(
       excludeCredentials: minhas.docs.map((d) => ({ id: d.id })),
     });
 
-    const ref = db.collection(_DESAFIOS).doc();
-    await ref.set({ desafio: opcoes.challenge, uid: uid, tipo: "cadastro",
-      criadoEmMs: Date.now(), usadoEm: null,
-      expiraEm: new Date(Date.now() + _passkey.DESAFIO_VALE_MS) });   /* ⛔ morre sozinho — ver a porta de entrada */
-    return { desafioId: ref.id, opcoes: opcoes };
+    /* ⛔ NADA É GRAVADO AQUI: o desafio já foi cunhado com tipo, conta e hora dentro. */
+    return { opcoes: opcoes };
   }
 );
 
@@ -12059,8 +12107,7 @@ exports.concluirCadastroDePasskey = onCall(
     const uid = request.auth && request.auth.uid;
     if (!uid) throw new HttpsError("unauthenticated", "Login obrigatório");
     const data = request.data || {};
-    const desafioId = String(data.desafioId || "");
-    if (!desafioId || !data.resposta) throw new HttpsError("invalid-argument", "pedido incompleto");
+    if (!data.resposta) throw new HttpsError("invalid-argument", "pedido incompleto");
 
     const origem = _origemDoPedido(request);
     if (!_passkey.origemAceita(origem)) {
@@ -12069,9 +12116,10 @@ exports.concluirCadastroDePasskey = onCall(
     }
 
     const db = admin.firestore();
-    const consumo = await _passkeyConsumirDesafio(db, desafioId, "cadastro", uid);
-    if (!consumo.ok) {
-      throw new HttpsError("permission-denied", "desafio inválido (" + consumo.motivo + ")");
+    /* ① confere o desafio SEM tocar no banco; ② queima DEPOIS da assinatura, mais abaixo. */
+    const aceito = _passkeyDesafioAceitavel(data.resposta, "cadastro", uid);
+    if (!aceito.ok) {
+      throw new HttpsError("permission-denied", "desafio inválido (" + aceito.motivo + ")");
     }
 
     const lib = await _passkeyLib();
@@ -12079,7 +12127,7 @@ exports.concluirCadastroDePasskey = onCall(
     try {
       v = await lib.verifyRegistrationResponse({
         response: data.resposta,
-        expectedChallenge: consumo.desafio,
+        expectedChallenge: aceito.desafio,
         expectedOrigin: _passkey.ORIGENS,
         expectedRPID: _passkey.DOMINIO,
         requireUserVerification: true,
@@ -12102,8 +12150,62 @@ exports.concluirCadastroDePasskey = onCall(
       backedUp: v.registrationInfo.credentialBackedUp,
     }, new Date().toISOString());
 
-    await db.collection(_PASSKEYS).doc(registro.credentialId)
-      .set(Object.assign({ uid: uid }, registro));
+    /* ⛔ AGORA a queima: a assinatura já foi conferida, então a gravação só acontece em tentativa real. */
+    const queima = await _passkeyQueimarDesafio(db, aceito.desafio);
+    if (!queima.ok) throw new HttpsError("permission-denied", "desafio inválido (" + queima.motivo + ")");
+
+    /* ⛔⛔ O TETO É APLICADO AQUI, EM TRANSAÇÃO — a consulta do início não basta.
+     * ⭐ Achado na revisão: eu contava as chaves ao ABRIR o cadastro e gravava ao CONCLUIR. Duas
+     * conclusões iniciadas com nove chaves passam as duas pela contagem e as duas gravam: onze.
+     * A contagem do início segue valendo como aviso cedo — melhor recusar antes do gesto do que
+     * depois —, mas quem decide é este bloco. */
+    const cabe = await db.runTransaction(async (tx) => {
+      const jaTem = await tx.get(db.collection(_PASSKEYS).where("uid", "==", uid));
+      const ref = db.collection(_PASSKEYS).doc(registro.credentialId);
+      const meuJa = await tx.get(ref);
+      /* ⛔⛔ CREDENCIAL QUE JÁ TEM OUTRO DONO NÃO SE SOBRESCREVE — achado na revisão de 25/set/2026.
+       * O id do documento é o id da credencial, que vem DO PEDIDO. Eu gravava com `set` sem olhar o
+       * dono: quem apresentasse um id já existente reassociava aquela credencial à SUA conta — e a
+       * entrada por passkey acha o uid justamente por este documento. Ou seja: a chave da outra
+       * pessoa passaria a abrir a minha conta, e a dela deixaria de abrir a própria.
+       * ⚠️ Não é só teoria de colisão: é o caminho de ataque mais curto desta porta, porque o id vai
+       * no corpo do pedido. A recusa tem de ser aqui, DENTRO da transação. */
+      /* ⛔⛔ E SE O DONO DA CREDENCIAL NÃO EXISTE MAIS, ELA PODE SER RETOMADA — achado na 4ª rodada de
+       * revisão. A recusa por "outro dono" está certa, mas ela criava um beco: se a limpeza da
+       * exclusão de conta falhar (ela é tolerante a falha, de propósito, para não travar a saída da
+       * pessoa), a credencial fica órfã e passa a BLOQUEAR o cadastro do MESMO aparelho numa conta
+       * nova — a pessoa apagaria a conta, criaria outra e o aparelho dela seria recusado para sempre,
+       * sem ninguém entender por quê.
+       * ⚠️ Não abre brecha: para chegar aqui já foi preciso a assinatura do aparelho, e a conta antiga
+       * está morta (lápide ou excluída) — não há sessão a roubar. */
+      let donoVivo = false;
+      if (meuJa.exists) {
+        const donoUid = String((meuJa.data() || {}).uid || "");
+        if (donoUid && donoUid !== String(uid)) {
+          const dono = await tx.get(db.collection("users").doc(donoUid));
+          const dd = dono.exists ? (dono.data() || {}) : null;
+          donoVivo = !!dd && dd.deleted !== true && !dd.mergedInto;
+        } else if (donoUid) { donoVivo = true; }
+      }
+      const veredito = _passkey.decidirCadastro({
+        uid: uid,
+        credencialExiste: meuJa.exists,
+        donoAtual: meuJa.exists ? (meuJa.data() || {}).uid : null,
+        donoVivo: donoVivo,
+        quantasJaTem: jaTem.size,
+      });
+      if (veredito !== "ok") return veredito;
+      tx.set(ref, Object.assign({ uid: uid }, registro));
+      return true;
+    });
+    if (cabe === "outro-dono") {
+      console.warn("[passkey] credencial já pertence a outra conta — recusado");
+      throw new HttpsError("already-exists", "este aparelho já está cadastrado em outra conta");
+    }
+    if (cabe !== true) {
+      throw new HttpsError("resource-exhausted",
+        "você já tem " + _passkey.MAX_POR_CONTA + " aparelhos cadastrados; remova um antes de acrescentar");
+    }
     console.log(`[passkey] cadastrado para ${uid} (sincroniza: ${registro.backedUp})`);
     return { ok: true, sincroniza: registro.backedUp };
   }
@@ -12112,62 +12214,51 @@ exports.concluirCadastroDePasskey = onCall(
 /* ── 3) ENTRADA: devolve desafio SEM perguntar quem é ─────────────────────────────────── */
 exports.iniciarEntradaPorPasskey = onCall(
   { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS,
-    /* ⚠️ `maxInstances` limita CONCORRÊNCIA, não requisições nem gravações — eu já escrevi aqui que
-     * ele "protegia" a porta pública e estava ERRADO. O teto de verdade está no corpo, por origem e
-     * por janela de minuto, e o mecanismo padrão (App Check) está nomeado em `passkey-core.js`. */
+    /* ⚠️ `maxInstances` limita CONCORRÊNCIA, não requisições — eu já escrevi aqui que ele "protegia"
+     * a porta pública e estava ERRADO. Ele serve para o que serve: põe teto no gasto de COMPUTAÇÃO de
+     * um laço de abuso. O gasto de BANCO é zero por desenho (esta porta não grava). */
     maxInstances: 10 },
   async (request) => {
     /* ⛔ SEM LOGIN, por natureza: é a porta de quem ainda não entrou. E sem `allowCredentials` —
      * dizer quais credenciais existem revelaria se um e-mail tem conta aqui. A chave descobrível
-     * dispensa isso: o aparelho da pessoa sabe qual chave é dele. */
-    const db = admin.firestore();
-
-    /* ⛔⛔ TETO POR ORIGEM E POR MINUTO, com custo de escrita LIMITADO. Um laço de mil chamadas no
-     * mesmo minuto vira UMA gravação de contador, não mil documentos de desafio. Ver a explicação e
-     * os limites do que isto NÃO cobre em `passkey-core.js`. */
-    const _h = (request && request.rawRequest && request.rawRequest.headers) || {};
-    const _origemBruta = String(_h["x-forwarded-for"] || _h["X-Forwarded-For"] || "sem-origem").split(",")[0].trim();
-    /* ⚠️ Guarda o HASH, não o endereço: contador de abuso não precisa saber de quem é, e endereço de
-     * rede é dado pessoal. */
-    const _chaveOrigem = require("crypto").createHash("sha256").update(_origemBruta).digest("hex").slice(0, 32)
-      + "_" + _passkey.janelaDeMinuto(Date.now());
-    const _limRef = db.collection("passkeyRateLimit").doc(_chaveOrigem);
-    const _passou = await db.runTransaction(async (tx) => {
-      const snap = await tx.get(_limRef);
-      const n = snap.exists ? Number((snap.data() || {}).n || 0) : 0;
-      if (_passkey.estourouOTeto(n)) return false;
-      tx.set(_limRef, { n: n + 1, expiraEm: new Date(Date.now() + 5 * 60 * 1000) }, { merge: true });
-      return true;
-    });
-    if (!_passou) {
-      console.warn("[passkey] teto por minuto estourado");
-      throw new HttpsError("resource-exhausted", "muitas tentativas; espere um instante");
-    }
-
-    /* ⛔ E O DESAFIO MORRE SOZINHO. Sem prazo de vida no documento, cada tentativa deixa lixo para
-     * sempre e a coleção cresce sem teto — o custo do abuso ficaria gravado. `expiraEm` é o campo que
-     * a política de expiração do Firestore apaga; o prazo curto já é exigido na conferência. */
+     * dispensa isso: o aparelho da pessoa sabe qual chave é dele.
+     *
+     * ⛔⛔ E ESTA PORTA NÃO TOCA NO BANCO: zero leitura, zero gravação. É de propósito e é a correção
+     * do defeito mais sério que esta leva já teve. Porta pública que grava um documento por chamada é
+     * conta de luz aberta para qualquer laço: sem login e sem App Check, não havia teto honesto — o
+     * teto por origem era falso (a origem é escrita por quem chama) e o teto global era contenção num
+     * documento só. O desenho que resolve está explicado em `passkey-core.js`: o desafio CARREGA tipo,
+     * conta e hora, e o único estado que sobra é a queima, que acontece na conclusão e só depois de a
+     * assinatura ser conferida.
+     * ⚠️ Quem acrescentar gravação aqui reabre o buraco. Se for inevitável, o mecanismo é App Check. */
     const lib = await _passkeyLib();
     const opcoes = await lib.generateAuthenticationOptions({
       rpID: _passkey.DOMINIO,
       userVerification: "required",
+      challenge: _passkey.cunharDesafio("entrada", null, Date.now(),
+        require("crypto").randomBytes(32).toString("base64url")),
     });
-    const ref = db.collection(_DESAFIOS).doc();
-    await ref.set({ desafio: opcoes.challenge, uid: null, tipo: "entrada",
-      criadoEmMs: Date.now(), usadoEm: null,
-      expiraEm: new Date(Date.now() + _passkey.DESAFIO_VALE_MS) });
-    return { desafioId: ref.id, opcoes: opcoes };
+    return { opcoes: opcoes };
   }
 );
 
 /* ── 4) confere a assinatura, acha o uid pela credencial e emite o token ──────────────── */
 exports.concluirEntradaPorPasskey = onCall(
-  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS,
+    /* ⚠️ ESTA PORTA LÊ ANTES DE CONFERIR A ASSINATURA, e não tem como não ler: para conferir a
+     * assinatura é preciso a chave PÚBLICA, que está na credencial. Então uma chamada com id inventado
+     * custa 1 leitura e morre.
+     * ⛔ O que se faz é ordenar e limitar, e digo até onde vai: ① o desafio é conferido ANTES, sem
+     * tocar no banco, então pedido torto nem chega a ler; ② `maxInstances` põe teto na CONCORRÊNCIA,
+     * logo no gasto de computação de um laço; ③ nenhuma gravação acontece sem assinatura válida.
+     * ⛔⛔ O que NÃO se faz é chamar isso de autenticação: CORS e `Origin` são cabeçalhos de quem
+     * chama. Fechar a porta pública de verdade é App Check, que não existe no projeto e tem passo de
+     * infraestrutura que é do dono. Está nomeado, não está feito. */
+    maxInstances: 10 },
   async (request) => {
     const data = request.data || {};
-    const desafioId = String(data.desafioId || "");
     const resposta = data.resposta;
-    if (!desafioId || !resposta || !resposta.id) {
+    if (!resposta || !resposta.id) {
       throw new HttpsError("invalid-argument", "pedido incompleto");
     }
     const origem = _origemDoPedido(request);
@@ -12176,11 +12267,13 @@ exports.concluirEntradaPorPasskey = onCall(
       throw new HttpsError("permission-denied", "origem não autorizada");
     }
 
-    const db = admin.firestore();
-    const consumo = await _passkeyConsumirDesafio(db, desafioId, "entrada", null);
-    if (!consumo.ok) {
-      throw new HttpsError("permission-denied", "desafio inválido (" + consumo.motivo + ")");
+    /* ① desafio conferido SEM banco — pedido torto morre aqui, sem custar leitura. */
+    const aceito = _passkeyDesafioAceitavel(resposta, "entrada", null);
+    if (!aceito.ok) {
+      throw new HttpsError("permission-denied", "desafio inválido (" + aceito.motivo + ")");
     }
+
+    const db = admin.firestore();
     const cSnap = await db.collection(_PASSKEYS).doc(String(resposta.id)).get();
 
     if (!cSnap.exists) throw new HttpsError("permission-denied", "aparelho não reconhecido");
@@ -12200,7 +12293,7 @@ exports.concluirEntradaPorPasskey = onCall(
     try {
       v = await lib.verifyAuthenticationResponse({
         response: resposta,
-        expectedChallenge: consumo.desafio,
+        expectedChallenge: aceito.desafio,
         expectedOrigin: _passkey.ORIGENS,
         expectedRPID: _passkey.DOMINIO,
         requireUserVerification: true,
@@ -12216,6 +12309,15 @@ exports.concluirEntradaPorPasskey = onCall(
       throw new HttpsError("permission-denied", "não consegui confirmar quem é");
     }
     if (!v || !v.verified) throw new HttpsError("permission-denied", "não consegui confirmar quem é");
+
+    /* ⛔⛔ ② SÓ AGORA A QUEIMA, e é ela que barra REAPRESENTAR uma assinatura capturada. Vem depois da
+     * conferência de propósito: antes, qualquer um queimaria o desafio de outra pessoa com lixo, e a
+     * tentativa inválida voltaria a custar gravação. */
+    const queima = await _passkeyQueimarDesafio(db, aceito.desafio);
+    if (!queima.ok) {
+      console.warn("[passkey] desafio reapresentado — recusado");
+      throw new HttpsError("permission-denied", "desafio inválido (" + queima.motivo + ")");
+    }
 
     /* ⛔ O CONTADOR É A DEFESA CONTRA REUSO DE ASSINATURA, e a exceção está anotada no núcleo:
      * zero dos dois lados é legítimo (Apple não implementa contador). */

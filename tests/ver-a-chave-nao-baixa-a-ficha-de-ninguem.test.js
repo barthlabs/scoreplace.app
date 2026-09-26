@@ -158,7 +158,13 @@ const DOCS = { uid1: FICHA, uid2: Object.assign({}, FICHA, { displayName: 'Beltr
   const callable = FUNCOES.slice(iCallable, FUNCOES.indexOf('// ─── setParticipantContactPhone', iCallable));
   must(callable.includes('_lerTorneioComElenco(db, tournamentId)') && callable.includes('_isTournamentOrgCaller(tournament, callerUid)'),
     '④ o servidor relê o torneio e confirma o organizador, sem confiar na tela');
-  must(callable.includes('_tournamentContacts.contatoDoPerfil(profile)') && !/profile\.email/.test(callable),
+  /* ⛔⛔ A ASSERÇÃO OLHAVA O COMENTÁRIO AO LADO — falso VERMELHO em 25/set/2026, e é a mesma família
+   * de erro que já me deu falso VERDE: casar texto no bloco inteiro casa também o que está explicado
+   * em português. O bloco tem uma FRASE explicando de onde o e-mail da organização sai, e a frase
+   * derrubava o teste sem que o código tivesse mudado.
+   * ⇒ Recorta-se o CÓDIGO antes de procurar. Comentário não é comportamento. */
+  const callableSemComentarios = callable.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+  must(callable.includes('_tournamentContacts.contatoDoPerfil(profile)') && !/profile\.email/.test(callableSemComentarios),
     '④ o servidor aplica a allowlist antes de responder e não inclui e-mail');
   const iContact = FUNCOES.indexOf('exports.getTournamentParticipantContact = onCall');
   const contactCallable = FUNCOES.slice(iContact, FUNCOES.indexOf('// ─── setParticipantContactPhone', iContact));

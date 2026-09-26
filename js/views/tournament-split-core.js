@@ -201,6 +201,13 @@
    * espelho trata como "saiu um, entrou outro". Pro dado é a mesma coisa (o registro é o
    * nome); e é infinitamente melhor que a posição, que muda sem ninguém ter feito nada.
    */
+  /* ⛔⛔ ESTACIONADO: a chave NÃO olha a identidade manual (`p1ManualId`/`p2ManualId`). Apontado pelo
+   * revisor em quatro rodadas da leva da entrada sem senha (25/set/2026) e separado aqui: é do bloco
+   * da IDENTIDADE, não do da autenticação — e o par dele está em `functions/participant-rename-core.js`.
+   * ⚠️ Hoje o dano é limitado porque esses campos NÃO SÃO ESCRITOS em lugar nenhum (medido em
+   * 24/set/2026): quem foi inscrito à mão é reconhecido pelo nome. No dia em que passarem a ser
+   * escritos, ESTE ponto e o da renomeação têm de mudar JUNTOS — senão o espelho trata a mesma pessoa
+   * como duas. [[feedback_enumerar_todos_os_caminhos_antes_de_dar_por_pronto]] */
   function chaveDoInscrito(p) {
     /* ⛔ 2.1.41 — `return 'x'` PARA TODA STRING: o pior tipo de colisão, porque não é
      * aleatória, é TOTAL. Medido no torneio de teste do dono: 8 inscritos no documento,

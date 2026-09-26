@@ -19,6 +19,10 @@ function _replaceNameFields(obj, oldName, newName, fields) {
   });
   return changed;
 }
+/* ⛔⛔ ESTACIONADO, PAR DO ANTERIOR: esta comparação também não conhece a identidade manual. Apontado
+ * pelo revisor em quatro rodadas da leva da entrada sem senha (25/set/2026) e separado aqui: bloco da
+ * IDENTIDADE. O outro ponto é `chaveDoInscrito` em `js/views/tournament-split-core.js`, e os dois têm
+ * de mudar na MESMA leva — um sem o outro deixa o espelho e a renomeação discordando sobre quem é quem. */
 function _matchesIdentity(p, oldName, uid) {
   if (typeof p === 'string') return !uid && p.split(' / ').some(x => _same(x, oldName));
   if (!p || typeof p !== 'object') return false;

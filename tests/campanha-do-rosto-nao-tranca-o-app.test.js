@@ -85,5 +85,29 @@ ok(R.diasRestantes(CAMPANHA, dia('2026-10-31T00:00:00Z')) === 1, '⑥ falta 1 di
 ok(R.diasRestantes(CAMPANHA, dia('2026-11-05T00:00:00Z')) === 0, '⑥ e nunca conta negativo');
 ok(R.diasRestantes(CAMPANHA, dia('2026-10-01T00:00:00Z')) === 31, '⑥ um mês cheio no primeiro dia');
 
+/* ══════════════════════════════════════════════════════════════════════════════
+ * ⑦ E A CAMPANHA NÃO ESTÁ LIGADA — isto é ESTADO DECLARADO, não esquecimento.
+ *
+ * ⛔⛔ A revisão de 25/set/2026 apontou como defeito que a campanha "não tem efeito". Tem razão no
+ * fato e o fato é PROPOSITAL: falta a COLETA do rosto (câmera, prova de vida, vetor no cofre), que é
+ * leva própria. Ligar a exigência antes da coleta barraria todo mundo sem oferecer o cadastro.
+ * ⇒ Em vez de deixar a ausência calada — que é como este projeto acumulou proteção inexistente —,
+ * ela é AFIRMADA aqui. No dia em que a coleta existir, estas duas asserções ficam vermelhas e a
+ * próxima pessoa é obrigada a trocá-las pela asserção contrária: que a porta CHAMA a política.
+ * ⚠️ É a lição de [[feedback_tela_parcial_se_diz_pronta]]: o não-medido aparece MARCADO, nunca ausente.
+ * ════════════════════════════════════════════════════════════════════════════ */
+const _fs = require('fs');
+const _path = require('path');
+const _RAIZ = _path.join(__dirname, '..');
+const _fonteTs = _fs.readFileSync(_path.join(_RAIZ, 'src/domain/face-rollout.ts'), 'utf8');
+ok(/NÃO ESTÁ LIGADO, E A AUSÊNCIA É DELIBERADA/.test(_fonteTs),
+  '⑦ ⛔⛔ o próprio contrato declara, em cima, que ainda não está ligado');
+ok(/enrollParticipant/.test(_fonteTs),
+  '⑦ ⭐ e NOMEIA a única porta onde vai ser ligado — no servidor, porque bloqueio no cliente não bloqueia');
+const _consumidores = ['functions/index.js', 'js/views/auth.js', 'js/firebase-db.js']
+  .filter((f) => /faceRollout|face-rollout|_campanhaDoRosto/.test(_fs.readFileSync(_path.join(_RAIZ, f), 'utf8')));
+ok(_consumidores.length === 0,
+  '⑦ ⛔ e hoje NENHUMA porta o chama — achei ' + _consumidores.length + '. Quando chamar, troque esta asserção pela contrária');
+
 console.log('\n' + (fail ? '✗ ' + fail + ' falha(s), ' : '✅ ') + pass + ' verificações');
 process.exit(fail ? 1 : 0);

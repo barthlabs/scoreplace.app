@@ -66,7 +66,13 @@ function openModal(modalId) {
    * ⛔ ABRIR E FECHAR MORAM NO MESMO PAR (ver `closeModal`), e é o que garante simetria: quem
    * acrescentar um caminho novo de abrir ganha a oferta sem saber que ela existe. */
   if (modalId === 'modal-login') {
+    /* ⛔ O vigia vem ANTES da oferta: a tela já existe aqui (`_garanteModal` rodou acima), e é este o
+     * único momento em que dá para garantir que ela existe. Ligar na carga do documento não
+     * funcionava — a tela é construída sob demanda. */
+    try { if (window._vigiarFechamentoDaEntrada) window._vigiarFechamentoDaEntrada(); } catch (_pkB) {}
     try { if (window._passkeyOferecerNoCampo) window._passkeyOferecerNoCampo(); } catch (_pk8) {}
+    /* ⛔ e o atalho, para quem não recebe a oferta no campo — a pergunta é feita ao navegador. */
+    try { if (window._passkeyMostrarAtalhoSeNecessario) window._passkeyMostrarAtalhoSeNecessario(); } catch (_pkD) {}
   }
   if (modal) {
     // v0.17.92: ao abrir modal-login, cancela timer de signout pendente
@@ -116,29 +122,28 @@ function closeModal(modalId) {
 }
 
 /* ⛔⛔ E QUEM FECHA A TELA DE ENTRADA POR FORA DE `closeModal` TAMBÉM PARA A OFERTA.
- * MEDIDO na revisão: há caminhos que removem a classe `active` direto — o X, os links de Termos e
- * Privacidade. Neles a espera da chave continuava viva, e uma chave escolhida DEPOIS trocaria a
- * sessão que acabou de autenticar: a pessoa entraria como outra conta sem entender por quê.
- * ⇒ Um observador na própria classe cobre todos eles de uma vez, inclusive os que ainda não existem.
- * É a lição de [[feedback_fechar_por_dentro_do_app_nao_e_fechar_a_aba]]: fechar por um caminho e não
- * pelos outros deixa estado vivo justamente no caso que ninguém testa. */
-(function vigiarFechamentoDaEntrada() {
-  if (typeof MutationObserver !== 'function' || typeof document === 'undefined') return;
-  function ligar() {
-    var el = document.getElementById('modal-login');
-    if (!el) return false;
-    new MutationObserver(function () {
-      if (!el.classList.contains('active')) {
-        try { if (window._passkeyPararOferta) window._passkeyPararOferta(); } catch (_pk9) {}
-      }
-    }).observe(el, { attributes: true, attributeFilter: ['class'] });
-    return true;
-  }
-  if (!ligar()) {
-    /* A tela pode ser construída depois; tenta de novo quando o documento estiver pronto. */
-    document.addEventListener('DOMContentLoaded', ligar, { once: true });
-  }
-})();
+ *
+ * ⭐ SEGUNDA TENTATIVA, e a primeira NÃO FUNCIONAVA — achado na revisão. Eu instalava o observador
+ * uma vez, na carga do documento. Mas a tela de entrada é CONSTRUÍDA SOB DEMANDA (`_garanteModal`):
+ * na carga ela não existe, a única tentativa falhava, e os fechamentos diretos — o X, os links de
+ * Termos e Privacidade — continuavam deixando a espera viva. O conserto que eu anunciei não
+ * consertava nada.
+ *
+ * ⇒ Agora o observador é ligado NO MOMENTO EM QUE A TELA NASCE, de dentro do `openModal`, e a marca
+ * no próprio elemento garante que ligue UMA vez por elemento.
+ * ⚠️ Vale para elemento novo também: se a tela for reconstruída, o elemento novo vem sem a marca e
+ * ganha o seu observador. */
+window._vigiarFechamentoDaEntrada = function () {
+  var el = document.getElementById('modal-login');
+  if (!el || el.__spVigiado) return;
+  if (typeof MutationObserver !== 'function') return;
+  el.__spVigiado = true;
+  new MutationObserver(function () {
+    if (!el.classList.contains('active')) {
+      try { if (window._passkeyPararOferta) window._passkeyPararOferta(); } catch (_pk9) {}
+    }
+  }).observe(el, { attributes: true, attributeFilter: ['class'] });
+};
 
 function createInteractiveElement(htmlString) {
   const div = document.createElement('div');

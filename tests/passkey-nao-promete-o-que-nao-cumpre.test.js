@@ -79,7 +79,26 @@ ok(/autocomplete="username webauthn"/.test(auth),
 ok(/_passkeyOferecerNoCampo\(\)/.test(auth),
   '⑦ ⭐ e a oferta é disparada quando a tela de entrada abre');
 ok(!/login-passkey-btn|login-ver-outras|login-outras-formas/.test(auth),
-  '⑦ ⛔⛔ e NÃO existe botão de passkey, nem atalho, nem bloco escondido — o padrão é o campo, e o botão criava beco e convite indevido');
+  '⑦ ⛔⛔ e NÃO existe botão de passkey na tela de entrada — o padrão é o campo, e o botão criava beco e convite indevido');
+
+/* ⛔⛔ E ESTA ASSERÇÃO NASCEU DE UM FALSO VERDE MEU, no mesmo dia.
+ * A asserção acima dizia "nem atalho" e continuou VERDE depois de eu acrescentar um atalho: ela casa
+ * TRÊS IDS pelo nome, e o meu tinha nome novo. Asserção que nomeia id não vigia o fato — é a terceira
+ * vez que caio nisso. ⇒ o que se trava agora é a CONDIÇÃO, não o nome.
+ *
+ * O atalho é legítimo e faz parte do padrão publicado (preenchimento no campo + saída para quem não
+ * tem mediação condicional). O que não é legítimo é aparecer SEM PERGUNTAR: aí ele volta a ser o
+ * botão que cria beco para quem nunca teve conta.
+ * ⚠️ Quem acrescentar outro caminho de mostrar o atalho tem de passar por esta porta — senão o fato
+ * volta a divergir do texto. */
+const _blocoAtalho = (semComentarios.match(/_passkeyMostrarAtalhoSeNecessario\s*=\s*async function[\s\S]*?\n  \};/) || [''])[0];
+ok(_blocoAtalho.length > 100, '⑦ o bloco do atalho foi encontrado pelo próprio identificador (não por tamanho fixo)');
+ok(/_passkeyTemNesteAparelho\(\)/.test(_blocoAtalho),
+  '⑦ ⛔⛔ o atalho PERGUNTA ao navegador antes de existir — não é chutado');
+ok(/===\s*true\)\s*return/.test(_blocoAtalho),
+  '⑦ ⛔ e desiste quando o campo JÁ oferece a chave: dois convites para a mesma coisa é ruído');
+ok(/_passkeyDisponivel\(\)\)\s*return/.test(_blocoAtalho),
+  '⑦ ⛔ e não aparece onde passkey não funciona — no nativo, nada');
 ok(/mediation: 'conditional'/.test(semComentarios),
   '⑦ a oferta usa mediação condicional — silenciosa para quem não tem chave');
 

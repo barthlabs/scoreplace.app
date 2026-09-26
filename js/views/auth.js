@@ -4754,6 +4754,9 @@ async function simulateLoginSuccess(user) {
       if (typeof window._applyProfileSportsUI === 'function') window._applyProfileSportsUI(arr);
       if (typeof window._renderProfileSkillBySport === 'function') window._renderProfileSkillBySport();
     })();
+    /* ⛔ PINTA A LISTA DE APARELHOS ao abrir o perfil. Sem esta chamada o caixote fica vazio e a
+     * revogação existe no servidor sem existir na tela — que é o mesmo que não existir. */
+    try { if (window._pintarMinhasPasskeys) window._pintarMinhasPasskeys(); } catch (_pkC) {}
     var phoneCountrySel = document.getElementById('profile-phone-country');
     var phoneInput = document.getElementById('profile-edit-phone');
     if (phoneCountrySel && cu.phoneCountry) phoneCountrySel.value = cu.phoneCountry;
@@ -5746,6 +5749,9 @@ function setupLoginModal() {
                   }).join('') : '<option value="55">🇧🇷 +55</option>') +
                 '</select>' +
                 '<input type="text" id="login-identifier" class="form-control" placeholder="seu@email.com.br ou (11) 9999-8888" autocomplete="username webauthn" style="width:100%;min-width:0;box-sizing:border-box;font-size:0.95rem;padding:11px 12px;" oninput="window._onIdentifierInput && window._onIdentifierInput()">' +
+                /* ⛔ Caixote do atalho: só ganha conteúdo em navegador que NÃO oferece a chave no
+                 * campo — ver `_passkeyMostrarAtalhoSeNecessario`. Vazio, não ocupa nada. */
+                '<div id="login-passkey-atalho" style="text-align:center;"></div>' +
               '</div>' +
               '<div id="login-senha-label" style="font-size:0.8rem;color:var(--text-muted);margin-bottom:4px;">Senha <span style="font-style:italic;font-size:0.72rem;">(mín. 6 caracteres)</span></div>' +
               '<div style="position:relative;margin-bottom:6px;">' +
@@ -6656,6 +6662,11 @@ function setupProfileModal() {
                     'style="background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;font-weight:700;">' +
                     'Cadastrar este aparelho' +
                   '</button>' +
+                  /* ⛔⛔ E A LISTA COM O REMOVER — sem ela a chave é porta sem tranca: aparelho perdido,
+                   * vendido ou emprestado entraria na conta para sempre e a pessoa não teria o que
+                   * fazer. Eu havia entregue as portas do servidor sem nenhuma tela que as chamasse,
+                   * o que é o mesmo que não tê-las. */
+                  '<div id="profile-passkey-lista"></div>' +
                 '</div>';
               } catch (_pk2) { return ''; }
             })() +
