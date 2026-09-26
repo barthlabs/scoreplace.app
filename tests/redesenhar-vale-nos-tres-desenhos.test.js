@@ -21,6 +21,8 @@
  * ⚠️ É por isso que a escolha da política é do organizador e acontece ANTES do sorteio.
  */
 const path = require('path');
+const fs = require('fs');
+const ROOT = path.join(__dirname, '..');
 const C = require(path.join(__dirname, '..', 'js', 'views', 'chaves.js'));
 
 let pass = 0, fail = 0;
@@ -174,6 +176,29 @@ POLITICAS.forEach(function (pol) {
     }
   });
 });
+
+/* ── ⑤ NO DESENHO DE FOLGA, O TARDIO NÃO ENTRA SOZINHO ───────────────────────
+ * ⛔⛔ Eu tinha ANOTADO que "o bye com inscrição aberta precisa de confirmação" e não implementei a
+ * recusa. A revisão reproduziu: com 36→37, `D29×D30 … D35×D36` vira `D28×D29 … D36×D37`, o integrador
+ * aplicava e a Function gravava — confronto que as pessoas já viram trocado sem ninguém pedir.
+ * Anotar o risco e deixar o código fazer assim mesmo é pior que não ter anotado.
+ * ⇒ Agora a chave não é mexida: o tardio fica pendente e refazer a chave é um gesto do organizador. */
+const adCod = fs.readFileSync(path.join(ROOT, 'js/views/chaves-adapter.js'), 'utf8')
+  .replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+ok(/_politicaAqui === 'bye'/.test(adCod),
+  '⑤ ⛔⛔ o integrador de tardios reconhece a chave de FOLGA');
+const iBye = adCod.indexOf("_politicaAqui === 'bye'");
+const iCresce = adCod.indexOf('crescerComPrefixo(doGrupo', iBye);
+const iRet = adCod.indexOf('return;', iBye);
+ok(iRet > iBye && (iCresce < 0 || iRet < iCresce),
+  '⑤ ⛔ e SAI antes de recalcular ou crescer — a chave não é tocada');
+ok(/pendentesPorGrupo/.test(adCod),
+  '⑤ o tardio fica REGISTRADO como pendente, não desaparece em silêncio');
+ok(/_tardiosAguardandoNovaChave/.test(adCod),
+  '⑤ ⭐ e a tela tem por onde perguntar, para oferecer a decisão ao organizador');
+/* ⚠️ E nos outros dois desenhos o tardio continua entrando sozinho — ali nada muda para ninguém. */
+ok(trocam.repescagem === 0 && trocam.sobra_unica === 0,
+  '⑤ na repescagem e na sobra única o tardio segue entrando sem mexer em confronto já sorteado');
 
 console.log('\n' + (fail ? '✗ ' + fail + ' falha(s), ' : '✅ ') + pass + ' verificações');
 process.exit(fail ? 1 : 0);

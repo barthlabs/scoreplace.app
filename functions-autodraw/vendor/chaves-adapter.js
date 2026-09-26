@@ -982,7 +982,19 @@
    *
    * @returns {{ok, aplicados:number, recusados:Array, semMudanca:boolean}}
    */
+  /* Tardios que NÃO entraram porque a chave é de folga e entrar exigiria refazê-la. Quem lê é a tela,
+   * para oferecer ao organizador a decisão — e é por grupo/linha, porque a chave é por linha. */
+  var pendentesPorGrupo = {};
+  /* ⛔ `window` PODE NÃO EXISTIR AQUI: este arquivo também é carregado em Node puro (harness e vendor
+   * da Cloud Function). Eu escrevi a atribuição crua e o módulo passou a estourar no load — sete
+   * suítes ficaram vermelhas com "chaves-adapter não carregado", que não diz nada sobre a causa.
+   * `node --check` não pega: é erro de execução, não de sintaxe. */
+  if (typeof window !== 'undefined') {
+    window._tardiosAguardandoNovaChave = function () { return pendentesPorGrupo; };
+  }
+
   function integrarTardiosElim(t, pendentes) {
+    pendentesPorGrupo = {};
     var res = { ok: true, aplicados: 0, entrantes: [], recusados: [], semMudanca: true };
     if (!t || !Array.isArray(t.matches) || !t.matches.length) return res;
 
@@ -1041,6 +1053,30 @@
         return !us.some(function (u) { return jaNaChave[u]; });
       });
       if (!novos.length) return;
+
+      /* ⛔⛔⛔ NO DESENHO DE FOLGA, TARDIO NÃO ENTRA SOZINHO — ele PEDE nova chave.
+       *
+       * ⭐ Eu havia ANOTADO isto como consequência aceita e não implementei a recusa; a revisão
+       * reproduziu: com 36→37 inscritos, `D29×D30 … D35×D36` vira `D28×D29 … D36×D37`. O integrador
+       * aplicava e a Function gravava — confronto que as pessoas já viram trocado sem ninguém pedir.
+       * Anotar o risco e deixar o código fazer assim mesmo é pior que não ter anotado.
+       *
+       * A CAUSA é do desenho, não um defeito a consertar: no bye a rodada de entrada é dimensionada
+       * pela potência de 2 abaixo de N, então mudar N muda QUEM joga a estreia. MEDIDO: em 60 dos 60
+       * incrementos entre 4 e 64. Na repescagem e na sobra única isso não acontece — todas jogam a
+       * estreia e o tardio entra na última posição.
+       *
+       * ⇒ Então aqui a chave NÃO é mexida. O tardio fica registrado como pendente e quem decide é o
+       * organizador: refazer a chave (e aí os confrontos mudam, com ele sabendo) ou deixar para o
+       * próximo torneio. Refazer é um gesto dele, nunca um efeito colateral de uma inscrição. */
+      var _politicaAqui = (t && t.politicaDaChave) || 'repescagem';
+      if (_politicaAqui === 'bye') {
+        pendentesPorGrupo[ns || ''] = (pendentesPorGrupo[ns || ''] || []).concat(novos);
+        if (typeof window._log === 'function') {
+          window._log('[tardio] chave em FOLGA: ' + novos.length + ' inscrito(s) aguardando decisão do organizador — entrar exige refazer a chave');
+        }
+        return;
+      }
 
       var elenco = roster.concat(novos);
       var r = recalcularComTardio(doGrupo, elenco.length, formato, {
