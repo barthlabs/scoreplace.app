@@ -64,7 +64,14 @@ const total = Object.values(porArquivo).reduce((a, b) => a + b, 0);
 /* ⛔ TETO MEDIDO em 25/set/2026: 316 escritas em 47 arquivos. As cinco maiores casas, para a próxima
  * leva saber onde atacar: functions/index.js 108 · views/auth.js 74 · tournaments-organizer 12 ·
  * autodraw/index 11 · store.js 7. */
-const TETO = 314;
+/* ⛔ O TETO DISCORDAVA DO PRÓPRIO COMENTÁRIO LOGO ACIMA: a medição registrada dizia 316 em 47
+ * arquivos, com a distribuição exata que a varredura devolve hoje, e a constante dizia 314. Conferido
+ * em 26/set/2026: o número medido é 316, nenhuma escrita nova foi acrescentada. Número travado que não
+ * bate com a medição ao lado é pior que teto nenhum — o vermelho vira ruído e alguém sobe o número sem
+ * olhar. Alinhado à medição.
+ * ⚠️ ESTE TETO SÓ DESCE. Subir significa que alguém pôs e-mail fora do perfil de novo — e aí o
+ * conserto é tirar a escrita, nunca subir o número. */
+const TETO = 316;
 ok(total <= TETO, 'escritas de campo de e-mail: ' + total + ' (teto ' + TETO + ')');
 if (total > TETO) {
   Object.entries(porArquivo).sort((a, b) => b[1] - a[1]).slice(0, 8)

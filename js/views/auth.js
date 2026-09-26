@@ -440,6 +440,29 @@ try {
     // cold start) saíam em INGLÊS por falta de locale. Força pt-BR pra qualquer
     // e-mail do Firebase Auth vir em português.
     try { firebase.auth().languageCode = 'pt-BR'; } catch (_lc) {}
+    /* ⛔⛔⛔ APP CHECK — a prova de que a chamada vem DESTE app, e não de um script qualquer.
+     *
+     * POR QUE EXISTE: a entrada sem senha precisa de uma porta que funcione ANTES de a pessoa logar,
+     * então essa porta não pode exigir login. Sem App Check, qualquer um a chama de fora do navegador,
+     * no laço que quiser. Já fizemos o que dava sem ele — a porta não grava nada e tem teto de
+     * concorrência —, mas quem fecha de verdade é isto.
+     *
+     * ⚠️ `isTokenAutoRefreshEnabled` é o que mantém o token vivo enquanto a pessoa fica com a aba
+     * aberta. Sem isso, o token vence em 1 hora e a chamada seguinte é recusada — o tipo de defeito
+     * que só aparece em quem deixa o torneio aberto o dia inteiro, que é exatamente o organizador.
+     * ⚠️ E isto é BEST-EFFORT de propósito: se o SDK não carregar (bloqueador de anúncio, rede ruim),
+     * o app continua funcionando. Só as portas que EXIGEM App Check é que recusam — e hoje são as
+     * duas do passkey, nenhuma delas no caminho de quem já está logado.
+     * ⛔ A chave é de SITE, pública por natureza: ela identifica o site, não autoriza nada sozinha.
+     * O que autoriza é o veredito do reCAPTCHA, que é do servidor. */
+    try {
+      if (firebase.appCheck && typeof firebase.appCheck === 'function') {
+        firebase.appCheck().activate(
+          new firebase.appCheck.ReCaptchaEnterpriseProvider('6LdD288tAAAAAEysM94nyLuD74SFUOQSouX-yVew'),
+          true
+        );
+      }
+    } catch (_ac) { if (window._warn) window._warn('[appcheck] não ativou: ' + (_ac && _ac.message)); }
     authProvider = new firebase.auth.GoogleAuthProvider();
     // NOTE: Sensitive People API scopes (gender, birthday, addresses, phone)
     // require Google OAuth app verification. Without verification, Google shows

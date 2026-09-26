@@ -1916,6 +1916,21 @@ window.FirestoreDB = {
     /* Sem usuário, vai SEM cabeçalho de autorização — e o servidor decide. */
     var cab = { 'Content-Type': 'application/json' };
     if (user) cab['Authorization'] = 'Bearer ' + (await user.getIdToken());
+    /* ⛔⛔ O TOKEN DO APP CHECK VAI EM TODA CHAMADA, e é ele que sustenta a porta PÚBLICA.
+     *
+     * ⚠️ Este transporte é montado À MÃO (não é o SDK de Functions), então o cabeçalho do App Check
+     * NÃO vai sozinho — o SDK é que o acrescentaria. Foi exatamente isto que a revisão apontou: o
+     * cliente mandava só `Content-Type` e, havendo sessão, `Authorization`. Sem esta linha, exigir
+     * App Check no servidor recusaria TODAS as chamadas, inclusive as legítimas.
+     * ⚠️ E é BEST-EFFORT: se o SDK do App Check não carregou, a chamada segue sem o cabeçalho. Quem
+     * recusa é a porta que EXIGE — e só as duas do passkey exigem. Derrubar o app inteiro porque um
+     * bloqueador de anúncio comeu um script seria trocar um risco por um defeito. */
+    try {
+      if (fb.appCheck && typeof fb.appCheck === 'function') {
+        var _tk = await fb.appCheck().getToken(/* forceRefresh */ false);
+        if (_tk && _tk.token) cab['X-Firebase-AppCheck'] = _tk.token;
+      }
+    } catch (_eAC) { /* sem token: a porta pública decide, as outras não exigem */ }
     var r = await fetch(url, { method: 'POST', headers: cab, body: JSON.stringify({ data: payload }) });
     var j = await r.json().catch(function () { return {}; });
     if (j && j.error) {

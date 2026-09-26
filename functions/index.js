@@ -12214,6 +12214,13 @@ exports.concluirCadastroDePasskey = onCall(
 /* ── 3) ENTRADA: devolve desafio SEM perguntar quem é ─────────────────────────────────── */
 exports.iniciarEntradaPorPasskey = onCall(
   { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS,
+    /* ⛔⛔⛔ APP CHECK EXIGIDO — é o que fecha a porta PÚBLICA de verdade.
+     * Esta é a porta de quem ainda NÃO entrou, então ela não pode pedir login. Sem App Check, qualquer
+     * um a chama de fora do navegador. CORS e o cabeçalho `Origin` não servem: os dois são escritos
+     * por quem chama. O que vale é o token que o Firebase emite só para o app de verdade.
+     * ⚠️ Ligado em 26/set/2026, depois de o app ser registrado no App Check com Fraud Defense. Antes
+     * disso, exigir aqui recusaria todo mundo. */
+    enforceAppCheck: true,
     /* ⚠️ `maxInstances` limita CONCORRÊNCIA, não requisições — eu já escrevi aqui que ele "protegia"
      * a porta pública e estava ERRADO. Ele serve para o que serve: põe teto no gasto de COMPUTAÇÃO de
      * um laço de abuso. O gasto de BANCO é zero por desenho (esta porta não grava). */
@@ -12245,6 +12252,10 @@ exports.iniciarEntradaPorPasskey = onCall(
 /* ── 4) confere a assinatura, acha o uid pela credencial e emite o token ──────────────── */
 exports.concluirEntradaPorPasskey = onCall(
   { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS,
+    /* ⛔⛔⛔ APP CHECK EXIGIDO — mesma razão da porta de cima, e aqui pesa mais: esta lê `passkeys` e
+     * `users` antes de poder conferir a assinatura (para conferir, é preciso a chave pública, que está
+     * na credencial). Com App Check, chamada de fora do app nem chega a ler. */
+    enforceAppCheck: true,
     /* ⚠️ ESTA PORTA LÊ ANTES DE CONFERIR A ASSINATURA, e não tem como não ler: para conferir a
      * assinatura é preciso a chave PÚBLICA, que está na credencial. Então uma chamada com id inventado
      * custa 1 leitura e morre.

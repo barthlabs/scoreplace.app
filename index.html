@@ -591,6 +591,10 @@
   <script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-app-compat.js" defer></script>
   <script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-auth-compat.js" defer></script>
   <script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore-compat.js" defer></script>
+  <!-- App Check: prova que a chamada vem DESTE app. Carregado junto dos outros SDKs; quem liga
+       é `auth.js`, logo depois do initializeApp. Sem ele, a porta pública do passkey fica aberta
+       a qualquer script fora do navegador. -->
+  <script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-app-check-compat.js" defer></script>
   <script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-messaging-compat.js" defer></script>
   <!-- SDK de Cloud Functions -->
   <script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-functions-compat.js" defer></script>
