@@ -848,6 +848,25 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;line-height:1.45;">' + (e.dupla
           ? 'Cada ' + (isDupla ? 'dupla' : 'jogador') + ' só é ' + (isDupla ? 'eliminada' : 'eliminado') + ' após <b>2 derrotas</b>: quem perde na <b>chave de cima</b> cai na <b>chave de baixo</b> (ainda no torneio) e as duas se encontram na <b>grande final</b>.'
           : 'Eliminação simples — uma derrota e está fora. Ative para <b>Dupla Eliminatória</b>: só sai com 2 derrotas (quem perde na chave de cima cai na de baixo).') + '</div>';
+      /* ⛔⛔⛔ COMO O RESTO É RESOLVIDO — a escolha do organizador entre os três desenhos.
+       * Só aparece na eliminatória SIMPLES: na dupla, a "repescagem" é o próprio formato (todo mundo
+       * precisa perder duas vezes), não tratamento de resto — oferecer a escolha ali seria oferecer
+       * um botão que não muda nada. A conta e as fórmulas de cada desenho estão em `chaves.js`. */
+      if (!e.dupla) {
+        var _pol = e.politicaDaChave || 'repescagem';
+        var _POLS = [
+          ['repescagem', 'Repescagem', 'Todas jogam a estreia e as melhores derrotadas VOLTAM, até fechar a potência de 2. Ninguém fica de fora do primeiro dia, mas o torneio cresce: com 36 duplas são 50 jogos, e 14 das 18 que perdem seguem vivas.'],
+          ['bye', 'Folga', 'Parte das equipes ESPERA a estreia e o campo já entra na potência de 2. É o mais enxuto — com 36 duplas são 36 jogos —, mas 28 delas não jogam o primeiro dia.'],
+          ['sobra_unica', 'Sobra única', 'Ninguém volta e ninguém espera a estreia: cada rodada com número ímpar tem UMA sobra, que folga. Todas jogam o primeiro dia e o torneio não cresce — com 36 duplas são 36 jogos e 3 folgas no meio.']
+        ];
+        eb += '<div style="margin-top:14px;font-size:0.72rem;color:var(--text-muted);margin-bottom:5px;">' +
+          'Quando o número de equipes não fecha a chave</div>';
+        eb += _POLS.map(function (o) {
+          return _pill(_pol === o[0], "window._f2PoliticaDaChave('" + o[0] + "')", o[1]);
+        }).join('');
+        eb += '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;line-height:1.45;">' +
+          _safe((_POLS.filter(function (o) { return o[0] === _pol; })[0] || _POLS[0])[2]) + '</div>';
+      }
       // Linhas (chaves paralelas): só na eliminatória SIMPLES — a dupla-elim é chave única.
       if (!e.dupla) {
         eb += '<div style="margin-top:12px;font-size:0.72rem;color:var(--text-muted);margin-bottom:5px;">Chaves paralelas (nomes livres)</div>';
@@ -1239,6 +1258,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   window._f2GrandFinal = function (checked) { if (!S) return; S.cfg.eliminatoria.grandFinal = !!checked; _norm(); _rerender(); };
   // v4.4.58: Dupla Eliminatória (repescagem). ON força 1 linha (chave única) no normalize.
   window._f2ElimDupla = function (checked) { S.cfg.eliminatoria.dupla = !!checked; _norm(); _rerender(); };
+  /* ⛔ A escolha dos três desenhos. `_norm()` é quem valida: valor torto cai em `repescagem`, e na
+   * dupla eliminatória o campo é forçado — a tela não precisa saber disso, e não deve. */
+  window._f2PoliticaDaChave = function (v) { S.cfg.eliminatoria.politicaDaChave = String(v || ''); _norm(); _rerender(); };
   // A direita do seletor é Abertas: ON abre inscrições; OFF fecha. Novos
   // Confrontos continua independente e não é alterado por esta escolha.
   window._f2ElimLateMaster = function (openOn) {

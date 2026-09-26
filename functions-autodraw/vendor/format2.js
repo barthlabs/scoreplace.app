@@ -190,6 +190,24 @@
     // cada uma com seu campeão). 1 linha não tem conceito de grande final.
     e.grandFinal = (e.grandFinal !== false);
     if (e.dupla) e.grandFinal = true;
+    /* ⛔⛔⛔ COMO O RESTO É RESOLVIDO — a escolha do organizador entre os três desenhos.
+     *
+     * O problema que ela resolve: a chave só desce limpa quando o número de equipes da rodada é
+     * potência de 2. Quando não é, sobra resto — e há três maneiras de tratá-lo:
+     *   · `repescagem`  todas jogam a estreia e perdedoras VOLTAM até completar a potência de 2;
+     *   · `bye`         parte do campo ESPERA a estreia, e o campo já entra na potência de 2;
+     *   · `sobra_unica` ninguém volta e ninguém espera a estreia: cada rodada ímpar tem UMA sobra.
+     * Os detalhes e as fórmulas estão em `chaves.js`.
+     *
+     * ⛔ VALOR FECHADO e default = `repescagem`, que é o que todo torneio existente já é. Valor torto
+     * cai no default em vez de inventar desenho: configuração de torneio antigo não pode virar chave
+     * diferente por causa de um campo que ninguém escreveu.
+     * ⛔ E NA DUPLA ELIMINATÓRIA NÃO SE APLICA: ali a "repescagem" é o próprio formato — todo mundo
+     * precisa perder duas vezes —, não é tratamento de resto. Forçar o default evita a tela oferecer
+     * uma escolha que não muda nada. */
+    var _POLITICAS_DA_CHAVE = ['repescagem', 'bye', 'sobra_unica'];
+    if (_POLITICAS_DA_CHAVE.indexOf(e.politicaDaChave) === -1) e.politicaDaChave = 'repescagem';
+    if (e.dupla) e.politicaDaChave = 'repescagem';
     if (!Array.isArray(e.nomes)) e.nomes = [];
     while (e.nomes.length < e.linhas) e.nomes.push('');
     e.nomes = e.nomes.slice(0, e.linhas);
@@ -380,6 +398,12 @@
     var scoreInd = cfg._scoreBy === 'individual';
     var re = opts.resultEntry || ['organizer'];
     var top = {}, p0;
+    /* ⛔⛔ A POLÍTICA DA CHAVE VAI PARA O TOPO DO TORNEIO, e não só para as fases.
+     * Quem sorteia a FASE 0 é `_buildPhase0Cfg`, e ele lê `t.politicaDaChave` — do documento, não das
+     * fases. Deixar a escolha só dentro de `phases[]` faria o sorteio inicial continuar em repescagem
+     * com `bye` escolhido: o defeito mais caro desta leva, e o último que eu enxerguei.
+     * ⚠️ Sai da configuração da eliminatória já normalizada, que é onde o campo é validado. */
+    top.politicaDaChave = (cfg && cfg.eliminatoria && cfg.eliminatoria.politicaDaChave) || 'repescagem';
 
     // v4.4.33: SEM fase classificatória → ELIMINAÇÃO DIRETA. Todos os inscritos entram no
     // bracket por sorteio; duplas já formadas (enrollment=teams) ou sorteadas (individual).
@@ -422,7 +446,11 @@
          * isso que esta linha aparece duas vezes: a eliminatória de fase única e a que vem depois da
          * classificatória são materializadas em pontos diferentes. Deixar uma sem a política faria o
          * torneio de duas fases trocar de desenho no meio. */
-        politicaDaChave: (cfg && cfg.politicaDaChave) || null,
+        /* ⚠️ Sai de `e0`, que é a configuração DA ELIMINATÓRIA já normalizada — não do `cfg` do
+         * topo, onde o campo não existe. Ler do lugar errado devolveria `null` sempre, e a escolha
+         * do organizador nunca chegaria ao sorteio: o motor saberia desenhar e a produção continuaria
+         * em repescagem, que é exatamente o defeito que esta leva veio fechar. */
+        politicaDaChave: (e0 && e0.politicaDaChave) || 'repescagem',
         source: { type: 'enrollment' },
         fixedPairs: isDupla, pairingStrategy: 'top', // eliminação direta: inscritos sorteados (sem ranking → semeadura neutra)
         mapping: _buildMapping(d0, e0.nomes, Math.max(e0.linhas, 2) * 8, e0.linhas),
@@ -588,7 +616,7 @@
          * isso que esta linha aparece duas vezes: a eliminatória de fase única e a que vem depois da
          * classificatória são materializadas em pontos diferentes. Deixar uma sem a política faria o
          * torneio de duas fases trocar de desenho no meio. */
-        politicaDaChave: (cfg && cfg.politicaDaChave) || null,
+        politicaDaChave: (e && e.politicaDaChave) || 'repescagem',   /* ver a nota da fase única */
         gruposCount: cfg.grupos, gruposClassified: cfg.classificados,
         source: {
           type: 'previous_phase', fromPhaseOffset: 1,

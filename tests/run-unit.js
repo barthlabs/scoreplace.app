@@ -67,6 +67,7 @@ const SUITES = [
   'tests/placar-aparece-sem-refresh.test.js',
   'tests/classificacao-nao-sai-com-repescagem-indefinida.test.js',
   'tests/app-check-fecha-a-porta-publica.test.js',
+  'tests/politica-da-chave-e-escolha-do-organizador.test.js',
   'tests/politica-chave-exige-escolha.test.js',
   'tests/casual-dupla-e-segundo-sacador.test.js',
   'tests/placar-melhor-de-3-nao-vira-um-set.test.js',

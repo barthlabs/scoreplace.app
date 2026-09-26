@@ -5793,8 +5793,32 @@ window._saveTournamentClickHandler = async function() {
         try {
           var _f2sport = (typeof window._currentSportName === 'function' && window._currentSportName()) || tourData.sport;
           var _f2out = window.FORMAT2.compileToPhases(_f2cfg, { sport: _f2sport, resultEntry: tourData.resultEntry, lateEnrollment: tourData.lateEnrollment, newMatchups: tourData.newMatchups });
+          /* ⛔⛔⛔ A POLÍTICA DA CHAVE NÃO MUDA DEPOIS DO SORTEIO.
+           *
+           * Ela decide a FORMA da chave — quem espera a estreia, quem volta depois de perder, onde
+           * cai a folga. Trocá-la com a chave já sorteada redesenha confrontos que as pessoas já
+           * viram e, pior, muda quem está dentro e quem está fora. É a mesma família do que acabou de
+           * acontecer na Confra, e ali foi por defeito; por configuração seria pior.
+           * ⇒ Antes do sorteio, vale o que o organizador escolher. Depois, o que está gravado manda —
+           * e o compilador não sobrescreve.
+           * ⚠️ A guarda é aqui, no SALVAR, e não na tela: tela pode ser contornada, e o mesmo save é
+           * usado por mais de um caminho. */
+          var _jaSorteou = !!(tourData.status && tourData.status !== 'open' && tourData.status !== 'draft') ||
+            (Array.isArray(tourData.matches) && tourData.matches.length > 0) ||
+            (Array.isArray(tourData.rounds) && tourData.rounds.length > 0);
+          var _politicaGravada = tourData.politicaDaChave;
           Object.assign(tourData, _f2out.topLevel);
           tourData.phases = _f2out.phases;
+          if (_jaSorteou && _politicaGravada && tourData.politicaDaChave !== _politicaGravada) {
+            tourData.politicaDaChave = _politicaGravada;
+            (tourData.phases || []).forEach(function (p) {
+              if (p && p.kind === 'elimination') p.politicaDaChave = _politicaGravada;
+            });
+            if (typeof showNotification === 'function') {
+              showNotification('A forma da chave não muda depois do sorteio',
+                'O torneio segue com o que já foi sorteado. Para trocar, seria preciso refazer a chave.', 'info');
+            }
+          }
           // O compilador recria phases[]. Preserva os limites que pertencem à
           // classificatória e aos controles próprios das fases posteriores.
           if (Array.isArray(tourData.roundBounds) && tourData.phases[0]) tourData.phases[0].roundBounds = tourData.roundBounds.slice();

@@ -80,8 +80,46 @@ let semTerceiroPorEstrutura = 0;
  * ⛔ Eu já tentei "resolver" isso mudando o desenho da sobra única, e o dono derrubou: o desenho está
  * certo, a TELA é que está incompleta. Leva 7.3. [[feedback_tela_parcial_se_diz_pronta]] */
 ok(semTerceiroPorEstrutura === 30,
-  '① ⚠️ 30 casos sem JOGO de 3º (penúltima com três) — o 3º existe, a TELA não o mostra: dívida da 7.3 (achei ' +
+  '① 30 casos sem JOGO de 3º, por estrutura: penúltima com três, sem 4º para disputar (achei ' +
   semTerceiroPorEstrutura + ')');
+
+/* ⛔⛔ E NESSES 30 CASOS O 3º COLOCADO EXISTE ASSIM MESMO — MEDIDO, não suposto.
+ *
+ * ⭐ CORREÇÃO DE UMA AFIRMAÇÃO MINHA. Eu havia escrito aqui que "o pódio fica sem 3º colocado" e
+ * registrado isso como dívida. Nunca medi. Medindo: a classificação DERIVA o 3º do perdedor da
+ * repescagem da penúltima rodada, e sai sem buraco nenhum. O caminho já existia e está anotado no
+ * próprio `bracket-logic` — quando não há jogo de 3º, os perdedores daquela rodada são ordenados pelos
+ * critérios do organizador.
+ * ⚠️ Afirmar defeito sem medir custa o mesmo que negar defeito sem medir: os dois mandam alguém
+ * trabalhar no lugar errado. [[feedback_nao_afirmar_causa_sem_medir]] */
+(function () {
+  const fs2 = require('fs');
+  const vm2 = require('vm');
+  const store = fs2.readFileSync(path.join(ROOT, 'js/store.js'), 'utf8');
+  const ini = store.indexOf('window._classifMapFromMatches = function');
+  const fim = store.indexOf('\nwindow._classifCompetitors', ini);
+  ok(ini > 0 && fim > ini, '① a porta da classificação foi achada em store.js');
+  if (ini < 0) return;
+  vm2.runInContext(store.slice(ini, fim), H.context || H.sandbox);
+  /* penúltima com TRÊS entrantes: 1 jogo normal + 1 repescagem, e depois a final */
+  const jogos = [
+    { id: 'R1-P1', round: 1, p1: 'A', p2: 'B', winner: 'A' },
+    { id: 'R1-P2', round: 1, p1: 'C', p2: 'D', winner: 'C' },
+    { id: 'R1-P3', round: 1, p1: 'E', p2: 'F', winner: 'E' },
+    { id: 'R2-P1', round: 2, p1: 'A', p2: 'C', winner: 'A' },
+    { id: 'R2-P2', round: 2, p1: 'E', p2: 'C', winner: 'E', tipo: 'repescagem' },
+    { id: 'R3-P1', round: 3, p1: 'A', p2: 'E', winner: 'A' },
+  ];
+  const mapa = W._classifMapFromMatches({ tiebreakers: null }, jogos) || {};
+  const posicoes = Object.values(mapa);
+  ok(posicoes.indexOf(3) !== -1,
+    '① ⭐⭐ SEM jogo de 3º, o 3º COLOCADO existe assim mesmo — derivado da chave');
+  ok(mapa.C === 3,
+    '① ⛔ e é quem perde a repescagem da penúltima rodada (achei ' + mapa.C + ')');
+  const ordenadas = posicoes.slice().sort(function (a, b) { return a - b; });
+  ok(JSON.stringify(ordenadas) === JSON.stringify([1, 2, 3, 4, 5, 6]),
+    '① ⛔ e a classificação sai SEM BURACO: ' + ordenadas.join(','));
+})();
 
 /* ── ② E ELA É JOGO ANTERIOR À FINAL, NÃO APÊNDICE ────────────────────────────
  * ⛔ O dono disse "é um jogo anterior a final que sempre deve estar previsto e CONTADO". Então tem de
