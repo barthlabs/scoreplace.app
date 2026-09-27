@@ -993,9 +993,16 @@
     window._tardiosAguardandoNovaChave = function () { return pendentesPorGrupo; };
   }
 
-  function integrarTardiosElim(t, pendentes) {
+  function integrarTardiosElim(t, pendentes, opts) {
     pendentesPorGrupo = {};
-    var res = { ok: true, aplicados: 0, entrantes: [], recusados: [], semMudanca: true };
+    /* instante ESTÁVEL da operação: quem chama de dentro de uma transação passa o seu, para a
+     * repetição da transação não produzir um documento diferente. */
+    var _instante = (opts && opts.agora) ? String(opts.agora) : new Date().toISOString();
+    /* ⛔⛔ `propostas` EXISTE PARA SER SOMADO AO `changed` DE QUEM GRAVA. Sem ele, na chave de folga
+     * `aplicados` fica 0, nenhum outro contador se move, o gravador conclui "nada mudou" e a proposta
+     * que eu acabei de escrever no torneio é DESCARTADA. Achado do revisor; eu tinha declarado a
+     * pendência como gravada quando ela morria na memória. Escrever no objeto não é persistir. */
+    var res = { ok: true, aplicados: 0, entrantes: [], recusados: [], propostas: 0, semMudanca: true };
     if (!t || !Array.isArray(t.matches) || !t.matches.length) return res;
 
     var elim = t.matches.filter(_ehElim);
@@ -1100,17 +1107,31 @@
         var _bruto = _afetados.map(function (c) { return c.id + '\u0001' + c.p1 + '\u0001' + c.p2; }).join('\u0002');
         var _rev = 0;
         for (var _i = 0; _i < _bruto.length; _i++) { _rev = ((_rev << 5) - _rev + _bruto.charCodeAt(_i)) | 0; }
+        var _inscritos = novos.map(function (p) {
+          return { uids: _uidsDe(p), nome: String((p && (p.name || p.nome)) || '') };
+        });
         t.tardiosPendentesPorLinha = t.tardiosPendentesPorLinha || {};
+        /* ⛔ IDEMPOTENTE POR REVISÃO + UIDS: sem isto, cada abertura da tela reescreveria a proposta
+         * com carimbo novo, o gravador veria "mudou" e o torneio levaria uma escrita por visita. */
+        var _atual = t.tardiosPendentesPorLinha[ns || ''];
+        var _assina = function (rev, ins) {
+          return String(rev) + '|' + (ins || []).map(function (x) { return (x.uids || []).join(','); }).sort().join(';');
+        };
+        if (_atual && _assina(_atual.revisaoDaChave, _atual.inscritos) === _assina(_rev, _inscritos)) {
+          return;   // mesma proposta, já gravada — nada a fazer e nada a sinalizar
+        }
+        /* ⛔ O INSTANTE VEM DE FORA quando quem chama tem um. Criar `new Date()` aqui é criar hora
+         * DENTRO da transação: se ela for repetida, o documento muda sozinho entre as tentativas. */
         t.tardiosPendentesPorLinha[ns || ''] = {
           linha: String(ns || ''),
           politica: 'bye',
-          criadaEm: new Date().toISOString(),
+          criadaEm: _instante,
           revisaoDaChave: String(_rev),
-          inscritos: novos.map(function (p) {
-            return { uids: _uidsDe(p), nome: String((p && (p.name || p.nome)) || '') };
-          }),
+          inscritos: _inscritos,
           confrontosAfetados: _afetados
         };
+        res.propostas++;
+        res.semMudanca = false;
         if (typeof window !== 'undefined' && typeof window._log === 'function') {
           window._log('[tardio] chave em FOLGA: ' + novos.length + ' inscrito(s) aguardando decisão do organizador — entrar exige refazer a chave');
         }

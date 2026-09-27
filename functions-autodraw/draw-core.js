@@ -675,7 +675,10 @@ function integrateLateEntries(t, opts) {
   // Grupos, Liga/Suíço e Rei/Rainha NÃO passam por aqui — têm caminho próprio.
   // ══════════════════════════════════════════════════════════════════════════
   let extra = 0, duplas = 0, duplasTier = 0, dissolved = 0, monarch = 0, repfill = 0;
-  let placed = 0; const recusas = [];
+  let placed = 0, propostas = 0; const recusas = [];
+  /* instante ESTÁVEL desta operação: usado por quem grava proposta pendente, para que repetir a
+   * transação não produza um documento diferente a cada tentativa. */
+  const _agoraDaOperacao = new Date().toISOString();
 
   // Quem pode entrar agora. NÃO reimplementar aqui: o coletor é o MESMO que o
   // caminho de Grupos usa (`window._collectLateCandidates`, tournaments-draw.js).
@@ -702,8 +705,13 @@ function integrateLateEntries(t, opts) {
       // checagem com outros helpers foi como as duas versões divergiram.
       const pend = _poolEspera();
       if (pend.length) {
-        const r = A.integrarTardiosElim(t, pend);
+        const r = A.integrarTardiosElim(t, pend, { agora: _agoraDaOperacao });
         placed = r.aplicados || 0;
+        /* ⛔⛔ PROPOSTA PENDENTE CONTA COMO MUDANÇA. Na chave de FOLGA o tardio não entra — a chave
+         * não é mexida — então `aplicados` fica 0 e nenhum outro contador se move. Sem somar isto ao
+         * `changed` lá embaixo, o gravador conclui "nada mudou" e a proposta escrita no torneio é
+         * DESCARTADA: o organizador nunca fica sabendo que alguém está esperando. */
+        propostas = r.propostas || 0;
         (r.recusados || []).forEach(function (x) { recusas.push(x); });
         // CADASTRO: quem entrou na chave deixa de ser espera e vira INSCRITO.
         // Sem isto o tardio jogava mas seguia aparecendo na Lista de Espera (bug
@@ -763,7 +771,7 @@ function integrateLateEntries(t, opts) {
 
   const redrawn = placed, healed = 0, dedup = 0, lowLand = 0;
 
-  const changed = (extra > 0 || duplas > 0 || dissolved > 0 || monarch > 0 || repfill > 0 || redrawn > 0 || dedup > 0 || healed > 0 || wlClean > 0 || lowLand > 0);
+  const changed = (extra > 0 || duplas > 0 || dissolved > 0 || monarch > 0 || repfill > 0 || redrawn > 0 || dedup > 0 || healed > 0 || wlClean > 0 || lowLand > 0 || propostas > 0);
   if (changed) {
     try { if (typeof win._computeMemberUids === 'function') win._computeMemberUids(t); } catch (e) {}
     t.updatedAt = new Date().toISOString();
@@ -774,7 +782,7 @@ function integrateLateEntries(t, opts) {
   // `recusas` NO RETORNO: quando o recálculo é recusado (cruzar potência de 2 com
   // jogo já disputado), o organizador precisa SABER e decidir — lista de espera ou
   // refazer descartando. Engolir em silêncio foi o pecado da 1.5.x.
-  return { ok: true, changed: changed, extra: extra, duplas: duplas, duplasTier: duplasTier, dissolved: dissolved, monarch: monarch, repfill: repfill, placed: redrawn, wlClean: wlClean, lowLand: lowLand, recusas: recusas };
+  return { ok: true, changed: changed, extra: extra, duplas: duplas, duplasTier: duplasTier, dissolved: dissolved, monarch: monarch, repfill: repfill, placed: redrawn, wlClean: wlClean, lowLand: lowLand, propostas: propostas, recusas: recusas };
 }
 
 // ── FORMAR dupla na LISTA DE ESPERA + INTEGRAR, ATÔMICO no servidor (CF-only). Espelha

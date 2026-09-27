@@ -240,6 +240,41 @@ if (!_pend.erro) {
     ok(!!p2 && p2.revisaoDaChave !== prop.revisaoDaChave,
       '⑥ ⛔⛔ chave diferente ⇒ revisão diferente (senão a proposta velha passaria por vigente)');
   }
+  /* ── ⑦ A PROPOSTA CHEGA AO GRAVADOR ──────────────────────────────────────
+   * ⛔⛔ Achado do revisor e defeito meu: escrever no objeto NÃO é persistir. Na folga o tardio não
+   * entra, `aplicados` fica 0, nenhum outro contador se move — e quem grava decide pelo agregado
+   * "mudou alguma coisa?". Sem um contador próprio, a proposta era escrita e jogada fora, e eu tinha
+   * declarado que estava gravada. */
+  const _r2 = (function () {
+    const t2 = { id: 'tq', politicaDaChave: 'bye',
+      matches: A.build(36, 'simples', { participantes: gente(36), politicaDaChave: 'bye' }).matches };
+    const out = A.integrarTardiosElim(t2, [{ name: 'T37', uid: 'uid-t37', presente: true }]);
+    return { out: out, t: t2 };
+  })();
+  ok(_r2.out && _r2.out.propostas === 1,
+    '⑦ ⛔⛔ o integrador CONTA a proposta criada (achei ' + ((_r2.out || {}).propostas) + ') — é isso que faz o gravador gravar');
+  ok(_r2.out && _r2.out.aplicados === 0,
+    '⑦ e segue sem aplicar nada na chave (aplicados=' + ((_r2.out || {}).aplicados) + ')');
+  ok(_r2.out && _r2.out.semMudanca === false,
+    '⑦ ⛔ e não se declara "sem mudança" — havia o que gravar');
+  /* ⛔ IDEMPOTENTE: repetir com o mesmo tardio e a mesma chave não pode gerar escrita nova, senão
+   * cada visita à tela custa uma gravação no torneio. */
+  const _r3 = A.integrarTardiosElim(_r2.t, [{ name: 'T37', uid: 'uid-t37', presente: true }]);
+  ok(_r3 && _r3.propostas === 0,
+    '⑦ ⛔⛔ repetir a MESMA proposta não conta de novo (achei ' + ((_r3 || {}).propostas) + ')');
+  /* ⛔ mas um tardio DIFERENTE é proposta diferente e tem de contar */
+  const _r4 = A.integrarTardiosElim(_r2.t, [{ name: 'T38', uid: 'uid-t38', presente: true }]);
+  ok(_r4 && _r4.propostas === 1,
+    '⑦ e um inscrito diferente gera proposta nova (achei ' + ((_r4 || {}).propostas) + ')');
+  /* ⛔ INSTANTE ESTÁVEL: quem chama de dentro de uma transação passa o seu, para a repetição da
+   * transação não produzir documento diferente. */
+  const _t5 = { id: 'tr', politicaDaChave: 'bye',
+    matches: A.build(36, 'simples', { participantes: gente(36), politicaDaChave: 'bye' }).matches };
+  A.integrarTardiosElim(_t5, [{ name: 'T39', uid: 'uid-t39', presente: true }], { agora: '2026-01-01T00:00:00.000Z' });
+  const _p5 = _t5.tardiosPendentesPorLinha && _t5.tardiosPendentesPorLinha[Object.keys(_t5.tardiosPendentesPorLinha)[0]];
+  ok(_p5 && _p5.criadaEm === '2026-01-01T00:00:00.000Z',
+    '⑦ ⛔ o instante vem de quem chama, não é criado dentro da operação');
+
   /* ⛔ E NADA foi redesenhado: a proposta é registro, não ação. */
   const antes = A.build(36, 'simples', { participantes: gente(36), politicaDaChave: 'bye' }).matches;
   const chave = (ms) => ms.filter(function (m) { return m && (m.p1 || m.p2); })
