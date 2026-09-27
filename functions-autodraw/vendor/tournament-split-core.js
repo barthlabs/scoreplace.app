@@ -64,6 +64,33 @@
    * a `PESADOS` — foi essa confusão que fez a trava do rito recusar `grupos`. */
   var PARTES = PESADOS.concat(['matches', 'grupos']);
 
+  /* ⛔⛔⛔ AS PARTES QUE TODO TORNEIO GUARDA FORA — CONSTANTE, NÃO DADO.
+   *
+   * Ordem do dono, 27/set/2026: _"nao é para ter nao dividido. nao é para ter marcador (já que
+   * todos sao divididos)"_.
+   *
+   * Até hoje cada documento carregava a SUA lista, e o código perguntava "este torneio está
+   * dividido?". A pergunta não existe mais: todo torneio nasce dividido (2.3.113) e os que faltavam
+   * foram migrados (2.3.114) — medido, 78 de 78. Uma pergunta cuja resposta é sempre a mesma não é
+   * pergunta: é um caminho morto esperando alguém entrar nele por engano.
+   * ⇒ quem precisa saber quais partes moram fora pergunta AQUI. Um lugar, uma resposta.
+   *
+   * ⚠️ E O CAMPO `_semPesados` CONTINUA SENDO GRAVADO — por compatibilidade, não por decisão.
+   * O app das lojas está em 2.3.95 e o código dele decide pelo campo: CONFERIDO no commit daquela
+   * versão. Tirar o campo do documento hoje faria aquele app tratar todo torneio como inteiro e
+   * mostrar ZERO INSCRITOS, porque num torneio dividido o elenco não está no documento.
+   * ⇒ o campo morre quando a nativa subir. Até lá ele é lastro para quem já instalou, e NINGUÉM
+   * decide por ele deste lado. [[project_torneio_nasce_dividido]] */
+  var PARTES_CANONICAS = ['matches', 'participants', 'opponentHistory'];
+
+  /* Quais partes deste torneio moram fora. Lê o campo quando ele existe — documento gravado por
+   * versão anterior — e cai na constante quando não existe. NUNCA devolve vazio: vazio significaria
+   * "inteiro", e inteiro deixou de existir. */
+  function partesDe(t) {
+    var d = t && t._semPesados;
+    return (Array.isArray(d) && d.length) ? d.slice() : PARTES_CANONICAS.slice();
+  }
+
   function _arr(x) { return Array.isArray(x) ? x : []; }
   function _clone(x) { return x === undefined ? undefined : JSON.parse(JSON.stringify(x)); }
 
@@ -575,7 +602,11 @@
   function montarDoBanco(config, lerColecao) {
     if (!config) throw new Error('[split] montarDoBanco: sem config');
     var fora = Array.isArray(config._semPesados) ? config._semPesados : null;
-    if (!fora || !fora.length) return Promise.resolve(config);   // inteiro: nada a montar
+    /* ⛔ NÃO EXISTE MAIS "inteiro: nada a montar". Documento sem o campo é documento de versão
+     * anterior, não torneio inteiro — e montar pelas partes canônicas devolve o certo nos dois
+     * casos. Devolver o config cru aqui era o caminho por onde um torneio dividido voltava sem
+     * elenco: `participants: []`, sem erro, com a tela mostrando ninguém. */
+    if (!fora || !fora.length) fora = PARTES_CANONICAS.slice();
     var partes = { config: config };
     var i = 0;
     function proxima() {
@@ -598,7 +629,8 @@
               chaveDoApontamento: chaveDoApontamento,
               colecaoDaParte: colecaoDaParte, chaveDoGrupo: chaveDoGrupo, montarDoBanco: montarDoBanco,
               jogosQueMudaram: jogosQueMudaram,
-              PESADOS: PESADOS, PARTES: PARTES, canonico: canonico, iguais: iguais };
+              PESADOS: PESADOS, PARTES: PARTES, PARTES_CANONICAS: PARTES_CANONICAS,
+              partesDe: partesDe, canonico: canonico, iguais: iguais };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (raiz) { raiz._tSplit = api; }
 })(typeof window !== 'undefined' ? window : null);

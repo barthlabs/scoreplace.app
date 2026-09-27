@@ -499,7 +499,12 @@ function _canManageMonarchGroup(t, groupName, phaseIndex, uid) {
 /* O estado ANTES do motor mexer — é contra ele que `jogosQueMudaram` compara pra saber
  * quais jogos gravar. Só clona quando vale: torneio inteiro no documento não precisa. */
 function _antesDoMotor(t) {
-  if (!t || !Array.isArray(t._semPesados) || !t._semPesados.length) return null;
+  /* ⛔⛔ "torneio inteiro no documento não precisa" deixou de existir: todo torneio nasce dividido
+   * (2.3.113) e os 37 que faltavam foram migrados (2.3.114) — 78 de 78, medido. Documento sem o
+   * campo é de versão anterior, não torneio inteiro, e devolver `null` aqui fazia a comparação de
+   * "quais jogos mudaram" não ter contra o que comparar: nenhum jogo era gravado, em silêncio.
+   * [[project_torneio_nasce_dividido]] */
+  if (!t) return null;
   return JSON.parse(JSON.stringify(t));
 }
 

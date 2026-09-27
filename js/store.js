@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.3.114';
+window.SCOREPLACE_VERSION = '2.3.115';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -796,10 +796,23 @@ window._spNameForLetzplay = function (handle, fallback) {
  *      topo não, senão vira busca em laço a cada eco.
  * Muta `t` (marca `_faltamPesados`/`_faltaOQue`) e devolve true se falta algo. */
 window._marcaPartesQueFaltam = function (t) {
-  if (!t || !Array.isArray(t._semPesados) || !t._semPesados.length) {
-    if (t) { delete t._faltamPesados; delete t._faltaOQue; }
-    return false;
-  }
+  if (!t) return false;
+  /* ⛔⛔ "TORNEIO INTEIRO" NÃO EXISTE MAIS. Todo torneio nasce dividido (2.3.113) e os 37 que
+   * faltavam foram migrados (2.3.114): medido em produção, 78 de 78. Documento sem o campo é
+   * documento gravado por versão anterior — e tratá-lo como inteiro era o caminho por onde um
+   * torneio dividido passava por completo, com o elenco vazio e sem erro nenhum.
+   * ⇒ as partes vêm da FONTE ÚNICA, que nunca devolve vazio. [[project_torneio_nasce_dividido]] */
+  /* ⚠️ AQUI O CAMPO CONTINUA MANDANDO, E ISSO É MEDIDO — NÃO É ESQUECIMENTO.
+   * Eu tinha trocado por "sem campo ⇒ trate como dividido", para acabar com a pergunta "está
+   * dividido?". Seis suítes ficaram vermelhas e explicaram por quê: esta função NÃO recebe só
+   * documento de torneio. Recebe RESUMO e CARTÃO — objetos que nunca tiveram partes fora e que,
+   * tratados como divididos, passam a dizer "falta carregar" onde a resposta certa é ZERO. O efeito
+   * na tela seria cartão em carregamento eterno em vez de "0 inscritos".
+   * ⇒ a pergunta que esta função responde não é "o torneio está dividido?" — é "eu tenho as partes
+   * em mãos?", e essa vale para qualquer objeto. A fonte única (`partesDe`) é para quem SABE que
+   * está com um documento: o montador e o servidor. [[project_torneio_nasce_dividido]] */
+  var _foraDaqui = Array.isArray(t._semPesados) ? t._semPesados : [];
+  if (!_foraDaqui.length) { delete t._faltamPesados; delete t._faltaOQue; return false; }
   var _tam = function (x) {
     if (Array.isArray(x)) return x.length;
     if (x && typeof x === 'object') return Object.keys(x).length;
@@ -830,7 +843,7 @@ window._marcaPartesQueFaltam = function (t) {
     return false;
   };
   var falta = false, oQue = [];
-  t._semPesados.forEach(function (nome) {
+  _foraDaqui.forEach(function (nome) {
     var tenho = _quantoTenho(nome);
     var n = _conta(nome);
     if (n != null) {
@@ -985,7 +998,23 @@ window._preservaPartesMontadas = function (novo, velho) {
  * de quem carregou tudo é destruir o trabalho da pessoa para proteger um dado que está lá.
  */
 window._partesFaltandoComCerteza = function (t) {
-  if (!t || !Array.isArray(t._semPesados) || !t._semPesados.length) return [];
+  if (!t) return [];
+  /* ⛔⛔ "TORNEIO INTEIRO" NÃO EXISTE MAIS. Todo torneio nasce dividido (2.3.113) e os 37 que
+   * faltavam foram migrados (2.3.114): medido em produção, 78 de 78. Documento sem o campo é
+   * documento gravado por versão anterior — e tratá-lo como inteiro era o caminho por onde um
+   * torneio dividido passava por completo, com o elenco vazio e sem erro nenhum.
+   * ⇒ as partes vêm da FONTE ÚNICA, que nunca devolve vazio. [[project_torneio_nasce_dividido]] */
+  /* ⚠️ AQUI O CAMPO CONTINUA MANDANDO, E ISSO É MEDIDO — NÃO É ESQUECIMENTO.
+   * Eu tinha trocado por "sem campo ⇒ trate como dividido", para acabar com a pergunta "está
+   * dividido?". Seis suítes ficaram vermelhas e explicaram por quê: esta função NÃO recebe só
+   * documento de torneio. Recebe RESUMO e CARTÃO — objetos que nunca tiveram partes fora e que,
+   * tratados como divididos, passam a dizer "falta carregar" onde a resposta certa é ZERO. O efeito
+   * na tela seria cartão em carregamento eterno em vez de "0 inscritos".
+   * ⇒ a pergunta que esta função responde não é "o torneio está dividido?" — é "eu tenho as partes
+   * em mãos?", e essa vale para qualquer objeto. A fonte única (`partesDe`) é para quem SABE que
+   * está com um documento: o montador e o servidor. [[project_torneio_nasce_dividido]] */
+  var _foraDaqui2 = Array.isArray(t._semPesados) ? t._semPesados : [];
+  if (!_foraDaqui2.length) return [];
   var _tam = function (x) {
     if (Array.isArray(x)) return x.length;
     if (x && typeof x === 'object') return Object.keys(x).length;
@@ -1006,7 +1035,7 @@ window._partesFaltandoComCerteza = function (t) {
     return _tam(t[nome]);
   };
   var fora = [];
-  t._semPesados.forEach(function (nome) {
+  _foraDaqui2.forEach(function (nome) {
     var n = null;
     if (t._nPartes && typeof t._nPartes[nome] === 'number') n = t._nPartes[nome];
     else if (nome === 'matches' && typeof t._nJogos === 'number') n = t._nJogos;
@@ -13364,6 +13393,7 @@ window.AppStore = {
     if (this._jogosSub && this._jogosSub.id === id) return;   // já ouvindo este
     this.pararDeOuvirJogos();
     var t = (this.tournaments || []).find(function (x) { return x && String(x.id) === id; });
+    /* ⚠️ idem: aqui chega resumo, não só documento — ver a nota em `_marcaPartesQueFaltam` */
     var fora = (t && Array.isArray(t._semPesados)) ? t._semPesados : [];
     if (!fora.length) return;      // torneio inteiro: o doc já traz tudo
     var S = window._tSplit;

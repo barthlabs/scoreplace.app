@@ -116,8 +116,12 @@ ok('⛔ 1 jogo de 115 em memória NÃO passa por completo', parcial._faltamPesad
  * `window._marcaPartesQueFaltam`, que os DOIS caminhos (ouvinte e cache) chamam. A
  * asserção continua a mesma: a conta percorre a LISTA, não nomes escritos à mão. */
 const trecho = store.slice(_m0, _m1);
-ok('⛔ a conta percorre `_semPesados` (nome escrito à mão foi o defeito)',
-  /_semPesados\.forEach\(function \(nome\) \{[\s\S]*?_quantoTenho\(nome\)/.test(trecho),
+/* ⚠️ 2.3.115: a lista ganhou nome próprio (`_foraDaqui`) quando a fonte das partes foi para um
+ * lugar só. A asserção NÃO mudou de intenção — continua exigindo que a conta percorra a LISTA e
+ * não nomes escritos à mão — mas deixou de casar pelo nome do campo, que é detalhe, e passa a
+ * casar pelo que importa: percorrer algo e perguntar quanto se tem DAQUELE nome. */
+ok('⛔ a conta percorre a LISTA de partes (nome escrito à mão foi o defeito)',
+  /(_semPesados|_foraDaqui)\.forEach\(function \(nome\) \{[\s\S]*?_quantoTenho\(nome\)/.test(trecho),
   'com `if (fora.indexOf(\'matches\')...)` solto, a parte seguinte fica de fora de novo');
 ok('⭐ e a conta é UMA só — o caminho do cache chama a mesma função',
   /_loadFromCache\(\)[\s\S]*?window\._marcaPartesQueFaltam\(t\)[\s\S]*?_montaPesadosQueFaltam\(/.test(store),
