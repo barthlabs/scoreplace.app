@@ -849,7 +849,21 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       // (renderMatchCard), não o cabeçalho. Pedido do dono: a data aparece no botão
       // _inclusive nas novidades_. A supressão do monarch continua valendo pra AÇÃO
       // (propor é único por grupo); ela só não vale mais pra INFORMAÇÃO.
-      if (m.scheduledAt) {
+      /* ⛔⛔ JOGO JÁ DISPUTADO NÃO MOSTRA DATA MARCADA. Relato do dono, 27/set/2026, jogo 120:
+       * o card dizia "Jogado em 26/09 08:33" no topo e, embaixo, um botão "📅 18/09 às 11:00" —
+       * a data em que se combinou jogar, já passada e já cumprida. Duas informações sobre o mesmo
+       * jogo, uma delas obsoleta, e a obsoleta com cara de botão.
+       * ⛔ O DEFEITO ERA DE ORDEM: este bloco devolvia a data ANTES da linha que descarta jogo
+       * decidido, logo ele sobrevivia ao resultado. A ordem existia por um motivo real — fazer a
+       * data aparecer nas Novidades, onde o botão do grupo não chega — e esse motivo continua
+       * valendo para jogo AINDA NÃO disputado. O que faltava era o outro lado da borda.
+       * ⇒ o critério é o MESMO que acende "Jogado em" no topo do card
+       * (`_matchCardTimelineTextHtml`): havendo resultado, a linha do tempo manda, e o combinado
+       * some. Não pode haver duas datas discordando no mesmo card.
+       * [[feedback_a_defesa_vaza_pela_borda]] */
+      var _jaDisputado = !!(m.resultAt || m.completedAt || m.winner || m.wo ||
+        (m.pendingResult && m.pendingResult.proposedAt));
+      if (m.scheduledAt && !_jaDisputado) {
         var open = 'event.stopPropagation(); window._schOpenMatch(\'' + _attr(t.id) + '\',\'' + _attr(m.id) + '\')';
         return _chipData(m.scheduledAt, m.scheduledKind, open);
       }
