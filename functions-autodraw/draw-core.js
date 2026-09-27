@@ -776,7 +776,11 @@ function integrateLateEntries(t, opts) {
   const changed = (extra > 0 || duplas > 0 || dissolved > 0 || monarch > 0 || repfill > 0 || redrawn > 0 || dedup > 0 || healed > 0 || wlClean > 0 || lowLand > 0 || propostas > 0);
   if (changed) {
     try { if (typeof win._computeMemberUids === 'function') win._computeMemberUids(t); } catch (e) {}
-    t.updatedAt = new Date().toISOString();
+    /* ⛔ O MESMO INSTANTE DA OPERAÇÃO, não uma hora nova. Esta função roda DENTRO da transação, e o
+     * Firestore repete a transação quando há disputa: com `new Date()` aqui, cada tentativa gravaria
+     * um `updatedAt` diferente, então duas tentativas da MESMA operação produzem documentos
+     * diferentes — e quem compara "mudou?" por carimbo passa a ver mudança que não houve. */
+    t.updatedAt = _agoraDaOperacao;
   }
   // `placed` NO RETORNO (v1.3.146): antes o contador do fallback (`redrawn`) NÃO era devolvido —
   // por isso o diag do dono mostrou `changed:true` com tudo 0 e o redraw passou despercebido.
