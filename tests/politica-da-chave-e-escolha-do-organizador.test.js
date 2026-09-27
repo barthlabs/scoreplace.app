@@ -31,9 +31,18 @@ console.log('\n──── a política da chave é escolha do organizador ─�
 /* ── ① A TELA OFERECE OS TRÊS ──────────────────────────────────────────────── */
 const ui = semCom(fs.readFileSync(path.join(ROOT, 'js/views/format2-ui.js'), 'utf8'));
 ok(/window\._f2PoliticaDaChave = function/.test(ui), '① a tela tem o setter da escolha');
+/* ⛔⛔ A TELA OFERECE OS TRÊS. Decisão do dono em 26/set/2026 que encerrou cinco rodadas de impasse:
+ * _"tendo 3o, ok. pode ter 3. 1 passa. 2 disputam e passa o ganhador"_.
+ * ⇒ na sobra única a penúltima rodada PODE ter três; o 3º colocado é quem perde o jogo dela. O que
+ * sempre existe é o 3º COLOCADO, não um card "3º contra 4º" — que ali é impossível, porque não há 4º.
+ * Eu tinha tirado a sobra única da tela por achar que as duas ordens dele não cabiam juntas; cabem,
+ * e a que estava errada era a minha leitura de que "sempre tem 3º" exigia um JOGO rotulado. */
 ['repescagem', 'bye', 'sobra_unica'].forEach(function (v) {
   ok(ui.indexOf("'" + v + "'") !== -1, '① e oferece "' + v + '"');
 });
+var _pols = (ui.match(/\['(repescagem|bye|sobra_unica)',/g) || []);
+ok(_pols.length === 3,
+  '① ⛔ exatamente TRÊS opções na tela (achei ' + _pols.length + ')');
 ok(/_f2PoliticaDaChave\('/.test(ui), '① os botões chamam o setter');
 /* ⛔ e a escolha NÃO aparece na dupla eliminatória: ali ela não muda nada */
 const iDupla = ui.indexOf('if (!e.dupla) {');
@@ -121,7 +130,7 @@ ok(jogos('bye') + 1 === 36 && pl('bye').esperamNoPlayin === 28,
   '⑥ o motor confirma: folga com 36 duplas = 36 jogos e 28 esperam');
 ok(/36 jogos/.test(trecho('bye')) && /28 delas/.test(trecho('bye')),
   '⑥ e a tela diz exatamente isso');
-/* sobra única: 36 jogos, 2 folgas e 1 sobra que joga (não há jogo de 3º: penúltima com três) */
+/* sobra única: 36 jogos, 2 folgas e 1 sobra que joga */
 ok(jogos('sobra_unica') === 36 && pl('sobra_unica').byes === 2 && pl('sobra_unica').repescagens === 1,
   '⑥ ⛔ o motor faz 36 jogos, DUAS folgas e UMA sobra jogando (achei ' +
   jogos('sobra_unica') + '/' + pl('sobra_unica').byes + '/' + pl('sobra_unica').repescagens + ')');
@@ -129,6 +138,23 @@ ok(/36 jogos, duas folgas/.test(trecho('sobra_unica')),
   '⑥ ⛔⛔ e a tela diz DUAS folgas — dizia três, e três é o que o motor NÃO faz');
 ok(!/3 folgas/.test(trecho('sobra_unica')),
   '⑥ e a promessa velha não voltou');
+/* ⛔ e o rótulo EXPLICA a penúltima de três, que é a decisão do dono — sem isso a tela oferece um
+ * desenho cujo 3º lugar o organizador não tem como prever. */
+ok(/uma passa direto/.test(trecho('sobra_unica')) && /3º/.test(trecho('sobra_unica')),
+  '⑥ ⛔⛔ e diz o que acontece quando a penúltima tem três: uma passa, duas jogam, quem perde é 3ª');
+
+/* ⑦ REPESCAGEM E FOLGA TÊM SEMPRE 4 NA PENÚLTIMA — nelas o JOGO de 3º contra 4º sempre existe.
+ * ⛔ Medido, não prometido. A sobra única fica FORA desta asserção de propósito: ali a penúltima pode
+ * ter três, e o 3º colocado sai do perdedor daquele jogo — ordem do dono, registrada acima. */
+[36, 37, 26, 28, 12, 7, 5].forEach(function (n) {
+  ['repescagem', 'bye'].forEach(function (pol) {
+    var rs = C.plano(n, 'simples', pol).rodadas.filter(function (r) { return r.fase === 'VC'; });
+    var penultima = rs.length >= 2 ? rs[rs.length - 2] : null;
+    ok(!!penultima && penultima.E === 4,
+      '⑦ ' + pol + ' com ' + n + ': a penúltima rodada tem 4 (achei ' +
+      (penultima ? penultima.E : 'nenhuma') + ') — sem isso não há 3º contra 4º');
+  });
+});
 
 console.log('\n' + (fail ? '✗ ' + fail + ' falha(s), ' : '✅ ') + pass + ' verificações');
 process.exit(fail ? 1 : 0);

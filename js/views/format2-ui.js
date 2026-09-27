@@ -862,7 +862,16 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
            * a sobra enfrenta o perdedor do jogo daquela rodada. Medido: 36 jogos, 2 folgas, 1 sobra
            * jogando. Prometer no rótulo o que o motor não faz é o defeito que este projeto mais repete.
            * [[feedback_nao_prometer_no_botao_o_que_nao_se_pode_conferir]] */
-          ['sobra_unica', 'Sobra única', 'Ninguém volta e ninguém espera a estreia: cada rodada com número ímpar tem UMA sobra. Ela folga, exceto perto da final — aí ela joga, porque folga em semifinal não existe. Todas jogam o primeiro dia e o torneio não cresce: com 36 duplas são 36 jogos, duas folgas no meio e uma sobra jogando na penúltima rodada.']
+          /* ⛔⛔ O 3º LUGAR NA SOBRA ÚNICA — DECISÃO DO DONO, 26/set/2026, que encerra cinco rodadas
+           * de impasse na revisão: _"tendo 3o, ok. pode ter 3. 1 passa. 2 disputam e passa o
+           * ganhador"_.
+           * ⇒ a penúltima rodada PODE ter três: a sobra passa direto, os outros dois jogam e o
+           * vencedor vai à final. O 3º colocado é quem perde esse jogo. O que sempre existe é o 3º
+           * COLOCADO — não um card rotulado "disputa de 3º contra 4º", que seria impossível ali
+           * porque não existe 4º. Nas outras duas políticas a penúltima fecha em 4 e o jogo existe.
+           * ⛔ Isto NÃO reabre a rodada de entrada: continua sem alvo de potência de 2 e sem ninguém
+           * esperando a estreia. Medido: 36 → 18 → 9 → 5 → 3 → 2. */
+          ['sobra_unica', 'Sobra única', 'Ninguém volta e ninguém espera a estreia: cada rodada com número ímpar tem UMA sobra. Ela folga, exceto perto da final — aí ela joga, porque folga em semifinal não existe. Todas jogam o primeiro dia e o torneio não cresce: com 36 duplas são 36 jogos, duas folgas no meio e uma sobra jogando na penúltima rodada. Quando a penúltima rodada tem três, uma passa direto, as outras duas jogam e quem perde fica em 3º.']
         ];
         eb += '<div style="margin-top:14px;font-size:0.72rem;color:var(--text-muted);margin-bottom:5px;">' +
           'Quando o número de equipes não fecha a chave</div>';
