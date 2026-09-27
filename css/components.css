@@ -50,6 +50,15 @@ input[type="time"]::-webkit-calendar-picker-indicator { cursor: pointer; opacity
    linha, é o CONTAINER que se adapta (flex-wrap / reduzir a data, não cortar a hora). */
 input[type="time"] { min-width: 5.75rem !important; }  /* "23:00" + ícone de relógio */
 input[type="date"] { min-width: 8.5rem !important; }   /* "dd/mm/aaaa" + ícone de calendário */
+/* ⛔ DATA PROPOSTA PELO ORGANIZADOR NÃO PODE CORTAR NO CELULAR (27/set/2026).
+   O `type=date` nativo do iOS decide sozinho mostrar "27 de set. de 2026"; CSS não
+   consegue forçá-lo a `dd/mm/aa`, e o ano quebrava em duas linhas. Este campo é curto
+   e explícito (`dd/mm/aa`), convertido para ISO antes de salvar; a hora nativa segue
+   em `hh:mm`. Assim os dois cabem na mesma linha, tanto no celular quanto no desktop.
+   [[regressao_data_proposta_organizador_nao_trunca_no_celular]] */
+@media (max-width: 600px) {
+  .sp-org-schedule-datetime .sp-org-date-short { min-width: 0; }
+}
 /* ⭐ 2.0.1 — LINHA COMPACTA (data + hora + ✕ na MESMA linha). Ordem do dono, olhando o
    "Término da fase": _"esse x deveria estar na mesma linha da data e hora (dá pra diminuir
    um pouco os campos para ele caber ali)"_. Sem isto o ✕ descia sozinho pra linha de baixo

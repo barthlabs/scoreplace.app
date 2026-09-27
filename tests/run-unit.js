@@ -779,6 +779,7 @@ const SUITES = [
   // marcou. Cobre também o buraco do Rei/Rainha, que aparecia SEM data nas Novidades.
   'tests/grade-estimada-e-propor-datas.test.js',
   'tests/propor-datas-organizador-ve-todos-os-grupos.test.js',
+  'tests/data-proposta-organizador-celular.test.js',
   // 2.1.98 — o gate dos DOIS chips deixou de ser "é a rodada atual?" e passou a ser "as
   // duas duplas existem?". Medido em produção: com o gate de rodada, 0 dos 99 jogos da
   // Fase 2 da Confra passavam, e nenhum participante via botão nenhum. Este teste roda o

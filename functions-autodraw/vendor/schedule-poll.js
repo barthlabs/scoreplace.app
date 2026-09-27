@@ -1077,11 +1077,12 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     // preserva a própria data para facilitar a alteração.
     var ymd = isNaN(ms) ? _schYmdNoFuso(Date.now(), t) : _schYmdNoFuso(ms, t);
     var hm = isNaN(ms) ? '09:00' : _schHmNoFuso(ms, t);
+    var dataCurta = /^\d{4}-\d{2}-\d{2}$/.test(ymd) ? ymd.slice(8, 10) + '/' + ymd.slice(5, 7) + '/' + ymd.slice(2, 4) : '';
     return '<div style="margin-top:14px;background:rgba(59,130,246,0.10);border:1px solid rgba(59,130,246,0.35);border-radius:12px;padding:12px;">' +
       '<div style="font-size:0.78rem;font-weight:800;color:var(--sp-c-60a5fa,#60a5fa);margin-bottom:2px;">🛠️ Organizador</div>' +
       '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:9px;">Apontar a data/hora aqui DEFINE o jogo na hora e encerra as propostas. Dá pra desfazer.</div>' +
-      '<div style="display:flex;gap:8px;margin-bottom:9px;">' +
-        '<input type="date" id="sch-org-date" value="' + _esc(ymd) + '" style="flex:1;min-width:0;background:var(--bg-darker,#0b1220);border:1px solid var(--sp-b-255-255-255-014,rgba(255,255,255,0.14));border-radius:8px;padding:8px;color:var(--text-bright);font-size:0.85rem;box-sizing:border-box;">' +
+      '<div class="sp-org-schedule-datetime" style="display:flex;gap:8px;margin-bottom:9px;">' +
+        '<input type="text" inputmode="numeric" autocomplete="off" pattern="[0-9]{2}/[0-9]{2}/[0-9]{2}" maxlength="8" aria-label="Data (dd/mm/aa)" class="sp-org-date-short" id="sch-org-date" value="' + _esc(dataCurta) + '" placeholder="dd/mm/aa" style="flex:1;min-width:0;background:var(--bg-darker,#0b1220);border:1px solid var(--sp-b-255-255-255-014,rgba(255,255,255,0.14));border-radius:8px;padding:8px;color:var(--text-bright);font-size:0.85rem;box-sizing:border-box;">' +
         '<input type="time" id="sch-org-time" value="' + _esc(hm) + '" style="width:96px;flex-shrink:0;background:var(--bg-darker,#0b1220);border:1px solid var(--sp-b-255-255-255-014,rgba(255,255,255,0.14));border-radius:8px;padding:8px;color:var(--text-bright);font-size:0.85rem;box-sizing:border-box;">' +
       '</div>' +
       '<button type="button" onclick="window._schOrgDefinir(\'' + _attr(t.id) + '\',\'' + _attr(m.id) + '\')" class="btn btn-shine" style="width:100%;background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff;font-weight:800;border:none;border-radius:10px;padding:10px;font-size:0.85rem;">📌 Definir data e hora</button>' +
@@ -1095,7 +1096,10 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var t = _findT(tId); if (!t || !_isOrg(t)) return;
     var m = _schFindMatch(t, matchId); if (!m) return;
     var d = document.getElementById('sch-org-date'), h = document.getElementById('sch-org-time');
-    var ymd = d && d.value, hm = (h && h.value) || '';
+    var dataDigitada = String((d && d.value) || '').trim();
+    var dataPartes = dataDigitada.match(/^(\d{2})\/(\d{2})\/(\d{2})$/);
+    var ymd = dataPartes ? ('20' + dataPartes[3] + '-' + dataPartes[2] + '-' + dataPartes[1]) : '';
+    var hm = (h && h.value) || '';
     if (!/^\d{4}-\d{2}-\d{2}$/.test(String(ymd || '')) || !/^\d{2}:\d{2}$/.test(String(hm))) {
       if (typeof showNotification === 'function') showNotification('Data inválida', 'Escolha a data e a hora.', 'warning');
       return;

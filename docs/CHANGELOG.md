@@ -1,3 +1,8 @@
+## 2.3.122 — 27/set/2026 (data curta no agendamento da organização)
+
+- **A data proposta pela organização não quebra mais no celular.** O controle nativo do iPhone escolhia mostrar a data por extenso e o ano caía numa segunda linha. O campo agora é explícito: `dd/mm/aa`; a hora continua `hh:mm`.
+- O valor é convertido para o formato interno somente ao salvar. A prova guarda formato, acessibilidade e conversão, sem alterar os pacotes nativos.
+
 ## 2.3.121 — 27/set/2026 (reabrir o mesmo cartão do torneio)
 
 - **Cartão → detalhe → Voltar → mesmo cartão volta a abrir o detalhe.** Um snapshot parcial podia conter um slot nulo na lista de inscrições. O histórico de atividades tentava ler a data desse slot, lançava uma exceção e o roteador mantinha a dashboard anterior, embora a URL já apontasse para o torneio.
