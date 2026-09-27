@@ -3982,7 +3982,41 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
     var _cong = t && t.classifFinalDaLinha && t.classifFinalDaLinha[bracketKey];
     if (Array.isArray(_cong) && _cong.length) {
       var _mapaCong = {};
-      _cong.forEach(function (x, i) { if (x && x.name) _mapaCong[x.name] = (x.pos != null ? x.pos : i + 1); });
+      /* ⛔⛔ O RETRATO É CONGELADO; O NOME NÃO. Pergunta do dono, 27/set/2026: _"a lista da
+       * classificacao tambem usa uid?"_. Não usava — e aqui é onde isso machuca de verdade.
+       *
+       * A POSIÇÃO é fato e não muda. O NOME muda depois: substituição de jogador, troca de
+       * displayName, dupla refeita. MEDIDO no mesmo dia, na Confra: "Marisa Roriz / Marilia
+       * Rodrigues" virou "Selena Kolberg / Marilia Rodrigues" quando o dono aplicou um W.O. com
+       * substituição. Um retrato preso ao rótulo velho passaria a exibir alguém que já não existe
+       * na chave — e ninguém tem como perceber, porque a posição continua certa.
+       *
+       * ⇒ a POSIÇÃO vem do retrato; o NOME é resolvido AGORA pelos uids que o retrato guardou.
+       * Sem uid guardado (retrato anterior a 2.3.111) cai no rótulo, que é tudo que há.
+       * ⚠️ Isto NÃO recalcula a classificação — recalcular é o que faria a ordem publicada mudar
+       * sozinha, e é justamente o que o congelamento existe para impedir. Só o rótulo é reidratado.
+       * [[feedback_uid_controls_everything_name_only_ficticio]] */
+      var _rotuloAtualPorUids = function (uids) {
+        if (!Array.isArray(uids) || !uids.length) return null;
+        var alvo = uids.map(String).slice().sort().join(',');
+        var achado = null;
+        (lm || []).some(function (m) {
+          if (!m) return false;
+          return ['p1', 'p2'].some(function (sl) {
+            var u = (typeof window._slotUids === 'function') ? window._slotUids(m, sl) : [];
+            if (!u || !u.length) return false;
+            if (u.map(String).slice().sort().join(',') !== alvo) return false;
+            if (m[sl] && m[sl] !== 'TBD') { achado = m[sl]; return true; }
+            return false;
+          });
+        });
+        return achado;
+      };
+      _cong.forEach(function (x, i) {
+        if (!x || !x.name) return;
+        var nome = _rotuloAtualPorUids(x.uids) || x.name;
+        _mapaCong[nome] = (x.pos != null ? x.pos : i + 1);
+      });
       return _renderClassifFromMap(_mapaCong, color, '📊 Classificação final', false);
     }
     var map = _lineClassifMap(bracketKey);
