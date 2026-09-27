@@ -3791,7 +3791,9 @@ exports.resolvePendingLateBye = onCall(async (request) => {
 
     // redesenha pelo motor canônico — a MESMA porta do resto, com o interruptor da decisão
     delete mapa[linha];
-    const r = integrateLateFn(t, { agora: agoraIso, decisaoDoOrganizador: true });
+    /* ⛔⛔ A LINHA VAI JUNTO. Sem ela o integrador varreria todas e confirmar a Ouro redesenharia a
+     * Prata, que tem decisão própria pendente e cujo organizador não foi perguntado. */
+    const r = integrateLateFn(t, { agora: agoraIso, decisaoDoOrganizador: true, linhaDaDecisao: linha });
     if (!r || !r.ok) {
       throw _drawFail('failed-precondition', (r && r.reason) || 'Não foi possível refazer a chave.', { tId, linha });
     }

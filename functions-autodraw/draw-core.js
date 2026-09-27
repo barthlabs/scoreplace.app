@@ -710,7 +710,9 @@ function integrateLateEntries(t, opts) {
         const r = A.integrarTardiosElim(t, pend, {
           agora: _agoraDaOperacao,
           /* só a callable de decisão do organizador liga isto; o caminho automático nunca */
-          decisaoDoOrganizador: !!(opts && opts.decisaoDoOrganizador)
+          decisaoDoOrganizador: !!(opts && opts.decisaoDoOrganizador),
+          /* a decisão vale para UMA linha; sem isto, confirmar uma redesenharia as outras */
+          linhaDaDecisao: (opts && opts.linhaDaDecisao != null) ? String(opts.linhaDaDecisao) : null
         });
         placed = r.aplicados || 0;
         /* ⛔⛔ PROPOSTA PENDENTE CONTA COMO MUDANÇA. Na chave de FOLGA o tardio não entra — a chave

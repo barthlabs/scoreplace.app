@@ -1082,7 +1082,15 @@
        * autorizar quem pede e conferir que a proposta ainda vale. Nenhum caminho automático o liga —
        * inscrição, sorteio e abertura de tela continuam caindo na recusa abaixo, que é o que impede
        * confronto publicado de mudar sozinho. */
-      if (_politicaAqui === 'bye' && !(opts && opts.decisaoDoOrganizador === true)) {
+      /* ⛔⛔ A DECISÃO É DE UMA LINHA, NÃO DO TORNEIO. Achado do revisor e defeito meu: eu ligava o
+       * interruptor e o integrador seguia varrendo TODAS as linhas — confirmar a Ouro redesenharia a
+       * Prata junto, que tem decisão própria pendente e cujo organizador não foi perguntado.
+       * ⇒ o interruptor vale só para a linha nomeada em `linhaDaDecisao`; toda outra linha de folga
+       * continua caindo na recusa, com a pendência dela intacta. */
+      var _estaLinha = String(ns || '');
+      var _decidida = !!(opts && opts.decisaoDoOrganizador === true) &&
+        String((opts && opts.linhaDaDecisao) || '') === _estaLinha;
+      if (_politicaAqui === 'bye' && !_decidida) {
         pendentesPorGrupo[ns || ''] = (pendentesPorGrupo[ns || ''] || []).concat(novos);
         /* ⛔⛔ A PENDÊNCIA TEM DE SOBREVIVER À ABA. Eu a deixava só numa função de `window`, que some
          * quando a pessoa fecha a página: o organizador nunca mais saberia que alguém está esperando,
