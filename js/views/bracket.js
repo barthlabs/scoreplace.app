@@ -3822,13 +3822,16 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
       return true;
     });
     if (_nsDaAba == null) return '';
+    /* ⛔ a CHAVE do mapa não é o namespace: o Firestore recusa campo de nome vazio, então a chave
+     * única é gravada sob um rótulo seguro. Comparar com o namespace cru não acharia nada. */
+    var _chaveDaAba = String(_nsDaAba) === '' ? '_principal' : String(_nsDaAba);
 
     /* ⛔⛔ A PENDÊNCIA SEM DESTINO TAMBÉM PRECISA APARECER. Ela nasce quando o candidato podia ser de
      * mais de uma linha e o dado não diz qual — então nenhuma aba a reclama pelo namespace, e ela
      * ficaria invisível para sempre: o inscrito esperando e ninguém sabendo. Achado do revisor.
      * ⇒ mostro-a UMA VEZ, na primeira chave desenhada, e ela só oferece ARQUIVAR: escolher a linha
      * por ela seria inventar a resposta que falta. */
-    var _semDestino = mapa.__sem_destino__;
+    var _semDestino = mapa._sem_destino;
     var extra = '';
     if (_semDestino && !_avisouSemDestino) {
       _avisouSemDestino = true;
@@ -3846,7 +3849,7 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
           '</div>' +
           '<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">' +
           '<button class="btn btn-sm btn-ghost" style="font-size:.76rem;" ' +
-          'onclick="window._decidirTardioNaFolga(&#39;__sem_destino__&#39;,&#39;&#39;,&#39;cancelar&#39;)">Arquivar pedido</button>' +
+          'onclick="window._decidirTardioNaFolga(&#39;_sem_destino&#39;,&#39;&#39;,&#39;cancelar&#39;)">Arquivar pedido</button>' +
           '</div></div>';
       }
     }
@@ -3854,7 +3857,7 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
     var chave = null, prop = null;
     Object.keys(mapa).forEach(function (k) {
       if (prop) return;
-      if (String(k) !== String(_nsDaAba)) return;
+      if (String(k) !== _chaveDaAba) return;
       if (mapa[k]) { prop = mapa[k]; chave = k; }
     });
     if (!prop) return extra;

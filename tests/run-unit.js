@@ -193,6 +193,7 @@ const SUITES = [
   'tests/dashboard-resultados-tempo-real.test.js',
   'tests/l7-form-confirmation-browser.test.js',
   'tests/l7-creation-replay-emulator.test.js',
+  'tests/decisao-do-tardio-na-folga-emulador.test.js',
   'tests/l7-creation-replay-behavior.test.js',
   'tests/test-utils.js',
   // A FAIXA da revisão do GPT (scripts/revisar-com-gpt.sh) é uma REGRA sobre os arquivos, e
@@ -2093,6 +2094,7 @@ const MEXEM_NO_REPO = [
  *      (`lsof -ti :8097`) antes de suspeitar do paralelismo. */
 const PRENDEM_PORTA = [
   'tests/l7-creation-replay-emulator.test.js',
+  'tests/decisao-do-tardio-na-folga-emulador.test.js',   // sobe o próprio emulador do Firestore
   'functions-autodraw/test-corrida-slot-emu.js',   // corrida real no Firestore Emulator
   'tests/deploy-liga-firebase-admin.test.js',      // roda a corrida acima dentro da cópia extraída
   // Abre dois emuladores em sequência; sob carga paralela o Firebase CLI pode esperar

@@ -976,6 +976,18 @@
   }
   /* a identidade da INSCRIÇÃO (não de cada pessoa): conjunto ordenado das chaves dela. É isto que
    * distingue (compartilhado, A) de (compartilhado, B) — duas duplas com um membro em comum. */
+  /* ⛔⛔ O FIRESTORE RECUSA CAMPO COM NOME VAZIO. O namespace da chave única é '' — e gravar
+   * `tardiosPendentesPorLinha['']` faz a escrita inteira estourar ("Element at index 0 should not be
+   * an empty string"). Ou seja: em torneio de chave única a pendência NUNCA seria gravada, e isso só
+   * apareceu quando o teste passou a bater no Firestore de verdade. Teste de unidade com objeto em
+   * memória aceitava '' sem reclamar.
+   * ⇒ a CHAVE do mapa é um rótulo seguro; o namespace verdadeiro fica no campo `linha`, que é o que
+   * o motor usa. Os dois não podem ser confundidos. */
+  /* ⚠️ E NÃO PODE SER CERCADO POR DOIS SUBLINHADOS: o Firestore RESERVA esses nomes
+   * ("field name '__principal__' is reserved"). Um sublinhado só passa. Os dois limites — nome
+   * vazio proibido e nome reservado — só apareceram batendo no banco de verdade. */
+  var CHAVE_PRINCIPAL = '_principal';
+  function _chaveDaLinha(ns) { return String(ns || '') === '' ? CHAVE_PRINCIPAL : String(ns); }
   function _assinaturaDaInscricao(p) {
     return _chavesDeIdentidade(p).map(String).sort().join('|');
   }
@@ -1133,7 +1145,7 @@
         if (!novos.length) return;
       }
       if (_politicaAqui === 'bye' && !_decidida) {
-        pendentesPorGrupo[ns || ''] = (pendentesPorGrupo[ns || ''] || []).concat(novos);
+        pendentesPorGrupo[_chaveDaLinha(ns)] = (pendentesPorGrupo[_chaveDaLinha(ns)] || []).concat(novos);
         /* ⛔⛔ A PENDÊNCIA TEM DE SOBREVIVER À ABA. Eu a deixava só numa função de `window`, que some
          * quando a pessoa fecha a página: o organizador nunca mais saberia que alguém está esperando,
          * e o inscrito sumiria sem ninguém decidir nada. Apontado pelo revisor, e é o mesmo defeito
@@ -1173,7 +1185,8 @@
         t.tardiosPendentesPorLinha = t.tardiosPendentesPorLinha || {};
         /* ⛔ IDEMPOTENTE POR REVISÃO + UIDS: sem isto, cada abertura da tela reescreveria a proposta
          * com carimbo novo, o gravador veria "mudou" e o torneio levaria uma escrita por visita. */
-        var _atual = t.tardiosPendentesPorLinha[ns || ''];
+        var _chaveMapa = _chaveDaLinha(ns);
+        var _atual = t.tardiosPendentesPorLinha[_chaveMapa];
         /* ⛔⛔ A ASSINATURA USA AS CHAVES, NÃO OS UIDS. Defeito meu, reproduzido pelo revisor: dois
          * inscritos manuais distintos têm AMBOS `uids: []`, então trocar o manual A pelo B produzia
          * a mesma assinatura — a proposta de A ficava lá e a de B nunca era gravada, em silêncio.
@@ -1189,7 +1202,7 @@
         }
         /* ⛔ O INSTANTE VEM DE FORA quando quem chama tem um. Criar `new Date()` aqui é criar hora
          * DENTRO da transação: se ela for repetida, o documento muda sozinho entre as tentativas. */
-        t.tardiosPendentesPorLinha[ns || ''] = {
+        t.tardiosPendentesPorLinha[_chaveMapa] = {
           linha: String(ns || ''),
           politica: 'bye',
           criadaEm: _instante,
@@ -1293,7 +1306,7 @@
      * uma resposta errada em duas chaves. [[feedback_prova_para_pintar_nao_serve_para_recusar]] */
     if (t.tardiosPendentesPorLinha) {
       var _mapa = t.tardiosPendentesPorLinha;
-      var _linhas = Object.keys(_mapa).filter(function (k) { return k !== '__sem_destino__'; });
+      var _linhas = Object.keys(_mapa).filter(function (k) { return k !== '_sem_destino'; });
       var _emQuantas = {};
       _linhas.forEach(function (k) {
         ((_mapa[k] && _mapa[k].inscritos) || []).forEach(function (x) {
@@ -1327,7 +1340,7 @@
           else prop.inscritos = fica;
         });
         if (_semDestino.length) {
-          _mapa.__sem_destino__ = {
+          _mapa._sem_destino = {
             linha: null, semDestino: true, politica: 'bye', criadaEm: _instante,
             revisaoDaChave: '', inscritos: _semDestino, confrontosAfetados: []
           };

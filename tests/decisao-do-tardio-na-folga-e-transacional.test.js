@@ -110,7 +110,12 @@ ok(automaticos.length >= 2 && comFlag.length === 0,
  * cujo organizador não foi perguntado. Chave publicada de outra linha mudando por tabela.
  * ⚠️ Aqui não basta ler o código: o que importa é o COMPORTAMENTO com duas linhas pendentes. */
 ok(/linhaDaDecisao/.test(adCod), '④b o integrador conhece a linha decidida');
-ok(/linhaDaDecisao: linha/.test(motor), '④b e a decisão manda QUAL linha foi decidida');
+/* ⛔ ao motor vai o NAMESPACE (`prop.linha`), não a chave do mapa: são coisas diferentes desde que
+ * a chave precisou de um rótulo seguro — o Firestore recusa campo de nome vazio, e o namespace da
+ * chave única é ''. Mandar a chave faria o motor procurar uma linha que não existe. */
+ok(/linhaDaDecisao: nsDaLinha/.test(motor), '④b e a decisão manda o NAMESPACE da linha decidida');
+ok(/const nsDaLinha = String\(prop\.linha/.test(motor),
+  '④b ⛔ tirado da própria proposta, não da chave do mapa');
 (function () {
   const H = require(path.join(ROOT, 'tests/headless.js'));
   ['chaves.js', 'chaves-adapter.js'].forEach(function (f) { try { H.load(f); } catch (e) {} });
@@ -211,15 +216,15 @@ ok(/linhaDaDecisao: linha/.test(motor), '④b e a decisão manda QUAL linha foi 
   const t = { id: 'ta', politicaDaChave: 'bye', matches: marca(mA, 'OURO').concat(marca(mB, 'PRATA')) };
   A.integrarTardiosElim(t, [{ name: 'X', uid: 'ux', presente: true }]);
   const mapa = t.tardiosPendentesPorLinha || {};
-  const porLinha = Object.keys(mapa).filter(function (k) { return k !== '__sem_destino__'; });
+  const porLinha = Object.keys(mapa).filter(function (k) { return k !== '_sem_destino'; });
   ok(porLinha.length === 0,
     '④c ⛔⛔ candidato ambíguo NÃO fica em nenhuma proposta de linha (achei ' + porLinha.length + ')');
-  ok(!!mapa.__sem_destino__,
+  ok(!!mapa._sem_destino,
     '④c ⛔ ele vai para uma pendência SEM DESTINO, em vez de sumir ou ser duplicado');
-  ok(mapa.__sem_destino__ && mapa.__sem_destino__.semDestino === true &&
-     mapa.__sem_destino__.linha === null,
+  ok(mapa._sem_destino && mapa._sem_destino.semDestino === true &&
+     mapa._sem_destino.linha === null,
     '④c e ela se declara sem destino, para a tela não a tratar como se fosse de uma linha');
-  const ins = (mapa.__sem_destino__ && mapa.__sem_destino__.inscritos) || [];
+  const ins = (mapa._sem_destino && mapa._sem_destino.inscritos) || [];
   ok(ins.length === 1 && (ins[0].uids || []).indexOf('ux') >= 0,
     '④c com quem está esperando');
 })();
@@ -250,27 +255,30 @@ ok(/linhaDaDecisao: linha/.test(motor), '④b e a decisão manda QUAL linha foi 
     '④d pela identidade manual, que é estável — não pelo nome, que envelhece');
   /* ⛔ e a confirmação com essa chave realmente integra */
   const antes = t.matches.length;
+  /* ⛔ `linhaDaDecisao` é o NAMESPACE (`prop.linha`), não a chave do mapa (`k`) — a chave única é
+   * gravada sob um rótulo seguro porque o Firestore recusa nome de campo vazio. */
   const out = A.integrarTardiosElim(t, [manual],
-    { decisaoDoOrganizador: true, linhaDaDecisao: k, assinaturasDaDecisao: [ks.map(String).sort().join('|')] });
+    { decisaoDoOrganizador: true, linhaDaDecisao: prop.linha,
+      assinaturasDaDecisao: [ks.map(String).sort().join('|')] });
   ok(out && out.aplicados === 1,
     '④d ⛔⛔ e confirmar FUNCIONA para quem não tem conta (aplicados=' + ((out || {}).aplicados) + ')');
   ok(t.matches.length !== antes || out.aplicados === 1, '④d a chave foi refeita');
 })();
 
 /* ── ④e A PENDÊNCIA SEM DESTINO TEM SAÍDA ──────────────────────────────────
- * ⛔⛔ Achado do revisor: eu criava `__sem_destino__` e não havia como resolvê-la. A tela só casava
+ * ⛔⛔ Achado do revisor: eu criava `_sem_destino` e não havia como resolvê-la. A tela só casava
  * namespace de chave real e a callable exigia revisão não vazia — que ela não tem, porque não
  * pertence a chave nenhuma. O inscrito ficava visível e sem decisão possível, para sempre.
  * ⇒ ela é ARQUIVÁVEL: aceita `cancelar` sem revisão, e recusa `confirmar`, porque confirmar exigiria
  * saber a linha — que é exatamente o que falta. */
-ok(motor.indexOf("const SEM_DESTINO = '__sem_destino__';") >= 0, '④e a regra conhece a pendência sem destino');
+ok(motor.indexOf("const SEM_DESTINO = '_sem_destino';") >= 0, '④e a regra conhece a pendência sem destino');
 ok(/ehSemDestino && acao !== 'cancelar'[\s\S]{0,200}Só é possível arquivá-lo/.test(motor),
   '④e ⛔⛔ ela só aceita ARQUIVAR — confirmar exigiria saber a linha');
 ok(/if \(!revisao && !ehSemDestino\)/.test(motor),
   '④e ⛔ e a revisão obrigatória não vale para ela, que nasce sem confrontos para assinar');
 ok(/!ehSemDestino && String\(prop\.revisaoDaChave\) !== revisao/.test(motor),
   '④e nem a conferência de revisão lá dentro');
-ok(/__sem_destino__/.test(brCodParaSemDestino()),
+ok(/_sem_destino/.test(brCodParaSemDestino()),
   '④e ⛔⛔ e a TELA a mostra, com botão de arquivar — senão ela ficaria invisível');
 function brCodParaSemDestino() {
   return fs.readFileSync(path.join(ROOT, 'js/views/bracket.js'), 'utf8');
@@ -464,13 +472,13 @@ ok(/já não está na lista de espera/.test(motor),
   /* ── caso 8: a pendência sem destino só arquiva ─────────────────────────── */
   (function () {
     const t = { id: 't', matches: [], tardiosPendentesPorLinha: {
-      __sem_destino__: { linha: null, semDestino: true, revisaoDaChave: '', inscritos: [{ chaves: ['manual:x'], nome: 'X' }], confrontosAfetados: [] }
+      _sem_destino: { linha: null, semDestino: true, revisaoDaChave: '', inscritos: [{ chaves: ['manual:x'], nome: 'X' }], confrontosAfetados: [] }
     } };
-    const nao = D(t, { linha: '__sem_destino__', revisao: '', acao: 'confirmar', agoraIso: 'i' });
+    const nao = D(t, { linha: '_sem_destino', revisao: '', acao: 'confirmar', agoraIso: 'i' });
     ok(nao.ok === false && /Só é possível arquivá-lo/.test(String(nao.mensagem || '')),
       '⑧ ⛔⛔ sem chave definida NÃO confirma — escolher a linha seria inventar');
-    const sim = D(t, { linha: '__sem_destino__', revisao: '', acao: 'cancelar', agoraIso: 'i' });
-    ok(sim.ok === true && sim.mudou === true && !t.tardiosPendentesPorLinha.__sem_destino__,
+    const sim = D(t, { linha: '_sem_destino', revisao: '', acao: 'cancelar', agoraIso: 'i' });
+    ok(sim.ok === true && sim.mudou === true && !t.tardiosPendentesPorLinha._sem_destino,
       '⑧ ⭐ mas ARQUIVA sem revisão — é a saída dela, e sem isso ela ficava presa para sempre');
   })();
 
@@ -506,8 +514,10 @@ ok(/window\._souOrganizador\(t\)/.test(blocoUi),
 ok(/_decidirTardioNaFolga/.test(blocoUi), '⑤ e os botões chamam a decisão');
 /* ⛔⛔ CASAMENTO EXATO, não por trecho: numa linha cujo namespace é PREFIXO de outra, o `indexOf`
  * mostrava e decidia a pendência errada — o organizador refaria a chave que não quis. */
-ok(/String\(k\) !== String\(_nsDaAba\)/.test(blocoUi),
-  '⑤ ⛔⛔ a pendência é casada por IGUALDADE do namespace');
+ok(/String\(k\) !== _chaveDaAba/.test(blocoUi),
+  '⑤ ⛔⛔ a pendência é casada por IGUALDADE da chave da linha');
+ok(/_chaveDaAba = String\(_nsDaAba\) === '' \? '_principal'/.test(blocoUi),
+  '⑤ ⛔ e a chave única usa o mesmo rótulo seguro com que foi gravada');
 ok(!/indexOf\(String\(bracketKey\)\)/.test(blocoUi),
   '⑤ ⛔ e a comparação por trecho não existe mais');
 ok(brCod.indexOf('_tardioPendenteHtml(bracketKey, color) +') > 0,

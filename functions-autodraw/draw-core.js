@@ -1038,7 +1038,7 @@ function decidirTardioNaFolga(t, opts) {
   const acao = String(o.acao || '');
   const agoraIso = String(o.agoraIso || '');
   const integrar = o.integrar;
-  const SEM_DESTINO = '__sem_destino__';
+  const SEM_DESTINO = '_sem_destino';
   const ehSemDestino = (linha === SEM_DESTINO);
   const nao = (codigo, mensagem, extra) => Object.assign({ ok: false, codigo, mensagem }, extra || {});
 
@@ -1101,8 +1101,13 @@ function decidirTardioNaFolga(t, opts) {
   }
 
   if (typeof integrar !== 'function') return nao('failed-precondition', 'Motor de chave indisponível.');
+  /* ⛔ AO MOTOR VAI O NAMESPACE, NÃO A CHAVE DO MAPA. São coisas diferentes desde que a chave
+   * precisou de um rótulo seguro (o Firestore recusa campo de nome vazio, e o namespace da chave
+   * única é ''). Mandar a chave faria o motor procurar uma linha chamada "_principal", que não
+   * existe, e nada seria aplicado — recusa silenciosa com cara de "ninguém está na espera". */
+  const nsDaLinha = String(prop.linha == null ? '' : prop.linha);
   const r = integrar(t, {
-    agora: agoraIso, decisaoDoOrganizador: true, linhaDaDecisao: linha, assinaturasDaDecisao: assinaturas
+    agora: agoraIso, decisaoDoOrganizador: true, linhaDaDecisao: nsDaLinha, assinaturasDaDecisao: assinaturas
   });
   if (!r || !r.ok) return nao('failed-precondition', (r && r.reason) || 'Não foi possível refazer a chave.');
 
