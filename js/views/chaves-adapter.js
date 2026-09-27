@@ -959,6 +959,21 @@
   function _ehElim(m) {
     return !!(m && (BRACKETS_ELIM[m.bracket] || m.isThirdPlace));
   }
+  /* ⛔⛔ IDENTIDADE DE QUEM NÃO TEM CONTA. O uid é a identidade quando existe — mas o organizador
+   * inscreve gente à mão, e essa gente nasce com `manualParticipantId` e NENHUM uid. Uma proposta
+   * que só guarda uids deixa o inscrito manual num beco: ele aparece esperando e o botão de
+   * confirmar recusa, porque não há uid para nomear. Achado do revisor.
+   * ⇒ a chave de identidade é: uid quando há; senão o id manual, que é estável e único; e só em
+   * último caso o nome, que é rótulo e envelhece — mas é melhor que nada para não perder a pessoa.
+   * ⚠️ Isto NÃO afrouxa a régua do uid: onde há uid, é ele que vale e é ele que casa. */
+  function _chavesDeIdentidade(p) {
+    var us = _uidsDe(p);
+    if (us.length) return us.map(function (u) { return 'uid:' + String(u); });
+    var mid = p && (p.manualParticipantId || p.manualId);
+    if (mid) return ['manual:' + String(mid)];
+    var nm = p && (p.name || p.nome || p.displayName);
+    return nm ? ['nome:' + String(nm)] : [];
+  }
   function _uidsDe(p) {
     if (!p) return [];
     if (Array.isArray(p.uids) && p.uids.length) return p.uids.map(String);
@@ -1095,11 +1110,11 @@
        * Ouro (reproduzido pelo revisor com duas linhas). Nomear a linha não bastava.
        * ⇒ com a decisão em curso, só entra quem estiver na lista de uids dela. Quem não estiver é
        * descartado deste lote, venha de onde vier. */
-      if (_decidida && Array.isArray(opts.uidsDaDecisao) && opts.uidsDaDecisao.length) {
+      if (_decidida && Array.isArray(opts.chavesDaDecisao) && opts.chavesDaDecisao.length) {
         var _permitidos = {};
-        opts.uidsDaDecisao.forEach(function (u) { _permitidos[String(u)] = 1; });
+        opts.chavesDaDecisao.forEach(function (k) { _permitidos[String(k)] = 1; });
         novos = novos.filter(function (p) {
-          return _uidsDe(p).some(function (u) { return _permitidos[String(u)]; });
+          return _chavesDeIdentidade(p).some(function (k) { return _permitidos[String(k)]; });
         });
         if (!novos.length) return;
       }
@@ -1134,7 +1149,12 @@
         var _rev = 0;
         for (var _i = 0; _i < _bruto.length; _i++) { _rev = ((_rev << 5) - _rev + _bruto.charCodeAt(_i)) | 0; }
         var _inscritos = novos.map(function (p) {
-          return { uids: _uidsDe(p), nome: String((p && (p.name || p.nome)) || '') };
+          return {
+            uids: _uidsDe(p),
+            /* ⛔ quem não tem conta também precisa ser nomeável, senão a confirmação nunca funciona */
+            chaves: _chavesDeIdentidade(p),
+            nome: String((p && (p.name || p.nome)) || '')
+          };
         });
         t.tardiosPendentesPorLinha = t.tardiosPendentesPorLinha || {};
         /* ⛔ IDEMPOTENTE POR REVISÃO + UIDS: sem isto, cada abertura da tela reescreveria a proposta
@@ -1252,7 +1272,7 @@
       var _emQuantas = {};
       _linhas.forEach(function (k) {
         ((_mapa[k] && _mapa[k].inscritos) || []).forEach(function (x) {
-          (x.uids || []).forEach(function (u) {
+          (x.chaves || (x.uids || []).map(function (u) { return 'uid:' + u; })).forEach(function (u) {
             (_emQuantas[String(u)] = _emQuantas[String(u)] || {})[k] = 1;
           });
         });
@@ -1268,11 +1288,13 @@
           if (!prop) return;
           var fica = [], sai = [];
           (prop.inscritos || []).forEach(function (x) {
-            var amb = (x.uids || []).some(function (u) { return _ambiguos[String(u)]; });
+            var amb = (x.chaves || (x.uids || []).map(function (u) { return 'uid:' + u; }))
+              .some(function (u) { return _ambiguos[String(u)]; });
             (amb ? sai : fica).push(x);
           });
           sai.forEach(function (x) {
-            if (!_semDestino.some(function (y) { return String((y.uids || []).join(',')) === String((x.uids || []).join(',')); })) {
+            var _ass = function (z) { return String((z.chaves || z.uids || []).join(',')); };
+            if (!_semDestino.some(function (y) { return _ass(y) === _ass(x); })) {
               _semDestino.push(x);
             }
           });

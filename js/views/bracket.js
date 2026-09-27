@@ -3800,6 +3800,9 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
    * estava com a tela aberta na hora. */
   /* escape do MESMO jeito do resto do app; nome de dupla é texto de usuário e vai para HTML */
   function _safeTxt(v) { return window._safeHtml ? window._safeHtml(String(v == null ? '' : v)) : String(v == null ? '' : v); }
+  /* uma vez por desenho: a pendência sem destino não é de nenhuma linha, então não pode repetir em
+   * cada aba de chave. */
+  var _avisouSemDestino = false;
   function _tardioPendenteHtml(bracketKey, color) {
     if (!t || !t.tardiosPendentesPorLinha) return '';
     if (typeof window._souOrganizador !== 'function' || !window._souOrganizador(t)) return '';
@@ -3819,23 +3822,53 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
       return true;
     });
     if (_nsDaAba == null) return '';
+
+    /* ⛔⛔ A PENDÊNCIA SEM DESTINO TAMBÉM PRECISA APARECER. Ela nasce quando o candidato podia ser de
+     * mais de uma linha e o dado não diz qual — então nenhuma aba a reclama pelo namespace, e ela
+     * ficaria invisível para sempre: o inscrito esperando e ninguém sabendo. Achado do revisor.
+     * ⇒ mostro-a UMA VEZ, na primeira chave desenhada, e ela só oferece ARQUIVAR: escolher a linha
+     * por ela seria inventar a resposta que falta. */
+    var _semDestino = mapa.__sem_destino__;
+    var extra = '';
+    if (_semDestino && !_avisouSemDestino) {
+      _avisouSemDestino = true;
+      var nomesSD = (_semDestino.inscritos || []).map(function (x) {
+        return _safeTxt(String((x && x.nome) || '')) || 'sem nome';
+      });
+      if (nomesSD.length) {
+        extra = '<div style="margin:10px 0;padding:10px 12px;border-radius:8px;' +
+          'background:var(--sp-bg-subtle,rgba(148,163,184,.12));' +
+          'border-left:3px solid ' + (color || 'var(--text-muted)') + ';">' +
+          '<div style="font-weight:700;font-size:.85rem;color:var(--text-primary);">⏳ Inscrição sem chave definida</div>' +
+          '<div style="font-size:.78rem;color:var(--text-muted);margin-top:3px;">' +
+          _safeTxt(nomesSD.join(', ')) + ' — não dá para saber em qual chave esta inscrição entraria. ' +
+          'Defina a categoria dela e inscreva de novo, ou arquive este pedido.' +
+          '</div>' +
+          '<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">' +
+          '<button class="btn btn-sm btn-ghost" style="font-size:.76rem;" ' +
+          'onclick="window._decidirTardioNaFolga(&#39;__sem_destino__&#39;,&#39;&#39;,&#39;cancelar&#39;)">Arquivar pedido</button>' +
+          '</div></div>';
+      }
+    }
+
     var chave = null, prop = null;
     Object.keys(mapa).forEach(function (k) {
       if (prop) return;
       if (String(k) !== String(_nsDaAba)) return;
       if (mapa[k]) { prop = mapa[k]; chave = k; }
     });
-    if (!prop) return '';
+    if (!prop) return extra;
     var nomes = (prop.inscritos || []).map(function (x) {
       return _safeTxt(String((x && x.nome) || '')) || 'sem nome';
     });
-    if (!nomes.length) return '';
+    if (!nomes.length) return extra;
     var quantos = (prop.confrontosAfetados || []).length;
     /* ⛔ os dois valores vão DENTRO de um atributo HTML: aspas simples viram &#39; para não fechar o
      * atributo, e a chave/revisão são dados nossos (id de linha e número), não texto de usuário. */
     var _attr = function (v) { return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/'/g, '&#39;').replace(/"/g, '&quot;').replace(/</g, '&lt;'); };
     var _k = _attr(chave), _rev = _attr(prop.revisaoDaChave || '');
-    return '<div style="margin:10px 0;padding:10px 12px;border-radius:8px;' +
+    return extra +
+      '<div style="margin:10px 0;padding:10px 12px;border-radius:8px;' +
       'background:var(--sp-bg-subtle,rgba(148,163,184,.12));' +
       'border-left:3px solid ' + (color || 'var(--text-muted)') + ';">' +
       '<div style="font-weight:700;font-size:.85rem;color:var(--text-primary);">⏳ Inscrição esperando decisão</div>' +

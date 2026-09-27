@@ -50,9 +50,9 @@ ok(/String\(m\.p1 == null \? '' : m\.p1\) !== String\(\(c && c\.p1\) \|\| ''\)/.
 ok(/String\(m\.p2 == null \? '' : m\.p2\) !== String\(\(c && c\.p2\) \|\| ''\)/.test(dentro),
   '① e p2 também');
 /* ⛔ e nomeia QUEM entra, não só a linha */
-ok(/uidsDaDecisao/.test(dentro) && /prop\.inscritos/.test(dentro),
-  '① ⛔⛔ os uids saem da PRÓPRIA proposta — o core recolhe a espera inteira do torneio');
-ok(/uidsDaDecisao: uidsDaDecisao/.test(dentro), '① e vão para o motor');
+ok(/chavesDaDecisao/.test(dentro) && /prop\.inscritos/.test(dentro),
+  '① ⛔⛔ a identidade de quem entra sai da PRÓPRIA proposta — o core recolhe a espera inteira');
+ok(/chavesDaDecisao: chavesDaDecisao/.test(dentro), '① e vai para o motor');
 ok(/sem-pendencia/.test(dentro),
   '① ⭐ pendência já resolvida devolve "nada mudou" em vez de estourar — é a segunda confirmação simultânea');
 
@@ -77,8 +77,8 @@ ok(/decisaoDoOrganizador: true/.test(dentro),
 const core = fs.readFileSync(path.join(ROOT, 'functions-autodraw/draw-core.js'), 'utf8');
 ok(/decisaoDoOrganizador: !!\(opts && opts\.decisaoDoOrganizador\)/.test(core),
   '④ o core repassa o interruptor em vez de ligá-lo por conta própria');
-ok(/uidsDaDecisao/.test(core), '④ e repassa a lista de quem a decisão nomeia');
-ok(/opts\.uidsDaDecisao/.test(adCod),
+ok(/chavesDaDecisao/.test(core), '④ e repassa a lista de quem a decisão nomeia');
+ok(/opts\.chavesDaDecisao/.test(adCod),
   '④ ⛔ o adapter filtra os candidatos por essa lista, em vez de aceitar a espera inteira');
 /* ⛔ e NENHUM caminho automático o liga. ⚠️ A contagem exclui o corpo da PRÓPRIA callable, que é
  * justamente quem deve ligá-lo — incluí-lo aqui daria vermelho pelo motivo errado (e me deu). */
@@ -144,11 +144,11 @@ ok(/linhaDaDecisao: linha/.test(dentro), '④b e a callable manda QUAL linha foi
     { name: 'A17', uid: 'Au17', presente: true, category: 'Ouro' },
     { name: 'B17', uid: 'Bu17', presente: true, category: 'Prata' }
   ];
-  const uidsDoAlvo = [];
-  (mapa[alvo].inscritos || []).forEach(function (x) { (x.uids || []).forEach(function (u) { uidsDoAlvo.push(String(u)); }); });
-  ok(uidsDoAlvo.length > 0, '④b a proposta da linha nomeia quem entraria');
+  const chavesDoAlvo = [];
+  (mapa[alvo].inscritos || []).forEach(function (x) { (x.chaves || []).forEach(function (k) { chavesDoAlvo.push(String(k)); }); });
+  ok(chavesDoAlvo.length > 0, '④b a proposta da linha nomeia quem entraria');
   A.integrarTardiosElim(t, esperaInteira,
-    { decisaoDoOrganizador: true, linhaDaDecisao: alvo, uidsDaDecisao: uidsDoAlvo });
+    { decisaoDoOrganizador: true, linhaDaDecisao: alvo, chavesDaDecisao: chavesDoAlvo });
   ok(foto(tagOutra) === antesOutra,
     '④b ⛔⛔ confirmar UMA linha não mexe em NENHUM confronto da outra');
   const depois = t.tardiosPendentesPorLinha || {};
@@ -207,6 +207,59 @@ ok(/linhaDaDecisao: linha/.test(dentro), '④b e a callable manda QUAL linha foi
   ok(ins.length === 1 && (ins[0].uids || []).indexOf('ux') >= 0,
     '④c com quem está esperando');
 })();
+
+/* ── ④d QUEM NÃO TEM CONTA TAMBÉM PODE SER CONFIRMADO ──────────────────────
+ * ⛔⛔ Achado do revisor: o organizador inscreve gente à mão, e essa gente nasce com
+ * `manualParticipantId` e NENHUM uid. A proposta guardava só uids e a callable recusava sem eles —
+ * o inscrito manual aparecia esperando e o botão de confirmar falhava para sempre. Beco sem saída.
+ * ⚠️ Isto NÃO afrouxa a régua do uid: onde há uid, é ele que vale e é ele que casa. */
+(function () {
+  const H = require(path.join(ROOT, 'tests/headless.js'));
+  ['chaves.js', 'chaves-adapter.js'].forEach(function (f) { try { H.load(f); } catch (e) {} });
+  const A = H.window._chavesAdapter;
+  if (!A) { ok(false, '④d adapter não carregou'); return; }
+  const gente = (n) => Array.from({ length: n }, (_, i) => ({ name: 'D' + (i + 1), uid: 'u' + (i + 1) }));
+  const t = { id: 'tm', politicaDaChave: 'bye',
+    matches: A.build(16, 'simples', { participantes: gente(16), politicaDaChave: 'bye' }).matches };
+  const manual = { name: 'Sem Conta', manualParticipantId: 'manual-abc', presente: true };
+  A.integrarTardiosElim(t, [manual]);
+  const mapa = t.tardiosPendentesPorLinha || {};
+  const k = Object.keys(mapa)[0];
+  const prop = k != null ? mapa[k] : null;
+  ok(!!prop, '④d a pendência do inscrito manual é gravada');
+  if (!prop) return;
+  const ks = (prop.inscritos[0] || {}).chaves || [];
+  ok(ks.length > 0, '④d ⛔⛔ e ela NOMEIA a pessoa mesmo sem uid (achei ' + ks.length + ' chave(s))');
+  ok(ks.indexOf('manual:manual-abc') >= 0,
+    '④d pela identidade manual, que é estável — não pelo nome, que envelhece');
+  /* ⛔ e a confirmação com essa chave realmente integra */
+  const antes = t.matches.length;
+  const out = A.integrarTardiosElim(t, [manual],
+    { decisaoDoOrganizador: true, linhaDaDecisao: k, chavesDaDecisao: ks });
+  ok(out && out.aplicados === 1,
+    '④d ⛔⛔ e confirmar FUNCIONA para quem não tem conta (aplicados=' + ((out || {}).aplicados) + ')');
+  ok(t.matches.length !== antes || out.aplicados === 1, '④d a chave foi refeita');
+})();
+
+/* ── ④e A PENDÊNCIA SEM DESTINO TEM SAÍDA ──────────────────────────────────
+ * ⛔⛔ Achado do revisor: eu criava `__sem_destino__` e não havia como resolvê-la. A tela só casava
+ * namespace de chave real e a callable exigia revisão não vazia — que ela não tem, porque não
+ * pertence a chave nenhuma. O inscrito ficava visível e sem decisão possível, para sempre.
+ * ⇒ ela é ARQUIVÁVEL: aceita `cancelar` sem revisão, e recusa `confirmar`, porque confirmar exigiria
+ * saber a linha — que é exatamente o que falta. */
+const iSemD = fn.indexOf("const SEM_DESTINO = '__sem_destino__';");
+ok(iSemD > 0 && iSemD < i0 + bloco.length, '④e a porta conhece a pendência sem destino');
+ok(/ehSemDestino && acao !== 'cancelar'[\s\S]{0,200}Só é possível arquivá-lo/.test(bloco),
+  '④e ⛔⛔ ela só aceita ARQUIVAR — confirmar exigiria saber a linha');
+ok(/if \(!revisao && !ehSemDestino\)/.test(bloco),
+  '④e ⛔ e a revisão obrigatória não vale para ela, que nasce sem confrontos para assinar');
+ok(/!ehSemDestino && String\(prop\.revisaoDaChave\) !== revisao/.test(dentro),
+  '④e nem a conferência de revisão lá dentro');
+ok(/__sem_destino__/.test(brCodParaSemDestino()),
+  '④e ⛔⛔ e a TELA a mostra, com botão de arquivar — senão ela ficaria invisível');
+function brCodParaSemDestino() {
+  return fs.readFileSync(path.join(ROOT, 'js/views/bracket.js'), 'utf8');
+}
 
 /* ── ⑤ A TELA LÊ O QUE ESTÁ GRAVADO, NÃO `window` ──────────────────────────── */
 const br = fs.readFileSync(path.join(ROOT, 'js/views/bracket.js'), 'utf8');

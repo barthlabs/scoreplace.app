@@ -3743,7 +3743,17 @@ exports.resolvePendingLateBye = onCall(async (request) => {
   const acao = String(d.acao || '').trim();
   if (!tId) throw new HttpsError('invalid-argument', 'Torneio obrigatório.');
   if (!['confirmar', 'cancelar'].includes(acao)) throw new HttpsError('invalid-argument', 'Ação inválida.');
-  if (!revisao) throw new HttpsError('invalid-argument', 'Revisão da chave obrigatória.');
+  /* ⛔⛔ A PENDÊNCIA SEM DESTINO NASCE SEM REVISÃO, de propósito: ela não pertence a chave nenhuma,
+   * então não há confrontos para assinar. Exigir revisão aqui a prendia para sempre — o inscrito
+   * ficava visível e sem saída. Ela aceita apenas ARQUIVAR; confirmar exigiria saber a linha, que é
+   * justamente o que falta. Achado do revisor. */
+  const SEM_DESTINO = '__sem_destino__';
+  const ehSemDestino = (linha === SEM_DESTINO);
+  if (ehSemDestino && acao !== 'cancelar') {
+    throw new HttpsError('failed-precondition',
+      'Este pedido ainda não tem chave definida. Só é possível arquivá-lo.');
+  }
+  if (!revisao && !ehSemDestino) throw new HttpsError('invalid-argument', 'Revisão da chave obrigatória.');
   if (acao === 'confirmar' && typeof integrateLateFn !== 'function') {
     throw new HttpsError('failed-precondition', 'Motor de chave indisponível.');
   }
@@ -3760,7 +3770,7 @@ exports.resolvePendingLateBye = onCall(async (request) => {
     const mapa = t.tardiosPendentesPorLinha;
     const prop = mapa && Object.prototype.hasOwnProperty.call(mapa, linha) ? mapa[linha] : null;
     if (!prop) return { ok: true, changed: false, motivo: 'sem-pendencia' };
-    if (String(prop.revisaoDaChave) !== revisao) {
+    if (!ehSemDestino && String(prop.revisaoDaChave) !== revisao) {
       throw _drawFail('failed-precondition',
         'A chave mudou desde que este pedido foi feito. Abra de novo para decidir sobre a chave atual.',
         { tId, linha });
@@ -3812,19 +3822,25 @@ exports.resolvePendingLateBye = onCall(async (request) => {
      * pelo revisor com duas linhas. Nomear a linha não basta: é preciso nomear QUEM.
      * ⇒ os uids saem de `prop.inscritos`, que é o retrato do que o organizador está confirmando, e o
      * core intersecta a espera com esse conjunto. Quem não estiver nele não entra, venha de onde vier. */
-    const uidsDaDecisao = [];
+    /* ⛔ A IDENTIDADE COBRE QUEM NÃO TEM CONTA. O organizador inscreve gente à mão, e essa gente
+     * nasce sem uid. Exigir uid aqui deixava o inscrito manual num beco: aparecia esperando e o
+     * botão de confirmar recusava para sempre. As chaves são uid quando há, id manual quando não. */
+    const chavesDaDecisao = [];
     (prop.inscritos || []).forEach((x) => {
-      (x && Array.isArray(x.uids) ? x.uids : []).forEach((u) => {
-        const v = String(u || '').trim();
-        if (v && uidsDaDecisao.indexOf(v) < 0) uidsDaDecisao.push(v);
+      const ks = (x && Array.isArray(x.chaves) && x.chaves.length)
+        ? x.chaves
+        : ((x && Array.isArray(x.uids) ? x.uids : []).map((u) => 'uid:' + String(u)));
+      ks.forEach((k) => {
+        const v = String(k || '').trim();
+        if (v && chavesDaDecisao.indexOf(v) < 0) chavesDaDecisao.push(v);
       });
     });
-    if (!uidsDaDecisao.length) {
+    if (!chavesDaDecisao.length) {
       throw _drawFail('failed-precondition',
         'Este pedido não identifica quem entraria. Peça a inscrição de novo.', { tId, linha });
     }
     const r = integrateLateFn(t, {
-      agora: agoraIso, decisaoDoOrganizador: true, linhaDaDecisao: linha, uidsDaDecisao: uidsDaDecisao
+      agora: agoraIso, decisaoDoOrganizador: true, linhaDaDecisao: linha, chavesDaDecisao: chavesDaDecisao
     });
     if (!r || !r.ok) {
       throw _drawFail('failed-precondition', (r && r.reason) || 'Não foi possível refazer a chave.', { tId, linha });
