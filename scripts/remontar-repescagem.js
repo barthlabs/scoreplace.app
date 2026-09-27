@@ -17,6 +17,28 @@
  *       node scripts/remontar-repescagem.js Confra Ouro
  */
 'use strict';
+/* ⛔⛔⛔ ESTE SCRIPT ESTÁ BLOQUEADO PARA GRAVAÇÃO. NÃO REMOVA O BLOQUEIO SEM CONSERTAR OS TRÊS PONTOS.
+ *
+ * Ele JÁ derrubou produção uma vez (26/set/2026): gravou vagas só com o nome, sem o objeto do time e
+ * sem uid, e com isso o botão de W.O. parou de funcionar e a tela de inscritos parou de abrir. Aquilo
+ * foi remendado, mas a revisão apontou que o script continua capaz de corromper dado:
+ *   ① a conversão para o formato do banco não é recursiva em mapa aninhado — o objeto do time tem
+ *      mapas dentro de mapas, e o que não converter direito vai gravado torto;
+ *   ② ele escolhe o torneio por PEDAÇO DO NOME, não por id exato: rodar com o alvo errado grava na
+ *      chave de outro torneio;
+ *   ③ não há precondição: ele lê, decide e grava sem exigir que o documento ainda esteja como estava.
+ *      Alguém lançando placar no meio perde a gravação, ou a dele é perdida.
+ *
+ * ⚠️ A LEITURA CONTINUA LIBERADA de propósito: o ensaio (sem `--gravar`) é útil e não arrisca nada.
+ * Quem precisar remontar de verdade: conserte os três pontos e tire este bloqueio no mesmo commit. */
+if (process.argv.includes('--gravar')) {
+  console.error('\n⛔ GRAVAÇÃO BLOQUEADA neste script — ele pode corromper o torneio.');
+  console.error('   Motivos, no cabeçalho do arquivo: conversão não recursiva de mapa aninhado,');
+  console.error('   alvo escolhido por pedaço do nome e gravação sem precondição.');
+  console.error('   O ensaio (sem --gravar) continua funcionando.\n');
+  process.exit(1);
+}
+
 const path = require('path');
 const { execSync } = require('child_process');
 const Split = require(path.join(__dirname, '..', 'js', 'views', 'tournament-split-core.js'));

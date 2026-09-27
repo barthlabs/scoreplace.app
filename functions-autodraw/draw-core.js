@@ -677,8 +677,10 @@ function integrateLateEntries(t, opts) {
   let extra = 0, duplas = 0, duplasTier = 0, dissolved = 0, monarch = 0, repfill = 0;
   let placed = 0, propostas = 0; const recusas = [];
   /* instante ESTÁVEL desta operação: usado por quem grava proposta pendente, para que repetir a
-   * transação não produza um documento diferente a cada tentativa. */
-  const _agoraDaOperacao = new Date().toISOString();
+   * transação não produza um documento diferente a cada tentativa.
+   * ⛔ Quem chama de dentro de uma transação PASSA o seu (`opts.agora`). O `new Date()` aqui é só o
+   * caminho de fora de transação; dentro dela, criar hora própria é o defeito que isto evita. */
+  const _agoraDaOperacao = (opts && opts.agora) ? String(opts.agora) : new Date().toISOString();
 
   // Quem pode entrar agora. NÃO reimplementar aqui: o coletor é o MESMO que o
   // caminho de Grupos usa (`window._collectLateCandidates`, tournaments-draw.js).

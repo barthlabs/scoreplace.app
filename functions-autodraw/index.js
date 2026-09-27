@@ -1398,7 +1398,7 @@ exports.integrateLateEntries = onCall(async (request) => {
       // visita torneio com `nextDrawAt`, e o Confra tem sorteio único já disparado.
       _enrichParticipantsFromProfiles(t);
 
-      const res = integrateLateFn(t, {});
+      const res = integrateLateFn(t, { agora: _agoraIsoTx });
       if (!res || !res.ok) {
         throw _drawFail('failed-precondition', (res && res.reason) || 'integrate-failed', { tId, format: t.format });
       }
@@ -5012,7 +5012,7 @@ async function _formarGruposDaEspera(doc) {
       // nomes dos grupos ANTES, pra saber depois quais nasceram agora (e avisar só eles)
       const antes = new Set();
       (t.rounds || []).forEach((r) => (r.monarchGroups || []).forEach((g) => { if (g && g.name) antes.add(g.name); }));
-      const r = integrateLateFn(t, {});
+      const r = integrateLateFn(t, { agora: _agoraIsoTx });
       if (!r || !r.ok || !r.changed) return { changed: false };
       const novos = [];
       (t.rounds || []).forEach((rr) => (rr.monarchGroups || []).forEach((g) => {
