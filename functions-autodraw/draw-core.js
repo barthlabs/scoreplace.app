@@ -16,6 +16,18 @@
 const g = globalThis;
 if (!g.window) g.window = g;
 
+/* ⛔⛔⛔ A MARCA DE "ESTOU NO SERVIDOR", e ela existe por ordem do dono (27/set/2026):
+ * _"nao pode ser recalculado no cliente. tudo no servidor e nada client side"_.
+ *
+ * O MOTIVO, medido no mesmo dia: os arquivos da chave rodam nos DOIS lados — o cliente tem a
+ * cópia original, o servidor tem a cópia vendorizada. Quando os dois recalculam, os dois podem
+ * discordar, e quem olha a tela não tem como saber qual está certo. O dono viu a MESMA tela
+ * mostrar uma dupla em "35º, eliminada" e, logo abaixo, a mesma dupla jogando.
+ * ⇒ decisão que MUDA QUEM ESTÁ NA CHAVE é do servidor. O cliente pinta o que recebe.
+ * ⚠️ `typeof window !== 'undefined'` NÃO serve para distinguir: aqui `window` é `globalThis`,
+ * então ele é verdadeiro nos dois lados. Foi por isso que essa separação nunca existiu. */
+g.window._SP_SERVIDOR = true;
+
 // i18n mínimo dos geradores de sorteio.
 //
 // `bui.byeLabel` NÃO é só exibição — é IDENTIDADE DE SLOT. `_autoResolveBye`

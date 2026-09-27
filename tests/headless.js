@@ -18,6 +18,14 @@ const vm = require('vm');
 
 const sandbox = {};
 sandbox.window = sandbox;        // window === global do contexto
+/* ⛔⛔ ESTE HARNESS REPRESENTA O MOTOR, QUE DESDE 27/set/2026 É O SERVIDOR. Ordem do dono:
+ * _"nao pode ser recalculado no cliente. tudo no servidor e nada client side"_. As decisões que
+ * mudam QUEM ESTÁ NA CHAVE — a repescagem, hoje — passaram a exigir esta marca, e o navegador não
+ * a tem: lá o app só PINTA o que o servidor decidiu.
+ * ⚠️ Sem esta linha, 22 suítes que exercitam o motor ficam vermelhas por estarem do lado errado
+ * da marca — não por defeito. E, do outro lado, a garantia de que o CLIENTE não recalcula é
+ * conferida por teste próprio, que lê o arquivo do cliente. */
+sandbox._SP_SERVIDOR = true;
 sandbox.globalThis = sandbox;
 sandbox.console = console;       // _error usa console.error
 sandbox.setTimeout = setTimeout;

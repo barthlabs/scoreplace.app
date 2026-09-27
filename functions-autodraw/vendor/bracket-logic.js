@@ -1883,7 +1883,25 @@ function _advanceWinner(t, completedMatch) {
 
   // REPESCADO = MELHOR DERROTADO — por ÚLTIMO: os passos acima (aresta, _resolveRepFills,
   // _syncLowerBracket) ainda escrevem nos slots. Idempotente; no-op com a rodada em curso.
-  if (typeof window !== 'undefined' && typeof window._reassignBestLosersToRepechage === 'function') {
+  /* ⛔⛔⛔ QUEM DECIDE A REPESCAGEM É O SERVIDOR. ORDEM DO DONO, 27/set/2026:
+   * _"nao pode ser recalculado no cliente. tudo no servidor e nada client side"_.
+   *
+   * O QUE ISSO CONSERTA, e foi medido no mesmo dia: este arquivo roda nos DOIS lados — o cliente
+   * tem a cópia original, o servidor a vendorizada. Os dois recalculavam. Quando discordavam, a
+   * tela mostrava uma coisa e o banco guardava outra, sem nada acusar: o dono viu a MESMA tela
+   * dizer "35º, eliminada" na classificação e, logo abaixo, a mesma dupla jogando com tarja de
+   * repescagem. No banco aquele confronto não existia — conferido de quatro maneiras.
+   *
+   * ⛔ E NÃO ADIANTAVA CONSERTAR A RÉGUA: enquanto o cliente recalculasse, ele continuaria podendo
+   * chegar a outro resultado — por dado velho em mãos, por versão antiga, por ordem diferente de
+   * chegada das partes. Decisão que MUDA QUEM ESTÁ NA CHAVE não pode ter duas fontes.
+   * ⇒ o cliente PINTA o que recebe. Se a vaga ainda não foi decidida, ela aparece como "A definir"
+   * até o servidor decidir — que é a resposta honesta, e não um palpite que some no próximo eco.
+   *
+   * ⚠️ `typeof window !== 'undefined'` não distingue os dois lados: no servidor `window` é o
+   * próprio global. A marca é posta por `draw-core` ao carregar. */
+  if (typeof window !== 'undefined' && window._SP_SERVIDOR === true &&
+      typeof window._reassignBestLosersToRepechage === 'function') {
     try { window._reassignBestLosersToRepechage(t); } catch (e) {}
   }
 
