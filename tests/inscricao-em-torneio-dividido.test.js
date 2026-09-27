@@ -91,12 +91,20 @@ const docDividido = { id: 't1', name: 'Torneio', _semPesados: ['participants'], 
   const restaram = Object.values(b3.subs.inscritos).map((r) => r.item.name).sort().join(',');
   ok('  → e some o CERTO (sobraram Ana e Carla)', restaram === 'Ana,Carla', 'sobraram: ' + restaram);
 
-  // ── ④ torneio INTEIRO segue pelo caminho de sempre ──────────────────────────
-  const b4 = banco({ id: 't2', participants: elenco.slice() }, {});
-  const d4 = await SP.hidratar(b4.tx, b4.ref, { id: 't2', participants: elenco.slice() });
-  SP.gravar(b4.tx, b4.ref, d4, { participants: elenco.concat([pessoa('uD', 'Diana')]) });
-  ok('⭐ torneio NÃO dividido continua gravando no documento (nada mudou pra ele)',
-    b4.doc.participants.length === 4 && !b4.subs.inscritos);
+  // ── ④ marcador ausente NÃO ressuscita o caminho de torneio inteiro ──────────
+  /* ⛔ A produção não tem mais torneio inteiro: todos nasceram divididos e os antigos
+   * foram migrados. O marcador existe para a nativa antiga; a Function não pode voltar
+   * a decidir por sua ausência. Esta fotografia simula só a compatibilidade de leitura:
+   * raiz antiga sem marcador, com o elenco no storage canônico. */
+  const docSemMarcador = { id: 't2', participants: [], maxParticipants: 4 };
+  const b4 = banco(docSemMarcador, { inscritos: JSON.parse(JSON.stringify(subInsc)) });
+  const d4 = await SP.hidratar(b4.tx, b4.ref, JSON.parse(JSON.stringify(docSemMarcador)), ['participants']);
+  ok('⛔ sem marcador, a Function NÃO trata o torneio como inteiro',
+    d4.participants.length === 3,
+    'sem o fallback canônico, a lista ficaria vazia e a lotação seria decidida errado');
+  SP.gravar(b4.tx, b4.ref, d4, { participants: d4.participants.concat([pessoa('uD', 'Diana')]) });
+  ok('⭐ e continua gravando o novo inscrito na subcoleção canônica',
+    b4.doc.participants.length === 0 && Object.keys(b4.subs.inscritos).length === 4);
 
   // ── ⑤ a ordem que o Firestore exige ─────────────────────────────────────────
   ok('⛔ nenhuma leitura aconteceu depois de uma escrita (a transação proíbe)',

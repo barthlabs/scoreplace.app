@@ -1,3 +1,4 @@
+// 2.3.124 — todo torneio segue usando as partes separadas mesmo se o marcador antigo não vier junto numa leitura. Inscrições e contatos continuam consultando a lista completa, sem voltar a gravar um elenco grande no documento principal.
 // 2.3.123 — a classificação final preserva duas vagas com o mesmo nome pela identidade (UID) e mantém o fallback honesto de participantes digitados sem conta. O pódio e os troféus não confundem mais homônimos.
 // 2.3.122 — ao definir a data de um jogo, a organização vê e digita data curta (dd/mm/aa) e hora (hh:mm). O seletor nativo do iPhone usava uma data por extenso que quebrava o ano em duas linhas no celular.
 // 2.3.121 — abrir um torneio, voltar para a tela inicial e abrir o mesmo cartão de novo passa a chegar sempre aos detalhes. Um slot incompleto de inscrição não pode mais interromper esse segundo caminho e deixar a tela inicial parada.

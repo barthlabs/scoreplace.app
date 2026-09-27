@@ -29,7 +29,13 @@ const S = require('./vendor/tournament-split-core.js');
 
 /** As partes que este torneio guarda fora do documento. */
 function partesDivididas(data) {
-  return (data && Array.isArray(data._semPesados)) ? data._semPesados.slice() : [];
+  /* ⛔ TODO TORNEIO NASCE DIVIDIDO. `_semPesados` continua no documento somente para o
+   * aplicativo nativo antigo, mas NÃO é uma decisão de negócio deste lado. Quando uma
+   * fotografia legítima chega sem o marcador, tratá-la como "inteira" faz a Function
+   * decidir lotação/duplicata com `participants: []` e depois gravar no lugar errado.
+   * A fonte única `partesDe` preserva o marcador quando existe e devolve as partes
+   * canônicas quando ele falta. [[project_torneio_nasce_dividido]] */
+  return S.partesDe(data);
 }
 
 /**

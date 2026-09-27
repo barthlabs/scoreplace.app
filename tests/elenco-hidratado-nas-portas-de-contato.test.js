@@ -93,9 +93,12 @@ const docDividido = {
     JSON.parse(JSON.stringify(docDividido)));
   ok('⛔ e SEM `apenas` o padrão continua sendo TUDO (quem decide chave precisa do torneio inteiro)',
     (tudo.participants || []).length === 152);
-  const naoDividido = { id: 't2', participants: elenco.slice() };
-  ok('⭐ torneio NÃO dividido não muda em nada',
-    (await SP.hidratar(null, banco({}).ref, naoDividido, ['participants'])).participants.length === 152);
+  /* ⛔ Não existe mais o caminho "sem marcador = torneio inteiro". A leitura de
+   * compatibilidade continua precisa: sem o campo, busca a parte canônica; com o
+   * campo explícito, respeita somente as partes que ele declara. */
+  const semMarcador = { id: 't2', participants: [] };
+  ok('⭐ documento sem marcador ainda hidrata o elenco canônico',
+    (await SP.hidratar(null, banco({ inscritos: subInsc }).ref, semMarcador, ['participants'])).participants.length === 152);
   ok('⭐ pedir uma parte que ESTE torneio não dividiu não inventa leitura',
     (await SP.hidratar(null, banco({}).ref,
       { id: 't3', _semPesados: ['matches'], participants: [] }, ['participants'])).participants.length === 0);

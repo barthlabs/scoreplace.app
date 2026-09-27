@@ -88,11 +88,13 @@ SP.gravar(tx3, ref, antesP, { participants: JSON.parse(JSON.stringify(antesP.par
 ok('⛔ elenco idêntico → nenhum doc reescrito', tx3.reg.sets.length === 0,
   'reescreveu ' + tx3.reg.sets.length + ' doc(s) sem mudança');
 
-// ── ④ quem NÃO está dividido segue como antes ─────────────────────────────────
+// ── ④ sem marcador segue a parte canônica, nunca o documento ──────────────────
 const tx4 = faketx();
+/* ⛔ A raiz sem `_semPesados` não é mais um formato de torneio. O marcador é compatibilidade
+ * da nativa antiga; a Function precisa conservar o teto do documento mesmo nessa fotografia. */
 SP.gravar(tx4, ref, { participants: antesP.participants }, { participants: depoisP });
-ok('⭐ torneio NÃO dividido grava tudo no documento, como sempre',
-  tx4.reg.sets.length === 0 && tx4.reg.updates.length === 1 && 'participants' in tx4.reg.updates[0]);
+ok('⭐ sem marcador, o elenco ainda grava só na subcoleção canônica',
+  tx4.reg.sets.length >= 1 && tx4.reg.updates.length === 1 && !('participants' in tx4.reg.updates[0]));
 
 // ── ⑤ campo do doc + parte dividida na MESMA gravação ─────────────────────────
 const tx5 = faketx();

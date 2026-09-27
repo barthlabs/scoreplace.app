@@ -26,6 +26,7 @@ process.env.GCLOUD_PROJECT=PROJECT;
 process.env.FIREBASE_CONFIG=JSON.stringify({projectId:PROJECT});
 const admin=require(process.env.ADMIN_PATH);
 const CF=require(process.env.ROOT_PATH+'/functions/index.js');
+const SPLIT=require(process.env.ROOT_PATH+'/functions/vendor/tournament-split-core.js');
 /* ⛔ AS CHAVES DE BUSCA DO NOME SÃO ESCRITAS POR UM GATILHO, e gatilho não roda sem o emulador
  * de FUNÇÕES. Sem elas a busca de candidatos não acha ninguém e a pergunta de segunda conta
  * jamais apareceria — o teste ficaria verde por falta de dado, não por acerto. Semeamos com a
@@ -56,11 +57,19 @@ const TOUR='tour_confra';
   await db.doc('users/'+VAL).set(comChaves('Val',{email:'val@sialdrill.com',phone:FONE_DA_CASA,phoneVerified:true}));
   await db.doc('users/'+IRMA).set(comChaves('Fabiana Vieira',{email:'irma@gmail.com'}));
 
+  /* ⛔ Todo torneio nasce dividido. Esta prova é de contato entre pessoas, não pode
+   * ressuscitar a fixture "elenco no documento" e mascarar um leitor que só funciona
+   * nesse formato extinto. A raiz guarda a projeção leve; o elenco vai para inscritos. */
+  const elencoInicial=[{uid:FABI,name:'FABIANA VIEIRA',enrollSeq:1},
+    {uid:VAL,name:'Val',enrollSeq:2},{uid:IRMA,name:'Fabiana Vieira',enrollSeq:3}];
+  const regsIniciais=SPLIT.dividir({participants:elencoInicial},['participants']).participants;
   await db.doc('tournaments/'+TOUR).set({
     name:'Confra BT', creatorUid:ORG, memberUids:[ORG,FABI,VAL,IRMA],
-    participants:[{uid:FABI,name:'FABIANA VIEIRA',enrollSeq:1},
-      {uid:VAL,name:'Val',enrollSeq:2},{uid:IRMA,name:'Fabiana Vieira',enrollSeq:3}],
+    _semPesados:['matches','participants','opponentHistory'],
+    _nPartes:{matches:0,participants:regsIniciais.length,opponentHistory:0},
+    participants:[], matches:[], opponentHistory:[],
   });
+  await Promise.all(regsIniciais.map((r)=>db.doc('tournaments/'+TOUR+'/inscritos/'+SPLIT.chaveDoRegistro(r)).set(r)));
 
   /* ── ① O ORGANIZADOR REGISTRA O NÚMERO DA CASA NA FICHA DA FABIANA.
    * O número já está CONFIRMADO por SMS na conta da Val. A versão que eu tinha feito antes
@@ -94,9 +103,10 @@ const TOUR='tour_confra';
    *   · a Val, mesmo número e nome sem nada a ver → NÃO pode perguntar (casal). */
   await db.doc('users/'+IRMA).set({phone:FONE_DA_CASA,phoneSource:'organizer'},{merge:true});
   await db.doc('tournaments/'+TOUR).update({
-    memberUids:[ORG,FABI,VAL],
-    participants:[{uid:FABI,name:'FABIANA VIEIRA',enrollSeq:1},{uid:VAL,name:'Val',enrollSeq:2}],
+    memberUids:[ORG,FABI,VAL], _nPartes:{matches:0,participants:2,opponentHistory:0},
   });
+  const regIrma=regsIniciais.find((r)=>r.item&&r.item.uid===IRMA);
+  await db.doc('tournaments/'+TOUR+'/inscritos/'+SPLIT.chaveDoRegistro(regIrma)).delete();
   try{ const d=await chamarCF('enrollParticipant',
         {tournamentId:TOUR,participantObj:{uid:IRMA,name:'Fabiana Vieira'}},IRMA);
     R['inscreveuHomonima']={ok:true,dup:d&&d.dupSuspect?
