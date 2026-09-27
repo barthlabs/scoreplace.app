@@ -38,7 +38,19 @@ function creator(db,time=clock){return makeCreateTournament({db,HttpsError,Field
   const fn=creator(db), request={auth,data:copy(payload)};
   const result=await Promise.all([fn(request),fn(request)]);
   assert.equal(db.writes,2);assert.equal(result.filter(x=>x.changed).length,1);
-  const t=db.docs.get('tournaments/'+id);assert.equal(t.creatorUid,'owner');assert.equal(t.organizerName,'Organizador real');assert.equal(t.status,'open');assert.equal(t._nascidoEm,'server-time');assert.deepEqual(t.participants,[]);assert(!t._semPesados);assert(t.memberUids.includes('owner'));
+  const t=db.docs.get('tournaments/'+id);assert.equal(t.creatorUid,'owner');assert.equal(t.organizerName,'Organizador real');assert.equal(t.status,'open');assert.equal(t._nascidoEm,'server-time');assert.deepEqual(t.participants,[]);
+  /* ⛔⛔ CONTRATO NOVO (27/set/2026, ordem do dono): o torneio NASCE DIVIDIDO. Esta linha exigia o
+   * contrário — `assert(!t._semPesados)` — porque até aqui ele nascia inteiro e era dividido em voo.
+   * Dividir em voo cria DUAS formas do mesmo torneio e quem só acerta uma falha em silêncio.
+   * ⚠️ O contador junto com o marcador não é detalhe: zero tem de significar "vazio de verdade",
+   * senão o leitor cai na heurística e sai buscando parte que não existe.
+   * [[project_torneio_nasce_dividido]] */
+  assert(Array.isArray(t._semPesados)&&t._semPesados.length,'nasce dividido');
+  ['matches','participants','opponentHistory'].forEach(n=>{
+    assert(t._semPesados.includes(n),'parte '+n+' nasce fora');
+    assert.equal(t._nPartes&&t._nPartes[n],0,'contador de '+n+' nasce em zero');
+  });
+  assert(t.memberUids.includes('owner'));
   t.matches=[{id:'new-game',winner:'A'}];db.docs.set('tournaments/'+id,t);
   const retry=await fn(request);assert.deepEqual(retry.tournament.matches,t.matches);assert.equal(db.writes,2);
  });

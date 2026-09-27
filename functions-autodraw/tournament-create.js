@@ -85,8 +85,40 @@ function makeCreateTournament({ db, HttpsError, FieldValue, fields, cloneConfig,
         currentPhaseIndex: 0, createdAt: iso, updatedAt: iso,
         history: [{ date: iso, message: 'Torneio Criado' }] });
       const result = boundary(t);
-      // Documento inteiro vazio, preservando o contrato atual. Criação dividida é outra migração.
-      tx.create(ref, Object.assign({}, result.persist, { _nascidoEm: FieldValue.serverTimestamp() }));
+      /* ⛔⛔⛔ O TORNEIO NASCE DIVIDIDO. Ordem do dono, 27/set/2026: _"nao é pra dividir em voo. é
+       * pra nascer dividido"_.
+       *
+       * POR QUÊ, e é a raiz de uma classe inteira de defeito: dividindo em voo existem DUAS formas
+       * do mesmo torneio — inteira e dividida — e a troca acontece num momento imprevisível, quando
+       * ele cruza o tamanho. Todo leitor, escritor e conferidor tem de acertar as DUAS, e quem só
+       * acerta uma falha em SILÊNCIO: a forma que ele não conhece simplesmente não tem o campo que
+       * ele procura. Nascendo dividido a forma é UMA SÓ desde o primeiro dia.
+       *
+       * ⭐ E NÃO É TERRENO NOVO — é o terreno onde a maioria já está. Medido em 27/set: dos 78
+       * torneios, 41 já estão divididos, e 40 deles com EXATAMENTE este conjunto de partes. O que
+       * muda aqui é a hora em que isso passa a valer, não o formato.
+       *
+       * ⛔ A FORMA TEM DE SER IDÊNTICA À QUE O SEPARADOR PRODUZ, senão nasce um terceiro estado —
+       * que seria o oposto do que esta mudança existe para resolver. São três coisas, e conferidas
+       * por teste contra o separador real:
+       *   ① os campos ficam como ARRAY VAZIO no documento (é o que `dividir` deixa, não `delete`);
+       *   ② `_semPesados` diz quais partes moram fora;
+       *   ③ `_nPartes` diz QUANTAS moram fora — e zero significa "vazio de verdade, não busque".
+       *      Sem o contador, o leitor cai na heurística e pode sair procurando parte que não existe.
+       * `_nJogos`/`_nGrupos` continuam por compatibilidade: app já instalado ainda lê esses.
+       *
+       * ⚠️ `grupos` FICA DE FORA de propósito: só 1 torneio em produção o tem separado, contra 40
+       * com os outros três. Sair daqui com ele seria estrear um conjunto que ninguém rodou.
+       * [[project_torneio_nasce_dividido]] */
+      const PARTES_AO_NASCER = ['matches', 'participants', 'opponentHistory'];
+      const _nascendoDividido = {
+        _semPesados: PARTES_AO_NASCER,
+        _nPartes: PARTES_AO_NASCER.reduce((acc, nome) => { acc[nome] = 0; return acc; }, {}),
+        _nJogos: 0, _nGrupos: 0
+      };
+      PARTES_AO_NASCER.forEach((nome) => { result.persist[nome] = []; });
+      tx.create(ref, Object.assign({}, result.persist, _nascendoDividido,
+        { _nascidoEm: FieldValue.serverTimestamp() }));
       tx.create(receipt, { uid, hash, expiresAt: Number(match[1]) + WINDOW_MS + 60000 });
       return { ok: true, changed: true, tournament: result.clean };
     });
