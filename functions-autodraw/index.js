@@ -3825,22 +3825,22 @@ exports.resolvePendingLateBye = onCall(async (request) => {
     /* ⛔ A IDENTIDADE COBRE QUEM NÃO TEM CONTA. O organizador inscreve gente à mão, e essa gente
      * nasce sem uid. Exigir uid aqui deixava o inscrito manual num beco: aparecia esperando e o
      * botão de confirmar recusava para sempre. As chaves são uid quando há, id manual quando não. */
-    const chavesDaDecisao = [];
-    (prop.inscritos || []).forEach((x) => {
+    /* ⛔⛔ A ASSINATURA DA INSCRIÇÃO INTEIRA, não a lista solta de membros. Juntar todas as chaves
+     * num saco e casar por interseção deixava uma dupla (compartilhado, B) entrar no lugar da dupla
+     * (compartilhado, A) que foi proposta — uma pessoa em comum não faz duas duplas serem a mesma. */
+    const assinaturasDaDecisao = (prop.inscritos || []).map((x) => {
       const ks = (x && Array.isArray(x.chaves) && x.chaves.length)
         ? x.chaves
         : ((x && Array.isArray(x.uids) ? x.uids : []).map((u) => 'uid:' + String(u)));
-      ks.forEach((k) => {
-        const v = String(k || '').trim();
-        if (v && chavesDaDecisao.indexOf(v) < 0) chavesDaDecisao.push(v);
-      });
-    });
-    if (!chavesDaDecisao.length) {
+      return ks.map(String).sort().join('|');
+    }).filter((a) => !!a);
+    if (!assinaturasDaDecisao.length) {
       throw _drawFail('failed-precondition',
         'Este pedido não identifica quem entraria. Peça a inscrição de novo.', { tId, linha });
     }
     const r = integrateLateFn(t, {
-      agora: agoraIso, decisaoDoOrganizador: true, linhaDaDecisao: linha, chavesDaDecisao: chavesDaDecisao
+      agora: agoraIso, decisaoDoOrganizador: true, linhaDaDecisao: linha,
+      assinaturasDaDecisao: assinaturasDaDecisao
     });
     if (!r || !r.ok) {
       throw _drawFail('failed-precondition', (r && r.reason) || 'Não foi possível refazer a chave.', { tId, linha });

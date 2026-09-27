@@ -715,7 +715,7 @@ function integrateLateEntries(t, opts) {
           linhaDaDecisao: (opts && opts.linhaDaDecisao != null) ? String(opts.linhaDaDecisao) : null,
           /* ⛔ quem a decisão nomeia. Sem isto o adapter veria a espera inteira e poria o tardio de
            * outra linha dentro desta. */
-          chavesDaDecisao: (opts && Array.isArray(opts.chavesDaDecisao)) ? opts.chavesDaDecisao.map(String) : null
+          assinaturasDaDecisao: (opts && Array.isArray(opts.assinaturasDaDecisao)) ? opts.assinaturasDaDecisao.map(String) : null
         });
         placed = r.aplicados || 0;
         /* ⛔⛔ PROPOSTA PENDENTE CONTA COMO MUDANÇA. Na chave de FOLGA o tardio não entra — a chave

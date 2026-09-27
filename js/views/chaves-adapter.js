@@ -974,6 +974,11 @@
     var nm = p && (p.name || p.nome || p.displayName);
     return nm ? ['nome:' + String(nm)] : [];
   }
+  /* a identidade da INSCRIÇÃO (não de cada pessoa): conjunto ordenado das chaves dela. É isto que
+   * distingue (compartilhado, A) de (compartilhado, B) — duas duplas com um membro em comum. */
+  function _assinaturaDaInscricao(p) {
+    return _chavesDeIdentidade(p).map(String).sort().join('|');
+  }
   function _uidsDe(p) {
     if (!p) return [];
     if (Array.isArray(p.uids) && p.uids.length) return p.uids.map(String);
@@ -1110,12 +1115,17 @@
        * Ouro (reproduzido pelo revisor com duas linhas). Nomear a linha não bastava.
        * ⇒ com a decisão em curso, só entra quem estiver na lista de uids dela. Quem não estiver é
        * descartado deste lote, venha de onde vier. */
-      if (_decidida && Array.isArray(opts.chavesDaDecisao) && opts.chavesDaDecisao.length) {
-        var _permitidos = {};
-        opts.chavesDaDecisao.forEach(function (k) { _permitidos[String(k)] = 1; });
-        novos = novos.filter(function (p) {
-          return _chavesDeIdentidade(p).some(function (k) { return _permitidos[String(k)]; });
-        });
+      if (_decidida && Array.isArray(opts.assinaturasDaDecisao) && opts.assinaturasDaDecisao.length) {
+        /* ⛔⛔ CASAMENTO PELA IDENTIDADE INTEIRA DA INSCRIÇÃO, NUNCA POR INTERSEÇÃO DE MEMBROS.
+         * Defeito meu, reproduzido pelo revisor: a proposta era da dupla (compartilhado, A) e
+         * guardava as duas chaves. Se a espera passasse a ter (compartilhado, B), o filtro por
+         * interseção aceitava B — porque o membro compartilhado casava — e a chave era refeita com a
+         * dupla ERRADA. Uma pessoa em comum não faz duas duplas serem a mesma dupla.
+         * ⇒ compara-se a ASSINATURA: o conjunto ordenado de todas as chaves da inscrição. Ou a
+         * inscrição é a mesma, ou não é. [[feedback_chave_de_espelho_nunca_e_posicao]] */
+        var _ok = {};
+        opts.assinaturasDaDecisao.forEach(function (a) { _ok[String(a)] = 1; });
+        novos = novos.filter(function (p) { return _ok[_assinaturaDaInscricao(p)]; });
         if (!novos.length) return;
       }
       if (_politicaAqui === 'bye' && !_decidida) {
@@ -1160,8 +1170,15 @@
         /* ⛔ IDEMPOTENTE POR REVISÃO + UIDS: sem isto, cada abertura da tela reescreveria a proposta
          * com carimbo novo, o gravador veria "mudou" e o torneio levaria uma escrita por visita. */
         var _atual = t.tardiosPendentesPorLinha[ns || ''];
+        /* ⛔⛔ A ASSINATURA USA AS CHAVES, NÃO OS UIDS. Defeito meu, reproduzido pelo revisor: dois
+         * inscritos manuais distintos têm AMBOS `uids: []`, então trocar o manual A pelo B produzia
+         * a mesma assinatura — a proposta de A ficava lá e a de B nunca era gravada, em silêncio.
+         * Assinar por um campo que é vazio para toda uma classe de gente é não assinar. */
+        var _chavesDe = function (x) {
+          return (x.chaves && x.chaves.length) ? x.chaves : (x.uids || []).map(function (u) { return 'uid:' + u; });
+        };
         var _assina = function (rev, ins) {
-          return String(rev) + '|' + (ins || []).map(function (x) { return (x.uids || []).join(','); }).sort().join(';');
+          return String(rev) + '|' + (ins || []).map(function (x) { return _chavesDe(x).slice().sort().join(','); }).sort().join(';');
         };
         if (_atual && _assina(_atual.revisaoDaChave, _atual.inscritos) === _assina(_rev, _inscritos)) {
           return;   // mesma proposta, já gravada — nada a fazer e nada a sinalizar
