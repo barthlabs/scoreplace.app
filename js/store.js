@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.3.118';
+window.SCOREPLACE_VERSION = '2.3.119';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -13488,6 +13488,38 @@ window.AppStore = {
                 // escreve NO LUGAR — telas guardam o objeto; trocar a referência as deixaria
                 // com o de antes. Mesmo motivo da busca e do `_ensureTournamentLoaded`.
                 Object.keys(montado).forEach(function (kk) { vivo[kk] = montado[kk]; });
+                                var _podeReaplicarPlacar = (nome === 'matches') && !!vivo._results &&
+                  typeof self._overlayResultOnMatch === 'function';
+                /* ⛔⛔⛔ O PLACAR VOLTA POR CIMA — ERA ISTO QUE FAZIA O 0-0.
+                 *
+                 * RELATO DO DONO, repetido por semanas: _"lanço o resultado, confirmo, volta 0-0;
+                 * só dando refresh aparece"_. A causa está exatamente aqui, e não na repintura,
+                 * que é onde eu procurei antes.
+                 *
+                 * O JOGO TEM DUAS CÓPIAS: o placar é gravado primeiro na coleção de RESULTADOS
+                 * (`results`), e o documento do JOGO (`matches`) recebe a atualização depois. Este
+                 * ouvinte remonta os jogos a partir de `matches` e escreve por cima do objeto vivo
+                 * — jogando fora a camada de resultado que a tela acabou de aplicar. O que sobra é
+                 * o jogo sem placar: 0-0. O refresh curava porque a carga completa reaplica
+                 * `_results` no fim.
+                 *
+                 * ⇒ reaplicar é obrigatório DEPOIS de repor os jogos, e pela MESMA função que o
+                 * ouvinte de resultados usa — duas implementações divergiriam e o defeito voltaria
+                 * por metade. [[project_jogo_vive_em_matches_e_results]] */
+                if (_podeReaplicarPlacar) {
+                  try {
+                    var _todosAgora = (typeof window._collectAllMatches === 'function')
+                      ? (window._collectAllMatches(vivo) || []) : (vivo.matches || []);
+                    var _lote = (typeof self._carimboDeLote === 'function') ? self._carimboDeLote(vivo._results) : null;
+                    _todosAgora.forEach(function (mm) {
+                      if (!mm || mm.id == null) return;
+                      var res = vivo._results[String(mm.id)];
+                      if (res) self._overlayResultOnMatch(mm, res, _lote);
+                    });
+                  } catch (_eOv) {
+                    if (window._error) window._error('[fase2] não consegui reaplicar os resultados após repor os jogos', _eOv);
+                  }
+                }
               }
               if (nome === 'matches' || nome === 'participants') {
                 delete vivo._faltamPesados;

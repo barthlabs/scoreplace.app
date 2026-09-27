@@ -72,5 +72,35 @@ module.exports = [
       + 'levou a conclusao errada: eu li o comentario e nao o codigo', data: '2026-09-24' },
   { id: '12', arquivo: U, ancora: 'window._faseCorrenteEhLiga = function', marca: 'AINDA SEM CHAMADOR',
     incidente: 'funcao criada na unificacao e nunca chamada — sem a nota, sai como codigo morto',
-    data: '2026-09-23' }
+    data: '2026-09-23' },
+
+  /* ── 27/set/2026 · ordem do dono: "registre no codigo em comentário para que nao regrida nunca
+   * mais". Os tres pontos abaixo custaram um dia inteiro e VARIAS publicacoes minhas que nao
+   * pegavam no defeito, porque eu consertava o sintoma. ── */
+
+  { id: '15', arquivo: 'js/views/bracket-logic.js', ancora: 'function _poeTimeNoSlot(m, side, fonte) {',
+    marca: 'A VAGA É O UID',
+    incidente: 'o slot guardava DUAS fontes de verdade — o rotulo (p1) e a identidade '
+      + '(team1Obj/team1Uids) — e sete pontos do motor trocavam o ocupante escrevendo SO O ROTULO. '
+      + 'Medido no jogo 153 da Confra: p1 dizia "Sandra Bighetto / Flavia Barchetta" e os uids eram '
+      + 'de Rodrigo e Betsy, a dupla ELIMINADA. O card desenha pela identidade, entao a tela '
+      + 'mostrava os eliminados jogando. Corrigi o rotulo tres vezes e o dono continuou vendo o erro',
+    data: '2026-09-27' },
+
+  { id: '16', arquivo: 'js/store.js', ancora: 'if (_podeReaplicarPlacar) {',
+    marca: 'O PLACAR VOLTA POR CIMA',
+    incidente: 'o jogo tem DUAS copias: o placar e gravado na colecao de resultados e o documento '
+      + 'do jogo so depois. O ouvinte remontava os jogos e escrevia por cima do objeto vivo, jogando '
+      + 'fora a camada de resultado recem-aplicada — o 0-0 que o dono relatou por semanas. O refresh '
+      + 'curava porque a carga completa reaplica, e foi isso que me fez procurar na repintura',
+    data: '2026-09-27' },
+
+  { id: '17', arquivo: 'js/views/bracket-logic.js',
+    ancora: 'if (_souOServidor) {',
+    marca: 'QUEM DECIDE A REPESCAGEM É O SERVIDOR',
+    incidente: 'este arquivo roda nos DOIS lados e os dois recalculavam a repescagem. Discordando, '
+      + 'a tela mostrava uma coisa e o banco guardava outra, sem nada acusar. typeof window nao '
+      + 'distingue os lados: no servidor window e o proprio global, e foi por isso que a separacao '
+      + 'nunca existiu',
+    data: '2026-09-27' }
 ];

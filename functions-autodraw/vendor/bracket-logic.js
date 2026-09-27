@@ -1941,6 +1941,8 @@ function _advanceWinner(t, completedMatch) {
 
   // REPESCADO = MELHOR DERROTADO — por ÚLTIMO: os passos acima (aresta, _resolveRepFills,
   // _syncLowerBracket) ainda escrevem nos slots. Idempotente; no-op com a rodada em curso.
+    var _souOServidor = (typeof window !== 'undefined') && window._SP_SERVIDOR === true &&
+    typeof window._reassignBestLosersToRepechage === 'function';
   /* ⛔⛔⛔ QUEM DECIDE A REPESCAGEM É O SERVIDOR. ORDEM DO DONO, 27/set/2026:
    * _"nao pode ser recalculado no cliente. tudo no servidor e nada client side"_.
    *
@@ -1958,8 +1960,7 @@ function _advanceWinner(t, completedMatch) {
    *
    * ⚠️ `typeof window !== 'undefined'` não distingue os dois lados: no servidor `window` é o
    * próprio global. A marca é posta por `draw-core` ao carregar. */
-  if (typeof window !== 'undefined' && window._SP_SERVIDOR === true &&
-      typeof window._reassignBestLosersToRepechage === 'function') {
+  if (_souOServidor) {
     try { window._reassignBestLosersToRepechage(t); } catch (e) {}
   }
 
