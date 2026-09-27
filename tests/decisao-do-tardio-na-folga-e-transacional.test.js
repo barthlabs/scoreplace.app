@@ -29,31 +29,47 @@ const i0 = fn.indexOf('exports.resolvePendingLateBye = onCall');
 const bloco = i0 < 0 ? '' : fn.slice(i0, fn.indexOf('\n});', i0));
 ok(bloco.length > 500, '① a porta existe e foi achada pelo identificador');
 
+/* ⛔⛔ A REGRA MUDOU DE ARQUIVO, E ESTE TESTE MUDOU JUNTO. Ela saiu da callable e virou função pura
+ * do motor, justamente para poder ser EXERCIDA (bloco ⑧). As asserções de estrutura passam a olhar
+ * o motor; as de comportamento saíram daqui e viraram execução — conferir os dois lugares seria
+ * conferir duas vezes a mesma coisa, e a cópia que envelhece é a de texto. */
+const coreSrc = fs.readFileSync(path.join(ROOT, 'functions-autodraw/draw-core.js'), 'utf8');
+const iM = coreSrc.indexOf('function decidirTardioNaFolga(t, opts)');
+const motor = iM < 0 ? '' : coreSrc.slice(iM, coreSrc.indexOf('\nmodule.exports', iM));
+ok(motor.length > 800, '① a regra foi achada no motor, pelo identificador');
+
 /* ── ① AS QUATRO CONFERÊNCIAS, TODAS DENTRO DA TRANSAÇÃO ───────────────────── */
 const iTx = bloco.indexOf('db.runTransaction');
 ok(iTx > 0, '① ela roda em transação');
 const dentro = iTx > 0 ? bloco.slice(iTx) : '';
+/* a CASCA: o que só a callable pode fazer */
 [
   ['_leTorneio(tx, ref, tId)', '① ⛔⛔ RELÊ o torneio pelo caminho canônico — decidir sobre o retrato da aba é decidir sobre o que já mudou'],
   ['_isTournamentAdmin(t, uid)', '① ⛔⛔ exige ORGANIZAÇÃO: nem o inscrito nem terceiro redesenham a chave de ninguém'],
-  ["String(prop.revisaoDaChave) !== revisao", '① ⛔⛔ exige que a REVISÃO bata — proposta velha é recusada, não aplicada por cima'],
-  ['confrontosAfetados', '① ⛔⛔ confere os confrontos afetados antes de mexer']
+  ['_gravaTorneio(tx, ref, t, antes', '① e grava pela porta canônica']
 ].forEach(function (par) {
   ok(dentro.indexOf(par[0]) >= 0, par[1]);
 });
-ok(/m\.winner \|\| m\.scoreP1 != null \|\| m\.scoreP2 != null \|\| m\.pendingResult/.test(dentro),
+/* a REGRA: mora no motor */
+[
+  ["String(prop.revisaoDaChave) !== revisao", '① ⛔⛔ exige que a REVISÃO bata — proposta velha é recusada, não aplicada por cima'],
+  ['confrontosAfetados', '① ⛔⛔ confere os confrontos afetados antes de mexer']
+].forEach(function (par) {
+  ok(motor.indexOf(par[0]) >= 0, par[1]);
+});
+ok(/m\.winner \|\| m\.scoreP1 != null \|\| m\.scoreP2 != null \|\| m\.pendingResult/.test(motor),
   '① ⛔ e recusa se houver resultado, placar ou placar esperando — redesenhar apagaria resultado');
 /* ⛔⛔ E CONFERE O RETRATO INTEIRO, não só "tem placar?": a proposta guardou id, p1 e p2. Uma troca
  * de duplas sem placar passava batido e seria apagada pelo redesenho. */
-ok(/String\(m\.p1 == null \? '' : m\.p1\) !== String\(\(c && c\.p1\) \|\| ''\)/.test(dentro),
+ok(/String\(m\.p1 == null \? '' : m\.p1\) !== String\(\(c && c\.p1\) \|\| ''\)/.test(motor),
   '① ⛔⛔ compara p1 do retrato com o que está na chave agora');
-ok(/String\(m\.p2 == null \? '' : m\.p2\) !== String\(\(c && c\.p2\) \|\| ''\)/.test(dentro),
+ok(/String\(m\.p2 == null \? '' : m\.p2\) !== String\(\(c && c\.p2\) \|\| ''\)/.test(motor),
   '① e p2 também');
 /* ⛔ e nomeia QUEM entra, não só a linha */
-ok(/assinaturasDaDecisao/.test(dentro) && /prop\.inscritos/.test(dentro),
+ok(/assinaturasDaDecisao/.test(motor) && /prop\.inscritos/.test(motor),
   '① ⛔⛔ a identidade de quem entra sai da PRÓPRIA proposta — o core recolhe a espera inteira');
-ok(/assinaturasDaDecisao: assinaturasDaDecisao/.test(dentro), '① e vai para o motor');
-ok(/sem-pendencia/.test(dentro),
+ok(/assinaturasDaDecisao: assinaturas/.test(motor), '① e vai para o integrador');
+ok(/sem-pendencia/.test(motor),
   '① ⭐ pendência já resolvida devolve "nada mudou" em vez de estourar — é a segunda confirmação simultânea');
 
 /* ── ② O INSTANTE VEM DE FORA DA TRANSAÇÃO ─────────────────────────────────── */
@@ -62,8 +78,8 @@ ok(iAgora > 0 && iAgora < iTx,
   '② ⛔ o instante é calculado ANTES da transação — a transação é repetida, e hora criada dentro faz cada tentativa gravar diferente');
 
 /* ── ③ CANCELAR TAMBÉM PERSISTE ────────────────────────────────────────────── */
-ok(/acao === 'cancelar'[\s\S]{0,300}delete mapa\[linha\][\s\S]{0,200}_gravaTorneio/.test(dentro),
-  '③ ⛔⛔ "manter como está" APAGA a pendência e GRAVA — decisão que não fica registrada volta amanhã');
+ok(/acao === 'cancelar'[\s\S]{0,120}delete mapa\[linha\]/.test(motor),
+  '③ ⛔⛔ "manter como está" APAGA a pendência — e a casca grava, porque `mudou` volta verdadeiro');
 
 /* ── ④ O REDESENHO SÓ SAI POR AQUI ─────────────────────────────────────────── */
 const ad = fs.readFileSync(path.join(ROOT, 'js/views/chaves-adapter.js'), 'utf8');
@@ -72,8 +88,8 @@ ok(/_politicaAqui === 'bye' && !_decidida/.test(adCod),
   '④ ⛔⛔ o integrador só redesenha a folga quando a decisão é DESTA linha — fora disso, recusa como antes');
 ok(/opts\.decisaoDoOrganizador === true/.test(adCod) && /opts\.linhaDaDecisao/.test(adCod),
   '④ e "decidida" exige as DUAS coisas: o interruptor e a linha');
-ok(/decisaoDoOrganizador: true/.test(dentro),
-  '④ e é a callable quem o liga');
+ok(/decisaoDoOrganizador: true/.test(motor),
+  '④ e é a decisão quem o liga');
 const core = fs.readFileSync(path.join(ROOT, 'functions-autodraw/draw-core.js'), 'utf8');
 ok(/decisaoDoOrganizador: !!\(opts && opts\.decisaoDoOrganizador\)/.test(core),
   '④ o core repassa o interruptor em vez de ligá-lo por conta própria');
@@ -94,7 +110,7 @@ ok(automaticos.length >= 2 && comFlag.length === 0,
  * cujo organizador não foi perguntado. Chave publicada de outra linha mudando por tabela.
  * ⚠️ Aqui não basta ler o código: o que importa é o COMPORTAMENTO com duas linhas pendentes. */
 ok(/linhaDaDecisao/.test(adCod), '④b o integrador conhece a linha decidida');
-ok(/linhaDaDecisao: linha/.test(dentro), '④b e a callable manda QUAL linha foi decidida');
+ok(/linhaDaDecisao: linha/.test(motor), '④b e a decisão manda QUAL linha foi decidida');
 (function () {
   const H = require(path.join(ROOT, 'tests/headless.js'));
   ['chaves.js', 'chaves-adapter.js'].forEach(function (f) { try { H.load(f); } catch (e) {} });
@@ -247,13 +263,12 @@ ok(/linhaDaDecisao: linha/.test(dentro), '④b e a callable manda QUAL linha foi
  * pertence a chave nenhuma. O inscrito ficava visível e sem decisão possível, para sempre.
  * ⇒ ela é ARQUIVÁVEL: aceita `cancelar` sem revisão, e recusa `confirmar`, porque confirmar exigiria
  * saber a linha — que é exatamente o que falta. */
-const iSemD = fn.indexOf("const SEM_DESTINO = '__sem_destino__';");
-ok(iSemD > 0 && iSemD < i0 + bloco.length, '④e a porta conhece a pendência sem destino');
-ok(/ehSemDestino && acao !== 'cancelar'[\s\S]{0,200}Só é possível arquivá-lo/.test(bloco),
+ok(motor.indexOf("const SEM_DESTINO = '__sem_destino__';") >= 0, '④e a regra conhece a pendência sem destino');
+ok(/ehSemDestino && acao !== 'cancelar'[\s\S]{0,200}Só é possível arquivá-lo/.test(motor),
   '④e ⛔⛔ ela só aceita ARQUIVAR — confirmar exigiria saber a linha');
-ok(/if \(!revisao && !ehSemDestino\)/.test(bloco),
+ok(/if \(!revisao && !ehSemDestino\)/.test(motor),
   '④e ⛔ e a revisão obrigatória não vale para ela, que nasce sem confrontos para assinar');
-ok(/!ehSemDestino && String\(prop\.revisaoDaChave\) !== revisao/.test(dentro),
+ok(/!ehSemDestino && String\(prop\.revisaoDaChave\) !== revisao/.test(motor),
   '④e nem a conferência de revisão lá dentro');
 ok(/__sem_destino__/.test(brCodParaSemDestino()),
   '④e ⛔⛔ e a TELA a mostra, com botão de arquivar — senão ela ficaria invisível');
@@ -324,20 +339,157 @@ function brCodParaSemDestino() {
 ok(/res\.assinaturasAplicadas/.test(adCod),
   '④h o adapter devolve QUAIS inscrições realmente entraram');
 ok(/assinaturasAplicadas/.test(core), '④h e o core repassa');
-const iApaga = dentro.indexOf('delete mapa[linha];', dentro.indexOf('const r = integrateLateFn'));
-const iMotor = dentro.indexOf('const r = integrateLateFn');
-ok(iMotor > 0 && iApaga > iMotor,
-  '④h ⛔⛔ a pendência é apagada DEPOIS do motor, não antes');
-ok(/const faltaram = assinaturasDaDecisao\.filter/.test(dentro),
-  '④h ⛔⛔ e só depois de conferir que nenhuma ficou de fora');
-const iFalta = dentro.indexOf('const faltaram =');
-ok(iFalta > 0 && iFalta < iApaga,
-  '④h ⛔ a conferência vem ANTES do apagar — depois já seria tarde');
-ok(/já não está na lista de espera/.test(dentro),
+const iIntegra = motor.indexOf('const r = integrar(t, {');
+const iApaga = motor.indexOf('delete mapa[linha];', iIntegra);
+ok(iIntegra > 0 && iApaga > iIntegra,
+  '④h ⛔⛔ a pendência é apagada DEPOIS do integrador, não antes');
+const iFalta = motor.indexOf('const faltaram =');
+ok(iFalta > iIntegra && iFalta < iApaga,
+  '④h ⛔ e a conferência de quem entrou vem ANTES do apagar — depois já seria tarde');
+ok(/já não está na lista de espera/.test(motor),
   '④h e o erro diz o que aconteceu, em vez de falhar calado');
-/* ⛔ e o cancelar continua apagando: ele não depende do motor */
-ok(/acao === 'cancelar'[\s\S]{0,300}delete mapa\[linha\]/.test(dentro),
-  '④h ⭐ arquivar segue apagando direto — ali não há motor para esperar');
+
+/* ══════════════════════════════════════════════════════════════════════════════
+ * ⑧ A DECISÃO, EXERCIDA DE VERDADE — não lida no texto.
+ *
+ * ⛔⛔ Pedido do revisor, e ele tem razão: até aqui eu conferia a regra procurando palavras no
+ * arquivo da callable. Teste que lê texto dá verde com o comportamento quebrado — já me pegou nesta
+ * mesma leva. Por isso a regra saiu da callable e virou função pura do motor: agora ela roda com um
+ * torneio na mão, e a callable é só a casca (autenticar, abrir transação, reler, gravar).
+ * ⚠️ O `integrar` é injetado, então cada caso abaixo controla o que o motor devolve.
+ * ════════════════════════════════════════════════════════════════════════════ */
+(function () {
+  const core = require(path.join(ROOT, 'functions-autodraw/draw-core.js'));
+  const D = core.decidirTardioNaFolga;
+  ok(typeof D === 'function', '⑧ a decisão é exportada pelo motor e executável');
+  if (typeof D !== 'function') return;
+
+  const montaT = () => ({
+    id: 'tx1',
+    matches: [
+      { id: 'VC-R1-P1', p1: 'A', p2: 'B' },
+      { id: 'VC-R1-P2', p1: 'C', p2: 'D' }
+    ],
+    tardiosPendentesPorLinha: {
+      '': {
+        linha: '', politica: 'bye', revisaoDaChave: 'r1',
+        inscritos: [{ uids: ['shared', 'a'], chaves: ['uid:shared', 'uid:a'], nome: 'shared / a' }],
+        confrontosAfetados: [
+          { id: 'VC-R1-P1', p1: 'A', p2: 'B' },
+          { id: 'VC-R1-P2', p1: 'C', p2: 'D' }
+        ]
+      }
+    }
+  });
+  const foto = (t) => JSON.stringify(t.matches);
+
+  /* ── caso 1: o motor não aplica (quem foi proposto saiu da espera) ──────── */
+  (function () {
+    const t = montaT(); const antes = foto(t);
+    const r = D(t, { linha: '', revisao: 'r1', acao: 'confirmar', agoraIso: 'i',
+      integrar: function () { return { ok: true, placed: 0, assinaturasAplicadas: [] }; } });
+    ok(r.ok === false && r.codigo === 'failed-precondition',
+      '⑧ ⛔⛔ espera sem quem foi proposto ⇒ RECUSA (veio ' + JSON.stringify(r.codigo) + ')');
+    ok(/já não está na lista de espera/.test(String(r.mensagem || '')),
+      '⑧ e a mensagem diz o que aconteceu');
+    ok(!!t.tardiosPendentesPorLinha[''],
+      '⑧ ⛔⛔ a pendência CONTINUA LÁ — apagar e não aplicar era o pior dos dois mundos');
+    ok(foto(t) === antes, '⑧ e nenhum confronto foi tocado');
+  })();
+
+  /* ── caso 2: a dupla da espera tem um membro em comum, mas não é a proposta ─ */
+  (function () {
+    const t = montaT(); const antes = foto(t);
+    const r = D(t, { linha: '', revisao: 'r1', acao: 'confirmar', agoraIso: 'i',
+      /* o motor recebeu a assinatura certa e nada casou: devolve zero aplicadas */
+      integrar: function (tt, o) {
+        ok((o.assinaturasDaDecisao || []).join() === 'uid:a|uid:shared',
+          '⑧ ⛔ o motor recebe a ASSINATURA da inscrição, não os membros soltos');
+        return { ok: true, placed: 0, assinaturasAplicadas: [] };
+      } });
+    ok(r.ok === false, '⑧ ⛔⛔ dupla com membro em comum não confirma o pedido de outra dupla');
+    ok(!!t.tardiosPendentesPorLinha[''] && foto(t) === antes,
+      '⑧ e a pendência e a chave ficam intactas');
+  })();
+
+  /* ── caso 3: o caminho feliz ────────────────────────────────────────────── */
+  (function () {
+    const t = montaT();
+    const r = D(t, { linha: '', revisao: 'r1', acao: 'confirmar', agoraIso: 'i',
+      integrar: function () { return { ok: true, placed: 1, assinaturasAplicadas: ['uid:a|uid:shared'] }; } });
+    ok(r.ok === true && r.mudou === true,
+      '⑧ ⭐ quem foi proposto entrou ⇒ a decisão vale (' + JSON.stringify(r) + ')');
+    ok(!t.tardiosPendentesPorLinha[''],
+      '⑧ ⛔ e SÓ ENTÃO a pendência é removida');
+  })();
+
+  /* ── caso 4: a revisão não bate ─────────────────────────────────────────── */
+  (function () {
+    const t = montaT(); const antes = foto(t);
+    const r = D(t, { linha: '', revisao: 'OUTRA', acao: 'confirmar', agoraIso: 'i',
+      integrar: function () { ok(false, '⑧ o motor NÃO devia ser chamado com revisão velha'); return { ok: true }; } });
+    ok(r.ok === false && /A chave mudou/.test(String(r.mensagem || '')),
+      '⑧ ⛔⛔ revisão velha é recusada ANTES de tocar no motor');
+    ok(!!t.tardiosPendentesPorLinha[''] && foto(t) === antes, '⑧ e nada foi alterado');
+  })();
+
+  /* ── caso 5: o retrato mudou sem placar (troca de dupla) ────────────────── */
+  (function () {
+    const t = montaT();
+    t.matches[0].p2 = 'OUTRO';                       // trocou sem lançar placar
+    const r = D(t, { linha: '', revisao: 'r1', acao: 'confirmar', agoraIso: 'i',
+      integrar: function () { ok(false, '⑧ o motor NÃO devia rodar com o retrato diferente'); return { ok: true }; } });
+    ok(r.ok === false, '⑧ ⛔⛔ troca de dupla SEM placar também barra — era o furo que eu tinha');
+    ok(!!t.tardiosPendentesPorLinha[''], '⑧ e a pendência fica');
+  })();
+
+  /* ── caso 6: jogo já lançado entre os afetados ──────────────────────────── */
+  (function () {
+    const t = montaT();
+    t.matches[1].winner = 'C';
+    const r = D(t, { linha: '', revisao: 'r1', acao: 'confirmar', agoraIso: 'i',
+      integrar: function () { ok(false, '⑧ o motor NÃO devia rodar com resultado lançado'); return { ok: true }; } });
+    ok(r.ok === false && /apagaria resultado/.test(String(r.mensagem || '')),
+      '⑧ ⛔⛔ resultado lançado barra o redesenho');
+  })();
+
+  /* ── caso 7: arquivar ───────────────────────────────────────────────────── */
+  (function () {
+    const t = montaT();
+    const r = D(t, { linha: '', revisao: 'r1', acao: 'cancelar', agoraIso: 'i' });
+    ok(r.ok === true && r.mudou === true, '⑧ arquivar vale e é gravado');
+    ok(!t.tardiosPendentesPorLinha[''], '⑧ ⛔ e a pendência sai — decisão que não fica registrada volta amanhã');
+  })();
+
+  /* ── caso 8: a pendência sem destino só arquiva ─────────────────────────── */
+  (function () {
+    const t = { id: 't', matches: [], tardiosPendentesPorLinha: {
+      __sem_destino__: { linha: null, semDestino: true, revisaoDaChave: '', inscritos: [{ chaves: ['manual:x'], nome: 'X' }], confrontosAfetados: [] }
+    } };
+    const nao = D(t, { linha: '__sem_destino__', revisao: '', acao: 'confirmar', agoraIso: 'i' });
+    ok(nao.ok === false && /Só é possível arquivá-lo/.test(String(nao.mensagem || '')),
+      '⑧ ⛔⛔ sem chave definida NÃO confirma — escolher a linha seria inventar');
+    const sim = D(t, { linha: '__sem_destino__', revisao: '', acao: 'cancelar', agoraIso: 'i' });
+    ok(sim.ok === true && sim.mudou === true && !t.tardiosPendentesPorLinha.__sem_destino__,
+      '⑧ ⭐ mas ARQUIVA sem revisão — é a saída dela, e sem isso ela ficava presa para sempre');
+  })();
+
+  /* ── caso 9: pendência que já sumiu não é erro ──────────────────────────── */
+  (function () {
+    const t = { id: 't', matches: [], tardiosPendentesPorLinha: {} };
+    const r = D(t, { linha: '', revisao: 'r1', acao: 'confirmar', agoraIso: 'i' });
+    ok(r.ok === true && r.mudou === false,
+      '⑧ ⭐ segunda confirmação simultânea: a pendência já saiu ⇒ "nada mudou", sem estourar');
+  })();
+})();
+
+/* ⑧b E A CALLABLE É SÓ A CASCA — a regra não pode voltar a morar lá dentro. */
+ok(/decidirTardioNaFolgaFn\(t, \{/.test(dentro),
+  '⑧b ⛔⛔ a porta CHAMA a função do motor');
+ok(!/confrontosAfetados/.test(dentro),
+  '⑧b ⛔ e não reimplementa a conferência do retrato');
+ok(!/assinaturasAplicadas/.test(dentro),
+  '⑧b nem a conferência de quem entrou');
 
 /* ── ⑤ A TELA LÊ O QUE ESTÁ GRAVADO, NÃO `window` ──────────────────────────── */
 const br = fs.readFileSync(path.join(ROOT, 'js/views/bracket.js'), 'utf8');

@@ -1017,4 +1017,106 @@ function runLigaAction(t, actor, action, args) {
   });
 }
 
-module.exports = { generateLigaRound, applyTournamentWO, setPresenceWithWOSubstitution, resolveWOSubstitutionChoice, setTournamentWOAbsence, acceptLigaSubstitution, runLigaAction, compileFromFmt2, canRecompile, hasDrawnBracket, drawInitial, integrateLateEntries, formLatePairCore, splitLatePairCore, closeRoundCore, materializeNextPhase: g.window._phasesEngine && g.window._phasesEngine.materializeNextPhase, standingsDaFaseAnterior: g.window._phasesEngine && g.window._phasesEngine.standingsDaFaseAnterior, phaseComplete: g.window._phasesEngine && g.window._phasesEngine.phaseComplete, groupTeamStandings: g.window._phasesEngine && g.window._phasesEngine.groupTeamStandings, _window: g.window };
+/* ⛔⛔ A DECISÃO SOBRE TARDIO EM CHAVE DE FOLGA, COMO FUNÇÃO PURA.
+ *
+ * Ela vive aqui, e não dentro da callable, por um motivo medido: enquanto morava lá, a única forma
+ * de conferi-la era LER o texto do arquivo — e teste que lê texto dá verde com o comportamento
+ * quebrado. O revisor pediu exatamente isto: exercitar a decisão de verdade, não procurar palavras.
+ * ⇒ a callable vira casca (autenticar, abrir transação, reler, gravar) e TODA a regra está aqui,
+ * executável com um torneio na mão.
+ *
+ * Recebe o torneio JÁ RELIDO dentro da transação e um `integrar` que é o motor. Não lê banco, não
+ * grava, não sabe o que é Firestore: devolve o que deve acontecer.
+ *   → { ok:true, mudou:false }                   nada a fazer
+ *   → { ok:true, mudou:true }                    `t` foi alterado; o chamador grava
+ *   → { ok:false, codigo, mensagem }             recusa; o chamador NÃO grava
+ */
+function decidirTardioNaFolga(t, opts) {
+  const o = opts || {};
+  const linha = String(o.linha == null ? '' : o.linha);
+  const revisao = String(o.revisao || '');
+  const acao = String(o.acao || '');
+  const agoraIso = String(o.agoraIso || '');
+  const integrar = o.integrar;
+  const SEM_DESTINO = '__sem_destino__';
+  const ehSemDestino = (linha === SEM_DESTINO);
+  const nao = (codigo, mensagem, extra) => Object.assign({ ok: false, codigo, mensagem }, extra || {});
+
+  if (!['confirmar', 'cancelar'].includes(acao)) return nao('invalid-argument', 'Ação inválida.');
+  /* ⛔ a pendência SEM DESTINO nasce sem revisão (não pertence a chave nenhuma): exigir revisão dela
+   * a prendia para sempre. Ela aceita só arquivar; confirmar exigiria saber a linha, que é o que falta. */
+  if (ehSemDestino && acao !== 'cancelar') {
+    return nao('failed-precondition', 'Este pedido ainda não tem chave definida. Só é possível arquivá-lo.');
+  }
+  if (!revisao && !ehSemDestino) return nao('invalid-argument', 'Revisão da chave obrigatória.');
+
+  const mapa = t && t.tardiosPendentesPorLinha;
+  const prop = (mapa && Object.prototype.hasOwnProperty.call(mapa, linha)) ? mapa[linha] : null;
+  if (!prop) return { ok: true, mudou: false, motivo: 'sem-pendencia' };
+  if (!ehSemDestino && String(prop.revisaoDaChave) !== revisao) {
+    return nao('failed-precondition',
+      'A chave mudou desde que este pedido foi feito. Abra de novo para decidir sobre a chave atual.');
+  }
+
+  if (acao === 'cancelar') { delete mapa[linha]; return { ok: true, mudou: true, acao }; }
+
+  /* ── CONFIRMAR ──────────────────────────────────────────────────────────── */
+  const win = (typeof g !== 'undefined' && g.window) ? g.window : (typeof window !== 'undefined' ? window : {});
+  const todos = (typeof win._collectAllMatches === 'function')
+    ? (win._collectAllMatches(t) || []) : (Array.isArray(t.matches) ? t.matches : []);
+  const porId = {};
+  todos.forEach((m) => { if (m && m.id != null) porId[String(m.id)] = m; });
+
+  /* ⛔ o retrato é conferido INTEIRO (id, p1, p2). Só "tem placar?" deixava passar uma troca de
+   * duplas sem placar, que o redesenho apagaria sem ninguém ver. */
+  const mudou = (prop.confrontosAfetados || []).filter((c) => {
+    const m = porId[String(c && c.id)];
+    if (!m) return true;
+    return String(m.p1 == null ? '' : m.p1) !== String((c && c.p1) || '') ||
+           String(m.p2 == null ? '' : m.p2) !== String((c && c.p2) || '');
+  });
+  if (mudou.length) {
+    return nao('failed-precondition',
+      'A chave mudou desde que este pedido foi feito. Abra de novo para decidir sobre a chave atual.',
+      { mudou: mudou.length });
+  }
+  const sujos = (prop.confrontosAfetados || []).filter((c) => {
+    const m = porId[String(c && c.id)];
+    return !!(m && (m.winner || m.scoreP1 != null || m.scoreP2 != null || m.pendingResult));
+  });
+  if (sujos.length) {
+    return nao('failed-precondition',
+      'Há jogo já lançado entre os que mudariam. Refazer a chave apagaria resultado.', { sujos: sujos.length });
+  }
+
+  /* ⛔ a identidade é da INSCRIÇÃO inteira: uma pessoa em comum não faz duas duplas serem a mesma */
+  const assinaturas = (prop.inscritos || []).map((x) => {
+    const ks = (x && Array.isArray(x.chaves) && x.chaves.length)
+      ? x.chaves
+      : ((x && Array.isArray(x.uids) ? x.uids : []).map((u) => 'uid:' + String(u)));
+    return ks.map(String).sort().join('|');
+  }).filter(Boolean);
+  if (!assinaturas.length) {
+    return nao('failed-precondition', 'Este pedido não identifica quem entraria. Peça a inscrição de novo.');
+  }
+
+  if (typeof integrar !== 'function') return nao('failed-precondition', 'Motor de chave indisponível.');
+  const r = integrar(t, {
+    agora: agoraIso, decisaoDoOrganizador: true, linhaDaDecisao: linha, assinaturasDaDecisao: assinaturas
+  });
+  if (!r || !r.ok) return nao('failed-precondition', (r && r.reason) || 'Não foi possível refazer a chave.');
+
+  /* ⛔⛔ A PENDÊNCIA SÓ SAI DEPOIS DE O MOTOR APLICAR, e só se ninguém ficou de fora. Apagar antes e
+   * apostar fazia o pedido sumir sem ninguém entrar quando a pessoa já não estava na espera. */
+  const aplicadas = Array.isArray(r.assinaturasAplicadas) ? r.assinaturasAplicadas.map(String) : [];
+  const faltaram = assinaturas.filter((a) => aplicadas.indexOf(String(a)) < 0);
+  if (faltaram.length) {
+    return nao('failed-precondition',
+      'Quem este pedido nomeia já não está na lista de espera. Confira a inscrição e decida de novo.',
+      { faltaram: faltaram.length });
+  }
+  delete mapa[linha];
+  return { ok: true, mudou: true, acao, aplicados: r.placed || 0 };
+}
+
+module.exports = { decidirTardioNaFolga, generateLigaRound, applyTournamentWO, setPresenceWithWOSubstitution, resolveWOSubstitutionChoice, setTournamentWOAbsence, acceptLigaSubstitution, runLigaAction, compileFromFmt2, canRecompile, hasDrawnBracket, drawInitial, integrateLateEntries, formLatePairCore, splitLatePairCore, closeRoundCore, materializeNextPhase: g.window._phasesEngine && g.window._phasesEngine.materializeNextPhase, standingsDaFaseAnterior: g.window._phasesEngine && g.window._phasesEngine.standingsDaFaseAnterior, phaseComplete: g.window._phasesEngine && g.window._phasesEngine.phaseComplete, groupTeamStandings: g.window._phasesEngine && g.window._phasesEngine.groupTeamStandings, _window: g.window };

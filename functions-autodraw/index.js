@@ -37,6 +37,7 @@ let acceptLigaSubstitutionFn = null;
 let runLigaActionFn = null;
 let drawInitial = null;   // v1.2.25: motor do SORTEIO INICIAL (Etapa 3 · fase A) — usado pela drawRound
 let integrateLateFn = null; // v1.2.57: integração de tardios no servidor — usado pela integrateLateEntries
+let decidirTardioNaFolgaFn = null; // regra da decisão do tardio em chave de folga (motor)
 let formLatePairFn = null;  // formar dupla na espera + integrar, atômico — usado pela formLatePair
 let splitLatePairFn = null; // desfazer dupla da espera, atômico — usado pela splitLatePair
 let closeRoundFn = null;
@@ -92,6 +93,8 @@ try {
   runLigaActionFn = _dc.runLigaAction;
   drawInitial = _dc.drawInitial;
   integrateLateFn = _dc.integrateLateEntries;
+  /* a decisão do tardio em chave de folga é função PURA do motor — a callable é só a casca */
+  decidirTardioNaFolgaFn = _dc.decidirTardioNaFolga;
   formLatePairFn = _dc.formLatePairCore;
   splitLatePairFn = _dc.splitLatePairCore;
   closeRoundFn = _dc.closeRoundCore;
@@ -3742,24 +3745,12 @@ exports.resolvePendingLateBye = onCall(async (request) => {
   const revisao = String(d.revisaoDaChave || '').trim();
   const acao = String(d.acao || '').trim();
   if (!tId) throw new HttpsError('invalid-argument', 'Torneio obrigatório.');
-  if (!['confirmar', 'cancelar'].includes(acao)) throw new HttpsError('invalid-argument', 'Ação inválida.');
-  /* ⛔⛔ A PENDÊNCIA SEM DESTINO NASCE SEM REVISÃO, de propósito: ela não pertence a chave nenhuma,
-   * então não há confrontos para assinar. Exigir revisão aqui a prendia para sempre — o inscrito
-   * ficava visível e sem saída. Ela aceita apenas ARQUIVAR; confirmar exigiria saber a linha, que é
-   * justamente o que falta. Achado do revisor. */
-  const SEM_DESTINO = '__sem_destino__';
-  const ehSemDestino = (linha === SEM_DESTINO);
-  if (ehSemDestino && acao !== 'cancelar') {
-    throw new HttpsError('failed-precondition',
-      'Este pedido ainda não tem chave definida. Só é possível arquivá-lo.');
-  }
-  if (!revisao && !ehSemDestino) throw new HttpsError('invalid-argument', 'Revisão da chave obrigatória.');
   if (acao === 'confirmar' && typeof integrateLateFn !== 'function') {
     throw new HttpsError('failed-precondition', 'Motor de chave indisponível.');
   }
   const ref = db.collection('tournaments').doc(tId);
-  // ⛔ instante estável FORA da transação: a transação é repetida quando há disputa, e hora criada
-  // lá dentro faz cada tentativa produzir um documento diferente.
+  /* ⛔ instante estável FORA da transação: ela é repetida quando há disputa, e hora criada lá dentro
+   * faz cada tentativa produzir um documento diferente. */
   const agoraIso = new Date().toISOString();
   return db.runTransaction(async (tx) => {
     const t = await _leTorneio(tx, ref, tId);
@@ -3767,100 +3758,24 @@ exports.resolvePendingLateBye = onCall(async (request) => {
     if (!_isTournamentAdmin(t, uid)) {
       throw _drawFail('permission-denied', 'Só a organização decide sobre a chave.', { tId, uid });
     }
-    const mapa = t.tardiosPendentesPorLinha;
-    const prop = mapa && Object.prototype.hasOwnProperty.call(mapa, linha) ? mapa[linha] : null;
-    if (!prop) return { ok: true, changed: false, motivo: 'sem-pendencia' };
-    if (!ehSemDestino && String(prop.revisaoDaChave) !== revisao) {
-      throw _drawFail('failed-precondition',
-        'A chave mudou desde que este pedido foi feito. Abra de novo para decidir sobre a chave atual.',
-        { tId, linha });
-    }
     const antes = _antesDoMotor(t);
-
-    if (acao === 'cancelar') {
-      delete mapa[linha];
-      const b0 = _gravaTorneio(tx, ref, t, antes, { agoraIso });
-      return { ok: true, changed: true, acao: acao, tournament: b0.clean };
+    /* ⛔⛔ TODA A REGRA MORA NO MOTOR (`decidirTardioNaFolga`), não aqui. Enquanto ela morava dentro
+     * desta callable, a única forma de conferi-la era LER o texto do arquivo — e teste que lê texto
+     * dá verde com o comportamento quebrado. Aqui ficou só a casca: autenticar, abrir a transação,
+     * reler e gravar. */
+    if (typeof decidirTardioNaFolgaFn !== 'function') {
+      throw new HttpsError('failed-precondition', 'Motor de decisão indisponível.');
     }
-
-    // ── CONFIRMAR: os confrontos afetados não podem ter resultado ──────────────
-    const porId = {};
-    const todos = (typeof drawWindow._collectAllMatches === 'function')
-      ? (drawWindow._collectAllMatches(t) || []) : (Array.isArray(t.matches) ? t.matches : []);
-    todos.forEach((m) => { if (m && m.id != null) porId[String(m.id)] = m; });
-    /* ⛔⛔ O RETRATO É CONFERIDO INTEIRO, não só "tem placar?". A proposta guardou id, p1 e p2 de
-     * cada confronto afetado; se QUALQUER um deles estiver diferente agora, a chave mudou desde o
-     * pedido — troca de dupla, substituição, desfazer par — e redesenhar apagaria essa mudança sem
-     * ninguém ver. Eu conferia só resultado, e uma troca de slots sem placar passava batido. */
-    const mudou = (prop.confrontosAfetados || []).filter((c) => {
-      const m = porId[String(c && c.id)];
-      if (!m) return true;                       // sumiu: a chave não é mais a que a proposta viu
-      return String(m.p1 == null ? '' : m.p1) !== String((c && c.p1) || '') ||
-             String(m.p2 == null ? '' : m.p2) !== String((c && c.p2) || '');
+    const out = decidirTardioNaFolgaFn(t, {
+      linha, revisao, acao, agoraIso, integrar: integrateLateFn
     });
-    if (mudou.length) {
-      throw _drawFail('failed-precondition',
-        'A chave mudou desde que este pedido foi feito. Abra de novo para decidir sobre a chave atual.',
-        { tId, linha, mudou: mudou.length });
-    }
-    const sujos = (prop.confrontosAfetados || []).filter((c) => {
-      const m = porId[String(c && c.id)];
-      return !!(m && (m.winner || m.scoreP1 != null || m.scoreP2 != null || m.pendingResult));
-    });
-    if (sujos.length) {
-      throw _drawFail('failed-precondition',
-        'Há jogo já lançado entre os que mudariam. Refazer a chave apagaria resultado.',
-        { tId, linha, sujos: sujos.length });
-    }
-
-    // redesenha pelo motor canônico — a MESMA porta do resto, com o interruptor da decisão
-    /* ⛔⛔ A PENDÊNCIA SÓ SAI DEPOIS DE O MOTOR APLICAR. Eu apagava antes e apostava: se a pessoa já
-     * não estivesse na espera (desistiu, foi promovida, virou dupla), o motor não aplicava nada e a
-     * pendência sumia sem ninguém entrar — o organizador via o pedido desaparecer e nada acontecer.
-     * ⇒ apaga depois, e só se TODAS as inscrições da proposta tiverem entrado. Faltando uma, nada é
-     * gravado e a pendência fica para decisão explícita. */
-    /* ⛔⛔ A LINHA VAI JUNTO. Sem ela o integrador varreria todas e confirmar a Ouro redesenharia a
-     * Prata, que tem decisão própria pendente e cujo organizador não foi perguntado. */
-    /* ⛔⛔ SÓ OS INSCRITOS DESTA PROPOSTA. O core recolhe a espera INTEIRA do torneio, e o adapter
-     * filtra por categoria — então confirmar a Ouro inseria também o tardio da Prata na Ouro. Medido
-     * pelo revisor com duas linhas. Nomear a linha não basta: é preciso nomear QUEM.
-     * ⇒ os uids saem de `prop.inscritos`, que é o retrato do que o organizador está confirmando, e o
-     * core intersecta a espera com esse conjunto. Quem não estiver nele não entra, venha de onde vier. */
-    /* ⛔ A IDENTIDADE COBRE QUEM NÃO TEM CONTA. O organizador inscreve gente à mão, e essa gente
-     * nasce sem uid. Exigir uid aqui deixava o inscrito manual num beco: aparecia esperando e o
-     * botão de confirmar recusava para sempre. As chaves são uid quando há, id manual quando não. */
-    /* ⛔⛔ A ASSINATURA DA INSCRIÇÃO INTEIRA, não a lista solta de membros. Juntar todas as chaves
-     * num saco e casar por interseção deixava uma dupla (compartilhado, B) entrar no lugar da dupla
-     * (compartilhado, A) que foi proposta — uma pessoa em comum não faz duas duplas serem a mesma. */
-    const assinaturasDaDecisao = (prop.inscritos || []).map((x) => {
-      const ks = (x && Array.isArray(x.chaves) && x.chaves.length)
-        ? x.chaves
-        : ((x && Array.isArray(x.uids) ? x.uids : []).map((u) => 'uid:' + String(u)));
-      return ks.map(String).sort().join('|');
-    }).filter((a) => !!a);
-    if (!assinaturasDaDecisao.length) {
-      throw _drawFail('failed-precondition',
-        'Este pedido não identifica quem entraria. Peça a inscrição de novo.', { tId, linha });
-    }
-    const r = integrateLateFn(t, {
-      agora: agoraIso, decisaoDoOrganizador: true, linhaDaDecisao: linha,
-      assinaturasDaDecisao: assinaturasDaDecisao
-    });
-    if (!r || !r.ok) {
-      throw _drawFail('failed-precondition', (r && r.reason) || 'Não foi possível refazer a chave.', { tId, linha });
-    }
-    const aplicadas = Array.isArray(r.assinaturasAplicadas) ? r.assinaturasAplicadas.map(String) : [];
-    const faltaram = assinaturasDaDecisao.filter((a) => aplicadas.indexOf(String(a)) < 0);
-    if (faltaram.length) {
-      throw _drawFail('failed-precondition',
-        'Quem este pedido nomeia já não está na lista de espera. Confira a inscrição e decida de novo.',
-        { tId, linha, faltaram: faltaram.length });
-    }
-    delete mapa[linha];
+    if (!out.ok) throw _drawFail(out.codigo, out.mensagem, { tId, linha });
+    if (!out.mudou) return { ok: true, changed: false, motivo: out.motivo || null };
     const b = _gravaTorneio(tx, ref, t, antes, { agoraIso });
-    return { ok: true, changed: true, acao: acao, aplicados: r.placed || 0, tournament: b.clean };
+    return { ok: true, changed: true, acao: out.acao, aplicados: out.aplicados || 0, tournament: b.clean };
   });
 });
+
 
 // ─── Cancelamento da preparação de sorteio: intenção server-side ─────────────
 // Antes do sorteio efetivo, os painéis podem suspender o torneio/fechar inscrição
