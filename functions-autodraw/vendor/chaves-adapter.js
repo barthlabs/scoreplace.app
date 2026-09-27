@@ -1072,7 +1072,46 @@
       var _politicaAqui = (t && t.politicaDaChave) || 'repescagem';
       if (_politicaAqui === 'bye') {
         pendentesPorGrupo[ns || ''] = (pendentesPorGrupo[ns || ''] || []).concat(novos);
-        if (typeof window._log === 'function') {
+        /* ⛔⛔ A PENDÊNCIA TEM DE SOBREVIVER À ABA. Eu a deixava só numa função de `window`, que some
+         * quando a pessoa fecha a página: o organizador nunca mais saberia que alguém está esperando,
+         * e o inscrito sumiria sem ninguém decidir nada. Apontado pelo revisor, e é o mesmo defeito
+         * de sempre — estado que importa guardado onde não dura.
+         * ⇒ a proposta vai para o DOCUMENTO DO TORNEIO, serializável e por LINHA:
+         *   · quem está esperando, por uid (nome é rótulo e envelhece);
+         *   · a REVISÃO da chave no momento em que a proposta nasceu — se a chave mudar por outro
+         *     caminho, quem for confirmar percebe que a proposta é velha em vez de redesenhar por
+         *     cima de outra coisa;
+         *   · os CONFRONTOS AFETADOS, que na folga são exatamente os da rodada de entrada: é ela que
+         *     é dimensionada pela potência de 2 abaixo de N, então mudar N muda quem estreia.
+         * ⚠️ Isto NÃO redesenha nada e NÃO é a confirmação: é o registro da decisão pendente. */
+        var _rodadaDeEntrada = null;
+        doGrupo.forEach(function (m) {
+          if (!m || !_ehElim(m)) return;
+          var _r = (typeof m.round === 'number') ? m.round : 1;
+          if (_rodadaDeEntrada == null || _r < _rodadaDeEntrada) _rodadaDeEntrada = _r;
+        });
+        var _afetados = doGrupo.filter(function (m) {
+          return m && _ehElim(m) && ((typeof m.round === 'number') ? m.round : 1) === _rodadaDeEntrada;
+        }).map(function (m) {
+          return { id: String(m.id), p1: String(m.p1 == null ? '' : m.p1), p2: String(m.p2 == null ? '' : m.p2) };
+        }).sort(function (x, y) { return String(x.id).localeCompare(String(y.id)); });
+        /* revisão = assinatura dos confrontos afetados. Barata, estável e suficiente: se qualquer
+         * um deles mudar, a assinatura muda e a proposta deixa de valer. */
+        var _bruto = _afetados.map(function (c) { return c.id + '\u0001' + c.p1 + '\u0001' + c.p2; }).join('\u0002');
+        var _rev = 0;
+        for (var _i = 0; _i < _bruto.length; _i++) { _rev = ((_rev << 5) - _rev + _bruto.charCodeAt(_i)) | 0; }
+        t.tardiosPendentesPorLinha = t.tardiosPendentesPorLinha || {};
+        t.tardiosPendentesPorLinha[ns || ''] = {
+          linha: String(ns || ''),
+          politica: 'bye',
+          criadaEm: new Date().toISOString(),
+          revisaoDaChave: String(_rev),
+          inscritos: novos.map(function (p) {
+            return { uids: _uidsDe(p), nome: String((p && (p.name || p.nome)) || '') };
+          }),
+          confrontosAfetados: _afetados
+        };
+        if (typeof window !== 'undefined' && typeof window._log === 'function') {
           window._log('[tardio] chave em FOLGA: ' + novos.length + ' inscrito(s) aguardando decisão do organizador — entrar exige refazer a chave');
         }
         return;

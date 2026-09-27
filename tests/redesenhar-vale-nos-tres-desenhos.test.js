@@ -196,6 +196,57 @@ ok(/pendentesPorGrupo/.test(adCod),
   '⑤ o tardio fica REGISTRADO como pendente, não desaparece em silêncio');
 ok(/_tardiosAguardandoNovaChave/.test(adCod),
   '⑤ ⭐ e a tela tem por onde perguntar, para oferecer a decisão ao organizador');
+
+/* ── ⑥ A PENDÊNCIA SOBREVIVE À ABA ──────────────────────────────────────────
+ * ⛔⛔ Achado do revisor: eu deixava a pendência SÓ numa função de `window`. Fechada a página, o
+ * organizador nunca mais saberia que alguém está esperando, e o inscrito sumiria sem decisão nenhuma.
+ * Estado que importa guardado onde não dura é o mesmo defeito de sempre.
+ * ⇒ a proposta vai gravada no torneio, por LINHA, e é EXERCIDA aqui — não conferida por texto. */
+const _pend = (function () {
+  const N = 36;
+  const t = {
+    id: 'tp', politicaDaChave: 'bye',
+    matches: A.build(N, 'simples', { participantes: gente(N), politicaDaChave: 'bye' }).matches
+  };
+  const tardio = { name: 'Tardio 37', uid: 'uid-tardio-37', presente: true };
+  try { A.integrarTardiosElim(t, [tardio]); } catch (e) { return { erro: e && e.message }; }
+  return { t: t };
+})();
+ok(!_pend.erro, '⑥ o integrador rodou no desenho de folga (' + (_pend.erro || 'ok') + ')');
+if (!_pend.erro) {
+  const mapa = _pend.t.tardiosPendentesPorLinha;
+  ok(mapa && typeof mapa === 'object', '⑥ ⛔⛔ a proposta foi GRAVADA no torneio');
+  const prop = mapa && mapa[Object.keys(mapa)[0]];
+  ok(!!prop, '⑥ e há uma proposta para a linha');
+  if (prop) {
+    ok(prop.politica === 'bye', '⑥ ela diz de que desenho é');
+    ok(Array.isArray(prop.inscritos) && prop.inscritos.length === 1,
+      '⑥ com quem está esperando (achei ' + ((prop.inscritos || []).length) + ')');
+    ok(((prop.inscritos[0] || {}).uids || []).indexOf('uid-tardio-37') >= 0,
+      '⑥ ⛔ identificado por UID, não pelo nome — nome é rótulo e envelhece');
+    ok(typeof prop.revisaoDaChave === 'string' && prop.revisaoDaChave.length > 0,
+      '⑥ ⛔⛔ com a REVISÃO da chave — sem ela, confirmar depois redesenharia por cima de outra coisa');
+    ok(Array.isArray(prop.confrontosAfetados) && prop.confrontosAfetados.length > 0,
+      '⑥ ⛔ e com os confrontos que mudariam (achei ' + ((prop.confrontosAfetados || []).length) + ')');
+    /* ⛔ serializável de verdade: é isso que separa "proposta gravada" de objeto vivo em memória */
+    let serializa = true;
+    try { JSON.parse(JSON.stringify(prop)); } catch (e) { serializa = false; }
+    ok(serializa, '⑥ ⛔ e a proposta é serializável — senão não chega ao banco');
+    /* ⛔ a revisão tem de MUDAR quando a chave muda, senão ela não protege nada */
+    const outro = { id: 'tp2', politicaDaChave: 'bye',
+      matches: A.build(32, 'simples', { participantes: gente(32), politicaDaChave: 'bye' }).matches };
+    try { A.integrarTardiosElim(outro, [{ name: 'T33', uid: 'uid-t33', presente: true }]); } catch (e) {}
+    const p2 = outro.tardiosPendentesPorLinha && outro.tardiosPendentesPorLinha[Object.keys(outro.tardiosPendentesPorLinha)[0]];
+    ok(!!p2 && p2.revisaoDaChave !== prop.revisaoDaChave,
+      '⑥ ⛔⛔ chave diferente ⇒ revisão diferente (senão a proposta velha passaria por vigente)');
+  }
+  /* ⛔ E NADA foi redesenhado: a proposta é registro, não ação. */
+  const antes = A.build(36, 'simples', { participantes: gente(36), politicaDaChave: 'bye' }).matches;
+  const chave = (ms) => ms.filter(function (m) { return m && (m.p1 || m.p2); })
+    .map(function (m) { return m.id + ':' + m.p1 + 'x' + m.p2; }).sort().join('|');
+  ok(chave(_pend.t.matches) === chave(antes),
+    '⑥ ⛔⛔ e NENHUM confronto foi mexido ao registrar a pendência');
+}
 /* ⚠️ E nos outros dois desenhos o tardio continua entrando sozinho — ali nada muda para ninguém. */
 ok(trocam.repescagem === 0 && trocam.sobra_unica === 0,
   '⑤ na repescagem e na sobra única o tardio segue entrando sem mexer em confronto já sorteado');
