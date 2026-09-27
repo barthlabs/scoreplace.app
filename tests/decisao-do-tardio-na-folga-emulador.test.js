@@ -74,9 +74,13 @@ const A = H.window._chavesAdapter;
     A.integrarTardiosElim(base, [tardio]);
     const linha = Object.keys(base.tardiosPendentesPorLinha || {})[0];
     assert(linha != null, 'a semeadura precisa produzir uma pendência');
+    /* ⛔ SEMEIA DIVIDIDO, que desde 2.3.113 é a única forma que existe: o gravador RECUSA torneio
+     * sem o marcador, e esta fixture ficou vermelha no dia em que a recusa entrou — o portão
+     * pegando o meu próprio teste. Marcador E contador, como a produção nasce. */
     await db.doc('tournaments/' + id).set({
       name: 'Folga ' + sufixo, sport: 'Beach Tennis', format: 'Eliminatórias Simples',
       creatorUid: dono, politicaDaChave: 'bye',
+      _semPesados: ['opponentHistory'], _nPartes: { opponentHistory: 0 }, opponentHistory: [],
       /* ⛔ sem isto ninguém entra por caminho nenhum: "Novos Confrontos" é o primeiro portão do
        * coletor de tardios, e é ortogonal a inscrições abertas. O teste tem de ligar o que o
        * organizador ligaria, senão mede a recusa errada. */

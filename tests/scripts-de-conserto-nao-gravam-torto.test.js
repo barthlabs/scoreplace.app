@@ -30,43 +30,56 @@ const ok = (c, m) => { if (c) { pass++; } else { fail++; console.error('  ✗ ' 
 console.log('\n──── scripts de conserto não gravam torto ────\n');
 
 const BLOQUEADOS = [
-  'scripts/remontar-repescagem.js',
-  'scripts/desmontar-repescagem-ouro-confra.js',
-  'scripts/reparar-times-da-repescagem.js'
+  /* ⛔ O MIGRADOR entra aqui por motivo DIFERENTE dos outros três: ele não tem defeito — ele
+   * perdeu a função. Medido em 27/set/2026: 78 torneios em produção, ZERO inteiros, e todo
+   * torneio novo nasce dividido. Um migrador sem nada para migrar só pode agir sobre torneio já
+   * dividido, e aí não é ferramenta, é risco. Ferramenta destrutiva que perdeu a função é a porta
+   * por onde a regressão entra. [[project_torneio_nasce_dividido]] */
+  /* ⚠️ CADA UM TEM A SUA PALAVRA DE GRAVAR. Eu escrevi `--gravar` para todos e três asserções
+   * ficaram vermelhas contra um bloqueio que FUNCIONA — o migrador grava com `--aplicar`. Teste que
+   * assume a interface em vez de declará-la mede a minha suposição. */
+  ['scripts/salto-fase2.js', '--aplicar'],
+  ['scripts/remontar-repescagem.js', '--gravar'],
+  ['scripts/desmontar-repescagem-ouro-confra.js', '--gravar'],
+  ['scripts/reparar-times-da-repescagem.js', '--gravar']
 ];
 
-BLOQUEADOS.forEach(function (rel) {
+BLOQUEADOS.forEach(function (par) {
+  const rel = par[0], bandeira = par[1];
   const full = path.join(ROOT, rel);
   ok(fs.existsSync(full), rel + ' existe');
   if (!fs.existsSync(full)) return;
   const src = fs.readFileSync(full, 'utf8');
 
   /* ① o bloqueio está no texto E é a PRIMEIRA coisa que roda — depois de ler o banco já seria tarde */
-  ok(/process\.argv\.includes\('--gravar'\)[\s\S]{0,400}process\.exit\(1\)/.test(src),
-    '① ' + rel + ': recusa --gravar e sai com erro');
-  const iBloq = src.indexOf("process.argv.includes('--gravar')");
+  const _re = new RegExp("process\\.argv\\.includes\\('" + bandeira + "'\\)[\\s\\S]{0,500}process\\.exit\\(1\\)");
+  ok(_re.test(src), '① ' + rel + ': recusa ' + bandeira + ' e sai com erro');
+  const iBloq = src.indexOf("process.argv.includes('" + bandeira + "')");
   const iRede = Math.min.apply(null, ['await fetch(', 'criarLeitor(', 'print-access-token']
     .map(function (t) { const i = src.indexOf(t); return i < 0 ? Number.MAX_SAFE_INTEGER : i; }));
   ok(iBloq > 0 && iBloq < iRede,
     '① ⛔⛔ ' + rel + ': o bloqueio vem ANTES de qualquer acesso ao banco');
 
   /* ② o motivo fica escrito — bloqueio sem motivo é removido por qualquer um na pressa */
-  ok(/mapa aninhado|recursiva em mapa/i.test(src) && /precondi/i.test(src),
-    '② ' + rel + ': os motivos estão escritos no arquivo');
+  /* ⛔ O MOTIVO TEM DE ESTAR ESCRITO, qualquer que seja ele — bloqueio sem motivo é removido na
+   * pressa por quem não sabe por que existe. Os três de conserto dizem "mapa aninhado/precondição";
+   * o migrador diz "não há mais o que migrar". */
+  ok(/mapa aninhado|recursiva em mapa/i.test(src) || /MIGRAÇÃO ENCERRADA|não há mais|perdeu a função/i.test(src),
+    '② ' + rel + ': o motivo do bloqueio está escrito no arquivo');
 
   /* ③ ⛔ EXERCIDO, não lido: roda o script de verdade com --gravar e exige saída 1 */
   let saiu = 0, texto = '';
   try {
-    texto = execFileSync(process.execPath, [full, '--gravar'],
+    texto = execFileSync(process.execPath, [full, bandeira],
       { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 20000 });
   } catch (e) {
     saiu = (e && typeof e.status === 'number') ? e.status : -1;
     texto = String((e && (e.stderr || e.stdout)) || '');
   }
-  ok(saiu === 1, '③ ⛔⛔ ' + rel + ': rodando com --gravar sai com código 1 (achei ' + saiu + ')');
-  ok(/BLOQUEADA/.test(texto), '③ e diz que está bloqueado, em vez de falhar calado');
+  ok(saiu === 1, '③ ⛔⛔ ' + rel + ': rodando com ' + bandeira + ' sai com código 1 (achei ' + saiu + ')');
+  ok(/BLOQUEADA|ENCERRADA/.test(texto), '③ e diz que está bloqueado, em vez de falhar calado');
   /* ⛔ e não pode ter chegado ao banco: se tivesse, teria pedido credencial ou impresso leitura */
-  ok(!/vaga\(s\)|reparadas|gravando/i.test(texto),
+  ok(!/vaga\(s\)|reparadas|gravando|TRANSFERIDO/i.test(texto),
     '③ ⛔ e não chegou a ler nem gravar nada antes de recusar');
 });
 

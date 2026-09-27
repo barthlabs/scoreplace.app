@@ -1,5 +1,5 @@
 'use strict';
-/* ENTRADA TARDIA PRECISA FUNCIONAR TAMBÉM NO TORNEIO DIVIDIDO.
+/* ENTRADA TARDIA FUNCIONA NO TORNEIO DIVIDIDO — que desde 2.3.113 é a única forma que existe.
  * node tests/tardio-entra-em-torneio-dividido.test.js
  *
  * ⛔⛔ O TORNEIO TEM DUAS FORMAS. Ele nasce inteiro num documento só; quando cresce, as partes
@@ -69,7 +69,7 @@ const A = H.window._chavesAdapter;
 
   /* Semeia um torneio na forma DIVIDIDA, pelo mesmo separador da produção: os jogos saem do
    * documento e vão para a subcoleção, e o marcador `_semPesados` diz que eles moram fora. */
-  const semear = async (sufixo, dividido) => {
+  const semear = async (sufixo) => {
     const id = 'tour_' + Date.now() + '_' + String(sufixo).padEnd(32, 'x');
     const jogos = A.build(8, 'simples', { participantes: gente(8), politicaDaChave: 'repescagem' }).matches;
     const base = {
@@ -80,9 +80,12 @@ const A = H.window._chavesAdapter;
       matches: jogos,
       rounds: [{ round: 1, matches: jogos }]
     };
-    if (!dividido) { await db.doc('tournaments/' + id).set(base); return id; }
     const p = Split.dividir(JSON.parse(JSON.stringify(base)), ['matches']);
-    const cfg = Object.assign({}, p.config, { _semPesados: ['matches'] });
+    /* nasce como a produção nasce: marcador E contador. Sem o contador, zero vira "não sei". */
+    const cfg = Object.assign({}, p.config, {
+      _semPesados: ['matches'],
+      _nPartes: { matches: (p.matches || []).length }
+    });
     delete cfg.matches;                           // na forma dividida ele NÃO mora no documento
     await db.doc('tournaments/' + id).set(cfg);
     const lote = db.batch();
@@ -102,20 +105,18 @@ const A = H.window._chavesAdapter;
     return sub.size;
   };
 
-  /* ── ① A FORMA INTEIRA FUNCIONA — é a régua de comparação ─────────────────
-   * Sem isto, um "não entrou" no dividido não prova nada: podia ser a fixture. */
-  const idInteiro = await semear('a', false);
-  const antesI = await quantosJogos(idInteiro);
-  const rI = await functions.integrateLateEntries.run({ auth: { uid: dono }, data: { tournamentId: idInteiro } });
-  const depoisI = await quantosJogos(idInteiro);
-  console.log('  inteiro : changed=' + (rI && rI.changed) + ' · jogos ' + antesI + ' → ' + depoisI);
-  assert.equal(rI && rI.changed, true, 'na forma inteira o tardio entra (régua de comparação)');
-  assert(depoisI > antesI, 'e a chave cresce');
+  /* ⛔⛔ AQUI HAVIA UM CASO "FORMA INTEIRA", como régua de comparação. Ele foi REMOVIDO no mesmo
+   * dia em que deixou de ser estado válido: desde 2.3.113 todo torneio nasce dividido, os 37 que
+   * ainda estavam inteiros foram migrados, e o gravador passou a RECUSAR torneio sem o marcador.
+   * Uma régua que mede um estado impossível não é régua — e esta ficou vermelha na hora, o que é
+   * exatamente o portão novo fazendo o trabalho dele.
+   * ⇒ a única forma que existe é a dividida, e é ela que este arquivo prova.
+   * [[project_torneio_nasce_dividido]] */
 
   /* ── ② A FORMA DIVIDIDA TEM DE FAZER O MESMO ──────────────────────────────
    * ⛔ Hoje ela NÃO faz: o integrador exige a lista plana de jogos, que a remontagem não produz,
    * e desiste antes de olhar para qualquer coisa. */
-  const idDividido = await semear('b', true);
+  const idDividido = await semear('b');
   const antesD = await quantosJogos(idDividido);
   const rD = await functions.integrateLateEntries.run({ auth: { uid: dono }, data: { tournamentId: idDividido } });
   const depoisD = await quantosJogos(idDividido);
@@ -132,7 +133,7 @@ const A = H.window._chavesAdapter;
   });
   assert(achou, '③ ⛔ o tardio aparece nos jogos GRAVADOS da subcoleção');
 
-  console.log('\n✅ entrada tardia funciona nas DUAS formas do torneio');
+  console.log('\n✅ entrada tardia funciona na forma dividida — a única que existe');
   await db.terminate();
   process.exit(0);
 })().catch((e) => { console.error(e && e.message ? e.message : e); process.exit(1); });

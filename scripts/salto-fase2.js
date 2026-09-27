@@ -29,6 +29,30 @@
  * Uso:  node scripts/salto-fase2.js <id> [--pitr <ISO>]            # em seco
  *       node scripts/salto-fase2.js <id> [--pitr <ISO>] --aplicar
  */
+
+/* ⛔⛔⛔ ESTA PORTA ESTÁ FECHADA — A MIGRAÇÃO ACABOU.
+ *
+ * Ordem do dono, 27/set/2026: _"se todo torneio esta dividido como deveria e todo torneio novo ja
+ * nasce dividido, nao precisa de porta de divisao nenhuma"_.
+ *
+ * MEDIDO NO MESMO DIA, em produção: **78 torneios, ZERO inteiros.** Os 37 que faltavam foram
+ * migrados por este script, um a um, com backup conferido byte a byte. E desde a 2.3.113 todo
+ * torneio NASCE dividido, então nenhum novo vai precisar dele.
+ *
+ * ⛔ POR QUE FECHAR EM VEZ DE DEIXAR QUIETO: um migrador que não tem mais nada para migrar só pode
+ * agir sobre torneio JÁ dividido — e aí ele não é ferramenta, é risco. Ferramenta destrutiva que
+ * perdeu a função é exatamente a porta por onde a regressão entra.
+ *
+ * ⚠️ A LEITURA CONTINUA LIBERADA (o ensaio, sem `--aplicar`): serve para conferir e não muda nada.
+ * `ver-backup.js` e `desfazer-divisao.js` seguem inteiros — o caminho de VOLTA não se fecha.
+ * [[project_torneio_nasce_dividido]] */
+if (process.argv.includes('--aplicar')) {
+  console.error('\n⛔ MIGRAÇÃO ENCERRADA — não há torneio inteiro para dividir.');
+  console.error('   Medido em 27/set/2026: 78 torneios em produção, ZERO sem o marcador.');
+  console.error('   Todo torneio nasce dividido desde a 2.3.113.');
+  console.error('   O ensaio (sem --aplicar) continua funcionando, e desfazer-divisao.js também.\n');
+  process.exit(1);
+}
 const path = require('path');
 const admin = require(path.join(__dirname, '..', 'functions', 'node_modules', 'firebase-admin'));
 const S = require(path.join(__dirname, '..', 'js', 'views', 'tournament-split-core.js'));
