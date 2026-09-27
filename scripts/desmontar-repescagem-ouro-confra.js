@@ -22,6 +22,20 @@
  *       node scripts/desmontar-repescagem-ouro-confra.js --gravar   (grava)
  */
 'use strict';
+/* ⛔⛔⛔ GRAVAÇÃO BLOQUEADA — mesma família do remontador, que JÁ derrubou produção em 26/set/2026.
+ * Os três defeitos são os mesmos e valem aqui: conversão não recursiva de mapa aninhado (o objeto do
+ * time tem mapa dentro de mapa), torneio escolhido por PEDAÇO DO NOME em vez do id exato, e gravação
+ * sem precondição contra o que foi lido — quem lançar placar no meio perde a gravação, ou a dele é
+ * perdida. Script de conserto pontual não pode ser mais perigoso que o defeito que conserta.
+ * ⚠️ A LEITURA CONTINUA LIBERADA: o ensaio (sem `--gravar`) é o que se usa para conferir e não
+ * arrisca nada. Para gravar de verdade: conserte os três pontos e tire o bloqueio no mesmo commit. */
+if (process.argv.includes('--gravar')) {
+  console.error('\n⛔ GRAVAÇÃO BLOQUEADA neste script — ele pode corromper o torneio.');
+  console.error('   Motivos no cabeçalho: mapa aninhado, alvo por nome e escrita sem precondição.');
+  console.error('   O ensaio (sem --gravar) continua funcionando.\n');
+  process.exit(1);
+}
+
 const path = require('path');
 const { execSync } = require('child_process');
 const Leitura = require(path.join(__dirname, 'lib', 'leitura-resiliente.js'));
