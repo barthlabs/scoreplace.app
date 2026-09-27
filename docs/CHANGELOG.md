@@ -1,3 +1,9 @@
+## 2.3.121 — 27/set/2026 (reabrir o mesmo cartão do torneio)
+
+- **Cartão → detalhe → Voltar → mesmo cartão volta a abrir o detalhe.** Um snapshot parcial podia conter um slot nulo na lista de inscrições. O histórico de atividades tentava ler a data desse slot, lançava uma exceção e o roteador mantinha a dashboard anterior, embora a URL já apontasse para o torneio.
+- O histórico agora ignora o slot nulo antes de ler qualquer campo. A regressão executa o construtor real duas vezes com o mesmo torneio — primeiro toque e retorno seguido do mesmo toque — e exige que os dois detalhes renderizem.
+- O ponto recebeu anotação no código e entrou no registro de pontos frágeis: uma futura alteração não pode transformar dado parcial em falha de navegação silenciosa.
+
 ## 2.3.97 — 24/set/2026 (a chamada ao servidor volta a ser autossuficiente)
 
 - 🔴 **A lista de inscritos dava erro ao abrir, e a causa fui eu.** Na 2.3.95, ao unificar o transporte das Cloud Functions, deixei `FirestoreDB._callFn` **delegando** para `window._callCF`, que mora em `js/views/tournaments-draw.js` — outro arquivo, 30 tags depois no `index.html`. Isso pôs uma **dependência entre arquivos no caminho mais quente do app**: *toda* chamada de servidor do `FirestoreDB` passa por ali, inclusive a que **abre a lista de inscritos**.

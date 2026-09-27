@@ -102,5 +102,11 @@ module.exports = [
       + 'a tela mostrava uma coisa e o banco guardava outra, sem nada acusar. typeof window nao '
       + 'distingue os lados: no servidor window e o proprio global, e foi por isso que a separacao '
       + 'nunca existiu',
+    data: '2026-09-27' },
+
+  { id: '18', arquivo: 'js/views/tournaments-analytics.js', ancora: 'if (p == null) return;',
+    marca: 'ABRIR O MESMO CARTÃO DUAS VEZES SEGUE O MESMO CAMINHO',
+    incidente: 'cartão → detalhe → Voltar → mesmo cartão mudava a hash, mas mantinha a dashboard: '
+      + 'o histórico de atividades lia enrolledAt de um slot nulo e o catch do roteador restaurava a tela anterior',
     data: '2026-09-27' }
 ];

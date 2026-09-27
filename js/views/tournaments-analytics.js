@@ -1173,6 +1173,10 @@ window._buildActivityLog = function(tournamentId) {
     // 2. Participants enrolled (use enrolledAt if available, or createdAt)
     var pList = Array.isArray(t.participants) ? t.participants : (t.participants ? Object.values(t.participants) : []);
     pList.forEach(function(p) {
+        /* ⛔ ABRIR O MESMO CARTÃO DUAS VEZES SEGUE O MESMO CAMINHO: uma entrada nula
+         * pode chegar num snapshot parcial, mas não pode derrubar o histórico nem fazer
+         * o roteador restaurar a dashboard no segundo acesso. [[regressao_reabrir_cartao_com_participante_nulo]] */
+        if (p == null) return;
         var name = window._pName(p, '?');
         var pDate = (typeof p === 'object' && p.enrolledAt) ? p.enrolledAt : null;
         if (name && name !== 'BYE') {
