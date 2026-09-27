@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.3.115';
+window.SCOREPLACE_VERSION = '2.3.116';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -13393,13 +13393,58 @@ window.AppStore = {
     if (this._jogosSub && this._jogosSub.id === id) return;   // já ouvindo este
     this.pararDeOuvirJogos();
     var t = (this.tournaments || []).find(function (x) { return x && String(x.id) === id; });
+
+    /* ⛔⛔⛔ ESTE OUVINTE EXISTIA E NÃO RESOLVIA NADA — porque DESISTIA CALADO.
+     *
+     * RELATO DO DONO, 27/set/2026: _"tem que ser certo em tempo real sem essa merda de cache"_,
+     * depois de ver a MESMA tela dizer "35º, eliminado" na classificação e, abaixo, a mesma dupla
+     * jogando com tarja de repescagem. Quando eu disse que faltava ouvinte, ele cortou: _"se ja
+     * existe nao resolve porra nenhuma"_. Estava certo — o ouvinte existe desde a 2.0.112.
+     *
+     * ⛔ O FURO, MEDIDO AQUI: quando o torneio AINDA NÃO ESTÁ na lista em memória — abrir por link
+     * direto, recarregar na chave, entrar por notificação — `t` vem indefinido, `fora` vem vazio, e
+     * a função saía pelo `return` de "torneio inteiro". Nunca mais era chamada: o roteador só liga
+     * o ouvinte ao ENTRAR na rota, e a entrada já aconteceu. Resultado: tela aberta a sessão toda
+     * com o retrato do primeiro instante, sem nada acusando.
+     * ⚠️ E os quatro `return` eram indistinguíveis entre si: "não é dividido" (legítimo, nada a
+     * fazer) tinha a MESMA cara de "ainda não cheguei no torneio" (defeito). Saída muda que
+     * significa duas coisas opostas é onde este projeto mais perde tempo.
+     *
+     * ⇒ agora: torneio ausente RETENTA — é espera, não resposta. E cada desistência tem voz. */
+    if (!t) {
+      var _self0 = this;
+      this._tentouOuvirPartes = this._tentouOuvirPartes || {};
+      var _n = (this._tentouOuvirPartes[id] || 0) + 1;
+      this._tentouOuvirPartes[id] = _n;
+      if (_n <= 10) {                       // ~10s no total; depois desiste, mas FALANDO
+        setTimeout(function () {
+          try { _self0.ouvirPartesDoTorneio(id); } catch (e) {}
+        }, 1000);
+      } else if (window._warn) {
+        window._warn('[torneio] desisti de ouvir as partes de ' + id + ': o torneio não chegou à ' +
+          'lista em memória depois de 10 tentativas. A tela pode ficar com dado do primeiro instante.');
+      }
+      return;
+    }
+    /* ⛔ o mapa só nasce no caminho da retentativa; no caminho feliz ele não existe. Apagar de
+     * `undefined` ESTOURA — e estourava aqui, na abertura normal, derrubando o ouvinte inteiro.
+     * Pego pelo teste que já existia, no primeiro `npm test` depois da mudança. */
+    if (this._tentouOuvirPartes) delete this._tentouOuvirPartes[id];
+
     /* ⚠️ idem: aqui chega resumo, não só documento — ver a nota em `_marcaPartesQueFaltam` */
-    var fora = (t && Array.isArray(t._semPesados)) ? t._semPesados : [];
-    if (!fora.length) return;      // torneio inteiro: o doc já traz tudo
+    var fora = Array.isArray(t._semPesados) ? t._semPesados : [];
+    if (!fora.length) return;      // torneio INTEIRO de verdade: o doc já traz tudo, e há ouvinte nele
     var S = window._tSplit;
-    if (!S || typeof S.remontar !== 'function') return;
+    if (!S || typeof S.remontar !== 'function') {
+      if (window._error) window._error('[torneio] sem o remontador não há como ouvir as partes de ' + id +
+        ' — a tela ficaria com o retrato do primeiro instante');
+      return;
+    }
     var alvos = this._partesQueMudamAoVivo(fora);
-    if (!alvos.length) return;
+    if (!alvos.length) {
+      if (window._warn) window._warn('[torneio] nenhuma parte ouvível em ' + id + ' (declaradas: ' + fora.join(', ') + ')');
+      return;
+    }
 
     var self = this, uns = [];
     alvos.forEach(function (nome) {
@@ -15618,3 +15663,44 @@ try {
     }
   });
 } catch (e) { if (window._warn) window._warn('[medição por nome]', e); }
+
+/* ⛔⛔⛔ DESCARTAR A PARTE VELHA E BUSCAR DE NOVO — a saída para o dado que chegou incoerente.
+ *
+ * RELATO DO DONO, 27/set/2026: a tela mostrava uma dupla em "35º" na classificação e, no mesmo
+ * desenho, a mesma dupla jogando com a tarja de repescagem. No banco aquele confronto não existia.
+ * Num torneio DIVIDIDO os jogos moram numa coleção própria: o documento veio fresco e os jogos
+ * vieram do cache. Duas idades no mesmo desenho, e nada acusava.
+ *
+ * ⛔ A MÁQUINA DE DESCARTAR CACHE JÁ EXISTIA, mas só dispara em ERRO FATAL do Firestore. Dado
+ * velho que "funciona" nunca chegava nela — e é justamente esse que vira mentira na tela.
+ * ⇒ aqui a parte suspeita é ESQUECIDA (marcada como ausente) e pedida de novo pelo MESMO caminho
+ * que busca parte que falta. Não invento leitura: reuso a que existe.
+ *
+ * ⚠️ NÃO limpa o cache inteiro do navegador: isso derrubaria a fila offline de quem está lançando
+ * placar sem sinal. Esquece só as partes DESTE torneio.
+ * [[project_cache_podre_do_firestore_se_descarta]] [[project_fila_do_placar_offline]] */
+window._descartaCacheEReler = function (tid) {
+  if (!tid) return false;
+  try {
+    var AS = window.AppStore;
+    if (!AS) return false;
+    var t = (AS.tournaments || []).find(function (x) { return x && String(x.id) === String(tid); });
+    if (!t) return false;
+    var fora = Array.isArray(t._semPesados) ? t._semPesados : [];
+    if (!fora.length) return false;
+    /* esvazia as partes em mãos: é isso que faz o contador acusar "falta" e a busca acontecer */
+    fora.forEach(function (nome) {
+      if (Array.isArray(t[nome])) t[nome] = [];
+      if (nome === 'matches') {
+        t.matches = [];
+        (t.rounds || []).forEach(function (r) { if (r && Array.isArray(r.matches)) r.matches = []; });
+      }
+    });
+    delete t._faltamPesados; delete t._faltaOQue;
+    if (typeof window._marcaPartesQueFaltam === 'function') window._marcaPartesQueFaltam(t);
+    if (typeof AS._montaPesadosQueFaltam === 'function') { AS._montaPesadosQueFaltam([tid]); return true; }
+  } catch (e) {
+    if (window._warn) window._warn('[cache] não consegui reler as partes de ' + tid, e);
+  }
+  return false;
+};

@@ -1149,6 +1149,12 @@ function _bracketSeguraSemPartes(t, container, tId) {
     } catch (e) {}
     try { AS._montaPesadosQueFaltam([id]); }
     catch (e) { if (window._error) window._error('[chave] montagem', e); }
+    /* ⛔⛔ E PASSA A OUVIR OS JOGOS DESTE TORNEIO. Montar é o retrato de agora; sem ouvinte, a
+     * tela fica com esse retrato para sempre enquanto estiver aberta — foi assim que o dono viu
+     * a classificação dizer "eliminado" e o card, logo abaixo, mostrar o mesmo time jogando.
+     * Ouvir é idempotente: chamar de novo com o mesmo torneio não abre um segundo ouvinte. */
+    try { if (typeof AS.ouvirJogosDoTorneio === 'function') AS.ouvirJogosDoTorneio(id); }
+    catch (e) { if (window._warn) window._warn('[chave] não consegui ouvir os jogos', e); }
     return true;
   }
 
@@ -3744,6 +3750,52 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
       : '';
   }
   // Classificação POR LINHA (mapa { nome: pos }) — delega ao global canônico.
+  /* ⛔⛔⛔ A TELA NÃO PINTA CONTRADIÇÃO — ELA ACUSA E BUSCA DE NOVO.
+   *
+   * RELATO DO DONO, 27/set/2026, com print: a MESMA tela mostrava "35º Rodrigo Godinho / Betsy"
+   * na classificação — eliminado — e, logo abaixo, os dois jogando um card com a tarja REP.
+   * _"as pessoas estao vendo e ficando confusas"_.
+   *
+   * ⛔ E O DADO NÃO ESTAVA ERRADO: medido no banco no mesmo minuto, aquele confronto NÃO EXISTE.
+   * O que existe é Sandra Bighetto / Flávia Barchetta, com as duas vagas carimbadas. O navegador
+   * estava com metade velha: num torneio DIVIDIDO os jogos moram numa coleção própria, e o
+   * documento veio fresco enquanto os jogos vieram do cache. Duas idades no mesmo desenho.
+   *
+   * ⛔ A MÁQUINA DE DESCARTAR CACHE JÁ EXISTE, mas só dispara em ERRO FATAL do Firestore. Dado
+   * velho que "funciona" não acusa nada — e é justamente o que chega ao usuário parecendo verdade.
+   * [[project_cache_podre_do_firestore_se_descarta]]
+   *
+   * ⇒ ESTE É O DETECTOR QUE FALTAVA, e ele é estreito de propósito: quem a classificação FINAL
+   * GRAVADA da linha já colocou entre os eliminados não pode estar ocupando vaga de repescagem em
+   * jogo sem vencedor. As duas coisas não podem ser verdade ao mesmo tempo. Havendo contradição,
+   * a linha NÃO é pintada: entra o aviso e o app relê.
+   * ⚠️ Só vale com a classificação CONGELADA em mãos — sem ela não há com o que contradizer, e
+   * inventar contradição esconderia a chave de quem está jogando. */
+  function _contradicaoNaLinha(bracketKey, lm) {
+    var cong = t && t.classifFinalDaLinha && t.classifFinalDaLinha[bracketKey];
+    if (!Array.isArray(cong) || !cong.length) return null;
+    var _vaz = function (v) { return !v || v === 'TBD' || /a definir/i.test(String(v)); };
+    /* quem a classificação final põe nas ÚLTIMAS posições da linha é quem caiu */
+    var maior = 0;
+    cong.forEach(function (x) { if (x && x.pos > maior) maior = x.pos; });
+    var caiu = {};
+    cong.forEach(function (x) {
+      if (!x || !x.name) return;
+      /* "caiu" = está entre os que não seguiram; a régua é a própria ordem gravada */
+      if (x.pos > maior - 4) caiu[String(x.name)] = x.pos;
+    });
+    var achados = [];
+    (lm || []).forEach(function (m) {
+      if (!m || m.winner) return;                       // jogo decidido não contradiz nada
+      ['p1', 'p2'].forEach(function (sl) {
+        if (!m[sl + 'FromRepechage'] || _vaz(m[sl])) return;
+        var pos = caiu[String(m[sl])];
+        if (pos) achados.push(String(m[sl]) + ' (' + pos + 'º)');
+      });
+    });
+    return achados.length ? achados : null;
+  }
+
   function _lineMatches(bracketKey) {
     return pm.filter(function (m) { return (m.bracket || 'main') === bracketKey; });
   }
@@ -3889,6 +3941,31 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
 
   function _tierClassifHtml(bracketKey, color) {
     var lm = _lineMatches(bracketKey);
+    /* ⛔⛔ CONTRADIÇÃO NA LINHA: não se pinta, se acusa e se relê. Ver `_contradicaoNaLinha`. */
+    var _contra = _contradicaoNaLinha(bracketKey, lm);
+    if (_contra) {
+      if (typeof window._error === 'function') {
+        window._error('[chave] dado incoerente na linha "' + bracketKey + '": ' + _contra.join(', ') +
+          ' — eliminados ocupando vaga de repescagem. Provável parte velha em cache; relendo.');
+      }
+      /* relê UMA vez por linha: sem o freio, um dado de verdade incoerente viraria laço infinito */
+      if (!_contradicaoNaLinha._pediu) _contradicaoNaLinha._pediu = {};
+      if (!_contradicaoNaLinha._pediu[bracketKey]) {
+        _contradicaoNaLinha._pediu[bracketKey] = 1;
+        try {
+          if (typeof window._descartaCacheEReler === 'function') window._descartaCacheEReler(t && t.id);
+          else if (typeof window._forceReloadTournament === 'function') window._forceReloadTournament(t && t.id);
+        } catch (e) { /* releitura é melhor-esforço; o aviso abaixo é o que o usuário precisa ver */ }
+      }
+      return '<div style="margin:10px 0;padding:10px 12px;border-radius:8px;' +
+        'background:var(--sp-bg-subtle,rgba(148,163,184,.12));' +
+        'border-left:3px solid ' + (color || 'var(--text-muted)') + ';">' +
+        '<div style="font-weight:700;font-size:.85rem;color:var(--text-primary);">⚠️ Dados desatualizados nesta chave</div>' +
+        '<div style="font-size:.78rem;color:var(--text-muted);margin-top:3px;">' +
+        'Esta tela recebeu uma parte antiga do torneio e ela discorda do resultado já registrado. ' +
+        'Estamos buscando de novo — se continuar, recarregue a página.' +
+        '</div></div>';
+    }
     if (_vagaDeRepescagemIndefinida(lm)) {
       return '<div style="margin:10px 0;padding:10px 12px;border-radius:8px;' +
         'background:var(--sp-bg-subtle,rgba(148,163,184,.12));' +

@@ -33,7 +33,12 @@ ok('⭐ espera, inativos, W.O., duplas, jogos, grupos e resultados recebem confi
   /includeMetadataChanges: true/.test(corpo) && /_isRemoteFirestoreSnapshot\(snap\)\) return;/.test(corpo),
   'o cache não pode reverter nenhuma parte operacional antes de o servidor confirmar');
 ok('  → torneio inteiro sai cedo, sem assinar nada', /if \(!fora\.length\) return;/.test(corpo));
-ok('  → e sem alvo também', /if \(!alvos\.length\) return;/.test(corpo));
+/* ⚠️ A FORMA MUDOU, A INTENÇÃO NÃO: esta saída ganhou VOZ em 27/set/2026. Antes os quatro
+ * `return` deste ouvinte eram indistinguíveis, e um deles — "o torneio ainda não chegou à memória"
+ * — se passava por "não é dividido". O dono ficou com a tela velha a sessão inteira por causa
+ * disso. A asserção continua exigindo que se SAIA sem assinar; deixou de exigir que se saia calado.
+ * [[feedback_engolir_erro_custa_horas_do_dono]] */
+ok('  → e sem alvo também', /if \(!alvos\.length\) \{[\s\S]{0,200}return;\s*\}/.test(corpo));
 
 ok('⭐ usa o DELTA (`docChanges`), não o snapshot inteiro', /snap\.docChanges\(\)\.length/.test(corpo));
 ok('⛔ parte VAZIA esvazia de verdade — `remontar` nunca apaga, e pra um ouvinte isso é errado',

@@ -604,9 +604,67 @@ function _gravaTorneio(tx, ref, tDepois, tAntes, ctx) {
   if (!_agoraIso) {
     throw new Error('[write-plan] _gravaTorneio exige ctx.agoraIso — instante estável calculado FORA da transação');
   }
+  /* ⛔⛔⛔ VAGA DE REPESCAGEM CARIMBADA NÃO MUDA — E A TRAVA MORA AQUI, NO SERVIDOR.
+   *
+   * RELATO DO DONO, 27/set/2026, com print: o jogo 153 aparecia na tela dele com
+   * "Rodrigo Godinho / Betsy", que é uma das duplas ELIMINADAS. No banco estava certo — medido
+   * no mesmo minuto: Sandra Bighetto / Flávia Barchetta, carimbada. Quem pintava errado era o
+   * app das LOJAS, que está 20 versões atrás: ele recalcula a repescagem pela régua velha ao
+   * abrir a chave. _"as pessoas estao vendo e ficando confusas"_.
+   *
+   * ⛔ O CARIMBO SOZINHO NÃO BASTA, e é a lição: ele vive no cliente NOVO. O cliente VELHO não
+   * sabe que existe, recalcula e tenta gravar por cima — e uma trava que só o cliente atualizado
+   * respeita não é trava, é combinado. Enquanto houver app antigo instalado, a única defesa que
+   * vale é a que roda aqui. [[feedback_a_trava_vale_onde_mora_a_verdade]]
+   *
+   * ⇒ antes de planejar a escrita, toda vaga carimbada VOLTA ao valor que está no banco. Não
+   * recuso a gravação inteira de propósito: o mesmo save carrega placar e outras mudanças
+   * legítimas, e derrubar tudo por causa de um campo puniria quem está só lançando resultado.
+   * Preservo o campo, deixo o resto passar, e registro.
+   *
+   * ⚠️ Só protege o que JÁ está carimbado no banco. Carimbar é decisão do motor, e continua
+   * sendo — aqui não se carimba nada, só se impede de desfazer. */
+  const _revertidas = _preservaRepescagemCarimbada(tDepois, tAntes);
+  if (_revertidas.length) {
+    console.warn('[gravaTorneio] ' + _revertidas.length + ' vaga(s) de repescagem carimbada(s) ' +
+      'foram preservadas contra reescrita: ' + _revertidas.join(' · '));
+  }
   const plan = _planejaEscrita(tDepois, tAntes, { agoraIso: _agoraIso, extras: (ctx && ctx.extras) || [] });
   _wp.applyPlan(tx, ref, plan, { FieldValue: FieldValue });
   return plan.boundary;
+}
+
+/* Devolve ao estado do banco toda vaga de repescagem que já está carimbada. Puro: mexe em
+ * `tDepois` e diz o que reverteu. Sem isto, o cliente velho desfaz a decisão do motor novo. */
+function _preservaRepescagemCarimbada(tDepois, tAntes) {
+  const revertidas = [];
+  if (!tDepois || !tAntes) return revertidas;
+  const _todos = (t) => {
+    if (!t) return [];
+    if (drawWindow && typeof drawWindow._collectAllMatches === 'function') {
+      try { return drawWindow._collectAllMatches(t) || []; } catch (e) { /* segue pelo caminho simples */ }
+    }
+    return Array.isArray(t.matches) ? t.matches : [];
+  };
+  const antesPorId = {};
+  _todos(tAntes).forEach((m) => { if (m && m.id != null) antesPorId[String(m.id)] = m; });
+  _todos(tDepois).forEach((m) => {
+    if (!m || m.id == null) return;
+    const a = antesPorId[String(m.id)];
+    if (!a) return;
+    ['p1', 'p2'].forEach((sl) => {
+      if (!a[sl + 'RepescagemFixada']) return;                 // não carimbada: o motor manda
+      if (String(m[sl] == null ? '' : m[sl]) === String(a[sl] == null ? '' : a[sl])) return;
+      revertidas.push(String(m.id) + '.' + sl + ': "' + m[sl] + '" → "' + a[sl] + '"');
+      m[sl] = a[sl];
+      /* a identidade volta junto: nome sem uid é o defeito que já derrubou o W.O. e os inscritos */
+      const cO = (sl === 'p1') ? 'team1Obj' : 'team2Obj';
+      const cU = (sl === 'p1') ? 'team1Uids' : 'team2Uids';
+      m[cO] = a[cO]; m[cU] = a[cU]; m[sl + 'Uid'] = a[sl + 'Uid'];
+      m[sl + 'RepescagemFixada'] = true;
+    });
+  });
+  return revertidas;
 }
 
 /* Monta o plano com as dependências do servidor. Separado de `_gravaTorneio` para que o

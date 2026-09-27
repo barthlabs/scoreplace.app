@@ -103,8 +103,15 @@ ok(/ouvirJogosDoTorneio\(String\(cleanParam\)\)/.test(router),
 const iS = router.indexOf('pararDeOuvirJogos');
 ok(iS > 0 && iS < router.indexOf("case 'tournaments':"),
   '⭐ e o SOLTA antes do despacho — num lugar só, senão uma rota nova amanhã esquece');
-ok(/!== 'tournaments'\) window\.AppStore\.pararDeOuvirJogos\(\)/.test(router),
-  '   qualquer rota que não seja o torneio fica sem assinatura');
+/* ⚠️ A CHAVE ENTROU NA CONTA (27/set/2026). Esta asserção exigia que TODA rota diferente de
+ * `tournaments` soltasse o ouvinte — e `bracket` é uma delas, embora desenhe a MESMA chave. Quem
+ * abrisse por ali ficava sem atualização ao vivo pela sessão inteira. A intenção não mudou: fora
+ * das telas de torneio, nada de assinatura. Mudou o que conta como tela de torneio.
+ * [[feedback_enumerar_todos_os_caminhos_antes_de_dar_por_pronto]] */
+ok(/_telaDeTorneio = \(view === 'tournaments' \|\| view === 'bracket'\)/.test(router),
+  '   as DUAS rotas que desenham a chave contam como tela de torneio');
+ok(/&& !_telaDeTorneio\) window\.AppStore\.pararDeOuvirJogos\(\)/.test(router),
+  '   qualquer rota fora delas fica sem assinatura');
 
 console.log((fail ? '✗' : '✓') + ' ouvinte-de-jogos-segue-a-tela-aberta: ' + pass + ' ok, ' + fail + ' falhas');
 process.exit(fail ? 1 : 0);

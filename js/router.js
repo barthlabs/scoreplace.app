@@ -440,8 +440,17 @@ function initRouter() {
    * amanhã esqueça e deixe a assinatura viva pra sempre. A rota do torneio re-liga logo
    * abaixo; qualquer outra fica sem, que é o certo. */
   try {
+    /* ⛔⛔ A CHAVE TAMBÉM É TELA DE TORNEIO. Esta linha soltava o ouvinte em toda rota que não
+     * fosse `tournaments` — e `bracket` é uma delas. Quem abrisse a chave direto (link, recarregar
+     * na chave, notificação) ficava SEM atualização ao vivo pela sessão inteira, com o retrato do
+     * primeiro instante. Foi assim que o dono viu a classificação dizer "eliminado" e o card, logo
+     * abaixo, mostrar o mesmo time jogando.
+     * ⚠️ As DUAS rotas desenham a mesma chave — já foi essa a causa do placar que só aparecia
+     * depois de recarregar. Nomear uma e esquecer a irmã é o erro que mais se repete aqui.
+     * [[feedback_enumerar_todos_os_caminhos_antes_de_dar_por_pronto]] */
+    var _telaDeTorneio = (view === 'tournaments' || view === 'bracket');
     if (window.AppStore && typeof window.AppStore.pararDeOuvirJogos === 'function'
-        && view !== 'tournaments') window.AppStore.pararDeOuvirJogos();
+        && !_telaDeTorneio) window.AppStore.pararDeOuvirJogos();
     if (window.AppStore && typeof window.AppStore.pararDeOuvirResultadosDaDashboard === 'function'
         && view !== '' && view !== 'dashboard') window.AppStore.pararDeOuvirResultadosDaDashboard();
   } catch (_eSolta) {}
