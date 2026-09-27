@@ -1653,7 +1653,22 @@ function _congelaLinhasEncerradas(t) {
       });
     });
     if (pendente) return;                                             // ② ainda não se sabe quem caiu
-    var reais = lm.filter(function (m) { return m && !m.isSitOut && !m.isBye; });
+    /* ⛔⛔ JOGO CONDICIONAL QUE NÃO FOI PRECISO NÃO É JOGO EM ABERTO. Na dupla eliminatória a
+     * grande final extra (`condicional`) é materializada sempre, e só acontece se quem vinha da
+     * chave inferior vencer a primeira. Quando não é preciso, ela fica para sempre sem vencedor —
+     * e, contada como pendente, a linha NUNCA congelaria a classificação final. Achado pelo
+     * revisor no diff desta leva; era defeito do congelador que eu escrevi.
+     * ⇒ o discriminador é ter GENTE dentro: condicional sem vencedor E sem os dois lados
+     * preenchidos nunca vai acontecer. Com gente marcada, ela é jogo de verdade e SEGURA.
+     * ⚠️ O jogo de 3º lugar NÃO entra nesta isenção, de propósito: ele é jogo previsto e
+     * disputado, e enquanto não tiver vencedor a classificação final da linha está incompleta. */
+    var _condicionalMorta = function (m) {
+      if (!m || !m.condicional || m.winner) return false;
+      return _vaz(m.p1) || _vaz(m.p2);
+    };
+    var reais = lm.filter(function (m) {
+      return m && !m.isSitOut && !m.isBye && !_condicionalMorta(m);
+    });
     if (!reais.length) return;
     if (!reais.every(function (m) { return !!m.winner; })) return;    // ① ainda há jogo em aberto
     var mapa = (typeof window._classifMapFromMatches === 'function') ? window._classifMapFromMatches(t, lm) : null;

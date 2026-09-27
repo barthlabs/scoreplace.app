@@ -1,6 +1,14 @@
 'use strict';
-/* A DISPUTA DE 3º LUGAR EXISTE SEMPRE — e não há caminho para ela não acontecer.
+/* O 3º COLOCADO EXISTE SEMPRE — e o JOGO de 3º existe sempre que houver um 4º para disputá-lo.
  * node tests/terceiro-lugar-existe-sempre.test.js
+ *
+ * ⛔⛔ O CRITÉRIO DE ACEITE MUDOU, POR DECISÃO DO DONO EM 26/set/2026, e este cabeçalho é o registro:
+ *   _"tendo 3o, ok. pode ter 3. 1 passa. 2 disputam e passa o ganhador"_.
+ * Antes eu declarava aqui que TODA chave prevê a partida de 3º. Não prevê, e não pode: quando a
+ * penúltima rodada tem três entrantes não existe 4º colocado, logo não existe "3º contra 4º". O que
+ * é inegociável é o 3º COLOCADO — esse sempre existe, e nesses casos é quem perde o jogo da penúltima.
+ * ⚠️ Os 30 casos abaixo deixam de ser DÍVIDA e passam a ser o desenho. Eles continuam contados e
+ * travados por número, para que ninguém os crie ou apague sem querer.
  *
  * ⛔⛔⛔ ORDEM DO DONO, repetida em 26/set/2026 depois de a coisa regredir de novo:
  *   _"todo torneio sempre tem a porra da disputa de 3o lugar. nao deve mais haver qualquer referencia
@@ -33,7 +41,7 @@ const C = W._chaves;
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) { pass++; } else { fail++; console.error('  ✗ ' + m); } };
 
-console.log('\n──── a disputa de 3º lugar existe sempre ────\n');
+console.log('\n──── o 3º colocado existe sempre ────\n');
 ok(!!(A && typeof A.build === 'function'), 'o construtor de verdade foi carregado');
 
 const gente = (n) => Array.from({ length: n }, (_, i) => ({ displayName: 'D' + (i + 1), uid: 'u' + (i + 1) }));
@@ -72,13 +80,15 @@ let semTerceiroPorEstrutura = 0;
     }
   }
 });
-/* ⚠️⚠️ ESTE NÚMERO É DÍVIDA, E FICA MARCADO: em 30 dos 183 casos a penúltima rodada tem TRÊS
- * entrantes. Ali sobram três equipes no fim — 1ª, 2ª e 3ª, sem 4ª — então não existe jogo de "3º contra
- * 4º" porque não existe 4º. O 3º COLOCADO EXISTE: é quem perde o último jogo decidido.
- * ⛔ O QUE FALTA, e é o conserto de verdade: o pódio lê o 3º do JOGO de 3º, então nesses casos ele fica
- * sem 3º colocado na tela mesmo havendo um 3º no torneio. A tela tem de DERIVAR o 3º da chave.
- * ⛔ Eu já tentei "resolver" isso mudando o desenho da sobra única, e o dono derrubou: o desenho está
- * certo, a TELA é que está incompleta. Leva 7.3. [[feedback_tela_parcial_se_diz_pronta]] */
+/* ⚠️ ESTE NÚMERO É O DESENHO, NÃO DÍVIDA — e fica travado para não mudar sem querer: em 30 dos 183
+ * casos a penúltima rodada tem TRÊS entrantes. Ali sobram três no fim — 1ª, 2ª e 3ª, sem 4ª — então
+ * não existe jogo de "3º contra 4º" porque não existe 4º. Uma passa direto, as outras duas jogam, e
+ * quem perde fica em 3º: é a regra que o dono fixou em 26/set/2026.
+ * ⛔ DUAS COISAS QUE EU ESCREVI AQUI E ESTAVAM ERRADAS, as duas por não medir:
+ *   ① que o pódio ficaria sem 3º colocado na tela — medido logo abaixo: não fica, a classificação
+ *      deriva o 3º e sai sem buraco;
+ *   ② que isso era conserto pendente da leva 7.3 — não é; o critério de aceite é que mudou.
+ * [[feedback_nao_afirmar_causa_sem_medir]] */
 ok(semTerceiroPorEstrutura === 30,
   '① 30 casos sem JOGO de 3º, por estrutura: penúltima com três, sem 4º para disputar (achei ' +
   semTerceiroPorEstrutura + ')');

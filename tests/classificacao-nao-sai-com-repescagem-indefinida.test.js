@@ -87,6 +87,19 @@ ok(/if \(pendente\) return;/.test(blCodigo),
   '⑤ ⛔⛔ e NÃO congela com vaga de repescagem indefinida — congelar um chute é pior que não congelar');
 ok(/reais\.every\(function \(m\) \{ return !!m\.winner; \}\)/.test(blCodigo),
   '⑤ nem com jogo em aberto na linha');
+/* ⛔⛔ MAS JOGO CONDICIONAL QUE NÃO FOI PRECISO NÃO SEGURA. Achado do revisor no diff desta leva, e
+ * era defeito do congelador que eu escrevi: na dupla eliminatória a grande final extra é materializada
+ * sempre e só acontece se quem vem da inferior vencer a primeira. Não sendo precisa, fica para sempre
+ * sem vencedor — e contada como pendente a linha NUNCA congelaria. */
+ok(/_condicionalMorta/.test(blCodigo),
+  '⑤ ⛔⛔ o congelador ignora jogo condicional que não chegou a ser necessário');
+ok(/m\.condicional && !m\.winner|!m\.condicional \|\| m\.winner/.test(blCodigo),
+  '⑤ e só quando ele está SEM vencedor — condicional disputado é jogo normal');
+ok(/_vaz\(m\.p1\) \|\| _vaz\(m\.p2\)/.test(blCodigo),
+  '⑤ ⛔ e só quando está VAZIO: condicional com gente marcada é jogo de verdade e SEGURA a linha');
+/* ⛔ e o jogo de 3º NÃO entra na isenção: ele é previsto e disputado. */
+ok(!/isThirdPlace/.test((blCodigo.match(/_condicionalMorta[\s\S]{0,400}/) || [''])[0]),
+  '⑤ ⛔ o jogo de 3º lugar não foi posto na isenção — enquanto ele não tem vencedor, a linha não fecha');
 const ui = fs.readFileSync(path.join(ROOT, 'js/views/bracket-ui.js'), 'utf8');
 ok(/_congelaLinhasEncerradas\(t\)/.test(ui),
   '⑤ ⭐ e o congelamento acontece na PORTA ÚNICA por onde todo placar lançado passa');
