@@ -3789,6 +3789,57 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
       });
     });
   }
+  /* ⛔⛔ O PEDIDO DE QUEM SE INSCREVEU TARDE NUMA CHAVE DE FOLGA — lido do TORNEIO, não de `window`.
+   * No desenho de folga a rodada de entrada é dimensionada pela potência de 2 abaixo do número de
+   * inscritos, então admitir mais um MUDA QUEM ESTREIA (medido em 60 dos 60 incrementos entre 4 e 64).
+   * Por isso o tardio não entra sozinho: fica gravado como pendência e a organização decide.
+   * ⛔ ISTO SÓ APARECE PARA A ORGANIZAÇÃO. Para o inscrito, um botão "refazer a chave" que ele não
+   * pode apertar é promessa que a tela não cumpre.
+   * ⚠️ E lê `t.tardiosPendentesPorLinha`, que é o que está GRAVADO. O mapa exposto pelo adapter vive
+   * na aba e some quando a página fecha — quem renderizasse dali mostraria a pendência só para quem
+   * estava com a tela aberta na hora. */
+  /* escape do MESMO jeito do resto do app; nome de dupla é texto de usuário e vai para HTML */
+  function _safeTxt(v) { return window._safeHtml ? window._safeHtml(String(v == null ? '' : v)) : String(v == null ? '' : v); }
+  function _tardioPendenteHtml(bracketKey, color) {
+    if (!t || !t.tardiosPendentesPorLinha) return '';
+    if (typeof window._souOrganizador !== 'function' || !window._souOrganizador(t)) return '';
+    var mapa = t.tardiosPendentesPorLinha;
+    var prop = null, chave = null;
+    Object.keys(mapa).forEach(function (k) {
+      var p = mapa[k];
+      if (!p || prop) return;
+      /* a linha da proposta é o namespace do id; casa com a chave desta aba por prefixo ou igualdade */
+      var lk = String(p.linha == null ? '' : p.linha);
+      if (lk === String(bracketKey) || lk.indexOf(String(bracketKey)) >= 0 || String(bracketKey).indexOf(lk) >= 0 || lk === '') {
+        prop = p; chave = k;
+      }
+    });
+    if (!prop) return '';
+    var nomes = (prop.inscritos || []).map(function (x) {
+      return _safeTxt(String((x && x.nome) || '')) || 'sem nome';
+    });
+    if (!nomes.length) return '';
+    var quantos = (prop.confrontosAfetados || []).length;
+    /* ⛔ os dois valores vão DENTRO de um atributo HTML: aspas simples viram &#39; para não fechar o
+     * atributo, e a chave/revisão são dados nossos (id de linha e número), não texto de usuário. */
+    var _attr = function (v) { return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/'/g, '&#39;').replace(/"/g, '&quot;').replace(/</g, '&lt;'); };
+    var _k = _attr(chave), _rev = _attr(prop.revisaoDaChave || '');
+    return '<div style="margin:10px 0;padding:10px 12px;border-radius:8px;' +
+      'background:var(--sp-bg-subtle,rgba(148,163,184,.12));' +
+      'border-left:3px solid ' + (color || 'var(--text-muted)') + ';">' +
+      '<div style="font-weight:700;font-size:.85rem;color:var(--text-primary);">⏳ Inscrição esperando decisão</div>' +
+      '<div style="font-size:.78rem;color:var(--text-muted);margin-top:3px;">' +
+      _safeTxt(nomes.join(', ')) + ' — entrar exige refazer esta chave, e isso muda ' + quantos +
+      ' confronto(s) da estreia que já estão publicados. Nada muda até você decidir.' +
+      '</div>' +
+      '<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">' +
+      '<button class="btn btn-sm" style="font-size:.76rem;" onclick="window._decidirTardioNaFolga(&#39;' +
+      _k + '&#39;,&#39;' + _rev + '&#39;,&#39;confirmar&#39;)">Refazer a chave</button>' +
+      '<button class="btn btn-sm btn-ghost" style="font-size:.76rem;" onclick="window._decidirTardioNaFolga(&#39;' +
+      _k + '&#39;,&#39;' + _rev + '&#39;,&#39;cancelar&#39;)">Manter como está</button>' +
+      '</div></div>';
+  }
+
   function _tierClassifHtml(bracketKey, color) {
     var lm = _lineMatches(bracketKey);
     if (_vagaDeRepescagemIndefinida(lm)) {
@@ -3871,6 +3922,9 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
     var _titleH4 = title ? '<h4 style="color:' + window._spCor(color, 'color') + ';font-size:0.85rem;text-transform:uppercase;letter-spacing:2px;border-left:4px solid ' + window._spCor(color, 'borda') + ';padding-left:10px;margin-bottom:1rem;">' + title + '</h4>' : '';
     return '<div style="margin-bottom:2rem;">' +
       _titleH4 +
+      /* ⛔ o pedido pendente aparece SEMPRE que existir, mesmo com a classificação escondida: ele é
+       * uma decisão esperando a organização, não parte da tabela. */
+      _tardioPendenteHtml(bracketKey, color) +
       (showClassif === false ? '' : _tierClassifHtml(bracketKey, color)) +
       '<div style="display:flex;align-items:flex-start;gap:10px;">' +
         showHiddenBtn +

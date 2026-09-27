@@ -3713,6 +3713,93 @@ exports.resolvePendingDraw = onCall(async (request) => {
   });
 });
 
+// ─── DECISÃO DO ORGANIZADOR SOBRE TARDIO EM CHAVE DE FOLGA ──────────────────
+// ⛔⛔ POR QUE ESTA PORTA EXISTE: no desenho de FOLGA a rodada de entrada é dimensionada pela
+// potência de 2 abaixo do número de inscritos. Mudar esse número muda QUEM estreia — medido em
+// 60 dos 60 incrementos entre 4 e 64. Com 36→37, `D29×D30 … D35×D36` vira `D28×D29 … D36×D37`:
+// confronto que as pessoas já viram, trocado sem ninguém pedir. Por isso a inscrição tardia NÃO
+// redesenha nada sozinha; ela grava uma pendência, e refazer a chave é um gesto explícito da
+// organização. Esta é a única porta que executa esse gesto.
+//
+// ⛔ E É TRANSACIONAL DE PROPÓSITO, porque o que está em jogo é chave publicada:
+//   ① relê o torneio pelo mesmo caminho do resto (inclusive torneio dividido) — decidir sobre o
+//      retrato que a aba tinha é decidir sobre o que já mudou;
+//   ② exige organização: nem o inscrito nem terceiro redesenham a chave de ninguém;
+//   ③ exige que a pendência AINDA EXISTA e que a REVISÃO bata. Se a chave mudou por outro caminho
+//      desde que a proposta nasceu, a proposta é velha e a decisão é recusada em vez de redesenhar
+//      por cima de outra coisa. É isto que torna duas confirmações simultâneas seguras: a segunda
+//      relê, vê que a pendência sumiu (ou que a revisão mudou) e para;
+//   ④ exige que nenhum confronto afetado já tenha resultado ou resultado esperando. Redesenhar por
+//      cima de jogo disputado apagaria resultado — e "promover é ganho, tirar de jogar é proibido".
+// ⚠️ Cancelar também PERSISTE: a pendência sai do documento. Decisão que não fica gravada faz a
+// mesma pergunta voltar amanhã.
+exports.resolvePendingLateBye = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  const d = request.data || {};
+  const tId = String(d.tournamentId || '').trim();
+  const linha = String(d.linha == null ? '' : d.linha);
+  const revisao = String(d.revisaoDaChave || '').trim();
+  const acao = String(d.acao || '').trim();
+  if (!tId) throw new HttpsError('invalid-argument', 'Torneio obrigatório.');
+  if (!['confirmar', 'cancelar'].includes(acao)) throw new HttpsError('invalid-argument', 'Ação inválida.');
+  if (!revisao) throw new HttpsError('invalid-argument', 'Revisão da chave obrigatória.');
+  if (acao === 'confirmar' && typeof integrateLateFn !== 'function') {
+    throw new HttpsError('failed-precondition', 'Motor de chave indisponível.');
+  }
+  const ref = db.collection('tournaments').doc(tId);
+  // ⛔ instante estável FORA da transação: a transação é repetida quando há disputa, e hora criada
+  // lá dentro faz cada tentativa produzir um documento diferente.
+  const agoraIso = new Date().toISOString();
+  return db.runTransaction(async (tx) => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    if (!_isTournamentAdmin(t, uid)) {
+      throw _drawFail('permission-denied', 'Só a organização decide sobre a chave.', { tId, uid });
+    }
+    const mapa = t.tardiosPendentesPorLinha;
+    const prop = mapa && Object.prototype.hasOwnProperty.call(mapa, linha) ? mapa[linha] : null;
+    if (!prop) return { ok: true, changed: false, motivo: 'sem-pendencia' };
+    if (String(prop.revisaoDaChave) !== revisao) {
+      throw _drawFail('failed-precondition',
+        'A chave mudou desde que este pedido foi feito. Abra de novo para decidir sobre a chave atual.',
+        { tId, linha });
+    }
+    const antes = _antesDoMotor(t);
+
+    if (acao === 'cancelar') {
+      delete mapa[linha];
+      const b0 = _gravaTorneio(tx, ref, t, antes, { agoraIso });
+      return { ok: true, changed: true, acao: acao, tournament: b0.clean };
+    }
+
+    // ── CONFIRMAR: os confrontos afetados não podem ter resultado ──────────────
+    const porId = {};
+    const todos = (typeof drawWindow._collectAllMatches === 'function')
+      ? (drawWindow._collectAllMatches(t) || []) : (Array.isArray(t.matches) ? t.matches : []);
+    todos.forEach((m) => { if (m && m.id != null) porId[String(m.id)] = m; });
+    const sujos = (prop.confrontosAfetados || []).filter((c) => {
+      const m = porId[String(c && c.id)];
+      if (!m) return true;                       // sumiu: a chave não é mais a que a proposta viu
+      return !!(m.winner || m.scoreP1 != null || m.scoreP2 != null || m.pendingResult);
+    });
+    if (sujos.length) {
+      throw _drawFail('failed-precondition',
+        'Há jogo já lançado entre os que mudariam. Refazer a chave apagaria resultado.',
+        { tId, linha, sujos: sujos.length });
+    }
+
+    // redesenha pelo motor canônico — a MESMA porta do resto, com o interruptor da decisão
+    delete mapa[linha];
+    const r = integrateLateFn(t, { agora: agoraIso, decisaoDoOrganizador: true });
+    if (!r || !r.ok) {
+      throw _drawFail('failed-precondition', (r && r.reason) || 'Não foi possível refazer a chave.', { tId, linha });
+    }
+    const b = _gravaTorneio(tx, ref, t, antes, { agoraIso });
+    return { ok: true, changed: true, acao: acao, aplicados: r.placed || 0, tournament: b.clean };
+  });
+});
+
 // ─── Cancelamento da preparação de sorteio: intenção server-side ─────────────
 // Antes do sorteio efetivo, os painéis podem suspender o torneio/fechar inscrição
 // enquanto a organização escolhe como resolver elenco, grupos ou potência de 2.

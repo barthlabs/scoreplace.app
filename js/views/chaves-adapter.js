@@ -1077,7 +1077,12 @@
        * organizador: refazer a chave (e aí os confrontos mudam, com ele sabendo) ou deixar para o
        * próximo torneio. Refazer é um gesto dele, nunca um efeito colateral de uma inscrição. */
       var _politicaAqui = (t && t.politicaDaChave) || 'repescagem';
-      if (_politicaAqui === 'bye') {
+      /* ⛔⛔ A ÚNICA PORTA QUE REDESENHA CHAVE DE FOLGA É A DECISÃO DO ORGANIZADOR. Este interruptor
+       * existe só para a callable de decisão: ela reabre o caminho DEPOIS de reler o torneio,
+       * autorizar quem pede e conferir que a proposta ainda vale. Nenhum caminho automático o liga —
+       * inscrição, sorteio e abertura de tela continuam caindo na recusa abaixo, que é o que impede
+       * confronto publicado de mudar sozinho. */
+      if (_politicaAqui === 'bye' && !(opts && opts.decisaoDoOrganizador === true)) {
         pendentesPorGrupo[ns || ''] = (pendentesPorGrupo[ns || ''] || []).concat(novos);
         /* ⛔⛔ A PENDÊNCIA TEM DE SOBREVIVER À ABA. Eu a deixava só numa função de `window`, que some
          * quando a pessoa fecha a página: o organizador nunca mais saberia que alguém está esperando,

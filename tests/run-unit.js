@@ -69,6 +69,7 @@ const SUITES = [
   'tests/saldo-e-sempre-na-unidade-mais-rica.test.js',
   'tests/repescagem-decidida-nao-se-reescreve.test.js',
   'tests/scripts-de-conserto-nao-gravam-torto.test.js',
+  'tests/decisao-do-tardio-na-folga-e-transacional.test.js',
   'tests/app-check-fecha-a-porta-publica.test.js',
   'tests/politica-da-chave-e-escolha-do-organizador.test.js',
   'tests/politica-chave-exige-escolha.test.js',

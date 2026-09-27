@@ -707,7 +707,11 @@ function integrateLateEntries(t, opts) {
       // checagem com outros helpers foi como as duas versões divergiram.
       const pend = _poolEspera();
       if (pend.length) {
-        const r = A.integrarTardiosElim(t, pend, { agora: _agoraDaOperacao });
+        const r = A.integrarTardiosElim(t, pend, {
+          agora: _agoraDaOperacao,
+          /* só a callable de decisão do organizador liga isto; o caminho automático nunca */
+          decisaoDoOrganizador: !!(opts && opts.decisaoDoOrganizador)
+        });
         placed = r.aplicados || 0;
         /* ⛔⛔ PROPOSTA PENDENTE CONTA COMO MUDANÇA. Na chave de FOLGA o tardio não entra — a chave
          * não é mexida — então `aplicados` fica 0 e nenhum outro contador se move. Sem somar isto ao

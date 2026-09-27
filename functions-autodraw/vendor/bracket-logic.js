@@ -6269,3 +6269,52 @@ window._isLigaAutoDraw = function (t) {
 // cliente×CF). Apagada em vez de mantida dormente: uma função de sorteio viva no
 // cliente é a corrida a uma linha de voltar. Quem sorteia: functions-autodraw
 // (autoDraw, cron 1min) via draw-core.generateLigaRound — o MESMO motor, vendored.
+
+/* ⛔⛔ A DECISÃO DO ORGANIZADOR SOBRE TARDIO EM CHAVE DE FOLGA.
+ *
+ * No desenho de folga a rodada de entrada é dimensionada pela potência de 2 abaixo do número de
+ * inscritos: admitir mais um MUDA QUEM ESTREIA — medido em 60 dos 60 incrementos entre 4 e 64. Por
+ * isso a inscrição tardia não redesenha nada sozinha; ela grava uma pendência no torneio e quem
+ * decide é a organização. Este é o gesto.
+ *
+ * ⛔ A DECISÃO ACONTECE NO SERVIDOR, não aqui. A Function relê o torneio, confere que quem pede é da
+ * organização, que a pendência ainda existe, que a REVISÃO bate e que nenhum confronto afetado já tem
+ * resultado — e só então redesenha, tudo na mesma transação. Este cliente só transporta a intenção:
+ * decidir no navegador seria decidir sobre o retrato que a aba tinha, que pode já estar velho.
+ *
+ * ⚠️ "Manter como está" também é decisão e também é GRAVADA: a pendência sai do documento. Decisão
+ * que não fica registrada faz a mesma pergunta voltar amanhã.
+ */
+window._decidirTardioNaFolga = async function (linha, revisaoDaChave, acao) {
+  var tId = (window._currentTournament && window._currentTournament.id) ||
+            (window._tAberto && window._tAberto.id) || null;
+  if (!tId) { if (window._warn) window._warn('[tardioNaFolga] sem torneio aberto'); return; }
+  var confirmar = String(acao) === 'confirmar';
+  if (confirmar && typeof window.confirm === 'function') {
+    /* ⛔ pergunta antes porque isto MUDA CONFRONTO JÁ PUBLICADO — é o oposto de um clique reversível */
+    if (!window.confirm('Refazer a chave vai mudar confrontos da estreia que já estão publicados. Continuar?')) return;
+  }
+  try {
+    var res = await window._callCF('resolvePendingLateBye', {
+      tournamentId: String(tId),
+      linha: String(linha == null ? '' : linha),
+      revisaoDaChave: String(revisaoDaChave || ''),
+      acao: confirmar ? 'confirmar' : 'cancelar'
+    }, 'Entre na sua conta para decidir sobre a chave.');
+    var out = (res && res.data) || {};
+    if (!out.changed) {
+      if (window.showNotification) window.showNotification('Nada a decidir', 'Este pedido já tinha sido resolvido.', 'info');
+    } else if (confirmar) {
+      if (window.showNotification) window.showNotification('Chave refeita', 'Os confrontos da estreia foram redesenhados com o novo inscrito.', 'success');
+    } else {
+      if (window.showNotification) window.showNotification('Chave mantida', 'O pedido foi arquivado e a chave não mudou.', 'info');
+    }
+    if (window._rerenderBracket) window._rerenderBracket(tId);
+  } catch (e) {
+    if (window._warn) window._warn('[tardioNaFolga] CF falhou', e);
+    /* ⛔ a mensagem do servidor é a útil aqui: "a chave mudou desde o pedido" e "há jogo já lançado"
+     * dizem o que fazer. Trocá-la por um genérico esconde exatamente a informação que resolve. */
+    var msg = (e && (e.message || (e.details && e.details.message))) || 'Tente novamente.';
+    if (window.showNotification) window.showNotification('Decisão não aplicada', String(msg), 'error');
+  }
+};
