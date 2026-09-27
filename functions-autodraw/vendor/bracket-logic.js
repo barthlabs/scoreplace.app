@@ -1380,6 +1380,64 @@ function _slotObj(m, side) {
   if (!m) return null;
   return side === 'p1' ? (m.team1Obj || null) : (m.team2Obj || null);
 }
+
+/* ⛔⛔⛔ A VAGA É O UID. PORTA ÚNICA PARA PÔR UM TIME NUM SLOT.
+ *
+ * ORDEM DO DONO, 27/set/2026, depois de o defeito sobreviver a três publicações:
+ * _"deve ser só uid! só uid sem nome em lugar nenhum que nao na porra do perfil da onde hidrata
+ * a porra do nome, telefone email"_.
+ *
+ * O QUE ISSO CONSERTA, e é a raiz de tudo que apareceu hoje: o slot guardava DUAS fontes de
+ * verdade — o nome (`p1`) e a identidade (`team1Obj`/`team1Uids`) — e sete pontos deste arquivo
+ * trocavam o ocupante escrevendo SÓ O NOME. A identidade ficava a do ocupante anterior.
+ * MEDIDO no jogo 153 da Confra: `p1 = "Sandra Bighetto / Flávia Barchetta"` (certo) com
+ * `team1Uids` = os uids de Rodrigo e Betsy (a dupla ELIMINADA). O card desenha pela identidade,
+ * então a tela mostrava os eliminados jogando enquanto a classificação, lida do nome, os dava
+ * como fora. Três publicações minhas não pegaram nisso porque eu corrigia o nome.
+ *
+ * ⇒ NINGUÉM entra num slot sem a identidade junto. Esta função é a única porta: move uid, objeto
+ * e rótulo no mesmo gesto, e recusa mover um time que não tenha identidade — porque nome sem uid
+ * é exatamente o estado que produziu este defeito e o que derrubou o W.O. e a tela de inscritos.
+ * ⚠️ O rótulo continua sendo gravado por compatibilidade com o app já instalado, que lê `p1`.
+ * Ele é DERIVADO daqui — nunca fonte. Quem desenha deve hidratar do perfil pelo uid.
+ * [[feedback_uid_controls_everything_name_only_ficticio]] [[project_slot_se_decide_por_uid]] */
+function _poeTimeNoSlot(m, side, fonte) {
+  if (!m || !fonte) return false;
+  var uids = (fonte.uids || []).filter(Boolean);
+  var obj = fonte.obj || null;
+  if (!uids.length && !obj) return false;        // sem identidade não entra ninguém
+  if (side === 'p1') {
+    m.p1 = fonte.nome; m.team1Obj = obj; m.team1Uids = uids;
+    m.p1Uid = (uids.length === 1) ? uids[0] : null;
+  } else {
+    m.p2 = fonte.nome; m.team2Obj = obj; m.team2Uids = uids;
+    m.p2Uid = (uids.length === 1) ? uids[0] : null;
+  }
+  return true;
+}
+/* Lê a identidade de um time a partir de QUALQUER jogo onde ele apareça inteiro. O rótulo é só a
+ * chave de busca — quem manda é o que vem junto. */
+function _identidadeDoTime(t, rotulo) {
+  if (!t || !rotulo) return null;
+  var todos = (typeof window._collectAllMatches === 'function')
+    ? (window._collectAllMatches(t) || []) : (Array.isArray(t.matches) ? t.matches : []);
+  for (var i = 0; i < todos.length; i++) {
+    var m = todos[i];
+    if (!m) continue;
+    var lados = ['p1', 'p2'];
+    for (var k = 0; k < 2; k++) {
+      var sl = lados[k];
+      if (String(m[sl]) !== String(rotulo)) continue;
+      var u = _slotUids(m, sl), o = _slotObj(m, sl);
+      if (u.length || o) return { nome: String(rotulo), uids: u, obj: o };
+    }
+  }
+  return null;
+}
+if (typeof window !== 'undefined') {
+  window._poeTimeNoSlot = _poeTimeNoSlot;
+  window._identidadeDoTime = _identidadeDoTime;
+}
 // v1.3.136: hint POSICIONAL de uid pro _resolveSideLive — 1 slot por membro na MESMA ordem do
 // display, com vazio ('') pro membro FICTÍCIO (sem conta). Diferente de _slotUids, que filtra os
 // vazios (certo pra avanço, errado pro display): sem a posição do ficto, uma dupla ficto+conta
@@ -2390,8 +2448,15 @@ window._reassignBestLosersToRepechage = function (t) {
         if (!origemL && temInferior) return;   // sem pouso pra quem sai — não troca
         delete jaRepescado[String(atual)];
         jaRepescado[String(querL)] = 1; colocados[String(querL)] = 1;
-        s.m[s.slot] = querL;
-        if (origemL) origemL.m[origemL.slot] = atual;
+        /* ⛔⛔ A TROCA MOVE O TIME INTEIRO, não o rótulo. Escrever só o nome aqui deixava a
+         * IDENTIDADE do ocupante anterior no slot — e o card desenha pela identidade. Foi este
+         * ponto que pôs os uids de uma dupla ELIMINADA num jogo cujo nome já estava certo, e
+         * sobreviveu a três publicações porque eu corrigia o nome. */
+        var _idQuerL = _identidadeDoTime(t, querL);
+        var _idAtual = _identidadeDoTime(t, atual);
+        if (!_idQuerL) return;                 // sem identidade ninguém entra
+        _poeTimeNoSlot(s.m, s.slot, _idQuerL);
+        if (origemL && _idAtual) _poeTimeNoSlot(origemL.m, origemL.slot, _idAtual);
         trocas++;
         return;
       }
@@ -2412,7 +2477,11 @@ window._reassignBestLosersToRepechage = function (t) {
       }
       if (!quer) return;
       var origem = _origemDe(quer, s);
-      s.m[s.slot] = quer;
+      /* idem: identidade junto, sempre. Vaga preenchida só com rótulo é o defeito que derrubou o
+       * botão de W.O. e a tela de inscritos em 26/set. */
+      var _idQuer = _identidadeDoTime(t, quer);
+      if (!_idQuer) return;
+      _poeTimeNoSlot(s.m, s.slot, _idQuer);
       jaRepescado[String(quer)] = 1; colocados[String(quer)] = 1;
       if (origem) { origem.m[origem.slot] = 'TBD'; vagados.push(origem); }
       trocas++;
@@ -2539,8 +2608,12 @@ function _assignRepechageLosers(t) {
   for (var i = 0; i < repLosers.length; i++) {
     var targetMatch = repMatches[Math.floor(slotIdx / 2)];
     if (targetMatch) {
-      if (slotIdx % 2 === 0) targetMatch.p1 = repLosers[i].name;
-      else targetMatch.p2 = repLosers[i].name;
+      /* ⛔ identidade junto — ver `_poeTimeNoSlot`. `repLosers[i]` já é o objeto do time, então
+       * a identidade vem dele e não precisa ser procurada. */
+      var _sl = (slotIdx % 2 === 0) ? 'p1' : 'p2';
+      var _uidsRep = (typeof window._participantUids === 'function')
+        ? (window._participantUids(repLosers[i]) || []) : [];
+      _poeTimeNoSlot(targetMatch, _sl, { nome: repLosers[i].name, uids: _uidsRep, obj: repLosers[i] });
     }
     slotIdx++;
   }
@@ -3694,8 +3767,18 @@ function _ensureFutureRounds(t, dryRun, opts) {
         .filter(m => m.winner && m.winner !== 'draw' && !m.isBye)
         .map(m => window._matchWinnerSide(m) === 1 ? m.p2 : m.p1)
         .filter(name => name && name !== 'TBD' && name !== 'BYE');
-      t.thirdPlaceMatch.p1 = losers.length >= 1 ? losers[0] : 'TBD';
-      t.thirdPlaceMatch.p2 = losers.length >= 2 ? losers[1] : 'TBD';
+      /* ⛔ o jogo de 3º também recebe IDENTIDADE: sem ela o card desenharia quem estava antes. */
+      ['p1', 'p2'].forEach(function (sl, k) {
+        var nome = losers.length >= (k + 1) ? losers[k] : null;
+        if (!nome) { t.thirdPlaceMatch[sl] = 'TBD'; return; }
+        var id = _identidadeDoTime(t, nome);
+        if (id) _poeTimeNoSlot(t.thirdPlaceMatch, sl, id);
+        /* ⛔⛔ SEM IDENTIDADE, FICA "A DEFINIR" — não se escreve o rótulo sozinho.
+         * Eu tinha posto aqui um recuo que gravava só o nome "porque é tudo que há", e o portão
+         * reprovou na hora: é exatamente o estado que pôs os uids de uma dupla eliminada num jogo
+         * de outra. Slot com nome e sem uid mente para quem desenha, que lê a identidade. */
+        else t.thirdPlaceMatch[sl] = 'TBD';
+      });
     }
   }
 
@@ -3814,8 +3897,14 @@ function _maybeGenerate3rdPlace(t) {
   // Se já tem resultado confirmado no 3º lugar, não mexer
   if (t.thirdPlaceMatch.winner) return;
 
-  t.thirdPlaceMatch.p1 = losers.length >= 1 ? losers[0] : 'TBD';
-  t.thirdPlaceMatch.p2 = losers.length >= 2 ? losers[1] : 'TBD';
+  /* ⛔ idem: identidade junto */
+  ['p1', 'p2'].forEach(function (sl, k) {
+    var nome = losers.length >= (k + 1) ? losers[k] : null;
+    if (!nome) { t.thirdPlaceMatch[sl] = 'TBD'; return; }
+    var id = _identidadeDoTime(t, nome);
+    if (id) _poeTimeNoSlot(t.thirdPlaceMatch, sl, id);
+    else t.thirdPlaceMatch[sl] = 'TBD';   // idem: sem identidade, ninguém é posto no slot
+  });
 }
 // v1.3.62: expõe pro rebuild de chave integrada (tardios) recriar o 3º lugar, que é
 // apagado ao reconstruir as rodadas. Fonte única — mesma lógica do fluxo normal.

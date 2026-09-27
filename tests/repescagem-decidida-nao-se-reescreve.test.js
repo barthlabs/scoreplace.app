@@ -40,7 +40,9 @@ ok(bloco.length > 1000, '① a função que reatribui foi achada pelo identifica
 /* ── ① A GUARDA EXISTE E ESTÁ NO RAMO DO OCUPADO, ANTES DA TROCA ───────────── */
 const iOcupado = bloco.indexOf('if (!_vazio(atual)) {');
 const iGuarda = bloco.indexOf("RepescagemFixada']) return;", iOcupado);
-const iTroca = bloco.indexOf('s.m[s.slot] = querL;', iOcupado);
+/* ⚠️ a âncora mudou em 27/set/2026: a troca deixou de escrever o rótulo solto e passa pela porta
+ * que move a identidade junto (`_poeTimeNoSlot`). A ordem conferida é a mesma. */
+const iTroca = bloco.indexOf('_poeTimeNoSlot(s.m, s.slot', iOcupado);
 ok(iOcupado > 0, '① o ramo do slot OCUPADO foi achado');
 ok(iGuarda > iOcupado, '① ⛔⛔ a guarda está dentro do ramo do ocupado');
 ok(iTroca > 0 && iGuarda < iTroca,
@@ -72,15 +74,21 @@ ok(typeof W._reassignBestLosersToRepechage === 'function', '③ a função carre
 if (typeof W._reassignBestLosersToRepechage === 'function') {
   /* Um torneio mínimo: 2 jogos decididos na rodada 1 e UMA vaga de repescagem na rodada 2. */
   const monta = (ocupante, fixada) => {
-    const vaga = { id: 'R2-P1', round: 2, p1: 'A', p2: ocupante, p2FromRepechage: true };
+    const vaga = { id: 'R2-P1', round: 2, p1: 'A', p2: ocupante, p2FromRepechage: true,
+      team1Uids: ['uA'], team2Uids: [ocupante === 'TBD' ? null : 'u' + String(ocupante).replace('PERDE_', '')].filter(Boolean) };
     if (fixada) vaga.p2RepescagemFixada = true;
     return {
       id: 't1',
       tiebreakers: ['saldo_pontos'],
       matches: [
+        /* ⛔ CADA TIME CARREGA IDENTIDADE. Desde 27/set/2026 o motor RECUSA pôr num slot quem só
+         * tem rótulo — foi nome sem uid que pôs uma dupla eliminada dentro do jogo de outra. Uma
+         * fixture só com nomes mede um caminho que o código não permite mais existir. */
         { id: 'R1-P1', round: 1, p1: 'A', p2: 'PERDE_POUCO', winner: 'A', scoreP1: 2, scoreP2: 1,
+          team1Uids: ['uA'], team2Uids: ['uPOUCO'],
           sets: [{ gamesP1: 6, gamesP2: 4 }, { gamesP1: 4, gamesP2: 6 }, { gamesP1: 6, gamesP2: 5 }] },
         { id: 'R1-P2', round: 1, p1: 'B', p2: 'PERDE_MUITO', winner: 'B', scoreP1: 2, scoreP2: 0,
+          team1Uids: ['uB'], team2Uids: ['uMUITO'],
           sets: [{ gamesP1: 6, gamesP2: 0 }, { gamesP1: 6, gamesP2: 0 }] },
         vaga
       ]

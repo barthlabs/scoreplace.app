@@ -69,6 +69,7 @@ const SUITES = [
   'tests/saldo-e-sempre-na-unidade-mais-rica.test.js',
   'tests/repescagem-decidida-nao-se-reescreve.test.js',
   'tests/vaga-carimbada-nao-muda-no-servidor.test.js',
+  'tests/vaga-e-uid-nunca-so-nome.test.js',
   'tests/tela-nao-pinta-contradicao.test.js',
   'tests/ouvinte-de-partes-nao-desiste-calado.test.js',
   'tests/scripts-de-conserto-nao-gravam-torto.test.js',
