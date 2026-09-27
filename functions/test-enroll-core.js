@@ -97,12 +97,14 @@ try { C.normalizeExtraUpdates({ status: 'finished' }); ok('extraUpdates recusa p
   eq('mesmo uid após alterar perfil → already', r.outcome, 'already');
 })();
 
-// ── Participante sem conta deduplica só pela chave estável ───────────────────
+// ── Participante sem conta tem chave estável E nome único ────────────────────
 (() => {
   const data = { status: 'open', participants: [{ manualParticipantId: 'manual-a', displayName: 'Convidado' }] };
   eq('mesma vaga manual → already', C.computeEnroll(data, { manualParticipantId: 'manual-a', displayName: 'Outro nome' }, null, NOW).outcome, 'already');
-  eq('manual distinto com mesmo nome → enrolled', C.computeEnroll(data, { manualParticipantId: 'manual-b', displayName: 'Convidado' }, null, NOW).outcome, 'enrolled');
+  eq('manual distinto com mesmo nome → duplicateName', C.computeEnroll(data, { manualParticipantId: 'manual-b', displayName: 'Convidado' }, null, NOW).outcome, 'duplicateName');
   eq('manual distinto com outro nome → enrolled', C.computeEnroll(data, { manualParticipantId: 'manual-b', displayName: 'Outra pessoa' }, null, NOW).outcome, 'enrolled');
+  const naEspera = { status: 'open', format: 'Liga', ligaOpenEnrollment: true, matches: [{ id: 'ja-sorteado' }], standbyParticipants: [{ manualParticipantId: 'manual-c', displayName: 'Convidada' }] };
+  eq('manual repetido na espera também é recusado', C.computeEnroll(naEspera, { manualParticipantId: 'manual-d', displayName: 'Convidada' }, null, NOW).outcome, 'duplicateName');
 })();
 
 // ── Já inscrito por SLOT de dupla (uid é o p2 de uma dupla) ───────────────────

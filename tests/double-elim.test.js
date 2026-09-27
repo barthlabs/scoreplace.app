@@ -22,7 +22,10 @@ function buildDE(n) {
   const names = []; for (let i = 1; i <= n; i++) names.push('T' + i);
   const t = { id: 'de' + n, format: 'Dupla Eliminatória', matches: [] };
   for (let i = 0; i < n / 2; i++) {
-    t.matches.push({ id: 'u' + i, round: 1, bracket: 'upper', p1: names[2 * i], p2: names[2 * i + 1], winner: null });
+    t.matches.push({ id: 'u' + i, round: 1, bracket: 'upper',
+      p1: names[2 * i], p2: names[2 * i + 1],
+      p1Uid: 'uid_' + names[2 * i], p2Uid: 'uid_' + names[2 * i + 1],
+      team1Uids: ['uid_' + names[2 * i]], team2Uids: ['uid_' + names[2 * i + 1]], winner: null });
   }
   W._buildDoubleElimBracket(t);
   return t;
@@ -57,6 +60,8 @@ function playAll(t) {
   // ciclo de vida completo
   playAll(t);
   ok(grand[0].winner && isReal(grand[0].winner), tag + ' grande final decidida → campeão ' + grand[0].winner);
+  ok(t.classificationEntries && t.classificationEntries['uid:uid_T1'] && t.classificationEntries['uid:uid_T1'].pos === 1,
+    tag + ' campeão também entra no registro paralelo pela identidade do slot');
   const orphans = t.matches.filter((m) => !m.isBye && !(isReal(m.p1) && isReal(m.p2) && m.winner));
   ok(orphans.length === 0, tag + ' ZERO órfãos (todos os jogos preenchidos e decididos) — sobraram ' + orphans.length);
   // loser-drop de fato aconteceu: a lower R1 recebeu perdedores reais do upper R1

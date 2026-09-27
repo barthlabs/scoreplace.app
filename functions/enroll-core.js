@@ -132,6 +132,27 @@ function isAlreadyEnrolled(participants, participantObj) {
   });
 }
 
+/* Nome repetido não é uma segunda identidade permitida. Contas já nascem com
+ * displayName globalmente único; esta porta cobre a única exceção operacional:
+ * participante digitado pelo organizador, sem UID. Comparar aqui (dentro da
+ * transação) impede tanto reenvio de cliente antigo quanto corrida com a espera.
+ * Dados antigos continuam legíveis; não se tenta adivinhar quem é quem por nome. */
+function displayNameKey(entry) {
+  var name = entry && (entry.displayName || entry.name);
+  return String(name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ').trim().toLocaleLowerCase();
+}
+function hasDuplicateManualName(lists, participantObj) {
+  if (!participantObj || !participantObj.manualParticipantId) return false;
+  var wanted = displayNameKey(participantObj);
+  if (!wanted) return false;
+  return (lists || []).some(function(list) {
+    return (Array.isArray(list) ? list : []).some(function(entry) {
+      return displayNameKey(entry) === wanted;
+    });
+  });
+}
+
 // Conta autenticada é identificada pelo UID. Nome, foto, contato e atributos de
 // perfil não são uma projeção do perfil dentro do torneio. A entrada manual é a
 // exceção: sem UID, o nome é a própria referência daquela vaga.
@@ -233,6 +254,11 @@ function computeEnroll(data, participantObj, extraUpdates, nowMs) {
   if (isAlreadyEnrolled(participants, participantObj)) {
     return { outcome: 'already', participants: participants, updateData: null };
   }
+  var knownStandby = Array.isArray(data.standbyParticipants) ? data.standbyParticipants : [];
+  var knownWaitlist = Array.isArray(data.waitlist) ? data.waitlist : [];
+  if (hasDuplicateManualName([participants, knownStandby, knownWaitlist], participantObj)) {
+    return { outcome: 'duplicateName', participants: participants, updateData: null };
+  }
   // v1.6.86 — FASE SORTEADA → LISTA DE ESPERA. Vem ANTES do teto de vagas de propósito:
   // a espera é justamente onde fica quem não tem vaga na rodada, então recusar por
   // "lotado" quem já está indo pra fila não faz sentido. Em Liga com temporada aberta
@@ -240,8 +266,8 @@ function computeEnroll(data, participantObj, extraUpdates, nowMs) {
   // open=true e a pessoa era empurrada pra participants depois do sorteio — inscrita,
   // fora dos grupos, fora da espera (Confra ago/2026). Ver waitlist-core._phaseDrawDone.
   if (phaseDrawDone(data)) {
-    var standby = Array.isArray(data.standbyParticipants) ? data.standbyParticipants : [];
-    var waitlist = Array.isArray(data.waitlist) ? data.waitlist : [];
+    var standby = knownStandby;
+    var waitlist = knownWaitlist;
     if (isAlreadyEnrolled(standby, participantObj) || isAlreadyEnrolled(waitlist, participantObj)) {
       return { outcome: 'alreadyWaitlisted', participants: participants, updateData: null };
     }

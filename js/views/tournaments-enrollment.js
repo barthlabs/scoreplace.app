@@ -470,6 +470,7 @@ window._applyEnrollResult = function (t, tId, res, ctx) {
 
   var verdict;
   if (res.capacityFull) verdict = 'capacityFull';
+  else if (res.duplicateName) verdict = 'duplicateName';
   else if (res.enrollmentClosed) verdict = 'closed';
   else if (res.alreadyEnrolled && res.dupSuspect) verdict = 'dupSuspect';
   else if (res.alreadyEnrolled) verdict = 'already';
@@ -490,6 +491,8 @@ window._applyEnrollResult = function (t, tId, res, ctx) {
     toast('Vagas esgotadas', ctx.self
       ? 'As vagas acabaram antes de você concluir — você não foi inscrito.'
       : ('As vagas acabaram — ' + name + ' não entrou.'), 'error');
+  } else if (verdict === 'duplicateName') {
+    toast('Nome já utilizado', 'Já há uma pessoa com esse nome neste torneio. Informe um nome diferente para a vaga manual.', 'error');
   } else if (verdict === 'closed') {
     // ⚠️ Corrige o toast otimista de sucesso que pode já ter saído: tem que dizer
     // com todas as letras que a inscrição NÃO foi gravada.
@@ -1556,11 +1559,32 @@ window._doAddParticipant = function (tId, pName, selectedUid, selectedPhoto, onD
     };
     {
         if (!pName || !pName.trim()) return;
+            /* Vaga manual não pode fabricar homônimo. O aviso local evita uma chamada
+             * inútil; a Function repete a regra na transação para cliente antigo/corrida.
+             * UID continua a identidade de conta — esta comparação é só para o texto que
+             * o organizador está tentando cadastrar sem conta. */
+            if (!selectedUid) {
+                var _manualNameKey = function(value) {
+                    return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                        .replace(/\s+/g, ' ').trim().toLocaleLowerCase();
+                };
+                var _wantedManualName = _manualNameKey(pName);
+                var _knownManualNames = [].concat(t.participants || [], t.standbyParticipants || [], t.waitlist || []);
+                var _nameAlreadyUsed = _knownManualNames.some(function(entry) {
+                    var shown = (typeof window._pName === 'function') ? window._pName(entry, '')
+                        : (entry && (entry.displayName || entry.name));
+                    return _manualNameKey(shown) === _wantedManualName;
+                });
+                if (_nameAlreadyUsed) {
+                    if (typeof showNotification !== 'undefined') showNotification('Nome já utilizado', 'Já há uma pessoa com esse nome neste torneio. Informe um nome diferente para a vaga manual.', 'error');
+                    return;
+                }
+            }
             // A Function autentica o organizador e cria autoria/horário no servidor.
             var participantObj = {
                 name: pName.trim(), displayName: pName.trim(), ligaActive: true,
-                // Nome manual não é identidade. Esta chave persiste a vaga sem
-                // confundir homônimos e permite deduplicar reenvios da mesma ação.
+                // Nome manual é único no elenco, mas não substitui a identidade estável:
+                // esta chave permite deduplicar reenvios da mesma ação.
                 manualParticipantId: selectedUid ? null : 'manual-' + ((window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID() : Date.now().toString(36) + '-' + Math.random().toString(36).slice(2))
             };
             // Se foi selecionado via autocomplete, incluir somente o uid.

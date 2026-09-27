@@ -3041,6 +3041,7 @@ exports.enrollParticipant = onCall(
     }
 
     if (out.outcome === "capacityFull") return withDuplicateSignal({ capacityFull: true, participants: out.participants });
+    if (out.outcome === "duplicateName") return withDuplicateSignal({ duplicateName: true, participants: out.participants });
     if (out.outcome === "already") return withDuplicateSignal({ alreadyEnrolled: true, participants: out.participants });
     if (out.outcome === "closed") return withDuplicateSignal({ alreadyEnrolled: false, enrollmentClosed: true, participants: out.participants });
     // v1.6.86: fase já sorteada → a pessoa entrou na LISTA DE ESPERA (não no roster).

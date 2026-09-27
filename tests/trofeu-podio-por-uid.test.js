@@ -40,11 +40,22 @@ ok(W._userPodiumedInTournament(t, 'uid-ana') === true,
 ok(W._userPodiumedInTournament(t, 'uid-bia') === false,
   '② ⛔ homônima em 5º não herda o 1º do mapa legado');
 
+const escritaNova = {
+  participants: t.participants,
+  classification: { Ana: 1 },
+  classificationEntries: {
+    'uid:uid-ana': { name: 'Ana', pos: 1, uids: ['uid-ana'] },
+    'uid:uid-bia': { name: 'Ana', pos: 5, uids: ['uid-bia'] }
+  }
+};
+ok(W._userPodiumedInTournament(escritaNova, 'uid-ana') === true && W._userPodiumedInTournament(escritaNova, 'uid-bia') === false,
+  '③ a escrita canônica nova também decide o troféu sem depender do retrato');
+
 /* Sem UID no retrato não há identidade a inferir; preserva o caminho legado
  * para a pessoa digitada manualmente. */
 const manual = { participants: [{ displayName: 'Convidada' }], classification: { Convidada: 2 }, classifFinalDaLinha: { main: [{ name: 'Convidada', pos: 5, uids: [] }] } };
 ok(W._userPodiumedInTournament(manual, 'uid-inexistente') === false,
-  '③ entrada manual sem UID não é associada a uma conta inventada');
+  '④ entrada manual sem UID não é associada a uma conta inventada');
 
 console.log(fail ? '❌ ' + fail + ' falha(s)' : '✅ troféu de pódio por UID: OK');
 process.exit(fail ? 1 : 0);

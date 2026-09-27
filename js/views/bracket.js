@@ -3316,12 +3316,13 @@ function renderSingleElimBracket(t, canEnterResult, standbyHtml) {
   // classificação só deve aparecer após a conclusão de todas as rodadas/fases.
   let classifHtml = '';
   const _elimComplete = !!champion || t.status === 'finished';
-  if (_elimComplete && t.classification && Object.keys(t.classification).length > 0) {
+  const _classifRows = (typeof window._classifRows === 'function') ? window._classifRows(t) : [];
+  if (_elimComplete && _classifRows.length > 0) {
     const medals = {1:'🥇',2:'🥈',3:'🥉',4:'4º'};
-    const entries = Object.entries(t.classification).sort((a,b) => a[1] - b[1]);
+    const entries = _classifRows;
     const rows = entries.map(function(e) {
-      var pos = e[1];
-      var name = e[0];
+      var pos = e.pos;
+      var name = e.name;
       // v1.9.99: posição numérica (1º/2º/3º/4º…) SEMPRE à esquerda; medalha
       // (🥇🥈🥉) à DIREITA do nome, só pro top 3. Antes a medalha ficava no lugar
       // da posição e quebrava a leitura quando havia 4º/5º/6º.
@@ -3563,12 +3564,13 @@ function renderDoubleElimBracket(t, canEnterResult, standbyHtml) {
   // mais como mudar de posição (ex: perdeu na LR1 = 7º-8º definitivo;
   // perdeu na LR Final = 3º definitivo; etc).
   let _deClassifHtml = '';
-  if (t.classification && Object.keys(t.classification).length > 0) {
+  const _deClassifRows = (typeof window._classifRows === 'function') ? window._classifRows(t) : [];
+  if (_deClassifRows.length > 0) {
     const _medals = {1: '🥇', 2: '🥈', 3: '🥉', 4: '4º'};
-    const _entries = Object.entries(t.classification).sort((a, b) => a[1] - b[1]);
+    const _entries = _deClassifRows;
     const _rows = _entries.map(function(e) {
-      var pos = e[1];
-      var name = e[0];
+      var pos = e.pos;
+      var name = e.name;
       // v1.9.99: posição numérica à esquerda; medalha à direita do nome (top 3).
       var posLabel = pos + 'º';
       var medalEmoji = pos <= 3 ? _medals[pos] : '';

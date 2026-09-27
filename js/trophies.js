@@ -231,7 +231,22 @@
       return false;
     }
 
-    // Eliminatória e afins: mapa name → posição final (1=campeão, 2=vice, 3=3º).
+    // Escrita nova: consulta a classificação canônica antes do mapa por rótulo.
+    // Não cair para o nome depois de achar uma entrada com UID evita premiar uma
+    // homônima que ficou fora do pódio. [[project_classificacao_chave_canonica_com_fallback_manual]]
+    if (t.classificationEntries && typeof t.classificationEntries === 'object') {
+      var ckeys = Object.keys(t.classificationEntries);
+      if (ckeys.length) {
+        for (var ci = 0; ci < ckeys.length; ci++) {
+          var ce = t.classificationEntries[ckeys[ci]];
+          if (!ce || !Array.isArray(ce.uids) || ce.uids.map(String).indexOf(String(uid)) === -1) continue;
+          return typeof ce.pos === 'number' && ce.pos >= 1 && ce.pos <= 3;
+        }
+        return false;
+      }
+    }
+
+    // Documento anterior à chave canônica: mapa name → posição final.
     if (t.classification && typeof t.classification === 'object') {
       for (var nm in myNames) {
         var pos = t.classification[nm];
