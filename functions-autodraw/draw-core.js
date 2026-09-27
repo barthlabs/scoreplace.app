@@ -712,7 +712,10 @@ function integrateLateEntries(t, opts) {
           /* só a callable de decisão do organizador liga isto; o caminho automático nunca */
           decisaoDoOrganizador: !!(opts && opts.decisaoDoOrganizador),
           /* a decisão vale para UMA linha; sem isto, confirmar uma redesenharia as outras */
-          linhaDaDecisao: (opts && opts.linhaDaDecisao != null) ? String(opts.linhaDaDecisao) : null
+          linhaDaDecisao: (opts && opts.linhaDaDecisao != null) ? String(opts.linhaDaDecisao) : null,
+          /* ⛔ quem a decisão nomeia. Sem isto o adapter veria a espera inteira e poria o tardio de
+           * outra linha dentro desta. */
+          uidsDaDecisao: (opts && Array.isArray(opts.uidsDaDecisao)) ? opts.uidsDaDecisao.map(String) : null
         });
         placed = r.aplicados || 0;
         /* ⛔⛔ PROPOSTA PENDENTE CONTA COMO MUDANÇA. Na chave de FOLGA o tardio não entra — a chave

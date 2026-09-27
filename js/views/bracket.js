@@ -3804,15 +3804,26 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
     if (!t || !t.tardiosPendentesPorLinha) return '';
     if (typeof window._souOrganizador !== 'function' || !window._souOrganizador(t)) return '';
     var mapa = t.tardiosPendentesPorLinha;
-    var prop = null, chave = null;
+    /* ⛔⛔ CASAMENTO EXATO, NUNCA POR TRECHO. Eu comparava com `indexOf` nos dois sentidos: numa
+     * linha cujo namespace é PREFIXO de outra (e são ids gerados, isso acontece), a tela mostrava e
+     * decidia a pendência da linha errada — o organizador clicaria "refazer" achando que é a Ouro e
+     * refaria a Prata. Chave de linha é identidade: ou é a mesma, ou não é.
+     * ⚠️ A comparação é feita sobre o namespace dos jogos DESTA aba, que é como a proposta foi
+     * gravada — comparar com o rótulo visível seria comparar duas coisas diferentes. */
+    var _nsDaAba = null;
+    (_lineMatches(bracketKey) || []).some(function (m) {
+      if (!m || !m.id) return false;
+      var i = String(m.id).search(/(^|-)(VC|PD|GF|3P)(-|$)/);
+      if (i < 0) return false;
+      _nsDaAba = (i === 0) ? '' : String(m.id).slice(0, i);
+      return true;
+    });
+    if (_nsDaAba == null) return '';
+    var chave = null, prop = null;
     Object.keys(mapa).forEach(function (k) {
-      var p = mapa[k];
-      if (!p || prop) return;
-      /* a linha da proposta é o namespace do id; casa com a chave desta aba por prefixo ou igualdade */
-      var lk = String(p.linha == null ? '' : p.linha);
-      if (lk === String(bracketKey) || lk.indexOf(String(bracketKey)) >= 0 || String(bracketKey).indexOf(lk) >= 0 || lk === '') {
-        prop = p; chave = k;
-      }
+      if (prop) return;
+      if (String(k) !== String(_nsDaAba)) return;
+      if (mapa[k]) { prop = mapa[k]; chave = k; }
     });
     if (!prop) return '';
     var nomes = (prop.inscritos || []).map(function (x) {

@@ -3778,10 +3778,24 @@ exports.resolvePendingLateBye = onCall(async (request) => {
     const todos = (typeof drawWindow._collectAllMatches === 'function')
       ? (drawWindow._collectAllMatches(t) || []) : (Array.isArray(t.matches) ? t.matches : []);
     todos.forEach((m) => { if (m && m.id != null) porId[String(m.id)] = m; });
-    const sujos = (prop.confrontosAfetados || []).filter((c) => {
+    /* ⛔⛔ O RETRATO É CONFERIDO INTEIRO, não só "tem placar?". A proposta guardou id, p1 e p2 de
+     * cada confronto afetado; se QUALQUER um deles estiver diferente agora, a chave mudou desde o
+     * pedido — troca de dupla, substituição, desfazer par — e redesenhar apagaria essa mudança sem
+     * ninguém ver. Eu conferia só resultado, e uma troca de slots sem placar passava batido. */
+    const mudou = (prop.confrontosAfetados || []).filter((c) => {
       const m = porId[String(c && c.id)];
       if (!m) return true;                       // sumiu: a chave não é mais a que a proposta viu
-      return !!(m.winner || m.scoreP1 != null || m.scoreP2 != null || m.pendingResult);
+      return String(m.p1 == null ? '' : m.p1) !== String((c && c.p1) || '') ||
+             String(m.p2 == null ? '' : m.p2) !== String((c && c.p2) || '');
+    });
+    if (mudou.length) {
+      throw _drawFail('failed-precondition',
+        'A chave mudou desde que este pedido foi feito. Abra de novo para decidir sobre a chave atual.',
+        { tId, linha, mudou: mudou.length });
+    }
+    const sujos = (prop.confrontosAfetados || []).filter((c) => {
+      const m = porId[String(c && c.id)];
+      return !!(m && (m.winner || m.scoreP1 != null || m.scoreP2 != null || m.pendingResult));
     });
     if (sujos.length) {
       throw _drawFail('failed-precondition',
@@ -3793,7 +3807,25 @@ exports.resolvePendingLateBye = onCall(async (request) => {
     delete mapa[linha];
     /* ⛔⛔ A LINHA VAI JUNTO. Sem ela o integrador varreria todas e confirmar a Ouro redesenharia a
      * Prata, que tem decisão própria pendente e cujo organizador não foi perguntado. */
-    const r = integrateLateFn(t, { agora: agoraIso, decisaoDoOrganizador: true, linhaDaDecisao: linha });
+    /* ⛔⛔ SÓ OS INSCRITOS DESTA PROPOSTA. O core recolhe a espera INTEIRA do torneio, e o adapter
+     * filtra por categoria — então confirmar a Ouro inseria também o tardio da Prata na Ouro. Medido
+     * pelo revisor com duas linhas. Nomear a linha não basta: é preciso nomear QUEM.
+     * ⇒ os uids saem de `prop.inscritos`, que é o retrato do que o organizador está confirmando, e o
+     * core intersecta a espera com esse conjunto. Quem não estiver nele não entra, venha de onde vier. */
+    const uidsDaDecisao = [];
+    (prop.inscritos || []).forEach((x) => {
+      (x && Array.isArray(x.uids) ? x.uids : []).forEach((u) => {
+        const v = String(u || '').trim();
+        if (v && uidsDaDecisao.indexOf(v) < 0) uidsDaDecisao.push(v);
+      });
+    });
+    if (!uidsDaDecisao.length) {
+      throw _drawFail('failed-precondition',
+        'Este pedido não identifica quem entraria. Peça a inscrição de novo.', { tId, linha });
+    }
+    const r = integrateLateFn(t, {
+      agora: agoraIso, decisaoDoOrganizador: true, linhaDaDecisao: linha, uidsDaDecisao: uidsDaDecisao
+    });
     if (!r || !r.ok) {
       throw _drawFail('failed-precondition', (r && r.reason) || 'Não foi possível refazer a chave.', { tId, linha });
     }

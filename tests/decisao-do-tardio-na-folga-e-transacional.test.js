@@ -43,6 +43,16 @@ const dentro = iTx > 0 ? bloco.slice(iTx) : '';
 });
 ok(/m\.winner \|\| m\.scoreP1 != null \|\| m\.scoreP2 != null \|\| m\.pendingResult/.test(dentro),
   '① ⛔ e recusa se houver resultado, placar ou placar esperando — redesenhar apagaria resultado');
+/* ⛔⛔ E CONFERE O RETRATO INTEIRO, não só "tem placar?": a proposta guardou id, p1 e p2. Uma troca
+ * de duplas sem placar passava batido e seria apagada pelo redesenho. */
+ok(/String\(m\.p1 == null \? '' : m\.p1\) !== String\(\(c && c\.p1\) \|\| ''\)/.test(dentro),
+  '① ⛔⛔ compara p1 do retrato com o que está na chave agora');
+ok(/String\(m\.p2 == null \? '' : m\.p2\) !== String\(\(c && c\.p2\) \|\| ''\)/.test(dentro),
+  '① e p2 também');
+/* ⛔ e nomeia QUEM entra, não só a linha */
+ok(/uidsDaDecisao/.test(dentro) && /prop\.inscritos/.test(dentro),
+  '① ⛔⛔ os uids saem da PRÓPRIA proposta — o core recolhe a espera inteira do torneio');
+ok(/uidsDaDecisao: uidsDaDecisao/.test(dentro), '① e vão para o motor');
 ok(/sem-pendencia/.test(dentro),
   '① ⭐ pendência já resolvida devolve "nada mudou" em vez de estourar — é a segunda confirmação simultânea');
 
@@ -67,6 +77,9 @@ ok(/decisaoDoOrganizador: true/.test(dentro),
 const core = fs.readFileSync(path.join(ROOT, 'functions-autodraw/draw-core.js'), 'utf8');
 ok(/decisaoDoOrganizador: !!\(opts && opts\.decisaoDoOrganizador\)/.test(core),
   '④ o core repassa o interruptor em vez de ligá-lo por conta própria');
+ok(/uidsDaDecisao/.test(core), '④ e repassa a lista de quem a decisão nomeia');
+ok(/opts\.uidsDaDecisao/.test(adCod),
+  '④ ⛔ o adapter filtra os candidatos por essa lista, em vez de aceitar a espera inteira');
 /* ⛔ e NENHUM caminho automático o liga. ⚠️ A contagem exclui o corpo da PRÓPRIA callable, que é
  * justamente quem deve ligá-lo — incluí-lo aqui daria vermelho pelo motivo errado (e me deu). */
 const _foraDaCallable = fn.slice(0, i0) + fn.slice(i0 + bloco.length);
@@ -102,10 +115,17 @@ ok(/linhaDaDecisao: linha/.test(dentro), '④b e a callable manda QUAL linha foi
     if (c.loserNextMatchId) c.loserNextMatchId = tag + '-' + String(c.loserNextMatchId);
     return c;
   });
-  const t = { id: 'tt', politicaDaChave: 'bye', matches: marca(mA, 'OURO').concat(marca(mB, 'PRATA')) };
+  /* ⛔ CADA LINHA PRECISA DE ALGO QUE A DISTINGA, senão o candidato não pertence a nenhuma — e o
+   * código, com razão, recusa escolher (ver o caso ambíguo logo abaixo). Aqui é a categoria, que é o
+   * que separa linhas paralelas num torneio de verdade. */
+  const comCat = (ms, cat) => ms.map(function (m) { const c = Object.assign({}, m); c.category = cat; return c; });
+  const t = {
+    id: 'tt', politicaDaChave: 'bye',
+    matches: comCat(marca(mA, 'OURO'), 'Ouro').concat(comCat(marca(mB, 'PRATA'), 'Prata'))
+  };
   A.integrarTardiosElim(t, [
-    { name: 'A17', uid: 'Au17', presente: true },
-    { name: 'B17', uid: 'Bu17', presente: true }
+    { name: 'A17', uid: 'Au17', presente: true, category: 'Ouro' },
+    { name: 'B17', uid: 'Bu17', presente: true, category: 'Prata' }
   ]);
   const mapa = t.tardiosPendentesPorLinha || {};
   const linhas = Object.keys(mapa);
@@ -117,14 +137,75 @@ ok(/linhaDaDecisao: linha/.test(dentro), '④b e a callable manda QUAL linha foi
   const tagOutra = String(outra).indexOf('OURO') >= 0 ? 'OURO' : 'PRATA';
   const antesOutra = foto(tagOutra);
   const revOutra = mapa[outra].revisaoDaChave;
-  /* confirma SÓ a primeira */
-  A.integrarTardiosElim(t, [{ name: 'A17', uid: 'Au17', presente: true }],
-    { decisaoDoOrganizador: true, linhaDaDecisao: alvo });
+  /* ⛔⛔ CONFIRMA COM A ESPERA INTEIRA, que é o que a callable faz de verdade. Meu teste anterior
+   * passava só `A17` e mascarava a falha: o core recolhe TODA a espera, então confirmar a Ouro
+   * inseria o tardio da Prata na Ouro. Testar com a lista que o código real não usa é falso verde. */
+  const esperaInteira = [
+    { name: 'A17', uid: 'Au17', presente: true, category: 'Ouro' },
+    { name: 'B17', uid: 'Bu17', presente: true, category: 'Prata' }
+  ];
+  const uidsDoAlvo = [];
+  (mapa[alvo].inscritos || []).forEach(function (x) { (x.uids || []).forEach(function (u) { uidsDoAlvo.push(String(u)); }); });
+  ok(uidsDoAlvo.length > 0, '④b a proposta da linha nomeia quem entraria');
+  A.integrarTardiosElim(t, esperaInteira,
+    { decisaoDoOrganizador: true, linhaDaDecisao: alvo, uidsDaDecisao: uidsDoAlvo });
   ok(foto(tagOutra) === antesOutra,
     '④b ⛔⛔ confirmar UMA linha não mexe em NENHUM confronto da outra');
   const depois = t.tardiosPendentesPorLinha || {};
   ok(depois[outra] && depois[outra].revisaoDaChave === revOutra,
     '④b ⛔ e a pendência da outra linha continua lá, intacta — a decisão dela não foi tomada por tabela');
+  /* ⛔⛔ E O CANDIDATO DA OUTRA LINHA NÃO ENTROU NESTA. Era exatamente o furo: nomear a linha e não
+   * nomear quem. */
+  const tagAlvo = String(alvo).indexOf('OURO') >= 0 ? 'OURO' : 'PRATA';
+  const intrusoNoAlvo = t.matches.some(function (m) {
+    if (String(m.id).indexOf(tagAlvo) !== 0) return false;
+    return ['p1', 'p2'].some(function (sl) {
+      const uids = (sl === 'p1') ? (m.team1Uids || []) : (m.team2Uids || []);
+      return uids.map(String).indexOf(tagAlvo === 'OURO' ? 'Bu17' : 'Au17') >= 0 ||
+             String(m[sl] || '') === (tagAlvo === 'OURO' ? 'B17' : 'A17');
+    });
+  });
+  ok(!intrusoNoAlvo,
+    '④b ⛔⛔ o tardio da OUTRA linha não foi inserido na linha decidida, mesmo estando na espera');
+})();
+
+/* ── ④c CANDIDATO QUE NÃO PERTENCE A UMA LINHA SÓ FICA SEM DESTINO ─────────
+ * ⛔⛔ Era a raiz do furo: com duas linhas e nada que separe os candidatos, AS DUAS propostas
+ * nasciam com OS DOIS — e confirmar uma inseria o tardio da outra. Escolher uma linha no chute
+ * colocaria alguém numa chave que não é a dele.
+ * ⇒ o ambíguo sai de todas as propostas de linha e vira pendência SEM DESTINO. Pergunta explícita é
+ * melhor que resposta errada em duas chaves. */
+(function () {
+  const H = require(path.join(ROOT, 'tests/headless.js'));
+  ['chaves.js', 'chaves-adapter.js'].forEach(function (f) { try { H.load(f); } catch (e) {} });
+  const W = H.window;
+  const A = W._chavesAdapter || W.ChavesAdapter || W._adapterChaves;
+  if (!A) { ok(false, '④c adapter não carregou'); return; }
+  const gente = (n, pre) => Array.from({ length: n }, (_, i) => ({ name: pre + (i + 1), uid: pre + 'u' + (i + 1) }));
+  const marca = (ms, tag) => ms.map(function (m) {
+    const c = Object.assign({}, m);
+    c.id = tag + '-' + String(m.id);
+    if (c.nextMatchId) c.nextMatchId = tag + '-' + String(c.nextMatchId);
+    if (c.loserNextMatchId) c.loserNextMatchId = tag + '-' + String(c.loserNextMatchId);
+    return c;
+  });
+  const mA = A.build(16, 'simples', { participantes: gente(16, 'A'), politicaDaChave: 'bye' }).matches;
+  const mB = A.build(16, 'simples', { participantes: gente(16, 'B'), politicaDaChave: 'bye' }).matches;
+  /* SEM categoria nos dois lados: nada diz a que linha o candidato pertence */
+  const t = { id: 'ta', politicaDaChave: 'bye', matches: marca(mA, 'OURO').concat(marca(mB, 'PRATA')) };
+  A.integrarTardiosElim(t, [{ name: 'X', uid: 'ux', presente: true }]);
+  const mapa = t.tardiosPendentesPorLinha || {};
+  const porLinha = Object.keys(mapa).filter(function (k) { return k !== '__sem_destino__'; });
+  ok(porLinha.length === 0,
+    '④c ⛔⛔ candidato ambíguo NÃO fica em nenhuma proposta de linha (achei ' + porLinha.length + ')');
+  ok(!!mapa.__sem_destino__,
+    '④c ⛔ ele vai para uma pendência SEM DESTINO, em vez de sumir ou ser duplicado');
+  ok(mapa.__sem_destino__ && mapa.__sem_destino__.semDestino === true &&
+     mapa.__sem_destino__.linha === null,
+    '④c e ela se declara sem destino, para a tela não a tratar como se fosse de uma linha');
+  const ins = (mapa.__sem_destino__ && mapa.__sem_destino__.inscritos) || [];
+  ok(ins.length === 1 && (ins[0].uids || []).indexOf('ux') >= 0,
+    '④c com quem está esperando');
 })();
 
 /* ── ⑤ A TELA LÊ O QUE ESTÁ GRAVADO, NÃO `window` ──────────────────────────── */
@@ -140,6 +221,12 @@ ok(!/_tardiosAguardandoNovaChave/.test(blocoUi),
 ok(/window\._souOrganizador\(t\)/.test(blocoUi),
   '⑤ ⛔ só a organização vê — botão que o inscrito não pode apertar é promessa que a tela não cumpre');
 ok(/_decidirTardioNaFolga/.test(blocoUi), '⑤ e os botões chamam a decisão');
+/* ⛔⛔ CASAMENTO EXATO, não por trecho: numa linha cujo namespace é PREFIXO de outra, o `indexOf`
+ * mostrava e decidia a pendência errada — o organizador refaria a chave que não quis. */
+ok(/String\(k\) !== String\(_nsDaAba\)/.test(blocoUi),
+  '⑤ ⛔⛔ a pendência é casada por IGUALDADE do namespace');
+ok(!/indexOf\(String\(bracketKey\)\)/.test(blocoUi),
+  '⑤ ⛔ e a comparação por trecho não existe mais');
 ok(brCod.indexOf('_tardioPendenteHtml(bracketKey, color) +') > 0,
   '⑤ ⭐ e o aviso é realmente renderizado, não só definido');
 

@@ -1090,6 +1090,19 @@
       var _estaLinha = String(ns || '');
       var _decidida = !!(opts && opts.decisaoDoOrganizador === true) &&
         String((opts && opts.linhaDaDecisao) || '') === _estaLinha;
+      /* ⛔⛔ E A DECISÃO NOMEIA QUEM, não só a linha. O coletor recolhe a espera INTEIRA do torneio e
+       * filtra por categoria/ausência — então confirmar a Ouro inseria também o tardio da Prata na
+       * Ouro (reproduzido pelo revisor com duas linhas). Nomear a linha não bastava.
+       * ⇒ com a decisão em curso, só entra quem estiver na lista de uids dela. Quem não estiver é
+       * descartado deste lote, venha de onde vier. */
+      if (_decidida && Array.isArray(opts.uidsDaDecisao) && opts.uidsDaDecisao.length) {
+        var _permitidos = {};
+        opts.uidsDaDecisao.forEach(function (u) { _permitidos[String(u)] = 1; });
+        novos = novos.filter(function (p) {
+          return _uidsDe(p).some(function (u) { return _permitidos[String(u)]; });
+        });
+        if (!novos.length) return;
+      }
       if (_politicaAqui === 'bye' && !_decidida) {
         pendentesPorGrupo[ns || ''] = (pendentesPorGrupo[ns || ''] || []).concat(novos);
         /* ⛔⛔ A PENDÊNCIA TEM DE SOBREVIVER À ABA. Eu a deixava só numa função de `window`, que some
@@ -1222,6 +1235,59 @@
       novos.forEach(function (p) { res.entrantes.push(p); });
       res.semMudanca = false;
     });
+
+    /* ⛔⛔⛔ UM CANDIDATO NÃO PODE APARECER EM DUAS PROPOSTAS. Achado do revisor, reproduzido: com
+     * Ouro e Prata as duas propostas nasceram com A17 E B17, porque o candidato só é filtrado por
+     * categoria e "já está na chave" — e num torneio de linhas paralelas sem categoria distinta isso
+     * não separa nada. Confirmar a Ouro então inseria o tardio da Prata na Ouro.
+     *
+     * ⛔ NÃO DÁ PARA ESCOLHER UMA LINHA NO CHUTE: se o dado não diz a qual linha a pessoa pertence,
+     * qualquer escolha minha é invenção, e inventar aqui coloca alguém numa chave que não é a dela.
+     * ⇒ candidato ambíguo sai de TODAS as propostas de linha e vai para uma pendência SEM DESTINO,
+     * que diz o que ela é: falta decidir em qual linha ele entra. Melhor uma pergunta explícita que
+     * uma resposta errada em duas chaves. [[feedback_prova_para_pintar_nao_serve_para_recusar]] */
+    if (t.tardiosPendentesPorLinha) {
+      var _mapa = t.tardiosPendentesPorLinha;
+      var _linhas = Object.keys(_mapa).filter(function (k) { return k !== '__sem_destino__'; });
+      var _emQuantas = {};
+      _linhas.forEach(function (k) {
+        ((_mapa[k] && _mapa[k].inscritos) || []).forEach(function (x) {
+          (x.uids || []).forEach(function (u) {
+            (_emQuantas[String(u)] = _emQuantas[String(u)] || {})[k] = 1;
+          });
+        });
+      });
+      var _ambiguos = {};
+      Object.keys(_emQuantas).forEach(function (u) {
+        if (Object.keys(_emQuantas[u]).length > 1) _ambiguos[u] = 1;
+      });
+      if (Object.keys(_ambiguos).length) {
+        var _semDestino = [];
+        _linhas.forEach(function (k) {
+          var prop = _mapa[k];
+          if (!prop) return;
+          var fica = [], sai = [];
+          (prop.inscritos || []).forEach(function (x) {
+            var amb = (x.uids || []).some(function (u) { return _ambiguos[String(u)]; });
+            (amb ? sai : fica).push(x);
+          });
+          sai.forEach(function (x) {
+            if (!_semDestino.some(function (y) { return String((y.uids || []).join(',')) === String((x.uids || []).join(',')); })) {
+              _semDestino.push(x);
+            }
+          });
+          if (!fica.length) delete _mapa[k];
+          else prop.inscritos = fica;
+        });
+        if (_semDestino.length) {
+          _mapa.__sem_destino__ = {
+            linha: null, semDestino: true, politica: 'bye', criadaEm: _instante,
+            revisaoDaChave: '', inscritos: _semDestino, confrontosAfetados: []
+          };
+        }
+        res.semMudanca = false;
+      }
+    }
 
     return res;
   }
