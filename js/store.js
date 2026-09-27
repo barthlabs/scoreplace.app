@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.3.122';
+window.SCOREPLACE_VERSION = '2.3.123';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -14696,6 +14696,15 @@ window._classifApplyFilter = function () {
 window._classifEntryIsMe = function (t, entryName) {
   var cu = window.AppStore && window.AppStore.currentUser;
   if (!t || !cu || !cu.uid || !entryName) return false;
+  /* A classificação congelada carrega a identidade do time junto com a posição.
+   * Não reduza esta entrada a `name` antes da comparação: dois inscritos podem ter
+   * o mesmo rótulo, enquanto `uids` distingue as duas vagas. Participante digitado
+   * manualmente é a exceção legítima sem UID e segue pelas vias de rótulo abaixo.
+   * [[project_classificacao_chave_canonica_com_fallback_manual]] */
+  var entryUids = entryName && typeof entryName === 'object' && Array.isArray(entryName.uids)
+    ? entryName.uids.map(String) : [];
+  if (entryUids.indexOf(String(cu.uid)) !== -1) return true;
+  if (entryName && typeof entryName === 'object') entryName = entryName.name;
   var target = String(entryName).trim().toLowerCase();
   if (!target) return false;
   var arr = Array.isArray(t.participants) ? t.participants
@@ -14730,13 +14739,22 @@ window._classifEntryIsMe = function (t, entryName) {
 
 window._renderClassifBlock = function (t, clMap, opts) {
   opts = opts || {};
-  var keys = Object.keys(clMap || {});
-  if (!keys.length) return '';
+  /* `clMap` normalmente é { rótulo: posição }, por compatibilidade com as
+   * classificações progressivas antigas. O retrato final, porém, pode entregar
+   * uma lista {name,pos,uids}: lista preserva duas vagas com o MESMO rótulo.
+   * Converter a lista de volta em objeto apagaria uma delas silenciosamente.
+   * [[project_classificacao_chave_canonica_com_fallback_manual]] */
+  var entries = Array.isArray(clMap)
+    ? clMap.filter(function (e) { return e && e.name != null && e.pos != null; }).map(function (e) {
+        return { name: String(e.name), pos: e.pos, uids: Array.isArray(e.uids) ? e.uids.slice() : [] };
+      })
+    : Object.keys(clMap || {}).map(function (k) { return { name: k, pos: clMap[k], uids: [] }; });
+  if (!entries.length) return '';
   var esc = window._safeHtml || function (s) { return String(s == null ? '' : s); };
   var nameHtml = function (n) { return (typeof window._nameWithCrown === 'function' && t) ? window._nameWithCrown(n, t) : esc(n); };
   var color = opts.color || '#fbbf24', label = opts.label || '📊 Classificação', open = !!opts.open;
   var mode = opts.mode || window._classifModeFor(t, opts.phaseIdx);
-  var entries = keys.map(function (k) { return { name: k, pos: clMap[k] }; }).sort(function (a, b) { return a.pos - b.pos; });
+  entries.sort(function (a, b) { return a.pos - b.pos; });
   var inner, countLabel;
   if (mode === 'blocks') {
     // EM BLOCOS — por FAIXA de posição: 1º–2º · 3º–4º · 5º–8º · 9º–16º… Quem cai na mesma
@@ -14746,17 +14764,19 @@ window._renderClassifBlock = function (t, clMap, opts) {
     var groups = [], byK = {};
     entries.forEach(function (e) {
       var k = blockK(e.pos);
-      if (byK[k] == null) { byK[k] = groups.length; groups.push({ k: k, lo: e.pos, hi: e.pos, names: [] }); }
-      var g = groups[byK[k]]; g.names.push(e.name); if (e.pos < g.lo) g.lo = e.pos; if (e.pos > g.hi) g.hi = e.pos;
+      if (byK[k] == null) { byK[k] = groups.length; groups.push({ k: k, lo: e.pos, hi: e.pos, entries: [] }); }
+      /* Conserva a entrada inteira: no modo por faixas, jogar fora `uids` aqui
+       * reabria a colisão que a lista resolveu no modo individual. */
+      var g = groups[byK[k]]; g.entries.push(e); if (e.pos < g.lo) g.lo = e.pos; if (e.pos > g.hi) g.hi = e.pos;
     });
     inner = groups.map(function (g) {
       var rng = (g.lo === g.hi) ? (g.lo + 'º') : (g.lo + 'º–' + g.hi + 'º');
       var bc = g.k === 1 ? '#fbbf24' : g.k === 2 ? '#cd7f32' : 'var(--text-muted)';
       return '<div style="padding:6px 12px;">' +
-        '<div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.5px;font-weight:800;color:' + window._spCor(bc, 'color') + ';margin-bottom:3px;">' + rng + (g.names.length > 1 ? ' · ' + g.names.length + ' times' : '') + '</div>' +
-        g.names.map(function (n) {
-          var _meB = (typeof window._classifEntryIsMe === 'function') && window._classifEntryIsMe(t, n);
-          return '<div data-classif-name="' + esc(n) + '" style="font-size:0.84rem;font-weight:' + (_meB ? '800' : '600') + ';color:' + window._spCor((_meB ? '#34d399' : 'var(--text-bright,#f1f5f9)'), 'color') + ';padding:1px 0;">' + nameHtml(n) + '</div>';
+        '<div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.5px;font-weight:800;color:' + window._spCor(bc, 'color') + ';margin-bottom:3px;">' + rng + (g.entries.length > 1 ? ' · ' + g.entries.length + ' times' : '') + '</div>' +
+        g.entries.map(function (entry) {
+          var _meB = (typeof window._classifEntryIsMe === 'function') && window._classifEntryIsMe(t, entry);
+          return '<div data-classif-name="' + esc(entry.name) + '" style="font-size:0.84rem;font-weight:' + (_meB ? '800' : '600') + ';color:' + window._spCor((_meB ? '#34d399' : 'var(--text-bright,#f1f5f9)'), 'color') + ';padding:1px 0;">' + nameHtml(entry.name) + '</div>';
         }).join('') +
         '</div>';
     }).join('');
@@ -14769,7 +14789,7 @@ window._renderClassifBlock = function (t, clMap, opts) {
       // v1.4.19: VERDE pra linha do próprio usuário (nome + posição) — achar-se na lista é
       // mais útil que a cor de pódio, que o emoji da medalha continua comunicando. Fundo
       // sutil + borda à esquerda pra localizar no meio de dezenas de linhas.
-      var _me = (typeof window._classifEntryIsMe === 'function') && window._classifEntryIsMe(t, e.name);
+      var _me = (typeof window._classifEntryIsMe === 'function') && window._classifEntryIsMe(t, e);
       if (_me) c = '#34d399';
       var _rowSt = _me
         ? 'display:flex;align-items:center;gap:8px;padding:4px 12px;background:rgba(52,211,153,0.10);border-left:3px solid #34d399;'

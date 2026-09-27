@@ -193,8 +193,30 @@
   // Decide se o usuário terminou em 1º/2º/3º (pódio) neste torneio.
   //   • Liga / Pontos Corridos → top-3 da classificação (_computeStandings).
   //   • Eliminatória / Grupos+Elim / Dupla Elim → mapa t.classification (pos 1-3).
-  function _userPodiumedInTournament(t, uid) {
+  /* ⛔ PÓDIO NÃO É NOME. A classificação final congelada já leva `uids` por
+   * posição; consultar só `classification[nome]` fazia o troféu depender do
+   * rótulo legado e podia premiar ou esconder um homônimo. Participante manual
+   * sem UID não entra neste caminho — para ele o fallback por nome abaixo é a
+   * única identidade honesta. [[project_classificacao_chave_canonica_com_fallback_manual]] */
+  window._userPodiumedInTournament = function(t, uid) {
     if (!t || !uid) return false;
+    var congelada = t.classifFinalDaLinha;
+    if (congelada && typeof congelada === 'object') {
+      var linhas = Object.keys(congelada);
+      for (var li = 0; li < linhas.length; li++) {
+        var retrato = congelada[linhas[li]];
+        if (!Array.isArray(retrato)) continue;
+        for (var ri = 0; ri < retrato.length; ri++) {
+          var e = retrato[ri];
+          if (!e || !Array.isArray(e.uids) || e.uids.map(String).indexOf(String(uid)) === -1) continue;
+          var ep = (e.pos != null) ? e.pos : (ri + 1);
+          /* Encontrar o UID no retrato encerra a busca: ele é a posição publicada
+           * daquela conta. Cair depois no nome legado faria uma homônima em 5º
+           * herdar o 1º de outra pessoa. */
+          return typeof ep === 'number' && ep >= 1 && ep <= 3;
+        }
+      }
+    }
     var myNames = _userNamesInTournament(t, uid);
     if (!Object.keys(myNames).length) return false;
 
@@ -219,7 +241,7 @@
     // Fallback: campeão via t.winner (caso classification ainda não populado).
     if (t.winner && myNames[t.winner]) return true;
     return false;
-  }
+  };
 
   // ─── Agregador de estatísticas do usuário ─────────────────────────────────
   // Constrói um objeto `stats` com todas as métricas necessárias para o engine.

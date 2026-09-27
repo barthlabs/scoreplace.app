@@ -3981,7 +3981,7 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
      * as pessoas já viram. */
     var _cong = t && t.classifFinalDaLinha && t.classifFinalDaLinha[bracketKey];
     if (Array.isArray(_cong) && _cong.length) {
-      var _mapaCong = {};
+      var _linhasCong = [];
       /* ⛔⛔ O RETRATO É CONGELADO; O NOME NÃO. Pergunta do dono, 27/set/2026: _"a lista da
        * classificacao tambem usa uid?"_. Não usava — e aqui é onde isso machuca de verdade.
        *
@@ -4015,9 +4015,12 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
       _cong.forEach(function (x, i) {
         if (!x || !x.name) return;
         var nome = _rotuloAtualPorUids(x.uids) || x.name;
-        _mapaCong[nome] = (x.pos != null ? x.pos : i + 1);
+        /* Lista, não mapa por nome: duas pessoas/duplas podem ter o mesmo rótulo.
+         * Os uids são a identidade quando existem; sem uid, o rótulo do participante
+         * manual continua sendo o único identificador disponível. [[project_classificacao_chave_canonica_com_fallback_manual]] */
+        _linhasCong.push({ name: nome, pos: (x.pos != null ? x.pos : i + 1), uids: Array.isArray(x.uids) ? x.uids : [] });
       });
-      return _renderClassifFromMap(_mapaCong, color, '📊 Classificação final', false);
+      return _renderClassifFromMap(_linhasCong, color, '📊 Classificação final', false);
     }
     var map = _lineClassifMap(bracketKey);
     var fechada = (typeof window._classifIsComplete === 'function') && window._classifIsComplete(lm, map);

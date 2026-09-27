@@ -68,6 +68,7 @@ const SUITES = [
   'tests/placar-nao-volta-a-zero-apos-eco.test.js',
   'tests/classificacao-nao-sai-com-repescagem-indefinida.test.js',
   'tests/classificacao-congelada-reidrata-o-nome.test.js',
+  'tests/trofeu-podio-por-uid.test.js',
   'tests/saldo-e-sempre-na-unidade-mais-rica.test.js',
   'tests/repescagem-decidida-nao-se-reescreve.test.js',
   'tests/vaga-carimbada-nao-muda-no-servidor.test.js',
