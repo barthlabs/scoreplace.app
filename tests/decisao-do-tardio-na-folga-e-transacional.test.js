@@ -315,6 +315,30 @@ function brCodParaSemDestino() {
     '④g ⛔ e a pendência aponta para B, não continua em A (achei "' + ((ins[0] || {}).nome) + '")');
 })();
 
+/* ── ④h A PENDÊNCIA SÓ SAI DEPOIS DE O MOTOR APLICAR ───────────────────────
+ * ⛔⛔ Defeito meu, achado pelo revisor: eu apagava a pendência ANTES de chamar o motor e apostava
+ * que ele aplicaria. Se quem o pedido nomeia já não estivesse na espera — desistiu, foi promovido,
+ * virou dupla — o motor não aplicava nada e a pendência sumia sem ninguém entrar. O organizador via
+ * o pedido desaparecer e nada acontecer.
+ * ⇒ apaga DEPOIS, e só se TODAS as inscrições da proposta tiverem entrado. */
+ok(/res\.assinaturasAplicadas/.test(adCod),
+  '④h o adapter devolve QUAIS inscrições realmente entraram');
+ok(/assinaturasAplicadas/.test(core), '④h e o core repassa');
+const iApaga = dentro.indexOf('delete mapa[linha];', dentro.indexOf('const r = integrateLateFn'));
+const iMotor = dentro.indexOf('const r = integrateLateFn');
+ok(iMotor > 0 && iApaga > iMotor,
+  '④h ⛔⛔ a pendência é apagada DEPOIS do motor, não antes');
+ok(/const faltaram = assinaturasDaDecisao\.filter/.test(dentro),
+  '④h ⛔⛔ e só depois de conferir que nenhuma ficou de fora');
+const iFalta = dentro.indexOf('const faltaram =');
+ok(iFalta > 0 && iFalta < iApaga,
+  '④h ⛔ a conferência vem ANTES do apagar — depois já seria tarde');
+ok(/já não está na lista de espera/.test(dentro),
+  '④h e o erro diz o que aconteceu, em vez de falhar calado');
+/* ⛔ e o cancelar continua apagando: ele não depende do motor */
+ok(/acao === 'cancelar'[\s\S]{0,300}delete mapa\[linha\]/.test(dentro),
+  '④h ⭐ arquivar segue apagando direto — ali não há motor para esperar');
+
 /* ── ⑤ A TELA LÊ O QUE ESTÁ GRAVADO, NÃO `window` ──────────────────────────── */
 const br = fs.readFileSync(path.join(ROOT, 'js/views/bracket.js'), 'utf8');
 const brCod = br.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1');

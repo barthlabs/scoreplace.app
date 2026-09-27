@@ -1022,7 +1022,11 @@
      * `aplicados` fica 0, nenhum outro contador se move, o gravador conclui "nada mudou" e a proposta
      * que eu acabei de escrever no torneio é DESCARTADA. Achado do revisor; eu tinha declarado a
      * pendência como gravada quando ela morria na memória. Escrever no objeto não é persistir. */
-    var res = { ok: true, aplicados: 0, entrantes: [], recusados: [], propostas: 0, semMudanca: true };
+    /* ⛔ `assinaturasAplicadas` existe para a callable CONFERIR o que realmente entrou. Sem devolver
+     * isso, ela apagava a pendência apostando que o motor tinha aplicado — e se a pessoa já não
+     * estivesse na espera, a pendência sumia sem ninguém entrar. */
+    var res = { ok: true, aplicados: 0, entrantes: [], recusados: [], propostas: 0,
+      assinaturasAplicadas: [], semMudanca: true };
     if (!t || !Array.isArray(t.matches) || !t.matches.length) return res;
 
     var elim = t.matches.filter(_ehElim);
@@ -1269,7 +1273,11 @@
       t.matches = t.matches.filter(function (m) { return !doGrupoIds[String(m.id)]; }).concat(r.matches);
       res.aplicados += novos.length;
       // devolve QUEM entrou: o chamador tira da espera e registra como inscrito
-      novos.forEach(function (p) { res.entrantes.push(p); });
+      novos.forEach(function (p) {
+        res.entrantes.push(p);
+        var _a = _assinaturaDaInscricao(p);
+        if (_a && res.assinaturasAplicadas.indexOf(_a) < 0) res.assinaturasAplicadas.push(_a);
+      });
       res.semMudanca = false;
     });
 

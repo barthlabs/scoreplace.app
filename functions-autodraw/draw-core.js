@@ -675,7 +675,7 @@ function integrateLateEntries(t, opts) {
   // Grupos, Liga/Suíço e Rei/Rainha NÃO passam por aqui — têm caminho próprio.
   // ══════════════════════════════════════════════════════════════════════════
   let extra = 0, duplas = 0, duplasTier = 0, dissolved = 0, monarch = 0, repfill = 0;
-  let placed = 0, propostas = 0; const recusas = [];
+  let placed = 0, propostas = 0, aplicadas = []; const recusas = [];
   /* instante ESTÁVEL desta operação: usado por quem grava proposta pendente, para que repetir a
    * transação não produza um documento diferente a cada tentativa.
    * ⛔ Quem chama de dentro de uma transação PASSA o seu (`opts.agora`). O `new Date()` aqui é só o
@@ -723,6 +723,7 @@ function integrateLateEntries(t, opts) {
          * `changed` lá embaixo, o gravador conclui "nada mudou" e a proposta escrita no torneio é
          * DESCARTADA: o organizador nunca fica sabendo que alguém está esperando. */
         propostas = r.propostas || 0;
+        aplicadas = Array.isArray(r.assinaturasAplicadas) ? r.assinaturasAplicadas.slice() : [];
         (r.recusados || []).forEach(function (x) { recusas.push(x); });
         // CADASTRO: quem entrou na chave deixa de ser espera e vira INSCRITO.
         // Sem isto o tardio jogava mas seguia aparecendo na Lista de Espera (bug
@@ -797,7 +798,7 @@ function integrateLateEntries(t, opts) {
   // `recusas` NO RETORNO: quando o recálculo é recusado (cruzar potência de 2 com
   // jogo já disputado), o organizador precisa SABER e decidir — lista de espera ou
   // refazer descartando. Engolir em silêncio foi o pecado da 1.5.x.
-  return { ok: true, changed: changed, extra: extra, duplas: duplas, duplasTier: duplasTier, dissolved: dissolved, monarch: monarch, repfill: repfill, placed: redrawn, wlClean: wlClean, lowLand: lowLand, propostas: propostas, recusas: recusas };
+  return { ok: true, changed: changed, extra: extra, duplas: duplas, duplasTier: duplasTier, dissolved: dissolved, monarch: monarch, repfill: repfill, placed: redrawn, wlClean: wlClean, lowLand: lowLand, propostas: propostas, assinaturasAplicadas: aplicadas, recusas: recusas };
 }
 
 // ── FORMAR dupla na LISTA DE ESPERA + INTEGRAR, ATÔMICO no servidor (CF-only). Espelha

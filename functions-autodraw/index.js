@@ -3814,7 +3814,11 @@ exports.resolvePendingLateBye = onCall(async (request) => {
     }
 
     // redesenha pelo motor canônico — a MESMA porta do resto, com o interruptor da decisão
-    delete mapa[linha];
+    /* ⛔⛔ A PENDÊNCIA SÓ SAI DEPOIS DE O MOTOR APLICAR. Eu apagava antes e apostava: se a pessoa já
+     * não estivesse na espera (desistiu, foi promovida, virou dupla), o motor não aplicava nada e a
+     * pendência sumia sem ninguém entrar — o organizador via o pedido desaparecer e nada acontecer.
+     * ⇒ apaga depois, e só se TODAS as inscrições da proposta tiverem entrado. Faltando uma, nada é
+     * gravado e a pendência fica para decisão explícita. */
     /* ⛔⛔ A LINHA VAI JUNTO. Sem ela o integrador varreria todas e confirmar a Ouro redesenharia a
      * Prata, que tem decisão própria pendente e cujo organizador não foi perguntado. */
     /* ⛔⛔ SÓ OS INSCRITOS DESTA PROPOSTA. O core recolhe a espera INTEIRA do torneio, e o adapter
@@ -3845,6 +3849,14 @@ exports.resolvePendingLateBye = onCall(async (request) => {
     if (!r || !r.ok) {
       throw _drawFail('failed-precondition', (r && r.reason) || 'Não foi possível refazer a chave.', { tId, linha });
     }
+    const aplicadas = Array.isArray(r.assinaturasAplicadas) ? r.assinaturasAplicadas.map(String) : [];
+    const faltaram = assinaturasDaDecisao.filter((a) => aplicadas.indexOf(String(a)) < 0);
+    if (faltaram.length) {
+      throw _drawFail('failed-precondition',
+        'Quem este pedido nomeia já não está na lista de espera. Confira a inscrição e decida de novo.',
+        { tId, linha, faltaram: faltaram.length });
+    }
+    delete mapa[linha];
     const b = _gravaTorneio(tx, ref, t, antes, { agoraIso });
     return { ok: true, changed: true, acao: acao, aplicados: r.placed || 0, tournament: b.clean };
   });
