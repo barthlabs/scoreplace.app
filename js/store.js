@@ -13653,10 +13653,16 @@ window.AppStore = {
       /* eslint-disable no-loop-func */
       (function (tid) {
         var alvo = (self.tournaments || []).find(function (x) { return x && String(x.id) === tid; });
-        if (!alvo || !Array.isArray(alvo._semPesados) || !alvo._semPesados.length) {
+        /* ⛔ Este caminho recebe o torneio que está aberto, nunca um resumo. Portanto a
+         * ausência do marcador legado não pode soltar a montagem e deixar a tela magra: a
+         * lista canônica continua sendo a fonte de quais subcoleções reler. */
+        var _splitMontar = (typeof window !== 'undefined') ? window._tSplit : null;
+        var _foraMontar = (alvo && _splitMontar && typeof _splitMontar.partesDe === 'function')
+          ? _splitMontar.partesDe(alvo) : (alvo && Array.isArray(alvo._semPesados) ? alvo._semPesados : []);
+        if (!alvo || !_foraMontar.length) {
           _soltar(tid); return;
         }
-        window.FirestoreDB._montaDeSubcolecoes(tid, alvo, alvo._semPesados)
+        window.FirestoreDB._montaDeSubcolecoes(tid, alvo, _foraMontar)
           .then(function (montado) {
             /* ⛔ Estes dois returns eram MUDOS e travados. Mudo já era ruim; travado deixava
              * o torneio sem jogos pelo resto da sessão. Agora soltam e falam. */
@@ -15747,7 +15753,12 @@ window._descartaCacheEReler = function (tid) {
     if (!AS) return false;
     var t = (AS.tournaments || []).find(function (x) { return x && String(x.id) === String(tid); });
     if (!t) return false;
-    var fora = Array.isArray(t._semPesados) ? t._semPesados : [];
+    /* A ação nasce do torneio aberto, não de cartão/resumo: mesmo sem o marcador legado
+     * ela precisa esvaziar e reler as partes canônicas, ou o botão de recuperação não faz
+     * nada justamente na fotografia que queremos curar. */
+    var _splitReler = window._tSplit;
+    var fora = (_splitReler && typeof _splitReler.partesDe === 'function')
+      ? _splitReler.partesDe(t) : (Array.isArray(t._semPesados) ? t._semPesados : []);
     if (!fora.length) return false;
     /* esvazia as partes em mãos: é isso que faz o contador acusar "falta" e a busca acontecer */
     fora.forEach(function (nome) {
@@ -15758,7 +15769,7 @@ window._descartaCacheEReler = function (tid) {
       }
     });
     delete t._faltamPesados; delete t._faltaOQue;
-    if (typeof window._marcaPartesQueFaltam === 'function') window._marcaPartesQueFaltam(t);
+    if (typeof window._marcaPartesQueFaltam === 'function') window._marcaPartesQueFaltam(t, true);
     if (typeof AS._montaPesadosQueFaltam === 'function') { AS._montaPesadosQueFaltam([tid]); return true; }
   } catch (e) {
     if (window._warn) window._warn('[cache] não consegui reler as partes de ' + tid, e);
