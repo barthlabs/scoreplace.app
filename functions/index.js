@@ -10085,7 +10085,7 @@ exports.enforceUniqueDisplayName = onDocumentWritten(
     }
 
     // Quem já estava com o nome não é incomodado pelas costas.
-    if (!_nameVariant.shouldIRename(a, conflito, uid)) {
+    if (!_nameVariant.shouldIReceiveConflict(a, conflito, uid)) {
       console.log(`[enforceUniqueDisplayName] "${nome}" colide com ${conflito.uid}, mas quem responde é o outro lado (uid=${uid} é o estabelecido)`);
       return;
     }

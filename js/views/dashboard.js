@@ -2346,10 +2346,15 @@ function renderDashboard(container) {
         if (m && m.round != null) return 'Rodada ' + window._matchRoundDisplayNum(t, m); // 1-based, nunca R0
         return '';
       }
-      // Conta partidas totais do torneio (excluindo BYE/TBD) para estimar total de times
+      /* ⛔ FOLGA NÃO É JOGO EM NENHUMA CONTAGEM DA DASHBOARD.
+       * A mesma folha alimenta a fase do mini-card. Se um marcador de folga/W.O. entrar
+       * nesta lista, ele inventa uma rodada e troca, por exemplo, a Final por Semifinal.
+       * BYE, TBD e folga são estados estruturais; só confronto disputável define a fase.
+       * [[project_folga_nunca_e_jogo]] */
       var allM = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (t.matches || []);
       var realMatches = allM.filter(function(mm) {
-        return mm && mm.p1 && mm.p2 && mm.p1 !== 'BYE' && mm.p2 !== 'BYE' && mm.p1 !== 'TBD' && mm.p2 !== 'TBD';
+        return mm && !mm.isSitOut && !mm.isBye && mm.p1 && mm.p2 &&
+          mm.p1 !== 'BYE' && mm.p2 !== 'BYE' && mm.p1 !== 'TBD' && mm.p2 !== 'TBD';
       });
       // v2.4.40: o TOTAL de rodadas vem do TAMANHO do bracket (nº de inscritos),
       // não do round máximo já gerado. Antes, um bracket só com R1 tinha maxRound=1

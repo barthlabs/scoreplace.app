@@ -3915,6 +3915,14 @@ window._showPlayerHistory = function(tId, playerName, filter) {
   var _flt = filter || 'all'; // 'all' | 'wins' | 'losses'
   var t = window._findTournamentById(tId);
   if (!t) return;
+  /* ⛔ FOLGA NÃO ENTRA NO HISTÓRICO NEM NO CONTADOR DE PARTIDAS.
+   * Um marcador de folga/W.O. pode ter nome dos dois lados para explicar o quadro, mas
+   * não houve confronto, adversário, vitória ou derrota. Os dois leitores abaixo
+   * (adaptador e fallback) passam por esta mesma porta. [[project_folga_nunca_e_jogo]] */
+  var _ehJogoDoHistorico = function(m) {
+    return !!(m && !m.isSitOut && !m.isBye && m.p1 !== 'BYE' && m.p2 !== 'BYE' &&
+      m.p1 !== 'FOLGA' && m.p2 !== 'FOLGA');
+  };
   var matches = [];
   // Prefer canonical adapter: picks up thirdPlace + rodadas + sub-rounds,
   // and supplies semantic labels ("Semifinais", "Final", "Grupo A", "Disputa 3º lugar").
@@ -3928,7 +3936,7 @@ window._showPlayerHistory = function(tId, playerName, filter) {
         c.subgroups.forEach(function(sg, gi) {
           var gname = window._groupDisplayName(sg, gi);
           (sg && sg.matches || []).forEach(function(m) {
-            if (m && (m.p1 === playerName || m.p2 === playerName)) {
+            if (_ehJogoDoHistorico(m) && (m.p1 === playerName || m.p2 === playerName)) {
               matches.push({ label: gname, m: m });
             }
           });
@@ -3937,7 +3945,7 @@ window._showPlayerHistory = function(tId, playerName, filter) {
       }
       if (!Array.isArray(c.matches)) return;
       c.matches.forEach(function(m) {
-        if (m && (m.p1 === playerName || m.p2 === playerName)) {
+        if (_ehJogoDoHistorico(m) && (m.p1 === playerName || m.p2 === playerName)) {
           matches.push({ label: c.label || '', m: m });
         }
       });
@@ -3946,18 +3954,18 @@ window._showPlayerHistory = function(tId, playerName, filter) {
     // Defensive fallback: adapter not loaded.
     (t.rounds || []).forEach(function(r, ri) {
       (r.matches || []).forEach(function(m) {
-        if (m.p1 === playerName || m.p2 === playerName) matches.push({ round: ri + 1, m: m });
+        if (_ehJogoDoHistorico(m) && (m.p1 === playerName || m.p2 === playerName)) matches.push({ round: ri + 1, m: m });
       });
     });
     if (Array.isArray(t.matches)) {
       t.matches.forEach(function(m) {
-        if (m.p1 === playerName || m.p2 === playerName) matches.push({ round: null, m: m });
+        if (_ehJogoDoHistorico(m) && (m.p1 === playerName || m.p2 === playerName)) matches.push({ round: null, m: m });
       });
     }
     if (Array.isArray(t.groups)) {
       t.groups.forEach(function(g, gi) {
         (g.matches || []).forEach(function(m) {
-          if (m.p1 === playerName || m.p2 === playerName) matches.push({ round: null, m: m, label: window._groupDisplayName(g, gi) });
+          if (_ehJogoDoHistorico(m) && (m.p1 === playerName || m.p2 === playerName)) matches.push({ round: null, m: m, label: window._groupDisplayName(g, gi) });
         });
       });
     }

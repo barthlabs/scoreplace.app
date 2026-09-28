@@ -77,8 +77,8 @@ function pickConflict(docs, myUid) {
       uid: d.id,
       email: (rawEmail && !isSyntheticEmail(rawEmail)) ? rawEmail : '',
       phone: data.phone || '',
-      // createdAt entra pro desempate de QUEM renomeia numa colisão simultânea
-      // (ver shouldIRename). Aditivo: quem só lê uid/email/phone não é afetado.
+      // createdAt entra pro desempate de QUEM recebe o sinal numa colisão simultânea
+      // (ver shouldIReceiveConflict). Aditivo: quem só lê uid/email/phone não é afetado.
       createdAt: data.createdAt || null,
     };
   }

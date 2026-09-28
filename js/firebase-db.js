@@ -2991,10 +2991,16 @@ window.FirestoreDB = {
 
   // Resolve um NOME DIGITADO → a(s) conta(s) que têm EXATAMENTE esse displayName.
   // IDENTIDADE = uid: usado no enroll/pareamento pra nunca gravar um titular de
-  // conta só por nome (a classe de bug que sumiu o Adriano). Nomes são únicos entre
-  // uids (resolveUniqueDisplayName), então normalmente 0 ou 1; 2+ é resíduo legado.
+  // conta só por nome (a classe de bug que sumiu o Adriano).
+  // Assim, normalmente há 0 ou 1 resultado; 2+ só é resíduo legado para tratar com cuidado.
   // Ignora contas mescladas (mergedInto) e nomes "não-amigáveis" (dupla "A / B",
-  // email, telefone, placeholder) — esses não são nome de pessoa. Retorna:
+  // email, telefone, placeholder) — esses não são nome de pessoa.
+  /* ⛔ NOME DE CONTA É ÚNICO, MAS NUNCA É RENOMEADO AUTOMATICAMENTE.
+   * A resolução abaixo só LÊ a identidade de uma conta para vincular participante por UID.
+   * Cadastro/edição recusam colisão no servidor; o login social sinaliza e pede confirmação
+   * ou outro nome. Não reintroduzir aqui um resolvedor que devolva "Nome 2": ele esconde
+   * segunda conta e a pergunta que evita inscrição duplicada. [[project_homonimo_exige_escolha]] */
+  // ⛔ NOME DE CONTA É ÚNICO, MAS NUNCA É RENOMEADO AUTOMATICAMENTE. Retorna:
   //   { status:'none' }                      → sem conta (participante informal)
   //   { status:'unique', uid, profile }      → 1 conta
   //   { status:'ambiguous', candidates:[…] } → 2+ homônimos (perguntar qual)
@@ -3020,36 +3026,6 @@ window.FirestoreDB = {
     } catch (e) {
       if (window._warn) window._warn('[resolveNameToAccounts] fail-open:', e);
       return { status: 'none' };
-    }
-  },
-
-  // v3.0.82: garante displayName ÚNICO entre UIDs. Dado um nome-base e o meu uid,
-  // devolve o próprio nome se livre, ou uma variante ("Nome 2", "Nome 3"…) quando
-  // já há OUTRA conta (uid) usando — a regra do dono: dois uids de pessoas
-  // diferentes NUNCA podem ter o mesmo nome. Nomes "não-amigáveis"
-  // (email/telefone/placeholder) passam intactos: não são nomes de pessoa e não
-  // disputam unicidade. Homônimos VIRTUAIS sem uid (Jogador X, informais, ghosts)
-  // não estão em `users` → nunca colidem aqui (são permitidos). Usado no PRIMEIRO
-  // login pra auto-adotar variante sem bloquear a entrada (o gate do perfil
-  // continua pedindo a variante explicitamente quando a pessoa edita o nome).
-  // Fail-open: erro de consulta devolve o nome-base.
-  async resolveUniqueDisplayName(baseName, myUid) {
-    var nm = String(baseName == null ? '' : baseName).trim();
-    if (!nm || !this.db) return nm;
-    if (typeof window._isUnfriendlyName === 'function' && window._isUnfriendlyName(nm)) return nm;
-    try {
-      var taken = await this.isDisplayNameTaken(nm, myUid);
-      if (!taken) return nm;
-      for (var k = 2; k <= 9; k++) {
-        var cand = nm + ' ' + k;
-        var t2 = await this.isDisplayNameTaken(cand, myUid);
-        if (!t2) return cand;
-      }
-      // Fallback extremo (9 variantes ocupadas): sufixo curto do uid — sempre único.
-      return nm + ' ' + String(myUid || '').slice(-4);
-    } catch (e) {
-      if (window._warn) window._warn('[resolveUniqueDisplayName] fail-open:', e);
-      return nm;
     }
   },
 

@@ -652,6 +652,8 @@ const SUITES = [
   // leva a tag na rodada seguinte. A regra era canônica mas vivia presa no renderer de FASE;
   // a Dupla Eliminatória retorna antes dele e desenhava o "PARTIDA vs BYE (Avança Direto)".
   'tests/bye-never-a-card.test.js',
+  'tests/folga-nao-rebatiza-fase-da-dashboard.test.js',
+  'tests/folga-nao-entra-no-historico-do-jogador.test.js',
   // "JOGO N" tem UM contador só. Regressão vista ao vivo: número da chave superior
   // repetido na inferior, porque um 2º contador dentro de renderDoubleElimBracket
   // sobrescrevia a fonte única sem pular BYE e sem deduplicar por id.

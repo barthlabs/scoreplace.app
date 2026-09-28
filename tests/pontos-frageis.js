@@ -108,5 +108,23 @@ module.exports = [
     marca: 'ABRIR O MESMO CARTÃO DUAS VEZES SEGUE O MESMO CAMINHO',
     incidente: 'cartão → detalhe → Voltar → mesmo cartão mudava a hash, mas mantinha a dashboard: '
       + 'o histórico de atividades lia enrolledAt de um slot nulo e o catch do roteador restaurava a tela anterior',
+    data: '2026-09-27' },
+
+  { id: '19', arquivo: 'js/views/dashboard.js', ancora: 'var allM = (typeof window._collectAllMatches ===',
+    marca: 'FOLGA NÃO É JOGO EM NENHUMA CONTAGEM DA DASHBOARD',
+    incidente: 'a leitura da fase no mini-card excluía BYE/TBD, mas uma folga com dois rótulos '
+      + 'ainda criava uma rodada imaginária e rebatizava a Final como Semifinal',
+    data: '2026-09-27' },
+
+  { id: '20', arquivo: 'js/views/bracket-ui.js', ancora: 'var _ehJogoDoHistorico = function(m) {',
+    marca: 'FOLGA NÃO ENTRA NO HISTÓRICO NEM NO CONTADOR DE PARTIDAS',
+    incidente: 'o histórico individual aceitava o marcador de folga/W.O. por ter rótulo dos dois lados, '
+      + 'exibindo adversário e inflando partidas/vitórias sem confronto',
+    data: '2026-09-27' },
+
+  { id: '21', arquivo: 'js/firebase-db.js', ancora: 'async resolveNameToAccounts(name) {',
+    marca: 'NOME DE CONTA É ÚNICO, MAS NUNCA É RENOMEADO AUTOMATICAMENTE',
+    incidente: 'o helper legado transformava colisão de cadastro em "Nome 2", escondendo a segunda '
+      + 'conta e a pergunta obrigatória para confirmar a identidade ou escolher outro nome',
     data: '2026-09-27' }
 ];
