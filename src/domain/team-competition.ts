@@ -9,12 +9,14 @@ namespace ScoreplaceTeamCompetition {
   export type RecordValue = Record<string, unknown>;
   export type Formation = 'manual' | 'draw';
   export type InternalMatches = 'allow' | 'avoid';
+  export type Ranking = 'points' | 'games_diff';
 
   export interface Config {
     enabled: boolean;
     teamCount: number;
     formation: Formation;
     internalMatches: InternalMatches;
+    ranking: Ranking;
     scoring: { win: number; draw: number; loss: number };
   }
 
@@ -26,6 +28,9 @@ namespace ScoreplaceTeamCompetition {
     draws: number;
     losses: number;
     played: number;
+    gamesWon: number;
+    gamesLost: number;
+    gamesDiff: number;
   }
 
   const number = (value: unknown, fallback: number): number => {
@@ -45,6 +50,9 @@ namespace ScoreplaceTeamCompetition {
       teamCount: Math.max(2, Math.floor(number(raw.teamCount, 8))),
       formation: raw.formation === 'manual' ? 'manual' : 'draw',
       internalMatches: raw.internalMatches === 'allow' ? 'allow' : 'avoid',
+      // Pontos preserva os torneios existentes. Saldo de games é uma escolha explícita
+      // do organizador para eventos em que o placar — e não a vitória isolada — define o time.
+      ranking: raw.ranking === 'games_diff' ? 'games_diff' : 'points',
       // A escala padrão é a mesma da classificatória atual: 3/1/0. O organizador
       // pode substituí-la, inclusive com valores zero ou negativos, de forma explícita.
       scoring: {
@@ -74,6 +82,16 @@ namespace ScoreplaceTeamCompetition {
     return teamIdOf(side === 'p1' ? match.team1Obj : match.team2Obj);
   }
 
+  /** Soma games dos sets; placar simples usa scoreP1/scoreP2 como unidade do jogo. */
+  function gamesOf(match: RecordValue): { p1: number; p2: number } {
+    const sets = Array.isArray(match.sets) ? match.sets : [];
+    if (sets.length) return sets.reduce((total, raw) => {
+      const set = record(raw);
+      return { p1: total.p1 + number(set.gamesP1, 0), p2: total.p2 + number(set.gamesP2, 0) };
+    }, { p1: 0, p2: 0 });
+    return { p1: number(match.scoreP1, 0), p2: number(match.scoreP2, 0) };
+  }
+
   /**
    * Soma somente jogos reais e decididos. Folga, W.O. sem adversário, pendência e dupla
    * sem time não viram ponto de ninguém. O chamador fornece os times existentes para que
@@ -86,7 +104,7 @@ namespace ScoreplaceTeamCompetition {
     (Array.isArray(teams) ? teams : []).forEach((raw) => {
       const team = record(raw), id = text(team.id);
       if (!id || rows[id]) return;
-      rows[id] = { id, name: text(team.name) || id, points: 0, wins: 0, draws: 0, losses: 0, played: 0 };
+      rows[id] = { id, name: text(team.name) || id, points: 0, wins: 0, draws: 0, losses: 0, played: 0, gamesWon: 0, gamesLost: 0, gamesDiff: 0 };
     });
     (Array.isArray(matches) ? matches : []).forEach((raw) => {
       const match = record(raw);
@@ -95,6 +113,11 @@ namespace ScoreplaceTeamCompetition {
       if (!a || !b || a === b || !rows[a] || !rows[b]) return;
       const winner = text(match.winner);
       if (!winner) return;
+      const games = gamesOf(match);
+      rows[a].gamesWon += games.p1; rows[a].gamesLost += games.p2;
+      rows[b].gamesWon += games.p2; rows[b].gamesLost += games.p1;
+      rows[a].gamesDiff = rows[a].gamesWon - rows[a].gamesLost;
+      rows[b].gamesDiff = rows[b].gamesWon - rows[b].gamesLost;
       if (winner === 'draw' || match.draw === true) {
         rows[a].played++; rows[b].played++;
         rows[a].draws++; rows[b].draws++;
@@ -109,8 +132,9 @@ namespace ScoreplaceTeamCompetition {
       win.wins++; win.points += cfg.scoring.win;
       loss.losses++; loss.points += cfg.scoring.loss;
     });
-    return Object.keys(rows).map((id) => rows[id]).sort((a, b) =>
-      (b.points - a.points) || (b.wins - a.wins) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+    return Object.keys(rows).map((id) => rows[id]).sort((a, b) => cfg.ranking === 'games_diff'
+      ? (b.gamesDiff - a.gamesDiff) || (b.gamesWon - a.gamesWon) || (b.wins - a.wins) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id)
+      : (b.points - a.points) || (b.wins - a.wins) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
   }
 }
 

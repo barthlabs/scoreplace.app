@@ -725,10 +725,15 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         tcToggle += '<div style="font-size:.72rem;color:var(--text-muted);margin:6px 0 12px;line-height:1.45;">As duplas permanecem nas suas categorias e são distribuídas entre 8 times no sorteio. A tabela soma os pontos de todas as categorias.</div>' +
           _toggleRight('Duplas do mesmo time podem se enfrentar', tc.internalMatches === 'allow', 'window._f2TeamInternalMatches(this.checked)') +
           '<div style="font-size:.72rem;color:var(--text-muted);margin:6px 0 12px;">' + (tc.internalMatches === 'allow' ? 'Confrontos internos são permitidos.' : 'Confrontos internos são evitados ao montar os grupos.') + '</div>' +
-          '<div style="font-size:.72rem;color:var(--text-muted);margin-bottom:6px;">Pontuação por resultado</div><div style="display:flex;gap:10px;flex-wrap:wrap;">' +
-          '<label style="font-size:.78rem;color:var(--text-muted);">Vitória ' + _num(tc.scoring.win, -99, 99, 'window._f2TeamScore(\'win\',this.value,this)') + '</label>' +
-          '<label style="font-size:.78rem;color:var(--text-muted);">Empate ' + _num(tc.scoring.draw, -99, 99, 'window._f2TeamScore(\'draw\',this.value,this)') + '</label>' +
-          '<label style="font-size:.78rem;color:var(--text-muted);">Derrota ' + _num(tc.scoring.loss, -99, 99, 'window._f2TeamScore(\'loss\',this.value,this)') + '</label></div>';
+          '<div style="font-size:.72rem;color:var(--text-muted);margin-bottom:6px;">Critério da classificação</div>' +
+          _pill(tc.ranking !== 'games_diff', 'window._f2TeamRanking(\'points\')', '🏅 Pontos') +
+          _pill(tc.ranking === 'games_diff', 'window._f2TeamRanking(\'games_diff\')', '➗ Saldo de games') +
+          (tc.ranking === 'games_diff'
+            ? '<div style="font-size:.72rem;color:var(--text-muted);margin-top:6px;">Ordem pelo total de games feitos menos games sofridos pelas duplas do time.</div>'
+            : '<div style="margin-top:10px;font-size:.72rem;color:var(--text-muted);margin-bottom:6px;">Pontuação por resultado</div><div style="display:flex;gap:10px;flex-wrap:wrap;">' +
+              '<label style="font-size:.78rem;color:var(--text-muted);">Vitória ' + _num(tc.scoring.win, -99, 99, 'window._f2TeamScore(\'win\',this.value,this)') + '</label>' +
+              '<label style="font-size:.78rem;color:var(--text-muted);">Empate ' + _num(tc.scoring.draw, -99, 99, 'window._f2TeamScore(\'draw\',this.value,this)') + '</label>' +
+              '<label style="font-size:.78rem;color:var(--text-muted);">Derrota ' + _num(tc.scoring.loss, -99, 99, 'window._f2TeamScore(\'loss\',this.value,this)') + '</label></div>');
       }
       classif += _sec('Times', tcToggle);
     }
@@ -1225,11 +1230,16 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     tc.enabled = !!enabled; tc.teamCount = 8; tc.formation = 'draw';
     if (tc.internalMatches !== 'allow' && tc.internalMatches !== 'avoid') tc.internalMatches = 'avoid';
     tc.scoring = tc.scoring || { win: 3, draw: 1, loss: 0 };
+    if (tc.ranking !== 'games_diff') tc.ranking = 'points';
     S.cfg.teamCompetition = tc; _norm(); _rerender();
   };
   window._f2TeamInternalMatches = function (allowed) {
     if (!S || !S.cfg.teamCompetition) return;
     S.cfg.teamCompetition.internalMatches = allowed ? 'allow' : 'avoid'; _norm(); _rerender();
+  };
+  window._f2TeamRanking = function (ranking) {
+    if (!S || !S.cfg.teamCompetition) return;
+    S.cfg.teamCompetition.ranking = ranking === 'games_diff' ? 'games_diff' : 'points'; _norm(); _rerender();
   };
   window._f2TeamScore = function (field, value, el) {
     if (!S || !S.cfg.teamCompetition || ['win', 'draw', 'loss'].indexOf(field) === -1) return;

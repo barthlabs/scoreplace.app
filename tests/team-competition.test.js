@@ -39,5 +39,16 @@ ok(row(rows, 'c').points === 1 && row(rows, 'c').draws === 1,
   'Cinza recebe o ponto configurado de empate');
 ok(rows[0].id === 'a' && rows[1].id === 'c' && rows[2].id === 'b', 'a tabela ordena pela soma dos pontos');
 
+const saldo = C.standings(teams, [
+  // O time Branco perde, mas seu saldo de games pode superar outro time: a métrica
+  // é o placar acumulado, não uma conversão disfarçada de vitórias em pontos.
+  { p1: 'A', p2: 'B', p1CompetitionTeamId: 'a', p2CompetitionTeamId: 'b', winner: 'p1', scoreP1: 6, scoreP2: 1 },
+  { p1: 'B', p2: 'C', p1CompetitionTeamId: 'b', p2CompetitionTeamId: 'c', winner: 'p1', sets: [{ gamesP1: 6, gamesP2: 4 }, { gamesP1: 6, gamesP2: 2 }] }
+], Object.assign({}, config, { ranking: 'games_diff' }));
+ok(row(saldo, 'a').gamesDiff === 5 && row(saldo, 'b').gamesWon === 13 && row(saldo, 'b').gamesLost === 12,
+  'saldo acumula games do placar simples e de todos os sets');
+ok(saldo[0].id === 'a' && saldo[1].id === 'b' && saldo[2].id === 'c',
+  'modo saldo ordena por games feitos menos games sofridos');
+
 console.log(fail ? '❌ team-competition: ' + fail + ' falharam, ' + pass + ' ok' : '✅ team-competition: ' + pass + ' ok');
 process.exit(fail ? 1 : 0);

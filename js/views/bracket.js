@@ -1212,13 +1212,16 @@ function _renderCompetitionTeamStandings(t) {
   var matches = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (t.matches || []);
   var rows = core.standings(t.competitionTeams || [], matches, cfg);
   if (!rows.length) return '';
+  var byGames = cfg.ranking === 'games_diff';
   var safe = window._safeHtml || function (value) { return String(value == null ? '' : value); };
   var body = rows.map(function (row, index) {
     var medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : (index + 1) + 'º';
     return '<tr style="border-bottom:1px solid var(--border-color);">' +
       '<td style="padding:9px 10px;font-weight:800;color:var(--text-muted);">' + medal + '</td>' +
       '<td style="padding:9px 10px;font-weight:700;color:var(--text-bright);">' + safe(row.name) + '</td>' +
-      '<td style="padding:9px 10px;text-align:center;font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);">' + row.points + '</td>' +
+      (byGames
+        ? '<td style="padding:9px 10px;text-align:center;font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);">' + (row.gamesDiff >= 0 ? '+' : '') + row.gamesDiff + '</td><td style="padding:9px 10px;text-align:center;color:var(--text-muted);">' + row.gamesWon + '-' + row.gamesLost + '</td>'
+        : '<td style="padding:9px 10px;text-align:center;font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);">' + row.points + '</td>') +
       '<td style="padding:9px 10px;text-align:center;color:var(--sp-c-4ade80,#4ade80);">' + row.wins + '</td>' +
       '<td style="padding:9px 10px;text-align:center;color:var(--sp-c-94a3b8,#94a3b8);">' + row.draws + '</td>' +
       '<td style="padding:9px 10px;text-align:center;color:var(--sp-c-f87171,#f87171);">' + row.losses + '</td>' +
@@ -1226,9 +1229,9 @@ function _renderCompetitionTeamStandings(t) {
   }).join('');
   return '<section class="card" data-competition-team-standings="1" style="margin:0 0 1rem;border-color:rgba(251,191,36,.38);overflow:auto;">' +
     '<div style="padding:12px 14px 8px;font-weight:800;color:var(--sp-c-fde68a,#fde68a);">🏆 Classificação dos times</div>' +
-    '<div style="padding:0 14px 12px;font-size:.74rem;color:var(--text-muted);">Soma dos resultados das duplas de todas as categorias.</div>' +
+    '<div style="padding:0 14px 12px;font-size:.74rem;color:var(--text-muted);">' + (byGames ? 'Saldo acumulado: games feitos menos games sofridos.' : 'Soma dos resultados das duplas de todas as categorias.') + '</div>' +
     '<table style="width:100%;border-collapse:collapse;min-width:440px;font-size:.84rem;"><thead><tr style="text-align:left;color:var(--text-muted);font-size:.68rem;text-transform:uppercase;letter-spacing:.35px;">' +
-      '<th style="padding:8px 10px;">#</th><th style="padding:8px 10px;">Time</th><th style="padding:8px 10px;text-align:center;">Pts</th><th style="padding:8px 10px;text-align:center;">V</th><th style="padding:8px 10px;text-align:center;">E</th><th style="padding:8px 10px;text-align:center;">D</th><th style="padding:8px 10px;text-align:center;">J</th>' +
+      '<th style="padding:8px 10px;">#</th><th style="padding:8px 10px;">Time</th>' + (byGames ? '<th style="padding:8px 10px;text-align:center;">Saldo</th><th style="padding:8px 10px;text-align:center;">Games</th>' : '<th style="padding:8px 10px;text-align:center;">Pts</th>') + '<th style="padding:8px 10px;text-align:center;">V</th><th style="padding:8px 10px;text-align:center;">E</th><th style="padding:8px 10px;text-align:center;">D</th><th style="padding:8px 10px;text-align:center;">J</th>' +
     '</tr></thead><tbody>' + body + '</tbody></table></section>';
 }
 window._renderCompetitionTeamStandings = _renderCompetitionTeamStandings;
