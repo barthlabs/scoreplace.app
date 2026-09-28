@@ -227,6 +227,20 @@ console.log('\n──── result-core: reabertura administrativa ────'
     T.classification['Ana / Bia'] === 3, JSON.stringify(T.classificationEntries));
 }
 
+// 13c) A aresta do perdedor da dupla eliminatória é outro destino: ela recebe
+// a mesma identidade do slot e, ao reabrir, precisa voltar a TBD por completo.
+{
+  const T = mkT();
+  const m = win._findMatch(T, 'm1');
+  const lower = { id: 'lower_1', p1: 'Caio / Dora', p2: 'TBD',
+    team1Uids: [UID_B1, UID_B2], p1Uid: null, team1Obj: { displayName: 'Caio / Dora' } };
+  T.matches.push(lower); m.loserMatchId = lower.id;
+  m.winner = 'Ana / Bia'; m.winnerUids = [UID_A1, UID_A2];
+  const reopened = core.applyResult(T, { matchId: 'm1', payload: { action: 'reopen-result' }, actor: { uid: UID_ORG }, now: 1 });
+  t('reabertura limpa também a vaga UID do perdedor', reopened.ok && lower.p1 === 'TBD' &&
+    lower.team1Uids.length === 0 && !lower.p1Uid && !lower.team1Obj, JSON.stringify(lower));
+}
+
 // 14) Refazer limpa pendência/placar sem tentar remover um avanço que já não existe.
 {
   const T = mkT(); const m = win._findMatch(T, 'm1');
