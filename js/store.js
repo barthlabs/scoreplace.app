@@ -13964,10 +13964,20 @@ window.AppStore = {
     store._creationPromises = store._creationPromises || {};
     if (store._creationPromises[id]) return store._creationPromises[id];
     var config = Object.assign({}, data);
+    /* `_allowConfigReset` é só uma marca do formulário de edição: autoriza o CLIENTE a
+     * recompilar a prévia, não descreve o torneio. Se cruzar a fronteira de criação a CF
+     * deve recusá-la como estado de execução — foi exatamente o "Falha ao salvar" ao
+     * configurar um torneio novo em 28/set. Mantê-la fora daqui impede a regressão. */
     ['id', '_allowConfigReset', 'storageCanonico', 'coHosts', 'creatorUid', 'creatorEmail',
       'organizerUid', 'organizerId', 'organizerEmail', 'organizerName', 'status', 'createdAt',
       'participants', 'matches', 'phases', 'ligaRRSchedule', 'logoData', 'coverPhotoData', 'logoUrl', 'coverUrl'].forEach(function (key) { delete config[key]; });
-    Object.keys(config).forEach(function (key) { if (config[key] === undefined) delete config[key]; });
+    // Todo campo de topo com `_` é estado transitório do navegador (a configuração
+    // declarativa legítima fica DENTRO de `fmt2`, onde o servidor permite apenas os
+    // dois derivados conhecidos). Listar um por um aqui já falhou: uma nova marca de
+    // tela bloqueou a criação inteira. A fronteira não envia estado para a CF.
+    Object.keys(config).forEach(function (key) {
+      if (config[key] === undefined || key.charAt(0) === '_') delete config[key];
+    });
     var images = [['logoData', 'logoUrl', 'logo'], ['coverPhotoData', 'coverUrl', 'cover']];
     // Storage exige que o documento já exista e comprove o dono. Primeiro cria
     // a configuração; depois anexa as imagens por outra intenção confirmada.
