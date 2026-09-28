@@ -200,8 +200,16 @@ function normalizeParticipantIntent(participantObj, callerUid, addedAt) {
     return value;
   };
   var uid = text('uid', 128), manualId = text('manualParticipantId', 200);
-  if ((uid && manualId) || (!uid && !manualId)) throw new Error('a inscrição precisa de uid ou manualParticipantId');
-  if (manualId && manualId.indexOf('manual-') !== 0) throw new Error('manualParticipantId inválido');
+  if (uid && manualId) throw new Error('a inscrição não pode misturar uid e manualParticipantId');
+  /* ⛔ INSCRIÇÃO NOVA EXIGE CONTA: NÃO NASCE VAGA MANUAL.
+   * Nome não distingue pessoas e o identificador manual só mascarava essa ambiguidade.
+   * Dados históricos com manualParticipantId continuam legíveis pelos consumidores; esta
+   * porta bloqueia exclusivamente a CRIAÇÃO, para não tornar nenhum torneio em voo ilegível.
+   * [[project_sem_vaga_manual_nova]] */
+  if (manualId) {
+    throw new Error('participante sem conta não é permitido; selecione uma conta cadastrada');
+  }
+  if (!uid) throw new Error('a inscrição precisa de uid');
   if (participantObj.ligaActive != null && typeof participantObj.ligaActive !== 'boolean') throw new Error('ligaActive inválido');
   var out = {};
   ['name', 'displayName', 'p1Name', 'p2Name', 'category', 'categorySource'].forEach(function (key) {
@@ -226,10 +234,6 @@ function normalizeParticipantIntent(participantObj, callerUid, addedAt) {
     out.uid = uid;
     out.selfEnrolled = uid === callerUid;
     if (!out.selfEnrolled) out.addedByUid = callerUid;
-  } else {
-    out.manualParticipantId = manualId;
-    out.selfEnrolled = false;
-    out.addedByUid = callerUid;
   }
   return sanitizeAccountParticipant(out);
 }

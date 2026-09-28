@@ -1543,12 +1543,15 @@ window._doAddParticipant = function (tId, pName, selectedUid, selectedPhoto, onD
         if (typeof showAlertDialog === 'function') showAlertDialog(_t('enroll.enrollClosed'), _t('enroll.enrollClosedMsg'), null, { type: 'warning' });
         return;
     }
-    // IDENTIDADE = uid: nome digitado à mão (sem uid do autocomplete) → resolve pra
-    // conta antes de gravar (pergunta se homônimo). _resolved evita loop quando o
-    // nome não tem conta (informal → grava por nome mesmo).
+    // IDENTIDADE = uid: nome digitado à mão precisa resolver para uma conta antes de
+    // gravar. Sem conta não há vaga manual nova — nome não separa duas pessoas.
     if (!selectedUid && !_resolved && pName && String(pName).trim()) {
         window._resolveEnrolleeUid(String(pName).trim(), function (uid) {
-            window._doAddParticipant(tId, pName, uid || '', selectedPhoto, onDone, true);
+            if (!uid) {
+                if (typeof showNotification !== 'undefined') showNotification('Conta necessária', 'Para adicionar alguém, selecione uma conta cadastrada. Não criamos vagas por nome.', 'warning');
+                return;
+            }
+            window._doAddParticipant(tId, pName, uid, selectedPhoto, onDone, true);
         });
         return;
     }
@@ -1559,33 +1562,10 @@ window._doAddParticipant = function (tId, pName, selectedUid, selectedPhoto, onD
     };
     {
         if (!pName || !pName.trim()) return;
-            /* Vaga manual não pode fabricar homônimo. O aviso local evita uma chamada
-             * inútil; a Function repete a regra na transação para cliente antigo/corrida.
-             * UID continua a identidade de conta — esta comparação é só para o texto que
-             * o organizador está tentando cadastrar sem conta. */
-            if (!selectedUid) {
-                var _manualNameKey = function(value) {
-                    return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-                        .replace(/\s+/g, ' ').trim().toLocaleLowerCase();
-                };
-                var _wantedManualName = _manualNameKey(pName);
-                var _knownManualNames = [].concat(t.participants || [], t.standbyParticipants || [], t.waitlist || []);
-                var _nameAlreadyUsed = _knownManualNames.some(function(entry) {
-                    var shown = (typeof window._pName === 'function') ? window._pName(entry, '')
-                        : (entry && (entry.displayName || entry.name));
-                    return _manualNameKey(shown) === _wantedManualName;
-                });
-                if (_nameAlreadyUsed) {
-                    if (typeof showNotification !== 'undefined') showNotification('Nome já utilizado', 'Já há uma pessoa com esse nome neste torneio. Informe um nome diferente para a vaga manual.', 'error');
-                    return;
-                }
-            }
+            if (!selectedUid) return;
             // A Function autentica o organizador e cria autoria/horário no servidor.
             var participantObj = {
-                name: pName.trim(), displayName: pName.trim(), ligaActive: true,
-                // Nome manual é único no elenco, mas não substitui a identidade estável:
-                // esta chave permite deduplicar reenvios da mesma ação.
-                manualParticipantId: selectedUid ? null : 'manual-' + ((window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID() : Date.now().toString(36) + '-' + Math.random().toString(36).slice(2))
+                ligaActive: true
             };
             // Se foi selecionado via autocomplete, incluir somente o uid.
             if (selectedUid) participantObj.uid = selectedUid;
@@ -1635,6 +1615,11 @@ window.addTeamFunction = function (tId) {
         showAlertDialog(_t('enroll.enrollClosed'), _t('enroll.enrollClosedMsg'), null, { type: 'warning' });
         return;
     }
+    /* ⛔ EQUIPE DIGITADA TAMBÉM SERIA VAGA MANUAL. A inscrição central recusa sem UID;
+     * bloquear aqui evita que a tela prometa uma inclusão que o servidor não vai aceitar.
+     * A leitura de equipes históricas permanece por compatibilidade. [[project_sem_vaga_manual_nova]] */
+    showAlertDialog('Conta necessária', 'Adicione participantes por contas cadastradas. Não criamos equipes ou vagas apenas por nome.', null, { type: 'warning' });
+    return;
     const teamSize = t.teamSize || 2;
     const items = Array.from({ length: teamSize }, (_, i) => ({ placeholder: _t('enroll.memberPlaceholder', {num: i + 1}) }));
 

@@ -164,5 +164,12 @@ module.exports = [
     marca: 'PERFIL INICIAL RESERVA O NOME ANTES DO SUCESSO',
     incidente: 'o cadastro por e-mail chamava a porta de update para perfil inexistente e escondia a recusa; '
       + 'a tela confirmava conta sem perfil e podia contornar a unicidade de nome',
+    data: '2026-09-28' },
+
+  { id: '28', arquivo: 'functions/enroll-core.js',
+    ancora: 'if (manualId) {',
+    marca: 'INSCRIÇÃO NOVA EXIGE CONTA: NÃO NASCE VAGA MANUAL',
+    incidente: 'nome digitado pelo organizador não permite saber qual homônimo é qual; '
+      + 'a vaga manual criava uma segunda identidade por rótulo e abria ambiguidade no elenco',
     data: '2026-09-28' }
 ];

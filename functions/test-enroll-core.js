@@ -60,11 +60,12 @@ try { C.normalizeExtraUpdates({ status: 'finished' }); ok('extraUpdates recusa p
   eq('conta persiste apenas uid e atributos da inscrição', self, {
     ligaActive: true, addedAt: '2026-07-17T12:00:00.000Z', uid: 'ana-uid', selfEnrolled: true
   });
-  const manual = C.normalizeParticipantIntent({ manualParticipantId: 'manual-convidada-01', name: 'Convidada' }, 'org-uid', '2026-07-17T12:00:00.000Z');
-  eq('vaga manual conserva nome e recebe auditoria do servidor', manual, {
-    name: 'Convidada', ligaActive: true, addedAt: '2026-07-17T12:00:00.000Z',
-    manualParticipantId: 'manual-convidada-01', selfEnrolled: false, addedByUid: 'org-uid'
-  });
+  try {
+    C.normalizeParticipantIntent({ manualParticipantId: 'manual-convidada-01', name: 'Convidada' }, 'org-uid', '2026-07-17T12:00:00.000Z');
+    ok('vaga manual nova é recusada pelo contrato central', false);
+  } catch (e) {
+    ok('vaga manual nova é recusada pelo contrato central', /sem conta não é permitido/.test(String(e && e.message)));
+  }
 })();
 
 (() => {

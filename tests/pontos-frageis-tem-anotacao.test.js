@@ -147,7 +147,7 @@ console.log('  ── o registro contra o código de verdade ──');
    * exatamente o tipo de regressão silenciosa que esta trava existe para impedir.
    * Tirar um ponto da lista passa a exigir tirar o id daqui também, e aí a pessoa lê o
    * incidente antes de decidir. É o objetivo inteiro do pedido do dono. */
-  const IDS = ['1','2','3','4','5','6','7','8','9','10','10b','10c','11','12','13','14','15','16','17','18','19','20','21','22','23','24','25','26','27'];
+  const IDS = ['1','2','3','4','5','6','7','8','9','10','10b','10c','11','12','13','14','15','16','17','18','19','20','21','22','23','24','25','26','27','28'];
   const atuais = REGISTRO.map((e) => e.id);
   const sumiram = IDS.filter((id) => atuais.indexOf(id) === -1);
   ok(sumiram.length === 0, 'nenhum ponto foi removido do registro'
