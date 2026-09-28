@@ -1,3 +1,4 @@
+// 2.3.140 — classificação progressiva, pódio, ficha e retrato congelado usam a identidade completa do time (UIDs do slot), nunca só o texto exibido. Rótulo serve para mostrar e para compatibilidade de registros antigos sem UID; não pode fundir dois competidores.
 // 2.3.139 — remover uma vaga manual usa seu ID estável desde os dois cartões até a callable. Um nome igual ou renomeado não faz a organização excluir outra pessoa.
 // 2.3.138 — substitutos da Liga e o fallback da fila seguem a mesma chave estável de inscrição. Mesmo sem o módulo de domínio carregado, ID manual não cai no nome e não remove homônimo.
 // 2.3.137 — promoções e integrações tardias removem da espera pela identidade estável (UID ou ID manual), nunca pelo rótulo. Assim um homônimo não sai da fila nem deixa de aparecer no elenco por engano.
