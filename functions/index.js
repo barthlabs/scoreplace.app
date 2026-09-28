@@ -3828,7 +3828,10 @@ exports.setTournamentPresence = onCall(
       changes.push({ parte: "absent", chave: legacyKey, valor: null });
       changes.push({ parte: "checkedInConfirmed", chave: legacyKey, valor: null });
     }
-    const fora = Array.isArray(t._semPesados) ? t._semPesados : [];
+    /* ⛔ PRESENÇA TAMBÉM RESPEITA AS PARTES CANÔNICAS. Marcador ausente é compatibilidade
+     * de cliente antigo, não autorização para devolver mapas externos ao documento.
+     * [[project_torneio_nasce_dividido]] */
+    const fora = _tSplitFn.partesDe(t);
     const FieldPath = admin.firestore.FieldPath;
     const FieldValue = admin.firestore.FieldValue;
     const lote = db.batch();
@@ -3897,7 +3900,9 @@ exports.aplicarNoTorneio = onCall(
     const snap = await docRef.get();
     if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
     const t = snap.data();
-    const fora = Array.isArray(t._semPesados) ? t._semPesados : [];
+    /* ⛔ ESCRITA FINA NUNCA DECIDE QUE O TORNEIO É INTEIRO PELO MARCADOR LEGADO.
+     * As partes canônicas continuam fora quando o campo falta. [[project_torneio_nasce_dividido]] */
+    const fora = _tSplitFn.partesDe(t);
 
     /* ⛔ AUTORIZA TUDO ANTES DE ESCREVER QUALQUER COISA. Autorizar no meio do laço deixaria
      * metade aplicada quando a segunda metade é negada — e "metade aplicada" é um estado
