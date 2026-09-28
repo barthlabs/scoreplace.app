@@ -4520,7 +4520,11 @@ exports.setMatchWhatsAppGroup = onCall(
         return s.docs.map((x) => x.data());
       });
 
-      const fora = Array.isArray(t._semPesados) ? t._semPesados : [];
+      /* ⛔ ESCRITA DE JOGO USA AS PARTES CANÔNICAS, NÃO O MARCADOR LEGADO.
+       * `montarDoBanco` já aceitou uma fotografia sem `_semPesados` e trouxe o jogo da
+       * subcoleção. Voltar a perguntar pelo campo aqui faria link/data parecerem salvos no
+       * documento pai, mas sumirem na próxima montagem. [[project_torneio_nasce_dividido]] */
+      const fora = _tSplitFn.partesDe(t);
       // O locator CANÔNICO: `dividir` é quem sabe onde jogo mora, e carimba `_loc`/`_chave`.
       const regs = (_tSplitFn.dividir(JSON.parse(JSON.stringify(t)), ["matches"]) || {}).matches || [];
       const alvo = regs.find((r) => r && r.jogo && r.jogo.id != null && String(r.jogo.id) === matchId);
@@ -5007,7 +5011,10 @@ exports.setMatchSchedule = onCall(
         const s = await tx.get(docRef.collection(colecao));
         return s.docs.map((x) => x.data());
       });
-      const fora = Array.isArray(t._semPesados) ? t._semPesados : [];
+      /* ⛔ ESCRITA DE JOGO USA AS PARTES CANÔNICAS, NÃO O MARCADOR LEGADO.
+       * Sem `_semPesados`, `matches` continua fora do documento; gravar a data no pai cria
+       * só uma cópia órfã que o montador ignora. [[project_torneio_nasce_dividido]] */
+      const fora = _tSplitFn.partesDe(t);
       const regs = (_tSplitFn.dividir(JSON.parse(JSON.stringify(t)), ["matches"]) || {}).matches || [];
       const souOrg = _isTournamentOrgCaller(t, callerUid);
       const alvos = itens.map((it) => {
