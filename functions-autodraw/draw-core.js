@@ -611,8 +611,11 @@ function drawInitial(t, opts) {
   // Liga/Suíço: generatePhase já escreveu t.rounds/t.standings (storage NATIVO).
   if (_built0 && _built0.appliedToT) {
     t._canonicalDraw = true; t.status = 'active';
+    /* A resposta de sorteio alimenta histórico e mensagens. A fallback não pode
+     * tratar BYE como jogo só porque a rodada veio de um formato/registro legado:
+     * folga e BYE são ambos marcadores, nunca partidas. */
     const _lrc = (_built0.roundMatchCount != null) ? _built0.roundMatchCount
-      : ((t.rounds && t.rounds[0] && t.rounds[0].matches || []).filter(function (m) { return !m.isSitOut; }).length);
+      : ((t.rounds && t.rounds[0] && t.rounds[0].matches || []).filter(function (m) { return m && !m.isSitOut && !m.isBye; }).length);
     const _lso = (t.rounds && t.rounds[0] && t.rounds[0].matches || []).filter(function (m) { return m.isSitOut; }).length;
     t.updatedAt = new Date().toISOString();
     return { ok: true, native: true, format: t.format, matchCount: _lrc, sitOuts: _lso, allMaleCount: _allMale, decisions: _decisions };

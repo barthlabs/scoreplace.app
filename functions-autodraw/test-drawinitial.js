@@ -13,6 +13,7 @@
 // node test-drawinitial.js
 
 const path = require('path');
+const fs = require('fs');
 const core = require('./draw-core.js');
 
 let pass = 0, fail = 0;
@@ -20,6 +21,17 @@ function ok(name, cond, got) {
   if (cond) { pass++; console.log('  ✓ ' + name + (got !== undefined ? ' (got ' + got + ')' : '')); }
   else { fail++; console.log('  ✗ ' + name + (got !== undefined ? ' (got ' + got + ')' : '')); }
 }
+
+// REGRESSÃO: o contador que drawInitial devolve aparece no histórico/mensagem de
+// sorteio. Quando a forma antiga não traz `roundMatchCount`, o fallback deve usar
+// a mesma regra do gerador da fase: BYE e folga são marcadores, nunca jogos.
+(() => {
+  const server = fs.readFileSync(path.join(__dirname, 'draw-core.js'), 'utf8');
+  const phaseSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'phases-engine.js'), 'utf8');
+  const expected = /m && !m\.isSitOut && !m\.isBye/;
+  ok('fallback do servidor exclui BYE e folga do matchCount', expected.test(server));
+  ok('gerador da fase usa a mesma contagem de jogo real', expected.test(phaseSource));
+})();
 
 // ── CLIENTE: o render-harness carrega store.js/tournaments-draw.js/bracket.js REAIS
 //    e expõe generateDrawFunction (o MESMO caminho do app). ─────────────────────────
