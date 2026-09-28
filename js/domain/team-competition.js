@@ -81,9 +81,9 @@ var ScoreplaceTeamCompetition;
             const winner = text(match.winner);
             if (!winner)
                 return;
-            rows[a].played++;
-            rows[b].played++;
             if (winner === 'draw' || match.draw === true) {
+                rows[a].played++;
+                rows[b].played++;
                 rows[a].draws++;
                 rows[b].draws++;
                 rows[a].points += cfg.scoring.draw;
@@ -94,6 +94,8 @@ var ScoreplaceTeamCompetition;
             const p2Won = winner === text(match.p2) || winner === 'p2';
             if (!p1Won && !p2Won)
                 return; // vencedor incompatível nunca decide tabela por suposição
+            rows[a].played++;
+            rows[b].played++;
             const win = p1Won ? rows[a] : rows[b], loss = p1Won ? rows[b] : rows[a];
             win.wins++;
             win.points += cfg.scoring.win;

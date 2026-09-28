@@ -315,6 +315,81 @@ if (!g.window._phasesEngine || typeof g.window._phasesEngine.generatePhase !== '
   throw new Error('[draw-core] window._phasesEngine.generatePhase ausente — vendor/phases-engine.js desatualizado.');
 }
 
+// ── Competição por times sobre a classificatória ────────────────────────────
+// A classificatória continua sendo de DUPLAS dentro de cada categoria. Times são
+// uma camada de pontuação sobre esses confrontos: uma dupla recebe um ID canônico
+// de time, mas nunca deixa de ser dupla nem troca de categoria. Isso precisa
+// acontecer no servidor, após formar as duplas e antes de gerar os jogos; fazer
+// no cliente permitiria que duas telas atribuíssem a mesma dupla a times distintos.
+function assignCompetitionTeamsAtInitialDraw(t, rawConfig) {
+  const win = g.window;
+  const core = win.ScoreplaceTeamCompetition;
+  const cfg = core && typeof core.normalize === 'function' ? core.normalize(rawConfig) : null;
+  if (!cfg || !cfg.enabled) return { ok: true, config: cfg };
+
+  const entries = (Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {}))
+    .filter(function (entry) { return entry && typeof entry === 'object'; });
+  const isDouble = function (entry) {
+    // `_entryTeamMembers` prepara nomes para a UI e pode devolver [] quando o
+    // sanitizador remove nomes de perfis com UID. Para esta regra estrutural,
+    // participantes/slots são a evidência canônica, inclusive depois de salvar.
+    if (Array.isArray(entry.participants) && entry.participants.length >= 2) return true;
+    return !!(entry.p1Uid || entry.p1Name || entry.p1ManualId)
+      && !!(entry.p2Uid || entry.p2Name || entry.p2ManualId);
+  };
+  if (!entries.length || entries.some(function (entry) { return !isDouble(entry); })) {
+    // Não inventamos um time para inscrição individual: a regra do produto é que
+    // quem representa um time nesta modalidade é uma dupla já formada.
+    return { ok: false, reason: 'competition-teams-require-doubles' };
+  }
+
+  const wanted = cfg.teamCount;
+  const previous = Array.isArray(t.competitionTeams) ? t.competitionTeams : [];
+  const teams = [];
+  const seen = new Set();
+  previous.forEach(function (team) {
+    const id = team && String(team.id || '').trim();
+    if (!id || seen.has(id) || teams.length >= wanted) return;
+    seen.add(id);
+    teams.push({ id: id, name: String(team.name || ('Time ' + (teams.length + 1))).trim() });
+  });
+  while (teams.length < wanted) {
+    const id = 'team-' + (teams.length + 1);
+    if (!seen.has(id)) {
+      const ordinal = teams.length + 1;
+      seen.add(id); teams.push({ id: id, name: 'Time ' + ordinal });
+    }
+  }
+  t.competitionTeams = teams;
+
+  if (cfg.formation === 'manual') {
+    const known = new Set(teams.map(function (team) { return team.id; }));
+    const missing = entries.some(function (entry) { return !known.has(core.teamIdOf(entry)); });
+    // Em modo manual, sortear silenciosamente contrariaria a decisão explícita do
+    // organizador e deixaria a tabela de times sem dono verificável.
+    return missing ? { ok: false, reason: 'competition-teams-unassigned' } : { ok: true, config: cfg };
+  }
+
+  // Sorteia e distribui por categoria em rodízio. Cada categoria começa em ordem
+  // aleatória própria, mas a distribuição fica balanceada (diferença máxima de uma
+  // dupla por time dentro da categoria) e não mistura categorias para montar dupla.
+  const byCategory = new Map();
+  entries.forEach(function (entry) {
+    const categories = typeof win._getParticipantCategories === 'function' ? win._getParticipantCategories(entry) : [];
+    const category = (categories && categories[0]) || '';
+    if (!byCategory.has(category)) byCategory.set(category, []);
+    byCategory.get(category).push(entry);
+  });
+  byCategory.forEach(function (categoryEntries) {
+    for (let i = categoryEntries.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const temp = categoryEntries[i]; categoryEntries[i] = categoryEntries[j]; categoryEntries[j] = temp;
+    }
+    categoryEntries.forEach(function (entry, index) { entry.competitionTeamId = teams[index % teams.length].id; });
+  });
+  return { ok: true, config: cfg };
+}
+
 // ── Entry point ─────────────────────────────────────────────────────────────
 // Gera a próxima rodada de uma Liga/Ranking IN-PLACE em `t`, exatamente como o
 // poller do cliente (_fireLigaAutoDraw). Retorna { ok, roundIndex, matchCount }
@@ -578,6 +653,9 @@ function drawInitial(t, opts) {
       win._applyMixedOriginCategories(t, t.participants);
     }
   }
+
+  const _competitionTeams = assignCompetitionTeamsAtInitialDraw(t, _cfg0 && _cfg0.teamCompetition);
+  if (!_competitionTeams.ok) return _competitionTeams;
 
   // ── Suíço como RESOLUÇÃO de pow2 (Opção B, canonizado): monta a classificatória Suíço
   // (fase 0) + a eliminatória (fase 1) e gera a 1ª rodada, com a MESMA função vendorada que
@@ -1171,4 +1249,4 @@ function decidirTardioNaFolga(t, opts) {
   return { ok: true, mudou: true, acao, aplicados: r.placed || 0 };
 }
 
-module.exports = { decidirTardioNaFolga, generateLigaRound, applyTournamentWO, setPresenceWithWOSubstitution, resolveWOSubstitutionChoice, setTournamentWOAbsence, acceptLigaSubstitution, runLigaAction, compileFromFmt2, canRecompile, hasDrawnBracket, drawInitial, integrateLateEntries, formLatePairCore, splitLatePairCore, closeRoundCore, materializeNextPhase: g.window._phasesEngine && g.window._phasesEngine.materializeNextPhase, standingsDaFaseAnterior: g.window._phasesEngine && g.window._phasesEngine.standingsDaFaseAnterior, phaseComplete: g.window._phasesEngine && g.window._phasesEngine.phaseComplete, groupTeamStandings: g.window._phasesEngine && g.window._phasesEngine.groupTeamStandings, _window: g.window };
+module.exports = { decidirTardioNaFolga, generateLigaRound, applyTournamentWO, setPresenceWithWOSubstitution, resolveWOSubstitutionChoice, setTournamentWOAbsence, acceptLigaSubstitution, runLigaAction, compileFromFmt2, canRecompile, hasDrawnBracket, drawInitial, assignCompetitionTeamsAtInitialDraw, integrateLateEntries, formLatePairCore, splitLatePairCore, closeRoundCore, materializeNextPhase: g.window._phasesEngine && g.window._phasesEngine.materializeNextPhase, standingsDaFaseAnterior: g.window._phasesEngine && g.window._phasesEngine.standingsDaFaseAnterior, phaseComplete: g.window._phasesEngine && g.window._phasesEngine.phaseComplete, groupTeamStandings: g.window._phasesEngine && g.window._phasesEngine.groupTeamStandings, _window: g.window };

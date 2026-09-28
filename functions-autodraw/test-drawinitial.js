@@ -94,6 +94,47 @@ const CASES = [
   ['Fase de Grupos · 8 · duplas', { format: 'Fase de Grupos', gruposCount: 2, gruposClassified: 2, teamSize: 2, enrollmentMode: 'individual' }, 8],
 ];
 
+// Competição por times não é outro formato de chave: cada entrada continua uma
+// dupla da sua categoria. Este guarda impede a regressão de sortear "times" antes
+// de formar as duplas, ou de concentrar toda uma categoria no mesmo time.
+(function () {
+  function dupla(n, category) {
+    return {
+      displayName: 'A' + n + ' / B' + n,
+      p1Uid: 'a' + n, p2Uid: 'b' + n,
+      participants: [{ uid: 'a' + n }, { uid: 'b' + n }],
+      category: category,
+    };
+  }
+  const drawn = { participants: [dupla(1, 'A'), dupla(2, 'A'), dupla(3, 'A'), dupla(4, 'A')] };
+  const cfg = { enabled: true, teamCount: 2, formation: 'draw', internalMatches: 'avoid', scoring: { win: 3, draw: 1, loss: 0 } };
+  const assigned = core.assignCompetitionTeamsAtInitialDraw(drawn, cfg);
+  const counts = drawn.participants.reduce(function (out, entry) {
+    out[entry.competitionTeamId] = (out[entry.competitionTeamId] || 0) + 1; return out;
+  }, {});
+  ok('times sorteados só após as duplas e com IDs canônicos', assigned.ok && drawn.competitionTeams.length === 2 && Object.keys(counts).length === 2,
+    JSON.stringify({ teams: drawn.competitionTeams, counts: counts }));
+  ok('sorteio de times distribui uma categoria de forma balanceada', Object.keys(counts).every(function (id) { return counts[id] === 2; }), JSON.stringify(counts));
+
+  const manual = { participants: [dupla(5, 'A')] };
+  const rejected = core.assignCompetitionTeamsAtInitialDraw(manual, Object.assign({}, cfg, { formation: 'manual' }));
+  ok('modo manual não inventa dono para dupla sem time', rejected.ok === false && rejected.reason === 'competition-teams-unassigned', JSON.stringify(rejected));
+
+  const full = mkT('team-full', {
+    format: 'Fase de Grupos', gruposCount: 1, gruposClassified: 1, teamSize: 2,
+    teamCompetition: cfg,
+  }, 8);
+  const complete = core.drawInitial(full, { idStamp: 'team-regression' });
+  const real = (full.matches || []).filter(function (m) { return m && !m.isBye && !m.isSitOut; });
+  ok('sorteio completo grava times e carimba ambos os lados de todo jogo', complete.ok &&
+    full.participants.every(function (entry) { return !!entry.competitionTeamId; }) &&
+    real.every(function (match) { return !!match.p1CompetitionTeamId && !!match.p2CompetitionTeamId; }),
+    JSON.stringify({ result: complete.ok, games: real.length }));
+  ok('toggle de evitar não gera confronto entre duplas do mesmo time', real.every(function (match) {
+    return match.p1CompetitionTeamId !== match.p2CompetitionTeamId;
+  }), JSON.stringify(real.map(function (match) { return [match.p1CompetitionTeamId, match.p2CompetitionTeamId]; })));
+})();
+
 console.log('════════════════════════════════════════');
 console.log('CLIENTE × SERVIDOR — estrutura da chave');
 console.log('════════════════════════════════════════');
