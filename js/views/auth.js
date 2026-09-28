@@ -2341,12 +2341,37 @@ window._entrarDoRegister = function(mode, raw, password) {
       .then(function(result) {
         var user = result.user;
         window._pendingVerifyName = name;
-        return user.updateProfile({ displayName: name }).catch(function(){}).then(function() {
-          if (window.FirestoreDB && window.FirestoreDB.db && user.uid) {
-            window.FirestoreDB.saveUserProfile(user.uid, { authProvider: 'password', email: user.email || raw.toLowerCase(), displayName: name, updatedAt: new Date().toISOString() }).catch(function(){});
-          }
+        /* ⛔ NOME DE CONTA É ÚNICO E O CADASTRO NÃO PODE CONFIRMAR ANTES DA RESERVA.
+         * Esta conta ainda não tem `users/{uid}`; chamar `saveUserProfile` usa a porta
+         * de UPDATE, que a Function recusa para perfil inexistente. O catch antigo
+         * escondia essa recusa e a tela dizia "conta criada" mesmo para homônimo.
+         * `initializeUserProfile` reserva nome e cria perfil na MESMA transação. Se
+         * falhar, apagamos só a credencial recém-criada: o e-mail fica livre para a
+         * pessoa escolher outro nome, sem conta órfã nem segundo homônimo.
+         * [[project_homonimo_exige_escolha]] */
+        if (!(window.FirestoreDB && typeof window.FirestoreDB.initializeUserProfile === 'function')) {
+          throw new Error('Não foi possível inicializar seu perfil. Tente novamente.');
+        }
+        /* ⛔ PERFIL INICIAL RESERVA O NOME ANTES DO SUCESSO.
+         * A Function cria o perfil e reclama o nome de forma transacional; não troque
+         * por update/fire-and-forget, pois isso reabre cadastro de homônimo ou órfã.
+         * [[project_homonimo_exige_escolha]] */
+        return window.FirestoreDB.initializeUserProfile({
+          authProvider: 'password', email: user.email || raw.toLowerCase(), displayName: name
+        }).then(function() {
+          return user.updateProfile({ displayName: name }).catch(function(e) {
+            // A conta/perfil já são válidos; falha no espelho do Firebase Auth não cria homônimo.
+            if (window._warn) window._warn('[cadastro] não salvou nome no Firebase Auth:', e);
+          });
+        }).then(function() {
           if (typeof _sendRichVerificationEmail === 'function') _sendRichVerificationEmail(user, name);
           window._entrarStatus('✅ Conta criada! Enviamos um <b>link de confirmação</b> pro seu e-mail — abra pra ativar.<br><span style="color:var(--text-muted);">Não chegou (UOL/Hotmail)? Volte e cadastre com <b>celular</b> — recebe um código por SMS.</span>', 'success');
+        }).catch(function(e) {
+          // `delete()` é permitido logo após createUser; se a reserva falhou, manter esta
+          // credencial impediria a tentativa seguinte com o mesmo e-mail e outro nome.
+          return user.delete().catch(function(delErr) {
+            if (window._error) window._error('[cadastro] não apagou credencial sem perfil:', delErr);
+          }).then(function() { throw e; });
         });
       })
       .catch(function(error) {
@@ -2356,6 +2381,9 @@ window._entrarDoRegister = function(mode, raw, password) {
           window._resetEntrarUI();
         } else if (code === 'auth/invalid-email') {
           window._entrarStatus('E-mail inválido.', 'warning');
+        } else if (code === 'already-exists' || code === 'functions/already-exists') {
+          window._entrarStatus('Esse nome já está em uso. Escolha outro nome de exibição.', 'warning');
+          if (nameEl) nameEl.focus();
         } else {
           window._entrarStatus((error && error.message) || 'Não foi possível criar a conta.', 'error');
         }

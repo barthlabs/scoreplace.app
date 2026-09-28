@@ -1692,6 +1692,9 @@ const SUITES = [
   // silêncio; o do servidor trava a regra da varredura — em especial NÃO criar perfil de
   // quem tem loginRedirects (isso prenderia a pessoa numa conta vazia).
   'tests/apple-nao-deixa-conta-orfa.test.js',
+  // Cadastro e-mail só confirma depois de a Function transacional reservar o nome;
+  // homônimo remove a credencial recém-criada, não deixa Auth sem perfil.
+  'tests/cadastro-email-reserva-nome.test.js',
   'tests/celular-botao-verificar-acende.test.js',
   'functions/test-orphan-profile-core.js',
   'functions/test-roster-watch.js',

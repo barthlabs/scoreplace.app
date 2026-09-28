@@ -157,5 +157,12 @@ module.exports = [
     marca: 'GRUPOS HISTÓRICOS NÃO PODEM SUMIR NA MONTAGEM',
     incidente: 'a Confra tem 35 grupos na subcoleção histórica; a montagem canônica lia só as '
       + 'três partes novas e devolvia a rodada sem grupos, perdendo retrato congelado, presença e W.O. na tela',
+    data: '2026-09-28' },
+
+  { id: '27', arquivo: 'js/views/auth.js',
+    ancora: 'return window.FirestoreDB.initializeUserProfile({',
+    marca: 'PERFIL INICIAL RESERVA O NOME ANTES DO SUCESSO',
+    incidente: 'o cadastro por e-mail chamava a porta de update para perfil inexistente e escondia a recusa; '
+      + 'a tela confirmava conta sem perfil e podia contornar a unicidade de nome',
     data: '2026-09-28' }
 ];
