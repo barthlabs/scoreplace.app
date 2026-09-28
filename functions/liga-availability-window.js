@@ -31,6 +31,7 @@ function allWait(tournament) { return waitlist.getWaitlist(tournament, helpers(t
  * então não divergem. */
 function allWaitWithSource(tournament) { return waitlist.getWaitlistWithSource(tournament, helpers(tournament)); }
 function removeWait(tournament, target) { return waitlist.removeByName(tournament, target, helpers(tournament)); }
+function removeWaitByKey(tournament, target) { return waitlist.removeByKey(tournament, target, helpers(tournament)); }
 function playing(tournament, entry) { return waitlist.isPlayingCurrentPhase(tournament, entry, helpers(tournament)); }
 function sanitize(tournament) {
   const inactive = new Set((tournament.participants || []).filter((entry) => entry && entry.ligaActive === false).flatMap(identity.participantUids));
@@ -53,6 +54,7 @@ module.exports = {
   _getWaitlist: allWait,
   _getWaitlistWithSource: allWaitWithSource,
   _removeFromWaitlist: removeWait,
+  _removeFromWaitlistByKey: removeWaitByKey,
   _waitlistPushBack: (tournament, entry) => waitlist.pushBack(tournament, entry, helpers(tournament)),
   _phaseDrawDone: waitlist.phaseDrawDone,
   _isPlayingCurrentPhase: playing,

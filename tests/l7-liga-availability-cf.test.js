@@ -10,6 +10,10 @@ t=fixture(false); applyLigaAvailability(t,'u-carol',true,win);
 ok(t.rounds[0].matches.some(m=>m.id==='wo'),'preserva o marcador W.O. enquanto a vaga ainda está aberta');
 t={participants:[{uid:'u-a',displayName:'Ana',ligaActive:true}],standbyParticipants:[],waitlist:[],monarchWaitlist:{},rounds:[]}; applyLigaAvailability(t,'u-a',false,win);
 ok(t.participants[0].ligaActive===false,'desativar permanece disponível pela mesma porta canônica');
+// Regressão: quem liga/desliga é localizado pelo UID; retirar "Ana" por nome também
+// removia uma Ana homônima da fila. A conta real precisa sair sozinha.
+t={participants:[],standbyParticipants:[{uid:'u-ana-1',displayName:'Ana',ligaActive:true},{uid:'u-ana-2',displayName:'Ana',ligaActive:true}],waitlist:[],monarchWaitlist:{},rounds:[]}; applyLigaAvailability(t,'u-ana-1',true,win);
+ok(t.participants.some(p=>p.uid==='u-ana-1') && t.standbyParticipants.length===1 && t.standbyParticipants[0].uid==='u-ana-2','reativar Ana remove da espera somente pelo UID');
 const client=require('fs').readFileSync(require('path').join(__dirname,'../js/views/tournaments-enrollment.js'),'utf8');
 const a=client.indexOf('window._toggleLigaActive = function'),b=client.indexOf('window._buildLigaActiveToggleHtml',a),body=client.slice(a,b);
 ok(/_callCF\('setLigaAvailability'/.test(body) && !/saveTournament|AppStore\.mutate/.test(body),'cliente do toggle só despacha a CF');

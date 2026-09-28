@@ -13,13 +13,21 @@ function applyLigaAvailability(t, callerUid, isActive, win) {
   if (!found) throw new Error('participante não está inscrito');
   const drawn = typeof win._phaseDrawDone === 'function' && win._phaseDrawDone(t);
   const name = (typeof win._pName === 'function' ? win._pName(found, '') : '') || found.displayName || found.name || '';
+  // A chamada é autenticada e `found` foi localizado pelo callerUid. Ao sair da fila,
+  // a mesma identidade deve ser usada; remover pelo rótulo apagaria o homônimo errado.
+  const waitKey = String((found && (found.uid || found.manualParticipantId)) || name || '');
+  const removeFromWait = () => {
+    if (typeof win._removeFromWaitlistByKey === 'function') return win._removeFromWaitlistByKey(t, waitKey);
+    if (typeof win._removeFromWaitlist === 'function') return win._removeFromWaitlist(t, name);
+    return false;
+  };
   if (fromWait) {
     found.ligaActive = !!isActive;
     if (isActive) {
       delete found.woSentToWaitlistAt;
-      if (!drawn) { if (typeof win._removeFromWaitlist === 'function') win._removeFromWaitlist(t, name); arr.push(found); }
+      if (!drawn) { removeFromWait(); arr.push(found); }
     } else {
-      if (typeof win._removeFromWaitlist === 'function') win._removeFromWaitlist(t, name);
+      removeFromWait();
       if (found.woSentToWaitlistAt) { delete found.woSentToWaitlistAt; found.woDeactivatedAt = new Date().toISOString(); }
       arr.push(found);
     }
