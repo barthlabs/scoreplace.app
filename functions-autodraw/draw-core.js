@@ -756,7 +756,10 @@ function integrateLateEntries(t, opts) {
           const chaveEspera = (p && typeof p === 'object' && (p.uid || p.manualParticipantId)) || nome;
           t.participants = t.participants || [];
           const ja = t.participants.some(function (x) {
-            return String((x && (x.displayName || x.name)) || x) === nome;
+            // O espelho do elenco e a espera têm de usar a MESMA identidade. Só comparar
+            // `nome` deixava de inserir manual-a se manual-b homônimo já estivesse no elenco.
+            const chaveX = (x && typeof x === 'object' && (x.uid || x.manualParticipantId)) || String((x && (x.displayName || x.name)) || x);
+            return chaveX === chaveEspera;
           });
           if (!ja) t.participants.push(p);
           // _removeFromWaitlistByKey entende uid/manualParticipantId e só então nome

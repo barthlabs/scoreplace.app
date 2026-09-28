@@ -65,8 +65,9 @@ const win = globalThis.window;
 (function () {
   const core = fs.readFileSync(path.join(ROOT, 'functions-autodraw', 'draw-core.js'), 'utf8');
   ok(/const chaveEspera = \(p && typeof p === 'object' && \(p\.uid \|\| p\.manualParticipantId\)\) \|\| nome;/.test(core) &&
-     /_removeFromWaitlistByKey\(t, chaveEspera\)/.test(core),
-    'integrar tardio deve tirar da espera por uid/manualParticipantId, não pelo nome');
+     /_removeFromWaitlistByKey\(t, chaveEspera\)/.test(core) &&
+     /return chaveX === chaveEspera;/.test(core),
+    'integrar tardio deve espelhar e tirar da espera por uid/manualParticipantId, não pelo nome');
 })();
 
 // ── 5. Saneamento: quem está num grupo NÃO fica na espera ────────────────────
