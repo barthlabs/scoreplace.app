@@ -2541,8 +2541,12 @@ window.FirestoreDB = {
         return null;
       }
       var _t = doc.data();
-      // o documento diz o que saiu dele; enquanto não disser nada, nada muda
-      var _fora = Array.isArray(_t._semPesados) ? _t._semPesados : null;
+      /* ⛔ A abertura fria não pode decidir pelo marcador legado: todo torneio usa as
+       * subcoleções canônicas e uma fotografia antiga pode chegar sem `_semPesados`.
+       * `partesDe` preserva a compatibilidade do campo para o nativo, mas garante que a
+       * web nunca devolva o documento magro como se fosse um torneio vazio. */
+      var _splitAbrir = (typeof window !== 'undefined') ? window._tSplit : null;
+      var _fora = (_splitAbrir && typeof _splitAbrir.partesDe === 'function') ? _splitAbrir.partesDe(_t) : null;
       if (_fora && _fora.length) _t = await this._montaDeSubcolecoes(id, _t, _fora);
       // Rei/Rainha: o doc traz grupos só com matchIds — reidrata group.matches como refs.
       try { if (typeof window !== 'undefined' && typeof window._hydrateMonarchGroups === 'function') window._hydrateMonarchGroups(_t); } catch (_hmErr) {}

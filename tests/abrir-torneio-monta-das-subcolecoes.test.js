@@ -34,7 +34,7 @@ ok(idx.indexOf('js/views/tournament-split-core.js') !== -1, 'o navegador carrega
 ok(idx.indexOf('js/views/tournament-split-core.js') < idx.indexOf('js/firebase-db.js'),
   'e ANTES do firebase-db.js, que é quem o chama');
 
-// ── o leitor: dispara pelo MARCADOR, e sabe cair de volta ────────────────────
+// ── o leitor: dispara pelas partes CANÔNICAS, mesmo sem marcador legado ───────
 const db = fs.readFileSync(path.join(ROOT, 'js', 'firebase-db.js'), 'utf8');
 /* ⚠️ ANCORADO NO FIM DO MÉTODO, não numa janela fixa (2.1.88). A janela de 1200 caracteres
  * cortava o corpo no meio assim que a função crescesse — e cresceu: entrou o caminho da
@@ -43,9 +43,10 @@ const db = fs.readFileSync(path.join(ROOT, 'js', 'firebase-db.js'), 'utf8');
  * ignorar teste. É a mesma regra que `teste-nao-recorta-por-tamanho-fixo` cobra. */
 const _iLTB = db.indexOf('async loadTournamentById');
 const fn = db.slice(_iLTB, db.indexOf('\n  },', _iLTB));
-ok(/_semPesados/.test(fn), 'loadTournamentById olha o marcador `_semPesados`');
-ok(/Array\.isArray\(_t\._semPesados\)/.test(fn),
-  'o marcador é uma LISTA do que saiu — dá pra tirar só os jogos e deixar o resto');
+ok(/_splitAbrir\.partesDe\(_t\)/.test(fn),
+  'loadTournamentById consulta as partes canônicas — marcador legado ausente não vira torneio inteiro');
+ok(!/Array\.isArray\(_t\._semPesados\)/.test(fn),
+  'a abertura não decide mais pelo formato do campo legado');
 ok(!/!_t\.rounds|rounds\s*===\s*undefined/.test(fn),
   'NÃO dispara por ausência de rounds (torneio novo também não tem jogo e abriria vazio)');
 ok(/_montaDeSubcolecoes/.test(db), 'existe o montador');
