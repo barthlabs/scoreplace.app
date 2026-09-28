@@ -11896,7 +11896,9 @@ exports.createSandbox = onCall(
 
     // ── ④ VALIDA AS CONTAGENS PROMETIDAS, ANTES DE ESCREVER ─────────────────
     const S = require("./vendor/tournament-split-core.js");   // cópia gerada (copy-vendor)
-    const fora = Array.isArray(cfg._semPesados) ? cfg._semPesados : [];
+    /* ⛔ O sandbox copia a forma canônica: `_semPesados` é só compatibilidade com
+     * nativos antigos. Sem ele, validar zero subcoleções aceitaria um clone incompleto. */
+    const fora = S.partesDe(cfg);
     const faltas = [];
     const colecaoDaParte = (nome) => (typeof S.colecaoDaParte === "function" ? S.colecaoDaParte(nome) : nome);
     for (const nome of fora) {

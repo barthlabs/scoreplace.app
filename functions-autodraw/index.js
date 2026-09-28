@@ -5352,20 +5352,21 @@ exports.tournamentSummary = onDocumentWritten(
        * primeiro valor — pior que zerado, porque parece certo. Com o marcador posto o
        * portão sai do caminho e o resumo é refeito sempre. */
       let paraResumo = depois;
-      const _fora = Array.isArray(depois._semPesados) ? depois._semPesados : null;
-      if (_fora && _fora.length) {
-        try {
-          // ⭐ mesmo caminho único do leitor — aqui fora de transação
-          paraResumo = await _tSplit.montarDoBanco(JSON.parse(JSON.stringify(depois)),
-            async (colecao) => (await db.collection('tournaments').doc(id).collection(colecao).get())
-              .docs.map((d) => d.data()));
-        } catch (eM) {
-          // ⛔ Resumir o doc cru aqui gravaria 0/0/0 por cima do resumo bom. Não gravar
-          // deixa o resumo ANTERIOR de pé, que é velho mas verdadeiro.
-          console.error('[tournamentSummary]', id, '⛔ não montei das subcoleções — resumo NÃO regravado', eM);
-          return;
-        }
-      } else if (antes && !_tourSummary.summaryMudou(antes, depois, id, H)) {
+      /* ⛔ O resumo não decide pelo marcador legado: todo torneio usa as partes
+       * canônicas e uma fotografia sem `_semPesados` ainda é magra. Sem montar aqui,
+       * a próxima gravação publicaria 0/0/0 por cima de progresso verdadeiro. */
+      try {
+        // ⭐ mesmo caminho único do leitor — aqui fora de transação
+        paraResumo = await _tSplit.montarDoBanco(JSON.parse(JSON.stringify(depois)),
+          async (colecao) => (await db.collection('tournaments').doc(id).collection(colecao).get())
+            .docs.map((d) => d.data()));
+      } catch (eM) {
+        // ⛔ Resumir o doc cru aqui gravaria 0/0/0 por cima do resumo bom. Não gravar
+        // deixa o resumo ANTERIOR de pé, que é velho mas verdadeiro.
+        console.error('[tournamentSummary]', id, '⛔ não montei das subcoleções — resumo NÃO regravado', eM);
+        return;
+      }
+      if (antes && !_tourSummary.summaryMudou(antes, depois, id, H)) {
         // nada que o cartão mostra mudou → não regrava (economia real em torneio ao vivo)
         return;
       }
