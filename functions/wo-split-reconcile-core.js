@@ -43,10 +43,14 @@ function novasEntradasDeWo(antes, depois) {
     .filter((w) => w && w.id && !jaTinha[String(w.id)] && w.status === 'active');
 }
 
-/** Este torneio guarda elenco/jogos fora do documento? */
+/* ⛔ TODO TORNEIO JÁ TEM ELENCO E JOGOS FORA DO DOCUMENTO.
+ * `_semPesados` ainda viaja só para o aplicativo nativo antigo, mas não decide esta Function.
+ * Se uma escrita legítima chegar sem marcador, pular a reconciliação deixa o W.O. apenas no
+ * documento magro: o substituto não entra no elenco, a ausente segue ativa e o jogo conserva
+ * o slot anterior. O leitor canônico já trata o campo ausente como partes canônicas; esta
+ * porta precisa obedecer ao mesmo contrato. [[project_torneio_nasce_dividido]] */
 function precisaReconciliar(depois) {
-  const fora = (depois && Array.isArray(depois._semPesados)) ? depois._semPesados : [];
-  return fora.indexOf('participants') !== -1 || fora.indexOf('matches') !== -1;
+  return !!depois;
 }
 
 /* ── UM SLOT DO JOGO TROCA EM TRÊS LUGARES ────────────────────────────────────

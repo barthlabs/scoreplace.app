@@ -2,6 +2,7 @@
 const fs = require('fs');
 const path = require('path');
 const src = fs.readFileSync(path.join(__dirname, '..', 'functions', 'index.js'), 'utf8');
+const S = require(path.join(__dirname, '..', 'functions', 'vendor', 'tournament-split-core.js'));
 let pass = 0, fail = 0;
 function ok(c, m) { if (c) pass++; else { fail++; console.error('  ✗', m); } }
 
@@ -9,8 +10,10 @@ ok(/exports\.syncSplitMatchResult\s*=\s*onDocumentWritten/.test(src), 'há gatil
 ok(/document:\s*"tournaments\/\{tid\}\/matches\/\{matchId\}"/.test(src), 'gatilho observa cada documento de jogo');
 ok(/_tSplitFn\.montarDoBanco\(/.test(src), 'gatilho remonta a fonte pelo núcleo canônico');
 ok(/_splitResultMirror\.planoDoEspelho\(/.test(src), 'decisão de set/skip/delete vem do núcleo puro');
-ok(/const fora = Array\.isArray\(config\._semPesados\)[\s\S]*fora\.indexOf\('matches'\) === -1/.test(src),
-  'torneio não dividido não entra neste caminho');
+ok(S.partesDe({}).indexOf('matches') !== -1,
+  '⭐⭐ configuração sem marcador ainda declara matches fora do documento');
+ok(/const fora = _tSplitFn\.partesDe\(config\);[\s\S]*fora\.indexOf\('matches'\) === -1/.test(src),
+  'o gatilho usa a fonte canônica das partes, não o marcador legado');
 ok(/async function _montarTorneioCanonico[\s\S]*_tSplitFn\.montarDoBanco/.test(src),
   'gatilho e reparo compartilham uma única montagem canônica');
 ok(/t = await _montarTorneioCanonico\(tdoc\.ref, bruto\)/.test(src),

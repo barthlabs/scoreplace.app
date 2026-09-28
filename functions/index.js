@@ -10370,8 +10370,14 @@ exports.syncSplitMatchResult = onDocumentWritten(
     const configSnap = await tournamentRef.get();
     if (!configSnap.exists) return;
     const config = configSnap.data() || {};
-    const fora = Array.isArray(config._semPesados) ? config._semPesados : [];
-    if (fora.indexOf('matches') === -1) return; // o espelho legado segue pelo gatilho do doc
+    /* ⛔ JOGO DIVIDIDO NÃO DEPENDE DO MARCADOR LEGADO.
+     * Todo torneio guarda `matches` fora do documento; `_semPesados` só continua gravado
+     * para o nativo antigo. Se este gatilho retornar porque uma fotografia chegou sem o
+     * campo, uma alteração de placar na subcoleção não chega a `results` e a tela volta a
+     * ler resultado velho. A mesma fonte `partesDe` já protege todos os montadores.
+     * [[project_torneio_nasce_dividido]] */
+    const fora = _tSplitFn.partesDe(config);
+    if (fora.indexOf('matches') === -1) return;
 
     let t;
     try {

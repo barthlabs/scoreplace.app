@@ -83,8 +83,11 @@ ok(p3.patchesDeJogo.length === 0 && p3.recusados.length === 3,
   '⛔ jogo COM PLACAR não é reescrito — quem jogou, jogou (no reparo manual isso barrou 9 jogos)');
 ok(C.planejar(depois, depois, inscritosH2, jogosH2).nada,
   '⭐ IDEMPOTENTE: sem entrada nova no woLog, não há o que fazer (o gatilho roda a cada escrita)');
-ok(C.planejar(antes, Object.assign({}, depois, { _semPesados: [] }), inscritosH2, jogosH2).nada,
-  'torneio INTEIRO (não dividido) não é tocado — lá o mutator já acerta sozinho');
+const semMarcadorAntes = { woLog: [] };
+const semMarcadorDepois = { woLog: [woNathalya] };
+const pSemMarcador = C.planejar(semMarcadorAntes, semMarcadorDepois, inscritosH2, jogosH2);
+ok(!pSemMarcador.nada && pSemMarcador.patchesDeJogo.length === 3,
+  '⭐⭐ sem `_semPesados`, o torneio ainda é dividido e os 3 jogos são reconciliados');
 const outroGrupo = [{ _id: 'x', _loc: {}, _chave: 'x', jogo: { label: 'R1 Grupo A • Jogo 1', roundIndex: 0, p1: 'Nathalya Calil / Z', team1: ['Nathalya Calil', 'Z'], team1Uids: ['ufIkpAo880X3LRWSxaOgXZS0Aph2', 'z'], p2: 'A / B', team2: ['A', 'B'], team2Uids: ['a', 'b'] } }];
 ok(C.planejar(antes, depois, inscritosH2, outroGrupo).patchesDeJogo.length === 0,
   '⛔ jogo de OUTRO grupo não é tocado — W.O. é do grupo onde aconteceu');

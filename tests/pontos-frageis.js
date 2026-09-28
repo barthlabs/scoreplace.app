@@ -126,5 +126,17 @@ module.exports = [
     marca: 'NOME DE CONTA É ÚNICO, MAS NUNCA É RENOMEADO AUTOMATICAMENTE',
     incidente: 'o helper legado transformava colisão de cadastro em "Nome 2", escondendo a segunda '
       + 'conta e a pergunta obrigatória para confirmar a identidade ou escolher outro nome',
+    data: '2026-09-27' },
+
+  { id: '22', arquivo: 'functions/wo-split-reconcile-core.js', ancora: 'function precisaReconciliar(depois) {',
+    marca: 'TODO TORNEIO JÁ TEM ELENCO E JOGOS FORA DO DOCUMENTO',
+    incidente: 'o gatilho de W.O. usava a ausência do marcador legado para pular a reconciliação, '
+      + 'deixando o substituto, a desativação e o slot do jogo divergirem das subcoleções',
+    data: '2026-09-27' },
+
+  { id: '23', arquivo: 'functions/index.js', ancora: 'const fora = _tSplitFn.partesDe(config);',
+    marca: 'JOGO DIVIDIDO NÃO DEPENDE DO MARCADOR LEGADO',
+    incidente: 'o gatilho de matches retornava quando a fotografia não trazia `_semPesados`, '
+      + 'mantendo o documento de resultado atrasado apesar de o jogo canônico ter mudado',
     data: '2026-09-27' }
 ];
