@@ -38,11 +38,13 @@ const corpo = 'var _enxertaJogos = ' + _contaFix.recortarPorta(store) + ';';
 const ctx = { window: {} }; vm.createContext(ctx);
 /* ⚠️ 2.1.66: a conta do que falta saiu de dentro de `_enxertaJogos` e virou
  * `window._marcaPartesQueFaltam`, pra que o caminho do CACHE use a MESMA função. */
-const _m0 = store.indexOf('window._marcaPartesQueFaltam = function (t) {');
+const _m0 = store.indexOf('window._marcaPartesQueFaltam = function (t, documentoDeTorneio) {');
 const _m1 = store.indexOf('window._userProfileCache = window._userProfileCache || {};');
 vm.runInContext(store.slice(_m0, _m1), ctx);
 vm.runInContext(corpo + '\nthis.F = _enxertaJogos;', ctx);
 const enxerta = ctx.F;
+const splitCanonico = require(path.join(ROOT, 'js', 'views', 'tournament-split-core.js'));
+ctx.window._tSplit = splitCanonico;
 
 // ── O CASO REAL: o Confra como ele está ──────────────────────────────────────
 const doDoc = () => ({
@@ -66,6 +68,14 @@ ok('  → e diz O QUE falta (pra não virar adivinhação no próximo defeito)',
   'faltando: ' + JSON.stringify(r._faltaOQue));
 ok('⭐ os jogos do cache continuam sendo aproveitados (não se rebusca o que já se tem)',
   (r.rounds[0].matches || []).length === 2);
+
+/* Documento REAL sem marcador legado: o ouvinte declara explicitamente sua origem e usa
+ * as partes canônicas. Resumos continuam no caminho conservador, sem esse argumento. */
+const semMarcadorLegado = doDoc();
+delete semMarcadorLegado._semPesados;
+ctx.window._marcaPartesQueFaltam(semMarcadorLegado, true);
+ok('⛔ documento sem marcador legado ainda acusa o elenco que falta',
+  semMarcadorLegado._faltamPesados === true && semMarcadorLegado._faltaOQue.indexOf('participants') !== -1);
 
 // `memberUids` é a TESTEMUNHA que cura os documentos que já existem, sem contador nenhum
 /* ⚠️ `_nJogos: 2` aqui é DE PROPÓSITO (2.1.65): a asserção é sobre o ELENCO sem contador e

@@ -23,7 +23,7 @@ const path = require('path');
 const vm = require('vm');
 
 const CAMINHO_STORE = path.join(__dirname, '..', 'js', 'store.js');
-const MARCA_INI = 'window._marcaPartesQueFaltam = function (t) {';
+const MARCA_INI = 'window._marcaPartesQueFaltam = function (t, documentoDeTorneio) {';
 const MARCA_FIM = 'window._userProfileCache = window._userProfileCache || {};';
 
 function fonte() { return fs.readFileSync(CAMINHO_STORE, 'utf8'); }
@@ -51,11 +51,11 @@ function injetar(ctx, src) {
  * um com a sua âncora, e todos quebraram juntos quando a função saiu da closure na 2.1.89 —
  * quatro falhas para UMA mudança de lugar. Agora a âncora mora aqui, num lugar só. */
 function recortarPorta(src) {
-  const ABRE = 'window._preservaPartesMontadas = function (novo, velho) {';
+  const ABRE = 'window._preservaPartesMontadas = function (novo, velho, documentoDeTorneio) {';
   const i = src.indexOf(ABRE);
   const j = src.indexOf('\n/* ══ R1.1 · "NÃO SEI AINDA"', i);
   if (i === -1 || j <= i) throw new Error('[fixture] não achei `_preservaPartesMontadas` em js/store.js');
-  return src.slice(i, j).replace(ABRE, '(function (novo, velho) {').trim().replace(/\};\s*$/, '})');
+  return src.slice(i, j).replace(ABRE, '(function (novo, velho, documentoDeTorneio) {').trim().replace(/\};\s*$/, '})');
 }
 
 /** As TRÊS PORTAS que dizem o que o ouvinte de `tournaments` pode afirmar (2.1.91),

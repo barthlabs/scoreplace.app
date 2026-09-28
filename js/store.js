@@ -795,7 +795,7 @@ window._spNameForLetzplay = function (handle, fallback) {
  *   ③ sem contador nem testemunha: `matches`/`grupos` são estruturais e acusam; as de
  *      topo não, senão vira busca em laço a cada eco.
  * Muta `t` (marca `_faltamPesados`/`_faltaOQue`) e devolve true se falta algo. */
-window._marcaPartesQueFaltam = function (t) {
+window._marcaPartesQueFaltam = function (t, documentoDeTorneio) {
   if (!t) return false;
   /* ⛔⛔ "TORNEIO INTEIRO" NÃO EXISTE MAIS. Todo torneio nasce dividido (2.3.113) e os 37 que
    * faltavam foram migrados (2.3.114): medido em produção, 78 de 78. Documento sem o campo é
@@ -811,7 +811,12 @@ window._marcaPartesQueFaltam = function (t) {
    * ⇒ a pergunta que esta função responde não é "o torneio está dividido?" — é "eu tenho as partes
    * em mãos?", e essa vale para qualquer objeto. A fonte única (`partesDe`) é para quem SABE que
    * está com um documento: o montador e o servidor. [[project_torneio_nasce_dividido]] */
-  var _foraDaqui = Array.isArray(t._semPesados) ? t._semPesados : [];
+  /* Só o ouvinte de `tournaments` passa `documentoDeTorneio`: resumos reutilizam esta
+   * função e não têm subcoleções para montar. A distinção evita tanto chave vazia no
+   * documento legado quanto cartão em carregamento eterno. */
+  var _splitFalta = (typeof window !== 'undefined') ? window._tSplit : null;
+  var _foraDaqui = (documentoDeTorneio && _splitFalta && typeof _splitFalta.partesDe === 'function')
+    ? _splitFalta.partesDe(t) : (Array.isArray(t._semPesados) ? t._semPesados : []);
   if (!_foraDaqui.length) { delete t._faltamPesados; delete t._faltaOQue; return false; }
   var _tam = function (x) {
     if (Array.isArray(x)) return x.length;
@@ -876,9 +881,12 @@ window._marcaPartesQueFaltam = function (t) {
  * ⇒ Agora é UMA função, no topo, e os DOIS ouvintes chamam ELA. Copiar a heurística pro
  * `_sbIngest` seria criar a segunda fonte que este projeto já pagou caro três vezes.
  * [[feedback_unify_dual_entry_points]] */
-window._preservaPartesMontadas = function (novo, velho) {
-    if (!novo || !Array.isArray(novo._semPesados) || !novo._semPesados.length) return novo;
-    var fora = novo._semPesados;
+window._preservaPartesMontadas = function (novo, velho, documentoDeTorneio) {
+    if (!novo) return novo;
+    var _splitPreserva = (typeof window !== 'undefined') ? window._tSplit : null;
+    var fora = (documentoDeTorneio && _splitPreserva && typeof _splitPreserva.partesDe === 'function')
+      ? _splitPreserva.partesDe(novo) : (Array.isArray(novo._semPesados) ? novo._semPesados : []);
+    if (!fora.length) return novo;
     var _vazio = function (x) {
       if (Array.isArray(x)) return !x.length;
       if (x && typeof x === 'object') return !Object.keys(x).length;
@@ -951,7 +959,7 @@ window._preservaPartesMontadas = function (novo, velho) {
      * inscritos de 152 e 1 jogo de 115 NUNCA pedia o resto. Era o último pedaço do
      * incidente de 31/ago. Agora os dois caminhos chamam a MESMA função.
      * [[feedback_unify_dual_entry_points]] */
-    window._marcaPartesQueFaltam(novo);
+    window._marcaPartesQueFaltam(novo, documentoDeTorneio);
     return novo;
 };
 
@@ -3507,7 +3515,7 @@ window._sbIngest = function (docs) {
     var emMemoria = (i === -1) ? null : lista[i];
     /* ⭐ A REDE, ANTES DE ENTRAR NA LISTA: o que já estava montado em memória é preservado,
      * e o que falta é MARCADO. Sem isto, o vazio do documento seria lido como "não tem". */
-    var pronto = window._preservaPartesMontadas(d, emMemoria);
+    var pronto = window._preservaPartesMontadas(d, emMemoria, true);
     if (i === -1) lista.push(pronto);
     else Object.assign(lista[i], pronto);          // escreve NO LUGAR: as telas guardam a referência
     var vivoAgora = (i === -1) ? pronto : lista[i];
@@ -3518,7 +3526,7 @@ window._sbIngest = function (docs) {
      * `round.matches`. Aqui ela pega o caso do sandbox NÃO dividido (jogos já no doc);
      * o dividido é servido pela montagem, que reidrata quando as partes chegam. */
     try { if (typeof window._hydrateMonarchGroups === 'function') window._hydrateMonarchGroups(vivoAgora); } catch (_hmS) {}
-    if (window._marcaPartesQueFaltam(vivoAgora)) paraMontar.push(id);
+    if (window._marcaPartesQueFaltam(vivoAgora, true)) paraMontar.push(id);
     /* ⭐ e o erro morre quando as partes chegam por outro caminho — igual ao ouvinte real.
      * Um "não consegui carregar" ao lado do dado carregado é pior que o erro. */
     else if (AS._partesEmErro) delete AS._partesEmErro[id];
@@ -12250,7 +12258,7 @@ window.AppStore = {
      * [[feedback_rede_que_cobre_o_rerender_nao_cobre_o_primeiro]] */
     /* ⭐ o ouvinte de torneio REAL usa a MESMA porta do de sandbox (2.1.89) — ver
      * `window._preservaPartesMontadas`. O nome local fica só pra não mexer nos call sites. */
-    var _enxertaJogos = function (novo, velho) { return window._preservaPartesMontadas(novo, velho); };
+    var _enxertaJogos = function (novo, velho) { return window._preservaPartesMontadas(novo, velho, true); };
 
     function _aplicaSnapTorneios(snap) {
         var _paraMontar = [];
@@ -12298,7 +12306,7 @@ window.AppStore = {
           // ⛔ doc sem os jogos NUNCA entra assim na tela — ver _enxertaJogos.
           // Enxerta do objeto que JÁ ESTÁ no store (montado), não do parse anterior:
           // `_prevParsed` é o doc cru e teria o mesmo buraco.
-          if (data && Array.isArray(data._semPesados) && data._semPesados.length) {
+          if (data && window._tSplit && typeof window._tSplit.partesDe === 'function') {
             var _emMemoria = (store.tournaments || []).find(function (x) {
               return x && String(x.id) === String(data.id);
             });
