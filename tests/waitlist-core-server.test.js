@@ -61,7 +61,26 @@ const win = globalThis.window;
     'remover manual-a não pode apagar o manual-b homônimo');
 })();
 
-// ── 4. Integração tardia entrega a chave estável ao removedor ────────────────
+// ── 4. O fallback isolado preserva a mesma identidade manual ────────────────
+(function () {
+  const previous = win.ScoreplaceWaitlist;
+  delete win.ScoreplaceWaitlist;
+  try {
+    const t = {
+      standbyParticipants: [
+        { manualParticipantId: 'manual-a', displayName: 'Convidado' },
+        { manualParticipantId: 'manual-b', displayName: 'Convidado' },
+      ], waitlist: [], monarchWaitlist: {},
+    };
+    ok(win._removeFromWaitlistByKey(t, 'manual-a') && t.standbyParticipants.length === 1 &&
+       t.standbyParticipants[0].manualParticipantId === 'manual-b',
+      'fallback sem domínio também remove somente o ID manual pedido');
+  } finally {
+    win.ScoreplaceWaitlist = previous;
+  }
+})();
+
+// ── 5. Integração tardia entrega a chave estável ao removedor ────────────────
 (function () {
   const core = fs.readFileSync(path.join(ROOT, 'functions-autodraw', 'draw-core.js'), 'utf8');
   ok(/const chaveEspera = \(p && typeof p === 'object' && \(p\.uid \|\| p\.manualParticipantId\)\) \|\| nome;/.test(core) &&

@@ -608,8 +608,9 @@ window._wlDisplayName = function (t, key) {
   return k;
 };
 
-// Remove da espera pela CHAVE (uid quando há conta, nome só pro informal). Espelha
-// _removeFromWaitlist, que continua existindo pros caminhos que só têm o nome em mãos.
+// Remove da espera pela CHAVE (uid, depois manualParticipantId; nome só pro informal
+// legado). Espelha _removeFromWaitlist, que continua existindo pros caminhos que só
+// têm o nome em mãos.
 window._removeFromWaitlistByKey = function (t, key) {
   var domain = _wlDomain();
   if (domain && typeof domain.removeByKey === 'function') return domain.removeByKey(t, key, _wlDomainHelpers(t));
@@ -621,6 +622,7 @@ window._removeFromWaitlistByKey = function (t, key) {
   var casa = function (e) {
     if (!e) return false;
     if (typeof e === 'object' && e.uid) return String(e.uid) === k;   // COM conta: só uid
+    if (typeof e === 'object' && e.manualParticipantId) return String(e.manualParticipantId) === k;
     return (window._nameForms(e) || []).indexOf(kLower) !== -1;        // SEM conta: nome
   };
   ['waitlist', 'standbyParticipants'].forEach(function (campo) {
