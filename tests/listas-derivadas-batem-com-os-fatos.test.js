@@ -71,6 +71,8 @@ function resto() {
   ok(/if \(require\.main === module\)/.test(fonte),
     '⛔ atrás de require.main — importar num teste não pode mexer no banco');
   ok(/montarDoBanco/.test(fonte), 'e ele monta o torneio dividido antes de comparar');
+  ok(!/if \(Array\.isArray\(t\._semPesados\)/.test(fonte),
+    '⛔ ausência do marcador não pula a montagem das partes canônicas');
   ok(/PULADO/.test(fonte),
     '⛔ e PULA o torneio cujas partes não montaram, em vez de acusar divergência que não existe');
 

@@ -125,7 +125,11 @@ if (require.main === module) {
     for (const d of snap.docs) {
       const t = d.data();
       let completo = t;
-      if (Array.isArray(t._semPesados) && t._semPesados.length) {
+      /* ⛔ MARCADOR AUSENTE NÃO TORNA O DOCUMENTO COMPLETO. Todo torneio nasce
+       * dividido; `_semPesados` é apenas compatibilidade da nativa antiga. O auditor
+       * precisa montar sempre antes de decidir se `memberUids` é divergente, ou pode
+       * regravar uma lista derivada a partir de elenco vazio. [[project_torneio_nasce_dividido]] */
+      {
         try {
           completo = await Split.montarDoBanco(JSON.parse(JSON.stringify(t)), async (col) => {
             const qs = await db.collection('tournaments').doc(d.id).collection(col).get();

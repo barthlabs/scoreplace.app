@@ -144,7 +144,7 @@ const idVazio = { _semPesados: [], matches: [{ id: '', p1: 'A' }] };
 ok(temProblema(inv(idVazio), /jogo sem id/), '⑧ id string vazia também falha');
 
 /* ⑨ ids únicos ⇒ passa */
-const bom = { _semPesados: [], matches: [{ id: 'a' }, { id: 'b' }], rounds: [] };
+const bom = { _semPesados: [], matches: [], participants: [], opponentHistory: [], rounds: [] };
 ok(inv(bom).length === 0, '⑨ ids únicos não geram problema (achei: ' + inv(bom).join(' | ') + ')');
 
 /* ⑩ `_nJogos` é conferido contra IDENTIDADES DISTINTAS, nunca contra o tamanho do Map */
@@ -162,6 +162,9 @@ ok(temProblema(inv(contagemRuim), /_nJogos=5 diverge/), '⑩ e contador mentiros
 ok(temProblema(inv({ _semPesados: ['matches'], _nJogos: 2, matches: [{ id: 'a' }, { id: 'b' }] }),
                /parte pesada no lugar errado/),
    '⑪ jogos no doc raiz de torneio dividido são recusados');
+ok(temProblema(inv({ _nJogos: 2, matches: [{ id: 'a' }, { id: 'b' }] }),
+               /parte pesada no lugar errado/),
+   '⑪b ⛔ sem marcador legado continua recusando jogos no documento');
 
 /* ⑫ referência quebrada na fiação */
 ok(temProblema(inv({ _semPesados: [], matches: [{ id: 'a', nextMatchId: 'zzz' }] }), /aponta nextMatchId/),

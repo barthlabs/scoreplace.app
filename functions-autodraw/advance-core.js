@@ -15,6 +15,7 @@
 'use strict';
 
 const crypto = require('crypto');
+const split = require('./vendor/tournament-split-core.js');
 
 /* ─────────────────────────────────────────────────────────────────────────────────────
  * 1. DENYLIST — o que NÃO entra no hash de revisão
@@ -309,7 +310,11 @@ function decisionsHash(decisoesValidadas) {
 function verificaInvariantes(t, opts) {
   const o = opts || {};
   const problemas = [];
-  const fora = Array.isArray(t._semPesados) ? t._semPesados : [];
+  /* ⛔ MARCADOR AUSENTE NÃO SIGNIFICA TORNEIO INTEIRO. Todos os torneios nascem
+   * divididos; `_semPesados` só permanece para a nativa antiga. Esta trava roda antes
+   * de gravar uma fase e precisa acusar jogos que voltaram ao documento mesmo quando a
+   * fotografia não trouxe o campo legado. [[project_torneio_nasce_dividido]] */
+  const fora = split.partesDe(t);
 
   /* Coleta com CAMINHO: o erro de duplicata tem de dizer ONDE, senão vira caça ao tesouro. */
   const jogos = [];
