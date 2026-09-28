@@ -62,6 +62,23 @@ ok(typeof s.matchesTotal === 'number' && typeof s.matchesDone === 'number' && ty
 ok(typeof s.waitlistCount === 'number' && typeof s.standbyCount === 'number',
    'e as contagens de espera/suplentes');
 
+// Regressão: o resumo é o número que chega antes ao cartão. Folga pode ter os dois rótulos
+// preenchidos, mas não é confronto; publicar 2/3 aqui deixaria a dashboard eternamente em 67%.
+{
+  const comFolga = {
+    id: 'resumo-sem-folga', name: 'Resumo sem folga', sport: 'Beach Tennis', status: 'active',
+    participants: [{ uid: 'ana' }, { uid: 'bia' }, { uid: 'carla' }, { uid: 'duda' }],
+    matches: [
+      { id: 'real-1', p1: 'Ana', p2: 'Bia', winner: 'Ana' },
+      { id: 'folga', p1: 'Carla', p2: 'Folga', isSitOut: true, winner: 'Carla' },
+      { id: 'real-2', p1: 'Duda', p2: 'Eva', winner: 'Duda' }
+    ]
+  };
+  const rFolga = buildSummary(comFolga, comFolga.id);
+  ok(rFolga.matchesTotal === 2 && rFolga.matchesDone === 2 && rFolga.progressPct === 100,
+     '⛔ o resumo também exclui folga: 2 jogos reais concluídos, nunca 2/3');
+}
+
 // ── ④ "meus torneios" e busca no servidor ────────────────────────────────────
 ok(Array.isArray(s.memberUids) && s.memberUids.length > 0,
    'traz memberUids — é ele que responde "meus torneios" como CONSULTA (' + s.memberUids.length + ')');
