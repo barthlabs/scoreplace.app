@@ -638,7 +638,13 @@ function drawInitial(t, opts) {
   }
   t._canonicalDraw = true; t.status = 'active';
   t.updatedAt = new Date().toISOString();
-  return { ok: true, native: false, format: t.format, matchCount: (t.matches || []).length, allMaleCount: _allMale, decisions: _decisions };
+  /* REGRESSÃO: formatos de chave/grupo materializam BYE e, em bases legadas,
+   * também folga em `matches`. O retorno alimenta toast/histórico: só confronto
+   * real é jogo, portanto marcadores não podem inflar `matchCount`. */
+  const _realFlatMatchCount = (t.matches || []).filter(function (m) {
+    return m && !m.isSitOut && !m.isBye;
+  }).length;
+  return { ok: true, native: false, format: t.format, matchCount: _realFlatMatchCount, allMaleCount: _allMale, decisions: _decisions };
 }
 
 // v1.2.57: INTEGRAÇÃO DE TARDIOS no SERVIDOR (cânone-no-servidor, dono 17/jul). Roda as MESMAS

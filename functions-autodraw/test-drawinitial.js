@@ -30,6 +30,8 @@ function ok(name, cond, got) {
   const phaseSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'phases-engine.js'), 'utf8');
   const expected = /m && !m\.isSitOut && !m\.isBye/;
   ok('fallback do servidor exclui BYE e folga do matchCount', expected.test(server));
+  ok('retorno de chave/grupo também exclui BYE e folga do matchCount',
+    /_realFlatMatchCount[\s\S]{0,180}m && !m\.isSitOut && !m\.isBye/.test(server));
   ok('gerador da fase usa a mesma contagem de jogo real', expected.test(phaseSource));
 })();
 
