@@ -127,10 +127,11 @@ function creator(db,time=clock){return makeCreateTournament({db,HttpsError,Field
   assert.equal(id,original.tournamentId);assert.equal(b.uploads,1);assert.equal(b.w.AppStore.tournaments.length,1);assert.equal(b.w.AppStore.tournaments[0].name,'Servidor');assert.equal(b.saves,1);
  });
  await test('estado transitório do formulário não atravessa a criação',async()=>{
-  const b=browser(),data={name:'Copa',sport:'Tênis',format:'Liga',_allowConfigReset:true,_previewOnly:'x'};let request;
+  const b=browser(),data={name:'Copa',sport:'Tênis',format:'Liga',_allowConfigReset:true,_previewOnly:'x',fmt2:{grupos:1,_previewOnly:'x',rodadas:{_intervalAuto:true,_renderTick:7}}};let request;
   b.w.FirestoreDB._callFn=async(name,payload)=>{request=payload;return {ok:true,tournament:{id:payload.tournamentId,name:'Copa'}};};
   await b.w.AppStore.addTournament(data);
-  assert(!Object.keys(request.config).some(k=>k.startsWith('_')));
+  const hasRuntimeKey=value=>Array.isArray(value)?value.some(hasRuntimeKey):value&&typeof value==='object'?Object.keys(value).some(k=>k.startsWith('_')||hasRuntimeKey(value[k])):false;
+  assert(!hasRuntimeKey(request.config));
  });
  await test('edição faz upload da imagem original e envia somente URL',async()=>{
   const b=browser();b.w.AppStore.tournaments.push({id:'e',name:'Antigo'});let patch;

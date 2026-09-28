@@ -344,6 +344,15 @@ function assignCompetitionTeamsAtInitialDraw(t, rawConfig) {
   }
 
   const wanted = cfg.teamCount;
+  const names = Array.isArray(cfg.teamNames) ? cfg.teamNames.map(function (name) { return String(name || '').trim(); }) : [];
+  const uniqueNames = new Set(names.map(function (name) { return name.toLocaleLowerCase(); }));
+  // ⛔ O botão de times permite montar a estrutura antes de preenchê-la. O sorteio,
+  // porém, nunca pode transformar zero, nomes vazios ou homônimos em times fictícios:
+  // depois de publicar os confrontos, a tabela ficaria ambígua e não há como saber
+  // quem representa quem. A recusa acontece ANTES de qualquer mutação no torneio.
+  if (!wanted || names.length !== wanted || names.some(function (name) { return !name; }) || uniqueNames.size !== names.length) {
+    return { ok: false, reason: 'competition-team-names-required' };
+  }
   const previous = Array.isArray(t.competitionTeams) ? t.competitionTeams : [];
   const teams = [];
   const seen = new Set();
@@ -351,13 +360,13 @@ function assignCompetitionTeamsAtInitialDraw(t, rawConfig) {
     const id = team && String(team.id || '').trim();
     if (!id || seen.has(id) || teams.length >= wanted) return;
     seen.add(id);
-    teams.push({ id: id, name: String(team.name || (cfg.teamNames && cfg.teamNames[teams.length]) || ('Time ' + (teams.length + 1))).trim() });
+    teams.push({ id: id, name: names[teams.length] });
   });
   while (teams.length < wanted) {
     const id = 'team-' + (teams.length + 1);
     if (!seen.has(id)) {
       const ordinal = teams.length + 1;
-      seen.add(id); teams.push({ id: id, name: String((cfg.teamNames && cfg.teamNames[ordinal - 1]) || ('Time ' + ordinal)).trim() });
+      seen.add(id); teams.push({ id: id, name: names[ordinal - 1] });
     }
   }
   t.competitionTeams = teams;

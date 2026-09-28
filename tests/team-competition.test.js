@@ -19,9 +19,15 @@ ok(C.allowsMatch(pairA1, pairB, config) === true, 'times diferentes continuam po
 ok(C.allowsMatch(pairA1, pairA2, Object.assign({}, config, { internalMatches: 'allow' })) === true,
   'toggle ligado: duplas do mesmo time podem se enfrentar');
 
-const named = C.normalize({ enabled: true, teamCount: 3, teamNames: ['Laranja', 'laranja', ''] });
-ok(named.teamNames.length === 3 && named.teamNames[0] === 'Laranja' && named.teamNames[1] === 'laranja 2' && named.teamNames[2] === 'Time 3',
-  'nomes dos times acompanham a quantidade configurada e não deixam rótulos ambíguos');
+const empty = C.normalize({ enabled: true });
+ok(empty.teamCount === 0 && empty.teamNames.length === 0,
+  'competição por times começa vazia até o organizador adicionar cada time');
+const named = C.normalize({ enabled: true, teamCount: 3, teamNames: ['Laranja', ''] });
+ok(named.teamCount === 2 && named.teamNames[0] === 'Laranja' && named.teamNames[1] === '',
+  'a configuração preserva a vaga vazia para a tela exigir nome antes do sorteio');
+const legacyNames = C.normalize({ enabled: true, teamCount: 3 });
+ok(legacyNames.teamNames.join(',') === 'Time 1,Time 2,Time 3',
+  'configuração antiga sem lista de nomes continua legível sem migração destrutiva');
 
 const teams = [{ id: 'a', name: 'Time Azul' }, { id: 'b', name: 'Time Branco' }, { id: 'c', name: 'Time Cinza' }];
 const rows = C.standings(teams, [

@@ -20,25 +20,20 @@ var ScoreplaceTeamCompetition;
     function normalize(value) {
         const raw = record(value);
         const scoring = record(raw.scoring);
-        const teamCount = Math.max(2, Math.floor(number(raw.teamCount, 8)));
-        const rawNames = Array.isArray(raw.teamNames) ? raw.teamNames : [];
-        const seenNames = {};
-        const teamNames = Array.from({ length: teamCount }, (_, index) => {
-            const name = text(rawNames[index]).slice(0, 80) || ('Time ' + (index + 1));
-            // Rótulo repetido torna a tabela ambígua. A identidade interna é o ID, mas a
-            // organização e os atletas só enxergam o nome; por isso normalizamos um fallback
-            // único em vez de deixar dois "Time A" indistinguíveis na configuração.
-            const key = name.toLocaleLowerCase();
-            if (!seenNames[key]) {
-                seenNames[key] = true;
-                return name;
-            }
-            let suffix = 2, candidate = name + ' ' + suffix;
-            while (seenNames[candidate.toLocaleLowerCase()])
-                candidate = name + ' ' + (++suffix);
-            seenNames[candidate.toLocaleLowerCase()] = true;
-            return candidate;
-        });
+        const hasExplicitNames = Array.isArray(raw.teamNames);
+        const suppliedNames = hasExplicitNames ? raw.teamNames : [];
+        // ⛔ Times NÃO nascem pré-criados. A competição por times pode ser ligada antes de
+        // o organizador decidir quantos times haverá; cada clique em "+ Time" cria uma vaga
+        // nomeável. Inventar oito "Time 1…8" parecia uma configuração feita e induzia o
+        // sorteio com uma estrutura que ninguém escolheu. [[regression_team_competition_starts_empty]]
+        //
+        // Configurações gravadas antes dessa regra só tinham `teamCount`; para não apagar a
+        // intenção de um torneio já configurado, elas recebem os antigos rótulos de migração.
+        const legacyCount = Math.max(0, Math.floor(number(raw.teamCount, 0)));
+        const teamNames = hasExplicitNames
+            ? suppliedNames.slice(0, 128).map((name) => text(name).slice(0, 80))
+            : Array.from({ length: legacyCount }, (_, index) => 'Time ' + (index + 1));
+        const teamCount = teamNames.length;
         return {
             enabled: raw.enabled === true,
             teamCount,

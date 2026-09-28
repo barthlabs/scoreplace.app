@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.3.141';
+window.SCOREPLACE_VERSION = '2.3.142';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -13974,7 +13974,23 @@ window.AppStore = {
     if (!data._creationImages) Object.defineProperty(data, '_creationImages', { value: {} });
     store._creationPromises = store._creationPromises || {};
     if (store._creationPromises[id]) return store._creationPromises[id];
-    var config = Object.assign({}, data);
+    // A Function aceita somente a configuração declarativa. `data` vem do formulário
+    // legado e pode conter marcadores transitórios aninhados (inclusive dentro de
+    // `fmt2`); removê-los apenas no topo fazia a criação falhar com "Estado de execução
+    // não pertence à configuração". A limpeza é recursiva e conserva apenas valores
+    // serializáveis escolhidos pelo organizador. [[regression_create_rejects_nested_runtime_state]]
+    var _creationConfig = function (value) {
+      if (Array.isArray(value)) return value.map(_creationConfig);
+      if (!value || typeof value !== 'object') return value;
+      var clean = {};
+      Object.keys(value).forEach(function (key) {
+        if (key.charAt(0) === '_') return;
+        var item = value[key];
+        if (item !== undefined) clean[key] = _creationConfig(item);
+      });
+      return clean;
+    };
+    var config = _creationConfig(data);
     /* `_allowConfigReset` é só uma marca do formulário de edição: autoriza o CLIENTE a
      * recompilar a prévia, não descreve o torneio. Se cruzar a fronteira de criação a CF
      * deve recusá-la como estado de execução — foi exatamente o "Falha ao salvar" ao

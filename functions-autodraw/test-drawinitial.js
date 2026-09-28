@@ -122,6 +122,11 @@ const CASES = [
   const rejected = core.assignCompetitionTeamsAtInitialDraw(manual, Object.assign({}, cfg, { formation: 'manual' }));
   ok('modo manual não inventa dono para dupla sem time', rejected.ok === false && rejected.reason === 'competition-teams-unassigned', JSON.stringify(rejected));
 
+  const withoutNames = core.assignCompetitionTeamsAtInitialDraw({ participants: [dupla(6, 'A')] }, { enabled: true, teamNames: [], formation: 'draw' });
+  ok('times vazios não permitem sorteio fictício', withoutNames.ok === false && withoutNames.reason === 'competition-team-names-required', JSON.stringify(withoutNames));
+  const duplicateNames = core.assignCompetitionTeamsAtInitialDraw({ participants: [dupla(7, 'A')] }, { enabled: true, teamNames: ['Neon', 'neon'], formation: 'draw' });
+  ok('homônimos não permitem sorteio ambíguo', duplicateNames.ok === false && duplicateNames.reason === 'competition-team-names-required', JSON.stringify(duplicateNames));
+
   const full = mkT('team-full', {
     format: 'Fase de Grupos', gruposCount: 1, gruposClassified: 1, teamSize: 2,
     teamCompetition: cfg,
