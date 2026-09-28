@@ -751,18 +751,22 @@ function integrateLateEntries(t, opts) {
         // real do Confra, jul/2026).
         (r.entrantes || []).forEach(function (p) {
           const nome = String((p && (p.displayName || p.name)) || p);
+          // A espera não é removida por rótulo: vaga manual tem manualParticipantId e
+          // pode mudar de nome. Nome só é fallback para documento legado sem identidade.
+          const chaveEspera = (p && typeof p === 'object' && (p.uid || p.manualParticipantId)) || nome;
           t.participants = t.participants || [];
           const ja = t.participants.some(function (x) {
             return String((x && (x.displayName || x.name)) || x) === nome;
           });
           if (!ja) t.participants.push(p);
-          // ATENÇÃO: _removeFromWaitlist(t, NOME) recebe string, não o objeto —
-          // passar o objeto vira no-op silencioso e o tardio segue na espera.
-          if (typeof win._removeFromWaitlist === 'function') { try { win._removeFromWaitlist(t, nome); } catch (e) {} }
+          // _removeFromWaitlistByKey entende uid/manualParticipantId e só então nome
+          // legado. Não voltar para _removeFromWaitlist(nome): ele remove homônimos.
+          if (typeof win._removeFromWaitlistByKey === 'function') { try { win._removeFromWaitlistByKey(t, chaveEspera); } catch (e) {} }
           else {
             const fora = function (arr) {
               return (arr || []).filter(function (x) {
-                return String((x && (x.displayName || x.name)) || x) !== nome;
+                const chaveX = (x && typeof x === 'object' && (x.uid || x.manualParticipantId)) || String((x && (x.displayName || x.name)) || x);
+                return chaveX !== chaveEspera;
               });
             };
             t.standbyParticipants = fora(t.standbyParticipants);

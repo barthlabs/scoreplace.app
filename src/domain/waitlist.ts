@@ -333,6 +333,12 @@ namespace ScoreplaceWaitlist {
     const matches = (entry: unknown): boolean => {
       const objectEntry = record(entry);
       if (objectEntry && text(objectEntry.uid)) return text(objectEntry.uid) === wanted;
+      /* REGRESSÃO: a chave do manual caía em `nameForms`, apagando todo homônimo
+       * quando a integração tardia retirava o entrante da espera. UID e manualId
+       * são identidades; nome só resolve o documento legado que não possui nenhuma. */
+      if (objectEntry && text(objectEntry.manualParticipantId)) {
+        return text(objectEntry.manualParticipantId) === wanted;
+      }
       return nameForms(entry, helpers).includes(lower);
     };
     for (const field of ['waitlist', 'standbyParticipants']) {

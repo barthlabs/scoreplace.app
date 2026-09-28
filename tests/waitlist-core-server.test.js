@@ -16,6 +16,7 @@
  * não contra o browser — era exatamente a diferença entre os dois que escondia o bug.
  */
 const path = require('path');
+const fs = require('fs');
 const ROOT = path.join(__dirname, '..');
 
 let pass = 0, fail = 0;
@@ -45,7 +46,30 @@ const win = globalThis.window;
   ok(win._removeFromWaitlist(t, 'Ana') === false, 'segunda remoção devia ser no-op');
 })();
 
-// ── 3. Saneamento: quem está num grupo NÃO fica na espera ────────────────────
+// ── 3. A chave manual remove só a vaga certa, nunca o homônimo ───────────────
+(function () {
+  const t = {
+    standbyParticipants: [
+      { manualParticipantId: 'manual-a', displayName: 'Convidado' },
+      { manualParticipantId: 'manual-b', displayName: 'Convidado' },
+    ],
+    waitlist: [], monarchWaitlist: {},
+  };
+  ok(win._removeFromWaitlistByKey(t, 'manual-a') === true,
+    'a chave manual deve remover a própria vaga');
+  ok(t.standbyParticipants.length === 1 && t.standbyParticipants[0].manualParticipantId === 'manual-b',
+    'remover manual-a não pode apagar o manual-b homônimo');
+})();
+
+// ── 4. Integração tardia entrega a chave estável ao removedor ────────────────
+(function () {
+  const core = fs.readFileSync(path.join(ROOT, 'functions-autodraw', 'draw-core.js'), 'utf8');
+  ok(/const chaveEspera = \(p && typeof p === 'object' && \(p\.uid \|\| p\.manualParticipantId\)\) \|\| nome;/.test(core) &&
+     /_removeFromWaitlistByKey\(t, chaveEspera\)/.test(core),
+    'integrar tardio deve tirar da espera por uid/manualParticipantId, não pelo nome');
+})();
+
+// ── 5. Saneamento: quem está num grupo NÃO fica na espera ────────────────────
 (function () {
   const t = {
     rounds: [{ monarchGroups: [{ players: ['Ana', 'Bruno', 'Carla', 'Dinho'] }] }],
