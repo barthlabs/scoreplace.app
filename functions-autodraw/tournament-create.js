@@ -12,11 +12,15 @@ function canonical(value) {
   }, {});
   return value;
 }
-function checkNested(value, fail) {
+function checkNested(value, fail, path) {
   if (!value || typeof value !== 'object') return;
   Object.keys(value).forEach(key => {
-    if (INTERNAL.has(key) || (key.startsWith('_') && !['_intervalAuto', '_scoreBy'].includes(key))) fail('invalid-argument', 'Estado de execução não pertence à configuração.');
-    checkNested(value[key], fail);
+    const at = (path ? path + '.' : '') + key;
+    // O caminho não contém valor do formulário; ele identifica apenas o nome estrutural
+    // que a fronteira recusou. Sem isso, "Estado de execução" repetia a mesma mensagem
+    // para causas diferentes e tornava impossível corrigir a origem verificavelmente.
+    if (INTERNAL.has(key) || (key.startsWith('_') && !['_intervalAuto', '_scoreBy'].includes(key))) fail('invalid-argument', 'Estado de execução não pertence à configuração: ' + at + '.');
+    checkNested(value[key], fail, at);
   });
 }
 // O cliente já remove marcadores de execução antes da chamada, mas a fronteira do

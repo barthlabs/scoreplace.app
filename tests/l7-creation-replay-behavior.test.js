@@ -60,6 +60,7 @@ function creator(db,time=clock){return makeCreateTournament({db,HttpsError,Field
   for(const extra of [{creatorUid:'other'},{participants:[{uid:'x'}]},{phases:[{matches:[]}]},{fmt2:{participants:[]}},JSON.parse('{"scoring":{"__proto__":{"adminUids":["x"]}}}'),{name:'x'.repeat(241)}]) {
    await assert.rejects(fn({auth,data:{...payload,config:{...payload.config,...extra}}}));
   }
+  await assert.rejects(fn({auth,data:{...payload,config:{...payload.config,fmt2:{rounds:[]}}}}),err=>err.code==='invalid-argument'&&/fmt2\.rounds/.test(err.message));
   assert.equal(db.writes,0);
   await fn({auth,data:payload});
   await assert.rejects(fn({auth:{uid:'intruder'},data:payload}),{code:'already-exists'});
