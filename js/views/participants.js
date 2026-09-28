@@ -2631,9 +2631,9 @@ function renderParticipants(container, tournamentId) {
       // v2.7.54: botão de REMOVER inscrito (só organizador) — poder de tirar qualquer
       // jogador do card, inclusive os da lista de espera. A remoção (tournaments.js)
       // tira de participants E dos storages da espera, casando nome cru/formatado.
-      // 3º argumento = o UID da PESSOA deste card. Sem ele, excluir quem está em dupla era
-      // no-op (o nome da entrada é "A / B", nunca "A"). [[project_uid_identity_canon_locked]]
-      const _delBtnC = isOrg ? `<button type="button" class="cancel-x-btn" onclick="event.stopPropagation();window.removeParticipantFunction('${tId}','${safeName}','${window._safeHtml(ind.uid || '')}')" title="Remover inscrito" style="--cx-size:22px;">✕</button>` : '';
+      // 3º argumento = a identidade estável do card (UID ou ID manual). Sem ele,
+      // excluir quem está em dupla era no-op; com nome, manual homônimo/renomeado saía errado.
+      const _delBtnC = isOrg ? `<button type="button" class="cancel-x-btn" onclick="event.stopPropagation();window.removeParticipantFunction('${tId}','${safeName}','${window._safeHtml(ind.uid || ind.manualParticipantId || '')}')" title="Remover inscrito" style="--cx-size:22px;">✕</button>` : '';
 
       const _safeName = (ind.name || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
 

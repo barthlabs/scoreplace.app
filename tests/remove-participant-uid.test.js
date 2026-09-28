@@ -121,6 +121,12 @@ console.log('\n── excluir inscrito num roster SÓ-UID (o clique real do ✕)
     'manual :: remove da espera somente a vaga escolhida');
 }
 
+{
+  const source = require('fs').readFileSync(require('path').join(__dirname, '..', 'js', 'views', 'participants.js'), 'utf8');
+  ok(/ind\.uid \|\| ind\.manualParticipantId \|\| ''/.test(source),
+    'cartão alternativo também envia manualParticipantId para a remoção');
+}
+
 // 4) presença/W.O./VIP do excluído não podem ficar penduradas
 {
   const t = mkT(); t.checkedIn = { uKarla: true, uSolo: true }; t.absent = { uKarla: true }; t.vips = { uKarla: true };
