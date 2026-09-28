@@ -97,6 +97,9 @@ console.log('──── mesmo caminho no cliente (js/views/tournaments) ──
   // FICTÍCIO é a única exceção: sem uid, o nome É a identidade — volta como string.
   const fict = sb.window._pairPartnerSolo({ p1Uid: 'uid-ana', p1Name: 'Ana', p2Name: 'Convidado' }, 2);
   ok(fict === 'Convidado', 'fictício sem conta continua sendo a string do nome');
+  const manual = sb.window._pairPartnerSolo({ p1Uid: 'uid-ana', p1Name: 'Ana', p2Name: 'Convidado', p2ManualId: 'manual-convidado' }, 2);
+  ok(manual && manual.manualParticipantId === 'manual-convidado',
+     'cliente: vaga manual moderna não perde o identificador ao virar solo');
 }
 
 console.log('──── o strip do save continua sendo a última barreira ────');

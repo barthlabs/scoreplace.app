@@ -317,7 +317,8 @@ function computeEnroll(data, participantObj, extraUpdates, nowMs) {
 // Constrói o PARCEIRO (lado `n`) de uma dupla como inscrito SOLO. Espelha
 // window._pairPartnerSolo (js/views/tournaments.js) e o solo() de computeSplitPair
 // (pair-core.js) — o solo herda o que era POR MEMBRO (nº de inscrição, contato,
-// categoria). Fictício (sem uid) volta como a STRING do nome. Sem uid nem nome → null.
+// categoria). Documento legado sem uid nem identificador continua como STRING do nome; vaga
+// manual atual volta como objeto para não perder manualParticipantId. Sem identidade/nome → null.
 /* ⛔⛔ O NÚMERO DE INSCRIÇÃO NASCE AQUI, DENTRO DA TRANSAÇÃO (24/set/2026).
  * Relato do dono: quem entra na lista de espera aparecia com 1, 2, 3, 4 num torneio com
  * 154 inscritos. MEDIDO: a palavra `Seq` aparecia UMA vez neste arquivo, e era só para
@@ -353,9 +354,16 @@ function allocateEnrollSeqs(tournamentLike) {
 function pairPartnerSolo(entry, n) {
   var g = function (suf) { return entry['p' + n + suf]; };
   var uid = g('Uid') || '';
+  var manualId = g('ManualId') || '';
   var nome = String(g('Name') || '').trim();
-  if (!uid) return nome || null; // fictício sem conta → string do nome
-  var o = { uid: uid, ligaActive: true };
+  // REGRESSÃO: ao desinscrever o colega de uma dupla, este caminho convertia até a vaga
+  // manual moderna em string. A string perde manualParticipantId e depois não pode ser
+  // localizada por espelho, número de inscrição ou outra dupla. Só o documento legado que
+  // realmente não possui ID continua string para não reescrever sua semântica.
+  if (!uid && !manualId) return nome || null;
+  var o = { ligaActive: true };
+  if (uid) o.uid = uid;
+  if (!uid && manualId) o.manualParticipantId = manualId;
   if (nome) { o.displayName = nome; o.name = nome; }
   if (g('Seq') != null) o.enrollSeq = g('Seq');
   // CAMPO DE PERFIL NÃO É GRAVADO EM QUEM TEM UID (email/photoURL/gender/birthDate).

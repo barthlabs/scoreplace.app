@@ -258,6 +258,19 @@ try { C.normalizeExtraUpdates({ status: 'finished' }); ok('extraUpdates recusa p
   eq('deenroll → parceiro fictício vira string do nome', r.participants[0], 'Convidado sem conta');
 })();
 
+// ── Parceiro MANUAL moderno não perde sua identidade ao virar solo ────────────
+(() => {
+  const data = { status: 'open', participants: [
+    { p1Uid: 'me-uid', p1Name: 'Eu', p2Name: 'Convidado com vaga',
+      p2ManualId: 'manual-convidado-42', p2Seq: 17, category: 'Misto' }
+  ] };
+  const r = C.computeDeenroll(data, 'me-uid');
+  const guest = r.participants[0];
+  eq('deenroll → parceiro manual vira objeto', typeof guest, 'object');
+  eq('deenroll → parceiro manual preserva id estável', guest && guest.manualParticipantId, 'manual-convidado-42');
+  eq('deenroll → parceiro manual preserva nº de inscrição', guest && guest.enrollSeq, 17);
+})();
+
 // ── Desinscrição de quem não está → notFound ─────────────────────────────────
 (() => {
   const data = { status: 'open', participants: [{ uid: 'a-uid' }] };

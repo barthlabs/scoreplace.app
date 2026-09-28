@@ -543,14 +543,20 @@ window._addPlaceholdersCore = function (id, qtd, onDone, opts) {
 // carrega. setupDone=true faz os blocos inline (em renderTournaments) virarem no-op.
 // Converte a dupla `entry` no INSCRITO SOLO do lado que FICA (n = 1 ou 2). Espelha o solo que a
 // CF splitPair devolve (functions/pair-core.computeSplitPair): identidade = uid, nome só se
-// existia gravado (fictício), e herda nº de inscrição, contato e categoria.
+// existia gravado (fictício), e herda nº de inscrição, contato e categoria. Documento legado sem
+// identidade manual ainda volta como string; a vaga manual moderna precisa voltar como objeto.
 window._pairPartnerSolo = function (entry, n) {
     if (!entry || typeof entry !== 'object') return entry;
     var g = function (suf) { return entry['p' + n + suf]; };
     var uid = g('Uid') || '';
+    var manualId = g('ManualId') || '';
     var nome = String(g('Name') || '').trim();
-    if (!uid) return nome || null;                      // fictício volta como string do nome
-    var o = { uid: uid, ligaActive: true };
+    // REGRESSÃO: converter o convidado manual em string apagava manualParticipantId ao
+    // desinscrever o parceiro. Nome só é identidade nos registros legados sem ID estável.
+    if (!uid && !manualId) return nome || null;
+    var o = { ligaActive: true };
+    if (uid) o.uid = uid;
+    if (!uid && manualId) o.manualParticipantId = manualId;
     if (nome) { o.displayName = nome; o.name = nome; }
     if (g('Seq') != null) o.enrollSeq = g('Seq');
     // Campo de perfil NÃO acompanha quem tem uid (email/photoURL/gender/birthDate).
