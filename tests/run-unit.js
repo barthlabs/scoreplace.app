@@ -2147,24 +2147,45 @@ const CPUS = os.cpus().length || 4;
 const JOBS_ENV = parseInt(process.env.SP_TEST_JOBS, 10);
 const JOBS = (JOBS_ENV >= 1) ? JOBS_ENV : Math.max(1, Math.min(8, CPUS - 2));
 const JOBS_PESADAS = Math.max(1, Math.min(3, JOBS));
+// Uma suíte filha que perde o processo de emulador/Chromium pode ficar sem evento `close`.
+// ⛔ TESTE QUE SOME NÃO PODE SEGURAR A PUBLICAÇÃO PARA SEMPRE: falhar com diagnóstico é
+// mais seguro que deixar o deploy pendurado sem decidir nada. O prazo é deliberadamente
+// generoso (4 min por suíte) e pode ser ampliado só para diagnóstico via ambiente.
+const SUITE_TIMEOUT_MS = Math.max(60000, parseInt(process.env.SP_SUITE_TIMEOUT_MS, 10) || 240000);
 
 const failed = [];
 const t0 = Date.now();
 
 function roda(rel) {
   return new Promise((resolve) => {
-    const p = spawn(process.execPath, [path.join(ROOT, rel)], { cwd: ROOT });
+    // `detached` cria grupo próprio: timeout mata também emulator/browser que a suíte deixou.
+    const p = spawn(process.execPath, [path.join(ROOT, rel)], { cwd: ROOT, detached: true });
     let saida = '';
+    let terminou = false;
+    const encerrar = function(code, motivo) {
+      if (terminou) return;
+      terminou = true;
+      clearTimeout(prazo);
+      if (motivo) saida += '\n✗ ' + motivo + '\n';
+      console.log('\n──────────── ' + rel + ' ────────────');
+      process.stdout.write(saida);
+      if (code !== 0) failed.push(rel);
+      resolve();
+    };
+    const prazo = setTimeout(function() {
+      // ⛔ UMA SUÍTE NÃO PODE DEIXAR EMULADOR/BROWSER ÓRFÃO PARA A PRÓXIMA.
+      // O grupo isolado é a unidade da execução; matar só o Node pai repetiria o bloqueio.
+      try { process.kill(-p.pid, 'SIGTERM'); } catch (e) { try { p.kill('SIGTERM'); } catch (_) {} }
+      setTimeout(function() { try { process.kill(-p.pid, 'SIGKILL'); } catch (e) {} }, 5000).unref();
+      encerrar(1, 'tempo limite de ' + Math.round(SUITE_TIMEOUT_MS / 1000) + 's — processo filho não encerrou');
+    }, SUITE_TIMEOUT_MS);
     p.stdout.on('data', (d) => { saida += d; });
     p.stderr.on('data', (d) => { saida += d; });
     p.on('close', (code) => {
       /* A saída sai INTEIRA e de uma vez, na ordem em que a suíte terminou. Interleavar
        * linha a linha (o que `stdio:'inherit'` faria em paralelo) misturaria a saída de 8
        * suítes e tornaria ilegível justamente o que se lê quando algo falha. */
-      console.log('\n──────────── ' + rel + ' ────────────');
-      process.stdout.write(saida);
-      if (code !== 0) failed.push(rel);
-      resolve();
+      encerrar(code, '');
     });
   });
 }

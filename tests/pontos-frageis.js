@@ -171,5 +171,12 @@ module.exports = [
     marca: 'INSCRIÇÃO NOVA EXIGE CONTA: NÃO NASCE VAGA MANUAL',
     incidente: 'nome digitado pelo organizador não permite saber qual homônimo é qual; '
       + 'a vaga manual criava uma segunda identidade por rótulo e abria ambiguidade no elenco',
+    data: '2026-09-28' },
+
+  { id: '29', arquivo: 'tests/run-unit.js',
+    ancora: 'const SUITE_TIMEOUT_MS =',
+    marca: 'TESTE QUE SOME NÃO PODE SEGURAR A PUBLICAÇÃO PARA SEMPRE',
+    incidente: 'uma suíte filha perdeu o evento de encerramento e deixou o preflight preso, sem subteste ativo '
+      + 'e sem promover a versão; o executor precisa falhar com diagnóstico e limpar seu grupo de processos',
     data: '2026-09-28' }
 ];
