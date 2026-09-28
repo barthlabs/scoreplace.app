@@ -56,6 +56,10 @@ ok(voltaA && voltaA.manualParticipantId === 'manual-aaa',
 ok(voltaB && voltaB.manualParticipantId === 'manual-bbb', '① e a outra também');
 ok(voltaA && voltaA.enrollSeq === 3 && voltaB && voltaB.enrollSeq === 4,
   '① e com o número de inscrição original de cada um');
+const porIdsManuais = pair.computeSplitPair({ participants: formado.participants.slice(), teamOrigins: {} },
+  { id1: 'manual-aaa', id2: 'manual-bbb' });
+ok(porIdsManuais.outcome === 'split',
+  '① o desfazer por manualParticipantId encontra a dupla mesmo se o nome tiver mudado');
 
 // ── ② quem TEM conta não ganha o campo ───────────────────────────────────────
 const comConta = { uid: 'uid_da_pessoa', name: 'Ana', displayName: 'Ana', enrollSeq: 1 };
@@ -98,6 +102,11 @@ const vT1 = (tTardio.standbyParticipants || []).find((p) => p && typeof p === 'o
 ok(vT1 && vT1.manualParticipantId === 'manual-t1',
   '③ ⭐⭐ e devolve a pessoa COM a identidade — antes ela voltava só com o nome');
 ok(vT1 && vT1.enrollSeq === 9, '③ e com o número de inscrição original');
+
+const tTardioPorId = { standbyParticipants: [Object.assign({}, dTardia)] };
+const rSplitPorId = dc.splitLatePairCore(tTardioPorId, { id1: 'manual-t1', id2: 'manual-t2' });
+ok(rSplitPorId && rSplitPorId.ok,
+  '③ o desfazer tardio também encontra a dupla pelos IDs manuais, não pelos rótulos');
 
 // ── ④ o campo é lido onde precisa: a chave do número de inscrição ────────────
 /* Era esta a leitura que nunca casava: ela procura `m:` + identificador, e ninguém o gravava. */

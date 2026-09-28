@@ -101,11 +101,12 @@ window._duplaCard = function (t, p, draggable, ctx) {
       : (_canPairDrag
         ? '<div style="font-size:0.65rem;color:rgba(255,255,255,0.45);margin-top:3px;">Arraste para formar dupla</div>'
         : '<div style="font-size:0.65rem;color:rgba(255,255,255,0.4);margin-top:3px;">Sem dupla</div>');
-    // v4.5.99: identidade de CADA membro = uid; só fictício (sem conta) usa o nome. O strip do
-    // ITEM 3 apaga name/displayName da dupla de contas → casar por STRING falhava (Desfazer não
-    // achava a entrada). Desfazer passa as 2 identidades (uid||nome-guest) e _splitDupla casa o PAR.
-    var _m1Id = (p && (p.p1Uid || p.p1Name)) || '';
-    var _m2Id = (p && (p.p2Uid || p.p2Name)) || '';
+    // Identidade de CADA membro = uid; convidado manual usa manualParticipantId; nome só é o
+    // fallback de documento legado. REGRESSÃO: o ✕ enviava pXName para a vaga manual. Depois de
+    // um renomeio, a CF procurava o rótulo antigo e não desfazia nada. O id manual atravessa a
+    // formação da dupla e torna o mesmo gesto estável, como já ocorre com UID.
+    var _m1Id = (p && (p.p1Uid || p.p1ManualId || p.p1Name)) || '';
+    var _m2Id = (p && (p.p2Uid || p.p2ManualId || p.p2Name)) || '';
     // Nome só p/ o botão Remover do SOLO — e RESOLVIDO ao vivo (_pName), nunca o `nm` cru: num
     // roster só-uid o `nm` é STRING VAZIA (a entrada não guarda nome), e o ✕ chamava a remoção
     // com nome vazio → não achava nada e saía calado ("o excluir não faz nada", dono 22/jul).
@@ -1149,7 +1150,8 @@ window._formDuplaByUids = function(tId, name1, uid1, name2, uid2) {
 // Desfazer dupla → 2 inscritos solo. ESCOPO DE MÓDULO (v1.3.x): estava dentro de
 // renderTournaments — mesmo bug que moveu _formDuplaByUids pro load (o botão "Desfazer" no
 // dashboard/participants quebrava antes de abrir o torneio). Casa a dupla pela IDENTIDADE de cada
-// membro (uid; só fictício sem conta usa nome). id1/id2 = (p1Uid||p1Name) e (p2Uid||p2Name);
+// membro (uid; manualParticipantId para vaga manual; nome só no legado). id1/id2 =
+// (p1Uid||p1ManualId||p1Name) e (p2Uid||p2ManualId||p2Name);
 // chamada antiga só com o nome inteiro (id2 vazio) cai no match por nome. CF-ONLY: só dispara.
 window._splitDupla = function(tId, id1, id2, btnEl) {
     // v1.5.8 (dono): desfazer NÃO é instantâneo (vai e volta da CF) e o ✕ não dava sinal
@@ -1167,7 +1169,7 @@ window._splitDupla = function(tId, id1, id2, btnEl) {
         idx = arr.findIndex(function(p) {
             if (!p || typeof p !== 'object') return false;
             if (!((p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name))) return false; // só dupla
-            var _got = [String(p.p1Uid || p.p1Name || ''), String(p.p2Uid || p.p2Name || '')].filter(Boolean).sort();
+            var _got = [String(p.p1Uid || p.p1ManualId || p.p1Name || ''), String(p.p2Uid || p.p2ManualId || p.p2Name || '')].filter(Boolean).sort();
             return _got.length === _want.length && _got.every(function(v, i){ return v === _want[i]; });
         });
     } else {
@@ -1193,7 +1195,7 @@ window._splitDupla = function(tId, id1, id2, btnEl) {
         var _achouEspera = _naEspera.some(function (p) {
             if (!p || typeof p !== 'object') return false;
             if (!((p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name))) return false;
-            var g = [String(p.p1Uid || p.p1Name || ''), String(p.p2Uid || p.p2Name || '')].filter(Boolean).sort();
+            var g = [String(p.p1Uid || p.p1ManualId || p.p1Name || ''), String(p.p2Uid || p.p2ManualId || p.p2Name || '')].filter(Boolean).sort();
             if (_wantW.length === 2) return g.length === 2 && g[0] === _wantW[0] && g[1] === _wantW[1];
             var _res = (typeof window._pName === 'function') ? window._pName(p, '') : '';
             return (p.displayName || p.name || '') === id1 || _res === id1;

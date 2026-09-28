@@ -887,14 +887,21 @@ function formLatePairCore(t, opts) {
 
 // ── DESFAZER dupla da LISTA DE ESPERA, ATÔMICO (CF-only). Espelha _splitLateDupla PURO: acha a
 // dupla nos 2 stores (standby/waitlist) por identidade de MEMBRO (uid||nome) e reparte em 2 solos.
-// opts: {id1, id2}. id2 vazio = casa pelo nome inteiro (compat).
+// opts: {id1, id2}. id2 vazio = casa pelo nome inteiro (compat). Membro manual usa seu
+// manualParticipantId; nome só é fallback de dupla legada sem identidade estável.
 function splitLatePairCore(t, opts) {
   const win = g.window;
   if (!t) return { ok: false, reason: 'no-tournament' };
   const id1 = String((opts && opts.id1) || ''), id2 = (opts && opts.id2 != null) ? String(opts.id2) : '';
   const _isDupla = function (p) { return p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name); };
   const _want = id2 ? [id1, id2].filter(Boolean).sort() : null;
-  const _byMembers = function (p) { if (!_isDupla(p) || !_want) return false; const gg = [String(p.p1Uid || p.p1Name || ''), String(p.p2Uid || p.p2Name || '')].filter(Boolean).sort(); return gg.length === _want.length && gg.every(function (v, i) { return v === _want[i]; }); };
+  const _byMembers = function (p) {
+    if (!_isDupla(p) || !_want) return false;
+    /* REGRESSÃO: o card tardio mandava a identidade manual, mas este leitor só comparava o
+     * nome. Um renomeio entre a renderização e o clique fazia o ✕ falhar em silêncio. */
+    const gg = [String(p.p1Uid || p.p1ManualId || p.p1Name || ''), String(p.p2Uid || p.p2ManualId || p.p2Name || '')].filter(Boolean).sort();
+    return gg.length === _want.length && gg.every(function (v, i) { return v === _want[i]; });
+  };
   const _byName = function (p) { return _isDupla(p) && ((win._pName ? win._pName(p, '') : (p.displayName || p.name)) === id1 || (p.displayName || p.name) === id1); };
   let arr = null, idx = -1;
   ['standbyParticipants', 'waitlist'].forEach(function (k) {

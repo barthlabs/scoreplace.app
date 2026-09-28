@@ -208,7 +208,7 @@ function computeFormPair(data, opts) {
   return { outcome: 'formed', participants: arr, updateData: updateData, newName: newName, u1: _u1, u2: _u2 };
 }
 
-// Decide o DESFAZER da dupla. Espelha _splitDupla. Casa por [id1,id2] (uid|nome de cada
+// Decide o DESFAZER da dupla. Espelha _splitDupla. Casa por [id1,id2] (uid|manualId|nome de cada
 // membro) ou, se id2 vazio, pelo NOME do time. NÃO usa perfil vivo — o nome do membro vem
 // do que está gravado (p1Name/p2Name; split de displayName só como fallback legado).
 function computeSplitPair(data, opts) {
@@ -221,7 +221,10 @@ function computeSplitPair(data, opts) {
     idx = arr.findIndex(function (p) {
       if (!p || typeof p !== 'object') return false;
       if (!((p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name))) return false; // só dupla
-      var got = [String(p.p1Uid || p.p1Name || ''), String(p.p2Uid || p.p2Name || '')].filter(Boolean).sort();
+      // REGRESSÃO: a UI já conhece manualParticipantId, mas este leitor descartava-o e
+      // procurava pelo nome. Renomear o convidado entre render e clique deixava o botão ✕ sem
+      // efeito. Nome só fica como compatibilidade dos pares legados sem id estável.
+      var got = [String(p.p1Uid || p.p1ManualId || p.p1Name || ''), String(p.p2Uid || p.p2ManualId || p.p2Name || '')].filter(Boolean).sort();
       return got.length === want.length && got.every(function (v, i) { return v === want[i]; });
     });
   } else {
