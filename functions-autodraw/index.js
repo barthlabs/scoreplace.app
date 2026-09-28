@@ -2943,6 +2943,60 @@ exports.applyEnrollmentAssignments = onCall(async (request) => {
   });
 });
 
+// ─── Formação manual dos times da classificatória ───────────────────────────
+// A chave enviada pela tela é `_tSplit.chaveDoInscrito`: uid(s) ou manualParticipantId,
+// nunca o nome visível. A transação recalcula todas as chaves no documento fresco e
+// exige cobertura completa; por isso uma dupla não troca de time ao ser renomeada e o
+// sorteio jamais recebe uma atribuição parcial para "completar" aleatoriamente.
+exports.assignCompetitionTeams = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid, data = request.data || {};
+  const tId = String(data.tournamentId || '').trim();
+  const rawTeams = Array.isArray(data.teams) ? data.teams.slice(0, 32) : null;
+  const rawAssignments = Array.isArray(data.assignments) ? data.assignments.slice(0, 256) : null;
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId || !rawTeams || !rawAssignments) throw new HttpsError('invalid-argument', 'Times e atribuições são obrigatórios.');
+  const teams = rawTeams.map(team => ({
+    id: String(team && team.id || '').trim().slice(0, 80),
+    name: String(team && team.name || '').trim().slice(0, 80)
+  }));
+  const assignments = rawAssignments.map(item => ({
+    entryKey: String(item && item.entryKey || '').trim().slice(0, 240),
+    teamId: String(item && item.teamId || '').trim().slice(0, 80)
+  }));
+  if (teams.some(team => !team.id || !team.name) || new Set(teams.map(team => team.id)).size !== teams.length ||
+      assignments.some(item => !item.entryKey || !item.teamId) || new Set(assignments.map(item => item.entryKey)).size !== assignments.length) {
+    throw new HttpsError('invalid-argument', 'Times ou atribuições inválidos.');
+  }
+  const ref = db.collection('tournaments').doc(tId), agoraIso = new Date().toISOString();
+  return db.runTransaction(async tx => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização forma os times.', { tId, uid });
+    if (typeof hasDrawnBracket !== 'function') throw _drawFail('internal', 'Motor do sorteio indisponível no servidor.', { tId });
+    if (hasDrawnBracket(t)) throw _drawFail('failed-precondition', 'Os times não podem mudar depois do sorteio.', { tId });
+    const core = drawWindow && drawWindow.ScoreplaceTeamCompetition;
+    const cfg = core && typeof core.normalize === 'function' ? core.normalize(t.teamCompetition) : null;
+    if (!cfg || !cfg.enabled || cfg.formation !== 'manual') throw _drawFail('failed-precondition', 'A formação manual de times não está ativa.', { tId });
+    if (teams.length !== cfg.teamCount) throw new HttpsError('invalid-argument', 'A quantidade de times não confere com a configuração.');
+    const knownTeams = new Set(teams.map(team => team.id));
+    if (assignments.some(item => !knownTeams.has(item.teamId))) throw new HttpsError('invalid-argument', 'Uma atribuição aponta para time inexistente.');
+    const entries = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
+    const isDouble = entry => entry && typeof entry === 'object' &&
+      ((Array.isArray(entry.participants) && entry.participants.length >= 2) ||
+       ((entry.p1Uid || entry.p1Name || entry.p1ManualId) && (entry.p2Uid || entry.p2Name || entry.p2ManualId)));
+    if (!entries.length || entries.some(entry => !isDouble(entry))) throw _drawFail('failed-precondition', 'Forme todas as duplas antes de distribuir os times.', { tId });
+    const byKey = new Map(entries.map(entry => [_tSplit.chaveDoInscrito(entry), entry]));
+    if (byKey.size !== entries.length || assignments.length !== entries.length || assignments.some(item => !byKey.has(item.entryKey))) {
+      throw _drawFail('failed-precondition', 'As duplas mudaram; atualize a tela antes de salvar os times.', { tId });
+    }
+    const before = _antesDoMotor(t);
+    assignments.forEach(item => { byKey.get(item.entryKey).competitionTeamId = item.teamId; });
+    t.competitionTeams = teams;
+    const boundary = _gravaTorneio(tx, ref, t, before, { agoraIso });
+    return { ok: true, changed: true, tournament: boundary.clean };
+  });
+});
+
 exports.applyCategoryCommunicationMarkers = onCall(async (request) => {
   const uid = request.auth && request.auth.uid, data = request.data || {};
   const tId = String(data.tournamentId || '').trim();
