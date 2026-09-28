@@ -99,6 +99,8 @@ const criacao = creationSource.slice(i);
  * que receba os inscritos e os grave na subcoleção. Até lá, nasce inteiro. */
 ok(/_semPesados:\s*PARTES_AO_NASCER/.test(criacao),
   '⭐ torneio novo nasce dividido — inscritos e jogos já têm morada canônica');
+ok(/Split\.PARTES_CANONICAS\.slice\(\)/.test(creationSource),
+  '⛔ a criação deriva as partes do núcleo compartilhado — não repete lista que pode divergir');
 
 // ── ⑤ A CAUSA, travada: a CF do espelho PULA o que saiu do documento ──────────────
 /* Esta asserção é o que faltava nas três tentativas. Ela não pergunta "nasce dividido?" —

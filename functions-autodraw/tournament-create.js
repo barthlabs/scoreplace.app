@@ -1,5 +1,6 @@
 'use strict';
 const { createHash } = require('crypto');
+const Split = require('./vendor/tournament-split-core.js');
 const WINDOW_MS = 24 * 60 * 60 * 1000;
 const INTERNAL = new Set(['__proto__', 'prototype', 'constructor', 'matches', 'rounds', 'participants',
   'standbyParticipants', 'waitlist', 'memberUids', 'adminUids', 'coHosts', 'creatorUid', 'organizerUid',
@@ -110,7 +111,12 @@ function makeCreateTournament({ db, HttpsError, FieldValue, fields, cloneConfig,
        * ⚠️ `grupos` FICA DE FORA de propósito: só 1 torneio em produção o tem separado, contra 40
        * com os outros três. Sair daqui com ele seria estrear um conjunto que ninguém rodou.
        * [[project_torneio_nasce_dividido]] */
-      const PARTES_AO_NASCER = ['matches', 'participants', 'opponentHistory'];
+      /* ⛔ Não repetir a lista aqui. Criação, abertura, escrita e autoDraw precisam nascer
+       * do mesmo contrato: uma parte canônica nova tem de passar a existir para todo leitor
+       * e escritor no mesmo commit, sem alguém lembrar deste arquivo. `_semPesados` recebe a
+       * cópia só para a nativa instalada; a decisão de negócio segue `Split.PARTES_CANONICAS`.
+       * [[project_torneio_nasce_dividido]] */
+      const PARTES_AO_NASCER = Split.PARTES_CANONICAS.slice();
       const _nascendoDividido = {
         _semPesados: PARTES_AO_NASCER,
         _nPartes: PARTES_AO_NASCER.reduce((acc, nome) => { acc[nome] = 0; return acc; }, {}),
