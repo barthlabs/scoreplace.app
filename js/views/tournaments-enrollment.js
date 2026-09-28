@@ -1619,53 +1619,6 @@ window.addTeamFunction = function (tId) {
      * bloquear aqui evita que a tela prometa uma inclusão que o servidor não vai aceitar.
      * A leitura de equipes históricas permanece por compatibilidade. [[project_sem_vaga_manual_nova]] */
     showAlertDialog('Conta necessária', 'Adicione participantes por contas cadastradas. Não criamos equipes ou vagas apenas por nome.', null, { type: 'warning' });
-    return;
-    const teamSize = t.teamSize || 2;
-    const items = Array.from({ length: teamSize }, (_, i) => ({ placeholder: _t('enroll.memberPlaceholder', {num: i + 1}) }));
-
-    showMultiInputDialog(
-        _closedOrDrawn2 ? _t('enroll.lateTeamTitle') : _t('enroll.addTeam'),
-        items,
-        (teamNames) => {
-            if (!teamNames || teamNames.some(n => !n.trim())) {
-                showAlertDialog(_t('enroll.cancelledTitle'), _t('enroll.allFieldsRequired'), null, { type: 'info' });
-                return;
-            }
-            const teamString = teamNames.join(' / ');
-            // If late enrollment, add to standby
-            if (_closedOrDrawn2) {
-                _enrollToStandby(t, tId, {
-                    name: teamString, displayName: teamString,
-                    manualParticipantId: 'manual-team-' + ((window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID() : Date.now().toString(36) + '-' + Math.random().toString(36).slice(2))
-                }, function() {
-                    var container = document.getElementById('view-container');
-                    if (container && typeof renderTournaments === 'function') renderTournaments(container, window.location.hash.split('/')[1]);
-                });
-                return;
-            }
-
-            // v1.8.40: SAIU o `saveTournament(t)` de doc INTEIRO — era a mesma classe do bug
-            // da Mariana (um campo da cópia local divergente do banco derruba a escrita toda,
-            // e o time some em silêncio). A inscrição do time vai pela MESMA porta de todo
-            // mundo (CF enrollParticipant, que grava só participants+memberUids+extraUpdates),
-            // e o resultado passa pelo leitor único.
-            if (!t.teamOrigins) t.teamOrigins = {};
-            t.teamOrigins[teamString] = 'formada';
-            var _teamObj = {
-                name: teamString, displayName: teamString,
-                manualParticipantId: 'manual-team-' + ((window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID() : Date.now().toString(36) + '-' + Math.random().toString(36).slice(2))
-            };
-            if (window.FirestoreDB && typeof window.FirestoreDB.enrollParticipant === 'function') {
-                window.FirestoreDB.enrollParticipant(tId, _teamObj, { teamOrigins: t.teamOrigins }).then(function(result) {
-                    window._applyEnrollResult(t, tId, result, { name: teamString, self: false, successToast: false, refresh: true });
-                }).catch(function(err) {
-                    window._warn('Add team error:', err);
-                    if (typeof showNotification !== 'undefined') showNotification(_t('enroll.error'), _t('enroll.addError'), 'error');
-                });
-            }
-        },
-        { itemLabel: _t('enroll.memberLabel') }
-    );
 };
 
 window.deleteTournamentFunction = function (tId) {
