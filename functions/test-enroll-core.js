@@ -98,6 +98,13 @@ try { C.normalizeExtraUpdates({ status: 'finished' }); ok('extraUpdates recusa p
 })();
 
 // ── Participante sem conta tem chave estável E nome único ────────────────────
+/*
+ * REGRESSÃO DE IDENTIDADE (regra do produto): conta cadastrada não aceita
+ * homônimos; participante digitado pelo organizador também não pode criar uma
+ * segunda pessoa indistinguível. O bloqueio roda no core transacional, portanto
+ * precisa alcançar elenco, espera nova e `waitlist` legado — cliente velho ou
+ * duas ações simultâneas não podem abrir exceção para uma vaga manual.
+ */
 (() => {
   const data = { status: 'open', participants: [{ manualParticipantId: 'manual-a', displayName: 'Convidado' }] };
   eq('mesma vaga manual → already', C.computeEnroll(data, { manualParticipantId: 'manual-a', displayName: 'Outro nome' }, null, NOW).outcome, 'already');
@@ -105,6 +112,8 @@ try { C.normalizeExtraUpdates({ status: 'finished' }); ok('extraUpdates recusa p
   eq('manual distinto com outro nome → enrolled', C.computeEnroll(data, { manualParticipantId: 'manual-b', displayName: 'Outra pessoa' }, null, NOW).outcome, 'enrolled');
   const naEspera = { status: 'open', format: 'Liga', ligaOpenEnrollment: true, matches: [{ id: 'ja-sorteado' }], standbyParticipants: [{ manualParticipantId: 'manual-c', displayName: 'Convidada' }] };
   eq('manual repetido na espera também é recusado', C.computeEnroll(naEspera, { manualParticipantId: 'manual-d', displayName: 'Convidada' }, null, NOW).outcome, 'duplicateName');
+  const naWaitlistLegada = { status: 'open', participants: [], waitlist: [{ manualParticipantId: 'manual-e', displayName: 'Débora  Castello' }] };
+  eq('manual homônimo na waitlist legada também é recusado', C.computeEnroll(naWaitlistLegada, { manualParticipantId: 'manual-f', displayName: 'debora castello' }, null, NOW).outcome, 'duplicateName');
 })();
 
 // ── Já inscrito por SLOT de dupla (uid é o p2 de uma dupla) ───────────────────
