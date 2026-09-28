@@ -112,6 +112,9 @@ ok(S.iguais(S.remontar(soJogos), t),
     'sem marcador legado, montarDoBanco recompõe o torneio inteiro pelas partes canônicas');
   ok(lidas.length === S.PARTES_CANONICAS.length,
     'sem marcador legado, lê cada parte canônica uma vez — não devolve o documento cru');
+  const parcial = S.partesDe({ _semPesados: ['matches'] });
+  ok(JSON.stringify(parcial) === JSON.stringify(S.PARTES_CANONICAS),
+    'marcador legado parcial não escolhe mais leitura/escrita: todas as partes continuam canônicas');
   console.log((fail ? '✗' : '✓') + ' abrir-torneio-monta-das-subcolecoes: ' + pass + ' ok, ' + fail + ' falhas');
   process.exit(fail ? 1 : 0);
 })().catch(function (err) { console.error(err); process.exit(1); });

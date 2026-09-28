@@ -83,12 +83,14 @@
    * decide por ele deste lado. [[project_torneio_nasce_dividido]] */
   var PARTES_CANONICAS = ['matches', 'participants', 'opponentHistory'];
 
-  /* Quais partes deste torneio moram fora. Lê o campo quando ele existe — documento gravado por
-   * versão anterior — e cai na constante quando não existe. NUNCA devolve vazio: vazio significaria
-   * "inteiro", e inteiro deixou de existir. */
+  /* Quais partes do torneio moram fora. A resposta é invariável: todo torneio já nasce com
+   * as partes canônicas separadas. `_semPesados` continua gravado para a nativa instalada,
+   * mas NÃO decide leitura nem escrita web/servidor — uma lista parcial antiga faria uma
+   * porta esquecer uma subcoleção e recriaria a divisão "em voo" que a reforma eliminou.
+   * NUNCA devolve vazio: vazio significaria "inteiro", e inteiro deixou de existir.
+   * [[project_torneio_nasce_dividido]] */
   function partesDe(t) {
-    var d = t && t._semPesados;
-    return (Array.isArray(d) && d.length) ? d.slice() : PARTES_CANONICAS.slice();
+    return PARTES_CANONICAS.slice();
   }
 
   function _arr(x) { return Array.isArray(x) ? x : []; }
