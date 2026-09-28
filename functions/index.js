@@ -157,6 +157,7 @@ const _amizadeVida = require("./amizade-lifecycle");
 const _AMIZADE_CACHE_CAMPOS = new Set(["friends", "friendRequestsSent", "friendRequestsReceived", "friendRequestsSentAt"]);
 const _nameUnique = require("./name-unique-core");
 const _profileUpdate = require("./profile-update-core");
+const _profileNameClaim = require("./profile-name-claim-core");
 const _profileEligibility = require("./profile-eligibility-core");
 /* A marca da categoria (`skillBySportSource`) é apagada pela MESMA regra em toda porta que
  * muda `skillBySport`. Sem isso, categoria digitada por cima de apurada mantinha o selo e o
@@ -3214,15 +3215,19 @@ exports.updateOwnProfile = onCall(
           tx.get(newClaim),
           oldClaimRef ? tx.get(oldClaimRef) : Promise.resolve(null),
         ]);
-        if (claim.exists && String((claim.data() || {}).uid || "") !== uid) throw new HttpsError("already-exists", "este nome já está em uso; escolha outro nome de exibição");
+        // ⛔ HOMÔNIMO NÃO ENTRA POR RENOMEAÇÃO: esta decisão usa as DUAS
+        // reservas lidas nesta mesma transação. O nome antigo só é liberado se
+        // pertence a este UID; uma reserva legada alheia jamais vira disponível.
+        const claimChange = _profileNameClaim.decide({
+          uid,
+          newClaim: claim,
+          oldClaim,
+          sameClaim: !!(oldClaimRef && oldClaimRef.path === newClaim.path),
+        });
+        if (claimChange.conflict) throw new HttpsError("already-exists", "este nome já está em uso; escolha outro nome de exibição");
         _nameUnique.denormalizeDisplayName(update, patch.displayName);
         tx.set(newClaim, { uid, displayName: patch.displayName, claimedAt: admin.firestore.FieldValue.serverTimestamp() });
-        if (oldClaimRef && oldClaimRef.path !== newClaim.path) {
-          // Não apaga uma reserva que não pertence ao perfil corrente: dados
-          // legados podem estar inconsistentes, mas nunca justificam liberar o
-          // nome de outra pessoa.
-          if (oldClaim.exists && String((oldClaim.data() || {}).uid || "") === uid) tx.delete(oldClaimRef);
-        }
+        if (oldClaimRef && claimChange.releaseOld) tx.delete(oldClaimRef);
       }
       if (patch.email) update.email_lower = patch.email.toLowerCase();
       tx.update(profileRef, update);

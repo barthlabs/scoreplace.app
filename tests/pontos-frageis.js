@@ -178,5 +178,12 @@ module.exports = [
     marca: 'TESTE QUE SOME NÃO PODE SEGURAR A PUBLICAÇÃO PARA SEMPRE',
     incidente: 'uma suíte filha perdeu o evento de encerramento e deixou o preflight preso, sem subteste ativo '
       + 'e sem promover a versão; o executor precisa falhar com diagnóstico e limpar seu grupo de processos',
+    data: '2026-09-28' },
+
+  { id: '30', arquivo: 'functions/index.js',
+    ancora: 'const claimChange = _profileNameClaim.decide({',
+    marca: 'HOMÔNIMO NÃO ENTRA POR RENOMEAÇÃO',
+    incidente: 'a regra de nome único no cadastro não basta se a edição do perfil puder tomar uma reserva '
+      + 'existente ou liberar uma reserva legada de outra pessoa',
     data: '2026-09-28' }
 ];
