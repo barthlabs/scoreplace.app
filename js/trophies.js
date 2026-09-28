@@ -195,9 +195,10 @@
   //   • Eliminatória / Grupos+Elim / Dupla Elim → mapa t.classification (pos 1-3).
   /* ⛔ PÓDIO NÃO É NOME. A classificação final congelada já leva `uids` por
    * posição; consultar só `classification[nome]` fazia o troféu depender do
-   * rótulo legado e podia premiar ou esconder um homônimo. Participante manual
+   * rótulo legado e podia premiar ou esconder um homônimo. Registro manual histórico
    * sem UID não entra neste caminho — para ele o fallback por nome abaixo é a
-   * única identidade honesta. [[project_classificacao_chave_canonica_com_fallback_manual]] */
+   * única leitura possível. Inscrição nova nunca cria tal registro.
+   * [[project_classificacao_chave_canonica_com_fallback_manual]] */
   window._userPodiumedInTournament = function(t, uid) {
     if (!t || !uid) return false;
     var congelada = t.classifFinalDaLinha;

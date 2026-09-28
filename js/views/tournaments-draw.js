@@ -5287,8 +5287,8 @@ window._collectLateCandidates = function (t, _theCat) {
   var _pu = function (x) { return (typeof window._participantUids === 'function') ? window._participantUids(x) : []; };
   // dupla = ESTRUTURA (p1/p2), nunca includes('/') — [[project_dupla_entry_structural_not_slash]]
   var _isPairEntry = function (p) { return !!(p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)); };
-  // Uma conta, uma vaga manual e um guest de mesmo rótulo são entradas diferentes. Reusa a
-  // chave global também empregada no registro de idempotência; não recria um deduplicador local.
+  // Uma conta e um registro manual HISTÓRICO de mesmo rótulo são entradas diferentes.
+  // Novas inscrições exigem conta; a chave global preserva apenas o legado sem misturá-lo.
   var _key = function (p) { return window._lateEntryKey(p); };
   // presença: mesmo-dia exige todos os membros presentes (cânone "só presentes")
   var _present = function (p) {

@@ -492,7 +492,7 @@ window._applyEnrollResult = function (t, tId, res, ctx) {
       ? 'As vagas acabaram antes de você concluir — você não foi inscrito.'
       : ('As vagas acabaram — ' + name + ' não entrou.'), 'error');
   } else if (verdict === 'duplicateName') {
-    toast('Nome já utilizado', 'Já há uma pessoa com esse nome neste torneio. Informe um nome diferente para a vaga manual.', 'error');
+    toast('Nome já utilizado', 'Já há uma pessoa com esse nome neste torneio. Selecione uma conta cadastrada diferente.', 'error');
   } else if (verdict === 'closed') {
     // ⚠️ Corrige o toast otimista de sucesso que pode já ter saído: tem que dizer
     // com todas as letras que a inscrição NÃO foi gravada.

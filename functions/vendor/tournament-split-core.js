@@ -219,7 +219,8 @@
    * da lista — aí o diff reescreve todo mundo depois dele com o conteúdo errado.
    *
    * ⭐ A ORDEM DE PREFERÊNCIA É O CÂNONE DO DONO (26/ago): _"sempre por uid a menos que
-   * seja digitado por organizador e nao tenha uid"_.
+   * seja digitado por organizador e nao tenha uid"_. Essa era a forma histórica;
+   * inscrição nova exige UID e não cria vaga manual.
    *   ① `uid` — a identidade de verdade.
    *   ② dupla: os dois uids, na ordem em que estão (p1 e p2 são posições do time, não
    *      ordem alfabética — trocar mudaria QUEM joga de cada lado).
@@ -229,7 +230,7 @@
    *      forma em que renomear ainda troca chave; não é permitido para entradas novas.
    */
   /* A chave do espelho respeita a identidade por POSIÇÃO: uid de conta, ou
-   * manualParticipantId para a exceção legítima sem conta. Os IDs manuais passaram
+   * manualParticipantId para o registro histórico sem conta. Os IDs manuais passaram
    * a atravessar formar/desfazer dupla; ignorá-los faria renomear um convidado apagar
    * seu documento e recriá-lo em outra chave. Nome só é fallback de fotografia legada
    * sem identificador. [[feedback_enumerar_todos_os_caminhos_antes_de_dar_por_pronto]] */

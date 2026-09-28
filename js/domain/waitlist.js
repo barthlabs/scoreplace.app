@@ -28,8 +28,8 @@ var ScoreplaceWaitlist;
      * Chave persistida: uid → id do inscrito MANUAL → nome do convidado legado.
      *
      * ⛔⛔ O NOME É A ÚLTIMA TENTATIVA, NUNCA A PREFERIDA (24/set/2026).
-     * O inscrito manual (fictício, sem conta) nasce com `manualParticipantId`
-     * (tournaments-enrollment.js). Enquanto a chave caía direto no nome, dois manuais
+     * O inscrito manual histórico (sem conta) conserva `manualParticipantId`.
+     * NOVA inscrição exige UID e não cria esse tipo de entrada. Enquanto a chave caía direto no nome, dois manuais
      * HOMÔNIMOS colapsavam num só: sumiam um do outro na fila e compartilhavam um único
      * número de inscrição. É o mesmo casamento por nome que o uid veio matar — e ele
      * sobrevivia aqui porque quem não tem conta não tem uid.

@@ -233,7 +233,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   // ─── Profile fetch ───────────────────────────────────────────────────
   //
   // Perfil de conta é resolvido exclusivamente pelo UID já gravado no elenco.
-  // Participante manual permanece sem perfil de conta; nome é só apresentação.
+  // Registro manual histórico permanece sem perfil de conta; nome é só apresentação.
+  // Inscrição nova exige conta e não cria esta forma.
 
   function _fetchProfiles(tId, parts) {
     if (!parts || parts.length === 0) return Promise.resolve({ byUid: {}, resolvedFor: {} });

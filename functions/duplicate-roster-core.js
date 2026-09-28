@@ -41,7 +41,8 @@ function mascararTelefone(tel) {
 /* ⭐ O ELENCO SAI DE SLOTS DE PESSOA, não de UIDs.
  *
  * `participantUids()` devolveria só quem tem conta — e o participante incluído pelo
- * organizador SEM conta (`manualParticipantId`), que é exceção prevista, sumiria da
+ * organizador SEM conta (`manualParticipantId`) num registro histórico, que precisa
+ * continuar legível até ser resolvido, sumiria da
  * contagem em silêncio. Aqui cada slot é contado: com UID vai para a análise; sem UID
  * vira "não medido", que APARECE na tela em vez de virar ausência.
  *

@@ -14781,8 +14781,8 @@ window._classifEntryIsMe = function (t, entryName) {
   if (!t || !cu || !cu.uid || !entryName) return false;
   /* A classificação congelada carrega a identidade do time junto com a posição.
    * Não reduza esta entrada a `name` antes da comparação: dois inscritos podem ter
-   * o mesmo rótulo, enquanto `uids` distingue as duas vagas. Participante digitado
-   * manualmente é a exceção legítima sem UID e segue pelas vias de rótulo abaixo.
+   * o mesmo rótulo, enquanto `uids` distingue as duas vagas. Registro manual histórico
+   * sem UID segue pelas vias de rótulo abaixo; inscrição nova não cria essa exceção.
    * [[project_classificacao_chave_canonica_com_fallback_manual]] */
   var entryUids = entryName && typeof entryName === 'object' && Array.isArray(entryName.uids)
     ? entryName.uids.map(String) : [];
