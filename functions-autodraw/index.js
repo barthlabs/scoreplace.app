@@ -1948,13 +1948,11 @@ async function _notificarJogosProntosDoTorneio(tournamentId, rawTournament, incl
   if (!rawTournament || !drawWindow || typeof drawWindow._collectAllMatches !== 'function') return;
   let tournament = rawTournament;
   const ref = db.collection('tournaments').doc(String(tournamentId));
-  // Torneio dividido carrega os jogos nas subcoleções. Ler o doc magro faria o aviso
-  // desaparecer justamente nos torneios grandes; a mesma porta `_leTorneio` já usada
-  // pelo motor remonta a forma canônica antes de decidir qualquer coisa.
-  if (Array.isArray(rawTournament._semPesados) && rawTournament._semPesados.length) {
-    tournament = await _leTorneio(_TX_LEITURA, ref, String(tournamentId));
-    if (!tournament) return;
-  }
+  /* ⛔ A NOTIFICAÇÃO SEMPRE LÊ O TORNEIO MONTADO. O marcador legado pode faltar na
+   * fotografia, mas os jogos canônicos continuam na subcoleção; usar o doc magro aqui
+   * silenciaria precisamente os avisos de confrontos liberados. [[project_torneio_nasce_dividido]] */
+  tournament = await _leTorneio(_TX_LEITURA, ref, String(tournamentId));
+  if (!tournament) return;
   const matches = drawWindow._collectAllMatches(tournament);
   const now = Date.now();
   const ready = _matchReadyNotifications.readySpecs(tournament, matches);
@@ -5494,7 +5492,10 @@ exports.tournamentMirror = onDocumentWritten(
        * concluiu "não há mais ninguém" e APAGOU a subcoleção inteira. O elenco sumia.
        * Mesmo estrago, campo diferente, e eu tinha acabado de escrever o aviso pro outro.
        * ⇒ A trava passa a ser derivada do MARCADOR, não de uma lista minha. */
-      const _pulados = Array.isArray(depois._semPesados) ? depois._semPesados : [];
+      /* ⛔ ESPELHO NÃO TRATA AUSÊNCIA DO MARCADOR COMO TORNEIO INTEIRO. As partes
+       * canônicas seguem fora; espelhá-las do documento magro apagaria a fonte viva.
+       * [[project_torneio_nasce_dividido]] */
+      const _pulados = _tSplit.partesDe(depois);
       /* ⛔ `_pula` NASCE COLADO NO MARCADOR — e não lá embaixo, junto do primeiro espelho.
        * Ele estava declarado DEPOIS do alerta de `playerUids` que o consulta. `const` tem
        * zona morta: no caso EXATO que o alerta existe pra denunciar (jogos jogáveis sem

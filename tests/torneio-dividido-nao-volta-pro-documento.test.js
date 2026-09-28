@@ -81,13 +81,13 @@ const iM = cf.indexOf('exports.tournamentMirror');
  * `exports.` — determinístico e imune a comentário. */
 const _fimMir = cf.indexOf('\nexports.', iM + 10);
 const mir = cf.slice(iM, _fimMir > 0 ? _fimMir : cf.length);
-/* ⭐ A TRAVA É DERIVADA DO MARCADOR, não de uma lista escrita à mão — e isso NÃO é
+/* ⭐ A TRAVA É DERIVADA DA FONTE CANÔNICA, não de uma lista escrita à mão — e isso NÃO é
  * elegância: eu tinha travado só `matches`, e o ENSAIO (scripts/ensaio-divisao.js) pegou
  * que, ao dividir também os INSCRITOS, o gatilho via `participants: []` no documento,
  * concluía "não há mais ninguém" e APAGAVA a subcoleção. O elenco sumia. Mesmo estrago,
  * campo diferente, e eu tinha acabado de escrever o aviso pro outro campo. */
-ok(/_pulados = Array\.isArray\(depois\._semPesados\)/.test(mir),
-  '⭐ o gatilho lê do MARCADOR quais partes saíram — nunca de uma lista minha');
+ok(/_pulados = _tSplit\.partesDe\(depois\)/.test(mir),
+  '⭐ o gatilho lê a fonte canônica das partes — marcador ausente não vira torneio inteiro');
 ok(/const _pula = \(nome\) =>/.test(mir), 'e decide por parte');
 
 /* ⛔ E A DECLARAÇÃO VEM ANTES DO PRIMEIRO USO — `const` tem ZONA MORTA (28/ago).
@@ -103,9 +103,9 @@ ok(_iDecl > 0 && _iUso > 0 && _iDecl < _iUso,
 /* ⛔ E `_pulados` É DECLARADO NESTA função. A `let` tinha ficado perdida dentro de
  * `tournamentSummary`, onde ninguém a lê; sem `use strict` a atribuição aqui virava GLOBAL
  * implícita, viva entre invocações no mesmo contêiner quente. */
-ok(/const _pulados = Array\.isArray\(depois\._semPesados\)/.test(mir),
+ok(/const _pulados = _tSplit\.partesDe\(depois\)/.test(mir),
   '⛔ `_pulados` é DECLARADO no gatilho — atribuir sem declarar vira global entre invocações');
-ok(_iDecl > mir.indexOf('_pulados = Array.isArray(depois._semPesados)'),
+ok(_iDecl > mir.indexOf('_pulados = _tSplit.partesDe(depois)'),
   '⭐ e `_pula` nasce colado no marcador de que ele deriva');
 ['matches', 'participants', 'history'].forEach((parte) => {
   ok(new RegExp("_pula\\('" + parte + "'\\)").test(mir),
