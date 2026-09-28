@@ -49,6 +49,7 @@ async function montar(doc, partes) {
   return await S.montarDoBanco(JSON.parse(JSON.stringify(doc)), async (colecao) => {
     if (colecao === 'inscritos') return (partes.participants || []).map((r) => r);
     if (colecao === 'matches') return (partes.matches || []).map((r) => r);
+    if (colecao === 'grupos') return (partes.grupos || []).map((r) => r);
     return [];
   });
 }
@@ -66,6 +67,27 @@ async function montar(doc, partes) {
     eq((montado.participants || []).length, 10, '⭐ MONTADO, o autoDraw enxerga os 10');
     ok((montado.participants || []).length >= 2,
       'e a guarda "menos de 2" passa a ser avaliada sobre o número REAL');
+  }
+
+  /* A Confra é a exceção histórica: 35 monarchGroups saíram para `grupos` antes
+   * de o contrato dos novos torneios fixar só matches/participants/opponentHistory.
+   * O autoDraw também chama montarDoBanco; se ele não recuperar esse detalhe, uma
+   * decisão posterior regrava a rodada sem classificação congelada ou W.O. */
+  console.log('▸ ⑥b grupo histórico externo volta antes de o autoDraw decidir');
+  {
+    const original = {
+      id: 'confra-legada', format: 'Liga', participants: [], matches: [], opponentHistory: [],
+      rounds: [{ round: 1, monarchGroups: [{ name: 'A', players: ['Ana', 'Bia'],
+        playersUids: ['uAna', 'uBia'], classifCongelada: [{ uid: 'uAna' }, { uid: 'uBia' }] }]}]
+    };
+    const partes = S.dividir(JSON.parse(JSON.stringify(original)),
+      ['matches', 'participants', 'opponentHistory', 'grupos']);
+    partes.config._semPesados = ['matches', 'participants', 'opponentHistory', 'grupos'];
+    const montado = await montar(partes.config, partes);
+    eq((montado.rounds[0].monarchGroups || []).length, 1,
+      '⛔ o autoDraw remonta o grupo que não está no documento-pai');
+    eq(montado.rounds[0].monarchGroups[0].classifCongelada[0].uid, 'uAna',
+      'e preserva o retrato congelado do grupo histórico');
   }
 
   console.log('▸ ⑦ o documento-pai continua sem participants/matches depois de gravar');
