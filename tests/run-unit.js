@@ -1440,6 +1440,7 @@ const SUITES = [
   'tests/nome-sempre-abre-estatisticas.test.js',
   'tests/numero-de-inscricao-conta-a-espera.test.js',
   'tests/pontos-frageis-tem-anotacao.test.js',
+  'tests/runner-timeout-nao-pendura.test.js',
   'tests/reprocessar-resumos.test.js',
   'tests/porta-unica-do-papel.test.js',
   'tests/servidor-e-app-respondem-o-mesmo-papel.test.js',
