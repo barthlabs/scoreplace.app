@@ -37,7 +37,7 @@ const S = require(path.join(ROOT, 'functions', 'vendor', 'tournament-split-core.
 const db = fs.readFileSync(path.join(ROOT, 'js', 'firebase-db.js'), 'utf8');
 
 // ── recorta o bloco REAL (pelo construto, nunca por linha fixa) ───────────────────
-const ini = db.indexOf("var _fora = Array.isArray(cleanData._semPesados)");
+const ini = db.indexOf("var _splitSalvar = (typeof window !== 'undefined') ? window._tSplit : null;");
 ok(ini > 0, 'achei o bloco que divide na gravação');
 /* ⚠️ 2.1.87: a linha que grava virou `this._tRef(docId)` (roteamento tournaments/sandboxes).
  * O `indexOf` da linha antiga achava uma ocorrência LÁ NA FRENTE e o recorte engolia um
@@ -90,6 +90,17 @@ ok(!erro2, '⛔ também não lança com elenco e jogos'
    + (erro2 ? '  →  ' + erro2.constructor.name + ': ' + erro2.message : ''));
 ok(saiu2 && saiu2._nPartes && saiu2._nPartes.participants === 2,
    'e conta os 2 inscritos que foram morar fora — got ' + (saiu2 && saiu2._nPartes && saiu2._nPartes.participants));
+
+/* ②b fotografia sem o marcador legado: continua dividida e o save o repõe para o
+ * aplicativo nativo antigo; nunca devolve inscritos/jogos ao documento pai. */
+const semMarcador = JSON.parse(JSON.stringify(cheio));
+delete semMarcador._semPesados;
+let saiuSemMarcador = null, erroSemMarcador = null;
+try { saiuSemMarcador = rodar(semMarcador, 'tour_TESTE', win); } catch (e) { erroSemMarcador = e; }
+ok(!erroSemMarcador && saiuSemMarcador && Array.isArray(saiuSemMarcador._semPesados),
+   '②b ⭐ sem marcador legado, o save repõe a lista canônica sem falhar');
+ok(saiuSemMarcador && Array.isArray(saiuSemMarcador.participants) && saiuSemMarcador.participants.length === 0,
+   '②b e o elenco permanece fora do documento, sem criar uma segunda fonte de verdade');
 
 /* ── ④ SANDBOX: O MESMO BLOCO TEM QUE DEIXAR AS PARTES NA MÃO DE QUEM GRAVA (2.1.87) ──
  * Num torneio real este bloco só limpa o documento: quem escreve a subcoleção é a CF. Mas o

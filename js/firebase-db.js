@@ -1270,7 +1270,13 @@ window.FirestoreDB = {
     /* O sync administrativo de sandbox já foi reconhecido acima: deixa o marcador
      * intacto no pai, mas não entra no reconciliador de partes. O sinal é do objeto
      * em memória e não é enumerável, portanto nunca vira campo persistido. */
-    var _fora = Array.isArray(cleanData._semPesados) && !cleanData._syncSandboxSemPartes ? cleanData._semPesados : null;
+    /* ⛔ O save web não escolhe mais entre torneio inteiro/dividido pelo marcador legado.
+     * A lista canônica mantém jogos e elenco fora do documento mesmo quando uma leitura
+     * antiga não trouxe `_semPesados`; o plano abaixo volta a gravar o marcador para o
+     * aplicativo nativo que ainda o consulta. */
+    var _splitSalvar = (typeof window !== 'undefined') ? window._tSplit : null;
+    var _fora = (!cleanData._syncSandboxSemPartes && _splitSalvar && typeof _splitSalvar.partesDe === 'function')
+      ? _splitSalvar.partesDe(cleanData) : null;
 
     /* ⛔⛔ NÃO GRAVAR PARTE QUE NÃO CHEGOU — O GUARDA QUE FALTAVA, E É UM SÓ.
      *
@@ -1520,7 +1526,8 @@ window.FirestoreDB = {
     if (this._ehSandbox(tournamentId)) {
       try {
         var _cfgSb = (await ref.get()).data() || {};
-        var _fSb = Array.isArray(_cfgSb._semPesados) ? _cfgSb._semPesados : [];
+        var _fSb = (window._tSplit && typeof window._tSplit.partesDe === 'function')
+          ? window._tSplit.partesDe(_cfgSb) : [];
         if (_fSb.length) {
           var _S0 = window._tSplit;
           _sbRegs = {};
@@ -1682,7 +1689,11 @@ window.FirestoreDB = {
        * documento MAGRO: recontar gravaria "1 jogo, 2 inscritos" como verdade e destruiria o
        * marcador — que é justamente o que a conta do cliente usa pra saber que falta coisa.
        * Só se REMOVE o que não devia estar no documento; os contadores ficam como estavam. */
-      var _foraM = Array.isArray(_persist._semPesados) ? _persist._semPesados : null;
+      /* Mutação transacional também recebe documento magro: ausência do marcador não
+       * autoriza devolver partes ao pai. A regra é a mesma de saveTournament. */
+      var _splitMutar = (typeof window !== 'undefined') ? window._tSplit : null;
+      var _foraM = (_splitMutar && typeof _splitMutar.partesDe === 'function')
+        ? _splitMutar.partesDe(_persist) : null;
       if (_foraM && _foraM.length && typeof window !== 'undefined' && window._tSplit && typeof window._tSplit.dividir === 'function') {
         try {
           var _pM = window._tSplit.dividir(JSON.parse(JSON.stringify(_persist)), _foraM);
