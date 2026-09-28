@@ -39,7 +39,7 @@ function _clone(x) { return JSON.parse(JSON.stringify(x)); }
 
 /* ── planWrites ────────────────────────────────────────────────────────────────────────
  * tAntes   — o torneio como estava (remontado), ou null quando não há anterior
- * tDepois  — o torneio já materializado, com `_semPesados` decidindo o que sai do doc
+ * tDepois  — o torneio já materializado; as partes canônicas decidem o que sai do doc
  * ctx      — {
  *              split,        // o módulo tournament-split-core (injetado, não importado)
  *              boundary,     // função que aplica a fronteira de escrita; devolve {persist}
@@ -54,36 +54,18 @@ function planWrites(tAntes, tDepois, ctx) {
   if (!o.boundary) throw new Error('[write-plan] ctx.boundary é obrigatório');
   if (!o.agoraIso) throw new Error('[write-plan] ctx.agoraIso é obrigatório — instante estável entra por argumento');
 
+  const split = o.split;
+  if (!split || typeof split.dividir !== 'function' || typeof split.partesDe !== 'function') {
+    throw new Error('[write-plan] tradutor de partes indisponível — recuso planejar torneio dividido');
+  }
   const b = o.boundary(tDepois);
   const ops = [];
 
-  const fora = Array.isArray(tDepois._semPesados) ? tDepois._semPesados : null;
-
-  if (!fora || !fora.length) {
-    /* ⛔⛔⛔ TORNEIO SEM MARCADOR NÃO SE GRAVA MAIS — e isto é uma INVARIANTE, não um aviso.
-     *
-     * Desde 27/set/2026 todo torneio NASCE dividido, e os 37 que ainda estavam inteiros foram
-     * migrados no mesmo dia: a medição em produção deu ZERO documentos sem marcador, de 78.
-     * Logo, um torneio chegando aqui sem `_semPesados` não é "o caso antigo": é um objeto que
-     * PERDEU o marcador no caminho — montado à mão, remontado errado, ou vindo de um cache velho.
-     *
-     * ⛔ E GRAVAR ASSIM É O PIOR DESFECHO POSSÍVEL: o documento volta a carregar tudo, o torneio
-     * DESDIVIDE em silêncio, e as subcoleções viram órfãs — dado duplicado em dois lugares, com o
-     * leitor escolhendo um deles. Foi para acabar com esse tipo de porta que a reforma existe.
-     *
-     * ⚠️ RECUSAR É MAIS SEGURO QUE GRAVAR: quem falha aqui vê o erro e o dado fica como está.
-     * Gravando, o estrago é mudo e só aparece semanas depois, do jeito que o dono descreve.
-     * ⇒ o dia em que existir um caso legítimo de torneio inteiro, ele entra por uma porta que diz
-     * o nome dele — não pela ausência de um campo. [[project_torneio_nasce_dividido]] */
-    throw new Error('[write-plan] recuso gravar torneio SEM `_semPesados`: todo torneio nasce ' +
-      'dividido desde 2.3.113 e nenhum documento em produção está inteiro. Um objeto sem o ' +
-      'marcador perdeu-o no caminho, e gravá-lo desdividiria o torneio em silêncio.');
-  }
-
-  const split = o.split;
-  if (!split || typeof split.dividir !== 'function') {
-    throw new Error('[write-plan] tradutor de partes indisponível — recuso planejar torneio dividido');
-  }
+  /* ⛔ TODO torneio mora nas mesmas subcoleções. `_semPesados` ainda é gravado para o
+   * aplicativo nativo antigo, mas uma fotografia sem ele NÃO pode mudar esta decisão:
+   * tratá-la como inteira devolveria jogos/inscritos ao documento pai e recriaria as duas
+   * fontes de verdade. `partesDe` aplica o fallback canônico e o plano repõe o marcador. */
+  const fora = split.partesDe(tDepois);
 
   const pDepois = split.dividir(_clone(b.persist), fora);
   /* Sem torneio anterior, TODA parte é "vazia antes" — derivado de PESADOS + matches, e

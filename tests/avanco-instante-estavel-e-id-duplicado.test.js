@@ -93,6 +93,21 @@ try { WP.planWrites(null, torneio(1), { split: split, boundary: boundary, espelh
 catch (e) { lancou = /agoraIso/.test(String(e && e.message)); }
 ok(lancou, '④ ⭐ planWrites sem agoraIso LANÇA — sem fallback dentro do caminho transacional');
 
+/* ④b marcador legado ausente NÃO transforma o torneio em inteiro. A leitura pode vir de
+ * cache/versão antiga sem esse campo; a escrita continua usando as partes canônicas e o
+ * repõe para o nativo que ainda depende dele. */
+const semMarcador = torneio(1);
+delete semMarcador._semPesados;
+const planoSemMarcador = WP.planWrites(null, semMarcador, {
+  split: split, boundary: boundary, agoraIso: '2026-09-02T10:00:00.000Z', espelho: espelho, tournamentId: 't1'
+});
+const configSemMarcador = planoSemMarcador.ops.find((op) => op.colecao === null);
+ok(planoSemMarcador.ops.some((op) => op.colecao === 'matches' && op.chave === 'm1'),
+   '④b ⭐ sem marcador, o jogo continua planejado na subcoleção canônica');
+ok(configSemMarcador && Array.isArray(configSemMarcador.doc._semPesados) &&
+   configSemMarcador.doc._semPesados.indexOf('matches') !== -1,
+   '④b e a gravação repõe o marcador de compatibilidade sem devolver o jogo ao documento');
+
 /* ⑤ e a porta do servidor exige o mesmo, sem fallback interno */
 const src = fs.readFileSync(path.join(__dirname, '..', 'functions-autodraw', 'index.js'), 'utf8');
 const corpo = src.slice(src.indexOf('function _gravaTorneio('), src.indexOf('function _applyWriteBoundary('));
