@@ -2168,6 +2168,10 @@ window._buildPhase0Cfg = function (t) {
         gruposCount: parseInt(t.gruposCount, 10) || 4,
         gruposClassified: parseInt(t.gruposClassified, 10) || 2,
         gruposEqualOnly: t.gruposEqualOnly === true,
+        // Time representado é uma camada sobre as duplas/categorias. A fase 0 precisa
+        // receber a mesma configuração gravada no torneio; sem ela o sorteio do servidor
+        // respeitaria o toggle e o caminho legado da tela redesenharia confrontos internos.
+        teamCompetition: t.teamCompetition || null,
         teamSize: parseInt(t.teamSize, 10) || 1,
         // Elim: cabeças VIP SEMPRE sobem ao topo (recebem os BYEs = "VIP folga"). Grupos:
         // só quando o organizador liga o toggle (gruposSeedVip → espalha pelos grupos).

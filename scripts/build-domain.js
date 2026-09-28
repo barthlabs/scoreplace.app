@@ -16,6 +16,7 @@ const entries = [
   { source: 'src/domain/participant-identity.ts', output: 'js/domain/participant-identity.js' },
   { source: 'src/domain/waitlist.ts', output: 'js/domain/waitlist.js' },
   { source: 'src/domain/standings.ts', output: 'js/domain/standings.js' },
+  { source: 'src/domain/team-competition.ts', output: 'js/domain/team-competition.js' },
   { source: 'src/domain/realtime-freshness.ts', output: 'js/domain/realtime-freshness.js' },
   { source: 'src/domain/referee-roster.ts', output: 'js/domain/referee-roster.js' },
   { source: 'src/domain/face-rollout.ts', output: 'js/domain/face-rollout.js' },

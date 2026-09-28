@@ -31,6 +31,7 @@ function eq(name, a, b) {
 // format2.js é um IIFE que lê window.SPORT_RULES e escreve window.FORMAT2.
 function loadFormat2In(filePath) {
   const sportRulesSrc = fs.readFileSync(path.resolve(__dirname, '..', 'js', 'views', 'sport-rules.js'), 'utf8');
+  const teamCompetitionSrc = fs.readFileSync(path.resolve(__dirname, '..', 'js', 'domain', 'team-competition.js'), 'utf8');
   const src = fs.readFileSync(filePath, 'utf8');
   const sandbox = {};
   sandbox.window = sandbox;
@@ -38,6 +39,7 @@ function loadFormat2In(filePath) {
   sandbox.console = console;
   vm.createContext(sandbox);
   vm.runInContext(sportRulesSrc, sandbox, { filename: 'sport-rules.js' });
+  vm.runInContext(teamCompetitionSrc, sandbox, { filename: 'team-competition.js' });
   vm.runInContext(src, sandbox, { filename: filePath });
   if (!sandbox.FORMAT2 || typeof sandbox.FORMAT2.compileToPhases !== 'function') {
     throw new Error('FORMAT2 não carregou de ' + filePath);
@@ -74,6 +76,7 @@ const CONFIGS = [
   ['abertura por Rei/Rainha (elim direta)', { disputa: 'dupla', grupos: 1, classifAtiva: false, eliminatoria: { ativa: true, linhas: 1, openReiRainha: true, reiRainhaCut: 4, formacao: 'performance' } }],
   ['individual · todos contra todos', { disputa: 'individual', grupos: 1, classifAtiva: true, classificados: 2, rodadas: { modo: 'todos', turnos: 'ida' }, eliminatoria: { ativa: true, linhas: 1 } }],
   ['qualifyAll (todos avançam)', { disputa: 'dupla', grupos: 2, parceria: 'fixa', classifAtiva: true, classificados: 2, classifScope: 'per_group', rodadas: { modo: 'todos' }, eliminatoria: { ativa: true, linhas: 1, qualifyAll: true } }],
+  ['times agregados · sem confronto interno', { disputa: 'dupla', grupos: 1, parceria: 'fixa', classifAtiva: true, classificados: 2, rodadas: { modo: 'todos' }, teamCompetition: { enabled: true, teamCount: 8, formation: 'draw', internalMatches: 'avoid', scoring: { win: 5, draw: 2, loss: 0 } }, eliminatoria: { ativa: false } }],
 ];
 
 const OPTS = { sport: SPORT, resultEntry: ['organizer'], lateEnrollment: 'closed' };
@@ -118,6 +121,16 @@ const core = require('./draw-core.js');
   // O ajuste que create-tournament.js:5235 faz — precisa estar espelhado.
   ok('Grupos: ligaRoundFormat forçado a standard', t.ligaRoundFormat === 'standard', t.ligaRoundFormat);
   ok('Grupos: ligaDrawMode forçado a standard', t.ligaDrawMode === 'standard', t.ligaDrawMode);
+})();
+
+(function () {
+  const cfg = { disputa: 'dupla', grupos: 1, parceria: 'fixa', classifAtiva: true, rodadas: { modo: 'todos' },
+    teamCompetition: { enabled: true, teamCount: 8, formation: 'manual', internalMatches: 'avoid', scoring: { win: 5, draw: 2, loss: 0 } }, eliminatoria: { ativa: false } };
+  const t = { id: 'tour_team_competition', sport: SPORT, fmt2: cfg };
+  const r = core.compileFromFmt2(t);
+  ok('Times: compilação ok', r.ok === true, JSON.stringify(r));
+  ok('Times: configuração chega ao torneio', t.teamCompetition && t.teamCompetition.scoring.win === 5 && t.teamCompetition.internalMatches === 'avoid');
+  ok('Times: configuração chega à fase 0', t.phases && t.phases[0] && t.phases[0].teamCompetition && t.phases[0].teamCompetition.teamCount === 8);
 })();
 
 (function () {

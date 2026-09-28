@@ -157,6 +157,7 @@ function loadDomain(rel) {
 
 // Ordem importa (mesma do index.html / draw-core.js): contrato → adaptador → consumidores
 loadDomain('standings.js');
+loadDomain('team-competition.js');
 load('waitlist-core.js');        // _getWaitlist/_removeFromWaitlist/_nameForms — cânone da espera
 load('wo-log.js');               // REGISTRO de W.O. (t.woLog) — o histórico é gravado, não deduzido
 load('standings-core.js');       // _standingsCompare — cadeia de desempate padrão

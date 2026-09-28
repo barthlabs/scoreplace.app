@@ -16,10 +16,10 @@
 // CONTRATO-CHAVE (verificado no motor):
 //  • Dupla FIXA  → Fase de Grupos (formatCode 'grupos_mata'), gruposCount=nº grupos
 //    (inclusive 1). Liga PROÍBE duplas formadas.
-//  • "Super 8" NÃO é um quarto formato: é esta mesma Fase de Grupos com 8 equipes
-//    no grupo (gruposCount=1 para um Super 8). Todos se enfrentam e a pontuação é a
-//    classificatória normal; gênero, habilidade e idade só filtram quem pode entrar.
-//    Não crie ramificação, ranking ou eliminatória especial para esse nome comercial.
+//  • A Fase de Grupos continua sendo a classificatória das DUPLAS: todos se enfrentam
+//    e as categorias só definem quais duplas se encontram. Super 8 não pode adulterar
+//    este motor tratando um time com várias duplas como se fosse uma dupla; a tabela
+//    agregada dos times é uma camada acima dos jogos por categoria.
 //  • Rei/Rainha  → Liga 'rei_rainha' (grupos de 4 rotativos, individual).
 //  • Sorteio/rodada → Liga 'standard' clusterizado (parceiro+adversário/rodada, individual).
 //  • Singles: 'todos' → Fase de Grupos; 'fixo N rodadas' → Liga standard.
@@ -131,6 +131,12 @@
 
     out.grupos = Math.max(1, parseInt(out.grupos, 10) || 1);
     var umGrupo = out.grupos === 1;
+    // Times representados (Super 8): a dupla continua na categoria e o time soma
+    // seus resultados. Normalizar aqui garante que web e CF leiam o MESMO toggle de
+    // confronto interno e a mesma escala, sem ativar nada em torneios existentes.
+    var _tcCore = (typeof window !== 'undefined') && window.ScoreplaceTeamCompetition;
+    out.teamCompetition = (_tcCore && typeof _tcCore.normalize === 'function')
+      ? _tcCore.normalize(out.teamCompetition) : null;
 
     if (!isDupla) {
       out.parceria = null;
@@ -513,6 +519,7 @@
       top.enrollmentMode = 'individual';
       top.gruposCount = cfg.grupos;
       top.gruposClassified = cfg.classificados;
+      if (cfg.teamCompetition && cfg.teamCompetition.enabled) top.teamCompetition = cfg.teamCompetition;
       // ida-e-volta só vale em tabela única (grupos=1) todos-contra-todos.
       var idaVolta = (cfg.grupos === 1 && cfg.rodadas.turnos === 'ida_volta');
       top.turnos = idaVolta ? 'ida_volta' : 'ida';   // _buildPhase0Cfg propaga p/ genGroupsFromPool
@@ -527,6 +534,7 @@
         _doubleRR: idaVolta,
         source: { type: 'enrollment' },
         fixedPairs: isDupla,                   // teamSize>1 forma duplas fixas no sorteio
+        teamCompetition: (cfg.teamCompetition && cfg.teamCompetition.enabled) ? cfg.teamCompetition : null,
         pairingStrategy: 'top', grandFinal: true
       });
     }

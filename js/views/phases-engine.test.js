@@ -494,17 +494,30 @@ ok(mres3.ok === false && mres3.error === 'already-materialized', 'guard _phaseMa
   var gOf = {}; built.groups.forEach(function (g) { g.players.forEach(function (p) { gOf[p.displayName] = g.groupIdx; }); });
   ok(gOf['P1'] !== gOf['P2'], 'serpentina: P1 e P2 (top seeds) em grupos diferentes');
 
-  // REGRESSÃO: "Super 8" é apenas a classificatória já existente com um grupo de 8.
-  // Não há código/formato próprio: todos se enfrentam, pontuam na tabela normal e
-  // folga/BYE nunca entra na contagem de jogos de grupo.
-  var super8Pool = [];
-  for (var s8 = 1; s8 <= 8; s8++) super8Pool.push({ displayName: 'S8-' + s8, uid: 's8-' + s8 });
-  var super8 = eng.genGroupsFromPool(super8Pool, { formatCode: 'grupos_mata', gruposCount: 1 }, 's8');
-  eq(super8.groups.length, 1, 'Super 8: uma classificatória, um grupo');
-  eq(super8.groups[0].players.length, 8, 'Super 8: 8 equipes no grupo');
-  eq(super8.matches.length, 28, 'Super 8: todos-contra-todos C(8,2)=28 jogos');
-  ok(super8.matches.every(function (m) { return m.bracket === 'group' && !m.isBye && m.p1 !== 'BYE' && m.p2 !== 'BYE'; }),
-    'Super 8: nenhum BYE/folga é jogo de grupo');
+  // REGRESSÃO: oito unidades de jogo na classificatória geram todos-contra-todos.
+  // A camada futura de times agregados não pode transformar time em dupla nem deixar
+  // uma folga/BYE entrar na contagem dos jogos reais de categoria.
+  var eightPairPool = [];
+  for (var p8 = 1; p8 <= 8; p8++) eightPairPool.push({ displayName: 'D-' + p8, uid: 'd-' + p8 });
+  var eightPairGroup = eng.genGroupsFromPool(eightPairPool, { formatCode: 'grupos_mata', gruposCount: 1 }, 'g8');
+  eq(eightPairGroup.groups.length, 1, 'grupo de oito: uma classificatória');
+  eq(eightPairGroup.groups[0].players.length, 8, 'grupo de oito: 8 unidades de jogo');
+  eq(eightPairGroup.matches.length, 28, 'grupo de oito: todos-contra-todos C(8,2)=28 jogos');
+  ok(eightPairGroup.matches.every(function (m) { return m.bracket === 'group' && !m.isBye && m.p1 !== 'BYE' && m.p2 !== 'BYE'; }),
+    'grupo de oito: nenhum BYE/folga é jogo de categoria');
+
+  // Times são agregação SOBRE as duplas: o toggle só remove confrontos internos.
+  var pairTeams = [
+    { displayName: 'A-1', uid: 'a1', competitionTeamId: 'azul' },
+    { displayName: 'A-2', uid: 'a2', competitionTeamId: 'azul' },
+    { displayName: 'B-1', uid: 'b1', competitionTeamId: 'branco' },
+    { displayName: 'B-2', uid: 'b2', competitionTeamId: 'branco' }
+  ];
+  var noInternal = eng.genGroupsFromPool(pairTeams, { formatCode: 'grupos_mata', gruposCount: 1,
+    teamCompetition: { enabled: true, internalMatches: 'avoid' } }, 'tc');
+  eq(noInternal.matches.length, 4, 'times: toggle remove os 2 confrontos internos do todos-contra-todos');
+  ok(noInternal.matches.every(function (m) { return m.p1CompetitionTeamId && m.p2CompetitionTeamId && m.p1CompetitionTeamId !== m.p2CompetitionTeamId; }),
+    'times: cada jogo guarda a identidade dos dois times representados');
 
   // feed-forward: simula grupos jogados (menor número vence) → standings ordenado.
   built.matches.forEach(function (m) {

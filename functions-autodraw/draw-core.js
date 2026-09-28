@@ -208,6 +208,7 @@ g.window._expandFormationAllowed = function (t) {
 g.window.ScoreplaceParticipantIdentity = require('./vendor/participant-identity.js');
 g.window.ScoreplaceWaitlist = require('./vendor/waitlist.js');
 g.window.ScoreplaceStandings = require('./vendor/standings.js');
+g.window.ScoreplaceTeamCompetition = require('./vendor/team-competition.js');
 g.window.ScoreplaceRealtimeFreshness = require('./vendor/realtime-freshness.js');
 g.window._isRemoteFirestoreSnapshot = g.window.ScoreplaceRealtimeFreshness.isRemoteSnapshot;
 require('./vendor/identity-core.js');

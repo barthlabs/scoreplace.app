@@ -1194,13 +1194,23 @@
     var counter = 0;
     function mkId() { return idPrefix + '-' + (counter++); }
     var allMatches = [];
+    // TIMES REPRESENTADOS: o sorteio continua distribuindo DUPLAS dentro da categoria.
+    // Quando o organizador veda confronto interno, só pulamos o par de duplas que leva o
+    // mesmo `competitionTeamId`; não removemos nem reatribuímos nenhuma dupla do time.
+    // A tabela agregada lê os ids gravados em cada jogo, não nomes. Sem configuração, o
+    // comportamento histórico é idêntico (todos-contra-todos integral).
+    var _teamCompetition = phaseCfg && phaseCfg.teamCompetition;
+    var _teamCompetitionCore = (typeof window !== 'undefined') && window.ScoreplaceTeamCompetition;
+    if (!_teamCompetitionCore && typeof module !== 'undefined' && module.exports) {
+      try { _teamCompetitionCore = require('../domain/team-competition.js'); } catch (e) { _teamCompetitionCore = null; }
+    }
     // v4.4.x: ida-e-volta (turnos=2) — repete o round-robin com mando invertido.
     // GATED: só quando phaseCfg.turnos==='ida_volta' (ou _doubleRR); ausente = single-RR (comportamento legado).
     var _turnos = (phaseCfg && (phaseCfg.turnos === 'ida_volta' || phaseCfg._doubleRR)) ? 2 : 1;
     groups.forEach(function (g) {
-      // REGRESSÃO SUPER 8: oito equipes aqui são uma classificatória comum, nunca uma
-      // chave especial. `roundRobinSchedule` cria C(8,2)=28 jogos reais; BYE pertence
-      // somente a eliminatória e não pode aparecer nem contar nesta fase.
+      // O grupo é sempre composto pelas unidades que efetivamente jogam (uma dupla ou
+      // um individual). `roundRobinSchedule` cria só jogos reais; BYE pertence somente
+      // à eliminatória e não pode aparecer nem contar nesta fase.
       // v3.1.9: round-robin via núcleo compartilhado (método do círculo) → rodadas
       // BALANCEADAS dentro do grupo. Estático: todos os jogos existem de uma vez.
       var sched = roundRobinSchedule(g.players);
@@ -1210,12 +1220,18 @@
           rd.pairs.forEach(function (pr) {
             var A = (turn === 0) ? pr.a : pr.b;   // volta: inverte mando
             var B = (turn === 0) ? pr.b : pr.a;
+            if (_teamCompetitionCore && typeof _teamCompetitionCore.allowsMatch === 'function' &&
+              !_teamCompetitionCore.allowsMatch(A, B, _teamCompetition)) return;
             var m = {
               id: mkId(), round: rd.round + turn * nRounds, bracket: 'group', groupIdx: g.groupIdx, groupName: g.name, tierLabel: g.name,
               p1: A.displayName, p2: B.displayName, team1Obj: A, team2Obj: B,
               winner: null, scoreP1: null, scoreP2: null,
               label: (_turnos > 1 ? ((turn === 0 ? 'Ida' : 'Volta') + ' • ') : '') + g.name + ' • ' + A.displayName + ' vs ' + B.displayName
             };
+            if (_teamCompetitionCore && typeof _teamCompetitionCore.teamIdOf === 'function') {
+              m.p1CompetitionTeamId = _teamCompetitionCore.teamIdOf(A);
+              m.p2CompetitionTeamId = _teamCompetitionCore.teamIdOf(B);
+            }
             _carimbaUidsNoSlot(m);   // o slot se descreve por uid, como no Confra
             g.matches.push(m); allMatches.push(m);
           });

@@ -3366,6 +3366,7 @@ const _CAMPOS_CONFIG_TORNEIO = new Set([
   'ligaInactivity','ligaInactivityX','allowSelfDeactivation','ligaOpenEnrollment',
   'ligaRoundFormat','ligaDrawMode','ligaTurnos','ligaRRSchedule',
   'ligaSeasonMonths','elimRankingType','gruposCount','gruposClassified','gruposEqualOnly',
+  'teamCompetition',
   'gruposSeedVip','gruposSeedCategory','drawMode','reiRainhaGroupsBy','monarchAdvanceToElim',
   /* ⛔ COMO A CHAVE RESOLVE O RESTO (repescagem · folga · sobra única). É configuração declarativa
    * e escolha do organizador, então pertence a esta lista — sem ela, criar ou editar um torneio
@@ -3390,6 +3391,7 @@ const _CAMPOS_CONFIG_TORNEIO = new Set([
 const _CONFIG_ESTRUTURAL = new Set([
   'format','sport','teamSize','gameTypes','drawMode','fmt2','phases','swissRounds',
   'gruposCount','gruposClassified','gruposEqualOnly','gruposSeedVip','gruposSeedCategory',
+  'teamCompetition',
   'ligaRoundFormat','ligaDrawMode','ligaTurnos','ligaRRSchedule','monarchAdvanceToElim',
   /* ⛔⛔⛔ COMO A CHAVE RESOLVE O RESTO É ESTRUTURAL: ela decide quem espera a estreia, quem volta
    * depois de perder e onde cai a folga. Trocá-la com a chave já sorteada redesenha confrontos que as

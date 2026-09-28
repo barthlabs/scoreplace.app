@@ -748,6 +748,7 @@ const SUITES = [
   'tests/h2h-uid-identity.test.js',
   'tests/h2h-matrix-uid.test.js',
   'tests/standings-tiebreakers.test.js',
+  'tests/team-competition.test.js',
   'tests/seed-pairing.test.js',
   'tests/grandfinal-lines.test.js',
   'tests/category-transition.test.js',
