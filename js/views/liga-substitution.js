@@ -2077,7 +2077,9 @@ function _monMatchesAll(t, pIdx) {
 function _monMatches(t, gName, pIdx) {
   return _monMatchesAll(t, pIdx).filter(function (m) { return m.groupName === gName; });
 }
-function _monPlaying(t, gName, pIdx) { return _monMatches(t, gName, pIdx).filter(function (m) { return !m.isSitOut; }); }
+// REGRESSÃO: substituição consulta partidas efetivamente jogadas; BYE, assim como
+// folga, é marcador estrutural e não pode alterar a leitura de quem jogou.
+function _monPlaying(t, gName, pIdx) { return _monMatches(t, gName, pIdx).filter(function (m) { return m && !m.isSitOut && !m.isBye; }); }
 function _monWoMarker(t, gName, pIdx) { return _monMatches(t, gName, pIdx).filter(function (m) { return m.isSitOut && m.sitOutReason === 'wo'; })[0] || null; }
 // Um coringa não tem uid, mas ainda é uma PESSOA/VAGA distinta. `team*SlotIds`
 // guarda essa identidade por posição e se repete nos três jogos rotativos do mesmo
