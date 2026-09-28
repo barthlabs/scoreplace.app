@@ -133,22 +133,34 @@ function isAlreadyEnrolled(participants, participantObj) {
 }
 
 /* Nome repetido não é uma segunda identidade permitida. Contas já nascem com
- * displayName globalmente único; esta porta cobre a única exceção operacional:
- * participante digitado pelo organizador, sem UID. Comparar aqui (dentro da
- * transação) impede tanto reenvio de cliente antigo quanto corrida com a espera.
- * Dados antigos continuam legíveis; não se tenta adivinhar quem é quem por nome. */
+ * displayName globalmente único; esta porta cobre a exceção operacional: participante
+ * digitado pelo organizador, sem UID. A proteção é NOS DOIS SENTIDOS: uma conta também
+ * não pode entrar sobre a vaga manual homônima. Comparar dentro da transação impede
+ * reenvio de cliente antigo e corrida com a espera. Dados antigos continuam legíveis. */
 function displayNameKey(entry) {
   var name = entry && (entry.displayName || entry.name);
   return String(name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .replace(/\s+/g, ' ').trim().toLocaleLowerCase();
 }
-function hasDuplicateManualName(lists, participantObj) {
-  if (!participantObj || !participantObj.manualParticipantId) return false;
-  var wanted = displayNameKey(participantObj);
+function entryDisplayNameKeys(entry) {
+  var values = [];
+  if (entry && typeof entry === 'object') {
+    values.push(entry.displayName || entry.name || '');
+    values.push(entry.p1Name || '', entry.p2Name || '');
+    if (Array.isArray(entry.participants)) entry.participants.forEach(function(member) {
+      values.push(member && typeof member === 'object' ? (member.displayName || member.name || '') : member || '');
+    });
+  } else values.push(entry || '');
+  var out = {};
+  values.forEach(function(value) { var key = displayNameKey({ displayName: value }); if (key) out[key] = true; });
+  return out;
+}
+function hasDuplicateParticipantName(lists, participantObj, accountDisplayName) {
+  var wanted = displayNameKey(accountDisplayName ? { displayName: accountDisplayName } : participantObj);
   if (!wanted) return false;
   return (lists || []).some(function(list) {
     return (Array.isArray(list) ? list : []).some(function(entry) {
-      return displayNameKey(entry) === wanted;
+      return !!entryDisplayNameKeys(entry)[wanted];
     });
   });
 }
@@ -242,7 +254,7 @@ function normalizeExtraUpdates(extraUpdates) {
 // A CF aplica updateData dentro da transação. NÃO stripa nomes (o servidor não tem
 // perfil vivo pra reidratar — preservar o nome é o comportamento conservador que o
 // próprio cliente adota quando _stripStoredNamesForUidEntries está indisponível).
-function computeEnroll(data, participantObj, extraUpdates, nowMs) {
+function computeEnroll(data, participantObj, extraUpdates, nowMs, accountDisplayName) {
   participantObj = sanitizeAccountParticipant(participantObj);
   var participants = asParticipantsArray(data);
   var openState = enrollmentOpen(data, nowMs);
@@ -256,7 +268,7 @@ function computeEnroll(data, participantObj, extraUpdates, nowMs) {
   }
   var knownStandby = Array.isArray(data.standbyParticipants) ? data.standbyParticipants : [];
   var knownWaitlist = Array.isArray(data.waitlist) ? data.waitlist : [];
-  if (hasDuplicateManualName([participants, knownStandby, knownWaitlist], participantObj)) {
+  if (hasDuplicateParticipantName([participants, knownStandby, knownWaitlist], participantObj, accountDisplayName)) {
     return { outcome: 'duplicateName', participants: participants, updateData: null };
   }
   // v1.6.86 — FASE SORTEADA → LISTA DE ESPERA. Vem ANTES do teto de vagas de propósito:

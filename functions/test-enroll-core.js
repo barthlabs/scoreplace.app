@@ -40,6 +40,10 @@ try { C.normalizeExtraUpdates({ status: 'finished' }); ok('extraUpdates recusa p
     /_enrollCore\.normalizeParticipantIntent\(participantObj, callerUid, new Date\(\)\.toISOString\(\)\)/.test(block) &&
     !/computeEnroll\([^\n]*participantObj/.test(block) &&
     /entry: _enrollCore\.cleanUndefined\(out\.entry \|\| sanitizedParticipantObj\)/.test(block));
+  ok('Function usa nome real do perfil para bloquear conta sobre vaga manual homônima',
+    /doc\(participantUid\)\.get\(\)/.test(block) &&
+    /accountDisplayName = String\(profile\.displayName \|\| profile\.name \|\| ""\)\.trim\(\)/.test(block) &&
+    /computeEnroll\(_dados, sanitizedParticipantObj, extraUpdates, nowMs, accountDisplayName\)/.test(block));
 })();
 
 (() => {
@@ -114,6 +118,10 @@ try { C.normalizeExtraUpdates({ status: 'finished' }); ok('extraUpdates recusa p
   eq('manual repetido na espera também é recusado', C.computeEnroll(naEspera, { manualParticipantId: 'manual-d', displayName: 'Convidada' }, null, NOW).outcome, 'duplicateName');
   const naWaitlistLegada = { status: 'open', participants: [], waitlist: [{ manualParticipantId: 'manual-e', displayName: 'Débora  Castello' }] };
   eq('manual homônimo na waitlist legada também é recusado', C.computeEnroll(naWaitlistLegada, { manualParticipantId: 'manual-f', displayName: 'debora castello' }, null, NOW).outcome, 'duplicateName');
+  eq('conta não entra sobre vaga manual homônima', C.computeEnroll(data, { uid: 'uid-convidado' }, null, NOW, 'Convidado').outcome, 'duplicateName');
+  const duplaManual = { status: 'open', participants: [{ p1Name: 'Ana Manual', p1ManualId: 'manual-p1', p2Name: 'Bia Manual', p2ManualId: 'manual-p2' }] };
+  eq('conta não entra sobre membro manual de dupla', C.computeEnroll(duplaManual, { uid: 'uid-ana' }, null, NOW, 'ana manual').outcome, 'duplicateName');
+  eq('conta com outro nome continua entrando', C.computeEnroll(data, { uid: 'uid-outra' }, null, NOW, 'Outra pessoa').outcome, 'enrolled');
 })();
 
 // ── Já inscrito por SLOT de dupla (uid é o p2 de uma dupla) ───────────────────

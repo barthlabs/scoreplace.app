@@ -2958,6 +2958,16 @@ exports.enrollParticipant = onCall(
       }
     }
 
+    // Só depois de autorizar o intent lemos o perfil da conta. Conta não leva nome para o
+    // documento do torneio (o UID é a identidade), mas também não pode ocupar uma vaga
+    // manual homônima. O nome vem do perfil verdadeiro no servidor, nunca do navegador.
+    let accountDisplayName = '';
+    if (participantUid) {
+      const profileSnap = await db.collection("users").doc(participantUid).get();
+      const profile = profileSnap.exists ? (profileSnap.data() || {}) : {};
+      accountDisplayName = String(profile.displayName || profile.name || "").trim();
+    }
+
     // Sinais de possível segunda conta são privados e não bloqueiam inscrição. A pessoa
     // continua pelo mesmo UID; revisão/prova de posse é um fluxo separado.
     if (participantUid === callerUid && _pre.exists) {
@@ -2998,7 +3008,7 @@ exports.enrollParticipant = onCall(
       if (!participantUid && !isOrganizer) {
         throw new HttpsError("permission-denied", "só o organizador pode incluir participante sem conta");
       }
-      const r = _enrollCore.computeEnroll(_dados, sanitizedParticipantObj, extraUpdates, nowMs);
+      const r = _enrollCore.computeEnroll(_dados, sanitizedParticipantObj, extraUpdates, nowMs, accountDisplayName);
       if (r.updateData) _splitParts.gravar(tx, docRef, _dados, r.updateData);
       return r;
     });
@@ -3008,7 +3018,7 @@ exports.enrollParticipant = onCall(
 
     // Sandbox: a MESMA CF replica a inscrição no SB via o MESMO core (best-effort).
     await _replicateRosterToSandbox(db, tournamentId, function (sbData) {
-      return _enrollCore.computeEnroll(sbData, sanitizedParticipantObj, extraUpdates, nowMs);
+      return _enrollCore.computeEnroll(sbData, sanitizedParticipantObj, extraUpdates, nowMs, accountDisplayName);
     });
 
     // ── ESPELHO DO ROSTER (v1.7.40) ─────────────────────────────────────────
