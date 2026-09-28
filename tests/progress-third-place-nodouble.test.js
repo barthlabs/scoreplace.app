@@ -59,6 +59,19 @@ const prog2 = W._getTournamentProgress(t2);
 ok(prog2.total === 2, 'sem 3º lugar existente: conta só os 2 jogos reais (zero placeholder) — deu ' + prog2.total);
 ok(prog2.completed === 2 && prog2.pct === 100, 'os 2 reais jogados → 100%');
 
+// Regressão: a folga pode carregar os dois rótulos para explicar a chave, mas não é partida.
+// Se entrar por ter p1/p2 preenchidos, o cartão fica em 2/3 para sempre embora só existam 2 jogos.
+const tFolga = {
+  id: 't-folga', format: 'Eliminatórias Simples', matches: [
+    { id: 'real-1', p1: 'Ana', p2: 'Bia', winner: 'Ana' },
+    { id: 'folga', p1: 'Carla', p2: 'Folga', isSitOut: true, winner: 'Carla' },
+    { id: 'real-2', p1: 'Duda', p2: 'Eva', winner: 'Duda' }
+  ]
+};
+const progFolga = W._getTournamentProgress(tFolga);
+ok(progFolga.total === 2 && progFolga.completed === 2 && progFolga.pct === 100,
+  '⛔ folga com dois lados não entra na conta: só 2 jogos reais, progresso 100%');
+
 console.log('\n' + (fail === 0 ? '✅ progress-third-place-nodouble: OK' : '❌ ' + fail + ' FALHA(S)') + '  (' + pass + ' asserts ok)');
 if (fails.length) { fails.forEach((f) => console.error('  ✗ ' + f)); }
 process.exit(fail > 0 ? 1 : 0);

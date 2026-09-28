@@ -634,7 +634,10 @@ window._getTournamentProgress = function(t) {
     // ligar/desligar a disputa de 3º lugar — fabricava um match "TBD" pra reservar o slot no
     // total antes de existir. Hoje o 3º lugar é SEMPRE criado como match real (isThirdPlace,
     // pelo motor de fases) → já é contado quando existe. Contamos SÓ jogos reais; nada de inventar.
-    // Filter out BYE matches (keep TBD — they are real future matches)
+    // ⛔ BYE e FOLGA NÃO SÃO JOGO. Mesmo quando a folga traz p1/p2 para explicar quem
+    // descansou, ela não entra no total nem no percentual: contar isso deixa o torneio
+    // travado abaixo de 100% com uma partida que ninguém jamais poderia disputar.
+    // TBD continua: é confronto real futuro e precisa entrar no planejamento.
     var realMatches = allMatches.filter(function(m) {
         var p1 = m.p1 || m.player1 || '';
         var p2 = m.p2 || m.player2 || '';
