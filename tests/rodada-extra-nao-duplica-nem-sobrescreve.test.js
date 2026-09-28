@@ -26,6 +26,10 @@ ok(/db\.runTransaction/.test(server) && /_leTorneio/.test(server) && /_gravaTorn
 ok(/max>=expectedRound/.test(server) && /_generateNextRound/.test(server),
   'a Function deduplica a rodada esperada antes de usar o motor');
 ok(/_isTournamentAdmin/.test(server), 'a Function exige autorização administrativa');
+// REGRESSÃO: o retorno alimenta o texto recebido pelo cliente; marcador de folga/BYE
+// não é jogo e não pode aparecer como partida criada numa rodada extra.
+ok(/const matchCount = \(round\.matches \|\| \[\]\)\.filter\(m => m && !m\.isSitOut && !m\.isBye\)\.length/.test(server),
+  'contagem retornada exclui folga e BYE');
 
-console.log('rodada-extra-nao-duplica-nem-sobrescreve: ' + (6 - failed) + ' passou, ' + failed + ' falhou');
+console.log('rodada-extra-nao-duplica-nem-sobrescreve: ' + (7 - failed) + ' passou, ' + failed + ' falhou');
 process.exit(failed ? 1 : 0);

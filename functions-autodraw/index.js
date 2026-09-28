@@ -1346,7 +1346,11 @@ exports.generateExtraTournamentRound = onCall(async (request) => {
     if(!round) return {ok:true,changed:false};
     t.status='active';
     const b=_gravaTorneio(tx,ref,t,before,{agoraIso});
-    return {ok:true,changed:true,matchCount:(round.matches||[]).filter(m=>!m.isSitOut).length,tournament:b.clean};
+    /* REGRESSÃO: `matchCount` volta para a tela e pode virar texto de rodada.
+     * Folga e BYE são marcadores estruturais, não partidas — nunca podem inflar
+     * essa contagem, ainda que cheguem misturados num formato/registro legado. */
+    const matchCount = (round.matches || []).filter(m => m && !m.isSitOut && !m.isBye).length;
+    return {ok:true,changed:true,matchCount,tournament:b.clean};
   });
 });
 
