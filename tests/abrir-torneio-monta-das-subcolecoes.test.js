@@ -97,5 +97,21 @@ const soJogos = { config: Object.assign({}, partes.config, { participants: t.par
 ok(S.iguais(S.remontar(soJogos), t),
   'dá pra tirar SÓ os jogos e deixar inscritos/histórico no documento (112 leituras em vez de 666)');
 
-console.log((fail ? '✗' : '✓') + ' abrir-torneio-monta-das-subcolecoes: ' + pass + ' ok, ' + fail + ' falhas');
-process.exit(fail ? 1 : 0);
+// Regressão 2.3.129: `_semPesados` é compatibilidade nativa, não a decisão de leitura web/CF.
+// Uma foto sem o marcador ainda é documento de torneio e deve buscar TODAS as partes canônicas.
+(async function () {
+  // `history` permanece no documento; a ausência simulada é só a do marcador legado.
+  const semMarcador = Object.assign({}, partes.config, { history: t.history });
+  delete semMarcador._semPesados;
+  const lidas = [];
+  const montado = await S.montarDoBanco(semMarcador, async (colecao, nome) => {
+    lidas.push(nome + '@' + colecao);
+    return partes[nome];
+  });
+  ok(S.iguais(montado, t),
+    'sem marcador legado, montarDoBanco recompõe o torneio inteiro pelas partes canônicas');
+  ok(lidas.length === S.PARTES_CANONICAS.length,
+    'sem marcador legado, lê cada parte canônica uma vez — não devolve o documento cru');
+  console.log((fail ? '✗' : '✓') + ' abrir-torneio-monta-das-subcolecoes: ' + pass + ' ok, ' + fail + ' falhas');
+  process.exit(fail ? 1 : 0);
+})().catch(function (err) { console.error(err); process.exit(1); });

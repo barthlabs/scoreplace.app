@@ -601,12 +601,12 @@
    */
   function montarDoBanco(config, lerColecao) {
     if (!config) throw new Error('[split] montarDoBanco: sem config');
-    var fora = Array.isArray(config._semPesados) ? config._semPesados : null;
-    /* ⛔ NÃO EXISTE MAIS "inteiro: nada a montar". Documento sem o campo é documento de versão
-     * anterior, não torneio inteiro — e montar pelas partes canônicas devolve o certo nos dois
-     * casos. Devolver o config cru aqui era o caminho por onde um torneio dividido voltava sem
-     * elenco: `participants: []`, sem erro, com a tela mostrando ninguém. */
-    if (!fora || !fora.length) fora = PARTES_CANONICAS.slice();
+    /* ⛔ O marcador `_semPesados` só existe para compatibilidade dos apps nativos antigos.
+     * Este é o caminho que recebe um DOCUMENTO de torneio e o recompõe; logo, precisa sempre
+     * perguntar ao contrato canônico `partesDe`. Se uma foto antiga do documento perder o
+     * marcador, ainda lemos matches/participants/opponentHistory: nunca devolvemos o config
+     * cru e nunca abrimos uma chave sem elenco ou jogos. Cartões-resumo não chamam esta função. */
+    var fora = partesDe(config);
     var partes = { config: config };
     var i = 0;
     function proxima() {
