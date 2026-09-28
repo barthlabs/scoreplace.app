@@ -2680,9 +2680,11 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
         _linhaTog({ id: 'bracket-late-mode-enrollment', mode: 'enrollment', on: _leOpen,
           left: 'Fechadas', right: 'Abertas', leftColor: '#f87171', rightColor: '#4ade80', leftToggleBg: 'rgba(248,113,113,0.28)', rightGlow: 'rgba(74,222,128,0.36)',
           ariaPrefix: 'Inscrições durante a fase', onchange: "event.stopPropagation(); window._setPhaseLateEnrollment('" + _tIdTog + "', this.checked ? '" + (_leConf ? 'expand' : 'standby') + "' : 'closed');" }) +
-        _linhaTog({ id: 'bracket-late-mode-matchups', mode: 'matchups', on: _leConf,
+        // [[regression_closed_phase_has_no_late_entry_choice]] Fechada bloqueia qualquer
+        // entrada tardia; a escolha Suplentes/Novos Confrontos só aparece quando abre.
+        (!_leFechadas ? _linhaTog({ id: 'bracket-late-mode-matchups', mode: 'matchups', on: _leConf,
           left: 'Suplentes', right: 'Novos Confrontos', leftColor: '#fbbf24', rightColor: '#60a5fa', leftToggleBg: 'rgba(251,191,36,0.24)', rightGlow: 'rgba(96,165,250,0.36)',
-          ariaPrefix: 'Entradas da lista de espera', onchange: "event.stopPropagation(); window._setPhaseLateEnrollment('" + _tIdTog + "', this.checked ? 'expand' : 'standby');" }) +
+          ariaPrefix: 'Entradas da lista de espera', onchange: "event.stopPropagation(); window._setPhaseLateEnrollment('" + _tIdTog + "', this.checked ? 'expand' : 'standby');" }) : '') +
         '</div>' +
       '</div>';
   }

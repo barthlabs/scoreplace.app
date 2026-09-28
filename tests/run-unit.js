@@ -805,6 +805,9 @@ const SUITES = [
   // rodadas) volta sozinho pra divisão igual — nunca vira rodada que começa depois de
   // terminar. O que se guarda é a intenção; a validação é toda na leitura.
   'tests/divisao-das-rodadas-e-ajuste-fino.test.js',
+  // Fechadas não oferece uma escolha impossível de entradas tardias; e os prazos
+  // por rodada são opt-in, inclusive no retorno da rota de edição.
+  'tests/phase-controls-opt-in.test.js',
   'tests/round-bounds-domain-build.test.js',
   'tests/participant-identity-domain.test.js',
   'tests/waitlist-domain.test.js',

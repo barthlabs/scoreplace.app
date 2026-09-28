@@ -165,9 +165,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var _inh = (function () { var el = document.getElementById('late-enrollment'); var val = el && el.value; return (['closed', 'standby', 'expand'].indexOf(val) >= 0) ? val : 'expand'; })();
     var v = _explicit ? e.lateEnrollment : _inh;
     var isClosed = v === 'closed';
-    // "Novos Confrontos" é INDEPENDENTE de "Abertas" (cânone do dono, v1.3.108) — na fase inicial
-    // já era; aqui na ELIMINATÓRIA ainda estava amarrado ao lateEnrollment ('expand') e a linha
-    // sumia quando fechava. Agora tem flag PRÓPRIA (e.newMatchups) e as duas linhas convivem.
+    // A preferência de novos confrontos continua independente e é preservada, mas só é
+    // configurável com inscrições abertas. [[regression_closed_phase_has_no_late_entry_choice]]
     var _nmInh = (function () { var el = document.getElementById('new-matchups'); if (el) return el.value === 'true'; return _inh === 'expand'; })();
     var isExpand = (e.newMatchups === true || e.newMatchups === false) ? e.newMatchups : _nmInh;
     // A mesma estrutura de dois rótulos existe no form e no atalho da chave.
@@ -189,14 +188,13 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       ariaPrefix: 'Inscrições durante a eliminatória', onchange: 'window._f2ElimLateMaster(this.checked)',
       desc: T(isClosed ? 'create.lateEnrollClosedOnDesc' : 'create.lateEnrollClosedOffDesc')
     });
-    // Sempre renderizado: novos confrontos é independente de aceitar inscrições.
-    var confRow = modeSwitch({
+    var confRow = !isClosed ? modeSwitch({
       id: 'f2-late-mode-matchups', mode: 'matchups', on: isExpand,
       left: T('create.lateEnrollSuplentesOnly'), right: T('create.lateEnrollExpand'),
       leftColor: '#fbbf24', rightColor: '#60a5fa', leftToggleBg: 'rgba(251,191,36,0.24)', rightGlow: 'rgba(96,165,250,0.36)',
       ariaPrefix: 'Entradas da lista de espera', onchange: 'window._f2ElimLateConf(this.checked)',
       desc: T(isExpand ? 'create.lateEnrollExpandOnDesc' : 'create.lateEnrollExpandOffDesc')
-    });
+    }) : '';
     var inheritHint = _explicit ? '' : ('<div style="font-size:0.72rem;color:var(--sp-c-93c5fd,#93c5fd);margin:0 0 8px;display:flex;align-items:flex-start;gap:5px;line-height:1.4;"><span>🔗</span><span>' + T('create.lateEnrollInheritHint') + '</span></div>');
     return '<div style="background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.15);border-radius:12px;padding:1rem;margin-top:14px;">' +
       '<p style="margin:0 0 0.75rem;font-size:0.8rem;color:var(--sp-c-fbbf24,#fbbf24);font-weight:600;text-transform:uppercase;letter-spacing:1px;">⏱️ ' + T('create.lateEnrollSection') + '</p>' +
@@ -413,7 +411,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     };
   }
   function _elimRoundBoundsHtml() {
-    return '<div id="f2-elim-round-bounds-box" style="display:none;margin-top:12px;padding-top:10px;border-top:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));">' +
+    return '<div style="display:flex;align-items:center;gap:10px;margin-top:12px;padding-top:10px;border-top:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));"><label class="toggle-switch" style="--toggle-on-bg:#60a5fa;--toggle-on-glow:rgba(96,165,250,0.3);--toggle-on-border:#60a5fa;flex-shrink:0;"><input type="checkbox" ' + ((S && S.cfg && S.cfg.eliminatoria && S.cfg.eliminatoria.roundBoundsEditorEnabled) ? 'checked ' : '') + 'onchange="window._f2ElimRoundBoundsEnabled(this.checked)"><span class="toggle-slider"></span></label><span style="font-size:0.82rem;color:var(--text-main);">Definir prazos por rodada</span></div>' +
+      '<div id="f2-elim-round-bounds-box" style="display:none;margin-top:12px;">' +
       '<div style="font-size:0.7rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">⏱️ Divisão das rodadas <span style="text-transform:none;font-weight:500;opacity:0.8;">— arraste para esticar ou encurtar</span></div>' +
       '<div id="f2-elim-round-bounds-mount"></div>' +
       '<div style="text-align:right;margin-top:2px;"><button type="button" onclick="window._f2ElimRoundBoundsReset()" style="background:none;border:0;color:var(--text-muted);font-size:0.66rem;font-weight:700;cursor:pointer;text-decoration:underline;padding:2px 4px;">voltar ao padrão (dias iguais)</button></div>' +
@@ -424,7 +423,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var mount = document.getElementById('f2-elim-round-bounds-mount');
     if (!box || !mount || typeof window._rbMount !== 'function') return;
     var n = _elimRoundCount(), win = _elimBoundsWindow();
-    if (n < 2 || !win) { box.style.display = 'none'; return; }
+    if (!S.cfg.eliminatoria.roundBoundsEditorEnabled || n < 2 || !win) { box.style.display = 'none'; return; }
     box.style.display = '';
     window._rbMount(mount, {
       startMs: function () { var w = _elimBoundsWindow(); return w ? w.startMs : NaN; },
@@ -436,6 +435,14 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     });
   }
   window._f2ElimRoundBoundsReset = function () { if (S && S.cfg && S.cfg.eliminatoria) { S.cfg.eliminatoria.roundBounds = []; _mountElimRoundBounds(); } };
+  // [[regression_round_deadlines_are_opt_in]] Sem a escolha explícita, não há prazos
+  // intermediários escondidos no evento. Ao reativar, a régua volta em dias iguais.
+  window._f2ElimRoundBoundsEnabled = function (enabled) {
+    if (!S || !S.cfg || !S.cfg.eliminatoria) return;
+    S.cfg.eliminatoria.roundBoundsEditorEnabled = !!enabled;
+    if (!enabled) S.cfg.eliminatoria.roundBounds = [];
+    _mountElimRoundBounds();
+  };
   // Cada divisor já é uma data/hora ISO. Este editor muda somente a HORA, preserva a
   // data escolhida no arraste e mantém o último prazo no endTime canônico da fase.
   window._f2ElimRoundEndTime = function (idx, value, el) {

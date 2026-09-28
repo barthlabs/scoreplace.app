@@ -3435,7 +3435,7 @@ exports.setTournamentFlyerPrefs = onCall(async (request) => {
 // detalhe de identidade, elenco, fila, jogos, resultados, fases materializadas ou
 // ciclo de vida fica fora desta lista e só possui comandos próprios no servidor.
 const _CAMPOS_CONFIG_TORNEIO = new Set([
-  'name','isPublic','format','sport','startDate','endDate','roundBounds','registrationLimit',
+  'name','isPublic','format','sport','startDate','endDate','roundBounds','roundBoundsEditorEnabled','registrationLimit',
   'enrollmentMode','mixedPairingSeparated','manualPairing','teamSize','gameTypes',
   'maxParticipants','autoCloseOnFull','enrollmentLimitMode','targetSlots','callPolicy',
   'resultEntry','woScope','lateEnrollment','newMatchups','venue','venueAccess','venueLat',

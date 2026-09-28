@@ -36,7 +36,7 @@ console.log('──── divisão das rodadas: igual por padrão, ajuste fino n
 const createUi = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'create-tournament.js'), 'utf8');
 ok(/_rodadasVisiveisDaFase\(t, fi\)[\s\S]{0,300}return reais[\s\S]{0,900}f2-sched-n/.test(createUi),
    '⓪ fase editada e rodadas reais vencem o campo de agendamento de outra fase');
-ok(/return \{ roundBounds: bounds \}/.test(createUi) && /_elimBounds[\s\S]{0,450}tourData\.phases\[tourData\.phases\.length - 1\]\.roundBounds/.test(createUi),
+ok(/roundBounds: bounds,[\s\S]{0,180}roundBoundsEditorEnabled/.test(createUi) && /_elimBounds[\s\S]{0,450}tourData\.phases\[tourData\.phases\.length - 1\]\.roundBounds/.test(createUi),
    '⓪ classificatória e eliminatória gravam limites próprios, sem cruzar fases');
 
 const DIA = 86400000;

@@ -21,8 +21,8 @@ ok(create.includes("checked = _lateEnroll !== 'closed'") && create.includes("che
 ok(format2.includes('window._lateEnrollmentModeSwitchHtml') && format2.includes('on: !isClosed'), 'eliminatória usa o mesmo gerador e o mesmo sentido para Abertas');
 ok(format2.includes("window._f2ElimLateMaster = function (openOn)"), 'handler da eliminatória recebe diretamente o estado aberto');
 ok(bracket.includes('window._lateEnrollmentModeSwitchHtml') && bracket.includes("left: 'Fechadas', right: 'Abertas'"), 'atalho da chave usa o mesmo gerador e os mesmos rótulos');
-ok(bracket.includes("left: 'Suplentes', right: 'Novos Confrontos'"), 'atalho da chave também mostra os dois destinos da espera');
-ok(!bracket.includes("(_leFechadas ? '' : _linhaTog"), 'segundo seletor não desaparece quando inscrições estão fechadas');
+ok(bracket.includes("left: 'Suplentes', right: 'Novos Confrontos'"), 'atalho da chave preserva os dois destinos da espera quando há inscrições abertas');
+ok(bracket.includes('(!_leFechadas ? _linhaTog'), 'Fechadas oculta o seletor de entradas tardias também no atalho da chave');
 ok(css.includes('.sp-late-mode-row') && css.includes('data-late-active="left"') && css.includes('data-late-active="right"'), 'CSS tem uma régua explícita para o estado ativo');
 ok(css.includes('--late-left') && css.includes('--late-right') && css.includes('text-shadow:0 0 7px currentColor'), 'cores de cada lado e brilho neon vivem no componente');
 if (fail) process.exitCode = 1;

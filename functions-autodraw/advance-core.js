@@ -42,7 +42,7 @@ const DENYLIST = [
   'venue', 'venueName', 'venueLat', 'venueLng', 'venueId', 'venuePlaceId',
   // agenda/janela: `_limitesDasRodadas` (round-bounds-core.js:100) só é chamado por
   // tournaments-utils.js:1437/1531 e create-tournament.js:4672 — nenhum no caminho
-  'roundBounds',
+  'roundBounds', 'roundBoundsEditorEnabled',
   // o `faux` de `_phaseGenNextLeagueRound` (bracket-logic.js:5514-5528) não carrega estes,
   // então o topo do documento nunca chega ao motor de Liga incremental
   'teamSize', 'enrollmentMode', 'combinedCategories', 'skillCategories',

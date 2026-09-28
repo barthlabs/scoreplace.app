@@ -451,6 +451,14 @@ function setupCreateTournamentModal() {
                      ⛔ Nasce ESCONDIDO e só aparece quando faz sentido: com início, fim e 2+
                      rodadas. Vazio = divisão igual, que é o padrão e continua sendo o que o
                      app faz sem ninguém tocar em nada. Ver js/views/round-bounds-core.js. -->
+                <!-- [[regression_round_deadlines_are_opt_in]] A régua não cria rodadas: ela só
+                     distribui PRAZOS entre rodadas já existentes. Em evento concentrado (como o
+                     NEON), esses prazos intermediários não existem; por isso o organizador precisa
+                     ligá-la conscientemente, em vez de receber uma divisão automática na tela. -->
+                <div id="round-bounds-toggle-row" style="display:flex;align-items:center;gap:10px;margin-top:10px;">
+                  <label class="toggle-switch" style="--toggle-on-bg:#60a5fa;--toggle-on-glow:rgba(96,165,250,0.3);--toggle-on-border:#60a5fa;flex-shrink:0;"><input type="checkbox" id="round-bounds-enabled" onchange="window._rbFormRefresh(true)"><span class="toggle-slider"></span></label>
+                  <span style="font-size:0.82rem;color:var(--text-main);">Definir prazos por rodada</span>
+                </div>
                 <div id="round-bounds-box" style="display:none; margin-top:10px;">
                   <div style="font-size:0.7rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin:0 0 4px 0.35rem;">⏱️ Divisão das rodadas <span style="text-transform:none; font-weight:500; opacity:0.8;">— arraste para esticar ou encurtar</span></div>
                   <input type="hidden" id="round-bounds" value="">
@@ -481,7 +489,7 @@ function setupCreateTournamentModal() {
                 <input type="hidden" id="new-matchups" value="false">
                 <div class="sp-late-mode-stack" id="late-enrollment-buttons">
                   ${window._lateEnrollmentModeSwitchHtml({ id: 'late-mode-enrollment', inputId: 'late-toggle-closed', mode: 'enrollment', on: false, left: _t('create.lateEnrollClosed'), right: _t('create.lateEnrollOpen'), leftColor: '#f87171', rightColor: '#4ade80', leftToggleBg: 'rgba(248,113,113,0.28)', rightGlow: 'rgba(74,222,128,0.36)', ariaPrefix: 'Inscrições durante a fase', onchange: "window._syncLateEnrollment('open')", descId: 'late-closed-desc', desc: _t('create.lateEnrollClosedOnDesc') })}
-                  ${window._lateEnrollmentModeSwitchHtml({ id: 'late-mode-matchups', inputId: 'late-toggle-expand', mode: 'matchups', on: false, left: _t('create.lateEnrollSuplentesOnly'), right: _t('create.lateEnrollExpand'), leftColor: '#fbbf24', rightColor: '#60a5fa', leftToggleBg: 'rgba(251,191,36,0.24)', rightGlow: 'rgba(96,165,250,0.36)', ariaPrefix: 'Entradas da lista de espera', onchange: "window._syncLateEnrollment('expand')", descId: 'late-expand-desc', desc: _t('create.lateEnrollExpandDisabledDesc') })}
+                  <div id="late-matchups-choice">${window._lateEnrollmentModeSwitchHtml({ id: 'late-mode-matchups', inputId: 'late-toggle-expand', mode: 'matchups', on: false, left: _t('create.lateEnrollSuplentesOnly'), right: _t('create.lateEnrollExpand'), leftColor: '#fbbf24', rightColor: '#60a5fa', leftToggleBg: 'rgba(251,191,36,0.24)', rightGlow: 'rgba(96,165,250,0.36)', ariaPrefix: 'Entradas da lista de espera', onchange: "window._syncLateEnrollment('expand')", descId: 'late-expand-desc', desc: _t('create.lateEnrollExpandDisabledDesc') })}</div>
                 </div>
               </div>
 
@@ -1942,7 +1950,9 @@ function setupCreateTournamentModal() {
 
   // ── Inscrições durante a fase ──
   // A inscrição (Fechadas/Abertas) e o destino da espera
-  // (Suplentes/Novos Confrontos) são escolhas independentes.
+  // (Suplentes/Novos Confrontos) são escolhas independentes QUANDO a porta está aberta.
+  // [[regression_closed_phase_has_no_late_entry_choice]] Fechada significa que ninguém entra:
+  // não faz sentido oferecer ao organizador a política de um ingresso tardio impossível.
   // `late-toggle-closed` conserva o id de compatibilidade, mas agora o seu
   // estado visual é natural: desligado = Fechadas, ligado = Abertas.
   window._syncLateEnrollment = function(source) {
@@ -1960,6 +1970,8 @@ function setupCreateTournamentModal() {
 
     window._setLateEnrollmentModeVisual(document.getElementById('late-mode-enrollment'), isOpen);
     window._setLateEnrollmentModeVisual(document.getElementById('late-mode-matchups'), !!expand.checked);
+    var matchupChoice = document.getElementById('late-matchups-choice');
+    if (matchupChoice) matchupChoice.style.display = isOpen ? '' : 'none';
 
     var closedDesc = document.getElementById('late-closed-desc');
     if (closedDesc) closedDesc.textContent = _t(isClosed ? 'create.lateEnrollClosedOnDesc' : 'create.lateEnrollClosedOffDesc');
@@ -4028,6 +4040,9 @@ function setupCreateTournamentModal() {
     catch (e) { return []; }
   }
   function _rbDoFormulario() {
+    // Desligar a opção remove os prazos intermediários no próximo save. Não deixamos um
+    // arrasto antigo continuar operando invisivelmente depois que o organizador a desativou.
+    if (!((document.getElementById('round-bounds-enabled') || {}).checked)) return [];
     var el = document.getElementById('round-bounds');
     if (!el || !el.value) return [];
     try { var v = JSON.parse(el.value); return Array.isArray(v) ? v : []; } catch (e) { return []; }
@@ -4046,7 +4061,8 @@ function setupCreateTournamentModal() {
       var ini = _rbCampoMs('tourn-start-date', 'tourn-start-time', '19:00');
       var fim = _rbCampoMs('tourn-end-date', 'tourn-end-time', '23:59');
       var n = _rbNumeroDeRodadas();
-      if (isNaN(ini) || isNaN(fim) || fim <= ini || n < 2) { box.style.display = 'none'; return; }
+      var enabled = !!((document.getElementById('round-bounds-enabled') || {}).checked);
+      if (!enabled || isNaN(ini) || isNaN(fim) || fim <= ini || n < 2) { box.style.display = 'none'; return; }
       box.style.display = '';
       if (!mount._rbOn) {
         window._rbMount(mount, {
@@ -4661,6 +4677,7 @@ function setupCreateTournamentModal() {
     try {
       window._editingTournament = t;
       var _rbEl = document.getElementById('round-bounds');
+      var _rbEnabled = document.getElementById('round-bounds-enabled');
       if (_rbEl) {
         // O campo pertence à fase classificatória (fase 0), mesmo depois de o
         // torneio ter avançado. A eliminatória usa o seu próprio controle no format2.
@@ -4668,6 +4685,10 @@ function setupCreateTournamentModal() {
         var _f = (Array.isArray(t.phases) && t.phases[_fi]) || null;
         var _rb = (_f && _f.roundBounds) || (Array.isArray(t.roundBounds) ? t.roundBounds : null);
         _rbEl.value = (Array.isArray(_rb) && _rb.length) ? JSON.stringify(_rb) : '';
+        // Compatibilidade: torneios anteriores sem o campo continuam exibindo a régua se
+        // já tinham prazos manuais. Configurações novas nascem desligadas.
+        if (_rbEnabled) _rbEnabled.checked = (typeof t.roundBoundsEditorEnabled === 'boolean')
+          ? t.roundBoundsEditorEnabled : !!(Array.isArray(_rb) && _rb.length);
       }
       if (typeof window._rbFormRefresh === 'function') window._rbFormRefresh();
     } catch (e) {}
@@ -5578,7 +5599,10 @@ window._saveTournamentClickHandler = async function() {
               // Este input é exclusivamente da fase classificatória. A fase
               // eliminatória mantém seu próprio roundBounds dentro de fmt2.
               var bounds = _rbDoFormulario();
-              return { roundBounds: bounds };
+              return {
+                roundBounds: bounds,
+                roundBoundsEditorEnabled: !!((document.getElementById('round-bounds-enabled') || {}).checked)
+              };
             } catch (e) { return {}; }
           })(),
           // v2.1.21: Liga ignora prazo de inscrição (sempre aberta) — limpa o residual.
@@ -7168,6 +7192,10 @@ window._prefillFromTemplate = function(tpl) {
   // v2.1.32: restaura ABSOLUTAMENTE TODAS as configs salvas no template.
   var _setV = function(id, v) { var el = document.getElementById(id); if (el && v !== undefined && v !== null && v !== '') el.value = v; };
   var _setC = function(id, v) { var el = document.getElementById(id); if (el) el.checked = !!v; };
+  if (tpl.roundBoundsEditorEnabled !== undefined) {
+    _setC('round-bounds-enabled', tpl.roundBoundsEditorEnabled);
+    if (typeof window._rbFormRefresh === 'function') window._rbFormRefresh(true);
+  }
 
   // Modo de sorteio (Sorteio vs Rei/Rainha)
   if (tpl.drawMode) {
@@ -7285,7 +7313,11 @@ window._prefillFromTemplate = function(tpl) {
 window._discardCreateTournament = function() {
   var _t = window._t || function(k) { return k; };
   var editId = (document.getElementById('edit-tournament-id') || {}).value || '';
-  if (window.location.hash === '#novo-torneio') {
+  // [[regression_back_from_edit_route_returns_to_tournament]] A edição usa
+  // `#novo-torneio/<id>` para sobreviver a refresh. Comparar só a rota curta fazia
+  // o botão cair no caminho de modal legado (que já não existe na page-route) e
+  // aparentar não fazer nada. Tanto criação quanto edição são a mesma tela de rota.
+  if (/^#novo-torneio(?:\/|$)/.test(window.location.hash || '')) {
     if (editId) {
       showNotification(_t('create.discarded'), '', 'info');
       window.location.hash = '#tournaments/' + editId;
@@ -7651,6 +7683,7 @@ window._saveCurrentFormAsTemplate = function() {
       woScope: 'individual',
       lateEnrollment: get('late-enrollment') || 'closed',
       newMatchups: (get('new-matchups') === 'true'), // v1.3.x: "Novos Confrontos" independente de "Abertas"
+      roundBoundsEditorEnabled: getChecked('round-bounds-enabled'),
       courtCount: parseInt(get('tourn-court-count')) || '',
       courtNames: (get('tourn-court-names') || '').trim(),
       callTime: parseInt(get('tourn-call-time')) || 0,

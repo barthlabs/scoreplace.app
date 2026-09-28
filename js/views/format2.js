@@ -81,7 +81,10 @@
         // _tournamentScheduledWindow já leem. Vazio = sem término próprio (herda o do torneio).
         endDate: '', endTime: '',
         // Ajuste fino das divisões da eliminatória. Vazio = dias iguais.
-        roundBounds: []
+        roundBounds: [],
+        // Prazos por rodada só aparecem por decisão do organizador. Eventos concentrados
+        // não devem ganhar uma régua de prazos intermediários por padrão.
+        roundBoundsEditorEnabled: false
       }
     }, sport);
   }
@@ -279,6 +282,10 @@
     e.endDate = (out.classifAtiva && /^\d{4}-\d{2}-\d{2}$/.test(String(e.endDate || ''))) ? String(e.endDate) : '';
     e.endTime = (e.endDate && /^\d{2}:\d{2}$/.test(String(e.endTime || ''))) ? String(e.endTime) : '';
     e.roundBounds = Array.isArray(e.roundBounds) ? e.roundBounds.slice() : [];
+    // Compat: configuração antiga que já gravou prazos continua mostrando o editor; nova
+    // configuração nasce opt-in. [[regression_round_deadlines_are_opt_in]]
+    e.roundBoundsEditorEnabled = (typeof e.roundBoundsEditorEnabled === 'boolean')
+      ? e.roundBoundsEditorEnabled : e.roundBounds.length > 0;
     out.eliminatoria = e;
 
     return out;
