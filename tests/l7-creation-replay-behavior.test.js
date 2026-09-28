@@ -79,6 +79,14 @@ function creator(db,time=clock){return makeCreateTournament({db,HttpsError,Field
   const out=await creator(db)({auth,data:{...payload,config:declarative}});
   assert(out.tournament.phases.length);assert.deepEqual(out.tournament.matches,[]);assert(out.tournament.fmt2);
  });
+ await test('marcador transitório aninhado é descartado pela fronteira do servidor',async()=>{
+  const db=fakeDB(),cfg=win.FORMAT2.defaultConfig();
+  cfg._renderTick=17;cfg.rodadas._draftOnly=true;
+  const declarative={name:'Copa limpa',sport:'Tênis',fmt2:cfg};
+  const request={auth,data:{tournamentId:'tour_'+clock+'_'+'b'.repeat(32),config:declarative}};
+  const out=await creator(db)(request);
+  assert(out.ok);assert(!('_renderTick' in out.tournament.fmt2));assert(!('_draftOnly' in out.tournament.fmt2.rodadas));
+ });
  const replay={v:2,totalPoints:1,points:[{w:1,a:0,b:0}],scoring:{setsToWin:1},truncated:false};
  function replayHandler(db){return makeSaveTournamentReplay({db,HttpsError,readTournament:read,findMatch:(t,id)=>t.matches.find(m=>m.id===id),isAdmin:(t,uid)=>t.creatorUid===uid,playerUids:m=>[m.p1Uid,m.p2Uid].filter(Boolean),buildMirror:mirror.buildMirrorDoc,now:()=>clock});}
  await test('replay usa UID canônico e não altera placar/proposta/roster concorrentes',async()=>{

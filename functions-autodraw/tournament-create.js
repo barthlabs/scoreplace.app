@@ -19,6 +19,22 @@ function checkNested(value, fail) {
     checkNested(value[key], fail);
   });
 }
+// O cliente já remove marcadores de execução antes da chamada, mas a fronteira do
+// servidor é a última garantia: versões em cache, templates antigos e campos que uma
+// tela anexa depois da montagem não podem impedir a criação de um torneio. Eles não são
+// aceitos nem persistidos — são simplesmente descartados ANTES da validação. Os nomes
+// reservados sem `_` (participants, matches, history etc.) continuam sendo recusados.
+// [[regression_create_runtime_markers_are_never_saved]]
+function withoutRuntimeState(value) {
+  if (Array.isArray(value)) return value.map(withoutRuntimeState);
+  if (!value || typeof value !== 'object') return value;
+  return Object.keys(value).reduce((out, key) => {
+    // `__proto__` parece marcador por começar com `_`, mas é injeção de protótipo,
+    // não estado da tela: precisa chegar a `checkNested` para ser recusado.
+    if (!key.startsWith('_') || key === '__proto__') out[key] = withoutRuntimeState(value[key]);
+    return out;
+  }, {});
+}
 // Dependências injetadas: este é o handler real, também executado pelos testes.
 function makeCreateTournament({ db, HttpsError, FieldValue, fields, cloneConfig, compile, boundary, readTournament, now = Date.now }) {
   const fail = (code, message) => { throw new HttpsError(code, message); };
@@ -33,8 +49,9 @@ function makeCreateTournament({ db, HttpsError, FieldValue, fields, cloneConfig,
     if (!match || Number(match[1]) > clock + 60000 || clock - Number(match[1]) > WINDOW_MS) {
       fail('invalid-argument', 'Pedido de criação inválido ou expirado. Abra uma nova criação.');
     }
-    const raw = input.config;
-    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) fail('invalid-argument', 'Configuração inválida.');
+    const incoming = input.config;
+    if (!incoming || typeof incoming !== 'object' || Array.isArray(incoming)) fail('invalid-argument', 'Configuração inválida.');
+    const raw = withoutRuntimeState(incoming);
     checkNested(raw, fail);
     const config = {};
     Object.keys(raw).forEach(key => {
