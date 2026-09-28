@@ -25,6 +25,13 @@ ok(fstart >= 0 && part.includes('db.runTransaction') && part.includes('_isTourna
   'Function relê, autoriza e grava a configuração em transação');
 ok(part.includes('_CAMPOS_CONFIG_TORNEIO') && part.includes('permission-denied') && part.includes('_CONFIG_ESTRUTURAL'),
   'Function recusa chaves fora do contrato e mudanças estruturais após sorteio');
+/* ⛔ A fase de grupos sempre compila `turnos` no topo (`ida` ou `ida_volta`), inclusive
+ * quando o organizador só está configurando competição por times. Em 28/set/2026 ele
+ * não constava do contrato da Function; um patch válido era recusado inteiro e NADA
+ * da ficha salvava. É estrutura (duplica os confrontos), portanto é aceito antes do
+ * sorteio e continua protegido depois dele. [[regression_group_turnos_must_save]] */
+const contract = fn.slice(fn.indexOf('const _CAMPOS_CONFIG_TORNEIO'), fn.indexOf('const _CONFIG_FASE_ATIVA'));
+ok(/'turnos'/.test(contract), 'turnos compilado pela fase de grupos pertence ao contrato da ficha');
 ok(part.includes('_fasesDeConfiguracaoAtualizaveis') && part.includes('t.history.push'),
   'fases já materializadas preservam o motor e a alteração ganha histórico servidor');
 process.exit(failed ? 1 : 0);
