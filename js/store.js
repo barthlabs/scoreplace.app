@@ -788,7 +788,7 @@ window._spNameForLetzplay = function (handle, fallback) {
  * jogo solto dentro do documento passar por "tenho os 115". Aqui se compara com o
  * CONTADOR que o escritor gravou.
  *
- * Ordem da decisão, por parte de `_semPesados`:
+ * Ordem da decisão, por parte canônica do DOCUMENTO de torneio:
  *   ① CONTADOR (`_nPartes`, `_nJogos`, `_nGrupos`): zero = vazio DE VERDADE, não busca;
  *      tenho < prometido = FALTA; tenho >= prometido = completo.
  *   ② sem contador, TESTEMUNHA no documento (`memberUids` prova que há elenco);

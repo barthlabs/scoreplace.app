@@ -5492,7 +5492,8 @@ exports.tournamentMirror = onDocumentWritten(
        * dividir também os INSCRITOS, o gatilho viu o documento com `participants: []`,
        * concluiu "não há mais ninguém" e APAGOU a subcoleção inteira. O elenco sumia.
        * Mesmo estrago, campo diferente, e eu tinha acabado de escrever o aviso pro outro.
-       * ⇒ A trava passa a ser derivada do MARCADOR, não de uma lista minha. */
+       * ⇒ A trava passa a ser derivada da LISTA CANÔNICA, não de um marcador legado nem de
+       * uma lista escrita aqui. */
       /* ⛔ ESPELHO NÃO TRATA AUSÊNCIA DO MARCADOR COMO TORNEIO INTEIRO. As partes
        * canônicas seguem fora; espelhá-las do documento magro apagaria a fonte viva.
        * [[project_torneio_nasce_dividido]] */

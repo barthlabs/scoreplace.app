@@ -45,8 +45,9 @@ function partesDivididas(data) {
  * decidir lotação e duplicata é pior que falhar: a falha a pessoa vê e tenta de novo.
  *
  * ⭐ `apenas` (opcional) — MESMA semântica do `dividir(t, apenas)` do tradutor: hidrata só
- * as partes pedidas, e sempre INTERSECTADAS com `_semPesados` (pedir uma parte que este
- * torneio não dividiu não inventa leitura nenhuma). Existe porque as portas que só
+ * as partes pedidas, e sempre INTERSECTADAS com as partes CANÔNICAS (pedir uma parte fora
+ * do contrato não inventa leitura nenhuma). `_semPesados` é apenas compatibilidade nativa;
+ * existe porque as portas que só
  * precisam saber QUEM ESTÁ INSCRITO — telefone de contato, @ do letzplay, comunicado do
  * organizador — não têm por que arrastar `matches` e `opponentHistory` inteiros de um
  * torneio de 150 pessoas dentro de um callable de 30s.
@@ -72,8 +73,9 @@ async function hidratar(tx, ref, data, apenas) {
  * Aplica `updateData` respeitando a divisão: campo que mora fora vai pra subcoleção (com
  * diff, para não reescrever o que não mudou nem perder quem saiu), e o resto vai pro doc.
  * `antes` é o torneio JÁ HIDRATADO — é dele que sai o lado esquerdo do diff.
- * ⛔ Deriva de `_semPesados`. Citar 'participants' aqui à mão faria a próxima parte a entrar
- * na lista ser esquecida em silêncio, que é como este projeto já perdeu parte quatro vezes.
+ * ⛔ Deriva de `partesDe` (a lista canônica). Citar 'participants' aqui à mão faria a próxima
+ * parte a entrar na lista ser esquecida em silêncio, que é como este projeto já perdeu parte
+ * quatro vezes. O marcador legado não pode voltar a escolher essa lista.
  */
 function gravar(tx, ref, antes, updateData) {
   const fora = partesDivididas(antes);
