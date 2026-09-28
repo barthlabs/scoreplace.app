@@ -1544,6 +1544,10 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
   // ações de pessoa (VIP/nível/excluir) valem pra entrada. [[project_uid_identity_canon_locked]]
   var _cardUid = (p && typeof p === 'object' && p.uid && !p.p1Uid && !p.p2Uid && !p.p1Name && !p.p2Name)
     ? String(p.uid).replace(/'/g, "\\'") : '';
+  // Só a ação de remover aceita também a identidade manual. As demais ações pessoais
+  // continuam exigindo UID de conta; não transformar manualParticipantId em "uid".
+  var _removeIdentity = (p && typeof p === 'object' && !p.p1Uid && !p.p2Uid && !p.p1Name && !p.p2Name)
+    ? String(p.uid || p.manualParticipantId || '').replace(/'/g, "\\'") : '';
   // v1.3.67: resolve o nome pelo UID ANTES do fallback "Participante N"/email. Entrada só-uid
   // (nome stripado no save — cânone: identidade é uid) caía direto no "Participante N" e o card
   // (e o data-lj-name do drag de formar dupla) mostrava "Participante 2" no lugar do nome real.
@@ -1724,7 +1728,7 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
       _vipBtn = '<button class="btn btn-micro" title="' + (isVip ? _T('tourn.removeVip') : _T('tourn.markVip')) + '" style="min-height:0;height:24px;line-height:1;padding:0 9px;font-size:0.66rem;font-weight:800;flex-shrink:0;background: ' + (isVip ? 'linear-gradient(135deg,rgba(234,179,8,0.35),rgba(251,191,36,0.25))' : 'rgba(234,179,8,0.08)') + '; color: ' + window._spCor((isVip ? '#fbbf24' : '#a3842a'), 'color') + '; border: 1px ' + (isVip ? 'solid' : 'dashed') + ' ' + (isVip ? 'rgba(251,191,36,0.6)' : 'rgba(234,179,8,0.3)') + ';" onclick="event.stopPropagation(); window._toggleVip(\'' + t.id + '\', \'' + safeP + '\', \'' + _cardUid + '\');">💎 VIP</button>';
       // Este ✕ é da ENTRADA inteira (dupla sai inteira) → NÃO manda uid de membro: mandar
       // p.uid (que numa dupla é o uid do p1) tiraria só uma pessoa e deixaria a outra.
-      _delBtn = '<button type="button" class="cancel-x-btn" title="' + _T('btn.remove') + '" style="--cx-size:22px;" onclick="event.stopPropagation(); window.removeParticipantFunction(\'' + t.id + '\', \'' + safeP + '\', \'' + _cardUid + '\');">✕</button>';
+      _delBtn = '<button type="button" class="cancel-x-btn" title="' + _T('btn.remove') + '" style="--cx-size:22px;" onclick="event.stopPropagation(); window.removeParticipantFunction(\'' + t.id + '\', \'' + safeP + '\', \'' + _removeIdentity + '\');">✕</button>';
       if (window._entryTeamMembers(p)) {
         _splitBtn = '<button class="btn btn-micro" title="' + _T('participants.splitTeam') + '" style="min-height:0;height:24px;line-height:1;padding:0 9px;font-size:0.7rem;font-weight:800;flex-shrink:0;background: rgba(14,165,233,0.1); color: var(--sp-c-38bdf8,#38bdf8); border: 1px dashed #0ea5e9;" onclick="event.stopPropagation(); window.splitParticipantFunction(\'' + t.id + '\', \'' + safeP + '\');">✂️</button>';
       }

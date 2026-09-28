@@ -101,6 +101,26 @@ console.log('\n── excluir inscrito num roster SÓ-UID (o clique real do ✕)
   ok(t.participants.indexOf('Convidado sem conta') === -1, 'fictício :: saiu do roster');
 }
 
+// Vaga manual moderna também tem identidade estável. Mesmo em dado legado com dois
+// rótulos iguais, remover manual-a não pode atingir manual-b no elenco nem na espera.
+{
+  const t = {
+    participants: [
+      { manualParticipantId: 'manual-a', displayName: 'Convidado' },
+      { manualParticipantId: 'manual-b', displayName: 'Convidado' },
+    ],
+    standbyParticipants: [
+      { manualParticipantId: 'manual-a', displayName: 'Convidado' },
+      { manualParticipantId: 'manual-b', displayName: 'Convidado' },
+    ], waitlist: [], monarchWaitlist: {}, checkedIn: {}, absent: {}, vips: {},
+  };
+  const out = W._applyOrganizerParticipantRemoval(t, 'Convidado', 'manual-a');
+  ok(!!out && t.participants.length === 1 && t.participants[0].manualParticipantId === 'manual-b',
+    'manual :: remove do elenco somente pelo manualParticipantId');
+  ok(t.standbyParticipants.length === 1 && t.standbyParticipants[0].manualParticipantId === 'manual-b',
+    'manual :: remove da espera somente a vaga escolhida');
+}
+
 // 4) presença/W.O./VIP do excluído não podem ficar penduradas
 {
   const t = mkT(); t.checkedIn = { uKarla: true, uSolo: true }; t.absent = { uKarla: true }; t.vips = { uKarla: true };

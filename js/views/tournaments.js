@@ -53,6 +53,7 @@ window._duplaCard = function (t, p, draggable, ctx) {
 
     var nm = typeof p === 'string' ? p : (p.displayName || p.name || '');
     var uid = typeof p === 'object' ? (p.uid || '') : '';
+    var _removeIdentity = typeof p === 'object' ? (p.uid || p.manualParticipantId || '') : '';
     var email = typeof p === 'object' ? (p.email || '') : '';
     var _isOrgP = uid ? !!_orgUidsShared[uid] : (email && !!_orgEmailsShared[email]);
     var _crown = _isOrgP ? ' <svg width="14" height="14" viewBox="0 0 24 24" fill="rgba(251,191,36,0.9)" style="flex-shrink:0;margin-left:2px;"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>' : '';
@@ -120,7 +121,7 @@ window._duplaCard = function (t, p, draggable, ctx) {
       ? '<button type="button" class="cancel-x-btn" onclick="event.stopPropagation();' + _splitCall + '" title="Desfazer dupla" style="--cx-size:24px;">✕</button>'
       : '';
     var _delBtnDupla = (isOrg && !drawDone && draggable)
-      ? '<button type="button" class="cancel-x-btn" title="Remover inscrito" onclick="event.stopPropagation();window.removeParticipantFunction(\'' + _safeAttr(tIdStr) + '\',\'' + _safeAttr(_entryName) + '\',\'' + _safeAttr(uid || '') + '\')" style="--cx-size:24px;">✕</button>'
+      ? '<button type="button" class="cancel-x-btn" title="Remover inscrito" onclick="event.stopPropagation();window.removeParticipantFunction(\'' + _safeAttr(tIdStr) + '\',\'' + _safeAttr(_entryName) + '\',\'' + _safeAttr(_removeIdentity) + '\')" style="--cx-size:24px;">✕</button>'
       : '';
     var _s1 = (members && window._enrollNumber) ? window._enrollNumber(_enrollOrderMapD, { uid: (p && p.p1Uid) || '', displayName: (p && p.p1Name) || members[0], name: (p && p.p1Name) || members[0] }) : '';
     var _s2 = (members && members[1] && window._enrollNumber) ? window._enrollNumber(_enrollOrderMapD, { uid: (p && p.p2Uid) || '', displayName: (p && p.p2Name) || members[1], name: (p && p.p2Name) || members[1] }) : '';
@@ -588,15 +589,22 @@ window._applyOrganizerParticipantRemoval = function(t, participantName, memberUi
     var arr = Array.isArray(t.participants) ? t.participants : (t.participants ? Object.values(t.participants) : []);
     var idx = -1;
     if (memberUid) {
-        var si = arr.findIndex(function (p) { return p && typeof p === 'object' && p.uid === memberUid && !p.p1Uid && !p.p2Uid && !p.p1Name && !p.p2Name; });
+        // `memberUid` é o nome histórico do campo da callable; ele carrega a CHAVE
+        // estável da pessoa: UID de conta ou manualParticipantId. Não cair no rótulo
+        // para a vaga manual, senão um renomeio/homônimo remove a pessoa errada.
+        var si = arr.findIndex(function (p) { return p && typeof p === 'object' &&
+            (p.uid === memberUid || p.manualParticipantId === memberUid) &&
+            !p.p1Uid && !p.p2Uid && !p.p1Name && !p.p2Name; });
         if (si !== -1) { removedP = arr[si]; arr.splice(si, 1); t.participants = arr; idx = si; }
     }
     if (idx === -1 && memberUid) {
-        var pi = arr.findIndex(function (p) { return p && typeof p === 'object' && (p.p1Uid === memberUid || p.p2Uid === memberUid); });
+        var pi = arr.findIndex(function (p) { return p && typeof p === 'object' &&
+            (p.p1Uid === memberUid || p.p2Uid === memberUid || p.p1ManualId === memberUid || p.p2ManualId === memberUid); });
         if (pi !== -1) {
             var entry = arr[pi];
-            var keep = window._pairPartnerSolo(entry, entry.p1Uid === memberUid ? 2 : 1);
-            removedP = { uid: memberUid };
+            var isFirst = entry.p1Uid === memberUid || entry.p1ManualId === memberUid;
+            var keep = window._pairPartnerSolo(entry, isFirst ? 2 : 1);
+            removedP = String(memberUid).indexOf('manual-') === 0 ? { manualParticipantId: memberUid } : { uid: memberUid };
             if (keep) arr.splice(pi, 1, keep); else arr.splice(pi, 1);
             t.participants = arr;
             idx = pi;
@@ -608,10 +616,13 @@ window._applyOrganizerParticipantRemoval = function(t, participantName, memberUi
             return forms.indexOf(target) !== -1 || ('participante ' + (i + 1)) === target;
         });
         if (idx !== -1) { removedP = arr[idx]; arr.splice(idx, 1); t.participants = arr; }
-    } else if (!removedP) removedP = { uid: memberUid };
-    var removedFromWait = (typeof window._removeFromWaitlist === 'function') ? window._removeFromWaitlist(t, participantName) : false;
+    } else if (!removedP) removedP = String(memberUid).indexOf('manual-') === 0 ? { manualParticipantId: memberUid } : { uid: memberUid };
+    var removalKey = memberUid || (removedP && (removedP.uid || removedP.manualParticipantId)) || participantName;
+    var removedFromWait = (typeof window._removeFromWaitlistByKey === 'function')
+        ? window._removeFromWaitlistByKey(t, removalKey)
+        : ((typeof window._removeFromWaitlist === 'function') ? window._removeFromWaitlist(t, participantName) : false);
     if (idx === -1 && !removedFromWait) return false;
-    if (typeof window._purgePersonFromMaps === 'function') window._purgePersonFromMaps(t, memberUid || (removedP && removedP.uid), participantName);
+    if (typeof window._purgePersonFromMaps === 'function') window._purgePersonFromMaps(t, removalKey, participantName);
     return { participant: removedP, removedFromWait: removedFromWait };
 };
 
