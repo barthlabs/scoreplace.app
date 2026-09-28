@@ -1981,7 +1981,9 @@
       if (_roundsBased && !isMonarch && classifyPhaseFormat(cfg0) === 'league') {
         var needL = (typeof window !== 'undefined' && typeof window._phasePlannedRounds === 'function') ? window._phasePlannedRounds(t, 0) : (parseInt(cfg0.rounds) || parseInt(cfg0.swissRounds) || 1);
         var playedL = t.rounds.filter(function (r) {
-          return r && Array.isArray(r.matches) && r.matches.some(function (m) { return !m.isSitOut; });
+          // Só rodada com confronto real satisfaz a quantidade planejada: BYE/folga
+          // explicam a estrutura, mas não são uma rodada jogada da classificatória.
+          return r && Array.isArray(r.matches) && r.matches.some(function (m) { return m && !m.isSitOut && !m.isBye; });
         }).length;
         if (playedL < needL) return false;
       }

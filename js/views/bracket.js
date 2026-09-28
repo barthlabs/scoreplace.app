@@ -7335,7 +7335,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
           for (var _rri = 0; _rri < currentRound - 1; _rri++) {
             var _prevR = rounds[_rri];
             if (_prevR && Array.isArray(_prevR.matches)) {
-              _monarchPrevRoundsMatches += _prevR.matches.filter(function(mm) { return mm && !mm.isSitOut; }).length;
+              _monarchPrevRoundsMatches += _prevR.matches.filter(function(mm) { return mm && !mm.isSitOut && !mm.isBye; }).length;
             }
           }
         } catch (_e) {}
@@ -7844,10 +7844,11 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         }
         return sortedGroups.map(_renderGroup).join('');
       })() : (() => {
-        const prevMatches = rounds.slice(0, currentRound - 1).reduce((sum, r) => sum + (r.matches || []).length, 0);
-        // v0.16.95: filtra sit-outs (isSitOut) — eles aparecem na seção
-        // dedicada "Ficaram de fora desta rodada" acima, não no grid.
-        const allMatches = (currentRoundData.matches || []).filter(function(m) { return m && !m.isSitOut; });
+        // REGRESSÃO: número de jogo e cards usam a mesma definição. Folga/BYE
+        // podem existir na estrutura, mas não ocupam número nem viram card de partida.
+        const isRealRoundMatch = function(m) { return m && !m.isSitOut && !m.isBye; };
+        const prevMatches = rounds.slice(0, currentRound - 1).reduce((sum, r) => sum + (r.matches || []).filter(isRealRoundMatch).length, 0);
+        const allMatches = (currentRoundData.matches || []).filter(isRealRoundMatch);
         // v1.8.46: item de GRID, sem largura própria. O `min-width:260px;max-width:320px;flex:1`
         // era o padrão que a v0.16.52 já tinha aposentado nos GRUPOS e que sobreviveu aqui
         // (rodadas de Liga/Suíço): cards na mesma linha se espremiam abaixo de 320 e o
@@ -8405,7 +8406,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
 
     // Upcoming Swiss rounds — TBD placeholders, same match count as current round.
     if (currentRound < maxRounds) {
-      var _swissMatchesPerRound = (currentRoundData.matches || []).filter(function(m) { return !m.isSitOut; }).length;
+      var _swissMatchesPerRound = (currentRoundData.matches || []).filter(function(m) { return m && !m.isSitOut && !m.isBye; }).length;
       if (_swissMatchesPerRound < 1) _swissMatchesPerRound = 1;
       for (var _upR = currentRound + 1; _upR <= maxRounds; _upR++) {
         var _tbdSwiss = '';
@@ -8510,7 +8511,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
   var upcomingRoundsHtml = '';
   if (!useColumnLayout) {
     if (isSuico && currentRound < maxRounds) {
-      var _legacySwissPerRound = (currentRoundData.matches || []).filter(function(m) { return !m.isSitOut; }).length;
+      var _legacySwissPerRound = (currentRoundData.matches || []).filter(function(m) { return m && !m.isSitOut && !m.isBye; }).length;
       if (_legacySwissPerRound < 1) _legacySwissPerRound = 1;
       for (var _legR = currentRound + 1; _legR <= maxRounds; _legR++) {
         var _legCards = '';

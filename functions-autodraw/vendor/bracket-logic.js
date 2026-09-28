@@ -4452,7 +4452,9 @@ function _doCloseRound(t, tId, roundIdx, anchorMatchId, resultCtx, _forcarLocal)
     } else {
       _generateNextRound(t);
       var _newRound = t.rounds[t.rounds.length - 1];
-      var _newMatchCount = (_newRound && _newRound.matches || []).filter(function(m) { return !m.isSitOut; }).length;
+      // A mensagem de nova rodada anuncia PARTIDAS: marcador de folga ou BYE não
+      // entra no número, mesmo se uma rodada legada o mantiver materializado.
+      var _newMatchCount = (_newRound && _newRound.matches || []).filter(function(m) { return m && !m.isSitOut && !m.isBye; }).length;
       showNotification(_t('bui.newRound'), _t('bui.newRoundMsg', { n: t.rounds.length, count: _newMatchCount }), 'success');
 
       // Notify all participants — personalized per recipient (shows their match)

@@ -64,5 +64,19 @@ ok(/isSitOut\s*\|\|\s*isBye\(m\)/.test(corpo) && /_gameNum\s*=\s*null/.test(corp
 ok(/m\.id/.test(corpo),
   'a fonte única deixou de consultar m.id — cópias do mesmo jogo receberiam números diferentes');
 
+// A fonte única carimba o número, mas os offsets e placeholders do renderer também
+// contam partidas. Se qualquer um deles incluir BYE/folga, os cartões seguintes
+// voltam a pular números mesmo com `_assignGlobalGameNumbers` correto.
+const bracketSrc = fs.readFileSync(path.join(ROOT, 'js/views/bracket.js'), 'utf8');
+const phaseSrc = fs.readFileSync(path.join(ROOT, 'js/views/phases-engine.js'), 'utf8');
+const logicSrc = fs.readFileSync(path.join(ROOT, 'js/views/bracket-logic.js'), 'utf8');
+ok(/isRealRoundMatch = function\(m\) \{ return m && !m\.isSitOut && !m\.isBye; \}/.test(bracketSrc) &&
+   /_swissMatchesPerRound[\s\S]{0,180}!m\.isSitOut && !m\.isBye/.test(bracketSrc),
+  'offsets e placeholders da chave contam só jogo real');
+ok(/var playedL[\s\S]{0,500}!m\.isSitOut && !m\.isBye/.test(phaseSrc),
+  'fase classificatória não considera uma rodada só de marcadores como jogada');
+ok(/_newMatchCount[\s\S]{0,180}!m\.isSitOut && !m\.isBye/.test(logicSrc),
+  'notificação de nova rodada não anuncia BYE/folga como partida');
+
 console.log('\n' + (fail === 0 ? '✅ game-number-single-counter: OK' : '❌ ' + fail + ' FALHA(S)') + '  (' + pass + ' asserts ok)');
 if (fail > 0) process.exit(1);
