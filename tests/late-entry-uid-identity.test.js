@@ -62,6 +62,16 @@ ok(W._lateEntryKey(sameTextUid) !== W._lateEntryKey(sameTextManual) &&
    'UID, manual e guest de mesmo texto não colidem');
 ok(W._lateEntryKey(mesmaDupla) === 't:u:' + [U1, U2].sort().join('|u:'),
    'dupla usa membros UID tipados e ordem estável');
+const duplaMista = { p1Uid: U1, p1Name: 'Marcello Martins de Souza',
+  p2ManualId: 'manual-convidada-7', p2Name: 'Convidada original' };
+const duplaMistaRenomeada = Object.assign({}, duplaMista, { p2Name: 'Convidada renomeada' });
+const duplaMistaOutra = Object.assign({}, duplaMista, { p2ManualId: 'manual-convidada-8' });
+ok(W._lateEntryKey(duplaMista) === 't:m:manual-convidada-7|u:' + U1,
+   'dupla mista inclui a identidade manual tipada do segundo membro');
+ok(W._lateEntryKey(duplaMista) === W._lateEntryKey(duplaMistaRenomeada),
+   'renomear membro manual não libera uma segunda integração tardia');
+ok(W._lateEntryKey(duplaMista) !== W._lateEntryKey(duplaMistaOutra),
+   'duas convidadas manuais diferentes não colidem numa dupla mista');
 const legacyIntegrated = { lateIntegrated: {} };
 legacyIntegrated.lateIntegrated[[U1, U2].sort().join('|')] = 1;
 ok(W._lateAlreadyIntegrated(legacyIntegrated, mesmaDupla) === true,

@@ -734,10 +734,15 @@ window._lateLegacyEntryKey = function (p) {
 };
 window._lateEntryKey = function (p) {
   if (!p || typeof p !== 'object') return p ? 'n:' + String(p) : '';
-  var memberKey = function (uid, name) {
-    return uid ? 'u:' + String(uid) : (name ? 'n:' + String(name) : '');
+  // REGRESSÃO: numa dupla mista, p1Uid + p2Name fazia a identidade depender do nome do
+  // convidado manual. Renomear esse convidado liberava uma segunda integração tardia;
+  // dois manuais de mesmo rótulo também se confundiam. Toda vaga criada hoje tem
+  // manualParticipantId, portanto ele vem antes do nome. Nome só mantém a compatibilidade
+  // de documentos antigos que realmente não guardam identidade alguma.
+  var memberKey = function (uid, manualId, name) {
+    return uid ? 'u:' + String(uid) : (manualId ? 'm:' + String(manualId) : (name ? 'n:' + String(name) : ''));
   };
-  var a = memberKey(p.p1Uid, p.p1Name), b = memberKey(p.p2Uid, p.p2Name);
+  var a = memberKey(p.p1Uid, p.p1ManualId, p.p1Name), b = memberKey(p.p2Uid, p.p2ManualId, p.p2Name);
   if (a && b) return 't:' + [a, b].sort().join('|');
   if (p.uid) return 'u:' + String(p.uid);
   if (p.manualParticipantId) return 'm:' + String(p.manualParticipantId);
