@@ -73,6 +73,15 @@ function planWrites(tAntes, tDepois, ctx) {
   const vazio = { matches: [] };
   (split.PESADOS || []).forEach((k) => { vazio[k] = []; });
   const pAntes = tAntes ? split.dividir(_clone(tAntes), fora) : vazio;
+  /* ⛔ Uma foto histórica pode ter os jogos (ou outra parte canônica) ainda no
+   * documento-pai e a subcoleção vazia. Se antes e depois forem comparados como
+   * iguais, o plano limpa o pai sem criar registros externos. `_leTorneio` só marca
+   * esse caso após confirmar que a coleção está vazia; aqui fazemos a primeira cópia
+   * atômica, sem mudar o contrato de que torneio novo já nasce dividido. */
+  const legadasNoDocumento = o.partesLegadasNoDocumento || {};
+  Object.keys(legadasNoDocumento).forEach((nome) => {
+    if (legadasNoDocumento[nome] && Object.prototype.hasOwnProperty.call(pAntes, nome)) pAntes[nome] = [];
+  });
 
   /* A LISTA MANDA, não o nome escrito à mão: parte nova no marcador passa a ser planejada
    * sem ninguém lembrar deste ponto. A chave sai de `chaveDoRegistro` — uma regra só. */

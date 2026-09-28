@@ -149,8 +149,13 @@ const A = H.window._chavesAdapter;
     const dps = (await s.doc.get()).data();
     assert(!(dps.tardiosPendentesPorLinha || {})[s.linha], 'pendência removida');
     assert.notEqual(foto(dps), foto(antes), 'a chave foi refeita e GRAVADA');
-    const entrou = (dps.matches || []).some((m) => m.p1 === tardio.name || m.p2 === tardio.name);
-    assert(entrou, 'o tardio está na chave gravada');
+    /* ⛔ O torneio novo é dividido: a decisão pode mudar o documento-pai (pendência,
+     * revisão, contadores), mas os jogos vivem em `matches/`. Procurar em `dps.matches`
+     * aprovaria a antiga estrutura inteira e deixaria a prova cega para o destino real. */
+    const jogosGravados = (await s.doc.collection('matches').get()).docs.map((x) => (x.data() || {}).jogo || {});
+    const entrou = jogosGravados.some((m) => m.p1 === tardio.name || m.p2 === tardio.name);
+    assert(entrou, 'o tardio está na chave gravada na subcoleção canônica');
+    assert(!Array.isArray(dps.matches) || dps.matches.length === 0, 'os jogos não voltaram ao documento-pai');
     /* ⛔ segunda confirmação (a concorrente que chega depois): não estoura e não muda nada */
     const foto2 = foto(dps);
     const out2 = await functions.resolvePendingLateBye.run({
@@ -165,13 +170,24 @@ const A = H.window._chavesAdapter;
   {
     const s = await semear('e');
     const antes = (await s.doc.get()).data();
+    const confrontosAntes = foto(antes);
     const out = await functions.resolvePendingLateBye.run({
       auth: { uid: dono }, data: { tournamentId: s.id, linha: s.linha, revisaoDaChave: s.rev, acao: 'cancelar' }
     });
     assert.equal(out.changed, true, 'arquivar vale');
     const dps = (await s.doc.get()).data();
     assert(!(dps.tardiosPendentesPorLinha || {})[s.linha], 'pendência arquivada');
-    assert.equal(foto(dps), foto(antes), 'e NENHUM confronto mudou');
+    const registrosExternos = (await s.doc.collection('matches').get()).docs;
+    const confrontosDepois = registrosExternos.length
+      /* Firestore entrega documentos por id; `3P` vem antes de `VC-*`, mas a ordem
+       * visível da chave é `_loc.mi`. A prova compara a chave reconstruída, não a
+       * ordenação incidental da coleção. */
+      ? JSON.stringify(registrosExternos.map((x) => x.data() || {}).sort((a, b) =>
+          (((a._loc || {}).mi || 0) - ((b._loc || {}).mi || 0))).map((r) => {
+          const m = r.jogo || {}; return [m.id, m.p1, m.p2];
+        }))
+      : foto(dps);
+    assert.equal(confrontosDepois, confrontosAntes, 'e NENHUM confronto mudou (onde quer que a chave já estivesse guardada)');
     console.log('✓ ⑤ arquivar remove a pendência sem tocar na chave');
   }
 

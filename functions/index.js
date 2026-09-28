@@ -3848,7 +3848,9 @@ exports.setTournamentPresence = onCall(
     /* ⛔ PRESENÇA TAMBÉM RESPEITA AS PARTES CANÔNICAS. Marcador ausente é compatibilidade
      * de cliente antigo, não autorização para devolver mapas externos ao documento.
      * [[project_torneio_nasce_dividido]] */
-    const fora = _tSplitFn.partesDe(t);
+    // Todo torneio novo usa as partes canônicas; `_semPesados` de documento antigo só
+    // acrescenta mapa que já está externo. Ignorá-lo faria presença cair de volta no pai.
+    const fora = Array.from(new Set(_tSplitFn.partesDe(t).concat(Array.isArray(t._semPesados) ? t._semPesados : [])));
     const FieldPath = admin.firestore.FieldPath;
     const FieldValue = admin.firestore.FieldValue;
     const lote = db.batch();
@@ -3919,7 +3921,9 @@ exports.aplicarNoTorneio = onCall(
     const t = snap.data();
     /* ⛔ ESCRITA FINA NUNCA DECIDE QUE O TORNEIO É INTEIRO PELO MARCADOR LEGADO.
      * As partes canônicas continuam fora quando o campo falta. [[project_torneio_nasce_dividido]] */
-    const fora = _tSplitFn.partesDe(t);
+    // Compatibilidade de escrita: parte canônica continua externa, e marcador legado
+    // apenas informa campos extras que já vivem em subcoleção — nunca tira os canônicos.
+    const fora = Array.from(new Set(_tSplitFn.partesDe(t).concat(Array.isArray(t._semPesados) ? t._semPesados : [])));
 
     /* ⛔ AUTORIZA TUDO ANTES DE ESCREVER QUALQUER COISA. Autorizar no meio do laço deixaria
      * metade aplicada quando a segunda metade é negada — e "metade aplicada" é um estado
@@ -4537,7 +4541,8 @@ exports.setMatchWhatsAppGroup = onCall(
        * e a única coisa que varia entre os leitores — COMO se lê uma coleção — entra por
        * parâmetro. [[project_dividir_exige_todo_escritor_ciente]]
        * ⚠️ TODA leitura vem antes de QUALQUER escrita: é o que a transação exige. */
-      const t = await _tSplitFn.montarDoBanco(snap.data(), async (colecao) => {
+      const bruto = snap.data() || {};
+      const t = await _tSplitFn.montarDoBanco(bruto, async (colecao) => {
         const s = await tx.get(docRef.collection(colecao));
         return s.docs.map((x) => x.data());
       });
@@ -4546,7 +4551,10 @@ exports.setMatchWhatsAppGroup = onCall(
        * `montarDoBanco` já aceitou uma fotografia sem `_semPesados` e trouxe o jogo da
        * subcoleção. Voltar a perguntar pelo campo aqui faria link/data parecerem salvos no
        * documento pai, mas sumirem na próxima montagem. [[project_torneio_nasce_dividido]] */
-      const fora = _tSplitFn.partesDe(t);
+      // A fonte canônica cobre torneio novo; a marca histórica acrescenta somente
+      // partes que já estão fora. Isto decide se este jogo é atualizado por campo no
+      // documento ou em seu registro externo, sem migrar nada durante a operação.
+      const fora = Array.from(new Set(_tSplitFn.partesDe(t).concat(Array.isArray(bruto._semPesados) ? bruto._semPesados : [])));
       // O locator CANÔNICO: `dividir` é quem sabe onde jogo mora, e carimba `_loc`/`_chave`.
       const regs = (_tSplitFn.dividir(JSON.parse(JSON.stringify(t)), ["matches"]) || {}).matches || [];
       const alvo = regs.find((r) => r && r.jogo && r.jogo.id != null && String(r.jogo.id) === matchId);
@@ -4585,7 +4593,17 @@ exports.setMatchWhatsAppGroup = onCall(
       const espelhoDoIrmao = (valor === null) ? null : { link: valor.link };
       const espelhados = [];
 
-      if (fora.indexOf("matches") !== -1) {
+      // A reforma faz jogos novos nascerem externos. Há, porém, fotografia histórica
+      // mista: outra parte já saiu, mas ESTE jogo ainda está no documento. O lugar que
+      // importa é o do registro que acabou de ser lido; inferir só pela lista canônica
+      // tentaria atualizar um subdocumento inexistente e o link não salvaria.
+      const jogoAindaNoDocumento = (function () {
+        const tem = function (lista) { return Array.isArray(lista) && lista.some(function (m) { return m && String(m.id) === matchId; }); };
+        if (tem(bruto.matches)) return true;
+        if ((bruto.rounds || []).some(function (r) { return r && tem(r.matches); })) return true;
+        return (bruto.groups || []).some(function (g) { return g && tem(g.matches); });
+      })();
+      if (fora.indexOf("matches") !== -1 && !jogoAindaNoDocumento) {
         const FieldPath = admin.firestore.FieldPath;
         const FieldValue = admin.firestore.FieldValue;
         const col = docRef.collection(_tSplitFn.colecaoDaParte("matches"));
@@ -4612,7 +4630,11 @@ exports.setMatchWhatsAppGroup = onCall(
          * dele devolveria pro documento o que já mora fora (é assim que este projeto já
          * perdeu/duplicou parte quatro vezes). `dividir` esvazia exatamente o que o marcador
          * diz e mais nada. [[project_grupo_e_documento_e_dividir_seletivo]] */
-        const cfg = (_tSplitFn.dividir(JSON.parse(JSON.stringify(t)), fora) || {}).config || {};
+        // Mantém o `matches` no config quando o registro existe no documento: `fora`
+        // continua contendo a parte canônica para leitores novos, mas removê-la desta
+        // gravação seletiva apagaria exatamente o jogo que estamos atualizando.
+        const foraParaEscrever = jogoAindaNoDocumento ? fora.filter(function (parte) { return parte !== "matches"; }) : fora;
+        const cfg = (_tSplitFn.dividir(JSON.parse(JSON.stringify(t)), foraParaEscrever) || {}).config || {};
         const upd = {};
         const aplica = (reg, v) => {
           const slot = _waSlotDoJogo(cfg, reg._loc);

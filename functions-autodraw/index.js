@@ -515,10 +515,31 @@ async function _leTorneio(tx, ref, tId) {
   // ⭐ UM CAMINHO SÓ (ver montarDoBanco no split-core). O que é daqui: ler coleção DENTRO
   // da transação — e transação exige todas as leituras antes de qualquer escrita, que é
   // por isso que esta função existe separada do gravador.
-  const montado = await _tSplit.montarDoBanco(t, async (colecao) => {
+  const lidas = {};
+  const montado = await _tSplit.montarDoBanco(t, async (colecao, parte) => {
     const s = await tx.get(ref.collection(colecao));
-    return s.docs.map((d) => d.data());
+    const docs = s.docs.map((d) => d.data());
+    lidas[parte || colecao] = docs;
+    return docs;
   });
+  /* ⛔ MIGRAÇÃO DE FOTOGRAFIA HISTÓRICA, NÃO "DIVISÃO EM VOO".
+   * Todo torneio novo já nasce com as partes canônicas em subcoleção. Há documentos
+   * anteriores, porém, nos quais `matches` ainda mora no pai enquanto outra parte já
+   * estava externa. Ao executar uma ação administrativa inócua (como arquivar uma
+   * pendência), o plano esvaziava o pai por ser canônico, mas o diff via os mesmos
+   * jogos antes/depois e não criava os subdocs: a chave desaparecia.
+   *
+   * Marcamos somente a leitura em que o documento-pai CONTÉM registros e a coleção
+   * correspondente está realmente vazia. O planejador então trata a origem como vazia
+   * uma única vez e copia os registros na mesma transação que limpa o pai. Coleção com
+   * qualquer registro continua soberana — não duplicamos nem ressuscitamos espelho velho.
+   * [[project_torneio_nasce_dividido]] */
+  const legadoNoPai = {};
+  _tSplit.partesDe(t).forEach((parte) => {
+    const noPai = (_tSplit.dividir(JSON.parse(JSON.stringify(t)), [parte]) || {})[parte] || [];
+    if (noPai.length && !(lidas[parte] || []).length) legadoNoPai[parte] = true;
+  });
+  if (Object.keys(legadoNoPai).length) montado._partesLegadasNoDocumento = legadoNoPai;
   montado.id = tId;
   return montado;
 }
@@ -671,12 +692,18 @@ function _preservaRepescagemCarimbada(tDepois, tAntes) {
  * avanço de fase possa PLANEJAR, checar o teto e só então executar — com o mesmo objeto. */
 function _planejaEscrita(tDepois, tAntes, opts) {
   const o = opts || {};
+  /* A marca é só contexto da leitura: nunca pode chegar ao Firestore. Quando uma
+   * fotografia anterior ainda trazia uma parte no documento, ela instrui o plano a
+   * gravar a cópia inicial na subcoleção antes de o documento-pai ser limpo. */
+  const partesLegadasNoDocumento = (tAntes && tAntes._partesLegadasNoDocumento) || null;
+  if (tDepois) delete tDepois._partesLegadasNoDocumento;
   return _wp.planWrites(tAntes, tDepois, {
     split: _tSplit,
     boundary: _applyWriteBoundary,
     agoraIso: o.agoraIso,
     espelho: _mrEspelho,
     tournamentId: o.tournamentId || (tDepois && tDepois.id) || null,
+    partesLegadasNoDocumento: partesLegadasNoDocumento,
     extras: o.extras || [],
     onAviso: (m) => console.error(m)
   });

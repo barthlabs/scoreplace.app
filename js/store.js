@@ -816,7 +816,13 @@ window._marcaPartesQueFaltam = function (t, documentoDeTorneio) {
    * documento legado quanto cartão em carregamento eterno. */
   var _splitFalta = (typeof window !== 'undefined') ? window._tSplit : null;
   var _foraDaqui = (documentoDeTorneio && _splitFalta && typeof _splitFalta.partesDe === 'function')
-    ? _splitFalta.partesDe(t) : (Array.isArray(t._semPesados) ? t._semPesados : []);
+    ? _splitFalta.partesDe(t) : [];
+  // As partes canônicas cobrem torneio novo. O marcador legado só pode ACRESCENTAR
+  // uma parte que já mora fora (por exemplo, grupos antigos), nunca remover uma
+  // canônica e fazer a tela declarar o torneio completo antes da montagem.
+  (Array.isArray(t._semPesados) ? t._semPesados : []).forEach(function (nome) {
+    if (_foraDaqui.indexOf(nome) === -1) _foraDaqui.push(nome);
+  });
   if (!_foraDaqui.length) { delete t._faltamPesados; delete t._faltaOQue; return false; }
   var _tam = function (x) {
     if (Array.isArray(x)) return x.length;
@@ -885,7 +891,12 @@ window._preservaPartesMontadas = function (novo, velho, documentoDeTorneio) {
     if (!novo) return novo;
     var _splitPreserva = (typeof window !== 'undefined') ? window._tSplit : null;
     var fora = (documentoDeTorneio && _splitPreserva && typeof _splitPreserva.partesDe === 'function')
-      ? _splitPreserva.partesDe(novo) : (Array.isArray(novo._semPesados) ? novo._semPesados : []);
+      ? _splitPreserva.partesDe(novo) : [];
+    // O marcador de documento histórico não escolhe as partes canônicas, mas registra
+    // extensões antigas que ainda precisam sobreviver a um eco magro (como grupos).
+    (Array.isArray(novo._semPesados) ? novo._semPesados : []).forEach(function (nome) {
+      if (fora.indexOf(nome) === -1) fora.push(nome);
+    });
     if (!fora.length) return novo;
     var _vazio = function (x) {
       if (Array.isArray(x)) return !x.length;

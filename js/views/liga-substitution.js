@@ -744,9 +744,41 @@ function _removeWaitEntry(tournament, entry, fallbackName) {
   var key = entry && typeof entry === 'object' && (entry.uid || entry.manualParticipantId);
   key = String(key || fallbackName || '').trim();
   if (!key) return false;
-  if (typeof window._removeFromWaitlistByKey === 'function') return window._removeFromWaitlistByKey(tournament, key);
-  if (typeof window._removeFromWaitlist === 'function') return window._removeFromWaitlist(tournament, String(fallbackName || key));
-  return false;
+  if (typeof window._removeFromWaitlistByKey === 'function') {
+    if (window._removeFromWaitlistByKey(tournament, key)) return true;
+  }
+  if (typeof window._removeFromWaitlist === 'function') {
+    if (window._removeFromWaitlist(tournament, String(fallbackName || key))) return true;
+  }
+  /* O núcleo da espera normalmente já está carregado. Este fallback existe para o
+   * caminho isolado/legado da Liga: aceitar o convite PRECISA tirar a pessoa da
+   * espera, senão ela volta a ser sorteável na rodada seguinte. UID/ID manual vence;
+   * texto puro só é removido por igualdade exata porque é a forma histórica sem UID. */
+  var uid = entry && typeof entry === 'object' ? String(entry.uid || '') : '';
+  var manual = entry && typeof entry === 'object' ? String(entry.manualParticipantId || '') : '';
+  var nome = String(fallbackName || '').trim();
+  var igual = function (item) {
+    if (item && typeof item === 'object') {
+      if (uid && String(item.uid || '') === uid) return true;
+      return !!(manual && String(item.manualParticipantId || '') === manual);
+    }
+    return !!nome && String(item) === nome;
+  };
+  var mudou = false;
+  ['standbyParticipants', 'waitlist'].forEach(function (campo) {
+    if (!Array.isArray(tournament[campo])) return;
+    var antes = tournament[campo].length;
+    tournament[campo] = tournament[campo].filter(function (item) { return !igual(item); });
+    mudou = mudou || tournament[campo].length !== antes;
+  });
+  var porCategoria = tournament.monarchWaitlist;
+  if (porCategoria && typeof porCategoria === 'object') Object.keys(porCategoria).forEach(function (categoria) {
+    if (!Array.isArray(porCategoria[categoria])) return;
+    var antes = porCategoria[categoria].length;
+    porCategoria[categoria] = porCategoria[categoria].filter(function (item) { return !igual(item); });
+    mudou = mudou || porCategoria[categoria].length !== antes;
+  });
+  return mudou;
 }
 
 // Box informativo do desfecho — não é escolha, é o que VAI acontecer. Fica no diálogo
