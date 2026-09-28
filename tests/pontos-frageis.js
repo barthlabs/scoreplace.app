@@ -150,5 +150,12 @@ module.exports = [
     marca: 'A CLASSIFICAÇÃO É A IDENTIDADE DO TIME',
     incidente: 'a classificação progressiva usava o rótulo como chave: duas duplas homônimas '
       + 'colapsavam numa posição, e pódio, ficha e retrato final podiam premiar a equipe errada',
+    data: '2026-09-28' },
+
+  { id: '26', arquivo: 'js/views/tournament-split-core.js',
+    ancora: 'var _legadoFora = Array.isArray(config._semPesados) ? config._semPesados : [];',
+    marca: 'GRUPOS HISTÓRICOS NÃO PODEM SUMIR NA MONTAGEM',
+    incidente: 'a Confra tem 35 grupos na subcoleção histórica; a montagem canônica lia só as '
+      + 'três partes novas e devolvia a rodada sem grupos, perdendo retrato congelado, presença e W.O. na tela',
     data: '2026-09-28' }
 ];

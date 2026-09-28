@@ -115,6 +115,32 @@ ok(S.iguais(S.remontar(soJogos), t),
   const parcial = S.partesDe({ _semPesados: ['matches'] });
   ok(JSON.stringify(parcial) === JSON.stringify(S.PARTES_CANONICAS),
     'marcador legado parcial não escolhe mais leitura/escrita: todas as partes continuam canônicas');
+
+  /* A Confra foi dividida antes do contrato atual e deixou `monarchGroups` numa
+   * subcoleção adicional. Não a promovemos a parte canônica de todos: novos torneios
+   * continuam com três leituras. Mas, quando a fotografia histórica declara esse lugar,
+   * devolver a rodada sem os grupos apaga o retrato congelado que as pessoas já viram. */
+  const historico = {
+    id: 'confra-historica',
+    rounds: [{ round: 1, format: 'liga', matches: [], monarchGroups: [{
+      name: 'Grupo A', players: ['Ana', 'Bia'], playersUids: ['uAna', 'uBia'],
+      classifCongelada: [{ uid: 'uAna', name: 'Ana' }, { uid: 'uBia', name: 'Bia' }]
+    }]}],
+    matches: [], participants: [], opponentHistory: []
+  };
+  const partesHistoricas = S.dividir(historico, ['matches', 'participants', 'opponentHistory', 'grupos']);
+  partesHistoricas.config._semPesados = ['matches', 'participants', 'opponentHistory', 'grupos'];
+  const lidasHistoricas = [];
+  const montadoHistorico = await S.montarDoBanco(partesHistoricas.config, async (colecao, nome) => {
+    lidasHistoricas.push(nome + '@' + colecao);
+    return partesHistoricas[nome] || [];
+  });
+  ok(S.partesDe(partesHistoricas.config).indexOf('grupos') === -1,
+    'grupo histórico NÃO vira a quarta parte canônica dos novos torneios');
+  ok(lidasHistoricas.some((x) => x.indexOf('grupos@grupos') === 0),
+    'mas a montagem lê a subcoleção histórica de grupos quando o documento a declara');
+  ok(JSON.stringify(montadoHistorico.rounds[0].monarchGroups) === JSON.stringify(historico.rounds[0].monarchGroups),
+    'e devolve grupo, UIDs e classificação congelada sem reinterpretação');
   console.log((fail ? '✗' : '✓') + ' abrir-torneio-monta-das-subcolecoes: ' + pass + ' ok, ' + fail + ' falhas');
   process.exit(fail ? 1 : 0);
 })().catch(function (err) { console.error(err); process.exit(1); });

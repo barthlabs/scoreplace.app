@@ -610,6 +610,16 @@
      * marcador, ainda lemos matches/participants/opponentHistory: nunca devolvemos o config
      * cru e nunca abrimos uma chave sem elenco ou jogos. Cartões-resumo não chamam esta função. */
     var fora = partesDe(config);
+    /* ⛔ GRUPOS HISTÓRICOS NÃO PODEM SUMIR NA MONTAGEM. Novos torneios têm só as
+     * três partes canônicas; por isso `grupos` não entra em `partesDe()` nem faz
+     * cada abertura pagar uma leitura extra. A Confra, porém, foi migrada antes
+     * desse contrato e guarda 35 `monarchGroups` na subcoleção `grupos`. Ignorar
+     * essa indicação histórica devolve rodada sem grupos, apagando classificação
+     * congelada, presença e W.O. da tela. O espelho legado aqui só RESTAURA essa
+     * estrutura já externa — nunca decide se matches/elenco/opponentHistory ficam
+     * dentro ou fora. [[project_torneio_nasce_dividido]] */
+    var _legadoFora = Array.isArray(config._semPesados) ? config._semPesados : [];
+    if (_legadoFora.indexOf('grupos') !== -1 && fora.indexOf('grupos') === -1) fora.push('grupos');
     var partes = { config: config };
     var i = 0;
     function proxima() {
