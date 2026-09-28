@@ -155,5 +155,12 @@ sec(function () {
   ok(corpo.indexOf('window._getMonarchWaitlist(') === -1, 'não pode voltar a CHAMAR o monarchWaitlist como fonte única');
 });
 
+// ── 9. Suplente sai por identidade, não pelo rótulo ─────────────────────────
+sec(function () {
+  ok(/function _removeWaitEntry\(tournament, entry, fallbackName\)/.test(LIGA_SRC) &&
+     /_removeFromWaitlistByKey/.test(LIGA_SRC),
+    'substituição deve remover o suplente por UID/ID manual antes de usar nome legado');
+});
+
 console.log((fail === 0 ? '✅' : '❌') + ' wo-fila-aparece-no-substituto: ' + pass + ' asserções, ' + fail + ' falha(s)');
 process.exit(fail === 0 ? 0 : 1);

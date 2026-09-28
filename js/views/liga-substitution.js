@@ -642,7 +642,7 @@ window._ligaApplyWo = function (tId, roundIndex, groupName, absentName) {
         if (_jaEntry) _marcaRastroWo(_jaEntry, absentName, _absU);
         else ft.participants.push(_subEntry);
       }
-      window._removeFromWaitlist(ft, _subName);          // sai da fila (assumiu)
+      _removeWaitEntry(ft, _subEntry, _subName);         // sai da fila (assumiu)
       _removeSitOut(r, _subName, (_subEntry && _subEntry.uid) || null);                        // não é mais folga — vai jogar
       _rewriteSlot(g, absentName, _subName, true, ft);
       // v1.7.63 — O SUPLENTE GUARDA O UID, espelhando o que `woAbsentUid` já fazia pro
@@ -708,6 +708,7 @@ function _ligaWoDeactivate(ft, absentName, absentUid) {
     // do outro lado também precisa ser sem uid (senão é gente diferente com nome parecido).
     if (!_uidsDe(_p).length && _wlDisplay(_p) === absentName) { _i = k; break; }
   }
+  var _entryToRemove = null;
   if (_i !== -1) {
     _parts[_i].ligaActive = false;
     _parts[_i].woDeactivatedAt = new Date().toISOString();
@@ -715,6 +716,7 @@ function _ligaWoDeactivate(ft, absentName, absentUid) {
     // card leria "está na fila" enquanto a pessoa está desativada no elenco (store.js
     // testa `woSentToWaitlistAt` ANTES de `woDeactivatedAt`).
     delete _parts[_i].woSentToWaitlistAt;
+    _entryToRemove = _parts[_i];
   } else {
     // Não estava no elenco (veio da fila / doc legado): entra desativado — nunca fica
     // sem lugar nenhum, que é como o inscrito fantasma nasce. ⚠️ Com uid conhecido, a
@@ -723,16 +725,28 @@ function _ligaWoDeactivate(ft, absentName, absentUid) {
     var _nova = { name: absentName, displayName: absentName, ligaActive: false, woDeactivatedAt: new Date().toISOString() };
     if (_u) _nova.uid = _u;
     _parts.push(_nova);
+    _entryToRemove = _nova;
   }
   ft.participants = _parts;
   // Sai da espera: desativado e na fila ao mesmo tempo é estado impossível de explicar,
   // e é justamente onde a Eliane ficou.
-  if (typeof window._removeFromWaitlist === 'function') window._removeFromWaitlist(ft, absentName);
+  _removeWaitEntry(ft, _entryToRemove, absentName);
 }
 
 function _wlDisplay(e) {
   if (typeof e === 'string') return e;
   return String((window._pName ? window._pName(e, '') : '') || (e && (e.displayName || e.name)) || '').trim();
+}
+
+// A fila usa UID/ID manual quando existe. O nome é só o fallback de documento legado;
+// remover um suplente por rótulo faria um homônimo sair junto ao assumir a vaga.
+function _removeWaitEntry(tournament, entry, fallbackName) {
+  var key = entry && typeof entry === 'object' && (entry.uid || entry.manualParticipantId);
+  key = String(key || fallbackName || '').trim();
+  if (!key) return false;
+  if (typeof window._removeFromWaitlistByKey === 'function') return window._removeFromWaitlistByKey(tournament, key);
+  if (typeof window._removeFromWaitlist === 'function') return window._removeFromWaitlist(tournament, String(fallbackName || key));
+  return false;
 }
 
 // Box informativo do desfecho — não é escolha, é o que VAI acontecer. Fica no diálogo
@@ -1064,7 +1078,7 @@ window._ligaSubstituteNow = function (tId, roundIndex, groupName, absentName, su
     var _jaE = _entradaNoElenco(ft, _entry.uid, subName);
     if (_jaE) _marcaRastroWo(_jaE, absentName, _absU2);   // já era do elenco: marca a entrada REAL
     else ft.participants.push(_entry);
-    if (typeof window._removeFromWaitlist === 'function') window._removeFromWaitlist(ft, subName);
+    _removeWaitEntry(ft, _entry, subName);
     _removeSitOut(r, subName, subUid || null);
     _rewriteSlot(g, absentName, subName, true, ft);
       // v1.7.63 — O SUPLENTE GUARDA O UID, espelhando o que `woAbsentUid` já fazia pro
@@ -1437,7 +1451,7 @@ window._ligaAcceptSub = function (tId, inviteId) {
     else ft.participants.push(_subEntry);
     // sai da LISTA DE ESPERA — dos TRÊS storages, não só do monarchWaitlist (ele assumiu;
     // a espera não pode continuar contando com ele pra formar grupo novo).
-    if (typeof window._removeFromWaitlist === 'function') window._removeFromWaitlist(ft, _invName);
+    _removeWaitEntry(ft, _subEntry, _invName);
     _rewriteSlot(g, _absName, _invName, true, t);
       // v1.7.63 — O SUPLENTE GUARDA O UID, espelhando o que `woAbsentUid` já fazia pro
       // ausente (v1.7.21). `subName` sozinho é rótulo, e rótulo ENVELHECE: quem troca o
