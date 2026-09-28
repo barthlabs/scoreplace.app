@@ -351,13 +351,13 @@ function assignCompetitionTeamsAtInitialDraw(t, rawConfig) {
     const id = team && String(team.id || '').trim();
     if (!id || seen.has(id) || teams.length >= wanted) return;
     seen.add(id);
-    teams.push({ id: id, name: String(team.name || ('Time ' + (teams.length + 1))).trim() });
+    teams.push({ id: id, name: String(team.name || (cfg.teamNames && cfg.teamNames[teams.length]) || ('Time ' + (teams.length + 1))).trim() });
   });
   while (teams.length < wanted) {
     const id = 'team-' + (teams.length + 1);
     if (!seen.has(id)) {
       const ordinal = teams.length + 1;
-      seen.add(id); teams.push({ id: id, name: 'Time ' + ordinal });
+      seen.add(id); teams.push({ id: id, name: String((cfg.teamNames && cfg.teamNames[ordinal - 1]) || ('Time ' + ordinal)).trim() });
     }
   }
   t.competitionTeams = teams;

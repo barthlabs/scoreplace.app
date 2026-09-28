@@ -107,13 +107,15 @@ const CASES = [
     };
   }
   const drawn = { participants: [dupla(1, 'A'), dupla(2, 'A'), dupla(3, 'A'), dupla(4, 'A')] };
-  const cfg = { enabled: true, teamCount: 2, formation: 'draw', internalMatches: 'avoid', scoring: { win: 3, draw: 1, loss: 0 } };
+  const cfg = { enabled: true, teamCount: 2, teamNames: ['Neon', 'Nightmare'], formation: 'draw', internalMatches: 'avoid', scoring: { win: 3, draw: 1, loss: 0 } };
   const assigned = core.assignCompetitionTeamsAtInitialDraw(drawn, cfg);
   const counts = drawn.participants.reduce(function (out, entry) {
     out[entry.competitionTeamId] = (out[entry.competitionTeamId] || 0) + 1; return out;
   }, {});
   ok('times sorteados só após as duplas e com IDs canônicos', assigned.ok && drawn.competitionTeams.length === 2 && Object.keys(counts).length === 2,
     JSON.stringify({ teams: drawn.competitionTeams, counts: counts }));
+  ok('sorteio preserva os nomes escolhidos pelo organizador', drawn.competitionTeams[0].name === 'Neon' && drawn.competitionTeams[1].name === 'Nightmare',
+    JSON.stringify(drawn.competitionTeams));
   ok('sorteio de times distribui uma categoria de forma balanceada', Object.keys(counts).every(function (id) { return counts[id] === 2; }), JSON.stringify(counts));
 
   const manual = { participants: [dupla(5, 'A')] };

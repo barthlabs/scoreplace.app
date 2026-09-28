@@ -19,6 +19,10 @@ ok(C.allowsMatch(pairA1, pairB, config) === true, 'times diferentes continuam po
 ok(C.allowsMatch(pairA1, pairA2, Object.assign({}, config, { internalMatches: 'allow' })) === true,
   'toggle ligado: duplas do mesmo time podem se enfrentar');
 
+const named = C.normalize({ enabled: true, teamCount: 3, teamNames: ['Laranja', 'laranja', ''] });
+ok(named.teamNames.length === 3 && named.teamNames[0] === 'Laranja' && named.teamNames[1] === 'laranja 2' && named.teamNames[2] === 'Time 3',
+  'nomes dos times acompanham a quantidade configurada e não deixam rótulos ambíguos');
+
 const teams = [{ id: 'a', name: 'Time Azul' }, { id: 'b', name: 'Time Branco' }, { id: 'c', name: 'Time Cinza' }];
 const rows = C.standings(teams, [
   // Categoria A: Azul vence Branco. Categoria 40+: empate Azul × Cinza.
@@ -49,6 +53,12 @@ ok(row(saldo, 'a').gamesDiff === 5 && row(saldo, 'b').gamesWon === 13 && row(sal
   'saldo acumula games do placar simples e de todos os sets');
 ok(saldo[0].id === 'a' && saldo[1].id === 'b' && saldo[2].id === 'c',
   'modo saldo ordena por games feitos menos games sofridos');
+
+const partial = C.standings(teams, [
+  { p1: 'A', p2: 'B', p1CompetitionTeamId: 'a', p2CompetitionTeamId: 'b', winner: 'fora-do-jogo', scoreP1: 6, scoreP2: 0 }
+], Object.assign({}, config, { ranking: 'games_diff' }));
+ok(row(partial, 'a').played === 0 && row(partial, 'a').gamesDiff === 0 && row(partial, 'b').gamesDiff === 0,
+  'vencedor incompatível não altera pontos nem saldo enquanto o resultado está parcial');
 
 console.log(fail ? '❌ team-competition: ' + fail + ' falharam, ' + pass + ' ok' : '✅ team-competition: ' + pass + ' ok');
 process.exit(fail ? 1 : 0);

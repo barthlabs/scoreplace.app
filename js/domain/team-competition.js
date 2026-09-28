@@ -20,9 +20,29 @@ var ScoreplaceTeamCompetition;
     function normalize(value) {
         const raw = record(value);
         const scoring = record(raw.scoring);
+        const teamCount = Math.max(2, Math.floor(number(raw.teamCount, 8)));
+        const rawNames = Array.isArray(raw.teamNames) ? raw.teamNames : [];
+        const seenNames = {};
+        const teamNames = Array.from({ length: teamCount }, (_, index) => {
+            const name = text(rawNames[index]).slice(0, 80) || ('Time ' + (index + 1));
+            // Rótulo repetido torna a tabela ambígua. A identidade interna é o ID, mas a
+            // organização e os atletas só enxergam o nome; por isso normalizamos um fallback
+            // único em vez de deixar dois "Time A" indistinguíveis na configuração.
+            const key = name.toLocaleLowerCase();
+            if (!seenNames[key]) {
+                seenNames[key] = true;
+                return name;
+            }
+            let suffix = 2, candidate = name + ' ' + suffix;
+            while (seenNames[candidate.toLocaleLowerCase()])
+                candidate = name + ' ' + (++suffix);
+            seenNames[candidate.toLocaleLowerCase()] = true;
+            return candidate;
+        });
         return {
             enabled: raw.enabled === true,
-            teamCount: Math.max(2, Math.floor(number(raw.teamCount, 8))),
+            teamCount,
+            teamNames,
             formation: raw.formation === 'manual' ? 'manual' : 'draw',
             internalMatches: raw.internalMatches === 'allow' ? 'allow' : 'avoid',
             // Pontos preserva os torneios existentes. Saldo de games é uma escolha explícita
@@ -97,6 +117,13 @@ var ScoreplaceTeamCompetition;
             const winner = text(match.winner);
             if (!winner)
                 return;
+            const draw = winner === 'draw' || match.draw === true;
+            const p1Won = winner === text(match.p1) || winner === 'p1';
+            const p2Won = winner === text(match.p2) || winner === 'p2';
+            // Um rótulo de vencedor que não corresponde aos lados ainda não é resultado
+            // publicável: nem pontos nem saldo podem ser inferidos desse estado parcial.
+            if (!draw && !p1Won && !p2Won)
+                return;
             const games = gamesOf(match);
             rows[a].gamesWon += games.p1;
             rows[a].gamesLost += games.p2;
@@ -104,7 +131,7 @@ var ScoreplaceTeamCompetition;
             rows[b].gamesLost += games.p1;
             rows[a].gamesDiff = rows[a].gamesWon - rows[a].gamesLost;
             rows[b].gamesDiff = rows[b].gamesWon - rows[b].gamesLost;
-            if (winner === 'draw' || match.draw === true) {
+            if (draw) {
                 rows[a].played++;
                 rows[b].played++;
                 rows[a].draws++;
@@ -113,10 +140,6 @@ var ScoreplaceTeamCompetition;
                 rows[b].points += cfg.scoring.draw;
                 return;
             }
-            const p1Won = winner === text(match.p1) || winner === 'p1';
-            const p2Won = winner === text(match.p2) || winner === 'p2';
-            if (!p1Won && !p2Won)
-                return; // vencedor incompatível nunca decide tabela por suposição
             rows[a].played++;
             rows[b].played++;
             const win = p1Won ? rows[a] : rows[b], loss = p1Won ? rows[b] : rows[a];
