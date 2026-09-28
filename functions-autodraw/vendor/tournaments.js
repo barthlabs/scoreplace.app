@@ -2823,7 +2823,12 @@ function renderTournaments(container, tournamentId = null) {
         // rodada) começa a ser jogada — a inscrição já fechou sozinha, não há mais o que
         // encerrar nem reabrir. Antes some só o lateEnrollManaged, agora gated por R2 não iniciada.
         const _r2Started = (typeof window._lateEnrollR2Started === 'function') && window._lateEnrollR2Started(t);
-        let toggleRegBtn = ((!hasDraw || (lateEnrollManaged && !_r2Started)) && !isLigaOpenEnroll && isOrg) ? `<button class="btn ${t.status === 'closed' ? 'btn-success' : 'btn-danger'} hover-lift" onclick="event.stopPropagation(); window._regBtnBusy&&window._regBtnBusy(this,'${t.id}','${t.status === 'closed' ? 'Reabrindo…' : 'Encerrando…'}'); window.toggleRegistrationStatus('${t.id}')">${t.status === 'closed' ? '✅ ' + _t('org.reopenRegistration') : '🛑 ' + _t('org.closeRegistration')}</button>` : '';
+        // REGRESSÃO: o organizador precisa enxergar o ESTADO e a próxima ação no mesmo botão.
+        // "Encerrar inscrições" isolado parecia uma ação única; depois de fechar, o caminho
+        // para reabrir não pode sumir nem depender de achar outra tela.
+        const _regIsClosed = t.status === 'closed';
+        const _regLabel = _regIsClosed ? '🟢 Inscrições fechadas — abrir' : '🔴 Inscrições abertas — fechar';
+        let toggleRegBtn = ((!hasDraw || (lateEnrollManaged && !_r2Started)) && !isLigaOpenEnroll && isOrg) ? `<button class="btn ${_regIsClosed ? 'btn-success' : 'btn-danger'} hover-lift" title="${_regIsClosed ? 'Reabrir inscrições' : 'Encerrar inscrições'}" onclick="event.stopPropagation(); window._regBtnBusy&&window._regBtnBusy(this,'${t.id}','${_regIsClosed ? 'Reabrindo…' : 'Encerrando…'}'); window.toggleRegistrationStatus('${t.id}')">${_regLabel}</button>` : '';
         // v4.1.18: Reabrir/Encerrar EM ANDAMENTO deste torneio → botão cinza "Reabrindo…"/
         // "Encerrando…" (mesma UX do Sortear) mesmo se o detalhe re-renderizar antes de
         // concluir. Limpo em _regBtnDone (dialog/painel/refresh/backstop).
