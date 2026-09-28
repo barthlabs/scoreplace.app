@@ -269,13 +269,19 @@ const PROPOSTA = { options: [{ id: 'so_1', kind: 'date', dateISO: '2026-09-10', 
   ok('⭐ os dois ficaram com estimativa', jogoNoBanco(BANCO, 'g1-1').scheduledKind === 'estimate' && jogoNoBanco(BANCO, 'g1-2').scheduledAt === '2026-09-13T10:00:00.000Z');
   ok('  → g1-3 intacto (não estava no lote)', !jogoNoBanco(BANCO, 'g1-3').scheduledAt);
 
-  console.log('⑧ torneio NÃO dividido: grava no documento, no lugar certo');
-  const tInt = torneio();
-  BANCO = bancoDeMentira('T1', tInt, {}, {});
+  /* ⛔ REGRESSÃO: ausência de `_semPesados` não autoriza voltar a gravar em
+   * `rounds[].matches`. Torneios nascem divididos; o marcador só existe para ler
+   * versões transitórias, enquanto `matches` continua sendo a fonte canônica.
+   * [[project_torneio_nasce_dividido]] */
+  console.log('⑧ sem marcador legado: grava na subcoleção canônica');
+  BANCO = bancoDividido();
+  delete BANCO.doc._semPesados;
   const r8 = await chamar('uE', { tournamentId: 'T1', matchId: 'g1-1', operationId: UUID(8), schedule: PROPOSTA });
   ok('ok', r8.ok === true);
-  ok('⭐ rounds[0].matches[3].schedule no documento', !!(BANCO.doc.rounds[0].matches[3].schedule && BANCO.doc.rounds[0].matches[3].schedule.options.length === 1));
-  ok('  → os outros 5 jogos do documento seguem sem schedule', BANCO.doc.rounds[0].matches.filter((m) => m.schedule).length === 1);
+  ok('⭐ schedule do jogo externo recebeu a proposta', !!(jogoNoBanco(BANCO, 'g1-1').schedule && jogoNoBanco(BANCO, 'g1-1').schedule.options.length === 1));
+  ok('⛔ rounds[].matches segue vazio no documento', !((BANCO.doc.rounds[0].matches || []).length));
+  ok('  → os outros 5 jogos externos seguem sem schedule',
+    ['g0-1', 'g0-2', 'g0-3', 'g1-2', 'g1-3'].every((id) => !jogoNoBanco(BANCO, id).schedule));
 
   console.log('⑨ o que a porta recusa antes de tocar no banco');
   ok('sem login → unauthenticated', (await erroDe(CF.setMatchSchedule.run({ data: { tournamentId: 'T1', matchId: 'g1-1', operationId: UUID(9) }, auth: null, rawRequest: { headers: {} } }))).code === 'unauthenticated');

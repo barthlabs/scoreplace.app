@@ -360,25 +360,31 @@ const jogoDoDoc = (b, id) => (b.doc.rounds[0].matches || []).find((m) => m && m.
       JSON.stringify(semWa2));
   }
 
-  // ═══ ② o mesmo, com o torneio INTEIRO no documento ═════════════════════════
-  console.log('\n② criar, trocar e remover — torneio NÃO dividido (jogos no documento)');
+  /* ═══ ② MARCADOR LEGADO AUSENTE, MAS JOGOS CANÔNICOS FORA ═══════════════════
+   * ⛔ REGRESSÃO: `_semPesados` é metadado de versões anteriores, não a fonte da
+   * morada dos jogos. Todo torneio novo já nasce dividido; se uma leitura antiga não
+   * trouxer o marcador, a porta ainda deve usar a subcoleção `matches`, nunca recriar
+   * uma segunda cópia dos jogos no documento.
+   * [[project_torneio_nasce_dividido]] */
+  console.log('\n② sem marcador legado: criar, trocar e remover na subcoleção canônica');
   {
-    BANCO = bancoInteiro();
-    const antes = clone(jogoDoDoc(BANCO, 'g0-1'));
+    BANCO = bancoDividido();
+    delete BANCO.doc._semPesados;
+    const antes = clone(regDe(BANCO, 'g0-1'));
     await chamar('uA', { tournamentId: 'T1', matchId: 'g0-1', link: LINK('1'), operationId: UUID(1) });
-    ok('⭐ o link vai pro jogo DENTRO do documento', jogoDoDoc(BANCO, 'g0-1').waGroup.link === LINK('1'));
-    const cru = clone(jogoDoDoc(BANCO, 'g0-1')); delete cru.waGroup;
-    ok('  → e o jogo continua idêntico no resto', JSON.stringify(cru) === JSON.stringify(antes));
-    ok('  → os outros 5 jogos ficaram exatamente como estavam',
-      (BANCO.doc.rounds[0].matches || []).filter((m) => m.waGroup).length === 3,
-      'só o portador + os 2 irmãos do grupo podem ter link');
-    ok('  → e nenhuma subcoleção foi criada', Object.keys(BANCO.subs).length === 0);
+    ok('⭐ o link continua indo para a SUBCOLEÇÃO', regDe(BANCO, 'g0-1').jogo.waGroup.link === LINK('1'));
+    ok('⛔ o documento não recriou jogos por falta do marcador',
+      (BANCO.doc.rounds[0].matches || []).length === 0);
+    ok('  → e o registro manteve `_chave`, `_loc` e `playerUids`',
+      regDe(BANCO, 'g0-1')._chave === antes._chave &&
+      JSON.stringify(regDe(BANCO, 'g0-1')._loc) === JSON.stringify(antes._loc) &&
+      JSON.stringify(regDe(BANCO, 'g0-1').playerUids) === JSON.stringify(antes.playerUids));
 
     await chamar('uA', { tournamentId: 'T1', matchId: 'g0-1', link: LINK('9'), operationId: UUID(2) });
-    ok('⭐ trocar no documento também funciona', jogoDoDoc(BANCO, 'g0-1').waGroup.link === LINK('9'));
+    ok('⭐ trocar também usa o jogo externo', regDe(BANCO, 'g0-1').jogo.waGroup.link === LINK('9'));
     await chamar('uA', { tournamentId: 'T1', matchId: 'g0-1', link: null, operationId: UUID(3) });
-    ok('⭐ e remover devolve o jogo ao estado original',
-      JSON.stringify(jogoDoDoc(BANCO, 'g0-1')) === JSON.stringify(antes));
+    ok('⭐ remover devolve o registro ao estado original',
+      JSON.stringify(regDe(BANCO, 'g0-1')) === JSON.stringify(antes));
   }
 
   /* ═══ ②b O CASO MISTO — jogo no DOCUMENTO, outra parte na SUBCOLEÇÃO ═════════
