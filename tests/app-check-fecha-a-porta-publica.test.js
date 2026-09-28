@@ -67,6 +67,8 @@ const bloco = (id) => { const i = fn.indexOf('exports.' + id + ' = onCall'); con
   const b = bloco(id);
   ok(b.length > 100, '③ o bloco de ' + id + ' foi achado');
   ok(/enforceAppCheck:\s*true/.test(b), '③ ⛔⛔ ' + id + ' EXIGE App Check');
+  ok(!/App Check, que não existe no projeto/.test(b),
+    '③ o comentário de ' + id + ' não contradiz a proteção que ele realmente exige');
 });
 /* ⛔ E NÃO nas portas de quem já está logado: ali a sessão já prova quem é, e exigir App Check
  * derrubaria quem estivesse com a página velha aberta no meio de um torneio. */

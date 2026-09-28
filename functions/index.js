@@ -12301,8 +12301,8 @@ exports.concluirEntradaPorPasskey = onCall(
      * tocar no banco, então pedido torto nem chega a ler; ② `maxInstances` põe teto na CONCORRÊNCIA,
      * logo no gasto de computação de um laço; ③ nenhuma gravação acontece sem assinatura válida.
      * ⛔⛔ O que NÃO se faz é chamar isso de autenticação: CORS e `Origin` são cabeçalhos de quem
-     * chama. Fechar a porta pública de verdade é App Check, que não existe no projeto e tem passo de
-     * infraestrutura que é do dono. Está nomeado, não está feito. */
+     * chama. Fechar a porta pública é App Check, já exigido nesta porta e na emissão do desafio.
+     * O teste `app-check-fecha-a-porta-publica` trava cliente, transporte e servidor juntos. */
     maxInstances: 10 },
   async (request) => {
     const data = request.data || {};
