@@ -5,6 +5,11 @@ const WINDOW_MS = 24 * 60 * 60 * 1000;
 const INTERNAL = new Set(['__proto__', 'prototype', 'constructor', 'matches', 'rounds', 'participants',
   'standbyParticipants', 'waitlist', 'memberUids', 'adminUids', 'coHosts', 'creatorUid', 'organizerUid',
   'isSandbox', '_semPesados', 'pendingDraw', 'results', 'history', 'winner', 'playerUids']);
+// `history` é reservado no documento do torneio, mas `rigorRequire.history` é uma
+// escolha booleana declarativa do formulário: exigir ou não histórico do atleta ao se
+// inscrever. A exceção é pelo CAMINHO completo, nunca pelo nome solto; assim não abre
+// `history` em nenhum outro objeto enviado pelo cliente. [[regression_rigor_history_is_config]]
+const DECLARATIVE_RESERVED_PATHS = new Set(['rigorRequire.history']);
 function canonical(value) {
   if (Array.isArray(value)) return value.map(canonical);
   if (value && typeof value === 'object') return Object.keys(value).sort().reduce((out, key) => {
@@ -19,7 +24,7 @@ function checkNested(value, fail, path) {
     // O caminho não contém valor do formulário; ele identifica apenas o nome estrutural
     // que a fronteira recusou. Sem isso, "Estado de execução" repetia a mesma mensagem
     // para causas diferentes e tornava impossível corrigir a origem verificavelmente.
-    if (INTERNAL.has(key) || (key.startsWith('_') && !['_intervalAuto', '_scoreBy'].includes(key))) fail('invalid-argument', 'Estado de execução não pertence à configuração: ' + at + '.');
+    if ((INTERNAL.has(key) && !DECLARATIVE_RESERVED_PATHS.has(at)) || (key.startsWith('_') && !['_intervalAuto', '_scoreBy'].includes(key))) fail('invalid-argument', 'Estado de execução não pertence à configuração: ' + at + '.');
     checkNested(value[key], fail, at);
   });
 }

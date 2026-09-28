@@ -88,6 +88,11 @@ function creator(db,time=clock){return makeCreateTournament({db,HttpsError,Field
   const out=await creator(db)(request);
   assert(out.ok);assert(!('_renderTick' in out.tournament.fmt2));assert(!('_draftOnly' in out.tournament.fmt2.rodadas));
  });
+ await test('exigir histórico no rigor é configuração, não histórico interno do torneio',async()=>{
+  const db=fakeDB(),request={auth,data:{tournamentId:'tour_'+clock+'_'+'c'.repeat(32),config:{...payload.config,rigorRequire:{history:true,gender:false,category:false,age:false}}}};
+  const out=await creator(db)(request);
+  assert(out.ok);assert.equal(out.tournament.rigorRequire.history,true);
+ });
  const replay={v:2,totalPoints:1,points:[{w:1,a:0,b:0}],scoring:{setsToWin:1},truncated:false};
  function replayHandler(db){return makeSaveTournamentReplay({db,HttpsError,readTournament:read,findMatch:(t,id)=>t.matches.find(m=>m.id===id),isAdmin:(t,uid)=>t.creatorUid===uid,playerUids:m=>[m.p1Uid,m.p2Uid].filter(Boolean),buildMirror:mirror.buildMirrorDoc,now:()=>clock});}
  await test('replay usa UID canônico e não altera placar/proposta/roster concorrentes',async()=>{
