@@ -33,7 +33,7 @@ const src = fs.readFileSync(path.join(ROOT, 'js', 'store.js'), 'utf8');
  * `window._preservaPartesMontadas`, chamada TAMBÉM pelo ouvinte de `sandboxes`. O recorte
  * à mão que morava aqui quebrou junto com os outros três na mudança de lugar — quatro
  * falhas para UMA mudança. Agora a âncora é do fixture, num lugar só. */
-const i0 = src.indexOf('window._preservaPartesMontadas = function (novo, velho) {');
+const i0 = src.indexOf('window._preservaPartesMontadas = function (novo, velho, documentoDeTorneio) {');
 ok(i0 > 0, 'a rede existe no ouvinte');
 const corpo = 'var _enxertaJogos = ' + _contaFix.recortarPorta(src) + ';';
 const ctx = { store: { tournaments: [] } };
@@ -42,6 +42,7 @@ vm.createContext(ctx);
  * `window._marcaPartesQueFaltam` (os dois caminhos, ouvinte e cache, usam a MESMA).
  * Quem recorta uma tem que ter a outra no contexto — o fixture faz isso num lugar só. */
 _contaFix.injetar(ctx, src);
+ctx.window._tSplit = require(path.join(ROOT, 'js', 'views', 'tournament-split-core.js'));
 vm.runInContext(corpo + '\nthis.f = _enxertaJogos;', ctx);
 const enxerta = ctx.f;
 
@@ -59,7 +60,7 @@ const novo = {
   rounds: [{ round: 1, matches: [] }, { round: 2, matches: [] }],
   matches: [], groups: [{ name: 'G', matches: [] }]
 };
-const r = enxerta(JSON.parse(JSON.stringify(novo)), velho);
+const r = enxerta(JSON.parse(JSON.stringify(novo)), velho, true);
 ok(r.rounds[0].matches.length === 2 && r.rounds[1].matches.length === 1,
   '⭐ os jogos das rodadas voltam da memória');
 ok(r.matches.length === 1, 'os jogos avulsos também');
@@ -70,13 +71,13 @@ ok(!r._faltamPesados, 'e não fica marcado como faltando');
 
 // ── ② SEM marcador, nada acontece (é o estado de hoje) ──────────────────────
 const semMarcador = { id: 't1', rounds: [{ round: 1, matches: [] }], matches: [] };
-const r2 = enxerta(JSON.parse(JSON.stringify(semMarcador)), velho);
-ok(r2.rounds[0].matches.length === 0,
-  '⛔ SEM `_semPesados` a rede não toca em nada — torneio recém-criado não tem jogo mesmo');
-ok(!r2._faltamPesados, 'e não é marcado como faltando (ausência ≠ mudou de lugar)');
+const r2 = enxerta(JSON.parse(JSON.stringify(semMarcador)), velho, true);
+ok(r2.rounds[0].matches.length === 2,
+  '⛔ documento sem marcador legado preserva jogos já montados');
+ok(!r2._faltamPesados, 'e não acusa falta quando a memória já está completa');
 
 // ── ③ com marcador e SEM memória: marca, não passa por vazio ───────────────
-const r3 = enxerta(JSON.parse(JSON.stringify(novo)), null);
+const r3 = enxerta(JSON.parse(JSON.stringify(novo)), null, true);
 ok(r3._faltamPesados === true,
   '⭐ sem nada em memória, marca `_faltamPesados` — "ainda não carregou" ≠ "não tem jogo"');
 ok((r3.rounds[0].matches || []).length === 0, '(e segue sem jogo, honestamente)');
@@ -84,7 +85,7 @@ ok((r3.rounds[0].matches || []).length === 0, '(e segue sem jogo, honestamente)'
 // ── ④ o documento manda quando ELE tem jogo ─────────────────────────────────
 const docTemJogo = { id: 't1', _semPesados: ['matches'],
   rounds: [{ round: 1, matches: [jogo('doNovo')] }], matches: [], groups: [] };
-const r4 = enxerta(JSON.parse(JSON.stringify(docTemJogo)), velho);
+const r4 = enxerta(JSON.parse(JSON.stringify(docTemJogo)), velho, true);
 ok(r4.rounds[0].matches.length === 1 && r4.rounds[0].matches[0].id === 'doNovo',
   '⛔ se o documento TEM jogo naquela rodada, ele ganha — a memória não sobrescreve o fresco');
 

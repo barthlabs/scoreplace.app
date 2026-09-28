@@ -78,9 +78,9 @@ function novoMundo() {
   console.log('\n── ① a porta de hidratação é ÚNICA (os dois ouvintes chamam a mesma) ──');
   const src = fs.readFileSync(path.join(ROOT, 'js/store.js'), 'utf8');
   ok('⭐⭐ a porta existe no topo, fora de qualquer closure',
-    /^window\._preservaPartesMontadas = function \(novo, velho\) \{/m.test(src));
+    /^window\._preservaPartesMontadas = function \(novo, velho, documentoDeTorneio\) \{/m.test(src));
   ok('⭐⭐ o ouvinte de TORNEIO REAL passa por ela',
-    /var _enxertaJogos = function \(novo, velho\) \{ return window\._preservaPartesMontadas\(novo, velho\); \};/.test(src));
+    /var _enxertaJogos = function \(novo, velho\) \{ return window\._preservaPartesMontadas\(novo, velho, true\); \};/.test(src));
   const iIng = src.indexOf('window._sbIngest = function (docs) {');
   const corpoIngest = src.slice(iIng, src.indexOf('\n};', iIng));
   ok('⭐⭐ o ouvinte de SANDBOX passa pela MESMA porta',
