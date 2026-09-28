@@ -72,6 +72,22 @@ const progFolga = W._getTournamentProgress(tFolga);
 ok(progFolga.total === 2 && progFolga.completed === 2 && progFolga.pct === 100,
   '⛔ folga com dois lados não entra na conta: só 2 jogos reais, progresso 100%');
 
+// A barra da Liga planeja rodadas futuras a partir da primeira. Portanto o mesmo
+// contrato precisa valer no denominador (por rodada) e no numerador (concluídos):
+// um BYE e uma folga materializados não podem transformar 1 jogo real em 3.
+const tLigaMarcadores = {
+  id: 't-liga-marcadores', format: 'Liga', drawManual: true,
+  rounds: [{ matches: [
+    { id: 'liga-real', p1: 'Ana', p2: 'Bia', winner: 'Ana' },
+    { id: 'liga-bye', p1: 'Carla', p2: 'BYE', isBye: true, winner: 'Carla' },
+    { id: 'liga-folga', p1: 'Duda', p2: 'Folga', isSitOut: true, winner: 'Duda' }
+  ] }]
+};
+const ligaProgress = W._ligaTournamentProgress(tLigaMarcadores);
+ok(ligaProgress && ligaProgress.perRound === 1 && ligaProgress.completedAll === 1 &&
+  ligaProgress.totalPlanned === 1 && ligaProgress.pct === 100,
+  '⛔ Liga: BYE e folga não entram no progresso (1/1, 100%)');
+
 console.log('\n' + (fail === 0 ? '✅ progress-third-place-nodouble: OK' : '❌ ' + fail + ' FALHA(S)') + '  (' + pass + ' asserts ok)');
 if (fails.length) { fails.forEach((f) => console.error('  ✗ ' + f)); }
 process.exit(fail > 0 ? 1 : 0);

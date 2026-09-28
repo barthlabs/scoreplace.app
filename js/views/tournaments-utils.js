@@ -919,16 +919,19 @@ window._estimateTournamentMinutes = function(t) {
 // v2.3.8: progresso do TORNEIO INTEIRO para Liga (todas as rodadas planejadas).
 // Diferente de _getTournamentProgress, que conta só as rodadas que JÁ existem.
 // Retorna null se não for Liga ou não houver rodada. perRound usa a 1ª rodada
-// (sem sit-outs) como referência; roundsPlanned vem do agendamento
+// (só jogos reais, sem BYE/folga) como referência; roundsPlanned vem do agendamento
 // (drawFirstDate..endDate / intervalo) quando agendado, senão das existentes.
 window._ligaTournamentProgress = function(t) {
   if (!t || !(window._isLigaFormat && window._isLigaFormat(t))) return null;
   if (!Array.isArray(t.rounds) || t.rounds.length === 0) return null;
-  var perRound = (t.rounds[0].matches || []).filter(function(m){ return !m.isSitOut; }).length;
+  /* REGRESSÃO: este número vira o denominador da barra de progresso. BYE e
+   * folga podem estar materializados na rodada para explicar a estrutura, mas
+   * nunca são partidas planejadas ou concluídas. */
+  var perRound = (t.rounds[0].matches || []).filter(function(m){ return m && !m.isSitOut && !m.isBye; }).length;
   if (perRound < 1) return null;
   var completedAll = 0;
   t.rounds.forEach(function(r){
-    (r.matches || []).forEach(function(m){ if (m.winner && !m.isSitOut) completedAll++; });
+    (r.matches || []).forEach(function(m){ if (m && m.winner && !m.isSitOut && !m.isBye) completedAll++; });
   });
   var roundsPlanned = t.rounds.length;
   if (t.drawManual !== true && t.drawFirstDate) {
