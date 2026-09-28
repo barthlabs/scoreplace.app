@@ -13431,15 +13431,16 @@ window.AppStore = {
      * Pego pelo teste que já existia, no primeiro `npm test` depois da mudança. */
     if (this._tentouOuvirPartes) delete this._tentouOuvirPartes[id];
 
-    /* ⚠️ idem: aqui chega resumo, não só documento — ver a nota em `_marcaPartesQueFaltam` */
-    var fora = Array.isArray(t._semPesados) ? t._semPesados : [];
-    if (!fora.length) return;      // torneio INTEIRO de verdade: o doc já traz tudo, e há ouvinte nele
     var S = window._tSplit;
     if (!S || typeof S.remontar !== 'function') {
       if (window._error) window._error('[torneio] sem o remontador não há como ouvir as partes de ' + id +
         ' — a tela ficaria com o retrato do primeiro instante');
       return;
     }
+    /* ⛔ OUVINTE NÃO TRATA MARCADOR AUSENTE COMO TORNEIO INTEIRO. Todos nascem
+     * divididos; sem assinar as partes canônicas a tela ficaria presa no resumo magro.
+     * [[project_torneio_nasce_dividido]] */
+    var fora = S.partesDe(t);
     var alvos = this._partesQueMudamAoVivo(fora);
     if (!alvos.length) {
       if (window._warn) window._warn('[torneio] nenhuma parte ouvível em ' + id + ' (declaradas: ' + fora.join(', ') + ')');

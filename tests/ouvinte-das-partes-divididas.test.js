@@ -3,7 +3,7 @@
  *
  * O `onSnapshot` do app é no DOCUMENTO. Campo que saiu pra subcoleção não chega por ele —
  * precisa do próprio ouvinte. Era só pros jogos, com 'matches' escrito à mão; agora deriva
- * de `_semPesados`, que é quem sabe o que ESTE torneio guarda fora.
+ * da fonte canônica de partes, que não transforma marcador ausente em torneio inteiro.
  *
  * ⛔ MAS NÃO OUVE TUDO, e a razão é custo: abrir o torneio já busca todas as partes. Um
  * ouvinte por parte pagaria essa leitura DE NOVO na primeira entrega (o Firestore manda tudo
@@ -24,15 +24,15 @@ const i = src.indexOf('ouvirPartesDoTorneio(tournamentId) {');
 ok('o ouvinte genérico existe', i > 0);
 const corpo = src.slice(i, src.indexOf('\n  pararDeOuvirJogos()', i));
 
-ok('⛔ deriva de `_semPesados`, não de um nome escrito à mão',
-  /_semPesados/.test(corpo) && !/colecaoDaParte\('matches'\)/.test(corpo),
+ok('⛔ deriva da fonte canônica, não de marcador ou nome escrito à mão',
+  /S\.partesDe\(t\)/.test(corpo) && !/colecaoDaParte\('matches'\)/.test(corpo),
   'com o nome fixo, a parte seguinte a sair do documento nunca chegaria na tela');
 ok('⭐ toda parte declarada pelo torneio chega ao vivo (sem lista manual incompleta)',
   /_partesQueMudamAoVivo\(fora\)/.test(corpo) && /return Array\.isArray\(partes\) \? partes\.slice\(\) : \[\];/.test(src));
 ok('⭐ espera, inativos, W.O., duplas, jogos, grupos e resultados recebem confirmação remota',
   /includeMetadataChanges: true/.test(corpo) && /_isRemoteFirestoreSnapshot\(snap\)\) return;/.test(corpo),
   'o cache não pode reverter nenhuma parte operacional antes de o servidor confirmar');
-ok('  → torneio inteiro sai cedo, sem assinar nada', /if \(!fora\.length\) return;/.test(corpo));
+ok('  → marcador ausente não desliga as assinaturas canônicas', !/if \(!fora\.length\) return;/.test(corpo));
 /* ⚠️ A FORMA MUDOU, A INTENÇÃO NÃO: esta saída ganhou VOZ em 27/set/2026. Antes os quatro
  * `return` deste ouvinte eram indistinguíveis, e um deles — "o torneio ainda não chegou à memória"
  * — se passava por "não é dividido". O dono ficou com a tela velha a sessão inteira por causa

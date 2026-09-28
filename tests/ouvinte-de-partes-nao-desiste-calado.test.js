@@ -10,8 +10,8 @@
  *
  * ⛔ O FURO, MEDIDO: numa abertura DIRETA (link, recarregar já na chave, notificação) o roteador
  * liga o ouvinte ANTES de o torneio existir na lista em memória. Sem o torneio, a lista de partes
- * vem vazia e a função saía pelo `return` de "torneio inteiro" — o mesmo `return` que significa
- * "não há nada a ouvir, está tudo no documento". Duas coisas OPOSTAS pela mesma porta muda.
+ * vinha vazia e a função desistia como se não houvesse partes a ouvir. Dois estados opostos pela
+ * mesma porta muda.
  * E como o roteador só liga ao ENTRAR na rota, e a entrada já tinha acontecido, nunca mais havia
  * segunda chance: a tela ficava com o retrato do primeiro instante pela sessão inteira.
  *
@@ -34,7 +34,7 @@ ok(bloco.length > 400, '① o ouvinte foi achado pelo identificador');
 
 /* ── ① TORNEIO AUSENTE RETENTA, EM VEZ DE DESISTIR ─────────────────────────── */
 ok(/if \(!t\) \{/.test(bloco),
-  '① ⛔⛔ "torneio ainda não chegou" virou um caso PRÓPRIO, separado de "não é dividido"');
+  '① ⛔⛔ "torneio ainda não chegou" virou um caso PRÓPRIO');
 ok(/setTimeout\([\s\S]{0,200}ouvirPartesDoTorneio\(id\)/.test(bloco),
   '① ⛔⛔ e ele RETENTA — sem isso a abertura direta nunca mais liga o ouvinte');
 ok(/_tentouOuvirPartes/.test(bloco),
@@ -51,16 +51,14 @@ ok(/desisti de ouvir as partes/.test(bloco),
 ok(/retrato do primeiro instante/.test(bloco),
   '② dizendo também a CONSEQUÊNCIA, que é o que faz alguém agir');
 
-/* ── ③ "NÃO É DIVIDIDO" SEGUE SENDO SAÍDA LEGÍTIMA E MUDA ──────────────────
- * ⛔ Não se põe voz aqui: torneio inteiro tem ouvinte no documento, não falta nada. Gritar neste
- * caminho encheria o console de aviso falso e ensinaria todo mundo a ignorar os de verdade. */
-const iFora = bloco.indexOf('if (!fora.length) return;');
-ok(iFora > 0, '③ o caso do torneio inteiro continua existindo');
-ok(/if \(!fora\.length\) return;\s*\/\/ torneio INTEIRO/.test(bloco),
-  '③ ⛔ e continua MUDO de propósito — aviso falso ensina a ignorar aviso');
+/* ── ③ PARTES SEMPRE VÊM DA FONTE CANÔNICA ───────────────────────────────── */
+const iFora = bloco.indexOf('var fora = S.partesDe(t);');
+ok(iFora > 0, '③ marcador ausente ainda resolve as partes canônicas');
+ok(!/if \(!fora\.length\) return;/.test(bloco),
+  '③ ⛔ não há saída que transforme ausência do marcador em torneio inteiro');
 const iT = bloco.indexOf('if (!t) {');
 ok(iT > 0 && iT < iFora,
-  '③ ⛔⛔ e o caso do torneio ausente vem ANTES dele — era essa ordem que confundia os dois');
+  '③ ⛔⛔ e o caso do torneio ausente vem antes da assinatura das partes');
 
 /* ── ④ A CHAVE NÃO PERDE O OUVINTE ────────────────────────────────────────── */
 const rt = fs.readFileSync(path.join(ROOT, 'js/router.js'), 'utf8');
