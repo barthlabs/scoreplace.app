@@ -43,6 +43,18 @@ const TOUR='tour_confra';
 
 (async()=>{
   const db=admin.firestore();
+  /* ⛔ O Firebase CLI anuncia os emuladores juntos, mas o processo de Auth pode
+   * aceitar conexões alguns milissegundos depois do Firestore. Começar a semeadura
+   * no anúncio gerava ECONNREFUSED intermitente na bateria paralela: não era falha da
+   * regra de telefone. Esperamos RESPOSTA do serviço, em vez de dormir um tempo fixo;
+   * se ele não subir, o teste continua falhando com o erro verdadeiro. */
+  for (let tentativa=0;;tentativa++) {
+    try { await admin.auth().listUsers(1); break; }
+    catch(e) {
+      if (tentativa >= 40 || !/ECONNREFUSED|UNAVAILABLE|network/i.test(String(e && e.message))) throw e;
+      await new Promise((resolve)=>setTimeout(resolve,100));
+    }
+  }
   const R={};
   await db.doc('_meta/amizadeMigration').set({fase:'live',maintenance:false});
 
