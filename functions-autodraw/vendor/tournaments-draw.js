@@ -529,7 +529,9 @@ window._buildSwissClassifDraw = function (t) {
     var _r1 = (t.rounds[0] && t.rounds[0].matches) || [];
     return {
         swissRounds: _swRounds, lo: _swLo, origFormat: _origFormat,
-        roundMatches: _r1.filter(function (m) { return !m.isSitOut; }).length,
+        // REGRESSÃO: o retorno deste sorteio vira texto de sucesso. BYE e folga
+        // descrevem a estrutura, mas nunca podem ser anunciados como partidas.
+        roundMatches: _r1.filter(function (m) { return m && !m.isSitOut && !m.isBye; }).length,
         sitOuts: _r1.filter(function (m) { return m.isSitOut; }).length
     };
 };

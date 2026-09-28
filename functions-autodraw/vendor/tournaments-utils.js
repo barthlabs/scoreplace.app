@@ -1466,7 +1466,8 @@ window._buildProgressInner = function(t) {
   if (_isLiga) {
     var _ri = t.rounds.length - 1;
     var _curR = t.rounds[_ri] || {};
-    var _rMatches = (_curR.matches || []).filter(function(m){ return !m.isSitOut; });
+    // Progresso da rodada conta confronto real: nem folga nem BYE são jogo.
+    var _rMatches = (_curR.matches || []).filter(function(m){ return m && !m.isSitOut && !m.isBye; });
     var _rTotal = _rMatches.length;
     var _rDone = _rMatches.filter(function(m){ return m.winner; }).length;
     if (_rTotal > 0) { prog = { total: _rTotal, completed: _rDone, pct: Math.round(_rDone / _rTotal * 100) }; progFrac = _rDone / _rTotal; }
@@ -2479,7 +2480,8 @@ window._ligaCurrentRoundStartTs = function (t) {
     if (!t || !Array.isArray(t.rounds) || !t.rounds.length) return null;
     var _ri = t.rounds.length - 1;
     var _curR = t.rounds[_ri] || {};
-    var _rMatches = (_curR.matches || []).filter(function (m) { return !m.isSitOut; });
+    // O primeiro ponto real não pode ser antecipado por um BYE materializado.
+    var _rMatches = (_curR.matches || []).filter(function (m) { return m && !m.isSitOut && !m.isBye; });
     var _starts = _rMatches.map(function (m) { return m.startedAt ? (+m.startedAt) : 0; }).filter(function (x) { return x; });
     if (_starts.length) return Math.min.apply(null, _starts); // 1º ponto real da rodada
     var _fdStr = String(t.drawFirstDate || '').indexOf('T') > -1 ? t.drawFirstDate : (t.drawFirstDate ? (t.drawFirstDate + 'T' + (t.drawFirstTime || '19:00')) : '');
@@ -2500,9 +2502,10 @@ window._ligaCurrentRoundStartTs = function (t) {
 window._ligaCurrentRoundEndTs = function (t) {
     if (!t || !Array.isArray(t.rounds) || !t.rounds.length) return null;
     var _curR = t.rounds[t.rounds.length - 1] || {};
-    var _rMatches = (_curR.matches || []).filter(function (m) { return !m.isSitOut; });
+    // Idem no fim: BYE/folga não congelam nem compõem o relógio da rodada.
+    var _rMatches = (_curR.matches || []).filter(function (m) { return m && !m.isSitOut && !m.isBye; });
     if (!_rMatches.length) return null;
-    var _allDone = _rMatches.every(function (m) { return !!m.winner || m.isBye; });
+    var _allDone = _rMatches.every(function (m) { return !!m.winner; });
     if (!_allDone) return null; // rodada não encerrada
     var _ends = _rMatches.map(function (m) { return m.resultAt ? (+m.resultAt) : 0; }).filter(function (x) { return x; });
     if (_ends.length) return Math.max.apply(null, _ends);

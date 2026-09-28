@@ -70,6 +70,8 @@ ok(/m\.id/.test(corpo),
 const bracketSrc = fs.readFileSync(path.join(ROOT, 'js/views/bracket.js'), 'utf8');
 const phaseSrc = fs.readFileSync(path.join(ROOT, 'js/views/phases-engine.js'), 'utf8');
 const logicSrc = fs.readFileSync(path.join(ROOT, 'js/views/bracket-logic.js'), 'utf8');
+const drawSrc = fs.readFileSync(path.join(ROOT, 'js/views/tournaments-draw.js'), 'utf8');
+const tournamentUtilsSrc = fs.readFileSync(path.join(ROOT, 'js/views/tournaments-utils.js'), 'utf8');
 ok(/isRealRoundMatch = function\(m\) \{ return m && !m\.isSitOut && !m\.isBye; \}/.test(bracketSrc) &&
    /_swissMatchesPerRound[\s\S]{0,180}!m\.isSitOut && !m\.isBye/.test(bracketSrc),
   'offsets e placeholders da chave contam só jogo real');
@@ -77,6 +79,14 @@ ok(/var playedL[\s\S]{0,500}!m\.isSitOut && !m\.isBye/.test(phaseSrc),
   'fase classificatória não considera uma rodada só de marcadores como jogada');
 ok(/_newMatchCount[\s\S]{0,180}!m\.isSitOut && !m\.isBye/.test(logicSrc),
   'notificação de nova rodada não anuncia BYE/folga como partida');
+ok(/roundMatches:[\s\S]{0,100}!m\.isSitOut && !m\.isBye/.test(drawSrc),
+  'sucesso do primeiro sorteio não anuncia marcador como partida');
+ok(/_ligaCurrentRoundStartTs[\s\S]{0,600}!m\.isSitOut && !m\.isBye/.test(tournamentUtilsSrc) &&
+   /_ligaCurrentRoundEndTs[\s\S]{0,500}!m\.isSitOut && !m\.isBye/.test(tournamentUtilsSrc),
+  'relógio da rodada Liga usa só confrontos reais');
+ok(/swissPastMatchOffset[\s\S]{0,350}!m\.isSitOut && !window\._isByeMatch\(m\)/.test(bracketSrc) &&
+   /preFinalsMatchCount[\s\S]{0,350}!m\.isSitOut && !window\._isByeMatch\(m\)/.test(bracketSrc),
+  'offsets entre fases não pulam Jogo N por BYE/folga');
 
 console.log('\n' + (fail === 0 ? '✅ game-number-single-counter: OK' : '❌ ' + fail + ' FALHA(S)') + '  (' + pass + ' asserts ok)');
 if (fail > 0) process.exit(1);

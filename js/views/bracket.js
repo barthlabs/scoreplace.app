@@ -3106,7 +3106,11 @@ function renderSingleElimBracket(t, canEnterResult, standbyHtml) {
   // Jogo N in the same tournament.
   const _swissPastCols = unified ? unified.columns.filter(c => c.phase === 'swiss-past') : [];
   const swissPastMatchOffset = _swissPastCols.reduce(function(sum, col) {
-    return sum + ((col && col.matches) ? col.matches.length : 0);
+    // REGRESSÃO: este offset alimenta o "Jogo N" da chave posterior. Um
+    // marcador de BYE/folga na fase suíça não pode pular a numeração real.
+    return sum + ((col && col.matches) ? col.matches.filter(function(m) {
+      return m && !m.isSitOut && !window._isByeMatch(m);
+    }).length : 0);
   }, 0);
 
   let globalMatchNum = swissPastMatchOffset;
@@ -3125,7 +3129,9 @@ function renderSingleElimBracket(t, canEnterResult, standbyHtml) {
   // Numbering: 3rd place = last semifinal + 1, final = 3rd place + 1
   // Count matches in all rounds EXCEPT the final round (last positive round gets its own number)
   const finalRoundNumForCount = positiveRounds.length > 0 ? positiveRounds[positiveRounds.length - 1] : null;
-  const preFinalsMatchCount = activeRounds.filter(r => r !== finalRoundNumForCount).reduce((sum, r) => sum + (roundsMap[r] || []).filter(m => !window._isByeMatch(m)).length, 0);
+  const preFinalsMatchCount = activeRounds.filter(r => r !== finalRoundNumForCount).reduce((sum, r) => sum + (roundsMap[r] || []).filter(function(m) {
+    return m && !m.isSitOut && !window._isByeMatch(m);
+  }).length, 0);
   const thirdPlaceMatchNum = hasThirdPlace ? swissPastMatchOffset + preFinalsMatchCount + 1 : 0;
   const finalMatchNum = hasThirdPlace ? swissPastMatchOffset + preFinalsMatchCount + 2 : swissPastMatchOffset + preFinalsMatchCount + 1;
 
