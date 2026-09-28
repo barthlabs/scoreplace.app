@@ -120,14 +120,18 @@ s.FirestoreDB = {
 
 // ── A · torneio MAGRO em AppStore.tournaments ────────────────────────────────
 {
-  const t = magro(); s.AppStore.tournaments = [t]; s.__pediu = [];
+  const t = magro(); delete t._semPesados; s.AppStore.tournaments = [t]; s.__pediu = [];
   const c = mkContainer();
   const segurou = portao(t, c, 'T');
-  ok(segurou === true, 'A: com partes faltando, o portão SEGURA o render');
+  ok(segurou === true, 'A: documento magro sem marcador legado ainda SEGURA o render');
   ok(/ball-loader|Carregando/.test(c.innerHTML), 'A: pinta estado de CARREGAMENTO — nunca área vazia');
   ok(c.innerHTML.length > 0, 'A: o container não fica vazio');
   ok((s.__pediu || []).indexOf('T') !== -1, 'A: pede a montagem pela PORTA CANÔNICA (_montaPesadosQueFaltam)');
 }
+ok(/_marcaPartesQueFaltam\(t, true\)/.test(srcB),
+  'A: a chave declara que recebe documento, nunca cartão-resumo');
+ok(/_splitPub\.partesDe\(t\)/.test(srcB),
+  'B: o espectador monta pelas partes canônicas quando o marcador legado faltar');
 // ── B · torneio MAGRO só em publicDiscovery (espectador) ─────────────────────
 {
   const t = magro(); s.AppStore.tournaments = []; s.AppStore.publicDiscovery = [t]; s.__pediu = [];

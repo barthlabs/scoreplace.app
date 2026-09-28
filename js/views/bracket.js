@@ -1111,7 +1111,10 @@ function _bracketSeguraSemPartes(t, container, tId) {
   if (!t || !container) return false;
   if (typeof window._marcaPartesQueFaltam !== 'function') return false;
   var falta = false;
-  try { falta = window._marcaPartesQueFaltam(t); } catch (e) { falta = false; }
+  /* Esta tela recebe o DOCUMENTO do torneio (inclusive o da descoberta pública), nunca um
+   * cartão-resumo. Declarar isso evita que uma fotografia antiga sem `_semPesados` seja
+   * tomada por resumo e a chave vazia atravesse o portão. */
+  try { falta = window._marcaPartesQueFaltam(t, true); } catch (e) { falta = false; }
   if (!falta) return false;
 
   var AS = window.AppStore;
@@ -1163,7 +1166,13 @@ function _bracketSeguraSemPartes(t, container, tId) {
   if (window._bracketMontandoPub[id]) return true;                       // já em voo
   if (!window.FirestoreDB || typeof window.FirestoreDB._montaDeSubcolecoes !== 'function') return true;
   window._bracketMontandoPub[id] = true;
-  window.FirestoreDB._montaDeSubcolecoes(id, t, t._semPesados)
+  /* O montador público recebe documento completo: as partes canônicas são a fonte da
+   * montagem, enquanto `_semPesados` continua apenas como lastro da nativa antiga. Sem
+   * isto, justamente a foto sem marcador ficaria no loader ou desenharia chave vazia. */
+  var _splitPub = window._tSplit;
+  var _partesPub = (_splitPub && typeof _splitPub.partesDe === 'function')
+    ? _splitPub.partesDe(t) : (Array.isArray(t._semPesados) ? t._semPesados : []);
+  window.FirestoreDB._montaDeSubcolecoes(id, t, _partesPub)
     .then(function (montado) {
       delete window._bracketMontandoPub[id];
       if (!montado) { if (window._warn) window._warn('[chave] montagem de ' + id + ' voltou vazia'); return; }
