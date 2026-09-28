@@ -272,6 +272,9 @@ namespace ScoreplaceStandings {
         output.p2 += n(set.gamesP2);
         continue;
       }
+      /* Um TB de set normal também é decisivo: 6–5 (10–8) não equivale a
+       * 6–5 (10–0). Os dois continuam com o mesmo saldo de GAMES; os pontos
+       * 10–8/10–0 entram aqui, no saldo secundário de tie-break. */
       let tiebreak = readTiebreak?.(set) || null;
       if (!tiebreak) {
         const nested = record(set.tiebreak);

@@ -68,6 +68,17 @@ console.log('\n3. SEM tie-break disputado o critério é NEUTRO (não inventa va
   ok(C.CRITERIOS.saldo_pontos_tiebreak(X, Y) === 0, 'ninguém jogou tie-break → ninguém sobe nem desce');
 }
 
+console.log('\n3b. Mesmo 6–5: perder o tie-break 10–8 é melhor que perder 10–0');
+{
+  // O saldo de games continua igual (−1). Os pontos do TB normal distinguem a
+  // derrota apertada da derrota larga, sem transformar 10 pontos em 10 games.
+  const perdeuDePouco = linha('TB 10-8', 'uTB8', { gamesWon: 5, gamesLost: 6, tbPointsWon: 8, tbPointsLost: 10 });
+  const perdeuDeMuito = linha('TB 10-0', 'uTB0', { gamesWon: 5, gamesLost: 6, tbPointsWon: 0, tbPointsLost: 10 });
+  ok(C.CRITERIOS.saldo_games(perdeuDePouco, perdeuDeMuito) === 0, 'os dois preservam o mesmo saldo de games (−1)');
+  ok(C.standingsCompare(perdeuDePouco, perdeuDeMuito) < 0,
+    '6–5 (10–8) fica acima de 6–5 (10–0) pelo saldo dos pontos do tie-break');
+}
+
 console.log('\n4. NO MOTOR DE VERDADE: 7×6 com tie-break 7-5 vale 7 GAMES, não 14');
 {
   // Um grupo de 2 duplas, um jogo só: 7×6 com o tie-break 7-5 gravado na forma do doc.
