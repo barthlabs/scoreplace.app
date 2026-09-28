@@ -1,3 +1,4 @@
+// 2.3.139 — remover uma vaga manual usa seu ID estável desde os dois cartões até a callable. Um nome igual ou renomeado não faz a organização excluir outra pessoa.
 // 2.3.138 — substitutos da Liga e o fallback da fila seguem a mesma chave estável de inscrição. Mesmo sem o módulo de domínio carregado, ID manual não cai no nome e não remove homônimo.
 // 2.3.137 — promoções e integrações tardias removem da espera pela identidade estável (UID ou ID manual), nunca pelo rótulo. Assim um homônimo não sai da fila nem deixa de aparecer no elenco por engano.
 // 2.3.136 — uma conta não ocupa vaga manual homônima: o servidor compara o nome real do perfil com elenco, espera e membros de dupla dentro da mesma transação. Assim uma troca de nome concorrente repete a decisão, e o navegador não escolhe a identidade.
