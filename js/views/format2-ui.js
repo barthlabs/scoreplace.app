@@ -737,7 +737,10 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
           '<div style="margin-top:12px;font-size:.72rem;color:var(--text-muted);margin-bottom:6px;">Escopo da tabela</div>' +
           _pill(tc.aggregation !== 'per_category', 'window._f2TeamAggregation(\'overall\')', '🌐 Geral') +
           _pill(tc.aggregation === 'per_category', 'window._f2TeamAggregation(\'per_category\')', '🏷️ Por categoria') +
-          '<div style="margin-top:12px;display:flex;align-items:center;justify-content:space-between;gap:10px;"><div style="font-size:.72rem;color:var(--text-muted);">Nomes dos times</div><button type="button" class="btn btn-sm" onclick="window._f2AddTeam()">＋ Time</button></div>' +
+          // Ação de criar é azul como os demais botões de inclusão. O `.btn` genérico
+          // herda o gradiente claro e, neste painel escuro, parece desabilitado mesmo
+          // estando ativo. [[regression_add_team_button_has_active_contrast]]
+          '<div style="margin-top:12px;display:flex;align-items:center;justify-content:space-between;gap:10px;"><div style="font-size:.72rem;color:var(--text-muted);">Nomes dos times</div><button type="button" class="btn btn-primary btn-sm" onclick="window._f2AddTeam()">＋ Time</button></div>' +
           (!(tc.teamNames || []).length ? '<div style="font-size:.72rem;color:var(--text-muted);margin-top:6px;">Nenhum time criado. Adicione e nomeie cada time antes do sorteio.</div>' : '') +
           '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:6px;">' +
           (tc.teamNames || []).map(function (name, index) { return '<label style="font-size:.72rem;color:var(--text-muted);">Time ' + (index + 1) + '<span style="display:flex;gap:4px;margin-top:3px;"><input maxlength="80" placeholder="Nome do time" value="' + _safe(name).replace(/&quot;/g, '&quot;') + '" onchange="window._f2TeamName(' + index + ',this.value,this)" style="box-sizing:border-box;min-width:0;flex:1;padding:7px 8px;border-radius:8px;border:1px solid rgba(255,255,255,.2);background:var(--sp-b-255-255-255-02,rgba(0,0,0,.22));color:var(--text-main);"><button type="button" class="cancel-x-btn" title="Remover time" onclick="window._f2RemoveTeam(' + index + ')" style="cursor:pointer;">×</button></span></label>'; }).join('') + '</div>';
