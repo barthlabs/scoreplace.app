@@ -63,6 +63,10 @@ function winnerSide(m) {
 
 function clearResultFields(m) {
   delete m.pendingResult; delete m.winner; delete m.draw;
+  // `winnerUids` tem precedência no leitor canônico de vencedor. Reabrir só o
+  // rótulo deixaria o jogo decidido por identidade, invisível na tela mas ativo
+  // para avanço/classificação. Resultado e carimbo UID são um fato indivisível.
+  delete m.winnerUid; delete m.winnerUids;
   delete m.scoreP1; delete m.scoreP2;
   delete m.sets; delete m.setsWonP1; delete m.setsWonP2;
   delete m.totalGamesP1; delete m.totalGamesP2;

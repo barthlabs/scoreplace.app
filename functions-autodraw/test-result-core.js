@@ -193,12 +193,14 @@ console.log('\n──── result-core: reabertura administrativa ────'
   const m = win._findMatch(T, 'm1');
   const next = { id: 'm2', p1: 'Ana / Bia', p2: 'TBD' };
   T.matches.push(next); m.nextMatchId = 'm2';
-  m.winner = 'Ana / Bia'; m.scoreP1 = 6; m.scoreP2 = 2; m.sets = [{ gamesP1: 6, gamesP2: 2 }];
+  m.winner = 'Ana / Bia'; m.winnerUids = [UID_A1, UID_A2]; m.winnerUid = null;
+  m.scoreP1 = 6; m.scoreP2 = 2; m.sets = [{ gamesP1: 6, gamesP2: 2 }];
   const denied = core.applyResult(T, { matchId: 'm1', payload: { action: 'reopen-result' }, actor: { uid: UID_A1 }, now: 1 });
   t('participante não reabre resultado', denied.ok === false && denied.reason === 'organizer-only', JSON.stringify(denied));
   const reopened = core.applyResult(T, { matchId: 'm1', payload: { action: 'reopen-result' }, actor: { uid: UID_ORG }, now: 2 });
   t('organizador reabre resultado pela CF', reopened.ok && reopened.outcome === 'result-reopened', JSON.stringify(reopened));
-  t('reabertura desfaz avanço e placar', next.p1 === 'TBD' && !m.winner && m.scoreP1 === undefined && !m.sets);
+  t('reabertura desfaz avanço, placar e identidade do vencedor', next.p1 === 'TBD' && !m.winner &&
+    m.scoreP1 === undefined && !m.sets && !m.winnerUid && !m.winnerUids);
   t('reabertura limpa classificação progressiva', !T.classification['Ana / Bia'] && !T.classification['Caio / Dora']);
 }
 
