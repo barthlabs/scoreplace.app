@@ -69,6 +69,25 @@ ok('⛔ MUDAR A ORDEM MUDA O RESULTADO (senão a tela é perfumaria)', porSaldo 
 const semVitorias = ordem(['saldo_pontos', 'sorteio']);
 ok('EXCLUIR um critério muda quem decide', semVitorias === 'AB', 'veio ' + semVitorias);
 
+// ── W.O. é o pior resultado possível no saldo de games ────────────────────────────
+// A dupla que não jogou não pode superar uma derrota efetivamente disputada por o
+// texto "W.O." ter sido convertido em zero. Regra operacional: derrota W.O. = 0–12.
+const woRanking = W._rankByTiebreakers({
+  id: 'wo', scoring: { type: 'gsm' }, tiebreakers: ['saldo_games', 'sorteio'],
+  matches: [
+    { id: 'normal', p1: 'V', p2: 'PERDEU_EM_QUADRA', winner: 'V',
+      sets: [{ gamesP1: 6, gamesP2: 4 }, { gamesP1: 6, gamesP2: 4 }] },
+    { id: 'wo', p1: 'V2', p2: 'PERDEU_POR_WO', winner: 'V2', wo: true,
+      scoreP1: 0, scoreP2: 'W.O.' }
+  ]
+}, ['PERDEU_EM_QUADRA', 'PERDEU_POR_WO']);
+const woStats = Object.fromEntries(woRanking.map(p => [p.name, p]));
+ok('W.O. computa saldo de games exatamente −12', woStats.PERDEU_POR_WO.gamesDiff === -12,
+  'veio ' + woStats.PERDEU_POR_WO.gamesDiff);
+ok('derrota em quadra fica acima de derrota por W.O. na repescagem',
+  woRanking.map(p => p.name).join('|') === 'PERDEU_EM_QUADRA|PERDEU_POR_WO',
+  'veio ' + woRanking.map(p => p.name).join('|'));
+
 // ── o critério FANTASMA não pode voltar ─────────────────────────────────────────────
 const src = fs.readFileSync(path.join(ROOT, 'js/views/bracket-logic.js'), 'utf8');
 const i = src.indexOf('function _rankByTiebreakers');

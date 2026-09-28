@@ -47,6 +47,8 @@ ok(iOcupado > 0, '① o ramo do slot OCUPADO foi achado');
 ok(iGuarda > iOcupado, '① ⛔⛔ a guarda está dentro do ramo do ocupado');
 ok(iTroca > 0 && iGuarda < iTroca,
   '① ⛔⛔ e ANTES da troca — depois da troca ela não impediria nada');
+ok(/RepescagemSuspensa/.test(bloco),
+  '① auditoria pode manter vaga como "A definir" sem o motor repopulá-la');
 
 /* ── ② O CARIMBO EXISTE, E SÓ DEPOIS DA RODADA-FONTE FECHAR ────────────────── */
 const iFechou = bloco.indexOf('if (!_fechou) {');
@@ -115,6 +117,14 @@ if (typeof W._reassignBestLosersToRepechage === 'function') {
   W._reassignBestLosersToRepechage(vazia);
   ok(vazia.matches[2].p2 === 'PERDE_POUCO',
     '③ ⛔ vaga vazia continua sendo preenchida normalmente (achei "' + vazia.matches[2].p2 + '")');
+
+  /* Suspensão é excepcional e explícita: não equivale a vaga vazia normal. */
+  const suspensa = monta('TBD', false);
+  suspensa.matches[2].p2RepescagemSuspensa = true;
+  suspensa.matches[2].p2AguardaMelhor = true;
+  W._reassignBestLosersToRepechage(suspensa);
+  ok(suspensa.matches[2].p2 === 'TBD',
+    '③ auditoria: vaga suspensa continua A DEFINIR (achei "' + suspensa.matches[2].p2 + '")');
 
   /* ⛔ rodar duas vezes seguidas não pode mudar nada na segunda — é o defeito relatado. */
   const duas = monta('TBD', false);

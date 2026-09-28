@@ -2164,7 +2164,15 @@ function _rankByTiebreakers(t, playerNames) {
       }
 
       // GSM stats
-      if (m.sets && Array.isArray(m.sets)) {
+      /* ⛔ W.O. NÃO É UM PLACAR 0-0. Para saldo de games — inclusive a ordem da
+       * repescagem — a derrota por W.O. vale exatamente 0–12, portanto saldo −12.
+       * Sem esta regra o parse de "W.O." virava zero e a dupla que não jogou podia
+       * parecer melhor que uma dupla que perdeu em quadra. [[regression_wo_is_minus_12_games_in_repechage]] */
+      if (m.wo) {
+        var venceuPorWo = window._matchWinnerSide(m) === (isP1 ? 1 : 2);
+        gamesWon += venceuPorWo ? 12 : 0;
+        gamesLost += venceuPorWo ? 0 : 12;
+      } else if (m.sets && Array.isArray(m.sets)) {
         m.sets.forEach(function(s) {
           var pg = isP1 ? (s.gamesP1 || 0) : (s.gamesP2 || 0);
           var og = isP1 ? (s.gamesP2 || 0) : (s.gamesP1 || 0);
@@ -2397,7 +2405,10 @@ window._reassignBestLosersToRepechage = function (t) {
   all.forEach(function (m) {
     if (!m || m.winner) return;
     ['p1', 'p2'].forEach(function (sl) {
-      if (m[sl + 'FromRepechage']) vagas.push({ m: m, slot: sl });
+      /* Uma vaga suspensa para auditoria permanece "A definir" até a decisão
+       * explícita do organizador. O motor não pode republicá-la ao reconciliar a
+       * chave, nem reabrir o risco de notificação com nomes ainda em conferência. */
+      if (m[sl + 'FromRepechage'] && !m[sl + 'RepescagemSuspensa']) vagas.push({ m: m, slot: sl });
     });
   });
   if (!vagas.length) return 0;

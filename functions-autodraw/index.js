@@ -674,6 +674,21 @@ function _preservaRepescagemCarimbada(tDepois, tAntes) {
     const a = antesPorId[String(m.id)];
     if (!a) return;
     ['p1', 'p2'].forEach((sl) => {
+      /* Uma suspensão operacional é uma trava mais forte que o carimbo publicado:
+       * o comando de auditoria grava "TBD" uma vez; em qualquer escrita posterior
+       * (inclusive de cliente antigo) restauramos essa fotografia, nunca o nome
+       * antigo. Assim a Prata fica oculta e sem reanúncio até a conferência acabar. */
+      if (m[sl + 'RepescagemSuspensa']) return;
+      if (a[sl + 'RepescagemSuspensa']) {
+        m[sl] = a[sl];
+        const cOSuspensa = (sl === 'p1') ? 'team1Obj' : 'team2Obj';
+        const cUSuspensa = (sl === 'p1') ? 'team1Uids' : 'team2Uids';
+        m[cOSuspensa] = a[cOSuspensa]; m[cUSuspensa] = a[cUSuspensa]; m[sl + 'Uid'] = a[sl + 'Uid'];
+        m[sl + 'AguardaMelhor'] = true;
+        m[sl + 'RepescagemSuspensa'] = true;
+        delete m[sl + 'RepescagemFixada'];
+        return;
+      }
       if (!a[sl + 'RepescagemFixada']) return;                 // não carimbada: o motor manda
       if (String(m[sl] == null ? '' : m[sl]) === String(a[sl] == null ? '' : a[sl])) return;
       revertidas.push(String(m.id) + '.' + sl + ': "' + m[sl] + '" → "' + a[sl] + '"');
