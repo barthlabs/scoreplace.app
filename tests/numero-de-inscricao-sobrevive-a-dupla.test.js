@@ -84,6 +84,17 @@ if (typeof dividir === 'function') {
   ok(new Set(chaves).size === chaves.length,
      '⛔ TRÊS CHAVES DISTINTAS — era aqui que dois strings viravam o mesmo doc `x` — got ' + JSON.stringify(chaves));
   ok(!chaves.includes('x'), 'e nenhuma delas é a constante `x`');
+
+  // A identidade manual já é escrita e sobrevive a formar/desfazer dupla. Nome
+  // pode mudar; a chave não pode mover o documento na subcoleção por isso.
+  const manualA = { manualParticipantId: 'manual-a', name: 'Convidada antes' };
+  const manualARenomeada = { manualParticipantId: 'manual-a', name: 'Convidada depois' };
+  ok(S.chaveDoInscrito(manualA) === S.chaveDoInscrito(manualARenomeada),
+     '⛔ vaga manual renomeada mantém a mesma chave de espelho');
+  const mistaA = { p1Uid: 'uid-conta', p2ManualId: 'manual-a', p1Name: 'Ana', p2Name: 'Convidada A' };
+  const mistaB = { p1Uid: 'uid-conta', p2ManualId: 'manual-b', p1Name: 'Ana', p2Name: 'Convidada B' };
+  ok(S.chaveDoInscrito(mistaA) !== S.chaveDoInscrito(mistaB),
+     '⛔ dupla mista distingue o convidado manual, não só a conta');
 }
 
 // ── ④ NINGUÉM entra numa dupla sem número (a causa de "voltou como inscrito 8") ──

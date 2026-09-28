@@ -45,9 +45,9 @@
    * 1 MB do Firestore não é lentidão, é RECUSA: passou, o banco não grava mais. Enquanto
    * um campo linear no número de inscritos morar no documento, existe um número de pessoas
    * a partir do qual o torneio simplesmente para.
-   * ⚠️ Estar nesta lista NÃO divide nada: `dividir` extrai por natureza, e os dois
-   * escritores devolvem pro documento tudo que não estiver no `_semPesados` daquele
-   * torneio. Quem opta é o marcador, por torneio.
+   * ⚠️ Estar nesta lista não basta para um campo novo: `partesDe` é o contrato
+   * invariável que decide o que sai. `_semPesados` continua apenas como espelho
+   * de compatibilidade para nativas antigas e nunca escolhe o formato na web/CF.
    * ⛔ E antes de pôr um torneio pra fora numa parte nova, TODO escritor tem que hidratar
    * — ver [[project_dividir_exige_todo_escritor_ciente]]: seis portas do `functions/`
    * decidiam com o elenco vazio porque a leitura foi construída antes da escrita. */
@@ -230,13 +230,11 @@
    * espelho trata como "saiu um, entrou outro". Pro dado é a mesma coisa (o registro é o
    * nome); e é infinitamente melhor que a posição, que muda sem ninguém ter feito nada.
    */
-  /* ⛔⛔ ESTACIONADO: a chave NÃO olha a identidade manual (`p1ManualId`/`p2ManualId`). Apontado pelo
-   * revisor em quatro rodadas da leva da entrada sem senha (25/set/2026) e separado aqui: é do bloco
-   * da IDENTIDADE, não do da autenticação — e o par dele está em `functions/participant-rename-core.js`.
-   * ⚠️ Hoje o dano é limitado porque esses campos NÃO SÃO ESCRITOS em lugar nenhum (medido em
-   * 24/set/2026): quem foi inscrito à mão é reconhecido pelo nome. No dia em que passarem a ser
-   * escritos, ESTE ponto e o da renomeação têm de mudar JUNTOS — senão o espelho trata a mesma pessoa
-   * como duas. [[feedback_enumerar_todos_os_caminhos_antes_de_dar_por_pronto]] */
+  /* A chave do espelho respeita a identidade por POSIÇÃO: uid de conta, ou
+   * manualParticipantId para a exceção legítima sem conta. Os IDs manuais passaram
+   * a atravessar formar/desfazer dupla; ignorá-los faria renomear um convidado apagar
+   * seu documento e recriá-lo em outra chave. Nome só é fallback de fotografia legada
+   * sem identificador. [[feedback_enumerar_todos_os_caminhos_antes_de_dar_por_pronto]] */
   function chaveDoInscrito(p) {
     /* ⛔ 2.1.41 — `return 'x'` PARA TODA STRING: o pior tipo de colisão, porque não é
      * aleatória, é TOTAL. Medido no torneio de teste do dono: 8 inscritos no documento,
@@ -249,7 +247,12 @@
     if (typeof p === 'string') return _chaveDeNomes(String(p));
     if (!p || typeof p !== 'object') return 'x';
     if (p.uid) return 'u' + String(p.uid);
-    if (p.p1Uid || p.p2Uid) return 'd' + String(p.p1Uid || '-') + '_' + String(p.p2Uid || '-');
+    if (p.manualParticipantId) return 'm' + String(p.manualParticipantId);
+    // Dupla pode ser conta+manual; cada lado precisa levar o TIPO junto para
+    // `uid:a` nunca colidir com um manual cujo texto também seja "a".
+    var p1 = p.p1Uid ? ('u' + String(p.p1Uid)) : (p.p1ManualId ? ('m' + String(p.p1ManualId)) : '-');
+    var p2 = p.p2Uid ? ('u' + String(p.p2Uid)) : (p.p2ManualId ? ('m' + String(p.p2ManualId)) : '-');
+    if (p1 !== '-' || p2 !== '-') return 'd' + p1 + '_' + p2;
     return _chaveDeNomes([p.name, p.displayName, p.p1Name, p.p2Name]
       .concat((Array.isArray(p.participants) ? p.participants : [])
         .map(function (x) { return x && (x.displayName || x.name); }))
