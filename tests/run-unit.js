@@ -1203,12 +1203,15 @@ const SUITES = [
    * em lote de UI/persistência: execute explicitamente ao alterar eliminatória com
    * `npm run test:elim-formula`. [[project_elim_formula_certificacao_isolada]] */
   ...(process.env.SP_RUN_ELIM_FORMULA === '1' ? ['tests/minimal-elim-formula.test.js'] : []),
-  // O PAINEL de resolução prometia mais jogos do que o sorteio entrega: contava a repescagem
-  // de elim SIMPLES com fórmula própria (⌊s/2⌋+(lo−1)+s%2) em vez da árvore mínima. N=33
-  // prometia 48, o sorteio faz 37 — 30% a mais no tempo com que o organizador DECIDE. Compara
-  // a conta do painel com o motor real pra N=3..300, e trava o tempo na régua por SET.
-  'tests/painel-resolucao-conta-como-o-sorteio.test.js',
-  'tests/bye-elim-formula.test.js',
+  /* ⛔ Os varrimentos do MOTOR de sorteio executam todas as combinações de formatos/N e
+   * podem levar muitos minutos. Não são reexecutados por alterações de tela, dados ou
+   * publicação web: execute `npm run test:draw-engine` ao mudar draw-core, eliminatória,
+   * BYE, integração tardia ou transição classificatória. [[project_draw_engine_sweeps_isolados]] */
+  ...(process.env.SP_RUN_DRAW_ENGINE === '1' ? [
+    // O painel de resolução deve usar a mesma fórmula da árvore real, nunca superestimar jogos.
+    'tests/painel-resolucao-conta-como-o-sorteio.test.js',
+    'tests/bye-elim-formula.test.js',
+  ] : []),
   'tests/late-integration-fullplay.test.js',
   'tests/draw-preserve-waitlist-presence.test.js',
   // v1.3.82: overlay de presença pendente sobrevive a snapshot stale do Firestore (aparece/apaga).
@@ -1216,16 +1219,18 @@ const SUITES = [
   // v1.3.87: 2 duplas pré-formadas ausentes→presentes (uma de cada vez) → a 2ª PREENCHE o "a definir"
   // da 1ª (não abre jogo novo). Reproduz o bug do SB Casais (só _lateJoin entrava).
   'tests/late-dupla-fills-adefinir-separate.test.js',
-  // v1.3.88: SWEEP — todo formato × config × N pelo motor canônico (draw-core), joga a chave inteira.
-  'tests/draw-sweep-all-formats.test.js',
+  ...(process.env.SP_RUN_DRAW_ENGINE === '1' ? [
+    // v1.3.88: SWEEP — todo formato × config × N pelo motor canônico (draw-core), joga a chave inteira.
+    'tests/draw-sweep-all-formats.test.js',
   // SWEEP de INTEGRAÇÃO TARDIA (formato × config × N): dupla formada de solos, dupla pré-formada
   // ausente que chega, solo tardio → tem que entrar na chave (não ficar órfão) e jogar até campeão.
   // Pegou o gap: Dupla Elim pow2 sem repescagem não integrava tardio (fix: re-sorteio Tier-1). v1.3.x.
-  'tests/late-integration-sweep.test.js',
+    'tests/late-integration-sweep.test.js',
   // SWEEP FASE CLASSIFICATÓRIA → ELIM (fmt2): todo N × grupos × classificados joga a classificatória,
   // avança (materializeNextPhase) e fecha a elim num campeão; + integração tardia na classificatória.
   // Individual e duplas, Grupos e Suíço. Pegou o gap: tardio não integrava em grupos/Suíço (fix redraw). v1.3.x.
-  'tests/classificatory-phase-sweep.test.js',
+    'tests/classificatory-phase-sweep.test.js',
+  ] : []),
   // BUG DO DONO: "formei dupla e nada dela entrar na chave". Dupla formada pós-sorteio funde em
   // participants (fora da espera) → ficava órfã. Fix: integrateLateEntries detecta órfão de roster
   // e re-sorteia (todo formato, incl. Elim Simples) + _triggerLateIntegration(force) + form dispara.
