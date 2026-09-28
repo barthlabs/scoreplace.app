@@ -10,6 +10,7 @@ namespace ScoreplaceTeamCompetition {
   export type Formation = 'manual' | 'draw';
   export type InternalMatches = 'allow' | 'avoid';
   export type Ranking = 'points' | 'games_diff';
+  export type Aggregation = 'overall' | 'per_category';
 
   export interface Config {
     enabled: boolean;
@@ -17,6 +18,7 @@ namespace ScoreplaceTeamCompetition {
     formation: Formation;
     internalMatches: InternalMatches;
     ranking: Ranking;
+    aggregation: Aggregation;
     scoring: { win: number; draw: number; loss: number };
   }
 
@@ -53,6 +55,9 @@ namespace ScoreplaceTeamCompetition {
       // Pontos preserva os torneios existentes. Saldo de games é uma escolha explícita
       // do organizador para eventos em que o placar — e não a vitória isolada — define o time.
       ranking: raw.ranking === 'games_diff' ? 'games_diff' : 'points',
+      // Geral soma categorias (por exemplo, feminino + masculino) no mesmo time.
+      // Por categoria mantém tabelas independentes sem alterar os confrontos.
+      aggregation: raw.aggregation === 'per_category' ? 'per_category' : 'overall',
       // A escala padrão é a mesma da classificatória atual: 3/1/0. O organizador
       // pode substituí-la, inclusive com valores zero ou negativos, de forma explícita.
       scoring: {

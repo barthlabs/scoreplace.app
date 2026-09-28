@@ -1210,6 +1210,25 @@ function _renderCompetitionTeamStandings(t) {
   var cfg = (t.teamCompetition || ((t.phases || [])[0] || {}).teamCompetition);
   if (!cfg || cfg.enabled !== true) return '';
   var matches = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (t.matches || []);
+  // A escolha "por categoria" não cria uma regra de jogo nova: só particiona a
+  // leitura da mesma fonte de partidas. A chamada recursiva recebe um retrato mínimo
+  // para `_collectAllMatches` não puxar, por acidente, jogos de outra categoria.
+  if (cfg.aggregation === 'per_category' && !t._competitionTeamCategoryView) {
+    var categories = {};
+    matches.forEach(function (match) {
+      if (!match || !match.p1CompetitionTeamId || !match.p2CompetitionTeamId) return;
+      categories[String(match.category || 'Sem categoria')] = true;
+    });
+    return Object.keys(categories).sort().map(function (category) {
+      var sectionCfg = Object.assign({}, cfg, { aggregation: 'overall' });
+      return _renderCompetitionTeamStandings({
+        teamCompetition: sectionCfg,
+        competitionTeams: t.competitionTeams || [],
+        matches: matches.filter(function (match) { return String((match && match.category) || 'Sem categoria') === category; }),
+        _competitionTeamCategoryView: category
+      });
+    }).join('');
+  }
   var rows = core.standings(t.competitionTeams || [], matches, cfg);
   if (!rows.length) return '';
   var byGames = cfg.ranking === 'games_diff';
@@ -1228,7 +1247,9 @@ function _renderCompetitionTeamStandings(t) {
       '<td style="padding:9px 10px;text-align:center;color:var(--text-muted);">' + row.played + '</td></tr>';
   }).join('');
   return '<section class="card" data-competition-team-standings="1" style="margin:0 0 1rem;border-color:rgba(251,191,36,.38);overflow:auto;">' +
-    '<div style="padding:12px 14px 8px;font-weight:800;color:var(--sp-c-fde68a,#fde68a);">🏆 Classificação dos times</div>' +
+    '<div style="padding:0 14px 12px;font-size:.74rem;color:var(--text-muted);">' + (byGames ? 'Saldo acumulado: games feitos menos games sofridos.' : 'Soma dos resultados das duplas de todas as categorias.') + '</div>' +
+    '<div style="padding:12px 14px 8px;font-weight:800;color:var(--sp-c-fde68a,#fde68a);">🏆 Classificação dos times' + (t._competitionTeamCategoryView ? ' · ' + safe(t._competitionTeamCategoryView) : '') + '</div>' +
+    '<div style="padding:0 14px 12px;font-size:.74rem;color:var(--text-muted);">' + (byGames ? 'Saldo acumulado: games feitos menos games sofridos.' : (t._competitionTeamCategoryView ? 'Resultados das duplas desta categoria.' : 'Soma dos resultados das duplas de todas as categorias.')) + '</div>' +
     '<div style="padding:0 14px 12px;font-size:.74rem;color:var(--text-muted);">' + (byGames ? 'Saldo acumulado: games feitos menos games sofridos.' : 'Soma dos resultados das duplas de todas as categorias.') + '</div>' +
     '<table style="width:100%;border-collapse:collapse;min-width:440px;font-size:.84rem;"><thead><tr style="text-align:left;color:var(--text-muted);font-size:.68rem;text-transform:uppercase;letter-spacing:.35px;">' +
       '<th style="padding:8px 10px;">#</th><th style="padding:8px 10px;">Time</th>' + (byGames ? '<th style="padding:8px 10px;text-align:center;">Saldo</th><th style="padding:8px 10px;text-align:center;">Games</th>' : '<th style="padding:8px 10px;text-align:center;">Pts</th>') + '<th style="padding:8px 10px;text-align:center;">V</th><th style="padding:8px 10px;text-align:center;">E</th><th style="padding:8px 10px;text-align:center;">D</th><th style="padding:8px 10px;text-align:center;">J</th>' +

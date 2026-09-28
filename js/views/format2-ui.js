@@ -717,7 +717,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     // dessas duplas. O valor fica na mesma configuração da fase para a CF sortear e
     // gravar os vínculos antes de gerar jogos — nunca como cálculo local da tela.
     if (isDupla && !rotativo && cfg.classifAtiva) {
-      var tc = cfg.teamCompetition || { enabled: false, teamCount: 8, formation: 'draw', internalMatches: 'avoid', scoring: { win: 3, draw: 1, loss: 0 } };
+      var tc = cfg.teamCompetition || { enabled: false, teamCount: 8, formation: 'draw', internalMatches: 'avoid', ranking: 'points', aggregation: 'overall', scoring: { win: 3, draw: 1, loss: 0 } };
       var tcLocked = _classifLocked;
       var tcToggle = '<label style="display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:' + (tcLocked ? 'not-allowed' : 'pointer') + ';font-size:.9rem;color:var(--text-main);' + (tcLocked ? 'opacity:.55;' : '') + '">' +
         '<span>🏆 Competição por 8 times</span><span class="toggle-switch"><input type="checkbox"' + (tc.enabled ? ' checked' : '') + (tcLocked ? ' disabled' : '') + ' onchange="window._f2TeamCompetition(this.checked)"><span class="toggle-slider"></span></span></label>';
@@ -733,7 +733,10 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
             : '<div style="margin-top:10px;font-size:.72rem;color:var(--text-muted);margin-bottom:6px;">Pontuação por resultado</div><div style="display:flex;gap:10px;flex-wrap:wrap;">' +
               '<label style="font-size:.78rem;color:var(--text-muted);">Vitória ' + _num(tc.scoring.win, -99, 99, 'window._f2TeamScore(\'win\',this.value,this)') + '</label>' +
               '<label style="font-size:.78rem;color:var(--text-muted);">Empate ' + _num(tc.scoring.draw, -99, 99, 'window._f2TeamScore(\'draw\',this.value,this)') + '</label>' +
-              '<label style="font-size:.78rem;color:var(--text-muted);">Derrota ' + _num(tc.scoring.loss, -99, 99, 'window._f2TeamScore(\'loss\',this.value,this)') + '</label></div>');
+              '<label style="font-size:.78rem;color:var(--text-muted);">Derrota ' + _num(tc.scoring.loss, -99, 99, 'window._f2TeamScore(\'loss\',this.value,this)') + '</label></div>') +
+          '<div style="margin-top:12px;font-size:.72rem;color:var(--text-muted);margin-bottom:6px;">Escopo da tabela</div>' +
+          _pill(tc.aggregation !== 'per_category', 'window._f2TeamAggregation(\'overall\')', '🌐 Geral') +
+          _pill(tc.aggregation === 'per_category', 'window._f2TeamAggregation(\'per_category\')', '🏷️ Por categoria');
       }
       classif += _sec('Times', tcToggle);
     }
@@ -1231,6 +1234,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (tc.internalMatches !== 'allow' && tc.internalMatches !== 'avoid') tc.internalMatches = 'avoid';
     tc.scoring = tc.scoring || { win: 3, draw: 1, loss: 0 };
     if (tc.ranking !== 'games_diff') tc.ranking = 'points';
+    if (tc.aggregation !== 'per_category') tc.aggregation = 'overall';
     S.cfg.teamCompetition = tc; _norm(); _rerender();
   };
   window._f2TeamInternalMatches = function (allowed) {
@@ -1240,6 +1244,10 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   window._f2TeamRanking = function (ranking) {
     if (!S || !S.cfg.teamCompetition) return;
     S.cfg.teamCompetition.ranking = ranking === 'games_diff' ? 'games_diff' : 'points'; _norm(); _rerender();
+  };
+  window._f2TeamAggregation = function (aggregation) {
+    if (!S || !S.cfg.teamCompetition) return;
+    S.cfg.teamCompetition.aggregation = aggregation === 'per_category' ? 'per_category' : 'overall'; _norm(); _rerender();
   };
   window._f2TeamScore = function (field, value, el) {
     if (!S || !S.cfg.teamCompetition || ['win', 'draw', 'loss'].indexOf(field) === -1) return;

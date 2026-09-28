@@ -63,6 +63,12 @@ function pairKey(a, b) { return [a, b].sort().join(' x '); }
   const html = W._renderCompetitionTeamStandings(t) || '';
   ok(/Classificação dos times/.test(html) && /Azul/.test(html) && /Verde/.test(html), 'quadro de times mostra todos os times, inclusive sem vitória');
   ok(/>3<\/td>/.test(html) && />0<\/td>/.test(html), 'quadro de times soma jogo real e ignora BYE');
+  t.teamCompetition.aggregation = 'per_category';
+  t.matches[0].category = 'Light';
+  t.matches.push({ p1: 'Dupla Azul 2', p2: 'Dupla Verde 2', p1CompetitionTeamId: 'azul', p2CompetitionTeamId: 'verde', winner: 'p2', category: 'Power' });
+  const separated = W._renderCompetitionTeamStandings(t) || '';
+  ok(/Classificação dos times · Light/.test(separated) && /Classificação dos times · Power/.test(separated),
+    'escopo por categoria cria tabelas independentes sem misturar resultados');
 })();
 
 // ---------- 3. STANDINGS por grupo: quem venceu todos lidera ----------
