@@ -49,6 +49,9 @@ ok(iTroca > 0 && iGuarda < iTroca,
   '① ⛔⛔ e ANTES da troca — depois da troca ela não impediria nada');
 ok(/RepescagemSuspensa/.test(bloco),
   '① auditoria pode manter vaga como "A definir" sem o motor repopulá-la');
+const fonteServidor = fs.readFileSync(path.join(ROOT, 'functions-autodraw/index.js'), 'utf8');
+ok(/RepescagemSuspensa[\s\S]{0,700}m\[sl\]\s*=\s*'TBD'/.test(fonteServidor),
+  '① servidor preserva a suspensão como TBD, sem restaurar nome residual');
 
 /* ── ② O CARIMBO EXISTE, E SÓ DEPOIS DA RODADA-FONTE FECHAR ────────────────── */
 const iFechou = bloco.indexOf('if (!_fechou) {');

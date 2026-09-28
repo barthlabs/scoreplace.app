@@ -264,6 +264,14 @@ namespace ScoreplaceStandings {
     for (const rawSet of values(match?.sets)) {
       const set = record(rawSet);
       if (!set) continue;
+      /* Super tie-break registra PONTOS nos campos gamesP1/gamesP2 por legado de
+       * placar. Ele não é um set de games: 10–8 deve desempatar em tbPoints,
+       * nunca inflar gamesWon/gamesLost. */
+      if (set.superTiebreak) {
+        output.p1 += n(set.gamesP1);
+        output.p2 += n(set.gamesP2);
+        continue;
+      }
       let tiebreak = readTiebreak?.(set) || null;
       if (!tiebreak) {
         const nested = record(set.tiebreak);

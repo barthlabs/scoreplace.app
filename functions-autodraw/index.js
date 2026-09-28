@@ -680,10 +680,13 @@ function _preservaRepescagemCarimbada(tDepois, tAntes) {
        * antigo. Assim a Prata fica oculta e sem reanúncio até a conferência acabar. */
       if (m[sl + 'RepescagemSuspensa']) return;
       if (a[sl + 'RepescagemSuspensa']) {
-        m[sl] = a[sl];
+        /* A fotografia anterior pode ser da escrita que iniciou a suspensão e
+         * ainda carregar o nome antigo. O estado canônico da pausa é sempre TBD,
+         * nunca uma cópia desse rótulo; do contrário a chave volta a exibir a dupla. */
+        m[sl] = 'TBD';
         const cOSuspensa = (sl === 'p1') ? 'team1Obj' : 'team2Obj';
         const cUSuspensa = (sl === 'p1') ? 'team1Uids' : 'team2Uids';
-        m[cOSuspensa] = a[cOSuspensa]; m[cUSuspensa] = a[cUSuspensa]; m[sl + 'Uid'] = a[sl + 'Uid'];
+        m[cOSuspensa] = null; m[cUSuspensa] = []; m[sl + 'Uid'] = null;
         m[sl + 'AguardaMelhor'] = true;
         m[sl + 'RepescagemSuspensa'] = true;
         delete m[sl + 'RepescagemFixada'];

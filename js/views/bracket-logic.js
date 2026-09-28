@@ -165,6 +165,7 @@ window._computeMonarchStandings = function(group, t, category) {
     var sw1 = 0, sw2 = 0, gw1 = 0, gw2 = 0, tb1 = 0, tb2 = 0;
     if (Array.isArray(m.sets) && m.sets.length > 0) {
       m.sets.forEach(function(st) {
+        if (st.superTiebreak) return; // pontos do STB vivem em tbPoints, nunca em games/sets
         var g1 = parseInt(st.gamesP1) || 0;
         var g2 = parseInt(st.gamesP2) || 0;
         gw1 += g1; gw2 += g2;
@@ -613,6 +614,10 @@ function _calcAdvancedPoints(t, playerName, category, matchesOverride, uidOverri
       var gamesWon = 0, gamesLost = 0, tbPtsWon = 0;
       if (Array.isArray(m.sets) && m.sets.length > 0) {
         m.sets.forEach(function(s) {
+          if (s.superTiebreak) {
+            tbPtsWon += isInP1 ? (parseInt(s.gamesP1) || 0) : (parseInt(s.gamesP2) || 0);
+            return;
+          }
           var g1 = parseInt(s.gamesP1) || 0;
           var g2 = parseInt(s.gamesP2) || 0;
           if (isInP1) { gamesWon += g1; gamesLost += g2; }
@@ -976,6 +981,7 @@ function _computeStandings(t, category) {
         if (!Array.isArray(m.sets) || m.sets.length === 0) return;
         var sw1 = 0, sw2 = 0, gw1 = 0, gw2 = 0, tb1 = 0, tb2 = 0;
         m.sets.forEach(function(s) {
+          if (s.superTiebreak) return; // STB é ponto de tiebreak, não game nem set
           var g1 = parseInt(s.gamesP1) || 0;
           var g2 = parseInt(s.gamesP2) || 0;
           gw1 += g1; gw2 += g2;
@@ -1017,6 +1023,7 @@ function _computeStandings(t, category) {
         var _g1 = 0, _g2 = 0, _sw1 = 0, _sw2 = 0, _tb1 = 0, _tb2 = 0;
         if (Array.isArray(m.sets) && m.sets.length) {
           m.sets.forEach(function(st){
+            if (st.superTiebreak) return; // saldo de games exclui o placar 10–8 do STB
             var sg1 = parseInt(st.gamesP1) || 0, sg2 = parseInt(st.gamesP2) || 0;
             _g1 += sg1; _g2 += sg2;
             if (sg1 > sg2) _sw1++; else if (sg2 > sg1) _sw2++;
@@ -2125,6 +2132,7 @@ function _rankByTiebreakers(t, playerNames) {
     var uidDoSlot = null;
     var totalScored = 0, totalConceded = 0, matchesWon = 0, matchesPlayed = 0;
     var setsWon = 0, setsLost = 0, gamesWon = 0, gamesLost = 0, tiebreaksWon = 0;
+    var tbPointsWon = 0, tbPointsLost = 0;
     var lastScoreDiff = 0, lastPointsScored = 0;
     /* ⛔⛔ O SALDO É SEMPRE NA UNIDADE MAIS RICA — a escada é PONTO DE RALLY > GAMES > SETS, e vale a
      * mais rica que EXISTE nos dois lados (`unidadeMaisRicaComum`, em src/domain/standings.ts).
@@ -2163,6 +2171,12 @@ function _rankByTiebreakers(t, playerNames) {
         rallyAgainst += parseInt(isP1 ? m.liveStats.pointsP2 : m.liveStats.pointsP1) || 0;
       }
 
+      // Pontos de tie-break, inclusive supertiebreak. A fonte canônica distingue
+      // 10–8 de games: são pontos usados apenas pelo saldo de tiebreak.
+      var _tbpRank = (typeof window._standingsTbPoints === 'function') ? window._standingsTbPoints(m) : { p1: 0, p2: 0 };
+      tbPointsWon += isP1 ? _tbpRank.p1 : _tbpRank.p2;
+      tbPointsLost += isP1 ? _tbpRank.p2 : _tbpRank.p1;
+
       // GSM stats
       /* ⛔ W.O. NÃO É UM PLACAR 0-0. Para saldo de games — inclusive a ordem da
        * repescagem — a derrota por W.O. vale exatamente 0–12, portanto saldo −12.
@@ -2174,6 +2188,10 @@ function _rankByTiebreakers(t, playerNames) {
         gamesLost += venceuPorWo ? 0 : 12;
       } else if (m.sets && Array.isArray(m.sets)) {
         m.sets.forEach(function(s) {
+          /* ⛔ STB 10–8 é pontuação, não dezoito games. Mantê-lo separado é
+           * obrigatório para que saldo_games continue sendo saldo de games e
+           * saldo_pontos_tiebreak decida só quando o organizador o configurar. */
+          if (s.superTiebreak) return;
           var pg = isP1 ? (s.gamesP1 || 0) : (s.gamesP2 || 0);
           var og = isP1 ? (s.gamesP2 || 0) : (s.gamesP1 || 0);
           gamesWon += pg; gamesLost += og;
@@ -2205,6 +2223,8 @@ function _rankByTiebreakers(t, playerNames) {
       gamesDiff: gamesWon - gamesLost,
       rallyFor: rallyFor,
       rallyAgainst: rallyAgainst,
+      tbPointsWon: tbPointsWon,
+      tbPointsLost: tbPointsLost,
       tiebreaksWon: tiebreaksWon
     };
   });
@@ -3444,6 +3464,7 @@ function _updateProgressiveClassification(t) {
         if (Array.isArray(m.sets) && m.sets.length > 0) {
           var sw1=0, sw2=0, gw1=0, gw2=0, tb1=0, tb2=0;
           m.sets.forEach(function(s) {
+            if (s.superTiebreak) return; // pontos do STB são contabilizados em tbPoints
             var g1 = parseInt(s.gamesP1) || 0;
             var g2 = parseInt(s.gamesP2) || 0;
             gw1 += g1; gw2 += g2;

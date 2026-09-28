@@ -102,6 +102,33 @@ console.log('\n4. NO MOTOR DE VERDADE: 7×6 com tie-break 7-5 vale 7 GAMES, não
   }
 }
 
+console.log('\n5. SUPERTIEBREAK 10×8 não vira dezoito games');
+{
+  const grupo = {
+    name: 'R1 Grupo STB',
+    players: ['Ana', 'Bia', 'Cida', 'Dora'],
+    playersUids: ['uid_ana_stb', 'uid_bia_stb', 'uid_cida_stb', 'uid_dora_stb'],
+    matches: [{
+      id: 'stb', p1: 'Ana / Bia', p2: 'Cida / Dora',
+      team1: ['Ana', 'Bia'], team1Uids: ['uid_ana_stb', 'uid_bia_stb'],
+      team2: ['Cida', 'Dora'], team2Uids: ['uid_cida_stb', 'uid_dora_stb'],
+      scoreP1: 2, scoreP2: 1, winner: 'Ana / Bia', isMonarch: true,
+      sets: [{ gamesP1: 6, gamesP2: 4 }, { gamesP1: 0, gamesP2: 6 }, { gamesP1: 10, gamesP2: 8, superTiebreak: true }]
+    }]
+  };
+  const t = { id: 'stb', sport: 'Beach Tennis', scoring: { type: 'sets', gamesPerSet: 6, setsToWin: 2, superTiebreak: true } };
+  W.AppStore.tournaments = [t];
+  const tabela = W._computeMonarchStandings(grupo, t) || [];
+  const ana = tabela.filter((r) => r.uid === 'uid_ana_stb')[0];
+  const cida = tabela.filter((r) => r.uid === 'uid_cida_stb')[0];
+  ok(ana.gamesWon === 6 && ana.gamesLost === 10,
+    '⭐ jogos normais são 6–10; STB 10–8 não entra como games (veio ' + ana.gamesWon + '/' + ana.gamesLost + ')');
+  ok(cida.gamesWon === 10 && cida.gamesLost === 6, '  → espelho 10–6 nos jogos normais');
+  ok(ana.tbPointsWon === 10 && ana.tbPointsLost === 8,
+    '⭐ pontos do STB ficam em saldo próprio 10–8');
+  ok(cida.tbPointsWon === 8 && cida.tbPointsLost === 10, '  → espelho 8–10 nos pontos do STB');
+}
+
 console.log('');
 if (fail) {
   console.log('❌ tiebreak-desempata-dentro-do-saldo: ' + pass + ' ok, ' + fail + ' falha(s)');
