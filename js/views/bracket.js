@@ -1200,6 +1200,39 @@ window._bracketTentarPartesDeNovo = function (tId) {
   if (typeof window._softRefreshView === 'function') window._softRefreshView();
 };
 
+// Tabela agregada de times (Super 8) — derivada sempre dos jogos, nunca persistida.
+// A dupla continua sendo a unidade da categoria; este quadro apenas soma os resultados
+// das duplas que representam cada time. Folga/BYE, pendência e jogo sem dois times são
+// excluídos pelo domínio compartilhado, para jamais virarem "jogo" ou pontuação.
+function _renderCompetitionTeamStandings(t) {
+  var core = window.ScoreplaceTeamCompetition;
+  if (!core || typeof core.standings !== 'function' || !t) return '';
+  var cfg = (t.teamCompetition || ((t.phases || [])[0] || {}).teamCompetition);
+  if (!cfg || cfg.enabled !== true) return '';
+  var matches = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (t.matches || []);
+  var rows = core.standings(t.competitionTeams || [], matches, cfg);
+  if (!rows.length) return '';
+  var safe = window._safeHtml || function (value) { return String(value == null ? '' : value); };
+  var body = rows.map(function (row, index) {
+    var medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : (index + 1) + 'º';
+    return '<tr style="border-bottom:1px solid var(--border-color);">' +
+      '<td style="padding:9px 10px;font-weight:800;color:var(--text-muted);">' + medal + '</td>' +
+      '<td style="padding:9px 10px;font-weight:700;color:var(--text-bright);">' + safe(row.name) + '</td>' +
+      '<td style="padding:9px 10px;text-align:center;font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);">' + row.points + '</td>' +
+      '<td style="padding:9px 10px;text-align:center;color:var(--sp-c-4ade80,#4ade80);">' + row.wins + '</td>' +
+      '<td style="padding:9px 10px;text-align:center;color:var(--sp-c-94a3b8,#94a3b8);">' + row.draws + '</td>' +
+      '<td style="padding:9px 10px;text-align:center;color:var(--sp-c-f87171,#f87171);">' + row.losses + '</td>' +
+      '<td style="padding:9px 10px;text-align:center;color:var(--text-muted);">' + row.played + '</td></tr>';
+  }).join('');
+  return '<section class="card" data-competition-team-standings="1" style="margin:0 0 1rem;border-color:rgba(251,191,36,.38);overflow:auto;">' +
+    '<div style="padding:12px 14px 8px;font-weight:800;color:var(--sp-c-fde68a,#fde68a);">🏆 Classificação dos times</div>' +
+    '<div style="padding:0 14px 12px;font-size:.74rem;color:var(--text-muted);">Soma dos resultados das duplas de todas as categorias.</div>' +
+    '<table style="width:100%;border-collapse:collapse;min-width:440px;font-size:.84rem;"><thead><tr style="text-align:left;color:var(--text-muted);font-size:.68rem;text-transform:uppercase;letter-spacing:.35px;">' +
+      '<th style="padding:8px 10px;">#</th><th style="padding:8px 10px;">Time</th><th style="padding:8px 10px;text-align:center;">Pts</th><th style="padding:8px 10px;text-align:center;">V</th><th style="padding:8px 10px;text-align:center;">E</th><th style="padding:8px 10px;text-align:center;">D</th><th style="padding:8px 10px;text-align:center;">J</th>' +
+    '</tr></thead><tbody>' + body + '</tbody></table></section>';
+}
+window._renderCompetitionTeamStandings = _renderCompetitionTeamStandings;
+
 function renderBracket(container, tournamentId, isInline) {
   // v1.4.20: a barra de busca da CLASSIFICAÇÃO sai no PRIMEIRO bloco deste render.
   // Reset aqui = começo do passo; sem isto, um render posterior não emitiria a barra.
@@ -1223,6 +1256,10 @@ function renderBracket(container, tournamentId, isInline) {
   if (!t && tId && window.AppStore && Array.isArray(window.AppStore.publicDiscovery)) {
     t = window.AppStore.publicDiscovery.find(tour => tour.id.toString() === tId.toString()) || null;
   }
+
+  // Calculada do retrato atual; o rerender normal após confirmar resultado atualiza a
+  // tabela junto com a chave, sem mutação local nem uma segunda fonte de verdade.
+  var _competitionTeamStandingsHtml = _renderCompetitionTeamStandings(t);
 
   // O resultado pode chegar no espelho `results/{matchId}` depois da estrutura da chave.
   // Busca uma vez por abertura: re-renderizações de W.O./placar não podem virar uma leitura
@@ -1722,7 +1759,7 @@ function renderBracket(container, tournamentId, isInline) {
     // (banner era calculado na linha ~402 e descartado). Os outros ramos (Liga 428, grupos 436)
     // já o inseriam; só este esquecia.
     _pintarEmEtapas(container, headerHtml + _subChoiceBanner + startTournamentBanner + _phaseAdvanceBanner + progressBarHtml,
-      function () { return window._renderPhaseBracket(t, canEnterResult, standbyHtml); }, _applyMyMatchesFilter);
+      function () { return _competitionTeamStandingsHtml + window._renderPhaseBracket(t, canEnterResult, standbyHtml); }, _applyMyMatchesFilter);
     return;
   }
 
@@ -1740,7 +1777,7 @@ function renderBracket(container, tournamentId, isInline) {
       // então ele viaja na 2ª tacada junto com eles — separar por "leve/pesado" sem olhar
       // a ordem jogaria a espera pra cima dos grupos.
       _pintarEmEtapas(container, headerHtml + _subChoiceBanner + startTournamentBanner + _phaseAdvanceBanner + progressBarHtml + readyBannerHtml,
-        function () { return renderGroupStage(t, isOrg, canEnterResult) + standbyHtml; }, _applyMyMatchesFilter);
+        function () { return _competitionTeamStandingsHtml + renderGroupStage(t, isOrg, canEnterResult) + standbyHtml; }, _applyMyMatchesFilter);
       return;
     }
     // If stage is elimination, fall through to bracket rendering below

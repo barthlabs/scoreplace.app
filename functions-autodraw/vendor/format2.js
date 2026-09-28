@@ -137,6 +137,10 @@
     var _tcCore = (typeof window !== 'undefined') && window.ScoreplaceTeamCompetition;
     out.teamCompetition = (_tcCore && typeof _tcCore.normalize === 'function')
       ? _tcCore.normalize(out.teamCompetition) : null;
+    // O carregamento normal traz o domínio antes deste arquivo. Ainda assim, o
+    // normalizador é usado por harnesses e ferramentas isoladas: sem o domínio, a
+    // opção fica explicitamente desligada em vez de acessar uma configuração nula.
+    if (!out.teamCompetition) out.teamCompetition = { enabled: false, teamCount: 8, formation: 'draw', internalMatches: 'avoid', scoring: { win: 3, draw: 1, loss: 0 } };
 
     if (!isDupla) {
       out.parceria = null;
@@ -258,6 +262,11 @@
     // eliminatória obrigatória (eliminação direta do enrollment).
     out.classifAtiva = out.classifAtiva !== false;
     if (!out.classifAtiva) e.ativa = true;
+    // Competição por times só agrega RESULTADOS de duplas FIXAS na classificatória.
+    // Rei/Rainha e parceiro por rodada não preservam a dupla; eliminatória direta não
+    // tem a classificatória onde a tabela de times existe. Desligar nesses casos evita
+    // uma configuração visualmente possível, mas sem unidade estável para representar o time.
+    if (!isDupla || out.parceria !== 'fixa' || !out.classifAtiva) out.teamCompetition.enabled = false;
     // v1.6.80: término PRÓPRIO da eliminatória — só faz sentido quando ela é 2ª fase. Na
     // eliminação DIRETA ela É a fase inicial e já usa as datas do form (t.startDate/t.endDate),
     // então aqui fica vazio pra não haver duas fontes pro mesmo fim. Só aceita 'AAAA-MM-DD';

@@ -712,6 +712,27 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       classif += _sec('Formação das equipes', fBtns);
     }
 
+    // Super 8 não é um novo formato: as categorias continuam classificatórias de
+    // duplas. Esta opção apenas cria oito times que recebem a soma dos resultados
+    // dessas duplas. O valor fica na mesma configuração da fase para a CF sortear e
+    // gravar os vínculos antes de gerar jogos — nunca como cálculo local da tela.
+    if (isDupla && !rotativo && cfg.classifAtiva) {
+      var tc = cfg.teamCompetition || { enabled: false, teamCount: 8, formation: 'draw', internalMatches: 'avoid', scoring: { win: 3, draw: 1, loss: 0 } };
+      var tcLocked = _classifLocked;
+      var tcToggle = '<label style="display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:' + (tcLocked ? 'not-allowed' : 'pointer') + ';font-size:.9rem;color:var(--text-main);' + (tcLocked ? 'opacity:.55;' : '') + '">' +
+        '<span>🏆 Competição por 8 times</span><span class="toggle-switch"><input type="checkbox"' + (tc.enabled ? ' checked' : '') + (tcLocked ? ' disabled' : '') + ' onchange="window._f2TeamCompetition(this.checked)"><span class="toggle-slider"></span></span></label>';
+      if (tc.enabled) {
+        tcToggle += '<div style="font-size:.72rem;color:var(--text-muted);margin:6px 0 12px;line-height:1.45;">As duplas permanecem nas suas categorias e são distribuídas entre 8 times no sorteio. A tabela soma os pontos de todas as categorias.</div>' +
+          _toggleRight('Duplas do mesmo time podem se enfrentar', tc.internalMatches === 'allow', 'window._f2TeamInternalMatches(this.checked)') +
+          '<div style="font-size:.72rem;color:var(--text-muted);margin:6px 0 12px;">' + (tc.internalMatches === 'allow' ? 'Confrontos internos são permitidos.' : 'Confrontos internos são evitados ao montar os grupos.') + '</div>' +
+          '<div style="font-size:.72rem;color:var(--text-muted);margin-bottom:6px;">Pontuação por resultado</div><div style="display:flex;gap:10px;flex-wrap:wrap;">' +
+          '<label style="font-size:.78rem;color:var(--text-muted);">Vitória ' + _num(tc.scoring.win, -99, 99, 'window._f2TeamScore(\'win\',this.value,this)') + '</label>' +
+          '<label style="font-size:.78rem;color:var(--text-muted);">Empate ' + _num(tc.scoring.draw, -99, 99, 'window._f2TeamScore(\'draw\',this.value,this)') + '</label>' +
+          '<label style="font-size:.78rem;color:var(--text-muted);">Derrota ' + _num(tc.scoring.loss, -99, 99, 'window._f2TeamScore(\'loss\',this.value,this)') + '</label></div>';
+      }
+      classif += _sec('Times', tcToggle);
+    }
+
     var rModo = cfg.rodadas.modo;
     var rInner;
     if (rotativo) {
@@ -1198,6 +1219,23 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   window._f2ClassScope = function (v) { if (!S) return; S.cfg.classifScope = (v === 'overall') ? 'overall' : 'per_group'; _norm(); _rerender(); };
   // v4.4.36: quantos avançam — todos × os melhores (slider).
   window._f2QualifyAll = function (all) { if (!S) return; S.cfg.eliminatoria.qualifyAll = !!all; _norm(); _rerender(); };
+  window._f2TeamCompetition = function (enabled) {
+    if (!S) return;
+    var tc = S.cfg.teamCompetition || {};
+    tc.enabled = !!enabled; tc.teamCount = 8; tc.formation = 'draw';
+    if (tc.internalMatches !== 'allow' && tc.internalMatches !== 'avoid') tc.internalMatches = 'avoid';
+    tc.scoring = tc.scoring || { win: 3, draw: 1, loss: 0 };
+    S.cfg.teamCompetition = tc; _norm(); _rerender();
+  };
+  window._f2TeamInternalMatches = function (allowed) {
+    if (!S || !S.cfg.teamCompetition) return;
+    S.cfg.teamCompetition.internalMatches = allowed ? 'allow' : 'avoid'; _norm(); _rerender();
+  };
+  window._f2TeamScore = function (field, value, el) {
+    if (!S || !S.cfg.teamCompetition || ['win', 'draw', 'loss'].indexOf(field) === -1) return;
+    S.cfg.teamCompetition.scoring = S.cfg.teamCompetition.scoring || {};
+    S.cfg.teamCompetition.scoring[field] = value; _norm(); _rerenderSemAtrapalhar(el);
+  };
   // Ao menos UMA fase ativa (sem travar toggle): desligar a eliminatória religa a classificatória.
   window._f2Elim = function (b) { if (!S) return; S.cfg.eliminatoria.ativa = !!b; if (!b) S.cfg.classifAtiva = true; _norm(); _rerender(); };
   // v4.4.33: toggle da fase classificatória. Desligar → eliminação direta (elim obrigatória).

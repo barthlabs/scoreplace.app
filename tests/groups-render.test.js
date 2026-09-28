@@ -50,6 +50,21 @@ function pairKey(a, b) { return [a, b].sort().join(' x '); }
   ok(nGrupo >= 4, 'render mostra os 4 grupos (got ' + nGrupo + ' menções)');
 })();
 
+// ---------- 2b. TIMES: quadro agregado, derivado de resultados reais ----------
+(function () {
+  const t = {
+    teamCompetition: { enabled: true, teamCount: 2, formation: 'draw', internalMatches: 'avoid', scoring: { win: 3, draw: 1, loss: 0 } },
+    competitionTeams: [{ id: 'azul', name: 'Azul' }, { id: 'verde', name: 'Verde' }],
+    matches: [
+      { p1: 'Dupla Azul', p2: 'Dupla Verde', p1CompetitionTeamId: 'azul', p2CompetitionTeamId: 'verde', winner: 'p1' },
+      { p1: 'Folga Azul', p2: 'BYE', p1CompetitionTeamId: 'azul', p2CompetitionTeamId: 'verde', winner: 'p1', isBye: true }
+    ]
+  };
+  const html = W._renderCompetitionTeamStandings(t) || '';
+  ok(/Classificação dos times/.test(html) && /Azul/.test(html) && /Verde/.test(html), 'quadro de times mostra todos os times, inclusive sem vitória');
+  ok(/>3<\/td>/.test(html) && />0<\/td>/.test(html), 'quadro de times soma jogo real e ignora BYE');
+})();
+
 // ---------- 3. STANDINGS por grupo: quem venceu todos lidera ----------
 (function () {
   const t = hydrateGroups(buildViaDraw('Fase de Grupos + Eliminatórias', 16));
