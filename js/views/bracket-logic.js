@@ -1393,8 +1393,9 @@ function _classifEntryKey(label, uids) {
 }
 window._classifEntryKey = _classifEntryKey;
 
-/* O mapa `classification` continua por enquanto para leitores antigos; o registro paralelo
- * é a fonte que não perde duas entradas homônimas. Toda escrita nova precisa passar por
+/* ⛔ A CLASSIFICAÇÃO É A IDENTIDADE DO TIME, NUNCA O RÓTULO. O mapa `classification`
+ * continua por enquanto para leitores antigos; o registro paralelo é a fonte que não
+ * perde duas entradas homônimas. Toda escrita nova precisa passar por
  * estas portas: escrever só o mapa legado recria a colisão, e escrever só o novo quebraria
  * a tela ainda instalada. A retirada do legado é uma leva posterior, depois de todos os
  * leitores migrarem. */

@@ -144,5 +144,11 @@ module.exports = [
     marca: 'ESCRITA DE JOGO USA AS PARTES CANÔNICAS, NÃO O MARCADOR LEGADO',
     incidente: 'as portas de link de grupo e data montavam jogos das subcoleções, mas decidiam a '
       + 'gravação pelo marcador legado e podiam escrever uma cópia ignorada no documento pai',
-    data: '2026-09-27' }
+    data: '2026-09-27' },
+
+  { id: '25', arquivo: 'js/views/bracket-logic.js', ancora: 'function _classifReset(t) {',
+    marca: 'A CLASSIFICAÇÃO É A IDENTIDADE DO TIME',
+    incidente: 'a classificação progressiva usava o rótulo como chave: duas duplas homônimas '
+      + 'colapsavam numa posição, e pódio, ficha e retrato final podiam premiar a equipe errada',
+    data: '2026-09-28' }
 ];
