@@ -69,6 +69,29 @@ function clearResultFields(m) {
   delete m.fixedSet;
 }
 
+// A classificação nova é por conjunto de UIDs; `classification` por nome existe só
+// para apps antigos. Ao reabrir um resultado, apagar apenas o rótulo deixaria a
+// entrada canônica publicada — e apagar todo homônimo excluiria outra pessoa.
+// Remove somente o slot deste jogo e recompõe o espelho legado a partir de qualquer
+// entrada canônica sobrevivente com o mesmo texto. Nunca deduz UID pelo nome.
+function removeClassificationSlot(t, label, uids) {
+  if (!t || !label) return;
+  const entries = t.classificationEntries;
+  const key = (typeof win._classifEntryKey === 'function')
+    ? win._classifEntryKey(label, uids || []) : '';
+  if (entries && key) delete entries[key];
+  if (!t.classification) return;
+  const surviving = Object.keys(entries || {}).map(k => entries[k]).filter(e =>
+    e && e.name === label && typeof e.pos === 'number');
+  if (surviving.length) {
+    // O espelho legado só pode exibir uma posição por texto; mantém a melhor
+    // sobrevivente enquanto os leitores antigos ainda existirem.
+    t.classification[label] = surviving.reduce((best, e) => Math.min(best, e.pos), surviving[0].pos);
+  } else {
+    delete t.classification[label];
+  }
+}
+
 function undoAdvancement(t, m) {
   const side = winnerSide(m);
   const prevWinner = m.winner;
@@ -87,10 +110,8 @@ function undoAdvancement(t, m) {
       if (loserMatch.p2 === oldLoser) loserMatch.p2 = 'TBD';
     }
   }
-  if (t.classification) {
-    delete t.classification[prevWinner];
-    delete t.classification[oldLoser];
-  }
+  removeClassificationSlot(t, prevWinner, typeof win._slotUids === 'function' ? win._slotUids(m, side === 1 ? 'p1' : 'p2') : []);
+  removeClassificationSlot(t, oldLoser, typeof win._slotUids === 'function' ? win._slotUids(m, side === 1 ? 'p2' : 'p1') : []);
 }
 
 function hasRealPlay(m) {

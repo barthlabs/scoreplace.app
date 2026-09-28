@@ -202,6 +202,27 @@ console.log('\n──── result-core: reabertura administrativa ────'
   t('reabertura limpa classificação progressiva', !T.classification['Ana / Bia'] && !T.classification['Caio / Dora']);
 }
 
+// 13b) Duas equipes podem ter o mesmo RÓTULO em uma fotografia histórica, mas
+// nunca a mesma identidade. Reabrir Ana/Bia não pode deixar sua chave UID nem
+// apagar Ana/Eva, que por acaso tem o mesmo texto no espelho legado.
+{
+  const T = mkT({
+    classification: { 'Ana / Bia': 1, 'Caio / Dora': 2 },
+    classificationEntries: {
+      'uid:uid_ana+uid_bia': { name: 'Ana / Bia', pos: 1, uids: [UID_A1, UID_A2] },
+      'uid:uid_caio+uid_dora': { name: 'Caio / Dora', pos: 2, uids: [UID_B1, UID_B2] },
+      'uid:uid_ana+uid_eva': { name: 'Ana / Bia', pos: 3, uids: [UID_A1, 'uid_eva'] }
+    }
+  });
+  const m = win._findMatch(T, 'm1');
+  m.winner = 'Ana / Bia';
+  const reopened = core.applyResult(T, { matchId: 'm1', payload: { action: 'reopen-result' }, actor: { uid: UID_ORG }, now: 1 });
+  t('reabertura remove somente as chaves UID dos dois lados reabertos', reopened.ok &&
+    !T.classificationEntries['uid:uid_ana+uid_bia'] && !T.classificationEntries['uid:uid_caio+uid_dora']);
+  t('reabertura preserva homônimo de identidade diferente', !!T.classificationEntries['uid:uid_ana+uid_eva'] &&
+    T.classification['Ana / Bia'] === 3, JSON.stringify(T.classificationEntries));
+}
+
 // 14) Refazer limpa pendência/placar sem tentar remover um avanço que já não existe.
 {
   const T = mkT(); const m = win._findMatch(T, 'm1');
