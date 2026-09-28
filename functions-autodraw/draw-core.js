@@ -825,7 +825,8 @@ function integrateLateEntries(t, opts) {
 // ── FORMAR dupla na LISTA DE ESPERA + INTEGRAR, ATÔMICO no servidor (CF-only). Espelha
 // _formLateJoinDupla (bracket.js) mas PURO: tira os 2 avulsos de standby/waitlist, empurra a dupla
 // _lateJoin, marca presença dos 2, e INTEGRA na chave (integrateLateEntries) — tudo numa passada.
-// O cliente só dispara e reflete o doc devolvido. opts: {key1, key2, nowTs}.
+// O cliente só dispara e reflete o doc devolvido. opts: {key1, key2, nowTs}; chave é
+// uid, manualParticipantId ou nome legado, nessa ordem.
 function formLatePairCore(t, opts) {
   const win = g.window;
   if (!t) return { ok: false, reason: 'no-tournament' };
@@ -833,7 +834,17 @@ function formLatePairCore(t, opts) {
   const nowTs = (opts && opts.nowTs) || 1;
   if (!key1 || !key2 || key1 === key2) return { ok: false, reason: 'bad-keys' };
   if (typeof win._rehydrateEntryNames === 'function') { try { win._rehydrateEntryNames(t); } catch (e) {} }
-  const _keyOf = function (p) { const uid = (typeof p === 'object' ? (p.uid || '') : ''); const nm = (win._pName ? win._pName(p, '') : (typeof p === 'string' ? p : (p && (p.displayName || p.name)) || '')); return uid || nm; };
+  const _keysOf = function (p) {
+    const uid = (typeof p === 'object' ? (p.uid || '') : '');
+    const manualId = (typeof p === 'object' ? (p.manualParticipantId || '') : '');
+    const nm = (win._pName ? win._pName(p, '') : (typeof p === 'string' ? p : (p && (p.displayName || p.name)) || ''));
+    // REGRESSÃO: formar dupla tardia usava o rótulo do manual. Renomear o card depois do
+    // render deixava a Function sem encontrar a vaga. UID/manualId são estáveis; nome só
+    // mantém a leitura de entradas antigas — inclusive uma aba web já aberta antes desta
+    // versão, que ainda envia nome. A ordem é a do contrato novo; aceitar os três evita que
+    // uma publicação interrompa o gesto iniciado na versão anterior.
+    return [uid, manualId, nm].filter(Boolean);
+  };
   const _pull = function (key) {
     const stores = [t.standbyParticipants, t.waitlist];
     for (let s = 0; s < stores.length; s++) {
@@ -841,7 +852,7 @@ function formLatePairCore(t, opts) {
       for (let i = 0; i < arr.length; i++) {
         const p = arr[i];
         if (p && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) continue; // já é dupla
-        if (_keyOf(p) === key) { arr.splice(i, 1); return p; }
+        if (_keysOf(p).indexOf(key) !== -1) { arr.splice(i, 1); return p; }
       }
     }
     return null;

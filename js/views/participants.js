@@ -1733,8 +1733,12 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
   // v1.3.36: pareamento tardio → arraste pointer-drag (data-lj-*), NÃO HTML5 DnD (trava no
   // touch). VIP/✂️/🗑️ já saem sozinhos (drawDone=true). Mantém o handler exato do painel.
   if (ctx.lateJoin) {
+    // REGRESSÃO: o arraste da vaga manual enviava pName; se o nome mudasse entre a renderização
+    // e a transação, formLatePair não a encontrava. A vaga moderna tem manualParticipantId,
+    // que é a identidade estável. Nome fica só para cards legados sem ID.
+    var _lateDragKey = (p && typeof p === 'object' && (p.uid || p.manualParticipantId)) || pName;
     dragProps = ctx.lateJoin.canPair
-      ? ('data-lj-card="1" data-lj-key="' + window._safeHtml(String((p && typeof p === 'object' && p.uid) || pName)) + '" data-lj-tid="' + window._safeHtml(t.id) + '" data-lj-name="' + window._safeHtml(pName) + '"')
+      ? ('data-lj-card="1" data-lj-key="' + window._safeHtml(String(_lateDragKey)) + '" data-lj-tid="' + window._safeHtml(t.id) + '" data-lj-name="' + window._safeHtml(pName) + '"')
       : '';
   }
 

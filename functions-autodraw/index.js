@@ -1497,7 +1497,7 @@ exports.integrateLateEntries = onCall(async (request) => {
 });
 
 // ─── FORMAR dupla na LISTA DE ESPERA + INTEGRAR, atômico (CF-only) ──────────
-// O cliente só dispara (key1/key2 = uid||nome dos 2 avulsos); a CF forma a dupla _lateJoin,
+// O cliente só dispara (key1/key2 = uid||manualParticipantId||nome legado dos 2 avulsos); a CF forma a dupla _lateJoin,
 // marca presença, integra na chave e persiste — tudo numa transação. Devolve o doc pro cliente
 // refletir SEM reload. Espelha integrateLateEntries (authz + txn + write-boundary).
 exports.formLatePair = onCall(async (request) => {

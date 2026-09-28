@@ -108,6 +108,15 @@ const rSplitPorId = dc.splitLatePairCore(tTardioPorId, { id1: 'manual-t1', id2: 
 ok(rSplitPorId && rSplitPorId.ok,
   '③ o desfazer tardio também encontra a dupla pelos IDs manuais, não pelos rótulos');
 
+const tTardioSelecionadoPorId = { id: 'tt-id', participants: [], standbyParticipants: [
+  { name: 'Nome antes A', displayName: 'Nome antes A', manualParticipantId: 'manual-selec-a' },
+  { name: 'Nome antes B', displayName: 'Nome antes B', manualParticipantId: 'manual-selec-b' },
+] };
+const rFormPorId = dc.formLatePairCore(tTardioSelecionadoPorId,
+  { key1: 'manual-selec-a', key2: 'manual-selec-b', nowTs: 1 });
+ok(rFormPorId && rFormPorId.ok,
+  '③ a formação tardia encontra vagas manuais pelo ID estável, não pelo nome exibido');
+
 // ── ④ o campo é lido onde precisa: a chave do número de inscrição ────────────
 /* Era esta a leitura que nunca casava: ela procura `m:` + identificador, e ninguém o gravava. */
 const H = require('./render-harness');
