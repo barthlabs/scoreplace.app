@@ -1199,7 +1199,10 @@ const SUITES = [
   // PLAY-THROUGH completo da integração tardia (dono, 20/jul): joga a chave INTEIRA com o motor
   // real (_advanceWinner) e exige que FECHE num campeão — pega BYE travado, repescado não-atribuído,
   // 3º lugar apagado, presença. É o gate que faltava (os testes antigos "jogavam" sem _advanceWinner).
-  'tests/minimal-elim-formula.test.js',
+  /* ⛔ Certificação exaustiva do MOTOR (N=3..300, ~20 min nesta máquina). Não roda
+   * em lote de UI/persistência: execute explicitamente ao alterar eliminatória com
+   * `npm run test:elim-formula`. [[project_elim_formula_certificacao_isolada]] */
+  ...(process.env.SP_RUN_ELIM_FORMULA === '1' ? ['tests/minimal-elim-formula.test.js'] : []),
   // O PAINEL de resolução prometia mais jogos do que o sorteio entrega: contava a repescagem
   // de elim SIMPLES com fórmula própria (⌊s/2⌋+(lo−1)+s%2) em vez da árvore mínima. N=33
   // prometia 48, o sorteio faz 37 — 30% a mais no tempo com que o organizador DECIDE. Compara

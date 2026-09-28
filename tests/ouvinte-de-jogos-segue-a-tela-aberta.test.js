@@ -39,7 +39,9 @@ const fakeDb = { collection: () => ({ doc: () => ({ collection: () => ({
 const _tSub = () => fakeDb.collection().doc().collection();
 const ctx = {
   window: { FirestoreDB: { db: fakeDb, _tSub: _tSub }, _tSplit: {
-      remontar: (p) => Object.assign({}, p.config, { _montado: p.matches.length }) },
+      remontar: (p) => Object.assign({}, p.config, { _montado: p.matches.length }),
+      partesDe: (t) => (Array.isArray(t && t._semPesados) && t._semPesados.length
+        ? t._semPesados : ['matches']) },
     _softRefreshView: () => {}, _error: () => {}, _warn: () => {}, _noteFsReads: () => {},
     _isRemoteFirestoreSnapshot: (snap) => !(snap && snap.metadata && snap.metadata.fromCache === true) },
   JSON: JSON
@@ -48,11 +50,12 @@ vm.createContext(ctx);
 vm.runInContext('var API = {' + corpo + '};\nthis.API = API;', ctx);
 const API = ctx.API;
 
-// ── ① torneio INTEIRO não é ouvido (não há subcoleção que valha) ────────────
+// ── ① sem marcador ainda é ouvido pelas partes canônicas ────────────────────
 const alvo = { id: 't1', _semPesados: ['matches'], rounds: [{ matches: [] }] };
 API.tournaments = [{ id: 'inteiro', rounds: [] }];
 API.ouvirJogosDoTorneio('inteiro');
-ok(!API._jogosSub, '⛔ torneio NÃO dividido não abre assinatura nenhuma — o doc já traz tudo');
+ok(API._jogosSub && API._jogosSub.id === 'inteiro', '⛔ sem marcador ainda abre assinatura canônica');
+API.pararDeOuvirJogos(); soltas = 0; // preparação não entra no teste de troca abaixo
 
 // ── ② torneio dividido é ouvido ─────────────────────────────────────────────
 API.tournaments = [alvo];

@@ -97,18 +97,17 @@ const criacao = creationSource.slice(i);
  *
  * ⚠️ RELIGAR exige uma PEÇA NOVA, não outra conferência: uma porta de escrita no servidor
  * que receba os inscritos e os grave na subcoleção. Até lá, nasce inteiro. */
-ok(!/_semPesados: \['matches', 'participants'/.test(criacao),
-  '⛔ torneio novo NÃO nasce dividido — os inscritos não chegariam à subcoleção');
+ok(/_semPesados:\s*PARTES_AO_NASCER/.test(criacao),
+  '⭐ torneio novo nasce dividido — inscritos e jogos já têm morada canônica');
 
 // ── ⑤ A CAUSA, travada: a CF do espelho PULA o que saiu do documento ──────────────
 /* Esta asserção é o que faltava nas três tentativas. Ela não pergunta "nasce dividido?" —
  * pergunta POR QUE não pode nascer ainda. No dia em que existir a porta de escrita, é ela
  * que vai apontar o que mudou. */
-ok(/_pulados\s*=\s*Array\.isArray\(depois\._semPesados\)/.test(cf),
-  '⛔ a CF do espelho deriva o que PULAR do marcador do documento');
+ok(/_pulados\s*=\s*_tSplit\.partesDe\(depois\)/.test(cf),
+  '⛔ a CF do espelho deriva o que pular da fonte canônica');
 ok(/_pula\('participants'\)/.test(cf),
-  '⛔⛔ e ela PULA `participants` quando ele saiu do doc — logo NINGUÉM o escreve na ' +
-  'subcoleção se ele nunca esteve lá. É isto que impede nascer dividido.');
+  '⛔⛔ e ela PULA `participants` quando ele saiu do doc — protege a fonte viva na subcoleção.');
 
 // ── ③ ⛔ A CONDIÇÃO QUE FALTAVA: o OUVINTE busca o que falta ────────────────
 /* Esta é a asserção que não existia em 26/ago, e a ausência dela custou produção. Não
