@@ -223,12 +223,10 @@
    *   ① `uid` — a identidade de verdade.
    *   ② dupla: os dois uids, na ordem em que estão (p1 e p2 são posições do time, não
    *      ordem alfabética — trocar mudaria QUEM joga de cada lado).
-   *   ③ só então o NOME, e só pra quem não tem uid nenhum: são as 75 de 240 entradas
-   *      digitadas pelo organizador, que existem só pelo nome. É a exceção dele, e ela é
-   *      legítima — sem ela essas pessoas não teriam chave nenhuma.
-   * ⚠️ Consequência aceita do ③: renomear um inscrito fictício muda a chave dele, e o
-   * espelho trata como "saiu um, entrou outro". Pro dado é a mesma coisa (o registro é o
-   * nome); e é infinitamente melhor que a posição, que muda sem ninguém ter feito nada.
+   *   ③ `manualParticipantId` — para quem o organizador digitou sem conta. É estável,
+   *      atravessa formar/desfazer dupla e evita que uma renomeação mova o documento.
+   *   ④ só então o NOME, para fotografia legada sem identificador nenhum. É a única
+   *      forma em que renomear ainda troca chave; não é permitido para entradas novas.
    */
   /* A chave do espelho respeita a identidade por POSIÇÃO: uid de conta, ou
    * manualParticipantId para a exceção legítima sem conta. Os IDs manuais passaram
