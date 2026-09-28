@@ -1198,6 +1198,9 @@
     // GATED: só quando phaseCfg.turnos==='ida_volta' (ou _doubleRR); ausente = single-RR (comportamento legado).
     var _turnos = (phaseCfg && (phaseCfg.turnos === 'ida_volta' || phaseCfg._doubleRR)) ? 2 : 1;
     groups.forEach(function (g) {
+      // REGRESSÃO SUPER 8: oito equipes aqui são uma classificatória comum, nunca uma
+      // chave especial. `roundRobinSchedule` cria C(8,2)=28 jogos reais; BYE pertence
+      // somente a eliminatória e não pode aparecer nem contar nesta fase.
       // v3.1.9: round-robin via núcleo compartilhado (método do círculo) → rodadas
       // BALANCEADAS dentro do grupo. Estático: todos os jogos existem de uma vez.
       var sched = roundRobinSchedule(g.players);

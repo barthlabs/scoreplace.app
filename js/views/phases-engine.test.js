@@ -494,6 +494,18 @@ ok(mres3.ok === false && mres3.error === 'already-materialized', 'guard _phaseMa
   var gOf = {}; built.groups.forEach(function (g) { g.players.forEach(function (p) { gOf[p.displayName] = g.groupIdx; }); });
   ok(gOf['P1'] !== gOf['P2'], 'serpentina: P1 e P2 (top seeds) em grupos diferentes');
 
+  // REGRESSÃO: "Super 8" é apenas a classificatória já existente com um grupo de 8.
+  // Não há código/formato próprio: todos se enfrentam, pontuam na tabela normal e
+  // folga/BYE nunca entra na contagem de jogos de grupo.
+  var super8Pool = [];
+  for (var s8 = 1; s8 <= 8; s8++) super8Pool.push({ displayName: 'S8-' + s8, uid: 's8-' + s8 });
+  var super8 = eng.genGroupsFromPool(super8Pool, { formatCode: 'grupos_mata', gruposCount: 1 }, 's8');
+  eq(super8.groups.length, 1, 'Super 8: uma classificatória, um grupo');
+  eq(super8.groups[0].players.length, 8, 'Super 8: 8 equipes no grupo');
+  eq(super8.matches.length, 28, 'Super 8: todos-contra-todos C(8,2)=28 jogos');
+  ok(super8.matches.every(function (m) { return m.bracket === 'group' && !m.isBye && m.p1 !== 'BYE' && m.p2 !== 'BYE'; }),
+    'Super 8: nenhum BYE/folga é jogo de grupo');
+
   // feed-forward: simula grupos jogados (menor número vence) → standings ordenado.
   built.matches.forEach(function (m) {
     m.phaseIndex = 1;

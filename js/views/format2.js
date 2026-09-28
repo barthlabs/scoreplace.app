@@ -16,6 +16,10 @@
 // CONTRATO-CHAVE (verificado no motor):
 //  • Dupla FIXA  → Fase de Grupos (formatCode 'grupos_mata'), gruposCount=nº grupos
 //    (inclusive 1). Liga PROÍBE duplas formadas.
+//  • "Super 8" NÃO é um quarto formato: é esta mesma Fase de Grupos com 8 equipes
+//    no grupo (gruposCount=1 para um Super 8). Todos se enfrentam e a pontuação é a
+//    classificatória normal; gênero, habilidade e idade só filtram quem pode entrar.
+//    Não crie ramificação, ranking ou eliminatória especial para esse nome comercial.
 //  • Rei/Rainha  → Liga 'rei_rainha' (grupos de 4 rotativos, individual).
 //  • Sorteio/rodada → Liga 'standard' clusterizado (parceiro+adversário/rodada, individual).
 //  • Singles: 'todos' → Fase de Grupos; 'fixo N rodadas' → Liga standard.
