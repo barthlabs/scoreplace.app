@@ -96,6 +96,21 @@ function removeClassificationSlot(t, label, uids) {
   }
 }
 
+// Uma vaga TBD não pode manter o UID/objeto do ocupante anterior. A leitura canônica
+// é uid-first; deixar esses campos faria o card parecer vazio enquanto autorização,
+// foto ou avanço ainda enxergariam quem saiu. Não usar `_setSlot(..., [], null)`:
+// ele propositalmente não apaga o objeto quando recebe null.
+function clearAdvancedSlot(m, side) {
+  if (!m || (side !== 'p1' && side !== 'p2')) return;
+  m[side] = 'TBD';
+  delete m[side + 'FromBye'];
+  if (side === 'p1') {
+    m.team1Uids = []; m.p1Uid = null; m.team1Obj = null;
+  } else {
+    m.team2Uids = []; m.p2Uid = null; m.team2Obj = null;
+  }
+}
+
 function undoAdvancement(t, m) {
   const side = winnerSide(m);
   const prevWinner = m.winner;
@@ -103,15 +118,15 @@ function undoAdvancement(t, m) {
   if (m.nextMatchId) {
     const next = win._findMatch(t, m.nextMatchId);
     if (next && !next.winner) {
-      if (next.p1 === prevWinner) { next.p1 = 'TBD'; delete next.p1FromBye; }
-      if (next.p2 === prevWinner) { next.p2 = 'TBD'; delete next.p2FromBye; }
+      if (next.p1 === prevWinner) clearAdvancedSlot(next, 'p1');
+      if (next.p2 === prevWinner) clearAdvancedSlot(next, 'p2');
     }
   }
   if (m.loserMatchId) {
     const loserMatch = win._findMatch(t, m.loserMatchId);
     if (loserMatch && !loserMatch.winner) {
-      if (loserMatch.p1 === oldLoser) loserMatch.p1 = 'TBD';
-      if (loserMatch.p2 === oldLoser) loserMatch.p2 = 'TBD';
+      if (loserMatch.p1 === oldLoser) clearAdvancedSlot(loserMatch, 'p1');
+      if (loserMatch.p2 === oldLoser) clearAdvancedSlot(loserMatch, 'p2');
     }
   }
   removeClassificationSlot(t, prevWinner, typeof win._slotUids === 'function' ? win._slotUids(m, side === 1 ? 'p1' : 'p2') : []);
