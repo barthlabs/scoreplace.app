@@ -63,10 +63,11 @@ ok(/_terceiros\.length === 1/.test(bloco),
 const iDesenho = src.indexOf('podium = window._buildPodiumHtml(w1, w2, thirdPlace);');
 ok(iDesenho > i, '⭐ e vem ANTES de o pódio ser desenhado');
 
-// e o mapa usado é o MESMO que alimenta a tabela
-const iMapa = src.lastIndexOf('classifMap = window._classifMapFromMatches(t, _comTerceiro(t, fpMatches));', i);
+// e a lista canônica usada é a MESMA que alimenta a tabela. Ela carrega UID(s),
+// ao contrário do adaptador legado {nome:posição}, e por isso não funde homônimos.
+const iMapa = src.lastIndexOf('classifMap = window._classifEntriesFromMatches(t, _comTerceiro(t, fpMatches));', i);
 ok(iMapa > 0 && iMapa < i,
-  '⭐ o mapa é o MESMO que desenha a classificação — é isso que garante que as duas concordem');
+  '⭐ a lista canônica é a MESMA que desenha a classificação — é isso que garante que as duas concordem');
 
 // ── o caso real, reproduzido: 8 duplas, sem jogo de 3º ─────────────────────
 const classif = { 'Max / Kelly Barth': 1, 'Mari / Flavia Cocozza': 2, 'Ciça Mange / Olivia': 3,

@@ -106,8 +106,8 @@ ok(semTerceiroPorEstrutura === 30,
   const fs2 = require('fs');
   const vm2 = require('vm');
   const store = fs2.readFileSync(path.join(ROOT, 'js/store.js'), 'utf8');
-  const ini = store.indexOf('window._classifMapFromMatches = function');
-  const fim = store.indexOf('\nwindow._classifCompetitors', ini);
+  const ini = store.indexOf('window._classifEntriesFromMatches = function');
+  const fim = store.indexOf('\n// A COLOCAÇÃO DE UMA PESSOA', ini);
   ok(ini > 0 && fim > ini, '① a porta da classificação foi achada em store.js');
   if (ini < 0) return;
   vm2.runInContext(store.slice(ini, fim), H.context || H.sandbox);

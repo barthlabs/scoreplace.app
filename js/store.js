@@ -14517,14 +14517,33 @@ window._classifTierKeys = function (matches) {
   return keys;
 };
 
-// classificação progressiva de um conjunto de matches (uma linha OU a fase) → { nome: pos }.
-window._classifMapFromMatches = function (t, matches) {
-  if (!matches || !matches.length || typeof window._updateProgressiveClassification !== 'function') return {};
+// Classificação progressiva como ENTRADAS, não como mapa por texto. Cada linha carrega
+// a chave formada pelo(s) UID(s) do slot; assim duas duplas cujo rótulo coincidiu não se
+// fundem no card nem na ficha. `classification` segue existindo somente como espelho para
+// documentos/apps antigos. Não volte a derivar esta lista de Object.keys(classification):
+// isso apaga justamente a segunda identidade. [[project_classificacao_chave_canonica_com_fallback_manual]]
+window._classifEntriesFromMatches = function (t, matches) {
+  if (!matches || !matches.length || typeof window._updateProgressiveClassification !== 'function') return [];
   var third = matches.filter(function (m) { return m.isThirdPlace || (m.bracket || '') === 'thirdplace'; })[0] || null;
   var rest = matches.filter(function (m) { return m !== third; });
   var faux = { matches: rest, format: 'Eliminatórias Simples', thirdPlaceMatch: third, tiebreakers: t && t.tiebreakers };
-  try { window._updateProgressiveClassification(faux); } catch (e) { return {}; }
-  return faux.classification || {};
+  try { window._updateProgressiveClassification(faux); } catch (e) { return []; }
+  if (typeof window._classifRows === 'function') return window._classifRows(faux);
+  return Object.keys(faux.classification || {}).map(function (name) {
+    return { key: 'legacy:' + name, name: name, pos: faux.classification[name], uids: [] };
+  });
+};
+
+// Adaptador legado: consumidores ainda não migrados podem receber {nome:pos}, mas NÃO
+// devem ser usados para decidir identidade. Em colisão, ele só consegue mostrar uma posição;
+// a lista acima é a fonte correta e os leitores novos devem chamá-la diretamente.
+window._classifMapFromMatches = function (t, matches) {
+  var map = {};
+  window._classifEntriesFromMatches(t, matches).forEach(function (entry) {
+    if (!entry || !entry.name || entry.pos == null) return;
+    if (map[entry.name] == null || entry.pos < map[entry.name]) map[entry.name] = entry.pos;
+  });
+  return map;
 };
 
 // QUEM REALMENTE DISPUTOU — tirado SÓ dos jogos.
@@ -14545,11 +14564,38 @@ window._classifCompetitors = function (matches) {
   return Object.keys(set);
 };
 
+// Mesmo conjunto de quem disputou, mas com a identidade do SLOT. BYE e TBD não são
+// competidores; folga jamais ganha linha nem entra na contagem de jogos/classificação.
+window._classifCompetitorEntries = function (matches) {
+  var set = {}, out = [];
+  (matches || []).forEach(function (m) {
+    ['p1', 'p2'].forEach(function (side) {
+      var name = String((m && m[side]) == null ? '' : m[side]).trim();
+      if (!name || name === 'TBD' || name === 'BYE') return;
+      var uids = (typeof window._slotUids === 'function') ? window._slotUids(m, side) : [];
+      var key = (typeof window._classifEntryKey === 'function')
+        ? window._classifEntryKey(name, uids) : (uids && uids.length ? 'uid:' + uids.slice().sort().join('+') : 'manual:' + name);
+      if (!key || set[key]) return;
+      set[key] = true;
+      out.push({ key: key, name: name, uids: Array.isArray(uids) ? uids.slice() : [] });
+    });
+  });
+  return out;
+};
+
 // A CLASSIFICAÇÃO FECHOU? Só quando TODO competidor que entrou em quadra tem posição.
 // ⚠️ Compara NOME A NOME, não `length >= length`: os dois números podem empatar com um
 // nome faltando e outro sobrando (dupla reescrita por substituição, por exemplo), e aí a
 // contagem diria "fechada" com alguém de fora — que é o oposto do pedido.
 window._classifIsComplete = function (matches, clMap) {
+  // A lista é o caminho atual: compara UID(s), não o rótulo que pode coincidir ou envelhecer.
+  if (Array.isArray(clMap)) {
+    var compEntries = window._classifCompetitorEntries(matches);
+    if (!compEntries.length) return false;
+    var placed = {};
+    clMap.forEach(function (entry) { if (entry && entry.key && entry.pos != null) placed[entry.key] = true; });
+    return compEntries.every(function (entry) { return !!placed[entry.key]; });
+  }
   var comp = window._classifCompetitors(matches);
   if (!comp.length) return false;
   var map = clMap || {};
@@ -14563,13 +14609,13 @@ window._classifIsComplete = function (matches, clMap) {
 // Não era reflexo do rótulo "parcial" (outra tela, outra fonte): aquela linha simplesmente
 // nunca teve colocação — o próprio comentário dela dizia "esta linha ainda não mostra
 // colocação". Isto é o resolvedor que faltava, e ele DELEGA tudo ao que já existe:
-// `_classifMapFromMatches` / `_classifUnifiedMap` são as MESMAS funções que desenham a
+// `_classifEntriesFromMatches` / `_classifUnifiedEntries` são as MESMAS funções que desenham a
 // classificação na página do torneio, então as duas telas não têm como divergir.
 //
 // ⚠️ IDENTIDADE É O UID. O time é achado pelo uid do SLOT (`_slotUids`), nunca pelo nome:
 // o rótulo gravado em `m.p1`/`m.p2` envelhece quando a pessoa troca de displayName, e foi
-// exatamente esse o defeito da 1.7.46. O rótulo só é usado DEPOIS, como chave do mapa de
-// classificação — que é keyed por rótulo porque a dupla não tem uid próprio.
+// exatamente esse o defeito da 1.7.46. O rótulo só é usado para EXIBIÇÃO; a chave da
+// classificação é o conjunto completo de UIDs do slot, porque a dupla não tem uid próprio.
 //
 // ⚠️ Só devolve com a classificação FECHADA (`_classifIsComplete`). Ordem do dono:
 // "classificacao final entre os participantes apenas". Torneio em andamento não publica
@@ -14583,11 +14629,11 @@ window._placementInTournament = function (t, uid) {
   if (!su) return null;
 
   // qual RÓTULO de time é o desta pessoa, e em que linha da chave ela jogou
-  var label = null, linha = null;
+  var label = null, entryKey = null, linha = null;
   for (var i = 0; i < ms.length; i++) {
     var m = ms[i];
-    if (su(m, 'p1').indexOf(uid) >= 0) { label = m.p1; linha = (m.bracket || 'main'); break; }
-    if (su(m, 'p2').indexOf(uid) >= 0) { label = m.p2; linha = (m.bracket || 'main'); break; }
+    if (su(m, 'p1').indexOf(uid) >= 0) { label = m.p1; entryKey = window._classifEntryKey(label, su(m, 'p1')); linha = (m.bracket || 'main'); break; }
+    if (su(m, 'p2').indexOf(uid) >= 0) { label = m.p2; entryKey = window._classifEntryKey(label, su(m, 'p2')); linha = (m.bracket || 'main'); break; }
   }
   if (!label || label === 'TBD' || label === 'BYE') return null;
 
@@ -14596,42 +14642,64 @@ window._placementInTournament = function (t, uid) {
   // si mesma; senão, fase única.
   var tierKeys = (typeof window._classifTierKeys === 'function') ? window._classifTierKeys(ms) : ['main'];
   var hasGF = ms.some(function (m) { return (m.bracket || '') === 'grandfinal'; });
-  var escopo = ms, map;
-  if (hasGF && typeof window._classifUnifiedMap === 'function') {
-    map = window._classifUnifiedMap(t, ms, tierKeys);
+  var escopo = ms, entries;
+  if (hasGF && typeof window._classifUnifiedEntries === 'function') {
+    entries = window._classifUnifiedEntries(t, ms, tierKeys);
   } else if (tierKeys.length >= 2) {
     escopo = ms.filter(function (m) { return (m.bracket || 'main') === linha; });
-    map = window._classifMapFromMatches(t, escopo);
+    entries = window._classifEntriesFromMatches(t, escopo);
   } else {
-    map = window._classifMapFromMatches(t, ms);
+    entries = window._classifEntriesFromMatches(t, ms);
   }
-  if (!window._classifIsComplete(escopo, map)) return null;
-  var pos = map[label];
-  if (pos == null) return null;
-  return { pos: pos, total: window._classifCompetitors(escopo).length, time: label };
+  if (!window._classifIsComplete(escopo, entries)) return null;
+  var mine = entries.filter(function (entry) { return entry && entry.key === entryKey; })[0];
+  if (!mine || mine.pos == null) return null;
+  return { pos: mine.pos, total: window._classifCompetitorEntries(escopo).length, time: mine.name || label };
 };
 
-// classificação GERAL com grande final: campeão=1º, vice=2º, 3º/4º das semis, depois as
-// linhas interleaved por (posição-na-linha, ordem-do-tier). → { nome: pos }.
-window._classifUnifiedMap = function (t, fpMatches, tierKeys) {
-  var cl = {}, nextPos = 1, placed = {};
-  function place(n) { if (n && n !== 'TBD' && n !== 'BYE' && !placed[n]) { placed[n] = 1; cl[n] = nextPos++; } }
+// Classificação geral com grande final como lista canônica. O mesmo membro pode aparecer
+// em duas duplas; por isso `key` representa o time inteiro, não um UID isolado.
+window._classifUnifiedEntries = function (t, fpMatches, tierKeys) {
+  var out = [], nextPos = 1, placed = {};
+  function entryFromSlot(m, side) {
+    if (!m || !m[side] || m[side] === 'TBD' || m[side] === 'BYE') return null;
+    var uids = (typeof window._slotUids === 'function') ? window._slotUids(m, side) : [];
+    var key = window._classifEntryKey(m[side], uids);
+    return key ? { key: key, name: m[side], uids: uids } : null;
+  }
+  function place(entry) {
+    if (!entry || !entry.key || placed[entry.key]) return;
+    placed[entry.key] = true;
+    out.push({ key: entry.key, name: entry.name, uids: entry.uids || [], pos: nextPos++ });
+  }
   var gf = (fpMatches || []).filter(function (m) { return (m.bracket || '') === 'grandfinal' && m.winner; })[0];
-  if (gf) { place(gf.winner); place(window._matchWinnerSide(gf) === 1 ? gf.p2 : gf.p1); }
+  if (gf) { var gs = window._matchWinnerSide(gf) === 1 ? 'p1' : 'p2'; place(entryFromSlot(gf, gs)); place(entryFromSlot(gf, gs === 'p1' ? 'p2' : 'p1')); }
   var tp = (fpMatches || []).filter(function (m) { return (m.bracket || '') === 'thirdplace' && m.winner; })[0];
-  if (tp) { place(tp.winner); place(window._matchWinnerSide(tp) === 1 ? tp.p2 : tp.p1); }
+  if (tp) { var ts = window._matchWinnerSide(tp) === 1 ? 'p1' : 'p2'; place(entryFromSlot(tp, ts)); place(entryFromSlot(tp, ts === 'p1' ? 'p2' : 'p1')); }
   var rest = [];
   (tierKeys || []).forEach(function (bk, li) {
     var lm = (fpMatches || []).filter(function (m) { return (m.bracket || 'main') === bk; });
-    var map = window._classifMapFromMatches(t, lm);
-    Object.keys(map).forEach(function (n) { if (!placed[n]) rest.push({ name: n, pos: map[n], line: li }); });
+    window._classifEntriesFromMatches(t, lm).forEach(function (entry) {
+      if (entry && !placed[entry.key]) rest.push({ key: entry.key, name: entry.name, uids: entry.uids || [], pos: entry.pos, line: li });
+    });
   });
   rest.sort(function (a, b) { return (a.pos !== b.pos) ? (a.pos - b.pos) : (a.line - b.line); });
-  rest.forEach(function (e) { place(e.name); });
-  return cl;
+  rest.forEach(place);
+  return out;
 };
 
-// renderiza um bloco <details> de classificação PERSONALIZADA (1º..Nº) do mapa {nome:pos}.
+// Adaptador legado para chamadas ainda esperando {nome:posição}. Leitores de identidade
+// devem usar `_classifUnifiedEntries`; reduzir a lista a texto não é operação reversível.
+window._classifUnifiedMap = function (t, fpMatches, tierKeys) {
+  var map = {};
+  window._classifUnifiedEntries(t, fpMatches, tierKeys).forEach(function (entry) {
+    if (map[entry.name] == null || entry.pos < map[entry.name]) map[entry.name] = entry.pos;
+  });
+  return map;
+};
+
+// Renderiza um bloco <details> de classificação. Recebe preferencialmente a lista canônica
+// `{key,name,pos,uids}`; o mapa {nome:pos} é aceito só para documentos/callers antigos.
 // opts: { label, color, open }. Vazio → ''.
 // v3.1.38 CANÔNICO: modo de classificação ('individual'|'blocks') lido DIRETO da fase
 // (t.phases[cur].rankingType). Toda fase — incl. a 0 — tem rankingType desde v3.1.37/migração.
@@ -14868,16 +14936,22 @@ window._renderPodiumsAndClassif = function (t) {
   if (_deHasGrand && _deHasLower && typeof window._updateDuplaElimClassification === 'function') {
     var _deFaux = { matches: fpMatches, tiebreakers: t && t.tiebreakers, swissEliminated: t && t.swissEliminated, swissStandings: t && t.swissStandings };
     try { window._updateDuplaElimClassification(_deFaux); } catch (e) {}
-    var _deMap = _deFaux.classification || {};
+    // A dupla eliminatória usa a mesma lista canônica que o restante da tela.
+    // `classification` por texto é somente o espelho de compatibilidade e fundiria
+    // duas entradas cujo rótulo coincida. [[project_classificacao_chave_canonica_com_fallback_manual]]
+    var _deMap = (typeof window._classifRows === 'function') ? window._classifRows(_deFaux) : (_deFaux.classification || {});
     var _deGF = fpMatches.filter(function (m) { return (m.bracket || '') === 'grand' && m.winner && m.winner !== 'draw' && !m.isBye; })[0];
     var _dePod = '';
     if (_deGF && typeof window._buildPodiumHtml === 'function') {
       var _d1 = _deGF.winner, _d2 = (window._matchWinnerSide(_deGF) === 1) ? _deGF.p2 : _deGF.p1;
       if (_d2 === 'TBD' || _d2 === 'BYE') _d2 = null;
-      var _d3 = Object.keys(_deMap).filter(function (n) { return _deMap[n] === 3; })[0] || null; // 3º = perdedor da Final Inferior
+      var _d3 = (Array.isArray(_deMap)
+        ? _deMap.filter(function (entry) { return entry && entry.pos === 3; }).map(function (entry) { return entry.name; })[0]
+        : Object.keys(_deMap).filter(function (n) { return _deMap[n] === 3; })[0]) || null; // 3º = perdedor da Final Inferior
       _dePod = window._buildPodiumHtml(_d1, _d2, _d3);
     }
-    var _deCls = Object.keys(_deMap).length ? window._renderClassifBlock(t, _deMap, { label: '📊 Classificação geral', color: '#fbbf24', open: false }) : '';
+    var _deCls = (Array.isArray(_deMap) ? _deMap.length : Object.keys(_deMap).length)
+      ? window._renderClassifBlock(t, _deMap, { label: '📊 Classificação geral', color: '#fbbf24', open: false }) : '';
     if (_dePod || _deCls) return _dePod + _deCls;
   }
 
@@ -14896,7 +14970,7 @@ window._renderPodiumsAndClassif = function (t) {
       var color = tierColors[bk] || palette[i % palette.length];
       var pod = window._linePodiumHtml(t, lm, title, color);
       if (!pod) return '';
-      var cls = window._renderClassifBlock(t, window._classifMapFromMatches(t, lm), { label: '📊 Classificação · ' + title, color: color, open: false });
+      var cls = window._renderClassifBlock(t, window._classifEntriesFromMatches(t, lm), { label: '📊 Classificação · ' + title, color: color, open: false });
       return '<div style="margin-bottom:1.25rem;">' + pod + cls + '</div>';
     }).join('');
     if (out) return out;
@@ -14921,7 +14995,7 @@ window._renderPodiumsAndClassif = function (t) {
     finalMatch = fpMatches.filter(function (m) { return (m.bracket || '') === 'grandfinal' && m.winner && !m.isBye; })[0] || null;
     var tpc = fpMatches.filter(function (m) { return (m.bracket || '') === 'thirdplace' && m.winner; })[0];
     if (tpc) thirdPlace = tpc.winner;
-    classifMap = window._classifUnifiedMap(t, _comTerceiro(t, fpMatches), tierKeys);
+    classifMap = window._classifUnifiedEntries(t, _comTerceiro(t, fpMatches), tierKeys);
   } else if (tierKeys.length >= 1 && fpMatches.some(function (m) { return m.winner; })) {
     var nonThird = fpMatches.filter(function (m) { return !m.isThirdPlace && (m.bracket || '') !== 'thirdplace'; });
     var rs = nonThird.map(function (m) { return m.round == null ? 1 : m.round; });
@@ -14930,7 +15004,7 @@ window._renderPodiumsAndClassif = function (t) {
     if (tp2) thirdPlace = tp2.winner;
     // ⚠️ E a CLASSIFICAÇÃO idem: sem o jogo de 3º ela põe em 3º quem PERDEU por W.O.
     // (medido no Corpus Christi). O jogo entra na lista antes de classificar.
-    classifMap = window._classifMapFromMatches(t, _comTerceiro(t, fpMatches));
+    classifMap = window._classifEntriesFromMatches(t, _comTerceiro(t, fpMatches));
   }
   /* ── SEM DISPUTA DE 3º, O 3º VEM DA CLASSIFICAÇÃO — NÃO DE LUGAR NENHUM ──────────
    * Relato do dono (26/ago, olhando o BT Corpus Christi): _"no pódio não aparece o 3º
@@ -14959,7 +15033,9 @@ window._renderPodiumsAndClassif = function (t) {
     thirdPlace = t.thirdPlaceMatch.winner;
   }
   if (!thirdPlace && classifMap && typeof classifMap === 'object') {
-    var _terceiros = Object.keys(classifMap).filter(function (n) { return classifMap[n] === 3; });
+    var _terceiros = (Array.isArray(classifMap)
+      ? classifMap.filter(function (entry) { return entry && entry.pos === 3; }).map(function (entry) { return entry.name; })
+      : Object.keys(classifMap).filter(function (n) { return classifMap[n] === 3; }));
     // ⚠️ Só quando a classificação aponta UM. Se ela empatar dois no 3º, escolher um seria
     // o app inventando um desempate que ninguém jogou.
     if (_terceiros.length === 1) thirdPlace = _terceiros[0];

@@ -3760,13 +3760,13 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
   // pra posição; third = jogo de 3º/4º (vai como thirdPlaceMatch no faux).
   // v3.1.33 CANÔNICO: estas funções DELEGAM pros globais (store.js) — a MESMA fonte que a
   // página do torneio usa. Não duplicar a lógica de classificação aqui. Ver
-  // _renderPodiumsAndClassif / _renderClassifBlock / _classifMapFromMatches / _classifUnifiedMap.
+  // _renderPodiumsAndClassif / _renderClassifBlock / _classifEntriesFromMatches / _classifUnifiedEntries.
   function _renderClassifFromMap(cl, color, label, openByDefault) {
     return (typeof window._renderClassifBlock === 'function')
       ? window._renderClassifBlock(t, cl, { color: color, label: label, open: !!openByDefault })
       : '';
   }
-  // Classificação POR LINHA (mapa { nome: pos }) — delega ao global canônico.
+  // Classificação POR LINHA (lista { key, nome, posição, uids }) — delega ao global canônico.
   /* ⛔⛔⛔ A TELA NÃO PINTA CONTRADIÇÃO — ELA ACUSA E BUSCA DE NOVO.
    *
    * RELATO DO DONO, 27/set/2026, com print: a MESMA tela mostrava "35º Rodrigo Godinho / Betsy"
@@ -3818,12 +3818,12 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
   }
   function _lineClassifMap(bracketKey) {
     var lm = _lineMatches(bracketKey);
-    return (typeof window._classifMapFromMatches === 'function') ? window._classifMapFromMatches(t, lm) : {};
+    return (typeof window._classifEntriesFromMatches === 'function') ? window._classifEntriesFromMatches(t, lm) : [];
   }
   function _classifBlock(matchesArr, third, color, label, openByDefault) {
-    if (!matchesArr || !matchesArr.length || typeof window._classifMapFromMatches !== 'function') return '';
+    if (!matchesArr || !matchesArr.length || typeof window._classifEntriesFromMatches !== 'function') return '';
     var src = third ? matchesArr.concat([third]) : matchesArr;
-    return _renderClassifFromMap(window._classifMapFromMatches(t, src), color, label, openByDefault);
+    return _renderClassifFromMap(window._classifEntriesFromMatches(t, src), color, label, openByDefault);
   }
   // v1.8.31: "PARCIAL" DEIXA DE SER PALAVRA FIXA E VIRA LEITURA DO DADO.
   // Relato do dono, com print do "Duplas Mistas Sorteadas" já ENCERRADO e com as 8 equipes
@@ -4047,7 +4047,7 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
   // v4.x: geral COLAPSADA por default (consistente com a classificação geral da fase 0 e
   // com a página do torneio encerrado). Por-linha (parcial) já era colapsada.
   function _unifiedClassifHtml() {
-    var map = (typeof window._classifUnifiedMap === 'function') ? window._classifUnifiedMap(t, pm, _tierKeys) : {};
+    var map = (typeof window._classifUnifiedEntries === 'function') ? window._classifUnifiedEntries(t, pm, _tierKeys) : [];
     return _renderClassifFromMap(map, '#fbbf24', '📊 Classificação geral', false);
   }
 

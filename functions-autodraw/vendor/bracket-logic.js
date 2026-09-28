@@ -1821,7 +1821,9 @@ function _congelaLinhasEncerradas(t) {
     });
     if (!reais.length) return;
     if (!reais.every(function (m) { return !!m.winner; })) return;    // ① ainda há jogo em aberto
-    var mapa = (typeof window._classifMapFromMatches === 'function') ? window._classifMapFromMatches(t, lm) : null;
+    // A fotografia publicada nasce da lista canônica: o adaptador {nome:posição}
+    // perde a segunda dupla se dois rótulos coincidirem. [[project_classificacao_chave_canonica_com_fallback_manual]]
+    var entries = (typeof window._classifEntriesFromMatches === 'function') ? window._classifEntriesFromMatches(t, lm) : [];
     var porChave = {};
     lm.forEach(function(m) {
       if (!m) return;
@@ -1838,13 +1840,12 @@ function _congelaLinhasEncerradas(t) {
       return porChave[key] && t.classificationEntries[key] && typeof t.classificationEntries[key].pos === 'number';
     }).map(function(key) { return { key: key, entry: t.classificationEntries[key] }; })
       .sort(function(a, b) { return a.entry.pos - b.entry.pos; });
-    if (!canon.length && !mapa) return;
+    if (!canon.length && !entries.length) return;
     var ordem = canon.length ? canon.map(function(x) { return x.key; })
-      : Object.keys(mapa).sort(function (a, b) { return mapa[a] - mapa[b]; });
+      : entries.slice().sort(function (a, b) { return a.pos - b.pos; }).map(function (entry) { return entry.key; });
     if (!ordem.length) return;
-    /* ⛔⛔ O RETRATO GUARDA OS UIDS, não só o rótulo. O mapa de classificação é keyed por RÓTULO
-     * de time — decisão anotada em `_classifMapFromMatches`, porque dupla não tem uid próprio. Mas
-     * RÓTULO ENVELHECE: quem troca de displayName deixa de casar com o retrato congelado, e a
+    /* ⛔⛔ O RETRATO GUARDA OS UIDS, não só o rótulo. A lista canônica é keyed pela identidade
+     * completa de time, porque dupla não tem uid próprio. Mas RÓTULO ENVELHECE: quem troca de displayName deixa de casar com o retrato congelado, e a
      * posição some da ficha da pessoa sem que nada fique vermelho. O retrato dos GRUPOS
      * (`_congelaGruposEncerrados`) já guardava uid; este não guardava — mesmo defeito, um lado só.
      * ⇒ os uids saem do SLOT do jogo (`_slotUids`), que é a identidade de verdade. */
@@ -1864,7 +1865,8 @@ function _congelaLinhasEncerradas(t) {
         var ce = t.classificationEntries[nome];
         return { name: ce.name, pos: ce.pos, uids: Array.isArray(ce.uids) ? ce.uids.slice() : [] };
       }
-      return { name: nome, pos: mapa[nome], uids: _uidsDoRotulo(nome) };
+      var entry = entries.filter(function (candidate) { return candidate && candidate.key === nome; })[0];
+      return { name: entry ? entry.name : nome, pos: entry ? entry.pos : null, uids: entry ? (entry.uids || []) : _uidsDoRotulo(nome) };
     });
     t.classifFinalDaLinha[k + '_at'] = new Date().toISOString();
     n++;

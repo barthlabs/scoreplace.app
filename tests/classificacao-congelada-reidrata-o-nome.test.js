@@ -115,8 +115,9 @@ ok(/if \(m\[sl\] && m\[sl\] !== 'TBD'\)/.test(bloco),
 /* ── ⑤ O RETRATO GUARDA OS UIDS ────────────────────────────────────────────
  * ⛔ Sem isto, o reidratador não tem do que partir e tudo acima vira enfeite. */
 const bl = fs.readFileSync(path.join(ROOT, 'js/views/bracket-logic.js'), 'utf8');
-ok(/uids: _uidsDoRotulo\(nome\)/.test(bl),
-  '⑤ ⛔⛔ o congelamento grava os uids de cada posição');
+ok(/uids: Array\.isArray\(ce\.uids\) \? ce\.uids\.slice\(\) : \[\]/.test(bl) &&
+   /uids: entry \? \(entry\.uids \|\| \[\]\)/.test(bl),
+  '⑤ ⛔⛔ o congelamento grava os uids que a entrada canônica já carrega');
 
 console.log('\n' + (fail ? '✗ ' + fail + ' falha(s), ' : '✅ ') + pass + ' verificações');
 process.exit(fail ? 1 : 0);

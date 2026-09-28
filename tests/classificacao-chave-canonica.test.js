@@ -6,6 +6,8 @@
  * dois UIDs, em ordem indiferente; nome é só fallback para quem foi digitado sem
  * conta. Um nome igual jamais fabrica UID nem funde duas pessoas. */
 const path = require('path');
+const fs = require('fs');
+const vm = require('vm');
 const { window: W } = require(path.join(__dirname, 'headless.js'));
 
 let pass = 0, fail = 0;
@@ -70,6 +72,23 @@ const gruposComHomonimas = {
 W._updateProgressiveClassification(gruposComHomonimas);
 ok(gruposComHomonimas.classificationEntries['uid:uAna1'] && gruposComHomonimas.classificationEntries['uid:uAna2'],
   'grupo conserva as duas homônimas não-classificadas como entradas distintas');
+
+// A tela e a ficha não podem voltar a reduzir a classificação progressiva ao mapa
+// `nome -> posição`. Carrega a porta real do store no mesmo VM do motor, não uma cópia
+// em teste: duas duplas de mesmo rótulo devem continuar com posições próprias.
+const store = fs.readFileSync(path.join(__dirname, '../js/store.js'), 'utf8');
+const storeIni = store.indexOf('window._classifEntriesFromMatches = function');
+const storeFim = store.indexOf('\n// Renderiza um bloco', storeIni);
+ok(storeIni >= 0 && storeFim > storeIni, 'a porta progressiva canônica foi localizada no store');
+if (storeIni >= 0 && storeFim > storeIni) vm.runInContext(store.slice(storeIni, storeFim), require('./headless.js').sandbox);
+
+const entries = W._classifEntriesFromMatches(homonimas, homonimas.matches);
+ok(entries.length === 4 && entries.filter((e) => e.name === 'Ana / Bia').length === 2,
+  'a classificação progressiva entrega lista e preserva os dois rótulos iguais');
+ok(W._classifIsComplete(homonimas.matches, entries),
+  'a completude compara as quatro identidades de slot, não apenas dois textos');
+ok(W._placementInTournament(homonimas, 'uC').pos === 2,
+  'a ficha encontra o vice pela chave UID mesmo com o rótulo do campeão igual');
 
 console.log(fail ? ('❌ ' + fail + ' falha(s)') : ('✅ ' + pass + ' verificações passaram'));
 process.exit(fail ? 1 : 0);
