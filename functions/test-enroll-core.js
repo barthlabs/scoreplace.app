@@ -41,7 +41,8 @@ try { C.normalizeExtraUpdates({ status: 'finished' }); ok('extraUpdates recusa p
     !/computeEnroll\([^\n]*participantObj/.test(block) &&
     /entry: _enrollCore\.cleanUndefined\(out\.entry \|\| sanitizedParticipantObj\)/.test(block));
   ok('Function usa nome real do perfil para bloquear conta sobre vaga manual homônima',
-    /doc\(participantUid\)\.get\(\)/.test(block) &&
+    /const profileRef = participantUid \? db\.collection\("users"\)\.doc\(participantUid\) : null;/.test(block) &&
+    /tx\.get\(profileRef\)/.test(block) &&
     /accountDisplayName = String\(profile\.displayName \|\| profile\.name \|\| ""\)\.trim\(\)/.test(block) &&
     /computeEnroll\(_dados, sanitizedParticipantObj, extraUpdates, nowMs, accountDisplayName\)/.test(block));
 })();

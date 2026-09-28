@@ -2941,6 +2941,7 @@ exports.enrollParticipant = onCall(
 
     const db = admin.firestore();
     const docRef = db.collection("tournaments").doc(tournamentId);
+    const profileRef = participantUid ? db.collection("users").doc(participantUid) : null;
     const nowMs = Date.now();
     let duplicateSignal = null;
 
@@ -2958,15 +2959,11 @@ exports.enrollParticipant = onCall(
       }
     }
 
-    // Só depois de autorizar o intent lemos o perfil da conta. Conta não leva nome para o
-    // documento do torneio (o UID é a identidade), mas também não pode ocupar uma vaga
-    // manual homônima. O nome vem do perfil verdadeiro no servidor, nunca do navegador.
+    // Conta não leva nome para o documento do torneio (o UID é a identidade), mas também
+    // não pode ocupar uma vaga manual homônima. O perfil é lido DENTRO da transação:
+    // se ele mudar enquanto a inscrição corre, o Firestore repete a decisão com o nome
+    // atual. Nunca aceitar o nome alegado pelo navegador evita reabrir essa regressão.
     let accountDisplayName = '';
-    if (participantUid) {
-      const profileSnap = await db.collection("users").doc(participantUid).get();
-      const profile = profileSnap.exists ? (profileSnap.data() || {}) : {};
-      accountDisplayName = String(profile.displayName || profile.name || "").trim();
-    }
 
     // Sinais de possível segunda conta são privados e não bloqueiam inscrição. A pessoa
     // continua pelo mesmo UID; revisão/prova de posse é um fluxo separado.
@@ -3007,6 +3004,11 @@ exports.enrollParticipant = onCall(
       }
       if (!participantUid && !isOrganizer) {
         throw new HttpsError("permission-denied", "só o organizador pode incluir participante sem conta");
+      }
+      if (profileRef) {
+        const profileSnap = await tx.get(profileRef);
+        const profile = profileSnap.exists ? (profileSnap.data() || {}) : {};
+        accountDisplayName = String(profile.displayName || profile.name || "").trim();
       }
       const r = _enrollCore.computeEnroll(_dados, sanitizedParticipantObj, extraUpdates, nowMs, accountDisplayName);
       if (r.updateData) _splitParts.gravar(tx, docRef, _dados, r.updateData);
