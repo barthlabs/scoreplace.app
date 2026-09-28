@@ -14,8 +14,11 @@ ok(S.partesDe({}).indexOf('matches') !== -1,
   '⭐⭐ configuração sem marcador ainda declara matches fora do documento');
 ok(/const fora = _tSplitFn\.partesDe\(config\);[\s\S]*fora\.indexOf\('matches'\) === -1/.test(src),
   'o gatilho usa a fonte canônica das partes, não o marcador legado');
-ok((src.match(/const fora = _tSplitFn\.partesDe\(t\);/g) || []).length >= 2,
-  'as duas portas de escrita de jogo usam a fonte canônica mesmo sem marcador');
+/* Uma porta também preserva extensões históricas já externas (por exemplo grupos),
+ * mas começa SEMPRE pelas partes canônicas. Exigir a linha antiga exata faria esta
+ * prova reprovar a compatibilidade correta como se ela fosse retorno ao marcador. */
+ok((src.match(/const fora = (?:_tSplitFn\.partesDe\(t\)|Array\.from\(new Set\(_tSplitFn\.partesDe\(t\)\.concat\()/g) || []).length >= 2,
+  'as duas portas de escrita de jogo começam pela fonte canônica mesmo sem marcador');
 ok(/async function _montarTorneioCanonico[\s\S]*_tSplitFn\.montarDoBanco/.test(src),
   'gatilho e reparo compartilham uma única montagem canônica');
 ok(/t = await _montarTorneioCanonico\(tdoc\.ref, bruto\)/.test(src),

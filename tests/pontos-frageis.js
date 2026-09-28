@@ -140,7 +140,7 @@ module.exports = [
       + 'mantendo o documento de resultado atrasado apesar de o jogo canônico ter mudado',
     data: '2026-09-27' },
 
-  { id: '24', arquivo: 'functions/index.js', ancora: 'const fora = _tSplitFn.partesDe(t);', ocorrencia: 3,
+  { id: '24', arquivo: 'functions/index.js', ancora: 'const fora = _tSplitFn.partesDe(t);',
     marca: 'ESCRITA DE JOGO USA AS PARTES CANÔNICAS, NÃO O MARCADOR LEGADO',
     incidente: 'as portas de link de grupo e data montavam jogos das subcoleções, mas decidiam a '
       + 'gravação pelo marcador legado e podiam escrever uma cópia ignorada no documento pai',
