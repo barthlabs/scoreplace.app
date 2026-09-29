@@ -28,6 +28,7 @@ const A = ctx.AppStore;
 const espelho = {
   matchId: 'match-elim-r2-3',
   playerUids: ['u-a', 'u-b', 'u-c', 'u-d'],
+  team1Uids: ['u-a', 'u-b'], team2Uids: ['u-c', 'u-d'],
   p1: 'Monique traldi / Fabiana Ferre', p2: 'Katia / Juliana Penha',
   winner: 'Monique traldi / Fabiana Ferre', roundLabel: 'Rodada 2',
   sets: [{ gamesP1: 6, gamesP2: 4 }, { gamesP1: 2, gamesP2: 6 }, { gamesP1: 10, gamesP2: 7 }],
@@ -38,6 +39,8 @@ const espelho = {
 const m = A._jogoDoEspelho(espelho.matchId, espelho);
 must(m && m.id === 'match-elim-r2-3', '① o jogo nasce com o id do espelho');
 must(m.p1 === espelho.p1 && m.p2 === espelho.p2, '① com os DOIS lados — sem isso não há card que se desenhe');
+must((m.team1Uids || []).join('|') === 'u-a|u-b' && (m.team2Uids || []).join('|') === 'u-c|u-d',
+  '① e mantém os UIDs de CADA lado — próximo jogo não depende da grafia do nome');
 must(m.winner === espelho.winner && Array.isArray(m.sets) && m.sets.length === 3,
   '① e com o resultado inteiro (vencedor e os 3 sets)');
 must(m.label === 'Rodada 2', '① o rótulo da rodada viaja junto — é o que agrupa em Novidades');
@@ -62,6 +65,8 @@ must(/_jogosSoDoEspelho\(t, _jaNaEstrutura\)/.test(DASH), '④ a dashboard acres
 const bloco = DASH.slice(DASH.indexOf('var _jaNaEstrutura = {}'), DASH.indexOf('matchSources.forEach(function(m) {', DASH.indexOf('var _jaNaEstrutura = {}')));
 must(/matchSources\.forEach\(function \(m\) \{ if \(m && m\.id != null\) _jaNaEstrutura/.test(bloco),
   '④ e monta o conjunto do que já veio ANTES de acrescentar — senão duplicaria tudo');
+must(/_p1UidsAgenda[\s\S]*?team1Uids[\s\S]*?_p2UidsAgenda[\s\S]*?team2Uids/.test(DASH),
+  '④ próximos jogos resolve primeiro o lado pelo UID do espelho, com nome só como fallback legado');
 
 console.log('✅ ' + ok + ' asserções — o jogo que só existe no espelho chega às Novidades');
 

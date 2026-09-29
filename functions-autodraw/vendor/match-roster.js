@@ -139,7 +139,12 @@ const RESULT_FIELDS = [
 // Campos de EXIBIÇÃO denormalizados (Fase B): deixam o jogo RENDERIZÁVEL sozinho,
 // sem carregar o doc do torneio (nome dos lados, nome do torneio, rótulo da rodada).
 // São ESTRUTURA denormalizada — copiados do match/torneio, não computados aqui.
-const DISPLAY_FIELDS = ["p1", "p2", "tournamentName", "roundLabel"];
+// ⛔ A dashboard pode receber SOMENTE este espelho (torneio dividido). Portanto os
+// dois lados precisam levar a identidade estrutural junto dos nomes: `playerUids`
+// diz que a pessoa está no jogo, mas não diz em qual lado ela joga. Sem estes campos
+// o card de "Próximos jogos" volta a depender da grafia do perfil e some depois de
+// uma troca de nome/conta. [[regressao_proximo_jogo_espelho_resolve_lado_por_uid]]
+const DISPLAY_FIELDS = ["p1", "p2", "team1Uids", "team2Uids", "p1Uid", "p2Uid", "tournamentName", "roundLabel"];
 
 // Monta o doc de resultado (seed) de um jogo a partir do estado ATUAL do match:
 // { matchId, playerUids, + campos de resultado + contexto de exibição }. Espelha o
@@ -153,6 +158,12 @@ function buildSeedDoc(t, m) {
   // Pula slot ainda não resolvido (TBD/BYE): o consumer mostra o placeholder.
   if (m.p1 != null && m.p1 !== "" && m.p1 !== "TBD" && m.p1 !== "BYE") doc.p1 = m.p1;
   if (m.p2 != null && m.p2 !== "" && m.p2 !== "TBD" && m.p2 !== "BYE") doc.p2 = m.p2;
+  // P1/P2 UIDs acompanham o texto do lado; `playerUids` geral continua sendo o
+  // índice de consulta/autorização. Não derive nomes dos UIDs aqui.
+  if (Array.isArray(m.team1Uids) && m.team1Uids.length) doc.team1Uids = m.team1Uids.filter(Boolean);
+  if (Array.isArray(m.team2Uids) && m.team2Uids.length) doc.team2Uids = m.team2Uids.filter(Boolean);
+  if (m.p1Uid) doc.p1Uid = m.p1Uid;
+  if (m.p2Uid) doc.p2Uid = m.p2Uid;
   if (t && t.name) doc.tournamentName = t.name;
   const rl = m.label || m.roundName || null; // rótulo já legível se o match carregar
   if (rl) doc.roundLabel = rl;

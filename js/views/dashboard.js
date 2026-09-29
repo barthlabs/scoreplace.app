@@ -2043,8 +2043,14 @@ function renderDashboard(container) {
         var p2Names = String(m.p2 || '').split(/\s*\/\s*/).filter(Boolean);
         if (m.isMonarch && Array.isArray(m.team1)) p1Names = m.team1.slice();
         if (m.isMonarch && Array.isArray(m.team2)) p2Names = m.team2.slice();
-        var inP1 = p1Names.some(_isMe) || _isMe(m.p1) || p1Names.some(function(n) { return _isMeByUid(n, t); });
-        var inP2 = p2Names.some(_isMe) || _isMe(m.p2) || p2Names.some(function(n) { return _isMeByUid(n, t); });
+        // ⛔ UID PRIMEIRO. Em torneio dividido a dashboard pode ter só o espelho de
+        // `results/`: ali `playerUids` geral prova que a pessoa joga, mas os UIDs de
+        // cada lado dizem qual adversário mostrar. Nome é apenas fallback legado.
+        // [[regressao_proximo_jogo_espelho_resolve_lado_por_uid]]
+        var _p1UidsAgenda = Array.isArray(m.team1Uids) && m.team1Uids.length ? m.team1Uids : (m.p1Uid ? [m.p1Uid] : []);
+        var _p2UidsAgenda = Array.isArray(m.team2Uids) && m.team2Uids.length ? m.team2Uids : (m.p2Uid ? [m.p2Uid] : []);
+        var inP1 = (uid && _p1UidsAgenda.indexOf(uid) !== -1) || p1Names.some(_isMe) || _isMe(m.p1) || p1Names.some(function(n) { return _isMeByUid(n, t); });
+        var inP2 = (uid && _p2UidsAgenda.indexOf(uid) !== -1) || p2Names.some(_isMe) || _isMe(m.p2) || p2Names.some(function(n) { return _isMeByUid(n, t); });
         // Fase/rodada para exibir no card (igual ao "Próximas Partidas" antigo).
         // ⚠️ Calculado ANTES do desvio de "não sou deste jogo": desde a seção
         // "Novidades no seu torneio" os DOIS ramos precisam deste rótulo.

@@ -143,6 +143,18 @@ ok(subdocSignature(buildSeedDoc(tDisp, tDisp.matches[1])) !== sigBefore, "assina
 const mir = buildMirrorDoc(tDisp, tDisp.matches[0], "T9", "2026-02-02");
 ok(mir.p1 === "A" && mir.tournamentName === "Copa Teste" && mir.roundLabel === "Final", "buildMirrorDoc inclui contexto de exibição");
 
+// O espelho de um torneio dividido deve preservar O LADO por UID, não só o roster
+// unido. Sem isso a dashboard não consegue achar "meu próximo jogo" depois que o
+// perfil muda de nome antes de a parte pesada chegar.
+const tSideUid = { name: "Copa UID", participants: parts, matches: [
+  { id: "m-side", p1: "X / Y", p2: "A", team1Uids: ["uX", "uY"], p2Uid: "uA", label: "Semi" }
+] };
+const sideDoc = buildMirrorDoc(tSideUid, tSideUid.matches[0], "T10", "2026-02-02");
+eqArr(sideDoc.team1Uids, ["uX", "uY"], "espelho preserva os UIDs do lado 1 da dupla");
+ok(sideDoc.p2Uid === "uA", "espelho preserva o UID do lado 2 individual");
+ok(subdocSignature(sideDoc) !== subdocSignature(Object.assign({}, sideDoc, { team1Uids: ["uY", "uX"] })),
+  "assinatura trata a ordem dos UIDs do lado como conteúdo (mudança não fica muda)");
+
 // ── IDENTIDADE POR uid do SLOT (v4.5.74) — a brecha de authz que fecha aqui ──
 // A regressão: com o reconcile de nome removido (v4.5.73), resolver o roster por
 // NOME libera a pessoa ERRADA em caso de homônimo, e BLOQUEIA quando o nome

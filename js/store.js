@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.3.163';
+window.SCOREPLACE_VERSION = '2.3.164';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -11867,6 +11867,14 @@ window.AppStore = {
     if (carimboDeLote != null && String(res.updatedAt) === String(carimboDeLote)) delete m.updatedAt;
     if (res.p1 != null) m.p1 = res.p1;
     if (res.p2 != null) m.p2 = res.p2;
+    // `playerUids` identifica o jogo, mas não qual é o lado do jogador. Copiar os
+    // UIDs DE CADA SLOT torna o card de próximos jogos independente do nome exibido
+    // quando o torneio dividido ainda não trouxe `matches`.
+    ['team1Uids', 'team2Uids'].forEach(function (k) {
+      if (Array.isArray(res[k])) m[k] = res[k].filter(Boolean);
+    });
+    if (res.p1Uid) m.p1Uid = res.p1Uid;
+    if (res.p2Uid) m.p2Uid = res.p2Uid;
     if (res.roundLabel) {
       m.label = String(res.roundLabel);
       // "R2 Grupo X • Jogo 7" → rodada 2: é o desempate quando dois resultados têm o mesmo
