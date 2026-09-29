@@ -6606,7 +6606,9 @@ window._gsmUpdateMainSummary = function() {
     var isEven = fsGames % 2 === 0;
     lines.push(isEven && tbOn ? _t('create.gsmFixedSetTb', { n: fsGames, pts: tbPts }) : _t('create.gsmFixedSet', { n: fsGames }));
   } else if (counting === 'numeric') {
-    lines.push(_t('create.gsmPoints', { s: s, g: g }));
+    // REGRESSÃO: `setsToWin` e `gamesPerSet` são campos técnicos reutilizados pelos
+    // esportes numéricos; traduzi-los como “1 pontos para vencer (6 min)” é falso.
+    // A modalidade já define a regra de pontos, então não exibimos resumo inventado.
   } else {
     var tie = g - 1;
     if (s === 1) {
@@ -6970,8 +6972,8 @@ window._gsmUpdateSummary = function() {
       lines.push(isEven ? _t('create.gsmResultsEven', { a: fsGames, b: fsGames - 1, c: fsGames - 2, n: half }) : _t('create.gsmResultsNoTb', { a: fsGames, b: fsGames - 1, c: fsGames - 2 }));
     }
   } else if (counting === 'numeric') {
-    lines.push(_t('create.gsmNumericPts', { s: sets }));
-    lines.push(_t('create.gsmNumericTime', { g: games }));
+    // Mesmo contrato do resumo compacto: valores internos não são duração nem meta de
+    // pontuação. Mantém o resumo vazio em vez de apresentar uma regra inexistente.
   } else {
     lines.push(_t('create.gsmSets', { s: sets, pl: sets > 1 ? 's' : '', g: games }));
     lines.push(advOn ? _t('create.gsmCountingAdv') : _t('create.gsmCounting'));
@@ -7013,6 +7015,10 @@ window._gsmUpdateSummary = function() {
     }
   }
 
+  // No placar numérico não há uma duração/meta dedutível para mostrar. Ocultar a caixa
+  // inteira evita um “Resumo” vazio e impede o retorno do texto fictício por CSS.
+  var summaryBox = document.getElementById('gsm-summary-box');
+  if (summaryBox) summaryBox.style.display = lines.length ? 'block' : 'none';
   el.innerHTML = lines.join('<br>');
 };
 

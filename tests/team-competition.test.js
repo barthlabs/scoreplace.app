@@ -6,6 +6,7 @@
  */
 'use strict';
 const { window: W } = require('./headless.js');
+const fs = require('fs');
 const C = W.ScoreplaceTeamCompetition;
 let pass = 0, fail = 0;
 function ok(condition, message) { if (condition) { pass++; console.log('  ✓ ' + message); } else { fail++; console.error('  ✗ ' + message); } }
@@ -31,6 +32,13 @@ ok(legacyNames.teamNames.join(',') === 'Time 1,Time 2,Time 3',
 const neonSchedule = C.normalize({ enabled: true, teamNames: ['Venom', 'Blackout', 'Eclipse', 'Volt', 'Phantom', 'Panic', 'Vortex', 'Blast'], schedule: { enabled: true, teamsPerGroup: 8, gamesPerTeam: 4, mode: 'structured' } });
 ok(neonSchedule.schedule.enabled && neonSchedule.schedule.teamsPerGroup === 8 && neonSchedule.schedule.gamesPerTeam === 4 && neonSchedule.schedule.mode === 'structured',
   'grade por times preserva 8 times, 4 jogos por time e o modo estruturado');
+
+const teamUi = fs.readFileSync('js/views/format2-ui.js', 'utf8');
+ok(teamUi.includes('f2-team-schedule-teams-value') && teamUi.includes('f2-team-schedule-games-value') && teamUi.includes('_f2TeamScheduleRefresh(tc)'),
+  'sliders de times atualizam seus números no próprio arraste, sem recriar o range em foco');
+const createUi = fs.readFileSync('js/views/create-tournament.js', 'utf8');
+ok(!createUi.includes("lines.push(_t('create.gsmPoints'") && !createUi.includes("lines.push(_t('create.gsmNumericPts'"),
+  'formato numérico não inventa “pontos para vencer” nem duração a partir de campos técnicos');
 
 const teams = [{ id: 'a', name: 'Time Azul' }, { id: 'b', name: 'Time Branco' }, { id: 'c', name: 'Time Cinza' }];
 const rows = C.standings(teams, [

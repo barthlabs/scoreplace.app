@@ -753,10 +753,13 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
           (tc.teamNames || []).map(function (name, index) { return '<label style="font-size:.72rem;color:var(--text-muted);">Time ' + (index + 1) + '<span style="display:flex;gap:4px;margin-top:3px;"><input maxlength="80" placeholder="Nome do time" value="' + _safe(name).replace(/&quot;/g, '&quot;') + '" onchange="window._f2TeamName(' + index + ',this.value,this)" style="box-sizing:border-box;min-width:0;flex:1;padding:7px 8px;border-radius:8px;border:1px solid rgba(255,255,255,.2);background:var(--sp-b-255-255-255-02,rgba(0,0,0,.22));color:var(--text-main);"><button type="button" class="cancel-x-btn" title="Remover time" onclick="window._f2RemoveTeam(' + index + ')" style="cursor:pointer;">×</button></span></label>'; }).join('') + '</div>' +
           (tc.teamCount < 2 ? '<div style="font-size:.72rem;color:var(--text-muted);margin-top:12px;">Adicione ao menos dois times para definir os confrontos.</div>' :
             '<div style="margin-top:16px;padding-top:12px;border-top:1px solid rgba(129,140,248,.22);">' +
-              '<div style="font-size:.72rem;color:var(--text-muted);margin-bottom:6px;">Times por grupo <b style="color:var(--text-main);">' + tc.schedule.teamsPerGroup + '</b></div>' +
-              '<input type="range" min="2" max="' + tc.teamCount + '" value="' + tc.schedule.teamsPerGroup + '" oninput="window._f2TeamSchedule(\'teamsPerGroup\',this.value,this)" style="width:100%;">' +
-              '<div style="font-size:.72rem;color:var(--text-muted);margin:10px 0 6px;">Jogos por time no grupo <b style="color:var(--text-main);">' + tc.schedule.gamesPerTeam + '</b></div>' +
-              '<input type="range" min="1" max="' + Math.max(1, tc.schedule.teamsPerGroup - 1) + '" value="' + tc.schedule.gamesPerTeam + '" oninput="window._f2TeamSchedule(\'gamesPerTeam\',this.value,this)" style="width:100%;">' +
+              // REGRESSÃO: range em foco não pode recriar o painel a cada pixel, mas o
+              // número precisa acompanhar o arraste. IDs estáveis permitem atualizar só
+              // os rótulos e o limite dependente sem interromper o gesto.
+              '<div style="font-size:.72rem;color:var(--text-muted);margin-bottom:6px;">Times por grupo <b id="f2-team-schedule-teams-value" style="color:var(--text-main);">' + tc.schedule.teamsPerGroup + '</b></div>' +
+              '<input id="f2-team-schedule-teams" type="range" min="2" max="' + tc.teamCount + '" value="' + tc.schedule.teamsPerGroup + '" oninput="window._f2TeamSchedule(\'teamsPerGroup\',this.value,this)" style="width:100%;">' +
+              '<div style="font-size:.72rem;color:var(--text-muted);margin:10px 0 6px;">Jogos por time no grupo <b id="f2-team-schedule-games-value" style="color:var(--text-main);">' + tc.schedule.gamesPerTeam + '</b></div>' +
+              '<input id="f2-team-schedule-games" type="range" min="1" max="' + Math.max(1, tc.schedule.teamsPerGroup - 1) + '" value="' + tc.schedule.gamesPerTeam + '" oninput="window._f2TeamSchedule(\'gamesPerTeam\',this.value,this)" style="width:100%;">' +
               '<div style="margin-top:12px;font-size:.72rem;color:var(--text-muted);margin-bottom:6px;">Grade entre categorias</div>' +
               _pill(tc.schedule.mode !== 'structured', 'window._f2TeamSchedule(\'mode\',\'free\')', '🎲 Sorteio livre') +
               _pill(tc.schedule.mode === 'structured', 'window._f2TeamSchedule(\'mode\',\'structured\')', '📋 Estruturado') +
@@ -1286,6 +1289,20 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (!S || !S.cfg.teamCompetition) return;
     S.cfg.teamCompetition.aggregation = aggregation === 'per_category' ? 'per_category' : 'overall'; _norm(); _rerender();
   };
+  function _f2TeamScheduleRefresh(tc) {
+    if (!tc || !tc.schedule) return;
+    var teams = Math.max(2, parseInt(tc.schedule.teamsPerGroup, 10) || 2);
+    var games = Math.max(1, parseInt(tc.schedule.gamesPerTeam, 10) || 1);
+    var gamesMax = Math.max(1, teams - 1);
+    if (games > gamesMax) games = gamesMax;
+    var setText = function (id, value) { var target = document.getElementById(id); if (target) target.textContent = value; };
+    setText('f2-team-schedule-teams-value', teams);
+    setText('f2-team-schedule-games-value', games);
+    var teamsInput = document.getElementById('f2-team-schedule-teams');
+    if (teamsInput) { teamsInput.value = teams; teamsInput.setAttribute('aria-valuetext', teams + ' times por grupo'); }
+    var gamesInput = document.getElementById('f2-team-schedule-games');
+    if (gamesInput) { gamesInput.max = gamesMax; gamesInput.value = games; gamesInput.setAttribute('aria-valuetext', games + ' jogos por time no grupo'); }
+  }
   window._f2TeamSchedule = function (field, value, el) {
     if (!S || !S.cfg.teamCompetition) return;
     var tc = S.cfg.teamCompetition;
@@ -1293,7 +1310,10 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (field === 'mode') tc.schedule.mode = value === 'structured' ? 'structured' : 'free';
     else if (field === 'teamsPerGroup') tc.schedule.teamsPerGroup = value;
     else if (field === 'gamesPerTeam') tc.schedule.gamesPerTeam = value;
-    _norm(); _rerenderSemAtrapalhar(el);
+    _norm();
+    // O arraste atualiza os valores no mesmo frame. A reconstrução estrutural fica no
+    // blur, pela proteção de _rerenderSemAtrapalhar, para o range não saltar de posição.
+    _f2TeamScheduleRefresh(S.cfg.teamCompetition); _rerenderSemAtrapalhar(el);
   };
   window._f2TeamName = function (index, value, el) {
     if (!S || !S.cfg.teamCompetition || index < 0) return;
