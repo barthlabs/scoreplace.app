@@ -916,10 +916,59 @@ window._buildTimeEstimation = function(t, opts) {
     }
   });
 
+  /* REGRESSÃO NEON (29/set/2026): a previsão não pode usar apenas as duplas
+   * já formadas. Em uma grade por equipes, capacidade + categorias + jogos por
+   * equipe são o plano contratado e precisam entrar antes do sorteio/importação.
+   * A conta replica a grade do criador: grupo par G, J jogos/equipe = G×J÷2
+   * confrontos e J rodadas; categorias Fem/Masc são blocos distintos de agenda. */
+  function _teamSchedulePlan() {
+    var phase = Array.isArray(t.phases) ? t.phases.filter(function(p) { return p && p.teamCompetition && p.teamCompetition.enabled; })[0] : null;
+    var tc = (phase && phase.teamCompetition) || (t.fmt2 && t.fmt2.teamCompetition) || t.teamCompetition;
+    var sch = tc && tc.schedule;
+    if (!tc || !tc.enabled || !sch) return null;
+    var groupSize = Math.max(2, Math.floor(Number(sch.teamsPerGroup) || 0));
+    var games = Math.max(1, Math.floor(Number(sch.gamesPerTeam) || 0));
+    if (!groupSize || !games) return null;
+    games = Math.min(games, groupSize - 1);
+    var cats = (Array.isArray(t.combinedCategories) ? t.combinedCategories : (Array.isArray(t.categories) ? t.categories : [])).filter(Boolean);
+    var catCount = Math.max(1, cats.length);
+    var people = Math.max(realCount, Math.floor(Number(t.maxParticipants) || 0));
+    var teams = Math.floor(people / _ts);
+    if (teams < 2) return null;
+    var perCat = Math.max(2, Math.floor(teams / catCount));
+    var full = Math.floor(perCat / groupSize), rest = perCat % groupSize;
+    function groupMatches(n) {
+      if (n < 2) return 0;
+      if (n % 2 && games % 2) return n * (n - 1) / 2;
+      return n % 2 ? Math.floor(n / 2) * (games + 1) : n * games / 2;
+    }
+    var perCatMatches = full * groupMatches(groupSize) + groupMatches(rest);
+    if (!perCatMatches) return null;
+    var rounds = (groupSize % 2 && games % 2) ? groupSize - 1 : (groupSize % 2 ? games + 1 : games);
+    var buckets = {};
+    cats.forEach(function(cat) {
+      var s = String(cat).toLowerCase();
+      var k = /^(fem|femin)/.test(s) ? 'fem' : (/^(masc|mascul)/.test(s) ? 'masc' : 'geral');
+      buckets[k] = (buckets[k] || 0) + 1;
+    });
+    if (!cats.length) buckets.geral = 1;
+    var minutes = Object.keys(buckets).reduce(function(max, k) {
+      var perRound = buckets[k] * (full * Math.floor(groupSize / 2) + Math.floor(rest / 2));
+      return Math.max(max, rounds * Math.ceil(perRound / courts) * timePerSlot);
+    }, 0);
+    return { realCount: people, unitCount: teams, format: format,
+      matches: perCatMatches * catCount, minutes: minutes,
+      categories: catCount, teamsPerCategory: perCat,
+      matchesPerCategory: perCatMatches, bucketCount: Object.keys(buckets).length,
+      gamesPerTeam: games };
+  }
+  var _teamPlan = _teamSchedulePlan();
+
   // v1.3.2: modo "dataOnly" — devolve só os números do cenário REAL (nº atual de
   // inscritos), sem HTML, pra alimentar a linha compacta _buildDurationForecast
   // logo abaixo da regressiva. FONTE ÚNICA das fórmulas — não duplicar noutro lugar.
   if (opts && opts.dataOnly) {
+    if (_teamPlan) return _teamPlan;
     if (unitCount < 2) return null;
     return { realCount: realCount, unitCount: unitCount, format: format,
              matches: calcMatches(unitCount, format), minutes: estimateDuration(unitCount, format) };
@@ -1055,12 +1104,16 @@ window._buildDurationForecast = function(t) {
     var hh = Math.floor((min % 1440) / 60);
     var mm = Math.round(min % 60);
     var jogosLbl = d.matches + (d.matches === 1 ? ' jogo' : ' jogos');
+    // A grade por equipes informa a densidade real: não esconder 96 confrontos
+    // atrás da antiga conta genérica de "8 equipes / 7 jogos".
+    if (d.categories > 1) jogosLbl += ' · ' + d.matchesPerCategory + '/categoria';
     var partsLbl = d.realCount + (d.realCount === 1 ? ' participante' : ' participantes');
     // duplas: mostra as EQUIPES (base real do cálculo) junto das pessoas — "31 participantes ·
     // 14 equipes / 13 jogos". v1.3.168, pedido do dono.
     if (d.unitCount && d.unitCount !== d.realCount) {
       partsLbl += ' · ' + d.unitCount + (d.unitCount === 1 ? ' equipe' : ' equipes');
     }
+    if (d.bucketCount > 1) _titleLbl += ' por bloco';
     var rb = (typeof window._photoReadBox === 'function')
       ? window._photoReadBox()
       : { bg: 'rgba(0,0,0,0.5)', fg: '#f1f5f9', border: 'rgba(255,255,255,0.12)' };
