@@ -86,7 +86,13 @@ PAPEIS=(
   roles/storage.admin                 # upload do código-fonte das functions
   roles/datastore.user                # leitura/escrita do Firestore pelo Admin SDK
   roles/iam.serviceAccountUser        # anexar a conta de runtime às functions
+  roles/serviceusage.serviceUsageViewer # consulta APIs habilitadas no pré-teste
 )
+
+# ⛔ REGRESSÃO (29/set/2026): sem ler este segredo, o pré-teste de deploy-hosting.sh
+# voltava silenciosamente para o OAuth do usuário. A permissão é NO SEGREDO, não no
+# projeto inteiro: a conta persistente não deve ler os demais segredos.
+SEGREDO_PRETESTE="SIGNIN_API_KEY"
 
 if [ -f "$CHAVE" ]; then
   echo "▸ JÁ EXISTE chave em $CHAVE — não crio outra."
@@ -116,6 +122,10 @@ for p in "${PAPEIS[@]}"; do
     --member "serviceAccount:${EMAIL}" --role "$p" --condition=None >/dev/null
   echo "  ✓ papel $p"
 done
+
+gcloud secrets add-iam-policy-binding "$SEGREDO_PRETESTE" --project "$PROJETO" \
+  --member "serviceAccount:${EMAIL}" --role "roles/secretmanager.secretAccessor" >/dev/null
+echo "  ✓ leitura do segredo de pré-teste $SEGREDO_PRETESTE"
 
 if [ ! -f "$CHAVE" ]; then
   mkdir -p "$DESTINO"; chmod 700 "$DESTINO"
