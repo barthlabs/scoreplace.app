@@ -2565,11 +2565,44 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     // FABRICA a categoria pelo gênero + habilidade. `_decomposeCat` reconhece "Fem D".
     return gTok ? (gTok + ' ' + skill) : skill;
   }
+
+  // A matriz não é um catálogo global de níveis: ela representa ESTE torneio.
+  // Se o organizador definiu Light/Power/Extreme, exibir A/B/C/D/FUN aqui é
+  // enganoso e torna impossível conferir as seis categorias reais (Fem/Masc ×
+  // Light/Power/Extreme). Os padrões só são o fallback de torneios sem nenhuma
+  // categoria configurada. Ver [[regression_analysis_uses_organizer_categories]].
+  function _erAnalysisSkills(t) {
+    var seen = {}, explicit = [];
+    (Array.isArray(t && t.skillCategories) ? t.skillCategories : [])
+      .concat(Array.isArray(t && t.customCategories) ? t.customCategories : [])
+      .forEach(function (skill) {
+        skill = String(skill || '').trim();
+        if (skill && !seen[skill]) { seen[skill] = true; explicit.push(skill); }
+      });
+    if (explicit.length) return explicit;
+
+    // Compatibilidade: alguns torneios antigos só persistiram a lista combinada
+    // (por exemplo, "Fem Light" e "Masc Light"). Ela também é uma estipulação
+    // do organizador e deve vencer o catálogo padrão.
+    var combined = (typeof window._getTournamentCategories === 'function')
+      ? (window._getTournamentCategories(t) || [])
+      : ((t && t.combinedCategories) || []);
+    var inferred = [];
+    combined.forEach(function (category) {
+      var remainder = String(category || '').trim()
+        .replace(/^(?:Fem|Masc|Misto(?:\s+(?:Aleat\.|Obrig\.))?)\s*/i, '')
+        .trim();
+      if (remainder && !seen[remainder]) { seen[remainder] = true; inferred.push(remainder); }
+    });
+    // Categoria somente por gênero (Fem/Masc) é uma configuração válida: não
+    // inventar A/B/C/D/FUN; a única caixa resume os inscritos daquele gênero.
+    if (combined.length) return inferred;
+    return _DEFAULT_SKILLS.slice();
+  }
   function _matrixInner(rows, t) {
-    // Buckets do ESTUDO = sempre A-D-FUN (+ custom); NÃO dependem de skillCategories
-    // (essas marcam quais foram FORMALIZADAS via botão "Criar categoria").
-    var skills = _DEFAULT_SKILLS.slice();
-    (t.skillCategories || []).forEach(function (s) { if (skills.indexOf(s) < 0) skills.push(s); });
+    // Buckets refletem a configuração explícita do torneio; A-D-FUN só existe
+    // quando não há categoria estipulada pelo organizador.
+    var skills = _erAnalysisSkills(t);
     var groups = skills.concat(['__none__']);
     function emptyBox() { var o = {}; groups.forEach(function (g) { o[g] = []; }); return o; }
     var fem = emptyBox(), masc = emptyBox(), semG = emptyBox();
