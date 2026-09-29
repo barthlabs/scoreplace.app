@@ -806,6 +806,15 @@ function setupCreateTournamentModal() {
                   <div style="font-size:0.7rem; color:var(--sp-c-a855f7,#a855f7); font-weight:600; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">${_t('create.catPreview')}</div>
                   <div id="category-preview-list" style="display:flex; flex-direction:column; gap:6px; font-size:0.8rem;"></div>
                 </div>
+                <!-- ⛔ LIMITE POR CATEGORIA É A FONTE DO TOTAL (29/set/2026).
+                     Com categorias definidas, o organizador informa vagas por categoria;
+                     maxParticipants é sempre a multiplicação mostrada abaixo. Não deixe
+                     os dois inputs editáveis, pois 16 × 6 não pode salvar como 95. -->
+                <div id="category-capacity-section" style="display:none; margin-top:0.9rem; padding:10px 12px; background:rgba(16,185,129,0.07); border:1px solid rgba(16,185,129,0.28); border-radius:9px;">
+                  <label class="form-label" style="margin-bottom:6px;">Máx. participantes por categoria</label>
+                  <input type="number" class="form-control" id="tourn-max-per-category" min="1" inputmode="numeric" placeholder="Ex.: 16" oninput="window._syncCategoryCapacity()">
+                  <div id="category-capacity-summary" style="margin-top:7px; font-size:0.78rem; color:var(--sp-c-6ee7b7,#6ee7b7); line-height:1.4;"></div>
+                </div>
               </div>
 
               <!-- BOX CANÔNICO (v3.1.34): "Formação de duplas" + "W.O. (ausência)" num box
@@ -3020,6 +3029,7 @@ function setupCreateTournamentModal() {
 
     if (combined.length === 0 && ageCombined.length === 0) {
       preview.style.display = 'none';
+      if (typeof window._syncCategoryCapacity === 'function') window._syncCategoryCapacity();
       return;
     }
 
@@ -3073,6 +3083,7 @@ function setupCreateTournamentModal() {
 
     list.innerHTML = rows.join('');
     preview.style.display = '';
+    if (typeof window._syncCategoryCapacity === 'function') window._syncCategoryCapacity();
   };
 
   window._getCreateFormCategoryData = function() {
@@ -3114,6 +3125,40 @@ function setupCreateTournamentModal() {
     var ageCats = (document.getElementById('tourn-age-categories') || {}).value || '';
     ageCats = ageCats ? ageCats.split(',').filter(Boolean) : [];
     return { genderCategories: genderVals, skillCategories: skillCats, ageCategories: ageCats, customCategories: customCats, combinedCategories: combined };
+  };
+
+  window._syncCategoryCapacity = function(options) {
+    options = options || {};
+    var section = document.getElementById('category-capacity-section');
+    var perCategory = document.getElementById('tourn-max-per-category');
+    var total = document.getElementById('tourn-max-participants');
+    var legacyContainer = document.getElementById('cap-max-container');
+    var summary = document.getElementById('category-capacity-summary');
+    if (!section || !perCategory || !total) return;
+
+    var catData = window._getCreateFormCategoryData ? window._getCreateFormCategoryData() : {};
+    var count = Array.isArray(catData.combinedCategories) ? catData.combinedCategories.length : 0;
+    section.style.display = count > 0 ? '' : 'none';
+    if (legacyContainer) legacyContainer.style.display = count > 0 ? 'none' : '';
+    total.readOnly = count > 0;
+
+    // Torneios legados só têm o total. Na primeira edição, recuperamos o valor por
+    // categoria quando a divisão é exata; nunca arredondamos e inventamos vagas.
+    if (count > 0 && options.deriveFromTotal && !parseInt(perCategory.value, 10)) {
+      var savedTotal = parseInt(total.value, 10);
+      if (savedTotal > 0 && savedTotal % count === 0) perCategory.value = String(savedTotal / count);
+    }
+
+    var per = parseInt(perCategory.value, 10);
+    if (count > 0 && per > 0) {
+      var calculated = per * count;
+      total.value = String(calculated);
+      if (summary) summary.textContent = count + ' categoria' + (count === 1 ? '' : 's') + ' × ' + per + ' participante' + (per === 1 ? '' : 's') + ' = ' + calculated + ' vagas no total.';
+    } else if (count > 0) {
+      if (summary) summary.textContent = 'Defina a capacidade de cada uma das ' + count + ' categorias para calcular o total de vagas.';
+    }
+    if (typeof window._updateAutoCloseVisibility === 'function') window._updateAutoCloseVisibility();
+    if (typeof window._recalcDuration === 'function') window._recalcDuration();
   };
 
   window._onInscricaoChange = function () {
@@ -5077,7 +5122,12 @@ function setupCreateTournamentModal() {
     if (typeof window._loadCustomCategoriesFromArray === 'function') {
       window._loadCustomCategoriesFromArray(t.customCategories || []);
     }
+    var _catCapEdit = document.getElementById('tourn-max-per-category');
+    if (_catCapEdit && t.maxParticipantsPerCategory) _catCapEdit.value = t.maxParticipantsPerCategory;
     window._updateCategoryPreview();
+    // Legado com total exato ganha a leitura por categoria; se não for exato,
+    // preserva-se o total antigo e pede-se uma decisão explícita do organizador.
+    if (typeof window._syncCategoryCapacity === 'function') window._syncCategoryCapacity({ deriveFromTotal: true });
 
     window._onFormatoChange();
     window._onLigaInactivityChange();
@@ -5534,6 +5584,7 @@ window._saveTournamentClickHandler = async function() {
         const enrollmentVal = document.getElementById('select-inscricao').value || 'individual';
         const teamSizeVal = parseInt(document.getElementById('tourn-team-size').value) || 1;
         const maxPartsVal = parseInt(document.getElementById('tourn-max-participants').value) || null;
+        const maxPerCategoryVal = parseInt((document.getElementById('tourn-max-per-category') || {}).value, 10) || null;
         const autoCloseVal = document.getElementById('tourn-auto-close').checked;
         // Sorteio de Vagas: modelo de inscrição + vagas + chamada da fila
         const enrollLimitModeVal = (document.getElementById('enrollment-limit-mode') || {}).value || 'cap';
@@ -5639,6 +5690,10 @@ window._saveTournamentClickHandler = async function() {
           // No modo Vagas-por-sorteio nunca há corrida: zera limite/auto-close
           // pra que os gatilhos de fechamento automático fiquem inertes.
           maxParticipants: isDrawMode ? null : maxPartsVal,
+          // ⛔ Não aceitar um total independente quando este valor existe: a tela
+          // recalcula `maxParticipants` a partir das categorias antes de chegar aqui.
+          // Persistir a unidade deixa template/edição reconstituírem 16 × 6 = 96.
+          maxParticipantsPerCategory: maxPerCategoryVal,
           autoCloseOnFull: isDrawMode ? false : autoCloseVal,
           enrollmentLimitMode: enrollLimitModeVal,
           targetSlots: isDrawMode ? targetSlotsVal : null,
@@ -7304,6 +7359,9 @@ window._prefillFromTemplate = function(tpl) {
     // Recalcula o preview com tudo restaurado
     if (typeof window._updateCategoryPreview === 'function') { try { window._updateCategoryPreview(); } catch (e) {} }
   }
+  var _tplCatCap = document.getElementById('tourn-max-per-category');
+  if (_tplCatCap && tpl.maxParticipantsPerCategory) _tplCatCap.value = tpl.maxParticipantsPerCategory;
+  if (typeof window._syncCategoryCapacity === 'function') { try { window._syncCategoryCapacity({ deriveFromTotal: true }); } catch (e) {} }
 
   // v4.4.x (Camada 2): CONFIG DE FORMATO — restaura a config do configurador único (format2)
   // salva em tpl.fmt2. É a fonte única de t.phases. Setamos como config pendente e remontamos
@@ -7697,6 +7755,7 @@ window._saveCurrentFormAsTemplate = function() {
       teamSize: parseInt(get('tourn-team-size')) || 1,
       gameTypes: get('tourn-game-types') || 'duplas',
       maxParticipants: parseInt(get('tourn-max-participants')) || '',
+      maxParticipantsPerCategory: parseInt(get('tourn-max-per-category')) || '',
       autoCloseOnFull: getChecked('tourn-auto-close'),
       enrollmentLimitMode: get('enrollment-limit-mode') || 'cap',
       targetSlots: parseInt(get('tourn-target-slots')) || '',

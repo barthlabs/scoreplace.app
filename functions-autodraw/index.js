@@ -3490,7 +3490,10 @@ exports.setTournamentFlyerPrefs = onCall(async (request) => {
 const _CAMPOS_CONFIG_TORNEIO = new Set([
   'name','isPublic','format','sport','startDate','endDate','roundBounds','roundBoundsEditorEnabled','registrationOpenAt','registrationLimit',
   'enrollmentMode','mixedPairingSeparated','manualPairing','teamSize','gameTypes',
-  'maxParticipants','autoCloseOnFull','enrollmentLimitMode','targetSlots','callPolicy',
+  // A capacidade por categoria é declarativa; o total que a tela calcula continua
+  // em maxParticipants para os fluxos legados de inscrição. Os dois precisam passar
+  // pela mesma porta de edição, senão a ficha salva recusaria 16 × 6 = 96.
+  'maxParticipants','maxParticipantsPerCategory','autoCloseOnFull','enrollmentLimitMode','targetSlots','callPolicy',
   'resultEntry','woScope','lateEnrollment','newMatchups','venue','venueAccess','venueLat',
   'venueLon','venueAddress','venuePlaceId','venueCity','venueState','venueCountry',
   'venuePhotoUrl','coverUrl','logoUrl','logoLocked','logoShape','logoRadius','courtCount',
