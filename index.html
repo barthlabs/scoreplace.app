@@ -68,7 +68,7 @@
   <link rel="stylesheet" href="css/paleta.css?v=2.0.118">
   
   <link rel="stylesheet" href="css/style.css?v=2.0.118">
-  <link rel="stylesheet" href="css/components.css?v=2.3.122">
+  <link rel="stylesheet" href="css/components.css?v=2.3.147">
   <link rel="stylesheet" href="css/layout.css?v=2.0.118">
   <link rel="stylesheet" href="css/bracket.css?v=2.0.118">
   <link rel="stylesheet" href="css/responsive.css?v=2.0.118">
@@ -634,10 +634,10 @@
        servidor carrega o MESMO arquivo antes de gravar — ver persist-core.js -->
   <script src="js/views/persist-core.js?v=2.3.107" defer></script>
   <!-- Contrato tipado da lista de espera; adaptador clássico e motor usam a mesma regra. -->
-  <script src="js/domain/waitlist.js?v=2.3.141" defer></script>
+  <script src="js/domain/waitlist.js?v=2.3.147" defer></script>
   <!-- Cânone da LISTA DE ESPERA (3 storages). Extraído do store.js: a Cloud Function
        integrateLateEntries carrega o MESMO arquivo — ver waitlist-core.js -->
-  <script src="js/views/waitlist-core.js?v=2.3.141" defer></script>
+  <script src="js/views/waitlist-core.js?v=2.3.147" defer></script>
   <!-- Contrato tipado da classificação: critérios, confronto direto, ordem da chave e tie-break. -->
   <script src="js/domain/standings.js?v=2.3.147" defer></script>
   <!-- Contrato da tabela por times: duplas jogam por categoria; o time agrega pontos. -->
@@ -690,23 +690,23 @@
   <script src="js/views/opinion-poll.js?v=2.3.102" defer></script>
   <script src="js/views/schedule-poll.js?v=2.3.122" defer></script>
   <script src="js/views/wa-group.js?v=2.2.94" defer></script>
-  <script src="js/views/tournaments-draw-prep.js?v=2.3.102" defer></script>
-  <script src="js/views/tournaments-draw.js?v=2.3.141" defer></script>
+  <script src="js/views/tournaments-draw-prep.js?v=2.3.147" defer></script>
+  <script src="js/views/tournaments-draw.js?v=2.3.147" defer></script>
   <!-- Núcleos PUROS da aplicação das decisões do pré-sorteio (resto/pow2/ímpar/sem-dupla/
        chamada). Os painéis chamam DAQUI e a Cloud Function drawRound carrega o MESMO
        arquivo (vendorado) — um dono só pra cada conta. Ver docs/sorteio-ciclo-decisoes.md -->
   <script src="js/views/draw-decisions.js?v=2.0.118" defer></script>
   <!-- L6.R2.1: tipo canônico do local do evento (number|null) + espelho do resolvedor de fuso, só pro aviso da tela. ANTES de create-tournament.js, que o usa. -->
   <script src="js/views/venue-geo-core.js?v=2.1.81" defer></script>
-  <script src="js/views/create-tournament.js?v=2.3.144" defer></script>
+  <script src="js/views/create-tournament.js?v=2.3.147" defer></script>
   <!-- v4.4.x — reescrita do motor de formato: configurador único (substitui empilhamento de fases) -->
   <script src="js/views/format2.js?v=2.3.144" defer></script>
   <script src="js/views/format2-ui.js?v=2.3.144" defer></script>
   <script src="js/views/bracket-logic.js?v=2.3.147" defer></script>
-  <script src="js/views/bracket-model.js?v=2.3.111" defer></script>
-  <script src="js/views/bracket.js?v=2.3.144" defer></script>
+  <script src="js/views/bracket-model.js?v=2.3.147" defer></script>
+  <script src="js/views/bracket.js?v=2.3.147" defer></script>
   <script src="js/views/live-now.js?v=2.3.24" defer></script>
-  <script src="js/views/bracket-ui.js?v=2.3.126" defer></script>
+  <script src="js/views/bracket-ui.js?v=2.3.147" defer></script>
   <script src="js/pwa-migrate-banner.js?v=2.0.118" defer></script>
   <!-- Ponte pro smartwatch (fase 4). Inerte na web; só liga no app nativo. -->
   <script src="js/watch-bridge.js?v=2.3.88" defer></script>
