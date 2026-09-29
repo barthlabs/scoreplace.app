@@ -237,17 +237,27 @@ window._applyWoSubsToTournament = function(t, opts) {
     if (subUid && oldUids.length) {
       newUids = oldUids.map(u => (u === absentUid ? subUid : u));
     }
-    const _displayOf = (uids, fallbackStr) => {
-      if (uids && uids.length && typeof window._displayNameForUid === 'function') {
-        const ns = uids.map(u => window._displayNameForUid(u, '')).filter(Boolean);
-        if (ns.length === uids.length) return ns.join(' / ');
-      }
-      return fallbackStr;
+    const _isUnresolvedProfileLabel = (name) => /^Jogador sem perfil\s*\(/i.test(String(name || ''));
+    /* UID é a identidade, mas um cache frio pode devolver o placeholder técnico
+     * `Jogador sem perfil (abcd)`. Ele NÃO é um nome e não pode substituir o
+     * rótulo já persistido do parceiro. Recompomos por posição do slot: o UID novo
+     * recebe `subName`, os demais preservam o melhor nome real disponível. Isto é
+     * especialmente necessário para a vaga Jogador X, que não existe no roster.
+     * [[regression_wo_ghost_slot_keeps_partner_display_name]] */
+    const _labelFromUids = (uids, priorLabel) => {
+      if (!uids || !uids.length) return priorLabel;
+      const prior = String(priorLabel || '').split(/\s*\/\s*/).map(n => n.trim());
+      return uids.map((uid, ix) => {
+        if (uid === subUid) return subName;
+        const resolved = typeof window._displayNameForUid === 'function'
+          ? window._displayNameForUid(uid, '') : '';
+        return (!resolved || _isUnresolvedProfileLabel(resolved)) ? (prior[ix] || '') : resolved;
+      }).filter(Boolean).join(' / ');
     };
     const isTeam = oldUids.length > 1 || oldEntry.includes('/');
     let newEntry;
     if (newUids) {
-      newEntry = _displayOf(newUids, subName);
+      newEntry = _labelFromUids(newUids, oldEntry) || subName;
     } else if (isTeam && woScope === 'individual') {
       // guest/legado sem uid: reconstrói por nome (é a identidade que há)
       const sep = oldEntry.includes(' / ') ? ' / ' : '/';
@@ -270,10 +280,9 @@ window._applyWoSubsToTournament = function(t, opts) {
       const su = (typeof window._slotUids === 'function') ? window._slotUids(m, side).filter(Boolean) : [];
       if (su.length && absentUid && subUid && su.indexOf(absentUid) !== -1) {
         const nu = su.map(u => (u === absentUid ? subUid : u));
-        let label = _displayOf(nu, newEntry);
-        // `_displayOf` depende do cache de perfis. Se ele ainda não chegou, não
-        // pode reduzir uma dupla a só a substituta: recompõe os nomes conhecidos
-        // do próprio slot, que é a fonte persistida desta transação.
+        let label = _labelFromUids(nu, m[side] || oldEntry) || newEntry;
+        // Cache frio não pode reduzir a dupla a só a substituta: o próprio slot
+        // ainda é a fotografia confiável do parceiro na transação.
         const labelParts = String(label || '').split(/\s*\/\s*/).map(n => n.trim()).filter(Boolean);
         if (nu.length > 1 && labelParts.length !== nu.length) {
           const oldParts = String(m[side] || oldEntry || '').split(/\s*\/\s*/).map(n => n.trim());
@@ -281,7 +290,7 @@ window._applyWoSubsToTournament = function(t, opts) {
             if (uid === subUid) return subName;
             const resolved = typeof window._displayNameForUid === 'function'
               ? window._displayNameForUid(uid, '') : '';
-            return resolved || oldParts[ix] || '';
+            return (!resolved || _isUnresolvedProfileLabel(resolved)) ? (oldParts[ix] || '') : resolved;
           }).filter(Boolean).join(' / ') || label;
         }
         /* O slot tem três representações históricas: `p1/p2`, `team*Uids` e
@@ -383,7 +392,17 @@ window._applyWoSubsToTournament = function(t, opts) {
     });
 
     subCount++;
-    subDetails.push({ absent: absentName, sub: subName, oldEntry, newEntry, matchNum: foundIdx + 1 });
+    /* ⛔ A confirmação do W.O. precisa carregar a identidade do jogo e dos membros,
+     * não apenas um texto para toast. O servidor usa este recibo para provar que a
+     * gravação atômica contém o slot alterado, e a web o aplica imediatamente enquanto
+     * o listener do Firestore confirma a mesma fotografia. Sem `matchId`/UIDs, uma
+     * resposta "substituído" podia coexistir com o card ainda exibindo Jogador X.
+     * [[regression_wo_substitution_receipt_is_uid_and_match]] */
+    subDetails.push({
+      absent: absentName, sub: subName, oldEntry, newEntry, matchNum: foundIdx + 1,
+      matchId: foundMatch.id || null, slot: foundSlot,
+      absentUid: absentUid || null, subUid: subUid || null
+    });
     if (!Array.isArray(t.history)) t.history = [];
     t.history.push({ date: new Date().toISOString(), message: `Substituição W.O. (auto): ${absentName} → ${subName}${partner ? ' (parceiro: ' + partner + ')' : ''} — Jogo ${foundIdx + 1}` });
   }

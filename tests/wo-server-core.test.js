@@ -2,6 +2,8 @@
 
 const assert = require('assert');
 const { applyTournamentWO, setPresenceWithWOSubstitution, resolveWOSubstitutionChoice } = require('../functions-autodraw/draw-core.js');
+const Split = require('../functions-autodraw/vendor/tournament-split-core.js');
+const WritePlan = require('../functions-autodraw/write-plan.js');
 
 function tournament(extra) {
   return Object.assign({
@@ -38,6 +40,51 @@ function tournament(extra) {
   assert.equal(r.outcome, 'subbed');
   assert.equal(t.matches[0].p1Uid, 'clara');
   assert.equal(t.matches[0].winner, undefined);
+  assert.equal(r.subDetails[0].matchId, 'm1', 'o recibo aponta o jogo persistido');
+  assert.equal(r.subDetails[0].absentUid, 'ana', 'o recibo não usa o nome como identidade');
+  assert.equal(r.subDetails[0].subUid, 'clara', 'o recibo informa o UID que ocupou a vaga');
+}
+
+// REGRESSÃO — Confra Prata, 29/set/2026: "Jogador X" é uma vaga provisória sem
+// perfil de inscrição, mas o slot ainda tem um UID técnico. Ao entrar a primeira
+// pessoa da espera, a única resposta aceitável é trocar aquele UID na dupla e
+// programar a escrita da subcoleção; toast sem esse write-plan não é sucesso.
+{
+  const t = tournament({
+    participants: [
+      { uid: 'vanessa', displayName: 'Vanessa Kaufmann', name: 'Vanessa Kaufmann' },
+      { uid: 'carol', displayName: 'Carol Capucho', name: 'Carol Capucho' },
+      { uid: 'daniela', displayName: 'Daniela Simão', name: 'Daniela Simão' }
+    ],
+    standbyParticipants: [{ uid: 'suplente-1', displayName: 'Primeira da Espera', name: 'Primeira da Espera' }],
+    checkedIn: {},
+    matches: [{
+      id: 'jogo-vanessa', p1: 'Vanessa Kaufmann / Jogador X', p2: 'Carol Capucho / Daniela Simão',
+      team1Uids: ['vanessa', 'ghost-jogador-x'], team2Uids: ['carol', 'daniela'],
+      team1Obj: {
+        displayName: 'Vanessa Kaufmann / Jogador X', p1Uid: 'vanessa', p2Uid: 'ghost-jogador-x',
+        participants: [{ uid: 'vanessa', name: 'Vanessa Kaufmann' }, { uid: 'ghost-jogador-x', name: 'Jogador X', isGhost: true }]
+      }
+    }]
+  });
+  const before = JSON.parse(JSON.stringify(t));
+  const r = applyTournamentWO(t, {
+    absentName: 'Jogador X', absentUids: ['ghost-jogador-x'], scope: 'match',
+    noSubBehavior: 'escalate', woScope: 'individual', forceWaitlistSub: true,
+    onlyAbsentUids: ['ghost-jogador-x']
+  });
+  assert.equal(r.outcome, 'subbed');
+  assert.deepEqual(t.matches[0].team1Uids, ['vanessa', 'suplente-1']);
+  assert.equal(t.matches[0].p1, 'Vanessa Kaufmann / Primeira da Espera');
+  assert.equal(t.matches[0].team1Obj.p2Uid, 'suplente-1');
+  assert.equal(r.subDetails[0].matchId, 'jogo-vanessa');
+  const plan = WritePlan.planWrites(before, t, {
+    split: Split,
+    boundary: (data) => ({ persist: data, clean: data }),
+    agoraIso: '2026-09-29T08:36:56.000Z'
+  });
+  assert.ok(plan.ops.some((op) => op.colecao === 'matches' && op.chave === 'jogo-vanessa'),
+    'a troca UID da vaga precisa chegar na subcoleção matches');
 }
 
 console.log('wo-server-core: OK');

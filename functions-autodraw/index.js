@@ -676,7 +676,15 @@ function _gravaTorneio(tx, ref, tDepois, tAntes, ctx) {
   }
   const plan = _planejaEscrita(tDepois, tAntes, { agoraIso: _agoraIso, extras: (ctx && ctx.extras) || [] });
   _wp.applyPlan(tx, ref, plan, { FieldValue: FieldValue });
-  return plan.boundary;
+  /* O chamador da W.O. precisa distinguir "motor mudou o objeto" de "o slot entrou
+   * no plano que esta transação realmente vai gravar". Expor somente os IDs (não o
+   * plano inteiro) mantém a fronteira pequena e torna impossível responder sucesso
+   * quando a parte `matches` ficou fora da escrita. [[regression_wo_receipt_requires_written_match]] */
+  return Object.assign({}, plan.boundary, {
+    writtenMatchIds: plan.ops
+      .filter((op) => op && op.colecao === _tSplit.colecaoDaParte('matches') && op.tipo === 'set')
+      .map((op) => String(op.chave))
+  });
 }
 
 /* Devolve ao estado do banco toda vaga de repescagem que já está carimbada. Puro: mexe em
@@ -2429,7 +2437,26 @@ exports.applyTournamentWO = onCall(async (request) => {
     }
     if (!result || !result.ok) return { ok: false, result: result || { outcome: 'error' } };
     const boundary = _gravaTorneio(tx, ref, t, before, { agoraIso });
-    return { ok: true, result, tournament: boundary.clean };
+    /* ⛔ Um toast de substituição é uma afirmação forte: cada jogo que o motor diz
+     * ter trocado PRECISA estar na escrita da subcoleção `matches` desta mesma txn.
+     * Antes a resposta podia sair como `subbed` mesmo se a leitura seguinte ainda
+     * recebesse o slot velho. Falhar fechado é preferível a anunciar uma troca que
+     * não ficou persistida. [[regression_wo_substitution_receipt_is_uid_and_match]] */
+    const changedIds = Array.from(new Set((result.subDetails || [])
+      .map((d) => d && d.matchId != null ? String(d.matchId) : '')
+      .filter(Boolean)));
+    const written = new Set((boundary.writtenMatchIds || []).map(String));
+    if (changedIds.some((id) => !written.has(id))) {
+      throw _drawFail('internal', 'A substituição não entrou na gravação do jogo.', { tId, changedIds, written: Array.from(written) });
+    }
+    /* Recibo canônico para repintura imediata. Não é um segundo caminho de escrita:
+     * vem do MESMO `t` transacional que o write-plan acabou de programar. O listener
+     * continua sendo a confirmação durável e corrige qualquer aba já aberta. */
+    const byId = {};
+    allMatches.forEach((m) => { if (m && m.id != null && changedIds.includes(String(m.id))) byId[String(m.id)] = m; });
+    const matchUpdates = changedIds.map((id) => byId[id]).filter(Boolean)
+      .map((m) => JSON.parse(JSON.stringify(m)));
+    return { ok: true, result, tournament: boundary.clean, matchUpdates };
   });
 });
 

@@ -40,6 +40,29 @@ function _reRenderParticipants() {
   }
 }
 
+/* Aplica SOMENTE a fotografia de jogo que a Function acabou de gravar. Não salva,
+ * não inventa substituto local e não usa nome como chave: `matchId` e `team*Uids`
+ * vêm da transação por UID. Isto elimina a janela em que o toast dizia que a vaga
+ * foi ocupada, mas o card permanecia com Jogador X até um snapshot tardio (ou,
+ * no incidente, até depois do refresh). O listener continua sendo a fonte durável.
+ * [[regression_wo_substitution_receipt_is_uid_and_match]] */
+window._applyCanonicalWoMatchUpdates = function(tId, updates) {
+  if (!Array.isArray(updates) || !updates.length || typeof window._findTournamentById !== 'function') return 0;
+  const fresh = window._findTournamentById(tId);
+  if (!fresh || typeof window._collectAllMatches !== 'function') return 0;
+  const byId = {};
+  updates.forEach(function(m) { if (m && m.id != null) byId[String(m.id)] = m; });
+  let applied = 0;
+  window._collectAllMatches(fresh).forEach(function(local) {
+    const remote = local && local.id != null ? byId[String(local.id)] : null;
+    if (!remote) return;
+    Object.keys(local).forEach(function(k) { if (!Object.prototype.hasOwnProperty.call(remote, k)) delete local[k]; });
+    Object.assign(local, remote);
+    applied++;
+  });
+  return applied;
+};
+
 // v1.3.80: re-render ESTÁVEL da tela de inscritos — MESMO caminho robusto do card estático (in-place),
 // pros casos em que o in-place não se aplica (painel de check-in pós-sorteio, cujos cards não têm
 // data-card-key). Preserva o scroll E suprime o eco do onSnapshot (o próprio write echoa → re-render
@@ -1486,6 +1509,11 @@ window._declareAbsent = function (tId, playerName, participantUid) {
       const out = (raw && raw.data) || raw || {};
       const _woRes = out.result || out;
       if (!out.ok) throw new Error((_woRes && (_woRes.reason || _woRes.outcome)) || 'wo-not-applied');
+      // A Function só devolve estes jogos depois de incluí-los no write-plan atômico.
+      // Repinta agora; o onSnapshot subsequente confirma a mesma fotografia sem refresh.
+      if (typeof window._applyCanonicalWoMatchUpdates === 'function') {
+        window._applyCanonicalWoMatchUpdates(String(tId), out.matchUpdates || []);
+      }
       const _o = _woRes && _woRes.outcome;
       if (typeof showNotification === 'function') {
         if (_o === 'subbed') {
