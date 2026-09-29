@@ -206,6 +206,10 @@ try { C.normalizeExtraUpdates({ status: 'finished' }); ok('extraUpdates recusa p
   const expired = C.enrollmentOpen({ status: 'open', registrationLimit: '2026-07-16T00:00:00Z' }, NOW);
   eq('janela canônica: prazo vencido bloqueia', expired.open, false);
   eq('janela canônica: prazo vencido é identificável', expired.deadlinePassed, true);
+  const scheduled = C.enrollmentOpen({ status: 'open', registrationOpenAt: '2026-07-18T00:00:00Z' }, NOW);
+  eq('janela canônica: abertura futura bloqueia', scheduled.open, false);
+  eq('janela canônica: abertura futura é identificável', scheduled.notOpenYet, true);
+  eq('janela canônica: após abertura aceita', C.enrollmentOpen({ status: 'open', registrationOpenAt: '2026-07-16T00:00:00Z' }, NOW).open, true);
   eq('janela canônica: torneio aberto aceita', C.enrollmentOpen({ status: 'open' }, NOW).open, true);
 })();
 

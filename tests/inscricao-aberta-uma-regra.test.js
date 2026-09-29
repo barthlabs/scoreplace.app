@@ -42,6 +42,7 @@ const formatos = ['Liga', 'Ranking', 'Eliminatórias Simples', 'Fase de Grupos +
 const statuses = [undefined, 'open', 'closed', 'active', 'finished'];
 const sorteios = [false, true];
 const prazos = [undefined, ONTEM, AMANHA];
+const aberturas = [undefined, ONTEM, AMANHA];
 const toggles = [undefined, false, true];
 
 let casos = 0;
@@ -49,8 +50,10 @@ formatos.forEach(function (fmt) {
   statuses.forEach(function (st) {
     sorteios.forEach(function (sorteado) {
       prazos.forEach(function (prazo) {
+        aberturas.forEach(function (abertura) {
         toggles.forEach(function (tg) {
           const t = { format: fmt, status: st, registrationLimit: prazo, ligaOpenEnrollment: tg };
+          if (abertura) t.registrationOpenAt = abertura;
           if (sorteado) t.rounds = [{ n: 1 }];
           // comparação por VERDADE (o servidor devolve undefined onde o cliente
           // devolve false — `format && (...)` sem coerção; semanticamente iguais)
@@ -62,6 +65,7 @@ formatos.forEach(function (fmt) {
             console.error('  ✗ DIVERGÊNCIA cliente=' + c + ' servidor=' + s + ' em ' + JSON.stringify(t));
           }
         });
+        });
       });
     });
   });
@@ -70,10 +74,10 @@ pass++; // a matriz inteira conta como uma asserção de paridade
 console.log('  ✓ paridade cliente×servidor em ' + casos + ' combinações');
 
 // ── os CASOS DO INCIDENTE, nomeados ────────────────────────────────────────────
-ok(cliente({ format: 'Liga', status: 'closed', registrationLimit: ONTEM }, AGORA).open === true,
-  'Liga aberta ANTES do sorteio com prazo vencido e status closed → ABERTA (era o bloqueio indevido)');
-ok(cliente({ format: 'Liga', registrationLimit: ONTEM }, AGORA).open === true,
-  'Liga aberta pré-sorteio com prazo vencido → ABERTA');
+ok(cliente({ format: 'Liga', status: 'closed', registrationLimit: ONTEM }, AGORA).open === false,
+  'Liga fechada manualmente permanece fechada');
+ok(cliente({ format: 'Liga', registrationLimit: ONTEM }, AGORA).open === false,
+  'Liga respeita o prazo programado pelo organizador');
 ok(cliente({ format: 'Liga', status: 'finished' }, AGORA).open === false,
   'Liga ENCERRADA nunca aceita inscrição (buraco do servidor, fechado nos dois lados)');
 ok(cliente({ format: 'Liga', ligaOpenEnrollment: false, rounds: [{}] }, AGORA).open === false,
@@ -82,6 +86,10 @@ ok(cliente({ format: 'Liga', rounds: [{}] }, AGORA).open === true,
   'Liga aberta PÓS-sorteio → aberta (o destino fila×elenco é do _phaseDrawDone, não daqui)');
 ok(cliente({ format: 'Eliminatórias Simples', registrationLimit: ONTEM }, AGORA).open === false,
   'não-Liga com prazo vencido → fechada');
+ok(cliente({ format: 'Eliminatórias Simples', registrationOpenAt: AMANHA }, AGORA).open === false,
+  'não-Liga antes da abertura programada → fechada');
+ok(cliente({ format: 'Eliminatórias Simples', registrationOpenAt: ONTEM }, AGORA).open === true,
+  'não-Liga após abertura programada → aberta');
 ok(cliente({ format: 'Eliminatórias Simples', rounds: [{}] }, AGORA).open === false,
   'não-Liga com sorteio → fechada (tardia é outra porta)');
 

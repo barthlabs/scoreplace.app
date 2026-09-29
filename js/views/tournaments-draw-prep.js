@@ -3457,30 +3457,11 @@ window.toggleRegistrationStatus = function (tId) {
         });
         return;
     }
-    var entries = Array.isArray(t.participants) ? t.participants : (t.participants ? Object.values(t.participants) : []);
-    if (entries.length < 2) {
-        if (typeof showAlertDialog === 'function') showAlertDialog(_t('draw.tooFewTitle'), _t('draw.tooFewCloseMsg'), null, { type: 'warning' });
-        return;
-    }
-    if (t.enrollmentLimitMode === 'draw' && !t.drawSelectionDone && !hasDraw && typeof window._showVagasDrawPanel === 'function') {
-        window._showVagasDrawPanel(tId); return;
-    }
-    var diag = null;
-    try { if (typeof window._diagnoseAll === 'function') diag = window._diagnoseAll(t); } catch (e) { if (window._warn) window._warn('[Encerrar Inscrições] diagnóstico falhou', e); }
-    var isGroups = t.format === 'Grupos + Eliminatória' || t.format === 'Grupos + Mata-Mata' || (t.format || '').indexOf('Grupo') !== -1 || t.format === 'Fase de Grupos + Eliminatórias';
-    var isLigaOrSwiss = t.format === 'Liga' || t.format === 'Suíço Clássico' || t.format === 'Ranking' || (window._isLigaFormat && window._isLigaFormat(t));
-    if (isGroups && typeof window._showGroupsConfigPanel === 'function') {
-        if (diag && (diag.incompleteTeams.length > 0 || diag.remainder > 0)) { window.showUnifiedResolutionPanel(tId); return; }
-        if (typeof window._grupos_f2Direct === 'function' && window._grupos_f2Direct(tId)) return;
-        window._showGroupsConfigPanel(tId); return;
-    }
-    if (diag) {
-        var autoP2 = typeof window._autoResolvesPow2 === 'function' && window._autoResolvesPow2(t);
-        var issues = (isLigaOrSwiss || autoP2) ? (diag.incompleteTeams.length > 0 || diag.remainder > 0) : diag.hasIssues;
-        if (issues && typeof window.showUnifiedResolutionPanel === 'function') { window.showUnifiedResolutionPanel(tId); return; }
-    }
+    // REGRESSÃO: este botão é SOMENTE a porta manual da janela de inscrições.
+    // Ele não sorteia, não valida tamanho de chave e pode fechar com zero inscritos.
+    // A validação de 2+ pessoas pertence exclusivamente ao fluxo do botão Sortear.
     if (typeof showConfirmDialog !== 'function') return;
-    showConfirmDialog(_t('draw.closeEnrollTitle'), _t('draw.closeEnrollMsg', { name: window._safeHtml(t.name || '') }), function() {
+    showConfirmDialog('Fechar inscrições?', 'Ninguém novo poderá se inscrever até você clicar em “abrir inscrições” novamente. Isso não realiza sorteio.', function() {
         request('close', _t('draw.enrollClosed'), _t('draw.enrollClosedMsg'), 'success');
     });
 };

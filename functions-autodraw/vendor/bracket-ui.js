@@ -1586,6 +1586,23 @@ window._syncConfirmBtn = function (matchId) {
 
 window._highlightWinner = function (matchId) {
   window._syncConfirmBtn(matchId);
+  // O campo de TB é horizontal ao placar que o abriu. Não basta mostrar o input:
+  // a coluna do placar, a coluna correspondente do outro lado e o rótulo precisam
+  // abrir JUNTOS, ou o cabeçalho deixa de apontar para seu próprio campo.
+  // Esta função não conhece IDs alternativos nem p1/p2; ela deriva o índice da
+  // coluna que contém o input e sincroniza só os elementos daquele set.
+  // [[regressao_stb_dois_digitos_e_tb_lateral]]
+  var _abrirColunaDoTieBreak = function (tbEl) {
+    if (!tbEl || !tbEl.closest) return;
+    var col = tbEl.closest('.sp-set-col[data-sp-set-index]');
+    if (!col) return; // placar de set único continua no seu layout canônico.
+    var idx = col.getAttribute('data-sp-set-index');
+    var card = col.closest('.sp-match-card');
+    if (!card || idx == null) return;
+    Array.prototype.forEach.call(card.querySelectorAll('.sp-set-col[data-sp-set-index="' + idx + '"]'), function (el) {
+      el.classList.add('sp-set-col--tb-open');
+    });
+  };
   if (document.getElementById('stblbl-' + matchId) && document.getElementById('s1-' + matchId + '-0')) {
     try {
       var tour = null, match = null;
@@ -1602,6 +1619,8 @@ window._highlightWinner = function (matchId) {
         var a = parseInt(aEl.value, 10), b = parseInt(bEl.value, 10);
         if (ta && tb && trigger !== null && window._isTiebreakSetScore(a, b, trigger)) {
           ta.style.display = 'inline-block'; tb.style.display = 'inline-block';
+          _abrirColunaDoTieBreak(ta);
+          _abrirColunaDoTieBreak(tb);
           var initialHint = document.getElementById('tbhint-' + matchId);
           if (initialHint) initialHint.style.display = 'block';
         }
@@ -1658,6 +1677,8 @@ window._highlightWinner = function (matchId) {
     if (triggerHit || alreadyShown) {
       tb1El.style.display = 'inline-block';
       tb2El.style.display = 'inline-block';
+      _abrirColunaDoTieBreak(tb1El);
+      _abrirColunaDoTieBreak(tb2El);
       tb1El.setAttribute('data-tb-shown', '1');
       tb2El.setAttribute('data-tb-shown', '1');
       // ⭐ O aviso "dif 2 pts" aparece NO MESMO instante que os campos — mesmo gatilho, uma

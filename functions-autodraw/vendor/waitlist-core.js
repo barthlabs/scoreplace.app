@@ -296,16 +296,19 @@ window._phaseDrawDone = function (t) {
 // teste). Todo gate de UI e todo caminho de escrita passam por AQUI; a próxima régua
 // paralela é a próxima pessoa bloqueada. [[feedback_unify_dual_entry_points]]
 window._enrollmentOpenState = function (t, nowMs) {
-  if (!t) return { open: false, ligaOpen: false, sorteio: false, deadlinePassed: false };
+  if (!t) return { open: false, ligaOpen: false, sorteio: false, deadlinePassed: false, notOpenYet: false, opensAt: null };
   var domain = _wlDomain();
   if (domain && typeof domain.enrollmentOpenState === 'function') return domain.enrollmentOpenState(t, nowMs);
   var now = (typeof nowMs === 'number') ? nowMs : Date.now();
   var isLiga = !!(t.format && (t.format === 'Liga' || t.format === 'Ranking' || t.format === 'liga' || t.format === 'ranking'));
-  var ligaOpen = isLiga && t.ligaOpenEnrollment !== false && t.status !== 'finished';
   var sorteio = window._phaseDrawDone(t);
-  var deadlinePassed = !!(t.registrationLimit && new Date(t.registrationLimit).getTime() < now);
-  var open = (t.status !== 'closed' && t.status !== 'finished' && !sorteio && !deadlinePassed) || !!ligaOpen;
-  return { open: open, ligaOpen: ligaOpen, sorteio: sorteio, deadlinePassed: deadlinePassed };
+  var opensAt = new Date(t.registrationOpenAt || '').getTime();
+  var notOpenYet = !!(t.registrationOpenAt && Number.isFinite(opensAt) && opensAt > now);
+  var deadline = new Date(t.registrationLimit || '').getTime();
+  var deadlinePassed = !!(t.registrationLimit && Number.isFinite(deadline) && deadline < now);
+  var ligaOpen = isLiga && t.ligaOpenEnrollment !== false && t.status !== 'closed' && t.status !== 'finished' && !notOpenYet && !deadlinePassed;
+  var open = (t.status !== 'closed' && t.status !== 'finished' && !sorteio && !notOpenYet && !deadlinePassed) || !!ligaOpen;
+  return { open: open, ligaOpen: ligaOpen, sorteio: sorteio, deadlinePassed: deadlinePassed, notOpenYet: notOpenYet, opensAt: Number.isFinite(opensAt) ? opensAt : null };
 };
 
 // Está JOGANDO a fase corrente? (aparece num grupo Rei/Rainha, num grupo de fase ou

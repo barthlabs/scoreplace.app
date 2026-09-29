@@ -3056,7 +3056,7 @@ exports.enrollParticipant = onCall(
     if (out.outcome === "capacityFull") return withDuplicateSignal({ capacityFull: true, participants: out.participants });
     if (out.outcome === "duplicateName") return withDuplicateSignal({ duplicateName: true, participants: out.participants });
     if (out.outcome === "already") return withDuplicateSignal({ alreadyEnrolled: true, participants: out.participants });
-    if (out.outcome === "closed") return withDuplicateSignal({ alreadyEnrolled: false, enrollmentClosed: true, participants: out.participants });
+    if (out.outcome === "closed" || out.outcome === "notOpenYet") return withDuplicateSignal({ alreadyEnrolled: false, enrollmentClosed: true, enrollmentNotOpenYet: out.outcome === "notOpenYet", participants: out.participants });
     // v1.6.86: fase já sorteada → a pessoa entrou na LISTA DE ESPERA (não no roster).
     // No caminho normal o cliente já detecta e chama a espera direto; este ramo cobre a
     // CORRIDA (o sorteio disparou entre a checagem do cliente e a escrita do servidor),
@@ -4217,7 +4217,7 @@ exports.requestCanonicalRegistration = onCall(
       if (!enrollmentWindow.open) {
         return {
           outcome: "closed",
-          reasons: [enrollmentWindow.deadlinePassed ? "registration_deadline_passed" : "registration_closed"],
+          reasons: [enrollmentWindow.notOpenYet ? "registration_not_open_yet" : (enrollmentWindow.deadlinePassed ? "registration_deadline_passed" : "registration_closed")],
         };
       }
       let definitions;

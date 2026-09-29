@@ -420,6 +420,13 @@ function setupCreateTournamentModal() {
               <div id="phase-dates-box" style="background:rgba(99,102,241,0.04); border:1px solid rgba(129,140,248,0.18); border-radius:10px; padding:0.6rem 0.4rem; margin-bottom:1rem;">
                 <div style="font-size:0.72rem; color:var(--sp-c-a5b4fc,#a5b4fc); font-weight:700; text-transform:uppercase; letter-spacing:0.8px; margin-bottom:0.5rem; padding-left:0.35rem;">📅 ${_t('create.phaseDatesTitle')}</div>
                 <div class="dates-row" style="display:flex; gap:8px; align-items:stretch; flex-wrap:wrap;">
+                  <div id="reg-open-date-container" style="flex:1; min-width:0; display:flex; flex-direction:column; background:var(--sp-g-255-255-255-003,rgba(255,255,255,0.03)); border:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08)); border-radius:10px; padding:8px 6px;">
+                    <div style="font-size:0.7rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">ABERTURA DAS INSCRIÇÕES</div>
+                    <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:auto;">
+                      <input type="date" class="form-control" id="tourn-reg-open-date" aria-label="Data de abertura das inscrições" style="padding:5px 3px; font-size:0.68rem; flex:1 1 0; min-width:0; white-space:nowrap; box-sizing:border-box;" oninput="window._recalcDuration()">
+                      <input type="time" class="form-control" id="tourn-reg-open-time" aria-label="Hora de abertura das inscrições" style="padding:5px 3px; font-size:0.74rem; width:58px; flex-shrink:0; box-sizing:border-box;" oninput="window._recalcDuration()">
+                    </div>
+                  </div>
                   <div id="reg-date-container" style="flex:1; min-width:0; display:flex; flex-direction:column; background:var(--sp-g-255-255-255-003,rgba(255,255,255,0.03)); border:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08)); border-radius:10px; padding:8px 6px;">
                     <div style="font-size:0.7rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">${_t('create.phaseEnrollDeadline')}</div>
                     <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:auto;">
@@ -1066,7 +1073,9 @@ function setupCreateTournamentModal() {
 
               <!-- (Formação das duplas movida pra dentro do box FASE 1 — v2.6.49) -->
 
-              <!-- Auto-close (apenas eliminatórias) -->
+              <!-- Auto-close por vagas: vale para qualquer formato com limite. O motor
+                   transacional é o mesmo; restringir o controle à eliminatória fazia o
+                   organizador concluir, erradamente, que grupos/ligas não podiam lotar. -->
               <div class="form-group mb-3" id="auto-close-container" style="display:none;">
                 <div class="toggle-row">
                   <div class="toggle-row-label"><span class="toggle-icon">⚡</span><div><span style="font-weight:bold;color:var(--text-color);">${_t('create.autoCloseLabel')}</span><div class="toggle-desc">${_t('create.autoCloseDesc')}</div></div></div>
@@ -3113,14 +3122,16 @@ function setupCreateTournamentModal() {
 
   window._updateRegDateVisibility = function () {
     const regBox = document.getElementById('reg-date-container');
-    if (!regBox) return;
+    const openBox = document.getElementById('reg-open-date-container');
+    if (!regBox && !openBox) return;
     // v2.6.52: o prazo de encerramento das inscrições é regido por "Inscrições durante
     // a fase": só aparece quando FECHADAS está ligado. Aberta = inscrição segue durante
     // a fase, sem data de corte (e o toggle "Novos Confrontos" aparece). Vale p/ todos
     // os formatos — antes era escondido só pra Liga com inscrições abertas.
     var lateVal = (document.getElementById('late-enrollment') || {}).value || 'closed';
     // 'flex' (não '') preserva o layout coluna do card — '' apagaria o display:flex inline.
-    regBox.style.display = (lateVal === 'closed') ? 'flex' : 'none';
+    if (regBox) regBox.style.display = (lateVal === 'closed') ? 'flex' : 'none';
+    if (openBox) openBox.style.display = (lateVal === 'closed') ? 'flex' : 'none';
   };
 
   window._onVenueAccessToggle = function () {
@@ -3656,10 +3667,8 @@ function setupCreateTournamentModal() {
     // Modo Vagas-por-sorteio é incompatível com encerrar-ao-lotar (não há corrida).
     var _elm = (document.getElementById('enrollment-limit-mode') || {}).value || 'cap';
     if (_elm === 'draw') { container.style.display = 'none'; return; }
-    const isElim = fmt.value === 'elim_simples' || fmt.value === 'elim_dupla';
     const maxVal = parseInt(maxEl.value);
-    const isPow2 = maxVal > 0 && (maxVal & (maxVal - 1)) === 0;
-    container.style.display = (isElim && isPow2) ? 'block' : 'none';
+    container.style.display = maxVal >= 2 ? 'block' : 'none';
   };
 
   // --- Court count change: auto-generate placeholder names ---
@@ -4660,9 +4669,12 @@ function setupCreateTournamentModal() {
       if (v.includes('T')) { const parts = v.split('T'); return [parts[0], parts[1].substring(0, 5)]; }
       return [v, ''];
     };
+    const [regOpenD, regOpenT] = _splitDT(t.registrationOpenAt);
     const [regD, regT] = _splitDT(t.registrationLimit);
     const [startD, startT] = _splitDT(t.startDate);
     const [endD, endT] = _splitDT(t.endDate);
+    document.getElementById('tourn-reg-open-date').value = regOpenD;
+    document.getElementById('tourn-reg-open-time').value = regOpenT;
     document.getElementById('tourn-reg-date').value = regD;
     document.getElementById('tourn-reg-time').value = regT;
     document.getElementById('tourn-start-date').value = startD;
@@ -5513,6 +5525,9 @@ window._saveTournamentClickHandler = async function() {
         const endDateRaw = document.getElementById('tourn-end-date').value || '';
         const endTimeRaw = document.getElementById('tourn-end-time').value || '';
         const endDateVal = endTimeRaw ? endDateRaw + 'T' + endTimeRaw : endDateRaw;
+        const regOpenDateRaw = document.getElementById('tourn-reg-open-date').value || '';
+        const regOpenTimeRaw = document.getElementById('tourn-reg-open-time').value || '';
+        const regOpenDateVal = regOpenTimeRaw ? regOpenDateRaw + 'T' + regOpenTimeRaw : regOpenDateRaw;
         const regDateRaw = document.getElementById('tourn-reg-date').value || '';
         const regTimeRaw = document.getElementById('tourn-reg-time').value || '';
         const regDateVal = regTimeRaw ? regDateRaw + 'T' + regTimeRaw : regDateRaw;
@@ -5564,13 +5579,17 @@ window._saveTournamentClickHandler = async function() {
         // v2.1.21: Liga tem inscrições sempre abertas (temporada contínua) — o
         // prazo de inscrição NÃO se aplica. Não valida (e o campo fica oculto pra
         // Liga). Bug: ao trocar pra Liga, o prazo residual ainda era validado.
-        if (regDateRaw && startDateRaw && format !== 'Liga') {
+        if (regDateRaw && startDateRaw) {
           const _regD = new Date(regDateVal);
           const _startD2 = new Date(startDateVal);
           if (_regD >= _startD2) {
             showAlertDialog(window._t('create.deadlineInvalid'), window._t('create.deadlineInvalidMsg'), null, { type: 'warning' });
             return;
           }
+        }
+        if (regOpenDateRaw && regDateRaw && new Date(regOpenDateVal) >= new Date(regDateVal)) {
+          showAlertDialog('Janela de inscrições inválida', 'A abertura deve ocorrer antes do fechamento das inscrições.', null, { type: 'warning' });
+          return;
         }
 
         const tourData = {
@@ -5606,7 +5625,10 @@ window._saveTournamentClickHandler = async function() {
             } catch (e) { return {}; }
           })(),
           // v2.1.21: Liga ignora prazo de inscrição (sempre aberta) — limpa o residual.
-          registrationLimit: (format === 'Liga' ? '' : regDateVal),
+          // A porta de inscrição avalia estes horários no servidor. Não depender de
+          // um timer da página: a janela abre e fecha mesmo sem navegador aberto.
+          registrationOpenAt: regOpenDateVal,
+          registrationLimit: regDateVal,
           enrollmentMode: enrollmentVal,
           // v2.2.46: separar duplas formadas x sorteadas (só vale no modo misto)
           mixedPairingSeparated: enrollmentVal === 'misto' && (document.getElementById('mixed-pairing-separated') || {}).value === 'true',
@@ -6046,7 +6068,7 @@ window._saveTournamentClickHandler = async function() {
 // Limpa os 6 campos de data/hora. Chamado ao abrir torneio NOVO e ao aplicar
 // template (templates não carregam datas — são específicas de cada evento).
 window._blankTournamentDates = function() {
-  ['tourn-reg-date', 'tourn-reg-time', 'tourn-start-date', 'tourn-start-time', 'tourn-end-date', 'tourn-end-time'].forEach(function(id) {
+  ['tourn-reg-open-date', 'tourn-reg-open-time', 'tourn-reg-date', 'tourn-reg-time', 'tourn-start-date', 'tourn-start-time', 'tourn-end-date', 'tourn-end-time'].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.value = '';
   });

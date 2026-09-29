@@ -421,14 +421,20 @@ var ScoreplaceWaitlist;
     ScoreplaceWaitlist.phaseDrawDone = phaseDrawDone;
     function enrollmentOpenState(tournament, nowMs) {
         if (!tournament)
-            return { open: false, ligaOpen: false, sorteio: false, deadlinePassed: false };
+            return { open: false, ligaOpen: false, sorteio: false, deadlinePassed: false, notOpenYet: false, opensAt: null };
         const format = text(tournament.format).toLowerCase();
         const isLiga = format === 'liga' || format === 'ranking';
-        const ligaOpen = isLiga && tournament.ligaOpenEnrollment !== false && tournament.status !== 'finished';
         const sorteio = phaseDrawDone(tournament);
+        const now = typeof nowMs === 'number' ? nowMs : Date.now();
+        const opensAt = new Date(String(tournament.registrationOpenAt || '')).getTime();
+        const notOpenYet = Boolean(tournament.registrationOpenAt && Number.isFinite(opensAt) && opensAt > now);
         const deadline = new Date(String(tournament.registrationLimit || '')).getTime();
-        const deadlinePassed = Boolean(tournament.registrationLimit && Number.isFinite(deadline) && deadline < (typeof nowMs === 'number' ? nowMs : Date.now()));
-        return { open: (tournament.status !== 'closed' && tournament.status !== 'finished' && !sorteio && !deadlinePassed) || !!ligaOpen, ligaOpen, sorteio, deadlinePassed };
+        const deadlinePassed = Boolean(tournament.registrationLimit && Number.isFinite(deadline) && deadline < now);
+        /* REGRESSÃO: esta é a cópia cliente da porta server-side enrollmentOpen.
+         * Abertura/fechamento agendados são avaliados pelo relógio, não por timer da
+         * página; status fechado manualmente continua fechado mesmo depois do horário. */
+        const ligaOpen = isLiga && tournament.ligaOpenEnrollment !== false && tournament.status !== 'closed' && tournament.status !== 'finished' && !notOpenYet && !deadlinePassed;
+        return { open: (tournament.status !== 'closed' && tournament.status !== 'finished' && !sorteio && !notOpenYet && !deadlinePassed) || !!ligaOpen, ligaOpen, sorteio, deadlinePassed, notOpenYet, opensAt: Number.isFinite(opensAt) ? opensAt : null };
     }
     ScoreplaceWaitlist.enrollmentOpenState = enrollmentOpenState;
     /** Quem ocupa confronto ou grupo da fase atual; folga nunca conta como jogo. */

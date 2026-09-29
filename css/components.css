@@ -2613,7 +2613,21 @@ html, body,
 .sp-set-inp{width:100%;box-sizing:border-box;text-align:right;font-size:var(--sp-num-fs-set,0.9rem);font-weight:700;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:var(--text-bright);border-radius:6px;padding:4px 3px;appearance:textfield;-moz-appearance:textfield;}
 .sp-set-inp--live{border-color:rgba(56,189,248,0.55);}
 .sp-set-inp::-webkit-outer-spin-button,.sp-set-inp::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
-.sp-set-tb{width:100%;box-sizing:border-box;margin-top:3px;text-align:center;font-size:0.60rem;font-weight:700;background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.3);color:var(--text-bright);border-radius:5px;padding:2px 1px;}
+/* ⛔ O tie-break é SUBCAMPO DO SET, não a próxima linha da dupla. Quando 6–5
+   (ou 7–6) abre TB, seus pontos ficam À DIREITA daquele mesmo placar. A versão
+   vertical fazia a leitura parecer outro set e, pior, o TB de um lado não casava
+   visualmente com o outro. `sp-set-col--tb-open` abre a mesma coluna no cabeçalho
+   e nas duas linhas de jogadores; o JS aplica a classe aos três elementos juntos.
+   Assim a grade continua coluna-a-coluna e não há segundo layout para regredir.
+   [[regressao_stb_dois_digitos_e_tb_lateral]] */
+:root{--sp-set-tb-field-w:34px;--sp-set-tb-gap:3px;}
+/* `flex-start`, não center: o TB menor começa na mesma linha-base visual do campo
+   de games. Centralizar dava a impressão de que ele tinha descido para outra linha. */
+.sp-set-score-entry{display:flex;align-items:flex-start;justify-content:flex-end;gap:var(--sp-set-tb-gap);min-width:0;}
+.sp-set-score-entry .sp-set-inp{flex:1 1 auto;min-width:0;}
+.sp-set-score-entry .sp-set-tb{flex:0 0 var(--sp-set-tb-field-w);width:var(--sp-set-tb-field-w);margin:0;}
+.sp-set-col--tb-open{width:calc(var(--w,34px) + var(--sp-set-tb-field-w) + var(--sp-set-tb-gap));flex-basis:calc(var(--w,34px) + var(--sp-set-tb-field-w) + var(--sp-set-tb-gap));}
+.sp-set-tb{width:100%;box-sizing:border-box;text-align:center;font-variant-numeric:tabular-nums;font-size:0.60rem;font-weight:700;background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.3);color:var(--text-bright);border-radius:5px;padding:2px 1px;}
 /* Set confirmado é CLICÁVEL pra corrigir (só enquanto o jogo não fechou) — o cursor é
    o único aviso, porque um ✕ por coluna encheria a linha de ruído. */
 .sp-tb-points{font-size:0.58em;font-weight:700;margin-left:1px;margin-right:0.22em;vertical-align:super;line-height:0;}

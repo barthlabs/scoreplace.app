@@ -3488,7 +3488,7 @@ exports.setTournamentFlyerPrefs = onCall(async (request) => {
 // detalhe de identidade, elenco, fila, jogos, resultados, fases materializadas ou
 // ciclo de vida fica fora desta lista e só possui comandos próprios no servidor.
 const _CAMPOS_CONFIG_TORNEIO = new Set([
-  'name','isPublic','format','sport','startDate','endDate','roundBounds','roundBoundsEditorEnabled','registrationLimit',
+  'name','isPublic','format','sport','startDate','endDate','roundBounds','roundBoundsEditorEnabled','registrationOpenAt','registrationLimit',
   'enrollmentMode','mixedPairingSeparated','manualPairing','teamSize','gameTypes',
   'maxParticipants','autoCloseOnFull','enrollmentLimitMode','targetSlots','callPolicy',
   'resultEntry','woScope','lateEnrollment','newMatchups','venue','venueAccess','venueLat',
@@ -3627,7 +3627,11 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
     if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização atualiza a configuração.', { tId, uid });
     const hasDraw = hasDrawnBracket(t);
-    const changed = Object.keys(patch).some(key => JSON.stringify(t[key]) !== JSON.stringify(patch[key]));
+    const requestedOpeningAt = Date.parse(String(patch.registrationOpenAt || ''));
+    // Mesmo que o horário já esteja gravado, uma edição precisa recuperar o estado
+    // "aberto quando chegar a hora" se uma versão antiga o deixou status=closed.
+    const scheduledOpeningRestoresState = !hasDraw && t.status === 'closed' && Number.isFinite(requestedOpeningAt) && requestedOpeningAt > Date.now();
+    const changed = scheduledOpeningRestoresState || Object.keys(patch).some(key => JSON.stringify(t[key]) !== JSON.stringify(patch[key]));
     if (!changed) return { ok:true, changed:false, tournament:t };
     /* ⏱️ COM A CHAVE SORTEADA, O PRAZO AINDA SE CORRIGE. Relato do dono (12/set/2026, Confra
      * com a Fase 2 rodando): _"não consigo salvar alterações nas datas"_. Arrastar a régua da
@@ -3672,6 +3676,12 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
         t[key] = patch[key];
       }
     });
+    /* Uma abertura futura é um comando declarativo: o status precisa estar apto a
+     * abrir quando o relógio chegar, enquanto enrollmentOpen mantém a porta fechada
+     * até lá. Não é bypass: só vale antes da chave e só a organização grava o campo.
+     * Fechar manualmente depois limpa o agendamento e volta a prevalecer. */
+    const openingAt = Date.parse(String(t.registrationOpenAt || ''));
+    if (!hasDraw && t.status === 'closed' && Number.isFinite(openingAt) && openingAt > Date.now()) t.status = 'open';
     t.updatedAt = agoraIso;
     if (!Array.isArray(t.history)) t.history = [];
     t.history.push({ date: agoraIso, message: 'Regras atualizadas pela organização.' });
@@ -4098,8 +4108,11 @@ exports.setTournamentEnrollmentStatus = onCall(async request => {
     const before = _antesDoMotor(t);
     let promoted = 0, changed = false;
     if (action === 'open') {
-      if (t.status !== 'open' || t.registrationLimit != null || t.activePollId) changed = true;
-      t.status = 'open'; t.registrationLimit = null; delete t._pollSuspended;
+      // REGRESSÃO: abrir manualmente é uma decisão explícita do organizador; não pode
+      // ficar refém de uma abertura futura que ele mesmo configurou antes. O prazo de
+      // fechamento permanece, para que "abrir agora e fechar em tal dia" siga valendo.
+      if (t.status !== 'open' || t.registrationOpenAt != null || t.activePollId) changed = true;
+      t.status = 'open'; t.registrationOpenAt = null; delete t._pollSuspended;
       if (drawWindow && typeof drawWindow._clearDrawRuntimeFlags === 'function') drawWindow._clearDrawRuntimeFlags(t);
       if (t.enrollmentLimitMode === 'draw') { t.drawSelectionDone = false; t.waitlistOrder = null; }
       if (t.activePollId && Array.isArray(t.polls)) {
@@ -4110,6 +4123,10 @@ exports.setTournamentEnrollmentStatus = onCall(async request => {
       _enqueueEnrollmentNotice(tx, ref, t, 'enrollments-reopened', '📋 Inscrições reabertas', 'As inscrições de ' + String(t.name || 'seu torneio') + ' foram reabertas.', nowIso);
     } else if (action === 'close' || action === 'late-close') {
       if (t.status !== 'closed') { t.status = 'closed'; changed = true; }
+      // Fechamento manual cancela somente uma abertura automática ainda pendente.
+      // Sem isto, editar depois podia parecer que o torneio reabria "sozinho" contra
+      // a última decisão explícita do organizador.
+      if (action === 'close' && t.registrationOpenAt != null) { t.registrationOpenAt = null; changed = true; }
       if (forDraw && !t._reopenIfDrawCancelled) { t._reopenIfDrawCancelled = true; changed = true; }
       if (action === 'late-close' && drawWindow && typeof drawWindow._maybeFinishElimination === 'function') {
         const beforeFinish = t.status; drawWindow._maybeFinishElimination(t); if (t.status !== beforeFinish) changed = true;

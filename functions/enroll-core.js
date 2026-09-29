@@ -101,15 +101,27 @@ function asParticipantsArray(data) {
 // (js/views/waitlist-core.js) — paridade travada por teste. Mudou aqui → mudou lá.
 // `status !== 'finished'` entrou no ligaOpen: Liga ENCERRADA não aceita inscrição
 // (antes o ligaOpen ignorava finished e o servidor aceitaria gente em torneio morto).
+//
+// REGRESSÃO A EVITAR — janela programada não pode depender de cron ou de uma aba
+// aberta. A própria porta de inscrição compara o relógio do servidor com
+// registrationOpenAt/registrationLimit; assim ela abre e fecha na hora mesmo que
+// nenhum organizador esteja olhando a ficha. `status === 'closed'` continua sendo
+// a decisão MANUAL e sempre vence um horário programado.
 function enrollmentOpen(data, nowMs) {
   var isLiga = data.format && (data.format === 'Liga' || data.format === 'Ranking' || data.format === 'liga' || data.format === 'ranking');
-  var ligaOpen = isLiga && data.ligaOpenEnrollment !== false && data.status !== 'finished';
   var sorteioRealizado = (Array.isArray(data.matches) && data.matches.length > 0) ||
     (Array.isArray(data.rounds) && data.rounds.length > 0) ||
     (Array.isArray(data.groups) && data.groups.length > 0);
-  var deadlinePassed = !!(data.registrationLimit && new Date(data.registrationLimit).getTime() < nowMs);
-  var open = (data.status !== 'closed' && data.status !== 'finished' && !sorteioRealizado && !deadlinePassed) || !!ligaOpen;
-  return { open: open, deadlinePassed: deadlinePassed };
+  var now = typeof nowMs === 'number' ? nowMs : Date.now();
+  var opensAt = new Date(data.registrationOpenAt || '').getTime();
+  var notOpenYet = !!(data.registrationOpenAt && Number.isFinite(opensAt) && opensAt > now);
+  var deadline = new Date(data.registrationLimit || '').getTime();
+  var deadlinePassed = !!(data.registrationLimit && Number.isFinite(deadline) && deadline < now);
+  // Liga mantém a exceção de aceitar inscrições depois do sorteio, mas NÃO ignora
+  // uma janela que o organizador configurou nem um fechamento manual.
+  var ligaOpen = isLiga && data.ligaOpenEnrollment !== false && data.status !== 'closed' && data.status !== 'finished' && !notOpenYet && !deadlinePassed;
+  var open = (data.status !== 'closed' && data.status !== 'finished' && !sorteioRealizado && !notOpenYet && !deadlinePassed) || !!ligaOpen;
+  return { open: open, deadlinePassed: deadlinePassed, notOpenYet: notOpenYet, opensAt: Number.isFinite(opensAt) ? opensAt : null };
 }
 
 // Inscrição só deduplica por identificador estável. Uma conta é sempre o UID; uma
@@ -265,7 +277,7 @@ function computeEnroll(data, participantObj, extraUpdates, nowMs, accountDisplay
   if (!openState.open) {
     var upd = {};
     if (openState.deadlinePassed && data.status !== 'closed') upd.status = 'closed';
-    return { outcome: 'closed', participants: participants, updateData: (upd.status ? upd : null) };
+    return { outcome: openState.notOpenYet ? 'notOpenYet' : 'closed', participants: participants, updateData: (upd.status ? upd : null) };
   }
   if (isAlreadyEnrolled(participants, participantObj)) {
     return { outcome: 'already', participants: participants, updateData: null };

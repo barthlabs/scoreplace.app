@@ -125,7 +125,9 @@ sandbox.checkPowerOf2 = function (t) { var n = (t.participants || []).length; re
 sandbox.showPowerOf2Panel = noop;
 
 // --- helpers de cenário ---
-function mkPool(n) { var a = []; for (var i = 0; i < n; i++) a.push({ displayName: 'D' + i, categories: ['C'] }); return a; }
+/* Fixtures de Dupla precisam carregar a mesma identidade da produção. Rótulo é só
+ * apresentação; sem UID a repescagem corretamente se recusa a preencher um slot. */
+function mkPool(n) { var a = []; for (var i = 0; i < n; i++) a.push({ displayName: 'D' + i, uid: 'uidD' + i, categories: ['C'] }); return a; }
 
 // monta um torneio pelo SORTEIO REAL (generateDrawFunction) — pro render bater com o app.
 function buildViaDraw(format, n, extra) {

@@ -388,6 +388,51 @@ async function tela() {
   ok(r.umSet.temInput, '1 SET: o campo de placar de sempre continua lá');
 }
 
+/* ── ④·2 STB de dois dígitos e TB lateral ───────────────────────────────────────
+ * Regressão relatada pelo dono: o STB reservado no início herdou o tamanho de um set
+ * comum e o TB de 6–5 caiu abaixo do placar. Não testar só HTML: medimos em Chromium
+ * que o STB comporta 10 e que, ao abrir TB, rótulo + duas linhas aumentam juntos. */
+async function stbDoisDigitosETieBreakLateral() {
+  console.log('\n④·2 STB de dois dígitos e tie-break lateral');
+  // O STB é reservado, mas fica oculto, no card inicial de melhor de 3.
+  const initialHtml = cardHtml(MELHOR3, [], { id: 'M-STB' });
+  const tbHtml = cardHtml(MELHOR3, [S(6, 4)], { id: 'M-TB' });
+  const browser = await chromium.launch();
+  const page = await browser.newPage({ viewport: { width: 430, height: 720 } });
+  await page.setContent('<style>' + CSS + '</style><body style="background:#0b1220;padding:8px;">' +
+    '<div id="stb-case">' + initialHtml + '</div><div id="tb-case">' + tbHtml + '</div></body>', { waitUntil: 'load' });
+  const before = await page.evaluate(() => {
+    document.querySelectorAll('#stb-case [id^="stbcol-"], #stb-case [id^="stblbl-"]').forEach((e) => { e.style.display = 'block'; });
+    const stb = document.querySelector('#stb-case [data-sp-set-index="2"] .sp-set-inp');
+    const q = stb.getBoundingClientRect();
+    return { width: q.width, textWidth: (() => { const c = document.createElement('span'); const cs = getComputedStyle(stb); c.textContent = '10'; c.style.cssText = 'font-family:' + cs.fontFamily + ';font-size:' + cs.fontSize + ';font-weight:' + cs.fontWeight + ';visibility:hidden;white-space:nowrap'; stb.parentNode.appendChild(c); const w = c.getBoundingClientRect().width; c.remove(); return w; })() };
+  });
+  ok(before.width >= before.textWidth + 10, 'STB reservado comporta 10 com folga (' + before.width.toFixed(1) + 'px)');
+  await page.evaluate(() => {
+    const card = document.querySelector('#tb-case .sp-match-card');
+    const a = document.querySelector('#tb-case #s1-M-TB'), b = document.querySelector('#tb-case #s2-M-TB');
+    const ta = document.querySelector('#tb-case #tb1-M-TB'), tb = document.querySelector('#tb-case #tb2-M-TB');
+    a.value = '6'; b.value = '5'; ta.style.display = 'inline-block'; tb.style.display = 'inline-block';
+    card.querySelectorAll('[data-sp-set-index="1"]').forEach((e) => e.classList.add('sp-set-col--tb-open'));
+  });
+  const after = await page.evaluate(() => {
+    const card = document.querySelector('#tb-case .sp-match-card');
+    const one = (sel) => document.querySelector('#tb-case ' + sel);
+    const input = one('#s1-M-TB'), tb = one('#tb1-M-TB');
+    const q = input.getBoundingClientRect(), tq = tb.getBoundingClientRect();
+    const cols = [...card.querySelectorAll('[data-sp-set-index="1"]')].map((e) => { const r = e.getBoundingClientRect(); return { x:r.x, w:r.width, open:e.classList.contains('sp-set-col--tb-open') }; });
+    return { input:{ x:q.x, y:q.y, right:q.right }, tb:{ x:tq.x, y:tq.y, right:tq.right, shown:getComputedStyle(tb).display !== 'none' }, cols:cols };
+  });
+  ok(after.tb.shown && Math.abs(after.tb.y - after.input.y) <= 1 && after.tb.x >= after.input.right + 2,
+    'TB abre à direita do placar do set, na mesma linha (placar=' + after.input.x.toFixed(1) + '–' + after.input.right.toFixed(1) + '; TB=' + after.tb.x.toFixed(1) + '–' + after.tb.right.toFixed(1) + '; y=' + after.input.y.toFixed(1) + '/' + after.tb.y.toFixed(1) + ')');
+  ok(after.cols.length === 3 && after.cols.every((c) => c.open) && after.cols.every((c) => Math.abs(c.w - after.cols[0].w) <= 0.5),
+    'rótulo e as duas linhas abrem a mesma coluna de TB, sem desalinhamento');
+  const ui = read('js/views/bracket-ui.js');
+  ok(/_abrirColunaDoTieBreak/.test(ui) && /sp-set-col--tb-open/.test(ui),
+    'o revelador real aplica a mesma abertura de coluna; o cenário não depende só do CSS');
+  await browser.close();
+}
+
 /* ── ⑤ AS CINCO CORREÇÕES DO SANDBOX (23/ago) ─────────────────────────────────────
  * Relatos do dono, olhando o SB do Confra:
  *   a) _"não pode cortar a tela dessa forma quando a largura é mais estreita"_
@@ -583,6 +628,7 @@ async function espacoDosSetsResponsivo() {
   regua();
   decisao();
   await tela();
+  await stbDoisDigitosETieBreakLateral();
   await correcoesDoSandbox();
   await duasSecoesMesmoTamanho();
   await espacoDosSetsResponsivo();

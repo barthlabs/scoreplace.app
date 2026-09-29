@@ -5339,7 +5339,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   // Rótulo e box saem do MESMO array (_plan.columns) e da MESMA largura (`--w`, por TIPO
   // de coluna). É por construção que o rótulo fica em cima do box: não há um segundo
   // lugar decidindo largura pra divergir do primeiro.
-  const _setColOpen = (c, extra) => '<div class="sp-set-col' + (extra || '') + '" style="--w:' + c.w + 'px;">';
+  const _setColOpen = (c, extra) => '<div class="sp-set-col' + (extra || '') + '" data-sp-set-index="' + c.i + '" style="--w:' + c.w + 'px;">';
   // Número do set já confirmado: verde pra quem VENCEU aquele set, vermelho pra quem
   // perdeu. A tarja da linha continua respondendo outra pergunta — "o JOGO já fechou?" —
   // e segue neutra enquanto não há vencedor. [[feedback_contraste_sempre_nos_dois_temas]]
@@ -5362,8 +5362,8 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
       ? '<input type="number" id="tb' + side + '-' + m.id + '" min="0" placeholder="tb" title="Tie-break"' +
         ' class="sp-set-tb" style="display:none;" oninput="window._highlightWinner(\'' + _esc(m.id) + '\')">'
       : '';
-    return '<input type="number" id="s' + side + '-' + m.id + '" min="0" placeholder="0" class="sp-set-inp sp-set-inp--live"' +
-      ' oninput="window._highlightWinner(\'' + _esc(m.id) + '\')" onchange="window._warnGrossSetScore(\'' + _esc(m.id) + '\')">' + tb;
+    return '<span class="sp-set-score-entry"><input type="number" id="s' + side + '-' + m.id + '" min="0" placeholder="0" class="sp-set-inp sp-set-inp--live"' +
+      ' oninput="window._highlightWinner(\'' + _esc(m.id) + '\')" onchange="window._warnGrossSetScore(\'' + _esc(m.id) + '\')">' + tb + '</span>';
   };
   // Correção de resultado é o MESMO placar do card, no MESMO lugar. Nenhum diálogo
   // paralelo: os números viram campos já preenchidos e o restante do card não se move.
@@ -5386,10 +5386,15 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     if (isStb || c.kind !== 'set') return input;
     const tbNeeded = Number.isFinite(Number(original.gamesP1)) && Number.isFinite(Number(original.gamesP2)) &&
       typeof window._isTiebreakSetScore === 'function' && window._isTiebreakSetScore(original.gamesP1, original.gamesP2, window._tbLoserGames(_msc, t.sport));
-    return input + '<input type="number" min="0" inputmode="numeric" value="' +
+    return '<span class="sp-set-score-entry">' + input + '<input type="number" min="0" inputmode="numeric" value="' +
       (tbValue != null ? window._safeHtml(tbValue) : '') + '" id="sp-edit-tb-' + _esc(m.id) + '-' + idx + '-' + side +
-      '" class="sp-set-tb" placeholder="tb" title="Tie-break" style="margin-top:3px;' + (tbNeeded ? 'display:block;' : 'display:none;') + '" onclick="event.stopPropagation()">';
+      '" class="sp-set-tb" placeholder="tb" title="Tie-break" style="display:' + (tbNeeded ? 'inline-block' : 'none') + ';" onclick="event.stopPropagation()"></span>';
   };
+  // Na edição o TB pode já vir salvo. A coluna precisa nascer aberta ANTES de
+  // qualquer oninput: ids de edição não passam pelo revelador do placar ao vivo.
+  // A mesma pergunta é usada para o rótulo e as duas linhas, nunca só para um lado.
+  const _colunaEditaTieBreak = (c) => !!(c && c.kind === 'set' && c.set &&
+    typeof window._setTiebreak === 'function' && window._setTiebreak(c.set));
   // Set confirmado é CLICÁVEL pra corrigir enquanto o jogo não fechou — sem isso um 6-4
   // digitado errado no set 1 fica preso até o fim da partida.
   const _podeCorrigirSet = !isDecided && !hasPending && canEnterResult && !_readOnly;
@@ -5397,17 +5402,20 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   const _entryColumns = _initialTwoSetEntry ? [
     { i: 0, kind: 'set', label: '1', w: _plan.columns[0] ? _plan.columns[0].w : 34, state: 'entry' },
     { i: 1, kind: 'set', label: '2', w: _plan.columns[0] ? _plan.columns[0].w : 34, state: 'entry' },
-    { i: 2, kind: _plan.superTiebreak ? 'stb' : 'set', label: _plan.superTiebreak ? 'STB' : '3', w: _plan.columns[0] ? _plan.columns[0].w : 34, state: 'stb-entry' }
+    // ⛔ STB não herda a largura do Set 1: o plano já calculou a largura mínima
+    // para dois dígitos (e para o alvo configurado, que pode ser maior que 10).
+    // Não reintroduzir `columns[0].w` aqui — foi a regressão do STB estreito.
+    { i: 2, kind: _plan.superTiebreak ? 'stb' : 'set', label: _plan.superTiebreak ? 'STB' : '3', w: _plan.superTiebreak ? _plan.stbEntryW : (_plan.columns[0] ? _plan.columns[0].w : 34), state: 'stb-entry' }
   ] : _plan.columns;
   const _initialEntryCell = (c, side) => {
     const hidden = c.state === 'stb-entry';
     const wrap = hidden ? ' id="stbcol-' + side + '-' + m.id + '" style="display:none;--w:' + c.w + 'px;"' : ' style="--w:' + c.w + 'px;"';
     const input = '<input type="number" id="s' + side + '-' + m.id + '-' + c.i + '" min="0" placeholder="0" class="sp-set-inp sp-set-inp--live" oninput="window._highlightWinner(\'' + _esc(m.id) + '\')" onchange="window._warnGrossSetScore(\'' + _esc(m.id) + '\',' + c.i + ')">';
     const tb = c.kind === 'set' && _tbEnabled ? '<input type="number" id="tb' + side + '-' + m.id + '-' + c.i + '" min="0" placeholder="tb" title="Tie-break" class="sp-set-tb" style="display:none;" oninput="window._highlightWinner(\'' + _esc(m.id) + '\')">' : '';
-    return '<div class="sp-set-col"' + wrap + '>' + input + tb + '</div>';
+    return '<div class="sp-set-col" data-sp-set-index="' + c.i + '"' + wrap + '><span class="sp-set-score-entry">' + input + tb + '</span></div>';
   };
   const _setCellsHtml = (side) => _entryColumns.map(function (c, idx) {
-    if (_setsEdit) return _setColOpen(c) + _setEditHtml(c, side, idx) + '</div>';
+    if (_setsEdit) return _setColOpen(c, _colunaEditaTieBreak(c) ? ' sp-set-col--tb-open' : '') + _setEditHtml(c, side, idx) + '</div>';
     if (c.state === 'entry' || c.state === 'stb-entry') return _initialEntryCell(c, side);
     if (c.state === 'live') return _setColOpen(c) + _setLiveHtml(c, side) + '</div>';
     const fix = _podeCorrigirSet
@@ -5418,7 +5426,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   }).join('');
   const _setLabelsHtml = () => _entryColumns.map(function (c) {
     if (c.state === 'stb-entry') return '<div id="stblbl-' + m.id + '" class="sp-set-col" style="display:none;--w:' + c.w + 'px;"><span class="sp-set-lbl">' + window._safeHtml(c.label) + '</span></div>';
-    return _setColOpen(c) + '<span class="sp-set-lbl' + (c.state === 'live' ? ' sp-set-lbl--live' : '') + '">' +
+    return _setColOpen(c, (_setsEdit && _colunaEditaTieBreak(c)) ? ' sp-set-col--tb-open' : '') + '<span class="sp-set-lbl' + (c.state === 'live' ? ' sp-set-lbl--live' : '') + '">' +
       window._safeHtml(c.label) + '</span></div>';
   }).join('');
   // A LINHA NOVA: "MELHOR DE 3 · SET 2" à esquerda, os rótulos das colunas à direita —

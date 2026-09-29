@@ -1377,6 +1377,9 @@ function _slotUids(m, side) {
   var single = side === 'p1' ? m.p1Uid : m.p2Uid;
   if (single) return [single];
   var obj = side === 'p1' ? m.team1Obj : m.team2Obj;
+  /* Dupla formada guardada no esquema p1Uid/p2Uid: ambos são UIDs canônicos.
+   * Não cair no rótulo aqui; o leitor precisa reconhecer a dupla sem UID-array. */
+  if (obj && (obj.p1Uid || obj.p2Uid)) return [obj.p1Uid, obj.p2Uid].filter(Boolean);
   if (obj && typeof window._participantUids === 'function') {
     var u = window._participantUids(obj);
     if (u && u.length) return u;

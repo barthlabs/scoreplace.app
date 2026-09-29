@@ -1307,8 +1307,10 @@ window._rotaMostraAChaveDeste = function (hash, id) {
    * placar — e quem diz se cabe é o teste de nome, não esta conta. */
   window._SET_COL_ESCALA = [
     { ate: 2, digito: 14.4, piso: 26, pisoStb: 30, tb: 23, fs: 1.45 },   // 1 ou 2 colunas
-    { ate: 3, digito: 14.4, piso: 24, pisoStb: 40, tb: 22, fs: 1.45 },   // 3 colunas (melhor de 3)
-    { ate: 5, digito: 11.7, piso: 14, pisoStb: 20, tb: 18, fs: 1.18 }    // 4 ou 5 colunas
+    // STB recebe ao menos 48px: 10 é o mínimo, mas 12/10 e 22/20 são placares
+    // normais e não podem tocar a borda do campo no celular.
+    { ate: 3, digito: 14.4, piso: 24, pisoStb: 48, tb: 22, fs: 1.45 },   // 3 colunas (melhor de 3)
+    { ate: 5, digito: 11.7, piso: 14, pisoStb: 42, tb: 18, fs: 1.18 }    // 4 ou 5 colunas
   ];
   window._setColEscala = function (nCols) {
     var e = window._SET_COL_ESCALA;
@@ -1405,8 +1407,9 @@ window._rotaMostraAChaveDeste = function (hash, id) {
     var esc = window._setColEscala(multi ? (played.length ? bestOf : 1) : 1);
     /* ⛔ A COLUNA COM TIE-BREAK É MAIS LARGA — senão o subponto cola no número seguinte.
      * O subponto é do SET, então as duas linhas crescem juntas e a grade segue casada. */
-    var larg = function (k, set) {
-      var piso = (k === 'stb') ? esc.pisoStb : esc.piso;
+    var larg = function (k, set, escala) {
+      escala = escala || esc;
+      var piso = (k === 'stb') ? escala.pisoStb : escala.piso;
       var dig = 1;
       if (set) {
         var _n = function (v) { var x = String(v == null ? '' : v); return x.length || 1; };
@@ -1423,17 +1426,17 @@ window._rotaMostraAChaveDeste = function (hash, id) {
       var tb = (set && typeof window._setTiebreak === 'function') ? window._setTiebreak(set) : null;
       var extraTb = 0;
       if (tb) {
-        // o subponto sai num `<sup>` a 0,58em — `esc.tb` é o custo dele com UM algarismo,
+        // o subponto sai num `<sup>` a 0,58em — `escala.tb` é o custo dele com UM algarismo,
         // medido no navegador. Dois algarismos ("(10)") pedem mais: meio dígito a mais.
         var _t = function (v) { var x = String(v == null ? '' : v); return x.length || 1; };
         var digTb = Math.max(_t(tb.p1), _t(tb.p2));
-        extraTb = (esc.tb || 0) + Math.ceil((digTb - 1) * esc.digito * 0.6);
+        extraTb = (escala.tb || 0) + Math.ceil((digTb - 1) * escala.digito * 0.6);
       }
       /* 6px de respiro (3 de cada lado) + o vão de 2px da grade. MEDIDO na régua do dono
        * (root 17px): 3px davam 3,8px entre dois números (perto demais de colar), 4px davam
        * 4,8px e ele pediu _"um pouco mais do que está agora, mas não o que estava antes"_ —
        * 6px levam o vão a ~7px, contra os ~15px do desenho original. */
-      return Math.max(piso, Math.ceil(dig * esc.digito) + 10) + extraTb;
+      return Math.max(piso, Math.ceil(dig * escala.digito) + 10) + extraTb;
     };
 
     var cols = [], i;
@@ -1475,6 +1478,16 @@ window._rotaMostraAChaveDeste = function (hash, id) {
     return {
       multi: multi, setsToWin: setsToWin, bestOf: bestOf,
       superTiebreak: stbOn, superTiebreakPoints: stbPts, tiebreakMargin: margem,
+      // ⛔ A coluna do STB que já fica RESERVADA no melhor de 3 nasce pela mesma
+      // régua da coluna que aparece depois de 1×1. Antes o card inicial copiava a
+      // largura do Set 1 (um dígito) e só então revelava um campo que recebe 10,
+      // 12 ou mais pontos. O resultado era o STB apertado até a próxima pintura.
+      // Expor o valor aqui mantém plano, rótulo e campo em uma única fonte.
+      // [[regressao_stb_dois_digitos_e_tb_lateral]]
+      // A reserva inicial usa a escala do FORMATO completo (melhor de 3), não a
+      // escala temporária de "só Set 1 visível". O campo não pode estreitar no
+      // instante em que revela o STB.
+      stbEntryW: stbOn ? larg('stb', null, window._setColEscala(bestOf)) : null,
       numFs: esc.fs,      // tamanho do número desta grade (degrau da escala)
       difPtsAviso: _avisoDif,
       played: played, setsWonP1: wonP1, setsWonP2: wonP2,

@@ -3328,8 +3328,11 @@ function renderTournaments(container, tournamentId = null) {
                 return ((typeof window._weatherSlotHtml === 'function') ? window._weatherSlotHtml(t, 'lg') : '');
               }
 
-              // Não-Liga: múltiplos countdowns (inscrições, início, fim)
+              // Não-Liga: múltiplos countdowns (abertura/fechamento de inscrições, início, fim)
               var _events = [];
+              if (_openSt.notOpenYet && _openSt.opensAt) {
+                _events.push({ ts: _openSt.opensAt, label: 'Inscrições abrem', icon: '🔓', color: '#38bdf8' });
+              }
               if (isAberto && t.registrationLimit) {
                 var _rd = new Date(t.registrationLimit).getTime();
                 if (!isNaN(_rd) && _rd > _now) _events.push({ ts: _rd, label: _t('event.enrollClose'), icon: '⏰', color: '#f59e0b' });
@@ -3346,7 +3349,7 @@ function renderTournaments(container, tournamentId = null) {
               }
               if (_events.length === 0) return '';
               _events.sort(function(a,b) { return a.ts - b.ts; });
-              var _colorMap2 = { '#f59e0b': '245,158,11', '#10b981': '16,185,129', '#8b5cf6': '139,92,246' };
+              var _colorMap2 = { '#38bdf8': '56,189,248', '#f59e0b': '245,158,11', '#10b981': '16,185,129', '#8b5cf6': '139,92,246' };
               var _next = _events[0];
               var _countdownText2 = window._formatCountdown ? window._formatCountdown(_next.ts - _now) : '';
               var _rgb2 = _colorMap2[_next.color] || '139,92,246';
