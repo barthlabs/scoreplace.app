@@ -41,6 +41,11 @@ ok(!createUi.includes("lines.push(_t('create.gsmPoints'") && !createUi.includes(
   'formato numérico não inventa “pontos para vencer” nem duração a partir de campos técnicos');
 ok(createUi.includes('[[regression_phase_estimate_uses_actual_team_schedule]]') && createUi.includes('scheduledMatchesInGroup'),
   'estimativa de capacidade usa a mesma grade parcial por times do motor, sem contar folga');
+ok(createUi.includes('[[regression_estimate_reads_team_schedule_without_redundant_enabled_flag]]') &&
+  createUi.includes('tc && tc.enabled && tc.schedule ?'),
+  'estimativa lê a grade ativa sem depender de um segundo enabled legado que a faria cair na eliminatória');
+ok(/window\._f2TeamSchedule[\s\S]{0,1400}window\._recalcDuration/.test(teamUi),
+  'cada movimento dos sliders de grade recalcula imediatamente confrontos e duração');
 ok(!createUi.includes("counts = [8, 16, 32, 64, 128]") && createUi.includes('Capacidade máxima'),
   'com limite configurado a estimativa mostra apenas a capacidade escolhida, sem escada genérica');
 

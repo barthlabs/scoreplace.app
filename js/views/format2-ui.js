@@ -1314,6 +1314,11 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     // O arraste atualiza os valores no mesmo frame. A reconstrução estrutural fica no
     // blur, pela proteção de _rerenderSemAtrapalhar, para o range não saltar de posição.
     _f2TeamScheduleRefresh(S.cfg.teamCompetition); _rerenderSemAtrapalhar(el);
+    /* REGRESSÃO — Neon, 29/set/2026: os números dos sliders mudavam, mas a estimativa
+     * de tempo permanecia na contagem anterior. O próprio `oninput` é o evento do
+     * arraste; recalcular aqui mantém confrontos e duração sincronizados em cada pixel,
+     * sem esperar salvar, soltar o controle ou trocar de seção. */
+    if (typeof window._recalcDuration === 'function') window._recalcDuration();
   };
   window._f2TeamName = function (index, value, el) {
     if (!S || !S.cfg.teamCompetition || index < 0) return;

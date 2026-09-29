@@ -3941,7 +3941,13 @@ function setupCreateTournamentModal() {
     var f2cfg = null;
     try { f2cfg = (typeof window._f2GetConfig === 'function') ? window._f2GetConfig() : null; } catch (e) {}
     var tc = f2cfg && f2cfg.teamCompetition;
-    var teamSchedule = tc && tc.enabled && tc.schedule && tc.schedule.enabled ? {
+    /* REGRESSÃO — Neon, 29/set/2026: `schedule.enabled` é detalhe de normalização
+     * legado; a competição por times já habilitada COM a grade é a fonte de verdade.
+     * Exigir os dois fazia a estimativa cair na eliminatória (7 jogos/categoria) e
+     * ignorar 8 times × 4 jogos = 16 confrontos/categoria. A conta deve consumir os
+     * mesmos três valores que o sorteio: times, grade e ida/volta.
+     * [[regression_estimate_reads_team_schedule_without_redundant_enabled_flag]] */
+    var teamSchedule = tc && tc.enabled && tc.schedule ? {
       enabled: true,
       teamsPerGroup: tc.schedule.teamsPerGroup,
       gamesPerTeam: tc.schedule.gamesPerTeam,
