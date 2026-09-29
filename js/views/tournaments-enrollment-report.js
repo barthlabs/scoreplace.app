@@ -91,7 +91,16 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
 
   function _decomposeCat(cat, t) {
     if (!cat) return {};
-    var skillCatsRaw = (t && t.skillCategories && t.skillCategories.length > 0) ? t.skillCategories : _DEFAULT_SKILLS;
+    // A categoria efetiva do torneio não mora exclusivamente em skillCategories.
+    // Criações como o Neon persistem Light/Power/Extreme em customCategories e
+    // combinedCategories ("Fem Light"), com skillCategories vazio. Usar apenas
+    // skillCategories fazia o parser reconhecer o gênero, mas não "Light" e o
+    // card caía falsamente em "Sem habilidade" depois de qualquer re-render.
+    // REGRESSÃO: nunca trocar esta fonte pelo fallback A/B/C/D/FUN quando o
+    // organizador já estipulou categorias próprias. A mesma regra alimenta o
+    // salvamento, a matriz e a formação de duplas por categoria.
+    var configuredSkills = (typeof _erConfiguredSkills === 'function') ? _erConfiguredSkills(t) : [];
+    var skillCatsRaw = configuredSkills.length ? configuredSkills : _DEFAULT_SKILLS;
     var ageCatsRaw = (t && t.ageCategories && t.ageCategories.length > 0) ? t.ageCategories : _DEFAULT_AGES;
     var skillCats = skillCatsRaw.slice().sort(function (a, b) { return b.length - a.length; });
     var ageCats = ageCatsRaw.slice();
@@ -5278,7 +5287,7 @@ window._lzNaoEhEuMesmo = function (uid) {
     } catch (e) { if (window._warn) window._warn('[analise] não reabri a ficha na volta', e); }
   }
 
-  window.renderEnrollmentReportPage = function (container, tId) {
+  window.renderEnrollmentReportPage = function (container, tId, loadedOnce) {
     // FONTE ÚNICA de lookup (String-safe, também olha publicDiscovery). O `find` com
     // `x.id === tId` cru dependia do tipo do id bater exatamente.
     var t = (typeof window._findTournamentById === 'function')
@@ -5287,8 +5296,27 @@ window._lzNaoEhEuMesmo = function (uid) {
           ? window.AppStore.tournaments.find(function (x) { return String(x.id) === String(tId); })
           : null);
     if (!t) {
-      if (typeof showNotification === 'function') showNotification('Erro', 'Torneio não encontrado.', 'error');
-      window.location.replace('#dashboard');
+      // A store pode ser trocada pelo snapshot antes de a busca pontual terminar.
+      // Não expulsar o organizador para o dashboard nem mostrar "não encontrado"
+      // nessa janela transitória: recarrega o documento canônico uma única vez.
+      // Também não deixa callback tardio disparar toast depois de o usuário voltar.
+      if (!loadedOnce && typeof window._ensureTournamentLoaded === 'function') {
+        _renderLoading(container, { id: tId, name: 'Análise de inscritos' });
+        window._ensureTournamentLoaded(tId, function (loaded) {
+          if (window.location.hash !== '#analise/' + tId) return;
+          if (loaded) {
+            window.renderEnrollmentReportPage(container, tId, true);
+            return;
+          }
+          if (typeof showNotification === 'function') showNotification('Erro', 'Torneio não encontrado.', 'error');
+          window.location.replace('#dashboard');
+        });
+        return;
+      }
+      if (window.location.hash === '#analise/' + tId) {
+        if (typeof showNotification === 'function') showNotification('Erro', 'Torneio não encontrado.', 'error');
+        window.location.replace('#dashboard');
+      }
       return;
     }
     // v2.8.56: expande duplas em pessoas individuais (conta todos os inscritos).

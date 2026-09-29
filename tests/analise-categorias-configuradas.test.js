@@ -20,6 +20,8 @@ ok(source.includes('var skills = _erAnalysisSkills(t);'), 'a matriz consome o re
 ok(source.includes('function _erConfiguredSkills(t)'), 'categorias legadas combinadas têm um resolvedor de eixos ativo');
 ok(source.includes('var createdSkills = _erConfiguredSkills(t);'), 'toggles reconhecem Light/Power/Extreme já gravadas em combinedCategories');
 ok(source.includes('var sc = _erConfiguredSkills(t).slice();'), 'editar um toggle não apaga as demais categorias legadas');
+ok(source.includes("var configuredSkills = (typeof _erConfiguredSkills === 'function') ? _erConfiguredSkills(t) : [];") && source.includes('var skillCatsRaw = configuredSkills.length ? configuredSkills : _DEFAULT_SKILLS;'), 'parser da categoria usa o mesmo eixo efetivo — Fem Light não cai em Sem habilidade');
+ok(source.includes('window._ensureTournamentLoaded(tId, function (loaded)') && source.includes("if (window.location.hash !== '#analise/' + tId) return;"), 'análise reidrata o torneio antes de acusar ausência e ignora callback após navegação');
 ok(source.includes("window._callCF('applyEnrollmentAssignments'"), 'salvamento usa o transporte autenticado canônico');
 ok(!source.includes("firebase.functions().httpsCallable('applyEnrollmentAssignments')"), 'análise não usa o SDK callable que perde Authorization em sessão compat');
 console.log('✅ analise-categorias-configuradas: ' + pass + ' asserções');
