@@ -40,14 +40,26 @@ const iGrava = src.indexOf('function _gravaTorneio(');
  * deixar de enxergar a mesma trava justamente quando o recibo evoluir. */
 const iRetorno = src.indexOf('return Object.assign({}, plan.boundary', iGrava);
 const corpo = iGrava < 0 || iRetorno < 0 ? '' : src.slice(iGrava, src.indexOf('\n}', iRetorno));
-const iChama = corpo.indexOf('_preservaRepescagemCarimbada(tDepois, tAntes)');
+const iChama = corpo.indexOf('_preservaRepescagemCarimbada(tDepois, tAntes, (ctx && ctx.woRepescagemPermits) || [])');
 const iPlaneja = corpo.indexOf('_planejaEscrita(');
 ok(iChama > 0, '① ⛔⛔ a porta única de escrita chama a trava');
 ok(iPlaneja > 0 && iChama < iPlaneja,
   '① ⛔ e chama ANTES de planejar — depois do plano já seria tarde');
 
 /* ── ② A REGRA, EXERCIDA ───────────────────────────────────────────────────── */
-const fn = new Function('drawWindow', 'return ' + bloco + '\n_preservaRepescagemCarimbada;')(null);
+const collectAll = (t) => {
+  const out = [];
+  const visit = (v) => {
+    if (!v || typeof v !== 'object') return;
+    if (Array.isArray(v)) { v.forEach(visit); return; }
+    if (v.id != null && ('p1' in v || 'p2' in v)) out.push(v);
+    Object.keys(v).forEach((k) => { if (k !== 'matches' || !Array.isArray(v[k])) visit(v[k]); });
+    if (Array.isArray(v.matches)) v.matches.forEach(visit);
+  };
+  visit(t && t.matches); visit(t && t.phaseRounds);
+  return out;
+};
+const fn = new Function('drawWindow', 'return ' + bloco + '\n_preservaRepescagemCarimbada;')({ _collectAllMatches: collectAll });
 ok(typeof fn === 'function', '② a trava foi extraída e é executável');
 
 if (typeof fn === 'function') {
@@ -90,6 +102,28 @@ if (typeof fn === 'function') {
   const t4 = antes(); const d4 = antes();
   d4.matches.push({ id: 'NOVO', p1: 'X', p1RepescagemFixada: true });
   ok(fn(d4, t4).length === 0, '② jogo novo não tem "antes" contra o que comparar: passa');
+
+  /* REGRESSÃO — Confra Prata, 29/set/2026: o W.O. individual de Jogador X é feito
+   * numa partida de `phaseRounds`, já carimbada. O recibo interno confere os DOIS
+   * conjuntos de UID; sem ele a trava restaura o X, com ele somente a suplente entra. */
+  const t5 = { phaseRounds: { '1': { rounds: [{ matches: [{
+    id: 'ph-prata-P11', p2: 'Vanessa / Jogador X', p2RepescagemFixada: true,
+    team2Uids: ['vanessa', 'jogador-x'], team2Obj: { ok: 'antes' }
+  }] }] } } };
+  const d5 = JSON.parse(JSON.stringify(t5));
+  const m5 = d5.phaseRounds['1'].rounds[0].matches[0];
+  m5.p2 = 'Vanessa / Paula'; m5.team2Uids = ['vanessa', 'paula']; m5.team2Obj = { ok: 'depois' };
+  const r5 = fn(d5, t5, [{
+    matchId: 'ph-prata-P11', slot: 'p2', absentUid: 'jogador-x', subUid: 'paula',
+    beforeUids: ['jogador-x', 'vanessa'], afterUids: ['paula', 'vanessa']
+  }]);
+  ok(r5.length === 0 && m5.p2 === 'Vanessa / Paula' && m5.team2Uids.includes('paula'),
+    '② ⭐ W.O. canônico por UID troca vaga carimbada em fase aninhada sem a destravar para saves comuns');
+  const d6 = JSON.parse(JSON.stringify(t5));
+  d6.phaseRounds['1'].rounds[0].matches[0].p2 = 'Vanessa / Paula';
+  d6.phaseRounds['1'].rounds[0].matches[0].team2Uids = ['vanessa', 'paula'];
+  ok(fn(d6, t5).length === 1 && d6.phaseRounds['1'].rounds[0].matches[0].p2 === 'Vanessa / Jogador X',
+    '② ⛔ a mesma troca sem recibo da Function continua bloqueada');
 
   /* ⛔ entrada torta não derruba a gravação */
   ok(fn(null, null).length === 0 && fn({}, {}).length === 0,

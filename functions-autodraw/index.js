@@ -669,7 +669,7 @@ function _gravaTorneio(tx, ref, tDepois, tAntes, ctx) {
    *
    * ⚠️ Só protege o que JÁ está carimbado no banco. Carimbar é decisão do motor, e continua
    * sendo — aqui não se carimba nada, só se impede de desfazer. */
-  const _revertidas = _preservaRepescagemCarimbada(tDepois, tAntes);
+  const _revertidas = _preservaRepescagemCarimbada(tDepois, tAntes, (ctx && ctx.woRepescagemPermits) || []);
   if (_revertidas.length) {
     console.warn('[gravaTorneio] ' + _revertidas.length + ' vaga(s) de repescagem carimbada(s) ' +
       'foram preservadas contra reescrita: ' + _revertidas.join(' · '));
@@ -689,7 +689,7 @@ function _gravaTorneio(tx, ref, tDepois, tAntes, ctx) {
 
 /* Devolve ao estado do banco toda vaga de repescagem que já está carimbada. Puro: mexe em
  * `tDepois` e diz o que reverteu. Sem isto, o cliente velho desfaz a decisão do motor novo. */
-function _preservaRepescagemCarimbada(tDepois, tAntes) {
+function _preservaRepescagemCarimbada(tDepois, tAntes, woRepescagemPermits) {
   const revertidas = [];
   if (!tDepois || !tAntes) return revertidas;
   const _todos = (t) => {
@@ -701,6 +701,31 @@ function _preservaRepescagemCarimbada(tDepois, tAntes) {
   };
   const antesPorId = {};
   _todos(tAntes).forEach((m) => { if (m && m.id != null) antesPorId[String(m.id)] = m; });
+  const permits = Array.isArray(woRepescagemPermits) ? woRepescagemPermits : [];
+  const _uidsDoSlot = (m, sl) => {
+    if (!m) return [];
+    const chave = sl === 'p1' ? 'team1Uids' : 'team2Uids';
+    const uids = Array.isArray(m[chave]) ? m[chave] : [];
+    const unicos = uids.map(String).filter(Boolean);
+    if (unicos.length) return unicos.sort();
+    return m[sl + 'Uid'] ? [String(m[sl + 'Uid'])] : [];
+  };
+  const _igual = (a, b) => a.length === b.length && a.every((uid, i) => uid === b[i]);
+  /* REGRESSÃO — Confra Prata, 29/set/2026: a mesma trava que impede cliente antigo
+   * de sobrescrever uma vaga carimbada restaurou `Jogador X` depois de o motor oficial
+   * ter promovido a suplente. Não há exceção por NOME, por `p1`/`p2` solto, nem por tela:
+   * só a callable nesta transação pode apresentar um recibo com jogo + lado + UID que sai
+   * + UID que entra + fotografia completa dos UIDs antes/depois. Qualquer save comum ou
+   * recibo incompleto continua voltando ao valor do banco. [[regression_wo_can_replace_stamped_repechage_slot_by_uid]] */
+  const _woAutorizado = (m, a, sl) => permits.some((p) => {
+    if (!p || String(p.matchId || '') !== String(m.id) || p.slot !== sl) return false;
+    const antes = _uidsDoSlot(a, sl), depois = _uidsDoSlot(m, sl);
+    const pAntes = Array.isArray(p.beforeUids) ? p.beforeUids.map(String).sort() : [];
+    const pDepois = Array.isArray(p.afterUids) ? p.afterUids.map(String).sort() : [];
+    return !!p.absentUid && !!p.subUid && antes.includes(String(p.absentUid)) &&
+      !depois.includes(String(p.absentUid)) && depois.includes(String(p.subUid)) &&
+      _igual(antes, pAntes) && _igual(depois, pDepois);
+  });
   _todos(tDepois).forEach((m) => {
     if (!m || m.id == null) return;
     const a = antesPorId[String(m.id)];
@@ -725,6 +750,7 @@ function _preservaRepescagemCarimbada(tDepois, tAntes) {
         return;
       }
       if (!a[sl + 'RepescagemFixada']) return;                 // não carimbada: o motor manda
+      if (_woAutorizado(m, a, sl)) return;                     // W.O. canônico por UID: única exceção
       if (String(m[sl] == null ? '' : m[sl]) === String(a[sl] == null ? '' : a[sl])) return;
       revertidas.push(String(m.id) + '.' + sl + ': "' + m[sl] + '" → "' + a[sl] + '"');
       m[sl] = a[sl];
@@ -2436,7 +2462,33 @@ exports.applyTournamentWO = onCall(async (request) => {
       });
     }
     if (!result || !result.ok) return { ok: false, result: result || { outcome: 'error' } };
-    const boundary = _gravaTorneio(tx, ref, t, before, { agoraIso });
+    /* O recibo vem exclusivamente do motor que acabou de alterar `t` dentro desta
+     * transação. Ele não é dado da tela e é comparado de novo na guarda de repescagem.
+     * Assim uma vaga carimbada fica protegida contra qualquer save antigo, mas o W.O.
+     * oficial consegue promover a suplente pelo único caminho de identidade: UID. */
+    const coletar = (x) => typeof drawWindow._collectAllMatches === 'function'
+      ? drawWindow._collectAllMatches(x) : (Array.isArray(x && x.matches) ? x.matches : []);
+    const porIdAntes = {};
+    coletar(before).forEach((m) => { if (m && m.id != null) porIdAntes[String(m.id)] = m; });
+    const uidDoSlot = (m, slot) => {
+      const chave = slot === 'p1' ? 'team1Uids' : 'team2Uids';
+      const uids = Array.isArray(m && m[chave]) ? m[chave].map(String).filter(Boolean) : [];
+      return (uids.length ? uids : ((m && m[slot + 'Uid']) ? [String(m[slot + 'Uid'])] : [])).sort();
+    };
+    const depoisPorId = {};
+    coletar(t).forEach((m) => { if (m && m.id != null) depoisPorId[String(m.id)] = m; });
+    const woRepescagemPermits = (result.subDetails || []).map((d) => {
+      const matchIdDoRecibo = d && d.matchId != null ? String(d.matchId) : '';
+      const slot = d && d.slot;
+      const antesDoJogo = porIdAntes[matchIdDoRecibo], depoisDoJogo = depoisPorId[matchIdDoRecibo];
+      if (!matchIdDoRecibo || (slot !== 'p1' && slot !== 'p2') || !antesDoJogo || !depoisDoJogo) return null;
+      return {
+        matchId: matchIdDoRecibo, slot,
+        absentUid: String(d.absentUid || ''), subUid: String(d.subUid || ''),
+        beforeUids: uidDoSlot(antesDoJogo, slot), afterUids: uidDoSlot(depoisDoJogo, slot)
+      };
+    }).filter(Boolean);
+    const boundary = _gravaTorneio(tx, ref, t, before, { agoraIso, woRepescagemPermits });
     /* ⛔ Um toast de substituição é uma afirmação forte: cada jogo que o motor diz
      * ter trocado PRECISA estar na escrita da subcoleção `matches` desta mesma txn.
      * Antes a resposta podia sair como `subbed` mesmo se a leitura seguinte ainda
@@ -2453,7 +2505,9 @@ exports.applyTournamentWO = onCall(async (request) => {
      * vem do MESMO `t` transacional que o write-plan acabou de programar. O listener
      * continua sendo a confirmação durável e corrige qualquer aba já aberta. */
     const byId = {};
-    allMatches.forEach((m) => { if (m && m.id != null && changedIds.includes(String(m.id))) byId[String(m.id)] = m; });
+    /* Lê o objeto depois do motor, não o array capturado antes: em fases aninhadas a
+     * identidade da partida é a mesma, mas o recibo precisa devolver a dupla já trocada. */
+    coletar(t).forEach((m) => { if (m && m.id != null && changedIds.includes(String(m.id))) byId[String(m.id)] = m; });
     const matchUpdates = changedIds.map((id) => byId[id]).filter(Boolean)
       .map((m) => JSON.parse(JSON.stringify(m)));
     return { ok: true, result, tournament: boundary.clean, matchUpdates };
