@@ -1496,7 +1496,7 @@ function _slotObj(m, side) {
  * como fora. Três publicações minhas não pegaram nisso porque eu corrigia o nome.
  *
  * ⇒ NINGUÉM entra num slot sem a identidade junto. Esta função é a única porta: move uid, objeto
- * e rótulo no mesmo gesto, e recusa mover um time que não tenha identidade — porque nome sem uid
+ * e rótulo no mesmo gesto, e recusa mover um time que não tenha UID — porque nome sem uid
  * é exatamente o estado que produziu este defeito e o que derrubou o W.O. e a tela de inscritos.
  * ⚠️ O rótulo continua sendo gravado por compatibilidade com o app já instalado, que lê `p1`.
  * Ele é DERIVADO daqui — nunca fonte. Quem desenha deve hidratar do perfil pelo uid.
@@ -1505,7 +1505,7 @@ function _poeTimeNoSlot(m, side, fonte) {
   if (!m || !fonte) return false;
   var uids = (fonte.uids || []).filter(Boolean);
   var obj = fonte.obj || null;
-  if (!uids.length && !obj) return false;        // sem identidade não entra ninguém
+  if (!uids.length) return false;                // sem UID não entra ninguém
   if (side === 'p1') {
     m.p1 = fonte.nome; m.team1Obj = obj; m.team1Uids = uids;
     m.p1Uid = (uids.length === 1) ? uids[0] : null;
@@ -2555,7 +2555,9 @@ window._reassignBestLosersToRepechage = function (t) {
       .forEach(function (m) {
         if (!m.winner) return;
         var perd = _refDoTimeNoSlot(m, window._matchWinnerSide(m) === 1 ? 'p2' : 'p1');
-        if (perd && !derrotadosPorUid[perd.key]) { derrotadosPorUid[perd.key] = 1; derrotados.push(perd); }
+        /* Sem UID, é leitura histórica para exibir; nunca concorre automaticamente.
+         * Repescagem nova não pode escolher pela aparência de um nome. */
+        if (perd && perd.uids.length && !derrotadosPorUid[perd.key]) { derrotadosPorUid[perd.key] = 1; derrotados.push(perd); }
       });
     if (!derrotados.length) return;
 
@@ -2579,7 +2581,7 @@ window._reassignBestLosersToRepechage = function (t) {
       ['p1', 'p2'].forEach(function (sl) {
         if (m[sl + 'FromRepechage'] && !_vazio(m[sl])) {
           var repRef = _refDoTimeNoSlot(m, sl);
-          if (repRef) jaRepescado[repRef.key] = 1;
+          if (repRef && repRef.uids.length) jaRepescado[repRef.key] = 1;
         }
       });
     });
@@ -2655,7 +2657,7 @@ window._reassignBestLosersToRepechage = function (t) {
           if (jaRepescado[cL.key] && !_mesmoTimePorUid(cL, atual)) continue;
           querL = cL; usados[cL.key] = 1; break;
         }
-        if (!querL || _mesmoTimePorUid(atual, querL)) { if (querL) colocados[querL.key] = 1; return; }
+        if (!querL || !querL.uids.length || _mesmoTimePorUid(atual, querL)) { if (querL) colocados[querL.key] = 1; return; }
         var origemL = _origemDe(querL, s);
         if (!origemL && temInferior) return;   // sem pouso pra quem sai — não troca
         delete jaRepescado[atual.key];
@@ -2684,7 +2686,7 @@ window._reassignBestLosersToRepechage = function (t) {
         }
         quer = cand; usados[cand.key] = 1; break;
       }
-      if (!quer) return;
+      if (!quer || !quer.uids.length) return;
       var origem = _origemDe(quer, s);
       /* idem: identidade junto, sempre. Vaga preenchida só com rótulo é o defeito que derrubou o
        * botão de W.O. e a tela de inscritos em 26/set. */

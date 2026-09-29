@@ -38,7 +38,7 @@ ok(porta.length > 200, '① a porta única existe');
 ['team1Obj', 'team1Uids', 'p1Uid', 'team2Obj', 'team2Uids', 'p2Uid'].forEach(function (c) {
   ok(porta.indexOf(c) >= 0, '① ela move "' + c + '" junto com o rótulo');
 });
-ok(/if \(!uids\.length && !obj\) return false;/.test(porta),
+ok(/if \(!uids\.length\) return false;/.test(porta),
   '① ⛔⛔ e RECUSA mover quem não tem identidade — nome sem uid é o estado que causou tudo isto');
 
 /* ── ② RÓTULO NUNCA É ESCRITO SEM IDENTIDADE NO MESMO GESTO ────────────────
@@ -75,10 +75,10 @@ ok(setSlot.length > 60 && /Uids/.test(setSlot) && /Obj/.test(setSlot),
 ['_poeTimeNoSlot(s.m, s.slot', '_poeTimeNoSlot(targetMatch', '_poeTimeNoSlot(t.thirdPlaceMatch'].forEach(function (p) {
   ok(codigo.indexOf(p) >= 0, '③ "' + p + '…" passa pela porta');
 });
-ok(/_identidadeDoTime\(t, querL\)/.test(codigo),
-  '③ ⛔ a troca da repescagem busca a IDENTIDADE do novo ocupante antes de mover');
-ok(/if \(!_idQuerL\) return;/.test(codigo),
-  '③ ⛔⛔ e desiste se não houver identidade, em vez de escrever só o rótulo');
+ok(/if \(!querL \|\| !querL\.uids\.length \|\| _mesmoTimePorUid\(atual, querL\)\)/.test(codigo),
+  '③ ⛔ a troca da repescagem exige UIDs do novo ocupante antes de mover');
+ok(/if \(!quer \|\| !quer\.uids\.length\) return;/.test(codigo),
+  '③ ⛔⛔ o preenchimento normal desiste sem UID, em vez de escrever só o rótulo');
 
 /* ── ④ A LEITURA DA IDENTIDADE NÃO INVENTA ────────────────────────────────── */
 const i1 = codigo.indexOf('function _identidadeDoTime(');
