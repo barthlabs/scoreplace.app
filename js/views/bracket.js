@@ -5529,18 +5529,18 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   // v1.0.67-beta: tag "BYE" indicando que o jogador veio de BYE NESTA rodada.
   // v1.0.70-beta: posicionada à esquerda do placar (entre o nome e o placar).
   // v2.8.87: tag ÂMBAR (era verde) — some quando o time avança por vitória.
-  var _byeTag = '<span title="Passou de BYE nesta rodada" style="display:inline-flex;align-items:center;font-size:0.58rem;font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.45);padding:2px 7px;border-radius:5px;margin-right:8px;letter-spacing:0.5px;text-transform:uppercase;flex-shrink:0;">BYE</span>';
+  var _byeTag = '<span class="sp-mc-badge sp-mc-badge--bye" title="Passou de BYE nesta rodada">BYE</span>';
   var _p1ByeBadge = m.p1FromBye ? _byeTag : '';
   var _p2ByeBadge = m.p2FromBye ? _byeTag : '';
   // v2.1.36: tag "Repescagem" no TIME que entrou por repescagem NESTA rodada
   // (preenchido via melhor-derrotado). Quem avança por vitória NÃO recebe a tag.
-  var _repTag = '<span title="Passou por repescagem nesta rodada" style="display:inline-flex;align-items:center;font-size:0.58rem;font-weight:800;color:var(--sp-c-fb923c,#fb923c);background:rgba(249,115,22,0.15);border:1px solid rgba(249,115,22,0.45);padding:2px 7px;border-radius:5px;margin-right:8px;letter-spacing:0.5px;text-transform:uppercase;flex-shrink:0;">REP</span>';
+  var _repTag = '<span class="sp-mc-badge sp-mc-badge--rep" title="Passou por repescagem nesta rodada">REP</span>';
   var _p1RepBadge = m.p1FromRepechage ? _repTag : '';
   var _p2RepBadge = m.p2FromRepechage ? _repTag : '';
   // A dupla promovida da linha inferior para a superior é um fato do sorteio, não uma
   // repescagem. A marca fica no SLOT DA RODADA DE ENTRADA, tal como REP; não acompanha
   // uma vitória da dupla para as rodadas seguintes.
-  var _promotedTag = '<span title="Dupla promovida por desempenho combinado" style="display:inline-flex;align-items:center;font-size:0.58rem;font-weight:800;color:var(--sp-c-c7d2fe,#c7d2fe);background:rgba(99,102,241,0.22);border:1px solid rgba(129,140,248,0.75);padding:2px 7px;border-radius:5px;margin-right:8px;letter-spacing:0.5px;text-transform:uppercase;flex-shrink:0;">PROMO</span>';
+  var _promotedTag = '<span class="sp-mc-badge sp-mc-badge--promo" title="Dupla promovida por desempenho combinado">PROMO</span>';
   var _p1PromotedBadge = m.p1PromotedFromLower ? _promotedTag : '';
   var _p2PromotedBadge = m.p2PromotedFromLower ? _promotedTag : '';
 

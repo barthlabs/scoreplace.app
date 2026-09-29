@@ -2514,6 +2514,10 @@ html, body,
 .sp-mc-vs{text-align:center;font-size:0.65rem;color:var(--text-muted);font-weight:800;letter-spacing:2px;padding:3px 0;}
 .sp-mc-acts{display:flex;align-items:flex-start;gap:6px;flex-wrap:wrap;justify-content:flex-end;margin-left:auto;}
 .sp-mc-sc{display:flex;align-items:center;flex-shrink:0;margin-left:8px;}
+.sp-mc-badge{display:inline-flex;align-items:center;font-size:0.58rem;font-weight:800;padding:2px 7px;border-radius:5px;margin-right:8px;letter-spacing:0.5px;text-transform:uppercase;flex-shrink:0;}
+.sp-mc-badge--bye{color:var(--sp-c-fbbf24,#fbbf24);background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.45);}
+.sp-mc-badge--rep{color:var(--sp-c-fb923c,#fb923c);background:rgba(249,115,22,0.15);border:1px solid rgba(249,115,22,0.45);}
+.sp-mc-badge--promo{color:var(--sp-c-c7d2fe,#c7d2fe);background:rgba(99,102,241,0.22);border:1px solid rgba(129,140,248,0.75);}
 /* O `margin-left` acima é o que impede o nome de ENCOSTAR no placar. A linha é
    `justify-content:space-between`, o que dá folga só quando o nome é curto; com o nome
    longo a caixa (`flex:1;min-width:0`) cresce até colar no número — foi o que o dono viu
@@ -2571,6 +2575,16 @@ html, body,
 .sp-set-grid{display:flex;align-items:flex-end;gap:2px;flex-shrink:0;}
 .sp-set-grid[data-sp-best-of="3"]{gap:16px;}
 .sp-set-grid[data-sp-best-of="5"]{gap:16px;}
+/* REGRESSÃO: o card não pode sacrificar o nome para manter vazios luxuosos no
+   placar. Em coluna estreita, o orçamento é: nome legível primeiro; depois
+   placar, e por último REP/BYE. O STB continua comportando dois dígitos, mas
+   fonte, vãos e tags reduzem juntos antes de a caixa do nome virar uma coluna. */
+@container (max-width:390px){
+  .sp-set-grid[data-sp-best-of="3"],.sp-set-grid[data-sp-best-of="5"]{gap:5px;}
+  .sp-set-grid{--sp-num-fs-set:1.12rem!important;}
+  .sp-mc-sc{margin-left:5px;}
+  .sp-mc-badge{font-size:0.52rem;padding:1px 4px;margin-right:4px;letter-spacing:0.2px;}
+}
 /* ⛔ PLACAR ALINHA À DIREITA, NÃO AO CENTRO. Ordem do dono (13/set/2026, olhando um jogo
    com super tie-break): _"os placares parecem alinhados nas colunas pela esquerda; faça o
    alinhamento na direita de cada coluna de placares"_.

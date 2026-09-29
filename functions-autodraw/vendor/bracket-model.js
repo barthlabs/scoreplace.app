@@ -1307,10 +1307,12 @@ window._rotaMostraAChaveDeste = function (hash, id) {
    * placar — e quem diz se cabe é o teste de nome, não esta conta. */
   window._SET_COL_ESCALA = [
     { ate: 2, digito: 14.4, piso: 26, pisoStb: 30, tb: 23, fs: 1.45 },   // 1 ou 2 colunas
-    // STB recebe ao menos 48px: 10 é o mínimo, mas 12/10 e 22/20 são placares
-    // normais e não podem tocar a borda do campo no celular.
-    { ate: 3, digito: 14.4, piso: 24, pisoStb: 48, tb: 22, fs: 1.45 },   // 3 colunas (melhor de 3)
-    { ate: 5, digito: 11.7, piso: 14, pisoStb: 42, tb: 18, fs: 1.18 }    // 4 ou 5 colunas
+    /* REGRESSÃO (29/set/2026): aumentar o piso do STB para 48/42 resolveu o
+     * campo de dois dígitos, mas sequestrou a largura dos nomes nos cards
+     * estreitos. Dois dígitos a 1.45rem cabem em 34px; a reserva maior deve
+     * ser usada pelo campo editável lateral, não pelo placar já confirmado. */
+    { ate: 3, digito: 14.4, piso: 24, pisoStb: 34, tb: 22, fs: 1.45 },   // 3 colunas (melhor de 3)
+    { ate: 5, digito: 11.7, piso: 14, pisoStb: 30, tb: 18, fs: 1.18 }    // 4 ou 5 colunas
   ];
   window._setColEscala = function (nCols) {
     var e = window._SET_COL_ESCALA;

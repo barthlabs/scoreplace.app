@@ -66,6 +66,9 @@ const painel = (id, w) => '<div id="' + id + '" class="bracket-sticky-scroll-wra
   must(r.largo.nomes.length === 4 && r.largo.nomes.every((n) => n.n.length > 5), 'os 4 nomes da dupla chegaram ao card');
   r.largo.nomes.forEach((n) => must(n.fs >= 13.5 && !n.corta, n.n + ': tamanho canônico (' + n.fs.toFixed(1) + 'px) e inteiro, com 3 sets lançados'));
   must(r.apertado.nomes.every((n) => !n.corta), 'sem espaço (card de 300px), o nome encolhe/quebra mas NÃO corta (' + r.apertado.nomes.map((n) => n.fs.toFixed(1)).join('/') + 'px)');
-  must(r.apertado.nomes.every((n) => n.fs < 13), 'e é o ESPAÇO que faltava, não o motor: apertado ele reduz de fato');
+  // REGRESSÃO (29/set/2026): o orçamento responsivo passa a reduzir placar e
+  // badges antes de reduzir pessoas; um card de 300px ainda mantém nome legível.
+  must(r.apertado.nomes.every((n) => n.fs >= 11) && r.apertado.nomes.some((n) => n.fs >= 13.5),
+    'e é o espaço devolvido pelo placar: apertado preserva nomes legíveis');
   console.log('\n✅ coluna da chave comporta 3 sets — ' + ok + ' verificações');
 })().catch((e) => { console.error(e.stack || e); process.exit(1); });

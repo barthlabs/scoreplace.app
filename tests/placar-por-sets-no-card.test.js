@@ -610,8 +610,11 @@ async function espacoDosSetsResponsivo() {
   const largo5 = await mede(920, decidido5);
   await browser.close();
 
-  ok(estreito.overflow <= 0 && estreito.gaps.every((g) => Math.abs(g - 16) < 0.1),
-    '⑦ melhor de 3 estreito preserva 16px sem transbordar (' + estreito.gaps.map((g) => g.toFixed(1)).join(', ') + 'px)');
+  // REGRESSÃO (29/set/2026): em card estreito, manter o vão largo deixa a grade
+  // bonita às custas de transformar o nome em coluna. A redução é intencional;
+  // o mesmo plano mantém 16px em cartões médios/largos.
+  ok(estreito.overflow <= 0 && estreito.gaps.every((g) => Math.abs(g - 5) < 0.1),
+    '⑦ melhor de 3 estreito reduz para 5px e preserva o nome (' + estreito.gaps.map((g) => g.toFixed(1)).join(', ') + 'px)');
   ok(medio.overflow <= 0 && medio.gaps.every((g) => Math.abs(g - 16) < 0.1),
     '⑦ melhor de 3 médio preserva 16px sem transbordar (' + medio.gaps.map((g) => g.toFixed(1)).join(', ') + 'px)');
   ok(largo2.gaps.every((g) => Math.abs(g - 16) < 0.1),
