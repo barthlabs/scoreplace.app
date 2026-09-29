@@ -1773,6 +1773,7 @@ const SUITES = [
   // "inscrições abertas" é UMA regra (paridade cliente×servidor por matriz; era o
   // bloqueio indevido de Liga aberta pré-sorteio com prazo vencido)
   'tests/inscricao-aberta-uma-regra.test.js',
+  'tests/inscricao-janela-programada.test.js',
   // o resultado da inscrição tem UM leitor — waitlisted/closed/dupSuspect nunca mais mudos
   'tests/inscricao-outcomes-um-leitor.test.js',
   // modal com Google/Apple no topo + "último usado" + linking sem API morta +
