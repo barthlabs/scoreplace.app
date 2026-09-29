@@ -1,6 +1,7 @@
-/* A data escolhida pela organização não pode quebrar no campo nativo do iPhone.
- * O iOS não deixa controlar o formato de type=date; por isso a data é dd/mm/aa
- * explícita e a hora permanece hh:mm, nos dois tamanhos de tela. */
+/* A data escolhida pela organização precisa abrir os controles nativos do dispositivo.
+ * O formato visível é localizado pelo SO; o valor de type=date é ISO, portanto a
+ * persistência não pode interpretar texto dd/mm/aa. Data e hora usam a mesma classe
+ * para o WebKit não trocar a fonte entre os dois. */
 const fs = require('fs');
 const path = require('path');
 const poll = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'schedule-poll.js'), 'utf8');
@@ -13,11 +14,10 @@ const bloco = poll.slice(start, poll.indexOf('window._schOrgDefinir', start));
 ok(start >= 0, 'formulário do organizador existe');
 ok(/class="sp-org-schedule-datetime"/.test(bloco), 'formulário recebe o gancho responsivo próprio');
 ok(/id="sch-org-date"/.test(bloco) && /id="sch-org-time"/.test(bloco), 'campos canônicos de data e hora continuam os mesmos');
-ok(/type="text"[\s\S]*?inputmode="numeric"[\s\S]*?pattern="\[0-9\]\{2\}\/\[0-9\]\{2\}\/\[0-9\]\{2\}"/.test(bloco), 'a data usa formato digitável dd/mm/aa, não o texto longo imposto pelo iOS');
-ok(/aria-label="Data \(dd\/mm\/aa\)"/.test(bloco) && /placeholder="dd\/mm\/aa"/.test(bloco), 'o formato curto é informado para leitura e digitação');
-ok(poll.includes("var ymd = dataPartes ? ('20' + dataPartes[3] + '-' + dataPartes[2] + '-' + dataPartes[1]) : '';"), 'dd/mm/aa é convertido antes de salvar');
-const mobile = css.match(/@media \(max-width: 600px\) \{[\s\S]*?\n\}/);
-ok(!!mobile, 'existe regra específica para o formulário no celular');
-ok(!!mobile && /\.sp-org-date-short\s*\{\s*min-width:\s*0/.test(mobile[0]), 'o campo curto não recebe piso que o faria truncar no celular');
+ok(/type="date" class="sp-schedule-native-input" id="sch-org-date"/.test(bloco), 'a data do organizador abre o calendário nativo');
+ok(/type="time" class="sp-schedule-native-input" id="sch-org-time"/.test(bloco), 'a hora do organizador abre o relógio nativo');
+ok(poll.includes("var ymd = /^\\d{4}-\\d{2}-\\d{2}$/.test(dataDigitada) ? dataDigitada : '';"), 'o valor ISO do controle nativo é salvo sem parsear texto localizado');
+ok((poll.match(/class="sp-schedule-native-input"/g) || []).length >= 5, 'proposta, proposta semanal e organizador usam a mesma classe nativa');
+ok(/\.sp-schedule-native-input[\s\S]*?font-family:\s*var\(--font-body\)\s*!important/.test(css), 'data e hora compartilham a fonte do app');
 console.log((fail ? '❌' : '✅') + ' data-proposta-organizador-celular: ' + (fail ? fail + ' falharam' : '8 ok'));
 process.exit(fail ? 1 : 0);

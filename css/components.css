@@ -50,14 +50,24 @@ input[type="time"]::-webkit-calendar-picker-indicator { cursor: pointer; opacity
    linha, é o CONTAINER que se adapta (flex-wrap / reduzir a data, não cortar a hora). */
 input[type="time"] { min-width: 5.75rem !important; }  /* "23:00" + ícone de relógio */
 input[type="date"] { min-width: 8.5rem !important; }   /* "dd/mm/aaaa" + ícone de calendário */
-/* ⛔ DATA PROPOSTA PELO ORGANIZADOR NÃO PODE CORTAR NO CELULAR (27/set/2026).
-   O `type=date` nativo do iOS decide sozinho mostrar "27 de set. de 2026"; CSS não
-   consegue forçá-lo a `dd/mm/aa`, e o ano quebrava em duas linhas. Este campo é curto
-   e explícito (`dd/mm/aa`), convertido para ISO antes de salvar; a hora nativa segue
-   em `hh:mm`. Assim os dois cabem na mesma linha, tanto no celular quanto no desktop.
-   [[regressao_data_proposta_organizador_nao_trunca_no_celular]] */
-@media (max-width: 600px) {
-  .sp-org-schedule-datetime .sp-org-date-short { min-width: 0; }
+/* Agenda: data e hora são sempre controles NATIVOS. Isso abre o calendário/relógio do
+   dispositivo, inclusive no desktop. A fonte é única nos três pontos da agenda
+   (proposta, semanal e definição do organizador); sem esta classe o WebKit pode usar
+   fonte de formulário diferente para `date` e `time`.
+   [[regressao_agenda_data_hora_nativas_e_mesma_fonte]] */
+.sp-schedule-native-input,
+.sp-schedule-native-input::-webkit-datetime-edit,
+.sp-schedule-native-input::-webkit-datetime-edit-fields-wrapper,
+.sp-schedule-native-input::-webkit-datetime-edit-text,
+.sp-schedule-native-input::-webkit-datetime-edit-month-field,
+.sp-schedule-native-input::-webkit-datetime-edit-day-field,
+.sp-schedule-native-input::-webkit-datetime-edit-year-field,
+.sp-schedule-native-input::-webkit-datetime-edit-hour-field,
+.sp-schedule-native-input::-webkit-datetime-edit-minute-field {
+  font-family: var(--font-body) !important;
+  font-size: 0.9rem !important;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 /* ⭐ 2.0.1 — LINHA COMPACTA (data + hora + ✕ na MESMA linha). Ordem do dono, olhando o
    "Término da fase": _"esse x deveria estar na mesma linha da data e hora (dá pra diminuir
