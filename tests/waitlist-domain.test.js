@@ -48,7 +48,9 @@ ok(D.isPlayingCurrentPhase(phase, entry('u_bia', 'Bia'), helpers), 'grupo Rei/Ra
 ok(D.isPlayingCurrentPhase(phase, entry('u_clara', 'Clara'), helpers), 'grupo de fase também marca participante como jogando');
 ok(!D.isPlayingCurrentPhase(phase, entry('u_dora', 'Dora'), helpers), 'folga não vira jogo nem inventa presença');
 ok(D.phaseDrawDone({ hasDraw: true }) && !D.phaseDrawDone({ hasDraw: false }), 'resumo hasDraw é autoridade quando existe');
-ok(D.enrollmentOpenState({ format: 'Liga', ligaOpenEnrollment: true, status: 'closed', rounds: [{}] }).open, 'Liga aberta continua aberta após sorteio');
+// REGRESSÃO: Liga pode ficar aberta depois do sorteio, mas uma decisão explícita do
+// organizador de fechar a inscrição prevalece sobre essa permissão de formato.
+ok(!D.enrollmentOpenState({ format: 'Liga', ligaOpenEnrollment: true, status: 'closed', rounds: [{}] }).open, 'fechamento manual também fecha Liga após sorteio');
 ok(!D.enrollmentOpenState({ status: 'finished' }).open, 'torneio concluído não aceita inscrição');
 
 const vendor = fs.readFileSync(path.join(__dirname, '../functions-autodraw/vendor/waitlist.js'));

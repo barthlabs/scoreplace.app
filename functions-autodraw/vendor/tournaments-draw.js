@@ -4485,7 +4485,14 @@ window._repropagateDecided = function (t) {
       var k = _key(m, srcSl);
       // já está no jogo-alvo (por uid ou rótulo)? nada a fazer
       if (['p1', 'p2'].some(function (s) { return tgt[s] === nome || (k && _key(tgt, s) === k); })) return;
-      var s2 = (tslot && _vz(tgt[tslot])) ? tslot : null;
+      /* REGRESSÃO — chave reconstruída após entrada tardia (29/set/2026):
+       * `_advanceWinner` preenche a primeira vaga TBD quando a aresta antiga não
+       * tinha `nextSlot`; a repropagação usava somente slot explícito. Assim todos
+       * os jogos podiam estar decididos e a Grande Final continuar `TBD`.
+       * Replicar a convenção do caminho único de avanço, sem nunca sobrescrever
+       * uma vaga ocupada, mantém a reconstrução equivalente ao lançamento ao vivo. */
+      var s2 = (tslot && _vz(tgt[tslot])) ? tslot :
+        ((!tgt.p1 || _vz(tgt.p1)) ? 'p1' : ((!tgt.p2 || _vz(tgt.p2)) ? 'p2' : null));
       if (!s2) return;                                   // sem slot explícito vazio: não chuta
       // v1.5.4: ANTI-AUTO-CONFRONTO — nunca escrever um time no slot quando o OUTRO lado já é ele
       // mesmo (visto AO VIVO: "Kelly/Rodrigo vs Kelly/Rodrigo" numa corrida de re-propagação com o

@@ -134,8 +134,10 @@ ok(W._setColEscala(9).fs === W._setColEscala(5).fs, '③ acima de 5 não encolhe
  * ⚠️ 4-5 COLUNAS NÃO SUBIRAM: lá o espaço é de cinco colunas. */
 ok(E[0].piso === 26 && E[1].piso === 24 && E[2].piso === 14,
    '④ ⭐ pisos de SET 26/24/14px — os dois primeiros abriram a pedido do dono; o de 5 colunas não');
-ok(E[0].pisoStb === 30 && E[1].pisoStb === 40 && E[2].pisoStb === 20,
-   '④ ⭐ e o do STB acompanha (30/40/20): o rótulo "STB" cabe numa linha só');
+// REGRESSÃO (28/set/2026): STB aceita 10+, inclusive 12-10 e 22-20. Os pisos
+// precisaram crescer sem deixar o rótulo STB quebrar de linha.
+ok(E[0].pisoStb === 30 && E[1].pisoStb === 48 && E[2].pisoStb === 42,
+   '④ ⭐ e o do STB comporta dois dígitos (30/48/42): o rótulo "STB" cabe numa linha só');
 ok(E.every(function (d) { return d.pisoStb >= d.piso; }),
    '④ o piso do super tie-break é maior ou igual (o rótulo "STB" é o mais largo)');
 ok(E.every(function (d) { return d.tb > d.digito; }),
