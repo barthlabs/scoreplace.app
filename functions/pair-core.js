@@ -28,6 +28,46 @@ function entryName(p) {
   return typeof p === 'string' ? p : ((p && (p.displayName || p.name)) || '');
 }
 
+/* ── Compatibilidade de categoria na dupla ───────────────────────────────────
+ * Regra do torneio (29/set/2026): se o organizador configurou categorias e o
+ * rigor não é Casual, dupla não é uma loteria entre categorias. Fem Light só
+ * forma com Fem Light; Masc Power só com Masc Power. A categoria Misto é a
+ * exceção explícita: uma dupla de 2 precisa ter exatamente uma mulher e um
+ * homem. Isto mora no núcleo que a Function usa, nunca só no drag-drop, para
+ * que convite, organizador e qualquer cliente recebam a mesma decisão.
+ * [[regression_pairing_respects_configured_categories]] */
+function _pairCategory(p) {
+  if (!p || typeof p !== 'object') return '';
+  var cat = String(p.category || '').trim();
+  if (!cat && Array.isArray(p.categories)) cat = String(p.categories[0] || '').trim();
+  return cat;
+}
+function _pairGender(p) {
+  var g = String((p && p.gender) || '').trim().toLowerCase();
+  if (g.indexOf('fem') === 0 || g === 'f') return 'feminino';
+  if (g.indexOf('masc') === 0 || g === 'm') return 'masculino';
+  return '';
+}
+function _hasConfiguredPairCategories(data) {
+  return ['combinedCategories', 'genderCategories', 'skillCategories', 'customCategories']
+    .some(function (key) { return Array.isArray(data && data[key]) && data[key].length > 0; });
+}
+function pairCategoryDecision(data, p1, p2) {
+  if (String((data && data.rigor) || 'casual').toLowerCase() === 'casual' || !_hasConfiguredPairCategories(data)) {
+    return { ok: true };
+  }
+  var c1 = _pairCategory(p1), c2 = _pairCategory(p2);
+  if (!c1 || !c2) return { ok: false, outcome: 'categoryRequired' };
+  if (c1.toLocaleLowerCase() !== c2.toLocaleLowerCase()) return { ok: false, outcome: 'categoryMismatch' };
+  if (/^misto(?:\b|\s)/i.test(c1)) {
+    var g1 = _pairGender(p1), g2 = _pairGender(p2);
+    if (!((g1 === 'feminino' && g2 === 'masculino') || (g1 === 'masculino' && g2 === 'feminino'))) {
+      return { ok: false, outcome: 'mixedPairRequiresOneOfEachGender' };
+    }
+  }
+  return { ok: true, category: c1 };
+}
+
 // A entrada é uma DUPLA (estrutural — nunca por "/" no nome). Espelha _isPairEntry do
 // cliente. Ver [[project_dupla_entry_structural_not_slash]].
 function isPairEntry(p) {
@@ -157,6 +197,11 @@ function computeFormPair(data, opts) {
   }
 
   var _p1 = arr[fi1], _p2 = arr[fi2];
+  var _categoryDecision = pairCategoryDecision(data, _p1, _p2);
+  if (!_categoryDecision.ok) {
+    return { outcome: _categoryDecision.outcome, participants: arr,
+      updateData: _backfilled ? { participants: arr } : null };
+  }
   var _u1 = uid1 || (typeof _p1 === 'object' && _p1 ? (_p1.uid || '') : '');
   var _u2 = uid2 || (typeof _p2 === 'object' && _p2 ? (_p2.uid || '') : '');
   // Preserva o nº de inscrição ORIGINAL de cada membro (enrollSeq persistido no solo).
@@ -183,6 +228,13 @@ function computeFormPair(data, opts) {
     p1ManualId: _mid1, p2ManualId: _mid2,
     p1Placeholder: _ph1, p2Placeholder: _ph2, ligaActive: true
   });
+  // A categoria é dado do TORNEIO. Como os dois membros foram validados na
+  // mesma categoria, a dupla carrega o rótulo para a grade e para o sorteio.
+  if (_categoryDecision.category) {
+    merged.category = _categoryDecision.category;
+    merged.categories = [_categoryDecision.category];
+    merged.categorySource = (_p1 && _p1.categorySource) || (_p2 && _p2.categorySource) || undefined;
+  }
 
   var maxI = Math.max(fi1, fi2), minI = Math.min(fi1, fi2);
   arr.splice(maxI, 1); arr.splice(minI, 1); arr.splice(minI, 0, merged);
@@ -327,5 +379,5 @@ function findDuplicatePeople(data) {
 
 module.exports = {
   computeFormPair, backfillEnrollSeqs, computeSplitPair, dropRequestsInvolving, markDuplasManualUpdate,
-  isPairEntry, entryIdentities, findDuplicatePeople
+  isPairEntry, entryIdentities, findDuplicatePeople, pairCategoryDecision
 };

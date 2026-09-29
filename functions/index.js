@@ -5180,6 +5180,9 @@ exports.formPair = onCall(
       return { notFound: false, alreadyPaired: true, who: out.who || "", participants: out.participants };
     }
     if (out.outcome === "notFound") return { notFound: true, participants: out.participants };
+    if (out.outcome === 'categoryRequired' || out.outcome === 'categoryMismatch' || out.outcome === 'mixedPairRequiresOneOfEachGender') {
+      return { notFound: false, invalidPairing: out.outcome, participants: out.participants };
+    }
     return { notFound: false, participants: out.participants, newName: out.newName };
   }
 );

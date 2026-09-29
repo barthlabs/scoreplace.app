@@ -61,6 +61,30 @@ console.log('\n── formar: alvo inexistente / mesmo ──');
   ok('mesmo uid → notFound', computeFormPair(t, { uid1: 'uidA', name1: 'Ana', uid2: 'uidA', name2: 'Ana' }).outcome === 'notFound');
 }
 
+console.log('\n── categorias configuradas: dupla não cruza categoria nem quebra misto ──');
+{
+  const t = mkT();
+  t.rigor = 'moderado';
+  t.combinedCategories = ['Fem Light', 'Masc Light', 'Misto Power'];
+  t.participants[0].category = 'Fem Light'; t.participants[0].gender = 'feminino';
+  t.participants[1].category = 'Masc Light'; t.participants[1].gender = 'masculino';
+  t.participants[2].category = 'Fem Light'; t.participants[2].gender = 'feminino';
+  ok('Fem Light + Masc Light → categoryMismatch',
+    computeFormPair(t, { uid1: 'uidA', name1: 'Ana', uid2: 'uidB', name2: 'Bia' }).outcome === 'categoryMismatch');
+  const same = computeFormPair(t, { uid1: 'uidA', name1: 'Ana', uid2: 'uidC', name2: 'Cid' });
+  ok('mesma categoria configurada → formed', same.outcome === 'formed', same.outcome);
+  ok('a dupla preserva a categoria do torneio', same.updateData && same.updateData.participants[0].category === 'Fem Light');
+
+  const mixed = mkT();
+  mixed.rigor = 'moderado'; mixed.combinedCategories = ['Misto Power'];
+  mixed.participants.forEach((p, i) => { p.category = 'Misto Power'; p.gender = i === 0 ? 'feminino' : 'masculino'; });
+  ok('Misto: feminino + masculino → formed',
+    computeFormPair(mixed, { uid1: 'uidA', name1: 'Ana', uid2: 'uidB', name2: 'Bia' }).outcome === 'formed');
+  mixed.participants[1].gender = 'feminino';
+  ok('Misto: duas mulheres → exige 50/50',
+    computeFormPair(mixed, { uid1: 'uidA', name1: 'Ana', uid2: 'uidB', name2: 'Bia' }).outcome === 'mixedPairRequiresOneOfEachGender');
+}
+
 // ── REGRESSÃO v1.5.8 — "Torneio de Casais: a presença embaralhou as duplas" ────────────
 // Visto AO VIVO: Lucia aparecia em "Fernando/Lucia" E em "Lucia/Patrícia"; Patrícia em
 // "Nei/Patrícia" E na mesma. Causa: computeFormPair casava a entrada por `p.uid` SEM checar

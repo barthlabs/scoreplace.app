@@ -384,7 +384,7 @@ window._devSimulateCurrentPhase = function (tId) {
 // fluxo de 4 fases. Agora cada time vira um OBJETO {displayName:"A / B",
 // p1Name/p1Uid, p2Name/p2Uid, participants:[...]} — a geração do bracket já lê
 // `displayName || name`, então nada quebra, e a identidade sobrevive.
-function _formDoublesTeams(origParticipants, teamSize, teamOrigins, balanceMode) {
+function _formDoublesTeams(origParticipants, teamSize, teamOrigins, balanceMode, pairingConfig) {
   var origByName = {};
   origParticipants.forEach(function(p) {
     if (p && typeof p === 'object') {
@@ -401,6 +401,14 @@ function _formDoublesTeams(origParticipants, teamSize, teamOrigins, balanceMode)
     });
     var displayName = subs.map(function(s) { return s.displayName || s.name || ''; }).join(' / ');
     var obj = { displayName: displayName, name: displayName, participants: subs };
+    // Categoria é do torneio. Dupla formada dentro da mesma categoria preserva
+    // o rótulo para a grade e para os próximos passos do sorteio.
+    var _teamCat = subs.length ? String(subs[0].category || ((subs[0].categories || [])[0]) || '').trim() : '';
+    if (_teamCat && subs.every(function (s) { return String(s.category || ((s.categories || [])[0]) || '').trim().toLowerCase() === _teamCat.toLowerCase(); })) {
+      obj.category = _teamCat;
+      obj.categories = [_teamCat];
+      obj.categorySource = subs[0].categorySource || undefined;
+    }
     /* ⛔ A DECISÃO DE GÊNERO DO ORGANIZADOR ATRAVESSA A FORMAÇÃO DA DUPLA (23/set/2026). Cada
      * membro entra aqui como inscrito individual, e se o par {valor, marca} não for projetado para
      * `pNGender`/`pNGenderSource` a decisão some ao formar a dupla — e o sanitizador, que exige a
@@ -447,7 +455,43 @@ function _formDoublesTeams(origParticipants, teamSize, teamOrigins, balanceMode)
   }
   var newTeams = [];
   var allMaleCount = 0;
-  if (balanceMode === 'equilibrado' && teamSize === 2) {
+  /* ⛔ CATEGORIA CONFIGURADA + RIGOR NÃO CASUAL: a formação automática obedece
+   * a mesma regra da Function formPair. Não basta proteger o drag-drop: o
+   * sorteio não pode cruzar categorias. Em Misto, 50/50 é uma mulher + um
+   * homem; quem não tiver par compatível permanece avulso.
+   * [[regression_auto_pairing_respects_categories]] */
+  var _strictCats = pairingConfig && String(pairingConfig.rigor || 'casual').toLowerCase() !== 'casual' &&
+    ['combinedCategories', 'genderCategories', 'skillCategories', 'customCategories'].some(function (key) {
+      return Array.isArray(pairingConfig[key]) && pairingConfig[key].length > 0;
+    });
+  if (_strictCats && teamSize === 2) {
+    var _byCategory = {}, _catOrder = [];
+    individuals.forEach(function (p, idx) {
+      var cat = String(p.category || ((p.categories || [])[0]) || '').trim();
+      // Sem categoria não pode ser unido aleatoriamente a outra pessoa.
+      var key = cat ? cat.toLowerCase() : ('__sem_categoria_' + idx);
+      if (!_byCategory[key]) { _byCategory[key] = { label: cat, people: [] }; _catOrder.push(key); }
+      _byCategory[key].people.push(p);
+    });
+    individuals = [];
+    _catOrder.forEach(function (key) {
+      var bucket = _byCategory[key], people = bucket.people;
+      if (/^misto(?:\b|\s)/i.test(bucket.label)) {
+        var women = [], men = [], pending = [];
+        people.forEach(function (p) {
+          var g = String(p.gender || '').toLowerCase();
+          if (g.indexOf('fem') === 0 || g === 'f') women.push(p);
+          else if (g.indexOf('masc') === 0 || g === 'm') men.push(p);
+          else pending.push(p);
+        });
+        while (women.length && men.length) newTeams.push(mkTeamObj([women.shift(), men.shift()]));
+        individuals = individuals.concat(women, men, pending);
+      } else {
+        while (people.length >= 2) newTeams.push(mkTeamObj([people.shift(), people.shift()]));
+        individuals = individuals.concat(people);
+      }
+    });
+  } else if (balanceMode === 'equilibrado' && teamSize === 2) {
     // v2.1.20: sorteio EQUILIBRADO — distribui não-homens (mulheres + outros)
     // pra MINIMIZAR duplas 100% masculinas. Cada não-homem "cobre" um homem.
     // Homens que sobram formam duplas masculinas (inevitável se faltarem
@@ -1233,7 +1277,7 @@ window._createExtraGamesFromWaitlist = function(t) {
     var n1, n2, used, u1 = [], u2 = [];
     if (_isTeams) {
       var four = solos.splice(0, 4);
-      var formed = window._formDoublesTeams(four, 2, t.teamOrigins);
+      var formed = window._formDoublesTeams(four, 2, t.teamOrigins, null, t);
       var teams = (formed.participants || []).filter(function(x){ return x && (x.displayName || x.name || '').indexOf(' / ') !== -1; });
       if (teams.length < 2) break;
       var tm1 = teams[0], tm2 = teams[1];

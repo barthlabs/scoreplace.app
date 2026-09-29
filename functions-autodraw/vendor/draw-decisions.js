@@ -506,7 +506,7 @@
     // [[project_canon_runs_on_server]] / [[project_enroll_number_chronological_no_gaps]].
     if (d.flexibilize && typeof window._formDoublesTeams === 'function') {
       if (!t.teamOrigins) t.teamOrigins = {};
-      var _ff = window._formDoublesTeams(t.participants, 2, t.teamOrigins, 'equilibrado');
+      var _ff = window._formDoublesTeams(t.participants, 2, t.teamOrigins, 'equilibrado', t);
       t.participants = _ff.participants;
       t._flexibilized = true;
       applied.push({ step: 'flexibilize', formed: _ff.newTeamsCount, sameGender: _ff.allMaleCount, leftover: _ff.leftoverCount });

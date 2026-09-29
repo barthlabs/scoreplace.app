@@ -1153,6 +1153,15 @@ window._formDuplaByUids = function(tId, name1, uid1, name2, uid2) {
                 if (typeof showNotification !== 'undefined') showNotification('Não foi possível formar a dupla', 'O servidor não encontrou os dois inscritos. Recarregue e tente de novo.', 'warning');
                 return;
             }
+            if (_r && _r.invalidPairing) {
+                var _pairRuleMsg = {
+                    categoryRequired: 'Atribua a categoria dos dois participantes antes de formar a dupla.',
+                    categoryMismatch: 'Neste torneio, a dupla precisa ser formada por pessoas da mesma categoria.',
+                    mixedPairRequiresOneOfEachGender: 'Na categoria mista, a dupla precisa ter uma mulher e um homem.'
+                };
+                if (typeof showNotification !== 'undefined') showNotification('Dupla incompatível', _pairRuleMsg[_r.invalidPairing] || 'Os participantes não atendem à regra de formação deste torneio.', 'warning');
+                return;
+            }
             // chave já sorteada → integra na CF (integrateLateEntries detecta o órfão e re-sorteia)
             if (_hasBracket && typeof window._triggerLateIntegration === 'function') { try { window._triggerLateIntegration(t, { force: true }); } catch (e) {} }
             if (typeof showNotification !== 'undefined') showNotification('👫 Dupla formada!', newName, 'success');

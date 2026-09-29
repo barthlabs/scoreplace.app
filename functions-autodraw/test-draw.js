@@ -86,6 +86,34 @@ function validateRound(round, n, label) {
 // 1) Primeiro sorteio em 3 tamanhos (atual, projetado, exato múltiplo de 4).
 [73, 142, 140].forEach(n => validateRound(mkConfra(n), n, 'PRIMEIRO SORTEIO'));
 
+// ── REGRESSÃO: formação automática respeita categorias do torneio ────────────
+// A proteção manual em pair-core não basta: drawInitial chama o mesmo formador
+// vendorizado. Com rigor moderado e categorias configuradas, nenhum sorteio
+// pode criar uma dupla que o organizador não poderia criar na tela.
+console.log('\n[FORMAR DUPLAS POR CATEGORIA] rigor moderado');
+{
+  const form = require('./draw-core.js')._window._formDoublesTeams;
+  const parts = [
+    { uid: 'fl1', displayName: 'FL 1', category: 'Fem Light', gender: 'feminino' },
+    { uid: 'fl2', displayName: 'FL 2', category: 'Fem Light', gender: 'feminino' },
+    { uid: 'fp1', displayName: 'FP 1', category: 'Fem Power', gender: 'feminino' },
+    { uid: 'fp2', displayName: 'FP 2', category: 'Fem Power', gender: 'feminino' }
+  ];
+  const out = form(parts, 2, {}, 'equilibrado', { rigor: 'moderado', combinedCategories: ['Fem Light', 'Fem Power'] });
+  const teams = out.participants.filter(p => p && p.p1Uid && p.p2Uid);
+  assert(teams.length === 2, 'forma duas duplas dentro das categorias (got ' + teams.length + ')');
+  assert(teams.every(p => p.category === 'Fem Light' || p.category === 'Fem Power'), 'dupla preserva a categoria do torneio');
+  assert(!teams.some(p => /FL 1 \/ FP|FL 2 \/ FP|FP 1 \/ FL|FP 2 \/ FL/.test(p.displayName)), 'nunca cruza Light com Power');
+
+  const mixed = form([
+    { uid: 'mf', displayName: 'F', category: 'Misto Power', gender: 'feminino' },
+    { uid: 'mm', displayName: 'M', category: 'Misto Power', gender: 'masculino' },
+    { uid: 'mf2', displayName: 'F2', category: 'Misto Power', gender: 'feminino' }
+  ], 2, {}, null, { rigor: 'moderado', combinedCategories: ['Misto Power'] });
+  const mixedTeams = mixed.participants.filter(p => p && p.p1Uid && p.p2Uid);
+  assert(mixedTeams.length === 1 && mixed.leftoverCount === 1, 'Misto forma só 1 mulher + 1 homem e deixa a sobra avulsa');
+}
+
 // 2) Fluxo multi-rodada: sorteia R1, lança resultados, sorteia R2 — confirma
 //    que a 2ª rodada também é Rei/Rainha correta e não repete os mesmos grupos.
 console.log('\n[MULTI-RODADA] 80 jogadores — R1 → resultados → R2');

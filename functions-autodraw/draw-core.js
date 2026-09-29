@@ -655,7 +655,7 @@ function drawInitial(t, opts) {
     if (!t.teamOrigins) t.teamOrigins = {};
     const _f0 = win._formDoublesTeams(
       Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {}),
-      _ts0, t.teamOrigins, t._drawBalanceMode);
+      _ts0, t.teamOrigins, t._drawBalanceMode, t);
     t.participants = _f0.participants;
     _allMale = _f0.allMaleCount || 0;   // o cliente TOASTA isto; aqui volta no retorno
     if (t.mixedPairingSeparated && _enr0 === 'misto' && _ts0 === 2 && typeof win._applyMixedOriginCategories === 'function') {

@@ -599,7 +599,7 @@ window._applyFlexibilizeBalance = function(tId) {
     document.body.style.overflow = '';
     if (typeof window._formDoublesTeams !== 'function') { window.showUnifiedResolutionPanel(String(tId)); return; }
     if (!t.teamOrigins) t.teamOrigins = {};
-    var res = window._formDoublesTeams(t.participants || [], 2, t.teamOrigins, 'equilibrado');
+    var res = window._formDoublesTeams(t.participants || [], 2, t.teamOrigins, 'equilibrado', t);
     t.participants = res.participants;
     // v1.2.53: marca que as duplas (incl. mesmo-gênero) já foram formadas → o painel do resto
     // e a remoção passam a tratar só os avulsos (resto real), sem mirar pow2. Limpo no cancelar/
