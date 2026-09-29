@@ -42,7 +42,9 @@ sec(function () {
 // ── 2. OS GANCHOS QUE O FILTRO VARRE EXISTEM NO MARKUP ─────────────────────────
 sec(function () {
   ok(/data-er-person="' \+ _esc\(r\.name/.test(SRC), 'cada card de pessoa carrega data-er-person com o nome');
-  ok(/data-er-box="1" data-er-total="' \+ arr\.length/.test(SRC), 'cada caixa de categoria carrega data-er-box + o total real');
+  // Uma dupla agora é um card único, mas vale por duas pessoas no total da caixa.
+  // O contrato da busca é usar o total efetivamente exibido, não apenas os solos.
+  ok(/data-er-box="1" data-er-total="' \+ boxTotal/.test(SRC), 'cada caixa de categoria carrega data-er-box + o total real, incluindo duplas');
   ok(/<span data-er-count/.test(SRC), 'a contagem do título é marcada (vira "x de N" enquanto filtra)');
 });
 
