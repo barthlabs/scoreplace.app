@@ -3746,10 +3746,15 @@ function setupCreateTournamentModal() {
   };
 
   // --- Duration estimation calculator ---
-  // ── Estimativa de tempo da FASE (escada de potências de 2 em torno do nº real) ──
-  // Considera: formato, modo de sorteio (sorteio/rei-rainha), categorias (dividem o
-  // campo em sub-chaves) e os tempos médios que o organizador informa (chamada +
-  // aquecimento + duração). O formato da partida (GSM) entra via a duração média.
+  // ── Estimativa de tempo da FASE, pela capacidade efetivamente configurada ──
+  // Considera formato, modo de sorteio, categorias e os tempos que o organizador
+  // informa (chamada + aquecimento + duração). O formato da partida (GSM) entra via
+  // a duração média.
+  //
+  // ⛔ REGRESSÃO (29/set/2026): não exibir uma escada fictícia de 16/32/64/128 quando
+  // há uma capacidade máxima. O organizador já decidiu o cenário de operação; a tela
+  // deve mostrar UMA única linha para ele: participantes, unidades competitivas,
+  // confrontos e ocupação das quadras dessa capacidade — nunca cenários acima/abaixo.
   // v2.6.68: núcleo da estimativa extraído — parametrizado por formato/modo/monarch/
   // grupos/N, pra ser reusado pela Fase 1 E por cada fase extra (mesma lógica).
   // slot/courts/categorias (K) são do TORNEIO (compartilhados); o resto vem da fase.
@@ -3773,9 +3778,11 @@ function setupCreateTournamentModal() {
     var fmt = o.fmt || 'elim_simples';
     var drawMode = o.drawMode || 'sorteio';
     var K = Math.max(o.K || 1, 1);
-    var ageCats = o.ageCats || 0;
     var N = o.N || 0;
     var isReal = !!o.isReal;
+    var totalParticipants = Math.max(0, o.totalParticipants || 0);
+    var capacityIsMax = !!o.capacityIsMax;
+    var teamSchedule = o.teamSchedule || null;
     // Classificados/grupo agora vêm da transição de fases (mapping.rankTo), não de
     // um campo dedicado. Para a estimativa usamos 2 (Rei+Vice), o caso típico.
     var monarchCls = 2;
@@ -3840,48 +3847,52 @@ function setupCreateTournamentModal() {
       if (h > 0) return h + 'h';
       return mm + 'min';
     }
-    function isPow2(v) { return v > 0 && (v & (v - 1)) === 0; }
-    function below(v) { var p = 1; while (p * 2 <= v) p *= 2; return p; }
-
-    // escada: 2 pot. de 2 abaixo + real/planejado + 2 acima
-    var counts;
-    if (N >= 2) {
-      if (isPow2(N)) counts = [N / 4, N / 2, N, N * 2, N * 4];
-      else { var prev = below(N); counts = [prev / 2, prev, N, prev * 2, prev * 4]; }
-    } else {
-      counts = [8, 16, 32, 64, 128]; // sem inscritos: simulação genérica
+    // A grade parcial por times não é todos-contra-todos. Esta conta replica a regra
+    // do motor de fases: grupo par usa exatamente `jogosPorTime` rodadas; para grupo
+    // ímpar, grau ímpar é impossível e o motor preserva o RR completo. Folga não entra
+    // em nenhuma dessas contas. [[regression_phase_estimate_uses_actual_team_schedule]]
+    function scheduledMatchesInGroup(size, gamesPerTeam) {
+      size = Math.max(0, Math.floor(size || 0));
+      if (size < 2) return 0;
+      var games = Math.min(size - 1, Math.max(1, Math.floor(gamesPerTeam || 1)));
+      if (size % 2 === 0) return (size * games) / 2;
+      if (games % 2 === 1) return (size * (size - 1)) / 2;
+      return Math.floor(size / 2) * (games + 1);
     }
-    var seen = {};
-    counts = counts.filter(function (c) { return c >= 2; })
-                   .filter(function (c) { if (seen[c]) return false; seen[c] = 1; return true; })
-                   .sort(function (a, b) { return a - b; });
+    function scheduledTeamMatches(units) {
+      if (!teamSchedule || !teamSchedule.enabled || units < 2) return null;
+      var groupSize = Math.min(units, Math.max(2, Math.floor(teamSchedule.teamsPerGroup || 2)));
+      var games = Math.max(1, Math.floor(teamSchedule.gamesPerTeam || 1));
+      var fullGroups = Math.floor(units / groupSize), remainder = units % groupSize, matches = 0;
+      for (var g = 0; g < fullGroups; g++) matches += scheduledMatchesInGroup(groupSize, games);
+      if (remainder) matches += scheduledMatchesInGroup(remainder, games);
+      return matches * (teamSchedule.turns === 2 ? 2 : 1);
+    }
 
     var fmtLabel = ({ elim_simples: 'Eliminatória', elim_dupla: 'Dupla Elim.', grupos_mata: 'Fase de Grupos', liga: 'Pontos Corridos', suico: 'Suíço' })[fmt] || fmt;
     var headLabel = (drawMode === 'rei_rainha') ? '👑 Rei/Rainha (grupos de 4)' : fmtLabel;
     var catLabel = K > 1 ? (' · ' + K + ' categorias') : '';
     var h = '';
     h += '<div style="font-size:0.68rem;color:var(--text-muted);margin-bottom:6px;">' + headLabel + catLabel + ' · ' + courts + (courts > 1 ? ' quadras' : ' quadra') + ' · ' + slot + 'min/jogo</div>';
-    if (slot <= 0) h += '<div style="font-size:0.72rem;color:var(--sp-c-f59e0b,#f59e0b);margin-bottom:6px;">Preencha chamada/aquecimento/duração pra estimar o tempo.</div>';
-    if (!isReal && N < 2) h += '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:6px;">Sem inscritos ainda — simulação genérica. Edite um torneio com inscritos pra ver o nº real.</div>';
-
-    h += '<div style="display:flex;flex-direction:column;gap:4px;">';
-    counts.forEach(function (c) {
-      var real = isReal && c === N;
-      var m = totalMatches(c);
-      var bg = real ? 'rgba(59,130,246,0.18)' : 'rgba(255,255,255,0.03)';
-      var bd = real ? '1px solid rgba(59,130,246,0.4)' : '1px solid var(--sp-b-255-255-255-006,rgba(255,255,255,0.06))';
-      var lc = real ? '#60a5fa' : 'var(--text-muted)';
-      h += '<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:' + window._spCor(bg, 'background') + ';border:' + bd + ';border-radius:8px;flex-wrap:wrap;">';
-      h += '<span style="font-size:0.78rem;font-weight:' + (real ? '700' : '600') + ';color:' + window._spCor(lc, 'color') + ';min-width:104px;">' + c + ' ' + (o.unitLbl || 'inscritos') + (real ? ' <span style="font-size:0.62rem;">(real)</span>' : '') + '</span>';
-      h += '<span style="font-size:0.74rem;color:var(--text-muted);opacity:0.65;">' + m + ' jogos</span>';
-      h += '<span style="font-size:0.85rem;font-weight:700;color:' + window._spCor((real ? '#e2e8f0' : 'rgba(255,255,255,0.7)'), 'color') + ';margin-left:auto;">' + fmtMin(timeFor(c)) + '</span>';
-      h += '</div>';
-    });
+    if (N < 2) {
+      h += '<div style="font-size:0.72rem;color:var(--text-muted);">Defina a capacidade máxima para estimar participantes, confrontos e tempo de quadra.</div>';
+      return h;
+    }
+    var matchesPerCategory = scheduledTeamMatches(perCat(N));
+    var matches = matchesPerCategory === null ? totalMatches(N) : matchesPerCategory * K;
+    var operationalMinutes = slot <= 0 ? -1 : Math.ceil(matches / courts) * slot;
+    var unitsLabel = o.unitLbl || 'inscritos';
+    var peopleLabel = totalParticipants > 0 ? totalParticipants + ' participante' + (totalParticipants === 1 ? '' : 's') : '';
+    var perCategory = K > 1 ? (' · ' + perCat(N) + ' ' + unitsLabel + '/categoria' + (matchesPerCategory === null ? '' : ' · ' + matchesPerCategory + ' confrontos/categoria')) : '';
+    var scheduleLabel = teamSchedule && teamSchedule.enabled ? (' · ' + teamSchedule.gamesPerTeam + ' jogos por ' + (teamSchedule.unitLabel || 'dupla/time')) : '';
+    var capacityLabel = capacityIsMax ? 'Capacidade máxima' : (isReal ? 'Inscritos atuais' : 'Capacidade planejada');
+    h += '<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:rgba(59,130,246,0.18);border:1px solid rgba(59,130,246,0.4);border-radius:8px;flex-wrap:wrap;">';
+    h += '<span style="font-size:0.78rem;font-weight:700;color:#60a5fa;">' + capacityLabel + ': ' + (peopleLabel ? peopleLabel + ' · ' : '') + N + ' ' + unitsLabel + perCategory + scheduleLabel + '</span>';
+    h += '<span style="font-size:0.74rem;color:var(--text-muted);">' + matches + ' confrontos</span>';
+    h += '<span style="font-size:0.85rem;font-weight:700;color:var(--text-bright);margin-left:auto;">' + fmtMin(operationalMinutes) + '</span>';
     h += '</div>';
-    if (drawMode === 'rei_rainha') h += '<div style="font-size:0.64rem;color:var(--text-muted);margin-top:6px;opacity:0.8;">Grupos de 4 + eliminatória dos classificados <strong>até a final</strong>.</div>';
-    else if (fmt === 'liga') h += '<div style="font-size:0.64rem;color:var(--text-muted);margin-top:6px;opacity:0.8;">Estimativa de <strong>uma rodada</strong> de pontos corridos.</div>';
-    else if (fmt === 'grupos_mata') h += '<div style="font-size:0.64rem;color:var(--text-muted);margin-top:6px;opacity:0.8;">Estimativa da <strong>fase de grupos</strong> completa (sem mata-mata).</div>';
-    if (ageCats > 0) h += '<div style="font-size:0.64rem;color:var(--text-muted);margin-top:4px;opacity:0.8;">⚠️ Categorias por idade criam sub-chaves extras não incluídas nesta estimativa.</div>';
+    if (slot <= 0) h += '<div style="font-size:0.64rem;color:var(--sp-c-f59e0b,#f59e0b);margin-top:6px;">Preencha chamada/aquecimento/duração para calcular o tempo de operação.</div>';
+    else h += '<div style="font-size:0.64rem;color:var(--text-muted);margin-top:6px;opacity:0.8;">' + matches + ' confrontos × ' + slot + 'min = ' + fmtMin(matches * slot) + ' de uso de quadra; ' + courts + (courts > 1 ? ' quadras' : ' quadra') + ' exigem ' + Math.ceil(matches / courts) + ' janelas em paralelo.</div>';
     return h;
   };
 
@@ -3891,23 +3902,21 @@ function setupCreateTournamentModal() {
     if (!ladder) return;
     var gv = function (id) { var e = document.getElementById(id); return e ? e.value : ''; };
     var iv = function (id, d) { var v = parseInt(gv(id), 10); return isNaN(v) ? d : v; };
-    var K = 1, ageCats = 0;
+    var K = 1;
     try {
       var catData = (window._getCreateFormCategoryData ? window._getCreateFormCategoryData() : {}) || {};
       if (catData.combinedCategories && catData.combinedCategories.length) K = catData.combinedCategories.length;
-      ageCats = (catData.ageCategories || []).length;
     } catch (e) { K = 1; }
-    // v1.3.168 (dono): a escada estima por UNIDADE COMPETITIVA — em duplas, EQUIPES, nunca nº
-    // de entradas (31 pessoas = 14 equipes + 3 sem dupla ⇒ chave de 14; solo sem dupla é
-    // pendência). Real: _diagnoseAll.effectiveTeams (fonte única, o mesmo nº dos painéis de
-    // resolução). Planejado: pessoas ÷ tamanho do time.
+    // A estimativa usa UNIDADE COMPETITIVA — em duplas, EQUIPES, nunca pessoas soltas.
+    // Quando há capacidade máxima, ela prevalece até em edição: o objetivo deste box é
+    // planejar o evento cheio, não substituir sua lotação por inscritos parciais.
     var teamSize = Math.max(iv('tourn-team-size', 1), 1);
-    var N = 0, isReal = false;
+    var N = 0, isReal = false, totalParticipants = 0;
     var editId = gv('edit-tournament-id');
     if (editId && window.AppStore && Array.isArray(window.AppStore.tournaments)) {
       var t = window.AppStore.tournaments.find(function (x) { return String(x.id) === String(editId); });
       if (t && Array.isArray(t.participants) && t.participants.length > 0) {
-        N = t.participants.length; isReal = true;
+        N = t.participants.length; totalParticipants = N; isReal = true;
         try {
           if (typeof window._diagnoseAll === 'function') {
             var _di = window._diagnoseAll(t);
@@ -3917,20 +3926,39 @@ function setupCreateTournamentModal() {
         } catch (e) {}
       }
     }
-    if (!isReal) {
+    var configuredMax = iv('tourn-max-participants', 0);
+    if (configuredMax > 0) {
+      totalParticipants = configuredMax;
+      N = teamSize >= 2 ? Math.floor(configuredMax / teamSize) : configuredMax;
+      isReal = false;
+    } else if (!isReal) {
       var elm = gv('enrollment-limit-mode') || 'cap';
       if (elm === 'draw') N = iv('tourn-target-slots', 0);
       if (!N) N = iv('tourn-max-participants', 0);
+      totalParticipants = N;
       if (teamSize >= 2 && N > 0) N = Math.floor(N / teamSize); // planejado é em PESSOAS
     }
+    var f2cfg = null;
+    try { f2cfg = (typeof window._f2GetConfig === 'function') ? window._f2GetConfig() : null; } catch (e) {}
+    var tc = f2cfg && f2cfg.teamCompetition;
+    var teamSchedule = tc && tc.enabled && tc.schedule && tc.schedule.enabled ? {
+      enabled: true,
+      teamsPerGroup: tc.schedule.teamsPerGroup,
+      gamesPerTeam: tc.schedule.gamesPerTeam,
+      turns: f2cfg.rodadas && f2cfg.rodadas.turnos === 'ida_volta' ? 2 : 1,
+      unitLabel: teamSize >= 2 ? 'dupla' : 'time'
+    } : null;
     ladder.innerHTML = window._buildPhaseEstimate({
       call: iv('tourn-call-time', 0), warm: iv('tourn-warmup-time', 0), dur: iv('tourn-game-duration', 0),
       // sets esperados do formato da fase INICIAL (campos ocultos do form = a fonte
       // única que o jogo vai usar). Sem isso a escada trata melhor de 3 como 1 set.
       sets: _setsDaFaseInicial(),
       courts: iv('tourn-court-count', 1), fmt: gv('select-formato') || 'elim_simples', drawMode: gv('draw-mode') || 'sorteio',
-      K: K, ageCats: ageCats, N: N, isReal: isReal,
-      unitLbl: (teamSize >= 2 ? 'equipes' : 'inscritos'),
+      K: K, N: N, isReal: isReal, totalParticipants: totalParticipants,
+      capacityIsMax: configuredMax > 0 && !isReal, teamSchedule: teamSchedule,
+      // A unidade que entra em quadra continua sendo a dupla, mesmo quando ela
+      // representa um time na classificação agregada. [[regression_estimate_names_playing_unit]]
+      unitLbl: (teamSize >= 2 ? 'duplas' : 'inscritos'),
       gruposCount: iv('grupos-count', 4)
     });
   };

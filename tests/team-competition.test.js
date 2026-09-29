@@ -39,6 +39,10 @@ ok(teamUi.includes('f2-team-schedule-teams-value') && teamUi.includes('f2-team-s
 const createUi = fs.readFileSync('js/views/create-tournament.js', 'utf8');
 ok(!createUi.includes("lines.push(_t('create.gsmPoints'") && !createUi.includes("lines.push(_t('create.gsmNumericPts'"),
   'formato numérico não inventa “pontos para vencer” nem duração a partir de campos técnicos');
+ok(createUi.includes('[[regression_phase_estimate_uses_actual_team_schedule]]') && createUi.includes('scheduledMatchesInGroup'),
+  'estimativa de capacidade usa a mesma grade parcial por times do motor, sem contar folga');
+ok(!createUi.includes("counts = [8, 16, 32, 64, 128]") && createUi.includes('Capacidade máxima'),
+  'com limite configurado a estimativa mostra apenas a capacidade escolhida, sem escada genérica');
 
 const teams = [{ id: 'a', name: 'Time Azul' }, { id: 'b', name: 'Time Branco' }, { id: 'c', name: 'Time Cinza' }];
 const rows = C.standings(teams, [
