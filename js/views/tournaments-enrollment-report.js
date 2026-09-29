@@ -1001,9 +1001,22 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   };
   window._erStageCategory = function (order, val) {
     if (!_liveState || !_liveState.isOrg) return;
-    if (!_pendingEdits[order]) _pendingEdits[order] = {};
-    _pendingEdits[order].category = val;
-    _erMarkCardModified(order);
+    // A categoria pertence à DUPLA, não a um lado dela. A análise continua
+    // mostrando as pessoas nas colunas de gênero, mas qualquer atribuição de
+    // categoria para uma delas precisa marcar os dois membros antes do Save.
+    // Assim o feedback local e a gravação canônica não divergem. Não propaga
+    // gênero: gênero continua sendo uma decisão por pessoa.
+    var row = ((_liveState.rows || []).filter(function (r) { return r.order === order; })[0]) || null;
+    var orders = [order];
+    if (row && row._duplaIdx != null) {
+      orders = (_liveState.rows || []).filter(function (r) { return r._duplaIdx === row._duplaIdx; }).map(function (r) { return r.order; });
+    }
+    orders.forEach(function (targetOrder) {
+      if (!_pendingEdits[targetOrder]) _pendingEdits[targetOrder] = {};
+      _pendingEdits[targetOrder].category = val;
+      _erMarkCardModified(targetOrder);
+    });
+    if (typeof window._erRenderFormedPairs === 'function') window._erRenderFormedPairs();
     window._erUpdateSaveBar();
   };
 
@@ -1012,6 +1025,44 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     Object.keys(_pendingEdits).forEach(function (k) { var pe = _pendingEdits[k]; if (pe && Object.keys(pe).length > 0) n++; });
     return n;
   }
+  // Painel de conferência: a Análise não forma/desfaz dupla (isso é ação de
+  // Inscritos), mas deixa explícito quais pares já existem e permite ao
+  // organizador atribuir ou mover a CATEGORIA DA DUPLA inteira.
+  function _erFormedPairsPanel(rows, t) {
+    var byPair = {};
+    (rows || []).forEach(function (r) {
+      if (r && r._duplaIdx != null && !r._wl) {
+        (byPair[r._duplaIdx] || (byPair[r._duplaIdx] = [])).push(r);
+      }
+    });
+    var pairs = Object.keys(byPair).map(function (k) { return byPair[k]; })
+      .filter(function (members) { return members.length === 2; });
+    if (!pairs.length) return '';
+    var cats = (typeof window._getTournamentCategories === 'function') ? (window._getTournamentCategories(t) || []) : [];
+    function option(value, label, selected) {
+      return '<option value="' + _esc(value) + '"' + (selected ? ' selected' : '') + '>' + _esc(label) + '</option>';
+    }
+    var cards = pairs.map(function (members) {
+      var a = members[0], b = members[1], pe = _pendingEdits[a.order] || _pendingEdits[b.order] || {};
+      var current = Object.prototype.hasOwnProperty.call(pe, 'category') ? pe.category : ((a.assigned && a.assigned[0]) || '');
+      var changed = Object.prototype.hasOwnProperty.call(pe, 'category');
+      var chooser = cats.length > 1
+        ? '<select aria-label="Categoria da dupla ' + _esc(a.name + ' e ' + b.name) + '" onchange="window._erStageCategory(' + a.order + ',this.value)" style="min-width:150px;max-width:100%;font-size:12px;font-weight:700;color:var(--sp-c-a5b4fc,#a5b4fc);background:rgba(99,102,241,.14);border:1px solid rgba(99,102,241,.4);border-radius:7px;padding:5px 7px;">' +
+            option('', 'sem categoria', !current) + cats.map(function (c) { return option(c, (window._displayCategoryName ? window._displayCategoryName(c) : c), current === c); }).join('') + '</select>'
+        : '<span style="font-size:12px;color:var(--text-muted);">' + _esc(current || 'categoria única') + '</span>';
+      return '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:9px 10px;border:1px solid ' + (changed ? 'rgba(245,158,11,.65)' : 'rgba(168,85,247,.35)') + ';border-radius:9px;background:' + (changed ? 'rgba(245,158,11,.07)' : 'rgba(168,85,247,.06)') + ';">' +
+        '<div style="min-width:0;flex:1;font-size:13px;font-weight:750;color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">👥 ' + _esc(a.name) + ' <span style="color:var(--text-muted);">+</span> ' + _esc(b.name) + '</div>' + chooser +
+      '</div>';
+    }).join('');
+    return '<div style="margin:0 0 14px;padding:13px;border:1px solid rgba(168,85,247,.36);border-radius:12px;background:rgba(168,85,247,.05);">' +
+      '<div style="font-size:14px;font-weight:850;color:var(--sp-c-c4b5fd,#c4b5fd);margin-bottom:4px;">👥 Duplas formadas (' + pairs.length + ')</div>' +
+      '<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">A categoria escolhida vale para os dois integrantes. Formação e desmembramento continuam em Inscritos.</div>' +
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:7px;">' + cards + '</div></div>';
+  }
+  window._erRenderFormedPairs = function () {
+    var slot = document.getElementById('er-formed-pairs');
+    if (slot && _liveState) slot.innerHTML = _erFormedPairsPanel(_liveState.rows || [], _liveState.t);
+  };
   // BOTÃO OCUPADO NÃO É REPINTADO. `_erSaveEdits` limpa `_pendingEdits` ANTES de terminar
   // de gravar, então qualquer chamada a esta função no meio do save veria n=0 e (a) trocaria
   // o "Salvando…" pelo rótulo normal e (b) ESCONDERIA a barra inline inteira — sumindo com
@@ -3043,8 +3094,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     orders.forEach(function (order) {
       if (!_pendingEdits[order]) _pendingEdits[order] = {};
       if (genderKey === 'feminino' || genderKey === 'masculino') _pendingEdits[order].gender = genderKey;
-      if (sk && sk !== '__none__') { var vc = _mxFindValidCat(_liveState.t, genderKey, sk); if (vc) _pendingEdits[order].category = vc; }
-      else if (sk === '__none__') { _pendingEdits[order].category = ''; }
+      if (sk && sk !== '__none__') { var vc = _mxFindValidCat(_liveState.t, genderKey, sk); if (vc) window._erStageCategory(order, vc); }
+      else if (sk === '__none__') { window._erStageCategory(order, ''); }
     });
     window._erRenderMatrix();
     window._erUpdateSaveBar();
@@ -4162,6 +4213,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     return '<div id="er-categories-section" style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;padding:16px 18px;margin-bottom:14px;">' +
       '<div style="font-size:15px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:var(--text-secondary,#c8cdd6);margin-bottom:8px;">🗂️ Categorias <span style="opacity:0.7;">· apuração pelo letzplay</span></div>' +
       saveBar + scanBtn + legend + hint +
+      '<div id="er-formed-pairs">' + _erFormedPairsPanel(rows, t) + '</div>' +
       '<div id="er-cat-matrix">' + _matrixInner(rows, t) + '</div>' +
     '</div>';
   }

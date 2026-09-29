@@ -83,11 +83,21 @@ function gravar(tx, ref, antes, updateData) {
   if (!fora.length) { if (Object.keys(doc).length) tx.update(ref, doc); return; }
 
   let mexeu = Object.keys(doc).length > 0;   // campo que fica no doc já é motivo de bump
+  // ⛔ `_nPartes` mede REGISTROS FÍSICOS da subcoleção, não pessoas. Formar uma
+  // dupla troca duas entradas por uma; desfazer faz o contrário. Se o marcador fica
+  // no total anterior, o cliente recebe o elenco certo mas o declara "incompleto" e
+  // mantém o card em "Carregando…" para sempre. O marcador é derivado AQUI, no mesmo
+  // diff que escreve a parte: nenhuma porta que transforme o elenco pode esquecê-lo.
+  // [[regression_pairing_keeps_split_part_count_in_sync]]
+  const nPartes = Object.assign({}, antes._nPartes || {});
+  let marcouParte = false;
   const pAntes = S.dividir(JSON.parse(JSON.stringify(antes)), fora);
   fora.forEach((nome) => {
     if (!(nome in doc)) return;                       // esta gravação não mexe nesta parte
     const depois = S.dividir({ [nome]: doc[nome] }, [nome]);
     delete doc[nome];                                 // não vai pro documento
+    nPartes[nome] = (depois[nome] || []).length;
+    marcouParte = true;
     const d = S.jogosQueMudaram(pAntes[nome] || [], depois[nome] || []);
     const col = ref.collection(S.colecaoDaParte(nome));
     const ch = (x) => {
@@ -98,6 +108,14 @@ function gravar(tx, ref, antes, updateData) {
     d.mudaram.forEach((x) => { tx.set(col.doc(ch(x)), x); mexeu = true; });
     d.sumiram.forEach((x) => { tx.delete(col.doc(ch(x))); mexeu = true; });
   });
+  if (marcouParte) {
+    doc._nPartes = nPartes;
+    // Compatibilidade com clientes antigos: estes dois aliases também descrevem
+    // contagem de registros externos e não podem divergir do marcador canônico.
+    if (Object.prototype.hasOwnProperty.call(nPartes, 'matches')) doc._nJogos = nPartes.matches;
+    if (Object.prototype.hasOwnProperty.call(nPartes, 'grupos')) doc._nGrupos = nPartes.grupos;
+    mexeu = true;
+  }
   /* ⛔ O DOCUMENTO TEM QUE SER TOCADO MESMO QUANDO SÓ A SUBCOLEÇÃO MUDOU.
    * Antes, uma gravação que mexia SÓ numa parte dividida (o caso do PLACAR) caía aqui com
    * `doc` vazio — o `delete doc[nome]` acima tinha tirado a única chave — e o `tx.update`

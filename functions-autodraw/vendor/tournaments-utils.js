@@ -2919,7 +2919,13 @@ window._buildTournamentConfigBox = function (t, opts) {
     }
     function fmtEnroll() {
         var m = t.enrollmentMode || 'individual';
-        return (m === 'time' || m === 'teams') ? 'Apenas times' : m === 'misto' ? 'Misto (individual + times)' : 'Individual';
+        // A pessoa sempre entra individualmente no cadastro; este texto descreve a
+        // REGRA DE ELEGIBILIDADE da fase. Em `teams`, ela só disputa depois que a
+        // dupla/time estiver formado — não é "individual e times".
+        if (m === 'time' || m === 'teams') {
+            return (parseInt(t.teamSize, 10) === 2) ? 'Duplas formadas obrigatórias' : 'Times formados obrigatórios';
+        }
+        return m === 'misto' ? 'Misto (individual + times)' : 'Individual';
     }
     function fmtScoring() {
         var s = t.scoring;
