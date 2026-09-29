@@ -28,6 +28,9 @@ ok(named.teamCount === 2 && named.teamNames[0] === 'Laranja' && named.teamNames[
 const legacyNames = C.normalize({ enabled: true, teamCount: 3 });
 ok(legacyNames.teamNames.join(',') === 'Time 1,Time 2,Time 3',
   'configuração antiga sem lista de nomes continua legível sem migração destrutiva');
+const neonSchedule = C.normalize({ enabled: true, teamNames: ['Venom', 'Blackout', 'Eclipse', 'Volt', 'Phantom', 'Panic', 'Vortex', 'Blast'], schedule: { enabled: true, teamsPerGroup: 8, gamesPerTeam: 4, mode: 'structured' } });
+ok(neonSchedule.schedule.enabled && neonSchedule.schedule.teamsPerGroup === 8 && neonSchedule.schedule.gamesPerTeam === 4 && neonSchedule.schedule.mode === 'structured',
+  'grade por times preserva 8 times, 4 jogos por time e o modo estruturado');
 
 const teams = [{ id: 'a', name: 'Time Azul' }, { id: 'b', name: 'Time Branco' }, { id: 'c', name: 'Time Cinza' }];
 const rows = C.standings(teams, [

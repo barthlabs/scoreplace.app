@@ -34,6 +34,13 @@ var ScoreplaceTeamCompetition;
             ? suppliedNames.slice(0, 128).map((name) => text(name).slice(0, 80))
             : Array.from({ length: legacyCount }, (_, index) => 'Time ' + (index + 1));
         const teamCount = teamNames.length;
+        const schedule = record(raw.schedule);
+        // A escala é limitada pela quantidade REAL de times nomeados. Um número solto
+        // permitiria salvar "8 por grupo" com seis times e o motor inventaria adversários.
+        // [[regression_team_schedule_uses_named_team_count]]
+        const maximumGroupSize = Math.max(2, teamCount || 2);
+        const teamsPerGroup = Math.min(maximumGroupSize, Math.max(2, Math.floor(number(schedule.teamsPerGroup, maximumGroupSize))));
+        const gamesPerTeam = Math.min(teamsPerGroup - 1, Math.max(1, Math.floor(number(schedule.gamesPerTeam, teamsPerGroup - 1))));
         return {
             enabled: raw.enabled === true,
             teamCount,
@@ -46,6 +53,11 @@ var ScoreplaceTeamCompetition;
             // Geral soma categorias (por exemplo, feminino + masculino) no mesmo time.
             // Por categoria mantém tabelas independentes sem alterar os confrontos.
             aggregation: raw.aggregation === 'per_category' ? 'per_category' : 'overall',
+            // Estruturado fixa a ordem pelo ID do time, não pelo rótulo. Renomear VENOM
+            // nunca pode redesenhar os confrontos. Livre embaralha cada categoria.
+            // Ausência de `schedule` é legado e preserva o todos-contra-todos completo.
+            // A nova tela grava enabled=true explicitamente antes do primeiro sorteio.
+            schedule: { enabled: Object.keys(schedule).length > 0 && schedule.enabled !== false, teamsPerGroup, gamesPerTeam, mode: schedule.mode === 'structured' ? 'structured' : 'free' },
             // A escala padrão é a mesma da classificatória atual: 3/1/0. O organizador
             // pode substituí-la, inclusive com valores zero ou negativos, de forma explícita.
             scoring: {

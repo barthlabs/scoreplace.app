@@ -1179,6 +1179,21 @@
       var _eq = Math.floor(pool.length / nGroups);
       if (_eq >= 1) { _placePool = pool.slice(0, _eq * nGroups); _waitlist = pool.slice(_eq * nGroups); }
     }
+    // A grade estruturada exige que a mesma identidade de time ocupe a mesma
+    // posição em cada categoria. Ordenar antes da serpentina torna o grupo e a
+    // ordem de adversários reprodutíveis; no sorteio livre a ordem original segue
+    // aleatória. [[regression_structured_team_groups_repeat_across_categories]]
+    var _tcForPlacement = phaseCfg && phaseCfg.teamCompetition;
+    var _tcPlacementCore = (typeof window !== 'undefined') && window.ScoreplaceTeamCompetition;
+    if (!_tcPlacementCore && typeof module !== 'undefined' && module.exports) {
+      try { _tcPlacementCore = require('../domain/team-competition.js'); } catch (e) { _tcPlacementCore = null; }
+    }
+    var _tcPlacementCfg = _tcPlacementCore && typeof _tcPlacementCore.normalize === 'function' ? _tcPlacementCore.normalize(_tcForPlacement) : null;
+    if (_tcPlacementCfg && _tcPlacementCfg.enabled && _tcPlacementCfg.schedule.mode === 'structured') {
+      _placePool = _placePool.slice().sort(function (a, b) {
+        return String(_tcPlacementCore.teamIdOf(a)).localeCompare(String(_tcPlacementCore.teamIdOf(b))) || String(a.displayName).localeCompare(String(b.displayName));
+      });
+    }
     // Serpentina: ida 0..n-1, volta n-1..0 — cabeças (pool já ordenado por força) caem
     // em grupos distintos e o equilíbrio fica melhor que blocos contíguos.
     _placePool.forEach(function (tm, i) {
@@ -1204,7 +1219,26 @@
     if (!_teamCompetitionCore && typeof module !== 'undefined' && module.exports) {
       try { _teamCompetitionCore = require('../domain/team-competition.js'); } catch (e) { _teamCompetitionCore = null; }
     }
-    // v4.4.x: ida-e-volta (turnos=2) — repete o round-robin com mando invertido.
+    // Grade parcial da competição por times. Estruturado ordena pelo ID canônico do
+    // time e por isso Light/Power/Extreme repetem os mesmos adversários na mesma
+    // ordem; livre embaralha cada categoria. Rótulo nunca decide confronto.
+    // [[regression_team_structured_schedule_uses_ids_not_labels]]
+    function _teamSchedule(players, wanted, mode) {
+      var ordered = players.slice();
+      var idOf = function (entry) { return _teamCompetitionCore && _teamCompetitionCore.teamIdOf ? _teamCompetitionCore.teamIdOf(entry) : ''; };
+      if (mode === 'structured') ordered.sort(function (a, b) { return String(idOf(a)).localeCompare(String(idOf(b))) || String(a.displayName).localeCompare(String(b.displayName)); });
+      else for (var i = ordered.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var swap = ordered[i]; ordered[i] = ordered[j]; ordered[j] = swap; }
+      var all = roundRobinSchedule(ordered);
+      // Em grupos pares, cada rodada do método do círculo dá exatamente um jogo a
+      // cada time. Ex.: 8 times e 4 jogos → 4 rodadas, 16 confrontos, zero BYE.
+      if (ordered.length % 2 === 0) return all.slice(0, Math.min(wanted, all.length));
+      // Para grupos ímpares, grau ímpar é matematicamente impossível para todos os
+      // times. Preservamos o RR completo (seguro e sem falsa folga como jogo) até o
+      // organizador escolher uma combinação viável; a configuração Neon é par.
+      if (wanted % 2 === 1) return all;
+      return all.slice(0, Math.min(wanted + 1, all.length));
+    }
+    // v4.4.x: ida-e-volta (turnos=2) — repete a grade com mando invertido.
     // GATED: só quando phaseCfg.turnos==='ida_volta' (ou _doubleRR); ausente = single-RR (comportamento legado).
     var _turnos = (phaseCfg && (phaseCfg.turnos === 'ida_volta' || phaseCfg._doubleRR)) ? 2 : 1;
     groups.forEach(function (g) {
@@ -1213,7 +1247,10 @@
       // à eliminatória e não pode aparecer nem contar nesta fase.
       // v3.1.9: round-robin via núcleo compartilhado (método do círculo) → rodadas
       // BALANCEADAS dentro do grupo. Estático: todos os jogos existem de uma vez.
-      var sched = roundRobinSchedule(g.players);
+      var normalizedCompetition = _teamCompetitionCore && typeof _teamCompetitionCore.normalize === 'function'
+        ? _teamCompetitionCore.normalize(_teamCompetition) : null;
+      var teamSchedule = normalizedCompetition && normalizedCompetition.enabled && normalizedCompetition.schedule.enabled ? normalizedCompetition.schedule : null;
+      var sched = teamSchedule ? _teamSchedule(g.players, teamSchedule.gamesPerTeam, teamSchedule.mode) : roundRobinSchedule(g.players);
       var nRounds = sched.length;
       for (var turn = 0; turn < _turnos; turn++) {
         sched.forEach(function (rd) {

@@ -724,7 +724,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     // dessas duplas. O valor fica na mesma configuração da fase para a CF sortear e
     // gravar os vínculos antes de gerar jogos — nunca como cálculo local da tela.
     if (isDupla && !rotativo && cfg.classifAtiva) {
-      var tc = cfg.teamCompetition || { enabled: false, teamCount: 0, teamNames: [], formation: 'draw', internalMatches: 'avoid', ranking: 'points', aggregation: 'overall', scoring: { win: 3, draw: 1, loss: 0 } };
+      var tc = cfg.teamCompetition || { enabled: false, teamCount: 0, teamNames: [], formation: 'draw', internalMatches: 'avoid', ranking: 'points', aggregation: 'overall', schedule: { enabled: false, teamsPerGroup: 2, gamesPerTeam: 1, mode: 'free' }, scoring: { win: 3, draw: 1, loss: 0 } };
       var tcLocked = _classifLocked;
       var tcToggle = '<label style="display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:' + (tcLocked ? 'not-allowed' : 'pointer') + ';font-size:.9rem;color:var(--text-main);' + (tcLocked ? 'opacity:.55;' : '') + '">' +
         '<span>🏆 Competição por times</span><span class="toggle-switch"><input type="checkbox"' + (tc.enabled ? ' checked' : '') + (tcLocked ? ' disabled' : '') + ' onchange="window._f2TeamCompetition(this.checked)"><span class="toggle-slider"></span></span></label>';
@@ -750,7 +750,18 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
           '<div style="margin-top:12px;display:flex;align-items:center;justify-content:space-between;gap:10px;"><div style="font-size:.72rem;color:var(--text-muted);">Nomes dos times</div><button type="button" class="btn btn-primary btn-sm" onclick="window._f2AddTeam()">＋ Time</button></div>' +
           (!(tc.teamNames || []).length ? '<div style="font-size:.72rem;color:var(--text-muted);margin-top:6px;">Nenhum time criado. Adicione e nomeie cada time antes do sorteio.</div>' : '') +
           '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:6px;">' +
-          (tc.teamNames || []).map(function (name, index) { return '<label style="font-size:.72rem;color:var(--text-muted);">Time ' + (index + 1) + '<span style="display:flex;gap:4px;margin-top:3px;"><input maxlength="80" placeholder="Nome do time" value="' + _safe(name).replace(/&quot;/g, '&quot;') + '" onchange="window._f2TeamName(' + index + ',this.value,this)" style="box-sizing:border-box;min-width:0;flex:1;padding:7px 8px;border-radius:8px;border:1px solid rgba(255,255,255,.2);background:var(--sp-b-255-255-255-02,rgba(0,0,0,.22));color:var(--text-main);"><button type="button" class="cancel-x-btn" title="Remover time" onclick="window._f2RemoveTeam(' + index + ')" style="cursor:pointer;">×</button></span></label>'; }).join('') + '</div>';
+          (tc.teamNames || []).map(function (name, index) { return '<label style="font-size:.72rem;color:var(--text-muted);">Time ' + (index + 1) + '<span style="display:flex;gap:4px;margin-top:3px;"><input maxlength="80" placeholder="Nome do time" value="' + _safe(name).replace(/&quot;/g, '&quot;') + '" onchange="window._f2TeamName(' + index + ',this.value,this)" style="box-sizing:border-box;min-width:0;flex:1;padding:7px 8px;border-radius:8px;border:1px solid rgba(255,255,255,.2);background:var(--sp-b-255-255-255-02,rgba(0,0,0,.22));color:var(--text-main);"><button type="button" class="cancel-x-btn" title="Remover time" onclick="window._f2RemoveTeam(' + index + ')" style="cursor:pointer;">×</button></span></label>'; }).join('') + '</div>' +
+          (tc.teamCount < 2 ? '<div style="font-size:.72rem;color:var(--text-muted);margin-top:12px;">Adicione ao menos dois times para definir os confrontos.</div>' :
+            '<div style="margin-top:16px;padding-top:12px;border-top:1px solid rgba(129,140,248,.22);">' +
+              '<div style="font-size:.72rem;color:var(--text-muted);margin-bottom:6px;">Times por grupo <b style="color:var(--text-main);">' + tc.schedule.teamsPerGroup + '</b></div>' +
+              '<input type="range" min="2" max="' + tc.teamCount + '" value="' + tc.schedule.teamsPerGroup + '" oninput="window._f2TeamSchedule(\'teamsPerGroup\',this.value,this)" style="width:100%;">' +
+              '<div style="font-size:.72rem;color:var(--text-muted);margin:10px 0 6px;">Jogos por time no grupo <b style="color:var(--text-main);">' + tc.schedule.gamesPerTeam + '</b></div>' +
+              '<input type="range" min="1" max="' + Math.max(1, tc.schedule.teamsPerGroup - 1) + '" value="' + tc.schedule.gamesPerTeam + '" oninput="window._f2TeamSchedule(\'gamesPerTeam\',this.value,this)" style="width:100%;">' +
+              '<div style="margin-top:12px;font-size:.72rem;color:var(--text-muted);margin-bottom:6px;">Grade entre categorias</div>' +
+              _pill(tc.schedule.mode !== 'structured', 'window._f2TeamSchedule(\'mode\',\'free\')', '🎲 Sorteio livre') +
+              _pill(tc.schedule.mode === 'structured', 'window._f2TeamSchedule(\'mode\',\'structured\')', '📋 Estruturado') +
+              '<div style="font-size:.72rem;color:var(--text-muted);margin-top:6px;">' + (tc.schedule.mode === 'structured' ? 'Os mesmos times se enfrentam na mesma ordem em cada categoria.' : 'Cada categoria recebe seus próprios confrontos sorteados.') + '</div>' +
+            '</div>');
       }
       classif += _sec('Times', tcToggle);
     }
@@ -763,6 +774,12 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       rInner = '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:2px;">Sorteio a cada rodada — ' +
         (cfg.parceria === 'rei_rainha' ? 'grupos de 4, parceiros rotativos' : 'parceiro e adversário sorteados') +
         '; pontuação individual.</div>' + _schedBlock(cfg.rodadas);
+    } else if (tc && tc.enabled && tc.teamCount >= 2) {
+      // A competição por times tem grade parcial própria. Os modos antigos descrevem
+      // liga e esconderiam os dois controles que determinam os confrontos.
+      // [[regression_team_schedule_replaces_round_mode_buttons]]
+      rInner = _toggleRight('Ida e volta', cfg.rodadas.turnos === 'ida_volta', 'window._f2Turnos(this.checked ? \'ida_volta\' : \'ida\')') +
+        '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;">Cada time faz ' + tc.schedule.gamesPerTeam + ' jogo(s) por categoria' + (cfg.rodadas.turnos === 'ida_volta' ? ' em cada turno — ida e volta dobra o total.' : '.') + '</div>';
     } else if (um) {
       // Pontos corridos: Nº de rodadas (PADRÃO, primeiro) × Todos contra todos.
       rInner = _pill(rModo === 'fixo', 'window._f2Modo(\'fixo\')', '🔢 Nº de rodadas') +
@@ -1249,6 +1266,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     // um número padrão escondido. Isso evita "Time 1…8" não escolhidos no sorteio.
     tc.teamNames = Array.isArray(tc.teamNames) ? tc.teamNames : [];
     tc.teamCount = tc.teamNames.length; tc.formation = 'draw';
+    tc.schedule = tc.schedule || { teamsPerGroup: 2, gamesPerTeam: 1, mode: 'free' };
+    tc.schedule.enabled = true;
     if (tc.internalMatches !== 'allow' && tc.internalMatches !== 'avoid') tc.internalMatches = 'avoid';
     tc.scoring = tc.scoring || { win: 3, draw: 1, loss: 0 };
     if (tc.ranking !== 'games_diff') tc.ranking = 'points';
@@ -1266,6 +1285,15 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   window._f2TeamAggregation = function (aggregation) {
     if (!S || !S.cfg.teamCompetition) return;
     S.cfg.teamCompetition.aggregation = aggregation === 'per_category' ? 'per_category' : 'overall'; _norm(); _rerender();
+  };
+  window._f2TeamSchedule = function (field, value, el) {
+    if (!S || !S.cfg.teamCompetition) return;
+    var tc = S.cfg.teamCompetition;
+    tc.schedule = tc.schedule || {};
+    if (field === 'mode') tc.schedule.mode = value === 'structured' ? 'structured' : 'free';
+    else if (field === 'teamsPerGroup') tc.schedule.teamsPerGroup = value;
+    else if (field === 'gamesPerTeam') tc.schedule.gamesPerTeam = value;
+    _norm(); _rerenderSemAtrapalhar(el);
   };
   window._f2TeamName = function (index, value, el) {
     if (!S || !S.cfg.teamCompetition || index < 0) return;

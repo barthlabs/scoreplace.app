@@ -519,6 +519,22 @@ ok(mres3.ok === false && mres3.error === 'already-materialized', 'guard _phaseMa
   ok(noInternal.matches.every(function (m) { return m.p1CompetitionTeamId && m.p2CompetitionTeamId && m.p1CompetitionTeamId !== m.p2CompetitionTeamId; }),
     'times: cada jogo guarda a identidade dos dois times representados');
 
+  // REGRESSÃO NEON: 8 times × 4 jogos = 16 confrontos reais, sem folga/BYE.
+  var neonTeams = [];
+  for (var nt = 1; nt <= 8; nt++) neonTeams.push({ displayName: 'Neon ' + nt, uid: 'neon-' + nt, competitionTeamId: 'team-' + nt });
+  var neon = eng.genGroupsFromPool(neonTeams, { formatCode: 'grupos_mata', gruposCount: 1,
+    teamCompetition: { enabled: true, teamNames: ['1','2','3','4','5','6','7','8'], schedule: { enabled: true, teamsPerGroup: 8, gamesPerTeam: 4, mode: 'structured' } } }, 'neon');
+  eq(neon.matches.length, 16, 'times: 8 × 4 ÷ 2 = 16 confrontos reais');
+  var appearances = {};
+  neon.matches.forEach(function (m) { appearances[m.p1CompetitionTeamId] = (appearances[m.p1CompetitionTeamId] || 0) + 1; appearances[m.p2CompetitionTeamId] = (appearances[m.p2CompetitionTeamId] || 0) + 1; });
+  ok(Object.keys(appearances).length === 8 && Object.keys(appearances).every(function (id) { return appearances[id] === 4; }),
+    'times: cada time joga exatamente quatro vezes na grade parcial');
+  var shuffledNeon = neonTeams.slice().reverse().map(function (entry) { return Object.assign({}, entry, { displayName: entry.displayName + ' Power' }); });
+  var neonPower = eng.genGroupsFromPool(shuffledNeon, { formatCode: 'grupos_mata', gruposCount: 1,
+    teamCompetition: { enabled: true, teamNames: ['1','2','3','4','5','6','7','8'], schedule: { enabled: true, teamsPerGroup: 8, gamesPerTeam: 4, mode: 'structured' } } }, 'neon-power');
+  var links = function (games) { return games.map(function (m) { return m.p1CompetitionTeamId + ':' + m.p2CompetitionTeamId + ':' + m.round; }).sort().join('|'); };
+  eq(links(neonPower.matches), links(neon.matches), 'times: estruturado repete adversários e ordem mesmo com a categoria embaralhada');
+
   // feed-forward: simula grupos jogados (menor número vence) → standings ordenado.
   built.matches.forEach(function (m) {
     m.phaseIndex = 1;

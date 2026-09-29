@@ -143,7 +143,7 @@
     // O carregamento normal traz o domínio antes deste arquivo. Ainda assim, o
     // normalizador é usado por harnesses e ferramentas isoladas: sem o domínio, a
     // opção fica explicitamente desligada em vez de acessar uma configuração nula.
-    if (!out.teamCompetition) out.teamCompetition = { enabled: false, teamCount: 0, teamNames: [], formation: 'draw', internalMatches: 'avoid', ranking: 'points', aggregation: 'overall', scoring: { win: 3, draw: 1, loss: 0 } };
+    if (!out.teamCompetition) out.teamCompetition = { enabled: false, teamCount: 0, teamNames: [], formation: 'draw', internalMatches: 'avoid', ranking: 'points', aggregation: 'overall', schedule: { enabled: false, teamsPerGroup: 2, gamesPerTeam: 1, mode: 'free' }, scoring: { win: 3, draw: 1, loss: 0 } };
 
     if (!isDupla) {
       out.parceria = null;
@@ -529,22 +529,29 @@
         drawIntervalDays: _schedManual ? null : ((cfg.rodadas.drawIntervalDays >= 1) ? cfg.rodadas.drawIntervalDays : null)
       });
     } else {
+      // Na competição por times, o tamanho escolhido para cada grupo determina a
+      // quantidade de grupos. Não deixamos o antigo campo "nº de grupos" competir
+      // com a nova fonte de verdade. Com 8 times e 8 por grupo, nasce 1 grupo.
+      // [[regression_team_group_size_derives_group_count]]
+      var _teamGroupCount = (cfg.teamCompetition && cfg.teamCompetition.enabled && cfg.teamCompetition.schedule.enabled && cfg.teamCompetition.teamCount >= 2)
+        ? Math.max(1, Math.ceil(cfg.teamCompetition.teamCount / cfg.teamCompetition.schedule.teamsPerGroup))
+        : cfg.grupos;
       top.format = 'Fase de Grupos';
       top.drawMode = 'sorteio';
       top.teamSize = teamSize;
       top.enrollmentMode = 'individual';
-      top.gruposCount = cfg.grupos;
+      top.gruposCount = _teamGroupCount;
       top.gruposClassified = cfg.classificados;
       if (cfg.teamCompetition && cfg.teamCompetition.enabled) top.teamCompetition = cfg.teamCompetition;
       // ida-e-volta só vale em tabela única (grupos=1) todos-contra-todos.
-      var idaVolta = (cfg.grupos === 1 && cfg.rodadas.turnos === 'ida_volta');
+      var idaVolta = (_teamGroupCount === 1 && cfg.rodadas.turnos === 'ida_volta');
       top.turnos = idaVolta ? 'ida_volta' : 'ida';   // _buildPhase0Cfg propaga p/ genGroupsFromPool
       if (idaVolta) top.ligaTurnos = 2;
       p0 = Object.assign(_phaseBase(re), {
-        kind: 'classification', classification: { structure: 'groups' }, name: cfg.grupos === 1 ? 'Pontos Corridos' : 'Fase de Grupos',
+        kind: 'classification', classification: { structure: 'groups' }, name: _teamGroupCount === 1 ? 'Pontos Corridos' : 'Fase de Grupos',
         formatCode: 'grupos_mata', format: 'Fase de Grupos',
         drawMode: 'sorteio', reiRainha: false,
-        gruposCount: cfg.grupos, gruposClassified: cfg.classificados,
+        gruposCount: _teamGroupCount, gruposClassified: cfg.classificados,
         groupsBy: 'sorteio', rounds: 1,
         turnos: idaVolta ? 'ida_volta' : 'ida',   // ⚠️ motor grupos_mata ainda não honra turnos (TODO extensão)
         _doubleRR: idaVolta,
