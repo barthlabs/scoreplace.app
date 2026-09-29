@@ -12,7 +12,7 @@ const card = src.slice(src.indexOf('function renderMatchCard'), src.indexOf('// 
 const filter = src.slice(src.indexOf('window._bracketApplyFilter'), src.indexOf('window._bracketApplyFilter', src.indexOf('window._bracketApplyFilter') + 1));
 
 ok(tabs.includes("return 'fem'") && tabs.includes("return 'masc'"), 'separa abas Feminina e Masculina pela categoria canônica');
-ok(tabs.includes('data-bracket-tab-category-button') && tabs.includes('data-bracket-tab-gender'), 'cada gênero expõe suas categorias em subabas');
+ok(tabs.includes('data-bracket-primary-tab') && tabs.includes('data-bracket-subtab'), 'gênero é aba principal e suas categorias aparecem como subabas');
 ok(tabs.includes('card.hidden ='), 'trocar aba oculta os cards fora da categoria sem duplicar a chave');
 ok(tabs.includes('window._bracketTabState'), 'a aba escolhida permanece ao re-renderizar placar ou W.O.');
 ok(tabs.includes('window._bracketTabsRevealSearch'), 'há caminho explícito para a busca revelar a aba do resultado');
@@ -21,6 +21,10 @@ ok(src.includes('window._bracketTabsRevealSearch();'), 'o filtro da busca chama 
 ok(card.includes('tierLabel') && card.includes('gold|silver|line'), 'linhas independentes como Ouro/Prata também recebem abas');
 ok(tabs.includes('tiersMeetAtFinal') && tabs.includes("data-bracket-tab-source") && card.includes('data-bracket-tab-source='), 'Ouro/Prata só se separam quando não convergem em uma grande final');
 ok(tabs.includes('.bracket-round-column>div:first-child{position:sticky'), 'o rótulo da rodada permanece visível dentro da coluna ao rolar');
+ok(tabs.includes('isOnlyLines') && tabs.includes("'linhas'"), 'Ouro/Prata ocupam diretamente a faixa de abas principal, sem aba genérica intermediária');
+ok(tabs.includes("translateY(1px)") && tabs.includes("translateY(5px)"), 'a aba ativa vem para a frente e as demais recuam visualmente');
+ok(tabs.includes('isRoundBased') && tabs.includes('data-bracket-round-tab') && card.includes('data-bracket-tab-round='), 'fases classificatórias ganham uma terceira faixa de abas por rodada independente');
+ok(tabs.includes('currentTournament.currentStage !== \'elimination\'') && tabs.includes('grupo|liga|ranking'), 'a faixa de rodadas não aparece na chave eliminatória encadeada');
 
 console.log('\n' + (fail ? '❌' : '✅') + ' chaves-abas-categoria: ' + pass + ' asserts ok, ' + fail + ' falharam');
 process.exitCode = fail ? 1 : 0;

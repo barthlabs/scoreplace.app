@@ -769,32 +769,61 @@ function _bracketTabLabel(category, gender) {
   if (gender === 'masc') s = s.replace(/^masculino\s*/i, '').replace(/^masc\s*/i, '');
   return s || 'Sem categoria';
 }
-function _bracketTabsApply(tid, gender, category) {
+function _bracketTabsApply(tid, gender, category, requestedRound) {
   var root = document.querySelector('[data-bracket-tabs-root][data-tournament-id="' + String(tid).replace(/"/g, '\\"') + '"]');
   if (!root) return;
+  var usesRoundTabs = root.getAttribute('data-bracket-round-tabs') === '1';
+  var roundButtons = root.querySelectorAll('[data-bracket-round-tab]');
+  var availableRounds = [];
+  for (var r = 0; r < roundButtons.length; r++) {
+    var rb = roundButtons[r];
+    if (rb.getAttribute('data-bracket-tab-gender') === gender && rb.getAttribute('data-bracket-tab-category') === category) availableRounds.push(rb.getAttribute('data-bracket-round-tab'));
+  }
+  var round = usesRoundTabs && availableRounds.length
+    ? (availableRounds.indexOf(String(requestedRound)) !== -1 ? String(requestedRound) : availableRounds[0])
+    : '';
   window._bracketTabState = window._bracketTabState || {};
-  window._bracketTabState[String(tid)] = { gender: gender, category: category };
+  window._bracketTabState[String(tid)] = { gender: gender, category: category, round: round };
   var cards = document.querySelectorAll('[data-bracket-tab-category]');
   for (var i = 0; i < cards.length; i++) {
     var card = cards[i];
-    card.hidden = card.getAttribute('data-bracket-tab-category') !== category;
+    card.hidden = card.getAttribute('data-bracket-tab-category') !== category || (usesRoundTabs && card.getAttribute('data-bracket-tab-round') !== round);
   }
-  var genderButtons = root.querySelectorAll('[data-bracket-tab-gender]');
-  for (var g = 0; g < genderButtons.length; g++) {
-    var gb = genderButtons[g], onG = gb.getAttribute('data-bracket-tab-gender') === gender;
+  // A camada de cima é a aba principal: Ouro/Prata em linhas independentes;
+  // Feminina/Masculina quando as categorias pertencem a um gênero. A ativa vem
+  // para a frente; as demais ficam recuadas, sem simularem conteúdo paralelo.
+  var lineMode = root.getAttribute('data-bracket-line-tabs') === '1';
+  var primaryButtons = root.querySelectorAll('[data-bracket-primary-tab]');
+  for (var g = 0; g < primaryButtons.length; g++) {
+    var gb = primaryButtons[g];
+    var onG = lineMode
+      ? gb.getAttribute('data-bracket-primary-tab') === category
+      : gb.getAttribute('data-bracket-primary-tab') === gender;
     gb.setAttribute('aria-selected', onG ? 'true' : 'false');
-    gb.style.background = onG ? 'rgba(99,102,241,.28)' : 'rgba(255,255,255,.04)';
+    gb.style.background = onG ? 'rgba(99,102,241,.32)' : 'rgba(255,255,255,.035)';
     gb.style.color = onG ? 'var(--text-bright)' : 'var(--text-muted)';
-    gb.style.borderColor = onG ? 'rgba(129,140,248,.85)' : 'rgba(255,255,255,.14)';
+    gb.style.borderColor = onG ? 'rgba(129,140,248,.95)' : 'rgba(255,255,255,.14)';
+    gb.style.transform = onG ? 'translateY(1px)' : 'translateY(5px)';
+    gb.style.position = 'relative'; gb.style.zIndex = onG ? '2' : '1';
   }
-  var catButtons = root.querySelectorAll('[data-bracket-tab-category-button]');
+  var catButtons = root.querySelectorAll('[data-bracket-subtab]');
   for (var c = 0; c < catButtons.length; c++) {
-    var cb = catButtons[c], ownG = cb.getAttribute('data-bracket-tab-gender'), onC = ownG === gender && cb.getAttribute('data-bracket-tab-category-button') === category;
+    var cb = catButtons[c], ownG = cb.getAttribute('data-bracket-tab-gender'), onC = ownG === gender && cb.getAttribute('data-bracket-subtab') === category;
     cb.style.display = ownG === gender ? '' : 'none';
     cb.setAttribute('aria-selected', onC ? 'true' : 'false');
     cb.style.background = onC ? 'rgba(245,158,11,.22)' : 'rgba(255,255,255,.025)';
     cb.style.color = onC ? 'var(--sp-c-fde68a,#fde68a)' : 'var(--text-muted)';
     cb.style.borderColor = onC ? 'rgba(245,158,11,.75)' : 'rgba(255,255,255,.12)';
+  }
+  for (var q = 0; q < roundButtons.length; q++) {
+    var qb = roundButtons[q];
+    var ownRound = qb.getAttribute('data-bracket-tab-gender') === gender && qb.getAttribute('data-bracket-tab-category') === category;
+    var onRound = ownRound && qb.getAttribute('data-bracket-round-tab') === round;
+    qb.style.display = ownRound ? '' : 'none';
+    qb.setAttribute('aria-selected', onRound ? 'true' : 'false');
+    qb.style.background = onRound ? 'rgba(16,185,129,.19)' : 'rgba(255,255,255,.025)';
+    qb.style.color = onRound ? 'var(--sp-c-6ee7b7,#6ee7b7)' : 'var(--text-muted)';
+    qb.style.borderColor = onRound ? 'rgba(16,185,129,.72)' : 'rgba(255,255,255,.12)';
   }
   // Colunas, grupos e detalhes vazios não devem ocupar a tela da aba escolhida.
   var holders = document.querySelectorAll('[data-bracket-tab-holder]');
@@ -804,8 +833,8 @@ function _bracketTabsApply(tid, gender, category) {
     else holder.setAttribute('data-bracket-tab-empty', '1');
   }
 }
-window._bracketSelectCategoryTab = function (tid, gender, category) {
-  _bracketTabsApply(String(tid), String(gender), String(category));
+window._bracketSelectCategoryTab = function (tid, gender, category, round) {
+  _bracketTabsApply(String(tid), String(gender), String(category), round == null ? '' : String(round));
 };
 window._bracketCategoryTabsMount = function () {
   var cards = Array.prototype.slice.call(document.querySelectorAll('[data-bracket-tab-category]'));
@@ -843,15 +872,49 @@ window._bracketCategoryTabsMount = function () {
     var anchor = scope.querySelector('.bracket-sticky-scroll-wrapper') || first;
     anchor.parentNode.insertBefore(root, anchor);
   }
-  var titles = { fem: '♀ Feminina', masc: '♂ Masculina', misto: '⚥ Mista', linhas: 'Categorias' };
-  var genderHtml = order.map(function (gender) {
-    return '<button type="button" data-bracket-tab-gender="' + gender + '" onclick="window._bracketSelectCategoryTab(\'' + String(id).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\',\'' + gender + '\',\'' + String(byGender[gender][0]).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\')" style="border:1px solid;border-radius:9px;padding:8px 12px;font-size:.82rem;font-weight:800;cursor:pointer;">' + (titles[gender] || gender) + '</button>';
-  }).join('');
+  var isOnlyLines = order.length === 1 && order[0] === 'linhas';
+  // Fase classificatória tem rodadas paralelas, não uma chave onde a coluna
+  // seguinte depende da anterior. Só nesses formatos a terceira faixa escolhe
+  // uma rodada; eliminatórias continuam apenas com as abas de categoria.
+  var formatText = String(currentTournament.format || currentTournament.classifyFormat || '').toLowerCase();
+  var isRoundBased = !isOnlyLines && currentTournament.currentStage !== 'elimination'
+    && /grupo|liga|ranking|su[ií]ç/.test(formatText);
+  root.setAttribute('data-bracket-line-tabs', isOnlyLines ? '1' : '0');
+  root.setAttribute('data-bracket-round-tabs', isRoundBased ? '1' : '0');
+  var titles = { fem: '♀ Feminina', masc: '♂ Masculina', misto: '⚥ Mista' };
+  var genderHtml = isOnlyLines
+    ? byGender.linhas.map(function (cat) {
+      var escaped = String(cat).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      return '<button type="button" data-bracket-primary-tab="' + String(cat).replace(/"/g, '&quot;') + '" onclick="window._bracketSelectCategoryTab(\'' + String(id).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\',\'linhas\',\'' + escaped + '\')" style="border:1px solid;border-radius:10px 10px 7px 7px;padding:9px 15px;font-size:.86rem;font-weight:850;cursor:pointer;">' + (window._safeHtml ? window._safeHtml(_bracketTabLabel(cat, 'linhas')) : _bracketTabLabel(cat, 'linhas')) + '</button>';
+    }).join('')
+    : order.filter(function (gender) { return gender !== 'linhas'; }).map(function (gender) {
+      return '<button type="button" data-bracket-primary-tab="' + gender + '" onclick="window._bracketSelectCategoryTab(\'' + String(id).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\',\'' + gender + '\',\'' + String(byGender[gender][0]).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\')" style="border:1px solid;border-radius:10px 10px 7px 7px;padding:9px 15px;font-size:.86rem;font-weight:850;cursor:pointer;">' + (titles[gender] || gender) + '</button>';
+    }).join('');
   var categoryHtml = order.map(function (gender) { return byGender[gender].map(function (cat) {
     var safe = String(cat).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-    return '<button type="button" data-bracket-tab-gender="' + gender + '" data-bracket-tab-category-button="' + String(cat).replace(/"/g, '&quot;') + '" onclick="window._bracketSelectCategoryTab(\'' + String(id).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\',\'' + gender + '\',\'' + safe + '\')" style="border:1px solid;border-radius:8px;padding:6px 10px;font-size:.78rem;font-weight:750;cursor:pointer;">' + (window._safeHtml ? window._safeHtml(_bracketTabLabel(cat, gender)) : _bracketTabLabel(cat, gender)) + '</button>';
+    return '<button type="button" data-bracket-tab-gender="' + gender + '" data-bracket-subtab="' + String(cat).replace(/"/g, '&quot;') + '" onclick="window._bracketSelectCategoryTab(\'' + String(id).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\',\'' + gender + '\',\'' + safe + '\')" style="border:1px solid;border-radius:8px;padding:6px 10px;font-size:.78rem;font-weight:750;cursor:pointer;">' + (window._safeHtml ? window._safeHtml(_bracketTabLabel(cat, gender)) : _bracketTabLabel(cat, gender)) + '</button>';
   }).join(''); }).join('');
-  root.innerHTML = '<span style="font-size:.7rem;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:var(--text-muted);margin-right:2px;">Chaves</span>' + genderHtml + '<span style="flex-basis:100%;height:0;"></span>' + categoryHtml;
+  var roundHtml = '';
+  if (isRoundBased) {
+    roundHtml = order.filter(function (gender) { return gender !== 'linhas'; }).map(function (gender) {
+      return byGender[gender].map(function (cat) {
+        var rounds = [];
+        cards.forEach(function (card) {
+          if (card.getAttribute('data-bracket-tab-gender') !== gender || card.getAttribute('data-bracket-tab-category') !== cat) return;
+          var value = card.getAttribute('data-bracket-tab-round');
+          if (value && rounds.indexOf(value) === -1) rounds.push(value);
+        });
+        rounds.sort(function (a, b) { return Number(a) - Number(b); });
+        return rounds.map(function (round) {
+          var escaped = String(round).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+          return '<button type="button" data-bracket-tab-gender="' + gender + '" data-bracket-tab-category="' + String(cat).replace(/"/g, '&quot;') + '" data-bracket-round-tab="' + String(round).replace(/"/g, '&quot;') + '" onclick="window._bracketSelectCategoryTab(\'' + String(id).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\',\'' + gender + '\',\'' + String(cat).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\',\'' + escaped + '\')" style="border:1px solid;border-radius:8px;padding:6px 10px;font-size:.76rem;font-weight:750;cursor:pointer;">Rodada ' + (window._safeHtml ? window._safeHtml(round) : round) + '</button>';
+        }).join('');
+      }).join('');
+    }).join('');
+  }
+  root.innerHTML = '<div style="display:flex;align-items:flex-end;gap:5px;flex-wrap:wrap;width:100%;border-bottom:1px solid rgba(129,140,248,.35);padding:0 4px;">' + genderHtml + '</div>'
+    + (isOnlyLines ? '' : '<div style="display:flex;gap:7px;flex-wrap:wrap;width:100%;padding:8px 4px 0;">' + categoryHtml + '</div>')
+    + (roundHtml ? '<div style="display:flex;gap:7px;flex-wrap:wrap;width:100%;padding:8px 4px 0;border-top:1px solid rgba(255,255,255,.07);">' + roundHtml + '</div>' : '');
   // Um holder é qualquer ancestral estrutural dos cards. A marca é só de aparência;
   // o filtro canônico continua dono do display dos cards e da busca.
   cards.forEach(function (card) {
@@ -871,7 +934,7 @@ window._bracketCategoryTabsMount = function () {
   var state = (window._bracketTabState || {})[id] || {};
   var gender = byGender[state.gender] ? state.gender : order[0];
   var category = byGender[gender].indexOf(state.category) !== -1 ? state.category : byGender[gender][0];
-  _bracketTabsApply(id, gender, category);
+  _bracketTabsApply(id, gender, category, state.round);
 };
 window._bracketTabsRevealSearch = function () {
   var root = document.querySelector('[data-bracket-tabs-root]');
@@ -881,7 +944,7 @@ window._bracketTabsRevealSearch = function () {
   for (var i = 0; i < cards.length; i++) {
     // O filtro já decidiu o display; mesmo escondido pela aba, este é o acerto real.
     if (cards[i].style.display === 'none') continue;
-    _bracketTabsApply(root.getAttribute('data-tournament-id'), cards[i].getAttribute('data-bracket-tab-gender'), cards[i].getAttribute('data-bracket-tab-category'));
+    _bracketTabsApply(root.getAttribute('data-tournament-id'), cards[i].getAttribute('data-bracket-tab-gender'), cards[i].getAttribute('data-bracket-tab-category'), cards[i].getAttribute('data-bracket-tab-round'));
     return;
   }
 };
@@ -6270,7 +6333,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   if (!_tabCategory && m.bracket && /^(gold|silver|line\d+)$/i.test(String(m.bracket))) _tabCategory = String(m.bracket);
   var _tabGender = _bracketTabGender(_tabCategory);
   return `
-    <div id="card-${m.id}" class="sp-match-card" data-players="${_searchNames}" data-player-uids="${_searchUids}" data-bracket-tab-category="${window._safeHtml(_tabCategory)}" data-bracket-tab-gender="${_tabGender}" data-bracket-tab-source="${_tabSource}" data-my-match="${_isMyMatch ? '1' : '0'}" data-my-pending="${_isMyMatch && !isDecided && !isByeMatch ? '1' : '0'}" data-match-num="${matchNum != null ? matchNum : ''}" style="scroll-margin-top:var(--scroll-anchor,120px);background:${window._spCor(_isMyMatch ? 'rgba(99,102,241,0.06)' : 'var(--bg-card)', 'background')};border:${_isMyMatch ? '2px' : '1px'} solid ${hasPending && _pr && _pr.disputed ? 'rgba(239,68,68,0.55)' : hasPending ? 'rgba(251,191,36,0.5)' : cardBorder};${_lineLeftBorder}border-radius:12px;padding:14px;${_cardMax}box-shadow:${_isMyMatch ? '0 0 20px rgba(99,102,241,0.25),0 0 8px rgba(99,102,241,0.12),0 4px 12px rgba(0,0,0,0.15)' : hasPending && _pr && _pr.disputed ? '0 0 14px rgba(239,68,68,0.2),0 4px 12px rgba(0,0,0,0.15)' : hasPending ? '0 0 14px rgba(251,191,36,0.18),0 4px 12px rgba(0,0,0,0.15)' : matchReady ? '0 0 16px rgba(16,185,129,0.15),0 4px 12px rgba(0,0,0,0.15)' : matchPartial ? '0 0 10px rgba(245,158,11,0.1),0 4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.15)'};${hasTBD ? 'opacity:0.6;' : ''}">
+    <div id="card-${m.id}" class="sp-match-card" data-players="${_searchNames}" data-player-uids="${_searchUids}" data-bracket-tab-category="${window._safeHtml(_tabCategory)}" data-bracket-tab-gender="${_tabGender}" data-bracket-tab-source="${_tabSource}" data-bracket-tab-round="${m.round != null ? window._safeHtml(String(m.round)) : ''}" data-my-match="${_isMyMatch ? '1' : '0'}" data-my-pending="${_isMyMatch && !isDecided && !isByeMatch ? '1' : '0'}" data-match-num="${matchNum != null ? matchNum : ''}" style="scroll-margin-top:var(--scroll-anchor,120px);background:${window._spCor(_isMyMatch ? 'rgba(99,102,241,0.06)' : 'var(--bg-card)', 'background')};border:${_isMyMatch ? '2px' : '1px'} solid ${hasPending && _pr && _pr.disputed ? 'rgba(239,68,68,0.55)' : hasPending ? 'rgba(251,191,36,0.5)' : cardBorder};${_lineLeftBorder}border-radius:12px;padding:14px;${_cardMax}box-shadow:${_isMyMatch ? '0 0 20px rgba(99,102,241,0.25),0 0 8px rgba(99,102,241,0.12),0 4px 12px rgba(0,0,0,0.15)' : hasPending && _pr && _pr.disputed ? '0 0 14px rgba(239,68,68,0.2),0 4px 12px rgba(0,0,0,0.15)' : hasPending ? '0 0 14px rgba(251,191,36,0.18),0 4px 12px rgba(0,0,0,0.15)' : matchReady ? '0 0 16px rgba(16,185,129,0.15),0 4px 12px rgba(0,0,0,0.15)' : matchPartial ? '0 0 10px rgba(245,158,11,0.1),0 4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.15)'};${hasTBD ? 'opacity:0.6;' : ''}">
       ${_headerHtml}
       ${_pendingBtnsRow}
       ${pendingBanner}
