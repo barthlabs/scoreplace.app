@@ -1048,11 +1048,21 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       if ('category' in pe) e.category = pe.category;
       edits.push(e);
     });
-    var nEdits = edits.length; if (!nEdits || !window.firebase || !firebase.functions) return;
+    var nEdits = edits.length; if (!nEdits) return;
     var btns = ['er-save-btn','er-mx-save-btn'].map(function(id){return document.getElementById(id);}).filter(Boolean);
     btns.forEach(function(b){ if(window._spinButton) window._spinButton(b,'Salvando…'); else { b.disabled=true; b.textContent='Salvando…'; } });
     window._suppressSoftRefresh = true;
-    firebase.functions().httpsCallable('applyEnrollmentAssignments')({ tournamentId:String(tId), sport:String(sport||''), edits:edits }).then(function(res){
+    // ⛔ NÃO usar firebase.functions().httpsCallable aqui. Este era o último caminho
+    // da Análise fora do transporte canônico e enviava a chamada sem Authorization
+    // em sessões compat — Cloud Run recusava antes de a Function ver o pedido e a UI
+    // mostrava apenas "internal". `_callCF` renova o ID token e preserva o protocolo
+    // callable, igual a Participantes e às demais telas. [[regression_analysis_save_uses_callcf]]
+    var saveCall = (typeof window._callCF === 'function')
+      ? window._callCF('applyEnrollmentAssignments', {
+          tournamentId:String(tId), sport:String(sport||''), edits:edits
+        }, { unauth:'Entre na sua conta para salvar as atribuições.', falha:'Não foi possível salvar as atribuições.' })
+      : Promise.reject(Object.assign(new Error('Atualize o aplicativo para salvar as atribuições com segurança.'), { code:'functions/internal' }));
+    saveCall.then(function(res){
       var r=(res&&res.data)||{}; _pendingEdits={};
       if (typeof showNotification==='function') showNotification('✅ Alterações salvas', (r.changed||nEdits)+' inscrito(s) atualizado(s).','success');
       btns.forEach(function(b){if(window._spinButtonDone)window._spinButtonDone(b);});
@@ -2572,6 +2582,23 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   // Light/Power/Extreme). Os padrões só são o fallback de torneios sem nenhuma
   // categoria configurada. Ver [[regression_analysis_uses_organizer_categories]].
   function _erAnalysisSkills(t) {
+    var explicit = _erConfiguredSkills(t);
+    if (explicit.length) return explicit;
+
+    // Categoria somente por gênero (Fem/Masc) é uma configuração válida: não
+    // inventar A/B/C/D/FUN; a única caixa resume os inscritos daquele gênero.
+    var combined = (typeof window._getTournamentCategories === 'function')
+      ? (window._getTournamentCategories(t) || [])
+      : ((t && t.combinedCategories) || []);
+    if (combined.length) return [];
+    return _DEFAULT_SKILLS.slice();
+  }
+
+  // A análise pode abrir torneios antigos que só guardaram `combinedCategories`.
+  // Extrair Light/Power/Extreme daqui é indispensável: elas já estão configuradas,
+  // portanto os toggles precisam nascer LIGADOS e uma edição não pode regravar só Fem/Masc.
+  // [[regression_analysis_preserves_combined_category_axes]]
+  function _erConfiguredSkills(t) {
     var seen = {}, explicit = [];
     (Array.isArray(t && t.skillCategories) ? t.skillCategories : [])
       .concat(Array.isArray(t && t.customCategories) ? t.customCategories : [])
@@ -2594,10 +2621,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         .trim();
       if (remainder && !seen[remainder]) { seen[remainder] = true; inferred.push(remainder); }
     });
-    // Categoria somente por gênero (Fem/Masc) é uma configuração válida: não
-    // inventar A/B/C/D/FUN; a única caixa resume os inscritos daquele gênero.
-    if (combined.length) return inferred;
-    return _DEFAULT_SKILLS.slice();
+    return inferred;
   }
   function _matrixInner(rows, t) {
     // Buckets refletem a configuração explícita do torneio; A-D-FUN só existe
@@ -2621,7 +2645,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var gcatsAll = t.genderCategories || [];
     var mistoOn = gcatsAll.some(_erIsMistoTok);
     var genderOn = gcatsAll.some(_erIsFMTok);
-    var createdSkills = (t.skillCategories || []);
+    // Não olhar só o campo novo: um torneio já configurado antes desse campo existir
+    // pode ter suas seis categorias apenas em `combinedCategories`.
+    var createdSkills = _erConfiguredSkills(t);
     var tIdEsc = _esc(String(t.id));
     var MIN_CAT = 2; // mínimo de pessoas pra oferecer "Criar categoria"
     function skillTotal(sk) { return fem[sk].length + masc[sk].length + semG[sk].length; }
@@ -2901,7 +2927,10 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   window._erToggleSkill = function (tId, sk, btn) {
     if (!_liveState || !_liveState.isOrg) return;
     var t = _erFindT(tId); if (!t) return;
-    var sc = (t.skillCategories || []).slice();
+    // Começa da configuração efetiva, inclusive legado por combinedCategories. Sem
+    // isso Light/Power/Extreme apareciam ligados, mas o primeiro clique apagava todas
+    // elas ao persistir apenas a habilidade clicada.
+    var sc = _erConfiguredSkills(t).slice();
     var i = sc.indexOf(sk);
     _erSetBtnBusy(btn, i >= 0);
     if (i >= 0) sc.splice(i, 1); else sc.push(sk);

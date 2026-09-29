@@ -2,7 +2,10 @@
 const fs=require('fs');let f=0;const ok=(v,s)=>{console.log((v?'✓ ':'✗ ')+s);if(!v)f++;};
 const ui=fs.readFileSync('js/views/tournaments-enrollment-report.js','utf8');
 const start=ui.indexOf('window._erSaveEdits = function');const end=ui.indexOf('// ─── Verificação letzplay',start);const part=ui.slice(start,end);
-ok(part.includes("httpsCallable('applyEnrollmentAssignments'")&&!part.includes('saveTournament(t)')&&!part.includes("setParticipantsProfile"),'análise apenas despacha a intenção atômica; não grava snapshot nem perfil separadamente');
+/* A chamada precisa passar por _callCF: é a porta que anexa o ID token no Authorization.
+ * Usar firebase.functions().httpsCallable direto aqui já gerou `internal` no Cloud Run,
+ * porque o compat não montava a credencial nesta tela. */
+ok(part.includes("window._callCF('applyEnrollmentAssignments'")&&!part.includes('httpsCallable(\'applyEnrollmentAssignments\'')&&!part.includes('saveTournament(t)')&&!part.includes("setParticipantsProfile"),'análise despacha somente a intenção atômica pela porta autenticada, sem gravar snapshot ou perfil');
 const fn=fs.readFileSync('functions-autodraw/index.js','utf8');const a=fn.indexOf('exports.applyEnrollmentAssignments');const b=fn.indexOf('\nexports.',a+8);const srv=fn.slice(a,b<0?fn.length:b);
 ok(a>=0&&srv.includes('db.runTransaction')&&srv.includes('_isTournamentAdmin')&&srv.includes('_gravaTorneio'),'servidor autoriza, relê e grava as atribuições na transação canônica');
 /* ⛔ INVERTIDO EM 23/set/2026. Este teste EXIGIA a escrita global de `skillBySport` — ou seja,

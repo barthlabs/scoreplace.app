@@ -82,8 +82,9 @@ t('save preserva a origem espera no comando enviado ao servidor',
   /waitlist:\s*!!row\._wl/.test(src));
 t('save envia o uid da linha como identidade do alvo',
   /uid:\s*row\.uid\s*\|\|\s*''/.test(src));
-t('save delega a resolução e a escrita à Cloud Function canônica',
-  /httpsCallable\('applyEnrollmentAssignments'\)/.test(src));
+t('save delega a resolução e a escrita à Cloud Function canônica autenticada',
+  /window\._callCF\('applyEnrollmentAssignments'/.test(src) &&
+  !/httpsCallable\('applyEnrollmentAssignments'\)/.test(src));
 
 console.log('\n──── a espera é VISÍVEL como espera (não se mistura aos inscritos) ────');
 t('linha da espera leva etiqueta', /\(r\._wl \?[\s\S]{0,900}>espera<\/span>/.test(src));
