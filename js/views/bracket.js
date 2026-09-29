@@ -752,9 +752,150 @@ try {
   }
 } catch (e) {}
 
+// ── Abas de gênero e categoria na chave ─────────────────────────────────────
+// A chave continua sendo uma única fonte de verdade: cada card recebe a categoria
+// canônica do jogo e as abas apenas mostram um recorte visual. Não duplicar partidas
+// nem montar uma chave paralela por categoria — isso já causou divergência de resultado.
+function _bracketTabGender(category) {
+  var s = String(category || '').toLowerCase();
+  if (/(^|\s)(fem|femin)/.test(s)) return 'fem';
+  if (/(^|\s)(masc|mascul)/.test(s)) return 'masc';
+  if (/(^|\s)misto/.test(s)) return 'misto';
+  return 'linhas';
+}
+function _bracketTabLabel(category, gender) {
+  var s = String(category || '').trim();
+  if (gender === 'fem') s = s.replace(/^feminino\s*/i, '').replace(/^fem\s*/i, '');
+  if (gender === 'masc') s = s.replace(/^masculino\s*/i, '').replace(/^masc\s*/i, '');
+  return s || 'Sem categoria';
+}
+function _bracketTabsApply(tid, gender, category) {
+  var root = document.querySelector('[data-bracket-tabs-root][data-tournament-id="' + String(tid).replace(/"/g, '\\"') + '"]');
+  if (!root) return;
+  window._bracketTabState = window._bracketTabState || {};
+  window._bracketTabState[String(tid)] = { gender: gender, category: category };
+  var cards = document.querySelectorAll('[data-bracket-tab-category]');
+  for (var i = 0; i < cards.length; i++) {
+    var card = cards[i];
+    card.hidden = card.getAttribute('data-bracket-tab-category') !== category;
+  }
+  var genderButtons = root.querySelectorAll('[data-bracket-tab-gender]');
+  for (var g = 0; g < genderButtons.length; g++) {
+    var gb = genderButtons[g], onG = gb.getAttribute('data-bracket-tab-gender') === gender;
+    gb.setAttribute('aria-selected', onG ? 'true' : 'false');
+    gb.style.background = onG ? 'rgba(99,102,241,.28)' : 'rgba(255,255,255,.04)';
+    gb.style.color = onG ? 'var(--text-bright)' : 'var(--text-muted)';
+    gb.style.borderColor = onG ? 'rgba(129,140,248,.85)' : 'rgba(255,255,255,.14)';
+  }
+  var catButtons = root.querySelectorAll('[data-bracket-tab-category-button]');
+  for (var c = 0; c < catButtons.length; c++) {
+    var cb = catButtons[c], ownG = cb.getAttribute('data-bracket-tab-gender'), onC = ownG === gender && cb.getAttribute('data-bracket-tab-category-button') === category;
+    cb.style.display = ownG === gender ? '' : 'none';
+    cb.setAttribute('aria-selected', onC ? 'true' : 'false');
+    cb.style.background = onC ? 'rgba(245,158,11,.22)' : 'rgba(255,255,255,.025)';
+    cb.style.color = onC ? 'var(--sp-c-fde68a,#fde68a)' : 'var(--text-muted)';
+    cb.style.borderColor = onC ? 'rgba(245,158,11,.75)' : 'rgba(255,255,255,.12)';
+  }
+  // Colunas, grupos e detalhes vazios não devem ocupar a tela da aba escolhida.
+  var holders = document.querySelectorAll('[data-bracket-tab-holder]');
+  for (var h = 0; h < holders.length; h++) {
+    var holder = holders[h], hasVisible = holder.querySelector('[data-bracket-tab-category]:not([hidden])');
+    if (hasVisible) holder.removeAttribute('data-bracket-tab-empty');
+    else holder.setAttribute('data-bracket-tab-empty', '1');
+  }
+}
+window._bracketSelectCategoryTab = function (tid, gender, category) {
+  _bracketTabsApply(String(tid), String(gender), String(category));
+};
+window._bracketCategoryTabsMount = function () {
+  var cards = Array.prototype.slice.call(document.querySelectorAll('[data-bracket-tab-category]'));
+  if (!cards.length) return;
+  // Ouro/Prata (ou linhas) só ganham abas quando são trilhas independentes. Se
+  // chegam a uma grande final, continuam na mesma chave — escondê-las em abas
+  // quebraria justamente a leitura de quem avança para o confronto comum.
+  var currentTournament = window._currentBracketTournament || {};
+  var currentMatches = (typeof window._collectAllMatches === 'function')
+    ? window._collectAllMatches(currentTournament)
+    : (currentTournament.matches || []);
+  var tiersMeetAtFinal = currentMatches.some(function (m) { return String((m && m.bracket) || '').toLowerCase() === 'grandfinal'; });
+  var byGender = {}, order = [];
+  cards.forEach(function (card) {
+    if (tiersMeetAtFinal && card.getAttribute('data-bracket-tab-source') === 'tier') return;
+    var cat = card.getAttribute('data-bracket-tab-category');
+    if (!cat) return;
+    var gender = card.getAttribute('data-bracket-tab-gender') || _bracketTabGender(cat);
+    if (!byGender[gender]) { byGender[gender] = []; order.push(gender); }
+    if (byGender[gender].indexOf(cat) === -1) byGender[gender].push(cat);
+  });
+  var allCats = order.reduce(function (n, gender) { return n + byGender[gender].length; }, 0);
+  if (allCats < 2) return; // chave única continua limpa: não há navegação a oferecer.
+  var first = cards[0], scope = first.closest ? first.closest('#view-container, #inline-bracket-container') : null;
+  if (!scope) scope = document.getElementById('view-container') || document.body;
+  var tid = (window._currentBracketTournament && window._currentBracketTournament.id) || scope.getAttribute('data-tournament-id') || 'current';
+  var id = String(tid);
+  var root = scope.querySelector('[data-bracket-tabs-root]');
+  if (!root) {
+    root = document.createElement('nav');
+    root.setAttribute('data-bracket-tabs-root', '1');
+    root.setAttribute('data-tournament-id', id);
+    root.setAttribute('aria-label', 'Categorias da chave');
+    root.style.cssText = 'display:flex;flex-wrap:wrap;gap:7px;align-items:center;margin:0 0 14px;padding:10px 12px;border:1px solid rgba(129,140,248,.32);border-radius:12px;background:rgba(15,23,42,.55);';
+    var anchor = scope.querySelector('.bracket-sticky-scroll-wrapper') || first;
+    anchor.parentNode.insertBefore(root, anchor);
+  }
+  var titles = { fem: '♀ Feminina', masc: '♂ Masculina', misto: '⚥ Mista', linhas: 'Categorias' };
+  var genderHtml = order.map(function (gender) {
+    return '<button type="button" data-bracket-tab-gender="' + gender + '" onclick="window._bracketSelectCategoryTab(\'' + String(id).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\',\'' + gender + '\',\'' + String(byGender[gender][0]).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\')" style="border:1px solid;border-radius:9px;padding:8px 12px;font-size:.82rem;font-weight:800;cursor:pointer;">' + (titles[gender] || gender) + '</button>';
+  }).join('');
+  var categoryHtml = order.map(function (gender) { return byGender[gender].map(function (cat) {
+    var safe = String(cat).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    return '<button type="button" data-bracket-tab-gender="' + gender + '" data-bracket-tab-category-button="' + String(cat).replace(/"/g, '&quot;') + '" onclick="window._bracketSelectCategoryTab(\'' + String(id).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\',\'' + gender + '\',\'' + safe + '\')" style="border:1px solid;border-radius:8px;padding:6px 10px;font-size:.78rem;font-weight:750;cursor:pointer;">' + (window._safeHtml ? window._safeHtml(_bracketTabLabel(cat, gender)) : _bracketTabLabel(cat, gender)) + '</button>';
+  }).join(''); }).join('');
+  root.innerHTML = '<span style="font-size:.7rem;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:var(--text-muted);margin-right:2px;">Chaves</span>' + genderHtml + '<span style="flex-basis:100%;height:0;"></span>' + categoryHtml;
+  // Um holder é qualquer ancestral estrutural dos cards. A marca é só de aparência;
+  // o filtro canônico continua dono do display dos cards e da busca.
+  cards.forEach(function (card) {
+    for (var p = card.parentElement; p && p !== scope; p = p.parentElement) {
+      if (p.classList && (p.classList.contains('bracket-round-column') || p.getAttribute('data-group-box') === '1')) p.setAttribute('data-bracket-tab-holder', '1');
+    }
+  });
+  if (!document.getElementById('bracket-category-tab-style')) {
+    var style = document.createElement('style'); style.id = 'bracket-category-tab-style';
+    style.textContent = '[data-bracket-tab-empty="1"]{display:none!important;}'
+      // O cabeçalho fica preso DENTRO da própria coluna, abaixo das barras
+      // globais. Assim cada rodada continua identificável durante o scroll
+      // vertical sem alterar o scroll horizontal da chave.
+      + '.bracket-round-column>div:first-child{position:sticky;top:var(--scroll-anchor,120px);z-index:4;background:var(--bg-main,#111827);padding:8px 0 7px;margin-top:-8px;box-shadow:0 8px 10px -10px rgba(0,0,0,.9);}';
+    document.head.appendChild(style);
+  }
+  var state = (window._bracketTabState || {})[id] || {};
+  var gender = byGender[state.gender] ? state.gender : order[0];
+  var category = byGender[gender].indexOf(state.category) !== -1 ? state.category : byGender[gender][0];
+  _bracketTabsApply(id, gender, category);
+};
+window._bracketTabsRevealSearch = function () {
+  var root = document.querySelector('[data-bracket-tabs-root]');
+  var input = document.getElementById('bracket-search');
+  if (!root || !input || !String(input.value || '').trim()) return;
+  var cards = document.querySelectorAll('[data-bracket-tab-category]');
+  for (var i = 0; i < cards.length; i++) {
+    // O filtro já decidiu o display; mesmo escondido pela aba, este é o acerto real.
+    if (cards[i].style.display === 'none') continue;
+    _bracketTabsApply(root.getAttribute('data-tournament-id'), cards[i].getAttribute('data-bracket-tab-gender'), cards[i].getAttribute('data-bracket-tab-category'));
+    return;
+  }
+};
+
 function _applyMyMatchesFilter() {
   // A régua do card é medida a cada render — é aqui que a chave nova já está no DOM.
   _medirLarguraUtilDaChave();
+  // As abas são um acabamento de leitura da mesma chave já renderizada. Fazemos a
+  // montagem aqui, no único pós-render compartilhado por eliminatória, grupos, liga
+  // e fases posteriores; criar um segundo renderer por categoria faria as duas
+  // versões divergirem em placar, W.O. e numeração.
+  if (typeof window._bracketCategoryTabsMount === 'function') {
+    try { window._bracketCategoryTabsMount(); } catch (e) {}
+  }
   // v4.0.96: fia o arrastar-real-sobre-vaga (placeholder) APÓS cada render do bracket,
   // em TODOS os formatos. Antes do early-return abaixo pra sempre rodar.
   if (typeof window._wirePlaceholderDnD === 'function') { try { window._wirePlaceholderDnD(); } catch (e) {} }
@@ -6121,8 +6262,15 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
 
   var _tierLC = { gold: '#fbbf24', silver: '#cbd5e1', line3: '#cd7f32', line4: '#3b82f6', upper: '#10b981', lower: '#f59e0b' };
   var _lineLeftBorder = _tierLC[m.bracket] ? ('border-left:4px solid ' + window._spCor(_tierLC, 'borda')[m.bracket] + ';') : '';
+  // A categoria é declarada no card uma única vez. Em linhas independentes sem
+  // categoria explícita, tierLabel/bracket nomeia a aba; eliminatória com final
+  // unificada permanece uma chave só porque só há uma categoria declarada.
+  var _tabCategory = String(m.category || m.tierLabel || '');
+  var _tabSource = m.category ? 'category' : 'tier';
+  if (!_tabCategory && m.bracket && /^(gold|silver|line\d+)$/i.test(String(m.bracket))) _tabCategory = String(m.bracket);
+  var _tabGender = _bracketTabGender(_tabCategory);
   return `
-    <div id="card-${m.id}" class="sp-match-card" data-players="${_searchNames}" data-player-uids="${_searchUids}" data-my-match="${_isMyMatch ? '1' : '0'}" data-my-pending="${_isMyMatch && !isDecided && !isByeMatch ? '1' : '0'}" data-match-num="${matchNum != null ? matchNum : ''}" style="scroll-margin-top:var(--scroll-anchor,120px);background:${window._spCor(_isMyMatch ? 'rgba(99,102,241,0.06)' : 'var(--bg-card)', 'background')};border:${_isMyMatch ? '2px' : '1px'} solid ${hasPending && _pr && _pr.disputed ? 'rgba(239,68,68,0.55)' : hasPending ? 'rgba(251,191,36,0.5)' : cardBorder};${_lineLeftBorder}border-radius:12px;padding:14px;${_cardMax}box-shadow:${_isMyMatch ? '0 0 20px rgba(99,102,241,0.25),0 0 8px rgba(99,102,241,0.12),0 4px 12px rgba(0,0,0,0.15)' : hasPending && _pr && _pr.disputed ? '0 0 14px rgba(239,68,68,0.2),0 4px 12px rgba(0,0,0,0.15)' : hasPending ? '0 0 14px rgba(251,191,36,0.18),0 4px 12px rgba(0,0,0,0.15)' : matchReady ? '0 0 16px rgba(16,185,129,0.15),0 4px 12px rgba(0,0,0,0.15)' : matchPartial ? '0 0 10px rgba(245,158,11,0.1),0 4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.15)'};${hasTBD ? 'opacity:0.6;' : ''}">
+    <div id="card-${m.id}" class="sp-match-card" data-players="${_searchNames}" data-player-uids="${_searchUids}" data-bracket-tab-category="${window._safeHtml(_tabCategory)}" data-bracket-tab-gender="${_tabGender}" data-bracket-tab-source="${_tabSource}" data-my-match="${_isMyMatch ? '1' : '0'}" data-my-pending="${_isMyMatch && !isDecided && !isByeMatch ? '1' : '0'}" data-match-num="${matchNum != null ? matchNum : ''}" style="scroll-margin-top:var(--scroll-anchor,120px);background:${window._spCor(_isMyMatch ? 'rgba(99,102,241,0.06)' : 'var(--bg-card)', 'background')};border:${_isMyMatch ? '2px' : '1px'} solid ${hasPending && _pr && _pr.disputed ? 'rgba(239,68,68,0.55)' : hasPending ? 'rgba(251,191,36,0.5)' : cardBorder};${_lineLeftBorder}border-radius:12px;padding:14px;${_cardMax}box-shadow:${_isMyMatch ? '0 0 20px rgba(99,102,241,0.25),0 0 8px rgba(99,102,241,0.12),0 4px 12px rgba(0,0,0,0.15)' : hasPending && _pr && _pr.disputed ? '0 0 14px rgba(239,68,68,0.2),0 4px 12px rgba(0,0,0,0.15)' : hasPending ? '0 0 14px rgba(251,191,36,0.18),0 4px 12px rgba(0,0,0,0.15)' : matchReady ? '0 0 16px rgba(16,185,129,0.15),0 4px 12px rgba(0,0,0,0.15)' : matchPartial ? '0 0 10px rgba(245,158,11,0.1),0 4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.15)'};${hasTBD ? 'opacity:0.6;' : ''}">
       ${_headerHtml}
       ${_pendingBtnsRow}
       ${pendingBanner}
@@ -9208,6 +9356,12 @@ window._bracketApplyFilter = function () {
   // Avisar aqui é barato (a função é idempotente e já roda a cada scroll) e fecha o
   // buraco na fonte: é o próprio ato de filtrar que reposiciona o chrome.
   if (typeof window._reflowChrome === 'function') window._reflowChrome();
+  // Busca encontra uma pessoa dentro da categoria, não só o card: abre a aba de
+  // gênero/categoria que contém o resultado. Com a busca limpa, a escolha manual
+  // da aba permanece intacta.
+  if (typeof window._bracketTabsRevealSearch === 'function') {
+    try { window._bracketTabsRevealSearch(); } catch (e) {}
+  }
   /* ⛔ E QUEM FILTRA TAMBÉM TEM QUE MANTER O PAI ALTO — era o que faltava aqui.
    * `position:sticky` só segura ENQUANTO o bloco-pai está na viewport. Filtrar de 55 cards
    * para 5 encolhe o `#view-container`, o pai deixa de ter por onde viajar e a barra
