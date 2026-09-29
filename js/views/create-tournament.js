@@ -351,17 +351,14 @@ function setupCreateTournamentModal() {
                 <input type="hidden" id="tourn-cover-data" value="">
               </div>
 
-              <!-- Público/Privado -->
-              <div class="form-group mb-2">
+              <!-- Visibilidade do torneio: os dois estados ficam sempre explícitos,
+                   tal qual Inscrições durante a fase. REGRESSÃO: não volte ao rótulo
+                   único “Público”; com o switch desligado ele escondia “Privado” e
+                   fazia o estado gravado em #tourn-public parecer o oposto. -->
+              <div class="form-group mb-2" style="background:rgba(96,165,250,0.06);border:1px solid rgba(96,165,250,0.18);border-radius:12px;padding:1rem;">
+                <p style="margin:0 0 0.75rem;font-size:0.8rem;color:var(--sp-c-60a5fa,#60a5fa);font-weight:600;text-transform:uppercase;letter-spacing:1px;">🌐 ${_t('create.visibilitySection')}</p>
                 <input type="hidden" id="tourn-public" value="true">
-                <div style="display:flex;align-items:center;gap:10px;">
-                  <label class="toggle-switch" style="flex-shrink:0;">
-                    <input type="checkbox" id="toggle-public" aria-label="Tornar torneio público" checked onchange="window._setVisibility(this.checked ? 'public' : 'private')">
-                    <span class="toggle-slider"></span>
-                  </label>
-                  <span style="font-weight:600;font-size:0.9rem;color:var(--text-bright);">🌐 ${_t('create.publicLabel')}</span>
-                </div>
-                <small id="vis-desc" class="text-muted" style="display:block;margin-top:6px;">${_t('create.publicDesc')}</small>
+                ${window._lateEnrollmentModeSwitchHtml({ id: 'tournament-visibility-mode', inputId: 'toggle-public', mode: 'visibility', on: true, left: _t('create.privateLabel'), right: _t('create.publicLabel'), leftColor: '#f87171', rightColor: '#60a5fa', leftToggleBg: 'rgba(248,113,113,0.28)', rightGlow: 'rgba(96,165,250,0.36)', ariaPrefix: _t('create.visibilitySection'), onchange: "window._setVisibility(this.checked ? 'public' : 'private')", descId: 'vis-desc', desc: _t('create.publicDesc') })}
               </div>
 
               <!-- ═══════════ BOX FASE 1 ═══════════
@@ -2540,7 +2537,10 @@ function setupCreateTournamentModal() {
     var toggle = document.getElementById('toggle-public');
     var hidden = document.getElementById('tourn-public');
     var desc = document.getElementById('vis-desc');
-    if (vis === 'public') {
+    var isPublic = vis === 'public';
+    // Fonte de verdade única: o valor salvo continua booleano em #tourn-public.
+    // O switch e suas duas legendas são apenas a representação visual desse valor.
+    if (isPublic) {
       if (toggle) toggle.checked = true;
       if (hidden) hidden.value = 'true';
       if (desc) desc.textContent = _t('create.publicDesc');
@@ -2549,6 +2549,8 @@ function setupCreateTournamentModal() {
       if (hidden) hidden.value = 'false';
       if (desc) desc.textContent = _t('create.privateDesc');
     }
+    var row = document.getElementById('tournament-visibility-mode');
+    if (typeof window._setLateEnrollmentModeVisual === 'function') window._setLateEnrollmentModeVisual(row, isPublic);
   };
 
   window._onSportChange = function () {
@@ -7281,7 +7283,9 @@ window._prefillFromTemplate = function(tpl) {
   }
   // Público/privado
   if (tpl.isPublic !== undefined) {
-    _setV('tourn-public', tpl.isPublic ? 'true' : 'false');
+    // Template, edição e toque manual devem passar pelo mesmo sincronizador;
+    // gravar apenas o hidden regressa o texto/posição visual para “Público”.
+    if (typeof window._setVisibility === 'function') window._setVisibility(tpl.isPublic ? 'public' : 'private');
   }
   // Tipo de jogo, lotação, lançamento de resultado, W.O. já tratado, encerrar ao lotar
   _setV('tourn-game-types', tpl.gameTypes);

@@ -1665,6 +1665,8 @@ window._translations['en'] = {
   'create.doublesOnly': 'Doubles matches only (2v2).',
   'create.publicDesc': 'Visible to everyone in the Explore tab. Anyone can sign up.',
   'create.privateDesc': 'Only you and invited players can see the tournament.',
+  'create.visibilitySection': 'Tournament visibility',
+  'create.privateLabel': 'Private',
   'create.openDesc': 'Anyone can sign up and follow the tournament.',
   'create.restrictedDesc': 'Only players invited by the organizer can participate.',
   'create.courtHint': 'Leave blank for automatic numbering (Court 1, Court 2...).',

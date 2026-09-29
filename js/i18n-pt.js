@@ -1679,6 +1679,8 @@ window._translations['pt'] = {
   'create.doublesOnly': 'Apenas partidas de duplas (2v2).',
   'create.publicDesc': 'Visível para todos na aba Explorar. Qualquer pessoa pode se inscrever.',
   'create.privateDesc': 'Apenas você e jogadores convidados poderão ver o torneio.',
+  'create.visibilitySection': 'Visibilidade do torneio',
+  'create.privateLabel': 'Privado',
   'create.openDesc': 'Qualquer pessoa pode se inscrever e acompanhar o torneio.',
   'create.restrictedDesc': 'Apenas convidados pelo organizador podem participar.',
   'create.courtHint': 'Deixe em branco para numeração automática (Quadra 1, Quadra 2...).',
