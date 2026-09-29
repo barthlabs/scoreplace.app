@@ -2408,6 +2408,12 @@ window._rankLosersByCriteria = function (t, nomes) {
 // project_repechage_selfmatch_systemic). Na Simples não há pouso: preenchimento direto.
 window._reassignBestLosersToRepechage = function (t) {
   if (!t) return 0;
+  /* REGRESSÃO — Prata da Confra, 28/set/2026:
+   * a dupla já presente na chave NÃO perde a repescagem porque um dos seus UIDs ainda
+   * não resolve um perfil (ex.: "Jogador X" que será substituído depois de um W.O.).
+   * A vaga é decidida pelo resultado e pelo UID registrado no jogo; W.O. e substituição
+   * são eventos posteriores, que então recalculam o saldo. Nunca filtrar o time aqui por
+   * disponibilidade de perfil, pois isso transforma uma pendência cadastral em eliminação. */
   var all = (typeof window._collectAllMatches === 'function') ? (window._collectAllMatches(t) || []) : (t.matches || []);
   if (!all.length) return 0;
   var _vazio = function (v) { return !v || v === 'TBD' || /^bye/i.test(String(v).trim()) || /a definir/i.test(String(v)); };
