@@ -219,11 +219,11 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       if (indiv && uids.length > 1) {
         uids.forEach(function (u) {
           var nm = (typeof window._displayNameForUid === 'function') ? window._displayNameForUid(u, '') : '';
-          out.push({ name: nm || String(u), uids: [u] });
+          out.push({ name: nm || String(u), uids: [u], side: side });
         });
         return;
       }
-      out.push({ name: s, uids: uids.length ? uids : _nameUids(t, s) });
+      out.push({ name: s, uids: uids.length ? uids : _nameUids(t, s), side: side });
     });
     return out;
   }
@@ -550,8 +550,29 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         : '';
       return '<button type="button" onclick="window.' + (_euMesmo ? '_woSelfConfirm' : '_woDeclare') + '(\'' + _attr(t.id) + '\',\'' + _attr(ctxKey) + '\',\'' + _attr(mb.name) + '\',\'' + _attr(_u) + '\')" class="btn hover-lift" style="display:block;width:100%;text-align:left;margin-bottom:8px;' + _sel + 'color:var(--text-bright);font-weight:700;border-radius:11px;padding:11px 13px;font-size:0.92rem;">🚫 ' + _esc(_nm) + _tag + '</button>';
     }).join('');
+    /* REGRESSÃO — modal de W.O. longo demais escondia Jogador X abaixo da dobra.
+     * Para a organização, cada lado do confronto ocupa UMA linha compacta: os nomes
+     * disparam W.O. individual (e chamam suplente); o botão à direita desclassifica a
+     * dupla inteira. A ação não é escondida em uma segunda lista, nem exige rolagem. */
+    var compactManagerChoices = isManager && rc.scope === 'match' && rc.m;
+    if (compactManagerChoices) {
+      picks = ['p1', 'p2'].map(function(side) {
+        var teamName = String(rc.m[side] || '').trim();
+        var opponent = String(rc.m[side === 'p1' ? 'p2' : 'p1'] || '').trim();
+        if (!teamName || teamName === 'TBD' || teamName === 'BYE') return '';
+        var names = selectable.filter(function(mb) { return mb.side === side; }).map(function(mb) {
+          var u = (mb.uids || [])[0] || '';
+          var nm = (typeof window._liveRowName === 'function') ? (window._liveRowName({ name: mb.name, uid: u }) || mb.name) : mb.name;
+          return '<button type="button" onclick="window._woDeclareIndividual(\'' + _attr(t.id) + '\',\'' + _attr(ctxKey) + '\',\'' + _attr(mb.name) + '\',\'' + _attr(u) + '\')" class="btn hover-lift" style="flex:1;min-width:0;white-space:normal;background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.35);color:var(--text-bright);font-weight:750;border-radius:10px;padding:10px 8px;font-size:0.84rem;">' + _esc(nm) + '</button>';
+        }).join('');
+        var teamAction = opponent && opponent !== 'TBD' && opponent !== 'BYE'
+          ? '<button type="button" onclick="window._woDeclareTeam(\'' + _attr(t.id) + '\',\'' + _attr(ctxKey) + '\',\'' + side + '\')" class="btn hover-lift" style="flex:0 0 auto;background:rgba(127,29,29,.32);border:1px solid rgba(248,113,113,.65);color:#fff;font-weight:850;border-radius:10px;padding:10px;font-size:.78rem;">W.O.<br>dupla</button>' : '';
+        return '<div style="display:flex;gap:7px;align-items:stretch;margin-bottom:8px;">' +
+          '<div style="display:flex;gap:6px;flex:1;min-width:0;">' + names + '</div>' + teamAction + '</div>';
+      }).join('');
+    }
     var teamPicks = '';
-    if (isManager && rc.scope === 'match' && rc.m) {
+    if (!compactManagerChoices && isManager && rc.scope === 'match' && rc.m) {
       ['p1', 'p2'].forEach(function (side) {
         var name = String(rc.m[side] || '').trim();
         var sideUids = (typeof window._slotUids === 'function') ? window._slotUids(rc.m, side).filter(Boolean) : [];
@@ -563,7 +584,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       });
     }
     var intro = isManager && rc.scope === 'match'
-      ? 'Escolha a ação. <b style="color:var(--text-bright);">W.O. individual</b> procura suplente elegível. <b style="color:var(--text-bright);">Desclassificar dupla</b> não consulta a espera e dá a vitória ao adversário.'
+      ? 'Toque no nome para W.O. individual e chamar o primeiro suplente. À direita, <b style="color:var(--text-bright);">W.O. dupla</b> encerra o confronto daquele time sem suplente.'
       : 'Quem não pôde vir? <b style="color:var(--text-bright);">Se for você, só a sua confirmação basta</b> — ninguém mais precisa aprovar. Apontando outra pessoa, o outro lado confirma antes.';
     _overlay(_header(isManager && rc.scope === 'match' ? 'Aplicar W.O.' : 'Faltou alguém?') +
       '<div style="padding:1.1rem;">' +

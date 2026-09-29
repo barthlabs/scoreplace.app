@@ -2360,17 +2360,29 @@ exports.applyTournamentWO = onCall(async (request) => {
       // O texto vindo da tela só localiza o alvo. O UID e o nome vivo são
       // rederivados no torneio fresco, para que homônimos não redirecionem W.O.
       const entries = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
+      /* REGRESSÃO — Prata, 28/set/2026: `Jogador X` pode ser o substituto provisório
+       * de uma dupla já publicada. Ele tem UID no SLOT, mas não pertence ao elenco de
+       * inscrições. Recusar o W.O. por não achá-lo em `participants` congelava exatamente
+       * o fluxo que existe para trocá-lo pelo primeiro suplente. A identidade do alvo é o
+       * UID no jogo; o elenco só é fonte complementar para quem ainda não entrou na chave. */
+      const slotMember = selectedMatch && requestedUid ? ['p1', 'p2'].map(side => {
+        const slotUids = _slotUidsOf(selectedMatch, side);
+        const at = slotUids.indexOf(requestedUid);
+        if (at < 0) return null;
+        const label = String(selectedMatch[side] || '').split(/\s*\/\s*/)[at] || '';
+        return { side, name: label.trim() };
+      }).find(Boolean) : null;
       const entry = entries.find((p) => {
         const uids = typeof drawWindow._participantUids === 'function' ? drawWindow._participantUids(p).filter(Boolean) : [];
         if (requestedUid) return uids.includes(requestedUid);
         const display = typeof drawWindow._pName === 'function' ? drawWindow._pName(p, '') : String((p && (p.displayName || p.name)) || '');
         return display === absentName || display.split('/').map(x => x.trim()).includes(absentName);
       });
-      if (!entry) throw _drawFail('not-found', 'Participante não pertence mais ao torneio.', { tId, uid, absentName, requestedUid });
+      if (!entry && !slotMember) throw _drawFail('not-found', 'Participante não pertence mais ao torneio.', { tId, uid, absentName, requestedUid });
       const entryUids = typeof drawWindow._participantUids === 'function' ? drawWindow._participantUids(entry).filter(Boolean) : [];
       targetUids = requestedUid ? [requestedUid] : (typeof drawWindow._memberUidByName === 'function' ? [drawWindow._memberUidByName(t, absentName)].filter(Boolean) : entryUids);
       canonicalName = requestedUid && typeof drawWindow._memberNameByUid === 'function'
-        ? (drawWindow._memberNameByUid(t, requestedUid) || absentName) : absentName;
+        ? (drawWindow._memberNameByUid(t, requestedUid) || (slotMember && slotMember.name) || absentName) : ((slotMember && slotMember.name) || absentName);
       if (!canonicalName) throw _drawFail('not-found', 'Participante não pertence mais ao torneio.', { tId, uid, requestedUid });
       if (selectedMatch) {
         const inMatch = ['p1', 'p2'].some(side => {
