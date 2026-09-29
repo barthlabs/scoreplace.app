@@ -1018,6 +1018,8 @@ const SUITES = [
   'tests/late-enrollment-switch-canonical.test.js',
   // Visibilidade usa a mesma régua explícita: Privado ← switch → Público.
   'tests/visibilidade-explicita-no-form.test.js',
+  // Acesso do local segue a mesma régua: Restrito ← switch → Aberto ao público.
+  'tests/acesso-local-explicito-no-form.test.js',
   'tests/late-enroll-inherit.test.js',
   'tests/late-enroll-window-r2-result.test.js',
   'tests/dash-enroll-late-window.test.js',

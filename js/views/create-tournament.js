@@ -935,15 +935,13 @@ function setupCreateTournamentModal() {
                     ${typeof window._venuePrefChipsHtml === 'function' ? window._venuePrefChipsHtml() : ''}
                     <div id="venue-create-map" style="display:none;width:100%;height:180px;border-radius:10px;overflow:hidden;border:1px solid var(--border-color);margin-bottom:8px;background:#1a1a2e;"></div>
                     <div id="venue-osm-info" style="display:none; margin-top:5px; font-size:0.75rem; color:var(--text-muted); display:flex; align-items:center; gap:5px;"></div>
+                    <!-- Acesso do local: dois estados sempre visíveis, como Privado/Público.
+                         REGRESSÃO: não restaurar o antigo rótulo único à direita do switch;
+                         “Acesso restrito” podia parecer apenas uma legenda e escondia que o
+                         controle estava desligado. O checkbox continua significando o estado
+                         da DIREITA: acesso aberto ao público. -->
                     <div style="margin-top:8px;">
-                      <div style="display:flex; align-items:center; gap:10px;">
-                        <label class="toggle-switch" style="margin:0;">
-                          <input type="checkbox" id="toggle-venue-public" aria-label="Local público" checked onchange="window._onVenueAccessToggle()">
-                          <span class="toggle-slider"></span>
-                        </label>
-                        <span id="venue-access-label" style="font-size:0.82rem; font-weight:600; color:var(--text-bright);">${_t('create.accessOpen')}</span>
-                      </div>
-                      <div id="venue-access-desc" style="font-size:0.72rem; color:var(--text-muted); margin-top:4px; margin-left:52px;">${_t('create.openDesc')}</div>
+                      ${window._lateEnrollmentModeSwitchHtml({ id: 'venue-access-mode', inputId: 'toggle-venue-public', mode: 'venue-access', on: true, left: _t('create.venueAccessRestricted'), right: _t('create.venueAccessOpen'), leftColor: '#f87171', rightColor: '#34d399', leftToggleBg: 'rgba(248,113,113,0.28)', rightGlow: 'rgba(52,211,153,0.36)', ariaPrefix: _t('create.venueAccessAria'), onchange: 'window._onVenueAccessToggle()', descId: 'venue-access-desc', desc: _t('create.openDesc') })}
                     </div>
                     <input type="hidden" id="tourn-venue-access" value="">
                     <input type="hidden" id="tourn-venue-lat" value="">
@@ -3184,30 +3182,32 @@ function setupCreateTournamentModal() {
   window._onVenueAccessToggle = function () {
     var toggle = document.getElementById('toggle-venue-public');
     var hiddenEl = document.getElementById('tourn-venue-access');
-    var label = document.getElementById('venue-access-label');
     var desc = document.getElementById('venue-access-desc');
+    var row = document.getElementById('venue-access-mode');
     if (!toggle || !hiddenEl) return;
+    /* O valor persistido não muda: public/members. Só a apresentação foi unificada com
+     * Privado/Público, e o helper mantém o rótulo ativo e o aria-label em sincronia. */
+    window._setLateEnrollmentModeVisual(row, toggle.checked);
     if (toggle.checked) {
       hiddenEl.value = 'public';
-      if (label) label.innerHTML = _t('create.accessOpen');
       if (desc) desc.textContent = _t('create.openDesc');
     } else {
       hiddenEl.value = 'members';
-      if (label) label.innerHTML = _t('create.accessRestricted');
       if (desc) desc.textContent = _t('create.restrictedDesc');
     }
   };
 
   window._applyVenueAccessUI = function (values) {
     var toggle = document.getElementById('toggle-venue-public');
-    var label = document.getElementById('venue-access-label');
     var desc = document.getElementById('venue-access-desc');
     var hiddenEl = document.getElementById('tourn-venue-access');
+    var row = document.getElementById('venue-access-mode');
     if (!toggle) return;
     var isPublic = values.length === 0 || (values.length === 1 && values[0] === 'public');
-    toggle.checked = isPublic;
+    // Reidratação de Places/edição também passa pelo helper; sem isto o valor salvo e o
+    // par Acesso restrito/Acesso aberto poderiam apontar para lados opostos. [[regression_venue_access_two_explicit_states]]
+    window._setLateEnrollmentModeVisual(row, isPublic);
     if (hiddenEl) hiddenEl.value = isPublic ? 'public' : 'members';
-    if (label) label.innerHTML = isPublic ? _t('create.accessOpen') : _t('create.accessRestricted');
     if (desc) desc.textContent = isPublic ? _t('create.openDesc') : _t('create.restrictedDesc');
   };
 
