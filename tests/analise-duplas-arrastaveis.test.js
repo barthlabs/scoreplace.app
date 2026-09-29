@@ -25,10 +25,12 @@ ok(panelStart >= 0, 'painel de cards de dupla existe');
 ok(panel.includes('draggable="true"'), 'card de dupla é arrastável');
 ok(panel.includes('window._erMxPairDragStart'), 'card de dupla inicia o caminho próprio de drag');
 ok(!panel.includes('<select'), 'dupla não usa seletor de categoria');
+ok(!panel.includes('DUPLA FORMADA'), 'rótulo de dupla aparece só no cabeçalho do bloco');
+ok(!panel.includes('arraste para mover'), 'instrução de arraste aparece só no cabeçalho do bloco');
 ok(matrix.includes('pairedOrders') && matrix.includes('individualRows'), 'integrantes de dupla são retirados dos buckets individuais');
 ok(matrix.includes('_erFormedPairsPanel(rows, t) + mistoStrip'), 'cards de dupla ficam imediatamente antes dos cards individuais');
 ok(dragDrop.includes("application/x-scoreplace-pair"), 'drag da dupla transporta índice interno, não nome');
 ok(dragDrop.includes('window._erStageCategory(pairRows[0].order, pairCategory)'), 'drop atribui categoria pelo integrante identificado e propaga à dupla');
 
-console.log('\n' + (fail ? '❌' : '✅') + ' análise-duplas-arrastáveis: ' + (8 - fail) + ' asserts ok, ' + fail + ' falharam');
+console.log('\n' + (fail ? '❌' : '✅') + ' análise-duplas-arrastáveis: ' + (10 - fail) + ' asserts ok, ' + fail + ' falharam');
 process.exitCode = fail ? 1 : 0;

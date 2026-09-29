@@ -1044,12 +1044,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       var a = members[0], b = members[1], pe = _pendingEdits[a.order] || _pendingEdits[b.order] || {};
       var current = Object.prototype.hasOwnProperty.call(pe, 'category') ? pe.category : ((a.assigned && a.assigned[0]) || '');
       var changed = Object.prototype.hasOwnProperty.call(pe, 'category');
-      var category = current ? (window._displayCategoryName ? window._displayCategoryName(current) : current) : 'Sem categoria';
       return '<div draggable="true" data-er-pair-order="' + a.order + '" data-er-person="' + _esc(a.name + ' ' + b.name) + '" ondragstart="window._erMxPairDragStart(event,' + a.order + ')" title="Arraste a dupla para uma categoria" style="cursor:grab;display:flex;flex-direction:column;gap:5px;padding:10px 11px;border:1px solid ' + (changed ? 'rgba(245,158,11,.65)' : 'rgba(168,85,247,.45)') + ';border-radius:9px;background:' + (changed ? 'rgba(245,158,11,.07)' : 'rgba(168,85,247,.08)') + ';user-select:none;">' +
-        '<div style="font-size:12px;font-weight:850;color:var(--sp-c-c4b5fd,#c4b5fd);">👥 DUPLA FORMADA</div>' +
         '<div style="font-size:14px;font-weight:750;color:var(--text-bright);line-height:1.25;overflow-wrap:anywhere;">' + _esc(a.name) + '</div>' +
         '<div style="font-size:14px;font-weight:750;color:var(--text-bright);line-height:1.25;overflow-wrap:anywhere;">' + _esc(b.name) + '</div>' +
-        '<div style="font-size:12px;color:' + (current ? 'var(--sp-c-a5b4fc,#a5b4fc)' : 'var(--text-muted)') + ';font-weight:700;">' + _esc(category) + ' · arraste para mover</div>' +
       '</div>';
     }).join('');
     return '<div style="margin:0 0 14px;padding:13px;border:1px solid rgba(168,85,247,.36);border-radius:12px;background:rgba(168,85,247,.05);">' +
