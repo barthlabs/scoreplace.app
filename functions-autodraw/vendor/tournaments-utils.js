@@ -1280,10 +1280,12 @@ window._phaseCurrentRoundProgress = function(t) {
   // rodada jogada só por lançamento direto ficava "aguardando início" (roundStartMs null).
   cur.forEach(function(m){ if (m.startedAt) starts.push(+m.startedAt); if (m.resultAt) { starts.push(+m.resultAt); ends.push(+m.resultAt); } });
   var _idx = rounds.indexOf(curR);
-  // Fim da rodada ANTERIOR desta fase (maior resultAt fora da rodada atual): quando a rodada
-  // atual está sorteada mas ainda sem 1º jogo, é DAQUI que ela ficou "valendo" — a fase não
-  // parou. Usado como fallback do início da rodada (evita "aguardando início" no meio da fase).
-  var _prevEnds = pm.filter(function(m){ return (m.round == null ? 1 : m.round) !== curR && m.resultAt; }).map(function(m){ return +m.resultAt; });
+  // Fim da rodada IMEDIATAMENTE anterior desta fase: quando a rodada atual está sorteada mas
+  // ainda sem 1º jogo, é DAQUI que ela ficou "valendo" — a fase não parou. Não pode usar
+  // qualquer rodada antiga: um resultado corrigido fora de ordem não deve mudar o relógio da
+  // rodada atual. Usado como fallback do início (evita "aguardando início" no meio da fase).
+  var _prevRound = _idx > 0 ? rounds[_idx - 1] : null;
+  var _prevEnds = _prevRound == null ? [] : (byRound[_prevRound] || []).filter(function(m){ return !!m.resultAt; }).map(function(m){ return +m.resultAt; });
   var prevRoundEndMs = _prevEnds.length ? Math.max.apply(null, _prevEnds) : null;
   // v4.3.16: NOME FUNCIONAL da rodada (Oitavas/Quartas/Semifinais/Final/3º lugar), por
   // ANALOGIA à nomeação das colunas do bracket — mas contando jogos POR TRILHA (Ouro/Prata
@@ -1609,10 +1611,16 @@ window._buildProgressInner = function(t) {
        * correndo. Sem isto o cartão diz "aguardando" com a regressiva já em curso.
        * ⛔ Só vale com marco REAL e já passado (o carimbo do avanço, via `_inicioDaFase`):
        * fase com início declarado no FUTURO continua, corretamente, aguardando. */
-      actualStart = _pr.roundStartMs || _pr.prevRoundEndMs || null;
+      // A conclusão real da rodada anterior antecipa o relógio desta rodada. O prazo final
+      // programado continua sendo o da janela dela; só o "aguardando início" é removido.
+      var _effectiveRoundStart = _pr.roundStartMs || _pr.prevRoundEndMs || null;
+      actualStart = _effectiveRoundStart;
       if (actualStart == null) {
         var _iniFase = window._inicioDaFase(t, _cp);
-        if (_iniFase && _iniFase <= now) actualStart = _iniFase;
+        if (_iniFase && _iniFase <= now) {
+          actualStart = _iniFase;
+          _effectiveRoundStart = actualStart;
+        }
       }
       var _phL = (t.phases && t.phases[_cp]) || {};
       /* ⛔ MESMA REGRA DO RAMO DE CIMA, e no MESMO arquivo de propósito: já foi provado aqui
@@ -1642,7 +1650,12 @@ window._buildProgressInner = function(t) {
          * contradizia a régua logo abaixo, que já mostrava corretamente 02/09→20/09.
          * Enquanto a rodada estiver aberta, início e previsão mostram a mesma janela
          * acordada pelo organizador; ao fechar, o fim real continua vencendo abaixo. */
-        if (_schedEndReal && schedStart) actualStart = (schedStart <= now) ? schedStart : null;
+        if (_schedEndReal && schedStart) {
+          // A grade é um plano, não uma trava: se a rodada anterior acabou antes, a próxima
+          // já está em contagem regressiva para o fim programado dela. Sem avanço real,
+          // preservamos o comportamento de aguardar o início previsto.
+          actualStart = _effectiveRoundStart || ((schedStart <= now) ? schedStart : null);
+        }
       }
       else {
         // v2.0.74: tempo é POR SET — a partida desta fase (`_phL`). Ver sport-rules.js.

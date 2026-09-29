@@ -1011,6 +1011,7 @@ const SUITES = [
   'tests/duplas-teams-enrollmode.test.js',
   'tests/analise-duplas-arrastaveis.test.js',
   'tests/chaves-abas-categoria.test.js',
+  'tests/rodada-antecipada-regressiva.test.js',
   'tests/apply-result.test.js',
   'tests/apply-round-close.test.js',
   'tests/apply-wo.test.js',
