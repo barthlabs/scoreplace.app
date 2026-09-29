@@ -1025,9 +1025,11 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     Object.keys(_pendingEdits).forEach(function (k) { var pe = _pendingEdits[k]; if (pe && Object.keys(pe).length > 0) n++; });
     return n;
   }
-  // Painel de conferência: a Análise não forma/desfaz dupla (isso é ação de
-  // Inscritos), mas deixa explícito quais pares já existem e permite ao
-  // organizador atribuir ou mover a CATEGORIA DA DUPLA inteira.
+  // Cânone visual da dupla na Análise: a Análise não forma/desfaz dupla (isso
+  // é ação de Inscritos). Quando uma dupla já existe, ela aparece UMA vez como
+  // card arrastável e os dois integrantes deixam de aparecer como cards solos.
+  // O drop continua chamando _erStageCategory por order, que propaga a mudança
+  // aos dois UIDs da dupla. Não usar nome como identidade neste caminho.
   function _erFormedPairsPanel(rows, t) {
     var byPair = {};
     (rows || []).forEach(function (r) {
@@ -1038,30 +1040,27 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var pairs = Object.keys(byPair).map(function (k) { return byPair[k]; })
       .filter(function (members) { return members.length === 2; });
     if (!pairs.length) return '';
-    var cats = (typeof window._getTournamentCategories === 'function') ? (window._getTournamentCategories(t) || []) : [];
-    function option(value, label, selected) {
-      return '<option value="' + _esc(value) + '"' + (selected ? ' selected' : '') + '>' + _esc(label) + '</option>';
-    }
     var cards = pairs.map(function (members) {
       var a = members[0], b = members[1], pe = _pendingEdits[a.order] || _pendingEdits[b.order] || {};
       var current = Object.prototype.hasOwnProperty.call(pe, 'category') ? pe.category : ((a.assigned && a.assigned[0]) || '');
       var changed = Object.prototype.hasOwnProperty.call(pe, 'category');
-      var chooser = cats.length > 1
-        ? '<select aria-label="Categoria da dupla ' + _esc(a.name + ' e ' + b.name) + '" onchange="window._erStageCategory(' + a.order + ',this.value)" style="min-width:150px;max-width:100%;font-size:12px;font-weight:700;color:var(--sp-c-a5b4fc,#a5b4fc);background:rgba(99,102,241,.14);border:1px solid rgba(99,102,241,.4);border-radius:7px;padding:5px 7px;">' +
-            option('', 'sem categoria', !current) + cats.map(function (c) { return option(c, (window._displayCategoryName ? window._displayCategoryName(c) : c), current === c); }).join('') + '</select>'
-        : '<span style="font-size:12px;color:var(--text-muted);">' + _esc(current || 'categoria única') + '</span>';
-      return '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:9px 10px;border:1px solid ' + (changed ? 'rgba(245,158,11,.65)' : 'rgba(168,85,247,.35)') + ';border-radius:9px;background:' + (changed ? 'rgba(245,158,11,.07)' : 'rgba(168,85,247,.06)') + ';">' +
-        '<div style="min-width:0;flex:1;font-size:13px;font-weight:750;color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">👥 ' + _esc(a.name) + ' <span style="color:var(--text-muted);">+</span> ' + _esc(b.name) + '</div>' + chooser +
+      var category = current ? (window._displayCategoryName ? window._displayCategoryName(current) : current) : 'Sem categoria';
+      return '<div draggable="true" data-er-pair-order="' + a.order + '" data-er-person="' + _esc(a.name + ' ' + b.name) + '" ondragstart="window._erMxPairDragStart(event,' + a.order + ')" title="Arraste a dupla para uma categoria" style="cursor:grab;display:flex;flex-direction:column;gap:5px;padding:10px 11px;border:1px solid ' + (changed ? 'rgba(245,158,11,.65)' : 'rgba(168,85,247,.45)') + ';border-radius:9px;background:' + (changed ? 'rgba(245,158,11,.07)' : 'rgba(168,85,247,.08)') + ';user-select:none;">' +
+        '<div style="font-size:12px;font-weight:850;color:var(--sp-c-c4b5fd,#c4b5fd);">👥 DUPLA FORMADA</div>' +
+        '<div style="font-size:14px;font-weight:750;color:var(--text-bright);line-height:1.25;overflow-wrap:anywhere;">' + _esc(a.name) + '</div>' +
+        '<div style="font-size:14px;font-weight:750;color:var(--text-bright);line-height:1.25;overflow-wrap:anywhere;">' + _esc(b.name) + '</div>' +
+        '<div style="font-size:12px;color:' + (current ? 'var(--sp-c-a5b4fc,#a5b4fc)' : 'var(--text-muted)') + ';font-weight:700;">' + _esc(category) + ' · arraste para mover</div>' +
       '</div>';
     }).join('');
     return '<div style="margin:0 0 14px;padding:13px;border:1px solid rgba(168,85,247,.36);border-radius:12px;background:rgba(168,85,247,.05);">' +
       '<div style="font-size:14px;font-weight:850;color:var(--sp-c-c4b5fd,#c4b5fd);margin-bottom:4px;">👥 Duplas formadas (' + pairs.length + ')</div>' +
-      '<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">A categoria escolhida vale para os dois integrantes. Formação e desmembramento continuam em Inscritos.</div>' +
-      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:7px;">' + cards + '</div></div>';
+      '<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">Arraste a dupla para a categoria. A atribuição vale para os dois integrantes; formação e desmembramento continuam em Inscritos.</div>' +
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:7px;">' + cards + '</div></div>';
   }
   window._erRenderFormedPairs = function () {
-    var slot = document.getElementById('er-formed-pairs');
-    if (slot && _liveState) slot.innerHTML = _erFormedPairsPanel(_liveState.rows || [], _liveState.t);
+    // O painel agora faz parte da matriz, logo acima dos cards individuais.
+    // Re-renderizar a matriz preserva uma única fonte de verdade visual.
+    if (typeof window._erRenderMatrix === 'function') window._erRenderMatrix();
   };
   // BOTÃO OCUPADO NÃO É REPINTADO. `_erSaveEdits` limpa `_pendingEdits` ANTES de terminar
   // de gravar, então qualquer chamada a esta função no meio do save veria n=0 e (a) trocaria
@@ -2725,8 +2724,20 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var skills = _erAnalysisSkills(t);
     var groups = skills.concat(['__none__']);
     function emptyBox() { var o = {}; groups.forEach(function (g) { o[g] = []; }); return o; }
-    var fem = emptyBox(), masc = emptyBox(), semG = emptyBox();
+    // Só uma representação por dupla: os dois integrantes seguem contando no
+    // total de inscritos, mas saem dos buckets individuais. A dupla acima da
+    // grade é o card que o organizador arrasta para a categoria.
+    var byPair = {};
     (rows || []).forEach(function (r) {
+      if (r && r._duplaIdx != null && !r._wl) (byPair[r._duplaIdx] || (byPair[r._duplaIdx] = [])).push(r);
+    });
+    var pairedOrders = {};
+    Object.keys(byPair).forEach(function (pairKey) {
+      if (byPair[pairKey].length === 2) byPair[pairKey].forEach(function (r) { pairedOrders[r.order] = true; });
+    });
+    var individualRows = (rows || []).filter(function (r) { return !pairedOrders[r.order]; });
+    var fem = emptyBox(), masc = emptyBox(), semG = emptyBox();
+    individualRows.forEach(function (r) {
       var g = _mxGenderOf(r), sk = _mxSkillOf(r, t);
       var key = (sk && groups.indexOf(sk) !== -1) ? sk : '__none__';
       (g === 'feminino' ? fem : g === 'masculino' ? masc : semG)[key].push(r);
@@ -2900,7 +2911,10 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         '<div style="font-size:17px;font-weight:800;color:var(--sp-c-8592a6,#8592a6);border-bottom:2px solid #8592a6;padding-bottom:6px;margin-bottom:8px;">? Sem gênero <span style="opacity:0.8;font-size:15px;">(' + semTotal + ')</span> — arraste pra Feminino ou Masculino</div>' +
         '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:9px;">' + semInner + '</div></div>';
     }
-    return catsBox + totalBar + _erMatrixSelectionBar() + mistoStrip + grid + semSection;
+    // Duplas vêm imediatamente antes dos cards individuais. Não há cópia dos
+    // integrantes abaixo: isso evita que o organizador atribua a mesma dupla
+    // por dois desenhos conflitantes. [[analysis_pair_card_is_canonical]]
+    return catsBox + totalBar + _erMatrixSelectionBar() + _erFormedPairsPanel(rows, t) + mistoStrip + grid + semSection;
   }
   window._erRenderMatrix = function () {
     var el = document.getElementById('er-cat-matrix');
@@ -3082,10 +3096,38 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       ev.dataTransfer.setData('application/x-scoreplace-orders', _erDraggedOrders.join(','));
     } catch (e) {}
   };
+  window._erMxPairDragStart = function (ev, order) {
+    // Payload por order/índice interno, nunca por nome. O primeiro integrante
+    // basta porque _erStageCategory propaga a categoria a toda a dupla.
+    _erLastMatrixDragAt = Date.now();
+    var row = ((_liveState && _liveState.rows) || []).filter(function (r) { return r.order === order; })[0];
+    if (!row || row._duplaIdx == null) return;
+    _erDraggedOrders = [order];
+    window._erMxDrag = order;
+    try {
+      ev.dataTransfer.effectAllowed = 'move';
+      ev.dataTransfer.setData('text/plain', 'pair:' + String(row._duplaIdx));
+      ev.dataTransfer.setData('application/x-scoreplace-pair', String(row._duplaIdx));
+    } catch (e) {}
+  };
   window._erMxOver = function (ev) { ev.preventDefault(); try { ev.dataTransfer.dropEffect = 'move'; } catch (e) {} };
   window._erMxDrop = function (ev, genderKey, sk) {
     ev.preventDefault(); ev.stopPropagation();
     if (!_liveState || !_liveState.isOrg) return;
+    var pairKey = '';
+    try { pairKey = (ev.dataTransfer && ev.dataTransfer.getData('application/x-scoreplace-pair')) || ''; } catch (e) {}
+    if (pairKey !== '') {
+      // Card de dupla só aceita um alvo de categoria. Soltar no cabeçalho de
+      // gênero não tenta inferir/alterar gênero dos dois integrantes.
+      window._erMxDrag = null; _erDraggedOrders = [];
+      if (!sk) return;
+      var pairRows = (_liveState.rows || []).filter(function (r) { return r && String(r._duplaIdx) === String(pairKey); });
+      if (pairRows.length !== 2) return;
+      var pairCategory = sk === '__none__' ? '' : _mxFindValidCat(_liveState.t, genderKey, sk);
+      if (sk !== '__none__' && !pairCategory) return;
+      window._erStageCategory(pairRows[0].order, pairCategory);
+      return;
+    }
     var fallback = (window._erMxDrag != null) ? window._erMxDrag : parseInt((ev.dataTransfer && ev.dataTransfer.getData('text/plain')) || '', 10);
     var raw = '';
     try { raw = (ev.dataTransfer && ev.dataTransfer.getData('application/x-scoreplace-orders')) || ''; } catch (e) {}
@@ -4216,7 +4258,6 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     return '<div id="er-categories-section" style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;padding:16px 18px;margin-bottom:14px;">' +
       '<div style="font-size:15px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:var(--text-secondary,#c8cdd6);margin-bottom:8px;">🗂️ Categorias <span style="opacity:0.7;">· apuração pelo letzplay</span></div>' +
       saveBar + scanBtn + legend + hint +
-      '<div id="er-formed-pairs">' + _erFormedPairsPanel(rows, t) + '</div>' +
       '<div id="er-cat-matrix">' + _matrixInner(rows, t) + '</div>' +
     '</div>';
   }

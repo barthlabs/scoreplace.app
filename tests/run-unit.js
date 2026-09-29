@@ -1009,6 +1009,7 @@ const SUITES = [
   'tests/no-format-regression.test.js',
   'tests/area-scaling-canon.test.js',
   'tests/duplas-teams-enrollmode.test.js',
+  'tests/analise-duplas-arrastaveis.test.js',
   'tests/apply-result.test.js',
   'tests/apply-round-close.test.js',
   'tests/apply-wo.test.js',
