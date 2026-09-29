@@ -13,12 +13,17 @@ assert(body.includes("woScope: 'individual'"), 'W.O. individual da organização
 assert(body.includes("woScope: 'team'"), 'W.O. do time chega ao mesmo motor compartilhado');
 assert(body.includes('_forceNoSub: true'), 'W.O. do time nunca chama suplente');
 assert(body.includes('matches: [selectedMatch]'), 'a callable limita a ação ao jogo escolhido');
-assert(body.includes('_slotUidsOf(selectedMatch, teamSide)'), 'o time é identificado por UID estrutural');
+assert(body.includes('requestedTeamUids'), 'o time é solicitado pelo conjunto de UIDs');
+assert(body.includes('_sameUidSet(candidate.uids, requestedTeamUids)'), 'o servidor valida o conjunto completo de UIDs no jogo fresco');
+assert(!body.includes('teamSide'), 'o contrato administrativo não transporta p1/p2');
+assert(body.includes('_matchMemberByUid(selectedMatch, requestedUid)'), 'W.O. individual aceita UID que já está no jogo mesmo fora do elenco');
+assert(body.includes('targetUids.every(targetUid => !!_matchMemberByUid(selectedMatch, targetUid))'), 'a presença no jogo é validada por UID, sem fallback por nome');
 
 const view = fs.readFileSync('js/views/wo-claim.js', 'utf8');
 assert(view.includes('window._woDeclareIndividual = function'), 'modal expõe W.O. individual da organização');
 assert(view.includes('window._woDeclareTeam = function'), 'modal expõe W.O. do time inteiro');
-assert(view.includes("_orgWoServer(tId, { matchId: String(rc.matchId || rc.m.id || ''), forceTeamWO: true, teamSide: side }"), 'ação da dupla envia apenas o jogo e o lado ao servidor');
+assert(view.includes('forceTeamWO: true, teamUids: team.uids'), 'ação da dupla envia somente os UIDs ao servidor');
+assert(!view.includes('teamSide:'), 'a tela não envia p1/p2 para a callable');
 assert(view.includes('W.O. do time inteiro'), 'modal identifica claramente a seção de dupla');
 assert(view.includes('Nenhum suplente será chamado'), 'confirmação explica que a dupla não usa a lista de espera');
 assert(view.includes('A primeira pessoa elegível da lista de espera assume a vaga'), 'confirmação individual explica a substituição');

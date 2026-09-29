@@ -139,6 +139,30 @@ function _slotUidsOf(m, side) {
   return [];
 }
 
+/* A estrutura histórica ainda chama os dois slots de p1/p2, mas nenhuma decisão de
+ * negócio pode usar esse detalhe como identidade. W.O., substituição e repescagem
+ * recebem UID(s); estes adaptadores só localizam o slot físico que já contém aquela
+ * identidade. Assim trocar a apresentação, o nome ou a ordem da dupla não muda quem
+ * será afetado. [[regression_wo_and_repechage_are_uid_only]] */
+function _matchTeamsByUid(m) {
+  return ['p1', 'p2'].map(slot => ({
+    slot,
+    uids: _slotUidsOf(m, slot).filter(Boolean).map(String),
+    legacyLabel: String((m && m[slot]) || '').trim()
+  })).filter(team => team.uids.length);
+}
+function _sameUidSet(a, b) {
+  const left = Array.from(new Set((a || []).filter(Boolean).map(String))).sort();
+  const right = Array.from(new Set((b || []).filter(Boolean).map(String))).sort();
+  return left.length === right.length && left.every((uid, index) => uid === right[index]);
+}
+function _matchMemberByUid(m, uid) {
+  const requested = String(uid || '').trim();
+  if (!requested) return null;
+  const team = _matchTeamsByUid(m).find(candidate => candidate.uids.includes(requested));
+  return team ? { uid: requested, teamUids: team.uids } : null;
+}
+
 // Busca em lote os nomes VIVOS (users/{uid}.displayName) de um conjunto de uids.
 // Retorna { profByUid, nameByUid }. Reaproveitado pra checar notifyPlatform sem
 // re-ler o mesmo doc. Nome ausente → não entra no mapa (o caller cai no fallback).
@@ -2297,13 +2321,13 @@ exports.applyTournamentWO = onCall(async (request) => {
   const requestedUid = String(data.absentUid || '').trim();
   const matchId = String(data.matchId || '').trim();
   const forceTeamWO = data.forceTeamWO === true;
-  const teamSide = data.teamSide === 'p1' || data.teamSide === 'p2' ? data.teamSide : '';
+  const requestedTeamUids = Array.isArray(data.teamUids) ? data.teamUids.filter(Boolean).map(String) : [];
   if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
   if (!tId || (!forceTeamWO && !absentName && !requestedUid)) {
     throw new HttpsError('invalid-argument', 'Torneio e participante são obrigatórios.');
   }
-  if (forceTeamWO && (!matchId || !teamSide)) {
-    throw new HttpsError('invalid-argument', 'Jogo e time são obrigatórios para desclassificar a dupla.');
+  if (forceTeamWO && (!matchId || !requestedTeamUids.length)) {
+    throw new HttpsError('invalid-argument', 'Jogo e UIDs do time são obrigatórios para desclassificar a dupla.');
   }
   if (typeof applyWoFn !== 'function' || !drawWindow) throw _drawFail('internal', 'Motor de W.O. indisponível no servidor.', { tId });
 
@@ -2337,13 +2361,19 @@ exports.applyTournamentWO = onCall(async (request) => {
     const before = _antesDoMotor(t);
 
     if (forceTeamWO) {
-      const opponentSide = teamSide === 'p1' ? 'p2' : 'p1';
-      const teamName = String(selectedMatch[teamSide] || '').trim();
-      const opponentName = String(selectedMatch[opponentSide] || '').trim();
-      const teamUids = _slotUidsOf(selectedMatch, teamSide);
-      const isTeam = teamUids.length > 1 || teamName.split(/\s*\/\s*/).filter(Boolean).length > 1;
+      // A tela envia o CONJUNTO de UIDs da dupla, nunca "p1"/"p2". O servidor
+      // encontra o time no jogo relido dentro da transação e recusa conjunto parcial.
+      const teams = _matchTeamsByUid(selectedMatch);
+      const team = teams.find(candidate => _sameUidSet(candidate.uids, requestedTeamUids));
+      const opponent = teams.find(candidate => candidate !== team);
+      const teamUids = team ? team.uids : [];
+      const nameOf = memberUid => (typeof drawWindow._memberNameByUid === 'function'
+        ? drawWindow._memberNameByUid(t, memberUid) : '') || '';
+      const teamName = teamUids.map(nameOf).filter(Boolean).join(' / ') || (team && team.legacyLabel) || '';
+      const opponentName = opponent ? (opponent.uids.map(nameOf).filter(Boolean).join(' / ') || opponent.legacyLabel) : '';
+      const isTeam = teamUids.length > 1;
       if (!teamName || teamName === 'TBD' || teamName === 'BYE' || !opponentName || opponentName === 'TBD' || opponentName === 'BYE' || !isTeam) {
-        throw _drawFail('failed-precondition', 'Só uma dupla ativa contra adversário definido pode ser desclassificada.', { tId, matchId, teamSide });
+        throw _drawFail('failed-precondition', 'Só uma dupla ativa por UID contra adversário definido pode ser desclassificada.', { tId, matchId, requestedTeamUids });
       }
       // W.O. de time é uma decisão expressa: nunca consome a lista de espera.
       result = applyWoFn(t, {
@@ -2365,13 +2395,7 @@ exports.applyTournamentWO = onCall(async (request) => {
        * inscrições. Recusar o W.O. por não achá-lo em `participants` congelava exatamente
        * o fluxo que existe para trocá-lo pelo primeiro suplente. A identidade do alvo é o
        * UID no jogo; o elenco só é fonte complementar para quem ainda não entrou na chave. */
-      const slotMember = selectedMatch && requestedUid ? ['p1', 'p2'].map(side => {
-        const slotUids = _slotUidsOf(selectedMatch, side);
-        const at = slotUids.indexOf(requestedUid);
-        if (at < 0) return null;
-        const label = String(selectedMatch[side] || '').split(/\s*\/\s*/)[at] || '';
-        return { side, name: label.trim() };
-      }).find(Boolean) : null;
+      const slotMember = selectedMatch && requestedUid ? _matchMemberByUid(selectedMatch, requestedUid) : null;
       const entry = entries.find((p) => {
         const uids = typeof drawWindow._participantUids === 'function' ? drawWindow._participantUids(p).filter(Boolean) : [];
         if (requestedUid) return uids.includes(requestedUid);
@@ -2382,13 +2406,12 @@ exports.applyTournamentWO = onCall(async (request) => {
       const entryUids = typeof drawWindow._participantUids === 'function' ? drawWindow._participantUids(entry).filter(Boolean) : [];
       targetUids = requestedUid ? [requestedUid] : (typeof drawWindow._memberUidByName === 'function' ? [drawWindow._memberUidByName(t, absentName)].filter(Boolean) : entryUids);
       canonicalName = requestedUid && typeof drawWindow._memberNameByUid === 'function'
-        ? (drawWindow._memberNameByUid(t, requestedUid) || (slotMember && slotMember.name) || absentName) : ((slotMember && slotMember.name) || absentName);
+        ? (drawWindow._memberNameByUid(t, requestedUid) || absentName) : absentName;
       if (!canonicalName) throw _drawFail('not-found', 'Participante não pertence mais ao torneio.', { tId, uid, requestedUid });
       if (selectedMatch) {
-        const inMatch = ['p1', 'p2'].some(side => {
-          const slotUids = _slotUidsOf(selectedMatch, side);
-          return targetUids.length ? slotUids.some(u => targetUids.includes(u)) : String(selectedMatch[side] || '').split(/\s*\/\s*/).map(x => x.trim()).includes(canonicalName);
-        });
+        const inMatch = targetUids.length
+          ? targetUids.every(targetUid => !!_matchMemberByUid(selectedMatch, targetUid))
+          : false;
         if (!inMatch) throw _drawFail('failed-precondition', 'A pessoa não está mais neste jogo.', { tId, matchId, requestedUid });
       }
       // Individual é sempre uma ação disponível para a organização. Com elegível,

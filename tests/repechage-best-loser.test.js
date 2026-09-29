@@ -252,7 +252,7 @@ console.log('\n── a chave se corrige AO ABRIR, sem lançar mais um resultado
 
   const rep = repOcup(t);
   // esperado = topo do ranking CANÔNICO (critérios do organizador) — sem assumir placar
-  const rankAbrir = W._rankLosersByCriteria(t, r1.map((m) => m.p2)).slice(0, rep.length);
+  const rankAbrir = W._rankLosersByCriteria(t, r1.map((m) => W._refDoTimeNoSlot(m, W._matchWinnerSide(m) === 1 ? 'p2' : 'p1'))).slice(0, rep.length).map((ref) => ref.name);
   ok(rankAbrir.every((n) => rep.indexOf(n) !== -1),
     'as vagas têm o TOPO do ranking [' + rankAbrir.join(',') + '], got [' + rep.join(',') + ']');
   ok(rep.indexOf(r1[0].p2) === -1 || rankAbrir.indexOf(r1[0].p2) !== -1,
@@ -306,7 +306,7 @@ console.log('\n── a vaga fica VAZIA enquanto a rodada corre (26 duplas, 13 j
   ok(ocup.every((x) => !vazio(x)), 'fechada a rodada, as vagas estão preenchidas: [' + ocup.join(', ') + ']');
   // esperado = topo do ranking CANÔNICO — o "melhor" é quem os critérios do organizador
   // disserem, seja o placar dele 6-5 ou 6-2. Nada de assumir placar no teste.
-  const rankVazia = W._rankLosersByCriteria(t, r1.map((m) => (m.winner === m.p1 ? m.p2 : m.p1))).slice(0, ocup.length);
+  const rankVazia = W._rankLosersByCriteria(t, r1.map((m) => W._refDoTimeNoSlot(m, W._matchWinnerSide(m) === 1 ? 'p2' : 'p1'))).slice(0, ocup.length).map((ref) => ref.name);
   ok(rankVazia.every((n) => ocup.indexOf(n) !== -1),
     'as vagas têm o TOPO do ranking [' + rankVazia.join(', ') + '], got [' + ocup.join(', ') + ']');
 })();
@@ -381,8 +381,8 @@ console.log('\n── DUPLA: vaga vazia na rodada em curso; topo do ranking ao f
     W._advanceWinner(t, m); if (W._resolveRepFills) W._resolveRepFills(t);
   });
   // esperado = topo do ranking CANÔNICO dos derrotados da R1 (ordem dos jogos na entrada)
-  const derrotados = r1.map((m) => (m.winner === m.p1 ? m.p2 : m.p1));
-  const rankTopo = W._rankLosersByCriteria(t, derrotados).slice(0, nVagas);
+  const derrotados = r1.map((m) => W._refDoTimeNoSlot(m, W._matchWinnerSide(m) === 1 ? 'p2' : 'p1'));
+  const rankTopo = W._rankLosersByCriteria(t, derrotados).slice(0, nVagas).map((ref) => ref.name);
   const ocup = [];
   t.matches.filter((m) => m.bracket === 'upper' && m.round === 2).forEach((m) =>
     ['p1', 'p2'].forEach((sl) => { if (m[sl + 'FromRepechage'] && !isEmpty(m[sl])) ocup.push(m[sl]); }));

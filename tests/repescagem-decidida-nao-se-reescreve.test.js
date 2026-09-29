@@ -38,7 +38,7 @@ const bloco = i0 < 0 ? '' : codigo.slice(i0, codigo.indexOf('\n};', i0));
 ok(bloco.length > 1000, '① a função que reatribui foi achada pelo identificador');
 
 /* ── ① A GUARDA EXISTE E ESTÁ NO RAMO DO OCUPADO, ANTES DA TROCA ───────────── */
-const iOcupado = bloco.indexOf('if (!_vazio(atual)) {');
+const iOcupado = bloco.indexOf('if (atual) {');
 const iGuarda = bloco.indexOf("RepescagemFixada']) return;", iOcupado);
 /* ⚠️ a âncora mudou em 27/set/2026: a troca deixou de escrever o rótulo solto e passa pela porta
  * que move a identidade junto (`_poeTimeNoSlot`). A ordem conferida é a mesma. */

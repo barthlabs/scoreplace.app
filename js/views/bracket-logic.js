@@ -1515,6 +1515,12 @@ function _poeTimeNoSlot(m, side, fonte) {
   }
   return true;
 }
+function _limpaTimeDoSlot(m, side) {
+  if (!m) return;
+  m[side] = 'TBD';
+  if (side === 'p1') { m.team1Obj = null; m.team1Uids = []; m.p1Uid = null; }
+  else { m.team2Obj = null; m.team2Uids = []; m.p2Uid = null; }
+}
 /* Lê a identidade de um time a partir de QUALQUER jogo onde ele apareça inteiro. O rótulo é só a
  * chave de busca — quem manda é o que vem junto. */
 function _identidadeDoTime(t, rotulo) {
@@ -1534,9 +1540,32 @@ function _identidadeDoTime(t, rotulo) {
   }
   return null;
 }
+
+/* IDENTIDADE CANÔNICA DA DUPLA PARA REPESCAGEM E W.O.
+ *
+ * INCIDENTES OURO/PRATA — 28/set/2026:
+ *  - saldo de games precisa escolher a dupla que realmente jogou;
+ *  - um rótulo pode envelhecer, repetir ou ser o provisório "Jogador X";
+ *  - p1/p2 é só endereço físico legado do slot, jamais a identidade do time.
+ *
+ * Portanto toda decisão usa a chave ordenada dos UIDs. Sem UID não há inscrição
+ * manual/homônima elegível e o item não participa de uma decisão automática. O nome
+ * derivado do slot continua apenas para renderizar a interface compatível. */
+function _refDoTimeNoSlot(m, side) {
+  var uids = _slotUids(m, side).filter(Boolean).map(String).sort();
+  var name = String((m && m[side]) || '');
+  if (uids.length) return { key: 'uids:' + uids.join('|'), uids: uids, name: name, obj: _slotObj(m, side) };
+  /* Leitura de chaves antigas sem UID: não é elegível para uma inscrição nova,
+   * mas preserva torneio já publicado enquanto a migração hidrata os slots. */
+  return name && name !== 'TBD' && !/^bye$/i.test(name) ? { key: 'legacy:' + name, uids: [], name: name, obj: _slotObj(m, side) } : null;
+}
+function _mesmoTimePorUid(a, b) {
+  return !!a && !!b && String(a.key) === String(b.key);
+}
 if (typeof window !== 'undefined') {
   window._poeTimeNoSlot = _poeTimeNoSlot;
   window._identidadeDoTime = _identidadeDoTime;
+  window._refDoTimeNoSlot = _refDoTimeNoSlot;
 }
 // v1.3.136: hint POSICIONAL de uid pro _resolveSideLive — 1 slot por membro na MESMA ordem do
 // display, com vazio ('') pro membro FICTÍCIO (sem conta). Diferente de _slotUids, que filtra os
@@ -2127,9 +2156,18 @@ if (typeof window !== 'undefined') window._unidadeDoSaldo = function (t) {
 };
 
 function _rankByTiebreakers(t, playerNames) {
-  var allMatches = t.matches || [];
-  var players = playerNames.map(function(name) {
-    var uidDoSlot = null;
+  /* A classificação e a repescagem leem a mesma coleção completa, inclusive
+   * categorias/fases aninhadas. Nunca decidir uma vaga pela cópia parcial da tela. */
+  var allMatches = (typeof window._collectAllMatches === 'function'
+    ? window._collectAllMatches(t) : null) || t.matches || [];
+  var players = playerNames.map(function(rawPlayer) {
+    /* A entrada nova é o ref por UIDs; aceitar nome aqui é compatibilidade de
+     * torneio antigo, não caminho usado para decidir nova repescagem. */
+    var supplied = rawPlayer && typeof rawPlayer === 'object' ? rawPlayer : null;
+    var ref = supplied && supplied.key ? supplied : _identidadeDoTime(t, String(rawPlayer || ''));
+    var name = String((supplied && supplied.name) || (ref && (ref.name || ref.nome)) || rawPlayer || '');
+    if (!ref || !ref.key) ref = { key: 'legacy:' + name, uids: (ref && ref.uids) || [], name: name, obj: (ref && ref.obj) || null };
+    var uidDoSlot = (ref && ref.key) || null;
     var totalScored = 0, totalConceded = 0, matchesWon = 0, matchesPlayed = 0;
     var setsWon = 0, setsLost = 0, gamesWon = 0, gamesLost = 0, tiebreaksWon = 0;
     var tbPointsWon = 0, tbPointsLost = 0;
@@ -2147,13 +2185,16 @@ function _rankByTiebreakers(t, playerNames) {
 
     allMatches.forEach(function(m) {
       if (!m.winner || m.isBye || m.isSitOut) return;
-      if (m.p1 !== name && m.p2 !== name) return;
-      var isP1 = m.p1 === name;
+      var refP1 = _refDoTimeNoSlot(m, 'p1');
+      var refP2 = _refDoTimeNoSlot(m, 'p2');
+      var isP1 = uidDoSlot ? _mesmoTimePorUid(ref, refP1) : m.p1 === name;
+      var isP2 = uidDoSlot ? _mesmoTimePorUid(ref, refP2) : m.p2 === name;
+      if (!isP1 && !isP2) return;
       // ⚠️ IDENTIDADE POR UID nas DUAS pontas. O comparador canônico chaveia o confronto
       // direto por `uid || name`; se a linha do jogador vier só com nome e o mapa h2h vier
       // com uid, as chaves nunca casam e o critério vira NEUTRO em silêncio — o mesmo jeito
       // de um critério deixar de valer sem ninguém notar. [[project_uid_identity_canon_locked]]
-      if (uidDoSlot == null) uidDoSlot = (isP1 ? m.p1Uid : m.p2Uid) || null;
+      if (uidDoSlot == null) uidDoSlot = (isP1 ? (refP1 && refP1.key) : (refP2 && refP2.key)) || null;
       var scored = parseInt(isP1 ? m.scoreP1 : m.scoreP2) || 0;
       var conceded = parseInt(isP1 ? m.scoreP2 : m.scoreP1) || 0;
       totalScored += scored;
@@ -2208,6 +2249,8 @@ function _rankByTiebreakers(t, playerNames) {
     return {
       name: name,
       uid: uidDoSlot,
+      key: uidDoSlot,
+      uids: (ref && ref.uids) || [],
       wins: matchesWon,
       played: matchesPlayed,
       scored: totalScored,
@@ -2234,11 +2277,14 @@ function _rankByTiebreakers(t, playerNames) {
   // ⚠️ O formato antigo daqui era `{p1|p2: {w1,w2}}` — o comparador canônico nunca
   // acharia essas chaves, e o critério viraria silenciosamente NEUTRO. Duas formas para o
   // mesmo fato é como o critério deixa de valer sem ninguém perceber.
-  var _idk = function (nome, uid) { return uid || nome || ''; };
+  var _idk = function (m, side) {
+    var ref = _refDoTimeNoSlot(m, side);
+    return (ref && ref.key) || ('legacy:' + String((m && m[side]) || ''));
+  };
   var h2h = {};
   allMatches.forEach(function (m) {
     if (!m.winner || m.isBye || m.isSitOut) return;
-    var k1 = _idk(m.p1, m.p1Uid), k2 = _idk(m.p2, m.p2Uid);
+    var k1 = _idk(m, 'p1'), k2 = _idk(m, 'p2');
     if (m.winner === 'draw' || m.draw) {
       h2h[k1 + '|||' + k2 + '|||d'] = (h2h[k1 + '|||' + k2 + '|||d'] || 0) + 1;
       h2h[k2 + '|||' + k1 + '|||d'] = (h2h[k2 + '|||' + k1 + '|||d'] || 0) + 1;
@@ -2349,7 +2395,9 @@ if (typeof window !== 'undefined') window._rankByTiebreakers = _rankByTiebreaker
 // final que o dono definiu). Helper ÚNICO — usado pela reatribuição de vagas (abaixo) e pelo
 // `_resolveRepFills` (phases-engine), pra nenhum caminho de repescagem ranquear diferente.
 window._rankLosersByCriteria = function (t, nomes) {
-  var lista = (nomes || []).filter(Boolean).map(String);
+  var entrada = (nomes || []).filter(Boolean);
+  var devolveRefs = entrada.some(function(x) { return x && typeof x === 'object' && x.key; });
+  var lista = entrada.map(function(x) { return x && typeof x === 'object' ? x : String(x); });
   if (lista.length < 2) return lista.slice();
   var _rankObjs;
   try {
@@ -2357,19 +2405,20 @@ window._rankLosersByCriteria = function (t, nomes) {
       ? window._rankByTiebreakers(t, lista)
       : lista.map(function (n) { return { name: n }; });
   } catch (e) { _rankObjs = lista.map(function (n) { return { name: n }; }); }
+  var _chaveDe = function (x) { return String((x && (x.key || x.uid || x.name)) || x); };
   var _nomeDe = function (x) { return String((x && x.name) || x); };
   var _sig = function (x) {
     if (!x || typeof x !== 'object') return '';
-    return Object.keys(x).filter(function (kk) { return typeof x[kk] === 'number'; })
+    return Object.keys(x).filter(function (kk) { return kk.charAt(0) !== '_' && typeof x[kk] === 'number'; })
       .sort().map(function (kk) { return kk + '=' + x[kk]; }).join('|');
   };
   var _pIn = {};
-  lista.forEach(function (n, i) { _pIn[String(n)] = i; });
+  lista.forEach(function (n, i) { _pIn[_chaveDe(n)] = i; });
   var ranked = [], _bloco = [], _sigAtual = null;
   var _fecha = function () {
     if (!_bloco.length) return;
-    _bloco.sort(function (a, b) { return _pIn[_nomeDe(a)] - _pIn[_nomeDe(b)]; });
-    _bloco.forEach(function (x) { ranked.push(_nomeDe(x)); });
+    _bloco.sort(function (a, b) { return _pIn[_chaveDe(a)] - _pIn[_chaveDe(b)]; });
+    _bloco.forEach(function (x) { ranked.push(x); });
     _bloco = [];
   };
   _rankObjs.forEach(function (x) {
@@ -2379,7 +2428,10 @@ window._rankLosersByCriteria = function (t, nomes) {
     _bloco.push(x);
   });
   _fecha();
-  return ranked;
+  if (!devolveRefs) return ranked.map(_nomeDe);
+  var porChave = {};
+  lista.forEach(function(ref) { porChave[_chaveDe(ref)] = ref; });
+  return ranked.map(function(x) { return porChave[_chaveDe(x)] || x; });
 };
 
 // ─── VAGA DE REPESCAGEM: ESPERA A RODADA FECHAR, DEPOIS ENTRA O MELHOR (regra do dono) ─────
@@ -2489,9 +2541,7 @@ window._reassignBestLosersToRepechage = function (t) {
       slots.forEach(function (s) {
         if (!s.m[s.slot + 'AguardaMelhor']) { s.m[s.slot + 'AguardaMelhor'] = true; trocas++; }
         if (!_vazio(s.m[s.slot])) {
-          s.m[s.slot] = 'TBD'; trocas++;
-          if (s.slot === 'p1') { s.m.team1Obj = null; s.m.team1Uids = []; s.m.p1Uid = null; }
-          else { s.m.team2Obj = null; s.m.team2Uids = []; s.m.p2Uid = null; }
+          _limpaTimeDoSlot(s.m, s.slot); trocas++;
         }
       });
       return;
@@ -2500,11 +2550,12 @@ window._reassignBestLosersToRepechage = function (t) {
 
     // derrotados NA ORDEM DOS JOGOS (o desempate final quando os critérios empatam)
     var derrotados = [];
+    var derrotadosPorUid = {};
     fonte.slice().sort(function (a, b) { return _idCmp(a.id, b.id); })
       .forEach(function (m) {
         if (!m.winner) return;
-        var perd = (window._matchWinnerSide(m) === 1) ? m.p2 : m.p1;
-        if (perd && !_vazio(perd) && derrotados.indexOf(perd) === -1) derrotados.push(perd);
+        var perd = _refDoTimeNoSlot(m, window._matchWinnerSide(m) === 1 ? 'p2' : 'p1');
+        if (perd && !derrotadosPorUid[perd.key]) { derrotadosPorUid[perd.key] = 1; derrotados.push(perd); }
       });
     if (!derrotados.length) return;
 
@@ -2512,7 +2563,11 @@ window._reassignBestLosersToRepechage = function (t) {
 
     // vencedor da rodada-fonte está vivo por mérito — nunca disputa a vaga
     var venceu = {};
-    fonte.forEach(function (m) { if (m.winner) venceu[String(m.winner)] = 1; });
+    fonte.forEach(function (m) {
+      if (!m.winner) return;
+      var vencedor = _refDoTimeNoSlot(m, window._matchWinnerSide(m) === 1 ? 'p1' : 'p2');
+      if (vencedor) venceu[vencedor.key] = 1;
+    });
     // UMA vida extra POR CHAVE: quem já ocupa outra vaga de repescagem NA MESMA chave não
     // é puxado de novo. O escopo é a chave-fonte (G.bk) de propósito — na Dupla o desenho
     // publica vida extra na superior E outra na inferior (chaves.js: "sai com até 4
@@ -2522,10 +2577,13 @@ window._reassignBestLosersToRepechage = function (t) {
     all.forEach(function (m) {
       if (!m || _fase(m) !== G.fase || _cat(m) !== G.cat || _bk(m) !== G.bk) return;
       ['p1', 'p2'].forEach(function (sl) {
-        if (m[sl + 'FromRepechage'] && !_vazio(m[sl])) jaRepescado[String(m[sl])] = 1;
+        if (m[sl + 'FromRepechage'] && !_vazio(m[sl])) {
+          var repRef = _refDoTimeNoSlot(m, sl);
+          if (repRef) jaRepescado[repRef.key] = 1;
+        }
       });
     });
-    var fila = ranked.filter(function (n) { return !venceu[String(n)]; });
+    var fila = ranked.filter(function (ref) { return ref && !venceu[ref.key]; });
 
     var temInferior = all.some(function (m) { return m && _fase(m) === G.fase && _cat(m) === G.cat && m.bracket === 'lower'; });
     var congelada = all.some(function (m) { return m && _fase(m) === G.fase && _cat(m) === G.cat && /^C\d+\|/.test(String(m._sig || '')); });
@@ -2535,22 +2593,22 @@ window._reassignBestLosersToRepechage = function (t) {
     slots.forEach(function (s) {
       var e = edgeDe[String(s.m.id) + '|' + s.slot];
       if (e && e.winner) {
-        var pd = (window._matchWinnerSide(e) === 1) ? e.p2 : e.p1;
-        if (pd && !_vazio(pd)) desigDe[String(s.m.id) + '|' + s.slot] = String(pd);
+        var pd = _refDoTimeNoSlot(e, window._matchWinnerSide(e) === 1 ? 'p2' : 'p1');
+        if (pd) desigDe[String(s.m.id) + '|' + s.slot] = pd;
       }
     });
     var ehDesignado = {};
-    Object.keys(desigDe).forEach(function (kk) { ehDesignado[desigDe[kk]] = 1; });
+    Object.keys(desigDe).forEach(function (kk) { ehDesignado[desigDe[kk].key] = 1; });
 
     // onde um nome está VIVO agora (jogo pendente), fora da própria vaga
-    var _origemDe = function (nome, sVaga) {
+    var _origemDe = function (ref, sVaga) {
       var achou = null;
       all.some(function (m) {
         if (!m || m.winner) return false;
         return ['p1', 'p2'].some(function (sl) {
           if (sVaga && m === sVaga.m && sl === sVaga.slot) return false;
           if (m[sl + 'FromRepechage'] && _vazio(m[sl])) return false;   // outra vaga pendente não é "estar vivo"
-          if (String(m[sl]) !== String(nome)) return false;
+          if (!_mesmoTimePorUid(_refDoTimeNoSlot(m, sl), ref)) return false;
           // POUSO CONQUISTADO NÃO É ORIGEM (cânone v1.5.3: "promover é ganho, TIRAR DE
           // JOGAR é proibido"). Se a pessoa chegou neste slot VENCENDO um jogo decidido
           // (inclusive avanço de BYE), puxá-la daqui deixa aquele vencedor decidido
@@ -2559,7 +2617,7 @@ window._reassignBestLosersToRepechage = function (t) {
           // foi promovida mesmo assim). Slot alimentado por vitória decidida não é
           // origem válida — e sem origem o candidato não é puxado.
           var _conquistado = all.some(function (m2) {
-            return m2 && m2 !== m && m2.winner && String(m2.winner) === String(nome) &&
+            return m2 && m2 !== m && m2.winner && _mesmoTimePorUid(_refDoTimeNoSlot(m2, window._matchWinnerSide(m2) === 1 ? 'p1' : 'p2'), ref) &&
               String(m2.nextMatchId || '') === String(m.id);
           });
           if (_conquistado) return false;
@@ -2571,10 +2629,10 @@ window._reassignBestLosersToRepechage = function (t) {
 
     var usados = {}, colocados = {}, vagados = [];
     slots.forEach(function (s) {
-      var atual = s.m[s.slot];
+      var atual = _refDoTimeNoSlot(s.m, s.slot);
 
       // ── OCUPADO (doc legado, gravado antes desta regra): correção por SWAP simétrico ──
-      if (!_vazio(atual)) {
+      if (atual) {
         /* ⛔⛔ REPESCAGEM DECIDIDA NÃO SE REESCREVE. Relato do dono em 26/set/2026, linha Ouro da
          * Confra: três vagas voltavam sozinhas para os times errados _"toda vez"_ — e a causa não era
          * a régua de desempate, era ESTE ramo. Ele pega o melhor candidato da fila e TROCA o ocupante
@@ -2593,24 +2651,21 @@ window._reassignBestLosersToRepechage = function (t) {
         var querL = null;
         for (var li = 0; li < fila.length; li++) {
           var cL = fila[li];
-          if (usados[String(cL)]) continue;
-          if (jaRepescado[String(cL)] && String(cL) !== String(atual)) continue;
-          querL = cL; usados[String(cL)] = 1; break;
+          if (usados[cL.key]) continue;
+          if (jaRepescado[cL.key] && !_mesmoTimePorUid(cL, atual)) continue;
+          querL = cL; usados[cL.key] = 1; break;
         }
-        if (!querL || String(atual) === String(querL)) { if (querL) colocados[String(querL)] = 1; return; }
+        if (!querL || _mesmoTimePorUid(atual, querL)) { if (querL) colocados[querL.key] = 1; return; }
         var origemL = _origemDe(querL, s);
         if (!origemL && temInferior) return;   // sem pouso pra quem sai — não troca
-        delete jaRepescado[String(atual)];
-        jaRepescado[String(querL)] = 1; colocados[String(querL)] = 1;
+        delete jaRepescado[atual.key];
+        jaRepescado[querL.key] = 1; colocados[querL.key] = 1;
         /* ⛔⛔ A TROCA MOVE O TIME INTEIRO, não o rótulo. Escrever só o nome aqui deixava a
          * IDENTIDADE do ocupante anterior no slot — e o card desenha pela identidade. Foi este
          * ponto que pôs os uids de uma dupla ELIMINADA num jogo cujo nome já estava certo, e
          * sobreviveu a três publicações porque eu corrigia o nome. */
-        var _idQuerL = _identidadeDoTime(t, querL);
-        var _idAtual = _identidadeDoTime(t, atual);
-        if (!_idQuerL) return;                 // sem identidade ninguém entra
-        _poeTimeNoSlot(s.m, s.slot, _idQuerL);
-        if (origemL && _idAtual) _poeTimeNoSlot(origemL.m, origemL.slot, _idAtual);
+        _poeTimeNoSlot(s.m, s.slot, { nome: querL.name, uids: querL.uids, obj: querL.obj });
+        if (origemL) _poeTimeNoSlot(origemL.m, origemL.slot, { nome: atual.name, uids: atual.uids, obj: atual.obj });
         trocas++;
         return;
       }
@@ -2619,25 +2674,23 @@ window._reassignBestLosersToRepechage = function (t) {
       var quer = null;
       for (var fi = 0; fi < fila.length; fi++) {
         var cand = fila[fi];
-        if (usados[String(cand)]) continue;
-        if (jaRepescado[String(cand)]) continue;
+        if (usados[cand.key]) continue;
+        if (jaRepescado[cand.key]) continue;
         if (temInferior) {
           // na Dupla o candidato precisa ter de onde sair (pouso pendente na inferior) OU
           // ser um designado (que nunca desceu). Puxar de jogo FECHADO é proibido — regra
           // "promover é ganho, tirar de jogar é proibido".
-          if (!ehDesignado[String(cand)] && !_origemDe(cand, s)) continue;
+          if (!ehDesignado[cand.key] && !_origemDe(cand, s)) continue;
         }
-        quer = cand; usados[String(cand)] = 1; break;
+        quer = cand; usados[cand.key] = 1; break;
       }
       if (!quer) return;
       var origem = _origemDe(quer, s);
       /* idem: identidade junto, sempre. Vaga preenchida só com rótulo é o defeito que derrubou o
        * botão de W.O. e a tela de inscritos em 26/set. */
-      var _idQuer = _identidadeDoTime(t, quer);
-      if (!_idQuer) return;
-      _poeTimeNoSlot(s.m, s.slot, _idQuer);
-      jaRepescado[String(quer)] = 1; colocados[String(quer)] = 1;
-      if (origem) { origem.m[origem.slot] = 'TBD'; vagados.push(origem); }
+      _poeTimeNoSlot(s.m, s.slot, { nome: quer.name, uids: quer.uids, obj: quer.obj });
+      jaRepescado[quer.key] = 1; colocados[quer.key] = 1;
+      if (origem) { _limpaTimeDoSlot(origem.m, origem.slot); vagados.push(origem); }
       trocas++;
     });
 
@@ -2655,13 +2708,13 @@ window._reassignBestLosersToRepechage = function (t) {
     var semCasa = [];
     slots.forEach(function (s) {
       var d = desigDe[String(s.m.id) + '|' + s.slot];
-      if (!d || colocados[d] || venceu[d]) return;
-      if (semCasa.indexOf(d) !== -1) return;
+      if (!d || colocados[d.key] || venceu[d.key]) return;
+      if (semCasa.some(function(x) { return _mesmoTimePorUid(x, d); })) return;
       if (_origemDe(d, s)) return;                    // já está vivo em algum lugar
       semCasa.push(d);
     });
     semCasa.forEach(function (d, i) {
-      if (i < vagados.length) { vagados[i].m[vagados[i].slot] = d; trocas++; }
+      if (i < vagados.length) { _poeTimeNoSlot(vagados[i].m, vagados[i].slot, { nome: d.name, uids: d.uids, obj: d.obj }); trocas++; }
     });
 
     // ── FIAÇÃO ESPELHA A OCUPAÇÃO ────────────────────────────────────────────────
