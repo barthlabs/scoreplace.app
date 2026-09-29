@@ -3064,7 +3064,11 @@ exports.assignMatchCourt = onCall(async (request) => {
 
 
 // ─── Atribuições da análise: torneio e perfil no mesmo comando canônico ─────────
-exports.applyEnrollmentAssignments = onCall(async (request) => {
+/* `invoker:'public'` só abre o transporte callable deste salvamento: identidade e
+ * autorização continuam exigidas abaixo (request.auth + _isTournamentAdmin). Sem
+ * isso o Cloud Run bloqueia o preflight e a tela mostra apenas "Failed to fetch".
+ * [[regression_analysis_assignment_callable_has_public_preflight]] */
+exports.applyEnrollmentAssignments = onCall({ invoker: 'public' }, async (request) => {
   const uid=request.auth&&request.auth.uid, data=request.data||{}, tId=String(data.tournamentId||'').trim();
   const sport=String(data.sport||'').trim().slice(0,80), raw=Array.isArray(data.edits)?data.edits.slice(0,100):null;
   if(!uid) throw new HttpsError('unauthenticated','Entre na sua conta.');
@@ -3476,7 +3480,9 @@ exports.closeExpiredLeagueSeason = onCall(async (request) => {
   return _closeExpiredLeagueSeason(ref, tId, new Date().toISOString());
 });
 
-exports.setTournamentCategoryConfig = onCall(async (request) => {
+// Mesma porta de configuração usada pelos toggles da Análise; sem preflight público
+// a mudança visual de categoria nunca chega à validação/autorização abaixo.
+exports.setTournamentCategoryConfig = onCall({ invoker: 'public' }, async (request) => {
   const uid = request.auth && request.auth.uid;
   const data = request.data || {};
   const tId = String(data.tournamentId || '').trim();
