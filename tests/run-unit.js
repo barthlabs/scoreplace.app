@@ -155,6 +155,10 @@ const SUITES = [
   'tests/fusao-e-volta-no-emulador.test.js',
   'tests/celular-do-casal-no-emulador.test.js',
   'functions/test-desfazer-fusao-core.js',
+  // Formar/desfazer dupla altera a quantidade de registros físicos do elenco.
+  // O marcador de partes precisa acompanhar essa transação ou a tela fica em
+  // “Carregando…” mesmo com as pessoas já salvas na subcoleção.
+  'functions/test-split-parts-marker.js',
   'functions/test-category-eligibility-core.js',
   'functions/test-registration-lifecycle-core.js',
   'functions/test-registration-merge-core.js',
