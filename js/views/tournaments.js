@@ -1123,11 +1123,10 @@ window._scrollToBracketSection = function(tId, matchId) {
 window._formDuplaByUids = function(tId, name1, uid1, name2, uid2) {
     var t = window.AppStore.tournaments.find(function(x) { return String(x.id) === String(tId); });
     if (!t) return;
-    // CF-ONLY (regra do dono "tudo na CF, cliente só dispara"): o cliente NÃO funde nem grava
-    // roster. A CF formPair roda computeFormPair (participants/teamOrigins/enrollSeq/memberUids/
-    // dropRequests/markDuplasManual) atômico + replica pro Sandbox; e, se a chave JÁ foi sorteada,
-    // o dispatch integrateLateEntries integra a dupla na chave (também na CF). O onSnapshot
-    // re-renderiza. Aqui só resolvemos uid (LEITURA) pra notificação — zero mutação local.
+    // CF-ONLY (regra do dono "tudo na CF, cliente só dispara"): a Function é quem
+    // forma a dupla. A resposta traz o roster canônico e PRECISA hidratar a tela
+    // imediatamente: aguardar só o snapshot deixa o toast dizer "Dupla formada" com
+    // ambos ainda em "Sem dupla". [[regression_pair_result_rehydrates_participants]]
     var arr2 = Array.isArray(t.participants) ? t.participants : [];
     var _p1 = arr2.find(function(p) { return uid1 ? (typeof p === 'object' && p.uid === uid1) : ((typeof p === 'string' ? p : (p.displayName||p.name||'')) === name1); });
     var _p2 = arr2.find(function(p) { return uid2 ? (typeof p === 'object' && p.uid === uid2) : ((typeof p === 'string' ? p : (p.displayName||p.name||'')) === name2); });
@@ -1161,6 +1160,18 @@ window._formDuplaByUids = function(tId, name1, uid1, name2, uid2) {
                 };
                 if (typeof showNotification !== 'undefined') showNotification('Dupla incompatível', _pairRuleMsg[_r.invalidPairing] || 'Os participantes não atendem à regra de formação deste torneio.', 'warning');
                 return;
+            }
+            // Não reconstruir a dupla no cliente e nem inferir por nomes. O único
+            // estado válido é `participants` retornado pela transação UID-only da CF.
+            if (_r && Array.isArray(_r.participants)) {
+                t.participants = _r.participants;
+                var _pool = (window.AppStore && window.AppStore.tournaments) || [];
+                var _stored = _pool.find(function (x) { return x && String(x.id) === String(tId); });
+                if (_stored && _stored !== t) _stored.participants = _r.participants;
+                // A assinatura da tela de Inscritos é usada para evitar repaint em
+                // snapshots irrelevantes. Invalidá-la aqui faz a reidratação canônica
+                // vencer o gate, sem depender de refresh manual.
+                window._pdetailSig = null;
             }
             // chave já sorteada → integra na CF (integrateLateEntries detecta o órfão e re-sorteia)
             if (_hasBracket && typeof window._triggerLateIntegration === 'function') { try { window._triggerLateIntegration(t, { force: true }); } catch (e) {} }
@@ -1677,8 +1688,13 @@ function renderTournaments(container, tournamentId = null) {
         evt.dataTransfer.effectAllowed = 'move';
         // v2.7.89: guarda onde o card foi pego (centra a seção compacta nesse ponto).
         window._spDragPickY = (typeof evt.clientY === 'number' && evt.clientY > 0) ? evt.clientY : (window.innerHeight / 2);
-        // v2.7.86/87: esconde o card arrastado + compacta os outros (drop mais perto).
-        setTimeout(function () { if (window._markDragSource) window._markDragSource(evt.target); if (window._setDragCompact) window._setDragCompact(true); }, 0);
+        // Ao formar dupla, os demais cards não podem trocar de posição no meio do
+        // gesto: isso faz o alvo parecer escapar. O card de origem vira só um
+        // fantasma invisível, preservando exatamente seu espaço na grade.
+        setTimeout(function () {
+          if (document.body) document.body.classList.add('sp-dupla-drag');
+          if (window._markDragSource) window._markDragSource(evt.target);
+        }, 0);
         // v2.8.50: TAMBÉM popular _participantDragData + ativar a vaga de co-organização.
         // Sem isto, arrastar um card "Sem dupla" pra vaga de co-org lia null e "nada
         // acontecia" (só _duplaDragData era setado, que serve pra parear, não pra co-org).

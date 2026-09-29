@@ -2654,30 +2654,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     _erSelectedOrders = {}; _erSelectionAnchor = null; _erDraggedOrders = [];
     if (!silent && typeof window._erRenderMatrix === 'function') window._erRenderMatrix();
   }
-  function _erPairSelection() {
-    var rows = _erSelectedRows();
-    if (rows.length !== 2 || !rows[0].uid || !rows[1].uid || rows[0].uid === rows[1].uid) return null;
-    // Não fundir uma pessoa que já pertence a dupla: a Function também recusa, mas
-    // bloquear na interface explica o motivo antes de uma chamada desnecessária.
-    if (rows[0]._duplaSide || rows[1]._duplaSide) return null;
-    return rows;
-  }
-  function _erSplitSelection() {
-    var rows = _erSelectedRows(), pairIndex = null;
-    if (!rows.length || !_liveState || !_liveState.t) return null;
-    rows.forEach(function (r) {
-      if (r._duplaIdx != null && (pairIndex == null || pairIndex === r._duplaIdx)) pairIndex = r._duplaIdx;
-      else if (r._duplaIdx !== pairIndex) pairIndex = false;
-    });
-    if (pairIndex === false || pairIndex == null) return null;
-    var entry = ((_liveState.t.participants || [])[pairIndex]) || {};
-    if (!entry.p1Uid || !entry.p2Uid) return null; // análise não desmonta legado por nome
-    return { uid1: String(entry.p1Uid), uid2: String(entry.p2Uid) };
-  }
   function _erMatrixSelectionBar() {
     var count = _erSelectedRows().length;
-    var pair = _erPairSelection();
-    var split = _erSplitSelection();
     var hint = _erHasFinePointer()
       ? '⌘/Ctrl clique seleciona vários · Shift seleciona uma faixa · arraste para atribuir em lote'
       : 'No computador, use ⌘/Ctrl ou Shift para selecionar e arrastar em lote';
@@ -2685,8 +2663,6 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       '<span style="font-size:13px;font-weight:700;color:var(--text-secondary,#cbd5e1);">' +
         (count ? ('✓ ' + count + ' selecionado' + (count === 1 ? '' : 's')) : hint) + '</span>' +
       (count ? '<button class="btn btn-outline btn-sm" style="font-size:12px;padding:4px 8px;" onclick="window._erMxClearSelection()">Limpar</button>' : '') +
-      '<button class="btn btn-primary btn-sm" style="font-size:12px;padding:4px 8px;"' + (pair ? '' : ' disabled title="Selecione duas pessoas avulsas com UID"') + ' onclick="window._erFormSelectedPair()">👫 Formar dupla</button>' +
-      '<button class="btn btn-outline btn-sm" style="font-size:12px;padding:4px 8px;"' + (split ? '' : ' disabled title="Selecione membro(s) da mesma dupla"') + ' onclick="window._erSplitSelectedPair()">↔ Desfazer dupla</button>' +
     '</div>';
   }
   function _matrixInner(rows, t) {
@@ -3072,54 +3048,6 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     });
     window._erRenderMatrix();
     window._erUpdateSaveBar();
-  };
-  function _erPairFailure(result, action) {
-    var code = result && result.invalidPairing;
-    var msgs = {
-      categoryRequired: 'Atribua a categoria dos dois participantes antes de formar a dupla.',
-      categoryMismatch: 'Neste torneio, a dupla precisa respeitar a mesma categoria.',
-      mixedPairRequiresOneOfEachGender: 'Na categoria mista, a dupla precisa ter uma mulher e um homem.'
-    };
-    if (typeof showNotification === 'function') showNotification(action, msgs[code] || 'O servidor não confirmou esta alteração.', 'warning');
-  }
-  function _erRefreshAfterPairResult(result) {
-    // A resposta da Function é a fotografia canônica da transação. Aplicá-la antes
-    // do snapshot faz a análise refletir formar/desfazer imediatamente, sem refresh.
-    if (_liveState && _liveState.t && result && Array.isArray(result.participants)) _liveState.t.participants = result.participants;
-    _erClearSelection(true);
-    var host = document.getElementById('view-container');
-    var t = _liveState && _liveState.t;
-    if (host && t && typeof window.renderEnrollmentReportPage === 'function') window.renderEnrollmentReportPage(host, t.id, true);
-  }
-  window._erFormSelectedPair = function () {
-    if (!_liveState || !_liveState.isOrg) return;
-    var selected = _erPairSelection();
-    if (!selected) { _erPairFailure(null, 'Seleção inválida'); return; }
-    if (!(window.FirestoreDB && typeof window.FirestoreDB.formPair === 'function')) { _erPairFailure(null, 'Sem conexão'); return; }
-    // REGRA: nunca enviar nomes para formar dupla pela Análise. UID é a identidade
-    // canônica; nome é somente a legenda do card e pode mudar a qualquer momento.
-    window.FirestoreDB.formPair(_liveState.t.id, { uid1: selected[0].uid, uid2: selected[1].uid })
-      .then(function (res) {
-        var out = (res && res.data) || res || {};
-        if (out.notFound || out.alreadyPaired || out.invalidPairing) { _erPairFailure(out, out.alreadyPaired ? 'Já está em dupla' : 'Dupla incompatível'); return; }
-        if (typeof showNotification === 'function') showNotification('👫 Dupla formada', 'A formação por UID foi salva.', 'success');
-        _erRefreshAfterPairResult(out);
-      }).catch(function (err) { _erPairFailure(null, (err && err.message) || 'Não foi possível formar a dupla'); });
-  };
-  window._erSplitSelectedPair = function () {
-    if (!_liveState || !_liveState.isOrg) return;
-    var selected = _erSplitSelection();
-    if (!selected) { _erPairFailure(null, 'Seleção inválida'); return; }
-    if (!(window.FirestoreDB && typeof window.FirestoreDB.splitPair === 'function')) { _erPairFailure(null, 'Sem conexão'); return; }
-    // Mesmo ao desfazer, os dois identificadores enviados são UIDs — sem p1/p2 e
-    // sem tentativa de reencontrar alguém pelo texto exibido na tela.
-    window.FirestoreDB.splitPair(_liveState.t.id, { id1: selected.uid1, id2: selected.uid2 })
-      .then(function (res) {
-        var out = (res && res.data) || res || {};
-        if (out.notFound) { _erPairFailure(out, 'Não foi possível desfazer a dupla'); return; }
-        if (typeof showNotification === 'function') showNotification('↔ Dupla desfeita', 'Os dois inscritos voltaram a ficar avulsos.', 'success');
-        _erRefreshAfterPairResult(out);
-      }).catch(function (err) { _erPairFailure(null, (err && err.message) || 'Não foi possível desfazer a dupla'); });
   };
   // ── Frescor da verificação (v1.1.18) ────────────────────────────────
   // "Os que estão atualizados a menos de 6 dias não precisam ser atualizados."

@@ -210,6 +210,9 @@ input[type="time"].rb-time::-webkit-calendar-picker-indicator {
      2rem) — antes tinha max-width:1400 + margin:auto e ficava centralizada,
      deixando vãos nas laterais por onde o conteúdo (ex.: bracket) vazava. */
   box-sizing: border-box;
+  /* O cabeçalho é uma superfície opaca. `isolation` impede que um descendente
+     com stacking-context próprio da matriz apareça por cima ao rolar no desktop. */
+  isolation: isolate;
 }
 /* No z-index lowering needed — hamburger dropdown is OUTSIDE the topbar
    at z-index 102 (its own stacking context). back-header stays at 101.
@@ -1238,6 +1241,15 @@ body.sp-drag-compact .sp-dnd-host .participant-card::before {
   word-break: break-word;
   line-height: 1.15;
   text-align: center;
+}
+
+/* Formação de dupla: preserve o lugar de onde o card saiu durante o arraste.
+   Não usar `display:none` nem a grade compacta aqui: ambos reorganizavam os
+   outros inscritos e faziam o alvo visual mudar enquanto o usuário segurava. */
+body.sp-dupla-drag .sp-dnd-host .participant-card.sp-drag-source {
+  opacity: 0.22 !important;
+  filter: grayscale(1) !important;
+  pointer-events: none !important;
 }
 
 /* --- Botões Compactos (ações em cards de participantes) --- */

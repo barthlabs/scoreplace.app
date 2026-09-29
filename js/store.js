@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.3.161';
+window.SCOREPLACE_VERSION = '2.3.162';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -8190,7 +8190,12 @@ window._setDragCompact = function (on) {
     // Só liga/desliga a classe do BODY — os containers de cards já têm a classe
     // permanente `.sp-dnd-host` (no HTML do renderizador), então sobrevive a um
     // re-render no meio do arraste. CSS: `body.sp-drag-compact .sp-dnd-host`.
-    if (on) b.classList.add('sp-drag-compact'); else b.classList.remove('sp-drag-compact');
+    if (on) b.classList.add('sp-drag-compact'); else {
+      b.classList.remove('sp-drag-compact');
+      // A formação de dupla usa fantasma estável, não o modo compacto. O mesmo
+      // encerramento global de drag limpa ambos para nunca deixar um slot oculto.
+      b.classList.remove('sp-dupla-drag');
+    }
     if (on) {
       // v2.7.88: centraliza a SEÇÃO dos cards na tela quando eles encolhem — assim a
       // grade compacta fica no meio do viewport e o trajeto de drop é mínimo. Centra a
