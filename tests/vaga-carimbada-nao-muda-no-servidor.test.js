@@ -35,7 +35,11 @@ ok(bloco.length > 400, '① a trava existe e foi achada pelo identificador');
 
 /* ── ① ELA É CHAMADA NA PORTA ÚNICA DE ESCRITA, ANTES DE PLANEJAR ──────────── */
 const iGrava = src.indexOf('function _gravaTorneio(');
-const corpo = iGrava < 0 ? '' : src.slice(iGrava, src.indexOf('\n}', src.indexOf('return plan.boundary;', iGrava)));
+/* A porta agora devolve também o recibo dos `matches` que entraram no plano atômico da
+ * substituição por W.O.  Não usar `return plan.boundary` como âncora: ele faria este teste
+ * deixar de enxergar a mesma trava justamente quando o recibo evoluir. */
+const iRetorno = src.indexOf('return Object.assign({}, plan.boundary', iGrava);
+const corpo = iGrava < 0 || iRetorno < 0 ? '' : src.slice(iGrava, src.indexOf('\n}', iRetorno));
 const iChama = corpo.indexOf('_preservaRepescagemCarimbada(tDepois, tAntes)');
 const iPlaneja = corpo.indexOf('_planejaEscrita(');
 ok(iChama > 0, '① ⛔⛔ a porta única de escrita chama a trava');
