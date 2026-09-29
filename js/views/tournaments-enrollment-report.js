@@ -1090,6 +1090,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     _pendingEdits = {};
     if (typeof window._erRenderMatrix === 'function') window._erRenderMatrix();
     if (typeof window._erRenderInscritos === 'function') window._erRenderInscritos();
+    // Regression guard: Cancel must also restore the category shown for a formed
+    // pair; it may not keep a local-only staged category after the matrix resets.
+    if (typeof window._erRenderFormedPairs === 'function') window._erRenderFormedPairs();
     window._erUpdateSaveBar();
   };
   // Realça o card editado sem re-render da lista (o ● aparece só no próximo render).
