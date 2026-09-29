@@ -24,4 +24,11 @@ ok(source.includes("var configuredSkills = (typeof _erConfiguredSkills === 'func
 ok(source.includes('window._ensureTournamentLoaded(tId, function (loaded)') && source.includes("if (window.location.hash !== '#analise/' + tId) return;"), 'análise reidrata o torneio antes de acusar ausência e ignora callback após navegação');
 ok(source.includes("window._callCF('applyEnrollmentAssignments'"), 'salvamento usa o transporte autenticado canônico');
 ok(!source.includes("firebase.functions().httpsCallable('applyEnrollmentAssignments')"), 'análise não usa o SDK callable que perde Authorization em sessão compat');
+ok(source.includes('function _erHasFinePointer()') && source.includes("'(pointer:fine)'"), 'seleção múltipla fica restrita ao ambiente desktop com ponteiro fino');
+ok(source.includes('ev.metaKey || ev.ctrlKey') && source.includes('ev.shiftKey'), 'Cmd/Ctrl seleciona vários e Shift seleciona uma faixa');
+ok(source.includes('application/x-scoreplace-orders') && source.includes('orders.forEach(function (order)'), 'arrastar a seleção aplica a atribuição staged a todos os selecionados');
+ok(source.includes('window._erFormSelectedPair') && source.includes('window._erSplitSelectedPair'), 'análise expõe formar e desfazer dupla');
+ok(source.includes('FirestoreDB.formPair(_liveState.t.id, { uid1: selected[0].uid, uid2: selected[1].uid })'), 'formação de dupla na análise envia somente os dois UIDs');
+ok(source.includes('FirestoreDB.splitPair(_liveState.t.id, { id1: selected.uid1, id2: selected.uid2 })'), 'desfazer dupla na análise envia somente os dois UIDs');
+ok(source.includes('result && Array.isArray(result.participants)') && source.includes('renderEnrollmentReportPage(host, t.id, true)'), 'resposta canônica da Function repinta a análise sem refresh');
 console.log('✅ analise-categorias-configuradas: ' + pass + ' asserções');

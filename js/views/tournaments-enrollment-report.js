@@ -859,6 +859,14 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   var _liveState = null;
   // v2.4.34: mudanças staged (gênero/categoria) por order, aplicadas só no "Salvar".
   var _pendingEdits = {};
+  // Seleção da matriz existe só como estado visual/local: atribuições continuam em
+  // `_pendingEdits` e dupla continua na Cloud Function. `order` é seguro aqui apenas
+  // como chave efêmera da tela; a escrita que sai dela usa exclusivamente UID.
+  // [[regression_analysis_bulk_selection_uid_only]]
+  var _erSelectedOrders = {};
+  var _erSelectionAnchor = null;
+  var _erDraggedOrders = [];
+  var _erLastMatrixDragAt = 0;
 
   function _norm(s) {
     return String(s == null ? '' : s).toLowerCase()
@@ -2632,6 +2640,55 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     });
     return inferred;
   }
+  function _erHasFinePointer() {
+    // Cmd/Ctrl/Shift não é um modelo descobrível no touch. Não fingir seleção de
+    // desktop num telefone evita que o toque normal deixe cards selecionados sem
+    // nenhuma forma clara de desfazer; no desktop o navegador informa pointer:fine.
+    try { return !!(window.matchMedia && window.matchMedia('(pointer:fine)').matches); } catch (e) { return false; }
+  }
+  function _erSelectedRows() {
+    var rows = (_liveState && _liveState.rows) || [];
+    return rows.filter(function (r) { return !!_erSelectedOrders[r.order]; });
+  }
+  function _erClearSelection(silent) {
+    _erSelectedOrders = {}; _erSelectionAnchor = null; _erDraggedOrders = [];
+    if (!silent && typeof window._erRenderMatrix === 'function') window._erRenderMatrix();
+  }
+  function _erPairSelection() {
+    var rows = _erSelectedRows();
+    if (rows.length !== 2 || !rows[0].uid || !rows[1].uid || rows[0].uid === rows[1].uid) return null;
+    // Não fundir uma pessoa que já pertence a dupla: a Function também recusa, mas
+    // bloquear na interface explica o motivo antes de uma chamada desnecessária.
+    if (rows[0]._duplaSide || rows[1]._duplaSide) return null;
+    return rows;
+  }
+  function _erSplitSelection() {
+    var rows = _erSelectedRows(), pairIndex = null;
+    if (!rows.length || !_liveState || !_liveState.t) return null;
+    rows.forEach(function (r) {
+      if (r._duplaIdx != null && (pairIndex == null || pairIndex === r._duplaIdx)) pairIndex = r._duplaIdx;
+      else if (r._duplaIdx !== pairIndex) pairIndex = false;
+    });
+    if (pairIndex === false || pairIndex == null) return null;
+    var entry = ((_liveState.t.participants || [])[pairIndex]) || {};
+    if (!entry.p1Uid || !entry.p2Uid) return null; // análise não desmonta legado por nome
+    return { uid1: String(entry.p1Uid), uid2: String(entry.p2Uid) };
+  }
+  function _erMatrixSelectionBar() {
+    var count = _erSelectedRows().length;
+    var pair = _erPairSelection();
+    var split = _erSplitSelection();
+    var hint = _erHasFinePointer()
+      ? '⌘/Ctrl clique seleciona vários · Shift seleciona uma faixa · arraste para atribuir em lote'
+      : 'No computador, use ⌘/Ctrl ou Shift para selecionar e arrastar em lote';
+    return '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:7px 9px;margin-bottom:12px;padding:9px 11px;border:1px solid rgba(56,189,248,0.32);border-radius:10px;background:rgba(14,116,144,0.10);">' +
+      '<span style="font-size:13px;font-weight:700;color:var(--text-secondary,#cbd5e1);">' +
+        (count ? ('✓ ' + count + ' selecionado' + (count === 1 ? '' : 's')) : hint) + '</span>' +
+      (count ? '<button class="btn btn-outline btn-sm" style="font-size:12px;padding:4px 8px;" onclick="window._erMxClearSelection()">Limpar</button>' : '') +
+      '<button class="btn btn-primary btn-sm" style="font-size:12px;padding:4px 8px;"' + (pair ? '' : ' disabled title="Selecione duas pessoas avulsas com UID"') + ' onclick="window._erFormSelectedPair()">👫 Formar dupla</button>' +
+      '<button class="btn btn-outline btn-sm" style="font-size:12px;padding:4px 8px;"' + (split ? '' : ' disabled title="Selecione membro(s) da mesma dupla"') + ' onclick="window._erSplitSelectedPair()">↔ Desfazer dupla</button>' +
+    '</div>';
+  }
   function _matrixInner(rows, t) {
     // Buckets refletem a configuração explícita do torneio; A-D-FUN só existe
     // quando não há categoria estipulada pelo organizador.
@@ -2705,6 +2762,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var _mxIsOrg = window._souOrganizador(t);
     function chip(r) {
       var pe = _pendingEdits[r.order] || {}; var edited = Object.keys(pe).length > 0;
+      var selected = !!_erSelectedOrders[r.order];
       // _lzColor já vem resolvido por _erApplyLzToRows: veredito verificado, ou
       // violeta (autorizou), ou branco (não autorizou). Fallback branco por segurança.
       var nameCol = edited ? '#f59e0b' : (r._lzColor || _LZ_COL.white);
@@ -2722,12 +2780,14 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         (canPull ? ' — clique pra puxar o histórico do letzplay'
                  : (canOpen ? ' — clique pra ver os jogos' : '')) +
         ' — arraste pra atribuir gênero/categoria';
-      var click = canOpen ? ' onclick="window._lzAthleteDialog(\'' + String(r.uid).replace(/['\\]/g, '') + '\')"' : '';
+      // Clique normal mantém a ficha do atleta; Cmd/Ctrl e Shift trocam apenas a
+      // seleção local. Assim a nova seleção em lote não rouba a ação já conhecida.
+      var click = canOpen ? ' onclick="window._erMxChipClick(event,' + r.order + ',\'' + String(r.uid).replace(/['\\]/g, '') + '\')"' : '';
       // v1.7.55: `data-er-person` é o que a barra de busca varre. Nome VIVO (o mesmo que o
       // card mostra) — indexar rótulo velho faz a busca achar quem a tela não mostra, que
       // foi exatamente o defeito da busca da chave na 1.7.47.
-      return '<div draggable="true" data-er-person="' + _esc(r.name || '') + '" ondragstart="window._erMxDragStart(event,' + r.order + ')"' + click + ' ' +
-        'style="cursor:' + (canOpen ? 'pointer' : 'grab') + ';font-size:0.74rem;font-weight:600;padding:4px 7px;border-radius:6px;min-width:0;background:var(--bg-card,rgba(0,0,0,0.25));color:' + window._spCor(nameCol, 'color') + ';border:1px solid ' + window._spCor(border, 'borda') + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' + tip + '">' + _esc(r.name || '(sem nome)') + '</div>';
+      return '<div draggable="true" data-er-order="' + r.order + '" data-er-person="' + _esc(r.name || '') + '" ondragstart="window._erMxDragStart(event,' + r.order + ')"' + click + ' ' +
+        'aria-pressed="' + (selected ? 'true' : 'false') + '" style="cursor:' + (canOpen ? 'pointer' : 'grab') + ';font-size:0.74rem;font-weight:600;padding:4px 7px;border-radius:6px;min-width:0;background:' + (selected ? 'rgba(14,165,233,0.20)' : 'var(--bg-card,rgba(0,0,0,0.25))') + ';color:' + window._spCor(nameCol, 'color') + ';border:' + (selected ? '2px solid #38bdf8' : ('1px solid ' + window._spCor(border, 'borda'))) + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' + tip + '">' + _esc(r.name || '(sem nome)') + '</div>';
     }
     function cardGrid(arr) {
       // minmax(0,...) e o que impede o estouro: com min-width:auto o nome longo
@@ -2810,7 +2870,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         '<div style="font-size:17px;font-weight:800;color:var(--sp-c-8592a6,#8592a6);border-bottom:2px solid #8592a6;padding-bottom:6px;margin-bottom:8px;">? Sem gênero <span style="opacity:0.8;font-size:15px;">(' + semTotal + ')</span> — arraste pra Feminino ou Masculino</div>' +
         '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:9px;">' + semInner + '</div></div>';
     }
-    return catsBox + totalBar + mistoStrip + grid + semSection;
+    return catsBox + totalBar + _erMatrixSelectionBar() + mistoStrip + grid + semSection;
   }
   window._erRenderMatrix = function () {
     var el = document.getElementById('er-cat-matrix');
@@ -2947,20 +3007,119 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     t.skillCategories = sc;
     _erCommitCats(t);
   };
-  window._erMxDragStart = function (ev, order) { window._erMxDrag = order; try { ev.dataTransfer.effectAllowed = 'move'; ev.dataTransfer.setData('text/plain', String(order)); } catch (e) {} };
+  function _erSelectRange(from, to) {
+    var rows = (_liveState && _liveState.rows) || [];
+    var a = rows.findIndex(function (r) { return r.order === from; });
+    var b = rows.findIndex(function (r) { return r.order === to; });
+    if (a < 0 || b < 0) { _erSelectedOrders[to] = true; return; }
+    var start = Math.min(a, b), end = Math.max(a, b);
+    for (var i = start; i <= end; i++) _erSelectedOrders[rows[i].order] = true;
+  }
+  window._erMxChipClick = function (ev, order, uid) {
+    // Depois de um drag alguns navegadores ainda disparam click: não abrir a ficha
+    // nem mudar a seleção por acidente ao soltar o card.
+    if (Date.now() - _erLastMatrixDragAt < 250) { ev.preventDefault(); return; }
+    var selecting = _erHasFinePointer() && (ev.metaKey || ev.ctrlKey || ev.shiftKey);
+    if (!selecting) {
+      if (uid && typeof window._lzAthleteDialog === 'function') window._lzAthleteDialog(uid);
+      return;
+    }
+    ev.preventDefault(); ev.stopPropagation();
+    if (ev.shiftKey && _erSelectionAnchor != null) {
+      _erSelectRange(_erSelectionAnchor, order);
+    } else if (ev.metaKey || ev.ctrlKey) {
+      if (_erSelectedOrders[order]) delete _erSelectedOrders[order]; else _erSelectedOrders[order] = true;
+      _erSelectionAnchor = order;
+    } else {
+      _erSelectedOrders = {}; _erSelectedOrders[order] = true; _erSelectionAnchor = order;
+    }
+    window._erRenderMatrix();
+  };
+  window._erMxClearSelection = function () { _erClearSelection(false); };
+  window._erMxDragStart = function (ev, order) {
+    _erLastMatrixDragAt = Date.now();
+    // Arrastar um card já selecionado leva todos; arrastar outro começa uma seleção
+    // unitária. A atribuição em lote só altera o estado staged, nunca o roster.
+    if (_erHasFinePointer() && !_erSelectedOrders[order]) {
+      _erSelectedOrders = {}; _erSelectedOrders[order] = true; _erSelectionAnchor = order;
+    }
+    _erDraggedOrders = (_erHasFinePointer() ? _erSelectedRows().map(function (r) { return r.order; }) : [order]);
+    if (!_erDraggedOrders.length) _erDraggedOrders = [order];
+    window._erMxDrag = order;
+    try {
+      ev.dataTransfer.effectAllowed = 'move';
+      ev.dataTransfer.setData('text/plain', String(order));
+      ev.dataTransfer.setData('application/x-scoreplace-orders', _erDraggedOrders.join(','));
+    } catch (e) {}
+  };
   window._erMxOver = function (ev) { ev.preventDefault(); try { ev.dataTransfer.dropEffect = 'move'; } catch (e) {} };
   window._erMxDrop = function (ev, genderKey, sk) {
     ev.preventDefault(); ev.stopPropagation();
     if (!_liveState || !_liveState.isOrg) return;
-    var order = (window._erMxDrag != null) ? window._erMxDrag : parseInt((ev.dataTransfer && ev.dataTransfer.getData('text/plain')) || '', 10);
+    var fallback = (window._erMxDrag != null) ? window._erMxDrag : parseInt((ev.dataTransfer && ev.dataTransfer.getData('text/plain')) || '', 10);
+    var raw = '';
+    try { raw = (ev.dataTransfer && ev.dataTransfer.getData('application/x-scoreplace-orders')) || ''; } catch (e) {}
+    var orders = raw ? raw.split(',').map(function (v) { return parseInt(v, 10); }).filter(function (v) { return !isNaN(v); }) : (_erDraggedOrders.length ? _erDraggedOrders.slice() : [fallback]);
     window._erMxDrag = null;
-    if (order == null || isNaN(order)) return;
-    if (!_pendingEdits[order]) _pendingEdits[order] = {};
-    if (genderKey === 'feminino' || genderKey === 'masculino') _pendingEdits[order].gender = genderKey;
-    if (sk && sk !== '__none__') { var vc = _mxFindValidCat(_liveState.t, genderKey, sk); if (vc) _pendingEdits[order].category = vc; }
-    else if (sk === '__none__') { _pendingEdits[order].category = ''; }
+    _erDraggedOrders = [];
+    orders = orders.filter(function (v, i, a) { return v != null && !isNaN(v) && a.indexOf(v) === i; });
+    if (!orders.length) return;
+    orders.forEach(function (order) {
+      if (!_pendingEdits[order]) _pendingEdits[order] = {};
+      if (genderKey === 'feminino' || genderKey === 'masculino') _pendingEdits[order].gender = genderKey;
+      if (sk && sk !== '__none__') { var vc = _mxFindValidCat(_liveState.t, genderKey, sk); if (vc) _pendingEdits[order].category = vc; }
+      else if (sk === '__none__') { _pendingEdits[order].category = ''; }
+    });
     window._erRenderMatrix();
     window._erUpdateSaveBar();
+  };
+  function _erPairFailure(result, action) {
+    var code = result && result.invalidPairing;
+    var msgs = {
+      categoryRequired: 'Atribua a categoria dos dois participantes antes de formar a dupla.',
+      categoryMismatch: 'Neste torneio, a dupla precisa respeitar a mesma categoria.',
+      mixedPairRequiresOneOfEachGender: 'Na categoria mista, a dupla precisa ter uma mulher e um homem.'
+    };
+    if (typeof showNotification === 'function') showNotification(action, msgs[code] || 'O servidor não confirmou esta alteração.', 'warning');
+  }
+  function _erRefreshAfterPairResult(result) {
+    // A resposta da Function é a fotografia canônica da transação. Aplicá-la antes
+    // do snapshot faz a análise refletir formar/desfazer imediatamente, sem refresh.
+    if (_liveState && _liveState.t && result && Array.isArray(result.participants)) _liveState.t.participants = result.participants;
+    _erClearSelection(true);
+    var host = document.getElementById('view-container');
+    var t = _liveState && _liveState.t;
+    if (host && t && typeof window.renderEnrollmentReportPage === 'function') window.renderEnrollmentReportPage(host, t.id, true);
+  }
+  window._erFormSelectedPair = function () {
+    if (!_liveState || !_liveState.isOrg) return;
+    var selected = _erPairSelection();
+    if (!selected) { _erPairFailure(null, 'Seleção inválida'); return; }
+    if (!(window.FirestoreDB && typeof window.FirestoreDB.formPair === 'function')) { _erPairFailure(null, 'Sem conexão'); return; }
+    // REGRA: nunca enviar nomes para formar dupla pela Análise. UID é a identidade
+    // canônica; nome é somente a legenda do card e pode mudar a qualquer momento.
+    window.FirestoreDB.formPair(_liveState.t.id, { uid1: selected[0].uid, uid2: selected[1].uid })
+      .then(function (res) {
+        var out = (res && res.data) || res || {};
+        if (out.notFound || out.alreadyPaired || out.invalidPairing) { _erPairFailure(out, out.alreadyPaired ? 'Já está em dupla' : 'Dupla incompatível'); return; }
+        if (typeof showNotification === 'function') showNotification('👫 Dupla formada', 'A formação por UID foi salva.', 'success');
+        _erRefreshAfterPairResult(out);
+      }).catch(function (err) { _erPairFailure(null, (err && err.message) || 'Não foi possível formar a dupla'); });
+  };
+  window._erSplitSelectedPair = function () {
+    if (!_liveState || !_liveState.isOrg) return;
+    var selected = _erSplitSelection();
+    if (!selected) { _erPairFailure(null, 'Seleção inválida'); return; }
+    if (!(window.FirestoreDB && typeof window.FirestoreDB.splitPair === 'function')) { _erPairFailure(null, 'Sem conexão'); return; }
+    // Mesmo ao desfazer, os dois identificadores enviados são UIDs — sem p1/p2 e
+    // sem tentativa de reencontrar alguém pelo texto exibido na tela.
+    window.FirestoreDB.splitPair(_liveState.t.id, { id1: selected.uid1, id2: selected.uid2 })
+      .then(function (res) {
+        var out = (res && res.data) || res || {};
+        if (out.notFound) { _erPairFailure(out, 'Não foi possível desfazer a dupla'); return; }
+        if (typeof showNotification === 'function') showNotification('↔ Dupla desfeita', 'Os dois inscritos voltaram a ficar avulsos.', 'success');
+        _erRefreshAfterPairResult(out);
+      }).catch(function (err) { _erPairFailure(null, (err && err.message) || 'Não foi possível desfazer a dupla'); });
   };
   // ── Frescor da verificação (v1.1.18) ────────────────────────────────
   // "Os que estão atualizados a menos de 6 dias não precisam ser atualizados."
