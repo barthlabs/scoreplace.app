@@ -1113,6 +1113,30 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     window._erUpdateSaveBar();
     return true;
   }
+  // A Function confirmou a transação, mas em algumas corridas o retorno HTTP
+  // ainda carrega o roster imediatamente anterior. Não se pode deixar a tela
+  // mentir até o snapshot/refresh: projeta SOMENTE a dupla recém-confirmada
+  // nas linhas vivas. O snapshot canônico continua sendo a fonte que a
+  // consolida; esta projeção não escreve nem fabrica participantes.
+  function _erProjectConfirmedPair(source, target) {
+    if (!_liveState || !source || !target) return false;
+    var rows = _liveState.rows || [];
+    function sameIdentity(row, ref) {
+      if (!row || !ref) return false;
+      if (ref.uid) return String(row.uid || '') === String(ref.uid);
+      if (ref.manualId) return String(row.manualId || '') === String(ref.manualId);
+      return String(row.name || '') === String(ref.name || '');
+    }
+    var a = rows.filter(function (r) { return sameIdentity(r, source); })[0];
+    var b = rows.filter(function (r) { return sameIdentity(r, target); })[0];
+    if (!a || !b || a === b || a._duplaIdx != null || b._duplaIdx != null) return false;
+    var key = 'confirmed:' + String(a.order) + ':' + String(b.order);
+    a._duplaIdx = key; a._duplaSide = 'p1';
+    b._duplaIdx = key; b._duplaSide = 'p2';
+    _erClearSelection(true);
+    if (typeof window._erRenderMatrix === 'function') window._erRenderMatrix();
+    return true;
+  }
   // BOTÃO OCUPADO NÃO É REPINTADO. `_erSaveEdits` limpa `_pendingEdits` ANTES de terminar
   // de gravar, então qualquer chamada a esta função no meio do save veria n=0 e (a) trocaria
   // o "Salvando…" pelo rótulo normal e (b) ESCONDERIA a barra inline inteira — sumindo com
@@ -3168,15 +3192,21 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     for (var i = start; i <= end; i++) _erSelectedOrders[rows[i].order] = true;
   }
   window._erMxChipClick = function (ev, order, uid) {
-    // Depois de um drag alguns navegadores ainda disparam click: não abrir a ficha
-    // nem mudar a seleção por acidente ao soltar o card.
+    // Depois de um drag alguns navegadores ainda disparam click: não mudar a
+    // seleção por acidente ao soltar o card.
     if (Date.now() - _erLastMatrixDragAt < 250) { ev.preventDefault(); return; }
-    var selecting = _erHasFinePointer() && (ev.metaKey || ev.ctrlKey || ev.shiftKey);
-    if (!selecting) {
+    if (!_erHasFinePointer()) {
       if (uid && typeof window._lzAthleteDialog === 'function') window._lzAthleteDialog(uid);
       return;
     }
     ev.preventDefault(); ev.stopPropagation();
+    // O primeiro clique já inicia a seleção visível. Cmd/Ctrl alterna unidades
+    // e Shift completa a faixa a partir desse primeiro card. Ficha do atleta,
+    // quando houver UID, permanece acessível no duplo clique desktop.
+    if (!ev.metaKey && !ev.ctrlKey && !ev.shiftKey && ev.detail >= 2 && uid && typeof window._lzAthleteDialog === 'function') {
+      window._lzAthleteDialog(uid);
+      return;
+    }
     if (ev.shiftKey && _erSelectionAnchor != null) {
       _erSelectRange(_erSelectionAnchor, order);
     } else if (ev.metaKey || ev.ctrlKey) {
@@ -3198,8 +3228,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   }
   window._erMxPairClick = function (ev, order) {
     if (Date.now() - _erLastMatrixDragAt < 250) { ev.preventDefault(); return; }
-    var selecting = _erHasFinePointer() && (ev.metaKey || ev.ctrlKey || ev.shiftKey);
-    if (!selecting) return;
+    if (!_erHasFinePointer()) return;
     ev.preventDefault(); ev.stopPropagation();
     var pairOrders = _erPairOrdersFrom(order);
     if (ev.shiftKey && _erSelectionAnchor != null) {
@@ -3275,6 +3304,17 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         return;
       }
       if (!_erApplyPairRoster(res)) return;
+      // A confirmação é válida, mas a resposta pode ter sido montada a partir
+      // de um snapshot anterior. Se ela ainda não materializou esta dupla,
+      // mostre-a já na matriz; o listener seguinte substitui a projeção pelo
+      // roster canônico persistido.
+      var visiblePair = ((_liveState && _liveState.rows) || []).filter(function (r) {
+        return r && r._duplaIdx != null &&
+          ((source.uid && String(r.uid || '') === String(source.uid)) ||
+           (source.manualId && String(r.manualId || '') === String(source.manualId)) ||
+           (!source.uid && !source.manualId && String(r.name || '') === String(source.name || '')));
+      }).length > 0;
+      if (!visiblePair) _erProjectConfirmedPair(source, target);
       if (typeof showNotification === 'function') showNotification('👫 Dupla formada', label, 'success');
     }).catch(function (err) {
       if (typeof showNotification === 'function') showNotification('Não foi possível formar a dupla', String((err && err.message) || err), 'error');

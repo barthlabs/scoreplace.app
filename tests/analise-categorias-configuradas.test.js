@@ -26,6 +26,7 @@ ok(source.includes("window._callCF('applyEnrollmentAssignments'"), 'salvamento u
 ok(!source.includes("firebase.functions().httpsCallable('applyEnrollmentAssignments')"), 'análise não usa o SDK callable que perde Authorization em sessão compat');
 ok(source.includes('function _erHasFinePointer()') && source.includes("'(pointer:fine)'"), 'seleção múltipla fica restrita ao ambiente desktop com ponteiro fino');
 ok(source.includes('ev.metaKey || ev.ctrlKey') && source.includes('ev.shiftKey'), 'Cmd/Ctrl seleciona vários e Shift seleciona uma faixa');
+ok(source.includes('O primeiro clique já inicia a seleção visível') && source.includes('ev.detail >= 2'), 'clique simples inicia a seleção e duplo clique preserva o acesso à ficha com UID');
 ok(source.includes('var selectionClick = !canOpen ?') && source.includes('window._erMxPairClick') && source.includes('_erPairOrdersFrom'), 'cards manuais e cards de dupla entram na mesma seleção visual por Cmd/Ctrl e Shift');
 ok(source.includes("var soloGrid = (femTotal || mascTotal) ?"), 'colunas Feminino/Masculino vazias não ocupam espaço entre os destinos e os inscritos sem gênero');
 ok(source.includes("var assigned = Object.prototype.hasOwnProperty.call(pe, 'category')") && source.includes('var actual = _decomposeCat(assigned, t)'), 'contador superior usa a categoria atribuída efetiva — inclusive para duplas/importados sem gênero individual');

@@ -39,7 +39,7 @@ ok(matrix.includes('pairsForBox') && matrix.includes('cardGrid(arr, pairs)'), 'd
 ok(pairCard.includes('var split = \'<button'), 'o X é renderizado também para dupla importada sem UID');
 ok(dragDrop.includes('window._erMxDropOnSolo') && dragDrop.includes('window._erFormPair') && dragDrop.includes('manualId1: source.manualId'), 'soltar um solo sobre outro forma dupla pela identidade canônica (UID ou manual)');
 ok(dragDrop.includes('window._erSplitPair') && dragDrop.includes('manualId') && dragDrop.includes('FirestoreDB.splitPair'), 'o X desfaz dupla pela identidade canônica (UID ou manual)');
-ok(src.includes('function _erApplyPairRoster') && src.includes('_liveState.rows = _buildRows') && src.includes('t.participants.splice.apply') && src.includes('data.tournament && Array.isArray(data.tournament.participants)'), 'resposta da CF reidrata a análise imediatamente, sem refresh nem referência antiga');
+ok(src.includes('function _erApplyPairRoster') && src.includes('_liveState.rows = _buildRows') && src.includes('t.participants.splice.apply') && src.includes('data.tournament && Array.isArray(data.tournament.participants)') && src.includes('function _erProjectConfirmedPair') && src.includes('if (!visiblePair) _erProjectConfirmedPair(source, target)'), 'resposta da CF reidrata a análise imediatamente, com projeção visual se o retorno vier defasado');
 ok(src.includes('manualParticipantId: row.manualId') && src.includes('r.tournament && _liveState'), 'Salvar usa ID manual e aplica imediatamente o torneio confirmado');
 
 console.log('\n' + (fail ? '❌' : '✅') + ' análise-duplas-arrastáveis: ' + (17 - fail) + ' asserts ok, ' + fail + ' falharam');
