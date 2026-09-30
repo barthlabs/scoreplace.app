@@ -984,6 +984,23 @@ function _bracketTabsApply(tid, gender, category, requestedRound) {
 window._bracketSelectCategoryTab = function (tid, gender, category, round) {
   _bracketTabsApply(String(tid), String(gender), String(category), round == null ? '' : String(round));
 };
+// A faixa de abas pode existir em mais de uma chave na mesma tela. O resize é
+// global e único: cada mount só registra o seu contêiner, evitando N listeners
+// no window quando placares ou filtros renderizam a chave novamente.
+function _bracketSyncRoundHeadingOffsets() {
+  var roots = document.querySelectorAll('[data-bracket-tabs-root]');
+  for (var i = 0; i < roots.length; i++) {
+    var root = roots[i];
+    var scope = root._bracketTabsScope || (root.closest ? root.closest('#view-container, #inline-bracket-container') : null) || document.getElementById('view-container') || document.body;
+    var height = Math.ceil(root.getBoundingClientRect().height || 0);
+    if (height > 0 && scope && scope.style) scope.style.setProperty('--bracket-tabs-height', height + 'px');
+  }
+}
+function _bracketEnsureRoundHeadingResizeListener() {
+  if (window._bracketRoundHeadingResizeListener) return;
+  window._bracketRoundHeadingResizeListener = function () { _bracketSyncRoundHeadingOffsets(); };
+  window.addEventListener('resize', window._bracketRoundHeadingResizeListener, { passive: true });
+}
 window._bracketCategoryTabsMount = function () {
   var cards = Array.prototype.slice.call(document.querySelectorAll('[data-bracket-tab-category]'));
   if (!cards.length) return;
@@ -1017,7 +1034,7 @@ window._bracketCategoryTabsMount = function () {
     root.setAttribute('data-bracket-tabs-root', '1');
     root.setAttribute('data-tournament-id', id);
     root.setAttribute('aria-label', 'Categorias da chave');
-    root.style.cssText = 'display:block;box-sizing:border-box;width:100%;margin:0 0 14px;padding:8px 12px;border:0;border-radius:0;background:#111114;overflow:visible;position:sticky;top:var(--scroll-anchor,120px);z-index:30;isolation:isolate;box-shadow:0 -48px 0 #111114,0 10px 0 #111114,0 16px 18px -16px rgba(0,0,0,.95);';
+    root.style.cssText = 'display:block;box-sizing:border-box;width:100%;margin:0 0 14px;padding:8px 12px;border:0;border-radius:0;background:var(--bg-darker,#111114);overflow:visible;position:sticky;top:var(--scroll-anchor,120px);z-index:30;isolation:isolate;box-shadow:0 -48px 0 var(--bg-darker,#111114),0 10px 0 var(--bg-darker,#111114),0 16px 18px -16px rgba(0,0,0,.95);';
     var anchor = _bracketTabsAnchor(first);
     // Em Ouro/Prata, sobe mais um nível: a faixa deve ficar acima da seção
     // inteira (título, classificação e rodadas), para poder ocultar a linha
@@ -1040,6 +1057,9 @@ window._bracketCategoryTabsMount = function () {
       currentAnchor.parentNode.insertBefore(root, currentAnchor);
     }
   }
+  // `scope` é o contêiner da chave que recebeu esta navegação. Guardamos a
+  // referência no root para o sincronizador global de altura das abas.
+  root._bracketTabsScope = scope;
   // Fase classificatória tem rodadas paralelas, não uma chave onde a coluna
   // seguinte depende da anterior. Só nesses formatos a terceira faixa escolhe
   // uma rodada; eliminatórias continuam apenas com as abas de categoria.
@@ -1101,9 +1121,12 @@ window._bracketCategoryTabsMount = function () {
   // caminho para voltar — inaceitável numa chave em produção.
   var style = document.getElementById('bracket-category-tab-style');
   if (!style) { style = document.createElement('style'); style.id = 'bracket-category-tab-style'; document.head.appendChild(style); }
-  // Sobrescrever também a regra já injetada por uma versão anterior: sem isso,
-  // atualizar a SPA podia manter h5 sticky e fazê-lo atravessar as abas.
-  style.textContent = '.bracket-round-column>h4:first-child,.bracket-round-column>h5:first-child{position:relative!important;top:auto!important;z-index:1!important;}';
+  // O cabeçalho é parte da sua própria coluna, não uma régua paralela. Ele
+  // fica visível sob as abas e carrega junto o comando "Ocultar" da rodada.
+  style.textContent = '.bracket-round-column>.bracket-round-heading{position:sticky!important;top:calc(var(--scroll-anchor,120px) + var(--bracket-tabs-height,0px))!important;z-index:26!important;background:var(--bg-darker,#111114);padding:8px 0 9px;margin:-8px 0 0;box-shadow:0 8px 0 var(--bg-darker,#111114);} .bracket-round-column>h4:first-child,.bracket-round-column>h5:first-child{position:relative!important;top:auto!important;z-index:1!important;}';
+  _bracketSyncRoundHeadingOffsets();
+  _bracketEnsureRoundHeadingResizeListener();
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(_bracketSyncRoundHeadingOffsets);
   var state = (window._bracketTabState || {})[id] || {};
   var gender = byGender[state.gender] ? state.gender : order[0];
   var category = byGender[gender].indexOf(state.category) !== -1 ? state.category : byGender[gender][0];
@@ -3635,7 +3658,7 @@ function renderSingleElimBracket(t, canEnterResult, standbyHtml) {
       }).join('');
       return `
         <div class="bracket-round-column" data-round-num="${roundNum}" style="display:flex;flex-direction:column;gap:1rem;min-width:280px;">
-          <div style="display:flex;align-items:center;gap:8px;">
+          <div class="bracket-round-heading" style="display:flex;align-items:center;gap:8px;">
             <h4 style="color:var(--text-bright);font-size:0.75rem;text-transform:uppercase;letter-spacing:2px;margin-bottom:0;border-left:3px solid var(--primary-color);padding-left:8px;flex:1;">${label}${suffix ? ' ' + suffix : ''}</h4>
             ${hideBtn}
           </div>
@@ -3719,7 +3742,7 @@ function renderSingleElimBracket(t, canEnterResult, standbyHtml) {
 
       roundColumns.push(`
         <div class="bracket-round-column" data-round-num="${roundNum}" style="display:flex;flex-direction:column;gap:1rem;min-width:280px;">
-          <div style="display:flex;align-items:center;gap:8px;">
+          <div class="bracket-round-heading" style="display:flex;align-items:center;gap:8px;">
             <h4 style="color:var(--text-bright);font-size:0.75rem;text-transform:uppercase;letter-spacing:2px;margin-bottom:0;border-left:3px solid var(--primary-color);padding-left:8px;flex:1;">${label}</h4>
             ${hideBtn}
           </div>
