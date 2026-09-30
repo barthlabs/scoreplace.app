@@ -871,6 +871,56 @@ function _bracketLayoutEliminationTree(root) {
     }
   });
 }
+// A régua fixa de rodadas é uma única faixa horizontal, espelhando o trilho
+// ativo. Ela substitui o resumo que quebrava em três linhas ("Linha / Rodada /
+// Oitavas...") e não usa botões: cada nome continua sendo apenas o cabeçalho
+// da sua coluna. O h5 dentro da chave fica no fluxo normal; esta régua é o
+// contexto que permanece visível sem atravessar nenhum card.
+function _bracketTabsRefreshRoundRail(root) {
+  if (!root) return;
+  var rail = root.querySelector('[data-bracket-round-rail]');
+  if (!rail) return;
+  var allCards = document.querySelectorAll('[data-bracket-tab-category]');
+  var activeCard = null;
+  for (var i = 0; i < allCards.length; i++) {
+    if (!allCards[i].hidden) { activeCard = allCards[i]; break; }
+  }
+  var scroller = activeCard && activeCard.closest && activeCard.closest('.bracket-scroll-container');
+  if (!scroller) { rail.hidden = true; rail.innerHTML = ''; return; }
+  var columns = scroller.querySelectorAll('.bracket-round-column');
+  var labels = [];
+  for (var c = 0; c < columns.length; c++) {
+    var children = columns[c].children, heading = null;
+    for (var h = 0; h < children.length; h++) {
+      if (String(children[h].tagName || '').toLowerCase() === 'h5') { heading = children[h]; break; }
+    }
+    var label = heading && String(heading.textContent || '').trim();
+    if (label) labels.push(label);
+  }
+  if (!labels.length) { rail.hidden = true; rail.innerHTML = ''; return; }
+  var safe = window._safeHtml || function (v) { return String(v); };
+  rail.hidden = false;
+  rail.innerHTML = '<div data-bracket-round-rail-track style="display:flex;gap:2rem;min-width:max-content;padding:7px 4px 5px;">' + labels.map(function (label) {
+    return '<span style="display:block;min-width:280px;color:var(--sp-c-fbbf24,#fbbf24);font-size:.78rem;font-weight:850;letter-spacing:.11em;text-transform:uppercase;white-space:nowrap;">' + safe(label) + '</span>';
+  }).join('') + '</div>';
+  // Espelhar a rolagem horizontal mantém o título exatamente sobre a coluna
+  // correspondente, sem transformar o h5 do card em sticky.
+  if (rail._bracketRoundScroller !== scroller) {
+    if (rail._bracketRoundScroller && rail._bracketRoundScrollerHandler) rail._bracketRoundScroller.removeEventListener('scroll', rail._bracketRoundScrollerHandler);
+    if (rail._bracketRoundRailHandler) rail.removeEventListener('scroll', rail._bracketRoundRailHandler);
+    var syncing = false;
+    rail._bracketRoundScrollerHandler = function () {
+      if (syncing) return; syncing = true; rail.scrollLeft = scroller.scrollLeft; syncing = false;
+    };
+    rail._bracketRoundRailHandler = function () {
+      if (syncing) return; syncing = true; scroller.scrollLeft = rail.scrollLeft; syncing = false;
+    };
+    scroller.addEventListener('scroll', rail._bracketRoundScrollerHandler, { passive: true });
+    rail.addEventListener('scroll', rail._bracketRoundRailHandler, { passive: true });
+    rail._bracketRoundScroller = scroller;
+  }
+  rail.scrollLeft = scroller.scrollLeft;
+}
 function _bracketTabsApply(tid, gender, category, requestedRound) {
   var root = document.querySelector('[data-bracket-tabs-root][data-tournament-id="' + String(tid).replace(/"/g, '\\"') + '"]');
   if (!root) return;
@@ -954,26 +1004,6 @@ function _bracketTabsApply(tid, gender, category, requestedRound) {
     var tierTitles = document.querySelectorAll('[data-bracket-tier-title]');
     for (var ti = 0; ti < tierTitles.length; ti++) tierTitles[ti].hidden = true;
   }
-  // Contexto de leitura fica na mesma faixa opaca das abas, fora do trilho com
-  // scroll horizontal. Nunca tornar o h5 de uma coluna sticky: dentro do
-  // overflow-x ele acaba flutuando por cima dos cards, em vez de no cabeçalho.
-  var roundContext = root.querySelector('[data-bracket-round-context]');
-  if (roundContext) {
-    var contextGender = { fem: 'Feminina', masc: 'Masculina', misto: 'Mista' };
-    var contextText = lineMode ? ('Linha: ' + _bracketTabLabel(category, 'linhas'))
-      : ((contextGender[gender] || gender) + ' · ' + _bracketTabLabel(category, gender));
-    if (round) contextText += ' · Rodada ' + round;
-    var labels = [], headers = document.querySelectorAll('.bracket-round-column > h5');
-    for (var hr = 0; hr < headers.length; hr++) {
-      var header = headers[hr];
-      if (header.closest && header.closest('[hidden]')) continue;
-      var text = String((header.querySelector('span') || header).textContent || '').trim();
-      if (text && labels.indexOf(text) === -1) labels.push(text);
-    }
-    roundContext.innerHTML = '<span style="font-weight:850;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;">' + (window._safeHtml ? window._safeHtml(contextText) : contextText) + '</span>' + labels.map(function (label) {
-      return '<span style="font-weight:750;letter-spacing:.05em;text-transform:uppercase;white-space:nowrap;">' + (window._safeHtml ? window._safeHtml(label) : label) + '</span>';
-    }).join('');
-  }
   // Colunas, grupos e detalhes vazios não devem ocupar a tela da aba escolhida.
   var holders = document.querySelectorAll('[data-bracket-tab-holder]');
   for (var h = 0; h < holders.length; h++) {
@@ -981,6 +1011,7 @@ function _bracketTabsApply(tid, gender, category, requestedRound) {
     if (hasVisible) holder.removeAttribute('data-bracket-tab-empty');
     else holder.setAttribute('data-bracket-tab-empty', '1');
   }
+  _bracketTabsRefreshRoundRail(root);
   _bracketLayoutEliminationTree(root);
 }
 window._bracketSelectCategoryTab = function (tid, gender, category, round) {
@@ -1085,11 +1116,11 @@ window._bracketCategoryTabsMount = function () {
   // viaja (não se cria um segundo input nem se perde o listener do filtro).
   var searchWrap = document.getElementById('fbwrap-chaves');
   if (searchWrap && root.contains(searchWrap) && root.parentNode) root.parentNode.insertBefore(searchWrap, root);
-  var putSearchInTabs = !!(searchWrap && window.innerWidth >= 900);
+  var putSearchInTabs = !!(searchWrap && window.innerWidth >= 560);
   root.innerHTML = '<div style="display:flex;align-items:flex-end;gap:5px;flex-wrap:wrap;width:100%;border-bottom:1px solid rgba(129,140,248,.6);padding:0 4px;">' + genderHtml + (putSearchInTabs ? '<div data-bracket-search-slot style="margin-left:auto;flex:1 1 260px;max-width:390px;min-width:220px;"></div>' : '') + '</div>'
     + (isOnlyLines ? '' : '<div style="display:flex;align-items:flex-end;gap:5px;flex-wrap:wrap;width:100%;padding:9px 4px 0;border-bottom:1px solid rgba(129,140,248,.42);">' + categoryHtml + '</div>')
     + (roundHtml ? '<div style="display:flex;gap:7px;flex-wrap:wrap;width:100%;padding:8px 4px 0;border-top:1px solid rgba(255,255,255,.07);">' + roundHtml + '</div>' : '')
-    + '<div data-bracket-round-context style="display:flex;align-items:center;gap:18px;flex-wrap:wrap;min-height:26px;padding:8px 4px 0;color:var(--text-muted);font-size:.72rem;background:#111114;border-top:1px solid rgba(255,255,255,.07);"></div>';
+    + (isRoundBased ? '' : '<div data-bracket-round-rail aria-label="Rodadas da chave" hidden style="overflow-x:auto;overflow-y:hidden;max-width:100%;background:#111114;border-bottom:1px solid rgba(255,255,255,.08);scrollbar-width:thin;"></div>');
   if (putSearchInTabs) {
     var searchSlot = root.querySelector('[data-bracket-search-slot]');
     if (searchSlot) {
@@ -1101,11 +1132,11 @@ window._bracketCategoryTabsMount = function () {
   // As abas filtram apenas os cards. Esconder um ancestral estrutural escondia
   // junto o seletor de Ouro/Prata em algumas larguras e deixava a pessoa sem
   // caminho para voltar — inaceitável numa chave em produção.
-  if (!document.getElementById('bracket-category-tab-style')) {
-    var style = document.createElement('style'); style.id = 'bracket-category-tab-style';
-    style.textContent = '.bracket-round-column>:first-child{position:relative;z-index:1;}';
-    document.head.appendChild(style);
-  }
+  var style = document.getElementById('bracket-category-tab-style');
+  if (!style) { style = document.createElement('style'); style.id = 'bracket-category-tab-style'; document.head.appendChild(style); }
+  // Sobrescrever também a regra já injetada por uma versão anterior: sem isso,
+  // atualizar a SPA podia manter h5 sticky e fazê-lo atravessar as abas.
+  style.textContent = '.bracket-round-column>:first-child{position:relative!important;top:auto!important;z-index:1;}';
   var state = (window._bracketTabState || {})[id] || {};
   var gender = byGender[state.gender] ? state.gender : order[0];
   var category = byGender[gender].indexOf(state.category) !== -1 ? state.category : byGender[gender][0];
