@@ -17,7 +17,7 @@ ok(src.includes('border-radius:12px 12px 0 0'), 'abas principais usam o recorte 
 ok(!src.includes('[data-bracket-tab-empty="1"]{display:none!important;}'), 'filtro não oculta mais holders estruturais da chave');
 ok(!src.includes("p.setAttribute('data-bracket-tab-holder', '1')"), 'montagem não marca ancestrais dos cards como escondíveis');
 ok(src.includes("cb.style.display = ownG === gender ? '' : 'none'"), 'subabas só alternam pelo gênero ativo sem remover as abas principais');
-ok(src.includes('function _bracketLayoutEliminationTree') && src.includes("data-bracket-tree-lines") && src.includes("cardColumns[ci - 1].length !== cardColumns[ci].length * 2"), 'eliminatórias alinham pares e desenham conectores sem aplicar a regra em rodadas independentes');
+ok(src.includes('function _bracketLayoutEliminationTree') && src.includes("data-bracket-tree-lines") && src.includes("cardColumns[ci - 1].length !== cardColumns[ci].length * 2") && src.includes('Nunca tirar um jogo do fluxo da sua coluna'), 'eliminatórias desenham conectores sem tirar cards do fluxo nem aplicar a regra em rodadas independentes');
 
 console.log('\n' + (fail ? '❌' : '✅') + ' chaves-abas-estáveis: ' + (8 - fail) + ' asserts ok, ' + fail + ' falharam');
 process.exitCode = fail ? 1 : 0;

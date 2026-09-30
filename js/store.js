@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.3.181';
+window.SCOREPLACE_VERSION = '2.3.182';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -4061,11 +4061,16 @@ window._devWhatsAppBtnHtml = function (opts) {
       return r.text();
     }).then(function(txt) {
       var v = String(txt || '').trim();
+      var _shell = window._versaoDoShell();
+      var _approvedUpdateFor = '';
+      try { _approvedUpdateFor = sessionStorage.getItem('sp_update_user_approved_for') || ''; } catch (e) {}
       if (v === window.SCOREPLACE_VERSION) {
         // O handoff autorizado chegou à versão pedida; nenhum aviso residual
-        // pode sobreviver para a publicação seguinte.
+        // pode sobreviver para a publicação seguinte. Se o HTML ainda for o
+        // shell anterior, preserve a autorização até ele ser revalidado: apagar
+        // aqui era precisamente o que devolvia uma segunda pílula ao usuário.
         try {
-          if (sessionStorage.getItem('sp_update_user_approved_for') === v) {
+          if (_approvedUpdateFor === v && (!_shell || _shell === v)) {
             sessionStorage.removeItem('sp_update_user_approved_for');
             sessionStorage.removeItem('sp_update_user_approved_retry');
           }
@@ -4115,12 +4120,24 @@ window._devWhatsAppBtnHtml = function (opts) {
        * ⚠️ GUARD PRÓPRIO, separado do `sp_update_reloaded_for`: são duas incoerências
        * diferentes e cada uma tem direito a UMA tentativa. Somadas, no pior caso, dois
        * reloads e depois só a pílula — nunca laço. */
-      var _shell = window._versaoDoShell();
       if (_shell && _shell !== window.SCOREPLACE_VERSION) {
         var _chave = _shell + '>' + window.SCOREPLACE_VERSION;
         var _jaTentou = null;
         try { _jaTentou = sessionStorage.getItem('sp_shell_reloaded_for'); } catch (e) {}
         if (_jaTentou === _chave) {
+          // A pessoa já autorizou a publicação e o JS correto já está rodando.
+          // Não pedir um segundo clique por um marcador do shell que ficou
+          // atrasado: a próxima navegação normal revalida o documento.
+          if (_approvedUpdateFor === window.SCOREPLACE_VERSION) {
+            try {
+              sessionStorage.removeItem('sp_update_user_approved_for');
+              sessionStorage.removeItem('sp_update_user_approved_retry');
+              sessionStorage.removeItem('sp_shell_reloaded_for');
+            } catch (e) {}
+            var _residualPill = document.getElementById('sp-update-pill');
+            if (_residualPill) _residualPill.remove();
+            return;
+          }
           window._log('[AutoUpdate] shell=' + _shell + ' != js=' + window.SCOREPLACE_VERSION +
             ' MESMO após reload — sem laço: só a pílula.');
           window._showUpdatePill();
@@ -4128,6 +4145,12 @@ window._devWhatsAppBtnHtml = function (opts) {
         }
         try { sessionStorage.setItem('sp_shell_reloaded_for', _chave); } catch (e) {}
         window._log('[AutoUpdate] EXECUÇÃO HÍBRIDA: shell=' + _shell + ' js=' + window.SCOREPLACE_VERSION + '.');
+        // Este reload vem de uma atualização explicitamente aprovada: refaz o
+        // handoff em silêncio, em vez de mostrar outra pílula idêntica.
+        if (_approvedUpdateFor === window.SCOREPLACE_VERSION) {
+          window._applyUpdate(true);
+          return;
+        }
         window._showUpdatePill();
         window._applyUpdate(!!opts.force);
       }

@@ -776,6 +776,13 @@ function _bracketTabsAnchor(first) {
   if (!first || !first.closest) return first;
   return first.closest('.bracket-sticky-scroll-wrapper, .bracket-scroll-container') || first;
 }
+function _bracketLineSection(card) {
+  var scroller = card && card.closest && card.closest('.bracket-scroll-container');
+  // renderTier: seção → linha auxiliar (botão vertical + scroll) → scroller.
+  // A seção inteira, inclusive classificação e título, é a unidade da aba.
+  return scroller && scroller.parentElement && scroller.parentElement.parentElement
+    ? scroller.parentElement.parentElement : null;
+}
 function _bracketIsEliminationTree(t) {
   var phase = t && t.phases && t.phases[t.currentPhaseIndex || 0];
   var format = String((phase && (phase.format || phase.formatCode || phase.kind)) || (t && (t.format || t.classifyFormat)) || '').toLowerCase();
@@ -787,9 +794,9 @@ function _bracketDirectVisibleCards(column) {
   });
 }
 // Em eliminatória, o par de jogos da coluna anterior alimenta um único jogo na
-// seguinte. Posicionamos esse jogo no centro do par e desenhamos os conectores
-// no mesmo trilho horizontal. Classificatórias não passam por aqui: suas rodadas
-// são independentes e nunca devem ganhar linhas que insinuem avanço.
+// seguinte. Desenhamos os conectores no mesmo trilho horizontal, preservando o
+// layout dos cards. Classificatórias não passam por aqui: suas rodadas são
+// independentes e nunca devem ganhar linhas que insinuem avanço.
 function _bracketLayoutEliminationTree(root) {
   if (!root || !_bracketIsEliminationTree(window._currentBracketTournament || {})) return;
   if (window._bracketTreeLayoutFrame) cancelAnimationFrame(window._bracketTreeLayoutFrame);
@@ -831,14 +838,14 @@ function _bracketLayoutEliminationTree(root) {
           var a = centers[mi * 2], b = centers[mi * 2 + 1], target = targetCards[mi];
           if (!a || !b) continue;
           var rect = target.getBoundingClientRect();
-          var center = (a.center + b.center) / 2;
-          target.style.position = 'absolute';
-          target.style.left = '0'; target.style.right = '0';
-          target.style.top = Math.max(0, center - rect.height / 2) + 'px';
-          target.setAttribute('data-bracket-tree-position', '1');
-          var colRect = target.parentElement.getBoundingClientRect();
-          nextCenters.push({ left: colRect.left - trackRect.left, right: colRect.right - trackRect.left, center: center, height: rect.height });
-          links.push({ a: a, b: b, target: { left: colRect.left - trackRect.left, center: center } });
+          // Nunca tirar um jogo do fluxo da sua coluna. A tentativa de centralizar
+          // com position:absolute fez a Ouro aparentar vazia em produção. O SVG
+          // conecta os dois jogos ao próximo sem mudar a posição de nenhum deles.
+          var targetCenter = rect.top - trackRect.top + rect.height / 2;
+          var targetLeft = rect.left - trackRect.left;
+          var targetRight = rect.right - trackRect.left;
+          nextCenters.push({ left: targetLeft, right: targetRight, center: targetCenter, height: rect.height });
+          links.push({ a: a, b: b, target: { left: targetLeft, center: targetCenter } });
         }
         centers = nextCenters;
       }
@@ -923,6 +930,25 @@ function _bracketTabsApply(tid, gender, category, requestedRound) {
     qb.style.color = onRound ? 'var(--sp-c-6ee7b7,#6ee7b7)' : 'var(--text-muted)';
     qb.style.borderColor = onRound ? 'rgba(16,185,129,.72)' : 'rgba(255,255,255,.12)';
   }
+  // Linhas independentes (Ouro/Prata) têm seção própria, com título,
+  // classificação e trilho. Esconder somente os cards deixava o bloco Ouro
+  // vazio antes de Prata. A aba troca a seção inteira, mas a barra fica fora
+  // delas e portanto continua sempre disponível.
+  if (lineMode) {
+    var sections = [];
+    for (var si = 0; si < cards.length; si++) {
+      var section = _bracketLineSection(cards[si]);
+      if (!section || sections.indexOf(section) !== -1) continue;
+      var sectionCards = section.querySelectorAll('[data-bracket-tab-category]');
+      var sectionCategory = sectionCards.length ? sectionCards[0].getAttribute('data-bracket-tab-category') : '';
+      if (!sectionCategory) continue;
+      section.setAttribute('data-bracket-line-section', sectionCategory);
+      sections.push(section);
+    }
+    sections.forEach(function (section) {
+      section.hidden = section.getAttribute('data-bracket-line-section') !== category;
+    });
+  }
   // Colunas, grupos e detalhes vazios não devem ocupar a tela da aba escolhida.
   var holders = document.querySelectorAll('[data-bracket-tab-holder]');
   for (var h = 0; h < holders.length; h++) {
@@ -961,6 +987,7 @@ window._bracketCategoryTabsMount = function () {
   if (!scope) scope = document.getElementById('view-container') || document.body;
   var tid = (window._currentBracketTournament && window._currentBracketTournament.id) || scope.getAttribute('data-tournament-id') || 'current';
   var id = String(tid);
+  var isOnlyLines = order.length === 1 && order[0] === 'linhas';
   var root = scope.querySelector('[data-bracket-tabs-root]');
   if (!root) {
     root = document.createElement('nav');
@@ -969,17 +996,27 @@ window._bracketCategoryTabsMount = function () {
     root.setAttribute('aria-label', 'Categorias da chave');
     root.style.cssText = 'display:block;box-sizing:border-box;width:100%;margin:0 0 14px;padding:0 12px 8px;border:0;border-radius:0;background:var(--bg-main,#111114);overflow:visible;';
     var anchor = _bracketTabsAnchor(first);
+    // Em Ouro/Prata, sobe mais um nível: a faixa deve ficar acima da seção
+    // inteira (título, classificação e rodadas), para poder ocultar a linha
+    // inativa sem levar junto os botões de navegação.
+    if (isOnlyLines) {
+      var lineSection = _bracketLineSection(first);
+      if (lineSection) anchor = lineSection;
+    }
     anchor.parentNode.insertBefore(root, anchor);
   } else {
     // O mount pode ser chamado depois de uma atualização de placar que recriou
     // o trilho. Reancora a mesma navegação acima das rodadas, sem deixá-la
     // presa à primeira coluna antiga.
     var currentAnchor = _bracketTabsAnchor(first);
+    if (isOnlyLines) {
+      var currentLineSection = _bracketLineSection(first);
+      if (currentLineSection) currentAnchor = currentLineSection;
+    }
     if (currentAnchor && currentAnchor.parentNode && root.nextElementSibling !== currentAnchor) {
       currentAnchor.parentNode.insertBefore(root, currentAnchor);
     }
   }
-  var isOnlyLines = order.length === 1 && order[0] === 'linhas';
   // Fase classificatória tem rodadas paralelas, não uma chave onde a coluna
   // seguinte depende da anterior. Só nesses formatos a terceira faixa escolhe
   // uma rodada; eliminatórias continuam apenas com as abas de categoria.
