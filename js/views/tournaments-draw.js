@@ -2635,7 +2635,7 @@ window._showTeamCompetitionDrawReview = function (tId) {
     }).join('');
     var rounds = Math.min(cfg.schedule.gamesPerTeam, Math.max(1, cfg.teamCount - 1));
     overlay.innerHTML = '<section role="dialog" aria-modal="true" aria-labelledby="team-draw-review-title" style="width:min(680px,100%);max-height:92svh;overflow:auto;background:#101827;border:1px solid rgba(59,130,246,.45);border-radius:20px;box-shadow:0 28px 90px rgba(0,0,0,.65);padding:22px;">' +
-      '<h2 id="team-draw-review-title" style="margin:0;color:#f8fafc;font-size:1.25rem;">🎲 Sorteio de times</h2>' +
+      '<h2 id="team-draw-review-title" style="margin:0;color:var(--text-bright);font-size:1.25rem;">🎲 Sorteio de times</h2>' +
       '<p style="margin:8px 0 18px;color:#cbd5e1;line-height:1.45;">Nenhum time nem confronto foi revelado. Ao sortear, cada time receberá uma dupla de cada categoria e, só então, os confrontos serão gerados.</p>' +
       '<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:18px;">' +
         '<div style="padding:10px;border-radius:10px;background:#182235;text-align:center;"><b style="display:block;color:#fff;font-size:1.25rem;">' + (entries.length * 2) + '</b><span style="font-size:.72rem;color:#94a3b8;">participantes</span></div>' +
@@ -2645,10 +2645,10 @@ window._showTeamCompetitionDrawReview = function (tId) {
       '</div>' +
       '<div style="border:1px solid rgba(148,163,184,.22);border-radius:12px;padding:0 14px;margin-bottom:14px;">' + rows + '</div>' +
       '<div style="font-size:.82rem;color:#cbd5e1;background:rgba(30,41,59,.7);padding:12px;border-radius:10px;margin-bottom:16px;">' +
-        '<b style="color:#f8fafc;">Confrontos: ' + (cfg.schedule.mode === 'structured' ? 'estruturados' : 'livres') + '</b><br>' +
+        '<b style="color:var(--text-bright);">Confrontos: ' + (cfg.schedule.mode === 'structured' ? 'estruturados' : 'livres') + '</b><br>' +
         (cfg.schedule.mode === 'structured' ? 'Os quatro adversários serão os mesmos nas seis categorias.' : 'Cada categoria terá sua própria grade de quatro adversários sem repetição por time.') +
         ' Serão ' + rounds + ' rodadas para cada categoria.</div>' +
-      (!valid ? '<p style="margin:0 0 14px;color:#fda4af;font-weight:700;">O sorteio está bloqueado: são necessárias ' + expectedPairs + ' duplas já formadas, com ' + cfg.teamCount + ' em cada categoria.</p>' : '') +
+      (!valid ? '<p style="margin:0 0 14px;color:var(--sp-c-f87171,#f87171);font-weight:700;">O sorteio está bloqueado: são necessárias ' + expectedPairs + ' duplas já formadas, com ' + cfg.teamCount + ' em cada categoria.</p>' : '') +
       '<div style="display:flex;justify-content:flex-end;gap:10px;"><button type="button" id="team-draw-cancel" class="btn">Cancelar</button><button type="button" id="team-draw-confirm" class="btn btn-primary"' + (valid ? '' : ' disabled aria-disabled="true" style="opacity:.45;cursor:not-allowed;"') + '>🎲 Sortear times e confrontos</button></div></section>';
     document.body.appendChild(overlay);
     var close = function () { overlay.remove(); };
@@ -2666,6 +2666,10 @@ window.generateDrawFunction = function (tId) {
     const t = window._findTournamentById(tId);
     if (!t) { if (window._dtrace) window._dtrace('generateDraw:NO-TOURNAMENT', { tId: String(tId) }); return; }
 
+    // O render-harness carrega esta função isoladamente em alguns testes e a
+    // extensão pode restaurar uma página antes do bloco global acima executar.
+    // A aprovação é efêmera, então inicializar de forma idempotente é seguro.
+    window._teamDrawReviewApproved = window._teamDrawReviewApproved || {};
     var _teamCfgForReview = t.teamCompetition || ((t.phases || [])[0] || {}).teamCompetition;
     if (!window._teamDrawReviewApproved[String(tId)] && _teamCfgForReview && _teamCfgForReview.enabled === true) {
         if (typeof window._drawBtnDone === 'function') window._drawBtnDone();
