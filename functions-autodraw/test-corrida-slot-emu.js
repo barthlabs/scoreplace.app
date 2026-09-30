@@ -39,7 +39,10 @@ const { execFileSync } = require('child_process');
 
 const AQUI = __dirname;
 const RAIZ = path.join(AQUI, '..');
-const PORT = 8097;                 // 8080=concurrency · 8098/8099=rules — este é só nosso
+// Cada processo usa uma porta efêmera: o predeploy roda suítes em paralelo e a antiga
+// 8097 fixa deixava uma corrida bloquear a outra, convertendo uma prova válida em falso
+// negativo de deploy.
+const PORT = Number(process.env.SP_CORRIDA_PORT) || (18000 + Math.floor(Math.random() * 10000));
 const PROJECT = 'demo-scoreplace';
 const CORRIDAS = 12;
 

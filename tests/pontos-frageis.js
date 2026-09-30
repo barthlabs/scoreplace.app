@@ -167,11 +167,12 @@ module.exports = [
     data: '2026-09-28' },
 
   { id: '28', arquivo: 'functions/enroll-core.js',
-    ancora: 'if (manualId) {',
-    marca: 'INSCRIÇÃO NOVA EXIGE CONTA: NÃO NASCE VAGA MANUAL',
+    ancora: 'if (!uid && !manualId)',
+    ocorrencia: 1,
+    marca: 'IDENTIDADE MANUAL ESTÁVEL',
     incidente: 'nome digitado pelo organizador não permite saber qual homônimo é qual; '
-      + 'a vaga manual criava uma segunda identidade por rótulo e abria ambiguidade no elenco',
-    data: '2026-09-28' },
+      + 'a vaga manual precisa de identificador estável, não de UID nem do rótulo visível',
+    data: '2026-09-30' },
 
   { id: '29', arquivo: 'tests/run-unit.js',
     ancora: 'const SUITE_TIMEOUT_MS =',

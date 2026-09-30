@@ -218,6 +218,8 @@ function normalizeParticipantIntent(participantObj, callerUid, addedAt) {
    * apresentação — `manualParticipantId` é a identidade estável até (e mesmo após)
    * uma eventual autenticação. A autorização de quem pode criar essa vaga é conferida
    * pela callable; este núcleo só exige que a vaga tenha ID e nome. */
+  // IDENTIDADE MANUAL ESTÁVEL: importados e digitados não têm UID, mas nunca podem
+  // depender do nome visível — homônimos são pessoas diferentes no mesmo torneio.
   if (!uid && !manualId) throw new Error('a inscrição precisa de uid ou manualParticipantId');
   if (!uid && !(text('name', 240) || text('displayName', 240))) throw new Error('participante manual precisa de nome');
   if (participantObj.ligaActive != null && typeof participantObj.ligaActive !== 'boolean') throw new Error('ligaActive inválido');

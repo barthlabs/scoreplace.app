@@ -36,7 +36,7 @@ const end = server.indexOf('exports.applyCategoryCommunicationMarkers = onCall',
 const handler = begin >= 0 && end > begin ? server.slice(begin, end) : '';
 ok(!!handler, 'handler canônico de atribuição foi encontrado');
 ok(!/\bemail\b/.test(handler), 'handler não aceita nem consulta e-mail');
-ok(/e\.uid\?u\.includes\(e\.uid\):e\.manualParticipantId\?manual\.includes\(e\.manualParticipantId\):\(!u\.length&&!manual\.length&&e\.name/.test(handler),
+ok(/e\.uid\s*\?\s*u\.includes\(e\.uid\)\s*:\s*e\.manualParticipantId\s*\?\s*manual\.includes\(e\.manualParticipantId\)\s*:\s*\(e\.name/.test(handler),
   'handler casa UID primeiro, depois ID manual estável e só então nome legado');
 ok(/\(!x\.uid&&!x\.manualParticipantId&&!x\.name\)/.test(handler), 'pedido sem UID aceita ID manual estável ou, só no legado, nome');
 

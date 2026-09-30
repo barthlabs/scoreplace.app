@@ -32,7 +32,7 @@ ok(!panel.includes('<select'), 'dupla não usa seletor de categoria');
 ok(!panel.includes('DUPLA FORMADA'), 'rótulo de dupla aparece só no cabeçalho do bloco');
 ok(!panel.includes('arraste para mover'), 'instrução de arraste aparece só no cabeçalho do bloco');
 ok(matrix.includes('pairedOrders') && matrix.includes('individualRows'), 'integrantes de dupla são retirados dos buckets individuais');
-ok(matrix.includes('catsBox + mistoStrip + categoryGrid + _erFormedPairsPanel(rows, t)') && matrix.includes('+ soloHint + soloGrid + semSection'), 'duplas sem categoria ficam entre as categorias reais e os individuais');
+ok(matrix.includes('catsBox + mistoStrip + categoryGrid + _erFormedPairsPanel(rows, t)') && !matrix.includes('soloHint'), 'duplas sem categoria ficam entre as categorias reais e os individuais, sem instrução fixa afastando os cards');
 ok(dragDrop.includes("application/x-scoreplace-pair"), 'drag da dupla transporta índice interno, não nome');
 ok(dragDrop.includes('window._erStageCategory(pairRows[0].order, pairCategory)'), 'drop atribui categoria pelo integrante identificado e propaga à dupla');
 ok(matrix.includes('pairsForBox') && matrix.includes('cardGrid(arr, pairs)'), 'dupla solta aparece no box da categoria junto do feedback visual');
