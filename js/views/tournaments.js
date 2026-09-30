@@ -3246,20 +3246,18 @@ function renderTournaments(container, tournamentId = null) {
             <!-- Logo: na tela de detalhe ocupa 1/3 da largura do card (max 160px), cap responsivo via CSS min() -->
             <div style="display: flex; align-items: ${window._tourLogoSrc(t) && tournamentId ? 'flex-start' : 'center'}; gap: ${window._tourLogoSrc(t) && tournamentId ? '18px' : '14px'}; margin: 1.8rem 0 0.5rem 0;">
               ${window._tourLogoSrc(t) ? `
-                <div style="width:33%;min-width:100px;flex-shrink:0;display:flex;align-items:flex-end;gap:10px;">
-                  <div style="min-width:0;flex:1;aspect-ratio:${window._tournamentLogoAspect ? window._tournamentLogoAspect(t) : 1};">
-                    <img src="${window._tourLogoSrc(t)}" alt="Logo do torneio"
+                <div style="position:relative;width:33%;min-width:100px;flex-shrink:0;aspect-ratio:${window._tournamentLogoAspect ? window._tournamentLogoAspect(t) : 1};">
+                  <img src="${window._tourLogoSrc(t)}" alt="Logo do torneio"
                     style="width:100%;height:100%;border-radius:${window._tournamentLogoRadius(t)};object-fit:contain;display:block;box-shadow:0 4px 20px rgba(0,0,0,0.45);${tournamentId && isOrg ? 'cursor:pointer;' : ''}"
                     ${tournamentId && isOrg ? `onclick="event.stopPropagation(); window._editTournamentLogoFromDetail('${window._safeHtml(t.id)}')" title="Clique para editar o logo"` : ''}
                   >
-                  </div>
-                  ${t.venuePlaceId ? '<span data-vlogo-pid="' + window._safeHtml(t.venuePlaceId) + '" title="Logo do local" aria-label="Logo do local" style="width:clamp(34px,8vw,56px);aspect-ratio:1/1;display:none;flex:0 0 auto;"></span>' : ''}
                 </div>
               ` : ''}
-              <div style="flex:1;min-width:0;">
+              <div style="flex:1;min-width:0;display:flex;flex-direction:column;align-self:stretch;">
                 <h4 style="margin: 0; font-size: 1.8rem; font-weight: 800; color: white; line-height: 1.2; text-align: left; overflow-wrap: anywhere;">
                   ${window._safeHtml(t.name)}
                 </h4>
+                ${t.venuePlaceId ? '<span data-vlogo-pid="' + window._safeHtml(t.venuePlaceId) + '" title="Logo do local" aria-label="Logo do local" style="width:clamp(34px,8vw,56px);aspect-ratio:1/1;display:none;margin-top:auto;"></span>' : ''}
               </div>
               ${/* v2.7.36: coração de favorito SEMPRE à direita, alinhado à 1ª linha do nome
                     (align-self:flex-start + margin-top centra na primeira linha do h4). */ ''}

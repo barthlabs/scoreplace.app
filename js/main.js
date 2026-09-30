@@ -1275,6 +1275,8 @@ function setupHelpModal() {
     if (window._releaseNotesLoaded || window._releaseNotesLoading) return;
     window._releaseNotesLoading = true;
     var s = document.createElement('script');
+    // A nota é carregada sob demanda, mas usa a versão única do shell como
+    // cache-buster. Não existe tag estática no index.html para este arquivo.
     s.src = 'js/release-notes.js?v=' + (window.SCOREPLACE_VERSION || '');
     s.onload = function () {
       // DOM update PRIMEIRO, flag DEPOIS — garante que observadores externos
