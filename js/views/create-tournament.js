@@ -341,7 +341,7 @@ function setupCreateTournamentModal() {
               <div id="cover-section" style="background: rgba(99,102,241,0.06); border: 1px solid rgba(99,102,241,0.15); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
                 <p style="margin: 0 0 0.35rem; font-size: 0.8rem; color: var(--sp-c-a5b4fc,#a5b4fc); font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">🖼️ Foto de fundo do torneio</p>
                 <p style="margin: 0 0 0.45rem; font-size: 0.72rem; color: var(--text-muted); line-height: 1.35;">Opcional. Se você definir, ela substitui a foto do Google nos cards e no detalhe. Ao escolher, dá pra girar, dar zoom e arrastar para enquadrar, sem distorcer.</p>
-                <div style="margin:0 0 0.75rem;padding:0.65rem 0.75rem;border-radius:8px;background:rgba(59,130,246,0.08);border:1px solid rgba(96,165,250,0.22);font-size:0.7rem;line-height:1.45;color:var(--sp-c-bfd7ff,#bfd7ff);">
+                <div style="margin:0 0 0.75rem;padding:0.65rem 0.75rem;border-radius:8px;background:rgba(59,130,246,0.08);border:1px solid rgba(96,165,250,0.22);font-size:0.7rem;line-height:1.45;color:var(--text-muted);">
                   <strong>Arquivo:</strong> JPG, PNG ou WebP, até 12 MB.<br>
                   <strong>Melhor resultado:</strong> envie 2000 × 1000 px (proporção 2:1) ou maior; a capa final é otimizada para 1000 × 500 px.<br>
                   <strong>Importante:</strong> desktop/tablet mostram a área 2:1; no celular em pé aparece principalmente a faixa central 3:4. Deixe nomes e logos nessa faixa central.
