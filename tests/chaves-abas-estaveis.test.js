@@ -18,9 +18,12 @@ ok(!src.includes('[data-bracket-tab-empty="1"]{display:none!important;}'), 'filt
 ok(!src.includes("p.setAttribute('data-bracket-tab-holder', '1')"), 'montagem não marca ancestrais dos cards como escondíveis');
 ok(src.includes("cb.style.display = ownG === gender ? '' : 'none'"), 'subabas só alternam pelo gênero ativo sem remover as abas principais');
 ok(src.includes('function _bracketLayoutEliminationTree') && src.includes("data-bracket-tree-lines") && src.includes("cardColumns[ci - 1].length !== cardColumns[ci].length * 2") && src.includes('Nunca tirar um jogo do fluxo da sua coluna'), 'eliminatórias desenham conectores sem tirar cards do fluxo nem aplicar a regra em rodadas independentes');
-ok(src.includes('function _bracketTabsRefreshRoundRail') && src.includes('data-bracket-round-rail') && src.includes('scroller.scrollLeft = rail.scrollLeft'), 'rodadas usam uma régua fixa compacta, alinhada à rolagem da chave, sem h5 sobre os cards');
+ok(src.includes('function _bracketTabsRefreshRoundRail') && src.includes('data-bracket-round-rail') && src.includes('scroller.scrollLeft = rail.scrollLeft'), 'rodadas usam uma régua fixa compacta, alinhada à rolagem da chave');
+ok(src.includes("heading.querySelector(':scope > span')") && src.includes("node.nodeType === 3") && !src.includes("safe(label) + '</span>'"), 'a régua lê apenas o nome da rodada, sem concatenar o botão Ocultar');
+ok(src.includes('left: columns[c].offsetLeft') && src.includes('width: columns[c].offsetWidth') && src.includes('position:absolute;left:'), 'cada rótulo da régua ocupa a posição e a largura reais da sua coluna');
+ok(src.includes('.bracket-round-column>h4:first-child,.bracket-round-column>h5:first-child') && src.includes('visibility:hidden!important'), 'o cabeçalho duplicado da coluna não reaparece abaixo da régua fixa');
 ok(src.includes('data-bracket-tier-title') && src.includes('tierTitles[ti].hidden = true'), 'a linha ativa não duplica título atrás da aba fixa');
 ok(src.includes('data-bracket-search-slot') && src.includes('window.innerWidth >= 560') && src.includes('searchSlot.appendChild(searchWrap)'), 'em janela desktop, a busca usa a sobra da mesma faixa das abas sem duplicar o input');
 
-console.log('\n' + (fail ? '❌' : '✅') + ' chaves-abas-estáveis: ' + (11 - fail) + ' asserts ok, ' + fail + ' falharam');
+console.log('\n' + (fail ? '❌' : '✅') + ' chaves-abas-estáveis: ' + (14 - fail) + ' asserts ok, ' + fail + ' falharam');
 process.exitCode = fail ? 1 : 0;

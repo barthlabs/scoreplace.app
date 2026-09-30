@@ -1,3 +1,4 @@
+// 2.3.187 — A régua de rodadas agora usa a posição real de cada coluna da chave: "Rodada 2", "Rodada 3" e as seguintes ficam exatamente sobre seus jogos. Ela lê somente o título, sem trazer o botão Ocultar, e substitui o cabeçalho duplicado sob as abas por uma faixa opaca única.
 // 2.3.186 — A chave usa uma única régua compacta de rodadas, logo abaixo das abas e alinhada à rolagem horizontal; removido o resumo multilinha que vazava sobre os jogos. A busca passa a ocupar a sobra da mesma faixa de abas em janelas desktop estreitas.
 // 2.3.185 — A faixa fixa das chaves agora é opaca de forma explícita e elimina o título duplicado que vazava por trás de Ouro/Prata. Rodadas aparecem como texto simples abaixo das abas, sem botões.
 // 2.3.184 — Corrige o cabeçalho das chaves: rodada não flutua mais sobre cards dentro do trilho horizontal; linha/categoria e rodadas ficam numa única faixa opaca de leitura. No desktop, a busca passa a ocupar a sobra da mesma linha das abas.
