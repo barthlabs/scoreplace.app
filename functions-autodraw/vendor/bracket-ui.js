@@ -3714,7 +3714,7 @@ window._tvMode = function(tId) {
   // Tournament info
   hero += '<div style="display:flex;align-items:center;gap:20px;">';
   var _hl = window._tourLogoSrc(t);
-  if (_hl) hero += '<img src="' + _hl + '" style="width:72px;height:72px;border-radius:' + window._tournamentLogoRadius(t) + ';object-fit:cover;box-shadow:0 4px 20px rgba(0,0,0,0.4);">';
+  if (_hl) hero += '<img src="' + _hl + '" style="width:72px;height:72px;border-radius:' + window._tournamentLogoRadius(t) + ';object-fit:contain;box-shadow:0 4px 20px rgba(0,0,0,0.4);">';
   hero += '<div>';
   hero += '<h1 style="margin:0;color:white;font-size:2.2rem;font-weight:900;text-shadow:0 2px 10px rgba(0,0,0,0.5);">' + safeName + '</h1>';
   hero += '<div style="color:rgba(255,255,255,0.6);font-size:1rem;margin-top:4px;display:flex;gap:16px;flex-wrap:wrap;">';

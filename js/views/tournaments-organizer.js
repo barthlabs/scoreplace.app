@@ -101,6 +101,7 @@ window._cloneTournament = async function(tournamentId) {
         logoLocked: t.logoLocked || false,
         logoShape: t.logoShape || 'square',
         logoRadius: (t.logoRadius != null ? t.logoRadius : 14),
+        logoAspect: (t.logoAspect != null ? t.logoAspect : 1),
         teamSize: t.teamSize || 2,
         tiebreakers: t.tiebreakers || [],
         genderCategories: t.genderCategories || [],

@@ -1,4 +1,4 @@
-// 2.3.190 — Cabeçalho de rodada e “Ocultar” são espelhados numa camada fixa sob as abas: continuam visíveis inclusive quando a chave usa trilho de rolagem horizontal.
+// 2.3.191 — Editor de mídia aceita logos 1:2..2:1 e rotação de capa em 90°; regra de Storage é publicada junto para o upload do organizador.
 // 2.3.189 — O cabeçalho canônico de cada coluna da chave fica preso logo abaixo das abas enquanto seus jogos passam: a barra lateral, o nome da rodada e o eventual comando “Ocultar” seguem juntos, sem uma segunda régua concorrente.
 // 2.3.188 — A chave volta a usar somente o cabeçalho canônico de cada coluna: a barra lateral, o título e o eventual comando da própria Rodada 2 permanecem diretamente sobre seus jogos. A régua paralela foi removida; a faixa de abas recebe cobertura opaca para nenhum card atravessá-la.
 // 2.3.187 — A régua de rodadas agora usa a posição real de cada coluna da chave: "Rodada 2", "Rodada 3" e as seguintes ficam exatamente sobre seus jogos. Ela lê somente o título, sem trazer o botão Ocultar, e substitui o cabeçalho duplicado sob as abas por uma faixa opaca única.

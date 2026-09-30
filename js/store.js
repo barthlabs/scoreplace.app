@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.3.190';
+window.SCOREPLACE_VERSION = '2.3.191';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -7380,6 +7380,11 @@ window._openImageCropEditor = function(dataUrl, opts, callback) {
   // comportamento quadrado original do logo, intocado.
   var ASPECT = (opts.aspect && opts.aspect > 0) ? opts.aspect : 1;
   var COVER  = !!opts.cover;
+  // Logo não é necessariamente um avatar: marcas horizontais e verticais precisam
+  // sobreviver inteiras. O controle vai de 1:2 a 2:1; capa continua com o aspecto
+  // editorial fixo escolhido pela tela que a chamou.
+  var ASPECT_CTRL = !!opts.aspectControl;
+  var ROTATION_CTRL = !!opts.rotationControl;
   var SIZE_W = opts.size || 400;
   var SIZE_H = Math.round(SIZE_W / ASPECT);
   // Preview com o MESMO aspecto do output
@@ -7426,6 +7431,21 @@ window._openImageCropEditor = function(dataUrl, opts, callback) {
       '</div>' +
       '<div style="font-size:0.62rem;color:var(--text-muted,#94a3b8);margin:0 0 6px;text-align:left;">Forma: arraste pra arredondar (círculo ↔ quadrado)</div>'
     : '';
+  var _aspectSliderHtml = ASPECT_CTRL
+    ? '<div style="margin:6px 0 2px;display:flex;align-items:center;gap:10px;">' +
+        '<span style="font-size:0.7rem;color:var(--text-muted,#94a3b8);white-space:nowrap;">1:2</span>' +
+        '<input type="range" id="crop-aspect" min="50" max="200" value="' + Math.round(ASPECT * 100) + '" style="flex:1;accent-color:#ec4899;">' +
+        '<span style="font-size:0.7rem;color:var(--text-muted,#94a3b8);white-space:nowrap;">2:1</span>' +
+      '</div>' +
+      '<div id="crop-aspect-label" style="font-size:0.62rem;color:var(--text-muted,#94a3b8);margin:0 0 6px;text-align:left;">Proporção do logo: 1:1</div>'
+    : '';
+  var _rotationHtml = ROTATION_CTRL
+    ? '<div style="margin:8px 0 4px;display:flex;align-items:center;justify-content:center;gap:8px;">' +
+        '<button type="button" id="crop-rotate-left" class="btn btn-sm" style="padding:6px 10px;">↶ 90°</button>' +
+        '<span id="crop-rotation-label" style="font-size:0.7rem;color:var(--text-muted,#94a3b8);min-width:68px;">0°</span>' +
+        '<button type="button" id="crop-rotate-right" class="btn btn-sm" style="padding:6px 10px;">90° ↷</button>' +
+      '</div>'
+    : '';
   var _canvasRadius = COVER ? '10px' : (RADIUS_CTRL ? (cropRadiusPct + '%') : (SHAPE === 'circle' ? '50%' : '12px'));
   panel.innerHTML =
     '<div style="font-size:0.9rem;font-weight:700;color:var(--text-bright,#f1f5f9);margin-bottom:14px;">' + TITLE + '</div>' +
@@ -7436,6 +7456,8 @@ window._openImageCropEditor = function(dataUrl, opts, callback) {
       '<span style="font-size:0.7rem;color:var(--text-muted,#94a3b8);white-space:nowrap;">+🔍</span>' +
     '</div>' +
     _formaSliderHtml +
+    _aspectSliderHtml +
+    _rotationHtml +
     '<div style="margin:6px 0 4px;display:flex;align-items:center;gap:10px;">' +
       '<span style="font-size:0.7rem;color:var(--text-muted,#94a3b8);white-space:nowrap;">☀−</span>' +
       '<input type="range" id="crop-brightness" min="-75" max="75" value="0" style="flex:1;accent-color:#f59e0b;">' +
@@ -7470,6 +7492,7 @@ window._openImageCropEditor = function(dataUrl, opts, callback) {
   var img = new Image();
   var scale = 1.0;
   var brightness = 0; // -75 to +75
+  var rotation = 0; // passos de 90°, assados no arquivo final
   var bgColor = 'transparent'; // fundo do canvas
   var offsetX = 0, offsetY = 0;
   var isDragging = false, lastX = 0, lastY = 0;
@@ -7496,12 +7519,38 @@ window._openImageCropEditor = function(dataUrl, opts, callback) {
     }
   };
 
+  function _aspectLabel() {
+    if (Math.abs(ASPECT - 1) < 0.01) return '1:1';
+    return ASPECT >= 1 ? (ASPECT.toFixed(2).replace(/\.00$/, '') + ':1') : ('1:' + (1 / ASPECT).toFixed(2).replace(/\.00$/, ''));
+  }
+  function _fitImage(resetOffset) {
+    if (!img.width || !img.height) return;
+    var rotated = Math.abs(rotation % 180) === 90;
+    var drawW = rotated ? img.height : img.width;
+    var drawH = rotated ? img.width : img.height;
+    var ratio = Math.max(PREV_W / drawW, PREV_H / drawH);
+    scale = ratio;
+    zoomSlider.min = Math.max(20, Math.round(ratio * 80));
+    zoomSlider.max = Math.round(ratio * 400);
+    zoomSlider.value = Math.round(ratio * 100);
+    if (resetOffset) { offsetX = 0; offsetY = 0; }
+  }
+  function _setAspect(next) {
+    ASPECT = Math.max(0.5, Math.min(2, Number(next) || 1));
+    SIZE_H = Math.round(SIZE_W / ASPECT);
+    if (ASPECT === 1) { PREV_W = 240; PREV_H = 240; }
+    else if (ASPECT >= 1) { PREV_W = 288; PREV_H = Math.round(288 / ASPECT); }
+    else { PREV_H = 240; PREV_W = Math.round(240 * ASPECT); }
+    canvas.width = PREV_W; canvas.height = PREV_H;
+    _fitImage(true);
+    var label = document.getElementById('crop-aspect-label');
+    if (label) label.textContent = 'Proporção do logo: ' + _aspectLabel();
+    draw();
+  }
   function draw() {
     ctx.clearRect(0, 0, PREV_W, PREV_H);
     var sw = img.width * scale;
     var sh = img.height * scale;
-    var dx = PREV_W/2 + offsetX - sw/2;
-    var dy = PREV_H/2 + offsetY - sh/2;
     ctx.save();
     var _minSide = Math.min(PREV_W, PREV_H);
     var _cornerPx = COVER ? 10 : (RADIUS_CTRL ? (cropRadiusPct / 50) * (_minSide / 2) : (SHAPE === 'circle' ? _minSide / 2 : 12));
@@ -7511,7 +7560,11 @@ window._openImageCropEditor = function(dataUrl, opts, callback) {
       ctx.fillStyle = bgColor;
       ctx.fillRect(0, 0, PREV_W, PREV_H);
     }
-    ctx.drawImage(img, dx, dy, sw, sh);
+    ctx.translate(PREV_W / 2 + offsetX, PREV_H / 2 + offsetY);
+    ctx.rotate(rotation * Math.PI / 180);
+    ctx.drawImage(img, -sw / 2, -sh / 2, sw, sh);
+    ctx.rotate(-rotation * Math.PI / 180);
+    ctx.translate(-(PREV_W / 2 + offsetX), -(PREV_H / 2 + offsetY));
     // Luminosidade: overlay branco (clarear) ou preto (escurecer).
     // ctx.filter não funciona em Safari iOS < 15.4; esta abordagem funciona
     // em todos os browsers desde sempre.
@@ -7556,12 +7609,7 @@ window._openImageCropEditor = function(dataUrl, opts, callback) {
   }
 
   img.onload = function() {
-    // Fit image to fill the preview
-    var ratio = Math.max(PREV_W / img.width, PREV_H / img.height);
-    scale = ratio;
-    zoomSlider.min = Math.max(20, Math.round(ratio * 80));
-    zoomSlider.max = Math.round(ratio * 400);
-    zoomSlider.value = Math.round(ratio * 100);
+    _fitImage(true);
     draw();
   };
   img.src = dataUrl;
@@ -7579,6 +7627,20 @@ window._openImageCropEditor = function(dataUrl, opts, callback) {
       draw();
     });
   }
+
+  var aspectSlider = document.getElementById('crop-aspect');
+  if (aspectSlider) aspectSlider.addEventListener('input', function() { _setAspect(parseInt(this.value, 10) / 100); });
+  function _rotateBy(step) {
+    rotation = (rotation + step + 360) % 360;
+    _fitImage(true);
+    var label = document.getElementById('crop-rotation-label');
+    if (label) label.textContent = rotation + '°';
+    draw();
+  }
+  var rotateLeft = document.getElementById('crop-rotate-left');
+  var rotateRight = document.getElementById('crop-rotate-right');
+  if (rotateLeft) rotateLeft.addEventListener('click', function() { _rotateBy(-90); });
+  if (rotateRight) rotateRight.addEventListener('click', function() { _rotateBy(90); });
 
   brightnessSlider.addEventListener('input', function() {
     brightness = parseInt(this.value, 10);
@@ -7611,8 +7673,6 @@ window._openImageCropEditor = function(dataUrl, opts, callback) {
     var ratio = SIZE_W / PREV_W; // === SIZE_H / PREV_H
     var sw = img.width * scale * ratio;
     var sh = img.height * scale * ratio;
-    var dx = SIZE_W/2 + offsetX*ratio - sw/2;
-    var dy = SIZE_H/2 + offsetY*ratio - sh/2;
     // Logo (RADIUS_CTRL): exporta QUADRADO inteiro (sem recortar) — o radius é
     // aplicado via CSS no display/impressão, sem cantos pretos no JPEG.
     // Cover: exporta retângulo inteiro (recorte já é a moldura escolhida).
@@ -7624,7 +7684,11 @@ window._openImageCropEditor = function(dataUrl, opts, callback) {
       octx.fillStyle = bgColor;
       octx.fillRect(0, 0, SIZE_W, SIZE_H);
     }
-    octx.drawImage(img, dx, dy, sw, sh);
+    octx.translate(SIZE_W / 2 + offsetX * ratio, SIZE_H / 2 + offsetY * ratio);
+    octx.rotate(rotation * Math.PI / 180);
+    octx.drawImage(img, -sw / 2, -sh / 2, sw, sh);
+    octx.rotate(-rotation * Math.PI / 180);
+    octx.translate(-(SIZE_W / 2 + offsetX * ratio), -(SIZE_H / 2 + offsetY * ratio));
     if (brightness !== 0) {
       var oAlpha = Math.abs(brightness) / 100 * 0.9;
       octx.fillStyle = brightness > 0
@@ -7634,7 +7698,7 @@ window._openImageCropEditor = function(dataUrl, opts, callback) {
     }
     var result = out.toDataURL('image/jpeg', COVER ? 0.82 : 0.88);
     overlay.remove();
-    if (typeof callback === 'function') callback(result, RADIUS_CTRL ? cropRadiusPct : undefined);
+    if (typeof callback === 'function') callback(result, RADIUS_CTRL ? cropRadiusPct : undefined, ASPECT_CTRL ? ASPECT : undefined);
   });
 };
 
@@ -8191,6 +8255,13 @@ window._tournamentLogoRadius = function(t) {
     var r = (t.logoRadius != null && t.logoRadius !== '') ? Number(t.logoRadius) : 14;
     if (isNaN(r)) r = 14;
     return Math.max(0, Math.min(50, r)) + '%';
+};
+// Proporção declarada pelo editor (1:2..2:1). Logo antigo não tinha esse campo
+// e por isso permanece exatamente 1:1. Os slots compactos usam contain para não
+// amputar uma marca horizontal/vertical.
+window._tournamentLogoAspect = function(t) {
+    var a = t && t.logoAspect != null ? Number(t.logoAspect) : 1;
+    return isNaN(a) ? 1 : Math.max(0.5, Math.min(2, a));
 };
 // v2.6.43: "read box" (tarja de leitura sobre a foto do local) é THEME-AWARE.
 // Convenção dos dois lados (ver memória feedback_dark_tarja_light_text):
