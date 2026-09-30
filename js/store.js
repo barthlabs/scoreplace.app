@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.3.177';
+window.SCOREPLACE_VERSION = '2.3.178';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -3896,7 +3896,20 @@ window._devWhatsAppBtnHtml = function (opts) {
       pill.id = 'sp-update-pill';
       pill.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:100000;background:linear-gradient(135deg,#10b981,#059669);color:#fff;font-weight:800;font-size:0.85rem;padding:11px 18px;border-radius:999px;box-shadow:0 6px 22px rgba(0,0,0,0.4);cursor:pointer;border:none;display:flex;align-items:center;gap:8px;animation:spUpPill 0.3s ease;';
       pill.innerHTML = '🔄 Nova versão — toque para atualizar';
-      pill.onclick = function() { pill.innerHTML = '⏳ Atualizando…'; window._applyUpdate(true); };
+      pill.onclick = function() {
+        /* O clique autoriza ESTA versão, não só a página atual. Se o primeiro
+         * handoff ainda cair no shell anterior, a autorização atravessa a
+         * recarga e evita cobrar um segundo toque para a mesma publicação. */
+        try {
+          var alvo = String(window._pendingUpdateVersion || '');
+          if (alvo) {
+            sessionStorage.setItem('sp_update_user_approved_for', alvo);
+            sessionStorage.setItem('sp_update_user_approved_retry', '0');
+          }
+        } catch (e) {}
+        pill.innerHTML = '⏳ Atualizando…';
+        window._applyUpdate(true);
+      };
       if (!document.getElementById('sp-update-pill-style')) {
         var st = document.createElement('style'); st.id = 'sp-update-pill-style';
         st.textContent = '@keyframes spUpPill{from{opacity:0;transform:translateX(-50%) translateY(12px);}to{opacity:1;transform:translateX(-50%) translateY(0);}}';
@@ -4048,6 +4061,17 @@ window._devWhatsAppBtnHtml = function (opts) {
       return r.text();
     }).then(function(txt) {
       var v = String(txt || '').trim();
+      if (v === window.SCOREPLACE_VERSION) {
+        // O handoff autorizado chegou à versão pedida; nenhum aviso residual
+        // pode sobreviver para a publicação seguinte.
+        try {
+          if (sessionStorage.getItem('sp_update_user_approved_for') === v) {
+            sessionStorage.removeItem('sp_update_user_approved_for');
+            sessionStorage.removeItem('sp_update_user_approved_retry');
+          }
+          sessionStorage.removeItem('sp_update_reloaded_for');
+        } catch (e) {}
+      }
       if (v && v.length < 40 && v !== window.SCOREPLACE_VERSION) {
         // GUARD ANTI-LOOP: se JÁ recarregamos por ESTE mesmo valor de version.txt e ele
         // AINDA não bate com o store.js carregado, é DEPLOY INCONSISTENTE (version.txt !=
@@ -4057,12 +4081,28 @@ window._devWhatsAppBtnHtml = function (opts) {
         var reloadedFor = null;
         try { reloadedFor = sessionStorage.getItem('sp_update_reloaded_for'); } catch (e) {}
         if (reloadedFor === v) {
+          // Quem já tocou em Atualizar não precisa tocar de novo se a primeira
+          // recarga nasceu com o worker/shell anterior. Há UMA repetição
+          // automática; se ela também falhar, a pílula volta a ser a saída
+          // explícita, sem laço infinito.
+          var approved = '', retry = 0;
+          try {
+            approved = sessionStorage.getItem('sp_update_user_approved_for') || '';
+            retry = parseInt(sessionStorage.getItem('sp_update_user_approved_retry') || '0', 10) || 0;
+          } catch (e) {}
+          if (approved === v && retry < 1) {
+            try { sessionStorage.setItem('sp_update_user_approved_retry', String(retry + 1)); } catch (e) {}
+            window._log('[AutoUpdate] Handoff ainda estava na versão anterior; repetindo a atualização já aprovada.');
+            window._applyUpdate(true);
+            return;
+          }
           window._log('[AutoUpdate] version.txt=' + v + ' != running ' + window.SCOREPLACE_VERSION + ' MESMO após reload — deploy inconsistente. Sem loop: só a pílula.');
           window._showUpdatePill();
           return;
         }
         try { sessionStorage.setItem('sp_update_reloaded_for', v); } catch (e) {}
         window._log('[AutoUpdate] New version:', v, '(running:', window.SCOREPLACE_VERSION + ').');
+        window._pendingUpdateVersion = v;
         window._showUpdatePill(); // mostra a pílula mesmo se o reload auto for adiado
         window._applyUpdate(!!opts.force);
         return;

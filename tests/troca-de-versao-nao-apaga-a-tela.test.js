@@ -17,4 +17,6 @@ const semGuarda = corpo.replace(/_isSafeToReload[\s\S]*?return;\s*\}/, '');
 must(!/^\s*_doReload\(\);\s*$/m.test(semGuarda) || /_isSafeToReload/.test(corpo), 'nenhum reload passa sem o portão');
 const store = fs.readFileSync(path.join(__dirname, '..', 'js', 'store.js'), 'utf8');
 must(/if \(window\._pendingUpdateReload\) \{ window\._applyUpdate\(false\)/.test(store), 'o auto-update consome o pendente quando volta a checar (hashchange/foco)');
+must(/sp_update_user_approved_for/.test(store) && /sp_update_user_approved_retry/.test(store), 'um toque de atualização atravessa o handoff entre shells');
+must(/approved === v && retry < 1[\s\S]*?window\._applyUpdate\(true\)/.test(store), 'o primeiro handoff incompleto ganha uma única tentativa automática, sem segundo clique');
 console.log('\n✅ ' + ok + ' verificações');

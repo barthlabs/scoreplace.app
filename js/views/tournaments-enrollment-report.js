@@ -1049,10 +1049,11 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   function _erPairCard(members) {
       var a = members[0], b = members[1], pe = _pendingEdits[a.order] || _pendingEdits[b.order] || {};
       var changed = Object.prototype.hasOwnProperty.call(pe, 'category');
+      var selected = !!(_erSelectedOrders[a.order] || _erSelectedOrders[b.order]);
       // O X não pode depender de uid: importados sem conta também têm dupla e
       // carregam manualParticipantId. A operação valida a identidade no servidor.
       var split = '<button type="button" class="cancel-x-btn" title="Desfazer dupla" aria-label="Desfazer dupla ' + _esc(a.name + ' e ' + b.name) + '" onclick="event.stopPropagation();window._erSplitPair(' + a.order + ',this)" style="--cx-size:23px;position:absolute;top:7px;right:7px;">✕</button>';
-      return '<div draggable="true" data-er-pair-order="' + a.order + '" data-er-person="' + _esc(a.name + ' ' + b.name) + '" ondragstart="window._erMxPairDragStart(event,' + a.order + ')" title="Arraste a dupla para uma categoria" style="position:relative;cursor:grab;display:flex;flex-direction:column;gap:5px;padding:10px 38px 10px 11px;border:1px solid ' + (changed ? 'rgba(245,158,11,.65)' : 'rgba(168,85,247,.45)') + ';border-radius:9px;background:' + (changed ? 'rgba(245,158,11,.07)' : 'rgba(168,85,247,.08)') + ';user-select:none;">' +
+      return '<div draggable="true" data-er-pair-order="' + a.order + '" data-er-person="' + _esc(a.name + ' ' + b.name) + '" ondragstart="window._erMxPairDragStart(event,' + a.order + ')" onclick="window._erMxPairClick(event,' + a.order + ')" aria-pressed="' + (selected ? 'true' : 'false') + '" title="Arraste a dupla para uma categoria" style="position:relative;cursor:grab;display:flex;flex-direction:column;gap:5px;padding:10px 38px 10px 11px;border:' + (selected ? '2px solid #38bdf8' : ('1px solid ' + (changed ? 'rgba(245,158,11,.65)' : 'rgba(168,85,247,.45)'))) + ';border-radius:9px;background:' + (selected ? 'rgba(14,165,233,0.20)' : (changed ? 'rgba(245,158,11,.07)' : 'rgba(168,85,247,.08)')) + ';user-select:none;">' +
         '<div style="font-size:14px;font-weight:750;color:var(--text-bright);line-height:1.25;overflow-wrap:anywhere;">' + _esc(a.name) + '</div>' +
         '<div style="font-size:14px;font-weight:750;color:var(--text-bright);line-height:1.25;overflow-wrap:anywhere;">' + _esc(b.name) + '</div>' + split +
       '</div>';
@@ -2837,11 +2838,19 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     function catCount(catName) {
       var d = _decomposeCat(catName, t), n = 0;
       (rows || []).forEach(function (r) {
-        var g = _mxGenderOf(r), sk = _mxSkillOf(r, t);
-        // Categoria Mista = UMA categoria com todo mundo → conta fem E masc juntos.
-        var gOk = !d.gender || d.gender === 'Misto' || (d.gender === 'Fem' && g === 'feminino') || (d.gender === 'Masc' && g === 'masculino');
-        var sOk = !d.skill || (sk === d.skill);
-        if (gOk && sOk) n++;
+        if (!r || r._wl) return;
+        // O resumo deve dizer onde a pessoa FOI ATRIBUÍDA, não inferir uma
+        // categoria pelo perfil/gênero. Em dupla importada o gênero individual
+        // pode ser vazio, mas `assigned[0]` já é, por exemplo, “Fem Light”.
+        // É a mesma fonte que o box da categoria usa para renderizar a dupla.
+        var pe = _pendingEdits[r.order] || {};
+        var assigned = Object.prototype.hasOwnProperty.call(pe, 'category')
+          ? pe.category : ((r.assigned && r.assigned[0]) || '');
+        if (!assigned) return;
+        var actual = _decomposeCat(assigned, t);
+        var genderOk = !d.gender || d.gender === actual.gender;
+        var skillOk = !d.skill || d.skill === actual.skill;
+        if (genderOk && skillOk) n++;
       });
       return n;
     }
@@ -2899,11 +2908,15 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         ' — arraste pra atribuir gênero/categoria';
       // Clique normal mantém a ficha do atleta; Cmd/Ctrl e Shift trocam apenas a
       // seleção local. Assim a nova seleção em lote não rouba a ação já conhecida.
+      // A ficha só é aberta para quem possui UID. Participantes manuais/importados
+      // recebem um handler separado, inerte no clique comum, para ainda poderem
+      // entrar em seleção Cmd/Ctrl ou Shift sem inventar uma ficha por nome.
       var click = canOpen ? ' onclick="window._erMxChipClick(event,' + r.order + ',\'' + String(r.uid).replace(/['\\]/g, '') + '\')"' : '';
+      var selectionClick = !canOpen ? ' onclick="window._erMxChipClick(event,' + r.order + ',\'\')"' : '';
       // v1.7.55: `data-er-person` é o que a barra de busca varre. Nome VIVO (o mesmo que o
       // card mostra) — indexar rótulo velho faz a busca achar quem a tela não mostra, que
       // foi exatamente o defeito da busca da chave na 1.7.47.
-      return '<div draggable="true" data-er-order="' + r.order + '" data-er-person="' + _esc(r.name || '') + '" ondragstart="window._erMxDragStart(event,' + r.order + ')" ondragover="window._erMxOver(event)" ondrop="window._erMxDropOnSolo(event,' + r.order + ')"' + click + ' ' +
+      return '<div draggable="true" data-er-order="' + r.order + '" data-er-person="' + _esc(r.name || '') + '" ondragstart="window._erMxDragStart(event,' + r.order + ')" ondragover="window._erMxOver(event)" ondrop="window._erMxDropOnSolo(event,' + r.order + ')"' + click + selectionClick + ' ' +
         'aria-pressed="' + (selected ? 'true' : 'false') + '" style="cursor:' + (canOpen ? 'pointer' : 'grab') + ';font-size:0.74rem;font-weight:600;padding:4px 7px;border-radius:6px;min-width:0;background:' + (selected ? 'rgba(14,165,233,0.20)' : 'var(--bg-card,rgba(0,0,0,0.25))') + ';color:' + window._spCor(nameCol, 'color') + ';border:' + (selected ? '2px solid #38bdf8' : ('1px solid ' + window._spCor(border, 'borda'))) + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' + tip + '">' + _esc(r.name || '(sem nome)') + '</div>';
     }
     function cardGrid(arr, pairs) {
@@ -3005,8 +3018,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       }).join('');
       return '<div style="min-width:0;border-top:2px solid ' + color + ';padding-top:7px;"><div style="font-size:17px;font-weight:850;color:' + color + ';">' + title + '</div>' + inner + '</div>';
     }
-    var soloGrid = '<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px 14px;">' +
-      soloColumn('♀ Feminino', femCol, fem) + soloColumn('♂ Masculino', mascCol, masc) + '</div>';
+    var soloGrid = (femTotal || mascTotal) ? ('<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px 14px;">' +
+      soloColumn('♀ Feminino', femCol, fem) + soloColumn('♂ Masculino', mascCol, masc) + '</div>') : '';
     // Ordem deliberada e visível: categorias reais (destinos) → duplas já
     // formadas sem categoria → individuais que ainda podem formar dupla.
     return catsBox + mistoStrip + categoryGrid + _erFormedPairsPanel(rows, t) + totalBar + _erMatrixSelectionBar() + soloGrid + semSection;
@@ -3174,6 +3187,33 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     }
     window._erRenderMatrix();
   };
+  // Card de dupla é uma unidade visual, mas a seleção conserva os dois orders:
+  // assim Cmd/Ctrl, Shift e o drag em lote produzem a mesma atribuição para os
+  // dois integrantes, inclusive quando vieram de planilha sem UID.
+  function _erPairOrdersFrom(order) {
+    var rows = (_liveState && _liveState.rows) || [];
+    var row = rows.filter(function (r) { return r.order === order; })[0];
+    if (!row || row._duplaIdx == null) return [order];
+    return rows.filter(function (r) { return r._duplaIdx === row._duplaIdx; }).map(function (r) { return r.order; });
+  }
+  window._erMxPairClick = function (ev, order) {
+    if (Date.now() - _erLastMatrixDragAt < 250) { ev.preventDefault(); return; }
+    var selecting = _erHasFinePointer() && (ev.metaKey || ev.ctrlKey || ev.shiftKey);
+    if (!selecting) return;
+    ev.preventDefault(); ev.stopPropagation();
+    var pairOrders = _erPairOrdersFrom(order);
+    if (ev.shiftKey && _erSelectionAnchor != null) {
+      _erSelectRange(_erSelectionAnchor, order);
+      pairOrders.forEach(function (o) { _erSelectedOrders[o] = true; });
+    } else if (ev.metaKey || ev.ctrlKey) {
+      var remove = pairOrders.every(function (o) { return !!_erSelectedOrders[o]; });
+      pairOrders.forEach(function (o) { if (remove) delete _erSelectedOrders[o]; else _erSelectedOrders[o] = true; });
+      _erSelectionAnchor = order;
+    } else {
+      _erSelectedOrders = {}; pairOrders.forEach(function (o) { _erSelectedOrders[o] = true; }); _erSelectionAnchor = order;
+    }
+    window._erRenderMatrix();
+  };
   window._erMxClearSelection = function () { _erClearSelection(false); };
   window._erMxDragStart = function (ev, order) {
     _erLastMatrixDragAt = Date.now();
@@ -3268,12 +3308,23 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     _erLastMatrixDragAt = Date.now();
     var row = ((_liveState && _liveState.rows) || []).filter(function (r) { return r.order === order; })[0];
     if (!row || row._duplaIdx == null) return;
-    _erDraggedOrders = [order];
+    if (_erHasFinePointer() && !_erSelectedOrders[order]) {
+      _erSelectedOrders = {};
+      _erPairOrdersFrom(order).forEach(function (o) { _erSelectedOrders[o] = true; });
+      _erSelectionAnchor = order;
+    }
+    _erDraggedOrders = _erHasFinePointer() ? _erSelectedRows().map(function (r) { return r.order; }) : [order];
     window._erMxDrag = order;
     try {
       ev.dataTransfer.effectAllowed = 'move';
       ev.dataTransfer.setData('text/plain', 'pair:' + String(row._duplaIdx));
-      ev.dataTransfer.setData('application/x-scoreplace-pair', String(row._duplaIdx));
+      ev.dataTransfer.setData('application/x-scoreplace-orders', _erDraggedOrders.join(','));
+      // Um card só usa o caminho atômico da dupla; ao arrastar uma seleção com
+      // duas ou mais unidades, o destino recebe a lista de orders e aplica o
+      // mesmo lote a todos, sem descartar as outras duplas selecionadas.
+      if (_erDraggedOrders.length === _erPairOrdersFrom(order).length) {
+        ev.dataTransfer.setData('application/x-scoreplace-pair', String(row._duplaIdx));
+      }
     } catch (e) {}
   };
   window._erMxOver = function (ev) { ev.preventDefault(); try { ev.dataTransfer.dropEffect = 'move'; } catch (e) {} };
