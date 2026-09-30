@@ -4,6 +4,7 @@
 const fs = require('fs');
 const path = require('path');
 const src = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'bracket.js'), 'utf8');
+const routerSrc = fs.readFileSync(path.join(__dirname, '..', 'js', 'router.js'), 'utf8');
 let fail = 0;
 function ok(condition, message) {
   if (condition) console.log('  ✓ ' + message);
@@ -19,9 +20,10 @@ ok(!src.includes("p.setAttribute('data-bracket-tab-holder', '1')"), 'montagem n�
 ok(src.includes("cb.style.display = ownG === gender ? '' : 'none'"), 'subabas só alternam pelo gênero ativo sem remover as abas principais');
 ok(src.includes('function _bracketLayoutEliminationTree') && src.includes("data-bracket-tree-lines") && src.includes("cardColumns[ci - 1].length !== cardColumns[ci].length * 2") && src.includes('Nunca tirar um jogo do fluxo da sua coluna'), 'eliminatórias desenham conectores sem tirar cards do fluxo nem aplicar a regra em rodadas independentes');
 ok(src.includes('function _bracketTabsRefreshRoundRail') && src.includes("rail.hidden = true") && src.includes("rail.innerHTML = ''"), 'não existe uma segunda régua de rodadas concorrendo com a chave');
-ok(src.includes('class="bracket-round-heading"') && src.includes('.bracket-round-column>.bracket-round-heading') && src.includes('var(--bracket-tabs-height,0px)') && src.includes('scope && scope.style') && src.includes('function _bracketSyncRoundHeadingOffsets') && src.includes('window._bracketRoundHeadingResizeListener') && src.includes('var(--bg-darker,#111114)') && !src.includes('visibility:hidden!important'), 'o cabeçalho canônico, com Ocultar, fica visível sob as abas e recalcula no redimensionamento com um único listener global');
+ok(src.includes('class="bracket-round-heading"') && src.includes('data-bracket-round-heading-portal') && src.includes('function _bracketUpdateRoundHeadingPortal') && src.includes('(root.parentNode || scope).appendChild(portal)') && !src.includes('document.body.appendChild(portal)') && src.includes('document.addEventListener(\'scroll\'') && src.includes('scope && scope.style') && src.includes('function _bracketSyncRoundHeadingOffsets') && src.includes('window._bracketRoundHeadingResizeListener') && src.includes('var(--bg-darker,#111114)') && !src.includes('visibility:hidden!important'), 'a linha e o Ocultar usam um portal fixo sob as abas, no ciclo de vida da seção da chave e sem camadas órfãs');
+ok(routerSrc.includes('cleanupBracketRoundHeadingPortals') && routerSrc.includes("document.querySelectorAll('[data-bracket-round-heading-portal]')") && routerSrc.includes('cleanupBracketRoundHeadingPortals();'), 'o roteador remove os portais de cabeçalho antes de toda nova rota');
 ok(src.includes('data-bracket-tier-title') && src.includes('tierTitles[ti].hidden = true'), 'a linha ativa não duplica título atrás da aba fixa');
 ok(src.includes('data-bracket-search-slot') && src.includes('window.innerWidth >= 560') && src.includes('searchSlot.appendChild(searchWrap)'), 'em janela desktop, a busca usa a sobra da mesma faixa das abas sem duplicar o input');
 
-console.log('\n' + (fail ? '❌' : '✅') + ' chaves-abas-estáveis: ' + (12 - fail) + ' asserts ok, ' + fail + ' falharam');
+console.log('\n' + (fail ? '❌' : '✅') + ' chaves-abas-estáveis: ' + (13 - fail) + ' asserts ok, ' + fail + ' falharam');
 process.exitCode = fail ? 1 : 0;

@@ -35,7 +35,18 @@ function initRouter() {
   } catch (e) {}
   var _firstRoute = true;
 
+  // Camadas fixas da chave são criadas fora do trilho horizontal para acompanhar
+  // a rolagem vertical. Antes de qualquer nova rota, removemos as anteriores:
+  // assim uma navegação ou um re-render não deixa portal órfão sobre a tela nova.
+  const cleanupBracketRoundHeadingPortals = () => {
+    const portals = document.querySelectorAll('[data-bracket-round-heading-portal]');
+    for (let i = portals.length - 1; i >= 0; i--) {
+      if (portals[i].parentNode) portals[i].parentNode.removeChild(portals[i]);
+    }
+  };
+
   const handleRoute = () => {
+    cleanupBracketRoundHeadingPortals();
     const hash = window.location.hash || '#dashboard';
     // Selo de diagnóstico do sorteio (SANDBOX) não pode sobreviver à troca de tela — ele só
     // se auto-removia no próximo _dtrace, então ficava por cima da dashboard. Ver store.js.

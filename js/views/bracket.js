@@ -994,12 +994,46 @@ function _bracketSyncRoundHeadingOffsets() {
     var scope = root._bracketTabsScope || (root.closest ? root.closest('#view-container, #inline-bracket-container') : null) || document.getElementById('view-container') || document.body;
     var height = Math.ceil(root.getBoundingClientRect().height || 0);
     if (height > 0 && scope && scope.style) scope.style.setProperty('--bracket-tabs-height', height + 'px');
+    _bracketUpdateRoundHeadingPortal(root, scope);
+  }
+}
+// O trilho da chave rola horizontalmente. CSS sticky dentro dele fica preso a
+// esse rolagem e não acompanha o scroll vertical da página. Espelhamos somente
+// os cabeçalhos que já passaram sob as abas para uma camada fixa, no mesmo x e
+// largura da coluna; o botão continua sendo o próprio botão clicável da rodada.
+function _bracketUpdateRoundHeadingPortal(root, scope) {
+  if (!root || !scope) return;
+  var portal = root._bracketRoundHeadingPortal;
+  if (!portal) {
+    portal = document.createElement('div');
+    portal.setAttribute('data-bracket-round-heading-portal', '1');
+    // O portal pertence ao ciclo de vida da seção reconstruída da chave. O pai
+    // imediato das abas some junto com ela na troca de rota; `scope` é apenas
+    // fallback para um mount ainda sem pai.
+    (root.parentNode || scope).appendChild(portal);
+    root._bracketRoundHeadingPortal = portal;
+  }
+  portal.innerHTML = '';
+  var anchorBottom = root.getBoundingClientRect().bottom;
+  var headings = scope.querySelectorAll('.bracket-round-heading');
+  for (var i = 0; i < headings.length; i++) {
+    var heading = headings[i];
+    var column = heading.closest ? heading.closest('.bracket-round-column') : null;
+    var rect = heading.getBoundingClientRect();
+    var colRect = column ? column.getBoundingClientRect() : rect;
+    if (rect.width < 1 || rect.top >= anchorBottom || colRect.bottom <= anchorBottom) continue;
+    var clone = document.createElement('div');
+    clone.className = 'bracket-round-heading-portal';
+    clone.style.cssText = 'position:fixed;top:' + Math.ceil(anchorBottom) + 'px;left:' + Math.round(rect.left) + 'px;width:' + Math.round(rect.width) + 'px;box-sizing:border-box;z-index:29;display:flex;align-items:center;gap:8px;background:var(--bg-darker,#111114);padding:8px 0 9px;box-shadow:0 8px 0 var(--bg-darker,#111114);';
+    clone.innerHTML = heading.innerHTML;
+    portal.appendChild(clone);
   }
 }
 function _bracketEnsureRoundHeadingResizeListener() {
   if (window._bracketRoundHeadingResizeListener) return;
   window._bracketRoundHeadingResizeListener = function () { _bracketSyncRoundHeadingOffsets(); };
   window.addEventListener('resize', window._bracketRoundHeadingResizeListener, { passive: true });
+  document.addEventListener('scroll', window._bracketRoundHeadingResizeListener, true);
 }
 window._bracketCategoryTabsMount = function () {
   var cards = Array.prototype.slice.call(document.querySelectorAll('[data-bracket-tab-category]'));
@@ -1123,7 +1157,7 @@ window._bracketCategoryTabsMount = function () {
   if (!style) { style = document.createElement('style'); style.id = 'bracket-category-tab-style'; document.head.appendChild(style); }
   // O cabeçalho é parte da sua própria coluna, não uma régua paralela. Ele
   // fica visível sob as abas e carrega junto o comando "Ocultar" da rodada.
-  style.textContent = '.bracket-round-column>.bracket-round-heading{position:sticky!important;top:calc(var(--scroll-anchor,120px) + var(--bracket-tabs-height,0px))!important;z-index:26!important;background:var(--bg-darker,#111114);padding:8px 0 9px;margin:-8px 0 0;box-shadow:0 8px 0 var(--bg-darker,#111114);} .bracket-round-column>h4:first-child,.bracket-round-column>h5:first-child{position:relative!important;top:auto!important;z-index:1!important;}';
+  style.textContent = '.bracket-round-column>.bracket-round-heading{position:relative!important;z-index:1!important;background:var(--bg-darker,#111114);padding:8px 0 9px;margin:-8px 0 0;} .bracket-round-heading-portal h4,.bracket-round-heading-portal h5{margin:0!important;}';
   _bracketSyncRoundHeadingOffsets();
   _bracketEnsureRoundHeadingResizeListener();
   if (typeof requestAnimationFrame === 'function') requestAnimationFrame(_bracketSyncRoundHeadingOffsets);
@@ -4551,7 +4585,7 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
         ? '<button class="btn btn-micro btn-outline" onclick="window._tierHideRound(\'' + _tIdEsc + '\',\'' + _bkEsc + '\',' + col.round + ')" style="flex-shrink:0;">Ocultar</button>'
         : '';
       return '<div class="bracket-round-column" style="display:flex;flex-direction:column;gap:1rem;min-width:280px;">' +
-        '<h5 style="display:flex;align-items:center;justify-content:space-between;gap:8px;color:' + window._spCor(color, 'color') + ';font-size:0.7rem;text-transform:uppercase;letter-spacing:2px;margin-bottom:.5rem;border-left:3px solid ' + window._spCor(color, 'borda') + ';padding-left:8px;"><span>' + label + '</span>' + hideBtn + '</h5>' +
+        '<div class="bracket-round-heading" style="display:flex;align-items:center;justify-content:space-between;gap:8px;"><h5 style="color:' + window._spCor(color, 'color') + ';font-size:0.7rem;text-transform:uppercase;letter-spacing:2px;margin:0;border-left:3px solid ' + window._spCor(color, 'borda') + ';padding-left:8px;"><span>' + label + '</span>' + hideBtn + '</h5></div>' +
         cards + thirdHtml + '</div>';
     }).join('');
     // v2.8.33: "Mostrar ocultas" fica à ESQUERDA das chaves, EM PÉ (vertical) e
