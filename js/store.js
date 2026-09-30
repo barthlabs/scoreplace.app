@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.3.191';
+window.SCOREPLACE_VERSION = '2.3.192';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -7441,9 +7441,9 @@ window._openImageCropEditor = function(dataUrl, opts, callback) {
     : '';
   var _rotationHtml = ROTATION_CTRL
     ? '<div style="margin:8px 0 4px;display:flex;align-items:center;justify-content:center;gap:8px;">' +
-        '<button type="button" id="crop-rotate-left" class="btn btn-sm" style="padding:6px 10px;">↶ 90°</button>' +
-        '<span id="crop-rotation-label" style="font-size:0.7rem;color:var(--text-muted,#94a3b8);min-width:68px;">0°</span>' +
-        '<button type="button" id="crop-rotate-right" class="btn btn-sm" style="padding:6px 10px;">90° ↷</button>' +
+        '<button type="button" id="crop-rotate-left" class="btn btn-sm" aria-label="Girar 90 graus para a esquerda" style="padding:8px 10px;background:#1e3a8a;color:#fff;border:1px solid #60a5fa;font-size:0.72rem;font-weight:700;white-space:nowrap;">↶ Girar 90° à esquerda</button>' +
+        '<span id="crop-rotation-label" style="font-size:0.76rem;color:var(--text-bright,#f1f5f9);font-weight:700;min-width:48px;text-align:center;">0°</span>' +
+        '<button type="button" id="crop-rotate-right" class="btn btn-sm" aria-label="Girar 90 graus para a direita" style="padding:8px 10px;background:#1e3a8a;color:#fff;border:1px solid #60a5fa;font-size:0.72rem;font-weight:700;white-space:nowrap;">Girar 90° à direita ↷</button>' +
       '</div>'
     : '';
   var _canvasRadius = COVER ? '10px' : (RADIUS_CTRL ? (cropRadiusPct + '%') : (SHAPE === 'circle' ? '50%' : '12px'));
@@ -7451,9 +7451,9 @@ window._openImageCropEditor = function(dataUrl, opts, callback) {
     '<div style="font-size:0.9rem;font-weight:700;color:var(--text-bright,#f1f5f9);margin-bottom:14px;">' + TITLE + '</div>' +
     '<canvas id="crop-canvas" width="' + PREV_W + '" height="' + PREV_H + '" style="border-radius:' + _canvasRadius + ';cursor:move;touch-action:none;max-width:100%;"></canvas>' +
     '<div style="margin:14px 0 4px;display:flex;align-items:center;gap:10px;">' +
-      '<span style="font-size:0.7rem;color:var(--text-muted,#94a3b8);white-space:nowrap;">🔍−</span>' +
-      '<input type="range" id="crop-zoom" min="50" max="300" value="100" style="flex:1;accent-color:var(--primary-color,#6366f1);">' +
-      '<span style="font-size:0.7rem;color:var(--text-muted,#94a3b8);white-space:nowrap;">+🔍</span>' +
+      '<span style="font-size:0.7rem;color:var(--text-muted,#94a3b8);white-space:nowrap;">🔍 Menos</span>' +
+      '<input type="range" id="crop-zoom" min="5" max="1200" value="100" aria-label="Zoom da imagem" style="flex:1;accent-color:var(--primary-color,#6366f1);">' +
+      '<span style="font-size:0.7rem;color:var(--text-muted,#94a3b8);white-space:nowrap;">Mais 🔍</span>' +
     '</div>' +
     _formaSliderHtml +
     _aspectSliderHtml +
@@ -7530,8 +7530,12 @@ window._openImageCropEditor = function(dataUrl, opts, callback) {
     var drawH = rotated ? img.width : img.height;
     var ratio = Math.max(PREV_W / drawW, PREV_H / drawH);
     scale = ratio;
-    zoomSlider.min = Math.max(20, Math.round(ratio * 80));
-    zoomSlider.max = Math.round(ratio * 400);
+    // Mantém o enquadramento inicial que cobre toda a área, mas deixa o
+    // organizador afastar bem mais a imagem ou aproximá-la até 12× dele.
+    // A capa pode exibir espaço vazio ao reduzir — é uma escolha deliberada,
+    // útil para logos/imagens que precisam respirar dentro do fundo.
+    zoomSlider.min = Math.max(5, Math.round(ratio * 20));
+    zoomSlider.max = Math.max(Math.round(ratio * 1200), Number(zoomSlider.min) + 1);
     zoomSlider.value = Math.round(ratio * 100);
     if (resetOffset) { offsetX = 0; offsetY = 0; }
   }

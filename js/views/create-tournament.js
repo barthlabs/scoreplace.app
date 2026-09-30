@@ -340,7 +340,12 @@ function setupCreateTournamentModal() {
               <!-- Foto de fundo do torneio (v4.0.21) — se definida, substitui a do Google -->
               <div id="cover-section" style="background: rgba(99,102,241,0.06); border: 1px solid rgba(99,102,241,0.15); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
                 <p style="margin: 0 0 0.35rem; font-size: 0.8rem; color: var(--sp-c-a5b4fc,#a5b4fc); font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">🖼️ Foto de fundo do torneio</p>
-                <p style="margin: 0 0 0.75rem; font-size: 0.72rem; color: var(--text-muted); line-height: 1.35;">Opcional. Se você definir, ela substitui a foto do Google nos cards e no detalhe. Ao escolher, dá pra dar zoom e arrastar pra enquadrar (sem distorcer).</p>
+                <p style="margin: 0 0 0.45rem; font-size: 0.72rem; color: var(--text-muted); line-height: 1.35;">Opcional. Se você definir, ela substitui a foto do Google nos cards e no detalhe. Ao escolher, dá pra girar, dar zoom e arrastar para enquadrar, sem distorcer.</p>
+                <div style="margin:0 0 0.75rem;padding:0.65rem 0.75rem;border-radius:8px;background:rgba(59,130,246,0.08);border:1px solid rgba(96,165,250,0.22);font-size:0.7rem;line-height:1.45;color:var(--sp-c-bfd7ff,#bfd7ff);">
+                  <strong>Arquivo:</strong> JPG, PNG ou WebP, até 12 MB.<br>
+                  <strong>Melhor resultado:</strong> envie 2000 × 1000 px (proporção 2:1) ou maior; a capa final é otimizada para 1000 × 500 px.<br>
+                  <strong>Importante:</strong> desktop/tablet mostram a área 2:1; no celular em pé aparece principalmente a faixa central 3:4. Deixe nomes e logos nessa faixa central.
+                </div>
                 <div id="cover-preview" style="width: 100%; max-width: 300px; aspect-ratio: 2/1; border-radius: 12px; border: 2px dashed rgba(99,102,241,0.3); display: flex; align-items: center; justify-content: center; overflow: hidden; background: var(--sp-g-0-0-0-02,rgba(0,0,0,0.2)); background-size: cover; background-position: center; margin-bottom: 8px;">
                   <span id="cover-placeholder" style="font-size: 0.72rem; color: var(--text-muted);">Sem foto de fundo</span>
                 </div>
@@ -348,7 +353,7 @@ function setupCreateTournamentModal() {
                   <button type="button" onclick="document.getElementById('cover-file-input').click()" style="padding: 8px 16px; border-radius: 10px; border: 1px solid rgba(99,102,241,0.3); background: rgba(99,102,241,0.15); color: var(--sp-c-a5b4fc,#a5b4fc); font-size: 0.8rem; font-weight: 600; cursor: pointer;">🖼️ Escolher foto</button>
                   <button type="button" id="btn-cover-clear" onclick="window._clearCoverPhoto()" title="Remover foto de fundo" style="padding: 8px 12px; border-radius: 10px; border: 1px solid rgba(239,68,68,0.2); background: rgba(239,68,68,0.08); color: var(--sp-c-f87171,#f87171); font-size: 0.8rem; cursor: pointer; display: none;">✕ Remover</button>
                 </div>
-                <input type="file" id="cover-file-input" accept="image/*" style="display:none;" onchange="window._handleCoverUpload(event)">
+                <input type="file" id="cover-file-input" accept="image/jpeg,image/png,image/webp" style="display:none;" onchange="window._handleCoverUpload(event)">
                 <input type="hidden" id="tourn-cover-data" value="">
               </div>
 
@@ -2397,6 +2402,12 @@ function setupCreateTournamentModal() {
   window._handleCoverUpload = function(event) {
     var file = event.target && event.target.files && event.target.files[0];
     if (!file) return;
+    var tiposAceitos = ['image/jpeg', 'image/png', 'image/webp'];
+    if (tiposAceitos.indexOf(file.type) === -1) {
+      if (typeof showNotification === 'function') showNotification('Formato não aceito', 'Escolha uma imagem JPG, PNG ou WebP.', 'error');
+      event.target.value = '';
+      return;
+    }
     if (file.size > 12 * 1024 * 1024) {
       if (typeof showNotification === 'function') showNotification('Arquivo muito grande', 'Escolha uma imagem de até 12MB.', 'error');
       event.target.value = '';

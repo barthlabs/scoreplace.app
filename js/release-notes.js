@@ -1,3 +1,4 @@
+// 2.3.192 — Controles de giro da capa têm rótulo legível e o zoom vai de 20% a 1200% do enquadramento inicial.
 // 2.3.191 — Editor de mídia aceita logos 1:2..2:1 e rotação de capa em 90°; regra de Storage é publicada junto para o upload do organizador.
 // 2.3.189 — O cabeçalho canônico de cada coluna da chave fica preso logo abaixo das abas enquanto seus jogos passam: a barra lateral, o nome da rodada e o eventual comando “Ocultar” seguem juntos, sem uma segunda régua concorrente.
 // 2.3.188 — A chave volta a usar somente o cabeçalho canônico de cada coluna: a barra lateral, o título e o eventual comando da própria Rodada 2 permanecem diretamente sobre seus jogos. A régua paralela foi removida; a faixa de abas recebe cobertura opaca para nenhum card atravessá-la.
