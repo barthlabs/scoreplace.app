@@ -3246,11 +3246,14 @@ function renderTournaments(container, tournamentId = null) {
             <!-- Logo: na tela de detalhe ocupa 1/3 da largura do card (max 160px), cap responsivo via CSS min() -->
             <div style="display: flex; align-items: ${window._tourLogoSrc(t) && tournamentId ? 'flex-start' : 'center'}; gap: ${window._tourLogoSrc(t) && tournamentId ? '18px' : '14px'}; margin: 1.8rem 0 0.5rem 0;">
               ${window._tourLogoSrc(t) ? `
-                <div style="position:relative;width:33%;min-width:100px;flex-shrink:0;aspect-ratio:${window._tournamentLogoAspect ? window._tournamentLogoAspect(t) : 1};">
-                  <img src="${window._tourLogoSrc(t)}" alt="Logo"
+                <div style="width:33%;min-width:100px;flex-shrink:0;display:flex;align-items:flex-end;gap:10px;">
+                  <div style="min-width:0;flex:1;aspect-ratio:${window._tournamentLogoAspect ? window._tournamentLogoAspect(t) : 1};">
+                    <img src="${window._tourLogoSrc(t)}" alt="Logo do torneio"
                     style="width:100%;height:100%;border-radius:${window._tournamentLogoRadius(t)};object-fit:contain;display:block;box-shadow:0 4px 20px rgba(0,0,0,0.45);${tournamentId && isOrg ? 'cursor:pointer;' : ''}"
                     ${tournamentId && isOrg ? `onclick="event.stopPropagation(); window._editTournamentLogoFromDetail('${window._safeHtml(t.id)}')" title="Clique para editar o logo"` : ''}
                   >
+                  </div>
+                  ${t.venuePlaceId ? '<span data-vlogo-pid="' + window._safeHtml(t.venuePlaceId) + '" title="Logo do local" aria-label="Logo do local" style="width:clamp(34px,8vw,56px);aspect-ratio:1/1;display:none;flex:0 0 auto;"></span>' : ''}
                 </div>
               ` : ''}
               <div style="flex:1;min-width:0;">
@@ -3397,7 +3400,6 @@ function renderTournaments(container, tournamentId = null) {
                </span>
                <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px; flex-shrink:0; align-self:stretch;">
                  ${(t.venuePlaceId || t.venue) ? '<button onclick="event.stopPropagation();window._openVenueFromTournament(\'' + String(t.id).replace(/\\/g, '\\\\').replace(/\'/g, "\\'") + '\')" title="Ver detalhes do local (movimento, contatos, reviews)" style="background:linear-gradient(135deg,#FFD700,#DAA520);border:none;color:#1a0f00;border-radius:8px;padding:5px 10px;font-size:0.72rem;font-weight:800;cursor:pointer;white-space:nowrap;">📍 Place</button>' : ''}
-                 ${t.venuePlaceId ? '<span data-vlogo-pid="' + window._safeHtml(t.venuePlaceId) + '" title="Logo do local" style="margin-top:auto;flex-shrink:0;width:clamp(44px,14vw,64px);aspect-ratio:1/1;display:none;"></span>' : ''}
                </div>
             </div>
             ${tournamentId && t.venueLat && t.venueLon ? '<div id="tournament-venue-map" data-lat="' + t.venueLat + '" data-lng="' + t.venueLon + '" data-venue="' + window._safeHtml(t.venue || '') + '" style="width:100%;height:180px;border-radius:10px;overflow:hidden;border:1px solid var(--sp-b-255-255-255-01,rgba(255,255,255,0.1));margin-top:8px;background:#1a1a2e;"></div>' : ''}` : ''}
@@ -4391,6 +4393,10 @@ function renderTournaments(container, tournamentId = null) {
     ${tournamentId ? `<div id="activity-log-section"></div>` : ''}
   `;
     container.innerHTML = html;
+
+    // O logo do local é parte do cabeçalho recém-renderizado. Hidratá-lo aqui evita
+    // depender do observador global e o mantém visível já no primeiro paint.
+    try { if (window._hydrateVenueLogos) window._hydrateVenueLogos(container); } catch (e) {}
 
     // v1.3.23: mede a barra de filtro/busca pra travar a barra de contagem logo abaixo dela.
     if (typeof window._measureInscritosStickyBars === 'function') {

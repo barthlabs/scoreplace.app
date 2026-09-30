@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.3.196';
+window.SCOREPLACE_VERSION = '2.3.197';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -2460,6 +2460,8 @@ window._formatLabel = function (t) {
 
   // LOGO DO LOCAL — mesma história, escala menor (29,8 KB num doc), mas o `venues` é
   // lido pra montar a lista de locais e o mapa. Mesmo acessor, mesmo motivo.
+  // Fonte única também para o cabeçalho do torneio: URL atual do Storage ou
+  // base64 legado. Mantida aqui, antes do hidratador que a consome abaixo.
   window._venueLogoSrc = function (v) {
     if (!v) return '';
     return v.logoUrl || v.logoData || '';
@@ -2565,12 +2567,17 @@ window._formatLabel = function (t) {
     _mem[pid] = (async function () {
       try {
         var v = await window.VenueDB.loadVenue(pid);
-        if (v && v.logoData) return { logoData: v.logoData, logoShape: v.logoShape || 'square', logoRadius: (v.logoRadius != null ? v.logoRadius : 14) };
+        // O logo do local migrou para Storage tal como o do torneio. A versão
+        // anterior consultava só `logoData` (base64 legado); por isso Paineiras
+        // e Confra, que têm `logoUrl`, pareciam não ter logo no cabeçalho.
+        var src = window._venueLogoSrc ? window._venueLogoSrc(v) : (v && (v.logoUrl || v.logoData));
+        if (src) return { logoData: src, logoShape: v.logoShape || 'square', logoRadius: (v.logoRadius != null ? v.logoRadius : 14) };
         return null; // carregado, sem logo → cacheia (não re-busca)
       } catch (e) { delete _mem[pid]; return null; } // erro → permite re-tentar
     })();
     return _mem[pid];
   };
+  // Preenche e revela os slots `data-vlogo-pid` dos cabeçalhos e cartões.
   window._hydrateVenueLogos = function (root) {
     root = root || document;
     var els;
@@ -2593,7 +2600,7 @@ window._formatLabel = function (t) {
         var radius = (info.logoShape === 'circle') ? '50%' : ((info.logoRadius != null ? info.logoRadius : 14) + '%');
         // Slot começa display:none (não reserva espaço quando o local não tem
         // logo). Ao preencher, revela. Anel claro + sombra destaca o brasão.
-        if (el.style.display === 'none') el.style.display = '';
+        if (el.style.display === 'none') el.style.display = 'block';
         el.innerHTML = '<img src="' + info.logoData + '" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:' + radius + ';display:block;box-shadow:0 0 0 3px rgba(255,255,255,0.92),0 2px 8px rgba(0,0,0,0.45);">';
       });
     });
