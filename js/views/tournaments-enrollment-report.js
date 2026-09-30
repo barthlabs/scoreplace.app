@@ -2751,13 +2751,14 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   }
   function _erMatrixSelectionBar() {
     var count = _erSelectedRows().length;
-    var hint = _erHasFinePointer()
-      ? '⌘/Ctrl clique seleciona vários · Shift seleciona uma faixa · arraste para atribuir em lote'
-      : 'No computador, use ⌘/Ctrl ou Shift para selecionar e arrastar em lote';
+    // A instrução permanente ocupava uma faixa grande exatamente entre os
+    // participantes e seus destinos. A seleção continua existindo; o feedback
+    // só aparece quando há uma seleção real.
+    if (!count) return '';
     return '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:7px 9px;margin-bottom:12px;padding:9px 11px;border:1px solid rgba(56,189,248,0.32);border-radius:10px;background:rgba(14,116,144,0.10);">' +
       '<span style="font-size:13px;font-weight:700;color:var(--text-secondary,#cbd5e1);">' +
-        (count ? ('✓ ' + count + ' selecionado' + (count === 1 ? '' : 's')) : hint) + '</span>' +
-      (count ? '<button class="btn btn-outline btn-sm" style="font-size:12px;padding:4px 8px;" onclick="window._erMxClearSelection()">Limpar</button>' : '') +
+        ('✓ ' + count + ' selecionado' + (count === 1 ? '' : 's')) + '</span>' +
+      '<button class="btn btn-outline btn-sm" style="font-size:12px;padding:4px 8px;" onclick="window._erMxClearSelection()">Limpar</button>' +
     '</div>';
   }
   function _matrixInner(rows, t) {
@@ -2977,7 +2978,6 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     // Duplas vêm imediatamente antes dos cards individuais. Não há cópia dos
     // integrantes abaixo: isso evita que o organizador atribua a mesma dupla
     // por dois desenhos conflitantes. [[analysis_pair_card_is_canonical]]
-    var soloHint = '<div style="font-size:12px;color:var(--text-muted);margin:0 0 9px;">Participantes sem dupla: arraste um card sobre outro para formar uma dupla.</div>';
     function soloColumn(title, color, buckets) {
       var inner = groups.map(function (sk) {
         var label = sk === '__none__' ? 'Sem habilidade' : _esc(sk);
@@ -2989,7 +2989,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       soloColumn('♀ Feminino', femCol, fem) + soloColumn('♂ Masculino', mascCol, masc) + '</div>';
     // Ordem deliberada e visível: categorias reais (destinos) → duplas já
     // formadas sem categoria → individuais que ainda podem formar dupla.
-    return catsBox + mistoStrip + categoryGrid + _erFormedPairsPanel(rows, t) + totalBar + _erMatrixSelectionBar() + soloHint + soloGrid + semSection;
+    return catsBox + mistoStrip + categoryGrid + _erFormedPairsPanel(rows, t) + totalBar + _erMatrixSelectionBar() + soloGrid + semSection;
   }
   window._erRenderMatrix = function () {
     var el = document.getElementById('er-cat-matrix');

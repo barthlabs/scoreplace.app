@@ -139,7 +139,8 @@ function isAlreadyEnrolled(participants, participantObj) {
   return participants.some(function (p) {
     if (memberMatches(p)) return true;
     if (Array.isArray(p.participants) && p.participants.some(memberMatches)) return true;
-    if (pUid && ((p.p1Uid && p.p1Uid === pUid) || (p.p2Uid && p.p2Uid === pUid))) return true;
+  if (pUid && ((p.p1Uid && p.p1Uid === pUid) || (p.p2Uid && p.p2Uid === pUid))) return true;
+  if (pManualId && ((p.p1ManualId && p.p1ManualId === pManualId) || (p.p2ManualId && p.p2ManualId === pManualId))) return true;
     return false;
   });
 }
@@ -213,15 +214,12 @@ function normalizeParticipantIntent(participantObj, callerUid, addedAt) {
   };
   var uid = text('uid', 128), manualId = text('manualParticipantId', 200);
   if (uid && manualId) throw new Error('a inscrição não pode misturar uid e manualParticipantId');
-  /* ⛔ INSCRIÇÃO NOVA EXIGE CONTA: NÃO NASCE VAGA MANUAL.
-   * Nome não distingue pessoas e o identificador manual só mascarava essa ambiguidade.
-   * Dados históricos com manualParticipantId continuam legíveis pelos consumidores; esta
-   * porta bloqueia exclusivamente a CRIAÇÃO, para não tornar nenhum torneio em voo ilegível.
-   * [[project_sem_vaga_manual_nova]] */
-  if (manualId) {
-    throw new Error('participante sem conta não é permitido; selecione uma conta cadastrada');
-  }
-  if (!uid) throw new Error('a inscrição precisa de uid');
+  /* Participante importado/digitado é suportado em TODO torneio. O nome é apenas
+   * apresentação — `manualParticipantId` é a identidade estável até (e mesmo após)
+   * uma eventual autenticação. A autorização de quem pode criar essa vaga é conferida
+   * pela callable; este núcleo só exige que a vaga tenha ID e nome. */
+  if (!uid && !manualId) throw new Error('a inscrição precisa de uid ou manualParticipantId');
+  if (!uid && !(text('name', 240) || text('displayName', 240))) throw new Error('participante manual precisa de nome');
   if (participantObj.ligaActive != null && typeof participantObj.ligaActive !== 'boolean') throw new Error('ligaActive inválido');
   var out = {};
   ['name', 'displayName', 'p1Name', 'p2Name', 'category', 'categorySource'].forEach(function (key) {
@@ -246,6 +244,10 @@ function normalizeParticipantIntent(participantObj, callerUid, addedAt) {
     out.uid = uid;
     out.selfEnrolled = uid === callerUid;
     if (!out.selfEnrolled) out.addedByUid = callerUid;
+  } else {
+    out.manualParticipantId = manualId;
+    out.selfEnrolled = false;
+    out.addedByUid = callerUid;
   }
   return sanitizeAccountParticipant(out);
 }
@@ -284,9 +286,8 @@ function computeEnroll(data, participantObj, extraUpdates, nowMs, accountDisplay
   }
   var knownStandby = Array.isArray(data.standbyParticipants) ? data.standbyParticipants : [];
   var knownWaitlist = Array.isArray(data.waitlist) ? data.waitlist : [];
-  if (hasDuplicateParticipantName([participants, knownStandby, knownWaitlist], participantObj, accountDisplayName)) {
-    return { outcome: 'duplicateName', participants: participants, updateData: null };
-  }
+  /* Não deduplicar pessoas pelo nome. Planilhas reais podem ter homônimos, e a
+   * identidade canônica já foi validada acima (UID ou manualParticipantId). */
   // v1.6.86 — FASE SORTEADA → LISTA DE ESPERA. Vem ANTES do teto de vagas de propósito:
   // a espera é justamente onde fica quem não tem vaga na rodada, então recusar por
   // "lotado" quem já está indo pra fila não faz sentido. Em Liga com temporada aberta

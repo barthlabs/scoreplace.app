@@ -17,6 +17,7 @@
  */
 const admin = require('firebase-admin');
 const fetch = require('node-fetch');
+const tournamentSplit = require('./vendor/tournament-split-core.js');
 admin.initializeApp({ projectId: 'demo-scoreplace' });
 const db = admin.firestore();
 
@@ -53,6 +54,22 @@ async function chamar(nome, token, dados) {
 
 const perfil = async (uid) => (await db.collection('users').doc(uid).get()).data() || {};
 
+/* O contrato atual guarda o elenco fora do documento raiz. Estes helpers evitam que o
+ * próprio ensaio plante um torneio legado e depois culpe a callable por não enxergar
+ * participantes que, em produção, vivem em `inscritos/{chave}`. */
+async function gravarInscritos(tournamentId, entries) {
+  const base = db.collection('tournaments').doc(tournamentId).collection('inscritos');
+  await Promise.all((entries || []).map((item, idx) =>
+    base.doc(tournamentSplit.chaveDoInscrito(item)).set({ _idx: idx, item: item, _k: tournamentSplit.chaveDoInscrito(item) })
+  ));
+}
+
+async function lerInscritos(tournamentId) {
+  const snap = await db.collection('tournaments').doc(tournamentId).collection('inscritos').get();
+  return snap.docs.map(d => d.data() || {}).sort((a, b) => Number(a._idx || 0) - Number(b._idx || 0))
+    .map(d => d.item || {});
+}
+
 (async function main() {
   const org = 'ad-marca-org', inscrito = 'ad-marca-inscrito';
   const tokenOrg = await criarConta(org, 'ad-org@teste.local');
@@ -66,8 +83,9 @@ const perfil = async (uid) => (await db.collection('users').doc(uid).get()).data
   await db.collection('tournaments').doc(tId).set({
     id: tId, name: 'Torneio da Marca (autodraw)', creatorUid: org, sport: 'Beach Tennis',
     combinedCategories: ['A', 'B'],
-    participants: [{ uid: inscrito, displayName: 'Inscrito', category: 'B', categories: ['B'] }],
+    _semPesados: ['matches', 'participants', 'opponentHistory'], participants: [],
   });
+  await gravarInscritos(tId, [{ uid: inscrito, displayName: 'Inscrito', category: 'B', categories: ['B'] }]);
 
   console.log('\n── applyEnrollmentAssignments: o organizador troca a categoria na Análise ──');
   /* ⛔ INVERTIDO EM 23/set/2026. Este cenário EXIGIA a categoria no perfil global — ou seja, exigia
@@ -82,9 +100,58 @@ const perfil = async (uid) => (await db.collection('users').doc(uid).get()).data
   eq(p.skillBySport, antesDoT1.skillBySport, '⛔ a categoria NÃO foi para o perfil global');
   eq(p.skillBySportSource, antesDoT1.skillBySportSource, '⛔ e a marca de procedência ficou intacta');
   ok(p.skillSetBy === undefined, '⛔ nem o carimbo de quem digitou a categoria');
-  const t1 = (await db.collection('tournaments').doc(tId).get()).data() || {};
-  const alvoNoTorneio = (t1.participants || []).find((x) => x && x.uid === inscrito) || {};
+  const alvoNoTorneio = (await lerInscritos(tId)).find((x) => x && x.uid === inscrito) || {};
   ok(alvoNoTorneio.category === 'A', '⭐ e a categoria VALE no torneio, que é onde ela mora');
+
+  console.log('\n── DUPLA MANUAL: categoria persiste no objeto da dupla ──');
+  /* A Análise expande esta dupla em dois cards, mas o armazenamento canônico é
+   * UMA entrada. A prova precisa ler o documento após a transação: resposta 200
+   * sem `participants[0].category` não é salvamento. */
+  const tPair = 'ad-marca-dupla-manual';
+  await db.collection('tournaments').doc(tPair).set({
+    id: tPair, name: 'Dupla importada', creatorUid: org, sport: 'Beach Tennis',
+    combinedCategories: ['Fem Light'],
+    _semPesados: ['matches', 'participants', 'opponentHistory'], participants: [],
+  });
+  await gravarInscritos(tPair, [{
+      p1ManualId: 'track-001', p1Name: 'Track Um',
+      p2ManualId: 'track-002', p2Name: 'Track Dois',
+      category: '', categories: [],
+  }]);
+  r = await chamar('applyEnrollmentAssignments', tokenOrg, {
+    tournamentId: tPair, sport: 'Beach Tennis', edits: [
+      { manualParticipantId: 'track-001', pairMember: 'p1', category: 'Fem Light' },
+      { manualParticipantId: 'track-002', pairMember: 'p2', category: 'Fem Light' },
+    ],
+  });
+  ok(r.status === 200, 'categoria da dupla manual respondeu 200 (' + r.status + ')');
+  const duplaPersistida = (await lerInscritos(tPair))[0] || {};
+  eq(duplaPersistida.category, 'Fem Light', '⭐ categoria da dupla manual foi gravada no documento canônico');
+  eq(duplaPersistida.categories, ['Fem Light'], '⭐ lista de categorias da dupla acompanha o valor canônico');
+
+  console.log('\n── DUPLA LEGADA SEM UID: o card p1/p2 encontra e grava a entrada ──');
+  /* Este é o formato do Neon já criado: há uma dupla, mas ainda não há UID nem
+   * manualParticipantId. O card mostra "Jogador 01" (p1Name), não o nome composto,
+   * portanto a porta precisa localizar o lado da dupla — não pode responder 200/zero. */
+  const tNamePair = 'ad-marca-dupla-legada';
+  await db.collection('tournaments').doc(tNamePair).set({
+    id: tNamePair, name: 'Dupla legada', creatorUid: org, sport: 'Beach Tennis',
+    combinedCategories: ['Fem Light'], _semPesados: ['matches', 'participants', 'opponentHistory'], participants: [],
+  });
+  await gravarInscritos(tNamePair, [{
+    name: 'Jogadora 01 / Jogadora 02', displayName: 'Jogadora 01 / Jogadora 02',
+    p1Name: 'Jogadora 01', p1Uid: '', p2Name: 'Jogadora 02', p2Uid: '', category: '', categories: [],
+  }]);
+  r = await chamar('applyEnrollmentAssignments', tokenOrg, {
+    tournamentId: tNamePair, sport: 'Beach Tennis', edits: [
+      { name: 'Jogadora 01', pairMember: 'p1', category: 'Fem Light' },
+      { name: 'Jogadora 02', pairMember: 'p2', category: 'Fem Light' },
+    ],
+  });
+  ok(r.status === 200 && r.body && r.body.result && r.body.result.changed === 2,
+    'a dupla legada respondeu sucesso com os dois lados realmente encontrados');
+  const duplaLegada = (await lerInscritos(tNamePair))[0] || {};
+  eq(duplaLegada.category, 'Fem Light', '⭐ a categoria do card de dupla legado persistiu');
 
   console.log('\n── SÓ CATEGORIA: o perfil global não é tocado ──');
   /* ⛔ DUAS CHAMADAS SEPARADAS, e a ordem importa: uma chamada COMBINADA (categoria + gênero)
@@ -160,15 +227,15 @@ const perfil = async (uid) => (await db.collection('users').doc(uid).get()).data
   const tDupla = 'ad-marca-t-dupla';
   await db.collection('tournaments').doc(tDupla).set({
     id: tDupla, name: 'Dupla', creatorUid: org, sport: 'Beach Tennis', combinedCategories: ['A'],
-    participants: [{ p1Uid: inscrito, p1Name: 'Um', p2Uid: outro, p2Name: 'Dois', name: 'Um / Dois' }],
+    _semPesados: ['matches', 'participants', 'opponentHistory'], participants: [],
   });
+  await gravarInscritos(tDupla, [{ p1Uid: inscrito, p1Name: 'Um', p2Uid: outro, p2Name: 'Dois', name: 'Um / Dois' }]);
   r = await chamar('applyEnrollmentAssignments', tokenOrg, {
     tournamentId: tDupla, sport: 'Beach Tennis',
     edits: [{ uid: inscrito, pairMember: 'p1', gender: 'feminino' }],
   });
   ok(r.status === 200, 'atribuição por membro respondeu 200 (' + r.status + ')');
-  const tD = (await db.collection('tournaments').doc(tDupla).get()).data() || {};
-  const dupla = (tD.participants || [])[0] || {};
+  const dupla = (await lerInscritos(tDupla))[0] || {};
   ok(dupla.p1Gender === 'feminino', 'o gênero do membro 1 foi gravado');
   ok(dupla.p1GenderSource === 'organizador', '⭐⭐ e COM a marca — sem ela o save seguinte apagaria');
   ok(dupla.p2Gender === undefined && dupla.p2GenderSource === undefined, 'o outro membro não foi tocado');
@@ -178,8 +245,7 @@ const perfil = async (uid) => (await db.collection('users').doc(uid).get()).data
     edits: [{ uid: inscrito, pairMember: 'p1', gender: '' }],
   });
   ok(r.status === 200, 'limpar o gênero do membro respondeu 200');
-  const tD2 = (await db.collection('tournaments').doc(tDupla).get()).data() || {};
-  const dupla2 = (tD2.participants || [])[0] || {};
+  const dupla2 = (await lerInscritos(tDupla))[0] || {};
   ok(dupla2.p1Gender === undefined && dupla2.p1GenderSource === undefined,
     '⛔ e apagar é SIMÉTRICO: valor e marca saem juntos (marca órfã viraria "decidiu" sem decisão)');
 
@@ -187,8 +253,7 @@ const perfil = async (uid) => (await db.collection('users').doc(uid).get()).data
     tournamentId: tDupla, sport: 'Beach Tennis',
     edits: [{ uid: inscrito, pairMember: 'p1', gender: 'misto' }],
   });
-  const tD3 = (await db.collection('tournaments').doc(tDupla).get()).data() || {};
-  const dupla3 = (tD3.participants || [])[0] || {};
+  const dupla3 = (await lerInscritos(tDupla))[0] || {};
   ok(dupla3.p1Gender !== 'misto', '⛔ `misto` NÃO entra como gênero de pessoa (é categoria)');
 
   console.log('\n── sem token a porta não abre ──');

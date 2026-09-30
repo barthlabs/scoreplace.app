@@ -60,12 +60,10 @@ try { C.normalizeExtraUpdates({ status: 'finished' }); ok('extraUpdates recusa p
   eq('conta persiste apenas uid e atributos da inscrição', self, {
     ligaActive: true, addedAt: '2026-07-17T12:00:00.000Z', uid: 'ana-uid', selfEnrolled: true
   });
-  try {
-    C.normalizeParticipantIntent({ manualParticipantId: 'manual-convidada-01', name: 'Convidada' }, 'org-uid', '2026-07-17T12:00:00.000Z');
-    ok('vaga manual nova é recusada pelo contrato central', false);
-  } catch (e) {
-    ok('vaga manual nova é recusada pelo contrato central', /sem conta não é permitido/.test(String(e && e.message)));
-  }
+  eq('vaga manual nova recebe identidade estável e autoria do organizador',
+    C.normalizeParticipantIntent({ manualParticipantId: 'manual-convidada-01', name: 'Convidada' }, 'org-uid', '2026-07-17T12:00:00.000Z'),
+    { name: 'Convidada', ligaActive: true, addedAt: '2026-07-17T12:00:00.000Z',
+      manualParticipantId: 'manual-convidada-01', selfEnrolled: false, addedByUid: 'org-uid' });
 })();
 
 (() => {
@@ -103,27 +101,21 @@ try { C.normalizeExtraUpdates({ status: 'finished' }); ok('extraUpdates recusa p
   eq('mesmo uid após alterar perfil → already', r.outcome, 'already');
 })();
 
-// ── Participante sem conta tem chave estável E nome único ────────────────────
-/*
- * REGRESSÃO DE IDENTIDADE (regra do produto): conta cadastrada não aceita
- * homônimos; participante digitado pelo organizador também não pode criar uma
- * segunda pessoa indistinguível. O bloqueio roda no core transacional, portanto
- * precisa alcançar elenco, espera nova e `waitlist` legado — cliente velho ou
- * duas ações simultâneas não podem abrir exceção para uma vaga manual.
- */
+// ── Participante sem conta tem chave estável; homônimos são pessoas distintas ─
 (() => {
   const data = { status: 'open', participants: [{ manualParticipantId: 'manual-a', displayName: 'Convidado' }] };
   eq('mesma vaga manual → already', C.computeEnroll(data, { manualParticipantId: 'manual-a', displayName: 'Outro nome' }, null, NOW).outcome, 'already');
-  eq('manual distinto com mesmo nome → duplicateName', C.computeEnroll(data, { manualParticipantId: 'manual-b', displayName: 'Convidado' }, null, NOW).outcome, 'duplicateName');
+  eq('manual distinto com mesmo nome → enrolled', C.computeEnroll(data, { manualParticipantId: 'manual-b', displayName: 'Convidado' }, null, NOW).outcome, 'enrolled');
   eq('manual distinto com outro nome → enrolled', C.computeEnroll(data, { manualParticipantId: 'manual-b', displayName: 'Outra pessoa' }, null, NOW).outcome, 'enrolled');
   const naEspera = { status: 'open', format: 'Liga', ligaOpenEnrollment: true, matches: [{ id: 'ja-sorteado' }], standbyParticipants: [{ manualParticipantId: 'manual-c', displayName: 'Convidada' }] };
-  eq('manual repetido na espera também é recusado', C.computeEnroll(naEspera, { manualParticipantId: 'manual-d', displayName: 'Convidada' }, null, NOW).outcome, 'duplicateName');
+  eq('manual homônimo na espera é uma nova pessoa', C.computeEnroll(naEspera, { manualParticipantId: 'manual-d', displayName: 'Convidada' }, null, NOW).outcome, 'waitlisted');
   const naWaitlistLegada = { status: 'open', participants: [], waitlist: [{ manualParticipantId: 'manual-e', displayName: 'Débora  Castello' }] };
-  eq('manual homônimo na waitlist legada também é recusado', C.computeEnroll(naWaitlistLegada, { manualParticipantId: 'manual-f', displayName: 'debora castello' }, null, NOW).outcome, 'duplicateName');
-  eq('conta não entra sobre vaga manual homônima', C.computeEnroll(data, { uid: 'uid-convidado' }, null, NOW, 'Convidado').outcome, 'duplicateName');
+  eq('manual homônimo na waitlist legada também entra', C.computeEnroll(naWaitlistLegada, { manualParticipantId: 'manual-f', displayName: 'debora castello' }, null, NOW).outcome, 'enrolled');
+  eq('conta homônima não ocupa vaga manual', C.computeEnroll(data, { uid: 'uid-convidado' }, null, NOW, 'Convidado').outcome, 'enrolled');
   const duplaManual = { status: 'open', participants: [{ p1Name: 'Ana Manual', p1ManualId: 'manual-p1', p2Name: 'Bia Manual', p2ManualId: 'manual-p2' }] };
-  eq('conta não entra sobre membro manual de dupla', C.computeEnroll(duplaManual, { uid: 'uid-ana' }, null, NOW, 'ana manual').outcome, 'duplicateName');
+  eq('conta homônima não ocupa membro manual de dupla', C.computeEnroll(duplaManual, { uid: 'uid-ana' }, null, NOW, 'ana manual').outcome, 'enrolled');
   eq('conta com outro nome continua entrando', C.computeEnroll(data, { uid: 'uid-outra' }, null, NOW, 'Outra pessoa').outcome, 'enrolled');
+  eq('manual já em p2 da dupla → already', C.computeEnroll(duplaManual, { manualParticipantId: 'manual-p2', displayName: 'Outro nome' }, null, NOW).outcome, 'already');
 })();
 
 // ── Já inscrito por SLOT de dupla (uid é o p2 de uma dupla) ───────────────────

@@ -3076,12 +3076,34 @@ exports.applyEnrollmentAssignments = onCall({ invoker: 'public' }, async (reques
   const clean=raw.map(x=>({uid:String(x&&x.uid||'').trim(),manualParticipantId:String(x&&x.manualParticipantId||'').trim().slice(0,180),name:String(x&&x.name||'').trim().slice(0,120),waitlist:!!(x&&x.waitlist),pairMember:(x&&['p1','p2'].includes(x.pairMember))?x.pairMember:'',gender:(x&&['feminino','masculino','outro',''].includes(x.gender))?x.gender:undefined,category:x&&Object.prototype.hasOwnProperty.call(x,'category')?String(x.category||'').trim().slice(0,80):undefined,uncategorizedByOrganizer:!!(x&&x.uncategorizedByOrganizer),markWasUncategorized:!!(x&&x.markWasUncategorized),notifyCategory:!!(x&&x.notifyCategory)}));
   if(clean.some(x=>(!x.uid&&!x.manualParticipantId&&!x.name)||(x.gender===undefined&&x.category===undefined))) throw new HttpsError('invalid-argument','Alvo ou alteração inválida.');
   const ref=db.collection('tournaments').doc(tId),agoraIso=new Date().toISOString();
+  // Migração preguiçosa de registros antigos: novas vagas já nascem com ID manual,
+  // mas fotos legadas só tinham nome. O nonce é criado fora da transação para que um
+  // retry preserve a mesma família de IDs; após a primeira gravação o nome nunca mais
+  // é usado como identidade para esse registro.
+  const legacyIdPrefix='legacy-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8);
+  let legacyIdSequence=0;
   return db.runTransaction(async tx=>{
     const t=await _leTorneio(tx,ref,tId); if(!t) throw new HttpsError('not-found','Torneio não encontrado.');
     if(!_isTournamentAdmin(t,uid)) throw _drawFail('permission-denied','Só a organização altera inscrições.',{tId,uid});
     const before=_antesDoMotor(t), valid=new Set(Array.isArray(t.combinedCategories)?t.combinedCategories:[]); let changed=0;
-    const find=(arr,e)=>{let hit=null; (arr||[]).forEach(p=>{if(hit||!p||typeof p!=='object')return; const u=[p.uid,p.p1Uid,p.p2Uid].filter(Boolean).map(String); const manual=[p.manualParticipantId,p.p1ManualId,p.p2ManualId].filter(Boolean).map(String); if(Array.isArray(p.participants))p.participants.forEach(q=>{if(!q)return;if(q.uid)u.push(String(q.uid));if(q.manualParticipantId)manual.push(String(q.manualParticipantId));}); if(e.uid?u.includes(e.uid):e.manualParticipantId?manual.includes(e.manualParticipantId):(!u.length&&!manual.length&&e.name&&(p.name===e.name||p.displayName===e.name)))hit=p;});return hit;};
-    for(const e of clean){const pools=e.waitlist?[t.waitlist,t.standbyParticipants,t.monarchWaitlist]:[t.participants]; let target=null; for(const pool of pools){target=find(pool,e);if(target)break;} if(!target) continue;
+    const find=(arr,e)=>{let hit=null; (arr||[]).forEach(p=>{if(hit||!p||typeof p!=='object')return; const u=[p.uid,p.p1Uid,p.p2Uid].filter(Boolean).map(String); const manual=[p.manualParticipantId,p.p1ManualId,p.p2ManualId].filter(Boolean).map(String); const names=[p.name,p.displayName];
+      /* Duplas criadas antes dos IDs estáveis carregam apenas p1Name/p2Name. A Análise
+       * expande o card pelo lado (p1/p2), logo a porta deve usar o MESMO lado para
+       * localizar a única entrada canônica; comparar só com "Ana / Bia" nunca encontra
+       * o card "Ana" e retornava changed:0 como se tivesse salvo. */
+      if(e.pairMember && p[e.pairMember+'Name']) names.push(p[e.pairMember+'Name']);
+      if(Array.isArray(p.participants))p.participants.forEach(q=>{if(!q)return;if(q.uid)u.push(String(q.uid));if(q.manualParticipantId)manual.push(String(q.manualParticipantId));if(q.name)names.push(q.name);if(q.displayName)names.push(q.displayName);});
+      if(e.uid?u.includes(e.uid):e.manualParticipantId?manual.includes(e.manualParticipantId):(e.name&&names.some(n=>String(n||'')===e.name)))hit=p;});return hit;};
+    const missing=[];
+    const ensureManualIdentity=(target,e)=>{
+      const next=()=>legacyIdPrefix+'-'+(++legacyIdSequence);
+      if(e.pairMember){
+        ['p1','p2'].forEach(side=>{const uidField=side+'Uid', manualField=side+'ManualId', nameField=side+'Name'; if(!target[uidField]&&!target[manualField]&&target[nameField])target[manualField]=next();});
+      }else if(!target.uid&&!target.manualParticipantId&&(target.name||target.displayName)) target.manualParticipantId=next();
+      if(Array.isArray(target.participants)) target.participants.forEach(slot=>{if(slot&&typeof slot==='object'&&!slot.uid&&!slot.manualParticipantId&&(slot.name||slot.displayName))slot.manualParticipantId=next();});
+    };
+    for(const e of clean){const pools=e.waitlist?[t.waitlist,t.standbyParticipants,t.monarchWaitlist]:[t.participants]; let target=null; for(const pool of pools){target=find(pool,e);if(target)break;} if(!target){missing.push(e.name||e.manualParticipantId||e.uid);continue;}
+      ensureManualIdentity(target,e);
       /* ⛔ O PAR {valor, marca} ANDA JUNTO, inclusive por MEMBRO de dupla — antes o membro recebia só
        * o valor, e o sanitizador (que agora exige a marca) o apagaria no próximo save: a decisão
        * evaporaria em silêncio. Apagar também é simétrico. ⛔ `misto` saiu do domínio: é CATEGORIA,
@@ -3104,6 +3126,10 @@ exports.applyEnrollmentAssignments = onCall({ invoker: 'public' }, async (reques
     }
     /* ⚰️ O LAÇO QUE ESCREVIA `users/{uid}` SAIU INTEIRO em 23/set/2026 — categoria primeiro, gênero
      * depois. Esta porta não toca mais em perfil de ninguém. */
+    /* Uma confirmação sem alvo era pior que erro: a tela limpava o âmbar e a dupla
+     * voltava para "sem categoria" no refresh. A transação inteira falha para que o
+     * organizador conserve as alterações pendentes e receba uma instrução honesta. */
+    if(missing.length) throw new HttpsError('failed-precondition','Um ou mais inscritos não foram encontrados. Atualize a análise e tente novamente.');
     if(!changed)return {ok:true,changed:0}; const b=_gravaTorneio(tx,ref,t,before,{agoraIso}); return {ok:true,changed,tournament:b.clean};
   });
 });

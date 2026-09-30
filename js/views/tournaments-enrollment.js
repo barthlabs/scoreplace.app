@@ -1543,18 +1543,6 @@ window._doAddParticipant = function (tId, pName, selectedUid, selectedPhoto, onD
         if (typeof showAlertDialog === 'function') showAlertDialog(_t('enroll.enrollClosed'), _t('enroll.enrollClosedMsg'), null, { type: 'warning' });
         return;
     }
-    // IDENTIDADE = uid: nome digitado à mão precisa resolver para uma conta antes de
-    // gravar. Sem conta não há vaga manual nova — nome não separa duas pessoas.
-    if (!selectedUid && !_resolved && pName && String(pName).trim()) {
-        window._resolveEnrolleeUid(String(pName).trim(), function (uid) {
-            if (!uid) {
-                if (typeof showNotification !== 'undefined') showNotification('Conta necessária', 'Para adicionar alguém, selecione uma conta cadastrada. Não criamos vagas por nome.', 'warning');
-                return;
-            }
-            window._doAddParticipant(tId, pName, uid, selectedPhoto, onDone, true);
-        });
-        return;
-    }
     var _refresh = function () {
         if (typeof onDone === 'function') { onDone(); return; }
         var container = document.getElementById('view-container');
@@ -1562,13 +1550,21 @@ window._doAddParticipant = function (tId, pName, selectedUid, selectedPhoto, onD
     };
     {
         if (!pName || !pName.trim()) return;
-            if (!selectedUid) return;
             // A Function autentica o organizador e cria autoria/horário no servidor.
             var participantObj = {
                 ligaActive: true
             };
-            // Se foi selecionado via autocomplete, incluir somente o uid.
+            // Uma conta usa UID. Nome digitado/importado recebe um ID manual opaco e
+            // estável; nome nunca é a identidade nem precisa ser único.
             if (selectedUid) participantObj.uid = selectedUid;
+            else {
+                var _manualNonce = (window.crypto && typeof window.crypto.randomUUID === 'function')
+                    ? window.crypto.randomUUID()
+                    : (Date.now().toString(36) + '-' + Math.random().toString(36).slice(2));
+                participantObj.manualParticipantId = 'manual-' + String(tId) + '-' + _manualNonce;
+                participantObj.name = pName.trim();
+                participantObj.displayName = pName.trim();
+            }
             // If late enrollment, add to standby instead
             if (_closedOrDrawn) {
                 _enrollToStandby(t, tId, participantObj, function() { _refresh(); });

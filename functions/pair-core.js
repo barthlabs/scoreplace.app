@@ -57,6 +57,11 @@ function pairCategoryDecision(data, p1, p2) {
     return { ok: true };
   }
   var c1 = _pairCategory(p1), c2 = _pairCategory(p2);
+  // A análise começa justamente com gente ainda sem gênero/habilidade. Dois
+  // participantes sem categoria são compatíveis: o organizador pode formar a
+  // dupla e atribuí-la depois. Só bloquear quando há uma categoria atribuída em
+  // apenas um lado (decisão incompleta) ou quando as duas divergem.
+  if (!c1 && !c2) return { ok: true };
   if (!c1 || !c2) return { ok: false, outcome: 'categoryRequired' };
   if (c1.toLocaleLowerCase() !== c2.toLocaleLowerCase()) return { ok: false, outcome: 'categoryMismatch' };
   if (/^misto(?:\b|\s)/i.test(c1)) {

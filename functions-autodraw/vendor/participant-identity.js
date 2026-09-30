@@ -70,50 +70,68 @@ var ScoreplaceParticipantIdentity;
     function participantSlots(value) {
         const slots = [];
         const vistosUid = new Set();
+        const vistosManual = new Set();
         const vistosNome = new Set();
-        const add = (rawUid, rawName) => {
+        const add = (rawUid, rawManualId, rawName) => {
             const uid = uidOf(rawUid);
+            const manualParticipantId = uidOf(rawManualId);
             const name = nameOf(rawName);
-            if (!uid && !name)
+            if (!uid && !manualParticipantId && !name)
                 return; // vaga, não pessoa
             if (uid) {
                 if (vistosUid.has(uid))
                     return;
                 vistosUid.add(uid);
-                slots.push({ uid: uid, name: name });
+                slots.push({ uid: uid, manualParticipantId: null, name: name });
+                return;
+            }
+            if (manualParticipantId) {
+                if (vistosManual.has(manualParticipantId))
+                    return;
+                vistosManual.add(manualParticipantId);
+                slots.push({ uid: null, manualParticipantId, name });
                 return;
             }
             const chave = name.toLowerCase();
             if (vistosNome.has(chave))
                 return;
             vistosNome.add(chave);
-            slots.push({ uid: null, name: name });
+            slots.push({ uid: null, manualParticipantId: null, name: name });
         };
         // Entrada TEXTUAL — a fila legada guarda nome solto. É pessoa, não lixo.
         if (typeof value === 'string') {
-            add(null, value);
+            add(null, null, value);
             return slots;
         }
         if (!value || typeof value !== 'object')
             return slots;
         const entry = value;
-        add(entry.uid, entry.displayName || entry.name);
         if (Array.isArray(entry.participants) && entry.participants.length > 0) {
             // Equipe composta: `participants[]` MANDA sobre p1/p2.
             entry.participants.forEach((slot) => {
                 if (typeof slot === 'string') {
-                    add(null, slot);
+                    add(null, null, slot);
                     return;
                 }
                 if (slot && typeof slot === 'object') {
                     const person = slot;
-                    add(person.uid, person.displayName || person.name);
+                    add(person.uid, person.manualParticipantId, person.displayName || person.name);
                 }
             });
             return slots;
         }
-        add(entry.p1Uid, entry.p1Name);
-        add(entry.p2Uid, entry.p2Name);
+        // Dupla tem um rótulo composto ("Ana / Bia") apenas para exibição. Contá-lo
+        // como uma terceira pessoa somava uma inscrição fantasma por dupla na análise.
+        // Em entrada estruturada, só os dois slots são pessoas.
+        const hasPairSlots = Boolean(uidOf(entry.p1Uid) || uidOf(entry.p2Uid) ||
+            uidOf(entry.p1ManualId) || uidOf(entry.p2ManualId) ||
+            nameOf(entry.p1Name) || nameOf(entry.p2Name));
+        if (hasPairSlots) {
+            add(entry.p1Uid, entry.p1ManualId, entry.p1Name);
+            add(entry.p2Uid, entry.p2ManualId, entry.p2Name);
+            return slots;
+        }
+        add(entry.uid, entry.manualParticipantId, entry.displayName || entry.name);
         return slots;
     }
     ScoreplaceParticipantIdentity.participantSlots = participantSlots;

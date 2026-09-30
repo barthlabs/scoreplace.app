@@ -63,6 +63,16 @@ console.log('\n── formar: alvo inexistente / mesmo ──');
 
 console.log('\n── categorias configuradas: dupla não cruza categoria nem quebra misto ──');
 {
+  const unassigned = {
+    rigor: 'moderado', combinedCategories: ['Fem Light', 'Masc Light'],
+    participants: [
+      { manualParticipantId: 'manual-17', displayName: 'Jogador 17' },
+      { manualParticipantId: 'manual-18', displayName: 'Jogador 18' }
+    ], teamOrigins: {}
+  };
+  ok('dois participantes sem gênero e sem habilidade podem formar dupla',
+    computeFormPair(unassigned, { manualId1: 'manual-17', name1: 'Jogador 17', manualId2: 'manual-18', name2: 'Jogador 18' }).outcome === 'formed');
+
   const t = mkT();
   t.rigor = 'moderado';
   t.combinedCategories = ['Fem Light', 'Masc Light', 'Misto Power'];

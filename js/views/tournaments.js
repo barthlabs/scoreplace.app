@@ -499,12 +499,9 @@ window._addPlaceholdersCore = function (id, qtd, onDone, opts) {
         var numStr, nm;
         do { k++; numStr = String(k).padStart(2, '0'); nm = 'Jogador ' + numStr; } while (existingNames[nm]);
         existingNames[nm] = true;
-        // v4.5.90: placeholder = vaga SEM conta → SEM uid e SEM email (igual ao participante
-        // informal digitado no campo de nome). Antes recebia um uid sintético 'jog_…' que,
-        // pós-ITEM 3 (_displayName resolve SÓ perfil vivo, sem fallback pro nome gravado),
-        // deixava o card com o nome vazio ("…") porque não existe users/jog_…. Identidade do
-        // placeholder é só o nome "Jogador NN"; ganha uid real só quando um jogador ocupa a vaga.
-        made.push({ name: nm, displayName: nm, isPlaceholder: true });
+        // Vaga sem conta também é uma pessoa identificável: nunca usar o nome como
+        // chave. O ID manual atravessa análise, dupla, categoria, split e importação.
+        made.push({ name: nm, displayName: nm, manualParticipantId: 'manual-' + String(id) + '-' + numStr, isPlaceholder: true });
     }
     var dest;
     if (hasDraw) {
