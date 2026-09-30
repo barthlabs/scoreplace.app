@@ -2,7 +2,8 @@
  *
  * A categoria é uma escrita no torneio. E-mail não pode viajar no pedido nem servir
  * para localizar uma pessoa autenticada: se há UID, ele é a única identidade; se não
- * há UID, trata-se de participante manual e o nome pertence apenas àquele torneio.
+ * há UID, `manualParticipantId` é a identidade estável do importado. Nome só mantém
+ * compatibilidade com torneios legados que ainda não carregam identificador manual.
  */
 const fs = require('fs');
 const path = require('path');
@@ -35,9 +36,9 @@ const end = server.indexOf('exports.applyCategoryCommunicationMarkers = onCall',
 const handler = begin >= 0 && end > begin ? server.slice(begin, end) : '';
 ok(!!handler, 'handler canônico de atribuição foi encontrado');
 ok(!/\bemail\b/.test(handler), 'handler não aceita nem consulta e-mail');
-ok(/e\.uid\?u\.includes\(e\.uid\):\(!u\.length&&e\.name/.test(handler),
-  'handler casa uid primeiro e só usa nome quando a entrada não tem uid');
-ok(/\(!x\.uid&&!x\.name\)/.test(handler), 'pedido sem uid exige nome de participante manual');
+ok(/e\.uid\?u\.includes\(e\.uid\):e\.manualParticipantId\?manual\.includes\(e\.manualParticipantId\):\(!u\.length&&!manual\.length&&e\.name/.test(handler),
+  'handler casa UID primeiro, depois ID manual estável e só então nome legado');
+ok(/\(!x\.uid&&!x\.manualParticipantId&&!x\.name\)/.test(handler), 'pedido sem UID aceita ID manual estável ou, só no legado, nome');
 
 const commStart = client.indexOf('function _categoryCommIdentity');
 const commEnd = client.indexOf('// Persist only communication markers', commStart);

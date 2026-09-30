@@ -1140,10 +1140,11 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     Object.keys(_pendingEdits).forEach(function (orderKey) {
       var pe = _pendingEdits[orderKey]; if (!pe || Object.keys(pe).length === 0) return;
       var row = rows.filter(function (r) { return r.order === parseInt(orderKey, 10); })[0];
-      // UID é a identidade do alvo. Para uma entrada fictícia, nome/e-mail só permitem
-      // localizar uma entrada igualmente sem uid; o servidor recusa ambiguidade.
+      // UID é a identidade do alvo. Participante importado/manual usa o
+      // manualParticipantId estável; nome é só o último fallback legado e não pode
+      // decidir qual dupla será atualizada.
       if (!row) return;
-      var e = { uid: row.uid || '', name: row.uid ? '' : (row.name || ''), email: row.uid ? '' : (row.email || ''), waitlist: !!row._wl, pairMember: row._duplaSide || '' };
+      var e = { uid: row.uid || '', manualParticipantId: row.manualId || '', name: (row.uid || row.manualId) ? '' : (row.name || ''), email: (row.uid || row.manualId) ? '' : (row.email || ''), waitlist: !!row._wl, pairMember: row._duplaSide || '' };
       if ('gender' in pe) e.gender = pe.gender;
       if ('category' in pe) e.category = pe.category;
       edits.push(e);
@@ -1164,6 +1165,17 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       : Promise.reject(Object.assign(new Error('Atualize o aplicativo para salvar as atribuições com segurança.'), { code:'functions/internal' }));
     saveCall.then(function(res){
       var r=(res&&res.data)||{}; _pendingEdits={};
+      // A Function devolve o documento canônico da transação. Aplicá-lo já evita
+      // que a dupla volte para “sem categoria” até o snapshot/reload chegar.
+      if (r.tournament && _liveState && _liveState.t) {
+        _liveState.t = r.tournament;
+        _liveState.rows = _buildRows(r.tournament, _expandDuplas(r.tournament.participants || []), {
+          byUid: _liveState.profileMap || {}, resolvedFor: _liveState.resolvedFor || {}
+        });
+        var stored = _erFindT(r.tournament.id);
+        if (stored && stored !== r.tournament) Object.assign(stored, r.tournament);
+        if (typeof window._erRenderMatrix === 'function') window._erRenderMatrix();
+      }
       if (typeof showNotification==='function') showNotification('✅ Alterações salvas', (r.changed||nEdits)+' inscrito(s) atualizado(s).','success');
       btns.forEach(function(b){if(window._spinButtonDone)window._spinButtonDone(b);});
       // Só a confirmação do servidor pode recarregar a tela: em erro de rede as
@@ -2914,13 +2926,18 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     }
     var femCol = '#ec4899', mascCol = '#3b82f6';
     var femTint = 'rgba(236,72,153,0.45)', mascTint = 'rgba(59,130,246,0.45)';
-    // GRID alinhado: 2 colunas (Feminino | Masculino); cada habilidade é uma LINHA →
-    // C fem e C masc na mesma linha. align-items:stretch mantém a linha uniforme.
-    var gridRows = ghead('♀', 'feminino', 'Feminino', femCol, femTotal) + ghead('♂', 'masculino', 'Masculino', mascCol, mascTotal);
+    // CATEGORIAS PRIMEIRO. Elas são os destinos de drop e mostram as duplas já
+    // categorizadas. Os avulsos ficam no painel próprio, DEPOIS das duplas não
+    // categorizadas: categorias → duplas formadas → participantes sem dupla.
+    // Antes o mesmo grid misturava os três papéis e fazia o painel de duplas
+    // parecer ficar acima das categorias, além de duplicar a leitura visual.
+    var pairFemTotal = pairGroups.reduce(function (n, members) { return n + (_mxGenderOf(members[0]) === 'feminino' ? 2 : 0); }, 0);
+    var pairMascTotal = pairGroups.reduce(function (n, members) { return n + (_mxGenderOf(members[0]) === 'masculino' ? 2 : 0); }, 0);
+    var gridRows = ghead('♀', 'feminino', 'Feminino', femCol, femTotal + pairFemTotal) + ghead('♂', 'masculino', 'Masculino', mascCol, mascTotal + pairMascTotal);
     groups.forEach(function (sk) {
-      gridRows += catBox('feminino', sk, fem[sk], femCol, femTint) + catBox('masculino', sk, masc[sk], mascCol, mascTint);
+      gridRows += catBox('feminino', sk, [], femCol, femTint) + catBox('masculino', sk, [], mascCol, mascTint);
     });
-    var grid = '<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px 8px;align-items:stretch;">' + gridRows + '</div>';
+    var categoryGrid = '<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px 8px;align-items:stretch;">' + gridRows + '</div>';
     // BOX MISTO acima do grid (pedido do dono, 23/jul): NÃO é uma coluna — só indica
     // que a categoria do torneio é MISTA (uma categoria só, fem e masc juntos) e dá o
     // ➕ Criar categoria / ↩ Reverter próprio. Quem é fem segue na coluna fem, masc na
@@ -2948,10 +2965,11 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var catsBox = '<div style="background:var(--bg-darker,rgba(0,0,0,0.18));border:1px solid var(--border-color);border-radius:12px;padding:12px 14px;margin-bottom:12px;">' +
       '<div style="font-size:15px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:var(--text-secondary,#c8cdd6);margin-bottom:9px;">🗂️ Categorias no torneio</div>' + catsBoxInner + '</div>';
     var totalBar = '<div style="font-size:18px;font-weight:800;color:var(--text-bright,#fff);margin-bottom:12px;">Total de inscritos: ' + total + '</div>';
-    // Sem gênero: faixa full-width embaixo, mesmas caixas de categoria.
+    // Sem gênero: faixa full-width no painel de avulsos, pois ainda não pode
+    // entrar numa categoria Fem/Masc até o organizador definir o gênero.
     var semSection = '';
     if (semTotal) {
-      var semInner = groups.map(function (sk) { return catBox('', sk, semG[sk], '#8592a6', 'rgba(133,146,166,0.45)'); }).join('');
+      var semInner = groups.map(function (sk) { return '<div style="min-width:0;"><div style="font-size:13px;font-weight:800;color:#8592a6;margin:0 0 5px;">' + (sk === '__none__' ? 'Sem habilidade' : _esc(sk)) + ' (' + semG[sk].length + ')</div>' + cardGrid(semG[sk], []) + '</div>'; }).join('');
       semSection = '<div style="margin-top:14px;background:var(--bg-darker,rgba(0,0,0,0.18));border:1.5px solid #8592a6;border-radius:12px;padding:10px 12px;">' +
         '<div style="font-size:17px;font-weight:800;color:var(--sp-c-8592a6,#8592a6);border-bottom:2px solid #8592a6;padding-bottom:6px;margin-bottom:8px;">? Sem gênero <span style="opacity:0.8;font-size:15px;">(' + semTotal + ')</span> — arraste pra Feminino ou Masculino</div>' +
         '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:9px;">' + semInner + '</div></div>';
@@ -2960,10 +2978,18 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     // integrantes abaixo: isso evita que o organizador atribua a mesma dupla
     // por dois desenhos conflitantes. [[analysis_pair_card_is_canonical]]
     var soloHint = '<div style="font-size:12px;color:var(--text-muted);margin:0 0 9px;">Participantes sem dupla: arraste um card sobre outro para formar uma dupla.</div>';
-    // Ordem deliberada: categorias estipuladas → duplas sem categoria → cards
-    // individuais. Quando a dupla recebe uma categoria, ela vai para o box dela
-    // em âmbar e deixa o bloco acima até o organizador salvar.
-    return catsBox + _erFormedPairsPanel(rows, t) + totalBar + _erMatrixSelectionBar() + soloHint + mistoStrip + grid + semSection;
+    function soloColumn(title, color, buckets) {
+      var inner = groups.map(function (sk) {
+        var label = sk === '__none__' ? 'Sem habilidade' : _esc(sk);
+        return '<div style="margin-top:9px;"><div style="font-size:13px;font-weight:800;color:' + color + ';margin-bottom:5px;">' + label + ' (' + buckets[sk].length + ')</div>' + cardGrid(buckets[sk], []) + '</div>';
+      }).join('');
+      return '<div style="min-width:0;border-top:2px solid ' + color + ';padding-top:7px;"><div style="font-size:17px;font-weight:850;color:' + color + ';">' + title + '</div>' + inner + '</div>';
+    }
+    var soloGrid = '<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px 14px;">' +
+      soloColumn('♀ Feminino', femCol, fem) + soloColumn('♂ Masculino', mascCol, masc) + '</div>';
+    // Ordem deliberada e visível: categorias reais (destinos) → duplas já
+    // formadas sem categoria → individuais que ainda podem formar dupla.
+    return catsBox + mistoStrip + categoryGrid + _erFormedPairsPanel(rows, t) + totalBar + _erMatrixSelectionBar() + soloHint + soloGrid + semSection;
   }
   window._erRenderMatrix = function () {
     var el = document.getElementById('er-cat-matrix');

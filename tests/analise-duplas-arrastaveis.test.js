@@ -32,7 +32,7 @@ ok(!panel.includes('<select'), 'dupla não usa seletor de categoria');
 ok(!panel.includes('DUPLA FORMADA'), 'rótulo de dupla aparece só no cabeçalho do bloco');
 ok(!panel.includes('arraste para mover'), 'instrução de arraste aparece só no cabeçalho do bloco');
 ok(matrix.includes('pairedOrders') && matrix.includes('individualRows'), 'integrantes de dupla são retirados dos buckets individuais');
-ok(matrix.includes('catsBox + _erFormedPairsPanel(rows, t) + totalBar'), 'duplas sem categoria ficam logo abaixo das categorias e antes dos individuais');
+ok(matrix.includes('catsBox + mistoStrip + categoryGrid + _erFormedPairsPanel(rows, t)') && matrix.includes('+ soloHint + soloGrid + semSection'), 'duplas sem categoria ficam entre as categorias reais e os individuais');
 ok(dragDrop.includes("application/x-scoreplace-pair"), 'drag da dupla transporta índice interno, não nome');
 ok(dragDrop.includes('window._erStageCategory(pairRows[0].order, pairCategory)'), 'drop atribui categoria pelo integrante identificado e propaga à dupla');
 ok(matrix.includes('pairsForBox') && matrix.includes('cardGrid(arr, pairs)'), 'dupla solta aparece no box da categoria junto do feedback visual');
@@ -40,6 +40,7 @@ ok(pairCard.includes('var split = \'<button'), 'o X é renderizado também para 
 ok(dragDrop.includes('window._erMxDropOnSolo') && dragDrop.includes('window._erFormPair') && dragDrop.includes('manualId1: source.manualId'), 'soltar um solo sobre outro forma dupla pela identidade canônica (UID ou manual)');
 ok(dragDrop.includes('window._erSplitPair') && dragDrop.includes('manualId') && dragDrop.includes('FirestoreDB.splitPair'), 'o X desfaz dupla pela identidade canônica (UID ou manual)');
 ok(src.includes('function _erApplyPairRoster') && src.includes('_liveState.rows = _buildRows'), 'resposta da CF reidrata a análise imediatamente, sem refresh');
+ok(src.includes('manualParticipantId: row.manualId') && src.includes('r.tournament && _liveState'), 'Salvar usa ID manual e aplica imediatamente o torneio confirmado');
 
-console.log('\n' + (fail ? '❌' : '✅') + ' análise-duplas-arrastáveis: ' + (16 - fail) + ' asserts ok, ' + fail + ' falharam');
+console.log('\n' + (fail ? '❌' : '✅') + ' análise-duplas-arrastáveis: ' + (17 - fail) + ' asserts ok, ' + fail + ' falharam');
 process.exitCode = fail ? 1 : 0;

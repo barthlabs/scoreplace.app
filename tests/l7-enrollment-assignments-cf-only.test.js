@@ -8,6 +8,7 @@ const start=ui.indexOf('window._erSaveEdits = function');const end=ui.indexOf('/
 ok(part.includes("window._callCF('applyEnrollmentAssignments'")&&!part.includes('httpsCallable(\'applyEnrollmentAssignments\'')&&!part.includes('saveTournament(t)')&&!part.includes("setParticipantsProfile"),'análise despacha somente a intenção atômica pela porta autenticada, sem gravar snapshot ou perfil');
 const fn=fs.readFileSync('functions-autodraw/index.js','utf8');const a=fn.indexOf('exports.applyEnrollmentAssignments');const b=fn.indexOf('\nexports.',a+8);const srv=fn.slice(a,b<0?fn.length:b);
 ok(a>=0&&srv.includes('db.runTransaction')&&srv.includes('_isTournamentAdmin')&&srv.includes('_gravaTorneio'),'servidor autoriza, relê e grava as atribuições na transação canônica');
+ok(part.includes('manualParticipantId: row.manualId')&&srv.includes('manualParticipantId:String(x&&x.manualParticipantId')&&srv.includes('p.p1ManualId'),'dupla importada é localizada por identificador manual estável, nunca por nome');
 /* ⛔ INVERTIDO EM 23/set/2026. Este teste EXIGIA a escrita global de `skillBySport` — ou seja,
  * exigia o defeito: a categoria que o organizador digita ia parar no perfil GLOBAL de terceiro.
  * Decisão do dono: o que o organizador define vale DENTRO do torneio.
