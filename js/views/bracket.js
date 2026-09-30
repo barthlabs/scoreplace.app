@@ -769,6 +769,101 @@ function _bracketTabLabel(category, gender) {
   if (gender === 'masc') s = s.replace(/^masculino\s*/i, '').replace(/^masc\s*/i, '');
   return s || 'Sem categoria';
 }
+// A faixa de abas pertence ao trilho inteiro, nunca à primeira coluna. Quando
+// ela era inserida antes do primeiro card, caía depois do título de Rodada 2 e
+// deslocava somente aquela coluna — exatamente a quebra visível na Confra.
+function _bracketTabsAnchor(first) {
+  if (!first || !first.closest) return first;
+  return first.closest('.bracket-sticky-scroll-wrapper, .bracket-scroll-container') || first;
+}
+function _bracketIsEliminationTree(t) {
+  var phase = t && t.phases && t.phases[t.currentPhaseIndex || 0];
+  var format = String((phase && (phase.format || phase.formatCode || phase.kind)) || (t && (t.format || t.classifyFormat)) || '').toLowerCase();
+  return !!(t && t.currentStage === 'elimination') || /eliminat|knockout/.test(format);
+}
+function _bracketDirectVisibleCards(column) {
+  return Array.prototype.filter.call(column ? column.children : [], function (node) {
+    return node && node.classList && node.classList.contains('sp-match-card') && !node.hidden;
+  });
+}
+// Em eliminatória, o par de jogos da coluna anterior alimenta um único jogo na
+// seguinte. Posicionamos esse jogo no centro do par e desenhamos os conectores
+// no mesmo trilho horizontal. Classificatórias não passam por aqui: suas rodadas
+// são independentes e nunca devem ganhar linhas que insinuem avanço.
+function _bracketLayoutEliminationTree(root) {
+  if (!root || !_bracketIsEliminationTree(window._currentBracketTournament || {})) return;
+  if (window._bracketTreeLayoutFrame) cancelAnimationFrame(window._bracketTreeLayoutFrame);
+  window._bracketTreeLayoutFrame = requestAnimationFrame(function () {
+    var scope = root.closest ? root.closest('#view-container, #inline-bracket-container') : document;
+    var tracks = scope ? scope.querySelectorAll('.bracket-scroll-content, .bracket-columns-track') : [];
+    for (var ti = 0; ti < tracks.length; ti++) {
+      var track = tracks[ti];
+      var oldSvg = track.querySelector(':scope > svg[data-bracket-tree-lines]');
+      if (oldSvg) oldSvg.remove();
+      var columns = Array.prototype.filter.call(track.children, function (node) {
+        return node && node.classList && node.classList.contains('bracket-round-column');
+      });
+      var cardColumns = columns.map(_bracketDirectVisibleCards).filter(function (cards) { return cards.length; });
+      if (cardColumns.length < 2) continue;
+      // Só é árvore quando cada rodada reduz exatamente à metade. Isso também
+      // protege grupos, suíço e qualquer layout paralelo que use as mesmas classes.
+      var isTree = true;
+      for (var ci = 1; ci < cardColumns.length; ci++) {
+        if (cardColumns[ci - 1].length !== cardColumns[ci].length * 2) { isTree = false; break; }
+      }
+      if (!isTree) continue;
+      var allCards = [].concat.apply([], cardColumns);
+      allCards.forEach(function (card) {
+        if (card.getAttribute('data-bracket-tree-position') === '1') {
+          card.style.position = ''; card.style.top = ''; card.style.left = ''; card.style.right = '';
+          card.removeAttribute('data-bracket-tree-position');
+        }
+      });
+      var trackRect = track.getBoundingClientRect();
+      var centers = cardColumns[0].map(function (card) {
+        var rect = card.getBoundingClientRect();
+        return { left: rect.left - trackRect.left, right: rect.right - trackRect.left, center: rect.top - trackRect.top + rect.height / 2, height: rect.height };
+      });
+      var links = [];
+      for (var round = 1; round < cardColumns.length; round++) {
+        var targetCards = cardColumns[round], nextCenters = [];
+        for (var mi = 0; mi < targetCards.length; mi++) {
+          var a = centers[mi * 2], b = centers[mi * 2 + 1], target = targetCards[mi];
+          if (!a || !b) continue;
+          var rect = target.getBoundingClientRect();
+          var center = (a.center + b.center) / 2;
+          target.style.position = 'absolute';
+          target.style.left = '0'; target.style.right = '0';
+          target.style.top = Math.max(0, center - rect.height / 2) + 'px';
+          target.setAttribute('data-bracket-tree-position', '1');
+          var colRect = target.parentElement.getBoundingClientRect();
+          nextCenters.push({ left: colRect.left - trackRect.left, right: colRect.right - trackRect.left, center: center, height: rect.height });
+          links.push({ a: a, b: b, target: { left: colRect.left - trackRect.left, center: center } });
+        }
+        centers = nextCenters;
+      }
+      if (!links.length) continue;
+      var height = Math.max.apply(null, allCards.map(function (card) { var r = card.getBoundingClientRect(); return r.bottom - trackRect.top; })) + 14;
+      track.style.position = 'relative'; track.style.minHeight = Math.ceil(height) + 'px';
+      var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('data-bracket-tree-lines', '1');
+      svg.setAttribute('width', String(Math.ceil(track.scrollWidth)));
+      svg.setAttribute('height', String(Math.ceil(height)));
+      svg.setAttribute('viewBox', '0 0 ' + Math.ceil(track.scrollWidth) + ' ' + Math.ceil(height));
+      svg.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:0;overflow:visible;';
+      links.forEach(function (link) {
+        var bend = Math.round((link.a.right + link.target.left) / 2);
+        var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', 'M ' + link.a.right + ' ' + link.a.center + ' H ' + bend + ' V ' + link.target.center + ' H ' + link.target.left + ' M ' + link.b.right + ' ' + link.b.center + ' H ' + bend);
+        path.setAttribute('fill', 'none'); path.setAttribute('stroke', 'rgba(129,140,248,.72)'); path.setAttribute('stroke-width', '2');
+        path.setAttribute('stroke-linecap', 'round'); path.setAttribute('stroke-linejoin', 'round');
+        svg.appendChild(path);
+      });
+      track.insertBefore(svg, track.firstChild);
+      allCards.forEach(function (card) { card.style.zIndex = '1'; });
+    }
+  });
+}
 function _bracketTabsApply(tid, gender, category, requestedRound) {
   var root = document.querySelector('[data-bracket-tabs-root][data-tournament-id="' + String(tid).replace(/"/g, '\\"') + '"]');
   if (!root) return;
@@ -835,6 +930,7 @@ function _bracketTabsApply(tid, gender, category, requestedRound) {
     if (hasVisible) holder.removeAttribute('data-bracket-tab-empty');
     else holder.setAttribute('data-bracket-tab-empty', '1');
   }
+  _bracketLayoutEliminationTree(root);
 }
 window._bracketSelectCategoryTab = function (tid, gender, category, round) {
   _bracketTabsApply(String(tid), String(gender), String(category), round == null ? '' : String(round));
@@ -871,9 +967,17 @@ window._bracketCategoryTabsMount = function () {
     root.setAttribute('data-bracket-tabs-root', '1');
     root.setAttribute('data-tournament-id', id);
     root.setAttribute('aria-label', 'Categorias da chave');
-    root.style.cssText = 'display:block;margin:0 0 14px;padding:0 12px 8px;border:0;border-radius:0;background:var(--bg-main,#111114);overflow:visible;';
-    var anchor = scope.querySelector('.bracket-sticky-scroll-wrapper') || first;
+    root.style.cssText = 'display:block;box-sizing:border-box;width:100%;margin:0 0 14px;padding:0 12px 8px;border:0;border-radius:0;background:var(--bg-main,#111114);overflow:visible;';
+    var anchor = _bracketTabsAnchor(first);
     anchor.parentNode.insertBefore(root, anchor);
+  } else {
+    // O mount pode ser chamado depois de uma atualização de placar que recriou
+    // o trilho. Reancora a mesma navegação acima das rodadas, sem deixá-la
+    // presa à primeira coluna antiga.
+    var currentAnchor = _bracketTabsAnchor(first);
+    if (currentAnchor && currentAnchor.parentNode && root.nextElementSibling !== currentAnchor) {
+      currentAnchor.parentNode.insertBefore(root, currentAnchor);
+    }
   }
   var isOnlyLines = order.length === 1 && order[0] === 'linhas';
   // Fase classificatória tem rodadas paralelas, não uma chave onde a coluna

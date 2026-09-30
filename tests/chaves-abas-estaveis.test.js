@@ -11,11 +11,13 @@ function ok(condition, message) {
 }
 
 ok(src.includes('function _bracketTabsApply'), 'aplicador único mantém o estado da aba');
+ok(src.includes('function _bracketTabsAnchor') && src.includes("first.closest('.bracket-sticky-scroll-wrapper, .bracket-scroll-container')"), 'faixa de abas ancora acima do trilho inteiro, não dentro da primeira rodada');
 ok(src.includes("gb.style.background = onG ? 'linear-gradient(135deg,#fbbf24,#f59e0b)'"), 'aba principal ativa é visualmente trazida para frente');
 ok(src.includes('border-radius:12px 12px 0 0'), 'abas principais usam o recorte de aba de planilha');
 ok(!src.includes('[data-bracket-tab-empty="1"]{display:none!important;}'), 'filtro não oculta mais holders estruturais da chave');
 ok(!src.includes("p.setAttribute('data-bracket-tab-holder', '1')"), 'montagem não marca ancestrais dos cards como escondíveis');
 ok(src.includes("cb.style.display = ownG === gender ? '' : 'none'"), 'subabas só alternam pelo gênero ativo sem remover as abas principais');
+ok(src.includes('function _bracketLayoutEliminationTree') && src.includes("data-bracket-tree-lines") && src.includes("cardColumns[ci - 1].length !== cardColumns[ci].length * 2"), 'eliminatórias alinham pares e desenham conectores sem aplicar a regra em rodadas independentes');
 
-console.log('\n' + (fail ? '❌' : '✅') + ' chaves-abas-estáveis: ' + (6 - fail) + ' asserts ok, ' + fail + ' falharam');
+console.log('\n' + (fail ? '❌' : '✅') + ' chaves-abas-estáveis: ' + (8 - fail) + ' asserts ok, ' + fail + ' falharam');
 process.exitCode = fail ? 1 : 0;

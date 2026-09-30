@@ -22,7 +22,7 @@ ok(card.includes('tierLabel') && card.includes('gold|silver|line'), 'linhas inde
 ok(tabs.includes('tiersMeetAtFinal') && tabs.includes("data-bracket-tab-source") && card.includes('data-bracket-tab-source='), 'Ouro/Prata só se separam quando não convergem em uma grande final');
 ok(tabs.includes('.bracket-round-column>div:first-child{position:sticky'), 'o rótulo da rodada permanece visível dentro da coluna ao rolar');
 ok(tabs.includes('isOnlyLines') && tabs.includes("'linhas'"), 'Ouro/Prata ocupam diretamente a faixa de abas principal, sem aba genérica intermediária');
-ok(tabs.includes("translateY(1px)") && tabs.includes("translateY(5px)"), 'a aba ativa vem para a frente e as demais recuam visualmente');
+ok(tabs.includes("translateY(1px)") && tabs.includes("translateY(0)") && tabs.includes("linear-gradient(135deg,#fbbf24,#f59e0b)"), 'a aba ativa vem para a frente e as demais permanecem alinhadas e clicáveis');
 ok(tabs.includes('isRoundBased') && tabs.includes('data-bracket-round-tab') && card.includes('data-bracket-tab-round='), 'fases classificatórias ganham uma terceira faixa de abas por rodada independente');
 ok(tabs.includes('currentTournament.currentStage !== \'elimination\'') && tabs.includes('grupo|liga|ranking'), 'a faixa de rodadas não aparece na chave eliminatória encadeada');
 
