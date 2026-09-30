@@ -800,10 +800,13 @@ function _bracketTabsApply(tid, gender, category, requestedRound) {
       ? gb.getAttribute('data-bracket-primary-tab') === category
       : gb.getAttribute('data-bracket-primary-tab') === gender;
     gb.setAttribute('aria-selected', onG ? 'true' : 'false');
-    gb.style.background = onG ? 'rgba(99,102,241,.32)' : 'rgba(255,255,255,.035)';
-    gb.style.color = onG ? 'var(--text-bright)' : 'var(--text-muted)';
-    gb.style.borderColor = onG ? 'rgba(129,140,248,.95)' : 'rgba(255,255,255,.14)';
-    gb.style.transform = onG ? 'translateY(1px)' : 'translateY(5px)';
+    // Aba de planilha: a ativa vem para a frente e é inequívoca; a outra
+    // permanece clicável ao lado. Nunca usar a própria aba como holder do
+    // conteúdo, pois isso a fazia desaparecer quando a linha não tinha cards.
+    gb.style.background = onG ? 'linear-gradient(135deg,#fbbf24,#f59e0b)' : 'rgba(30,41,59,.92)';
+    gb.style.color = onG ? '#111114' : 'var(--text-main)';
+    gb.style.borderColor = onG ? '#fcd34d' : 'rgba(129,140,248,.65)';
+    gb.style.transform = onG ? 'translateY(1px)' : 'translateY(0)';
     gb.style.position = 'relative'; gb.style.zIndex = onG ? '2' : '1';
   }
   var catButtons = root.querySelectorAll('[data-bracket-subtab]');
@@ -868,7 +871,7 @@ window._bracketCategoryTabsMount = function () {
     root.setAttribute('data-bracket-tabs-root', '1');
     root.setAttribute('data-tournament-id', id);
     root.setAttribute('aria-label', 'Categorias da chave');
-    root.style.cssText = 'display:flex;flex-wrap:wrap;gap:7px;align-items:center;margin:0 0 14px;padding:10px 12px;border:1px solid rgba(129,140,248,.32);border-radius:12px;background:rgba(15,23,42,.55);';
+    root.style.cssText = 'display:block;margin:0 0 14px;padding:0 12px 8px;border:0;border-radius:0;background:var(--bg-main,#111114);overflow:visible;';
     var anchor = scope.querySelector('.bracket-sticky-scroll-wrapper') || first;
     anchor.parentNode.insertBefore(root, anchor);
   }
@@ -885,10 +888,10 @@ window._bracketCategoryTabsMount = function () {
   var genderHtml = isOnlyLines
     ? byGender.linhas.map(function (cat) {
       var escaped = String(cat).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-      return '<button type="button" data-bracket-primary-tab="' + String(cat).replace(/"/g, '&quot;') + '" onclick="window._bracketSelectCategoryTab(\'' + String(id).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\',\'linhas\',\'' + escaped + '\')" style="border:1px solid;border-radius:10px 10px 7px 7px;padding:9px 15px;font-size:.86rem;font-weight:850;cursor:pointer;">' + (window._safeHtml ? window._safeHtml(_bracketTabLabel(cat, 'linhas')) : _bracketTabLabel(cat, 'linhas')) + '</button>';
+      return '<button type="button" data-bracket-primary-tab="' + String(cat).replace(/"/g, '&quot;') + '" onclick="window._bracketSelectCategoryTab(\'' + String(id).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\',\'linhas\',\'' + escaped + '\')" style="border:1px solid;border-radius:12px 12px 0 0;padding:10px 24px;min-width:106px;font-size:.94rem;font-weight:850;cursor:pointer;box-shadow:none;">' + (window._safeHtml ? window._safeHtml(_bracketTabLabel(cat, 'linhas')) : _bracketTabLabel(cat, 'linhas')) + '</button>';
     }).join('')
     : order.filter(function (gender) { return gender !== 'linhas'; }).map(function (gender) {
-      return '<button type="button" data-bracket-primary-tab="' + gender + '" onclick="window._bracketSelectCategoryTab(\'' + String(id).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\',\'' + gender + '\',\'' + String(byGender[gender][0]).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\')" style="border:1px solid;border-radius:10px 10px 7px 7px;padding:9px 15px;font-size:.86rem;font-weight:850;cursor:pointer;">' + (titles[gender] || gender) + '</button>';
+      return '<button type="button" data-bracket-primary-tab="' + gender + '" onclick="window._bracketSelectCategoryTab(\'' + String(id).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\',\'' + gender + '\',\'' + String(byGender[gender][0]).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\')" style="border:1px solid;border-radius:12px 12px 0 0;padding:10px 24px;min-width:132px;font-size:.94rem;font-weight:850;cursor:pointer;box-shadow:none;">' + (titles[gender] || gender) + '</button>';
     }).join('');
   var categoryHtml = order.map(function (gender) { return byGender[gender].map(function (cat) {
     var safe = String(cat).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
@@ -912,23 +915,18 @@ window._bracketCategoryTabsMount = function () {
       }).join('');
     }).join('');
   }
-  root.innerHTML = '<div style="display:flex;align-items:flex-end;gap:5px;flex-wrap:wrap;width:100%;border-bottom:1px solid rgba(129,140,248,.35);padding:0 4px;">' + genderHtml + '</div>'
-    + (isOnlyLines ? '' : '<div style="display:flex;gap:7px;flex-wrap:wrap;width:100%;padding:8px 4px 0;">' + categoryHtml + '</div>')
+  root.innerHTML = '<div style="display:flex;align-items:flex-end;gap:5px;flex-wrap:wrap;width:100%;border-bottom:1px solid rgba(129,140,248,.6);padding:0 4px;">' + genderHtml + '</div>'
+    + (isOnlyLines ? '' : '<div style="display:flex;align-items:flex-end;gap:5px;flex-wrap:wrap;width:100%;padding:9px 4px 0;border-bottom:1px solid rgba(129,140,248,.42);">' + categoryHtml + '</div>')
     + (roundHtml ? '<div style="display:flex;gap:7px;flex-wrap:wrap;width:100%;padding:8px 4px 0;border-top:1px solid rgba(255,255,255,.07);">' + roundHtml + '</div>' : '');
-  // Um holder é qualquer ancestral estrutural dos cards. A marca é só de aparência;
-  // o filtro canônico continua dono do display dos cards e da busca.
-  cards.forEach(function (card) {
-    for (var p = card.parentElement; p && p !== scope; p = p.parentElement) {
-      if (p.classList && (p.classList.contains('bracket-round-column') || p.getAttribute('data-group-box') === '1')) p.setAttribute('data-bracket-tab-holder', '1');
-    }
-  });
+  // As abas filtram apenas os cards. Esconder um ancestral estrutural escondia
+  // junto o seletor de Ouro/Prata em algumas larguras e deixava a pessoa sem
+  // caminho para voltar — inaceitável numa chave em produção.
   if (!document.getElementById('bracket-category-tab-style')) {
     var style = document.createElement('style'); style.id = 'bracket-category-tab-style';
-    style.textContent = '[data-bracket-tab-empty="1"]{display:none!important;}'
-      // O cabeçalho fica preso DENTRO da própria coluna, abaixo das barras
-      // globais. Assim cada rodada continua identificável durante o scroll
-      // vertical sem alterar o scroll horizontal da chave.
-      + '.bracket-round-column>div:first-child{position:sticky;top:var(--scroll-anchor,120px);z-index:4;background:var(--bg-main,#111827);padding:8px 0 7px;margin-top:-8px;box-shadow:0 8px 10px -10px rgba(0,0,0,.9);}';
+    // O cabeçalho fica preso DENTRO da própria coluna, abaixo das barras
+    // globais. Assim cada rodada continua identificável durante o scroll
+    // vertical sem alterar o scroll horizontal da chave.
+    style.textContent = '.bracket-round-column>div:first-child{position:sticky;top:var(--scroll-anchor,120px);z-index:4;background:var(--bg-main,#111827);padding:8px 0 7px;margin-top:-8px;box-shadow:0 8px 10px -10px rgba(0,0,0,.9);}';
     document.head.appendChild(style);
   }
   var state = (window._bracketTabState || {})[id] || {};

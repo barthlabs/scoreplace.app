@@ -231,6 +231,22 @@ input[type="time"].rb-time::-webkit-calendar-picker-indicator {
 .sticky-back-header + * {
   margin-top: 50px;
 }
+/* A análise usa uma matriz longa com cards que criam camadas próprias. Em
+   larguras desktop intermediárias, o arredondamento de altura entre a topbar,
+   este header fixo e a busca sticky deixava uma fenda onde a matriz aparecia.
+   A superfície extra é deliberadamente opaca e só vale nesta rota. */
+.sticky-back-header.er-analysis-back-header {
+  overflow: hidden;
+  width: 100vw;
+  max-width: 100vw;
+  box-shadow: 0 -24px 0 var(--bg-darker);
+}
+#fbwrap-analise.er-analysis-filter {
+  overflow: hidden;
+  width: 100vw;
+  max-width: 100vw;
+  box-shadow: 0 -8px 0 var(--bg-darker);
+}
 /* Hamburger button inside back header — hidden on regular pages (topbar handles it).
    Shown ONLY inside fullscreen overlays where the topbar is hidden behind the z-index. */
 .back-hdr-ham { display: none !important; }

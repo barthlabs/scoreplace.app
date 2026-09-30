@@ -868,6 +868,10 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   var _erSelectionAnchor = null;
   var _erDraggedOrders = [];
   var _erLastMatrixDragAt = 0;
+  // A callable e o listener do Firestore podem chegar em ordem diferente. Esta
+  // sobreposição local dura somente até o snapshot canônico confirmar a mesma
+  // dupla (ou a mesma separação), impedindo o pisca/reversão visual.
+  var _erPendingPairReconciliations = {};
 
   function _norm(s) {
     return String(s == null ? '' : s).toLowerCase()
@@ -1104,38 +1108,60 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         stored.participants = t.participants;
       }
     }
-    _liveState.rows = _buildRows(t, _expandDuplas(t.participants), {
+    _liveState.rows = _erReconcilePairRows(_buildRows(t, _expandDuplas(t.participants), {
       byUid: _liveState.profileMap || {}, resolvedFor: _liveState.resolvedFor || {}
-    });
+    }));
     _pendingEdits = {};
     _erClearSelection(true);
     if (typeof window._erRenderMatrix === 'function') window._erRenderMatrix();
     window._erUpdateSaveBar();
     return true;
   }
-  // A Function confirmou a transação, mas em algumas corridas o retorno HTTP
-  // ainda carrega o roster imediatamente anterior. Não se pode deixar a tela
-  // mentir até o snapshot/refresh: projeta SOMENTE a dupla recém-confirmada
-  // nas linhas vivas. O snapshot canônico continua sendo a fonte que a
-  // consolida; esta projeção não escreve nem fabrica participantes.
-  function _erProjectConfirmedPair(source, target) {
-    if (!_liveState || !source || !target) return false;
-    var rows = _liveState.rows || [];
-    function sameIdentity(row, ref) {
-      if (!row || !ref) return false;
-      if (ref.uid) return String(row.uid || '') === String(ref.uid);
-      if (ref.manualId) return String(row.manualId || '') === String(ref.manualId);
-      return String(row.name || '') === String(ref.name || '');
-    }
-    var a = rows.filter(function (r) { return sameIdentity(r, source); })[0];
-    var b = rows.filter(function (r) { return sameIdentity(r, target); })[0];
-    if (!a || !b || a === b || a._duplaIdx != null || b._duplaIdx != null) return false;
-    var key = 'confirmed:' + String(a.order) + ':' + String(b.order);
-    a._duplaIdx = key; a._duplaSide = 'p1';
-    b._duplaIdx = key; b._duplaSide = 'p2';
-    _erClearSelection(true);
-    if (typeof window._erRenderMatrix === 'function') window._erRenderMatrix();
-    return true;
+  function _erPairIdentity(ref) {
+    if (!ref) return '';
+    if (ref.uid) return 'uid:' + String(ref.uid);
+    if (ref.manualId) return 'manual:' + String(ref.manualId);
+    return 'name:' + String(ref.name || '');
+  }
+  function _erSamePairIdentity(row, ref) {
+    return !!row && _erPairIdentity(row) === _erPairIdentity(ref);
+  }
+  function _erRememberPairReconciliation(first, second, paired) {
+    var a = _erPairIdentity(first), b = _erPairIdentity(second);
+    if (!a || !b || a === b) return '';
+    var key = [a, b].sort().join('|');
+    _erPendingPairReconciliations[key] = { first: first, second: second, paired: !!paired };
+    return key;
+  }
+  function _erReconcilePairRows(rows) {
+    rows = rows || [];
+    Object.keys(_erPendingPairReconciliations).forEach(function (key) {
+      var pending = _erPendingPairReconciliations[key];
+      var first = rows.filter(function (row) { return _erSamePairIdentity(row, pending.first); })[0];
+      var second = rows.filter(function (row) { return _erSamePairIdentity(row, pending.second); })[0];
+      if (!first || !second) return;
+      // A própria projeção otimista volta a passar por aqui a cada render. Ela
+      // não é confirmação do banco: só um snapshot novo, sem esta marca, pode
+      // encerrar a reconciliação. Sem isso a segunda renderização apagava a
+      // proteção e o listener atrasado fazia a dupla piscar/reaparecer como solo.
+      var projected = first._erPairProjection === key && second._erPairProjection === key;
+      var canonicalPaired = !projected && first._duplaIdx != null && String(first._duplaIdx) === String(second._duplaIdx);
+      if (!projected && canonicalPaired === pending.paired) {
+        delete _erPendingPairReconciliations[key];
+        return;
+      }
+      if (pending.paired) {
+        var projectedPairIdx = 'pending-pair:' + key;
+        first._duplaIdx = projectedPairIdx; first._duplaSide = 'p1';
+        second._duplaIdx = projectedPairIdx; second._duplaSide = 'p2';
+        first._erPairProjection = key; second._erPairProjection = key;
+      } else {
+        first._duplaIdx = null; first._duplaSide = null;
+        second._duplaIdx = null; second._duplaSide = null;
+        first._erPairProjection = key; second._erPairProjection = key;
+      }
+    });
+    return rows;
   }
   // BOTÃO OCUPADO NÃO É REPINTADO. `_erSaveEdits` limpa `_pendingEdits` ANTES de terminar
   // de gravar, então qualquer chamada a esta função no meio do save veria n=0 e (a) trocaria
@@ -1214,9 +1240,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       // que a dupla volte para “sem categoria” até o snapshot/reload chegar.
       if (r.tournament && _liveState && _liveState.t) {
         _liveState.t = r.tournament;
-        _liveState.rows = _buildRows(r.tournament, _expandDuplas(r.tournament.participants || []), {
+        _liveState.rows = _erReconcilePairRows(_buildRows(r.tournament, _expandDuplas(r.tournament.participants || []), {
           byUid: _liveState.profileMap || {}, resolvedFor: _liveState.resolvedFor || {}
-        });
+        }));
         var stored = _erFindT(r.tournament.id);
         if (stored && stored !== r.tournament) Object.assign(stored, r.tournament);
         if (typeof window._erRenderMatrix === 'function') window._erRenderMatrix();
@@ -3028,7 +3054,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var semSection = '';
     if (semTotal) {
       var semInner = groups.map(function (sk) { return '<div style="min-width:0;"><div style="font-size:13px;font-weight:800;color:#8592a6;margin:0 0 5px;">' + (sk === '__none__' ? 'Sem habilidade' : _esc(sk)) + ' (' + semG[sk].length + ')</div>' + cardGrid(semG[sk], []) + '</div>'; }).join('');
-      semSection = '<div style="margin-top:14px;background:var(--bg-darker,rgba(0,0,0,0.18));border:1.5px solid #8592a6;border-radius:12px;padding:10px 12px;">' +
+      semSection = '<div ondragover="window._erMxOver(event)" ondrop="window._erMxDrop(event,\'__nonegender__\',\'__none__\')" style="margin-top:14px;background:var(--bg-darker,rgba(0,0,0,0.18));border:1.5px solid #8592a6;border-radius:12px;padding:10px 12px;">' +
         '<div style="font-size:17px;font-weight:800;color:var(--sp-c-8592a6,#8592a6);border-bottom:2px solid #8592a6;padding-bottom:6px;margin-bottom:8px;">? Sem gênero <span style="opacity:0.8;font-size:15px;">(' + semTotal + ')</span> — arraste pra Feminino ou Masculino</div>' +
         '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:9px;">' + semInner + '</div></div>';
     }
@@ -3050,7 +3076,10 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   }
   window._erRenderMatrix = function () {
     var el = document.getElementById('er-cat-matrix');
-    if (el && _liveState) el.innerHTML = _matrixInner(_liveState.rows, _liveState.t);
+    if (el && _liveState) {
+      _liveState.rows = _erReconcilePairRows(_liveState.rows || []);
+      el.innerHTML = _matrixInner(_liveState.rows, _liveState.t);
+    }
     // O texto digitado sobrevive ao re-render (é estado da barra), mas os cards voltam sem
     // filtro — reaplica aqui, num lugar só, e não em cada caller do re-render.
     if (typeof window._erApplyMatrixFilter === 'function') window._erApplyMatrixFilter();
@@ -3303,18 +3332,13 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         if (typeof showNotification === 'function') showNotification('Dupla incompatível', msg, 'warning');
         return;
       }
-      if (!_erApplyPairRoster(res)) return;
-      // A confirmação é válida, mas a resposta pode ter sido montada a partir
-      // de um snapshot anterior. Se ela ainda não materializou esta dupla,
-      // mostre-a já na matriz; o listener seguinte substitui a projeção pelo
-      // roster canônico persistido.
-      var visiblePair = ((_liveState && _liveState.rows) || []).filter(function (r) {
-        return r && r._duplaIdx != null &&
-          ((source.uid && String(r.uid || '') === String(source.uid)) ||
-           (source.manualId && String(r.manualId || '') === String(source.manualId)) ||
-           (!source.uid && !source.manualId && String(r.name || '') === String(source.name || '')));
-      }).length > 0;
-      if (!visiblePair) _erProjectConfirmedPair(source, target);
+      _erRememberPairReconciliation(source, target, true);
+      _erApplyPairRoster(res);
+      if (_liveState) {
+        _erClearSelection(true);
+        _liveState.rows = _erReconcilePairRows(_liveState.rows || []);
+        if (typeof window._erRenderMatrix === 'function') window._erRenderMatrix();
+      }
       if (typeof showNotification === 'function') showNotification('👫 Dupla formada', label, 'success');
     }).catch(function (err) {
       if (typeof showNotification === 'function') showNotification('Não foi possível formar a dupla', String((err && err.message) || err), 'error');
@@ -3335,7 +3359,13 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       var data = (res && res.data) ? res.data : (res || {});
       if (btn && typeof window._spinButtonDone === 'function') window._spinButtonDone(btn);
       if (data.notFound) { if (typeof showNotification === 'function') showNotification('Não foi possível desfazer a dupla', 'O servidor não encontrou esta dupla no torneio.', 'warning'); return; }
-      if (!_erApplyPairRoster(res)) return;
+      _erRememberPairReconciliation(pair[0], pair[1], false);
+      _erApplyPairRoster(res);
+      if (_liveState) {
+        _erClearSelection(true);
+        _liveState.rows = _erReconcilePairRows(_liveState.rows || []);
+        if (typeof window._erRenderMatrix === 'function') window._erRenderMatrix();
+      }
       if (typeof showNotification === 'function') showNotification('↩️ Dupla desfeita', pair[0].name + ' e ' + pair[1].name + ' voltaram para Sem dupla.', 'info');
     }).catch(function (err) {
       if (btn && typeof window._spinButtonDone === 'function') window._spinButtonDone(btn);
@@ -3373,13 +3403,20 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (!_liveState || !_liveState.isOrg) return;
     var pairKey = '';
     try { pairKey = (ev.dataTransfer && ev.dataTransfer.getData('application/x-scoreplace-pair')) || ''; } catch (e) {}
-    if (pairKey !== '') {
-      // Card de dupla só aceita um alvo de categoria. Soltar no cabeçalho de
-      // gênero não tenta inferir/alterar gênero dos dois integrantes.
+      if (pairKey !== '') {
+      // Card de dupla aceita uma categoria ou o retorno explícito para Sem
+      // gênero/Sem habilidade. Este segundo caso limpa os dois membros e faz a
+      // dupla reaparecer no painel “Duplas formadas”, sem desmontá-la.
       window._erMxDrag = null; _erDraggedOrders = [];
       if (!sk) return;
       var pairRows = (_liveState.rows || []).filter(function (r) { return r && String(r._duplaIdx) === String(pairKey); });
       if (pairRows.length !== 2) return;
+      if (genderKey === '__nonegender__') {
+        pairRows.forEach(function (member) {
+          if (!_pendingEdits[member.order]) _pendingEdits[member.order] = {};
+          _pendingEdits[member.order].gender = '';
+        });
+      }
       var pairCategory = sk === '__none__' ? '' : _mxFindValidCat(_liveState.t, genderKey, sk);
       if (sk !== '__none__' && !pairCategory) return;
       window._erStageCategory(pairRows[0].order, pairCategory);
@@ -3396,6 +3433,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     orders.forEach(function (order) {
       if (!_pendingEdits[order]) _pendingEdits[order] = {};
       if (genderKey === 'feminino' || genderKey === 'masculino') _pendingEdits[order].gender = genderKey;
+      else if (genderKey === '__nonegender__') _pendingEdits[order].gender = '';
       if (sk && sk !== '__none__') { var vc = _mxFindValidCat(_liveState.t, genderKey, sk); if (vc) window._erStageCategory(order, vc); }
       else if (sk === '__none__') { window._erStageCategory(order, ''); }
     });
@@ -5481,7 +5519,7 @@ window._lzNaoEhEuMesmo = function (uid) {
         label: 'Voltar',
         middleHtml: '<span style="flex:1;font-size:0.88rem;font-weight:700;color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">📊 Análise de Inscritos</span>',
         rightHtml: _saveInline,
-      })
+        }).replace('class="sticky-back-header"', 'class="sticky-back-header er-analysis-back-header"')
       : '';
 
     var tName = _esc(t.name || 'Torneio');
@@ -5500,7 +5538,7 @@ window._lzNaoEhEuMesmo = function (uid) {
       ? window._inscritosFilterBar({
           stateKey: 'analise', sticky: true, searchOnly: true,
           searchId: 'er-mx-search', onChange: 'window._erApplyMatrixFilter()',
-        }) + '<div id="er-mx-search-empty" style="display:none;text-align:center;color:var(--text-muted);padding:14px;font-size:0.85rem;">Ninguém encontrado com esse nome.</div>'
+        }).replace('id="fbwrap-analise"', 'id="fbwrap-analise" class="er-analysis-filter"') + '<div id="er-mx-search-empty" style="display:none;text-align:center;color:var(--text-muted);padding:14px;font-size:0.85rem;">Ninguém encontrado com esse nome.</div>'
       : '';
 
     container.innerHTML = hdr + _mxBar +

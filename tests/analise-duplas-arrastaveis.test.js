@@ -39,8 +39,9 @@ ok(matrix.includes('pairsForBox') && matrix.includes('cardGrid(arr, pairs)'), 'd
 ok(pairCard.includes('var split = \'<button'), 'o X é renderizado também para dupla importada sem UID');
 ok(dragDrop.includes('window._erMxDropOnSolo') && dragDrop.includes('window._erFormPair') && dragDrop.includes('manualId1: source.manualId'), 'soltar um solo sobre outro forma dupla pela identidade canônica (UID ou manual)');
 ok(dragDrop.includes('window._erSplitPair') && dragDrop.includes('manualId') && dragDrop.includes('FirestoreDB.splitPair'), 'o X desfaz dupla pela identidade canônica (UID ou manual)');
-ok(src.includes('function _erApplyPairRoster') && src.includes('_liveState.rows = _buildRows') && src.includes('t.participants.splice.apply') && src.includes('data.tournament && Array.isArray(data.tournament.participants)') && src.includes('function _erProjectConfirmedPair') && src.includes('if (!visiblePair) _erProjectConfirmedPair(source, target)'), 'resposta da CF reidrata a análise imediatamente, com projeção visual se o retorno vier defasado');
+ok(src.includes('function _erApplyPairRoster') && src.includes('_erReconcilePairRows(_buildRows') && src.includes('t.participants.splice.apply') && src.includes('data.tournament && Array.isArray(data.tournament.participants)') && src.includes('function _erReconcilePairRows') && src.includes('_erRememberPairReconciliation(source, target, true)') && src.includes('_erRememberPairReconciliation(pair[0], pair[1], false)'), 'resposta e snapshots defasados são reconciliados até o roster canônico confirmar formar ou desfazer');
+ok(src.includes("\\'__nonegender__\\',\\'__none__\\'") && src.includes("genderKey === '__nonegender__'") && src.includes('pairRows.forEach(function (member)'), 'soltar uma dupla em Sem gênero/Sem habilidade limpa as duas atribuições sem desmontá-la');
 ok(src.includes('manualParticipantId: row.manualId') && src.includes('r.tournament && _liveState'), 'Salvar usa ID manual e aplica imediatamente o torneio confirmado');
 
-console.log('\n' + (fail ? '❌' : '✅') + ' análise-duplas-arrastáveis: ' + (17 - fail) + ' asserts ok, ' + fail + ' falharam');
+console.log('\n' + (fail ? '❌' : '✅') + ' análise-duplas-arrastáveis: ' + (18 - fail) + ' asserts ok, ' + fail + ' falharam');
 process.exitCode = fail ? 1 : 0;
