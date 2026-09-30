@@ -880,59 +880,13 @@ function _bracketTabsRefreshRoundRail(root) {
   if (!root) return;
   var rail = root.querySelector('[data-bracket-round-rail]');
   if (!rail) return;
-  var allCards = document.querySelectorAll('[data-bracket-tab-category]');
-  var activeCard = null;
-  for (var i = 0; i < allCards.length; i++) {
-    if (!allCards[i].hidden) { activeCard = allCards[i]; break; }
-  }
-  var scroller = activeCard && activeCard.closest && activeCard.closest('.bracket-scroll-container');
-  if (!scroller) { rail.hidden = true; rail.innerHTML = ''; return; }
-  var columns = scroller.querySelectorAll('.bracket-round-column');
-  var labels = [];
-  for (var c = 0; c < columns.length; c++) {
-    var children = columns[c].children, heading = null;
-    for (var h = 0; h < children.length; h++) {
-      var tag = String(children[h].tagName || '').toLowerCase();
-      if (tag === 'h4' || tag === 'h5') { heading = children[h]; break; }
-    }
-    // O h5 de uma rodada concluída também tem o botão "Ocultar". Ler o
-    // textContent do h5 juntava os dois em "RODADA 2OCULTAR" na régua fixa.
-    // O nome é o span de título; para renderizadores antigos sem span, pega
-    // somente os nós de texto diretos, nunca o texto de controles filhos.
-    var labelNode = heading && heading.querySelector && heading.querySelector(':scope > span');
-    var label = labelNode
-      ? String(labelNode.textContent || '').trim()
-      : heading && Array.prototype.map.call(heading.childNodes || [], function (node) {
-        return node.nodeType === 3 ? node.nodeValue : '';
-      }).join('').trim();
-    if (label) labels.push({ label: label, left: columns[c].offsetLeft, width: columns[c].offsetWidth });
-  }
-  if (!labels.length) { rail.hidden = true; rail.innerHTML = ''; return; }
-  var safe = window._safeHtml || function (v) { return String(v); };
-  rail.hidden = false;
-  // A régua replica as posições REAIS das colunas. Larguras inventadas (280px)
-  // desalinhavam "Rodada 3" quando a grade cabia em duas ou três colunas.
-  var railWidth = Math.max(scroller.scrollWidth || 0, scroller.clientWidth || 0);
-  rail.innerHTML = '<div data-bracket-round-rail-track style="position:relative;height:31px;min-width:' + Math.ceil(railWidth) + 'px;">' + labels.map(function (entry) {
-    return '<span style="position:absolute;left:' + Math.max(0, Math.round(entry.left)) + 'px;width:' + Math.max(1, Math.round(entry.width)) + 'px;box-sizing:border-box;display:block;padding:7px 4px 5px;color:var(--sp-c-fbbf24,#fbbf24);font-size:.78rem;font-weight:850;letter-spacing:.11em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + safe(entry.label) + '</span>';
-  }).join('') + '</div>';
-  // Espelhar a rolagem horizontal mantém o título exatamente sobre a coluna
-  // correspondente, sem transformar o h5 do card em sticky.
-  if (rail._bracketRoundScroller !== scroller) {
-    if (rail._bracketRoundScroller && rail._bracketRoundScrollerHandler) rail._bracketRoundScroller.removeEventListener('scroll', rail._bracketRoundScrollerHandler);
-    if (rail._bracketRoundRailHandler) rail.removeEventListener('scroll', rail._bracketRoundRailHandler);
-    var syncing = false;
-    rail._bracketRoundScrollerHandler = function () {
-      if (syncing) return; syncing = true; rail.scrollLeft = scroller.scrollLeft; syncing = false;
-    };
-    rail._bracketRoundRailHandler = function () {
-      if (syncing) return; syncing = true; scroller.scrollLeft = rail.scrollLeft; syncing = false;
-    };
-    scroller.addEventListener('scroll', rail._bracketRoundScrollerHandler, { passive: true });
-    rail.addEventListener('scroll', rail._bracketRoundRailHandler, { passive: true });
-    rail._bracketRoundScroller = scroller;
-  }
-  rail.scrollLeft = scroller.scrollLeft;
+  // A régua paralela não preservou a leitura da própria chave: ela repetia
+  // títulos fora das colunas e ainda disputava espaço com o cabeçalho real.
+  // O cabeçalho canônico é o h4/h5 de cada coluna — ele já nasce exatamente
+  // sobre seus jogos, com a barra lateral e o eventual comando "Ocultar".
+  // Portanto esta faixa permanece desativada; não criar segunda representação.
+  rail.hidden = true;
+  rail.innerHTML = '';
 }
 function _bracketTabsApply(tid, gender, category, requestedRound) {
   var root = document.querySelector('[data-bracket-tabs-root][data-tournament-id="' + String(tid).replace(/"/g, '\\"') + '"]');
@@ -1063,7 +1017,7 @@ window._bracketCategoryTabsMount = function () {
     root.setAttribute('data-bracket-tabs-root', '1');
     root.setAttribute('data-tournament-id', id);
     root.setAttribute('aria-label', 'Categorias da chave');
-    root.style.cssText = 'display:block;box-sizing:border-box;width:100%;margin:0 0 14px;padding:8px 12px;border:0;border-radius:0;background:#111114;overflow:hidden;position:sticky;top:var(--scroll-anchor,120px);z-index:30;isolation:isolate;box-shadow:0 -1px 0 #111114,0 10px 0 #111114,0 16px 18px -16px rgba(0,0,0,.95);';
+    root.style.cssText = 'display:block;box-sizing:border-box;width:100%;margin:0 0 14px;padding:8px 12px;border:0;border-radius:0;background:#111114;overflow:visible;position:sticky;top:var(--scroll-anchor,120px);z-index:30;isolation:isolate;box-shadow:0 -48px 0 #111114,0 10px 0 #111114,0 16px 18px -16px rgba(0,0,0,.95);';
     var anchor = _bracketTabsAnchor(first);
     // Em Ouro/Prata, sobe mais um nível: a faixa deve ficar acima da seção
     // inteira (título, classificação e rodadas), para poder ocultar a linha
@@ -1149,7 +1103,7 @@ window._bracketCategoryTabsMount = function () {
   if (!style) { style = document.createElement('style'); style.id = 'bracket-category-tab-style'; document.head.appendChild(style); }
   // Sobrescrever também a regra já injetada por uma versão anterior: sem isso,
   // atualizar a SPA podia manter h5 sticky e fazê-lo atravessar as abas.
-  style.textContent = '.bracket-round-column>h4:first-child,.bracket-round-column>h5:first-child{visibility:hidden!important;height:0!important;min-height:0!important;margin:0!important;padding:0!important;border:0!important;overflow:hidden!important;position:relative!important;top:auto!important;z-index:1!important;}';
+  style.textContent = '.bracket-round-column>h4:first-child,.bracket-round-column>h5:first-child{position:relative!important;top:auto!important;z-index:1!important;}';
   var state = (window._bracketTabState || {})[id] || {};
   var gender = byGender[state.gender] ? state.gender : order[0];
   var category = byGender[gender].indexOf(state.category) !== -1 ? state.category : byGender[gender][0];
