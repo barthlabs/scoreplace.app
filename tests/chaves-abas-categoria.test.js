@@ -20,7 +20,7 @@ ok(card.includes('data-bracket-tab-category=') && card.includes('data-bracket-ta
 ok(src.includes('window._bracketTabsRevealSearch();'), 'o filtro da busca chama a revelação da aba correspondente');
 ok(card.includes('tierLabel') && card.includes('gold|silver|line'), 'linhas independentes como Ouro/Prata também recebem abas');
 ok(tabs.includes('tiersMeetAtFinal') && tabs.includes("data-bracket-tab-source") && card.includes('data-bracket-tab-source='), 'Ouro/Prata só se separam quando não convergem em uma grande final');
-ok(tabs.includes('.bracket-round-column>:first-child{position:sticky') && tabs.includes('--bracket-tabs-height'), 'o rótulo da rodada permanece visível abaixo do cabeçalho de categoria ao rolar');
+ok(tabs.includes('data-bracket-round-context') && tabs.includes('overflow-x ele acaba flutuando por cima dos cards') && tabs.includes('bracket-round-column>:first-child{position:relative'), 'o rótulo da rodada permanece na faixa fixa de categoria, sem flutuar sobre os cards');
 ok(tabs.includes('isOnlyLines') && tabs.includes("'linhas'"), 'Ouro/Prata ocupam diretamente a faixa de abas principal, sem aba genérica intermediária');
 ok(tabs.includes("translateY(1px)") && tabs.includes("translateY(0)") && tabs.includes("linear-gradient(135deg,#fbbf24,#f59e0b)"), 'a aba ativa vem para a frente e as demais permanecem alinhadas e clicáveis');
 ok(tabs.includes('isRoundBased') && tabs.includes('data-bracket-round-tab') && card.includes('data-bracket-tab-round='), 'fases classificatórias ganham uma terceira faixa de abas por rodada independente');

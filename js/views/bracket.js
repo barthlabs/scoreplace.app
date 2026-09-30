@@ -887,17 +887,6 @@ function _bracketTabsApply(tid, gender, category, requestedRound) {
   window._bracketTabState = window._bracketTabState || {};
   window._bracketTabState[String(tid)] = { gender: gender, category: category, round: round };
   var lineMode = root.getAttribute('data-bracket-line-tabs') === '1';
-  // Contexto persistente de leitura: as abas podem estar longe dos cards depois
-  // de rolar a chave. Esta régua fica presa no topo e diz em qual linha/categoria
-  // a pessoa está; cada coluna mantém sua própria rodada presa logo abaixo.
-  var context = root.querySelector('[data-bracket-context]');
-  if (context) {
-    var contextGender = { fem: 'Feminina', masc: 'Masculina', misto: 'Mista' };
-    var contextText = lineMode ? ('Linha: ' + _bracketTabLabel(category, 'linhas'))
-      : ((contextGender[gender] || gender) + ' · ' + _bracketTabLabel(category, gender));
-    if (round) contextText += ' · Rodada ' + round;
-    context.textContent = contextText;
-  }
   var cards = document.querySelectorAll('[data-bracket-tab-category]');
   for (var i = 0; i < cards.length; i++) {
     var card = cards[i];
@@ -960,6 +949,26 @@ function _bracketTabsApply(tid, gender, category, requestedRound) {
       section.hidden = section.getAttribute('data-bracket-line-section') !== category;
     });
   }
+  // Contexto de leitura fica na mesma faixa opaca das abas, fora do trilho com
+  // scroll horizontal. Nunca tornar o h5 de uma coluna sticky: dentro do
+  // overflow-x ele acaba flutuando por cima dos cards, em vez de no cabeçalho.
+  var roundContext = root.querySelector('[data-bracket-round-context]');
+  if (roundContext) {
+    var contextGender = { fem: 'Feminina', masc: 'Masculina', misto: 'Mista' };
+    var contextText = lineMode ? ('Linha: ' + _bracketTabLabel(category, 'linhas'))
+      : ((contextGender[gender] || gender) + ' · ' + _bracketTabLabel(category, gender));
+    if (round) contextText += ' · Rodada ' + round;
+    var labels = [], headers = document.querySelectorAll('.bracket-round-column > h5');
+    for (var hr = 0; hr < headers.length; hr++) {
+      var header = headers[hr];
+      if (header.closest && header.closest('[hidden]')) continue;
+      var text = String((header.querySelector('span') || header).textContent || '').trim();
+      if (text && labels.indexOf(text) === -1) labels.push(text);
+    }
+    roundContext.innerHTML = '<span style="font-weight:850;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;">' + (window._safeHtml ? window._safeHtml(contextText) : contextText) + '</span>' + labels.map(function (label) {
+      return '<span style="padding:3px 8px;border:1px solid rgba(129,140,248,.48);border-radius:999px;white-space:nowrap;">' + (window._safeHtml ? window._safeHtml(label) : label) + '</span>';
+    }).join('');
+  }
   // Colunas, grupos e detalhes vazios não devem ocupar a tela da aba escolhida.
   var holders = document.querySelectorAll('[data-bracket-tab-holder]');
   for (var h = 0; h < holders.length; h++) {
@@ -968,10 +977,6 @@ function _bracketTabsApply(tid, gender, category, requestedRound) {
     else holder.setAttribute('data-bracket-tab-empty', '1');
   }
   _bracketLayoutEliminationTree(root);
-  // As rodadas sticky devem pousar abaixo desta faixa, e não atrás dela.
-  requestAnimationFrame(function () {
-    if (root.parentElement) root.parentElement.style.setProperty('--bracket-tabs-height', root.offsetHeight + 'px');
-  });
 }
 window._bracketSelectCategoryTab = function (tid, gender, category, round) {
   _bracketTabsApply(String(tid), String(gender), String(category), round == null ? '' : String(round));
@@ -1009,7 +1014,7 @@ window._bracketCategoryTabsMount = function () {
     root.setAttribute('data-bracket-tabs-root', '1');
     root.setAttribute('data-tournament-id', id);
     root.setAttribute('aria-label', 'Categorias da chave');
-    root.style.cssText = 'display:block;box-sizing:border-box;width:100%;margin:0 0 14px;padding:0 12px 8px;border:0;border-radius:0;background:var(--bg-main,#111114);overflow:visible;position:sticky;top:var(--scroll-anchor,120px);z-index:12;box-shadow:0 10px 12px -14px rgba(0,0,0,.95);';
+    root.style.cssText = 'display:block;box-sizing:border-box;width:100%;margin:0 0 14px;padding:8px 12px;border:0;border-radius:0;background:var(--bg-main,#111114);overflow:visible;position:sticky;top:var(--scroll-anchor,120px);z-index:30;isolation:isolate;box-shadow:0 10px 0 var(--bg-main,#111114),0 16px 18px -16px rgba(0,0,0,.95);';
     var anchor = _bracketTabsAnchor(first);
     // Em Ouro/Prata, sobe mais um nível: a faixa deve ficar acima da seção
     // inteira (título, classificação e rodadas), para poder ocultar a linha
@@ -1071,19 +1076,29 @@ window._bracketCategoryTabsMount = function () {
       }).join('');
     }).join('');
   }
-  root.innerHTML = '<div data-bracket-context style="padding:5px 4px 7px;color:var(--text-muted);font-size:.72rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;">Chave</div>'
-    + '<div style="display:flex;align-items:flex-end;gap:5px;flex-wrap:wrap;width:100%;border-bottom:1px solid rgba(129,140,248,.6);padding:0 4px;">' + genderHtml + '</div>'
+  // No desktop, a busca ocupa a sobra da mesma faixa das abas. O próprio nó
+  // viaja (não se cria um segundo input nem se perde o listener do filtro).
+  var searchWrap = document.getElementById('fbwrap-chaves');
+  if (searchWrap && root.contains(searchWrap) && root.parentNode) root.parentNode.insertBefore(searchWrap, root);
+  var putSearchInTabs = !!(searchWrap && window.innerWidth >= 900);
+  root.innerHTML = '<div style="display:flex;align-items:flex-end;gap:5px;flex-wrap:wrap;width:100%;border-bottom:1px solid rgba(129,140,248,.6);padding:0 4px;">' + genderHtml + (putSearchInTabs ? '<div data-bracket-search-slot style="margin-left:auto;flex:1 1 260px;max-width:390px;min-width:220px;"></div>' : '') + '</div>'
     + (isOnlyLines ? '' : '<div style="display:flex;align-items:flex-end;gap:5px;flex-wrap:wrap;width:100%;padding:9px 4px 0;border-bottom:1px solid rgba(129,140,248,.42);">' + categoryHtml + '</div>')
-    + (roundHtml ? '<div style="display:flex;gap:7px;flex-wrap:wrap;width:100%;padding:8px 4px 0;border-top:1px solid rgba(255,255,255,.07);">' + roundHtml + '</div>' : '');
+    + (roundHtml ? '<div style="display:flex;gap:7px;flex-wrap:wrap;width:100%;padding:8px 4px 0;border-top:1px solid rgba(255,255,255,.07);">' + roundHtml + '</div>' : '')
+    + '<div data-bracket-round-context style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;min-height:26px;padding:8px 4px 0;color:var(--text-muted);font-size:.72rem;background:var(--bg-main,#111114);"></div>';
+  if (putSearchInTabs) {
+    var searchSlot = root.querySelector('[data-bracket-search-slot]');
+    if (searchSlot) {
+      if (!searchWrap.dataset.bracketTabsOriginalStyle) searchWrap.dataset.bracketTabsOriginalStyle = searchWrap.getAttribute('style') || '';
+      searchWrap.style.cssText = 'position:static;top:auto;z-index:auto;background:transparent;margin:0;padding:0;width:100%;box-sizing:border-box;';
+      searchSlot.appendChild(searchWrap);
+    }
+  }
   // As abas filtram apenas os cards. Esconder um ancestral estrutural escondia
   // junto o seletor de Ouro/Prata em algumas larguras e deixava a pessoa sem
   // caminho para voltar — inaceitável numa chave em produção.
   if (!document.getElementById('bracket-category-tab-style')) {
     var style = document.createElement('style'); style.id = 'bracket-category-tab-style';
-    // O cabeçalho fica preso DENTRO da própria coluna, abaixo das barras
-    // globais. Assim cada rodada continua identificável durante o scroll
-    // vertical sem alterar o scroll horizontal da chave.
-    style.textContent = '.bracket-round-column>:first-child{position:sticky;top:calc(var(--scroll-anchor,120px) + var(--bracket-tabs-height,0px));z-index:4;background:var(--bg-main,#111827);padding:8px 0 7px;margin-top:-8px;box-shadow:0 8px 10px -10px rgba(0,0,0,.9);}';
+    style.textContent = '.bracket-round-column>:first-child{position:relative;z-index:1;}';
     document.head.appendChild(style);
   }
   var state = (window._bracketTabState || {})[id] || {};
