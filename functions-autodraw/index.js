@@ -4,6 +4,8 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { initializeApp } = require('firebase-admin/app');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { getMessaging } = require('firebase-admin/messaging');
+const { getStorage } = require('firebase-admin/storage');
+const { randomUUID } = require('crypto');
 // v1.7.35: rebase do sorteio (o servidor não sobrescreve o que aconteceu na quadra
 // enquanto pensava). Módulo PURO e testável — o index não é require-ável em teste.
 const { rebaseRounds } = require('./rebase-core.js');
@@ -3713,6 +3715,49 @@ exports.cleanupTournamentCreationRequests = onSchedule('every 24 hours', async (
   const batch = db.batch();
   expired.docs.forEach(doc => batch.delete(doc.ref));
   await batch.commit();
+});
+
+// ─── Imagem do torneio: a Function autoriza, o servidor grava ─────────────────
+// O upload direto do navegador dependia de uma regra de Storage que precisa cruzar
+// Storage → Firestore para descobrir a organização. Em alguns projetos/importações
+// esse cruzamento chegou como `storage/unauthorized` embora a mesma pessoa pudesse
+// salvar a ficha pela callable. A fronteira canônica é esta: autentica, relê o
+// torneio e aplica a mesma autorização UID-only das demais ações administrativas;
+// só então o Admin SDK escreve no bucket.
+exports.uploadTournamentImage = onCall({ timeoutSeconds: 60, memory: '512MiB' }, async (request) => {
+  const uid = request.auth && request.auth.uid;
+  const data = request.data || {};
+  const tId = String(data.tournamentId || '').trim();
+  const tipo = String(data.type || '').trim();
+  const dataUrl = String(data.dataUrl || '');
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId || !['logo', 'cover'].includes(tipo)) throw new HttpsError('invalid-argument', 'Imagem inválida.');
+  const match = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl);
+  if (!match) throw new HttpsError('invalid-argument', 'Envie uma imagem JPG, PNG ou WebP.');
+  const bytes = Buffer.from(match[2], 'base64');
+  if (!bytes.length || bytes.length > 5 * 1024 * 1024) {
+    throw new HttpsError('invalid-argument', 'A imagem final deve ter no máximo 5 MB.');
+  }
+  const ref = db.collection('tournaments').doc(tId);
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Torneio não encontrado.');
+  if (!_isTournamentAdmin(snap.data(), uid)) {
+    throw new HttpsError('permission-denied', 'Só a organização pode enviar a imagem do torneio.');
+  }
+  const mime = match[1];
+  const ext = mime === 'image/png' ? 'png' : (mime === 'image/webp' ? 'webp' : 'jpg');
+  const bucket = getStorage().bucket();
+  const file = bucket.file('tournaments/' + tId + '/' + tipo + '-' + Date.now() + '.' + ext);
+  const token = randomUUID();
+  await file.save(bytes, {
+    resumable: false,
+    metadata: {
+      contentType: mime,
+      cacheControl: 'public, max-age=31536000, immutable',
+      metadata: { firebaseStorageDownloadTokens: token }
+    }
+  });
+  return { ok: true, url: 'https://firebasestorage.googleapis.com/v0/b/' + bucket.name + '/o/' + encodeURIComponent(file.name) + '?alt=media&token=' + token };
 });
 
 exports.updateTournamentConfiguration = onCall(async (request) => {

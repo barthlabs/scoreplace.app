@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.3.192';
+window.SCOREPLACE_VERSION = '2.3.193';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -2445,12 +2445,17 @@ window._formatLabel = function (t) {
     if (!/^data:/i.test(valor)) return '';
     var blob = _dataUrlParaBlob(valor);
     if (!blob) return '';
-    var storage = await window._carregaSdkStorage();
-    var ext = (blob.type.split('/')[1] || 'jpg').replace(/[^a-z0-9]/gi, '').slice(0, 5);
-    var caminho = 'tournaments/' + String(tournamentId) + '/' + tipo + '-' + Date.now() + '.' + ext;
-    var ref = storage.ref().child(caminho);
-    await ref.put(blob, { contentType: blob.type, cacheControl: 'public, max-age=31536000, immutable' });
-    return await ref.getDownloadURL();
+    // A fronteira de imagem é a Function: ela relê o torneio e confirma o mesmo
+    // organizador/coorganizador UID-only que salva a ficha. Não dependemos mais da
+    // regra cruzada Storage → Firestore, que em alguns torneios importados negava o
+    // upload no navegador apesar de a configuração ser autorizada no servidor.
+    if (typeof window._callCF !== 'function') throw new Error('Atualize o aplicativo para enviar a imagem do torneio.');
+    var resposta = await window._callCF('uploadTournamentImage', {
+      tournamentId: String(tournamentId), type: String(tipo), dataUrl: valor
+    }, { unauth: 'Entre na sua conta para enviar a imagem.', falha: 'Não foi possível enviar a imagem do torneio.' });
+    var url = resposta && resposta.data && resposta.data.url;
+    if (!url || !/^https?:\/\//i.test(url)) throw new Error('O servidor não confirmou o upload da imagem.');
+    return url;
   };
 
   // LOGO DO LOCAL — mesma história, escala menor (29,8 KB num doc), mas o `venues` é
@@ -7441,9 +7446,9 @@ window._openImageCropEditor = function(dataUrl, opts, callback) {
     : '';
   var _rotationHtml = ROTATION_CTRL
     ? '<div style="margin:8px 0 4px;display:flex;align-items:center;justify-content:center;gap:8px;">' +
-        '<button type="button" id="crop-rotate-left" class="btn btn-sm" aria-label="Girar 90 graus para a esquerda" style="padding:8px 10px;background:#1e3a8a;color:#fff;border:1px solid #60a5fa;font-size:0.72rem;font-weight:700;white-space:nowrap;">↶ Girar 90° à esquerda</button>' +
+        '<button type="button" id="crop-rotate-left" class="btn btn-sm" aria-label="Girar 90 graus para a esquerda" style="padding:8px 14px;background:#1e3a8a;color:#fff;border:1px solid #60a5fa;font-size:0.9rem;font-weight:700;white-space:nowrap;">−90°</button>' +
         '<span id="crop-rotation-label" style="font-size:0.76rem;color:var(--text-bright,#f1f5f9);font-weight:700;min-width:48px;text-align:center;">0°</span>' +
-        '<button type="button" id="crop-rotate-right" class="btn btn-sm" aria-label="Girar 90 graus para a direita" style="padding:8px 10px;background:#1e3a8a;color:#fff;border:1px solid #60a5fa;font-size:0.72rem;font-weight:700;white-space:nowrap;">Girar 90° à direita ↷</button>' +
+        '<button type="button" id="crop-rotate-right" class="btn btn-sm" aria-label="Girar 90 graus para a direita" style="padding:8px 14px;background:#1e3a8a;color:#fff;border:1px solid #60a5fa;font-size:0.9rem;font-weight:700;white-space:nowrap;">+90°</button>' +
       '</div>'
     : '';
   var _canvasRadius = COVER ? '10px' : (RADIUS_CTRL ? (cropRadiusPct + '%') : (SHAPE === 'circle' ? '50%' : '12px'));
