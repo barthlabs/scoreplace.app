@@ -5483,8 +5483,8 @@ window._lzNaoEhEuMesmo = function (uid) {
     // exigiria devolver identidade correlacionável, que é o que esta porta não faz.
     var naoMedido = e.naoMedidos
       ? '<div style="font-size:0.78rem;color:var(--sp-c-fbbf24,#fbbf24);margin-top:9px;line-height:1.45;">' +
-        'ℹ️ <b>' + e.naoMedidos + '</b> ' + (e.naoMedidos === 1 ? 'inscrição não pôde' : 'inscrições não puderam') +
-        ' ser medida' + (e.naoMedidos === 1 ? '' : 's') + ' — em geral participante incluído sem conta.</div>'
+        'ℹ️ <b>' + e.naoMedidos + '</b> ' + (e.naoMedidos === 1 ? 'participante sem conta não entra' : 'participantes sem conta não entram') +
+        ' na análise de contas duplicadas.</div>'
       : '';
 
     if (!e.pares.length) {
