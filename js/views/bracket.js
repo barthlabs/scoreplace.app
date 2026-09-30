@@ -948,6 +948,11 @@ function _bracketTabsApply(tid, gender, category, requestedRound) {
     sections.forEach(function (section) {
       section.hidden = section.getAttribute('data-bracket-line-section') !== category;
     });
+    // Ouro/Prata já está na aba principal. O h4 repetido dentro da seção não
+    // acrescenta contexto e, quando a faixa fixa encosta no topo, atravessa o
+    // cabeçalho como se fosse vazamento. As abas são o único título da linha.
+    var tierTitles = document.querySelectorAll('[data-bracket-tier-title]');
+    for (var ti = 0; ti < tierTitles.length; ti++) tierTitles[ti].hidden = true;
   }
   // Contexto de leitura fica na mesma faixa opaca das abas, fora do trilho com
   // scroll horizontal. Nunca tornar o h5 de uma coluna sticky: dentro do
@@ -966,7 +971,7 @@ function _bracketTabsApply(tid, gender, category, requestedRound) {
       if (text && labels.indexOf(text) === -1) labels.push(text);
     }
     roundContext.innerHTML = '<span style="font-weight:850;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;">' + (window._safeHtml ? window._safeHtml(contextText) : contextText) + '</span>' + labels.map(function (label) {
-      return '<span style="padding:3px 8px;border:1px solid rgba(129,140,248,.48);border-radius:999px;white-space:nowrap;">' + (window._safeHtml ? window._safeHtml(label) : label) + '</span>';
+      return '<span style="font-weight:750;letter-spacing:.05em;text-transform:uppercase;white-space:nowrap;">' + (window._safeHtml ? window._safeHtml(label) : label) + '</span>';
     }).join('');
   }
   // Colunas, grupos e detalhes vazios não devem ocupar a tela da aba escolhida.
@@ -1014,7 +1019,7 @@ window._bracketCategoryTabsMount = function () {
     root.setAttribute('data-bracket-tabs-root', '1');
     root.setAttribute('data-tournament-id', id);
     root.setAttribute('aria-label', 'Categorias da chave');
-    root.style.cssText = 'display:block;box-sizing:border-box;width:100%;margin:0 0 14px;padding:8px 12px;border:0;border-radius:0;background:var(--bg-main,#111114);overflow:visible;position:sticky;top:var(--scroll-anchor,120px);z-index:30;isolation:isolate;box-shadow:0 10px 0 var(--bg-main,#111114),0 16px 18px -16px rgba(0,0,0,.95);';
+    root.style.cssText = 'display:block;box-sizing:border-box;width:100%;margin:0 0 14px;padding:8px 12px;border:0;border-radius:0;background:#111114;overflow:visible;position:sticky;top:var(--scroll-anchor,120px);z-index:30;isolation:isolate;box-shadow:0 10px 0 #111114,0 16px 18px -16px rgba(0,0,0,.95);';
     var anchor = _bracketTabsAnchor(first);
     // Em Ouro/Prata, sobe mais um nível: a faixa deve ficar acima da seção
     // inteira (título, classificação e rodadas), para poder ocultar a linha
@@ -1084,7 +1089,7 @@ window._bracketCategoryTabsMount = function () {
   root.innerHTML = '<div style="display:flex;align-items:flex-end;gap:5px;flex-wrap:wrap;width:100%;border-bottom:1px solid rgba(129,140,248,.6);padding:0 4px;">' + genderHtml + (putSearchInTabs ? '<div data-bracket-search-slot style="margin-left:auto;flex:1 1 260px;max-width:390px;min-width:220px;"></div>' : '') + '</div>'
     + (isOnlyLines ? '' : '<div style="display:flex;align-items:flex-end;gap:5px;flex-wrap:wrap;width:100%;padding:9px 4px 0;border-bottom:1px solid rgba(129,140,248,.42);">' + categoryHtml + '</div>')
     + (roundHtml ? '<div style="display:flex;gap:7px;flex-wrap:wrap;width:100%;padding:8px 4px 0;border-top:1px solid rgba(255,255,255,.07);">' + roundHtml + '</div>' : '')
-    + '<div data-bracket-round-context style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;min-height:26px;padding:8px 4px 0;color:var(--text-muted);font-size:.72rem;background:var(--bg-main,#111114);"></div>';
+    + '<div data-bracket-round-context style="display:flex;align-items:center;gap:18px;flex-wrap:wrap;min-height:26px;padding:8px 4px 0;color:var(--text-muted);font-size:.72rem;background:#111114;border-top:1px solid rgba(255,255,255,.07);"></div>';
   if (putSearchInTabs) {
     var searchSlot = root.querySelector('[data-bracket-search-slot]');
     if (searchSlot) {
@@ -4534,7 +4539,7 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
       ? '<button class="btn btn-micro btn-outline" onclick="window._tierRevealOne(\'' + _tIdEsc + '\',\'' + _bkEsc + '\')" title="Mostrar a rodada oculta mais recente (1 por clique)" style="position:sticky;top:var(--scroll-anchor,112px);align-self:flex-start;writing-mode:vertical-rl;transform:rotate(180deg);padding:14px 7px;flex-shrink:0;margin:0;line-height:1.15;white-space:nowrap;z-index:5;">👁 Mostrar ocultas (' + hiddenCount + ')</button>'
       : '';
     // Título da chave suprimido quando vazio (chave única → sem rótulo, igual categoria única).
-    var _titleH4 = title ? '<h4 style="color:' + window._spCor(color, 'color') + ';font-size:0.85rem;text-transform:uppercase;letter-spacing:2px;border-left:4px solid ' + window._spCor(color, 'borda') + ';padding-left:10px;margin-bottom:1rem;">' + title + '</h4>' : '';
+    var _titleH4 = title ? '<h4 data-bracket-tier-title style="color:' + window._spCor(color, 'color') + ';font-size:0.85rem;text-transform:uppercase;letter-spacing:2px;border-left:4px solid ' + window._spCor(color, 'borda') + ';padding-left:10px;margin-bottom:1rem;">' + title + '</h4>' : '';
     return '<div style="margin-bottom:2rem;">' +
       _titleH4 +
       /* ⛔ o pedido pendente aparece SEMPRE que existir, mesmo com a classificação escondida: ele é

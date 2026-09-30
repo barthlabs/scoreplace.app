@@ -1,3 +1,4 @@
+// 2.3.185 — A faixa fixa das chaves agora é opaca de forma explícita e elimina o título duplicado que vazava por trás de Ouro/Prata. Rodadas aparecem como texto simples abaixo das abas, sem botões.
 // 2.3.184 — Corrige o cabeçalho das chaves: rodada não flutua mais sobre cards dentro do trilho horizontal; linha/categoria e rodadas ficam numa única faixa opaca de leitura. No desktop, a busca passa a ocupar a sobra da mesma linha das abas.
 // 2.3.183 — Na chave, a linha/categoria ativa fica fixa no topo; logo abaixo, o título de cada coluna mantém a rodada visível mesmo ao descer pelos jogos. As duas faixas se respeitam, sem sobrepor cards.
 // 2.3.182 — Ouro/Prata agora alternam a seção inteira, sem buraco residual, e a faixa de abas permanece acima das rodadas. Nas eliminatórias, os conectores são desenhados entre os jogos sem retirar cards do fluxo da chave. Uma atualização explicitamente aprovada não volta a exigir um segundo toque quando o shell chega atrasado.
