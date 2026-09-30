@@ -1,4 +1,4 @@
-// 2.3.193 — Imagens de torneio sobem pela Function autorizada (não falham mais na regra cruzada do Storage); giro usa botões compactos −90°/+90°, o editor recebe cache-buster da própria versão e a callable integra o contrato único de publicação/sondagem.
+// 2.3.194 — Todo Salvar que aguarda servidor no editor de torneio mostra spinner e “Salvando…” até concluir (inclusive templates); o estado ocupado só expira como rede após 60 s, não mais 8 s.
 // 2.3.192 — Controles de giro da capa têm rótulo legível e o zoom vai de 20% a 1200% do enquadramento inicial; orientação de mídia preserva contraste nos dois temas.
 // 2.3.191 — Editor de mídia aceita logos 1:2..2:1 e rotação de capa em 90°; regra de Storage é publicada junto para o upload do organizador.
 // 2.3.189 — O cabeçalho canônico de cada coluna da chave fica preso logo abaixo das abas enquanto seus jogos passam: a barra lateral, o nome da rodada e o eventual comando “Ocultar” seguem juntos, sem uma segunda régua concorrente.

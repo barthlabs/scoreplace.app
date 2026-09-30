@@ -11,6 +11,8 @@ await p.evaluate((src)=>{
  for(const [id,v] of Object.entries({'edit-tournament-id':'e','tourn-name':'Nome editado','select-formato':'elim_simples','tourn-sport':'Tênis'})){const e=document.getElementById(id);if(e)e.value=v;}
  window._t=(k)=>k;window._autoDrawAgendadoNoForm=()=>false;window._sportBaseName=x=>x;window._gsmReadHidden=()=>({type:'simple'});
  window._allowSelfDeactEl=()=>null;window._f2GetConfig=()=>({classifAtiva:false,eliminatoria:{ativa:true}});
+ window._spinButton=(btn,label)=>{btn.disabled=true;btn.innerHTML='<span class="btn-spinner"></span>'+label;};
+ window._spinButtonDone=(btn)=>{btn.disabled=false;btn.innerHTML='Salvar';};
  window._canCreateTournament=()=>true;window._getCreateFormCategoryData=()=>({});window.closeModal=()=>{};
  window._notes=[];window.showNotification=(...x)=>window._notes.push(x);window.showAlertDialog=(...x)=>window._notes.push(x);
  window._error=(...x)=>window._notes.push(x.map(y=>String(y)));
@@ -28,6 +30,7 @@ await p.evaluate(()=>{
  window._saveTournamentClickHandler();
 });
 assert(await p.evaluate(()=>document.getElementById('btn-save-tournament').disabled));
+assert(await p.evaluate(()=>document.getElementById('btn-save-tournament').textContent.includes('Salvando…')),'o salvar pendente informa visualmente que está processando');
 assert.equal(await p.evaluate(()=>window._notes.length),0,'não anuncia sucesso antes da confirmação');
 assert(await p.evaluate(()=>location.hash===window._beforeHash));
 await p.evaluate(()=>window._rejectCreation(new Error('falha de rede')));

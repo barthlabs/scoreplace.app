@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.3.193';
+window.SCOREPLACE_VERSION = '2.3.194';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -10384,7 +10384,7 @@ window._spinButton = function(btn, label) {
   var original = btn.innerHTML;
   var _oFilter = btn.style.filter, _oCursor = btn.style.cursor, _oOpacity = btn.style.opacity;
   // v1.5.8: guarda o restore no próprio elemento pra _spinButtonDone soltar por EVENTO (a
-  // função terminou), como manda o cânone do botão ocupado. O setTimeout de 8s abaixo
+  // função terminou), como manda o cânone do botão ocupado. O setTimeout de 60s abaixo
   // continua valendo só como rede pra quem não chama o done. [[project_busy_button_canonical]]
   btn._spinRestore = function () {
     if (btn.getAttribute('data-spinning') !== '1') return;
@@ -10423,7 +10423,7 @@ window._spinButton = function(btn, label) {
       btn.style.filter = _oFilter; btn.style.cursor = _oCursor; btn.style.opacity = _oOpacity;
       btn.removeAttribute('data-spinning');
     }
-  }, 8000);
+  }, 60000);
 };
 // Solta o botão QUANDO A FUNÇÃO TERMINA (evento) — não no timeout cego. Todo call site que
 // sabe o fim (settle da promise, guard que aborta) deve chamar isto. [[project_busy_button_canonical]]

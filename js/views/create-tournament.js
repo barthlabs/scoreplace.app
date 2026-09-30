@@ -5538,7 +5538,10 @@ window._ctPaintRatio = function () {
 window._saveTournamentClickHandler = async function() {
       var saveButton = document.getElementById('btn-save-tournament');
       if (saveButton && saveButton.disabled) return;
-      if (saveButton) saveButton.disabled = true;
+      // Salvar pode incluir upload de imagem e a confirmação do servidor. O botão precisa
+      // dizer que recebeu o comando durante toda a operação, não apenas ficar desabilitado.
+      if (saveButton && typeof window._spinButton === 'function') window._spinButton(saveButton, 'Salvando…');
+      else if (saveButton) saveButton.disabled = true;
       var createdId = null;
       try {
         const editId = document.getElementById('edit-tournament-id').value;
@@ -6184,7 +6187,10 @@ window._saveTournamentClickHandler = async function() {
       } catch (err) {
         window._error('Erro ao salvar torneio:', err);
         showNotification(window._t('auth.error'), window._t('create.saveError', {msg: err.message}), 'error');
-      } finally { if (saveButton) saveButton.disabled = false; }
+      } finally {
+        if (saveButton && typeof window._spinButtonDone === 'function') window._spinButtonDone(saveButton);
+        else if (saveButton) saveButton.disabled = false;
+      }
   };
   const btnSave = document.getElementById('btn-save-tournament');
   if (btnSave) btnSave.addEventListener('click', window._saveTournamentClickHandler);
@@ -7661,7 +7667,7 @@ window._renderCreateTournamentHeader = function() {
   var actionsHtml =
     '<div class="create-hdr-actions" style="display:flex;align-items:center;gap:6px;flex-shrink:0;flex-wrap:nowrap;">' +
       '<button class="btn btn-tool-amber btn-sm" id="btn-save-template-create" type="button" ' +
-              'onclick="window._saveCurrentFormAsTemplate()" ' +
+              'onclick="window._saveCurrentFormAsTemplate(this)" ' +
               'style="' + tplPad + 'flex-shrink:0;border-radius:10px;" ' +
               'title="' + (_t('create.saveTemplate') || 'Salvar Template') + '">💾' + saveLbl + '</button>' +
       '<button class="btn btn-tool-indigo btn-sm" id="btn-load-template-create" type="button" ' +
@@ -7767,7 +7773,7 @@ window._renderCreateTournamentHeader = function() {
 // ─── Save current form as template ────────────────────────────────────────
 // Reads the current create-tournament form values and saves them as a
 // reusable template via window._saveTemplate.
-window._saveCurrentFormAsTemplate = function() {
+window._saveCurrentFormAsTemplate = function(saveButton) {
   var _t = window._t || function(k) { return k; };
   if (!window.AppStore || !window.AppStore.currentUser || !window.AppStore.currentUser.uid) {
     if (typeof showNotification === 'function') showNotification(_t('template.loginRequired') || 'Faça login para salvar templates', '', 'warning');
@@ -7889,6 +7895,8 @@ window._saveCurrentFormAsTemplate = function() {
     };
     if (typeof window._saveTemplate !== 'function') return;
     var _doSave = function() {
+      if (saveButton && typeof window._spinButton === 'function') window._spinButton(saveButton, 'Salvando…');
+      else if (saveButton) saveButton.disabled = true;
       window._saveTemplate(template).then(function(result) {
         if (result === 'ok') {
           if (typeof showNotification === 'function') showNotification(_t('template.saved') || 'Template salvo', template.name, 'success');
@@ -7897,6 +7905,11 @@ window._saveCurrentFormAsTemplate = function() {
         } else {
           if (typeof showNotification === 'function') showNotification(_t('template.saveError') || 'Erro ao salvar', '', 'error');
         }
+      }).catch(function() {
+        if (typeof showNotification === 'function') showNotification(_t('template.saveError') || 'Erro ao salvar', '', 'error');
+      }).finally(function() {
+        if (saveButton && typeof window._spinButtonDone === 'function') window._spinButtonDone(saveButton);
+        else if (saveButton) saveButton.disabled = false;
       });
     };
     // v2.1.33: nome duplicado → confirma substituir (atualiza por cima) ou cancela.
