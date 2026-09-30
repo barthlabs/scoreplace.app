@@ -1,3 +1,4 @@
+// 2.3.195 — Sorteio de competição por times valida a grade completa antes de revelar qualquer resultado: no Neon são 96 participantes, 48 duplas, seis categorias de oito e oito times com uma dupla por categoria. Cores dos times persistem; Light/Power/Extreme usam 40%/70%/100% de saturação. O modo estruturado mantém quatro adversários por time em todas as categorias; o livre sorteia cada categoria sem repetir adversário na sua própria grade.
 // 2.3.194 — Todo Salvar que aguarda servidor no editor de torneio mostra spinner e “Salvando…” até concluir (inclusive templates); o estado ocupado só expira como rede após 60 s, não mais 8 s.
 // 2.3.192 — Controles de giro da capa têm rótulo legível e o zoom vai de 20% a 1200% do enquadramento inicial; orientação de mídia preserva contraste nos dois temas.
 // 2.3.191 — Editor de mídia aceita logos 1:2..2:1 e rotação de capa em 90°; regra de Storage é publicada junto para o upload do organizador.

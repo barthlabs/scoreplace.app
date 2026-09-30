@@ -353,6 +353,10 @@ function assignCompetitionTeamsAtInitialDraw(t, rawConfig) {
   if (!wanted || names.length !== wanted || names.some(function (name) { return !name; }) || uniqueNames.size !== names.length) {
     return { ok: false, reason: 'competition-team-names-required' };
   }
+  // As cores pertencem ao TIME, não ao nome nem à categoria. Persistir o matiz evita
+  // que uma nova tela, um novo aparelho ou uma renomeação troquem a identidade visual
+  // que foi divulgada no sorteio. A categoria só regula a saturação da mesma cor.
+  const TEAM_HUES = [332, 207, 142, 28, 267, 2, 184, 53, 315, 112, 226, 16];
   const previous = Array.isArray(t.competitionTeams) ? t.competitionTeams : [];
   const teams = [];
   const seen = new Set();
@@ -360,18 +364,17 @@ function assignCompetitionTeamsAtInitialDraw(t, rawConfig) {
     const id = team && String(team.id || '').trim();
     if (!id || seen.has(id) || teams.length >= wanted) return;
     seen.add(id);
-    teams.push({ id: id, name: names[teams.length] });
+    teams.push({ id: id, name: names[teams.length], hue: Number(team.hue) || TEAM_HUES[teams.length % TEAM_HUES.length] });
   });
   while (teams.length < wanted) {
     const id = 'team-' + (teams.length + 1);
     if (!seen.has(id)) {
       const ordinal = teams.length + 1;
-      seen.add(id); teams.push({ id: id, name: names[ordinal - 1] });
+      seen.add(id); teams.push({ id: id, name: names[ordinal - 1], hue: TEAM_HUES[(ordinal - 1) % TEAM_HUES.length] });
     }
   }
-  t.competitionTeams = teams;
-
   if (cfg.formation === 'manual') {
+    t.competitionTeams = teams;
     const known = new Set(teams.map(function (team) { return team.id; }));
     const missing = entries.some(function (entry) { return !known.has(core.teamIdOf(entry)); });
     // Em modo manual, sortear silenciosamente contrariaria a decisão explícita do
@@ -389,12 +392,47 @@ function assignCompetitionTeamsAtInitialDraw(t, rawConfig) {
     if (!byCategory.has(category)) byCategory.set(category, []);
     byCategory.get(category).push(entry);
   });
-  byCategory.forEach(function (categoryEntries) {
+  // Para a competição por times com categorias explícitas, não existe sorteio parcial:
+  // cada categoria precisa ter exatamente uma dupla para cada time. Sem isto o produto
+  // estaria revelando um "Time" que não poderia jogar todas as suas categorias.
+  const configuredCategories = (Array.isArray(t.combinedCategories) ? t.combinedCategories : (Array.isArray(t.categories) ? t.categories : []))
+    .map(function (category) { return String(category || '').trim(); }).filter(Boolean);
+  const categoriesToValidate = configuredCategories.length > 1 ? configuredCategories : Array.from(byCategory.keys()).filter(Boolean);
+  if (categoriesToValidate.length > 1) {
+    const bad = categoriesToValidate.filter(function (category) {
+      return !byCategory.has(category) || byCategory.get(category).length !== teams.length;
+    });
+    if (bad.length || entries.length !== categoriesToValidate.length * teams.length) {
+      return { ok: false, reason: 'competition-team-category-coverage', details: {
+        categories: categoriesToValidate.length, teams: teams.length, pairs: entries.length,
+        invalidCategories: bad
+      } };
+    }
+  }
+  // Só passa a expor a lista de times depois que a grade inteira foi validada.
+  // Assim uma tentativa rejeitada não deixa estado parcial nem para chamadores
+  // diretos (a transação já protege o Firestore, mas a função também é testável pura).
+  t.competitionTeams = teams;
+  function saturationFor(category) {
+    const label = String(category || '').toLocaleLowerCase();
+    if (/extreme/.test(label)) return 100;
+    if (/power/.test(label)) return 70;
+    if (/light/.test(label)) return 40;
+    return 70;
+  }
+  byCategory.forEach(function (categoryEntries, category) {
     for (let i = categoryEntries.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       const temp = categoryEntries[i]; categoryEntries[i] = categoryEntries[j]; categoryEntries[j] = temp;
     }
-    categoryEntries.forEach(function (entry, index) { entry.competitionTeamId = teams[index % teams.length].id; });
+    categoryEntries.forEach(function (entry, index) {
+      const team = teams[index % teams.length];
+      const saturation = saturationFor(category);
+      entry.competitionTeamId = team.id;
+      entry.competitionTeamHue = team.hue;
+      entry.competitionTeamSaturation = saturation;
+      entry.competitionTeamColor = 'hsl(' + team.hue + ' ' + saturation + '% 52%)';
+    });
   });
   return { ok: true, config: cfg };
 }

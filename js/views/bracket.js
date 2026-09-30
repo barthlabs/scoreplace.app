@@ -1667,11 +1667,18 @@ function _renderCompetitionTeamStandings(t) {
   if (!rows.length) return '';
   var byGames = cfg.ranking === 'games_diff';
   var safe = window._safeHtml || function (value) { return String(value == null ? '' : value); };
+  var colorsByTeam = {};
+  (t.competitionTeams || []).forEach(function (team) {
+    if (!team || !team.id) return;
+    var hue = Number(team.hue);
+    colorsByTeam[String(team.id)] = Number.isFinite(hue) ? 'hsl(' + hue + ' 78% 56%)' : '';
+  });
   var body = rows.map(function (row, index) {
     var medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : (index + 1) + 'º';
+    var color = colorsByTeam[String(row.id)] || '#94a3b8';
     return '<tr style="border-bottom:1px solid var(--border-color);">' +
       '<td style="padding:9px 10px;font-weight:800;color:var(--text-muted);">' + medal + '</td>' +
-      '<td style="padding:9px 10px;font-weight:700;color:var(--text-bright);">' + safe(row.name) + '</td>' +
+      '<td style="padding:9px 10px;font-weight:700;color:var(--text-bright);"><span aria-hidden="true" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:' + color + ';margin-right:7px;box-shadow:0 0 10px ' + color + ';"></span>' + safe(row.name) + '</td>' +
       (byGames
         ? '<td style="padding:9px 10px;text-align:center;font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);">' + (row.gamesDiff >= 0 ? '+' : '') + row.gamesDiff + '</td><td style="padding:9px 10px;text-align:center;color:var(--text-muted);">' + row.gamesWon + '-' + row.gamesLost + '</td>'
         : '<td style="padding:9px 10px;text-align:center;font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);">' + row.points + '</td>') +
@@ -5978,9 +5985,19 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   var _p1PromotedBadge = m.p1PromotedFromLower ? _promotedTag : '';
   var _p2PromotedBadge = m.p2PromotedFromLower ? _promotedTag : '';
 
+  // Competições por time guardam a cor no próprio par no momento do sorteio.
+  // O marcador discreto viaja com a dupla para cada jogo e deixa a leitura do
+  // representante do time imediata sem trocar as cores semânticas do placar.
+  var _teamColorDot = function(side) {
+    var entry = side === 'p1' ? m.team1Obj : m.team2Obj;
+    var color = entry && String(entry.competitionTeamColor || '').trim();
+    if (!/^hsl\(\d{1,3}\s+\d{1,3}%\s+\d{1,3}%\)$/.test(color)) return '';
+    return '<span aria-hidden="true" title="Time" style="width:10px;height:10px;border-radius:50%;background:' + color + ';box-shadow:0 0 0 2px rgba(255,255,255,.16);flex:0 0 auto;margin-right:7px;"></span>';
+  };
+
   const p1Row = `
     <div style="${rowStyle(p1IsWinner, 'p1')}">
-      ${ciDot(p1ci)}<div style="flex:1;overflow:hidden;min-width:0;">${_teamAvatarHtml(m.p1AguardaMelhor ? 'TBD' : m.p1, pendingSub, t, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p1', t) : (m.p1Uid || m.team1Uids)), m)}</div>
+      ${ciDot(p1ci)}${_teamColorDot('p1')}<div style="flex:1;overflow:hidden;min-width:0;">${_teamAvatarHtml(m.p1AguardaMelhor ? 'TBD' : m.p1, pendingSub, t, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p1', t) : (m.p1Uid || m.team1Uids)), m)}</div>
       ${_p1PromotedBadge}${_p1RepBadge}${_p1ByeBadge}
       <div id="score-p1-${m.id}" class="sp-mc-sc">
         ${_multiSet ? _setGridHtml(1) : (showInputs ? p1Score : (p1ScoreVal || ''))}
@@ -5989,7 +6006,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
 
   const p2Row = `
     <div style="${rowStyle(p2IsWinner, 'p2')}">
-      ${ciDot(p2ci)}<div style="flex:1;overflow:hidden;min-width:0;">${_teamAvatarHtml(m.p2AguardaMelhor ? 'TBD' : m.p2, pendingSub, t, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p2', t) : (m.p2Uid || m.team2Uids)), m)}</div>
+      ${ciDot(p2ci)}${_teamColorDot('p2')}<div style="flex:1;overflow:hidden;min-width:0;">${_teamAvatarHtml(m.p2AguardaMelhor ? 'TBD' : m.p2, pendingSub, t, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p2', t) : (m.p2Uid || m.team2Uids)), m)}</div>
       ${_p2PromotedBadge}${_p2RepBadge}${_p2ByeBadge}
       <div id="score-p2-${m.id}" class="sp-mc-sc">
         ${_multiSet ? _setGridHtml(2) : (showInputs ? p2Score : (p2ScoreVal || ''))}

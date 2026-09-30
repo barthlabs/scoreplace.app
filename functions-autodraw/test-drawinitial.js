@@ -140,6 +140,48 @@ const CASES = [
   ok('toggle de evitar não gera confronto entre duplas do mesmo time', real.every(function (match) {
     return match.p1CompetitionTeamId !== match.p2CompetitionTeamId;
   }), JSON.stringify(real.map(function (match) { return [match.p1CompetitionTeamId, match.p2CompetitionTeamId]; })));
+
+  // Neon: 96 participantes = 48 duplas, em seis categorias com oito duplas cada.
+  // O sorteio só pode seguir se cada time receber exatamente uma dupla de CADA categoria.
+  const neonCategories = ['Fem Light', 'Masc Light', 'Fem Power', 'Masc Power', 'Fem Extreme', 'Masc Extreme'];
+  const neonPairs = [];
+  neonCategories.forEach(function (category, categoryIndex) {
+    for (let i = 0; i < 8; i++) neonPairs.push(dupla(categoryIndex * 8 + i + 100, category));
+  });
+  const neonTournament = { combinedCategories: neonCategories, participants: neonPairs };
+  const neonConfig = { enabled: true, teamCount: 8, teamNames: ['Time 1', 'Time 2', 'Time 3', 'Time 4', 'Time 5', 'Time 6', 'Time 7', 'Time 8'], formation: 'draw', internalMatches: 'avoid', schedule: { enabled: true, teamsPerGroup: 8, gamesPerTeam: 4, mode: 'structured' } };
+  const neonAssigned = core.assignCompetitionTeamsAtInitialDraw(neonTournament, neonConfig);
+  const neonCoverage = {};
+  neonTournament.participants.forEach(function (entry) {
+    const key = entry.category + ':' + entry.competitionTeamId;
+    neonCoverage[key] = (neonCoverage[key] || 0) + 1;
+  });
+  ok('Neon: 48 duplas formam 8 times com seis duplas cada', neonAssigned.ok && neonTournament.participants.length === 48 && neonTournament.competitionTeams.length === 8 &&
+    neonTournament.competitionTeams.every(function (team) { return neonTournament.participants.filter(function (entry) { return entry.competitionTeamId === team.id; }).length === 6; }), JSON.stringify(neonTournament.competitionTeams));
+  ok('Neon: cada categoria tem exatamente uma dupla por time', neonCategories.every(function (category) {
+    return neonTournament.competitionTeams.every(function (team) { return neonCoverage[category + ':' + team.id] === 1; });
+  }), JSON.stringify(neonCoverage));
+  ok('Neon: Light/Power/Extreme persistem saturação 40/70/100 na cor da dupla', neonTournament.participants.every(function (entry) {
+    const expected = /Light/.test(entry.category) ? 40 : (/Power/.test(entry.category) ? 70 : 100);
+    return entry.competitionTeamSaturation === expected && /^hsl\(/.test(entry.competitionTeamColor || '');
+  }));
+  const malformedNeon = { combinedCategories: neonCategories, participants: neonPairs.slice(0, 47) };
+  const rejectedNeon = core.assignCompetitionTeamsAtInitialDraw(malformedNeon, neonConfig);
+  ok('Neon: não sorteia grade incompleta', rejectedNeon.ok === false && rejectedNeon.reason === 'competition-team-category-coverage', JSON.stringify(rejectedNeon));
+
+  // Estruturas multifase guardam a configuração na fase inicial. O servidor
+  // chama a mesma `_buildPhase0Cfg` da web e precisa enxergar essa fonte.
+  const neonInPhase = {
+    id: 'neon-phase', name: 'Neon em fases', status: 'open', format: 'Liga',
+    ligaRoundFormat: 'standard', ligaDrawMode: 'standard', drawManual: true,
+    combinedCategories: neonCategories,
+    participants: neonPairs.map(function (entry) { return Object.assign({}, entry, { participants: entry.participants.map(function (p) { return Object.assign({}, p); }) }); }),
+    phases: [{ teamCompetition: neonConfig }]
+  };
+  const phaseDraw = core.drawInitial(neonInPhase, { idStamp: 'neon-phase' });
+  ok('Neon: configuração da fase inicial também distribui os oito times', phaseDraw.ok &&
+    neonInPhase.competitionTeams.length === 8 && neonInPhase.participants.every(function (entry) { return !!entry.competitionTeamId; }),
+    JSON.stringify({ result: phaseDraw.ok, teams: neonInPhase.competitionTeams && neonInPhase.competitionTeams.length }));
 })();
 
 console.log('════════════════════════════════════════');

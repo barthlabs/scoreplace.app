@@ -2215,7 +2215,10 @@ window._buildPhase0Cfg = function (t) {
         // Time representado é uma camada sobre as duplas/categorias. A fase 0 precisa
         // receber a mesma configuração gravada no torneio; sem ela o sorteio do servidor
         // respeitaria o toggle e o caminho legado da tela redesenharia confrontos internos.
-        teamCompetition: t.teamCompetition || null,
+        // A configuração pode pertencer ao torneio inteiro ou à primeira fase
+        // de uma estrutura multifase. O servidor executa esta mesma função
+        // vendorada: a fonte precisa ser idêntica ao modal de pré-sorteio.
+        teamCompetition: t.teamCompetition || ((t.phases || [])[0] || {}).teamCompetition || null,
         teamSize: parseInt(t.teamSize, 10) || 1,
         // Elim: cabeças VIP SEMPRE sobem ao topo (recebem os BYEs = "VIP folga"). Grupos:
         // só quando o organizador liga o toggle (gruposSeedVip → espalha pelos grupos).
@@ -2594,9 +2597,80 @@ window._setPhaseLateEnrollment = function (tId, mode) {
     } else { _announce(); _fire(); }
 };
 
+/* ── Pré-sorteio de competição por times ─────────────────────────────────────
+ * A descoberta dos times e confrontos é parte do próprio sorteio. Antes dele a
+ * organização pode conferir somente a GRADE (48 duplas, 6 categorias, 8 por
+ * categoria), sem revelar uma atribuição parcial que depois mude no servidor.
+ * A confirmação é efêmera: não grava nem times nem confrontos no torneio. */
+window._teamDrawReviewApproved = window._teamDrawReviewApproved || {};
+window._showTeamCompetitionDrawReview = function (tId) {
+    var t = window._findTournamentById && window._findTournamentById(tId);
+    if (!t) return false;
+    var core = window.ScoreplaceTeamCompetition;
+    var cfg = core && core.normalize ? core.normalize(t.teamCompetition || ((t.phases || [])[0] || {}).teamCompetition) : null;
+    if (!cfg || !cfg.enabled || !cfg.schedule || !cfg.schedule.enabled) return false;
+    var entries = Array.isArray(t.participants) ? t.participants.filter(function (entry) { return entry && typeof entry === 'object'; }) : [];
+    var isPair = function (entry) {
+        return (Array.isArray(entry.participants) && entry.participants.length >= 2) ||
+          !!((entry.p1Uid || entry.p1Name || entry.p1ManualId) && (entry.p2Uid || entry.p2Name || entry.p2ManualId));
+    };
+    var categories = (Array.isArray(t.combinedCategories) ? t.combinedCategories : (Array.isArray(t.categories) ? t.categories : []))
+      .map(function (category) { return String(category || '').trim(); }).filter(Boolean);
+    var countByCategory = {};
+    entries.forEach(function (entry) {
+        var found = (typeof window._getParticipantCategories === 'function' ? window._getParticipantCategories(entry) : []) || [];
+        var category = String(found[0] || entry.category || '').trim();
+        countByCategory[category] = (countByCategory[category] || 0) + 1;
+    });
+    var expectedPairs = categories.length * cfg.teamCount;
+    var valid = entries.length === expectedPairs && entries.every(isPair) && categories.length > 0 && categories.every(function (category) { return countByCategory[category] === cfg.teamCount; });
+    var old = document.getElementById('team-draw-review-panel'); if (old) old.remove();
+    var overlay = document.createElement('div');
+    overlay.id = 'team-draw-review-panel';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:100001;background:rgba(2,6,23,.94);backdrop-filter:blur(10px);display:flex;align-items:center;justify-content:center;padding:16px;';
+    var safe = window._safeHtml || function (value) { return String(value == null ? '' : value); };
+    var rows = categories.map(function (category) {
+        var n = countByCategory[category] || 0, ok = n === cfg.teamCount;
+        return '<div style="display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid rgba(148,163,184,.14);"><span>' + safe(category) + '</span><b style="color:' + (ok ? '#4ade80' : '#fb7185') + ';">' + n + '/' + cfg.teamCount + ' duplas ' + (ok ? '✓' : '✕') + '</b></div>';
+    }).join('');
+    var rounds = Math.min(cfg.schedule.gamesPerTeam, Math.max(1, cfg.teamCount - 1));
+    overlay.innerHTML = '<section role="dialog" aria-modal="true" aria-labelledby="team-draw-review-title" style="width:min(680px,100%);max-height:92svh;overflow:auto;background:#101827;border:1px solid rgba(59,130,246,.45);border-radius:20px;box-shadow:0 28px 90px rgba(0,0,0,.65);padding:22px;">' +
+      '<h2 id="team-draw-review-title" style="margin:0;color:#f8fafc;font-size:1.25rem;">🎲 Sorteio de times</h2>' +
+      '<p style="margin:8px 0 18px;color:#cbd5e1;line-height:1.45;">Nenhum time nem confronto foi revelado. Ao sortear, cada time receberá uma dupla de cada categoria e, só então, os confrontos serão gerados.</p>' +
+      '<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:18px;">' +
+        '<div style="padding:10px;border-radius:10px;background:#182235;text-align:center;"><b style="display:block;color:#fff;font-size:1.25rem;">' + (entries.length * 2) + '</b><span style="font-size:.72rem;color:#94a3b8;">participantes</span></div>' +
+        '<div style="padding:10px;border-radius:10px;background:#182235;text-align:center;"><b style="display:block;color:#fff;font-size:1.25rem;">' + entries.length + '</b><span style="font-size:.72rem;color:#94a3b8;">duplas</span></div>' +
+        '<div style="padding:10px;border-radius:10px;background:#182235;text-align:center;"><b style="display:block;color:#fff;font-size:1.25rem;">' + categories.length + '</b><span style="font-size:.72rem;color:#94a3b8;">categorias</span></div>' +
+        '<div style="padding:10px;border-radius:10px;background:#182235;text-align:center;"><b style="display:block;color:#fff;font-size:1.25rem;">' + cfg.teamCount + '</b><span style="font-size:.72rem;color:#94a3b8;">times</span></div>' +
+      '</div>' +
+      '<div style="border:1px solid rgba(148,163,184,.22);border-radius:12px;padding:0 14px;margin-bottom:14px;">' + rows + '</div>' +
+      '<div style="font-size:.82rem;color:#cbd5e1;background:rgba(30,41,59,.7);padding:12px;border-radius:10px;margin-bottom:16px;">' +
+        '<b style="color:#f8fafc;">Confrontos: ' + (cfg.schedule.mode === 'structured' ? 'estruturados' : 'livres') + '</b><br>' +
+        (cfg.schedule.mode === 'structured' ? 'Os quatro adversários serão os mesmos nas seis categorias.' : 'Cada categoria terá sua própria grade de quatro adversários sem repetição por time.') +
+        ' Serão ' + rounds + ' rodadas para cada categoria.</div>' +
+      (!valid ? '<p style="margin:0 0 14px;color:#fda4af;font-weight:700;">O sorteio está bloqueado: são necessárias ' + expectedPairs + ' duplas já formadas, com ' + cfg.teamCount + ' em cada categoria.</p>' : '') +
+      '<div style="display:flex;justify-content:flex-end;gap:10px;"><button type="button" id="team-draw-cancel" class="btn">Cancelar</button><button type="button" id="team-draw-confirm" class="btn btn-primary"' + (valid ? '' : ' disabled aria-disabled="true" style="opacity:.45;cursor:not-allowed;"') + '>🎲 Sortear times e confrontos</button></div></section>';
+    document.body.appendChild(overlay);
+    var close = function () { overlay.remove(); };
+    overlay.querySelector('#team-draw-cancel').onclick = close;
+    var confirm = overlay.querySelector('#team-draw-confirm');
+    if (valid && confirm) confirm.onclick = function () {
+        window._teamDrawReviewApproved[String(tId)] = true;
+        close();
+        window.generateDrawFunction(tId);
+    };
+    return true;
+};
+
 window.generateDrawFunction = function (tId) {
     const t = window._findTournamentById(tId);
     if (!t) { if (window._dtrace) window._dtrace('generateDraw:NO-TOURNAMENT', { tId: String(tId) }); return; }
+
+    var _teamCfgForReview = t.teamCompetition || ((t.phases || [])[0] || {}).teamCompetition;
+    if (!window._teamDrawReviewApproved[String(tId)] && _teamCfgForReview && _teamCfgForReview.enabled === true) {
+        if (typeof window._drawBtnDone === 'function') window._drawBtnDone();
+        if (window._showTeamCompetitionDrawReview(tId)) return;
+    }
 
     /* ⛔⛔ NÃO SORTEAR COM MEIO ELENCO. ESTA É A CONSEQUÊNCIA MAIS CARA DA CLASSE.
      *
