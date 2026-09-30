@@ -234,6 +234,7 @@ const TABELA = [
   { nome: "updateOwnPushToken", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
   { nome: "updateOwnTournamentPreference", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
   { nome: "updateTournamentConfiguration", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },
+  { nome: "uploadTournamentImage", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },
   { nome: "verifyEmailCode", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
   { nome: "verifyPasswordResetPhone", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
   { nome: "verifyPasswordResetPhoneToken", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
