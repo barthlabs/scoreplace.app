@@ -84,11 +84,11 @@ function entryIdentities(p) {
   function add(v) { if (v && out.indexOf(String(v)) === -1) out.push(String(v)); }
   if (isPairEntry(p)) {
     add(p.p1Uid); add(p.p2Uid);
-    if (!p.p1Uid) add(String(p.p1Name || '').trim());
-    if (!p.p2Uid) add(String(p.p2Name || '').trim());
+    if (!p.p1Uid) { add(p.p1ManualId); add(String(p.p1Name || '').trim()); }
+    if (!p.p2Uid) { add(p.p2ManualId); add(String(p.p2Name || '').trim()); }
   } else {
     add(p.uid);
-    if (!p.uid) add(String(entryName(p) || '').trim());
+    if (!p.uid) { add(p.manualParticipantId); add(String(entryName(p) || '').trim()); }
   }
   if (Array.isArray(p.participants)) p.participants.forEach(function (s) { if (s) add(s.uid); });
   return out;
@@ -156,6 +156,10 @@ function backfillEnrollSeqs(arr) {
 function computeFormPair(data, opts) {
   var uid1 = opts.uid1 || '', name1 = opts.name1 || '';
   var uid2 = opts.uid2 || '', name2 = opts.name2 || '';
+  // Importações e vagas criadas pelo organizador não têm uid. O
+  // manualParticipantId é a identidade estável delas; nome continua só como
+  // compatibilidade para torneios antigos.
+  var manualId1 = opts.manualId1 || '', manualId2 = opts.manualId2 || '';
   var arr = asParticipantsArray(data).slice();
   var _backfilled = backfillEnrollSeqs(arr);
 
@@ -166,8 +170,8 @@ function computeFormPair(data, opts) {
   // nenhum, então acabava pareado de novo → a MESMA pessoa em DUAS duplas (visto ao vivo:
   // Lucia em "Fernando/Lucia" e em "Lucia/Patrícia"; Patrícia em "Nei/Patrícia" e na mesma).
   // Agora: (a) só casa SOLO; (b) se qualquer um dos dois já está em ALGUMA dupla, aborta.
-  var idA = uid1 || String(name1 || '').trim();
-  var idB = uid2 || String(name2 || '').trim();
+  var idA = uid1 || manualId1 || String(name1 || '').trim();
+  var idB = uid2 || manualId2 || String(name2 || '').trim();
   var pairedIds = {};
   arr.forEach(function (p) {
     if (!isPairEntry(p)) return;
@@ -186,11 +190,13 @@ function computeFormPair(data, opts) {
 
   var fi1 = arr.findIndex(function (p) {
     if (isPairEntry(p)) return false;
-    return uid1 ? (typeof p === 'object' && p && p.uid === uid1) : (entryName(p) === name1);
+    return uid1 ? (typeof p === 'object' && p && p.uid === uid1)
+      : (manualId1 ? (typeof p === 'object' && p && p.manualParticipantId === manualId1) : (entryName(p) === name1));
   });
   var fi2 = arr.findIndex(function (p) {
     if (isPairEntry(p)) return false;
-    return uid2 ? (typeof p === 'object' && p && p.uid === uid2) : (entryName(p) === name2);
+    return uid2 ? (typeof p === 'object' && p && p.uid === uid2)
+      : (manualId2 ? (typeof p === 'object' && p && p.manualParticipantId === manualId2) : (entryName(p) === name2));
   });
   if (fi1 === -1 || fi2 === -1 || fi1 === fi2) {
     return { outcome: 'notFound', participants: arr, updateData: _backfilled ? { participants: arr } : null };

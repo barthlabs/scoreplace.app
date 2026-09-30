@@ -300,8 +300,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         /* ⛔ VALOR LEGADO NÃO É DECISÃO (23/set/2026). Isto marcava QUALQUER `pNGender` antigo como
          * "do organizador" — e com a precedência nova isso poria gênero velho da dupla ACIMA do
          * perfil vivo. A marca agora é a do próprio membro, que a porta grava junto do valor. */
-        out.push({ uid: p.p1Uid || '', displayName: p.p1Name, name: p.p1Name, email: p.p1Email || '', categories: baseCats.slice(), category: p.category || '', gender: p.p1Gender || '', genderSource: p.p1GenderSource === 'organizador' ? 'organizador' : '', _fromDupla: true, _duplaIdx: idx, _duplaSide: 'p1' });
-        out.push({ uid: p.p2Uid || '', displayName: p.p2Name, name: p.p2Name, email: p.p2Email || '', categories: baseCats.slice(), category: p.category || '', gender: p.p2Gender || '', genderSource: p.p2GenderSource === 'organizador' ? 'organizador' : '', _fromDupla: true, _duplaIdx: idx, _duplaSide: 'p2' });
+        out.push({ uid: p.p1Uid || '', manualParticipantId: p.p1ManualId || '', displayName: p.p1Name, name: p.p1Name, email: p.p1Email || '', categories: baseCats.slice(), category: p.category || '', gender: p.p1Gender || '', genderSource: p.p1GenderSource === 'organizador' ? 'organizador' : '', _fromDupla: true, _duplaIdx: idx, _duplaSide: 'p1' });
+        out.push({ uid: p.p2Uid || '', manualParticipantId: p.p2ManualId || '', displayName: p.p2Name, name: p.p2Name, email: p.p2Email || '', categories: baseCats.slice(), category: p.category || '', gender: p.p2Gender || '', genderSource: p.p2GenderSource === 'organizador' ? 'organizador' : '', _fromDupla: true, _duplaIdx: idx, _duplaSide: 'p2' });
       } else {
         out.push(p);
       }
@@ -420,6 +420,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         name: name,
         email: email,
         uid: uid,
+        manualId: (p && p.manualParticipantId) || '',
         gender: gender,
         age: age,
         ageBuckets: ageBks,
@@ -1028,8 +1029,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   // Cânone visual da dupla na Análise: uma dupla já existente aparece UMA vez
   // como card arrastável; seus integrantes não reaparecem como cards solos.
   // O ✕ chama o caminho canônico de desfazer e soltar um solo sobre outro chama
-  // o caminho canônico de formar. Categoria e dupla usam sempre UIDs; nome é
-  // somente o rótulo visível. [[analysis_pairing_uses_canonical_uid_flow]]
+  // o caminho canônico de formar. A identidade pode ser UID ou
+  // manualParticipantId (importação/vaga manual); nome é apenas o último fallback
+  // dos torneios antigos. [[analysis_pairing_uses_canonical_identity_flow]]
   function _erPairGroups(rows) {
     var byPair = {};
     (rows || []).forEach(function (r) {
@@ -1047,9 +1049,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   function _erPairCard(members) {
       var a = members[0], b = members[1], pe = _pendingEdits[a.order] || _pendingEdits[b.order] || {};
       var changed = Object.prototype.hasOwnProperty.call(pe, 'category');
-      var split = (a.uid && b.uid)
-        ? '<button type="button" class="cancel-x-btn" title="Desfazer dupla" aria-label="Desfazer dupla ' + _esc(a.name + ' e ' + b.name) + '" onclick="event.stopPropagation();window._erSplitPair(' + a.order + ',this)" style="--cx-size:23px;position:absolute;top:7px;right:7px;">✕</button>'
-        : '';
+      // O X não pode depender de uid: importados sem conta também têm dupla e
+      // carregam manualParticipantId. A operação valida a identidade no servidor.
+      var split = '<button type="button" class="cancel-x-btn" title="Desfazer dupla" aria-label="Desfazer dupla ' + _esc(a.name + ' e ' + b.name) + '" onclick="event.stopPropagation();window._erSplitPair(' + a.order + ',this)" style="--cx-size:23px;position:absolute;top:7px;right:7px;">✕</button>';
       return '<div draggable="true" data-er-pair-order="' + a.order + '" data-er-person="' + _esc(a.name + ' ' + b.name) + '" ondragstart="window._erMxPairDragStart(event,' + a.order + ')" title="Arraste a dupla para uma categoria" style="position:relative;cursor:grab;display:flex;flex-direction:column;gap:5px;padding:10px 38px 10px 11px;border:1px solid ' + (changed ? 'rgba(245,158,11,.65)' : 'rgba(168,85,247,.45)') + ';border-radius:9px;background:' + (changed ? 'rgba(245,158,11,.07)' : 'rgba(168,85,247,.08)') + ';user-select:none;">' +
         '<div style="font-size:14px;font-weight:750;color:var(--text-bright);line-height:1.25;overflow-wrap:anywhere;">' + _esc(a.name) + '</div>' +
         '<div style="font-size:14px;font-weight:750;color:var(--text-bright);line-height:1.25;overflow-wrap:anywhere;">' + _esc(b.name) + '</div>' + split +
@@ -1071,6 +1073,25 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     // Re-renderizar a matriz preserva uma única fonte de verdade visual.
     if (typeof window._erRenderMatrix === 'function') window._erRenderMatrix();
   };
+  // A CF é a única escritora do roster. Quando ela responde, aplicar o roster
+  // devolvido aqui evita depender de snapshot/refresh e mantém a Análise no
+  // estado que foi de fato persistido (inclusive em participantes importados).
+  function _erApplyPairRoster(result) {
+    var data = (result && result.data) ? result.data : (result || {});
+    if (!_liveState || !Array.isArray(data.participants)) return false;
+    var t = _liveState.t;
+    t.participants = data.participants;
+    var stored = _erFindT(t.id);
+    if (stored && stored !== t) stored.participants = data.participants;
+    _liveState.rows = _buildRows(t, _expandDuplas(data.participants), {
+      byUid: _liveState.profileMap || {}, resolvedFor: _liveState.resolvedFor || {}
+    });
+    _pendingEdits = {};
+    _erClearSelection(true);
+    if (typeof window._erRenderMatrix === 'function') window._erRenderMatrix();
+    window._erUpdateSaveBar();
+    return true;
+  }
   // BOTÃO OCUPADO NÃO É REPINTADO. `_erSaveEdits` limpa `_pendingEdits` ANTES de terminar
   // de gravar, então qualquer chamada a esta função no meio do save veria n=0 e (a) trocaria
   // o "Salvando…" pelo rótulo normal e (b) ESCONDERIA a barra inline inteira — sumindo com
@@ -3138,11 +3159,40 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var rows = _liveState.rows || [];
     var source = rows.filter(function (r) { return r.order === sourceOrder; })[0];
     var target = rows.filter(function (r) { return r.order === targetOrder; })[0];
-    // A tela só oferece esta ação em cards solo. UID é obrigatório: nome nunca
-    // identifica a operação de formação, nem como fallback de escrita.
-    if (!source || !target || source._duplaIdx != null || target._duplaIdx != null || !source.uid || !target.uid) return;
-    if (typeof window._formDuplaByUids !== 'function') return;
-    window._formDuplaByUids(String(_liveState.t.id), source.name || '', source.uid, target.name || '', target.uid);
+    if (!source || !target || source._duplaIdx != null || target._duplaIdx != null) return;
+    window._erFormPair(source, target);
+  };
+  window._erFormPair = function (source, target) {
+    if (!_liveState || !_liveState.isOrg || !source || !target) return;
+    // Categoria staged ainda não existe no servidor. Formar agora faria a CF
+    // rejeitar a dupla por categoria ausente e voltaria a parecer que o drop
+    // "não fez nada". O aviso direciona para o único passo necessário.
+    var sp = _pendingEdits[source.order] || {}, tp = _pendingEdits[target.order] || {};
+    if (Object.prototype.hasOwnProperty.call(sp, 'category') || Object.prototype.hasOwnProperty.call(tp, 'category')) {
+      if (typeof showNotification === 'function') showNotification('Salve a categoria antes de formar a dupla', 'A dupla precisa ser validada no servidor com as categorias já gravadas.', 'warning');
+      return;
+    }
+    if (!(window.FirestoreDB && typeof window.FirestoreDB.formPair === 'function')) return;
+    var t = _liveState.t, label = (source.name || '') + ' / ' + (target.name || '');
+    window.FirestoreDB.formPair(String(t.id), {
+      uid1: source.uid || '', manualId1: source.manualId || '', name1: source.name || '',
+      uid2: target.uid || '', manualId2: target.manualId || '', name2: target.name || ''
+    }).then(function (res) {
+      var data = (res && res.data) ? res.data : (res || {});
+      if (data.alreadyPaired) { if (typeof showNotification === 'function') showNotification('Já está em dupla', (data.who || 'Um dos participantes') + ' já faz parte de outra dupla.', 'warning'); return; }
+      if (data.notFound) { if (typeof showNotification === 'function') showNotification('Não foi possível formar a dupla', 'Os inscritos não foram encontrados no estado atual do torneio.', 'warning'); return; }
+      if (data.invalidPairing) {
+        var msg = data.invalidPairing === 'categoryRequired' ? 'Atribua e salve a categoria dos dois participantes antes de formar a dupla.'
+          : data.invalidPairing === 'categoryMismatch' ? 'Nesta configuração, os dois participantes precisam estar na mesma categoria.'
+          : 'Na categoria mista, a dupla precisa ter uma mulher e um homem.';
+        if (typeof showNotification === 'function') showNotification('Dupla incompatível', msg, 'warning');
+        return;
+      }
+      if (!_erApplyPairRoster(res)) return;
+      if (typeof showNotification === 'function') showNotification('👫 Dupla formada', label, 'success');
+    }).catch(function (err) {
+      if (typeof showNotification === 'function') showNotification('Não foi possível formar a dupla', String((err && err.message) || err), 'error');
+    });
   };
   window._erSplitPair = function (order, btn) {
     if (!_liveState || !_liveState.isOrg) return;
@@ -3150,8 +3200,21 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var row = rows[0];
     if (!row || row._duplaIdx == null) return;
     var pair = (_liveState.rows || []).filter(function (r) { return r && r._duplaIdx === row._duplaIdx; });
-    if (pair.length !== 2 || !pair[0].uid || !pair[1].uid || typeof window._splitDupla !== 'function') return;
-    window._splitDupla(String(_liveState.t.id), pair[0].uid, pair[1].uid, btn);
+    if (pair.length !== 2 || !(window.FirestoreDB && typeof window.FirestoreDB.splitPair === 'function')) return;
+    var id1 = pair[0].uid || pair[0].manualId || pair[0].name || '';
+    var id2 = pair[1].uid || pair[1].manualId || pair[1].name || '';
+    if (!id1 || !id2) return;
+    if (btn && typeof window._spinButton === 'function') window._spinButton(btn, '');
+    window.FirestoreDB.splitPair(String(_liveState.t.id), { id1: id1, id2: id2 }).then(function (res) {
+      var data = (res && res.data) ? res.data : (res || {});
+      if (btn && typeof window._spinButtonDone === 'function') window._spinButtonDone(btn);
+      if (data.notFound) { if (typeof showNotification === 'function') showNotification('Não foi possível desfazer a dupla', 'O servidor não encontrou esta dupla no torneio.', 'warning'); return; }
+      if (!_erApplyPairRoster(res)) return;
+      if (typeof showNotification === 'function') showNotification('↩️ Dupla desfeita', pair[0].name + ' e ' + pair[1].name + ' voltaram para Sem dupla.', 'info');
+    }).catch(function (err) {
+      if (btn && typeof window._spinButtonDone === 'function') window._spinButtonDone(btn);
+      if (typeof showNotification === 'function') showNotification('Não foi possível desfazer a dupla', String((err && err.message) || err), 'error');
+    });
   };
   window._erMxPairDragStart = function (ev, order) {
     // Payload por order/índice interno, nunca por nome. O primeiro integrante
@@ -5289,7 +5352,7 @@ window._lzNaoEhEuMesmo = function (uid) {
 
     // Estado vivo pra busca/sort/filtros da lista de inscritos.
     var _isOrg = window._souOrganizador(t);
-    _liveState = { rows: rows, t: t, isOrg: _isOrg };
+    _liveState = { rows: rows, t: t, isOrg: _isOrg, profileMap: profileMap || {}, resolvedFor: resolvedFor || {} };
     _pendingEdits = {}; // v2.4.34: cada carga da página começa sem edições pendentes
 
     // A barra é a 1ª IRMÃ DEPOIS DO CABEÇALHO, fora do container com padding. `sticky` só

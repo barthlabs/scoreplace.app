@@ -34,9 +34,10 @@ const manualA = { name: 'Jogador 01', displayName: 'Jogador 01', manualParticipa
 const manualB = { name: 'Jogador 02', displayName: 'Jogador 02', manualParticipantId: 'manual-bbb', enrollSeq: 4 };
 const t1 = { participants: [manualA, manualB], teamOrigins: {} };
 
-const formado = pair.computeFormPair(t1, { name1: 'Jogador 01', name2: 'Jogador 02' });
+const formado = pair.computeFormPair(t1, { manualId1: 'manual-aaa', name1: 'Jogador 01', manualId2: 'manual-bbb', name2: 'Jogador 02' });
 const dupla = (formado.participants || []).find((p) => p && p.p1Name === 'Jogador 01');
 ok(!!dupla, '① a dupla foi formada no servidor');
+ok(formado.outcome === 'formed', '① a formação encontra cada importado pelo manualParticipantId, não pelo nome');
 ok(dupla && dupla.p1ManualId === 'manual-aaa' && dupla.p2ManualId === 'manual-bbb',
   '① ⭐⭐ e ela CARREGA o identificador dos dois — era isto que não era gravado');
 ok(dupla && dupla.p1Seq === 3 && dupla.p2Seq === 4,

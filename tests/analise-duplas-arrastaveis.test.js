@@ -36,8 +36,10 @@ ok(matrix.includes('catsBox + _erFormedPairsPanel(rows, t) + totalBar'), 'duplas
 ok(dragDrop.includes("application/x-scoreplace-pair"), 'drag da dupla transporta índice interno, não nome');
 ok(dragDrop.includes('window._erStageCategory(pairRows[0].order, pairCategory)'), 'drop atribui categoria pelo integrante identificado e propaga à dupla');
 ok(matrix.includes('pairsForBox') && matrix.includes('cardGrid(arr, pairs)'), 'dupla solta aparece no box da categoria junto do feedback visual');
-ok(dragDrop.includes('window._erMxDropOnSolo') && dragDrop.includes('window._formDuplaByUids'), 'soltar um solo sobre outro forma dupla pelo caminho canônico');
-ok(dragDrop.includes('window._erSplitPair') && dragDrop.includes('window._splitDupla'), 'o X desfaz dupla pelo caminho canônico');
+ok(pairCard.includes('var split = \'<button'), 'o X é renderizado também para dupla importada sem UID');
+ok(dragDrop.includes('window._erMxDropOnSolo') && dragDrop.includes('window._erFormPair') && dragDrop.includes('manualId1: source.manualId'), 'soltar um solo sobre outro forma dupla pela identidade canônica (UID ou manual)');
+ok(dragDrop.includes('window._erSplitPair') && dragDrop.includes('manualId') && dragDrop.includes('FirestoreDB.splitPair'), 'o X desfaz dupla pela identidade canônica (UID ou manual)');
+ok(src.includes('function _erApplyPairRoster') && src.includes('_liveState.rows = _buildRows'), 'resposta da CF reidrata a análise imediatamente, sem refresh');
 
-console.log('\n' + (fail ? '❌' : '✅') + ' análise-duplas-arrastáveis: ' + (14 - fail) + ' asserts ok, ' + fail + ' falharam');
+console.log('\n' + (fail ? '❌' : '✅') + ' análise-duplas-arrastáveis: ' + (16 - fail) + ' asserts ok, ' + fail + ' falharam');
 process.exitCode = fail ? 1 : 0;

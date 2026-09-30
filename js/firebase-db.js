@@ -2010,8 +2010,8 @@ window.FirestoreDB = {
   async formPair(tournamentId, opts) {
     return await this._callFn('formPair', {
       tournamentId: String(tournamentId),
-      uid1: (opts && opts.uid1) || '', name1: (opts && opts.name1) || '',
-      uid2: (opts && opts.uid2) || '', name2: (opts && opts.name2) || '',
+      uid1: (opts && opts.uid1) || '', manualId1: (opts && opts.manualId1) || '', name1: (opts && opts.name1) || '',
+      uid2: (opts && opts.uid2) || '', manualId2: (opts && opts.manualId2) || '', name2: (opts && opts.name2) || '',
       changeRule: !!(opts && opts.changeRule)
     });
   },
