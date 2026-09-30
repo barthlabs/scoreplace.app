@@ -24,7 +24,7 @@ const dropStart = src.indexOf('window._erMxDragStart');
 const dropEnd = src.indexOf('// ── Frescor', dropStart);
 const dragDrop = src.slice(dropStart, dropEnd);
 
-ok(panelStart >= 0, 'painel de cards de dupla existe');
+ok(panelStart >= 0 && panel.includes('repeat(auto-fill,minmax(min(170px,100%),1fr))') && !panel.includes('auto-fit,minmax(250px,1fr)'), 'painel de dupla usa a mesma grade compacta dos cards solos');
 ok(pairCard.includes('draggable="true"'), 'card de dupla é arrastável');
 ok(pairCard.includes('window._erMxPairDragStart'), 'card de dupla inicia o caminho próprio de drag');
 ok(pairCard.includes('rgba(245,158,11'), 'dupla pendente usa o feedback visual âmbar');
@@ -39,7 +39,7 @@ ok(matrix.includes('pairsForBox') && matrix.includes('cardGrid(arr, pairs)'), 'd
 ok(pairCard.includes('var split = \'<button'), 'o X é renderizado também para dupla importada sem UID');
 ok(dragDrop.includes('window._erMxDropOnSolo') && dragDrop.includes('window._erFormPair') && dragDrop.includes('manualId1: source.manualId'), 'soltar um solo sobre outro forma dupla pela identidade canônica (UID ou manual)');
 ok(dragDrop.includes('window._erSplitPair') && dragDrop.includes('manualId') && dragDrop.includes('FirestoreDB.splitPair'), 'o X desfaz dupla pela identidade canônica (UID ou manual)');
-ok(src.includes('function _erApplyPairRoster') && src.includes('_liveState.rows = _buildRows'), 'resposta da CF reidrata a análise imediatamente, sem refresh');
+ok(src.includes('function _erApplyPairRoster') && src.includes('_liveState.rows = _buildRows') && src.includes('t.participants.splice.apply') && src.includes('data.tournament && Array.isArray(data.tournament.participants)'), 'resposta da CF reidrata a análise imediatamente, sem refresh nem referência antiga');
 ok(src.includes('manualParticipantId: row.manualId') && src.includes('r.tournament && _liveState'), 'Salvar usa ID manual e aplica imediatamente o torneio confirmado');
 
 console.log('\n' + (fail ? '❌' : '✅') + ' análise-duplas-arrastáveis: ' + (17 - fail) + ' asserts ok, ' + fail + ' falharam');

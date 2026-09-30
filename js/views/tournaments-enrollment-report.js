@@ -1063,10 +1063,13 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var pairs = _erPairGroups(rows).filter(function (members) { return !_erPairCategory(members); });
     if (!pairs.length) return '';
     var cards = pairs.map(_erPairCard).join('');
+    // A grade da dupla segue exatamente a base dos cards solos desta matriz.
+    // `auto-fit` transformava uma única dupla em um card de largura total.
+    var pairGrid = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(min(170px,100%),1fr));gap:4px;min-width:0;';
     return '<div style="margin:0 0 14px;padding:13px;border:1px solid rgba(168,85,247,.36);border-radius:12px;background:rgba(168,85,247,.05);">' +
       '<div style="font-size:14px;font-weight:850;color:var(--sp-c-c4b5fd,#c4b5fd);margin-bottom:4px;">👥 Duplas formadas (' + pairs.length + ')</div>' +
       '<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">Arraste a dupla para mudar a categoria. O ✕ desfaz a dupla.</div>' +
-      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:7px;">' + cards + '</div></div>';
+      '<div class="sp-dnd-host" style="' + pairGrid + '">' + cards + '</div></div>';
   }
   window._erRenderFormedPairs = function () {
     // O painel agora faz parte da matriz, logo acima dos cards individuais.
@@ -1078,12 +1081,29 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   // estado que foi de fato persistido (inclusive em participantes importados).
   function _erApplyPairRoster(result) {
     var data = (result && result.data) ? result.data : (result || {});
-    if (!_liveState || !Array.isArray(data.participants)) return false;
+    // Aceita tanto o retorno direto da callable quanto o documento canônico
+    // envelopado. A UI nunca deve esperar um refresh para enxergar a dupla.
+    var roster = Array.isArray(data.participants) ? data.participants
+      : ((data.tournament && Array.isArray(data.tournament.participants)) ? data.tournament.participants : null);
+    if (!_liveState || !roster) return false;
     var t = _liveState.t;
-    t.participants = data.participants;
+    // Preserve a referência do array atual: outros trechos desta tela podem ter
+    // fechado sobre ela durante o drag. Substituí-la deixava o toast aparecer,
+    // mas os dois cards solos continuavam no DOM até um reload.
+    if (Array.isArray(t.participants) && t.participants !== roster) {
+      t.participants.splice.apply(t.participants, [0, t.participants.length].concat(roster));
+    } else {
+      t.participants = roster;
+    }
     var stored = _erFindT(t.id);
-    if (stored && stored !== t) stored.participants = data.participants;
-    _liveState.rows = _buildRows(t, _expandDuplas(data.participants), {
+    if (stored && stored !== t) {
+      if (Array.isArray(stored.participants) && stored.participants !== t.participants) {
+        stored.participants.splice.apply(stored.participants, [0, stored.participants.length].concat(t.participants));
+      } else {
+        stored.participants = t.participants;
+      }
+    }
+    _liveState.rows = _buildRows(t, _expandDuplas(t.participants), {
       byUid: _liveState.profileMap || {}, resolvedFor: _liveState.resolvedFor || {}
     });
     _pendingEdits = {};
