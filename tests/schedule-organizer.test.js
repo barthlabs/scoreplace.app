@@ -91,6 +91,9 @@ ok(byCategoryMatch.FL && byCategoryMatch.FP && byCategoryMatch.ML &&
   'cada categoria permanece no dia configurado, sem vazar para o outro dia');
 ok(byCategoryMatch.FL && byCategoryMatch.FP && byCategoryMatch.FL.ms < byCategoryMatch.FP.ms,
   'a ordem declarada torna Fem Light anterior a Fem Power no mesmo dia');
+const tooShort = Object.assign({}, categoryDays, { endDate:'2026-10-22T18:10' });
+ok(W._schGradeEstimada(tooShort).cabe === false && W._operationalSchedulePlan(tooShort).cabe === false,
+  'uma categoria que não cabe no dia bloqueia a aplicação da agenda');
 ok(/categorySchedule/.test(fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'tournaments-draw.js'), 'utf8')),
   'a revisão pré-sorteio permite gravar dia e ordem de cada categoria');
 const functionsSource = fs.readFileSync(path.join(__dirname, '..', 'functions-autodraw', 'index.js'), 'utf8');
@@ -122,6 +125,8 @@ ok(/ondrop/.test(organizerSource) && /manual\[from\.matchId\].*to\.court/.test(o
   'soltar um card sobre outro troca os slots de horário e quadra');
 ok(/← Voltar/.test(bracketSource) && /width:min\(1600px,calc\(100vw - 36px\)\)/.test(bracketSource),
   'o modal aproveita a largura útil e usa o botão padrão Voltar');
+ok(/if \(!latest\.cabe\)/.test(bracketSource) && /if \(!draft\.cabe\)/.test(organizerSource),
+  'nenhuma das duas agendas permite salvar distribuição que não cabe no dia');
 const timezoneRoundTrip = execFileSync(process.execPath, ['-e', [
   "const fs=require('fs'),vm=require('vm');",
   "const s={window:{},console};vm.createContext(s);",

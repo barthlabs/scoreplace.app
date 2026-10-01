@@ -105,7 +105,10 @@
       items.push({ matchId:String(m.id), court:court, scheduledAt:iso(at), scheduleLocked:false, scheduleSource:'estimate' });
       cursor = Math.max(cursor, at);
     });
-    return { baseScheduleRevision:Number(t.scheduleRevision || 0), items:items, courts:cs };
+    return { baseScheduleRevision:Number(t.scheduleRevision || 0), items:items, courts:cs,
+      // A agenda por categoria não pode ser aplicada se uma categoria explicitamente
+      // presa a um dia ultrapassa a janela desse dia.
+      cabe: !(grade && grade.cabe === false) };
   };
   function uid() { return (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c){ var r=Math.random()*16|0; return (c==='x'?r:(r&3|8)).toString(16); }); }
   function msg(title, body, type) { if (typeof window.showNotification === 'function') window.showNotification(title, body, type); }
@@ -234,7 +237,8 @@
       var board = window._operationalScheduleGrid(fresh, plan, { prefix:'agenda', activeDay:activeDay }); activeDay = board.activeDay;
       slot.innerHTML = '<section class="sp-operational-schedule" style="margin:12px 0;padding:12px 14px;border:1px solid rgba(56,189,248,.35);border-radius:12px;background:rgba(14,116,144,.10);display:flex;gap:12px;align-items:center;flex-wrap:wrap">' +
         '<div style="flex:1;min-width:220px"><strong>📍 Agenda operacional</strong><div style="font-size:.82rem;opacity:.78;margin-top:3px">' + total + ' jogos pendentes · ' + plan.courts.map(esc).join(' · ') + '. Alterar horário ou quadra fixa o jogo e reorganiza os demais; nada é salvo antes de aplicar.</div></div>' +
-        '<button type="button" class="btn btn-primary" id="sp-agenda-apply-' + esc(fresh.id) + '">Aplicar agenda</button>' +
+        (!plan.cabe ? '<div style="width:100%;color:#fbbf24;font-size:.8rem;font-weight:700">A agenda não cabe no dia atribuído às categorias. Ajuste dias, ordem, duração ou quadras antes de aplicar.</div>' : '') +
+        '<button type="button" class="btn btn-primary" id="sp-agenda-apply-' + esc(fresh.id) + '"' + (!plan.cabe ? ' disabled aria-disabled="true" style="opacity:.45;cursor:not-allowed"' : '') + '>Aplicar agenda</button>' +
         '<div style="width:100%;margin-top:2px">' + board.html + '</div></section>';
       Array.prototype.forEach.call(slot.querySelectorAll('[data-agenda-day]'), function (control) { control.onclick = function () { activeDay = control.getAttribute('data-agenda-day'); render(); }; });
       Array.prototype.forEach.call(slot.querySelectorAll('[data-agenda-match]'), function (card) {
@@ -270,6 +274,7 @@
       if (!button) return;
       button.onclick = function () {
         var latest = draftForFresh(), fresh = latest.fresh, draft = latest.plan;
+        if (!draft.cabe) { msg('Agenda não cabe', 'Ajuste os dias, a ordem, a duração ou as quadras antes de aplicar.', 'error'); return; }
         if (!draft.items.length) { msg('Agenda atualizada', 'Não há jogos pendentes para realocar.', 'info'); return; }
         button.disabled = true; button.textContent = 'Aplicando agenda…';
         var db = window.FirestoreDB;
