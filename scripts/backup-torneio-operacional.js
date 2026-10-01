@@ -53,6 +53,32 @@ function stable(value) {
 }
 function digest(text) { return crypto.createHash('sha256').update(text).digest('hex'); }
 
+function countEntities(subcollections) {
+  const records = subcollections.inscritos || [];
+  const identities = new Set();
+  let pairs = 0;
+  for (const record of records) {
+    const item = record.data && record.data.item || record.data || {};
+    const first = ['p1Uid', 'p1ManualId', 'p1Id', 'p1Seq'].map((key) => item[key]).find(Boolean);
+    const second = ['p2Uid', 'p2ManualId', 'p2Id', 'p2Seq'].map((key) => item[key]).find(Boolean);
+    if (first && second) {
+      pairs += 1;
+      identities.add('p1:' + String(first));
+      identities.add('p2:' + String(second));
+      continue;
+    }
+    const individual = ['uid', 'manualId', 'id'].map((key) => item[key]).find(Boolean) || record.id;
+    identities.add('individual:' + String(individual));
+  }
+  return {
+    enrollmentRecords: records.length,
+    participants: identities.size,
+    pairs,
+    // Times são criados pelo sorteio e não podem ser deduzidos de inscrições.
+    teams: null
+  };
+}
+
 (async () => {
   const tournamentId = arg('tournament');
   const output = arg('output') || DEFAULT_OUTPUT;
@@ -82,6 +108,7 @@ function digest(text) { return crypto.createHash('sha256').update(text).digest('
   };
   const body = JSON.stringify(payload, null, 2) + '\n';
   const sha256 = digest(body);
+  const entities = countEntities(subcollections);
   const manifest = {
     schema: payload.schema,
     project: PROJECT,
@@ -89,6 +116,7 @@ function digest(text) { return crypto.createHash('sha256').update(text).digest('
     createdAt,
     sha256,
     tournamentFields: Object.keys(payload.tournament.data).length,
+    entities,
     subcollections: Object.fromEntries(Object.entries(subcollections).map(([name, docs]) => [name, docs.length]))
   };
   const stamp = createdAt.replace(/[:.]/g, '-');
@@ -116,5 +144,6 @@ function digest(text) { return crypto.createHash('sha256').update(text).digest('
   console.log('✓ backup operacional gravado e relido');
   console.log('  arquivo: ' + target);
   console.log('  SHA-256: ' + sha256);
+  console.log('  entidades: participantes=' + entities.participants + ', duplas=' + entities.pairs + ', registros de inscrição=' + entities.enrollmentRecords + ', times=não sorteados');
   console.log('  subcoleções: ' + Object.entries(manifest.subcollections).map(([name, count]) => name + '=' + count).join(', '));
 })().catch((error) => { console.error('✗ ' + (error && error.message || error)); process.exit(1); });
