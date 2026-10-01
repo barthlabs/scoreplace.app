@@ -6591,6 +6591,60 @@ window._renderPendingDrawPreview = function (t) {
   return html;
 };
 
+// Agenda antes da publicação: usa o mesmo planejador da agenda operacional, mas
+// monta uma visão efêmera sobre `pendingDraw.draft`. Assim a organização pode mudar
+// a ordem ou a quadra e ver os outros jogos se rearranjarem sem criar jogos públicos.
+window._openPendingInitialSchedule = function (tId) {
+  var getTournament = window._findTournamentById || function (id) {
+    return window.AppStore && (window.AppStore.tournaments || []).find(function (x) { return String(x.id) === String(id); });
+  };
+  var t = getTournament(tId), pd = t && t.pendingDraw, draft = pd && pd.kind === 'initial' && pd.draft;
+  if (!t || !draft || !Array.isArray(draft.matches) || typeof window._operationalSchedulePlan !== 'function') {
+    if (window.showNotification) window.showNotification('Agenda indisponível', 'Atualize a tela e tente novamente.', 'error');
+    return;
+  }
+  var esc = window._safeHtml || function (s) { return String(s == null ? '' : s); };
+  var manual = {};
+  var old = document.getElementById('sp-pending-schedule-overlay'); if (old) old.remove();
+  var overlay = document.createElement('div'); overlay.id = 'sp-pending-schedule-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:200100;background:rgba(2,6,23,.78);padding:18px;overflow:auto;box-sizing:border-box;';
+  function view() {
+    var x = Object.assign({}, t, draft);
+    x.id = t.id; x.matches = draft.matches; x.scheduleRevision = Number(pd.scheduleRevision || 0);
+    return x;
+  }
+  function localValue(iso) {
+    var ms = Date.parse(iso || ''); if (!Number.isFinite(ms)) return '';
+    var d = new Date(ms - new Date(ms).getTimezoneOffset() * 60000); return d.toISOString().slice(0, 16);
+  }
+  function label(m, fallback) { return 'Jogo ' + String((m && (m.number || m.matchNumber || m.id)) || fallback); }
+  function plan() { return window._operationalSchedulePlan(view(), Object.keys(manual).map(function (id) { return manual[id]; })); }
+  function render() {
+    var p = plan(), byId = {}; draft.matches.forEach(function (m) { if (m) byId[String(m.id)] = m; });
+    var rows = p.items.slice().sort(function (a, b) { return String(a.scheduledAt).localeCompare(String(b.scheduledAt)); }).map(function (item) {
+      var m = byId[item.matchId], options = p.courts.map(function (court) { return '<option value="' + esc(court) + '"' + (court === item.court ? ' selected' : '') + '>' + esc(court) + '</option>'; }).join('');
+      return '<div style="display:grid;grid-template-columns:minmax(85px,1fr) minmax(130px,1.2fr) minmax(105px,.9fr);gap:8px;align-items:end;padding:9px 0;border-top:1px solid rgba(148,163,184,.2)">' +
+        '<strong style="font-size:.82rem">' + esc(label(m, item.matchId)) + '</strong>' +
+        '<label style="font-size:.75rem">Horário<input data-pis-time="' + esc(item.matchId) + '" type="datetime-local" value="' + esc(localValue(item.scheduledAt)) + '" style="display:block;width:100%;box-sizing:border-box;margin-top:3px"></label>' +
+        '<label style="font-size:.75rem">Quadra<select data-pis-court="' + esc(item.matchId) + '" style="display:block;width:100%;box-sizing:border-box;margin-top:3px">' + options + '</select></label></div>';
+    }).join('');
+    overlay.innerHTML = '<div role="dialog" aria-modal="true" style="max-width:850px;margin:0 auto;background:#111827;border:1px solid rgba(56,189,248,.5);border-radius:16px;padding:16px;color:#e5e7eb;box-shadow:0 24px 70px rgba(0,0,0,.55)">' +
+      '<div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start"><div><h2 style="margin:0;font-size:1.05rem">📍 Planejar antes de publicar</h2><p style="margin:5px 0 12px;font-size:.82rem;line-height:1.4;color:#cbd5e1">Ao mudar horário ou quadra, os jogos ainda livres se reorganizam. Nada fica visível para participantes até publicar a chave.</p></div><button type="button" data-pis-close class="btn">Fechar</button></div>' +
+      '<div style="font-size:.76rem;color:#94a3b8;margin-bottom:6px">' + p.items.length + ' jogos · ' + p.courts.map(esc).join(' · ') + '</div>' + rows +
+      '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px"><button type="button" data-pis-apply class="btn btn-primary">Aplicar agenda no rascunho</button></div></div>';
+    overlay.querySelector('[data-pis-close]').onclick = function () { overlay.remove(); };
+    Array.prototype.forEach.call(overlay.querySelectorAll('[data-pis-court]'), function (control) { control.onchange = function () { var item = p.items.find(function (x) { return String(x.matchId) === String(control.getAttribute('data-pis-court')); }); if (item) { manual[item.matchId] = { matchId:item.matchId, court:control.value, scheduledAt:item.scheduledAt }; render(); } }; });
+    Array.prototype.forEach.call(overlay.querySelectorAll('[data-pis-time]'), function (control) { control.onchange = function () { var item = p.items.find(function (x) { return String(x.matchId) === String(control.getAttribute('data-pis-time')); }); var ms = Date.parse(control.value || ''); if (item && Number.isFinite(ms)) { manual[item.matchId] = { matchId:item.matchId, court:item.court, scheduledAt:new Date(ms).toISOString() }; render(); } }; });
+    overlay.querySelector('[data-pis-apply]').onclick = function (event) {
+      var button = event.currentTarget, latest = plan(); button.disabled = true; button.textContent = 'Salvando agenda…';
+      window._callCF('setPendingInitialSchedule', { tournamentId:String(t.id), jogos:latest.items.map(function (i) { return { matchId:i.matchId, court:i.court, scheduledAt:i.scheduledAt }; }) }, 'Entre na sua conta para salvar a agenda.')
+        .then(function () { if (window.showNotification) window.showNotification('Agenda do rascunho salva', 'A chave continua em revisão até você publicar.', 'success'); overlay.remove(); if (window._rerenderBracket) window._rerenderBracket(t.id); })
+        .catch(function (e) { button.disabled=false; button.textContent='Aplicar agenda no rascunho'; if (window.showNotification) window.showNotification('Agenda não salva', (e && e.message) || 'Tente novamente.', 'error'); });
+    };
+  }
+  document.body.appendChild(overlay); render();
+};
+
 window._renderPendingDrawBanner = function (t) {
   if (!t || !t.pendingDraw) return '';
   var store = window.AppStore;
@@ -6607,6 +6661,7 @@ window._renderPendingDrawBanner = function (t) {
       '<div style="margin-top:8px;max-height:380px;overflow:auto;">' + preview + '</div>' +
     '</details>' +
     '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
+      (t.pendingDraw && t.pendingDraw.kind === 'initial' ? '<button class="btn btn-outline" onclick="event.stopPropagation(); window._openPendingInitialSchedule(\'' + esc(t.id) + '\')">📍 Planejar quadras e horários</button>' : '') +
       '<button class="btn btn-outline" style="color:var(--sp-c-f87171,#f87171);border-color:rgba(248,113,113,0.5);" onclick="event.stopPropagation(); window._annulPendingDraw(\'' + esc(t.id) + '\')">✕ Anular</button>' +
       '<button class="btn btn-shine" style="background:#10b981;color:#fff;border:1px solid var(--sp-b-255-255-255-03,rgba(255,255,255,0.3));font-weight:700;" onclick="event.stopPropagation(); window._publishPendingDraw(\'' + esc(t.id) + '\')">🚀 Publicar sorteio</button>' +
     '</div>' +

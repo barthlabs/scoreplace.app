@@ -8,6 +8,7 @@ const ok=(v,s)=>{console.log((v?'✓ ':'✗ ')+s);if(!v)f++;};
 const a=i.slice(i.indexOf('exports.resolvePendingDraw'),i.indexOf('// ─── Reconciliação',i.indexOf('exports.resolvePendingDraw')));
 const c=b.slice(b.indexOf('window._publishPendingDraw'),b.indexOf('// v2.7.6:',b.indexOf('window._publishPendingDraw')));
 const draw=i.slice(i.indexOf('exports.drawRound'),i.indexOf('// ─── Convite de dupla',i.indexOf('exports.drawRound')));
+const agenda=i.slice(i.indexOf('exports.setPendingInitialSchedule'),i.indexOf('// ─── DECISÃO DO ORGANIZADOR',i.indexOf('exports.setPendingInitialSchedule')));
 ok(a.includes('db.runTransaction')&&a.includes('_leTorneio(tx,ref,tId)')&&a.includes('_gravaTorneio(tx,ref,t,antes'),'Function relê e grava pendingDraw na transação');
 ok(a.includes('_isTournamentAdmin(t,uid)'),'Function exige organização por uid');
 ok(a.includes("action==='annul'")&&a.includes('t.pendingDraw=null'),'Function resolve publicar e anular');
@@ -15,4 +16,7 @@ ok(c.includes("_callCF('resolvePendingDraw'")&&!/AppStore\.mutate|_notifyDrawPer
 ok(draw.includes("kind: 'initial'")&&draw.includes('draft: _rascunhoDoSorteioInicial(t)')&&draw.includes('_stageInitial'),'Sorteio inicial de times fica em rascunho antes de materializar a chave');
 ok(a.includes("pd.kind === 'initial'")&&a.includes('_aplicaRascunhoDoSorteioInicial(t, pd.draft)'),'Publicação aplica somente o rascunho derivado na transação');
 ok(/if \(d\.staged\) \{[\s\S]*?\} else \{[\s\S]*?_notifyDrawPersonalized/.test(d),'Rascunho não dispara notificação antes da publicação');
+ok(agenda.includes('db.runTransaction')&&agenda.includes('_isTournamentAdmin(t, uid)')&&agenda.includes('pd.kind !== \'initial\''),'Agenda do rascunho é transacional e exclusiva da organização');
+ok(agenda.includes('pd.draft.matches')&&agenda.includes('match.court = item.court')&&agenda.includes('match.scheduleLocked = true'),'Agenda altera somente jogos do rascunho e os fixa antes da publicação');
+ok(b.includes('window._openPendingInitialSchedule')&&b.includes("_callCF('setPendingInitialSchedule'"),'Cliente planeja no rascunho e delega o salvamento à Function');
 process.exit(f?1:0);

@@ -4159,6 +4159,63 @@ exports.resolvePendingDraw = onCall(async (request) => {
   });
 });
 
+// ─── Agenda do rascunho inicial: organiza antes de tornar a chave pública ───
+// A agenda de produção vive em `functions.setMatchSchedule`, onde os jogos já são
+// registros canônicos. No rascunho inicial eles ainda pertencem exclusivamente ao
+// pacote `pendingDraw.draft`; escrever no torneio aqui seria publicar sem querer.
+// Esta porta aceita somente a lista completa calculada pelo planejador e grava a
+// intenção no próprio rascunho, dentro de uma transação e só para a organização.
+exports.setPendingInitialSchedule = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid;
+  const data = request.data || {};
+  const tId = String(data.tournamentId || '').trim();
+  const raw = Array.isArray(data.jogos) ? data.jogos : null;
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId || !raw || !raw.length || raw.length > 300) {
+    throw new HttpsError('invalid-argument', 'Agenda do rascunho inválida.');
+  }
+  const itens = raw.map((item) => {
+    if (!item || item.matchId == null) throw new HttpsError('invalid-argument', 'Cada jogo precisa de identidade.');
+    const matchId = String(item.matchId);
+    const court = String(item.court || '').trim().slice(0, 80);
+    const scheduledAt = String(item.scheduledAt || '');
+    if (!court || !scheduledAt || !Number.isFinite(Date.parse(scheduledAt))) {
+      throw new HttpsError('invalid-argument', 'Cada jogo precisa de quadra e horário válidos.');
+    }
+    return { matchId, court, scheduledAt };
+  });
+  if (new Set(itens.map((item) => item.matchId)).size !== itens.length) {
+    throw new HttpsError('invalid-argument', 'Há jogo repetido na agenda.');
+  }
+  const ref = db.collection('tournaments').doc(tId), agoraIso = new Date().toISOString();
+  return db.runTransaction(async (tx) => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização reorganiza este rascunho.', { tId, uid });
+    const pd = t.pendingDraw;
+    if (!pd || pd.kind !== 'initial' || !pd.draft || !Array.isArray(pd.draft.matches)) {
+      throw new HttpsError('failed-precondition', 'Não há sorteio inicial em revisão.');
+    }
+    const byId = new Map(pd.draft.matches.filter((m) => m && !m.isBye && !m.isSitOut).map((m) => [String(m.id), m]));
+    if (itens.length !== byId.size || itens.some((item) => !byId.has(item.matchId))) {
+      throw new HttpsError('invalid-argument', 'A agenda precisa cobrir exatamente os jogos do rascunho.');
+    }
+    const antes = _antesDoMotor(t);
+    itens.forEach((item) => {
+      const match = byId.get(item.matchId);
+      match.court = item.court;
+      match.scheduledAt = item.scheduledAt;
+      match.scheduledKind = 'estimate';
+      match.scheduleLocked = true;
+      match.scheduleSource = 'organizer';
+    });
+    pd.scheduleRevision = Number(pd.scheduleRevision || 0) + 1;
+    pd.scheduleUpdatedAt = agoraIso;
+    const b = _gravaTorneio(tx, ref, t, antes, { agoraIso });
+    return { ok: true, changed: true, scheduleRevision: pd.scheduleRevision, tournament: b.clean };
+  });
+});
+
 // ─── DECISÃO DO ORGANIZADOR SOBRE TARDIO EM CHAVE DE FOLGA ──────────────────
 // ⛔⛔ POR QUE ESTA PORTA EXISTE: no desenho de FOLGA a rodada de entrada é dimensionada pela
 // potência de 2 abaixo do número de inscritos. Mudar esse número muda QUEM estreia — medido em
