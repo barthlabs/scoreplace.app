@@ -613,7 +613,8 @@ window._wlDisplayName = function (t, key) {
 
 // Remove da espera pela CHAVE (uid, depois manualParticipantId; nome só pro informal
 // legado). Espelha _removeFromWaitlist, que continua existindo pros caminhos que só
-// têm o nome em mãos.
+// têm o nome em mãos. Esta definição é vendorizada no `draw-core` da Cloud Function:
+// promotionar alguém para uma dupla/jogo nunca pode depender de um helper só do browser.
 window._removeFromWaitlistByKey = function (t, key) {
   var domain = _wlDomain();
   if (domain && typeof domain.removeByKey === 'function') return domain.removeByKey(t, key, _wlDomainHelpers(t));
