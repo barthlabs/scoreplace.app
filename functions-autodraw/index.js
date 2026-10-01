@@ -969,7 +969,12 @@ function _drawFail(code, reason, ctx) {
 // pela organização antes do primeiro sorteio. Esta validação vive no servidor
 // para impedir que uma aba velha ou chamada manual pule a tela de decisão.
 function _requireExplicitTeamDrawPlan(t, tId) {
-  const raw = t && (t.teamCompetition || ((t.phases || [])[0] || {}).teamCompetition);
+  const core = drawWindow && drawWindow.ScoreplaceTeamCompetition;
+  // Não usar `topo || fase`: um espelho incompleto no torneio já fez o
+  // servidor ignorar a agenda e o modo confirmados na fase inicial.
+  const raw = core && typeof core.configurationForTournament === 'function'
+    ? core.configurationForTournament(t)
+    : (t && (t.teamCompetition || ((t.phases || [])[0] || {}).teamCompetition));
   if (!raw || raw.enabled !== true || !raw.schedule || raw.schedule.enabled === false) return;
   const mode = raw.schedule.mode;
   if (raw.schedule.modeConfirmed !== true || (mode !== 'structured' && mode !== 'free')) {
@@ -1114,7 +1119,10 @@ exports.drawRound = onCall(async (request) => {
      * confirmação explícita. Assim a organização pode conferir/reordenar antes de
      * avisar os participantes. Um re-sorteio de chave já pública continua sendo uma
      * alteração explícita e não é escondido num rascunho. */
-    const _tcCfg = t.teamCompetition || ((t.phases || [])[0] || {}).teamCompetition || null;
+    const _tcCore = drawWindow && drawWindow.ScoreplaceTeamCompetition;
+    const _tcCfg = _tcCore && typeof _tcCore.configurationForTournament === 'function'
+      ? _tcCore.configurationForTournament(t)
+      : (t.teamCompetition || ((t.phases || [])[0] || {}).teamCompetition || null);
     const _stageInitial = !hadBracket && (t.stagedDraw === true || !!(_tcCfg && _tcCfg.enabled));
     if (_stageInitial) {
       const tEspera = JSON.parse(JSON.stringify(_tAntes));

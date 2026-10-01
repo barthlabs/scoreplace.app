@@ -16,6 +16,28 @@ var ScoreplaceTeamCompetition;
     const text = (value) => value == null ? '' : String(value).trim();
     const record = (value) => (value && typeof value === 'object' && !Array.isArray(value))
         ? value : {};
+    /**
+     * A configuração pode estar no torneio ou, em eventos multifase legados, na
+     * primeira fase. Não basta usar `topo || fase`: uma cópia incompleta no topo
+     * (por exemplo, sem `schedule`) escondia o plano completo da fase e fazia o
+     * sorteio pular a decisão obrigatória da organização.
+     *
+     * Preferimos sempre uma configuração ativa com agenda declarada. Se não
+     * houver nenhuma, devolvemos a primeira competição ativa para que quem chama
+     * possa bloquear/explicar a configuração incompleta — nunca inventar modo.
+     */
+    function configurationForTournament(value) {
+        const tournament = record(value);
+        const phases = Array.isArray(tournament.phases) ? tournament.phases : [];
+        const candidates = [tournament.teamCompetition].concat(phases.map((phase) => record(phase).teamCompetition));
+        const active = candidates.filter((candidate) => record(candidate).enabled === true);
+        const planned = active.find((candidate) => {
+            const schedule = record(record(candidate).schedule);
+            return Object.keys(schedule).length > 0 && schedule.enabled !== false;
+        });
+        return record(planned || active[0]);
+    }
+    ScoreplaceTeamCompetition.configurationForTournament = configurationForTournament;
     /** Normaliza a escolha feita ANTES do sorteio; ausência mantém torneios existentes intactos. */
     function normalize(value) {
         const raw = record(value);

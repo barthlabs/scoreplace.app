@@ -3,6 +3,7 @@ const fs=require('fs');
 const i=fs.readFileSync('functions-autodraw/index.js','utf8');
 const b=fs.readFileSync('js/views/bracket-logic.js','utf8');
 const d=fs.readFileSync('js/views/tournaments-draw.js','utf8');
+const tc=fs.readFileSync('src/domain/team-competition.ts','utf8');
 let f=0;
 const ok=(v,s)=>{console.log((v?'✓ ':'✗ ')+s);if(!v)f++;};
 const a=i.slice(i.indexOf('exports.resolvePendingDraw'),i.indexOf('// ─── Reconciliação',i.indexOf('exports.resolvePendingDraw')));
@@ -23,6 +24,7 @@ ok(agenda.includes('pd.draft.matches')&&agenda.includes('match.court = item.cour
 ok(b.includes('window._openPendingInitialSchedule')&&b.includes("_callCF('setPendingInitialSchedule'"),'Cliente planeja no rascunho e delega o salvamento à Function');
 ok(i.includes('exports.getPendingInitialDraw')&&i.includes('_isTournamentAdmin(t, uid)')&&i.includes("collection('privateDraws')"),'Prévia privada só é lida pela Function após conferir a organização');
 ok(draw.includes('_requireExplicitTeamDrawPlan(t, tId)')&&i.includes('modeConfirmed')&&i.includes('categorySchedule')&&i.includes('plan.confirmed === true'),'Function bloqueia competição por times sem modo e agenda explicitamente escolhidos');
+ok(tc.includes('function configurationForTournament')&&i.includes('configurationForTournament(t)')&&d.includes('configurationForTournament(t)'), 'cliente e Function não deixam cópia parcial no topo pular a decisão obrigatória');
 ok(d.includes('name="team-draw-mode"')&&d.includes('modeConfirmed:true')&&d.includes('confirmed:true'),'Tela exige e persiste modo e agenda escolhidos pela organização');
 ok(d.includes('data-team-court-rank')&&d.includes('courtOrder:selectedCourtOrder'),'Tela permite declarar a prioridade das quadras antes do sorteio');
 ok(agenda.includes('match.matchNumber = matchNumber.get(item.matchId)')&&agenda.includes('courtRank'),'Agenda do rascunho renumera jogos continuamente pela ordem de horário e quadra');

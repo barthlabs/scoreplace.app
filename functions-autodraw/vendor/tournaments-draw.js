@@ -2218,7 +2218,11 @@ window._buildPhase0Cfg = function (t) {
         // A configuração pode pertencer ao torneio inteiro ou à primeira fase
         // de uma estrutura multifase. O servidor executa esta mesma função
         // vendorada: a fonte precisa ser idêntica ao modal de pré-sorteio.
-        teamCompetition: t.teamCompetition || ((t.phases || [])[0] || {}).teamCompetition || null,
+        // A mesma resolução do modal e da Cloud Function: uma cópia parcial no
+        // topo não pode ocultar o plano completo guardado na fase inicial.
+        teamCompetition: (window.ScoreplaceTeamCompetition && window.ScoreplaceTeamCompetition.configurationForTournament
+          ? window.ScoreplaceTeamCompetition.configurationForTournament(t)
+          : (t.teamCompetition || ((t.phases || [])[0] || {}).teamCompetition || null)),
         teamSize: parseInt(t.teamSize, 10) || 1,
         // Elim: cabeças VIP SEMPRE sobem ao topo (recebem os BYEs = "VIP folga"). Grupos:
         // só quando o organizador liga o toggle (gruposSeedVip → espalha pelos grupos).
@@ -2607,7 +2611,10 @@ window._showTeamCompetitionDrawReview = function (tId) {
     var t = window._findTournamentById && window._findTournamentById(tId);
     if (!t) return false;
     var core = window.ScoreplaceTeamCompetition;
-    var cfg = core && core.normalize ? core.normalize(t.teamCompetition || ((t.phases || [])[0] || {}).teamCompetition) : null;
+    var rawCompetition = core && core.configurationForTournament
+      ? core.configurationForTournament(t)
+      : (t.teamCompetition || ((t.phases || [])[0] || {}).teamCompetition);
+    var cfg = core && core.normalize ? core.normalize(rawCompetition) : null;
     if (!cfg || !cfg.enabled || !cfg.schedule || !cfg.schedule.enabled) return false;
     var entries = Array.isArray(t.participants) ? t.participants.filter(function (entry) { return entry && typeof entry === 'object'; }) : [];
     var isPair = function (entry) {
@@ -2766,7 +2773,9 @@ window.generateDrawFunction = function (tId) {
     // extensão pode restaurar uma página antes do bloco global acima executar.
     // A aprovação é efêmera, então inicializar de forma idempotente é seguro.
     window._teamDrawReviewApproved = window._teamDrawReviewApproved || {};
-    var _teamCfgForReview = t.teamCompetition || ((t.phases || [])[0] || {}).teamCompetition;
+    var _teamCfgForReview = window.ScoreplaceTeamCompetition && window.ScoreplaceTeamCompetition.configurationForTournament
+      ? window.ScoreplaceTeamCompetition.configurationForTournament(t)
+      : (t.teamCompetition || ((t.phases || [])[0] || {}).teamCompetition);
     if (!window._teamDrawReviewApproved[String(tId)] && _teamCfgForReview && _teamCfgForReview.enabled === true) {
         if (typeof window._drawBtnDone === 'function') window._drawBtnDone();
         if (window._showTeamCompetitionDrawReview(tId)) return;

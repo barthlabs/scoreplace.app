@@ -33,6 +33,14 @@ const neonSchedule = C.normalize({ enabled: true, teamNames: ['Venom', 'Blackout
 ok(neonSchedule.schedule.enabled && neonSchedule.schedule.teamsPerGroup === 8 && neonSchedule.schedule.gamesPerTeam === 4 && neonSchedule.schedule.mode === 'structured',
   'grade por times preserva 8 times, 4 jogos por time e o modo estruturado');
 
+const phasePlan = { enabled: true, teamNames: ['Venom', 'Blackout'], schedule: { enabled: true, teamsPerGroup: 2, gamesPerTeam: 1, mode: 'structured', modeConfirmed: true } };
+const incompleteTopLevel = { enabled: true, teamNames: ['Venom', 'Blackout'] };
+const resolvedPlan = C.configurationForTournament({ teamCompetition: incompleteTopLevel, phases: [{ teamCompetition: phasePlan }] });
+ok(resolvedPlan === phasePlan,
+  'configuração parcial no topo não esconde o modo, a agenda e a confirmação guardados na fase');
+ok(C.configurationForTournament({ teamCompetition: incompleteTopLevel }).enabled === true,
+  'sem plano completo, a competição ativa ainda é retornada para bloquear sorteio sem escolha explícita');
+
 const teamUi = fs.readFileSync('js/views/format2-ui.js', 'utf8');
 ok(teamUi.includes('f2-team-schedule-teams-value') && teamUi.includes('f2-team-schedule-games-value') && teamUi.includes('_f2TeamScheduleRefresh(tc)'),
   'sliders de times atualizam seus números no próprio arraste, sem recriar o range em foco');
