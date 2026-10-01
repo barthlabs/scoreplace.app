@@ -83,9 +83,15 @@ window._duplaCard = function (t, p, draggable, ctx) {
         }
       }
     }
+    // O rótulo vem de configuração do organizador e entra em HTML. Escapa no próprio
+    // limite de renderização para o card permanecer seguro mesmo se for reutilizado antes
+    // da carga dos helpers globais.
+    var _pairCategorySafe = String(_pairTournamentCategory).replace(/[&<>"']/g, function (ch) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[ch];
+    });
     var _pairCategoryBadge = members
       ? (_pairTournamentCategory
-        ? '<div title="Categoria definida para esta dupla neste torneio" style="align-self:center;font-size:0.68rem;font-weight:800;color:var(--sp-c-c7d2fe,#c7d2fe);background:rgba(99,102,241,0.2);border:1px solid rgba(129,140,248,0.58);border-radius:7px;padding:3px 8px;line-height:1.25;white-space:nowrap;">🏷️ ' + window._safeHtml(_pairTournamentCategory) + '</div>'
+        ? '<div title="Categoria definida para esta dupla neste torneio" style="align-self:center;font-size:0.68rem;font-weight:800;color:var(--sp-c-c7d2fe,#c7d2fe);background:rgba(99,102,241,0.2);border:1px solid rgba(129,140,248,0.58);border-radius:7px;padding:3px 8px;line-height:1.25;white-space:nowrap;">🏷️ ' + _pairCategorySafe + '</div>'
         : '<div title="O organizador precisa atribuir uma categoria customizada do torneio a esta dupla" style="align-self:center;font-size:0.66rem;font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);background:rgba(245,158,11,0.13);border:1px dashed rgba(245,158,11,0.6);border-radius:7px;padding:3px 8px;line-height:1.25;">⚠️ Categoria do torneio pendente</div>')
       : '';
     var nameHtml;
