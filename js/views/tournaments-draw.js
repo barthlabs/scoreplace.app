@@ -2669,6 +2669,11 @@ window._showTeamCompetitionDrawReview = function (tId) {
         '<input data-team-category-order data-category="' + safe(category) + '" type="number" min="1" max="' + categories.length + '" value="' + slot.order + '" aria-label="Ordem de ' + safe(category) + '" style="min-width:0">' +
       '</div>';
     }).join('');
+    // Dias/ordem e o formato de confrontos são escolhas da organização. O
+    // normalizador usa um valor de compatibilidade para torneios legados, mas ele
+    // nunca pode virar uma decisão implícita no primeiro sorteio deste torneio.
+    var modeConfirmed = cfg.schedule && cfg.schedule.modeConfirmed === true;
+    var selectedMode = modeConfirmed ? cfg.schedule.mode : '';
     var rounds = Math.min(cfg.schedule.gamesPerTeam, Math.max(1, cfg.teamCount - 1));
     overlay.innerHTML = '<section role="dialog" aria-modal="true" aria-labelledby="team-draw-review-title" style="width:min(680px,100%);max-height:92svh;overflow:auto;background:#101827;border:1px solid rgba(59,130,246,.45);border-radius:20px;box-shadow:0 28px 90px rgba(0,0,0,.65);padding:22px;">' +
       '<h2 id="team-draw-review-title" style="margin:0;color:var(--text-bright);font-size:1.25rem;">🎲 Sorteio de times</h2>' +
@@ -2681,9 +2686,10 @@ window._showTeamCompetitionDrawReview = function (tId) {
       '</div>' +
       '<div style="border:1px solid rgba(148,163,184,.22);border-radius:12px;padding:0 14px;margin-bottom:14px;">' + rows + '</div>' +
       '<div style="font-size:.82rem;color:#cbd5e1;background:rgba(30,41,59,.7);padding:12px;border-radius:10px;margin-bottom:16px;">' +
-        '<b style="color:var(--text-bright);">Confrontos: ' + (cfg.schedule.mode === 'structured' ? 'estruturados' : 'livres') + '</b><br>' +
-        (cfg.schedule.mode === 'structured' ? 'Os quatro adversários serão os mesmos nas seis categorias.' : 'Cada categoria terá sua própria grade de quatro adversários sem repetição por time.') +
-        ' Serão ' + rounds + ' rodadas para cada categoria.</div>' +
+        '<b style="color:var(--text-bright);">Formato dos confrontos</b><br>' +
+        '<label style="display:block;margin-top:8px;cursor:pointer;"><input type="radio" name="team-draw-mode" value="structured"' + (selectedMode === 'structured' ? ' checked' : '') + '> 📋 <b>Estruturado</b> — em cada rodada, os mesmos times se enfrentam nas seis categorias.</label>' +
+        '<label style="display:block;margin-top:7px;cursor:pointer;"><input type="radio" name="team-draw-mode" value="free"' + (selectedMode === 'free' ? ' checked' : '') + '> 🎲 <b>Livre</b> — cada categoria sorteia seus próprios adversários, sem repetir oponente dentro das quatro rodadas.</label>' +
+        '<span style="display:block;margin-top:8px;color:#94a3b8;font-size:.76rem;">Escolha obrigatória da organização. Serão ' + rounds + ' rodadas por categoria.</span></div>' +
       '<section style="border:1px solid rgba(34,197,94,.35);border-radius:12px;padding:0 14px;margin-bottom:16px;">' +
         '<h3 style="font-size:.94rem;margin:13px 0 4px;color:#86efac;">📅 Dias e ordem das categorias</h3>' +
         '<p style="font-size:.78rem;color:#cbd5e1;margin:0 0 8px;line-height:1.35;">Cada categoria joga somente no dia escolhido. A ordem define qual categoria entra primeiro naquele dia; categorias personalizadas usam exatamente a mesma regra.</p>' +
@@ -2706,13 +2712,19 @@ window._showTeamCompetitionDrawReview = function (tId) {
           var orderControl = findControl('data-team-category-order');
           return { category:category, day:dayControl && dayControl.value, order:Math.max(1, Number(orderControl && orderControl.value) || 1) };
         });
+        var modeControl = overlay.querySelector('input[name="team-draw-mode"]:checked');
+        var selectedDrawMode = modeControl && modeControl.value;
         var validSlots = slots.length === categories.length && slots.every(function (slot) { return days.indexOf(slot.day) >= 0; });
         if (!validSlots) { if (window.showNotification) window.showNotification('Agenda inválida', 'Escolha um dia para cada categoria.', 'error'); return; }
+        if (selectedDrawMode !== 'structured' && selectedDrawMode !== 'free') { if (window.showNotification) window.showNotification('Formato não escolhido', 'Escolha sorteio estruturado ou livre antes de continuar.', 'error'); return; }
         confirm.disabled = true; confirm.textContent = 'Salvando agenda…';
         var db = window.FirestoreDB;
         if (!db || typeof db._callFn !== 'function') { confirm.disabled = false; confirm.textContent = '🎲 Sortear times e confrontos'; if (window.showNotification) window.showNotification('Agenda não salva', 'Conexão indisponível.', 'error'); return; }
-        db._callFn('updateTournamentConfiguration', { tournamentId:String(tId), patch:{ categorySchedule:{ version:1, slots:slots } } }).then(function () {
-          t.categorySchedule = { version:1, slots:slots };
+        var nextCompetition = JSON.parse(JSON.stringify(cfg));
+        nextCompetition.schedule = Object.assign({}, nextCompetition.schedule || {}, { enabled:true, mode:selectedDrawMode, modeConfirmed:true });
+        db._callFn('updateTournamentConfiguration', { tournamentId:String(tId), patch:{ categorySchedule:{ version:1, confirmed:true, slots:slots }, teamCompetition:nextCompetition } }).then(function () {
+          t.categorySchedule = { version:1, confirmed:true, slots:slots };
+          t.teamCompetition = nextCompetition;
           window._teamDrawReviewApproved[String(tId)] = true;
           close(); window.generateDrawFunction(tId);
         }).catch(function (error) {

@@ -964,6 +964,34 @@ function _drawFail(code, reason, ctx) {
   return new HttpsError(code, reason);
 }
 
+// Competição por times não pode nascer de defaults invisíveis do navegador.
+// Dias/ordem e o modo (estruturado ou livre) precisam ser escolhas persistidas
+// pela organização antes do primeiro sorteio. Esta validação vive no servidor
+// para impedir que uma aba velha ou chamada manual pule a tela de decisão.
+function _requireExplicitTeamDrawPlan(t, tId) {
+  const raw = t && (t.teamCompetition || ((t.phases || [])[0] || {}).teamCompetition);
+  if (!raw || raw.enabled !== true || !raw.schedule || raw.schedule.enabled === false) return;
+  const mode = raw.schedule.mode;
+  if (raw.schedule.modeConfirmed !== true || (mode !== 'structured' && mode !== 'free')) {
+    throw _drawFail('failed-precondition', 'A organização precisa escolher sorteio estruturado ou livre antes de sortear.', { tId });
+  }
+  const categories = (Array.isArray(t.combinedCategories) ? t.combinedCategories : (Array.isArray(t.categories) ? t.categories : []))
+    .map(category => String(category || '').trim()).filter(Boolean);
+  const plan = t.categorySchedule;
+  const slots = plan && Array.isArray(plan.slots) ? plan.slots : [];
+  const byCategory = new Map();
+  slots.forEach(slot => { const category = String(slot && slot.category || '').trim(); if (category && !byCategory.has(category)) byCategory.set(category, slot); });
+  const start = String(t.startDate || '').slice(0, 10), end = String(t.endDate || start).slice(0, 10);
+  const validDay = day => /^\d{4}-\d{2}-\d{2}$/.test(day) && (!start || (day >= start && day <= end));
+  const complete = plan && plan.confirmed === true && categories.length > 0 && categories.every(category => {
+    const slot = byCategory.get(category), day = String(slot && slot.day || '').slice(0, 10);
+    return !!slot && validDay(day) && Number(slot.order) >= 1;
+  });
+  if (!complete) {
+    throw _drawFail('failed-precondition', 'A organização precisa distribuir todas as categorias pelos dias e definir a ordem antes de sortear.', { tId, categories:categories.length });
+  }
+}
+
 exports.drawRound = onCall(async (request) => {
   const uid = request.auth && request.auth.uid;
   const email = request.auth && request.auth.token && request.auth.token.email;
@@ -1026,6 +1054,8 @@ exports.drawRound = onCall(async (request) => {
     if (!_isTournamentAdmin(t, uid)) {
       throw _drawFail('permission-denied', 'Só o organizador ou um co-organizador pode sortear (doc fresco).', { tId, uid });
     }
+
+    if (!hasDrawnBracket(t)) _requireExplicitTeamDrawPlan(t, tId);
 
     // Rei/Rainha: o doc fresco traz grupos só com matchIds — hidrata ANTES do motor,
     // igual mutateTournament faz antes do mutator.

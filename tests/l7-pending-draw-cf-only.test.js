@@ -14,6 +14,7 @@ ok(a.includes('_isTournamentAdmin(t,uid)'),'Function exige organização por uid
 ok(a.includes("action==='annul'")&&a.includes('t.pendingDraw=null')&&a.includes("if (action === 'publish') throw new HttpsError('failed-precondition','O rascunho privado não foi encontrado.')")&&!a.includes('t.lastAutoDrawAt=null'),'Anular limpa marcador/cofre sem apagar estado anterior; publicar continua exigindo cofre íntegro');
 ok(c.includes("_callCF('resolvePendingDraw'")&&!/AppStore\.mutate|_notifyDrawPersonalized/.test(c),'cliente só despacha a Function');
 ok(c.includes("Sorteio não anulado")&&c.includes("Sorteio já anulado"),'falha ou ausência do rascunho recebe retorno visual, nunca silêncio');
+ok(c.includes('_teamDrawReviewApproved')&&c.includes('delete window._teamDrawReviewApproved[String(tId)]'),'Anular também apaga a aprovação local para exigir nova decisão no próximo sorteio');
 ok(draw.includes("kind: 'initial'")&&draw.includes('draft: _rascunhoDoSorteioInicial(t)')&&draw.includes('_refRascunhoInicialPrivado(ref)')&&draw.includes('_stageInitial'),'Sorteio inicial vai ao cofre privado antes de materializar a chave');
 ok(a.includes("pd.kind === 'initial'")&&a.includes('_aplicaRascunhoDoSorteioInicial(t, pd.draft)'),'Publicação aplica somente o rascunho derivado na transação');
 ok(/if \(d\.staged\) \{[\s\S]*?\} else \{[\s\S]*?_notifyDrawPersonalized/.test(d),'Rascunho não dispara notificação antes da publicação');
@@ -21,4 +22,6 @@ ok(agenda.includes('db.runTransaction')&&agenda.includes('_isTournamentAdmin(t, 
 ok(agenda.includes('pd.draft.matches')&&agenda.includes('match.court = item.court')&&agenda.includes('match.scheduleLocked = item.scheduleLocked'),'Agenda altera somente jogos do rascunho e fixa apenas escolhas manuais antes da publicação');
 ok(b.includes('window._openPendingInitialSchedule')&&b.includes("_callCF('setPendingInitialSchedule'"),'Cliente planeja no rascunho e delega o salvamento à Function');
 ok(i.includes('exports.getPendingInitialDraw')&&i.includes('_isTournamentAdmin(t, uid)')&&i.includes("collection('privateDraws')"),'Prévia privada só é lida pela Function após conferir a organização');
+ok(draw.includes('_requireExplicitTeamDrawPlan(t, tId)')&&i.includes('modeConfirmed')&&i.includes('categorySchedule')&&i.includes('plan.confirmed === true'),'Function bloqueia competição por times sem modo e agenda explicitamente escolhidos');
+ok(d.includes('name="team-draw-mode"')&&d.includes('modeConfirmed:true')&&d.includes('confirmed:true'),'Tela exige e persiste modo e agenda escolhidos pela organização');
 process.exit(f?1:0);

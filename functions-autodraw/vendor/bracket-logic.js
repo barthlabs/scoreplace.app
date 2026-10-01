@@ -6691,6 +6691,10 @@ window._annulPendingDraw = function (tId) {
   var go=function(){ return window._callCF('resolvePendingDraw',{ tournamentId:String(tId), action:'annul' },'Entre na sua conta para anular o sorteio.').then(function(res){
     var out=(res&&res.data)||{};
     if(window.__pendingInitialDraws) delete window.__pendingInitialDraws[String(tId)];
+    // Anular devolve o torneio ao ponto anterior ao primeiro sorteio. A aprovação
+    // local da tela também precisa sumir, ou uma segunda tentativa pula as escolhas
+    // obrigatórias de dias/ordem e de estruturado/livre.
+    if(window._teamDrawReviewApproved) delete window._teamDrawReviewApproved[String(tId)];
     if(window.showNotification) window.showNotification(out.changed ? 'Sorteio anulado' : 'Sorteio já anulado', out.changed ? 'O rascunho foi descartado e o torneio voltou ao estado anterior ao sorteio.' : 'Não havia um rascunho pendente para descartar.', 'info');
     if(window._rerenderBracket) window._rerenderBracket(tId);
   }).catch(function(e){

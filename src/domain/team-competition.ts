@@ -21,7 +21,7 @@ namespace ScoreplaceTeamCompetition {
     internalMatches: InternalMatches;
     ranking: Ranking;
     aggregation: Aggregation;
-    schedule: { enabled: boolean; teamsPerGroup: number; gamesPerTeam: number; mode: ScheduleMode };
+    schedule: { enabled: boolean; teamsPerGroup: number; gamesPerTeam: number; mode: ScheduleMode; modeConfirmed?: boolean };
     scoring: { win: number; draw: number; loss: number };
   }
 
@@ -89,7 +89,7 @@ namespace ScoreplaceTeamCompetition {
       // nunca pode redesenhar os confrontos. Livre embaralha cada categoria.
       // Ausência de `schedule` é legado e preserva o todos-contra-todos completo.
       // A nova tela grava enabled=true explicitamente antes do primeiro sorteio.
-      schedule: { enabled: Object.keys(schedule).length > 0 && schedule.enabled !== false, teamsPerGroup, gamesPerTeam, mode: schedule.mode === 'structured' ? 'structured' : 'free' },
+      schedule: { enabled: Object.keys(schedule).length > 0 && schedule.enabled !== false, teamsPerGroup, gamesPerTeam, mode: schedule.mode === 'structured' ? 'structured' : 'free', modeConfirmed: schedule.modeConfirmed === true },
       // A escala padrão é a mesma da classificatória atual: 3/1/0. O organizador
       // pode substituí-la, inclusive com valores zero ou negativos, de forma explícita.
       scoring: {
