@@ -724,7 +724,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     // dessas duplas. O valor fica na mesma configuração da fase para a CF sortear e
     // gravar os vínculos antes de gerar jogos — nunca como cálculo local da tela.
     if (isDupla && !rotativo && cfg.classifAtiva) {
-      var tc = cfg.teamCompetition || { enabled: false, teamCount: 0, teamNames: [], formation: 'draw', internalMatches: 'avoid', ranking: 'points', aggregation: 'overall', schedule: { enabled: false, teamsPerGroup: 2, gamesPerTeam: 1, mode: 'free' }, scoring: { win: 3, draw: 1, loss: 0 } };
+      var tc = cfg.teamCompetition || { enabled: false, teamCount: 0, teamNames: [], formation: 'draw', internalMatches: 'avoid', ranking: 'points', aggregation: 'overall', schedule: { enabled: false, teamsPerGroup: 2, gamesPerTeam: 1, mode: 'structured' }, scoring: { win: 3, draw: 1, loss: 0 } };
       var tcLocked = _classifLocked;
       var tcToggle = '<label style="display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:' + (tcLocked ? 'not-allowed' : 'pointer') + ';font-size:.9rem;color:var(--text-main);' + (tcLocked ? 'opacity:.55;' : '') + '">' +
         '<span>🏆 Competição por times</span><span class="toggle-switch"><input type="checkbox"' + (tc.enabled ? ' checked' : '') + (tcLocked ? ' disabled' : '') + ' onchange="window._f2TeamCompetition(this.checked)"><span class="toggle-slider"></span></span></label>';
@@ -1269,7 +1269,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     // um número padrão escondido. Isso evita "Time 1…8" não escolhidos no sorteio.
     tc.teamNames = Array.isArray(tc.teamNames) ? tc.teamNames : [];
     tc.teamCount = tc.teamNames.length; tc.formation = 'draw';
-    tc.schedule = tc.schedule || { teamsPerGroup: 2, gamesPerTeam: 1, mode: 'free' };
+    tc.schedule = tc.schedule || { teamsPerGroup: 2, gamesPerTeam: 1, mode: 'structured' };
     tc.schedule.enabled = true;
     if (tc.internalMatches !== 'allow' && tc.internalMatches !== 'avoid') tc.internalMatches = 'avoid';
     tc.scoring = tc.scoring || { win: 3, draw: 1, loss: 0 };

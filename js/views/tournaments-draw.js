@@ -2616,6 +2616,34 @@ window._showTeamCompetitionDrawReview = function (tId) {
     };
     var categories = (Array.isArray(t.combinedCategories) ? t.combinedCategories : (Array.isArray(t.categories) ? t.categories : []))
       .map(function (category) { return String(category || '').trim(); }).filter(Boolean);
+    // Dias e sequência pertencem à configuração declarativa do torneio. A tela
+    // pré-sorteio apenas a torna explícita antes de revelar times/confrontos.
+    function dateKeys() {
+      var start = String(t.startDate || '').slice(0, 10), end = String(t.endDate || start).slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end) || end < start) end = start;
+      if (!start) return [];
+      // Chaves de dia são calendário, não instante: usar UTC evita que o fuso
+      // do navegador transforme uma data em véspera ao avançar a lista.
+      var out = [], d = new Date(start + 'T00:00:00Z'), limit = 0;
+      while (limit++ < 8) { out.push(d.toISOString().slice(0, 10)); if (out[out.length - 1] === end) break; d.setUTCDate(d.getUTCDate() + 1); }
+      return out;
+    }
+    var days = dateKeys(), storedSlots = (t.categorySchedule && Array.isArray(t.categorySchedule.slots)) ? t.categorySchedule.slots : [];
+    var byCategory = {};
+    storedSlots.forEach(function (slot) { var name = String(slot && slot.category || '').trim(); if (name && !byCategory[name]) byCategory[name] = slot; });
+    function defaultCategorySlot(category, index) {
+      var stored = byCategory[category]; if (stored && days.indexOf(String(stored.day || '').slice(0, 10)) >= 0) return { day:String(stored.day).slice(0, 10), order:Math.max(1, Number(stored.order) || (index + 1)) };
+      // Um torneio com dois dias e categorias explicitamente Fem/Masc começa
+      // com a divisão mais útil, mas continua inteiramente editável.
+      var female = /(^|\s)(fem|femin)/i.test(category), male = /(^|\s)(masc|mascul)/i.test(category);
+      var day = (days.length > 1 && male && !female) ? days[1] : days[0];
+      var sameDayBefore = categories.slice(0, index).filter(function (name) {
+        var f = /(^|\s)(fem|femin)/i.test(name), m = /(^|\s)(masc|mascul)/i.test(name);
+        return day === ((days.length > 1 && m && !f) ? days[1] : days[0]);
+      }).length;
+      return { day:day, order:sameDayBefore + 1 };
+    }
+    function dayLabel(day) { return new Date(day + 'T12:00:00').toLocaleDateString('pt-BR', { weekday:'short', day:'2-digit', month:'short' }); }
     var countByCategory = {};
     entries.forEach(function (entry) {
         var found = (typeof window._getParticipantCategories === 'function' ? window._getParticipantCategories(entry) : []) || [];
@@ -2633,6 +2661,14 @@ window._showTeamCompetitionDrawReview = function (tId) {
         var n = countByCategory[category] || 0, ok = n === cfg.teamCount;
         return '<div style="display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid rgba(148,163,184,.14);"><span>' + safe(category) + '</span><b style="color:' + (ok ? '#4ade80' : '#fb7185') + ';">' + n + '/' + cfg.teamCount + ' duplas ' + (ok ? '✓' : '✕') + '</b></div>';
     }).join('');
+    var categoryScheduleRows = categories.map(function (category, index) {
+      var slot = defaultCategorySlot(category, index);
+      return '<div style="display:grid;grid-template-columns:minmax(120px,1fr) minmax(130px,1fr) 76px;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid rgba(148,163,184,.14);">' +
+        '<b style="font-size:.86rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + safe(category) + '</b>' +
+        '<select data-team-category-day data-category="' + safe(category) + '" aria-label="Dia de ' + safe(category) + '">' + days.map(function (day) { return '<option value="' + safe(day) + '"' + (day === slot.day ? ' selected' : '') + '>' + safe(dayLabel(day)) + '</option>'; }).join('') + '</select>' +
+        '<input data-team-category-order data-category="' + safe(category) + '" type="number" min="1" max="' + categories.length + '" value="' + slot.order + '" aria-label="Ordem de ' + safe(category) + '" style="min-width:0">' +
+      '</div>';
+    }).join('');
     var rounds = Math.min(cfg.schedule.gamesPerTeam, Math.max(1, cfg.teamCount - 1));
     overlay.innerHTML = '<section role="dialog" aria-modal="true" aria-labelledby="team-draw-review-title" style="width:min(680px,100%);max-height:92svh;overflow:auto;background:#101827;border:1px solid rgba(59,130,246,.45);border-radius:20px;box-shadow:0 28px 90px rgba(0,0,0,.65);padding:22px;">' +
       '<h2 id="team-draw-review-title" style="margin:0;color:var(--text-bright);font-size:1.25rem;">🎲 Sorteio de times</h2>' +
@@ -2648,6 +2684,11 @@ window._showTeamCompetitionDrawReview = function (tId) {
         '<b style="color:var(--text-bright);">Confrontos: ' + (cfg.schedule.mode === 'structured' ? 'estruturados' : 'livres') + '</b><br>' +
         (cfg.schedule.mode === 'structured' ? 'Os quatro adversários serão os mesmos nas seis categorias.' : 'Cada categoria terá sua própria grade de quatro adversários sem repetição por time.') +
         ' Serão ' + rounds + ' rodadas para cada categoria.</div>' +
+      '<section style="border:1px solid rgba(34,197,94,.35);border-radius:12px;padding:0 14px;margin-bottom:16px;">' +
+        '<h3 style="font-size:.94rem;margin:13px 0 4px;color:#86efac;">📅 Dias e ordem das categorias</h3>' +
+        '<p style="font-size:.78rem;color:#cbd5e1;margin:0 0 8px;line-height:1.35;">Cada categoria joga somente no dia escolhido. A ordem define qual categoria entra primeiro naquele dia; categorias personalizadas usam exatamente a mesma regra.</p>' +
+        categoryScheduleRows +
+      '</section>' +
       (!valid ? '<p style="margin:0 0 14px;color:var(--sp-c-f87171,#f87171);font-weight:700;">O sorteio está bloqueado: são necessárias ' + expectedPairs + ' duplas já formadas, com ' + cfg.teamCount + ' em cada categoria.</p>' : '') +
       '<div style="display:flex;justify-content:flex-end;gap:10px;"><button type="button" id="team-draw-cancel" class="btn">Cancelar</button><button type="button" id="team-draw-confirm" class="btn btn-primary"' + (valid ? '' : ' disabled aria-disabled="true" style="opacity:.45;cursor:not-allowed;"') + '>🎲 Sortear times e confrontos</button></div></section>';
     document.body.appendChild(overlay);
@@ -2655,9 +2696,29 @@ window._showTeamCompetitionDrawReview = function (tId) {
     overlay.querySelector('#team-draw-cancel').onclick = close;
     var confirm = overlay.querySelector('#team-draw-confirm');
     if (valid && confirm) confirm.onclick = function () {
-        window._teamDrawReviewApproved[String(tId)] = true;
-        close();
-        window.generateDrawFunction(tId);
+        var slots = categories.map(function (category) {
+          var findControl = function (attribute) {
+            var found = null, controls = overlay.querySelectorAll('[' + attribute + ']');
+            Array.prototype.some.call(controls, function (control) { if (control.getAttribute('data-category') === category) { found = control; return true; } return false; });
+            return found;
+          };
+          var dayControl = findControl('data-team-category-day');
+          var orderControl = findControl('data-team-category-order');
+          return { category:category, day:dayControl && dayControl.value, order:Math.max(1, Number(orderControl && orderControl.value) || 1) };
+        });
+        var validSlots = slots.length === categories.length && slots.every(function (slot) { return days.indexOf(slot.day) >= 0; });
+        if (!validSlots) { if (window.showNotification) window.showNotification('Agenda inválida', 'Escolha um dia para cada categoria.', 'error'); return; }
+        confirm.disabled = true; confirm.textContent = 'Salvando agenda…';
+        var db = window.FirestoreDB;
+        if (!db || typeof db._callFn !== 'function') { confirm.disabled = false; confirm.textContent = '🎲 Sortear times e confrontos'; if (window.showNotification) window.showNotification('Agenda não salva', 'Conexão indisponível.', 'error'); return; }
+        db._callFn('updateTournamentConfiguration', { tournamentId:String(tId), patch:{ categorySchedule:{ version:1, slots:slots } } }).then(function () {
+          t.categorySchedule = { version:1, slots:slots };
+          window._teamDrawReviewApproved[String(tId)] = true;
+          close(); window.generateDrawFunction(tId);
+        }).catch(function (error) {
+          confirm.disabled = false; confirm.textContent = '🎲 Sortear times e confrontos';
+          if (window.showNotification) window.showNotification('Agenda não salva', (error && error.message) || 'Não foi possível salvar os dias das categorias.', 'error');
+        });
     };
     return true;
 };

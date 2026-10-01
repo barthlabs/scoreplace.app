@@ -6621,22 +6621,29 @@ window._openPendingInitialSchedule = function (tId) {
     x.id = t.id; x.matches = draft.matches; x.scheduleRevision = Number(pd.scheduleRevision || 0);
     return x;
   }
-  function localValue(iso) {
-    var ms = Date.parse(iso || ''); if (!Number.isFinite(ms)) return '';
-    var d = new Date(ms - new Date(ms).getTimezoneOffset() * 60000); return d.toISOString().slice(0, 16);
-  }
-  function label(m, fallback) { return 'Jogo ' + String((m && (m.number || m.matchNumber || m.id)) || fallback); }
   function plan() { return window._operationalSchedulePlan(view(), Object.keys(manual).map(function (id) { return manual[id]; })); }
   function render() {
     var p = plan(), board = window._operationalScheduleGrid(view(), p, { prefix:'pis', activeDay:activeDay }); activeDay = board.activeDay;
-    overlay.innerHTML = '<div role="dialog" aria-modal="true" style="max-width:850px;margin:0 auto;background:#111827;border:1px solid rgba(56,189,248,.5);border-radius:16px;padding:16px;color:var(--text-main);box-shadow:0 24px 70px rgba(0,0,0,.55)">' +
-      '<div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start"><div><h2 style="margin:0;font-size:1.05rem">📍 Planejar antes de publicar</h2><p style="margin:5px 0 12px;font-size:.82rem;line-height:1.4;color:#cbd5e1">Ao mudar horário ou quadra, os jogos ainda livres se reorganizam. Nada fica visível para participantes até publicar a chave.</p></div><button type="button" data-pis-close class="btn">Fechar</button></div>' +
+    overlay.innerHTML = '<div role="dialog" aria-modal="true" style="width:min(1600px,calc(100vw - 36px));max-width:none;margin:0 auto;background:#111827;border:1px solid rgba(56,189,248,.5);border-radius:16px;padding:16px;color:var(--text-main);box-shadow:0 24px 70px rgba(0,0,0,.55)">' +
+      '<div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start"><div><h2 style="margin:0;font-size:1.05rem">📍 Planejar antes de publicar</h2><p style="margin:5px 0 12px;font-size:.82rem;line-height:1.4;color:#cbd5e1">Arraste um jogo sobre outro para trocar seus horários e quadras. A data é escolhida na aba; nos cards, ajuste somente a hora.</p></div><button type="button" data-pis-close class="btn btn-outline">← Voltar</button></div>' +
       '<div style="font-size:.76rem;color:#94a3b8;margin-bottom:6px">' + p.items.length + ' jogos · ' + p.courts.length + ' quadras. Cada linha é um horário; cada coluna é uma quadra.</div>' + board.html +
       '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px"><button type="button" data-pis-apply class="btn btn-primary">Aplicar agenda no rascunho</button></div></div>';
     overlay.querySelector('[data-pis-close]').onclick = function () { overlay.remove(); };
     Array.prototype.forEach.call(overlay.querySelectorAll('[data-pis-day]'), function (control) { control.onclick = function () { activeDay = control.getAttribute('data-pis-day'); render(); }; });
+    Array.prototype.forEach.call(overlay.querySelectorAll('[data-pis-match]'), function (card) {
+      card.ondragstart = function (event) { event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', card.getAttribute('data-pis-match')); };
+      card.ondragover = function (event) { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; };
+      card.ondrop = function (event) {
+        event.preventDefault(); var fromId = event.dataTransfer.getData('text/plain'), toId = card.getAttribute('data-pis-match');
+        var from = p.items.find(function (x) { return String(x.matchId) === String(fromId); }), to = p.items.find(function (x) { return String(x.matchId) === String(toId); });
+        if (!from || !to || from.matchId === to.matchId) return;
+        manual[from.matchId] = { matchId:from.matchId, court:to.court, scheduledAt:to.scheduledAt };
+        manual[to.matchId] = { matchId:to.matchId, court:from.court, scheduledAt:from.scheduledAt };
+        render();
+      };
+    });
     Array.prototype.forEach.call(overlay.querySelectorAll('[data-pis-court]'), function (control) { control.onchange = function () { var item = p.items.find(function (x) { return String(x.matchId) === String(control.getAttribute('data-pis-court')); }); if (item) { manual[item.matchId] = { matchId:item.matchId, court:control.value, scheduledAt:item.scheduledAt }; render(); } }; });
-    Array.prototype.forEach.call(overlay.querySelectorAll('[data-pis-time]'), function (control) { control.onchange = function () { var item = p.items.find(function (x) { return String(x.matchId) === String(control.getAttribute('data-pis-time')); }); var ms = Date.parse(control.value || ''); if (item && Number.isFinite(ms)) { manual[item.matchId] = { matchId:item.matchId, court:item.court, scheduledAt:new Date(ms).toISOString() }; render(); } }; });
+    Array.prototype.forEach.call(overlay.querySelectorAll('[data-pis-time]'), function (control) { control.onchange = function () { var item = p.items.find(function (x) { return String(x.matchId) === String(control.getAttribute('data-pis-time')); }); var key = item && window._scheduleLocalDayKey && window._scheduleLocalDayKey(item.scheduledAt), at = key && window._scheduleIsoOnDay(key, control.value); if (item && at) { manual[item.matchId] = { matchId:item.matchId, court:item.court, scheduledAt:at }; render(); } }; });
     overlay.querySelector('[data-pis-apply]').onclick = function (event) {
       var button = event.currentTarget, latest = plan(); button.disabled = true; button.textContent = 'Salvando agenda…';
       window._callCF('setPendingInitialSchedule', { tournamentId:String(t.id), jogos:latest.items.map(function (i) { return { matchId:i.matchId, court:i.court, scheduledAt:i.scheduledAt, scheduleLocked:!!i.scheduleLocked }; }) }, 'Entre na sua conta para salvar a agenda.')

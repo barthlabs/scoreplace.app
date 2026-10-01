@@ -32,6 +32,8 @@ ok(part.includes('_CAMPOS_CONFIG_TORNEIO') && part.includes('permission-denied')
  * sorteio e continua protegido depois dele. [[regression_group_turnos_must_save]] */
 const contract = fn.slice(fn.indexOf('const _CAMPOS_CONFIG_TORNEIO'), fn.indexOf('const _CONFIG_FASE_ATIVA'));
 ok(/'turnos'/.test(contract), 'turnos compilado pela fase de grupos pertence ao contrato da ficha');
+ok(/'categorySchedule'/.test(contract) && /'teamCompetition','categorySchedule','turnos'/.test(contract),
+  'agenda por categoria entra no mesmo contrato transacional antes do sorteio e é estrutural depois da chave');
 ok(part.includes('_fasesDeConfiguracaoAtualizaveis') && part.includes('t.history.push'),
   'fases já materializadas preservam o motor e a alteração ganha histórico servidor');
 process.exit(failed ? 1 : 0);

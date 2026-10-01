@@ -698,6 +698,26 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     return { dias: dias, iniHm: ini.hm, fimHm: fim.hm };
   };
 
+  // A programação de categorias é declarativa: antes do sorteio a organização
+  // escolhe em qual dia cada categoria joga e sua posição naquele dia. Não há
+  // inferência por gênero no motor; Fem/Masc, Misto e categorias personalizadas
+  // são somente nomes de categoria e recebem o mesmo tratamento.
+  function _schCategoriaDoJogo(m) {
+    return String((m && (m.category || (m.team1Obj && m.team1Obj.category) || (m.team2Obj && m.team2Obj.category))) || '').trim();
+  }
+  window._schCategorySchedule = function (t) {
+    var raw = t && t.categorySchedule, slots = raw && Array.isArray(raw.slots) ? raw.slots : [];
+    var out = {}, used = {};
+    slots.forEach(function (slot, index) {
+      var category = String(slot && slot.category || '').trim();
+      var day = String(slot && slot.day || '').slice(0, 10);
+      if (!category || !/^\d{4}-\d{2}-\d{2}$/.test(day) || used[category]) return;
+      used[category] = true;
+      out[category] = { day:day, order:Math.max(1, Number(slot.order) || (index + 1)) };
+    });
+    return out;
+  };
+
   // Plano PURO: devolve { slots: [{matchId, ms, iso, dia, onda}], slotMin, quadras,
   // dias, cabe } sem tocar em nada. Testável sem DOM e sem Firebase.
   //
@@ -710,7 +730,11 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     try {
       t = t || {};
       var jan = window._schJanelaTorneio(t);
-      if (!jan || !jan.dias.length || jan.dias.length > 3) return null;
+      // Acima de três dias a estimativa histórica não se aventura a adivinhar
+      // agenda. Uma agenda explícita por categoria, porém, é justamente a
+      // decisão do organizador que torna o planejamento determinístico.
+      var temAgendaCategorias = Object.keys(window._schCategorySchedule(t)).length > 0;
+      if (!jan || !jan.dias.length || (jan.dias.length > 3 && !temAgendaCategorias)) return null;
       var quadras = Math.max(1, parseInt(t.courtCount, 10) || (Array.isArray(t.courtNames) ? t.courtNames.length : 0) || 1);
       var all = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (Array.isArray(t.matches) ? t.matches : []);
       var jogos = (all || []).filter(function (m) {
@@ -718,23 +742,36 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       });
       if (!jogos.length) return null;
 
-      // agrupa por (fase, rodada) preservando a ordem em que apareceram
+      // Agrupa por categoria/fase/rodada. Quando há agenda de categorias,
+      // cada bloco começa no dia e na posição explicitamente escolhidos; sem
+      // agenda, a chave histórica continua usando apenas fase/rodada.
+      var agendaCategorias = window._schCategorySchedule(t), indiceDia = {};
+      jan.dias.forEach(function (dia, index) { indiceDia[dia.ymd] = index; });
       var chaves = [], porChave = {};
       jogos.forEach(function (m) {
         var f = (m.phaseIndex != null) ? m.phaseIndex : (t.currentPhaseIndex || 0);
         var r = (m.round == null) ? 0 : m.round;
-        var k = f + '|' + r;
-        if (!porChave[k]) { porChave[k] = { fase: f, rodada: r, ms: [] }; chaves.push(k); }
+        var categoria = _schCategoriaDoJogo(m), agenda = agendaCategorias[categoria];
+        var k = (agenda ? categoria : '') + '|' + f + '|' + r;
+        if (!porChave[k]) {
+          porChave[k] = { fase:f, rodada:r, categoria:categoria, agenda:agenda || null, ms:[] };
+          chaves.push(k);
+        }
         porChave[k].ms.push(m);
       });
       chaves.sort(function (a, b) {
         var A = porChave[a], B = porChave[b];
-        return (A.fase - B.fase) || (A.rodada - B.rodada);
+        var ad = A.agenda && indiceDia[A.agenda.day] != null ? indiceDia[A.agenda.day] : 0;
+        var bd = B.agenda && indiceDia[B.agenda.day] != null ? indiceDia[B.agenda.day] : 0;
+        var ao = A.agenda ? A.agenda.order : 9999, bo = B.agenda ? B.agenda.order : 9999;
+        return (ad - bd) || (ao - bo) || A.categoria.localeCompare(B.categoria) || (A.fase - B.fase) || (A.rodada - B.rodada);
       });
 
-      var slots = [], diaIdx = 0, cursor = jan.dias[0].iniMs, onda = 0, estourou = false;
+      var slots = [], cursores = jan.dias.map(function (dia) { return dia.iniMs; }), onda = 0, estourou = false, fimMs = cursores[0];
       chaves.forEach(function (k) {
         var bloco = porChave[k];
+        var diaIdx = bloco.agenda && indiceDia[bloco.agenda.day] != null ? indiceDia[bloco.agenda.day] : 0;
+        var cursor = cursores[diaIdx];
         var slotMin = window._minutosDaPartida(t, window._faseDoTorneio(t, bloco.fase)) || 30;
         // monta as ONDAS desta rodada: guloso, primeira onda que tem quadra livre E
         // nenhum jogador em comum.
@@ -753,10 +790,10 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
           uids.forEach(function (u) { alvo.uids[u] = 1; });
         });
         ondas.forEach(function (o) {
-          // cabe no dia corrente? senão pula pro próximo (se houver)
+          // Categoria marcada para um dia não pode vazar para outro: o plano
+          // acusa que não cabe, mas não troca Feminino de quinta para sexta.
           if (cursor + slotMin * _MIN > jan.dias[diaIdx].fimMs) {
-            if (diaIdx + 1 < jan.dias.length) { diaIdx++; cursor = jan.dias[diaIdx].iniMs; }
-            else { estourou = true; } // sem dia sobrando: segue em frente no último e AVISA
+            estourou = true;
           }
           o.jogos.forEach(function (m) {
             slots.push({ matchId: String(m.id), ms: cursor, iso: new Date(cursor).toISOString(), dia: diaIdx, onda: onda });
@@ -764,10 +801,12 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
           cursor += slotMin * _MIN;
           onda++;
         });
+        cursores[diaIdx] = cursor;
+        if (cursor > fimMs) fimMs = cursor;
       });
       return {
         slots: slots, quadras: quadras, dias: jan.dias.length,
-        cabe: !estourou, fimMs: cursor,
+        cabe: !estourou, fimMs: fimMs,
         // slotMin da 1ª fase — só informativo (cada fase tem o seu, ver o loop acima)
         slotMin: window._minutosDaPartida(t, window._faseDoTorneio(t, (jogos[0] && jogos[0].phaseIndex) || 0)) || 30
       };

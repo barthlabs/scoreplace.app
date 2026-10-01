@@ -1,11 +1,13 @@
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+const { execFileSync } = require('child_process');
 const { sandbox } = require('./render-harness');
 vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'schedule-poll.js'), 'utf8'), sandbox, { filename: 'schedule-poll.js' });
 vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'schedule-organizer.js'), 'utf8'), sandbox, { filename: 'schedule-organizer.js' });
 const W = sandbox;
 const organizerSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'schedule-organizer.js'), 'utf8');
+const bracketSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'bracket-logic.js'), 'utf8');
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.error('  ✗', m); } };
 console.log('──── agenda operacional e quadras ────');
@@ -68,6 +70,33 @@ ok(/getTimezoneOffset\(\) \* 60000/.test(organizerSource),
 ok(/scheduleLocked:true, scheduleSource:'organizer'/.test(organizerSource),
   'Aplicar agenda transforma a sugestão confirmada em alocação manual protegida');
 
+const categoryDays = {
+  startDate:'2026-10-22T18:00', endDate:'2026-10-23T23:00', courtCount:1, gameDuration:30,
+  categorySchedule:{ version:1, slots:[
+    { category:'Fem Light', day:'2026-10-22', order:1 },
+    { category:'Fem Power', day:'2026-10-22', order:2 },
+    { category:'Masc Light', day:'2026-10-23', order:1 }
+  ] },
+  matches:[
+    { id:'FL', category:'Fem Light', round:1, p1:'A', p2:'B' },
+    { id:'FP', category:'Fem Power', round:1, p1:'C', p2:'D' },
+    { id:'ML', category:'Masc Light', round:1, p1:'E', p2:'F' }
+  ]
+};
+const categoryGrade = W._schGradeEstimada(categoryDays);
+const byCategoryMatch = {};
+(categoryGrade && categoryGrade.slots || []).forEach(function (slot) { byCategoryMatch[slot.matchId] = slot; });
+ok(byCategoryMatch.FL && byCategoryMatch.FP && byCategoryMatch.ML &&
+  byCategoryMatch.FL.iso.slice(0, 10) === '2026-10-22' && byCategoryMatch.FP.iso.slice(0, 10) === '2026-10-22' && byCategoryMatch.ML.iso.slice(0, 10) === '2026-10-23',
+  'cada categoria permanece no dia configurado, sem vazar para o outro dia');
+ok(byCategoryMatch.FL && byCategoryMatch.FP && byCategoryMatch.FL.ms < byCategoryMatch.FP.ms,
+  'a ordem declarada torna Fem Light anterior a Fem Power no mesmo dia');
+ok(/categorySchedule/.test(fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'tournaments-draw.js'), 'utf8')),
+  'a revisão pré-sorteio permite gravar dia e ordem de cada categoria');
+const functionsSource = fs.readFileSync(path.join(__dirname, '..', 'functions-autodraw', 'index.js'), 'utf8');
+ok(/'teamCompetition','categorySchedule'/.test(functionsSource) && /'teamCompetition','categorySchedule','turnos'/.test(functionsSource),
+  'o servidor aceita a agenda antes do sorteio e a congela junto com a estrutura depois da chave');
+
 // A agenda não pode voltar a expor IDs técnicos como a informação principal. A mesma
 // grade serve ao rascunho e ao torneio publicado: linhas são horários, colunas são
 // quadras, e cada card identifica categoria, duplas e seus times coloridos.
@@ -81,9 +110,25 @@ t.matches[0] = Object.assign({}, t.matches[0], {
 const board = W._operationalScheduleGrid(t, p, { prefix:'agenda' });
 ok(board.days.length === 1 && /data-agenda-day/.test(board.html),
   'a grade cria abas por dia quando há agenda');
-ok(/VENOM/.test(board.html) && /BLACKOUT/.test(board.html) && /Ana \/ Bia/.test(board.html) && /Fem Power/.test(board.html),
+ok(/VENOM/.test(board.html) && /BLACKOUT/.test(board.html) && /Ana/.test(board.html) && /Bia/.test(board.html) && /Fem Power/.test(board.html),
   'a célula informa times, nomes das duplas e categoria');
 ok(/grid-template-columns:72px repeat\(2, minmax\(176px,1fr\)\)/.test(board.html),
   'a grade tem uma coluna de horário e uma coluna para cada quadra');
+ok(/draggable="true"/.test(board.html) && /type="time"/.test(board.html) && !/type="datetime-local"/.test(board.html),
+  'o card é arrastável e mostra apenas a hora; a data fica na aba do dia');
+ok(/<div>Ana<\/div><div>Bia<\/div>/.test(board.html),
+  'os dois jogadores da dupla aparecem em linhas separadas');
+ok(/ondrop/.test(organizerSource) && /manual\[from\.matchId\].*to\.court/.test(organizerSource),
+  'soltar um card sobre outro troca os slots de horário e quadra');
+ok(/← Voltar/.test(bracketSource) && /width:min\(1600px,calc\(100vw - 36px\)\)/.test(bracketSource),
+  'o modal aproveita a largura útil e usa o botão padrão Voltar');
+const timezoneRoundTrip = execFileSync(process.execPath, ['-e', [
+  "const fs=require('fs'),vm=require('vm');",
+  "const s={window:{},console};vm.createContext(s);",
+  "vm.runInContext(fs.readFileSync('js/views/schedule-organizer.js','utf8'),s);",
+  "process.stdout.write(s.window._scheduleIsoOnDay('2026-10-01','14:30'));"
+].join('')], { cwd:path.join(__dirname, '..'), env:Object.assign({}, process.env, { TZ:'America/Sao_Paulo' }) }).toString();
+ok(timezoneRoundTrip === '2026-10-01T17:30:00.000Z',
+  '14:30 em São Paulo persiste como 17:30Z e volta à mesma hora local');
 console.log('──── ' + pass + ' passaram, ' + fail + ' falharam ────');
 process.exitCode = fail ? 1 : 0;

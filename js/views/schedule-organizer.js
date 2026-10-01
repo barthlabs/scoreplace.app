@@ -47,7 +47,17 @@
     listChanges.forEach(function (change) {
       if (change && change.matchId != null) changesByMatch[String(change.matchId)] = change;
     });
-    var cs = courts(t), ms = all(t).filter(function (m) { return !m.isBye && !m.isSitOut; }).sort(order);
+    // A grade estimada já conhece o dia/ordem declarados por categoria. A agenda
+    // operacional usa essa mesma intenção como ponto de partida e só move jogos
+    // quando precisa fugir de uma quadra ocupada ou de uma escolha manual.
+    var grade = window._schGradeEstimada && window._schGradeEstimada(t), preferred = {};
+    if (grade && Array.isArray(grade.slots)) grade.slots.forEach(function (slot) { preferred[String(slot.matchId)] = Number(slot.ms); });
+    var cs = courts(t), ms = all(t).filter(function (m) { return !m.isBye && !m.isSitOut; }).sort(function (a, b) {
+      var aa = preferred[String(a.id)], bb = preferred[String(b.id)];
+      if (isFinite(aa) && isFinite(bb) && aa !== bb) return aa - bb;
+      if (isFinite(aa) !== isFinite(bb)) return isFinite(aa) ? -1 : 1;
+      return order(a, b);
+    });
     var blocked = [], pending = [];
     ms.forEach(function (m) {
       var change = changesByMatch[String(m.id)];
@@ -84,7 +94,7 @@
         if (a && c) items.push({ matchId:String(m.id), court:String(c), scheduledAt:String(a), scheduleLocked:true, scheduleSource:'organizer' });
         return;
       }
-      var len = duration(t, m), at = cursor, cidx = 0, guard = 0;
+      var len = duration(t, m), at = isFinite(preferred[String(m.id)]) ? preferred[String(m.id)] : cursor, cidx = 0, guard = 0;
       while (guard++ < 2000) {
         var found = cs.find(function (c) { return free(c, at, len); });
         if (found) { cidx = cs.indexOf(found); break; }
@@ -93,7 +103,7 @@
       var court = cs[cidx];
       reserve(m, iso(at), court);
       items.push({ matchId:String(m.id), court:court, scheduledAt:iso(at), scheduleLocked:false, scheduleSource:'estimate' });
-      cursor = Math.min(cursor, at);
+      cursor = Math.max(cursor, at);
     });
     return { baseScheduleRevision:Number(t.scheduleRevision || 0), items:items, courts:cs };
   };
@@ -120,6 +130,7 @@
     if (isNaN(d.getTime())) return 'sem-data';
     return [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')].join('-');
   }
+  window._scheduleLocalDayKey = dayKey;
   function dayLabel(key, fallback) {
     if (key === 'sem-data') return 'Sem data';
     var d = new Date(key + 'T12:00:00');
@@ -129,6 +140,22 @@
     var d = new Date(isoText || '');
     return isNaN(d.getTime()) ? 'Sem horário' : d.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
   }
+  function localTime(isoText) {
+    var d = new Date(isoText || '');
+    if (isNaN(d.getTime())) return '';
+    return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  }
+  // A aba já escolhe a data. Cada card edita apenas a hora, evitando repetir a
+  // mesma data nove vezes por linha e evitando uma troca acidental de dia.
+  window._scheduleIsoOnDay = function (key, time) {
+    var match = String(key || '').match(/^(\d{4})-(\d{2})-(\d{2})$/), clock = String(time || '').match(/^(\d{2}):(\d{2})$/);
+    if (!match || !clock) return null;
+    // O construtor numérico recebe o horário de parede local; toISOString faz a
+    // conversão local → UTC uma única vez. Aplicar o offset manualmente aqui
+    // deslocaria o horário duas vezes (14:30 em São Paulo viraria 11:30 na tela).
+    var d = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), Number(clock[1]), Number(clock[2]), 0, 0);
+    return isNaN(d.getTime()) ? null : d.toISOString();
+  };
   function teamLookup(t) {
     var names = {};
     var source = Array.isArray(t && t.competitionTeams) ? t.competitionTeams : [];
@@ -151,12 +178,14 @@
     var saturation = Math.max(35, Math.min(100, Number(object.competitionTeamSaturation) || 58));
     var category = m && m.category || object.category || 'Sem categoria';
     var pair = m && m[side] || object.displayName || object.name || 'Dupla a definir';
-    var players = object.p1Name && object.p2Name ? object.p1Name + ' / ' + object.p2Name : pair;
+    var players = object.p1Name && object.p2Name
+      ? '<div>' + esc(object.p1Name) + '</div><div>' + esc(object.p2Name) + '</div>'
+      : '<div>' + esc(pair) + '</div>';
     var teamName = team.name || id || 'Time a definir';
     var color = 'hsl(' + hue + ' ' + saturation + '% 55%)';
     return '<div style="border-left:4px solid ' + esc(color) + ';background:hsl(' + hue + ' ' + saturation + '% 14%);border-radius:7px;padding:5px 6px;margin-top:4px;min-width:0;">' +
       '<div style="font-size:.66rem;font-weight:800;color:' + esc(color) + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(teamName) + '</div>' +
-      '<div style="font-size:.69rem;font-weight:700;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(players) + '</div>' +
+      '<div style="font-size:.69rem;font-weight:700;line-height:1.2;overflow:hidden;">' + players + '</div>' +
       '<div style="font-size:.61rem;opacity:.78;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(category) + '</div></div>';
   }
   // Grade comum para o rascunho e para a agenda publicada. Cada linha é um horário;
@@ -181,12 +210,12 @@
       var cells = plan.courts.map(function (court) {
         var item = byCourt[String(court)];
         if (!item) return '<div style="min-height:118px;border:1px dashed rgba(148,163,184,.25);border-radius:8px;background:rgba(15,23,42,.24);"></div>';
-        var m = matchById[String(item.matchId)] || {}, label = gameLabel(t, item.matchId);
+        var m = matchById[String(item.matchId)] || {};
         var optionsHtml = plan.courts.map(function (name) { return '<option value="' + esc(name) + '"' + (name === item.court ? ' selected' : '') + '>' + esc(name) + '</option>'; }).join('');
-        return '<article data-' + prefix + '-match="' + esc(item.matchId) + '" style="min-height:118px;border:1px solid rgba(56,189,248,.32);border-radius:8px;padding:6px;background:rgba(15,23,42,.72);box-sizing:border-box;overflow:hidden;">' +
-          '<div style="font-size:.64rem;color:#7dd3fc;font-weight:800;display:flex;justify-content:space-between;gap:4px;"><span>' + esc(label) + '</span><span>R' + esc(String(m.round || '—')) + '</span></div>' +
+        return '<article draggable="true" data-' + prefix + '-match="' + esc(item.matchId) + '" title="Arraste para trocar horário e quadra" style="min-height:132px;border:1px solid rgba(56,189,248,.32);border-radius:8px;padding:6px;background:rgba(15,23,42,.72);box-sizing:border-box;overflow:hidden;cursor:grab;">' +
+          '<div style="font-size:.64rem;color:#7dd3fc;font-weight:800;display:flex;justify-content:flex-end;gap:4px;"><span>Rodada ' + esc(String(m.round || '—')) + '</span></div>' +
           sideHtml(t, m, 'p1', names) + sideHtml(t, m, 'p2', names) +
-          '<div style="display:flex;gap:4px;margin-top:5px;"><input data-' + prefix + '-time="' + esc(item.matchId) + '" type="datetime-local" value="' + esc(localDateTime(item.scheduledAt)) + '" aria-label="Horário de ' + esc(label) + '" style="min-width:0;width:100%;font-size:.63rem;box-sizing:border-box"><select data-' + prefix + '-court="' + esc(item.matchId) + '" aria-label="Quadra de ' + esc(label) + '" style="min-width:0;width:68px;font-size:.63rem;box-sizing:border-box">' + optionsHtml + '</select></div>' +
+          '<div style="display:flex;gap:4px;margin-top:5px;"><input data-' + prefix + '-time="' + esc(item.matchId) + '" type="time" value="' + esc(localTime(item.scheduledAt)) + '" aria-label="Hora da rodada ' + esc(String(m.round || '')) + '" style="min-width:0;width:100%;font-size:.63rem;box-sizing:border-box"><select data-' + prefix + '-court="' + esc(item.matchId) + '" aria-label="Quadra da rodada ' + esc(String(m.round || '')) + '" style="min-width:0;width:68px;font-size:.63rem;box-sizing:border-box">' + optionsHtml + '</select></div>' +
           '</article>';
       }).join('');
       return '<div style="display:grid;grid-template-columns:72px repeat(' + plan.courts.length + ', minmax(176px,1fr));gap:6px;margin-top:6px;align-items:stretch"><div style="font-size:.82rem;font-weight:900;color:#fbbf24;display:flex;align-items:center;justify-content:center;text-align:center;">' + esc(timeLabel(slot)) + '</div>' + cells + '</div>';
@@ -208,6 +237,18 @@
         '<button type="button" class="btn btn-primary" id="sp-agenda-apply-' + esc(fresh.id) + '">Aplicar agenda</button>' +
         '<div style="width:100%;margin-top:2px">' + board.html + '</div></section>';
       Array.prototype.forEach.call(slot.querySelectorAll('[data-agenda-day]'), function (control) { control.onclick = function () { activeDay = control.getAttribute('data-agenda-day'); render(); }; });
+      Array.prototype.forEach.call(slot.querySelectorAll('[data-agenda-match]'), function (card) {
+        card.ondragstart = function (event) { event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', card.getAttribute('data-agenda-match')); };
+        card.ondragover = function (event) { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; };
+        card.ondrop = function (event) {
+          event.preventDefault(); var fromId = event.dataTransfer.getData('text/plain'), toId = card.getAttribute('data-agenda-match');
+          var from = plan.items.find(function (x) { return String(x.matchId) === String(fromId); }), to = plan.items.find(function (x) { return String(x.matchId) === String(toId); });
+          if (!from || !to || from.matchId === to.matchId) return;
+          manual[from.matchId] = { matchId:from.matchId, court:to.court, scheduledAt:to.scheduledAt };
+          manual[to.matchId] = { matchId:to.matchId, court:from.court, scheduledAt:from.scheduledAt };
+          render();
+        };
+      });
       Array.prototype.forEach.call(slot.querySelectorAll('[data-agenda-court]'), function (control) {
         control.onchange = function () {
           var id = control.getAttribute('data-agenda-court'), item = plan.items.find(function (x) { return String(x.matchId) === String(id); });
@@ -219,9 +260,9 @@
       Array.prototype.forEach.call(slot.querySelectorAll('[data-agenda-time]'), function (control) {
         control.onchange = function () {
           var id = control.getAttribute('data-agenda-time'), item = plan.items.find(function (x) { return String(x.matchId) === String(id); });
-          var ms = new Date(control.value || '').getTime();
-          if (!item || isNaN(ms)) return;
-          manual[id] = { matchId:id, court:item.court, scheduledAt:iso(ms) };
+          var at = item && window._scheduleIsoOnDay(dayKey(item.scheduledAt), control.value);
+          if (!item || !at) return;
+          manual[id] = { matchId:id, court:item.court, scheduledAt:at };
           render();
         };
       });

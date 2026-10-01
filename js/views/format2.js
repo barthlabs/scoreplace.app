@@ -143,7 +143,7 @@
     // O carregamento normal traz o domínio antes deste arquivo. Ainda assim, o
     // normalizador é usado por harnesses e ferramentas isoladas: sem o domínio, a
     // opção fica explicitamente desligada em vez de acessar uma configuração nula.
-    if (!out.teamCompetition) out.teamCompetition = { enabled: false, teamCount: 0, teamNames: [], formation: 'draw', internalMatches: 'avoid', ranking: 'points', aggregation: 'overall', schedule: { enabled: false, teamsPerGroup: 2, gamesPerTeam: 1, mode: 'free' }, scoring: { win: 3, draw: 1, loss: 0 } };
+    if (!out.teamCompetition) out.teamCompetition = { enabled: false, teamCount: 0, teamNames: [], formation: 'draw', internalMatches: 'avoid', ranking: 'points', aggregation: 'overall', schedule: { enabled: false, teamsPerGroup: 2, gamesPerTeam: 1, mode: 'structured' }, scoring: { win: 3, draw: 1, loss: 0 } };
 
     if (!isDupla) {
       out.parceria = null;
