@@ -367,13 +367,24 @@ window._applyWoSubsToTournament = function(t, opts) {
     }
     t.participants = partsArr;
 
-    // Remove o suplente das listas de espera — por UID (dedup homônimo). Nome só p/ guest.
-    const _notSub = (p) => {
-      const u = (typeof window._participantUids === 'function') ? window._participantUids(p) : (p && p.uid ? [p.uid] : []);
-      return (subUid && u.length) ? u.indexOf(subUid) === -1 : _getName(p) !== subName;
-    };
-    if (Array.isArray(t.standbyParticipants)) t.standbyParticipants = t.standbyParticipants.filter(_notSub);
-    if (Array.isArray(t.waitlist)) t.waitlist = t.waitlist.filter(_notSub);
+    // A promoção TEM de consumir a entrada de todos os três depósitos de espera,
+    // inclusive `monarchWaitlist`. A chave é sempre o UID; nome é só o fallback de
+    // convidado legado. Centralizar no núcleo evita que uma suplente entre no jogo
+    // e continue aparecendo como disponível na fila.
+    const _subKey = subUid || subName;
+    if (typeof window._removeFromWaitlistByKey === 'function') {
+      window._removeFromWaitlistByKey(t, _subKey);
+    } else {
+      const _notSub = (p) => {
+        const u = (typeof window._participantUids === 'function') ? window._participantUids(p) : (p && p.uid ? [p.uid] : []);
+        return (subUid && u.length) ? u.indexOf(subUid) === -1 : _getName(p) !== subName;
+      };
+      if (Array.isArray(t.standbyParticipants)) t.standbyParticipants = t.standbyParticipants.filter(_notSub);
+      if (Array.isArray(t.waitlist)) t.waitlist = t.waitlist.filter(_notSub);
+      if (t.monarchWaitlist && typeof t.monarchWaitlist === 'object') Object.keys(t.monarchWaitlist).forEach((category) => {
+        if (Array.isArray(t.monarchWaitlist[category])) t.monarchWaitlist[category] = t.monarchWaitlist[category].filter(_notSub);
+      });
+    }
 
     // Mark sub as Presente (use timestamp pra preservar FIFO em subs subsequentes).
     // uid-first via o objeto do substituto (sub.p tem uid).

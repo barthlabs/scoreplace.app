@@ -25,10 +25,13 @@ function ok(c, m) { if (c) pass++; else { fail++; console.error('  ✗', m); } }
 // Carrega o shim do servidor (monta o window global + vendor/).
 require(path.join(ROOT, 'functions-autodraw', 'draw-core.js'));
 const win = globalThis.window;
+const waitlistCoreSource = fs.readFileSync(path.join(ROOT, 'js', 'views', 'waitlist-core.js'), 'utf8');
+ok(/window\._removeFromWaitlistByKey\s*=\s*function/.test(waitlistCoreSource),
+  'a definição global de remoção por chave precisa acompanhar o servidor');
 
 // ── 1. As funções da espera EXISTEM no servidor ──────────────────────────────
 ['_getWaitlist', '_removeFromWaitlist', '_nameForms', '_clearAllWaitlists',
- '_waitlistNameSet', '_sanitizeWaitlistVsGroups'].forEach(function (fn) {
+ '_removeFromWaitlistByKey', '_waitlistNameSet', '_sanitizeWaitlistVsGroups'].forEach(function (fn) {
   ok(typeof win[fn] === 'function', 'servidor não define window.' + fn + ' (o guard typeof falha em silêncio)');
 });
 
@@ -44,6 +47,18 @@ const win = globalThis.window;
   ok(t.standbyParticipants.length === 1, 'standbyParticipants ainda tem Ana');
   ok(t.monarchWaitlist._default_.join() === 'Carla', 'monarchWaitlist ainda tem Ana');
   ok(win._removeFromWaitlist(t, 'Ana') === false, 'segunda remoção devia ser no-op');
+})();
+
+// ── 2b. A chave UID alcança a entrada enxuta em TODOS os storages ──────────
+(function () {
+  const t = {
+    waitlist: [{ uid: 'uid-ana', displayName: 'Ana' }],
+    standbyParticipants: [{ uid: 'uid-ana', displayName: 'Ana' }],
+    monarchWaitlist: { _default_: [{ uid: 'uid-ana', displayName: 'Ana' }, 'Carla'] },
+  };
+  ok(win._removeFromWaitlistByKey(t, 'uid-ana') === true, 'removeByKey devia remover a entrada por UID do Rei/Rainha');
+  ok(t.waitlist.length === 0 && t.standbyParticipants.length === 0 && t.monarchWaitlist._default_.join() === 'Carla',
+    'a entrada UID não pode sobreviver no storage Rei/Rainha');
 })();
 
 // ── 3. A chave manual remove só a vaga certa, nunca o homônimo ───────────────

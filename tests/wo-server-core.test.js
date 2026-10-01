@@ -1,6 +1,8 @@
 'use strict';
 
 const assert = require('assert');
+const fs = require('fs');
+const path = require('path');
 const { applyTournamentWO, setPresenceWithWOSubstitution, resolveWOSubstitutionChoice } = require('../functions-autodraw/draw-core.js');
 const Split = require('../functions-autodraw/vendor/tournament-split-core.js');
 const WritePlan = require('../functions-autodraw/write-plan.js');
@@ -33,6 +35,8 @@ function tournament(extra) {
 {
   const t = tournament({
     standbyParticipants: [{ uid: 'clara', displayName: 'Clara', name: 'Clara' }],
+    waitlist: [{ uid: 'clara', displayName: 'Clara', name: 'Clara' }],
+    monarchWaitlist: { Power: [{ uid: 'clara', displayName: 'Clara', name: 'Clara' }] },
     checkedIn: { clara: Date.now() }
   });
   const r = applyTournamentWO(t, { absentName: 'Ana', absentUids: ['ana'], scope: 'match', noSubBehavior: 'wait', woScope: 'individual' });
@@ -43,6 +47,9 @@ function tournament(extra) {
   assert.equal(r.subDetails[0].matchId, 'm1', 'o recibo aponta o jogo persistido');
   assert.equal(r.subDetails[0].absentUid, 'ana', 'o recibo não usa o nome como identidade');
   assert.equal(r.subDetails[0].subUid, 'clara', 'o recibo informa o UID que ocupou a vaga');
+  assert.equal(t.standbyParticipants.length, 0, 'a substituta não fica no standby');
+  assert.equal(t.waitlist.length, 0, 'a substituta não fica na waitlist legada');
+  assert.equal(t.monarchWaitlist.Power.length, 0, 'a substituta não fica na espera por categoria');
 }
 
 // REGRESSÃO — Confra Prata, 29/set/2026: "Jogador X" é uma vaga provisória sem
@@ -88,6 +95,11 @@ function tournament(extra) {
 }
 
 console.log('wo-server-core: OK');
+
+const callableSource = fs.readFileSync(path.join(__dirname, '..', 'functions-autodraw', 'index.js'), 'utf8');
+assert.ok(callableSource.includes('regression_confra_paula_promovida_nao_fica_na_espera') &&
+  callableSource.includes('drawWindow._removeFromWaitlistByKey(t, promotedUid)'),
+  'a callable precisa reaplicar no limite transacional a remoção do UID promovido');
 
 
 // Presença posterior a um W.O. percorre o mesmo motor e substitui sem que o

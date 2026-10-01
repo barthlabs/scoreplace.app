@@ -686,6 +686,7 @@ const SUITES = [
   // Cânone da LISTA DE ESPERA no AMBIENTE DO SERVIDOR (CF). Falha se alguém devolver
   // as funções pro store.js (não vendorado) — o tardio voltaria a ficar preso na espera.
   'tests/waitlist-core-server.test.js',
+  'tests/roster-state-core.test.js',
   // PORTA DE ENTRADA da espera: fase SORTEADA → lista de espera, nunca o roster. Roda o doc
   // REAL do Confra (111 inscritos, 27 grupos, 83 jogos) pelo computeEnroll da CF e pelo
   // _toggleLigaActive real. Falha se alguém deixar Liga com temporada aberta voltar a

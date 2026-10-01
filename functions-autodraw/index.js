@@ -13,6 +13,7 @@ const _tourSummary = require('./tournament-summary-core.js');
 const _wp = require('./write-plan.js');
 const _woClaimCore = require('./wo-claim-core.js');
 const _matchHistory = require('./match-history-core.js');
+const _rosterState = require('./roster-state-core.js');
 const _tSplit = require('./vendor/tournament-split-core.js');   // fonte única: js/views/ (copy-vendor)
 // fonte única: functions/match-roster.js (copy-vendor) — monta o subdoc de resultado,
 // incluindo o carregar-adiante do `replay`, que o servidor não sabe recalcular.
@@ -730,6 +731,16 @@ function _gravaTorneio(tx, ref, tDepois, tAntes, ctx) {
     console.warn('[gravaTorneio] ' + _revertidas.length + ' vaga(s) de repescagem carimbada(s) ' +
       'foram preservadas contra reescrita: ' + _revertidas.join(' · '));
   }
+  /* Todas as callables passam por esta única fronteira de persistência. A fila
+   * não pode sobreviver em paralelo a uma dupla, grupo ou jogo futuro por UID.
+   * [[regression_confra_paula_promovida_nao_fica_na_espera]] */
+  const _reconciliacaoElenco = _rosterState.reconcileRosterStates(tDepois, {
+    collectMatches: (torneio) => {
+      if (drawWindow && typeof drawWindow._collectAllMatches === 'function') return drawWindow._collectAllMatches(torneio) || [];
+      return Array.isArray(torneio && torneio.matches) ? torneio.matches : [];
+    }
+  });
+  if (_reconciliacaoElenco.removed) console.warn('[gravaTorneio] removeu ' + _reconciliacaoElenco.removed + ' cópia(s) de espera já alocadas.');
   const plan = _planejaEscrita(tDepois, tAntes, { agoraIso: _agoraIso, extras: (ctx && ctx.extras) || [] });
   _wp.applyPlan(tx, ref, plan, { FieldValue: FieldValue });
   /* O chamador da W.O. precisa distinguir "motor mudou o objeto" de "o slot entrou
@@ -2559,6 +2570,19 @@ exports.applyTournamentWO = onCall(async (request) => {
     };
     const depoisPorId = {};
     coletar(t).forEach((m) => { if (m && m.id != null) depoisPorId[String(m.id)] = m; });
+    /* Defesa de persistência: o motor já consome a suplente por UID, mas esta
+     * callable é a última fronteira antes de gravar o snapshot transacional.
+     * Reaplicar a remoção usando o recibo que o próprio motor produziu impede
+     * que uma cópia enxuta sobrevivente em outro storage (waitlist/standby/
+     * monarchWaitlist) ressuscite a suplente no listener seguinte. Não há nome
+     * nem dado vindo da tela aqui: só o `subUid` confirmado no jogo fresco.
+     * [[regression_confra_paula_promovida_nao_fica_na_espera]] */
+    if (typeof drawWindow._removeFromWaitlistByKey === 'function') {
+      (result.subDetails || []).forEach((detail) => {
+        const promotedUid = String(detail && detail.subUid || '').trim();
+        if (promotedUid) drawWindow._removeFromWaitlistByKey(t, promotedUid);
+      });
+    }
     const woRepescagemPermits = (result.subDetails || []).map((d) => {
       const matchIdDoRecibo = d && d.matchId != null ? String(d.matchId) : '';
       const slot = d && d.slot;

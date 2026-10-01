@@ -14,6 +14,17 @@ var ScoreplaceWaitlist;
     const text = (value) => value == null ? '' : String(value).trim();
     const array = (value) => Array.isArray(value) ? value : [];
     const object = (value) => record(value);
+    /* Comparador compartilhado das três filas. Mantê-lo nomeado fora de
+     * `removeByKey` deixa explícito que waitlist, standby e Monarch seguem a
+     * mesma identidade: UID, depois ID manual, e nome só no legado sem ambos. */
+    function matchesRemovalKey(entry, wanted, helpers) {
+        const objectEntry = record(entry);
+        if (objectEntry && text(objectEntry.uid))
+            return text(objectEntry.uid) === wanted;
+        if (objectEntry && text(objectEntry.manualParticipantId))
+            return text(objectEntry.manualParticipantId) === wanted;
+        return nameForms(entry, helpers).includes(wanted.toLowerCase());
+    }
     function nameForms(value, helpers) {
         const values = [helpers.displayName(value)];
         const entry = record(value);
@@ -340,25 +351,12 @@ var ScoreplaceWaitlist;
         const wanted = text(keyValue);
         if (!wanted)
             return false;
-        const lower = wanted.toLowerCase();
         let removed = false;
-        const matches = (entry) => {
-            const objectEntry = record(entry);
-            if (objectEntry && text(objectEntry.uid))
-                return text(objectEntry.uid) === wanted;
-            /* REGRESSÃO: a chave do manual caía em `nameForms`, apagando todo homônimo
-             * quando a integração tardia retirava o entrante da espera. UID e manualId
-             * são identidades; nome só resolve o documento legado que não possui nenhuma. */
-            if (objectEntry && text(objectEntry.manualParticipantId)) {
-                return text(objectEntry.manualParticipantId) === wanted;
-            }
-            return nameForms(entry, helpers).includes(lower);
-        };
         for (const field of ['waitlist', 'standbyParticipants']) {
             if (!Array.isArray(tournament[field]))
                 continue;
             const before = tournament[field].length;
-            tournament[field] = tournament[field].filter((entry) => !matches(entry));
+            tournament[field] = tournament[field].filter((entry) => !matchesRemovalKey(entry, wanted, helpers));
             if (tournament[field].length < before)
                 removed = true;
         }
@@ -368,10 +366,10 @@ var ScoreplaceWaitlist;
                 if (!Array.isArray(monarch[category]))
                     return;
                 const before = monarch[category].length;
-                monarch[category] = monarch[category].filter((entry) => {
-                    const raw = text(entry);
-                    return !(raw === wanted || raw.toLowerCase() === lower);
-                });
+                // A espera Rei/Rainha também pode carregar a entrada enxuta por UID.
+                // Tratar esse storage como texto fazia um objeto virar "[object Object]" e
+                // sobreviver à promoção — exatamente a duplicação "joga e continua na fila".
+                monarch[category] = monarch[category].filter((entry) => !matchesRemovalKey(entry, wanted, helpers));
                 if (monarch[category].length < before)
                     removed = true;
             });
