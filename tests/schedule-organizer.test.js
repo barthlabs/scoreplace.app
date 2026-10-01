@@ -67,5 +67,23 @@ ok(/getTimezoneOffset\(\) \* 60000/.test(organizerSource),
   'o conversor do input de horário usa minutos em milissegundos explicitamente');
 ok(/scheduleLocked:true, scheduleSource:'organizer'/.test(organizerSource),
   'Aplicar agenda transforma a sugestão confirmada em alocação manual protegida');
+
+// A agenda não pode voltar a expor IDs técnicos como a informação principal. A mesma
+// grade serve ao rascunho e ao torneio publicado: linhas são horários, colunas são
+// quadras, e cada card identifica categoria, duplas e seus times coloridos.
+t.competitionTeams = [{ id:'team-1', name:'VENOM', hue:332 }, { id:'team-2', name:'BLACKOUT', hue:207 }];
+t.matches[0] = Object.assign({}, t.matches[0], {
+  p1:'Ana / Bia', p2:'Carla / Dani', category:'Fem Power', round:1,
+  p1CompetitionTeamId:'team-1', p2CompetitionTeamId:'team-2',
+  team1Obj:{ p1Name:'Ana', p2Name:'Bia', competitionTeamHue:332, competitionTeamSaturation:70, category:'Fem Power' },
+  team2Obj:{ p1Name:'Carla', p2Name:'Dani', competitionTeamHue:207, competitionTeamSaturation:70, category:'Fem Power' }
+});
+const board = W._operationalScheduleGrid(t, p, { prefix:'agenda' });
+ok(board.days.length === 1 && /data-agenda-day/.test(board.html),
+  'a grade cria abas por dia quando há agenda');
+ok(/VENOM/.test(board.html) && /BLACKOUT/.test(board.html) && /Ana \/ Bia/.test(board.html) && /Fem Power/.test(board.html),
+  'a célula informa times, nomes das duplas e categoria');
+ok(/grid-template-columns:72px repeat\(2, minmax\(176px,1fr\)\)/.test(board.html),
+  'a grade tem uma coluna de horário e uma coluna para cada quadra');
 console.log('──── ' + pass + ' passaram, ' + fail + ' falharam ────');
 process.exitCode = fail ? 1 : 0;

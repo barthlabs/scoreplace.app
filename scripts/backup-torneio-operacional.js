@@ -27,7 +27,17 @@ const PROJECT = 'scoreplace-app';
 // repositório e sem transferência para serviços externos.
 const DEFAULT_OUTPUT = '/Users/rtb/Documents/Codex/backups-operacionais';
 
-require('./preflight-alvo').preflight('backup-torneio-operacional', PROJECT);
+function preflight() {
+  // Este utilitário é autocontido: não pode depender de um helper local que uma
+  // restauração ou checkout administrativo talvez não traga junto.
+  const emulator = String(process.env.FIRESTORE_EMULATOR_HOST || '').trim();
+  if (emulator) fail('FIRESTORE_EMULATOR_HOST está ativo; recusei gravar um backup operacional do emulador');
+  console.log('▸ backup-torneio-operacional');
+  console.log('  projectId:              ' + PROJECT);
+  console.log('  FIRESTORE_EMULATOR_HOST: (ausente)');
+  console.log('  alvo efetivo:           PRODUÇÃO (Firestore real)');
+  console.log('');
+}
 
 function arg(name) {
   const prefix = '--' + name + '=';
@@ -83,6 +93,7 @@ function countEntities(subcollections) {
   const tournamentId = arg('tournament');
   const output = arg('output') || DEFAULT_OUTPUT;
   if (!tournamentId) fail('use --tournament=<id>');
+  preflight();
   if (!admin.apps.length) admin.initializeApp({ projectId: PROJECT });
   const db = admin.firestore();
   const ref = db.collection('tournaments').doc(tournamentId);

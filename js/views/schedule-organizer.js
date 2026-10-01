@@ -115,28 +115,99 @@
     var m = all(t).find(function (x) { return String(x.id) === String(id); });
     return m && (m.number || m.matchNumber) ? 'Jogo ' + (m.number || m.matchNumber) : 'Jogo ' + String(id);
   }
+  function dayKey(isoText) {
+    var d = new Date(isoText || '');
+    if (isNaN(d.getTime())) return 'sem-data';
+    return [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')].join('-');
+  }
+  function dayLabel(key, fallback) {
+    if (key === 'sem-data') return 'Sem data';
+    var d = new Date(key + 'T12:00:00');
+    return isNaN(d.getTime()) ? fallback : d.toLocaleDateString('pt-BR', { weekday:'short', day:'2-digit', month:'short' });
+  }
+  function timeLabel(isoText) {
+    var d = new Date(isoText || '');
+    return isNaN(d.getTime()) ? 'Sem horário' : d.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
+  }
+  function teamLookup(t) {
+    var names = {};
+    var source = Array.isArray(t && t.competitionTeams) ? t.competitionTeams : [];
+    source.forEach(function (team, index) {
+      if (!team) return;
+      names[String(team.id || ('team-' + (index + 1)))] = { name:team.name || ('Time ' + (index + 1)), hue:Number(team.hue) };
+    });
+    var configured = t && t.teamCompetition && t.teamCompetition.teamNames;
+    if (Array.isArray(configured)) configured.forEach(function (name, index) {
+      var id = 'team-' + (index + 1);
+      if (!names[id]) names[id] = { name:name || ('Time ' + (index + 1)), hue:NaN };
+    });
+    return names;
+  }
+  function sideHtml(t, m, side, names) {
+    var object = m && m[side === 'p1' ? 'team1Obj' : 'team2Obj'] || {};
+    var id = String(m && m[side === 'p1' ? 'p1CompetitionTeamId' : 'p2CompetitionTeamId'] || object.competitionTeamId || '');
+    var team = names[id] || {};
+    var hue = Number(object.competitionTeamHue); if (!isFinite(hue)) hue = Number(team.hue); if (!isFinite(hue)) hue = 210;
+    var saturation = Math.max(35, Math.min(100, Number(object.competitionTeamSaturation) || 58));
+    var category = m && m.category || object.category || 'Sem categoria';
+    var pair = m && m[side] || object.displayName || object.name || 'Dupla a definir';
+    var players = object.p1Name && object.p2Name ? object.p1Name + ' / ' + object.p2Name : pair;
+    var teamName = team.name || id || 'Time a definir';
+    var color = 'hsl(' + hue + ' ' + saturation + '% 55%)';
+    return '<div style="border-left:4px solid ' + esc(color) + ';background:hsl(' + hue + ' ' + saturation + '% 14%);border-radius:7px;padding:5px 6px;margin-top:4px;min-width:0;">' +
+      '<div style="font-size:.66rem;font-weight:800;color:' + esc(color) + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(teamName) + '</div>' +
+      '<div style="font-size:.69rem;font-weight:700;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(players) + '</div>' +
+      '<div style="font-size:.61rem;opacity:.78;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(category) + '</div></div>';
+  }
+  // Grade comum para o rascunho e para a agenda publicada. Cada linha é um horário;
+  // cada coluna, uma quadra. Assim os IDs técnicos nunca são a informação principal.
+  window._operationalScheduleGrid = function (t, plan, options) {
+    options = options || {};
+    var prefix = String(options.prefix || 'agenda'), matchById = {};
+    all(t).forEach(function (m) { if (m) matchById[String(m.id)] = m; });
+    var names = teamLookup(t), byDay = {};
+    (plan.items || []).forEach(function (item) {
+      var key = dayKey(item.scheduledAt); (byDay[key] || (byDay[key] = [])).push(item);
+    });
+    var days = Object.keys(byDay).sort(), activeDay = days.indexOf(options.activeDay) >= 0 ? options.activeDay : (days[0] || '');
+    var tabs = days.map(function (key) { return '<button type="button" data-' + prefix + '-day="' + esc(key) + '" class="btn ' + (key === activeDay ? 'btn-primary' : 'btn-outline') + '" style="padding:6px 10px;font-size:.76rem;">' + esc(dayLabel(key, key)) + '</button>'; }).join('');
+    var slots = {};
+    (byDay[activeDay] || []).forEach(function (item) {
+      var key = String(item.scheduledAt || ''); (slots[key] || (slots[key] = [])).push(item);
+    });
+    var headers = plan.courts.map(function (court) { return '<div style="font-size:.72rem;font-weight:800;text-align:center;padding:7px 4px;background:rgba(30,41,59,.92);border-radius:7px;white-space:nowrap;">' + esc(court) + '</div>'; }).join('');
+    var rows = Object.keys(slots).sort().map(function (slot) {
+      var byCourt = {}; slots[slot].forEach(function (item) { byCourt[String(item.court)] = item; });
+      var cells = plan.courts.map(function (court) {
+        var item = byCourt[String(court)];
+        if (!item) return '<div style="min-height:118px;border:1px dashed rgba(148,163,184,.25);border-radius:8px;background:rgba(15,23,42,.24);"></div>';
+        var m = matchById[String(item.matchId)] || {}, label = gameLabel(t, item.matchId);
+        var optionsHtml = plan.courts.map(function (name) { return '<option value="' + esc(name) + '"' + (name === item.court ? ' selected' : '') + '>' + esc(name) + '</option>'; }).join('');
+        return '<article data-' + prefix + '-match="' + esc(item.matchId) + '" style="min-height:118px;border:1px solid rgba(56,189,248,.32);border-radius:8px;padding:6px;background:rgba(15,23,42,.72);box-sizing:border-box;overflow:hidden;">' +
+          '<div style="font-size:.64rem;color:#7dd3fc;font-weight:800;display:flex;justify-content:space-between;gap:4px;"><span>' + esc(label) + '</span><span>R' + esc(String(m.round || '—')) + '</span></div>' +
+          sideHtml(t, m, 'p1', names) + sideHtml(t, m, 'p2', names) +
+          '<div style="display:flex;gap:4px;margin-top:5px;"><input data-' + prefix + '-time="' + esc(item.matchId) + '" type="datetime-local" value="' + esc(localDateTime(item.scheduledAt)) + '" aria-label="Horário de ' + esc(label) + '" style="min-width:0;width:100%;font-size:.63rem;box-sizing:border-box"><select data-' + prefix + '-court="' + esc(item.matchId) + '" aria-label="Quadra de ' + esc(label) + '" style="min-width:0;width:68px;font-size:.63rem;box-sizing:border-box">' + optionsHtml + '</select></div>' +
+          '</article>';
+      }).join('');
+      return '<div style="display:grid;grid-template-columns:72px repeat(' + plan.courts.length + ', minmax(176px,1fr));gap:6px;margin-top:6px;align-items:stretch"><div style="font-size:.82rem;font-weight:900;color:#fbbf24;display:flex;align-items:center;justify-content:center;text-align:center;">' + esc(timeLabel(slot)) + '</div>' + cells + '</div>';
+    }).join('');
+    return { activeDay:activeDay, days:days, html:'<div style="display:flex;gap:7px;flex-wrap:wrap;margin:10px 0 8px;">' + tabs + '</div><div style="overflow:auto;border-top:1px solid rgba(148,163,184,.2);padding-top:7px;"><div style="min-width:' + (72 + plan.courts.length * 182) + 'px"><div style="display:grid;grid-template-columns:72px repeat(' + plan.courts.length + ', minmax(176px,1fr));gap:6px"><div></div>' + headers + '</div>' + (rows || '<div style="padding:16px;opacity:.72">Não há jogos neste dia.</div>') + '</div></div>' };
+  };
   window._renderOperationalSchedule = function (slot, t) {
     if (!slot || !t || !window._souOrganizador || !window._souOrganizador(t)) return;
-    var manual = {};
+    var manual = {}, activeDay = '';
     function draftForFresh() {
       var fresh = (window._findTournamentById && window._findTournamentById(t.id)) || t;
       return { fresh:fresh, plan:window._operationalSchedulePlan(fresh, Object.keys(manual).map(function (id) { return manual[id]; })) };
     }
     function render() {
       var current = draftForFresh(), fresh = current.fresh, plan = current.plan, total = plan.items.length;
-      var rows = plan.items.slice().sort(function(a,b) { return String(a.scheduledAt).localeCompare(String(b.scheduledAt)) || String(a.matchId).localeCompare(String(b.matchId)); }).map(function (item) {
-        var label = gameLabel(fresh, item.matchId);
-        var options = plan.courts.map(function (court) { return '<option value="' + esc(court) + '"' + (court === item.court ? ' selected' : '') + '>' + esc(court) + '</option>'; }).join('');
-        return '<div data-agenda-row="' + esc(item.matchId) + '" style="display:grid;grid-template-columns:minmax(104px,1fr) minmax(120px,1fr) minmax(92px,.7fr);gap:8px;align-items:end;padding:8px 0;border-top:1px solid rgba(148,163,184,.18)">' +
-          '<label style="font-size:.78rem;min-width:0"><span style="display:block;font-weight:700">' + esc(label) + '</span><input data-agenda-time="' + esc(item.matchId) + '" type="datetime-local" value="' + esc(localDateTime(item.scheduledAt)) + '" aria-label="Horário de ' + esc(label) + '" style="width:100%;box-sizing:border-box;margin-top:3px"></label>' +
-          '<label style="font-size:.78rem"><span style="display:block;font-weight:700">Quadra</span><select data-agenda-court="' + esc(item.matchId) + '" aria-label="Quadra de ' + esc(label) + '" style="width:100%;box-sizing:border-box;margin-top:3px">' + options + '</select></label>' +
-          '<div style="font-size:.74rem;opacity:.72;padding-bottom:4px">' + esc(labelDateTime(item.scheduledAt)) + (item.scheduleLocked ? ' · fixado' : ' · sugestão') + '</div>' +
-        '</div>';
-      }).join('');
+      var board = window._operationalScheduleGrid(fresh, plan, { prefix:'agenda', activeDay:activeDay }); activeDay = board.activeDay;
       slot.innerHTML = '<section class="sp-operational-schedule" style="margin:12px 0;padding:12px 14px;border:1px solid rgba(56,189,248,.35);border-radius:12px;background:rgba(14,116,144,.10);display:flex;gap:12px;align-items:center;flex-wrap:wrap">' +
         '<div style="flex:1;min-width:220px"><strong>📍 Agenda operacional</strong><div style="font-size:.82rem;opacity:.78;margin-top:3px">' + total + ' jogos pendentes · ' + plan.courts.map(esc).join(' · ') + '. Alterar horário ou quadra fixa o jogo e reorganiza os demais; nada é salvo antes de aplicar.</div></div>' +
         '<button type="button" class="btn btn-primary" id="sp-agenda-apply-' + esc(fresh.id) + '">Aplicar agenda</button>' +
-        '<details style="width:100%;margin-top:2px"><summary style="cursor:pointer;font-weight:700">Editar horários e quadras</summary><div style="margin-top:8px">' + (rows || '<div style="font-size:.82rem;opacity:.75">Não há jogos pendentes para planejar.</div>') + '</div></details></section>';
+        '<div style="width:100%;margin-top:2px">' + board.html + '</div></section>';
+      Array.prototype.forEach.call(slot.querySelectorAll('[data-agenda-day]'), function (control) { control.onclick = function () { activeDay = control.getAttribute('data-agenda-day'); render(); }; });
       Array.prototype.forEach.call(slot.querySelectorAll('[data-agenda-court]'), function (control) {
         control.onchange = function () {
           var id = control.getAttribute('data-agenda-court'), item = plan.items.find(function (x) { return String(x.matchId) === String(id); });

@@ -6612,7 +6612,7 @@ window._openPendingInitialSchedule = function (tId) {
     return;
   }
   var esc = window._safeHtml || function (s) { return String(s == null ? '' : s); };
-  var manual = {};
+  var manual = {}, activeDay = '';
   var old = document.getElementById('sp-pending-schedule-overlay'); if (old) old.remove();
   var overlay = document.createElement('div'); overlay.id = 'sp-pending-schedule-overlay';
   overlay.style.cssText = 'position:fixed;inset:0;z-index:200100;background:rgba(2,6,23,.78);padding:18px;overflow:auto;box-sizing:border-box;';
@@ -6628,19 +6628,13 @@ window._openPendingInitialSchedule = function (tId) {
   function label(m, fallback) { return 'Jogo ' + String((m && (m.number || m.matchNumber || m.id)) || fallback); }
   function plan() { return window._operationalSchedulePlan(view(), Object.keys(manual).map(function (id) { return manual[id]; })); }
   function render() {
-    var p = plan(), byId = {}; draft.matches.forEach(function (m) { if (m) byId[String(m.id)] = m; });
-    var rows = p.items.slice().sort(function (a, b) { return String(a.scheduledAt).localeCompare(String(b.scheduledAt)); }).map(function (item) {
-      var m = byId[item.matchId], options = p.courts.map(function (court) { return '<option value="' + esc(court) + '"' + (court === item.court ? ' selected' : '') + '>' + esc(court) + '</option>'; }).join('');
-      return '<div style="display:grid;grid-template-columns:minmax(85px,1fr) minmax(130px,1.2fr) minmax(105px,.9fr);gap:8px;align-items:end;padding:9px 0;border-top:1px solid rgba(148,163,184,.2)">' +
-        '<strong style="font-size:.82rem">' + esc(label(m, item.matchId)) + '</strong>' +
-        '<label style="font-size:.75rem">Horário<input data-pis-time="' + esc(item.matchId) + '" type="datetime-local" value="' + esc(localValue(item.scheduledAt)) + '" style="display:block;width:100%;box-sizing:border-box;margin-top:3px"></label>' +
-        '<label style="font-size:.75rem">Quadra<select data-pis-court="' + esc(item.matchId) + '" style="display:block;width:100%;box-sizing:border-box;margin-top:3px">' + options + '</select></label></div>';
-    }).join('');
+    var p = plan(), board = window._operationalScheduleGrid(view(), p, { prefix:'pis', activeDay:activeDay }); activeDay = board.activeDay;
     overlay.innerHTML = '<div role="dialog" aria-modal="true" style="max-width:850px;margin:0 auto;background:#111827;border:1px solid rgba(56,189,248,.5);border-radius:16px;padding:16px;color:var(--text-main);box-shadow:0 24px 70px rgba(0,0,0,.55)">' +
       '<div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start"><div><h2 style="margin:0;font-size:1.05rem">📍 Planejar antes de publicar</h2><p style="margin:5px 0 12px;font-size:.82rem;line-height:1.4;color:#cbd5e1">Ao mudar horário ou quadra, os jogos ainda livres se reorganizam. Nada fica visível para participantes até publicar a chave.</p></div><button type="button" data-pis-close class="btn">Fechar</button></div>' +
-      '<div style="font-size:.76rem;color:#94a3b8;margin-bottom:6px">' + p.items.length + ' jogos · ' + p.courts.map(esc).join(' · ') + '</div>' + rows +
+      '<div style="font-size:.76rem;color:#94a3b8;margin-bottom:6px">' + p.items.length + ' jogos · ' + p.courts.length + ' quadras. Cada linha é um horário; cada coluna é uma quadra.</div>' + board.html +
       '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px"><button type="button" data-pis-apply class="btn btn-primary">Aplicar agenda no rascunho</button></div></div>';
     overlay.querySelector('[data-pis-close]').onclick = function () { overlay.remove(); };
+    Array.prototype.forEach.call(overlay.querySelectorAll('[data-pis-day]'), function (control) { control.onclick = function () { activeDay = control.getAttribute('data-pis-day'); render(); }; });
     Array.prototype.forEach.call(overlay.querySelectorAll('[data-pis-court]'), function (control) { control.onchange = function () { var item = p.items.find(function (x) { return String(x.matchId) === String(control.getAttribute('data-pis-court')); }); if (item) { manual[item.matchId] = { matchId:item.matchId, court:control.value, scheduledAt:item.scheduledAt }; render(); } }; });
     Array.prototype.forEach.call(overlay.querySelectorAll('[data-pis-time]'), function (control) { control.onchange = function () { var item = p.items.find(function (x) { return String(x.matchId) === String(control.getAttribute('data-pis-time')); }); var ms = Date.parse(control.value || ''); if (item && Number.isFinite(ms)) { manual[item.matchId] = { matchId:item.matchId, court:item.court, scheduledAt:new Date(ms).toISOString() }; render(); } }; });
     overlay.querySelector('[data-pis-apply]').onclick = function (event) {
