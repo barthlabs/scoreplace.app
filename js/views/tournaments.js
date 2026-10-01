@@ -64,6 +64,30 @@ window._duplaCard = function (t, p, draggable, ctx) {
       ? [{ uid: (p.p1Uid || ''), guest: String(p.p1Name || '').trim() }, { uid: (p.p2Uid || ''), guest: String(p.p2Name || '').trim() }]
       : (nm.includes('/') ? nm.split('/').map(function (s) { return { uid: '', guest: s.trim() }; }).filter(function (x) { return x.guest; }) : null);
     var members = _pairMembers ? _pairMembers.map(function (m) { return window._displayName(m.uid, m.guest); }) : null;
+    /* A categoria da DUPLA é uma decisão do torneio, não uma inferência do perfil de
+     * cada pessoa. Em inscrições em lote (como o Neon), os placeholders não têm perfil:
+     * tentar montar os badges por membro produzia dois "sem cat" mesmo quando o registro
+     * canônico do par já dizia, por exemplo, "Fem Power". Só aceitamos um valor que faça
+     * parte das categorias deste torneio; assim um dado legado não vira um rótulo inventado
+     * na tela nem contamina a categoria customizada escolhida pelo organizador. */
+    var _pairTournamentCategory = '';
+    if (members && p && typeof p === 'object') {
+      var _pairCats = (typeof window._getTournamentCategories === 'function')
+        ? (window._getTournamentCategories(t) || []) : ((t && t.combinedCategories) || []);
+      var _pairCategoryRaw = String(p.category || ((p.categories || [])[0]) || '').trim();
+      var _pairCategoryKey = _pairCategoryRaw.toLocaleLowerCase();
+      for (var _pci = 0; _pci < _pairCats.length; _pci++) {
+        if (String(_pairCats[_pci] || '').trim().toLocaleLowerCase() === _pairCategoryKey) {
+          _pairTournamentCategory = String(_pairCats[_pci]).trim();
+          break;
+        }
+      }
+    }
+    var _pairCategoryBadge = members
+      ? (_pairTournamentCategory
+        ? '<div title="Categoria definida para esta dupla neste torneio" style="align-self:center;font-size:0.68rem;font-weight:800;color:var(--sp-c-c7d2fe,#c7d2fe);background:rgba(99,102,241,0.2);border:1px solid rgba(129,140,248,0.58);border-radius:7px;padding:3px 8px;line-height:1.25;white-space:nowrap;">🏷️ ' + window._safeHtml(_pairTournamentCategory) + '</div>'
+        : '<div title="O organizador precisa atribuir uma categoria customizada do torneio a esta dupla" style="align-self:center;font-size:0.66rem;font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);background:rgba(245,158,11,0.13);border:1px dashed rgba(245,158,11,0.6);border-radius:7px;padding:3px 8px;line-height:1.25;">⚠️ Categoria do torneio pendente</div>')
+      : '';
     var nameHtml;
     if (members) {
       // ⭐ O UID DO MEMBRO CHEGA AQUI. `members` era só a lista de NOMES resolvidos, mas
@@ -150,14 +174,16 @@ window._duplaCard = function (t, p, draggable, ctx) {
           _mObj.gender = p[_mLado + 'Gender'];
           _mObj.genderSource = 'organizador';
         }
-        var _meta = (typeof window._profileMetaSlots === 'function') ? window._profileMetaSlots(_mObj, _metaName, false, t, isOrg) : '';
+        // Em uma dupla a categoria é do PAR. Não desenhe "sem cat" por membro quando
+        // a categoria customizada já foi atribuída à dupla no torneio.
+        var _meta = (!_pairTournamentCategory && typeof window._profileMetaSlots === 'function') ? window._profileMetaSlots(_mObj, _metaName, false, t, isOrg) : '';
         // v4.5.75: presença POR MEMBRO na dupla — o toggle Presente do jogador fica
         // DENTRO do bloco dele (esquerda p/ o da esquerda, direita p/ o da direita).
         var _mPres = (typeof ctx.memberPresence === 'function') ? ctx.memberPresence(_mm, right) : null;
         var _mPresHtml = (_mPres && _mPres.html) ? _mPres.html : '';
         return '<div style="min-width:0;display:flex;flex-direction:column;gap:4px;flex:1 1 42%;' + (right ? 'align-items:flex-end;text-align:right;' : 'align-items:flex-start;') + '">' + _av + _meta + _mPresHtml + '</div>';
       };
-      _body = '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">' + _memBlock(0, false) + (_pairMembers[1] ? _memBlock(1, true) : '') + '</div>';
+      _body = '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">' + _memBlock(0, false) + (_pairMembers[1] ? _memBlock(1, true) : '') + '</div>' + _pairCategoryBadge;
     } else {
       _body = nameHtml + ((typeof window._profileMetaSlots === 'function') ? window._profileMetaSlots(p, nm, false, t, isOrg) : '');
     }

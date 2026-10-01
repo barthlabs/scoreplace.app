@@ -439,6 +439,7 @@ const SUITES = [
   'tests/encerrados-em-lista-com-dobra.test.js',
   'tests/acoes-do-card-ficam-a-direita-mesmo-quebrando.test.js',
   'tests/card-de-inscrito-tem-um-dono-so.test.js',
+  'tests/dupla-categoria-do-torneio.test.js',
   // Os dois hotfixes da rota de inscritos (29/ago/2026), que ficaram parados em worktree:
   // callback tardio repintava inscritos por cima do detalhe do torneio, com a URL dizendo
   // `#tournaments/<id>`. Um cobre a ENTRADA do render, o outro o callback da gravação.
