@@ -13,10 +13,11 @@ ok(a.includes('db.runTransaction')&&a.includes('_leTorneio(tx,ref,tId)')&&a.incl
 ok(a.includes('_isTournamentAdmin(t,uid)'),'Function exige organização por uid');
 ok(a.includes("action==='annul'")&&a.includes('t.pendingDraw=null'),'Function resolve publicar e anular');
 ok(c.includes("_callCF('resolvePendingDraw'")&&!/AppStore\.mutate|_notifyDrawPersonalized/.test(c),'cliente só despacha a Function');
-ok(draw.includes("kind: 'initial'")&&draw.includes('draft: _rascunhoDoSorteioInicial(t)')&&draw.includes('_stageInitial'),'Sorteio inicial de times fica em rascunho antes de materializar a chave');
+ok(draw.includes("kind: 'initial'")&&draw.includes('draft: _rascunhoDoSorteioInicial(t)')&&draw.includes('_refRascunhoInicialPrivado(ref)')&&draw.includes('_stageInitial'),'Sorteio inicial vai ao cofre privado antes de materializar a chave');
 ok(a.includes("pd.kind === 'initial'")&&a.includes('_aplicaRascunhoDoSorteioInicial(t, pd.draft)'),'Publicação aplica somente o rascunho derivado na transação');
 ok(/if \(d\.staged\) \{[\s\S]*?\} else \{[\s\S]*?_notifyDrawPersonalized/.test(d),'Rascunho não dispara notificação antes da publicação');
 ok(agenda.includes('db.runTransaction')&&agenda.includes('_isTournamentAdmin(t, uid)')&&agenda.includes('pd.kind !== \'initial\''),'Agenda do rascunho é transacional e exclusiva da organização');
 ok(agenda.includes('pd.draft.matches')&&agenda.includes('match.court = item.court')&&agenda.includes('match.scheduleLocked = item.scheduleLocked'),'Agenda altera somente jogos do rascunho e fixa apenas escolhas manuais antes da publicação');
 ok(b.includes('window._openPendingInitialSchedule')&&b.includes("_callCF('setPendingInitialSchedule'"),'Cliente planeja no rascunho e delega o salvamento à Function');
+ok(i.includes('exports.getPendingInitialDraw')&&i.includes('_isTournamentAdmin(t, uid)')&&i.includes("collection('privateDraws')"),'Prévia privada só é lida pela Function após conferir a organização');
 process.exit(f?1:0);

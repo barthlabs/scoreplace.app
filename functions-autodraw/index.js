@@ -570,6 +570,24 @@ async function _leTorneio(tx, ref, tId) {
   return montado;
 }
 
+// O marcador de revisão fica no documento do torneio para o motor pausar e a
+// organização saber que há uma decisão pendente. O conteúdo do sorteio inicial
+// (times, confrontos e agenda) não pode ficar nesse documento: hoje ele ainda é
+// lido por qualquer conta autenticada. O cofre abaixo só é acessado pelo Admin SDK.
+function _refRascunhoInicialPrivado(ref) {
+  return ref.collection('privateDraws').doc('initial');
+}
+
+function _marcadorPublicoDoRascunhoInicial(pd) {
+  return {
+    kind: 'initial', private: true,
+    matchCount: Number(pd && pd.matchCount || 0),
+    teamCount: Number(pd && pd.teamCount || 0),
+    generatedAt: String(pd && pd.generatedAt || ''),
+    source: String(pd && pd.source || 'drawRound')
+  };
+}
+
 /* "Transação" só de leitura: `_leTorneio` pede um objeto com `.get(ref)`, e fora de uma
  * transação isso é o próprio `ref.get()`. Existe pra NÃO haver uma segunda montagem de
  * torneio dividido escrita à mão — duas versões da mesma leitura divergem. */
@@ -1059,7 +1077,7 @@ exports.drawRound = onCall(async (request) => {
     const _stageInitial = !hadBracket && (t.stagedDraw === true || !!(_tcCfg && _tcCfg.enabled));
     if (_stageInitial) {
       const tEspera = JSON.parse(JSON.stringify(_tAntes));
-      tEspera.pendingDraw = {
+      const rascunhoPrivado = {
         kind: 'initial',
         draft: _rascunhoDoSorteioInicial(t),
         matchCount: res.matchCount || 0,
@@ -1067,6 +1085,8 @@ exports.drawRound = onCall(async (request) => {
         generatedAt: _agoraIsoTx,
         source: 'drawRound'
       };
+      tEspera.pendingDraw = _marcadorPublicoDoRascunhoInicial(rascunhoPrivado);
+      tx.set(_refRascunhoInicialPrivado(ref), rascunhoPrivado);
       const b = _gravaTorneio(tx, ref, tEspera, _tAntes, { agoraIso: _agoraIsoTx });
       return { ok: true, staged: true, format: res.format, native: !!res.native,
                matchCount: res.matchCount, sitOuts: res.sitOuts || 0,
@@ -4129,9 +4149,16 @@ exports.resolvePendingDraw = onCall(async (request) => {
   return db.runTransaction(async tx=>{
     const t=await _leTorneio(tx,ref,tId); if(!t) throw new HttpsError('not-found','Torneio não encontrado.');
     if(!_isTournamentAdmin(t,uid)) throw _drawFail('permission-denied','Só a organização altera o sorteio em revisão.',{tId,uid});
-    const pd=t.pendingDraw; if(!pd) return {ok:true,changed:false};
+    let pd=t.pendingDraw; if(!pd) return {ok:true,changed:false};
+    const refPrivado = pd.kind === 'initial' ? _refRascunhoInicialPrivado(ref) : null;
+    if (refPrivado && pd.private === true) {
+      const secreto = await tx.get(refPrivado);
+      if (!secreto.exists) throw new HttpsError('failed-precondition','O rascunho privado não foi encontrado.');
+      pd = secreto.data() || null;
+      if (!pd || pd.kind !== 'initial' || !pd.draft) throw new HttpsError('failed-precondition','O rascunho privado está inválido.');
+    }
     const antes=_antesDoMotor(t);
-    if(action==='annul') { t.pendingDraw=null; t.lastAutoDrawAt=null; }
+    if(action==='annul') { t.pendingDraw=null; t.lastAutoDrawAt=null; if(refPrivado) tx.delete(refPrivado); }
     else {
       if (pd.kind === 'initial') {
         _aplicaRascunhoDoSorteioInicial(t, pd.draft);
@@ -4141,7 +4168,7 @@ exports.resolvePendingDraw = onCall(async (request) => {
           const ms=Date.parse(pd.generatedAt||'');
           t.tournamentStarted=Number.isFinite(ms)&&ms>0?ms:Date.now();
         }
-        t.pendingDraw=null;
+        t.pendingDraw=null; if(refPrivado) tx.delete(refPrivado);
       } else {
         t.rounds=Array.isArray(pd.rounds)?pd.rounds:[];
         ['standings','sitOutHistory','opponentHistory','monarchWaitlist'].forEach(k=>{ if(pd[k]) t[k]=pd[k]; });
@@ -4195,9 +4222,15 @@ exports.setPendingInitialSchedule = onCall(async (request) => {
     const t = await _leTorneio(tx, ref, tId);
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
     if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização reorganiza este rascunho.', { tId, uid });
-    const pd = t.pendingDraw;
-    if (!pd || pd.kind !== 'initial' || !pd.draft || !Array.isArray(pd.draft.matches)) {
+    const marcador = t.pendingDraw;
+    if (!marcador || marcador.kind !== 'initial') {
       throw new HttpsError('failed-precondition', 'Não há sorteio inicial em revisão.');
+    }
+    const refPrivado = _refRascunhoInicialPrivado(ref);
+    const secreto = await tx.get(refPrivado);
+    const pd = secreto.exists ? secreto.data() : null;
+    if (!pd || pd.kind !== 'initial' || !pd.draft || !Array.isArray(pd.draft.matches)) {
+      throw new HttpsError('failed-precondition', 'Não há rascunho privado em revisão.');
     }
     const byId = new Map(pd.draft.matches.filter((m) => m && !m.isBye && !m.isSitOut).map((m) => [String(m.id), m]));
     if (itens.length !== byId.size || itens.some((item) => !byId.has(item.matchId))) {
@@ -4217,8 +4250,39 @@ exports.setPendingInitialSchedule = onCall(async (request) => {
     });
     pd.scheduleRevision = Number(pd.scheduleRevision || 0) + 1;
     pd.scheduleUpdatedAt = agoraIso;
+    tx.set(refPrivado, pd);
     const b = _gravaTorneio(tx, ref, t, antes, { agoraIso });
     return { ok: true, changed: true, scheduleRevision: pd.scheduleRevision, tournament: b.clean };
+  });
+});
+
+// A única leitura do conteúdo pré-publicação. Regras do Firestore bloqueiam o
+// subdocumento inclusive para participantes; a Function rele o torneio fresco e
+// decide organização por UID. Também migra, quando encontrado, um rascunho legado
+// que tenha sido criado antes do cofre existir.
+exports.getPendingInitialDraw = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid;
+  const tId = String((request.data && request.data.tournamentId) || '').trim();
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId) throw new HttpsError('invalid-argument', 'Torneio obrigatório.');
+  const ref = db.collection('tournaments').doc(tId), agoraIso = new Date().toISOString();
+  return db.runTransaction(async (tx) => {
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização vê este rascunho.', { tId, uid });
+    const marcador = t.pendingDraw;
+    if (!marcador || marcador.kind !== 'initial') throw new HttpsError('failed-precondition', 'Não há sorteio inicial em revisão.');
+    const refPrivado = _refRascunhoInicialPrivado(ref);
+    const secreto = await tx.get(refPrivado);
+    if (secreto.exists) return { ok:true, pendingDraw:secreto.data() };
+    // Migração preguiçosa e transacional de rascunhos feitos pela versão anterior.
+    if (!marcador.draft) throw new HttpsError('failed-precondition', 'O rascunho privado não foi encontrado.');
+    const legado = JSON.parse(JSON.stringify(marcador));
+    const antes = _antesDoMotor(t);
+    t.pendingDraw = _marcadorPublicoDoRascunhoInicial(legado);
+    tx.set(refPrivado, legado);
+    _gravaTorneio(tx, ref, t, antes, { agoraIso });
+    return { ok:true, pendingDraw:legado, migrated:true };
   });
 });
 

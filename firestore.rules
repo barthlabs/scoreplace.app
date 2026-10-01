@@ -727,6 +727,14 @@ service cloud.firestore {
         && (isTournamentAdmin(resource.data) || isTournamentAdminByUid(resource.data))
         && !dividido();
 
+      // ─── COFRE DO SORTEIO INICIAL ─────────────────────────────────────────
+      // O marcador `pendingDraw` no pai não contém times, confrontos nem agenda.
+      // O conteúdo fica aqui e só a Cloud Function (Admin SDK) o acessa depois de
+      // conferir o UID da organização. Participante autenticado também é negado.
+      match /privateDraws/{drawId} {
+        allow read, write: if false;
+      }
+
       // ─── Resultado por JOGO em doc próprio (linha 4.1, project_match_result_docs) ───
       // Cada jogo tem seu placar/consenso em tournaments/{id}/results/{matchId}.
       //

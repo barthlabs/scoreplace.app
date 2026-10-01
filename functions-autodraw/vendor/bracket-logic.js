@@ -6536,13 +6536,14 @@ window._checkLigaAutoDraws = async function() {
 //  • Anular   → descarta pendingDraw (nada público aconteceu); re-sorteia depois.
 // Preview read-only da chave sorteada (grupos Rei/Rainha ou jogos), pra validar.
 window._renderPendingDrawPreview = function (t) {
-  var pd = t && t.pendingDraw;
+  var pd = t && ((window.__pendingInitialDraws || {})[String(t.id)] || t.pendingDraw);
   if (!pd) return '<div style="color:var(--text-muted);font-size:0.8rem;">(sem dados)</div>';
   var esc = window._safeHtml || function (s) { return String(s == null ? '' : s); };
   /* Sorteio inicial por times: o rascunho contém os jogos materializados, mas
    * ainda não existe em `t.matches`. A prévia é exclusivamente para conferência
    * da organização; a chave pública segue vazia até "Publicar sorteio". */
   if (pd.kind === 'initial') {
+    if (!pd.draft) return '<div style="color:var(--text-muted);font-size:0.8rem;">Rascunho protegido. Abra a revisão para conferi-lo.</div>';
     var draft = pd.draft || {}, games = Array.isArray(draft.matches) ? draft.matches : [];
     var teams = Array.isArray(draft.competitionTeams) ? draft.competitionTeams : [];
     if (!games.length) return '<div style="color:var(--text-muted);font-size:0.8rem;">(rascunho sem jogos)</div>';
@@ -6598,7 +6599,14 @@ window._openPendingInitialSchedule = function (tId) {
   var getTournament = window._findTournamentById || function (id) {
     return window.AppStore && (window.AppStore.tournaments || []).find(function (x) { return String(x.id) === String(id); });
   };
-  var t = getTournament(tId), pd = t && t.pendingDraw, draft = pd && pd.kind === 'initial' && pd.draft;
+  var t = getTournament(tId), cache = window.__pendingInitialDraws || (window.__pendingInitialDraws = {}), pd = t && (cache[String(tId)] || t.pendingDraw), draft = pd && pd.kind === 'initial' && pd.draft;
+  if (t && pd && pd.kind === 'initial' && !draft) {
+    if (window.showNotification) window.showNotification('Abrindo revisão…', 'Carregando o rascunho protegido da organização.', 'info');
+    window._callCF('getPendingInitialDraw', { tournamentId:String(tId) }, 'Entre na sua conta para revisar o sorteio.')
+      .then(function (res) { var dado = (res && res.data && res.data.pendingDraw) || null; if (!dado) throw new Error('Rascunho indisponível.'); cache[String(tId)] = dado; window._openPendingInitialSchedule(tId); if (window._rerenderBracket) window._rerenderBracket(tId); })
+      .catch(function (e) { if (window.showNotification) window.showNotification('Revisão indisponível', (e && e.message) || 'Tente novamente.', 'error'); });
+    return;
+  }
   if (!t || !draft || !Array.isArray(draft.matches) || typeof window._operationalSchedulePlan !== 'function') {
     if (window.showNotification) window.showNotification('Agenda indisponível', 'Atualize a tela e tente novamente.', 'error');
     return;
@@ -6672,12 +6680,13 @@ window._publishPendingDraw = async function (tId) {
   try {
     var res=await window._callCF('resolvePendingDraw',{ tournamentId:String(tId), action:'publish' },'Entre na sua conta para publicar o sorteio.');
     if(!((res&&res.data)||{}).changed) return;
+    if (window.__pendingInitialDraws) delete window.__pendingInitialDraws[String(tId)];
     if(window.showNotification) window.showNotification('🚀 Sorteio publicado!','A chave foi liberada para os participantes.','success');
     if(window._rerenderBracket) window._rerenderBracket(tId);
   } catch(e) { if(window._warn) window._warn('[publishPendingDraw] CF falhou',e); if(window.showNotification) window.showNotification('Sorteio não publicado','Não foi possível publicar o sorteio. Tente novamente.','error'); }
 };
 window._annulPendingDraw = function (tId) {
-  var go=function(){ return window._callCF('resolvePendingDraw',{ tournamentId:String(tId), action:'annul' },'Entre na sua conta para anular o sorteio.').then(function(res){ if(!((res&&res.data)||{}).changed) return; if(window.showNotification) window.showNotification('Sorteio anulado','O sorteio em revisão foi descartado.','info'); if(window._rerenderBracket) window._rerenderBracket(tId); }).catch(function(e){ if(window._warn) window._warn('[annulPendingDraw] CF falhou',e); }); };
+  var go=function(){ return window._callCF('resolvePendingDraw',{ tournamentId:String(tId), action:'annul' },'Entre na sua conta para anular o sorteio.').then(function(res){ if(!((res&&res.data)||{}).changed) return; if(window.__pendingInitialDraws) delete window.__pendingInitialDraws[String(tId)]; if(window.showNotification) window.showNotification('Sorteio anulado','O sorteio em revisão foi descartado.','info'); if(window._rerenderBracket) window._rerenderBracket(tId); }).catch(function(e){ if(window._warn) window._warn('[annulPendingDraw] CF falhou',e); }); };
   if(window.showConfirmDialog) window.showConfirmDialog('Anular sorteio?','O sorteio em revisão será descartado.',go,null,{confirmText:'Anular',cancelText:'Cancelar',danger:true}); else go();
 };
 
