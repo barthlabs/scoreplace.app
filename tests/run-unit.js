@@ -790,6 +790,7 @@ const SUITES = [
   // ⛔ invariante que segura tudo — recálculo do sistema NUNCA pisa em data que gente
   // marcou. Cobre também o buraco do Rei/Rainha, que aparecia SEM data nas Novidades.
   'tests/grade-estimada-e-propor-datas.test.js',
+  'tests/schedule-organizer.test.js',
   'tests/propor-datas-organizador-ve-todos-os-grupos.test.js',
   'tests/data-proposta-organizador-celular.test.js',
   // 2.1.98 — o gate dos DOIS chips deixou de ser "é a rodada atual?" e passou a ser "as

@@ -4995,6 +4995,17 @@ exports.setTournamentWhatsAppGroup = onCall(
  * Aceita UM jogo ou um LOTE (`jogos[]`, ≤300 — a grade estimada escreve dezenas de uma vez).
  * Idempotente por `operationId` (UUID v4): o retry da quadra sem sinal não grava duas vezes. */
 const _SCH_KINDS = ["estimate", "organizer", "consensus"];
+// ⚠️ DUPLICAÇÃO INTENCIONAL — replica `played()` de js/views/schedule-organizer.js.
+// Servidor valida a CF; cliente calcula o plano sem round-trip. Ao mudar a definição
+// de partida realizada, os dois lados precisam mudar juntos.
+// Agenda operacional: resultado, W.O. ou início real congela a partida. A sugestão
+// pode reorganizar somente o que ainda não aconteceu.
+function _scheduleHasRealPlay(m) {
+  if (!m || typeof m !== "object") return false;
+  if (m.liveScored === true || m.startedAt || m.resultAt || m.wo === true || m.winner != null) return true;
+  if (Array.isArray(m.sets) && m.sets.length > 0) return true;
+  return ((typeof m.scoreP1 === "number" && m.scoreP1 > 0) || (typeof m.scoreP2 === "number" && m.scoreP2 > 0)) && !m.wo;
+}
 function _schSaneiaSchedule(s) {
   if (s === null || s === undefined) return null;
   if (typeof s !== "object" || Array.isArray(s)) throw new HttpsError("invalid-argument", "schedule tem que ser objeto");
@@ -5024,9 +5035,12 @@ exports.setMatchSchedule = onCall(
     if (!tournamentId) throw new HttpsError("invalid-argument", "tournamentId é obrigatório");
     if (!_WA_UUID_V4_RE.test(operationId)) throw new HttpsError("invalid-argument", "operationId tem que ser um UUID v4");
     const espelharGrupo = !!pedido.espelharGrupo;
+    const operational = pedido.operational === true;
+    const baseScheduleRevision = pedido.baseScheduleRevision == null ? null : Number(pedido.baseScheduleRevision);
+    if (baseScheduleRevision !== null && (!Number.isInteger(baseScheduleRevision) || baseScheduleRevision < 0)) throw new HttpsError("invalid-argument", "baseScheduleRevision inválida");
     // forma singular (um jogo) ou lote (`jogos[]`)
     const lote = Array.isArray(pedido.jogos) ? pedido.jogos
-      : [{ matchId: pedido.matchId, schedule: pedido.schedule, scheduledAt: pedido.scheduledAt, scheduledBy: pedido.scheduledBy, scheduledKind: pedido.scheduledKind }];
+      : [{ matchId: pedido.matchId, schedule: pedido.schedule, scheduledAt: pedido.scheduledAt, scheduledBy: pedido.scheduledBy, scheduledKind: pedido.scheduledKind, court: pedido.court, scheduleLocked: pedido.scheduleLocked, scheduleSource: pedido.scheduleSource }];
     if (!lote.length || lote.length > 300) throw new HttpsError("invalid-argument", "jogos: entre 1 e 300");
     const itens = lote.map((j) => {
       if (!j || !j.matchId) throw new HttpsError("invalid-argument", "cada jogo precisa de matchId");
@@ -5034,6 +5048,14 @@ exports.setMatchSchedule = onCall(
       if (kind !== null && _SCH_KINDS.indexOf(kind) === -1) throw new HttpsError("invalid-argument", "scheduledKind inválido");
       const at = (j.scheduledAt === null || j.scheduledAt === undefined || j.scheduledAt === "") ? null : String(j.scheduledAt);
       if (at !== null && isNaN(new Date(at).getTime())) throw new HttpsError("invalid-argument", "scheduledAt não é uma data");
+      const temCourt = j.court !== undefined;
+      const court = temCourt && j.court != null ? String(j.court).trim() : null;
+      if (court && court.length > 80) throw new HttpsError("invalid-argument", "quadra longa demais");
+      const temScheduleLocked = j.scheduleLocked !== undefined;
+      if (temScheduleLocked && typeof j.scheduleLocked !== "boolean") throw new HttpsError("invalid-argument", "scheduleLocked inválido");
+      const temScheduleSource = j.scheduleSource !== undefined;
+      const scheduleSource = temScheduleSource ? String(j.scheduleSource || "") : null;
+      if (temScheduleSource && ["estimate", "organizer"].indexOf(scheduleSource) === -1) throw new HttpsError("invalid-argument", "scheduleSource inválido");
       return {
         matchId: String(j.matchId),
         // ⛔ só escreve `schedule` quando ele VEM como objeto. Ausente/null = não toca: o organizador
@@ -5043,6 +5065,9 @@ exports.setMatchSchedule = onCall(
         scheduledAt: at,
         scheduledBy: (j.scheduledBy === null || j.scheduledBy === undefined) ? null : String(j.scheduledBy),
         scheduledKind: kind,
+        temCourt: temCourt, court: court,
+        temScheduleLocked: temScheduleLocked, scheduleLocked: j.scheduleLocked,
+        temScheduleSource: temScheduleSource, scheduleSource: scheduleSource,
       };
     });
     const db = admin.firestore();
@@ -5061,6 +5086,8 @@ exports.setMatchSchedule = onCall(
       const fora = _tSplitFn.partesDe(t);
       const regs = (_tSplitFn.dividir(JSON.parse(JSON.stringify(t)), ["matches"]) || {}).matches || [];
       const souOrg = _isTournamentOrgCaller(t, callerUid);
+      if ((operational || baseScheduleRevision !== null) && !souOrg) throw new HttpsError("permission-denied", "só a organização reorganiza a agenda operacional");
+      const scheduleRevision = Number(t.scheduleRevision || 0);
       const alvos = itens.map((it) => {
         const alvo = regs.find((r) => r && r.jogo && r.jogo.id != null && String(r.jogo.id) === it.matchId);
         if (!alvo) throw new HttpsError("not-found", "jogo " + it.matchId + " não existe neste torneio");
@@ -5069,17 +5096,25 @@ exports.setMatchSchedule = onCall(
           if (elenco.indexOf(callerUid) === -1) throw new HttpsError("permission-denied", "só quem joga este confronto — ou quem organiza o torneio — mexe nas datas");
           if (it.scheduledKind === "organizer" || it.scheduledKind === "estimate") throw new HttpsError("permission-denied", "só o organizador aponta ou estima horário");
         }
+        if ((it.temCourt || it.temScheduleLocked || it.temScheduleSource) && !souOrg) throw new HttpsError("permission-denied", "só a organização define quadra e trava agenda");
+        if (operational && _scheduleHasRealPlay(alvo.jogo)) throw new HttpsError("failed-precondition", "jogo " + it.matchId + " já começou ou terminou e não pode ser realocado");
         return { it, alvo };
       });
       // idempotência: a MESMA operação já foi aplicada (retry da quadra sem sinal)
       if (alvos.every(({ alvo }) => alvo.jogo && alvo.jogo.scheduleOpId === operationId)) {
-        return { ok: true, jaAplicado: true, jogos: alvos.map(({ alvo }) => ({ matchId: String(alvo.jogo.id), schedule: alvo.jogo.schedule || null, scheduledAt: alvo.jogo.scheduledAt || null, scheduledBy: alvo.jogo.scheduledBy || null, scheduledKind: alvo.jogo.scheduledKind || null })), espelhados: [] };
+        return { ok: true, jaAplicado: true, scheduleRevision: scheduleRevision, jogos: alvos.map(({ alvo }) => ({ matchId: String(alvo.jogo.id), schedule: alvo.jogo.schedule || null, scheduledAt: alvo.jogo.scheduledAt || null, scheduledBy: alvo.jogo.scheduledBy || null, scheduledKind: alvo.jogo.scheduledKind || null, court: alvo.jogo.court || null })), espelhados: [] };
+      }
+      if (baseScheduleRevision !== null && baseScheduleRevision !== scheduleRevision) {
+        throw new HttpsError("aborted", "a agenda foi alterada em outra tela", { code: "schedule-revision-stale", expected: baseScheduleRevision, actual: scheduleRevision });
       }
       const espelhados = [];
       const saida = [];
       const camposDe = (it) => {
         const c = { scheduledAt: it.scheduledAt, scheduledBy: it.scheduledBy, scheduledKind: it.scheduledKind, scheduleOpId: operationId, scheduleTouchedAt: agoraIso };
         if (it.temSchedule) c.schedule = it.schedule;
+        if (it.temCourt) c.court = it.court;
+        if (it.temScheduleLocked) c.scheduleLocked = it.scheduleLocked;
+        if (it.temScheduleSource) c.scheduleSource = it.scheduleSource;
         return c;
       };
       if (fora.indexOf("matches") !== -1) {
@@ -5107,7 +5142,7 @@ exports.setMatchSchedule = onCall(
             });
           }
         });
-        _splitParts.gravar(tx, docRef, t, { updatedAt: agoraIso });
+        _splitParts.gravar(tx, docRef, t, { updatedAt: agoraIso, scheduleRevision: operational ? scheduleRevision + 1 : scheduleRevision });
       } else {
         const cfg = (_tSplitFn.dividir(JSON.parse(JSON.stringify(t)), fora) || {}).config || {};
         const upd = {};
@@ -5131,9 +5166,10 @@ exports.setMatchSchedule = onCall(
           }
         });
         upd.updatedAt = agoraIso;
+        if (operational) upd.scheduleRevision = scheduleRevision + 1;
         _splitParts.gravar(tx, docRef, t, upd);
       }
-      return { ok: true, jaAplicado: false, jogos: saida, espelhados: espelhados };
+      return { ok: true, jaAplicado: false, scheduleRevision: operational ? scheduleRevision + 1 : scheduleRevision, jogos: saida, espelhados: espelhados };
     });
   }
 );
@@ -11164,20 +11200,12 @@ exports.getTournamentDuplicateAccounts = onCall(
       throw new HttpsError("permission-denied", "Só a organização do torneio pode ver esta análise");
     }
 
-    // ── elenco ESTRUTURAL: principal + fila canônica, COM procedência ────────────────
-    // ⚠️ Direto do adaptador local: `_ligaDrawWindow` pode vir do motor do autoDraw, que
-    // não expõe esta porta nova.
-    const _filaPorta = require("./liga-availability-window.js");
-    const fila = _filaPorta._getWaitlistWithSource(t) || [];
+    // ── elenco INSCRITO canônico ────────────────────────────────────────────────────
+    // A análise é de "contas duplicadas entre os inscritos". Fila de espera, espelhos
+    // de Rei/Rainha e vagas operacionais NÃO são inscrição adicional: misturá-los aqui
+    // inflou o aviso para 144 num torneio que tem 96 pessoas no elenco principal.
     const entradas = [].concat(t.participants || []);
-    const entradasFila = [];
-    fila.forEach((sourced) => {
-      // ⚠️ A procedência serve para auditoria e deduplicação — NUNCA para apagar alguém da
-      // conta. Nome manual entra venha de onde vier, inclusive de `monarchWaitlist`; o que
-      // o coletor já descarta (uid órfão, resíduo) segue descartado.
-      entradasFila.push(sourced.entry);
-    });
-    const elenco = _dupRoster.montarElenco(entradas.concat(entradasFila));
+    const elenco = _dupRoster.montarElenco(entradas);
     if (elenco.uids.length > DUP_MAX_UIDS) {
       throw new HttpsError("resource-exhausted", "Elenco grande demais para a análise de duplicata");
     }

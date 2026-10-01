@@ -1,3 +1,4 @@
+// 2.3.199 — Agenda operacional: o organizador aplica uma sugestão de horários e quadras para jogos pendentes. Partidas iniciadas, concluídas ou em W.O. permanecem intactas; cada aplicação usa revisão transacional para não apagar uma alteração feita em outra tela.
 // 2.3.198 — O logo do local fica abaixo do nome do evento, alinhado à esquerda com o título e pela base com o logo do evento; o logo principal preserva integralmente sua largura original. O carregamento aceita URL atual do Storage e formato legado.
 // 2.3.197 — O cabeçalho do torneio volta a mostrar o logo do local cadastrado ao lado do logo do evento, menor e alinhado pela base. Ele lê tanto a URL atual do Storage quanto o campo legado, restaurando Paineiras e Confra.
 // 2.3.196 — Correção de segurança do sorteio por times: o modal respeita contraste nos dois temas e funciona também no carregamento isolado; a configuração da primeira fase é lida igual no cliente e no servidor.

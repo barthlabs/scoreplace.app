@@ -6,12 +6,20 @@
  * organizador — nunca era avisado. É por isso que a mesclagem falhou em todos os incidentes.
  */
 const core = require('../functions/duplicate-roster-core.js');
+const fs = require('fs');
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) { pass++; return; } fail++; console.error('  ✗ ' + m); };
 const eq = (a, b, m) => ok(a === b, m + ' — esperado ' + JSON.stringify(b) + ', veio ' + JSON.stringify(a));
 
 console.log('\n── elenco: quem entra, quem é contado como NÃO MEDIDO ──');
+{
+  const server = fs.readFileSync(require.resolve('../functions/index.js'), 'utf8');
+  ok(/const elenco = _dupRoster\.montarElenco\(entradas\);/.test(server),
+    'a análise usa somente participantes inscritos — fila e espelhos não inflacionam o total');
+  ok(!/montarElenco\(entradas\.concat\(entradasFila\)\)/.test(server),
+    'a fila de espera não é somada ao contador de inscritos');
+}
 {
   const r = core.montarElenco([
     { uid: 'a', displayName: 'Rodrigo Barth' },

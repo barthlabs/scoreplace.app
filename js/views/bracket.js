@@ -2270,16 +2270,22 @@ function renderBracket(container, tournamentId, isInline) {
   // ── Bracket ────────────────────────────────────────────────────────────────
   // Swiss-as-p2 past rounds render as columns inside the main bracket strip
   // (see renderSingleElimBracket / renderDoubleElimBracket). No separate card.
+  var _opSlotId = 'operational-schedule-' + String(t.id || '').replace(/[^a-zA-Z0-9_-]/g, '_');
+  var operationalSlot = isOrg ? '<div id="' + _opSlotId + '"></div>' : '';
   try {
     if (isDupla) {
-      container.innerHTML = headerHtml + _subChoiceBanner + startTournamentBanner + _phaseAdvanceBanner + progressBarHtml + readyBannerHtml + renderDoubleElimBracket(t, canEnterResult, standbyHtml);
+      container.innerHTML = headerHtml + _subChoiceBanner + startTournamentBanner + _phaseAdvanceBanner + progressBarHtml + readyBannerHtml + operationalSlot + renderDoubleElimBracket(t, canEnterResult, standbyHtml);
     } else {
-      container.innerHTML = headerHtml + startTournamentBanner + _phaseAdvanceBanner + progressBarHtml + readyBannerHtml + renderSingleElimBracket(t, canEnterResult, standbyHtml);
+      container.innerHTML = headerHtml + startTournamentBanner + _phaseAdvanceBanner + progressBarHtml + readyBannerHtml + operationalSlot + renderSingleElimBracket(t, canEnterResult, standbyHtml);
     }
   } catch (bracketErr) {
     window._error('[Bracket] Render error:', bracketErr);
     container.innerHTML = headerHtml + '<div style="padding:2rem;text-align:center;color:var(--sp-c-f87171,#f87171);"><p>Erro ao renderizar chaveamento.</p><pre style="font-size:0.7rem;text-align:left;max-width:600px;margin:1rem auto;overflow:auto;background:var(--sp-g-0-0-0-03,rgba(0,0,0,0.3));padding:1rem;border-radius:8px;">' + window._safeHtml(String(bracketErr.stack || bracketErr)) + '</pre></div>';
   }
+  try {
+    var _opSlot = container.querySelector('#' + _opSlotId);
+    if (_opSlot && typeof window._renderOperationalSchedule === 'function') window._renderOperationalSchedule(_opSlot, t);
+  } catch (_opErr) { window._warn && window._warn('[agenda operacional]', _opErr); }
   _applyMyMatchesFilter();
 
   // ── Scrollbar fixa no bottom da viewport (só na view dedicada #bracket) ──

@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.3.198';
+window.SCOREPLACE_VERSION = '2.3.199';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -3720,6 +3720,7 @@ window._matchHasRealPlay = function (m) {
   if (m.liveScored === true) return true;                          // placar ao vivo finalizado
   if (m.startedAt) return true;                                    // jogo iniciado (placar ao vivo aberto)
   if (m.resultAt) return true;                                     // resultado real registrado
+  if (m.winner != null) return true;                               // resultado/W.O. já decidiu a partida
   if (Array.isArray(m.sets) && m.sets.length > 0) return true;     // sets lançados
   // Placar numérico real (> 0) lançado por jogo de verdade — exclui o W.O. puro.
   var _num = function (v) { return typeof v === 'number' && v > 0; };
