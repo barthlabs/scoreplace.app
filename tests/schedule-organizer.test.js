@@ -61,8 +61,8 @@ const afterConfirmed = W._operationalSchedulePlan(confirmed);
 const confirmedB = afterConfirmed.items.find(x => x.matchId === 'B');
 ok(confirmedB && confirmedB.court === 'Quadra 1' && confirmedB.scheduledAt === '2026-10-01T09:00:00.000Z' && confirmedB.scheduleLocked,
   'jogo já alocado não é movido automaticamente, mesmo se a alocação antiga era uma sugestão');
-ok(/data-agenda-court/.test(organizerSource) && /data-agenda-time/.test(organizerSource),
-  'a tela entrega seletor de quadra e campo de horário por jogo');
+ok(!/data-agenda-court/.test(organizerSource) && !/data-agenda-time/.test(organizerSource),
+  'a tela não repete seletor de quadra nem horário dentro de cada card');
 ok(/Object\.keys\(manual\)\.map/.test(organizerSource),
   'cada edição recompõe o plano completo a partir de todas as intervenções manuais');
 ok(/getTimezoneOffset\(\) \* 60000/.test(organizerSource),
@@ -117,8 +117,10 @@ ok(/VENOM/.test(board.html) && /BLACKOUT/.test(board.html) && /Ana/.test(board.h
   'a célula informa times, nomes das duplas e categoria');
 ok(/grid-template-columns:72px repeat\(2, minmax\(176px,1fr\)\)/.test(board.html),
   'a grade tem uma coluna de horário e uma coluna para cada quadra');
-ok(/draggable="true"/.test(board.html) && /type="time"/.test(board.html) && !/type="datetime-local"/.test(board.html),
-  'o card é arrastável e mostra apenas a hora; a data fica na aba do dia');
+ok(/draggable="true"/.test(board.html) && !/type="time"/.test(board.html) && !/type="datetime-local"/.test(board.html),
+  'o card é arrastável, sem controles redundantes; hora fica na régua e data na aba');
+ok(/Jogo 1/.test(board.html) && !/Jogo A/.test(board.html),
+  'o card mostra o número único do jogo no torneio, nunca o ID técnico');
 ok(/<div>Ana<\/div><div>Bia<\/div>/.test(board.html),
   'os dois jogadores da dupla aparecem em linhas separadas');
 ok(/ondrop/.test(organizerSource) && /manual\[from\.matchId\].*to\.court/.test(organizerSource),

@@ -6625,7 +6625,7 @@ window._openPendingInitialSchedule = function (tId) {
   function render() {
     var p = plan(), board = window._operationalScheduleGrid(view(), p, { prefix:'pis', activeDay:activeDay }); activeDay = board.activeDay;
     overlay.innerHTML = '<div role="dialog" aria-modal="true" style="width:min(1600px,calc(100vw - 36px));max-width:none;margin:0 auto;background:#111827;border:1px solid rgba(56,189,248,.5);border-radius:16px;padding:16px;color:var(--text-main);box-shadow:0 24px 70px rgba(0,0,0,.55)">' +
-      '<div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start"><div><h2 style="margin:0;font-size:1.05rem">📍 Planejar antes de publicar</h2><p style="margin:5px 0 12px;font-size:.82rem;line-height:1.4;color:#cbd5e1">Arraste um jogo sobre outro para trocar seus horários e quadras. A data é escolhida na aba; nos cards, ajuste somente a hora.</p></div><button type="button" data-pis-close class="btn btn-outline">← Voltar</button></div>' +
+      '<div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start"><div><h2 style="margin:0;font-size:1.05rem">📍 Planejar antes de publicar</h2><p style="margin:5px 0 12px;font-size:.82rem;line-height:1.4;color:#cbd5e1">Cada horário aparece uma vez na régua vertical à esquerda. Arraste um jogo sobre outro para trocar seus horários e quadras.</p></div><button type="button" data-pis-close class="btn btn-outline">← Voltar</button></div>' +
       '<div style="font-size:.76rem;color:#94a3b8;margin-bottom:6px">' + p.items.length + ' jogos · ' + p.courts.length + ' quadras. Cada linha é um horário; cada coluna é uma quadra.</div>' +
       (!p.cabe ? '<div style="margin:0 0 10px;color:#fbbf24;font-size:.82rem;font-weight:700">A agenda não cabe no dia atribuído às categorias. Ajuste dias, ordem, duração ou quadras antes de aplicar.</div>' : '') + board.html +
       '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px"><button type="button" data-pis-apply class="btn btn-primary"' + (!p.cabe ? ' disabled aria-disabled="true" style="opacity:.45;cursor:not-allowed"' : '') + '>Aplicar agenda no rascunho</button></div></div>';
@@ -6643,8 +6643,6 @@ window._openPendingInitialSchedule = function (tId) {
         render();
       };
     });
-    Array.prototype.forEach.call(overlay.querySelectorAll('[data-pis-court]'), function (control) { control.onchange = function () { var item = p.items.find(function (x) { return String(x.matchId) === String(control.getAttribute('data-pis-court')); }); if (item) { manual[item.matchId] = { matchId:item.matchId, court:control.value, scheduledAt:item.scheduledAt }; render(); } }; });
-    Array.prototype.forEach.call(overlay.querySelectorAll('[data-pis-time]'), function (control) { control.onchange = function () { var item = p.items.find(function (x) { return String(x.matchId) === String(control.getAttribute('data-pis-time')); }); var key = item && window._scheduleLocalDayKey && window._scheduleLocalDayKey(item.scheduledAt), at = key && window._scheduleIsoOnDay(key, control.value); if (item && at) { manual[item.matchId] = { matchId:item.matchId, court:item.court, scheduledAt:at }; render(); } }; });
     overlay.querySelector('[data-pis-apply]').onclick = function (event) {
       var button = event.currentTarget, latest = plan();
       if (!latest.cabe) { if (window.showNotification) window.showNotification('Agenda não cabe', 'Ajuste dias, ordem, duração ou quadras antes de salvar.', 'error'); return; }
