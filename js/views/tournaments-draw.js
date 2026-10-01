@@ -2644,6 +2644,13 @@ window._showTeamCompetitionDrawReview = function (tId) {
       return { day:day, order:sameDayBefore + 1 };
     }
     function dayLabel(day) { return new Date(day + 'T12:00:00').toLocaleDateString('pt-BR', { weekday:'short', day:'2-digit', month:'short' }); }
+    var courtNames = Array.isArray(t.courtNames) ? t.courtNames.filter(Boolean).map(String) : [];
+    var courtCount = Math.max(1, Number(t.courtCount) || courtNames.length || 1);
+    while (courtNames.length < courtCount) courtNames.push('Quadra ' + (courtNames.length + 1));
+    courtNames = courtNames.slice(0, courtCount);
+    var savedCourtOrder = Array.isArray(t.courtOrder) ? t.courtOrder.map(String) : [];
+    var normalizedCourtOrder = savedCourtOrder.filter(function (court, index) { return courtNames.indexOf(court) >= 0 && savedCourtOrder.indexOf(court) === index; });
+    courtNames.forEach(function (court) { if (normalizedCourtOrder.indexOf(court) < 0) normalizedCourtOrder.push(court); });
     var countByCategory = {};
     entries.forEach(function (entry) {
         var found = (typeof window._getParticipantCategories === 'function' ? window._getParticipantCategories(entry) : []) || [];
@@ -2668,6 +2675,11 @@ window._showTeamCompetitionDrawReview = function (tId) {
         '<select data-team-category-day data-category="' + safe(category) + '" aria-label="Dia de ' + safe(category) + '">' + days.map(function (day) { return '<option value="' + safe(day) + '"' + (day === slot.day ? ' selected' : '') + '>' + safe(dayLabel(day)) + '</option>'; }).join('') + '</select>' +
         '<input data-team-category-order data-category="' + safe(category) + '" type="number" min="1" max="' + categories.length + '" value="' + slot.order + '" aria-label="Ordem de ' + safe(category) + '" style="min-width:0">' +
       '</div>';
+    }).join('');
+    var courtPriorityRows = normalizedCourtOrder.map(function (court, index) {
+      return '<div style="display:grid;grid-template-columns:76px minmax(0,1fr);gap:8px;align-items:center;padding:7px 0;border-bottom:1px solid rgba(148,163,184,.14);">' +
+        '<select data-team-court-rank data-court="' + safe(court) + '" aria-label="Prioridade de ' + safe(court) + '">' + courtNames.map(function (_, rank) { return '<option value="' + (rank + 1) + '"' + (rank === index ? ' selected' : '') + '>' + (rank + 1) + 'ª</option>'; }).join('') + '</select>' +
+        '<b style="font-size:.86rem;">' + safe(court) + '</b></div>';
     }).join('');
     // Dias/ordem e o formato de confrontos são escolhas da organização. O
     // normalizador usa um valor de compatibilidade para torneios legados, mas ele
@@ -2695,6 +2707,11 @@ window._showTeamCompetitionDrawReview = function (tId) {
         '<p style="font-size:.78rem;color:#cbd5e1;margin:0 0 8px;line-height:1.35;">Cada categoria joga somente no dia escolhido. A ordem define qual categoria entra primeiro naquele dia; categorias personalizadas usam exatamente a mesma regra.</p>' +
         categoryScheduleRows +
       '</section>' +
+      '<section style="border:1px solid rgba(56,189,248,.35);border-radius:12px;padding:0 14px;margin-bottom:16px;">' +
+        '<h3 style="font-size:.94rem;margin:13px 0 4px;color:#7dd3fc;">📍 Prioridade das quadras</h3>' +
+        '<p style="font-size:.78rem;color:#cbd5e1;margin:0 0 8px;line-height:1.35;">Quando dois jogos começam no mesmo horário, a quadra de maior prioridade recebe o próximo jogo. A ordem padrão segue a numeração das quadras.</p>' +
+        courtPriorityRows +
+      '</section>' +
       (!valid ? '<p style="margin:0 0 14px;color:var(--sp-c-f87171,#f87171);font-weight:700;">O sorteio está bloqueado: são necessárias ' + expectedPairs + ' duplas já formadas, com ' + cfg.teamCount + ' em cada categoria.</p>' : '') +
       '<div style="display:flex;justify-content:flex-end;gap:10px;"><button type="button" id="team-draw-cancel" class="btn">Cancelar</button><button type="button" id="team-draw-confirm" class="btn btn-primary"' + (valid ? '' : ' disabled aria-disabled="true" style="opacity:.45;cursor:not-allowed;"') + '>🎲 Sortear times e confrontos</button></div></section>';
     document.body.appendChild(overlay);
@@ -2714,16 +2731,22 @@ window._showTeamCompetitionDrawReview = function (tId) {
         });
         var modeControl = overlay.querySelector('input[name="team-draw-mode"]:checked');
         var selectedDrawMode = modeControl && modeControl.value;
+        var ranks = {};
+        Array.prototype.forEach.call(overlay.querySelectorAll('[data-team-court-rank]'), function (control) { ranks[control.getAttribute('data-court')] = Number(control.value); });
+        var selectedCourtOrder = courtNames.slice().sort(function (a, b) { return (ranks[a] || 999) - (ranks[b] || 999) || a.localeCompare(b); });
+        var validCourtOrder = selectedCourtOrder.length === courtNames.length && Object.keys(ranks).length === courtNames.length && new Set(Object.keys(ranks).map(function (court) { return ranks[court]; })).size === courtNames.length;
         var validSlots = slots.length === categories.length && slots.every(function (slot) { return days.indexOf(slot.day) >= 0; });
         if (!validSlots) { if (window.showNotification) window.showNotification('Agenda inválida', 'Escolha um dia para cada categoria.', 'error'); return; }
         if (selectedDrawMode !== 'structured' && selectedDrawMode !== 'free') { if (window.showNotification) window.showNotification('Formato não escolhido', 'Escolha sorteio estruturado ou livre antes de continuar.', 'error'); return; }
+        if (!validCourtOrder) { if (window.showNotification) window.showNotification('Prioridade das quadras inválida', 'Cada quadra precisa ter uma posição diferente.', 'error'); return; }
         confirm.disabled = true; confirm.textContent = 'Salvando agenda…';
         var db = window.FirestoreDB;
         if (!db || typeof db._callFn !== 'function') { confirm.disabled = false; confirm.textContent = '🎲 Sortear times e confrontos'; if (window.showNotification) window.showNotification('Agenda não salva', 'Conexão indisponível.', 'error'); return; }
         var nextCompetition = JSON.parse(JSON.stringify(cfg));
         nextCompetition.schedule = Object.assign({}, nextCompetition.schedule || {}, { enabled:true, mode:selectedDrawMode, modeConfirmed:true });
-        db._callFn('updateTournamentConfiguration', { tournamentId:String(tId), patch:{ categorySchedule:{ version:1, confirmed:true, slots:slots }, teamCompetition:nextCompetition } }).then(function () {
+        db._callFn('updateTournamentConfiguration', { tournamentId:String(tId), patch:{ categorySchedule:{ version:1, confirmed:true, slots:slots }, courtOrder:selectedCourtOrder, teamCompetition:nextCompetition } }).then(function () {
           t.categorySchedule = { version:1, confirmed:true, slots:slots };
+          t.courtOrder = selectedCourtOrder;
           t.teamCompetition = nextCompetition;
           window._teamDrawReviewApproved[String(tId)] = true;
           close(); window.generateDrawFunction(tId);

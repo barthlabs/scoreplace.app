@@ -24,4 +24,6 @@ ok(b.includes('window._openPendingInitialSchedule')&&b.includes("_callCF('setPen
 ok(i.includes('exports.getPendingInitialDraw')&&i.includes('_isTournamentAdmin(t, uid)')&&i.includes("collection('privateDraws')"),'Prévia privada só é lida pela Function após conferir a organização');
 ok(draw.includes('_requireExplicitTeamDrawPlan(t, tId)')&&i.includes('modeConfirmed')&&i.includes('categorySchedule')&&i.includes('plan.confirmed === true'),'Function bloqueia competição por times sem modo e agenda explicitamente escolhidos');
 ok(d.includes('name="team-draw-mode"')&&d.includes('modeConfirmed:true')&&d.includes('confirmed:true'),'Tela exige e persiste modo e agenda escolhidos pela organização');
+ok(d.includes('data-team-court-rank')&&d.includes('courtOrder:selectedCourtOrder'),'Tela permite declarar a prioridade das quadras antes do sorteio');
+ok(agenda.includes('match.matchNumber = matchNumber.get(item.matchId)')&&agenda.includes('courtRank'),'Agenda do rascunho renumera jogos continuamente pela ordem de horário e quadra');
 process.exit(f?1:0);

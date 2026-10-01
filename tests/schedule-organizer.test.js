@@ -99,6 +99,8 @@ ok(/categorySchedule/.test(fs.readFileSync(path.join(__dirname, '..', 'js', 'vie
 const functionsSource = fs.readFileSync(path.join(__dirname, '..', 'functions-autodraw', 'index.js'), 'utf8');
 ok(/'teamCompetition','categorySchedule'/.test(functionsSource) && /'teamCompetition','categorySchedule','turnos'/.test(functionsSource),
   'o servidor aceita a agenda antes do sorteio e a congela junto com a estrutura depois da chave');
+ok(/'courtNames','courtOrder'/.test(functionsSource) && /data-team-court-rank/.test(fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'tournaments-draw.js'), 'utf8')),
+  'a organização define a prioridade das quadras antes do sorteio');
 
 // A agenda não pode voltar a expor IDs técnicos como a informação principal. A mesma
 // grade serve ao rascunho e ao torneio publicado: linhas são horários, colunas são
@@ -121,6 +123,9 @@ ok(/draggable="true"/.test(board.html) && !/type="time"/.test(board.html) && !/t
   'o card é arrastável, sem controles redundantes; hora fica na régua e data na aba');
 ok(/Jogo 1/.test(board.html) && !/Jogo A/.test(board.html),
   'o card mostra o número único do jogo no torneio, nunca o ID técnico');
+const numberedBoard = W._operationalScheduleGrid(t, p, { prefix:'agenda', renumberBySchedule:true });
+ok(/Jogo 1/.test(numberedBoard.html) && /Jogo 2/.test(numberedBoard.html),
+  'a prévia da agenda apresenta numeração contínua pela ordem dos slots');
 ok(/<div>Ana<\/div><div>Bia<\/div>/.test(board.html),
   'os dois jogadores da dupla aparecem em linhas separadas');
 ok(/ondrop/.test(organizerSource) && /manual\[from\.matchId\].*to\.court/.test(organizerSource),

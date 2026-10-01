@@ -6623,7 +6623,7 @@ window._openPendingInitialSchedule = function (tId) {
   }
   function plan() { return window._operationalSchedulePlan(view(), Object.keys(manual).map(function (id) { return manual[id]; })); }
   function render() {
-    var p = plan(), board = window._operationalScheduleGrid(view(), p, { prefix:'pis', activeDay:activeDay }); activeDay = board.activeDay;
+    var p = plan(), board = window._operationalScheduleGrid(view(), p, { prefix:'pis', activeDay:activeDay, renumberBySchedule:true }); activeDay = board.activeDay;
     overlay.innerHTML = '<div role="dialog" aria-modal="true" style="width:min(1600px,calc(100vw - 36px));max-width:none;margin:0 auto;background:#111827;border:1px solid rgba(56,189,248,.5);border-radius:16px;padding:16px;color:var(--text-main);box-shadow:0 24px 70px rgba(0,0,0,.55)">' +
       '<div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start"><div><h2 style="margin:0;font-size:1.05rem">📍 Planejar antes de publicar</h2><p style="margin:5px 0 12px;font-size:.82rem;line-height:1.4;color:#cbd5e1">Cada horário aparece uma vez na régua vertical à esquerda. Arraste um jogo sobre outro para trocar seus horários e quadras.</p></div><button type="button" data-pis-close class="btn btn-outline">← Voltar</button></div>' +
       '<div style="font-size:.76rem;color:#94a3b8;margin-bottom:6px">' + p.items.length + ' jogos · ' + p.courts.length + ' quadras. Cada linha é um horário; cada coluna é uma quadra.</div>' +

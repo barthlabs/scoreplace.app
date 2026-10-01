@@ -3746,7 +3746,7 @@ const _CAMPOS_CONFIG_TORNEIO = new Set([
   'resultEntry','woScope','lateEnrollment','newMatchups','venue','venueAccess','venueLat',
   'venueLon','venueAddress','venuePlaceId','venueCity','venueState','venueCountry',
   'venuePhotoUrl','coverUrl','logoUrl','logoLocked','logoShape','logoRadius','logoAspect','courtCount',
-  'courtNames','callTime','warmupTime','gameDuration','scoring','swissRounds',
+  'courtNames','courtOrder','callTime','warmupTime','gameDuration','scoring','swissRounds',
   'drawFirstDate','drawFirstTime','drawIntervalDays','drawManual','temporada','equilibrado',
   'clusterSize','balanceBy','genderRatio','wlGroupBalance','ligaNewPlayerScore',
   'ligaInactivity','ligaInactivityX','allowSelfDeactivation','ligaOpenEnrollment',
@@ -4310,6 +4310,19 @@ exports.setPendingInitialSchedule = onCall(async (request) => {
       throw new HttpsError('invalid-argument', 'A agenda precisa cobrir exatamente os jogos do rascunho.');
     }
     const antes = _antesDoMotor(t);
+    const courtNames = Array.isArray(t.courtNames) ? t.courtNames.filter(Boolean).map(String) : [];
+    const courtCount = Math.max(1, Number.parseInt(t.courtCount, 10) || courtNames.length || 1);
+    while (courtNames.length < courtCount) courtNames.push(`Quadra ${courtNames.length + 1}`);
+    const declaredCourts = courtNames.slice(0, courtCount);
+    const preferredCourts = Array.isArray(t.courtOrder) ? t.courtOrder.map(String) : [];
+    const courtOrder = preferredCourts.filter((court, index) => declaredCourts.includes(court) && preferredCourts.indexOf(court) === index);
+    declaredCourts.forEach(court => { if (!courtOrder.includes(court)) courtOrder.push(court); });
+    const courtRank = new Map(courtOrder.map((court, index) => [court, index]));
+    // O jogo é numerado pela agenda final, nunca pelo ID de geração. Assim a troca
+    // de dois slots antes da publicação preserva uma única sequência contínua.
+    const numbered = itens.slice().sort((a, b) => (Date.parse(a.scheduledAt) - Date.parse(b.scheduledAt)) ||
+      ((courtRank.get(a.court) ?? courtOrder.length) - (courtRank.get(b.court) ?? courtOrder.length)) || a.matchId.localeCompare(b.matchId));
+    const matchNumber = new Map(numbered.map((item, index) => [item.matchId, index + 1]));
     itens.forEach((item) => {
       const match = byId.get(item.matchId);
       match.court = item.court;
@@ -4320,6 +4333,7 @@ exports.setPendingInitialSchedule = onCall(async (request) => {
       // publicação da chave.
       match.scheduleLocked = item.scheduleLocked;
       match.scheduleSource = item.scheduleLocked ? 'organizer' : 'estimate';
+      match.matchNumber = matchNumber.get(item.matchId);
     });
     pd.scheduleRevision = Number(pd.scheduleRevision || 0) + 1;
     pd.scheduleUpdatedAt = agoraIso;

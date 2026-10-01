@@ -21,7 +21,14 @@
     var names = Array.isArray(t.courtNames) ? t.courtNames.filter(Boolean).map(String) : [];
     var n = Math.max(1, parseInt(t.courtCount, 10) || names.length || 1);
     while (names.length < n) names.push('Quadra ' + (names.length + 1));
-    return names.slice(0, n);
+    names = names.slice(0, n);
+    // A prioridade é uma decisão operacional, não uma renomeação: ela define qual
+    // coluna recebe o próximo jogo livre. Itens desconhecidos/duplicados nunca
+    // entram na frente e a ordem padrão continua sendo Quadra 1, 2, 3…
+    var chosen = Array.isArray(t.courtOrder) ? t.courtOrder.map(String) : [];
+    var ordered = chosen.filter(function (court, index) { return names.indexOf(court) >= 0 && chosen.indexOf(court) === index; });
+    names.forEach(function (court) { if (ordered.indexOf(court) < 0) ordered.push(court); });
+    return ordered;
   }
   function start(t) {
     var g = window._schGradeEstimada && window._schGradeEstimada(t);
@@ -124,14 +131,14 @@
     var date = new Date(isoText || '');
     return isNaN(date.getTime()) ? 'Sem horário' : date.toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
   }
-  function gameLabel(t, id) {
+  function gameLabel(t, id, scheduledNumber) {
     var games = all(t).filter(function (x) { return x && !x.isBye && !x.isSitOut; });
     var m = games.find(function (x) { return String(x.id) === String(id); });
     // O código interno (p0-…, c2-…) não é identificação para o organizador.
     // A numeração canônica, quando já existe, prevalece. Antes de ela existir,
     // a posição estável do jogo no torneio fornece o mesmo rótulo único sem vazar
     // o ID técnico para a agenda privada.
-    var number = m && (m.number != null ? m.number : m.matchNumber);
+    var number = scheduledNumber != null ? scheduledNumber : (m && (m.number != null ? m.number : m.matchNumber));
     if (number == null || number === '') number = games.indexOf(m) + 1;
     return 'Jogo ' + String(number || '—');
   }
@@ -204,7 +211,19 @@
     options = options || {};
     var prefix = String(options.prefix || 'agenda'), matchById = {};
     all(t).forEach(function (m) { if (m) matchById[String(m.id)] = m; });
-    var names = teamLookup(t), byDay = {};
+    var names = teamLookup(t), byDay = {}, numberByMatch = {};
+    // Durante a revisão do sorteio, o número é a sequência da agenda que o
+    // organizador está vendo — trocar dois cards renumera imediatamente todos os
+    // jogos. Ao aplicar, a Function grava esta mesma sequência no rascunho.
+    if (options.renumberBySchedule === true) {
+      (plan.items || []).slice().sort(function (a, b) {
+        var at = Date.parse(a.scheduledAt || ''), bt = Date.parse(b.scheduledAt || '');
+        if (at !== bt) return at - bt;
+        var ac = plan.courts.indexOf(a.court), bc = plan.courts.indexOf(b.court);
+        if (ac !== bc) return ac - bc;
+        return String(a.matchId).localeCompare(String(b.matchId));
+      }).forEach(function (item, index) { numberByMatch[String(item.matchId)] = index + 1; });
+    }
     (plan.items || []).forEach(function (item) {
       var key = dayKey(item.scheduledAt); (byDay[key] || (byDay[key] = [])).push(item);
     });
@@ -222,7 +241,7 @@
         if (!item) return '<div style="min-height:118px;border:1px dashed rgba(148,163,184,.25);border-radius:8px;background:rgba(15,23,42,.24);"></div>';
         var m = matchById[String(item.matchId)] || {};
         return '<article draggable="true" data-' + prefix + '-match="' + esc(item.matchId) + '" title="Arraste este jogo para trocar o horário e a quadra" style="min-height:132px;border:1px solid rgba(56,189,248,.32);border-radius:8px;padding:6px;background:rgba(15,23,42,.72);box-sizing:border-box;overflow:hidden;cursor:grab;">' +
-          '<div style="font-size:.68rem;color:#7dd3fc;font-weight:900;display:flex;justify-content:space-between;gap:8px;"><span>' + esc(gameLabel(t, item.matchId)) + '</span><span>R' + esc(String(m.round || '—')) + '</span></div>' +
+          '<div style="font-size:.68rem;color:#7dd3fc;font-weight:900;display:flex;justify-content:space-between;gap:8px;"><span>' + esc(gameLabel(t, item.matchId, numberByMatch[String(item.matchId)])) + '</span><span>R' + esc(String(m.round || '—')) + '</span></div>' +
           sideHtml(t, m, 'p1', names) + sideHtml(t, m, 'p2', names) +
           '</article>';
       }).join('');
