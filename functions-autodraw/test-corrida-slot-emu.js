@@ -77,8 +77,14 @@ console.log('\n① os caminhos REAIS reivindicam o slot DENTRO da transação\n'
     'drawRound consome o slot agendado e roda em transação');
   ok(dr.indexOf('_consumirSlotAgendado(') > dr.indexOf('db.runTransaction('),
     '⭐ e o consumo está DENTRO da transação');
-  ok(dr.indexOf('_consumirSlotAgendado(') < dr.indexOf('_gravaTorneio(tx,'),
-    '⭐ e ANTES do _gravaTorneio — mesma transação que grava a rodada');
+  /* A competição por times pode persistir SOMENTE o pacote `pendingDraw`
+   * antes de consumir agenda — ela ainda não materializou rodada pública. A garantia
+   * relevante é a do caminho que realmente publica a rodada: depois do consumo do
+   * slot, a próxima persistência canônica tem de ocorrer na mesma transação. */
+  const consumoManual = dr.indexOf('_consumirSlotAgendado(');
+  const gravaDepoisDoConsumo = dr.indexOf('_gravaTorneio(tx,', consumoManual);
+  ok(consumoManual < gravaDepoisDoConsumo,
+    '⭐ publicação de rodada vem APÓS consumir o slot — mesma transação');
 
   const cr = corpo('exports.closeRound = onCall', '\nexports.autoDraw');
   ok(cr.length > 500, 'achei o corpo de exports.closeRound');
