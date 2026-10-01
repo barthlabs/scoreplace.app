@@ -2975,9 +2975,13 @@ window.generateDrawFunction = function (tId) {
             window.location.hash = '#bracket/' + tId;
             setTimeout(function () {
                 if (window._sound) window._sound('sino');
-                if (d.native) showNotification(_t('tdraw.started'), _t('tdraw.startedMsg', { n: d.matchCount }), 'success');
-                else showNotification(_t('draw.changesSaved'), _t('tdraw.drawDone'), 'success');
-                if (typeof window._notifyDrawPersonalized === 'function') window._notifyDrawPersonalized(t, tId);
+                if (d.staged) {
+                    showNotification('🔒 Sorteio em revisão', 'Times, confrontos e agenda estão prontos para conferência. Nada foi publicado nem notificado.', 'info');
+                } else {
+                    if (d.native) showNotification(_t('tdraw.started'), _t('tdraw.startedMsg', { n: d.matchCount }), 'success');
+                    else showNotification(_t('draw.changesSaved'), _t('tdraw.drawDone'), 'success');
+                    if (typeof window._notifyDrawPersonalized === 'function') window._notifyDrawPersonalized(t, tId);
+                }
             }, 140);
         }).catch(function (err) {
             if (window._dtrace) window._dtrace('cf:ERR', { code: (err && err.code) || '', msg: String(err && err.message || err).slice(0, 120) });

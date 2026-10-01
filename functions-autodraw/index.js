@@ -620,6 +620,42 @@ function _consumirSlotAgendado(t, nowMs, tz) {
   } catch (e) { return null; }   // a trava nunca pode derrubar um sorteio manual
 }
 
+/* ── Rascunho do primeiro sorteio ──────────────────────────────────────────
+ * A competição por times não pode exibir uma atribuição parcial: primeiro o motor
+ * sorteia as seis duplas de cada time e os confrontos; só depois a organização
+ * confirma que essa chave pode aparecer para os participantes. O objeto abaixo é
+ * deliberadamente uma lista fechada de campos DERIVADOS. Configuração, local,
+ * inscrições e permissões continuam sendo o documento fresco, e uma edição desses
+ * campos durante a revisão não é apagada quando o rascunho é publicado.
+ *
+ * Os jogos permanecem apenas no payload até publicar. `_gravaTorneio` então grava
+ * as partes canônicas (`matches`, `groups`…) na mesma transação da publicação; não
+ * existe uma chave pública intermediária, nem duas cópias de agenda competindo. */
+const _CAMPOS_RASCUNHO_SORTEIO_INICIAL = [
+  'participants', 'competitionTeams', 'teamOrigins',
+  'matches', 'groups', 'rounds', 'phaseGroups', 'phaseRounds',
+  'standings', 'sitOutHistory', 'opponentHistory', 'monarchWaitlist',
+  'waitlist', 'standbyParticipants', 'checkedIn', 'absent',
+  'status', 'currentStage', 'currentPhaseIndex', '_phaseMaterialized',
+  'phaseStartedAt', '_canonicalDraw', 'history', 'lastAutoDrawAt',
+  'tournamentStarted', 'drawSlotAt', 'nextDrawAt'
+];
+function _rascunhoDoSorteioInicial(t) {
+  const draft = {};
+  _CAMPOS_RASCUNHO_SORTEIO_INICIAL.forEach((key) => {
+    if (Object.prototype.hasOwnProperty.call(t || {}, key)) draft[key] = t[key];
+  });
+  return JSON.parse(JSON.stringify(draft));
+}
+function _aplicaRascunhoDoSorteioInicial(t, draft) {
+  if (!draft || typeof draft !== 'object' || Array.isArray(draft)) {
+    throw new HttpsError('failed-precondition', 'O rascunho do sorteio está inválido. Anule e sorteie novamente.');
+  }
+  _CAMPOS_RASCUNHO_SORTEIO_INICIAL.forEach((key) => {
+    if (Object.prototype.hasOwnProperty.call(draft, key)) t[key] = draft[key];
+  });
+}
+
 
 /* Grava o torneio respeitando o que saiu do documento. Devolve o mesmo `{persist, clean}`
  * de sempre, pra quem chama seguir devolvendo `clean` ao cliente sem saber de nada disto.
@@ -1013,6 +1049,30 @@ exports.drawRound = onCall(async (request) => {
       : `Sorteio Realizado — ${t.format} (motor canônico)`;
     if (!Array.isArray(t.history)) t.history = [];
     t.history.push({ date: new Date().toISOString(), message: msg });
+
+    /* Competição por times: gerar não é publicar. O rascunho retém o resultado
+     * integral (times, confrontos e agenda) fora da chave materializada até a
+     * confirmação explícita. Assim a organização pode conferir/reordenar antes de
+     * avisar os participantes. Um re-sorteio de chave já pública continua sendo uma
+     * alteração explícita e não é escondido num rascunho. */
+    const _tcCfg = t.teamCompetition || ((t.phases || [])[0] || {}).teamCompetition || null;
+    const _stageInitial = !hadBracket && (t.stagedDraw === true || !!(_tcCfg && _tcCfg.enabled));
+    if (_stageInitial) {
+      const tEspera = JSON.parse(JSON.stringify(_tAntes));
+      tEspera.pendingDraw = {
+        kind: 'initial',
+        draft: _rascunhoDoSorteioInicial(t),
+        matchCount: res.matchCount || 0,
+        teamCount: Array.isArray(t.competitionTeams) ? t.competitionTeams.length : 0,
+        generatedAt: _agoraIsoTx,
+        source: 'drawRound'
+      };
+      const b = _gravaTorneio(tx, ref, tEspera, _tAntes, { agoraIso: _agoraIsoTx });
+      return { ok: true, staged: true, format: res.format, native: !!res.native,
+               matchCount: res.matchCount, sitOuts: res.sitOuts || 0,
+               allMaleCount: res.allMaleCount || 0, duplicatesRemoved,
+               estimatedScheduleApplied, tournament: b.clean };
+    }
 
     // v4.1.30: o sorteio LIMPA a presença (drawInitial já zera checkedIn/absent).
     /* L6.R1 · MANUAL × AUTOMÁTICO: se havia um slot agendado devido, este sorteio o CONSOME
@@ -4073,11 +4133,22 @@ exports.resolvePendingDraw = onCall(async (request) => {
     const antes=_antesDoMotor(t);
     if(action==='annul') { t.pendingDraw=null; t.lastAutoDrawAt=null; }
     else {
-      t.rounds=Array.isArray(pd.rounds)?pd.rounds:[];
-      ['standings','sitOutHistory','opponentHistory','monarchWaitlist'].forEach(k=>{ if(pd[k]) t[k]=pd[k]; });
-      t.status=pd.status||'active'; t.drawVisibility=t.drawVisibility||'public';
-      if(t.drawManual!==true&&!t.tournamentStarted) { const ms=Date.parse(pd.generatedAt||''); t.tournamentStarted=Number.isFinite(ms)&&ms>0?ms:Date.now(); }
-      t.lastAutoDrawAt=pd.generatedAt||t.lastAutoDrawAt||agoraIso; t.pendingDraw=null;
+      if (pd.kind === 'initial') {
+        _aplicaRascunhoDoSorteioInicial(t, pd.draft);
+        t.status = (pd.draft && pd.draft.status) || 'active';
+        t.drawVisibility = 'public';
+        if (!t.tournamentStarted) {
+          const ms=Date.parse(pd.generatedAt||'');
+          t.tournamentStarted=Number.isFinite(ms)&&ms>0?ms:Date.now();
+        }
+        t.pendingDraw=null;
+      } else {
+        t.rounds=Array.isArray(pd.rounds)?pd.rounds:[];
+        ['standings','sitOutHistory','opponentHistory','monarchWaitlist'].forEach(k=>{ if(pd[k]) t[k]=pd[k]; });
+        t.status=pd.status||'active'; t.drawVisibility=t.drawVisibility||'public';
+        if(t.drawManual!==true&&!t.tournamentStarted) { const ms=Date.parse(pd.generatedAt||''); t.tournamentStarted=Number.isFinite(ms)&&ms>0?ms:Date.now(); }
+        t.lastAutoDrawAt=pd.generatedAt||t.lastAutoDrawAt||agoraIso; t.pendingDraw=null;
+      }
     }
     const b=_gravaTorneio(tx,ref,t,antes,{agoraIso});
     return {ok:true,changed:true,action,roundIndex:pd.roundIndex,firstDraw:!!pd.firstDraw,tournament:b.clean};

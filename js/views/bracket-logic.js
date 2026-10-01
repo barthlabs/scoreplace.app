@@ -6537,8 +6537,36 @@ window._checkLigaAutoDraws = async function() {
 // Preview read-only da chave sorteada (grupos Rei/Rainha ou jogos), pra validar.
 window._renderPendingDrawPreview = function (t) {
   var pd = t && t.pendingDraw;
-  if (!pd || !Array.isArray(pd.rounds) || !pd.rounds.length) return '<div style="color:var(--text-muted);font-size:0.8rem;">(sem dados)</div>';
+  if (!pd) return '<div style="color:var(--text-muted);font-size:0.8rem;">(sem dados)</div>';
   var esc = window._safeHtml || function (s) { return String(s == null ? '' : s); };
+  /* Sorteio inicial por times: o rascunho contém os jogos materializados, mas
+   * ainda não existe em `t.matches`. A prévia é exclusivamente para conferência
+   * da organização; a chave pública segue vazia até "Publicar sorteio". */
+  if (pd.kind === 'initial') {
+    var draft = pd.draft || {}, games = Array.isArray(draft.matches) ? draft.matches : [];
+    var teams = Array.isArray(draft.competitionTeams) ? draft.competitionTeams : [];
+    if (!games.length) return '<div style="color:var(--text-muted);font-size:0.8rem;">(rascunho sem jogos)</div>';
+    var nameByTeam = {};
+    teams.forEach(function (team) { if (team && team.id != null) nameByTeam[String(team.id)] = team.name || team.id; });
+    var byCategory = {};
+    games.forEach(function (m) {
+      if (!m || m.isBye || m.isSitOut) return;
+      var cat = String(m.category || 'Sem categoria');
+      (byCategory[cat] || (byCategory[cat] = [])).push(m);
+    });
+    var initialHtml = '<div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:8px;">' +
+      esc(String(pd.teamCount || teams.length || 0)) + ' times · ' + esc(String(pd.matchCount || games.length)) + ' jogos</div>';
+    Object.keys(byCategory).sort().forEach(function (cat) {
+      initialHtml += '<div style="font-weight:700;color:var(--sp-c-22d3ee,#22d3ee);margin:10px 0 4px;font-size:0.85rem;">' + esc(cat) + '</div>';
+      byCategory[cat].sort(function (a, b) { return (Number(a.round) || 0) - (Number(b.round) || 0); }).forEach(function (m) {
+        var one = nameByTeam[String(m.p1CompetitionTeamId || '')] || m.p1 || 'A definir';
+        var two = nameByTeam[String(m.p2CompetitionTeamId || '')] || m.p2 || 'A definir';
+        initialHtml += '<div style="font-size:0.78rem;color:var(--text-main);padding:2px 0;">R' + esc(String(m.round || 1)) + ' · ' + esc(one) + ' <span style="opacity:0.55;">×</span> ' + esc(two) + '</div>';
+      });
+    });
+    return initialHtml;
+  }
+  if (!Array.isArray(pd.rounds) || !pd.rounds.length) return '<div style="color:var(--text-muted);font-size:0.8rem;">(sem dados)</div>';
   var html = '';
   pd.rounds.forEach(function (round, ri) {
     html += '<div style="font-weight:700;color:var(--text-bright);margin:10px 0 4px;font-size:0.85rem;">Rodada ' + (round.round || ri + 1) + '</div>';
@@ -6573,7 +6601,7 @@ window._renderPendingDrawBanner = function (t) {
   var esc = window._safeHtml || function (s) { return String(s == null ? '' : s); };
   var preview = window._renderPendingDrawPreview ? window._renderPendingDrawPreview(t) : '';
   return '<div style="border:2px solid #f59e0b;background:rgba(245,158,11,0.10);border-radius:14px;padding:14px 16px;margin:0 0 1rem;">' +
-    '<div style="font-size:1rem;font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);margin-bottom:4px;">🔒 Sorteio em revisão — só você vê</div>' +
+    '<div style="font-size:1rem;font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);margin-bottom:4px;">🔒 Sorteio em revisão</div>' +
     '<div style="font-size:0.82rem;color:var(--text-main);line-height:1.45;margin-bottom:10px;">O sorteio foi realizado mas <b>não foi publicado</b> e <b>ninguém foi notificado</b>. Confira a chave abaixo. Se estiver tudo certo, clique <b>Publicar</b> — aí sim vai a público e os participantes são avisados. Se houver erro, clique <b>Anular</b>.</div>' +
     '<details style="margin-bottom:10px;"><summary style="cursor:pointer;font-weight:700;color:var(--text-bright);font-size:0.85rem;">👁️ Ver a chave sorteada</summary>' +
       '<div style="margin-top:8px;max-height:380px;overflow:auto;">' + preview + '</div>' +
