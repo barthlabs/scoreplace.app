@@ -51,11 +51,21 @@ ok(multiA && multiB && multiA.scheduleLocked && multiB.scheduleLocked,
   'mais de uma intervenção manual permanece fixada no mesmo rascunho');
 ok(multiA && multiB && multiA.court !== multiB.court,
   'duas alterações simultâneas podem distribuir jogos entre quadras diferentes');
+
+const confirmed = Object.assign({}, t, { matches: t.matches.map(function (m) {
+  return m.id === 'B' ? Object.assign({}, m, { court: 'Quadra 1', scheduledAt: '2026-10-01T09:00:00.000Z', scheduleLocked: false, scheduleSource: 'estimate' }) : m;
+}) });
+const afterConfirmed = W._operationalSchedulePlan(confirmed);
+const confirmedB = afterConfirmed.items.find(x => x.matchId === 'B');
+ok(confirmedB && confirmedB.court === 'Quadra 1' && confirmedB.scheduledAt === '2026-10-01T09:00:00.000Z' && confirmedB.scheduleLocked,
+  'jogo já alocado não é movido automaticamente, mesmo se a alocação antiga era uma sugestão');
 ok(/data-agenda-court/.test(organizerSource) && /data-agenda-time/.test(organizerSource),
   'a tela entrega seletor de quadra e campo de horário por jogo');
 ok(/Object\.keys\(manual\)\.map/.test(organizerSource),
   'cada edição recompõe o plano completo a partir de todas as intervenções manuais');
 ok(/getTimezoneOffset\(\) \* 60000/.test(organizerSource),
   'o conversor do input de horário usa minutos em milissegundos explicitamente');
+ok(/scheduleLocked:true, scheduleSource:'organizer'/.test(organizerSource),
+  'Aplicar agenda transforma a sugestão confirmada em alocação manual protegida');
 console.log('──── ' + pass + ' passaram, ' + fail + ' falharam ────');
 process.exitCode = fail ? 1 : 0;

@@ -1613,7 +1613,41 @@
       if (monarch || (cfg && cfg.ligaCadence === 'incremental')) { built = { matches: [], players: pool.map(function (p) { return p.displayName; }), pool: pool, incrementalLeague: true }; }
       else { built = genLeagueFromPool(pool, cfg, idPrefix); }
     } else if (fmt === 'groups') {
-      built = genGroupsFromPool(pool, cfg, idPrefix);
+      // A fase de grupos também precisa respeitar categorias. Antes a separação
+      // existia apenas nas eliminatórias: em uma competição por times isso juntava
+      // Light/Power/Extreme no mesmo grupo e destruía a regra "uma dupla de cada
+      // categoria representa o time". Cada categoria passa a ter sua própria
+      // grade e cada jogo recebe o carimbo dela, como já ocorre na eliminatória.
+      // [[regression_neon_groups_are_split_by_category]]
+      var groupCats = (cfg && Array.isArray(cfg.categories) && cfg.categories.length > 1) ? cfg.categories : null;
+      if (groupCats && ctx && typeof ctx.catOf === 'function') {
+        var allGroupMatches = [], allGroups = [], groupWaitlist = [];
+        groupCats.forEach(function (cat, ci) {
+          var catPool = pool.filter(function (entry) { return String(ctx.catOf(entry) || '') === String(cat); });
+          if (!catPool.length) return;
+          var groupCfg = Object.assign({}, cfg);
+          // A grade por times define quantos times cabem em cada grupo. Com oito
+          // times e oito por grupo (Neon), portanto, há uma única rodada de grupos
+          // por categoria — quatro rodadas, quatro jogos por time.
+          var tc = cfg.teamCompetition;
+          if (tc && tc.enabled && tc.schedule && tc.schedule.enabled) {
+            groupCfg.gruposCount = Math.max(1, Math.ceil(catPool.length / Math.max(2, Number(tc.schedule.teamsPerGroup) || catPool.length)));
+          }
+          var one = genGroupsFromPool(catPool, groupCfg, idPrefix + '-c' + ci);
+          (one.matches || []).forEach(function (match) { match.category = cat; });
+          (one.groups || []).forEach(function (group) {
+            group.category = cat;
+            group.name = String(cat) + ' · ' + String(group.name || 'Grupo');
+          });
+          allGroupMatches = allGroupMatches.concat(one.matches || []);
+          allGroups = allGroups.concat(one.groups || []);
+          groupWaitlist = groupWaitlist.concat(one.waitlist || []);
+        });
+        built = { matches: allGroupMatches, groups: allGroups };
+        if (groupWaitlist.length) built.waitlist = groupWaitlist;
+      } else {
+        built = genGroupsFromPool(pool, cfg, idPrefix);
+      }
     } else {
       // Eliminatória: split por CATEGORIA só quando há 2+ categorias REAIS (cada uma =
       // chave independente). O split é um EIXO da fase (cfg.categories), não código de

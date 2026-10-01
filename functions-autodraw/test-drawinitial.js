@@ -182,6 +182,58 @@ const CASES = [
   ok('Neon: configuração da fase inicial também distribui os oito times', phaseDraw.ok &&
     neonInPhase.competitionTeams.length === 8 && neonInPhase.participants.every(function (entry) { return !!entry.competitionTeamId; }),
     JSON.stringify({ result: phaseDraw.ok, teams: neonInPhase.competitionTeams && neonInPhase.competitionTeams.length }));
+
+  // Prova ponta a ponta: o sorteio canônico precisa criar SEIS grades separadas.
+  // A antiga separação por categoria existia apenas na eliminatória, o que misturava
+  // as duplas no formato de grupos e deixava o Neon com confrontos entre categorias.
+  function neonWith(mode) {
+    return {
+      id: 'neon-full-' + mode, name: 'Neon completo', status: 'open', format: 'Fase de Grupos',
+      teamSize: 2, enrollmentMode: 'teams', combinedCategories: neonCategories,
+      participants: neonPairs.map(function (entry) { return Object.assign({}, entry, { participants: entry.participants.map(function (member) { return Object.assign({}, member); }) }); }),
+      teamCompetition: Object.assign({}, neonConfig, { schedule: Object.assign({}, neonConfig.schedule, { mode: mode }) }),
+      phases: [{ teamCompetition: Object.assign({}, neonConfig, { schedule: Object.assign({}, neonConfig.schedule, { mode: mode }) }) }]
+    };
+  }
+  const neonStructured = neonWith('structured');
+  const neonStructuredDraw = core.drawInitial(neonStructured, { idStamp: 'neon-completo-estruturado' });
+  const byNeonCategory = neonStructured.matches.reduce(function (out, match) {
+    (out[String(match.category || '')] || (out[String(match.category || '')] = [])).push(match); return out;
+  }, {});
+  ok('Neon completo: 96 confrontos = 16 em cada uma das seis categorias', neonStructuredDraw.ok && neonStructured.matches.length === 96 &&
+    neonCategories.every(function (category) { return (byNeonCategory[category] || []).length === 16; }),
+    JSON.stringify(Object.keys(byNeonCategory).map(function (category) { return [category, byNeonCategory[category].length]; })));
+  ok('Neon completo: cada categoria mantém 4 jogos por time, sem confronto interno', neonCategories.every(function (category) {
+    const appearances = {};
+    return (byNeonCategory[category] || []).every(function (match) {
+      appearances[match.p1CompetitionTeamId] = (appearances[match.p1CompetitionTeamId] || 0) + 1;
+      appearances[match.p2CompetitionTeamId] = (appearances[match.p2CompetitionTeamId] || 0) + 1;
+      return match.p1CompetitionTeamId !== match.p2CompetitionTeamId;
+    }) && neonStructured.competitionTeams.every(function (team) { return appearances[team.id] === 4; });
+  }));
+  const structuredLinks = function (matches) { return matches.map(function (match) {
+    return [match.round, [match.p1CompetitionTeamId, match.p2CompetitionTeamId].sort().join(':')].join('|');
+  }).sort().join(','); };
+  const firstStructuredLinks = structuredLinks(byNeonCategory[neonCategories[0]] || []);
+  ok('Neon completo: modo estruturado repete os quatro adversários na mesma ordem nas seis categorias',
+    neonCategories.every(function (category) { return structuredLinks(byNeonCategory[category] || []) === firstStructuredLinks; }));
+  const neonFree = neonWith('free');
+  const neonFreeDraw = core.drawInitial(neonFree, { idStamp: 'neon-completo-livre' });
+  const freeByCategory = neonFree.matches.reduce(function (out, match) {
+    (out[String(match.category || '')] || (out[String(match.category || '')] = [])).push(match); return out;
+  }, {});
+  ok('Neon completo: modo livre mantém quatro adversários distintos por time dentro de cada categoria', neonFreeDraw.ok &&
+    neonCategories.every(function (category) {
+      const opponents = {};
+      (freeByCategory[category] || []).forEach(function (match) {
+        (opponents[match.p1CompetitionTeamId] || (opponents[match.p1CompetitionTeamId] = [])).push(match.p2CompetitionTeamId);
+        (opponents[match.p2CompetitionTeamId] || (opponents[match.p2CompetitionTeamId] = [])).push(match.p1CompetitionTeamId);
+      });
+      return neonFree.competitionTeams.every(function (team) {
+        const list = opponents[team.id] || [];
+        return list.length === 4 && new Set(list).size === 4;
+      });
+    }));
 })();
 
 console.log('════════════════════════════════════════');

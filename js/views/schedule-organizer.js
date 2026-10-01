@@ -51,7 +51,12 @@
     var blocked = [], pending = [];
     ms.forEach(function (m) {
       var change = changesByMatch[String(m.id)];
-      var manual = m.scheduleLocked === true || m.scheduleSource === 'organizer' || !!change;
+      // Uma alocação já confirmada pelo organizador é um compromisso operacional,
+      // mesmo se nasceu da sugestão. Recalcular não pode trocar quadra ou horário
+      // de quem já recebeu um slot; só uma edição manual explícita pode fazê-lo.
+      // [[regression_confirmed_court_never_moves_automatically]]
+      var allocated = !!(m.court && m.scheduledAt);
+      var manual = allocated || m.scheduleLocked === true || m.scheduleSource === 'organizer' || !!change;
       if (played(m) || manual) blocked.push(m); else pending.push(m);
     });
     var occupied = {};
@@ -70,7 +75,8 @@
     var cursor = start(t), items = [];
     ms.forEach(function (m) {
       var change = changesByMatch[String(m.id)];
-      var manual = m.scheduleLocked === true || m.scheduleSource === 'organizer' || !!change;
+      var allocated = !!(m.court && m.scheduledAt);
+      var manual = allocated || m.scheduleLocked === true || m.scheduleSource === 'organizer' || !!change;
       if (played(m)) return;
       if (manual) {
         var a = change ? change.scheduledAt : m.scheduledAt;
@@ -157,7 +163,10 @@
         var db = window.FirestoreDB;
         if (!db || typeof db._callFn !== 'function') { button.disabled=false; button.textContent='Aplicar agenda'; msg('Agenda não salva','Conexão indisponível.','error'); return; }
         db._callFn('setMatchSchedule', { tournamentId:String(fresh.id), operationId:uid(), baseScheduleRevision:draft.baseScheduleRevision, operational:true,
-          jogos:draft.items.map(function (i) { return { matchId:i.matchId, court:i.court, scheduledAt:i.scheduledAt, scheduledKind:'estimate', scheduleLocked:i.scheduleLocked, scheduleSource:i.scheduleSource }; })
+          // Aplicar confirma cada slot da sugestão. A partir daqui não existe
+          // realocação automática: para mudar, o organizador escolhe o jogo,
+          // horário e/ou quadra nesta própria tela.
+          jogos:draft.items.map(function (i) { return { matchId:i.matchId, court:i.court, scheduledAt:i.scheduledAt, scheduledKind:'estimate', scheduleLocked:true, scheduleSource:'organizer' }; })
         }).then(function () { msg('Agenda aplicada', draft.items.length + ' jogos pendentes foram distribuídos pelas quadras.', 'success'); if (window.renderBracket) window.renderBracket(fresh.id); })
           .catch(function (e) { msg('Agenda não salva', (e && e.details && e.details.code === 'schedule-revision-stale') ? 'A agenda mudou em outra tela. A sugestão foi recalculada; aplique novamente.' : 'Não foi possível aplicar a agenda. Tente novamente.', 'error'); })
           .finally(function () { button.disabled=false; button.textContent='Aplicar agenda'; });
