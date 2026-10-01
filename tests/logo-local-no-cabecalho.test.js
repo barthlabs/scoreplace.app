@@ -8,6 +8,7 @@ function ok(value, label) { console.log((value ? '✓ ' : '✗ ') + label); if (
 
 const store = fs.readFileSync('js/store.js', 'utf8');
 const tournaments = fs.readFileSync('js/views/tournaments.js', 'utf8');
+const responsive = fs.readFileSync('css/responsive.css', 'utf8');
 const main = fs.readFileSync('js/main.js', 'utf8');
 const begin = store.indexOf('function _setupVenueLogos()');
 const end = store.indexOf('// ─── (REMOVIDO', begin);
@@ -25,9 +26,13 @@ ok(/display:flex;flex-direction:column;align-self:stretch/.test(hero), 'coluna d
 ok(/display:none;margin-top:auto/.test(hero), 'logo menor do local fica abaixo do nome e alinhado pela base');
 ok(/width:clamp\(34px,8vw,56px\)/.test(hero), 'logo do local fica menor que o logo principal');
 ok(/position:relative;width:33%;min-width:100px;flex-shrink:0;aspect-ratio:/.test(hero), 'logo do evento mantém exatamente a largura original de 33%');
+ok(/class="tournament-card-title"/.test(hero), 'o título tem classe própria para a regra responsiva');
+ok(/font-size:clamp\(1\.15rem,4vw,1\.8rem\)/.test(hero), 'o título reduz de forma fluida antes de ficar apertado');
+ok(/overflow-wrap:normal;word-break:normal;hyphens:none/.test(hero), 'palavras do título não são partidas no meio');
+ok(/\.tournament-card-title\s*\{\s*overflow-wrap:\s*normal\s*!important;\s*word-break:\s*normal\s*!important;\s*hyphens:\s*none;\s*\}/.test(responsive), 'a proteção contra corte de palavra vale em todos os breakpoints');
 ok(!/margin-top:auto;flex-shrink:0;width:clamp\(44px,14vw,64px\)/.test(tournaments), 'não sobra segunda cópia do logo do local no bloco de endereço');
 ok(/window\._hydrateVenueLogos\(container\)/.test(tournaments), 'o render do cabeçalho hidrata o logo imediatamente');
 ok(/release-notes\.js\?v=' \+ \(window\.SCOREPLACE_VERSION \|\| ''\)/.test(main), 'notas de versão usam o cache-buster dinâmico do release atual');
 
-console.log((bad ? '❌' : '✅') + ' logo-local-no-cabecalho: ' + (11 - bad) + ' ok, ' + bad + ' falha(s)');
+console.log((bad ? '❌' : '✅') + ' logo-local-no-cabecalho: ' + (15 - bad) + ' ok, ' + bad + ' falha(s)');
 process.exitCode = bad ? 1 : 0;

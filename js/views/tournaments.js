@@ -3254,7 +3254,7 @@ function renderTournaments(container, tournamentId = null) {
                 </div>
               ` : ''}
               <div style="flex:1;min-width:0;display:flex;flex-direction:column;align-self:stretch;">
-                <h4 style="margin: 0; font-size: 1.8rem; font-weight: 800; color: white; line-height: 1.2; text-align: left; overflow-wrap: anywhere;">
+                <h4 class="tournament-card-title" style="margin:0;font-size:clamp(1.15rem,4vw,1.8rem);font-weight:800;color:white;line-height:1.16;text-align:left;overflow-wrap:normal;word-break:normal;hyphens:none;">
                   ${window._safeHtml(t.name)}
                 </h4>
                 ${t.venuePlaceId ? '<span data-vlogo-pid="' + window._safeHtml(t.venuePlaceId) + '" title="Logo do local" aria-label="Logo do local" style="width:clamp(34px,8vw,56px);aspect-ratio:1/1;display:none;margin-top:auto;"></span>' : ''}

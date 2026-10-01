@@ -12,6 +12,15 @@
 
 /* Topbar/Header — handled by MOBILE TOPBAR section below */
 
+/* Identidade do torneio não pode ser cortada dentro de uma palavra em nenhuma
+   largura. A fonte fluida vive no próprio título; esta regra global protege
+   desktop, tablet e celular contra futuras folhas mais específicas. */
+.tournament-card-title {
+  overflow-wrap: normal !important;
+  word-break: normal !important;
+  hyphens: none;
+}
+
 /* Dashboard cards - Mobile Stack */
 @media (max-width: 767px) {
   .dashboard-cards {
