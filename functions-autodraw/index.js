@@ -4182,7 +4182,10 @@ exports.setPendingInitialSchedule = onCall(async (request) => {
     if (!court || !scheduledAt || !Number.isFinite(Date.parse(scheduledAt))) {
       throw new HttpsError('invalid-argument', 'Cada jogo precisa de quadra e horário válidos.');
     }
-    return { matchId, court, scheduledAt };
+    if (item.scheduleLocked !== undefined && typeof item.scheduleLocked !== 'boolean') {
+      throw new HttpsError('invalid-argument', 'A trava manual da agenda é inválida.');
+    }
+    return { matchId, court, scheduledAt, scheduleLocked: item.scheduleLocked === true };
   });
   if (new Set(itens.map((item) => item.matchId)).size !== itens.length) {
     throw new HttpsError('invalid-argument', 'Há jogo repetido na agenda.');
@@ -4206,8 +4209,11 @@ exports.setPendingInitialSchedule = onCall(async (request) => {
       match.court = item.court;
       match.scheduledAt = item.scheduledAt;
       match.scheduledKind = 'estimate';
-      match.scheduleLocked = true;
-      match.scheduleSource = 'organizer';
+      // No rascunho, somente a escolha explícita da organização é fixa. Os
+      // demais jogos continuam estimativas e podem ser recalculados antes da
+      // publicação da chave.
+      match.scheduleLocked = item.scheduleLocked;
+      match.scheduleSource = item.scheduleLocked ? 'organizer' : 'estimate';
     });
     pd.scheduleRevision = Number(pd.scheduleRevision || 0) + 1;
     pd.scheduleUpdatedAt = agoraIso;

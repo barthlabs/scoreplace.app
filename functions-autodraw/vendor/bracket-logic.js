@@ -6628,7 +6628,7 @@ window._openPendingInitialSchedule = function (tId) {
         '<label style="font-size:.75rem">Horário<input data-pis-time="' + esc(item.matchId) + '" type="datetime-local" value="' + esc(localValue(item.scheduledAt)) + '" style="display:block;width:100%;box-sizing:border-box;margin-top:3px"></label>' +
         '<label style="font-size:.75rem">Quadra<select data-pis-court="' + esc(item.matchId) + '" style="display:block;width:100%;box-sizing:border-box;margin-top:3px">' + options + '</select></label></div>';
     }).join('');
-    overlay.innerHTML = '<div role="dialog" aria-modal="true" style="max-width:850px;margin:0 auto;background:#111827;border:1px solid rgba(56,189,248,.5);border-radius:16px;padding:16px;color:#e5e7eb;box-shadow:0 24px 70px rgba(0,0,0,.55)">' +
+    overlay.innerHTML = '<div role="dialog" aria-modal="true" style="max-width:850px;margin:0 auto;background:#111827;border:1px solid rgba(56,189,248,.5);border-radius:16px;padding:16px;color:var(--text-main);box-shadow:0 24px 70px rgba(0,0,0,.55)">' +
       '<div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start"><div><h2 style="margin:0;font-size:1.05rem">📍 Planejar antes de publicar</h2><p style="margin:5px 0 12px;font-size:.82rem;line-height:1.4;color:#cbd5e1">Ao mudar horário ou quadra, os jogos ainda livres se reorganizam. Nada fica visível para participantes até publicar a chave.</p></div><button type="button" data-pis-close class="btn">Fechar</button></div>' +
       '<div style="font-size:.76rem;color:#94a3b8;margin-bottom:6px">' + p.items.length + ' jogos · ' + p.courts.map(esc).join(' · ') + '</div>' + rows +
       '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px"><button type="button" data-pis-apply class="btn btn-primary">Aplicar agenda no rascunho</button></div></div>';
@@ -6637,7 +6637,7 @@ window._openPendingInitialSchedule = function (tId) {
     Array.prototype.forEach.call(overlay.querySelectorAll('[data-pis-time]'), function (control) { control.onchange = function () { var item = p.items.find(function (x) { return String(x.matchId) === String(control.getAttribute('data-pis-time')); }); var ms = Date.parse(control.value || ''); if (item && Number.isFinite(ms)) { manual[item.matchId] = { matchId:item.matchId, court:item.court, scheduledAt:new Date(ms).toISOString() }; render(); } }; });
     overlay.querySelector('[data-pis-apply]').onclick = function (event) {
       var button = event.currentTarget, latest = plan(); button.disabled = true; button.textContent = 'Salvando agenda…';
-      window._callCF('setPendingInitialSchedule', { tournamentId:String(t.id), jogos:latest.items.map(function (i) { return { matchId:i.matchId, court:i.court, scheduledAt:i.scheduledAt }; }) }, 'Entre na sua conta para salvar a agenda.')
+      window._callCF('setPendingInitialSchedule', { tournamentId:String(t.id), jogos:latest.items.map(function (i) { return { matchId:i.matchId, court:i.court, scheduledAt:i.scheduledAt, scheduleLocked:!!i.scheduleLocked }; }) }, 'Entre na sua conta para salvar a agenda.')
         .then(function () { if (window.showNotification) window.showNotification('Agenda do rascunho salva', 'A chave continua em revisão até você publicar.', 'success'); overlay.remove(); if (window._rerenderBracket) window._rerenderBracket(t.id); })
         .catch(function (e) { button.disabled=false; button.textContent='Aplicar agenda no rascunho'; if (window.showNotification) window.showNotification('Agenda não salva', (e && e.message) || 'Tente novamente.', 'error'); });
     };

@@ -17,6 +17,6 @@ ok(draw.includes("kind: 'initial'")&&draw.includes('draft: _rascunhoDoSorteioIni
 ok(a.includes("pd.kind === 'initial'")&&a.includes('_aplicaRascunhoDoSorteioInicial(t, pd.draft)'),'Publicação aplica somente o rascunho derivado na transação');
 ok(/if \(d\.staged\) \{[\s\S]*?\} else \{[\s\S]*?_notifyDrawPersonalized/.test(d),'Rascunho não dispara notificação antes da publicação');
 ok(agenda.includes('db.runTransaction')&&agenda.includes('_isTournamentAdmin(t, uid)')&&agenda.includes('pd.kind !== \'initial\''),'Agenda do rascunho é transacional e exclusiva da organização');
-ok(agenda.includes('pd.draft.matches')&&agenda.includes('match.court = item.court')&&agenda.includes('match.scheduleLocked = true'),'Agenda altera somente jogos do rascunho e os fixa antes da publicação');
+ok(agenda.includes('pd.draft.matches')&&agenda.includes('match.court = item.court')&&agenda.includes('match.scheduleLocked = item.scheduleLocked'),'Agenda altera somente jogos do rascunho e fixa apenas escolhas manuais antes da publicação');
 ok(b.includes('window._openPendingInitialSchedule')&&b.includes("_callCF('setPendingInitialSchedule'"),'Cliente planeja no rascunho e delega o salvamento à Function');
 process.exit(f?1:0);

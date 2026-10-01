@@ -167,6 +167,7 @@ const TABELA = [
   { nome: "resolveMergedLogin", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
   { nome: "resolveParticipantMerge", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },
   { nome: "resolvePendingDraw", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },
+  { nome: "setPendingInitialSchedule", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },
   { nome: "resolvePendingLateBye", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },
   { nome: "resolvePhaseInactives", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },
   { nome: "resolveProfileTournamentCategoryChange", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },
