@@ -11,8 +11,9 @@ const draw=i.slice(i.indexOf('exports.drawRound'),i.indexOf('// ─── Convit
 const agenda=i.slice(i.indexOf('exports.setPendingInitialSchedule'),i.indexOf('// ─── DECISÃO DO ORGANIZADOR',i.indexOf('exports.setPendingInitialSchedule')));
 ok(a.includes('db.runTransaction')&&a.includes('_leTorneio(tx,ref,tId)')&&a.includes('_gravaTorneio(tx,ref,t,antes'),'Function relê e grava pendingDraw na transação');
 ok(a.includes('_isTournamentAdmin(t,uid)'),'Function exige organização por uid');
-ok(a.includes("action==='annul'")&&a.includes('t.pendingDraw=null'),'Function resolve publicar e anular');
+ok(a.includes("action==='annul'")&&a.includes('t.pendingDraw=null')&&a.includes("if (action === 'publish') throw new HttpsError('failed-precondition','O rascunho privado não foi encontrado.')")&&!a.includes('t.lastAutoDrawAt=null'),'Anular limpa marcador/cofre sem apagar estado anterior; publicar continua exigindo cofre íntegro');
 ok(c.includes("_callCF('resolvePendingDraw'")&&!/AppStore\.mutate|_notifyDrawPersonalized/.test(c),'cliente só despacha a Function');
+ok(c.includes("Sorteio não anulado")&&c.includes("Sorteio já anulado"),'falha ou ausência do rascunho recebe retorno visual, nunca silêncio');
 ok(draw.includes("kind: 'initial'")&&draw.includes('draft: _rascunhoDoSorteioInicial(t)')&&draw.includes('_refRascunhoInicialPrivado(ref)')&&draw.includes('_stageInitial'),'Sorteio inicial vai ao cofre privado antes de materializar a chave');
 ok(a.includes("pd.kind === 'initial'")&&a.includes('_aplicaRascunhoDoSorteioInicial(t, pd.draft)'),'Publicação aplica somente o rascunho derivado na transação');
 ok(/if \(d\.staged\) \{[\s\S]*?\} else \{[\s\S]*?_notifyDrawPersonalized/.test(d),'Rascunho não dispara notificação antes da publicação');

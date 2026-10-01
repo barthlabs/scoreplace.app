@@ -4177,12 +4177,31 @@ exports.resolvePendingDraw = onCall(async (request) => {
     const refPrivado = pd.kind === 'initial' ? _refRascunhoInicialPrivado(ref) : null;
     if (refPrivado && pd.private === true) {
       const secreto = await tx.get(refPrivado);
-      if (!secreto.exists) throw new HttpsError('failed-precondition','O rascunho privado não foi encontrado.');
-      pd = secreto.data() || null;
-      if (!pd || pd.kind !== 'initial' || !pd.draft) throw new HttpsError('failed-precondition','O rascunho privado está inválido.');
+      /* Anular é uma operação de limpeza: se uma versão antiga já apagou o
+       * cofre e deixou o marcador público para trás, NÃO pode aprisionar a
+       * organização num "sorteio em revisão" impossível de anular. Publicar,
+       * ao contrário, exige o pacote íntegro porque materializa a chave. */
+      if (!secreto.exists) {
+        if (action === 'publish') throw new HttpsError('failed-precondition','O rascunho privado não foi encontrado.');
+      } else {
+        const privado = secreto.data() || null;
+        if ((!privado || privado.kind !== 'initial' || !privado.draft) && action === 'publish') {
+          throw new HttpsError('failed-precondition','O rascunho privado está inválido.');
+        }
+        // Em anulação de cofre corrompido, preserva o marcador original em `pd`
+        // apenas para retornar metadados; a transação abaixo o remove de qualquer
+        // modo. Nunca deixar `pd=null` chegar ao retorno e derrubar a limpeza.
+        if (privado && privado.kind === 'initial' && privado.draft) pd = privado;
+      }
     }
     const antes=_antesDoMotor(t);
-    if(action==='annul') { t.pendingDraw=null; t.lastAutoDrawAt=null; if(refPrivado) tx.delete(refPrivado); }
+    if(action==='annul') {
+      // O rascunho inicial nunca materializa times, jogos ou agenda no torneio.
+      // Portanto a restauração correta é retirar apenas o marcador e o cofre,
+      // sem zerar lastAutoDrawAt nem outro estado que já existia antes do sorteio.
+      t.pendingDraw=null;
+      if(refPrivado) tx.delete(refPrivado);
+    }
     else {
       if (pd.kind === 'initial') {
         _aplicaRascunhoDoSorteioInicial(t, pd.draft);

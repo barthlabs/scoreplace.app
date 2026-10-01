@@ -6688,7 +6688,16 @@ window._publishPendingDraw = async function (tId) {
   } catch(e) { if(window._warn) window._warn('[publishPendingDraw] CF falhou',e); if(window.showNotification) window.showNotification('Sorteio não publicado','Não foi possível publicar o sorteio. Tente novamente.','error'); }
 };
 window._annulPendingDraw = function (tId) {
-  var go=function(){ return window._callCF('resolvePendingDraw',{ tournamentId:String(tId), action:'annul' },'Entre na sua conta para anular o sorteio.').then(function(res){ if(!((res&&res.data)||{}).changed) return; if(window.__pendingInitialDraws) delete window.__pendingInitialDraws[String(tId)]; if(window.showNotification) window.showNotification('Sorteio anulado','O sorteio em revisão foi descartado.','info'); if(window._rerenderBracket) window._rerenderBracket(tId); }).catch(function(e){ if(window._warn) window._warn('[annulPendingDraw] CF falhou',e); }); };
+  var go=function(){ return window._callCF('resolvePendingDraw',{ tournamentId:String(tId), action:'annul' },'Entre na sua conta para anular o sorteio.').then(function(res){
+    var out=(res&&res.data)||{};
+    if(window.__pendingInitialDraws) delete window.__pendingInitialDraws[String(tId)];
+    if(window.showNotification) window.showNotification(out.changed ? 'Sorteio anulado' : 'Sorteio já anulado', out.changed ? 'O rascunho foi descartado e o torneio voltou ao estado anterior ao sorteio.' : 'Não havia um rascunho pendente para descartar.', 'info');
+    if(window._rerenderBracket) window._rerenderBracket(tId);
+  }).catch(function(e){
+    if(window._warn) window._warn('[annulPendingDraw] CF falhou',e);
+    var detail=(e&&(e.message||(e.details&&e.details.message)))||'Tente novamente.';
+    if(window.showNotification) window.showNotification('Sorteio não anulado',String(detail),'error');
+  }); };
   if(window.showConfirmDialog) window.showConfirmDialog('Anular sorteio?','O sorteio em revisão será descartado.',go,null,{confirmText:'Anular',cancelText:'Cancelar',danger:true}); else go();
 };
 
