@@ -149,6 +149,35 @@ input[type="time"].rb-time::-webkit-calendar-picker-indicator {
   padding: 0 !important;
   margin: 0 !important;
 }
+/* Configuração do sorteio por times: estes são campos de edição compactos,
+   não a régua de horários. A regra genérica de type=time tem 40px/0.9rem e
+   fazia os quatro relógios dominarem cada faixa de dia. Mantém o indicador
+   nativo, mas usa a mesma família e escala dos demais controles do painel. */
+input[type="time"].sp-team-draw-time {
+  width: 5.25rem !important;
+  min-width: 5.25rem !important;
+  height: 30px !important;
+  min-height: 30px !important;
+  max-height: 30px !important;
+  padding: 3px 5px !important;
+  font-family: var(--font-body) !important;
+  font-size: 0.78rem !important;
+  font-weight: 600 !important;
+  line-height: 1.2 !important;
+  color: var(--text-bright) !important;
+  background: var(--bg-darker,#0b1220) !important;
+  border: 1px solid #64748b !important;
+  border-radius: 5px !important;
+}
+input[type="time"].sp-team-draw-time::-webkit-datetime-edit,
+input[type="time"].sp-team-draw-time::-webkit-datetime-edit-fields-wrapper,
+input[type="time"].sp-team-draw-time::-webkit-datetime-edit-hour-field,
+input[type="time"].sp-team-draw-time::-webkit-datetime-edit-minute-field {
+  font-family: var(--font-body) !important;
+  font-size: 0.78rem !important;
+  font-weight: 600 !important;
+  line-height: 22px !important;
+}
 /* "Repetir a cada [N] dias" (número) e a tag "≈ N rodadas" acompanham a mesma
    altura pra alinhar na linha do agendamento de sorteios. */
 #liga-draw-interval, #liga-rounds-tag {

@@ -178,6 +178,8 @@ ok(/data-team-toggle-group="mode"/.test(drawSource) && /wireToggle\('mode'/.test
   'o modo estruturado/livre usa toggle com explicação dinâmica da escolha ativa');
 ok(/data-team-day-flow/.test(drawSource) && /categoryFlow/.test(drawSource) && /data-team-day-start/.test(drawSource),
   'a mesma tela define, para cada dia, sequência concentrada/alternada e início/fim');
+ok(/sp-team-draw-time/.test(drawSource) && /window\.location\.hash = d\.staged \? '#tournaments\/'/.test(drawSource),
+  'os horários do sorteio usam controle compacto e a revisão volta ao detalhe com seus controles');
 ok(/var selectedMode = modeConfirmed && \(cfg\.schedule\.mode === 'structured' \|\| cfg\.schedule\.mode === 'free'\) \? cfg\.schedule\.mode : 'free';/.test(drawSource),
   'Livre é o padrão no primeiro sorteio; uma escolha já confirmada permanece');
 ok((drawSource.match(/background:#182235!important;color:var\(--text-bright\)!important/g) || []).length >= 2,
