@@ -2616,7 +2616,9 @@ window._showTeamCompetitionDrawReview = function (tId, opts) {
       ? core.configurationForTournament(t)
       : (t.teamCompetition || ((t.phases || [])[0] || {}).teamCompetition);
     var cfg = core && core.normalize ? core.normalize(rawCompetition) : null;
-    if (!cfg || !cfg.enabled || !cfg.schedule || !cfg.schedule.enabled) return false;
+    // Antes do primeiro sorteio a agenda ainda não está habilitada: é esta tela
+    // canônica que recebe as decisões de dias, ordem de categorias e quadras.
+    if (!cfg || !cfg.enabled) return false;
     var entries = Array.isArray(t.participants) ? t.participants.filter(function (entry) { return entry && typeof entry === 'object'; }) : [];
     var isPair = function (entry) {
         return (Array.isArray(entry.participants) && entry.participants.length >= 2) ||
@@ -2801,17 +2803,27 @@ window.generateDrawFunction = function (tId) {
         // Há atalhos para a chave vazia que podem ser abertos sem antes renderizar
         // a página do torneio. Eles também precisam abrir a mesma tela única —
         // inclusive a decisão todos/presentes —, jamais começar o sorteio direto.
-        if (window._showTeamCompetitionDrawReview(tId, {
-            includePresenceChoice: true,
-            onReady: function (choice) {
-                var scope = choice && choice.scope === 'present' ? 'present' : 'all';
-                if (typeof window._setDrawDecision === 'function') window._setDrawDecision(tId, { scope:scope });
-                if (scope === 'present' && typeof window._moveAbsentToWaitlistForPresentDraw === 'function') {
-                    window._moveAbsentToWaitlistForPresentDraw(t);
+        var _openedTeamReview = false;
+        try {
+            _openedTeamReview = window._showTeamCompetitionDrawReview(tId, {
+                includePresenceChoice: true,
+                onReady: function (choice) {
+                    var scope = choice && choice.scope === 'present' ? 'present' : 'all';
+                    if (typeof window._setDrawDecision === 'function') window._setDrawDecision(tId, { scope:scope });
+                    if (scope === 'present' && typeof window._moveAbsentToWaitlistForPresentDraw === 'function') {
+                        window._moveAbsentToWaitlistForPresentDraw(t);
+                    }
+                    window.generateDrawFunction(tId);
                 }
-                window.generateDrawFunction(tId);
-            }
-        })) return;
+            });
+        } catch (_teamReviewError) {
+            if (window._dtrace) window._dtrace('generateDraw:teamDrawReview:error', { message: String(_teamReviewError && _teamReviewError.message || _teamReviewError) });
+        }
+        if (_openedTeamReview) return;
+        if (typeof window.showNotification === 'function') {
+            window.showNotification('Configuração do sorteio indisponível', 'Não foi possível abrir a tela obrigatória de modo, categorias e quadras. Recarregue a página e tente novamente.', 'error');
+        }
+        return;
     }
 
     /* ⛔⛔ NÃO SORTEAR COM MEIO ELENCO. ESTA É A CONSEQUÊNCIA MAIS CARA DA CLASSE.

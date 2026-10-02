@@ -2122,23 +2122,33 @@ function renderTournaments(container, tournamentId = null) {
         // presença isolada seguida de defaults silenciosos.
         if (!skipGates && _teamDrawCfg && _teamDrawCfg.enabled === true && typeof window._showTeamCompetitionDrawReview === 'function') {
             var _closeTeamDraw = _inscricoesAbertas && !_lateMode;
-            window._showTeamCompetitionDrawReview(tId, {
-                includePresenceChoice: !_isLigaSort,
-                onCancel: function () { if (typeof window._drawBtnDone === 'function') window._drawBtnDone(); },
-                onReady: function (choice) {
-                    var scope = choice && choice.scope === 'present' ? 'present' : 'all';
-                    if (window._setDrawDecision) window._setDrawDecision(tId, { scope:scope });
-                    if (scope === 'present') {
-                        var current = window._findTournamentById ? window._findTournamentById(tId) : _tSort;
-                        var moved = current && window._moveAbsentToWaitlistForPresentDraw ? window._moveAbsentToWaitlistForPresentDraw(current) : 0;
-                        if (moved > 0 && typeof showNotification !== 'undefined') showNotification('Sorteio entre presentes', moved + ' ausente(s) irão para a lista de espera.', 'info');
+            var _teamPanelOpened = false;
+            try {
+                _teamPanelOpened = window._showTeamCompetitionDrawReview(tId, {
+                    includePresenceChoice: !_isLigaSort,
+                    onCancel: function () { if (typeof window._drawBtnDone === 'function') window._drawBtnDone(); },
+                    onReady: function (choice) {
+                        var scope = choice && choice.scope === 'present' ? 'present' : 'all';
+                        if (window._setDrawDecision) window._setDrawDecision(tId, { scope:scope });
+                        if (scope === 'present') {
+                            var current = window._findTournamentById ? window._findTournamentById(tId) : _tSort;
+                            var moved = current && window._moveAbsentToWaitlistForPresentDraw ? window._moveAbsentToWaitlistForPresentDraw(current) : 0;
+                            if (moved > 0 && typeof showNotification !== 'undefined') showNotification('Sorteio entre presentes', moved + ' ausente(s) irão para a lista de espera.', 'info');
+                        }
+                        var proceed = function () { _startDraw(); };
+                        if (!_closeTeamDraw) { proceed(); return; }
+                        if (typeof window._setTournamentEnrollmentStatus !== 'function') { if (typeof window._drawBtnDone === 'function') window._drawBtnDone(); return; }
+                        window._setTournamentEnrollmentStatus(tId, 'close', { forDraw:true }).then(function (saved) { if (saved && saved.changed !== false) proceed(); else if (typeof window._drawBtnDone === 'function') window._drawBtnDone(); });
                     }
-                    var proceed = function () { _startDraw(); };
-                    if (!_closeTeamDraw) { proceed(); return; }
-                    if (typeof window._setTournamentEnrollmentStatus !== 'function') { if (typeof window._drawBtnDone === 'function') window._drawBtnDone(); return; }
-                    window._setTournamentEnrollmentStatus(tId, 'close', { forDraw:true }).then(function (saved) { if (saved && saved.changed !== false) proceed(); else if (typeof window._drawBtnDone === 'function') window._drawBtnDone(); });
-                }
-            });
+                });
+            } catch (_teamReviewError) {
+                if (window._dtrace) window._dtrace('gate:teamDrawReview:error', { message: String(_teamReviewError && _teamReviewError.message || _teamReviewError) });
+            }
+            if (_teamPanelOpened) return;
+            // A configuração de competição por times exige esta tela; não é
+            // permitido cair no fluxo genérico ou parecer que o clique funcionou.
+            if (typeof window._drawBtnDone === 'function') window._drawBtnDone();
+            if (typeof showNotification === 'function') showNotification('Configuração do sorteio indisponível', 'Não foi possível abrir a tela obrigatória de modo, categorias e quadras. Recarregue a página e tente novamente.', 'error');
             return;
         }
         // v1.3.85 (dono): a pergunta "sortear entre os PRESENTES ou entre TODOS" é a PRIMEIRA do

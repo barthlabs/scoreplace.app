@@ -34,5 +34,8 @@ ok(d.includes('includePresenceChoice')&&d.includes('name="team-draw-presence"')&
 const tournamentView=fs.readFileSync('js/views/tournaments.js','utf8');
 ok(tournamentView.includes('includePresenceChoice: !_isLigaSort')&&tournamentView.includes('window._showTeamCompetitionDrawReview(tId, {')&&tournamentView.includes('scope:scope'),'O botão Sortear abre a tela única antes do sorteio, gravando o escopo junto das demais decisões');
 ok(d.includes('includePresenceChoice: true')&&d.includes('window.generateDrawFunction(tId);'),'Atalhos da chave também reabrem a tela única com todos/presentes antes de gerar');
+ok(!d.includes('!cfg.schedule || !cfg.schedule.enabled')&&d.includes('if (!cfg || !cfg.enabled) return false;'),'A tela canônica abre antes de a agenda estar configurada — ela é quem configura a agenda');
+ok(tournamentView.includes('var _teamPanelOpened = false;')&&tournamentView.includes('if (_teamPanelOpened) return;')&&tournamentView.includes('Configuração do sorteio indisponível'),'Falha ao abrir a tela obrigatória restaura o botão e explica o erro; nunca retorna silenciosamente');
+ok(d.includes('var _openedTeamReview = false;')&&d.includes('if (_openedTeamReview) return;')&&d.includes("window.showNotification('Configuração do sorteio indisponível'"),'Atalhos também não iniciam sorteio por times se a tela obrigatória não abrir');
 ok(agenda.includes('match.matchNumber = matchNumber.get(item.matchId)')&&agenda.includes('courtRank'),'Agenda do rascunho renumera jogos continuamente pela ordem de horário e quadra');
 process.exit(f?1:0);
