@@ -993,7 +993,7 @@ function renderDashboard(container) {
                         Título de torneio não é nome de jogador: sua caixa não tem altura fixa,
                         portanto o encolhedor de nomes não consegue medi-lo. Dashboard e detalhe
                         usam a mesma classe fluida, com quebra apenas entre palavras. */''}
-                  <h4 class="tournament-card-title sp-name-fit" data-maxrem="1.5" data-minrem="0.95"
+                  <h4 class="tournament-card-title"
                       style="margin:0;font-weight:800;color:white;flex:1;min-width:0;">
                     ${window._safeHtml(t.name)}
                   </h4>

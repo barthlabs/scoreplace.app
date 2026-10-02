@@ -102,7 +102,10 @@ console.log('\n== Texto nunca corta ==');
   // CATRACA: o número só pode CRESCER. O helper foi construído na v1.2.30 e ficou em
   // 2 usos porque nada cobrava; o piso aqui impede que alguém o remova em silêncio, e
   // sobe junto quando ele for propagado pra mais telas.
-  const PISO = 11;   // sobe quando o helper é propagado; NUNCA desce
+  // O título do torneio saiu desta contagem na 2.3.222: ele cresce verticalmente
+  // e não é uma caixa de nome fixa. Os dez usos restantes continuam sujeitos ao
+  // contrato do motor.
+  const PISO = 10;
   ok(usos.length >= PISO,
     'a classe .sp-name-fit está em uso em pelo menos ' + PISO + ' lugares (achado: ' + usos.length + ')');
   const semLimite = usos.filter(u => !/data-maxrem/.test(u.tag) || !/data-minrem/.test(u.tag))
@@ -125,14 +128,14 @@ console.log('\n== Texto nunca corta ==');
   const tag = mTag[0];
   ok(/min-width:\s*0/.test(tag),
     'o título tem min-width:0 — sem isso o item do flex não encolhe e o texto vaza');
-  ok(/sp-name-fit/.test(tag) && /data-maxrem=/.test(tag) && /data-minrem=/.test(tag),
-    'o título continua registrado no ciclo de ajuste de nomes');
+  ok(!/sp-name-fit/.test(tag) && !/data-maxrem=/.test(tag) && !/data-minrem=/.test(tag),
+    'o título não entra no encolhedor de caixas fixas: ele pode crescer verticalmente');
   ok(!/overflow-wrap:\s*anywhere/.test(tag), 'o título deixa a quebra entre palavras para a regra compartilhada');
   const tournaments = fs.readFileSync(path.join(ROOT, 'js', 'views', 'tournaments.js'), 'utf8');
   ok(/<h4 class="tournament-card-title" style="margin:0;font-weight:800;color:white;text-align:left;">/.test(tournaments),
     'o detalhe usa o mesmo componente de título da dashboard');
-  ok(/\.tournament-card-title\s*\{[\s\S]*font-size:\s*clamp\(1\.08rem,\s*4\.2vw,\s*1\.5rem\)\s*!important[\s\S]*text-wrap:\s*balance[\s\S]*overflow-wrap:\s*normal\s*!important/.test(responsive),
-    'a fonte fluida e a quebra por palavra vêm de uma única regra responsiva');
+  ok(/\.tournament-card-title\s*\{[\s\S]*font-size:\s*clamp\(1\.45rem,\s*6\.4vw,\s*2\.25rem\)\s*!important[\s\S]*text-wrap:\s*pretty[\s\S]*overflow-wrap:\s*normal\s*!important/.test(responsive),
+    'a fonte usa o maior tamanho fluido da tela e quebra somente entre palavras');
 })();
 
 // ── 5. superfície invertida: restauração NÃO pode ser presa a tag ────────────

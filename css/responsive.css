@@ -13,21 +13,17 @@
 /* Topbar/Header — handled by MOBILE TOPBAR section below */
 
 /* Uma única régua de identidade para o card da dashboard e o cabeçalho do
-   detalhe. O nome é texto de leitura, não pode acabar em "TOURNAMEN / T".
-   `clamp` reduz antes de ocupar linhas demais; as linhas restantes quebram só
-   entre palavras — nunca no meio delas. */
+   detalhe. Este título NÃO entra no encolhedor de nomes: ele não mora numa
+   caixa de altura fixa. Portanto ocupa a altura de que precisar e usa o maior
+   tamanho editorial adequado à tela; só quebra ENTRE palavras. */
 .tournament-card-title {
-  font-size: clamp(1.08rem, 4.2vw, 1.5rem) !important;
-  line-height: 1.16;
-  text-wrap: balance;
+  font-size: clamp(1.45rem, 6.4vw, 2.25rem) !important;
+  line-height: 1.12;
+  text-wrap: pretty;
   max-inline-size: 100%;
   overflow-wrap: normal !important;
   word-break: normal !important;
   hyphens: none;
-}
-
-@media (max-width: 430px) {
-  .tournament-card-title { font-size: clamp(1.02rem, 5.2vw, 1.3rem) !important; }
 }
 
 /* Dashboard cards - Mobile Stack */

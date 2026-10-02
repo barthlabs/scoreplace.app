@@ -27,9 +27,9 @@ ok(/display:none;margin-top:auto/.test(hero), 'logo menor do local fica abaixo d
 ok(/width:clamp\(34px,8vw,56px\)/.test(hero), 'logo do local fica menor que o logo principal');
 ok(/position:relative;width:33%;min-width:100px;flex-shrink:0;aspect-ratio:/.test(hero), 'logo do evento mantém exatamente a largura original de 33%');
 ok(/class="tournament-card-title"/.test(hero), 'o título tem classe própria para a regra responsiva');
-ok(/font-size:\s*clamp\(1\.08rem,\s*4\.2vw,\s*1\.5rem\)\s*!important/.test(responsive), 'o título reduz de forma fluida antes de ficar apertado');
-ok(/text-wrap:\s*balance/.test(responsive) && /overflow-wrap:\s*normal\s*!important/.test(responsive) && /word-break:\s*normal\s*!important/.test(responsive), 'palavras do título não são partidas no meio');
-ok(/@media \(max-width: 430px\)[\s\S]*\.tournament-card-title\s*\{\s*font-size: clamp\(1\.02rem, 5\.2vw, 1\.3rem\) !important;/.test(responsive), 'o mesmo teto menor vale no celular');
+ok(/font-size:\s*clamp\(1\.45rem,\s*6\.4vw,\s*2\.25rem\)\s*!important/.test(responsive), 'o título ocupa o maior tamanho fluido apropriado');
+ok(/text-wrap:\s*pretty/.test(responsive) && /overflow-wrap:\s*normal\s*!important/.test(responsive) && /word-break:\s*normal\s*!important/.test(responsive), 'palavras do título não são partidas no meio');
+ok(!/@media \(max-width: 430px\)[\s\S]*\.tournament-card-title/.test(responsive), 'não há teto móvel artificial que reduza o título antes de necessário');
 ok(!/margin-top:auto;flex-shrink:0;width:clamp\(44px,14vw,64px\)/.test(tournaments), 'não sobra segunda cópia do logo do local no bloco de endereço');
 ok(/window\._hydrateVenueLogos\(container\)/.test(tournaments), 'o render do cabeçalho hidrata o logo imediatamente');
 ok(/release-notes\.js\?v=' \+ \(window\.SCOREPLACE_VERSION \|\| ''\)/.test(main), 'notas de versão usam o cache-buster dinâmico do release atual');
