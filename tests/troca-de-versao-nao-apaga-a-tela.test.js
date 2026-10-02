@@ -18,5 +18,9 @@ must(!/^\s*_doReload\(\);\s*$/m.test(semGuarda) || /_isSafeToReload/.test(corpo)
 const store = fs.readFileSync(path.join(__dirname, '..', 'js', 'store.js'), 'utf8');
 must(/if \(window\._pendingUpdateReload\) \{ window\._applyUpdate\(false\)/.test(store), 'o auto-update consome o pendente quando volta a checar (hashchange/foco)');
 must(/sp_update_user_approved_for/.test(store) && /sp_update_user_approved_retry/.test(store), 'um toque de atualização atravessa o handoff entre shells');
+must(/if \(!_shell \|\| _shell === v\) \{[\s\S]{0,350}?_pillAtualizada\.remove\(\)/.test(store),
+  'quando servidor, JS e shell já coincidem, a pílula residual é removida — nunca mostra “Nova versão” depois de atualizar');
+must(/window\._pendingUpdateVersion = ''/.test(store) && /window\._pendingUpdateReload = false/.test(store),
+  'a reconciliação também limpa o estado pendente que criou a pílula');
 must(/approved === v && retry < 1[\s\S]*?window\._applyUpdate\(true\)/.test(store), 'o primeiro handoff incompleto ganha uma única tentativa automática, sem segundo clique');
 console.log('\n✅ ' + ok + ' verificações');

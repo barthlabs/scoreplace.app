@@ -1,3 +1,4 @@
+// 2.3.228 — O aviso de atualização agora se encerra quando servidor, JavaScript e shell já estão na mesma versão; uma pílula antiga não pode continuar oferecendo “Nova versão” depois de o app estar atualizado.
 // 2.3.227 — Configuração do sorteio por times foi compactada: toggles com explicação dinâmica e cards arrastáveis para dias/categorias e prioridade das quadras; uma categoria pode continuar suas rodadas em mais de um dia.
 // 2.3.226 — Busca e abas da chave agora formam uma única pilha sticky, sem vão onde cards poderiam atravessar no celular ou desktop.
 // 2.3.225 — Qualquer abertura do detalhe do torneio agora encontra o próximo jogo pendente do participante, abre a aba correta e ancora no card; atalhos da dashboard preservam o jogo clicado.

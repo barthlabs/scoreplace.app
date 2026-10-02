@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.3.227';
+window.SCOREPLACE_VERSION = '2.3.228';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -4082,6 +4082,19 @@ window._devWhatsAppBtnHtml = function (opts) {
         // pode sobreviver para a publicação seguinte. Se o HTML ainda for o
         // shell anterior, preserve a autorização até ele ser revalidado: apagar
         // aqui era precisamente o que devolvia uma segunda pílula ao usuário.
+        //
+        // A pílula é DOM, não só uma chave de sessão. Antes este ramo limpava
+        // as chaves mas deixava `#sp-update-pill` pintada: depois de atualizar,
+        // o aplicativo já rodava a versão do servidor e ainda oferecia
+        // “Nova versão”. Só a coerência COMPLETA (versão + shell) pode encerrá-la;
+        // se o shell for de outra build, o ramo logo abaixo continua pedindo o
+        // handoff em vez de esconder um problema real.
+        if (!_shell || _shell === v) {
+          window._pendingUpdateVersion = '';
+          window._pendingUpdateReload = false;
+          var _pillAtualizada = document.getElementById('sp-update-pill');
+          if (_pillAtualizada) _pillAtualizada.remove();
+        }
         try {
           if (_approvedUpdateFor === v && (!_shell || _shell === v)) {
             sessionStorage.removeItem('sp_update_user_approved_for');
