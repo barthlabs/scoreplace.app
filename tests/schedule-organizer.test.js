@@ -149,8 +149,8 @@ ok(W._operationalSchedulePlan(janelaFechada).cabe === false && W._operationalSch
   'a agenda operacional também bloqueia uma distribuição que ultrapassaria a janela');
 const sequenciaCategorias = {
   startDate:'2026-10-22T18:00', endDate:'2026-10-22T23:00', courtCount:1, gameDuration:30,
-  scheduleWindow:{ version:1, days:[{ day:'2026-10-22', startTime:'18:00', endTime:'23:00' }] },
-  categorySchedule:{ version:1, executionOrder:'categories', slots:[
+  scheduleWindow:{ version:1, days:[{ day:'2026-10-22', startTime:'18:00', endTime:'23:00', categoryFlow:'categories' }] },
+  categorySchedule:{ version:1, slots:[
     { category:'Light', day:'2026-10-22', order:1 }, { category:'Power', day:'2026-10-22', order:2 }
   ] },
   matches:[
@@ -161,7 +161,7 @@ const sequenciaCategorias = {
 function sequenceOf(grade) { return grade.slots.slice().sort(function (a, b) { return a.ms - b.ms; }).map(function (slot) { return slot.matchId; }).join(','); }
 ok(sequenceOf(W._schGradeEstimada(sequenciaCategorias)) === 'L1,L2,P1,P2',
   'modo por categoria conclui a primeira categoria antes de começar a segunda');
-const sequenciaRodadas = Object.assign({}, sequenciaCategorias, { categorySchedule:Object.assign({}, sequenciaCategorias.categorySchedule, { executionOrder:'rounds' }) });
+const sequenciaRodadas = Object.assign({}, sequenciaCategorias, { scheduleWindow:{ version:1, days:[{ day:'2026-10-22', startTime:'18:00', endTime:'23:00', categoryFlow:'rounds' }] } });
 ok(sequenceOf(W._schGradeEstimada(sequenciaRodadas)) === 'L1,P1,L2,P2',
   'modo por rodadas faz R1 de todas as categorias antes de iniciar R2');
 ok(/categorySchedule/.test(fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'tournaments-draw.js'), 'utf8')),
@@ -176,8 +176,8 @@ ok(/data-team-day-lane/.test(drawSource) && /data-team-category-source/.test(dra
   'categorias podem ser arrastadas para um ou mais dias e removidas de um dia específico');
 ok(/data-team-toggle-group="mode"/.test(drawSource) && /wireToggle\('mode'/.test(drawSource),
   'o modo estruturado/livre usa toggle com explicação dinâmica da escolha ativa');
-ok(/data-team-toggle-group="execution"/.test(drawSource) && /executionOrder:selectedExecutionOrder/.test(drawSource) && /data-team-day-start/.test(drawSource),
-  'a mesma tela define sequência por categoria/rodadas e início/fim de cada dia');
+ok(/data-team-day-flow/.test(drawSource) && /categoryFlow/.test(drawSource) && /data-team-day-start/.test(drawSource),
+  'a mesma tela define, para cada dia, sequência concentrada/alternada e início/fim');
 ok(/var selectedMode = modeConfirmed && \(cfg\.schedule\.mode === 'structured' \|\| cfg\.schedule\.mode === 'free'\) \? cfg\.schedule\.mode : 'free';/.test(drawSource),
   'Livre é o padrão no primeiro sorteio; uma escolha já confirmada permanece');
 ok((drawSource.match(/background:#182235!important;color:var\(--text-bright\)!important/g) || []).length >= 2,

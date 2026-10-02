@@ -706,17 +706,20 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var porDia = {};
     configurados.forEach(function (item) {
       var day = String(item && item.day || '').slice(0, 10), start = String(item && item.startTime || ''), end = String(item && item.endTime || '');
-      if (/^\d{4}-\d{2}-\d{2}$/.test(day) && /^\d{2}:\d{2}$/.test(start) && /^\d{2}:\d{2}$/.test(end)) porDia[day] = { start:start, end:end };
+      if (/^\d{4}-\d{2}-\d{2}$/.test(day) && /^\d{2}:\d{2}$/.test(start) && /^\d{2}:\d{2}$/.test(end)) porDia[day] = {
+        start:start, end:end,
+        categoryFlow:item && item.categoryFlow === 'rounds' ? 'rounds' : 'categories'
+      };
     });
     var dias = [], ymd = ini.ymd, guarda = 0, invalida = false;
     while (guarda++ < 8) {
       var ehUltimo = (ymd === fim.ymd);
-      var legado = { start:ini.hm, end:(ehUltimo ? fim.hm : '22:00') }, janela = porDia[ymd] || legado;
+      var legado = { start:ini.hm, end:(ehUltimo ? fim.hm : '22:00'), categoryFlow:'categories' }, janela = porDia[ymd] || legado;
       var iniMs = _ms(ymd, janela.start), fimMs = _ms(ymd, janela.end);
       // Janela vazia não vira silenciosamente 12 horas: é uma configuração
       // inválida que impede aplicar a agenda e pede correção ao organizador.
       if (fimMs <= iniMs) invalida = true;
-      dias.push({ ymd: ymd, iniMs: iniMs, fimMs: fimMs, startTime:janela.start, endTime:janela.end });
+      dias.push({ ymd: ymd, iniMs: iniMs, fimMs: fimMs, startTime:janela.start, endTime:janela.end, categoryFlow:janela.categoryFlow });
       if (ehUltimo) break;
       ymd = _addDias(ymd, 1);
     }
@@ -798,13 +801,20 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       // A organização escolhe se conclui uma categoria antes da seguinte ou se
       // intercala R1 de todas, depois R2 de todas etc. A preferência pertence à
       // agenda das categorias e não ao modo estruturado/livre dos confrontos.
-      var ordemExecucao = t.categorySchedule && t.categorySchedule.executionOrder === 'rounds' ? 'rounds' : 'categories';
+      // A cadência pertence a CADA dia. Mantemos executionOrder apenas como
+      // compatibilidade com sorteios anteriores à escolha por dia.
+      var ordemLegada = t.categorySchedule && t.categorySchedule.executionOrder === 'rounds' ? 'rounds' : 'categories';
+      function ordemDoDia(index) {
+        return jan.dias[index] && jan.dias[index].categoryFlow === 'rounds' ? 'rounds' :
+          (jan.dias[index] && jan.dias[index].categoryFlow === 'categories' ? 'categories' : ordemLegada);
+      }
       chaves.sort(function (a, b) {
         var A = porChave[a], B = porChave[b];
         var ad = A.agenda && indiceDia[A.agenda.day] != null ? indiceDia[A.agenda.day] : 0;
         var bd = B.agenda && indiceDia[B.agenda.day] != null ? indiceDia[B.agenda.day] : 0;
         var ao = A.agenda ? A.agenda.order : 9999, bo = B.agenda ? B.agenda.order : 9999;
-        if (ordemExecucao === 'rounds') return (ad - bd) || (A.fase - B.fase) || (A.rodada - B.rodada) || (ao - bo) || A.categoria.localeCompare(B.categoria);
+        if (ad !== bd) return ad - bd;
+        if (ordemDoDia(ad) === 'rounds') return (A.fase - B.fase) || (A.rodada - B.rodada) || (ao - bo) || A.categoria.localeCompare(B.categoria);
         return (ad - bd) || (ao - bo) || A.categoria.localeCompare(B.categoria) || (A.fase - B.fase) || (A.rodada - B.rodada);
       });
 
@@ -885,7 +895,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         slots: slots, quadras: quadras, dias: jan.dias.length,
         cabe: !estourou, fimMs: fimMs, extraPorDia:extraPorDia,
         extraMs: extraPorDia.reduce(function (sum, value) { return sum + value; }, 0),
-        executionOrder:ordemExecucao,
+        executionOrder:ordemLegada,
         // slotMin da 1ª fase — só informativo (cada fase tem o seu, ver o loop acima)
         slotMin: window._minutosDaPartida(t, window._faseDoTorneio(t, (jogos[0] && jogos[0].phaseIndex) || 0)) || 30
       };
