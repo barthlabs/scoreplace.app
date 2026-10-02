@@ -1093,8 +1093,24 @@ window._buildPodiumHtml = function(p1, p2, p3, sub1, sub2, sub3, opts) {
 // v2.0.8: aceita matchId opcional (rola direto pra esse jogo). A página de
 // chaveamento standalone foi removida — o fallback agora navega pro DETALHE
 // (#tournaments/:id) com uma flag de scroll, nunca mais pra #bracket/:id.
-window._goToTournamentMatch = function(tId, matchId) {
-  try { sessionStorage.setItem('sp_bracketScroll', JSON.stringify({ tId: String(tId), matchId: matchId ? String(matchId) : null })); } catch(e) {}
+window._setTournamentMatchTarget = function(tId, matchId, tab) {
+  try {
+    sessionStorage.setItem('sp_bracketScroll', JSON.stringify({
+      tId: String(tId),
+      matchId: matchId ? String(matchId) : null,
+      // A dashboard sabe qual categoria/rodada o card representa. Carregar a
+      // chave na aba padrão e só então procurar o card o deixa oculto pela aba.
+      tab: tab && tab.category ? {
+        category: String(tab.category),
+        gender: String(tab.gender || ''),
+        round: tab.round == null ? '' : String(tab.round)
+      } : null
+    }));
+  } catch(e) {}
+};
+
+window._goToTournamentMatch = function(tId, matchId, tab) {
+  window._setTournamentMatchTarget(tId, matchId, tab);
   window.location.hash = '#tournaments/' + tId;
 };
 
@@ -3314,7 +3330,7 @@ function renderTournaments(container, tournamentId = null) {
                 </div>
               ` : ''}
               <div style="flex:1;min-width:0;display:flex;flex-direction:column;align-self:stretch;">
-                <h4 class="tournament-card-title" style="margin:0;font-size:clamp(1.15rem,4vw,1.8rem);font-weight:800;color:white;line-height:1.16;text-align:left;overflow-wrap:normal;word-break:normal;hyphens:none;">
+                <h4 class="tournament-card-title" style="margin:0;font-weight:800;color:white;text-align:left;">
                   ${window._safeHtml(t.name)}
                 </h4>
                 ${t.venuePlaceId ? '<span data-vlogo-pid="' + window._safeHtml(t.venuePlaceId) + '" title="Logo do local" aria-label="Logo do local" style="width:clamp(34px,8vw,56px);aspect-ratio:1/1;display:none;margin-top:auto;"></span>' : ''}
@@ -4528,6 +4544,18 @@ function renderTournaments(container, tournamentId = null) {
     if (tournamentId && typeof window._initMergeTouchDrag === 'function') {
         window._initMergeTouchDrag(tournamentId);
     }
+
+    // Se a dashboard pediu um jogo, a aba precisa ser escolhida ANTES do
+    // render: um card de outra categoria nasce hidden e não é um alvo válido
+    // para a rolagem. A mesma chave de sessão é consumida abaixo, após o DOM.
+    try {
+        const _pendingBracketTarget = JSON.parse(sessionStorage.getItem('sp_bracketScroll') || 'null');
+        if (_pendingBracketTarget && String(_pendingBracketTarget.tId) === String(tournamentId) &&
+            _pendingBracketTarget.tab && _pendingBracketTarget.tab.category) {
+            window._bracketTabState = window._bracketTabState || {};
+            window._bracketTabState[String(tournamentId)] = _pendingBracketTarget.tab;
+        }
+    } catch (_pendingBracketTargetErr) {}
 
     // Renderiza a chave de forma transparente associada a esse torneio
     if (hasDrawn && typeof renderBracket === 'function') {

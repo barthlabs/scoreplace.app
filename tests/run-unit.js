@@ -1016,6 +1016,7 @@ const SUITES = [
   'tests/analise-duplas-arrastaveis.test.js',
   'tests/chaves-abas-categoria.test.js',
   'tests/chaves-abas-estaveis.test.js',
+  'tests/dashboard-atalho-aba-e-agenda.test.js',
   'tests/rodada-antecipada-regressiva.test.js',
   'tests/apply-result.test.js',
   'tests/apply-round-close.test.js',

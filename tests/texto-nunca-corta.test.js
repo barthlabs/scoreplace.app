@@ -50,6 +50,7 @@ const FILES = arquivosJs(path.join(ROOT, 'js'));
 const JS = FILES.map(f => fs.readFileSync(f, 'utf8')).join('\n');
 const store = fs.readFileSync(path.join(ROOT, 'js', 'store.js'), 'utf8');
 const components = fs.readFileSync(path.join(ROOT, 'css', 'components.css'), 'utf8');
+const responsive = fs.readFileSync(path.join(ROOT, 'css', 'responsive.css'), 'utf8');
 
 console.log('\n== Texto nunca corta ==');
 
@@ -118,13 +119,20 @@ console.log('\n== Texto nunca corta ==');
   const dash = fs.readFileSync(path.join(ROOT, 'js', 'views', 'dashboard.js'), 'utf8');
   // pega a TAG INTEIRA que carrega a classe (ela é multilinha) — fatiar por índice
   // pegava o `>` de um comentário logo acima e media a coisa errada.
-  const mTag = dash.match(/<h4[^>]*sp-name-fit[^>]*>/);
-  ok(!!mTag, 'o título do card da dashboard usa o encolhedor canônico');
+  const mTag = dash.match(/<h4[^>]*tournament-card-title[^>]*>/);
+  ok(!!mTag, 'o título do card da dashboard usa o componente canônico de título');
   if (!mTag) return;
   const tag = mTag[0];
   ok(/min-width:\s*0/.test(tag),
-    'o título tem min-width:0 — sem isso o item do flex não encolhe e o texto vaza mesmo com anywhere');
-  ok(/overflow-wrap:\s*anywhere/.test(tag), 'o título quebra com `anywhere`');
+    'o título tem min-width:0 — sem isso o item do flex não encolhe e o texto vaza');
+  ok(/sp-name-fit/.test(tag) && /data-maxrem=/.test(tag) && /data-minrem=/.test(tag),
+    'o título continua registrado no ciclo de ajuste de nomes');
+  ok(!/overflow-wrap:\s*anywhere/.test(tag), 'o título deixa a quebra entre palavras para a regra compartilhada');
+  const tournaments = fs.readFileSync(path.join(ROOT, 'js', 'views', 'tournaments.js'), 'utf8');
+  ok(/<h4 class="tournament-card-title" style="margin:0;font-weight:800;color:white;text-align:left;">/.test(tournaments),
+    'o detalhe usa o mesmo componente de título da dashboard');
+  ok(/\.tournament-card-title\s*\{[\s\S]*font-size:\s*clamp\(1\.08rem,\s*4\.2vw,\s*1\.5rem\)\s*!important[\s\S]*text-wrap:\s*balance[\s\S]*overflow-wrap:\s*normal\s*!important/.test(responsive),
+    'a fonte fluida e a quebra por palavra vêm de uma única regra responsiva');
 })();
 
 // ── 5. superfície invertida: restauração NÃO pode ser presa a tag ────────────

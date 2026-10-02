@@ -666,7 +666,14 @@ function initRouter() {
         // (#tournaments/:id) e rola até a seção de chaveamento, que já existe
         // inline lá. renderBracket continua existindo (usado inline no detalhe).
         if (cleanParam) {
-          try { sessionStorage.setItem('sp_bracketScroll', JSON.stringify({ tId: String(cleanParam), matchId: null })); } catch (e) {}
+          try {
+            // O link da dashboard já pode ter preparado jogo + aba. O redirecionamento
+            // #bracket → detalhe não pode apagar essa intenção e voltar à aba padrão.
+            var _priorBracketTarget = JSON.parse(sessionStorage.getItem('sp_bracketScroll') || 'null');
+            var _target = _priorBracketTarget && String(_priorBracketTarget.tId) === String(cleanParam)
+              ? _priorBracketTarget : { tId: String(cleanParam), matchId: null };
+            sessionStorage.setItem('sp_bracketScroll', JSON.stringify(_target));
+          } catch (e) {}
           window.location.hash = '#tournaments/' + cleanParam;
         } else {
           window.location.hash = '#dashboard';

@@ -1025,6 +1025,11 @@ function _bracketUpdateRoundHeadingPortal(root, scope) {
     var clone = document.createElement('div');
     clone.className = 'bracket-round-heading-portal';
     clone.style.cssText = 'position:fixed;top:' + Math.ceil(anchorBottom) + 'px;left:' + Math.round(rect.left) + 'px;width:' + Math.round(rect.width) + 'px;box-sizing:border-box;z-index:29;display:flex;align-items:center;gap:8px;background:var(--bg-darker,#111114);padding:8px 0 9px;box-shadow:0 8px 0 var(--bg-darker,#111114);';
+    // O portal só acompanha o título da rodada. A máscara que avançava para
+    // baixo escondia busca e cards ao rolar em telas estreitas.
+    clone.style.background = '#111114';
+    clone.style.boxShadow = 'none';
+    clone.style.borderBottom = '1px solid rgba(255,255,255,.08)';
     clone.innerHTML = heading.innerHTML;
     portal.appendChild(clone);
   }
@@ -1071,7 +1076,7 @@ window._bracketCategoryTabsMount = function () {
     // A faixa fixa ocupa somente a altura real das abas. Uma sombra sólida de
     // 48px acima dela mascarava a busca e os títulos anteriores no celular;
     // sombra visual não pode criar uma nova área de layout nem encobrir texto.
-    root.style.cssText = 'display:block;box-sizing:border-box;width:100%;margin:0 0 14px;padding:8px 12px;border:0;border-radius:0;background:var(--bg-darker,#111114);overflow:visible;position:sticky;top:var(--scroll-anchor,120px);z-index:30;isolation:isolate;box-shadow:0 10px 18px -18px rgba(0,0,0,.95);';
+    root.style.cssText = 'display:block;box-sizing:border-box;width:100%;margin:0 0 14px;padding:4px 12px 6px;border:0;border-radius:0;background:#111114;overflow:hidden;position:sticky;top:var(--scroll-anchor,120px);z-index:30;isolation:isolate;box-shadow:0 8px 12px -12px rgba(0,0,0,.95);';
     var anchor = _bracketTabsAnchor(first);
     // Em Ouro/Prata, sobe mais um nível: a faixa deve ficar acima da seção
     // inteira (título, classificação e rodadas), para poder ocultar a linha
@@ -1164,8 +1169,14 @@ window._bracketCategoryTabsMount = function () {
   _bracketSyncRoundHeadingOffsets();
   _bracketEnsureRoundHeadingResizeListener();
   if (typeof requestAnimationFrame === 'function') requestAnimationFrame(_bracketSyncRoundHeadingOffsets);
+  // A dashboard grava este alvo antes de trocar de rota. Consumir o estado na
+  // montagem — e não depois da rolagem — garante que o card já nasça visível
+  // na categoria solicitada, inclusive quando o gênero informado era antigo.
   var state = (window._bracketTabState || {})[id] || {};
-  var gender = byGender[state.gender] ? state.gender : order[0];
+  var targetGender = Object.keys(byGender).find(function (candidate) {
+    return byGender[candidate].indexOf(state.category) !== -1;
+  });
+  var gender = targetGender || (byGender[state.gender] ? state.gender : order[0]);
   var category = byGender[gender].indexOf(state.category) !== -1 ? state.category : byGender[gender][0];
   _bracketTabsApply(id, gender, category, state.round);
 };

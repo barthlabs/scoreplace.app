@@ -12,13 +12,22 @@
 
 /* Topbar/Header — handled by MOBILE TOPBAR section below */
 
-/* Identidade do torneio não pode ser cortada dentro de uma palavra em nenhuma
-   largura. A fonte fluida vive no próprio título; esta regra global protege
-   desktop, tablet e celular contra futuras folhas mais específicas. */
+/* Uma única régua de identidade para o card da dashboard e o cabeçalho do
+   detalhe. O nome é texto de leitura, não pode acabar em "TOURNAMEN / T".
+   `clamp` reduz antes de ocupar linhas demais; as linhas restantes quebram só
+   entre palavras — nunca no meio delas. */
 .tournament-card-title {
+  font-size: clamp(1.08rem, 4.2vw, 1.5rem) !important;
+  line-height: 1.16;
+  text-wrap: balance;
+  max-inline-size: 100%;
   overflow-wrap: normal !important;
   word-break: normal !important;
   hyphens: none;
+}
+
+@media (max-width: 430px) {
+  .tournament-card-title { font-size: clamp(1.02rem, 5.2vw, 1.3rem) !important; }
 }
 
 /* Dashboard cards - Mobile Stack */

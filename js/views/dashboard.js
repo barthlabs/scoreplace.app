@@ -990,11 +990,11 @@ function renderDashboard(container) {
                         flex: ele permite quebrar, mas a largura MÍNIMA do elemento continua
                         sendo a da palavra inteira, então o item não encolhe e o texto vaza.
                         Quem afeta a largura mínima é `anywhere` — com `min-width:0` no item.
-                        E, quando mesmo quebrando não couber, a FONTE ENCOLHE: `.sp-name-fit`
-                        é o encolhedor canônico do app (store.js), em rem por causa da escala
-                        por área — nunca px. Ver project_name_fit_box_canonical. */''}
-                  <h4 class="sp-name-fit" data-maxrem="1.5" data-minrem="0.95"
-                      style="margin:0;font-size:1.5rem;font-weight:800;color:white;line-height:1.2;flex:1;min-width:0;overflow-wrap:anywhere;word-break:break-word;">
+                        Título de torneio não é nome de jogador: sua caixa não tem altura fixa,
+                        portanto o encolhedor de nomes não consegue medi-lo. Dashboard e detalhe
+                        usam a mesma classe fluida, com quebra apenas entre palavras. */''}
+                  <h4 class="tournament-card-title sp-name-fit" data-maxrem="1.5" data-minrem="0.95"
+                      style="margin:0;font-weight:800;color:white;flex:1;min-width:0;">
                     ${window._safeHtml(t.name)}
                   </h4>
                   <span data-fav-id="${t.id}" onclick="window._toggleFavorite('${t.id}', event)" title="${_isFav ? _t('fav.remove') : _t('fav.add')}" style="font-size:1.4rem;cursor:pointer;flex-shrink:0;color:${window._spCor(_isFav ? '#f43f5e' : 'rgba(255,255,255,0.4)', 'color')};transition:color 0.2s;line-height:1;margin-top:2px;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">${_isFav ? '❤️' : '♡'}</span>
@@ -1856,6 +1856,19 @@ function renderDashboard(container) {
       return { group: s.trim(), jogo: '' };
     }
 
+    // O card da dashboard já conhece a categoria da partida. Guardá-la junto
+    // com a âncora impede que o detalhe abra sempre Ouro/a primeira categoria
+    // e esconda justamente o jogo que a pessoa escolheu.
+    function _bracketTabForMatch(m) {
+      m = m || {};
+      var category = String(m.category || m.tierLabel || m.bracket || '').trim();
+      var label = category.toLowerCase();
+      var gender = /(^|\s)(fem|femin|female)/.test(label) ? 'fem'
+        : (/(^|\s)(masc|mascul|male)/.test(label) ? 'masc'
+          : (/(^|\s)(mist|mixed)/.test(label) ? 'misto' : 'linhas'));
+      return { category:category, gender:gender, round:m.round == null ? '' : String(m.round) };
+    }
+
     // v1.8.78: cabeçalho de grupo em DUAS LINHAS (grupo em cima, torneio embaixo) —
     // pedido do dono. Ocupa a linha inteira da grade (`grid-column:1/-1`) de propósito:
     // com o rótulo dentro do card, só o 1º card de cada grupo teria cabeçalho e os
@@ -1873,7 +1886,7 @@ function renderDashboard(container) {
     // rola sozinha até o jogo do próprio usuário, e como estes grupos são os DELE, o
     // destino cai na classificação certa sem precisar de âncora por grupo (que não
     // existe hoje na chave).
-    function _grupoHeadHtml(grupo, tName, cor, attr, inline, tId, matchId) {
+    function _grupoHeadHtml(grupo, tName, cor, attr, inline, tId, matchId, match) {
       // v1.8.99: leva o GRUPO junto — ordem do dono: "tem que ir com o grupo clicado
       // no topo e nao no topo do torneio". O rótulo vai por sessionStorage (não pela
       // URL) porque a chave é normalizada e nome de grupo tem espaço/acento; a chave é
@@ -1885,11 +1898,15 @@ function renderDashboard(container) {
        * rótulo vem vazio, não há âncora e a tela cai no topo. Agora o ID DO JOGO viaja junto
        * (`sp_scrollToMatch`) e a chave rola até ele — o grupo continua indo, para quem tem. */
       var _mId = String(matchId == null ? '' : matchId).replace(/'/g, '');
+      var _tab = _bracketTabForMatch(match);
+      var _escJs = function(value) { return String(value == null ? '' : value).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); };
+      var _target = "window._setTournamentMatchTarget('" + _escJs(tId) + "','" + _escJs(_mId) + "'," +
+        (_tab.category ? "{category:'" + _escJs(_tab.category) + "',gender:'" + _escJs(_tab.gender) + "',round:'" + _escJs(_tab.round) + "'}" : 'null') + ');';
       var _btn = tId
         ? '<a href="#bracket/' + String(tId).replace(/"/g, '&quot;') + '" ' +
           'onclick="event.stopPropagation();try{sessionStorage.setItem(\'sp_scrollToGroup\',\'' +
             String(_grpK).replace(/'/g, '') + '\');' +
-            (_mId ? ('sessionStorage.setItem(\'sp_scrollToMatch\',\'' + _mId + '\');') : '') +
+            (_mId ? ('sessionStorage.setItem(\'sp_scrollToMatch\',\'' + _mId + '\');') : '') + _target +
           '}catch(e){}" ' +
           'style="flex-shrink:0;margin-left:auto;align-self:center;font-size:0.62rem;font-weight:700;' +
           'text-decoration:none;color:var(--sp-c-7dd3fc,#7dd3fc);background:rgba(125,211,252,0.14);' +
@@ -2420,6 +2437,7 @@ function renderDashboard(container) {
 
       // Fase label + cor da barra (igual às colunas do bracket)
       var tRef = participacoes.find(function(tt) { return tt.id === item.tId; });
+      var _cardTab = _bracketTabForMatch(item.m);
       var faseStr = tRef ? _elabFaseLabel(tRef, item.m) : (item.subLine || '');
       // Cor baseada na fase — Semi=ciano, Quartas=verde, Oitavas/Rodada/Grupo=índigo,
       // Final=ouro. Default índigo (neutro) pra não pintar Liga/Rei-Rainha de ouro
@@ -2646,7 +2664,9 @@ function renderDashboard(container) {
       // (mesma fonte/padding/raio, flat) só com a cor índigo — antes era .btn .btn-sm
       // (maior, com volume) e quebrava pra outra linha. Fica na MESMA linha dos outros
       // 2, FORA do #header-btns (que é reescrito in-place no fluxo de aprovação).
-      var goToBtn = '<button class="btn btn-indigo btn-micro" onclick="event.stopPropagation();window._goToTournamentMatch(\'' + _esc(tId) + '\',\'' + _esc(mId) + '\')" style="flex-shrink:0;font-size:0.72rem;line-height:1.05;text-align:center;">Ir para<br>Torneio →</button>';
+      var _tabArg = _cardTab.category
+        ? (",{category:'" + _esc(_cardTab.category) + "',gender:'" + _esc(_cardTab.gender) + "',round:'" + _esc(_cardTab.round) + "'}") : '';
+      var goToBtn = '<button class="btn btn-indigo btn-micro" onclick="event.stopPropagation();window._goToTournamentMatch(\'' + _esc(tId) + '\',\'' + _esc(mId) + '\'' + _tabArg + ')" style="flex-shrink:0;font-size:0.72rem;line-height:1.05;text-align:center;">Ir para<br>Torneio →</button>';
 
       // v1.7.83: o box era `min-width:300px;max-width:360px` — px CRAVADO. Com a
       // escala grande (até 1.7) os 3 botões do cabeçalho (Ao Vivo · Confirmar ·
@@ -2797,6 +2817,11 @@ function renderDashboard(container) {
       if (_ngM.tierLabel) _meta.push(String(_ngM.tierLabel).trim());
       // v4.0.2: a coroa fica SÓ ao lado do "JOGO N" (no card) — não repetir aqui.
       var _metaStr = _meta.join(' · ');
+      // Mesma régua do card canônico: resultado > horário confirmado > prazo.
+      // O próximo jogo já agendado precisa dizer quando ele acontece antes de a
+      // pessoa abrir a chave, não somente depois.
+      var _nextTimeline = (_ngT && typeof window._matchCardTimelineTextHtml === 'function')
+        ? window._matchCardTimelineTextHtml(_ngT, _ngM) : '';
       // v4.1.20: "JOGO N" GLOBAL (fonte única). Antes parseava _ngM.label — que muitas
       // vezes não traz número → caía em "Jogo" pelado (bug reportado na dashboard).
       // v1.2.37: Rei/Rainha NÃO é exceção — o `!isMonarch` daqui era o bug do "JOGO 73"
@@ -2815,6 +2840,7 @@ function renderDashboard(container) {
       _upHtml += '<div style="border-left:3px solid #818cf8;padding-left:10px;margin-bottom:10px;">' +
         '<div style="font-weight:800;color:var(--text-bright);font-size:0.92rem;text-transform:uppercase;letter-spacing:0.5px;line-height:1.25;">' + _sf(_ng.tName) + '</div>' +
         (_metaStr ? '<div style="color:var(--sp-c-a5b4fc,#a5b4fc);font-size:0.72rem;margin-top:3px;font-weight:600;">' + _sf(_metaStr) + '</div>' : '') +
+        (_nextTimeline ? '<div style="margin-top:5px;">' + _nextTimeline + '</div>' : '') +
       '</div>';
       /* MESMA LARGURA DAS NOVIDADES E DOS ÚLTIMOS RESULTADOS. Esta era a única das quatro
        * chamadas de `_miniBracketCard` que entrava PELADA: sem o grid e sem o embrulho
@@ -2884,7 +2910,7 @@ function renderDashboard(container) {
           // v1.8.78: grupo e torneio em DUAS LINHAS (antes lado a lado, e o torneio
           // sumia no `ellipsis` em tela estreita). Mesmo desenho das Novidades.
           html += _grupoHeadHtml(g.group, g.tName, g.color, _spFull(), false, g.tId,
-            (g.units[0] && g.units[0].m && g.units[0].m.id) || null);
+            (g.units[0] && g.units[0].m && g.units[0].m.id) || null, (g.units[0] && g.units[0].m) || null);
           // v2.3.62: o rótulo "JOGO N" com a barra colorida acima de cada chave
           // foi removido — essa info já aparece no header de cada box
           // ("R2 GRUPO A • JOGO N"). Só o cabeçalho do grupo (grupo + torneio)
@@ -2903,7 +2929,7 @@ function renderDashboard(container) {
             html += '<div data-mr-card="1"' + _spCard() + ' style="min-width:0;display:flex;flex-direction:column;gap:0.6rem;">' +
               _grupoHeadHtml(
                 (String(u.faseStr2 || '').toLowerCase().indexOf('final') !== -1 ? '🏆 ' : '') + u.faseStr2,
-                u.tName, u.color, '', true, u.tId, (u.m && u.m.id) || null
+                u.tName, u.color, '', true, u.tId, (u.m && u.m.id) || null, u.m || null
               ) +
               u.body +
             '</div>';
@@ -3196,7 +3222,7 @@ function renderDashboard(container) {
       _novList.forEach(function(it) {
         var _fp = _splitFase(it.phaseLabel || it.subLine || '');
         var _head = _grupoHeadHtml(_fp.group, it.tName, '#fbbf24', 'data-nov-head="inline"', true, it.tId,
-          (it.m && it.m.id) || null);
+          (it.m && it.m.id) || null, it.m || null);
         _novAntes = _spCards;
         _guarda(_novCard(it, _head));
       });
