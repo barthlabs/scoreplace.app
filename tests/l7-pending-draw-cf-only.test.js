@@ -16,6 +16,9 @@ ok(a.includes("action==='annul'")&&a.includes('t.pendingDraw=null')&&a.includes(
 ok(c.includes("_callCF('resolvePendingDraw'")&&!/AppStore\.mutate|_notifyDrawPersonalized/.test(c),'cliente só despacha a Function');
 ok(c.includes("Sorteio não anulado")&&c.includes("Sorteio já anulado"),'falha ou ausência do rascunho recebe retorno visual, nunca silêncio');
 ok(c.includes('_teamDrawReviewApproved')&&c.includes('delete window._teamDrawReviewApproved[String(tId)]'),'Anular também apaga a aprovação local para exigir nova decisão no próximo sorteio');
+const annulStart=b.indexOf('window._annulPendingDraw = function');
+const annul=b.slice(annulStart,b.indexOf('// v2.7.6:',annulStart));
+ok(annul.includes("var targetHash='#tournaments/'+encodeURIComponent(String(tId))")&&annul.includes("window.renderTournaments(container,String(tId))")&&!annul.includes('if(window._rerenderBracket) window._rerenderBracket(tId);'),'Anular retorna ao detalhe canônico do torneio, inclusive sem hashchange, em vez de renderizar a chave vazia');
 ok(draw.includes("kind: 'initial'")&&draw.includes('draft: _rascunhoDoSorteioInicial(t)')&&draw.includes('_refRascunhoInicialPrivado(ref)')&&draw.includes('_stageInitial'),'Sorteio inicial vai ao cofre privado antes de materializar a chave');
 ok(a.includes("pd.kind === 'initial'")&&a.includes('_aplicaRascunhoDoSorteioInicial(t, pd.draft)'),'Publicação aplica somente o rascunho derivado na transação');
 ok(/if \(d\.staged\) \{[\s\S]*?\} else \{[\s\S]*?_notifyDrawPersonalized/.test(d),'Rascunho não dispara notificação antes da publicação');

@@ -6696,7 +6696,13 @@ window._annulPendingDraw = function (tId) {
     // obrigatórias de dias/ordem e de estruturado/livre.
     if(window._teamDrawReviewApproved) delete window._teamDrawReviewApproved[String(tId)];
     if(window.showNotification) window.showNotification(out.changed ? 'Sorteio anulado' : 'Sorteio já anulado', out.changed ? 'O rascunho foi descartado e o torneio voltou ao estado anterior ao sorteio.' : 'Não havia um rascunho pendente para descartar.', 'info');
-    if(window._rerenderBracket) window._rerenderBracket(tId);
+    // A chave vazia não é uma tela útil após anular. Volta ao detalhe canônico do
+    // MESMO torneio, inclusive quando já estamos nessa hash (caso em que hashchange
+    // não dispara e a renderização explícita é necessária).
+    var targetHash='#tournaments/'+encodeURIComponent(String(tId));
+    if(window.location.hash!==targetHash) window.location.hash=targetHash;
+    var container=document.getElementById('view-container');
+    if(container&&typeof window.renderTournaments==='function') window.renderTournaments(container,String(tId));
   }).catch(function(e){
     if(window._warn) window._warn('[annulPendingDraw] CF falhou',e);
     var detail=(e&&(e.message||(e.details&&e.details.message)))||'Tente novamente.';
