@@ -693,27 +693,34 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     return _brtYmd(d.getTime());
   }
 
-  // Os DIAS do torneio, com a janela de cada um. Dia 1 começa na hora do startDate;
-  // os seguintes na MESMA hora do dia. O último termina na hora do endDate.
+  // Os DIAS do torneio, com a janela de cada um. `scheduleWindow` é uma
+  // decisão declarativa do organizador: não existe mais o atalho histórico de
+  // supor 22:00 nos dias intermediários. Cada data tem início e fim próprios.
   window._schJanelaTorneio = function (t) {
     t = t || {};
     var ini = _dtParts(t.startDate, '09:00');
     if (!ini) return null;
     var fim = _dtParts(t.endDate, '22:00');
     if (!fim || fim.ymd < ini.ymd) fim = { ymd: ini.ymd, hm: (t.endDate ? '22:00' : '22:00') };
-    var dias = [], ymd = ini.ymd, guarda = 0;
+    var configurados = t && t.scheduleWindow && Array.isArray(t.scheduleWindow.days) ? t.scheduleWindow.days : [];
+    var porDia = {};
+    configurados.forEach(function (item) {
+      var day = String(item && item.day || '').slice(0, 10), start = String(item && item.startTime || ''), end = String(item && item.endTime || '');
+      if (/^\d{4}-\d{2}-\d{2}$/.test(day) && /^\d{2}:\d{2}$/.test(start) && /^\d{2}:\d{2}$/.test(end)) porDia[day] = { start:start, end:end };
+    });
+    var dias = [], ymd = ini.ymd, guarda = 0, invalida = false;
     while (guarda++ < 8) {
       var ehUltimo = (ymd === fim.ymd);
-      var iniMs = _ms(ymd, ini.hm);
-      var fimMs = _ms(ymd, ehUltimo ? fim.hm : '22:00');
-      // Janela invertida/vazia (ex.: começa 09:00 e "termina" 08:00 no mesmo dia):
-      // não dá pra jogar em tempo negativo. Abre 12h a partir do início.
-      if (fimMs <= iniMs) fimMs = iniMs + 12 * 60 * _MIN;
-      dias.push({ ymd: ymd, iniMs: iniMs, fimMs: fimMs });
+      var legado = { start:ini.hm, end:(ehUltimo ? fim.hm : '22:00') }, janela = porDia[ymd] || legado;
+      var iniMs = _ms(ymd, janela.start), fimMs = _ms(ymd, janela.end);
+      // Janela vazia não vira silenciosamente 12 horas: é uma configuração
+      // inválida que impede aplicar a agenda e pede correção ao organizador.
+      if (fimMs <= iniMs) invalida = true;
+      dias.push({ ymd: ymd, iniMs: iniMs, fimMs: fimMs, startTime:janela.start, endTime:janela.end });
       if (ehUltimo) break;
       ymd = _addDias(ymd, 1);
     }
-    return { dias: dias, iniHm: ini.hm, fimHm: fim.hm };
+    return { dias: dias, iniHm: ini.hm, fimHm:fim.hm, invalida:invalida };
   };
 
   // A programação de categorias é declarativa: a organização pode colocar uma
@@ -753,7 +760,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       // agenda. Uma agenda explícita por categoria, porém, é justamente a
       // decisão do organizador que torna o planejamento determinístico.
       var temAgendaCategorias = Object.keys(window._schCategorySchedule(t)).length > 0;
-      if (!jan || !jan.dias.length || (jan.dias.length > 3 && !temAgendaCategorias)) return null;
+      if (!jan || jan.invalida || !jan.dias.length || (jan.dias.length > 3 && !temAgendaCategorias)) return null;
       var quadras = Math.max(1, parseInt(t.courtCount, 10) || (Array.isArray(t.courtNames) ? t.courtNames.length : 0) || 1);
       var all = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (Array.isArray(t.matches) ? t.matches : []);
       var jogos = (all || []).filter(function (m) {
@@ -788,15 +795,20 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         var agendas = porChave[keys[0]].agendas;
         keys.forEach(function (key, index) { porChave[key].agenda = agendas[Math.min(agendas.length - 1, Math.floor(index * agendas.length / keys.length))]; });
       });
+      // A organização escolhe se conclui uma categoria antes da seguinte ou se
+      // intercala R1 de todas, depois R2 de todas etc. A preferência pertence à
+      // agenda das categorias e não ao modo estruturado/livre dos confrontos.
+      var ordemExecucao = t.categorySchedule && t.categorySchedule.executionOrder === 'rounds' ? 'rounds' : 'categories';
       chaves.sort(function (a, b) {
         var A = porChave[a], B = porChave[b];
         var ad = A.agenda && indiceDia[A.agenda.day] != null ? indiceDia[A.agenda.day] : 0;
         var bd = B.agenda && indiceDia[B.agenda.day] != null ? indiceDia[B.agenda.day] : 0;
         var ao = A.agenda ? A.agenda.order : 9999, bo = B.agenda ? B.agenda.order : 9999;
+        if (ordemExecucao === 'rounds') return (ad - bd) || (A.fase - B.fase) || (A.rodada - B.rodada) || (ao - bo) || A.categoria.localeCompare(B.categoria);
         return (ad - bd) || (ao - bo) || A.categoria.localeCompare(B.categoria) || (A.fase - B.fase) || (A.rodada - B.rodada);
       });
 
-      var slots = [], cursores = jan.dias.map(function (dia) { return dia.iniMs; }), onda = 0, estourou = false, fimMs = cursores[0];
+      var slots = [], cursores = jan.dias.map(function (dia) { return dia.iniMs; }), onda = 0, estourou = false, fimMs = cursores[0], extraPorDia = jan.dias.map(function () { return 0; });
       // A memória é por categoria: uma espera em Fem Light não compra nem
       // consome descanso em Masc Light. O número guarda a última onda em que a
       // dupla jogou; quem está há mais ondas sem jogar vem primeiro na rodada
@@ -851,10 +863,14 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         }
         proximaOndaPorCategoria[categoriaDescanso] = ondaCategoria;
         ondas.forEach(function (o) {
-          // Categoria marcada para um dia não pode vazar para outro: o plano
-          // acusa que não cabe, mas não troca Feminino de quinta para sexta.
+          // Categoria marcada para um dia nunca vaza para outro — nem para uma
+          // hora depois do encerramento. O plano parcial só serve de diagnóstico;
+          // a aplicação é bloqueada e informa exatamente o tempo adicional.
           if (cursor + slotMin * _MIN > jan.dias[diaIdx].fimMs) {
             estourou = true;
+            extraPorDia[diaIdx] += slotMin * _MIN;
+            onda++;
+            return;
           }
           o.jogos.forEach(function (m) {
             slots.push({ matchId: String(m.id), ms: cursor, iso: new Date(cursor).toISOString(), dia: diaIdx, onda: onda });
@@ -867,7 +883,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       });
       return {
         slots: slots, quadras: quadras, dias: jan.dias.length,
-        cabe: !estourou, fimMs: fimMs,
+        cabe: !estourou, fimMs: fimMs, extraPorDia:extraPorDia,
+        extraMs: extraPorDia.reduce(function (sum, value) { return sum + value; }, 0),
+        executionOrder:ordemExecucao,
         // slotMin da 1ª fase — só informativo (cada fase tem o seu, ver o loop acima)
         slotMin: window._minutosDaPartida(t, window._faseDoTorneio(t, (jogos[0] && jogos[0].phaseIndex) || 0)) || 30
       };
@@ -880,7 +898,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   // desta régua existir, e o único jeito de ter data lá era alguém ter combinado.
   window._schAplicarGrade = function (t, alterados) {
     var plano = window._schGradeEstimada(t);
-    if (!plano || !plano.slots.length) return 0;
+    if (!plano || !plano.cabe || !plano.slots.length) return 0;
     var n = 0;
     plano.slots.forEach(function (s) {
       var m = _schFindMatch(t, s.matchId);
@@ -1607,7 +1625,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var _gradeBtn = _plano ? (
       '<button type="button" onclick="window._schRecalcularGrade(\'' + _attr(t.id) + '\')" class="btn" style="width:100%;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.45);color:var(--sp-c-fbbf24,#fbbf24);font-weight:800;border-radius:11px;padding:10px;font-size:0.85rem;margin-bottom:10px;">🧮 Recalcular horários estimados</button>' +
       '<div style="font-size:0.7rem;color:var(--text-muted);text-align:center;margin-bottom:12px;">' + _plano.slots.length + ' jogo(s) · ' + _plano.quadras + ' quadra(s) · ' + _plano.dias + ' dia(s)' +
-        (_plano.cabe ? '' : ' · ⚠️ não cabe na janela do torneio') + '. Datas já marcadas por você ou pelos jogadores não são tocadas.</div>'
+        (_plano.cabe ? '' : ' · ⚠️ faltam ' + Math.ceil((_plano.extraMs || 0) / _MIN) + ' min nas janelas configuradas') + '. Datas já marcadas por você ou pelos jogadores não são tocadas.</div>'
     ) : '';
     var body = '<div style="padding:1rem 1.1rem;">' +
       '<div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:12px;">Toque num jogo pra apontar a data/hora, ou pra acompanhar o que os jogadores propuseram.</div>' +
@@ -1623,6 +1641,11 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   // que é o preço conhecido de GRAVAR a estimativa em vez de recalculá-la a cada render.
   window._schRecalcularGrade = function (tId) {
     var t = _findT(tId); if (!t || !_isOrg(t)) return;
+    var plano = window._schGradeEstimada(t);
+    if (plano && !plano.cabe) {
+      if (typeof showNotification === 'function') showNotification('Agenda não cabe', 'Faltam ' + Math.ceil((plano.extraMs || 0) / _MIN) + ' min nas janelas dos dias configurados. Nenhum jogo será levado para fora do evento.', 'error');
+      return;
+    }
     var _alterados = [];
     var n = window._schAplicarGrade(t, _alterados);
     if (!n) {

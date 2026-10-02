@@ -995,6 +995,31 @@ function _requireExplicitTeamDrawPlan(t, tId) {
   if (!complete) {
     throw _drawFail('failed-precondition', 'A organização precisa distribuir todas as categorias pelos dias e definir a ordem antes de sortear.', { tId, categories:categories.length });
   }
+  // A data define quais dias existem; o horário de funcionamento de cada dia
+  // é uma decisão separada do organizador. Exigir ambas impede o velho padrão
+  // silencioso de estender a agenda até 22h (ou para um terceiro dia).
+  const windows = t.scheduleWindow && Array.isArray(t.scheduleWindow.days) ? t.scheduleWindow.days : [];
+  const validWindows = new Set();
+  windows.forEach(item => {
+    const day = String(item && item.day || '').slice(0, 10);
+    const startTime = String(item && item.startTime || '');
+    const endTime = String(item && item.endTime || '');
+    if (/^\d{4}-\d{2}-\d{2}$/.test(day) && /^\d{2}:\d{2}$/.test(startTime) && /^\d{2}:\d{2}$/.test(endTime) && endTime > startTime) validWindows.add(day);
+  });
+  const calendarDays = [];
+  if (start) {
+    let cursor = start, guard = 0;
+    while (guard++ < 8) {
+      calendarDays.push(cursor);
+      if (cursor === end) break;
+      const next = new Date(cursor + 'T12:00:00Z');
+      next.setUTCDate(next.getUTCDate() + 1);
+      cursor = next.toISOString().slice(0, 10);
+    }
+  }
+  if (!calendarDays.length || !calendarDays.every(day => validWindows.has(day))) {
+    throw _drawFail('failed-precondition', 'A organização precisa informar início e fim de cada dia do torneio antes de sortear.', { tId, days:calendarDays.length });
+  }
 }
 
 exports.drawRound = onCall(async (request) => {
@@ -3766,7 +3791,7 @@ const _CAMPOS_CONFIG_TORNEIO = new Set([
   'ligaInactivity','ligaInactivityX','allowSelfDeactivation','ligaOpenEnrollment',
   'ligaRoundFormat','ligaDrawMode','ligaTurnos','ligaRRSchedule',
   'ligaSeasonMonths','elimRankingType','gruposCount','gruposClassified','gruposEqualOnly','turnos',
-  'teamCompetition','categorySchedule',
+  'teamCompetition','categorySchedule','scheduleWindow',
   'gruposSeedVip','gruposSeedCategory','drawMode','reiRainhaGroupsBy','monarchAdvanceToElim',
   /* ⛔ COMO A CHAVE RESOLVE O RESTO (repescagem · folga · sobra única). É configuração declarativa
    * e escolha do organizador, então pertence a esta lista — sem ela, criar ou editar um torneio

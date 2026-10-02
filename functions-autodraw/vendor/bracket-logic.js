@@ -6627,7 +6627,7 @@ window._openPendingInitialSchedule = function (tId) {
     overlay.innerHTML = '<div role="dialog" aria-modal="true" style="width:min(1600px,calc(100vw - 36px));max-width:none;margin:0 auto;background:#111827;border:1px solid rgba(56,189,248,.5);border-radius:16px;padding:16px;color:var(--text-main);box-shadow:0 24px 70px rgba(0,0,0,.55)">' +
       '<div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start"><div><h2 style="margin:0;font-size:1.05rem">📍 Planejar antes de publicar</h2><p style="margin:5px 0 12px;font-size:.82rem;line-height:1.4;color:#cbd5e1">Cada horário aparece uma vez na régua vertical à esquerda. Arraste um jogo sobre outro para trocar seus horários e quadras.</p></div><button type="button" data-pis-close class="btn btn-outline">← Voltar</button></div>' +
       '<div style="font-size:.76rem;color:#94a3b8;margin-bottom:6px">' + p.items.length + ' jogos · ' + p.courts.length + ' quadras. Cada linha é um horário; cada coluna é uma quadra.</div>' +
-      (!p.cabe ? '<div style="margin:0 0 10px;color:#fbbf24;font-size:.82rem;font-weight:700">A agenda não cabe no dia atribuído às categorias. Ajuste dias, ordem, duração ou quadras antes de aplicar.</div>' : '') + board.html +
+      (!p.cabe ? '<div style="margin:0 0 10px;color:#fbbf24;font-size:.82rem;font-weight:700">A agenda não cabe nas janelas configuradas: faltam ' + Math.ceil((p.extraMs || 0) / 60000) + ' min. Nenhum jogo será levado para fora dos dias/horários do evento.</div>' : '') + board.html +
       '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px"><button type="button" data-pis-apply class="btn btn-primary"' + (!p.cabe ? ' disabled aria-disabled="true" style="opacity:.45;cursor:not-allowed"' : '') + '>Aplicar agenda no rascunho</button></div></div>';
     overlay.querySelector('[data-pis-close]').onclick = function () { overlay.remove(); };
     Array.prototype.forEach.call(overlay.querySelectorAll('[data-pis-day]'), function (control) { control.onclick = function () { activeDay = control.getAttribute('data-pis-day'); render(); }; });
@@ -6645,7 +6645,7 @@ window._openPendingInitialSchedule = function (tId) {
     });
     overlay.querySelector('[data-pis-apply]').onclick = function (event) {
       var button = event.currentTarget, latest = plan();
-      if (!latest.cabe) { if (window.showNotification) window.showNotification('Agenda não cabe', 'Ajuste dias, ordem, duração ou quadras antes de salvar.', 'error'); return; }
+      if (!latest.cabe) { if (window.showNotification) window.showNotification('Agenda não cabe', 'Faltam ' + Math.ceil((latest.extraMs || 0) / 60000) + ' min nas janelas configuradas. Ajuste dias, horários, ordem, duração ou quadras antes de salvar.', 'error'); return; }
       button.disabled = true; button.textContent = 'Salvando agenda…';
       window._callCF('setPendingInitialSchedule', { tournamentId:String(t.id), jogos:latest.items.map(function (i) { return { matchId:i.matchId, court:i.court, scheduledAt:i.scheduledAt, scheduleLocked:!!i.scheduleLocked }; }) }, 'Entre na sua conta para salvar a agenda.')
         .then(function () { if (window.showNotification) window.showNotification('Agenda do rascunho salva', 'A chave continua em revisão até você publicar.', 'success'); overlay.remove(); if (window._rerenderBracket) window._rerenderBracket(t.id); })

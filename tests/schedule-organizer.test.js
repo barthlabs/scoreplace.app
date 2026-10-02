@@ -128,11 +128,47 @@ ok(descansoPorJogo['AB-1'] < descansoPorJogo['CD-1'] && descansoPorJogo['AB-2'] 
 const tooShort = Object.assign({}, categoryDays, { endDate:'2026-10-22T18:10' });
 ok(W._schGradeEstimada(tooShort).cabe === false && W._operationalSchedulePlan(tooShort).cabe === false,
   'uma categoria que não cabe no dia bloqueia a aplicação da agenda');
+const janelaFechada = {
+  startDate:'2026-10-22T18:00', endDate:'2026-10-23T23:00', courtCount:1, gameDuration:30,
+  scheduleWindow:{ version:1, days:[
+    { day:'2026-10-22', startTime:'18:00', endTime:'19:00' },
+    { day:'2026-10-23', startTime:'18:00', endTime:'19:00' }
+  ] },
+  categorySchedule:{ version:1, slots:[{ category:'Fem Light', day:'2026-10-22', order:1 }] },
+  matches:[
+    { id:'J1', category:'Fem Light', round:1, p1:'A', p2:'B' },
+    { id:'J2', category:'Fem Light', round:1, p1:'C', p2:'D' },
+    { id:'J3', category:'Fem Light', round:1, p1:'E', p2:'F' }
+  ]
+};
+const gradeJanelaFechada = W._schGradeEstimada(janelaFechada);
+ok(gradeJanelaFechada && gradeJanelaFechada.cabe === false && gradeJanelaFechada.extraMs === 30 * 60000 &&
+  gradeJanelaFechada.slots.every(function (slot) { return slot.ms < new Date('2026-10-22T19:00:00-03:00').getTime(); }),
+  'a grade nunca cria jogo depois do fim do dia e informa exatamente o tempo adicional');
+ok(W._operationalSchedulePlan(janelaFechada).cabe === false && W._operationalSchedulePlan(janelaFechada).extraMs === 30 * 60000,
+  'a agenda operacional também bloqueia uma distribuição que ultrapassaria a janela');
+const sequenciaCategorias = {
+  startDate:'2026-10-22T18:00', endDate:'2026-10-22T23:00', courtCount:1, gameDuration:30,
+  scheduleWindow:{ version:1, days:[{ day:'2026-10-22', startTime:'18:00', endTime:'23:00' }] },
+  categorySchedule:{ version:1, executionOrder:'categories', slots:[
+    { category:'Light', day:'2026-10-22', order:1 }, { category:'Power', day:'2026-10-22', order:2 }
+  ] },
+  matches:[
+    { id:'L1', category:'Light', round:1, p1:'A', p2:'B' }, { id:'L2', category:'Light', round:2, p1:'C', p2:'D' },
+    { id:'P1', category:'Power', round:1, p1:'E', p2:'F' }, { id:'P2', category:'Power', round:2, p1:'G', p2:'H' }
+  ]
+};
+function sequenceOf(grade) { return grade.slots.slice().sort(function (a, b) { return a.ms - b.ms; }).map(function (slot) { return slot.matchId; }).join(','); }
+ok(sequenceOf(W._schGradeEstimada(sequenciaCategorias)) === 'L1,L2,P1,P2',
+  'modo por categoria conclui a primeira categoria antes de começar a segunda');
+const sequenciaRodadas = Object.assign({}, sequenciaCategorias, { categorySchedule:Object.assign({}, sequenciaCategorias.categorySchedule, { executionOrder:'rounds' }) });
+ok(sequenceOf(W._schGradeEstimada(sequenciaRodadas)) === 'L1,P1,L2,P2',
+  'modo por rodadas faz R1 de todas as categorias antes de iniciar R2');
 ok(/categorySchedule/.test(fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'tournaments-draw.js'), 'utf8')),
   'a revisão pré-sorteio permite gravar dia e ordem de cada categoria');
 const functionsSource = fs.readFileSync(path.join(__dirname, '..', 'functions-autodraw', 'index.js'), 'utf8');
-ok(/'teamCompetition','categorySchedule'/.test(functionsSource) && /'teamCompetition','categorySchedule','turnos'/.test(functionsSource),
-  'o servidor aceita a agenda antes do sorteio e a congela junto com a estrutura depois da chave');
+ok(/'teamCompetition','categorySchedule','scheduleWindow'/.test(functionsSource) && /'teamCompetition','categorySchedule','turnos'/.test(functionsSource),
+  'o servidor aceita janelas diárias junto da agenda antes do sorteio e preserva a estrutura depois da chave');
 const drawSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'tournaments-draw.js'), 'utf8');
 ok(/'courtNames','courtOrder'/.test(functionsSource) && /data-team-court-card/.test(drawSource) && /draggable="true"/.test(drawSource),
   'a organização define a prioridade das quadras com cards arrastáveis antes do sorteio');
@@ -140,6 +176,8 @@ ok(/data-team-day-lane/.test(drawSource) && /data-team-category-source/.test(dra
   'categorias podem ser arrastadas para um ou mais dias e removidas de um dia específico');
 ok(/data-team-toggle-group="mode"/.test(drawSource) && /wireToggle\('mode'/.test(drawSource),
   'o modo estruturado/livre usa toggle com explicação dinâmica da escolha ativa');
+ok(/data-team-toggle-group="execution"/.test(drawSource) && /executionOrder:selectedExecutionOrder/.test(drawSource) && /data-team-day-start/.test(drawSource),
+  'a mesma tela define sequência por categoria/rodadas e início/fim de cada dia');
 ok(/var selectedMode = modeConfirmed && \(cfg\.schedule\.mode === 'structured' \|\| cfg\.schedule\.mode === 'free'\) \? cfg\.schedule\.mode : 'free';/.test(drawSource),
   'Livre é o padrão no primeiro sorteio; uma escolha já confirmada permanece');
 ok((drawSource.match(/background:#182235!important;color:var\(--text-bright\)!important/g) || []).length >= 2,

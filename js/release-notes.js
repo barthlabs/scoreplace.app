@@ -1,3 +1,4 @@
+// 2.3.230 — O organizador define início e fim de cada dia do torneio antes do sorteio. A agenda não cria jogos fora dessas janelas, informa os minutos adicionais necessários quando não cabe e permite escolher categorias concentradas ou alternadas por rodadas.
 // 2.3.229 — O primeiro sorteio por times começa em Livre; a organização pode trocar para Estruturado. A agenda prioriza, dentro de cada categoria, quem aguardou mais antes de conceder nova folga a uma dupla, e os comandos Voltar/Cancelar da configuração têm contraste legível.
 // 2.3.228 — O aviso de atualização agora se encerra quando servidor, JavaScript e shell já estão na mesma versão; uma pílula antiga não pode continuar oferecendo “Nova versão” depois de o app estar atualizado.
 // 2.3.227 — Configuração do sorteio por times foi compactada: toggles com explicação dinâmica e cards arrastáveis para dias/categorias e prioridade das quadras; uma categoria pode continuar suas rodadas em mais de um dia.
