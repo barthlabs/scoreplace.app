@@ -104,6 +104,11 @@ function cenario(opcoes) {
   fs.mkdirSync(path.join(repo, 'scripts'));
   fs.copyFileSync(path.join(RAIZ, 'scripts', 'deploy-hosting.sh'), path.join(repo, 'scripts', 'deploy-hosting.sh'));
   fs.chmodSync(path.join(repo, 'scripts', 'deploy-hosting.sh'), 0o755);
+  // Este laboratório prova a ordem dos gates com ferramentas falsas. A credencial
+  // persistente real é coberta na suíte própria; aqui o helper existe só para que o
+  // `source` não interrompa a cena antes do preflight que está sob teste.
+  fs.writeFileSync(path.join(repo, 'scripts', 'firebase-credencial-persistente.sh'),
+    '#!/bin/sh\nsp_preparar_credencial_firebase() { :; }\n');
   // gates do preflight que rodam no REPO (não na cópia): version-ahead
   // ⛔ 04/set/2026 — ESTE STUB FALTAVA E DERRUBOU O TESTE INTEIRO. O passo 1.8 do script
   // passou a chamar `scripts/revisar.sh diff` (revisão cruzada), e a árvore mínima daqui só

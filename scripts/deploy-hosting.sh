@@ -60,56 +60,8 @@ DRY=0
 # de usuário para achar, ela usa a conta de serviço. Mexe SÓ nisso — trocar `HOME` também
 # resolveria, mas levaria junto cache do npm e tudo o mais.
 #
-# ⚠️ Só entra quando a chave durável existe. Sem ela, o comportamento antigo continua, e a
-# mensagem de "não autenticado" segue explicando o caminho que dura.
-if [ -n "${GOOGLE_APPLICATION_CREDENTIALS:-}" ] && [ -r "${GOOGLE_APPLICATION_CREDENTIALS}" ]; then
-  export _SP_RAIZ="$(cd "$(dirname "$0")/.." && pwd)"
-  # ⛔ E SÓ SE ELA REALMENTE CONSEGUIR PUBLICAR. MEDIDO em 14/set/2026: a conta de serviço
-  # autentica, mas não tem acesso aos SEGREDOS que três funções declaram — e o deploy morre
-  # com 403 do Secret Manager. Esconder a sessão de usuário nesse caso troca um problema por
-  # outro: some a credencial que funciona. O teste abaixo é uma leitura barata que usa
-  # exatamente a permissão que falta; se passar, a conta de serviço assume (e não expira). Se
-  # não, o script segue com a sessão de usuário e DIZ por quê, em vez de falhar no meio.
-  _SP_CFG="$(mktemp -d)"
-  # ⛔ O TESTE TEM DE COBRIR TUDO QUE O DEPLOY USA, não só o que me mordeu da última vez.
-  # MEDIDO em 14/set/2026: a conta de serviço passou no teste do segredo e MESMO ASSIM o deploy
-  # morreu depois, em `cloudbilling.googleapis.com ... 403` — a API de faturamento está
-  # DESATIVADA no projeto, e a CLI a consulta antes de subir função. Um teste que valida metade
-  # dá confiança falsa e falha no meio, que é o pior lugar para falhar.
-  # ⛔ A SEGUNDA CONDIÇÃO É A API DE FATURAMENTO, e ela não se testa pela CLI: a consulta só
-  # acontece lá dentro do deploy. MEDIDO em 14/set/2026: a conta de serviço passou no teste do
-  # segredo e o deploy morreu depois em `cloudbilling.googleapis.com ... 403` — a API está
-  # DESATIVADA no projeto. Um teste que valida metade dá confiança falsa e falha no meio.
-  if XDG_CONFIG_HOME="$_SP_CFG" firebase --project "${PROJECT:-scoreplace-app}" \
-       functions:secrets:get SIGNIN_API_KEY >/dev/null 2>&1 \
-     && _SP_RAIZ="$(cd "$(dirname "$0")/.." && pwd)" && node -e '
-       const {GoogleAuth}=require(process.env._SP_RAIZ+"/functions/node_modules/google-auth-library");
-       const timer=setTimeout(()=>process.exit(1),15000);
-       (async()=>{const a=new GoogleAuth({scopes:["https://www.googleapis.com/auth/cloud-platform"]});
-        const t=(await (await a.getClient()).getAccessToken()).token;
-        const r=await fetch("https://serviceusage.googleapis.com/v1/projects/scoreplace-app/services/cloudbilling.googleapis.com",
-          {headers:{Authorization:"Bearer "+t}});
-        const j=await r.json(); clearTimeout(timer);
-        process.exit(r.ok && j.state==="ENABLED" ? 0 : 1);})().catch(()=>{clearTimeout(timer);process.exit(1);});' >/dev/null 2>&1; then
-    export XDG_CONFIG_HOME="$_SP_CFG"
-    trap 'rm -rf "$_SP_CFG"' EXIT
-    echo "▸ credencial: conta de serviço ($(basename "$GOOGLE_APPLICATION_CREDENTIALS")) — não expira"
-  else
-    rm -rf "$_SP_CFG"
-    # ⛔ DIZER O QUE DE FATO FALTOU, não o último motivo que eu conheci. Esta mensagem já
-    # culpou os segredos quando o que faltava era a API de faturamento — e mandar consertar a
-    # coisa errada custa mais caro que não dizer nada.
-    echo "▸ credencial: sessão de usuário (a conta de serviço não passou no teste)"
-    if ! XDG_CONFIG_HOME="$_SP_CFG" firebase --project scoreplace-app \
-         functions:secrets:get SIGNIN_API_KEY >/dev/null 2>&1; then
-      echo "  Falta: papel de Secret Manager para a conta de serviço."
-    else
-      echo "  Falta: a API cloudbilling.googleapis.com está DESATIVADA no projeto — a CLI a"
-      echo "  consulta antes de subir função, e só a sessão de usuário passa por ela hoje."
-    fi
-    echo "  Enquanto isso, publicar depende de uma sessão que expira."
-  fi
-fi
+source "$RAIZ/scripts/firebase-credencial-persistente.sh"
+sp_preparar_credencial_firebase "$RAIZ" "${PROJECT:-scoreplace-app}"
 
 
 # ── L6.R2.3 · UMA CÓPIA FIEL, MONTADA NUM LUGAR SÓ ───────────────────────────────────
@@ -351,9 +303,8 @@ if ! "$RAIZ/scripts/revisar.sh" diff; then
 fi
 
 # ── 1.85 · SESSÃO DO FIREBASE ANTES DA SUÍTE ─────────────────────────────────
-# A suíte custa minutos e o upload depende da sessão local do Firebase CLI. Descobrir um
-# token expirado só depois dela deixa o main alinhado mas o site antigo. Esta consulta é de
-# leitura e usa a mesma sessão que o upload usará em seguida.
+# A suíte custa minutos e o upload depende da conta de serviço já validada no início. Esta
+# consulta é uma segunda prova, usando o mesmo cofre isolado do upload.
 fase "revisão cruzada"
 echo "▸ conferindo a sessão do Firebase…"
 # ⛔ NÃO CONFIAR NO EXIT CODE DO `firebase --json`. MEDIDO em 12/set/2026, com a sessão VÁLIDA:
@@ -370,25 +321,8 @@ if ! printf '%s' "$_FB_SESSAO" | grep -q '"status": *"success"'; then
   echo
   echo "✗ FIREBASE NÃO AUTENTICADO — nada foi testado, empurrado ou publicado."
   echo
-  # ⛔ NÃO EMPURRAR DE VOLTA PRA CREDENCIAL QUE EXPIRA. `firebase login` é sessão de USUÁRIO,
-  # e credencial de usuário do Google expira POR DESENHO (política de reautenticação). Mandar
-  # rodar `--reauth` conserta por hoje e traz o mesmo bloqueio na semana que vem — foi o que
-  # aconteceu, e o dono tinha razão de reclamar. O caminho que DURA é conta de serviço.
-  if [ -z "${GOOGLE_APPLICATION_CREDENTIALS:-}" ]; then
-    echo "  A causa provável: não há credencial DURÁVEL ligada (GOOGLE_APPLICATION_CREDENTIALS vazia)."
-    echo "  Resolva de uma vez — conta de serviço, que não expira:"
-    echo "      bash scripts/credencial-duradoura.sh --apply --ligar-no-shell"
-    echo
-    echo "  (só a primeira vez pede um  gcloud auth login)"
-  else
-    echo "  Há credencial durável ligada:"
-    echo "      $GOOGLE_APPLICATION_CREDENTIALS"
-    echo "  Então o problema é OUTRO — confira se o arquivo existe, se é legível e se a conta"
-    echo "  de serviço tem os papéis (rode o script acima sem --apply pra ver a lista)."
-  fi
-  echo
-  echo "  Saída para hoje, se estiver com pressa: firebase login --reauth"
-  echo "  Depois repita: scripts/deploy-hosting.sh"
+  echo "  A conta de serviço persistente falhou depois da validação inicial."
+  echo "  Corrija as permissões dela; este fluxo nunca deve usar firebase login --reauth."
   exit 1
 fi
 echo "  ✓ sessão do Firebase válida"

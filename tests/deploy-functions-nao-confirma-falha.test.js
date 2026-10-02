@@ -11,7 +11,17 @@ const { spawnSync } = require('child_process');
 const raiz = path.join(__dirname, '..');
 const falso = fs.mkdtempSync(path.join(os.tmpdir(), 'scoreplace-firebase-falso-'));
 const bin = path.join(falso, 'firebase');
-fs.writeFileSync(bin, '#!/usr/bin/env bash\nprintf "%s\\n" "$FIREBASE_FALSO_SAIDA"\nexit "$FIREBASE_FALSO_EXIT"\n');
+const chave = path.join(falso, 'service-account.json');
+const hook = path.join(falso, 'firebase-auth-hook.js');
+fs.writeFileSync(chave, '{}\n');
+fs.writeFileSync(bin,
+  '#!/usr/bin/env bash\n' +
+  'case "$*" in *"functions:secrets:get"*) exit 0;; esac\n' +
+  'printf "%s\\n" "$FIREBASE_FALSO_SAIDA"\nexit "$FIREBASE_FALSO_EXIT"\n');
+// O helper persistente é exercitado sem rede: o preload troca somente aquisição do token
+// e consulta de billing. O deploy propriamente dito continua passando pelo Firebase falso.
+fs.writeFileSync(hook,
+  "const Module=require('module');const load=Module._load;Module._load=function(r){if(r==='google-auth-library'||/google-auth-library$/.test(r))return{GoogleAuth:class{async getClient(){return{getAccessToken:async()=>({token:'teste'})}}}};return load.apply(this,arguments)};global.fetch=async()=>({ok:true,json:async()=>({state:'ENABLED'})});\n");
 fs.chmodSync(bin, 0o755);
 
 function executar(saida, codigo) {
@@ -19,8 +29,9 @@ function executar(saida, codigo) {
     PATH: falso + path.delimiter + process.env.PATH,
     FIREBASE_FALSO_SAIDA: saida,
     FIREBASE_FALSO_EXIT: String(codigo),
+    GOOGLE_APPLICATION_CREDENTIALS: chave,
+    NODE_OPTIONS: '-r ' + hook,
   });
-  delete env.GOOGLE_APPLICATION_CREDENTIALS;
   return spawnSync('bash', ['scripts/deploy-functions.sh', 'main'], { cwd: raiz, env, encoding: 'utf8' });
 }
 

@@ -9,6 +9,8 @@
  */
 const assert = require('assert/strict'), fs = require('fs'), path = require('path');
 const sh = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'deploy-hosting.sh'), 'utf8');
+const functionsSh = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'deploy-functions.sh'), 'utf8');
+const credential = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'firebase-credencial-persistente.sh'), 'utf8');
 let ok = 0; const must = (v, m) => { assert.ok(v, m); ok++; console.log('  ✓ ' + m); };
 
 must(/_FB_SESSAO="\$\(firebase projects:list --json 2>\/dev\/null \|\| true\)"/.test(sh),
@@ -22,6 +24,17 @@ must(!/if ! firebase projects:list --json >\/dev\/null 2>&1; then/.test(sh),
 must(/FIREBASE NÃO AUTENTICADO/.test(sh), 'a trava continua existindo — o que mudou é COMO ela decide');
 must(sh.indexOf('conferindo a sessão do Firebase') < sh.indexOf('FIREBASE NÃO AUTENTICADO'),
   'e ela continua ANTES da suíte: descobrir sessão morta depois de minutos de teste é o que ela evita');
+
+must(/sp_preparar_credencial_firebase/.test(sh) && /sp_preparar_credencial_firebase/.test(functionsSh),
+  'hosting e Functions passam pela mesma trava de credencial persistente');
+must(/XDG_CONFIG_HOME="\$cofre" firebase/.test(credential),
+  'a trava isola a CLI do cofre OAuth de usuário antes de validar a conta de serviço');
+must(/deploy-sa\.json/.test(credential),
+  'a chave persistente padrão é conhecida mesmo em shell não interativo');
+must(!/sessão de usuário \(a conta de serviço não passou no teste\)/.test(sh + functionsSh),
+  '⛔ não existe fallback silencioso para a sessão OAuth expirável');
+must(!/Saída para hoje, se estiver com pressa: firebase login --reauth/.test(sh),
+  'e o publicador não recomenda reautenticação temporária como saída');
 
 // ⛔ E o MESMO CLI sai não-zero DEPOIS de publicar: com `set -e` o script morria após o upload,
 // deixando o ar novo e o `main` atrás — o oposto do que a trava de alinhamento protege.
