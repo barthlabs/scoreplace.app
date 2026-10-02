@@ -2096,7 +2096,35 @@ function renderTournaments(container, tournamentId = null) {
         // (inscrições já encerradas pelo organizador) pula direto pro sorteio.
         var _inscricoesAbertas = !!(_tSort && (_tSort.status !== 'closed' || _tSort._autoClosedByDeadline));
         var _isLigaSort = !!(window._isLigaFormat && _tSort && window._isLigaFormat(_tSort));
+        var _teamDrawCfg = window.ScoreplaceTeamCompetition && window.ScoreplaceTeamCompetition.configurationForTournament
+            ? window.ScoreplaceTeamCompetition.configurationForTournament(_tSort)
+            : (_tSort && (_tSort.teamCompetition || ((_tSort.phases || [])[0] || {}).teamCompetition));
         if (window._dtrace) window._dtrace('gate', { skipGates: !!skipGates, abertas: !!_inscricoesAbertas, lateMode: !!_lateMode, liga: !!_isLigaSort });
+        // Competição por times tem QUATRO decisões obrigatórias: escopo (todos/presentes),
+        // estruturado/livre, dias+ordem das categorias e prioridade das quadras. Elas são uma
+        // única tela e antecedem qualquer painel ou chamada do sorteio — nunca uma pergunta de
+        // presença isolada seguida de defaults silenciosos.
+        if (!skipGates && _teamDrawCfg && _teamDrawCfg.enabled === true && typeof window._showTeamCompetitionDrawReview === 'function') {
+            var _closeTeamDraw = _inscricoesAbertas && !_lateMode;
+            window._showTeamCompetitionDrawReview(tId, {
+                includePresenceChoice: !_isLigaSort,
+                onCancel: function () { if (typeof window._drawBtnDone === 'function') window._drawBtnDone(); },
+                onReady: function (choice) {
+                    var scope = choice && choice.scope === 'present' ? 'present' : 'all';
+                    if (window._setDrawDecision) window._setDrawDecision(tId, { scope:scope });
+                    if (scope === 'present') {
+                        var current = window._findTournamentById ? window._findTournamentById(tId) : _tSort;
+                        var moved = current && window._moveAbsentToWaitlistForPresentDraw ? window._moveAbsentToWaitlistForPresentDraw(current) : 0;
+                        if (moved > 0 && typeof showNotification !== 'undefined') showNotification('Sorteio entre presentes', moved + ' ausente(s) irão para a lista de espera.', 'info');
+                    }
+                    var proceed = function () { _startDraw(); };
+                    if (!_closeTeamDraw) { proceed(); return; }
+                    if (typeof window._setTournamentEnrollmentStatus !== 'function') { if (typeof window._drawBtnDone === 'function') window._drawBtnDone(); return; }
+                    window._setTournamentEnrollmentStatus(tId, 'close', { forDraw:true }).then(function (saved) { if (saved && saved.changed !== false) proceed(); else if (typeof window._drawBtnDone === 'function') window._drawBtnDone(); });
+                }
+            });
+            return;
+        }
         // v1.3.85 (dono): a pergunta "sortear entre os PRESENTES ou entre TODOS" é a PRIMEIRA do
         // fluxo canônico de QUALQUER torneio PRESENCIAL (não-Liga), independente de lateMode. Num
         // torneio de 1 dia, incluir ausentes na chave frequentemente INVIABILIZA o torneio (vira

@@ -1992,7 +1992,7 @@ function renderBracket(container, tournamentId, isInline) {
       ${hasContent ? `<button class="btn btn-secondary btn-sm hover-lift no-print" onclick="window._printTournament('${_tIdSafe}')">🖨️ Imprimir</button>` : '<span></span>'}
       ${hasContent ? `<button class="btn btn-secondary btn-sm hover-lift" onclick="window._exportTournamentCSV('${_tIdSafe}')">📊 CSV</button>` : '<span></span>'}
       ${hasContent ? `<button class="btn btn-secondary btn-sm hover-lift no-print" onclick="window._tvMode('${_tIdSafe}')">📺 Modo TV</button>` : '<span></span>'}
-      ${isOrg && !hasContent ? `<button class="btn btn-primary btn-sm hover-lift" style="grid-column:span 2;" onclick="window.generateDrawFunction('${_tIdSafe}')">🎲 Realizar Sorteio</button>` : ''}
+      ${isOrg && !hasContent ? `<button class="btn btn-primary btn-sm hover-lift" style="grid-column:span 2;" onclick="if(window._handleSortearClick)window._handleSortearClick('${_tIdSafe}',false);else window.generateDrawFunction('${_tIdSafe}')">🎲 Realizar Sorteio</button>` : ''}
       ${/* Reset + Simular fase: SÓ no SB e só pro dev (removidos dos torneios normais). */ ''}
       ${(hasContent && window._isSandboxTournament && window._isSandboxTournament(t) && typeof window._isTestIdentity === 'function' && window._isTestIdentity()) ? `<button class="btn btn-warning btn-sm hover-lift no-print" style="grid-column:span 2;" onclick="window._resetTournamentToEnrollment('${_tIdSafe}')" title="SB: re-sincroniza o roster do original agora e apaga sorteio/resultados/adições de teste">🔄 Resetar (manter inscritos)</button>` : ''}
       ${(hasContent && window._isSandboxTournament && window._isSandboxTournament(t) && typeof window._isTestIdentity === 'function' && window._isTestIdentity()) ? `<button class="btn btn-purple btn-sm hover-lift no-print" style="grid-column:span 2;" onclick="window._devSimulateCurrentPhase('${_tIdSafe}')" title="SB (só você): simula os resultados da fase atual com horários reais">🎲 Simular fase (dev)</button>` : ''}
@@ -2264,7 +2264,7 @@ function renderBracket(container, tournamentId, isInline) {
           <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom:1rem;opacity:0.5;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
           <h3 style="color:var(--text-bright);margin-bottom:.5rem;">Nenhuma chave gerada ainda</h3>
           <p style="max-width:400px;margin:0 auto 1.5rem;">As chaves aparecerão aqui após o organizador realizar o sorteio.</p>
-          ${isOrg ? `<button class="btn btn-success hover-lift" onclick="window.generateDrawFunction('${String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'">🎲 Realizar Sorteio Agora</button>` : ''}
+          ${isOrg ? `<button class="btn btn-success hover-lift" onclick="if(window._handleSortearClick)window._handleSortearClick('${String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}',false);else window.generateDrawFunction('${String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')">🎲 Realizar Sorteio Agora</button>` : ''}
         </div>
       </div>`;
     return;
@@ -7259,7 +7259,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
       <div style="text-align:center;padding:3rem;background:var(--sp-g-255-255-255-002,rgba(255,255,255,0.02));border:1px dashed rgba(255,255,255,0.1);border-radius:24px;">
         <h3 style="color:var(--text-bright);">${_t('bracket.noRounds')}</h3>
         <p class="text-muted">${_t('bracket.noRoundsDesc')}</p>
-        ${isOrg ? `<button class="btn btn-primary" style="margin-top:1rem;" onclick="window.generateDrawFunction('${String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')">${_t('bracket.startFirstRound')}</button>` : ''}
+        ${isOrg ? `<button class="btn btn-primary" style="margin-top:1rem;" onclick="if(window._handleSortearClick)window._handleSortearClick('${String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}',false);else window.generateDrawFunction('${String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')">${_t('bracket.startFirstRound')}</button>` : ''}
       </div>`;
   }
 

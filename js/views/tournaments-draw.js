@@ -2607,7 +2607,8 @@ window._setPhaseLateEnrollment = function (tId, mode) {
  * categoria), sem revelar uma atribuição parcial que depois mude no servidor.
  * A confirmação é efêmera: não grava nem times nem confrontos no torneio. */
 window._teamDrawReviewApproved = window._teamDrawReviewApproved || {};
-window._showTeamCompetitionDrawReview = function (tId) {
+window._showTeamCompetitionDrawReview = function (tId, opts) {
+    opts = opts || {};
     var t = window._findTournamentById && window._findTournamentById(tId);
     if (!t) return false;
     var core = window.ScoreplaceTeamCompetition;
@@ -2694,6 +2695,16 @@ window._showTeamCompetitionDrawReview = function (tId) {
     var modeConfirmed = cfg.schedule && cfg.schedule.modeConfirmed === true;
     var selectedMode = modeConfirmed ? cfg.schedule.mode : '';
     var rounds = Math.min(cfg.schedule.gamesPerTeam, Math.max(1, cfg.teamCount - 1));
+    var includePresenceChoice = opts.includePresenceChoice === true;
+    var defaultScope = opts.defaultScope === 'present' ? 'present' : 'all';
+    var presenceChoiceHtml = includePresenceChoice
+      ? '<section style="border:1px solid rgba(167,139,250,.45);border-radius:12px;padding:0 14px;margin-bottom:16px;">' +
+          '<h3 style="font-size:.94rem;margin:13px 0 4px;color:#c4b5fd;">👥 Quem participa deste sorteio?</h3>' +
+          '<p style="font-size:.78rem;color:#cbd5e1;margin:0 0 8px;line-height:1.35;">Escolha antes de gerar times, confrontos e agenda.</p>' +
+          '<label style="display:block;margin:9px 0;cursor:pointer;"><input type="radio" name="team-draw-presence" value="all"' + (defaultScope === 'all' ? ' checked' : '') + '> <b>Todos os inscritos</b> — presença é ignorada.</label>' +
+          '<label style="display:block;margin:9px 0;cursor:pointer;"><input type="radio" name="team-draw-presence" value="present"' + (defaultScope === 'present' ? ' checked' : '') + '> <b>Só os presentes</b> — ausentes vão para a lista de espera.</label>' +
+        '</section>'
+      : '';
     overlay.innerHTML = '<section role="dialog" aria-modal="true" aria-labelledby="team-draw-review-title" style="width:min(680px,100%);max-height:92svh;overflow:auto;background:#101827;border:1px solid rgba(59,130,246,.45);border-radius:20px;box-shadow:0 28px 90px rgba(0,0,0,.65);padding:22px;">' +
       '<h2 id="team-draw-review-title" style="margin:0;color:var(--text-bright);font-size:1.25rem;">🎲 Sorteio de times</h2>' +
       '<p style="margin:8px 0 18px;color:#cbd5e1;line-height:1.45;">Nenhum time nem confronto foi revelado. Ao sortear, cada time receberá uma dupla de cada categoria e, só então, os confrontos serão gerados.</p>' +
@@ -2704,6 +2715,7 @@ window._showTeamCompetitionDrawReview = function (tId) {
         '<div style="padding:10px;border-radius:10px;background:#182235;text-align:center;"><b style="display:block;color:#fff;font-size:1.25rem;">' + cfg.teamCount + '</b><span style="font-size:.72rem;color:#94a3b8;">times</span></div>' +
       '</div>' +
       '<div style="border:1px solid rgba(148,163,184,.22);border-radius:12px;padding:0 14px;margin-bottom:14px;">' + rows + '</div>' +
+      presenceChoiceHtml +
       '<div style="font-size:.82rem;color:#cbd5e1;background:rgba(30,41,59,.7);padding:12px;border-radius:10px;margin-bottom:16px;">' +
         '<b style="color:var(--text-bright);">Formato dos confrontos</b><br>' +
         '<label style="display:block;margin-top:8px;cursor:pointer;"><input type="radio" name="team-draw-mode" value="structured"' + (selectedMode === 'structured' ? ' checked' : '') + '> 📋 <b>Estruturado</b> — em cada rodada, os mesmos times se enfrentam nas seis categorias.</label>' +
@@ -2723,7 +2735,7 @@ window._showTeamCompetitionDrawReview = function (tId) {
       '<div style="display:flex;justify-content:flex-end;gap:10px;"><button type="button" id="team-draw-cancel" class="btn">Cancelar</button><button type="button" id="team-draw-confirm" class="btn btn-primary"' + (valid ? '' : ' disabled aria-disabled="true" style="opacity:.45;cursor:not-allowed;"') + '>🎲 Sortear times e confrontos</button></div></section>';
     document.body.appendChild(overlay);
     var close = function () { overlay.remove(); };
-    overlay.querySelector('#team-draw-cancel').onclick = close;
+    overlay.querySelector('#team-draw-cancel').onclick = function () { close(); if (typeof opts.onCancel === 'function') opts.onCancel(); };
     var confirm = overlay.querySelector('#team-draw-confirm');
     if (valid && confirm) confirm.onclick = function () {
         var slots = categories.map(function (category) {
@@ -2738,6 +2750,8 @@ window._showTeamCompetitionDrawReview = function (tId) {
         });
         var modeControl = overlay.querySelector('input[name="team-draw-mode"]:checked');
         var selectedDrawMode = modeControl && modeControl.value;
+        var presenceControl = overlay.querySelector('input[name="team-draw-presence"]:checked');
+        var selectedScope = presenceControl && presenceControl.value === 'present' ? 'present' : 'all';
         var ranks = {};
         Array.prototype.forEach.call(overlay.querySelectorAll('[data-team-court-rank]'), function (control) { ranks[control.getAttribute('data-court')] = Number(control.value); });
         var selectedCourtOrder = courtNames.slice().sort(function (a, b) { return (ranks[a] || 999) - (ranks[b] || 999) || a.localeCompare(b); });
@@ -2746,6 +2760,10 @@ window._showTeamCompetitionDrawReview = function (tId) {
         if (!validSlots) { if (window.showNotification) window.showNotification('Agenda inválida', 'Escolha um dia para cada categoria.', 'error'); return; }
         if (selectedDrawMode !== 'structured' && selectedDrawMode !== 'free') { if (window.showNotification) window.showNotification('Formato não escolhido', 'Escolha sorteio estruturado ou livre antes de continuar.', 'error'); return; }
         if (!validCourtOrder) { if (window.showNotification) window.showNotification('Prioridade das quadras inválida', 'Cada quadra precisa ter uma posição diferente.', 'error'); return; }
+        if (includePresenceChoice && selectedScope === 'present') {
+          var presentCount = entries.filter(function (entry) { return typeof window._isParticipantPresent === 'function' && window._isParticipantPresent(t, entry); }).length;
+          if (presentCount < 2) { if (window.showNotification) window.showNotification('Poucos presentes', 'Marque pelo menos duas duplas/pessoas presentes antes de sortear somente entre os presentes.', 'error'); return; }
+        }
         confirm.disabled = true; confirm.textContent = 'Salvando agenda…';
         var db = window.FirestoreDB;
         if (!db || typeof db._callFn !== 'function') { confirm.disabled = false; confirm.textContent = '🎲 Sortear times e confrontos'; if (window.showNotification) window.showNotification('Agenda não salva', 'Conexão indisponível.', 'error'); return; }
@@ -2756,7 +2774,9 @@ window._showTeamCompetitionDrawReview = function (tId) {
           t.courtOrder = selectedCourtOrder;
           t.teamCompetition = nextCompetition;
           window._teamDrawReviewApproved[String(tId)] = true;
-          close(); window.generateDrawFunction(tId);
+          close();
+          if (typeof opts.onReady === 'function') opts.onReady({ scope:selectedScope });
+          else window.generateDrawFunction(tId);
         }).catch(function (error) {
           confirm.disabled = false; confirm.textContent = '🎲 Sortear times e confrontos';
           if (window.showNotification) window.showNotification('Agenda não salva', (error && error.message) || 'Não foi possível salvar os dias das categorias.', 'error');
@@ -2778,7 +2798,20 @@ window.generateDrawFunction = function (tId) {
       : (t.teamCompetition || ((t.phases || [])[0] || {}).teamCompetition);
     if (!window._teamDrawReviewApproved[String(tId)] && _teamCfgForReview && _teamCfgForReview.enabled === true) {
         if (typeof window._drawBtnDone === 'function') window._drawBtnDone();
-        if (window._showTeamCompetitionDrawReview(tId)) return;
+        // Há atalhos para a chave vazia que podem ser abertos sem antes renderizar
+        // a página do torneio. Eles também precisam abrir a mesma tela única —
+        // inclusive a decisão todos/presentes —, jamais começar o sorteio direto.
+        if (window._showTeamCompetitionDrawReview(tId, {
+            includePresenceChoice: true,
+            onReady: function (choice) {
+                var scope = choice && choice.scope === 'present' ? 'present' : 'all';
+                if (typeof window._setDrawDecision === 'function') window._setDrawDecision(tId, { scope:scope });
+                if (scope === 'present' && typeof window._moveAbsentToWaitlistForPresentDraw === 'function') {
+                    window._moveAbsentToWaitlistForPresentDraw(t);
+                }
+                window.generateDrawFunction(tId);
+            }
+        })) return;
     }
 
     /* ⛔⛔ NÃO SORTEAR COM MEIO ELENCO. ESTA É A CONSEQUÊNCIA MAIS CARA DA CLASSE.
