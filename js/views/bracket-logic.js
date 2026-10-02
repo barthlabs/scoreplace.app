@@ -6616,6 +6616,15 @@ window._openPendingInitialSchedule = function (tId) {
   var old = document.getElementById('sp-pending-schedule-overlay'); if (old) old.remove();
   var overlay = document.createElement('div'); overlay.id = 'sp-pending-schedule-overlay';
   overlay.style.cssText = 'position:fixed;inset:0;z-index:200100;background:rgba(2,6,23,.78);padding:18px;overflow:auto;box-sizing:border-box;';
+  // ⛔ REVISÃO PENDENTE NÃO PODE SUMIR AO VOLTAR DA AGENDA. O rascunho ainda
+  // existe até Anular ou Publicar; portanto o detalhe canônico precisa ser
+  // repintado com o marcador e os quatro controles (Ver/Planejar/Anular/Publicar).
+  function returnToPendingDetail() {
+    overlay.remove();
+    if (pd && typeof window._rememberPendingDrawMarker === 'function') window._rememberPendingDrawMarker(tId, pd);
+    var container = document.getElementById('view-container');
+    if (container && typeof window.renderTournaments === 'function') window.renderTournaments(container, String(tId));
+  }
   function view() {
     var x = Object.assign({}, t, draft);
     x.id = t.id; x.matches = draft.matches; x.scheduleRevision = Number(pd.scheduleRevision || 0);
@@ -6629,7 +6638,7 @@ window._openPendingInitialSchedule = function (tId) {
       '<div style="font-size:.76rem;color:#94a3b8;margin-bottom:6px">' + p.items.length + ' jogos · ' + p.courts.length + ' quadras. Cada linha é um horário; cada coluna é uma quadra.</div>' +
       (!p.cabe ? '<div style="margin:0 0 10px;color:#fbbf24;font-size:.82rem;font-weight:700">A agenda não cabe nas janelas configuradas: faltam ' + Math.ceil((p.extraMs || 0) / 60000) + ' min. Nenhum jogo será levado para fora dos dias/horários do evento.</div>' : '') + board.html +
       '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px"><button type="button" data-pis-apply class="btn btn-primary"' + (!p.cabe ? ' disabled aria-disabled="true" style="opacity:.45;cursor:not-allowed"' : '') + '>Aplicar agenda no rascunho</button></div></div>';
-    overlay.querySelector('[data-pis-close]').onclick = function () { overlay.remove(); };
+    overlay.querySelector('[data-pis-close]').onclick = returnToPendingDetail;
     Array.prototype.forEach.call(overlay.querySelectorAll('[data-pis-day]'), function (control) { control.onclick = function () { activeDay = control.getAttribute('data-pis-day'); render(); }; });
     Array.prototype.forEach.call(overlay.querySelectorAll('[data-pis-match]'), function (card) {
       card.ondragstart = function (event) { event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', card.getAttribute('data-pis-match')); };
@@ -6648,7 +6657,7 @@ window._openPendingInitialSchedule = function (tId) {
       if (!latest.cabe) { if (window.showNotification) window.showNotification('Agenda não cabe', 'Faltam ' + Math.ceil((latest.extraMs || 0) / 60000) + ' min nas janelas configuradas. Ajuste dias, horários, ordem, duração ou quadras antes de salvar.', 'error'); return; }
       button.disabled = true; button.textContent = 'Salvando agenda…';
       window._callCF('setPendingInitialSchedule', { tournamentId:String(t.id), jogos:latest.items.map(function (i) { return { matchId:i.matchId, court:i.court, scheduledAt:i.scheduledAt, scheduleLocked:!!i.scheduleLocked }; }) }, 'Entre na sua conta para salvar a agenda.')
-        .then(function () { if (window.showNotification) window.showNotification('Agenda do rascunho salva', 'A chave continua em revisão até você publicar.', 'success'); overlay.remove(); if (window._rerenderBracket) window._rerenderBracket(t.id); })
+        .then(function () { if (window.showNotification) window.showNotification('Agenda do rascunho salva', 'A chave continua em revisão até você publicar.', 'success'); returnToPendingDetail(); })
         .catch(function (e) { button.disabled=false; button.textContent='Aplicar agenda no rascunho'; if (window.showNotification) window.showNotification('Agenda não salva', (e && e.message) || 'Tente novamente.', 'error'); });
     };
   }

@@ -25,4 +25,7 @@ ok(/_rememberPendingDrawMarker\(tId, d\.tournament\.pendingDraw\)/.test(draw),
   'a resposta do sorteio preserva imediatamente o marcador até o listener alcançar');
 ok(/_hydratePendingDrawMarker\(visible\[0\]\.id\)/.test(detail),
   'abrir novamente o detalhe também recupera controles de uma revisão pendente');
+ok(/function returnToPendingDetail\(\)[\s\S]*?_rememberPendingDrawMarker\(tId, pd\)[\s\S]*?renderTournaments\(container, String\(tId\)\)/.test(ui) &&
+  /querySelector\('\[data-pis-close\]'\)\.onclick = returnToPendingDetail/.test(ui),
+  'Voltar do planejamento restaura o detalhe com Ver, Planejar, Anular e Publicar enquanto houver rascunho');
 process.exitCode = fail ? 1 : 0;

@@ -206,12 +206,18 @@ ok(/data-team-toggle-group="mode"/.test(drawSource) && /wireToggle\('mode'/.test
   'o modo estruturado/livre usa toggle com explicação dinâmica da escolha ativa');
 ok(/data-team-day-flow/.test(drawSource) && /categoryFlow/.test(drawSource) && /data-team-day-start/.test(drawSource),
   'a mesma tela define, para cada dia, sequência concentrada/alternada e início/fim');
+ok(/grid-template-columns:minmax\(0,1fr\) 8px minmax\(0,1fr\)/.test(drawSource) && /width:100%;min-width:0;box-sizing:border-box/.test(drawSource),
+  'os dois horários ocupam a largura disponível sem se sobrepor nem truncar');
+ok(/flex:0 1 auto;min-width:0;font-size:\.62rem/.test(drawSource),
+  'os toggles Concentradas/Alternadas permanecem compactos em cada dia');
+ok(/position:sticky;top:0;z-index:3/.test(drawSource) && !/id="team-draw-cancel" class=/.test(drawSource),
+  'Voltar fica sempre visível no cabeçalho e não há Cancelar duplicado no rodapé');
 ok(/sp-team-draw-time/.test(drawSource) && /window\.location\.hash = d\.staged \? '#tournaments\/'/.test(drawSource),
   'os horários do sorteio usam controle compacto e a revisão volta ao detalhe com seus controles');
 ok(/var selectedMode = modeConfirmed && \(cfg\.schedule\.mode === 'structured' \|\| cfg\.schedule\.mode === 'free'\) \? cfg\.schedule\.mode : 'free';/.test(drawSource),
   'Livre é o padrão no primeiro sorteio; uma escolha já confirmada permanece');
-ok((drawSource.match(/background:#182235!important;color:var\(--text-bright\)!important/g) || []).length >= 2,
-  'Voltar e Cancelar têm contraste explícito no modal de configuração');
+ok((drawSource.match(/background:#182235!important;color:var\(--text-bright\)!important/g) || []).length >= 1 && !/id="team-draw-cancel" class=/.test(drawSource),
+  'Voltar tem contraste explícito no modal de configuração e Cancelar redundante não existe');
 
 // A agenda não pode voltar a expor IDs técnicos como a informação principal. A mesma
 // grade serve ao rascunho e ao torneio publicado: linhas são horários, colunas são
