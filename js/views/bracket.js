@@ -1081,10 +1081,12 @@ window._bracketCategoryTabsMount = function () {
     root.setAttribute('data-bracket-tabs-root', '1');
     root.setAttribute('data-tournament-id', id);
     root.setAttribute('aria-label', 'Categorias da chave');
-    // A faixa fixa ocupa somente a altura real das abas. Uma sombra sólida de
-    // 48px acima dela mascarava a busca e os títulos anteriores no celular;
-    // sombra visual não pode criar uma nova área de layout nem encobrir texto.
-    root.style.cssText = 'display:block;box-sizing:border-box;width:100%;margin:0 0 14px;padding:4px 12px 6px;border:0;border-radius:0;background:#111114;overflow:hidden;position:sticky;top:var(--scroll-anchor,120px);z-index:30;isolation:isolate;box-shadow:0 8px 12px -12px rgba(0,0,0,.95);';
+    // A busca e as abas formam uma única pilha sticky. `--scroll-anchor` tem
+    // 12px de respiro para o alvo de scroll (card/grupo), mas esse respiro não
+    // pertence à interface: se fosse usado aqui, o conteúdo passaria pelo vão
+    // entre busca e abas. As abas começam um pixel dentro da base da busca,
+    // cobrindo a emenda sem criar uma tarja adicional.
+    root.style.cssText = 'display:block;box-sizing:border-box;width:100%;margin:0 0 14px;padding:4px 12px 6px;border:0;border-radius:0;background:#111114;overflow:hidden;position:sticky;top:calc(var(--topbar-h,60px) + var(--hamburger-dd-h,0px) + var(--backheader-h,0px) + var(--stickybar-h,0px) - 1px);z-index:31;isolation:isolate;box-shadow:0 8px 12px -12px rgba(0,0,0,.95);';
     var anchor = _bracketTabsAnchor(first);
     // Em Ouro/Prata, sobe mais um nível: a faixa deve ficar acima da seção
     // inteira (título, classificação e rodadas), para poder ocultar a linha

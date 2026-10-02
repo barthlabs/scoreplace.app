@@ -26,6 +26,7 @@ ok(src.includes('data-bracket-tier-title') && src.includes('tierTitles[ti].hidde
 ok(src.includes('data-bracket-search-slot') && src.includes('window.innerWidth >= 560') && src.includes('searchSlot.appendChild(searchWrap)'), 'em janela desktop, a busca usa a sobra da mesma faixa das abas sem duplicar o input');
 ok(!src.includes('box-shadow:0 -48px 0 var(--bg-darker,#111114)') && src.includes('background:#111114;overflow:hidden') && src.includes("clone.style.boxShadow = 'none'"), 'a faixa sticky e o portal não projetam uma tarja sólida sobre busca, título da eliminatória ou conteúdo anterior');
 ok(src.includes('var tabsHost = searchWrap && searchWrap.parentNode') && src.includes('tabsHost.insertBefore(root, searchWrap.nextSibling)'), 'no celular as abas ficam imediatamente após a busca, sem cards atravessando a faixa fixa');
+ok(src.includes('top:calc(var(--topbar-h,60px) + var(--hamburger-dd-h,0px) + var(--backheader-h,0px) + var(--stickybar-h,0px) - 1px);z-index:31') && !src.includes('position:sticky;top:var(--scroll-anchor,120px);z-index:30;isolation:isolate;box-shadow:0 8px 12px -12px'), 'abas encostam na busca sticky; o respiro de scroll não vira vão visível');
 
-console.log('\n' + (fail ? '❌' : '✅') + ' chaves-abas-estáveis: ' + (15 - fail) + ' asserts ok, ' + fail + ' falharam');
+console.log('\n' + (fail ? '❌' : '✅') + ' chaves-abas-estáveis: ' + (16 - fail) + ' asserts ok, ' + fail + ' falharam');
 process.exitCode = fail ? 1 : 0;

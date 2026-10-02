@@ -1,3 +1,4 @@
+// 2.3.226 — Busca e abas da chave agora formam uma única pilha sticky, sem vão onde cards poderiam atravessar no celular ou desktop.
 // 2.3.225 — Qualquer abertura do detalhe do torneio agora encontra o próximo jogo pendente do participante, abre a aba correta e ancora no card; atalhos da dashboard preservam o jogo clicado.
 // 2.3.224 — Atalhos da dashboard entram diretamente no detalhe canônico levando jogo, aba e grupo; no celular as abas ficam imediatamente após a busca, sem conteúdo atravessando a faixa fixa.
 // 2.3.223 — O fluxo canônico de competição por times sempre abre a tela obrigatória de decisões, inclusive antes da agenda existir; falhas restauram o botão e explicam o erro, sem retorno silencioso. Cache das duas metades do fluxo foi renovado.
