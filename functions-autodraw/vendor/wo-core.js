@@ -40,6 +40,16 @@ window._applyWoSubsToTournament = function(t, opts) {
 
   const _getName = p => window._pName(p);
   const _normTeam = (s) => (s || '').replace(/\s*\/\s*/g, '/').trim();
+  // Uma substituição só muda a fotografia FUTURA da chave. Jogo com placar,
+  // resultado, sets ou placar ao vivo é histórico: o substituto não pode
+  // receber retroativamente uma partida de outra pessoa.
+  const _matchIsHistorical = (m) => {
+    if (!m) return true;
+    if (typeof window._matchHasRealPlay === 'function') return window._matchHasRealPlay(m);
+    if (m.winner != null || m.startedAt || m.resultAt || m.liveScored === true) return true;
+    if (Array.isArray(m.sets) && m.sets.length) return true;
+    return ((typeof m.scoreP1 === 'number' && m.scoreP1 > 0) || (typeof m.scoreP2 === 'number' && m.scoreP2 > 0)) && !m.wo;
+  };
 
   // Pool de standby CANÔNICO (store.js) — merge standbyParticipants+waitlist dedup por nome.
   const standbyPool = window._getStandbyPool(t);
@@ -183,7 +193,7 @@ window._applyWoSubsToTournament = function(t, opts) {
     let foundMatch = null, foundSlot = null, foundIdx = -1;
     for (let i = 0; i < allMatches.length; i++) {
       const m = allMatches[i];
-      if (!m || m.winner) continue;
+      if (_matchIsHistorical(m)) continue;
       for (const slot of ['p1', 'p2']) {
         const entry = m[slot];
         if (!entry || entry === 'TBD' || entry === 'BYE') continue;
@@ -330,7 +340,10 @@ window._applyWoSubsToTournament = function(t, opts) {
       return false;
     };
     allMatches.forEach(m => {
-      if (!m) return;
+      // A mesma pessoa pode aparecer em jogos passados e futuros. Propagar por
+      // UID sem esta barreira reescrevia uma dupla já disputada ao preencher uma
+      // vaga futura — exatamente o que não pode acontecer.
+      if (_matchIsHistorical(m)) return;
       _applyToSlot(m, 'p1'); _applyToSlot(m, 'p2');
       // team1/team2 (arrays de nome, Rei/Rainha) — troca o nome do ausente pelo do sub
       if (Array.isArray(m.team1)) { const ti = m.team1.indexOf(absentName); if (ti !== -1) m.team1[ti] = subName; }

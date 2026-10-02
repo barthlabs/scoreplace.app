@@ -24,6 +24,7 @@ ok(src.includes('class="bracket-round-heading"') && src.includes('data-bracket-r
 ok(routerSrc.includes('cleanupBracketRoundHeadingPortals') && routerSrc.includes("document.querySelectorAll('[data-bracket-round-heading-portal]')") && routerSrc.includes('cleanupBracketRoundHeadingPortals();'), 'o roteador remove os portais de cabeçalho antes de toda nova rota');
 ok(src.includes('data-bracket-tier-title') && src.includes('tierTitles[ti].hidden = true'), 'a linha ativa não duplica título atrás da aba fixa');
 ok(src.includes('data-bracket-search-slot') && src.includes('window.innerWidth >= 560') && src.includes('searchSlot.appendChild(searchWrap)'), 'em janela desktop, a busca usa a sobra da mesma faixa das abas sem duplicar o input');
+ok(!src.includes('box-shadow:0 -48px 0 var(--bg-darker,#111114)') && src.includes('box-shadow:0 10px 18px -18px rgba(0,0,0,.95)'), 'a faixa sticky não projeta uma tarja sólida sobre busca, título da eliminatória ou conteúdo anterior');
 
-console.log('\n' + (fail ? '❌' : '✅') + ' chaves-abas-estáveis: ' + (13 - fail) + ' asserts ok, ' + fail + ' falharam');
+console.log('\n' + (fail ? '❌' : '✅') + ' chaves-abas-estáveis: ' + (14 - fail) + ' asserts ok, ' + fail + ' falharam');
 process.exitCode = fail ? 1 : 0;

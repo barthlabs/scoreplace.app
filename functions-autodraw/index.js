@@ -2516,7 +2516,13 @@ exports.applyTournamentWO = onCall(async (request) => {
     const selectedMatch = matchId
       ? (allMatches || []).find(m => m && String(m.id) === matchId)
       : null;
-    if (matchId && (!selectedMatch || selectedMatch.winner || selectedMatch.isBye || selectedMatch.isSitOut)) {
+    const selectedHasRealPlay = !!(selectedMatch && (
+      (typeof drawWindow._matchHasRealPlay === 'function' && drawWindow._matchHasRealPlay(selectedMatch)) ||
+      selectedMatch.winner != null || selectedMatch.startedAt || selectedMatch.resultAt || selectedMatch.liveScored === true ||
+      (Array.isArray(selectedMatch.sets) && selectedMatch.sets.length) ||
+      (((typeof selectedMatch.scoreP1 === 'number' && selectedMatch.scoreP1 > 0) || (typeof selectedMatch.scoreP2 === 'number' && selectedMatch.scoreP2 > 0)) && !selectedMatch.wo)
+    ));
+    if (matchId && (!selectedMatch || selectedHasRealPlay || selectedMatch.isBye || selectedMatch.isSitOut)) {
       throw _drawFail('failed-precondition', 'Este jogo não está mais disponível para W.O.', { tId, matchId });
     }
 

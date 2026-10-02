@@ -1068,7 +1068,10 @@ window._bracketCategoryTabsMount = function () {
     root.setAttribute('data-bracket-tabs-root', '1');
     root.setAttribute('data-tournament-id', id);
     root.setAttribute('aria-label', 'Categorias da chave');
-    root.style.cssText = 'display:block;box-sizing:border-box;width:100%;margin:0 0 14px;padding:8px 12px;border:0;border-radius:0;background:var(--bg-darker,#111114);overflow:visible;position:sticky;top:var(--scroll-anchor,120px);z-index:30;isolation:isolate;box-shadow:0 -48px 0 var(--bg-darker,#111114),0 10px 0 var(--bg-darker,#111114),0 16px 18px -16px rgba(0,0,0,.95);';
+    // A faixa fixa ocupa somente a altura real das abas. Uma sombra sólida de
+    // 48px acima dela mascarava a busca e os títulos anteriores no celular;
+    // sombra visual não pode criar uma nova área de layout nem encobrir texto.
+    root.style.cssText = 'display:block;box-sizing:border-box;width:100%;margin:0 0 14px;padding:8px 12px;border:0;border-radius:0;background:var(--bg-darker,#111114);overflow:visible;position:sticky;top:var(--scroll-anchor,120px);z-index:30;isolation:isolate;box-shadow:0 10px 18px -18px rgba(0,0,0,.95);';
     var anchor = _bracketTabsAnchor(first);
     // Em Ouro/Prata, sobe mais um nível: a faixa deve ficar acima da seção
     // inteira (título, classificação e rodadas), para poder ocultar a linha

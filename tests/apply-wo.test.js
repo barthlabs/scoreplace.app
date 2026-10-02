@@ -54,6 +54,9 @@ sandbox._getStandbyPool = (t) => {
 sandbox._woHistSet = () => {};
 sandbox._woHistGet = () => null;
 sandbox._woHistDel = () => {};
+sandbox._matchHasRealPlay = (m) => !!(m && (m.winner != null || m.startedAt || m.resultAt || m.liveScored === true ||
+  (Array.isArray(m.sets) && m.sets.length) ||
+  (((typeof m.scoreP1 === 'number' && m.scoreP1 > 0) || (typeof m.scoreP2 === 'number' && m.scoreP2 > 0)) && !m.wo)));
 // _woIsKnockoutMatch: mata-mata = elim (o motor usa isto pra decidir _advanceWinner)
 sandbox._woIsKnockoutMatch = (t, m) => {
   if (!t || !m) return false;
@@ -108,6 +111,31 @@ function register(t) { W.AppStore.tournaments = [t]; return t; }
   eq(r.outcome, 'subbed', 'sub: outcome subbed');
   eq(t.matches[0].p1, 'Sub', 'sub: A trocado por Sub no jogo');
   ok(!t.matches[0].winner, 'sub: jogo continua sem vencedor (segue sendo jogado)');
+})();
+
+// ── 1d. W.O. futuro não reescreve jogo já disputado ──────────────────────────
+// Reproduz Jonathan no jogo 130 (placar lançado) e o W.O. no jogo 171. A
+// substituta deve ocupar somente o jogo futuro; o histórico é imutável.
+(function () {
+  const t = register({
+    id: 't1d', format: 'Eliminatórias Simples', woScope: 'individual',
+    participants: [
+      { displayName: 'Jonathan Hall', uid: 'uj' }, { displayName: 'Parceira', uid: 'up' },
+      { displayName: 'Erika Lopes', uid: 'ue' }, { displayName: 'Oponente', uid: 'uo' }
+    ],
+    standbyParticipants: [{ displayName: 'Erika Lopes', uid: 'ue' }],
+    checkedIn: {}, absent: {},
+    matches: [
+      { id: 'jogo-130', p1: 'Jonathan Hall / Parceira', p2: 'Oponente', team1Uids: ['uj', 'up'], team2Uids: ['uo'], scoreP1: 6, scoreP2: 4, winner: 'Jonathan Hall / Parceira', resultAt: 1 },
+      { id: 'jogo-171', p1: 'Jonathan Hall / Parceira', p2: 'Oponente', team1Uids: ['uj', 'up'], team2Uids: ['uo'], winner: null }
+    ]
+  });
+  const r = W._applyWO(t, { absentName: 'Jonathan Hall', absentUids: ['uj'], scope: 'match', noSubBehavior: 'escalate', forceWaitlistSub: true, onlyAbsentUids: ['uj'] });
+  eq(r.outcome, 'subbed', 'histórico: W.O. futuro recebe substituta');
+  eq(t.matches[0].p1, 'Jonathan Hall / Parceira', 'histórico: jogo 130 preserva Jonathan');
+  eq(t.matches[0].winner, 'Jonathan Hall / Parceira', 'histórico: vencedor do jogo 130 é preservado');
+  eq(t.matches[0].scoreP1, 6, 'histórico: placar do jogo 130 é preservado');
+  eq(t.matches[1].p1, 'Erika Lopes / Parceira', 'futuro: somente o jogo 171 recebe Erika');
 })();
 
 // ── 1b. DECISÃO DA ORG: só o alvo atual entra na transação, e a fila pula
