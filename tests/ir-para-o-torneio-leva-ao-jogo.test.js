@@ -15,7 +15,7 @@ const store = fs.readFileSync(path.join(root, 'js/store.js'), 'utf8');
 let ok = 0; const must = (v, m) => { assert.ok(v, m); ok++; console.log('  ✓ ' + m); };
 
 // ① o botão leva o jogo
-must(/function _grupoHeadHtml\(grupo, tName, cor, attr, inline, tId, matchId\)/.test(dash),
+must(/function _grupoHeadHtml\(grupo, tName, cor, attr, inline, tId, matchId, match\)/.test(dash),
   'o cabeçalho recebe o id do JOGO, não só o do torneio');
 must(/sp_scrollToMatch/.test(dash), 'e grava `sp_scrollToMatch` no clique');
 must(/sp_scrollToGroup/.test(dash), '⛔ sem perder o grupo — quem tem grupo continua caindo nele');

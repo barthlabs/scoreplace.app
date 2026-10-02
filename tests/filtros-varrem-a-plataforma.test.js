@@ -398,14 +398,14 @@ if (codPools && codCont) {
 // resultados" saiu de graça, em vez de virar uma segunda montagem que divergiria.
 (function () {
   const dash = fs.readFileSync(path.join(ROOT, 'js', 'views', 'dashboard.js'), 'utf8');
-  // 11/set/2026: ganhou um 7º parâmetro — o id do JOGO — porque na eliminatória não há grupo
+  // 11/set/2026: ganhou o id do JOGO — porque na eliminatória não há grupo
   // e "Ir para o torneio" caía no topo. Ver tests/ir-para-o-torneio-leva-ao-jogo.test.js.
-  ok(/function _grupoHeadHtml\(grupo, tName, cor, attr, inline, tId, matchId\)/.test(dash),
+  ok(/function _grupoHeadHtml\(grupo, tName, cor, attr, inline, tId, matchId, match\)/.test(dash),
     'o cabeçalho compartilhado recebe o id do torneio (e agora também o do jogo)');
-  ok(/href="#bracket\/' \+ String\(tId\)/.test(dash),
-    'o botão leva pra chave/classificação do torneio');
+  ok(/href="#tournaments\/' \+ String\(tId\)/.test(dash) && /window\._goToTournamentMatch/.test(dash),
+    'o botão leva diretamente ao detalhe canônico com o jogo preservado');
   ok(/Ir para o torneio/.test(dash), 'o rótulo é "Ir para o torneio"');
-  ok(/margin-left:auto/.test(dash.slice(dash.indexOf('var _btn = tId'), dash.indexOf('var _btn = tId') + 700)),
+  ok(/margin-left:auto/.test(dash.slice(dash.indexOf('var _btn = tId'), dash.indexOf('var _btn = tId') + 1800)),
     'o botão é empurrado pra DIREITA na mesma linha');
   ok(/var _btn = tId\s*\n?\s*\?/.test(dash),
     'sem id do torneio NÃO desenha botão — link pra lugar nenhum é pior que nenhum link');
