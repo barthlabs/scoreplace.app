@@ -25,8 +25,10 @@ ok(dashboard.includes('window._matchCardTimelineTextHtml(_ngT, _ngM)'),
   'Seu próximo jogo reutiliza a linha Agendado da chave');
 ok(tournaments.includes('_pendingBracketTarget.tab') && tournaments.includes('window._bracketTabState[String(tournamentId)]') && bracket.includes('var targetGender = Object.keys(byGender).find') && bracket.includes('byGender[candidate].indexOf(state.category)'),
   'o detalhe seleciona a aba antes de desenhar e localizar o card');
+ok(tournaments.includes('window._nextParticipantTournamentMatchTarget') && tournaments.includes('Mesma régua da dashboard para "Seu próximo jogo"') && tournaments.includes('window._navScrollTid') && tournaments.includes("sessionStorage.setItem('sp_scrollToMatch'"),
+  'abrir o detalhe diretamente encontra o próximo jogo do usuário, prepara a aba e ancora no card');
 ok(router.includes('_priorBracketTarget') && router.includes('? _priorBracketTarget : { tId: String(cleanParam), matchId: null }'),
   'a rota #bracket preserva o alvo vindo da dashboard');
 
-console.log('\n' + (fail ? '❌' : '✅') + ' dashboard-atalho-aba-e-agenda: ' + (6 - fail) + ' asserts ok, ' + fail + ' falharam');
+console.log('\n' + (fail ? '❌' : '✅') + ' dashboard-atalho-aba-e-agenda: ' + (7 - fail) + ' asserts ok, ' + fail + ' falharam');
 process.exitCode = fail ? 1 : 0;

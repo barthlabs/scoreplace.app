@@ -1114,6 +1114,42 @@ window._goToTournamentMatch = function(tId, matchId, tab) {
   window.location.hash = '#tournaments/' + tId;
 };
 
+// Um destino de chave não pode depender de qual tela originou a navegação.
+// Dashboard, card do torneio e URL direta abrem o MESMO detalhe: quando há
+// partida pendente da pessoa, todos precisam cair na categoria e no jogo dela.
+// Esta é a fonte única do alvo; a dashboard só pode sobrescrevê-la quando o
+// usuário clicou conscientemente em outro jogo específico.
+window._nextParticipantTournamentMatchTarget = function(t) {
+  var cu = window.AppStore && window.AppStore.currentUser;
+  if (!t || !cu || typeof window._collectAllMatches !== 'function' ||
+      typeof window._userTeamInMatch !== 'function') return null;
+
+  var matches = window._collectAllMatches(t).filter(function(m) {
+    return !!(m && !m.winner && !m.isBye && m.p1 && m.p1 !== 'TBD' && m.p2 && m.p2 !== 'TBD' &&
+      window._userTeamInMatch(t, m, cu) > 0);
+  });
+  // Mesma régua da dashboard para "Seu próximo jogo": rodada e, dentro dela,
+  // número global do jogo. Não usar a ordem incidental de campos do Firestore.
+  matches.sort(function(a, b) {
+    var ar = Number(a.round || 0), br = Number(b.round || 0);
+    if (ar !== br) return ar - br;
+    var an = Number(a._gameNum || 0), bn = Number(b._gameNum || 0);
+    if (an !== bn) return an - bn;
+    return String(a.id || '').localeCompare(String(b.id || ''));
+  });
+  var m = matches[0];
+  if (!m || m.id == null) return null;
+  var category = String(m.category || m.tierLabel || m.bracket || '').trim();
+  var label = category.toLowerCase();
+  var gender = /(^|\s)(fem|femin|female)/.test(label) ? 'fem'
+    : (/(^|\s)(masc|mascul|male)/.test(label) ? 'masc'
+      : (/(^|\s)(mist|mixed)/.test(label) ? 'misto' : 'linhas'));
+  return {
+    matchId: String(m.id),
+    tab: category ? { category: category, gender: gender, round: m.round == null ? '' : String(m.round) } : null
+  };
+};
+
 window._scrollToBracketSection = function(tId, matchId) {
   var t = window.AppStore && window.AppStore.tournaments &&
           window.AppStore.tournaments.find(function(x){ return String(x.id) === String(tId); });
@@ -4555,17 +4591,32 @@ function renderTournaments(container, tournamentId = null) {
         window._initMergeTouchDrag(tournamentId);
     }
 
-    // Se a dashboard pediu um jogo, a aba precisa ser escolhida ANTES do
-    // render: um card de outra categoria nasce hidden e não é um alvo válido
-    // para a rolagem. A mesma chave de sessão é consumida abaixo, após o DOM.
+    // O detalhe possui UMA entrada canônica. Um atalho explícito da dashboard
+    // preserva o jogo clicado; sem atalho, a própria abertura do torneio escolhe
+    // o próximo jogo pendente do usuário. Em ambos os casos a aba é definida
+    // ANTES do render: um card de outra categoria nasce hidden e não pode ser
+    // ancorado depois. [[regression_open_tournament_goes_to_my_next_match]]
+    var _pendingBracketTarget = null;
     try {
-        const _pendingBracketTarget = JSON.parse(sessionStorage.getItem('sp_bracketScroll') || 'null');
-        if (_pendingBracketTarget && String(_pendingBracketTarget.tId) === String(tournamentId) &&
-            _pendingBracketTarget.tab && _pendingBracketTarget.tab.category) {
-            window._bracketTabState = window._bracketTabState || {};
-            window._bracketTabState[String(tournamentId)] = _pendingBracketTarget.tab;
+        var _requestedBracketTarget = JSON.parse(sessionStorage.getItem('sp_bracketScroll') || 'null');
+        if (_requestedBracketTarget && String(_requestedBracketTarget.tId) === String(tournamentId)) {
+            _pendingBracketTarget = _requestedBracketTarget;
         }
     } catch (_pendingBracketTargetErr) {}
+    if (!_pendingBracketTarget && window._navScrollTid && String(window._navScrollTid) === String(tournamentId) &&
+        typeof window._nextParticipantTournamentMatchTarget === 'function') {
+        var _detailTournamentForTarget = window._findTournamentById ? window._findTournamentById(tournamentId) : null;
+        _pendingBracketTarget = window._nextParticipantTournamentMatchTarget(_detailTournamentForTarget);
+        // O bracket consome este marcador ao montar seus cards e rola exatamente
+        // para a partida encontrada; não o persistimos como intenção externa.
+        if (_pendingBracketTarget && _pendingBracketTarget.matchId) {
+            try { sessionStorage.setItem('sp_scrollToMatch', _pendingBracketTarget.matchId); } catch (_targetStoreErr) {}
+        }
+    }
+    if (_pendingBracketTarget && _pendingBracketTarget.tab && _pendingBracketTarget.tab.category) {
+        window._bracketTabState = window._bracketTabState || {};
+        window._bracketTabState[String(tournamentId)] = _pendingBracketTarget.tab;
+    }
 
     // Renderiza a chave de forma transparente associada a esse torneio
     if (hasDrawn && typeof renderBracket === 'function') {
