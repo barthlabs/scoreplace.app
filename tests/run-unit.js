@@ -1594,6 +1594,7 @@ const SUITES = [
   'tests/l7-consenso-placar-cf-only.test.js',
   'tests/l7-auto-repairs-cf-only.test.js', // L7: reparos automáticos só despacham a CF // L7: proposta/contestação só despacham a CF
   'tests/l7-pending-draw-cf-only.test.js', // L7: sorteio em revisão só despacha a CF
+  'tests/pending-draw-review-controls.test.js', // revisão: Ver/Anular/Publicar não dependem do snapshot atrasado
   'tests/l7-default-scoring-cf-only.test.js', // L7: formato padrão só despacha a CF
   'tests/l7-group-config-draw-cf.test.js', // L7: grupos entram pela CF de sorteio
   'tests/l7-close-enrollment-draw-cf.test.js', // L7: fechamento entra pela CF de sorteio

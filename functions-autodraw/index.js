@@ -4412,6 +4412,26 @@ exports.getPendingInitialDraw = onCall(async (request) => {
   });
 });
 
+// Marcador mínimo da revisão. O cliente usa esta porta ao entrar no detalhe do
+// torneio porque o snapshot pode ainda representar o instante anterior ao draw.
+// Não devolve times, confrontos nem agenda: esses continuam no subdocumento privado.
+exports.getPendingDrawReviewState = onCall(async (request) => {
+  const uid = request.auth && request.auth.uid;
+  const tId = String((request.data && request.data.tournamentId) || '').trim();
+  if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
+  if (!tId) throw new HttpsError('invalid-argument', 'Torneio obrigatório.');
+  const ref = db.collection('tournaments').doc(tId);
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Torneio não encontrado.');
+  const t = Object.assign({ id:tId }, snap.data() || {});
+  /* Autorização UID-only, declarada aqui para esta leitura estreita: é exatamente
+   * o contrato de `_isTournamentAdmin` (creatorUid ou adminUids), sem e-mail/nome.
+   * A Function usa Admin SDK; portanto este gate não pode depender das rules. */
+  const canReview = t.creatorUid === uid || (Array.isArray(t.adminUids) && t.adminUids.indexOf(uid) !== -1);
+  if (!canReview) throw new HttpsError('permission-denied', 'Só a organização revisa este sorteio.');
+  return { ok:true, pendingDraw:t.pendingDraw || null };
+});
+
 // ─── DECISÃO DO ORGANIZADOR SOBRE TARDIO EM CHAVE DE FOLGA ──────────────────
 // ⛔⛔ POR QUE ESTA PORTA EXISTE: no desenho de FOLGA a rodada de entrada é dimensionada pela
 // potência de 2 abaixo do número de inscritos. Mudar esse número muda QUEM estreia — medido em

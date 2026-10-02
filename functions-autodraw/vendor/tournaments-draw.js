@@ -3207,6 +3207,12 @@ window.generateDrawFunction = function (tId) {
             // Firestore) → hidrata igual ao ingest do listener.
             Object.keys(t).forEach(function (k) { delete t[k]; });
             Object.keys(d.tournament).forEach(function (k) { t[k] = d.tournament[k]; });
+            // A revisão precisa sobreviver ao intervalo entre a resposta canônica e o
+            // próximo snapshot do Firestore. Só o marcador público é mantido aqui;
+            // times, confrontos e agenda continuam exclusivamente no cofre da Function.
+            if (d.staged && d.tournament.pendingDraw && typeof window._rememberPendingDrawMarker === 'function') {
+                window._rememberPendingDrawMarker(tId, d.tournament.pendingDraw);
+            }
             if (typeof window._hydrateMonarchGroups === 'function') { try { window._hydrateMonarchGroups(t); } catch (_eH) {} }
             // A grade estimada já veio no recibo canônico de drawRound.
             try { window.AppStore._saveToCache(); } catch (_eC) {}

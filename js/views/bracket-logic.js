@@ -6655,23 +6655,98 @@ window._openPendingInitialSchedule = function (tId) {
   document.body.appendChild(overlay); render();
 };
 
+/* ⛔ REGRESSÃO CRÍTICA — NÃO REMOVER NEM VOLTAR A DEPENDER SÓ DE `t.pendingDraw`.
+ * O mesmo defeito reapareceu diversas vezes: a Function já tinha gravado o sorteio
+ * privado e a UI exibia o toast “Sorteio em revisão”, mas o listener ainda carregava
+ * o retrato anterior. Resultado inaceitável: o organizador ficava sem Ver, Planejar,
+ * Anular e Publicar, embora fosse o único que pudesse concluir o fluxo.
+ *
+ * Invariável: enquanto o servidor informar revisão pendente, o detalhe do organizador
+ * SEMPRE expõe os quatro controles. O marcador é a única coisa que o cliente guarda;
+ * times, confrontos e agenda continuam exclusivamente no cofre privado da Function. */
+window._rememberPendingDrawMarker = function (tId, marker) {
+  if (!tId || !marker) return;
+  var all = window.__pendingDrawMarkers || (window.__pendingDrawMarkers = {});
+  all[String(tId)] = marker;
+};
+window._pendingDrawMarkerFor = function (t) {
+  if (!t) return null;
+  var cached = window.__pendingDrawMarkers && window.__pendingDrawMarkers[String(t.id)];
+  return cached || t.pendingDraw || null;
+};
+/* Leitura estreita, autenticada e só para organização. Ela recupera o MARCADOR
+ * quando o snapshot local ainda está velho; a chave continua no cofre privado. */
+window._hydratePendingDrawMarker = function (tId) {
+  var id = String(tId || '');
+  if (!id || !(window._callCF)) return Promise.resolve(null);
+  var state = window.__pendingDrawMarkerLoads || (window.__pendingDrawMarkerLoads = {});
+  if (state[id] && state[id].promise) return state[id].promise;
+  var promise = window._callCF('getPendingDrawReviewState', { tournamentId:id }, 'Entre na sua conta para revisar o sorteio.')
+    .then(function (res) {
+      var out = (res && res.data) || res || {}, marker = out.pendingDraw || null;
+      if (marker) window._rememberPendingDrawMarker(id, marker);
+      else if (window.__pendingDrawMarkers) delete window.__pendingDrawMarkers[id];
+      /* Não depender de uma atualização genérica/assíncrona: acabamos de obter o
+       * marcador que torna os controles visíveis. Re-renderiza explicitamente o
+       * detalhe que está aberto, no mesmo fluxo e com o mesmo id. */
+      var currentHash = window.location.hash || '', container = document.getElementById('view-container');
+      if (container && currentHash.indexOf('#tournaments/' + encodeURIComponent(id)) === 0 && typeof window.renderTournaments === 'function') {
+        window.renderTournaments(container, id);
+      }
+      return marker;
+    })
+    .catch(function () { return null; });
+  state[id] = { promise: promise };
+  return promise;
+};
+
+window._openPendingDrawReview = function (tId) {
+  var getTournament = window._findTournamentById || function (id) {
+    return window.AppStore && (window.AppStore.tournaments || []).find(function (x) { return String(x.id) === String(id); });
+  };
+  var t = getTournament(tId), marker = window._pendingDrawMarkerFor(t);
+  if (!t || !marker) return;
+  var cache = window.__pendingInitialDraws || (window.__pendingInitialDraws = {}), draft = cache[String(tId)];
+  if (!draft && marker.kind === 'initial') {
+    if (window.showNotification) window.showNotification('Abrindo revisão…', 'Carregando a chave protegida da organização.', 'info');
+    window._callCF('getPendingInitialDraw', { tournamentId:String(tId) }, 'Entre na sua conta para revisar o sorteio.')
+      .then(function (res) { var out = (res && res.data) || res || {}; if (!out.pendingDraw) throw new Error('Rascunho indisponível.'); cache[String(tId)] = out.pendingDraw; window._openPendingDrawReview(tId); })
+      .catch(function (e) { if (window.showNotification) window.showNotification('Revisão indisponível', (e && e.message) || 'Tente novamente.', 'error'); });
+    return;
+  }
+  var old = document.getElementById('pending-draw-review-overlay'); if (old) old.remove();
+  var overlay = document.createElement('div');
+  overlay.id = 'pending-draw-review-overlay'; overlay.className = 'modal-overlay';
+  overlay.innerHTML = '<div class="modal" role="dialog" aria-modal="true" aria-label="Revisar sorteio" style="width:min(920px,96vw);max-height:88vh;display:flex;flex-direction:column;">' +
+    '<div style="display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:10px;"><h2 style="margin:0;font-size:1.15rem;">👁️ Chave sorteada em revisão</h2><button class="btn btn-outline" data-close>Voltar</button></div>' +
+    '<div style="color:var(--text-muted);font-size:.86rem;margin-bottom:12px;">Ainda privada: participantes não veem nem recebem notificações.</div>' +
+    '<div style="overflow:auto;padding-right:4px;">' + (window._renderPendingDrawPreview ? window._renderPendingDrawPreview(t) : '') + '</div>' +
+    '<div style="display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-top:14px;">' +
+      (marker.kind === 'initial' ? '<button class="btn btn-outline" data-plan>📍 Planejar quadras e horários</button>' : '') +
+      '<button class="btn btn-outline" style="color:var(--sp-c-f87171,#f87171);border-color:rgba(248,113,113,.5);" data-annul>✕ Anular</button>' +
+      '<button class="btn btn-shine" style="background:#10b981;color:#fff;" data-publish>🚀 Publicar sorteio</button>' +
+      '<button class="btn btn-outline" data-close>Voltar</button></div></div>';
+  overlay.querySelectorAll('[data-close]').forEach(function (b) { b.onclick = function () { overlay.remove(); }; });
+  var plan = overlay.querySelector('[data-plan]'); if (plan) plan.onclick = function () { overlay.remove(); window._openPendingInitialSchedule(tId); };
+  var annul = overlay.querySelector('[data-annul]'); if (annul) annul.onclick = function () { overlay.remove(); window._annulPendingDraw(tId); };
+  var publish = overlay.querySelector('[data-publish]'); if (publish) publish.onclick = function () { overlay.remove(); window._publishPendingDraw(tId); };
+  document.body.appendChild(overlay);
+};
+
 window._renderPendingDrawBanner = function (t) {
-  if (!t || !t.pendingDraw) return '';
-  var store = window.AppStore;
+  var marker = window._pendingDrawMarkerFor(t);
+  if (!t || !marker) return '';
   /* ⛔ Aqui a chamada era por APELIDO (`store.isOrganizer`) e escapou das minhas duas
    * primeiras contagens, que procuravam o nome do objeto. Por isso o portão desta leva
    * olha a ÁRVORE e o nome do MÉTODO, não o receptor. */
   if (!window._souOrganizador(t)) return '';
   var esc = window._safeHtml || function (s) { return String(s == null ? '' : s); };
-  var preview = window._renderPendingDrawPreview ? window._renderPendingDrawPreview(t) : '';
   return '<div style="border:2px solid #f59e0b;background:rgba(245,158,11,0.10);border-radius:14px;padding:14px 16px;margin:0 0 1rem;">' +
     '<div style="font-size:1rem;font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);margin-bottom:4px;">🔒 Sorteio em revisão</div>' +
     '<div style="font-size:0.82rem;color:var(--text-main);line-height:1.45;margin-bottom:10px;">O sorteio foi realizado mas <b>não foi publicado</b> e <b>ninguém foi notificado</b>. Confira a chave abaixo. Se estiver tudo certo, clique <b>Publicar</b> — aí sim vai a público e os participantes são avisados. Se houver erro, clique <b>Anular</b>.</div>' +
-    '<details style="margin-bottom:10px;"><summary style="cursor:pointer;font-weight:700;color:var(--text-bright);font-size:0.85rem;">👁️ Ver a chave sorteada</summary>' +
-      '<div style="margin-top:8px;max-height:380px;overflow:auto;">' + preview + '</div>' +
-    '</details>' +
     '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
-      (t.pendingDraw && t.pendingDraw.kind === 'initial' ? '<button class="btn btn-outline" onclick="event.stopPropagation(); window._openPendingInitialSchedule(\'' + esc(t.id) + '\')">📍 Planejar quadras e horários</button>' : '') +
+      '<button class="btn btn-outline" onclick="event.stopPropagation(); window._openPendingDrawReview(\'' + esc(t.id) + '\')">👁️ Ver chave sorteada</button>' +
+      (marker.kind === 'initial' ? '<button class="btn btn-outline" onclick="event.stopPropagation(); window._openPendingInitialSchedule(\'' + esc(t.id) + '\')">📍 Planejar quadras e horários</button>' : '') +
       '<button class="btn btn-outline" style="color:var(--sp-c-f87171,#f87171);border-color:rgba(248,113,113,0.5);" onclick="event.stopPropagation(); window._annulPendingDraw(\'' + esc(t.id) + '\')">✕ Anular</button>' +
       '<button class="btn btn-shine" style="background:#10b981;color:#fff;border:1px solid var(--sp-b-255-255-255-03,rgba(255,255,255,0.3));font-weight:700;" onclick="event.stopPropagation(); window._publishPendingDraw(\'' + esc(t.id) + '\')">🚀 Publicar sorteio</button>' +
     '</div>' +
@@ -6683,6 +6758,8 @@ window._publishPendingDraw = async function (tId) {
     var res=await window._callCF('resolvePendingDraw',{ tournamentId:String(tId), action:'publish' },'Entre na sua conta para publicar o sorteio.');
     if(!((res&&res.data)||{}).changed) return;
     if (window.__pendingInitialDraws) delete window.__pendingInitialDraws[String(tId)];
+    if (window.__pendingDrawMarkers) delete window.__pendingDrawMarkers[String(tId)];
+    if (window.__pendingDrawMarkerLoads) delete window.__pendingDrawMarkerLoads[String(tId)];
     if(window.showNotification) window.showNotification('🚀 Sorteio publicado!','A chave foi liberada para os participantes.','success');
     if(window._rerenderBracket) window._rerenderBracket(tId);
   } catch(e) { if(window._warn) window._warn('[publishPendingDraw] CF falhou',e); if(window.showNotification) window.showNotification('Sorteio não publicado','Não foi possível publicar o sorteio. Tente novamente.','error'); }
@@ -6691,6 +6768,8 @@ window._annulPendingDraw = function (tId) {
   var go=function(){ return window._callCF('resolvePendingDraw',{ tournamentId:String(tId), action:'annul' },'Entre na sua conta para anular o sorteio.').then(function(res){
     var out=(res&&res.data)||{};
     if(window.__pendingInitialDraws) delete window.__pendingInitialDraws[String(tId)];
+    if(window.__pendingDrawMarkers) delete window.__pendingDrawMarkers[String(tId)];
+    if(window.__pendingDrawMarkerLoads) delete window.__pendingDrawMarkerLoads[String(tId)];
     // Anular devolve o torneio ao ponto anterior ao primeiro sorteio. A aprovação
     // local da tela também precisa sumir, ou uma segunda tentativa pula as escolhas
     // obrigatórias de dias/ordem e de estruturado/livre.

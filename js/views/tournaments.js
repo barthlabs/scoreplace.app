@@ -4514,6 +4514,14 @@ function renderTournaments(container, tournamentId = null) {
   `;
     container.innerHTML = html;
 
+    /* O listener pode estar um snapshot atrás exatamente quando o sorteio acabou.
+       A organização consulta o marcador canônico uma vez e repinta o painel de
+       revisão; sem isso o toast dizia "em revisão" enquanto Ver/Anular/Publicar
+       sumiam da própria tela de detalhe. */
+    if (tournamentId && visible.length === 1 && window._souOrganizador(visible[0]) && typeof window._hydratePendingDrawMarker === 'function') {
+        window._hydratePendingDrawMarker(visible[0].id);
+    }
+
     // O logo do local é parte do cabeçalho recém-renderizado. Hidratá-lo aqui evita
     // depender do observador global e o mantém visível já no primeiro paint.
     try { if (window._hydrateVenueLogos) window._hydrateVenueLogos(container); } catch (e) {}
