@@ -114,6 +114,9 @@ const TABELA = [
   { nome: "formLatePair", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },
   { nome: "formPair", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
   { nome: "generateExtraTournamentRound", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },
+  /* Exportado por functions-autodraw/index.js: o marcador público da revisão,
+   * chamado quando o snapshot local do detalhe ainda está no estado pré-sorteio. */
+  { nome: "getPendingDrawReviewState", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },
   { nome: "getCommunicationStats", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
   { nome: "getOwnEmailMergeCandidates", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
   { nome: "getTournamentDuplicateAccounts", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },

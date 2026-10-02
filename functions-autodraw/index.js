@@ -4415,6 +4415,8 @@ exports.getPendingInitialDraw = onCall(async (request) => {
 // Marcador mínimo da revisão. O cliente usa esta porta ao entrar no detalhe do
 // torneio porque o snapshot pode ainda representar o instante anterior ao draw.
 // Não devolve times, confrontos nem agenda: esses continuam no subdocumento privado.
+// ⛔ É o export `getPendingDrawReviewState` de tests/contrato-callables.js.
+// Mantê-los juntos impede que o cliente chame uma porta não inventariada/publicada.
 exports.getPendingDrawReviewState = onCall(async (request) => {
   const uid = request.auth && request.auth.uid;
   const tId = String((request.data && request.data.tournamentId) || '').trim();

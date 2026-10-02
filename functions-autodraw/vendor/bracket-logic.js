@@ -6717,7 +6717,9 @@ window._openPendingDrawReview = function (tId) {
   var old = document.getElementById('pending-draw-review-overlay'); if (old) old.remove();
   var overlay = document.createElement('div');
   overlay.id = 'pending-draw-review-overlay'; overlay.className = 'modal-overlay';
-  overlay.innerHTML = '<div class="modal" role="dialog" aria-modal="true" aria-label="Revisar sorteio" style="width:min(920px,96vw);max-height:88vh;display:flex;flex-direction:column;">' +
+  /* ⛔ Área, não viewport: `.modal-overlay` ocupa o retângulo fixo e `.modal` usa
+   * porcentagem por contrato. Não reintroduza vh aqui: sob zoom do body ele escapa da área. */
+  overlay.innerHTML = '<div class="modal" role="dialog" aria-modal="true" aria-label="Revisar sorteio" style="width:min(920px,96vw);max-height:88%;display:flex;flex-direction:column;">' +
     '<div style="display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:10px;"><h2 style="margin:0;font-size:1.15rem;">👁️ Chave sorteada em revisão</h2><button class="btn btn-outline" data-close>Voltar</button></div>' +
     '<div style="color:var(--text-muted);font-size:.86rem;margin-bottom:12px;">Ainda privada: participantes não veem nem recebem notificações.</div>' +
     '<div style="overflow:auto;padding-right:4px;">' + (window._renderPendingDrawPreview ? window._renderPendingDrawPreview(t) : '') + '</div>' +
