@@ -91,6 +91,24 @@ ok(byCategoryMatch.FL && byCategoryMatch.FP && byCategoryMatch.ML &&
   'cada categoria permanece no dia configurado, sem vazar para o outro dia');
 ok(byCategoryMatch.FL && byCategoryMatch.FP && byCategoryMatch.FL.ms < byCategoryMatch.FP.ms,
   'a ordem declarada torna Fem Light anterior a Fem Power no mesmo dia');
+const splitCategoryDays = Object.assign({}, categoryDays, {
+  categorySchedule:{ version:1, slots:[
+    { category:'Fem Light', day:'2026-10-22', order:1 },
+    { category:'Fem Light', day:'2026-10-23', order:1 }
+  ] },
+  matches:[
+    { id:'FL1', category:'Fem Light', round:1, p1:'A', p2:'B' },
+    { id:'FL2', category:'Fem Light', round:2, p1:'C', p2:'D' },
+    { id:'FL3', category:'Fem Light', round:3, p1:'E', p2:'F' },
+    { id:'FL4', category:'Fem Light', round:4, p1:'G', p2:'H' }
+  ]
+});
+const splitGrade = W._schGradeEstimada(splitCategoryDays);
+const splitByMatch = {}; (splitGrade && splitGrade.slots || []).forEach(function (slot) { splitByMatch[slot.matchId] = slot; });
+ok(splitByMatch.FL1 && splitByMatch.FL2 && splitByMatch.FL3 && splitByMatch.FL4 &&
+  splitByMatch.FL1.iso.slice(0, 10) === '2026-10-22' && splitByMatch.FL2.iso.slice(0, 10) === '2026-10-22' &&
+  splitByMatch.FL3.iso.slice(0, 10) === '2026-10-23' && splitByMatch.FL4.iso.slice(0, 10) === '2026-10-23',
+  'uma categoria em dois dias mantém as rodadas contínuas e termina no segundo dia');
 const tooShort = Object.assign({}, categoryDays, { endDate:'2026-10-22T18:10' });
 ok(W._schGradeEstimada(tooShort).cabe === false && W._operationalSchedulePlan(tooShort).cabe === false,
   'uma categoria que não cabe no dia bloqueia a aplicação da agenda');
@@ -99,8 +117,13 @@ ok(/categorySchedule/.test(fs.readFileSync(path.join(__dirname, '..', 'js', 'vie
 const functionsSource = fs.readFileSync(path.join(__dirname, '..', 'functions-autodraw', 'index.js'), 'utf8');
 ok(/'teamCompetition','categorySchedule'/.test(functionsSource) && /'teamCompetition','categorySchedule','turnos'/.test(functionsSource),
   'o servidor aceita a agenda antes do sorteio e a congela junto com a estrutura depois da chave');
-ok(/'courtNames','courtOrder'/.test(functionsSource) && /data-team-court-rank/.test(fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'tournaments-draw.js'), 'utf8')),
-  'a organização define a prioridade das quadras antes do sorteio');
+const drawSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'tournaments-draw.js'), 'utf8');
+ok(/'courtNames','courtOrder'/.test(functionsSource) && /data-team-court-card/.test(drawSource) && /draggable="true"/.test(drawSource),
+  'a organização define a prioridade das quadras com cards arrastáveis antes do sorteio');
+ok(/data-team-day-lane/.test(drawSource) && /data-team-category-source/.test(drawSource) && /data-team-remove-category/.test(drawSource),
+  'categorias podem ser arrastadas para um ou mais dias e removidas de um dia específico');
+ok(/data-team-toggle-group="mode"/.test(drawSource) && /wireToggle\('mode'/.test(drawSource),
+  'o modo estruturado/livre usa toggle com explicação dinâmica da escolha ativa');
 
 // A agenda não pode voltar a expor IDs técnicos como a informação principal. A mesma
 // grade serve ao rascunho e ao torneio publicado: linhas são horários, colunas são

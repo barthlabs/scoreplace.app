@@ -698,10 +698,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     return { dias: dias, iniHm: ini.hm, fimHm: fim.hm };
   };
 
-  // A programação de categorias é declarativa: antes do sorteio a organização
-  // escolhe em qual dia cada categoria joga e sua posição naquele dia. Não há
-  // inferência por gênero no motor; Fem/Masc, Misto e categorias personalizadas
-  // são somente nomes de categoria e recebem o mesmo tratamento.
+  // A programação de categorias é declarativa: a organização pode colocar uma
+  // categoria em mais de um dia. Nesse caso o planejador preserva a sequência
+  // das rodadas, começando no primeiro cartão/dia e terminando no último.
   function _schCategoriaDoJogo(m) {
     return String((m && (m.category || (m.team1Obj && m.team1Obj.category) || (m.team2Obj && m.team2Obj.category))) || '').trim();
   }
@@ -711,10 +710,12 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     slots.forEach(function (slot, index) {
       var category = String(slot && slot.category || '').trim();
       var day = String(slot && slot.day || '').slice(0, 10);
-      if (!category || !/^\d{4}-\d{2}-\d{2}$/.test(day) || used[category]) return;
-      used[category] = true;
-      out[category] = { day:day, order:Math.max(1, Number(slot.order) || (index + 1)) };
+      var key = category + '|' + day;
+      if (!category || !/^\d{4}-\d{2}-\d{2}$/.test(day) || used[key]) return;
+      used[key] = true;
+      (out[category] || (out[category] = [])).push({ day:day, order:Math.max(1, Number(slot.order) || (index + 1)) });
     });
+    Object.keys(out).forEach(function (category) { out[category].sort(function (a, b) { return a.day.localeCompare(b.day) || a.order - b.order; }); });
     return out;
   };
 
@@ -754,10 +755,20 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         var categoria = _schCategoriaDoJogo(m), agenda = agendaCategorias[categoria];
         var k = (agenda ? categoria : '') + '|' + f + '|' + r;
         if (!porChave[k]) {
-          porChave[k] = { fase:f, rodada:r, categoria:categoria, agenda:agenda || null, ms:[] };
+          porChave[k] = { fase:f, rodada:r, categoria:categoria, agendas:agenda || null, agenda:null, ms:[] };
           chaves.push(k);
         }
         porChave[k].ms.push(m);
+      });
+      // Distribui blocos consecutivos de cada categoria pelos dias escolhidos.
+      // Ex.: 4 rodadas em dois dias = R1/R2 no primeiro, R3/R4 no segundo.
+      var keysByCategory = {};
+      chaves.forEach(function (key) { var block = porChave[key], name = block.categoria; if (block.agendas && name) (keysByCategory[name] || (keysByCategory[name] = [])).push(key); });
+      Object.keys(keysByCategory).forEach(function (category) {
+        var keys = keysByCategory[category];
+        keys.sort(function (a, b) { var A = porChave[a], B = porChave[b]; return (A.fase - B.fase) || (A.rodada - B.rodada); });
+        var agendas = porChave[keys[0]].agendas;
+        keys.forEach(function (key, index) { porChave[key].agenda = agendas[Math.min(agendas.length - 1, Math.floor(index * agendas.length / keys.length))]; });
       });
       chaves.sort(function (a, b) {
         var A = porChave[a], B = porChave[b];

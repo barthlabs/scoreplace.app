@@ -2639,10 +2639,17 @@ window._showTeamCompetitionDrawReview = function (tId, opts) {
       return out;
     }
     var days = dateKeys(), storedSlots = (t.categorySchedule && Array.isArray(t.categorySchedule.slots)) ? t.categorySchedule.slots : [];
+    // Uma categoria pode ocupar mais de um dia. Isso não duplica partidas: o
+    // motor reparte suas rodadas em blocos contínuos, da primeira à final.
     var byCategory = {};
-    storedSlots.forEach(function (slot) { var name = String(slot && slot.category || '').trim(); if (name && !byCategory[name]) byCategory[name] = slot; });
+    storedSlots.forEach(function (slot) {
+      var name = String(slot && slot.category || '').trim(), day = String(slot && slot.day || '').slice(0, 10);
+      if (!name || days.indexOf(day) < 0) return;
+      var list = byCategory[name] || (byCategory[name] = []);
+      if (!list.some(function (item) { return item.day === day; })) list.push({ day:day, order:Math.max(1, Number(slot.order) || (list.length + 1)) });
+    });
     function defaultCategorySlot(category, index) {
-      var stored = byCategory[category]; if (stored && days.indexOf(String(stored.day || '').slice(0, 10)) >= 0) return { day:String(stored.day).slice(0, 10), order:Math.max(1, Number(stored.order) || (index + 1)) };
+      var stored = byCategory[category]; if (stored && stored.length) return stored[0];
       // Um torneio com dois dias e categorias explicitamente Fem/Masc começa
       // com a divisão mais útil, mas continua inteiramente editável.
       var female = /(^|\s)(fem|femin)/i.test(category), male = /(^|\s)(masc|mascul)/i.test(category);
@@ -2674,22 +2681,26 @@ window._showTeamCompetitionDrawReview = function (tId, opts) {
     overlay.id = 'team-draw-review-panel';
     overlay.style.cssText = 'position:fixed;inset:0;z-index:100001;background:rgba(2,6,23,.94);backdrop-filter:blur(10px);display:flex;align-items:center;justify-content:center;padding:16px;';
     var safe = window._safeHtml || function (value) { return String(value == null ? '' : value); };
-    var rows = categories.map(function (category) {
-        var n = countByCategory[category] || 0, ok = n === cfg.teamCount;
-        return '<div style="display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid rgba(148,163,184,.14);"><span>' + safe(category) + '</span><b style="color:' + (ok ? '#4ade80' : '#fb7185') + ';">' + n + '/' + cfg.teamCount + ' duplas ' + (ok ? '✓' : '✕') + '</b></div>';
+    function categoryCard(category, removable) {
+      return '<div draggable="true" data-team-category-card="' + safe(category) + '" style="display:flex;align-items:center;gap:6px;padding:7px 8px;border:1px solid rgba(74,222,128,.45);border-radius:8px;background:#132a27;color:var(--text-bright,#ebebf5);font-size:.78rem;font-weight:800;cursor:grab;user-select:none;">' +
+        '<span aria-hidden="true" style="color:#86efac;">⠿</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;">' + safe(category) + '</span>' +
+        (removable ? '<button type="button" data-team-remove-category title="Remover deste dia" aria-label="Remover ' + safe(category) + ' deste dia" style="border:0;background:transparent;color:var(--sp-c-f87171,#f87171);font-size:1rem;cursor:pointer;padding:0 2px;">×</button>' : '') + '</div>';
+    }
+    var categorySourceCards = categories.map(function (category) { return categoryCard(category, false); }).join('');
+    var categoryDayLanes = days.map(function (day) {
+      var cards = categories.filter(function (category, index) {
+        var stored = byCategory[category];
+        return (stored && stored.some(function (slot) { return slot.day === day; })) || (!stored && defaultCategorySlot(category, index).day === day);
+      }).sort(function (a, b) {
+        var aSlot = (byCategory[a] || []).filter(function (slot) { return slot.day === day; })[0] || defaultCategorySlot(a, categories.indexOf(a));
+        var bSlot = (byCategory[b] || []).filter(function (slot) { return slot.day === day; })[0] || defaultCategorySlot(b, categories.indexOf(b));
+        return aSlot.order - bSlot.order;
+      }).map(function (category) { return categoryCard(category, true); }).join('');
+      return '<section data-team-day-lane data-day="' + safe(day) + '" style="min-width:0;border:1px dashed rgba(74,222,128,.5);border-radius:10px;padding:8px;background:rgba(6,78,59,.12);">' +
+        '<b style="display:block;color:#86efac;font-size:.8rem;margin-bottom:7px;">' + safe(dayLabel(day)) + '</b><div data-team-day-cards style="display:grid;gap:6px;min-height:42px;">' + cards + '</div></section>';
     }).join('');
-    var categoryScheduleRows = categories.map(function (category, index) {
-      var slot = defaultCategorySlot(category, index);
-      return '<div style="display:grid;grid-template-columns:minmax(120px,1fr) minmax(130px,1fr) 76px;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid rgba(148,163,184,.14);">' +
-        '<b style="font-size:.86rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + safe(category) + '</b>' +
-        '<select data-team-category-day data-category="' + safe(category) + '" aria-label="Dia de ' + safe(category) + '">' + days.map(function (day) { return '<option value="' + safe(day) + '"' + (day === slot.day ? ' selected' : '') + '>' + safe(dayLabel(day)) + '</option>'; }).join('') + '</select>' +
-        '<input data-team-category-order data-category="' + safe(category) + '" type="number" min="1" max="' + categories.length + '" value="' + slot.order + '" aria-label="Ordem de ' + safe(category) + '" style="min-width:0">' +
-      '</div>';
-    }).join('');
-    var courtPriorityRows = normalizedCourtOrder.map(function (court, index) {
-      return '<div style="display:grid;grid-template-columns:76px minmax(0,1fr);gap:8px;align-items:center;padding:7px 0;border-bottom:1px solid rgba(148,163,184,.14);">' +
-        '<select data-team-court-rank data-court="' + safe(court) + '" aria-label="Prioridade de ' + safe(court) + '">' + courtNames.map(function (_, rank) { return '<option value="' + (rank + 1) + '"' + (rank === index ? ' selected' : '') + '>' + (rank + 1) + 'ª</option>'; }).join('') + '</select>' +
-        '<b style="font-size:.86rem;">' + safe(court) + '</b></div>';
+    var courtPriorityCards = normalizedCourtOrder.map(function (court) {
+      return '<div draggable="true" data-team-court-card="' + safe(court) + '" style="display:flex;align-items:center;gap:7px;padding:8px;border:1px solid rgba(56,189,248,.48);border-radius:8px;background:#102838;color:var(--text-bright,#ebebf5);font-size:.8rem;font-weight:800;cursor:grab;user-select:none;"><span aria-hidden="true" style="color:#7dd3fc;">⠿</span><span data-team-court-rank-label></span><span>' + safe(court) + '</span></div>';
     }).join('');
     // Dias/ordem e o formato de confrontos são escolhas da organização. O
     // normalizador usa um valor de compatibilidade para torneios legados, mas ele
@@ -2699,67 +2710,117 @@ window._showTeamCompetitionDrawReview = function (tId, opts) {
     var rounds = Math.min(cfg.schedule.gamesPerTeam, Math.max(1, cfg.teamCount - 1));
     var includePresenceChoice = opts.includePresenceChoice === true;
     var defaultScope = opts.defaultScope === 'present' ? 'present' : 'all';
-    var presenceChoiceHtml = includePresenceChoice
-      ? '<section style="border:1px solid rgba(167,139,250,.45);border-radius:12px;padding:0 14px;margin-bottom:16px;">' +
-          '<h3 style="font-size:.94rem;margin:13px 0 4px;color:#c4b5fd;">👥 Quem participa deste sorteio?</h3>' +
-          '<p style="font-size:.78rem;color:#cbd5e1;margin:0 0 8px;line-height:1.35;">Escolha antes de gerar times, confrontos e agenda.</p>' +
-          '<label style="display:block;margin:9px 0;cursor:pointer;"><input type="radio" name="team-draw-presence" value="all"' + (defaultScope === 'all' ? ' checked' : '') + '> <b>Todos os inscritos</b> — presença é ignorada.</label>' +
-          '<label style="display:block;margin:9px 0;cursor:pointer;"><input type="radio" name="team-draw-presence" value="present"' + (defaultScope === 'present' ? ' checked' : '') + '> <b>Só os presentes</b> — ausentes vão para a lista de espera.</label>' +
-        '</section>'
-      : '';
-    overlay.innerHTML = '<section role="dialog" aria-modal="true" aria-labelledby="team-draw-review-title" style="width:min(680px,100%);max-height:92svh;overflow:auto;background:#101827;border:1px solid rgba(59,130,246,.45);border-radius:20px;box-shadow:0 28px 90px rgba(0,0,0,.65);padding:22px;">' +
-      '<h2 id="team-draw-review-title" style="margin:0;color:var(--text-bright);font-size:1.25rem;">🎲 Sorteio de times</h2>' +
-      '<p style="margin:8px 0 18px;color:#cbd5e1;line-height:1.45;">Nenhum time nem confronto foi revelado. Ao sortear, cada time receberá uma dupla de cada categoria e, só então, os confrontos serão gerados.</p>' +
-      '<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:18px;">' +
-        '<div style="padding:10px;border-radius:10px;background:#182235;text-align:center;"><b style="display:block;color:#fff;font-size:1.25rem;">' + (entries.length * 2) + '</b><span style="font-size:.72rem;color:#94a3b8;">participantes</span></div>' +
-        '<div style="padding:10px;border-radius:10px;background:#182235;text-align:center;"><b style="display:block;color:#fff;font-size:1.25rem;">' + entries.length + '</b><span style="font-size:.72rem;color:#94a3b8;">duplas</span></div>' +
-        '<div style="padding:10px;border-radius:10px;background:#182235;text-align:center;"><b style="display:block;color:#fff;font-size:1.25rem;">' + categories.length + '</b><span style="font-size:.72rem;color:#94a3b8;">categorias</span></div>' +
-        '<div style="padding:10px;border-radius:10px;background:#182235;text-align:center;"><b style="display:block;color:#fff;font-size:1.25rem;">' + cfg.teamCount + '</b><span style="font-size:.72rem;color:#94a3b8;">times</span></div>' +
+    var presenceChoiceHtml = includePresenceChoice ? '<section data-team-toggle-group="presence" style="margin-bottom:12px;"><b style="font-size:.88rem;color:#c4b5fd;">Participantes</b><div style="display:flex;gap:8px;margin-top:7px;"><button type="button" data-team-toggle="all" class="btn" style="flex:1;">Todos</button><button type="button" data-team-toggle="present" class="btn" style="flex:1;">Só presentes</button></div><p data-team-toggle-copy style="margin:7px 0 0;color:#a5b4fc;font-size:.76rem;line-height:1.3;"></p></section>' : '';
+    overlay.innerHTML = '<section role="dialog" aria-modal="true" aria-labelledby="team-draw-review-title" style="width:min(1180px,calc(100vw - 24px));max-height:94svh;overflow:auto;background:#101827;border:1px solid rgba(59,130,246,.45);border-radius:20px;box-shadow:0 28px 90px rgba(0,0,0,.65);padding:18px;">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:12px;"><div><h2 id="team-draw-review-title" style="margin:0;color:var(--text-bright);font-size:1.18rem;">🎲 Configurar sorteio</h2><span style="font-size:.75rem;color:#94a3b8;">' + entries.length * 2 + ' participantes · ' + entries.length + ' duplas · ' + categories.length + ' categorias · ' + cfg.teamCount + ' times</span></div><button type="button" id="team-draw-cancel-top" class="btn">← Voltar</button></div>' +
+      '<style>@media (max-width:780px){#team-draw-review-panel [data-team-draw-layout]{grid-template-columns:1fr!important;}#team-draw-review-panel [data-team-day-lane]{min-width:135px!important;}}</style><div data-team-draw-layout style="display:grid;grid-template-columns:minmax(270px,.8fr) minmax(420px,1.35fr) minmax(190px,.62fr);gap:14px;align-items:start;">' +
+        '<section style="border:1px solid rgba(167,139,250,.34);border-radius:12px;padding:13px;">' +
+          presenceChoiceHtml +
+          '<section data-team-toggle-group="mode"><b style="font-size:.88rem;color:#c4b5fd;">Confrontos</b><div style="display:flex;gap:8px;margin-top:7px;"><button type="button" data-team-toggle="structured" class="btn" style="flex:1;">Estruturado</button><button type="button" data-team-toggle="free" class="btn" style="flex:1;">Livre</button></div><p data-team-toggle-copy style="margin:7px 0 0;color:#c4b5fd;font-size:.76rem;line-height:1.35;"></p></section>' +
+          '<div style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(148,163,184,.18);font-size:.74rem;color:#94a3b8;">São ' + rounds + ' rodadas por categoria. A opção selecionada vale para todas elas.</div>' +
+        '</section>' +
+        '<section style="border:1px solid rgba(34,197,94,.38);border-radius:12px;padding:13px;">' +
+          '<h3 style="font-size:.94rem;margin:0 0 4px;color:#86efac;">📅 Dias e ordem das categorias</h3><p style="font-size:.75rem;color:#cbd5e1;margin:0 0 9px;line-height:1.3;">Arraste uma categoria para os dias em que ela joga e ordene dentro de cada dia. Em dois dias, as rodadas seguem em sequência; em um só, a categoria termina nele.</p>' +
+          '<div style="display:grid;grid-template-columns:repeat(' + Math.max(1, days.length) + ',minmax(150px,1fr));gap:8px;">' + categoryDayLanes + '</div>' +
+          '<div style="margin-top:9px;"><b style="font-size:.74rem;color:#94a3b8;">Categorias disponíveis — arraste para um dia</b><div data-team-category-source style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;">' + categorySourceCards + '</div></div>' +
+        '</section>' +
+        '<section style="border:1px solid rgba(56,189,248,.38);border-radius:12px;padding:13px;">' +
+          '<h3 style="font-size:.94rem;margin:0 0 4px;color:#7dd3fc;">📍 Quadras</h3><p style="font-size:.75rem;color:#cbd5e1;margin:0 0 9px;line-height:1.3;">Arraste para definir a prioridade.</p><div data-team-court-list style="display:grid;gap:6px;">' + courtPriorityCards + '</div>' +
+        '</section>' +
       '</div>' +
-      '<div style="border:1px solid rgba(148,163,184,.22);border-radius:12px;padding:0 14px;margin-bottom:14px;">' + rows + '</div>' +
-      presenceChoiceHtml +
-      '<div style="font-size:.82rem;color:#cbd5e1;background:rgba(30,41,59,.7);padding:12px;border-radius:10px;margin-bottom:16px;">' +
-        '<b style="color:var(--text-bright);">Formato dos confrontos</b><br>' +
-        '<label style="display:block;margin-top:8px;cursor:pointer;"><input type="radio" name="team-draw-mode" value="structured"' + (selectedMode === 'structured' ? ' checked' : '') + '> 📋 <b>Estruturado</b> — em cada rodada, os mesmos times se enfrentam nas seis categorias.</label>' +
-        '<label style="display:block;margin-top:7px;cursor:pointer;"><input type="radio" name="team-draw-mode" value="free"' + (selectedMode === 'free' ? ' checked' : '') + '> 🎲 <b>Livre</b> — cada categoria sorteia seus próprios adversários, sem repetir oponente dentro das quatro rodadas.</label>' +
-        '<span style="display:block;margin-top:8px;color:#94a3b8;font-size:.76rem;">Escolha obrigatória da organização. Serão ' + rounds + ' rodadas por categoria.</span></div>' +
-      '<section style="border:1px solid rgba(34,197,94,.35);border-radius:12px;padding:0 14px;margin-bottom:16px;">' +
-        '<h3 style="font-size:.94rem;margin:13px 0 4px;color:#86efac;">📅 Dias e ordem das categorias</h3>' +
-        '<p style="font-size:.78rem;color:#cbd5e1;margin:0 0 8px;line-height:1.35;">Cada categoria joga somente no dia escolhido. A ordem define qual categoria entra primeiro naquele dia; categorias personalizadas usam exatamente a mesma regra.</p>' +
-        categoryScheduleRows +
-      '</section>' +
-      '<section style="border:1px solid rgba(56,189,248,.35);border-radius:12px;padding:0 14px;margin-bottom:16px;">' +
-        '<h3 style="font-size:.94rem;margin:13px 0 4px;color:#7dd3fc;">📍 Prioridade das quadras</h3>' +
-        '<p style="font-size:.78rem;color:#cbd5e1;margin:0 0 8px;line-height:1.35;">Quando dois jogos começam no mesmo horário, a quadra de maior prioridade recebe o próximo jogo. A ordem padrão segue a numeração das quadras.</p>' +
-        courtPriorityRows +
-      '</section>' +
       (!valid ? '<p style="margin:0 0 14px;color:var(--sp-c-f87171,#f87171);font-weight:700;">O sorteio está bloqueado: são necessárias ' + expectedPairs + ' duplas já formadas, com ' + cfg.teamCount + ' em cada categoria.</p>' : '') +
       '<div style="display:flex;justify-content:flex-end;gap:10px;"><button type="button" id="team-draw-cancel" class="btn">Cancelar</button><button type="button" id="team-draw-confirm" class="btn btn-primary"' + (valid ? '' : ' disabled aria-disabled="true" style="opacity:.45;cursor:not-allowed;"') + '>🎲 Sortear times e confrontos</button></div></section>';
     document.body.appendChild(overlay);
     var close = function () { overlay.remove(); };
     overlay.querySelector('#team-draw-cancel').onclick = function () { close(); if (typeof opts.onCancel === 'function') opts.onCancel(); };
+    overlay.querySelector('#team-draw-cancel-top').onclick = function () { close(); if (typeof opts.onCancel === 'function') opts.onCancel(); };
+    // Os dois pares de escolhas usam o mesmo padrão visual dos toggles do
+    // torneio: uma escolha ativa e uma explicação curta, não dois parágrafos
+    // concorrendo por atenção.
+    var selectedScope = defaultScope, selectedDrawMode = selectedMode;
+    function wireToggle(groupName, selected, copy) {
+      var group = overlay.querySelector('[data-team-toggle-group="' + groupName + '"]');
+      if (!group) return function () { return selected; };
+      var buttons = group.querySelectorAll('[data-team-toggle]'), hint = group.querySelector('[data-team-toggle-copy]');
+      function paint(value) {
+        selected = value;
+        Array.prototype.forEach.call(buttons, function (button) {
+          var active = button.getAttribute('data-team-toggle') === value;
+          button.style.background = active ? 'linear-gradient(135deg,#2563eb,#4f46e5)' : '#182235';
+          button.style.borderColor = active ? '#60a5fa' : 'rgba(148,163,184,.35)';
+          button.style.color = active ? '#fff' : '#cbd5e1';
+          button.setAttribute('aria-pressed', active ? 'true' : 'false');
+        });
+        if (hint) hint.textContent = copy(value);
+      }
+      Array.prototype.forEach.call(buttons, function (button) { button.onclick = function () { paint(button.getAttribute('data-team-toggle')); }; });
+      paint(selected);
+      return function () { return selected; };
+    }
+    var getScope = includePresenceChoice ? wireToggle('presence', selectedScope, function (value) {
+      return value === 'present' ? 'Só as duplas presentes entram; ausentes permanecem na lista de espera.' : 'Todos os inscritos participam; a presença não altera o sorteio.';
+    }) : function () { return 'all'; };
+    var getDrawMode = wireToggle('mode', selectedDrawMode, function (value) {
+      return value === 'structured' ? 'Em cada rodada, os mesmos dois times se enfrentam em todas as categorias.' : 'Cada categoria sorteia adversários próprios, sem repetir oponente nas rodadas.';
+    });
+    // Drag & drop de categorias: a origem é uma paleta (cópia); cada faixa de
+    // dia guarda uma ocorrência ordenável. Assim a mesma categoria pode começar
+    // num dia e terminar no outro sem duplicar uma partida.
+    var draggingCategory = null, draggingCategoryCard = null, draggingCourt = null;
+    function dayCards(lane) { return lane && lane.querySelector('[data-team-day-cards]'); }
+    function categoryExists(lane, category) {
+      return !!(lane && Array.prototype.some.call(lane.querySelectorAll('[data-team-category-card]'), function (card) {
+        return card.getAttribute('data-team-category-card') === String(category);
+      }));
+    }
+    function bindCategoryCard(card) {
+      card.ondragstart = function (event) { draggingCategory = card.getAttribute('data-team-category-card'); draggingCategoryCard = card.closest('[data-team-day-lane]') ? card : null; if (event.dataTransfer) event.dataTransfer.effectAllowed = draggingCategoryCard ? 'move' : 'copy'; };
+      card.ondragend = function () { draggingCategory = null; draggingCategoryCard = null; };
+      var remove = card.querySelector('[data-team-remove-category]');
+      if (remove) remove.onclick = function () { card.remove(); };
+    }
+    Array.prototype.forEach.call(overlay.querySelectorAll('[data-team-category-card]'), bindCategoryCard);
+    Array.prototype.forEach.call(overlay.querySelectorAll('[data-team-day-lane]'), function (lane) {
+      lane.ondragover = function (event) { if (draggingCategory) { event.preventDefault(); lane.style.borderColor = '#4ade80'; } };
+      lane.ondragleave = function () { lane.style.borderColor = 'rgba(74,222,128,.5)'; };
+      lane.ondrop = function (event) {
+        event.preventDefault(); lane.style.borderColor = 'rgba(74,222,128,.5)'; if (!draggingCategory) return;
+        var target = event.target.closest && event.target.closest('[data-team-category-card]'), holder = dayCards(lane);
+        if (!holder) return;
+        if (draggingCategoryCard && draggingCategoryCard.closest('[data-team-day-lane]') === lane) {
+          if (target && target !== draggingCategoryCard) holder.insertBefore(draggingCategoryCard, target); return;
+        }
+        if (categoryExists(lane, draggingCategory)) return;
+        var source = Array.prototype.filter.call(overlay.querySelectorAll('[data-team-category-card]'), function (card) {
+          return card.getAttribute('data-team-category-card') === String(draggingCategory);
+        })[0];
+        if (!source) return;
+        var copy = source.cloneNode(true); var remove = copy.querySelector('[data-team-remove-category]');
+        if (!remove) { copy.insertAdjacentHTML('beforeend', '<button type="button" data-team-remove-category title="Remover deste dia" aria-label="Remover deste dia" style="border:0;background:transparent;color:var(--sp-c-f87171,#f87171);font-size:1rem;cursor:pointer;padding:0 2px;">×</button>'); }
+        bindCategoryCard(copy); if (target) holder.insertBefore(copy, target); else holder.appendChild(copy);
+      };
+    });
+    function paintCourtRanks() { Array.prototype.forEach.call(overlay.querySelectorAll('[data-team-court-card]'), function (card, index) { var label = card.querySelector('[data-team-court-rank-label]'); if (label) label.textContent = (index + 1) + 'ª'; }); }
+    Array.prototype.forEach.call(overlay.querySelectorAll('[data-team-court-card]'), function (card) {
+      card.ondragstart = function () { draggingCourt = card; };
+      card.ondragover = function (event) { if (draggingCourt) event.preventDefault(); };
+      card.ondrop = function (event) { event.preventDefault(); if (draggingCourt && draggingCourt !== card) card.parentNode.insertBefore(draggingCourt, card); paintCourtRanks(); };
+      card.ondragend = function () { draggingCourt = null; };
+    });
+    paintCourtRanks();
     var confirm = overlay.querySelector('#team-draw-confirm');
     if (valid && confirm) confirm.onclick = function () {
-        var slots = categories.map(function (category) {
-          var findControl = function (attribute) {
-            var found = null, controls = overlay.querySelectorAll('[' + attribute + ']');
-            Array.prototype.some.call(controls, function (control) { if (control.getAttribute('data-category') === category) { found = control; return true; } return false; });
-            return found;
-          };
-          var dayControl = findControl('data-team-category-day');
-          var orderControl = findControl('data-team-category-order');
-          return { category:category, day:dayControl && dayControl.value, order:Math.max(1, Number(orderControl && orderControl.value) || 1) };
+        var slots = [];
+        Array.prototype.forEach.call(overlay.querySelectorAll('[data-team-day-lane]'), function (lane) {
+          var day = lane.getAttribute('data-day');
+          Array.prototype.forEach.call(lane.querySelectorAll('[data-team-category-card]'), function (card, index) { slots.push({ category:card.getAttribute('data-team-category-card'), day:day, order:index + 1 }); });
         });
-        var modeControl = overlay.querySelector('input[name="team-draw-mode"]:checked');
-        var selectedDrawMode = modeControl && modeControl.value;
-        var presenceControl = overlay.querySelector('input[name="team-draw-presence"]:checked');
-        var selectedScope = presenceControl && presenceControl.value === 'present' ? 'present' : 'all';
-        var ranks = {};
-        Array.prototype.forEach.call(overlay.querySelectorAll('[data-team-court-rank]'), function (control) { ranks[control.getAttribute('data-court')] = Number(control.value); });
-        var selectedCourtOrder = courtNames.slice().sort(function (a, b) { return (ranks[a] || 999) - (ranks[b] || 999) || a.localeCompare(b); });
-        var validCourtOrder = selectedCourtOrder.length === courtNames.length && Object.keys(ranks).length === courtNames.length && new Set(Object.keys(ranks).map(function (court) { return ranks[court]; })).size === courtNames.length;
-        var validSlots = slots.length === categories.length && slots.every(function (slot) { return days.indexOf(slot.day) >= 0; });
-        if (!validSlots) { if (window.showNotification) window.showNotification('Agenda inválida', 'Escolha um dia para cada categoria.', 'error'); return; }
+        selectedDrawMode = getDrawMode(); selectedScope = getScope();
+        var selectedCourtOrder = Array.prototype.map.call(overlay.querySelectorAll('[data-team-court-card]'), function (card) { return card.getAttribute('data-team-court-card'); });
+        var validCourtOrder = selectedCourtOrder.length === courtNames.length && new Set(selectedCourtOrder).size === courtNames.length;
+        var scheduledCategories = {}; slots.forEach(function (slot) { scheduledCategories[slot.category] = true; });
+        var validSlots = slots.length >= categories.length && categories.every(function (category) { return scheduledCategories[category]; }) && slots.every(function (slot) { return days.indexOf(slot.day) >= 0; });
+        if (!validSlots) { if (window.showNotification) window.showNotification('Agenda incompleta', 'Arraste cada categoria para pelo menos um dia do torneio.', 'error'); return; }
         if (selectedDrawMode !== 'structured' && selectedDrawMode !== 'free') { if (window.showNotification) window.showNotification('Formato não escolhido', 'Escolha sorteio estruturado ou livre antes de continuar.', 'error'); return; }
         if (!validCourtOrder) { if (window.showNotification) window.showNotification('Prioridade das quadras inválida', 'Cada quadra precisa ter uma posição diferente.', 'error'); return; }
         if (includePresenceChoice && selectedScope === 'present') {

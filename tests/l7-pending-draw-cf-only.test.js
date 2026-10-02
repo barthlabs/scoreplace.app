@@ -28,9 +28,9 @@ ok(b.includes('window._openPendingInitialSchedule')&&b.includes("_callCF('setPen
 ok(i.includes('exports.getPendingInitialDraw')&&i.includes('_isTournamentAdmin(t, uid)')&&i.includes("collection('privateDraws')"),'Prévia privada só é lida pela Function após conferir a organização');
 ok(draw.includes('_requireExplicitTeamDrawPlan(t, tId)')&&i.includes('modeConfirmed')&&i.includes('categorySchedule')&&i.includes('plan.confirmed === true'),'Function bloqueia competição por times sem modo e agenda explicitamente escolhidos');
 ok(tc.includes('function configurationForTournament')&&i.includes('configurationForTournament(t)')&&d.includes('configurationForTournament(t)'), 'cliente e Function não deixam cópia parcial no topo pular a decisão obrigatória');
-ok(d.includes('name="team-draw-mode"')&&d.includes('modeConfirmed:true')&&d.includes('confirmed:true'),'Tela exige e persiste modo e agenda escolhidos pela organização');
-ok(d.includes('data-team-court-rank')&&d.includes('courtOrder:selectedCourtOrder'),'Tela permite declarar a prioridade das quadras antes do sorteio');
-ok(d.includes('includePresenceChoice')&&d.includes('name="team-draw-presence"')&&d.includes('opts.onReady({ scope:selectedScope })'),'A mesma tela de times inclui todos/presentes e só prossegue após as quatro escolhas');
+ok(d.includes('data-team-toggle-group="mode"')&&d.includes('modeConfirmed:true')&&d.includes('confirmed:true'),'Tela exige e persiste modo e agenda escolhidos pela organização');
+ok(d.includes('data-team-court-card')&&d.includes('courtOrder:selectedCourtOrder'),'Tela permite declarar a prioridade das quadras antes do sorteio');
+ok(d.includes('includePresenceChoice')&&d.includes('data-team-toggle-group="presence"')&&d.includes('opts.onReady({ scope:selectedScope })'),'A mesma tela de times inclui todos/presentes e só prossegue após as quatro escolhas');
 const tournamentView=fs.readFileSync('js/views/tournaments.js','utf8');
 ok(tournamentView.includes('includePresenceChoice: !_isLigaSort')&&tournamentView.includes('window._showTeamCompetitionDrawReview(tId, {')&&tournamentView.includes('scope:scope'),'O botão Sortear abre a tela única antes do sorteio, gravando o escopo junto das demais decisões');
 ok(d.includes('includePresenceChoice: true')&&d.includes('window.generateDrawFunction(tId);'),'Atalhos da chave também reabrem a tela única com todos/presentes antes de gerar');
