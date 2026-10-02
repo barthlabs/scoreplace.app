@@ -1,3 +1,4 @@
+// 2.3.224 — Atalhos da dashboard entram diretamente no detalhe canônico levando jogo, aba e grupo; no celular as abas ficam imediatamente após a busca, sem conteúdo atravessando a faixa fixa.
 // 2.3.223 — O fluxo canônico de competição por times sempre abre a tela obrigatória de decisões, inclusive antes da agenda existir; falhas restauram o botão e explicam o erro, sem retorno silencioso. Cache das duas metades do fluxo foi renovado.
 // 2.3.222 — Títulos de torneio na dashboard e no detalhe usam o maior tamanho disponível e crescem em altura quando necessário; palavras nunca são cortadas nem reduzidas por uma caixa fixa.
 // 2.3.221 — A faixa fixa das abas e da rodada não vaza sobre busca ou cards; atalhos da dashboard abrem a categoria e o jogo corretos; o próximo jogo mostra seu horário agendado; títulos usam a mesma fonte fluida na dashboard e no detalhe, sem quebrar palavras.

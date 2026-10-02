@@ -17,6 +17,8 @@ function ok(condition, message) {
 
 ok(dashboard.includes('function _bracketTabForMatch') && dashboard.includes("window._setTournamentMatchTarget"),
   'os atalhos da dashboard guardam a aba canônica e o jogo escolhido');
+ok(dashboard.includes('href="#tournaments/') && dashboard.includes('event.preventDefault()') && dashboard.includes('window._goToTournamentMatch'),
+  'Ir para o torneio navega diretamente ao detalhe canônico com o alvo preservado');
 ok(dashboard.includes('window._goToTournamentMatch') && dashboard.includes('var _cardTab = _bracketTabForMatch(item.m)'),
   'o card de próximo jogo leva a categoria para a navegação');
 ok(dashboard.includes('window._matchCardTimelineTextHtml(_ngT, _ngM)'),
@@ -26,5 +28,5 @@ ok(tournaments.includes('_pendingBracketTarget.tab') && tournaments.includes('wi
 ok(router.includes('_priorBracketTarget') && router.includes('? _priorBracketTarget : { tId: String(cleanParam), matchId: null }'),
   'a rota #bracket preserva o alvo vindo da dashboard');
 
-console.log('\n' + (fail ? '❌' : '✅') + ' dashboard-atalho-aba-e-agenda: ' + (5 - fail) + ' asserts ok, ' + fail + ' falharam');
+console.log('\n' + (fail ? '❌' : '✅') + ' dashboard-atalho-aba-e-agenda: ' + (6 - fail) + ' asserts ok, ' + fail + ' falharam');
 process.exitCode = fail ? 1 : 0;

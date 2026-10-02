@@ -1064,6 +1064,14 @@ window._bracketCategoryTabsMount = function () {
   if (allCats < 2) return; // chave única continua limpa: não há navegação a oferecer.
   var first = cards[0], scope = first.closest ? first.closest('#view-container, #inline-bracket-container') : null;
   if (!scope) scope = document.getElementById('view-container') || document.body;
+  // A busca da chave é a primeira superfície fixa do detalhe. No celular, a
+  // faixa de abas precisa ser sua irmã imediata: deixá-la dentro do trilho que
+  // nasce muito abaixo permitia cards e títulos atravessarem o espaço entre as
+  // duas barras enquanto a aba ainda não tinha alcançado o seu ponto sticky.
+  // A chave continua no #inline-bracket-container; somente sua navegação sobe
+  // para a borda estável do detalhe.
+  var searchWrap = document.getElementById('fbwrap-chaves');
+  var tabsHost = searchWrap && searchWrap.parentNode ? searchWrap.parentNode : null;
   var tid = (window._currentBracketTournament && window._currentBracketTournament.id) || scope.getAttribute('data-tournament-id') || 'current';
   var id = String(tid);
   var isOnlyLines = order.length === 1 && order[0] === 'linhas';
@@ -1085,7 +1093,8 @@ window._bracketCategoryTabsMount = function () {
       var lineSection = _bracketLineSection(first);
       if (lineSection) anchor = lineSection;
     }
-    anchor.parentNode.insertBefore(root, anchor);
+    if (tabsHost) tabsHost.insertBefore(root, searchWrap.nextSibling);
+    else anchor.parentNode.insertBefore(root, anchor);
   } else {
     // O mount pode ser chamado depois de uma atualização de placar que recriou
     // o trilho. Reancora a mesma navegação acima das rodadas, sem deixá-la
@@ -1095,7 +1104,9 @@ window._bracketCategoryTabsMount = function () {
       var currentLineSection = _bracketLineSection(first);
       if (currentLineSection) currentAnchor = currentLineSection;
     }
-    if (currentAnchor && currentAnchor.parentNode && root.nextElementSibling !== currentAnchor) {
+    if (tabsHost) {
+      if (root.parentNode !== tabsHost || root.previousElementSibling !== searchWrap) tabsHost.insertBefore(root, searchWrap.nextSibling);
+    } else if (currentAnchor && currentAnchor.parentNode && root.nextElementSibling !== currentAnchor) {
       currentAnchor.parentNode.insertBefore(root, currentAnchor);
     }
   }
@@ -1143,7 +1154,6 @@ window._bracketCategoryTabsMount = function () {
   }
   // No desktop, a busca ocupa a sobra da mesma faixa das abas. O próprio nó
   // viaja (não se cria um segundo input nem se perde o listener do filtro).
-  var searchWrap = document.getElementById('fbwrap-chaves');
   if (searchWrap && root.contains(searchWrap) && root.parentNode) root.parentNode.insertBefore(searchWrap, root);
   var putSearchInTabs = !!(searchWrap && window.innerWidth >= 560);
   root.innerHTML = '<div style="display:flex;align-items:flex-end;gap:5px;flex-wrap:wrap;width:100%;border-bottom:1px solid rgba(129,140,248,.6);padding:0 4px;">' + genderHtml + (putSearchInTabs ? '<div data-bracket-search-slot style="margin-left:auto;flex:1 1 260px;max-width:390px;min-width:220px;"></div>' : '') + '</div>'

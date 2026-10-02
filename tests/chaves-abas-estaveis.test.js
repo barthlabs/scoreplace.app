@@ -25,6 +25,7 @@ ok(routerSrc.includes('cleanupBracketRoundHeadingPortals') && routerSrc.includes
 ok(src.includes('data-bracket-tier-title') && src.includes('tierTitles[ti].hidden = true'), 'a linha ativa não duplica título atrás da aba fixa');
 ok(src.includes('data-bracket-search-slot') && src.includes('window.innerWidth >= 560') && src.includes('searchSlot.appendChild(searchWrap)'), 'em janela desktop, a busca usa a sobra da mesma faixa das abas sem duplicar o input');
 ok(!src.includes('box-shadow:0 -48px 0 var(--bg-darker,#111114)') && src.includes('background:#111114;overflow:hidden') && src.includes("clone.style.boxShadow = 'none'"), 'a faixa sticky e o portal não projetam uma tarja sólida sobre busca, título da eliminatória ou conteúdo anterior');
+ok(src.includes('var tabsHost = searchWrap && searchWrap.parentNode') && src.includes('tabsHost.insertBefore(root, searchWrap.nextSibling)'), 'no celular as abas ficam imediatamente após a busca, sem cards atravessando a faixa fixa');
 
-console.log('\n' + (fail ? '❌' : '✅') + ' chaves-abas-estáveis: ' + (14 - fail) + ' asserts ok, ' + fail + ' falharam');
+console.log('\n' + (fail ? '❌' : '✅') + ' chaves-abas-estáveis: ' + (15 - fail) + ' asserts ok, ' + fail + ' falharam');
 process.exitCode = fail ? 1 : 0;

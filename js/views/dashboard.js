@@ -1882,10 +1882,8 @@ function renderDashboard(container) {
     // fazer a mesma coisa nos seus ultimos resultados".
     // Como este cabeçalho é a FONTE ÚNICA das duas seções (Novidades e Seus últimos
     // resultados), o botão nasce nas duas de uma vez — era exatamente o pedido.
-    // ⚠️ Leva pra `#bracket/<id>`: é ali que mora a CLASSIFICAÇÃO do grupo. A chave já
-    // rola sozinha até o jogo do próprio usuário, e como estes grupos são os DELE, o
-    // destino cai na classificação certa sem precisar de âncora por grupo (que não
-    // existe hoje na chave).
+    // O destino canônico é o detalhe do torneio. O jogo, a aba e o grupo viajam
+    // juntos; não passar por #bracket evita uma segunda rota apagar a intenção.
     function _grupoHeadHtml(grupo, tName, cor, attr, inline, tId, matchId, match) {
       // v1.8.99: leva o GRUPO junto — ordem do dono: "tem que ir com o grupo clicado
       // no topo e nao no topo do torneio". O rótulo vai por sessionStorage (não pela
@@ -1903,11 +1901,13 @@ function renderDashboard(container) {
       var _target = "window._setTournamentMatchTarget('" + _escJs(tId) + "','" + _escJs(_mId) + "'," +
         (_tab.category ? "{category:'" + _escJs(_tab.category) + "',gender:'" + _escJs(_tab.gender) + "',round:'" + _escJs(_tab.round) + "'}" : 'null') + ');';
       var _btn = tId
-        ? '<a href="#bracket/' + String(tId).replace(/"/g, '&quot;') + '" ' +
-          'onclick="event.stopPropagation();try{sessionStorage.setItem(\'sp_scrollToGroup\',\'' +
+        ? '<a href="#tournaments/' + String(tId).replace(/"/g, '&quot;') + '" ' +
+          'onclick="event.preventDefault();event.stopPropagation();try{sessionStorage.setItem(\'sp_scrollToGroup\',\'' +
             String(_grpK).replace(/'/g, '') + '\');' +
             (_mId ? ('sessionStorage.setItem(\'sp_scrollToMatch\',\'' + _mId + '\');') : '') + _target +
-          '}catch(e){}" ' +
+            'if(window._goToTournamentMatch){window._goToTournamentMatch(\'' + _escJs(tId) + '\',\'' + _escJs(_mId) + '\',' +
+              (_tab.category ? "{category:'" + _escJs(_tab.category) + "',gender:'" + _escJs(_tab.gender) + "',round:'" + _escJs(_tab.round) + "'}" : 'null') +
+            ');}else{window.location.hash=\'#tournaments/' + _escJs(tId) + '\';}}catch(e){window.location.hash=\'#tournaments/' + _escJs(tId) + '\';}return false;" ' +
           'style="flex-shrink:0;margin-left:auto;align-self:center;font-size:0.62rem;font-weight:700;' +
           'text-decoration:none;color:var(--sp-c-7dd3fc,#7dd3fc);background:rgba(125,211,252,0.14);' +
           'border:1px solid rgba(125,211,252,0.45);border-radius:999px;padding:3px 9px;line-height:1.2;' +
