@@ -2706,13 +2706,15 @@ window._showTeamCompetitionDrawReview = function (tId, opts) {
     // normalizador usa um valor de compatibilidade para torneios legados, mas ele
     // nunca pode virar uma decisão implícita no primeiro sorteio deste torneio.
     var modeConfirmed = cfg.schedule && cfg.schedule.modeConfirmed === true;
-    var selectedMode = modeConfirmed ? cfg.schedule.mode : '';
+    // Livre é o padrão do primeiro sorteio. Uma escolha já persistida pela
+    // organização sempre vence o padrão, inclusive se ela for estruturada.
+    var selectedMode = modeConfirmed && (cfg.schedule.mode === 'structured' || cfg.schedule.mode === 'free') ? cfg.schedule.mode : 'free';
     var rounds = Math.min(cfg.schedule.gamesPerTeam, Math.max(1, cfg.teamCount - 1));
     var includePresenceChoice = opts.includePresenceChoice === true;
     var defaultScope = opts.defaultScope === 'present' ? 'present' : 'all';
     var presenceChoiceHtml = includePresenceChoice ? '<section data-team-toggle-group="presence" style="margin-bottom:12px;"><b style="font-size:.88rem;color:#c4b5fd;">Participantes</b><div style="display:flex;gap:8px;margin-top:7px;"><button type="button" data-team-toggle="all" class="btn" style="flex:1;">Todos</button><button type="button" data-team-toggle="present" class="btn" style="flex:1;">Só presentes</button></div><p data-team-toggle-copy style="margin:7px 0 0;color:#a5b4fc;font-size:.76rem;line-height:1.3;"></p></section>' : '';
     overlay.innerHTML = '<section role="dialog" aria-modal="true" aria-labelledby="team-draw-review-title" style="width:min(1180px,calc(100vw - 24px));max-height:94svh;overflow:auto;background:#101827;border:1px solid rgba(59,130,246,.45);border-radius:20px;box-shadow:0 28px 90px rgba(0,0,0,.65);padding:18px;">' +
-      '<div style="display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:12px;"><div><h2 id="team-draw-review-title" style="margin:0;color:var(--text-bright);font-size:1.18rem;">🎲 Configurar sorteio</h2><span style="font-size:.75rem;color:#94a3b8;">' + entries.length * 2 + ' participantes · ' + entries.length + ' duplas · ' + categories.length + ' categorias · ' + cfg.teamCount + ' times</span></div><button type="button" id="team-draw-cancel-top" class="btn">← Voltar</button></div>' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:12px;"><div><h2 id="team-draw-review-title" style="margin:0;color:var(--text-bright);font-size:1.18rem;">🎲 Configurar sorteio</h2><span style="font-size:.75rem;color:#94a3b8;">' + entries.length * 2 + ' participantes · ' + entries.length + ' duplas · ' + categories.length + ' categorias · ' + cfg.teamCount + ' times</span></div><button type="button" id="team-draw-cancel-top" class="btn" style="background:#182235!important;color:var(--text-bright)!important;border:1px solid #64748b!important;text-shadow:none!important;box-shadow:none!important;">← Voltar</button></div>' +
       '<style>@media (max-width:780px){#team-draw-review-panel [data-team-draw-layout]{grid-template-columns:1fr!important;}#team-draw-review-panel [data-team-day-lane]{min-width:135px!important;}}</style><div data-team-draw-layout style="display:grid;grid-template-columns:minmax(270px,.8fr) minmax(420px,1.35fr) minmax(190px,.62fr);gap:14px;align-items:start;">' +
         '<section style="border:1px solid rgba(167,139,250,.34);border-radius:12px;padding:13px;">' +
           presenceChoiceHtml +
@@ -2729,7 +2731,7 @@ window._showTeamCompetitionDrawReview = function (tId, opts) {
         '</section>' +
       '</div>' +
       (!valid ? '<p style="margin:0 0 14px;color:var(--sp-c-f87171,#f87171);font-weight:700;">O sorteio está bloqueado: são necessárias ' + expectedPairs + ' duplas já formadas, com ' + cfg.teamCount + ' em cada categoria.</p>' : '') +
-      '<div style="display:flex;justify-content:flex-end;gap:10px;"><button type="button" id="team-draw-cancel" class="btn">Cancelar</button><button type="button" id="team-draw-confirm" class="btn btn-primary"' + (valid ? '' : ' disabled aria-disabled="true" style="opacity:.45;cursor:not-allowed;"') + '>🎲 Sortear times e confrontos</button></div></section>';
+      '<div style="display:flex;justify-content:flex-end;gap:10px;"><button type="button" id="team-draw-cancel" class="btn" style="background:#182235!important;color:var(--text-bright)!important;border:1px solid #64748b!important;text-shadow:none!important;box-shadow:none!important;">Cancelar</button><button type="button" id="team-draw-confirm" class="btn btn-primary"' + (valid ? '' : ' disabled aria-disabled="true" style="opacity:.45;cursor:not-allowed;"') + '>🎲 Sortear times e confrontos</button></div></section>';
     document.body.appendChild(overlay);
     var close = function () { overlay.remove(); };
     overlay.querySelector('#team-draw-cancel').onclick = function () { close(); if (typeof opts.onCancel === 'function') opts.onCancel(); };

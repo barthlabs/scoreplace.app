@@ -1,3 +1,4 @@
+// 2.3.229 — O primeiro sorteio por times começa em Livre; a organização pode trocar para Estruturado. A agenda prioriza, dentro de cada categoria, quem aguardou mais antes de conceder nova folga a uma dupla, e os comandos Voltar/Cancelar da configuração têm contraste legível.
 // 2.3.228 — O aviso de atualização agora se encerra quando servidor, JavaScript e shell já estão na mesma versão; uma pílula antiga não pode continuar oferecendo “Nova versão” depois de o app estar atualizado.
 // 2.3.227 — Configuração do sorteio por times foi compactada: toggles com explicação dinâmica e cards arrastáveis para dias/categorias e prioridade das quadras; uma categoria pode continuar suas rodadas em mais de um dia.
 // 2.3.226 — Busca e abas da chave agora formam uma única pilha sticky, sem vão onde cards poderiam atravessar no celular ou desktop.

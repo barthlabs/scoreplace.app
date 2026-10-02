@@ -109,6 +109,22 @@ ok(splitByMatch.FL1 && splitByMatch.FL2 && splitByMatch.FL3 && splitByMatch.FL4 
   splitByMatch.FL1.iso.slice(0, 10) === '2026-10-22' && splitByMatch.FL2.iso.slice(0, 10) === '2026-10-22' &&
   splitByMatch.FL3.iso.slice(0, 10) === '2026-10-23' && splitByMatch.FL4.iso.slice(0, 10) === '2026-10-23',
   'uma categoria em dois dias mantém as rodadas contínuas e termina no segundo dia');
+const descansoEquilibrado = {
+  startDate:'2026-10-22T18:00', endDate:'2026-10-22T23:00', courtCount:1, gameDuration:30,
+  categorySchedule:{ version:1, slots:[{ category:'Fem Light', day:'2026-10-22', order:1 }] },
+  matches:[
+    { id:'AB-1', category:'Fem Light', round:1, p1:'Time A', p2:'Time B' },
+    { id:'CD-1', category:'Fem Light', round:1, p1:'Time C', p2:'Time D' },
+    // A entrada da R2 vem de propósito na ordem oposta: o motor deve agendar
+    // primeiro A/B, que descansaram enquanto C/D jogavam na onda anterior.
+    { id:'CD-2', category:'Fem Light', round:2, p1:'Time C', p2:'Time D' },
+    { id:'AB-2', category:'Fem Light', round:2, p1:'Time A', p2:'Time B' }
+  ]
+};
+const gradeDescanso = W._schGradeEstimada(descansoEquilibrado);
+const descansoPorJogo = {}; (gradeDescanso && gradeDescanso.slots || []).forEach(function (slot) { descansoPorJogo[slot.matchId] = slot.ms; });
+ok(descansoPorJogo['AB-1'] < descansoPorJogo['CD-1'] && descansoPorJogo['AB-2'] < descansoPorJogo['CD-2'],
+  'a dupla que já aguardou entra antes: não recebe segunda folga enquanto a outra ainda não descansou');
 const tooShort = Object.assign({}, categoryDays, { endDate:'2026-10-22T18:10' });
 ok(W._schGradeEstimada(tooShort).cabe === false && W._operationalSchedulePlan(tooShort).cabe === false,
   'uma categoria que não cabe no dia bloqueia a aplicação da agenda');
@@ -124,6 +140,10 @@ ok(/data-team-day-lane/.test(drawSource) && /data-team-category-source/.test(dra
   'categorias podem ser arrastadas para um ou mais dias e removidas de um dia específico');
 ok(/data-team-toggle-group="mode"/.test(drawSource) && /wireToggle\('mode'/.test(drawSource),
   'o modo estruturado/livre usa toggle com explicação dinâmica da escolha ativa');
+ok(/var selectedMode = modeConfirmed && \(cfg\.schedule\.mode === 'structured' \|\| cfg\.schedule\.mode === 'free'\) \? cfg\.schedule\.mode : 'free';/.test(drawSource),
+  'Livre é o padrão no primeiro sorteio; uma escolha já confirmada permanece');
+ok((drawSource.match(/background:#182235!important;color:var\(--text-bright\)!important/g) || []).length >= 2,
+  'Voltar e Cancelar têm contraste explícito no modal de configuração');
 
 // A agenda não pode voltar a expor IDs técnicos como a informação principal. A mesma
 // grade serve ao rascunho e ao torneio publicado: linhas são horários, colunas são

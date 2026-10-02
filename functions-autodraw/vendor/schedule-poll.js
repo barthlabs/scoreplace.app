@@ -324,6 +324,24 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   window._schMatchUids = _schMatchUids;
   window._schUserIsPlayer = _schUserIsPlayer;
 
+  // Unidade de descanso da agenda. Em torneio por equipes, p1/p2 são as
+  // duplas que representam os times; em torneios comuns, os uids de cada lado
+  // são a identidade mais estável. O fallback por rótulo mantém a regra também
+  // nos rascunhos e dados legados, que ainda não têm uid.
+  function _schMatchRestUnits(m) {
+    if (!m) return [];
+    var slot = (typeof window._slotUids === 'function') ? window._slotUids : null;
+    function sideKey(side, fallback) {
+      var ids = slot ? slot(m, side).filter(Boolean).slice().sort() : [];
+      if (ids.length) return 'uids:' + ids.join('|');
+      var label = String(fallback || '').trim();
+      return label && label !== 'TBD' && label !== 'BYE' ? 'side:' + label : '';
+    }
+    var left = sideKey('p1', m.p1 || (m.team1Obj && (m.team1Obj.displayName || m.team1Obj.name)));
+    var right = sideKey('p2', m.p2 || (m.team2Obj && (m.team2Obj.displayName || m.team2Obj.name)));
+    return [left, right].filter(Boolean);
+  }
+
   // ─── PORTA ÚNICA: quem pode MEXER na agenda de um jogo (2.1.7) ────────────────
   // Ordem do dono (25/ago/2026): _"o botão de propor agenda deve aparecer em cada grupo
   // para os membros do grupo apenas e para os organizadores (o botão de todos os grupos)…
@@ -779,27 +797,59 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       });
 
       var slots = [], cursores = jan.dias.map(function (dia) { return dia.iniMs; }), onda = 0, estourou = false, fimMs = cursores[0];
+      // A memória é por categoria: uma espera em Fem Light não compra nem
+      // consome descanso em Masc Light. O número guarda a última onda em que a
+      // dupla jogou; quem está há mais ondas sem jogar vem primeiro na rodada
+      // seguinte. Assim uma dupla não recebe uma segunda folga enquanto outra
+      // da mesma categoria ainda aguarda a primeira oportunidade de descansar.
+      var ultimaOndaPorCategoria = {}, proximaOndaPorCategoria = {};
       chaves.forEach(function (k) {
         var bloco = porChave[k];
         var diaIdx = bloco.agenda && indiceDia[bloco.agenda.day] != null ? indiceDia[bloco.agenda.day] : 0;
         var cursor = cursores[diaIdx];
         var slotMin = window._minutosDaPartida(t, window._faseDoTorneio(t, bloco.fase)) || 30;
-        // monta as ONDAS desta rodada: guloso, primeira onda que tem quadra livre E
-        // nenhum jogador em comum.
+        // Monta as ondas da rodada por prioridade de descanso. Entre jogos
+        // igualmente viáveis, entram antes as duplas cuja última partida foi
+        // mais antiga. Ainda respeitamos a capacidade das quadras e nunca
+        // colocamos o mesmo jogador em duas partidas simultâneas.
         var ondas = [];
-        bloco.ms.forEach(function (m) {
-          var uids = _schMatchUids(t, m);
-          var alvo = null;
-          for (var i = 0; i < ondas.length; i++) {
-            var o = ondas[i];
-            if (o.jogos.length >= quadras) continue;
-            var conflita = uids.some(function (u) { return o.uids[u]; });
-            if (!conflita) { alvo = o; break; }
+        var pendentes = bloco.ms.map(function (m, index) { return { m:m, index:index, uids:_schMatchUids(t, m), units:_schMatchRestUnits(m) }; });
+        var categoriaDescanso = bloco.categoria || '__sem_categoria__';
+        var ultimas = ultimaOndaPorCategoria[categoriaDescanso] || (ultimaOndaPorCategoria[categoriaDescanso] = {});
+        var ondaCategoria = proximaOndaPorCategoria[categoriaDescanso] || 0;
+        while (pendentes.length) {
+          var candidatos = pendentes.slice().sort(function (a, b) {
+            function prioridade(item) {
+              // Nunca jogou nesta categoria = mais antigo; mantém a ordem
+              // original apenas como desempate determinístico.
+              return item.units.reduce(function (sum, unit) { return sum + (Object.prototype.hasOwnProperty.call(ultimas, unit) ? ultimas[unit] : -1000000); }, 0);
+            }
+            return prioridade(a) - prioridade(b) || a.index - b.index;
+          });
+          var alvo = { jogos: [], uids: {}, units: [] };
+          candidatos.forEach(function (item) {
+            if (alvo.jogos.length >= quadras) return;
+            var conflita = item.uids.some(function (u) { return alvo.uids[u]; });
+            if (conflita) return;
+            alvo.jogos.push(item.m);
+            alvo.units = alvo.units.concat(item.units);
+            item.uids.forEach(function (u) { alvo.uids[u] = 1; });
+            var pos = pendentes.indexOf(item);
+            if (pos !== -1) pendentes.splice(pos, 1);
+          });
+          // Um jogo sem uid ainda precisa ocupar uma onda; este fallback evita
+          // qualquer laço caso o documento antigo esteja incompleto.
+          if (!alvo.jogos.length) {
+            var unico = pendentes.shift();
+            alvo.jogos.push(unico.m);
+            alvo.units = unico.units;
+            unico.uids.forEach(function (u) { alvo.uids[u] = 1; });
           }
-          if (!alvo) { alvo = { jogos: [], uids: {} }; ondas.push(alvo); }
-          alvo.jogos.push(m);
-          uids.forEach(function (u) { alvo.uids[u] = 1; });
-        });
+          alvo.units.forEach(function (unit) { ultimas[unit] = ondaCategoria; });
+          ondaCategoria++;
+          ondas.push(alvo);
+        }
+        proximaOndaPorCategoria[categoriaDescanso] = ondaCategoria;
         ondas.forEach(function (o) {
           // Categoria marcada para um dia não pode vazar para outro: o plano
           // acusa que não cabe, mas não troca Feminino de quinta para sexta.
