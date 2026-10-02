@@ -59,6 +59,7 @@
     // quando precisa fugir de uma quadra ocupada ou de uma escolha manual.
     var grade = window._schGradeEstimada && window._schGradeEstimada(t), preferred = {};
     if (grade && Array.isArray(grade.slots)) grade.slots.forEach(function (slot) { preferred[String(slot.matchId)] = Number(slot.ms); });
+    var hasGrade = !!(grade && Array.isArray(grade.slots));
     var cs = courts(t), ms = all(t).filter(function (m) { return !m.isBye && !m.isSitOut; }).sort(function (a, b) {
       var aa = preferred[String(a.id)], bb = preferred[String(b.id)];
       if (isFinite(aa) && isFinite(bb) && aa !== bb) return aa - bb;
@@ -101,6 +102,11 @@
         if (a && c) items.push({ matchId:String(m.id), court:String(c), scheduledAt:String(a), scheduleLocked:true, scheduleSource:'organizer' });
         return;
       }
+      // ⛔ LIMITE RÍGIDO DA JANELA: se a grade declarativa não encontrou
+      // capacidade para este jogo, ele fica sem slot e a aplicação é bloqueada.
+      // Nunca use o cursor de fallback para empurrá-lo para outro dia/horário:
+      // isso já exibiu um sábado inexistente em evento de quinta e sexta.
+      if (hasGrade && !isFinite(preferred[String(m.id)])) return;
       var len = duration(t, m), at = isFinite(preferred[String(m.id)]) ? preferred[String(m.id)] : cursor, cidx = 0, guard = 0;
       while (guard++ < 2000) {
         var found = cs.find(function (c) { return free(c, at, len); });
@@ -115,7 +121,8 @@
     return { baseScheduleRevision:Number(t.scheduleRevision || 0), items:items, courts:cs,
       // A agenda por categoria não pode ser aplicada se uma categoria explicitamente
       // presa a um dia ultrapassa a janela desse dia.
-      cabe: !(grade && grade.cabe === false), extraMs:Number(grade && grade.extraMs || 0) };
+      cabe: !(grade && grade.cabe === false), extraMs:Number(grade && grade.extraMs || 0),
+      unscheduledCount:Math.max(0, pending.filter(function (m) { return !items.some(function (item) { return item.matchId === String(m.id); }); }).length) };
   };
   function uid() { return (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c){ var r=Math.random()*16|0; return (c==='x'?r:(r&3|8)).toString(16); }); }
   function msg(title, body, type) { if (typeof window.showNotification === 'function') window.showNotification(title, body, type); }

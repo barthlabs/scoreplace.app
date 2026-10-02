@@ -147,6 +147,34 @@ ok(gradeJanelaFechada && gradeJanelaFechada.cabe === false && gradeJanelaFechada
   'a grade nunca cria jogo depois do fim do dia e informa exatamente o tempo adicional');
 ok(W._operationalSchedulePlan(janelaFechada).cabe === false && W._operationalSchedulePlan(janelaFechada).extraMs === 30 * 60000,
   'a agenda operacional também bloqueia uma distribuição que ultrapassaria a janela');
+// REGRESSÃO: janelas explícitas são a fronteira do evento. Mesmo que a data final
+// legada alcance o sábado, uma configuração quinta/sexta não pode criar aba, slot
+// ou sugestão no sábado para tentar acomodar o que não coube.
+const doisDiasRigidos = {
+  startDate:'2026-10-22T18:00', endDate:'2026-10-24T23:59', courtCount:1, gameDuration:30,
+  scheduleWindow:{ version:1, days:[
+    { day:'2026-10-22', startTime:'18:00', endTime:'18:30' },
+    { day:'2026-10-23', startTime:'18:00', endTime:'18:30' }
+  ] },
+  categorySchedule:{ version:1, slots:[
+    { category:'Fem Light', day:'2026-10-22', order:1 },
+    { category:'Fem Power', day:'2026-10-23', order:1 }
+  ] },
+  matches:[
+    { id:'QUI', category:'Fem Light', round:1, p1:'A', p2:'B' },
+    { id:'SEX', category:'Fem Power', round:1, p1:'C', p2:'D' },
+    { id:'NAO-CABE', category:'Fem Power', round:2, p1:'E', p2:'F' }
+  ]
+};
+const gradeDoisDiasRigidos = W._schGradeEstimada(doisDiasRigidos);
+const planDoisDiasRigidos = W._operationalSchedulePlan(doisDiasRigidos);
+const janelaDoisDiasRigidos = W._schJanelaTorneio(doisDiasRigidos);
+ok(janelaDoisDiasRigidos && janelaDoisDiasRigidos.dias.length === 2 && gradeDoisDiasRigidos && gradeDoisDiasRigidos.cabe === false &&
+  gradeDoisDiasRigidos.slots.every(function (slot) { return slot.iso.slice(0, 10) !== '2026-10-24'; }),
+  'janelas explícitas não herdam um terceiro dia da data final legada');
+ok(planDoisDiasRigidos.cabe === false && planDoisDiasRigidos.unscheduledCount === 1 &&
+  planDoisDiasRigidos.items.every(function (item) { return item.scheduledAt.slice(0, 10) !== '2026-10-24'; }),
+  'a prévia não cria slot fora da janela para jogo que não coube; ela o mantém pendente');
 const sequenciaCategorias = {
   startDate:'2026-10-22T18:00', endDate:'2026-10-22T23:00', courtCount:1, gameDuration:30,
   scheduleWindow:{ version:1, days:[{ day:'2026-10-22', startTime:'18:00', endTime:'23:00', categoryFlow:'categories' }] },

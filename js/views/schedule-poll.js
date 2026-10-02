@@ -686,6 +686,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   }
   // Offset BRT na mão, igual ao resto do módulo (_optIso, _schWindow): o app inteiro
   // ancora horário em America/Sao_Paulo, e o Brasil não tem horário de verão desde 2019.
+  // Contrato interno da janela e da grade: recebe horário de parede BRT e
+  // devolve milissegundos. `_schJanelaTorneio` e `_schGradeEstimada` usam esta
+  // mesma função; não substituir por `Date.parse` sem preservar o fuso.
   function _ms(ymd, hm) { return new Date(ymd + 'T' + hm + ':00-03:00').getTime(); }
   function _addDias(ymd, n) {
     var d = new Date(ymd + 'T12:00:00-03:00');
@@ -711,7 +714,21 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         categoryFlow:item && item.categoryFlow === 'rounds' ? 'rounds' : 'categories'
       };
     });
+    // Quando o organizador configurou janelas diárias, esta é a lista canônica
+    // de dias da competição. Não complete lacunas com dias de calendário: fazer
+    // isso criou uma aba de sábado para um evento configurado só para quinta e
+    // sexta. A duração declarada é um LIMITE; falta de capacidade é diagnóstico,
+    // nunca autorização para inventar um terceiro dia.
     var dias = [], ymd = ini.ymd, guarda = 0, invalida = false;
+    var diasConfigurados = Object.keys(porDia).sort();
+    if (diasConfigurados.length) {
+      diasConfigurados.forEach(function (day) {
+        var janelaConfigurada = porDia[day], iniConfigurada = _ms(day, janelaConfigurada.start), fimConfigurada = _ms(day, janelaConfigurada.end);
+        if (fimConfigurada <= iniConfigurada) invalida = true;
+        dias.push({ ymd:day, iniMs:iniConfigurada, fimMs:fimConfigurada, startTime:janelaConfigurada.start, endTime:janelaConfigurada.end, categoryFlow:janelaConfigurada.categoryFlow });
+      });
+      return { dias: dias, iniHm: ini.hm, fimHm:fim.hm, invalida:invalida };
+    }
     while (guarda++ < 8) {
       var ehUltimo = (ymd === fim.ymd);
       var legado = { start:ini.hm, end:(ehUltimo ? fim.hm : '22:00'), categoryFlow:'categories' }, janela = porDia[ymd] || legado;
@@ -892,6 +909,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         if (cursor > fimMs) fimMs = cursor;
       });
       return {
+        // A janela expõe `dias` como array; a grade expõe a QUANTIDADE para a
+        // UI. `slots` é sempre a lista canônica de {matchId, ms} consumida pela
+        // agenda operacional — manter esse contrato entre cliente e vendor.
         slots: slots, quadras: quadras, dias: jan.dias.length,
         cabe: !estourou, fimMs: fimMs, extraPorDia:extraPorDia,
         extraMs: extraPorDia.reduce(function (sum, value) { return sum + value; }, 0),
