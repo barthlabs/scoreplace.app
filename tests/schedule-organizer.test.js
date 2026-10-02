@@ -212,8 +212,8 @@ ok(/flex:0 1 auto;min-width:0;font-size:\.62rem/.test(drawSource),
   'os toggles Concentradas/Alternadas permanecem compactos em cada dia');
 ok(/position:sticky;top:0;z-index:3/.test(drawSource) && !/id="team-draw-cancel" class=/.test(drawSource),
   'Voltar fica sempre visível no cabeçalho e não há Cancelar duplicado no rodapé');
-ok(/sp-team-draw-time/.test(drawSource) && /window\.location\.hash = d\.staged \? '#tournaments\/'/.test(drawSource),
-  'os horários do sorteio usam controle compacto e a revisão volta ao detalhe com seus controles');
+ok(/sp-team-draw-time/.test(drawSource) && /window\.location\.hash = d\.staged \? '#tournaments\/'/.test(drawSource) && /_openPendingInitialSchedule\(tId\)/.test(drawSource),
+  'os horários do sorteio usam controle compacto e uma revisão nova abre direto no planejamento privado');
 ok(/var selectedMode = modeConfirmed && \(cfg\.schedule\.mode === 'structured' \|\| cfg\.schedule\.mode === 'free'\) \? cfg\.schedule\.mode : 'free';/.test(drawSource),
   'Livre é o padrão no primeiro sorteio; uma escolha já confirmada permanece');
 ok((drawSource.match(/background:#182235!important;color:var\(--text-bright\)!important/g) || []).length >= 1 && !/id="team-draw-cancel" class=/.test(drawSource),

@@ -6618,7 +6618,7 @@ window._openPendingInitialSchedule = function (tId) {
   overlay.style.cssText = 'position:fixed;inset:0;z-index:200100;background:rgba(2,6,23,.78);padding:18px;overflow:auto;box-sizing:border-box;';
   // ⛔ REVISÃO PENDENTE NÃO PODE SUMIR AO VOLTAR DA AGENDA. O rascunho ainda
   // existe até Anular ou Publicar; portanto o detalhe canônico precisa ser
-  // repintado com o marcador e os quatro controles (Ver/Planejar/Anular/Publicar).
+  // repintado com os únicos retornos coerentes: Planejar novamente ou Anular.
   function returnToPendingDetail() {
     overlay.remove();
     if (pd && typeof window._rememberPendingDrawMarker === 'function') window._rememberPendingDrawMarker(tId, pd);
@@ -6630,6 +6630,17 @@ window._openPendingInitialSchedule = function (tId) {
     x.id = t.id; x.matches = draft.matches; x.scheduleRevision = Number(pd.scheduleRevision || 0);
     return x;
   }
+  function saveSchedule(latest) {
+    return window._callCF('setPendingInitialSchedule', { tournamentId:String(t.id), jogos:latest.items.map(function (i) { return { matchId:i.matchId, court:i.court, scheduledAt:i.scheduledAt, scheduleLocked:!!i.scheduleLocked }; }) }, 'Entre na sua conta para salvar a agenda.')
+      .then(function (res) {
+        /* Mantém o cofre já aberto coerente até a próxima leitura autenticada. */
+        latest.items.forEach(function (item) {
+          var match = (draft.matches || []).find(function (m) { return String(m.id) === String(item.matchId); });
+          if (match) { match.court = item.court; match.scheduledAt = item.scheduledAt; match.scheduleLocked = !!item.scheduleLocked; }
+        });
+        return res;
+      });
+  }
   function plan() { return window._operationalSchedulePlan(view(), Object.keys(manual).map(function (id) { return manual[id]; })); }
   function render() {
     var p = plan(), board = window._operationalScheduleGrid(view(), p, { prefix:'pis', activeDay:activeDay, renumberBySchedule:true }); activeDay = board.activeDay;
@@ -6637,7 +6648,7 @@ window._openPendingInitialSchedule = function (tId) {
       '<div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start"><div><h2 style="margin:0;font-size:1.05rem">📍 Planejar antes de publicar</h2><p style="margin:5px 0 12px;font-size:.82rem;line-height:1.4;color:#cbd5e1">Cada horário aparece uma vez na régua vertical à esquerda. Arraste um jogo sobre outro para trocar seus horários e quadras.</p></div><button type="button" data-pis-close class="btn btn-outline">← Voltar</button></div>' +
       '<div style="font-size:.76rem;color:#94a3b8;margin-bottom:6px">' + p.items.length + ' jogos · ' + p.courts.length + ' quadras. Cada linha é um horário; cada coluna é uma quadra.</div>' +
       (!p.cabe ? '<div style="margin:0 0 10px;color:#fbbf24;font-size:.82rem;font-weight:700">A agenda não cabe nas janelas configuradas: faltam ' + Math.ceil((p.extraMs || 0) / 60000) + ' min. Nenhum jogo será levado para fora dos dias/horários do evento.</div>' : '') + board.html +
-      '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px"><button type="button" data-pis-apply class="btn btn-primary"' + (!p.cabe ? ' disabled aria-disabled="true" style="opacity:.45;cursor:not-allowed"' : '') + '>Aplicar agenda no rascunho</button></div></div>';
+      '<div style="display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-top:14px"><button type="button" data-pis-apply class="btn btn-outline"' + (!p.cabe ? ' disabled aria-disabled="true" style="opacity:.45;cursor:not-allowed"' : '') + '>Salvar ajustes</button><button type="button" data-pis-publish class="btn btn-shine" style="background:#10b981;color:#fff"' + (!p.cabe ? ' disabled aria-disabled="true" style="opacity:.45;cursor:not-allowed"' : '') + '>🚀 Publicar sorteio</button></div></div>';
     overlay.querySelector('[data-pis-close]').onclick = returnToPendingDetail;
     Array.prototype.forEach.call(overlay.querySelectorAll('[data-pis-day]'), function (control) { control.onclick = function () { activeDay = control.getAttribute('data-pis-day'); render(); }; });
     Array.prototype.forEach.call(overlay.querySelectorAll('[data-pis-match]'), function (card) {
@@ -6656,15 +6667,23 @@ window._openPendingInitialSchedule = function (tId) {
       var button = event.currentTarget, latest = plan();
       if (!latest.cabe) { if (window.showNotification) window.showNotification('Agenda não cabe', 'Faltam ' + Math.ceil((latest.extraMs || 0) / 60000) + ' min nas janelas configuradas. Ajuste dias, horários, ordem, duração ou quadras antes de salvar.', 'error'); return; }
       button.disabled = true; button.textContent = 'Salvando agenda…';
-      window._callCF('setPendingInitialSchedule', { tournamentId:String(t.id), jogos:latest.items.map(function (i) { return { matchId:i.matchId, court:i.court, scheduledAt:i.scheduledAt, scheduleLocked:!!i.scheduleLocked }; }) }, 'Entre na sua conta para salvar a agenda.')
+      saveSchedule(latest)
         .then(function () { if (window.showNotification) window.showNotification('Agenda do rascunho salva', 'A chave continua em revisão até você publicar.', 'success'); returnToPendingDetail(); })
-        .catch(function (e) { button.disabled=false; button.textContent='Aplicar agenda no rascunho'; if (window.showNotification) window.showNotification('Agenda não salva', (e && e.message) || 'Tente novamente.', 'error'); });
+        .catch(function (e) { button.disabled=false; button.textContent='Salvar ajustes'; if (window.showNotification) window.showNotification('Agenda não salva', (e && e.message) || 'Tente novamente.', 'error'); });
+    };
+    overlay.querySelector('[data-pis-publish]').onclick = function (event) {
+      var button = event.currentTarget, latest = plan();
+      if (!latest.cabe) { if (window.showNotification) window.showNotification('Agenda não cabe', 'Ajuste a configuração antes de publicar.', 'error'); return; }
+      button.disabled = true; button.textContent = 'Publicando…';
+      saveSchedule(latest)
+        .then(function () { return window._publishPendingDraw(tId); })
+        .then(function (published) { if (published) overlay.remove(); else { button.disabled = false; button.textContent = '🚀 Publicar sorteio'; } });
     };
   }
   document.body.appendChild(overlay); render();
 };
 
-/* ⛔ REGRESSÃO CRÍTICA — NÃO REMOVER NEM VOLTAR A DEPENDER SÓ DE `t.pendingDraw`.
+  /* ⛔ REGRESSÃO CRÍTICA — NÃO REMOVER NEM VOLTAR A DEPENDER SÓ DE `t.pendingDraw`.
  * O mesmo defeito reapareceu diversas vezes: a Function já tinha gravado o sorteio
  * privado e a UI exibia o toast “Sorteio em revisão”, mas o listener ainda carregava
  * o retrato anterior. Resultado inaceitável: o organizador ficava sem Ver, Planejar,
@@ -6754,12 +6773,10 @@ window._renderPendingDrawBanner = function (t) {
   var esc = window._safeHtml || function (s) { return String(s == null ? '' : s); };
   return '<div style="border:2px solid #f59e0b;background:rgba(245,158,11,0.10);border-radius:14px;padding:14px 16px;margin:0 0 1rem;">' +
     '<div style="font-size:1rem;font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);margin-bottom:4px;">🔒 Sorteio em revisão</div>' +
-    '<div style="font-size:0.82rem;color:var(--text-main);line-height:1.45;margin-bottom:10px;">O sorteio foi realizado mas <b>não foi publicado</b> e <b>ninguém foi notificado</b>. Confira a chave abaixo. Se estiver tudo certo, clique <b>Publicar</b> — aí sim vai a público e os participantes são avisados. Se houver erro, clique <b>Anular</b>.</div>' +
+    '<div style="font-size:0.82rem;color:var(--text-main);line-height:1.45;margin-bottom:10px;">O sorteio segue privado. Abra o planejamento para conferir e ajustar jogos, horários e quadras; publique por lá. Se houver erro, anule este rascunho.</div>' +
     '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
-      '<button class="btn btn-outline" onclick="event.stopPropagation(); window._openPendingDrawReview(\'' + esc(t.id) + '\')">👁️ Ver chave sorteada</button>' +
-      (marker.kind === 'initial' ? '<button class="btn btn-outline" onclick="event.stopPropagation(); window._openPendingInitialSchedule(\'' + esc(t.id) + '\')">📍 Planejar quadras e horários</button>' : '') +
+      (marker.kind === 'initial' ? '<button class="btn btn-outline" onclick="event.stopPropagation(); window._openPendingInitialSchedule(\'' + esc(t.id) + '\')">📍 Conferir e ajustar sorteio</button>' : '<button class="btn btn-outline" onclick="event.stopPropagation(); window._openPendingDrawReview(\'' + esc(t.id) + '\')">👁️ Conferir sorteio</button>') +
       '<button class="btn btn-outline" style="color:var(--sp-c-f87171,#f87171);border-color:rgba(248,113,113,0.5);" onclick="event.stopPropagation(); window._annulPendingDraw(\'' + esc(t.id) + '\')">✕ Anular</button>' +
-      '<button class="btn btn-shine" style="background:#10b981;color:#fff;border:1px solid var(--sp-b-255-255-255-03,rgba(255,255,255,0.3));font-weight:700;" onclick="event.stopPropagation(); window._publishPendingDraw(\'' + esc(t.id) + '\')">🚀 Publicar sorteio</button>' +
     '</div>' +
   '</div>';
 };
@@ -6767,13 +6784,14 @@ window._renderPendingDrawBanner = function (t) {
 window._publishPendingDraw = async function (tId) {
   try {
     var res=await window._callCF('resolvePendingDraw',{ tournamentId:String(tId), action:'publish' },'Entre na sua conta para publicar o sorteio.');
-    if(!((res&&res.data)||{}).changed) return;
+    if(!((res&&res.data)||{}).changed) return false;
     if (window.__pendingInitialDraws) delete window.__pendingInitialDraws[String(tId)];
     if (window.__pendingDrawMarkers) delete window.__pendingDrawMarkers[String(tId)];
     if (window.__pendingDrawMarkerLoads) delete window.__pendingDrawMarkerLoads[String(tId)];
     if(window.showNotification) window.showNotification('🚀 Sorteio publicado!','A chave foi liberada para os participantes.','success');
     if(window._rerenderBracket) window._rerenderBracket(tId);
-  } catch(e) { if(window._warn) window._warn('[publishPendingDraw] CF falhou',e); if(window.showNotification) window.showNotification('Sorteio não publicado','Não foi possível publicar o sorteio. Tente novamente.','error'); }
+    return true;
+  } catch(e) { if(window._warn) window._warn('[publishPendingDraw] CF falhou',e); if(window.showNotification) window.showNotification('Sorteio não publicado','Não foi possível publicar o sorteio. Tente novamente.','error'); return false; }
 };
 window._annulPendingDraw = function (tId) {
   var go=function(){ return window._callCF('resolvePendingDraw',{ tournamentId:String(tId), action:'annul' },'Entre na sua conta para anular o sorteio.').then(function(res){

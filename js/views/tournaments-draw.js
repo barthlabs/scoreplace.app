@@ -3235,6 +3235,10 @@ window.generateDrawFunction = function (tId) {
                 if (window._sound) window._sound('sino');
                 if (d.staged) {
                     showNotification('🔒 Sorteio em revisão', 'Times, confrontos e agenda estão prontos para conferência. Nada foi publicado nem notificado.', 'info');
+                    // O primeiro destino de uma revisão é SEMPRE a agenda privada: é ali
+                    // que a organização confere, ajusta e publica. Não a faça caçar um
+                    // botão "Ver" no detalhe antes de enxergar o sorteio que acabou de criar.
+                    if (typeof window._openPendingInitialSchedule === 'function') window._openPendingInitialSchedule(tId);
                 } else {
                     if (d.native) showNotification(_t('tdraw.started'), _t('tdraw.startedMsg', { n: d.matchCount }), 'success');
                     else showNotification(_t('draw.changesSaved'), _t('tdraw.drawDone'), 'success');
