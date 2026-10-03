@@ -57,8 +57,11 @@
     // A grade estimada já conhece o dia/ordem declarados por categoria. A agenda
     // operacional usa essa mesma intenção como ponto de partida e só move jogos
     // quando precisa fugir de uma quadra ocupada ou de uma escolha manual.
-    var grade = window._schGradeEstimada && window._schGradeEstimada(t), preferred = {};
-    if (grade && Array.isArray(grade.slots)) grade.slots.forEach(function (slot) { preferred[String(slot.matchId)] = Number(slot.ms); });
+    var grade = window._schGradeEstimada && window._schGradeEstimada(t), preferred = {}, preferredExceeds = {};
+    if (grade && Array.isArray(grade.slots)) grade.slots.forEach(function (slot) {
+      preferred[String(slot.matchId)] = Number(slot.ms);
+      preferredExceeds[String(slot.matchId)] = slot.extrapolaJanela === true;
+    });
     var hasGrade = !!(grade && Array.isArray(grade.slots));
     var cs = courts(t), ms = all(t).filter(function (m) { return !m.isBye && !m.isSitOut; }).sort(function (a, b) {
       var aa = preferred[String(a.id)], bb = preferred[String(b.id)];
@@ -99,7 +102,7 @@
       if (manual) {
         var a = change ? change.scheduledAt : m.scheduledAt;
         var c = change ? change.court : m.court;
-        if (a && c) items.push({ matchId:String(m.id), court:String(c), scheduledAt:String(a), scheduleLocked:true, scheduleSource:'organizer' });
+        if (a && c) items.push({ matchId:String(m.id), court:String(c), scheduledAt:String(a), scheduleLocked:true, scheduleSource:'organizer', extrapolaJanela:preferredExceeds[String(m.id)] === true });
         return;
       }
       // ⛔ LIMITE RÍGIDO DA JANELA: se a grade declarativa não encontrou
@@ -115,7 +118,7 @@
       }
       var court = cs[cidx];
       reserve(m, iso(at), court);
-      items.push({ matchId:String(m.id), court:court, scheduledAt:iso(at), scheduleLocked:false, scheduleSource:'estimate' });
+      items.push({ matchId:String(m.id), court:court, scheduledAt:iso(at), scheduleLocked:false, scheduleSource:'estimate', extrapolaJanela:preferredExceeds[String(m.id)] === true });
       cursor = Math.max(cursor, at);
     });
     return { baseScheduleRevision:Number(t.scheduleRevision || 0), items:items, courts:cs,
@@ -247,8 +250,10 @@
         var item = byCourt[String(court)];
         if (!item) return '<div data-' + prefix + '-empty-slot data-' + prefix + '-court="' + esc(court) + '" data-' + prefix + '-time="' + esc(String(slot)) + '" title="Solte um jogo aqui" style="min-height:118px;border:1px dashed rgba(148,163,184,.25);border-radius:8px;background:rgba(15,23,42,.24);box-sizing:border-box;"></div>';
         var m = matchById[String(item.matchId)] || {};
-        return '<article draggable="true" data-' + prefix + '-match="' + esc(item.matchId) + '" title="Arraste este jogo para trocar o horário e a quadra" style="min-height:132px;border:1px solid rgba(56,189,248,.32);border-radius:8px;padding:6px;background:rgba(15,23,42,.72);box-sizing:border-box;overflow:hidden;cursor:grab;">' +
+        var excedente = item.extrapolaJanela === true;
+        return '<article draggable="true" data-' + prefix + '-match="' + esc(item.matchId) + '"' + (excedente ? ' data-' + prefix + '-outside-window="true"' : '') + ' title="' + (excedente ? 'Este jogo ultrapassa o horário configurado do evento' : 'Arraste este jogo para trocar o horário e a quadra') + '" style="min-height:132px;border:1px solid ' + (excedente ? 'rgba(248,113,113,.9)' : 'rgba(56,189,248,.32)') + ';border-radius:8px;padding:6px;background:' + (excedente ? 'repeating-linear-gradient(45deg,rgba(239,68,68,.55) 0 10px,rgba(148,163,184,.42) 10px 20px),rgba(15,23,42,.86)' : 'rgba(15,23,42,.72)') + ';box-sizing:border-box;overflow:hidden;cursor:grab;">' +
           '<div style="font-size:.68rem;color:#7dd3fc;font-weight:900;display:flex;justify-content:space-between;gap:8px;"><span>' + esc(gameLabel(t, item.matchId, numberByMatch[String(item.matchId)])) + '</span><span>R' + esc(String(m.round || '—')) + '</span></div>' +
+          (excedente ? '<div style="margin-top:4px;font-size:.62rem;font-weight:900;color:#fff;background:rgba(127,29,29,.88);border-radius:4px;padding:3px 4px;">⚠ FORA DO HORÁRIO</div>' : '') +
           sideHtml(t, m, 'p1', names) + sideHtml(t, m, 'p2', names) +
           '</article>';
       }).join('');

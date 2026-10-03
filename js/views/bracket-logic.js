@@ -6615,7 +6615,10 @@ window._openPendingInitialSchedule = function (tId) {
   var manual = {}, activeDay = '';
   var old = document.getElementById('sp-pending-schedule-overlay'); if (old) old.remove();
   var overlay = document.createElement('div'); overlay.id = 'sp-pending-schedule-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;z-index:200100;background:rgba(2,6,23,.78);padding:18px;overflow:auto;box-sizing:border-box;';
+  // A grade rola lateralmente no seu próprio painel. O overlay nunca pode rolar
+  // no eixo X: Voltar e Publicar pertencem ao cabeçalho da página e devem ficar
+  // visíveis mesmo quando existem muitas quadras.
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:200100;background:rgba(2,6,23,.78);padding:18px;overflow-y:auto;overflow-x:hidden;box-sizing:border-box;';
   // ⛔ REVISÃO PENDENTE NÃO PODE SUMIR AO VOLTAR DA AGENDA. O rascunho ainda
   // existe até Anular ou Publicar; portanto o detalhe canônico precisa ser
   // repintado com os únicos retornos coerentes: Planejar novamente ou Anular.
@@ -6644,13 +6647,13 @@ window._openPendingInitialSchedule = function (tId) {
   function plan() { return window._operationalSchedulePlan(view(), Object.keys(manual).map(function (id) { return manual[id]; })); }
   function render() {
     var p = plan(), board = window._operationalScheduleGrid(view(), p, { prefix:'pis', activeDay:activeDay, renumberBySchedule:true }); activeDay = board.activeDay;
-    overlay.innerHTML = '<div role="dialog" aria-modal="true" style="width:min(1600px,calc(100vw - 36px));max-width:none;margin:0 auto;background:#111827;border:1px solid rgba(56,189,248,.5);border-radius:16px;padding:16px;color:var(--text-main);box-shadow:0 24px 70px rgba(0,0,0,.55)">' +
+    overlay.innerHTML = '<div role="dialog" aria-modal="true" style="width:100%;max-width:1600px;margin:0 auto;background:#111827;border:1px solid rgba(56,189,248,.5);border-radius:16px;padding:16px;box-sizing:border-box;overflow:hidden;color:var(--text-main);box-shadow:0 24px 70px rgba(0,0,0,.55)">' +
       /* ⛔ Comandos de decisão ficam no cabeçalho sticky: Voltar à esquerda e
        * Publicar à direita. Não os deixe no fim da grade — a revisão pode ter
        * centenas de jogos e o organizador não deve perder as ações principais. */
       '<div style="position:sticky;top:0;z-index:5;margin:-16px -16px 12px;padding:16px;background:#111827;border-bottom:1px solid rgba(148,163,184,.28)"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center"><button type="button" data-pis-close class="btn btn-outline" style="flex:none">← Voltar</button><h2 style="margin:0;min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center;font-size:1.05rem">📍 Planejar antes de publicar</h2><button type="button" data-pis-publish class="btn btn-shine" style="flex:none;background:#10b981;color:#fff' + (!p.cabe ? ';opacity:.45;cursor:not-allowed' : '') + '"' + (!p.cabe ? ' disabled aria-disabled="true"' : '') + '>🚀 Publicar</button></div><p style="margin:8px 0 0;font-size:.82rem;line-height:1.4;color:#cbd5e1">Cada horário aparece uma vez na régua vertical à esquerda. Arraste um jogo sobre outro para trocar seus horários e quadras.</p></div>' +
       '<div style="font-size:.76rem;color:#94a3b8;margin-bottom:6px">' + p.items.length + ' jogos · ' + p.courts.length + ' quadras. Cada linha é um horário; cada coluna é uma quadra.</div>' +
-      (!p.cabe ? '<div style="margin:0 0 10px;color:#fbbf24;font-size:.82rem;font-weight:700">A agenda não cabe nas janelas configuradas: faltam ' + Math.ceil((p.extraMs || 0) / 60000) + ' min. Nenhum jogo será levado para fora dos dias/horários do evento.</div>' : '') + board.html +
+      (!p.cabe ? '<div style="margin:0 0 10px;color:#fbbf24;font-size:.82rem;font-weight:700">A agenda ultrapassa as janelas configuradas em ' + Math.ceil((p.extraMs || 0) / 60000) + ' min. Todos os jogos continuam exibidos; os excedentes aparecem em faixa zebrada vermelha e cinza.</div>' : '') + board.html +
       '<div style="display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-top:14px"><button type="button" data-pis-apply class="btn btn-outline"' + (!p.cabe ? ' disabled aria-disabled="true" style="opacity:.45;cursor:not-allowed"' : '') + '>Salvar ajustes</button></div></div>';
     overlay.querySelector('[data-pis-close]').onclick = returnToPendingDetail;
     Array.prototype.forEach.call(overlay.querySelectorAll('[data-pis-day]'), function (control) { control.onclick = function () { activeDay = control.getAttribute('data-pis-day'); render(); }; });

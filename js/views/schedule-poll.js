@@ -890,17 +890,18 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         }
         proximaOndaPorCategoria[categoriaDescanso] = ondaCategoria;
         ondas.forEach(function (o) {
-          // Categoria marcada para um dia nunca vaza para outro — nem para uma
-          // hora depois do encerramento. O plano parcial só serve de diagnóstico;
-          // a aplicação é bloqueada e informa exatamente o tempo adicional.
-          if (cursor + slotMin * _MIN > jan.dias[diaIdx].fimMs) {
+          // Categoria marcada para um dia nunca muda de dia, mas NENHUM jogo
+          // necessário pode desaparecer da prévia quando a janela é curta.
+          // Mantemos o slot no próprio dia e o marcamos como excedente: assim a
+          // organização vê exatamente o que falta acomodar, em vez de acreditar
+          // que uma chave incompleta é uma agenda viável.
+          var extrapolaJanela = cursor + slotMin * _MIN > jan.dias[diaIdx].fimMs;
+          if (extrapolaJanela) {
             estourou = true;
-            extraPorDia[diaIdx] += slotMin * _MIN;
-            onda++;
-            return;
+            extraPorDia[diaIdx] = Math.max(extraPorDia[diaIdx], cursor + slotMin * _MIN - jan.dias[diaIdx].fimMs);
           }
           o.jogos.forEach(function (m) {
-            slots.push({ matchId: String(m.id), ms: cursor, iso: new Date(cursor).toISOString(), dia: diaIdx, onda: onda });
+            slots.push({ matchId: String(m.id), ms: cursor, iso: new Date(cursor).toISOString(), dia: diaIdx, onda: onda, extrapolaJanela:extrapolaJanela });
           });
           cursor += slotMin * _MIN;
           onda++;
@@ -963,6 +964,23 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         slots.forEach(function (s) { delete s._categoria; delete s._fase; delete s._rodada; delete s._uids; });
       }
       _compactarSlotsNaMesmaJanela();
+      // A compactação pode trazer para dentro uma partida que inicialmente
+      // ultrapassava a janela. Recalculamos a marca e o excedente pelo slot
+      // definitivo: a faixa zebrada representa a agenda que a tela exibe.
+      estourou = false;
+      extraPorDia = jan.dias.map(function () { return 0; });
+      var jogoPorId = {};
+      jogos.forEach(function (m) { jogoPorId[String(m.id)] = m; });
+      slots.forEach(function (slot) {
+        var jogo = jogoPorId[slot.matchId], fase = jogo && jogo.phaseIndex != null ? jogo.phaseIndex : (t.currentPhaseIndex || 0);
+        var duracao = (window._minutosDaPartida(t, window._faseDoTorneio(t, fase)) || 30) * _MIN;
+        var dia = jan.dias[slot.dia];
+        slot.extrapolaJanela = !!(dia && slot.ms + duracao > dia.fimMs);
+        if (slot.extrapolaJanela) {
+          estourou = true;
+          extraPorDia[slot.dia] = Math.max(extraPorDia[slot.dia], slot.ms + duracao - dia.fimMs);
+        }
+      });
       return {
         // A janela expõe `dias` como array; a grade expõe a QUANTIDADE para a
         // UI. `slots` é sempre a lista canônica de {matchId, ms} consumida pela

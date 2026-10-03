@@ -159,8 +159,8 @@ const janelaFechada = {
 };
 const gradeJanelaFechada = W._schGradeEstimada(janelaFechada);
 ok(gradeJanelaFechada && gradeJanelaFechada.cabe === false && gradeJanelaFechada.extraMs === 30 * 60000 &&
-  gradeJanelaFechada.slots.every(function (slot) { return slot.ms < new Date('2026-10-22T19:00:00-03:00').getTime(); }),
-  'a grade nunca cria jogo depois do fim do dia e informa exatamente o tempo adicional');
+  gradeJanelaFechada.slots.length === 3 && gradeJanelaFechada.slots.filter(function (slot) { return slot.extrapolaJanela; }).length === 1,
+  'a grade mantém todos os jogos no próprio dia e marca o excedente da janela');
 ok(W._operationalSchedulePlan(janelaFechada).cabe === false && W._operationalSchedulePlan(janelaFechada).extraMs === 30 * 60000,
   'a agenda operacional também bloqueia uma distribuição que ultrapassaria a janela');
 // REGRESSÃO: janelas explícitas são a fronteira do evento. Mesmo que a data final
@@ -188,9 +188,10 @@ const janelaDoisDiasRigidos = W._schJanelaTorneio(doisDiasRigidos);
 ok(janelaDoisDiasRigidos && janelaDoisDiasRigidos.dias.length === 2 && gradeDoisDiasRigidos && gradeDoisDiasRigidos.cabe === false &&
   gradeDoisDiasRigidos.slots.every(function (slot) { return slot.iso.slice(0, 10) !== '2026-10-24'; }),
   'janelas explícitas não herdam um terceiro dia da data final legada');
-ok(planDoisDiasRigidos.cabe === false && planDoisDiasRigidos.unscheduledCount === 1 &&
-  planDoisDiasRigidos.items.every(function (item) { return item.scheduledAt.slice(0, 10) !== '2026-10-24'; }),
-  'a prévia não cria slot fora da janela para jogo que não coube; ela o mantém pendente');
+ok(planDoisDiasRigidos.cabe === false && planDoisDiasRigidos.unscheduledCount === 0 &&
+  planDoisDiasRigidos.items.every(function (item) { return item.scheduledAt.slice(0, 10) !== '2026-10-24'; }) &&
+  planDoisDiasRigidos.items.some(function (item) { return item.extrapolaJanela; }),
+  'a prévia não cria terceiro dia: mantém o jogo excedente no dia configurado e o sinaliza');
 const sequenciaCategorias = {
   startDate:'2026-10-22T18:00', endDate:'2026-10-22T23:00', courtCount:1, gameDuration:30,
   scheduleWindow:{ version:1, days:[{ day:'2026-10-22', startTime:'18:00', endTime:'23:00', categoryFlow:'categories' }] },
@@ -265,8 +266,10 @@ ok(/<div>Ana<\/div><div>Bia<\/div>/.test(board.html),
   'os dois jogadores da dupla aparecem em linhas separadas');
 ok(/ondrop/.test(organizerSource) && /manual\[from\.matchId\].*to\.court/.test(organizerSource),
   'soltar um card sobre outro troca os slots de horário e quadra');
-ok(/← Voltar/.test(bracketSource) && /width:min\(1600px,calc\(100vw - 36px\)\)/.test(bracketSource),
-  'o modal aproveita a largura útil e usa o botão padrão Voltar');
+ok(/← Voltar/.test(bracketSource) && /overflow-y:auto;overflow-x:hidden/.test(bracketSource) && /width:100%;max-width:1600px/.test(bracketSource),
+  'o modal aproveita a largura útil e impede que o cabeçalho role lateralmente');
+ok(/data-\' \+ prefix \+ \'-outside-window/.test(organizerSource) && /repeating-linear-gradient\(45deg,rgba\(239,68,68/.test(organizerSource) && /Todos os jogos continuam exibidos/.test(bracketSource),
+  'jogos que ultrapassam a janela seguem na grade com faixa zebrada vermelha e cinza');
 ok(/if \(!latest\.cabe\)/.test(bracketSource) && /if \(!draft\.cabe\)/.test(organizerSource),
   'nenhuma das duas agendas permite salvar distribuição que não cabe no dia');
 const timezoneRoundTrip = execFileSync(process.execPath, ['-e', [
