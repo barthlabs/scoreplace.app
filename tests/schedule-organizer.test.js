@@ -274,8 +274,8 @@ ok(/<div>Ana<\/div><div>Bia<\/div>/.test(board.html),
 ok(/ondrop/.test(organizerSource) && /manual\[from\.matchId\].*to\.court/.test(organizerSource),
   'soltar um card sobre outro troca os slots de horário e quadra');
 ok(/← Voltar/.test(bracketSource) && /data-pis-apply/.test(bracketSource) && /data-pis-publish/.test(bracketSource) &&
-  /position:sticky;top:0;z-index:20/.test(bracketSource) && /overflow-y:auto;overflow-x:hidden/.test(bracketSource) && /width:100%;max-width:1600px/.test(bracketSource),
-  'Voltar, Salvar ajustes e Publicar ficam juntos no cabeçalho fixo, fora da rolagem lateral da grade');
+  /data-pis-toolbar/.test(bracketSource) && /data-pis-scroll/.test(bracketSource) && /display:flex;flex-direction:column;isolation:isolate/.test(bracketSource) && /overflow:hidden/.test(bracketSource) && /width:100%;max-width:1600px/.test(bracketSource),
+  'Voltar, Salvar ajustes e Publicar ficam juntos numa barra opaca separada, fora das rolagens da grade');
 ok(/data-\' \+ prefix \+ \'-outside-window/.test(organizerSource) && /repeating-linear-gradient\(45deg,rgba\(239,68,68/.test(organizerSource) && /Todos os jogos continuam exibidos/.test(bracketSource),
   'jogos que ultrapassam a janela seguem na grade com faixa zebrada vermelha e cinza');
 ok(/if \(!latest\.cabe\)/.test(bracketSource) && /if \(!draft\.cabe\)/.test(organizerSource),
