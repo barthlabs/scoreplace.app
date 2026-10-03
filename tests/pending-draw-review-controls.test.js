@@ -28,6 +28,10 @@ ok(/_hydratePendingDrawMarker\(visible\[0\]\.id\)/.test(detail),
 ok(/function returnToPendingDetail\(\)[\s\S]*?_rememberPendingDrawMarker\(tId, pd\)[\s\S]*?renderTournaments\(container, String\(tId\)\)/.test(ui) &&
   /querySelector\('\[data-pis-close\]'\)\.onclick = returnToPendingDetail/.test(ui) &&
   /data-pis-publish/.test(ui) && /saveSchedule\(latest\)[\s\S]*?_publishPendingDraw\(tId\)/.test(ui) &&
-  /Conferir e ajustar sorteio/.test(ui) && /✕ Anular/.test(ui),
+  /Ajustar torneio/.test(ui) && /✕ Anular/.test(ui),
   'a revisão abre no planejamento, publica dali e Voltar restaura no detalhe somente ajuste e anulação');
+ok(/position:sticky;top:0;z-index:5/.test(ui) &&
+  /data-pis-close[\s\S]*?data-pis-publish/.test(ui) &&
+  !/Salvar ajustes<\\\/button><button type="button" data-pis-publish/.test(ui),
+  'Voltar fica à esquerda e Publicar à direita no cabeçalho fixo; a grade não tem comando de publicação no rodapé');
 process.exitCode = fail ? 1 : 0;

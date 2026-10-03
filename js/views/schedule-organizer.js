@@ -245,7 +245,7 @@
       var byCourt = {}; slots[slot].forEach(function (item) { byCourt[String(item.court)] = item; });
       var cells = plan.courts.map(function (court) {
         var item = byCourt[String(court)];
-        if (!item) return '<div style="min-height:118px;border:1px dashed rgba(148,163,184,.25);border-radius:8px;background:rgba(15,23,42,.24);"></div>';
+        if (!item) return '<div data-' + prefix + '-empty-slot data-' + prefix + '-court="' + esc(court) + '" data-' + prefix + '-time="' + esc(String(slot)) + '" title="Solte um jogo aqui" style="min-height:118px;border:1px dashed rgba(148,163,184,.25);border-radius:8px;background:rgba(15,23,42,.24);box-sizing:border-box;"></div>';
         var m = matchById[String(item.matchId)] || {};
         return '<article draggable="true" data-' + prefix + '-match="' + esc(item.matchId) + '" title="Arraste este jogo para trocar o horário e a quadra" style="min-height:132px;border:1px solid rgba(56,189,248,.32);border-radius:8px;padding:6px;background:rgba(15,23,42,.72);box-sizing:border-box;overflow:hidden;cursor:grab;">' +
           '<div style="font-size:.68rem;color:#7dd3fc;font-weight:900;display:flex;justify-content:space-between;gap:8px;"><span>' + esc(gameLabel(t, item.matchId, numberByMatch[String(item.matchId)])) + '</span><span>R' + esc(String(m.round || '—')) + '</span></div>' +
@@ -281,6 +281,18 @@
           if (!from || !to || from.matchId === to.matchId) return;
           manual[from.matchId] = { matchId:from.matchId, court:to.court, scheduledAt:to.scheduledAt };
           manual[to.matchId] = { matchId:to.matchId, court:from.court, scheduledAt:from.scheduledAt };
+          render();
+        };
+      });
+      /* Uma vaga livre também é destino: antes só cards aceitavam drop, deixando
+       * a organização incapaz de usar manualmente uma quadra vazia. */
+      Array.prototype.forEach.call(slot.querySelectorAll('[data-agenda-empty-slot]'), function (empty) {
+        empty.ondragover = function (event) { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; };
+        empty.ondrop = function (event) {
+          event.preventDefault(); var fromId = event.dataTransfer.getData('text/plain');
+          var from = plan.items.find(function (x) { return String(x.matchId) === String(fromId); });
+          if (!from) return;
+          manual[from.matchId] = { matchId:from.matchId, court:empty.getAttribute('data-agenda-court'), scheduledAt:new Date(Number(empty.getAttribute('data-agenda-time'))).toISOString() };
           render();
         };
       });

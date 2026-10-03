@@ -908,6 +908,61 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         cursores[diaIdx] = cursor;
         if (cursor > fimMs) fimMs = cursor;
       });
+      /*
+       * ⛔ NUNCA deixe uma quadra livre se existir jogo independente que caiba na
+       * mesma onda. O cursor por categoria acima preserva ordem e descansos, mas
+       * uma categoria com só quatro confrontos deixava duas das seis quadras
+       * vazias e empurrava a categoria seguinte para depois — chegando a estourar
+       * a janela do torneio. Compactamos SOMENTE para trás, na mesma data: não
+       * atravessa a agenda escolhida, não antecipa rodada dependente e nunca põe
+       * uma dupla duas vezes no mesmo horário.
+       *
+       * "Concentradas" continua significando que a categoria tem prioridade; as
+       * vagas que ela não consegue ocupar são usadas por partidas independentes,
+       * pois quadra ociosa não é descanso nem preserva regra esportiva alguma.
+       */
+      function _compactarSlotsNaMesmaJanela() {
+        var porId = {};
+        jogos.forEach(function (m) { porId[String(m.id)] = m; });
+        slots.forEach(function (s) {
+          var m = porId[s.matchId];
+          s._categoria = _schCategoriaDoJogo(m);
+          s._fase = (m && m.phaseIndex != null) ? m.phaseIndex : (t.currentPhaseIndex || 0);
+          s._rodada = (m && m.round != null) ? m.round : 0;
+          s._uids = _schMatchUids(t, m);
+        });
+        function anterior(a, b) {
+          return a._fase < b._fase || (a._fase === b._fase && a._rodada < b._rodada);
+        }
+        function podeAdiantar(slot, destino) {
+          /* Toda rodada anterior da mesma categoria precisa já estar encerrada. */
+          for (var i = 0; i < slots.length; i++) {
+            var outro = slots[i];
+            if (outro === slot || outro.dia !== slot.dia || outro._categoria !== slot._categoria) continue;
+            if (anterior(outro, slot) && outro.ms >= destino) return false;
+          }
+          /* O mesmo atleta/dupla não joga em duas quadras na mesma onda. */
+          for (var j = 0; j < slots.length; j++) {
+            var ocupante = slots[j];
+            if (ocupante === slot || ocupante.dia !== slot.dia || ocupante.ms !== destino) continue;
+            if (slot._uids.some(function (uid) { return ocupante._uids.indexOf(uid) !== -1; })) return false;
+          }
+          return true;
+        }
+        slots.forEach(function (slot) {
+          var horarios = {};
+          slots.forEach(function (s) { if (s.dia === slot.dia && s.ms < slot.ms) horarios[s.ms] = true; });
+          Object.keys(horarios).map(Number).sort(function (a, b) { return a - b; }).some(function (destino) {
+            var ocupados = slots.filter(function (s) { return s !== slot && s.dia === slot.dia && s.ms === destino; }).length;
+            if (ocupados >= quadras || !podeAdiantar(slot, destino)) return false;
+            slot.ms = destino;
+            slot.iso = new Date(destino).toISOString();
+            return true;
+          });
+        });
+        slots.forEach(function (s) { delete s._categoria; delete s._fase; delete s._rodada; delete s._uids; });
+      }
+      _compactarSlotsNaMesmaJanela();
       return {
         // A janela expõe `dias` como array; a grade expõe a QUANTIDADE para a
         // UI. `slots` é sempre a lista canônica de {matchId, ms} consumida pela

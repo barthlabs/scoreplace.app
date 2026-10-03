@@ -61,7 +61,7 @@ const afterConfirmed = W._operationalSchedulePlan(confirmed);
 const confirmedB = afterConfirmed.items.find(x => x.matchId === 'B');
 ok(confirmedB && confirmedB.court === 'Quadra 1' && confirmedB.scheduledAt === '2026-10-01T09:00:00.000Z' && confirmedB.scheduleLocked,
   'jogo já alocado não é movido automaticamente, mesmo se a alocação antiga era uma sugestão');
-ok(!/data-agenda-court/.test(organizerSource) && !/data-agenda-time/.test(organizerSource),
+ok(!/<select[^>]+data-agenda-(court|time)/.test(organizerSource),
   'a tela não repete seletor de quadra nem horário dentro de cada card');
 ok(/Object\.keys\(manual\)\.map/.test(organizerSource),
   'cada edição recompõe o plano completo a partir de todas as intervenções manuais');
@@ -91,6 +91,22 @@ ok(byCategoryMatch.FL && byCategoryMatch.FP && byCategoryMatch.ML &&
   'cada categoria permanece no dia configurado, sem vazar para o outro dia');
 ok(byCategoryMatch.FL && byCategoryMatch.FP && byCategoryMatch.FL.ms < byCategoryMatch.FP.ms,
   'a ordem declarada torna Fem Light anterior a Fem Power no mesmo dia');
+const seisQuadras = {
+  startDate:'2026-10-22T18:00', endDate:'2026-10-22T23:00', courtCount:6, gameDuration:30,
+  categorySchedule:{ version:1, slots:[
+    { category:'Fem Power', day:'2026-10-22', order:1 },
+    { category:'Fem Extreme', day:'2026-10-22', order:2 }
+  ] },
+  matches:[
+    { id:'P1', category:'Fem Power', round:1, p1:'P1A', p2:'P1B' }, { id:'P2', category:'Fem Power', round:1, p1:'P2A', p2:'P2B' },
+    { id:'P3', category:'Fem Power', round:1, p1:'P3A', p2:'P3B' }, { id:'P4', category:'Fem Power', round:1, p1:'P4A', p2:'P4B' },
+    { id:'E1', category:'Fem Extreme', round:1, p1:'E1A', p2:'E1B' }, { id:'E2', category:'Fem Extreme', round:1, p1:'E2A', p2:'E2B' }
+  ]
+};
+const gradeSeisQuadras = W._schGradeEstimada(seisQuadras);
+const primeiroHorario = Math.min.apply(null, gradeSeisQuadras.slots.map(function (s) { return s.ms; }));
+ok(gradeSeisQuadras.slots.filter(function (s) { return s.ms === primeiroHorario; }).length === 6,
+  'jogos independentes da categoria seguinte ocupam as quadras livres na mesma onda');
 const splitCategoryDays = Object.assign({}, categoryDays, {
   categorySchedule:{ version:1, slots:[
     { category:'Fem Light', day:'2026-10-22', order:1 },
@@ -212,6 +228,8 @@ ok(/flex:0 1 auto;min-width:0;font-size:\.62rem/.test(drawSource),
   'os toggles Concentradas/Alternadas permanecem compactos em cada dia');
 ok(/position:sticky;top:0;z-index:3/.test(drawSource) && !/id="team-draw-cancel" class=/.test(drawSource),
   'Voltar fica sempre visível no cabeçalho e não há Cancelar duplicado no rodapé');
+ok(/data-\' \+ prefix \+ \'-empty-slot/.test(organizerSource) && /data-pis-empty-slot/.test(bracketSource) && /Solte um jogo aqui/.test(organizerSource),
+  'quadras vazias aceitam arrastar e soltar tanto na agenda quanto na revisão privada');
 ok(/sp-team-draw-time/.test(drawSource) && /window\.location\.hash = d\.staged \? '#tournaments\/'/.test(drawSource) && /_openPendingInitialSchedule\(tId\)/.test(drawSource),
   'os horários do sorteio usam controle compacto e uma revisão nova abre direto no planejamento privado');
 ok(/var selectedMode = modeConfirmed && \(cfg\.schedule\.mode === 'structured' \|\| cfg\.schedule\.mode === 'free'\) \? cfg\.schedule\.mode : 'free';/.test(drawSource),
