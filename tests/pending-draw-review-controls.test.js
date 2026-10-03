@@ -30,8 +30,8 @@ ok(/function returnToPendingDetail\(\)[\s\S]*?_rememberPendingDrawMarker\(tId, p
   /data-pis-publish/.test(ui) && /saveSchedule\(latest\)[\s\S]*?_publishPendingDraw\(tId\)/.test(ui) &&
   /Ajustar torneio/.test(ui) && /✕ Anular/.test(ui),
   'a revisão abre no planejamento, publica dali e Voltar restaura no detalhe somente ajuste e anulação');
-ok(/position:sticky;top:0;z-index:20/.test(ui) && /overflow:visible/.test(ui) &&
+ok(/data-pis-toolbar/.test(ui) && /data-pis-scroll/.test(ui) && /height:100%;/.test(ui) && /overflow:hidden/.test(ui) &&
   /data-pis-close[\s\S]*?data-pis-apply[\s\S]*?data-pis-publish/.test(ui) &&
   !/margin-top:14px[\s\S]*?data-pis-apply/.test(ui),
-  'Voltar fica à esquerda; Salvar ajustes e Publicar ficam ativos à direita no cabeçalho fixo, sem comando no rodapé');
+  'Voltar fica à esquerda; Salvar ajustes e Publicar ficam ativos à direita em barra opaca fora do painel rolável, sem comando no rodapé');
 process.exitCode = fail ? 1 : 0;
