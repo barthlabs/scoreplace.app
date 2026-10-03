@@ -66,6 +66,36 @@ function igualEstrutural(campo, atual, enviado) {
     : igual(atual, enviado);
 }
 
+/* Defaults que a tela atual materializa em documentos antigos. Eles não alteram os
+ * confrontos: o editor de prazo é visível porque já há cortes, e competição por times
+ * segue expressamente desligada. A lista é fechada e comparada por conteúdo; não é uma
+ * permissão para campos novos entrarem de carona na atualização de calendário. */
+const _TIME_COMPETITION_DESLIGADA = {
+  enabled: false, teamCount: 0, teamNames: [], formation: 'draw',
+  internalMatches: 'avoid', ranking: 'points', aggregation: 'overall',
+  schedule: { enabled: false, teamsPerGroup: 2, gamesPerTeam: 1, mode: 'free', modeConfirmed: false },
+  scoring: { win: 3, draw: 1, loss: 0 }
+};
+function _removaDefaultsLegados(atual, comparado) {
+  const politicaAtual = _leia(atual, 'eliminatoria.politicaDaChave');
+  const politicaEnviada = _leia(comparado, 'eliminatoria.politicaDaChave');
+  if (_politicaCanonica(politicaAtual) === _politicaCanonica(politicaEnviada) &&
+      politicaAtual === undefined && politicaEnviada === 'repescagem') {
+    _escreva(comparado, 'eliminatoria.politicaDaChave', undefined);
+  }
+  const editorAtual = _leia(atual, 'eliminatoria.roundBoundsEditorEnabled');
+  const editorEnviado = _leia(comparado, 'eliminatoria.roundBoundsEditorEnabled');
+  const cortesAtuais = _leia(atual, 'eliminatoria.roundBounds');
+  if (editorAtual === undefined && editorEnviado === true &&
+      Array.isArray(cortesAtuais) && cortesAtuais.length > 0) {
+    _escreva(comparado, 'eliminatoria.roundBoundsEditorEnabled', undefined);
+  }
+  if (_leia(atual, 'teamCompetition') === undefined &&
+      igual(_leia(comparado, 'teamCompetition'), _TIME_COMPETITION_DESLIGADA)) {
+    _escreva(comparado, 'teamCompetition', undefined);
+  }
+}
+
 function _leia(obj, caminho) {
   const partes = caminho.split('.');
   let cur = obj;
@@ -110,12 +140,7 @@ function fmt2Atualizavel(atual, enviado, caminhos) {
    * normalização da tela acabou de materializar. Assim nenhum campo estrutural novo entra
    * junto com a data. */
   const comparado = _clone(enviado);
-  const politicaAtual = _leia(atual, 'eliminatoria.politicaDaChave');
-  const politicaEnviada = _leia(comparado, 'eliminatoria.politicaDaChave');
-  if (_politicaCanonica(politicaAtual) === _politicaCanonica(politicaEnviada) &&
-      politicaAtual === undefined && politicaEnviada === 'repescagem') {
-    _escreva(comparado, 'eliminatoria.politicaDaChave', undefined);
-  }
+  _removaDefaultsLegados(atual, comparado);
   if (!igual(mescla, comparado)) {
     return { ok: false, motivo: 'a alteração passa por campos que recriariam as rodadas' };
   }

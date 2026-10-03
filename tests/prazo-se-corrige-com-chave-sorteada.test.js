@@ -86,6 +86,27 @@ politicaMudada.eliminatoria.politicaDaChave = 'bye';
 must(!core.fmt2Atualizavel(legado, politicaMudada).ok,
   '⑥b ⛔ bye dentro do fmt2 também continua recusado');
 
+// ── ⑥c Confra real: normalizador materializa três defaults de documento legado ─
+const confraLegado = copia();
+const confraNormalizada = copia();
+confraNormalizada.eliminatoria.politicaDaChave = 'repescagem';
+confraNormalizada.eliminatoria.roundBoundsEditorEnabled = true;
+confraNormalizada.teamCompetition = {
+  enabled: false, teamCount: 0, teamNames: [], formation: 'draw', internalMatches: 'avoid',
+  ranking: 'points', aggregation: 'overall',
+  schedule: { enabled: false, teamsPerGroup: 2, gamesPerTeam: 1, mode: 'free', modeConfirmed: false },
+  scoring: { win: 3, draw: 1, loss: 0 }
+};
+confraNormalizada.eliminatoria.roundBounds = ['2026-09-30T23:00', '2026-10-16T23:00'];
+const vConfra = core.fmt2Atualizavel(confraLegado, confraNormalizada);
+must(vConfra.ok, '⑥c ⛔ a Confra real salva o prazo mesmo quando a tela materializa os defaults legados');
+must(vConfra.valor.teamCompetition === undefined && vConfra.valor.eliminatoria.roundBoundsEditorEnabled === undefined,
+  '⑥c os defaults visuais/desligados não são gravados como mudança estrutural');
+const timeLigado = JSON.parse(JSON.stringify(confraNormalizada));
+timeLigado.teamCompetition.enabled = true;
+must(!core.fmt2Atualizavel(confraLegado, timeLigado).ok,
+  '⑥c ⛔ ligar competição por times continua mudança estrutural recusada');
+
 // ── ⑦ `roundBounds` é CALENDÁRIO, não estrutura (o campo que a recusa nomeou) ──
 {
   const ini = IDX.indexOf('const _CONFIG_ESTRUTURAL = new Set([');
