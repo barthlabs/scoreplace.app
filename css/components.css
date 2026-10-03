@@ -2576,8 +2576,11 @@ html, body,
 /* Espaçamento canônico entre os integrantes de uma dupla em TODO card de jogo.
    O valor vem da geometria aprovada em “Seus últimos resultados”; dashboard, próximo
    jogo, novidades e chave usam esta mesma classe, nunca um gap local. */
-:root{--sp-match-team-member-gap:4px;}
-.sp-mc-col{display:flex;flex-direction:column;gap:var(--sp-match-team-member-gap);overflow:hidden;min-width:0;}
+:root{--sp-match-team-member-gap:2px;}
+/* Uma dupla é uma lista compacta, nunca uma coluna distribuída pela altura do
+   card. `justify-content:flex-start` e `align-content:flex-start` previnem que
+   altura herdada ou um layout externo transforme os 2px em um vão visível. */
+.sp-mc-col{display:flex;flex-direction:column;justify-content:flex-start;align-content:flex-start;gap:var(--sp-match-team-member-gap);overflow:hidden;min-width:0;}
 .sp-mc-vs{text-align:center;font-size:0.65rem;color:var(--text-muted);font-weight:800;letter-spacing:2px;padding:3px 0;}
 .sp-mc-acts{display:flex;align-items:flex-start;gap:6px;flex-wrap:wrap;justify-content:flex-end;margin-left:auto;}
 .sp-mc-sc{display:flex;align-items:center;flex-shrink:0;margin-left:5px;}

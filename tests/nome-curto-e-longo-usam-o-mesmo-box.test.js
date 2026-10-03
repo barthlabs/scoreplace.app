@@ -32,8 +32,8 @@ must(/data-two-line-maxrem/.test(BRACKET) && /data-sp-card-name-box/.test(BRACKE
   'Últimos Resultados usa o mesmo contrato adaptativo da chave, por delegação');
 must(!/data-fit-group/.test(BRACKET) && !/data-fit-group/.test(DASHBOARD),
   'nenhum render força o nome curto a acompanhar a quebra do parceiro');
-must(/--sp-match-team-member-gap:4px/.test(CSS) && /\.sp-mc-col\{[^}]*gap:var\(--sp-match-team-member-gap\)/.test(CSS) && recent.includes('window.renderMatchCard(m2'),
-  'dashboard e chave usam a mesma variável canônica de 4px entre integrantes da dupla');
+must(/--sp-match-team-member-gap:2px/.test(CSS) && /\.sp-mc-col\{[^}]*justify-content:flex-start[^}]*gap:var\(--sp-match-team-member-gap\)/.test(CSS) && recent.includes('window.renderMatchCard(m2'),
+  'dashboard e chave usam a mesma variável canônica de 2px, sem vão elástico, entre integrantes da dupla');
 must(/data-mr-card="1"/.test(DASHBOARD) && /data-nov-card="1"/.test(DASHBOARD),
   'todo wrapper de card de resultados e novidades declara o atributo que estica a fileira');
 must(TOURNAMENTS === VENDOR_TOURNAMENTS && CATEGORIES === VENDOR_CATEGORIES,
@@ -66,7 +66,7 @@ must(TOURNAMENTS === VENDOR_TOURNAMENTS && CATEGORIES === VENDOR_CATEGORIES,
   must(m.lucia.lines === 2, 'Lucia Helena Silva Cerri usa duas linhas');
   must(m.leila.fs > m.lucia.fs, 'o nome curto fica maior que o nome longo');
 must(Math.abs(m.leila.height - m.lucia.height) < 0.5, 'nomes curtos e longos reservam a mesma altura de duas linhas');
-  must(m.gap === 4 && Math.abs(m.rowGap - 4) < 0.5, 'o espaço canônico entre participantes é 4px, sem linha vazia');
+  must(m.gap === 2 && Math.abs(m.rowGap - 2) < 0.5, 'o espaço canônico entre participantes é 2px, sem linha vazia');
   must(!m.leila.cut && !m.lucia.cut, 'nenhum dos dois nomes é truncado');
   console.log('\n✅ nome curto e longo no mesmo box — ' + ok + ' verificações');
 })();

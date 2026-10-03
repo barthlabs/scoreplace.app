@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.3.246';
+window.SCOREPLACE_VERSION = '2.3.247';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -10378,20 +10378,59 @@ window._fitTournamentTitles = function(root, force) {
       var el = els[i];
       // Primeiro restaura o teto definido no CSS; a largura do slot, não a do
       // viewport, é a medida correta para dashboard e detalhe.
-      el.style.fontSize = '';
+      // `responsive.css` protege o teto editorial com `!important`. Uma atribuição
+      // normal em `style.fontSize` NÃO o vence; este era o motivo pelo qual o
+      // "encolhedor" marcava o título como pronto, mas ele continuava no tamanho
+      // máximo e cortava a última palavra no card da dashboard. A prioridade aqui
+      // é deliberada: dashboard e detalhe precisam obedecer ao mesmo cálculo.
+      el.style.removeProperty('font-size');
       el.style.whiteSpace = 'normal';
-      var bw = el.clientWidth;
+      var bw = el.getBoundingClientRect().width;
       if (!bw) continue; // card ainda fora do fluxo: a próxima mutação/redimensionamento cobre
       var maxPx = parseFloat(window.getComputedStyle(el).fontSize) || 16;
       var fs = maxPx;
-      // Com quebra normal, scrollWidth só excede a caixa quando uma palavra
-      // indivisível estoura. Escalar proporcionalmente evita hifenizar ou cortar.
-      if (el.scrollWidth > bw + 1) {
-        fs = Math.max(14, Math.floor((maxPx * (bw - 1) / el.scrollWidth) * 10) / 10);
-        el.style.fontSize = fs + 'px';
-        if (el.scrollWidth > bw + 1 && fs > 14) {
-          fs = Math.max(14, fs - 0.5);
-          el.style.fontSize = fs + 'px';
+      // Mede a palavra mais larga isoladamente. `scrollWidth` do h4 com várias
+      // linhas pode ser igual à caixa mesmo quando uma linha está sendo recortada
+      // pelo overflow do card; a sonda elimina essa ambiguidade.
+      var words = String(el.textContent || '').trim().split(/\s+/).filter(Boolean);
+      var probe = document.createElement('span');
+      var computed = window.getComputedStyle(el);
+      probe.style.cssText = 'position:fixed;left:-10000px;top:-10000px;visibility:hidden;display:inline-block;white-space:nowrap;pointer-events:none;';
+      probe.style.font = computed.font;
+      probe.style.letterSpacing = computed.letterSpacing;
+      probe.style.textTransform = computed.textTransform;
+      document.body.appendChild(probe);
+      var widest = 0;
+      for (var w = 0; w < words.length; w++) {
+        probe.textContent = words[w];
+        widest = Math.max(widest, probe.getBoundingClientRect().width);
+      }
+      probe.remove();
+      // Começa no maior tamanho editorial e reduz somente o indispensável para
+      // a maior palavra caber inteira. O piso baixo só atende nomes compostos
+      // excepcionalmente longos; nunca troca corte por uma quebra dentro da palavra.
+      if (widest > bw - 1) {
+        fs = Math.max(10, Math.floor((maxPx * (bw - 1) / widest) * 10) / 10);
+        el.style.setProperty('font-size', fs + 'px', 'important');
+        var guard = 0;
+        while (guard < 80) {
+          computed = window.getComputedStyle(el);
+          probe = document.createElement('span');
+          probe.style.cssText = 'position:fixed;left:-10000px;top:-10000px;visibility:hidden;display:inline-block;white-space:nowrap;pointer-events:none;';
+          probe.style.font = computed.font;
+          probe.style.letterSpacing = computed.letterSpacing;
+          probe.style.textTransform = computed.textTransform;
+          document.body.appendChild(probe);
+          widest = 0;
+          for (w = 0; w < words.length; w++) {
+            probe.textContent = words[w];
+            widest = Math.max(widest, probe.getBoundingClientRect().width);
+          }
+          probe.remove();
+          if (widest <= bw - 1 || fs <= 10) break;
+          fs = Math.max(10, fs - 0.25);
+          el.style.setProperty('font-size', fs + 'px', 'important');
+          guard++;
         }
       }
       el.setAttribute('data-sp-title-fitted', '1');
@@ -10410,7 +10449,7 @@ window._fitTournamentTitles = function(root, force) {
       try {
         document.querySelectorAll('.tournament-card-title[data-sp-title-fitted]').forEach(function (el) {
           el.removeAttribute('data-sp-title-fitted');
-          el.style.fontSize = '';
+          el.style.removeProperty('font-size');
         });
         window._fitTournamentTitles(document);
       } catch (e) {}

@@ -195,6 +195,7 @@ const SUITES = [
   'tests/l4-inscricao-propria-nao-grava-email.test.js',
   'tests/balao-fica-junto-do-nome-em-duas-linhas.test.js',
   'tests/nome-curto-e-longo-usam-o-mesmo-box.test.js',
+  'tests/titulo-torneio-nao-corta-no-dashboard.test.js',
   'tests/l4-desvincular-email-e-do-servidor.test.js',
   'tests/lista-de-pessoas-nao-entrega-a-ficha-inteira.test.js',
   'tests/limpeza-das-confirmacoes-expiradas-roda-o-que-promete.test.js',

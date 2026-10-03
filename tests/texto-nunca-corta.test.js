@@ -136,6 +136,8 @@ console.log('\n== Texto nunca corta ==');
     'o detalhe usa o mesmo componente de título da dashboard');
   ok(/window\._fitTournamentTitles\s*=\s*function/.test(store) && /project_tournament_title_max_without_truncation/.test(store),
     'o título é ajustado pela largura real do card, não apenas pelo viewport');
+  ok(/style\.setProperty\('font-size',\s*fs \+ 'px',\s*'important'\)/.test(store) && /maior palavra caber inteira/.test(store),
+    'o ajuste efetivamente vence o teto CSS protegido e mede a maior palavra antes de reduzir');
   ok(/\.sp-tournament-title-slot\s*\{\s*min-width:\s*0/.test(responsive) && /\.tournament-card-title\s*\{[\s\S]*font-size:\s*clamp\(1\.45rem,\s*6\.4vw,\s*2\.25rem\)\s*!important[\s\S]*text-wrap:\s*pretty[\s\S]*overflow-wrap:\s*normal\s*!important/.test(responsive),
     'dashboard e detalhe compartilham teto editorial e quebra somente entre palavras');
 })();
