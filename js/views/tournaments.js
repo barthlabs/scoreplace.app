@@ -3366,7 +3366,7 @@ function renderTournaments(container, tournamentId = null) {
 
             <!-- Middle Left: Nome + Logo + Favorito -->
             <!-- Logo: na tela de detalhe ocupa 1/3 da largura do card (max 160px), cap responsivo via CSS min() -->
-            <div style="display: flex; align-items: ${window._tourLogoSrc(t) && tournamentId ? 'flex-start' : 'center'}; gap: ${window._tourLogoSrc(t) && tournamentId ? '18px' : '14px'}; margin: 1.8rem 0 0.5rem 0;">
+            <div class="sp-tournament-identity-row" style="display: flex; align-items: ${window._tourLogoSrc(t) && tournamentId ? 'flex-start' : 'center'}; gap: ${window._tourLogoSrc(t) && tournamentId ? '18px' : '14px'}; margin: 1.8rem 0 0.5rem 0;">
               ${window._tourLogoSrc(t) ? `
                 <div style="position:relative;width:33%;min-width:100px;flex-shrink:0;aspect-ratio:${window._tournamentLogoAspect ? window._tournamentLogoAspect(t) : 1};">
                   <img src="${window._tourLogoSrc(t)}" alt="Logo do torneio"
@@ -3375,7 +3375,7 @@ function renderTournaments(container, tournamentId = null) {
                   >
                 </div>
               ` : ''}
-              <div style="flex:1;min-width:0;display:flex;flex-direction:column;align-self:stretch;">
+              <div class="sp-tournament-title-slot" style="flex:1;min-width:0;display:flex;flex-direction:column;align-self:stretch;">
                 <h4 class="tournament-card-title" style="margin:0;font-weight:800;color:white;text-align:left;">
                   ${window._safeHtml(t.name)}
                 </h4>

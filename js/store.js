@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.3.243';
+window.SCOREPLACE_VERSION = '2.3.246';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -4236,19 +4236,17 @@ window._devWhatsAppBtnHtml = function (opts) {
 // ─── Live countdown ticker ─────────────────────────────────────────────────
 // Updates all elements with data-countdown-target every second
 window._formatCountdown = function(diff) {
-  if (diff <= 0) return '0s';
+  if (diff <= 0) return '00d 00h 00m 00s';
   var d = Math.floor(diff / 86400000);
   var h = Math.floor((diff % 86400000) / 3600000);
   var m = Math.floor((diff % 3600000) / 60000);
   var s = Math.floor((diff % 60000) / 1000);
-  // 1.9.81: SEGUNDOS só no último minuto. Acima disso, o texto muda no máximo
-  // 1x/min — e como o tique só escreve quando o texto MUDA (dirty-check), o
-  // relógio deixa de invalidar o layout da página inteira a cada segundo
-  // (era um dos vagões do trem de travadas medido no aparelho do dono).
-  if (d > 0) return d + 'd ' + h + 'h';
-  if (h > 0) return h + 'h ' + m + 'm';
-  if (m > 0) return m + 'm';
-  return s + 's';
+  // Contrato visual canônico: toda regressiva de evento informa as quatro
+  // unidades. Dashboard e detalhe usam este mesmo formatador, sem exceção por
+  // torneio ou por janela de tempo. O ticker já cede durante a rolagem abaixo.
+  // [[project_tournament_countdown_dd_hh_mm_ss]]
+  var _p2 = function (n) { return (n < 10 ? '0' : '') + n; };
+  return _p2(d) + 'd ' + _p2(h) + 'h ' + _p2(m) + 'm ' + _p2(s) + 's';
 };
 // ⚡ O RELÓGIO CEDE A VEZ PRA ROLAGEM (24/ago/2026). O tique escreve texto que
 // muda TODO segundo (os relógios com segundos), então o dirty-check não segura
@@ -6846,21 +6844,22 @@ window._firstNameOnly = function(name) {
       (el.getAttribute('data-maxrem') || '') + '|' + (el.getAttribute('data-minrem') || '') + '|' +
       (el.getAttribute('data-two-line-maxrem') || '');
   }
-  // Só os nomes de cards de jogo recebem esta compactação. A caixa começa alta para
-  // permitir a busca em duas linhas; depois ela ocupa uma ou duas linhas conforme o
-  // resultado real. Não há regra por tela: o atributo vem do mesmo contrato canônico.
+  // Todos os slots de nome de card reservam DUAS linhas, mesmo quando o texto cabe em
+  // uma. Isto mantém a altura das duplas e dos cards irmãos estável: nome longo escolhe
+  // fonte/quebra, nunca aumenta o card; nome curto apenas fica centralizado no mesmo
+  // espaço. Não há regra por tela: o atributo vem do contrato canônico.
+  // [[project_card_de_jogo_geometria_canon]]
   function _compactaCaixaNomeDeCard(el) {
     var box = el && el.parentElement;
     if (!box || !box.hasAttribute('data-sp-card-name-box')) return null;
     var one = box.getAttribute('data-sp-one-line-h');
     var two = box.getAttribute('data-sp-two-line-h');
     if (!one || !two) return null;
-    var cs = getComputedStyle(el);
-    var lh = parseFloat(cs.lineHeight) || ((parseFloat(cs.fontSize) || 0) * 1.1);
-    var duasLinhas = el.style.whiteSpace === 'normal' && lh > 0 && el.scrollHeight > (lh * 1.45);
-    var altura = duasLinhas ? two : one;
+    // `one` continua no markup por compatibilidade de documentos renderizados antes
+    // deste contrato; não pode voltar a ser aplicado sem quebrar a igualdade vertical.
+    var altura = two;
     if (box.style.getPropertyValue('--sp-box-h') !== altura) box.style.setProperty('--sp-box-h', altura);
-    el.setAttribute('data-sp-name-lines', duasLinhas ? '2' : '1');
+    el.setAttribute('data-sp-name-lines', '2-slot');
     return { bw: box.clientWidth, bh: box.clientHeight };
   }
 
@@ -10363,6 +10362,61 @@ window._fitTwoLineNames = function(root) {
     }
   } catch (e) {}
 };
+
+// ── TÍTULO DE TORNEIO: MAIOR TAMANHO SEM CORTAR PALAVRA ─────────────────────
+// Dashboard e detalhe usam `.tournament-card-title`. Diferente dos nomes de
+// jogadores, este título pode crescer em altura; só reduzimos a fonte quando a
+// MAIOR palavra não cabe na largura real do slot. Assim a escolha começa no
+// teto editorial do CSS, quebra entre palavras e nunca deixa uma palavra sair
+// para fora do card (que por razões visuais tem overflow:hidden).
+// [[project_tournament_title_max_without_truncation]]
+window._fitTournamentTitles = function(root, force) {
+  try {
+    var scope = (root && root.querySelectorAll) ? root : document;
+    var els = scope.querySelectorAll('.tournament-card-title' + (force ? '' : ':not([data-sp-title-fitted])'));
+    for (var i = 0; i < els.length; i++) {
+      var el = els[i];
+      // Primeiro restaura o teto definido no CSS; a largura do slot, não a do
+      // viewport, é a medida correta para dashboard e detalhe.
+      el.style.fontSize = '';
+      el.style.whiteSpace = 'normal';
+      var bw = el.clientWidth;
+      if (!bw) continue; // card ainda fora do fluxo: a próxima mutação/redimensionamento cobre
+      var maxPx = parseFloat(window.getComputedStyle(el).fontSize) || 16;
+      var fs = maxPx;
+      // Com quebra normal, scrollWidth só excede a caixa quando uma palavra
+      // indivisível estoura. Escalar proporcionalmente evita hifenizar ou cortar.
+      if (el.scrollWidth > bw + 1) {
+        fs = Math.max(14, Math.floor((maxPx * (bw - 1) / el.scrollWidth) * 10) / 10);
+        el.style.fontSize = fs + 'px';
+        if (el.scrollWidth > bw + 1 && fs > 14) {
+          fs = Math.max(14, fs - 0.5);
+          el.style.fontSize = fs + 'px';
+        }
+      }
+      el.setAttribute('data-sp-title-fitted', '1');
+    }
+  } catch (e) {}
+};
+// Largura do card muda sem mutação do DOM. Recalcular apenas em resize mantém
+// o título máximo em cada largura sem introduzir trabalho durante o scroll.
+(function () {
+  var pending = false;
+  window.addEventListener('resize', function () {
+    if (pending) return;
+    pending = true;
+    (window.requestAnimationFrame || function (fn) { setTimeout(fn, 16); })(function () {
+      pending = false;
+      try {
+        document.querySelectorAll('.tournament-card-title[data-sp-title-fitted]').forEach(function (el) {
+          el.removeAttribute('data-sp-title-fitted');
+          el.style.fontSize = '';
+        });
+        window._fitTournamentTitles(document);
+      } catch (e) {}
+    });
+  });
+})();
 // Observer único: ao mudar o DOM, agenda um fit (debounce via rAF). O filtro
 // :not([data-fit-done]) torna o passo barato quando não há nomes novos.
 (function() {
@@ -10381,6 +10435,7 @@ window._fitTwoLineNames = function(root) {
     pending = false;
     if (typeof window._fitTwoLineNames === 'function') window._fitTwoLineNames(document);
     if (typeof window._fitNames === 'function') window._fitNames(document, 0);
+    if (typeof window._fitTournamentTitles === 'function') window._fitTournamentTitles(document);
     // e quem ficou FORA da margem imediata passa a ser vigiado pelo navegador, pra ser
     // ajustado ANTES de entrar na tela quando a pessoa rolar (ver _observaParaAjuste).
     if (typeof window._observaNomesParaAjuste === 'function') window._observaNomesParaAjuste(document);

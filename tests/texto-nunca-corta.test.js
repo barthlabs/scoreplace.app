@@ -134,8 +134,10 @@ console.log('\n== Texto nunca corta ==');
   const tournaments = fs.readFileSync(path.join(ROOT, 'js', 'views', 'tournaments.js'), 'utf8');
   ok(/<h4 class="tournament-card-title" style="margin:0;font-weight:800;color:white;text-align:left;">/.test(tournaments),
     'o detalhe usa o mesmo componente de título da dashboard');
-  ok(/\.tournament-card-title\s*\{[\s\S]*font-size:\s*clamp\(1\.45rem,\s*6\.4vw,\s*2\.25rem\)\s*!important[\s\S]*text-wrap:\s*pretty[\s\S]*overflow-wrap:\s*normal\s*!important/.test(responsive),
-    'a fonte usa o maior tamanho fluido da tela e quebra somente entre palavras');
+  ok(/window\._fitTournamentTitles\s*=\s*function/.test(store) && /project_tournament_title_max_without_truncation/.test(store),
+    'o título é ajustado pela largura real do card, não apenas pelo viewport');
+  ok(/\.sp-tournament-title-slot\s*\{\s*min-width:\s*0/.test(responsive) && /\.tournament-card-title\s*\{[\s\S]*font-size:\s*clamp\(1\.45rem,\s*6\.4vw,\s*2\.25rem\)\s*!important[\s\S]*text-wrap:\s*pretty[\s\S]*overflow-wrap:\s*normal\s*!important/.test(responsive),
+    'dashboard e detalhe compartilham teto editorial e quebra somente entre palavras');
 })();
 
 // ── 5. superfície invertida: restauração NÃO pode ser presa a tag ────────────

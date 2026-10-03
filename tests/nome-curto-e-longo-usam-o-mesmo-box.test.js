@@ -1,8 +1,8 @@
 'use strict';
-/* A dupla não pode punir o nome curto por ter uma parceira de nome longo.
+/* A dupla não pode ter a geometria alterada pelo tamanho do nome.
  * Cenário real informado: "Leila Arida" cabe em uma linha; "Lucia Helena Silva Cerri"
- * usa duas linhas com fonte menor. A caixa curta encolhe depois do fit; a longa preserva
- * duas linhas, e o vão entre participantes permanece canônico em todos os cards. */
+ * usa duas linhas com fonte menor. Ambas reservam duas linhas: nome longo não aumenta
+ * o card e nome curto não o encolhe. */
 const assert = require('assert/strict');
 const fs = require('fs');
 const path = require('path');
@@ -57,7 +57,7 @@ must(/--sp-match-team-member-gap:4px/.test(CSS) && /\.sp-mc-col\{[^}]*gap:var\(-
   must(m.leila.lines === 1, 'Leila Arida permanece em uma linha');
   must(m.lucia.lines === 2, 'Lucia Helena Silva Cerri usa duas linhas');
   must(m.leila.fs > m.lucia.fs, 'o nome curto fica maior que o nome longo');
-  must(m.leila.height < m.lucia.height, 'a caixa do nome curto encolhe e a do nome longo preserva duas linhas');
+must(Math.abs(m.leila.height - m.lucia.height) < 0.5, 'nomes curtos e longos reservam a mesma altura de duas linhas');
   must(m.gap === 4 && Math.abs(m.rowGap - 4) < 0.5, 'o espaço canônico entre participantes é 4px, sem linha vazia');
   must(!m.leila.cut && !m.lucia.cut, 'nenhum dos dois nomes é truncado');
   console.log('\n✅ nome curto e longo no mesmo box — ' + ok + ' verificações');

@@ -337,6 +337,7 @@ const SUITES = [
   // largura mínima → vaza em flex) e restauração de cor presa a TAG em superfície
   // invertida (foi o `span[style*=…]` que deixou metade da previsão ilegível).
   'tests/texto-nunca-corta.test.js',
+  'tests/indicadores-torneio-canonicos.test.js',
   // "Todos / Inscrições abertas / Encerrados" varrem a PLATAFORMA (outros organizadores
   // e ocultos incluídos); os ocultos aparecem na seção colapsável, em qualquer estado.
   // Cobre LISTA e CONTADOR juntos: na 1.8.89 consertei só a lista e o pill seguiu

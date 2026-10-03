@@ -2571,17 +2571,20 @@ html, body,
    inteiro. Em fluxo inline quem manda é `vertical-align`, que o acompanha na última linha.
    [[project_card_de_jogo_geometria_canon]] */
 .sp-mc-nm{font-weight:600;white-space:nowrap;display:inline-block;}
-.sp-mc-side{display:flex;align-items:center;gap:5px;overflow:hidden;}
+.sp-mc-side{display:flex;align-items:center;gap:5px;overflow:hidden;min-width:0;}
 .sp-mc-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;margin-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:5px;}
 /* Espaçamento canônico entre os integrantes de uma dupla em TODO card de jogo.
    O valor vem da geometria aprovada em “Seus últimos resultados”; dashboard, próximo
    jogo, novidades e chave usam esta mesma classe, nunca um gap local. */
 :root{--sp-match-team-member-gap:4px;}
-.sp-mc-col{display:flex;flex-direction:column;gap:var(--sp-match-team-member-gap);overflow:hidden;}
+.sp-mc-col{display:flex;flex-direction:column;gap:var(--sp-match-team-member-gap);overflow:hidden;min-width:0;}
 .sp-mc-vs{text-align:center;font-size:0.65rem;color:var(--text-muted);font-weight:800;letter-spacing:2px;padding:3px 0;}
 .sp-mc-acts{display:flex;align-items:flex-start;gap:6px;flex-wrap:wrap;justify-content:flex-end;margin-left:auto;}
-.sp-mc-sc{display:flex;align-items:center;flex-shrink:0;margin-left:8px;}
-.sp-mc-badge{display:inline-flex;align-items:center;font-size:0.58rem;font-weight:800;padding:2px 7px;border-radius:5px;margin-right:8px;letter-spacing:0.5px;text-transform:uppercase;flex-shrink:0;}
+.sp-mc-sc{display:flex;align-items:center;flex-shrink:0;margin-left:5px;}
+/* REP/BYE/PROMO é uma anotação do time, não uma terceira coluna concorrendo com
+   nome e placar. O chip compacto recupera largura para os nomes e preserva a
+   separação fixa antes do score em todos os cards. */
+.sp-mc-badge{display:inline-flex;align-items:center;font-size:0.52rem;font-weight:800;padding:1px 4px;border-radius:4px;margin:0 3px 0 2px;letter-spacing:0.25px;text-transform:uppercase;flex-shrink:0;line-height:1.15;}
 .sp-mc-badge--bye{color:var(--sp-c-fbbf24,#fbbf24);background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.45);}
 .sp-mc-badge--rep{color:var(--sp-c-fb923c,#fb923c);background:rgba(249,115,22,0.15);border:1px solid rgba(249,115,22,0.45);}
 .sp-mc-badge--promo{color:var(--sp-c-c7d2fe,#c7d2fe);background:rgba(99,102,241,0.22);border:1px solid rgba(129,140,248,0.75);}
@@ -2639,9 +2642,16 @@ html, body,
    melhor de 3 e melhor de 5 usam 16px. A regra não depende de container query — o
    card pode mudar de largura sem Novidades voltar ao vão compacto. */
 .sp-match-card{container-type:inline-size;}
+/* Dashboard: cards na mesma fileira têm a mesma caixa externa. O conteúdo menor
+   não reduz o cartão; ele só deixa respiro interno. A chave não usa esses wrappers,
+   portanto continua com a altura própria de cada confronto. */
+#novidades-grid > [data-nov-card],
+#meus-resultados-body [data-mr-card]{align-self:stretch;display:flex !important;flex-direction:column;min-width:0;box-sizing:border-box;}
+#novidades-grid > [data-nov-card] > .sp-match-card,
+#meus-resultados-body [data-mr-card] > .sp-match-card{height:100%;display:flex;flex-direction:column;box-sizing:border-box;}
 .sp-set-grid{display:flex;align-items:flex-end;gap:2px;flex-shrink:0;}
-.sp-set-grid[data-sp-best-of="3"]{gap:16px;}
-.sp-set-grid[data-sp-best-of="5"]{gap:16px;}
+.sp-set-grid[data-sp-best-of="3"]{gap:clamp(5px,1.1cqw,10px);}
+.sp-set-grid[data-sp-best-of="5"]{gap:clamp(5px,1.1cqw,10px);}
 /* REGRESSÃO: o card não pode sacrificar o nome para manter vazios luxuosos no
    placar. Em coluna estreita, o orçamento é: nome legível primeiro; depois
    placar, e por último REP/BYE. O STB continua comportando dois dígitos, mas
@@ -2649,8 +2659,8 @@ html, body,
 @container (max-width:390px){
   .sp-set-grid[data-sp-best-of="3"],.sp-set-grid[data-sp-best-of="5"]{gap:5px;}
   .sp-set-grid{--sp-num-fs-set:1.12rem!important;}
-  .sp-mc-sc{margin-left:5px;}
-  .sp-mc-badge{font-size:0.52rem;padding:1px 4px;margin-right:4px;letter-spacing:0.2px;}
+  .sp-mc-sc{margin-left:4px;}
+  .sp-mc-badge{font-size:0.5rem;padding:1px 3px;margin:0 2px 0 1px;letter-spacing:0.15px;}
 }
 /* ⛔ PLACAR ALINHA À DIREITA, NÃO AO CENTRO. Ordem do dono (13/set/2026, olhando um jogo
    com super tie-break): _"os placares parecem alinhados nas colunas pela esquerda; faça o

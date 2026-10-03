@@ -13,9 +13,10 @@
 /* Topbar/Header — handled by MOBILE TOPBAR section below */
 
 /* Uma única régua de identidade para o card da dashboard e o cabeçalho do
-   detalhe. Este título NÃO entra no encolhedor de nomes: ele não mora numa
-   caixa de altura fixa. Portanto ocupa a altura de que precisar e usa o maior
-   tamanho editorial adequado à tela; só quebra ENTRE palavras. */
+   detalhe. O JS mede a largura real de `.sp-tournament-title-slot` e reduz
+   SOMENTE se uma palavra inteira não couber; este teto é, portanto, o maior
+   tamanho que o título recebe nos dois lugares. */
+.sp-tournament-title-slot { min-width: 0; }
 .tournament-card-title {
   font-size: clamp(1.45rem, 6.4vw, 2.25rem) !important;
   line-height: 1.12;

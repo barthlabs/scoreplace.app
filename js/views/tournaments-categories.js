@@ -952,9 +952,11 @@ window._buildTimeEstimation = function(t, opts) {
       buckets[k] = (buckets[k] || 0) + 1;
     });
     if (!cats.length) buckets.geral = 1;
-    var minutes = Object.keys(buckets).reduce(function(max, k) {
+    // Cada bloco de categorias é uma parte da agenda do torneio; a duração
+    // exibida ao organizador é o TOTAL do evento, não o maior bloco isolado.
+    var minutes = Object.keys(buckets).reduce(function(total, k) {
       var perRound = buckets[k] * (full * Math.floor(groupSize / 2) + Math.floor(rest / 2));
-      return Math.max(max, rounds * Math.ceil(perRound / courts) * timePerSlot);
+      return total + rounds * Math.ceil(perRound / courts) * timePerSlot;
     }, 0);
     return { realCount: people, unitCount: teams, format: format,
       matches: perCatMatches * catCount, minutes: minutes,
@@ -1092,7 +1094,7 @@ window._buildDurationForecast = function(t) {
       } catch (e) { return null; }
     }
     var _isFin = !!(t && t.status === 'finished');
-    var _titleLbl = 'Estimativa de duração';
+    var _titleLbl = 'Estimativa de duração total';
     if (_isFin) {
       _titleLbl = 'Duração';
       var _actMin = _actualDurationMinutes(t);
@@ -1103,17 +1105,15 @@ window._buildDurationForecast = function(t) {
     var dd = Math.floor(min / 1440);
     var hh = Math.floor((min % 1440) / 60);
     var mm = Math.round(min % 60);
-    var jogosLbl = d.matches + (d.matches === 1 ? ' jogo' : ' jogos');
-    // A grade por equipes informa a densidade real: não esconder 96 confrontos
-    // atrás da antiga conta genérica de "8 equipes / 7 jogos".
-    if (d.categories > 1) jogosLbl += ' · ' + d.matchesPerCategory + '/categoria';
-    var partsLbl = d.realCount + (d.realCount === 1 ? ' participante' : ' participantes');
-    // duplas: mostra as EQUIPES (base real do cálculo) junto das pessoas — "31 participantes ·
-    // 14 equipes / 13 jogos". v1.3.168, pedido do dono.
-    if (d.unitCount && d.unitCount !== d.realCount) {
-      partsLbl += ' · ' + d.unitCount + (d.unitCount === 1 ? ' equipe' : ' equipes');
-    }
-    if (d.bucketCount > 1) _titleLbl += ' por bloco';
+    // Card público: apenas as quatro medidas canônicas do torneio por times.
+    // Ex.: 96 participantes · 48 duplas · 8 times · 96 jogos.
+    var _summary = [d.realCount + (d.realCount === 1 ? ' participante' : ' participantes')];
+    var _teamSize = Math.max(1, Number(t.teamSize) || 1);
+    if (_teamSize === 2 && d.unitCount) _summary.push(d.unitCount + (d.unitCount === 1 ? ' dupla' : ' duplas'));
+    else if (d.unitCount && d.unitCount !== d.realCount) _summary.push(d.unitCount + (d.unitCount === 1 ? ' time' : ' times'));
+    if (d.teamsPerCategory) _summary.push(d.teamsPerCategory + (d.teamsPerCategory === 1 ? ' time' : ' times'));
+    _summary.push(d.matches + (d.matches === 1 ? ' jogo' : ' jogos'));
+    var partsLbl = _summary.join(' · ');
     var rb = (typeof window._photoReadBox === 'function')
       ? window._photoReadBox()
       : { bg: 'rgba(0,0,0,0.5)', fg: '#f1f5f9', border: 'rgba(255,255,255,0.12)' };
@@ -1134,7 +1134,7 @@ window._buildDurationForecast = function(t) {
             '<span style="font-size:1.1rem;flex-shrink:0;">⏱️</span>' +
             '<span style="font-size:0.95rem;font-weight:800;color:' + rb.fg + ' !important;">' + _titleLbl + '</span>' +
           '</div>' +
-          '<span style="font-size:0.72rem;font-weight:600;opacity:0.82;color:' + rb.fg + ' !important;">(' + partsLbl + ' / ' + jogosLbl + ')</span>' +
+          '<span style="font-size:0.72rem;font-weight:600;opacity:0.82;color:' + rb.fg + ' !important;">' + partsLbl + '</span>' +
         '</div>' +
         '<div style="margin-left:auto;display:flex;align-items:flex-end;gap:6px;flex-shrink:0;">' +
           _seg('dias', dd) + _colon + _seg('horas', hh) + _colon + _seg('min', mm) +

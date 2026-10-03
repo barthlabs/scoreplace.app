@@ -979,9 +979,9 @@ function renderDashboard(container) {
             </div>` : ''}
 
             <!-- Middle: Logo 1/3 + conteúdo 2/3 -->
-            <div style="display:flex;align-items:flex-start;gap:14px;margin:1.4rem 0 1.2rem 0;">
+            <div class="sp-tournament-identity-row" style="display:flex;align-items:flex-start;gap:14px;margin:1.4rem 0 1.2rem 0;">
               ${window._tourLogoSrc(t) ? `<div style="width:33%;min-width:80px;flex-shrink:0;aspect-ratio:${window._tournamentLogoAspect ? window._tournamentLogoAspect(t) : 1};"><img src="${window._tourLogoSrc(t)}" alt="Logo" style="width:100%;height:100%;border-radius:${window._tournamentLogoRadius(t)};object-fit:contain;display:block;box-shadow:0 4px 16px rgba(0,0,0,0.4);"></div>` : ''}
-              <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:0;">
+              <div class="sp-tournament-title-slot" style="flex:1;min-width:0;display:flex;flex-direction:column;gap:0;">
                 <div style="display:flex;align-items:flex-start;gap:6px;">
                   ${/* v1.8.85: o nome era CORTADO quando trazia um token que não quebra —
                         no relato, um torneio nomeado com o e-mail do organizador
