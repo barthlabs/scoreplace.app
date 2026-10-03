@@ -3985,7 +3985,7 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
         // ⛔ ORDEM DE CHAVE NÃO É MUDANÇA: o formulário recompila a configuração inteira a cada
         // save e ela volta com as chaves em outra ordem. Comparar por conteúdo evita recusar um
         // pedido em que o campo estrutural está IGUAL ao que já está gravado.
-        if (_configAtiva.igual(t[key], patch[key])) { delete patch[key]; return; }
+        if (_configAtiva.igualEstrutural(key, t[key], patch[key])) { delete patch[key]; return; }
         if (key === 'fmt2') {
           const v = _configAtiva.fmt2Atualizavel(t.fmt2, patch.fmt2);
           if (v.ok) { _fmt2Mesclado = v.valor; return; }

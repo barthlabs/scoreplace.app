@@ -54,8 +54,8 @@ const IDX = fs.readFileSync(path.join(__dirname, '..', 'functions-autodraw/index
 must(/_configAtiva\.fmt2Atualizavel\(t\.fmt2, patch\.fmt2\)/.test(IDX),
   '⑤ a Function pergunta ao núcleo, com o documento FRESCO da transação');
 must(/t\.fmt2 = _fmt2Mesclado;/.test(IDX), '⑤ ⛔ e grava a mescla conferida, nunca `patch.fmt2` cru');
-must(/if \(_configAtiva\.igual\(t\[key\], patch\[key\]\)\) \{ delete patch\[key\]; return; \}/.test(IDX),
-  '⑤ campo estrutural IGUAL ao gravado sai do pedido — ordem de chave não é mudança');
+must(/if \(_configAtiva\.igualEstrutural\(key, t\[key\], patch\[key\]\)\) \{ delete patch\[key\]; return; \}/.test(IDX),
+  '⑤ campo estrutural equivalente ao gravado sai do pedido — ordem de chave não é mudança');
 must(/_recusados\.push\(key\)/.test(IDX) && /recusado: ' \+ _recusados\.join/.test(IDX),
   '⑤ ⭐ e a recusa DIZ QUAIS campos foram recusados — "a chave já existe" sozinho não dá pra depurar');
 
@@ -67,6 +67,24 @@ must(core.fmt2Atualizavel(canonico, revirado).ok, '⑥ e por isso ele passa pela
 must(!core.igual({ a: [1, 2] }, { a: [2, 1] }), '⑥ mas em ARRAY a ordem é conteúdo — [1,2] ≠ [2,1]');
 must(core.igual(undefined, null), '⑥ ausente e nulo contam como a mesma coisa');
 must(!core.igual({ a: 1 }, { a: 1, b: 2 }), '⑥ campo a mais é diferença de verdade');
+
+// ── ⑥b compatibilidade real: torneio legado sem política explícita ──────────
+const legado = copia();
+const pedidoLegado = copia();
+pedidoLegado.eliminatoria.politicaDaChave = 'repescagem'; // normalizador atual materializa o default
+pedidoLegado.eliminatoria.roundBounds = ['2026-09-20T23:00', '2026-10-12T23:00'];
+const vLegado = core.fmt2Atualizavel(legado, pedidoLegado);
+must(vLegado.ok, '⑥b prazo de torneio legado passa mesmo com o default repescagem materializado');
+must(vLegado.valor.eliminatoria.politicaDaChave === undefined,
+  '⑥b a gravação mantém o documento legado: o default não entra de carona');
+must(core.igualEstrutural('politicaDaChave', undefined, 'repescagem'),
+  '⑥b top-level ausente e repescagem são equivalentes para salvar prazo');
+must(!core.igualEstrutural('politicaDaChave', undefined, 'bye'),
+  '⑥b ⛔ bye continua troca estrutural e é recusado');
+const politicaMudada = JSON.parse(JSON.stringify(pedidoLegado));
+politicaMudada.eliminatoria.politicaDaChave = 'bye';
+must(!core.fmt2Atualizavel(legado, politicaMudada).ok,
+  '⑥b ⛔ bye dentro do fmt2 também continua recusado');
 
 // ── ⑦ `roundBounds` é CALENDÁRIO, não estrutura (o campo que a recusa nomeou) ──
 {

@@ -52,6 +52,20 @@ function igual(a, b) {
          JSON.stringify(_canonico(b === undefined ? null : b));
 }
 
+/* Torneios anteriores à escolha explícita de política não gravaram o campo: a ausência
+ * sempre significou `repescagem`. A tela atual o normaliza para esse valor e, sem esta
+ * equivalência, um simples ajuste de prazo chega ao servidor parecendo uma alteração
+ * estrutural. Só a dupla ausente/repescagem é compatível; bye e sobra_unica continuam
+ * diferenças reais e permanecem congeladas depois do sorteio. */
+function _politicaCanonica(v) {
+  return (v === undefined || v === null || v === '') ? 'repescagem' : v;
+}
+function igualEstrutural(campo, atual, enviado) {
+  return campo === 'politicaDaChave'
+    ? _politicaCanonica(atual) === _politicaCanonica(enviado)
+    : igual(atual, enviado);
+}
+
 function _leia(obj, caminho) {
   const partes = caminho.split('.');
   let cur = obj;
@@ -91,10 +105,21 @@ function fmt2Atualizavel(atual, enviado, caminhos) {
   }
   const mescla = _clone(atual);
   lista.forEach((c) => { _escreva(mescla, c, _clone(_leia(enviado, c))); });
-  if (!igual(mescla, enviado)) {
+  /* A mesma compatibilidade precisa existir DENTRO do fmt2 inteiro. Não inserimos a
+   * política no documento legado: só retiramos do espelho de comparação o default que a
+   * normalização da tela acabou de materializar. Assim nenhum campo estrutural novo entra
+   * junto com a data. */
+  const comparado = _clone(enviado);
+  const politicaAtual = _leia(atual, 'eliminatoria.politicaDaChave');
+  const politicaEnviada = _leia(comparado, 'eliminatoria.politicaDaChave');
+  if (_politicaCanonica(politicaAtual) === _politicaCanonica(politicaEnviada) &&
+      politicaAtual === undefined && politicaEnviada === 'repescagem') {
+    _escreva(comparado, 'eliminatoria.politicaDaChave', undefined);
+  }
+  if (!igual(mescla, comparado)) {
     return { ok: false, motivo: 'a alteração passa por campos que recriariam as rodadas' };
   }
   return { ok: true, valor: mescla };
 }
 
-module.exports = { CAMINHOS_ATIVOS_FMT2, fmt2Atualizavel, igual };
+module.exports = { CAMINHOS_ATIVOS_FMT2, fmt2Atualizavel, igual, igualEstrutural };
