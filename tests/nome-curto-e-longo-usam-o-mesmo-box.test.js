@@ -13,6 +13,10 @@ const CSS = read('css/components.css');
 const STORE = read('js/store.js');
 const BRACKET = read('js/views/bracket.js');
 const DASHBOARD = read('js/views/dashboard.js');
+const TOURNAMENTS = read('js/views/tournaments.js');
+const VENDOR_TOURNAMENTS = read('functions-autodraw/vendor/tournaments.js');
+const CATEGORIES = read('js/views/tournaments-categories.js');
+const VENDOR_CATEGORIES = read('functions-autodraw/vendor/tournaments-categories.js');
 const i = STORE.indexOf('window._fitNameToBox = _fitOne;');
 const FIT = STORE.slice(STORE.lastIndexOf('\n(function() {', i), STORE.indexOf('\n})();', i) + 6);
 let ok = 0;
@@ -30,6 +34,10 @@ must(!/data-fit-group/.test(BRACKET) && !/data-fit-group/.test(DASHBOARD),
   'nenhum render força o nome curto a acompanhar a quebra do parceiro');
 must(/--sp-match-team-member-gap:4px/.test(CSS) && /\.sp-mc-col\{[^}]*gap:var\(--sp-match-team-member-gap\)/.test(CSS) && recent.includes('window.renderMatchCard(m2'),
   'dashboard e chave usam a mesma variável canônica de 4px entre integrantes da dupla');
+must(/data-mr-card="1"/.test(DASHBOARD) && /data-nov-card="1"/.test(DASHBOARD),
+  'todo wrapper de card de resultados e novidades declara o atributo que estica a fileira');
+must(TOURNAMENTS === VENDOR_TOURNAMENTS && CATEGORIES === VENDOR_CATEGORIES,
+  'vendor do AutoDraw é idêntico às fontes de detalhe e de duração total');
 
 (async function () {
   const b = await chromium.launch();
