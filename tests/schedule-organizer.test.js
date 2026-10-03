@@ -163,6 +163,13 @@ ok(gradeJanelaFechada && gradeJanelaFechada.cabe === false && gradeJanelaFechada
   'a grade mantém todos os jogos no próprio dia e marca o excedente da janela');
 ok(W._operationalSchedulePlan(janelaFechada).cabe === false && W._operationalSchedulePlan(janelaFechada).extraMs === 30 * 60000,
   'a agenda operacional também bloqueia uma distribuição que ultrapassaria a janela');
+const janelaTrocada = W._operationalSchedulePlan(janelaFechada, [
+  { matchId:'J1', court:'Quadra 1', scheduledAt:new Date('2026-10-22T19:00:00-03:00').toISOString() },
+  { matchId:'J3', court:'Quadra 1', scheduledAt:new Date('2026-10-22T18:00:00-03:00').toISOString() }
+]);
+ok(janelaTrocada.items.find(function (item) { return item.matchId === 'J1'; }).extrapolaJanela === true &&
+  janelaTrocada.items.find(function (item) { return item.matchId === 'J3'; }).extrapolaJanela === false,
+  'a faixa zebrada acompanha o slot atual: sai do jogo trazido para dentro e entra no que foi levado para fora');
 // REGRESSÃO: janelas explícitas são a fronteira do evento. Mesmo que a data final
 // legada alcance o sábado, uma configuração quinta/sexta não pode criar aba, slot
 // ou sugestão no sábado para tentar acomodar o que não coube.
@@ -223,8 +230,8 @@ ok(/data-team-toggle-group="mode"/.test(drawSource) && /wireToggle\('mode'/.test
   'o modo estruturado/livre usa toggle com explicação dinâmica da escolha ativa');
 ok(/data-team-day-flow/.test(drawSource) && /categoryFlow/.test(drawSource) && /data-team-day-start/.test(drawSource),
   'a mesma tela define, para cada dia, sequência concentrada/alternada e início/fim');
-ok(/grid-template-columns:minmax\(0,1fr\) 8px minmax\(0,1fr\)/.test(drawSource) && /width:100%;min-width:0;box-sizing:border-box/.test(drawSource),
-  'os dois horários ocupam a largura disponível sem se sobrepor nem truncar');
+ok(/grid-template-columns:1fr;gap:5px;width:100%;min-width:0/.test(drawSource) && /grid-template-columns:42px minmax\(0,1fr\)/.test(drawSource) && /<span>Início<\/span>/.test(drawSource) && /<span>Fim<\/span>/.test(drawSource),
+  'início e fim ocupam linhas inteiras, sem se sobrepor ou truncar em nenhuma largura');
 ok(/flex:0 1 auto;min-width:0;font-size:\.62rem/.test(drawSource),
   'os toggles Concentradas/Alternadas permanecem compactos em cada dia');
 ok(/position:sticky;top:0;z-index:3/.test(drawSource) && !/id="team-draw-cancel" class=/.test(drawSource),
@@ -266,8 +273,9 @@ ok(/<div>Ana<\/div><div>Bia<\/div>/.test(board.html),
   'os dois jogadores da dupla aparecem em linhas separadas');
 ok(/ondrop/.test(organizerSource) && /manual\[from\.matchId\].*to\.court/.test(organizerSource),
   'soltar um card sobre outro troca os slots de horário e quadra');
-ok(/← Voltar/.test(bracketSource) && /overflow-y:auto;overflow-x:hidden/.test(bracketSource) && /width:100%;max-width:1600px/.test(bracketSource),
-  'o modal aproveita a largura útil e impede que o cabeçalho role lateralmente');
+ok(/← Voltar/.test(bracketSource) && /data-pis-apply/.test(bracketSource) && /data-pis-publish/.test(bracketSource) &&
+  /position:sticky;top:0;z-index:20/.test(bracketSource) && /overflow-y:auto;overflow-x:hidden/.test(bracketSource) && /width:100%;max-width:1600px/.test(bracketSource),
+  'Voltar, Salvar ajustes e Publicar ficam juntos no cabeçalho fixo, fora da rolagem lateral da grade');
 ok(/data-\' \+ prefix \+ \'-outside-window/.test(organizerSource) && /repeating-linear-gradient\(45deg,rgba\(239,68,68/.test(organizerSource) && /Todos os jogos continuam exibidos/.test(bracketSource),
   'jogos que ultrapassam a janela seguem na grade com faixa zebrada vermelha e cinza');
 ok(/if \(!latest\.cabe\)/.test(bracketSource) && /if \(!draft\.cabe\)/.test(organizerSource),

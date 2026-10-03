@@ -217,6 +217,33 @@ const CASES = [
   const firstStructuredLinks = structuredLinks(byNeonCategory[neonCategories[0]] || []);
   ok('Neon completo: modo estruturado repete os quatro adversários na mesma ordem nas seis categorias',
     neonCategories.every(function (category) { return structuredLinks(byNeonCategory[category] || []) === firstStructuredLinks; }));
+  // Estruturado mantém a MESMA grade entre categorias, mas não pode ordenar
+  // `team-1..team-8` a cada chamada: isso transformava um novo sorteio em cópia
+  // da chave anterior. Forçamos duas sequências aleatórias opostas sobre duplas
+  // manualmente atribuídas, isolando a permutação dos times do sorteio das duplas.
+  function structuredWithSeed(label, values) {
+    var tournament = neonWith('structured');
+    tournament.id = 'neon-structured-seed-' + label;
+    var manualConfig = Object.assign({}, neonConfig, { formation:'manual', schedule:Object.assign({}, neonConfig.schedule, { mode:'structured' }) });
+    tournament.teamCompetition = manualConfig;
+    tournament.phases = [{ teamCompetition:manualConfig }];
+    tournament.participants.forEach(function (entry, index) { entry.competitionTeamId = 'team-' + ((index % 8) + 1); });
+    var oldRandom = Math.random, cursor = 0;
+    Math.random = function () { var value = values[cursor % values.length]; cursor++; return value; };
+    try { core.drawInitial(tournament, { idStamp:'structured-seed-' + label }); }
+    finally { Math.random = oldRandom; }
+    var grouped = tournament.matches.reduce(function (out, match) {
+      (out[String(match.category || '')] || (out[String(match.category || '')] = [])).push(match); return out;
+    }, {});
+    return { tournament:tournament, grouped:grouped, links:structuredLinks(grouped[neonCategories[0]] || []) };
+  }
+  var structuredLow = structuredWithSeed('low', [0]);
+  var structuredHigh = structuredWithSeed('high', [0.999999]);
+  ok('novo sorteio estruturado embaralha de verdade os confrontos, sem quebrar o padrão entre categorias',
+    structuredLow.links !== structuredHigh.links &&
+    neonCategories.every(function (category) { return structuredLinks(structuredLow.grouped[category] || []) === structuredLow.links; }) &&
+    neonCategories.every(function (category) { return structuredLinks(structuredHigh.grouped[category] || []) === structuredHigh.links; }),
+    JSON.stringify({ baixo:structuredLow.links, alto:structuredHigh.links }));
   const neonFree = neonWith('free');
   const neonFreeDraw = core.drawInitial(neonFree, { idStamp: 'neon-completo-livre' });
   const freeByCategory = neonFree.matches.reduce(function (out, match) {

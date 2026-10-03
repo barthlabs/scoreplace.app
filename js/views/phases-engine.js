@@ -1180,9 +1180,9 @@
       if (_eq >= 1) { _placePool = pool.slice(0, _eq * nGroups); _waitlist = pool.slice(_eq * nGroups); }
     }
     // A grade estruturada exige que a mesma identidade de time ocupe a mesma
-    // posição em cada categoria. Ordenar antes da serpentina torna o grupo e a
-    // ordem de adversários reprodutíveis; no sorteio livre a ordem original segue
-    // aleatória. [[regression_structured_team_groups_repeat_across_categories]]
+    // posição em cada categoria. A permutação nasce UMA vez no sorteio e é
+    // compartilhada pelas categorias: mantém os confrontos alinhados, sem
+    // transformar novos sorteios em uma chave fixa. [[regression_structured_draw_is_random_per_draw]]
     var _tcForPlacement = phaseCfg && phaseCfg.teamCompetition;
     var _tcPlacementCore = (typeof window !== 'undefined') && window.ScoreplaceTeamCompetition;
     if (!_tcPlacementCore && typeof module !== 'undefined' && module.exports) {
@@ -1190,8 +1190,16 @@
     }
     var _tcPlacementCfg = _tcPlacementCore && typeof _tcPlacementCore.normalize === 'function' ? _tcPlacementCore.normalize(_tcForPlacement) : null;
     if (_tcPlacementCfg && _tcPlacementCfg.enabled && _tcPlacementCfg.schedule.mode === 'structured') {
+      var _placementOrder = Array.isArray(_tcForPlacement && _tcForPlacement.structuredTeamOrder)
+        ? _tcForPlacement.structuredTeamOrder.map(function (id) { return String(id); }) : [];
       _placePool = _placePool.slice().sort(function (a, b) {
-        return String(_tcPlacementCore.teamIdOf(a)).localeCompare(String(_tcPlacementCore.teamIdOf(b))) || String(a.displayName).localeCompare(String(b.displayName));
+        var aId = String(_tcPlacementCore.teamIdOf(a));
+        var bId = String(_tcPlacementCore.teamIdOf(b));
+        var aRank = _placementOrder.indexOf(aId);
+        var bRank = _placementOrder.indexOf(bId);
+        if (aRank < 0) aRank = Number.MAX_SAFE_INTEGER;
+        if (bRank < 0) bRank = Number.MAX_SAFE_INTEGER;
+        return aRank - bRank || aId.localeCompare(bId) || String(a.displayName).localeCompare(String(b.displayName));
       });
     }
     // Serpentina: ida 0..n-1, volta n-1..0 — cabeças (pool já ordenado por força) caem
@@ -1219,14 +1227,24 @@
     if (!_teamCompetitionCore && typeof module !== 'undefined' && module.exports) {
       try { _teamCompetitionCore = require('../domain/team-competition.js'); } catch (e) { _teamCompetitionCore = null; }
     }
-    // Grade parcial da competição por times. Estruturado ordena pelo ID canônico do
-    // time e por isso Light/Power/Extreme repetem os mesmos adversários na mesma
-    // ordem; livre embaralha cada categoria. Rótulo nunca decide confronto.
-    // [[regression_team_structured_schedule_uses_ids_not_labels]]
+    // Grade parcial da competição por times. Estruturado usa a permutação aleatória
+    // criada para ESTE sorteio; assim Light/Power/Extreme repetem os adversários na
+    // mesma ordem entre si, mas um novo sorteio realmente muda os confrontos.
+    // [[regression_structured_draw_is_random_per_draw]]
     function _teamSchedule(players, wanted, mode) {
       var ordered = players.slice();
       var idOf = function (entry) { return _teamCompetitionCore && _teamCompetitionCore.teamIdOf ? _teamCompetitionCore.teamIdOf(entry) : ''; };
-      if (mode === 'structured') ordered.sort(function (a, b) { return String(idOf(a)).localeCompare(String(idOf(b))) || String(a.displayName).localeCompare(String(b.displayName)); });
+      if (mode === 'structured') {
+        var structuredOrder = Array.isArray(_teamCompetition && _teamCompetition.structuredTeamOrder)
+          ? _teamCompetition.structuredTeamOrder.map(function (id) { return String(id); }) : [];
+        ordered.sort(function (a, b) {
+          var aId = String(idOf(a)); var bId = String(idOf(b));
+          var aRank = structuredOrder.indexOf(aId); var bRank = structuredOrder.indexOf(bId);
+          if (aRank < 0) aRank = Number.MAX_SAFE_INTEGER;
+          if (bRank < 0) bRank = Number.MAX_SAFE_INTEGER;
+          return aRank - bRank || aId.localeCompare(bId) || String(a.displayName).localeCompare(String(b.displayName));
+        });
+      }
       else for (var i = ordered.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var swap = ordered[i]; ordered[i] = ordered[j]; ordered[j] = swap; }
       var all = roundRobinSchedule(ordered);
       // Em grupos pares, cada rodada do método do círculo dá exatamente um jogo a

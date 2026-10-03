@@ -704,6 +704,31 @@ function drawInitial(t, opts) {
   const _competitionTeams = assignCompetitionTeamsAtInitialDraw(t, _cfg0 && _cfg0.teamCompetition);
   if (!_competitionTeams.ok) return _competitionTeams;
 
+  /*
+   * SORTEIO ESTRUTURADO ≠ chave fixa.
+   *
+   * A estrutura pede o MESMO calendário de adversários em todas as categorias,
+   * mas a ordem dos times que alimenta esse calendário deve nascer de novo a
+   * cada sorteio. Antes o motor ordenava `team-1`, `team-2`... em toda chamada:
+   * os seis grupos ficavam alinhados, porém TODO novo sorteio repetia os mesmos
+   * confrontos. Guardamos a permutação somente nesta cfg em memória (não é uma
+   * decisão persistida nem um rótulo de time) e ela é compartilhada por todas
+   * as categorias produzidas abaixo. [[regression_structured_draw_is_random_per_draw]]
+   */
+  if (_cfg0 && _cfg0.teamCompetition && _competitionTeams.config
+    && _competitionTeams.config.schedule && _competitionTeams.config.schedule.enabled
+    && _competitionTeams.config.schedule.mode === 'structured') {
+    const _structuredTeamOrder = (t.competitionTeams || [])
+      .map(function (team) { return team && String(team.id || '').trim(); }).filter(Boolean);
+    for (let i = _structuredTeamOrder.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const temp = _structuredTeamOrder[i]; _structuredTeamOrder[i] = _structuredTeamOrder[j]; _structuredTeamOrder[j] = temp;
+    }
+    _cfg0.teamCompetition = Object.assign({}, _cfg0.teamCompetition, {
+      structuredTeamOrder: _structuredTeamOrder
+    });
+  }
+
   // ── Suíço como RESOLUÇÃO de pow2 (Opção B, canonizado): monta a classificatória Suíço
   // (fase 0) + a eliminatória (fase 1) e gera a 1ª rodada, com a MESMA função vendorada que
   // o cliente roda. DEPOIS da formação de duplas (entram COMO ESTÃO), ANTES do reset/

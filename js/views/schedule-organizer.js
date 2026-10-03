@@ -44,6 +44,20 @@
     return (Number(a.phaseIndex || 0) - Number(b.phaseIndex || 0)) || (Number(a.round || 0) - Number(b.round || 0)) || String(a.id).localeCompare(String(b.id));
   }
   function iso(ms) { return new Date(ms).toISOString(); }
+  // O excedente pertence ao SLOT ATUAL, nunca ao jogo que antes o ocupava. O
+  // planejador é reexecutado a cada drag-and-drop; reaproveitar a marca da grade
+  // inicial deixava a faixa zebrada grudada no card depois de ele voltar para
+  // dentro da janela (e escondia o card que foi levado para fora).
+  // [[regression_outside_window_follows_current_slot]]
+  function exceedsConfiguredWindow(t, match, scheduledAt) {
+    var at = new Date(scheduledAt || '').getTime();
+    var windows = window._schJanelaTorneio && window._schJanelaTorneio(t);
+    if (!windows || !Array.isArray(windows.dias) || !windows.dias.length || isNaN(at)) return false;
+    // `at === fimMs` ainda pertence a esta janela para medir o excedente; ele
+    // continua FORA porque a duração torna `at + duração > fimMs` logo abaixo.
+    var day = windows.dias.find(function (item) { return at >= Number(item.iniMs) && at <= Number(item.fimMs); });
+    return !day || at + duration(t, match) > Number(day.fimMs);
+  }
   // `changes` fixa explicitamente um ou mais jogos; o restante pendente ocupa o
   // primeiro horário livre. Uma troca de quadra, portanto, reorganiza todos os
   // outros jogos que ainda estão livres, sem tocar em partida já realizada.
@@ -57,10 +71,9 @@
     // A grade estimada já conhece o dia/ordem declarados por categoria. A agenda
     // operacional usa essa mesma intenção como ponto de partida e só move jogos
     // quando precisa fugir de uma quadra ocupada ou de uma escolha manual.
-    var grade = window._schGradeEstimada && window._schGradeEstimada(t), preferred = {}, preferredExceeds = {};
+    var grade = window._schGradeEstimada && window._schGradeEstimada(t), preferred = {};
     if (grade && Array.isArray(grade.slots)) grade.slots.forEach(function (slot) {
       preferred[String(slot.matchId)] = Number(slot.ms);
-      preferredExceeds[String(slot.matchId)] = slot.extrapolaJanela === true;
     });
     var hasGrade = !!(grade && Array.isArray(grade.slots));
     var cs = courts(t), ms = all(t).filter(function (m) { return !m.isBye && !m.isSitOut; }).sort(function (a, b) {
@@ -102,7 +115,7 @@
       if (manual) {
         var a = change ? change.scheduledAt : m.scheduledAt;
         var c = change ? change.court : m.court;
-        if (a && c) items.push({ matchId:String(m.id), court:String(c), scheduledAt:String(a), scheduleLocked:true, scheduleSource:'organizer', extrapolaJanela:preferredExceeds[String(m.id)] === true });
+        if (a && c) items.push({ matchId:String(m.id), court:String(c), scheduledAt:String(a), scheduleLocked:true, scheduleSource:'organizer', extrapolaJanela:exceedsConfiguredWindow(t, m, a) });
         return;
       }
       // ⛔ LIMITE RÍGIDO DA JANELA: se a grade declarativa não encontrou
@@ -118,13 +131,29 @@
       }
       var court = cs[cidx];
       reserve(m, iso(at), court);
-      items.push({ matchId:String(m.id), court:court, scheduledAt:iso(at), scheduleLocked:false, scheduleSource:'estimate', extrapolaJanela:preferredExceeds[String(m.id)] === true });
+      items.push({ matchId:String(m.id), court:court, scheduledAt:iso(at), scheduleLocked:false, scheduleSource:'estimate', extrapolaJanela:exceedsConfiguredWindow(t, m, iso(at)) });
       cursor = Math.max(cursor, at);
     });
+    // Aplicar/publicar precisa usar a MESMA verdade visual: se um arrasto trouxe
+    // todos os cards de volta à janela, libera; se levou algum para fora, bloqueia.
+    // A duração excedida é medida por dia (máximo de término em cada janela), não
+    // somada por card, pois as quadras funcionam em paralelo.
+    var windows = window._schJanelaTorneio && window._schJanelaTorneio(t);
+    var overflowByDay = {};
+    items.forEach(function (item) {
+      var match = ms.find(function (candidate) { return String(candidate.id) === String(item.matchId); });
+      var at = new Date(item.scheduledAt || '').getTime();
+      if (isNaN(at) || !match || !windows || !Array.isArray(windows.dias)) return;
+      var day = windows.dias.find(function (candidate) { return at >= Number(candidate.iniMs) && at <= Number(candidate.fimMs); });
+      if (!day) return;
+      overflowByDay[day.ymd] = Math.max(Number(overflowByDay[day.ymd] || 0), Math.max(0, at + duration(t, match) - Number(day.fimMs)));
+    });
+    var actualExtraMs = Object.keys(overflowByDay).reduce(function (sum, key) { return sum + overflowByDay[key]; }, 0);
+    var actualOutside = items.some(function (item) { return item.extrapolaJanela === true; });
     return { baseScheduleRevision:Number(t.scheduleRevision || 0), items:items, courts:cs,
       // A agenda por categoria não pode ser aplicada se uma categoria explicitamente
       // presa a um dia ultrapassa a janela desse dia.
-      cabe: !(grade && grade.cabe === false), extraMs:Number(grade && grade.extraMs || 0),
+      cabe: !actualOutside, extraMs:actualExtraMs,
       unscheduledCount:Math.max(0, pending.filter(function (m) { return !items.some(function (item) { return item.matchId === String(m.id); }); }).length) };
   };
   function uid() { return (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c){ var r=Math.random()*16|0; return (c==='x'?r:(r&3|8)).toString(16); }); }
