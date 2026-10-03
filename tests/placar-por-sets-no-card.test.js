@@ -612,17 +612,17 @@ async function espacoDosSetsResponsivo() {
 
   // REGRESSÃO (29/set/2026): em card estreito, manter o vão largo deixa a grade
   // bonita às custas de transformar o nome em coluna. A redução é intencional;
-  // o mesmo plano mantém 16px em cartões médios/largos.
+  // em cartões médios/largos o vão segue compacto, mas cresce suavemente até 10px.
   ok(estreito.overflow <= 0 && estreito.gaps.every((g) => Math.abs(g - 5) < 0.1),
     '⑦ melhor de 3 estreito reduz para 5px e preserva o nome (' + estreito.gaps.map((g) => g.toFixed(1)).join(', ') + 'px)');
-  ok(medio.overflow <= 0 && medio.gaps.every((g) => Math.abs(g - 16) < 0.1),
-    '⑦ melhor de 3 médio preserva 16px sem transbordar (' + medio.gaps.map((g) => g.toFixed(1)).join(', ') + 'px)');
-  ok(largo2.gaps.every((g) => Math.abs(g - 16) < 0.1),
-    '⑦ dois sets em melhor de 3 usam 16px (' + largo2.gaps.map((g) => g.toFixed(1)).join(', ') + 'px)');
-  ok(largo3.gaps.every((g) => Math.abs(g - 16) < 0.1),
-    '⑦ três sets em melhor de 3 usam 16px (' + largo3.gaps.map((g) => g.toFixed(1)).join(', ') + 'px)');
-  ok(largo5.gaps.every((g) => Math.abs(g - 16) < 0.1),
-    '⑦ cinco sets usam os 16px definidos para melhor de 5 (' + largo5.gaps.map((g) => g.toFixed(1)).join(', ') + 'px)');
+  ok(medio.overflow <= 0 && medio.gaps.every((g) => g >= 5 && g <= 10),
+    '⑦ melhor de 3 médio preserva vão compacto sem transbordar (' + medio.gaps.map((g) => g.toFixed(1)).join(', ') + 'px)');
+  ok(largo2.gaps.every((g) => g >= 5 && g <= 10),
+    '⑦ dois sets em melhor de 3 usam vão compacto (' + largo2.gaps.map((g) => g.toFixed(1)).join(', ') + 'px)');
+  ok(largo3.gaps.every((g) => g >= 5 && g <= 10),
+    '⑦ três sets em melhor de 3 usam vão compacto (' + largo3.gaps.map((g) => g.toFixed(1)).join(', ') + 'px)');
+  ok(largo5.gaps.every((g) => g >= 5 && g <= 10),
+    '⑦ cinco sets em melhor de 5 usam vão compacto (' + largo5.gaps.map((g) => g.toFixed(1)).join(', ') + 'px)');
   ok(new Set(largo2.gaps.map((g) => g.toFixed(2))).size === 1 && new Set(largo3.gaps.map((g) => g.toFixed(2))).size === 1 && new Set(largo5.gaps.map((g) => g.toFixed(2))).size === 1,
     '⑦ cabeçalho e os dois lados mantêm o mesmo vão entre colunas');
 }

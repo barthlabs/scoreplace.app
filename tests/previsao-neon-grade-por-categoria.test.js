@@ -21,5 +21,5 @@ const t = {
 const d = W._buildTimeEstimation(t, { dataOnly: true });
 ok(d && d.realCount === 96 && d.unitCount === 48, 'capacidade é 96 pessoas / 48 duplas, não as 8 já formadas');
 ok(d && d.matchesPerCategory === 16 && d.matches === 96, '8 duplas × 4 jogos / 2 = 16 por categoria, 96 no total');
-ok(d && d.bucketCount === 2 && d.minutes === 320, 'Fem/Masc em blocos distintos: 5h20 por bloco com 9 quadras');
+ok(d && d.bucketCount === 2 && d.minutes === 640, 'Fem/Masc em blocos distintos: 10h40 é a duração total dos dois blocos com 9 quadras');
 process.exit(fail ? 1 : 0);

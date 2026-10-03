@@ -9,12 +9,12 @@ const css = fs.readFileSync('css/components.css', 'utf8');
 const model = fs.readFileSync('js/views/bracket-model.js', 'utf8');
 const bracket = fs.readFileSync('js/views/bracket.js', 'utf8');
 const dashboard = fs.readFileSync('js/views/dashboard.js', 'utf8');
-ok(css.includes('.sp-set-grid[data-sp-best-of="3"]{gap:16px;}'),
-  'melhor de 3 usa sempre 16px de separação, sem depender da largura ou da tela');
-ok(css.includes('.sp-set-grid[data-sp-best-of="5"]{gap:16px;}'),
-  'melhor de 5 usa sempre 16px de separação');
+ok(css.includes('.sp-set-grid[data-sp-best-of="3"]{gap:clamp(5px,1.1cqw,10px);}'),
+  'melhor de 3 usa vão compacto proporcional, preservando largura para os nomes');
+ok(css.includes('.sp-set-grid[data-sp-best-of="5"]{gap:clamp(5px,1.1cqw,10px);}'),
+  'melhor de 5 usa o mesmo vão compacto proporcional');
 ok(!css.includes('@container (min-width:430px)'),
-  'a folga não cai para 2px em Novidades por depender de uma container query');
+  'a grade não depende de um breakpoint largo para recuperar um vão que comprima nomes');
 ok(model.includes('data-sp-set-count="') && model.includes('data-sp-best-of="') && model.includes('plan.bestOf'),
   'modelo canônico declara formato e quantidade em cards estáticos');
 ok(bracket.includes('const _setCountAttr') && bracket.includes('const _setFormatAttr') && bracket.includes('data-sp-best-of="'),
