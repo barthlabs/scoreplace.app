@@ -3973,7 +3973,12 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
     // Mesmo que o horário já esteja gravado, uma edição precisa recuperar o estado
     // "aberto quando chegar a hora" se uma versão antiga o deixou status=closed.
     const scheduledOpeningRestoresState = !hasDraw && t.status === 'closed' && Number.isFinite(requestedOpeningAt) && requestedOpeningAt > Date.now();
-    const changed = scheduledOpeningRestoresState || Object.keys(patch).some(key => JSON.stringify(t[key]) !== JSON.stringify(patch[key]));
+    /* A URL vazia é o comando explícito de remover marca. Ela também precisa limpar
+     * `coverPhotoData`/`logoData` legado; por isso continua sendo mudança mesmo se uma
+     * fotografia antiga já tiver deixado a URL vazia no documento. */
+    const removesLegacyBranding = (patch.coverUrl === '' && !!(t.coverUrl || t.coverPhotoData)) ||
+      (patch.logoUrl === '' && !!(t.logoUrl || t.logoData));
+    const changed = scheduledOpeningRestoresState || removesLegacyBranding || Object.keys(patch).some(key => JSON.stringify(t[key]) !== JSON.stringify(patch[key]));
     if (!changed) return { ok:true, changed:false, tournament:t };
     /* ⏱️ COM A CHAVE SORTEADA, O PRAZO AINDA SE CORRIGE. Relato do dono (12/set/2026, Confra
      * com a Fase 2 rodando): _"não consigo salvar alterações nas datas"_. Arrastar a régua da
@@ -4014,6 +4019,14 @@ exports.updateTournamentConfiguration = onCall(async (request) => {
         t.phases = _fasesDeConfiguracaoAtualizaveis(Array.isArray(t.phases) ? t.phases : [], patch.phases);
       } else if (key === 'fmt2' && _fmt2Mesclado) {
         t.fmt2 = _fmt2Mesclado;   // a mescla conferida, nunca o objeto cru da tela
+      } else if (key === 'coverUrl' && patch[key] === '') {
+        // A capa é canônica na URL, mas torneios antigos podem carregar base64 legado.
+        // Apagar só a URL deixaria `_tourCoverSrc` cair no legado e a imagem reaparecer.
+        delete t.coverUrl;
+        delete t.coverPhotoData;
+      } else if (key === 'logoUrl' && patch[key] === '') {
+        delete t.logoUrl;
+        delete t.logoData;
       } else {
         t[key] = patch[key];
       }

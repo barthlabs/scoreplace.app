@@ -14207,7 +14207,18 @@ window.AppStore = {
       var _images = [['logoData', 'logoUrl', 'logo'], ['coverPhotoData', 'coverUrl', 'cover']];
       var _saveEdit = Promise.all(_images.map(function (pair) {
         var raw = data[pair[0]] || _editPatch[pair[1]];
-        if (!raw) { delete _editPatch[pair[0]]; return Promise.resolve(); }
+        if (!raw) {
+          delete _editPatch[pair[0]];
+          /* ⛔ REMOVER CAPA/LOGO PRECISA SER UMA INTENÇÃO EXPLÍCITA. O save normal
+           * omite imagens para não reenviar base64; reutilizar essa omissão aqui fez
+           * o Firestore preservar a URL antiga quando o organizador clicava em
+           * "remover". Se havia marca no documento fresco e o campo do formulário
+           * ficou vazio, mandamos a URL vazia para a Function apagar também o legado.
+           * [[regression_remover_capa_nao_pode_preservar_url_antiga]] */
+          if (tourData[pair[1]] || tourData[pair[0]]) _editPatch[pair[1]] = '';
+          else delete _editPatch[pair[1]];
+          return Promise.resolve();
+        }
         if (typeof window._subirImagemTorneio !== 'function') throw new Error('Upload de imagem indisponível.');
         return window._subirImagemTorneio(id, pair[2], raw).then(function (url) {
           if (!url) throw new Error('A imagem não foi salva.');

@@ -7,6 +7,8 @@ const add = s.slice(s.indexOf('  addTournament(data) {'), s.indexOf('  logAction
 ok(/var _isExisting = _idx !== -1/.test(add), 'separa edição existente de criação nova');
 ok(/_isExisting[\s\S]*?_callCF\('updateTournamentConfiguration'/.test(add) && !/_isExisting[\s\S]*?commitTournamentTx/.test(add), 'edição despacha somente o patch para a Function');
 ok(/_subirImagemTorneio[\s\S]*?_callCF\('updateTournamentConfiguration'/.test(add), 'upload de imagem termina antes do comando de edição');
+ok(/if \(tourData\[pair\[1\]\] \|\| tourData\[pair\[0\]\]\) _editPatch\[pair\[1\]\] = ''/.test(add),
+  'remover uma capa ou logo envia URL vazia, em vez de omitir e preservar a imagem antiga');
 ok(/Object\.assign\(tourData, fresh\)[\s\S]*?_saveToCache/.test(add), 'cache só recebe o retorno canônico do servidor');
 ok(add.includes("_callFn('createTournament'") && !add.includes('saveTournament('), 'criação nova usa a Function especializada');
 const submit = form.slice(form.indexOf('if (editId) {'), form.indexOf('// Auto-assign categories', form.indexOf('if (editId) {')));
