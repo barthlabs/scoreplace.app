@@ -7,7 +7,7 @@ vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'sched
 vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'schedule-organizer.js'), 'utf8'), sandbox, { filename: 'schedule-organizer.js' });
 const W = sandbox;
 const organizerSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'schedule-organizer.js'), 'utf8');
-const bracketSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'bracket-logic.js'), 'utf8');
+const bracketLogicSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'bracket-logic.js'), 'utf8');
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.error('  ✗', m); } };
 console.log('──── agenda operacional e quadras ────');
@@ -238,10 +238,10 @@ const bracketViewSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'view
 ok(/'teamCompetition','categorySchedule','scheduleWindow'/.test(functionsSource) && /'teamCompetition','categorySchedule','turnos'/.test(functionsSource),
   'o servidor aceita janelas diárias junto da agenda antes do sorteio e preserva a estrutura depois da chave');
 ok(/match\.scheduledGameNumber\s*=\s*scheduledGameNumber\.get\(item\.matchId\)/.test(functionsSource) &&
-  /match\.scheduleLocked\s*=\s*true/.test(functionsSource) &&
+  /match\.scheduleLocked\s*=\s*item\.scheduleLocked\s*===\s*true/.test(functionsSource) &&
   !/match\.matchNumber\s*=\s*matchNumber\.get/.test(functionsSource),
-  'a agenda revisada grava Jogo N e trava toda a prévia como contrato da chave publicada');
-ok(/scheduledGameNumber:i\.scheduledGameNumber/.test(bracketSource) && /scheduleLocked:true/.test(bracketSource),
+  'a agenda revisada grava Jogo N como contrato da chave e trava somente escolhas manuais');
+ok(/scheduledGameNumber:i\.scheduledGameNumber/.test(bracketLogicSource) && /scheduleLocked:true/.test(bracketLogicSource),
   'a tela envia à Function a sequência cronológica que o organizador confirmou');
 ok(/competitionTeamTagForMatch/.test(bracketViewSource) && /Time: /.test(bracketViewSource) && /sp-match-team-tag/.test(bracketViewSource),
   'cards de competição mostram a tag “Time:” colorida junto aos atletas');
@@ -262,7 +262,7 @@ ok(/flex:0 1 auto;min-width:0;font-size:\.62rem/.test(drawSource),
   'os toggles Concentradas/Alternadas permanecem compactos em cada dia');
 ok(/position:sticky;top:0;z-index:3/.test(drawSource) && !/id="team-draw-cancel" class=/.test(drawSource),
   'Voltar fica sempre visível no cabeçalho e não há Cancelar duplicado no rodapé');
-ok(/data-\' \+ prefix \+ \'-empty-slot/.test(organizerSource) && /data-pis-empty-slot/.test(bracketSource) && /Solte um jogo aqui/.test(organizerSource),
+ok(/data-\' \+ prefix \+ \'-empty-slot/.test(organizerSource) && /data-pis-empty-slot/.test(bracketLogicSource) && /Solte um jogo aqui/.test(organizerSource),
   'quadras vazias aceitam arrastar e soltar tanto na agenda quanto na revisão privada');
 ok(/sp-team-draw-time/.test(drawSource) && /window\.location\.hash = d\.staged \? '#tournaments\/'/.test(drawSource) && /_openPendingInitialSchedule\(tId\)/.test(drawSource),
   'os horários do sorteio usam controle compacto e uma revisão nova abre direto no planejamento privado');
@@ -299,18 +299,18 @@ ok(/<div>Ana<\/div><div>Bia<\/div>/.test(board.html),
   'os dois jogadores da dupla aparecem em linhas separadas');
 ok(/ondrop/.test(organizerSource) && /manual\[from\.matchId\].*to\.court/.test(organizerSource),
   'soltar um card sobre outro troca os slots de horário e quadra');
-ok(/← Voltar/.test(bracketSource) && /data-pis-apply/.test(bracketSource) && /data-pis-publish/.test(bracketSource) &&
-  /data-pis-toolbar/.test(bracketSource) && /data-pis-day-tabs/.test(bracketSource) && /board\.tabsHtml/.test(bracketSource) && /board\.gridHtml/.test(bracketSource) && /data-pis-scroll/.test(bracketSource) && /display:flex;flex-direction:column;isolation:isolate/.test(bracketSource) && /overflow:hidden/.test(bracketSource) && /width:100%;max-width:1600px/.test(bracketSource),
+ok(/← Voltar/.test(bracketLogicSource) && /data-pis-apply/.test(bracketLogicSource) && /data-pis-publish/.test(bracketLogicSource) &&
+  /data-pis-toolbar/.test(bracketLogicSource) && /data-pis-day-tabs/.test(bracketLogicSource) && /board\.tabsHtml/.test(bracketLogicSource) && /board\.gridHtml/.test(bracketLogicSource) && /data-pis-scroll/.test(bracketLogicSource) && /display:flex;flex-direction:column;isolation:isolate/.test(bracketLogicSource) && /overflow:hidden/.test(bracketLogicSource) && /width:100%;max-width:1600px/.test(bracketLogicSource),
   'Voltar, Salvar ajustes, Publicar e abas de dia ficam em barras opacas separadas, fora das rolagens da grade');
 ok(/tabsHtml:tabsHtml/.test(organizerSource) && /gridHtml:gridHtml/.test(organizerSource),
   'a grade expõe abas e conteúdo separadamente para manter o seletor de dias fixo fora da rolagem');
-ok(/gridScroll = \{ top:0, left:0 \}/.test(bracketSource) && /previousScroll\.scrollTop/.test(bracketSource) && /restoredScroll\.scrollTop = gridScroll\.top/.test(bracketSource) && /restoredScroll\.scrollLeft = gridScroll\.left/.test(bracketSource),
+ok(/gridScroll = \{ top:0, left:0 \}/.test(bracketLogicSource) && /previousScroll\.scrollTop/.test(bracketLogicSource) && /restoredScroll\.scrollTop = gridScroll\.top/.test(bracketLogicSource) && /restoredScroll\.scrollLeft = gridScroll\.left/.test(bracketLogicSource),
   'recalcular a grade após arrastar preserva a rolagem vertical e horizontal do ponto em edição');
-ok(/data-\' \+ prefix \+ \'-outside-window/.test(organizerSource) && /repeating-linear-gradient\(45deg,rgba\(239,68,68/.test(organizerSource) && /Todos os jogos continuam exibidos/.test(bracketSource),
+ok(/data-\' \+ prefix \+ \'-outside-window/.test(organizerSource) && /repeating-linear-gradient\(45deg,rgba\(239,68,68/.test(organizerSource) && /Todos os jogos continuam exibidos/.test(bracketLogicSource),
   'jogos que ultrapassam a janela seguem na grade com faixa zebrada vermelha e cinza');
-const pendingScheduleStart = bracketSource.indexOf('window._openPendingInitialSchedule = function');
-const pendingScheduleEnd = bracketSource.indexOf('window._rememberPendingDrawMarker = function', pendingScheduleStart);
-const pendingSchedule = bracketSource.slice(pendingScheduleStart, pendingScheduleEnd);
+const pendingScheduleStart = bracketLogicSource.indexOf('window._openPendingInitialSchedule = function');
+const pendingScheduleEnd = bracketLogicSource.indexOf('window._rememberPendingDrawMarker = function', pendingScheduleStart);
+const pendingSchedule = bracketLogicSource.slice(pendingScheduleStart, pendingScheduleEnd);
 ok(!/if \(!latest\.cabe\)[\s\S]{0,220}?return;/.test(pendingSchedule) && /Publicando horários estimados/.test(pendingSchedule) && /if \(!draft\.cabe\)/.test(organizerSource),
   'a revisão inicial pode publicar agenda excedente sinalizada; a aplicação operacional comum continua validando distribuição inválida');
 const timezoneRoundTrip = execFileSync(process.execPath, ['-e', [

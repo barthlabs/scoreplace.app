@@ -35,6 +35,15 @@ summary::-webkit-details-marker { display: none; }
   overflow-wrap: anywhere;
 }
 
+/* A cor identifica o time, mas a etiqueta continua legível no tema claro.
+   Não usar o matiz puro como fundo: amarelos e verdes claros derrubam o
+   contraste do texto. */
+[data-theme="light"] .sp-match-team-tag {
+  background: color-mix(in srgb, var(--sp-team-color, #1d4ed8) 16%, #fff);
+  border-color: color-mix(in srgb, var(--sp-team-color, #1d4ed8) 68%, #0f172a);
+  color: #0f172a;
+}
+
 .sp-match-court {
   display: flex;
   align-items: center;

@@ -11,10 +11,10 @@
  *
  * É o MESMO defeito que o `scroll-margin-top:120px` fixo já tinha causado nos cards e
  * caixas de grupo (v1.5.22) e que deu origem a `--scroll-anchor` — a FONTE ÚNICA de "tudo
- * que fica grudado no topo", medida a cada reflow em `_reflowChrome` (store.js). Os cinco
- * botões verticais do bracket seguiam com o número fixo, fora dessa fonte.
+ * que fica grudado no topo", medida a cada reflow em `_reflowChrome` (store.js). O botão
+ * vertical remanescente do bracket seguia com número fixo, fora dessa fonte.
  *
- * A CURA: `top: var(--scroll-anchor, <antigo>)` nos cinco. O fallback preserva o valor de
+ * A CURA: `top: var(--scroll-anchor, <antigo>)` nele. O fallback preserva o valor de
  * hoje antes do 1º reflow.
  *
  * Cobre os dois lados:
@@ -54,7 +54,10 @@ function varrerTopFixo() {
     if (/var\(--scroll-anchor/.test(mSticky[1])) comVar++;
     else cravados.push(mSticky[1]);
   }
-  ok(comVar >= 5, comVar + ' sticky(s) vertical(is) ancorado(s) em --scroll-anchor (esperado ≥ 5)');
+  // Todas as rodadas agora ficam desenhadas; os antigos quatro reveladores verticais
+  // foram removidos de propósito. O controle de fase que resta continua obrigado a
+  // usar a âncora canônica, sem exigir botões mortos só para satisfazer a contagem.
+  ok(comVar >= 1, comVar + ' sticky(s) vertical(is) ancorado(s) em --scroll-anchor (esperado ≥ 1)');
   ok(cravados.length === 0, 'nenhum com top cravado' + (cravados.length ? ' — ' + cravados.join(', ') : ''));
 }
 

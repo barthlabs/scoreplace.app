@@ -4406,8 +4406,11 @@ exports.setPendingInitialSchedule = onCall(async (request) => {
        * nem replanejamento silencioso ao publicar: categoria, quadra, horário e
        * Jogo N desta lista devem reaparecer idênticos na chave pública.
        * [[regression_preview_schedule_is_published_schedule]] */
-      match.scheduleLocked = true;
-      match.scheduleSource = 'organizer';
+      // A grade inteira é o contrato da prévia, mas somente uma troca feita
+      // manualmente pelo organizador vira trava contra o próximo planejamento.
+      // Marcar tudo como manual congelava slots automáticos e desperdiçava quadras.
+      match.scheduleLocked = item.scheduleLocked === true;
+      match.scheduleSource = item.scheduleLocked === true ? 'organizer' : 'estimate';
       match.scheduledGameNumber = scheduledGameNumber.get(item.matchId);
     });
     pd.scheduleRevision = Number(pd.scheduleRevision || 0) + 1;

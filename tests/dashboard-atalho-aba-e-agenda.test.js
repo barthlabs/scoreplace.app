@@ -40,10 +40,12 @@ try {
   const source = { id: 'r1-2', _gameNum: 7, nextMatchId: 'semi-1', nextSlot: 'p2' };
   const target = { id: 'semi-1', p1: 'A / B', p2: 'TBD' };
   const classification = { id: 'semi-2', p2AguardaMelhor: true };
+  const classificatorio = { id: 'neon-r4-2', p1: 'TBD', p2: 'TBD' };
   labelSandbox.window._collectAllMatches = () => [source, target];
   ok(labelSandbox.window._directBracketSlotLabel({}, target, 'p2') === 'Vencedor do jogo 7' &&
-    labelSandbox.window._directBracketSlotLabel({}, classification, 'p2') === '',
-    'o rótulo de origem é calculado pela aresta direta e não substitui dependência de classificação');
+    labelSandbox.window._directBracketSlotLabel({}, classification, 'p2') === '' &&
+    labelSandbox.window._directBracketSlotLabel({}, classificatorio, 'p1') === '',
+    '“Vencedor do jogo” só existe quando há aresta direta; classificatória como Neon não inventa confronto futuro');
 } catch (err) {
   ok(false, 'o resolvedor de origem de vaga executa isoladamente: ' + err.message);
 }

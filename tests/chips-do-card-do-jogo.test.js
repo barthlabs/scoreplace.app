@@ -84,8 +84,8 @@ ok(!/Propor datas/.test(scheduledCard), 'data definida substitui o botão "Propo
 ok(/#7dd3fc/.test(scheduledCard), 'a data definida usa azul-claro');
 ok(/button/.test(scheduledCard) && /_schOpenMatch/.test(scheduledCard), 'o horário definido continua sendo botão para reagendar');
 ok(/data-schedule-chip/.test(scheduledCard), 'o card expõe o slot canônico do agendamento');
-ok(/data-match-time-status/.test(scheduledCard) && /Agendado:/.test(scheduledCard),
-  'o mesmo horário aparece abaixo do número do jogo no cabeçalho canônico');
+ok(/data-match-time-status/.test(scheduledCard) && !/Agendado:/.test(scheduledCard),
+  'o cabeçalho mantém o slot de linha do tempo sem duplicar o agendamento que já é reagendável no rodapé');
 const slotAgendado = { innerHTML: '', getAttribute: function (k) { return k === 'data-schedule-match-id' ? m.id : null; } };
 const slotLinhaDoTempo = {
   innerHTML: '',
@@ -105,8 +105,8 @@ W._schRefreshCardChip(t, m);
 W.document.querySelectorAll = queryOriginal;
 ok(/18\/09 às 11:00/.test(slotAgendado.innerHTML) && !/Propor datas/.test(slotAgendado.innerHTML),
   'ao definir, o slot do card aberto é atualizado antes do snapshot remoto');
-ok(/Agendado:/.test(slotLinhaDoTempo.innerHTML) && /18\/09 11:00/.test(slotLinhaDoTempo.innerHTML),
-  'a linha sob o número do jogo também atualiza antes do snapshot remoto');
+ok(!/Agendado:/.test(slotLinhaDoTempo.innerHTML),
+  'ao definir, a linha sob o número não duplica o horário que o chip reagendável já mostra');
 m.scheduledAt = ''; m.scheduledKind = '';
 
 // ─── a linha abaixo de JOGO N tem uma única precedência ───────────────────────
@@ -135,8 +135,8 @@ ok(/Jogar até/.test(cardDaR3) && /16\/10 23:00/.test(cardDaR3),
 
 mLinhaDoTempo.scheduledAt = '2026-10-12T22:00:00.000Z';
 const cardMarcado = W.renderMatchCard(mLinhaDoTempo, true, tLinhaDoTempo.id, 1);
-ok(/Agendado:/.test(cardMarcado) && /12\/10 19:00/.test(cardMarcado) && !/Jogar até/.test(cardMarcado),
-  'horário marcado vence o prazo da rodada no mesmo slot do cabeçalho');
+ok(/12\/10 às 19:00/.test(cardMarcado) && !/Agendado:/.test(cardMarcado),
+  'horário marcado aparece no chip reagendável sem repetir "Agendado:" no cabeçalho');
 
 mLinhaDoTempo.winner = 'J1';
 mLinhaDoTempo.completedAt = '2026-10-11T00:00:00.000Z';

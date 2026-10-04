@@ -2168,20 +2168,9 @@ function renderBracket(container, tournamentId, isInline) {
       var _currentContent = window._renderPhaseBracket(t, canEnterResult, standbyHtml, null);
       if (!window._phasePrevOpen) window._phasePrevOpen = {};
       var _prevOpen = !!window._phasePrevOpen[t.id];
-      // v4.3.15: UM nível para trás por vez. Enquanto a FASE ATUAL ainda tem rodada
-      // OCULTA (botão "Mostrar ocultas"), o "Fase anterior" NÃO aparece — o usuário revela
-      // primeiro as rodadas desta fase; só quando não há mais oculta é que surge o botão
-      // pra ir à fase anterior. Evita os DOIS botões verticais empilhados ao mesmo tempo.
-      var _hasHiddenInPhase = false;
-      if (window._hiddenRoundsTier) {
-        var _hrPref = t.id + '|';
-        _hasHiddenInPhase = Object.keys(window._hiddenRoundsTier).some(function (k) {
-          return k.indexOf(_hrPref) === 0 && window._hiddenRoundsTier[k] && window._hiddenRoundsTier[k].size > 0;
-        });
-      }
-      var _prevBtn = (_hasHiddenInPhase && !_prevOpen)
-        ? ''
-        : '<button class="btn btn-micro btn-outline" onclick="window._togglePhasePrev(\'' + _tIdEsc2 + '\')" title="Ver resultados e chaves das fases anteriores (encerradas) sem sair da fase atual" style="position:sticky;top:var(--scroll-anchor,112px);align-self:flex-start;writing-mode:vertical-rl;transform:rotate(180deg);padding:14px 7px;flex-shrink:0;margin:0;line-height:1.15;white-space:nowrap;z-index:5;">' + (_prevOpen ? '✕ Ocultar anterior' : '👁 Fase anterior') + '</button>';
+      // Todas as rodadas permanecem visíveis. A fase anterior não depende mais de
+      // um estado oculto da chave atual.
+      var _prevBtn = '<button class="btn btn-micro btn-outline" onclick="window._togglePhasePrev(\'' + _tIdEsc2 + '\')" title="Ver resultados e chaves das fases anteriores (encerradas) sem sair da fase atual" style="position:sticky;top:var(--scroll-anchor,112px);align-self:flex-start;writing-mode:vertical-rl;transform:rotate(180deg);padding:14px 7px;flex-shrink:0;margin:0;line-height:1.15;white-space:nowrap;z-index:5;">' + (_prevOpen ? '✕ Ocultar anterior' : '👁 Fase anterior') + '</button>';
       var _prevSections = '';
       if (_prevOpen) {
         for (var _ppi = _curPh - 1; _ppi >= 0; _ppi--) {
@@ -3537,8 +3526,7 @@ function _setupFixedScrollbar(container) {
   }, 100);
 }
 
-// ─── Hidden rounds state, bracket view mode & zoom ──────────────────────────
-if (!window._hiddenRounds) window._hiddenRounds = {};
+// ─── Bracket view mode & zoom ───────────────────────────────────────────────
 if (window._bracketMirrorMode === undefined) window._bracketMirrorMode = false;
 if (window._bracketZoom === undefined) window._bracketZoom = 1;
 
@@ -3673,9 +3661,9 @@ function renderSingleElimBracket(t, canEnterResult, standbyHtml) {
   const thirdPlaceMatchNum = hasThirdPlace ? swissPastMatchOffset + preFinalsMatchCount + 1 : 0;
   const finalMatchNum = hasThirdPlace ? swissPastMatchOffset + preFinalsMatchCount + 2 : swissPastMatchOffset + preFinalsMatchCount + 1;
 
-  // Determine visible rounds (not hidden)
-  const visibleRounds = activeRounds.filter(r => !hiddenSet.has(r));
-  const hiddenCount = activeRounds.length - visibleRounds.length;
+  // Todas as rodadas ficam desenhadas: inclusive as futuras, que são parte da
+  // chave pública e não um detalhe que possa desaparecer da tela.
+  const visibleRounds = activeRounds.slice();
 
   // Check if mirror layout is structurally possible:
   // Need: semis (2 matches) + final visible, at least 3 total rounds
@@ -3694,20 +3682,7 @@ function renderSingleElimBracket(t, canEnterResult, standbyHtml) {
   // Build round columns
   const roundColumns = [];
 
-  // "Mostrar" button for hidden rounds — each click reveals ONE round
-  // (the latest hidden, LIFO), not all at once. The button is position:sticky
-  // so it follows the vertical scroll and stays visible at the top, middle and
-  // bottom of the bracket area (sticks below topbar + back-header at top:120px).
-  const showBtnHtml = hiddenCount > 0 ? `
-    <div style="display:flex;flex-direction:column;align-items:center;min-width:48px;gap:8px;align-self:stretch;">
-      <button onclick="window._showAllHiddenRounds('${String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')"
-        style="position:sticky;top:var(--scroll-anchor,120px);writing-mode:vertical-lr;text-orientation:mixed;background:var(--sp-g-255-255-255-005,rgba(255,255,255,0.05));border:1px dashed rgba(255,255,255,0.15);color:var(--text-muted);border-radius:8px;padding:12px 8px;font-size:0.7rem;font-weight:600;cursor:pointer;transition:all 0.2s;letter-spacing:1px;margin-top:1rem;"
-        onmouseover="this.style.background='rgba(255,255,255,0.1)';this.style.color='var(--text-bright)'"
-        onmouseout="this.style.background='rgba(255,255,255,0.05)';this.style.color='var(--text-muted)'"
-        title="Mostrar rodadas ocultas (${hiddenCount})">
-        ◀ Mostrar (${hiddenCount})
-      </button>
-    </div>` : '';
+  const showBtnHtml = '';
 
   if (canMirror) {
     // ── World Cup mirror layout ──
@@ -3904,16 +3879,7 @@ function renderSingleElimBracket(t, canEnterResult, standbyHtml) {
         ${modeIcon} ${modeLabel}
       </button>` : '';
 
-  // "Mostrar rodada anterior" button for toolbar — a cada clique revela uma
-  // rodada oculta, começando pela mais recente e indo para trás.
-  const showAllHiddenBtnHtml = hiddenCount > 0 ? `
-      <button onclick="window._showAllHiddenRounds('${String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')"
-        style="background:rgba(129,140,248,0.15);border:1px solid rgba(129,140,248,0.4);color:var(--sp-c-a5b4fc,#a5b4fc);border-radius:20px;padding:5px 14px;font-size:0.75rem;font-weight:600;cursor:pointer;transition:all 0.2s;display:inline-flex;align-items:center;gap:6px;"
-        onmouseover="this.style.background='rgba(129,140,248,0.25)';this.style.color='#c7d2fe'"
-        onmouseout="this.style.background='rgba(129,140,248,0.15)';this.style.color='#a5b4fc'"
-        title="Revelar a rodada oculta mais recente (clique de novo para revelar a anterior)">
-        👁️ Mostrar rodada anterior (${hiddenCount} oculta${hiddenCount > 1 ? 's' : ''})
-      </button>` : '';
+  const showAllHiddenBtnHtml = '';
 
   // Zoom controls with slider
   const zoomPct = Math.round(window._bracketZoom * 100);
@@ -4595,26 +4561,12 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
     // v2.8.15: 3º lugar (1 jogo) — numerado ANTES da final (final-1, número menor), mas
     // renderizado ABAIXO da final na mesma coluna, com header próprio "🥉 3º lugar".
     var thirdM = pm.filter(function (m) { return m.bracket === bracketKey && m.isThirdPlace; })[0];
-    // v2.8.24: ocultar/mostrar rodadas CONCLUÍDAS por linha (LIFO). Estado por-tier em
-    // window._hiddenRoundsTier[tId|bracketKey]. O nº dos JOGOs é preservado ao ocultar
-    // (a coluna oculta avança o globalNum sem renderizar). A final NUNCA é ocultável.
-    var _tIdEsc = String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-    var _bkEsc = String(bracketKey).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-    // Todas as rodadas da chave ficam desenhadas desde o sorteio. Estado legado
-    // de “ocultar” é deliberadamente ignorado para não esconder R2/R3/R4.
-    var hiddenSet = null;
-    function _roundComplete(col) { return col.matches.length > 0 && col.matches.every(function (m) { return m.winner || m.isBye || m.isSitOut; }); }
-    var hiddenCount = 0;
+    // Todas as rodadas ficam desenhadas, inclusive as futuras desta chave.
     var colsHtml = cols.map(function (col, idx) {
       var isFinalCol = (idx === cols.length - 1);
       // v2.8.87: jogos BYE NÃO viram card "jogo não jogado" — quem passou de BYE
       // aparece na rodada SEGUINTE com a tag âmbar. A rodada exibe só jogos a disputar.
       var realMatches = col.matches.filter(function (m) { return !window._isByeMatch(m); });
-      var isHidden = !isFinalCol && hiddenSet && hiddenSet.has(col.round);
-      if (isHidden) {
-        hiddenCount++;
-        return '';
-      }
       // coluna que sobrou só com BYEs (nenhum jogo real) não é exibida
       if (realMatches.length === 0 && !(isFinalCol && thirdM)) return '';
       var label = roundLabel(cols, idx);
@@ -4629,11 +4581,7 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
         '<div class="bracket-round-heading" style="display:flex;align-items:center;justify-content:space-between;gap:8px;"><h5 style="color:' + window._spCor(color, 'color') + ';font-size:0.7rem;text-transform:uppercase;letter-spacing:2px;margin:0;border-left:3px solid ' + window._spCor(color, 'borda') + ';padding-left:8px;"><span>' + label + '</span>' + hideBtn + '</h5></div>' +
         cards + thirdHtml + '</div>';
     }).join('');
-    // v2.8.33: "Mostrar ocultas" fica à ESQUERDA das chaves, EM PÉ (vertical) e
-    // STICKY no scroll vertical — top abaixo da topbar(60) + back-header fixo(~44).
-    var showHiddenBtn = hiddenCount > 0
-      ? '<button class="btn btn-micro btn-outline" onclick="window._tierRevealOne(\'' + _tIdEsc + '\',\'' + _bkEsc + '\')" title="Mostrar a rodada oculta mais recente (1 por clique)" style="position:sticky;top:var(--scroll-anchor,112px);align-self:flex-start;writing-mode:vertical-rl;transform:rotate(180deg);padding:14px 7px;flex-shrink:0;margin:0;line-height:1.15;white-space:nowrap;z-index:5;">👁 Mostrar ocultas (' + hiddenCount + ')</button>'
-      : '';
+    var showHiddenBtn = '';
     // Título da chave suprimido quando vazio (chave única → sem rótulo, igual categoria única).
     var _titleH4 = title ? '<h4 data-bracket-tier-title style="color:' + window._spCor(color, 'color') + ';font-size:0.85rem;text-transform:uppercase;letter-spacing:2px;border-left:4px solid ' + window._spCor(color, 'borda') + ';padding-left:10px;margin-bottom:1rem;">' + title + '</h4>' : '';
     return '<div style="margin-bottom:2rem;">' +
@@ -4975,27 +4923,6 @@ window._phaseCloseLeagueRound = function (tId, phaseIdx) {
     return;
   }
   return go(false);
-};
-
-// v2.8.24: ocultar/mostrar rodadas concluídas POR LINHA (gold/silver…) no bracket de
-// fase. Estado por-tier em window._hiddenRoundsTier['<tId>|<bracketKey>'] (Set de round).
-if (!window._hiddenRoundsTier) window._hiddenRoundsTier = {};
-window._tierHideRound = function (tId, bracketKey, roundNum) {
-  var key = tId + '|' + bracketKey;
-  if (!window._hiddenRoundsTier[key]) window._hiddenRoundsTier[key] = new Set();
-  window._hiddenRoundsTier[key].add(Number(roundNum));
-  if (typeof window._rerenderBracket === 'function') window._rerenderBracket(tId);
-};
-// "Mostrar ocultas": revela UMA rodada por clique — a oculta mais recente (maior round,
-// 1 nível para trás), nunca todas de uma vez.
-window._tierRevealOne = function (tId, bracketKey) {
-  var key = tId + '|' + bracketKey;
-  var set = window._hiddenRoundsTier && window._hiddenRoundsTier[key];
-  if (!set || !set.size) return;
-  var mx = -Infinity;
-  set.forEach(function (r) { if (r > mx) mx = r; });
-  set.delete(mx);
-  if (typeof window._rerenderBracket === 'function') window._rerenderBracket(tId);
 };
 
 // ─── Match Card — inline score entry ─────────────────────────────────────────
@@ -7275,29 +7202,6 @@ function _buildSwissPastColumns(t, swissPastCols) {
   });
 
   var cols = [];
-  var _tIdEsc = String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-  var hiddenSet = (window._hiddenSwissPast && window._hiddenSwissPast[t.id]) || new Set();
-  var hiddenCount = 0;
-
-  // "◀ Mostrar (N)" pill for Swiss past hidden columns. Matches the elim
-  // pill style (vertical sticky button) and lives at the very left of the
-  // scroll strip, before any visible swiss-past columns.
-  swissPastCols.forEach(function(col) {
-    if (hiddenSet.has(col.round)) hiddenCount++;
-  });
-  if (hiddenCount > 0) {
-    cols.push(
-      '<div style="display:flex;flex-direction:column;align-items:center;min-width:48px;gap:8px;align-self:stretch;">' +
-        '<button onclick="window._showAllHiddenSwissPast(\'' + _tIdEsc + '\')" ' +
-          'style="position:sticky;top:var(--scroll-anchor,120px);writing-mode:vertical-lr;text-orientation:mixed;background:rgba(59,130,246,0.08);border:1px dashed rgba(59,130,246,0.3);color:var(--sp-c-60a5fa,#60a5fa);border-radius:8px;padding:12px 8px;font-size:0.7rem;font-weight:600;cursor:pointer;transition:all 0.2s;letter-spacing:1px;margin-top:1rem;" ' +
-          'onmouseover="this.style.background=\'rgba(59,130,246,0.15)\'" ' +
-          'onmouseout="this.style.background=\'rgba(59,130,246,0.08)\'" ' +
-          'title="Mostrar rodadas Suíças ocultas (' + hiddenCount + ')">' +
-          '◀ Mostrar Suíço (' + hiddenCount + ')' +
-        '</button>' +
-      '</div>'
-    );
-  }
 
   // Cumulative match index across Swiss rounds so the card numbering stays
   // consistent with what the user saw during the qualifier phase.
@@ -7305,11 +7209,9 @@ function _buildSwissPastColumns(t, swissPastCols) {
   swissPastCols.forEach(function(col) {
     var matches = (col && col.matches) ? col.matches : [];
     if (matches.length === 0) return;
-    // Accumulate numbering even for hidden columns so visible columns keep
-    // the same "Jogo N" labels regardless of which columns are hidden.
+    // A numeração é estável e toda rodada permanece visível.
     var startNum = _cumMatchNum;
     _cumMatchNum += matches.length;
-    if (hiddenSet.has(col.round)) return;
     // Render using the same renderMatchCard used during the qualifier phase —
     // completed rounds keep the exact same visual presentation they had while
     // in progress (just read-only, canEnterResult=false).
@@ -7317,12 +7219,10 @@ function _buildSwissPastColumns(t, swissPastCols) {
       return renderMatchCard(m, false, t.id, startNum + mi + 1);
     }).join('');
     var roundLabel = (col.label || ('Suíço R' + col.round)) + ' ✓';
-    var hideBtn = '<button class="btn btn-micro btn-outline" onclick="window._toggleSwissPastVisibility(\'' + _tIdEsc + '\', ' + (col.round || 0) + ')">Ocultar</button>';
     cols.push(
       '<div class="bracket-round-column" data-round-num="' + (col.round || 0) + '" style="display:flex;flex-direction:column;gap:1rem;min-width:280px;">' +
         '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' +
           '<h4 style="color:var(--sp-c-60a5fa,#60a5fa);font-size:0.75rem;text-transform:uppercase;letter-spacing:2px;margin:0;border-left:3px solid #3b82f6;padding-left:8px;flex:1;">' + safe(roundLabel) + '</h4>' +
-          hideBtn +
         '</div>' +
         '<div style="display:flex;flex-direction:column;gap:1.5rem;">' + matchesHtml + '</div>' +
       '</div>'
@@ -8974,40 +8874,9 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
   var roundsScrollHtml = '';
   if (useColumnLayout) {
     var _roundColumns = [];
-    var _tIdEsc = String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    var _showHiddenBtnHtml = '';
 
-    // Hidden rounds state — mirrors Eliminatórias behaviour.
-    var _hiddenSwissSet = (window._hiddenRounds && window._hiddenRounds[t.id]) || new Set();
-    var _hiddenSwissCount = 0;
-    var _maxHiddenSwissRound = -1;
-    for (var _hri = 1; _hri < currentRound; _hri++) {
-      if (_hiddenSwissSet.has(_hri)) {
-        _hiddenSwissCount++;
-        if (_hri > _maxHiddenSwissRound) _maxHiddenSwissRound = _hri;
-      }
-    }
-
-    // "◀ Mostrar (N)" pill at left edge when some completed rounds are hidden.
-    // Cada clique revela apenas a rodada mais recente ocultada (maior número) —
-    // não todas de uma vez. Usa _showAllHiddenRounds (LIFO) em vez de
-    // _toggleRoundVisibility (que expande "tudo até esta rodada"). O botão é
-    // position:sticky com top:120px para seguir o scroll vertical: fica visível
-    // no topo, meio e pé do chaveamento enquanto o usuário rola.
-    var _showHiddenBtnHtml = _hiddenSwissCount > 0
-      ? '<div style="display:flex;flex-direction:column;align-items:center;min-width:48px;gap:8px;align-self:stretch;">' +
-          '<button onclick="window._showAllHiddenRounds(\'' + _tIdEsc + '\')" ' +
-            'style="position:sticky;top:var(--scroll-anchor,120px);writing-mode:vertical-lr;text-orientation:mixed;background:var(--sp-g-255-255-255-005,rgba(255,255,255,0.05));border:1px dashed rgba(255,255,255,0.15);color:var(--text-muted);border-radius:8px;padding:12px 8px;font-size:0.7rem;font-weight:600;cursor:pointer;transition:all 0.2s;letter-spacing:1px;margin-top:1rem;" ' +
-            'onmouseover="this.style.background=\'rgba(255,255,255,0.1)\';this.style.color=\'var(--text-bright)\'" ' +
-            'onmouseout="this.style.background=\'rgba(255,255,255,0.05)\';this.style.color=\'var(--text-muted)\'" ' +
-            'title="Mostrar rodadas ocultas (' + _hiddenSwissCount + ')">' +
-            '◀ Mostrar (' + _hiddenSwissCount + ')' +
-          '</button>' +
-        '</div>'
-      : '';
-
-    // Completed Swiss rounds — shown as scroll columns to the LEFT of the
-    // current round. Each gets an "Ocultar" button; state lives in
-    // window._hiddenRounds[t.id]. Consistent with Eliminatórias behaviour.
+    // Rodadas suíças concluídas continuam lado a lado com a rodada atual.
     // v4.1.21: numeração GLOBAL "JOGO N" do Suíço — contador único que atravessa rodadas
     // concluídas → atual → TBD futuras. Só jogos REAIS contam (folga/BYE = sem número),
     // igual ao _assignGlobalGameNumbers (a dashboard lê o mesmo). Antes cada rodada futura
@@ -9018,17 +8887,13 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
     for (var _pri = 0; _pri < currentRound - 1; _pri++) {
       var _prRound = rounds[_pri];
       var _prMatches = (_prRound && _prRound.matches) || [];
-      if (_hiddenSwissSet.has(_pri + 1)) {
-        _prMatches.forEach(function(m){ if (_isRealSwiss(m)) _swissGN++; }); // oculta preserva a numeração
-        continue;
-      }
       var _prCardsHtml = _prMatches.map(function(m) {
         if (!_isRealSwiss(m)) return renderMatchCard(m, canEnterResult, t.id, null);
         _swissGN++;
         return renderMatchCard(m, canEnterResult, t.id, _swissGN);
       }).join('');
       var _prLabel = isSwissQualifier ? _swissQualifierLabel(_pri + 1) : (_t('bracket.round', {n: _pri + 1}) + ' / ' + maxRounds);
-      var _prHideBtn = '<button class="btn btn-micro btn-outline" onclick="window._toggleRoundVisibility(\'' + _tIdEsc + '\', ' + (_pri + 1) + ')">Ocultar</button>';
+      var _prHideBtn = '';
       _completedColsHtml +=
         '<div class="bracket-round-column" data-round-num="' + (_pri + 1) + '" style="display:flex;flex-direction:column;gap:1rem;min-width:280px;">' +
           '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' +
