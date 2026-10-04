@@ -61,7 +61,7 @@ ok(bracket.includes('if (_ligaPorTimes)') && bracket.includes('Não existe exce�
   bracket.includes('return _classificacaoNoTopo\n    ? _phaseBannerHtml + _progressBar + _sb + standingsTablesHtml'),
   'Neon e os demais formatos só elevam a classificação no intervalo entre blocos');
 ok(bracket.includes('regression_grupos_chaves_antes_classificacao') &&
-  bracket.includes('const _groupKeysFirst = _groupHasUnscheduledPending') &&
+  bracket.includes('const _groupKeysFirst = _groupMatchesForOrder.some(function(m) { return !m.winner; });') &&
   bracket.includes('${_groupKeysFirst && matchesHtml ? `'),
   'o caminho de grupos também mantém as chaves antes das classificações durante os jogos');
 ok(bracket.includes('regression_canonical_key_before_team_standings') &&

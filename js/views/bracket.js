@@ -7024,24 +7024,16 @@ function renderGroupStage(t, isOrg, canEnterResult, opts) {
    * `renderGroupStage` é outro caminho canônico, não um detalhe visual. Ele
    * montava a tabela antes dos cards independentemente da agenda e por isso
    * anulava a regra de renderStandings para torneios classificatórios como o
-   * Neon. Enquanto existir partida pendente sem horário ou em até seis horas,
-   * os cards vêm primeiro; a tabela só sobe no intervalo real entre blocos.
+   * Neon. Enquanto existir partida pendente, os cards vêm primeiro; uma
+   * classificação nunca pode tomar a frente da chave que ainda está sendo
+   * disputada. O horário não muda a ordem de leitura da chave.
    * [[regression_grupos_chaves_antes_classificacao]] */
   const _groupMatchesForOrder = subgroups.reduce(function(list, sg) {
     return list.concat((sg && sg.rounds || []).reduce(function(acc, r) {
       return acc.concat((r && r.matches) || []);
     }, (sg && sg.matches) || []));
   }, []).filter(function(m) { return m && !m.isBye && !m.isSitOut; });
-  const _groupHasUnscheduledPending = _groupMatchesForOrder.some(function(m) {
-    return !m.winner && !_matchCardTimestamp(m.scheduledAt);
-  });
-  const _groupNextPendingAt = _groupMatchesForOrder.reduce(function(next, m) {
-    if (m.winner) return next;
-    var when = _matchCardTimestamp(m.scheduledAt);
-    return when && (next == null || when < next) ? when : next;
-  }, null);
-  const _groupKeysFirst = _groupHasUnscheduledPending ||
-    (_groupNextPendingAt != null && _groupNextPendingAt <= Date.now() + 6 * 60 * 60 * 1000);
+  const _groupKeysFirst = _groupMatchesForOrder.some(function(m) { return !m.winner; });
 
   // O único avanço possível é o de uma fase configurada: o motor de fases monta
   // a eliminatória a partir dos classificados e da política declarada. A antiga
