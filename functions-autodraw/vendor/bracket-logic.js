@@ -6634,12 +6634,12 @@ window._openPendingInitialSchedule = function (tId) {
     return x;
   }
   function saveSchedule(latest) {
-    return window._callCF('setPendingInitialSchedule', { tournamentId:String(t.id), jogos:latest.items.map(function (i) { return { matchId:i.matchId, court:i.court, scheduledAt:i.scheduledAt, scheduleLocked:!!i.scheduleLocked }; }) }, 'Entre na sua conta para salvar a agenda.')
+    return window._callCF('setPendingInitialSchedule', { tournamentId:String(t.id), jogos:latest.items.map(function (i) { return { matchId:i.matchId, court:i.court, scheduledAt:i.scheduledAt, scheduledGameNumber:i.scheduledGameNumber, scheduleLocked:true }; }) }, 'Entre na sua conta para salvar a agenda.')
       .then(function (res) {
         /* Mantém o cofre já aberto coerente até a próxima leitura autenticada. */
         latest.items.forEach(function (item) {
           var match = (draft.matches || []).find(function (m) { return String(m.id) === String(item.matchId); });
-          if (match) { match.court = item.court; match.scheduledAt = item.scheduledAt; match.scheduleLocked = !!item.scheduleLocked; }
+          if (match) { match.court = item.court; match.scheduledAt = item.scheduledAt; match.scheduledGameNumber = item.scheduledGameNumber; match.scheduleLocked = true; match.scheduleSource = 'organizer'; }
         });
         return res;
       });

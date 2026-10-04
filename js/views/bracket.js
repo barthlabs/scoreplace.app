@@ -3630,8 +3630,10 @@ function renderSingleElimBracket(t, canEnterResult, standbyHtml) {
     return matches.length > 0 && matches.every(m => m.winner || m.isBye);
   };
 
-  // Hidden rounds for this tournament
-  const hiddenSet = (window._hiddenRounds[t.id]) || new Set();
+  // A chave é um mapa completo: rodadas nunca somem da visualização. Ocultar uma
+  // rodada concluída fazia parecer que o torneio tinha só R1 e escondia os
+  // confrontos futuros que o organizador precisa conferir.
+  const hiddenSet = new Set();
 
   // Find the highest hidden round number (for "mostrar" button)
   let maxHiddenRound = -1;
@@ -3724,7 +3726,7 @@ function renderSingleElimBracket(t, canEnterResult, standbyHtml) {
       const idx = activeRounds.indexOf(roundNum);
       const label = getRoundLabel(roundNum, idx);
       const complete = isRoundComplete(roundNum);
-      const hideBtn = (showHide && complete) ? `<button class="btn btn-micro btn-outline" onclick="window._toggleRoundVisibility('${String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}', ${roundNum})">Ocultar</button>` : '';
+      const hideBtn = '';
       const matchesHtml = matches.filter(m => !window._isByeMatch(m)).map(m => {
         globalMatchNum++;
         return renderMatchCard(m, canEnterResult, t.id, globalMatchNum);
@@ -3796,7 +3798,7 @@ function renderSingleElimBracket(t, canEnterResult, standbyHtml) {
       const complete = isRoundComplete(roundNum);
 
       // "Ocultar" button — only for completed rounds that are not the final
-      const hideBtn = (complete && !isFinalRound) ? `<button class="btn btn-micro btn-outline" onclick="window._toggleRoundVisibility('${String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}', ${roundNum})">Ocultar</button>` : '';
+      const hideBtn = '';
 
       const matchesHtml = roundsMap[roundNum].filter(m => !window._isByeMatch(m)).map(m => {
         if (isFinalRound && hasThirdPlace) {
@@ -4598,7 +4600,9 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
     // (a coluna oculta avança o globalNum sem renderizar). A final NUNCA é ocultável.
     var _tIdEsc = String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     var _bkEsc = String(bracketKey).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-    var hiddenSet = (window._hiddenRoundsTier && window._hiddenRoundsTier[t.id + '|' + bracketKey]) || null;
+    // Todas as rodadas da chave ficam desenhadas desde o sorteio. Estado legado
+    // de “ocultar” é deliberadamente ignorado para não esconder R2/R3/R4.
+    var hiddenSet = null;
     function _roundComplete(col) { return col.matches.length > 0 && col.matches.every(function (m) { return m.winner || m.isBye || m.isSitOut; }); }
     var hiddenCount = 0;
     var colsHtml = cols.map(function (col, idx) {
@@ -4620,9 +4624,7 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
         ? '<h5 style="color:var(--sp-c-cd7f32,#cd7f32);font-size:0.7rem;text-transform:uppercase;letter-spacing:2px;margin:1rem 0 .5rem;border-left:3px solid #cd7f32;padding-left:8px;">🥉 3º lugar</h5>' + renderMatchCard(thirdM, canEnterResult, t.id, thirdNum)
         : '';
       // botão Ocultar (direita, alinhado ao box) só em rodada CONCLUÍDA e não-final
-      var hideBtn = (!isFinalCol && _roundComplete(col))
-        ? '<button class="btn btn-micro btn-outline" onclick="window._tierHideRound(\'' + _tIdEsc + '\',\'' + _bkEsc + '\',' + col.round + ')" style="flex-shrink:0;">Ocultar</button>'
-        : '';
+      var hideBtn = '';
       return '<div class="bracket-round-column" style="display:flex;flex-direction:column;gap:1rem;min-width:280px;">' +
         '<div class="bracket-round-heading" style="display:flex;align-items:center;justify-content:space-between;gap:8px;"><h5 style="color:' + window._spCor(color, 'color') + ';font-size:0.7rem;text-transform:uppercase;letter-spacing:2px;margin:0;border-left:3px solid ' + window._spCor(color, 'borda') + ';padding-left:8px;"><span>' + label + '</span>' + hideBtn + '</h5></div>' +
         cards + thirdHtml + '</div>';
@@ -4639,11 +4641,12 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
       /* ⛔ o pedido pendente aparece SEMPRE que existir, mesmo com a classificação escondida: ele é
        * uma decisão esperando a organização, não parte da tabela. */
       _tardioPendenteHtml(bracketKey, color) +
-      (showClassif === false ? '' : _tierClassifHtml(bracketKey, color)) +
       '<div style="display:flex;align-items:flex-start;gap:10px;">' +
         showHiddenBtn +
         '<div class="bracket-scroll-container" data-hscroll="tier:' + _hsKey(bracketKey) + '" style="display:flex;gap:32px;overflow-x:auto;padding-bottom:8px;flex:1;min-width:0;"><div class="bracket-columns-track" style="display:flex;gap:32px;min-width:max-content;">' + colsHtml + '<div style="min-width:120px;flex-shrink:0;">&nbsp;</div></div></div>' +
       '</div>' +
+      // A chave vem antes; a classificação é consulta e fica recolhível abaixo.
+      (showClassif === false ? '' : _tierClassifHtml(bracketKey, color)) +
       '</div>';
   }
 
@@ -5239,6 +5242,19 @@ window._competitionTeamNameForMatch = function (t, match, slot) {
   return '';
 };
 
+// O time e sua cor pertencem ao sorteio, não ao texto da dupla. A cor carrega
+// o matiz do time e a saturação da categoria (Light/Power/Extreme), gravada pelo
+// draw-core; esta tag só a apresenta junto aos atletas.
+window._competitionTeamTagForMatch = function (t, match, slot, compact) {
+  var name = window._competitionTeamNameForMatch(t, match, slot);
+  if (!name) return '';
+  var obj = match && match[slot === 'p2' ? 'team2Obj' : 'team1Obj'];
+  var color = obj && String(obj.competitionTeamColor || '').trim();
+  var safeColor = /^hsl\(\d{1,3}\s+\d{1,3}%\s+\d{1,3}%\)$/.test(color) ? color : '';
+  var style = safeColor ? ' style="--sp-team-color:' + safeColor + ';' + (compact ? 'margin:2px 0 0;' : '') + '"' : (compact ? ' style="margin:2px 0 0;"' : '');
+  return '<span class="sp-match-team-tag" title="Time: ' + window._safeHtml(name) + '"' + style + '>Time: ' + window._safeHtml(name) + '</span>';
+};
+
 // ─── Player avatars helper for bracket cards ────────────────────────────────
 function _teamAvatarHtml(teamName, pendingSub, t, uidHint, m, slot) {
   /* ⭐ 2.1.99 — O 💬 DE CADA PESSOA, EM TODO CARD DE JOGO.
@@ -5253,10 +5269,8 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint, m, slot) {
    * `m` é opcional: sem ele, `sameGroup` é falso e só o organizador vê — que é o
    * comportamento seguro pra qualquer chamador que ainda não passe o jogo. */
   var _souDoJogo = false;
-  var _nomeDoTime = (typeof window._competitionTeamNameForMatch === 'function')
-    ? window._competitionTeamNameForMatch(t, m, slot) : '';
-  var _timeHtml = _nomeDoTime
-    ? '<div class="sp-match-team-name" title="Time">Time: ' + window._safeHtml(_nomeDoTime) + '</div>' : '';
+  var _timeHtml = (typeof window._competitionTeamTagForMatch === 'function')
+    ? window._competitionTeamTagForMatch(t, m, slot) : '';
   try {
     var _cuJ = window.AppStore && window.AppStore.currentUser;
     _souDoJogo = !!(m && _cuJ && typeof window._userTeamInMatch === 'function' &&
@@ -5592,11 +5606,8 @@ function _matchCardTimelineTextHtml(t, m) {
       var played = _matchCardDateTime(resultAt, t);
       return played ? '<span style="font-size:0.62rem;font-weight:700;color:var(--text-muted);line-height:1.2;white-space:nowrap;">Jogado em <b style="color:var(--sp-c-cbd5e1,#cbd5e1);">' + window._safeHtml(played) + '</b></span>' : '';
     }
-    var scheduled = _matchCardTimestamp(m.scheduledAt);
-    if (scheduled) {
-      var scheduledText = _matchCardDateTime(scheduled, t);
-      return scheduledText ? '<span style="font-size:0.62rem;font-weight:700;color:var(--sp-c-86efac,#86efac);line-height:1.2;white-space:nowrap;">Agendado: ' + window._safeHtml(scheduledText) + '</span>' : '';
-    }
+    // Horário previsto já aparece no controle de reagendamento do card. Não
+    // duplicar “Agendado:” no cabeçalho rouba espaço dos times e do placar.
     var deadline = _matchCardRoundDeadlineMs(t, m);
     var deadlineText = deadline ? _matchCardDateTime(deadline, t) : '';
     return deadlineText ? '<span style="font-size:0.62rem;font-weight:700;color:var(--text-muted);line-height:1.2;white-space:nowrap;">Jogar até <b style="color:var(--sp-c-7dd3fc,#7dd3fc);">' + window._safeHtml(deadlineText) + '</b></span>' : '';
@@ -6075,16 +6086,6 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   var _p1PromotedBadge = m.p1PromotedFromLower ? _promotedTag : '';
   var _p2PromotedBadge = m.p2PromotedFromLower ? _promotedTag : '';
 
-  // Competições por time guardam a cor no próprio par no momento do sorteio.
-  // O marcador discreto viaja com a dupla para cada jogo e deixa a leitura do
-  // representante do time imediata sem trocar as cores semânticas do placar.
-  var _teamColorDot = function(side) {
-    var entry = side === 'p1' ? m.team1Obj : m.team2Obj;
-    var color = entry && String(entry.competitionTeamColor || '').trim();
-    if (!/^hsl\(\d{1,3}\s+\d{1,3}%\s+\d{1,3}%\)$/.test(color)) return '';
-    return '<span aria-hidden="true" title="Time" style="width:10px;height:10px;border-radius:50%;background:' + color + ';box-shadow:0 0 0 2px rgba(255,255,255,.16);flex:0 0 auto;margin-right:7px;"></span>';
-  };
-
   // A quadra é parte da agenda operacional. Resultado, placar ao vivo ou início
   // real congelam o jogo: não há seletor nem alteração possível depois disso.
   // `_matchHasRealPlay` é definido em js/store.js, carregado antes das views; o
@@ -6110,14 +6111,14 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     var _courtOpts = '<option value="">📍 Sem quadra</option>' + _cardCourts.map(function (court) {
       return '<option value="' + window._safeHtml(court) + '"' + (String(m.court || '') === court ? ' selected' : '') + '>' + window._safeHtml(court) + '</option>';
     }).join('');
-    _courtCardHtml = '<label class="sp-match-court"><span>📍 Quadra</span><select onclick="event.stopPropagation()" onchange="window._assignMatchCourt(\'' + _esc(tId) + '\',\'' + _esc(m.id) + '\',this.value)">' + _courtOpts + '</select></label>';
+    _courtCardHtml = '<label class="sp-match-court"><span>📍</span><select aria-label="Quadra" onclick="event.stopPropagation()" onchange="window._assignMatchCourt(\'' + _esc(tId) + '\',\'' + _esc(m.id) + '\',this.value)">' + _courtOpts + '</select></label>';
   } else if (m.court) {
     _courtCardHtml = '<div class="sp-match-court sp-match-court--readonly">📍 ' + window._safeHtml(String(m.court)) + '</div>';
   }
 
   const p1Row = `
     <div style="${rowStyle(p1IsWinner, 'p1')}">
-      ${ciDot(p1ci)}${_teamColorDot('p1')}<div style="flex:1;overflow:hidden;min-width:0;">${_teamAvatarHtml(m.p1AguardaMelhor ? 'TBD' : m.p1, pendingSub, t, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p1', t) : (m.p1Uid || m.team1Uids)), m, 'p1')}</div>
+      ${ciDot(p1ci)}<div style="flex:1;overflow:hidden;min-width:0;">${_teamAvatarHtml(m.p1AguardaMelhor ? 'TBD' : m.p1, pendingSub, t, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p1', t) : (m.p1Uid || m.team1Uids)), m, 'p1')}</div>
       ${_p1PromotedBadge}${_p1RepBadge}${_p1ByeBadge}
       <div id="score-p1-${m.id}" class="sp-mc-sc">
         ${_multiSet ? _setGridHtml(1) : (showInputs ? p1Score : (p1ScoreVal || ''))}
@@ -6126,7 +6127,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
 
   const p2Row = `
     <div style="${rowStyle(p2IsWinner, 'p2')}">
-      ${ciDot(p2ci)}${_teamColorDot('p2')}<div style="flex:1;overflow:hidden;min-width:0;">${_teamAvatarHtml(m.p2AguardaMelhor ? 'TBD' : m.p2, pendingSub, t, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p2', t) : (m.p2Uid || m.team2Uids)), m, 'p2')}</div>
+      ${ciDot(p2ci)}<div style="flex:1;overflow:hidden;min-width:0;">${_teamAvatarHtml(m.p2AguardaMelhor ? 'TBD' : m.p2, pendingSub, t, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p2', t) : (m.p2Uid || m.team2Uids)), m, 'p2')}</div>
       ${_p2PromotedBadge}${_p2RepBadge}${_p2ByeBadge}
       <div id="score-p2-${m.id}" class="sp-mc-sc">
         ${_multiSet ? _setGridHtml(2) : (showInputs ? p2Score : (p2ScoreVal || ''))}
@@ -8750,12 +8751,8 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         var hasScore = (m.scoreP1 !== undefined && m.scoreP1 !== null);
         // O histórico também é card de jogo: em torneio por times ele preserva
         // o time além dos atletas, exatamente como o card da rodada atual.
-        var _prevP1Team = (typeof window._competitionTeamNameForMatch === 'function')
-          ? window._competitionTeamNameForMatch(t, m, 'p1') : '';
-        var _prevP2Team = (typeof window._competitionTeamNameForMatch === 'function')
-          ? window._competitionTeamNameForMatch(t, m, 'p2') : '';
-        var _prevP1TeamHtml = _prevP1Team ? '<span class="sp-match-team-name" style="margin:2px 0 0;">Time: ' + window._safeHtml(_prevP1Team) + '</span>' : '';
-        var _prevP2TeamHtml = _prevP2Team ? '<span class="sp-match-team-name" style="margin:2px 0 0;">Time: ' + window._safeHtml(_prevP2Team) + '</span>' : '';
+        var _prevP1TeamHtml = (typeof window._competitionTeamTagForMatch === 'function') ? window._competitionTeamTagForMatch(t, m, 'p1', true) : '';
+        var _prevP2TeamHtml = (typeof window._competitionTeamTagForMatch === 'function') ? window._competitionTeamTagForMatch(t, m, 'p2', true) : '';
         // v2.3.5: layout empilhado (dupla + placar à direita), igual aos cards
         // do bracket. Antes era p1 | placar | p2 em 3 colunas num card estreito —
         // com nomes de dupla longos o placar "6 x 2" quebrava e colava nos nomes.

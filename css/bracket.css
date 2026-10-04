@@ -14,10 +14,19 @@ summary::-webkit-details-marker { display: none; }
   box-shadow: 0 7px 10px -10px rgba(0,0,0,.85);
 }
 
-.sp-match-team-name {
+.sp-match-team-tag {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  max-width: calc(100% - var(--sp-av, 24px) - 5px);
   min-height: 1.15em;
-  margin: 1px 0 0 calc(var(--sp-av, 24px) + 5px);
-  color: var(--text-muted);
+  margin: 2px 0 0 calc(var(--sp-av, 24px) + 5px);
+  padding: .12rem .38rem;
+  border: 1px solid var(--sp-team-color, var(--primary-color));
+  border-radius: 999px;
+  background: rgba(15, 23, 42, .52);
+  background: color-mix(in srgb, var(--sp-team-color, var(--primary-color)) 28%, var(--bg-card));
+  color: var(--text-bright);
   font-size: .61rem;
   font-weight: 800;
   letter-spacing: .035em;

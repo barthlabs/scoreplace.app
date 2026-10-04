@@ -234,8 +234,19 @@ ok(sequenceOf(W._schGradeEstimada(sequenciaRodadas)) === 'L1,P1,L2,P2',
 ok(/categorySchedule/.test(fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'tournaments-draw.js'), 'utf8')),
   'a revisão pré-sorteio permite gravar dia e ordem de cada categoria');
 const functionsSource = fs.readFileSync(path.join(__dirname, '..', 'functions-autodraw', 'index.js'), 'utf8');
+const bracketViewSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'bracket.js'), 'utf8');
 ok(/'teamCompetition','categorySchedule','scheduleWindow'/.test(functionsSource) && /'teamCompetition','categorySchedule','turnos'/.test(functionsSource),
   'o servidor aceita janelas diárias junto da agenda antes do sorteio e preserva a estrutura depois da chave');
+ok(/match\.scheduledGameNumber\s*=\s*scheduledGameNumber\.get\(item\.matchId\)/.test(functionsSource) &&
+  /match\.scheduleLocked\s*=\s*true/.test(functionsSource) &&
+  !/match\.matchNumber\s*=\s*matchNumber\.get/.test(functionsSource),
+  'a agenda revisada grava Jogo N e trava toda a prévia como contrato da chave publicada');
+ok(/scheduledGameNumber:i\.scheduledGameNumber/.test(bracketSource) && /scheduleLocked:true/.test(bracketSource),
+  'a tela envia à Function a sequência cronológica que o organizador confirmou');
+ok(/competitionTeamTagForMatch/.test(bracketViewSource) && /Time: /.test(bracketViewSource) && /sp-match-team-tag/.test(bracketViewSource),
+  'cards de competição mostram a tag “Time:” colorida junto aos atletas');
+ok(!/Agendado: /.test(bracketViewSource),
+  'o cabeçalho do card não duplica o horário que já pode ser reagendado abaixo');
 const drawSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'tournaments-draw.js'), 'utf8');
 ok(/'courtNames','courtOrder'/.test(functionsSource) && /data-team-court-card/.test(drawSource) && /draggable="true"/.test(drawSource),
   'a organização define a prioridade das quadras com cards arrastáveis antes do sorteio');

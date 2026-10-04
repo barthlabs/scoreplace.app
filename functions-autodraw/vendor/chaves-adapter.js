@@ -366,7 +366,9 @@
      * O comentário de `reconciliar` logo acima já prometia preservar o "grupo de WhatsApp";
      * a lista é que não cumpria. Nome inventado não falha alto: ele preserva um campo que
      * ninguém escreve e deixa de preservar o que existe. */
-    'court', 'schedule', 'waGroup',
+    // A agenda confirmada na prévia é um fato da chave. Reconciliar a estrutura
+    // nunca pode trocar categoria/quadra/sequência por uma ordem derivada.
+    'court', 'schedule', 'scheduledAt', 'scheduledGameNumber', 'scheduleLocked', 'scheduleSource', 'waGroup',
     'presenceP1', 'presenceP2'
   ];
 

@@ -58,6 +58,7 @@ const DENYLIST = [
   'label', 'tierLabel', '_sig', '_gameNum',
   'p1FromBye', 'p2FromBye', 'p1PromotedFromLower', 'p2PromotedFromLower',
   'waGroup', 'schedule', 'scheduledAt', 'scheduledBy', 'scheduledKind',
+  'scheduledGameNumber', 'scheduleLocked', 'scheduleSource', 'court',
   // do GRUPO: rótulo e carimbo sem leitor (comentário bracket-logic.js:281 é explícito)
   'classifCongeladaAt',
   // do PARTICIPANTE: nenhum leitor no caminho

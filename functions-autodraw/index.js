@@ -4395,18 +4395,20 @@ exports.setPendingInitialSchedule = onCall(async (request) => {
     // de dois slots antes da publicação preserva uma única sequência contínua.
     const numbered = itens.slice().sort((a, b) => (Date.parse(a.scheduledAt) - Date.parse(b.scheduledAt)) ||
       ((courtRank.get(a.court) ?? courtOrder.length) - (courtRank.get(b.court) ?? courtOrder.length)) || a.matchId.localeCompare(b.matchId));
-    const matchNumber = new Map(numbered.map((item, index) => [item.matchId, index + 1]));
+    const scheduledGameNumber = new Map(numbered.map((item, index) => [item.matchId, index + 1]));
     itens.forEach((item) => {
       const match = byId.get(item.matchId);
       match.court = item.court;
       match.scheduledAt = item.scheduledAt;
       match.scheduledKind = 'estimate';
-      // No rascunho, somente a escolha explícita da organização é fixa. Os
-      // demais jogos continuam estimativas e podem ser recalculados antes da
-      // publicação da chave.
-      match.scheduleLocked = item.scheduleLocked;
-      match.scheduleSource = item.scheduleLocked ? 'organizer' : 'estimate';
-      match.matchNumber = matchNumber.get(item.matchId);
+      /* ⛔ CONTRATO DA PRÉVIA → CHAVE: salvar a grade de revisão confirma a
+       * agenda inteira escolhida pela organização. Não existe segundo sorteio
+       * nem replanejamento silencioso ao publicar: categoria, quadra, horário e
+       * Jogo N desta lista devem reaparecer idênticos na chave pública.
+       * [[regression_preview_schedule_is_published_schedule]] */
+      match.scheduleLocked = true;
+      match.scheduleSource = 'organizer';
+      match.scheduledGameNumber = scheduledGameNumber.get(item.matchId);
     });
     pd.scheduleRevision = Number(pd.scheduleRevision || 0) + 1;
     pd.scheduleUpdatedAt = agoraIso;
