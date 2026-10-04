@@ -274,8 +274,10 @@ ok(/<div>Ana<\/div><div>Bia<\/div>/.test(board.html),
 ok(/ondrop/.test(organizerSource) && /manual\[from\.matchId\].*to\.court/.test(organizerSource),
   'soltar um card sobre outro troca os slots de horário e quadra');
 ok(/← Voltar/.test(bracketSource) && /data-pis-apply/.test(bracketSource) && /data-pis-publish/.test(bracketSource) &&
-  /data-pis-toolbar/.test(bracketSource) && /data-pis-scroll/.test(bracketSource) && /display:flex;flex-direction:column;isolation:isolate/.test(bracketSource) && /overflow:hidden/.test(bracketSource) && /width:100%;max-width:1600px/.test(bracketSource),
-  'Voltar, Salvar ajustes e Publicar ficam juntos numa barra opaca separada, fora das rolagens da grade');
+  /data-pis-toolbar/.test(bracketSource) && /data-pis-day-tabs/.test(bracketSource) && /board\.tabsHtml/.test(bracketSource) && /board\.gridHtml/.test(bracketSource) && /data-pis-scroll/.test(bracketSource) && /display:flex;flex-direction:column;isolation:isolate/.test(bracketSource) && /overflow:hidden/.test(bracketSource) && /width:100%;max-width:1600px/.test(bracketSource),
+  'Voltar, Salvar ajustes, Publicar e abas de dia ficam em barras opacas separadas, fora das rolagens da grade');
+ok(/tabsHtml:tabsHtml/.test(organizerSource) && /gridHtml:gridHtml/.test(organizerSource),
+  'a grade expõe abas e conteúdo separadamente para manter o seletor de dias fixo fora da rolagem');
 ok(/gridScroll = \{ top:0, left:0 \}/.test(bracketSource) && /previousScroll\.scrollTop/.test(bracketSource) && /restoredScroll\.scrollTop = gridScroll\.top/.test(bracketSource) && /restoredScroll\.scrollLeft = gridScroll\.left/.test(bracketSource),
   'recalcular a grade após arrastar preserva a rolagem vertical e horizontal do ponto em edição');
 ok(/data-\' \+ prefix \+ \'-outside-window/.test(organizerSource) && /repeating-linear-gradient\(45deg,rgba\(239,68,68/.test(organizerSource) && /Todos os jogos continuam exibidos/.test(bracketSource),

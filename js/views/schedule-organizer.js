@@ -288,7 +288,9 @@
       }).join('');
       return '<div style="display:grid;grid-template-columns:72px repeat(' + plan.courts.length + ', minmax(176px,1fr));gap:6px;margin-top:6px;align-items:stretch"><div style="font-size:.82rem;font-weight:900;color:#fbbf24;display:flex;align-items:center;justify-content:center;text-align:center;">' + esc(timeLabel(slot)) + '</div>' + cells + '</div>';
     }).join('');
-    return { activeDay:activeDay, days:days, html:'<div style="display:flex;gap:7px;flex-wrap:wrap;margin:10px 0 8px;">' + tabs + '</div><div style="overflow:auto;border-top:1px solid rgba(148,163,184,.2);padding-top:7px;"><div style="min-width:' + (72 + plan.courts.length * 182) + 'px"><div style="display:grid;grid-template-columns:72px repeat(' + plan.courts.length + ', minmax(176px,1fr));gap:6px"><div></div>' + headers + '</div>' + (rows || '<div style="padding:16px;opacity:.72">Não há jogos neste dia.</div>') + '</div></div>' };
+    var tabsHtml = '<div style="display:flex;gap:7px;flex-wrap:wrap;">' + tabs + '</div>';
+    var gridHtml = '<div style="overflow:auto;border-top:1px solid rgba(148,163,184,.2);padding-top:7px;"><div style="min-width:' + (72 + plan.courts.length * 182) + 'px"><div style="display:grid;grid-template-columns:72px repeat(' + plan.courts.length + ', minmax(176px,1fr));gap:6px"><div></div>' + headers + '</div>' + (rows || '<div style="padding:16px;opacity:.72">Não há jogos neste dia.</div>') + '</div></div>';
+    return { activeDay:activeDay, days:days, tabsHtml:tabsHtml, gridHtml:gridHtml, html:'<div style="margin:10px 0 8px;">' + tabsHtml + '</div>' + gridHtml };
   };
   window._renderOperationalSchedule = function (slot, t) {
     if (!slot || !t || !window._souOrganizador || !window._souOrganizador(t)) return;

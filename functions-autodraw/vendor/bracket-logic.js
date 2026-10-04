@@ -6658,11 +6658,12 @@ window._openPendingInitialSchedule = function (tId) {
       /* ⛔ REGRESSÃO DO CABEÇALHO DA AGENDA: este bloco é IRMÃO do painel que
        * rola, e não `sticky` dentro dele. Sticky deixava a grade pintar por trás
        * da barra em alguns navegadores/zoom. A única área com overflow é
-       * `[data-pis-scroll]`; Voltar, Salvar ajustes e Publicar ficam sempre
-       * opacos, visíveis e fora da rolagem vertical e horizontal. */
+       * `[data-pis-scroll]`; Voltar, Salvar ajustes, Publicar E as abas de dia
+       * ficam sempre opacos, visíveis e fora da rolagem vertical/horizontal. */
       '<div data-pis-toolbar style="position:relative;z-index:2;flex:none;padding:16px;background:#111827;border-bottom:1px solid rgba(148,163,184,.28);box-shadow:0 8px 16px rgba(2,6,23,.55)"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center"><button type="button" data-pis-close class="btn btn-outline" style="flex:none">← Voltar</button><h2 style="margin:0;min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center;font-size:1.05rem">📍 Planejar antes de publicar</h2><div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;flex:none"><button type="button" data-pis-apply class="btn btn-outline">Salvar ajustes</button><button type="button" data-pis-publish class="btn btn-shine" style="background:#10b981;color:#fff">🚀 Publicar</button></div></div><p style="margin:8px 0 0;font-size:.82rem;line-height:1.4;color:#cbd5e1">Cada horário aparece uma vez na régua vertical à esquerda. Arraste um jogo sobre outro para trocar seus horários e quadras.</p></div>' +
+      '<div data-pis-day-tabs style="position:relative;z-index:2;flex:none;padding:10px 16px;background:#111827;border-bottom:1px solid rgba(148,163,184,.28);box-shadow:0 6px 12px rgba(2,6,23,.4)">' + board.tabsHtml + '</div>' +
       '<div data-pis-scroll style="position:relative;z-index:1;flex:1;min-height:0;overflow:auto;padding:16px;box-sizing:border-box"><div style="font-size:.76rem;color:#94a3b8;margin-bottom:6px">' + p.items.length + ' jogos · ' + p.courts.length + ' quadras. Cada linha é um horário; cada coluna é uma quadra. Horários são estimados e podem mudar conforme o andamento.</div>' +
-      (!p.cabe ? '<div style="margin:0 0 10px;color:#fbbf24;font-size:.82rem;font-weight:700">⚠ Ao publicar assim, a programação excede a janela determinada pela organização em ' + Math.ceil((p.extraMs || 0) / 60000) + ' min. Todos os jogos continuam exibidos; os excedentes aparecem em faixa zebrada vermelha e cinza.</div>' : '') + board.html +
+      (!p.cabe ? '<div style="margin:0 0 10px;color:#fbbf24;font-size:.82rem;font-weight:700">⚠ Ao publicar assim, a programação excede a janela determinada pela organização em ' + Math.ceil((p.extraMs || 0) / 60000) + ' min. Todos os jogos continuam exibidos; os excedentes aparecem em faixa zebrada vermelha e cinza.</div>' : '') + board.gridHtml +
       '</div></div>';
     var restoredScroll = overlay.querySelector('[data-pis-scroll]');
     if (restoredScroll) { restoredScroll.scrollTop = gridScroll.top; restoredScroll.scrollLeft = gridScroll.left; }
