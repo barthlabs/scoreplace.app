@@ -204,7 +204,7 @@ function setupHelpModal() {
           '<div style="font-weight:700;font-size:0.85rem;color:var(--text-bright);margin-bottom:8px;">Cards de Torneio</div>' +
           '<p>Cada card mostra: nome, esporte, formato, inscritos, barra de progresso, countdown e status. Cor de fundo indica seu papel (organizador = índigo, participante = teal).</p>' +
           '<p><b>Coração ♥</b> — Favoritar/desfavoritar. Aparecem no filtro "Favoritos".</p>' +
-          '<p><b>Foto do local</b> — Fundo do card quando o venue tem <code>venuePhotoUrl</code>.</p>' +
+          '<p><b>Fundo do card</b> — Usa apenas a capa definida pelo organizador. Sem capa, fica em uma cor sólida neutra; uma cor de marca atenuada pode ser usada quando estiver definida no torneio.</p>' +
           '<p><b>Logo do torneio</b> — Miniatura 56×56. Gerada automaticamente ou upload manual em Editar Torneio.</p>' +
           '<p><b>Botão de inscrição inline</b> — ✅ Inscrever-se / 🛑 Desinscrever-se / ✓ INSCRITO (badge), conforme seu estado atual. Funciona inclusive com torneios do feed de descoberta (hidratação defensiva injeta o doc em <code>AppStore.tournaments</code> antes do enroll).</p>' +
         '</div>' +

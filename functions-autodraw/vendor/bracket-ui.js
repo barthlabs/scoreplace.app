@@ -3692,17 +3692,12 @@ window._tvMode = function(tId) {
   overlay.id = 'tv-mode-overlay';
   overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:#0a0e1a;z-index:99999;overflow:auto;display:flex;flex-direction:column;';
 
-  // Hero section with venue photo background
-  // v4.0.21: foto de fundo custom do organizador tem prioridade sobre a do Google.
-  // v1.7.53: o hero do Modo TV não pinta mais `url(t.venuePhotoUrl)` — essa URL é do
-  // places.googleapis.com e o Modo TV RE-RENDERIZA sozinho a cada 30s, ou seja era uma
-  // chamada COBRADA a cada meio minuto com a TV ligada no clube o dia inteiro.
+  // Hero do torneio: somente a capa configurada pela organização pode virar foto.
+  // Foto de local não representa necessariamente este evento e não é buscada aqui.
   var heroBg = window._tourCoverSrc(t)
     ? 'background-image:linear-gradient(to bottom,rgba(10,14,26,0.3),rgba(10,14,26,0.95)),url(' + window._tourCoverSrc(t) + ');background-size:cover;background-position:center;'
-    : 'background:linear-gradient(135deg,#1e293b 0%,#0f172a 50%,#1e1b4b 100%);';
-  var _heroVphoto = (!window._tourCoverSrc(t) && t.venuePlaceId)
-    ? ' data-vphoto-pid="' + window._safeHtml(t.venuePlaceId) + '" data-vphoto-overlay="linear-gradient(to bottom,rgba(10,14,26,0.3),rgba(10,14,26,0.95))"'
-    : '';
+    : 'background:#111827;';
+  var _heroVphoto = '';
   var hero = '<div' + _heroVphoto + ' style="' + heroBg + 'padding:30px 40px;flex-shrink:0;position:relative;">';
   // Exit button (top right)
   hero += '<button onclick="window._exitTvMode()" style="position:absolute;top:16px;right:20px;background:rgba(239,68,68,0.25);color:var(--sp-c-f87171,#f87171);border:1px solid rgba(239,68,68,0.4);padding:10px 20px;border-radius:10px;cursor:pointer;font-size:0.9rem;font-weight:700;z-index:1;">✕ Sair do Modo TV</button>';

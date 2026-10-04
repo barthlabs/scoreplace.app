@@ -424,14 +424,9 @@ function renderDashboard(container) {
   const _allVisibleRaw = window.AppStore.getVisibleTournaments();
   const visible = _hidIds.length ? _allVisibleRaw.filter(function(t){ return !_hidSet[String(t.id)]; }) : _allVisibleRaw;
 
-  // v1.7.53: o PRÉ-CARREGAMENTO de fotos foi REMOVIDO. Ele existia (v3.0.55) pra matar o
-  // "pisca" do card entre os re-renders do boot, mas `t.venuePhotoUrl` é a URL crua do
-  // places.googleapis.com/.../media?key=… — cada `new Image()` aqui era **uma chamada
-  // COBRADA ao Google**, para TODO torneio visível, a cada render. Foi um dos três
-  // caminhos que levaram o orçamento a 90% em 5 dias (R$91 de R$92 num SKU só).
-  // O pisca não volta: a foto agora é um dataURL vindo de `venuePhotos/{placeId}`
-  // (nosso Firestore), guardado em memória por sessão em `_venueFreshPhoto` — não há
-  // rede no re-render. ⚠️ NÃO reintroduzir laço de preload sobre venuePhotoUrl.
+  // ⛔ Card de torneio não busca nem herda foto do local. A capa pertence ao
+  // torneio; sem capa, a apresentação usa fundo sólido neutro (ou cor de marca
+  // atenuada), sem tráfego para Google Places.
   // v3.0.55: registra a assinatura dos dados RENDERIZADOS — o _softRefreshView
   // compara com isto e NÃO re-renderiza (nem re-pisca a foto) quando o snapshot
   // (cache→servidor no boot) traz os mesmos torneios.
@@ -825,30 +820,16 @@ function renderDashboard(container) {
 
     // Card gradients adaptam ao tema via CSS variables
     // v0.17.32: dark themes (Noturno/Oceano) precisam de gradients DARK pros
-    // 3 estados (default/participating/organizer) — antes participating/org
-    // usavam tons médios saturados (teal-500, indigo-500, cyan-600) que
-    // pareciam claros contra bg escuro. Agora usa deep tints (teal-950,
-    // indigo-950, cyan-950, sky-900) que mantêm a identidade hue mas ficam
-    // dark de verdade. Sunset agora é light cream desde v0.17.25 — gradients
-    // antigos (brown-950) ficaram quebrados; corrigidos pra cream warm.
     var _theme = (document.documentElement.getAttribute('data-theme') || 'dark');
     var _isLight = (_theme === 'light');
-    let bgGradient;
-    if (_theme === 'light') {
-      bgGradient = 'linear-gradient(135deg, #e2e8f0 0%, #f1f5f9 100%)';
-      if (isParticipating) bgGradient = 'linear-gradient(135deg, #ccfbf1 0%, #99f6e4 100%)';
-      else if (isOrg) bgGradient = 'linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%)';
-    
-    } else {
-      bgGradient = 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)';
-      if (isParticipating) bgGradient = 'linear-gradient(135deg, #0f3a36 0%, #0d2826 100%)';
-      else if (isOrg) bgGradient = 'linear-gradient(135deg, #1e1b4b 0%, #161339 100%)';
-    }
+    var bgGradient = window._tournamentCardSolidBackground
+      ? window._tournamentCardSolidBackground(t, _isLight)
+      : (_isLight ? '#f1f5f9' : '#111827');
 
     // Card text color adapts to theme
     var _cardTextColor = _isLight ? '#1f2937' : 'white';
 
-    // Venue photo background
+    // Capa configurada do torneio; foto do local nunca entra neste card.
     var overlayGrad = isOrg
       ? 'linear-gradient(135deg, rgba(67,56,202,0.5) 0%, rgba(99,102,241,0.42) 100%)'
       : isParticipating
@@ -862,18 +843,8 @@ function renderDashboard(container) {
       // é `_hydrateTournamentPhotos`, do dado que JÁ está em memória — sem ida à rede.
       venuePhotoBg = overlayGrad ? ('background-image: ' + overlayGrad + ';') : '';
       _cardTextColor = 'white';
-    } else if (t.venuePlaceId) {
-      // v1.7.53: NÃO pinta mais `url(t.venuePhotoUrl)` — aquela URL é do
-      // places.googleapis.com e cada render dela era 1 chamada COBRADA. Aqui fica só o
-      // gradiente; quem pinta a foto é o hidratador, com o dataURL do nosso Firestore.
-      _cardTextColor = 'white'; // Overlay sempre escuro, texto branco
     }
-    // v1.7.53: gate passou a ser o placeId (era `venuePhotoUrl && venuePlaceId`) — o
-    // placeId é a identidade do local; a URL velha do Google não é mais pré-requisito
-    // pra ter foto, e torneio salvo sem ela também passa a mostrar.
-    var vphotoAttrs = (!window._tourCoverSrc(t) && t.venuePlaceId)
-      ? ' data-vphoto-pid="' + window._safeHtml(t.venuePlaceId) + '" data-vphoto-overlay="' + overlayGrad + '"'
-      : '';
+    var vphotoAttrs = '';
     // capa própria do torneio: marca o card pro hidratador (a imagem vem depois, do
     // AppStore) em vez de carregar a base64 dentro do HTML.
     if (window._tourCoverSrc(t)) {

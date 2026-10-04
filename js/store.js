@@ -2400,6 +2400,20 @@ window._formatLabel = function (t) {
     return t.coverUrl || t.coverPhotoData || '';
   };
 
+  // A imagem de fundo pertence ao torneio, nunca ao local. Sem capa, o card
+  // usa uma cor neutra sólida; se a organização persistir uma cor de marca do
+  // logo, ela pode ser usada em tom atenuado sem comprometer a leitura.
+  window._tournamentCardSolidBackground = function (t, isLight) {
+    var raw = t && (t.logoAccentColor || t.brandColor || t.cardColor || '');
+    if (/^#[0-9a-f]{6}$/i.test(raw)) {
+      var n = parseInt(raw.slice(1), 16), r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+      return isLight
+        ? 'rgb(' + Math.round((r + 255 * 5) / 6) + ',' + Math.round((g + 255 * 5) / 6) + ',' + Math.round((b + 255 * 5) / 6) + ')'
+        : 'rgb(' + Math.round(r * .22) + ',' + Math.round(g * .22) + ',' + Math.round(b * .22) + ')';
+    }
+    return isLight ? '#f1f5f9' : '#111827';
+  };
+
   // ─── SUBIR IMAGEM PRO STORAGE ────────────────────────────────────────────────
   // ⚠️ O SDK DE STORAGE É CARREGADO SOB DEMANDA, e isto é o ponto: só quem CRIA ou EDITA
   // um torneio precisa dele. A LEITURA não precisa de SDK nenhum — a imagem vira
@@ -2532,13 +2546,12 @@ window._formatLabel = function (t) {
     // ⚠️ A DO TORNEIO NÃO ESPERA OS 250ms. O dado já está em AppStore (zero rede), e é a
     // imagem que o olho procura no card: atrasá-la trocaria "HTML pesado" por "card que
     // pisca de cinza pra foto". Ela é barata — querySelector + busca em memória —, então
-    // roda no mesmo quadro da mutação. O debounce existe pras que vão à REDE (foto do
-    // local via CF), e essas continuam esperando.
+    // roda no mesmo quadro da mutação. Foto de local não é mais hidratada em
+    // cards de torneio: cada evento usa somente capa própria ou fundo sólido.
     try { window._hydrateTournamentPhotos(document); } catch (e) {}
     if (_deb) return;
     _deb = setTimeout(function () {
       _deb = null;
-      try { window._hydrateVenuePhotos(document); } catch (e) {}
       try { if (window._hydrateVenueLogos) window._hydrateVenueLogos(document); } catch (e) {}
     }, 250);
   }

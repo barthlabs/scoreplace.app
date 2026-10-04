@@ -1987,7 +1987,7 @@ window._renderTournamentProgress = function(t) {
   // senão o header "Progresso"/contagens (que herdam a cor) somem sobre a foto.
   // Os textos coloridos (azul/roxo/verde/vermelho) já são legíveis sobre escuro.
   // !important vence a inversão de cor do tema claro (css/style.css).
-  var _hasPhoto = !!(t && (window._tourCoverSrc(t) || t.venuePhotoUrl));
+  var _hasPhoto = !!(t && window._tourCoverSrc(t));
   var _rb = (_hasPhoto && typeof window._photoReadBox === 'function') ? window._photoReadBox() : null;
   var _wrapStyle = _rb
     ? 'margin-top:1rem;padding:14px 16px;border-radius:14px;background:' + window._spCor(_rb.bg, 'background') + ';border:1px solid ' + window._spCor(_rb.border, 'borda') + ';'

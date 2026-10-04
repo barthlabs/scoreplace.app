@@ -3437,18 +3437,11 @@ function setupCreateTournamentModal() {
       var placeIdEl = document.getElementById('tourn-venue-place-id');
       if (placeIdEl) placeIdEl.value = place.id || '';
 
-      // Extract venue photo from Google Places
-      var venuePhotoUrl = '';
       var photoUrlEl = document.getElementById('tourn-venue-photo-url');
-      if (place.photos && place.photos.length > 0) {
-        try {
-          venuePhotoUrl = place.photos[0].getURI({ maxWidth: 800, maxHeight: 400 });
-        } catch (photoErr) {
-          window._warn('Could not get photo URI:', photoErr);
-        }
-      }
-      if (photoUrlEl) photoUrlEl.value = venuePhotoUrl;
-      window._applyVenuePhoto(venuePhotoUrl);
+      // Foto de fundo é uma escolha explícita do torneio; selecionar um local
+      // no Google não importa nem salva foto do Places.
+      if (photoUrlEl) photoUrlEl.value = '';
+      window._applyVenuePhoto('');
       // L6.R2.1: escolher o local pode ter RESOLVIDO o fuso — o aviso some na hora.
       try { if (typeof window._atualizarAvisoFuso === 'function') window._atualizarAvisoFuso(); } catch (_e) {}
 
@@ -4924,11 +4917,8 @@ function setupCreateTournamentModal() {
     document.getElementById('tourn-venue-lon').value = t.venueLon || '';
     document.getElementById('tourn-venue-address').value = t.venueAddress || '';
     document.getElementById('tourn-venue-place-id').value = t.venuePlaceId || '';
-    document.getElementById('tourn-venue-photo-url').value = t.venuePhotoUrl || '';
-    // Apply saved venue photo as background
-    if (t.venuePhotoUrl) {
-      setTimeout(function() { window._applyVenuePhoto(t.venuePhotoUrl); }, 50);
-    }
+    document.getElementById('tourn-venue-photo-url').value = '';
+    window._applyVenuePhoto('');
     // v4.0.21: foto de fundo custom do torneio
     if (typeof window._applyCoverPhoto === 'function') {
       setTimeout(function() { window._applyCoverPhoto(window._tourCoverSrc(t) || ''); }, 50);
@@ -5677,7 +5667,8 @@ window._saveTournamentClickHandler = async function() {
         const venueLonVal = document.getElementById('tourn-venue-lon').value || '';
         const venueAddressVal = document.getElementById('tourn-venue-address').value || '';
         const venuePlaceIdVal = document.getElementById('tourn-venue-place-id').value || '';
-        const venuePhotoUrlVal = document.getElementById('tourn-venue-photo-url').value || '';
+        // Campo legado: torneios não herdam nem mantêm foto do local.
+        const venuePhotoUrlVal = '';
         const coverPhotoDataVal = (document.getElementById('tourn-cover-data') || {}).value || '';
         const logoDataVal = document.getElementById('tourn-logo-data').value || '';
         const logoLockedVal = document.getElementById('tourn-logo-locked').value === '1';
@@ -7405,7 +7396,7 @@ window._prefillFromTemplate = function(tpl) {
   _setV('tourn-venue-city', tpl.venueCity);
   _setV('tourn-venue-state', tpl.venueState);
   _setV('tourn-venue-country', tpl.venueCountry);
-  _setV('tourn-venue-photo-url', tpl.venuePhotoUrl);
+  _setV('tourn-venue-photo-url', '');
   if (typeof window._applyCoverPhoto === 'function') window._applyCoverPhoto(tpl.coverPhotoData || '');
   // Logo
   if (typeof window._setLogoFormaFromRadius === 'function') { try { window._setLogoFormaFromRadius((tpl.logoRadius != null && tpl.logoRadius !== '') ? tpl.logoRadius : 14, tpl.logoShape === 'circle'); } catch (e) {} }
@@ -7869,7 +7860,7 @@ window._saveCurrentFormAsTemplate = function(saveButton) {
       venueCity: get('tourn-venue-city') || '',
       venueState: get('tourn-venue-state') || '',
       venueCountry: get('tourn-venue-country') || '',
-      venuePhotoUrl: get('tourn-venue-photo-url') || '',
+      venuePhotoUrl: '',
       coverPhotoData: (document.getElementById('tourn-cover-data') || {}).value || '',
       logoData: get('tourn-logo-data') || '',
       logoLocked: get('tourn-logo-locked') === '1',

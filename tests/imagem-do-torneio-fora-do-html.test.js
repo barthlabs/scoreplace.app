@@ -71,15 +71,36 @@ ok(!/fetch\(|_callCF|\.get\(\)|onSnapshot/.test(corpo),
 ok(/data-tcover-done/.test(corpo) && /data-tlogo-done/.test(corpo),
    'marca quem já foi pintado — re-render não repinta tudo de novo');
 
-// ── 3. A CAPA NÃO ESPERA O DEBOUNCE DE REDE ──────────────────────────────────
-// O gatilho é compartilhado com a foto do LOCAL, que é debounced em 250ms porque vai à
-// CF. Se a do torneio entrasse no mesmo balde, trocaríamos "HTML pesado" por "card que
-// pisca de cinza pra foto" — regressão visível, ganho invisível.
+// ── 3. A CAPA NÃO ESPERA O DEBOUNCE ───────────────────────────────────────────
+// A capa já está em AppStore; atrasá-la trocaria "HTML pesado" por "card que pisca de
+// cinza pra foto". Fotos de local não participam mais do fluxo de cards de torneio.
 const kick = (store.match(/function _kick\(\)[\s\S]*?\n  \}/) || [''])[0];
 const posTorneio = kick.indexOf('_hydrateTournamentPhotos');
 const posTimer = kick.indexOf('setTimeout');
 ok(posTorneio > -1 && posTimer > -1 && posTorneio < posTimer,
-   'a foto do torneio é pintada ANTES do setTimeout (não espera os 250ms da foto do local)');
+   'a foto do torneio é pintada ANTES do setTimeout');
+
+// ── 4. NUNCA USAR FOTO DO LOCAL COMO FUNDO DE TORNEIO ─────────────────────────
+// REGRA CANÔNICA: a imagem do card pertence ao torneio. O local não é fallback
+// visual e nem pode iniciar tráfego para Google Places ao renderizar a dashboard,
+// a lista, o detalhe ou o Modo TV.
+const dashboard = RENDERIZADORES[0][1];
+const lista = RENDERIZADORES[1][1];
+const criacao = ler('js/views/create-tournament.js');
+const tv = ler('js/views/bracket-ui.js');
+const progresso = ler('js/views/tournaments-utils.js');
+ok(!/data-vphoto-pid/.test(dashboard) && !/data-vphoto-pid/.test(lista) && !/data-vphoto-pid/.test(tv),
+   'cards, lista e Modo TV não marcam foto do local como fundo');
+ok(!/_hydrateVenuePhotos\(document\)/.test(kick),
+   'o observador de cards não busca foto do local');
+ok(!/place\.photos|\.getURI\(/.test(criacao),
+   'a seleção de local não importa foto do Google Places');
+ok(/_tourCoverSrc/.test(dashboard) && /_tourCoverSrc/.test(lista) && /_tourCoverSrc/.test(tv),
+   'capa própria continua sendo a única imagem de fundo possível');
+ok(/_tournamentCardSolidBackground/.test(store) && /#111827/.test(store),
+   'sem capa o card usa fundo sólido neutro (ou cor de marca atenuada)');
+ok(!/venuePhotoUrl/.test(progresso),
+   'o detalhe considera apenas a capa própria como imagem do torneio');
 
 console.log(falhas === 0
   ? '\n✅ a imagem é pintada depois do card, não dentro do HTML\n'

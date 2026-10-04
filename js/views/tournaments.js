@@ -2644,21 +2644,11 @@ function renderTournaments(container, tournamentId = null) {
         // light cream (corrigido pós v0.17.25 redesign).
         var _theme = (document.documentElement.getAttribute('data-theme') || 'dark');
         var _isLight = (_theme === 'light');
-        let bgGradient;
-        if (_theme === 'light') {
-            bgGradient = 'linear-gradient(135deg, #e2e8f0 0%, #f1f5f9 100%)';
-            if (isParticipating) bgGradient = 'linear-gradient(135deg, #ccfbf1 0%, #99f6e4 100%)';
-            else if (isOrg) bgGradient = 'linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%)';
-    
-        } else {
-            bgGradient = 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)';
-            if (isParticipating) bgGradient = 'linear-gradient(135deg, #0f3a36 0%, #0d2826 100%)';
-            else if (isOrg) bgGradient = 'linear-gradient(135deg, #1e1b4b 0%, #161339 100%)';
-        }
+        var bgGradient = window._tournamentCardSolidBackground
+            ? window._tournamentCardSolidBackground(t, _isLight)
+            : (_isLight ? '#f1f5f9' : '#111827');
 
-        // Venue photo background — overlay gradient on top of photo
-        // v2.3.71: gradiente mais leve (foto mais visível); a leitura vem de
-        // um box frosted sutil atrás do conteúdo (sem o contraste pesado).
+        // Apenas a capa do próprio torneio pode receber foto de fundo.
         var overlayGradient = isOrg
             ? 'linear-gradient(135deg, rgba(67,56,202,0.5) 0%, rgba(99,102,241,0.42) 100%)'
             : isParticipating
@@ -2672,14 +2662,7 @@ function renderTournaments(container, tournamentId = null) {
             // `_hydrateTournamentPhotos`). Fica o gradiente; a foto é pintada depois.
             venuePhotoBg = overlayGradient ? ('background-image: ' + overlayGradient + ';') : '';
         }
-        // v1.7.53: saíram daqui o `url(t.venuePhotoUrl)` e o preload com `new Image()` —
-        // aquela URL é do places.googleapis.com, então PINTAR já era pagar, e o preload
-        // pagava de novo a cada re-render do boot. O "pisca" que o preload combatia não
-        // volta: a foto agora é dataURL de `venuePhotos/{placeId}` (nosso Firestore),
-        // guardado em memória por sessão — re-render não vai à rede.
-        var vphotoAttrs = (!window._tourCoverSrc(t) && t.venuePlaceId)
-            ? ' data-vphoto-pid="' + window._safeHtml(t.venuePlaceId) + '" data-vphoto-overlay="' + overlayGradient + '"'
-            : '';
+        var vphotoAttrs = '';
         if (window._tourCoverSrc(t)) {
             vphotoAttrs += ' data-tcover-tid="' + window._safeHtml(String(t.id)) + '" data-tcover-overlay="' + overlayGradient + '"';
         }
@@ -3590,13 +3573,9 @@ function renderTournaments(container, tournamentId = null) {
               // Relato do dono: _"ficou uma merda. antes da regressao era bem melhor com
               // muito mais contraste sem ser fonte maior"_. Os dois lados da frase são
               // verdade, e vinham de commits DIFERENTES:
-              //   • O CONTRASTE caiu na 1.7.53. Antes dela `venuePhotoBg` já vinha pronto no
-              //     render, então o card com foto do Google entrava no ramo de cima de
-              //     `_toolsCss` — #f1f5f9 + sombra dupla. A 1.7.53 tirou a URL paga do render
-              //     (certíssimo: PINTAR era PAGAR) e a foto passou a ser pintada DEPOIS pelo
-              //     hidratador — mas `_toolsCss` continuou perguntando por `venuePhotoBg`, que
-              //     a partir dali responde SEMPRE "sem foto". O rótulo virou cinza-apagado
-              //     (`--text-muted`) por baixo de uma foto. É esse o "sem contraste".
+              //   • O CONTRASTE cai se um rótulo tema-aware for aplicado sobre a capa própria
+              //     do torneio. Por isso o hidratador marca a capa efetivamente pintada e o CSS
+              //     fornece contraste específico somente nesse estado.
               //   • A FONTE MAIOR foi a 1.8.30, que tentou consertar a legibilidade pelo lado
               //     errado: aumentou corpo e espaçamento sem tocar na COR, que era o problema.
               // Agora o tamanho volta ao pré-1.8.30 (0.7rem) e o contraste é resolvido pelo
