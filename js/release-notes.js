@@ -1,3 +1,4 @@
+// 2.3.252 — O gate local agora reproduz o dry-run sem exigir credencial Firebase e exige que a versão iOS acompanhe a web antes do push; os workflows usam as actions atuais para evitar falhas e avisos repetidos.
 // 2.3.251 — A imagem de fundo de um torneio passa a ser exclusivamente a capa definida pela organização. Escolher um local não busca nem salva fotografia do Google Places; sem capa, os cards, o detalhe e o Modo TV usam fundo sólido neutro (ou cor de marca atenuada quando configurada).
 // 2.3.250 — Na tela de planejar antes de publicar, o seletor de dias fica numa faixa opaca fixa logo abaixo do cabeçalho. A grade rola abaixo dela, mantendo as abas sempre visíveis e selecionáveis.
 // 2.3.249 — Ao mover ou trocar jogos na grade de ajustes da chave, a grade preserva exatamente a rolagem vertical e horizontal do ponto em edição; ela não salta mais para o topo após recalcular a agenda.

@@ -38,8 +38,6 @@ PROJECT="scoreplace-app"
 # de usuário para achar, ela usa a conta de serviço. Mexe SÓ nisso — trocar `HOME` também
 # resolveria, mas levaria junto cache do npm e tudo o mais.
 #
-source "$ROOT/scripts/firebase-credencial-persistente.sh"
-sp_preparar_credencial_firebase "$ROOT" "$PROJECT"
 DRY=0
 ONLY=""
 
@@ -58,6 +56,16 @@ while [ "$#" -gt 0 ]; do
     *) die "opção desconhecida: $1" ;;
   esac
 done
+
+# `--dry-run` só constrói e mostra a lista de funções. Ele é usado pelo gate
+# unitário para validar o runbook em um runner sem segredos Firebase; pedir a
+# conta de serviço aqui transformava uma verificação puramente local em uma
+# falha de CI e gerava alertas falsos de deploy. Credenciais são necessárias
+# exclusivamente no caminho que de fato invoca `firebase deploy`.
+if [ "$DRY" != "1" ]; then
+  source "$ROOT/scripts/firebase-credencial-persistente.sh"
+  sp_preparar_credencial_firebase "$ROOT" "$PROJECT"
+fi
 
 # Monta "functions:a,functions:b,…" a partir dos exports CJS (^exports.nome).
 targets_cjs() { # $1=arquivo $2=prefixo (ex.: "functions:" ou "functions:stripe:")

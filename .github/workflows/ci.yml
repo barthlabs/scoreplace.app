@@ -33,7 +33,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           # ⚠️ 2.0.75 · HISTÓRICO COMPLETO, e isto NÃO é preferência. O padrão do
           # actions/checkout é `fetch-depth: 1` — um commit só. Com isso,
@@ -49,7 +49,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 20
 
@@ -58,7 +58,7 @@ jobs:
       # recuperar-fase2-no-emulador, rules-contencao-avanco-de-fase). O runner não instalava
       # nenhum dos dois: 53 e-mails de "run failed" da 2.1.108 em diante, todos pelo mesmo motivo.
       - name: Java (emulador do Firestore)
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '21'
