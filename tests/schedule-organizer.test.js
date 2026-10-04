@@ -278,8 +278,11 @@ ok(/← Voltar/.test(bracketSource) && /data-pis-apply/.test(bracketSource) && /
   'Voltar, Salvar ajustes e Publicar ficam juntos numa barra opaca separada, fora das rolagens da grade');
 ok(/data-\' \+ prefix \+ \'-outside-window/.test(organizerSource) && /repeating-linear-gradient\(45deg,rgba\(239,68,68/.test(organizerSource) && /Todos os jogos continuam exibidos/.test(bracketSource),
   'jogos que ultrapassam a janela seguem na grade com faixa zebrada vermelha e cinza');
-ok(/if \(!latest\.cabe\)/.test(bracketSource) && /if \(!draft\.cabe\)/.test(organizerSource),
-  'nenhuma das duas agendas permite salvar distribuição que não cabe no dia');
+const pendingScheduleStart = bracketSource.indexOf('window._openPendingInitialSchedule = function');
+const pendingScheduleEnd = bracketSource.indexOf('window._rememberPendingDrawMarker = function', pendingScheduleStart);
+const pendingSchedule = bracketSource.slice(pendingScheduleStart, pendingScheduleEnd);
+ok(!/if \(!latest\.cabe\)[\s\S]{0,220}?return;/.test(pendingSchedule) && /Publicando horários estimados/.test(pendingSchedule) && /if \(!draft\.cabe\)/.test(organizerSource),
+  'a revisão inicial pode publicar agenda excedente sinalizada; a aplicação operacional comum continua validando distribuição inválida');
 const timezoneRoundTrip = execFileSync(process.execPath, ['-e', [
   "const fs=require('fs'),vm=require('vm');",
   "const s={window:{},console};vm.createContext(s);",
