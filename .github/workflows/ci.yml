@@ -28,6 +28,14 @@ on:
 permissions:
   contents: read
 
+# O GitHub é backup e gate, não o publicador. Quando vários pushes chegam em
+# sequência, só o commit mais recente pode representar a árvore que será usada
+# no próximo corte; cancelar o job ultrapassado reduz custo e e-mails sem
+# transformar uma falha real do commit final em sucesso.
+concurrency:
+  group: ci-unit-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   testes:
     runs-on: ubuntu-latest

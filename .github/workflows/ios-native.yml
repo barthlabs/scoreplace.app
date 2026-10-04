@@ -1,35 +1,32 @@
 name: iOS nativo — validação e TestFlight
 
-# A validação roda em toda mudança que pode alterar o binário. O upload só ocorre
-# por disparo manual e com a opção explícita marcada: subir um build é uma ação de
-# loja, não consequência implícita de um push.
+# A validação roda somente em mudanças que podem alterar o binário nativo. O app
+# web é publicado pelo Firebase Hosting e tem corte independente: rodar Xcode a
+# cada ajuste de JS/CSS gera alertas falsos e ainda exigia nota de release nativa
+# para uma mudança que não iria para a App Store. O upload só ocorre por disparo
+# manual e com a opção explícita marcada: subir um build é uma ação de loja, não
+# consequência implícita de um push.
 on:
   push:
     branches: [main]
     paths:
       - 'ios/**'
-      - 'js/**'
-      - 'css/**'
-      - 'src/**'
-      - 'tools/**'
-      - 'scripts/**'
-      - 'index.html'
+      - 'capacitor.config.*'
       - 'package.json'
       - 'package-lock.json'
-      - 'version.txt'
+      - 'scripts/ios-*.sh'
+      - 'scripts/check-versao-nativa.js'
+      - 'scripts/check-release-notes.js'
       - '.github/workflows/ios-native.yml'
   pull_request:
     paths:
       - 'ios/**'
-      - 'js/**'
-      - 'css/**'
-      - 'src/**'
-      - 'tools/**'
-      - 'scripts/**'
-      - 'index.html'
+      - 'capacitor.config.*'
       - 'package.json'
       - 'package-lock.json'
-      - 'version.txt'
+      - 'scripts/ios-*.sh'
+      - 'scripts/check-versao-nativa.js'
+      - 'scripts/check-release-notes.js'
       - '.github/workflows/ios-native.yml'
   workflow_dispatch:
     inputs:
