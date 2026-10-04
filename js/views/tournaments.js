@@ -2654,16 +2654,20 @@ function renderTournaments(container, tournamentId = null) {
             : isParticipating
                 ? 'linear-gradient(135deg, rgba(15,118,110,0.5) 0%, rgba(20,184,166,0.42) 100%)'
                 : 'linear-gradient(135deg, rgba(30,41,59,0.5) 0%, rgba(15,23,42,0.42) 100%)';
+        var _usesCoverPhoto = window._tourUsesCoverPhoto ? window._tourUsesCoverPhoto(t) : !!window._tourCoverSrc(t);
+        var _coverBackground = window._tournamentCoverBackground ? window._tournamentCoverBackground(t) : null;
         let venuePhotoBg = '';
-        if (window._tourCoverSrc(t)) {
+        if (_usesCoverPhoto) {
             // v4.0.21: foto de fundo custom do organizador — substitui a do Google.
             // Já vem enquadrada (cropper), então só cover+center, sem hidratar Google.
             // 1.9.50: a base64 saiu da string de HTML (ver a nota em
             // `_hydrateTournamentPhotos`). Fica o gradiente; a foto é pintada depois.
             venuePhotoBg = overlayGradient ? ('background-image: ' + overlayGradient + ';') : '';
+        } else if (_coverBackground) {
+            venuePhotoBg = 'background:' + _coverBackground.css + ';';
         }
         var vphotoAttrs = '';
-        if (window._tourCoverSrc(t)) {
+        if (_usesCoverPhoto) {
             vphotoAttrs += ' data-tcover-tid="' + window._safeHtml(String(t.id)) + '" data-tcover-overlay="' + overlayGradient + '"';
         }
 
@@ -3306,7 +3310,7 @@ function renderTournaments(container, tournamentId = null) {
           `;
         }
 
-        var _cardTextColor = (_isLight && !venuePhotoBg) ? '#1f2937' : 'white';
+        var _cardTextColor = _coverBackground ? _coverBackground.textColor : ((_isLight && !venuePhotoBg) ? '#1f2937' : 'white');
         // v2.3.72: SEM box no card inteiro (não mata a foto). Caixas de leitura
         // ficam SÓ nos blocos de info de fonte pequena/cor fraca (datas,
         // cronômetro, inscritos, formato/acesso). _pReadBg = fundo escuro legível

@@ -3792,7 +3792,7 @@ const _CAMPOS_CONFIG_TORNEIO = new Set([
   'maxParticipants','maxParticipantsPerCategory','autoCloseOnFull','enrollmentLimitMode','targetSlots','callPolicy',
   'resultEntry','woScope','lateEnrollment','newMatchups','venue','venueAccess','venueLat',
   'venueLon','venueAddress','venuePlaceId','venueCity','venueState','venueCountry',
-  'venuePhotoUrl','coverUrl','logoUrl','logoLocked','logoShape','logoRadius','logoAspect','courtCount',
+  'venuePhotoUrl','coverUrl','coverMode','coverColor','coverGradientColor','coverGradientEnabled','coverGradientAngle','logoUrl','logoLocked','logoShape','logoRadius','logoAspect','courtCount',
   'courtNames','courtOrder','callTime','warmupTime','gameDuration','scoring','swissRounds',
   'drawFirstDate','drawFirstTime','drawIntervalDays','drawManual','temporada','equilibrado',
   'clusterSize','balanceBy','genderRatio','wlGroupBalance','ligaNewPlayerScore',

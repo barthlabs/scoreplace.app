@@ -2399,6 +2399,31 @@ window._formatLabel = function (t) {
     if (!t) return '';
     return t.coverUrl || t.coverPhotoData || '';
   };
+  // Uma capa antiga sem `coverMode` continua sendo foto para manter torneios já
+  // publicados intactos. A escolha explícita "cor" vence inclusive se um cliente
+  // velho deixou uma URL no cache — isso evita o fundo removido reaparecer.
+  window._tourUsesCoverPhoto = function (t) {
+    return !!(window._tourCoverSrc(t) && (!t || t.coverMode !== 'color'));
+  };
+  function _coverHex(v) { return /^#[0-9a-f]{6}$/i.test(String(v || '')) ? String(v) : ''; }
+  function _coverLuma(hex) {
+    var n = parseInt(hex.slice(1), 16), r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+    return (r * 299 + g * 587 + b * 114) / 1000;
+  }
+  // Fonte canônica de cor/gradiente para cards, detalhe e heróis. Não concatena
+  // valor livre do usuário: só hex validado e ângulo limitado entram no style.
+  window._tournamentCoverBackground = function (t) {
+    if (!t || window._tourUsesCoverPhoto(t)) return null;
+    var c1 = _coverHex(t.coverColor), c2 = _coverHex(t.coverGradientColor);
+    if (!c1) return null;
+    if (!c2) c2 = c1;
+    var angle = Math.max(0, Math.min(360, parseInt(t.coverGradientAngle, 10) || 135));
+    var gradient = t.coverGradientEnabled === true;
+    return {
+      css: gradient ? 'linear-gradient(' + angle + 'deg, ' + c1 + ', ' + c2 + ')' : c1,
+      textColor: ((_coverLuma(c1) + _coverLuma(c2)) / 2) > 158 ? '#111827' : '#f8fafc'
+    };
+  };
 
   // A imagem de fundo pertence ao torneio, nunca ao local. Sem capa, o card
   // usa uma cor neutra sólida; se a organização persistir uma cor de marca do
@@ -2525,7 +2550,7 @@ window._formatLabel = function (t) {
       el.setAttribute('data-tcover-done', '1');
       var t = _tourPorId(el.getAttribute('data-tcover-tid'));
       var _capa = window._tourCoverSrc(t);
-      if (!_capa) return;
+      if (!_capa || !window._tourUsesCoverPhoto(t)) return;
       var overlay = el.getAttribute('data-tcover-overlay') || '';
       _pintarFotoNoCard(el, (overlay ? overlay + ', ' : '') + 'url(' + _capa + ')');
     });
@@ -14215,13 +14240,13 @@ window.AppStore = {
            * "remover". Se havia marca no documento fresco e o campo do formulário
            * ficou vazio, mandamos a URL vazia para a Function apagar também o legado.
            * [[regression_remover_capa_nao_pode_preservar_url_antiga]] */
-          /* A ficha de edição sempre traz `coverPhotoData`, inclusive vazio. Não
-           * condicionar a remoção à cópia local: ela pode estar velha e sem `coverUrl`,
-           * enquanto o documento canônico no Firestore ainda tem a capa. Neste caso,
+          /* A ficha de edição sempre traz foto e logo, inclusive vazios. Não
+           * condicionar a remoção à cópia local: ela pode estar velha e sem URL,
+           * enquanto o documento canônico no Firestore ainda tem a marca. Neste caso,
            * omitir o patch preserva a imagem e o organizador vê o fundo voltar depois
-           * de salvar. Campo de capa explicitamente vazio = comando de apagar.
+           * de salvar. Campo explicitamente vazio = comando de apagar.
            * [[regression_remover_capa_independe_do_cache_local]] */
-          if (pair[0] === 'coverPhotoData' && Object.prototype.hasOwnProperty.call(data, pair[0])) _editPatch[pair[1]] = '';
+          if ((pair[0] === 'coverPhotoData' || pair[0] === 'logoData') && Object.prototype.hasOwnProperty.call(data, pair[0])) _editPatch[pair[1]] = '';
           else if (tourData[pair[1]] || tourData[pair[0]]) _editPatch[pair[1]] = '';
           else delete _editPatch[pair[1]];
           return Promise.resolve();

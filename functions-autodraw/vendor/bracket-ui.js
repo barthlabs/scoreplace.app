@@ -3694,9 +3694,11 @@ window._tvMode = function(tId) {
 
   // Hero do torneio: somente a capa configurada pela organização pode virar foto.
   // Foto de local não representa necessariamente este evento e não é buscada aqui.
-  var heroBg = window._tourCoverSrc(t)
+  var _tvHasPhoto = window._tourUsesCoverPhoto ? window._tourUsesCoverPhoto(t) : !!window._tourCoverSrc(t);
+  var _tvCoverBg = window._tournamentCoverBackground ? window._tournamentCoverBackground(t) : null;
+  var heroBg = _tvHasPhoto
     ? 'background-image:linear-gradient(to bottom,rgba(10,14,26,0.3),rgba(10,14,26,0.95)),url(' + window._tourCoverSrc(t) + ');background-size:cover;background-position:center;'
-    : 'background:#111827;';
+    : (_tvCoverBg ? 'background:' + _tvCoverBg.css + ';' : 'background:#111827;');
   var _heroVphoto = '';
   var hero = '<div' + _heroVphoto + ' style="' + heroBg + 'padding:30px 40px;flex-shrink:0;position:relative;">';
   // Exit button (top right)

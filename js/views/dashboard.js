@@ -835,19 +835,24 @@ function renderDashboard(container) {
       : isParticipating
         ? 'linear-gradient(135deg, rgba(15,118,110,0.5) 0%, rgba(20,184,166,0.42) 100%)'
         : 'linear-gradient(135deg, rgba(30,41,59,0.5) 0%, rgba(15,23,42,0.42) 100%)';
+    const _usesCoverPhoto = window._tourUsesCoverPhoto ? window._tourUsesCoverPhoto(t) : !!window._tourCoverSrc(t);
+    const _coverBackground = window._tournamentCoverBackground ? window._tournamentCoverBackground(t) : null;
     let venuePhotoBg = '';
-    if (window._tourCoverSrc(t)) {
+    if (_usesCoverPhoto) {
       // v4.0.21: foto de fundo custom do organizador — substitui a do Google.
       // 1.9.50: a base64 NÃO entra mais na string (chegava a 194 KB num card só, e o
       // parser mastigava isso na thread principal). Fica o gradiente; quem pinta a foto
       // é `_hydrateTournamentPhotos`, do dado que JÁ está em memória — sem ida à rede.
       venuePhotoBg = overlayGrad ? ('background-image: ' + overlayGrad + ';') : '';
       _cardTextColor = 'white';
+    } else if (_coverBackground) {
+      venuePhotoBg = 'background: ' + _coverBackground.css + ';';
+      _cardTextColor = _coverBackground.textColor;
     }
     var vphotoAttrs = '';
     // capa própria do torneio: marca o card pro hidratador (a imagem vem depois, do
     // AppStore) em vez de carregar a base64 dentro do HTML.
-    if (window._tourCoverSrc(t)) {
+    if (_usesCoverPhoto) {
       vphotoAttrs += ' data-tcover-tid="' + window._safeHtml(String(t.id)) + '" data-tcover-overlay="' + overlayGrad + '"';
     }
 

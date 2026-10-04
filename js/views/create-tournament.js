@@ -337,21 +337,54 @@ function setupCreateTournamentModal() {
                 </div>
               </div>
 
-              <!-- Foto de fundo do torneio (v4.0.21) — se definida, substitui a do Google -->
+              <!-- Fundo do torneio: foto OU cor/gradiente, nunca uma foto do local. -->
               <div id="cover-section" style="background: rgba(99,102,241,0.06); border: 1px solid rgba(99,102,241,0.15); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
-                <p style="margin: 0 0 0.35rem; font-size: 0.8rem; color: var(--sp-c-a5b4fc,#a5b4fc); font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">🖼️ Foto de fundo do torneio</p>
-                <p style="margin: 0 0 0.45rem; font-size: 0.72rem; color: var(--text-muted); line-height: 1.35;">Opcional. Se você definir, ela substitui a foto do Google nos cards e no detalhe. Ao escolher, dá pra girar, dar zoom e arrastar para enquadrar, sem distorcer.</p>
+                <p style="margin: 0 0 0.35rem; font-size: 0.8rem; color: var(--sp-c-a5b4fc,#a5b4fc); font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">🎨 Fundo do torneio</p>
+                <p style="margin: 0 0 0.7rem; font-size: 0.72rem; color: var(--text-muted); line-height: 1.35;">Escolha uma foto ou uma cor. Sem foto, o torneio usa uma cor sólida neutra; o gradiente é opcional e tem duas cores e direção livre.</p>
+                <input type="hidden" id="tourn-cover-mode" value="color">
+                <div role="group" aria-label="Tipo de fundo" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:0.8rem;">
+                  <button type="button" id="cover-mode-color" onclick="window._setCoverMode('color')" style="padding:8px 14px;border-radius:10px;border:1px solid #818cf8;background:#3730a3;color:#fff;font-size:0.8rem;font-weight:700;cursor:pointer;">🎨 Cor</button>
+                  <button type="button" id="cover-mode-photo" onclick="window._setCoverMode('photo')" style="padding:8px 14px;border-radius:10px;border:1px solid rgba(99,102,241,0.35);background:rgba(99,102,241,0.1);color:var(--sp-c-e2e8f0,#e2e8f0);font-size:0.8rem;font-weight:700;cursor:pointer;">🖼️ Foto</button>
+                </div>
+                <div id="cover-color-controls" style="margin:0 0 0.8rem;padding:0.7rem;border-radius:10px;background:rgba(15,23,42,0.55);border:1px solid rgba(129,140,248,0.22);">
+                  <div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap;">
+                    <label style="display:grid;gap:4px;font-size:0.72rem;font-weight:700;color:var(--text-muted);">Cor 1
+                      <input type="color" id="tourn-cover-color" value="#1f2937" oninput="window._syncCoverColorFromPicker()" style="width:54px;height:34px;padding:2px;cursor:pointer;">
+                    </label>
+                    <label style="display:grid;gap:4px;font-size:0.72rem;font-weight:700;color:var(--text-muted);">Cor 2
+                      <input type="color" id="tourn-cover-gradient-color" value="#0f172a" oninput="window._refreshCoverPreview()" style="width:54px;height:34px;padding:2px;cursor:pointer;">
+                    </label>
+                    <label style="display:flex;align-items:center;gap:7px;min-height:34px;font-size:0.75rem;font-weight:700;color:var(--sp-c-e2e8f0,#e2e8f0);cursor:pointer;">
+                      <input type="checkbox" id="tourn-cover-gradient-enabled" onchange="window._refreshCoverPreview()"> Usar gradiente
+                    </label>
+                    <label style="display:grid;gap:4px;font-size:0.72rem;font-weight:700;color:var(--text-muted);min-width:152px;">Direção <span id="tourn-cover-angle-value" style="color:var(--sp-c-e2e8f0,#e2e8f0);font-variant-numeric:tabular-nums;">135°</span>
+                      <input type="range" id="tourn-cover-gradient-angle" min="0" max="360" value="135" oninput="window._syncCoverAngle(this.value)" style="width:100%;accent-color:#818cf8;">
+                    </label>
+                    <label style="display:grid;gap:4px;font-size:0.72rem;font-weight:700;color:var(--text-muted);">Ângulo exato
+                      <input type="number" id="tourn-cover-gradient-angle-number" min="0" max="360" value="135" oninput="window._syncCoverAngle(this.value)" style="width:72px;padding:6px 8px;border-radius:7px;background:#0f172a;color:#f8fafc;border:1px solid #475569;">
+                    </label>
+                  </div>
+                  <details style="margin-top:0.65rem;"><summary style="cursor:pointer;font-size:0.72rem;color:var(--sp-c-a5b4fc,#a5b4fc);font-weight:700;">Ajuste fino da cor 1 (roda HSL)</summary>
+                    <div style="display:grid;grid-template-columns:repeat(3,minmax(120px,1fr));gap:8px;margin-top:0.55rem;">
+                      <label style="font-size:0.7rem;color:var(--text-muted);">Matiz <input type="range" id="tourn-cover-hue" min="0" max="360" value="215" oninput="window._syncCoverColorFromHsl()" style="width:100%;accent-color:#818cf8;"></label>
+                      <label style="font-size:0.7rem;color:var(--text-muted);">Saturação <input type="range" id="tourn-cover-saturation" min="0" max="100" value="27" oninput="window._syncCoverColorFromHsl()" style="width:100%;accent-color:#818cf8;"></label>
+                      <label style="font-size:0.7rem;color:var(--text-muted);">Luminosidade (gama) <input type="range" id="tourn-cover-lightness" min="0" max="100" value="17" oninput="window._syncCoverColorFromHsl()" style="width:100%;accent-color:#818cf8;"></label>
+                    </div>
+                  </details>
+                </div>
+                <div id="cover-photo-controls" style="display:none;">
                 <div style="margin:0 0 0.75rem;padding:0.65rem 0.75rem;border-radius:8px;background:rgba(59,130,246,0.08);border:1px solid rgba(96,165,250,0.22);font-size:0.7rem;line-height:1.45;color:var(--text-muted);">
                   <strong>Arquivo:</strong> JPG, PNG ou WebP, até 12 MB.<br>
                   <strong>Melhor resultado:</strong> envie 2000 × 1000 px (proporção 2:1) ou maior; a capa final é otimizada para 1000 × 500 px.<br>
                   <strong>Importante:</strong> desktop/tablet mostram a área 2:1; no celular em pé aparece principalmente a faixa central 3:4. Deixe nomes e logos nessa faixa central.
                 </div>
+                </div>
                 <div id="cover-preview" style="width: 100%; max-width: 300px; aspect-ratio: 2/1; border-radius: 12px; border: 2px dashed rgba(99,102,241,0.3); display: flex; align-items: center; justify-content: center; overflow: hidden; background: var(--sp-g-0-0-0-02,rgba(0,0,0,0.2)); background-size: cover; background-position: center; margin-bottom: 8px;">
-                  <span id="cover-placeholder" style="font-size: 0.72rem; color: var(--text-muted);">Sem foto de fundo</span>
+                  <span id="cover-placeholder" style="font-size: 0.72rem; color: #fff; text-shadow:0 1px 3px #000;">Prévia do fundo</span>
                 </div>
                 <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-                  <button type="button" onclick="document.getElementById('cover-file-input').click()" style="padding: 8px 16px; border-radius: 10px; border: 1px solid rgba(99,102,241,0.3); background: rgba(99,102,241,0.15); color: var(--sp-c-a5b4fc,#a5b4fc); font-size: 0.8rem; font-weight: 600; cursor: pointer;">🖼️ Escolher foto</button>
-                  <button type="button" id="btn-cover-clear" onclick="window._clearCoverPhoto()" title="Remover foto de fundo" style="padding: 8px 12px; border-radius: 10px; border: 1px solid rgba(239,68,68,0.2); background: rgba(239,68,68,0.08); color: var(--sp-c-f87171,#f87171); font-size: 0.8rem; cursor: pointer; display: none;">✕ Remover</button>
+                  <button type="button" id="btn-cover-choose" onclick="document.getElementById('cover-file-input').click()" style="display:none;padding: 8px 16px; border-radius: 10px; border: 1px solid rgba(99,102,241,0.3); background: rgba(99,102,241,0.15); color: var(--sp-c-a5b4fc,#a5b4fc); font-size: 0.8rem; font-weight: 600; cursor: pointer;">🖼️ Escolher foto</button>
+                  <button type="button" id="btn-cover-clear" onclick="window._clearCoverPhoto()" title="Voltar para a cor de fundo" style="padding: 8px 12px; border-radius: 10px; border: 1px solid rgba(239,68,68,0.2); background: rgba(239,68,68,0.08); color: var(--sp-c-f87171,#f87171); font-size: 0.8rem; cursor: pointer; display: none;">✕ Remover foto</button>
                 </div>
                 <input type="file" id="cover-file-input" accept="image/jpeg,image/png,image/webp" style="display:none;" onchange="window._handleCoverUpload(event)">
                 <input type="hidden" id="tourn-cover-data" value="">
@@ -2395,10 +2428,66 @@ function setupCreateTournamentModal() {
     window._applyTournamentLogo(dataUrl);
   };
 
-  // ─── Foto de fundo do torneio (v4.0.21) ───────────────────────────────────
-  // Sobe arquivo → cropper retangular 2:1 (zoom+pan sem distorção, recorte assado
-  // no canvas) → salva o resultado já enquadrado em #tourn-cover-data. No render,
-  // quando t.coverPhotoData existe, ela substitui a foto do Google.
+  // ─── Fundo do torneio: foto OU cor/gradiente ───────────────────────────────
+  // A cor é parte declarativa do torneio. Foto é uma alternativa opcional; trocar
+  // para cor limpa a foto do payload para que o servidor não a preserve por engano.
+  function _coverHexOk(v) { return /^#[0-9a-f]{6}$/i.test(String(v || '')); }
+  function _coverHexToHsl(hex) {
+    var n = parseInt(String(hex).slice(1), 16), r = ((n >> 16) & 255) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
+    var max = Math.max(r, g, b), min = Math.min(r, g, b), h = 0, s = 0, l = (max + min) / 2, d = max - min;
+    if (d) { s = d / (1 - Math.abs(2 * l - 1)); if (max === r) h = 60 * (((g - b) / d) % 6); else if (max === g) h = 60 * ((b - r) / d + 2); else h = 60 * ((r - g) / d + 4); }
+    if (h < 0) h += 360;
+    return { h: Math.round(h), s: Math.round(s * 100), l: Math.round(l * 100) };
+  }
+  function _coverHslToHex(h, s, l) {
+    h = ((Number(h) % 360) + 360) % 360; s = Math.max(0, Math.min(100, Number(s))) / 100; l = Math.max(0, Math.min(100, Number(l))) / 100;
+    var c = (1 - Math.abs(2 * l - 1)) * s, x = c * (1 - Math.abs((h / 60) % 2 - 1)), m = l - c / 2, r = 0, g = 0, b = 0;
+    if (h < 60) { r = c; g = x; } else if (h < 120) { r = x; g = c; } else if (h < 180) { g = c; b = x; } else if (h < 240) { g = x; b = c; } else if (h < 300) { r = x; b = c; } else { r = c; b = x; }
+    return '#' + [r, g, b].map(function(v) { return Math.round((v + m) * 255).toString(16).padStart(2, '0'); }).join('');
+  }
+  window._syncCoverAngle = function(value) {
+    var n = Math.max(0, Math.min(360, parseInt(value, 10) || 0));
+    var range = document.getElementById('tourn-cover-gradient-angle'), number = document.getElementById('tourn-cover-gradient-angle-number'), label = document.getElementById('tourn-cover-angle-value');
+    if (range) range.value = n; if (number) number.value = n; if (label) label.textContent = n + '°';
+    window._refreshCoverPreview();
+  };
+  window._syncCoverColorFromPicker = function() {
+    var picker = document.getElementById('tourn-cover-color'); if (!picker || !_coverHexOk(picker.value)) return;
+    var hsl = _coverHexToHsl(picker.value);
+    [['tourn-cover-hue', hsl.h], ['tourn-cover-saturation', hsl.s], ['tourn-cover-lightness', hsl.l]].forEach(function(pair) { var el = document.getElementById(pair[0]); if (el) el.value = pair[1]; });
+    window._refreshCoverPreview();
+  };
+  window._syncCoverColorFromHsl = function() {
+    var h = document.getElementById('tourn-cover-hue'), s = document.getElementById('tourn-cover-saturation'), l = document.getElementById('tourn-cover-lightness'), picker = document.getElementById('tourn-cover-color');
+    if (!h || !s || !l || !picker) return;
+    picker.value = _coverHslToHex(h.value, s.value, l.value);
+    window._refreshCoverPreview();
+  };
+  window._refreshCoverPreview = function() {
+    var prev = document.getElementById('cover-preview'), mode = (document.getElementById('tourn-cover-mode') || {}).value || 'color';
+    if (!prev) return;
+    var c1 = (document.getElementById('tourn-cover-color') || {}).value || '#1f2937';
+    var c2 = (document.getElementById('tourn-cover-gradient-color') || {}).value || '#0f172a';
+    var grad = !!((document.getElementById('tourn-cover-gradient-enabled') || {}).checked);
+    var angle = Math.max(0, Math.min(360, parseInt((document.getElementById('tourn-cover-gradient-angle') || {}).value, 10) || 135));
+    if (!_coverHexOk(c1)) c1 = '#1f2937'; if (!_coverHexOk(c2)) c2 = '#0f172a';
+    var photo = (document.getElementById('tourn-cover-data') || {}).value || '';
+    prev.style.backgroundImage = (mode === 'photo' && photo) ? 'url(' + photo + ')' : (grad ? 'linear-gradient(' + angle + 'deg, ' + c1 + ', ' + c2 + ')' : 'none');
+    prev.style.backgroundColor = (mode === 'photo' && photo) ? '' : c1;
+    prev.style.borderStyle = (mode === 'photo' && photo) ? 'solid' : 'dashed';
+  };
+  window._setCoverMode = function(mode) {
+    mode = mode === 'photo' ? 'photo' : 'color';
+    var hidden = document.getElementById('tourn-cover-mode'); if (hidden) hidden.value = mode;
+    if (mode === 'color') { var data = document.getElementById('tourn-cover-data'); if (data) data.value = ''; }
+    var colorBox = document.getElementById('cover-color-controls'), photoBox = document.getElementById('cover-photo-controls'), choose = document.getElementById('btn-cover-choose'), clear = document.getElementById('btn-cover-clear');
+    if (colorBox) colorBox.style.display = mode === 'color' ? '' : 'none';
+    if (photoBox) photoBox.style.display = mode === 'photo' ? '' : 'none';
+    if (choose) choose.style.display = mode === 'photo' ? '' : 'none';
+    if (clear) clear.style.display = mode === 'photo' && ((document.getElementById('tourn-cover-data') || {}).value || '') ? '' : 'none';
+    [['cover-mode-color', mode === 'color'], ['cover-mode-photo', mode === 'photo']].forEach(function(pair) { var el = document.getElementById(pair[0]); if (!el) return; el.style.background = pair[1] ? '#3730a3' : 'rgba(99,102,241,0.1)'; el.style.color = pair[1] ? '#fff' : 'var(--sp-c-e2e8f0,#e2e8f0)'; });
+    window._refreshCoverPreview();
+  };
   window._handleCoverUpload = function(event) {
     var file = event.target && event.target.files && event.target.files[0];
     if (!file) return;
@@ -2429,14 +2518,20 @@ function setupCreateTournamentModal() {
   window._applyCoverPhoto = function(dataUrl) {
     var hidden = document.getElementById('tourn-cover-data');
     if (hidden) hidden.value = dataUrl || '';
-    var prev = document.getElementById('cover-preview');
     var ph = document.getElementById('cover-placeholder');
     var clr = document.getElementById('btn-cover-clear');
-    if (prev) { prev.style.backgroundImage = dataUrl ? 'url(' + dataUrl + ')' : ''; prev.style.borderStyle = dataUrl ? 'solid' : 'dashed'; }
-    if (ph) ph.style.display = dataUrl ? 'none' : '';
+    if (dataUrl) { var mode = document.getElementById('tourn-cover-mode'); if (mode) mode.value = 'photo'; }
+    if (ph) ph.style.display = 'none';
     if (clr) clr.style.display = dataUrl ? '' : 'none';
+    window._setCoverMode(dataUrl ? 'photo' : 'color');
   };
   window._clearCoverPhoto = function() { window._applyCoverPhoto(''); };
+  // A criação começa com a prévia neutra. A edição repõe seus valores depois; não
+  // depender de CSS vazio evita a impressão de que a cor escolhida não foi aplicada.
+  setTimeout(function() {
+    var data = document.getElementById('tourn-cover-data');
+    if ((!data || !data.value) && typeof window._setCoverMode === 'function') window._setCoverMode('color');
+  }, 0);
 
   window._handleLogoUpload = function(event) {
     var file = event.target.files && event.target.files[0];
@@ -4921,7 +5016,17 @@ function setupCreateTournamentModal() {
     window._applyVenuePhoto('');
     // v4.0.21: foto de fundo custom do torneio
     if (typeof window._applyCoverPhoto === 'function') {
-      setTimeout(function() { window._applyCoverPhoto(window._tourCoverSrc(t) || ''); }, 50);
+      setTimeout(function() {
+        var c1 = document.getElementById('tourn-cover-color'), c2 = document.getElementById('tourn-cover-gradient-color'), ge = document.getElementById('tourn-cover-gradient-enabled');
+        if (c1 && /^#[0-9a-f]{6}$/i.test(t.coverColor || '')) c1.value = t.coverColor;
+        if (c2 && /^#[0-9a-f]{6}$/i.test(t.coverGradientColor || '')) c2.value = t.coverGradientColor;
+        if (ge) ge.checked = t.coverGradientEnabled === true;
+        if (typeof window._syncCoverColorFromPicker === 'function') window._syncCoverColorFromPicker();
+        if (typeof window._syncCoverAngle === 'function') window._syncCoverAngle(t.coverGradientAngle != null ? t.coverGradientAngle : 135);
+        var hasCoverPhoto = window._tourUsesCoverPhoto ? window._tourUsesCoverPhoto(t) : !!window._tourCoverSrc(t);
+        window._applyCoverPhoto(hasCoverPhoto ? (window._tourCoverSrc(t) || '') : '');
+        if (!hasCoverPhoto && typeof window._setCoverMode === 'function') window._setCoverMode('color');
+      }, 50);
     }
     // Show venue map if lat/lon available
     if (t.venueLat && t.venueLon) {
@@ -5670,6 +5775,11 @@ window._saveTournamentClickHandler = async function() {
         // Campo legado: torneios não herdam nem mantêm foto do local.
         const venuePhotoUrlVal = '';
         const coverPhotoDataVal = (document.getElementById('tourn-cover-data') || {}).value || '';
+        const coverModeVal = ((document.getElementById('tourn-cover-mode') || {}).value === 'photo' && coverPhotoDataVal) ? 'photo' : 'color';
+        const coverColorVal = (document.getElementById('tourn-cover-color') || {}).value || '#1f2937';
+        const coverGradientColorVal = (document.getElementById('tourn-cover-gradient-color') || {}).value || '#0f172a';
+        const coverGradientEnabledVal = !!((document.getElementById('tourn-cover-gradient-enabled') || {}).checked);
+        const coverGradientAngleVal = Math.max(0, Math.min(360, parseInt((document.getElementById('tourn-cover-gradient-angle') || {}).value, 10) || 135));
         const logoDataVal = document.getElementById('tourn-logo-data').value || '';
         const logoLockedVal = document.getElementById('tourn-logo-locked').value === '1';
         const logoShapeVal = (document.getElementById('tourn-logo-shape') || {}).value === 'circle' ? 'circle' : 'square';
@@ -5780,6 +5890,11 @@ window._saveTournamentClickHandler = async function() {
           venueCountry: (document.getElementById('tourn-venue-country') || {}).value || '',
           venuePhotoUrl: venuePhotoUrlVal,
           coverPhotoData: coverPhotoDataVal,
+          coverMode: coverModeVal,
+          coverColor: /^#[0-9a-f]{6}$/i.test(coverColorVal) ? coverColorVal : '#1f2937',
+          coverGradientColor: /^#[0-9a-f]{6}$/i.test(coverGradientColorVal) ? coverGradientColorVal : '#0f172a',
+          coverGradientEnabled: coverGradientEnabledVal,
+          coverGradientAngle: coverGradientAngleVal,
           logoData: logoDataVal,
           logoLocked: logoLockedVal,
           logoShape: logoShapeVal,
@@ -7397,7 +7512,15 @@ window._prefillFromTemplate = function(tpl) {
   _setV('tourn-venue-state', tpl.venueState);
   _setV('tourn-venue-country', tpl.venueCountry);
   _setV('tourn-venue-photo-url', '');
-  if (typeof window._applyCoverPhoto === 'function') window._applyCoverPhoto(tpl.coverPhotoData || '');
+  if (typeof window._applyCoverPhoto === 'function') {
+    _setV('tourn-cover-color', tpl.coverColor || '#1f2937');
+    _setV('tourn-cover-gradient-color', tpl.coverGradientColor || '#0f172a');
+    _setC('tourn-cover-gradient-enabled', !!tpl.coverGradientEnabled);
+    if (typeof window._syncCoverColorFromPicker === 'function') window._syncCoverColorFromPicker();
+    if (typeof window._syncCoverAngle === 'function') window._syncCoverAngle(tpl.coverGradientAngle != null ? tpl.coverGradientAngle : 135);
+    window._applyCoverPhoto(tpl.coverPhotoData || '');
+    if (!tpl.coverPhotoData && typeof window._setCoverMode === 'function') window._setCoverMode('color');
+  }
   // Logo
   if (typeof window._setLogoFormaFromRadius === 'function') { try { window._setLogoFormaFromRadius((tpl.logoRadius != null && tpl.logoRadius !== '') ? tpl.logoRadius : 14, tpl.logoShape === 'circle'); } catch (e) {} }
   if (typeof window._setLogoAspect === 'function') { try { window._setLogoAspect(tpl.logoAspect != null ? tpl.logoAspect : 1); } catch (e) {} }
@@ -7862,6 +7985,11 @@ window._saveCurrentFormAsTemplate = function(saveButton) {
       venueCountry: get('tourn-venue-country') || '',
       venuePhotoUrl: '',
       coverPhotoData: (document.getElementById('tourn-cover-data') || {}).value || '',
+      coverMode: (get('tourn-cover-mode') === 'photo' && get('tourn-cover-data')) ? 'photo' : 'color',
+      coverColor: get('tourn-cover-color') || '#1f2937',
+      coverGradientColor: get('tourn-cover-gradient-color') || '#0f172a',
+      coverGradientEnabled: getChecked('tourn-cover-gradient-enabled'),
+      coverGradientAngle: parseInt(get('tourn-cover-gradient-angle'), 10) || 135,
       logoData: get('tourn-logo-data') || '',
       logoLocked: get('tourn-logo-locked') === '1',
       logoShape: get('tourn-logo-shape') === 'circle' ? 'circle' : 'square',
