@@ -1024,7 +1024,11 @@ function _bracketUpdateRoundHeadingPortal(root, scope) {
   var headings = scope.querySelectorAll('.bracket-round-heading');
   for (var i = 0; i < headings.length; i++) {
     var heading = headings[i];
+    // Nas chaves eliminatórias a coluna é explícita. Nos grupos, o h5 vive no
+    // invólucro da rodada; usar só o próprio h5 fazia `colRect.bottom` terminar
+    // antes das abas e o portal nunca aparecia depois de rolar.
     var column = heading.closest ? heading.closest('.bracket-round-column') : null;
+    if (!column) column = heading.parentElement;
     var rect = heading.getBoundingClientRect();
     var colRect = column ? column.getBoundingClientRect() : rect;
     if (rect.width < 1 || rect.top >= anchorBottom || colRect.bottom <= anchorBottom) continue;

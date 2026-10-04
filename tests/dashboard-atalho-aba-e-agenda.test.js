@@ -72,6 +72,7 @@ ok(bracket.includes('class="bracket-round-heading"') &&
   bracket.includes('_bracketUpdateRoundHeadingPortal') &&
   bracket.includes('document.addEventListener(\'scroll\', window._bracketRoundHeadingResizeListener, true)') &&
   bracket.includes('_bracketUpdateRoundHeadingPortal(root, scope);') &&
+  bracket.includes('if (!column) column = heading.parentElement;') &&
   bracket.includes('_bracketSyncRoundHeadingOffsets();\n  _bracketEnsureRoundHeadingResizeListener();'),
   'títulos de rodadas classificatórias entram no portal fixo e têm a montagem ligada ao scroll');
 
