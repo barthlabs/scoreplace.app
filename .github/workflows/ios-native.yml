@@ -1,33 +1,14 @@
 name: iOS nativo — validação e TestFlight
 
-# A validação roda somente em mudanças que podem alterar o binário nativo. O app
-# web é publicado pelo Firebase Hosting e tem corte independente: rodar Xcode a
-# cada ajuste de JS/CSS gera alertas falsos e ainda exigia nota de release nativa
-# para uma mudança que não iria para a App Store. O upload só ocorre por disparo
-# manual e com a opção explícita marcada: subir um build é uma ação de loja, não
-# consequência implícita de um push.
+# O binário nativo tem um ciclo deliberadamente separado do web. O Firebase
+# Hosting é a publicação de produção do Scoreplace; commits do produto web NÃO
+# podem acionar Xcode, TestFlight ou alertas de CI. Execute este workflow apenas
+# manualmente ao fechar um lote nativo para App Store/TestFlight.
+#
+# REGRA ANTI-REGRESSÃO: não reintroduzir gatilhos push/pull_request aqui. Mesmo
+# mudanças em ios/** aguardam a decisão explícita de preparar uma nova versão
+# nativa, para não inflar builds e não gerar alertas operacionais inúteis.
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'ios/**'
-      - 'capacitor.config.*'
-      - 'package.json'
-      - 'package-lock.json'
-      - 'scripts/ios-*.sh'
-      - 'scripts/check-versao-nativa.js'
-      - 'scripts/check-release-notes.js'
-      - '.github/workflows/ios-native.yml'
-  pull_request:
-    paths:
-      - 'ios/**'
-      - 'capacitor.config.*'
-      - 'package.json'
-      - 'package-lock.json'
-      - 'scripts/ios-*.sh'
-      - 'scripts/check-versao-nativa.js'
-      - 'scripts/check-release-notes.js'
-      - '.github/workflows/ios-native.yml'
   workflow_dispatch:
     inputs:
       upload_testflight:
@@ -46,9 +27,9 @@ concurrency:
 jobs:
   validate:
     name: Compilar iOS e Watch sem assinatura
-    # No envio manual, o archive assinado abaixo já recompila e valida o mesmo
-    # binário. Evitar a compilação sem assinatura economiza cerca de cinco
-    # minutos, sem reduzir a cobertura final do release.
+    # O archive assinado abaixo é a validação canônica do fluxo manual.
+    # Este job é mantido somente como proteção caso sejam criados outros gatilhos
+    # explicitamente autorizados no futuro.
     if: github.event_name != 'workflow_dispatch'
     runs-on: macos-26
     timeout-minutes: 45
