@@ -198,6 +198,30 @@ if [[ -n "$(git status --porcelain)" ]]; then
   exit 1
 fi
 
+# ── 1.1 · CORTE ÚNICO DE VERSÃO: só o Hosting promove uma release ────────────
+# GitHub é backup. O main pode receber várias correções com a mesma versão; somente
+# aqui, quando a versão SERVIDA foi lida, nasce o próximo patch e seus cache-busters.
+VERSAO_NO_AR="$(curl -fsS --max-time 15 https://scoreplace.app/version.txt 2>/dev/null || true)"
+if [[ -z "$VERSAO_NO_AR" ]]; then
+  echo "✗ não consegui ler a versão atualmente servida — não publico sem saber se o cache vai trocar."
+  exit 1
+fi
+BASE_CORTE="$(git log -1 --format=%H -- version.txt)"
+if [[ $DRY -eq 1 ]]; then
+  echo "▸ dry-run: corte de versão não altera a árvore"
+else
+  SP_RELEASE_PRODUCTION_VERSION="$VERSAO_NO_AR" node "$RAIZ/scripts/prepare-hosting-release.js" || exit 1
+  if [[ -n "$(git status --porcelain)" ]]; then
+    npm run --silent prerender || exit 1
+    SP_RELEASE_BASE="$BASE_CORTE" node "$RAIZ/scripts/check-cache-busters.js" --fix || exit 1
+    git add -A -- js/store.js sw.js js/release-notes.js index.html version.txt ext-version.txt extension/content.js ios/App/App.xcodeproj/project.pbxproj 'scoreplace-letzplay-ext-*.zip'
+    VERSAO="$(tr -d '[:space:]' < version.txt)"
+    git commit -q -m "$VERSAO — corte único de produção"
+    COMMIT="$(git rev-parse HEAD)"
+    echo "  ✓ corte consolidado em ${COMMIT:0:8} (v$VERSAO)"
+  fi
+fi
+
 # ── 1.2 a nota de versão cobre o que vai subir? (SÓ AQUI ELA PODE SER COBRADA) ──
 # ⚠️ ESTA TRAVA JÁ EXISTIA no hosting.predeploy — e a metade que importa NUNCA RODAVA LÁ.
 # `check-release-notes.js` tem duas partes: (1) existe entrada da minor? (2) a nota está
@@ -401,11 +425,6 @@ if ! node "$RAIZ/scripts/check-version-ahead.js"; then
 fi
 
 echo "▸ preflight: código novo recebeu uma versão nova?"
-VERSAO_NO_AR="$(curl -fsS --max-time 15 https://scoreplace.app/version.txt 2>/dev/null || true)"
-if [[ -z "$VERSAO_NO_AR" ]]; then
-  echo "✗ não consegui ler a versão atualmente servida — não publico sem saber se o cache vai trocar."
-  exit 1
-fi
 SP_RELEASE_PRODUCTION_VERSION="$VERSAO_NO_AR" node "$RAIZ/scripts/check-release-version-fresh.js" || exit 1
 
 fase "gates de versão"

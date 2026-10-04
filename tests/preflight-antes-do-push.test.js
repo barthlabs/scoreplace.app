@@ -120,6 +120,9 @@ function cenario(opcoes) {
   fs.chmodSync(path.join(repo, 'scripts', 'revisar.sh'), 0o755);
   fs.writeFileSync(path.join(repo, 'scripts', 'check-version-ahead.js'), 'process.exit(0);\n');
   fs.writeFileSync(path.join(repo, 'scripts', 'check-release-version-fresh.js'), 'process.exit(0);\n');
+  // O corte único pertence a outra suíte. Aqui ele é neutro para a cena continuar
+  // medindo exclusivamente a ordem preflight → push → Hosting.
+  fs.writeFileSync(path.join(repo, 'scripts', 'prepare-hosting-release.js'), 'process.exit(0);\n');
   fs.writeFileSync(path.join(repo, 'scripts', 'check-release-notes.js'), 'process.exit(0);\n');
   fs.writeFileSync(path.join(repo, 'scripts', 'check-deploy-alignment.js'), 'process.exit(0);\n');
   fs.writeFileSync(path.join(repo, 'package.json'), JSON.stringify({ name: 'x', version: '1.0.0', scripts: {} }));
@@ -133,7 +136,7 @@ function cenario(opcoes) {
   git(['push', '-q', 'origin', 'HEAD:main']);
   // ⭐ o commit de RELEASE que NÃO pode chegar ao remoto se o preflight reprovar
   fs.writeFileSync(path.join(repo, 'version.txt'), '9.9.9');
-  fs.appendFileSync(path.join(repo, 'js', 'store.js'), '// mudança da release\n');
+  fs.appendFileSync(path.join(repo, 'functions-autodraw', 'placeholder.js'), '// mudança da release\n');
   git(['add', '-A']);
   git(['commit', '-q', '-m', 'commit de release']);
   const shaRelease = git(['rev-parse', 'HEAD']).trim();

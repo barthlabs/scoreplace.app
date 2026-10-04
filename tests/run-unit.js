@@ -229,6 +229,7 @@ const SUITES = [
   // mantém a chave velha e o usuário continua rodando o JS anterior. A trava é dupla:
   // executor no deploy e instrução explícita para a revisão Claude.
   'tests/release-version-fresh.test.js',
+  'tests/hosting-is-the-only-version-cut.test.js',
   // Cada FASE pode ter o seu formato de partida (1 set na classificatória, melhor de 3 com
   // super tie-break na eliminatória — pedido do dono com a Confra de exemplo). Guarda o
   // caminho INTEIRO, não o desenho: cfg.eliminatoria.scoring → compileToPhases →

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* Impede publicar código novo com o mesmo número já presente em origin/main.
+/* Impede publicar código novo com o mesmo número já presente em produção.
  * A coerência shell/JS/SW não basta: sem um número novo, o Service Worker conserva
  * a chave antiga e aparelhos já instalados continuam executando o release anterior. */
 'use strict';
@@ -42,14 +42,18 @@ const blocked = (baseline) => {
   console.error('  Bumpe SCOREPLACE_VERSION, rode npm run prerender e atualize os cache-busters antes de publicar.');
   process.exit(1);
 };
-if (ahead > 0 && tocaShellPublico && valid(base) && cmp(current, base) <= 0) blocked(base);
+// O repositório é backup, não é produção. Correções podem se acumular no main com a
+// versão que já está no ar; o corte da versão ocorre exclusivamente no deploy do
+// Hosting. Só a comparação explícita com a versão SERVIDA pode bloquear uma publicação.
 if (tocaShellPublico && valid(live) && cmp(current, live) <= 0) blocked(live);
 if (!base && !live) {
   console.log('✓ versão fresca: cópia de deploy sem histórico Git; a checagem ocorreu no repositório-fonte');
   process.exit(0);
 }
 const baseline = live || base || 'sem histórico';
-if (ahead > 0 && !tocaShellPublico) {
+if (!live && ahead > 0 && tocaShellPublico) {
+  console.log('✓ versão de trabalho preservada: ' + ahead + ' commit(s) aguardam o corte no Hosting');
+} else if (ahead > 0 && !tocaShellPublico) {
   console.log('✓ versão do shell preservada: ' + ahead + ' commit(s) só de servidor/documentação/teste');
 } else {
   console.log('✓ versão fresca: ' + current + ' é maior que a base ' + baseline + ' (' + ahead + ' commit(s) novo(s))');

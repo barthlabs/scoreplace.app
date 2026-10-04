@@ -27,12 +27,11 @@ const ok = (c, m) => { if (c) { pass++; console.log('  ✓ ' + m); } else { fail
 console.log('──── a trava de cache-buster não fica vazia ────');
 
 // ── 1. ela É CHAMADA por quem publica ────────────────────────────────────────────────
-ok(/node scripts\/check-cache-busters\.js/.test(hook),
-  'o pre-push chama a trava (é o único ponto onde ela pega: no predeploy o push já aconteceu)');
+ok(!/node scripts\/check-cache-busters\.js/.test(hook),
+  'o pre-push não corta versão: cache-buster fica exclusivamente no deploy do Hosting');
 // compara com a CHAMADA da suíte (`! npm test >"$LOG"`), não com as menções no cabeçalho
-ok(hook.indexOf('node scripts/check-cache-busters.js') < hook.indexOf('! npm test >'),
-  '  → e antes da suíte de 2min30 (a trava é um git diff, custa nada)');
-ok(/barra "cache-buster desatualizado/.test(hook), '  → e BARRA o push, não só avisa');
+ok(/SP_RELEASE_BASE/.test(deploy) && /check-cache-busters\.js" --fix/.test(deploy),
+  'o deploy corta cache-busters contra a base do último release');
 ok(/SP_PREFLIGHT_OK/.test(hook) && /git status --porcelain/.test(hook),
   'o único reaproveitamento da suíte exige SHA do preflight e árvore limpa');
 const corpoDoGate = hook.slice(hook.indexOf('# ── 2. pro main'));

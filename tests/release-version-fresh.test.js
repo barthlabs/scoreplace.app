@@ -14,8 +14,8 @@ try {
   run(['add', '.']); run(['commit', '-m', 'base']); run(['update-ref', 'refs/remotes/origin/main', 'HEAD']);
   fs.writeFileSync(path.join(lab, 'js', 'app.js'), 'new code\n'); run(['add', '.']); run(['commit', '-m', 'new code without version']);
   const gate = path.join(root, 'scripts/check-release-version-fresh.js');
-  const red = spawnSync(process.execPath, [gate], { env: { ...process.env, SP_RELEASE_ROOT: lab }, encoding: 'utf8' });
-  if (red.status === 0 || !/RELEASE BLOQUEADO/.test(red.stderr)) throw new Error('gate aceitou código novo com versão repetida');
+  const worktree = spawnSync(process.execPath, [gate], { env: { ...process.env, SP_RELEASE_ROOT: lab }, encoding: 'utf8' });
+  if (worktree.status !== 0 || !/aguardam o corte no Hosting/.test(worktree.stdout)) throw new Error('gate não aceitou trabalho acumulado antes do corte');
   fs.writeFileSync(path.join(lab, 'version.txt'), '2.2.35\n'); run(['add', '.']); run(['commit', '-m', 'release']);
   const stillRed = spawnSync(process.execPath, [gate], { env: { ...process.env, SP_RELEASE_ROOT: lab, SP_RELEASE_PRODUCTION_VERSION: '2.2.35' }, encoding: 'utf8' });
   if (stillRed.status === 0) throw new Error('gate aceitou repetir a versão que já está em produção');

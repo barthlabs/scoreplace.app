@@ -39,7 +39,7 @@ if (!versao) { console.error('✗ não achei SCOREPLACE_VERSION em js/store.js')
 let mudados = [];
 let _de = '';
 try {
-  let base = execSync('git merge-base HEAD origin/main', { cwd: root }).toString().trim();
+  let base = String(process.env.SP_RELEASE_BASE || '').trim() || execSync('git merge-base HEAD origin/main', { cwd: root }).toString().trim();
   const head = execSync('git rev-parse HEAD', { cwd: root }).toString().trim();
   if (base === head) {
     // Ainda sem commit novo, a leva pode estar em fechamento local. Nesse caso

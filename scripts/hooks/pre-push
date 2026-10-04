@@ -91,15 +91,10 @@ fi
 
 # ── 2. pro main, a suíte é gate ──────────────────────────────────────────────
 if [[ $PRA_MAIN -eq 1 ]]; then
-  # ⚠️ CACHE-BUSTER ANTES DA SUÍTE (24/ago/2026). A trava existia desde jul/2026 e NINGUÉM a
-  # chamava — só `npm run check:cache`. Resultado medido: um conserto em dashboard.js foi pro
-  # ar servido como `?v=2.0.39`, a URL antiga, e quem tinha o arquivo em cache continuou com o
-  # código velho. Aqui é o único lugar onde ela pega de verdade: no `hosting.predeploy` o push
-  # pro main JÁ ACONTECEU e o diff dela fica vazio.
-  # Barata (é um `git diff`), então roda antes da suíte de 2min30.
-  if ! node scripts/check-cache-busters.js; then
-    barra "cache-buster desatualizado (saída acima)." "    bumpe o \`?v=\` no index.html — sem isso o navegador serve a cópia VELHA e o deploy é fantasma."
-  fi
+  # Cache-buster é gerado no CORTE do Hosting, junto com o novo CACHE_NAME. O main
+  # acumula trabalho e não é uma publicação: exigir o ?v= novo aqui inflava versões
+  # sem entregar nada ao usuário. O deploy roda a mesma trava, contra a base do último
+  # release, antes de subir qualquer byte.
 
   # O deploy já roda esta mesma suíte na cópia exata ANTES de alcançar este push.
   # A prova não é uma chave booleana: o SHA aprovado precisa ser o HEAD e a árvore
