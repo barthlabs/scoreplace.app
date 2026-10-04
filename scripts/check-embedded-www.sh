@@ -44,7 +44,19 @@ if [ ! -f "$EMBEDDED_STORE" ]; then
   exit 1
 fi
 
-EMBEDDED_VER="$(sed -n "s/.*SCOREPLACE_VERSION *= *'\([^']*\)'.*/\1/p" "$EMBEDDED_STORE" | head -1)"
+# O arquivo copiado pelo Capacitor vem do build Vite. Em desenvolvimento a
+# atribuição usa aspas simples; no artefato minificado o Vite pode trocá-las por
+# aspas duplas e retirar os espaços. A trava tem de ler as duas formas, pois o
+# objetivo é conferir a versão embarcada, não a formatação do minificador.
+EMBEDDED_VER="$(awk '
+  match($0, /SCOREPLACE_VERSION[[:space:]]*=[[:space:]]*["\047][^"\047]+["\047]/) {
+    version = substr($0, RSTART, RLENGTH)
+    sub(/^.*=[[:space:]]*/, "", version)
+    gsub(/["\047]/, "", version)
+    print version
+    exit
+  }
+' "$EMBEDDED_STORE")"
 
 if [ -z "$EMBEDDED_VER" ]; then
   echo "✖ EMBARCADO sem SCOREPLACE_VERSION legível: $EMBEDDED_STORE" >&2

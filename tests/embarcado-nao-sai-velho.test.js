@@ -69,6 +69,13 @@ console.log('\n📋 embarcado em dia');
     const r = runGate(plat, fakeTree(plat, '1.9.70', '1.9.70'));
     assert(r.status === 0, plat + ': embarcado igual ao version.txt passa');
     assert(/1\.9\.70/.test(r.stdout), plat + ': diz qual versão conferiu');
+
+    // O Vite minifica a atribuição canônica em `window.SCOREPLACE_VERSION="…"`.
+    // A trava não pode confundir essa forma válida com bundle corrompido.
+    const minificado = fakeTree(plat, '1.9.70', '1.9.70');
+    fs.writeFileSync(path.join(minificado, PATHS[plat]), 'window.SCOREPLACE_VERSION="1.9.70",window.ok=1;\n');
+    assert(runGate(plat, minificado).status === 0,
+        plat + ': atribuição minificada com aspas duplas também passa');
 });
 
 // ─── a falha que aconteceu de verdade ───
