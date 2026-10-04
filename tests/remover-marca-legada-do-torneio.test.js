@@ -6,6 +6,7 @@
  */
 const fs = require('fs');
 const source = fs.readFileSync('functions-autodraw/index.js', 'utf8');
+const client = fs.readFileSync('js/store.js', 'utf8');
 let fail = 0;
 function ok(value, message) { if (value) console.log('✓ ' + message); else { fail++; console.error('✗ ' + message); } }
 
@@ -15,4 +16,6 @@ ok(/key === 'coverUrl' && patch\[key\] === ''[\s\S]*?delete t\.coverUrl;[\s\S]*?
   'remover capa apaga URL e base64 legado no documento canônico');
 ok(/key === 'logoUrl' && patch\[key\] === ''[\s\S]*?delete t\.logoUrl;[\s\S]*?delete t\.logoData;/.test(source),
   'o mesmo contrato vale para logo, evitando a mesma regressão');
+ok(/pair\[0\] === 'coverPhotoData' && Object\.prototype\.hasOwnProperty\.call\(data, pair\[0\]\)[\s\S]*?_editPatch\[pair\[1\]\] = ''/.test(client),
+  'capa vazia no formulário manda remoção mesmo quando o cache local não traz a URL');
 process.exit(fail ? 1 : 0);

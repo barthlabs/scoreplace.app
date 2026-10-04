@@ -14215,7 +14215,14 @@ window.AppStore = {
            * "remover". Se havia marca no documento fresco e o campo do formulário
            * ficou vazio, mandamos a URL vazia para a Function apagar também o legado.
            * [[regression_remover_capa_nao_pode_preservar_url_antiga]] */
-          if (tourData[pair[1]] || tourData[pair[0]]) _editPatch[pair[1]] = '';
+          /* A ficha de edição sempre traz `coverPhotoData`, inclusive vazio. Não
+           * condicionar a remoção à cópia local: ela pode estar velha e sem `coverUrl`,
+           * enquanto o documento canônico no Firestore ainda tem a capa. Neste caso,
+           * omitir o patch preserva a imagem e o organizador vê o fundo voltar depois
+           * de salvar. Campo de capa explicitamente vazio = comando de apagar.
+           * [[regression_remover_capa_independe_do_cache_local]] */
+          if (pair[0] === 'coverPhotoData' && Object.prototype.hasOwnProperty.call(data, pair[0])) _editPatch[pair[1]] = '';
+          else if (tourData[pair[1]] || tourData[pair[0]]) _editPatch[pair[1]] = '';
           else delete _editPatch[pair[1]];
           return Promise.resolve();
         }
