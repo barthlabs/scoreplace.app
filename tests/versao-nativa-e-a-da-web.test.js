@@ -26,6 +26,15 @@ console.log('──── a versão nativa é a da web ────');
 
 const ROOT = path.join(__dirname, '..');
 const web = fs.readFileSync(path.join(ROOT, 'version.txt'), 'utf8').trim();
+const packageScripts = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).scripts;
+
+// [[regression_hosting_web_nao_mexe_em_versao_nativa]]
+// Uma publicação Firebase é só web. Exigir igualdade aqui torna o CI vermelho
+// entre releases de loja e o sincronizador chegava a editar o pbxproj num corte web.
+ok(!/check-versao-nativa/.test(packageScripts.test),
+  'npm test web não exige versão nativa: a checagem ocorre somente no release da loja');
+ok(!/sync-versao-nativa/.test(packageScripts.prerender),
+  'prerender web não altera MARKETING_VERSION do iOS');
 
 // ── o gate existe e está LIGADO nos dois caminhos de release ────────────────
 ok(fs.existsSync(path.join(ROOT, 'scripts', 'check-versao-nativa.js')), 'o gate existe');
