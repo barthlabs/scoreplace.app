@@ -1,3 +1,4 @@
+// 2.3.254 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.3.253 — A validação do bundle embarcado aceita a forma minificada real de SCOREPLACE_VERSION, sem deixar de comparar a versão que segue para iOS/Android.
 // 2.3.252 — O gate local agora reproduz o dry-run sem exigir credencial Firebase e exige que a versão iOS acompanhe a web antes do push; os workflows usam as actions atuais para evitar falhas e avisos repetidos.
 // 2.3.251 — A imagem de fundo de um torneio passa a ser exclusivamente a capa definida pela organização. Escolher um local não busca nem salva fotografia do Google Places; sem capa, os cards, o detalhe e o Modo TV usam fundo sólido neutro (ou cor de marca atenuada quando configurada).
