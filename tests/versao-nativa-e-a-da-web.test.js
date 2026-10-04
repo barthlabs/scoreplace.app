@@ -74,14 +74,13 @@ ok(androidVersions.length === 2 && androidVersions.every((v) => /^\d+\.\d+\.\d+$
 ok(new Set(androidVersions).size === 1,
   'Android: telefone e Wear carregam a mesma versão de produto — veio: ' + androidVersions.join(', '));
 
-// ── o gate REPROVA de verdade (não é decoração) ─────────────────────────────
-// Roda o script real contra uma árvore de mentira com a versão errada.
+// ── o gate aceita web diferente, mas REPROVA alvos nativos divergentes ───────
 const os = require('os');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'vn-'));
 fs.writeFileSync(path.join(tmp, 'version.txt'), '9.9.9\n');
 fs.mkdirSync(path.join(tmp, 'ios', 'App', 'App.xcodeproj'), { recursive: true });
 fs.writeFileSync(path.join(tmp, 'ios', 'App', 'App.xcodeproj', 'project.pbxproj'),
-  'MARKETING_VERSION = 2.1;\nMARKETING_VERSION = 2.1;\n');
+  'MARKETING_VERSION = 2.1.0;\nMARKETING_VERSION = 2.1.0;\n');
 fs.mkdirSync(path.join(tmp, 'scripts'), { recursive: true });
 fs.copyFileSync(path.join(ROOT, 'scripts', 'check-versao-nativa.js'),
   path.join(tmp, 'scripts', 'check-versao-nativa.js'));
@@ -90,10 +89,18 @@ try {
   execFileSync(process.execPath, [path.join(tmp, 'scripts', 'check-versao-nativa.js'), 'ios'],
     { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
 } catch (e) { saiu = e.status; saida = String(e.stderr || ''); }
-ok(saiu === 1, '⛔ com a versão nativa diferente da web, o gate SAI 1 (reprova de verdade)');
-ok(/9\.9\.9/.test(saida) && /2\.1/.test(saida),
-   'e a mensagem mostra os DOIS números, pra não ter que adivinhar qual mexer');
-ok(/MARKETING_VERSION/.test(saida), 'e diz ONDE mexer');
+ok(saiu === 0, 'web diferente não bloqueia a release nativa');
+fs.writeFileSync(path.join(tmp, 'ios', 'App', 'App.xcodeproj', 'project.pbxproj'),
+  'MARKETING_VERSION = 2.1.0;\nMARKETING_VERSION = 2.1.1;\n');
+saiu = 0; saida = '';
+try {
+  execFileSync(process.execPath, [path.join(tmp, 'scripts', 'check-versao-nativa.js'), 'ios'],
+    { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+} catch (e) { saiu = e.status; saida = String(e.stderr || ''); }
+ok(saiu === 1, '⛔ alvos nativos divergentes são recusados de verdade');
+ok(/2\.1\.0/.test(saida) && /2\.1\.1/.test(saida),
+   'a mensagem mostra as versões nativas que divergem');
+ok(/Web\/Hosting/.test(saida), 'e deixa explícito que a web não entra na comparação');
 fs.rmSync(tmp, { recursive: true, force: true });
 
 console.log(pass + ' ok, ' + fail + ' falhas');

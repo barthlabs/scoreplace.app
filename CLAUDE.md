@@ -12,7 +12,7 @@ Plataforma web de gestao de torneios esportivos e board games. App SPA (Single P
   não pode alterar `MARKETING_VERSION` (iOS), `versionName` (Android), nem exigir que eles
   coincidam com a web: as versões das lojas só mudam quando há uma publicação nativa real.
   Nos fluxos `ios-archive.sh` e `android-release.sh`, o gate `check-versao-nativa.js`
-  continua exigindo a igualdade com a versão web escolhida para aquela release. O
+  valida que todos os alvos da mesma loja usam a mesma versão X.Y.Z, sem comparar com a web. O
   `CURRENT_PROJECT_VERSION` (build) segue independente e sempre incrementando — ele é da
   Apple, não do produto.
 - **Convenção de versão (a partir de 30 Abr 2026):** `MAJOR.MINOR.PATCH-channel` no padrão semver. Em fase **beta**, incremento PATCH a cada deploy (`1.0.0-beta` → `1.0.1-beta` → `1.0.2-beta` → ...). MINOR sobe quando há feature significativa nova; MAJOR reservado pra v2.0 (mudanças incompatíveis). Estável: dropar o `-beta` (`1.0.0`).

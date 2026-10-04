@@ -1,22 +1,10 @@
-/* check-versao-nativa.js — TRAVA: a versão NATIVA é a mesma da web.
+/* check-versao-nativa.js — TRAVA: cada release nativa é consistente consigo mesma.
  *
- * ⛔ ORDEM DO DONO (27/ago/2026): _"altere esse padrao que é impossivel de alcancar. vc
- * sempre faz cagada na nativa e nunca fica x.y no final… adotemos o mesmo padrao da web
- * x.y.z"_.
- *
- * O QUE ERA: a loja usava MAJOR.MINOR (2.1) e a web MAJOR.MINOR.PATCH (2.1.22). Com dois
- * esquemas, "está alinhado?" virava julgamento — e a conta batia de um jeito diferente a
- * cada leva. Pior: a build 265 subiu como "2.1" carregando o código da 2.1.6, e ninguém
- * tinha como ver isso pelo número.
- *
- * O QUE É AGORA: `MARKETING_VERSION` (iOS) e `versionName` (Android) == `version.txt`.
- * Alinhamento deixa de ser julgamento e vira comparação de string — o número que o testador
- * lê é o mesmo que o `version.txt` do ar.
- *
- * ⚠️ POR QUE É UM GATE, e não uma linha no CLAUDE.md: o dono JÁ tinha dito "tudo tem que
- * andar junto" e o repo mesmo assim ficou 16 commits atrás. Neste projeto, o que não é
- * gate não acontece. Roda antes de arquivar: falhar aqui custa segundos, falhar depois
- * custa uma volta inteira na fila da Apple.
+ * [[regression_hosting_web_nao_mexe_em_versao_nativa]]
+ * Web (Firebase Hosting), iOS e Android têm cortes independentes. Logo, este gate NÃO
+ * compara a versão da loja a version.txt: ele roda somente antes de arquivar uma loja e
+ * exige que todos os seus alvos tenham a mesma versão X.Y.Z válida. Assim um deploy web
+ * não altera a loja e uma release iOS/Android não pode sair com alvos divergentes.
  *
  * ⛔ NÃO confere o BUILD (CURRENT_PROJECT_VERSION / versionCode): esse é da Apple/Google,
  * só precisa subir sempre, e não tem relação com a versão do produto.
@@ -29,9 +17,6 @@ const path = require('path');
 
 const plat = (process.argv[2] || '').toLowerCase();
 const root = path.resolve(__dirname, '..');
-const web = (fs.readFileSync(path.join(root, 'version.txt'), 'utf8') || '').trim();
-
-if (!web) { console.error('✗ version.txt vazio ou ausente.'); process.exit(1); }
 if (plat !== 'ios' && plat !== 'android') {
   console.error('uso: node scripts/check-versao-nativa.js <ios|android>');
   process.exit(2);
@@ -57,16 +42,12 @@ if (!achadas.length) {
   console.error(`✗ não achei a versão nativa (${plat}) — o arquivo mudou de forma?`);
   process.exit(1);
 }
-const erradas = [...new Set(achadas.filter((v) => v !== web))];
-if (erradas.length) {
-  console.error(`\n✗ A VERSÃO NATIVA NÃO É A DA WEB (${plat}):`);
-  console.error(`    web (version.txt) : ${web}`);
-  console.error(`    nativa            : ${[...new Set(achadas)].join(', ')}`);
-  console.error(`\n  Desde 27/ago/2026 elas são a MESMA string — ordem do dono, porque com`);
-  console.error(`  dois esquemas "alinhado" virava julgamento e a build 265 chegou a subir`);
-  console.error(`  como "2.1" carregando o código da 2.1.6.`);
-  console.error(`\n  CONSERTO: ponha ${web} em ${plat === 'ios' ? 'MARKETING_VERSION (todos os alvos do pbxproj)' : 'versionName (android/app e android/wear)'}.`);
-  console.error(`  (o número de BUILD é outra coisa e segue independente)\n`);
+const versions = [...new Set(achadas)];
+const invalidas = versions.filter((v) => !/^\d+\.\d+\.\d+$/.test(v));
+if (invalidas.length || versions.length !== 1) {
+  console.error(`\n✗ A VERSÃO NATIVA ESTÁ INCONSISTENTE (${plat}): ${versions.join(', ')}`);
+  console.error(`  Todos os alvos de ${plat} devem usar a mesma versão X.Y.Z.`);
+  console.error('  Web/Hosting usa um corte independente e não entra nesta comparação.\n');
   process.exit(1);
 }
-console.log(`▶ versão nativa (${plat}) = web = ${web}.`);
+console.log(`▶ versão nativa (${plat}) consistente = ${versions[0]}.`);
