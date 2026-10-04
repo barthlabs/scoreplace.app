@@ -150,6 +150,18 @@
     });
     var actualExtraMs = Object.keys(overflowByDay).reduce(function (sum, key) { return sum + overflowByDay[key]; }, 0);
     var actualOutside = items.some(function (item) { return item.extrapolaJanela === true; });
+    // JOGO N é cronológico na agenda aprovada: seis quadras às 18:00 recebem
+    // Jogos 1–6; o primeiro slot das 18:35 passa a ser o Jogo 7. Não usamos
+    // categoria nem a ordem incidental do array para numerar. A prioridade de
+    // quadra só desempata jogos que começam no mesmo instante.
+    var _courtRank = {}; cs.forEach(function (court, index) { _courtRank[String(court)] = index; });
+    items.slice().sort(function (a, b) {
+      var at = Date.parse(a.scheduledAt || ''), bt = Date.parse(b.scheduledAt || '');
+      if (at !== bt) return at - bt;
+      var ac = _courtRank[String(a.court)], bc = _courtRank[String(b.court)];
+      if (ac !== bc) return ac - bc;
+      return String(a.matchId).localeCompare(String(b.matchId));
+    }).forEach(function (item, index) { item.scheduledGameNumber = index + 1; });
     return { baseScheduleRevision:Number(t.scheduleRevision || 0), items:items, courts:cs,
       // A agenda por categoria não pode ser aplicada se uma categoria explicitamente
       // presa a um dia ultrapassa a janela desse dia.
@@ -345,7 +357,7 @@
           // Aplicar confirma cada slot da sugestão. A partir daqui não existe
           // realocação automática: para mudar, o organizador escolhe o jogo,
           // horário e/ou quadra nesta própria tela.
-          jogos:draft.items.map(function (i) { return { matchId:i.matchId, court:i.court, scheduledAt:i.scheduledAt, scheduledKind:'estimate', scheduleLocked:true, scheduleSource:'organizer' }; })
+          jogos:draft.items.map(function (i) { return { matchId:i.matchId, court:i.court, scheduledAt:i.scheduledAt, scheduledGameNumber:i.scheduledGameNumber, scheduledKind:'estimate', scheduleLocked:true, scheduleSource:'organizer' }; })
         }).then(function () { msg('Agenda aplicada', draft.items.length + ' jogos pendentes foram distribuídos pelas quadras.', 'success'); if (window.renderBracket) window.renderBracket(fresh.id); })
           .catch(function (e) { msg('Agenda não salva', (e && e.details && e.details.code === 'schedule-revision-stale') ? 'A agenda mudou em outra tela. A sugestão foi recalculada; aplique novamente.' : 'Não foi possível aplicar a agenda. Tente novamente.', 'error'); })
           .finally(function () { button.disabled=false; button.textContent='Aplicar agenda'; });

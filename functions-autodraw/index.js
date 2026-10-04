@@ -3231,6 +3231,14 @@ exports.assignMatchCourt = onCall(async (request) => {
       if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização define a quadra.', { tId, matchId, uid });
       const m = drawWindow._findMatch(t, matchId);
       if (!m) return { ok: false, reason: 'match-not-found' };
+      const jaEmJogo = (typeof drawWindow._matchHasRealPlay === 'function' && drawWindow._matchHasRealPlay(m)) ||
+        m.liveScored === true || m.startedAt || m.resultAt || m.wo === true || m.winner != null ||
+        (Array.isArray(m.sets) && m.sets.length > 0) ||
+        (((typeof m.scoreP1 === 'number' && m.scoreP1 > 0) || (typeof m.scoreP2 === 'number' && m.scoreP2 > 0)) && !m.wo);
+      // Jogo iniciado/concluído é histórico operacional: não pode ser deslocado
+      // por nenhuma interface. Uma troca de quadra mexe só neste jogo futuro e
+      // preserva todos os demais por construção.
+      if (jaEmJogo) throw _drawFail('failed-precondition', 'Jogo iniciado ou concluído não pode mudar de quadra.', { tId, matchId });
       const antes = _antesDoMotor(t);
       const atual = String(m.court || '');
       if (atual === court) return { ok: true, changed: false };

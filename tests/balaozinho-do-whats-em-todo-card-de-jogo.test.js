@@ -64,7 +64,9 @@ ok(/dentroDaCaixa: true/.test(corpoLimpo),
    '① e avisa a porta única que está dentro da caixa (flex-shrink, pra não ser espremido)');
 
 // ── ② os dois lados do card passam o jogo ────────────────────────────────────
-const chamadas = bracket.match(/_teamAvatarHtml\([^;]*?\)\)?, m\)/g) || [];
+// O slot explícito (p1/p2) é necessário para o nome do time; `m` continua sendo
+// passado às duas metades para que a porta única do WhatsApp decida visibilidade.
+const chamadas = bracket.match(/_teamAvatarHtml\([^;]*?\)\)?, m(?:, ['"]p[12]['"])?\)/g) || [];
 ok(chamadas.length === 2, '② os dois lados (p1 e p2) passam o jogo — achei ' + chamadas.length);
 
 // ── ③ a REGRA, exercitada na porta única de verdade ─────────────────────────

@@ -1552,6 +1552,30 @@ window._assignGlobalGameNumbers = function (t) {
     _acharCarimbo(rd && rd.matches);
     (rd && rd.monarchGroups || []).forEach(function (g) { _acharCarimbo(g && g.matches); });
   });
+  // Depois de a agenda operacional ser aplicada, ela é a fonte de ordem mais
+  // específica: a sequência segue horário e prioridade da quadra. Só a aceitamos
+  // quando cobre TODOS os jogos reais e forma 1..N sem repetição; um plano parcial
+  // nunca pode renumerar uma chave já válida.
+  var _scheduled = [], _scheduledById = {};
+  function _coletarPlanejado(lista) {
+    (lista || []).forEach(function (m) {
+      if (!m || m.isSitOut || window._isByeMatch(m) || m.id == null) return;
+      var id = String(m.id);
+      if (_scheduledById[id]) return;
+      _scheduledById[id] = m;
+      _scheduled.push(m);
+    });
+  }
+  _coletarPlanejado(t.matches);
+  (t.rounds || []).forEach(function (rd) { _coletarPlanejado(rd && rd.matches); });
+  var _planNumbers = _scheduled.map(function (m) { return Number(m.scheduledGameNumber); });
+  var _validPlanNumbers = _scheduled.length > 0 && _planNumbers.length === _scheduled.length &&
+    _planNumbers.every(function (n) { return Number.isInteger(n) && n > 0 && n <= _scheduled.length; }) &&
+    (new Set(_planNumbers)).size === _scheduled.length;
+  if (_validPlanNumbers) {
+    _scheduled.forEach(function (m) { m._gameNum = Number(m.scheduledGameNumber); });
+    return;
+  }
   if (_temCarimboServidor && !_temJogoRealSemNumero) return;
   // `phaseRounds` e `groups` podem conter cópias já carregadas para desenhar a
   // tela, mas não são as fontes que este numerador percorre abaixo. Contá-las aqui

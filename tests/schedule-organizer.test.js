@@ -53,6 +53,19 @@ ok(multiA && multiB && multiA.scheduleLocked && multiB.scheduleLocked,
   'mais de uma intervenção manual permanece fixada no mesmo rascunho');
 ok(multiA && multiB && multiA.court !== multiB.court,
   'duas alterações simultâneas podem distribuir jogos entre quadras diferentes');
+ok(multiA && multiB && multiB.scheduledGameNumber < multiA.scheduledGameNumber,
+  'jogos no mesmo horário respeitam a prioridade da quadra na numeração global');
+
+const seisQuadrasNumeracao = {
+  id:'seis-quadras', startDate:'2026-10-01T18:00:00.000Z', endDate:'2026-10-01T23:59:00.000Z',
+  courtCount:6, gameDuration:35,
+  matches:Array.from({ length:6 }, function (_, i) { return { id:'M' + (i + 1), p1:'A' + i, p2:'B' + i, round:1 }; })
+};
+const mesmoHorario = W._operationalSchedulePlan(seisQuadrasNumeracao, seisQuadrasNumeracao.matches.map(function (m, i) {
+  return { matchId:m.id, court:'Quadra ' + (i + 1), scheduledAt:'2026-10-01T18:00:00.000Z' };
+}));
+ok(mesmoHorario.items.map(function (i) { return i.scheduledGameNumber; }).sort(function(a,b){ return a-b; }).join(',') === '1,2,3,4,5,6',
+  'seis quadras às 18:00 são exatamente Jogos 1–6, sem repetir número');
 
 const confirmed = Object.assign({}, t, { matches: t.matches.map(function (m) {
   return m.id === 'B' ? Object.assign({}, m, { court: 'Quadra 1', scheduledAt: '2026-10-01T09:00:00.000Z', scheduleLocked: false, scheduleSource: 'estimate' }) : m;
@@ -69,6 +82,8 @@ ok(/getTimezoneOffset\(\) \* 60000/.test(organizerSource),
   'o conversor do input de horário usa minutos em milissegundos explicitamente');
 ok(/scheduleLocked:true, scheduleSource:'organizer'/.test(organizerSource),
   'Aplicar agenda transforma a sugestão confirmada em alocação manual protegida');
+ok(/scheduledGameNumber:i\.scheduledGameNumber/.test(organizerSource),
+  'Aplicar agenda persiste a numeração cronológica que a grade mostrou');
 
 const categoryDays = {
   startDate:'2026-10-22T18:00', endDate:'2026-10-23T23:00', courtCount:1, gameDuration:30,

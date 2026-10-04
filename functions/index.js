@@ -5048,6 +5048,9 @@ exports.setMatchSchedule = onCall(
       if (kind !== null && _SCH_KINDS.indexOf(kind) === -1) throw new HttpsError("invalid-argument", "scheduledKind inválido");
       const at = (j.scheduledAt === null || j.scheduledAt === undefined || j.scheduledAt === "") ? null : String(j.scheduledAt);
       if (at !== null && isNaN(new Date(at).getTime())) throw new HttpsError("invalid-argument", "scheduledAt não é uma data");
+      const temScheduledGameNumber = j.scheduledGameNumber !== undefined;
+      const scheduledGameNumber = temScheduledGameNumber ? Number(j.scheduledGameNumber) : null;
+      if (temScheduledGameNumber && (!Number.isInteger(scheduledGameNumber) || scheduledGameNumber < 1)) throw new HttpsError("invalid-argument", "scheduledGameNumber inválido");
       const temCourt = j.court !== undefined;
       const court = temCourt && j.court != null ? String(j.court).trim() : null;
       if (court && court.length > 80) throw new HttpsError("invalid-argument", "quadra longa demais");
@@ -5063,6 +5066,7 @@ exports.setMatchSchedule = onCall(
         temSchedule: !!(j.schedule && typeof j.schedule === "object" && !Array.isArray(j.schedule)),
         schedule: (j.schedule && typeof j.schedule === "object" && !Array.isArray(j.schedule)) ? _schSaneiaSchedule(j.schedule) : null,
         scheduledAt: at,
+        temScheduledGameNumber: temScheduledGameNumber, scheduledGameNumber: scheduledGameNumber,
         scheduledBy: (j.scheduledBy === null || j.scheduledBy === undefined) ? null : String(j.scheduledBy),
         scheduledKind: kind,
         temCourt: temCourt, court: court,
@@ -5111,6 +5115,7 @@ exports.setMatchSchedule = onCall(
       const saida = [];
       const camposDe = (it) => {
         const c = { scheduledAt: it.scheduledAt, scheduledBy: it.scheduledBy, scheduledKind: it.scheduledKind, scheduleOpId: operationId, scheduleTouchedAt: agoraIso };
+        if (it.temScheduledGameNumber) c.scheduledGameNumber = it.scheduledGameNumber;
         if (it.temSchedule) c.schedule = it.schedule;
         if (it.temCourt) c.court = it.court;
         if (it.temScheduleLocked) c.scheduleLocked = it.scheduleLocked;

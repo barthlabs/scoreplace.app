@@ -9,4 +9,6 @@ ok(!body.includes('AppStore.mutate') && !body.includes('saveTournament'), 'atrib
 const cf=fs.readFileSync('functions-autodraw/index.js','utf8');
 ok(cf.includes('exports.assignMatchCourt = onCall') && cf.includes('_isTournamentAdmin(t, uid)'), 'Function exige organização no documento fresco');
 ok(cf.includes("const m = drawWindow._findMatch(t, matchId)") && cf.includes('_gravaTorneio(tx, ref, t, antes'), 'Function encontra jogo e grava pelo plano canônico');
+ok(cf.includes('Jogo iniciado ou concluído não pode mudar de quadra.'), 'Function bloqueia alteração de quadra em jogo iniciado ou concluído');
+ok(src.includes('regression_played_match_court_is_immutable') && src.includes('sp-match-court'), 'card mostra a quadra e só libera o seletor em jogo futuro');
 process.exit(fail?1:0);

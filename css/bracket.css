@@ -3,6 +3,50 @@ details[open] > summary .standings-toggle-show { display: none; }
 details[open] > summary .standings-toggle-hide { display: inline !important; }
 summary::-webkit-details-marker { display: none; }
 
+/* Cabeçalho de cada rodada no layout empilhado. A grade de colunas tem portal
+ * próprio; Liga/Ranking usa este mesmo ponto de ancoragem sob o cabeçalho global. */
+.sp-bracket-round-heading {
+  position: sticky;
+  top: var(--scroll-anchor, 120px);
+  z-index: 8;
+  background: var(--bg-card);
+  padding: .5rem 0;
+  box-shadow: 0 7px 10px -10px rgba(0,0,0,.85);
+}
+
+.sp-match-team-name {
+  min-height: 1.15em;
+  margin: 1px 0 0 calc(var(--sp-av, 24px) + 5px);
+  color: var(--text-muted);
+  font-size: .61rem;
+  font-weight: 800;
+  letter-spacing: .035em;
+  line-height: 1.15;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+
+.sp-match-court {
+  display: flex;
+  align-items: center;
+  gap: .38rem;
+  margin-top: .5rem;
+  color: var(--sp-c-86efac,#86efac);
+  font-size: .68rem;
+  font-weight: 800;
+}
+.sp-match-court select {
+  min-width: 0;
+  flex: 1;
+  padding: .24rem .35rem;
+  border: 1px solid rgba(16,185,129,.48);
+  border-radius: 6px;
+  background: rgba(16,185,129,.12);
+  color: var(--text-bright);
+  font: inherit;
+}
+.sp-match-court--readonly { justify-content: flex-start; }
+
 /* ==== TOURNAMENT BRACKET ==== */
 .bracket-container {
   display: flex;

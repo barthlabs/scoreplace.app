@@ -180,5 +180,17 @@ ok(typeof W._monarchGlobalJogoNum === 'undefined',
     '[CANON] dentro da rodada, P1/P2/P10 usa posição numérica; depois vem a mesma rodada da Prata — got ' + JSON.stringify(got));
 })();
 
+// A agenda operacional é a única fonte da sequência quando ela cobre todos os
+// jogos: a ordem do array não pode trocar Jogo 1 e Jogo 2.
+(function () {
+  const t = { matches: [
+    { id: 'slot-18h35', p1: 'C', p2: 'D', scheduledGameNumber: 2 },
+    { id: 'slot-18h00', p1: 'A', p2: 'B', scheduledGameNumber: 1 }
+  ] };
+  W._assignGlobalGameNumbers(t);
+  ok(t.matches[0]._gameNum === 2 && t.matches[1]._gameNum === 1,
+    '[AGENDA] scheduledGameNumber prevalece sobre a ordem incidental do array');
+})();
+
 console.log('\n' + (fail === 0 ? '✅' : '❌') + ' game-numbering: ' + pass + ' ok, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);

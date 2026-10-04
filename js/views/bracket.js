@@ -5221,6 +5221,24 @@ window._directBracketSlotLabel = function (t, match, slot) {
   return (kind === 'loser' ? 'Perdedor' : 'Vencedor') + ' do jogo ' + n;
 };
 
+// Competições por times (como o Neon) guardam o vínculo no confronto, não no
+// nome exibido da dupla. O card lê este vínculo canônico para mostrar os dois:
+// time e atletas. Nunca infere o time a partir do texto dos atletas.
+window._competitionTeamNameForMatch = function (t, match, slot) {
+  if (!t || !match || (slot !== 'p1' && slot !== 'p2')) return '';
+  var side = slot === 'p2' ? 'p2' : 'p1';
+  var obj = match[side === 'p1' ? 'team1Obj' : 'team2Obj'] || {};
+  var id = String(match[side + 'CompetitionTeamId'] || obj.competitionTeamId || '').trim();
+  if (!id) return '';
+  var teams = Array.isArray(t.competitionTeams) ? t.competitionTeams : [];
+  for (var i = 0; i < teams.length; i++) {
+    var team = teams[i] || {};
+    var teamId = String(team.id || team.teamId || ('team-' + (i + 1))).trim();
+    if (teamId === id) return String(team.name || team.displayName || '').trim();
+  }
+  return '';
+};
+
 // ─── Player avatars helper for bracket cards ────────────────────────────────
 function _teamAvatarHtml(teamName, pendingSub, t, uidHint, m, slot) {
   /* ⭐ 2.1.99 — O 💬 DE CADA PESSOA, EM TODO CARD DE JOGO.
@@ -5235,6 +5253,10 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint, m, slot) {
    * `m` é opcional: sem ele, `sameGroup` é falso e só o organizador vê — que é o
    * comportamento seguro pra qualquer chamador que ainda não passe o jogo. */
   var _souDoJogo = false;
+  var _nomeDoTime = (typeof window._competitionTeamNameForMatch === 'function')
+    ? window._competitionTeamNameForMatch(t, m, slot) : '';
+  var _timeHtml = _nomeDoTime
+    ? '<div class="sp-match-team-name" title="Time">Time: ' + window._safeHtml(_nomeDoTime) + '</div>' : '';
   try {
     var _cuJ = window.AppStore && window.AppStore.currentUser;
     _souDoJogo = !!(m && _cuJ && typeof window._userTeamInMatch === 'function' &&
@@ -5384,7 +5406,7 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint, m, slot) {
         `<div class="sp-mc-box"${_boxNomeAttrs} style="${_boxNome}"><span class="sp-name-fit" data-maxrem="${_nomeMaxRem}" data-minrem="${_nomeMinRem}" data-two-line-maxrem="${_geo.twoLineMaxRem}" style="font-weight:700;color:var(--sp-c-fbbf24,#fbbf24);white-space:nowrap;">${window._safeHtml(dispName)}</span></div>` +
         `<span style="font-size:0.52rem;font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.4);padding:1px 5px;border-radius:5px;letter-spacing:0.3px;text-transform:uppercase;white-space:nowrap;flex-shrink:0;">aguardando resposta</span>` +
       `</div>`;
-      return;
+      return html + _timeHtml;
     }
     html += `<div class="sp-mc-side">` +
       `<img src="${photoSrc}"${_avatarUid} ${onerror} data-player-name="${window._safeHtml(name)}" class="sp-av" style="--sp-av:${size}">` +
@@ -5433,7 +5455,7 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint, m, slot) {
     `</div>`;
   });
   if (members.length > 1) html += '</div>';
-  return html;
+  return html + _timeHtml;
 }
 
 /* ── LINHA DE TEMPO DO JOGO ─────────────────────────────────────────────────────
@@ -6063,6 +6085,31 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     return '<span aria-hidden="true" title="Time" style="width:10px;height:10px;border-radius:50%;background:' + color + ';box-shadow:0 0 0 2px rgba(255,255,255,.16);flex:0 0 auto;margin-right:7px;"></span>';
   };
 
+  // A quadra é parte da agenda operacional. Resultado, placar ao vivo ou início
+  // real congelam o jogo: não há seletor nem alteração possível depois disso.
+  // [[regression_played_match_court_is_immutable]]
+  var _matchAlreadyInPlay = (typeof window._matchHasRealPlay === 'function')
+    ? window._matchHasRealPlay(m)
+    : !!(m.liveScored || m.startedAt || m.resultAt || m.winner || m.wo || (Array.isArray(m.sets) && m.sets.length));
+  var _cardCourts = (function () {
+    var names = t && t.courtNames;
+    if (Array.isArray(names) && names.length) return names.map(String).filter(Boolean);
+    if (typeof names === 'string' && names.trim()) return names.split(',').map(function (x) { return x.trim(); }).filter(Boolean);
+    var n = Math.max(0, parseInt(t && t.courtCount, 10) || 0), out = [];
+    for (var i = 1; i <= n; i++) out.push('Quadra ' + i);
+    return out;
+  })();
+  var _canChangeCardCourt = !!(t && typeof window._souOrganizador === 'function' && window._souOrganizador(t) && !_matchAlreadyInPlay && !isByeMatch && !m.isSitOut);
+  var _courtCardHtml = '';
+  if (_canChangeCardCourt && _cardCourts.length) {
+    var _courtOpts = '<option value="">📍 Sem quadra</option>' + _cardCourts.map(function (court) {
+      return '<option value="' + window._safeHtml(court) + '"' + (String(m.court || '') === court ? ' selected' : '') + '>' + window._safeHtml(court) + '</option>';
+    }).join('');
+    _courtCardHtml = '<label class="sp-match-court"><span>📍 Quadra</span><select onclick="event.stopPropagation()" onchange="window._assignMatchCourt(\'' + _esc(tId) + '\',\'' + _esc(m.id) + '\',this.value)">' + _courtOpts + '</select></label>';
+  } else if (m.court) {
+    _courtCardHtml = '<div class="sp-match-court sp-match-court--readonly">📍 ' + window._safeHtml(String(m.court)) + '</div>';
+  }
+
   const p1Row = `
     <div style="${rowStyle(p1IsWinner, 'p1')}">
       ${ciDot(p1ci)}${_teamColorDot('p1')}<div style="flex:1;overflow:hidden;min-width:0;">${_teamAvatarHtml(m.p1AguardaMelhor ? 'TBD' : m.p1, pendingSub, t, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p1', t) : (m.p1Uid || m.team1Uids)), m, 'p1')}</div>
@@ -6658,6 +6705,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
       ${p2Row}
       ${_tbHintHtml}
       ${winnerBadge}
+      ${_courtCardHtml}
       ${_cardFooterChips(t, m, { semCabecalhoDeGrupo: _dashConsensus })}
     </div>`;
 }
@@ -7555,7 +7603,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
   const currentRoundHtml = `
     <div class="card" style="margin-top:1.5rem;">
       ${rankingCountdownHtml}
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:1rem;">
+      <div class="sp-bracket-round-heading" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:1rem;">
         <h3 class="card-title" style="margin:0;border-left:3px solid ${_isReiRainhaRound ? '#fbbf24' : 'var(--primary-color)'};padding-left:10px;">${_isReiRainhaRound ? '👑 ' : ''}${isSwissQualifier ? _swissQualifierLabel(currentRound) : (_t('bracket.round', {n: currentRound}) + (isSuico ? ` / ${maxRounds}` : ''))} ${currentRoundData.status === 'complete' ? '— ' + _t('bracket.complete') + ' ✓' : ''}</h3>
         ${isOrg && !isFinished && allComplete && _phaseCad ? `
           <button class="btn btn-success btn-sm hover-lift" onclick="window._phaseCloseLeagueRound('${String(_phaseCad.tId || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}', ${parseInt(_phaseCad.phaseIdx, 10) || 0})">
@@ -8623,13 +8671,11 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
     var title = displayLabel
       ? _t('bracket.standingsTitleCat', {cat: displayLabel, n: _roundLabel})
       : _t('bracket.standingsTitle', {n: _roundLabel});
-    // v0.16.93: classificação por CATEGORIA mostrada por default (open) — pedido do
-    // usuário "no detalhe do torneio a classificação deve estar mostrada por padrao e
-    // pode ser ocultada pelo usuário." v4.x: a classificação GERAL (sem categoria,
-    // sec.label null — ex.: torneio com muitos inscritos) fica COLAPSADA por default;
-    // por-categoria segue aberta. Spans show/hide mantêm estilos inline originais — CSS
-    // bracket.css já tem regras details[open] > summary .standings-toggle-{show,hide}.
-    var _stdOpen = sec.label ? ' open' : '';
+    // Em competição por times, os cards são a leitura primária. A classificação
+    // vem depois de TODAS as rodadas e começa recolhida; não pode empurrar os jogos
+    // para baixo logo ao abrir a chave (caso Neon).
+    var _isTeamCompetition = Array.isArray(t && t.competitionTeams) && t.competitionTeams.length > 0;
+    var _stdOpen = (!_isTeamCompetition && sec.label) ? ' open' : '';
     return `<div class="card" style="margin:1.25rem 0 1rem;">
       <details${_stdOpen}>
         <summary style="cursor:pointer;user-select:none;list-style:none;display:flex;justify-content:space-between;align-items:center;gap:.75rem;">
@@ -8653,14 +8699,16 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
   let previousRoundsHtml = '';
   if (currentRound > 1) {
     let prevRoundsInner = '';
-    for (var ri = currentRound - 2; ri >= 0; ri--) {
+    // Rodadas são uma narrativa cronológica: R1 → R2 → atual → próximas. A
+    // renderização anterior invertia o histórico e escondia a leitura do plano.
+    for (var ri = 0; ri <= currentRound - 2; ri++) {
       var rd = rounds[ri];
       if (!rd || !rd.matches || rd.matches.length === 0) continue;
       var prevMatchOffset = rounds.slice(0, ri).reduce(function(sum, r) { return sum + (r.matches || []).length; }, 0);
       var rdComplete = (rd.matches || []).every(function(m) { return m.winner || m.isBye || m.isSitOut; });
       var rdIsRR = rd.format === 'rei_rainha';
       prevRoundsInner += '<div style="margin-bottom: 12px;">' +
-        '<div style="font-weight: 700; font-size: 0.85rem; color: var(--text-bright); margin-bottom: 8px;">' + (rdIsRR ? '👑 ' : '') + _t('bracket.round', {n: ri + 1}) + (rdComplete ? ' — ' + _t('bracket.complete') + ' ✓' : '') + '</div>' +
+        '<div class="sp-bracket-round-heading" style="font-weight: 700; font-size: 0.85rem; color: var(--text-bright); margin-bottom: 8px;">' + (rdIsRR ? '👑 ' : '') + _t('bracket.round', {n: ri + 1}) + (rdComplete ? ' — ' + _t('bracket.complete') + ' ✓' : '') + '</div>' +
         '<div style="display: flex; flex-wrap: wrap; gap: 12px;">';
       // v4.4.114: ordena — jogos reais primeiro, depois FOLGA (âmbar), depois INATIVO (vermelho).
       var _rdOrdered = (rd.matches || []).slice().sort(function(a, b){
@@ -8695,6 +8743,14 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         var p1Style = p1Win ? 'color:var(--sp-c-4ade80,#4ade80);font-weight:700;' : (isDraw ? 'color:var(--sp-c-94a3b8,#94a3b8);' : 'color:var(--text-muted);opacity:0.8;');
         var p2Style = p2Win ? 'color:var(--sp-c-4ade80,#4ade80);font-weight:700;' : (isDraw ? 'color:var(--sp-c-94a3b8,#94a3b8);' : 'color:var(--text-muted);opacity:0.8;');
         var hasScore = (m.scoreP1 !== undefined && m.scoreP1 !== null);
+        // O histórico também é card de jogo: em torneio por times ele preserva
+        // o time além dos atletas, exatamente como o card da rodada atual.
+        var _prevP1Team = (typeof window._competitionTeamNameForMatch === 'function')
+          ? window._competitionTeamNameForMatch(t, m, 'p1') : '';
+        var _prevP2Team = (typeof window._competitionTeamNameForMatch === 'function')
+          ? window._competitionTeamNameForMatch(t, m, 'p2') : '';
+        var _prevP1TeamHtml = _prevP1Team ? '<span class="sp-match-team-name" style="margin:2px 0 0;">Time: ' + window._safeHtml(_prevP1Team) + '</span>' : '';
+        var _prevP2TeamHtml = _prevP2Team ? '<span class="sp-match-team-name" style="margin:2px 0 0;">Time: ' + window._safeHtml(_prevP2Team) + '</span>' : '';
         // v2.3.5: layout empilhado (dupla + placar à direita), igual aos cards
         // do bracket. Antes era p1 | placar | p2 em 3 colunas num card estreito —
         // com nomes de dupla longos o placar "6 x 2" quebrava e colava nos nomes.
@@ -8706,11 +8762,11 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         else if (isDraw && !hasScore) footer = '<div style="font-size:0.65rem;color:var(--sp-c-94a3b8,#94a3b8);text-align:center;margin-top:3px;">' + _t('bracket.draw') + '</div>';
         prevRoundsInner += '<div style="min-width: 200px; flex: 1; max-width: 280px; background: var(--sp-g-0-0-0-015,rgba(0,0,0,0.15)); border-radius: 8px; padding: 8px 12px; font-size: 0.8rem;">' +
           '<div style="' + rowS + '">' +
-            '<span style="' + nameS + p1Style + '">' + window._safeHtml(window._resolveSideLive(t, m.p1, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p1', t) : (m.p1Uid || m.team1Uids))) || 'TBD') + '</span>' +
+            '<span style="' + nameS + p1Style + '">' + window._safeHtml(window._resolveSideLive(t, m.p1, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p1', t) : (m.p1Uid || m.team1Uids))) || 'TBD') + _prevP1TeamHtml + '</span>' +
             '<span style="' + numS + (p1Win ? 'color:var(--sp-c-4ade80,#4ade80);' : 'color:var(--text-muted);') + '">' + (hasScore ? m.scoreP1 : '') + '</span>' +
           '</div>' +
           '<div style="' + rowS + 'margin-top:3px;">' +
-            '<span style="' + nameS + p2Style + '">' + window._safeHtml(window._resolveSideLive(t, m.p2, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p2', t) : (m.p2Uid || m.team2Uids))) || 'TBD') + '</span>' +
+            '<span style="' + nameS + p2Style + '">' + window._safeHtml(window._resolveSideLive(t, m.p2, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p2', t) : (m.p2Uid || m.team2Uids))) || 'TBD') + _prevP2TeamHtml + '</span>' +
             '<span style="' + numS + (p2Win ? 'color:var(--sp-c-4ade80,#4ade80);' : 'color:var(--text-muted);') + '">' + (hasScore ? m.scoreP2 : '') + '</span>' +
           '</div>' +
           footer +
@@ -9113,6 +9169,23 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
   // ─── Legacy stacked-card layout (Liga/Ranking, Rei/Rainha rounds) ──────────
   var upcomingRoundsHtml = '';
   if (!useColumnLayout) {
+    // Liga/Ranking já materializa todas as rodadas no sorteio. Desenhá-las é mais
+    // honesto que escondê-las até virarem a atual: cada rodada tem seu cabeçalho
+    // sticky e os cards ficam em leitura, sem permitir lançar resultado futuro.
+    if (!isSuico && Array.isArray(rounds) && rounds.length > currentRound) {
+      for (var _futureRi = currentRound; _futureRi < rounds.length; _futureRi++) {
+        var _futureRound = rounds[_futureRi] || {};
+        var _futureMatches = (_futureRound.matches || []).filter(function (m) { return m && !m.isSitOut && !m.isBye; });
+        if (!_futureMatches.length) continue;
+        upcomingRoundsHtml += '<section class="card" style="margin-top:1rem;">' +
+          '<div class="sp-bracket-round-heading" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;gap:.5rem;">' +
+            '<h3 class="card-title" style="margin:0;border-left:3px solid rgba(148,163,184,.45);padding-left:10px;">' + _t('bracket.round', {n: _futureRi + 1}) + '</h3>' +
+            '<span style="font-size:.75rem;color:var(--text-muted);">Planejada</span>' +
+          '</div><div style="display:flex;flex-wrap:wrap;gap:12px;">' +
+          _futureMatches.map(function (m) { return '<div>' + renderMatchCard(m, false, t.id, m._gameNum, false, null, { readOnly:true }) + '</div>'; }).join('') +
+          '</div></section>';
+      }
+    }
     if (isSuico && currentRound < maxRounds) {
       var _legacySwissPerRound = (currentRoundData.matches || []).filter(function(m) { return m && !m.isSitOut && !m.isBye; }).length;
       if (_legacySwissPerRound < 1) _legacySwissPerRound = 1;
@@ -9121,7 +9194,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         for (var _legMi = 1; _legMi <= _legacySwissPerRound; _legMi++) _legCards += _tbdMatchCard(_legMi, null);
         upcomingRoundsHtml +=
           '<div class="card" style="margin-top:1rem;opacity:0.8;border-style:dashed;">' +
-            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:0.5rem;">' +
+            '<div class="sp-bracket-round-heading" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:0.5rem;">' +
               '<h3 class="card-title" style="margin:0;border-left:3px solid rgba(148,163,184,0.35);padding-left:10px;">' + (isSwissQualifier ? _swissQualifierLabel(_legR) : (_t('bracket.round', {n: _legR}) + ' / ' + maxRounds)) + '</h3>' +
               '<span style="font-size:0.75rem;color:var(--text-muted);">⏳ ' + _t('bracket.awaitingPrevRound') + '</span>' +
             '</div>' +
@@ -9184,6 +9257,12 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
       var _sc = _np ? (((_np.source && _np.source.scope) || _np.scope || 'per_group')) : null;
       return !!_np && _sc !== 'overall';
     })();
+    var _ligaPorTimes = Array.isArray(t && t.competitionTeams) && t.competitionTeams.length > 0;
+    if (_ligaPorTimes) {
+      // Neon: jogos (atual, demais, anteriores e futuros) primeiro; classificação
+      // recolhida depois. Mantém o torneio legível sem uma exceção visual do Neon.
+      return _phaseBannerHtml + _progressBar + _playoffHtml + _readyBanner + previousRoundsHtml + currentRoundHtml + ligaOtherMatchesHtml + upcomingRoundsHtml + _sb + standingsTablesHtml + statsHtml + h2hHtml;
+    }
     if (allComplete) {
       if (_txPerGroup) {
         return _phaseBannerHtml + _progressBar + _playoffHtml + _readyBanner + currentRoundHtml + ligaOtherMatchesHtml + _sb + standingsTablesHtml + upcomingRoundsHtml + statsHtml + h2hHtml + previousRoundsHtml;
