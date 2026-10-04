@@ -42,4 +42,6 @@ ok(/id="cover-hue-wheel"/.test(creator) && /window\._pickCoverHue/.test(creator)
   'a escolha de cor oferece roda visual, não só controles lineares');
 ok(/id="cover-angle-wheel"/.test(creator) && /window\._pickCoverAngle/.test(creator) && /_coverPointAngle/.test(creator),
   'a direção do gradiente é uma roda 360° e mantém o valor numérico exato');
+ok(/function _startCoverWheelDrag[\s\S]*?setPointerCapture[\s\S]*?pointermove[\s\S]*?pointerup/.test(creator) && /_startCoverWheelDrag\(event, wheel/.test(creator),
+  'as duas rodas aceitam clique e arrasto contínuo, inclusive fora da borda da roda');
 process.exit(fail ? 1 : 0);

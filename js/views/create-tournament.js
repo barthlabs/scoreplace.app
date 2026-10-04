@@ -353,8 +353,8 @@ function setupCreateTournamentModal() {
                     <label style="display:flex;align-items:center;gap:7px;min-height:34px;font-size:0.78rem;font-weight:800;color:var(--text-main);cursor:pointer;"><input type="checkbox" id="tourn-cover-gradient-enabled" onchange="window._refreshCoverPreview()"> Usar gradiente</label>
                   </div>
                   <div style="display:grid;grid-template-columns:minmax(172px,1fr) minmax(172px,1fr);gap:18px;align-items:start;max-width:520px;">
-                    <div style="display:grid;justify-items:center;gap:7px;"><strong style="font-size:.76rem;">Roda de cores</strong><button type="button" id="cover-hue-wheel" aria-label="Escolher matiz na roda de cores" onpointerdown="window._pickCoverHue(event)" style="width:142px;height:142px;border-radius:50%;border:3px solid #e2e8f0;background:conic-gradient(#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00);box-shadow:inset 0 0 0 28px rgba(15,23,42,.96),0 3px 14px rgba(0,0,0,.3);cursor:crosshair;position:relative;"><span id="cover-hue-wheel-marker" aria-hidden="true" style="position:absolute;left:calc(50% - 6px);top:2px;width:12px;height:12px;border:2px solid white;border-radius:50%;box-shadow:0 0 0 1px #111;"></span></button><span id="cover-hue-wheel-value" style="font-size:.75rem;color:var(--text-muted);">Matiz 215°</span></div>
-                    <div style="display:grid;justify-items:center;gap:7px;"><strong style="font-size:.76rem;">Direção do gradiente</strong><button type="button" id="cover-angle-wheel" aria-label="Escolher direção do gradiente em 360 graus" onpointerdown="window._pickCoverAngle(event)" style="width:142px;height:142px;border-radius:50%;border:3px solid #818cf8;background:radial-gradient(circle,#172554 0 34%,transparent 35%),conic-gradient(from 0deg,#818cf8,#22d3ee,#34d399,#fbbf24,#f472b6,#818cf8);box-shadow:0 3px 14px rgba(0,0,0,.3);cursor:crosshair;position:relative;"><span id="cover-angle-wheel-marker" aria-hidden="true" style="position:absolute;left:calc(50% - 3px);top:8px;width:6px;height:52px;background:#fff;border-radius:6px;transform-origin:3px 62px;box-shadow:0 0 0 1px #111;"></span><span style="position:absolute;inset:0;display:grid;place-items:center;color:#fff;font-weight:900;font-variant-numeric:tabular-nums;text-shadow:0 1px 2px #000;"><span id="tourn-cover-angle-value">135°</span></span></button><label style="font-size:.74rem;color:var(--text-muted);">Ângulo exato <input type="number" id="tourn-cover-gradient-angle-number" min="0" max="360" value="135" oninput="window._syncCoverAngle(this.value)" style="width:65px;padding:5px 7px;border-radius:7px;background:#0f172a;color:var(--text-bright);border:1px solid #475569;"></label><input type="hidden" id="tourn-cover-gradient-angle" value="135"></div>
+                    <div style="display:grid;justify-items:center;gap:7px;"><strong style="font-size:.76rem;">Roda de cores</strong><button type="button" id="cover-hue-wheel" aria-label="Escolher matiz na roda de cores: clique ou arraste" onpointerdown="window._pickCoverHue(event)" style="width:142px;height:142px;border-radius:50%;border:3px solid #e2e8f0;background:conic-gradient(#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00);box-shadow:inset 0 0 0 28px rgba(15,23,42,.96),0 3px 14px rgba(0,0,0,.3);cursor:crosshair;position:relative;touch-action:none;user-select:none;"><span id="cover-hue-wheel-marker" aria-hidden="true" style="position:absolute;left:calc(50% - 6px);top:2px;width:12px;height:12px;border:2px solid white;border-radius:50%;box-shadow:0 0 0 1px #111;"></span></button><span id="cover-hue-wheel-value" style="font-size:.75rem;color:var(--text-muted);">Matiz 215°</span></div>
+                    <div style="display:grid;justify-items:center;gap:7px;"><strong style="font-size:.76rem;">Direção do gradiente</strong><button type="button" id="cover-angle-wheel" aria-label="Escolher direção do gradiente em 360 graus: clique ou arraste" onpointerdown="window._pickCoverAngle(event)" style="width:142px;height:142px;border-radius:50%;border:3px solid #818cf8;background:radial-gradient(circle,#172554 0 34%,transparent 35%),conic-gradient(from 0deg,#818cf8,#22d3ee,#34d399,#fbbf24,#f472b6,#818cf8);box-shadow:0 3px 14px rgba(0,0,0,.3);cursor:crosshair;position:relative;touch-action:none;user-select:none;"><span id="cover-angle-wheel-marker" aria-hidden="true" style="position:absolute;left:calc(50% - 3px);top:8px;width:6px;height:52px;background:#fff;border-radius:6px;transform-origin:3px 62px;box-shadow:0 0 0 1px #111;"></span><span style="position:absolute;inset:0;display:grid;place-items:center;color:#fff;font-weight:900;font-variant-numeric:tabular-nums;text-shadow:0 1px 2px #000;"><span id="tourn-cover-angle-value">135°</span></span></button><label style="font-size:.74rem;color:var(--text-muted);">Ângulo exato <input type="number" id="tourn-cover-gradient-angle-number" min="0" max="360" value="135" oninput="window._syncCoverAngle(this.value)" style="width:65px;padding:5px 7px;border-radius:7px;background:#0f172a;color:var(--text-bright);border:1px solid #475569;"></label><input type="hidden" id="tourn-cover-gradient-angle" value="135"></div>
                   </div>
                   <div style="display:grid;grid-template-columns:repeat(2,minmax(130px,1fr));gap:8px;margin-top:.85rem;max-width:520px;">
                     <label style="font-size:.72rem;color:var(--text-muted);">Saturação <input type="range" id="tourn-cover-saturation" min="0" max="100" value="27" oninput="window._syncCoverColorFromHsl()" style="width:100%;accent-color:#818cf8;"></label>
@@ -2447,6 +2447,32 @@ function setupCreateTournamentModal() {
     var r = el.getBoundingClientRect(), x = event.clientX - r.left - r.width / 2, y = event.clientY - r.top - r.height / 2;
     return (Math.round(Math.atan2(y, x) * 180 / Math.PI + 90) + 360) % 360;
   }
+  // O gesto é único para mouse, caneta e toque. Pointer capture garante que o
+  // ajuste continua mesmo se o ponteiro sai da roda; ao soltar, todos os listeners
+  // temporários saem. Sem isso a roda só reagia ao primeiro clique.
+  function _startCoverWheelDrag(event, wheel, update) {
+    if (!event || !wheel || typeof update !== 'function') return;
+    if (event.isPrimary === false) return;
+    event.preventDefault();
+    var pointerId = event.pointerId;
+    var move = function(ev) {
+      if (pointerId != null && ev.pointerId != null && ev.pointerId !== pointerId) return;
+      ev.preventDefault();
+      update(ev, wheel);
+    };
+    var stop = function(ev) {
+      if (ev && pointerId != null && ev.pointerId != null && ev.pointerId !== pointerId) return;
+      document.removeEventListener('pointermove', move);
+      document.removeEventListener('pointerup', stop);
+      document.removeEventListener('pointercancel', stop);
+      try { wheel.releasePointerCapture(pointerId); } catch (e) {}
+    };
+    try { wheel.setPointerCapture(pointerId); } catch (e) {}
+    update(event, wheel);
+    document.addEventListener('pointermove', move, { passive: false });
+    document.addEventListener('pointerup', stop);
+    document.addEventListener('pointercancel', stop);
+  }
   window._selectCoverColorTarget = function(target) {
     _coverColorTarget = target === 2 ? 2 : 1;
     [['cover-color-target-1', 1], ['cover-color-target-2', 2]].forEach(function(pair) {
@@ -2458,17 +2484,19 @@ function setupCreateTournamentModal() {
     window._syncCoverColorFromPicker(_coverColorTarget);
   };
   window._pickCoverHue = function(event) {
-    event.preventDefault();
     var wheel = document.getElementById('cover-hue-wheel'); if (!wheel) return;
-    var hue = _coverPointAngle(event, wheel), input = document.getElementById('tourn-cover-hue');
-    if (input) input.value = hue;
-    _setCoverWheelMarker('cover-hue-wheel-marker', hue);
-    window._syncCoverColorFromHsl();
+    _startCoverWheelDrag(event, wheel, function(ev, el) {
+      var hue = _coverPointAngle(ev, el), input = document.getElementById('tourn-cover-hue');
+      if (input) input.value = hue;
+      _setCoverWheelMarker('cover-hue-wheel-marker', hue);
+      window._syncCoverColorFromHsl();
+    });
   };
   window._pickCoverAngle = function(event) {
-    event.preventDefault();
     var wheel = document.getElementById('cover-angle-wheel'); if (!wheel) return;
-    window._syncCoverAngle(_coverPointAngle(event, wheel));
+    _startCoverWheelDrag(event, wheel, function(ev, el) {
+      window._syncCoverAngle(_coverPointAngle(ev, el));
+    });
   };
   window._syncCoverAngle = function(value) {
     var n = Math.max(0, Math.min(360, parseInt(value, 10) || 0));

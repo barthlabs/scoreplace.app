@@ -5188,8 +5188,41 @@ async function _preloadPlayerPhotos(tournament) {
 // Até lá o card mostra "A definir" — o dado fica, a exibição espera. A flag é posta e
 // retirada por `_reassignBestLosersToRepechage` (bracket-logic).
 
+// ─── Origem explícita de vaga na chave ──────────────────────────────────────
+// "A definir" é correto quando a vaga depende de classificação. Em uma chave
+// direta, porém, a origem já é conhecida pelo fio `nextMatchId`/`loserMatchId`:
+// esconder isso atrapalha a leitura de quem espera o resultado. Esta função lê
+// só essas arestas explícitas — nunca tenta adivinhar classificação por posição.
+window._directBracketSlotLabel = function (t, match, slot) {
+  if (!t || !match || (slot !== 'p1' && slot !== 'p2')) return '';
+  // Melhor perdedor/classificação é deliberadamente indefinido até o critério fechar.
+  if (match[slot + 'AguardaMelhor']) return '';
+  var all = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (t.matches || []);
+  var targetId = match.id == null ? '' : String(match.id);
+  if (!targetId) return '';
+  var source = null, kind = '';
+  for (var i = 0; i < all.length; i++) {
+    var candidate = all[i];
+    if (!candidate) continue;
+    if (String(candidate.nextMatchId || '') === targetId && String(candidate.nextSlot || 'p1') === slot) {
+      source = candidate; kind = 'winner'; break;
+    }
+    if (String(candidate.loserMatchId || '') === targetId && String(candidate.loserSlot || 'p1') === slot) {
+      source = candidate; kind = 'loser'; break;
+    }
+  }
+  if (!source) return '';
+  var n = Number(source._gameNum || source.matchNumber || source.gameNumber || source.number);
+  if (!Number.isFinite(n) || n < 1) {
+    // Apenas para dados legados ainda sem o carimbo global; a ordem do array é o
+    // último fallback visual, nunca uma decisão de classificatória.
+    n = all.indexOf(source) + 1;
+  }
+  return (kind === 'loser' ? 'Perdedor' : 'Vencedor') + ' do jogo ' + n;
+};
+
 // ─── Player avatars helper for bracket cards ────────────────────────────────
-function _teamAvatarHtml(teamName, pendingSub, t, uidHint, m) {
+function _teamAvatarHtml(teamName, pendingSub, t, uidHint, m, slot) {
   /* ⭐ 2.1.99 — O 💬 DE CADA PESSOA, EM TODO CARD DE JOGO.
    * Ordem do dono (02/set/2026): _"precisa me devolver os balõezinhos em todos os jogos
    * para que as pessoas se encontrem pelo whats"_ e _"para os participantes do grupo (e
@@ -5216,7 +5249,10 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint, m) {
   // SENTINELAS antes de tudo: TBD/BYE são ESTADO do slot, não gente — nenhum uid
   // muda isso.
   if (teamName === 'TBD') {
-    return `<span style="font-weight:600;font-size:0.85rem;opacity:0.4;font-style:italic;">A definir</span>`;
+    var _slot = slot === 'p2' ? 'p2' : 'p1';
+    var _origem = (typeof window._directBracketSlotLabel === 'function')
+      ? window._directBracketSlotLabel(t, m, _slot) : '';
+    return `<span style="font-weight:600;font-size:0.85rem;opacity:0.62;font-style:italic;">${window._safeHtml(_origem || 'A definir')}</span>`;
   }
   if (teamName === 'BYE') {
     return `<span style="font-weight:600;font-size:0.85rem;opacity:0.5;">BYE</span>`;
@@ -6029,7 +6065,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
 
   const p1Row = `
     <div style="${rowStyle(p1IsWinner, 'p1')}">
-      ${ciDot(p1ci)}${_teamColorDot('p1')}<div style="flex:1;overflow:hidden;min-width:0;">${_teamAvatarHtml(m.p1AguardaMelhor ? 'TBD' : m.p1, pendingSub, t, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p1', t) : (m.p1Uid || m.team1Uids)), m)}</div>
+      ${ciDot(p1ci)}${_teamColorDot('p1')}<div style="flex:1;overflow:hidden;min-width:0;">${_teamAvatarHtml(m.p1AguardaMelhor ? 'TBD' : m.p1, pendingSub, t, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p1', t) : (m.p1Uid || m.team1Uids)), m, 'p1')}</div>
       ${_p1PromotedBadge}${_p1RepBadge}${_p1ByeBadge}
       <div id="score-p1-${m.id}" class="sp-mc-sc">
         ${_multiSet ? _setGridHtml(1) : (showInputs ? p1Score : (p1ScoreVal || ''))}
@@ -6038,7 +6074,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
 
   const p2Row = `
     <div style="${rowStyle(p2IsWinner, 'p2')}">
-      ${ciDot(p2ci)}${_teamColorDot('p2')}<div style="flex:1;overflow:hidden;min-width:0;">${_teamAvatarHtml(m.p2AguardaMelhor ? 'TBD' : m.p2, pendingSub, t, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p2', t) : (m.p2Uid || m.team2Uids)), m)}</div>
+      ${ciDot(p2ci)}${_teamColorDot('p2')}<div style="flex:1;overflow:hidden;min-width:0;">${_teamAvatarHtml(m.p2AguardaMelhor ? 'TBD' : m.p2, pendingSub, t, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p2', t) : (m.p2Uid || m.team2Uids)), m, 'p2')}</div>
       ${_p2PromotedBadge}${_p2RepBadge}${_p2ByeBadge}
       <div id="score-p2-${m.id}" class="sp-mc-sc">
         ${_multiSet ? _setGridHtml(2) : (showInputs ? p2Score : (p2ScoreVal || ''))}

@@ -1125,7 +1125,13 @@ window._nextParticipantTournamentMatchTarget = function(t) {
       typeof window._userTeamInMatch !== 'function') return null;
 
   var matches = window._collectAllMatches(t).filter(function(m) {
-    return !!(m && !m.winner && !m.isBye && m.p1 && m.p1 !== 'TBD' && m.p2 && m.p2 !== 'TBD' &&
+    /* O próximo jogo da pessoa não deixa de ser dela só porque o ADVERSÁRIO
+     * ainda vem de outro confronto. Em eliminatória, é normal uma vaga já ter
+     * a dupla conhecida e a outra dizer "Vencedor do jogo X". Exigir os dois
+     * lados preenchidos aqui fazia a abertura cair no topo exatamente nos
+     * torneios em que a chave mais precisa orientar a pessoa. A única exigência
+     * é a pessoa já ocupar um dos slots; classificação sem dono continua fora. */
+    return !!(m && !m.winner && !m.isBye &&
       window._userTeamInMatch(t, m, cu) > 0);
   });
   // Mesma régua da dashboard para "Seu próximo jogo": rodada e, dentro dela,

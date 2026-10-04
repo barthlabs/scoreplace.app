@@ -4,6 +4,7 @@
  * node tests/dashboard-atalho-aba-e-agenda.test.js */
 const fs = require('fs');
 const path = require('path');
+const vm = require('vm');
 const ROOT = path.join(__dirname, '..');
 const dashboard = fs.readFileSync(path.join(ROOT, 'js', 'views', 'dashboard.js'), 'utf8');
 const tournaments = fs.readFileSync(path.join(ROOT, 'js', 'views', 'tournaments.js'), 'utf8');
@@ -27,8 +28,27 @@ ok(tournaments.includes('_pendingBracketTarget.tab') && tournaments.includes('wi
   'o detalhe seleciona a aba antes de desenhar e localizar o card');
 ok(tournaments.includes('window._nextParticipantTournamentMatchTarget') && tournaments.includes('Mesma régua da dashboard para "Seu próximo jogo"') && tournaments.includes('window._navScrollTid') && tournaments.includes("sessionStorage.setItem('sp_scrollToMatch'"),
   'abrir o detalhe diretamente encontra o próximo jogo do usuário, prepara a aba e ancora no card');
+ok(tournaments.includes('não deixa de ser dela só porque o ADVERSÁRIO') && !tournaments.includes("m.p1 && m.p1 !== 'TBD' && m.p2 && m.p2 !== 'TBD'"),
+  'o próximo jogo do participante continua sendo alvo quando só o adversário ainda vem da chave');
+ok(bracket.includes('window._directBracketSlotLabel') && bracket.includes("? 'Perdedor' : 'Vencedor'") && bracket.includes("_origem || 'A definir'"),
+  'vagas ligadas diretamente mostram vencedor/perdedor do jogo; A definir fica para classificação');
+const labelStart = bracket.indexOf('window._directBracketSlotLabel = function');
+const labelEnd = bracket.indexOf('// ─── Player avatars helper', labelStart);
+const labelSandbox = { window: {} };
+try {
+  vm.runInNewContext(bracket.slice(labelStart, labelEnd), labelSandbox);
+  const source = { id: 'r1-2', _gameNum: 7, nextMatchId: 'semi-1', nextSlot: 'p2' };
+  const target = { id: 'semi-1', p1: 'A / B', p2: 'TBD' };
+  const classification = { id: 'semi-2', p2AguardaMelhor: true };
+  labelSandbox.window._collectAllMatches = () => [source, target];
+  ok(labelSandbox.window._directBracketSlotLabel({}, target, 'p2') === 'Vencedor do jogo 7' &&
+    labelSandbox.window._directBracketSlotLabel({}, classification, 'p2') === '',
+    'o rótulo de origem é calculado pela aresta direta e não substitui dependência de classificação');
+} catch (err) {
+  ok(false, 'o resolvedor de origem de vaga executa isoladamente: ' + err.message);
+}
 ok(router.includes('_priorBracketTarget') && router.includes('? _priorBracketTarget : { tId: String(cleanParam), matchId: null }'),
   'a rota #bracket preserva o alvo vindo da dashboard');
 
-console.log('\n' + (fail ? '❌' : '✅') + ' dashboard-atalho-aba-e-agenda: ' + (7 - fail) + ' asserts ok, ' + fail + ' falharam');
+console.log('\n' + (fail ? '❌' : '✅') + ' dashboard-atalho-aba-e-agenda: ' + (10 - fail) + ' asserts ok, ' + fail + ' falharam');
 process.exitCode = fail ? 1 : 0;
