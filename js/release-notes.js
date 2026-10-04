@@ -1,3 +1,4 @@
+// 2.3.262 — Em chaves classificatórias, toda rodada com jogo pendente permanece antes da classificação do grupo, independentemente da distância até o horário. O título da rodada usa o mesmo portal fixo das chaves eliminatórias e fica visível sob as abas durante a rolagem.
 // 2.3.261 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.3.260 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.3.259 — Atualização consolidada de produção com as correções validadas desde a última publicação.
