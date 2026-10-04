@@ -1,3 +1,4 @@
+// 2.3.256 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.3.255 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.3.254 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.3.253 — A validação do bundle embarcado aceita a forma minificada real de SCOREPLACE_VERSION, sem deixar de comparar a versão que segue para iOS/Android.
