@@ -6612,7 +6612,7 @@ window._openPendingInitialSchedule = function (tId) {
     return;
   }
   var esc = window._safeHtml || function (s) { return String(s == null ? '' : s); };
-  var manual = {}, activeDay = '';
+  var manual = {}, activeDay = '', gridScroll = { top:0, left:0 };
   var old = document.getElementById('sp-pending-schedule-overlay'); if (old) old.remove();
   var overlay = document.createElement('div'); overlay.id = 'sp-pending-schedule-overlay';
   // A grade rola lateralmente no seu próprio painel. O overlay nunca pode rolar
@@ -6646,6 +6646,13 @@ window._openPendingInitialSchedule = function (tId) {
   }
   function plan() { return window._operationalSchedulePlan(view(), Object.keys(manual).map(function (id) { return manual[id]; })); }
   function render() {
+    /* ⛔ REGRESSÃO DE EDIÇÃO DA GRADE: soltar um jogo recalcula a agenda e
+     * reconstrói o HTML da grade. Sem guardar a rolagem do painel, o navegador
+     * volta para (0,0) e faz a organização perder o ponto que estava ajustando.
+     * A barra fica fora da rolagem; somente este painel pode ter sua posição
+     * preservada entre um drop e o próximo render. */
+    var previousScroll = overlay.querySelector('[data-pis-scroll]');
+    if (previousScroll) gridScroll = { top:previousScroll.scrollTop, left:previousScroll.scrollLeft };
     var p = plan(), board = window._operationalScheduleGrid(view(), p, { prefix:'pis', activeDay:activeDay, renumberBySchedule:true }); activeDay = board.activeDay;
     overlay.innerHTML = '<div role="dialog" aria-modal="true" style="width:100%;max-width:1600px;height:100%;margin:0 auto;background:#111827;border:1px solid rgba(56,189,248,.5);border-radius:16px;box-sizing:border-box;overflow:hidden;color:var(--text-main);box-shadow:0 24px 70px rgba(0,0,0,.55);display:flex;flex-direction:column;isolation:isolate">' +
       /* ⛔ REGRESSÃO DO CABEÇALHO DA AGENDA: este bloco é IRMÃO do painel que
@@ -6657,6 +6664,8 @@ window._openPendingInitialSchedule = function (tId) {
       '<div data-pis-scroll style="position:relative;z-index:1;flex:1;min-height:0;overflow:auto;padding:16px;box-sizing:border-box"><div style="font-size:.76rem;color:#94a3b8;margin-bottom:6px">' + p.items.length + ' jogos · ' + p.courts.length + ' quadras. Cada linha é um horário; cada coluna é uma quadra. Horários são estimados e podem mudar conforme o andamento.</div>' +
       (!p.cabe ? '<div style="margin:0 0 10px;color:#fbbf24;font-size:.82rem;font-weight:700">⚠ Ao publicar assim, a programação excede a janela determinada pela organização em ' + Math.ceil((p.extraMs || 0) / 60000) + ' min. Todos os jogos continuam exibidos; os excedentes aparecem em faixa zebrada vermelha e cinza.</div>' : '') + board.html +
       '</div></div>';
+    var restoredScroll = overlay.querySelector('[data-pis-scroll]');
+    if (restoredScroll) { restoredScroll.scrollTop = gridScroll.top; restoredScroll.scrollLeft = gridScroll.left; }
     overlay.querySelector('[data-pis-close]').onclick = returnToPendingDetail;
     Array.prototype.forEach.call(overlay.querySelectorAll('[data-pis-day]'), function (control) { control.onclick = function () { activeDay = control.getAttribute('data-pis-day'); render(); }; });
     Array.prototype.forEach.call(overlay.querySelectorAll('[data-pis-match]'), function (card) {

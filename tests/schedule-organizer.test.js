@@ -276,6 +276,8 @@ ok(/ondrop/.test(organizerSource) && /manual\[from\.matchId\].*to\.court/.test(o
 ok(/← Voltar/.test(bracketSource) && /data-pis-apply/.test(bracketSource) && /data-pis-publish/.test(bracketSource) &&
   /data-pis-toolbar/.test(bracketSource) && /data-pis-scroll/.test(bracketSource) && /display:flex;flex-direction:column;isolation:isolate/.test(bracketSource) && /overflow:hidden/.test(bracketSource) && /width:100%;max-width:1600px/.test(bracketSource),
   'Voltar, Salvar ajustes e Publicar ficam juntos numa barra opaca separada, fora das rolagens da grade');
+ok(/gridScroll = \{ top:0, left:0 \}/.test(bracketSource) && /previousScroll\.scrollTop/.test(bracketSource) && /restoredScroll\.scrollTop = gridScroll\.top/.test(bracketSource) && /restoredScroll\.scrollLeft = gridScroll\.left/.test(bracketSource),
+  'recalcular a grade após arrastar preserva a rolagem vertical e horizontal do ponto em edição');
 ok(/data-\' \+ prefix \+ \'-outside-window/.test(organizerSource) && /repeating-linear-gradient\(45deg,rgba\(239,68,68/.test(organizerSource) && /Todos os jogos continuam exibidos/.test(bracketSource),
   'jogos que ultrapassam a janela seguem na grade com faixa zebrada vermelha e cinza');
 const pendingScheduleStart = bracketSource.indexOf('window._openPendingInitialSchedule = function');
