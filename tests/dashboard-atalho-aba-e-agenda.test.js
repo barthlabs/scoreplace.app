@@ -60,6 +60,10 @@ ok(bracket.includes('const _chavesAntesDaClassificacao = _haJogoPendenteSemHorar
 ok(bracket.includes('if (_ligaPorTimes)') && bracket.includes('Não existe exceção visual para o Neon.') &&
   bracket.includes('return _classificacaoNoTopo\n    ? _phaseBannerHtml + _progressBar + _sb + standingsTablesHtml'),
   'Neon e os demais formatos só elevam a classificação no intervalo entre blocos');
+ok(bracket.includes('regression_grupos_chaves_antes_classificacao') &&
+  bracket.includes('const _groupKeysFirst = _groupHasUnscheduledPending') &&
+  bracket.includes('${_groupKeysFirst && matchesHtml ? `'),
+  'o caminho de grupos também mantém as chaves antes das classificações durante os jogos');
 
-console.log('\n' + (fail ? '❌' : '✅') + ' dashboard-atalho-aba-e-agenda: ' + (13 - fail) + ' asserts ok, ' + fail + ' falharam');
+console.log('\n' + (fail ? '❌' : '✅') + ' dashboard-atalho-aba-e-agenda: ' + (14 - fail) + ' asserts ok, ' + fail + ' falharam');
 process.exitCode = fail ? 1 : 0;

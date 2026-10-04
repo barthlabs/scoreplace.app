@@ -6996,6 +6996,29 @@ function renderGroupStage(t, isOrg, canEnterResult, opts) {
     return (sg.matches || []).every(function(m) { return m.winner || m.isBye || m.isSitOut; });
   });
 
+  /* ── CHAVE ANTES DA CLASSIFICAÇÃO, TAMBÉM NOS GRUPOS ─────────────────────
+   * `renderGroupStage` é outro caminho canônico, não um detalhe visual. Ele
+   * montava a tabela antes dos cards independentemente da agenda e por isso
+   * anulava a regra de renderStandings para torneios classificatórios como o
+   * Neon. Enquanto existir partida pendente sem horário ou em até seis horas,
+   * os cards vêm primeiro; a tabela só sobe no intervalo real entre blocos.
+   * [[regression_grupos_chaves_antes_classificacao]] */
+  const _groupMatchesForOrder = subgroups.reduce(function(list, sg) {
+    return list.concat((sg && sg.rounds || []).reduce(function(acc, r) {
+      return acc.concat((r && r.matches) || []);
+    }, (sg && sg.matches) || []));
+  }, []).filter(function(m) { return m && !m.isBye && !m.isSitOut; });
+  const _groupHasUnscheduledPending = _groupMatchesForOrder.some(function(m) {
+    return !m.winner && !_matchCardTimestamp(m.scheduledAt);
+  });
+  const _groupNextPendingAt = _groupMatchesForOrder.reduce(function(next, m) {
+    if (m.winner) return next;
+    var when = _matchCardTimestamp(m.scheduledAt);
+    return when && (next == null || when < next) ? when : next;
+  }, null);
+  const _groupKeysFirst = _groupHasUnscheduledPending ||
+    (_groupNextPendingAt != null && _groupNextPendingAt <= Date.now() + 6 * 60 * 60 * 1000);
+
   // O único avanço possível é o de uma fase configurada: o motor de fases monta
   // a eliminatória a partir dos classificados e da política declarada. A antiga
   // eliminatória embutida não tem writer nem chamador e não pode deixar um botão
@@ -7148,6 +7171,10 @@ function renderGroupStage(t, isOrg, canEnterResult, opts) {
     return `
       <div class="card" id="group-section-${gi}" data-group-box="1"${isMyGroupGS ? ' data-my-group="1"' : ''} data-group-label="${window._safeHtml(window._grpKey(sg.name))}" style="border-left:4px solid ${isMyGroupGS ? '#22d3ee' : groupColor};scroll-margin-top:var(--scroll-anchor,120px);">
         <div style="display:flex;align-items:center;gap:8px;margin:0 0 1rem;flex-wrap:wrap;"><h3 style="margin:0;color:${window._spCor(isMyGroupGS ? '#22d3ee' : groupColor, 'color')};font-size:1rem;font-weight:800;">${window._safeHtml(sg.name)}${myGroupBadge}</h3>${_woGsChip ? `<span style="margin-left:auto;">${_woGsChip}</span>` : ''}</div>
+        ${_groupKeysFirst && matchesHtml ? `
+          <div style="border-top:1px solid var(--border-color);padding-top:1rem;margin-bottom:1rem;">
+            ${matchesHtml}
+          </div>` : ''}
         <div class="standings-scroll" style="margin-bottom:1rem;">
           <table style="width:100%;border-collapse:collapse;font-size:0.85rem;min-width:480px;">
             <thead>
@@ -7164,7 +7191,7 @@ function renderGroupStage(t, isOrg, canEnterResult, opts) {
             <tbody>${rows}</tbody>
           </table>
         </div>
-        ${matchesHtml ? `
+        ${!_groupKeysFirst && matchesHtml ? `
           <div style="border-top:1px solid var(--border-color);padding-top:1rem;">
             ${matchesHtml}
           </div>` : ''}
