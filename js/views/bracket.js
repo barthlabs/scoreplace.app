@@ -6087,10 +6087,15 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
 
   // A quadra é parte da agenda operacional. Resultado, placar ao vivo ou início
   // real congelam o jogo: não há seletor nem alteração possível depois disso.
+  // `_matchHasRealPlay` é definido em js/store.js, carregado antes das views; o
+  // fallback abaixo replica integralmente a regra caso este card seja isolado.
   // [[regression_played_match_court_is_immutable]]
   var _matchAlreadyInPlay = (typeof window._matchHasRealPlay === 'function')
     ? window._matchHasRealPlay(m)
-    : !!(m.liveScored || m.startedAt || m.resultAt || m.winner || m.wo || (Array.isArray(m.sets) && m.sets.length));
+    : !!(m.liveScored || m.startedAt || m.resultAt || m.winner || m.wo ||
+      (Array.isArray(m.sets) && m.sets.length) ||
+      (((typeof m.scoreP1 === 'number' && m.scoreP1 > 0) ||
+        (typeof m.scoreP2 === 'number' && m.scoreP2 > 0)) && !m.wo));
   var _cardCourts = (function () {
     var names = t && t.courtNames;
     if (Array.isArray(names) && names.length) return names.map(String).filter(Boolean);

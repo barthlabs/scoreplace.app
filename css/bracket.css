@@ -31,7 +31,10 @@ summary::-webkit-details-marker { display: none; }
   align-items: center;
   gap: .38rem;
   margin-top: .5rem;
-  color: var(--sp-c-86efac,#86efac);
+  /* Informação operacional, não estado de sucesso: usa o token legível nos
+   * dois temas. O verde pastel era correto sobre fundo escuro, mas falhava
+   * contraste na ficha clara. */
+  color: var(--text-muted);
   font-size: .68rem;
   font-weight: 800;
 }

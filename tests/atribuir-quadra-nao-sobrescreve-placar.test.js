@@ -11,4 +11,6 @@ ok(cf.includes('exports.assignMatchCourt = onCall') && cf.includes('_isTournamen
 ok(cf.includes("const m = drawWindow._findMatch(t, matchId)") && cf.includes('_gravaTorneio(tx, ref, t, antes'), 'Function encontra jogo e grava pelo plano canônico');
 ok(cf.includes('Jogo iniciado ou concluído não pode mudar de quadra.'), 'Function bloqueia alteração de quadra em jogo iniciado ou concluído');
 ok(src.includes('regression_played_match_court_is_immutable') && src.includes('sp-match-court'), 'card mostra a quadra e só libera o seletor em jogo futuro');
+ok(src.includes("typeof m.scoreP1 === 'number' && m.scoreP1 > 0") && src.includes("typeof m.scoreP2 === 'number' && m.scoreP2 > 0"),
+  'cliente também bloqueia seletor quando já existe placar numérico — mesma régua da Function');
 process.exit(fail?1:0);
