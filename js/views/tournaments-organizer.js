@@ -98,6 +98,14 @@ window._cloneTournament = async function(tournamentId) {
         courtCount: t.courtCount || '',
         courtNames: t.courtNames || '',
         logoData: window._tourLogoSrc(t) || '',
+        // Fundo é identidade visual do evento. A escolha explícita por cor ganha
+        // de qualquer URL legada no cache, pelo mesmo contrato do render.
+        coverPhotoData: (window._tourUsesCoverPhoto && window._tourUsesCoverPhoto(t)) ? (window._tourCoverSrc(t) || '') : '',
+        coverMode: t.coverMode || ((window._tourCoverSrc && window._tourCoverSrc(t)) ? 'photo' : 'color'),
+        coverColor: t.coverColor || '#1f2937',
+        coverGradientColor: t.coverGradientColor || '#0f172a',
+        coverGradientEnabled: t.coverGradientEnabled === true,
+        coverGradientAngle: t.coverGradientAngle != null ? t.coverGradientAngle : 135,
         logoLocked: t.logoLocked || false,
         logoShape: t.logoShape || 'square',
         logoRadius: (t.logoRadius != null ? t.logoRadius : 14),

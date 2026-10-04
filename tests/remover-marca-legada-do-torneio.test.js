@@ -8,6 +8,7 @@ const fs = require('fs');
 const vm = require('vm');
 const source = fs.readFileSync('functions-autodraw/index.js', 'utf8');
 const client = fs.readFileSync('js/store.js', 'utf8');
+const organizer = fs.readFileSync('js/views/tournaments-organizer.js', 'utf8');
 let fail = 0;
 function ok(value, message) { if (value) console.log('✓ ' + message); else { fail++; console.error('✗ ' + message); } }
 
@@ -34,4 +35,6 @@ ok(!!bg && sandbox.window._tourUsesCoverPhoto({ coverUrl: 'https://img', coverMo
 const gradient = bg && bg({ coverMode: 'color', coverColor: '#123456', coverGradientColor: '#abcdef', coverGradientEnabled: true, coverGradientAngle: 271 });
 ok(gradient && gradient.css === 'linear-gradient(271deg, #123456, #abcdef)',
   'as duas cores e os 360° do gradiente chegam à renderização canônica');
+ok(/coverPhotoData:[\s\S]*?coverMode:[\s\S]*?coverColor:[\s\S]*?coverGradientColor:[\s\S]*?coverGradientEnabled:[\s\S]*?coverGradientAngle:/.test(organizer),
+  'clonar torneio preserva foto ou cor/gradiente, não só o logo');
 process.exit(fail ? 1 : 0);
