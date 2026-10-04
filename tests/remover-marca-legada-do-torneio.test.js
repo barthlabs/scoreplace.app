@@ -37,4 +37,9 @@ ok(gradient && gradient.css === 'linear-gradient(271deg, #123456, #abcdef)',
   'as duas cores e os 360° do gradiente chegam à renderização canônica');
 ok(/coverPhotoData:[\s\S]*?coverMode:[\s\S]*?coverColor:[\s\S]*?coverGradientColor:[\s\S]*?coverGradientEnabled:[\s\S]*?coverGradientAngle:/.test(organizer),
   'clonar torneio preserva foto ou cor/gradiente, não só o logo');
+const creator = fs.readFileSync('js/views/create-tournament.js', 'utf8');
+ok(/id="cover-hue-wheel"/.test(creator) && /window\._pickCoverHue/.test(creator),
+  'a escolha de cor oferece roda visual, não só controles lineares');
+ok(/id="cover-angle-wheel"/.test(creator) && /window\._pickCoverAngle/.test(creator) && /_coverPointAngle/.test(creator),
+  'a direção do gradiente é uma roda 360° e mantém o valor numérico exato');
 process.exit(fail ? 1 : 0);

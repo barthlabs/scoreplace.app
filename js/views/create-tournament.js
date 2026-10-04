@@ -346,31 +346,21 @@ function setupCreateTournamentModal() {
                   <button type="button" id="cover-mode-color" onclick="window._setCoverMode('color')" style="padding:8px 14px;border-radius:10px;border:1px solid #818cf8;background:#3730a3;color:#fff;font-size:0.8rem;font-weight:700;cursor:pointer;">🎨 Cor</button>
                   <button type="button" id="cover-mode-photo" onclick="window._setCoverMode('photo')" style="padding:8px 14px;border-radius:10px;border:1px solid rgba(99,102,241,0.35);background:rgba(99,102,241,0.1);color:var(--sp-c-e2e8f0,#e2e8f0);font-size:0.8rem;font-weight:700;cursor:pointer;">🖼️ Foto</button>
                 </div>
-                <div id="cover-color-controls" style="margin:0 0 0.8rem;padding:0.7rem;border-radius:10px;background:rgba(15,23,42,0.55);border:1px solid rgba(129,140,248,0.22);">
-                  <div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap;">
-                    <label style="display:grid;gap:4px;font-size:0.72rem;font-weight:700;color:var(--text-muted);">Cor 1
-                      <input type="color" id="tourn-cover-color" value="#1f2937" oninput="window._syncCoverColorFromPicker()" style="width:54px;height:34px;padding:2px;cursor:pointer;">
-                    </label>
-                    <label style="display:grid;gap:4px;font-size:0.72rem;font-weight:700;color:var(--text-muted);">Cor 2
-                      <input type="color" id="tourn-cover-gradient-color" value="#0f172a" oninput="window._refreshCoverPreview()" style="width:54px;height:34px;padding:2px;cursor:pointer;">
-                    </label>
-                    <label style="display:flex;align-items:center;gap:7px;min-height:34px;font-size:0.75rem;font-weight:700;color:var(--sp-c-e2e8f0,#e2e8f0);cursor:pointer;">
-                      <input type="checkbox" id="tourn-cover-gradient-enabled" onchange="window._refreshCoverPreview()"> Usar gradiente
-                    </label>
-                    <label style="display:grid;gap:4px;font-size:0.72rem;font-weight:700;color:var(--text-muted);min-width:152px;">Direção <span id="tourn-cover-angle-value" style="color:var(--sp-c-e2e8f0,#e2e8f0);font-variant-numeric:tabular-nums;">135°</span>
-                      <input type="range" id="tourn-cover-gradient-angle" min="0" max="360" value="135" oninput="window._syncCoverAngle(this.value)" style="width:100%;accent-color:#818cf8;">
-                    </label>
-                    <label style="display:grid;gap:4px;font-size:0.72rem;font-weight:700;color:var(--text-muted);">Ângulo exato
-                      <input type="number" id="tourn-cover-gradient-angle-number" min="0" max="360" value="135" oninput="window._syncCoverAngle(this.value)" style="width:72px;padding:6px 8px;border-radius:7px;background:#0f172a;color:var(--text-bright);border:1px solid #475569;">
-                    </label>
+                <div id="cover-color-controls" style="margin:0 0 0.8rem;padding:0.85rem;border-radius:12px;background:rgba(15,23,42,0.55);border:1px solid rgba(129,140,248,0.22);">
+                  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:0.8rem;">
+                    <button type="button" id="cover-color-target-1" onclick="window._selectCoverColorTarget(1)" style="display:flex;align-items:center;gap:7px;padding:7px 10px;border-radius:9px;border:2px solid #818cf8;background:rgba(99,102,241,.18);color:var(--text-main);font-weight:800;cursor:pointer;">Cor 1 <input aria-label="Cor 1" type="color" id="tourn-cover-color" value="#1f2937" oninput="window._syncCoverColorFromPicker()" style="width:30px;height:28px;padding:0;border:0;background:none;cursor:pointer;"></button>
+                    <button type="button" id="cover-color-target-2" onclick="window._selectCoverColorTarget(2)" style="display:flex;align-items:center;gap:7px;padding:7px 10px;border-radius:9px;border:1px solid #475569;background:rgba(255,255,255,.04);color:var(--text-main);font-weight:800;cursor:pointer;">Cor 2 <input aria-label="Cor 2" type="color" id="tourn-cover-gradient-color" value="#0f172a" oninput="window._syncCoverColorFromPicker(2)" style="width:30px;height:28px;padding:0;border:0;background:none;cursor:pointer;"></button>
+                    <label style="display:flex;align-items:center;gap:7px;min-height:34px;font-size:0.78rem;font-weight:800;color:var(--text-main);cursor:pointer;"><input type="checkbox" id="tourn-cover-gradient-enabled" onchange="window._refreshCoverPreview()"> Usar gradiente</label>
                   </div>
-                  <details style="margin-top:0.65rem;"><summary style="cursor:pointer;font-size:0.72rem;color:var(--sp-c-a5b4fc,#a5b4fc);font-weight:700;">Ajuste fino da cor 1 (roda HSL)</summary>
-                    <div style="display:grid;grid-template-columns:repeat(3,minmax(120px,1fr));gap:8px;margin-top:0.55rem;">
-                      <label style="font-size:0.7rem;color:var(--text-muted);">Matiz <input type="range" id="tourn-cover-hue" min="0" max="360" value="215" oninput="window._syncCoverColorFromHsl()" style="width:100%;accent-color:#818cf8;"></label>
-                      <label style="font-size:0.7rem;color:var(--text-muted);">Saturação <input type="range" id="tourn-cover-saturation" min="0" max="100" value="27" oninput="window._syncCoverColorFromHsl()" style="width:100%;accent-color:#818cf8;"></label>
-                      <label style="font-size:0.7rem;color:var(--text-muted);">Luminosidade (gama) <input type="range" id="tourn-cover-lightness" min="0" max="100" value="17" oninput="window._syncCoverColorFromHsl()" style="width:100%;accent-color:#818cf8;"></label>
-                    </div>
-                  </details>
+                  <div style="display:grid;grid-template-columns:minmax(172px,1fr) minmax(172px,1fr);gap:18px;align-items:start;max-width:520px;">
+                    <div style="display:grid;justify-items:center;gap:7px;"><strong style="font-size:.76rem;">Roda de cores</strong><button type="button" id="cover-hue-wheel" aria-label="Escolher matiz na roda de cores" onpointerdown="window._pickCoverHue(event)" style="width:142px;height:142px;border-radius:50%;border:3px solid #e2e8f0;background:conic-gradient(#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00);box-shadow:inset 0 0 0 28px rgba(15,23,42,.96),0 3px 14px rgba(0,0,0,.3);cursor:crosshair;position:relative;"><span id="cover-hue-wheel-marker" aria-hidden="true" style="position:absolute;left:calc(50% - 6px);top:2px;width:12px;height:12px;border:2px solid white;border-radius:50%;box-shadow:0 0 0 1px #111;"></span></button><span id="cover-hue-wheel-value" style="font-size:.75rem;color:var(--text-muted);">Matiz 215°</span></div>
+                    <div style="display:grid;justify-items:center;gap:7px;"><strong style="font-size:.76rem;">Direção do gradiente</strong><button type="button" id="cover-angle-wheel" aria-label="Escolher direção do gradiente em 360 graus" onpointerdown="window._pickCoverAngle(event)" style="width:142px;height:142px;border-radius:50%;border:3px solid #818cf8;background:radial-gradient(circle,#172554 0 34%,transparent 35%),conic-gradient(from 0deg,#818cf8,#22d3ee,#34d399,#fbbf24,#f472b6,#818cf8);box-shadow:0 3px 14px rgba(0,0,0,.3);cursor:crosshair;position:relative;"><span id="cover-angle-wheel-marker" aria-hidden="true" style="position:absolute;left:calc(50% - 3px);top:8px;width:6px;height:52px;background:#fff;border-radius:6px;transform-origin:3px 62px;box-shadow:0 0 0 1px #111;"></span><span style="position:absolute;inset:0;display:grid;place-items:center;color:#fff;font-weight:900;font-variant-numeric:tabular-nums;text-shadow:0 1px 2px #000;"><span id="tourn-cover-angle-value">135°</span></span></button><label style="font-size:.74rem;color:var(--text-muted);">Ângulo exato <input type="number" id="tourn-cover-gradient-angle-number" min="0" max="360" value="135" oninput="window._syncCoverAngle(this.value)" style="width:65px;padding:5px 7px;border-radius:7px;background:#0f172a;color:var(--text-bright);border:1px solid #475569;"></label><input type="hidden" id="tourn-cover-gradient-angle" value="135"></div>
+                  </div>
+                  <div style="display:grid;grid-template-columns:repeat(2,minmax(130px,1fr));gap:8px;margin-top:.85rem;max-width:520px;">
+                    <label style="font-size:.72rem;color:var(--text-muted);">Saturação <input type="range" id="tourn-cover-saturation" min="0" max="100" value="27" oninput="window._syncCoverColorFromHsl()" style="width:100%;accent-color:#818cf8;"></label>
+                    <label style="font-size:.72rem;color:var(--text-muted);">Luminosidade <input type="range" id="tourn-cover-lightness" min="0" max="100" value="17" oninput="window._syncCoverColorFromHsl()" style="width:100%;accent-color:#818cf8;"></label>
+                    <input type="hidden" id="tourn-cover-hue" value="215">
+                  </div>
                 </div>
                 <div id="cover-photo-controls" style="display:none;">
                 <div style="margin:0 0 0.75rem;padding:0.65rem 0.75rem;border-radius:8px;background:rgba(59,130,246,0.08);border:1px solid rgba(96,165,250,0.22);font-size:0.7rem;line-height:1.45;color:var(--text-muted);">
@@ -2445,22 +2435,63 @@ function setupCreateTournamentModal() {
     if (h < 60) { r = c; g = x; } else if (h < 120) { r = x; g = c; } else if (h < 180) { g = c; b = x; } else if (h < 240) { g = x; b = c; } else if (h < 300) { r = x; b = c; } else { r = c; b = x; }
     return '#' + [r, g, b].map(function(v) { return Math.round((v + m) * 255).toString(16).padStart(2, '0'); }).join('');
   }
+  var _coverColorTarget = 1;
+  function _setCoverWheelMarker(id, angle) {
+    var marker = document.getElementById(id); if (!marker) return;
+    marker.style.transform = id === 'cover-angle-wheel-marker'
+      ? 'rotate(' + angle + 'deg)'
+      : 'rotate(' + angle + 'deg) translateY(-58px) rotate(' + (-angle) + 'deg)';
+    if (id === 'cover-hue-wheel-marker') { marker.style.top = 'calc(50% - 6px)'; marker.style.left = 'calc(50% - 6px)'; }
+  }
+  function _coverPointAngle(event, el) {
+    var r = el.getBoundingClientRect(), x = event.clientX - r.left - r.width / 2, y = event.clientY - r.top - r.height / 2;
+    return (Math.round(Math.atan2(y, x) * 180 / Math.PI + 90) + 360) % 360;
+  }
+  window._selectCoverColorTarget = function(target) {
+    _coverColorTarget = target === 2 ? 2 : 1;
+    [['cover-color-target-1', 1], ['cover-color-target-2', 2]].forEach(function(pair) {
+      var el = document.getElementById(pair[0]); if (!el) return;
+      var active = pair[1] === _coverColorTarget;
+      el.style.border = active ? '2px solid #818cf8' : '1px solid #475569';
+      el.style.background = active ? 'rgba(99,102,241,.18)' : 'rgba(255,255,255,.04)';
+    });
+    window._syncCoverColorFromPicker(_coverColorTarget);
+  };
+  window._pickCoverHue = function(event) {
+    event.preventDefault();
+    var wheel = document.getElementById('cover-hue-wheel'); if (!wheel) return;
+    var hue = _coverPointAngle(event, wheel), input = document.getElementById('tourn-cover-hue');
+    if (input) input.value = hue;
+    _setCoverWheelMarker('cover-hue-wheel-marker', hue);
+    window._syncCoverColorFromHsl();
+  };
+  window._pickCoverAngle = function(event) {
+    event.preventDefault();
+    var wheel = document.getElementById('cover-angle-wheel'); if (!wheel) return;
+    window._syncCoverAngle(_coverPointAngle(event, wheel));
+  };
   window._syncCoverAngle = function(value) {
     var n = Math.max(0, Math.min(360, parseInt(value, 10) || 0));
     var range = document.getElementById('tourn-cover-gradient-angle'), number = document.getElementById('tourn-cover-gradient-angle-number'), label = document.getElementById('tourn-cover-angle-value');
     if (range) range.value = n; if (number) number.value = n; if (label) label.textContent = n + '°';
+    _setCoverWheelMarker('cover-angle-wheel-marker', n);
     window._refreshCoverPreview();
   };
-  window._syncCoverColorFromPicker = function() {
-    var picker = document.getElementById('tourn-cover-color'); if (!picker || !_coverHexOk(picker.value)) return;
+  window._syncCoverColorFromPicker = function(target) {
+    if (target === 1 || target === 2) _coverColorTarget = target;
+    var picker = document.getElementById(_coverColorTarget === 2 ? 'tourn-cover-gradient-color' : 'tourn-cover-color'); if (!picker || !_coverHexOk(picker.value)) return;
     var hsl = _coverHexToHsl(picker.value);
     [['tourn-cover-hue', hsl.h], ['tourn-cover-saturation', hsl.s], ['tourn-cover-lightness', hsl.l]].forEach(function(pair) { var el = document.getElementById(pair[0]); if (el) el.value = pair[1]; });
+    _setCoverWheelMarker('cover-hue-wheel-marker', hsl.h);
+    var hueLabel = document.getElementById('cover-hue-wheel-value'); if (hueLabel) hueLabel.textContent = 'Matiz ' + hsl.h + '° · Cor ' + _coverColorTarget;
     window._refreshCoverPreview();
   };
   window._syncCoverColorFromHsl = function() {
-    var h = document.getElementById('tourn-cover-hue'), s = document.getElementById('tourn-cover-saturation'), l = document.getElementById('tourn-cover-lightness'), picker = document.getElementById('tourn-cover-color');
+    var h = document.getElementById('tourn-cover-hue'), s = document.getElementById('tourn-cover-saturation'), l = document.getElementById('tourn-cover-lightness'), picker = document.getElementById(_coverColorTarget === 2 ? 'tourn-cover-gradient-color' : 'tourn-cover-color');
     if (!h || !s || !l || !picker) return;
     picker.value = _coverHslToHex(h.value, s.value, l.value);
+    _setCoverWheelMarker('cover-hue-wheel-marker', h.value);
+    var hueLabel = document.getElementById('cover-hue-wheel-value'); if (hueLabel) hueLabel.textContent = 'Matiz ' + h.value + '° · Cor ' + _coverColorTarget;
     window._refreshCoverPreview();
   };
   window._refreshCoverPreview = function() {
