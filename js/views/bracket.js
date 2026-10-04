@@ -994,6 +994,8 @@ function _bracketSyncRoundHeadingOffsets() {
     var scope = root._bracketTabsScope || (root.closest ? root.closest('#view-container, #inline-bracket-container') : null) || document.getElementById('view-container') || document.body;
     var height = Math.ceil(root.getBoundingClientRect().height || 0);
     if (height > 0 && scope && scope.style) scope.style.setProperty('--bracket-tabs-height', height + 'px');
+    // Integração do ciclo de scroll: o listener chama este sincronizador e,
+    // para cada raiz montada, ele atualiza o portal com root e scope reais.
     _bracketUpdateRoundHeadingPortal(root, scope);
   }
 }
@@ -1003,6 +1005,10 @@ function _bracketSyncRoundHeadingOffsets() {
 // largura da coluna; o botão continua sendo o próprio botão clicável da rodada.
 function _bracketUpdateRoundHeadingPortal(root, scope) {
   if (!root || !scope) return;
+  // Contrato de todas as fontes de rodada: o título precisa carregar a classe
+  // `.bracket-round-heading`. O portal encontra essa classe, clona somente o
+  // cabeçalho já ultrapassado e o mantém logo abaixo das abas; grupos
+  // classificatórios agora obedecem ao mesmo contrato.
   var portal = root._bracketRoundHeadingPortal;
   if (!portal) {
     portal = document.createElement('div');
@@ -1038,6 +1044,8 @@ function _bracketEnsureRoundHeadingResizeListener() {
   if (window._bracketRoundHeadingResizeListener) return;
   window._bracketRoundHeadingResizeListener = function () { _bracketSyncRoundHeadingOffsets(); };
   window.addEventListener('resize', window._bracketRoundHeadingResizeListener, { passive: true });
+  // Captura a rolagem da página e dos contêineres horizontais/verticais da
+  // chave; assim o cabeçalho espelhado acompanha a rodada sem trocar o foco.
   document.addEventListener('scroll', window._bracketRoundHeadingResizeListener, true);
 }
 window._bracketCategoryTabsMount = function () {
@@ -1178,6 +1186,9 @@ window._bracketCategoryTabsMount = function () {
   // O cabeçalho é parte da sua própria coluna, não uma régua paralela. Ele
   // fica visível sob as abas e carrega junto o comando "Ocultar" da rodada.
   style.textContent = '.bracket-round-column>.bracket-round-heading{position:relative!important;z-index:1!important;background:var(--bg-darker,#111114);padding:8px 0 9px;margin:-8px 0 0;} .bracket-round-heading-portal h4,.bracket-round-heading-portal h5{margin:0!important;}';
+  // Ponto de montagem efetivo: cada chave nova sincroniza imediatamente o
+  // portal de cabeçalhos e registra uma única escuta capturada de scroll.
+  // Não mover para outro renderer: é aqui que `root` e `scope` já existem.
   _bracketSyncRoundHeadingOffsets();
   _bracketEnsureRoundHeadingResizeListener();
   if (typeof requestAnimationFrame === 'function') requestAnimationFrame(_bracketSyncRoundHeadingOffsets);
@@ -2238,8 +2249,15 @@ function renderBracket(container, tournamentId, isInline) {
     // usa. Sem ele, a fase classificatória fechava 100% mas o botão "Avançar" nunca aparecia
     // (banner era calculado na linha ~402 e descartado). Os outros ramos (Liga 428, grupos 436)
     // já o inseriam; só este esquecia.
+    /*
+     * A chave é a leitura primária enquanto existem jogos: nunca antepor a
+     * classificação dos times a `_renderPhaseBracket`. O Neon entra exatamente
+     * por este caminho canônico (t._canonicalDraw), e a concatenação invertida
+     * deixava "Classificação dos times" no topo mesmo com as quatro rodadas
+     * desenhadas logo abaixo. [[regression_canonical_key_before_team_standings]]
+     */
     _pintarEmEtapas(container, headerHtml + _subChoiceBanner + startTournamentBanner + _phaseAdvanceBanner + progressBarHtml,
-      function () { return _competitionTeamStandingsHtml + window._renderPhaseBracket(t, canEnterResult, standbyHtml); }, _applyMyMatchesFilter);
+      function () { return window._renderPhaseBracket(t, canEnterResult, standbyHtml) + _competitionTeamStandingsHtml; }, _applyMyMatchesFilter);
     return;
   }
 
@@ -2256,8 +2274,10 @@ function renderBracket(container, tournamentId, isInline) {
       // ⚠️ A ORDEM É A DE ANTES: o `standbyHtml` (lista de espera) vem DEPOIS dos grupos,
       // então ele viaja na 2ª tacada junto com eles — separar por "leve/pesado" sem olhar
       // a ordem jogaria a espera pra cima dos grupos.
+      // Mesmo contrato do caminho canônico: jogos/chaves primeiro, classificação
+      // apenas abaixo deles. Não criar uma exceção visual para grupos legados.
       _pintarEmEtapas(container, headerHtml + _subChoiceBanner + startTournamentBanner + _phaseAdvanceBanner + progressBarHtml + readyBannerHtml,
-        function () { return _competitionTeamStandingsHtml + renderGroupStage(t, isOrg, canEnterResult) + standbyHtml; }, _applyMyMatchesFilter);
+        function () { return renderGroupStage(t, isOrg, canEnterResult) + standbyHtml + _competitionTeamStandingsHtml; }, _applyMyMatchesFilter);
       return;
     }
     // If stage is elimination, fall through to bracket rendering below
@@ -7152,7 +7172,10 @@ function renderGroupStage(t, isOrg, canEnterResult, opts) {
       }).join('');
       return `
         <div style="margin-bottom:0.75rem;">
-          <h5 style="font-size:0.7rem;color:${window._spCor(roundLabelColor, 'color')};text-transform:uppercase;letter-spacing:1px;margin-bottom:0.5rem;border-left:3px solid ${roundLabelColor};padding-left:8px;">${roundLabel}</h5>
+          <!-- A classe bracket-round-heading é consumida pelo portal fixo abaixo das abas.
+               Sem a classe, as rodadas classificatórias (Neon) eram a única árvore
+               sem cabeçalho persistente durante a rolagem. -->
+          <h5 class="bracket-round-heading" style="font-size:0.7rem;color:${window._spCor(roundLabelColor, 'color')};text-transform:uppercase;letter-spacing:1px;margin-bottom:0.5rem;border-left:3px solid ${roundLabelColor};padding-left:8px;">${roundLabel}</h5>
           <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;">${matchesInRound}</div>
         </div>`;
     }).join('');

@@ -64,6 +64,16 @@ ok(bracket.includes('regression_grupos_chaves_antes_classificacao') &&
   bracket.includes('const _groupKeysFirst = _groupHasUnscheduledPending') &&
   bracket.includes('${_groupKeysFirst && matchesHtml ? `'),
   'o caminho de grupos também mantém as chaves antes das classificações durante os jogos');
+ok(bracket.includes('regression_canonical_key_before_team_standings') &&
+  bracket.includes('return window._renderPhaseBracket(t, canEnterResult, standbyHtml) + _competitionTeamStandingsHtml') &&
+  bracket.includes('return renderGroupStage(t, isOrg, canEnterResult) + standbyHtml + _competitionTeamStandingsHtml'),
+  'os dois caminhos reais nunca antepõem classificação de times às chaves');
+ok(bracket.includes('class="bracket-round-heading"') &&
+  bracket.includes('_bracketUpdateRoundHeadingPortal') &&
+  bracket.includes('document.addEventListener(\'scroll\', window._bracketRoundHeadingResizeListener, true)') &&
+  bracket.includes('_bracketUpdateRoundHeadingPortal(root, scope);') &&
+  bracket.includes('_bracketSyncRoundHeadingOffsets();\n  _bracketEnsureRoundHeadingResizeListener();'),
+  'títulos de rodadas classificatórias entram no portal fixo e têm a montagem ligada ao scroll');
 
-console.log('\n' + (fail ? '❌' : '✅') + ' dashboard-atalho-aba-e-agenda: ' + (14 - fail) + ' asserts ok, ' + fail + ' falharam');
+console.log('\n' + (fail ? '❌' : '✅') + ' dashboard-atalho-aba-e-agenda: ' + (16 - fail) + ' asserts ok, ' + fail + ' falharam');
 process.exitCode = fail ? 1 : 0;
