@@ -21,6 +21,8 @@ const annul=b.slice(annulStart,b.indexOf('// v2.7.6:',annulStart));
 ok(annul.includes("var targetHash='#tournaments/'+encodeURIComponent(String(tId))")&&annul.includes("window.renderTournaments(container,String(tId))")&&!annul.includes('if(window._rerenderBracket) window._rerenderBracket(tId);'),'Anular retorna ao detalhe canônico do torneio, inclusive sem hashchange, em vez de renderizar a chave vazia');
 ok(draw.includes("kind: 'initial'")&&draw.includes('draft: _rascunhoDoSorteioInicial(t)')&&draw.includes('_refRascunhoInicialPrivado(ref)')&&draw.includes('_stageInitial'),'Sorteio inicial vai ao cofre privado antes de materializar a chave');
 ok(a.includes("pd.kind === 'initial'")&&a.includes('_aplicaRascunhoDoSorteioInicial(t, pd.draft)'),'Publicação aplica somente o rascunho derivado na transação');
+ok(i.includes('function _drawCanBePublishedPublicly(t)')&&a.includes("t.drawVisibility = publicRelease ? 'public' : 'private'")&&a.includes('publishedPublicly:action===\'publish\''),'visibilidade da chave publicada vem de isPublic; torneio privado materializa sem abrir a chave');
+ok(i.includes('if(!_drawCanBePublishedPublicly(t) || t.notificationsMuted) return;')&&i.includes('horários estimados publicados'),'notificação só ocorre em torneio público e declara horários estimados');
 ok(/if \(d\.staged\) \{[\s\S]*?\} else \{[\s\S]*?_notifyDrawPersonalized/.test(d),'Rascunho não dispara notificação antes da publicação');
 ok(agenda.includes('db.runTransaction')&&agenda.includes('_isTournamentAdmin(t, uid)')&&agenda.includes('pd.kind !== \'initial\''),'Agenda do rascunho é transacional e exclusiva da organização');
 ok(agenda.includes('pd.draft.matches')&&agenda.includes('match.court = item.court')&&agenda.includes('match.scheduleLocked = item.scheduleLocked'),'Agenda altera somente jogos do rascunho e fixa apenas escolhas manuais antes da publicação');
@@ -38,4 +40,7 @@ ok(!d.includes('!cfg.schedule || !cfg.schedule.enabled')&&d.includes('if (!cfg |
 ok(tournamentView.includes('var _teamPanelOpened = false;')&&tournamentView.includes('if (_teamPanelOpened) return;')&&tournamentView.includes('Configuração do sorteio indisponível'),'Falha ao abrir a tela obrigatória restaura o botão e explica o erro; nunca retorna silenciosamente');
 ok(d.includes('var _openedTeamReview = false;')&&d.includes('if (_openedTeamReview) return;')&&d.includes("window.showNotification('Configuração do sorteio indisponível'"),'Atalhos também não iniciam sorteio por times se a tela obrigatória não abrir');
 ok(agenda.includes('match.matchNumber = matchNumber.get(item.matchId)')&&agenda.includes('courtRank'),'Agenda do rascunho renumera jogos continuamente pela ordem de horário e quadra');
+const pendingScheduleStart=b.indexOf('window._openPendingInitialSchedule = function');
+const pendingSchedule=b.slice(pendingScheduleStart, b.indexOf('window._rememberPendingDrawMarker = function', pendingScheduleStart));
+ok(!/if \(!latest\.cabe\)[\s\S]{0,220}?return;/.test(pendingSchedule)&&pendingSchedule.includes('Publicando horários estimados…')&&pendingSchedule.includes("Sorteio não publicado"),'excesso de janela mantém todos os jogos zebrado e não bloqueia a publicação; erro de publicação volta ao botão com mensagem');
 process.exit(f?1:0);

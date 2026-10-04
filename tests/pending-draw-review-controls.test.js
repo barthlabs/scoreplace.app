@@ -34,4 +34,9 @@ ok(/data-pis-toolbar/.test(ui) && /data-pis-scroll/.test(ui) && /height:100%;/.t
   /data-pis-close[\s\S]*?data-pis-apply[\s\S]*?data-pis-publish/.test(ui) &&
   !/margin-top:14px[\s\S]*?data-pis-apply/.test(ui),
   'Voltar fica à esquerda; Salvar ajustes e Publicar ficam ativos à direita em barra opaca fora do painel rolável, sem comando no rodapé');
+const scheduleStart = ui.indexOf('window._openPendingInitialSchedule = function');
+const scheduleEnd = ui.indexOf('window._rememberPendingDrawMarker = function', scheduleStart);
+const schedule = scheduleStart >= 0 && scheduleEnd > scheduleStart ? ui.slice(scheduleStart, scheduleEnd) : '';
+ok(/Horários são estimados/.test(schedule) && !/if \(!latest\.cabe\)[\s\S]{0,220}?return;/.test(schedule) && /Publicando horários estimados/.test(schedule) && /\.catch\(function \(e\)/.test(schedule),
+  'agenda excedente continua visível como estimativa e a publicação não fica bloqueada nem silenciosa');
 process.exitCode = fail ? 1 : 0;

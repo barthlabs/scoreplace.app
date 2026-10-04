@@ -475,6 +475,14 @@ function _isTournamentAdmin(t, uid) {
   return false;
 }
 
+/* Concluir o sorteio e divulgá-lo são decisões separadas. Um torneio privado
+ * materializa chave e agenda somente para a organização, sem anúncio ou aviso.
+ * `drawVisibility` é consequência desta regra, nunca o seu critério. Falha fechada:
+ * documento sem `isPublic: true` permanece privado até escolha explícita do organizador. */
+function _drawCanBePublishedPublicly(t) {
+  return !!(t && t.isPublic === true && t.isSandbox !== true);
+}
+
 // Espelha isTournamentParticipant das firestore.rules: memberUids primeiro (uid é a identidade
 // primária), memberEmails só como FALLBACK quando memberUids está vazio (docs legados). Usado
 // só pela closeRound — o fecho de rodada é disparado por quem salva o ÚLTIMO placar, que num
@@ -4272,10 +4280,12 @@ exports.resolvePendingDraw = onCall(async (request) => {
       if(refPrivado) tx.delete(refPrivado);
     }
     else {
+      const publicRelease = _drawCanBePublishedPublicly(t);
       if (pd.kind === 'initial') {
         _aplicaRascunhoDoSorteioInicial(t, pd.draft);
         t.status = (pd.draft && pd.draft.status) || 'active';
-        t.drawVisibility = 'public';
+        // A chave sempre é materializada; só é exposta fora da organização se pública.
+        t.drawVisibility = publicRelease ? 'public' : 'private';
         if (!t.tournamentStarted) {
           const ms=Date.parse(pd.generatedAt||'');
           t.tournamentStarted=Number.isFinite(ms)&&ms>0?ms:Date.now();
@@ -4284,16 +4294,19 @@ exports.resolvePendingDraw = onCall(async (request) => {
       } else {
         t.rounds=Array.isArray(pd.rounds)?pd.rounds:[];
         ['standings','sitOutHistory','opponentHistory','monarchWaitlist'].forEach(k=>{ if(pd[k]) t[k]=pd[k]; });
-        t.status=pd.status||'active'; t.drawVisibility=t.drawVisibility||'public';
+        t.status=pd.status||'active'; t.drawVisibility=publicRelease ? 'public' : 'private';
         if(t.drawManual!==true&&!t.tournamentStarted) { const ms=Date.parse(pd.generatedAt||''); t.tournamentStarted=Number.isFinite(ms)&&ms>0?ms:Date.now(); }
         t.lastAutoDrawAt=pd.generatedAt||t.lastAutoDrawAt||agoraIso; t.pendingDraw=null;
       }
     }
     const b=_gravaTorneio(tx,ref,t,antes,{agoraIso});
-    return {ok:true,changed:true,action,roundIndex:pd.roundIndex,firstDraw:!!pd.firstDraw,tournament:b.clean};
+    return {ok:true,changed:true,action,roundIndex:pd.roundIndex,firstDraw:!!pd.firstDraw,publishedPublicly:action==='publish' && _drawCanBePublishedPublicly(t),tournament:b.clean};
   }).then(async out=>{
     // A publicação deixa o servidor, e não o navegador, responsável pela entrega.
-    if(out.changed && action==='publish') await _notifyPublishedPendingDraw(out.tournament,tId,out.roundIndex,agoraIso);
+    // `publishedPublicly` nasceu dentro da mesma transação que decidiu a visibilidade.
+    // Não derive a entrega do retrato retornado: a agenda privada deve permanecer
+    // silenciosa mesmo se um chamador futuro reduzir os campos de `tournament`.
+    if(out.changed && action==='publish' && out.publishedPublicly === true) await _notifyPublishedPendingDraw(out.tournament,tId,out.roundIndex,agoraIso);
     return out;
   });
 });
@@ -5081,10 +5094,11 @@ exports.setPhasePromotion = onCall(async (request) => {
 });
 
 async function _notifyPublishedPendingDraw(t,tId,roundIndex,nowIso) {
-  if(!t || t.isSandbox || t.notificationsMuted) return;
+  // ⛔ A finalização privada nunca comunica jogadores: só torneio explicitamente público.
+  if(!_drawCanBePublishedPublicly(t) || t.notificationsMuted) return;
   const ids=new Set(); (t.participants||[]).forEach(p=>[p&&p.uid,p&&p.p1Uid,p&&p.p2Uid].forEach(u=>u&&ids.add(String(u))));
   const {profByUid}=await _loadLiveNames(ids); const mailed=new Set();
-  for(const uid of ids){ const profile=profByUid[uid]; if(!profile) continue; const msg='🔄 Sorteio publicado no torneio '+(t.name||'')+'! Confira seus jogos.';
+  for(const uid of ids){ const profile=profByUid[uid]; if(!profile) continue; const msg='🔄 Chave e horários estimados publicados no torneio '+(t.name||'')+'. Confira seus jogos: os horários podem mudar conforme o andamento.';
     if(profile.notifyPlatform!==false) try { await db.collection('users').doc(uid).collection('notifications').doc('pending-draw-'+tId+'-'+roundIndex).set({type:'draw',fromUid:'system',fromName:'scoreplace.app',fromPhoto:'',tournamentId:tId,tournamentName:t.name||'',message:msg,createdAt:nowIso,read:false},{merge:true}); } catch(e){console.warn('pending draw notif',e&&e.message);}
     await _queueDrawEmail(profile,_drawEmailOpts(t,tId,msg),mailed);
   }

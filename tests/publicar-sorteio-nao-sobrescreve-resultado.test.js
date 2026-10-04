@@ -9,9 +9,10 @@ if (start < 0 || end < 0) throw new Error('não encontrei _publishPendingDraw');
 
 let notification = null;
 let command = null;
+let response = { data: { changed: true, publishedPublicly: true } };
 const sandbox = {
   window: null, console,
-  _callCF: async (name, payload) => { command = { name, payload }; return { data: { changed: true } }; },
+  _callCF: async (name, payload) => { command = { name, payload }; return response; },
   showNotification: (...args) => { notification = args; }
 };
 sandbox.window = sandbox;
@@ -28,7 +29,11 @@ vm.runInContext(src.slice(start, end), sandbox, { filename: 'bracket-logic.js:_p
   const body = cf.slice(cf.indexOf('exports.resolvePendingDraw'), cf.indexOf('exports.resolvePendingDraw') + 5000);
   ok(/runTransaction/.test(body) && /_gravaTorneio/.test(body), 'a CF publica o documento fresco transacionalmente');
   ok(/pendingDraw/.test(body) && /result/.test(cf), 'a CF preserva o domínio de resultados fora da cópia cliente');
-  ok(notification && notification[0] === '🚀 Sorteio publicado!', 'notifica somente depois da gravação confirmada');
+  ok(notification && notification[0] === '🚀 Chave publicada!' && /horários estimados/.test(notification[1]), 'torneio público só notifica depois da gravação confirmada e informa que horários são estimados');
+  notification = null;
+  response = { data: { changed: true, publishedPublicly: false } };
+  await sandbox._publishPendingDraw('T2');
+  ok(notification && notification[0] === '✓ Chave privada finalizada' && /Nenhum participante foi avisado/.test(notification[1]), 'torneio privado finaliza a chave sem alegar divulgação ou notificação');
   ok(!/AppStore\.mutate|FirestoreDB\.saveTournament|syncImmediate\(/.test(src.slice(start, end)),
     'sem mutação cliente, não há fallback que publique o snapshot inteiro');
   if (fail) process.exit(1);

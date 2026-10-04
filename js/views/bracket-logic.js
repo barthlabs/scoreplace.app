@@ -6654,8 +6654,8 @@ window._openPendingInitialSchedule = function (tId) {
        * `[data-pis-scroll]`; Voltar, Salvar ajustes e Publicar ficam sempre
        * opacos, visíveis e fora da rolagem vertical e horizontal. */
       '<div data-pis-toolbar style="position:relative;z-index:2;flex:none;padding:16px;background:#111827;border-bottom:1px solid rgba(148,163,184,.28);box-shadow:0 8px 16px rgba(2,6,23,.55)"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center"><button type="button" data-pis-close class="btn btn-outline" style="flex:none">← Voltar</button><h2 style="margin:0;min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center;font-size:1.05rem">📍 Planejar antes de publicar</h2><div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;flex:none"><button type="button" data-pis-apply class="btn btn-outline">Salvar ajustes</button><button type="button" data-pis-publish class="btn btn-shine" style="background:#10b981;color:#fff">🚀 Publicar</button></div></div><p style="margin:8px 0 0;font-size:.82rem;line-height:1.4;color:#cbd5e1">Cada horário aparece uma vez na régua vertical à esquerda. Arraste um jogo sobre outro para trocar seus horários e quadras.</p></div>' +
-      '<div data-pis-scroll style="position:relative;z-index:1;flex:1;min-height:0;overflow:auto;padding:16px;box-sizing:border-box"><div style="font-size:.76rem;color:#94a3b8;margin-bottom:6px">' + p.items.length + ' jogos · ' + p.courts.length + ' quadras. Cada linha é um horário; cada coluna é uma quadra.</div>' +
-      (!p.cabe ? '<div style="margin:0 0 10px;color:#fbbf24;font-size:.82rem;font-weight:700">A agenda ultrapassa as janelas configuradas em ' + Math.ceil((p.extraMs || 0) / 60000) + ' min. Todos os jogos continuam exibidos; os excedentes aparecem em faixa zebrada vermelha e cinza.</div>' : '') + board.html +
+      '<div data-pis-scroll style="position:relative;z-index:1;flex:1;min-height:0;overflow:auto;padding:16px;box-sizing:border-box"><div style="font-size:.76rem;color:#94a3b8;margin-bottom:6px">' + p.items.length + ' jogos · ' + p.courts.length + ' quadras. Cada linha é um horário; cada coluna é uma quadra. Horários são estimados e podem mudar conforme o andamento.</div>' +
+      (!p.cabe ? '<div style="margin:0 0 10px;color:#fbbf24;font-size:.82rem;font-weight:700">⚠ Ao publicar assim, a programação excede a janela determinada pela organização em ' + Math.ceil((p.extraMs || 0) / 60000) + ' min. Todos os jogos continuam exibidos; os excedentes aparecem em faixa zebrada vermelha e cinza.</div>' : '') + board.html +
       '</div></div>';
     overlay.querySelector('[data-pis-close]').onclick = returnToPendingDetail;
     Array.prototype.forEach.call(overlay.querySelectorAll('[data-pis-day]'), function (control) { control.onclick = function () { activeDay = control.getAttribute('data-pis-day'); render(); }; });
@@ -6694,11 +6694,17 @@ window._openPendingInitialSchedule = function (tId) {
     Array.prototype.forEach.call(overlay.querySelectorAll('[data-pis-publish]'), function (publishButton) {
       publishButton.onclick = function (event) {
         var button = event.currentTarget, latest = plan();
-        if (!latest.cabe) { if (window.showNotification) window.showNotification('Agenda não cabe', 'Ajuste a configuração antes de publicar.', 'error'); return; }
-        button.disabled = true; button.textContent = 'Publicando…';
+        /* ⛔ NÃO BLOQUEAR PUBLICAÇÃO POR EXCESSO DE HORÁRIO. A agenda deve conter
+         * todos os jogos; os que excedem a janela ficam na faixa zebrada para a
+         * organização enxergar e ajustar, mas não tornam a chave impossível de finalizar. */
+        button.disabled = true; button.textContent = latest.cabe ? 'Publicando…' : 'Publicando horários estimados…';
         saveSchedule(latest)
           .then(function () { return window._publishPendingDraw(tId); })
-          .then(function (published) { if (published) overlay.remove(); else { button.disabled = false; button.textContent = '🚀 Publicar'; } });
+          .then(function (published) { if (published) overlay.remove(); else { button.disabled = false; button.textContent = '🚀 Publicar'; } })
+          .catch(function (e) {
+            button.disabled = false; button.textContent = '🚀 Publicar';
+            if (window.showNotification) window.showNotification('Sorteio não publicado', (e && e.message) || 'Não foi possível salvar a agenda e publicar o sorteio.', 'error');
+          });
       };
     });
   }
@@ -6806,11 +6812,18 @@ window._renderPendingDrawBanner = function (t) {
 window._publishPendingDraw = async function (tId) {
   try {
     var res=await window._callCF('resolvePendingDraw',{ tournamentId:String(tId), action:'publish' },'Entre na sua conta para publicar o sorteio.');
-    if(!((res&&res.data)||{}).changed) return false;
+    var out=(res&&res.data)||{};
+    if(!out.changed) return false;
     if (window.__pendingInitialDraws) delete window.__pendingInitialDraws[String(tId)];
     if (window.__pendingDrawMarkers) delete window.__pendingDrawMarkers[String(tId)];
     if (window.__pendingDrawMarkerLoads) delete window.__pendingDrawMarkerLoads[String(tId)];
-    if(window.showNotification) window.showNotification('🚀 Sorteio publicado!','A chave foi liberada para os participantes.','success');
+    if(window.showNotification) window.showNotification(
+      out.publishedPublicly === true ? '🚀 Chave publicada!' : '✓ Chave privada finalizada',
+      out.publishedPublicly === true
+        ? 'A chave e os horários estimados foram liberados aos inscritos. Os horários podem mudar conforme o andamento.'
+        : 'A chave e a agenda foram finalizadas somente para a organização. Nenhum participante foi avisado.',
+      'success'
+    );
     if(window._rerenderBracket) window._rerenderBracket(tId);
     return true;
   } catch(e) { if(window._warn) window._warn('[publishPendingDraw] CF falhou',e); if(window.showNotification) window.showNotification('Sorteio não publicado','Não foi possível publicar o sorteio. Tente novamente.','error'); return false; }
