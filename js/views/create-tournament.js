@@ -361,7 +361,7 @@ function setupCreateTournamentModal() {
                       <input type="range" id="tourn-cover-gradient-angle" min="0" max="360" value="135" oninput="window._syncCoverAngle(this.value)" style="width:100%;accent-color:#818cf8;">
                     </label>
                     <label style="display:grid;gap:4px;font-size:0.72rem;font-weight:700;color:var(--text-muted);">Ângulo exato
-                      <input type="number" id="tourn-cover-gradient-angle-number" min="0" max="360" value="135" oninput="window._syncCoverAngle(this.value)" style="width:72px;padding:6px 8px;border-radius:7px;background:#0f172a;color:#f8fafc;border:1px solid #475569;">
+                      <input type="number" id="tourn-cover-gradient-angle-number" min="0" max="360" value="135" oninput="window._syncCoverAngle(this.value)" style="width:72px;padding:6px 8px;border-radius:7px;background:#0f172a;color:var(--text-bright);border:1px solid #475569;">
                     </label>
                   </div>
                   <details style="margin-top:0.65rem;"><summary style="cursor:pointer;font-size:0.72rem;color:var(--sp-c-a5b4fc,#a5b4fc);font-weight:700;">Ajuste fino da cor 1 (roda HSL)</summary>
