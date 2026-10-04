@@ -51,6 +51,15 @@ try {
 }
 ok(router.includes('_priorBracketTarget') && router.includes('? _priorBracketTarget : { tId: String(cleanParam), matchId: null }'),
   'a rota #bracket preserva o alvo vindo da dashboard');
+ok(bracket.includes('regression_chaves_antes_classificacao_ate_janela_de_6h') &&
+  bracket.includes('const _janelaJogosProximosMs = 6 * 60 * 60 * 1000'),
+  'a ordem entre chave e classificação usa a janela canônica de seis horas');
+ok(bracket.includes('const _chavesAntesDaClassificacao = _haJogoPendenteSemHorario') &&
+  bracket.includes('(_proximoJogoPendenteMs != null && _proximoJogoPendenteMs <= Date.now() + _janelaJogosProximosMs)'),
+  'jogo pendente sem horário ou dentro de seis horas mantém a chave acima');
+ok(bracket.includes('if (_ligaPorTimes)') && bracket.includes('Não existe exceção visual para o Neon.') &&
+  bracket.includes('return _classificacaoNoTopo\n    ? _phaseBannerHtml + _progressBar + _sb + standingsTablesHtml'),
+  'Neon e os demais formatos só elevam a classificação no intervalo entre blocos');
 
-console.log('\n' + (fail ? '❌' : '✅') + ' dashboard-atalho-aba-e-agenda: ' + (10 - fail) + ' asserts ok, ' + fail + ' falharam');
+console.log('\n' + (fail ? '❌' : '✅') + ' dashboard-atalho-aba-e-agenda: ' + (13 - fail) + ' asserts ok, ' + fail + ' falharam');
 process.exitCode = fail ? 1 : 0;

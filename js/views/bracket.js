@@ -7416,6 +7416,45 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
 
   const currentRoundData = rounds[currentRound - 1];
   const allComplete = (currentRoundData.matches || []).every(m => m.winner || m.isBye || m.isSitOut);
+
+  /* ── ORDEM CANÔNICA: CHAVES/JOGOS ANTES DA CLASSIFICAÇÃO ────────────────
+   * A classificação é leitura do que já ocorreu; a chave é a ação pendente.
+   * Portanto ela só pode subir quando o bloco de jogos do dia acabou E o próximo
+   * jogo começa daqui a mais de seis horas. Em qualquer outro caso (jogo em
+   * aberto, jogo sem horário ou próximo em até 6h), os jogos permanecem acima.
+   *
+   * Não especializar Neon: ele é classificatório como qualquer outro torneio.
+   * Uma versão anterior colocou a classificação no topo pelo simples `allComplete`
+   * da rodada atual, mesmo havendo uma rodada seguinte já planejada; foi isso que
+   * fez a chave do Neon voltar a abrir abaixo da tabela.
+   * [[regression_chaves_antes_classificacao_ate_janela_de_6h]] */
+  const _jogosDaGrade = (function () {
+    var list = [], seen = {};
+    function add(m) {
+      if (!m || m.isBye || m.isSitOut) return;
+      var key = String(m.id || m.matchId || m._gameNum || '') + '|' + String(m.scheduledAt || '');
+      if (seen[key]) return;
+      seen[key] = true;
+      list.push(m);
+    }
+    (rounds || []).forEach(function (r) { (r && r.matches || []).forEach(add); });
+    (t.matches || []).forEach(add);
+    return list;
+  })();
+  const _haJogoPendenteSemHorario = _jogosDaGrade.some(function (m) {
+    return !m.winner && !_matchCardTimestamp(m.scheduledAt);
+  });
+  const _proximoJogoPendenteMs = _jogosDaGrade.reduce(function (next, m) {
+    if (m.winner) return next;
+    var when = _matchCardTimestamp(m.scheduledAt);
+    return when && (next == null || when < next) ? when : next;
+  }, null);
+  const _janelaJogosProximosMs = 6 * 60 * 60 * 1000;
+  const _chavesAntesDaClassificacao = _haJogoPendenteSemHorario ||
+    (_proximoJogoPendenteMs != null && _proximoJogoPendenteMs <= Date.now() + _janelaJogosProximosMs);
+  // Sem jogos pendentes, ou com o próximo só depois da janela de seis horas, a
+  // classificação pode ser o primeiro bloco — intervalo legítimo entre dias.
+  const _classificacaoNoTopo = !_chavesAntesDaClassificacao;
   const isSuico = t.format === 'Suíço Clássico' || t.classifyFormat === 'swiss' || t.currentStage === 'swiss';
   const isLigaFmt = window._isLigaFormat ? window._isLigaFormat(t) : (t.format === 'Liga' || t.format === 'Ranking');
   const maxRounds = t.swissRounds || 99;
@@ -9093,10 +9132,9 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
 
   var _progressBar = progressBarHtml || '';
   if (useColumnLayout) {
-    // v4.0.89 (pedido do dono): no Suíço, CHAVES primeiro e classificação DEPOIS. A
-    // classificação só sobe pra ANTES das chaves quando TODAS as rodadas do Suíço
-    // encerram (isFinished). A LISTA DE ESPERA (_sb) fica SEMPRE depois das chaves.
-    if (isFinished) {
+    // A lista de espera (_sb) fica sempre depois das chaves. A classificação só
+    // sobe na janela real entre blocos, nunca por um `isFinished` parcial.
+    if (_classificacaoNoTopo) {
       return _phaseBannerHtml + _progressBar + standingsTablesHtml + _readyBanner + roundsScrollHtml + _sb + statsHtml + h2hHtml;
     }
     return _phaseBannerHtml + _progressBar + _readyBanner + roundsScrollHtml + _sb + standingsTablesHtml + statsHtml + h2hHtml;
@@ -9126,19 +9164,27 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
     })();
     var _ligaPorTimes = Array.isArray(t && t.competitionTeams) && t.competitionTeams.length > 0;
     if (_ligaPorTimes) {
-      // Neon: jogos (atual, demais, anteriores e futuros) primeiro; classificação
-      // recolhida depois. Mantém o torneio legível sem uma exceção visual do Neon.
+      // Neon e qualquer competição por times obedecem a mesma janela canônica.
+      // Não existe exceção visual para o Neon.
+      if (_classificacaoNoTopo) {
+        return _phaseBannerHtml + _progressBar + _playoffHtml + standingsTablesHtml + _readyBanner + previousRoundsHtml + currentRoundHtml + ligaOtherMatchesHtml + upcomingRoundsHtml + _sb + statsHtml + h2hHtml;
+      }
       return _phaseBannerHtml + _progressBar + _playoffHtml + _readyBanner + previousRoundsHtml + currentRoundHtml + ligaOtherMatchesHtml + upcomingRoundsHtml + _sb + standingsTablesHtml + statsHtml + h2hHtml;
     }
-    if (allComplete) {
+    if (_classificacaoNoTopo) {
       if (_txPerGroup) {
-        return _phaseBannerHtml + _progressBar + _playoffHtml + _readyBanner + currentRoundHtml + ligaOtherMatchesHtml + _sb + standingsTablesHtml + upcomingRoundsHtml + statsHtml + h2hHtml + previousRoundsHtml;
+        // A classificação por grupo também só pode ocupar o topo no intervalo
+        // de seis horas. Não deixe o atalho de transição por grupo inverter a
+        // ordem e esconder as chaves enquanto ainda há jogo para disputar.
+        return _phaseBannerHtml + _progressBar + _playoffHtml + _readyBanner + _sb + standingsTablesHtml + currentRoundHtml + ligaOtherMatchesHtml + upcomingRoundsHtml + statsHtml + h2hHtml + previousRoundsHtml;
       }
       return _phaseBannerHtml + _progressBar + _playoffHtml + _readyBanner + _sb + standingsTablesHtml + currentRoundHtml + ligaOtherMatchesHtml + upcomingRoundsHtml + statsHtml + h2hHtml + previousRoundsHtml;
     }
     return _phaseBannerHtml + _progressBar + _playoffHtml + _readyBanner + currentRoundHtml + ligaOtherMatchesHtml + _sb + standingsTablesHtml + upcomingRoundsHtml + statsHtml + h2hHtml + previousRoundsHtml;
   }
-  return _phaseBannerHtml + _progressBar + _sb + standingsTablesHtml + _readyBanner + currentRoundHtml + upcomingRoundsHtml + statsHtml + h2hHtml + previousRoundsHtml;
+  return _classificacaoNoTopo
+    ? _phaseBannerHtml + _progressBar + _sb + standingsTablesHtml + _readyBanner + currentRoundHtml + upcomingRoundsHtml + statsHtml + h2hHtml + previousRoundsHtml
+    : _phaseBannerHtml + _progressBar + _readyBanner + currentRoundHtml + upcomingRoundsHtml + _sb + standingsTablesHtml + statsHtml + h2hHtml + previousRoundsHtml;
 }
 
 // ─── Compute standings ────────────────────────────────────────────────────────
