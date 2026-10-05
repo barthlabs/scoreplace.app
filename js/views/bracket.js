@@ -1005,18 +1005,11 @@ function _bracketSyncRoundHeadingOffsets() {
 // largura da coluna; o botão continua sendo o próprio botão clicável da rodada.
 function _bracketUpdateRoundHeadingPortal(root, scope) {
   if (!root || !scope) return;
-  // A agenda concentrada (Neon) exibe todas as rodadas lado a lado. Clonar
-  // títulos em `position:fixed` nessa grade criava a faixa solta que atravessava
-  // cards e escondia R2–R4. O cabeçalho canônico permanece na própria coluna,
-  // alinhado aos cards que ele nomeia.
-  if (root.getAttribute('data-bracket-team-schedule') === '1') {
-    if (root._bracketRoundHeadingPortal) root._bracketRoundHeadingPortal.innerHTML = '';
-    return;
-  }
-  // Contrato de todas as fontes de rodada: o título precisa carregar a classe
-  // `.bracket-round-heading`. O portal encontra essa classe, clona somente o
-  // cabeçalho já ultrapassado e o mantém logo abaixo das abas; grupos
-  // classificatórios agora obedecem ao mesmo contrato.
+  // Contrato de todas as fontes de rodada, inclusive da agenda concentrada:
+  // o título precisa carregar `.bracket-round-heading`. O portal espelha
+  // somente o título de cada coluna que passou sob as abas e o mantém alinhado
+  // ao respectivo card. Não desabilitar isto no Neon: sem o espelho, "Rodada
+  // 1" some na rolagem vertical. [[regression_neon_round_headers_are_sticky]]
   var portal = root._bracketRoundHeadingPortal;
   if (!portal) {
     portal = document.createElement('div');
@@ -1139,8 +1132,15 @@ window._bracketCategoryTabsMount = function () {
   // por times (Neon) precisa deixar R1–R4 visíveis lado a lado: esconder cada
   // coluna atrás de uma terceira aba apaga justamente os jogos futuros.
   var formatText = String(currentTournament.format || currentTournament.classifyFormat || '').toLowerCase();
-  var teamCfg = currentTournament.teamCompetition || ((currentTournament.phases || [])[0] || {}).teamCompetition || {};
-  var isTeamSchedule = !!(teamCfg.enabled && teamCfg.schedule && teamCfg.schedule.enabled);
+  var teamCfg = (window.ScoreplaceTeamCompetition && window.ScoreplaceTeamCompetition.configurationForTournament)
+    ? window.ScoreplaceTeamCompetition.configurationForTournament(currentTournament)
+    : (currentTournament.teamCompetition || ((currentTournament.phases || [])[0] || {}).teamCompetition || {});
+  // A agenda de um evento concentrado é gravada no planejamento publicado.
+  // A cópia de fase pode não transportar `teamCompetition`, mas não pode por
+  // isso transformar Neon em "Grupo A". A janela operacional é a fonte de
+  // verdade para diferenciar Neon da Confra.
+  var isTeamSchedule = !!((window._isConcentratedTournament && window._isConcentratedTournament(currentTournament)) ||
+    (teamCfg.enabled && teamCfg.schedule && teamCfg.schedule.enabled));
   /* [[regression_neon_all_planned_rounds_visible]] Não reintroduzir abas de
    * rodada para agenda concentrada: elas filtram os cards por `m.round` e
    * deixam R2–R4 invisíveis, embora o sorteio as tenha criado. */
@@ -4837,11 +4837,26 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
       var allMs = rounds.reduce(function (acc, r) { return acc.concat(r.matches); }, []);
       return { name: g.name, players: Object.keys(g.players), matches: allMs, rounds: rounds };
     });
+    /*
+     * A fase é recortada por categoria, mas continua sendo o MESMO evento
+     * concentrado. Não perder o contrato operacional na cópia: sem esses
+     * campos `renderGroupStage` enxerga o grupo técnico e recria o card/Grupo
+     * A; também deixa de usar a sequência planejada dos jogos.
+     * [[regression_neon_phase_faux_keeps_schedule_contract]]
+     */
     var _gFaux = {
       id: t.id, matches: _gMs, groups: _gGroups,
       gruposClassified: phaseCfg.gruposClassified || t.gruposClassified || 2,
       scoring: t.scoring, tiebreakers: t.tiebreakers,
-      creatorUid: t.creatorUid, coHosts: t.coHosts
+      creatorUid: t.creatorUid, coHosts: t.coHosts,
+      teamCompetition: t.teamCompetition,
+      scheduleWindow: t.scheduleWindow,
+      categorySchedule: t.categorySchedule,
+      courtOrder: t.courtOrder,
+      courtNames: t.courtNames,
+      courtCount: t.courtCount,
+      fmt2: t.fmt2,
+      phases: t.phases
     };
     var _gIsOrg = window._souOrganizador(t);
     body = (typeof window.renderGroupStage === 'function')
@@ -5617,6 +5632,12 @@ window._matchCardTimelineTextHtml = _matchCardTimelineTextHtml;
 function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingSub, opts) {
   var _t = window._t || function(k) { return k; };
   if (!m) return '';
+
+  // A prévia publicada decide a numeração do evento concentrado: seis quadras
+  // às 18h são Jogos 1–6, e o primeiro Light pode ser corretamente o Jogo 2.
+  // O contador visual de uma categoria jamais pode renumerar essa decisão.
+  var _plannedGameNumber = Number(m.scheduledGameNumber);
+  if (Number.isFinite(_plannedGameNumber) && _plannedGameNumber > 0) matchNum = _plannedGameNumber;
 
   // v1.8.67: MODO SOMENTE LEITURA — o card é o mesmo, mas SEM nenhuma ação. Existe
   // porque a dashboard ("📣 Novidades no seu torneio") reusa este renderizador para
@@ -7052,8 +7073,11 @@ function renderGroupStage(t, isOrg, canEnterResult, opts) {
   // A classificação da agenda concentrada é uma tabela de rodadas, não uma
   // coleção de “Grupo A”. Há um grupo técnico por categoria no banco apenas
   // para o motor calcular pontos; este rótulo não é uma entidade do torneio.
-  const _teamCfgGS = t.teamCompetition || ((t.phases || [])[0] || {}).teamCompetition || {};
-  const _isTeamScheduleGS = !!(_teamCfgGS.enabled && _teamCfgGS.schedule && _teamCfgGS.schedule.enabled);
+  const _teamCfgGS = (window.ScoreplaceTeamCompetition && window.ScoreplaceTeamCompetition.configurationForTournament)
+    ? window.ScoreplaceTeamCompetition.configurationForTournament(t)
+    : (t.teamCompetition || ((t.phases || [])[0] || {}).teamCompetition || {});
+  const _isTeamScheduleGS = !!((window._isConcentratedTournament && window._isConcentratedTournament(t)) ||
+    (_teamCfgGS.enabled && _teamCfgGS.schedule && _teamCfgGS.schedule.enabled));
 
   // Source per-group structure from the unified adapter when available.
   // Adapter's groups column carries subgroups[i].rounds (same shape as

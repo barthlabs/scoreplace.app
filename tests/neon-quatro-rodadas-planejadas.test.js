@@ -45,6 +45,9 @@ const bracket = fs.readFileSync(path.join(__dirname, '..', 'js/views/bracket.js'
 assert(/data-bracket-team-schedule/.test(bracket), 'a grade concentrada tem um modo próprio de abas');
 assert(/!isTeamSchedule && !isOnlyLines/.test(bracket), 'o Neon não pode esconder R2–R4 em abas de rodada');
 assert(/_isTeamScheduleGS[\s\S]{0,900}groupHeader/.test(bracket), 'o grupo técnico não pode aparecer como título da chave');
+assert(/regression_neon_phase_faux_keeps_schedule_contract/.test(bracket), 'a cópia filtrada da fase mantém o contrato de agenda do Neon');
+assert(/regression_neon_round_headers_are_sticky/.test(bracket), 'cada cabeçalho de rodada concentrada continua fixo durante a rolagem');
+assert(/scheduledGameNumber[\s\S]{0,180}matchNum = _plannedGameNumber/.test(bracket), 'o card usa o número definido na prévia, não o contador local da categoria');
 const timestampFn = bracket.indexOf('function _matchCardTimestamp(value)');
 const dateTimeFn = bracket.indexOf('function _matchCardDateTime(ms, t)');
 const scheduleCard = bracket.indexOf('var _scheduledMs = _isConcentratedEvent');
