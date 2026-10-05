@@ -970,7 +970,12 @@ function _bracketGeneralView(root, show, gender, onlyReady) {
   // Trocar Geral ↔ Próximos jogos não pode reutilizar wrappers do modo anterior:
   // devolve cada card primeiro e monta a outra visão a partir da chave canônica.
   var requestedMode = onlyReady ? 'upcoming' : 'general';
-  if (entries.length && root._bracketGeneralMode !== requestedMode) {
+  // A visão operacional move os cards reais. Toda nova entrada (inclusive
+  // voltar para Geral depois de uma categoria) primeiro os devolve e reconstrói
+  // a partir da chave canônica. Reaproveitar o mesmo `entries` faria
+  // `view.innerHTML = ''` desconectar os wrappers e deixaria as colunas vazias.
+  // [[regression_operational_tabs_must_rebuild_moved_cards]]
+  if (entries.length) {
     _bracketGeneralView(root, false, gender);
     entries = root._bracketGeneralEntries || [];
   }
@@ -1086,7 +1091,6 @@ function _bracketGeneralView(root, show, gender, onlyReady) {
     group.appendChild(grid);
     roundsTrack.appendChild(group);
   });
-  view.appendChild(roundsTrack);
   if (waitingEntries.length) {
     waitingEntries.sort(function (a, b) {
       if (a.at !== b.at) return a.at - b.at;
@@ -1094,7 +1098,9 @@ function _bracketGeneralView(root, show, gender, onlyReady) {
     });
     var waitingSection = document.createElement('section');
     waitingSection.setAttribute('data-bracket-upcoming-waiting', '1');
-    waitingSection.style.cssText = 'margin:20px 0 0;padding-top:14px;border-top:1px solid rgba(245,158,11,.28);';
+    // A chamada pendente vem ANTES dos jogos prontos: é a informação que o
+    // organizador precisa resolver para o próximo jogo poder entrar na agenda.
+    waitingSection.style.cssText = 'margin:0 0 20px;padding-bottom:14px;border-bottom:1px solid rgba(245,158,11,.28);';
     waitingSection.innerHTML = '<h4 style="margin:0 0 12px;color:var(--sp-c-fbbf24,#fbbf24);font-size:.9rem;letter-spacing:.2px;">🟡 ' + waitingEntries.length + (waitingEntries.length === 1 ? ' jogo aguardando presença' : ' jogos aguardando presença') + '</h4>';
     var waitingGrid = document.createElement('div');
     waitingGrid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;align-items:start;';
@@ -1102,6 +1108,7 @@ function _bracketGeneralView(root, show, gender, onlyReady) {
     waitingSection.appendChild(waitingGrid);
     view.appendChild(waitingSection);
   }
+  view.appendChild(roundsTrack);
   view.style.display = '';
   return true;
 }

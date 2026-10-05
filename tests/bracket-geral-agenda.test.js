@@ -86,6 +86,13 @@ function trecho(inicio, fim) {
     };
 
     document.getElementById('geral').click();
+    // Reentrar na mesma aba já moveu os wrappers uma vez; não pode apagá-los
+    // ao limpar a visão transitória antes da nova montagem.
+    document.getElementById('geral').click();
+    const generalReentry = {
+      order: Array.from(agenda.querySelectorAll('[data-bracket-tab-category]')).map((el) => el.id),
+      visible: Array.from(agenda.querySelectorAll('[data-bracket-tab-category]')).every((el) => !el.hidden)
+    };
     const orphanPortal = document.createElement('div');
     orphanPortal.setAttribute('data-bracket-round-heading-portal', '1');
     document.body.appendChild(orphanPortal);
@@ -124,7 +131,7 @@ function trecho(inicio, fim) {
       sourceVisible: !document.getElementById('nested-source').hidden,
       movedVisible: !!nestedRoot._bracketGeneralView.querySelector('#played-card') && !nestedRoot._bracketGeneralView.querySelector('#played-card').hidden
     };
-    return { generalState, upcomingState, restored, cleanup, noSchedule, nested };
+    return { generalState, upcomingState, restored, generalReentry, cleanup, noSchedule, nested };
   });
 
   console.log('\n📋 Geral é a agenda do dia, não uma cópia por gênero');
@@ -133,14 +140,16 @@ function trecho(inicio, fim) {
   ok(result.generalState.noClone, 'os cards reais são movidos: não há id nem input duplicado');
   ok(result.generalState.visibleCards, 'os cards movidos para Geral são visíveis, não herdam o hidden do filtro de categoria');
   ok(result.generalState.roundColumns.join(',') === 'Rodada 1,Rodada 2', 'Geral agrupa a agenda pela rodada, com cabeçalho de coluna estável');
-  console.log('\n📋 Próximos jogos só mostra partidas pendentes e com ambas as duplas presentes');
+  console.log('\n📋 Próximos jogos prioriza o que aguarda presença e preserva os prontos');
   ok(result.upcomingState.sourceHidden, 'Próximos jogos também troca a chave canônica por uma única visão operacional');
-  ok(result.upcomingState.order.join(',') === 'fem-court-5,fem-round-2,fem-waiting', 'Próximos jogos separa a partida parcialmente presente depois das partidas prontas');
-  ok(result.upcomingState.waiting.join(',') === 'fem-waiting', 'a lista de aguardando presença fica abaixo dos próximos jogos');
+  ok(result.upcomingState.order.join(',') === 'fem-waiting,fem-court-5,fem-round-2', 'a partida parcialmente presente vem antes dos próximos jogos prontos');
+  ok(result.upcomingState.waiting.join(',') === 'fem-waiting', 'a lista de aguardando presença fica no topo de Próximos jogos');
   ok(result.upcomingState.visibleCards, 'o card pronto continua visível depois de mover entre Geral e Próximos jogos');
   console.log('\n📋 Voltar para categoria restaura a chave canônica');
   ok(result.restored.sourceVisible && result.restored.agendaHidden, 'Light fecha a agenda e restaura a fonte');
   ok(result.restored.originalOrder.join(',') === 'fem-court-5,masc-same-day,fem-round-2,fem-waiting,tomorrow', 'cada wrapper volta exatamente ao seu placeholder');
+  ok(result.generalReentry.order.join(',') === 'masc-same-day,fem-court-5,fem-waiting,fem-round-2' && result.generalReentry.visible,
+    'voltar para Geral reconstrói os cards reais, sem colunas vazias');
   console.log('\n📋 Novo render limpa Geral aberta antes de substituir a chave');
   ok(result.cleanup.rootGone && result.cleanup.agendaGone, 'abas e agenda transitória são destruídas');
   ok(result.cleanup.cardsReturned.join(',') === 'fem-court-5,masc-same-day,fem-round-2,fem-waiting,tomorrow', 'nenhum card fica órfão fora do container');
