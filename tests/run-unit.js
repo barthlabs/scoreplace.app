@@ -554,6 +554,8 @@ const SUITES = [
   'tests/prazo-do-card-sem-round-usa-o-id.test.js',
   'tests/troca-de-versao-nao-apaga-a-tela.test.js',
   'tests/presenca-so-quando-o-jogo-e-iminente.test.js',
+  // A chamada no card é individual: uma dupla parcial precisa mostrar quem chegou.
+  'tests/bolinha-presenca-individual.test.js',
   'tests/sugestao-casual-nao-aponta-para-quem-ja-joga.test.js',
   // o cronômetro da Liga mira o fim da rodada
   'tests/liga-countdown-round-end.test.js',
