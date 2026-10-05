@@ -70,8 +70,8 @@ function trecho(inicio, fim) {
     document.getElementById('upcoming').click();
     const upcomingState = {
       sourceHidden: document.getElementById('source').hidden,
-      order: Array.from(root._bracketGeneralView.querySelectorAll('[data-bracket-tab-category]')).map((el) => el.id),
-      visibleCards: Array.from(root._bracketGeneralView.querySelectorAll('[data-bracket-tab-category]')).every((el) => !el.hidden)
+      order: Array.from(agenda.querySelectorAll('[data-bracket-tab-category]')).map((el) => el.id),
+      visibleCards: Array.from(agenda.querySelectorAll('[data-bracket-tab-category]')).every((el) => !el.hidden)
     };
 
     document.getElementById('light').click();
