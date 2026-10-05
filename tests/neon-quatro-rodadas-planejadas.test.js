@@ -44,7 +44,7 @@ const path = require('path');
 const bracket = fs.readFileSync(path.join(__dirname, '..', 'js/views/bracket.js'), 'utf8');
 assert(/data-bracket-team-schedule/.test(bracket), 'a grade concentrada tem um modo próprio de abas');
 assert(/!isTeamSchedule && !isOnlyLines/.test(bracket), 'o Neon não pode esconder R2–R4 em abas de rodada');
-assert(/_isTeamScheduleGS[\s\S]{0,900}groupHeader/.test(bracket), 'o grupo técnico não pode aparecer como título da chave');
+assert(/const groupHeader = _isTeamScheduleGS\s*\?/.test(bracket), 'o grupo técnico não pode aparecer como título da chave');
 assert(/regression_neon_phase_faux_keeps_schedule_contract/.test(bracket), 'a cópia filtrada da fase mantém o contrato de agenda do Neon');
 assert(/regression_neon_round_headers_are_sticky/.test(bracket), 'cada cabeçalho de rodada concentrada continua fixo durante a rolagem');
 assert(/regression_neon_sticky_heading_keeps_column_presentation/.test(bracket), 'o cabeçalho fixo preserva a mesma tipografia, cor e barra da coluna');
@@ -63,5 +63,11 @@ assert(/regression_score_submit_never_jumps_bracket/.test(require('fs').readFile
   'a confirmação do placar preserva a âncora da chave em vez de reiniciar a página');
 assert(/Object\.assign\({}, configuredCfg, \{ ranking: 'games_diff' \}\)/.test(bracket),
   'a classificação dos times usa saldo acumulado de games, não pontos por vitória');
+assert(/regression_team_competition_hides_pair_standings/.test(bracket) && /pairStandingsHtml = _isTeamCompetitionGS \? ''/.test(bracket),
+  'agenda entre times não mostra classificação técnica por participantes/duplas');
+assert(/regression_team_standings_general_first/.test(bracket) && /Classificação geral dos times/.test(bracket),
+  'a classificação geral de todos os times antecede qualquer detalhamento por categoria');
+assert(/data-competition-team-category-standings="1"/.test(bracket) && /Classificação por categorias/.test(bracket),
+  'as classificações por categoria permanecem disponíveis, mas recolhidas');
 
 console.log('✅ Neon: quatro rodadas planejadas, sem Grupo A visível');

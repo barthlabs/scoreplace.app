@@ -1726,16 +1726,25 @@ function _renderCompetitionTeamStandings(t) {
   // reutilizar a pontuação de vitória das duplas, que é outro critério.
   var cfg = Object.assign({}, configuredCfg, { ranking: 'games_diff' });
   var matches = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (t.matches || []);
-  // A escolha "por categoria" não cria uma regra de jogo nova: só particiona a
-  // leitura da mesma fonte de partidas. A chamada recursiva recebe um retrato mínimo
-  // para `_collectAllMatches` não puxar, por acidente, jogos de outra categoria.
-  if (cfg.aggregation === 'per_category' && !t._competitionTeamCategoryView) {
+  // A classificação aberta é sempre a geral dos times, somando todas as categorias.
+  // As tabelas por categoria são apenas um detalhamento recolhido abaixo dela: jamais
+  // podem substituir a leitura geral nem antecedê-la. [[regression_team_standings_general_first]]
+  // A chamada recursiva recebe um retrato mínimo para `_collectAllMatches` não puxar,
+  // por acidente, jogos de outra categoria.
+  if (!t._competitionTeamCategoryView && !t._competitionTeamOverallView) {
     var categories = {};
     matches.forEach(function (match) {
       if (!match || !match.p1CompetitionTeamId || !match.p2CompetitionTeamId) return;
       categories[String(match.category || 'Sem categoria')] = true;
     });
-    return Object.keys(categories).sort().map(function (category) {
+    var overallCfg = Object.assign({}, cfg, { aggregation: 'overall' });
+    var overallHtml = _renderCompetitionTeamStandings({
+      teamCompetition: overallCfg,
+      competitionTeams: t.competitionTeams || [],
+      matches: matches,
+      _competitionTeamOverallView: true
+    });
+    var categoryHtml = Object.keys(categories).sort().map(function (category) {
       var sectionCfg = Object.assign({}, cfg, { aggregation: 'overall' });
       return _renderCompetitionTeamStandings({
         teamCompetition: sectionCfg,
@@ -1744,6 +1753,10 @@ function _renderCompetitionTeamStandings(t) {
         _competitionTeamCategoryView: category
       });
     }).join('');
+    if (!categoryHtml) return overallHtml;
+    return overallHtml + '<details class="card" data-competition-team-category-standings="1" style="margin:0 0 1rem;border-color:rgba(148,163,184,.32);">' +
+      '<summary style="cursor:pointer;padding:13px 14px;font-weight:800;color:var(--text-bright);">Classificação por categorias <span style="color:var(--text-muted);font-size:.78rem;">▸</span></summary>' +
+      '<div style="padding:0 12px 12px;">' + categoryHtml + '</div></details>';
   }
   var rows = core.standings(t.competitionTeams || [], matches, cfg);
   if (!rows.length) return '';
@@ -1769,11 +1782,12 @@ function _renderCompetitionTeamStandings(t) {
       '<td style="padding:9px 10px;text-align:center;color:var(--sp-c-f87171,#f87171);">' + row.losses + '</td>' +
       '<td style="padding:9px 10px;text-align:center;color:var(--text-muted);">' + row.played + '</td></tr>';
   }).join('');
-  return '<section class="card" data-competition-team-standings="1" style="margin:0 0 1rem;border-color:rgba(251,191,36,.38);overflow:auto;">' +
-    '<div style="padding:0 14px 12px;font-size:.74rem;color:var(--text-muted);">' + (byGames ? 'Saldo acumulado: games feitos menos games sofridos.' : 'Soma dos resultados das duplas de todas as categorias.') + '</div>' +
-    '<div style="padding:12px 14px 8px;font-weight:800;color:var(--sp-c-fde68a,#fde68a);">🏆 Classificação dos times' + (t._competitionTeamCategoryView ? ' · ' + safe(t._competitionTeamCategoryView) : '') + '</div>' +
-    '<div style="padding:0 14px 12px;font-size:.74rem;color:var(--text-muted);">' + (byGames ? 'Saldo acumulado: games feitos menos games sofridos.' : (t._competitionTeamCategoryView ? 'Resultados das duplas desta categoria.' : 'Soma dos resultados das duplas de todas as categorias.')) + '</div>' +
-    '<div style="padding:0 14px 12px;font-size:.74rem;color:var(--text-muted);">' + (byGames ? 'Saldo acumulado: games feitos menos games sofridos.' : 'Soma dos resultados das duplas de todas as categorias.') + '</div>' +
+  var heading = t._competitionTeamCategoryView
+    ? 'Classificação · ' + safe(t._competitionTeamCategoryView)
+    : '🏆 Classificação geral dos times';
+  return '<section class="card" data-competition-team-standings="1"' + (t._competitionTeamCategoryView ? ' data-competition-team-category="1"' : ' data-competition-team-general="1"') + ' style="margin:0 0 1rem;border-color:rgba(251,191,36,.38);overflow:auto;">' +
+    '<div style="padding:12px 14px 8px;font-weight:800;color:var(--sp-c-fde68a,#fde68a);">' + heading + '</div>' +
+    '<div style="padding:0 14px 12px;font-size:.74rem;color:var(--text-muted);">Saldo acumulado: games feitos menos games sofridos.</div>' +
     '<table style="width:100%;border-collapse:collapse;min-width:440px;font-size:.84rem;"><thead><tr style="text-align:left;color:var(--text-muted);font-size:.68rem;text-transform:uppercase;letter-spacing:.35px;">' +
       '<th style="padding:8px 10px;">#</th><th style="padding:8px 10px;">Time</th>' + (byGames ? '<th style="padding:8px 10px;text-align:center;">Saldo</th><th style="padding:8px 10px;text-align:center;">Games</th>' : '<th style="padding:8px 10px;text-align:center;">Pts</th>') + '<th style="padding:8px 10px;text-align:center;">V</th><th style="padding:8px 10px;text-align:center;">E</th><th style="padding:8px 10px;text-align:center;">D</th><th style="padding:8px 10px;text-align:center;">J</th>' +
     '</tr></thead><tbody>' + body + '</tbody></table></section>';
@@ -7103,6 +7117,7 @@ function renderGroupStage(t, isOrg, canEnterResult, opts) {
   const _teamCfgGS = (window.ScoreplaceTeamCompetition && window.ScoreplaceTeamCompetition.configurationForTournament)
     ? window.ScoreplaceTeamCompetition.configurationForTournament(t)
     : (t.teamCompetition || ((t.phases || [])[0] || {}).teamCompetition || {});
+  const _isTeamCompetitionGS = !!(_teamCfgGS && _teamCfgGS.enabled);
   const _isTeamScheduleGS = !!((window._isConcentratedTournament && window._isConcentratedTournament(t)) ||
     (_teamCfgGS.enabled && _teamCfgGS.schedule && _teamCfgGS.schedule.enabled));
 
@@ -7315,13 +7330,10 @@ function renderGroupStage(t, isOrg, canEnterResult, opts) {
     const groupShellStyle = _isTeamScheduleGS
       ? 'scroll-margin-top:var(--scroll-anchor,120px);'
       : 'border-left:4px solid ' + (isMyGroupGS ? '#22d3ee' : groupColor) + ';scroll-margin-top:var(--scroll-anchor,120px);';
-    return `
-      <div class="${groupShellClass}" id="group-section-${gi}" data-group-box="1"${isMyGroupGS ? ' data-my-group="1"' : ''} data-group-label="${window._safeHtml(window._grpKey(sg.name))}" style="${groupShellStyle}">
-        ${groupHeader}
-        ${_groupKeysFirst && matchesHtml ? `
-          <div style="border-top:1px solid var(--border-color);padding-top:1rem;margin-bottom:1rem;">
-            ${matchesHtml}
-          </div>` : ''}
+    // Em competição de times, a tabela técnica de duplas/participantes não é uma
+    // classificação do torneio. A única leitura aberta é a geral de times, exibida
+    // depois da chave; as categorias ficam recolhidas nela. [[regression_team_competition_hides_pair_standings]]
+    const pairStandingsHtml = _isTeamCompetitionGS ? '' : `
         <div class="standings-scroll" style="margin-bottom:1rem;">
           <table style="width:100%;border-collapse:collapse;font-size:0.85rem;min-width:480px;">
             <thead>
@@ -7337,7 +7349,15 @@ function renderGroupStage(t, isOrg, canEnterResult, opts) {
             </thead>
             <tbody>${rows}</tbody>
           </table>
-        </div>
+        </div>`;
+    return `
+      <div class="${groupShellClass}" id="group-section-${gi}" data-group-box="1"${isMyGroupGS ? ' data-my-group="1"' : ''} data-group-label="${window._safeHtml(window._grpKey(sg.name))}" style="${groupShellStyle}">
+        ${groupHeader}
+        ${_groupKeysFirst && matchesHtml ? `
+          <div style="border-top:1px solid var(--border-color);padding-top:1rem;margin-bottom:1rem;">
+            ${matchesHtml}
+          </div>` : ''}
+        ${pairStandingsHtml}
         ${!_groupKeysFirst && matchesHtml ? `
           <div style="border-top:1px solid var(--border-color);padding-top:1rem;">
             ${matchesHtml}
