@@ -1,3 +1,4 @@
+// 2.3.280 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.3.279 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.3.278 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.3.278 — Na chave de evento concentrado, Geral volta a exibir os cards reais da agenda do dia; a nova aba Próximos jogos mostra somente partidas ainda não decididas em que as duas duplas já confirmaram presença. Alternar essas visões não duplica controles nem perde o card na categoria.
