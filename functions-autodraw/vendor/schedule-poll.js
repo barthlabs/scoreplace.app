@@ -931,6 +931,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
           s._fase = (m && m.phaseIndex != null) ? m.phaseIndex : (t.currentPhaseIndex || 0);
           s._rodada = (m && m.round != null) ? m.round : 0;
           s._uids = _schMatchUids(t, m);
+          s._duracao = (window._minutosDaPartida(t, window._faseDoTorneio(t, s._fase)) || 30) * _MIN;
         });
         function anterior(a, b) {
           return a._fase < b._fase || (a._fase === b._fase && a._rodada < b._rodada);
@@ -948,6 +949,16 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
             if (ocupante === slot || ocupante.dia !== slot.dia || ocupante.ms !== destino) continue;
             if (slot._uids.some(function (uid) { return ocupante._uids.indexOf(uid) !== -1; })) return false;
           }
+          /* Preencher uma quadra vazia não pode fabricar uma sequência de dois
+           * jogos sem descanso. A compactação só antecipa; portanto este freio
+           * nunca alonga a agenda nem altera o desenho já salvo — apenas deixa
+           * o card na sua onda original quando o avanço o colocaria logo após
+           * outro jogo do mesmo atleta. [[regression_compaction_never_creates_back_to_back]] */
+          for (var k = 0; k < slots.length; k++) {
+            var anteriorDireto = slots[k];
+            if (anteriorDireto === slot || anteriorDireto.dia !== slot.dia || anteriorDireto.ms + anteriorDireto._duracao !== destino) continue;
+            if (slot._uids.some(function (uid) { return anteriorDireto._uids.indexOf(uid) !== -1; })) return false;
+          }
           return true;
         }
         slots.forEach(function (slot) {
@@ -961,7 +972,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
             return true;
           });
         });
-        slots.forEach(function (s) { delete s._categoria; delete s._fase; delete s._rodada; delete s._uids; });
+        slots.forEach(function (s) { delete s._categoria; delete s._fase; delete s._rodada; delete s._uids; delete s._duracao; });
       }
       _compactarSlotsNaMesmaJanela();
       // A compactação pode trazer para dentro uma partida que inicialmente

@@ -156,6 +156,30 @@ const gradeDescanso = W._schGradeEstimada(descansoEquilibrado);
 const descansoPorJogo = {}; (gradeDescanso && gradeDescanso.slots || []).forEach(function (slot) { descansoPorJogo[slot.matchId] = slot.ms; });
 ok(descansoPorJogo['AB-1'] < descansoPorJogo['CD-1'] && descansoPorJogo['AB-2'] < descansoPorJogo['CD-2'],
   'a dupla que já aguardou entra antes: não recebe segunda folga enquanto a outra ainda não descansou');
+// A compactação aproveita vaga de quadra, mas não pode transformar essa economia
+// em uma segunda partida seguida do mesmo atleta. A categoria C teria uma vaga na
+// onda seguinte; como A acabou de jogar, ela permanece na onda posterior.
+const compactacaoComDescanso = {
+  startDate:'2026-10-22T18:00', endDate:'2026-10-22T21:00', courtCount:2, gameDuration:30,
+  participants:[
+    { uid:'a', displayName:'A' }, { uid:'b', displayName:'B' },
+    { uid:'c', displayName:'C' }, { uid:'d', displayName:'D' }
+  ],
+  categorySchedule:{ version:1, slots:[
+    { category:'Fem Light', day:'2026-10-22', order:1 },
+    { category:'Fem Power', day:'2026-10-22', order:2 },
+    { category:'Fem Extreme', day:'2026-10-22', order:3 }
+  ] },
+  matches:[
+    { id:'A1', category:'Fem Light', round:1, p1:'A', p2:'B' },
+    { id:'B1', category:'Fem Power', round:1, p1:'C', p2:'D' },
+    { id:'A2', category:'Fem Extreme', round:1, p1:'A', p2:'B' }
+  ]
+};
+const gradeComDescanso = W._schGradeEstimada(compactacaoComDescanso);
+const porIdComDescanso = {}; (gradeComDescanso && gradeComDescanso.slots || []).forEach(function (slot) { porIdComDescanso[slot.matchId] = slot; });
+ok(porIdComDescanso.A1 && porIdComDescanso.A2 && porIdComDescanso.A2.ms - porIdComDescanso.A1.ms >= 60 * 60000,
+  'a compactação não antecipa um atleta para a onda imediatamente após seu jogo anterior');
 const tooShort = Object.assign({}, categoryDays, { endDate:'2026-10-22T18:10' });
 ok(W._schGradeEstimada(tooShort).cabe === false && W._operationalSchedulePlan(tooShort).cabe === false,
   'uma categoria que não cabe no dia bloqueia a aplicação da agenda');
