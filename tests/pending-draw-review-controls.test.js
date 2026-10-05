@@ -35,8 +35,9 @@ ok(/data-pis-toolbar/.test(ui) && /data-pis-scroll/.test(ui) && /height:100%;/.t
   !/margin-top:14px[\s\S]*?data-pis-apply/.test(ui),
   'Voltar fica à esquerda; Salvar ajustes e Publicar ficam ativos à direita em barra opaca fora do painel rolável, sem comando no rodapé');
 ok(/data-pis-shuffle/.test(ui) && /data-pis-copy-other-day/.test(ui) && /function shuffledGames\(slots\)/.test(ui) && /games\.push\(games\.shift\(\)\)/.test(ui) &&
-  /function applySlots\(assignments\)/.test(ui) && /Jogos embaralhados/.test(ui) && /Estrutura copiada/.test(ui),
-  'embaralhar sempre muda a ordem (inclusive quando Fisher–Yates cair na identidade), e copiar aplica a estrutura inteira de forma atômica com confirmação visível');
+  /function applySlots\(assignments\)/.test(ui) && /function structuralKey\(slot\)/.test(ui) && /sourceByStructure/.test(ui) && /round.*category.*times/.test(ui) &&
+  /Jogos embaralhados/.test(ui) && /Estrutura copiada/.test(ui),
+  'embaralhar sempre muda a ordem (inclusive quando Fisher–Yates cair na identidade), e copiar pareia cada jogo por rodada, categoria equivalente e confronto de times, de forma atômica');
 const scheduleStart = ui.indexOf('window._openPendingInitialSchedule = function');
 const scheduleEnd = ui.indexOf('window._rememberPendingDrawMarker = function', scheduleStart);
 const schedule = scheduleStart >= 0 && scheduleEnd > scheduleStart ? ui.slice(scheduleStart, scheduleEnd) : '';

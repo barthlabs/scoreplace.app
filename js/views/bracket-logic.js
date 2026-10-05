@@ -6717,6 +6717,23 @@ window._openPendingInitialSchedule = function (tId) {
       if (!changed && games.length > 1) games.push(games.shift());
       return games;
     }
+    function matchForSlot(slot) {
+      return (draft.matches || []).find(function (match) { return String(match && match.id) === String(slot && slot.matchId); }) || null;
+    }
+    function structuralKey(slot) {
+      var match = matchForSlot(slot);
+      if (!match) return '';
+      var category = String(match.category || (match.team1Obj && match.team1Obj.category) || (match.team2Obj && match.team2Obj.category) || '')
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+        // Dia feminino e masculino podem usar o mesmo molde. A categoria
+        // competitiva que precisa coincidir é Light/Power/Extreme, não o gênero.
+        .replace(/\b(fem|feminina|feminino|masc|masculina|masculino|female|male)\b/g, '')
+        .replace(/[^a-z0-9]+/g, ' ').trim();
+      var a = String(match.p1CompetitionTeamId || (match.team1Obj && match.team1Obj.competitionTeamId) || '').trim();
+      var b = String(match.p2CompetitionTeamId || (match.team2Obj && match.team2Obj.competitionTeamId) || '').trim();
+      if (!category || !a || !b) return '';
+      return [String(match.round || 1), category, [a, b].sort().join('×')].join('|');
+    }
     var shuffleButton = overlay.querySelector('[data-pis-shuffle]');
     if (shuffleButton) shuffleButton.onclick = function () {
       var slots = orderSlots(itemsOn(activeDay));
@@ -6739,20 +6756,35 @@ window._openPendingInitialSchedule = function (tId) {
     if (copyOtherDayButton) copyOtherDayButton.onclick = function () {
       var otherDay = (board.days || []).find(function (day) { return day !== activeDay; });
       var target = orderSlots(itemsOn(activeDay)), source = orderSlots(itemsOn(otherDay));
-      if (!otherDay || !target.length || source.length !== target.length) {
-        if (window.showNotification) window.showNotification('Estrutura não copiada', 'Os dois dias precisam ter a mesma quantidade de jogos para repetir quadras e horários sem omitir nenhum jogo.', 'warning');
+      if (!otherDay || !target.length || !source.length) {
+        if (window.showNotification) window.showNotification('Estrutura não copiada', 'Abra um dia que tenha jogos e mantenha outro dia planejado como referência.', 'warning');
         return;
       }
-      var assignments = source.map(function (slot, index) {
+      // ⛔ NÃO COPIAR POR ÍNDICE. Isso ignorava a organização real do sorteio:
+      // ao trocar a ordem dos cards, Fem Light poderia herdar o lugar de Power
+      // e um confronto Venom × Blast cair no slot de outro adversário. O molde
+      // é o próprio confronto: rodada + categoria equivalente + dois times.
+      var sourceByStructure = {}, ambiguous = {};
+      source.forEach(function (slot) {
+        var key = structuralKey(slot);
+        if (!key) return;
+        if (sourceByStructure[key]) { ambiguous[key] = true; return; }
+        sourceByStructure[key] = slot;
+      });
+      var usedSource = {}, unmatched = [], assignments = target.map(function (targetSlot) {
+        var key = structuralKey(targetSlot), slot = key && !ambiguous[key] ? sourceByStructure[key] : null;
+        if (!slot || usedSource[String(slot.matchId)]) { unmatched.push(targetSlot); return null; }
         var date = new Date(slot.scheduledAt || ''), clock = isNaN(date.getTime()) ? '' : String(date.getHours()).padStart(2, '0') + ':' + String(date.getMinutes()).padStart(2, '0');
         var when = window._scheduleIsoOnDay && window._scheduleIsoOnDay(activeDay, clock);
-        return when ? { matchId:target[index].matchId, slot:{ court:slot.court, scheduledAt:when } } : null;
+        if (!when) { unmatched.push(targetSlot); return null; }
+        usedSource[String(slot.matchId)] = true;
+        return { matchId:targetSlot.matchId, slot:{ court:slot.court, scheduledAt:when } };
       });
-      if (!applySlots(assignments)) {
-        if (window.showNotification) window.showNotification('Estrutura não copiada', 'Não foi possível converter os horários do outro dia para a data aberta.', 'error');
+      if (unmatched.length || !applySlots(assignments)) {
+        if (window.showNotification) window.showNotification('Estrutura não copiada', unmatched.length + ' jogo(s) não têm um equivalente de categoria, rodada e confronto no outro dia. Nada foi alterado.', 'warning');
         return;
       }
-      if (window.showNotification) window.showNotification('Estrutura copiada', 'Horários e quadras do outro dia foram aplicados a este dia. Salve os ajustes para confirmar.', 'success');
+      if (window.showNotification) window.showNotification('Estrutura copiada', 'Cada confronto equivalente recebeu a mesma quadra e o mesmo horário relativo do outro dia. Salve os ajustes para confirmar.', 'success');
       render();
     };
     Array.prototype.forEach.call(overlay.querySelectorAll('[data-pis-match]'), function (card) {
