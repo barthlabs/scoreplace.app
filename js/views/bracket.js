@@ -261,6 +261,34 @@ function _entregarQuandoPronto(container, tarefa) {
 }
 window._entregarQuandoPronto = _entregarQuandoPronto;
 
+// As abas e o espelho dos títulos de rodada vivem deliberadamente fora do
+// trilho horizontal. Isso é necessário para ficarem visíveis durante o scroll,
+// mas também significa que `container.innerHTML = ...` sozinho não os desmonta
+// quando um placar dispara uma nova pintura. Sem esta limpeza, renderizações
+// concorrentes deixam abas e cabeçalhos antigos sobre a chave nova.
+// [[regression_score_save_does_not_duplicate_bracket_chrome]]
+function _limparCamadasTransitóriasDaChave(container) {
+  if (!container || typeof document === 'undefined') return;
+  var roots = document.querySelectorAll('[data-bracket-tabs-root]');
+  for (var i = 0; i < roots.length; i++) {
+    var root = roots[i];
+    var pertence = root._bracketTabsScope === container ||
+      (container.contains && container.contains(root));
+    if (!pertence) continue;
+    var portalDoRoot = root._bracketRoundHeadingPortal;
+    if (portalDoRoot && portalDoRoot.parentNode) portalDoRoot.parentNode.removeChild(portalDoRoot);
+    if (root.parentNode) root.parentNode.removeChild(root);
+  }
+  // Versões anteriores do portal não guardavam o vínculo com sua raiz. A tela
+  // só mostra uma chave por vez, portanto remover os portais restantes aqui é
+  // mais seguro do que deixar uma camada órfã de uma pintura anterior.
+  var portals = document.querySelectorAll('[data-bracket-round-heading-portal]');
+  for (var p = portals.length - 1; p >= 0; p--) {
+    if (portals[p].parentNode) portals[p].parentNode.removeChild(portals[p]);
+  }
+}
+window._limparCamadasTransitóriasDaChave = _limparCamadasTransitóriasDaChave;
+
 function _pintarEmEtapas(container, leve, geraPesado, depois) {
   // ── PINTURA EM FATIAS, DO JEITO QUE A 1.9.42 ENCOMENDOU (1.9.74) ────────────
   // A "pintura em dois tempos" original foi desligada na 1.9.42 porque a 1ª tacada
@@ -303,14 +331,26 @@ function _pintarEmEtapas(container, leve, geraPesado, depois) {
   // atrás do loader. O que se via antes era a tela pela metade.
   // ⛔ Não reintroduzir "otimização" que entrega a tela em pedaços.
   var _fatiar = false;
+  // `_entregarQuandoPronto` pode completar depois de uma nova atualização de
+  // placar. Cada pintura recebe uma geração: uma callback antiga nunca pode
+  // escrever sobre a chave mais nova nem remontar suas abas.
+  var paintEpoch = (Number(container._bracketPaintEpoch) || 0) + 1;
+  container._bracketPaintEpoch = paintEpoch;
+  _limparCamadasTransitóriasDaChave(container);
+  var aindaEhAPinturaAtual = function () {
+    return container && container._bracketPaintEpoch === paintEpoch;
+  };
 
   _entregarQuandoPronto(container, function () {
+    if (!aindaEhAPinturaAtual()) return;
     var _tudo = '';
     try { _tudo = geraPesado() || ''; }
     catch (e) { if (window._error) window._error('[Bracket] pintura:', e); }
+    if (!aindaEhAPinturaAtual()) return;
 
     if (!_fatiar) {
       container.innerHTML = leve + _tudo;
+      if (!aindaEhAPinturaAtual()) return;
       try { window._chaveLigaLotes(container); } catch (eL) {}   // ⭐ 2.0.88: liga os lotes guardados
       if (typeof depois === 'function') { try { depois(); } catch (e2) {} }
       return;
@@ -345,7 +385,7 @@ function _pintarEmEtapas(container, leve, geraPesado, depois) {
     var i = 0, lote = 4, _tPassoAnterior = 0;
     var passo = function () {
       // outro render assumiu a tela (innerHTML novo) → esta pintura morreu
-      if (!bulk.isConnected) return;
+      if (!bulk.isConnected || !aindaEhAPinturaAtual()) return;
       var _agora = (window.performance && performance.now) ? performance.now() : 0;
       if (_tPassoAnterior && _agora) {
         var _quadro = _agora - _tPassoAnterior;   // inclui o layout/paint do lote anterior
@@ -359,6 +399,7 @@ function _pintarEmEtapas(container, leve, geraPesado, depois) {
       } catch (eAnexo) {
         // rede: anexo falhou → HTML inteiro de uma vez. NUNCA meia tela.
         if (window._error) window._error('[Bracket] fatia falhou — pintando inteiro:', eAnexo);
+        if (!aindaEhAPinturaAtual()) return;
         try { container.innerHTML = leve + _tudo; } catch (e6) {}
         try { window._chaveLigaLotes(container); } catch (eL) {}
         if (typeof depois === 'function') { try { depois(); } catch (e7) {} }
@@ -888,6 +929,98 @@ function _bracketTabsRefreshRoundRail(root) {
   rail.hidden = true;
   rail.innerHTML = '';
 }
+
+// Visão operacional do evento concentrado: os MESMOS cards da chave são
+// reagrupados por horário e quadra, sem clonar inputs, botões ou ids de placar.
+// Clonar os cards faria dois campos com o mesmo id e salvaria o resultado no
+// jogo errado. Ao sair de "Geral", cada card volta precisamente ao seu lugar.
+function _bracketGeneralView(root, show, gender) {
+  if (!root) return false;
+  var scope = root._bracketTabsScope || (root.closest && root.closest('#view-container, #inline-bracket-container'));
+  if (!scope) return false;
+  var view = root._bracketGeneralView;
+  if (!view) {
+    view = document.createElement('section');
+    view.setAttribute('data-bracket-general-view', '1');
+    view.style.cssText = 'display:none;margin:12px 0 18px;';
+    root.insertAdjacentElement('afterend', view);
+    root._bracketGeneralView = view;
+  }
+  var entries = root._bracketGeneralEntries || [];
+  if (!show) {
+    for (var r = 0; r < entries.length; r++) {
+      var old = entries[r];
+      if (old.placeholder && old.placeholder.parentNode && old.wrapper) old.placeholder.parentNode.replaceChild(old.wrapper, old.placeholder);
+    }
+    var oldSources = root._bracketGeneralSources || [];
+    for (var s = 0; s < oldSources.length; s++) oldSources[s].hidden = false;
+    root._bracketGeneralEntries = [];
+    root._bracketGeneralSources = [];
+    view.style.display = 'none';
+    view.innerHTML = '';
+    return true;
+  }
+  if (!entries.length) {
+    var cards = Array.prototype.slice.call(scope.querySelectorAll('[data-bracket-tab-category][data-bracket-scheduled-at]'));
+    // "Geral" é uma agenda POR DIA. No Neon, Feminina e Masculina ocupam
+    // dias diferentes, por isso hoje a seleção de gênero leva ao dia certo;
+    // não é, porém, uma regra de gênero: qualquer categoria marcada para a
+    // mesma data entra na mesma visão operacional.
+    var reference = cards.find(function (card) {
+      return String(card.getAttribute('data-bracket-tab-gender') || '') === String(gender || '') &&
+        Number(card.getAttribute('data-bracket-scheduled-at')) > 0;
+    });
+    var referenceDate = reference ? new Date(Number(reference.getAttribute('data-bracket-scheduled-at'))) : null;
+    var dayKey = referenceDate && !isNaN(referenceDate.getTime())
+      ? [referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate()].join('-') : '';
+    cards.forEach(function (card) {
+      var at = Number(card.getAttribute('data-bracket-scheduled-at'));
+      if (!isFinite(at) || at <= 0 || !card.parentNode) return;
+      var cardDate = new Date(at);
+      if (!dayKey || [cardDate.getFullYear(), cardDate.getMonth(), cardDate.getDate()].join('-') !== dayKey) return;
+      var wrapper = card.parentNode;
+      var placeholder = document.createComment('scoreplace-general-card');
+      wrapper.parentNode.insertBefore(placeholder, wrapper);
+      entries.push({ card: card, wrapper: wrapper, placeholder: placeholder, at: at, court: card.getAttribute('data-bracket-court') || '' });
+    });
+    entries.sort(function (a, b) {
+      if (a.at !== b.at) return a.at - b.at;
+      return String(a.court).localeCompare(String(b.court), 'pt-BR', { numeric: true });
+    });
+    var sources = [];
+    entries.forEach(function (entry) {
+      var source = entry.placeholder.parentElement && entry.placeholder.parentElement.closest
+        ? entry.placeholder.parentElement.closest('.bracket-scroll-container, .bracket-sticky-scroll-wrapper') : null;
+      if (source && sources.indexOf(source) === -1) sources.push(source);
+    });
+    root._bracketGeneralEntries = entries;
+    root._bracketGeneralSources = sources;
+  }
+  if (!entries.length) return false;
+  (root._bracketGeneralSources || []).forEach(function (source) { source.hidden = true; });
+  view.innerHTML = '';
+  var groups = {};
+  entries.forEach(function (entry) {
+    var key = String(entry.at);
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(entry);
+  });
+  Object.keys(groups).sort(function (a, b) { return Number(a) - Number(b); }).forEach(function (key) {
+    var when = new Date(Number(key));
+    var label = isNaN(when.getTime()) ? 'Horário estimado' : when.toLocaleString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    var group = document.createElement('section');
+    group.style.cssText = 'margin:0 0 20px;';
+    group.innerHTML = '<h4 style="margin:0 0 10px;padding-left:10px;border-left:4px solid var(--sp-c-fbbf24,#fbbf24);color:var(--sp-c-fde68a,#fde68a);font-size:.82rem;letter-spacing:1px;text-transform:uppercase;">🕒 ' + (window._safeHtml ? window._safeHtml(label) : label) + '</h4>';
+    var grid = document.createElement('div');
+    grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;align-items:start;';
+    groups[key].forEach(function (entry) { grid.appendChild(entry.wrapper); });
+    group.appendChild(grid);
+    view.appendChild(group);
+  });
+  view.style.display = '';
+  return true;
+}
+
 function _bracketTabsApply(tid, gender, category, requestedRound) {
   var root = document.querySelector('[data-bracket-tabs-root][data-tournament-id="' + String(tid).replace(/"/g, '\\"') + '"]');
   if (!root) return;
@@ -903,11 +1036,17 @@ function _bracketTabsApply(tid, gender, category, requestedRound) {
     : '';
   window._bracketTabState = window._bracketTabState || {};
   window._bracketTabState[String(tid)] = { gender: gender, category: category, round: round };
+  var isGeneral = category === '__general';
+  if (!isGeneral) {
+    root._bracketLastCategoryByGender = root._bracketLastCategoryByGender || {};
+    root._bracketLastCategoryByGender[gender] = category;
+    _bracketGeneralView(root, false, gender);
+  }
   var lineMode = root.getAttribute('data-bracket-line-tabs') === '1';
   var cards = document.querySelectorAll('[data-bracket-tab-category]');
   for (var i = 0; i < cards.length; i++) {
     var card = cards[i];
-    card.hidden = card.getAttribute('data-bracket-tab-category') !== category || (usesRoundTabs && card.getAttribute('data-bracket-tab-round') !== round);
+    card.hidden = isGeneral || card.getAttribute('data-bracket-tab-category') !== category || (usesRoundTabs && card.getAttribute('data-bracket-tab-round') !== round);
   }
   // A camada de cima é a aba principal: Ouro/Prata em linhas independentes;
   // Feminina/Masculina quando as categorias pertencem a um gênero. A ativa vem
@@ -946,6 +1085,10 @@ function _bracketTabsApply(tid, gender, category, requestedRound) {
     qb.style.background = onRound ? 'rgba(16,185,129,.19)' : 'rgba(255,255,255,.025)';
     qb.style.color = onRound ? 'var(--sp-c-6ee7b7,#6ee7b7)' : 'var(--text-muted)';
     qb.style.borderColor = onRound ? 'rgba(16,185,129,.72)' : 'rgba(255,255,255,.12)';
+  }
+  if (isGeneral) {
+    _bracketGeneralView(root, true, gender);
+    return;
   }
   // Linhas independentes (Ouro/Prata) têm seção própria, com título,
   // classificação e trilho. Esconder somente os cards deixava o bloco Ouro
@@ -1169,18 +1312,23 @@ window._bracketCategoryTabsMount = function () {
   root.setAttribute('data-bracket-round-tabs', isRoundBased ? '1' : '0');
   root.setAttribute('data-bracket-team-schedule', isTeamSchedule ? '1' : '0');
   var titles = { fem: '♀ Feminina', masc: '♂ Masculina', misto: '⚥ Mista' };
-  var genderHtml = isOnlyLines
+  var genderHtml = (isOnlyLines
     ? byGender.linhas.map(function (cat) {
       var escaped = String(cat).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
       return '<button type="button" data-bracket-primary-tab="' + String(cat).replace(/"/g, '&quot;') + '" onclick="window._bracketSelectCategoryTab(\'' + String(id).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\',\'linhas\',\'' + escaped + '\')" style="border:1px solid;border-radius:12px 12px 0 0;padding:10px 24px;min-width:106px;font-size:.94rem;font-weight:850;cursor:pointer;box-shadow:none;">' + (window._safeHtml ? window._safeHtml(_bracketTabLabel(cat, 'linhas')) : _bracketTabLabel(cat, 'linhas')) + '</button>';
     }).join('')
     : order.filter(function (gender) { return gender !== 'linhas'; }).map(function (gender) {
       return '<button type="button" data-bracket-primary-tab="' + gender + '" onclick="window._bracketSelectCategoryTab(\'' + String(id).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\',\'' + gender + '\',\'' + String(byGender[gender][0]).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\')" style="border:1px solid;border-radius:12px 12px 0 0;padding:10px 24px;min-width:132px;font-size:.94rem;font-weight:850;cursor:pointer;box-shadow:none;">' + (titles[gender] || gender) + '</button>';
+    }).join(''));
+  var categoryHtml = order.map(function (gender) {
+    var generalSubtab = isTeamSchedule && gender !== 'linhas'
+      ? '<button type="button" data-bracket-tab-gender="' + gender + '" data-bracket-subtab="__general" onclick="window._bracketSelectCategoryTab(\'' + String(id).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\',\'' + gender + '\',\'__general\')" style="border:1px solid;border-radius:8px;padding:6px 10px;font-size:.78rem;font-weight:750;cursor:pointer;">Geral</button>'
+      : '';
+    return generalSubtab + byGender[gender].map(function (cat) {
+      var safe = String(cat).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      return '<button type="button" data-bracket-tab-gender="' + gender + '" data-bracket-subtab="' + String(cat).replace(/"/g, '&quot;') + '" onclick="window._bracketSelectCategoryTab(\'' + String(id).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\',\'' + gender + '\',\'' + safe + '\')" style="border:1px solid;border-radius:8px;padding:6px 10px;font-size:.78rem;font-weight:750;cursor:pointer;">' + (window._safeHtml ? window._safeHtml(_bracketTabLabel(cat, gender)) : _bracketTabLabel(cat, gender)) + '</button>';
     }).join('');
-  var categoryHtml = order.map(function (gender) { return byGender[gender].map(function (cat) {
-    var safe = String(cat).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-    return '<button type="button" data-bracket-tab-gender="' + gender + '" data-bracket-subtab="' + String(cat).replace(/"/g, '&quot;') + '" onclick="window._bracketSelectCategoryTab(\'' + String(id).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\',\'' + gender + '\',\'' + safe + '\')" style="border:1px solid;border-radius:8px;padding:6px 10px;font-size:.78rem;font-weight:750;cursor:pointer;">' + (window._safeHtml ? window._safeHtml(_bracketTabLabel(cat, gender)) : _bracketTabLabel(cat, gender)) + '</button>';
-  }).join(''); }).join('');
+  }).join('');
   var roundHtml = '';
   if (isRoundBased) {
     roundHtml = order.filter(function (gender) { return gender !== 'linhas'; }).map(function (gender) {
@@ -1238,6 +1386,10 @@ window._bracketCategoryTabsMount = function () {
   // montagem — e não depois da rolagem — garante que o card já nasça visível
   // na categoria solicitada, inclusive quando o gênero informado era antigo.
   var state = (window._bracketTabState || {})[id] || {};
+  if (isTeamSchedule && state.category === '__general' && byGender[state.gender]) {
+    _bracketTabsApply(id, state.gender, '__general', '');
+    return;
+  }
   var targetGender = Object.keys(byGender).find(function (candidate) {
     return byGender[candidate].indexOf(state.category) !== -1;
   });
@@ -6769,7 +6921,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   if (!_tabCategory && m.bracket && /^(gold|silver|line\d+)$/i.test(String(m.bracket))) _tabCategory = String(m.bracket);
   var _tabGender = _bracketTabGender(_tabCategory);
   return `
-    <div id="card-${m.id}" class="sp-match-card" data-players="${_searchNames}" data-player-uids="${_searchUids}" data-bracket-tab-category="${window._safeHtml(_tabCategory)}" data-bracket-tab-gender="${_tabGender}" data-bracket-tab-source="${_tabSource}" data-bracket-tab-round="${m.round != null ? window._safeHtml(String(m.round)) : ''}" data-my-match="${_isMyMatch ? '1' : '0'}" data-my-pending="${_isMyMatch && !isDecided && !isByeMatch ? '1' : '0'}" data-match-num="${matchNum != null ? matchNum : ''}" style="scroll-margin-top:var(--scroll-anchor,120px);background:${window._spCor(_isMyMatch ? 'rgba(99,102,241,0.06)' : 'var(--bg-card)', 'background')};border:${_isMyMatch ? '2px' : '1px'} solid ${hasPending && _pr && _pr.disputed ? 'rgba(239,68,68,0.55)' : hasPending ? 'rgba(251,191,36,0.5)' : cardBorder};${_lineLeftBorder}border-radius:12px;padding:14px;${_cardMax}box-shadow:${_isMyMatch ? '0 0 20px rgba(99,102,241,0.25),0 0 8px rgba(99,102,241,0.12),0 4px 12px rgba(0,0,0,0.15)' : hasPending && _pr && _pr.disputed ? '0 0 14px rgba(239,68,68,0.2),0 4px 12px rgba(0,0,0,0.15)' : hasPending ? '0 0 14px rgba(251,191,36,0.18),0 4px 12px rgba(0,0,0,0.15)' : matchReady ? '0 0 16px rgba(16,185,129,0.15),0 4px 12px rgba(0,0,0,0.15)' : matchPartial ? '0 0 10px rgba(245,158,11,0.1),0 4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.15)'};${hasTBD ? 'opacity:0.6;' : ''}">
+    <div id="card-${m.id}" class="sp-match-card" data-players="${_searchNames}" data-player-uids="${_searchUids}" data-bracket-tab-category="${window._safeHtml(_tabCategory)}" data-bracket-tab-gender="${_tabGender}" data-bracket-tab-source="${_tabSource}" data-bracket-tab-round="${m.round != null ? window._safeHtml(String(m.round)) : ''}" data-bracket-scheduled-at="${_scheduledMs || ''}" data-bracket-court="${window._safeHtml(String(m.court || ''))}" data-my-match="${_isMyMatch ? '1' : '0'}" data-my-pending="${_isMyMatch && !isDecided && !isByeMatch ? '1' : '0'}" data-match-num="${matchNum != null ? matchNum : ''}" style="scroll-margin-top:var(--scroll-anchor,120px);background:${window._spCor(_isMyMatch ? 'rgba(99,102,241,0.06)' : 'var(--bg-card)', 'background')};border:${_isMyMatch ? '2px' : '1px'} solid ${hasPending && _pr && _pr.disputed ? 'rgba(239,68,68,0.55)' : hasPending ? 'rgba(251,191,36,0.5)' : cardBorder};${_lineLeftBorder}border-radius:12px;padding:14px;${_cardMax}box-shadow:${_isMyMatch ? '0 0 20px rgba(99,102,241,0.25),0 0 8px rgba(99,102,241,0.12),0 4px 12px rgba(0,0,0,0.15)' : hasPending && _pr && _pr.disputed ? '0 0 14px rgba(239,68,68,0.2),0 4px 12px rgba(0,0,0,0.15)' : hasPending ? '0 0 14px rgba(251,191,36,0.18),0 4px 12px rgba(0,0,0,0.15)' : matchReady ? '0 0 16px rgba(16,185,129,0.15),0 4px 12px rgba(0,0,0,0.15)' : matchPartial ? '0 0 10px rgba(245,158,11,0.1),0 4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.15)'};${hasTBD ? 'opacity:0.6;' : ''}">
       ${_headerHtml}
       ${_pendingBtnsRow}
       ${pendingBanner}
