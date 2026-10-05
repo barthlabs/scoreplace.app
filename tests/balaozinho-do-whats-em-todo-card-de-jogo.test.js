@@ -66,7 +66,9 @@ ok(/dentroDaCaixa: true/.test(corpoLimpo),
 // ── ② os dois lados do card passam o jogo ────────────────────────────────────
 // O slot explícito (p1/p2) é necessário para o nome do time; `m` continua sendo
 // passado às duas metades para que a porta única do WhatsApp decida visibilidade.
-const chamadas = bracket.match(/_teamAvatarHtml\([^;]*?\)\)?, m(?:, ['"]p[12]['"])?\)/g) || [];
+// A presença individual é um argumento opcional depois do slot; a fiação do
+// WhatsApp continua exigindo que as duas metades recebam o mesmo `m` e o slot.
+const chamadas = bracket.match(/_teamAvatarHtml\([^;]*?\)\)?, m(?:, ['"]p[12]['"])?(?:,\s*showIndividualCheckIn)?\)/g) || [];
 ok(chamadas.length === 2, '② os dois lados (p1 e p2) passam o jogo — achei ' + chamadas.length);
 
 // ── ③ a REGRA, exercitada na porta única de verdade ─────────────────────────
