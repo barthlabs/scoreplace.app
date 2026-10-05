@@ -5536,7 +5536,7 @@ window._competitionTeamTagForMatch = function (t, match, slot, compact, vertical
 };
 
 // ─── Player avatars helper for bracket cards ────────────────────────────────
-function _teamAvatarHtml(teamName, pendingSub, t, uidHint, m, slot) {
+function _teamAvatarHtml(teamName, pendingSub, t, uidHint, m, slot, showIndividualCheckIn) {
   /* ⭐ 2.1.99 — O 💬 DE CADA PESSOA, EM TODO CARD DE JOGO.
    * Ordem do dono (02/set/2026): _"precisa me devolver os balõezinhos em todos os jogos
    * para que as pessoas se encontrem pelo whats"_ e _"para os participantes do grupo (e
@@ -5644,6 +5644,23 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint, m, slot) {
     // convidado em amarelo + tag "aguardando resposta" (avatar do convidado).
     const _isPendingSlot = !!(pendingSub && pendingSub.absent && name === pendingSub.absent && pendingSub.invitee);
     const dispName = _isPendingSlot ? pendingSub.invitee : name;
+    // A chamada é individual. A bolinha pertence a cada atleta, nunca à dupla:
+    // uma dupla parcial precisa deixar imediatamente claro QUEM chegou e quem ainda
+    // falta. UID é a chave preferencial para que homônimos não compartilhem presença.
+    const _presenceWho = _slotUid
+      ? { uid: _slotUid, displayName: dispName, name: dispName }
+      : dispName;
+    const _isPresent = !!(showIndividualCheckIn && t && window._idMapHas &&
+      window._idMapHas(t, t.checkedIn || {}, _presenceWho));
+    const _isAbsent = !!(showIndividualCheckIn && !_isPresent && t && window._idMapHas &&
+      window._idMapHas(t, t.absent || {}, _presenceWho));
+    const _presenceDot = showIndividualCheckIn
+      ? '<span title="' + (_isPresent ? 'Presente' : (_isAbsent ? 'Ausente' : 'Aguardando presença')) +
+        '" aria-label="' + (_isPresent ? 'Presente' : (_isAbsent ? 'Ausente' : 'Aguardando presença')) +
+        '" style="width:8px;height:8px;border-radius:50%;background:' +
+        (_isPresent ? window._spCor('#10b981', 'background') : (_isAbsent ? window._spCor('#60a5fa', 'background') : window._spCor('#64748b', 'background'))) +
+        ';flex:0 0 8px;display:inline-block;"></span>'
+      : '';
     const seed = encodeURIComponent(dispName);
     // Check photo cache for real user photo
     const rawCached = window._playerPhotoCache[dispName.toLowerCase()] || '';
@@ -5696,6 +5713,7 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint, m, slot) {
     const _boxNomeAttrs = ` data-sp-card-name-box data-sp-one-line-h="${_geo.oneLineBoxH}rem" data-sp-two-line-h="${_geo.twoLineBoxH}rem"`;
     if (_isPendingSlot) {
       html += `<div style="display:flex;align-items:center;gap:5px;overflow:hidden;flex-wrap:wrap;">` +
+        _presenceDot +
         `<img src="${photoSrc}"${_avatarUid} ${onerror} data-player-name="${window._safeHtml(dispName)}" class="sp-av sp-av-p" style="--sp-av:${size}">` +
         `<div class="sp-mc-box"${_boxNomeAttrs} style="${_boxNome}"><span class="sp-name-fit" data-maxrem="${_nomeMaxRem}" data-minrem="${_nomeMinRem}" data-two-line-maxrem="${_geo.twoLineMaxRem}" style="font-weight:700;color:var(--sp-c-fbbf24,#fbbf24);white-space:nowrap;">${window._safeHtml(dispName)}</span></div>` +
         `<span style="font-size:0.52rem;font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.4);padding:1px 5px;border-radius:5px;letter-spacing:0.3px;text-transform:uppercase;white-space:nowrap;flex-shrink:0;">aguardando resposta</span>` +
@@ -5705,6 +5723,7 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint, m, slot) {
         : html;
     }
     html += `<div class="sp-mc-side">` +
+      _presenceDot +
       `<img src="${photoSrc}"${_avatarUid} ${onerror} data-player-name="${window._safeHtml(name)}" class="sp-av" style="--sp-av:${size}">` +
       // Cada participante abre sua ficha pelo próprio nome, inclusive no card da chave.
       // O clique delegado para antes da ação do card, portanto não aciona placar/confirmar.
@@ -6183,13 +6202,9 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     String(window._setsEditState.matchId) === String(m.id));
   const showInputs = !isDecided && !hasPending && !isByeMatch && !hasTBD && canEnterResult && !_setsEdit;
 
-  // Check-in dot indicator
-  const ciDot = (status) => {
-    if (!hasAnyCheckIn && !matchReady) return '';
-    const color = status === 'full' ? '#10b981' : status === 'partial' ? '#f59e0b' : '#64748b';
-    const title = status === 'full' ? _t('bracket.checkedIn') : status === 'partial' ? _t('bracket.partial') : _t('bracket.notCheckedIn');
-    return `<span title="${title}" style="width:8px;height:8px;border-radius:50%;background:${window._spCor(color, 'background')};flex-shrink:0;margin-right:4px;display:inline-block;"></span>`;
-  };
+  // A chamada só aparece neste card se há presença registrada no confronto. A
+  // bolinha em si é desenhada por atleta dentro de `_teamAvatarHtml`, não por dupla.
+  const showIndividualCheckIn = _presencaImporta && (hasAnyCheckIn || matchReady);
 
   const _esc = function(s) { return String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); };
 
@@ -6467,7 +6482,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
 
   const p1Row = `
     <div style="${rowStyle(p1IsWinner, 'p1')}">
-      ${ciDot(p1ci)}<div style="flex:1;overflow:hidden;min-width:0;">${_teamAvatarHtml(m.p1AguardaMelhor ? 'TBD' : m.p1, pendingSub, t, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p1', t) : (m.p1Uid || m.team1Uids)), m, 'p1')}</div>
+      <div style="flex:1;overflow:hidden;min-width:0;">${_teamAvatarHtml(m.p1AguardaMelhor ? 'TBD' : m.p1, pendingSub, t, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p1', t) : (m.p1Uid || m.team1Uids)), m, 'p1', showIndividualCheckIn)}</div>
       ${_p1PromotedBadge}${_p1RepBadge}${_p1ByeBadge}
       <div id="score-p1-${m.id}" class="sp-mc-sc">
         ${_multiSet ? _setGridHtml(1) : (showInputs ? p1Score : (p1ScoreVal || ''))}
@@ -6476,7 +6491,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
 
   const p2Row = `
     <div style="${rowStyle(p2IsWinner, 'p2')}">
-      ${ciDot(p2ci)}<div style="flex:1;overflow:hidden;min-width:0;">${_teamAvatarHtml(m.p2AguardaMelhor ? 'TBD' : m.p2, pendingSub, t, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p2', t) : (m.p2Uid || m.team2Uids)), m, 'p2')}</div>
+      <div style="flex:1;overflow:hidden;min-width:0;">${_teamAvatarHtml(m.p2AguardaMelhor ? 'TBD' : m.p2, pendingSub, t, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p2', t) : (m.p2Uid || m.team2Uids)), m, 'p2', showIndividualCheckIn)}</div>
       ${_p2PromotedBadge}${_p2RepBadge}${_p2ByeBadge}
       <div id="score-p2-${m.id}" class="sp-mc-sc">
         ${_multiSet ? _setGridHtml(2) : (showInputs ? p2Score : (p2ScoreVal || ''))}
@@ -6755,11 +6770,11 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   // v2.4.1: presença PEER — em torneio onde os JOGADORES lançam o placar
   // (resultEntry inclui players), o próprio jogador marca a sua presença no card
   // do jogo (confirmada pelo GPS via _toggleCheckIn → _isUserAtTournamentVenue).
-  // Os sorteados juntos veem o status uns dos outros pelos pontos de presença
-  // (ciDot) que já existem. Não há "chamada do organizador" aqui — é peer.
+  // Os sorteados juntos veem o status uns dos outros pelas bolinhas individuais
+  // de presença. Não há "chamada do organizador" aqui — é peer.
   let _arrivedBtn = '';   // BOTÃO "Cheguei" (vai na linha dos botões)
   let _presenceTag = '';  // v4.1.25: TAG "✓ Presente" REMOVIDA (pedido do dono) — a bolinha
-                          // verde (ciDot) ao lado da dupla já indica presença. Não repetir.
+                          // verde ao lado do próprio atleta já indica presença. Não repetir.
   if (typeof window._participantsSelfPresence === 'function' && window._participantsSelfPresence(t) &&
       _isMyMatch && !isDecided && !isByeMatch && !hasTBD && _cuName) {
     const _meHere = window._idMapHas(t, t.checkedIn, _cuName);
