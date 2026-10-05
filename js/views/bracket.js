@@ -1107,7 +1107,10 @@ window._bracketCategoryTabsMount = function () {
     // pertence à interface: se fosse usado aqui, o conteúdo passaria pelo vão
     // entre busca e abas. As abas começam um pixel dentro da base da busca,
     // cobrindo a emenda sem criar uma tarja adicional.
-    root.style.cssText = 'display:block;box-sizing:border-box;width:100%;margin:0 0 14px;padding:4px 12px 6px;border:0;border-radius:0;background:#111114;overflow:hidden;position:sticky;top:calc(var(--topbar-h,60px) + var(--hamburger-dd-h,0px) + var(--backheader-h,0px) + var(--stickybar-h,0px) - 1px);z-index:31;isolation:isolate;box-shadow:0 8px 12px -12px rgba(0,0,0,.95);';
+    // Sem margem inferior: ela era transparente e deixava título/card da chave
+    // vazar no intervalo entre as categorias e as rodadas.
+    // [[regression_bracket_tabs_do_not_leak_round_content]]
+    root.style.cssText = 'display:block;box-sizing:border-box;width:100%;margin:0;padding:4px 12px 6px;border:0;border-radius:0;background:#111114;overflow:hidden;position:sticky;top:calc(var(--topbar-h,60px) + var(--hamburger-dd-h,0px) + var(--backheader-h,0px) + var(--stickybar-h,0px) - 1px);z-index:31;isolation:isolate;box-shadow:0 8px 12px -12px rgba(0,0,0,.95);';
     var anchor = _bracketTabsAnchor(first);
     // Em Ouro/Prata, sobe mais um nível: a faixa deve ficar acima da seção
     // inteira (título, classificação e rodadas), para poder ocultar a linha
@@ -1704,8 +1707,11 @@ window._bracketTentarPartesDeNovo = function (tId) {
 function _renderCompetitionTeamStandings(t) {
   var core = window.ScoreplaceTeamCompetition;
   if (!core || typeof core.standings !== 'function' || !t) return '';
-  var cfg = (t.teamCompetition || ((t.phases || [])[0] || {}).teamCompetition);
-  if (!cfg || cfg.enabled !== true) return '';
+  var configuredCfg = (t.teamCompetition || ((t.phases || [])[0] || {}).teamCompetition);
+  if (!configuredCfg || configuredCfg.enabled !== true) return '';
+  // A competição entre times é definida pelo saldo acumulado de games. Não
+  // reutilizar a pontuação de vitória das duplas, que é outro critério.
+  var cfg = Object.assign({}, configuredCfg, { ranking: 'games_diff' });
   var matches = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (t.matches || []);
   // A escolha "por categoria" não cria uma regra de jogo nova: só particiona a
   // leitura da mesma fonte de partidas. A chamada recursiva recebe um retrato mínimo
@@ -8765,7 +8771,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
     } catch (e) { return false; }
   })();
 
-  const standingsTablesHtml = _hideGeneralStandings ? '' : standingsSections.map(function(sec) {
+  let standingsTablesHtml = _hideGeneralStandings ? '' : standingsSections.map(function(sec) {
     var displayLabel = sec.label && window._displayCategoryName ? window._displayCategoryName(sec.label) : sec.label;
     var _roundLabel = currentRound + (isSuico ? ' / ' + maxRounds : '');
     var title = displayLabel
@@ -8794,6 +8800,21 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
       </details>
     </div>`;
   }).join('');
+
+  // Em competição por times, a dupla é unidade de jogo, não de classificação.
+  // A tabela principal mostra somente os times; o recorte por categoria continua
+  // disponível abaixo, fechado, para consulta sem competir com a leitura principal.
+  var _hasCompetitionTeams = Array.isArray(t && t.competitionTeams) && t.competitionTeams.length > 0;
+  if (_hasCompetitionTeams) {
+    var _teamStandingsHtml = _renderCompetitionTeamStandings(t);
+    var _categoryStandingsHtml = standingsTablesHtml
+      ? '<details class="card" data-category-standings="1" style="margin:0 0 1rem;">' +
+          '<summary style="cursor:pointer;user-select:none;padding:12px 14px;font-weight:800;color:var(--text-bright);">▸ Classificação por categorias</summary>' +
+          '<div style="padding:0 14px 12px;">' + standingsTablesHtml + '</div>' +
+        '</details>'
+      : '';
+    standingsTablesHtml = _teamStandingsHtml + _categoryStandingsHtml;
+  }
 
   // ── Previous rounds (collapsed, expandable) ──────────────────────────────
   let previousRoundsHtml = '';

@@ -11886,6 +11886,15 @@ window.AppStore = {
     // houver rede. Assim não existe uma segunda porta que possa divergir do recibo e do
     // placar canônicos da CF.
     var _viaCF = false;
+    // Capture antes do await. A confirmação pode chegar depois da restauração
+    // inicial do card, mas ainda precisa redesenhar pela mesma âncora — nunca
+    // pelo refresh geral que reposiciona a página no topo.
+    // [[regression_score_submit_never_jumps_bracket]]
+    var _keepBracketViewport = false;
+    try {
+      _keepBracketViewport = (window.location.hash || '').indexOf('#tournaments/' + String(tournamentId)) === 0 &&
+        !!document.getElementById('card-' + String(matchId));
+    } catch (_eViewport) {}
     if (typeof window._callApplyMatchResult === 'function') {
       try {
         var _res = await window._callApplyMatchResult({
@@ -11966,9 +11975,14 @@ window.AppStore = {
                * porque a cópia logo acima já adiantou o local, e conclui "nada mudou". */
               try {
                 if ((window.location.hash || '').indexOf('#tournaments/' + String(tournamentId)) === 0) {
-                  window._suppressSoftRefresh = false;
-                  window._tdetailSig = null;
-                  if (typeof window._softRefreshView === 'function') window._softRefreshView();
+                  if (_keepBracketViewport && typeof window._rerenderBracket === 'function') {
+                    window._suppressSoftRefresh = true;
+                    window._rerenderBracket(tournamentId, matchId);
+                  } else {
+                    window._suppressSoftRefresh = false;
+                    window._tdetailSig = null;
+                    if (typeof window._softRefreshView === 'function') window._softRefreshView();
+                  }
                 }
               } catch (_eR) { /* best-effort: repintura nunca derruba o placar já gravado */ }
             }

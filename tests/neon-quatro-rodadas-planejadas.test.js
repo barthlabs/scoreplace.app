@@ -55,5 +55,11 @@ const scheduleCard = bracket.indexOf('var _scheduledMs = _isConcentratedEvent');
 assert(timestampFn >= 0 && timestampFn < scheduleCard, 'o card concentrado usa o leitor canônico de data já declarado');
 assert(dateTimeFn >= 0 && dateTimeFn < scheduleCard, 'o card concentrado usa o formatador canônico de data já declarado');
 assert(/sp-match-estimated-time[\s\S]{0,160}margin-left:auto/.test(bracket), 'o horário estimado fica alinhado à direita do rodapé operacional');
+assert(/regression_bracket_tabs_do_not_leak_round_content/.test(bracket) && /margin:0;padding:4px 12px 6px/.test(bracket),
+  'as abas não deixam conteúdo da rodada vazar no intervalo abaixo das categorias');
+assert(/regression_score_submit_never_jumps_bracket/.test(require('fs').readFileSync(path.join(__dirname, '..', 'js/store.js'), 'utf8')),
+  'a confirmação do placar preserva a âncora da chave em vez de reiniciar a página');
+assert(/Object\.assign\({}, configuredCfg, \{ ranking: 'games_diff' \}\)/.test(bracket),
+  'a classificação dos times usa saldo acumulado de games, não pontos por vitória');
 
 console.log('✅ Neon: quatro rodadas planejadas, sem Grupo A visível');
