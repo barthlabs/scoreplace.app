@@ -397,9 +397,7 @@ window._rotaMostraAChaveDeste = function (hash, id) {
     var subgroups = t.groups.map(function (g, gi) {
       var gMatches = [];
       var gRounds;
-      if (Array.isArray(g.matches) && g.matches.length > 0) {
-        gMatches = g.matches.slice();
-      } else if (Array.isArray(g.rounds)) {
+      if (Array.isArray(g.rounds) && g.rounds.length) {
         gRounds = g.rounds.map(function (r) {
           return {
             round: r.round != null ? r.round : undefined,
@@ -408,6 +406,35 @@ window._rotaMostraAChaveDeste = function (hash, id) {
           };
         });
         gRounds.forEach(function (r) { gMatches = gMatches.concat(r.matches); });
+      }
+      if (Array.isArray(g.matches) && g.matches.length > 0) {
+        gMatches = g.matches.slice();
+      }
+      /* [[regression_neon_all_planned_rounds_visible]]
+       * A competição por times salva a agenda estruturada numa lista PLANA em
+       * `group.matches`: cada jogo já carrega `round: 1..4`, mas não há
+       * `group.rounds`. Não materializar essas rodadas fazia o renderer inventar
+       * “Grupo A” e mostrar apenas a primeira coluna. A agenda é o contrato
+       * publicado: R1, R2, R3 e R4 têm de sair dela, na ordem já decidida.
+       * Só respeitamos `g.rounds` quando ele cobre a mesma quantidade de jogos;
+       * um snapshot parcial nunca pode apagar rodadas futuras da chave. */
+      var roundsCoverMatches = gRounds && gRounds.reduce(function (n, r) {
+        return n + ((r && r.matches && r.matches.length) || 0);
+      }, 0) >= gMatches.length;
+      if (gMatches.length && !roundsCoverMatches) {
+        var byRound = {}, order = [];
+        gMatches.forEach(function (m) {
+          var round = Number(m && m.round);
+          if (!isFinite(round) || round < 1) round = 1;
+          round = Math.floor(round);
+          if (!byRound[round]) { byRound[round] = []; order.push(round); }
+          byRound[round].push(m);
+        });
+        order.sort(function (a, b) { return a - b; });
+        gRounds = order.map(function (round) {
+          var matches = byRound[round];
+          return { round: round, status: _roundStatus(matches), matches: matches };
+        });
       }
       /* ⛔ PRESERVA TODOS OS CAMPOS DO GRUPO — este literal já apagou dois.
        * Aqui havia `{ name, players, matches, rounds }` e mais nada. Tudo o que o grupo

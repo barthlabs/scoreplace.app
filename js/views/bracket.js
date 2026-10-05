@@ -1005,6 +1005,14 @@ function _bracketSyncRoundHeadingOffsets() {
 // largura da coluna; o botão continua sendo o próprio botão clicável da rodada.
 function _bracketUpdateRoundHeadingPortal(root, scope) {
   if (!root || !scope) return;
+  // A agenda concentrada (Neon) exibe todas as rodadas lado a lado. Clonar
+  // títulos em `position:fixed` nessa grade criava a faixa solta que atravessava
+  // cards e escondia R2–R4. O cabeçalho canônico permanece na própria coluna,
+  // alinhado aos cards que ele nomeia.
+  if (root.getAttribute('data-bracket-team-schedule') === '1') {
+    if (root._bracketRoundHeadingPortal) root._bracketRoundHeadingPortal.innerHTML = '';
+    return;
+  }
   // Contrato de todas as fontes de rodada: o título precisa carregar a classe
   // `.bracket-round-heading`. O portal encontra essa classe, clona somente o
   // cabeçalho já ultrapassado e o mantém logo abaixo das abas; grupos
@@ -1127,14 +1135,20 @@ window._bracketCategoryTabsMount = function () {
   // `scope` é o contêiner da chave que recebeu esta navegação. Guardamos a
   // referência no root para o sincronizador global de altura das abas.
   root._bracketTabsScope = scope;
-  // Fase classificatória tem rodadas paralelas, não uma chave onde a coluna
-  // seguinte depende da anterior. Só nesses formatos a terceira faixa escolhe
-  // uma rodada; eliminatórias continuam apenas com as abas de categoria.
+  // Fase classificatória comum pode trocar de rodada. Já a agenda concentrada
+  // por times (Neon) precisa deixar R1–R4 visíveis lado a lado: esconder cada
+  // coluna atrás de uma terceira aba apaga justamente os jogos futuros.
   var formatText = String(currentTournament.format || currentTournament.classifyFormat || '').toLowerCase();
-  var isRoundBased = !isOnlyLines && currentTournament.currentStage !== 'elimination'
+  var teamCfg = currentTournament.teamCompetition || ((currentTournament.phases || [])[0] || {}).teamCompetition || {};
+  var isTeamSchedule = !!(teamCfg.enabled && teamCfg.schedule && teamCfg.schedule.enabled);
+  /* [[regression_neon_all_planned_rounds_visible]] Não reintroduzir abas de
+   * rodada para agenda concentrada: elas filtram os cards por `m.round` e
+   * deixam R2–R4 invisíveis, embora o sorteio as tenha criado. */
+  var isRoundBased = !isTeamSchedule && !isOnlyLines && currentTournament.currentStage !== 'elimination'
     && /grupo|liga|ranking|su[ií]ç/.test(formatText);
   root.setAttribute('data-bracket-line-tabs', isOnlyLines ? '1' : '0');
   root.setAttribute('data-bracket-round-tabs', isRoundBased ? '1' : '0');
+  root.setAttribute('data-bracket-team-schedule', isTeamSchedule ? '1' : '0');
   var titles = { fem: '♀ Feminina', masc: '♂ Masculina', misto: '⚥ Mista' };
   var genderHtml = isOnlyLines
     ? byGender.linhas.map(function (cat) {
@@ -6084,13 +6098,22 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   var _isConcentratedEvent = !!(window._isConcentratedTournament && window._isConcentratedTournament(t));
   var _canChangeCardCourt = !!(_isConcentratedEvent && t && typeof window._souOrganizador === 'function' && window._souOrganizador(t) && !_matchAlreadyInPlay && !isByeMatch && !m.isSitOut);
   var _courtCardHtml = '';
+  // Na agenda concentrada a quadra e o horário formam um único dado operacional.
+  // `scheduledKind: estimate` vem do planejador; o ≈ deixa explícito que a
+  // organização pode ajustar o chamado dos jogos ao longo do evento.
+  var _scheduledMs = _isConcentratedEvent ? _matchCardTimestamp(m.scheduledAt) : null;
+  var _estimatedTimeHtml = _scheduledMs
+    ? '<span class="sp-match-estimated-time" title="Horário estimado do jogo" style="white-space:nowrap;font-size:.78rem;font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);">🕒 ' + (m.scheduledKind === 'estimate' ? '≈ ' : '') + window._safeHtml(_matchCardDateTime(_scheduledMs, t)) + '</span>'
+    : '';
   if (_canChangeCardCourt && _cardCourts.length) {
     var _courtOpts = '<option value="">Sem quadra</option>' + _cardCourts.map(function (court) {
       return '<option value="' + window._safeHtml(court) + '"' + (String(m.court || '') === court ? ' selected' : '') + '>' + window._safeHtml(court) + '</option>';
     }).join('');
-    _courtCardHtml = '<label class="sp-match-court"><select aria-label="Quadra" onclick="event.stopPropagation()" onchange="window._assignMatchCourt(\'' + _esc(tId) + '\',\'' + _esc(m.id) + '\',this.value)">' + _courtOpts + '</select></label>';
+    _courtCardHtml = '<div class="sp-match-operational" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><label class="sp-match-court"><select aria-label="Quadra" onclick="event.stopPropagation()" onchange="window._assignMatchCourt(\'' + _esc(tId) + '\',\'' + _esc(m.id) + '\',this.value)">' + _courtOpts + '</select></label>' + _estimatedTimeHtml + '</div>';
   } else if (_isConcentratedEvent && m.court) {
-    _courtCardHtml = '<div class="sp-match-court sp-match-court--readonly">' + window._safeHtml(String(m.court)) + '</div>';
+    _courtCardHtml = '<div class="sp-match-operational" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><div class="sp-match-court sp-match-court--readonly">' + window._safeHtml(String(m.court)) + '</div>' + _estimatedTimeHtml + '</div>';
+  } else if (_estimatedTimeHtml) {
+    _courtCardHtml = '<div class="sp-match-operational" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' + _estimatedTimeHtml + '</div>';
   }
 
   const p1Row = `
@@ -7020,6 +7043,11 @@ function renderGroupStage(t, isOrg, canEnterResult, opts) {
   var _t = window._t || function(k) { return k; };
   const groups = t.groups || [];
   if (!groups.length) return '<p class="text-muted">' + _t('bracket.noGroups') + '</p>';
+  // A classificação da agenda concentrada é uma tabela de rodadas, não uma
+  // coleção de “Grupo A”. Há um grupo técnico por categoria no banco apenas
+  // para o motor calcular pontos; este rótulo não é uma entidade do torneio.
+  const _teamCfgGS = t.teamCompetition || ((t.phases || [])[0] || {}).teamCompetition || {};
+  const _isTeamScheduleGS = !!(_teamCfgGS.enabled && _teamCfgGS.schedule && _teamCfgGS.schedule.enabled);
 
   // Source per-group structure from the unified adapter when available.
   // Adapter's groups column carries subgroups[i].rounds (same shape as
@@ -7223,9 +7251,16 @@ function renderGroupStage(t, isOrg, canEnterResult, opts) {
     var _woGsMatches = gRounds.reduce(function (a, r) { return a.concat(r.matches || []); }, []).filter(function (m) { return m && !m.isBye && !m.isSitOut; });
     var _woGsPlayers = (sg.players && sg.players.length) ? sg.players : sorted.map(function (s) { return s.name; });
     var _woGsChip = (typeof window._woClaimChip === 'function') ? window._woClaimChip(t, { scope: 'group', roundIndex: (t.currentPhaseIndex || 0), groupName: sg.name, players: _woGsPlayers, matches: _woGsMatches }) : '';
+    const groupHeader = _isTeamScheduleGS
+      ? (_woGsChip ? '<div style="display:flex;justify-content:flex-end;margin:0 0 1rem;">' + _woGsChip + '</div>' : '')
+      : '<div style="display:flex;align-items:center;gap:8px;margin:0 0 1rem;flex-wrap:wrap;"><h3 style="margin:0;color:' + window._spCor(isMyGroupGS ? '#22d3ee' : groupColor, 'color') + ';font-size:1rem;font-weight:800;">' + window._safeHtml(sg.name) + myGroupBadge + '</h3>' + (_woGsChip ? '<span style="margin-left:auto;">' + _woGsChip + '</span>' : '') + '</div>';
+    const groupShellClass = _isTeamScheduleGS ? 'team-schedule-bracket' : 'card';
+    const groupShellStyle = _isTeamScheduleGS
+      ? 'scroll-margin-top:var(--scroll-anchor,120px);'
+      : 'border-left:4px solid ' + (isMyGroupGS ? '#22d3ee' : groupColor) + ';scroll-margin-top:var(--scroll-anchor,120px);';
     return `
-      <div class="card" id="group-section-${gi}" data-group-box="1"${isMyGroupGS ? ' data-my-group="1"' : ''} data-group-label="${window._safeHtml(window._grpKey(sg.name))}" style="border-left:4px solid ${isMyGroupGS ? '#22d3ee' : groupColor};scroll-margin-top:var(--scroll-anchor,120px);">
-        <div style="display:flex;align-items:center;gap:8px;margin:0 0 1rem;flex-wrap:wrap;"><h3 style="margin:0;color:${window._spCor(isMyGroupGS ? '#22d3ee' : groupColor, 'color')};font-size:1rem;font-weight:800;">${window._safeHtml(sg.name)}${myGroupBadge}</h3>${_woGsChip ? `<span style="margin-left:auto;">${_woGsChip}</span>` : ''}</div>
+      <div class="${groupShellClass}" id="group-section-${gi}" data-group-box="1"${isMyGroupGS ? ' data-my-group="1"' : ''} data-group-label="${window._safeHtml(window._grpKey(sg.name))}" style="${groupShellStyle}">
+        ${groupHeader}
         ${_groupKeysFirst && matchesHtml ? `
           <div style="border-top:1px solid var(--border-color);padding-top:1rem;margin-bottom:1rem;">
             ${matchesHtml}
@@ -7254,7 +7289,7 @@ function renderGroupStage(t, isOrg, canEnterResult, opts) {
   }).join('');
 
   return `
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:1.5rem;">
+    <div style="${_isTeamScheduleGS ? 'display:block;' : 'display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:1.5rem;'}">
       ${groupsHtml}
     </div>
     ${advanceBtn}`;

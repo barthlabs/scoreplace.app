@@ -616,6 +616,7 @@ const SUITES = [
   'tests/set-parcial-confirmado-aparece-imediatamente.test.js',
   'tests/previsao-conta-times-e-o-terceiro-lugar.test.js',
   'tests/previsao-neon-grade-por-categoria.test.js',
+  'tests/neon-quatro-rodadas-planejadas.test.js',
   // ⭐ FASE 2b — o jogo espelhado diz QUEM JOGA (insumo de autorização da CF).
   'tests/jogo-espelhado-diz-quem-joga.test.js',
   'tests/historico-e-log-nao-se-apaga.test.js',
