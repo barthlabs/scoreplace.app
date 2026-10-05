@@ -243,8 +243,9 @@ ok(/match\.scheduledGameNumber\s*=\s*scheduledGameNumber\.get\(item\.matchId\)/.
   'a agenda revisada grava Jogo N como contrato da chave e trava somente escolhas manuais');
 ok(/scheduledGameNumber:i\.scheduledGameNumber/.test(bracketLogicSource) && /scheduleLocked:true/.test(bracketLogicSource),
   'a tela envia à Function a sequência cronológica que o organizador confirmou');
-ok(/competitionTeamTagForMatch/.test(bracketViewSource) && /Time: /.test(bracketViewSource) && /sp-match-team-tag/.test(bracketViewSource),
-  'cards de competição mostram a tag “Time:” colorida junto aos atletas');
+ok(/competitionTeamTagForMatch/.test(bracketViewSource) && /sp-match-team-tag--vertical/.test(bracketViewSource) &&
+  !/>Time: ' \+ window\._safeHtml\(name\)/.test(bracketViewSource),
+  'cards de competição mostram uma tag vertical colorida, sem o prefixo redundante “Time:”');
 ok(!/Agendado: /.test(bracketViewSource),
   'o cabeçalho do card não duplica o horário que já pode ser reagendado abaixo');
 const drawSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'tournaments-draw.js'), 'utf8');

@@ -74,6 +74,38 @@ ok(/Propor/i.test(cardHtml), 'o card RENDERIZADO traz o "Propor datas" (fiação
 ok(/Criar grupo/i.test(cardHtml), 'o card RENDERIZADO traz o botão de CRIAR o grupo (ainda sem link)');
 ok(/_waGrpOpen\(/.test(cardHtml), 'o botão do grupo está fiado na ação real (_waGrpOpen)');
 
+// ─── cenário 1b: evento concentrado não negocia data e concentra a operação ───
+// A distinção é o contrato persistido do pré-sorteio (`scheduleWindow.days`),
+// nunca o nome do torneio ou a diferença de dias do calendário.
+const tConcentrado = mkLiga();
+tConcentrado.courtNames = ['Quadra 4', 'Quadra 5'];
+tConcentrado.scheduleWindow = { version: 1, days: [
+  { day: '2026-10-22', startTime: '18:00', endTime: '23:59', categoryFlow: 'rounds' }
+] };
+tConcentrado.competitionTeams = [{ id: 'venom', name: 'VENOM' }];
+const mConcentrado = tConcentrado.rounds[0].matches[0];
+mConcentrado.category = 'Fem Light';
+mConcentrado.p1CompetitionTeamId = 'venom';
+mConcentrado.team1Obj = { competitionTeamId: 'venom', competitionTeamColor: 'hsl(320 80% 45%)' };
+comUsuario(tConcentrado, { uid: 'u1', displayName: 'J1', email: 'j1@x.com' });
+const souOrgOriginal = W._souOrganizador;
+W._souOrganizador = function () { return true; };
+const cardConcentrado = W.renderMatchCard(mConcentrado, true, tConcentrado.id, 1);
+W._souOrganizador = souOrgOriginal;
+ok(/Categoria <b[^>]*>Fem Light<\/b>/.test(cardConcentrado) && !/Jogar até|Propor datas/.test(cardConcentrado),
+  'evento concentrado mostra a categoria e não convida atletas a negociar prazo/data');
+ok(/sp-match-court/.test(cardConcentrado) && /<option value="">Sem quadra<\/option>/.test(cardConcentrado) && !/📍 Sem quadra/.test(cardConcentrado),
+  'evento concentrado mantém somente o seletor de quadra, sem pino decorativo');
+ok(/sp-match-team-tag--vertical/.test(cardConcentrado) && />VENOM<\/span>/.test(cardConcentrado) && !/>Time: VENOM<\/span>/.test(cardConcentrado),
+  'o nome do time vira uma tag vertical colorida e não repete “Time:”');
+
+const tDistribuido = mkLiga();
+tDistribuido.rounds[0].matches[0].court = 'Quadra 9';
+comUsuario(tDistribuido, { uid: 'u1', displayName: 'J1', email: 'j1@x.com' });
+const cardDistribuido = W.renderMatchCard(tDistribuido.rounds[0].matches[0], true, tDistribuido.id, 1);
+ok(!/sp-match-court/.test(cardDistribuido),
+  'torneio distribuído não expõe quadra no card mesmo se houver valor legado');
+
 // Data definida substitui a ação no mesmo slot canônico, em azul-claro. O card
 // não pode continuar dizendo "Propor datas" depois de o organizador marcar.
 m.scheduledAt = '2026-09-18T14:00:00.000Z';

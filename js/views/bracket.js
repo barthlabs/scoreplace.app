@@ -5196,14 +5196,14 @@ window._competitionTeamNameForMatch = function (t, match, slot) {
 // O time e sua cor pertencem ao sorteio, não ao texto da dupla. A cor carrega
 // o matiz do time e a saturação da categoria (Light/Power/Extreme), gravada pelo
 // draw-core; esta tag só a apresenta junto aos atletas.
-window._competitionTeamTagForMatch = function (t, match, slot, compact) {
+window._competitionTeamTagForMatch = function (t, match, slot, compact, vertical) {
   var name = window._competitionTeamNameForMatch(t, match, slot);
   if (!name) return '';
   var obj = match && match[slot === 'p2' ? 'team2Obj' : 'team1Obj'];
   var color = obj && String(obj.competitionTeamColor || '').trim();
   var safeColor = /^hsl\(\d{1,3}\s+\d{1,3}%\s+\d{1,3}%\)$/.test(color) ? color : '';
   var style = safeColor ? ' style="--sp-team-color:' + safeColor + ';' + (compact ? 'margin:2px 0 0;' : '') + '"' : (compact ? ' style="margin:2px 0 0;"' : '');
-  return '<span class="sp-match-team-tag" title="Time: ' + window._safeHtml(name) + '"' + style + '>Time: ' + window._safeHtml(name) + '</span>';
+  return '<span class="sp-match-team-tag' + (vertical ? ' sp-match-team-tag--vertical' : '') + '" title="Time: ' + window._safeHtml(name) + '"' + style + '>' + window._safeHtml(name) + '</span>';
 };
 
 // ─── Player avatars helper for bracket cards ────────────────────────────────
@@ -5221,7 +5221,7 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint, m, slot) {
    * comportamento seguro pra qualquer chamador que ainda não passe o jogo. */
   var _souDoJogo = false;
   var _timeHtml = (typeof window._competitionTeamTagForMatch === 'function')
-    ? window._competitionTeamTagForMatch(t, m, slot) : '';
+    ? window._competitionTeamTagForMatch(t, m, slot, false, true) : '';
   try {
     var _cuJ = window.AppStore && window.AppStore.currentUser;
     _souDoJogo = !!(m && _cuJ && typeof window._userTeamInMatch === 'function' &&
@@ -5371,7 +5371,9 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint, m, slot) {
         `<div class="sp-mc-box"${_boxNomeAttrs} style="${_boxNome}"><span class="sp-name-fit" data-maxrem="${_nomeMaxRem}" data-minrem="${_nomeMinRem}" data-two-line-maxrem="${_geo.twoLineMaxRem}" style="font-weight:700;color:var(--sp-c-fbbf24,#fbbf24);white-space:nowrap;">${window._safeHtml(dispName)}</span></div>` +
         `<span style="font-size:0.52rem;font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.4);padding:1px 5px;border-radius:5px;letter-spacing:0.3px;text-transform:uppercase;white-space:nowrap;flex-shrink:0;">aguardando resposta</span>` +
       `</div>`;
-      return html + _timeHtml;
+      return _timeHtml
+        ? '<div class="sp-match-team">' + _timeHtml + '<div class="sp-match-team-members">' + html + '</div></div>'
+        : html;
     }
     html += `<div class="sp-mc-side">` +
       `<img src="${photoSrc}"${_avatarUid} ${onerror} data-player-name="${window._safeHtml(name)}" class="sp-av" style="--sp-av:${size}">` +
@@ -5420,7 +5422,9 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint, m, slot) {
     `</div>`;
   });
   if (members.length > 1) html += '</div>';
-  return html + _timeHtml;
+  return _timeHtml
+    ? '<div class="sp-match-team">' + _timeHtml + '<div class="sp-match-team-members">' + html + '</div></div>'
+    : html;
 }
 
 /* ── LINHA DE TEMPO DO JOGO ─────────────────────────────────────────────────────
@@ -5458,6 +5462,19 @@ function _matchCardDateTime(ms, t) {
     return day + ' ' + hour;
   } catch (e) { return ''; }
 }
+
+// Evento concentrado é uma decisão explícita do planejamento: cada dia ganhou
+// uma janela operacional no pré-sorteio. Não inferir isso por título, duração ou
+// quantidade de dias: a Confra também dura vários dias, mas seus participantes
+// combinam cada jogo e não usam uma quadra operacional.
+window._isConcentratedTournament = function(t) {
+  var days = t && t.scheduleWindow && t.scheduleWindow.days;
+  return Array.isArray(days) && days.some(function(day) {
+    return day && /^\d{4}-\d{2}-\d{2}$/.test(String(day.day || '').slice(0, 10)) &&
+      /^\d{2}:\d{2}$/.test(String(day.startTime || '')) &&
+      /^\d{2}:\d{2}$/.test(String(day.endTime || ''));
+  });
+};
 
 // Coordenadas (fase, rodada) lidas do id ESTRUTURAL do jogo — a única fonte que sobrevive
 // a qualquer cópia do jogo (doc, subcoleção `matches`, espelho `results`, dashboard).
@@ -5556,6 +5573,13 @@ function _matchCardTimelineTextHtml(t, m) {
     if (resultAt) {
       var played = _matchCardDateTime(resultAt, t);
       return played ? '<span style="font-size:0.62rem;font-weight:700;color:var(--text-muted);line-height:1.2;white-space:nowrap;">Jogado em <b style="color:var(--sp-c-cbd5e1,#cbd5e1);">' + window._safeHtml(played) + '</b></span>' : '';
+    }
+    // Num evento concentrado, quem chama os jogos é a organização dentro da
+    // janela do evento. Não há prazo individual a negociar: o slot mostra a
+    // categoria. Em torneio distribuído, mantém-se o prazo da rodada.
+    if (window._isConcentratedTournament && window._isConcentratedTournament(t)) {
+      var category = String(m.category || m.tierLabel || '').trim();
+      return category ? '<span style="font-size:0.62rem;font-weight:700;color:var(--text-muted);line-height:1.2;white-space:nowrap;">Categoria <b style="color:var(--sp-c-7dd3fc,#7dd3fc);">' + window._safeHtml(category) + '</b></span>' : '';
     }
     // Horário previsto já aparece no controle de reagendamento do card. Não
     // duplicar “Agendado:” no cabeçalho rouba espaço dos times e do placar.
@@ -6056,15 +6080,16 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     for (var i = 1; i <= n; i++) out.push('Quadra ' + i);
     return out;
   })();
-  var _canChangeCardCourt = !!(t && typeof window._souOrganizador === 'function' && window._souOrganizador(t) && !_matchAlreadyInPlay && !isByeMatch && !m.isSitOut);
+  var _isConcentratedEvent = !!(window._isConcentratedTournament && window._isConcentratedTournament(t));
+  var _canChangeCardCourt = !!(_isConcentratedEvent && t && typeof window._souOrganizador === 'function' && window._souOrganizador(t) && !_matchAlreadyInPlay && !isByeMatch && !m.isSitOut);
   var _courtCardHtml = '';
   if (_canChangeCardCourt && _cardCourts.length) {
-    var _courtOpts = '<option value="">📍 Sem quadra</option>' + _cardCourts.map(function (court) {
+    var _courtOpts = '<option value="">Sem quadra</option>' + _cardCourts.map(function (court) {
       return '<option value="' + window._safeHtml(court) + '"' + (String(m.court || '') === court ? ' selected' : '') + '>' + window._safeHtml(court) + '</option>';
     }).join('');
-    _courtCardHtml = '<label class="sp-match-court"><span>📍</span><select aria-label="Quadra" onclick="event.stopPropagation()" onchange="window._assignMatchCourt(\'' + _esc(tId) + '\',\'' + _esc(m.id) + '\',this.value)">' + _courtOpts + '</select></label>';
-  } else if (m.court) {
-    _courtCardHtml = '<div class="sp-match-court sp-match-court--readonly">📍 ' + window._safeHtml(String(m.court)) + '</div>';
+    _courtCardHtml = '<label class="sp-match-court"><select aria-label="Quadra" onclick="event.stopPropagation()" onchange="window._assignMatchCourt(\'' + _esc(tId) + '\',\'' + _esc(m.id) + '\',this.value)">' + _courtOpts + '</select></label>';
+  } else if (_isConcentratedEvent && m.court) {
+    _courtCardHtml = '<div class="sp-match-court sp-match-court--readonly">' + window._safeHtml(String(m.court)) + '</div>';
   }
 
   const p1Row = `
@@ -6675,7 +6700,9 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
 // jogo sem resultado) — fonte única nos helpers do schedule-poll.js.
 // Os dois chips retornam elemento PURO; a centralização é aqui.
 function _cardFooterChips(t, m, opts) {
-  var sch = (typeof window._schCardChip === 'function') ? window._schCardChip(t, m) : '';
+  // A enquete de data existe para torneios distribuídos. Em evento concentrado
+  // a agenda é do organizador e o card não deve convidar atletas a negociar data.
+  var sch = (!window._isConcentratedTournament || !window._isConcentratedTournament(t)) && typeof window._schCardChip === 'function' ? window._schCardChip(t, m) : '';
   var wa = (typeof window._waGrpCardChip === 'function') ? window._waGrpCardChip(t, m, opts) : '';
   if (!sch && !wa) return '';
   /* ⭐ ALINHADOS À ESQUERDA. Ordem do dono (12/set/2026): _"os botões do whats deveriam estar

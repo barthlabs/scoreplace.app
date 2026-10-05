@@ -35,6 +35,21 @@ summary::-webkit-details-marker { display: none; }
   overflow-wrap: anywhere;
 }
 
+/* O time identifica o lado sem roubar uma linha dos atletas. */
+.sp-match-team { display:flex; align-items:stretch; gap:.35rem; min-width:0; }
+.sp-match-team-members { flex:1; min-width:0; }
+.sp-match-team-tag--vertical {
+  width:auto;
+  max-width:none;
+  min-width:1.35rem;
+  justify-content:center;
+  margin:0;
+  padding:5px 2px;
+  writing-mode:vertical-rl;
+  text-orientation:mixed;
+  white-space:nowrap;
+}
+
 /* A cor identifica o time, mas a etiqueta continua legível no tema claro.
    Não usar o matiz puro como fundo: amarelos e verdes claros derrubam o
    contraste do texto. */
