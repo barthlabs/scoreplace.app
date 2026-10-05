@@ -37,5 +37,10 @@ console.log('── presença só despacha a Function ──');
   ok(r.calls[0][1][0] === 'setTournamentPresenceWithWOSubstitution', 'a intenção usa o motor server-side');
   ok(r.mutates === 0, 'W.O. também não muta a fotografia local');
 }
+const participantSrc = require('fs').readFileSync(require('path').join(__dirname, '..', 'js/views/participants.js'), 'utf8');
+console.log('── presença confirmada atualiza sem remontar a lista ──');
+ok(participantSrc.includes('function _applyPresenceReceipt') && participantSrc.includes('function _refreshPresenceReceiptInPlace'), 'recibo confirmado da Function atualiza apenas o estado local correspondente');
+ok(participantSrc.includes("if (!_refreshPresenceReceiptInPlace(tId, uid, playerName)) _reRenderParticipantsStable();"), 'a lista só é remontada quando não há card/barra para atualizar no lugar');
+ok(!participantSrc.includes("showConfirmDialog('Remover presença"), 'desmarcar continua uma ação direta, sem diálogo extra');
 console.log((fail ? '❌ ' : '✅ ') + 'presence-field-write: ' + pass + ' asserts');
 process.exit(fail ? 1 : 0);

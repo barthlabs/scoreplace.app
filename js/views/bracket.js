@@ -980,21 +980,29 @@ function _bracketGeneralView(root, show, gender, onlyReady) {
     // dias diferentes, por isso hoje a seleção de gênero leva ao dia certo;
     // não é, porém, uma regra de gênero: qualquer categoria marcada para a
     // mesma data entra na mesma visão operacional.
-    var eligibleCards = cards.filter(function (card) {
-      return !onlyReady || card.getAttribute('data-bracket-upcoming') === '1';
+    var scheduledCards = cards.filter(function (card) {
+      return Number(card.getAttribute('data-bracket-scheduled-at')) > 0;
     });
-    var reference = eligibleCards.find(function (card) {
+    // A data de referência não pode depender de haver jogo pronto: se todos
+    // aguardam presença, Próximos jogos ainda precisa mostrar o aviso no topo.
+    var reference = scheduledCards.find(function (card) {
       return String(card.getAttribute('data-bracket-tab-gender') || '') === String(gender || '') &&
         Number(card.getAttribute('data-bracket-scheduled-at')) > 0;
     });
     var referenceDate = reference ? new Date(Number(reference.getAttribute('data-bracket-scheduled-at'))) : null;
     var dayKey = referenceDate && !isNaN(referenceDate.getTime())
       ? [referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate()].join('-') : '';
-    eligibleCards.forEach(function (card) {
+    var waitingPresence = 0;
+    scheduledCards.forEach(function (card) {
       var at = Number(card.getAttribute('data-bracket-scheduled-at'));
       if (!isFinite(at) || at <= 0 || !card.parentNode) return;
       var cardDate = new Date(at);
       if (!dayKey || [cardDate.getFullYear(), cardDate.getMonth(), cardDate.getDate()].join('-') !== dayKey) return;
+      // O aviso é de PRESENÇA PARCIAL: presença completa já aparece nos
+      // Próximos jogos; sem ninguém presente ainda não é uma chamada em curso.
+      var isWaitingPresence = onlyReady && card.getAttribute('data-bracket-presence') === 'partial';
+      if (isWaitingPresence) waitingPresence++;
+      if (onlyReady && card.getAttribute('data-bracket-upcoming') !== '1' && !isWaitingPresence) return;
       var wrapper = card.parentNode;
       var placeholder = document.createComment('scoreplace-general-card');
       wrapper.parentNode.insertBefore(placeholder, wrapper);
@@ -1004,7 +1012,7 @@ function _bracketGeneralView(root, show, gender, onlyReady) {
       // wrapper. O container de origem é ocultado separadamente logo abaixo.
       // [[regression_general_agenda_moves_visible_cards]]
       card.hidden = false;
-      entries.push({ card: card, wrapper: wrapper, placeholder: placeholder, at: at, court: card.getAttribute('data-bracket-court') || '' });
+      entries.push({ card: card, wrapper: wrapper, placeholder: placeholder, at: at, court: card.getAttribute('data-bracket-court') || '', round: Number(card.getAttribute('data-bracket-tab-round')) || 1, waitingPresence: isWaitingPresence });
     });
     entries.sort(function (a, b) {
       if (a.at !== b.at) return a.at - b.at;
@@ -1019,38 +1027,81 @@ function _bracketGeneralView(root, show, gender, onlyReady) {
     root._bracketGeneralEntries = entries;
     root._bracketGeneralSources = sources;
     root._bracketGeneralMode = requestedMode;
+    root._bracketUpcomingWaitingPresence = waitingPresence;
   }
   if (!entries.length) {
     // Geral sem horário não ganha aba. Já Próximos jogos pode legitimamente
     // estar vazio enquanto a chamada de presença acontece; explique, não deixe
     // a pessoa diante de uma tela preta.
     if (onlyReady) {
-      view.innerHTML = '<p style="margin:16px 0;color:var(--text-muted);font-weight:700;">Nenhum jogo pronto para chamar neste dia.</p>';
+      var _awaiting = Number(root._bracketUpcomingWaitingPresence) || 0;
+      view.innerHTML = (_awaiting
+        ? '<div data-bracket-upcoming-waiting="1" style="margin:0 0 14px;padding:10px 12px;border:1px solid rgba(245,158,11,.42);border-radius:10px;background:rgba(245,158,11,.09);color:var(--sp-c-fbbf24,#fbbf24);font-size:.9rem;font-weight:800;">🟡 ' + _awaiting + (_awaiting === 1 ? ' jogo aguardando presença' : ' jogos aguardando presença') + '</div>'
+        : '') + '<p style="margin:16px 0;color:var(--text-muted);font-weight:700;">Nenhum jogo pronto para chamar neste dia.</p>';
       view.style.display = '';
       return true;
     }
     return false;
   }
-  (root._bracketGeneralSources || []).forEach(function (source) { source.hidden = true; });
+  // A faixa de abas pode morar DENTRO do próprio trilho da chave. Nesse caso a
+  // agenda recém-criada também é filha de `source`: esconder o trilho esconderia
+  // todos os jogos da Geral. Os wrappers já foram movidos para `view`, portanto
+  // não há card duplicado a ocultar; só escondemos uma fonte que não contém a
+  // agenda. [[regression_general_view_must_not_hide_itself]]
+  (root._bracketGeneralSources || []).forEach(function (source) {
+    source.hidden = !(source && source.contains && source.contains(view));
+  });
   view.innerHTML = '';
+  // Geral preserva a leitura da chave: cada coluna é uma rodada. Dentro dela,
+  // os jogos seguem o planejamento (horário e, no empate, a ordem da quadra).
+  // Assim R1 contém todos os primeiros jogos, R2 todos os segundos etc., sem
+  // apagar os que já foram concluídos. [[regression_general_round_columns]]
+  var agendaEntries = onlyReady ? entries.filter(function (entry) { return !entry.waitingPresence; }) : entries;
+  var waitingEntries = onlyReady ? entries.filter(function (entry) { return entry.waitingPresence; }) : [];
+  if (onlyReady && !agendaEntries.length) {
+    var noneReady = document.createElement('p');
+    noneReady.style.cssText = 'margin:0 0 16px;color:var(--text-muted);font-weight:700;';
+    noneReady.textContent = 'Nenhum jogo pronto para chamar neste dia.';
+    view.appendChild(noneReady);
+  }
   var groups = {};
-  entries.forEach(function (entry) {
-    var key = String(entry.at);
+  agendaEntries.forEach(function (entry) {
+    var key = String(entry.round || 1);
     if (!groups[key]) groups[key] = [];
     groups[key].push(entry);
   });
+  var roundsTrack = document.createElement('div');
+  roundsTrack.style.cssText = 'display:flex;align-items:flex-start;gap:20px;overflow-x:auto;padding:0 0 14px;scroll-snap-type:x proximity;';
   Object.keys(groups).sort(function (a, b) { return Number(a) - Number(b); }).forEach(function (key) {
-    var when = new Date(Number(key));
-    var label = isNaN(when.getTime()) ? 'Horário estimado' : when.toLocaleString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    groups[key].sort(function (a, b) {
+      if (a.at !== b.at) return a.at - b.at;
+      return String(a.court).localeCompare(String(b.court), 'pt-BR', { numeric: true });
+    });
     var group = document.createElement('section');
-    group.style.cssText = 'margin:0 0 20px;';
-    group.innerHTML = '<h4 style="margin:0 0 10px;padding-left:10px;border-left:4px solid var(--sp-c-fbbf24,#fbbf24);color:var(--sp-c-fde68a,#fde68a);font-size:.82rem;letter-spacing:1px;text-transform:uppercase;">🕒 ' + (window._safeHtml ? window._safeHtml(label) : label) + '</h4>';
+    group.style.cssText = 'flex:0 0 min(380px,88vw);min-width:280px;scroll-snap-align:start;';
+    group.innerHTML = '<h4 style="margin:0 0 10px;padding:0 0 9px 10px;border-left:4px solid var(--sp-c-fbbf24,#fbbf24);border-bottom:1px solid rgba(255,255,255,.10);color:var(--sp-c-fde68a,#fde68a);font-size:.82rem;letter-spacing:1px;text-transform:uppercase;">Rodada ' + (window._safeHtml ? window._safeHtml(String(key)) : String(key)) + '</h4>';
     var grid = document.createElement('div');
-    grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;align-items:start;';
+    grid.style.cssText = 'display:grid;grid-template-columns:minmax(0,1fr);gap:14px;align-items:start;';
     groups[key].forEach(function (entry) { grid.appendChild(entry.wrapper); });
     group.appendChild(grid);
-    view.appendChild(group);
+    roundsTrack.appendChild(group);
   });
+  view.appendChild(roundsTrack);
+  if (waitingEntries.length) {
+    waitingEntries.sort(function (a, b) {
+      if (a.at !== b.at) return a.at - b.at;
+      return String(a.court).localeCompare(String(b.court), 'pt-BR', { numeric: true });
+    });
+    var waitingSection = document.createElement('section');
+    waitingSection.setAttribute('data-bracket-upcoming-waiting', '1');
+    waitingSection.style.cssText = 'margin:20px 0 0;padding-top:14px;border-top:1px solid rgba(245,158,11,.28);';
+    waitingSection.innerHTML = '<h4 style="margin:0 0 12px;color:var(--sp-c-fbbf24,#fbbf24);font-size:.9rem;letter-spacing:.2px;">🟡 ' + waitingEntries.length + (waitingEntries.length === 1 ? ' jogo aguardando presença' : ' jogos aguardando presença') + '</h4>';
+    var waitingGrid = document.createElement('div');
+    waitingGrid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;align-items:start;';
+    waitingEntries.forEach(function (entry) { waitingGrid.appendChild(entry.wrapper); });
+    waitingSection.appendChild(waitingGrid);
+    view.appendChild(waitingSection);
+  }
   view.style.display = '';
   return true;
 }
@@ -5838,15 +5889,27 @@ function _matchCardRoundDeadlineMs(t, m) {
   } catch (e) { return null; }
 }
 
+function _matchCardResultTimestamp(m) {
+  if (!m) return null;
+  return _matchCardTimestamp(m.resultAt) ||
+    _matchCardTimestamp(m.pendingResult && m.pendingResult.proposedAt) ||
+    _matchCardTimestamp(m.completedAt) ||
+    ((m.winner || m.wo) ? _matchCardTimestamp(m.updatedAt) : null);
+}
+
 function _matchCardTimelineTextHtml(t, m) {
   try {
     if (!m) return '';
+    // No evento concentrado a categoria é o contexto do jogo, inclusive depois
+    // que o placar foi lançado. O horário efetivamente jogado vive ao lado da
+    // quadra, no mesmo lugar do estimado — não duplica "Jogado em" no cabeçalho.
+    if (window._isConcentratedTournament && window._isConcentratedTournament(t)) {
+      var concentratedCategory = String(m.category || m.tierLabel || '').trim();
+      return concentratedCategory ? '<span style="font-size:0.62rem;font-weight:700;color:var(--sp-c-7dd3fc,#7dd3fc);line-height:1.2;white-space:nowrap;">' + window._safeHtml(concentratedCategory) + '</span>' : '';
+    }
     // `resultAt` é escrito no instante em que o último placar é salvo. Os outros
     // carimbos são só recuperação de partidas históricas que ainda não o tinham.
-    var resultAt = _matchCardTimestamp(m.resultAt) ||
-      _matchCardTimestamp(m.pendingResult && m.pendingResult.proposedAt) ||
-      _matchCardTimestamp(m.completedAt) ||
-      ((m.winner || m.wo) ? _matchCardTimestamp(m.updatedAt) : null);
+    var resultAt = _matchCardResultTimestamp(m);
     if (resultAt) {
       var played = _matchCardDateTime(resultAt, t);
       return played ? '<span style="font-size:0.62rem;font-weight:700;color:var(--text-muted);line-height:1.2;white-space:nowrap;">Jogado em <b style="color:var(--sp-c-cbd5e1,#cbd5e1);">' + window._safeHtml(played) + '</b></span>' : '';
@@ -5854,11 +5917,6 @@ function _matchCardTimelineTextHtml(t, m) {
     // Num evento concentrado, quem chama os jogos é a organização dentro da
     // janela do evento. Não há prazo individual a negociar: o slot mostra a
     // categoria. Em torneio distribuído, mantém-se o prazo da rodada.
-    if (window._isConcentratedTournament && window._isConcentratedTournament(t)) {
-      var category = String(m.category || m.tierLabel || '').trim();
-      // A aba já informa o contexto. No card, basta o nome da categoria.
-      return category ? '<span style="font-size:0.62rem;font-weight:700;color:var(--sp-c-7dd3fc,#7dd3fc);line-height:1.2;white-space:nowrap;">' + window._safeHtml(category) + '</span>' : '';
-    }
     // Horário previsto já aparece no controle de reagendamento do card. Não
     // duplicar “Agendado:” no cabeçalho rouba espaço dos times e do placar.
     var deadline = _matchCardRoundDeadlineMs(t, m);
@@ -6371,8 +6429,13 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   // `scheduledKind: estimate` vem do planejador; o ≈ deixa explícito que a
   // organização pode ajustar o chamado dos jogos ao longo do evento.
   var _scheduledMs = _isConcentratedEvent ? _matchCardTimestamp(m.scheduledAt) : null;
-  var _estimatedTimeHtml = _scheduledMs
-    ? '<span class="sp-match-estimated-time" title="Horário estimado do jogo" style="margin-left:auto;white-space:nowrap;text-align:right;font-size:.78rem;font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);">🕒 ' + (m.scheduledKind === 'estimate' ? '≈ ' : '') + window._safeHtml(_matchCardDateTime(_scheduledMs, t)) + '</span>'
+  var _playedMs = _isConcentratedEvent ? _matchCardResultTimestamp(m) : null;
+  // Um único slot operacional de horário: azul enquanto é previsão; verde
+  // quando o resultado confirmou o horário real. Não exibir "Jogado em" duas
+  // vezes, nem perder a categoria do card concluído.
+  var _matchTimeMs = _playedMs || _scheduledMs;
+  var _estimatedTimeHtml = _matchTimeMs
+    ? '<span class="sp-match-estimated-time" title="' + (_playedMs ? 'Horário jogado' : 'Horário estimado do jogo') + '" style="margin-left:auto;white-space:nowrap;text-align:right;font-size:.78rem;font-weight:800;color:' + (_playedMs ? 'var(--sp-c-4ade80,#4ade80)' : 'var(--sp-c-7dd3fc,#7dd3fc)') + ';">🕒 ' + (_playedMs ? '' : '≈ ') + window._safeHtml(_matchCardDateTime(_matchTimeMs, t)) + '</span>'
     : '';
   if (_canChangeCardCourt && _cardCourts.length) {
     var _courtOpts = '<option value="">Sem quadra</option>' + _cardCourts.map(function (court) {
@@ -6970,7 +7033,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   if (!_tabCategory && m.bracket && /^(gold|silver|line\d+)$/i.test(String(m.bracket))) _tabCategory = String(m.bracket);
   var _tabGender = _bracketTabGender(_tabCategory);
   return `
-    <div id="card-${m.id}" class="sp-match-card" data-players="${_searchNames}" data-player-uids="${_searchUids}" data-bracket-tab-category="${window._safeHtml(_tabCategory)}" data-bracket-tab-gender="${_tabGender}" data-bracket-tab-source="${_tabSource}" data-bracket-tab-round="${m.round != null ? window._safeHtml(String(m.round)) : ''}" data-bracket-scheduled-at="${_scheduledMs || ''}" data-bracket-court="${window._safeHtml(String(m.court || ''))}" data-bracket-upcoming="${_isConcentratedEvent && matchReady ? '1' : '0'}" data-my-match="${_isMyMatch ? '1' : '0'}" data-my-pending="${_isMyMatch && !isDecided && !isByeMatch ? '1' : '0'}" data-match-num="${matchNum != null ? matchNum : ''}" style="scroll-margin-top:var(--scroll-anchor,120px);background:${window._spCor(_isMyMatch ? 'rgba(99,102,241,0.06)' : 'var(--bg-card)', 'background')};border:${_isMyMatch ? '2px' : '1px'} solid ${hasPending && _pr && _pr.disputed ? 'rgba(239,68,68,0.55)' : hasPending ? 'rgba(251,191,36,0.5)' : cardBorder};${_lineLeftBorder}border-radius:12px;padding:14px;${_cardMax}box-shadow:${_isMyMatch ? '0 0 20px rgba(99,102,241,0.25),0 0 8px rgba(99,102,241,0.12),0 4px 12px rgba(0,0,0,0.15)' : hasPending && _pr && _pr.disputed ? '0 0 14px rgba(239,68,68,0.2),0 4px 12px rgba(0,0,0,0.15)' : hasPending ? '0 0 14px rgba(251,191,36,0.18),0 4px 12px rgba(0,0,0,0.15)' : matchReady ? '0 0 16px rgba(16,185,129,0.15),0 4px 12px rgba(0,0,0,0.15)' : matchPartial ? '0 0 10px rgba(245,158,11,0.1),0 4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.15)'};${hasTBD ? 'opacity:0.6;' : ''}">
+    <div id="card-${m.id}" class="sp-match-card" data-players="${_searchNames}" data-player-uids="${_searchUids}" data-bracket-tab-category="${window._safeHtml(_tabCategory)}" data-bracket-tab-gender="${_tabGender}" data-bracket-tab-source="${_tabSource}" data-bracket-tab-round="${m.round != null ? window._safeHtml(String(m.round)) : ''}" data-bracket-scheduled-at="${_scheduledMs || ''}" data-bracket-court="${window._safeHtml(String(m.court || ''))}" data-bracket-upcoming="${_isConcentratedEvent && matchReady ? '1' : '0'}" data-bracket-presence="${_isConcentratedEvent && !isDecided && !isByeMatch ? (matchReady ? 'complete' : (matchPartial ? 'partial' : 'none')) : ''}" data-my-match="${_isMyMatch ? '1' : '0'}" data-my-pending="${_isMyMatch && !isDecided && !isByeMatch ? '1' : '0'}" data-match-num="${matchNum != null ? matchNum : ''}" style="scroll-margin-top:var(--scroll-anchor,120px);background:${window._spCor(_isMyMatch ? 'rgba(99,102,241,0.06)' : 'var(--bg-card)', 'background')};border:${_isMyMatch ? '2px' : '1px'} solid ${hasPending && _pr && _pr.disputed ? 'rgba(239,68,68,0.55)' : hasPending ? 'rgba(251,191,36,0.5)' : cardBorder};${_lineLeftBorder}border-radius:12px;padding:14px;${_cardMax}box-shadow:${_isMyMatch ? '0 0 20px rgba(99,102,241,0.25),0 0 8px rgba(99,102,241,0.12),0 4px 12px rgba(0,0,0,0.15)' : hasPending && _pr && _pr.disputed ? '0 0 14px rgba(239,68,68,0.2),0 4px 12px rgba(0,0,0,0.15)' : hasPending ? '0 0 14px rgba(251,191,36,0.18),0 4px 12px rgba(0,0,0,0.15)' : matchReady ? '0 0 16px rgba(16,185,129,0.15),0 4px 12px rgba(0,0,0,0.15)' : matchPartial ? '0 0 10px rgba(245,158,11,0.1),0 4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.15)'};${hasTBD ? 'opacity:0.6;' : ''}">
       ${_headerHtml}
       ${_pendingBtnsRow}
       ${pendingBanner}

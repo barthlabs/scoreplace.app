@@ -346,6 +346,51 @@ window._presenceBusyUntil = function (key, done) {
   if (done && typeof done.then === 'function') done.then(clear, clear); else clear();
 };
 
+// A callable já confirmou a escrita: espelhar somente esse recibo no estado em
+// memória permite redesenhar o card tocado, sem esperar um snapshot e sem
+// desmontar a lista inteira. Não é escrita otimista nem substitui o snapshot;
+// ele continua sendo a fonte durável. [[regression_presence_receipt_no_jump]]
+function _applyPresenceReceipt(tId, targetKey, action, legacyKey) {
+  var current = window._findTournamentById && window._findTournamentById(tId);
+  if (!current || !targetKey) return null;
+  current.checkedIn = current.checkedIn || {};
+  current.checkedInConfirmed = current.checkedInConfirmed || {};
+  current.absent = current.absent || {};
+  if (action === 'present') {
+    current.checkedIn[targetKey] = Date.now();
+    delete current.checkedInConfirmed[targetKey];
+    delete current.absent[targetKey];
+  } else if (action === 'confirmed') {
+    current.checkedInConfirmed[targetKey] = Date.now();
+    delete current.checkedIn[targetKey];
+    delete current.absent[targetKey];
+  } else if (action === 'clear') {
+    delete current.checkedIn[targetKey];
+    delete current.checkedInConfirmed[targetKey];
+  }
+  if (legacyKey && legacyKey !== targetKey) {
+    delete current.checkedIn[legacyKey];
+    delete current.checkedInConfirmed[legacyKey];
+    delete current.absent[legacyKey];
+  }
+  return current;
+}
+
+function _refreshPresenceReceiptInPlace(tId, uid, playerName) {
+  var changed = false;
+  try { changed = !!(window._updatePanelCardInPlace && window._updatePanelCardInPlace(tId, uid, playerName)); } catch (_ePanel) {}
+  try { changed = !!(window._updateCardPresenceInPlace && window._updateCardPresenceInPlace(tId, uid, playerName)) || changed; } catch (_eCard) {}
+  try {
+    var bar = document.getElementById('rollcall-bar');
+    if (bar && typeof window._rollCallBarHtml === 'function') {
+      var mode = bar.getAttribute('data-rc-mode') || 'rollcall';
+      bar.outerHTML = window._rollCallBarHtml(tId, mode);
+      changed = true;
+    }
+  } catch (_eBar) {}
+  return changed;
+}
+
 /* ── DE ONDE SAI O UID DA PRESENÇA ────────────────────────────────────────────────
  * ⛔ MEDIDO NO CONFRA (27/ago/2026, torneio AO VIVO): das 9 presenças VIVAS (<24h), OITO
  * estavam gravadas com o NOME como chave. Não era legado — era o caminho de hoje.
@@ -444,8 +489,9 @@ window._applySelfPresence = function (tId, playerName, uid) {
     var save = window.FirestoreDB.setTournamentPresence(tId, selfUid, action, '');
     window._presenceBusyUntil(selfUid, save);
     save.then(function () {
+      _applyPresenceReceipt(tId, selfUid, action, '');
       if (typeof showNotification === 'function') showNotification(successTitle, successMessage, 'success');
-      _reRenderParticipantsStable();
+      if (!_refreshPresenceReceiptInPlace(tId, selfUid, playerName)) _reRenderParticipantsStable();
     }).catch(function (e) {
       if (typeof showNotification === 'function') showNotification('⚠️ Presença não salva', (e && e.message) || 'Tente novamente.', 'warning');
     });
@@ -656,8 +702,10 @@ window._applyCheckInToggle = function (tId, playerName, uid) {
 
   window._presenceBusyUntil(uid || playerName, save);
   Promise.resolve(save).then(function () {
-    // Sem escrita otimista: o listener refletirá o recibo canônico do servidor.
-    _reRenderParticipantsStable();
+    // Só após o recibo do servidor, espelha a mudança exata e troca o card no
+    // lugar. A lista inteira não pode desmontar a cada chamada de presença.
+    _applyPresenceReceipt(tId, targetKey || uid || playerName, wantPresent ? 'present' : 'clear', legacyKey || '');
+    if (!_refreshPresenceReceiptInPlace(tId, uid, playerName)) _reRenderParticipantsStable();
     // A integração tardia também só parte depois do commit da presença; a CF
     // correspondente relê o torneio e é idempotente.
     if (wantPresent && typeof window._triggerLateIntegration === 'function') {
