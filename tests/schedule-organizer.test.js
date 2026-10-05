@@ -243,6 +243,8 @@ ok(/match\.scheduledGameNumber\s*=\s*scheduledGameNumber\.get\(item\.matchId\)/.
   'a agenda revisada grava Jogo N como contrato da chave e trava somente escolhas manuais');
 ok(/scheduledGameNumber:i\.scheduledGameNumber/.test(bracketLogicSource) && /scheduleLocked:true/.test(bracketLogicSource),
   'a tela envia à Function a sequência cronológica que o organizador confirmou');
+ok(/_CAMPOS_RASCUNHO_SORTEIO_INICIAL[\s\S]*?'matches'/.test(functionsSource) && /_aplicaRascunhoDoSorteioInicial\(t, pd\.draft\)/.test(functionsSource),
+  'publicar materializa os mesmos jogos do rascunho, preservando a estrutura confirmada de horário, quadra, ordem e confronto');
 ok(/competitionTeamTagForMatch/.test(bracketViewSource) && /sp-match-team-tag--vertical/.test(bracketViewSource) &&
   !/>Time: ' \+ window\._safeHtml\(name\)/.test(bracketViewSource),
   'cards de competição mostram uma tag vertical colorida, sem o prefixo redundante “Time:”');
@@ -265,8 +267,10 @@ ok(/position:sticky;top:0;z-index:3/.test(drawSource) && !/id="team-draw-cancel"
   'Voltar fica sempre visível no cabeçalho e não há Cancelar duplicado no rodapé');
 ok(/data-\' \+ prefix \+ \'-empty-slot/.test(organizerSource) && /data-pis-empty-slot/.test(bracketLogicSource) && /Solte um jogo aqui/.test(organizerSource),
   'quadras vazias aceitam arrastar e soltar tanto na agenda quanto na revisão privada');
-ok(/sp-team-draw-time/.test(drawSource) && /window\.location\.hash = d\.staged \? '#tournaments\/'/.test(drawSource) && /_openPendingInitialSchedule\(tId\)/.test(drawSource),
-  'os horários do sorteio usam controle compacto e uma revisão nova abre direto no planejamento privado');
+ok(/sp-team-draw-time/.test(drawSource) && /__openingPendingInitialScheduleFromDraw/.test(drawSource) && /_openPendingInitialSchedule\(tId\)/.test(drawSource) && !/window\.location\.hash = d\.staged \? '#tournaments\/'/.test(drawSource),
+  'os horários do sorteio usam controle compacto e uma revisão nova vai de Sorteando direto ao planejamento privado, sem voltar ao detalhe');
+ok(!/data-team-court-rank-label/.test(drawSource) && !/paintCourtRanks/.test(drawSource) && /data-team-court-card/.test(drawSource),
+  'a prioridade das quadras é definida pela ordem dos cards, sem prefixos ordinais redundantes');
 ok(/var selectedMode = modeConfirmed && \(cfg\.schedule\.mode === 'structured' \|\| cfg\.schedule\.mode === 'free'\) \? cfg\.schedule\.mode : 'free';/.test(drawSource),
   'Livre é o padrão no primeiro sorteio; uma escolha já confirmada permanece');
 ok((drawSource.match(/background:#182235!important;color:var\(--text-bright\)!important/g) || []).length >= 1 && !/id="team-draw-cancel" class=/.test(drawSource),

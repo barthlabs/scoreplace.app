@@ -6596,6 +6596,15 @@ window._renderPendingDrawPreview = function (t) {
 // monta uma visão efêmera sobre `pendingDraw.draft`. Assim a organização pode mudar
 // a ordem ou a quadra e ver os outros jogos se rearranjarem sem criar jogos públicos.
 window._openPendingInitialSchedule = function (tId) {
+  /* Quando este painel é a continuação de um sorteio, o loader global só pode
+   * desaparecer depois que a grade estiver pronta. Assim não existe retorno
+   * visual ao detalhe no intervalo entre a Function e o planejamento. */
+  function finishDrawToPlanningTransition() {
+    if (String(window.__openingPendingInitialScheduleFromDraw || '') !== String(tId)) return;
+    window.__openingPendingInitialScheduleFromDraw = null;
+    if (typeof window._hideLoading === 'function') window._hideLoading();
+    if (typeof window._drawBtnDone === 'function') window._drawBtnDone();
+  }
   var getTournament = window._findTournamentById || function (id) {
     return window.AppStore && (window.AppStore.tournaments || []).find(function (x) { return String(x.id) === String(id); });
   };
@@ -6604,10 +6613,11 @@ window._openPendingInitialSchedule = function (tId) {
     if (window.showNotification) window.showNotification('Abrindo revisão…', 'Carregando o rascunho protegido da organização.', 'info');
     window._callCF('getPendingInitialDraw', { tournamentId:String(tId) }, 'Entre na sua conta para revisar o sorteio.')
       .then(function (res) { var dado = (res && res.data && res.data.pendingDraw) || null; if (!dado) throw new Error('Rascunho indisponível.'); cache[String(tId)] = dado; window._openPendingInitialSchedule(tId); if (window._rerenderBracket) window._rerenderBracket(tId); })
-      .catch(function (e) { if (window.showNotification) window.showNotification('Revisão indisponível', (e && e.message) || 'Tente novamente.', 'error'); });
+      .catch(function (e) { finishDrawToPlanningTransition(); if (window.showNotification) window.showNotification('Revisão indisponível', (e && e.message) || 'Tente novamente.', 'error'); });
     return;
   }
   if (!t || !draft || !Array.isArray(draft.matches) || typeof window._operationalSchedulePlan !== 'function') {
+    finishDrawToPlanningTransition();
     if (window.showNotification) window.showNotification('Agenda indisponível', 'Atualize a tela e tente novamente.', 'error');
     return;
   }
@@ -6660,7 +6670,7 @@ window._openPendingInitialSchedule = function (tId) {
        * da barra em alguns navegadores/zoom. A única área com overflow é
        * `[data-pis-scroll]`; Voltar, Salvar ajustes, Publicar E as abas de dia
        * ficam sempre opacos, visíveis e fora da rolagem vertical/horizontal. */
-      '<div data-pis-toolbar style="position:relative;z-index:2;flex:none;padding:16px;background:#111827;border-bottom:1px solid rgba(148,163,184,.28);box-shadow:0 8px 16px rgba(2,6,23,.55)"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center"><button type="button" data-pis-close class="btn btn-outline" style="flex:none">← Voltar</button><h2 style="margin:0;min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center;font-size:1.05rem">📍 Planejar antes de publicar</h2><div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;flex:none"><button type="button" data-pis-apply class="btn btn-outline">Salvar ajustes</button><button type="button" data-pis-publish class="btn btn-shine" style="background:#10b981;color:#fff">🚀 Publicar</button></div></div><p style="margin:8px 0 0;font-size:.82rem;line-height:1.4;color:#cbd5e1">Cada horário aparece uma vez na régua vertical à esquerda. Arraste um jogo sobre outro para trocar seus horários e quadras.</p></div>' +
+      '<div data-pis-toolbar style="position:relative;z-index:2;flex:none;padding:16px;background:#111827;border-bottom:1px solid rgba(148,163,184,.28);box-shadow:0 8px 16px rgba(2,6,23,.55)"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center"><button type="button" data-pis-close class="btn btn-outline" style="flex:none">← Voltar</button><h2 style="margin:0;min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center;font-size:1.05rem">📍 Planejar antes de publicar</h2><div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;flex:none;flex-wrap:wrap"><button type="button" data-pis-shuffle class="btn btn-outline" title="Mantém os slots de quadra e horário; troca os jogos do dia">↻ Embaralhar jogos</button><button type="button" data-pis-copy-other-day class="btn btn-outline" title="Repete no dia aberto os mesmos horários e quadras do outro dia">⧉ Copiar estrutura do outro dia</button><button type="button" data-pis-apply class="btn btn-outline">Salvar ajustes</button><button type="button" data-pis-publish class="btn btn-shine" style="background:#10b981;color:#fff">🚀 Publicar</button></div></div><p style="margin:8px 0 0;font-size:.82rem;line-height:1.4;color:#cbd5e1">A estrutura desta grade é o contrato da chave: dia, horário, quadra, ordem e confronto só mudam por ação explícita da organização.</p></div>' +
       '<div data-pis-day-tabs style="position:relative;z-index:2;flex:none;padding:10px 16px;background:#111827;border-bottom:1px solid rgba(148,163,184,.28);box-shadow:0 6px 12px rgba(2,6,23,.4)">' + board.tabsHtml + '</div>' +
       '<div data-pis-scroll style="position:relative;z-index:1;flex:1;min-height:0;overflow:auto;padding:16px;box-sizing:border-box"><div style="font-size:.76rem;color:#94a3b8;margin-bottom:6px">' + p.items.length + ' jogos · ' + p.courts.length + ' quadras. Cada linha é um horário; cada coluna é uma quadra. Horários são estimados e podem mudar conforme o andamento.</div>' +
       (!p.cabe ? '<div style="margin:0 0 10px;color:#fbbf24;font-size:.82rem;font-weight:700">⚠ Ao publicar assim, a programação excede a janela determinada pela organização em ' + Math.ceil((p.extraMs || 0) / 60000) + ' min. Todos os jogos continuam exibidos; os excedentes aparecem em faixa zebrada vermelha e cinza.</div>' : '') + board.gridHtml +
@@ -6669,6 +6679,44 @@ window._openPendingInitialSchedule = function (tId) {
     if (restoredScroll) { restoredScroll.scrollTop = gridScroll.top; restoredScroll.scrollLeft = gridScroll.left; }
     overlay.querySelector('[data-pis-close]').onclick = returnToPendingDetail;
     Array.prototype.forEach.call(overlay.querySelectorAll('[data-pis-day]'), function (control) { control.onclick = function () { activeDay = control.getAttribute('data-pis-day'); render(); }; });
+    function orderSlots(items) {
+      return (items || []).slice().sort(function (a, b) {
+        var at = Date.parse(a.scheduledAt || ''), bt = Date.parse(b.scheduledAt || '');
+        if (at !== bt) return at - bt;
+        var ac = p.courts.indexOf(a.court), bc = p.courts.indexOf(b.court);
+        if (ac !== bc) return ac - bc;
+        return String(a.matchId).localeCompare(String(b.matchId));
+      });
+    }
+    function itemsOn(day) { return (p.items || []).filter(function (item) { return window._scheduleLocalDayKey(item.scheduledAt) === day; }); }
+    function fixMatchOnSlot(matchId, slot) {
+      manual[String(matchId)] = { matchId:String(matchId), court:slot.court, scheduledAt:slot.scheduledAt };
+    }
+    var shuffleButton = overlay.querySelector('[data-pis-shuffle]');
+    if (shuffleButton) shuffleButton.onclick = function () {
+      var slots = orderSlots(itemsOn(activeDay)), games = slots.slice();
+      if (slots.length < 2) return;
+      // Fisher–Yates: apenas o conteúdo dos slots muda. O desenho decidido pela
+      // organização (dia, horário e quadra) continua intacto e visível na grade.
+      for (var i = games.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var swap = games[i]; games[i] = games[j]; games[j] = swap; }
+      games.forEach(function (game, index) { fixMatchOnSlot(game.matchId, slots[index]); });
+      render();
+    };
+    var copyOtherDayButton = overlay.querySelector('[data-pis-copy-other-day]');
+    if (copyOtherDayButton) copyOtherDayButton.onclick = function () {
+      var otherDay = (board.days || []).find(function (day) { return day !== activeDay; });
+      var target = orderSlots(itemsOn(activeDay)), source = orderSlots(itemsOn(otherDay));
+      if (!otherDay || !target.length || source.length !== target.length) {
+        if (window.showNotification) window.showNotification('Estrutura não copiada', 'Os dois dias precisam ter a mesma quantidade de jogos para repetir quadras e horários sem omitir nenhum jogo.', 'warning');
+        return;
+      }
+      source.forEach(function (slot, index) {
+        var date = new Date(slot.scheduledAt || ''), clock = isNaN(date.getTime()) ? '' : String(date.getHours()).padStart(2, '0') + ':' + String(date.getMinutes()).padStart(2, '0');
+        var when = window._scheduleIsoOnDay && window._scheduleIsoOnDay(activeDay, clock);
+        if (when) fixMatchOnSlot(target[index].matchId, { court:slot.court, scheduledAt:when });
+      });
+      render();
+    };
     Array.prototype.forEach.call(overlay.querySelectorAll('[data-pis-match]'), function (card) {
       card.ondragstart = function (event) { event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', card.getAttribute('data-pis-match')); };
       card.ondragover = function (event) { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; };
@@ -6719,6 +6767,7 @@ window._openPendingInitialSchedule = function (tId) {
     });
   }
   document.body.appendChild(overlay); render();
+  finishDrawToPlanningTransition();
 };
 
   /* ⛔ REGRESSÃO CRÍTICA — NÃO REMOVER NEM VOLTAR A DEPENDER SÓ DE `t.pendingDraw`.

@@ -2718,7 +2718,10 @@ window._showTeamCompetitionDrawReview = function (tId, opts) {
         '<div style="margin-bottom:7px;"><b style="display:block;color:#86efac;font-size:.8rem;margin-bottom:5px;">' + safe(dayLabel(day)) + '</b><div style="display:grid;grid-template-columns:1fr;gap:5px;width:100%;min-width:0;color:#cbd5e1;font-size:.67rem;"><label style="display:grid;grid-template-columns:42px minmax(0,1fr);gap:5px;align-items:center;min-width:0;"><span>Início</span><input class="sp-team-draw-time" data-team-day-start data-day="' + safe(day) + '" type="time" value="' + safe(win.start) + '" aria-label="Início em ' + safe(dayLabel(day)) + '" style="width:100%;min-width:0;box-sizing:border-box;padding:4px 7px;font-size:.78rem;"></label><label style="display:grid;grid-template-columns:42px minmax(0,1fr);gap:5px;align-items:center;min-width:0;"><span>Fim</span><input class="sp-team-draw-time" data-team-day-end data-day="' + safe(day) + '" type="time" value="' + safe(win.end) + '" aria-label="Fim em ' + safe(dayLabel(day)) + '" style="width:100%;min-width:0;box-sizing:border-box;padding:4px 7px;font-size:.78rem;"></label></div></div><div data-team-day-flow data-day="' + safe(day) + '" style="display:flex;gap:4px;margin:0 0 7px;flex-wrap:wrap;"><button type="button" data-team-day-flow-option="categories" class="btn" style="flex:0 1 auto;min-width:0;font-size:.62rem;padding:4px 7px;">Concentradas</button><button type="button" data-team-day-flow-option="rounds" class="btn" style="flex:0 1 auto;min-width:0;font-size:.62rem;padding:4px 7px;">Alternadas</button></div><p data-team-day-flow-copy style="font-size:.68rem;line-height:1.25;color:#cbd5e1;margin:0 0 7px;"></p><div data-team-day-cards style="display:grid;gap:6px;min-height:42px;">' + cards + '</div></section>';
     }).join('');
     var courtPriorityCards = normalizedCourtOrder.map(function (court) {
-      return '<div draggable="true" data-team-court-card="' + safe(court) + '" style="display:flex;align-items:center;gap:7px;padding:8px;border:1px solid rgba(56,189,248,.48);border-radius:8px;background:#102838;color:var(--text-bright,#ebebf5);font-size:.8rem;font-weight:800;cursor:grab;user-select:none;"><span aria-hidden="true" style="color:#7dd3fc;">⠿</span><span data-team-court-rank-label></span><span>' + safe(court) + '</span></div>';
+      /* A ordem visual da lista já É a prioridade. Não reintroduzir "1ª", "2ª"
+       * etc.: esses rótulos repetem a informação e fazem a quadra parecer parte
+       * de um ranking, quando a organização só precisa arrastar a sequência. */
+      return '<div draggable="true" data-team-court-card="' + safe(court) + '" style="display:flex;align-items:center;gap:7px;padding:8px;border:1px solid rgba(56,189,248,.48);border-radius:8px;background:#102838;color:var(--text-bright,#ebebf5);font-size:.8rem;font-weight:800;cursor:grab;user-select:none;"><span aria-hidden="true" style="color:#7dd3fc;">⠿</span><span>' + safe(court) + '</span></div>';
     }).join('');
     // Dias/ordem e o formato de confrontos são escolhas da organização. O
     // normalizador usa um valor de compatibilidade para torneios legados, mas ele
@@ -2835,14 +2838,12 @@ window._showTeamCompetitionDrawReview = function (tId, opts) {
         bindCategoryCard(copy); if (target) holder.insertBefore(copy, target); else holder.appendChild(copy);
       };
     });
-    function paintCourtRanks() { Array.prototype.forEach.call(overlay.querySelectorAll('[data-team-court-card]'), function (card, index) { var label = card.querySelector('[data-team-court-rank-label]'); if (label) label.textContent = (index + 1) + 'ª'; }); }
     Array.prototype.forEach.call(overlay.querySelectorAll('[data-team-court-card]'), function (card) {
       card.ondragstart = function () { draggingCourt = card; };
       card.ondragover = function (event) { if (draggingCourt) event.preventDefault(); };
-      card.ondrop = function (event) { event.preventDefault(); if (draggingCourt && draggingCourt !== card) card.parentNode.insertBefore(draggingCourt, card); paintCourtRanks(); };
+      card.ondrop = function (event) { event.preventDefault(); if (draggingCourt && draggingCourt !== card) card.parentNode.insertBefore(draggingCourt, card); };
       card.ondragend = function () { draggingCourt = null; };
     });
-    paintCourtRanks();
     var confirm = overlay.querySelector('#team-draw-confirm');
     if (valid && confirm) confirm.onclick = function () {
         var slots = [];
@@ -3231,19 +3232,25 @@ window.generateDrawFunction = function (tId) {
             if (d.duplicatesRemoved > 0 && typeof showNotification !== 'undefined') {
                 showNotification(_t('tdraw.dupsRemoved'), _t('tdraw.dupsRemovedMsg', { n: d.duplicatesRemoved }), 'info');
             }
-            // Um sorteio em revisão não tem chave pública. A rota da chave escondia
-            // justamente os controles Ver/Anular/Publicar, que ficam no detalhe
-            // canônico do torneio. Só o sorteio já publicado abre a chave.
-            window.location.hash = d.staged ? '#tournaments/' + encodeURIComponent(String(tId)) : '#bracket/' + tId;
             setTimeout(function () {
                 if (window._sound) window._sound('sino');
                 if (d.staged) {
                     showNotification('🔒 Sorteio em revisão', 'Times, confrontos e agenda estão prontos para conferência. Nada foi publicado nem notificado.', 'info');
-                    // O primeiro destino de uma revisão é SEMPRE a agenda privada: é ali
-                    // que a organização confere, ajusta e publica. Não a faça caçar um
-                    // botão "Ver" no detalhe antes de enxergar o sorteio que acabou de criar.
-                    if (typeof window._openPendingInitialSchedule === 'function') window._openPendingInitialSchedule(tId);
+                    // ⛔ NÃO NAVEGAR AO DETALHE ENTRE "Sorteando…" E O PLANEJAMENTO.
+                    // Esse hash intermediário desmontava o loader e fazia a tela piscar
+                    // no detalhe antes de abrir a grade. A transição válida é somente
+                    // Sorteando… → Planejar antes de publicar. O planejador encerra o
+                    // loader depois de montar a própria interface.
+                    window.__openingPendingInitialScheduleFromDraw = String(tId);
+                    if (typeof window._openPendingInitialSchedule === 'function') {
+                        window._openPendingInitialSchedule(tId);
+                    } else {
+                        window.__openingPendingInitialScheduleFromDraw = null;
+                        if (typeof window._hideLoading === 'function') window._hideLoading();
+                        window.location.hash = '#tournaments/' + encodeURIComponent(String(tId));
+                    }
                 } else {
+                    window.location.hash = '#bracket/' + tId;
                     if (d.native) showNotification(_t('tdraw.started'), _t('tdraw.startedMsg', { n: d.matchCount }), 'success');
                     else showNotification(_t('draw.changesSaved'), _t('tdraw.drawDone'), 'success');
                     if (typeof window._notifyDrawPersonalized === 'function') window._notifyDrawPersonalized(t, tId);

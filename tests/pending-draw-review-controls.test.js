@@ -34,6 +34,8 @@ ok(/data-pis-toolbar/.test(ui) && /data-pis-scroll/.test(ui) && /height:100%;/.t
   /data-pis-close[\s\S]*?data-pis-apply[\s\S]*?data-pis-publish/.test(ui) &&
   !/margin-top:14px[\s\S]*?data-pis-apply/.test(ui),
   'Voltar fica à esquerda; Salvar ajustes e Publicar ficam ativos à direita em barra opaca fora do painel rolável, sem comando no rodapé');
+ok(/data-pis-shuffle/.test(ui) && /data-pis-copy-other-day/.test(ui) && /Fisher–Yates/.test(ui) && /fixMatchOnSlot/.test(ui),
+  'a revisão permite embaralhar os jogos ou repetir a estrutura do outro dia sem recriar slots de quadra e horário');
 const scheduleStart = ui.indexOf('window._openPendingInitialSchedule = function');
 const scheduleEnd = ui.indexOf('window._rememberPendingDrawMarker = function', scheduleStart);
 const schedule = scheduleStart >= 0 && scheduleEnd > scheduleStart ? ui.slice(scheduleStart, scheduleEnd) : '';
