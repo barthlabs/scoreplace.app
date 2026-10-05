@@ -7323,7 +7323,11 @@ function renderGroupStage(t, isOrg, canEnterResult, opts) {
     var _woGsMatches = gRounds.reduce(function (a, r) { return a.concat(r.matches || []); }, []).filter(function (m) { return m && !m.isBye && !m.isSitOut; });
     var _woGsPlayers = (sg.players && sg.players.length) ? sg.players : sorted.map(function (s) { return s.name; });
     var _woGsChip = (typeof window._woClaimChip === 'function') ? window._woClaimChip(t, { scope: 'group', roundIndex: (t.currentPhaseIndex || 0), groupName: sg.name, players: _woGsPlayers, matches: _woGsMatches }) : '';
-    const groupHeader = _isTeamScheduleGS
+    // A agenda concentrada tem um grupo técnico para cálculo, não uma entidade
+    // exibível. Esta guarda é deliberadamente separada do estilo do container:
+    // o título "Grupo A" não pode voltar por regressão. [[regression_neon_hides_technical_group_header]]
+    const _hideTechnicalGroupHeader = _isTeamScheduleGS;
+    const groupHeader = _hideTechnicalGroupHeader
       ? (_woGsChip ? '<div style="display:flex;justify-content:flex-end;margin:0 0 1rem;">' + _woGsChip + '</div>' : '')
       : '<div style="display:flex;align-items:center;gap:8px;margin:0 0 1rem;flex-wrap:wrap;"><h3 style="margin:0;color:' + window._spCor(isMyGroupGS ? '#22d3ee' : groupColor, 'color') + ';font-size:1rem;font-weight:800;">' + window._safeHtml(sg.name) + myGroupBadge + '</h3>' + (_woGsChip ? '<span style="margin-left:auto;">' + _woGsChip + '</span>' : '') + '</div>';
     const groupShellClass = _isTeamScheduleGS ? 'team-schedule-bracket' : 'card';

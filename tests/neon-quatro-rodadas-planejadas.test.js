@@ -44,7 +44,8 @@ const path = require('path');
 const bracket = fs.readFileSync(path.join(__dirname, '..', 'js/views/bracket.js'), 'utf8');
 assert(/data-bracket-team-schedule/.test(bracket), 'a grade concentrada tem um modo próprio de abas');
 assert(/!isTeamSchedule && !isOnlyLines/.test(bracket), 'o Neon não pode esconder R2–R4 em abas de rodada');
-assert(/const groupHeader = _isTeamScheduleGS\s*\?/.test(bracket), 'o grupo técnico não pode aparecer como título da chave');
+assert(/regression_neon_hides_technical_group_header[\s\S]{0,220}const _hideTechnicalGroupHeader = _isTeamScheduleGS;[\s\S]{0,100}const groupHeader = _hideTechnicalGroupHeader\s*\?/.test(bracket),
+  'o grupo técnico não pode aparecer como título da chave');
 assert(/regression_neon_phase_faux_keeps_schedule_contract/.test(bracket), 'a cópia filtrada da fase mantém o contrato de agenda do Neon');
 assert(/regression_neon_round_headers_are_sticky/.test(bracket), 'cada cabeçalho de rodada concentrada continua fixo durante a rolagem');
 assert(/regression_neon_sticky_heading_keeps_column_presentation/.test(bracket), 'o cabeçalho fixo preserva a mesma tipografia, cor e barra da coluna');
