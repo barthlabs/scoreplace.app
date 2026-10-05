@@ -56,13 +56,13 @@ function pairKey(a, b) { return [a, b].sort().join(' x '); }
     teamCompetition: { enabled: true, teamCount: 2, formation: 'draw', internalMatches: 'avoid', scoring: { win: 3, draw: 1, loss: 0 } },
     competitionTeams: [{ id: 'azul', name: 'Azul' }, { id: 'verde', name: 'Verde' }],
     matches: [
-      { p1: 'Dupla Azul', p2: 'Dupla Verde', p1CompetitionTeamId: 'azul', p2CompetitionTeamId: 'verde', winner: 'p1' },
+      { p1: 'Dupla Azul', p2: 'Dupla Verde', p1CompetitionTeamId: 'azul', p2CompetitionTeamId: 'verde', winner: 'p1', scoreP1: 6, scoreP2: 2 },
       { p1: 'Folga Azul', p2: 'BYE', p1CompetitionTeamId: 'azul', p2CompetitionTeamId: 'verde', winner: 'p1', isBye: true }
     ]
   };
   const html = W._renderCompetitionTeamStandings(t) || '';
   ok(/Classificação dos times/.test(html) && /Azul/.test(html) && /Verde/.test(html), 'quadro de times mostra todos os times, inclusive sem vitória');
-  ok(/>3<\/td>/.test(html) && />0<\/td>/.test(html), 'quadro de times soma jogo real e ignora BYE');
+  ok(/>\+4<\/td>/.test(html) && />0<\/td>/.test(html), 'quadro de times soma saldo de games do jogo real e ignora BYE');
   t.teamCompetition.aggregation = 'per_category';
   t.matches[0].category = 'Light';
   t.matches.push({ p1: 'Dupla Azul 2', p2: 'Dupla Verde 2', p1CompetitionTeamId: 'azul', p2CompetitionTeamId: 'verde', winner: 'p2', category: 'Power' });
