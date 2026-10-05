@@ -132,7 +132,7 @@ console.log('\n§1 O NÚMERO DO CARTÃO');
     ok(dashNum(0, confraInteiroSemJogosMeus()) === 0,
       'zero VERDADEIRO continua sendo impresso como 0 — torneio sem inscrito existe');
   }
-  ok(/\$\{window\._dashNum\(individualCount, t\)\}/.test(SRC),
+  ok(/\$\{window\._dashNum\(individualCount, t, _ccDash\.confiavel\)\}/.test(SRC),
     'o cartão grande passa `individualCount` pelo filtro (senão a rede não cobre o primeiro render)');
   ok(/window\._dashNum\(pCount, t\)/.test(SRC),
     'a linha COMPACTA também — é outra porta pro mesmo número');

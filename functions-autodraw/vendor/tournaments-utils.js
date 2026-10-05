@@ -801,15 +801,19 @@ var _num = function (v) { return (typeof v === 'number' && isFinite(v)) ? v : nu
 window._cardCompetidores = function (t) {
   if (!t) return { people: 0, teams: 0, carregando: false };
   var p = _num(t.competitorsCount);
-  if (p != null) return { people: p, teams: _num(t.teamsCount) || 0, carregando: false };
+  // O resumo é publicado no documento-base junto da inscrição. Portanto, mesmo quando
+  // a subcoleção `inscritos` ainda está chegando, estes números já são fatos — não são
+  // uma lista parcial. Sem esta marca o cartão chamava `_dashNum`, via a hidratação
+  // pendente, e trocava 96/8 por reticências logo após anular uma chave.
+  if (p != null) return { people: p, teams: _num(t.teamsCount) || 0, carregando: false, confiavel: true };
   // sem o número do resumo, a conta sai da LISTA — que num torneio dividido pode não ter
   // chegado ainda. Aí não há número a dar.
   if (typeof window._elencoCarregado === 'function' && !window._elencoCarregado(t)) {
-    return { people: null, teams: null, carregando: true };
+    return { people: null, teams: null, carregando: true, confiavel: false };
   }
   var c = (typeof window._countCompetitors === 'function')
     ? window._countCompetitors(t) : { people: 0, teams: 0 };
-  return { people: c.people, teams: c.teams, carregando: false };
+  return { people: c.people, teams: c.teams, carregando: false, confiavel: true };
 };
 
 window._cardEspera = function (t) {
@@ -1182,6 +1186,36 @@ window._tournamentScheduledWindow = function (t) {
     startMs: starts.length ? Math.min.apply(null, starts) : null,
     endMs: ends.length ? Math.max.apply(null, ends) : null
   };
+};
+
+/* Evento concentrado: o relógio é uma regra da janela operacional, não da chave.
+ *
+ * Antes da primeira partida o cartão deve dizer quanto falta para COMEÇAR; depois do
+ * início, quanto falta para a janela TERMINAR. A existência de jogos/sorteio é
+ * irrelevante: apagar ou publicar a chave não pode trocar o sentido do relógio.
+ * Torneios distribuídos (ex.: Confra) não têm `scheduleWindow.days` e devolvem null;
+ * assim continuam usando seus prazos e rodadas próprios. */
+window._concentratedTournamentCountdownEvent = function (t, now) {
+  var days = t && t.scheduleWindow && t.scheduleWindow.days;
+  var concentrated = (typeof window._isConcentratedTournament === 'function')
+    ? window._isConcentratedTournament(t)
+    : (Array.isArray(days) && days.some(function (day) {
+      return day && /^\d{4}-\d{2}-\d{2}$/.test(String(day.day || '').slice(0, 10)) &&
+        /^\d{2}:\d{2}$/.test(String(day.startTime || '')) &&
+        /^\d{2}:\d{2}$/.test(String(day.endTime || ''));
+    }));
+  if (!concentrated) return null;
+  var win = (typeof window._tournamentScheduledWindow === 'function')
+    ? window._tournamentScheduledWindow(t) : null;
+  if (!win || win.startMs == null || win.endMs == null) return null;
+  now = (typeof now === 'number') ? now : Date.now();
+  if (now < win.startMs) {
+    return { ts: win.startMs, labelKey: 'event.tournamentStart', icon: '🏁', color: '#10b981', kind: 'tournament-start' };
+  }
+  if (now < win.endMs) {
+    return { ts: win.endMs, labelKey: 'event.tournamentEnd', icon: '🏆', color: '#8b5cf6', kind: 'tournament-end' };
+  }
+  return null;
 };
 
 // v4.3.8: progresso da RODADA ATUAL da fase POSTERIOR (chaves em t.matches, phaseIndex>=1).

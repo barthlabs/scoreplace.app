@@ -404,7 +404,10 @@ window._verMaisTag = _verMaisTag;
  *
  * Recupera-se sozinho: `_marcaPartesQueFaltam` já dispara a busca das partes, e a
  * chegada delas re-renderiza. Nenhum reload, nenhum laço. */
-window._dashNum = function (n, t) {
+window._dashNum = function (n, t, fonteConfirmada) {
+  // Um resumo canônico (competitorsCount/teamsCount) já é completo no documento-base;
+  // não o esconda por uma subcoleção pesada ainda estar hidratando.
+  if (fonteConfirmada && typeof n === 'number' && isFinite(n)) return n;
   if (typeof window._dadosConfiaveis === 'function' && window._dadosConfiaveis(t)) return n;
   /* ⛔ R1.1.1 · "…" QUER DIZER "JÁ VOLTO". Depois de esgotado o teto de tentativas nada
    * mais está a caminho, e continuar mostrando reticências é prometer o que não vai
@@ -1068,26 +1071,31 @@ function renderDashboard(container) {
                   ((typeof window._weatherSlotHtml === 'function') ? window._weatherSlotHtml(t, 'sm') : '');
               }
 
-              // Não-Liga: countdown do evento mais próximo
-              var _events = [];
-              if (isAberto && t.registrationLimit) {
+              // Não-Liga: evento concentrado tem relógio canônico da janela. Antes do
+              // horário de início ele NUNCA pode mostrar "Fim do torneio", ainda que
+              // a chave tenha sido anulada ou ainda não exista.
+              var _concentratedCountdown = (typeof window._concentratedTournamentCountdownEvent === 'function')
+                ? window._concentratedTournamentCountdownEvent(t, _now) : null;
+              var _events = _concentratedCountdown ? [_concentratedCountdown] : [];
+              if (!_concentratedCountdown && isAberto && t.registrationLimit) {
                 var _rd = new Date(t.registrationLimit).getTime();
                 if (!isNaN(_rd) && _rd > _now) _events.push({ ts: _rd, label: _t('event.enrollClose'), icon: '⏰', color: '#f59e0b' });
               }
-              if (t.startDate) {
+              if (!_concentratedCountdown && t.startDate) {
                 var _sd2 = new Date(t.startDate).getTime();
                 if (!isNaN(_sd2) && _sd2 > _now && !sorteioRealizado) _events.push({ ts: _sd2, label: _t('event.tournamentStart'), icon: '🏁', color: '#10b981' });
               }
               // v1.6.83: "🏆 Fim do torneio" conta pro fim da ÚLTIMA fase — com t.endDate cru
               // a contagem zerava no fim da classificatória, com a eliminatória ainda por vir.
               var _edRaw = window._tournamentEndDate ? window._tournamentEndDate(t) : t.endDate;
-              if (_edRaw) {
+              if (!_concentratedCountdown && _edRaw) {
                 var _ed = new Date(_edRaw).getTime();
                 if (!isNaN(_ed) && _ed > _now) _events.push({ ts: _ed, label: _t('event.tournamentEnd'), icon: '🏆', color: '#8b5cf6' });
               }
               if (_events.length === 0) return '';
               _events.sort(function(a,b) { return a.ts - b.ts; });
               var _next = _events[0];
+              if (_next.labelKey) _next.label = _t(_next.labelKey);
               var _countdownText = window._formatCountdown ? window._formatCountdown(_next.ts - _now) : '';
               var _rgb2 = _next.color === '#f59e0b' ? '245,158,11' : _next.color === '#10b981' ? '16,185,129' : '139,92,246';
               var _rbCt2 = (typeof window._photoReadBox === 'function') ? window._photoReadBox() : { bg: 'rgba(0,0,0,0.5)', fg: '#f1f5f9', border: 'rgba(255,255,255,0.12)' };
@@ -1122,7 +1130,7 @@ function renderDashboard(container) {
                        <div class="stat-box" style="flex-direction: column;${_pReadBg ? 'background:' + window._spCor(_pReadBg, 'background')+';color:'+_pReadFg+' !important;border:1px solid ' + window._spCor(_pReadBd, 'borda')+';' : ''}">
                           <div style="display: flex; align-items: center; gap: 4px;">
                              <span style="font-size: 1.1rem;">👤</span>
-                             <span style="font-size: 1.4rem; font-weight: 800; line-height: 1; opacity: 0.95;">${window._dashNum(individualCount, t)}</span>
+                             <span style="font-size: 1.4rem; font-weight: 800; line-height: 1; opacity: 0.95;">${window._dashNum(individualCount, t, _ccDash.confiavel)}</span>
                           </div>
                           <span style="font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1px; margin-top: 3px; opacity: 0.8;">${_t('dashboard.statEnrolled')}</span>
                        </div>
@@ -1130,7 +1138,7 @@ function renderDashboard(container) {
                        <div class="stat-box" style="flex-direction: column;${_pReadBg ? 'background:' + window._spCor(_pReadBg, 'background')+';color:'+_pReadFg+' !important;border:1px solid ' + window._spCor(_pReadBd, 'borda')+';' : ''}">
                           <div style="display: flex; align-items: center; gap: 4px;">
                              <span style="font-size: 1.1rem;">👥</span>
-                             <span style="font-size: 1.4rem; font-weight: 800; line-height: 1; opacity: 0.95;">${window._dashNum(teamCount, t)}</span>
+                             <span style="font-size: 1.4rem; font-weight: 800; line-height: 1; opacity: 0.95;">${window._dashNum(teamCount, t, _ccDash.confiavel)}</span>
                           </div>
                           <span style="font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1px; margin-top: 3px; opacity: 0.8;">${_t('dashboard.statTeams')}</span>
                        </div>

@@ -3466,22 +3466,25 @@ function renderTournaments(container, tournamentId = null) {
                 return ((typeof window._weatherSlotHtml === 'function') ? window._weatherSlotHtml(t, 'lg') : '');
               }
 
-              // Não-Liga: múltiplos countdowns (abertura/fechamento de inscrições, início, fim)
-              var _events = [];
-              if (_openSt.notOpenYet && _openSt.opensAt) {
+              // Evento concentrado: a janela publicada manda no relógio, não a chave.
+              // Antes do início: "Início do torneio". Depois: "Fim do torneio".
+              var _concentratedCountdown = (typeof window._concentratedTournamentCountdownEvent === 'function')
+                ? window._concentratedTournamentCountdownEvent(t, _now) : null;
+              var _events = _concentratedCountdown ? [_concentratedCountdown] : [];
+              if (!_concentratedCountdown && _openSt.notOpenYet && _openSt.opensAt) {
                 _events.push({ ts: _openSt.opensAt, label: 'Inscrições abrem', icon: '🔓', color: '#38bdf8' });
               }
-              if (isAberto && t.registrationLimit) {
+              if (!_concentratedCountdown && isAberto && t.registrationLimit) {
                 var _rd = new Date(t.registrationLimit).getTime();
                 if (!isNaN(_rd) && _rd > _now) _events.push({ ts: _rd, label: _t('event.enrollClose'), icon: '⏰', color: '#f59e0b' });
               }
-              if (t.startDate) {
+              if (!_concentratedCountdown && t.startDate) {
                 var _sd2 = new Date(t.startDate).getTime();
                 if (!isNaN(_sd2) && _sd2 > _now && !sorteioRealizado) _events.push({ ts: _sd2, label: _t('event.tournamentStart'), icon: '🏁', color: '#10b981' });
               }
               // v1.6.83: fim da ÚLTIMA fase (ver dashboard.js — mesma contagem regressiva).
               var _edRaw = window._tournamentEndDate ? window._tournamentEndDate(t) : t.endDate;
-              if (_edRaw) {
+              if (!_concentratedCountdown && _edRaw) {
                 var _ed = new Date(_edRaw).getTime();
                 if (!isNaN(_ed) && _ed > _now) _events.push({ ts: _ed, label: _t('event.tournamentEnd'), icon: '🏆', color: '#8b5cf6' });
               }
@@ -3489,6 +3492,7 @@ function renderTournaments(container, tournamentId = null) {
               _events.sort(function(a,b) { return a.ts - b.ts; });
               var _colorMap2 = { '#38bdf8': '56,189,248', '#f59e0b': '245,158,11', '#10b981': '16,185,129', '#8b5cf6': '139,92,246' };
               var _next = _events[0];
+              if (_next.labelKey) _next.label = _t(_next.labelKey);
               var _countdownText2 = window._formatCountdown ? window._formatCountdown(_next.ts - _now) : '';
               var _rgb2 = _colorMap2[_next.color] || '139,92,246';
               // v2.6.21: tarja escura → texto claro; sem tarja → cor semântica.
@@ -3528,13 +3532,13 @@ function renderTournaments(container, tournamentId = null) {
                     <div id="stat-boxes-row" ${_pReadBg ? 'data-photo-bg="'+_pReadBg+'" data-photo-fg="'+_pReadFg+'" data-photo-bd="'+_pReadBd+'"' : ''} style="display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-start;">
                         <div class="stat-box" data-stat="inscritos" ${_pReadBg ? 'style="background:' + window._spCor(_pReadBg, 'background')+';color:'+_pReadFg+' !important;border:1px solid ' + window._spCor(_pReadBd, 'borda')+';"' : ''}>
                            <span style="font-size: 1.1rem; margin-right: 4px;">👤</span>
-                           <span class="stat-value" style="font-size: 1.4rem; font-weight: 800; line-height: 1; opacity: 0.95;">${window._dashNum ? window._dashNum(individualCount, t) : individualCount}</span>
+                           <span class="stat-value" style="font-size: 1.4rem; font-weight: 800; line-height: 1; opacity: 0.95;">${window._dashNum ? window._dashNum(individualCount, t, _ccDetail.confiavel) : individualCount}</span>
                            <span style="font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1px; margin-left: 8px; opacity: 0.8;">Inscritos</span>
                         </div>
                         ${teamCount > 0 ? `
                         <div class="stat-box" data-stat="equipes" ${_pReadBg ? 'style="background:' + window._spCor(_pReadBg, 'background')+';color:'+_pReadFg+' !important;border:1px solid ' + window._spCor(_pReadBd, 'borda')+';"' : ''}>
                            <span style="font-size: 1.1rem; margin-right: 4px;">👥</span>
-                           <span class="stat-value" style="font-size: 1.4rem; font-weight: 800; line-height: 1; opacity: 0.95;">${window._dashNum ? window._dashNum(teamCount, t) : teamCount}</span>
+                           <span class="stat-value" style="font-size: 1.4rem; font-weight: 800; line-height: 1; opacity: 0.95;">${window._dashNum ? window._dashNum(teamCount, t, _ccDetail.confiavel) : teamCount}</span>
                            <span style="font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1px; margin-left: 8px; opacity: 0.8;">Equipes</span>
                         </div>
                         ` : ''}
