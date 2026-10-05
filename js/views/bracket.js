@@ -1035,6 +1035,8 @@ function _bracketUpdateRoundHeadingPortal(root, scope) {
     if (rect.width < 1 || rect.top >= anchorBottom || colRect.bottom <= anchorBottom) continue;
     var clone = document.createElement('div');
     clone.className = 'bracket-round-heading-portal';
+    // Sequência da correção 2.3.274: aquela versão já removeu a margem
+    // negativa do h5 abaixo; esta etapa trata a segunda camada, o portal.
     // `anchorBottom` pode cair entre pixels (ex.: 230,5). Arredondar para
     // cima abria um vão de meio pixel entre a aba fixa e o portal da rodada,
     // onde o conteúdo da chave aparecia como uma linha vazada. O portal fica
