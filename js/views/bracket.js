@@ -1035,7 +1035,13 @@ function _bracketUpdateRoundHeadingPortal(root, scope) {
     if (rect.width < 1 || rect.top >= anchorBottom || colRect.bottom <= anchorBottom) continue;
     var clone = document.createElement('div');
     clone.className = 'bracket-round-heading-portal';
-    clone.style.cssText = 'position:fixed;top:' + Math.ceil(anchorBottom) + 'px;left:' + Math.round(rect.left) + 'px;width:' + Math.round(rect.width) + 'px;box-sizing:border-box;z-index:29;background:var(--bg-darker,#111114);padding:8px 0 9px;box-shadow:0 8px 0 var(--bg-darker,#111114);';
+    // `anchorBottom` pode cair entre pixels (ex.: 230,5). Arredondar para
+    // cima abria um vão de meio pixel entre a aba fixa e o portal da rodada,
+    // onde o conteúdo da chave aparecia como uma linha vazada. O portal fica
+    // um pixel por baixo da faixa (z-index 29 contra 31), eliminando a emenda
+    // sem deslocar a tipografia do título.
+    // [[regression_round_portal_overlaps_tabs_subpixel_seam]]
+    clone.style.cssText = 'position:fixed;top:' + Math.floor(anchorBottom) + 'px;left:' + Math.round(rect.left) + 'px;width:' + Math.round(rect.width) + 'px;box-sizing:border-box;z-index:29;background:var(--bg-darker,#111114);padding:8px 0 9px;box-shadow:0 8px 0 var(--bg-darker,#111114);';
     // O portal só acompanha o título da rodada. A máscara que avançava para
     // baixo escondia busca e cards ao rolar em telas estreitas.
     clone.style.background = '#111114';
