@@ -47,11 +47,13 @@ assert(/!isTeamSchedule && !isOnlyLines/.test(bracket), 'o Neon não pode escond
 assert(/_isTeamScheduleGS[\s\S]{0,900}groupHeader/.test(bracket), 'o grupo técnico não pode aparecer como título da chave');
 assert(/regression_neon_phase_faux_keeps_schedule_contract/.test(bracket), 'a cópia filtrada da fase mantém o contrato de agenda do Neon');
 assert(/regression_neon_round_headers_are_sticky/.test(bracket), 'cada cabeçalho de rodada concentrada continua fixo durante a rolagem');
+assert(/regression_neon_sticky_heading_keeps_column_presentation/.test(bracket), 'o cabeçalho fixo preserva a mesma tipografia, cor e barra da coluna');
 assert(/scheduledGameNumber[\s\S]{0,180}matchNum = _plannedGameNumber/.test(bracket), 'o card usa o número definido na prévia, não o contador local da categoria');
 const timestampFn = bracket.indexOf('function _matchCardTimestamp(value)');
 const dateTimeFn = bracket.indexOf('function _matchCardDateTime(ms, t)');
 const scheduleCard = bracket.indexOf('var _scheduledMs = _isConcentratedEvent');
 assert(timestampFn >= 0 && timestampFn < scheduleCard, 'o card concentrado usa o leitor canônico de data já declarado');
 assert(dateTimeFn >= 0 && dateTimeFn < scheduleCard, 'o card concentrado usa o formatador canônico de data já declarado');
+assert(/sp-match-estimated-time[\s\S]{0,160}margin-left:auto/.test(bracket), 'o horário estimado fica alinhado à direita do rodapé operacional');
 
 console.log('✅ Neon: quatro rodadas planejadas, sem Grupo A visível');

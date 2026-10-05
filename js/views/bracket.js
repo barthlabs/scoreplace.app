@@ -1035,13 +1035,21 @@ function _bracketUpdateRoundHeadingPortal(root, scope) {
     if (rect.width < 1 || rect.top >= anchorBottom || colRect.bottom <= anchorBottom) continue;
     var clone = document.createElement('div');
     clone.className = 'bracket-round-heading-portal';
-    clone.style.cssText = 'position:fixed;top:' + Math.ceil(anchorBottom) + 'px;left:' + Math.round(rect.left) + 'px;width:' + Math.round(rect.width) + 'px;box-sizing:border-box;z-index:29;display:flex;align-items:center;gap:8px;background:var(--bg-darker,#111114);padding:8px 0 9px;box-shadow:0 8px 0 var(--bg-darker,#111114);';
+    clone.style.cssText = 'position:fixed;top:' + Math.ceil(anchorBottom) + 'px;left:' + Math.round(rect.left) + 'px;width:' + Math.round(rect.width) + 'px;box-sizing:border-box;z-index:29;background:var(--bg-darker,#111114);padding:8px 0 9px;box-shadow:0 8px 0 var(--bg-darker,#111114);';
     // O portal só acompanha o título da rodada. A máscara que avançava para
     // baixo escondia busca e cards ao rolar em telas estreitas.
     clone.style.background = '#111114';
     clone.style.boxShadow = 'none';
     clone.style.borderBottom = '1px solid rgba(255,255,255,.08)';
-    clone.innerHTML = heading.innerHTML;
+    // O portal não pode copiar somente `innerHTML`: no Neon o próprio h5
+    // carrega a tipografia, cor e barra lateral da rodada. Copiar o elemento
+    // preserva exatamente o visual da coluna quando ele passa a ficar fixo.
+    // Remove a classe para que o clone não entre na próxima varredura de
+    // cabeçalhos. [[regression_neon_sticky_heading_keeps_column_presentation]]
+    var headingCopy = heading.cloneNode(true);
+    if (headingCopy.classList) headingCopy.classList.remove('bracket-round-heading');
+    headingCopy.style.margin = '0';
+    clone.appendChild(headingCopy);
     portal.appendChild(clone);
   }
 }
@@ -6130,7 +6138,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   // organização pode ajustar o chamado dos jogos ao longo do evento.
   var _scheduledMs = _isConcentratedEvent ? _matchCardTimestamp(m.scheduledAt) : null;
   var _estimatedTimeHtml = _scheduledMs
-    ? '<span class="sp-match-estimated-time" title="Horário estimado do jogo" style="white-space:nowrap;font-size:.78rem;font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);">🕒 ' + (m.scheduledKind === 'estimate' ? '≈ ' : '') + window._safeHtml(_matchCardDateTime(_scheduledMs, t)) + '</span>'
+    ? '<span class="sp-match-estimated-time" title="Horário estimado do jogo" style="margin-left:auto;white-space:nowrap;text-align:right;font-size:.78rem;font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);">🕒 ' + (m.scheduledKind === 'estimate' ? '≈ ' : '') + window._safeHtml(_matchCardDateTime(_scheduledMs, t)) + '</span>'
     : '';
   if (_canChangeCardCourt && _cardCourts.length) {
     var _courtOpts = '<option value="">Sem quadra</option>' + _cardCourts.map(function (court) {
