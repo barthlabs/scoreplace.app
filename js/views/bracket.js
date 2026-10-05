@@ -5900,6 +5900,11 @@ function _matchCardResultTimestamp(m) {
 function _matchCardTimelineTextHtml(t, m) {
   try {
     if (!m) return '';
+    // Mantém exatamente o mesmo contrato de resultado da agenda. Sem isso, um
+    // jogo decidido poderia voltar a exibir a data antiga de agendamento em
+    // outro card. [[regression_completed_match_uses_one_result_contract]]
+    var hasRecordedResult = !!(m.resultAt || m.completedAt || m.winner || m.wo ||
+      (m.pendingResult && m.pendingResult.proposedAt));
     // No evento concentrado a categoria é o contexto do jogo, inclusive depois
     // que o placar foi lançado. O horário efetivamente jogado vive ao lado da
     // quadra, no mesmo lugar do estimado — não duplica "Jogado em" no cabeçalho.
@@ -5910,7 +5915,7 @@ function _matchCardTimelineTextHtml(t, m) {
     // `resultAt` é escrito no instante em que o último placar é salvo. Os outros
     // carimbos são só recuperação de partidas históricas que ainda não o tinham.
     var resultAt = _matchCardResultTimestamp(m);
-    if (resultAt) {
+    if (resultAt && hasRecordedResult) {
       var played = _matchCardDateTime(resultAt, t);
       return played ? '<span style="font-size:0.62rem;font-weight:700;color:var(--text-muted);line-height:1.2;white-space:nowrap;">Jogado em <b style="color:var(--sp-c-cbd5e1,#cbd5e1);">' + window._safeHtml(played) + '</b></span>' : '';
     }
