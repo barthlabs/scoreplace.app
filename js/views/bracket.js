@@ -6072,6 +6072,11 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
    * próximas 24h. Fora disso o card não pinta prontos/parcial nem as bolinhas. */
   const _presencaImporta = (function () {
     try {
+      // Em evento concentrado a presença é a chamada da organização, não uma
+      // confirmação de horário negociado. Ela começa antes do primeiro jogo e
+      // precisa alimentar “Próximos jogos” mesmo dias antes da abertura.
+      // [[regression_concentrated_rollcall_is_not_limited_to_24_hours]]
+      if (window._isConcentratedTournament && window._isConcentratedTournament(t)) return true;
       if (typeof window._tournamentIsSameDay !== 'function' || window._tournamentIsSameDay(t)) return true;
       const _sch = _matchCardTimestamp(m.scheduledAt);
       return !!(_sch && Math.abs(_sch - Date.now()) <= 24 * 60 * 60 * 1000);
