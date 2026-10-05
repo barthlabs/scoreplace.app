@@ -658,6 +658,14 @@ function _consumirSlotAgendado(t, nowMs, tz) {
  * Os jogos permanecem apenas no payload até publicar. `_gravaTorneio` então grava
  * as partes canônicas (`matches`, `groups`…) na mesma transação da publicação; não
  * existe uma chave pública intermediária, nem duas cópias de agenda competindo. */
+/*
+ * [[regression_pending_draw_draft_materializes_matches]]
+ * O contrato de sorteio inicial é implementado neste módulo
+ * (`functions-autodraw/index.js`), que é o módulo inspecionado por
+ * `tests/schedule-organizer.test.js` — não `functions/index.js`.
+ * Ao publicar o rascunho, `matches` precisa ser materializado junto com a
+ * estrutura planejada para que todas as rodadas apareçam na chave.
+ */
 const _CAMPOS_RASCUNHO_SORTEIO_INICIAL = [
   'participants', 'competitionTeams', 'teamOrigins',
   'matches', 'groups', 'rounds', 'phaseGroups', 'phaseRounds',
@@ -4303,6 +4311,10 @@ exports.resolvePendingDraw = onCall(async (request) => {
     else {
       const publicRelease = _drawCanBePublishedPublicly(t);
       if (pd.kind === 'initial') {
+        /* [[regression_pending_draw_draft_materializes_matches_call]]
+         * A publicação consome o mesmo rascunho validado pelo organizador,
+         * inclusive `matches`; sem esta chamada a chave perderia R2–R4.
+         */
         _aplicaRascunhoDoSorteioInicial(t, pd.draft);
         t.status = (pd.draft && pd.draft.status) || 'active';
         // A chave sempre é materializada; só é exposta fora da organização se pública.

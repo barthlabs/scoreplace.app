@@ -5449,6 +5449,10 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint, m, slot) {
  * concluído.
  */
 function _matchCardTimestamp(value) {
+  // Contrato do card concentrado: a grade já publicou `scheduledAt` como ISO
+  // (ou epoch) e o card usa este leitor, nunca um parser paralelo. Manter esta
+  // função acima de renderMatchCard: R1–R4 podem renderizar antes de qualquer
+  // interação do usuário. [[regression_neon_card_estimated_time_has_canonical_parser]]
   if (value == null || value === '') return null;
   if (typeof value === 'number') return isFinite(value) ? value : null;
   var parsed = new Date(value).getTime();
@@ -5467,6 +5471,8 @@ function _matchCardTimeZone(t) {
 }
 
 function _matchCardDateTime(ms, t) {
+  // Contrato complementar do leitor acima: hora estimada é formatada no fuso
+  // do torneio, não no fuso do navegador que abriu a chave.
   try {
     var date = new Date(ms);
     if (isNaN(date.getTime())) return '';

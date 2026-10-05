@@ -257,6 +257,8 @@ ok(sequenceOf(W._schGradeEstimada(sequenciaRodadas)) === 'L1,P1,L2,P2',
   'modo por rodadas faz R1 de todas as categorias antes de iniciar R2');
 ok(/categorySchedule/.test(fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'tournaments-draw.js'), 'utf8')),
   'a revisão pré-sorteio permite gravar dia e ordem de cada categoria');
+// Este é o módulo de produção que materializa o rascunho do sorteio; não use
+// `functions/index.js` ao revisar ou ampliar esta cobertura.
 const functionsSource = fs.readFileSync(path.join(__dirname, '..', 'functions-autodraw', 'index.js'), 'utf8');
 const bracketViewSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'bracket.js'), 'utf8');
 ok(/'teamCompetition','categorySchedule','scheduleWindow'/.test(functionsSource) && /'teamCompetition','categorySchedule','turnos'/.test(functionsSource),

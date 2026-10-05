@@ -45,5 +45,10 @@ const bracket = fs.readFileSync(path.join(__dirname, '..', 'js/views/bracket.js'
 assert(/data-bracket-team-schedule/.test(bracket), 'a grade concentrada tem um modo próprio de abas');
 assert(/!isTeamSchedule && !isOnlyLines/.test(bracket), 'o Neon não pode esconder R2–R4 em abas de rodada');
 assert(/_isTeamScheduleGS[\s\S]{0,900}groupHeader/.test(bracket), 'o grupo técnico não pode aparecer como título da chave');
+const timestampFn = bracket.indexOf('function _matchCardTimestamp(value)');
+const dateTimeFn = bracket.indexOf('function _matchCardDateTime(ms, t)');
+const scheduleCard = bracket.indexOf('var _scheduledMs = _isConcentratedEvent');
+assert(timestampFn >= 0 && timestampFn < scheduleCard, 'o card concentrado usa o leitor canônico de data já declarado');
+assert(dateTimeFn >= 0 && dateTimeFn < scheduleCard, 'o card concentrado usa o formatador canônico de data já declarado');
 
 console.log('✅ Neon: quatro rodadas planejadas, sem Grupo A visível');
