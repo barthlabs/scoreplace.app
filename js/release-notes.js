@@ -1,3 +1,4 @@
+// 2.3.277 — Chave concentrada: agenda Geral por dia (horário/quadra, sem cards duplicados) e correção de abas/cabeçalhos que podiam se duplicar ao lançar placar.
 // 2.3.276 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.3.275 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.3.274 — Atualização consolidada de produção com as correções validadas desde a última publicação.

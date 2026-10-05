@@ -2328,3 +2328,8 @@ processo.
 - Fix: Service Worker removido (causava cache stale)
 - Botoes de organizador condicionais (+Participante/+Time/Encerrar/Sortear/Iniciar)
 - Status badge (Inscricoes Abertas/Encerradas) na mesma linha da modalidade no mobile
+# 2.3.277 — 05/out/2026 (chave: uma pintura por vez e agenda operacional)
+
+- **Lançar um placar não pode multiplicar abas, filtros ou cabeçalhos de rodada.** A regressão foi identificada em 05/out, ao registrar um placar no Neon: callbacks de uma pintura anterior ainda conseguiam remontar a navegação depois de uma renderização mais nova. Cada pintura agora recebe uma geração; a anterior perde o direito de escrever, e suas camadas transitórias são desmontadas antes da nova tela.
+- **A aba Geral da agenda concentrada é por dia do evento.** Ela fica antes de Light/Power/Extreme e reúne os cards reais — sem clonar controles de placar — na ordem horário estimado e quadra. No Neon, a divisão feminina/masculina atualmente coincide com os dias, mas não é a regra: categorias de qualquer gênero marcadas no mesmo dia entram juntas.
+- Ao recarregar a chave, inclusive depois de lançar resultado com Geral aberta, os cards retornam primeiro aos seus lugares canônicos e a seção transitória é destruída. Isso impede cards órfãos, controles duplicados e navegação residual.

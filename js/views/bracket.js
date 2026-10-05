@@ -275,6 +275,13 @@ function _limparCamadasTransitóriasDaChave(container) {
     var pertence = root._bracketTabsScope === container ||
       (container.contains && container.contains(root));
     if (!pertence) continue;
+    // A agenda "Geral" move os wrappers dos cards para uma seção irmã das
+    // abas. Antes de apagar a raiz da chave, devolva cada wrapper ao seu
+    // placeholder; caso contrário um save de placar no meio da agenda deixaria
+    // os cards vivos fora do container que a nova pintura substitui.
+    try { _bracketGeneralView(root, false); } catch (eG) {}
+    var generalView = root._bracketGeneralView;
+    if (generalView && generalView.parentNode) generalView.parentNode.removeChild(generalView);
     var portalDoRoot = root._bracketRoundHeadingPortal;
     if (portalDoRoot && portalDoRoot.parentNode) portalDoRoot.parentNode.removeChild(portalDoRoot);
     if (root.parentNode) root.parentNode.removeChild(root);
@@ -1312,6 +1319,14 @@ window._bracketCategoryTabsMount = function () {
   root.setAttribute('data-bracket-round-tabs', isRoundBased ? '1' : '0');
   root.setAttribute('data-bracket-team-schedule', isTeamSchedule ? '1' : '0');
   var titles = { fem: '♀ Feminina', masc: '♂ Masculina', misto: '⚥ Mista' };
+  // Geral só existe quando a agenda publicada tem uma data/hora válida para o
+  // dia que esta aba representa. Sem isso, mostrar um botão que abre uma tela
+  // vazia seria uma promessa falsa — torneio distribuído continua nas categorias.
+  var generalAgendaByGender = {};
+  cards.forEach(function (card) {
+    var cardGender = card.getAttribute('data-bracket-tab-gender') || _bracketTabGender(card.getAttribute('data-bracket-tab-category') || '');
+    if (Number(card.getAttribute('data-bracket-scheduled-at')) > 0) generalAgendaByGender[cardGender] = true;
+  });
   var genderHtml = (isOnlyLines
     ? byGender.linhas.map(function (cat) {
       var escaped = String(cat).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
@@ -1321,7 +1336,7 @@ window._bracketCategoryTabsMount = function () {
       return '<button type="button" data-bracket-primary-tab="' + gender + '" onclick="window._bracketSelectCategoryTab(\'' + String(id).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\',\'' + gender + '\',\'' + String(byGender[gender][0]).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\')" style="border:1px solid;border-radius:12px 12px 0 0;padding:10px 24px;min-width:132px;font-size:.94rem;font-weight:850;cursor:pointer;box-shadow:none;">' + (titles[gender] || gender) + '</button>';
     }).join(''));
   var categoryHtml = order.map(function (gender) {
-    var generalSubtab = isTeamSchedule && gender !== 'linhas'
+    var generalSubtab = isTeamSchedule && gender !== 'linhas' && generalAgendaByGender[gender]
       ? '<button type="button" data-bracket-tab-gender="' + gender + '" data-bracket-subtab="__general" onclick="window._bracketSelectCategoryTab(\'' + String(id).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\',\'' + gender + '\',\'__general\')" style="border:1px solid;border-radius:8px;padding:6px 10px;font-size:.78rem;font-weight:750;cursor:pointer;">Geral</button>'
       : '';
     return generalSubtab + byGender[gender].map(function (cat) {
@@ -1386,7 +1401,7 @@ window._bracketCategoryTabsMount = function () {
   // montagem — e não depois da rolagem — garante que o card já nasça visível
   // na categoria solicitada, inclusive quando o gênero informado era antigo.
   var state = (window._bracketTabState || {})[id] || {};
-  if (isTeamSchedule && state.category === '__general' && byGender[state.gender]) {
+  if (isTeamSchedule && state.category === '__general' && byGender[state.gender] && generalAgendaByGender[state.gender]) {
     _bracketTabsApply(id, state.gender, '__general', '');
     return;
   }
