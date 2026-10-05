@@ -1,3 +1,4 @@
+// 2.3.271 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.3.270 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.3.269 — A compactação da agenda preserva o desenho salvo e continua ocupando vagas úteis, mas não antecipa um atleta para a onda imediatamente seguinte ao jogo anterior. Isso reduz jogos consecutivos sem inventar tempo ou deslocar a estrutura confirmada pela organização.
 // 2.3.268 — Copiar estrutura deixa de usar a posição incidental dos cards: pareia cada jogo pela rodada, categoria equivalente e confronto entre os dois times, então reproduz no outro dia a quadra e o horário do molde correto. Se faltar um equivalente, não aplica mudança parcial.
