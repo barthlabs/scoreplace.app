@@ -1214,7 +1214,12 @@ window._bracketCategoryTabsMount = function () {
   if (!style) { style = document.createElement('style'); style.id = 'bracket-category-tab-style'; document.head.appendChild(style); }
   // O cabeçalho é parte da sua própria coluna, não uma régua paralela. Ele
   // fica visível sob as abas e carrega junto o comando "Ocultar" da rodada.
-  style.textContent = '.bracket-round-column>.bracket-round-heading{position:relative!important;z-index:1!important;background:var(--bg-darker,#111114);padding:8px 0 9px;margin:-8px 0 0;} .bracket-round-heading-portal h4,.bracket-round-heading-portal h5{margin:0!important;}';
+  // A margem negativa trazia o título oito pixels para dentro da faixa opaca
+  // das categorias. Quando a lista começava a pintar, esse encontro deixava
+  // uma fresta mínima com conteúdo da rodada visível. O espaçamento é do
+  // próprio cabeçalho/coluna, sem sobrepor as duas camadas.
+  // [[regression_round_heading_never_overlaps_category_tabs]]
+  style.textContent = '.bracket-round-column>.bracket-round-heading{position:relative!important;z-index:1!important;background:var(--bg-darker,#111114);padding:8px 0 9px;margin:0;} .bracket-round-heading-portal h4,.bracket-round-heading-portal h5{margin:0!important;}';
   // Ponto de montagem efetivo: cada chave nova sincroniza imediatamente o
   // portal de cabeçalhos e registra uma única escuta capturada de scroll.
   // Não mover para outro renderer: é aqui que `root` e `scope` já existem.

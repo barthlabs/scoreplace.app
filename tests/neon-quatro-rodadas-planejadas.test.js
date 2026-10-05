@@ -57,6 +57,8 @@ assert(dateTimeFn >= 0 && dateTimeFn < scheduleCard, 'o card concentrado usa o f
 assert(/sp-match-estimated-time[\s\S]{0,160}margin-left:auto/.test(bracket), 'o horário estimado fica alinhado à direita do rodapé operacional');
 assert(/regression_bracket_tabs_do_not_leak_round_content/.test(bracket) && /margin:0;padding:4px 12px 6px/.test(bracket),
   'as abas não deixam conteúdo da rodada vazar no intervalo abaixo das categorias');
+assert(/regression_round_heading_never_overlaps_category_tabs/.test(bracket) && /bracket-round-column>\.bracket-round-heading[\s\S]{0,220}margin:0;/.test(bracket) && !bracket.includes('margin:-8px 0 0'),
+  'o cabeçalho da rodada não invade a faixa das categorias nem deixa fresta visual');
 assert(/regression_score_submit_never_jumps_bracket/.test(require('fs').readFileSync(path.join(__dirname, '..', 'js/store.js'), 'utf8')),
   'a confirmação do placar preserva a âncora da chave em vez de reiniciar a página');
 assert(/Object\.assign\({}, configuredCfg, \{ ranking: 'games_diff' \}\)/.test(bracket),
