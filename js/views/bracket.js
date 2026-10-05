@@ -5579,7 +5579,8 @@ function _matchCardTimelineTextHtml(t, m) {
     // categoria. Em torneio distribuído, mantém-se o prazo da rodada.
     if (window._isConcentratedTournament && window._isConcentratedTournament(t)) {
       var category = String(m.category || m.tierLabel || '').trim();
-      return category ? '<span style="font-size:0.62rem;font-weight:700;color:var(--text-muted);line-height:1.2;white-space:nowrap;">Categoria <b style="color:var(--sp-c-7dd3fc,#7dd3fc);">' + window._safeHtml(category) + '</b></span>' : '';
+      // A aba já informa o contexto. No card, basta o nome da categoria.
+      return category ? '<span style="font-size:0.62rem;font-weight:700;color:var(--sp-c-7dd3fc,#7dd3fc);line-height:1.2;white-space:nowrap;">' + window._safeHtml(category) + '</span>' : '';
     }
     // Horário previsto já aparece no controle de reagendamento do card. Não
     // duplicar “Agendado:” no cabeçalho rouba espaço dos times e do placar.
@@ -6703,7 +6704,9 @@ function _cardFooterChips(t, m, opts) {
   // A enquete de data existe para torneios distribuídos. Em evento concentrado
   // a agenda é do organizador e o card não deve convidar atletas a negociar data.
   var sch = (!window._isConcentratedTournament || !window._isConcentratedTournament(t)) && typeof window._schCardChip === 'function' ? window._schCardChip(t, m) : '';
-  var wa = (typeof window._waGrpCardChip === 'function') ? window._waGrpCardChip(t, m, opts) : '';
+  // Grupo de jogo serve para a dupla combinar data. Em evento concentrado a
+  // organização chama os jogos, portanto não há negociação nem grupo por jogo.
+  var wa = (!window._isConcentratedTournament || !window._isConcentratedTournament(t)) && typeof window._waGrpCardChip === 'function' ? window._waGrpCardChip(t, m, opts) : '';
   if (!sch && !wa) return '';
   /* ⭐ ALINHADOS À ESQUERDA. Ordem do dono (12/set/2026): _"os botões do whats deveriam estar
    * alinhados na esquerda de cada card"_. Centralizado, cada card punha o botão num lugar
@@ -7185,7 +7188,10 @@ function renderGroupStage(t, isOrg, canEnterResult, opts) {
     // v0.16.52: cards de jogo viram grid com colunas iguais (auto-fill +
     // minmax). Antes (`flex:1 + max-width:300px`) o último card sozinho na
     // linha esticava até max enquanto os anteriores dividiam — diferença visual.
-    const allRoundsHtml = gRounds.map((r, ri) => {
+    // Cada rodada é uma coluna da chave. Empilhá-las fazia R2/R3 aparecerem
+    // abaixo de R1 e o cabeçalho sticky atravessar cards alheios; o trilho
+    // horizontal mantém a sequência de leitura R1 → R2 → R3.
+    const allRoundsColumns = gRounds.map((r, ri) => {
       // "— Em andamento" removido (pedido do dono): só o "— Concluída ✓" informa algo.
       const roundLabel = _t('bracket.round', {n: ri + 1}) + (r.status === 'complete' ? ' — ' + _t('bracket.complete') + ' ✓' : '');
       const roundLabelColor = r.status === 'complete' ? '#4ade80' : r.status === 'active' ? '#fbbf24' : 'var(--text-muted)';
@@ -7194,15 +7200,18 @@ function renderGroupStage(t, isOrg, canEnterResult, opts) {
         return `<div>${renderMatchCard(m, canEnterResult, t.id, _num)}</div>`;
       }).join('');
       return `
-        <div style="margin-bottom:0.75rem;">
+        <div class="bracket-round-column" data-round-num="${ri + 1}" style="display:flex;flex-direction:column;gap:12px;min-width:280px;max-width:360px;align-self:flex-start;">
           <!-- A classe bracket-round-heading é consumida pelo portal fixo abaixo das abas.
                Sem a classe, as rodadas classificatórias (Neon) eram a única árvore
                sem cabeçalho persistente durante a rolagem. -->
           <h5 class="bracket-round-heading" style="font-size:0.7rem;color:${window._spCor(roundLabelColor, 'color')};text-transform:uppercase;letter-spacing:1px;margin-bottom:0.5rem;border-left:3px solid ${roundLabelColor};padding-left:8px;">${roundLabel}</h5>
-          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;">${matchesInRound}</div>
+          <div style="display:flex;flex-direction:column;gap:12px;">${matchesInRound}</div>
         </div>`;
     }).join('');
-    const matchesHtml = allRoundsHtml;
+    const matchesHtml = allRoundsColumns ? `
+      <div class="bracket-scroll-container" data-hscroll="groups:${_hsKey(sg.name || gi)}" style="display:flex;gap:24px;overflow-x:auto;overflow-y:visible;padding:8px 0 12px;max-width:100%;">
+        <div class="bracket-columns-track" style="display:flex;align-items:flex-start;gap:24px;min-width:max-content;">${allRoundsColumns}</div>
+      </div>` : '';
 
     const groupColor = ['#f59e0b', '#8b5cf6', '#10b981', '#ef4444', '#3b82f6', '#ec4899', '#14b8a6', '#f97316'][gi % 8];
     // v0.16.52: highlight visual quando o grupo é do usuário logado.

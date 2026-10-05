@@ -92,12 +92,14 @@ const souOrgOriginal = W._souOrganizador;
 W._souOrganizador = function () { return true; };
 const cardConcentrado = W.renderMatchCard(mConcentrado, true, tConcentrado.id, 1);
 W._souOrganizador = souOrgOriginal;
-ok(/Categoria <b[^>]*>Fem Light<\/b>/.test(cardConcentrado) && !/Jogar até|Propor datas/.test(cardConcentrado),
-  'evento concentrado mostra a categoria e não convida atletas a negociar prazo/data');
+ok(/>Fem Light<\/span>/.test(cardConcentrado) && !/Categoria|Jogar até|Propor datas/.test(cardConcentrado),
+  'evento concentrado mostra somente a categoria e não convida atletas a negociar prazo/data');
 ok(/sp-match-court/.test(cardConcentrado) && /<option value="">Sem quadra<\/option>/.test(cardConcentrado) && !/📍 Sem quadra/.test(cardConcentrado),
   'evento concentrado mantém somente o seletor de quadra, sem pino decorativo');
 ok(/sp-match-team-tag--vertical/.test(cardConcentrado) && />VENOM<\/span>/.test(cardConcentrado) && !/>Time: VENOM<\/span>/.test(cardConcentrado),
   'o nome do time vira uma tag vertical colorida e não repete “Time:”');
+ok(!/Criar grupo/.test(cardConcentrado),
+  'evento concentrado não oferece grupo de jogo: atletas não negociam a partida');
 
 const tDistribuido = mkLiga();
 tDistribuido.rounds[0].matches[0].court = 'Quadra 9';

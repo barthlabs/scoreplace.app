@@ -47,6 +47,7 @@ summary::-webkit-details-marker { display: none; }
   padding:5px 2px;
   writing-mode:vertical-rl;
   text-orientation:mixed;
+  transform:rotate(180deg);
   white-space:nowrap;
 }
 

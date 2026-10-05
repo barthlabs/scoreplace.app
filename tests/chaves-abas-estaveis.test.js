@@ -27,6 +27,8 @@ ok(src.includes('data-bracket-search-slot') && src.includes('window.innerWidth >
 ok(!src.includes('box-shadow:0 -48px 0 var(--bg-darker,#111114)') && src.includes('background:#111114;overflow:hidden') && src.includes("clone.style.boxShadow = 'none'"), 'a faixa sticky e o portal não projetam uma tarja sólida sobre busca, título da eliminatória ou conteúdo anterior');
 ok(src.includes('var tabsHost = searchWrap && searchWrap.parentNode') && src.includes('tabsHost.insertBefore(root, searchWrap.nextSibling)'), 'no celular as abas ficam imediatamente após a busca, sem cards atravessando a faixa fixa');
 ok(src.includes('top:calc(var(--topbar-h,60px) + var(--hamburger-dd-h,0px) + var(--backheader-h,0px) + var(--stickybar-h,0px) - 1px);z-index:31') && !src.includes('position:sticky;top:var(--scroll-anchor,120px);z-index:30;isolation:isolate;box-shadow:0 8px 12px -12px'), 'abas encostam na busca sticky; o respiro de scroll não vira vão visível');
+ok(src.includes('const allRoundsColumns = gRounds.map') && src.includes('class="bracket-round-column" data-round-num="${ri + 1}"') && src.includes('data-hscroll="groups:${_hsKey(sg.name || gi)}"'), 'rodadas de grupos ficam em colunas sucessivas no mesmo trilho horizontal');
+ok(src.includes('min-width:280px;max-width:360px;align-self:flex-start') && src.includes('bracket-columns-track" style="display:flex;align-items:flex-start;gap:24px'), 'cada cabeçalho de rodada é limitado à própria coluna, sem máscara atravessar a chave');
 
-console.log('\n' + (fail ? '❌' : '✅') + ' chaves-abas-estáveis: ' + (16 - fail) + ' asserts ok, ' + fail + ' falharam');
+console.log('\n' + (fail ? '❌' : '✅') + ' chaves-abas-estáveis: ' + (18 - fail) + ' asserts ok, ' + fail + ' falharam');
 process.exitCode = fail ? 1 : 0;
