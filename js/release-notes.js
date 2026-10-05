@@ -1,3 +1,4 @@
+// 2.3.278 — Na chave de evento concentrado, Geral volta a exibir os cards reais da agenda do dia; a nova aba Próximos jogos mostra somente partidas ainda não decididas em que as duas duplas já confirmaram presença. Alternar essas visões não duplica controles nem perde o card na categoria.
 // 2.3.277 — Chave concentrada: agenda Geral por dia (horário/quadra, sem cards duplicados) e correção de abas/cabeçalhos que podiam se duplicar ao lançar placar.
 // 2.3.276 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.3.275 — Atualização consolidada de produção com as correções validadas desde a última publicação.

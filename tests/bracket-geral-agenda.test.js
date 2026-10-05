@@ -36,23 +36,25 @@ function trecho(inicio, fim) {
     window._bracketTabsRefreshRoundRail = function () {};
     window._bracketLayoutEliminationTree = function () {};
     const at = (day, hour) => new Date(2026, 9, day, hour, 0, 0, 0).getTime();
-    const card = (id, gender, category, when, court) =>
+    const card = (id, gender, category, when, court, upcoming) =>
       '<div class="wrap" data-wrap="' + id + '"><article id="' + id + '" data-bracket-tab-category="' + category +
       '" data-bracket-tab-gender="' + gender + '" data-bracket-tab-round="1" data-bracket-scheduled-at="' + when +
-      '" data-bracket-court="' + court + '">' + id + '</article></div>';
+      '" data-bracket-court="' + court + '" data-bracket-upcoming="' + (upcoming ? '1' : '0') + '">' + id + '</article></div>';
     document.body.innerHTML =
       '<main id="view-container"><nav data-bracket-tabs-root="1" data-tournament-id="neon" data-bracket-line-tabs="0" data-bracket-round-tabs="0">' +
         '<button id="geral" data-bracket-subtab="__general" data-bracket-tab-gender="fem">Geral</button>' +
+        '<button id="upcoming" data-bracket-subtab="__upcoming" data-bracket-tab-gender="fem">Próximos jogos</button>' +
         '<button id="light" data-bracket-subtab="Light" data-bracket-tab-gender="fem">Light</button>' +
       '</nav><section class="bracket-scroll-container" id="source">' +
-        card('fem-court-5', 'fem', 'Light', at(22, 18), 'Quadra 5') +
+        card('fem-court-5', 'fem', 'Light', at(22, 18), 'Quadra 5', true) +
         card('masc-same-day', 'masc', 'Power', at(22, 18), 'Quadra 4') +
-        card('tomorrow', 'fem', 'Extreme', at(23, 18), 'Quadra 4') +
+        card('tomorrow', 'fem', 'Extreme', at(23, 18), 'Quadra 4', true) +
       '</section></main>';
     const scope = document.getElementById('view-container');
     const root = document.querySelector('[data-bracket-tabs-root]');
     root._bracketTabsScope = scope;
     document.getElementById('geral').addEventListener('click', () => window._bracketSelectCategoryTab('neon', 'fem', '__general', ''));
+    document.getElementById('upcoming').addEventListener('click', () => window._bracketSelectCategoryTab('neon', 'fem', '__upcoming', ''));
     document.getElementById('light').addEventListener('click', () => window._bracketSelectCategoryTab('neon', 'fem', 'Light', ''));
 
     document.getElementById('geral').click();
@@ -61,7 +63,15 @@ function trecho(inicio, fim) {
     const generalState = {
       sourceHidden: document.getElementById('source').hidden,
       order: inAgenda,
-      noClone: new Set(inAgenda).size === inAgenda.length && document.querySelectorAll('#fem-court-5').length === 1
+      noClone: new Set(inAgenda).size === inAgenda.length && document.querySelectorAll('#fem-court-5').length === 1,
+      visibleCards: Array.from(agenda.querySelectorAll('[data-bracket-tab-category]')).every((el) => !el.hidden)
+    };
+
+    document.getElementById('upcoming').click();
+    const upcomingState = {
+      sourceHidden: document.getElementById('source').hidden,
+      order: Array.from(root._bracketGeneralView.querySelectorAll('[data-bracket-tab-category]')).map((el) => el.id),
+      visibleCards: Array.from(root._bracketGeneralView.querySelectorAll('[data-bracket-tab-category]')).every((el) => !el.hidden)
     };
 
     document.getElementById('light').click();
@@ -97,13 +107,18 @@ function trecho(inicio, fim) {
       sourceStillVisible: !document.getElementById('empty-source').hidden,
       noMovedCards: document.querySelectorAll('[data-bracket-general-view] [data-bracket-tab-category]').length === 0
     };
-    return { generalState, restored, cleanup, noSchedule };
+    return { generalState, upcomingState, restored, cleanup, noSchedule };
   });
 
   console.log('\n📋 Geral é a agenda do dia, não uma cópia por gênero');
   ok(result.generalState.sourceHidden, 'ao clicar Geral, a chave de origem fica fora da leitura duplicada');
   ok(result.generalState.order.join(',') === 'masc-same-day,fem-court-5', 'inclui Feminina e Masculina do mesmo dia, em horário e quadra');
   ok(result.generalState.noClone, 'os cards reais são movidos: não há id nem input duplicado');
+  ok(result.generalState.visibleCards, 'os cards movidos para Geral são visíveis, não herdam o hidden do filtro de categoria');
+  console.log('\n📋 Próximos jogos só mostra partidas pendentes e com ambas as duplas presentes');
+  ok(result.upcomingState.sourceHidden, 'Próximos jogos também troca a chave canônica por uma única visão operacional');
+  ok(result.upcomingState.order.join(',') === 'fem-court-5', 'não inclui jogo sem presença completa nem jogo de outro dia');
+  ok(result.upcomingState.visibleCards, 'o card pronto continua visível depois de mover entre Geral e Próximos jogos');
   console.log('\n📋 Voltar para categoria restaura a chave canônica');
   ok(result.restored.sourceVisible && result.restored.agendaHidden, 'Light fecha a agenda e restaura a fonte');
   ok(result.restored.originalOrder.join(',') === 'fem-court-5,masc-same-day,tomorrow', 'cada wrapper volta exatamente ao seu placeholder');

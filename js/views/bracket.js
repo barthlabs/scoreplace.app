@@ -941,7 +941,7 @@ function _bracketTabsRefreshRoundRail(root) {
 // reagrupados por horário e quadra, sem clonar inputs, botões ou ids de placar.
 // Clonar os cards faria dois campos com o mesmo id e salvaria o resultado no
 // jogo errado. Ao sair de "Geral", cada card volta precisamente ao seu lugar.
-function _bracketGeneralView(root, show, gender) {
+function _bracketGeneralView(root, show, gender, onlyReady) {
   if (!root) return false;
   var scope = root._bracketTabsScope || (root.closest && root.closest('#view-container, #inline-bracket-container'));
   if (!scope) return false;
@@ -967,20 +967,30 @@ function _bracketGeneralView(root, show, gender) {
     view.innerHTML = '';
     return true;
   }
+  // Trocar Geral ↔ Próximos jogos não pode reutilizar wrappers do modo anterior:
+  // devolve cada card primeiro e monta a outra visão a partir da chave canônica.
+  var requestedMode = onlyReady ? 'upcoming' : 'general';
+  if (entries.length && root._bracketGeneralMode !== requestedMode) {
+    _bracketGeneralView(root, false, gender);
+    entries = root._bracketGeneralEntries || [];
+  }
   if (!entries.length) {
     var cards = Array.prototype.slice.call(scope.querySelectorAll('[data-bracket-tab-category][data-bracket-scheduled-at]'));
     // "Geral" é uma agenda POR DIA. No Neon, Feminina e Masculina ocupam
     // dias diferentes, por isso hoje a seleção de gênero leva ao dia certo;
     // não é, porém, uma regra de gênero: qualquer categoria marcada para a
     // mesma data entra na mesma visão operacional.
-    var reference = cards.find(function (card) {
+    var eligibleCards = cards.filter(function (card) {
+      return !onlyReady || card.getAttribute('data-bracket-upcoming') === '1';
+    });
+    var reference = eligibleCards.find(function (card) {
       return String(card.getAttribute('data-bracket-tab-gender') || '') === String(gender || '') &&
         Number(card.getAttribute('data-bracket-scheduled-at')) > 0;
     });
     var referenceDate = reference ? new Date(Number(reference.getAttribute('data-bracket-scheduled-at'))) : null;
     var dayKey = referenceDate && !isNaN(referenceDate.getTime())
       ? [referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate()].join('-') : '';
-    cards.forEach(function (card) {
+    eligibleCards.forEach(function (card) {
       var at = Number(card.getAttribute('data-bracket-scheduled-at'));
       if (!isFinite(at) || at <= 0 || !card.parentNode) return;
       var cardDate = new Date(at);
@@ -988,6 +998,12 @@ function _bracketGeneralView(root, show, gender) {
       var wrapper = card.parentNode;
       var placeholder = document.createComment('scoreplace-general-card');
       wrapper.parentNode.insertBefore(placeholder, wrapper);
+      // `_bracketTabsApply` esconde todos os cards ao selecionar Geral para
+      // retirar a chave categorizada da tela. Aqui o MESMO card passa a viver
+      // na agenda; portanto precisa voltar a ser visível antes de mover o seu
+      // wrapper. O container de origem é ocultado separadamente logo abaixo.
+      // [[regression_general_agenda_moves_visible_cards]]
+      card.hidden = false;
       entries.push({ card: card, wrapper: wrapper, placeholder: placeholder, at: at, court: card.getAttribute('data-bracket-court') || '' });
     });
     entries.sort(function (a, b) {
@@ -1002,8 +1018,19 @@ function _bracketGeneralView(root, show, gender) {
     });
     root._bracketGeneralEntries = entries;
     root._bracketGeneralSources = sources;
+    root._bracketGeneralMode = requestedMode;
   }
-  if (!entries.length) return false;
+  if (!entries.length) {
+    // Geral sem horário não ganha aba. Já Próximos jogos pode legitimamente
+    // estar vazio enquanto a chamada de presença acontece; explique, não deixe
+    // a pessoa diante de uma tela preta.
+    if (onlyReady) {
+      view.innerHTML = '<p style="margin:16px 0;color:var(--text-muted);font-weight:700;">Nenhum jogo pronto para chamar neste dia.</p>';
+      view.style.display = '';
+      return true;
+    }
+    return false;
+  }
   (root._bracketGeneralSources || []).forEach(function (source) { source.hidden = true; });
   view.innerHTML = '';
   var groups = {};
@@ -1044,7 +1071,9 @@ function _bracketTabsApply(tid, gender, category, requestedRound) {
   window._bracketTabState = window._bracketTabState || {};
   window._bracketTabState[String(tid)] = { gender: gender, category: category, round: round };
   var isGeneral = category === '__general';
-  if (!isGeneral) {
+  var isUpcoming = category === '__upcoming';
+  var isOperationalView = isGeneral || isUpcoming;
+  if (!isOperationalView) {
     root._bracketLastCategoryByGender = root._bracketLastCategoryByGender || {};
     root._bracketLastCategoryByGender[gender] = category;
     _bracketGeneralView(root, false, gender);
@@ -1053,7 +1082,7 @@ function _bracketTabsApply(tid, gender, category, requestedRound) {
   var cards = document.querySelectorAll('[data-bracket-tab-category]');
   for (var i = 0; i < cards.length; i++) {
     var card = cards[i];
-    card.hidden = isGeneral || card.getAttribute('data-bracket-tab-category') !== category || (usesRoundTabs && card.getAttribute('data-bracket-tab-round') !== round);
+    card.hidden = isOperationalView || card.getAttribute('data-bracket-tab-category') !== category || (usesRoundTabs && card.getAttribute('data-bracket-tab-round') !== round);
   }
   // A camada de cima é a aba principal: Ouro/Prata em linhas independentes;
   // Feminina/Masculina quando as categorias pertencem a um gênero. A ativa vem
@@ -1093,8 +1122,8 @@ function _bracketTabsApply(tid, gender, category, requestedRound) {
     qb.style.color = onRound ? 'var(--sp-c-6ee7b7,#6ee7b7)' : 'var(--text-muted)';
     qb.style.borderColor = onRound ? 'rgba(16,185,129,.72)' : 'rgba(255,255,255,.12)';
   }
-  if (isGeneral) {
-    _bracketGeneralView(root, true, gender);
+  if (isOperationalView) {
+    _bracketGeneralView(root, true, gender, isUpcoming);
     return;
   }
   // Linhas independentes (Ouro/Prata) têm seção própria, com título,
@@ -1325,7 +1354,9 @@ window._bracketCategoryTabsMount = function () {
   var generalAgendaByGender = {};
   cards.forEach(function (card) {
     var cardGender = card.getAttribute('data-bracket-tab-gender') || _bracketTabGender(card.getAttribute('data-bracket-tab-category') || '');
-    if (Number(card.getAttribute('data-bracket-scheduled-at')) > 0) generalAgendaByGender[cardGender] = true;
+    if (Number(card.getAttribute('data-bracket-scheduled-at')) > 0) {
+      generalAgendaByGender[cardGender] = true;
+    }
   });
   var genderHtml = (isOnlyLines
     ? byGender.linhas.map(function (cat) {
@@ -1339,7 +1370,10 @@ window._bracketCategoryTabsMount = function () {
     var generalSubtab = isTeamSchedule && gender !== 'linhas' && generalAgendaByGender[gender]
       ? '<button type="button" data-bracket-tab-gender="' + gender + '" data-bracket-subtab="__general" onclick="window._bracketSelectCategoryTab(\'' + String(id).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\',\'' + gender + '\',\'__general\')" style="border:1px solid;border-radius:8px;padding:6px 10px;font-size:.78rem;font-weight:750;cursor:pointer;">Geral</button>'
       : '';
-    return generalSubtab + byGender[gender].map(function (cat) {
+    var upcomingSubtab = isTeamSchedule && gender !== 'linhas' && generalAgendaByGender[gender]
+      ? '<button type="button" data-bracket-tab-gender="' + gender + '" data-bracket-subtab="__upcoming" onclick="window._bracketSelectCategoryTab(\'' + String(id).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\',\'' + gender + '\',\'__upcoming\')" style="border:1px solid;border-radius:8px;padding:6px 10px;font-size:.78rem;font-weight:750;cursor:pointer;">Próximos jogos</button>'
+      : '';
+    return generalSubtab + upcomingSubtab + byGender[gender].map(function (cat) {
       var safe = String(cat).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
       return '<button type="button" data-bracket-tab-gender="' + gender + '" data-bracket-subtab="' + String(cat).replace(/"/g, '&quot;') + '" onclick="window._bracketSelectCategoryTab(\'' + String(id).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\',\'' + gender + '\',\'' + safe + '\')" style="border:1px solid;border-radius:8px;padding:6px 10px;font-size:.78rem;font-weight:750;cursor:pointer;">' + (window._safeHtml ? window._safeHtml(_bracketTabLabel(cat, gender)) : _bracketTabLabel(cat, gender)) + '</button>';
     }).join('');
@@ -1401,8 +1435,8 @@ window._bracketCategoryTabsMount = function () {
   // montagem — e não depois da rolagem — garante que o card já nasça visível
   // na categoria solicitada, inclusive quando o gênero informado era antigo.
   var state = (window._bracketTabState || {})[id] || {};
-  if (isTeamSchedule && state.category === '__general' && byGender[state.gender] && generalAgendaByGender[state.gender]) {
-    _bracketTabsApply(id, state.gender, '__general', '');
+  if (isTeamSchedule && (state.category === '__general' || state.category === '__upcoming') && byGender[state.gender] && generalAgendaByGender[state.gender]) {
+    _bracketTabsApply(id, state.gender, state.category, '');
     return;
   }
   var targetGender = Object.keys(byGender).find(function (candidate) {
@@ -6936,7 +6970,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   if (!_tabCategory && m.bracket && /^(gold|silver|line\d+)$/i.test(String(m.bracket))) _tabCategory = String(m.bracket);
   var _tabGender = _bracketTabGender(_tabCategory);
   return `
-    <div id="card-${m.id}" class="sp-match-card" data-players="${_searchNames}" data-player-uids="${_searchUids}" data-bracket-tab-category="${window._safeHtml(_tabCategory)}" data-bracket-tab-gender="${_tabGender}" data-bracket-tab-source="${_tabSource}" data-bracket-tab-round="${m.round != null ? window._safeHtml(String(m.round)) : ''}" data-bracket-scheduled-at="${_scheduledMs || ''}" data-bracket-court="${window._safeHtml(String(m.court || ''))}" data-my-match="${_isMyMatch ? '1' : '0'}" data-my-pending="${_isMyMatch && !isDecided && !isByeMatch ? '1' : '0'}" data-match-num="${matchNum != null ? matchNum : ''}" style="scroll-margin-top:var(--scroll-anchor,120px);background:${window._spCor(_isMyMatch ? 'rgba(99,102,241,0.06)' : 'var(--bg-card)', 'background')};border:${_isMyMatch ? '2px' : '1px'} solid ${hasPending && _pr && _pr.disputed ? 'rgba(239,68,68,0.55)' : hasPending ? 'rgba(251,191,36,0.5)' : cardBorder};${_lineLeftBorder}border-radius:12px;padding:14px;${_cardMax}box-shadow:${_isMyMatch ? '0 0 20px rgba(99,102,241,0.25),0 0 8px rgba(99,102,241,0.12),0 4px 12px rgba(0,0,0,0.15)' : hasPending && _pr && _pr.disputed ? '0 0 14px rgba(239,68,68,0.2),0 4px 12px rgba(0,0,0,0.15)' : hasPending ? '0 0 14px rgba(251,191,36,0.18),0 4px 12px rgba(0,0,0,0.15)' : matchReady ? '0 0 16px rgba(16,185,129,0.15),0 4px 12px rgba(0,0,0,0.15)' : matchPartial ? '0 0 10px rgba(245,158,11,0.1),0 4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.15)'};${hasTBD ? 'opacity:0.6;' : ''}">
+    <div id="card-${m.id}" class="sp-match-card" data-players="${_searchNames}" data-player-uids="${_searchUids}" data-bracket-tab-category="${window._safeHtml(_tabCategory)}" data-bracket-tab-gender="${_tabGender}" data-bracket-tab-source="${_tabSource}" data-bracket-tab-round="${m.round != null ? window._safeHtml(String(m.round)) : ''}" data-bracket-scheduled-at="${_scheduledMs || ''}" data-bracket-court="${window._safeHtml(String(m.court || ''))}" data-bracket-upcoming="${_isConcentratedEvent && matchReady ? '1' : '0'}" data-my-match="${_isMyMatch ? '1' : '0'}" data-my-pending="${_isMyMatch && !isDecided && !isByeMatch ? '1' : '0'}" data-match-num="${matchNum != null ? matchNum : ''}" style="scroll-margin-top:var(--scroll-anchor,120px);background:${window._spCor(_isMyMatch ? 'rgba(99,102,241,0.06)' : 'var(--bg-card)', 'background')};border:${_isMyMatch ? '2px' : '1px'} solid ${hasPending && _pr && _pr.disputed ? 'rgba(239,68,68,0.55)' : hasPending ? 'rgba(251,191,36,0.5)' : cardBorder};${_lineLeftBorder}border-radius:12px;padding:14px;${_cardMax}box-shadow:${_isMyMatch ? '0 0 20px rgba(99,102,241,0.25),0 0 8px rgba(99,102,241,0.12),0 4px 12px rgba(0,0,0,0.15)' : hasPending && _pr && _pr.disputed ? '0 0 14px rgba(239,68,68,0.2),0 4px 12px rgba(0,0,0,0.15)' : hasPending ? '0 0 14px rgba(251,191,36,0.18),0 4px 12px rgba(0,0,0,0.15)' : matchReady ? '0 0 16px rgba(16,185,129,0.15),0 4px 12px rgba(0,0,0,0.15)' : matchPartial ? '0 0 10px rgba(245,158,11,0.1),0 4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.15)'};${hasTBD ? 'opacity:0.6;' : ''}">
       ${_headerHtml}
       ${_pendingBtnsRow}
       ${pendingBanner}
