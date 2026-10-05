@@ -6670,7 +6670,7 @@ window._openPendingInitialSchedule = function (tId) {
        * da barra em alguns navegadores/zoom. A única área com overflow é
        * `[data-pis-scroll]`; Voltar, Salvar ajustes, Publicar E as abas de dia
        * ficam sempre opacos, visíveis e fora da rolagem vertical/horizontal. */
-      '<div data-pis-toolbar style="position:relative;z-index:2;flex:none;padding:16px;background:#111827;border-bottom:1px solid rgba(148,163,184,.28);box-shadow:0 8px 16px rgba(2,6,23,.55)"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center"><button type="button" data-pis-close class="btn btn-outline" style="flex:none">← Voltar</button><h2 style="margin:0;min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center;font-size:1.05rem">📍 Planejar antes de publicar</h2><div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;flex:none;flex-wrap:wrap"><button type="button" data-pis-shuffle class="btn btn-outline" title="Mantém os slots de quadra e horário; troca os jogos do dia">↻ Embaralhar jogos</button><button type="button" data-pis-copy-other-day class="btn btn-outline" title="Repete no dia aberto os mesmos horários e quadras do outro dia">⧉ Copiar estrutura do outro dia</button><button type="button" data-pis-apply class="btn btn-outline">Salvar ajustes</button><button type="button" data-pis-publish class="btn btn-shine" style="background:#10b981;color:#fff">🚀 Publicar</button></div></div><p style="margin:8px 0 0;font-size:.82rem;line-height:1.4;color:#cbd5e1">A estrutura desta grade é o contrato da chave: dia, horário, quadra, ordem e confronto só mudam por ação explícita da organização.</p></div>' +
+      '<div data-pis-toolbar style="position:relative;z-index:2;flex:none;padding:16px;background:#111827;border-bottom:1px solid rgba(148,163,184,.28);box-shadow:0 8px 16px rgba(2,6,23,.55)"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center"><button type="button" data-pis-close class="btn btn-outline" style="flex:none">← Voltar</button><h2 style="margin:0;min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center;font-size:1.05rem">📍 Planejar antes de publicar</h2><div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;flex:none;flex-wrap:wrap"><button type="button" data-pis-shuffle class="btn btn-outline" title="Mantém os slots de quadra e horário; troca os jogos do dia">↻ Embaralhar</button><button type="button" data-pis-copy-other-day class="btn btn-outline" title="Repete no dia aberto os mesmos horários e quadras do outro dia">⧉ Copiar estrutura</button><button type="button" data-pis-apply class="btn btn-outline">Salvar ajustes</button><button type="button" data-pis-publish class="btn btn-shine" style="background:#10b981;color:#fff">🚀 Publicar</button></div></div><p style="margin:8px 0 0;font-size:.82rem;line-height:1.4;color:#cbd5e1">A estrutura desta grade é o contrato da chave: dia, horário, quadra, ordem e confronto só mudam por ação explícita da organização.</p></div>' +
       '<div data-pis-day-tabs style="position:relative;z-index:2;flex:none;padding:10px 16px;background:#111827;border-bottom:1px solid rgba(148,163,184,.28);box-shadow:0 6px 12px rgba(2,6,23,.4)">' + board.tabsHtml + '</div>' +
       '<div data-pis-scroll style="position:relative;z-index:1;flex:1;min-height:0;overflow:auto;padding:16px;box-sizing:border-box"><div style="font-size:.76rem;color:#94a3b8;margin-bottom:6px">' + p.items.length + ' jogos · ' + p.courts.length + ' quadras. Cada linha é um horário; cada coluna é uma quadra. Horários são estimados e podem mudar conforme o andamento.</div>' +
       (!p.cabe ? '<div style="margin:0 0 10px;color:#fbbf24;font-size:.82rem;font-weight:700">⚠ Ao publicar assim, a programação excede a janela determinada pela organização em ' + Math.ceil((p.extraMs || 0) / 60000) + ' min. Todos os jogos continuam exibidos; os excedentes aparecem em faixa zebrada vermelha e cinza.</div>' : '') + board.gridHtml +
@@ -6692,14 +6692,47 @@ window._openPendingInitialSchedule = function (tId) {
     function fixMatchOnSlot(matchId, slot) {
       manual[String(matchId)] = { matchId:String(matchId), court:slot.court, scheduledAt:slot.scheduledAt };
     }
+    function applySlots(assignments) {
+      // Uma ação de toolbar é atômica: se algum slot for inválido, não deixamos
+      // metade da agenda alterada. Isto evita o falso "copiei" que antes só
+      // guardava parte das mudanças no objeto manual.
+      if (!Array.isArray(assignments) || !assignments.length || assignments.some(function (entry) {
+        return !entry || !entry.matchId || !entry.slot || !entry.slot.court || !entry.slot.scheduledAt;
+      })) return false;
+      assignments.forEach(function (entry) { fixMatchOnSlot(entry.matchId, entry.slot); });
+      return true;
+    }
+    function shuffledGames(slots) {
+      var games = slots.slice(), changed = false;
+      // Fisher–Yates é o sorteio; porém sua permutação pode ser a identidade.
+      // Um clique em "Embaralhar" precisa SEMPRE produzir uma ordem nova quando
+      // existem dois ou mais jogos, ou a organização não tem feedback material.
+      for (var i = games.length - 1; i > 0; i--) {
+        var j = Math.floor(Math.random() * (i + 1)), swap = games[i];
+        games[i] = games[j]; games[j] = swap;
+      }
+      for (var index = 0; index < games.length; index++) {
+        if (String(games[index].matchId) !== String(slots[index].matchId)) { changed = true; break; }
+      }
+      if (!changed && games.length > 1) games.push(games.shift());
+      return games;
+    }
     var shuffleButton = overlay.querySelector('[data-pis-shuffle]');
     if (shuffleButton) shuffleButton.onclick = function () {
-      var slots = orderSlots(itemsOn(activeDay)), games = slots.slice();
-      if (slots.length < 2) return;
-      // Fisher–Yates: apenas o conteúdo dos slots muda. O desenho decidido pela
+      var slots = orderSlots(itemsOn(activeDay));
+      if (slots.length < 2) {
+        if (window.showNotification) window.showNotification('Não há jogos para embaralhar', 'Este dia precisa ter ao menos dois jogos.', 'info');
+        return;
+      }
+      var games = shuffledGames(slots);
+      // Apenas o conteúdo dos slots muda. O desenho decidido pela
       // organização (dia, horário e quadra) continua intacto e visível na grade.
-      for (var i = games.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var swap = games[i]; games[i] = games[j]; games[j] = swap; }
-      games.forEach(function (game, index) { fixMatchOnSlot(game.matchId, slots[index]); });
+      var changed = applySlots(games.map(function (game, index) { return { matchId:game.matchId, slot:slots[index] }; }));
+      if (!changed) {
+        if (window.showNotification) window.showNotification('Jogos não embaralhados', 'Não foi possível montar uma nova ordem para este dia.', 'error');
+        return;
+      }
+      if (window.showNotification) window.showNotification('Jogos embaralhados', 'Confrontos alterados; dia, horário e quadra foram preservados.', 'success');
       render();
     };
     var copyOtherDayButton = overlay.querySelector('[data-pis-copy-other-day]');
@@ -6710,11 +6743,16 @@ window._openPendingInitialSchedule = function (tId) {
         if (window.showNotification) window.showNotification('Estrutura não copiada', 'Os dois dias precisam ter a mesma quantidade de jogos para repetir quadras e horários sem omitir nenhum jogo.', 'warning');
         return;
       }
-      source.forEach(function (slot, index) {
+      var assignments = source.map(function (slot, index) {
         var date = new Date(slot.scheduledAt || ''), clock = isNaN(date.getTime()) ? '' : String(date.getHours()).padStart(2, '0') + ':' + String(date.getMinutes()).padStart(2, '0');
         var when = window._scheduleIsoOnDay && window._scheduleIsoOnDay(activeDay, clock);
-        if (when) fixMatchOnSlot(target[index].matchId, { court:slot.court, scheduledAt:when });
+        return when ? { matchId:target[index].matchId, slot:{ court:slot.court, scheduledAt:when } } : null;
       });
+      if (!applySlots(assignments)) {
+        if (window.showNotification) window.showNotification('Estrutura não copiada', 'Não foi possível converter os horários do outro dia para a data aberta.', 'error');
+        return;
+      }
+      if (window.showNotification) window.showNotification('Estrutura copiada', 'Horários e quadras do outro dia foram aplicados a este dia. Salve os ajustes para confirmar.', 'success');
       render();
     };
     Array.prototype.forEach.call(overlay.querySelectorAll('[data-pis-match]'), function (card) {
