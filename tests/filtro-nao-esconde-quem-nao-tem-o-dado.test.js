@@ -42,7 +42,10 @@ const src = fs.readFileSync(path.join(ROOT, 'js', 'views', 'participants.js'), '
 const i = src.indexOf('var okSearch = !q || nm.indexOf(q) !== -1;');
 const j = src.indexOf('var okActive =', i);
 ok(i > 0 && j > i, 'achei a regra de filtro no participants.js');
-const corpo = src.slice(i, j);
+// O filtro de categoria foi adicionado depois desta prova. Esta suíte mede gênero,
+// nível e busca; portanto executa a nova dimensão no neutro, em vez de deixar uma
+// variável livre transformar a prova em erro de infraestrutura.
+const corpo = "var cf = 'all'; var category = '';\n" + src.slice(i, j);
 const visivel = new Function('q', 'nm', 'gf', 'g', 'sk', 's', 'isMulti',
   corpo + ' return okSearch && okGender && okSkill;');
 
