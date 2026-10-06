@@ -1676,7 +1676,13 @@ window._toggleLigaActive = function(tId, isActive) {
   // A tela só espelha a intenção. Elenco, fila e marcadores de W.O. são recalculados
   // pela CF sobre o documento fresco; nenhuma fotografia local é persistida.
   var sync = function(active) {
-    var wrappers = document.querySelectorAll('[data-liga-toggle-tid="' + String(tId).replace(/"/g, '\\"') + '"]');
+    // O atributo pode conter um ID legado com caracteres especiais para CSS.
+    // Filtrar a lista de toggles pelo valor literal evita quebrar a presença
+    // quando a atualização otimista espelha a escolha do participante.
+    var wrappers = Array.prototype.filter.call(
+      document.querySelectorAll('[data-liga-toggle-tid]'),
+      function (node) { return node.getAttribute('data-liga-toggle-tid') === String(tId); }
+    );
     wrappers.forEach(function(w) {
       var lbl = w.querySelector('.liga-toggle-state-label');
       if (lbl) { lbl.textContent = active ? 'Ativado' : 'Desativado'; lbl.style.color = '#fff'; }
