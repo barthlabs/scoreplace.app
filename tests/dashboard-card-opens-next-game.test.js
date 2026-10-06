@@ -59,8 +59,8 @@ function section(from, to) {
   });
 
   console.log('\n📋 Card da dashboard abre o próximo jogo, não a classificação');
-  ok(result.selected.length === 1 && result.selected[0].join(',') === 'neon,fem,__general,',
-    'a entrada genérica ativa a aba Geral do gênero do próximo jogo');
+  ok(result.selected.length === 1 && result.selected[0].join(',') === 'neon,fem,__upcoming,',
+    'a entrada genérica ativa Próximos jogos no gênero do próximo jogo');
   ok(result.scrolled[0] === 'card-earlier-court-4',
     'o foco usa o primeiro jogo sem resultado por horário e depois por quadra');
   ok(result.scrolled.indexOf('inline-bracket-container') === -1,

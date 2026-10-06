@@ -1202,11 +1202,13 @@ window._scrollToBracketSection = function(tId, matchId) {
     if (nextScheduled) {
       var nextId = nextScheduled.id;
       var nextGender = String(nextScheduled.getAttribute('data-bracket-tab-gender') || '');
-      // A Geral deixa o card dentro da agenda operacional; fazer a seleção
-      // antes do foco impede que a classificação seja o destino visual.
+      // A entrada operacional da dashboard é Próximos jogos, não a
+      // classificação Geral. Selecionar a agenda antes do foco garante que o
+      // detalhe abra no primeiro jogo pendente, inclusive se ele ainda
+      // aguarda presença parcial.
       try {
         if (nextGender && typeof window._bracketSelectCategoryTab === 'function') {
-          window._bracketSelectCategoryTab(String(tId), nextGender, '__general', '');
+          window._bracketSelectCategoryTab(String(tId), nextGender, '__upcoming', '');
         }
       } catch (eTab) {}
       var focusNextScheduled = function() {
