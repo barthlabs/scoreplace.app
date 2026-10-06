@@ -1442,6 +1442,7 @@ const SUITES = [
   'tests/game-numbering.test.js',
   'tests/cancel-x-canon.test.js',
   'tests/groups-render.test.js',
+  'tests/dashboard-card-opens-next-game.test.js',
   'tests/liga-render.test.js',
   'tests/liga-countdown.test.js',
   'tests/sched-config-coherent.test.js',
