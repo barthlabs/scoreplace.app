@@ -347,6 +347,9 @@ de build/teste). Não bloqueie por memória externa, arquivo fora do repositóri
 de processo, relato manual de teste, ou tarefa documental não solicitada pelo responsável.
 O deploy executa a suíte completa depois da revisão; peça um teste adicional apenas quando
 ele provar um defeito específico deste diff, indicando arquivo e cenário.
+Quando o diff referencia variável, função ou script parcialmente fora do corte, use Read/Grep
+na árvore atual antes de declarar algo indefinido, ausente ou sem contexto. A árvore atual é
+autoridade: um diff é deliberadamente parcial e não prova que uma definição antiga inexiste.
 
 Depois, só o que for concreto, sempre com arquivo:linha:
 1. O QUE QUEBRA — regressão, caso não coberto, concorrência, dado que some.
