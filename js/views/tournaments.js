@@ -1213,6 +1213,13 @@ window._scrollToBracketSection = function(tId, matchId) {
       catch (e) { _specific.scrollIntoView(); }
       return;
     }
+    // A chave pode estar sendo montada em lotes. Um alvo explícito que ainda
+    // não nasceu não autoriza cair no fallback genérico (que leva ao topo do
+    // detalhe); ele precisa sobreviver até `_applyMyMatchesFilter` encontrar o
+    // card e executar a rolagem canônica.
+    try { sessionStorage.setItem('sp_scrollToMatch', String(matchId)); } catch (eStore) {}
+    window._bracketPendingScroll = String(tId);
+    return;
   }
   // Entrada genérica (card do torneio na dashboard): o alvo não é a chave
   // inline, que também contém classificação. A agenda publicada é a fonte
@@ -4739,7 +4746,17 @@ function renderTournaments(container, tournamentId = null) {
     // renderBracket; manter o mesmo alvo nos dois contratos evita cair na
     // classificação enquanto Próximos jogos aparece selecionada.
     if (_pendingBracketTarget && _pendingBracketTarget.matchId) {
-        try { sessionStorage.setItem('sp_scrollToMatch', String(_pendingBracketTarget.matchId)); } catch (_targetStoreErr2) {}
+        try {
+            sessionStorage.setItem('sp_scrollToMatch', String(_pendingBracketTarget.matchId));
+            // O resumo da dashboard pode ainda não conter as partidas. Depois
+            // que o detalhe completo calculou o alvo, substitui também a
+            // intenção incompleta que disparou a navegação. Sem isso, o
+            // consumidor tardio abaixo recebia `matchId: null` e voltava ao
+            // topo/classificação mesmo com o card correto já escolhido.
+            if (typeof window._setTournamentMatchTarget === 'function') {
+                window._setTournamentMatchTarget(tournamentId, _pendingBracketTarget.matchId, _pendingBracketTarget.tab);
+            }
+        } catch (_targetStoreErr2) {}
         // O alvo vindo da dashboard já escolheu a aba, mas renderBracket só arma
         // sua rolagem automática quando a navegação veio pelo router. O leitor
         // em `_applyMyMatchesFilter` (bracket.js) consome este marcador depois

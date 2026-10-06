@@ -67,6 +67,20 @@ function section(from, to) {
     'o foco usa o primeiro jogo sem resultado por horário e depois por quadra');
   ok(result.scrolled.indexOf('inline-bracket-container') === -1,
     'a classificação inline nunca é usada como fallback quando há agenda');
+  const lateTarget = await page.evaluate(() => {
+    document.body.innerHTML = '<section id="inline-bracket-container">Classificação geral dos times</section>';
+    window.AppStore = { tournaments: [{ id: 'neon' }] };
+    window._bracketPendingScroll = null;
+    const scrolled = [];
+    Element.prototype.scrollIntoView = function () { scrolled.push(this.id || this.textContent); };
+    window._scrollToBracketSection('neon', 'card-que-ainda-vai-nascer');
+    return {
+      scrolled,
+      pending: window._bracketPendingScroll
+    };
+  });
+  ok(lateTarget.scrolled.length === 0 && lateTarget.pending === 'neon',
+    'um alvo explícito ainda não montado é preservado, sem cair no topo/classificação');
   const target = await page.evaluate(() => {
     window._collectAllMatches = (t) => t.matches;
     return window._nextScheduledTournamentMatchTarget({ matches: [
