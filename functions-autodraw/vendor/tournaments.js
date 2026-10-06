@@ -4722,13 +4722,6 @@ function renderTournaments(container, tournamentId = null) {
         window._bracketTabState = window._bracketTabState || {};
         window._bracketTabState[String(tournamentId)] = _pendingBracketTarget.tab;
     }
-    // O alvo explícito também é consumido pelo renderizador dos cards. Sem
-    // este marcador, a aba Próximos jogos pode até ficar selecionada, mas o
-    // foco continua no bloco de classificação que foi pintado primeiro.
-    if (_pendingBracketTarget && _pendingBracketTarget.matchId) {
-        try { sessionStorage.setItem('sp_scrollToMatch', String(_pendingBracketTarget.matchId)); } catch (_targetStoreErr2) {}
-    }
-
     // Renderiza a chave de forma transparente associada a esse torneio
     if (hasDrawn && typeof renderBracket === 'function') {
         const inlineContainer = document.getElementById('inline-bracket-container');

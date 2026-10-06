@@ -2056,9 +2056,7 @@ function renderDashboard(container) {
         // ⚠️ Calculado ANTES do desvio de "não sou deste jogo": desde a seção
         // "Novidades no seu torneio" os DOIS ramos precisam deste rótulo.
         var _phaseLabel = '';
-        var _teamCfgDash = (window.ScoreplaceTeamCompetition && window.ScoreplaceTeamCompetition.configurationForTournament)
-          ? window.ScoreplaceTeamCompetition.configurationForTournament(t)
-          : (t.teamCompetition || ((t.phases || [])[0] || {}).teamCompetition || {});
+        var _teamCfgDash = t.teamCompetition || ((t.phases || [])[0] || {}).teamCompetition || {};
         var _isConcentratedTeamSchedule = !!((window._isConcentratedTournament && window._isConcentratedTournament(t)) ||
           (_teamCfgDash.enabled && _teamCfgDash.schedule && _teamCfgDash.schedule.enabled));
         // A agenda por times não possui grupos. Alguns espelhos legados ainda
