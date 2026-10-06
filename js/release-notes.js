@@ -1,3 +1,4 @@
+// 2.3.285 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.3.284 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.3.283 — No Neon, a chave operacional reconhece a agenda publicada por times, exibe a categoria real da inscrição e mantém a classificação geral de equipes acima das chaves. Próximos jogos continua exclusivo de eventos concentrados. A revisão e o preparo de release agora são idempotentes: retomadas não herdam parecer antigo nem duplicam a nota, e o preflight verifica esses contratos antes do Hosting.
 // 2.3.282 — Atualização consolidada de produção com as correções validadas desde a última publicação.
