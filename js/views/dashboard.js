@@ -2056,7 +2056,17 @@ function renderDashboard(container) {
         // ⚠️ Calculado ANTES do desvio de "não sou deste jogo": desde a seção
         // "Novidades no seu torneio" os DOIS ramos precisam deste rótulo.
         var _phaseLabel = '';
-        if (m.label) _phaseLabel = String(m.label);
+        var _teamCfgDash = (window.ScoreplaceTeamCompetition && window.ScoreplaceTeamCompetition.configurationForTournament)
+          ? window.ScoreplaceTeamCompetition.configurationForTournament(t)
+          : (t.teamCompetition || ((t.phases || [])[0] || {}).teamCompetition || {});
+        var _isConcentratedTeamSchedule = !!((window._isConcentratedTournament && window._isConcentratedTournament(t)) ||
+          (_teamCfgDash.enabled && _teamCfgDash.schedule && _teamCfgDash.schedule.enabled));
+        // A agenda por times não possui grupos. Alguns espelhos legados ainda
+        // carregam no label "Grupo A • Jogador …" do sorteio anterior; nunca
+        // exponha esse metadado como fase do torneio. A rodada publicada é a
+        // fonte canônica do título no feed de novidades.
+        if (_isConcentratedTeamSchedule && m.round != null) _phaseLabel = 'Rodada ' + window._matchRoundDisplayNum(t, m);
+        else if (m.label) _phaseLabel = String(m.label);
         else if (m.roundLabel) _phaseLabel = String(m.roundLabel);
         else if (m.round != null) _phaseLabel = 'Rodada ' + window._matchRoundDisplayNum(t, m); // 1-based, nunca R0
         var _formatLabel = m.isMonarch ? 'Rei/Rainha' : ((window._formatDisplayName ? window._formatDisplayName(t.format) : t.format) || '');

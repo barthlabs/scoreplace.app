@@ -22,6 +22,7 @@ function section(from, to) {
   const browser = await chromium.launch();
   const page = await browser.newPage();
   await page.setContent('<!doctype html><body></body>');
+  await page.addScriptTag({ content: section('window._nextScheduledTournamentMatchTarget = function', 'window._scrollToBracketSection = function') });
   await page.addScriptTag({ content: section('window._scrollToBracketSection = function', '// v2.7.85: funções de DUPLA') });
 
   const result = await page.evaluate(async () => {
@@ -65,8 +66,22 @@ function section(from, to) {
     'o foco usa o primeiro jogo sem resultado por horário e depois por quadra');
   ok(result.scrolled.indexOf('inline-bracket-container') === -1,
     'a classificação inline nunca é usada como fallback quando há agenda');
-  ok(store.indexOf('window._setTournamentMatchTarget(tournamentId, null, null);') !== -1,
-    'o clique genérico do card persiste a intenção de abrir o próximo jogo');
+  const target = await page.evaluate(() => {
+    window._collectAllMatches = (t) => t.matches;
+    return window._nextScheduledTournamentMatchTarget({ matches: [
+      { id: 'done', winner: 'a', scheduledAt: '2026-10-22T18:00:00Z', court: 'Quadra 1', _gameNum: 1, category: 'Fem Light' },
+      { id: 'court-5', scheduledAt: '2026-10-22T18:35:00Z', court: 'Quadra 5', _gameNum: 4, category: 'Fem Power' },
+      { id: 'court-4', scheduledAt: '2026-10-22T18:35:00Z', court: 'Quadra 4', _gameNum: 3, category: 'Fem Light' }
+    ] });
+  });
+  ok(target && target.matchId === 'court-4' && target.tab.category === '__upcoming' && target.tab.gender === 'fem',
+    'o alvo persistido é o primeiro jogo pendente por horário e quadra, na aba Próximos jogos');
+  ok(store.includes('window._nextScheduledTournamentMatchTarget(_tournament)') &&
+    store.includes('_target && _target.matchId ? _target.matchId : null'),
+    'o clique genérico calcula e persiste o primeiro jogo agendado, não um alvo vazio');
+  ok(tournaments.includes('window._nextScheduledTournamentMatchTarget = function(t)') &&
+    tournaments.includes("category: '__upcoming'"),
+    'o alvo genérico força a aba Próximos jogos antes de o detalhe ser renderizado');
 
   await browser.close();
   console.log('\n' + (fail ? '❌' : '✅') + ' dashboard-card-opens-next-game: ' + pass + ' ok, ' + fail + ' falharam');

@@ -1156,6 +1156,46 @@ window._nextParticipantTournamentMatchTarget = function(t) {
   };
 };
 
+// Entrada genérica da dashboard: o cartão do torneio não aponta para uma
+// partida específica, mas o detalhe precisa nascer na agenda, já ancorado no
+// primeiro jogo ainda sem resultado. Não deixe esse cálculo para depois do
+// render: nessa altura a classificação já pode ter restaurado a aba anterior.
+// [[regression_dashboard_tournament_card_opens_upcoming_match]]
+window._nextScheduledTournamentMatchTarget = function(t) {
+  if (!t || typeof window._collectAllMatches !== 'function') return null;
+  var asMs = function(value) {
+    if (value == null || value === '') return 0;
+    if (typeof value === 'object' && typeof value.toMillis === 'function') return Number(value.toMillis()) || 0;
+    if (typeof value === 'object' && value.seconds != null) return (Number(value.seconds) || 0) * 1000;
+    if (typeof value === 'number') return value > 100000000000 ? value : value * 1000;
+    var parsed = Date.parse(String(value));
+    return isNaN(parsed) ? 0 : parsed;
+  };
+  var matchTab = function(m) {
+    var category = String(m.category || m.tierLabel || m.bracket || '').trim();
+    var label = category.toLowerCase();
+    var gender = /(^|\s)(fem|femin|female)/.test(label) ? 'fem'
+      : (/(^|\s)(masc|mascul|male)/.test(label) ? 'masc'
+        : (/(^|\s)(mist|mixed)/.test(label) ? 'misto' : 'linhas'));
+    return { category: '__upcoming', gender: gender, round: '' };
+  };
+  var matches = window._collectAllMatches(t).filter(function(m) {
+    return !!(m && m.id != null && !m.winner && !m.isBye &&
+      asMs(m.scheduledAt) > 0);
+  });
+  matches.sort(function(a, b) {
+    var at = asMs(a.scheduledAt), bt = asMs(b.scheduledAt);
+    if (at !== bt) return at - bt;
+    var court = String(a.court || '').localeCompare(String(b.court || ''), 'pt-BR', { numeric: true });
+    if (court) return court;
+    var an = Number(a._gameNum || 0), bn = Number(b._gameNum || 0);
+    if (an !== bn) return an - bn;
+    return String(a.id).localeCompare(String(b.id));
+  });
+  if (!matches.length) return null;
+  return { matchId: String(matches[0].id), tab: matchTab(matches[0]) };
+};
+
 window._scrollToBracketSection = function(tId, matchId) {
   var t = window.AppStore && window.AppStore.tournaments &&
           window.AppStore.tournaments.find(function(x){ return String(x.id) === String(tId); });
@@ -4681,6 +4721,12 @@ function renderTournaments(container, tournamentId = null) {
     if (_pendingBracketTarget && _pendingBracketTarget.tab && _pendingBracketTarget.tab.category) {
         window._bracketTabState = window._bracketTabState || {};
         window._bracketTabState[String(tournamentId)] = _pendingBracketTarget.tab;
+    }
+    // O alvo explícito também é consumido pelo renderizador dos cards. Sem
+    // este marcador, a aba Próximos jogos pode até ficar selecionada, mas o
+    // foco continua no bloco de classificação que foi pintado primeiro.
+    if (_pendingBracketTarget && _pendingBracketTarget.matchId) {
+        try { sessionStorage.setItem('sp_scrollToMatch', String(_pendingBracketTarget.matchId)); } catch (_targetStoreErr2) {}
     }
 
     // Renderiza a chave de forma transparente associada a esse torneio

@@ -9708,7 +9708,16 @@ window._navTorneioComAvisoAgora = function (tournamentId, evento) {
     // em vez do primeiro jogo pendente da agenda.
     try {
       if (typeof window._setTournamentMatchTarget === 'function') {
-        window._setTournamentMatchTarget(tournamentId, null, null);
+        var _target = null;
+        var _tournament = typeof window._findTournamentById === 'function'
+          ? window._findTournamentById(tournamentId)
+          : ((window.AppStore && window.AppStore.tournaments) || []).find(function(t) { return String(t.id) === String(tournamentId); });
+        if (typeof window._nextScheduledTournamentMatchTarget === 'function') {
+          _target = window._nextScheduledTournamentMatchTarget(_tournament);
+        }
+        window._setTournamentMatchTarget(tournamentId,
+          _target && _target.matchId ? _target.matchId : null,
+          _target && _target.tab ? _target.tab : null);
       }
     } catch (eTarget) {}
     _trocarHashDoTorneio();
