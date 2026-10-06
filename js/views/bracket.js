@@ -2598,14 +2598,13 @@ function renderBracket(container, tournamentId, isInline) {
     // (banner era calculado na linha ~402 e descartado). Os outros ramos (Liga 428, grupos 436)
     // já o inseriam; só este esquecia.
     /*
-     * A chave é a leitura primária enquanto existem jogos: nunca antepor a
-     * classificação dos times a `_renderPhaseBracket`. O Neon entra exatamente
-     * por este caminho canônico (t._canonicalDraw), e a concatenação invertida
-     * deixava "Classificação dos times" no topo mesmo com as quatro rodadas
-     * desenhadas logo abaixo. [[regression_canonical_key_before_team_standings]]
+     * A classificação geral dos TIMES é o resumo do torneio e deve anteceder
+     * as chaves no Neon. Ela contextualiza o quadro que vem abaixo; as
+     * classificações por categoria continuam recolhidas dentro do mesmo bloco.
+     * [[regression_team_standings_before_canonical_key]]
      */
     _pintarEmEtapas(container, headerHtml + _subChoiceBanner + startTournamentBanner + _phaseAdvanceBanner + progressBarHtml,
-      function () { return window._renderPhaseBracket(t, canEnterResult, standbyHtml) + _competitionTeamStandingsHtml; }, _applyMyMatchesFilter);
+      function () { return _competitionTeamStandingsHtml + window._renderPhaseBracket(t, canEnterResult, standbyHtml); }, _applyMyMatchesFilter);
     return;
   }
 
@@ -2622,10 +2621,10 @@ function renderBracket(container, tournamentId, isInline) {
       // ⚠️ A ORDEM É A DE ANTES: o `standbyHtml` (lista de espera) vem DEPOIS dos grupos,
       // então ele viaja na 2ª tacada junto com eles — separar por "leve/pesado" sem olhar
       // a ordem jogaria a espera pra cima dos grupos.
-      // Mesmo contrato do caminho canônico: jogos/chaves primeiro, classificação
-      // apenas abaixo deles. Não criar uma exceção visual para grupos legados.
+      // Mesmo contrato do caminho canônico: a classificação geral dos times é
+      // o resumo acima da chave; os detalhes por categoria ficam recolhidos.
       _pintarEmEtapas(container, headerHtml + _subChoiceBanner + startTournamentBanner + _phaseAdvanceBanner + progressBarHtml + readyBannerHtml,
-        function () { return renderGroupStage(t, isOrg, canEnterResult) + standbyHtml + _competitionTeamStandingsHtml; }, _applyMyMatchesFilter);
+        function () { return _competitionTeamStandingsHtml + renderGroupStage(t, isOrg, canEnterResult) + standbyHtml; }, _applyMyMatchesFilter);
       return;
     }
     // If stage is elimination, fall through to bracket rendering below
@@ -5853,11 +5852,19 @@ function _matchCardDateTime(ms, t) {
 // combinam cada jogo e não usam uma quadra operacional.
 window._isConcentratedTournament = function(t) {
   var days = t && t.scheduleWindow && t.scheduleWindow.days;
-  return Array.isArray(days) && days.some(function(day) {
+  if (Array.isArray(days) && days.some(function(day) {
     return day && /^\d{4}-\d{2}-\d{2}$/.test(String(day.day || '').slice(0, 10)) &&
       /^\d{2}:\d{2}$/.test(String(day.startTime || '')) &&
       /^\d{2}:\d{2}$/.test(String(day.endTime || ''));
-  });
+  })) return true;
+  // O planejamento pode chegar ao leitor da chave pela configuração de times
+  // antes de `scheduleWindow` ser hidratada no resumo local. É a MESMA agenda
+  // concentrada publicada — não uma inferência por duração ou por título. Sem
+  // este segundo formato o card perde scheduledAt e Geral/Próximos ficam vazios
+  // apesar de o confronto já ter data, hora e quadra no documento.
+  // [[regression_team_schedule_marks_neon_operational]]
+  var cfg = (t && t.teamCompetition) || (t && t.phases && t.phases[0] && t.phases[0].teamCompetition) || {};
+  return !!(cfg.enabled && cfg.schedule && cfg.schedule.enabled);
 };
 
 // Coordenadas (fase, rodada) lidas do id ESTRUTURAL do jogo — a única fonte que sobrevive
@@ -7095,7 +7102,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   if (!_tabCategory && m.bracket && /^(gold|silver|line\d+)$/i.test(String(m.bracket))) _tabCategory = String(m.bracket);
   var _tabGender = _bracketTabGender(_tabCategory);
   return `
-    <div id="card-${m.id}" class="sp-match-card" data-players="${_searchNames}" data-player-uids="${_searchUids}" data-bracket-tab-category="${window._safeHtml(_tabCategory)}" data-bracket-tab-gender="${_tabGender}" data-bracket-tab-source="${_tabSource}" data-bracket-tab-round="${m.round != null ? window._safeHtml(String(m.round)) : ''}" data-bracket-scheduled-at="${_scheduledMs || ''}" data-bracket-court="${window._safeHtml(String(m.court || ''))}" data-bracket-upcoming="${_isConcentratedEvent && matchReady ? '1' : '0'}" data-bracket-presence="${_isConcentratedEvent && !isDecided && !isByeMatch ? (matchReady ? 'complete' : (matchPartial ? 'partial' : 'none')) : ''}" data-my-match="${_isMyMatch ? '1' : '0'}" data-my-pending="${_isMyMatch && !isDecided && !isByeMatch ? '1' : '0'}" data-match-num="${matchNum != null ? matchNum : ''}" style="scroll-margin-top:var(--scroll-anchor,120px);background:${window._spCor(_isMyMatch ? 'rgba(99,102,241,0.06)' : 'var(--bg-card)', 'background')};border:${_isMyMatch ? '2px' : '1px'} solid ${hasPending && _pr && _pr.disputed ? 'rgba(239,68,68,0.55)' : hasPending ? 'rgba(251,191,36,0.5)' : cardBorder};${_lineLeftBorder}border-radius:12px;padding:14px;${_cardMax}box-shadow:${_isMyMatch ? '0 0 20px rgba(99,102,241,0.25),0 0 8px rgba(99,102,241,0.12),0 4px 12px rgba(0,0,0,0.15)' : hasPending && _pr && _pr.disputed ? '0 0 14px rgba(239,68,68,0.2),0 4px 12px rgba(0,0,0,0.15)' : hasPending ? '0 0 14px rgba(251,191,36,0.18),0 4px 12px rgba(0,0,0,0.15)' : matchReady ? '0 0 16px rgba(16,185,129,0.15),0 4px 12px rgba(0,0,0,0.15)' : matchPartial ? '0 0 10px rgba(245,158,11,0.1),0 4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.15)'};${hasTBD ? 'opacity:0.6;' : ''}">
+    <div id="card-${m.id}" class="sp-match-card" data-players="${_searchNames}" data-player-uids="${_searchUids}" data-bracket-tab-category="${window._safeHtml(_tabCategory)}" data-bracket-tab-gender="${_tabGender}" data-bracket-tab-source="${_tabSource}" data-bracket-tab-round="${m.round != null ? window._safeHtml(String(m.round)) : ''}" data-bracket-scheduled-at="${_scheduledMs || ''}" data-bracket-court="${window._safeHtml(String(m.court || ''))}" data-bracket-upcoming="${matchReady ? '1' : '0'}" data-bracket-presence="${!isDecided && !isByeMatch ? (matchReady ? 'complete' : (matchPartial ? 'partial' : 'none')) : ''}" data-my-match="${_isMyMatch ? '1' : '0'}" data-my-pending="${_isMyMatch && !isDecided && !isByeMatch ? '1' : '0'}" data-match-num="${matchNum != null ? matchNum : ''}" style="scroll-margin-top:var(--scroll-anchor,120px);background:${window._spCor(_isMyMatch ? 'rgba(99,102,241,0.06)' : 'var(--bg-card)', 'background')};border:${_isMyMatch ? '2px' : '1px'} solid ${hasPending && _pr && _pr.disputed ? 'rgba(239,68,68,0.55)' : hasPending ? 'rgba(251,191,36,0.5)' : cardBorder};${_lineLeftBorder}border-radius:12px;padding:14px;${_cardMax}box-shadow:${_isMyMatch ? '0 0 20px rgba(99,102,241,0.25),0 0 8px rgba(99,102,241,0.12),0 4px 12px rgba(0,0,0,0.15)' : hasPending && _pr && _pr.disputed ? '0 0 14px rgba(239,68,68,0.2),0 4px 12px rgba(0,0,0,0.15)' : hasPending ? '0 0 14px rgba(251,191,36,0.18),0 4px 12px rgba(0,0,0,0.15)' : matchReady ? '0 0 16px rgba(16,185,129,0.15),0 4px 12px rgba(0,0,0,0.15)' : matchPartial ? '0 0 10px rgba(245,158,11,0.1),0 4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.15)'};${hasTBD ? 'opacity:0.6;' : ''}">
       ${_headerHtml}
       ${_pendingBtnsRow}
       ${pendingBanner}

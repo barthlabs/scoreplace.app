@@ -10159,6 +10159,41 @@ window._profileMetaSemCatTag = function(rgb) {
   return '<span style="font-size:0.6rem;font-weight:700;padding:1px 7px;border-radius:6px;background:rgba(' + rgb + ',0.12);color:rgb(' + rgb + ');border:1px dashed rgba(' + rgb + ',0.5);line-height:1.5;" title="sem categoria no perfil">sem cat</span>';
 };
 
+// A categoria competitiva é propriedade da inscrição (na dupla, do PAR), não
+// uma inferência do perfil. No Neon os pares já trazem `category: Fem Light`,
+// por exemplo; quando o card é aberto por membro, ele precisa reencontrar essa
+// mesma categoria no elenco canônico em vez de desenhar dois "sem cat".
+// [[regression_enrollment_card_shows_actual_tournament_category]]
+window._profileMetaTournamentCategory = function(p, pName, t) {
+  var direct = p && typeof p === 'object' && (p.category || (Array.isArray(p.categories) && p.categories[0]));
+  if (direct) return String(direct);
+  if (!t) return '';
+  var wantedUid = p && typeof p === 'object' ? String(p.uid || '') : '';
+  var wantedName = String(pName || (p && (p.displayName || p.name)) || '').trim().toLowerCase();
+  if (!wantedUid && !wantedName) return '';
+  var roster = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
+  for (var i = 0; i < roster.length; i++) {
+    var item = roster[i] && typeof roster[i] === 'object' ? roster[i] : null;
+    if (!item) continue;
+    var category = item.category || (Array.isArray(item.categories) && item.categories[0]) || '';
+    if (!category) continue;
+    var identities = [item.uid, item.p1Uid, item.p2Uid, item.name, item.displayName, item.p1Name, item.p2Name];
+    for (var j = 0; j < identities.length; j++) {
+      var identity = String(identities[j] || '').trim();
+      // Uid é preferível, mas um elenco de dupla manual pode não tê-lo embora o
+      // card já o tenha recebido do perfil. Nesse caso o nome canônico ainda é
+      // a identidade correta para recuperar a categoria da inscrição.
+      if ((wantedUid && identity === wantedUid) || (wantedName && identity.toLowerCase() === wantedName)) return String(category);
+    }
+  }
+  return '';
+};
+
+window._profileMetaTournamentCategoryBadge = function(category) {
+  if (!category) return '';
+  return '<span style="font-size:0.62rem;font-weight:800;padding:1px 7px;border-radius:6px;background:rgba(56,189,248,.14);color:var(--sp-c-7dd3fc,#7dd3fc);border:1px solid rgba(56,189,248,.42);line-height:1.5;" title="categoria do torneio">' + window._safeHtml(String(category)) + '</span>';
+};
+
 // Quais eixos de categoria o TORNEIO usa (pra decidir quando mostrar "sem cat").
 window._profileMetaTournamentAxes = function(t) {
   var axes = { gender: false, skill: false, age: false };
@@ -10178,8 +10213,11 @@ window._profileMetaTournamentAxes = function(t) {
   return axes;
 };
 
-window._profileMetaBadgesHtml = function(gender, skill, birth, prefixName, t) {
+window._profileMetaBadgesHtml = function(gender, skill, birth, prefixName, t, tournamentCategory) {
   var prefix = prefixName ? '<span style="font-size:0.6rem;color:var(--text-muted);font-weight:700;margin-right:1px;">' + window._safeHtml(prefixName) + ':</span>' : '';
+  // A categoria que o torneio já atribuiu é a informação útil no card. Não a
+  // decompor em lacunas de perfil nem substituir por "sem cat".
+  if (tournamentCategory) return prefix + window._profileMetaTournamentCategoryBadge(tournamentCategory);
   var axes = window._profileMetaTournamentAxes(t);
   // Cada eixo: o badge do perfil OU, se faltando E o torneio usa esse eixo,
   // a tag "sem cat" na cor do eixo — sempre na MESMA POSIÇÃO do badge.
@@ -10221,9 +10259,9 @@ window._profileMetaSlots = function(p, pName, isTeam, t, isOrg, opts) {
     }
     var fbGender = _decidido
       || ((!isTeam && p && typeof p === 'object') ? ((window._pGender && window._pGender(p)) || p.gender || '') : '');
-    var fbCat = (!isTeam && p && typeof p === 'object') ? (p.category || '') : '';
+    var fbCat = window._profileMetaTournamentCategory(p, mn, t);
     var prefixName = isTeam ? String(mn).split(' ')[0] : '';
-    var initial = window._profileMetaBadgesHtml(fbGender, window._profileMetaExtractSkill(fbCat, t), '', prefixName, t);
+    var initial = window._profileMetaBadgesHtml(fbGender, window._profileMetaExtractSkill(fbCat, t), '', prefixName, t, fbCat);
     var _mt = _inline ? '0' : (mi === 0 ? '5px' : '3px');
     return '<div class="participant-meta" data-pmeta-name="' + _attrEscMeta(lc) + '" data-pmeta-uid="' + _attrEscMeta(_pmUid) + '" data-pmeta-gender="' + _attrEscMeta(fbGender) + '" data-pmeta-gender-org="' + (_decidido ? '1' : '') + '" data-pmeta-cat="' + _attrEscMeta(fbCat) + '" data-pmeta-prefix="' + _attrEscMeta(prefixName) + '" style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-top:' + _mt + ';">' + initial + '</div>';
   }).join('');
@@ -10359,7 +10397,7 @@ window._patchProfileMetaSlots = function(container, t) {
     var skillRaw = (prof && prof.skillBySport && t && t.sport && prof.skillBySport[t.sport]) || '';
     var skill = window._profileMetaExtractSkill(skillRaw, t) || window._profileMetaExtractSkill(fbCat, t);
     var birth = (prof && prof.birthDate) || '';
-    slot.innerHTML = window._profileMetaBadgesHtml(gender, skill, birth, prefixName, t);
+    slot.innerHTML = window._profileMetaBadgesHtml(gender, skill, birth, prefixName, t, fbCat);
     // v2.7.35: o PERFIL é a fonte da verdade e propaga PRA TUDO — aqui pro filtro/sort.
     // O badge usa profile.skillBySport[sport]/gender; o card carregava data-part-skill/
     // gender de p.category/p.gender (muitas vezes vazios) → "sem habilidade"/"sem gênero"
