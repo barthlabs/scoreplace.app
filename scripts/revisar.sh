@@ -358,7 +358,7 @@ Depois, só o que for concreto, sempre com arquivo:linha:
 4. AJUSTE SUGERIDO — a versão corrigida do plano/diff, curta.
 5. RELEASE — quando o diff tiver código de app, confira version.txt, SCOREPLACE_VERSION,
    CACHE_NAME e compare a versão com origin/main:version.txt. Esta revisão roda ANTES do
-   `scripts/prepare-hosting-release.js`, que o `deploy-hosting.sh` executa e commita para
+   scripts/prepare-hosting-release.js, que o scripts/deploy-hosting.sh executa e commita para
    subir o próximo patch/cache-buster: não exija um bump já presente no pré-corte. Só marque
    BLOQUEIO se esse fluxo não existir ou não sincronizar app e service worker após o preparo.
 Sem elogios, sem resumo do que leu, sem repetir o texto. Se algo é opinião, marque como tal.
