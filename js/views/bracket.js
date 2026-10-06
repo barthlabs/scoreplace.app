@@ -1788,12 +1788,15 @@ function _applyMyMatchesFilter() {
   if (typeof window._wirePlaceholderDnD === 'function') { try { window._wirePlaceholderDnD(); } catch (e) {} }
   if (typeof window._wireLateJoinPairDnD === 'function') { try { window._wireLateJoinPairDnD(); } catch (e) {} }
   var cards = document.querySelectorAll('[data-my-match]');
-  if (!cards.length) return;
   // v1.6.86: quem decide o `display` dos cards é UMA função só — `_bracketApplyFilter`,
   // que avalia "Só meus jogos" E a busca juntas e esconde também os containers que ficam
   // vazios (box de grupo, coluna de rodada). Antes este loop escrevia `display=''` em todo
   // card do usuário e DESFAZIA a busca ativa (e deixava o box do grupo de pé sem jogos).
-  window._bracketApplyFilter();
+  // Não retornar aqui: o organizador pode não ser participante e, nesse caso,
+  // ainda precisa consumir o alvo explícito da dashboard (`sp_scrollToMatch`).
+  // Era esse retorno que abria Próximos jogos no topo do cartão do torneio,
+  // sem chegar ao primeiro jogo pendente.
+  if (cards.length) window._bracketApplyFilter();
   // Ao ENTRAR no bracket (navegação, não re-render), rola pro TOPO do PRÓXIMO jogo do
   // usuário (1º card PENDENTE dele na ordem do DOM = cronológica; fallback: 1º jogo dele).
   // Se o jogo mora num GRUPO (Rei/Rainha / Fase de Grupos), rola pro TOPO DO GRUPO

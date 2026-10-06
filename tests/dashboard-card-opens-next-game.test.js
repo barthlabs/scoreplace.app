@@ -88,6 +88,12 @@ function section(from, to) {
     bracket.includes("sessionStorage.getItem('sp_scrollToMatch')") &&
     bracket.includes("document.getElementById('card-' + String(_pm))"),
     'o alvo persistido chega ao leitor da chave depois que o card é montado');
+  const applyStart = bracket.indexOf('function _applyMyMatchesFilter()');
+  const pendingStart = bracket.indexOf('if (window._bracketPendingScroll)', applyStart);
+  const applyBlock = bracket.slice(applyStart, pendingStart);
+  ok(!applyBlock.includes('if (!cards.length) return;') &&
+    applyBlock.includes('if (cards.length) window._bracketApplyFilter();'),
+    'organizador sem jogo próprio ainda consome a rolagem pendente da dashboard');
 
   await browser.close();
   console.log('\n' + (fail ? '❌' : '✅') + ' dashboard-card-opens-next-game: ' + pass + ' ok, ' + fail + ' falharam');
