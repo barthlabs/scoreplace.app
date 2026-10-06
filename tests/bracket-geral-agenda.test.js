@@ -185,7 +185,11 @@ function trecho(inicio, fim) {
     window._bracketGeneralView(focusRoot, true, 'fem', false, true);
     await new Promise((resolve) => setTimeout(resolve, 130));
     HTMLElement.prototype.getBoundingClientRect = originalRect;
-    const readyFocus = { top: focusedTop, moved: !!focusRoot._bracketGeneralView.querySelector('#focus-ready') };
+    const readyFocus = {
+      top: focusedTop,
+      moved: !!focusRoot._bracketGeneralView.querySelector('#focus-ready'),
+      track: !!focusRoot._bracketGeneralView.querySelector('.bracket-general-rounds-track')
+    };
     return { generalState, upcomingState, recentResults, restored, generalReentry, cleanup, noSchedule, nested, externalSource, readyFocus };
   });
 
@@ -221,7 +225,7 @@ function trecho(inicio, fim) {
   console.log('\n📋 Detalhe publicado e chave inline usam a mesma agenda');
   ok(result.externalSource.shown, 'Geral abre quando os cards publicados estão fora da chave inline');
   ok(result.externalSource.cards.join(',') === 'real-scheduled', 'Geral usa o card publicado, não o cabeçalho vazio da chave inline');
-  ok(result.readyFocus.moved && result.readyFocus.top >= 200,
+  ok(result.readyFocus.track && result.readyFocus.moved && result.readyFocus.top >= 200,
     'ao abrir Geral, o foco prioriza o jogo pronto mesmo se um pendente anterior ainda aguarda presença');
   ok(result.externalSource.emptyHeadingHidden, 'Geral remove cabeçalho de rodada sem jogo da chave inline');
 

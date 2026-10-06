@@ -1,4 +1,4 @@
-// 2.3.291 — Em Beach Tennis a classificação por times não exibe empates, pois toda partida precisa ter vencedor. Abrir um torneio pelo card da dashboard entra direto em Próximos jogos e ancora no primeiro confronto ainda pendente já pronto para chamar; se não houver jogo pronto, usa o primeiro pendente como referência. A prioridade do jogo pronto está coberta contra regressão.
+// 2.3.291 — Em Beach Tennis a classificação por times não exibe empates, pois toda partida precisa ter vencedor. Abrir um torneio pelo card da dashboard entra direto em Próximos jogos e ancora no primeiro confronto ainda pendente já pronto para chamar; se não houver jogo pronto, usa o primeiro pendente como referência. A prioridade do jogo pronto, inclusive no trilho horizontal real, está coberta contra regressão.
 // 2.3.290 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.3.289 — Inscritos passa a recortar presença e jogos pela categoria completa do torneio;
 // jogos legados identificados por UID continuam visíveis nesse recorte. Geral e Próximos
