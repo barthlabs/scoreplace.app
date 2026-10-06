@@ -1,3 +1,4 @@
+// 2.3.291 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.3.290 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.3.289 — Inscritos passa a recortar presença e jogos pela categoria completa do torneio;
 // jogos legados identificados por UID continuam visíveis nesse recorte. Geral e Próximos
