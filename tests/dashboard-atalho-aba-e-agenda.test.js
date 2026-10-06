@@ -24,6 +24,14 @@ ok(dashboard.includes('window._goToTournamentMatch') && dashboard.includes('var 
   'o card de próximo jogo leva a categoria para a navegação');
 ok(dashboard.includes('window._matchCardTimelineTextHtml(_ngT, _ngM)'),
   'Seu próximo jogo reutiliza a linha Agendado da chave');
+ok(dashboard.includes("document.getElementById('proximos-jogos-section')") &&
+  dashboard.includes("document.querySelector('[data-dashboard-enrolled=\"1\"]')") &&
+  dashboard.includes('data-dashboard-enrolled="1"'),
+  'a entrada da dashboard rola para Seu próximo jogo e, sem ele, para o primeiro torneio inscrito');
+ok(bracket.includes('typeof value.toMillis === \'function\'') &&
+  bracket.includes('value.seconds != null') &&
+  bracket.indexOf('var scheduledAt = _matchCardTimestamp(m.scheduledAt);') < bracket.indexOf('var deadline = _matchCardRoundDeadlineMs(t, m);'),
+  'o horário marcado aceita Timestamp do Firestore e prevalece sobre o prazo da rodada');
 ok(tournaments.includes('_pendingBracketTarget.tab') && tournaments.includes('window._bracketTabState[String(tournamentId)]') && bracket.includes('var targetGender = Object.keys(byGender).find') && bracket.includes('byGender[candidate].indexOf(state.category)'),
   'o detalhe seleciona a aba antes de desenhar e localizar o card');
 ok(tournaments.includes('window._nextParticipantTournamentMatchTarget') && tournaments.includes('Mesma régua da dashboard para "Seu próximo jogo"') && tournaments.includes('window._navScrollTid') && tournaments.includes("sessionStorage.setItem('sp_scrollToMatch'"),

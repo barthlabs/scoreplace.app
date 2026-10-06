@@ -84,6 +84,11 @@ function section(from, to) {
   ok(tournaments.includes('window._nextScheduledTournamentMatchTarget = function(t)') &&
     tournaments.includes("category: '__upcoming'"),
     'o alvo genérico força a aba Próximos jogos antes de o detalhe ser renderizado');
+  ok(tournaments.includes('_requestedBracketTarget.matchId') &&
+    tournaments.includes('var _openedFromDashboard') &&
+    tournaments.indexOf('window._nextScheduledTournamentMatchTarget(_detailTournamentForTarget)') <
+      tournaments.indexOf('window._nextParticipantTournamentMatchTarget(_detailTournamentForTarget)'),
+    'um alvo vazio vindo do resumo é recalculado com o torneio completo antes de abrir a agenda');
   ok(tournaments.includes("sessionStorage.setItem('sp_scrollToMatch', String(_pendingBracketTarget.matchId))") &&
     bracket.includes("sessionStorage.getItem('sp_scrollToMatch')") &&
     bracket.includes("document.getElementById('card-' + String(_pm))"),

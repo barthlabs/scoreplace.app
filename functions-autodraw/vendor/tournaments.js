@@ -4704,16 +4704,28 @@ function renderTournaments(container, tournamentId = null) {
     var _pendingBracketTarget = null;
     try {
         var _requestedBracketTarget = JSON.parse(sessionStorage.getItem('sp_bracketScroll') || 'null');
-        if (_requestedBracketTarget && String(_requestedBracketTarget.tId) === String(tournamentId)) {
+        // Um cartão genérico da dashboard pode chegar antes de o resumo ter os
+        // jogos completos. Nesse caso ele grava uma intenção SEM id. Tratar esse
+        // objeto vazio como alvo válido era o defeito: bloqueava o cálculo já no
+        // detalhe e a página ficava no topo do card do torneio.
+        if (_requestedBracketTarget && String(_requestedBracketTarget.tId) === String(tournamentId) &&
+            _requestedBracketTarget.matchId) {
             _pendingBracketTarget = _requestedBracketTarget;
         }
     } catch (_pendingBracketTargetErr) {}
-    if (!_pendingBracketTarget && window._navScrollTid && String(window._navScrollTid) === String(tournamentId) &&
-        typeof window._nextParticipantTournamentMatchTarget === 'function') {
+    var _openedFromDashboard = !!(_requestedBracketTarget && String(_requestedBracketTarget.tId) === String(tournamentId));
+    if (!_pendingBracketTarget && (_openedFromDashboard ||
+        (window._navScrollTid && String(window._navScrollTid) === String(tournamentId)))) {
         var _detailTournamentForTarget = window._findTournamentById ? window._findTournamentById(tournamentId) : null;
-        _pendingBracketTarget = window._nextParticipantTournamentMatchTarget(_detailTournamentForTarget);
-        // O bracket consome este marcador ao montar seus cards e rola exatamente
-        // para a partida encontrada; não o persistimos como intenção externa.
+        // A dashboard pede o primeiro jogo AGENDADO do torneio, não o jogo do
+        // usuário nem a classificação. Só depois usa o alvo pessoal como
+        // fallback para entradas diretas sem agenda publicada.
+        if (_openedFromDashboard && typeof window._nextScheduledTournamentMatchTarget === 'function') {
+            _pendingBracketTarget = window._nextScheduledTournamentMatchTarget(_detailTournamentForTarget);
+        }
+        if (!_pendingBracketTarget && typeof window._nextParticipantTournamentMatchTarget === 'function') {
+            _pendingBracketTarget = window._nextParticipantTournamentMatchTarget(_detailTournamentForTarget);
+        }
         if (_pendingBracketTarget && _pendingBracketTarget.matchId) {
             try { sessionStorage.setItem('sp_scrollToMatch', _pendingBracketTarget.matchId); } catch (_targetStoreErr) {}
         }

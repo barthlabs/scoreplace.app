@@ -6118,6 +6118,19 @@ function _matchCardTimestamp(value) {
   // interação do usuário. [[regression_neon_card_estimated_time_has_canonical_parser]]
   if (value == null || value === '') return null;
   if (typeof value === 'number') return isFinite(value) ? value : null;
+  // Firestore pode chegar ao card antes de ser serializado para ISO. Sem
+  // normalizar Timestamp/toMillis/seconds, um jogo efetivamente marcado cai
+  // indevidamente no prazo "Jogar até" na dashboard.
+  if (typeof value === 'object') {
+    if (typeof value.toMillis === 'function') {
+      var fromToMillis = Number(value.toMillis());
+      return isFinite(fromToMillis) ? fromToMillis : null;
+    }
+    if (value.seconds != null) {
+      var seconds = Number(value.seconds);
+      return isFinite(seconds) ? seconds * 1000 : null;
+    }
+  }
   var parsed = new Date(value).getTime();
   return isNaN(parsed) ? null : parsed;
 }
@@ -6282,11 +6295,16 @@ function _matchCardTimelineTextHtml(t, m) {
       var played = _matchCardDateTime(resultAt, t);
       return played ? '<span style="font-size:0.62rem;font-weight:700;color:var(--text-muted);line-height:1.2;white-space:nowrap;">Jogado em <b style="color:var(--sp-c-cbd5e1,#cbd5e1);">' + window._safeHtml(played) + '</b></span>' : '';
     }
-    // Num evento concentrado, quem chama os jogos é a organização dentro da
-    // janela do evento. Não há prazo individual a negociar: o slot mostra a
-    // categoria. Em torneio distribuído, mantém-se o prazo da rodada.
-    // Horário previsto já aparece no controle de reagendamento do card. Não
-    // duplicar “Agendado:” no cabeçalho rouba espaço dos times e do placar.
+    // Um horário marcado para este jogo é mais específico que o prazo da
+    // rodada, seja o torneio concentrado ou distribuído. A dashboard reutiliza
+    // esta linha no "Seu próximo jogo"; esconder scheduledAt ali fazia aparecer
+    // apenas "Jogar até" mesmo quando data/hora já estavam definidas.
+    var scheduledAt = _matchCardTimestamp(m.scheduledAt);
+    if (scheduledAt) {
+      var scheduled = _matchCardDateTime(scheduledAt, t);
+      return scheduled ? '<span style="font-size:0.62rem;font-weight:700;color:var(--text-muted);line-height:1.2;white-space:nowrap;">🕒 <b style="color:var(--sp-c-7dd3fc,#7dd3fc);">' + window._safeHtml(scheduled) + '</b></span>' : '';
+    }
+    // Sem horário marcado, em torneio distribuído mantém-se o prazo da rodada.
     var deadline = _matchCardRoundDeadlineMs(t, m);
     var deadlineText = deadline ? _matchCardDateTime(deadline, t) : '';
     return deadlineText ? '<span style="font-size:0.62rem;font-weight:700;color:var(--text-muted);line-height:1.2;white-space:nowrap;">Jogar até <b style="color:var(--sp-c-7dd3fc,#7dd3fc);">' + window._safeHtml(deadlineText) + '</b></span>' : '';

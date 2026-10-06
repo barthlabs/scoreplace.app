@@ -924,7 +924,7 @@ function renderDashboard(container) {
     const _pReadFg = _rb ? _rb.fg : '#f1f5f9';
     const _pReadBd = _rb ? _rb.border : 'rgba(255,255,255,0.12)';
     return `
-        <div class="card mb-3${venuePhotoBg ? ' card-has-photo' : ''}"${vphotoAttrs}${_isOpenEnrollment(t) ? ' data-open-enrollment="1"' : ''} data-search-blob="${window._safeHtml(window._tournamentSearchBlob ? window._tournamentSearchBlob(t) : '')}" style="position: relative; overflow: hidden; ${venuePhotoBg ? venuePhotoBg : 'background: ' + window._spCor(bgGradient, 'background') + ';'} color: ${window._spCor(_cardTextColor, 'color')}; border: 1px solid ${_isLight ? 'rgba(0,0,0,0.08)' : 'transparent'}; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,${_isLight ? '0.06' : '0.1'}); cursor: pointer; transition: transform 0.2s;" onclick="window._dashCardClick(event, '${t.id}')" >
+        <div class="card mb-3${venuePhotoBg ? ' card-has-photo' : ''}"${vphotoAttrs}${_isOpenEnrollment(t) ? ' data-open-enrollment="1"' : ''}${isParticipating === true ? ' data-dashboard-enrolled="1"' : ''} data-search-blob="${window._safeHtml(window._tournamentSearchBlob ? window._tournamentSearchBlob(t) : '')}" style="position: relative; overflow: hidden; ${venuePhotoBg ? venuePhotoBg : 'background: ' + window._spCor(bgGradient, 'background') + ';'} color: ${window._spCor(_cardTextColor, 'color')}; border: 1px solid ${_isLight ? 'rgba(0,0,0,0.08)' : 'transparent'}; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,${_isLight ? '0.06' : '0.1'}); cursor: pointer; transition: transform 0.2s;" onclick="window._dashCardClick(event, '${t.id}')" >
           ${isOrg ? `
              <div style="position: absolute; bottom: 6px; right: 8px; opacity: 0.9; pointer-events: none;" title="${window._genderWord ? window._genderWord(window.AppStore && window.AppStore.currentUser, 'Organizador', 'Organizadora') : 'Organizador'}">
                <svg width="28" height="28" viewBox="0 0 24 24" fill="rgba(251,191,36,0.95)"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
@@ -3713,6 +3713,12 @@ function renderDashboard(container) {
     if (!items || items.length === 0) return '<div style="text-align:center;padding:2rem;color:var(--text-muted);opacity:0.6;">' + _t('tournament.emptyState') + '</div>';
     return '<div class="compact-list-container" style="display:flex;flex-direction:column;gap:2px;">' + items.map(function(t) {
       var isOrg = window._souOrganizador(t);
+      // O dashboard pode estar no modo Lista. Preserve o mesmo marcador de
+      // inscrição do card grande para que a entrada sem próximo jogo encontre
+      // o primeiro torneio da pessoa também nesse modo.
+      var isParticipating = (typeof window._souInscrito === 'function')
+        ? window._souInscrito(t, window.AppStore && window.AppStore.currentUser)
+        : false;
       var statusText = '', statusColor = '';
       // v1.3.35-beta: distinguir 'finished' real de 'closed' (inscrições
       // encerradas) e só mostrar "Em Andamento" quando t.tournamentStarted
@@ -3745,7 +3751,7 @@ function renderDashboard(container) {
       var statusBadgeBgRgb = statusColor === '#4ade80' ? '16,185,129' : statusColor === '#60a5fa' ? '96,165,250' : '148,163,184';
       // A linha compacta é um <a> de verdade (o href navega sozinho); aqui só entra o
       // "Abrindo o torneio…" — a espera depois do toque é a MESMA do card grande.
-      return '<a href="#tournaments/' + t.id + '" class="compact-row" data-search-blob="' + window._safeHtml(window._tournamentSearchBlob ? window._tournamentSearchBlob(t) : '') + '" style="display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:10px;background:' + window._spCor(_rowBg, 'background') + ';border:1px solid ' + window._spCor(_rowBd, 'borda') + ';text-decoration:none;color:inherit;transition:background 0.2s;" onclick="event.preventDefault();if(window._navTorneioComAviso)window._navTorneioComAviso(\'' + String(t.id).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\', event);else window.location.hash=\'#tournaments/' + t.id + '\';" onmouseover="this.style.background=\'' + _rowBgH + '\'" onmouseout="this.style.background=\'' + _rowBg + '\'">' +
+      return '<a href="#tournaments/' + t.id + '" class="compact-row"' + (isParticipating ? ' data-dashboard-enrolled="1"' : '') + ' data-search-blob="' + window._safeHtml(window._tournamentSearchBlob ? window._tournamentSearchBlob(t) : '') + '" style="display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:10px;background:' + window._spCor(_rowBg, 'background') + ';border:1px solid ' + window._spCor(_rowBd, 'borda') + ';text-decoration:none;color:inherit;transition:background 0.2s;" onclick="event.preventDefault();if(window._navTorneioComAviso)window._navTorneioComAviso(\'' + String(t.id).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\', event);else window.location.hash=\'#tournaments/' + t.id + '\';" onmouseover="this.style.background=\'' + _rowBgH + '\'" onmouseout="this.style.background=\'' + _rowBg + '\'">' +
         // 1.9.50: `src` vazio + marca — o hidratador põe a base64 depois que a linha
         // existe. Antes, cada linha carregava até 111 KB de texto dentro do HTML.
         (window._tourLogoSrc(t) ? '<img data-tlogo-tid="' + window._safeHtml(String(t.id)) + '" alt="" class="compact-logo" style="width:36px;height:36px;border-radius:' + window._tournamentLogoRadius(t) + ';object-fit:contain;flex-shrink:0;">' : '<div class="compact-logo" style="width:36px;height:36px;border-radius:8px;background:rgba(99,102,241,0.2);display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0;">' + (getSportIcon(t.sport)) + '</div>') +
@@ -4553,7 +4559,10 @@ function renderDashboard(container) {
     }).catch(function() {}).then(function () { return _dashNamesReady; }).then(_dashHydrateNames);
   }
 
-  // Auto-scroll para resultados pendentes de aprovação.
+  // Entrada da dashboard: o destino operacional é "Seu próximo jogo". Sem
+  // jogo pendente, mostra o primeiro torneio em que a pessoa está inscrita.
+  // Resultados aguardando aprovação continuam no fluxo, mas não podem roubar
+  // esta entrada principal.
   // 600ms = após todos os _jumpTop do router (último em 350ms) e após a
   // restauração de scroll do _softRefreshView (RAF ~16ms).
   // Em navegação fresca (!_isSoftRefresh) reseta o guard para que o scroll
@@ -4572,7 +4581,9 @@ function renderDashboard(container) {
     // página; o auto-scroll é só uma conveniência da primeira abertura.
     var _cur = window.scrollY || window.pageYOffset || 0;
     if (_cur > 40) { window._dashPendingScrolled = true; return; }
-    var _section = document.querySelector('[data-has-pending="1"]');
+    var _section = document.getElementById('proximos-jogos-section');
+    if (!_section) _section = document.querySelector('[data-dashboard-enrolled="1"]');
+    if (!_section) _section = document.querySelector('[data-has-pending="1"]');
     if (_section) {
       window._dashPendingScrolled = true;
       // v3.1.24: "Meus Últimos Resultados" é colapsada por padrão — mas se há pendência
