@@ -25,6 +25,18 @@ if (!changed) {
 }
 const parts = production.split('.').map(Number);
 const next = [parts[0], parts[1], parts[2] + 1].join('.');
+// O deploy pode precisar ser retomado depois de uma revisão. Se a primeira
+// tentativa já materializou o mesmo patch, preparar de novo não pode empilhar
+// a mesma nota de release nem criar um corte artificialmente diferente.
+// [[regression_release_prepare_is_idempotent_for_same_production_target]]
+const notes = path.join(root, 'js/release-notes.js');
+const note = '// ' + next + ' — Atualização consolidada de produção com as correções validadas desde a última publicação.\n';
+if (current === next) {
+  const existingNotes = fs.readFileSync(notes, 'utf8');
+  if (!existingNotes.startsWith(note)) fs.writeFileSync(notes, note + existingNotes);
+  console.log('✓ corte de produção ' + next + ' já preparado; retomando sem duplicar a nota');
+  process.exit(0);
+}
 const replaceOne = (file, re, value) => {
   const full = path.join(root, file), before = fs.readFileSync(full, 'utf8');
   if (!re.test(before)) throw new Error('não encontrei versão em ' + file);
@@ -32,7 +44,6 @@ const replaceOne = (file, re, value) => {
 };
 replaceOne('js/store.js', /window\.SCOREPLACE_VERSION\s*=\s*'[^']+'/, "window.SCOREPLACE_VERSION = '" + next + "'");
 replaceOne('sw.js', /var CACHE_NAME = 'scoreplace-v[^']+'/, "var CACHE_NAME = 'scoreplace-v" + next + "'");
-const notes = path.join(root, 'js/release-notes.js');
-const note = '// ' + next + ' — Atualização consolidada de produção com as correções validadas desde a última publicação.\n';
-fs.writeFileSync(notes, note + fs.readFileSync(notes, 'utf8'));
+const existingNotes = fs.readFileSync(notes, 'utf8');
+if (!existingNotes.startsWith(note)) fs.writeFileSync(notes, note + existingNotes);
 console.log('✓ corte de produção preparado: ' + current + ' → ' + next + ' (base ' + lastCut.slice(0, 8) + ')');
