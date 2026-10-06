@@ -2333,3 +2333,8 @@ processo.
 - **Lançar um placar não pode multiplicar abas, filtros ou cabeçalhos de rodada.** A regressão foi identificada em 05/out, ao registrar um placar no Neon: callbacks de uma pintura anterior ainda conseguiam remontar a navegação depois de uma renderização mais nova. Cada pintura agora recebe uma geração; a anterior perde o direito de escrever, e suas camadas transitórias são desmontadas antes da nova tela.
 - **A aba Geral da agenda concentrada é por dia do evento.** Ela fica antes de Light/Power/Extreme e reúne os cards reais — sem clonar controles de placar — na ordem horário estimado e quadra. No Neon, a divisão feminina/masculina atualmente coincide com os dias, mas não é a regra: categorias de qualquer gênero marcadas no mesmo dia entram juntas.
 - Ao recarregar a chave, inclusive depois de lançar resultado com Geral aberta, os cards retornam primeiro aos seus lugares canônicos e a seção transitória é destruída. Isso impede cards órfãos, controles duplicados e navegação residual.
+## 2.3.292 — 6/out/2026 (dashboard abre no próximo jogo)
+
+- **Abrir o detalhe pelo card do torneio na dashboard agora entra em Próximos jogos e ancora no primeiro confronto pendente que já tem horário.** A ordem é horário, quadra e número do jogo; partidas sem horário não são escolhidas como alvo operacional.
+- O alvo persiste até a chave montar os cards, portanto a aba pode nascer correta sem a rolagem cair na classificação geral antes de o card existir.
+- A regressão cobre timestamps do Firestore nas formas `.seconds` e `.toMillis()`, jogos sem horário, seleção da aba e o caminho persistido até o leitor da chave.
