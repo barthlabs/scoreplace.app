@@ -2252,6 +2252,7 @@ function _renderCompetitionTeamStandings(t) {
       teamCompetition: overallCfg,
       competitionTeams: t.competitionTeams || [],
       matches: matches,
+      sport: t.sport,
       _competitionTeamOverallView: true
     });
     var categoryHtml = Object.keys(categories).sort().map(function (category) {
@@ -2260,6 +2261,7 @@ function _renderCompetitionTeamStandings(t) {
         teamCompetition: sectionCfg,
         competitionTeams: t.competitionTeams || [],
         matches: matches.filter(function (match) { return String((match && match.category) || 'Sem categoria') === category; }),
+        sport: t.sport,
         _competitionTeamCategoryView: category
       });
     }).join('');
@@ -2271,6 +2273,12 @@ function _renderCompetitionTeamStandings(t) {
   var rows = core.standings(t.competitionTeams || [], matches, cfg);
   if (!rows.length) return '';
   var byGames = cfg.ranking === 'games_diff';
+  // Beach Tennis não admite jogo empatado: mesmo placar de games é decidido no
+  // tie-break. A coluna E não é informação válida nessa classificação.
+  var sportName = typeof window._sportBaseName === 'function'
+    ? window._sportBaseName(t.sport)
+    : String(t.sport || '').replace(/^[^\wÀ-ɏ]+/u, '').trim();
+  var showDraws = !/beach\s+tennis/i.test(String(sportName || t.sport || ''));
   var safe = window._safeHtml || function (value) { return String(value == null ? '' : value); };
   var colorsByTeam = {};
   (t.competitionTeams || []).forEach(function (team) {
@@ -2288,7 +2296,7 @@ function _renderCompetitionTeamStandings(t) {
         ? '<td style="padding:9px 10px;text-align:center;font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);">' + (row.gamesDiff >= 0 ? '+' : '') + row.gamesDiff + '</td><td style="padding:9px 10px;text-align:center;color:var(--text-muted);">' + row.gamesWon + '-' + row.gamesLost + '</td>'
         : '<td style="padding:9px 10px;text-align:center;font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);">' + row.points + '</td>') +
       '<td style="padding:9px 10px;text-align:center;color:var(--sp-c-4ade80,#4ade80);">' + row.wins + '</td>' +
-      '<td style="padding:9px 10px;text-align:center;color:var(--sp-c-94a3b8,#94a3b8);">' + row.draws + '</td>' +
+      (showDraws ? '<td style="padding:9px 10px;text-align:center;color:var(--sp-c-94a3b8,#94a3b8);">' + row.draws + '</td>' : '') +
       '<td style="padding:9px 10px;text-align:center;color:var(--sp-c-f87171,#f87171);">' + row.losses + '</td>' +
       '<td style="padding:9px 10px;text-align:center;color:var(--text-muted);">' + row.played + '</td></tr>';
   }).join('');
@@ -2299,7 +2307,7 @@ function _renderCompetitionTeamStandings(t) {
     '<div style="padding:12px 14px 8px;font-weight:800;color:var(--sp-c-fde68a,#fde68a);">' + heading + '</div>' +
     '<div style="padding:0 14px 12px;font-size:.74rem;color:var(--text-muted);">Saldo acumulado: games feitos menos games sofridos.</div>' +
     '<table style="width:100%;border-collapse:collapse;min-width:440px;font-size:.84rem;"><thead><tr style="text-align:left;color:var(--text-muted);font-size:.68rem;text-transform:uppercase;letter-spacing:.35px;">' +
-      '<th style="padding:8px 10px;">#</th><th style="padding:8px 10px;">Time</th>' + (byGames ? '<th style="padding:8px 10px;text-align:center;">Saldo</th><th style="padding:8px 10px;text-align:center;">Games</th>' : '<th style="padding:8px 10px;text-align:center;">Pts</th>') + '<th style="padding:8px 10px;text-align:center;">V</th><th style="padding:8px 10px;text-align:center;">E</th><th style="padding:8px 10px;text-align:center;">D</th><th style="padding:8px 10px;text-align:center;">J</th>' +
+      '<th style="padding:8px 10px;">#</th><th style="padding:8px 10px;">Time</th>' + (byGames ? '<th style="padding:8px 10px;text-align:center;">Saldo</th><th style="padding:8px 10px;text-align:center;">Games</th>' : '<th style="padding:8px 10px;text-align:center;">Pts</th>') + '<th style="padding:8px 10px;text-align:center;">V</th>' + (showDraws ? '<th style="padding:8px 10px;text-align:center;">E</th>' : '') + '<th style="padding:8px 10px;text-align:center;">D</th><th style="padding:8px 10px;text-align:center;">J</th>' +
     '</tr></thead><tbody>' + body + '</tbody></table></section>';
 }
 window._renderCompetitionTeamStandings = _renderCompetitionTeamStandings;

@@ -63,13 +63,17 @@ function pairKey(a, b) { return [a, b].sort().join(' x '); }
   const html = W._renderCompetitionTeamStandings(t) || '';
   ok(/Classificação geral dos times/.test(html) && /Azul/.test(html) && /Verde/.test(html), 'quadro geral de times mostra todos os times, inclusive sem vitória');
   ok(/>\+4<\/td>/.test(html) && />0<\/td>/.test(html), 'quadro de times soma saldo de games do jogo real e ignora BYE');
+  t.sport = '🎾 Beach Tennis';
+  const beachTennis = W._renderCompetitionTeamStandings(t) || '';
+  ok(!/<th[^>]*>E<\/th>/.test(beachTennis), 'Beach Tennis não exibe coluna de empates na classificação de times');
   t.teamCompetition.aggregation = 'per_category';
   t.matches[0].category = 'Light';
   t.matches.push({ p1: 'Dupla Azul 2', p2: 'Dupla Verde 2', p1CompetitionTeamId: 'azul', p2CompetitionTeamId: 'verde', winner: 'p2', category: 'Power' });
   const separated = W._renderCompetitionTeamStandings(t) || '';
   ok(/Classificação geral dos times/.test(separated) && /Classificação · Light/.test(separated) && /Classificação · Power/.test(separated) &&
     /<details class="card" data-competition-team-category-standings="1"/.test(separated) &&
-    separated.indexOf('Classificação geral dos times') < separated.indexOf('Classificação por categorias'),
+    separated.indexOf('Classificação geral dos times') < separated.indexOf('Classificação por categorias') &&
+    !/<th[^>]*>E<\/th>/.test(separated),
     'geral de times vem aberta antes dos recortes por categoria, que ficam recolhidos');
 })();
 
