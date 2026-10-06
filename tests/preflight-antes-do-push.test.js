@@ -37,7 +37,7 @@ console.log('\n▸ ① preflight e integridade vêm antes do Hosting; backup vem
     cache: sh.indexOf('TRAVA DURA: O CACHE DO SW'),
     preflight: sh.indexOf('PREFLIGHT: TODOS OS GATES ANTES DE TOCAR NO'),
     npmtest: sh.indexOf('&& npm test'),
-    revisao: sh.indexOf('revisão cruzada sobre origin/main..HEAD'),
+    revisao: sh.indexOf('revisão cruzada sobre o corte $BASE_CORTE..HEAD'),
     // ⚠️ MARCO, não o texto do comando.
     push: sh.indexOf('# MARCO: push-do-main'),
     deploy: sh.indexOf('firebase deploy --only hosting --project')

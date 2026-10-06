@@ -10259,7 +10259,11 @@ window._profileMetaSlots = function(p, pName, isTeam, t, isOrg, opts) {
     }
     var fbGender = _decidido
       || ((!isTeam && p && typeof p === 'object') ? ((window._pGender && window._pGender(p)) || p.gender || '') : '');
-    var fbCat = window._profileMetaTournamentCategory(p, mn, t);
+    // Em produção o helper é carregado acima deste renderer; a guarda mantém o
+    // primeiro paint seguro durante carregamento parcial e em consumidores que
+    // extraem somente este bloco (não inventa categoria se a fonte não chegou).
+    var fbCat = typeof window._profileMetaTournamentCategory === 'function'
+      ? window._profileMetaTournamentCategory(p, mn, t) : '';
     var prefixName = isTeam ? String(mn).split(' ')[0] : '';
     var initial = window._profileMetaBadgesHtml(fbGender, window._profileMetaExtractSkill(fbCat, t), '', prefixName, t, fbCat);
     var _mt = _inline ? '0' : (mi === 0 ? '5px' : '3px');

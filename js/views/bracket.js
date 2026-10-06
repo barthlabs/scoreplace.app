@@ -1295,7 +1295,7 @@ function _bracketUpdateRoundHeadingPortal(root, scope) {
     return Math.ceil(item.rect.height || 0) + 18;
   }));
   portalHeight = Math.max(38, portalHeight);
-  portal.style.cssText = 'display:block;position:fixed;top:' + (Math.floor(anchorBottom) - 1) + 'px;left:' + Math.round(rootRect.left) + 'px;width:' + Math.round(rootRect.width) + 'px;max-width:100vw;height:' + portalHeight + 'px;box-sizing:border-box;overflow:hidden;isolation:isolate;pointer-events:none;z-index:29;background:#111114;border-bottom:1px solid rgba(255,255,255,.08);';
+  portal.style.cssText = 'display:block;position:fixed;top:' + (Math.floor(anchorBottom) - 1) + 'px;left:' + Math.round(rootRect.left) + 'px;width:' + Math.round(rootRect.width) + 'px;max-width:100%;height:' + portalHeight + 'px;box-sizing:border-box;overflow:hidden;isolation:isolate;pointer-events:none;z-index:29;background:#111114;border-bottom:1px solid rgba(255,255,255,.08);';
   for (var p = 0; p < visibleHeadings.length; p++) {
     var item = visibleHeadings[p];
     var heading = item.heading;
@@ -1512,7 +1512,7 @@ window._bracketCategoryTabsMount = function () {
   // uma fresta mínima com conteúdo da rodada visível. O espaçamento é do
   // próprio cabeçalho/coluna, sem sobrepor as duas camadas.
   // [[regression_round_heading_never_overlaps_category_tabs]]
-  style.textContent = '.bracket-round-column>.bracket-round-heading{position:relative!important;z-index:1!important;background:var(--bg-darker,#111114);padding:8px 0 9px;margin:0;} .bracket-general-rounds-track{max-width:100%;min-width:0;overflow-y:clip;} [data-bracket-round-heading-portal]{max-width:100vw;overflow:hidden;} .bracket-round-heading-portal h4,.bracket-round-heading-portal h5{margin:0!important;}';
+  style.textContent = '.bracket-round-column>.bracket-round-heading{position:relative!important;z-index:1!important;background:var(--bg-darker,#111114);padding:8px 0 9px;margin:0;} .bracket-general-rounds-track{max-width:100%;min-width:0;overflow-y:clip;} [data-bracket-round-heading-portal]{max-width:100%;overflow:hidden;} .bracket-round-heading-portal h4,.bracket-round-heading-portal h5{margin:0!important;}';
   // Ponto de montagem efetivo: cada chave nova sincroniza imediatamente o
   // portal de cabeçalhos e registra uma única escuta capturada de scroll.
   // Não mover para outro renderer: é aqui que `root` e `scope` já existem.

@@ -361,6 +361,8 @@ Depois, só o que for concreto, sempre com arquivo:linha:
    scripts/prepare-hosting-release.js, que o scripts/deploy-hosting.sh executa e commita para
    subir o próximo patch/cache-buster: não exija um bump já presente no pré-corte. Só marque
    BLOQUEIO se esse fluxo não existir ou não sincronizar app e service worker após o preparo.
+   Código novo com a mesma versão do release-base só bloqueia quando esse preparo não puder
+   gerar o patch/cache-buster antes do upload.
 Sem elogios, sem resumo do que leu, sem repetir o texto. Se algo é opinião, marque como tal.
 EOF
   echo
