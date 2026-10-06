@@ -9697,6 +9697,9 @@ window._navTorneioComAvisoAgora = function (tournamentId, evento) {
     }); });
   }
   var _foiPro = false;
+  // A troca de rota fica em um callback próprio: o navegador ganha um quadro
+  // entre o feedback do toque e o começo do render do detalhe.
+  var _trocarHashDoTorneio = function () { window.location.hash = '#tournaments/' + tournamentId; };
   var _irPro = function () {
     if (_foiPro) return; _foiPro = true;
     // O card genérico da dashboard não representa uma partida específica, mas
@@ -9708,7 +9711,7 @@ window._navTorneioComAvisoAgora = function (tournamentId, evento) {
         window._setTournamentMatchTarget(tournamentId, null, null);
       }
     } catch (eTarget) {}
-    window.location.hash = '#tournaments/' + tournamentId;
+    _trocarHashDoTorneio();
   };
   // 2.0.62 — MESMA correção do router: o `setTimeout(_irPro, 120)` disparava a
   // navegação ANTES de o loader virar pixel (com a thread ocupada o timeout vence

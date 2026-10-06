@@ -1214,6 +1214,11 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame) {
   // [[regression_operational_tabs_open_on_next_game]]
   if (focusNextGame) {
     var nextEntry = entries.find(function (entry) {
+      return entry && entry.card && entry.card.getAttribute('data-bracket-upcoming') === '1' && Number(entry.card.getAttribute('data-bracket-result-at')) <= 0;
+    });
+    // Geral também exibe jogos cuja presença ainda não está completa. Se não
+    // houver nenhum pronto, conserva uma âncora útil no primeiro pendente.
+    if (!nextEntry) nextEntry = entries.find(function (entry) {
       return entry && entry.card && Number(entry.card.getAttribute('data-bracket-result-at')) <= 0;
     });
     if (nextEntry && nextEntry.card) {
