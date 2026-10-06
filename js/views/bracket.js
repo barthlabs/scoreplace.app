@@ -2598,7 +2598,9 @@ function renderBracket(container, tournamentId, isInline) {
     // (banner era calculado na linha ~402 e descartado). Os outros ramos (Liga 428, grupos 436)
     // já o inseriam; só este esquecia.
     /*
-     * A classificação geral dos TIMES é o resumo do torneio e deve anteceder
+     * Decisão explícita do organizador para o Neon: a classificação geral dos
+     * TIMES, somando todas as categorias, aparece ANTES das chaves. Ela é o
+     * resumo do torneio e deve anteceder
      * as chaves no Neon. Ela contextualiza o quadro que vem abaixo; as
      * classificações por categoria continuam recolhidas dentro do mesmo bloco.
      * [[regression_team_standings_before_canonical_key]]
@@ -2621,7 +2623,7 @@ function renderBracket(container, tournamentId, isInline) {
       // ⚠️ A ORDEM É A DE ANTES: o `standbyHtml` (lista de espera) vem DEPOIS dos grupos,
       // então ele viaja na 2ª tacada junto com eles — separar por "leve/pesado" sem olhar
       // a ordem jogaria a espera pra cima dos grupos.
-      // Mesmo contrato do caminho canônico: a classificação geral dos times é
+      // Mesmo contrato explicitamente pedido para o Neon: a classificação geral dos times é
       // o resumo acima da chave; os detalhes por categoria ficam recolhidos.
       _pintarEmEtapas(container, headerHtml + _subChoiceBanner + startTournamentBanner + _phaseAdvanceBanner + progressBarHtml + readyBannerHtml,
         function () { return _competitionTeamStandingsHtml + renderGroupStage(t, isOrg, canEnterResult) + standbyHtml; }, _applyMyMatchesFilter);

@@ -52,5 +52,16 @@ ok(win._profileMetaTournamentCategory({}, 'Jogador 02', neon) === 'Fem Light',
 ok(win._profileMetaTournamentCategory({ category: 'Masc Power' }, 'Ignorado', neon) === 'Masc Power',
   'categoria direta da inscrição tem precedência sobre qualquer lookup do elenco');
 
+const canonicalRender = block(bracket,
+  'if (t._canonicalDraw && (t.currentPhaseIndex || 0) === 0',
+  '// ── Liga / Suíço');
+const groupRender = block(bracket,
+  "if (isGrupos && t.groups && t.groups.length > 0)",
+  '// Rei/Rainha NÃO é formato de fase');
+ok(canonicalRender.indexOf('_competitionTeamStandingsHtml + window._renderPhaseBracket') >= 0,
+  'Neon canônico mostra a classificação geral dos times antes das chaves, por decisão do organizador');
+ok(groupRender.indexOf('_competitionTeamStandingsHtml + renderGroupStage') >= 0,
+  'Neon em grupos preserva a mesma ordem: classificação geral antes das chaves');
+
 console.log('\n' + (fail ? '❌' : '✅') + ' neon-agenda-categoria-contract: ' + pass + ' ok, ' + fail + ' falharam');
 if (fail) process.exit(1);
