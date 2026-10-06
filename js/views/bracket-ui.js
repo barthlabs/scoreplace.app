@@ -2612,7 +2612,13 @@ window._saveResultInline = function (tId, matchId) {
   var _keepUpcomingViewMounted = false;
   try {
     var _tabState = window._bracketTabState && window._bracketTabState[String(tId)];
-    _operationalUpcomingRoot = document.querySelector('[data-bracket-tabs-root][data-tournament-id="' + String(tId).replace(/"/g, '\\"') + '"]');
+    // Não componha seletor CSS com um ID externo: Firestore hoje gera IDs
+    // alfanuméricos, mas o estado da tela também aceita IDs legados. Comparar
+    // o atributo evita que \`:\`, \`.\` ou \`#\` façam o card desaparecer ao salvar.
+    _operationalUpcomingRoot = Array.prototype.find.call(
+      document.querySelectorAll('[data-bracket-tabs-root]'),
+      function (node) { return node.getAttribute('data-tournament-id') === String(tId); }
+    ) || null;
     _keepUpcomingViewMounted = !!(_tabState && _tabState.category === '__upcoming' &&
       _operationalUpcomingRoot &&
       window._isConcentratedTournament && window._isConcentratedTournament(t));

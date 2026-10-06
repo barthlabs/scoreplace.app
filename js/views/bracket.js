@@ -1181,7 +1181,13 @@ function _bracketGeneralView(root, show, gender, onlyReady) {
 }
 
 function _bracketTabsApply(tid, gender, category, requestedRound) {
-  var root = document.querySelector('[data-bracket-tabs-root][data-tournament-id="' + String(tid).replace(/"/g, '\\"') + '"]');
+  // IDs de torneio não devem ser interpolados em seletores CSS. Além de ser
+  // mais seguro para IDs legados, a busca por atributo preserva as abas após
+  // salvar um placar mesmo que o ID contenha caracteres especiais.
+  var root = Array.prototype.find.call(
+    document.querySelectorAll('[data-bracket-tabs-root]'),
+    function (node) { return node.getAttribute('data-tournament-id') === String(tid); }
+  ) || null;
   if (!root) return;
   var usesRoundTabs = root.getAttribute('data-bracket-round-tabs') === '1';
   var roundButtons = root.querySelectorAll('[data-bracket-round-tab]');
