@@ -317,8 +317,8 @@ echo "  ✓ CACHE_NAME do SW = versão do app ($VER_APP)"
 # Interruptor por lado: `revisar-com-{gpt,claude}.sh desligar "<motivo>"` (passa com aviso).
 # Escape só com uma linha `sem-gpt: <motivo>` num commit a publicar, e SP_SEM_GPT=1.
 fase "nota+gates locais"
-echo "▸ 1.8 revisão cruzada sobre origin/main..HEAD…"
-if ! "$RAIZ/scripts/revisar.sh" diff; then
+echo "▸ 1.8 revisão cruzada sobre o corte $BASE_CORTE..HEAD…"
+if ! SP_REVIEW_BASE="$BASE_CORTE" "$RAIZ/scripts/revisar.sh" diff; then
   echo
   echo "✗ O REVISOR NÃO APROVOU (ou não respondeu) — nada foi empurrado nem publicado."
   echo "  Parecer em .claude/tmp/parecer-<revisor>-diff.md: atenda os pontos e rode de novo (o"

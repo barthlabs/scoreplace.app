@@ -17,8 +17,9 @@
 #   plano  — ANTES de editar: quem vai implementar escreve o que muda e o revisor confere contra
 #            o código REAL (leitura da árvore, nunca escrita). Só APROVADO libera; na resubmissão
 #            o parecer anterior vai junto pra ele conferir o que foi atendido.
-#   diff   — ANTES de publicar: revisa origin/main..HEAD + o que não foi commitado. O
-#            deploy-hosting.sh chama este modo (passo 1.8) com REVISOR=auto.
+#   diff   — ANTES de publicar: revisa o corte atual desde SP_REVIEW_BASE (ou
+#            origin/main na ausência dele) + o que não foi commitado. O deploy
+#            informa a base do último corte para não reabrir ressalvas antigas.
 #
 # A FAIXA é o PISO do esforço — regra sobre os arquivos tocados, não opinião de modelo:
 #   trivial  — só CSS/texto/notas/ícones, ou (SÓ no diff) só o bump em store.js → SEM revisão.
@@ -138,9 +139,18 @@ if [[ -n "${SP_GPT_FAIXA:-}" && ! "${SP_GPT_FAIXA}" =~ ^(normal|critica)$ ]]; th
 fi
 
 # ── arquivos tocados ─────────────────────────────────────────────────────────────────
+base_do_diff() {
+  local base="${SP_REVIEW_BASE:-origin/main}"
+  if git rev-parse --verify -q "${base}^{commit}" >/dev/null; then
+    printf '%s\n' "$base"
+  else
+    printf '%s\n' 'origin/main'
+  fi
+}
+BASE_DIFF="$(base_do_diff)"
 arquivos_do_diff() {
   {
-    git diff --name-only origin/main...HEAD 2>/dev/null || true
+    git diff --name-only "$BASE_DIFF"...HEAD 2>/dev/null || true
     git diff --name-only HEAD 2>/dev/null || true
     git ls-files --others --exclude-standard 2>/dev/null || true
   } | sed '/^$/d' | sort -u
@@ -153,13 +163,13 @@ arquivos_do_plano() {
 # store.js é CRÍTICO, mas o bump de versão sozinho é TRIVIAL — SÓ no diff há como saber
 so_bump_de_versao() {
   local n
-  n=$( { git diff origin/main...HEAD -- js/store.js; git diff HEAD -- js/store.js; } 2>/dev/null \
+  n=$( { git diff "$BASE_DIFF"...HEAD -- js/store.js; git diff HEAD -- js/store.js; } 2>/dev/null \
        | grep -E '^[-+]' | grep -vE '^(\+\+\+|---)' | grep -vc 'SCOREPLACE_VERSION' || true )
   [[ "${n:-0}" -eq 0 ]]
 }
 linhas_do_diff() { # inclui não rastreados: eles vão pro revisor, então contam no teto
   local n1 n2
-  n1=$( { git diff --numstat origin/main...HEAD 2>/dev/null; git diff --numstat HEAD 2>/dev/null; } \
+  n1=$( { git diff --numstat "$BASE_DIFF"...HEAD 2>/dev/null; git diff --numstat HEAD 2>/dev/null; } \
         | awk '{a+=$1; d+=$2} END {print a+d+0}' )
   n2=$( git ls-files --others --exclude-standard -z 2>/dev/null | xargs -0 cat 2>/dev/null | wc -l | tr -d ' ' )
   echo $(( ${n1:-0} + ${n2:-0} ))
@@ -287,15 +297,24 @@ fi
 # revisado for idêntico. Assim o deploy não cobra/reaguarda o Claude quando nada
 # mudou, mas qualquer alteração invalida o recibo automaticamente.
 RECIBO="$OUT.sha256"
+RECIBO_BASE="$OUT.base"
 FINGERPRINT=""
 if [[ "$MODO" == diff ]]; then
-  FINGERPRINT=$( { git diff origin/main...HEAD 2>/dev/null; git diff HEAD 2>/dev/null; git ls-files --others --exclude-standard -z 2>/dev/null | xargs -0 shasum -a 256 2>/dev/null; } | shasum -a 256 | awk '{print $1}')
+  FINGERPRINT=$( { git diff "$BASE_DIFF"...HEAD 2>/dev/null; git diff HEAD 2>/dev/null; git ls-files --others --exclude-standard -z 2>/dev/null | xargs -0 shasum -a 256 2>/dev/null; } | shasum -a 256 | awk '{print $1}')
   if [[ -s "$OUT" && -s "$RECIBO" && "$(cat "$RECIBO")" == "$FINGERPRINT" ]] && grep -qE '(^|\*\*)VEREDITO: *APROVADO' "$OUT"; then
     echo "  ✓ parecer APROVADO reaproveitado: diff idêntico ($FINGERPRINT)."
     exit 0
   fi
 fi
-ANTERIOR=""; [[ -s "$OUT" ]] && ANTERIOR="$(cat "$OUT")"
+# Um parecer só é contexto de ressubmissão se revisou O MESMO corte. Sem essa
+# vinculação, trocar origin/main pela base real da publicação carregava uma
+# ressalva histórica (até de outro release) e a transformava em bloqueio eterno.
+ANTERIOR=""
+if [[ "$MODO" == diff && -s "$OUT" && -s "$RECIBO_BASE" && "$(cat "$RECIBO_BASE")" == "$BASE_DIFF" ]]; then
+  ANTERIOR="$(cat "$OUT")"
+elif [[ "$MODO" != diff && -s "$OUT" ]]; then
+  ANTERIOR="$(cat "$OUT")"
+fi
 {
   cat <<EOF
 Você é o REVISOR de segunda opinião deste repositório (scoreplace.app — SPA em vanilla JS +
@@ -322,6 +341,13 @@ investigação técnica concreta (por exemplo, uma cadeia transacional extensa o
 de autorização que exige prova adicional). Não escale por cautela genérica, por tamanho do
 diff, nem só porque há RESSALVAS ou BLOQUEIO: nesses casos, liste os ajustes e deixe NAO.
 
+LIMITE DE AUTORIDADE: revisão é consultiva e só pode bloquear por defeito concreto,
+reproduzível e ligado ao corte (regressão, segurança, perda de dados, autorização ou falha
+de build/teste). Não bloqueie por memória externa, arquivo fora do repositório, preferência
+de processo, relato manual de teste, ou tarefa documental não solicitada pelo responsável.
+O deploy executa a suíte completa depois da revisão; peça um teste adicional apenas quando
+ele provar um defeito específico deste diff, indicando arquivo e cenário.
+
 Depois, só o que for concreto, sempre com arquivo:linha:
 1. O QUE QUEBRA — regressão, caso não coberto, concorrência, dado que some.
 2. O QUE JÁ EXISTE — função/padrão/porta que o texto reinventa em vez de reusar.
@@ -340,9 +366,9 @@ EOF
   if [[ "$MODO" == "plano" ]]; then
     echo "=== PLANO A REVISAR (arquivo: $PLANO) ==="; cat "$PLANO"
   else
-    echo "=== DIFF A REVISAR (origin/main..HEAD + alterações não commitadas) ==="
-    echo "--- commits à frente de origin/main:"; git log --oneline origin/main..HEAD 2>/dev/null || true
-    echo "--- diff:"; git diff origin/main...HEAD 2>/dev/null || true; git diff HEAD 2>/dev/null || true
+    echo "=== DIFF A REVISAR ($BASE_DIFF..HEAD + alterações não commitadas) ==="
+    echo "--- commits à frente da base do corte:"; git log --oneline "$BASE_DIFF"..HEAD 2>/dev/null || true
+    echo "--- diff:"; git diff "$BASE_DIFF"...HEAD 2>/dev/null || true; git diff HEAD 2>/dev/null || true
     git ls-files --others --exclude-standard -z 2>/dev/null | while IFS= read -r -d '' f; do
       echo "--- arquivo NOVO não rastreado: $f"; sed -n '1,400p' "$f"
     done
@@ -418,6 +444,7 @@ executar_revisor() {
 echo "  revisor: $REVISOR${MODELO:+ · modelo $MODELO}${ESFORCO:+ · esforço $ESFORCO}${ANTERIOR:+ · RESUBMISSÃO} · prompt: $(wc -c < "$PROMPT" | tr -d ' ') bytes · aguarde (minutos)…"
 executar_revisor ""
 mv "$RASCUNHO" "$OUT"; RASCUNHO=""
+[[ "$MODO" == diff ]] && printf '%s\n' "$BASE_DIFF" > "$RECIBO_BASE"
 
 ESCALAR=$(grep -m1 -oE 'ESCALAR: *(SIM|NAO)' "$OUT" | sed 's/ESCALAR: *//' || true)
 if [[ "$REVISOR" == gpt && "$ESCALAR" == SIM && "$ESFORCO" == medium ]]; then
