@@ -411,10 +411,11 @@ executar_revisor() {
   # aguardava confirmação e terminava sem stdout. A allowlist é só leitura; stderr vai
   # separado porque o parser abaixo procura o 1º `{` do stdout.
   CLAUDE_EXTRA=(); [[ "$MODELO" != haiku ]] && CLAUDE_EXTRA+=(--effort "$ESFORCO")
-  # Teto separado por motor: Haiku recebe US$ 0.25; Sonnet crítico, US$ 0.60. Um override
-  # explícito continua possível só para diagnóstico operacional, sem mudar o padrão econômico.
+  # Teto separado por motor: Haiku recebe US$ 0.35; Sonnet crítico, US$ 0.60. O limite
+  # anterior de 0.25 encerrava revisões normais antes de devolver veredito, bloqueando o
+  # deploy sem uma avaliação. Um override explícito continua possível para diagnóstico.
   if [[ "$MODELO" == haiku ]]; then
-    CLAUDE_ORCAMENTO="${SP_CLAUDE_MAX_BUDGET_USD_NORMAL:-0.25}"
+    CLAUDE_ORCAMENTO="${SP_CLAUDE_MAX_BUDGET_USD_NORMAL:-0.35}"
   else
     CLAUDE_ORCAMENTO="${SP_CLAUDE_MAX_BUDGET_USD_CRITICA:-0.60}"
   fi

@@ -161,7 +161,7 @@ r = runLab(labCLAUDE, ['plano', planoAdapt], { CLAUDE_BIN: fakeClaude, FAKE_MODE
 ok(r.code === 2, 'Claude pede investigação: bloqueia sem gastar outra chamada — code ' + r.code);
 ok(fs.readFileSync(modelos, 'utf8') === 'haiku\n', 'Claude faz uma única chamada Haiku, sem escalada automática');
 
-ok(NUCLEO.includes('SP_CLAUDE_MAX_BUDGET_USD_NORMAL:-0.25') &&
+ok(NUCLEO.includes('SP_CLAUDE_MAX_BUDGET_USD_NORMAL:-0.35') &&
    NUCLEO.includes('SP_CLAUDE_MAX_BUDGET_USD_CRITICA:-0.60') &&
    NUCLEO.includes('--max-budget-usd "$CLAUDE_ORCAMENTO"') &&
    NUCLEO.includes('--no-session-persistence'), 'Claude possui tetos econômicos por faixa e sessão efêmera');
