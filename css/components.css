@@ -253,6 +253,22 @@ input[type="time"].sp-team-draw-time::-webkit-datetime-edit-minute-field {
      com stacking-context próprio da matriz apareça por cima ao rolar no desktop. */
   isolation: isolate;
 }
+/* A matriz da chave pode ter dezenas de colunas e camadas próprias. A faixa
+   "Voltar" precisa ser uma máscara opaca de largura integral, inclusive nos
+   poucos pixels imediatamente acima e abaixo dela; caso contrário, um repaint
+   durante o scroll deixa cards atravessarem visualmente o cabeçalho.
+   [[regression_back_header_never_leaks_bracket_content_full_width]] */
+.sticky-back-header::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  pointer-events: none;
+  left: 0;
+  right: 0;
+  top: -32px;
+  bottom: -32px;
+  background: var(--bg-darker, #111114);
+}
 /* No z-index lowering needed — hamburger dropdown is OUTSIDE the topbar
    at z-index 102 (its own stacking context). back-header stays at 101.
    Both are visible and clickable simultaneously. */

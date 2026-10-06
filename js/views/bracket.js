@@ -949,7 +949,11 @@ function _bracketGeneralView(root, show, gender, onlyReady) {
   if (!view) {
     view = document.createElement('section');
     view.setAttribute('data-bracket-general-view', '1');
-    view.style.cssText = 'display:none;margin:12px 0 18px;';
+    // A agenda operacional é larga por natureza (uma coluna por rodada), mas
+    // jamais pode pintar fora da largura da chave, nem durante um repaint de
+    // placar. O trilho interno é o único ponto que pode rolar na horizontal.
+    // [[regression_general_agenda_never_leaks_past_full_width]]
+    view.style.cssText = 'display:none;margin:12px 0 18px;width:100%;max-width:100%;min-width:0;box-sizing:border-box;overflow-x:clip;isolation:isolate;';
     root.insertAdjacentElement('afterend', view);
     root._bracketGeneralView = view;
   }
@@ -1076,15 +1080,19 @@ function _bracketGeneralView(root, show, gender, onlyReady) {
     groups[key].push(entry);
   });
   var roundsTrack = document.createElement('div');
-  roundsTrack.style.cssText = 'display:flex;align-items:flex-start;gap:20px;overflow-x:auto;padding:0 0 14px;scroll-snap-type:x proximity;';
+  roundsTrack.className = 'bracket-general-rounds-track';
+  roundsTrack.style.cssText = 'display:flex;align-items:flex-start;gap:20px;width:100%;max-width:100%;min-width:0;box-sizing:border-box;overflow-x:auto;overflow-y:clip;padding:0 0 14px;scroll-snap-type:x proximity;';
   Object.keys(groups).sort(function (a, b) { return Number(a) - Number(b); }).forEach(function (key) {
     groups[key].sort(function (a, b) {
       if (a.at !== b.at) return a.at - b.at;
       return String(a.court).localeCompare(String(b.court), 'pt-BR', { numeric: true });
     });
     var group = document.createElement('section');
+    // Usa o mesmo contrato das colunas canônicas: assim o cabeçalho de cada
+    // rodada da Geral é fixado pelo portal enquanto seus cards rolam.
+    group.className = 'bracket-round-column bracket-general-round-column';
     group.style.cssText = 'flex:0 0 min(380px,88vw);min-width:280px;scroll-snap-align:start;';
-    group.innerHTML = '<h4 style="margin:0 0 10px;padding:0 0 9px 10px;border-left:4px solid var(--sp-c-fbbf24,#fbbf24);border-bottom:1px solid rgba(255,255,255,.10);color:var(--sp-c-fde68a,#fde68a);font-size:.82rem;letter-spacing:1px;text-transform:uppercase;">Rodada ' + (window._safeHtml ? window._safeHtml(String(key)) : String(key)) + '</h4>';
+    group.innerHTML = '<h4 class="bracket-round-heading" style="margin:0 0 10px;padding:0 0 9px 10px;border-left:4px solid var(--sp-c-fbbf24,#fbbf24);border-bottom:1px solid rgba(255,255,255,.10);color:var(--sp-c-fde68a,#fde68a);font-size:.82rem;letter-spacing:1px;text-transform:uppercase;">Rodada ' + (window._safeHtml ? window._safeHtml(String(key)) : String(key)) + '</h4>';
     var grid = document.createElement('div');
     grid.style.cssText = 'display:grid;grid-template-columns:minmax(0,1fr);gap:14px;align-items:start;';
     groups[key].forEach(function (entry) { grid.appendChild(entry.wrapper); });
@@ -1258,8 +1266,10 @@ function _bracketUpdateRoundHeadingPortal(root, scope) {
     root._bracketRoundHeadingPortal = portal;
   }
   portal.innerHTML = '';
-  var anchorBottom = root.getBoundingClientRect().bottom;
+  var rootRect = root.getBoundingClientRect();
+  var anchorBottom = rootRect.bottom;
   var headings = scope.querySelectorAll('.bracket-round-heading');
+  var visibleHeadings = [];
   for (var i = 0; i < headings.length; i++) {
     var heading = headings[i];
     // Nas chaves eliminatórias a coluna é explícita. Nos grupos, o h5 vive no
@@ -1270,6 +1280,26 @@ function _bracketUpdateRoundHeadingPortal(root, scope) {
     var rect = heading.getBoundingClientRect();
     var colRect = column ? column.getBoundingClientRect() : rect;
     if (rect.width < 1 || rect.top >= anchorBottom || colRect.bottom <= anchorBottom) continue;
+    visibleHeadings.push({ heading: heading, rect: rect });
+  }
+  if (!visibleHeadings.length || rootRect.width < 1) {
+    portal.style.display = 'none';
+    return;
+  }
+  // O portal é uma faixa ÚNICA e recortada exatamente na largura das abas.
+  // Antes, cada título era `position:fixed` por conta própria: ao rolar uma
+  // matriz larga, os clones escapavam à esquerda/direita e apareciam acima ou
+  // abaixo da barra Voltar. Nenhum descendente pode atravessar este viewport.
+  // [[regression_round_portal_is_hard_clipped_to_tabs_width]]
+  var portalHeight = Math.max.apply(null, visibleHeadings.map(function (item) {
+    return Math.ceil(item.rect.height || 0) + 18;
+  }));
+  portalHeight = Math.max(38, portalHeight);
+  portal.style.cssText = 'display:block;position:fixed;top:' + (Math.floor(anchorBottom) - 1) + 'px;left:' + Math.round(rootRect.left) + 'px;width:' + Math.round(rootRect.width) + 'px;max-width:100vw;height:' + portalHeight + 'px;box-sizing:border-box;overflow:hidden;isolation:isolate;pointer-events:none;z-index:29;background:#111114;border-bottom:1px solid rgba(255,255,255,.08);';
+  for (var p = 0; p < visibleHeadings.length; p++) {
+    var item = visibleHeadings[p];
+    var heading = item.heading;
+    var rect = item.rect;
     var clone = document.createElement('div');
     clone.className = 'bracket-round-heading-portal';
     // Sequência da correção 2.3.274: aquela versão já removeu a margem
@@ -1280,7 +1310,7 @@ function _bracketUpdateRoundHeadingPortal(root, scope) {
     // um pixel por baixo da faixa (z-index 29 contra 31), eliminando a emenda
     // sem deslocar a tipografia do título.
     // [[regression_round_portal_overlaps_tabs_subpixel_seam]]
-    clone.style.cssText = 'position:fixed;top:' + Math.floor(anchorBottom) + 'px;left:' + Math.round(rect.left) + 'px;width:' + Math.round(rect.width) + 'px;box-sizing:border-box;z-index:29;background:var(--bg-darker,#111114);padding:8px 0 9px;box-shadow:0 8px 0 var(--bg-darker,#111114);';
+    clone.style.cssText = 'position:absolute;top:1px;left:' + Math.round(rect.left - rootRect.left) + 'px;width:' + Math.round(rect.width) + 'px;box-sizing:border-box;background:var(--bg-darker,#111114);padding:8px 0 9px;';
     // O portal só acompanha o título da rodada. A máscara que avançava para
     // baixo escondia busca e cards ao rolar em telas estreitas.
     clone.style.background = '#111114';
@@ -1355,7 +1385,7 @@ window._bracketCategoryTabsMount = function () {
     // Sem margem inferior: ela era transparente e deixava título/card da chave
     // vazar no intervalo entre as categorias e as rodadas.
     // [[regression_bracket_tabs_do_not_leak_round_content]]
-    root.style.cssText = 'display:block;box-sizing:border-box;width:100%;margin:0;padding:4px 12px 6px;border:0;border-radius:0;background:#111114;overflow:hidden;position:sticky;top:calc(var(--topbar-h,60px) + var(--hamburger-dd-h,0px) + var(--backheader-h,0px) + var(--stickybar-h,0px) - 1px);z-index:31;isolation:isolate;box-shadow:0 8px 12px -12px rgba(0,0,0,.95);';
+    root.style.cssText = 'display:block;box-sizing:border-box;width:100%;max-width:100%;min-width:0;margin:0;padding:4px 12px 6px;border:0;border-radius:0;background:#111114;overflow:clip;position:sticky;top:calc(var(--topbar-h,60px) + var(--hamburger-dd-h,0px) + var(--backheader-h,0px) + var(--stickybar-h,0px) - 1px);z-index:31;isolation:isolate;box-shadow:0 8px 12px -12px rgba(0,0,0,.95);';
     var anchor = _bracketTabsAnchor(first);
     // Em Ouro/Prata, sobe mais um nível: a faixa deve ficar acima da seção
     // inteira (título, classificação e rodadas), para poder ocultar a linha
@@ -1482,7 +1512,7 @@ window._bracketCategoryTabsMount = function () {
   // uma fresta mínima com conteúdo da rodada visível. O espaçamento é do
   // próprio cabeçalho/coluna, sem sobrepor as duas camadas.
   // [[regression_round_heading_never_overlaps_category_tabs]]
-  style.textContent = '.bracket-round-column>.bracket-round-heading{position:relative!important;z-index:1!important;background:var(--bg-darker,#111114);padding:8px 0 9px;margin:0;} .bracket-round-heading-portal h4,.bracket-round-heading-portal h5{margin:0!important;}';
+  style.textContent = '.bracket-round-column>.bracket-round-heading{position:relative!important;z-index:1!important;background:var(--bg-darker,#111114);padding:8px 0 9px;margin:0;} .bracket-general-rounds-track{max-width:100%;min-width:0;overflow-y:clip;} [data-bracket-round-heading-portal]{max-width:100vw;overflow:hidden;} .bracket-round-heading-portal h4,.bracket-round-heading-portal h5{margin:0!important;}';
   // Ponto de montagem efetivo: cada chave nova sincroniza imediatamente o
   // portal de cabeçalhos e registra uma única escuta capturada de scroll.
   // Não mover para outro renderer: é aqui que `root` e `scope` já existem.
