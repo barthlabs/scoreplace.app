@@ -2827,7 +2827,10 @@ function renderDashboard(container) {
       }
 
       // v3.1.24: SEÇÃO SEPARADA, NÃO colapsável — renderizada ANTES de "Meus Últimos Resultados".
-      _upHtml += '<div id="proximos-jogos-section" style="background:rgba(56,189,248,0.05);border:1px solid rgba(56,189,248,0.18);border-radius:14px;padding:14px 16px;margin-bottom:1rem;">';
+      // A entrada automática da Dashboard ancora nesta seção. A margem de
+      // rolagem pertence ao próprio destino: assim "Seu próximo jogo" nunca
+      // fica sob o cabeçalho fixo, independentemente da altura do chrome.
+      _upHtml += '<div id="proximos-jogos-section" style="scroll-margin-top:calc(var(--scroll-anchor, 0px) + 12px);background:rgba(56,189,248,0.05);border:1px solid rgba(56,189,248,0.18);border-radius:14px;padding:14px 16px;margin-bottom:1rem;">';
       _upHtml += '<h3 style="margin:0 0 12px;font-size:0.85rem;font-weight:700;color:var(--sp-c-38bdf8,#38bdf8);letter-spacing:0.04em;text-transform:uppercase;display:flex;align-items:center;gap:8px;">⚔️ Seu próximo jogo</h3>';
       _upHtml += '<div style="border-left:3px solid #818cf8;padding-left:10px;margin-bottom:10px;">' +
         '<div style="font-weight:800;color:var(--text-bright);font-size:0.92rem;text-transform:uppercase;letter-spacing:0.5px;line-height:1.25;">' + _sf(_ng.tName) + '</div>' +
