@@ -945,6 +945,12 @@ function _bracketGeneralView(root, show, gender, onlyReady) {
   if (!root) return false;
   var scope = root._bracketTabsScope || (root.closest && root.closest('#view-container, #inline-bracket-container'));
   if (!scope) return false;
+  // A visão operacional (Geral/Próximos jogos) é conteúdo da chave, não um
+  // atalho que deve furar o cartão de detalhes do torneio. O cartão canônico
+  // precisa continuar antes das rodadas tanto na Geral quanto nos Próximos.
+  // [[regression_operational_view_stays_after_tournament_details]]
+  var detailsCard = scope.querySelector ? scope.querySelector('#tourn-grid-container') : null;
+  var operationalAnchor = detailsCard || root;
   var view = root._bracketGeneralView;
   if (!view) {
     view = document.createElement('section');
@@ -954,8 +960,12 @@ function _bracketGeneralView(root, show, gender, onlyReady) {
     // placar. O trilho interno é o único ponto que pode rolar na horizontal.
     // [[regression_general_agenda_never_leaks_past_full_width]]
     view.style.cssText = 'display:none;margin:12px 0 18px;width:100%;max-width:100%;min-width:0;box-sizing:border-box;overflow-x:clip;isolation:isolate;';
-    root.insertAdjacentElement('afterend', view);
+    operationalAnchor.insertAdjacentElement('afterend', view);
     root._bracketGeneralView = view;
+  } else if (operationalAnchor.parentNode && view.previousElementSibling !== operationalAnchor) {
+    // O detalhe é recriado depois de uma atualização de placar. Recoloque a
+    // visão operacional logo abaixo dele sem recriar inputs ou perder a aba.
+    operationalAnchor.insertAdjacentElement('afterend', view);
   }
   var entries = root._bracketGeneralEntries || [];
   if (!show) {
@@ -1118,6 +1128,11 @@ function _bracketGeneralView(root, show, gender, onlyReady) {
   }
   view.appendChild(roundsTrack);
   view.style.display = '';
+  // Os cards acabaram de trocar de coluna; o portal só pode medir cabeçalhos
+  // depois desse movimento. Sem esta sincronização, eles somem na primeira
+  // rolagem da Geral até algum outro evento forçar um resize.
+  // [[regression_general_round_headings_stick_after_cards_move]]
+  _bracketSyncRoundHeadingOffsets();
   return true;
 }
 
@@ -1332,6 +1347,10 @@ function _bracketEnsureRoundHeadingResizeListener() {
   if (window._bracketRoundHeadingResizeListener) return;
   window._bracketRoundHeadingResizeListener = function () { _bracketSyncRoundHeadingOffsets(); };
   window.addEventListener('resize', window._bracketRoundHeadingResizeListener, { passive: true });
+  // O scroll do documento é entregue de modo diferente entre navegadores
+  // quando a página tem trilhos horizontais internos. Ouvir também a janela
+  // garante que a régua da Geral acompanhe a rolagem vertical da página.
+  window.addEventListener('scroll', window._bracketRoundHeadingResizeListener, { passive: true });
   // Captura a rolagem da página e dos contêineres horizontais/verticais da
   // chave; assim o cabeçalho espelhado acompanha a rodada sem trocar o foco.
   document.addEventListener('scroll', window._bracketRoundHeadingResizeListener, true);
@@ -1385,7 +1404,12 @@ window._bracketCategoryTabsMount = function () {
     // Sem margem inferior: ela era transparente e deixava título/card da chave
     // vazar no intervalo entre as categorias e as rodadas.
     // [[regression_bracket_tabs_do_not_leak_round_content]]
-    root.style.cssText = 'display:block;box-sizing:border-box;width:100%;max-width:100%;min-width:0;margin:0;padding:4px 12px 6px;border:0;border-radius:0;background:#111114;overflow:clip;position:sticky;top:calc(var(--topbar-h,60px) + var(--hamburger-dd-h,0px) + var(--backheader-h,0px) + var(--stickybar-h,0px) - 1px);z-index:31;isolation:isolate;box-shadow:0 8px 12px -12px rgba(0,0,0,.95);';
+    // Não recortar verticalmente a própria navegação. `overflow:clip` cortava
+    // a metade superior de Feminina/Masculina ao ativar Light/Power/Extreme.
+    // A contenção horizontal pertence aos trilhos e ao portal das rodadas;
+    // aqui os filhos já têm largura limitada e precisam poder pintar inteiros.
+    // [[regression_primary_gender_tabs_are_never_vertically_clipped]]
+    root.style.cssText = 'display:block;box-sizing:border-box;width:100%;max-width:100%;min-width:0;margin:0;padding:4px 12px 6px;border:0;border-radius:0;background:#111114;overflow:visible;position:sticky;top:calc(var(--topbar-h,60px) + var(--hamburger-dd-h,0px) + var(--backheader-h,0px) + var(--stickybar-h,0px) - 1px);z-index:31;isolation:isolate;box-shadow:0 8px 12px -12px rgba(0,0,0,.95);';
     var anchor = _bracketTabsAnchor(first);
     // Em Ouro/Prata, sobe mais um nível: a faixa deve ficar acima da seção
     // inteira (título, classificação e rodadas), para poder ocultar a linha
