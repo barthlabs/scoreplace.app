@@ -268,13 +268,20 @@ input[type="time"].sp-team-draw-time::-webkit-datetime-edit-minute-field {
 .sticky-back-header::before {
   content: '';
   position: absolute;
-  z-index: -1;
+  /* A máscara precisa ficar NA FRENTE das camadas dos cards. Com z-index:-1
+     ela ficava atrás do próprio fundo do cabeçalho e não selava a emenda em
+     fullscreen; por isso a chave ainda aparecia acima de Voltar. */
+  z-index: 0;
   pointer-events: none;
   left: 0;
   right: 0;
-  top: 0;
-  bottom: 0;
+  top: -4px;
+  bottom: -4px;
   background: var(--bg-darker, #111114);
+}
+.sticky-back-header > * {
+  position: relative;
+  z-index: 1;
 }
 /* No z-index lowering needed — hamburger dropdown is OUTSIDE the topbar
    at z-index 102 (its own stacking context). back-header stays at 101.

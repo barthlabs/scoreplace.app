@@ -941,7 +941,7 @@ function _bracketTabsRefreshRoundRail(root) {
 // reagrupados por horário e quadra, sem clonar inputs, botões ou ids de placar.
 // Clonar os cards faria dois campos com o mesmo id e salvaria o resultado no
 // jogo errado. Ao sair de "Geral", cada card volta precisamente ao seu lugar.
-function _bracketGeneralView(root, show, gender, onlyReady) {
+function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame) {
   if (!root) return false;
   var scope = root._bracketTabsScope || (root.closest && root.closest('#view-container, #inline-bracket-container'));
   if (!scope) return false;
@@ -1172,6 +1172,24 @@ function _bracketGeneralView(root, show, gender, onlyReady) {
     }, 0);
     if (tallest > 0) operationalCards.forEach(function (card) { card.style.minHeight = tallest + 'px'; });
   });
+  // Geral e Próximos jogos são telas operacionais: ao abri-las, o primeiro
+  // jogo ainda não decidido é o foco, não o topo arbitrário da rodada nem o
+  // último placar preservado para conferência. O quinto argumento é explícito
+  // para que a atualização in-place após salvar placar não roube a rolagem.
+  // [[regression_operational_tabs_open_on_next_game]]
+  if (focusNextGame) {
+    var nextEntry = entries.find(function (entry) {
+      return entry && entry.card && entry.card.getAttribute('data-bracket-upcoming') === '1';
+    });
+    if (nextEntry && nextEntry.card && typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+          if (!nextEntry.card.isConnected || nextEntry.card.hidden || window._travaRolagemDaChave) return;
+          nextEntry.card.scrollIntoView({ behavior: 'auto', block: 'start', inline: 'start' });
+        });
+      });
+    }
+  }
   // Os cards acabaram de trocar de coluna; o portal só pode medir cabeçalhos
   // depois desse movimento. Sem esta sincronização, eles somem na primeira
   // rolagem da Geral até algum outro evento forçar um resize.
@@ -1260,7 +1278,7 @@ function _bracketTabsApply(tid, gender, category, requestedRound) {
     qb.style.borderColor = onRound ? 'rgba(16,185,129,.72)' : 'rgba(255,255,255,.12)';
   }
   if (isOperationalView) {
-    var operationalShown = _bracketGeneralView(root, true, gender, isUpcoming);
+    var operationalShown = _bracketGeneralView(root, true, gender, isUpcoming, true);
     // Dados legados sem horário não podem esconder a chave inteira quando a
     // aba Geral foi restaurada de uma visita anterior. Volta para uma categoria
     // real em vez de deixar a tela preta.
@@ -1389,7 +1407,7 @@ function _bracketUpdateRoundHeadingPortal(root, scope) {
   // emenda sem criar espaço vertical, e a cópia abaixo preserva a posição do
   // texto exatamente onde o cabeçalho original estaria.
   // [[regression_round_portal_covers_fullscreen_subpixel_seam]]
-  portal.style.cssText = 'display:block;position:fixed;top:' + (Math.floor(anchorBottom) - 2) + 'px;left:' + Math.round(rootRect.left) + 'px;width:' + Math.round(rootRect.width) + 'px;max-width:100%;height:' + (portalHeight + 1) + 'px;box-sizing:border-box;overflow:hidden;isolation:isolate;pointer-events:none;z-index:29;background:#111114;border-bottom:1px solid rgba(255,255,255,.08);box-shadow:0 -1px 0 #111114;';
+  portal.style.cssText = 'display:block;position:fixed;top:' + (Math.floor(anchorBottom) - 4) + 'px;left:' + Math.round(rootRect.left) + 'px;width:' + Math.round(rootRect.width) + 'px;max-width:100%;height:' + (portalHeight + 3) + 'px;box-sizing:border-box;overflow:hidden;isolation:isolate;pointer-events:none;z-index:1000;background:#111114;border-bottom:1px solid rgba(255,255,255,.08);box-shadow:0 -2px 0 #111114;';
   for (var p = 0; p < visibleHeadings.length; p++) {
     var item = visibleHeadings[p];
     var heading = item.heading;
@@ -1404,7 +1422,7 @@ function _bracketUpdateRoundHeadingPortal(root, scope) {
     // um pixel por baixo da faixa (z-index 29 contra 31), eliminando a emenda
     // sem deslocar a tipografia do título.
     // [[regression_round_portal_overlaps_tabs_subpixel_seam]]
-    clone.style.cssText = 'position:absolute;top:2px;left:' + Math.round(rect.left - rootRect.left) + 'px;width:' + Math.round(rect.width) + 'px;box-sizing:border-box;background:var(--bg-darker,#111114);padding:8px 0 9px;';
+    clone.style.cssText = 'position:absolute;top:4px;left:' + Math.round(rect.left - rootRect.left) + 'px;width:' + Math.round(rect.width) + 'px;box-sizing:border-box;background:var(--bg-darker,#111114);padding:8px 0 9px;';
     // O portal só acompanha o título da rodada. A máscara que avançava para
     // baixo escondia busca e cards ao rolar em telas estreitas.
     clone.style.background = '#111114';
@@ -1640,6 +1658,18 @@ window._bracketCategoryTabsMount = function () {
   if (isTeamSchedule && (state.category === '__general' || state.category === '__upcoming') && byGender[state.gender] && generalAgendaByGender[state.gender]) {
     _bracketTabsApply(id, state.gender, state.category, '');
     return;
+  }
+  // Em agenda concentrada, Geral é a entrada canônica. Categorias continuam
+  // acessíveis como abas, mas Light/Power/Extreme não podem virar o padrão só
+  // porque são as primeiras na matriz.
+  if (isTeamSchedule && !state.category) {
+    var defaultAgendaGender = byGender[state.gender] ? state.gender : order.find(function (candidate) {
+      return candidate !== 'linhas' && generalAgendaByGender[candidate];
+    });
+    if (defaultAgendaGender && generalAgendaByGender[defaultAgendaGender]) {
+      _bracketTabsApply(id, defaultAgendaGender, '__general', '');
+      return;
+    }
   }
   var targetGender = Object.keys(byGender).find(function (candidate) {
     return byGender[candidate].indexOf(state.category) !== -1;
