@@ -9699,6 +9699,15 @@ window._navTorneioComAvisoAgora = function (tournamentId, evento) {
   var _foiPro = false;
   var _irPro = function () {
     if (_foiPro) return; _foiPro = true;
+    // O card genérico da dashboard não representa uma partida específica, mas
+    // a entrada operacional do torneio precisa ter um alvo explícito. Sem esta
+    // intenção persistida o detalhe cai no primeiro bloco do DOM (classificação)
+    // em vez do primeiro jogo pendente da agenda.
+    try {
+      if (typeof window._setTournamentMatchTarget === 'function') {
+        window._setTournamentMatchTarget(tournamentId, null, null);
+      }
+    } catch (eTarget) {}
     window.location.hash = '#tournaments/' + tournamentId;
   };
   // 2.0.62 — MESMA correção do router: o `setTimeout(_irPro, 120)` disparava a

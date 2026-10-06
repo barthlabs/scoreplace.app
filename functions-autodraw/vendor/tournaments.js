@@ -1174,6 +1174,68 @@ window._scrollToBracketSection = function(tId, matchId) {
       return;
     }
   }
+  // Entrada genérica (card do torneio na dashboard): o alvo não é a chave
+  // inline, que também contém classificação. A agenda publicada é a fonte
+  // canônica; seleciona o primeiro jogo sem resultado por horário, quadra e
+  // número. Isso vale inclusive para um jogo que ainda aguarda presença.
+  if (!matchId) {
+    var pageScope = document.getElementById('view-container') || document;
+    var seenScheduled = {};
+    var scheduled = Array.prototype.slice.call(pageScope.querySelectorAll('[id^="card-"][data-bracket-scheduled-at]')).filter(function(card) {
+      var id = String(card.id || '');
+      var at = Number(card.getAttribute('data-bracket-scheduled-at'));
+      var resultAt = Number(card.getAttribute('data-bracket-result-at'));
+      if (!id || seenScheduled[id] || !isFinite(at) || at <= 0 || (isFinite(resultAt) && resultAt > 0)) return false;
+      seenScheduled[id] = true;
+      return true;
+    }).sort(function(a, b) {
+      var atA = Number(a.getAttribute('data-bracket-scheduled-at'));
+      var atB = Number(b.getAttribute('data-bracket-scheduled-at'));
+      if (atA !== atB) return atA - atB;
+      var court = String(a.getAttribute('data-bracket-court') || '').localeCompare(
+        String(b.getAttribute('data-bracket-court') || ''), 'pt-BR', { numeric: true }
+      );
+      if (court) return court;
+      return Number(a.getAttribute('data-match-num')) - Number(b.getAttribute('data-match-num'));
+    });
+    var nextScheduled = scheduled[0];
+    if (nextScheduled) {
+      var nextId = nextScheduled.id;
+      var nextGender = String(nextScheduled.getAttribute('data-bracket-tab-gender') || '');
+      // A Geral deixa o card dentro da agenda operacional; fazer a seleção
+      // antes do foco impede que a classificação seja o destino visual.
+      try {
+        if (nextGender && typeof window._bracketSelectCategoryTab === 'function') {
+          window._bracketSelectCategoryTab(String(tId), nextGender, '__general', '');
+        }
+      } catch (eTab) {}
+      var focusNextScheduled = function() {
+        var root = Array.prototype.find.call(document.querySelectorAll('[data-bracket-tabs-root]'), function(node) {
+          return node.getAttribute('data-tournament-id') === String(tId);
+        });
+        var agenda = root && root._bracketGeneralView;
+        var target = agenda && Array.prototype.find.call(agenda.querySelectorAll('[id^="card-"]'), function(card) {
+          return card.id === nextId;
+        });
+        if (!target) {
+          target = Array.prototype.find.call(pageScope.querySelectorAll('[id^="card-"]'), function(card) {
+            return card.id === nextId;
+          });
+        }
+        if (!target) return;
+        try { target.scrollIntoView({ behavior: 'smooth', block: 'start', inline: 'nearest' }); }
+        catch (eScroll) { target.scrollIntoView(); }
+      };
+      // A Geral move os cards entre contêineres; o segundo quadro usa o nó já
+      // assentado e vence qualquer foco inicial da própria aba.
+      if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(function() { requestAnimationFrame(focusNextScheduled); });
+      } else {
+        setTimeout(focusNextScheduled, 0);
+      }
+      return;
+    }
+  }
   var cu = window.AppStore && window.AppStore.currentUser;
   var isOrg = window._souOrganizador(t);
   var matches = (typeof window._collectAllMatches === 'function')
