@@ -4728,6 +4728,11 @@ function renderTournaments(container, tournamentId = null) {
     // classificação enquanto Próximos jogos aparece selecionada.
     if (_pendingBracketTarget && _pendingBracketTarget.matchId) {
         try { sessionStorage.setItem('sp_scrollToMatch', String(_pendingBracketTarget.matchId)); } catch (_targetStoreErr2) {}
+        // O alvo vindo da dashboard já escolheu a aba, mas renderBracket só arma
+        // sua rolagem automática quando a navegação veio pelo router. Sem este
+        // marcador, o atalho posterior tenta achar o card antes de a agenda
+        // terminar de montá-lo e a tela fica no topo do detalhe.
+        window._bracketPendingScroll = String(tournamentId);
     }
     // Renderiza a chave de forma transparente associada a esse torneio
     if (hasDrawn && typeof renderBracket === 'function') {

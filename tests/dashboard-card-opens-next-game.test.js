@@ -94,6 +94,8 @@ function section(from, to) {
   ok(!applyBlock.includes('if (!cards.length) return;') &&
     applyBlock.includes('if (cards.length) window._bracketApplyFilter();'),
     'organizador sem jogo próprio ainda consome a rolagem pendente da dashboard');
+  ok(tournaments.includes('window._bracketPendingScroll = String(tournamentId);'),
+    'o alvo explícito da dashboard arma a rolagem depois que a agenda terminou de montar');
 
   await browser.close();
   console.log('\n' + (fail ? '❌' : '✅') + ' dashboard-card-opens-next-game: ' + pass + ' ok, ' + fail + ' falharam');
