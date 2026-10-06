@@ -81,6 +81,23 @@ function section(from, to) {
   });
   ok(lateTarget.scrolled.length === 0 && lateTarget.pending === 'neon',
     'um alvo explícito ainda não montado é preservado, sem cair no topo/classificação');
+  const lateCardFocus = await page.evaluate(async () => {
+    document.body.innerHTML = '<section id="inline-bracket-container">Classificação geral dos times</section>';
+    window.AppStore = { tournaments: [{ id: 'neon' }] };
+    window._bracketPendingScroll = null;
+    const scrolled = [];
+    Element.prototype.scrollIntoView = function () { scrolled.push(this.id || this.textContent); };
+    window._scrollToBracketSection('neon', 'nasce-depois');
+    setTimeout(() => {
+      const card = document.createElement('article');
+      card.id = 'card-nasce-depois';
+      document.body.appendChild(card);
+    }, 80);
+    await new Promise((resolve) => setTimeout(resolve, 260));
+    return scrolled;
+  });
+  ok(lateCardFocus[0] === 'card-nasce-depois',
+    'se o card nasce depois da aba, a retentativa independente ainda o focaliza');
   const target = await page.evaluate(() => {
     window._collectAllMatches = (t) => t.matches;
     return window._nextScheduledTournamentMatchTarget({ matches: [

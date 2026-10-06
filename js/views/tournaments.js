@@ -1196,6 +1196,31 @@ window._nextScheduledTournamentMatchTarget = function(t) {
   return { matchId: String(matches[0].id), tab: matchTab(matches[0]) };
 };
 
+// A montagem da agenda é assíncrona: o detalhe pode já estar visível e a aba
+// “Próximos jogos” selecionada enquanto o card do jogo ainda não foi inserido.
+// Este é o único foco que espera o card solicitado nascer. Não usa a
+// classificação como fallback — se o card ainda não existe, continua tentando
+// até ele existir ou até o tempo limite.
+window._focusTournamentMatchWhenReady = function(tId, matchId, options) {
+  if (!matchId) return;
+  var attempts = 0;
+  var maxAttempts = 60;
+  var behavior = options && options.behavior ? options.behavior : 'auto';
+  var focus = function() {
+    if (window._travaRolagemDaChave) return;
+    var target = document.getElementById('card-' + String(matchId));
+    if (target && getComputedStyle(target).display !== 'none') {
+      try { if (typeof window._reflowChrome === 'function') window._reflowChrome(); } catch (eChrome) {}
+      try { target.scrollIntoView({ behavior: behavior, block: 'start', inline: 'nearest' }); }
+      catch (eScroll) { try { target.scrollIntoView(); } catch (eFallback) {} }
+      return;
+    }
+    attempts += 1;
+    if (attempts < maxAttempts) setTimeout(focus, 100);
+  };
+  focus();
+};
+
 window._scrollToBracketSection = function(tId, matchId) {
   var t = window.AppStore && window.AppStore.tournaments &&
           window.AppStore.tournaments.find(function(x){ return String(x.id) === String(tId); });
@@ -1209,8 +1234,7 @@ window._scrollToBracketSection = function(tId, matchId) {
   if (matchId) {
     var _specific = document.getElementById('card-' + matchId);
     if (_specific) {
-      try { _specific.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' }); }
-      catch (e) { _specific.scrollIntoView(); }
+      window._focusTournamentMatchWhenReady(tId, matchId, { behavior: 'smooth' });
       return;
     }
     // A chave pode estar sendo montada em lotes. Um alvo explícito que ainda
@@ -1219,6 +1243,10 @@ window._scrollToBracketSection = function(tId, matchId) {
     // card e executar a rolagem canônica.
     try { sessionStorage.setItem('sp_scrollToMatch', String(matchId)); } catch (eStore) {}
     window._bracketPendingScroll = String(tId);
+    // O leitor da chave também recebe a intenção, mas pode já ter rodado antes
+    // deste lote terminar. A retentativa independente é o que impede a entrada
+    // pela dashboard de parar no topo do detalhe.
+    window._focusTournamentMatchWhenReady(tId, matchId);
     return;
   }
   // Entrada genérica (card do torneio na dashboard): o alvo não é a chave
@@ -1247,7 +1275,10 @@ window._scrollToBracketSection = function(tId, matchId) {
     });
     var nextScheduled = scheduled[0];
     if (nextScheduled) {
-      var nextId = nextScheduled.id;
+      // `matchId` não inclui o prefixo de DOM `card-`. Passar o id inteiro
+      // fazia a função canônica procurar `card-card-…`, portanto o foco
+      // genérico jamais encontrava o jogo mesmo quando a aba estava correta.
+      var nextId = String(nextScheduled.id).slice(5);
       var nextGender = String(nextScheduled.getAttribute('data-bracket-tab-gender') || '');
       // A entrada operacional da dashboard é Próximos jogos, não a
       // classificação Geral. Selecionar a agenda antes do foco garante que o
@@ -1258,30 +1289,7 @@ window._scrollToBracketSection = function(tId, matchId) {
           window._bracketSelectCategoryTab(String(tId), nextGender, '__upcoming', '');
         }
       } catch (eTab) {}
-      var focusNextScheduled = function() {
-        var root = Array.prototype.find.call(document.querySelectorAll('[data-bracket-tabs-root]'), function(node) {
-          return node.getAttribute('data-tournament-id') === String(tId);
-        });
-        var agenda = root && root._bracketGeneralView;
-        var target = agenda && Array.prototype.find.call(agenda.querySelectorAll('[id^="card-"]'), function(card) {
-          return card.id === nextId;
-        });
-        if (!target) {
-          target = Array.prototype.find.call(pageScope.querySelectorAll('[id^="card-"]'), function(card) {
-            return card.id === nextId;
-          });
-        }
-        if (!target) return;
-        try { target.scrollIntoView({ behavior: 'smooth', block: 'start', inline: 'nearest' }); }
-        catch (eScroll) { target.scrollIntoView(); }
-      };
-      // A Geral move os cards entre contêineres; o segundo quadro usa o nó já
-      // assentado e vence qualquer foco inicial da própria aba.
-      if (typeof requestAnimationFrame === 'function') {
-        requestAnimationFrame(function() { requestAnimationFrame(focusNextScheduled); });
-      } else {
-        setTimeout(focusNextScheduled, 0);
-      }
+      window._focusTournamentMatchWhenReady(tId, nextId, { behavior: 'smooth' });
       return;
     }
   }
