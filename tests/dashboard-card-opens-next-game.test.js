@@ -94,8 +94,12 @@ function section(from, to) {
   ok(!applyBlock.includes('if (!cards.length) return;') &&
     applyBlock.includes('if (cards.length) window._bracketApplyFilter();'),
     'organizador sem jogo próprio ainda consome a rolagem pendente da dashboard');
-  ok(tournaments.includes('window._bracketPendingScroll = String(tournamentId);'),
-    'o alvo explícito da dashboard arma a rolagem depois que a agenda terminou de montar');
+  const pendingReaderStart = bracket.indexOf('if (window._bracketPendingScroll)', applyStart);
+  const pendingReader = pendingReaderStart < 0 ? '' : bracket.slice(pendingReaderStart, pendingReaderStart + 6000);
+  ok(tournaments.includes('window._bracketPendingScroll = String(tournamentId);') &&
+    pendingReader.includes("setTimeout(function () { _goMine('smooth'); }, 80);") &&
+    pendingReader.includes('var _el = _alvoDeEntrada();'),
+    'o alvo explícito arma o leitor da agenda, que espera os cards e rola para o mesmo alvo');
 
   await browser.close();
   console.log('\n' + (fail ? '❌' : '✅') + ' dashboard-card-opens-next-game: ' + pass + ' ok, ' + fail + ' falharam');
