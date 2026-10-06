@@ -40,10 +40,10 @@ function trecho(inicio, fim) {
     // existe no arquivo completo sem iniciar outro portal dentro do Chromium.
     window._bracketSyncRoundHeadingOffsets = function () {};
     const at = (day, hour) => new Date(2026, 9, day, hour, 0, 0, 0).getTime();
-    const card = (id, gender, category, when, court, upcoming, round, presence) =>
+    const card = (id, gender, category, when, court, upcoming, round, presence, resultAt) =>
       '<div class="wrap" data-wrap="' + id + '"><article id="' + id + '" data-bracket-tab-category="' + category +
       '" data-bracket-tab-gender="' + gender + '" data-bracket-tab-round="' + (round || 1) + '" data-bracket-scheduled-at="' + when +
-      '" data-bracket-court="' + court + '" data-bracket-upcoming="' + (upcoming ? '1' : '0') + '" data-bracket-presence="' + (presence || '') + '">' + id + '</article></div>';
+      '" data-bracket-court="' + court + '" data-bracket-upcoming="' + (upcoming ? '1' : '0') + '" data-bracket-presence="' + (presence || '') + '" data-bracket-result-at="' + (resultAt || '') + '">' + id + '</article></div>';
     document.body.innerHTML =
       '<main id="view-container"><nav data-bracket-tabs-root="1" data-tournament-id="neon" data-bracket-line-tabs="0" data-bracket-round-tabs="0">' +
         '<button id="geral" data-bracket-subtab="__general" data-bracket-tab-gender="fem">Geral</button>' +
@@ -82,6 +82,16 @@ function trecho(inicio, fim) {
       visibleCards: Array.from(agenda.querySelectorAll('[data-bracket-tab-category]')).every((el) => !el.hidden),
       waiting: Array.from(agenda.querySelectorAll('[data-bracket-upcoming-waiting] [data-bracket-tab-category]')).map((el) => el.id)
     };
+
+    // Dois resultados já registrados continuam na lista operacional; o
+    // terceiro substitui o mais antigo para a conferência não crescer sem fim.
+    document.getElementById('source').insertAdjacentHTML('beforeend',
+      card('played-old', 'fem', 'Light', at(22, 19), 'Quadra 4', false, 1, '', 100) +
+      card('played-mid', 'fem', 'Light', at(22, 19), 'Quadra 5', false, 1, '', 200) +
+      card('played-new', 'fem', 'Light', at(22, 19), 'Quadra 6', false, 1, '', 300));
+    document.getElementById('light').click();
+    document.getElementById('upcoming').click();
+    const recentResults = Array.from(agenda.querySelectorAll('[data-bracket-tab-category]')).map((el) => el.id);
 
     document.getElementById('light').click();
     const restored = {
@@ -136,7 +146,7 @@ function trecho(inicio, fim) {
       sourceVisible: !document.getElementById('nested-source').hidden,
       movedVisible: !!nestedRoot._bracketGeneralView.querySelector('#played-card') && !nestedRoot._bracketGeneralView.querySelector('#played-card').hidden
     };
-    return { generalState, upcomingState, restored, generalReentry, cleanup, noSchedule, nested };
+    return { generalState, upcomingState, recentResults, restored, generalReentry, cleanup, noSchedule, nested };
   });
 
   console.log('\n📋 Geral é a agenda do dia, não uma cópia por gênero');
@@ -151,14 +161,16 @@ function trecho(inicio, fim) {
   ok(result.upcomingState.order.join(',') === 'fem-waiting,fem-court-5,fem-round-2', 'a partida parcialmente presente vem antes dos próximos jogos prontos');
   ok(result.upcomingState.waiting.join(',') === 'fem-waiting', 'a lista de aguardando presença fica no topo de Próximos jogos');
   ok(result.upcomingState.visibleCards, 'o card pronto continua visível depois de mover entre Geral e Próximos jogos');
+  ok(result.recentResults.indexOf('played-new') !== -1 && result.recentResults.indexOf('played-mid') !== -1 && result.recentResults.indexOf('played-old') === -1,
+    'Próximos jogos preserva os dois últimos placares e remove somente o terceiro mais antigo');
   console.log('\n📋 Voltar para categoria restaura a chave canônica');
   ok(result.restored.sourceVisible && result.restored.agendaHidden, 'Light fecha a agenda e restaura a fonte');
-  ok(result.restored.originalOrder.join(',') === 'fem-court-5,masc-same-day,fem-round-2,fem-waiting,tomorrow', 'cada wrapper volta exatamente ao seu placeholder');
-  ok(result.generalReentry.order.join(',') === 'masc-same-day,fem-court-5,fem-waiting,fem-round-2' && result.generalReentry.visible,
+  ok(result.restored.originalOrder.join(',') === 'fem-court-5,masc-same-day,fem-round-2,fem-waiting,tomorrow,played-old,played-mid,played-new', 'cada wrapper volta exatamente ao seu placeholder');
+  ok(result.generalReentry.order.join(',') === 'masc-same-day,fem-court-5,fem-waiting,played-old,played-mid,played-new,fem-round-2' && result.generalReentry.visible,
     'voltar para Geral reconstrói os cards reais, sem colunas vazias');
   console.log('\n📋 Novo render limpa Geral aberta antes de substituir a chave');
   ok(result.cleanup.rootGone && result.cleanup.agendaGone, 'abas e agenda transitória são destruídas');
-  ok(result.cleanup.cardsReturned.join(',') === 'fem-court-5,masc-same-day,fem-round-2,fem-waiting,tomorrow', 'nenhum card fica órfão fora do container');
+  ok(result.cleanup.cardsReturned.join(',') === 'fem-court-5,masc-same-day,fem-round-2,fem-waiting,tomorrow,played-old,played-mid,played-new', 'nenhum card fica órfão fora do container');
   ok(result.cleanup.portalGone, 'portal de cabeçalho de pintura anterior também é removido');
   console.log('\n📋 Sem horário não há agenda enganosa');
   ok(result.noSchedule.returnedFalse && result.noSchedule.sourceStillVisible && result.noSchedule.noMovedCards,

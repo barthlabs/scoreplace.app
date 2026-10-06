@@ -986,6 +986,7 @@ function _bracketGeneralView(root, show, gender, onlyReady) {
   if (!show) {
     for (var r = 0; r < entries.length; r++) {
       var old = entries[r];
+      if (old.card && old.card.style) old.card.style.minHeight = '';
       if (old.placeholder && old.placeholder.parentNode && old.wrapper) old.placeholder.parentNode.replaceChild(old.wrapper, old.placeholder);
     }
     var oldSources = root._bracketGeneralSources || [];
@@ -1026,6 +1027,20 @@ function _bracketGeneralView(root, show, gender, onlyReady) {
     var referenceDate = reference ? new Date(Number(reference.getAttribute('data-bracket-scheduled-at'))) : null;
     var dayKey = referenceDate && !isNaN(referenceDate.getTime())
       ? [referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate()].join('-') : '';
+    // Em Próximos jogos, além das partidas prontas e das presenças parciais,
+    // conservamos os DOIS últimos resultados deste dia para conferência.
+    // A seleção usa o carimbo persistido do resultado, não estado efêmero da
+    // tela: ao lançar o terceiro, o primeiro sai naturalmente da janela.
+    // [[regression_upcoming_keeps_two_last_saved_results]]
+    var recentCompletedIds = scheduledCards.filter(function (card) {
+      var at = Number(card.getAttribute('data-bracket-scheduled-at'));
+      var resultAt = Number(card.getAttribute('data-bracket-result-at'));
+      if (!isFinite(at) || at <= 0 || !isFinite(resultAt) || resultAt <= 0) return false;
+      var cardDate = new Date(at);
+      return dayKey && [cardDate.getFullYear(), cardDate.getMonth(), cardDate.getDate()].join('-') === dayKey;
+    }).sort(function (a, b) {
+      return Number(b.getAttribute('data-bracket-result-at')) - Number(a.getAttribute('data-bracket-result-at'));
+    }).slice(0, 2).map(function (card) { return card.id; });
     var waitingPresence = 0;
     scheduledCards.forEach(function (card) {
       var at = Number(card.getAttribute('data-bracket-scheduled-at'));
@@ -1036,7 +1051,8 @@ function _bracketGeneralView(root, show, gender, onlyReady) {
       // Próximos jogos; sem ninguém presente ainda não é uma chamada em curso.
       var isWaitingPresence = onlyReady && card.getAttribute('data-bracket-presence') === 'partial';
       if (isWaitingPresence) waitingPresence++;
-      if (onlyReady && card.getAttribute('data-bracket-upcoming') !== '1' && !isWaitingPresence) return;
+      var isRecentCompleted = onlyReady && recentCompletedIds.indexOf(card.id) !== -1;
+      if (onlyReady && card.getAttribute('data-bracket-upcoming') !== '1' && !isWaitingPresence && !isRecentCompleted) return;
       var wrapper = card.parentNode;
       var placeholder = document.createComment('scoreplace-general-card');
       wrapper.parentNode.insertBefore(placeholder, wrapper);
@@ -1046,7 +1062,7 @@ function _bracketGeneralView(root, show, gender, onlyReady) {
       // wrapper. O container de origem é ocultado separadamente logo abaixo.
       // [[regression_general_agenda_moves_visible_cards]]
       card.hidden = false;
-      entries.push({ card: card, wrapper: wrapper, placeholder: placeholder, at: at, court: card.getAttribute('data-bracket-court') || '', round: Number(card.getAttribute('data-bracket-tab-round')) || 1, waitingPresence: isWaitingPresence });
+      entries.push({ card: card, wrapper: wrapper, placeholder: placeholder, at: at, court: card.getAttribute('data-bracket-court') || '', round: Number(card.getAttribute('data-bracket-tab-round')) || 1, waitingPresence: isWaitingPresence, recentCompleted: isRecentCompleted });
     });
     entries.sort(function (a, b) {
       if (a.at !== b.at) return a.at - b.at;
@@ -1143,6 +1159,19 @@ function _bracketGeneralView(root, show, gender, onlyReady) {
   }
   view.appendChild(roundsTrack);
   view.style.display = '';
+  // Os cards operacionais compartilham a mesma grade visual. Depois de mover
+  // os cards reais, mede o mais alto e aplica a altura a todos, em vez de
+  // deixar um resultado recém-lançado menor que os jogos prontos ao lado.
+  // Medição no próximo quadro captura fontes e botões já assentados.
+  // [[regression_operational_cards_have_equal_height]]
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(function () {
+    var operationalCards = Array.prototype.slice.call(view.querySelectorAll('.sp-match-card'));
+    operationalCards.forEach(function (card) { card.style.minHeight = ''; });
+    var tallest = operationalCards.reduce(function (height, card) {
+      return Math.max(height, Math.ceil(card.getBoundingClientRect().height || 0));
+    }, 0);
+    if (tallest > 0) operationalCards.forEach(function (card) { card.style.minHeight = tallest + 'px'; });
+  });
   // Os cards acabaram de trocar de coluna; o portal só pode medir cabeçalhos
   // depois desse movimento. Sem esta sincronização, eles somem na primeira
   // rolagem da Geral até algum outro evento forçar um resize.
@@ -1166,6 +1195,12 @@ function _bracketTabsApply(tid, gender, category, requestedRound) {
     : '';
   window._bracketTabState = window._bracketTabState || {};
   window._bracketTabState[String(tid)] = { gender: gender, category: category, round: round };
+  // A rota Dashboard desmonta a chave, mas não pode desmontar a escolha
+  // operacional de quem organiza. Guardar a aba por torneio mantém Geral ou
+  // Próximos jogos reconstruíveis ao voltar, inclusive se o router recriar o
+  // root antes de qualquer snapshot chegar.
+  // [[regression_operational_tab_survives_dashboard_round_trip]]
+  try { sessionStorage.setItem('scoreplace_bracket_tab_state_' + String(tid), JSON.stringify(window._bracketTabState[String(tid)])); } catch (e) {}
   var isGeneral = category === '__general';
   var isUpcoming = category === '__upcoming';
   var isOperationalView = isGeneral || isUpcoming;
@@ -1219,7 +1254,18 @@ function _bracketTabsApply(tid, gender, category, requestedRound) {
     qb.style.borderColor = onRound ? 'rgba(16,185,129,.72)' : 'rgba(255,255,255,.12)';
   }
   if (isOperationalView) {
-    _bracketGeneralView(root, true, gender, isUpcoming);
+    var operationalShown = _bracketGeneralView(root, true, gender, isUpcoming);
+    // Dados legados sem horário não podem esconder a chave inteira quando a
+    // aba Geral foi restaurada de uma visita anterior. Volta para uma categoria
+    // real em vez de deixar a tela preta.
+    if (!operationalShown) {
+      var fallbackCategory = (root._bracketLastCategoryByGender || {})[gender] || '';
+      if (!fallbackCategory) {
+        var fallbackButton = root.querySelector('[data-bracket-subtab]:not([data-bracket-subtab="__general"]):not([data-bracket-subtab="__upcoming"])[data-bracket-tab-gender="' + String(gender).replace(/"/g, '\\"') + '"]');
+        fallbackCategory = fallbackButton ? fallbackButton.getAttribute('data-bracket-subtab') : '';
+      }
+      if (fallbackCategory) return _bracketTabsApply(tid, gender, fallbackCategory, '');
+    }
     return;
   }
   // Linhas independentes (Ouro/Prata) têm seção própria, com título,
@@ -1332,7 +1378,12 @@ function _bracketUpdateRoundHeadingPortal(root, scope) {
     return Math.ceil(item.rect.height || 0) + 18;
   }));
   portalHeight = Math.max(38, portalHeight);
-  portal.style.cssText = 'display:block;position:fixed;top:' + (Math.floor(anchorBottom) - 1) + 'px;left:' + Math.round(rootRect.left) + 'px;width:' + Math.round(rootRect.width) + 'px;max-width:100%;height:' + portalHeight + 'px;box-sizing:border-box;overflow:hidden;isolation:isolate;pointer-events:none;z-index:29;background:#111114;border-bottom:1px solid rgba(255,255,255,.08);';
+  // Sobreposição de dois pixels: em tela cheia o browser pode arredondar a
+  // base das abas e o topo do portal em direções diferentes. A faixa cobre a
+  // emenda sem criar espaço vertical, e a cópia abaixo preserva a posição do
+  // texto exatamente onde o cabeçalho original estaria.
+  // [[regression_round_portal_covers_fullscreen_subpixel_seam]]
+  portal.style.cssText = 'display:block;position:fixed;top:' + (Math.floor(anchorBottom) - 2) + 'px;left:' + Math.round(rootRect.left) + 'px;width:' + Math.round(rootRect.width) + 'px;max-width:100%;height:' + (portalHeight + 1) + 'px;box-sizing:border-box;overflow:hidden;isolation:isolate;pointer-events:none;z-index:29;background:#111114;border-bottom:1px solid rgba(255,255,255,.08);box-shadow:0 -1px 0 #111114;';
   for (var p = 0; p < visibleHeadings.length; p++) {
     var item = visibleHeadings[p];
     var heading = item.heading;
@@ -1347,7 +1398,7 @@ function _bracketUpdateRoundHeadingPortal(root, scope) {
     // um pixel por baixo da faixa (z-index 29 contra 31), eliminando a emenda
     // sem deslocar a tipografia do título.
     // [[regression_round_portal_overlaps_tabs_subpixel_seam]]
-    clone.style.cssText = 'position:absolute;top:1px;left:' + Math.round(rect.left - rootRect.left) + 'px;width:' + Math.round(rect.width) + 'px;box-sizing:border-box;background:var(--bg-darker,#111114);padding:8px 0 9px;';
+    clone.style.cssText = 'position:absolute;top:2px;left:' + Math.round(rect.left - rootRect.left) + 'px;width:' + Math.round(rect.width) + 'px;box-sizing:border-box;background:var(--bg-darker,#111114);padding:8px 0 9px;';
     // O portal só acompanha o título da rodada. A máscara que avançava para
     // baixo escondia busca e cards ao rolar em telas estreitas.
     clone.style.background = '#111114';
@@ -1431,7 +1482,11 @@ window._bracketCategoryTabsMount = function () {
     // A contenção horizontal pertence aos trilhos e ao portal das rodadas;
     // aqui os filhos já têm largura limitada e precisam poder pintar inteiros.
     // [[regression_primary_gender_tabs_are_never_vertically_clipped]]
-    root.style.cssText = 'display:block;box-sizing:border-box;width:100%;max-width:100%;min-width:0;margin:0;padding:4px 12px 6px;border:0;border-radius:0;background:#111114;overflow:visible;position:sticky;top:calc(var(--topbar-h,60px) + var(--hamburger-dd-h,0px) + var(--backheader-h,0px) + var(--stickybar-h,0px) - 1px);z-index:31;isolation:isolate;box-shadow:0 8px 12px -12px rgba(0,0,0,.95);';
+    // A própria faixa cobre as duas emendas de composição acima e abaixo.
+    // Isso é pintura sobreposta de 2px — não cria margem nem desloca abas — e
+    // impede cards da matriz de aparecerem nessas frestas em fullscreen.
+    // [[regression_tabs_full_width_seams_are_opaque]]
+    root.style.cssText = 'display:block;box-sizing:border-box;width:100%;max-width:100%;min-width:0;margin:0;padding:4px 12px 6px;border:0;border-radius:0;background:#111114;overflow:visible;position:sticky;top:calc(var(--topbar-h,60px) + var(--hamburger-dd-h,0px) + var(--backheader-h,0px) + var(--stickybar-h,0px) - 1px);z-index:31;isolation:isolate;box-shadow:0 -2px 0 #111114,0 2px 0 #111114,0 8px 12px -12px rgba(0,0,0,.95);';
     var anchor = _bracketTabsAnchor(first);
     // Em Ouro/Prata, sobe mais um nível: a faixa deve ficar acima da seção
     // inteira (título, classificação e rodadas), para poder ocultar a linha
@@ -1569,6 +1624,13 @@ window._bracketCategoryTabsMount = function () {
   // montagem — e não depois da rolagem — garante que o card já nasça visível
   // na categoria solicitada, inclusive quando o gênero informado era antigo.
   var state = (window._bracketTabState || {})[id] || {};
+  if (!state || !state.category) {
+    try { state = JSON.parse(sessionStorage.getItem('scoreplace_bracket_tab_state_' + id) || '{}') || {}; } catch (e) { state = {}; }
+    if (state && state.category) {
+      window._bracketTabState = window._bracketTabState || {};
+      window._bracketTabState[id] = state;
+    }
+  }
   if (isTeamSchedule && (state.category === '__general' || state.category === '__upcoming') && byGender[state.gender] && generalAgendaByGender[state.gender]) {
     _bracketTabsApply(id, state.gender, state.category, '');
     return;
@@ -7055,9 +7117,11 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     _headerHtml = `
       <div class="sp-mc-head">
         <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-start;min-width:0;">
-          <span style="font-size:0.7rem;font-weight:700;color:var(--sp-c-38bdf8,#38bdf8);text-transform:uppercase;">${window._safeHtml(matchLabel)}</span>
+          <div style="display:flex;align-items:center;gap:7px;min-width:0;">
+            <span style="font-size:0.7rem;font-weight:700;color:var(--sp-c-38bdf8,#38bdf8);text-transform:uppercase;white-space:nowrap;">${window._safeHtml(matchLabel)}</span>
+            ${readyBadge}
+          </div>
           ${_mostraCabecaSet ? _headlineSlot : _timelineSlot}
-          ${readyBadge}
         </div>
         <div id="header-btns-${m.id}" class="btn-row sp-mc-acts">${_headerActions}</div>
       </div>`;
@@ -7156,7 +7220,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   var _operationalPresence = _isConcentratedEvent && !isDecided && !isByeMatch
     ? (matchReady ? 'complete' : (matchPartial ? 'partial' : 'none')) : '';
   return `
-    <div id="card-${m.id}" class="sp-match-card" data-players="${_searchNames}" data-player-uids="${_searchUids}" data-bracket-tab-category="${window._safeHtml(_tabCategory)}" data-bracket-tab-gender="${_tabGender}" data-bracket-tab-source="${_tabSource}" data-bracket-tab-round="${m.round != null ? window._safeHtml(String(m.round)) : ''}" data-bracket-scheduled-at="${_scheduledMs || ''}" data-bracket-court="${window._safeHtml(String(m.court || ''))}" data-bracket-upcoming="${_isConcentratedEvent && matchReady ? '1' : '0'}" data-bracket-presence="${_operationalPresence}" data-my-match="${_isMyMatch ? '1' : '0'}" data-my-pending="${_isMyMatch && !isDecided && !isByeMatch ? '1' : '0'}" data-match-num="${matchNum != null ? matchNum : ''}" style="scroll-margin-top:var(--scroll-anchor,120px);background:${window._spCor(_isMyMatch ? 'rgba(99,102,241,0.06)' : 'var(--bg-card)', 'background')};border:${_isMyMatch ? '2px' : '1px'} solid ${hasPending && _pr && _pr.disputed ? 'rgba(239,68,68,0.55)' : hasPending ? 'rgba(251,191,36,0.5)' : cardBorder};${_lineLeftBorder}border-radius:12px;padding:14px;${_cardMax}box-shadow:${_isMyMatch ? '0 0 20px rgba(99,102,241,0.25),0 0 8px rgba(99,102,241,0.12),0 4px 12px rgba(0,0,0,0.15)' : hasPending && _pr && _pr.disputed ? '0 0 14px rgba(239,68,68,0.2),0 4px 12px rgba(0,0,0,0.15)' : hasPending ? '0 0 14px rgba(251,191,36,0.18),0 4px 12px rgba(0,0,0,0.15)' : matchReady ? '0 0 16px rgba(16,185,129,0.15),0 4px 12px rgba(0,0,0,0.15)' : matchPartial ? '0 0 10px rgba(245,158,11,0.1),0 4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.15)'};${hasTBD ? 'opacity:0.6;' : ''}">
+    <div id="card-${m.id}" class="sp-match-card" data-players="${_searchNames}" data-player-uids="${_searchUids}" data-bracket-tab-category="${window._safeHtml(_tabCategory)}" data-bracket-tab-gender="${_tabGender}" data-bracket-tab-source="${_tabSource}" data-bracket-tab-round="${m.round != null ? window._safeHtml(String(m.round)) : ''}" data-bracket-scheduled-at="${_scheduledMs || ''}" data-bracket-result-at="${_playedMs || ''}" data-bracket-court="${window._safeHtml(String(m.court || ''))}" data-bracket-upcoming="${_isConcentratedEvent && matchReady ? '1' : '0'}" data-bracket-presence="${_operationalPresence}" data-my-match="${_isMyMatch ? '1' : '0'}" data-my-pending="${_isMyMatch && !isDecided && !isByeMatch ? '1' : '0'}" data-match-num="${matchNum != null ? matchNum : ''}" style="scroll-margin-top:var(--scroll-anchor,120px);background:${window._spCor(_isMyMatch ? 'rgba(99,102,241,0.06)' : 'var(--bg-card)', 'background')};border:${_isMyMatch ? '2px' : '1px'} solid ${hasPending && _pr && _pr.disputed ? 'rgba(239,68,68,0.55)' : hasPending ? 'rgba(251,191,36,0.5)' : cardBorder};${_lineLeftBorder}border-radius:12px;padding:14px;${_cardMax}box-shadow:${_isMyMatch ? '0 0 20px rgba(99,102,241,0.25),0 0 8px rgba(99,102,241,0.12),0 4px 12px rgba(0,0,0,0.15)' : hasPending && _pr && _pr.disputed ? '0 0 14px rgba(239,68,68,0.2),0 4px 12px rgba(0,0,0,0.15)' : hasPending ? '0 0 14px rgba(251,191,36,0.18),0 4px 12px rgba(0,0,0,0.15)' : matchReady ? '0 0 16px rgba(16,185,129,0.15),0 4px 12px rgba(0,0,0,0.15)' : matchPartial ? '0 0 10px rgba(245,158,11,0.1),0 4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.15)'};${hasTBD ? 'opacity:0.6;' : ''}">
       ${_headerHtml}
       ${_pendingBtnsRow}
       ${pendingBanner}

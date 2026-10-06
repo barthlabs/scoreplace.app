@@ -252,6 +252,11 @@ input[type="time"].sp-team-draw-time::-webkit-datetime-edit-minute-field {
   /* O cabeçalho é uma superfície opaca. `isolation` impede que um descendente
      com stacking-context próprio da matriz apareça por cima ao rolar no desktop. */
   isolation: isolate;
+  /* Não é margem: cobre os dois meios-pixels que surgem quando a altura da
+     topbar, desta faixa e da navegação sticky é arredondada em escalas de
+     desktop/fullscreen. Sem essa sobreposição de pintura, a matriz larga
+     aparece numa fresta acima ou abaixo da linha Voltar. */
+  box-shadow: 0 -2px 0 var(--bg-darker, #111114), 0 2px 0 var(--bg-darker, #111114);
 }
 /* A matriz da chave pode ter dezenas de colunas e camadas próprias. A faixa
    "Voltar" precisa ser uma máscara opaca de largura integral. Ela NÃO pode

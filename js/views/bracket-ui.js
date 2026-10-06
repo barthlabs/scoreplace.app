@@ -2602,7 +2602,22 @@ window._saveResultInline = function (tId, matchId) {
   // pra que o echo do onSnapshot (nosso próprio save) não dispare initRouter()
   // e desmonte o layout estático (colapsando "Demais jogos" + recomputando a
   // classificação). Reset após 3s, igual ao _rerenderBracket.
-  if (_inPlaceFinalize) {
+  // Na aba operacional Próximos jogos, remontar a chave inteira destrói a
+  // barra fixa, a régua de rodadas e os cards por um frame antes de redesenhar.
+  // Esse é precisamente o salto visual relatado ao confirmar um placar. A
+  // agenda concentrada tem horário/quadra próprios e pode atualizar o card
+  // real em posição, reconstruindo apenas sua lista de dois últimos resultados.
+  // [[regression_upcoming_result_save_keeps_fixed_chrome_mounted]]
+  var _operationalUpcomingRoot = null;
+  var _keepUpcomingViewMounted = false;
+  try {
+    var _tabState = window._bracketTabState && window._bracketTabState[String(tId)];
+    _operationalUpcomingRoot = document.querySelector('[data-bracket-tabs-root][data-tournament-id="' + String(tId).replace(/"/g, '\\"') + '"]');
+    _keepUpcomingViewMounted = !!(_tabState && _tabState.category === '__upcoming' &&
+      _operationalUpcomingRoot &&
+      window._isConcentratedTournament && window._isConcentratedTournament(t));
+  } catch (e) {}
+  if (_inPlaceFinalize || _keepUpcomingViewMounted) {
     window._suppressSoftRefresh = true;
     clearTimeout(window._pendingSoftRefresh);
   }
@@ -2643,7 +2658,16 @@ window._saveResultInline = function (tId, matchId) {
   // lançado (página estática). Se a finalização in-place falhar (card fora do
   // DOM, etc.), cai no rerender completo. Rodada completa / eliminatórias /
   // grupos seguem no rerender completo (classificação sobe, próxima rodada).
-  if (_inPlaceFinalize && _finalizeRoundCardInPlace(t, m, tId, matchId)) {
+  if (_keepUpcomingViewMounted && _finalizeRoundCardInPlace(t, m, tId, matchId)) {
+    // Não desmontar root, abas nem portal. A própria visão devolve/move os
+    // wrappers no mesmo frame e preserva os dois resultados mais recentes.
+    try {
+      var _activeGender = (window._bracketTabState[String(tId)] || {}).gender || '';
+      window._bracketGeneralView(_operationalUpcomingRoot, true, _activeGender, true);
+      window._bracketSyncRoundHeadingOffsets();
+    } catch (e) {}
+    setTimeout(function() { window._suppressSoftRefresh = false; }, 3000);
+  } else if (_inPlaceFinalize && _finalizeRoundCardInPlace(t, m, tId, matchId)) {
     setTimeout(function() { window._suppressSoftRefresh = false; }, 3000);
   } else {
     window._suppressSoftRefresh = false;
