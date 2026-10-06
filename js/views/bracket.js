@@ -2933,12 +2933,52 @@ window._renderReadyMatchesBanner = function _renderReadyMatchesBanner(t, opts) {
     const wanted = _normCategory(_selectedCategory);
     const direct = match && (match.category || match.categoryName || match.division || match.skillCategory);
     if (_normCategory(direct) === wanted) return true;
-    const names = String((match && match.p1) || '') + ' / ' + String((match && match.p2) || '');
-    const members = names.split(/\s*\/\s*/).map(function (name) { return String(name || '').trim().toLocaleLowerCase(); }).filter(Boolean);
+    // A geração atual guarda os UIDs posicionais, mas chaves antigas podem trazer
+    // apenas p1/p2 como UID. Compare todas as identidades que o jogo carrega (UID
+    // ou nome) com todas as identidades do inscrito; usar só o texto de p1/p2 faria
+    // uma aba de categoria esconder silenciosamente esse acervo legado.
+    const _sideMembers = function (side, team) {
+      const values = [];
+      const add = function (value) {
+        if (Array.isArray(value)) { value.forEach(add); return; }
+        String(value || '').split(/\s*\/\s*/).forEach(function (member) {
+          member = String(member || '').trim().toLocaleLowerCase();
+          if (member) values.push(member);
+        });
+      };
+      add(match && match[side]);
+      add(match && match[side + 'Uid']);
+      add(match && match['team' + team]);
+      add(match && match['team' + team + 'Uids']);
+      return values;
+    };
+    const members = _sideMembers('p1', 1).concat(_sideMembers('p2', 2));
+    const _participantMembers = function (participant) {
+      const values = [];
+      const add = function (value) {
+        if (Array.isArray(value)) { value.forEach(add); return; }
+        String(value || '').split(/\s*\/\s*/).forEach(function (member) {
+          member = String(member || '').trim().toLocaleLowerCase();
+          if (member) values.push(member);
+        });
+      };
+      add(participant && participant.uid);
+      add(participant && participant.id);
+      add(participant && participant.displayName);
+      add(participant && participant.name);
+      add(participant && participant.p1Uid);
+      add(participant && participant.p2Uid);
+      add(participant && participant.p1Name);
+      add(participant && participant.p2Name);
+      (participant && participant.participants || []).forEach(function (member) {
+        if (member && typeof member === 'object') { add(member.uid); add(member.id); add(member.displayName); add(member.name); }
+        else add(member);
+      });
+      return values;
+    };
     return (t.participants || []).some(function (participant) {
       if (!participant || _normCategory(participant.category) !== wanted) return false;
-      const entry = String((typeof window._pName === 'function' ? window._pName(participant) : (participant.displayName || participant.name || '')) || '');
-      return entry.split(/\s*\/\s*/).some(function (name) { return members.indexOf(String(name || '').trim().toLocaleLowerCase()) !== -1; });
+      return _participantMembers(participant).some(function (member) { return members.indexOf(member) !== -1; });
     });
   };
 

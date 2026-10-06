@@ -24,6 +24,8 @@ ok(bracket.includes('const _normCategory = function (value) { return String(valu
   'o recorte de jogos normaliza espaços e caixa antes de comparar a categoria');
 ok(bracket.includes('match.category || match.categoryName || match.division || match.skillCategory') && bracket.includes('(t.participants || []).some'),
   'jogos antigos sem categoria própria resolvem a categoria pelos participantes');
+ok(bracket.includes("match['team' + team + 'Uids']") && bracket.includes('add(participant && participant.uid)'),
+  'o fallback preserva jogos antigos que identificam os lados por UID, não apenas por nome');
 
-console.log('\n' + (fail ? '❌' : '✅') + ' inscritos-abas-categoria: ' + (6 - fail) + ' ok, ' + fail + ' falharam');
+console.log('\n' + (fail ? '❌' : '✅') + ' inscritos-abas-categoria: ' + (7 - fail) + ' ok, ' + fail + ' falharam');
 process.exitCode = fail ? 1 : 0;
