@@ -29,6 +29,8 @@ function trecho(inicio, fim) {
   await page.setContent('<!doctype html><body></body>');
   // A ordem é proposital: _limpar chama _bracketGeneralView, como no arquivo real.
   await page.addScriptTag({ content: trecho('_limparCamadasTransitóriasDaChave', '_pintarEmEtapas') });
+  await page.addScriptTag({ content: trecho('_bracketOperationalCards', '_bracketToggleEmptySourceRounds') });
+  await page.addScriptTag({ content: trecho('_bracketToggleEmptySourceRounds', '_bracketGeneralView') });
   await page.addScriptTag({ content: trecho('_bracketGeneralView', '_bracketTabsApply') });
   await page.addScriptTag({ content: trecho('_bracketTabsApply', '_bracketSyncRoundHeadingOffsets') });
 
@@ -146,7 +148,22 @@ function trecho(inicio, fim) {
       sourceVisible: !document.getElementById('nested-source').hidden,
       movedVisible: !!nestedRoot._bracketGeneralView.querySelector('#played-card') && !nestedRoot._bracketGeneralView.querySelector('#played-card').hidden
     };
-    return { generalState, upcomingState, recentResults, restored, generalReentry, cleanup, noSchedule, nested };
+
+    // Reproduz o detalhe real: a chave inline só traz a classificação e os
+    // cabeçalhos, mas os cards agendados pertencem ao detalhe inteiro.
+    document.body.innerHTML = '<main id="detail-scope"><section id="published-agenda" class="bracket-scroll-container">' +
+      card('real-scheduled', 'fem', 'Light', at(22, 18), 'Quadra 5', true) +
+      '</section><section id="inline-bracket-container"><nav id="external-root"></nav><section class="bracket-round-column"><h4 class="bracket-round-heading">Rodada 1</h4></section></section></main>';
+    const externalRoot = document.getElementById('external-root');
+    externalRoot._bracketTabsScope = document.getElementById('inline-bracket-container');
+    externalRoot._bracketCardsScope = document.getElementById('detail-scope');
+    const externalShown = window._bracketGeneralView(externalRoot, true, 'fem');
+    const externalSource = {
+      shown: externalShown,
+      cards: Array.from(externalRoot._bracketGeneralView.querySelectorAll('[data-bracket-tab-category]')).map((el) => el.id),
+      emptyHeadingHidden: document.querySelector('#inline-bracket-container .bracket-round-column:not(.bracket-general-round-column) .bracket-round-heading').hidden
+    };
+    return { generalState, upcomingState, recentResults, restored, generalReentry, cleanup, noSchedule, nested, externalSource };
   });
 
   console.log('\n📋 Geral é a agenda do dia, não uma cópia por gênero');
@@ -178,6 +195,10 @@ function trecho(inicio, fim) {
   console.log('\n📋 Geral dentro do próprio trilho continua visível');
   ok(result.nested.shown && result.nested.sourceVisible && result.nested.movedVisible,
     'a Geral não esconde o ancestral que contém a própria agenda; inclusive jogo já concluído permanece visível');
+  console.log('\n📋 Detalhe publicado e chave inline usam a mesma agenda');
+  ok(result.externalSource.shown, 'Geral abre quando os cards publicados estão fora da chave inline');
+  ok(result.externalSource.cards.join(',') === 'real-scheduled', 'Geral usa o card publicado, não o cabeçalho vazio da chave inline');
+  ok(result.externalSource.emptyHeadingHidden, 'Geral remove cabeçalho de rodada sem jogo da chave inline');
 
   await browser.close();
   console.log('\n' + (fail ? '❌' : '✅') + ' bracket-geral-agenda: ' + pass + ' ok, ' + fail + ' falharam');

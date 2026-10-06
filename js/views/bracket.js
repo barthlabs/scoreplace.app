@@ -941,6 +941,37 @@ function _bracketTabsRefreshRoundRail(root) {
 // reagrupados por horário e quadra, sem clonar inputs, botões ou ids de placar.
 // Clonar os cards faria dois campos com o mesmo id e salvaria o resultado no
 // jogo errado. Ao sair de "Geral", cada card volta precisamente ao seu lugar.
+function _bracketOperationalCards(root, fallbackScope) {
+  // A tela de detalhe tem dois blocos irmãos: o cartão/agenda publicado e a
+  // chave inline. Em Liga por times, a chave inline pode conter somente a
+  // classificação e títulos de rodadas, enquanto os cards reais vivem no
+  // primeiro bloco. Consultar apenas a chave inline fazia Geral abrir vazia.
+  // O mount guarda o escopo completo do detalhe; cards já movidos para a
+  // própria agenda são excluídos para uma remontagem nunca se auto-incluir.
+  // [[regression_general_uses_cards_outside_empty_inline_bracket]]
+  var cardScope = root && root._bracketCardsScope;
+  if (!cardScope || !cardScope.querySelectorAll) cardScope = fallbackScope || document.getElementById('view-container') || document;
+  return Array.prototype.slice.call(cardScope.querySelectorAll('[data-bracket-tab-category]')).filter(function (card) {
+    return !(root && root._bracketGeneralView && root._bracketGeneralView.contains(card));
+  });
+}
+
+function _bracketToggleEmptySourceRounds(root, hide) {
+  var scope = root && (root._bracketCardsScope || root._bracketTabsScope);
+  if (!scope || !scope.querySelectorAll) return;
+  var headings = scope.querySelectorAll('.bracket-round-heading');
+  for (var i = 0; i < headings.length; i++) {
+    var heading = headings[i];
+    // Os cabeçalhos da agenda operacional têm cards dentro da própria coluna;
+    // os cabeçalhos legados da chave inline ficam sem nenhum card ao mover os
+    // jogos reais. Só estes últimos desaparecem em Geral/Próximos.
+    var column = heading.closest ? heading.closest('.bracket-round-column') : null;
+    var hasCards = !!(column && column.querySelector('[data-bracket-tab-category]'));
+    if (hide && !hasCards) heading.hidden = true;
+    else if (!hide) heading.hidden = false;
+  }
+}
+
 function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame) {
   if (!root) return false;
   var scope = root._bracketTabsScope || (root.closest && root.closest('#view-container, #inline-bracket-container'));
@@ -993,6 +1024,7 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame) {
     for (var s = 0; s < oldSources.length; s++) oldSources[s].hidden = false;
     root._bracketGeneralEntries = [];
     root._bracketGeneralSources = [];
+    _bracketToggleEmptySourceRounds(root, false);
     view.style.display = 'none';
     view.innerHTML = '';
     return true;
@@ -1010,7 +1042,9 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame) {
     entries = root._bracketGeneralEntries || [];
   }
   if (!entries.length) {
-    var cards = Array.prototype.slice.call(scope.querySelectorAll('[data-bracket-tab-category][data-bracket-scheduled-at]'));
+    var cards = _bracketOperationalCards(root, scope).filter(function (card) {
+      return card.hasAttribute('data-bracket-scheduled-at');
+    });
     // "Geral" é uma agenda POR DIA. No Neon, Feminina e Masculina ocupam
     // dias diferentes, por isso hoje a seleção de gênero leva ao dia certo;
     // não é, porém, uma regra de gênero: qualquer categoria marcada para a
@@ -1101,6 +1135,7 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame) {
   (root._bracketGeneralSources || []).forEach(function (source) {
     source.hidden = !(source && source.contains && source.contains(view));
   });
+  _bracketToggleEmptySourceRounds(root, true);
   view.innerHTML = '';
   // Geral preserva a leitura da chave: cada coluna é uma rodada. Dentro dela,
   // os jogos seguem o planejamento (horário e, no empate, a ordem da quadra).
@@ -1268,7 +1303,7 @@ function _bracketTabsApply(tid, gender, category, requestedRound) {
     _bracketGeneralView(root, false, gender);
   }
   var lineMode = root.getAttribute('data-bracket-line-tabs') === '1';
-  var cards = document.querySelectorAll('[data-bracket-tab-category]');
+  var cards = _bracketOperationalCards(root, root._bracketTabsScope);
   for (var i = 0; i < cards.length; i++) {
     var card = cards[i];
     card.hidden = isOperationalView || card.getAttribute('data-bracket-tab-category') !== category || (usesRoundTabs && card.getAttribute('data-bracket-tab-round') !== round);
@@ -1512,7 +1547,11 @@ window._bracketCategoryTabsMount = function () {
   var allCats = order.reduce(function (n, gender) { return n + byGender[gender].length; }, 0);
   if (allCats < 2) return; // chave única continua limpa: não há navegação a oferecer.
   var first = cards[0], scope = first.closest ? first.closest('#view-container, #inline-bracket-container') : null;
-  if (!scope) scope = document.getElementById('view-container') || document.body;
+  // A categoria pode ter sido encontrada primeiro dentro de uma chave inline
+  // sem cards jogáveis. Para a navegação operacional, a fonte é sempre o
+  // detalhe inteiro do torneio — é nele que a agenda publicada mora.
+  var detailScope = document.getElementById('view-container') || scope || document.body;
+  if (!scope) scope = detailScope;
   // A busca da chave é a primeira superfície fixa do detalhe. No celular, a
   // faixa de abas precisa ser sua irmã imediata: deixá-la dentro do trilho que
   // nasce muito abaixo permitia cards e títulos atravessarem o espaço entre as
@@ -1576,6 +1615,7 @@ window._bracketCategoryTabsMount = function () {
   // `scope` é o contêiner da chave que recebeu esta navegação. Guardamos a
   // referência no root para o sincronizador global de altura das abas.
   root._bracketTabsScope = scope;
+  root._bracketCardsScope = detailScope;
   // Fase classificatória comum pode trocar de rodada. Já a agenda concentrada
   // por times (Neon) precisa deixar R1–R4 visíveis lado a lado: esconder cada
   // coluna atrás de uma terceira aba apaga justamente os jogos futuros.
