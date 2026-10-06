@@ -31,9 +31,10 @@ const next = [parts[0], parts[1], parts[2] + 1].join('.');
 // [[regression_release_prepare_is_idempotent_for_same_production_target]]
 const notes = path.join(root, 'js/release-notes.js');
 const note = '// ' + next + ' — Atualização consolidada de produção com as correções validadas desde a última publicação.\n';
+const hasVersionNote = (content) => new RegExp('^// ' + next.replace(/\./g, '\\.') + ' — ', 'm').test(content);
 if (current === next) {
   const existingNotes = fs.readFileSync(notes, 'utf8');
-  if (!existingNotes.startsWith(note)) fs.writeFileSync(notes, note + existingNotes);
+  if (!hasVersionNote(existingNotes)) fs.writeFileSync(notes, note + existingNotes);
   console.log('✓ corte de produção ' + next + ' já preparado; retomando sem duplicar a nota');
   process.exit(0);
 }
@@ -45,5 +46,5 @@ const replaceOne = (file, re, value) => {
 replaceOne('js/store.js', /window\.SCOREPLACE_VERSION\s*=\s*'[^']+'/, "window.SCOREPLACE_VERSION = '" + next + "'");
 replaceOne('sw.js', /var CACHE_NAME = 'scoreplace-v[^']+'/, "var CACHE_NAME = 'scoreplace-v" + next + "'");
 const existingNotes = fs.readFileSync(notes, 'utf8');
-if (!existingNotes.startsWith(note)) fs.writeFileSync(notes, note + existingNotes);
+if (!hasVersionNote(existingNotes)) fs.writeFileSync(notes, note + existingNotes);
 console.log('✓ corte de produção preparado: ' + current + ' → ' + next + ' (base ' + lastCut.slice(0, 8) + ')');

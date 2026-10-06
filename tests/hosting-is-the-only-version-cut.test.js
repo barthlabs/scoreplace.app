@@ -15,6 +15,9 @@ try {
   fs.writeFileSync(path.join(lab, 'js', 'release-notes.js'), '// notes\n');
   git(['add', '.']); git(['commit', '-m', 'last hosting cut']);
   fs.writeFileSync(path.join(lab, 'js', 'screen.js'), 'new public screen\n');
+  // Uma nota detalhada escrita junto da funcionalidade já cobre o patch que
+  // o Hosting vai materializar; o preparador não pode empilhar uma genérica.
+  fs.writeFileSync(path.join(lab, 'js', 'release-notes.js'), '// 2.3.254 — Tela nova com agenda do evento.\n// notes\n');
   git(['add', '.']); git(['commit', '-m', 'work accumulated']);
   const prep = path.join(root, 'scripts', 'prepare-hosting-release.js');
   const env = { ...process.env, SP_RELEASE_ROOT: lab, SP_RELEASE_PRODUCTION_VERSION: '2.3.253' };
@@ -23,6 +26,10 @@ try {
   const store = fs.readFileSync(path.join(lab, 'js', 'store.js'), 'utf8');
   const sw = fs.readFileSync(path.join(lab, 'sw.js'), 'utf8');
   if (!store.includes("'2.3.254'") || !sw.includes('scoreplace-v2.3.254')) throw new Error('corte não sincronizou app e SW');
+  const notes = fs.readFileSync(path.join(lab, 'js', 'release-notes.js'), 'utf8');
+  if ((notes.match(/^\/\/ 2\.3\.254 — /gm) || []).length !== 1 || !notes.includes('Tela nova com agenda')) {
+    throw new Error('corte duplicou ou apagou nota detalhada da versão');
+  }
   // No deploy real, `npm run prerender` deriva version.txt do store antes do commit.
   fs.writeFileSync(path.join(lab, 'version.txt'), '2.3.254\n');
   git(['add', '.']); git(['commit', '-m', 'hosting cut']);
