@@ -1,4 +1,4 @@
-// 2.3.286 — Atualização consolidada de produção com as correções validadas desde a última publicação.
+// 2.3.286 — A chave operacional encontra sua aba pelo atributo do torneio, sem montar um seletor CSS com o ID. Assim IDs legados com caracteres especiais não desmontam Geral ou Próximos jogos depois de salvar um placar.
 // 2.3.285 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.3.284 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.3.283 — No Neon, a chave operacional reconhece a agenda publicada por times, exibe a categoria real da inscrição e mantém a classificação geral de equipes acima das chaves. Próximos jogos continua exclusivo de eventos concentrados. A revisão e o preparo de release agora são idempotentes: retomadas não herdam parecer antigo nem duplicam a nota, e o preflight verifica esses contratos antes do Hosting.
