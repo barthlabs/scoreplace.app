@@ -38,6 +38,8 @@ ok(!win._isConcentratedTournament({ teamCompetition: { enabled: true, schedule: 
   'configuração de times sem agenda operacional não vira torneio concentrado');
 ok(!win._isConcentratedTournament({ scheduleWindow: { days: [{ day: '2026-10-22', startTime: '18:00' }] } }),
   'janela incompleta não é aceita como agenda concentrada');
+ok(!win._isConcentratedTournament({}),
+  'torneio legado sem agenda nem competição por times não vira concentrado');
 ok(/data-bracket-upcoming="\$\{_isConcentratedEvent && matchReady \? '1' : '0'\}"/.test(bracket) &&
    /var _operationalPresence = _isConcentratedEvent && !isDecided && !isByeMatch/.test(bracket),
   'torneio legado não ganha Próximos jogos nem presença operacional só por haver check-in');
