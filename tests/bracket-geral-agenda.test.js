@@ -35,6 +35,10 @@ function trecho(inicio, fim) {
   const result = await page.evaluate(() => {
     window._bracketTabsRefreshRoundRail = function () {};
     window._bracketLayoutEliminationTree = function () {};
+    // A Geral sincroniza a régua após mover os cards. Este teste carrega só o
+    // recorte da função real, então fornece a mesma dependência inofensiva que
+    // existe no arquivo completo sem iniciar outro portal dentro do Chromium.
+    window._bracketSyncRoundHeadingOffsets = function () {};
     const at = (day, hour) => new Date(2026, 9, day, hour, 0, 0, 0).getTime();
     const card = (id, gender, category, when, court, upcoming, round, presence) =>
       '<div class="wrap" data-wrap="' + id + '"><article id="' + id + '" data-bracket-tab-category="' + category +
