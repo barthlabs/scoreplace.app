@@ -34,7 +34,7 @@ function trecho(inicio, fim) {
   await page.addScriptTag({ content: trecho('_bracketGeneralView', '_bracketTabsApply') });
   await page.addScriptTag({ content: trecho('_bracketTabsApply', '_bracketSyncRoundHeadingOffsets') });
 
-  const result = await page.evaluate(() => {
+  const result = await page.evaluate(async () => {
     window._bracketTabsRefreshRoundRail = function () {};
     window._bracketLayoutEliminationTree = function () {};
     // A Geral sincroniza a régua após mover os cards. Este teste carrega só o
@@ -163,7 +163,30 @@ function trecho(inicio, fim) {
       cards: Array.from(externalRoot._bracketGeneralView.querySelectorAll('[data-bracket-tab-category]')).map((el) => el.id),
       emptyHeadingHidden: document.querySelector('#inline-bracket-container .bracket-round-column:not(.bracket-general-round-column) .bracket-round-heading').hidden
     };
-    return { generalState, upcomingState, recentResults, restored, generalReentry, cleanup, noSchedule, nested, externalSource };
+
+    // Ao abrir Geral/Próximos, o primeiro jogo pronto para chamar vem antes
+    // de um pendente mais cedo que ainda não tem presença completa. Este é o
+    // alvo que a dashboard deve deixar no topo útil da agenda.
+    document.body.innerHTML = '<main id="focus-scope"><nav id="focus-root"></nav><section id="focus-source" class="bracket-scroll-container">' +
+      card('focus-pending', 'fem', 'Light', at(22, 18), 'Quadra 4', false) +
+      card('focus-ready', 'fem', 'Light', at(22, 19), 'Quadra 5', true) +
+      '</section></main>';
+    const focusRoot = document.getElementById('focus-root');
+    focusRoot._bracketTabsScope = document.getElementById('focus-scope');
+    const originalRect = HTMLElement.prototype.getBoundingClientRect;
+    let focusedTop = -1;
+    HTMLElement.prototype.getBoundingClientRect = function () {
+      if (this.id === 'focus-root') return { top: 0, bottom: 50, left: 0, right: 600, width: 600, height: 50 };
+      if (this.id === 'focus-pending') return { top: 100, bottom: 200, left: 0, right: 300, width: 300, height: 100 };
+      if (this.id === 'focus-ready') return { top: 300, bottom: 400, left: 0, right: 300, width: 300, height: 100 };
+      return originalRect.call(this);
+    };
+    window.scrollTo = function (opts) { focusedTop = typeof opts === 'object' ? Number(opts.top) : Number(arguments[1]); };
+    window._bracketGeneralView(focusRoot, true, 'fem', false, true);
+    await new Promise((resolve) => setTimeout(resolve, 130));
+    HTMLElement.prototype.getBoundingClientRect = originalRect;
+    const readyFocus = { top: focusedTop, moved: !!focusRoot._bracketGeneralView.querySelector('#focus-ready') };
+    return { generalState, upcomingState, recentResults, restored, generalReentry, cleanup, noSchedule, nested, externalSource, readyFocus };
   });
 
   console.log('\n📋 Geral é a agenda do dia, não uma cópia por gênero');
@@ -198,6 +221,8 @@ function trecho(inicio, fim) {
   console.log('\n📋 Detalhe publicado e chave inline usam a mesma agenda');
   ok(result.externalSource.shown, 'Geral abre quando os cards publicados estão fora da chave inline');
   ok(result.externalSource.cards.join(',') === 'real-scheduled', 'Geral usa o card publicado, não o cabeçalho vazio da chave inline');
+  ok(result.readyFocus.moved && result.readyFocus.top >= 200,
+    'ao abrir Geral, o foco prioriza o jogo pronto mesmo se um pendente anterior ainda aguarda presença');
   ok(result.externalSource.emptyHeadingHidden, 'Geral remove cabeçalho de rodada sem jogo da chave inline');
 
   await browser.close();
