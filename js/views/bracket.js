@@ -1181,28 +1181,47 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame) {
     var nextEntry = entries.find(function (entry) {
       return entry && entry.card && entry.card.getAttribute('data-bracket-upcoming') === '1';
     });
-    if (nextEntry && nextEntry.card && typeof requestAnimationFrame === 'function') {
-      requestAnimationFrame(function () {
-        requestAnimationFrame(function () {
-          if (!nextEntry.card.isConnected || nextEntry.card.hidden || window._travaRolagemDaChave) return;
-          // \`scrollIntoView\` escolhe o primeiro ancestral com overflow e, nesta
-          // agenda, às vezes só movia a coluna horizontal. Calculamos os dois
-          // eixos depois da montagem real: o próximo jogo fica logo abaixo
-          // das abas e sua rodada entra na área visível.
-          // [[regression_operational_tabs_scroll_to_next_scheduled_game]]
-          var track = nextEntry.card.closest ? nextEntry.card.closest('.bracket-general-rounds-track') : null;
-          var cardRect = nextEntry.card.getBoundingClientRect();
-          var safeTop = root.getBoundingClientRect().bottom + 12;
-          var targetTop = Math.max(0, (window.scrollY || window.pageYOffset || 0) + cardRect.top - safeTop);
-          window.scrollTo({ top: targetTop, behavior: 'auto' });
-          if (track) {
-            var trackRect = track.getBoundingClientRect();
-            var targetLeft = Math.max(0, track.scrollLeft + cardRect.left - trackRect.left - 8);
-            track.scrollTo({ left: targetLeft, behavior: 'auto' });
-          }
-          _bracketSyncRoundHeadingOffsets();
-        });
-      });
+    if (nextEntry && nextEntry.card) {
+      // A montagem da agenda move os cards reais entre contêineres. `scrollTo`
+      // isolado pode ser ignorado enquanto esse reflow ainda está em curso;
+      // escrevemos diretamente nos dois scrollports e repetimos uma vez depois
+      // da pintura estável. O token cancela um foco antigo se outra aba for
+      // escolhida enquanto os frames ainda estão pendentes.
+      // [[regression_operational_tabs_always_focus_next_game]]
+      var focusToken = (Number(view._bracketFocusToken) || 0) + 1;
+      view._bracketFocusToken = focusToken;
+      var focusOperationalNextGame = function () {
+        if (view._bracketFocusToken !== focusToken || view.style.display === 'none' || !nextEntry.card.isConnected || nextEntry.card.hidden || window._travaRolagemDaChave) return;
+        // `scrollIntoView` escolhe o primeiro ancestral com overflow e, nesta
+        // agenda, às vezes só movia a coluna horizontal. Calculamos os dois
+        // eixos depois da montagem real: o próximo jogo fica no topo útil,
+        // logo abaixo das abas, e sua rodada entra na área visível.
+        // [[regression_operational_tabs_scroll_to_next_scheduled_game]]
+        var track = nextEntry.card.closest ? nextEntry.card.closest('.bracket-general-rounds-track') : null;
+        var cardRect = nextEntry.card.getBoundingClientRect();
+        var safeTop = root.getBoundingClientRect().bottom + 12;
+        var currentTop = window.scrollY || window.pageYOffset || 0;
+        var targetTop = Math.max(0, currentTop + cardRect.top - safeTop);
+        var scrollRoot = document.scrollingElement || document.documentElement || document.body;
+        if (scrollRoot) scrollRoot.scrollTop = targetTop;
+        try { window.scrollTo({ top: targetTop, behavior: 'instant' }); }
+        catch (eScroll) { try { window.scrollTo(0, targetTop); } catch (eLegacyScroll) {} }
+        if (track) {
+          var trackRect = track.getBoundingClientRect();
+          var targetLeft = Math.max(0, track.scrollLeft + cardRect.left - trackRect.left - 8);
+          track.scrollLeft = targetLeft;
+          try { track.scrollTo({ left: targetLeft, behavior: 'instant' }); }
+          catch (eTrack) {}
+        }
+        _bracketSyncRoundHeadingOffsets();
+      };
+      var afterPaint = function () {
+        if (typeof requestAnimationFrame === 'function') requestAnimationFrame(focusOperationalNextGame);
+        else focusOperationalNextGame();
+        setTimeout(focusOperationalNextGame, 80);
+      };
+      if (typeof requestAnimationFrame === 'function') requestAnimationFrame(afterPaint);
+      else afterPaint();
     }
   }
   // Os cards acabaram de trocar de coluna; o portal só pode medir cabeçalhos
