@@ -1,3 +1,4 @@
+// 2.3.287 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.3.286 — A chave operacional e o toggle de presença da Liga encontram elementos pelo atributo do torneio, sem montar seletores CSS com o ID. Assim IDs legados com caracteres especiais não desmontam Geral ou Próximos jogos depois de salvar um placar nem quebram a disponibilidade do participante.
 // 2.3.285 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.3.284 — Atualização consolidada de produção com as correções validadas desde a última publicação.
