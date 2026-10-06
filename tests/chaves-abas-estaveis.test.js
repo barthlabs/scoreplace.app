@@ -44,6 +44,7 @@ ok(src.includes('function _matchCardResultTimestamp') && src.includes('var _play
 ok(src.includes('data-bracket-result-at') && src.includes('regression_upcoming_keeps_two_last_saved_results'), 'Próximos jogos conserva apenas os dois últimos resultados para conferência');
 ok(src.includes('scoreplace_bracket_tab_state_') && src.includes('regression_operational_tab_survives_dashboard_round_trip') && src.includes('regression_operational_cards_have_equal_height'), 'a visão operacional sobrevive ao retorno do dashboard e nivela os cards reais');
 ok(src.includes('defaultAgendaGender') && src.includes("'__general'") && src.includes('regression_operational_tabs_open_on_next_game') && src.includes('regression_operational_tabs_always_focus_next_game') && src.includes('regression_operational_tabs_scroll_to_next_scheduled_game') && src.includes("data-bracket-upcoming') === '1'") && src.includes('scrollRoot.scrollTop = targetTop') && src.includes('track.scrollLeft = targetLeft') && src.includes('setTimeout(focusOperationalNextGame, 80)'), 'Geral é a aba inicial da agenda e Geral/Próximos levam deterministicamente o próximo jogo pendente ao topo útil');
+ok(src.includes('root._bracketFocusToken') && !src.includes('view._bracketFocusToken'), 'o cancelamento do foco operacional usa o contêiner recebido no escopo, sem referência livre em runtime');
 
-console.log('\n' + (fail ? '❌' : '✅') + ' chaves-abas-estáveis: ' + (20 - fail) + ' asserts ok, ' + fail + ' falharam');
+console.log('\n' + (fail ? '❌' : '✅') + ' chaves-abas-estáveis: ' + (21 - fail) + ' asserts ok, ' + fail + ' falharam');
 process.exitCode = fail ? 1 : 0;

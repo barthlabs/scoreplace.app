@@ -1188,10 +1188,10 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame) {
       // da pintura estável. O token cancela um foco antigo se outra aba for
       // escolhida enquanto os frames ainda estão pendentes.
       // [[regression_operational_tabs_always_focus_next_game]]
-      var focusToken = (Number(view._bracketFocusToken) || 0) + 1;
-      view._bracketFocusToken = focusToken;
+      var focusToken = (Number(root._bracketFocusToken) || 0) + 1;
+      root._bracketFocusToken = focusToken;
       var focusOperationalNextGame = function () {
-        if (view._bracketFocusToken !== focusToken || view.style.display === 'none' || !nextEntry.card.isConnected || nextEntry.card.hidden || window._travaRolagemDaChave) return;
+        if (root._bracketFocusToken !== focusToken || root.style.display === 'none' || !nextEntry.card.isConnected || nextEntry.card.hidden || window._travaRolagemDaChave) return;
         // `scrollIntoView` escolhe o primeiro ancestral com overflow e, nesta
         // agenda, às vezes só movia a coluna horizontal. Calculamos os dois
         // eixos depois da montagem real: o próximo jogo fica no topo útil,
