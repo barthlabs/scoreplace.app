@@ -2830,8 +2830,11 @@ function renderDashboard(container) {
       // A entrada automática da Dashboard ancora nesta seção. A margem de
       // rolagem pertence ao próprio destino: assim "Seu próximo jogo" nunca
       // fica sob o cabeçalho fixo, independentemente da altura do chrome.
-      _upHtml += '<div id="proximos-jogos-section" style="scroll-margin-top:calc(var(--scroll-anchor, 0px) + 12px);background:rgba(56,189,248,0.05);border:1px solid rgba(56,189,248,0.18);border-radius:14px;padding:14px 16px;margin-bottom:1rem;">';
-      _upHtml += '<h3 style="margin:0 0 12px;font-size:0.85rem;font-weight:700;color:var(--sp-c-38bdf8,#38bdf8);letter-spacing:0.04em;text-transform:uppercase;display:flex;align-items:center;gap:8px;">⚔️ Seu próximo jogo</h3>';
+      _upHtml += '<div id="proximos-jogos-section" style="scroll-margin-top:calc(var(--scroll-anchor, 0px) + 16px);background:rgba(56,189,248,0.05);border:1px solid rgba(56,189,248,0.18);border-radius:14px;padding:14px 16px;margin-bottom:1rem;">';
+      // O alvo de entrada é a seção, portanto a própria frase precisa sobreviver
+      // ao recuo do cabeçalho fixo. O span não trunca: em largura estreita ele
+      // quebra de linha antes de desaparecer sob o chrome.
+      _upHtml += '<h3 style="margin:0 0 12px;min-width:0;font-size:0.85rem;font-weight:700;color:var(--sp-c-38bdf8,#38bdf8);letter-spacing:0.04em;text-transform:uppercase;display:flex;align-items:center;flex-wrap:wrap;gap:8px;line-height:1.25;overflow:visible;"><span aria-hidden="true">⚔️</span><span style="min-width:0;overflow:visible;text-overflow:clip;white-space:normal;">Seu próximo jogo</span></h3>';
       _upHtml += '<div style="border-left:3px solid #818cf8;padding-left:10px;margin-bottom:10px;">' +
         '<div style="font-weight:800;color:var(--text-bright);font-size:0.92rem;text-transform:uppercase;letter-spacing:0.5px;line-height:1.25;">' + _sf(_ng.tName) + '</div>' +
         (_metaStr ? '<div style="color:var(--sp-c-a5b4fc,#a5b4fc);font-size:0.72rem;margin-top:3px;font-weight:600;">' + _sf(_metaStr) + '</div>' : '') +
