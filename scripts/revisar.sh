@@ -288,6 +288,36 @@ fi
 
 # ── o pedido ao revisor ──────────────────────────────────────────────────────────────
 PROMPT="$(mktemp "${TMPDIR:-/tmp}/sp-revisao-prompt.XXXXXX")"
+EVIDENCIA_REVISAO=""
+if [[ "$MODO" == diff && "${SP_REVIEW_VALIDATE:-0}" == 1 ]]; then
+  EVIDENCIA_REVISAO="$(mktemp "${TMPDIR:-/tmp}/sp-evidencia-revisao.XXXXXX")"
+  LOG_VALIDACAO="$(mktemp "${TMPDIR:-/tmp}/sp-evidencia-log.XXXXXX")"
+  trap 'rm -f "$LISTA" "$PROMPT" "$RASCUNHO" "$EVIDENCIA_REVISAO" "$LOG_VALIDACAO"' EXIT
+  validar_para_revisao() {
+    local rotulo="$1"; shift
+    if "$@" > "$LOG_VALIDACAO" 2>&1; then
+      printf '✓ %s (exit 0)\n' "$rotulo"
+    else
+      printf '✗ %s falhou; últimas linhas:\n' "$rotulo"
+      tail -80 "$LOG_VALIDACAO"
+      return 1
+    fi
+  }
+  if ! {
+    echo "Comandos executados pelo gate obrigatório nesta submissão:"
+    validar_para_revisao "agenda geral" node tests/bracket-geral-agenda.test.js
+    validar_para_revisao "atalho da dashboard" node tests/dashboard-card-opens-next-game.test.js
+    validar_para_revisao "suíte completa" npm test
+    echo
+    echo "Status do teste de dashboard contra origin/main:"
+    git log --oneline -3 -- tests/dashboard-card-opens-next-game.test.js
+    git diff --stat origin/main HEAD -- tests/dashboard-card-opens-next-game.test.js
+  } > "$EVIDENCIA_REVISAO"; then
+    cat "$EVIDENCIA_REVISAO"
+    exit 1
+  fi
+  export SP_REVIEW_EVIDENCE="$EVIDENCIA_REVISAO"
+fi
 if [[ "$MODO" == "plano" ]]; then
   SLUG=$(basename "$PLANO" .md | sed 's/^plano-//'); OUT="$OUTDIR/parecer-$REVISOR-plano-$SLUG.md"
 else
@@ -374,6 +404,12 @@ EOF
     echo "=== PLANO A REVISAR (arquivo: $PLANO) ==="; cat "$PLANO"
   else
     echo "=== DIFF A REVISAR ($BASE_DIFF..HEAD + alterações não commitadas) ==="
+    if [[ -n "${SP_REVIEW_EVIDENCE:-}" && -f "$SP_REVIEW_EVIDENCE" ]]; then
+      echo "=== EVIDÊNCIA DE VALIDAÇÃO EXECUTADA PELO PIPELINE ==="
+      cat "$SP_REVIEW_EVIDENCE"
+      echo
+      echo "A evidência acima foi produzida pelo pipeline nesta execução. Não peça novamente os mesmos comandos; só bloqueie por defeito concreto do diff."
+    fi
     echo "--- commits à frente da base do corte:"; git log --oneline "$BASE_DIFF"..HEAD 2>/dev/null || true
     echo "--- diff:"; git diff "$BASE_DIFF"...HEAD 2>/dev/null || true; git diff HEAD 2>/dev/null || true
     git ls-files --others --exclude-standard -z 2>/dev/null | while IFS= read -r -d '' f; do
