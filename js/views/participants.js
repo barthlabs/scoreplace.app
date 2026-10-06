@@ -1133,6 +1133,14 @@ window._setCheckInFilter = function (tId, filter) {
   _reRenderParticipants();
 };
 
+// Categoria aqui é a categoria COMPLETA do torneio (ex.: "Fem Light"), não só
+// o nível. A aba precisa filtrar a mesma categoria que aparece no card e nos jogos.
+window._participantCategoryFilters = window._participantCategoryFilters || {};
+window._setParticipantsCategoryTab = function (tId, category) {
+  window._participantCategoryFilters[String(tId)] = String(category || 'all');
+  _reRenderParticipants();
+};
+
 // Factory CANÔNICO dos callbacks de presença da CHAMADA (roll-call) — v1.3.16. Extraído de
 // renderParticipants pra ser reusado TAMBÉM no DETALHE do torneio (tournaments.js) sem duplicar
 // a lógica. Retorna {cardPresence, memberPresence} pra passar como ctx ao
@@ -1291,6 +1299,7 @@ window._partApplyFilter = function () {
   var sort = (document.getElementById('part-sort') || {}).value || 'name-asc';
   var gf = (document.getElementById('part-gender') || {}).value || 'all';
   var sk = (document.getElementById('part-skill') || {}).value || 'all';
+  var cf = (document.getElementById('part-category') || {}).value || 'all';
   // v4.4.65: FILTRO ativos/inativos (bola verde/vermelha). all=todos, active=só ativos,
   // inactive=só inativos. Lê data-part-inactive (1=inativo).
   var af = (document.getElementById('part-active') || {}).value || 'all';
@@ -1301,6 +1310,7 @@ window._partApplyFilter = function () {
     var nm = c.getAttribute('data-part-name') || '';
     var g = c.getAttribute('data-part-gender') || 'none';
     var s = c.getAttribute('data-part-skill') || 'none';
+    var category = c.getAttribute('data-part-category') || '';
     // v3.1.x: card de DUPLA (data-part-multi="1") = 2 pessoas. Gênero/habilidade não
     // se aplicam a um PAR (cada membro tem o seu) — viram wildcard; só a BUSCA filtra
     // (data-part-name casa qualquer um dos nomes). Pra solo, mantém o casamento exato,
@@ -1324,8 +1334,9 @@ window._partApplyFilter = function () {
                    g === gf || g.split(',').indexOf(gf) !== -1;
     var okSkill = isMulti || sk === 'all' || !s || s === 'none' ||
                   s === sk || s.split(',').indexOf(sk) !== -1;
+    var okCategory = cf === 'all' || category === cf;
     var okActive = af === 'all' || (af === 'active' ? !_inact : _inact);
-    var ok = okSearch && okGender && okSkill && okActive;
+    var ok = okSearch && okGender && okSkill && okCategory && okActive;
     c.style.display = ok ? '' : 'none';
     if (ok) shown++;
   });
@@ -1827,6 +1838,7 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
   var _fSkill = 'none';
   var _fSkillCats = t.skillCategories || [];
   var _fCatStr = (_gPart && typeof _gPart === 'object') ? (_gPart.category || '') : '';
+  var _fCategory = _fCatStr;
   for (var _fi = 0; _fi < _fSkillCats.length; _fi++) { if (_fCatStr === _fSkillCats[_fi] || _fCatStr.endsWith(' ' + _fSkillCats[_fi])) { _fSkill = _fSkillCats[_fi]; break; } }
   var _fEnrollNum = (typeof window._enrollNumber === 'function') ? window._enrollNumber(_enrollOrderMap, _gPart || pName) : '';
   /* ⛔⛔ POSIÇÃO NO PAINEL NÃO É NÚMERO DE INSCRIÇÃO (24/set/2026).
@@ -1859,7 +1871,7 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
   // 168px acomoda cabeçalho, até três badges e a linha de ação sem deixar os cards
   // de inativos menores que os cards da espera; conteúdo excepcional ainda pode crescer.
   return '' +
-    '<div class="participant-card" data-part-card="1" data-part-org="' + (_isOrgP ? '1' : '0') + '" data-part-vip="' + (isVip ? '1' : '0') + '" data-part-standby="' + (_isStandbyEntry ? '1' : '0') + '" data-part-name="' + _fNameAttr + '" data-participant-name="' + window._safeHtml(_dragName) + '" data-card-key="' + window._safeHtml(String((typeof p === 'object' && p && p.uid) ? p.uid : pName)) + '" data-card-idx="' + idx + '" data-part-uid="' + window._safeHtml(String((typeof p === 'object' && p && p.uid && !isTeam) ? p.uid : '')) + '" data-part-inactive="' + _fInactive + '" data-part-gender="' + _fGender + '" data-part-skill="' + String(_fSkill).replace(/"/g, '&quot;') + '" data-part-order="' + _fOrder + '" ' + dragProps + ' style="' + cardStyle + ' min-height:168px;height:100%;box-sizing:border-box;border-radius:12px;padding:12px;position:relative;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.1);transition:all 0.2s;' + (isOrg ? 'cursor:grab;' : '') + _rcCardExtra + '" onmouseover="this.style.transform=\'translateY(-2px)\'" onmouseout="this.style.transform=\'none\'">' +
+    '<div class="participant-card" data-part-card="1" data-part-org="' + (_isOrgP ? '1' : '0') + '" data-part-vip="' + (isVip ? '1' : '0') + '" data-part-standby="' + (_isStandbyEntry ? '1' : '0') + '" data-part-name="' + _fNameAttr + '" data-participant-name="' + window._safeHtml(_dragName) + '" data-card-key="' + window._safeHtml(String((typeof p === 'object' && p && p.uid) ? p.uid : pName)) + '" data-card-idx="' + idx + '" data-part-uid="' + window._safeHtml(String((typeof p === 'object' && p && p.uid && !isTeam) ? p.uid : '')) + '" data-part-inactive="' + _fInactive + '" data-part-gender="' + _fGender + '" data-part-skill="' + String(_fSkill).replace(/"/g, '&quot;') + '" data-part-category="' + window._safeHtml(String(_fCategory)).replace(/"/g, '&quot;') + '" data-part-order="' + _fOrder + '" ' + dragProps + ' style="' + cardStyle + ' min-height:168px;height:100%;box-sizing:border-box;border-radius:12px;padding:12px;position:relative;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.1);transition:all 0.2s;' + (isOrg ? 'cursor:grab;' : '') + _rcCardExtra + '" onmouseover="this.style.transform=\'translateY(-2px)\'" onmouseout="this.style.transform=\'none\'">' +
       _wmNum +
       '<div style="position:relative;z-index:1;">' +
         pNameHtml +
@@ -2185,6 +2197,17 @@ function renderParticipants(container, tournamentId) {
       pn.split('/').forEach(function(nm) { const t2 = nm.trim(); if (t2) _nameToParticipant[t2] = p; });
     }
   });
+  const _tournamentCategories = (typeof window._getTournamentCategories === 'function')
+    ? (window._getTournamentCategories(t) || [])
+    : ((t.combinedCategories || t.categories || []).slice());
+  const _canonicalParticipantCategory = function (raw) {
+    const value = String(raw || '').trim();
+    if (!value) return '';
+    const hit = _tournamentCategories.find(function (category) {
+      return String(category || '').trim().toLocaleLowerCase() === value.toLocaleLowerCase();
+    });
+    return hit ? String(hit).trim() : value;
+  };
 
   if (drawDone) {
     // v3.0.x: SEMPRE que há sorteio (jogos criados) mostra a grade RICA canônica —
@@ -2263,7 +2286,8 @@ function renderParticipants(container, tournamentId) {
           else if (p.p2Name && n === String(p.p2Name).trim()) _slotUid = p.p2Uid || '';
           else _slotUid = p.uid || '';
         }
-        const _obj = { name: n, uid: _slotUid, teamName: currentTeam, teamIdx: idx, matchNum, matchDecided, opponent };
+        const _obj = { name: n, uid: _slotUid, teamName: currentTeam, teamIdx: idx, matchNum, matchDecided, opponent,
+          category: _canonicalParticipantCategory(p && typeof p === 'object' ? p.category : '') };
         allIndividuals.push(_obj);
         _indivByName[n.toLowerCase()] = _obj;
       });
@@ -2283,7 +2307,8 @@ function renderParticipants(container, tournamentId) {
           else if (p.p2Name && n === String(p.p2Name).trim()) _slotUidSb = p.p2Uid || '';
           else _slotUidSb = p.uid || '';
         }
-        const _obj = { name: n, uid: _slotUidSb, teamName: pName.includes('/') ? pName : null, teamIdx: -1, matchNum: null, matchDecided: false, opponent: null, isStandby: true };
+        const _obj = { name: n, uid: _slotUidSb, teamName: pName.includes('/') ? pName : null, teamIdx: -1, matchNum: null, matchDecided: false, opponent: null, isStandby: true,
+          category: _canonicalParticipantCategory(p && typeof p === 'object' ? p.category : '') };
         allIndividuals.push(_obj);
         _indivByName[n.toLowerCase()] = _obj;
       });
@@ -2829,6 +2854,7 @@ function renderParticipants(container, tournamentId) {
       }
 
       const _ciPart = _nameToParticipant[ind.name];
+      const _ciCategory = _canonicalParticipantCategory(ind.category || (_ciPart && _ciPart.category) || '');
       const _ciInactive = (t.allowSelfDeactivation !== false && _ciPart && _ciPart.ligaActive === false) ? '1' : '0';
       const _ciGender = (typeof window._canonGender === 'function') ? window._canonGender(window._pGender(_ciPart)) : 'none'; // v1.3.39: perfil-first
       const _ciSkillVal = _ciCurrentSkill || 'none';
@@ -2862,7 +2888,7 @@ function renderParticipants(container, tournamentId) {
       const _riNum = (typeof _ciOrder === 'number' && _ciOrder !== 9999) ? (_ciOrder + 1) : '';
       const _riWoBadge = isWOOrphan ? '<div style="font-size:0.64rem;font-weight:800;padding:3px 9px;border-radius:8px;background:rgba(239,68,68,0.18);color:var(--sp-c-f87171,#f87171);border:1px solid rgba(239,68,68,0.35);">W.O.</div>' : woBadge;
       return `
-        <div class="participant-card" data-part-card="1" data-panel-card="1" data-card-key="${String(ind.uid || ind.name || '').replace(/"/g, '&quot;')}" data-part-org="${_isOrgPC ? '1' : '0'}" data-part-vip="${isVipPlayer ? '1' : '0'}" data-part-standby="${isStandby ? '1' : '0'}" data-part-name="${(ind.name || '').toLowerCase().replace(/"/g, '&quot;')}" data-part-inactive="${_ciInactive}" data-part-gender="${_ciGender}" data-part-skill="${String(_ciSkillVal).replace(/"/g, '&quot;')}" data-part-order="${_ciOrder}" style="min-height:168px;height:100%;box-sizing:border-box;background:${window._spCor(_riGrad, 'background')};border:${_riBorder};border-radius:12px;padding:12px;position:relative;overflow:hidden;${_riGlow}${_riDim}transition:all 0.2s;">
+        <div class="participant-card" data-part-card="1" data-panel-card="1" data-card-key="${String(ind.uid || ind.name || '').replace(/"/g, '&quot;')}" data-part-org="${_isOrgPC ? '1' : '0'}" data-part-vip="${isVipPlayer ? '1' : '0'}" data-part-standby="${isStandby ? '1' : '0'}" data-part-name="${(ind.name || '').toLowerCase().replace(/"/g, '&quot;')}" data-part-inactive="${_ciInactive}" data-part-gender="${_ciGender}" data-part-skill="${String(_ciSkillVal).replace(/"/g, '&quot;')}" data-part-category="${window._safeHtml(_ciCategory).replace(/"/g, '&quot;')}" data-part-order="${_ciOrder}" style="min-height:168px;height:100%;box-sizing:border-box;background:${window._spCor(_riGrad, 'background')};border:${_riBorder};border-radius:12px;padding:12px;position:relative;overflow:hidden;${_riGlow}${_riDim}transition:all 0.2s;">
             ${(typeof window._enrollNumberBadge === 'function') ? window._enrollNumberBadge(_riNum, 'right') : ''}
             <div style="position:relative;z-index:1;">
                 <!-- HEADER: avatar + nome + estrela (Jogo N foi pro match strip, na linha do 2º time) -->
@@ -3008,8 +3034,31 @@ function renderParticipants(container, tournamentId) {
         <span style="font-size:0.85rem;font-weight:700;color:var(--sp-c-4ade80,#4ade80);">${_t('participants.inProgressBadge')}</span>
     </div>` : '';
 
-  // Ready matches banner (check-in: jogos prontos para chamar)
-  const readyBannerHtml = (typeof window._renderReadyMatchesBanner === 'function') ? window._renderReadyMatchesBanner(t) : '';
+  // Abas por CATEGORIA DO TORNEIO (não só nível): a mesma seleção vale para os
+  // cards de presença e para os jogos prontos/parciais logo abaixo.
+  const _savedParticipantCategory = (window._participantCategoryFilters || {})[String(tId)] || 'all';
+  const _activeParticipantCategory = _tournamentCategories.some(function (category) {
+    return String(category) === String(_savedParticipantCategory);
+  }) ? String(_savedParticipantCategory) : 'all';
+  const _escapeCategoryArg = function (value) {
+    return String(value).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  };
+  const _participantCategoryTabs = _tournamentCategories.length ? (function () {
+    const tab = function (value, label) {
+      const active = _activeParticipantCategory === value;
+      return '<button type="button" onclick="window._setParticipantsCategoryTab(\'' + _escapeCategoryArg(tId) + '\',\'' + _escapeCategoryArg(value) + '\')" style="min-height:34px;padding:5px 12px;border-radius:8px;border:1px solid ' + (active ? 'rgba(96,165,250,.9)' : 'rgba(255,255,255,.14)') + ';background:' + (active ? 'rgba(59,130,246,.18)' : 'rgba(255,255,255,.035)') + ';color:' + (active ? 'var(--sp-c-bfdbfe,#bfdbfe)' : 'var(--text-muted)') + ';font-weight:800;font-size:.78rem;cursor:pointer;white-space:nowrap;">' + window._safeHtml(label) + '</button>';
+    };
+    return '<div data-participant-category-tabs="1" style="display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px;">' +
+      '<input type="hidden" id="part-category" value="' + window._safeHtml(_activeParticipantCategory).replace(/"/g, '&quot;') + '">' +
+      tab('all', 'Todas') +
+      _tournamentCategories.map(function (category) { return tab(String(category), String(category)); }).join('') +
+    '</div>';
+  })() : '<input type="hidden" id="part-category" value="all">';
+
+  // Jogos prontos e presença parcial permanecem ABAIXO da barra de presença e
+  // seguem a categoria ativa, em vez de misturar categorias diferentes.
+  const readyBannerHtml = (typeof window._renderReadyMatchesBanner === 'function')
+    ? window._renderReadyMatchesBanner(t, { category: _activeParticipantCategory }) : '';
 
   // Standby / waitlist panel
   const standbyPanelHtml = (typeof window._renderStandbyPanel === 'function') ? window._renderStandbyPanel(t, isOrg) : '';
@@ -3058,7 +3107,7 @@ function renderParticipants(container, tournamentId) {
     ${rollCallBanner}
     ${startBanner}
     ${startedBadge}
-    ${readyBannerHtml}
+    ${_participantCategoryTabs}
     ${_filterBarCtrls}
     ${parts.length > 0 ? `
       <div id="inscritos-grid" style="${gridStyle}">
@@ -3069,6 +3118,7 @@ function renderParticipants(container, tournamentId) {
         <p class="text-muted">Nenhum inscrito ainda.</p>
       </div>
     `}
+    ${readyBannerHtml}
     ${standbyPanelHtml}
   `;
   var _geracao = window._inscritosNovaGeracao();

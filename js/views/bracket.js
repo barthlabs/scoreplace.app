@@ -2894,7 +2894,8 @@ function renderBracket(container, tournamentId, isInline) {
 }
 
 // ─── Banner de Jogos Prontos (ambos presentes) ──────────────────────────────
-window._renderReadyMatchesBanner = function _renderReadyMatchesBanner(t) {
+window._renderReadyMatchesBanner = function _renderReadyMatchesBanner(t, opts) {
+  opts = opts || {};
   var _t = window._t || function(k) { return k; };
   // Antes exigia t.tournamentStarted — mas lançar/simular resultado já MARCA presença
   // (checkedIn) sem sempre gravar o flag. A presença (hasAnyCheckin abaixo) É o gate real:
@@ -2922,6 +2923,25 @@ window._renderReadyMatchesBanner = function _renderReadyMatchesBanner(t) {
     : (Array.isArray(t.matches) ? t.matches.slice() : []);
   if (!allMatchesForBanner.length) return '';
 
+  // A tela de Inscritos pode estar recortada por uma categoria completa ("Fem
+  // Light", por exemplo). A partida traz a categoria quando disponível; para
+  // dados antigos, resolve pelo inscrito que compõe o confronto.
+  const _selectedCategory = String(opts.category || 'all');
+  const _normCategory = function (value) { return String(value || '').trim().toLocaleLowerCase(); };
+  const _matchHasCategory = function (match) {
+    if (_selectedCategory === 'all') return true;
+    const wanted = _normCategory(_selectedCategory);
+    const direct = match && (match.category || match.categoryName || match.division || match.skillCategory);
+    if (_normCategory(direct) === wanted) return true;
+    const names = String((match && match.p1) || '') + ' / ' + String((match && match.p2) || '');
+    const members = names.split(/\s*\/\s*/).map(function (name) { return String(name || '').trim().toLocaleLowerCase(); }).filter(Boolean);
+    return (t.participants || []).some(function (participant) {
+      if (!participant || _normCategory(participant.category) !== wanted) return false;
+      const entry = String((typeof window._pName === 'function' ? window._pName(participant) : (participant.displayName || participant.name || '')) || '');
+      return entry.split(/\s*\/\s*/).some(function (name) { return members.indexOf(String(name || '').trim().toLocaleLowerCase()) !== -1; });
+    });
+  };
+
   // Find matches where both sides are fully checked in and not yet decided
   const readyMatches = [];
   const partialMatches = [];
@@ -2929,6 +2949,7 @@ window._renderReadyMatchesBanner = function _renderReadyMatchesBanner(t) {
 
   allMatchesForBanner.forEach((m, idx) => {
     if (!m || m.winner || m.isBye || !m.p1 || m.p1 === 'TBD' || !m.p2 || m.p2 === 'TBD') return;
+    if (!_matchHasCategory(m)) return;
     const p1s = _getCheckInStatus(t.id, m.p1);
     const p2s = _getCheckInStatus(t.id, m.p2);
     /* ⛔ SEGUNDO CONTADOR — o banner numerava `idx + 1` sobre a PRÓPRIA lista filtrada
