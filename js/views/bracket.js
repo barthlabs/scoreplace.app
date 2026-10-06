@@ -1185,7 +1185,22 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame) {
       requestAnimationFrame(function () {
         requestAnimationFrame(function () {
           if (!nextEntry.card.isConnected || nextEntry.card.hidden || window._travaRolagemDaChave) return;
-          nextEntry.card.scrollIntoView({ behavior: 'auto', block: 'start', inline: 'start' });
+          // \`scrollIntoView\` escolhe o primeiro ancestral com overflow e, nesta
+          // agenda, às vezes só movia a coluna horizontal. Calculamos os dois
+          // eixos depois da montagem real: o próximo jogo fica logo abaixo
+          // das abas e sua rodada entra na área visível.
+          // [[regression_operational_tabs_scroll_to_next_scheduled_game]]
+          var track = nextEntry.card.closest ? nextEntry.card.closest('.bracket-general-rounds-track') : null;
+          var cardRect = nextEntry.card.getBoundingClientRect();
+          var safeTop = root.getBoundingClientRect().bottom + 12;
+          var targetTop = Math.max(0, (window.scrollY || window.pageYOffset || 0) + cardRect.top - safeTop);
+          window.scrollTo({ top: targetTop, behavior: 'auto' });
+          if (track) {
+            var trackRect = track.getBoundingClientRect();
+            var targetLeft = Math.max(0, track.scrollLeft + cardRect.left - trackRect.left - 8);
+            track.scrollTo({ left: targetLeft, behavior: 'auto' });
+          }
+          _bracketSyncRoundHeadingOffsets();
         });
       });
     }
@@ -1402,12 +1417,15 @@ function _bracketUpdateRoundHeadingPortal(root, scope) {
     return Math.ceil(item.rect.height || 0) + 18;
   }));
   portalHeight = Math.max(38, portalHeight);
-  // Sobreposição de dois pixels: em tela cheia o browser pode arredondar a
-  // base das abas e o topo do portal em direções diferentes. A faixa cobre a
-  // emenda sem criar espaço vertical, e a cópia abaixo preserva a posição do
-  // texto exatamente onde o cabeçalho original estaria.
-  // [[regression_round_portal_covers_fullscreen_subpixel_seam]]
-  portal.style.cssText = 'display:block;position:fixed;top:' + (Math.floor(anchorBottom) - 4) + 'px;left:' + Math.round(rootRect.left) + 'px;width:' + Math.round(rootRect.width) + 'px;max-width:100%;height:' + (portalHeight + 3) + 'px;box-sizing:border-box;overflow:hidden;isolation:isolate;pointer-events:none;z-index:1000;background:#111114;border-bottom:1px solid rgba(255,255,255,.08);box-shadow:0 -2px 0 #111114;';
+  // A primeira faixa de cards pode cruzar a base das abas ANTES do seu
+  // cabeçalho alcançar o portal (especialmente no fullscreen, onde a grade
+  // larga é repintada em camada própria). Portanto a máscara começa 24px
+  // ANTES da base das abas. Ela fica abaixo das próprias abas (30 < 31), logo
+  // não muda sua altura nem encobre botões; apenas elimina a pintura que
+  // tentava atravessá-las. A cópia recebe o mesmo deslocamento para continuar
+  // exatamente na base canônica da faixa.
+  // [[regression_round_portal_masks_cards_before_round_heading]]
+  portal.style.cssText = 'display:block;position:fixed;top:' + (Math.floor(anchorBottom) - 24) + 'px;left:' + Math.round(rootRect.left) + 'px;width:' + Math.round(rootRect.width) + 'px;max-width:100%;height:' + (portalHeight + 23) + 'px;box-sizing:border-box;overflow:hidden;isolation:isolate;pointer-events:none;z-index:30;background:#111114;border-bottom:1px solid rgba(255,255,255,.08);box-shadow:none;';
   for (var p = 0; p < visibleHeadings.length; p++) {
     var item = visibleHeadings[p];
     var heading = item.heading;
@@ -1422,7 +1440,7 @@ function _bracketUpdateRoundHeadingPortal(root, scope) {
     // um pixel por baixo da faixa (z-index 29 contra 31), eliminando a emenda
     // sem deslocar a tipografia do título.
     // [[regression_round_portal_overlaps_tabs_subpixel_seam]]
-    clone.style.cssText = 'position:absolute;top:4px;left:' + Math.round(rect.left - rootRect.left) + 'px;width:' + Math.round(rect.width) + 'px;box-sizing:border-box;background:var(--bg-darker,#111114);padding:8px 0 9px;';
+    clone.style.cssText = 'position:absolute;top:24px;left:' + Math.round(rect.left - rootRect.left) + 'px;width:' + Math.round(rect.width) + 'px;box-sizing:border-box;background:var(--bg-darker,#111114);padding:8px 0 9px;';
     // O portal só acompanha o título da rodada. A máscara que avançava para
     // baixo escondia busca e cards ao rolar em telas estreitas.
     clone.style.background = '#111114';
