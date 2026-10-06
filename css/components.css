@@ -254,10 +254,12 @@ input[type="time"].sp-team-draw-time::-webkit-datetime-edit-minute-field {
   isolation: isolate;
 }
 /* A matriz da chave pode ter dezenas de colunas e camadas próprias. A faixa
-   "Voltar" precisa ser uma máscara opaca de largura integral, inclusive nos
-   poucos pixels imediatamente acima e abaixo dela; caso contrário, um repaint
-   durante o scroll deixa cards atravessarem visualmente o cabeçalho.
-   [[regression_back_header_never_leaks_bracket_content_full_width]] */
+   "Voltar" precisa ser uma máscara opaca de largura integral. Ela NÃO pode
+   crescer para fora: a antiga extensão de 32px acima/abaixo parecia margem
+   vazia e afastava as abas da linha do cabeçalho. A contenção é da própria
+   faixa visível, não de uma área morta ao redor dela.
+   [[regression_back_header_never_leaks_bracket_content_full_width]]
+   [[regression_back_header_does_not_create_phantom_vertical_margin]] */
 .sticky-back-header::before {
   content: '';
   position: absolute;
@@ -265,8 +267,8 @@ input[type="time"].sp-team-draw-time::-webkit-datetime-edit-minute-field {
   pointer-events: none;
   left: 0;
   right: 0;
-  top: -32px;
-  bottom: -32px;
+  top: 0;
+  bottom: 0;
   background: var(--bg-darker, #111114);
 }
 /* No z-index lowering needed — hamburger dropdown is OUTSIDE the topbar

@@ -949,7 +949,11 @@ function _bracketGeneralView(root, show, gender, onlyReady) {
   // atalho que deve furar o cartão de detalhes do torneio. O cartão canônico
   // precisa continuar antes das rodadas tanto na Geral quanto nos Próximos.
   // [[regression_operational_view_stays_after_tournament_details]]
-  var detailsCard = scope.querySelector ? scope.querySelector('#tourn-grid-container') : null;
+  // `scope` pode ser só o trilho da chave; o cartão do torneio é irmão dele
+  // em `#view-container`. Procurar apenas dentro do scope fazia Geral/Próximos
+  // nascerem antes do cartão quando a tela ainda estava terminando de montar.
+  var detailsCard = document.getElementById('tourn-grid-container') ||
+    (scope.querySelector ? scope.querySelector('#tourn-grid-container') : null);
   var operationalAnchor = detailsCard || root;
   var view = root._bracketGeneralView;
   if (!view) {
@@ -967,6 +971,17 @@ function _bracketGeneralView(root, show, gender, onlyReady) {
     // visão operacional logo abaixo dele sem recriar inputs ou perder a aba.
     operationalAnchor.insertAdjacentElement('afterend', view);
   }
+  // A montagem do detalhe pode terminar depois das abas. Reconciliamos no
+  // próximo quadro para que a visão operacional nunca permaneça acima dele.
+  // Não depende de timing de render, nem recria os cards já movidos.
+  // [[regression_operational_view_waits_for_tournament_details]]
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(function () {
+    var mountedDetails = document.getElementById('tourn-grid-container');
+    if (mountedDetails && mountedDetails.parentNode && view.parentNode && view.previousElementSibling !== mountedDetails) {
+      mountedDetails.insertAdjacentElement('afterend', view);
+    }
+    _bracketSyncRoundHeadingOffsets();
+  });
   var entries = root._bracketGeneralEntries || [];
   if (!show) {
     for (var r = 0; r < entries.length; r++) {
@@ -1283,7 +1298,14 @@ function _bracketUpdateRoundHeadingPortal(root, scope) {
   portal.innerHTML = '';
   var rootRect = root.getBoundingClientRect();
   var anchorBottom = rootRect.bottom;
-  var headings = scope.querySelectorAll('.bracket-round-heading');
+  // Geral/Próximos é posicionado após o cartão do torneio, fora do escopo
+  // estrutural onde a chave categorizada nasceu. Enquanto essa visão estiver
+  // aberta, seus títulos são a única fonte canônica para o portal fixo.
+  // [[regression_general_round_portal_reads_operational_view]]
+  var operationalView = root._bracketGeneralView;
+  var headingScope = operationalView && operationalView.style.display !== 'none'
+    ? operationalView : scope;
+  var headings = headingScope.querySelectorAll('.bracket-round-heading');
   var visibleHeadings = [];
   for (var i = 0; i < headings.length; i++) {
     var heading = headings[i];

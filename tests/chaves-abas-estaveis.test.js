@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const src = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'bracket.js'), 'utf8');
 const routerSrc = fs.readFileSync(path.join(__dirname, '..', 'js', 'router.js'), 'utf8');
+const componentsCss = fs.readFileSync(path.join(__dirname, '..', 'css', 'components.css'), 'utf8');
 let fail = 0;
 function ok(condition, message) {
   if (condition) console.log('  ✓ ' + message);
@@ -12,6 +13,7 @@ function ok(condition, message) {
 }
 
 ok(src.includes('function _bracketTabsApply'), 'aplicador único mantém o estado da aba');
+ok(/\.sticky-back-header::before\s*\{[\s\S]*?top:\s*0;[\s\S]*?bottom:\s*0;/.test(componentsCss), 'a máscara da linha Voltar cobre somente sua faixa e não recria margem fantasma acima ou abaixo');
 ok(src.includes('function _bracketTabsAnchor') && src.includes("first.closest('.bracket-sticky-scroll-wrapper, .bracket-scroll-container')"), 'faixa de abas ancora acima do trilho inteiro, não dentro da primeira rodada');
 ok(src.includes("gb.style.background = onG ? 'linear-gradient(135deg,#fbbf24,#f59e0b)'"), 'aba principal ativa é visualmente trazida para frente');
 ok(src.includes('border-radius:12px 12px 0 0'), 'abas principais usam o recorte de aba de planilha');

@@ -55,7 +55,7 @@ function trecho(inicio, fim) {
         card('fem-round-2', 'fem', 'Light', at(22, 20), 'Quadra 5', true, 2) +
         card('fem-waiting', 'fem', 'Power', at(22, 18), 'Quadra 6', false, 1, 'partial') +
         card('tomorrow', 'fem', 'Extreme', at(23, 18), 'Quadra 4', true) +
-      '</section></main>';
+      '</section><section id="tourn-grid-container">Detalhe do torneio</section></main>';
     const scope = document.getElementById('view-container');
     const root = document.querySelector('[data-bracket-tabs-root]');
     root._bracketTabsScope = scope;
@@ -71,7 +71,8 @@ function trecho(inicio, fim) {
       order: inAgenda,
       noClone: new Set(inAgenda).size === inAgenda.length && document.querySelectorAll('#fem-court-5').length === 1,
       visibleCards: Array.from(agenda.querySelectorAll('[data-bracket-tab-category]')).every((el) => !el.hidden),
-      roundColumns: Array.from(agenda.querySelectorAll('h4')).map((el) => el.textContent.trim())
+      roundColumns: Array.from(agenda.querySelectorAll('h4')).map((el) => el.textContent.trim()),
+      followsDetails: agenda.previousElementSibling && agenda.previousElementSibling.id === 'tourn-grid-container'
     };
 
     document.getElementById('upcoming').click();
@@ -144,6 +145,7 @@ function trecho(inicio, fim) {
   ok(result.generalState.noClone, 'os cards reais são movidos: não há id nem input duplicado');
   ok(result.generalState.visibleCards, 'os cards movidos para Geral são visíveis, não herdam o hidden do filtro de categoria');
   ok(result.generalState.roundColumns.join(',') === 'Rodada 1,Rodada 2', 'Geral agrupa a agenda pela rodada, com cabeçalho de coluna estável');
+  ok(result.generalState.followsDetails, 'Geral fica depois do card de detalhes do torneio, mesmo quando o detalhe é irmão da chave');
   console.log('\n📋 Próximos jogos prioriza o que aguarda presença e preserva os prontos');
   ok(result.upcomingState.sourceHidden, 'Próximos jogos também troca a chave canônica por uma única visão operacional');
   ok(result.upcomingState.order.join(',') === 'fem-waiting,fem-court-5,fem-round-2', 'a partida parcialmente presente vem antes dos próximos jogos prontos');
