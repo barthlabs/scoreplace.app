@@ -6,6 +6,7 @@ const { chromium } = require('@playwright/test');
 const ROOT = path.join(__dirname, '..');
 const tournaments = fs.readFileSync(path.join(ROOT, 'js/views/tournaments.js'), 'utf8');
 const store = fs.readFileSync(path.join(ROOT, 'js/store.js'), 'utf8');
+const bracket = fs.readFileSync(path.join(ROOT, 'js/views/bracket.js'), 'utf8');
 let pass = 0, fail = 0;
 function ok(condition, message) {
   if (condition) { pass++; console.log('  ✓ ' + message); }
@@ -70,8 +71,9 @@ function section(from, to) {
     window._collectAllMatches = (t) => t.matches;
     return window._nextScheduledTournamentMatchTarget({ matches: [
       { id: 'done', winner: 'a', scheduledAt: '2026-10-22T18:00:00Z', court: 'Quadra 1', _gameNum: 1, category: 'Fem Light' },
-      { id: 'court-5', scheduledAt: '2026-10-22T18:35:00Z', court: 'Quadra 5', _gameNum: 4, category: 'Fem Power' },
-      { id: 'court-4', scheduledAt: '2026-10-22T18:35:00Z', court: 'Quadra 4', _gameNum: 3, category: 'Fem Light' }
+      { id: 'unscheduled', court: 'Quadra 1', _gameNum: 2, category: 'Fem Light' },
+      { id: 'court-5', scheduledAt: { seconds: 1792694100 }, court: 'Quadra 5', _gameNum: 4, category: 'Fem Power' },
+      { id: 'court-4', scheduledAt: { toMillis: () => 1792694100000 }, court: 'Quadra 4', _gameNum: 3, category: 'Fem Light' }
     ] });
   });
   ok(target && target.matchId === 'court-4' && target.tab.category === '__upcoming' && target.tab.gender === 'fem',
@@ -82,6 +84,10 @@ function section(from, to) {
   ok(tournaments.includes('window._nextScheduledTournamentMatchTarget = function(t)') &&
     tournaments.includes("category: '__upcoming'"),
     'o alvo genérico força a aba Próximos jogos antes de o detalhe ser renderizado');
+  ok(tournaments.includes("sessionStorage.setItem('sp_scrollToMatch', String(_pendingBracketTarget.matchId))") &&
+    bracket.includes("sessionStorage.getItem('sp_scrollToMatch')") &&
+    bracket.includes("document.getElementById('card-' + String(_pm))"),
+    'o alvo persistido chega ao leitor da chave depois que o card é montado');
 
   await browser.close();
   console.log('\n' + (fail ? '❌' : '✅') + ' dashboard-card-opens-next-game: ' + pass + ' ok, ' + fail + ' falharam');
