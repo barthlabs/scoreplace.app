@@ -1,4 +1,4 @@
-// 2.3.292 — Atualização consolidada de produção com as correções validadas desde a última publicação.
+// 2.3.292 — O atalho da dashboard para o torneio mantém apenas o alvo canônico da agenda: abre Próximos jogos e ancora no primeiro confronto pendente por horário, quadra e número. Removeu-se o marcador paralelo que podia disputar o foco e deixar a aba correta selecionada enquanto a tela caía na classificação.
 // 2.3.291 — Em Beach Tennis a classificação por times não exibe empates, pois toda partida precisa ter vencedor. Abrir um torneio pelo card da dashboard entra direto em Próximos jogos e ancora no primeiro confronto ainda pendente já pronto para chamar; se não houver jogo pronto, usa o primeiro pendente como referência. A prioridade do jogo pronto, inclusive no trilho horizontal real, está coberta contra regressão.
 // 2.3.290 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.3.289 — Inscritos passa a recortar presença e jogos pela categoria completa do torneio;
