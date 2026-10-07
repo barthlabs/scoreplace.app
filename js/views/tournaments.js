@@ -1093,11 +1093,16 @@ window._buildPodiumHtml = function(p1, p2, p3, sub1, sub2, sub3, opts) {
 // v2.0.8: aceita matchId opcional (rola direto pra esse jogo). A página de
 // chaveamento standalone foi removida — o fallback agora navega pro DETALHE
 // (#tournaments/:id) com uma flag de scroll, nunca mais pra #bracket/:id.
-window._setTournamentMatchTarget = function(tId, matchId, tab) {
+window._setTournamentMatchTarget = function(tId, matchId, tab, options) {
   try {
     sessionStorage.setItem('sp_bracketScroll', JSON.stringify({
       tId: String(tId),
       matchId: matchId ? String(matchId) : null,
+      // A dashboard não deve transformar o jogo que por acaso estava no
+      // resumo em destino definitivo. Esta intenção manda o detalhe consultar
+      // a chave completa e escolher novamente o próximo jogo DA PESSOA que
+      // abriu a tela.
+      resolveForCurrentUser: !!(options && options.resolveForCurrentUser),
       // A dashboard sabe qual categoria/rodada o card representa. Carregar a
       // chave na aba padrão e só então procurar o card o deixa oculto pela aba.
       tab: tab && tab.category ? {
@@ -1111,6 +1116,13 @@ window._setTournamentMatchTarget = function(tId, matchId, tab) {
 
 window._goToTournamentMatch = function(tId, matchId, tab) {
   window._setTournamentMatchTarget(tId, matchId, tab);
+  window.location.hash = '#tournaments/' + tId;
+};
+
+// Atalho da dashboard: o cartão é só a porta de entrada. O destino é sempre
+// recalculado no detalhe, com o usuário autenticado e a chave completa.
+window._goToMyNextTournamentMatch = function(tId) {
+  window._setTournamentMatchTarget(tId, null, null, { resolveForCurrentUser: true });
   window.location.hash = '#tournaments/' + tId;
 };
 
@@ -4799,12 +4811,17 @@ function renderTournaments(container, tournamentId = null) {
     if (!_pendingBracketTarget && (_openedFromDashboard ||
         (window._navScrollTid && String(window._navScrollTid) === String(tournamentId)))) {
         var _detailTournamentForTarget = window._findTournamentById ? window._findTournamentById(tournamentId) : null;
-        // A dashboard grava uma intenção genérica. Não antecipe aqui o id do
-        // jogo: esse resumo não é a fonte de verdade de resultado/presença.
-        // A rotina tardia `_scrollToBracketSection(..., null)` resolve o
-        // primeiro card exibível depois de renderBracket concluir.
-        if (!_openedFromDashboard && !_pendingBracketTarget && typeof window._nextParticipantTournamentMatchTarget === 'function') {
+        // A rota da dashboard não escolhe o jogo pelo resumo: o detalhe já tem
+        // a fonte completa. Portanto, toda entrada genérica resolve primeiro o
+        // próximo confronto PENDENTE do usuário autenticado. Só quem não tem
+        // partida pendente cai no próximo jogo agendado do torneio.
+        // Isso impede que um card global/pronto de outra pessoa ou a
+        // classificação substituam a agenda de quem entrou.
+        if (typeof window._nextParticipantTournamentMatchTarget === 'function') {
             _pendingBracketTarget = window._nextParticipantTournamentMatchTarget(_detailTournamentForTarget);
+        }
+        if (!_pendingBracketTarget && typeof window._nextScheduledTournamentMatchTarget === 'function') {
+            _pendingBracketTarget = window._nextScheduledTournamentMatchTarget(_detailTournamentForTarget);
         }
         if (_pendingBracketTarget && _pendingBracketTarget.matchId) {
             try { sessionStorage.setItem('sp_scrollToMatch', _pendingBracketTarget.matchId); } catch (_targetStoreErr) {}

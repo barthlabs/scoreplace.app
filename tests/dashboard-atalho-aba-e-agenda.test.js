@@ -20,8 +20,9 @@ ok(dashboard.includes('function _bracketTabForMatch') && dashboard.includes("win
   'os atalhos da dashboard guardam a aba canônica e o jogo escolhido');
 ok(dashboard.includes('href="#tournaments/') && dashboard.includes('event.preventDefault()') && dashboard.includes('window._goToTournamentMatch'),
   'Ir para o torneio navega diretamente ao detalhe canônico com o alvo preservado');
-ok(dashboard.includes('window._goToTournamentMatch') && dashboard.includes('var _cardTab = _bracketTabForMatch(item.m)'),
-  'o card de próximo jogo leva a categoria para a navegação');
+ok(dashboard.includes('window._goToMyNextTournamentMatch') && dashboard.includes('var _cardTab = _bracketTabForMatch(item.m)') &&
+  tournaments.includes('resolveForCurrentUser: !!(options && options.resolveForCurrentUser)'),
+  'o card de próximo jogo pede que o detalhe recalcule o próximo confronto do usuário');
 ok(dashboard.includes('window._matchCardTimelineTextHtml(_ngT, _ngM)'),
   'Seu próximo jogo reutiliza a linha Agendado da chave');
 ok(dashboard.includes("document.getElementById('proximos-jogos-section')") &&
@@ -34,8 +35,8 @@ ok(bracket.includes('typeof value.toMillis === \'function\'') &&
   'o horário marcado aceita Timestamp do Firestore e prevalece sobre o prazo da rodada');
 ok(tournaments.includes('_pendingBracketTarget.tab') && tournaments.includes('window._bracketTabState[String(tournamentId)]') && bracket.includes('var targetGender = Object.keys(byGender).find') && bracket.includes('byGender[candidate].indexOf(state.category)'),
   'o detalhe seleciona a aba antes de desenhar e localizar o card');
-ok(tournaments.includes('window._nextParticipantTournamentMatchTarget') && tournaments.includes('Mesma régua da dashboard para "Seu próximo jogo"') && tournaments.includes('window._navScrollTid') && tournaments.includes("sessionStorage.setItem('sp_scrollToMatch'"),
-  'abrir o detalhe diretamente encontra o próximo jogo do usuário, prepara a aba e ancora no card');
+ok(tournaments.includes('window._nextParticipantTournamentMatchTarget') && tournaments.includes('próximo confronto PENDENTE do usuário autenticado') && tournaments.includes('window._navScrollTid') && tournaments.includes("sessionStorage.setItem('sp_scrollToMatch'"),
+  'a entrada pelo detalhe encontra o próximo jogo do usuário, prepara a aba e ancora no card');
 ok(tournaments.includes('não deixa de ser dela só porque o ADVERSÁRIO') && !tournaments.includes("m.p1 && m.p1 !== 'TBD' && m.p2 && m.p2 !== 'TBD'"),
   'o próximo jogo do participante continua sendo alvo quando só o adversário ainda vem da chave');
 ok(bracket.includes('window._directBracketSlotLabel') && bracket.includes("? 'Perdedor' : 'Vencedor'") && bracket.includes("_origem || 'A definir'"),

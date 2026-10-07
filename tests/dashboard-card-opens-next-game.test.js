@@ -23,6 +23,7 @@ function section(from, to) {
   const browser = await chromium.launch();
   const page = await browser.newPage();
   await page.setContent('<!doctype html><body></body>');
+  await page.addScriptTag({ content: section('window._nextParticipantTournamentMatchTarget = function', '// Entrada genérica da dashboard:') });
   await page.addScriptTag({ content: section('window._nextScheduledTournamentMatchTarget = function', 'window._scrollToBracketSection = function') });
   await page.addScriptTag({ content: section('window._scrollToBracketSection = function', '// v2.7.85: funções de DUPLA') });
 
@@ -111,17 +112,36 @@ function section(from, to) {
   });
   ok(target && target.matchId === 'court-4' && target.tab.category === '__upcoming' && target.tab.gender === 'fem',
     'o alvo persistido é o primeiro jogo pendente por horário e quadra, na aba Próximos jogos');
+  const perUserTarget = await page.evaluate(() => {
+    const tournament = { matches: [
+      { id: 'ana-mais-tarde', owner: 'ana', round: 3, _gameNum: 1, category: 'Fem Prata' },
+      { id: 'bia-proximo', owner: 'bia', round: 1, _gameNum: 2, category: 'Fem Ouro' },
+      { id: 'ana-proximo', owner: 'ana', round: 1, _gameNum: 7, category: 'Fem Prata' }
+    ] };
+    window._collectAllMatches = (t) => t.matches;
+    window._userTeamInMatch = (_t, match, user) => match.owner === user.uid ? 1 : 0;
+    window.AppStore = { currentUser: { uid: 'ana' } };
+    const ana = window._nextParticipantTournamentMatchTarget(tournament);
+    window.AppStore = { currentUser: { uid: 'bia' } };
+    const bia = window._nextParticipantTournamentMatchTarget(tournament);
+    return { ana, bia };
+  });
+  ok(perUserTarget.ana && perUserTarget.ana.matchId === 'ana-proximo' &&
+    perUserTarget.bia && perUserTarget.bia.matchId === 'bia-proximo',
+    'o mesmo torneio leva cada usuário ao próprio próximo jogo, nunca a um id fixo ou global');
   ok(store.includes('window._setTournamentMatchTarget(tournamentId, null, null);') &&
     !store.includes('window._nextScheduledTournamentMatchTarget(_tournament)'),
     'o clique genérico persiste intenção sem id para o detalhe usar a agenda já montada');
   ok(tournaments.includes('window._nextScheduledTournamentMatchTarget = function(t)') &&
     tournaments.includes("category: '__upcoming'"),
     'o alvo genérico força a aba Próximos jogos antes de o detalhe ser renderizado');
-  ok(tournaments.includes('_requestedBracketTarget.matchId') &&
-    tournaments.includes('var _openedFromDashboard') &&
-    tournaments.includes('window._focusTournamentUpcomingWhenReady') &&
-    tournaments.includes("card.getAttribute('data-bracket-upcoming') === '1'"),
-    'uma intenção genérica da dashboard é resolvida pelos cards montados e prioriza jogo pronto');
+  const routeTargetStart = tournaments.indexOf('var _openedFromDashboard');
+  const routeTargetEnd = tournaments.indexOf('if (_pendingBracketTarget && _pendingBracketTarget.tab', routeTargetStart);
+  const routeTarget = routeTargetStart < 0 || routeTargetEnd < 0 ? '' : tournaments.slice(routeTargetStart, routeTargetEnd);
+  ok(routeTarget.includes('window._nextParticipantTournamentMatchTarget(_detailTournamentForTarget)') &&
+    routeTarget.includes('window._nextScheduledTournamentMatchTarget(_detailTournamentForTarget)') &&
+    routeTarget.indexOf('_nextParticipantTournamentMatchTarget') < routeTarget.indexOf('_nextScheduledTournamentMatchTarget'),
+    'a entrada genérica calcula primeiro o próximo jogo do usuário; agenda global é só fallback');
   ok(tournaments.includes("sessionStorage.setItem('sp_scrollToMatch', String(_pendingBracketTarget.matchId))") &&
     bracket.includes("sessionStorage.getItem('sp_scrollToMatch')") &&
     bracket.includes("document.getElementById('card-' + String(_pm))"),

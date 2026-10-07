@@ -2656,9 +2656,11 @@ function renderDashboard(container) {
       // (mesma fonte/padding/raio, flat) só com a cor índigo — antes era .btn .btn-sm
       // (maior, com volume) e quebrava pra outra linha. Fica na MESMA linha dos outros
       // 2, FORA do #header-btns (que é reescrito in-place no fluxo de aprovação).
-      var _tabArg = _cardTab.category
-        ? (",{category:'" + _esc(_cardTab.category) + "',gender:'" + _esc(_cardTab.gender) + "',round:'" + _esc(_cardTab.round) + "'}") : '';
-      var goToBtn = '<button class="btn btn-indigo btn-micro" onclick="event.stopPropagation();window._goToTournamentMatch(\'' + _esc(tId) + '\',\'' + _esc(mId) + '\'' + _tabArg + ')" style="flex-shrink:0;font-size:0.72rem;line-height:1.05;text-align:center;">Ir para<br>Torneio →</button>';
+      // O cartão é uma fotografia da dashboard e pode envelhecer enquanto a
+      // pessoa navega. Ao entrar no torneio, a chave completa recalcula o
+      // próximo confronto do USUÁRIO autenticado; nunca fixa este `mId` como
+      // destino só porque ele estava visível no resumo.
+      var goToBtn = '<button class="btn btn-indigo btn-micro" onclick="event.stopPropagation();window._goToMyNextTournamentMatch(\'' + _esc(tId) + '\')" style="flex-shrink:0;font-size:0.72rem;line-height:1.05;text-align:center;">Ir para<br>Torneio →</button>';
 
       // v1.7.83: o box era `min-width:300px;max-width:360px` — px CRAVADO. Com a
       // escala grande (até 1.7) os 3 botões do cabeçalho (Ao Vivo · Confirmar ·
@@ -4602,10 +4604,36 @@ function renderDashboard(container) {
         _mrSec.setAttribute('data-mr-collapsed', '0');
         window._spSyncCollapsePreview();   // v1.9.64: a tag e o rodapé saem daqui (fonte única)
       }
-      // v1.9.94: instantâneo (não 'smooth'). Com re-renders assíncronos na
-      // entrada, a animação suave era interrompida no meio e parecia "pulo".
-      // O guard + scroll preservado garantem que isto roda UMA vez e fica.
-      _section.scrollIntoView({ behavior: 'auto', block: 'start' });
+      // A dashboard recebe fotos, presença e resultados em lotes. Um único
+      // scroll podia acertar a seção ainda incompleta e deixá-la cortada quando
+      // o lote seguinte entrasse. Rebuscamos a seção a cada passada (o render
+      // pode ter trocado o nó), reafirmando SOMENTE esta entrada e cedendo no
+      // primeiro gesto manual da pessoa.
+      var _dashToken = String(Date.now()) + ':' + Math.random();
+      window._dashEntryFocusToken = _dashToken;
+      var _dashInterrupted = false;
+      var _stopDashFocus = function() { _dashInterrupted = true; };
+      try {
+        window.addEventListener('wheel', _stopDashFocus, { passive:true, once:true });
+        window.addEventListener('touchstart', _stopDashFocus, { passive:true, once:true });
+        window.addEventListener('pointerdown', _stopDashFocus, { passive:true, once:true });
+      } catch (_dashInputErr) {}
+      var _placeNextGame = function() {
+        if (_dashInterrupted || window._dashEntryFocusToken !== _dashToken) return;
+        var _route = (window.location.hash || '').replace('#', '').split('/')[0];
+        if (_route && _route !== 'dashboard') return;
+        var _liveSection = document.getElementById('proximos-jogos-section') ||
+          document.querySelector('[data-dashboard-enrolled="1"]') ||
+          document.querySelector('[data-has-pending="1"]');
+        if (!_liveSection || !_liveSection.isConnected) return;
+        try { if (typeof window._reflowChrome === 'function') window._reflowChrome(); } catch (_dashChromeErr) {}
+        try { _liveSection.scrollIntoView({ behavior:'auto', block:'start' }); } catch (_dashScrollErr) {}
+      };
+      _placeNextGame();
+      setTimeout(_placeNextGame, 100);
+      setTimeout(_placeNextGame, 320);
+      setTimeout(_placeNextGame, 750);
+      setTimeout(_placeNextGame, 1400);
     }
   }, 350);
 
