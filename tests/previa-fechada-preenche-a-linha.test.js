@@ -232,8 +232,14 @@ function cenario(cols, gruposNov, cardsMr, colapsada) {
   novGrid.getBoundingClientRect = function () { return { width: cols * 280 + Math.max(0, cols - 1) * 12 }; };
   novSec.add(novGrid);
   gruposNov.forEach(function (n) {
-    novGrid.add(new El({ 'data-nov-head': '1' }));
-    for (let i = 0; i < n; i++) novGrid.add(new El({ 'data-nov-card': '1' }));
+    // A estrutura real separa o nome do torneio da rodada. O mock precisa
+    // preservar ambos; do contrário a medição ficaria verde sobre a marcação
+    // antiga e não exercitaria o agrupamento que a interface realmente usa.
+    novGrid.add(new El({ 'data-nov-tournament-head': '1' }));
+    for (let i = 0; i < n; i++) {
+      if (i === 0) novGrid.add(new El({ 'data-nov-round-head': '1' }));
+      novGrid.add(new El({ 'data-nov-card': '1' }));
+    }
   });
   const mrSec = new El({ 'data-mr-collapsed': colapsada === false ? '0' : '1' });
   const mrBody = new El({});
@@ -276,7 +282,9 @@ function cenario(cols, gruposNov, cardsMr, colapsada) {
     mrCards: vistos(mrGrid, 'data-mr-card'), mrHint: mrHint.textContent,
     mrHintVisivel: mrHintP.style.display !== 'none',
     // o cabeçalho do 1º grupo tem que continuar à vista; o do 2º, não
-    heads: novGrid.children.filter(function (k) { return k.hasAttribute('data-nov-head'); })
+    heads: novGrid.children.filter(function (k) {
+      return k.hasAttribute('data-nov-tournament-head') || k.hasAttribute('data-nov-round-head');
+    })
       .map(function (k) { return !k.hasAttribute('data-sp-extra'); })
   };
 }
@@ -319,8 +327,8 @@ if (TEM_MEDICAO) (function () {
   const c4 = cenario(4, [3, 2], 3);
   ok(c4.novCards === 3 && c4.novHint === 'ver os 2 jogos anteriores',
     'D4 — 4 colunas com grupo de 3: para no cabeçalho, e o botão acompanha — vi ' + c4.novCards + ' / "' + c4.novHint + '"');
-  ok(c3.heads[0] === true && c3.heads[1] === false,
-    'D5 — o cabeçalho do 1º grupo fica à vista; o do 2º sai junto com os cards dele');
+  ok(c3.heads[0] === true && c3.heads[2] === false,
+    'D5 — o cabeçalho do 1º torneio fica à vista; o do segundo sai junto com os cards dele');
   ok(c2.mrCards === 2 && c2.mrHint === 'ver o anterior',
     'D6 — "Seus últimos resultados" (3 cards, 2 colunas): sobra 1 → SINGULAR "ver o anterior" — vi "' + c2.mrHint + '"');
   ok(c1.mrHint === 'ver os 2 anteriores', 'D7 — 1 coluna: "ver os 2 anteriores"');
