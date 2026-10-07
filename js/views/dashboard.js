@@ -4662,7 +4662,27 @@ function renderDashboard(container) {
           document.querySelector('[data-has-pending="1"]');
         if (!_liveSection || !_liveSection.isConnected) return;
         try { if (typeof window._reflowChrome === 'function') window._reflowChrome(); } catch (_dashChromeErr) {}
-        try { _liveSection.scrollIntoView({ behavior:'auto', block:'start' }); } catch (_dashScrollErr) {}
+        // `scrollIntoView` respeita o scroll-margin, mas não garante que a
+        // seção inteira seja o primeiro conteúdo abaixo da topbar depois de
+        // uma atualização de presença/fotos. A dashboard deve abrir com o
+        // início de “Seu próximo jogo” no topo útil — nunca com o fim da
+        // seção anterior recortado acima dele.
+        // [[regression_dashboard_next_game_section_starts_at_chrome_bottom]]
+        var _chromeBottom = 0;
+        Array.prototype.forEach.call(document.querySelectorAll('.topbar, .sticky-back-header, #hamburger-dropdown'), function(_chrome) {
+          var _rect = _chrome.getBoundingClientRect();
+          var _style = getComputedStyle(_chrome);
+          if (_rect.height > 0 && (_style.position === 'fixed' || _style.position === 'sticky')) {
+            _chromeBottom = Math.max(_chromeBottom, Math.ceil(_rect.bottom || 0));
+          }
+        });
+        var _sectionRect = _liveSection.getBoundingClientRect();
+        var _currentTop = window.scrollY || window.pageYOffset || 0;
+        var _targetTop = Math.max(0, _currentTop + _sectionRect.top - _chromeBottom - 8);
+        var _scrollRoot = document.scrollingElement || document.documentElement || document.body;
+        if (_scrollRoot) _scrollRoot.scrollTop = _targetTop;
+        try { window.scrollTo({ top:_targetTop, behavior:'auto' }); }
+        catch (_dashScrollErr) { try { window.scrollTo(0, _targetTop); } catch (_dashLegacyScrollErr) {} }
       };
       _placeNextGame();
       setTimeout(_placeNextGame, 100);

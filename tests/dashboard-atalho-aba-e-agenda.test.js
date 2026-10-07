@@ -27,8 +27,11 @@ ok(dashboard.includes('window._matchCardTimelineTextHtml(_ngT, _ngM)'),
   'Seu próximo jogo reutiliza a linha Agendado da chave');
 ok(dashboard.includes("document.getElementById('proximos-jogos-section')") &&
   dashboard.includes("document.querySelector('[data-dashboard-enrolled=\"1\"]')") &&
-  dashboard.includes('data-dashboard-enrolled="1"'),
-  'a entrada da dashboard rola para Seu próximo jogo e, sem ele, para o primeiro torneio inscrito');
+  dashboard.includes('data-dashboard-enrolled="1"') &&
+  dashboard.includes('regression_dashboard_next_game_section_starts_at_chrome_bottom') &&
+  dashboard.includes('var _targetTop = Math.max(0, _currentTop + _sectionRect.top - _chromeBottom - 8);') &&
+  dashboard.includes('_scrollRoot.scrollTop = _targetTop'),
+  'a entrada da dashboard posiciona a seção inteira de Seu próximo jogo abaixo do chrome, sem sobrar conteúdo da seção anterior');
 ok(bracket.includes('typeof value.toMillis === \'function\'') &&
   bracket.includes('value.seconds != null') &&
   bracket.indexOf('var scheduledAt = _matchCardTimestamp(m.scheduledAt);') < bracket.indexOf('var deadline = _matchCardRoundDeadlineMs(t, m);'),
