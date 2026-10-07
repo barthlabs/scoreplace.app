@@ -1,3 +1,4 @@
+// 2.3.310 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.3.309 — Atualização consolidada de produção: o agendamento do próximo jogo fica no rodapé do próprio card, e as opções internas do card são inicializadas antes da montagem para que a abertura do torneio preserve a âncora do jogo escolhido.
 // 2.3.308 — Dashboard abre “Seu próximo jogo” inteiro logo abaixo do cabeçalho fixo, sem sobra da seção anterior. No detalhe do torneio, Geral e Próximos jogos usam a mesma geometria para o card operacional: o foco reserva abas e a régua da rodada, inclusive nas reafirmações tardias, sem cortar o cabeçalho do jogo.
 // 2.3.307 — Atualização consolidada de produção com as correções validadas desde a última publicação.
