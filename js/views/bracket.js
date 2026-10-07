@@ -634,10 +634,11 @@ window._flushBracketPaint = function () {
 // ficasse pra trás desfazia a outra (foi assim que o passe fixo de 1400ms já desmanchou uma
 // rolagem certa). [[feedback_unify_dual_entry_points]]
 function _alvoDeEntrada() {
-  // 0) Fase concluída + organizador → o banner "🏆 Avançar" está no topo e é a próxima ação
-  //    dele. (Antes só o _goMine conhecia esta regra; o laço media outro elemento e brigava.)
-  var _adv = document.getElementById('phase-advance-banner');
-  if (_adv) return _adv;
+  // 0) JOGO PEDIDO — a intenção explícita da dashboard precisa ganhar de
+  // qualquer CTA genérico do detalhe. Antes o banner "Avançar fase", que fica
+  // no topo do card do torneio, era testado ANTES deste matchId: a aba Próximos
+  // jogos abria, mas a rolagem sempre parava no topo do card. O destino do
+  // card do torneio é o próximo jogo agendado, não o banner.
   // 1) GRUPO PEDIDO — quem chegou pelo "Ir para o torneio" de um grupo específico (dashboard)
   //    quer AQUELE grupo, não o seu. Não encontrado (re-sorteio, fase avançada) → não insiste.
   /* ⛔ 0) JOGO PEDIDO — na ELIMINATÓRIA não existe grupo, e era só o grupo que viajava.
@@ -667,6 +668,11 @@ function _alvoDeEntrada() {
     // ainda não montado (lote preguiçoso que ainda não aterrissou): o pedido de grupo abaixo
     // resolve, e o pedido de jogo fica guardado para a próxima passada do laço de reafirmação.
   }
+  // Fase concluída + organizador: sem alvo explícito, o banner "🏆 Avançar"
+  // é de fato a próxima ação útil. Ele só pode ser fallback — nunca pode
+  // sequestrar uma entrada que já escolheu um jogo.
+  var _adv = document.getElementById('phase-advance-banner');
+  if (_adv) return _adv;
   var _p = null;
   try { _p = sessionStorage.getItem('sp_scrollToGroup'); } catch (e) {}
   if (_p) {

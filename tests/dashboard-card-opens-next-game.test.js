@@ -124,6 +124,10 @@ function section(from, to) {
     bracket.includes("sessionStorage.getItem('sp_scrollToMatch')") &&
     bracket.includes("document.getElementById('card-' + String(_pm))"),
     'o alvo persistido chega ao leitor da chave depois que o card é montado');
+  const explicitMatchRead = bracket.indexOf('var _pm = null;');
+  const phaseAdvanceFallback = bracket.indexOf("var _adv = document.getElementById('phase-advance-banner');");
+  ok(explicitMatchRead >= 0 && phaseAdvanceFallback > explicitMatchRead,
+    'um jogo explícito vence o banner de avançar fase: o destino não cai no topo do card do torneio');
   const applyStart = bracket.indexOf('function _applyMyMatchesFilter()');
   const pendingStart = bracket.indexOf('if (window._bracketPendingScroll)', applyStart);
   const applyBlock = bracket.slice(applyStart, pendingStart);
