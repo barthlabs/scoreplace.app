@@ -153,6 +153,16 @@ const inicioNeon = new Date('2026-10-22T18:00:00-03:00').getTime();
 ok(ondasNeon.length === 8 && ondasNeon.every(function (ms, index) { return ms === inicioNeon + index * 35 * 60000; }) &&
   ondasNeon.every(function (ms) { return gradeNeonSemLacunas.slots.filter(function (slot) { return slot.ms === ms; }).length === 6; }),
   'Neon ocupa seis quadras em oito ondas contínuas, de 18:00 a 22:05, sem lacuna entre rodadas');
+const neonPorId = Object.fromEntries(neonSemLacunas.matches.map(function (match) { return [String(match.id), match]; }));
+const neonSemChoque = gradeNeonSemLacunas.slots.every(function (slot, index, slots) {
+  var atual = neonPorId[slot.matchId];
+  return slots.slice(index + 1).every(function (outroSlot) {
+    if (slot.ms + 35 * 60000 <= outroSlot.ms || outroSlot.ms + 35 * 60000 <= slot.ms) return true;
+    var outro = neonPorId[outroSlot.matchId];
+    return [atual.p1, atual.p2].every(function (player) { return player !== outro.p1 && player !== outro.p2; });
+  });
+});
+ok(neonSemChoque, 'compactação Neon não sobrepõe atleta em duas partidas');
 const splitCategoryDays = Object.assign({}, categoryDays, {
   categorySchedule:{ version:1, slots:[
     { category:'Fem Light', day:'2026-10-22', order:1 },

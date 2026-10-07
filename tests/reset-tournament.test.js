@@ -136,6 +136,7 @@ W._countCompetitors = W._countCompetitors || function (t) { return { people: (t.
     teamOrigins:{ 'Caio / Duda':'manual' },
     matches:[{ id:'m', p1:'Caio / Duda', p2:'Outro', winner:'Caio / Duda' }],
     rounds:[{ round:1, matches:[{ id:'m', winner:'Caio / Duda' }] }], groups:[], phases:[{}],
+    allowPrePublicationRestore:true,
     categorySchedule:{ version:1, confirmed:true, slots:[{ category:'Fem Light', day:'2026-10-22', order:1 }] },
     scheduleWindow:{ version:1, days:[{ day:'2026-10-22', startTime:'18:00', endTime:'23:59' }] }
   };
@@ -144,6 +145,8 @@ W._countCompetitors = W._countCompetitors || function (t) { return { people: (t.
     'restaurar pré-publicação preserva a dupla formada manualmente');
   ok(t.categorySchedule && t.categorySchedule.confirmed === true && t.scheduleWindow && t.scheduleWindow.days.length === 1,
     'restaurar pré-publicação preserva os ajustes confirmados antes do sorteio');
+  ok(t.allowPrePublicationRestore === true,
+    'restaurar pré-publicação mantém a permissão operacional do organizador');
 })();
 
 console.log('\n' + (fail === 0 ? '✅' : '❌') + ' reset-tournament: ' + pass + ' asserts ok, ' + fail + ' falharam');
