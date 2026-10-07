@@ -166,20 +166,19 @@ ok(contar(NOV + MR, 'display:none !important') >= 3,
     'B2 — "Seus últimos resultados": 3 cards, só o 1º sem data-sp-extra — vi ' + cardsMr.length + '/' + semAtrMr.length);
 })();
 (function () {
-  // O feed é cronológico. Um cabeçalho compartilhado reordena quando o mesmo grupo volta
-  // depois de outro; por isso o contexto viaja dentro de CADA card, sem elemento de linha
-  // inteira que possa partir a prévia responsiva.
-  const heads = NOV.split('data-nov-head="1"').slice(1);
-  const headsIn = NOV.split('data-nov-head="inline"').slice(1);
-  ok(heads.length === 0, 'B3 — nenhuma novidade usa cabeçalho compartilhado de linha inteira — vi ' + heads.length);
-  ok(headsIn.length === 3, 'B3b — todos os 3 cartões levam seu contexto internamente — vi ' + headsIn.length);
+  // As novidades agora são agrupadas por torneio: o nome aparece uma vez e as rodadas
+  // daquele torneio ficam juntas, em vez de misturar eventos simultâneos no mesmo feed.
+  const tournamentHeads = NOV.split('data-nov-tournament-head="1"').slice(1);
+  const roundHeads = NOV.split('data-nov-round-head="1"').slice(1);
   const cards = NOV.split('data-nov-card="1"').slice(1);
-  ok(cards[0].indexOf('data-nov-head="inline"') !== -1 && cards[0].slice(0, 30).indexOf('data-sp-extra') === -1,
-    'B4 — o contexto do primeiro cartão entra na prévia junto dele');
-  ok(cards.slice(1).every(function (c) { return c.indexOf('data-nov-head="inline"') !== -1 && c.slice(0, 30).indexOf('data-sp-extra') !== -1; }),
-    'B5 — os contextos dos cartões posteriores permanecem junto dos respectivos cartões ocultos');
-  ok(NOV.indexOf('data-nov-head="inline"') > NOV.indexOf('data-nov-card="1"'),
-    'B5b — e o rótulo inline vive DENTRO de um card, não solto na grade');
+  ok(tournamentHeads.length === 1, 'B3 — o torneio tem um único cabeçalho de contexto — vi ' + tournamentHeads.length);
+  ok(roundHeads.length >= 1, 'B3b — as rodadas do torneio têm cabeçalhos próprios — vi ' + roundHeads.length);
+  ok(NOV.indexOf('data-nov-tournament-head="1"') < NOV.indexOf('data-nov-card="1"'),
+    'B4 — o contexto do torneio vem antes do primeiro cartão');
+  ok(cards.slice(1).every(function (c) { return c.slice(0, 30).indexOf('data-sp-extra') !== -1; }),
+    'B5 — cartões posteriores permanecem ocultos na prévia inicial');
+  ok(NOV.indexOf('data-nov-head="inline"') === -1,
+    'B5b — o rótulo não se repete dentro de cada card');
 })();
 
 // ── F. singular de verdade no convite ──────────────────────────────────────
