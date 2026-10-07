@@ -1,3 +1,4 @@
+// 2.3.305 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.3.304 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.3.303 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.3.302 — Atualização consolidada de produção com as correções validadas desde a última publicação.
