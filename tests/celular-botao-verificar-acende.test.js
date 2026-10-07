@@ -118,7 +118,7 @@ console.log('\n== 6. o empurrão do login: 1× POR DIA, e nunca trava ==');
   ok(!/7 \* 24 \* 3600000/.test(bloco), 'o cooldown de 7 DIAS saiu');
   ok(/getFullYear\(\)[\s\S]{0,160}getDate\(\)/.test(bloco), 'a chave carrega o DIA de calendário (não timestamp) — 23h55 e 00h05 não gastam a cota das duas');
   ok(/if \(cu\.phone\) return;/.test(bloco), 'quem JÁ tem celular nunca vê o empurrão');
-  ok(/dupSuspect \|\| cu\.nameConflict/.test(bloco), 'não aparece em cima de outra pergunta');
+  ok(/if \(cu\.dupSuspect\) return/.test(bloco), 'não aparece em cima de pergunta de segunda conta');
   ok(/cancelText: 'Agora não'/.test(bloco), 'dá pra fechar — o pedido do dono foi explícito: NÃO trava a pessoa');
   ok(/WhatsApp/.test(bloco), 'o texto diz que o celular é o WhatsApp');
   ok(/jogos são[\s\S]{0,20}combinados|combinados/.test(bloco), 'o texto diz PRA QUE serve: marcar jogo');

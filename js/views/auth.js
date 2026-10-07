@@ -2341,21 +2341,17 @@ window._entrarDoRegister = function(mode, raw, password) {
       .then(function(result) {
         var user = result.user;
         window._pendingVerifyName = name;
-        /* ⛔ NOME DE CONTA É ÚNICO E O CADASTRO NÃO PODE CONFIRMAR ANTES DA RESERVA.
+        /* ⛔ O PERFIL É CRIADO PELO SERVIDOR ANTES DO SUCESSO DO CADASTRO.
          * Esta conta ainda não tem `users/{uid}`; chamar `saveUserProfile` usa a porta
          * de UPDATE, que a Function recusa para perfil inexistente. O catch antigo
-         * escondia essa recusa e a tela dizia "conta criada" mesmo para homônimo.
-         * `initializeUserProfile` reserva nome e cria perfil na MESMA transação. Se
-         * falhar, apagamos só a credencial recém-criada: o e-mail fica livre para a
-         * pessoa escolher outro nome, sem conta órfã nem segundo homônimo.
-         * [[project_homonimo_exige_escolha]] */
+         * escondia essa recusa e a tela dizia "conta criada" sem perfil. A Function
+         * cria o perfil do UID na mesma transação; homônimos são permitidos.
+         * [[project_perfil-servidor-sem-reserva-de-nome]] */
         if (!(window.FirestoreDB && typeof window.FirestoreDB.initializeUserProfile === 'function')) {
           throw new Error('Não foi possível inicializar seu perfil. Tente novamente.');
         }
-        /* ⛔ PERFIL INICIAL RESERVA O NOME ANTES DO SUCESSO.
-         * A Function cria o perfil e reclama o nome de forma transacional; não troque
-         * por update/fire-and-forget, pois isso reabre cadastro de homônimo ou órfã.
-         * [[project_homonimo_exige_escolha]] */
+        /* ⛔ PERFIL INICIAL É CRIADO ANTES DO SUCESSO. A Function fixa o UID pelo
+         * token; não troque por update/fire-and-forget, que pode deixar conta órfã. */
         return window.FirestoreDB.initializeUserProfile({
           authProvider: 'password', email: user.email || raw.toLowerCase(), displayName: name
         }).then(function() {
@@ -4454,26 +4450,8 @@ async function simulateLoginSuccess(user) {
       basicData.createdAt = new Date().toISOString();
       needsSave = true;
     }
-    // v3.0.82: NOME ÚNICO ENTRE UIDS no PRIMEIRO login. Se o nome derivado do
-    // provedor (Google/Apple) colide com OUTRA conta, adota uma variante
-    // automaticamente — dois uids de pessoas diferentes nunca podem ter o mesmo
-    // nome. NÃO bloqueia a entrada (política "deixa entrar e edita depois"); a
-    // pessoa refina no perfil, onde o gate também garante unicidade. Só vale pra
-    // PRIMEIRA atribuição de nome (conta sem displayName ainda) — jamais renomeia
-    // um usuário estabelecido em re-login (ex.: backfill de displayName_lower).
-    // Email/telefone como nome passam direto (são únicos por natureza).
-    // ⚠️ v1.7.37 — O RENOME AUTOMÁTICO SAIU DAQUI. Regra do dono (05/ago/2026): em vez de
-    // criar "Gabriela Ferreira 2" pelas costas, o app mostra o nome que JÁ existe (com o
-    // contato mascarado) e PERGUNTA se é a mesma pessoa — se for, autentica e mescla; se não
-    // for, a pessoa escolhe um nome livre, com sugestões.
-    //
-    // A variante silenciosa resolvia a unicidade e escondia a pergunta. Pior: ela CEGAVA a
-    // detecção de inscrição duplicada, que compara nome idêntico — com o "2" no banco, a
-    // segunda conta da mesma pessoa nunca mais casaria com a primeira.
-    //
-    // Quem sinaliza agora é o trigger `enforceUniqueDisplayName` (grava `nameConflict` com
-    // e-mail/celular MASCARADOS), e quem pergunta é `_hydrateNameConflictPrompt`.
-    // O nome entra como veio do provedor — entrar nunca é bloqueado (v1.1.3).
+    // `displayName` é somente apresentação: pessoas diferentes podem compartilhar
+    // o mesmo nome. O UID e credenciais comprovadas continuam sendo identidade.
     if (needsSave) {
       basicData.updatedAt = new Date().toISOString();
       // Espera, repete e AVISA. Era `.catch()` mudo — e numa conta nova esta era
@@ -4506,15 +4484,12 @@ async function simulateLoginSuccess(user) {
   if (window.AppStore.startProfileListener) {
     window.AppStore.startProfileListener();
   }
-  // v1.7.41: o trigger sinaliza o conflito de nome em `nameConflict`; aqui é quem PERGUNTA.
-  // Atrasado: o perfil chega pelo listener e `nameConflict` só existe depois dele.
   // Sem nome nenhum (login social que não devolveu nome) a pessoa aparece
   // "Jogador sem perfil (XXXX)" pra TODO MUNDO já na primeira inscrição — por isso
   // esta pergunta vem antes das outras. O app não inventa um nome nem publica o
   // e-mail: pergunta. Ver _seedProfileFromAuth.
   setTimeout(function () { if (typeof window._askMissingName === 'function') window._askMissingName(); }, 2500);
-  setTimeout(function () { if (typeof window._askNameConflict === 'function') window._askNameConflict(); }, 4000);
-  // A pergunta de SEGUNDA CONTA vem depois da de nome — duas caixas ao mesmo tempo é o
+  // A pergunta de SEGUNDA CONTA vem depois da de nome ausente — duas caixas ao mesmo tempo é o
   // jeito mais rápido de a pessoa fechar as duas no automático (que é justamente o que o
   // dono descreveu: "as pessoas às vezes não leem na pressa e fecham respondendo não").
   setTimeout(function () { if (typeof window._askDuplicateAccount === 'function') window._askDuplicateAccount(); }, 9000);
@@ -4927,9 +4902,6 @@ async function simulateLoginSuccess(user) {
     if (typeof window._profileRenderAuthProviders === 'function') window._profileRenderAuthProviders();
     if (typeof window._profileRenderLinkedEmails === 'function') window._profileRenderLinkedEmails();
     if (typeof window._profileRenderLinkedPhones === 'function') window._profileRenderLinkedPhones();
-    // Colisão de nome com outra conta (o servidor decide; aqui só se pinta o aviso).
-    if (typeof window._profileHydrateNameConflict === 'function') window._profileHydrateNameConflict();
-
     // ── BASELINE DE HIDRATAÇÃO ──────────────────────────────────────────
     // Registro do que o formulário REALMENTE MOSTROU pra pessoa. É esse
     // registro que dá ao save a diferença que faltava entre:
@@ -6654,13 +6626,6 @@ function setupProfileModal() {
             '<div id="profile-link-provider-msg" style="display:none;margin-top:6px;font-size:0.78rem;"></div>' +
             '<span style="font-size:0.65rem;color:var(--text-muted);opacity:0.7;margin-top:4px;display:block;">Vincule Google e Apple na mesma conta pra entrar por qualquer um dos dois. Sem isso, entrar pelo outro cria uma conta separada — principalmente com o "Ocultar meu e-mail" da Apple, que dá um endereço novo que não temos como reconhecer.</span>' +
           '</div>' +
-          // ── Outra conta com o MESMO NOME: avisa e oferece unir COM PROVA ──
-          // O nome só DETECTA. Quem AUTORIZA é a posse do e-mail/celular da outra conta:
-          // a pessoa recebe um link lá e é isso que funde. Sem essa prova, dois homônimos
-          // de verdade poderiam se fundir num clique — e fundir gente é irreversível,
-          // enquanto conta duplicada é só incômodo. Contato aparece MASCARADO.
-          // Slot vazio por padrão: só aparece quando o servidor confirma a colisão.
-          '<div id="profile-name-conflict" style="display:none;margin:0 0 10px 0;"></div>' +
           // ── Emails vinculados ──
           '<div style="margin:0 0 6px 0;">' +
             '<label class="form-label" style="font-size:0.75rem;">🔗 E-mails vinculados</label>' +
@@ -8380,7 +8345,7 @@ function setupProfileModal() {
 // O celular é o sinal de dedup mais forte da base (medido 13/ago: das 49 contas
 // com celular no Auth, ZERO repetido) e a âncora de recuperação quando a pessoa
 // esquece como entrou. Só 24% da base tem — este nudge existe pra subir isso.
-// Regras: (1) nunca em cima de outra pergunta (dupSuspect/nameConflict têm
+    // Regras: (1) nunca em cima de outra pergunta de possível segunda conta
 // prioridade); (2) cooldown de 7 dias por uid; (3) some pra sempre quando o
 // celular existir. E-mail oculto da Apple (@privaterelay) ganha texto próprio:
 // é a conta MAIS exposta a virar duplicata (não temos como reconhecer o e-mail).
@@ -8421,7 +8386,7 @@ window._askSecureContact = function () {
     var cu = window.AppStore && window.AppStore.currentUser;
     if (!cu || !cu.uid) return;
     if (cu.phone) return;                                   // já tem celular — nada a pedir
-    if (cu.dupSuspect || cu.nameConflict) return;           // outra pergunta em aberto tem prioridade
+    if (cu.dupSuspect) return;                              // outra pergunta em aberto tem prioridade
     if (typeof showConfirmDialog !== 'function') return;
     // 2.0.7 — 1× POR DIA (era 7 dias). Pedido do dono: insistir até a pessoa
     // colocar. NÃO trava nada: ela fecha e usa o app inteiro; o que muda é o

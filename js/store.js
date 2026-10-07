@@ -13305,11 +13305,10 @@ window.AppStore = {
           window._applyUiScale(this.currentUser.uiScale);
         }
         if (profile.gender) this.currentUser.gender = profile.gender;
-        // v1.7.41: sinal de NOME EM CONFLITO, gravado pelo trigger enforceUniqueDisplayName
-        // (que parou de renomear em silêncio). Sem trazê-lo pra cá o sinal existiria no doc
-        // e NINGUÉM o leria — a lista abaixo é campo a campo e não faz merge genérico.
-        // `null` limpa (o trigger apaga o campo quando o conflito acaba).
-        this.currentUser.nameConflict = profile.nameConflict || null;
+        // `nameConflict` é legado da antiga reserva global de displayName. Não
+        // participa da sessão: homônimos são válidos e qualquer sinal de possível
+        // segunda conta chega exclusivamente por `dupSuspect`.
+        delete this.currentUser.nameConflict;
         // v1.8.3 — POSSÍVEL SEGUNDA CONTA (detectada no cadastro pelo trigger).
         // ⚠️ loadUserProfile copia CAMPO A CAMPO (não há merge genérico): sem esta linha o
         // sinal fica gravado no Firestore e a tela nunca pergunta — foi exatamente o que

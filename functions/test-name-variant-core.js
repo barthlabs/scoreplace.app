@@ -12,9 +12,9 @@
  * permissão (as rules liberam a consulta), nem nome vazio do provedor — era a lei morar
  * num lugar que pode simplesmente não rodar. Cânone roda no SERVIDOR.
  *
- * A política atual é única: cadastro/edição recusam homônimo; login federado entra mas
- * recebe a pergunta para confirmar a conta ou escolher outro nome. "Nome 2" só pode ser
- * uma sugestão visível, nunca uma decisão automática. */
+ * O contrato atual separa apresentação de identidade: homônimos são válidos. O
+ * trigger do servidor só mantém índices e pode levantar `dupSuspect`; ele não
+ * reserva nome, não renomeia e não funde contas. */
 const V = require('./name-variant-core');
 
 let pass = 0, fail = 0;
@@ -27,51 +27,21 @@ ok('trima o base', V.buildVariant('  Nelson Barth  ', 3) === 'Nelson Barth 3');
 ok('o módulo NÃO exporta auto-resolvedor de nome', typeof V.resolveUniqueName === 'undefined');
 
 (async () => {
-  // ── shouldIReceiveConflict: pergunta só para quem acabou de chegar ─────────
-  const velho = { createdAt: '2026-07-11T00:00:00Z' };
-  const novoC = { uid: 'uOutro', createdAt: '2026-07-14T00:00:00Z' };
-  ok('sou o mais ANTIGO → não me renomeio (quem chegou depois é que muda)',
-    V.shouldIReceiveConflict(velho, novoC, 'uMeu') === false);
-  ok('sou o mais NOVO → eu renomeio',
-    V.shouldIReceiveConflict({ createdAt: '2026-07-14T00:00:00Z' }, { uid: 'u', createdAt: '2026-07-11T00:00:00Z' }, 'uMeu') === true);
-  // Simultâneo/sem idade: desempate estável, e só UM dos lados renomeia
-  const A = V.shouldIReceiveConflict({}, { uid: 'uB' }, 'uA');
-  const B = V.shouldIReceiveConflict({}, { uid: 'uA' }, 'uB');
-  ok('sem idade: exatamente UM dos dois renomeia (senão o nome fica órfão)', A !== B);
-  ok('Timestamp-like (toMillis) também é lido',
-    V.shouldIReceiveConflict({ createdAt: { toMillis: () => 2000 } }, { uid: 'u', createdAt: { toMillis: () => 1000 } }, 'x') === true);
-
-  // ── O trigger existe e respeita as travas ─────────────────────────────────
+  // ── O trigger existe e mantém apenas índice/sinal privado ──────────────────
   const fs = require('fs'), path = require('path');
   const src = fs.readFileSync(path.join(__dirname, 'index.js'), 'utf8');
   ok('index.js exporta o trigger enforceUniqueDisplayName',
     /exports\.enforceUniqueDisplayName\s*=\s*onDocumentWritten/.test(src));
   const bloco = src.slice(src.indexOf('exports.enforceUniqueDisplayName'), src.indexOf('scheduledAutoMergeCleanup (sinais'));
-  ok('ANTI-LOOP: só age quando o displayName MUDOU nesta escrita',
-    /nome === String\(b\.displayName/.test(bloco));
+  ok('ANTI-LOOP: só escreve chaves quando elas divergem do esperado',
+    /const divergiu =/.test(bloco) && /if \(divergiu\)/.test(bloco));
   ok('ignora tombstone de fusão', /a\.mergedInto/.test(bloco));
-  ok('ignora nome não-amigável', /isUnfriendlyName/.test(bloco));
-  ok('não pergunta ao estabelecido (consulta shouldIReceiveConflict)', /shouldIReceiveConflict\(/.test(bloco));
-  // ⚠️ DUAS ASSERÇÕES REVOGADAS DE PROPÓSITO em 05/ago/2026 (v1.7.37).
-  // Elas exigiam que o trigger ADOTASSE a variante ("Nome 2") — gravando displayName_lower
-  // pelo denormalizeDisplayName e chamando _nameVariant.resolveUniqueName.
-  //
-  // O dono trocou a política: _"o certo, invés de criar 'Gabriela Ferreira 2', é indicar o
-  // nome que já existe, indicando com ****email/celular e perguntar se é a mesma pessoa.
-  // Autentica se for e mescla. Se não for, que a pessoa indique um nome válido e livre."_
-  //
-  // Além de esconder a pergunta, a variante CEGAVA a detecção de inscrição duplicada, que
-  // compara nome idêntico: com o "2" gravado, a segunda conta da mesma pessoa nunca mais
-  // casaria com a primeira. O trigger agora SINALIZA (`nameConflict`, mascarado) e quem
-  // decide é a pessoa — ver functions/test-duplicate-person-core.js, que trava o novo
-  // comportamento (não renomeia, sinaliza, e limpa o sinal quando o conflito acaba).
-  //
-  // O que essas asserções protegiam de verdade continua travado logo abaixo: a separação
-  // entre o módulo de CADASTRO e o de VARIANTE.
   ok('NÃO renomeia mais em silêncio (a variante automática saiu do trigger)',
     bloco.indexOf('_nameVariant.resolveUniqueName(') === -1);
-  ok('sinaliza o conflito com contato MASCARADO em vez de renomear',
-    /nameConflict/.test(bloco) && /maskedEmail/.test(bloco));
+  ok('não cria reserva nem nameConflict por homônimo',
+    !/collection\("displayNameClaims"\)|nameConflict:\s*\{/.test(bloco));
+  ok('sinaliza só possível segunda conta, sem bloquear',
+    /dupSuspect/.test(bloco) && /_mudouIdent/.test(bloco));
 
   // A separação das políticas é o que protege o cadastro — trava aqui também.
   const unique = require('./name-unique-core');

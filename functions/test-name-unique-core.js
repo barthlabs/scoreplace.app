@@ -1,18 +1,16 @@
 'use strict';
-/* Testa functions/name-unique-core.js — nome de exibição único entre uids, no SERVIDOR.
+/* Testa functions/name-unique-core.js — nome de exibição é apresentação, não UID.
  * Rodar:  node functions/test-name-unique-core.js
  *
  * TRAVA DE REGRESSÃO (incidente real, 02/ago/2026): "Gabriela Ferreira" tinha conta
  * Google e criou uma SEGUNDA conta homônima via celular+senha — a CF
  * registerPhonePassword gravava displayName sem NENHUMA checagem (a regra só existia
  * no cliente) e ela se inscreveu 2x no mesmo torneio. Este teste roda o cenário com
- * um Firestore fake e exige: conflito detectado, already-exists com e-mail MASCARADO
- * (nunca o cheio), e NUNCA auto-sufixo silencioso.
+ * um Firestore fake e exige: o sinal continua detectável sem impedir o cadastro,
+ * nem criar auto-sufixo silencioso.
  *
- * Também faz VARREDURA DE CÓDIGO em index.js: a registerPhonePassword tem que passar
- * pelo core (findDisplayNameConflict + buildConflictMessage) e gravar
- * displayName_lower junto do displayName — sem o _lower a conta nova fica invisível
- * pra própria checagem. */
+ * Também trava que `registerPhonePassword` não use nome como recusa de conta.
+ * O índice de apresentação continua sendo gravado para a detecção privada. */
 const fs = require('fs');
 const path = require('path');
 const C = require('./name-unique-core');
@@ -177,17 +175,23 @@ function baseUsers() {
     ok('nome vazio não toca o payload', !('displayName' in intacto) && !('displayName_lower' in intacto));
   }
 
-  // ── VARREDURA DE CÓDIGO: a CF passa pelo core (a fiação é o fix) ───────────
+  // ── VARREDURA DE CÓDIGO: homônimo não bloqueia telefone/senha ─────────────
   {
     const src = fs.readFileSync(path.join(__dirname, 'index.js'), 'utf8');
+    const initStart = src.indexOf('exports.initializeUserProfile');
+    const initEnd = src.indexOf('exports.updateOwnProfile', initStart);
+    const initBlock = src.slice(initStart, initEnd === -1 ? src.length : initEnd);
+    ok('initializeUserProfile existe', initStart !== -1);
+    ok('criação de perfil não consulta nem reserva nome global',
+      initBlock.indexOf('findDisplayNameConflict') === -1 && initBlock.indexOf('displayNameClaims') === -1);
+    ok('criação preserva o nome escolhido para o próprio UID', /tx\.set\(profileRef, profile\)/.test(initBlock));
     const start = src.indexOf('exports.registerPhonePassword');
     ok('registerPhonePassword existe', start !== -1);
     const end = src.indexOf('exports.', start + 10);
     const block = src.slice(start, end === -1 ? src.length : end);
-    ok('CF consulta o conflito via core (findDisplayNameConflict)', block.indexOf('findDisplayNameConflict') !== -1);
-    ok('CF rejeita com already-exists', block.indexOf('"already-exists"') !== -1);
-    ok('CF usa a mensagem do core (buildConflictMessage)', block.indexOf('buildConflictMessage') !== -1);
-    ok('CF grava displayName_lower junto (denormalizeDisplayName)', block.indexOf('denormalizeDisplayName') !== -1);
+    ok('CF não consulta conflito de nome para decidir cadastro', block.indexOf('findDisplayNameConflict') === -1);
+    ok('CF não rejeita homônimo com already-exists', block.indexOf('buildConflictMessage') === -1);
+    ok('CF conserva o displayName informado', /if \(displayName\) upd\.displayName = displayName/.test(block));
     ok('index.js importa o core', src.indexOf('require("./name-unique-core")') !== -1);
   }
 

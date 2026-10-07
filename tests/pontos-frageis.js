@@ -123,9 +123,9 @@ module.exports = [
     data: '2026-09-27' },
 
   { id: '21', arquivo: 'js/firebase-db.js', ancora: 'async resolveNameToAccounts(name) {',
-    marca: 'NOME DE CONTA É ÚNICO, MAS NUNCA É RENOMEADO AUTOMATICAMENTE',
-    incidente: 'o helper legado transformava colisão de cadastro em "Nome 2", escondendo a segunda '
-      + 'conta e a pergunta obrigatória para confirmar a identidade ou escolher outro nome',
+    marca: 'NOME DE EXIBIÇÃO NÃO IDENTIFICA PESSOA',
+    incidente: 'o helper legado tratava rótulo como identidade e podia escolher a conta errada entre '
+      + 'homônimos; resolução só pode devolver candidatas para decisão explícita por UID',
     data: '2026-09-27' },
 
   { id: '22', arquivo: 'functions/wo-split-reconcile-core.js', ancora: 'function precisaReconciliar(depois) {',
@@ -161,9 +161,9 @@ module.exports = [
 
   { id: '27', arquivo: 'js/views/auth.js',
     ancora: 'return window.FirestoreDB.initializeUserProfile({',
-    marca: 'PERFIL INICIAL RESERVA O NOME ANTES DO SUCESSO',
+    marca: 'PERFIL INICIAL É CRIADO ANTES DO SUCESSO',
     incidente: 'o cadastro por e-mail chamava a porta de update para perfil inexistente e escondia a recusa; '
-      + 'a tela confirmava conta sem perfil e podia contornar a unicidade de nome',
+      + 'a tela confirmava conta sem perfil; o perfil precisa nascer no servidor, preso ao UID autenticado',
     data: '2026-09-28' },
 
   { id: '28', arquivo: 'functions/enroll-core.js',
@@ -181,10 +181,4 @@ module.exports = [
       + 'e sem promover a versão; o executor precisa falhar com diagnóstico e limpar seu grupo de processos',
     data: '2026-09-28' },
 
-  { id: '30', arquivo: 'functions/index.js',
-    ancora: 'const claimChange = _profileNameClaim.decide({',
-    marca: 'HOMÔNIMO NÃO ENTRA POR RENOMEAÇÃO',
-    incidente: 'a regra de nome único no cadastro não basta se a edição do perfil puder tomar uma reserva '
-      + 'existente ou liberar uma reserva legada de outra pessoa',
-    data: '2026-09-28' }
 ];

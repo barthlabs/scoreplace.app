@@ -108,8 +108,8 @@ ok(/_entrarEarlyHintCache/.test(auth), 'hint tem cache por valor (zero chamada r
 // ── 6. GARANTA SUA CONTA ──────────────────────────────────────────────────────
 ok(/window\._askSecureContact = function/.test(auth), 'pedido de celular pós-login existe');
 ok(/scoreplace_phone_nudge_/.test(auth), 'cooldown por uid (não vira spam de diálogo)');
-ok(/cu\.dupSuspect \|\| cu\.nameConflict\) return/.test(auth),
-  'perguntas de duplicata/nome têm PRIORIDADE (nunca empilha diálogos)');
+ok(/if \(cu\.dupSuspect\) return/.test(auth) && !/cu\.dupSuspect \|\| cu\.nameConflict\) return/.test(auth),
+  'sinal de segunda conta tem prioridade, sem tratar homônimo como bloqueio');
 // (no fonte o domínio aparece como regex literal com \. escapado — casar por partes)
 ok(/privaterelay/.test(auth) && /e-mail oculto/.test(auth), 'e-mail oculto da Apple tem texto próprio');
 ok(/_askSecureContact === 'function'\) window\._askSecureContact\(\); \}, 16000\)/.test(auth),

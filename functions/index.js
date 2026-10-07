@@ -157,7 +157,6 @@ const _amizadeVida = require("./amizade-lifecycle");
 const _AMIZADE_CACHE_CAMPOS = new Set(["friends", "friendRequestsSent", "friendRequestsReceived", "friendRequestsSentAt"]);
 const _nameUnique = require("./name-unique-core");
 const _profileUpdate = require("./profile-update-core");
-const _profileNameClaim = require("./profile-name-claim-core");
 const _profileEligibility = require("./profile-eligibility-core");
 /* A marca da categoria (`skillBySportSource`) é apagada pela MESMA regra em toda porta que
  * muda `skillBySport`. Sem isso, categoria digitada por cima de apurada mantinha o selo e o
@@ -3090,48 +3089,19 @@ exports.enrollParticipant = onCall(
 // Seguro escrever no perfil alheio aqui: o autoMergeOnProfileUpdate só age quando `phone` ou
 // `email` mudam, e o enforceUniqueDisplayName só quando `displayName` muda.
 
-// "NÃO SOU EU" no conflito de NOME: a pessoa escolhe um nome livre, e o app precisa (a) dizer
-// se o que ela digitou está livre e (b) sugerir alternativas. Antes o servidor escolhia
-// sozinho ("Nome 2") e a pessoa nem ficava sabendo — ver enforceUniqueDisplayName.
-// Só devolve disponibilidade e sugestões: nenhum dado da outra conta sai daqui.
+// Compatibilidade para clientes antigos que ainda consultam disponibilidade de nome.
+// Nomes de exibição não são identidade: homônimos são permitidos. Portanto esta
+// porta nunca mais bloqueia ou sugere variante; o sinal de possível segunda conta
+// segue em `_detectarDuplicataNaBase`, separado da escolha de apresentação.
 exports.checkDisplayNameAvailability = onCall(
   { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
   async (request) => {
     const callerUid = request.auth && request.auth.uid;
     if (!callerUid) throw new HttpsError("unauthenticated", "Login obrigatório");
-    const db = admin.firestore();
-
     const pedido = String((request.data && request.data.nome) || "").trim();
-    const me = await db.collection("users").doc(callerUid).get();
-    const meuNome = String(((me.exists && me.data()) || {}).displayName || "").trim();
-    const minhaCidade = String(((me.exists && me.data()) || {}).city || "").trim();
-    const base = pedido || meuNome;
-    if (!base) return { livre: false, sugestoes: [] };
-
-    const livre = async (n) => !(await _nameUnique.findDisplayNameConflict(db, n, callerUid));
-
-    // Sugestões: primeiro a cidade (identifica de verdade), depois numéricas.
-    const candidatos = [];
-    if (minhaCidade) candidatos.push(base + " (" + minhaCidade + ")");
-    for (let k = 2; k <= 6; k++) candidatos.push(_nameVariant.buildVariant(base, k));
-
-    const sugestoes = [];
-    for (const c of candidatos) {
-      if (sugestoes.length >= 3) break;
-      try { if (await livre(c)) sugestoes.push(c); } catch (e) { /* fail-open */ }
-    }
-    let ok = false;
-    try { ok = pedido ? await livre(pedido) : false; } catch (e) { ok = false; }
-    return { livre: ok, sugestoes };
+    return { livre: !!pedido, sugestoes: [] };
   }
 );
-
-// Criação inicial do perfil: o cliente pede, o servidor reserva o nome e grava
-// ambos na mesma transação. A reserva impede a corrida de dois cadastros com o
-// mesmo nome, algo que uma consulta seguida de escrita no navegador não resolve.
-function _displayNameClaimId(name) {
-  return crypto.createHash("sha256").update(String(name).trim().toLocaleLowerCase("pt-BR")).digest("hex");
-}
 
 exports.initializeUserProfile = onCall(
   { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
@@ -3145,13 +3115,9 @@ exports.initializeUserProfile = onCall(
     }
 
     const db = admin.firestore();
-    const existingConflict = name ? await _nameUnique.findDisplayNameConflict(db, name, uid) : null;
-    if (existingConflict) throw new HttpsError("already-exists", _nameUnique.buildConflictMessage(existingConflict));
-
-    // user-vivo:isento — UID vem do token autenticado; a leitura é pontual e a
-    // consulta seguinte é de casualMatches, não uma busca de pessoas.
+    // UID é a identidade. Nome é apenas apresentação e pode coincidir com o de
+    // outra conta; a transação só evita criar duas vezes o perfil do MESMO UID.
     const profileRef = db.collection("users").doc(uid);
-    const claimRef = name ? db.collection("displayNameClaims").doc(_displayNameClaimId(name)) : null;
     const allowed = ["authProvider", "email", "photoURL"];
     const profile = { createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
     allowed.forEach((key) => { if (typeof input[key] === "string" && input[key]) profile[key] = input[key]; });
@@ -3159,12 +3125,8 @@ exports.initializeUserProfile = onCall(
     if (name) _nameUnique.denormalizeDisplayName(profile, name);
 
     return await db.runTransaction(async (tx) => {
-      const [current, claim] = await Promise.all([tx.get(profileRef), claimRef ? tx.get(claimRef) : Promise.resolve(null)]);
+      const current = await tx.get(profileRef);
       if (current.exists) return { ok: true, existing: true };
-      if (claim.exists && String((claim.data() || {}).uid || "") !== uid) {
-        throw new HttpsError("already-exists", "este nome já está em uso; escolha outro nome de exibição");
-      }
-      if (claimRef) tx.set(claimRef, { uid: uid, displayName: name, claimedAt: admin.firestore.FieldValue.serverTimestamp() });
       tx.set(profileRef, profile);
       return { ok: true, created: true };
     });
@@ -3172,7 +3134,8 @@ exports.initializeUserProfile = onCall(
 );
 
 // Atualização canônica do próprio perfil. A tela envia intenção; o servidor
-// relê, valida, reserva eventual novo nome e grava tudo na mesma transação.
+// relê, valida e grava tudo na mesma transação. Nome não é reservado: homônimos
+// são válidos e os sinais de possível duplicidade não alteram esta decisão.
 exports.updateOwnProfile = onCall(
   { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
   async (request) => {
@@ -3207,27 +3170,7 @@ exports.updateOwnProfile = onCall(
       }
       eraseFields.forEach((field) => { delete update[field]; update[field] = admin.firestore.FieldValue.delete(); });
       if (patch.displayName && patch.displayName !== old.displayName) {
-        const conflict = await _nameUnique.findDisplayNameConflict(db, patch.displayName, uid);
-        if (conflict) throw new HttpsError("already-exists", _nameUnique.buildConflictMessage(conflict));
-        const newClaim = db.collection("displayNameClaims").doc(_displayNameClaimId(patch.displayName));
-        const oldClaimRef = old.displayName ? db.collection("displayNameClaims").doc(_displayNameClaimId(old.displayName)) : null;
-        const [claim, oldClaim] = await Promise.all([
-          tx.get(newClaim),
-          oldClaimRef ? tx.get(oldClaimRef) : Promise.resolve(null),
-        ]);
-        // ⛔ HOMÔNIMO NÃO ENTRA POR RENOMEAÇÃO: esta decisão usa as DUAS
-        // reservas lidas nesta mesma transação. O nome antigo só é liberado se
-        // pertence a este UID; uma reserva legada alheia jamais vira disponível.
-        const claimChange = _profileNameClaim.decide({
-          uid,
-          newClaim: claim,
-          oldClaim,
-          sameClaim: !!(oldClaimRef && oldClaimRef.path === newClaim.path),
-        });
-        if (claimChange.conflict) throw new HttpsError("already-exists", "este nome já está em uso; escolha outro nome de exibição");
         _nameUnique.denormalizeDisplayName(update, patch.displayName);
-        tx.set(newClaim, { uid, displayName: patch.displayName, claimedAt: admin.firestore.FieldValue.serverTimestamp() });
-        if (oldClaimRef && claimChange.releaseOld) tx.delete(oldClaimRef);
       }
       if (patch.email) update.email_lower = patch.email.toLowerCase();
       tx.update(profileRef, update);
@@ -6416,18 +6359,8 @@ exports.registerPhonePassword = onCall(
       if (e instanceof HttpsError) throw e; // user-not-found = ok
     }
 
-    // v1.6.x: NOME ÚNICO ENTRE UIDS, agora no SERVIDOR (name-unique-core.js).
-    // A regra só existia no cliente (isDisplayNameTaken) e esta CF gravava direto —
-    // foi assim que nasceu a segunda "Gabriela Ferreira" (02/ago/2026), inscrita 2x
-    // no mesmo torneio. Homônimo em cadastro por celular é quase sempre a MESMA
-    // pessoa: REJEITA apontando a conta existente (mascarada) — nunca auto-sufixa.
-    if (displayName) {
-      const conflict = await _nameUnique.findDisplayNameConflict(admin.firestore(), displayName, uid);
-      if (conflict) {
-        console.log("[registerPhonePassword] displayName em conflito com uid:", conflict.uid);
-        throw new HttpsError("already-exists", _nameUnique.buildConflictMessage(conflict));
-      }
-    }
+    // Nome é apresentação, não chave humana. Um telefone verificado continua
+    // protegido pelo seu próprio vínculo de Auth; homônimos não recusam cadastro.
 
     const upd = { email: synthetic, emailVerified: true, password: password, phoneNumber: phoneE164 };
     if (displayName) upd.displayName = displayName;
@@ -10131,10 +10064,8 @@ exports.enforceUniqueDisplayName = onDocumentWritten(
     // capaz de revelar a segunda conta. Grava `dupSuspect` (só o contato MASCARADO), que
     // o cliente lê e transforma em pergunta. O detector também abre caso privado, mas
     // nunca funde as contas por conta própria.
-    // ⚠️ Separado de `nameConflict` DE PROPÓSITO: aquele é UNICIDADE (nome idêntico → a
-    // saída é trocar de nome); este é DUPLICATA (nome parecido → a saída é unir ou dizer
-    // "não sou eu"). "Rodrigo Terra Barth" não precisa trocar de nome por existir
-    // "Rodrigo Barth" — precisa ser perguntado.
+    // `dupSuspect` é apenas um sinal: mesmo nome ou nome parecido não muda UID,
+    // não bloqueia cadastro e nunca funde contas automaticamente.
     try {
       const _mudouIdent = nome !== String(b.displayName || "").trim() ||
         String(a.phone || "") !== String(b.phone || "") ||
@@ -10164,48 +10095,10 @@ exports.enforceUniqueDisplayName = onDocumentWritten(
       console.error("[enforceUniqueDisplayName] duplicata no cadastro (best-effort):", e && e.message);
     }
 
-    if (nome === String(b.displayName || "").trim()) return; // nome não mudou → nada a fazer
-    if (_nameUnique.isUnfriendlyName(nome)) return; // placeholder não disputa unicidade
-    const conflito = await _nameUnique.findDisplayNameConflict(db, nome, uid);
-
-    if (!conflito) {
-      // Conflito resolvido (a pessoa trocou de nome, ou a outra conta sumiu/fundiu):
-      // limpa o sinal, senão a pergunta ficaria pendurada pra sempre.
-      if (a.nameConflict) {
-        await db.collection("users").doc(uid).set(
-          { nameConflict: admin.firestore.FieldValue.delete() }, { merge: true });
-        console.log(`[enforceUniqueDisplayName] uid=${uid}: conflito de "${nome}" resolvido — sinal limpo`);
-      }
-      return;
-    }
-
-    // Quem já estava com o nome não é incomodado pelas costas.
-    if (!_nameVariant.shouldIReceiveConflict(a, conflito, uid)) {
-      console.log(`[enforceUniqueDisplayName] "${nome}" colide com ${conflito.uid}, mas quem responde é o outro lado (uid=${uid} é o estabelecido)`);
-      return;
-    }
-
-    // ⚠️ v1.7.37 — NÃO RENOMEIA MAIS EM SILÊNCIO. Regra do dono (05/ago/2026):
-    // _"o certo, invés de criar 'Gabriela Ferreira 2', é indicar o nome que já existe,
-    // indicando com ****email/celular e perguntar se é a mesma pessoa. Autentica se for e
-    // mescla. Se não for, que a pessoa indique um nome válido e livre."_
-    //
-    // A variante automática resolvia a UNICIDADE e escondia a PERGUNTA — e, pior, cegava a
-    // própria detecção de duplicata: com "Gabriela Ferreira 2" no banco, a comparação por
-    // nome idêntico nunca mais casaria. Aqui só se SINALIZA; quem decide é a pessoa.
-    // Só o MASCARADO é gravado: `nameConflict` é lido pelo cliente, e uid/contato cheio da
-    // outra conta nunca podem chegar lá ([[project_privileged_fields_never_client_writable]]).
-    const emailReal = (conflito.email && !_nameUnique.isSyntheticEmail(conflito.email)) ? conflito.email : "";
-    await db.collection("users").doc(uid).set({
-      nameConflict: {
-        nome: nome,
-        maskedEmail: _nameUnique.maskEmail(emailReal) || null,
-        maskedPhone: _nameUnique.maskPhone(conflito.phone) || null,
-        at: new Date().toISOString(),
-      },
-      updatedAt: new Date().toISOString(),
-    }, { merge: true });
-    console.log(`[enforceUniqueDisplayName] uid=${uid}: "${nome}" colide com ${conflito.uid} → SINALIZADO (sem renomear)`);
+    // A antiga reserva global `displayNameClaims` não é mais lida nem escrita.
+    // Reservas históricas ficam intactas até uma limpeza própria, auditada e sem
+    // impacto no perfil. Possível segunda conta continua sendo tratada acima por
+    // `dupSuspect`, que nunca bloqueia, renomeia ou funde automaticamente.
   }
 );
 

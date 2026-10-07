@@ -147,10 +147,10 @@ console.log('  ── o registro contra o código de verdade ──');
    * exatamente o tipo de regressão silenciosa que esta trava existe para impedir.
    * Tirar um ponto da lista passa a exigir tirar o id daqui também, e aí a pessoa lê o
    * incidente antes de decidir. É o objetivo inteiro do pedido do dono. */
-  // REGRESSÃO: a entrada 30 existia no registro, mas ficou fora da lista fechada abaixo;
-  // removê-la passava verde e deixava a proteção contra homônimo por renomeação evaporar.
+  // Alterar esta lista exige rever o incidente correspondente. O ponto 30 foi retirado
+  // deliberadamente quando a reserva global de displayName foi eliminada do produto.
   // A lista é deliberadamente duplicada: ela prova que o registro não encolheu sozinho.
-  const IDS = ['1','2','3','4','5','6','7','8','9','10','10b','10c','11','12','13','14','15','16','17','18','19','20','21','22','23','24','25','26','27','28','29','30'];
+  const IDS = ['1','2','3','4','5','6','7','8','9','10','10b','10c','11','12','13','14','15','16','17','18','19','20','21','22','23','24','25','26','27','28','29'];
   const atuais = REGISTRO.map((e) => e.id);
   const sumiram = IDS.filter((id) => atuais.indexOf(id) === -1);
   ok(sumiram.length === 0, 'nenhum ponto foi removido do registro'

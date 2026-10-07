@@ -2570,8 +2570,9 @@ window.FirestoreDB = {
 
   // ---- User Profiles ----
 
-  // Criação inicial é exclusivamente no servidor: ele reserva o nome e grava o
-  // perfil na mesma transação. O navegador nunca cria users/{uid} diretamente.
+  // Criação inicial é exclusivamente no servidor: ele grava o perfil do UID
+  // autenticado na mesma transação. O navegador nunca cria users/{uid} direto;
+  // displayName é apresentação e pode coincidir entre pessoas.
   async initializeUserProfile(profileData) {
     return this._callFn('initializeUserProfile', { profile: profileData || {} });
   },
@@ -3010,12 +3011,11 @@ window.FirestoreDB = {
   // Assim, normalmente há 0 ou 1 resultado; 2+ só é resíduo legado para tratar com cuidado.
   // Ignora contas mescladas (mergedInto) e nomes "não-amigáveis" (dupla "A / B",
   // email, telefone, placeholder) — esses não são nome de pessoa.
-  /* ⛔ NOME DE CONTA É ÚNICO, MAS NUNCA É RENOMEADO AUTOMATICAMENTE.
-   * A resolução abaixo só LÊ a identidade de uma conta para vincular participante por UID.
-   * Cadastro/edição recusam colisão no servidor; o login social sinaliza e pede confirmação
-   * ou outro nome. Não reintroduzir aqui um resolvedor que devolva "Nome 2": ele esconde
-   * segunda conta e a pergunta que evita inscrição duplicada. [[project_homonimo_exige_escolha]] */
-  // ⛔ NOME DE CONTA É ÚNICO, MAS NUNCA É RENOMEADO AUTOMATICAMENTE. Retorna:
+  /* ⛔ NOME DE EXIBIÇÃO NÃO IDENTIFICA PESSOA.
+   * A resolução abaixo só LÊ candidatas para permitir que o organizador escolha
+   * conscientemente uma conta pelo UID. Cadastro e edição aceitam homônimos; não
+   * reintroduzir reserva global ou sufixo automático. [[project_uid-e-nao-nome]] */
+  // ⛔ NOME DE EXIBIÇÃO NÃO IDENTIFICA PESSOA. Retorna:
   //   { status:'none' }                      → sem conta (participante informal)
   //   { status:'unique', uid, profile }      → 1 conta
   //   { status:'ambiguous', candidates:[…] } → 2+ homônimos (perguntar qual)
