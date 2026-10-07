@@ -51,23 +51,30 @@ function section(from, to) {
     window._souOrganizador = () => true;
     const selected = [];
     const scrolled = [];
+    const operationalFocus = [];
     window._bracketSelectCategoryTab = (...args) => {
       selected.push(args);
       root._bracketGeneralView.appendChild(document.getElementById('card-ready'));
     };
     Element.prototype.scrollIntoView = function () { scrolled.push(this.id || this.textContent); };
     window.scrollTo = function () { scrolled.push('window'); };
+    window._bracketFocusOperationalCard = (focusRoot, focusCard, behavior) => {
+      operationalFocus.push({ root: focusRoot.getAttribute('data-tournament-id'), card: focusCard.id, behavior });
+    };
 
     window._scrollToBracketSection('neon');
     await new Promise((resolve) => setTimeout(resolve, 100));
-    return { selected, scrolled };
+    return { selected, scrolled, operationalFocus };
   });
 
   console.log('\n📋 Card da dashboard abre o próximo jogo, não a classificação');
   ok(result.selected.length === 1 && result.selected[0].join(',') === 'neon,fem,__upcoming,',
     'a entrada genérica ativa Próximos jogos no gênero do próximo jogo');
-  ok(result.scrolled[0] === 'window',
-    'o foco prioriza o primeiro jogo pronto e usa a rolagem vertical da página, não uma pendência invisível');
+  ok(result.operationalFocus.length >= 1 && result.operationalFocus[0].root === 'neon' &&
+    result.operationalFocus[0].card === 'card-ready' && result.operationalFocus[0].behavior === 'smooth',
+    'o foco prioriza o primeiro jogo pronto pela geometria operacional, sem uma segunda coordenada vertical');
+  ok(result.scrolled.indexOf('window') === -1,
+    'a entrada não reescreve a rolagem da agenda com o cálculo vertical legado');
   ok(result.scrolled.indexOf('inline-bracket-container') === -1,
     'a classificação inline nunca é usada como fallback quando há agenda');
   const lateTarget = await page.evaluate(() => {

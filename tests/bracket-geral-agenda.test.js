@@ -31,6 +31,7 @@ function trecho(inicio, fim) {
   await page.addScriptTag({ content: trecho('_limparCamadasTransitóriasDaChave', '_pintarEmEtapas') });
   await page.addScriptTag({ content: trecho('_bracketOperationalCards', '_bracketToggleEmptySourceRounds') });
   await page.addScriptTag({ content: trecho('_bracketToggleEmptySourceRounds', '_bracketGeneralView') });
+  await page.addScriptTag({ content: trecho('_bracketFocusOperationalCard', '_bracketGeneralView') });
   await page.addScriptTag({ content: trecho('_bracketGeneralView', '_bracketTabsApply') });
   await page.addScriptTag({ content: trecho('_bracketTabsApply', '_bracketSyncRoundHeadingOffsets') });
 

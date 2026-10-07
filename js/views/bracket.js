@@ -1000,6 +1000,48 @@ function _bracketToggleEmptySourceRounds(root, hide) {
   }
 }
 
+// Mantém um card da agenda operacional inteiro abaixo das abas e da régua
+// fixa de rodada. Esta é a única geometria permitida para a entrada da
+// dashboard, as abas Geral/Próximos e a reafirmação pós-montagem: antes, cada
+// caminho calculava um topo diferente e o último callback cortava o card.
+// [[regression_operational_card_focus_has_one_geometry]]
+function _bracketFocusOperationalCard(root, card, behavior) {
+  if (!root || !card || !card.isConnected || card.hidden || window._travaRolagemDaChave) return null;
+  var track = card.closest ? card.closest('.bracket-general-rounds-track') : null;
+  if (track) {
+    var beforeRect = card.getBoundingClientRect();
+    var trackRect = track.getBoundingClientRect();
+    var targetLeft = Math.max(0, track.scrollLeft + beforeRect.left - trackRect.left - 8);
+    track.scrollLeft = targetLeft;
+    try { track.scrollTo({ left: targetLeft, behavior: 'instant' }); }
+    catch (eTrack) {}
+  }
+  var cardRect = card.getBoundingClientRect();
+  var rootRect = root.getBoundingClientRect();
+  var roundColumn = card.closest ? card.closest('.bracket-general-round-column, .bracket-round-column') : null;
+  var roundHeading = roundColumn && roundColumn.querySelector ? roundColumn.querySelector('.bracket-round-heading') : null;
+  var headingHeight = roundHeading ? Math.ceil(roundHeading.getBoundingClientRect().height || 0) : 0;
+  // O portal da rodada pode nascer só depois desta rolagem. Reservamos a
+  // altura que ele ocuparia e, se ele já existe, usamos a sua borda real.
+  // [[regression_operational_focus_reserves_round_heading]]
+  var portalReserve = headingHeight ? headingHeight + 30 : 68;
+  var safeTop = rootRect.bottom + Math.max(12, portalReserve);
+  var portal = root._bracketRoundHeadingPortal;
+  if (portal && portal.style.display !== 'none') {
+    var portalBottom = Math.ceil(portal.getBoundingClientRect().bottom || 0) + 12;
+    if (portalBottom > safeTop) safeTop = portalBottom;
+  }
+  var currentTop = window.scrollY || window.pageYOffset || 0;
+  var targetTop = Math.max(0, currentTop + cardRect.top - safeTop);
+  var scrollRoot = document.scrollingElement || document.documentElement || document.body;
+  if (scrollRoot) scrollRoot.scrollTop = targetTop;
+  try { window.scrollTo({ top: targetTop, behavior: behavior || 'auto' }); }
+  catch (eScroll) { try { window.scrollTo(0, targetTop); } catch (eLegacyScroll) {} }
+  _bracketSyncRoundHeadingOffsets();
+  return targetTop;
+}
+window._bracketFocusOperationalCard = _bracketFocusOperationalCard;
+
 function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame) {
   if (!root) return false;
   var scope = root._bracketTabsScope || (root.closest && root.closest('#view-container, #inline-bracket-container'));
@@ -1259,38 +1301,10 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame) {
       var focusOperationalNextGame = function () {
         if (root._bracketFocusToken !== focusToken || root.style.display === 'none' || !nextEntry.card.isConnected || nextEntry.card.hidden || window._travaRolagemDaChave) return;
         // `scrollIntoView` escolhe o primeiro ancestral com overflow e, nesta
-        // agenda, às vezes só movia a coluna horizontal. Calculamos os dois
-        // eixos depois da montagem real: o próximo jogo fica no topo útil,
-        // logo abaixo das abas, e sua rodada entra na área visível.
+        // agenda, às vezes só movia a coluna horizontal. A geometria é comum
+        // a todos os gatilhos de entrada, inclusive os callbacks tardios.
         // [[regression_operational_tabs_scroll_to_next_scheduled_game]]
-        var track = nextEntry.card.closest ? nextEntry.card.closest('.bracket-general-rounds-track') : null;
-        var cardRect = nextEntry.card.getBoundingClientRect();
-        var rootRect = root.getBoundingClientRect();
-        var roundColumn = nextEntry.card.closest ? nextEntry.card.closest('.bracket-general-round-column, .bracket-round-column') : null;
-        var roundHeading = roundColumn && roundColumn.querySelector ? roundColumn.querySelector('.bracket-round-heading') : null;
-        // A régua de Rodada é promovida para um portal fixo somente DEPOIS que
-        // cruzamos a faixa das abas. Rolar o card até `root.bottom + 12` parecia
-        // certo no quadro anterior, mas deixava seu topo escondido quando esse
-        // portal nascia no quadro seguinte. Reserve agora a mesma altura que o
-        // portal vai ocupar: o card deve começar abaixo da régua, inteiro.
-        // [[regression_operational_focus_reserves_round_heading]]
-        var headingHeight = roundHeading ? Math.ceil(roundHeading.getBoundingClientRect().height || 0) : 0;
-        var portalReserve = headingHeight ? headingHeight + 30 : 68;
-        var safeTop = rootRect.bottom + Math.max(12, portalReserve);
-        var currentTop = window.scrollY || window.pageYOffset || 0;
-        var targetTop = Math.max(0, currentTop + cardRect.top - safeTop);
-        var scrollRoot = document.scrollingElement || document.documentElement || document.body;
-        if (scrollRoot) scrollRoot.scrollTop = targetTop;
-        try { window.scrollTo({ top: targetTop, behavior: 'instant' }); }
-        catch (eScroll) { try { window.scrollTo(0, targetTop); } catch (eLegacyScroll) {} }
-        if (track) {
-          var trackRect = track.getBoundingClientRect();
-          var targetLeft = Math.max(0, track.scrollLeft + cardRect.left - trackRect.left - 8);
-          track.scrollLeft = targetLeft;
-          try { track.scrollTo({ left: targetLeft, behavior: 'instant' }); }
-          catch (eTrack) {}
-        }
-        _bracketSyncRoundHeadingOffsets();
+        _bracketFocusOperationalCard(root, nextEntry.card, 'instant');
       };
       var afterPaint = function () {
         if (typeof requestAnimationFrame === 'function') requestAnimationFrame(focusOperationalNextGame);
@@ -1881,6 +1895,13 @@ function _applyMyMatchesFilter() {
         if (typeof window._reflowChrome === 'function') window._reflowChrome();
         var _target = _alvoDeEntrada();
         if (!_target) return;
+        var _operationalRoot = Array.prototype.find.call(document.querySelectorAll('[data-bracket-tabs-root]'), function (_root) {
+          return !!(_root._bracketGeneralView && _root._bracketGeneralView.contains(_target));
+        }) || null;
+        if (_operationalRoot && typeof window._bracketFocusOperationalCard === 'function') {
+          window._bracketFocusOperationalCard(_operationalRoot, _target, behavior);
+          return;
+        }
         _target.scrollIntoView({ behavior: behavior, block: 'start' });
       } catch (e) {}
     };

@@ -1306,7 +1306,7 @@ window._focusTournamentUpcomingWhenReady = function(tId, options) {
     // chave renderizar e podem sobrescrever uma primeira rolagem. Reafirmamos
     // a âncora na mesma entrada curta, sempre com posição absoluta no viewport
     // da página (não no scroll horizontal da rodada).
-    var placeOperationalAnchor = function() {
+    var placeOperationalAnchor = function(reasserting) {
       if (window._travaRolagemDaChave || userInterrupted || window._tournamentUpcomingEntryToken !== entryToken) return;
       var liveTarget = targetId && document.getElementById(targetId);
       var destination = liveTarget && getComputedStyle(liveTarget).display !== 'none' ? liveTarget : null;
@@ -1320,6 +1320,14 @@ window._focusTournamentUpcomingWhenReady = function(tId, options) {
         return;
       }
       try { if (typeof window._reflowChrome === 'function') window._reflowChrome(); } catch (eChrome) {}
+      // A rodada é promovida para uma camada fixa após cruzar as abas. Esta
+      // entrada antes repetia uma conta que não sabia dessa camada e, 140ms ou
+      // mais tarde, escondia o cabeçalho do jogo já corretamente focado.
+      if (root && destination !== root._bracketGeneralView &&
+          typeof window._bracketFocusOperationalCard === 'function') {
+        window._bracketFocusOperationalCard(root, destination, reasserting ? 'auto' : behavior);
+        return;
+      }
       var rect = destination.getBoundingClientRect();
       var stickyBottom = root ? root.getBoundingClientRect().bottom : 0;
       var currentTop = window.scrollY || window.pageYOffset || 0;
@@ -1331,13 +1339,13 @@ window._focusTournamentUpcomingWhenReady = function(tId, options) {
     // quadros. Não encerrar em 520ms: essa era exatamente a janela em que a
     // tela acabava parando na classificação. A âncora é restrita à entrada e
     // cede assim que a pessoa toca/rola a página.
-    placeOperationalAnchor();
-    setTimeout(placeOperationalAnchor, 140);
-    setTimeout(placeOperationalAnchor, 520);
-    setTimeout(placeOperationalAnchor, 1000);
-    setTimeout(placeOperationalAnchor, 1600);
-    setTimeout(placeOperationalAnchor, 2400);
-    setTimeout(placeOperationalAnchor, 3400);
+    placeOperationalAnchor(false);
+    setTimeout(function() { placeOperationalAnchor(true); }, 140);
+    setTimeout(function() { placeOperationalAnchor(true); }, 520);
+    setTimeout(function() { placeOperationalAnchor(true); }, 1000);
+    setTimeout(function() { placeOperationalAnchor(true); }, 1600);
+    setTimeout(function() { placeOperationalAnchor(true); }, 2400);
+    setTimeout(function() { placeOperationalAnchor(true); }, 3400);
   };
   focus();
 };
