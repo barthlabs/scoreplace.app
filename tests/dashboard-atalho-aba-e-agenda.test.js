@@ -10,6 +10,7 @@ const dashboard = fs.readFileSync(path.join(ROOT, 'js', 'views', 'dashboard.js')
 const tournaments = fs.readFileSync(path.join(ROOT, 'js', 'views', 'tournaments.js'), 'utf8');
 const router = fs.readFileSync(path.join(ROOT, 'js', 'router.js'), 'utf8');
 const bracket = fs.readFileSync(path.join(ROOT, 'js', 'views', 'bracket.js'), 'utf8');
+const paleta = fs.readFileSync(path.join(ROOT, 'css', 'paleta.css'), 'utf8');
 let fail = 0;
 function ok(condition, message) {
   if (condition) console.log('  ✓ ' + message);
@@ -25,6 +26,29 @@ ok(dashboard.includes('window._goToMyNextTournamentMatch') && dashboard.includes
   'o card de próximo jogo pede que o detalhe recalcule o próximo confronto do usuário');
 ok(dashboard.includes('window._matchCardTimelineTextHtml(_ngT, _ngM)'),
   'Seu próximo jogo reutiliza a linha Agendado da chave');
+ok(dashboard.includes('footerHtml: _nextTimeline') &&
+  dashboard.includes('data-next-game-schedule="1"') &&
+  dashboard.includes('justify-content:flex-start') &&
+  dashboard.includes('border:1px solid var(--sp-c-38bdf8,#38bdf8)') &&
+  dashboard.includes('background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06))') &&
+  !dashboard.includes('rgba(56,189,248,0.5)') &&
+  !dashboard.includes('rgba(14,165,233,0.12)') &&
+  !dashboard.includes("(_nextTimeline ? '<div style=\"margin-top:5px;\">' + _nextTimeline + '</div>' : '')"),
+  'o agendamento fica no rodapé azul esquerdo do card, sem reservar linha acima e respeita os temas');
+const lightPaletteStart = paleta.indexOf('[data-theme="light"]');
+const lightPaletteEnd = paleta.indexOf('/* ── A TARJA DE LEITURA', lightPaletteStart);
+const lightPalette = paleta.slice(lightPaletteStart, lightPaletteEnd);
+ok(paleta.includes('--sp-c-38bdf8: #38bdf8;') &&
+  paleta.includes('--sp-g-255-255-255-006: rgba(255,255,255,0.06);') &&
+  lightPalette.includes('--sp-c-38bdf8: #0369a1;') &&
+  lightPalette.includes('--sp-g-255-255-255-006: rgba(0,0,0,0.045);'),
+  'os tokens do rodapé têm base escura e remapeamento de contraste no tema claro');
+const miniCardStart = dashboard.indexOf('function _miniBracketCard(item, canLaunch)');
+const miniCardEnd = dashboard.indexOf('function _matchCardTimelineTextHtml', miniCardStart);
+const miniCard = dashboard.slice(miniCardStart, miniCardEnd === -1 ? undefined : miniCardEnd);
+ok(miniCard.indexOf('var opts = arguments[2] || {};') !== -1 &&
+  miniCard.indexOf('var opts = arguments[2] || {};') < miniCard.indexOf('var pendingScores = opts.pendingScores || null;'),
+  'o terceiro argumento do mini-card é inicializado antes de qualquer leitura de opts');
 ok(dashboard.includes("document.getElementById('proximos-jogos-section')") &&
   dashboard.includes("document.querySelector('[data-dashboard-enrolled=\"1\"]')") &&
   dashboard.includes('data-dashboard-enrolled="1"') &&
@@ -42,6 +66,14 @@ ok(tournaments.includes('window._nextParticipantTournamentMatchTarget') && tourn
   'a entrada pelo detalhe encontra o próximo jogo do usuário, prepara a aba e ancora no card');
 ok(tournaments.includes('não deixa de ser dela só porque o ADVERSÁRIO') && !tournaments.includes("m.p1 && m.p1 !== 'TBD' && m.p2 && m.p2 !== 'TBD'"),
   'o próximo jogo do participante continua sendo alvo quando só o adversário ainda vem da chave');
+ok(tournaments.includes('if (!_bso.matchId)') &&
+  tournaments.includes('criava uma segunda rolagem concorrente') &&
+  tournaments.includes('window._scrollToBracketSection(tournamentId, null)'),
+  'o consumidor tardio não dispara scroll genérico quando já há card alvo');
+ok(tournaments.includes('window._bracketPendingScroll = String(tournamentId);') &&
+  bracket.includes('if (window._bracketPendingScroll)') &&
+  bracket.includes('var _target = _alvoDeEntrada();'),
+  'a âncora pendente da entrada é consumida pela chave depois de os cards existirem');
 ok(bracket.includes('window._directBracketSlotLabel') && bracket.includes("? 'Perdedor' : 'Vencedor'") && bracket.includes("_origem || 'A definir'"),
   'vagas ligadas diretamente mostram vencedor/perdedor do jogo; A definir fica para classificação');
 const labelStart = bracket.indexOf('window._directBracketSlotLabel = function');
@@ -88,5 +120,5 @@ ok(bracket.includes('class="bracket-round-heading"') &&
   bracket.includes('_bracketSyncRoundHeadingOffsets();\n  _bracketEnsureRoundHeadingResizeListener();'),
   'títulos de rodadas classificatórias entram no portal fixo e têm a montagem ligada ao scroll');
 
-console.log('\n' + (fail ? '❌' : '✅') + ' dashboard-atalho-aba-e-agenda: ' + (16 - fail) + ' asserts ok, ' + fail + ' falharam');
+console.log('\n' + (fail ? '❌' : '✅') + ' dashboard-atalho-aba-e-agenda: ' + (21 - fail) + ' asserts ok, ' + fail + ' falharam');
 process.exitCode = fail ? 1 : 0;

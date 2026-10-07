@@ -4903,15 +4903,23 @@ function renderTournaments(container, tournamentId = null) {
     try {
         const _bs = sessionStorage.getItem('sp_bracketScroll');
         if (_bs) {
-            const _bso = JSON.parse(_bs);
-            if (_bso && String(_bso.tId) === String(tournamentId)) {
-                sessionStorage.removeItem('sp_bracketScroll');
-                setTimeout(function() {
-                    if (typeof window._scrollToBracketSection === 'function') {
-                        window._scrollToBracketSection(tournamentId, _bso.matchId || null);
-                    }
-                }, 200);
+          const _bso = JSON.parse(_bs);
+          if (_bso && String(_bso.tId) === String(tournamentId)) {
+            sessionStorage.removeItem('sp_bracketScroll');
+            /* Um destino de jogo já foi armado por `_bracketPendingScroll` antes
+             * de a chave nascer. Repassá-lo 200ms depois a `_scrollToBracketSection`
+             * criava uma segunda rolagem concorrente: primeiro ia ao jogo certo,
+             * depois saltava quando o detalhe/snapshot terminava de montar.
+             * Consome a intenção aqui, mas só usa o rolador genérico quando não
+             * existe matchId (entrada realmente sem alvo específico). */
+            if (!_bso.matchId) {
+              setTimeout(function() {
+                if (typeof window._scrollToBracketSection === 'function') {
+                  window._scrollToBracketSection(tournamentId, null);
+                }
+              }, 200);
             }
+          }
         }
     } catch (_bse) {}
 

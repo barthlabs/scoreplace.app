@@ -2413,7 +2413,7 @@ function renderDashboard(container) {
     // helper: mini bracket card — estrutura idêntica ao bracket.js:
     //   • coluna bracket-round-column: min-width 280px, max-width 320px (não full-width!)
     //   • título da coluna com barra colorida à esquerda (border-left) + nome da fase
-    //   • card do jogo igual ao renderMatchCard: header com label + Ao Vivo + Confirmar
+    //   • card do jogo com a mesma estrutura do card da chave: label + Ao Vivo + Confirmar
     //   • "Ir para Torneio" no footer do card (não no header)
     function _miniBracketCard(item, canLaunch) {
       var tId = _sf(item.tId);
@@ -2563,6 +2563,14 @@ function renderDashboard(container) {
       var cardBorderStr = opts.cardBorder || 'rgba(99,102,241,0.6)';
       var cardBgStr = opts.cardBg || 'rgba(99,102,241,0.06)';
       var cardShadow = opts.cardShadow || '0 0 20px rgba(99,102,241,0.25),0 4px 12px rgba(0,0,0,0.15)';
+      // A data/hora do próximo jogo fica no rodapé do card, alinhada à
+      // esquerda. A dashboard reaproveita o fragmento da chave, sem uma faixa
+      // solta antes do card nem uma segunda regra de agendamento.
+      var cardFooterHtml = opts.footerHtml
+        ? '<div data-next-game-schedule="1" style="margin-top:10px;padding-top:9px;border-top:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));display:flex;justify-content:flex-start;align-items:center;min-height:30px;">' +
+            '<span style="display:inline-flex;align-items:center;min-height:28px;padding:4px 10px;border:1px solid var(--sp-c-38bdf8,#38bdf8);border-radius:999px;background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));color:var(--sp-c-7dd3fc,#7dd3fc);font-size:0.72rem;font-weight:800;">' + opts.footerHtml + '</span>' +
+          '</div>'
+        : '';
 
       // ⭐ 2.0.35: o TAMANHO do número sai da classe canônica (.sp-mc-num → --sp-num-fs), a
       // mesma do card da chave. Aqui sobra só o que é DESTE estado: âmbar e itálico.
@@ -2690,6 +2698,7 @@ function renderDashboard(container) {
           '<div style="' + rowStyle + '">' + _teamHtml(p1, _p1Uids) + '<div id="score-p1-' + mId + '" style="display:flex;align-items:center;flex-shrink:0;">' + p1ScoreHtml + '</div></div>' +
           '<div style="text-align:center;font-size:0.65rem;color:var(--text-muted);font-weight:800;letter-spacing:2px;padding:3px 0;">VS</div>' +
           '<div style="' + rowStyle + '">' + _teamHtml(p2, _p2Uids) + '<div id="score-p2-' + mId + '" style="display:flex;align-items:center;flex-shrink:0;">' + p2ScoreHtml + '</div></div>' +
+          cardFooterHtml +
         '</div>' +
       '</div>';
     }
@@ -2840,7 +2849,6 @@ function renderDashboard(container) {
       _upHtml += '<div style="border-left:3px solid #818cf8;padding-left:10px;margin-bottom:10px;">' +
         '<div style="font-weight:800;color:var(--text-bright);font-size:0.92rem;text-transform:uppercase;letter-spacing:0.5px;line-height:1.25;">' + _sf(_ng.tName) + '</div>' +
         (_metaStr ? '<div style="color:var(--sp-c-a5b4fc,#a5b4fc);font-size:0.72rem;margin-top:3px;font-weight:600;">' + _sf(_metaStr) + '</div>' : '') +
-        (_nextTimeline ? '<div style="margin-top:5px;">' + _nextTimeline + '</div>' : '') +
       '</div>';
       /* MESMA LARGURA DAS NOVIDADES E DOS ÚLTIMOS RESULTADOS. Esta era a única das quatro
        * chamadas de `_miniBracketCard` que entrava PELADA: sem o grid e sem o embrulho
@@ -2849,7 +2857,11 @@ function renderDashboard(container) {
        * canônica em todo lugar — inclusive a caixa que o segura. */
       _upHtml += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;align-items:start;">' +
         '<div data-mr-card="1" style="min-width:0;">' +
-        _miniBracketCard(_ng, _ngEntry.canLaunch, { hideFaseHeader: true, boxLabelOverride: _boxU }) +
+        _miniBracketCard(_ng, _ngEntry.canLaunch, {
+          hideFaseHeader: true,
+          boxLabelOverride: _boxU,
+          footerHtml: _nextTimeline
+        }) +
         '</div></div>';
       _upHtml += '</div>'; // fecha #proximos-jogos-section
     }
