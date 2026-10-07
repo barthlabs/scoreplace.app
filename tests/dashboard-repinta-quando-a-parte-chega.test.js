@@ -143,8 +143,8 @@ const dashNum = (function () {
     '⭐ "Participando" passa a incluir o Confra (era o "Participando 1" errado)');
   const html = secao();
   ok(html !== '' && !/[Cc]arregando os dados/.test(html), '⭐ a seção sai do estado de carregamento');
-  ok(/Novidades no seu torneio/.test(html),
-    '⭐ e "📣 Novidades no seu torneio" é montada (jogo de outra pessoa, com placar)');
+  ok(/Novidades nos seus torneios/.test(html),
+    '⭐ e "📣 Novidades nos seus torneios" é montada (jogo de outra pessoa, com placar)');
 
   console.log('\n§3 SNAPSHOT SEM TRANSIÇÃO DE HIDRATAÇÃO — não repinta');
   pedidos = [];

@@ -27,7 +27,7 @@ console.log('──── "ver menos" de Novidades acompanha a rolagem ───
 
 // recorte do bloco da seção Novidades (do <div id="novidades-section"> até o <h3> do título)
 const ini = dash.indexOf('<div id="novidades-section"');
-const fim = dash.indexOf('📣 Novidades no seu torneio', ini);
+const fim = dash.indexOf('📣 Novidades nos seus torneios', ini);
 ok(ini > 0 && fim > ini, 'achei o bloco da seção Novidades');
 const bloco = dash.slice(ini, fim + 400);
 

@@ -253,40 +253,36 @@ ok(NOV.indexOf('data-nov-card="1" style="margin-bottom') === -1,
 ok(NOV.indexOf('(SB)') === -1, 'B1. torneio sandbox NÃO aparece nas Novidades');
 ok(HTML.indexOf('(SB)') === -1, 'B2. torneio sandbox não aparece em NENHUMA das seções (inclusive "Seus últimos resultados")');
 
-// ⚠️ SONDAS REVISADAS DE PROPÓSITO em v1.8.78 — o INVARIANTE não mudou, o MARKUP mudou.
-// Pedido do dono (15/ago): "colocar o nome de grupo numa linha e o nome do torneio na de
-// baixo; sempre que for mesmo grupo e torneio, omitir dos demais jogos do mesmo grupo".
-// O rótulo "R1 Grupo S • Jogo 1" DEIXOU DE EXISTIR como string única: o grupo virou
-// cabeçalho compartilhado (`data-nov-head`) e o "Jogo N" ficou no card. Procurar a string
-// antiga passaria a medir a ausência do rótulo, não a duplicação — que é o que estas
-// asserções nasceram pra pegar (o clone do sandbox). Elas continuam pegando exatamente
-// isso, agora contando CARDS e CABEÇALHOS.
+// Novidades é agrupada primeiro por TORNEIO e depois por rodada. Isso evita misturar
+// rodadas de competições simultâneas e garante que o nome de cada torneio apareça uma vez.
 function cabecalhosNov(html, tipo) {
-  var out = [], re = new RegExp('data-nov-head="' + (tipo || '1') + '"[\\s\\S]*?letter-spacing:2px;[^"]*">([^<]+)<', 'g'), m;
+  var out = [], re = new RegExp('data-nov-' + (tipo || 'tournament') + '-head="1"[\\s\\S]*?letter-spacing:2px;[^"]*">([^<]+)<', 'g'), m;
   while ((m = re.exec(html))) out.push(m[1].trim());
   return out;
 }
-/* ⭐ 2.1.36 — DOIS tipos de cabeçalho, e a diferença é a LINHA que eles gastam.
- * Grupo com 2+ jogos: cabeçalho COMPARTILHADO (`data-nov-head="1"`), largura cheia — ele
- * se paga, porque o rótulo serve a vários cards.
- * Grupo de UM jogo: rótulo INLINE (`data-nov-head="inline"`), DENTRO do card — um
- * cabeçalho de linha inteira pra um card só deixava o resto da fileira vazio, que foi o
- * relato do dono ("cabem 2, está mostrando 1"). É a mesma regra que "Seus últimos
- * resultados" já usava; agora as duas seções não divergem.
- * ⛔ O INVARIANTE destas asserções NÃO mudou: o rótulo de cada grupo aparece UMA vez. */
+/* O cabeçalho de torneio é único; os cabeçalhos de rodada ficam dentro dele. */
 const HEADS = cabecalhosNov(NOV);
-const HEADS_INLINE = cabecalhosNov(NOV, 'inline');
+const HEADS_ROUND = cabecalhosNov(NOV, 'round');
 ok(contar(NOV, 'data-nov-card="1"') === 5,
   'B3. os 5 jogos de outros entram uma vez cada (o clone do sandbox não duplica) — vi ' + contar(NOV, 'data-nov-card="1"'));
-ok(HEADS.length === 0,
-  'B4. nenhuma novidade gasta uma linha inteira com cabeçalho de grupo — vi [' + HEADS.join(' | ') + ']');
-ok(HEADS_INLINE.length === 5,
-  'B4b. cada cartão carrega o próprio contexto sem reordenar o feed — vi [' + HEADS_INLINE.join(' | ') + ']');
-ok(HEADS_INLINE[0] === 'R1 Grupo U' && HEADS_INLINE[1] === 'R1 Grupo S' && HEADS_INLINE[2] === 'R1 Grupo T' && HEADS_INLINE[3] === 'R1 Grupo S',
-  'B4c. o contexto acompanha a sequência cronológica, inclusive quando o grupo reaparece');
-// o torneio vai na LINHA DE BAIXO do mesmo cabeçalho (nunca colado ao grupo)
-ok(/data-nov-head="inline"[\s\S]*?letter-spacing:2px;[^"]*">R1 Grupo S<\/div><div style="color:var\(--text-muted\)/.test(NOV),
-  'B4d. o torneio segue na segunda linha do contexto do cartão');
+ok(HEADS.length === 1 && HEADS[0] === 'Confra BT Alta da Clínica 2026',
+  'B4. o nome do torneio aparece uma única vez — vi [' + HEADS.join(' | ') + ']');
+ok(HEADS_ROUND.length === 3 && HEADS_ROUND.indexOf('R1 Grupo S') !== -1,
+  'B4b. as rodadas recentes ficam agrupadas dentro do torneio — vi [' + HEADS_ROUND.join(' | ') + ']');
+ok(NOV.indexOf('Novidades nos seus torneios') !== -1,
+  'B4c. o título usa o plural porque a seção pode reunir mais de um torneio');
+
+const OUTRO = confra();
+OUTRO.id = 'tour_neon';
+OUTRO.name = 'Neon Nightmare';
+OUTRO.rounds[0].matches = [Object.assign({}, OUTRO.rounds[0].matches[0], {
+  id: 'neon-m1', label: 'Rodada 1 · Jogo 3', resultAt: HOJE + 1000,
+  winner: 'Vanessa Bianchini / Bruna Arilla'
+})];
+const NOV_MULTI = secaoNovidades(render([T, OUTRO], { colapsada:false }));
+const HEADS_MULTI = cabecalhosNov(NOV_MULTI);
+ok(HEADS_MULTI.length === 2 && HEADS_MULTI[0] === 'Neon Nightmare' && HEADS_MULTI[1] === 'Confra BT Alta da Clínica 2026',
+  'B4d. torneios simultâneos formam blocos separados, ordenados pela novidade mais recente — vi [' + HEADS_MULTI.join(' | ') + ']');
 
 // id de DOM repetido é o que faria _editPendingResult/_approveResult agirem no card errado
 const idsCard = (HTML.match(/id="card-[^"]+"/g) || []);
@@ -321,8 +317,8 @@ const posHoje = NOV.indexOf('id="card-m-S3"');
 const posParcial = NOV.indexOf('id="card-m-U1"');
 const posSegundo = NOV.indexOf('id="card-m-T1"');
 const posOntem = NOV.indexOf('id="card-m-S1"');
-ok(posParcial !== -1 && posHoje !== -1 && posSegundo !== -1 && posOntem !== -1 && posParcial < posHoje && posHoje < posSegundo && posSegundo < posOntem,
-  'C2. o feed inteiro segue a cronologia: U1@' + posParcial + ' < S3@' + posHoje + ' < T1@' + posSegundo + ' < S1@' + posOntem);
+ok(posParcial !== -1 && posHoje !== -1 && posSegundo !== -1 && posOntem !== -1 && posParcial < posHoje && posHoje < posOntem && posOntem < posSegundo,
+  'C2. dentro do torneio, cada rodada fica inteira e os blocos seguem a novidade mais recente: U1@' + posParcial + ' < S3@' + posHoje + ' < S1@' + posOntem + ' < T1@' + posSegundo);
 
 /* A ordem continua sendo medida — só que pela POSIÇÃO dos rótulos no HTML, que vale
  * para os dois tipos de cabeçalho. Comparar `HEADS[0]/HEADS[1]` deixou de servir quando o

@@ -3161,7 +3161,7 @@ function renderDashboard(container) {
       }
       _novHtml += '<h3 id="nov-h3" onclick="window._toggleNovidadesCollapse()" style="margin:0;' +
         'font-size:0.85rem;font-weight:700;color:var(--sp-c-fbbf24,#fbbf24);letter-spacing:0.04em;text-transform:uppercase;cursor:pointer;display:flex;align-items:center;gap:8px;user-select:none;" title="Mostrar/ocultar">' +
-        '📣 Novidades no seu torneio' +
+        '📣 Novidades nos seus torneios' +
         // ⚠️ O CALÇO. A pílula saiu do fluxo do cabeçalho (foi pro trilho sticky), então o
         // título passou a correr POR BAIXO dela — medido na tela estreita: "NOVIDADES NO SEU
         // TOR|ver menos". Este span invisível ocupa a MESMA caixa e devolve ao título o
@@ -3185,10 +3185,12 @@ function renderDashboard(container) {
       // novidade, o card ocupa toda a largura útil mesmo se o sincronizador
       // ainda não tiver executado. A prévia mede esse mesmo piso de 280px.
       _novHtml += '<div id="novidades-grid" data-sp-preview-min="280" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;align-items:start;margin-top:12px;">';
-      // A ordem aqui é a do FEED, nunca a de grupos. Agrupar globalmente parecia econômico,
-      // mas reordenava A(novo), B(segundo), A(antigo) para A(novo), A(antigo), B(segundo).
-      // O contexto de fase/torneio vai dentro de cada cartão: assim qualquer novidade nova
-      // entra no topo e as anteriores são apenas empurradas para baixo.
+      // A leitura agora é por TORNEIO, não por um feed que mistura tudo. Quando a pessoa
+      // participa de mais de um evento, "Rodada 3" de um não pode aparecer ao lado de
+      // "Rodada 1" de outro como se fossem partes da mesma competição. Os torneios seguem
+      // ordenados pela sua novidade mais recente; dentro de cada um, as rodadas recentes
+      // ficam juntas. O nome do torneio aparece uma vez por bloco e a rodada organiza os
+      // cards daquele bloco. [[dashboard_news_grouped_by_tournament]]
       // ── ⭐ O ESCONDIDO NEM NASCE (2.0.82) ──────────────────────────────────
       // Ordem do dono: _"tem o mostrar mais nos 2. poderia não carregar tudo antes
       // que alguém clicasse no mostrar mais."_ E ele está certo: recolhida, esta
@@ -3219,12 +3221,45 @@ function renderDashboard(container) {
         if (_novAntes >= _NOV_PREVIEW_MAX) _novExt += html; else _novVis += html;
       };
       var _novAntes = 0;
+      var _novTorneios = [];
+      var _novPorTorneio = Object.create(null);
       _novList.forEach(function(it) {
+        var _tid = String(it.tId || it.tName || 'sem-torneio');
+        var _bloco = _novPorTorneio[_tid];
+        if (!_bloco) {
+          _bloco = { id:_tid, name:it.tName || 'Torneio', items:[], rounds:[], byRound:Object.create(null) };
+          _novPorTorneio[_tid] = _bloco;
+          _novTorneios.push(_bloco);
+        }
+        _bloco.items.push(it);
         var _fp = _splitFase(it.phaseLabel || it.subLine || '');
-        var _head = _grupoHeadHtml(_fp.group, it.tName, '#fbbf24', 'data-nov-head="inline"', true, it.tId,
-          (it.m && it.m.id) || null, it.m || null);
+        var _roundName = _fp.group || 'Resultados recentes';
+        var _round = _bloco.byRound[_roundName];
+        if (!_round) {
+          _round = { name:_roundName, items:[] };
+          _bloco.byRound[_roundName] = _round;
+          _bloco.rounds.push(_round);
+        }
+        _round.items.push(it);
+      });
+      _novTorneios.forEach(function(bloco) {
+        var _first = bloco.items[0];
+        // Cabeçalho e primeiro card do torneio nascem juntos. Depois do primeiro card,
+        // os próximos blocos recebem `data-sp-extra`, portanto não sobra título órfão
+        // quando a seção está recolhida.
         _novAntes = _spCards;
-        _guarda(_novCard(it, _head));
+        _guarda(_grupoHeadHtml(bloco.name, '', '#fbbf24', 'data-nov-tournament-head="1"' +
+          (_spCards > 0 ? ' data-sp-extra="1"' : ''), false, _first.tId,
+          (_first.m && _first.m.id) || null, _first.m || null));
+        bloco.rounds.forEach(function(round) {
+          _novAntes = _spCards;
+          _guarda(_grupoHeadHtml(round.name, '', '#fbbf24', 'data-nov-round-head="1"' +
+            (_spCards > 0 ? ' data-sp-extra="1"' : ''), false, '', null, null));
+          round.items.forEach(function(it) {
+            _novAntes = _spCards;
+            _guarda(_novCard(it, ''));
+          });
+        });
       });
       _novHtml += _novVis;
       // ⚠️ Só guarda pra depois quando a seção NASCE recolhida. Aberta, tudo entra
