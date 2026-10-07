@@ -1271,26 +1271,34 @@ window._focusTournamentUpcomingWhenReady = function(tId, options) {
         window._bracketSelectCategoryTab(String(tId), gender, '__upcoming', '');
       }
     } catch (eTab) {}
-    setTimeout(function() {
-      var liveTarget = target && document.getElementById(target.id);
-      if (liveTarget && getComputedStyle(liveTarget).display !== 'none') {
-        try { if (typeof window._reflowChrome === 'function') window._reflowChrome(); } catch (eChrome) {}
-        try { liveTarget.scrollIntoView({ behavior: behavior, block: 'start', inline: 'nearest' }); }
-        catch (eScroll) { try { liveTarget.scrollIntoView(); } catch (eFallback) {} }
+    var targetId = target && target.id;
+    // Há callbacks legados que terminam a montagem do detalhe depois de a
+    // chave renderizar e podem sobrescrever uma primeira rolagem. Reafirmamos
+    // a âncora na mesma entrada curta, sempre com posição absoluta no viewport
+    // da página (não no scroll horizontal da rodada).
+    var placeOperationalAnchor = function() {
+      var liveTarget = targetId && document.getElementById(targetId);
+      var destination = liveTarget && getComputedStyle(liveTarget).display !== 'none' ? liveTarget : null;
+      var root = Array.prototype.find.call(document.querySelectorAll('[data-bracket-tabs-root]'), function(node) {
+        return node.getAttribute('data-tournament-id') === String(tId);
+      }) || null;
+      if (!destination) destination = root && root._bracketGeneralView;
+      if (!destination) {
+        attempts += 1;
+        if (attempts < maxAttempts) setTimeout(focus, 100);
         return;
       }
-      // Sem jogo pronto/parcial, a agenda pode exibir a mensagem operacional.
-      // Levar o usuário a ela preserva o contexto e impede cair no hero.
-      var root = document.querySelector('[data-bracket-tabs-root][data-tournament-id="' + String(tId).replace(/"/g, '\\"') + '"]');
-      var agenda = root && root._bracketGeneralView;
-      if (agenda) {
-        try { agenda.scrollIntoView({ behavior: behavior, block: 'start', inline: 'nearest' }); }
-        catch (eAgenda) { try { agenda.scrollIntoView(); } catch (eAgendaFallback) {} }
-        return;
-      }
-      attempts += 1;
-      if (attempts < maxAttempts) setTimeout(focus, 100);
-    }, 0);
+      try { if (typeof window._reflowChrome === 'function') window._reflowChrome(); } catch (eChrome) {}
+      var rect = destination.getBoundingClientRect();
+      var stickyBottom = root ? root.getBoundingClientRect().bottom : 0;
+      var currentTop = window.scrollY || window.pageYOffset || 0;
+      var top = Math.max(0, currentTop + rect.top - Math.max(12, stickyBottom + 12));
+      try { window.scrollTo({ top: top, behavior: behavior }); }
+      catch (eScroll) { try { window.scrollTo(0, top); } catch (eFallback) {} }
+    };
+    placeOperationalAnchor();
+    setTimeout(placeOperationalAnchor, 140);
+    setTimeout(placeOperationalAnchor, 520);
   };
   focus();
 };

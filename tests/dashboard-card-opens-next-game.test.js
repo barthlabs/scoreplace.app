@@ -55,6 +55,7 @@ function section(from, to) {
       root._bracketGeneralView.appendChild(document.getElementById('card-ready'));
     };
     Element.prototype.scrollIntoView = function () { scrolled.push(this.id || this.textContent); };
+    window.scrollTo = function () { scrolled.push('window'); };
 
     window._scrollToBracketSection('neon');
     await new Promise((resolve) => setTimeout(resolve, 100));
@@ -64,8 +65,8 @@ function section(from, to) {
   console.log('\n📋 Card da dashboard abre o próximo jogo, não a classificação');
   ok(result.selected.length === 1 && result.selected[0].join(',') === 'neon,fem,__upcoming,',
     'a entrada genérica ativa Próximos jogos no gênero do próximo jogo');
-  ok(result.scrolled[0] === 'card-ready',
-    'o foco prioriza o primeiro jogo pronto para chamar, não pendência invisível ou já concluída');
+  ok(result.scrolled[0] === 'window',
+    'o foco prioriza o primeiro jogo pronto e usa a rolagem vertical da página, não uma pendência invisível');
   ok(result.scrolled.indexOf('inline-bracket-container') === -1,
     'a classificação inline nunca é usada como fallback quando há agenda');
   const lateTarget = await page.evaluate(() => {
