@@ -1265,7 +1265,18 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame) {
         // [[regression_operational_tabs_scroll_to_next_scheduled_game]]
         var track = nextEntry.card.closest ? nextEntry.card.closest('.bracket-general-rounds-track') : null;
         var cardRect = nextEntry.card.getBoundingClientRect();
-        var safeTop = root.getBoundingClientRect().bottom + 12;
+        var rootRect = root.getBoundingClientRect();
+        var roundColumn = nextEntry.card.closest ? nextEntry.card.closest('.bracket-general-round-column, .bracket-round-column') : null;
+        var roundHeading = roundColumn && roundColumn.querySelector ? roundColumn.querySelector('.bracket-round-heading') : null;
+        // A régua de Rodada é promovida para um portal fixo somente DEPOIS que
+        // cruzamos a faixa das abas. Rolar o card até `root.bottom + 12` parecia
+        // certo no quadro anterior, mas deixava seu topo escondido quando esse
+        // portal nascia no quadro seguinte. Reserve agora a mesma altura que o
+        // portal vai ocupar: o card deve começar abaixo da régua, inteiro.
+        // [[regression_operational_focus_reserves_round_heading]]
+        var headingHeight = roundHeading ? Math.ceil(roundHeading.getBoundingClientRect().height || 0) : 0;
+        var portalReserve = headingHeight ? headingHeight + 30 : 68;
+        var safeTop = rootRect.bottom + Math.max(12, portalReserve);
         var currentTop = window.scrollY || window.pageYOffset || 0;
         var targetTop = Math.max(0, currentTop + cardRect.top - safeTop);
         var scrollRoot = document.scrollingElement || document.documentElement || document.body;

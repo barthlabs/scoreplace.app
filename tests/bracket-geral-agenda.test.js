@@ -181,8 +181,9 @@ function trecho(inicio, fim) {
     let focusedTop = -1;
     HTMLElement.prototype.getBoundingClientRect = function () {
       if (this.id === 'focus-root') return { top: 0, bottom: 50, left: 0, right: 600, width: 600, height: 50 };
-      if (this.id === 'focus-pending') return { top: 100, bottom: 200, left: 0, right: 300, width: 300, height: 100 };
+      if (this.id === 'focus-pending') return { top: 240, bottom: 340, left: 0, right: 300, width: 300, height: 100 };
       if (this.id === 'focus-ready') return { top: 300, bottom: 400, left: 0, right: 300, width: 300, height: 100 };
+      if (this.classList && this.classList.contains('bracket-round-heading')) return { top: 60, bottom: 100, left: 0, right: 300, width: 300, height: 40 };
       return originalRect.call(this);
     };
     window.scrollTo = function (opts) { focusedTop = typeof opts === 'object' ? Number(opts.top) : Number(arguments[1]); };
@@ -233,6 +234,8 @@ function trecho(inicio, fim) {
   ok(result.externalSource.cards.join(',') === 'real-scheduled', 'Geral usa o card publicado, não o cabeçalho vazio da chave inline');
   ok(result.nextFocus.track && result.nextFocus.moved && result.nextFocus.top >= 0,
     'ao abrir Geral, o foco usa o primeiro jogo sem placar mesmo se sua presença ainda aguarda confirmação');
+  ok(result.nextFocus.top === 120,
+    'o foco reserva a régua fixa da Rodada (50px de abas + 40px de título + 30px), sem cortar o topo do card');
   ok(result.externalSource.emptyHeadingHidden, 'Geral remove cabeçalho de rodada sem jogo da chave inline');
 
   await browser.close();
