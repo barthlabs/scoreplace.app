@@ -30,6 +30,23 @@ function eq(a, b, m) { ok(a === b, m + ' — esperado ' + JSON.stringify(b) + ',
 
 const sh = fs.readFileSync(path.join(RAIZ, 'scripts', 'deploy-hosting.sh'), 'utf8');
 
+// ── ⓪ · UMA publicação por vez, com retomada somente atestada ────────────────
+// A suíte completa custa minutos. Sem lock, duas abas/terminais repetem esse custo,
+// disputam o mesmo push e tornam impossível atribuir o resultado a uma execução. A
+// retomada não é atalho: ela só vale para o SHA e a versão já aprovados.
+console.log('\n▸ ⓪ execução única e retomada atestada');
+ok(/SP_DEPLOY_DIR=.*scoreplace-deploy/.test(sh) && /SP_LOCK="\$SP_DEPLOY_DIR\/lock"/.test(sh) && /mkdir "\$SP_LOCK"/.test(sh),
+  'a publicação toma um lock atômico antes de qualquer gate');
+ok(/kill -0 "\$SP_OWNER"/.test(sh) && /Já existe uma publicação em andamento/.test(sh),
+  'um processo vivo bloqueia a segunda publicação com estado e log visíveis');
+ok(/SP_PREFLIGHT_ATTEST=.*preflight-\$\{COMMIT\}\.ok/.test(sh) &&
+   /--resume-preflight/.test(sh) && /cat "\$SP_PREFLIGHT_ATTEST"\)" == "\$VERSAO"/.test(sh),
+  'a retomada exige atestado do mesmo commit e da mesma versão');
+ok(/_sp_state\(\)/.test(sh) && /trap _sp_finish EXIT/.test(sh),
+  'cada execução deixa estado terminal, inclusive em falha');
+ok(/--status/.test(sh) && /nenhuma publicação registrada nesta máquina/.test(sh),
+  'o estado da última execução pode ser consultado sem iniciar outro deploy');
+
 // ── ① a ORDEM no script ──────────────────────────────────────────────────────────────
 console.log('\n▸ ① preflight e integridade vêm antes do Hosting; backup vem depois');
 {

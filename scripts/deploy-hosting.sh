@@ -38,8 +38,10 @@
 #   6. firebase deploy --only hosting  (o predeploy roda testes + prerender + os checks)
 #   7. confere no ar: version.txt servido == version.txt publicado
 #
-# Uso:  scripts/deploy-hosting.sh            # publica
-#       scripts/deploy-hosting.sh --dry-run  # faz tudo menos o upload
+# Uso:  scripts/deploy-hosting.sh                    # publica
+#       scripts/deploy-hosting.sh --dry-run          # faz tudo menos o upload
+#       scripts/deploy-hosting.sh --resume-preflight # retoma o mesmo commit já aprovado
+#       scripts/deploy-hosting.sh --status           # mostra etapa e log da última execução
 set -euo pipefail
 
 RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -47,6 +49,40 @@ cd "$RAIZ"
 
 DRY=0
 [[ "${1:-}" == "--dry-run" ]] && DRY=1
+RESUME_PREFLIGHT=0
+[[ "${1:-}" == "--resume-preflight" ]] && RESUME_PREFLIGHT=1
+
+# Uma publicação é uma transação operacional, não uma coleção de comandos que pode
+# rodar em paralelo. Duas execuções concorrentes repetiam a suíte, disputavam o push e
+# deixavam a pessoa sem saber qual delas tinha publicado. `mkdir` é atômico inclusive no
+# macOS (onde `flock` não é padrão), e o PID evita confundir um lock vivo com lixo velho.
+SP_DEPLOY_DIR="${TMPDIR:-/tmp}/scoreplace-deploy"
+SP_LOCK="$SP_DEPLOY_DIR/lock"
+SP_STATE="$SP_DEPLOY_DIR/status"
+SP_LOG="$SP_DEPLOY_DIR/latest.log"
+if [[ "${1:-}" == "--status" ]]; then
+  [[ -f "$SP_STATE" ]] && cat "$SP_STATE" || echo 'nenhuma publicação registrada nesta máquina'
+  echo "log: $SP_LOG"
+  exit 0
+fi
+mkdir -p "$SP_DEPLOY_DIR"
+if ! mkdir "$SP_LOCK" 2>/dev/null; then
+  SP_OWNER="$(cat "$SP_LOCK/pid" 2>/dev/null || true)"
+  if [[ "$SP_OWNER" =~ ^[0-9]+$ ]] && kill -0 "$SP_OWNER" 2>/dev/null; then
+    echo "✗ Já existe uma publicação em andamento (PID $SP_OWNER)."
+    echo "  Estado: $SP_STATE"
+    echo "  Log:    $SP_LOG"
+    exit 1
+  fi
+  rm -rf "$SP_LOCK"
+  mkdir "$SP_LOCK"
+fi
+printf '%s\n' "$$" > "$SP_LOCK/pid"
+_sp_state() { printf '%s\t%s\t%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "${2:-}" > "$SP_STATE"; }
+_sp_state 'iniciando' "pid=$$ log=$SP_LOG"
+exec > >(tee -a "$SP_LOG") 2>&1
+_sp_finish() { local rc=$?; _sp_state "$([[ $rc -eq 0 ]] && echo concluído || echo falhou)" "rc=$rc"; rm -rf "$SP_LOCK"; exit "$rc"; }
+trap _sp_finish EXIT
 
 # ⛔⛔ A CONTA DE SERVIÇO TEM DE VENCER A SESSÃO DE USUÁRIO VELHA.
 #
@@ -184,7 +220,7 @@ COMMIT="$(git rev-parse HEAD)"
 # _"mais de 20 min a cada publicacao parece um funcionario publico burocrata"_. Antes de
 # cortar qualquer coisa é preciso saber ONDE o tempo está; sem isto, cortar é chutar.
 SP_T0=$(date +%s); SP_TF=$SP_T0
-fase() { local a=$(date +%s); printf '   ⏱️  %s: %ds (total %ds)\n' "$1" "$((a-SP_TF))" "$((a-SP_T0))"; SP_TF=$a; }
+fase() { local a=$(date +%s); _sp_state "$1" "commit=${COMMIT:0:8} versão=$VERSAO"; printf '   ⏱️  %s: %ds (total %ds)\n' "$1" "$((a-SP_TF))" "$((a-SP_T0))"; SP_TF=$a; }
 echo "▸ repo:   $RAIZ"
 echo "▸ commit: ${COMMIT:0:8}  ·  versão: $VERSAO"
 
@@ -428,10 +464,14 @@ echo "▸ preflight: código novo recebeu uma versão nova?"
 SP_RELEASE_PRODUCTION_VERSION="$VERSAO_NO_AR" node "$RAIZ/scripts/check-release-version-fresh.js" || exit 1
 
 fase "gates de versão"
+SP_PREFLIGHT_ATTEST="$SP_DEPLOY_DIR/preflight-${COMMIT}.ok"
+PRE_OK=1
+if [[ $RESUME_PREFLIGHT -eq 1 && -f "$SP_PREFLIGHT_ATTEST" ]] && [[ "$(cat "$SP_PREFLIGHT_ATTEST")" == "$VERSAO" ]]; then
+  echo "▸ preflight já aprovado para ${COMMIT:0:8} (v$VERSAO); retomando sem repetir a suíte."
+else
 echo "▸ preflight: montando a cópia e rodando os gates ANTES de tocar no main…"
 PRE="${TMPDIR:-/tmp}/sp-preflight-$$"
 montar_copia "$PRE" "$COMMIT"
-PRE_OK=1
 # Os MESMOS comandos do `hosting.predeploy` (firebase.json), na mesma ordem, na cópia.
 # `SP_EXIGE_CORRIDA_REAL=1` proíbe o desfecho "pulada" da corrida manual × automático:
 # aqui ela roda no Emulator ou o deploy para.
@@ -455,6 +495,8 @@ if [[ $PRE_OK -ne 1 ]]; then
   exit 1
 fi
 rm -rf "$PRE"
+printf '%s' "$VERSAO" > "$SP_PREFLIGHT_ATTEST"
+fi
 echo "  ✓ preflight VERDE — pode alinhar o main e publicar"
 # ⭐ O CARIMBO DO PREFLIGHT. O `hosting.predeploy` roda a MESMA lista logo em seguida,
 # sobre o MESMO commit — eram duas rodadas da suíte por publicação (~5min20 cada, com o
