@@ -1230,6 +1230,20 @@ window._focusTournamentUpcomingWhenReady = function(tId, options) {
   var attempts = 0;
   var maxAttempts = 60;
   var behavior = options && options.behavior ? options.behavior : 'auto';
+  // A agenda é remontada em lotes depois de a rota pintar (presença, os dois
+  // últimos resultados e a grade por rodada). Uma única rolagem pode acertar a
+  // posição antiga e, quando o lote termina, deixar a classificação na tela.
+  // Este token pertence apenas à ENTRADA pelo atalho: ele reafirma a âncora até
+  // a agenda assentar e é cancelado imediatamente por uma interação do usuário.
+  var entryToken = String(tId) + ':' + Date.now() + ':' + Math.random();
+  window._tournamentUpcomingEntryToken = entryToken;
+  var userInterrupted = false;
+  var cancelEntryFocus = function() { userInterrupted = true; };
+  try {
+    window.addEventListener('wheel', cancelEntryFocus, { passive: true, once: true });
+    window.addEventListener('touchstart', cancelEntryFocus, { passive: true, once: true });
+    window.addEventListener('pointerdown', cancelEntryFocus, { passive: true, once: true });
+  } catch (eInput) {}
   var compareScheduled = function(a, b) {
     var atA = Number(a.getAttribute('data-bracket-scheduled-at'));
     var atB = Number(b.getAttribute('data-bracket-scheduled-at'));
@@ -1241,7 +1255,7 @@ window._focusTournamentUpcomingWhenReady = function(tId, options) {
     return Number(a.getAttribute('data-match-num')) - Number(b.getAttribute('data-match-num'));
   };
   var focus = function() {
-    if (window._travaRolagemDaChave) return;
+    if (window._travaRolagemDaChave || userInterrupted || window._tournamentUpcomingEntryToken !== entryToken) return;
     var pageScope = document.getElementById('view-container') || document;
     var seen = {};
     var pending = Array.prototype.slice.call(pageScope.querySelectorAll('[id^="card-"][data-bracket-scheduled-at]')).filter(function(card) {
@@ -1277,6 +1291,7 @@ window._focusTournamentUpcomingWhenReady = function(tId, options) {
     // a âncora na mesma entrada curta, sempre com posição absoluta no viewport
     // da página (não no scroll horizontal da rodada).
     var placeOperationalAnchor = function() {
+      if (window._travaRolagemDaChave || userInterrupted || window._tournamentUpcomingEntryToken !== entryToken) return;
       var liveTarget = targetId && document.getElementById(targetId);
       var destination = liveTarget && getComputedStyle(liveTarget).display !== 'none' ? liveTarget : null;
       var root = Array.prototype.find.call(document.querySelectorAll('[data-bracket-tabs-root]'), function(node) {
@@ -1296,9 +1311,17 @@ window._focusTournamentUpcomingWhenReady = function(tId, options) {
       try { window.scrollTo({ top: top, behavior: behavior }); }
       catch (eScroll) { try { window.scrollTo(0, top); } catch (eFallback) {} }
     };
+    // O snapshot remoto e a montagem tardia podem mover a agenda por alguns
+    // quadros. Não encerrar em 520ms: essa era exatamente a janela em que a
+    // tela acabava parando na classificação. A âncora é restrita à entrada e
+    // cede assim que a pessoa toca/rola a página.
     placeOperationalAnchor();
     setTimeout(placeOperationalAnchor, 140);
     setTimeout(placeOperationalAnchor, 520);
+    setTimeout(placeOperationalAnchor, 1000);
+    setTimeout(placeOperationalAnchor, 1600);
+    setTimeout(placeOperationalAnchor, 2400);
+    setTimeout(placeOperationalAnchor, 3400);
   };
   focus();
 };
