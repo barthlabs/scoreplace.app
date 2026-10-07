@@ -2024,6 +2024,37 @@ function renderDashboard(container) {
         matchSources = matchSources.concat(window.AppStore._jogosSoDoEspelho(t, _jaNaEstrutura));
       }
 
+      // O nome de uma fase eliminatória não é o número cru salvo no jogo. Ele depende
+      // da cadeia inteira (8 jogos = Oitavas, 4 = Quartas, 2 = Semifinal, 1 = Final).
+      // A chave já calcula isso em `_getUnifiedRounds`; a dashboard precisa consumir
+      // exatamente a mesma fonte para não chamar a R4 da Confra de "Rodada 4" enquanto
+      // o detalhe do torneio a chama, corretamente, de "Oitavas de Final".
+      // Não entra o espelho nesta conta: enquanto ele ainda não foi hidratado na
+      // estrutura do torneio, usá-lo aqui faria a dashboard contar uma chave diferente
+      // da que o detalhe renderiza. Nesse intervalo o card usa seu fallback; nunca um
+      // rótulo canônico divergente.
+      var _elimLabelByMatchId = {};
+      try {
+        if (typeof window._getUnifiedRounds === 'function') {
+          var _roundModel = window._getUnifiedRounds(t);
+          ((_roundModel && _roundModel.columns) || []).forEach(function (_col) {
+            // A mesma porta também devolve colunas classificatórias (Liga/Suíço).
+            // Elas mantêm os próprios rótulos de rodada; só uma coluna efetivamente
+            // eliminatória pode substituir a apresentação original do jogo.
+            if (!_col || !(_col.phase === 'elim' || _col.phase === 'playin' ||
+              _col.phase === 'repechage' || _col.phase === 'grandfinal') ||
+              !_col.label || !Array.isArray(_col.matches)) return;
+            _col.matches.forEach(function (_matchOfColumn) {
+              if (_matchOfColumn && _matchOfColumn.id != null) {
+                _elimLabelByMatchId[String(_matchOfColumn.id)] = _col.label;
+              }
+            });
+          });
+        }
+      } catch (_roundLabelError) {
+        // O card continua com o fallback legado se a estrutura estiver incompleta.
+      }
+
       matchSources.forEach(function(m) {
         if (!m) return;
         // v1.8.67: o MESMO jogo nunca entra duas vezes (ver `_seenMatch`). O id é a
@@ -2063,7 +2094,9 @@ function renderDashboard(container) {
         // carregam no label "Grupo A • Jogador …" do sorteio anterior; nunca
         // exponha esse metadado como fase do torneio. A rodada publicada é a
         // fonte canônica do título no feed de novidades.
-        if (_isConcentratedTeamSchedule && m.round != null) _phaseLabel = 'Rodada ' + window._matchRoundDisplayNum(t, m);
+        var _canonicalElimLabel = m.id != null ? _elimLabelByMatchId[String(m.id)] : '';
+        if (_canonicalElimLabel) _phaseLabel = _canonicalElimLabel;
+        else if (_isConcentratedTeamSchedule && m.round != null) _phaseLabel = 'Rodada ' + window._matchRoundDisplayNum(t, m);
         else if (m.label) _phaseLabel = String(m.label);
         else if (m.roundLabel) _phaseLabel = String(m.roundLabel);
         else if (m.round != null) _phaseLabel = 'Rodada ' + window._matchRoundDisplayNum(t, m); // 1-based, nunca R0

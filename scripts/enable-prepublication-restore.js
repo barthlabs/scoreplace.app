@@ -8,6 +8,9 @@
  *   source scripts/firebase-credencial-persistente.sh
  *   sp_preparar_credencial_firebase "$PWD" scoreplace-app
  *   node scripts/enable-prepublication-restore.js <tournamentId> "<nome exato>"
+ *
+ * Requer `functions/node_modules/firebase-admin`; em checkout novo, rode
+ * `cd functions && npm ci` antes. O publicador oficial já garante isso.
  */
 'use strict';
 
@@ -20,8 +23,19 @@ if (!/^[A-Za-z0-9_-]{12,}$/.test(String(tournamentId || '')) || !expectedName) {
   process.exit(1);
 }
 
-const admin = require(path.join(__dirname, '..', 'functions', 'node_modules', 'firebase-admin'));
-if (!admin.apps.length) admin.initializeApp({ credential: admin.credential.applicationDefault() });
+let admin;
+try {
+  admin = require(path.join(__dirname, '..', 'functions', 'node_modules', 'firebase-admin'));
+} catch (error) {
+  console.error('Dependência firebase-admin indisponível. Rode `cd functions && npm ci` e tente novamente.');
+  process.exit(1);
+}
+try {
+  if (!admin.apps.length) admin.initializeApp({ credential: admin.credential.applicationDefault() });
+} catch (error) {
+  console.error('Credencial Firebase indisponível. Execute `source scripts/firebase-credencial-persistente.sh` e `sp_preparar_credencial_firebase "$PWD" scoreplace-app` antes de tentar.');
+  process.exit(1);
+}
 
 (async function () {
   const ref = admin.firestore().collection('tournaments').doc(tournamentId);

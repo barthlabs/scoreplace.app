@@ -38,14 +38,15 @@ const porta = W._getUnifiedRounds;
 ok(typeof porta === 'function', 'a porta que monta as colunas da chave existe (achei ' + typeof porta + ')');
 
 /* Monta jogos falsos com o número de jogos que eu quiser por rodada, na chave principal. */
-function jogos(porRodada) {
+function jogos(porRodada, numerosDasRodadas) {
   const out = [];
   porRodada.forEach(function (n, i) {
     for (let k = 0; k < n; k++) {
       /* ⛔ SEM `bracket`: é assim que a eliminatória simples chega ao construtor. Pôr `bracket:'main'`
        * joga o jogo no caminho da DUPLA eliminatória, que rotula "Rodada N" e não usa os nomes —
        * eu escrevi assim na primeira versão e o teste media o caminho errado. */
-      out.push({ id: 'R' + (i + 1) + '-P' + (k + 1), round: i + 1,
+      var numero = numerosDasRodadas ? numerosDasRodadas[i] : i + 1;
+      out.push({ id: 'R' + numero + '-P' + (k + 1), round: numero,
         p1: 'A', p2: 'B', winner: null });
     }
   });
@@ -68,6 +69,18 @@ const r4 = nomes([2, 1]);
 ok(r4.join(' | ') === 'Semifinais | Final', '① chave de 4: ' + r4.join(' | '));
 const r2 = nomes([1]);
 ok(r2.join(' | ') === 'Final', '① chave de 2: ' + r2.join(' | '));
+
+/* A Confra começou a eliminatória na R4. O nome é dado pela ESTRUTURA, nunca
+ * pelo ordinal cru: R4=Oitavas, R5=Quartas, R6=Semifinal, R7=Final. */
+const confraMatches = jogos([8, 4, 2, 1], [4, 5, 6, 7]);
+const confraCols = porta({ id: 'confra', format: 'Liga', matches: confraMatches }).columns || [];
+const confraPorJogo = {};
+confraCols.forEach(function (col) {
+  (col.matches || []).forEach(function (m) { confraPorJogo[m.id] = col.label; });
+});
+ok(confraPorJogo['R4-P1'] === 'Oitavas de Final' && confraPorJogo['R5-P1'] === 'Quartas de Final' &&
+  confraPorJogo['R6-P1'] === 'Semifinais' && confraPorJogo['R7-P1'] === 'Final',
+  '① R4-R7 da Confra recebem os nomes eliminatórios canônicos: ' + JSON.stringify(confraPorJogo));
 
 /* ── ② A CONTAGEM ERRADA PERDE O NOME, mesmo na distância certa ─────────────
  * ⛔ É o defeito que este arquivo existe para travar: 2 jogos na antepenúltima NÃO é "Quartas". */
@@ -112,6 +125,10 @@ const src = fs.readFileSync(path.join(__dirname, '..', 'js/views/bracket-model.j
 ok(/_NOMES_POR_JOGOS/.test(src), '⑥ a tabela do conceito existe, nomeada');
 ok(/1 jogo[\s\S]{0,400}2 jogos[\s\S]{0,400}4 jogos[\s\S]{0,400}8 jogos/.test(src),
   '⑥ e os quatro nomes estão explicados com o número de jogos de cada um');
+const dashboardSrc = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'dashboard.js'), 'utf8');
+ok(/_getUnifiedRounds\(t\)/.test(dashboardSrc) && /_elimLabelByMatchId/.test(dashboardSrc) &&
+  !/Object\.assign\(\{\}, t, \{ matches: matchSources \}\)/.test(dashboardSrc),
+  '⑥ dashboard e chave consomem o MESMO torneio canônico; o espelho não altera a fase');
 
 console.log('\n' + (fail ? '✗ ' + fail + ' falha(s), ' : '✅ ') + pass + ' verificações');
 process.exit(fail ? 1 : 0);

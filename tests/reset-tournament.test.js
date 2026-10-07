@@ -5,6 +5,8 @@
  * Causa: t.phaseRounds (rodadas da fase 2) NÃO era limpo → _collectAllMatches ainda via
  * os jogos → torneio "voltava" pra fase 2. Também faltavam presença e W.O.
  */
+const fs = require('fs');
+const path = require('path');
 const { window: W, load } = require('./headless.js');
 
 W.AppStore = W.AppStore || {};
@@ -92,6 +94,22 @@ W._countCompetitors = W._countCompetitors || function (t) { return { people: (t.
 
   // ── bracketResolution da fase limpo (re-avanço reabre o painel) ──
   ok(!t.phases[1].bracketResolution, 'bracketResolution da fase 2 limpo (painel reabre no re-avanço)');
+})();
+
+// A opção administrativa é intencionalmente opt-in por torneio. Este teste amarra
+// UI, transporte e callable para a revisão não aceitar um campo sem efeito real.
+(function () {
+  var root = path.join(__dirname, '..');
+  var bracket = fs.readFileSync(path.join(root, 'js', 'views', 'bracket.js'), 'utf8');
+  var draw = fs.readFileSync(path.join(root, 'js', 'views', 'tournaments-draw.js'), 'utf8');
+  var db = fs.readFileSync(path.join(root, 'js', 'firebase-db.js'), 'utf8');
+  var server = fs.readFileSync(path.join(root, 'functions-autodraw', 'index.js'), 'utf8');
+  ok(/t\.allowPrePublicationRestore === true/.test(bracket) && /_restoreTournamentPrePublication/.test(bracket),
+    'a UI oferece restauração somente quando a permissão explícita do torneio é true');
+  ok(/_callFn\('resetTournamentToEnrollment'/.test(draw),
+    'a UI despacha a restauração pela callable canônica');
+  ok(/async _callFn\(name, payload, msgs\)/.test(db) && /exports\.resetTournamentToEnrollment\s*=\s*onCall/.test(server),
+    'o transporte canônico e a callable de restauração existem');
 })();
 
 // ── v1.2.45: RESETAR desfaz a dupla SORTEADA mesmo com entrada só-uid ────────
