@@ -94,3 +94,30 @@ inativo autorizado. Antes disso, definir o contrato de fusão de contas: qual
 prova comprova controle dos dois lados, quem aprova exceções e como a operação
 fica pendente, auditável e reversível. Nenhum sinal de nome, foto, telefone ou
 semelhança pode executar fusão ou bloquear definitivamente uma pessoa.
+
+## Censo de formatos — 07/10/2026
+
+O censo de produção `node scripts/censo-formatos-legados.js --json` executado
+em 07/10/2026 fez somente leituras na coleção de torneios e retornou:
+
+```json
+{
+  "total": 81,
+  "divididos": 81,
+  "inteiros": 0,
+  "categoriasCanonicas": 8,
+  "categoriasPorEixos": 0,
+  "categoriasSemDados": 73,
+  "rankingLegado": 3,
+  "ligaAtual": 13,
+  "semMarcadorDeFonte": 0
+}
+```
+
+Consequências verificadas: não existe coorte separada de torneio inteiro para
+suportar; todos os torneios já usam a divisão de partes. Porém, 73 torneios não
+expõem definição tipada de categorias no documento raiz. Eles não devem receber
+categoria inferida nem ser regravados em massa. A migração de inscrições começa
+por um torneio inativo aprovado, a partir de prévia com fingerprint, e só então
+avança por coortes. Os três registros `ranking*` continuam exigindo adaptador
+de leitura até uma conversão explícita e auditável.

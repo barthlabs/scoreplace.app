@@ -22,6 +22,7 @@ censo antes/depois e aprovação específica.
 | Sorteio | Rei/Rainha já é tratado em diversos pontos como modo de sorteio; ainda há caminhos e testes dependentes de `Liga`. | Deve migrar para uma modalidade explícita dentro de uma fase classificatória, sem apagar o adaptador de leitura. |
 | Chaves | `tournaments-draw-prep.js` oferece uma escolha; `phases-engine.js` documenta e executa a decisão ignorando `bracketResolution`; `tournaments-draw.js` remove essa decisão no reset. | A escolha atual não é uma política canônica aplicada pelo motor. BYE e sobra única não devem ser conectados a ela ainda. |
 | Inscrição | `functions/enroll-core.js` deduplica contas por `uid` e vagas manuais por `manualParticipantId`; sinais de conta suspeita não decidem inscrição. | Ainda falta o registro canônico por categoria, mas nome/e-mail/telefone não são chaves de unicidade. |
+| Nome de exibição | `initializeUserProfile` e `displayNameClaims` ainda recusam um nome já usado. | Isto contraria o domínio: homônimos são permitidos; nome é apresentação e, no máximo, sinal privado de revisão — nunca identidade ou trava de cadastro. |
 | Dados de perfil | Há cópias de nome, e-mail e foto em participantes e pares; a análise de inscritos resolve perfis somente por UID. | A regra de perfil único ainda não está completa; precisa de migração por fronteira, não de nova varredura textual isolada. |
 | Elenco | O produto mantém lista embutida, espera embutida, espelho `participants` e, em torneios divididos, `inscritos`. | A duplicação é uma causa raiz de regressões; o cadastro deve ter uma fonte canônica única. |
 | Telemetria de SMS | O cliente anteriormente criava `users/{uid}/phoneVerifyAttempts` e duplicava telefone no rastro. Em 21/09/2026, `recordPhoneVerificationAttempt` passou a validar o intent, fixar o UID do token e gravar somente desfecho operacional. | A subcoleção está fechada a escrita direta nas Rules; telefone e mensagem crua não entram mais nessa projeção. |
@@ -79,6 +80,9 @@ rótulos históricos em massa.
 - Uma entrada de inscrição autenticada possui chave determinística
   `uid + tournamentId + categoryId`. Essa é a única regra de unicidade para
   impedir a mesma conta de estar duas vezes na mesma categoria.
+- `displayName` é somente apresentação. Duas contas diferentes podem ter o
+  mesmo nome; isso pode abrir sinal privado de possível duplicidade, mas nunca
+  recusar cadastro, alterar uma conta ou decidir uma inscrição.
 
 O bloqueio por conta não resolve duas contas da mesma pessoa. Para isso, a
 solução correta é separada:
@@ -226,8 +230,10 @@ de preparação são configurações de `classification`; playoff é uma fase
 O modelo de grupos seguido de mata-mata é, portanto, uma composição normal de
 duas fases — não um formato paralelo. Na primeira, a configuração
 `classification.structure: 'groups'` define quantidade ou tamanho dos grupos,
-distribuição de cabeças de chave, todos-contra-todos dentro de cada grupo,
-pontuação e desempates. A fase eliminatória declara sua fonte por colocação:
+distribuição de cabeças de chave, política de confrontos, pontuação e
+desempates. A política de confrontos pode ser todos-contra-todos ou uma
+quantidade configurada de rodadas/emparelhamentos por grupo; grupo maior não
+obriga todos os integrantes a se enfrentarem. A fase eliminatória declara sua fonte por colocação:
 por exemplo, primeiro do Grupo A contra segundo do Grupo B. A fonte pode
 classificar mais posições por grupo e, se necessário, enviar as posições
 restantes à política de chave escolhida para completar a eliminatória. O
@@ -246,13 +252,16 @@ A forma alvo é:
   schedule: { mode: 'manual' | 'automatic', firstAt, intervalDays, rounds },
   lateEnrollment: { mode: 'closed' | 'waitlist' | 'expand_before_play' },
   draw: {
-    modality: 'standard' | 'monarch' | 'super8',
+    modality: 'standard' | 'monarch' | 'group_schedule',
     teamFormation: 'none' | 'organizer' | 'participant' | 'random',
     pairPersistence: 'phase' | 'round',
     pairing: 'random' | 'performance' | 'balance',
     antiRepeat: { partners: true, opponents: true, sitOuts: true }
   },
-  classification: { structure: 'round_robin' | 'groups' | 'swiss', ... },
+  classification: {
+    structure: 'round_robin' | 'groups' | 'swiss',
+    groupSchedule: { mode: 'round_robin' | 'configured_rounds', rounds: number }
+  },
   elimination: { seeding: 'performance' | 'balance', bracketPolicy: ... }
 }
 ```
@@ -421,11 +430,17 @@ autoridade de elegibilidade.
   não existir.
 - Aplicar a regra de regeneração apenas antes do primeiro fato de jogo.
 
-### 6. Super 8
+### 6. Agenda de grupos configurável
 
-- Implementar somente após definir matematicamente a modalidade, seus pontos,
-  desempates, ausência/W.O., inscritos tardios e ponte para playoff.
-- Reusar a mesma representação de equipe, rodada, partida e classificação.
+- Implementar grupos como modalidade classificatória comum: tamanho do grupo e
+  quantidade de rodadas/emparelhamentos são escolhas explícitas do organizador.
+  Não há fase nem formato paralelo chamado Super 8.
+- “Super 8” é apenas um preset visual para grupo de oito duplas com agenda
+  todos-contra-todos (sete rodadas, 28 partidas). O mesmo grupo pode ter menos
+  rodadas para um torneio mais curto.
+- Reusar a mesma representação de equipe, rodada, partida, pontuação,
+  desempate, ausência/W.O. e ponte para playoff. O planejador deve provar que
+  não repete confronto antes de esgotar combinações disponíveis.
 
 ### 7. Retirada do legado
 
@@ -503,11 +518,7 @@ aceitá-la por payload numa nova Function apenas deslocaria a vulnerabilidade.
 
 ## Decisões pendentes antes de programar
 
-1. **Super 8:** oito duplas em todos-contra-todos significam 28 partidas em
-   sete rodadas (quatro partidas por rodada), não sete partidas no total. A
-   implementação pressupõe sete rodadas; se a intenção é outra mecânica, a
-   regra precisa ser descrita antes de codificar.
-2. **Entrada tardia após resultado:** este plano propõe espera/substituição,
+1. **Entrada tardia após resultado:** este plano propõe espera/substituição,
    e redesenho total somente antes do primeiro fato de jogo ou após reset
    confirmado. É a única interpretação que não reescreve história; precisa ser
    a regra de produto definitiva.
