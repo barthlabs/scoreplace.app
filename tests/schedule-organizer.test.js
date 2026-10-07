@@ -122,6 +122,37 @@ const gradeSeisQuadras = W._schGradeEstimada(seisQuadras);
 const primeiroHorario = Math.min.apply(null, gradeSeisQuadras.slots.map(function (s) { return s.ms; }));
 ok(gradeSeisQuadras.slots.filter(function (s) { return s.ms === primeiroHorario; }).length === 6,
   'jogos independentes da categoria seguinte ocupam as quadras livres na mesma onda');
+
+// REGRESSÃO NEON: 48 jogos femininos, seis quadras e 35 minutos por jogo ocupam
+// oito ondas contínuas. Não existe "respiro" automático entre rodadas: se há
+// jogo elegível, toda quadra livre precisa ser preenchida na onda seguinte.
+const neonSemLacunas = {
+  startDate:'2026-10-22T18:00', endDate:'2026-10-22T23:59', courtCount:6,
+  gameDuration:25, callTime:5, warmupTime:5,
+  scheduleWindow:{ version:1, days:[{ day:'2026-10-22', startTime:'18:00', endTime:'23:59', categoryFlow:'rounds' }] },
+  categorySchedule:{ version:1, slots:[
+    { category:'Fem Extreme', day:'2026-10-22', order:1 },
+    { category:'Fem Power', day:'2026-10-22', order:2 },
+    { category:'Fem Light', day:'2026-10-22', order:3 }
+  ] },
+  matches:[]
+};
+['Fem Extreme', 'Fem Power', 'Fem Light'].forEach(function (category) {
+  for (var round = 1; round <= 4; round++) {
+    for (var game = 1; game <= 4; game++) {
+      neonSemLacunas.matches.push({
+        id:category + '-' + round + '-' + game, category:category, round:round,
+        p1:category + '-A' + game, p2:category + '-B' + game
+      });
+    }
+  }
+});
+const gradeNeonSemLacunas = W._schGradeEstimada(neonSemLacunas);
+const ondasNeon = Array.from(new Set(gradeNeonSemLacunas.slots.map(function (slot) { return slot.ms; }))).sort(function (a, b) { return a - b; });
+const inicioNeon = new Date('2026-10-22T18:00:00-03:00').getTime();
+ok(ondasNeon.length === 8 && ondasNeon.every(function (ms, index) { return ms === inicioNeon + index * 35 * 60000; }) &&
+  ondasNeon.every(function (ms) { return gradeNeonSemLacunas.slots.filter(function (slot) { return slot.ms === ms; }).length === 6; }),
+  'Neon ocupa seis quadras em oito ondas contínuas, de 18:00 a 22:05, sem lacuna entre rodadas');
 const splitCategoryDays = Object.assign({}, categoryDays, {
   categorySchedule:{ version:1, slots:[
     { category:'Fem Light', day:'2026-10-22', order:1 },

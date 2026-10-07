@@ -943,10 +943,11 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
             if (outro === slot || outro.dia !== slot.dia || outro._categoria !== slot._categoria) continue;
             if (anterior(outro, slot) && outro.ms >= destino) return false;
           }
-          /* O mesmo atleta/dupla não joga em duas quadras na mesma onda. */
+          /* O mesmo atleta/dupla não pode ocupar duas partidas sobrepostas. */
           for (var j = 0; j < slots.length; j++) {
             var ocupante = slots[j];
-            if (ocupante === slot || ocupante.dia !== slot.dia || ocupante.ms !== destino) continue;
+            if (ocupante === slot || ocupante.dia !== slot.dia ||
+                !(destino < ocupante.ms + ocupante._duracao && ocupante.ms < destino + slot._duracao)) continue;
             if (slot._uids.some(function (uid) { return ocupante._uids.indexOf(uid) !== -1; })) return false;
           }
           /* Preencher uma quadra vazia não pode fabricar uma sequência de dois
@@ -961,17 +962,44 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
           }
           return true;
         }
-        slots.forEach(function (slot) {
-          var horarios = {};
-          slots.forEach(function (s) { if (s.dia === slot.dia && s.ms < slot.ms) horarios[s.ms] = true; });
-          Object.keys(horarios).map(Number).sort(function (a, b) { return a - b; }).some(function (destino) {
-            var ocupados = slots.filter(function (s) { return s !== slot && s.dia === slot.dia && s.ms === destino; }).length;
-            if (ocupados >= quadras || !podeAdiantar(slot, destino)) return false;
-            slot.ms = destino;
-            slot.iso = new Date(destino).toISOString();
-            return true;
+        /*
+         * A passagem precisa chegar a um ponto fixo. Um único forEach deixa
+         * lacunas artificiais quando uma R1 posterior ocupa uma vaga só DEPOIS
+         * de a R2 já ter sido examinada: a R2 não é reavaliada e uma onda inteira
+         * fica vazia. Isso apareceu no Neon como 19:10, 20:55 e 22:40 livres,
+         * embora houvesse jogos independentes para as seis quadras.
+         *
+         * Cada movimento é estritamente para trás e só para um horário já
+         * existente; portanto o processo termina. Não é "tempo de respiro":
+         * havendo jogo elegível, a próxima onda deve ocupar as quadras livres.
+         */
+        var mudouCompactacao = true, passagensCompactacao = 0;
+        while (mudouCompactacao && passagensCompactacao++ < slots.length) {
+          mudouCompactacao = false;
+          slots.forEach(function (slot) {
+            var horarios = {}, inicioDoDia = jan.dias[slot.dia] && jan.dias[slot.dia].iniMs;
+            if (inicioDoDia != null && inicioDoDia < slot.ms) horarios[inicioDoDia] = true;
+            slots.forEach(function (s) {
+              if (s.dia !== slot.dia || s === slot) return;
+              // O próximo horário possível é o fim de uma onda já ocupada, não
+              // apenas o começo de outra. Sem isto, 19:10 não existe como alvo
+              // depois que 18:35 foi preenchido, e a quadra fica vazia sem razão.
+              var fim = s.ms + s._duracao;
+              if (fim < slot.ms) horarios[fim] = true;
+            });
+            Object.keys(horarios).map(Number).sort(function (a, b) { return a - b; }).some(function (destino) {
+              var ocupados = slots.filter(function (s) {
+                return s !== slot && s.dia === slot.dia &&
+                  destino < s.ms + s._duracao && s.ms < destino + slot._duracao;
+              }).length;
+              if (ocupados >= quadras || !podeAdiantar(slot, destino)) return false;
+              slot.ms = destino;
+              slot.iso = new Date(destino).toISOString();
+              mudouCompactacao = true;
+              return true;
+            });
           });
-        });
+        }
         slots.forEach(function (s) { delete s._categoria; delete s._fase; delete s._rodada; delete s._uids; delete s._duracao; });
       }
       _compactarSlotsNaMesmaJanela();

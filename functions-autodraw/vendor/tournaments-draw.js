@@ -233,6 +233,34 @@ window._resetTournamentToEnrollment = function (tId) {
   );
 };
 
+// Restauração explicitamente habilitada pela organização para repetir um teste
+// de sorteio. Não é um "novo torneio": volta exatamente ao estado configurado
+// antes de publicar a chave. `_clearTournamentDraw` preserva categorias, janelas,
+// inscritos e duplas de origem manual; remove somente jogos, horários e resultados.
+window._restoreTournamentPrePublication = function (tId) {
+  var t = window.AppStore.tournaments.find(function (x) { return String(x.id) === String(tId); });
+  if (!t || t.allowPrePublicationRestore !== true || typeof showAlertDialog !== 'function') return;
+  var n = (typeof window._countCompetitors === 'function') ? window._countCompetitors(t).people : (t.participants || []).length;
+  showAlertDialog('↩️ Restaurar pré-publicação?',
+    'Isto apaga a chave publicada, os <strong>placares</strong>, resultados e horários do sorteio atual. ' +
+    'Preserva as configurações já ajustadas, os <strong>' + n + '</strong> inscritos e as <strong>duplas formadas manualmente</strong>. Não dá pra desfazer.',
+    function () {
+      if (!window.FirestoreDB || typeof window.FirestoreDB._callFn !== 'function') return;
+      window.FirestoreDB._callFn('resetTournamentToEnrollment', { tournamentId: String(tId) })
+        .then(function () {
+          if (typeof showNotification === 'function') showNotification('↩️ Pré-publicação restaurada', 'A grade e as duplas formadas foram preservadas; a chave e os placares foram apagados.', 'success');
+          var c = document.getElementById('view-container');
+          if (c && typeof window.renderTournaments === 'function') window.renderTournaments(c, String(tId));
+        })
+        .catch(function (err) {
+          window._error && window._error('[restorePrePublication] server error:', err);
+          if (typeof showNotification === 'function') showNotification('Erro ao restaurar', (err && err.message) || 'Tente novamente.', 'error');
+        });
+    },
+    { type:'danger', confirmText:'Sim, restaurar', cancelText:'Cancelar' }
+  );
+};
+
 // v2.7.62: DEV — simula os resultados da FASE ATUAL (só SP_TEST_IDENTITIES via
 // _isTestIdentity). Preenche vencedor + placar E os horários (startedAt/resultAt)
 // IGUAL ao lançamento real, com resultAt escalonado terminando AGORA — assim o

@@ -127,5 +127,24 @@ W._countCompetitors = W._countCompetitors || function (t) { return { people: (t.
   ok(!t.teamOrigins || t.teamOrigins['Ana / Bia'] === undefined, 'teamOrigins da dupla sorteada é limpo');
 })();
 
+// Restaurar pré-publicação apaga a chave, mas uma dupla formada manualmente é
+// inscrição, não artefato do sorteio. Ela precisa sobreviver ao novo teste.
+(function () {
+  var duplaManual = { p1Uid:'uC', p2Uid:'uD', p1Seq:4, p2Seq:5, category:'Fem Light' };
+  var t = {
+    id:'T3', status:'active', participants:[duplaManual],
+    teamOrigins:{ 'Caio / Duda':'manual' },
+    matches:[{ id:'m', p1:'Caio / Duda', p2:'Outro', winner:'Caio / Duda' }],
+    rounds:[{ round:1, matches:[{ id:'m', winner:'Caio / Duda' }] }], groups:[], phases:[{}],
+    categorySchedule:{ version:1, confirmed:true, slots:[{ category:'Fem Light', day:'2026-10-22', order:1 }] },
+    scheduleWindow:{ version:1, days:[{ day:'2026-10-22', startTime:'18:00', endTime:'23:59' }] }
+  };
+  W._clearTournamentDraw(t);
+  ok(t.participants.length === 1 && t.participants[0].p1Uid === 'uC' && t.participants[0].p2Uid === 'uD',
+    'restaurar pré-publicação preserva a dupla formada manualmente');
+  ok(t.categorySchedule && t.categorySchedule.confirmed === true && t.scheduleWindow && t.scheduleWindow.days.length === 1,
+    'restaurar pré-publicação preserva os ajustes confirmados antes do sorteio');
+})();
+
 console.log('\n' + (fail === 0 ? '✅' : '❌') + ' reset-tournament: ' + pass + ' asserts ok, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);
