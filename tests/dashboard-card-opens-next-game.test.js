@@ -31,7 +31,7 @@ function section(from, to) {
     const card = (id, at, court, resultAt, num, upcoming, presence) =>
       '<article id="card-' + id + '" data-bracket-scheduled-at="' + at + '" data-bracket-court="' + court +
       '" data-bracket-result-at="' + (resultAt || '') + '" data-match-num="' + num +
-      '" data-bracket-tab-gender="fem" data-bracket-upcoming="' + (upcoming ? '1' : '0') +
+      '" data-bracket-tab-gender="fem" data-bracket-tab-category="__upcoming" data-bracket-upcoming="' + (upcoming ? '1' : '0') +
       '" data-bracket-presence="' + (presence || 'none') + '">' + id + '</article>';
     document.body.innerHTML = '<main id="view-container">' +
       '<nav data-bracket-tabs-root="1" data-tournament-id="neon"></nav>' +
@@ -77,6 +77,10 @@ function section(from, to) {
     'a entrada não reescreve a rolagem da agenda com o cálculo vertical legado');
   ok(result.scrolled.indexOf('inline-bracket-container') === -1,
     'a classificação inline nunca é usada como fallback quando há agenda');
+  ok(tournaments.includes('var operationalCard = !!(root && root._bracketGeneralView &&') &&
+    tournaments.includes("root._bracketGeneralView.contains(destination)") &&
+    tournaments.includes("destination.hasAttribute('data-bracket-tab-category')"),
+    'a geometria operacional só recebe cards realmente montados na agenda; a própria seção continua no fallback correto');
   const lateTarget = await page.evaluate(() => {
     document.body.innerHTML = '<section id="inline-bracket-container">Classificação geral dos times</section>';
     window.AppStore = { tournaments: [{ id: 'neon' }] };

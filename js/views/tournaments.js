@@ -1323,8 +1323,10 @@ window._focusTournamentUpcomingWhenReady = function(tId, options) {
       // A rodada é promovida para uma camada fixa após cruzar as abas. Esta
       // entrada antes repetia uma conta que não sabia dessa camada e, 140ms ou
       // mais tarde, escondia o cabeçalho do jogo já corretamente focado.
-      if (root && destination !== root._bracketGeneralView &&
-          typeof window._bracketFocusOperationalCard === 'function') {
+      var operationalCard = !!(root && root._bracketGeneralView &&
+        root._bracketGeneralView.contains(destination) &&
+        destination.hasAttribute('data-bracket-tab-category'));
+      if (operationalCard && typeof window._bracketFocusOperationalCard === 'function') {
         window._bracketFocusOperationalCard(root, destination, reasserting ? 'auto' : behavior);
         return;
       }
