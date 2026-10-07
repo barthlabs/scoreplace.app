@@ -2416,6 +2416,7 @@ function renderDashboard(container) {
     //   • card do jogo com a mesma estrutura do card da chave: label + Ao Vivo + Confirmar
     //   • "Ir para Torneio" no footer do card (não no header)
     function _miniBracketCard(item, canLaunch) {
+      var opts = arguments[2] || {};
       var tId = _sf(item.tId);
       var mId = _sf(item.m.id || '');
       var p1 = item.m.p1 || '';
@@ -2557,7 +2558,6 @@ function renderDashboard(container) {
       // opts.pendingScores = {p1, p2} → mostra placar âmbar read-only (estado pendente)
       // opts.headerBtns → HTML dos botões no header (substitui Ao Vivo + Confirmar)
       // opts.cardBorder / opts.cardBg → override de estilo do card
-      var opts = arguments[2] || {};
       var pendingScores = opts.pendingScores || null;
       var headerBtns = opts.headerBtns != null ? opts.headerBtns : null;
       var cardBorderStr = opts.cardBorder || 'rgba(99,102,241,0.6)';
