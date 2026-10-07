@@ -1231,19 +1231,22 @@
     // criada para ESTE sorteio; assim Light/Power/Extreme repetem os adversários na
     // mesma ordem entre si, mas um novo sorteio realmente muda os confrontos.
     // [[regression_structured_draw_is_random_per_draw]]
-    function _teamSchedule(players, wanted, mode) {
+    // Grade parcial de grupos: `wanted` é o número de jogos por UNIDADE que entra
+    // em quadra. Não pertence à competição agregada por times. `identityOf` existe
+    // apenas para o modo estruturado: ordem estável por UID/id, nunca por nome de
+    // exibição, para que renomear uma pessoa não redesenhe uma fase já configurada.
+    function _partialGroupSchedule(players, wanted, mode, identityOf) {
       var ordered = players.slice();
-      var idOf = function (entry) { return _teamCompetitionCore && _teamCompetitionCore.teamIdOf ? _teamCompetitionCore.teamIdOf(entry) : ''; };
+      identityOf = identityOf || function (entry) {
+        if (!entry) return '';
+        if (entry.uid) return String(entry.uid);
+        if (entry.p1Uid || entry.p2Uid) return String(entry.p1Uid || '') + '|' + String(entry.p2Uid || '');
+        return String(entry.id || '');
+      };
       if (mode === 'structured') {
-        var structuredOrder = Array.isArray(_teamCompetition && _teamCompetition.structuredTeamOrder)
-          ? _teamCompetition.structuredTeamOrder.map(function (id) { return String(id); }) : [];
-        ordered.sort(function (a, b) {
-          var aId = String(idOf(a)); var bId = String(idOf(b));
-          var aRank = structuredOrder.indexOf(aId); var bRank = structuredOrder.indexOf(bId);
-          if (aRank < 0) aRank = Number.MAX_SAFE_INTEGER;
-          if (bRank < 0) bRank = Number.MAX_SAFE_INTEGER;
-          return aRank - bRank || aId.localeCompare(bId) || String(a.displayName).localeCompare(String(b.displayName));
-        });
+        ordered = ordered.map(function (entry, index) { return { entry: entry, index: index, id: String(identityOf(entry) || '') }; })
+          .sort(function (a, b) { return a.id.localeCompare(b.id) || a.index - b.index; })
+          .map(function (item) { return item.entry; });
       }
       else for (var i = ordered.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var swap = ordered[i]; ordered[i] = ordered[j]; ordered[j] = swap; }
       var all = roundRobinSchedule(ordered);
@@ -1268,7 +1271,18 @@
       var normalizedCompetition = _teamCompetitionCore && typeof _teamCompetitionCore.normalize === 'function'
         ? _teamCompetitionCore.normalize(_teamCompetition) : null;
       var teamSchedule = normalizedCompetition && normalizedCompetition.enabled && normalizedCompetition.schedule.enabled ? normalizedCompetition.schedule : null;
-      var sched = teamSchedule ? _teamSchedule(g.players, teamSchedule.gamesPerTeam, teamSchedule.mode) : roundRobinSchedule(g.players);
+      var classificationSchedule = phaseCfg && phaseCfg.classification && phaseCfg.classification.schedule;
+      var genericSchedule = classificationSchedule && parseInt(classificationSchedule.gamesPerUnit, 10) >= 1
+        ? classificationSchedule : null;
+      // Campo novo vence; campo de times permanece só como leitor de documentos
+      // anteriores à separação entre agenda e classificação agregada.
+      var sched = genericSchedule
+        ? _partialGroupSchedule(g.players, genericSchedule.gamesPerUnit, genericSchedule.mode)
+        : (teamSchedule
+          ? _partialGroupSchedule(g.players, teamSchedule.gamesPerTeam, teamSchedule.mode, function (entry) {
+              return _teamCompetitionCore && _teamCompetitionCore.teamIdOf ? _teamCompetitionCore.teamIdOf(entry) : '';
+            })
+          : roundRobinSchedule(g.players));
       var nRounds = sched.length;
       for (var turn = 0; turn < _turnos; turn++) {
         sched.forEach(function (rd) {

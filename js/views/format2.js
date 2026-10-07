@@ -38,6 +38,25 @@
   }
   function teamSizeFor(disputa) { return disputa === 'dupla' ? 2 : 1; }
 
+  // Agenda de uma fase classificatória de grupos. A unidade aqui é sempre a que
+  // entra em quadra (individual ou dupla), nunca o "time" de uma classificação
+  // agregada. Isto separa duas decisões que o código antigo misturava: times
+  // representados podem somar resultados, mas não são pré-requisito para um grupo
+  // grande jogar uma quantidade menor de confrontos.
+  //
+  // Ausência = todos-contra-todos, que é o comportamento histórico. Só uma escolha
+  // explícita grava `classificationSchedule`, portanto reler torneios existentes não
+  // encurta a agenda por acidente.
+  function normalizeClassificationSchedule(value) {
+    if (!value || typeof value !== 'object') return null;
+    var games = parseInt(value.gamesPerUnit, 10);
+    if (!(games >= 1)) return null;
+    return {
+      gamesPerUnit: games,
+      mode: value.mode === 'structured' ? 'structured' : 'free'
+    };
+  }
+
   function defaultConfig(sport) {
     var dispDefault = allowsSingles(sport) ? 'individual' : 'dupla';
     return normalize({
@@ -144,6 +163,14 @@
     // normalizador é usado por harnesses e ferramentas isoladas: sem o domínio, a
     // opção fica explicitamente desligada em vez de acessar uma configuração nula.
     if (!out.teamCompetition) out.teamCompetition = { enabled: false, teamCount: 0, teamNames: [], formation: 'draw', internalMatches: 'avoid', ranking: 'points', aggregation: 'overall', schedule: { enabled: false, teamsPerGroup: 2, gamesPerTeam: 1, mode: 'structured' }, scoring: { win: 3, draw: 1, loss: 0 } };
+
+    // O campo novo é explícito. `teamCompetition.schedule` continua sendo lido
+    // exclusivamente pelo adaptador de compatibilidade do motor: promovê-lo aqui
+    // mudaria o número de grupos de documentos já configurados. A migração segura
+    // precisa preservar primeiro a grade existente e só então oferecer conversão
+    // auditável pelo organizador.
+    out.classificationSchedule = normalizeClassificationSchedule(out.classificationSchedule);
+    if (!out.classificationSchedule) delete out.classificationSchedule;
 
     if (!isDupla) {
       out.parceria = null;
@@ -529,11 +556,11 @@
         drawIntervalDays: _schedManual ? null : ((cfg.rodadas.drawIntervalDays >= 1) ? cfg.rodadas.drawIntervalDays : null)
       });
     } else {
-      // Na competição por times, o tamanho escolhido para cada grupo determina a
-      // quantidade de grupos. Não deixamos o antigo campo "nº de grupos" competir
-      // com a nova fonte de verdade. Com 8 times e 8 por grupo, nasce 1 grupo.
-      // [[regression_team_group_size_derives_group_count]]
-      var _teamGroupCount = (cfg.teamCompetition && cfg.teamCompetition.enabled && cfg.teamCompetition.schedule.enabled && cfg.teamCompetition.teamCount >= 2)
+      // Compatibilidade: documentos que nasceram com a agenda parcial dentro de
+      // competição por times mantêm seu tamanho de grupo calculado como antes. Em
+      // qualquer configuração nova, `grupos` é a fonte de verdade da fase — a agenda
+      // parcial apenas limita jogos por unidade, não cria outro formato de torneio.
+      var _teamGroupCount = (!cfg.classificationSchedule && cfg.teamCompetition && cfg.teamCompetition.enabled && cfg.teamCompetition.schedule.enabled && cfg.teamCompetition.teamCount >= 2)
         ? Math.max(1, Math.ceil(cfg.teamCompetition.teamCount / cfg.teamCompetition.schedule.teamsPerGroup))
         : cfg.grupos;
       top.format = 'Fase de Grupos';
@@ -547,8 +574,10 @@
       var idaVolta = (_teamGroupCount === 1 && cfg.rodadas.turnos === 'ida_volta');
       top.turnos = idaVolta ? 'ida_volta' : 'ida';   // _buildPhase0Cfg propaga p/ genGroupsFromPool
       if (idaVolta) top.ligaTurnos = 2;
+      var _classification = { structure: 'groups' };
+      if (cfg.classificationSchedule) _classification.schedule = cfg.classificationSchedule;
       p0 = Object.assign(_phaseBase(re), {
-        kind: 'classification', classification: { structure: 'groups' }, name: _teamGroupCount === 1 ? 'Pontos Corridos' : 'Fase de Grupos',
+        kind: 'classification', classification: _classification, name: _teamGroupCount === 1 ? 'Pontos Corridos' : 'Fase de Grupos',
         formatCode: 'grupos_mata', format: 'Fase de Grupos',
         drawMode: 'sorteio', reiRainha: false,
         gruposCount: _teamGroupCount, gruposClassified: cfg.classificados,

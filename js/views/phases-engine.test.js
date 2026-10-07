@@ -506,6 +506,26 @@ ok(mres3.ok === false && mres3.error === 'already-materialized', 'guard _phaseMa
   ok(eightPairGroup.matches.every(function (m) { return m.bracket === 'group' && !m.isBye && m.p1 !== 'BYE' && m.p2 !== 'BYE'; }),
     'grupo de oito: nenhum BYE/folga é jogo de categoria');
 
+  // Agenda parcial é propriedade da fase classificatória, não da classificação
+  // agregada por times. Oito duplas, quatro jogos por dupla = 16 confrontos, com
+  // quatro aparições para cada UID e sem depender de rótulo/nome.
+  var eightPartial = eng.genGroupsFromPool(eightPairPool, {
+    kind: 'classification', classification: { structure: 'groups', schedule: { gamesPerUnit: 4, mode: 'structured' } }, gruposCount: 1
+  }, 'g8-partial');
+  eq(eightPartial.matches.length, 16, 'agenda parcial: 8 × 4 ÷ 2 = 16 confrontos');
+  var partialAppearances = {};
+  eightPartial.matches.forEach(function (m) {
+    (m.team1Uids || []).concat(m.team2Uids || []).forEach(function (uid) { partialAppearances[uid] = (partialAppearances[uid] || 0) + 1; });
+  });
+  ok(eightPairPool.every(function (p) { return partialAppearances[p.uid] === 4; }), 'agenda parcial: cada unidade joga quatro vezes por UID');
+
+  // O limite é por unidade DENTRO do grupo: com N=8, sete jogos por unidade
+  // é o próprio todos-contra-todos (8 × 7 ÷ 2 = 28), não outro formato.
+  var eightCompleteBySchedule = eng.genGroupsFromPool(eightPairPool, {
+    kind: 'classification', classification: { structure: 'groups', schedule: { gamesPerUnit: 7, mode: 'structured' } }, gruposCount: 1
+  }, 'g8-complete');
+  eq(eightCompleteBySchedule.matches.length, 28, 'agenda completa: N−1 jogos por unidade é todos-contra-todos');
+
   // Times são agregação SOBRE as duplas: o toggle só remove confrontos internos.
   var pairTeams = [
     { displayName: 'A-1', uid: 'a1', competitionTeamId: 'azul' },

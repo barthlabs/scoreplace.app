@@ -77,6 +77,7 @@ const CONFIGS = [
   ['individual · todos contra todos', { disputa: 'individual', grupos: 1, classifAtiva: true, classificados: 2, rodadas: { modo: 'todos', turnos: 'ida' }, eliminatoria: { ativa: true, linhas: 1 } }],
   ['qualifyAll (todos avançam)', { disputa: 'dupla', grupos: 2, parceria: 'fixa', classifAtiva: true, classificados: 2, classifScope: 'per_group', rodadas: { modo: 'todos' }, eliminatoria: { ativa: true, linhas: 1, qualifyAll: true } }],
   ['times agregados · sem confronto interno', { disputa: 'dupla', grupos: 1, parceria: 'fixa', classifAtiva: true, classificados: 2, rodadas: { modo: 'todos' }, teamCompetition: { enabled: true, teamCount: 8, formation: 'draw', internalMatches: 'avoid', scoring: { win: 5, draw: 2, loss: 0 } }, eliminatoria: { ativa: false } }],
+  ['grupo parcial sem classificação por times', { disputa: 'dupla', grupos: 1, parceria: 'fixa', classifAtiva: true, classificados: 2, rodadas: { modo: 'todos' }, classificationSchedule: { gamesPerUnit: 4, mode: 'structured' }, eliminatoria: { ativa: false } }],
 ];
 
 const OPTS = { sport: SPORT, resultEntry: ['organizer'], lateEnrollment: 'closed' };
@@ -131,6 +132,18 @@ const core = require('./draw-core.js');
   ok('Times: compilação ok', r.ok === true, JSON.stringify(r));
   ok('Times: configuração chega ao torneio', t.teamCompetition && t.teamCompetition.scoring.win === 5 && t.teamCompetition.internalMatches === 'avoid');
   ok('Times: configuração chega à fase 0', t.phases && t.phases[0] && t.phases[0].teamCompetition && t.phases[0].teamCompetition.teamCount === 8);
+})();
+
+(function () {
+  const cfg = { disputa: 'dupla', grupos: 1, parceria: 'fixa', classifAtiva: true,
+    rodadas: { modo: 'todos' }, classificationSchedule: { gamesPerUnit: 4, mode: 'structured' }, eliminatoria: { ativa: false } };
+  const t = { id: 'tour_partial_groups', sport: SPORT, fmt2: cfg };
+  const r = core.compileFromFmt2(t);
+  ok('Agenda parcial: compilação ok', r.ok === true, JSON.stringify(r));
+  ok('Agenda parcial: chega à classificação da fase 0 (jogos por unidade no grupo)', t.phases && t.phases[0] &&
+    t.phases[0].classification && t.phases[0].classification.schedule &&
+    t.phases[0].classification.schedule.gamesPerUnit === 4,
+  JSON.stringify(t.phases && t.phases[0] && t.phases[0].classification));
 })();
 
 (function () {
