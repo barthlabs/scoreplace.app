@@ -1,3 +1,4 @@
+// 2.3.299 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.3.298 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.3.297 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.3.296 — O detalhe que parte de um card genérico da dashboard preserva o alvo do primeiro jogo agendado mesmo enquanto a chave monta em lotes; uma segunda rolagem não pode mais devolvê-lo ao topo do torneio ou à classificação. A entrada da Dashboard deixa “Seu próximo jogo” inteiro abaixo do cabeçalho fixo, sem cortar o título. O cache-buster da Dashboard foi renovado junto para que o navegador carregue esse ajuste.
