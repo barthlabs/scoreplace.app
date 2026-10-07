@@ -1180,7 +1180,7 @@ window._nextScheduledTournamentMatchTarget = function(t) {
     return { category: '__upcoming', gender: gender, round: '' };
   };
   var matches = window._collectAllMatches(t).filter(function(m) {
-    return !!(m && m.id != null && !m.winner && !m.isBye &&
+    return !!(m && m.id != null && !m.winner && !m.resultAt && !m.isBye &&
       asMs(m.scheduledAt) > 0);
   });
   matches.sort(function(a, b) {
@@ -1221,6 +1221,80 @@ window._focusTournamentMatchWhenReady = function(tId, matchId, options) {
   focus();
 };
 
+// A entrada genérica da dashboard só pode escolher o destino depois que a
+// agenda efetiva foi montada. Resultado e presença chegam ao card do DOM antes
+// de estarem necessariamente consistentes no resumo do torneio. Prioridade:
+// pronto para chamar, depois presença parcial; se ainda não houver nenhum dos
+// dois, mostra o topo útil de Próximos jogos, nunca o hero/classificação.
+window._focusTournamentUpcomingWhenReady = function(tId, options) {
+  var attempts = 0;
+  var maxAttempts = 60;
+  var behavior = options && options.behavior ? options.behavior : 'auto';
+  var compareScheduled = function(a, b) {
+    var atA = Number(a.getAttribute('data-bracket-scheduled-at'));
+    var atB = Number(b.getAttribute('data-bracket-scheduled-at'));
+    if (atA !== atB) return atA - atB;
+    var court = String(a.getAttribute('data-bracket-court') || '').localeCompare(
+      String(b.getAttribute('data-bracket-court') || ''), 'pt-BR', { numeric: true }
+    );
+    if (court) return court;
+    return Number(a.getAttribute('data-match-num')) - Number(b.getAttribute('data-match-num'));
+  };
+  var focus = function() {
+    if (window._travaRolagemDaChave) return;
+    var pageScope = document.getElementById('view-container') || document;
+    var seen = {};
+    var pending = Array.prototype.slice.call(pageScope.querySelectorAll('[id^="card-"][data-bracket-scheduled-at]')).filter(function(card) {
+      var id = String(card.id || '');
+      var at = Number(card.getAttribute('data-bracket-scheduled-at'));
+      var resultAt = Number(card.getAttribute('data-bracket-result-at'));
+      if (!id || seen[id] || !isFinite(at) || at <= 0 || (isFinite(resultAt) && resultAt > 0)) return false;
+      seen[id] = true;
+      return true;
+    }).sort(compareScheduled);
+    if (!pending.length) {
+      attempts += 1;
+      if (attempts < maxAttempts) setTimeout(focus, 100);
+      return;
+    }
+    var ready = pending.filter(function(card) {
+      return card.getAttribute('data-bracket-upcoming') === '1';
+    });
+    var partial = pending.filter(function(card) {
+      return card.getAttribute('data-bracket-presence') === 'partial';
+    });
+    var target = ready[0] || partial[0] || null;
+    var reference = target || pending[0];
+    var gender = String(reference.getAttribute('data-bracket-tab-gender') || '');
+    try {
+      if (gender && typeof window._bracketSelectCategoryTab === 'function') {
+        window._bracketSelectCategoryTab(String(tId), gender, '__upcoming', '');
+      }
+    } catch (eTab) {}
+    setTimeout(function() {
+      var liveTarget = target && document.getElementById(target.id);
+      if (liveTarget && getComputedStyle(liveTarget).display !== 'none') {
+        try { if (typeof window._reflowChrome === 'function') window._reflowChrome(); } catch (eChrome) {}
+        try { liveTarget.scrollIntoView({ behavior: behavior, block: 'start', inline: 'nearest' }); }
+        catch (eScroll) { try { liveTarget.scrollIntoView(); } catch (eFallback) {} }
+        return;
+      }
+      // Sem jogo pronto/parcial, a agenda pode exibir a mensagem operacional.
+      // Levar o usuário a ela preserva o contexto e impede cair no hero.
+      var root = document.querySelector('[data-bracket-tabs-root][data-tournament-id="' + String(tId).replace(/"/g, '\\"') + '"]');
+      var agenda = root && root._bracketGeneralView;
+      if (agenda) {
+        try { agenda.scrollIntoView({ behavior: behavior, block: 'start', inline: 'nearest' }); }
+        catch (eAgenda) { try { agenda.scrollIntoView(); } catch (eAgendaFallback) {} }
+        return;
+      }
+      attempts += 1;
+      if (attempts < maxAttempts) setTimeout(focus, 100);
+    }, 0);
+  };
+  focus();
+};
+
 window._scrollToBracketSection = function(tId, matchId) {
   var t = window.AppStore && window.AppStore.tournaments &&
           window.AppStore.tournaments.find(function(x){ return String(x.id) === String(tId); });
@@ -1249,49 +1323,11 @@ window._scrollToBracketSection = function(tId, matchId) {
     window._focusTournamentMatchWhenReady(tId, matchId);
     return;
   }
-  // Entrada genérica (card do torneio na dashboard): o alvo não é a chave
-  // inline, que também contém classificação. A agenda publicada é a fonte
-  // canônica; seleciona o primeiro jogo sem resultado por horário, quadra e
-  // número. Isso vale inclusive para um jogo que ainda aguarda presença.
+  // Entrada genérica da dashboard: use os cards já montados, pois eles têm o
+  // estado de resultado/presença que determina o que aparece na agenda.
   if (!matchId) {
-    var pageScope = document.getElementById('view-container') || document;
-    var seenScheduled = {};
-    var scheduled = Array.prototype.slice.call(pageScope.querySelectorAll('[id^="card-"][data-bracket-scheduled-at]')).filter(function(card) {
-      var id = String(card.id || '');
-      var at = Number(card.getAttribute('data-bracket-scheduled-at'));
-      var resultAt = Number(card.getAttribute('data-bracket-result-at'));
-      if (!id || seenScheduled[id] || !isFinite(at) || at <= 0 || (isFinite(resultAt) && resultAt > 0)) return false;
-      seenScheduled[id] = true;
-      return true;
-    }).sort(function(a, b) {
-      var atA = Number(a.getAttribute('data-bracket-scheduled-at'));
-      var atB = Number(b.getAttribute('data-bracket-scheduled-at'));
-      if (atA !== atB) return atA - atB;
-      var court = String(a.getAttribute('data-bracket-court') || '').localeCompare(
-        String(b.getAttribute('data-bracket-court') || ''), 'pt-BR', { numeric: true }
-      );
-      if (court) return court;
-      return Number(a.getAttribute('data-match-num')) - Number(b.getAttribute('data-match-num'));
-    });
-    var nextScheduled = scheduled[0];
-    if (nextScheduled) {
-      // `matchId` não inclui o prefixo de DOM `card-`. Passar o id inteiro
-      // fazia a função canônica procurar `card-card-…`, portanto o foco
-      // genérico jamais encontrava o jogo mesmo quando a aba estava correta.
-      var nextId = String(nextScheduled.id).slice(5);
-      var nextGender = String(nextScheduled.getAttribute('data-bracket-tab-gender') || '');
-      // A entrada operacional da dashboard é Próximos jogos, não a
-      // classificação Geral. Selecionar a agenda antes do foco garante que o
-      // detalhe abra no primeiro jogo pendente, inclusive se ele ainda
-      // aguarda presença parcial.
-      try {
-        if (nextGender && typeof window._bracketSelectCategoryTab === 'function') {
-          window._bracketSelectCategoryTab(String(tId), nextGender, '__upcoming', '');
-        }
-      } catch (eTab) {}
-      window._focusTournamentMatchWhenReady(tId, nextId, { behavior: 'smooth' });
-      return;
-    }
+    window._focusTournamentUpcomingWhenReady(tId, { behavior: 'smooth' });
+    return;
   }
   var cu = window.AppStore && window.AppStore.currentUser;
   var isOrg = window._souOrganizador(t);
@@ -4732,13 +4768,11 @@ function renderTournaments(container, tournamentId = null) {
     if (!_pendingBracketTarget && (_openedFromDashboard ||
         (window._navScrollTid && String(window._navScrollTid) === String(tournamentId)))) {
         var _detailTournamentForTarget = window._findTournamentById ? window._findTournamentById(tournamentId) : null;
-        // A dashboard pede o primeiro jogo AGENDADO do torneio, não o jogo do
-        // usuário nem a classificação. Só depois usa o alvo pessoal como
-        // fallback para entradas diretas sem agenda publicada.
-        if (_openedFromDashboard && typeof window._nextScheduledTournamentMatchTarget === 'function') {
-            _pendingBracketTarget = window._nextScheduledTournamentMatchTarget(_detailTournamentForTarget);
-        }
-        if (!_pendingBracketTarget && typeof window._nextParticipantTournamentMatchTarget === 'function') {
+        // A dashboard grava uma intenção genérica. Não antecipe aqui o id do
+        // jogo: esse resumo não é a fonte de verdade de resultado/presença.
+        // A rotina tardia `_scrollToBracketSection(..., null)` resolve o
+        // primeiro card exibível depois de renderBracket concluir.
+        if (!_openedFromDashboard && !_pendingBracketTarget && typeof window._nextParticipantTournamentMatchTarget === 'function') {
             _pendingBracketTarget = window._nextParticipantTournamentMatchTarget(_detailTournamentForTarget);
         }
         if (_pendingBracketTarget && _pendingBracketTarget.matchId) {

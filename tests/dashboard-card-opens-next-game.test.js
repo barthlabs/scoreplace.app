@@ -27,17 +27,18 @@ function section(from, to) {
   await page.addScriptTag({ content: section('window._scrollToBracketSection = function', '// v2.7.85: funções de DUPLA') });
 
   const result = await page.evaluate(async () => {
-    const card = (id, at, court, resultAt, num) =>
+    const card = (id, at, court, resultAt, num, upcoming, presence) =>
       '<article id="card-' + id + '" data-bracket-scheduled-at="' + at + '" data-bracket-court="' + court +
       '" data-bracket-result-at="' + (resultAt || '') + '" data-match-num="' + num +
-      '" data-bracket-tab-gender="fem">' + id + '</article>';
+      '" data-bracket-tab-gender="fem" data-bracket-upcoming="' + (upcoming ? '1' : '0') +
+      '" data-bracket-presence="' + (presence || 'none') + '">' + id + '</article>';
     document.body.innerHTML = '<main id="view-container">' +
       '<nav data-bracket-tabs-root="1" data-tournament-id="neon"></nav>' +
       '<section id="published">' +
         card('played', 1000, 'Quadra 1', 1200, 1) +
-        card('later', 2000, 'Quadra 1', '', 2) +
-        card('earlier-court-5', 1500, 'Quadra 5', '', 4) +
-        card('earlier-court-4', 1500, 'Quadra 4', '', 3) +
+        card('waiting-earlier', 1500, 'Quadra 4', '', 3) +
+        card('partial', 1600, 'Quadra 5', '', 4, false, 'partial') +
+        card('ready', 2000, 'Quadra 1', '', 2, true, 'complete') +
       '</section>' +
       '<section id="inline-bracket-container">Classificação geral dos times</section>' +
       '</main>';
@@ -51,7 +52,7 @@ function section(from, to) {
     const scrolled = [];
     window._bracketSelectCategoryTab = (...args) => {
       selected.push(args);
-      root._bracketGeneralView.appendChild(document.getElementById('card-earlier-court-4'));
+      root._bracketGeneralView.appendChild(document.getElementById('card-ready'));
     };
     Element.prototype.scrollIntoView = function () { scrolled.push(this.id || this.textContent); };
 
@@ -63,8 +64,8 @@ function section(from, to) {
   console.log('\n📋 Card da dashboard abre o próximo jogo, não a classificação');
   ok(result.selected.length === 1 && result.selected[0].join(',') === 'neon,fem,__upcoming,',
     'a entrada genérica ativa Próximos jogos no gênero do próximo jogo');
-  ok(result.scrolled[0] === 'card-earlier-court-4',
-    'o foco usa o primeiro jogo sem resultado por horário e depois por quadra');
+  ok(result.scrolled[0] === 'card-ready',
+    'o foco prioriza o primeiro jogo pronto para chamar, não pendência invisível ou já concluída');
   ok(result.scrolled.indexOf('inline-bracket-container') === -1,
     'a classificação inline nunca é usada como fallback quando há agenda');
   const lateTarget = await page.evaluate(() => {
@@ -101,7 +102,7 @@ function section(from, to) {
   const target = await page.evaluate(() => {
     window._collectAllMatches = (t) => t.matches;
     return window._nextScheduledTournamentMatchTarget({ matches: [
-      { id: 'done', winner: 'a', scheduledAt: '2026-10-22T18:00:00Z', court: 'Quadra 1', _gameNum: 1, category: 'Fem Light' },
+      { id: 'done', resultAt: 1792694000000, scheduledAt: '2026-10-22T18:00:00Z', court: 'Quadra 1', _gameNum: 1, category: 'Fem Light' },
       { id: 'unscheduled', court: 'Quadra 1', _gameNum: 2, category: 'Fem Light' },
       { id: 'court-5', scheduledAt: { seconds: 1792694100 }, court: 'Quadra 5', _gameNum: 4, category: 'Fem Power' },
       { id: 'court-4', scheduledAt: { toMillis: () => 1792694100000 }, court: 'Quadra 4', _gameNum: 3, category: 'Fem Light' }
@@ -109,17 +110,17 @@ function section(from, to) {
   });
   ok(target && target.matchId === 'court-4' && target.tab.category === '__upcoming' && target.tab.gender === 'fem',
     'o alvo persistido é o primeiro jogo pendente por horário e quadra, na aba Próximos jogos');
-  ok(store.includes('window._nextScheduledTournamentMatchTarget(_tournament)') &&
-    store.includes('_target && _target.matchId ? _target.matchId : null'),
-    'o clique genérico calcula e persiste o primeiro jogo agendado, não um alvo vazio');
+  ok(store.includes('window._setTournamentMatchTarget(tournamentId, null, null);') &&
+    !store.includes('window._nextScheduledTournamentMatchTarget(_tournament)'),
+    'o clique genérico persiste intenção sem id para o detalhe usar a agenda já montada');
   ok(tournaments.includes('window._nextScheduledTournamentMatchTarget = function(t)') &&
     tournaments.includes("category: '__upcoming'"),
     'o alvo genérico força a aba Próximos jogos antes de o detalhe ser renderizado');
   ok(tournaments.includes('_requestedBracketTarget.matchId') &&
     tournaments.includes('var _openedFromDashboard') &&
-    tournaments.indexOf('window._nextScheduledTournamentMatchTarget(_detailTournamentForTarget)') <
-      tournaments.indexOf('window._nextParticipantTournamentMatchTarget(_detailTournamentForTarget)'),
-    'um alvo vazio vindo do resumo é recalculado com o torneio completo antes de abrir a agenda');
+    tournaments.includes('window._focusTournamentUpcomingWhenReady') &&
+    tournaments.includes("card.getAttribute('data-bracket-upcoming') === '1'"),
+    'uma intenção genérica da dashboard é resolvida pelos cards montados e prioriza jogo pronto');
   ok(tournaments.includes("sessionStorage.setItem('sp_scrollToMatch', String(_pendingBracketTarget.matchId))") &&
     bracket.includes("sessionStorage.getItem('sp_scrollToMatch')") &&
     bracket.includes("document.getElementById('card-' + String(_pm))"),

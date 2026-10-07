@@ -9702,22 +9702,13 @@ window._navTorneioComAvisoAgora = function (tournamentId, evento) {
   var _trocarHashDoTorneio = function () { window.location.hash = '#tournaments/' + tournamentId; };
   var _irPro = function () {
     if (_foiPro) return; _foiPro = true;
-    // O card genérico da dashboard não representa uma partida específica, mas
-    // a entrada operacional do torneio precisa ter um alvo explícito. Sem esta
-    // intenção persistida o detalhe cai no primeiro bloco do DOM (classificação)
-    // em vez do primeiro jogo pendente da agenda.
+    // O card genérico da dashboard não representa uma partida específica.
+    // Não escolha uma partida aqui: o resumo pode estar desatualizado em
+    // relação a resultado/presença e apontar para um card já concluído ou
+    // oculto. O detalhe resolve a agenda depois de montar os cards reais.
     try {
       if (typeof window._setTournamentMatchTarget === 'function') {
-        var _target = null;
-        var _tournament = typeof window._findTournamentById === 'function'
-          ? window._findTournamentById(tournamentId)
-          : ((window.AppStore && window.AppStore.tournaments) || []).find(function(t) { return String(t.id) === String(tournamentId); });
-        if (typeof window._nextScheduledTournamentMatchTarget === 'function') {
-          _target = window._nextScheduledTournamentMatchTarget(_tournament);
-        }
-        window._setTournamentMatchTarget(tournamentId,
-          _target && _target.matchId ? _target.matchId : null,
-          _target && _target.tab ? _target.tab : null);
+        window._setTournamentMatchTarget(tournamentId, null, null);
       }
     } catch (eTarget) {}
     _trocarHashDoTorneio();
