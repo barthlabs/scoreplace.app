@@ -952,7 +952,7 @@ window._markBracketJustScored = function (tournamentId, matchId) {
   if (tournamentId == null || matchId == null) return;
   window._bracketJustScoredByTournament[String(tournamentId)] = String(matchId);
 };
-if (!window._bracketJustScoredRouteCleanup) {
+if (!window._bracketJustScoredRouteCleanup && typeof window.addEventListener === 'function') {
   window._bracketJustScoredRouteCleanup = true;
   window.addEventListener('hashchange', function () {
     var hash = String(window.location.hash || '');

@@ -114,6 +114,8 @@ function section(from, to) {
   });
   ok(target && target.matchId === 'court-4' && target.tab.category === '__upcoming' && target.tab.gender === 'fem',
     'o alvo persistido é o primeiro jogo pendente por horário e quadra, na aba Próximos jogos');
+  ok(target && target.matchId !== 'legacy-done' && target.matchId !== 'wo-done',
+    'resultado legado concluído e W.O. não entram na fila operacional do organizador');
   const perUserTarget = await page.evaluate(() => {
     const tournament = { matches: [
       { id: 'ana-mais-tarde', owner: 'ana', round: 3, _gameNum: 1, category: 'Fem Prata' },
