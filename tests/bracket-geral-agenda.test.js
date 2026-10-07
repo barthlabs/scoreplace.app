@@ -168,9 +168,9 @@ function trecho(inicio, fim) {
       emptyHeadingHidden: document.querySelector('#inline-bracket-container .bracket-round-column:not(.bracket-general-round-column) .bracket-round-heading').hidden
     };
 
-    // Ao abrir Geral/Próximos, o primeiro jogo pronto para chamar vem antes
-    // de um pendente mais cedo que ainda não tem presença completa. Este é o
-    // alvo que a dashboard deve deixar no topo útil da agenda.
+    // Ao abrir Geral/Próximos, a âncora é sempre o primeiro jogo sem placar
+    // por horário e quadra — presença ainda incompleta não pode fazer um jogo
+    // posterior saltar para o topo da agenda.
     document.body.innerHTML = '<main id="focus-scope"><nav id="focus-root"></nav><section id="focus-source" class="bracket-scroll-container">' +
       card('focus-pending', 'fem', 'Light', at(22, 18), 'Quadra 4', false) +
       card('focus-ready', 'fem', 'Light', at(22, 19), 'Quadra 5', true) +
@@ -189,24 +189,24 @@ function trecho(inicio, fim) {
     window._bracketGeneralView(focusRoot, true, 'fem', false, true);
     await new Promise((resolve) => setTimeout(resolve, 130));
     HTMLElement.prototype.getBoundingClientRect = originalRect;
-    const readyFocus = {
+    const nextFocus = {
       top: focusedTop,
-      moved: !!focusRoot._bracketGeneralView.querySelector('#focus-ready'),
+      moved: !!focusRoot._bracketGeneralView.querySelector('#focus-pending'),
       track: !!focusRoot._bracketGeneralView.querySelector('.bracket-general-rounds-track')
     };
-    return { generalState, upcomingState, freshUpcomingResults, justScoredResults, restored, generalReentry, cleanup, noSchedule, nested, externalSource, readyFocus };
+    return { generalState, upcomingState, freshUpcomingResults, justScoredResults, restored, generalReentry, cleanup, noSchedule, nested, externalSource, nextFocus };
   });
 
-  console.log('\n📋 Geral é a agenda do dia, não uma cópia por gênero');
+  console.log('\n📋 Geral é a agenda completa do torneio, não uma cópia por gênero');
   ok(result.generalState.sourceHidden, 'ao clicar Geral, a chave de origem fica fora da leitura duplicada');
-  ok(result.generalState.order.join(',') === 'masc-same-day,fem-court-5,fem-waiting,fem-round-2', 'inclui partidas jogadas e pendentes do dia nas colunas corretas');
+  ok(result.generalState.order.join(',') === 'masc-same-day,fem-court-5,fem-waiting,tomorrow,fem-round-2', 'inclui a agenda completa, inclusive os jogos dos dias seguintes, nas colunas corretas');
   ok(result.generalState.noClone, 'os cards reais são movidos: não há id nem input duplicado');
   ok(result.generalState.visibleCards, 'os cards movidos para Geral são visíveis, não herdam o hidden do filtro de categoria');
   ok(result.generalState.roundColumns.join(',') === 'Rodada 1,Rodada 2', 'Geral agrupa a agenda pela rodada, com cabeçalho de coluna estável');
   ok(result.generalState.followsDetails, 'Geral fica depois do card de detalhes do torneio, mesmo quando o detalhe é irmão da chave');
-  console.log('\n📋 Próximos jogos prioriza o que aguarda presença e preserva os prontos');
+  console.log('\n📋 Próximos jogos mostra todos os jogos sem placar');
   ok(result.upcomingState.sourceHidden, 'Próximos jogos também troca a chave canônica por uma única visão operacional');
-  ok(result.upcomingState.order.join(',') === 'fem-waiting,fem-court-5,fem-round-2', 'a partida parcialmente presente vem antes dos próximos jogos prontos');
+  ok(result.upcomingState.order.join(',') === 'fem-waiting,masc-same-day,fem-court-5,tomorrow,fem-round-2', 'a fila inclui todos os jogos sem placar, mantendo presença parcial no topo');
   ok(result.upcomingState.waiting.join(',') === 'fem-waiting', 'a lista de aguardando presença fica no topo de Próximos jogos');
   ok(result.upcomingState.visibleCards, 'o card pronto continua visível depois de mover entre Geral e Próximos jogos');
   ok(result.freshUpcomingResults.indexOf('played-new') === -1 && result.freshUpcomingResults.indexOf('played-mid') === -1 && result.freshUpcomingResults.indexOf('played-old') === -1,
@@ -216,7 +216,7 @@ function trecho(inicio, fim) {
   console.log('\n📋 Voltar para categoria restaura a chave canônica');
   ok(result.restored.sourceVisible && result.restored.agendaHidden, 'Light fecha a agenda e restaura a fonte');
   ok(result.restored.originalOrder.join(',') === 'fem-court-5,masc-same-day,fem-round-2,fem-waiting,tomorrow,played-old,played-mid,played-new', 'cada wrapper volta exatamente ao seu placeholder');
-  ok(result.generalReentry.order.join(',') === 'masc-same-day,fem-court-5,fem-waiting,played-old,played-mid,played-new,fem-round-2' && result.generalReentry.visible,
+  ok(result.generalReentry.order.join(',') === 'masc-same-day,fem-court-5,fem-waiting,played-old,played-mid,played-new,tomorrow,fem-round-2' && result.generalReentry.visible,
     'voltar para Geral reconstrói os cards reais, sem colunas vazias');
   console.log('\n📋 Novo render limpa Geral aberta antes de substituir a chave');
   ok(result.cleanup.rootGone && result.cleanup.agendaGone, 'abas e agenda transitória são destruídas');
@@ -231,8 +231,8 @@ function trecho(inicio, fim) {
   console.log('\n📋 Detalhe publicado e chave inline usam a mesma agenda');
   ok(result.externalSource.shown, 'Geral abre quando os cards publicados estão fora da chave inline');
   ok(result.externalSource.cards.join(',') === 'real-scheduled', 'Geral usa o card publicado, não o cabeçalho vazio da chave inline');
-  ok(result.readyFocus.track && result.readyFocus.moved && result.readyFocus.top >= 200,
-    'ao abrir Geral, o foco prioriza o jogo pronto mesmo se um pendente anterior ainda aguarda presença');
+  ok(result.nextFocus.track && result.nextFocus.moved && result.nextFocus.top >= 0,
+    'ao abrir Geral, o foco usa o primeiro jogo sem placar mesmo se sua presença ainda aguarda confirmação');
   ok(result.externalSource.emptyHeadingHidden, 'Geral remove cabeçalho de rodada sem jogo da chave inline');
 
   await browser.close();

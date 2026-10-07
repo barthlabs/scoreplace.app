@@ -1073,22 +1073,16 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame) {
     var cards = _bracketOperationalCards(root, scope).filter(function (card) {
       return card.hasAttribute('data-bracket-scheduled-at');
     });
-    // "Geral" é uma agenda POR DIA. No Neon, Feminina e Masculina ocupam
-    // dias diferentes, por isso hoje a seleção de gênero leva ao dia certo;
-    // não é, porém, uma regra de gênero: qualquer categoria marcada para a
-    // mesma data entra na mesma visão operacional.
+    // A agenda operacional é do torneio inteiro. Filtrar pelo primeiro dia
+    // encontrado deixava os jogos seguintes (e, em alguns eventos, TODOS os
+    // jogos da categoria) fora da tela: a aba parecia vazia mesmo com partidas
+    // já agendadas. A fila precisa mostrar todos os jogos sem placar, em ordem
+    // cronológica e, no mesmo horário, por quadra.
     var scheduledCards = cards.filter(function (card) {
       return Number(card.getAttribute('data-bracket-scheduled-at')) > 0;
     });
     // A data de referência não pode depender de haver jogo pronto: se todos
     // aguardam presença, Próximos jogos ainda precisa mostrar o aviso no topo.
-    var reference = scheduledCards.find(function (card) {
-      return String(card.getAttribute('data-bracket-tab-gender') || '') === String(gender || '') &&
-        Number(card.getAttribute('data-bracket-scheduled-at')) > 0;
-    });
-    var referenceDate = reference ? new Date(Number(reference.getAttribute('data-bracket-scheduled-at'))) : null;
-    var dayKey = referenceDate && !isNaN(referenceDate.getTime())
-      ? [referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate()].join('-') : '';
     // Próximos jogos é a fila operacional: resultado persistido NUNCA volta
     // para ela numa abertura nova. A única exceção é o placar acabado de
     // lançar nesta mesma página, que fica momentaneamente para conferência.
@@ -1101,8 +1095,6 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame) {
     scheduledCards.forEach(function (card) {
       var at = Number(card.getAttribute('data-bracket-scheduled-at'));
       if (!isFinite(at) || at <= 0 || !card.parentNode) return;
-      var cardDate = new Date(at);
-      if (!dayKey || [cardDate.getFullYear(), cardDate.getMonth(), cardDate.getDate()].join('-') !== dayKey) return;
       // O aviso é de PRESENÇA PARCIAL: presença completa já aparece nos
       // Próximos jogos; sem ninguém presente ainda não é uma chamada em curso.
       var isWaitingPresence = onlyReady && card.getAttribute('data-bracket-presence') === 'partial';
@@ -1110,7 +1102,13 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame) {
       var isJustScored = onlyReady && justScoredMatchId &&
         (card.id === ('card-' + justScoredMatchId) || card.id === justScoredMatchId) &&
         Number(card.getAttribute('data-bracket-result-at')) > 0;
-      if (onlyReady && card.getAttribute('data-bracket-upcoming') !== '1' && !isWaitingPresence && !isJustScored) return;
+      // "Próximos jogos" não é uma lista de presença completa: é a fila de
+      // todos os jogos ainda sem placar. Antes `data-bracket-upcoming=1` só
+      // era escrito quando as quatro presenças estavam completas; por isso um
+      // organizador via a aba vazia justamente antes de chamar os jogos.
+      var hasResult = Number(card.getAttribute('data-bracket-result-at')) > 0 ||
+        card.getAttribute('data-bracket-complete') === '1';
+      if (onlyReady && hasResult && !isJustScored) return;
       var wrapper = card.parentNode;
       var placeholder = document.createComment('scoreplace-general-card');
       wrapper.parentNode.insertBefore(placeholder, wrapper);
@@ -1182,7 +1180,13 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame) {
   var roundsTrack = document.createElement('div');
   roundsTrack.className = 'bracket-general-rounds-track';
   roundsTrack.style.cssText = 'display:flex;align-items:flex-start;gap:20px;width:100%;max-width:100%;min-width:0;box-sizing:border-box;overflow-x:auto;overflow-y:clip;padding:0 0 14px;scroll-snap-type:x proximity;';
-  Object.keys(groups).sort(function (a, b) { return Number(a) - Number(b); }).forEach(function (key) {
+  Object.keys(groups).sort(function (a, b) {
+    // A rodada cuja primeira partida vem antes também vem antes na fila. O
+    // número da rodada só desempata agendas simultâneas.
+    var aAt = groups[a][0] ? groups[a][0].at : 0;
+    var bAt = groups[b][0] ? groups[b][0].at : 0;
+    return aAt - bAt || Number(a) - Number(b);
+  }).forEach(function (key) {
     groups[key].sort(function (a, b) {
       if (a.at !== b.at) return a.at - b.at;
       return String(a.court).localeCompare(String(b.court), 'pt-BR', { numeric: true });
@@ -1231,19 +1235,17 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame) {
     }, 0);
     if (tallest > 0) operationalCards.forEach(function (card) { card.style.minHeight = tallest + 'px'; });
   });
-  // Geral e Próximos jogos são telas operacionais: ao abri-las, o primeiro
-  // jogo ainda não decidido é o foco, não o topo arbitrário da rodada nem o
-  // último placar preservado para conferência. O quinto argumento é explícito
+  // Geral e Próximos jogos são telas operacionais: ao abri-las, o foco é o
+  // primeiro jogo sem placar pela ordem cronológica e de quadra, não o topo
+  // arbitrário da rodada, um jogo apenas "pronto" mais tarde, nem o último
+  // placar preservado para conferência. O quinto argumento é explícito
   // para que a atualização in-place após salvar placar não roube a rolagem.
   // [[regression_operational_tabs_open_on_next_game]]
   if (focusNextGame) {
     var nextEntry = entries.find(function (entry) {
-      return entry && entry.card && entry.card.getAttribute('data-bracket-upcoming') === '1' && Number(entry.card.getAttribute('data-bracket-result-at')) <= 0;
-    });
-    // Geral também exibe jogos cuja presença ainda não está completa. Se não
-    // houver nenhum pronto, conserva uma âncora útil no primeiro pendente.
-    if (!nextEntry) nextEntry = entries.find(function (entry) {
-      return entry && entry.card && Number(entry.card.getAttribute('data-bracket-result-at')) <= 0;
+      return entry && entry.card &&
+        Number(entry.card.getAttribute('data-bracket-result-at')) <= 0 &&
+        entry.card.getAttribute('data-bracket-complete') !== '1';
     });
     if (nextEntry && nextEntry.card) {
       // A montagem da agenda move os cards reais entre contêineres. `scrollTo`
@@ -7452,7 +7454,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   var _operationalPresence = _isConcentratedEvent && !isDecided && !isByeMatch
     ? (matchReady ? 'complete' : (matchPartial ? 'partial' : 'none')) : '';
   return `
-    <div id="card-${m.id}" class="sp-match-card" data-players="${_searchNames}" data-player-uids="${_searchUids}" data-bracket-tab-category="${window._safeHtml(_tabCategory)}" data-bracket-tab-gender="${_tabGender}" data-bracket-tab-source="${_tabSource}" data-bracket-tab-round="${m.round != null ? window._safeHtml(String(m.round)) : ''}" data-bracket-scheduled-at="${_scheduledMs || ''}" data-bracket-result-at="${_playedMs || ''}" data-bracket-court="${window._safeHtml(String(m.court || ''))}" data-bracket-upcoming="${_isConcentratedEvent && matchReady ? '1' : '0'}" data-bracket-presence="${_operationalPresence}" data-my-match="${_isMyMatch ? '1' : '0'}" data-my-pending="${_isMyMatch && !isDecided && !isByeMatch ? '1' : '0'}" data-match-num="${matchNum != null ? matchNum : ''}" style="scroll-margin-top:var(--scroll-anchor,120px);background:${window._spCor(_isMyMatch ? 'rgba(99,102,241,0.06)' : 'var(--bg-card)', 'background')};border:${_isMyMatch ? '2px' : '1px'} solid ${hasPending && _pr && _pr.disputed ? 'rgba(239,68,68,0.55)' : hasPending ? 'rgba(251,191,36,0.5)' : cardBorder};${_lineLeftBorder}border-radius:12px;padding:14px;${_cardMax}box-shadow:${_isMyMatch ? '0 0 20px rgba(99,102,241,0.25),0 0 8px rgba(99,102,241,0.12),0 4px 12px rgba(0,0,0,0.15)' : hasPending && _pr && _pr.disputed ? '0 0 14px rgba(239,68,68,0.2),0 4px 12px rgba(0,0,0,0.15)' : hasPending ? '0 0 14px rgba(251,191,36,0.18),0 4px 12px rgba(0,0,0,0.15)' : matchReady ? '0 0 16px rgba(16,185,129,0.15),0 4px 12px rgba(0,0,0,0.15)' : matchPartial ? '0 0 10px rgba(245,158,11,0.1),0 4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.15)'};${hasTBD ? 'opacity:0.6;' : ''}">
+    <div id="card-${m.id}" class="sp-match-card" data-players="${_searchNames}" data-player-uids="${_searchUids}" data-bracket-tab-category="${window._safeHtml(_tabCategory)}" data-bracket-tab-gender="${_tabGender}" data-bracket-tab-source="${_tabSource}" data-bracket-tab-round="${m.round != null ? window._safeHtml(String(m.round)) : ''}" data-bracket-scheduled-at="${_scheduledMs || ''}" data-bracket-result-at="${_playedMs || ''}" data-bracket-complete="${isDecided || m.wo ? '1' : '0'}" data-bracket-court="${window._safeHtml(String(m.court || ''))}" data-bracket-upcoming="${_isConcentratedEvent && matchReady ? '1' : '0'}" data-bracket-presence="${_operationalPresence}" data-my-match="${_isMyMatch ? '1' : '0'}" data-my-pending="${_isMyMatch && !isDecided && !isByeMatch ? '1' : '0'}" data-match-num="${matchNum != null ? matchNum : ''}" style="scroll-margin-top:var(--scroll-anchor,120px);background:${window._spCor(_isMyMatch ? 'rgba(99,102,241,0.06)' : 'var(--bg-card)', 'background')};border:${_isMyMatch ? '2px' : '1px'} solid ${hasPending && _pr && _pr.disputed ? 'rgba(239,68,68,0.55)' : hasPending ? 'rgba(251,191,36,0.5)' : cardBorder};${_lineLeftBorder}border-radius:12px;padding:14px;${_cardMax}box-shadow:${_isMyMatch ? '0 0 20px rgba(99,102,241,0.25),0 0 8px rgba(99,102,241,0.12),0 4px 12px rgba(0,0,0,0.15)' : hasPending && _pr && _pr.disputed ? '0 0 14px rgba(239,68,68,0.2),0 4px 12px rgba(0,0,0,0.15)' : hasPending ? '0 0 14px rgba(251,191,36,0.18),0 4px 12px rgba(0,0,0,0.15)' : matchReady ? '0 0 16px rgba(16,185,129,0.15),0 4px 12px rgba(0,0,0,0.15)' : matchPartial ? '0 0 10px rgba(245,158,11,0.1),0 4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.15)'};${hasTBD ? 'opacity:0.6;' : ''}">
       ${_headerHtml}
       ${_pendingBtnsRow}
       ${pendingBanner}
