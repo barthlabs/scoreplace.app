@@ -2178,6 +2178,12 @@ window._applyResultToTournament = function (t, matchId, payload) {
   m.resultAt = Date.now();
   if (!m.startedAt) m.startedAt = m.resultAt;
   if (m.pendingResult) delete m.pendingResult;
+  // Próximos jogos é uma fila, não histórico. Mantém SOMENTE este placar
+  // recém-gravado enquanto a tela atual está aberta, para o organizador
+  // conferir antes de chamar a próxima partida. Não persiste em storage.
+  try {
+    if (typeof window._markBracketJustScored === 'function') window._markBracketJustScored(t.id, m.id);
+  } catch (eJustScored) {}
 
   if (!isGroupMatch && !isRoundMatch) {
     if (typeof window._advanceWinner === 'function') window._advanceWinner(t, m);
@@ -2491,6 +2497,9 @@ window._saveResultInline = function (tId, matchId) {
   // Se havia um pendingResult (proposta anterior) — agora foi finalizado
   // pelo organizador OU pelo adversário, libera o slot.
   if (m.pendingResult) delete m.pendingResult;
+  try {
+    if (typeof window._markBracketJustScored === 'function') window._markBracketJustScored(tId, matchId);
+  } catch (eJustScored) {}
 
   // Som: resultado lançado/confirmado fora do placar ao vivo → fanfarra "Set".
   // (o caminho de proposta que precisa de aprovação já retornou acima.)

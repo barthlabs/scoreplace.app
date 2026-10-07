@@ -943,6 +943,28 @@ function _bracketTabsRefreshRoundRail(root) {
   rail.innerHTML = '';
 }
 
+// O placar acabado de lançar fica na fila operacional somente enquanto esta
+// instância da tela está viva. Não use storage: após refresh, ou depois de
+// deixar o detalhe e voltar, o organizador deve enxergar exclusivamente a
+// próxima partida sem resultado.
+window._bracketJustScoredByTournament = window._bracketJustScoredByTournament || {};
+window._markBracketJustScored = function (tournamentId, matchId) {
+  if (tournamentId == null || matchId == null) return;
+  window._bracketJustScoredByTournament[String(tournamentId)] = String(matchId);
+};
+if (!window._bracketJustScoredRouteCleanup) {
+  window._bracketJustScoredRouteCleanup = true;
+  window.addEventListener('hashchange', function () {
+    var hash = String(window.location.hash || '');
+    var active = /^#tournaments\/([^/?]+)/.exec(hash);
+    var activeId = active ? String(active[1]) : '';
+    var remembered = window._bracketJustScoredByTournament || {};
+    Object.keys(remembered).forEach(function (tournamentId) {
+      if (tournamentId !== activeId) delete remembered[tournamentId];
+    });
+  });
+}
+
 // Visão operacional do evento concentrado: os MESMOS cards da chave são
 // reagrupados por horário e quadra, sem clonar inputs, botões ou ids de placar.
 // Clonar os cards faria dois campos com o mesmo id e salvaria o resultado no
@@ -1067,20 +1089,14 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame) {
     var referenceDate = reference ? new Date(Number(reference.getAttribute('data-bracket-scheduled-at'))) : null;
     var dayKey = referenceDate && !isNaN(referenceDate.getTime())
       ? [referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate()].join('-') : '';
-    // Em Próximos jogos, além das partidas prontas e das presenças parciais,
-    // conservamos os DOIS últimos resultados deste dia para conferência.
-    // A seleção usa o carimbo persistido do resultado, não estado efêmero da
-    // tela: ao lançar o terceiro, o primeiro sai naturalmente da janela.
-    // [[regression_upcoming_keeps_two_last_saved_results]]
-    var recentCompletedIds = scheduledCards.filter(function (card) {
-      var at = Number(card.getAttribute('data-bracket-scheduled-at'));
-      var resultAt = Number(card.getAttribute('data-bracket-result-at'));
-      if (!isFinite(at) || at <= 0 || !isFinite(resultAt) || resultAt <= 0) return false;
-      var cardDate = new Date(at);
-      return dayKey && [cardDate.getFullYear(), cardDate.getMonth(), cardDate.getDate()].join('-') === dayKey;
-    }).sort(function (a, b) {
-      return Number(b.getAttribute('data-bracket-result-at')) - Number(a.getAttribute('data-bracket-result-at'));
-    }).slice(0, 2).map(function (card) { return card.id; });
+    // Próximos jogos é a fila operacional: resultado persistido NUNCA volta
+    // para ela numa abertura nova. A única exceção é o placar acabado de
+    // lançar nesta mesma página, que fica momentaneamente para conferência.
+    // O marcador vive só em memória (não em sessionStorage): recarregar ou
+    // sair e retornar elimina-o e mostra a próxima partida sem placar.
+    // [[regression_upcoming_keeps_only_current_session_result]]
+    var justScoredByTournament = window._bracketJustScoredByTournament || {};
+    var justScoredMatchId = String(justScoredByTournament[String(root.getAttribute('data-tournament-id') || '')] || '');
     var waitingPresence = 0;
     scheduledCards.forEach(function (card) {
       var at = Number(card.getAttribute('data-bracket-scheduled-at'));
@@ -1091,8 +1107,10 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame) {
       // Próximos jogos; sem ninguém presente ainda não é uma chamada em curso.
       var isWaitingPresence = onlyReady && card.getAttribute('data-bracket-presence') === 'partial';
       if (isWaitingPresence) waitingPresence++;
-      var isRecentCompleted = onlyReady && recentCompletedIds.indexOf(card.id) !== -1;
-      if (onlyReady && card.getAttribute('data-bracket-upcoming') !== '1' && !isWaitingPresence && !isRecentCompleted) return;
+      var isJustScored = onlyReady && justScoredMatchId &&
+        (card.id === ('card-' + justScoredMatchId) || card.id === justScoredMatchId) &&
+        Number(card.getAttribute('data-bracket-result-at')) > 0;
+      if (onlyReady && card.getAttribute('data-bracket-upcoming') !== '1' && !isWaitingPresence && !isJustScored) return;
       var wrapper = card.parentNode;
       var placeholder = document.createComment('scoreplace-general-card');
       wrapper.parentNode.insertBefore(placeholder, wrapper);
@@ -1102,7 +1120,7 @@ function _bracketGeneralView(root, show, gender, onlyReady, focusNextGame) {
       // wrapper. O container de origem é ocultado separadamente logo abaixo.
       // [[regression_general_agenda_moves_visible_cards]]
       card.hidden = false;
-      entries.push({ card: card, wrapper: wrapper, placeholder: placeholder, at: at, court: card.getAttribute('data-bracket-court') || '', round: Number(card.getAttribute('data-bracket-tab-round')) || 1, waitingPresence: isWaitingPresence, recentCompleted: isRecentCompleted });
+      entries.push({ card: card, wrapper: wrapper, placeholder: placeholder, at: at, court: card.getAttribute('data-bracket-court') || '', round: Number(card.getAttribute('data-bracket-tab-round')) || 1, waitingPresence: isWaitingPresence, justScored: isJustScored });
     });
     entries.sort(function (a, b) {
       if (a.at !== b.at) return a.at - b.at;

@@ -1192,7 +1192,11 @@ window._nextScheduledTournamentMatchTarget = function(t) {
     return { category: '__upcoming', gender: gender, round: '' };
   };
   var matches = window._collectAllMatches(t).filter(function(m) {
-    return !!(m && m.id != null && !m.winner && !m.resultAt && !m.isBye &&
+    // Não basta olhar `winner`: importações antigas e W.O. podem ter
+    // `completedAt`/`wo` sem vencedor materializado. Para o organizador,
+    // qualquer resultado concluído sai da fila de chamada.
+    var hasResult = !!(m && (m.winner || m.resultAt || m.completedAt || m.wo));
+    return !!(m && m.id != null && !hasResult && !m.isBye &&
       asMs(m.scheduledAt) > 0);
   });
   matches.sort(function(a, b) {

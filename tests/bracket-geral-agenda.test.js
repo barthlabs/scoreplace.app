@@ -85,15 +85,19 @@ function trecho(inicio, fim) {
       waiting: Array.from(agenda.querySelectorAll('[data-bracket-upcoming-waiting] [data-bracket-tab-category]')).map((el) => el.id)
     };
 
-    // Dois resultados já registrados continuam na lista operacional; o
-    // terceiro substitui o mais antigo para a conferência não crescer sem fim.
+    // Resultado persistido não pertence à fila operacional numa abertura
+    // normal. Só o último placar confirmado nesta mesma sessão de tela fica
+    // visível para conferência; o histórico não volta após recarregar.
     document.getElementById('source').insertAdjacentHTML('beforeend',
       card('played-old', 'fem', 'Light', at(22, 19), 'Quadra 4', false, 1, '', 100) +
       card('played-mid', 'fem', 'Light', at(22, 19), 'Quadra 5', false, 1, '', 200) +
       card('played-new', 'fem', 'Light', at(22, 19), 'Quadra 6', false, 1, '', 300));
     document.getElementById('light').click();
     document.getElementById('upcoming').click();
-    const recentResults = Array.from(agenda.querySelectorAll('[data-bracket-tab-category]')).map((el) => el.id);
+    const freshUpcomingResults = Array.from(agenda.querySelectorAll('[data-bracket-tab-category]')).map((el) => el.id);
+    window._bracketJustScoredByTournament = { neon: 'played-new' };
+    document.getElementById('upcoming').click();
+    const justScoredResults = Array.from(agenda.querySelectorAll('[data-bracket-tab-category]')).map((el) => el.id);
 
     document.getElementById('light').click();
     const restored = {
@@ -190,7 +194,7 @@ function trecho(inicio, fim) {
       moved: !!focusRoot._bracketGeneralView.querySelector('#focus-ready'),
       track: !!focusRoot._bracketGeneralView.querySelector('.bracket-general-rounds-track')
     };
-    return { generalState, upcomingState, recentResults, restored, generalReentry, cleanup, noSchedule, nested, externalSource, readyFocus };
+    return { generalState, upcomingState, freshUpcomingResults, justScoredResults, restored, generalReentry, cleanup, noSchedule, nested, externalSource, readyFocus };
   });
 
   console.log('\n📋 Geral é a agenda do dia, não uma cópia por gênero');
@@ -205,8 +209,10 @@ function trecho(inicio, fim) {
   ok(result.upcomingState.order.join(',') === 'fem-waiting,fem-court-5,fem-round-2', 'a partida parcialmente presente vem antes dos próximos jogos prontos');
   ok(result.upcomingState.waiting.join(',') === 'fem-waiting', 'a lista de aguardando presença fica no topo de Próximos jogos');
   ok(result.upcomingState.visibleCards, 'o card pronto continua visível depois de mover entre Geral e Próximos jogos');
-  ok(result.recentResults.indexOf('played-new') !== -1 && result.recentResults.indexOf('played-mid') !== -1 && result.recentResults.indexOf('played-old') === -1,
-    'Próximos jogos preserva os dois últimos placares e remove somente o terceiro mais antigo');
+  ok(result.freshUpcomingResults.indexOf('played-new') === -1 && result.freshUpcomingResults.indexOf('played-mid') === -1 && result.freshUpcomingResults.indexOf('played-old') === -1,
+    'Próximos jogos não reintroduz resultados persistidos após uma abertura nova');
+  ok(result.justScoredResults.indexOf('played-new') !== -1 && result.justScoredResults.indexOf('played-mid') === -1 && result.justScoredResults.indexOf('played-old') === -1,
+    'Próximos jogos conserva apenas o último placar recém-lançado na sessão atual');
   console.log('\n📋 Voltar para categoria restaura a chave canônica');
   ok(result.restored.sourceVisible && result.restored.agendaHidden, 'Light fecha a agenda e restaura a fonte');
   ok(result.restored.originalOrder.join(',') === 'fem-court-5,masc-same-day,fem-round-2,fem-waiting,tomorrow,played-old,played-mid,played-new', 'cada wrapper volta exatamente ao seu placeholder');

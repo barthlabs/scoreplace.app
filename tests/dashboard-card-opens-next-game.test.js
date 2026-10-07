@@ -105,6 +105,8 @@ function section(from, to) {
     window._collectAllMatches = (t) => t.matches;
     return window._nextScheduledTournamentMatchTarget({ matches: [
       { id: 'done', resultAt: 1792694000000, scheduledAt: '2026-10-22T18:00:00Z', court: 'Quadra 1', _gameNum: 1, category: 'Fem Light' },
+      { id: 'legacy-done', completedAt: 1792694000000, scheduledAt: '2026-10-22T17:30:00Z', court: 'Quadra 1', _gameNum: 0, category: 'Fem Light' },
+      { id: 'wo-done', wo: true, scheduledAt: '2026-10-22T17:45:00Z', court: 'Quadra 2', _gameNum: 0, category: 'Fem Light' },
       { id: 'unscheduled', court: 'Quadra 1', _gameNum: 2, category: 'Fem Light' },
       { id: 'court-5', scheduledAt: { seconds: 1792694100 }, court: 'Quadra 5', _gameNum: 4, category: 'Fem Power' },
       { id: 'court-4', scheduledAt: { toMillis: () => 1792694100000 }, court: 'Quadra 4', _gameNum: 3, category: 'Fem Light' }
