@@ -25,5 +25,9 @@ ok(r.changed && r.phases[0].kind === 'classification', 'projetor real traduz lig
 const legacySwiss = { format: 'Eliminatórias Simples', classifyFormat: 'swiss', currentStage: 'swiss', phases: [{ name: 'Classificatória', formatCode: 'liga', format: 'Suíço' }] };
 r = planLegacyPhaseProjection(legacySwiss, _window.FORMAT2.projectLegacyPhases);
 ok(r.changed && r.phases[0].classification && r.phases[0].classification.pairing && r.phases[0].classification.pairing.strategy === 'ranking_clusters', 'projetor traduz o marcador suíço legado para pareamento classificatório canônico');
+const legacyMonarch = { phases: [{ name: 'Abertura', format: 'Rei/Rainha', drawMode: 'rei_rainha', reiRainha: true }] };
+r = planLegacyPhaseProjection(legacyMonarch, _window.FORMAT2.projectLegacyPhases);
+ok(r.changed && r.phases[0].kind === 'classification' && r.phases[0].formatCode === 'classification_rounds', 'Rei/Rainha legado sem código Liga continua uma classificatória');
+ok(r.phases[0].classification && r.phases[0].classification.pairing && r.phases[0].classification.pairing.strategy === 'monarch_groups', 'Rei/Rainha legado preserva o modo de sorteio canônico');
 console.log((fail ? '✗' : '✓') + ' legacy-phase-projection-core: ' + pass + ' passaram, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);

@@ -73,7 +73,11 @@
     if (explicit === 'classification' || explicit === 'elimination') return explicit;
     var code = String((phase && phase.formatCode) || (tournament && tournament.formatCode) || '').toLowerCase();
     var label = String((phase && phase.format) || (tournament && tournament.format) || '').toLowerCase();
+    var monarch = !!(phase && phase.reiRainha) ||
+      String((phase && phase.drawMode) || '').toLowerCase() === 'rei_rainha' ||
+      /rei\s*\/?\s*rainha|monarch/.test(label);
     if (code === 'elim_simples' || code === 'elim_dupla') return 'elimination';
+    if (monarch) return 'classification';
     if (code === 'grupos_mata' || code === 'classification_groups' || /grupo/.test(label)) return 'classification';
     if (code === 'liga' || code === 'classification_rounds' || /\bliga\b|pontos corridos|ranking|su[ií]ç?o|swiss/.test(label)) return 'classification';
     return 'elimination';
@@ -135,6 +139,10 @@
     if (normalizedCurrent) return normalizedCurrent;
     var code = String((phase && phase.formatCode) || (tournament && tournament.formatCode) || '').toLowerCase();
     var label = String((phase && phase.format) || (tournament && tournament.format) || '').toLowerCase();
+    var isMonarch = !!(phase && phase.reiRainha) ||
+      String((phase && phase.drawMode) || '').toLowerCase() === 'rei_rainha' ||
+      /rei\s*\/?\s*rainha|monarch/.test(label);
+    if (isMonarch) return { strategy: 'monarch_groups', entryMode: 'rotate' };
     // `classifyFormat` e `currentStage` foram marcadores transitórios do
     // construtor suíço. A projeção os absorve no único lugar de domínio que
     // importa: a própria fase classificatória.
