@@ -37,7 +37,7 @@ console.log('\n──── segunda conta: explica e age ────\n');
 
 // ── ① a pergunta na tela conta a situação ──────────────────────────────────
 const iP = AUTH.indexOf('window._askDuplicateAccount = function');
-const POPUP = semComentario(AUTH.slice(iP, AUTH.indexOf('window._askNameConflict = function', iP)));
+const POPUP = semComentario(AUTH.slice(iP, AUTH.indexOf('// ── Formas de entrar (provedores federados no MESMO uid)', iP)));
 must(iP > 0, '① a pergunta existe');
 must(/ds\.pista/.test(POPUP), '① ⭐ ela usa a pista que o servidor mandou');
 must(/está inscrita em/.test(POPUP),

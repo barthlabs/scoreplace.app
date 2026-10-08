@@ -187,7 +187,7 @@ const achou = (c, p) => D.detectarMesmaPessoa(c, p).suspeito;
    * outra conta") e reprovou o texto novo, que hedge do mesmo jeito. O que não pode mudar é
    * AFIRMAR: dizer "você já tem outra conta" mente quando são dois homônimos de verdade. */
   const _iPop = auth.indexOf('window._askDuplicateAccount = function');
-  const _popup = auth.slice(_iPop, auth.indexOf('window._askNameConflict = function', _iPop));
+  const _popup = auth.slice(_iPop, auth.indexOf('// ── Formas de entrar (provedores federados no MESMO uid)', _iPop));
   ok('  → o texto NUNCA afirma: ele hedge',
     _iPop > 0 && /(PARECE|[Pp]arece|tudo indica)/.test(_popup));
   ok('  → e não diz de saída que a conta é dela',

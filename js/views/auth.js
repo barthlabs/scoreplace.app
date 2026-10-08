@@ -8304,37 +8304,13 @@ function setupProfileModal() {
       });
     };
 
-    // ── Outra conta com o mesmo NOME: avisar e oferecer unir COM PROVA ────
-    // Quem decide se existe colisão é o SERVIDOR (checkNameConflict) — o cliente não
-    // recebe o uid nem o contato cheio da outra conta, só o MASCARADO. E o botão não
-    // funde nada: ele pede uma PROVA DE POSSE (link no e-mail da outra conta), porque
-    // nome igual não é evidência de que a conta é da mesma pessoa. Fundir dois
-    // homônimos de verdade apagaria alguém do Auth — erro que não tem volta, enquanto
-    // conta duplicada é só incômodo.
-    
-// ─── "Já existe uma conta com o seu nome. É você?" (v1.7.41) ─────────────────
-//
-// REGRA DO DONO (05/ago/2026): _"o certo, invés de criar 'Gabriela Ferreira 2', é indicar o
-// nome que já existe, indicando com ****email/celular e perguntar se é a mesma pessoa.
-// Autentica se for e mescla. Se não for, que a pessoa indique um nome válido e livre para
-// display name (mostra o nome que já existe e quais variações pode sugerir)."_
-//
-// Quem DETECTA é o trigger `enforceUniqueDisplayName`, que parou de renomear em silêncio e
-// passou a gravar `nameConflict` no perfil — só com o contato MASCARADO (uid e valor cheio
-// da outra conta nunca chegam ao cliente). Esta função é quem finalmente PERGUNTA: sem ela o
-// sinal era gravado e ninguém lia.
-//
-// Nada é fundido aqui. "Sim" leva pro perfil, onde vivem os dois canais de PROVA DE POSSE
-// (link no e-mail / SMS no celular da outra conta) — nome igual detecta, nome igual não
-// autoriza ([[project_unique_display_name]]). "Não" só troca o próprio nome por um livre.
-// ─── POSSÍVEL SEGUNDA CONTA — a pergunta no CADASTRO (v1.8.3) ───────────────────────
+// ─── POSSÍVEL SEGUNDA CONTA — a pergunta no CADASTRO ─────────────────────────
 // Regra do dono (11/ago/2026): _"essa verificação deve acontecer quando a pessoa se
 // cadastra"_ e _"tem que perguntar"_. O trigger grava `dupSuspect` (só o contato
 // MASCARADO); aqui é quem finalmente PERGUNTA — sem isso o sinal era gravado e ninguém lia.
 //
-// ⚠️ SEPARADO do `_askNameConflict` de propósito. Aquele é UNICIDADE (nome idêntico → a
-// saída é escolher outro nome). Este é DUPLICATA (nome PARECIDO ou credencial) → a saída é
-// unir ou dizer "não sou eu". Sobre "Rodrigo Terra Barth" × "Rodrigo Barth" o dono foi
+// Homônimos são permitidos. Este fluxo trata somente suspeita de DUPLICATA por sinais
+// combinados, e nunca usa nome como identidade. Sobre "Rodrigo Terra Barth" × "Rodrigo Barth" o dono foi
 // explícito: _"é diferente. se disser que não é, não é, mas é um baita indício."_ — ninguém
 // precisa trocar de nome por isso, precisa ser perguntado.
 //
@@ -8355,7 +8331,7 @@ function setupProfileModal() {
 // atrás. O app já se recusa a gravar o e-mail como nome num login social
 // (_seedProfileFromAuth) — a contrapartida é PERGUNTAR, senão a pessoa fica
 // "Jogador sem perfil (XXXX)" na lista de espera do organizador.
-// Mesma doutrina do _askNameConflict: quem decide o nome é a pessoa.
+// O nome de exibição continua escolha da própria pessoa.
 window._askMissingName = function () {
   try {
     var cu = window.AppStore && window.AppStore.currentUser;
@@ -8554,197 +8530,6 @@ window._askDuplicateAccount = function () {
     }, { confirmText: 'Sim, unir as duas', cancelText: 'Não sou eu' });
   } catch (e) { if (window._warn) window._warn('[dupAccount] pergunta falhou:', e); }
 };
-
-window._askNameConflict = function () {
-  try {
-    var cu = window.AppStore && window.AppStore.currentUser;
-    if (!cu || !cu.uid) return;
-    var nc = cu.nameConflict;
-    if (!nc || !nc.nome) return;
-    if (window._nameConflictAsked) return;      // uma vez por sessão
-    window._nameConflictAsked = true;
-
-    var contato = nc.maskedEmail || nc.maskedPhone || '';
-    var corpo =
-      '<div style="font-size:0.86rem;line-height:1.5;">' +
-        'Já existe uma conta cadastrada com o nome <strong>' + window._safeHtml(nc.nome) + '</strong>' +
-        (contato ? (', com o contato <strong>' + window._safeHtml(contato) + '</strong>') : '') + '.' +
-      '</div>' +
-      '<div style="margin-top:10px;font-size:0.8rem;color:var(--text-muted);line-height:1.45;">' +
-        'Se essa conta é <strong>sua</strong>, dá pra unir as duas — seus torneios, jogos e histórico ficam num lugar só. ' +
-        'A união só acontece depois que você confirmar a posse daquela conta (link no e-mail ou código no celular dela). ' +
-        'Se for outra pessoa com o mesmo nome, escolha um nome livre pra vocês não serem confundidos.' +
-      '</div>';
-
-    showConfirmDialog('👤 Esse nome já está em uso', corpo, function () {
-      if (typeof showNotification === 'function') {
-        showNotification('Confirme a posse', 'Abrimos seu perfil: confirme pelo e-mail ou pelo celular da outra conta pra unir as duas.', 'info');
-      }
-      window.location.hash = '#profile';
-    }, function () {
-      // ⚠️ MEDIDO no navegador (05/ago): chamar direto aqui NÃO abria a escolha de nome.
-      // O "Não sou eu" fecha este diálogo, e o fechamento varre overlays — o novo diálogo
-      // nascia no meio dessa varredura e morria junto. Isolado, a mesma função abre normal.
-      // Adiar um tick deixa o fechamento terminar antes de o próximo abrir.
-      setTimeout(function () { window._pickFreeDisplayName(nc.nome); }, 350);
-    }, { confirmText: 'Sim, é minha outra conta', cancelText: 'Não sou eu' });
-  } catch (e) { if (window._warn) window._warn('[nameConflict] pergunta falhou:', e); }
-};
-
-// "Não sou eu" → escolher um nome LIVRE, com o ocupado à vista e sugestões do servidor.
-// A disponibilidade é decidida pela CF (checkDisplayNameAvailability): o cliente é fail-open
-// e não pode ser a autoridade sobre unicidade — foi por isso que homônimos continuaram
-// nascendo mesmo com a regra existindo ([[project_unique_display_name]]).
-window._pickFreeDisplayName = function (nomeOcupado) {
-  var fns = (window.firebase && firebase.functions) ? firebase.functions() : null;
-  if (!fns) return;
-  fns.httpsCallable('checkDisplayNameAvailability')({}).then(function (res) {
-    var sug = ((res && res.data && res.data.sugestoes) || []).slice(0, 3);
-    var msg =
-      '<div style="font-size:0.84rem;line-height:1.5;">O nome <strong>' + window._safeHtml(nomeOcupado) +
-      '</strong> já é de outra pessoa. Escolha como você quer aparecer:</div>' +
-      (sug.length ? ('<div style="margin-top:10px;font-size:0.78rem;color:var(--text-muted);">Livres agora: ' +
-        sug.map(function (s) { return '<strong>' + window._safeHtml(s) + '</strong>'; }).join(' · ') + '</div>') : '');
-    showInputDialog('✏️ Escolha seu nome', msg, function (novo) {
-      novo = String(novo || '').trim();
-      if (!novo) return;
-      fns.httpsCallable('checkDisplayNameAvailability')({ nome: novo }).then(function (r2) {
-        if (!(r2 && r2.data && r2.data.livre)) {
-          if (typeof showNotification === 'function') {
-            showNotification('Nome em uso', 'Esse nome também já está ocupado. Tente outro.', 'warning');
-          }
-          window._nameConflictAsked = false;
-          return window._pickFreeDisplayName(nomeOcupado);
-        }
-        var uid = window.AppStore.currentUser.uid;
-        window.FirestoreDB.saveUserProfile(uid, { displayName: novo, displayName_lower: novo.toLowerCase() })
-          .then(function () {
-            window.AppStore.currentUser.displayName = novo;
-            if (typeof showNotification === 'function') showNotification('✅ Nome atualizado', 'Agora você aparece como "' + novo + '".', 'success');
-            if (typeof window._refreshTopbarUser === 'function') window._refreshTopbarUser();
-          });
-      });
-    }, { placeholder: sug[0] || 'Seu nome', okText: 'Usar este nome', defaultValue: sug[0] || '' });
-  }).catch(function (e) { if (window._warn) window._warn('[nameConflict] sugestões falharam:', e); });
-};
-
-window._profileHydrateNameConflict = function () {
-      var box = document.getElementById('profile-name-conflict');
-      if (!box) return;
-      var fns = (window.firebase && firebase.functions) ? firebase.functions() : null;
-      if (!fns) return;
-      fns.httpsCallable('checkNameConflict')({}).then(function (res) {
-        var d = (res && res.data) || {};
-        if (!d.hasConflict) { box.style.display = 'none'; box.innerHTML = ''; return; }
-        var contato = d.maskedEmail || d.maskedPhone || '';
-        var podeEmail = !!d.maskedEmail;
-        box.style.display = '';
-        box.innerHTML =
-          '<div style="background:rgba(251,191,36,0.10);border:1px solid rgba(251,191,36,0.35);border-radius:10px;padding:10px 12px;">' +
-            '<div style="font-size:0.8rem;font-weight:700;color:var(--sp-c-fbbf24,#fbbf24);margin-bottom:4px;">👤 Existe outra conta com o seu nome</div>' +
-            '<div style="font-size:0.75rem;color:var(--text-muted);line-height:1.45;">' +
-              (contato
-                ? 'Ela está cadastrada com ' + window._safeHtml(contato) + '. '
-                : '') +
-              'Se essa conta é <strong>sua</strong>, dá pra unir as duas: seus torneios, partidas e histórico ficam num lugar só. ' +
-              'Se for outra pessoa com o mesmo nome, é só ignorar — nada acontece sem você confirmar.' +
-            '</div>' +
-            // Dois caminhos de PROVA, os dois já existentes no app. E-mail: o servidor manda
-            // o link pra caixa da outra conta (a pessoa não precisa saber o endereço).
-            // Celular: a pessoa digita o número da outra conta e o SMS chega lá — a sessão
-            // secundária devolve o uid daquela conta, e é isso que o servidor exige como
-            // prova (mergePhoneAccount → verifyIdToken). Quem não sabe o número não passa.
-            '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;">' +
-              (podeEmail
-                ? '<button type="button" id="profile-name-merge-btn" class="btn btn-warning btn-sm" ' +
-                    'onclick="window._profileRequestNameMerge()">✉️ Confirmar por e-mail</button>'
-                : '') +
-              (d.maskedPhone
-                ? '<button type="button" id="profile-nc-phone-btn" class="btn btn-success btn-sm" ' +
-                    'onclick="window._profileNameMergeByPhone()">📲 Confirmar por celular</button>'
-                : '') +
-            '</div>' +
-            (!podeEmail && !d.maskedPhone
-              ? '<div style="font-size:0.72rem;color:var(--text-muted);opacity:0.85;margin-top:8px;">' +
-                  'A outra conta não tem e-mail nem celular cadastrados, então não há como confirmar ' +
-                  'que ela é sua. Entre nela e cadastre um dos dois no perfil.</div>'
-              : '') +
-            '<div id="profile-name-merge-msg" style="display:none;margin-top:8px;font-size:0.78rem;"></div>' +
-            // Campos do caminho por celular — escondidos até o clique.
-            '<div id="profile-nc-phone-wrap" style="display:none;margin-top:10px;">' +
-              '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:6px;">' +
-                'Digite o celular da outra conta' + (d.maskedPhone ? ' — termina em ' + window._safeHtml(d.maskedPhone) : '') +
-                '. Mandamos um código por SMS pra ele.</div>' +
-              '<div style="display:flex;gap:6px;align-items:center;">' +
-                '<select id="profile-nc-phone-country" aria-label="DDI" class="form-control" style="width:124px;flex-shrink:0;box-sizing:border-box;font-size:0.85rem;padding:0.75rem 0.45rem;">' +
-                  (window._phoneCountryOptionsHtml ? window._phoneCountryOptionsHtml('55') : '<option value="55">🇧🇷 +55</option>') +
-                '</select>' +
-                '<input type="tel" id="profile-nc-phone-input" class="form-control" placeholder="(11) 99999-8888" data-digits="" style="flex:1;min-width:0;box-sizing:border-box;" ' +
-                  'oninput="this.setAttribute(\'data-digits\', this.value.replace(/\\D/g,\'\'));">' +
-              '</div>' +
-              '<button type="button" class="btn btn-success btn-sm" style="margin-top:6px;" ' +
-                'onclick="window._profileVerifyPhone && window._profileVerifyPhone({conflict:true})">Enviar código por SMS</button>' +
-              '<div id="profile-nc-phone-otp" style="display:none;margin-top:8px;"></div>' +
-              '<div id="profile-nc-phone-recaptcha" style="display:none;"></div>' +
-            '</div>' +
-          '</div>';
-      }).catch(function (e) {
-        // Fail-open: aviso é conveniência, não pode quebrar o perfil.
-        if (window._warn) window._warn('[nameConflict] fail-open:', e);
-      });
-    };
-
-    // Revela os campos do caminho por CELULAR. O envio em si é do _profileVerifyPhone
-    // ({conflict:true}) — a mesma máquina já usada no celular vinculado: app secundário
-    // 'profilephone' (persistence NONE, não derruba a sessão), reCAPTCHA invisível recriado
-    // FRESCO e off-screen mas EM LAYOUT (display:none faz o token sair inválido no iOS),
-    // e no fim mergePhoneAccount com o proofIdToken da sessão do telefone.
-    window._profileNameMergeByPhone = function () {
-      var w = document.getElementById('profile-nc-phone-wrap');
-      if (!w) return;
-      w.style.display = '';
-      var btn = document.getElementById('profile-nc-phone-btn');
-      if (btn) btn.style.display = 'none';
-      var inp = document.getElementById('profile-nc-phone-input');
-      if (inp) { try { inp.focus(); } catch (e) {} }
-    };
-
-    // Dispara a PROVA. Não funde nada aqui — quem funde é o clique no link que chega
-    // na caixa da OUTRA conta (confirmEmailMerge). O e-mail de destino é resolvido no
-    // servidor; o cliente nunca o conhece.
-    window._profileRequestNameMerge = function () {
-      var btn = document.getElementById('profile-name-merge-btn');
-      var msg = document.getElementById('profile-name-merge-msg');
-      var fns = (window.firebase && firebase.functions) ? firebase.functions() : null;
-      if (!fns) return;
-      function diz(tipo, txt) {
-        if (!msg) return;
-        msg.style.display = '';
-        msg.style.color = (tipo === 'err') ? '#fca5a5' : (tipo === 'ok' ? '#6ee7b7' : 'var(--text-muted)');
-        msg.textContent = txt;
-      }
-      if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
-      diz('info', 'Enviando…');
-      fns.httpsCallable('requestNameMergeProof')({ channel: 'email' }).then(function (res) {
-        var d = (res && res.data) || {};
-        if (d.ok) {
-          diz('ok', '✅ Enviamos um link para ' + (d.masked || 'o e-mail da outra conta') +
-            '. Abra lá e confirme — é assim que provamos que a conta é sua. O link vale 1 hora.');
-          if (btn) btn.style.display = 'none';
-          return;
-        }
-        if (d.reason === 'no-conflict') { diz('info', 'Não há mais outra conta com esse nome.'); return; }
-        if (d.reason === 'no-email') { diz('err', 'A outra conta não tem e-mail cadastrado — não dá pra enviar a confirmação.'); return; }
-        diz('err', 'Não foi possível enviar agora.');
-        if (btn) { btn.disabled = false; btn.style.opacity = ''; }
-      }).catch(function (e) {
-        var code = (e && e.code) || '';
-        diz('err', /resource-exhausted/.test(code)
-          ? 'Muitas tentativas. Tente de novo daqui a pouco.'
-          : 'Não foi possível enviar agora. Tente de novo.');
-        if (btn) { btn.disabled = false; btn.style.opacity = ''; }
-      });
-    };
 
     // ── Formas de entrar (provedores federados no MESMO uid) ──────────────
     // Ver o comentário do bloco de UI: isto NÃO é linkedEmails/linkedPhones.
