@@ -35,7 +35,7 @@ namespace ScoreplaceWaitlist {
   export function nameForms(value: unknown, helpers: Helpers): string[] {
     const values: unknown[] = [helpers.displayName(value)];
     const entry = record(value);
-    if (entry) values.push(entry.displayName, entry.name, entry.email);
+    if (entry) values.push(entry.displayName, entry.name);
     else if (typeof value === 'string') values.push(value);
     return [...new Set(values.map((item) => text(item).toLowerCase()).filter(Boolean))];
   }

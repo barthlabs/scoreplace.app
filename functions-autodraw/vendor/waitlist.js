@@ -29,7 +29,7 @@ var ScoreplaceWaitlist;
         const values = [helpers.displayName(value)];
         const entry = record(value);
         if (entry)
-            values.push(entry.displayName, entry.name, entry.email);
+            values.push(entry.displayName, entry.name);
         else if (typeof value === 'string')
             values.push(value);
         return [...new Set(values.map((item) => text(item).toLowerCase()).filter(Boolean))];
