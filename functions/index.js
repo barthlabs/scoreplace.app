@@ -8218,22 +8218,10 @@ exports.checkNameConflict = onCall(
   async (request) => {
     const callerUid = request.auth && request.auth.uid;
     if (!callerUid) throw new HttpsError("unauthenticated", "Login obrigatório");
-    const db = admin.firestore();
-    const me = await db.collection("users").doc(callerUid).get();
-    if (!me.exists) return { hasConflict: false };
-    const nome = String((me.data() || {}).displayName || "").trim();
-    if (!nome) return { hasConflict: false };
-
-    const c = await _nameUnique.findDisplayNameConflict(db, nome, callerUid);
-    if (!c) return { hasConflict: false };
-
-    // Só o MASCARADO sai daqui — o valor cheio e o uid nunca chegam ao cliente.
-    return {
-      hasConflict: true,
-      name: nome,
-      maskedEmail: _nameUnique.maskEmail(c.email) || null,
-      maskedPhone: _nameUnique.maskPhone(c.phone) || null,
-    };
+    // Compatibilidade para clientes antigos: homônimos são permitidos e não são
+    // identidade. A interface atual recebe apenas `dupSuspect`, que passa pelo
+    // detector de segunda conta e pela prova de posse.
+    return { hasConflict: false, retired: true };
   }
 );
 
@@ -8263,13 +8251,7 @@ exports.checkNameConflict = onCall(
  * ⚠️ A PROVA CONTINUA SENDO EXIGIDA. Dizer "sim" não une nada: quem une é quem RECEBE a
  * mensagem na outra conta. Sem isso, bastaria um homônimo dizer "sim" para engolir a conta
  * alheia. [[project_duplicata_o_sim_tem_que_agir]] */
-exports.pedirProvaDaSegundaConta = onCall(
-  { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
-  async (request) => {
-    const callerUid = request.auth && request.auth.uid;
-    if (!callerUid) throw new HttpsError("unauthenticated", "Login obrigatório");
-    const db = admin.firestore();
-
+async function _pedirProvaDaSegundaConta(db, callerUid) {
     const me = await db.collection("users").doc(callerUid).get();
     if (!me.exists) throw new HttpsError("failed-precondition", "perfil não encontrado");
 
@@ -8322,6 +8304,14 @@ exports.pedirProvaDaSegundaConta = onCall(
     }, { merge: true });
     console.log(`[pedirProvaDaSegundaConta] prova enviada: req=${callerUid} target=${alvo.uid}`);
     return { ok: true, sent: true, canal: "email", masked: _nameUnique.maskEmail(email) };
+}
+
+exports.pedirProvaDaSegundaConta = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError("unauthenticated", "Login obrigatório");
+    return _pedirProvaDaSegundaConta(admin.firestore(), callerUid);
   }
 );
 
@@ -8330,35 +8320,10 @@ exports.requestNameMergeProof = onCall(
   async (request) => {
     const callerUid = request.auth && request.auth.uid;
     if (!callerUid) throw new HttpsError("unauthenticated", "Login obrigatório");
-    const channel = String((request.data && request.data.channel) || "email").trim();
-    const db = admin.firestore();
-
-    const me = await db.collection("users").doc(callerUid).get();
-    if (!me.exists) throw new HttpsError("failed-precondition", "perfil não encontrado");
-    const nome = String((me.data() || {}).displayName || "").trim();
-    const c = nome ? await _nameUnique.findDisplayNameConflict(db, nome, callerUid) : null;
-    if (!c) return { ok: false, reason: "no-conflict" };
-
-    // Rate limit: 3 envios por hora por caller.
-    const rlRef = db.collection("mergeProofLimits").doc(callerUid);
-    const rl = await rlRef.get();
-    const agora = Date.now();
-    const janela = (rl.exists && rl.data().windowStart && rl.data().windowStart.toMillis)
-      ? rl.data().windowStart.toMillis() : 0;
-    const n = (rl.exists && janela && (agora - janela) < 3600000) ? (rl.data().count || 0) : 0;
-    if (n >= 3) throw new HttpsError("resource-exhausted", "Muitas tentativas. Tente de novo daqui a pouco.");
-
-    if (channel !== "email") throw new HttpsError("invalid-argument", "canal não suportado ainda");
-    if (!c.email) return { ok: false, reason: "no-email" };
-
-    await _sendMergeProofEmail(db, callerUid, c.uid, c.email);
-    await rlRef.set({
-      count: n + 1,
-      windowStart: (n === 0) ? admin.firestore.FieldValue.serverTimestamp() : (rl.data() || {}).windowStart,
-    }, { merge: true });
-
-    console.log(`[requestNameMergeProof] prova por ${channel} enviada: req=${callerUid} target=${c.uid}`);
-    return { ok: true, sent: true, masked: _nameUnique.maskEmail(c.email) };
+    // Nome do callable preservado apenas para cliente antigo: nunca resolve o
+    // alvo por displayName. Toda prova passa pelo detector UID/contato do fluxo
+    // atual e pela mesma limitação de taxa.
+    return _pedirProvaDaSegundaConta(admin.firestore(), callerUid);
   }
 );
 

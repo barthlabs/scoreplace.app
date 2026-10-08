@@ -67,7 +67,11 @@ must(/Não deu para enviar agora/.test(POPUP),
 // ── ③ o servidor descobre sozinho qual é a outra conta ─────────────────────
 const iD = CODIGO.indexOf('exports.pedirProvaDaSegundaConta = onCall(');
 must(iD > 0, '③ a porta existe no servidor');
-const PORTA = CODIGO.slice(iD, CODIGO.indexOf('\nexports.', iD + 10));
+const iHelper = CODIGO.indexOf('async function _pedirProvaDaSegundaConta(');
+must(iHelper > 0, '③ a regra de prova tem um único núcleo reutilizável');
+const PORTA = CODIGO.slice(iHelper, CODIGO.indexOf('\nexports.', iHelper + 10));
+must(/return _pedirProvaDaSegundaConta\(admin\.firestore\(\), callerUid\)/.test(CODIGO.slice(iD, CODIGO.indexOf('\nexports.', iD + 10))),
+  '③ a porta pública delega ao núcleo de prova');
 must(/_detectarDuplicataNaBase\(db, callerUid/.test(PORTA),
   '③ ⭐⭐ ela redescobre o par sozinha — o cliente nunca soube nem manda o uid do outro');
 must(!/request\.data.*uid/.test(PORTA),
