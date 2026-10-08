@@ -39,6 +39,17 @@ function renderRules(container, tournamentId) {
     misto: _t('rules.enrollMixed')
   }[t.enrollmentMode || 'individual'];
 
+  // A ficha descreve a configuração do torneio inteiro. Quando há fases
+  // canônicas, o rótulo histórico do topo não pode decidir se há eliminatória
+  // ou classificatória por pontos — um torneio pode conter ambas.
+  const canonicalPhases = Array.isArray(t.phases) && t.phases.some((phase) => phase && phase.kind);
+  const hasEliminationPhase = canonicalPhases
+    ? t.phases.some((phase) => phase && phase.kind === 'elimination')
+    : (t.format === 'Eliminatórias Simples' || t.format === 'Dupla Eliminatória');
+  const hasRoundRobinPhase = canonicalPhases
+    ? t.phases.some((phase) => phase && phase.kind === 'classification' && (!phase.classification || phase.classification.structure !== 'groups'))
+    : t.format === 'Liga';
+
   const formatInfo = () => {
     const f = t.format || 'Eliminatórias Simples';
     let extra = '';
@@ -204,7 +215,7 @@ function renderRules(container, tournamentId) {
               <span style="font-weight:600;color:var(--text-bright);font-size:0.9rem;text-align:right;">${value}</span>
             </li>`).join('')}
 
-          ${(t.format === 'Eliminatórias Simples' || t.format === 'Dupla Eliminatória') ? `
+          ${hasEliminationPhase ? `
             <li style="padding:0.85rem 0;border-bottom:1px solid var(--border-color);">
               <div style="color:var(--text-muted);font-size:0.9rem;margin-bottom:6px;">${_t('rules.finalRanking')}</div>
               <div style="font-weight:600;color:var(--text-bright);">${t.elimRankingType === 'blocks' ? _t('rules.rankBlocks') : _t('rules.rankIndividual')}</div>
@@ -214,7 +225,7 @@ function renderRules(container, tournamentId) {
               <ol style="padding-left:18px;margin:0;">${tiebreakersHtml}</ol>
             </li>` : ''}
 
-          ${t.format === 'Liga' ? `
+          ${hasRoundRobinPhase ? `
             <li style="padding:0.85rem 0;border-bottom:1px solid var(--border-color);">
               <span style="color:var(--text-muted);font-size:0.9rem;">${_t('rules.ligaEnrollDuring')}</span>
               <span style="font-weight:600;color:var(--text-bright);">${t.ligaOpenEnrollment !== false ? _t('rules.ligaOpen') : _t('rules.ligaClosed')}</span>

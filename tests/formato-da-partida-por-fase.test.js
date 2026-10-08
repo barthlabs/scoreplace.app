@@ -152,7 +152,9 @@ function confraCfg() {
 // melhor de 3. Quem manda no jogo é _effectiveScoring; as Regras só precisam NÃO mentir.
 (function () {
   const src = fs.readFileSync(path.join(__dirname, '..', 'js/views/rules.js'), 'utf8');
-  ok(/fasesFormatoHtml/.test(src), 'rules.js monta o bloco de formato POR FASE');
+ok(/fasesFormatoHtml/.test(src), 'rules.js monta o bloco de formato POR FASE');
+ok(/hasEliminationPhase/.test(src) && /hasRoundRobinPhase/.test(src),
+  'rules.js decide regras de eliminatória e pontos corridos pelas fases canônicas');
   ok(/p\.scoring && p\.scoring\.type|x\.p\.scoring/.test(src), 'lê phases[i].scoring (não só t.scoring)');
   ok(/\$\{fasesFormatoHtml\}/.test(src), 'e o bloco é REALMENTE injetado na tela (não só calculado)');
   ok(/As demais fases/.test(src), 'diz quais fases seguem o formato de cima (não deixa dúvida)');
