@@ -149,5 +149,9 @@ const atribNova = varrer(path.join(ROOT, 'js'), /window\._faseCorrenteEhLiga\s*=
 ok(atribNova.length === 1 && atribNova[0] === 'js/views/tournaments-utils.js',
   '⑤ e ele tem UMA casa, a mesma do outro — ' + atribNova.join(', '));
 
+const bracket = fs.readFileSync(path.join(ROOT, 'js', 'views', 'bracket.js'), 'utf8');
+ok(/_hasGroupHistory/.test(bracket) && /_isEliminationHistory/.test(bracket),
+  '⑤ o histórico de grupos segue as fases canônicas, não o formato legado');
+
 console.log('\n' + (fail ? '✗ ' + fail + ' falha(s), ' : '✅ ') + pass + ' verificações');
 process.exit(fail ? 1 : 0);

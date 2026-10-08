@@ -4658,7 +4658,14 @@ function renderSingleElimBracket(t, canEnterResult, standbyHtml) {
   // (isOrg=false + canEnterResult=false + suppressAutoAdvance), abaixo da chave. Mesmo
   // padrão read-only que o motor de fases usa pra conferir uma fase anterior.
   let groupHistoryHtml = '';
-  if (t.format === 'Fase de Grupos + Eliminatórias' && t.currentStage === 'elimination'
+  var _currentPhaseHistory = (typeof window._phaseForMatch === 'function') ? window._phaseForMatch(t) : null;
+  var _hasGroupHistory = Array.isArray(t.phases) && t.phases.some(function(phase) {
+    return phase && phase.kind === 'classification' && phase.classification && phase.classification.structure === 'groups';
+  });
+  var _isEliminationHistory = _currentPhaseHistory
+    ? _currentPhaseHistory.kind === 'elimination'
+    : t.currentStage === 'elimination';
+  if (_hasGroupHistory && _isEliminationHistory
       && Array.isArray(t.groups) && t.groups.length > 0
       && typeof window.renderGroupStage === 'function') {
     groupHistoryHtml = '<details style="margin-top:1.5rem;">'
