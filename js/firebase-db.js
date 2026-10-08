@@ -1978,6 +1978,12 @@ window.FirestoreDB = {
     }
   },
 
+  // Leitura privada da fonte canônica: a Function confirma que quem pede já
+  // pertence ao elenco (ou à organização) e devolve só a projeção estrutural.
+  async loadCanonicalTournamentRoster(tournamentId) {
+    return await this._callFn('getCanonicalTournamentRoster', { tournamentId: String(tournamentId || '') });
+  },
+
   // Sair da lista de espera é decidido no servidor contra o documento fresco.
   // Não há transação ou fallback de escrita no navegador.
   async leaveStandby(tournamentId, user) {
@@ -2416,6 +2422,17 @@ window.FirestoreDB = {
         var arr = []; snap.forEach(function (d) { var v = d.data(); if (v) arr.push(v); });
         return arr;
       });
+      var _migration = (t && t.canonicalRegistrationMigration) || {};
+      if (_migration.fingerprint) {
+        if (typeof self.loadCanonicalTournamentRoster !== 'function') throw new Error('leitor canônico de inscrições indisponível');
+        var _canonical = await self.loadCanonicalTournamentRoster(id);
+        if (!_canonical || !Array.isArray(_canonical.participants)) throw new Error('resposta canônica de inscrições inválida');
+        var _expected = Number(_migration.registrationCount || 0);
+        if (Number(_canonical.registrationCount || 0) !== _expected) {
+          throw new Error('inscrições canônicas divergentes: esperado ' + _expected + ', recebido ' + Number(_canonical.registrationCount || 0));
+        }
+        t.participants = _canonical.participants;
+      }
       try { if (window._noteFsReads) window._noteFsReads(lidos, 'abrir-torneio-subcolecao'); } catch (e) {}
       return t;
     } catch (e) {

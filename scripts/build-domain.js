@@ -20,6 +20,7 @@ const entries = [
   { source: 'src/domain/realtime-freshness.ts', output: 'js/domain/realtime-freshness.js' },
   { source: 'src/domain/referee-roster.ts', output: 'js/domain/referee-roster.js' },
   { source: 'src/domain/face-rollout.ts', output: 'js/domain/face-rollout.js' },
+  { source: 'src/domain/registration-roster.ts', output: 'js/domain/registration-roster.js' },
 ];
 let failures = 0;
 

@@ -15,7 +15,7 @@ const _woClaimCore = require('./wo-claim-core.js');
 const _matchHistory = require('./match-history-core.js');
 const _rosterState = require('./roster-state-core.js');
 const _tSplit = require('./vendor/tournament-split-core.js');   // fonte única: js/views/ (copy-vendor)
-const _registrationRoster = require('./vendor/registration-roster-core.js');
+const _registrationRoster = require('./vendor/registration-roster.js');
 // fonte única: functions/match-roster.js (copy-vendor) — monta o subdoc de resultado,
 // incluindo o carregar-adiante do `replay`, que o servidor não sabe recalcular.
 let _mrEspelho = null;

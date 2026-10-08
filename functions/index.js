@@ -92,6 +92,7 @@ const _emailFail = require("./email-failure-core");
 const _categoryEligibility = require("./category-eligibility-core");
 const _registrationCore = require("./registration-core");
 const _registrationMigration = require("./registration-migration-core");
+const _registrationRoster = require("./vendor/registration-roster.js");
 const _registrationLifecycle = require("./registration-lifecycle-core");
 const _splitParts = require("./split-parts.js");   // torneio dividido: elenco na subcoleção
 const _refereeRoster = require("./vendor/referee-roster.js"); // escala de arbitragem: contrato puro e sem contato
@@ -4285,6 +4286,44 @@ exports.requestCanonicalRegistration = onCall(
         validationState: decision.validationState,
         reasons: decision.reasons || [],
       };
+    });
+  }
+);
+
+/* A coleção canônica permanece privada no Firestore. Esta é a única ponte de
+ * leitura para a tela: devolve uma projeção estrutural, nunca os documentos
+ * crus, e somente para a organização ou alguém que já pertença ao elenco.
+ * `participants` portanto não volta a ser um espelho persistido só para UI. */
+exports.getCanonicalTournamentRoster = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
+    const tournamentId = String((request.data && request.data.tournamentId) || "").trim();
+    if (!tournamentId) throw new HttpsError("invalid-argument", "tournamentId é obrigatório");
+    const db = admin.firestore();
+    const ref = db.collection("tournaments").doc(tournamentId);
+    return await db.runTransaction(async (tx) => {
+      const tournamentSnap = await tx.get(ref);
+      if (!tournamentSnap.exists) throw new HttpsError("not-found", "torneio não existe");
+      const tournament = tournamentSnap.data() || {};
+      const migration = tournament.canonicalRegistrationMigration || {};
+      if (!migration.fingerprint) throw new HttpsError("failed-precondition", "torneio ainda não usa inscrições canônicas");
+      const registrationsSnap = await tx.get(ref.collection("registrations"));
+      const registrations = registrationsSnap.docs.map((doc) => doc.data() || {});
+      const expected = Number(migration.registrationCount || 0);
+      if (expected !== registrations.length) {
+        throw new HttpsError("failed-precondition", "inscrições canônicas divergentes; abertura interrompida");
+      }
+      let participants;
+      try { participants = _registrationRoster.rosterFromRegistrations(registrations); }
+      catch (error) { throw new HttpsError("failed-precondition", "elenco canônico inválido: " + error.message); }
+      const belongsToRoster = participants.some((entry) => [entry.uid, entry.p1Uid, entry.p2Uid]
+        .filter(Boolean).map(String).indexOf(String(callerUid)) !== -1);
+      if (!_isTournamentOrgCaller(tournament, callerUid) && !belongsToRoster) {
+        throw new HttpsError("permission-denied", "elenco indisponível neste torneio");
+      }
+      return { tournamentId, registrationCount: registrations.length, participants };
     });
   }
 );
