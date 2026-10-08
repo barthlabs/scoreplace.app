@@ -45,6 +45,8 @@ try { C.normalizeExtraUpdates({ status: 'finished' }); ok('extraUpdates recusa p
     !/profileRef/.test(enrollmentDecision) &&
     !/accountDisplayName/.test(enrollmentDecision) &&
     /computeEnroll\(_dados, sanitizedParticipantObj, extraUpdates, nowMs\)/.test(enrollmentDecision));
+  ok('Function recusa inscrição durante fusão ou exclusão pela trava transacional do UID',
+    /_amizadeLock\.exigirAtivos\(tx, db, \[callerUid, participantUid\], nowMs\)/.test(enrollmentDecision));
 })();
 
 (() => {

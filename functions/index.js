@@ -2970,6 +2970,12 @@ exports.enrollParticipant = onCall(
      * primeiro. E ela LANÇA se uma parte não vier — decidir vaga com elenco vazio é pior
      * que falhar. [[project_teto_do_documento_e_arquitetura_de_dados]] */
     const out = await db.runTransaction(async (tx) => {
+      // A mesma identidade que ocupa uma vaga precisa estar ativa no instante da
+      // decisão. Sem esta leitura transacional, uma conta fundida/excluída ainda
+      // poderia reenviar uma chamada antiga e voltar ao elenco com outro estado
+      // de ciclo de vida. Não é uma heurística de nome: só UID autenticado.
+      try { await _amizadeLock.exigirAtivos(tx, db, [callerUid, participantUid], nowMs); }
+      catch (error) { throw new HttpsError("aborted", error.message); }
       const snap = await tx.get(docRef);
       if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
       const _dados = await _splitParts.hidratar(tx, docRef, snap.data());
