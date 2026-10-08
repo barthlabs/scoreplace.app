@@ -109,6 +109,7 @@ const core = require('./draw-core.js');
   ok('Rei/Rainha: t.drawMode = rei_rainha', t.drawMode === 'rei_rainha', t.drawMode);
   ok('Rei/Rainha: t.ligaRoundFormat = rei_rainha', t.ligaRoundFormat === 'rei_rainha', t.ligaRoundFormat);
   ok('Rei/Rainha: 2 fases (classif + elim)', Array.isArray(t.phases) && t.phases.length === 2, t.phases && t.phases.length);
+  ok('Rei/Rainha: fase classificatória não grava tipo Liga legado', t.phases[0].formatCode === 'classification_rounds' && t.phases[0].format == null, JSON.stringify(t.phases[0]));
   ok('Rei/Rainha: fmt2 regravado normalizado', !!t.fmt2 && t.fmt2.parceria === 'rei_rainha');
 })();
 
@@ -122,6 +123,7 @@ const core = require('./draw-core.js');
   // O ajuste que create-tournament.js:5235 faz — precisa estar espelhado.
   ok('Grupos: ligaRoundFormat forçado a standard', t.ligaRoundFormat === 'standard', t.ligaRoundFormat);
   ok('Grupos: ligaDrawMode forçado a standard', t.ligaDrawMode === 'standard', t.ligaDrawMode);
+  ok('Grupos: fase classificatória não grava código grupos_mata legado', t.phases[0].formatCode === 'classification_groups' && t.phases[0].format == null, JSON.stringify(t.phases[0]));
 })();
 
 (function () {
@@ -185,6 +187,7 @@ console.log('══════════════════════�
   const r = core.compileFromFmt2(t);
   ok('legado multifase → projeção ok', r.ok === true && r.phases === 2);
   ok('legado multifase → classificatória é round_robin', t.phases[0].kind === 'classification' && t.phases[0].classification.structure === 'round_robin');
+  ok('legado multifase → código classificatório é promovido', t.phases[0].formatCode === 'classification_rounds', t.phases[0].formatCode);
   ok('legado multifase → eliminação dupla é canonical', t.phases[1].kind === 'elimination' && t.phases[1].elimination.bracketType === 'double');
   ok('legado multifase → conserva rodada e placar', t.phases[0].rounds[0].id === 'c1' && t.phases[1].matches[0].score[0] === 7);
   const again = core.compileFromFmt2(t);

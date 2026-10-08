@@ -74,8 +74,8 @@
     var code = String((phase && phase.formatCode) || (tournament && tournament.formatCode) || '').toLowerCase();
     var label = String((phase && phase.format) || (tournament && tournament.format) || '').toLowerCase();
     if (code === 'elim_simples' || code === 'elim_dupla') return 'elimination';
-    if (code === 'grupos_mata' || /grupo/.test(label)) return 'classification';
-    if (code === 'liga' || /\bliga\b|pontos corridos|ranking|su[ií]ç?o|swiss/.test(label)) return 'classification';
+    if (code === 'grupos_mata' || code === 'classification_groups' || /grupo/.test(label)) return 'classification';
+    if (code === 'liga' || code === 'classification_rounds' || /\bliga\b|pontos corridos|ranking|su[ií]ç?o|swiss/.test(label)) return 'classification';
     return 'elimination';
   }
 
@@ -84,7 +84,23 @@
     if (current === 'groups' || current === 'round_robin') return current;
     var code = String((phase && phase.formatCode) || (tournament && tournament.formatCode) || '').toLowerCase();
     var label = String((phase && phase.format) || (tournament && tournament.format) || '').toLowerCase();
-    return (code === 'grupos_mata' || /grupo/.test(label)) ? 'groups' : 'round_robin';
+    return (code === 'grupos_mata' || code === 'classification_groups' || /grupo/.test(label)) ? 'groups' : 'round_robin';
+  }
+
+  // `formatCode` existia antes de `kind` e ainda é lido pelo adaptador de execução
+  // do torneio. Dentro de `phases[]`, porém, ele não pode reintroduzir uma terceira
+  // espécie de fase chamada "Liga". Toda classificatória nova (e toda projeção de
+  // legado) recebe um identificador descritivo da estrutura; a política de pares
+  // continua em `classification.pairing`.
+  function canonicalPhaseFormatCode(kind, phase) {
+    if (kind === 'classification') {
+      return phase && phase.classification && phase.classification.structure === 'groups'
+        ? 'classification_groups'
+        : 'classification_rounds';
+    }
+    return phase && phase.elimination && phase.elimination.bracketType === 'double'
+      ? 'elim_dupla'
+      : 'elim_simples';
   }
 
   function legacyClassificationPairing(phase, tournament) {
@@ -175,6 +191,14 @@
           phase.elimination = Object.assign({}, phase.elimination || {}, { bracketType: bracketType });
           changed = true;
         }
+      }
+      // Uma vez conhecido o domínio, a fase não volta a carregar `liga` ou
+      // `grupos_mata` como se fossem tipos concorrentes. Os adaptadores legados
+      // são aplicados somente ao executar a fase, nunca persistidos como modelo.
+      var canonicalCode = canonicalPhaseFormatCode(kind, phase);
+      if (phase.formatCode !== canonicalCode) {
+        phase.formatCode = canonicalCode;
+        changed = true;
       }
       return phase;
     });
@@ -538,7 +562,7 @@
     var cutRR = e0.reiRainhaCut;               // 2 (top-2 → 1 dupla) | 4 (todos → 2 duplas)
     var daInscricao = !(sourceRR && sourceRR.type === 'previous_phase');
     var pRR = Object.assign(_phaseBase(re), {
-      kind: 'classification', classification: { structure: 'round_robin' }, name: 'Rei/Rainha', formatCode: 'liga', format: 'Liga',
+      kind: 'classification', classification: { structure: 'round_robin' }, name: 'Rei/Rainha', formatCode: 'classification_rounds',
       drawMode: 'rei_rainha', reiRainha: true, rounds: 1, groupsBy: 'sorteio',
       source: sourceRR,
       fixedPairs: false, gruposCount: 1, gruposClassified: cutRR,
@@ -690,7 +714,7 @@
       }
       p0 = Object.assign(_phaseBase(re), {
         kind: 'classification', classification: { structure: 'round_robin', pairing: _roundPairing }, name: isRR ? 'Rei/Rainha' : 'Pontos Corridos',
-        formatCode: 'liga', format: 'Liga',
+        formatCode: 'classification_rounds',
         drawMode: top.drawMode, reiRainha: isRR,
         rounds: cfg.rodadas.n, groupsBy: 'sorteio',
         source: { type: 'enrollment' },
@@ -724,7 +748,7 @@
       if (cfg.classificationSchedule) _classification.schedule = cfg.classificationSchedule;
       p0 = Object.assign(_phaseBase(re), {
         kind: 'classification', classification: _classification, name: _teamGroupCount === 1 ? 'Pontos Corridos' : 'Fase de Grupos',
-        formatCode: 'grupos_mata', format: 'Fase de Grupos',
+        formatCode: 'classification_groups',
         drawMode: 'sorteio', reiRainha: false,
         gruposCount: _teamGroupCount, gruposClassified: cfg.classificados,
         groupsBy: 'sorteio', rounds: 1,
