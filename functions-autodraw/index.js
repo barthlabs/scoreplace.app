@@ -5252,7 +5252,10 @@ exports.autoDraw = onSchedule('every 1 minutes', async (event) => {
      *      a divisão.
      * Agora: fuso IANA do local do evento, janela do MESMO MINUTO local, montagem por
      * `_leTorneio` DENTRO da transação e persistência exclusivamente por `_gravaTorneio`. */
-    const isLiga = t.format === 'Liga' || t.format === 'Ranking';
+    // A fase atual é a autoridade: um torneio que começou como pontos corridos
+    // pode já estar na eliminatória. O campo `format` fica apenas como leitura
+    // de documentos antigos sem `phases`.
+    const isLiga = _leagueSeasonCore.isLeagueFormat(t);
     if (!isLiga) continue;
     if (t.drawManual) continue;
     if (!t.drawFirstDate) continue;

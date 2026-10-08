@@ -10,6 +10,24 @@ ok(r.changed && t.status === 'finished' && t.finishedAt === '2026-09-09T00:00:00
 r = core.closeExpiredLeagueSeason(t, { expired: true, nowIso: 'later' });
 ok(!r.changed, 'núcleo é idempotente após o fecho');
 ok(!core.closeExpiredLeagueSeason({ format: 'Liga', status: 'active' }, { expired: false }).changed, 'prazo não vencido não fecha');
+
+// A fase corrente vence o rótulo legado do torneio. Confra nasceu como Liga,
+// mas, já na eliminatória, não pode ter a temporada fechada por esse rótulo.
+const inElimination = {
+  format: 'Liga', status: 'active', currentPhaseIndex: 1,
+  phases: [
+    { kind: 'classification', classification: { structure: 'round_robin' } },
+    { kind: 'elimination', elimination: { bracketType: 'single' } }
+  ]
+};
+ok(!core.isLeagueFormat(inElimination), 'fase eliminatória não é temporada mesmo se o topo legado disser Liga');
+ok(!core.closeExpiredLeagueSeason(inElimination, { expired: true }).changed, 'fechamento de temporada não toca eliminatória em torneio multifase');
+
+const inClassification = {
+  format: 'Fase de Grupos', status: 'active', currentPhaseIndex: 0,
+  phases: [{ kind: 'classification', classification: { structure: 'round_robin' } }]
+};
+ok(core.isLeagueFormat(inClassification), 'classificatória canônica de pontos corridos dispensa rótulo Liga no topo');
 const fn = fs.readFileSync('functions-autodraw/index.js', 'utf8');
 const start = fn.indexOf('exports.closeExpiredLeagueSeason');
 const end = fn.indexOf('exports.setTournamentCategoryConfig', start);
