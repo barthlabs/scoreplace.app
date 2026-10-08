@@ -42,7 +42,7 @@ console.log('──── 2. o strip SANITIZA igual ao cliente (não é no-op) �
 w._profileNameByUid = { uA: 'Ana Lima', uB: 'Bruno Sá' };
 
 const entradas = [
-  { uid: 'uA', displayName: 'Ana Lima', name: 'Ana Lima' },
+  { uid: 'uA', displayName: 'Ana Lima', name: 'Ana Lima', email: 'ana@antigo.test', phone: '5511999999999' },
   { displayName: 'Zé Convidado' },
   { uid: 'uORF', displayName: 'Órfão Antigo' },
   { p1Uid: 'uA', p1Name: 'Ana Lima', p2Uid: 'uB', p2Name: 'Bruno Sá', displayName: 'Ana Lima / Bruno Sá' },
@@ -50,7 +50,7 @@ const entradas = [
 ];
 const out = w._stripStoredNamesForUidEntries(entradas);
 
-ok(!has(out[0], 'displayName') && !has(out[0], 'name'), 'conta com perfil → nome STRIPADO (display vem do users/ vivo)');
+ok(!has(out[0], 'displayName') && !has(out[0], 'name') && !has(out[0], 'email') && !has(out[0], 'phone'), 'conta com perfil → nome e contato STRIPADOS (display vem do users/ vivo)');
 ok(out[0].uid === 'uA', 'conta com perfil → uid preservado (é a identidade)');
 ok(out[1].displayName === 'Zé Convidado', 'guest sem uid → nome INTACTO (é a única identidade dele)');
 // A regra do [[project_orphan_uid_entries]]: uid sem users/ + strip = o sorteio grava o uid COMO NOME.
@@ -131,8 +131,8 @@ if (bi !== -1) {
   const mm1 = { id: 'm1', p1: 'Ana Lima', p2: 'Bruno Sá' };
   const doc2 = {
     id: 'T1', creatorUid: 'uid_A_longo', organizerEmail: 'a@x.com', organizerName: 'Ana Lima',
-    participants: [{ uid: 'uid_A_longo', displayName: 'Ana Lima' }, { displayName: 'Zé Guest' },
-                   { uid: 'uid_B_longo', displayName: 'Bruno Sá' }],
+  participants: [{ uid: 'uid_A_longo', displayName: 'Ana Lima', email: 'ana@x.com' }, { displayName: 'Zé Guest', email: 'guest@x.com' },
+                   { p1Uid: 'uid_A_longo', p1Name: 'Ana Lima', p1Email: 'ana@x.com', p2Uid: 'uid_B_longo', p2Name: 'Bruno Sá', p2Email: 'bruno@x.com' }],
     rounds: [{ matches: [mm1], monarchGroups: [{ name: 'G1', matches: [mm1] }] }],
     absent: { uid_A_longo: { name: 'Ana Lima', matchId: 'm1' } },
     woHistory: { uid_A_longo: { name: 'Ana Lima', partner: 'Bruno Sá', replacedBy: 'Zé', partnerUid: 'uid_B_longo', substituteUid: 'uid_B_longo' } },
@@ -145,7 +145,8 @@ if (bi !== -1) {
   ok(!has(b.persist.participants[0], 'displayName'), 'PERSIST: nome de quem tem perfil sanitizado (storage só-uid)');
   ok(!has(b.persist, 'organizerName') && !has(b.clean, 'organizerName'),
     'PERSIST/CLEAN: organizador fica somente no creatorUid; nome vem do perfil vivo');
-  ok(b.persist.participants[1].displayName === 'Zé Guest', 'PERSIST: guest mantém o nome');
+  ok(b.persist.participants[1].displayName === 'Zé Guest' && !has(b.persist.participants[1], 'email'), 'PERSIST: guest mantém o nome, mas não contato');
+  ok(!has(b.persist.participants[2], 'p1Email') && !has(b.persist.participants[2], 'p2Email'), 'PERSIST: dupla por UID não congela contatos dos slots');
   ok(b.clean.participants[0].displayName === 'Ana Lima', 'CLEAN (devolvido ao cliente): nome PRESERVADO');
   // REGRESSÃO REAL (v1.2.25): Object.assign é RASO → persist.rounds É clean.rounds. Hidratar
   // `clean` antes do set devolvia group.matches pro persist e o Firestore gravaria cada jogo

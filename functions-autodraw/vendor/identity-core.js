@@ -467,6 +467,11 @@ window._entryTeamMembers = function (p) {
 function _stripUidEntryNames(p) {
   if (!p || typeof p !== 'object') return p;
   var q = {}; for (var k in p) { if (Object.prototype.hasOwnProperty.call(p, k)) q[k] = p[k]; }
+  // Contato pertence exclusivamente a users/{uid}. Nem uma conta órfã, nem convidado
+  // manual carregam e-mail/telefone/foto dentro do torneio: para convidados o único dado
+  // permitido é o nome digitado e o manualParticipantId; para contas, o UID resolve o perfil.
+  ['email', 'phone', 'photoURL', 'p1Email', 'p2Email', 'p1Phone', 'p2Phone',
+   'p1Photo', 'p2Photo', 'p1PhotoURL', 'p2PhotoURL'].forEach(function (field) { delete q[field]; });
   // v4.5.91: PLACEHOLDER (vaga "Jogador NN") NÃO é conta — nome É a identidade. Placeholders
   // legados nasceram com uid sintético 'jog_NN_…' + email fake, e o strip abaixo apagava o
   // nome (achando que tinha conta) → card virava o email. Aqui CURA pro formato limpo (só

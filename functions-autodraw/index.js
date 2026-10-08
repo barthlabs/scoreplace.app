@@ -309,8 +309,8 @@ async function _preloadDrawNames(t) {
 }
 
 // v1.3.52: resolve o perfil POR UID e ESCREVE nos participantes em memória (gênero/skill/idade/
-// email/phone/defaultCategory) ANTES do motor e das notificações. Assim o inscrito grava SÓ uid;
-// a CF re-resolve tudo aqui (o vendor lê p.gender/p.email etc., que passam a vir do perfil vivo).
+// defaultCategory) ANTES do motor. Contato não transita pelo torneio: notificações o resolvem
+// diretamente do perfil. Assim o inscrito grava SÓ uid.
 // Idempotente. Usa drawWindow._profByUid populado por _preloadDrawNames. Ver [[project_autodraw_server_parity]].
 function _enrichParticipantsFromProfiles(t) {
   try {
@@ -333,8 +333,6 @@ function _enrichParticipantsFromProfiles(t) {
         if (d.skillBySport && typeof d.skillBySport === 'object') p.skillBySport = d.skillBySport;
         if (d.birthDate) p.birthDate = d.birthDate;
         if (d.defaultCategory) p.defaultCategory = d.defaultCategory;
-        if (d.email) p.email = d.email;
-        if (d.phone) p.phone = d.phone;
       }
       const d1 = p.p1Uid && prof[p.p1Uid];
       if (d1 && d1.gender && !_doOrg(p, 'p1Gender', 'p1GenderSource')) p.p1Gender = d1.gender;
@@ -2896,15 +2894,15 @@ exports.occupyTournamentPlaceholder = onCall(async (request) => {
       if (!p || typeof p !== 'object') return;
       if (!(p.p1Uid || p.p1Name) && !(p.p2Uid || p.p2Name) && String(p.displayName || p.name || '').trim().toLowerCase() === placeholderLc) {
         p.name = realName; p.displayName = realName; p.uid = participantUid;
-        p.email = person.email || null; p.photoURL = person.photoURL || null; delete p.isPlaceholder; changed = true;
+        delete p.email; delete p.phone; delete p.photoURL; delete p.isPlaceholder; changed = true;
       }
-      if (String(p.p1Name || '').trim().toLowerCase() === placeholderLc) { p.p1Name = realName; p.p1Uid = participantUid; p.p1Email = person.email || null; p.p1Photo = person.photoURL || null; changed = true; }
-      if (String(p.p2Name || '').trim().toLowerCase() === placeholderLc) { p.p2Name = realName; p.p2Uid = participantUid; p.p2Email = person.email || null; p.p2Photo = person.photoURL || null; changed = true; }
+      if (String(p.p1Name || '').trim().toLowerCase() === placeholderLc) { p.p1Name = realName; p.p1Uid = participantUid; delete p.p1Email; delete p.p1Phone; delete p.p1Photo; changed = true; }
+      if (String(p.p2Name || '').trim().toLowerCase() === placeholderLc) { p.p2Name = realName; p.p2Uid = participantUid; delete p.p2Email; delete p.p2Phone; delete p.p2Photo; changed = true; }
       if (p.p1Name && p.p2Name && typeof p.displayName === 'string' && p.displayName.indexOf(' / ') !== -1) p.displayName = p.p1Name + ' / ' + p.p2Name;
       if (Array.isArray(p.participants)) p.participants = p.participants.map(slot => {
         if (slot && String(slot.displayName || slot.name || '').trim().toLowerCase() === placeholderLc) {
           changed = true;
-          return { name: realName, displayName: realName, uid: participantUid, email: person.email || null, photoURL: person.photoURL || null };
+          return { name: realName, displayName: realName, uid: participantUid };
         }
         return slot;
       });
@@ -4637,19 +4635,14 @@ function _entriesOf(t, key) {
 }
 function _entryIdentityKeys(entry) {
   if (!entry) return [];
-  if (typeof entry === 'string') return ['name:' + entry.trim().toLowerCase()];
-  const keys = [];
-  [entry.uid, entry.p1Uid, entry.p2Uid, entry.email,
-    entry.displayName, entry.name, entry.p1Name, entry.p2Name].forEach(v => {
-      const s = String(v || '').trim(); if (s) keys.push(s.includes('@') ? 'email:' + s.toLowerCase() : 'id:' + s);
-    });
-  (Array.isArray(entry.participants) ? entry.participants : []).forEach(member => {
-    if (!member) return;
-    const u = String(member.uid || '').trim();
-    const n = String(member.displayName || member.name || '').trim();
-    if (u) keys.push('id:' + u); if (n) keys.push('id:' + n);
-  });
-  return keys;
+  const canonical = drawWindow && typeof drawWindow._participantIdentityKeys === 'function'
+    ? drawWindow._participantIdentityKeys(entry) : [];
+  if (canonical.length) return canonical;
+  // Documentos realmente antigos, sem UID nem manualParticipantId, continuam legíveis
+  // até a migração explícita. Nome não se mistura com nenhuma identidade de conta.
+  if (typeof entry === 'string') return ['legacy-name:' + entry.trim().toLowerCase()];
+  const name = String(entry.displayName || entry.name || '').trim();
+  return name ? ['legacy-name:' + name.toLowerCase()] : [];
 }
 function _isSameEnrollment(a, b) {
   const seen = new Set(_entryIdentityKeys(a));
