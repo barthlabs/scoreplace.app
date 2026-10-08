@@ -57,7 +57,9 @@ async function listCollection(url, token) {
 function entriesFromMirror(documents) {
   return documents.map((doc) => {
     const data = documentToObject(doc);
-    return data.item || data;
+    // A chave do documento é o único insumo seguro para gerar, em preview,
+    // manualParticipantId de convidado legado. Nunca usamos nome ou índice.
+    return { sourceKey: doc.name.split('/').pop(), entry: data.item || data };
   });
 }
 
@@ -67,14 +69,16 @@ async function entriesForTournament(document, token) {
   const mirrored = await listCollection(BASE + '/' + document.name.replace(/^.*\/documents\//, '') + '/' + encodeURIComponent(collection), token);
   // Todo torneio nasce dividido. O fallback preserva a leitura de fotografias
   // antigas sem espelho, sem inferir/reescrever nenhuma identidade.
-  if (!mirrored.empty) return entriesFromMirror(mirrored);
+  if (mirrored.length) return entriesFromMirror(mirrored);
+  // Todo torneio corrente é dividido; este fallback só mantém o diagnóstico de
+  // fotografias antigas legível e deliberadamente não inventa uma sourceKey.
   return Array.isArray(tournament.participants) ? tournament.participants : [];
 }
 
 async function main() {
   const token = accessToken();
   const tournaments = await listCollection(BASE + '/tournaments', token);
-  const totals = { tournaments: tournaments.length, entries: 0, registrations: 0, conflicts: 0, unsupported: 0 };
+  const totals = { tournaments: tournaments.length, entries: 0, registrations: 0, formedPairs: 0, conflicts: 0, unsupported: 0 };
   const unsupportedByReason = {};
   const unsupportedSchemas = {};
   const flagged = [];
@@ -90,11 +94,13 @@ async function main() {
     reports.forEach(({ id, entries, report }) => {
       totals.entries += entries.length;
       totals.registrations += report.registrations.length;
+      totals.formedPairs += report.formedPairs.length;
       totals.conflicts += report.conflicts.length;
       totals.unsupported += report.unsupported.length;
       report.unsupported.forEach((item) => {
         unsupportedByReason[item.reason] = (unsupportedByReason[item.reason] || 0) + 1;
-        const entry = entries[item.index] || {};
+        const record = entries[item.index] || {};
+        const entry = record && record.entry ? record.entry : record;
         const schema = Object.keys(entry).sort().join(',') || '(primitive-or-empty)';
         const key = item.reason + ' :: ' + schema;
         unsupportedSchemas[key] = (unsupportedSchemas[key] || 0) + 1;
@@ -109,6 +115,7 @@ async function main() {
   console.log('  torneios: ' + totals.tournaments);
   console.log('  entradas: ' + totals.entries);
   console.log('  inscrições projetáveis: ' + totals.registrations);
+  console.log('  duplas formadas preserváveis: ' + totals.formedPairs);
   console.log('  conflitos: ' + totals.conflicts);
   console.log('  entradas sem suporte: ' + totals.unsupported);
   Object.keys(unsupportedByReason).sort().forEach((reason) => {
