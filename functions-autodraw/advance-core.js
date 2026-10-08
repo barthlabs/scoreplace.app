@@ -273,7 +273,10 @@ function validaDecisoes(decisions, pend, opts) {
 
   if (typeof d !== 'object' || Array.isArray(d)) erro('decisions deve ser um objeto');
 
-  const chavesConhecidas = ['inativos', 'promoteLines', 'bracketResolution', 'swissRounds'];
+  // `classificationRounds` é o contrato atual. `swissRounds` só é aceito como
+  // leitura de payload antigo e é imediatamente traduzido no resultado; assim o
+  // restante do avanço nunca precisa saber que o apelido histórico existiu.
+  const chavesConhecidas = ['inativos', 'promoteLines', 'bracketResolution', 'classificationRounds', 'swissRounds'];
   Object.keys(d).forEach((k) => { if (chavesConhecidas.indexOf(k) === -1) erro('decisão desconhecida: ' + k); });
 
   if (pend.precisaDecidirInativos) {
@@ -293,10 +296,17 @@ function validaDecisoes(decisions, pend, opts) {
     if (['bye', 'playin', 'waitlist'].indexOf(d.bracketResolution) === -1) erro('decisions.bracketResolution inválido');
     out.bracketResolution = d.bracketResolution;
   }
-  if (d.swissRounds !== undefined) {
-    const n = d.swissRounds;
-    if (!Number.isInteger(n) || n < 1 || n > 30) erro('decisions.swissRounds inválido');
-    out.swissRounds = n;
+  if (d.classificationRounds !== undefined && d.swissRounds !== undefined) {
+    erro('envie apenas decisions.classificationRounds');
+  }
+  const classificationRounds = d.classificationRounds !== undefined
+    ? d.classificationRounds
+    : d.swissRounds;
+  if (classificationRounds !== undefined) {
+    if (!Number.isInteger(classificationRounds) || classificationRounds < 1 || classificationRounds > 30) {
+      erro('decisions.classificationRounds inválido');
+    }
+    out.classificationRounds = classificationRounds;
   }
   return out;
 }

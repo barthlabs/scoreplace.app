@@ -1,4 +1,8 @@
-# Ciclo de decisões do pré-sorteio — mapa lido do código (jul/2026)
+# Ciclo de decisões do pré-sorteio — contrato canônico
+
+> Atualizado em outubro de 2026. Este documento descreve o contrato atual;
+> campos como `p2Resolution: 'swiss'` e `swissRounds` são lidos somente para
+> migrar documentos ou requests antigos. Nenhum torneio novo os grava.
 
 Levantado LENDO o código na v1.2.28 (`claude/nostalgic-yalow-721a34` + main). Cada linha
 aponta arquivo:linha. Serve de base pra mover a APLICAÇÃO das decisões pra CF `drawRound`,
@@ -67,11 +71,11 @@ Aplica em `_resolveAbsenteesThenDraw` (L773) pelo núcleo PURO `_applyRoll` (L78
 - **PERSISTE** (`saveTournament` full-doc, L696) → re-diagnostica → sorteia ou reabre painel
 
 ### 3.2 POTÊNCIA DE 2 — `showPowerOf2Panel` → `_handleP2Option` (draw-prep.js:2929)
-**1 decisão, 6 opções**: `reopen` | `bye` | `playin` | `standby` | `swiss` | `exclusion` (+ `poll`)
-- `bye`/`playin`/`standby`/`swiss` → **`_confirmP2Resolution` (L3599)**: grava
+**1 decisão, 6 opções**: `reopen` | `bye` | `playin` | `standby` | `classification_rounds` | `exclusion` (+ `poll`)
+- `bye`/`playin`/`standby`/`classification_rounds` → **`_confirmP2Resolution`**: grava
   `p2Resolution`, `p2TargetCount`, `p2CrossSeed`, `standbyPick` (`last`|`random`, radio
   `standby-pick`, L3648), `standbyMode` (radio `standby-mode`, L3667), `classifyFormat`,
-  `swissRounds`, e no `standby` MOVE o excedente (L3650-3665, respeita VIP, conta em PLAYERS)
+  `classificationTransition.rounds`, e no `standby` MOVE o excedente (respeita VIP, conta em PLAYERS)
 - `exclusion` → confirm → `splice` dos últimos N (L2960) + `p2Resolution='exclusion'`
 - **NÃO PERSISTE** — v4.5.7 tirou o `sync()` DE PROPÓSITO (L3683-3689: o sync clobberava a
   chave → sorteio-fantasma). Persiste de carona no delta do `_commitInitialDraw`.
@@ -128,9 +132,9 @@ funções (vendoradas), sobre o doc fresco, dentro da transação.
   solo:       'waitlist' | 'exclude' | null,                      // S1
   balanceMode:'livre' | 'equilibrado' | null,                     // S5 → t._drawBalanceMode
   remainder:  { mode: 'standby'|'exclusion', method: 'random'|'last' } | null,  // 3.1
-  p2:         { option: 'bye'|'playin'|'standby'|'swiss'|'exclusion',
+  p2:         { option: 'bye'|'playin'|'standby'|'classification_rounds'|'exclusion',
                 pick: 'last'|'random', mode: 'teams'|'players',
-                swissRounds: Number|null } | null,                // 3.2
+                classificationRounds: Number|null } | null,       // 3.2
   odd:        'bye_rotative' | 'exclusion' | null,                // 3.5
   incomplete: 'standby'|'lottery_direct'|'dissolve' | null,       // 3.4
   allowRedraw: Boolean                                            // _redrawConfirmed

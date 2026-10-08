@@ -10,7 +10,7 @@
 
 | Dimensão | Valores | Onde (phases-engine.js) |
 |---|---|---|
-| `formatCode` | `elim_simples`, `elim_dupla`, `grupos_mata`, `liga` | classifyPhaseFormat ~592 |
+| `kind` | `elimination`, `classification` | projeção canônica de fases |
 | modo Rei/Rainha | `reiRainha:true` \| `drawMode:'rei_rainha'` (ortogonal ao formato) | isMonarchDraw ~588 |
 | `fixedPairs` | true \| false | 417, 533, 681 |
 | `pairingStrategy` | `top` (performance), `balanced` (equilíbrio), `draw_among` (sorteio), `seed` (cabeças) | 418, 534 |
@@ -26,9 +26,9 @@
 | `tiebreakers[]` | confronto_direto, saldo_pontos/sets/games, vitorias, buchholz, sonneborn_berger, antiguidade, juventude, sorteio… | 801-822 |
 | nº participantes | par/ímpar/potência-de-2/resto | genTierBracket 229-262 |
 
-## Matriz de transição formato→formato (suportadas)
+## Matriz de transição de fases (suportadas)
 
-Os formatos são **4**: Eliminatória Simples · Dupla Eliminatória · Grupos · Pontos Corridos (Liga). **Rei/Rainha NÃO é formato** — é **modo de sorteio** (eixo ortogonal: normal | Rei/Rainha), aplicável dentro de Grupos/Pontos Corridos; e há a **cadência** (na Liga: incremental | todos-de-uma-vez), também ortogonal. `classifyPhaseFormat` devolve só `elim`/`groups`/`league`; `isMonarchDraw` é booleano à parte. **Eliminatória é TERMINAL** (dono 28-jun): encerra o torneio (campeão + classificação final) → NENHUMA fase vem depois. Só **Grupos** e **Pontos Corridos** podem ser ORIGEM de uma próxima fase. (Uma Eliminatória tem 1, 2 ou 4 LINHAS — com 2/4 elas convergem numa grande final; é 1 fase, não várias. Nomes das linhas são ARBITRÁRIOS; "Ouro/Prata" é só exemplo de nome, NÃO regra.) O construtor deve bloquear fase após elim. Transição: Fase0(inscrição)→qualquer formato; Fase N(Grupos/Pontos Corridos)→N+1, cada fase com seu modo de sorteio + cadência (feed-forward via `bracketPhaseGroups`). Caso especial: liga **incremental** grava jogos em `t.phaseRounds[idx]`, não em `t.matches`.
+Há apenas **dois tipos de fase**: **classificatória** e **eliminatória**. Grupos, pontos corridos, classificação por rodadas e Rei/Rainha são configurações internas de uma classificatória; não são tipos paralelos de fase. Rei/Rainha é um formato de sorteio. Uma classificatória pode usar grupos de tamanho configurável, todos-contra-todos (para `n` participantes: `n - 1` jogos por participante) ou um número menor de jogos por grupo, e pode emparelhar rodadas por clusters dinâmicos de desempenho. **Eliminatória é terminal**: encerra o torneio. Uma fase classificatória pode alimentar outra classificatória ou a eliminatória seguinte. Os rótulos de linhas de uma eliminatória são arbitrários.
 
 ## Funções do ciclo de vida (assinaturas)
 
