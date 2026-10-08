@@ -3444,8 +3444,8 @@ window._sbRebuildCleanRoster = function (list, isTeamEnroll) {
   /* 2.1.41: `isPlaceholder` (e o par p1/p2Placeholder) entram na lista. Fora dela a
    * limpeza APAGAVA a marca de "vaga", e a vaga voltava como pessoa comum — o mesmo
    * tipo de perda que fazia o nº de inscrição sumir no desfazer da dupla. */
-  var ALLOW_P = ALLOW_I.concat(['p1Uid', 'p1Name', 'p1Email', 'p1Photo', 'p1Seq', 'p1Gender', 'p1GenderSource', 'p1BirthDate',
-    'p2Uid', 'p2Name', 'p2Email', 'p2Photo', 'p2Seq', 'p2Gender', 'p2GenderSource', 'p2BirthDate',
+  var ALLOW_P = ALLOW_I.concat(['p1Uid', 'p1ManualId', 'p1Name', 'p1Seq', 'p1Gender', 'p1GenderSource', 'p1BirthDate',
+    'p2Uid', 'p2ManualId', 'p2Name', 'p2Seq', 'p2Gender', 'p2GenderSource', 'p2BirthDate',
     'p1Placeholder', 'p2Placeholder']);
   var isPair = function (p) { return !!(p && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)); };
   var member = function (p, n) {

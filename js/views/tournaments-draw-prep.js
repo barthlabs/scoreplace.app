@@ -2419,7 +2419,7 @@ window._dissolveIncompleteTeams = function (t) {
         if (members && members.length < teamSize) {
             dissolved++;
             if (p && typeof p === 'object' && Array.isArray(p.participants) && p.participants.length) p.participants.forEach(function (s) { newParts.push((s && typeof s === 'object') ? Object.assign({}, s) : { name: String(s || ''), displayName: String(s || '') }); });
-            else if (p && typeof p === 'object' && p.p1Name) { newParts.push({ name: p.p1Name, displayName: p.p1Name, uid: p.p1Uid || '', email: p.p1Email || '', photoURL: p.p1Photo || '' }); if (p.p2Name) newParts.push({ name: p.p2Name, displayName: p.p2Name, uid: p.p2Uid || '', email: p.p2Email || '', photoURL: p.p2Photo || '' }); }
+            else if (p && typeof p === 'object' && p.p1Name) { newParts.push({ name: p.p1Name, displayName: p.p1Name, uid: p.p1Uid || '', manualParticipantId: p.p1ManualId || '' }); if (p.p2Name) newParts.push({ name: p.p2Name, displayName: p.p2Name, uid: p.p2Uid || '', manualParticipantId: p.p2ManualId || '' }); }
             else members.forEach(function (m) { newParts.push({ name: m, displayName: m }); });
         } else newParts.push(p);
     });

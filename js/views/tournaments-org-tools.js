@@ -301,13 +301,13 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       if (!p || typeof p !== 'object') return;
       if (!(p.p1Uid || p.p1Name) && !(p.p2Uid || p.p2Name) && (p.displayName || p.name || '').trim().toLowerCase() === phLc) {
         p.name = realName; p.displayName = realName; p.uid = realPlayer.uid || p.uid;
-        p.email = realPlayer.email || null; p.photoURL = realPlayer.photoURL || null; delete p.isPlaceholder; matched = true;
+        delete p.email; delete p.phone; delete p.photoURL; delete p.isPlaceholder; matched = true;
       }
-      if ((p.p1Name || '').trim().toLowerCase() === phLc) { p.p1Name = realName; p.p1Uid = realPlayer.uid; p.p1Email = realPlayer.email; p.p1Photo = realPlayer.photoURL; matched = true; }
-      if ((p.p2Name || '').trim().toLowerCase() === phLc) { p.p2Name = realName; p.p2Uid = realPlayer.uid; p.p2Email = realPlayer.email; p.p2Photo = realPlayer.photoURL; matched = true; }
+      if ((p.p1Name || '').trim().toLowerCase() === phLc) { p.p1Name = realName; p.p1Uid = realPlayer.uid; delete p.p1Email; delete p.p1Phone; delete p.p1Photo; matched = true; }
+      if ((p.p2Name || '').trim().toLowerCase() === phLc) { p.p2Name = realName; p.p2Uid = realPlayer.uid; delete p.p2Email; delete p.p2Phone; delete p.p2Photo; matched = true; }
       if (p.p1Name && p.p2Name && typeof p.displayName === 'string' && p.displayName.indexOf(' / ') !== -1) p.displayName = p.p1Name + ' / ' + p.p2Name;
       if (Array.isArray(p.participants)) p.participants = p.participants.map(function (s) {
-        if (s && (s.displayName || s.name || '').trim().toLowerCase() === phLc) { matched = true; return { name: realName, displayName: realName, uid: realPlayer.uid, email: realPlayer.email, photoURL: realPlayer.photoURL }; }
+        if (s && (s.displayName || s.name || '').trim().toLowerCase() === phLc) { matched = true; return { name: realName, displayName: realName, uid: realPlayer.uid }; }
         return s;
       });
     });

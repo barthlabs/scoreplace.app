@@ -4373,8 +4373,7 @@ window._applySwissEliminationTransition = function (t, roundIdx) {
     var o = { name: nm, displayName: nm };
     if (p && typeof p === 'object') {
       if (p.uid) o.uid = p.uid;
-      if (p.email) o.email = p.email;
-      if (p.photoURL) o.photoURL = p.photoURL;
+      if (p.manualParticipantId) o.manualParticipantId = p.manualParticipantId;
       if (p.p1Name) { o.p1Name = p.p1Name; o.p2Name = p.p2Name; if (p.p1Uid) o.p1Uid = p.p1Uid; if (p.p2Uid) o.p2Uid = p.p2Uid; o.fixedPair = true; }
     }
     return o;
