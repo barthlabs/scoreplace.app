@@ -22,4 +22,20 @@ const d = W._buildTimeEstimation(t, { dataOnly: true });
 ok(d && d.realCount === 96 && d.unitCount === 48, 'capacidade é 96 pessoas / 48 duplas, não as 8 já formadas');
 ok(d && d.matchesPerCategory === 16 && d.matches === 96, '8 duplas × 4 jogos / 2 = 16 por categoria, 96 no total');
 ok(d && d.bucketCount === 2 && d.minutes === 640, 'Fem/Masc em blocos distintos: 10h40 é a duração total dos dois blocos com 9 quadras');
+
+// O título histórico não manda no cálculo quando o documento já tem fases
+// canônicas. Isso impede que uma eliminatória publicada como "Liga" por legado
+// perca a previsão, e o inverso que uma temporada de pontos corridos a exiba.
+const eliminationWithLegacyLeague = W._buildTimeEstimation({
+  format: 'Liga', participants: ['A', 'B', 'C', 'D'], courtCount: 1,
+  phases: [{ kind: 'elimination', elimination: { bracketType: 'single' } }]
+}, { dataOnly: true });
+ok(eliminationWithLegacyLeague && eliminationWithLegacyLeague.format === 'Eliminatórias Simples',
+  'eliminação canônica não é escondida pelo rótulo legado Liga');
+
+const roundRobinWithLegacyElim = W._buildTimeEstimation({
+  format: 'Eliminatórias Simples', participants: ['A', 'B', 'C', 'D'], courtCount: 1,
+  phases: [{ kind: 'classification', classification: { structure: 'round_robin' } }]
+}, { dataOnly: true });
+ok(roundRobinWithLegacyElim === '', 'classificatória todos-contra-todos canônica não ganha previsão de evento eliminatório');
 process.exit(fail ? 1 : 0);

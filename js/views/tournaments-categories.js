@@ -723,12 +723,28 @@ window._buildTimeEstimation = function(t, opts) {
   // duração fixa. Mostrar simulação de partidas é enganoso. Pedido do
   // usuário: "quando o campeonato for liga vamos ocultar a sessao duração
   // estimada que não faz sentido em ligas."
-  var isLigaFmt = (typeof window._isLigaFormat === 'function')
-    ? window._isLigaFormat(t)
-    : (t.format === 'Liga' || t.format === 'Ranking');
+  // A duração é propriedade do plano da primeira fase. Depois da projeção
+  // canônica, `t.format` pode continuar apenas como rótulo histórico do
+  // torneio e não pode esconder/forjar esta estimativa.
+  var phase0 = Array.isArray(t.phases) ? t.phases[0] : null;
+  var hasCanonicalPhase = !!(phase0 && phase0.kind);
+  var isLigaFmt = hasCanonicalPhase
+    ? (phase0.kind === 'classification' && (!phase0.classification || phase0.classification.structure !== 'groups'))
+    : ((typeof window._isLigaFormat === 'function')
+      ? window._isLigaFormat(t)
+      : (t.format === 'Liga' || t.format === 'Ranking'));
   if (isLigaFmt) return '';
 
   var format = t.format || 'Eliminatórias';
+  if (hasCanonicalPhase) {
+    if (phase0.kind === 'elimination') {
+      format = phase0.elimination && phase0.elimination.bracketType === 'double'
+        ? 'Dupla Eliminatória' : 'Eliminatórias Simples';
+    } else if (phase0.kind === 'classification' && phase0.classification && phase0.classification.structure === 'groups') {
+      var hasEliminationAfter = (t.phases || []).slice(1).some(function (phase) { return phase && phase.kind === 'elimination'; });
+      format = hasEliminationAfter ? 'Fase de Grupos + Eliminatórias' : 'Fase de Grupos';
+    }
+  }
   var courts = Math.max(parseInt(t.courtCount) || 1, 1);
   var intervalBetween = 5; // intervalo entre slots no mesmo court (min)
   // v2.0.74: `gameDuration` é o tempo POR SET (régua única `_minutosDaPartida`, em
