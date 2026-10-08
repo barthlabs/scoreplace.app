@@ -56,7 +56,10 @@ window._askDuplicatePerson = function (tId, dup) {
     if (typeof showNotification !== 'undefined') {
       showNotification('Enviando…', 'Preparando a confirmação da sua outra conta.', 'info');
     }
-    _fns.httpsCallable('requestNameMergeProof')({ channel: 'email' }).then(function (r) {
+    // A porta antiga resolvia o alvo apenas por homônimo. A prova de segunda
+    // conta precisa redescobrir os sinais no servidor (telefone/e-mail provados
+    // e a revisão de identidade), sem transformar nome de exibição em identidade.
+    _fns.httpsCallable('pedirProvaDaSegundaConta')({}).then(function (r) {
       var d = (r && r.data) || {};
       if (d.ok && d.sent) {
         // O ÚNICO passo que sobra pra ela: abrir a caixa e clicar.

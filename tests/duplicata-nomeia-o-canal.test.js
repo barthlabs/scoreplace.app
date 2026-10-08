@@ -70,8 +70,10 @@ ok(/Nada é unido só porque os nomes são iguais/.test(soEmail.corpo),
    'o texto segue dizendo que nome igual não une nada');
 // ⭐ 2.1 — UMA ÚNICA POSSIBILIDADE no "Sim". Ordem do dono: "tem que abrir uma única
 // possibilidade quando ela diz que é ela e não o perfil porra. assim ela não sabe o que fazer."
-ok(/httpsCallable\('requestNameMergeProof'\)/.test(corpo),
-   'o "Sim" DISPARA a prova (manda o link), em vez de largar a pessoa no perfil');
+ok(/httpsCallable\('pedirProvaDaSegundaConta'\)/.test(corpo),
+   'o "Sim" DISPARA a prova pelo detector de segunda conta, em vez de largar a pessoa no perfil');
+ok(!/httpsCallable\('requestNameMergeProof'\)/.test(corpo),
+   '⛔ o fluxo de inscrição não resolve mais o alvo apenas por homônimo');
 ok(/Link enviado|📬 Link enviado/.test(corpo), 'e diz que o link foi enviado');
 ok(/d\.masked/.test(corpo), 'nomeando a caixa pra onde foi');
 ok(/#profile/.test(corpo), 'o perfil continua como saída SÓ quando não há e-mail na outra conta');
