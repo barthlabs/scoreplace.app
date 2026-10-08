@@ -398,6 +398,7 @@ const SUITES = [
   'tests/l7-opinion-poll-cf-only.test.js',
   'tests/sorteio-vagas-nao-sobrescreve-elenco.test.js',
   'tests/categorias-escrevem-no-fresco.test.js',
+  'tests/category-merge-entry-identity.test.js',
   'tests/maintenance-writers-sao-transacionais.test.js',
   'tests/status-writers-sao-transacionais.test.js',
   'tests/edicao-torneio-escreve-no-fresco.test.js',

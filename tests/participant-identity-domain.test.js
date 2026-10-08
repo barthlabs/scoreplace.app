@@ -38,24 +38,32 @@ ok(domain.entryTeamMembers({ participants: [{ displayName: 'Ana' }, { name: 'Bia
   '⑧ entrada composta preserva a ordem de apresentação');
 ok(domain.entryTeamMembers({ participants: ['Ana', { name: 'Bia' }] }).join(',') === 'Ana,Bia',
   '⑨ entrada composta legada em texto continua legível');
+ok(domain.entryIdentityKey({ uid: 'ana', email: 'ana@antigo.test', displayName: 'Ana' }) === 'uid:ana',
+  '⑩ identidade de conta ignora e-mail e nome de apresentação');
+ok(domain.entryIdentityKey({ p1Uid: 'ana', p2ManualId: 'guest-7', p2Name: 'Convidada' }) === 'team:manual:guest-7|uid:ana',
+  '⑪ dupla preserva UID e ID manual dos dois membros');
+ok(domain.entryIdentityKey({ manualParticipantId: 'ana', displayName: 'Ana' }) !== domain.entryIdentityKey({ uid: 'ana', displayName: 'Ana' }),
+  '⑫ UID e participante manual com o mesmo texto não colidem');
 
 const browser = { window: null }; browser.window = browser; vm.createContext(browser);
 vm.runInContext(fs.readFileSync(path.join(ROOT, 'js/domain/participant-identity.js'), 'utf8'), browser);
 vm.runInContext(fs.readFileSync(path.join(ROOT, 'js/views/identity-core.js'), 'utf8'), browser);
 ok(browser._participantUids({ uid: 'ana', p1Uid: 'bia', p2Uid: 'ana' }).join(',') === 'ana,bia',
-  '⑩ adaptador de browser delega ao domínio tipado');
+  '⑬ adaptador de browser delega ao domínio tipado');
 ok(browser._entryTeamMembers({ p1Uid: 'u1', p2Uid: 'u2' }).join(',') === 'u1,u2',
-  '⑪ adaptador de browser preserva a dupla só-uid');
+  '⑭ adaptador de browser preserva a dupla só-uid');
+ok(browser._participantEntryKey({ p1Uid: 'u1', p2ManualId: 'm2', p2Name: 'Manual' }) === 'team:manual:m2|uid:u1',
+  '⑮ adaptador expõe a mesma chave tipada de entrada');
 
 const index = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
 ok(index.indexOf('js/domain/participant-identity.js') < index.indexOf('js/views/identity-core.js'),
-  '⑫ domínio carrega antes do adaptador clássico');
+  '⑯ domínio carrega antes do adaptador clássico');
 const draw = fs.readFileSync(path.join(ROOT, 'functions-autodraw', 'draw-core.js'), 'utf8');
 ok(draw.indexOf("participant-identity.js") < draw.indexOf("require('./vendor/identity-core.js')"),
-  '⑬ motor de sorteio carrega o mesmo domínio antes do adaptador');
+  '⑰ motor de sorteio carrega o mesmo domínio antes do adaptador');
 const engine = require(path.join(ROOT, 'functions-autodraw', 'draw-core.js'));
 ok(engine._window.ScoreplaceParticipantIdentity && engine._window._participantUids({ uid: 'a', p1Uid: 'b', p2Uid: 'a' }).join(',') === 'a,b',
-  '⑭ motor executa o contrato tipado, não uma cópia própria');
+  '⑱ motor executa o contrato tipado, não uma cópia própria');
 
 console.log(fail ? ('  ' + fail + ' FALHA(S), ' + pass + ' ok') : ('  ✓ ' + pass + ' asserções'));
 process.exit(fail ? 1 : 0);

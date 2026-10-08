@@ -36,6 +36,39 @@ window._participantUids = function(p) {
   return uids;
 };
 
+// Chave de UMA ENTRADA (não de uma pessoa). Mesclagem/desmesclagem de categorias
+// opera sobre a inscrição inteira, então uma dupla precisa incluir ambos os slots.
+// O domínio tipado é a única fonte da regra; e-mail nunca participa da identidade.
+window._participantEntryKey = function(p) {
+  var domain = window.ScoreplaceParticipantIdentity;
+  if (domain && typeof domain.entryIdentityKey === 'function') return domain.entryIdentityKey(p);
+  // Reserva para harness legado parcial: mantém a semântica tipada sem introduzir
+  // e-mail como chave. O produto sempre carrega o domínio antes deste adaptador.
+  if (!p || typeof p !== 'object') return '';
+  function member(uid, manual, name) {
+    if (uid) return 'uid:' + String(uid);
+    if (manual) return 'manual:' + String(manual);
+    return name ? 'legacy-name:' + String(name).trim().toLowerCase() : '';
+  }
+  var members = [];
+  if (Array.isArray(p.participants)) p.participants.forEach(function(slot) {
+    if (!slot || typeof slot !== 'object') return;
+    var key = member(slot.uid, slot.manualParticipantId, slot.displayName || slot.name);
+    if (key && members.indexOf(key) === -1) members.push(key);
+  });
+  if (!members.length && (p.p1Uid || p.p2Uid || p.p1ManualId || p.p2ManualId || p.p1Name || p.p2Name)) {
+    [member(p.p1Uid, p.p1ManualId, p.p1Name), member(p.p2Uid, p.p2ManualId, p.p2Name)].forEach(function(key) {
+      if (key && members.indexOf(key) === -1) members.push(key);
+    });
+  }
+  if (!members.length) {
+    var single = member(p.uid, p.manualParticipantId, p.displayName || p.name);
+    if (single) members.push(single);
+  }
+  members.sort();
+  return members.length > 1 ? 'team:' + members.join('|') : (members[0] || '');
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // IDENTIDADE = uid em TODO mapa por-pessoa do torneio (checkedIn / absent / vips).
 // Regra do dono (jun/2026): "sempre identifica pelo uid. vips, checkin, ausente e

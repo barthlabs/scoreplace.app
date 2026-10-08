@@ -136,6 +136,30 @@ var ScoreplaceParticipantIdentity;
     }
     ScoreplaceParticipantIdentity.participantSlots = participantSlots;
     /**
+     * Chave estável de uma ENTRADA de torneio. É usada apenas onde a operação é
+     * sobre a inscrição inteira (por exemplo, desfazer uma mesclagem de
+     * categorias), portanto uma dupla precisa carregar os dois membros.
+     *
+     * Conta: `uid:<uid>`; convidado manual criado hoje:
+     * `manual:<manualParticipantId>`; registros históricos sem nenhum ID:
+     * `legacy-name:<nome normalizado>`. E-mail não é identidade de participante
+     * e não entra nesta chave. O último caso existe exclusivamente para que um
+     * documento antigo permaneça reversível até a migração explícita.
+     */
+    function entryIdentityKey(value) {
+        const members = participantSlots(value).map((person) => {
+            if (person.uid)
+                return 'uid:' + person.uid;
+            if (person.manualParticipantId)
+                return 'manual:' + person.manualParticipantId;
+            return person.name ? 'legacy-name:' + person.name.toLocaleLowerCase() : '';
+        }).filter(Boolean).sort();
+        if (!members.length)
+            return '';
+        return members.length === 1 ? members[0] : 'team:' + members.join('|');
+    }
+    ScoreplaceParticipantIdentity.entryIdentityKey = entryIdentityKey;
+    /**
      * Uma dupla existe quando os dois slots estão ocupados por UID ou, no caso de
      * convidado sem conta, por nome. Uma barra no texto não transforma alguém em
      * dupla: ela é somente apresentação.

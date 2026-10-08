@@ -2057,10 +2057,11 @@ function _applyCategoryMerge(t, sourceCat, targetCat, mergedName, timestamp) {
     var premergeMap = {};
     parts.forEach(function(p) {
         if (typeof p !== 'object') return;
-        // Chave da entrada uid-first (varredura uid, Parte 6): uid/p1Uid evita
-        // colisão entre duas entradas de mesmo nome; email/nome só fallback.
+        // Chave da entrada canônica: inclui TODOS os membros da dupla e separa
+        // UID, manualParticipantId e rótulo legado. E-mail jamais identifica
+        // participante; nome só sobrevive como compatibilidade de doc sem ID.
         // Casa com a mesma fórmula no read de _executeUnmerge.
-        var pKey = p.uid || p.p1Uid || p.email || p.displayName || p.name || '';
+        var pKey = window._participantEntryKey ? window._participantEntryKey(p) : '';
         if (!pKey) return;
         if (window._participantInCategory(p, sourceCat)) {
             premergeMap[pKey] = sourceCat;
@@ -2129,7 +2130,7 @@ function _applyCategoryMerge(t, sourceCat, targetCat, mergedName, timestamp) {
         sourceCat: sourceCat,
         targetCat: targetCat,
         timestamp: timestamp || Date.now(),
-        participants: premergeMap // email → category before this merge (sourceCat or targetCat)
+        participants: premergeMap // chave tipada da entrada → categoria antes da mesclagem
     };
     t.mergeHistory.push(mergeRecord);
 
@@ -2527,9 +2528,9 @@ function _applyCategoryUnmerge(t, mergeIdentity) {
         var idx = pCats.indexOf(mergedName);
         if (idx === -1) return;
 
-        // Mesma chave uid-first do write em _executeMerge (varredura uid, Parte 6).
-        // Docs de merge legados (keyed por e-mail) caem no fallback p.originalCategory.
-        var pKey = p.uid || p.p1Uid || p.email || p.displayName || p.name || '';
+        // Mesma chave tipada do write em _executeMerge. Históricos antigos com
+        // e-mail/nome não são reinterpretados: caem no fallback p.originalCategory.
+        var pKey = window._participantEntryKey ? window._participantEntryKey(p) : '';
         // participantMap has the exact pre-merge category (sourceCat or targetCat)
         var fromMap = participantMap[pKey] || '';
         var fromOrig = p.originalCategory || '';

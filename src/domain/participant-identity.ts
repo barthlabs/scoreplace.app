@@ -20,6 +20,8 @@ namespace ScoreplaceParticipantIdentity {
   export interface ParticipantEntry extends ParticipantSlot {
     p1Uid?: unknown;
     p2Uid?: unknown;
+    p1ManualId?: unknown;
+    p2ManualId?: unknown;
     p1Name?: unknown;
     p2Name?: unknown;
     participants?: unknown;
@@ -148,6 +150,27 @@ namespace ScoreplaceParticipantIdentity {
     }
     add(entry.uid, entry.manualParticipantId, (entry as ParticipantSlot).displayName || (entry as ParticipantSlot).name);
     return slots;
+  }
+
+  /**
+   * Chave estável de uma ENTRADA de torneio. É usada apenas onde a operação é
+   * sobre a inscrição inteira (por exemplo, desfazer uma mesclagem de
+   * categorias), portanto uma dupla precisa carregar os dois membros.
+   *
+   * Conta: `uid:<uid>`; convidado manual criado hoje:
+   * `manual:<manualParticipantId>`; registros históricos sem nenhum ID:
+   * `legacy-name:<nome normalizado>`. E-mail não é identidade de participante
+   * e não entra nesta chave. O último caso existe exclusivamente para que um
+   * documento antigo permaneça reversível até a migração explícita.
+   */
+  export function entryIdentityKey(value: unknown): string {
+    const members = participantSlots(value).map((person) => {
+      if (person.uid) return 'uid:' + person.uid;
+      if (person.manualParticipantId) return 'manual:' + person.manualParticipantId;
+      return person.name ? 'legacy-name:' + person.name.toLocaleLowerCase() : '';
+    }).filter(Boolean).sort();
+    if (!members.length) return '';
+    return members.length === 1 ? members[0] : 'team:' + members.join('|');
   }
 
   /**
