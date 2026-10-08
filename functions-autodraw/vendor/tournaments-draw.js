@@ -105,19 +105,19 @@ window._clearTournamentDraw = function (t) {
       var nm = (p && typeof p === 'object')
         ? ((window._pName ? window._pName(p, '') : '') || p.displayName || p.name || '')
         : String(p || '');
-      var isTeam = (p && typeof p === 'object' && Array.isArray(p.participants) && p.participants.length) || (p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) || (nm.indexOf(' / ') !== -1);
+      var isTeam = (p && typeof p === 'object' && Array.isArray(p.participants) && p.participants.length) || (p && typeof p === 'object' && (p.p1Uid || p.p1ManualId || p.p1Name) && (p.p2Uid || p.p2ManualId || p.p2Name)) || (nm.indexOf(' / ') !== -1);
       if (nm && _origins[nm] === 'sorteada' && isTeam) {
         if (Array.isArray(p.participants) && p.participants.length) {
           p.participants.forEach(function (s) { _out.push(s); });
-        } else if ((p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) {
+        } else if ((p.p1Uid || p.p1ManualId || p.p1Name) && (p.p2Uid || p.p2ManualId || p.p2Name)) {
           // FASE 2: nome do membro resolve pelo uid (perfil ao vivo); nome gravado só fallback (guest/cache frio)
           var _dnA = window._displayNameForUid ? window._displayNameForUid(p.p1Uid, p.p1Name) : (p.p1Name || p.p1Uid || '');
           var _dnB = window._displayNameForUid ? window._displayNameForUid(p.p2Uid, p.p2Name) : (p.p2Name || p.p2Uid || '');
           // v1.2.45: devolve o nº de inscrição de CADA um (p1Seq→enrollSeq). O número é da
           // PESSOA e desfazer dupla não pode mexer nele — sem isto o reset renumerava todo
           // mundo. Ver tests/enroll-number-canon.test.js.
-          _out.push({ name: _dnA, displayName: _dnA, uid: p.p1Uid, email: p.p1Email, photoURL: p.p1Photo, enrollSeq: (p.p1Seq != null ? p.p1Seq : undefined) });
-          _out.push({ name: _dnB, displayName: _dnB, uid: p.p2Uid, email: p.p2Email, photoURL: p.p2Photo, enrollSeq: (p.p2Seq != null ? p.p2Seq : undefined) });
+          _out.push({ name: _dnA, displayName: _dnA, uid: p.p1Uid, manualParticipantId: p.p1ManualId, photoURL: p.p1Photo, enrollSeq: (p.p1Seq != null ? p.p1Seq : undefined) });
+          _out.push({ name: _dnB, displayName: _dnB, uid: p.p2Uid, manualParticipantId: p.p2ManualId, photoURL: p.p2Photo, enrollSeq: (p.p2Seq != null ? p.p2Seq : undefined) });
         } else {
           nm.split('/').map(function (x) { return x.trim(); }).filter(Boolean).forEach(function (x) { _out.push({ name: x, displayName: x }); });
         }
@@ -127,10 +127,16 @@ window._clearTournamentDraw = function (t) {
     });
     var _seen = {}, _final = [];
     _out.forEach(function (p) {
-      var k;
-      if (p && typeof p === 'object' && (p.uid || p.email)) k = 'id:' + String(p.uid || p.email).toLowerCase();
-      else { var s = (p && typeof p === 'object') ? (p.displayName || p.name || '') : String(p || ''); k = 'n:' + s.trim().toLowerCase(); }
-      if (k === 'n:') { _final.push(p); return; }
+      // UID/manualParticipantId são as únicas chaves de uma pessoa criada hoje.
+      // O nome continua somente como rótulo legado sem ID; e-mail jamais pode
+      // fundir duas inscrições diferentes durante uma restauração.
+      var k = (p && typeof p === 'object' && typeof window._participantEntryKey === 'function') ? window._participantEntryKey(p) : '';
+      if (!k && p && typeof p === 'object') {
+        // Harness/artefato parcial: reproduz o contrato tipado sem cair em e-mail.
+        k = p.uid ? 'uid:' + String(p.uid) : (p.manualParticipantId ? 'manual:' + String(p.manualParticipantId) : '');
+      }
+      if (!k) { var s = (p && typeof p === 'object') ? (p.displayName || p.name || '') : String(p || ''); k = s.trim() ? 'legacy-name:' + s.trim().toLowerCase() : ''; }
+      if (!k) { _final.push(p); return; }
       if (!_seen[k]) { _seen[k] = 1; _final.push(p); }
     });
     t.participants = _final;

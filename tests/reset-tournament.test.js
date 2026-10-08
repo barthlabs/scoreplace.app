@@ -145,6 +145,29 @@ W._countCompetitors = W._countCompetitors || function (t) { return { people: (t.
   ok(!t.teamOrigins || t.teamOrigins['Ana / Bia'] === undefined, 'teamOrigins da dupla sorteada é limpo');
 })();
 
+// Um e-mail nunca pode decidir a deduplicação do reset. Duas convidadas manuais
+// podem inclusive compartilhar contato do casal: o ID manual, e não o e-mail nem
+// o rótulo, é que mantém as duas inscrições distintas ao desfazer a dupla sorteada.
+(function () {
+  W._displayNameForUid = function (_u, fallback) { return fallback || ''; };
+  W._pName = function (p, fallback) {
+    if (!p || typeof p !== 'object') return fallback || '';
+    if (p.p1Name || p.p2Name) return [p.p1Name, p.p2Name].filter(Boolean).join(' / ');
+    return p.displayName || p.name || fallback || '';
+  };
+  var t = {
+    id: 'T-manual', status: 'active', participants: [{
+      p1ManualId: 'manual-ana', p1Name: 'Ana', p1Email: 'casa@test',
+      p2ManualId: 'manual-bia', p2Name: 'Ana', p2Email: 'casa@test'
+    }],
+    teamOrigins: { 'Ana / Ana': 'sorteada' }, matches: [], rounds: [], groups: [], phases: [{}]
+  };
+  W._clearTournamentDraw(t);
+  var manualIds = (t.participants || []).map(function (p) { return p.manualParticipantId; }).sort();
+  ok(manualIds.join(',') === 'manual-ana,manual-bia', 'reset preserva os dois IDs manuais mesmo com mesmo nome/e-mail');
+  ok(!(t.participants || []).some(function (p) { return Object.prototype.hasOwnProperty.call(p, 'email'); }), 'reset não copia e-mail como identidade de participante');
+})();
+
 // Restaurar pré-publicação apaga a chave, mas uma dupla formada manualmente é
 // inscrição, não artefato do sorteio. Ela precisa sobreviver ao novo teste.
 (function () {
