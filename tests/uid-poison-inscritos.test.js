@@ -175,12 +175,14 @@ console.log('\n"Esta pessoa é esta inscrição?" — só uid decide (quem tem c
   ok('dupla: p2Email igual ao meu NÃO me inscreve',
     M(eu, { p1Uid: 'uid_p1', p2Uid: 'uid_p2', p2Email: POISON_EMAIL }) === false);
 
-  // Exceção do cânone: fictício sem conta — nome digitado É a identidade.
+  // Entrada manual sem uid é somente uma vaga exibida: uma conta com o mesmo
+  // nome jamais pode reivindicá-la sem migração verificada.
   const fict = { name: 'Convidado da Quadra', displayName: 'Convidado da Quadra' };
-  ok('fictício casa pelo nome digitado', M({ uid: 'uid_x', displayName: 'Convidado da Quadra' }, fict) === true);
-  ok('fictício: nome diferente não casa', M(eu, fict) === false);
-  ok('dupla de fictícios (rótulo legado "A / B") casa pelo nome',
-    M({ uid: 'uid_x', displayName: 'Mari' }, { displayName: 'Mari / Flavia', name: 'Mari / Flavia' }) === true);
+  ok('fictício sem uid não é reivindicado por conta de mesmo nome',
+    M({ uid: 'uid_x', displayName: 'Convidado da Quadra' }, fict) === false);
+  ok('fictício: nome diferente também não casa', M(eu, fict) === false);
+  ok('dupla manual legada só com rótulo não é reivindicada por nome',
+    M({ uid: 'uid_x', displayName: 'Mari' }, { displayName: 'Mari / Flavia', name: 'Mari / Flavia' }) === false);
 
   // Fim a fim: o botão. Era o outro lado do sintoma (botão dizia Desinscrever-se).
   const t = makeT();

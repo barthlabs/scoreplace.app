@@ -14647,18 +14647,18 @@ window._teamNameBreakHtml = function(name, tournament) {
 
 // ─── Enrollment lookup: matches user against a participant (incl. team members) ─
 // A participant can be:
-//  • string "Name"                           → match vs user.displayName/email
-//  • string "Name1 / Name2"                  → team — match any member
+//  • string "Name"                           → vaga manual, nunca casa uma conta
+//  • string "Name1 / Name2"                  → vaga manual, nunca casa uma conta
 //  • object { uid, email, displayName, ... } → top-level fields
 //  • object { ..., participants: [ m1, m2 ] }→ team — recurse into each member
-//  • object whose displayName/name contains " / " → treat label as team string
+//  • object whose displayName/name contains " / " → rótulo legado, não identidade
 // "Esta pessoa É esta inscrição?" — porta gêmea de _getCompetitors (o botão
 // Inscrever-se/Desinscrever-se e a desinscrição passam por aqui).
 //
-// CÂNONE (dono, jul/2026): quem tem conta é identificado por UID e mais nada. Um slot/entrada
-// que TEM uid casa SÓ por uid — o nome e o e-mail gravados ali são rótulo velho (o strip não
-// os repõe, e-mail muda, conta é recriada, nome colide). Fictício (SEM uid) casa pelo NOME
-// digitado: é a única identidade que ele tem. E-mail NUNCA identifica ninguém.
+// CÂNONE (dono, out/2026): uma conta autenticada é identificada por UID e mais nada.
+// Entrada manual/legada sem uid não pertence a conta alguma até uma migração verificada:
+// o rótulo digitado serve para exibir a vaga, jamais para conceder inscrição, saída,
+// placar ou qualquer outra ação. E-mail NUNCA identifica ninguém.
 //
 // v1.2.44 — removidos os fallbacks por e-mail (`m.email`, `p1Email`, `p2Email`) e por nome
 // de quem TEM uid. Eles davam match em pessoa ERRADA: e-mail repetido (família, conta
@@ -14668,19 +14668,17 @@ window._teamNameBreakHtml = function(name, tournament) {
 // fictícios só-nome, que o cânone manda casar por nome mesmo. Travado por
 // tests/uid-poison-inscritos.test.js. Ver [[project_uid_identity_canon_locked]].
 window._userMatchesParticipant = function(user, p) {
-  if (!user || !p) return false;
-  var un = user.displayName || '';
+  if (!user || !p || !user.uid) return false;
   var uu = user.uid || '';
   // Uma PESSOA (entrada solo, membro de dupla ou sub-participante).
   function matchMember(m) {
     if (!m) return false;
-    if (typeof m === 'string') return !!(un && m.trim() === un);   // fictício legado: nome é a identidade
-    if (m.uid) return !!(uu && m.uid === uu);                      // tem conta → SÓ uid, nunca nome/e-mail
-    return !!(un && ((m.displayName && m.displayName === un) || (m.name && m.name === un))); // fictício
+    if (typeof m === 'string' || !m.uid) return false;
+    return m.uid === uu;
   }
-  // String legada "A / B": sem slots, o nome é a única identidade que existe.
+  // String legada "A / B": rótulo sem identidade verificável; nunca reivindica conta.
   if (typeof p === 'string') {
-    return p.split(' / ').map(function(s) { return s.trim(); }).filter(Boolean).some(matchMember);
+    return false;
   }
   // DUPLA por ESTRUTURA (slots p1/p2) — 2 pessoas, cada uma com a SUA identidade.
   // O rótulo "A / B" (displayName) é TIPOGRAFIA, não identidade: quando há slots, eles mandam
@@ -14692,11 +14690,6 @@ window._userMatchesParticipant = function(user, p) {
   }
   if (matchMember(p)) return true;
   if (Array.isArray(p.participants) && p.participants.some(matchMember)) return true;
-  // Sem slots e sem sub-array: dupla de fictícios guardada só como rótulo "A / B" (legado).
-  var label = p.uid ? '' : (p.displayName || p.name || '');
-  if (label && label.indexOf(' / ') !== -1) {
-    return label.split(' / ').map(function(s) { return s.trim(); }).filter(Boolean).some(matchMember);
-  }
   return false;
 };
 
