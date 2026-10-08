@@ -2245,7 +2245,13 @@ window._nextOwedDrawMs = function(t, nowMs) {
         }
         return window._owedDrawSlotMs(_pcfg.drawFirstDate, _pcfg.drawFirstTime, _pcfg.drawIntervalDays, _slot && _slot.lastAutoDrawAt, _now);
     }
-    var isLiga = t.format === 'Liga' || t.format === 'Ranking';
+    var phase0 = Array.isArray(t.phases) ? t.phases[0] : null;
+    // A agenda inicial pertence à fase 0. Um torneio multifase pode manter o
+    // rótulo histórico “Liga” no topo e já estar em mata-mata; a fase resolve a
+    // ambiguidade sem mudar o fallback de documentos ainda não projetados.
+    var isLiga = phase0 && phase0.kind
+      ? (phase0.kind === 'classification' && (!phase0.classification || phase0.classification.structure !== 'groups'))
+      : (t.format === 'Liga' || t.format === 'Ranking');
     if (!isLiga || t.drawManual === true || !t.drawFirstDate || t.status === 'finished') return null;
     // v3.x: torneio multifase — o auto-draw para no fim da fase classificatória
     // (avanço pra próxima fase é MANUAL). Single-phase → false (zero efeito).

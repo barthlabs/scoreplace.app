@@ -53,6 +53,10 @@ const FD = new Date('2026-07-01T19:00:00-03:00').getTime();
   const NOW = FD + 3 * D; // dentro do slot 0
 
   ok(g(Object.assign({}, baseLiga), NOW) === FD, '[next] Liga auto válida → slot devido (firstDraw)');
+  ok(g(Object.assign({}, baseLiga, { phases: [{ kind: 'elimination', elimination: { bracketType: 'single' } }] }), NOW) === null,
+    '[next] fase canônica eliminatória vence o rótulo Liga do topo');
+  ok(g({ format: 'Eliminatórias Simples', phases: [{ kind: 'classification', classification: { structure: 'round_robin' } }], drawFirstDate: '2026-07-01', drawFirstTime: '19:00', drawIntervalDays: 7 }, NOW) === FD,
+    '[next] fase canônica classificatória vence o rótulo eliminatório do topo');
   ok(g({ format: 'Eliminatórias Simples', drawFirstDate: '2026-07-01', drawIntervalDays: 7 }, NOW) === null, '[next] não-Liga → null');
   ok(g(Object.assign({ drawManual: true }, baseLiga), NOW) === null, '[next] Liga MANUAL → null');
   ok(g({ format: 'Liga', drawIntervalDays: 7 }, NOW) === null, '[next] Liga sem drawFirstDate → null');
