@@ -1940,6 +1940,7 @@ window._congelaGruposEncerrados = _congelaGruposEncerrados;
 // como fallback para documentos que ainda não passaram pela projeção segura de
 // legado. Não usar o rótulo histórico quando a fase já o contradiz.
 function _bracketPhaseFormat(t) {
+  if (typeof window._phaseEliminationKind === 'function') return window._phaseEliminationKind(t);
   var phases = t && Array.isArray(t.phases) ? t.phases : null;
   var phase = phases && phases[t.currentPhaseIndex || 0];
   if (!phase || !phase.kind) return null;
@@ -1948,11 +1949,13 @@ function _bracketPhaseFormat(t) {
 }
 
 function _isDoubleEliminationBracket(t) {
+  if (typeof window._isDoubleEliminationPhase === 'function') return window._isDoubleEliminationPhase(t);
   var canonical = _bracketPhaseFormat(t);
   return canonical ? canonical === 'double' : !!(t && t.format === 'Dupla Eliminatória');
 }
 
 function _isEliminationBracket(t) {
+  if (typeof window._isEliminationPhase === 'function') return window._isEliminationPhase(t);
   var canonical = _bracketPhaseFormat(t);
   if (canonical) return canonical === 'single' || canonical === 'double';
   var legacy = (t && t.format) || '';

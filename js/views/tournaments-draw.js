@@ -821,6 +821,19 @@ window._lateEntryKey = function (p) {
   var name = window._pName ? window._pName(p, '') : (p.displayName || p.name || '');
   return name ? 'n:' + String(name) : '';
 };
+
+function _drawIsDoubleElimination(t) {
+  return typeof window._isDoubleEliminationPhase === 'function'
+    ? window._isDoubleEliminationPhase(t)
+    : /dupla/i.test(String((t && t.format) || ''));
+}
+
+function _drawIsSingleElimination(t) {
+  if (typeof window._phaseEliminationKind === 'function') return window._phaseEliminationKind(t) === 'single';
+  var format = (t && t.format) || '';
+  return format === 'Eliminatórias Simples' || format === 'Eliminatória Simples';
+}
+
 window._lateAlreadyIntegrated = function (t, p) {
   var k = window._lateEntryKey(p);
   var legacy = window._lateLegacyEntryKey(p);
@@ -836,7 +849,7 @@ window._markLateIntegrated = function (t, p) {
 window._integrateLateDuplas = function (t) {
   if (!t) return 0;
   if (!window._allowsNewMatchups(t)) return 0;
-  if (!/dupla/i.test(t.format || '')) return 0; // Eliminatória Simples: _createExtraGamesFromWaitlist
+  if (!_drawIsDoubleElimination(t)) return 0; // Eliminatória Simples: _createExtraGamesFromWaitlist
   if (!Array.isArray(t.matches) || t.matches.length === 0) return 0; // sorteio ainda não feito
   if (Array.isArray(t.combinedCategories) && t.combinedCategories.length > 1) return 0; // multi-cat: fora do escopo
 
@@ -1147,8 +1160,7 @@ window._integrateLateDuplas = function (t) {
 window._createExtraGamesFromWaitlist = function(t) {
   if (!t) return 0;
   if (!window._allowsNewMatchups(t)) return 0; // v1.3.x: gate independente (ver _allowsNewMatchups)
-  var fmt = t.format || '';
-  if (fmt !== 'Eliminatórias Simples' && fmt !== 'Eliminatória Simples') return 0;
+  if (!_drawIsSingleElimination(t)) return 0;
   if (Array.isArray(t.combinedCategories) && t.combinedCategories.length > 1) return 0; // multi-categoria: fora do escopo por ora
   if (!Array.isArray(t.matches) || t.matches.length === 0) return 0; // sorteio já feito
   // v1.3.57: 1ª rodada = MENOR round (CF numera round 0; legado round 1). Jogos tardios entram
@@ -1596,8 +1608,7 @@ window._fillRepFillWithLateDuplas = function (t) {
 // rodada são derivados do nº de rodadas (automático no render).
 window._rebuildIntegratedBracket = function(t) {
   if (!t || !Array.isArray(t.matches)) return false;
-  var fmt = t.format || '';
-  if (fmt !== 'Eliminatórias Simples' && fmt !== 'Eliminatória Simples') return false;
+  if (!_drawIsSingleElimination(t)) return false;
   // v1.3.57: ROUND-AGNOSTIC — a 1ª rodada é o MENOR round das matches. O sorteio da CF numera a
   // 1ª rodada como round 0; o legado assumia round 1 e pegava a rodada errada (semis) → chave
   // reconstruída torta. firstRound=1 pros brackets legados (backward-compat). Ver [[project_late_enrollment_elimination]].
@@ -6278,7 +6289,7 @@ window._placeLateEntriesSurgically = function (t, _theCat) {
     // NORMALIZA a proporção da árvore dupla-elim FRESCA: a colocação aditiva deixa 6 R1 → 4 R2 + 2
     // inf em vez de 3/3. Recompõe o downstream em árvore-mínima com repescagem no ímpar, MANTENDO a
     // R1. Auto-guardado (fresca + R1 completa por categoria). project_dupla_downstream_bye_deadend.
-    if (/dupla/i.test(String(t.format || '')) && typeof window._rebuildDuplaDownstream === 'function') {
+    if (_drawIsDoubleElimination(t) && typeof window._rebuildDuplaDownstream === 'function') {
       try { window._rebuildDuplaDownstream(t); } catch (e) {}
     }
   }

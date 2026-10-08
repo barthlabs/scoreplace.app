@@ -39,6 +39,33 @@ window._faseCorrenteEhLiga = function(t) {
     return !fase.classification || fase.classification.structure !== 'groups';
 };
 
+// Contrato canônico da fase eliminatória. O texto em `t.format` é somente a
+// ponte para documentos que ainda não foram projetados; fluxos novos nunca
+// devem decidir simples/dupla pelo rótulo do torneio inteiro.
+window._phaseEliminationKind = function(t, phaseIndex) {
+    if (!t) return null;
+    var phases = Array.isArray(t.phases) ? t.phases : null;
+    var index = phaseIndex == null ? (t.currentPhaseIndex || 0) : phaseIndex;
+    var phase = phases && phases[index];
+    if (phase && phase.kind) {
+        if (phase.kind !== 'elimination') return 'classification';
+        return phase.elimination && phase.elimination.bracketType === 'double' ? 'double' : 'single';
+    }
+    var legacy = t.format || '';
+    if (legacy === 'Dupla Eliminatória') return 'double';
+    if (legacy === 'Eliminatórias Simples' || legacy === 'Eliminatória Simples' || legacy === 'Fase de Grupos') return 'single';
+    return null;
+};
+
+window._isDoubleEliminationPhase = function(t, phaseIndex) {
+    return window._phaseEliminationKind(t, phaseIndex) === 'double';
+};
+
+window._isEliminationPhase = function(t, phaseIndex) {
+    var kind = window._phaseEliminationKind(t, phaseIndex);
+    return kind === 'single' || kind === 'double';
+};
+
 // Rei/Rainha é MODO de sorteio/chaveamento (parceiro rotativo), NÃO um formato de fase.
 // A fonte da verdade é t.drawMode === 'rei_rainha' (ou ligaRoundFormat='rei_rainha' p/ Liga
 // Rei/Rainha) — nunca t.format. O antigo string t.format === 'Rei/Rainha da Praia' foi APAGADO

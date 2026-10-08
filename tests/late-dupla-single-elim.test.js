@@ -29,7 +29,11 @@ function latePair(a, b) { return Object.assign(pair(a, b), { _lateJoin: true });
 function build() {
   const A = pair('A1', 'A2'), B = pair('B1', 'B2'), C = pair('C1', 'C2'), D = pair('D1', 'D2');
   const t = {
-    id: 'SE1', format: 'Eliminatórias Simples', teamSize: 2, enrollmentMode: 'teams',
+    id: 'SE1',
+    // O rótulo histórico é deliberadamente incompatível: a integração tardia
+    // deve obedecer a fase canônica e ainda criar o jogo da chave simples.
+    format: 'Liga', phases: [{ kind: 'elimination', elimination: { bracketType: 'single' } }],
+    teamSize: 2, enrollmentMode: 'teams',
     lateEnrollment: 'expand', currentPhaseIndex: 0,
     participants: [A, B, C, D],
     standbyParticipants: [], waitlist: [], checkedIn: {}, absent: {}, teamOrigins: {},
