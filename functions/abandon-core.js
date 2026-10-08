@@ -73,8 +73,20 @@ function fimDoTorneioMs(t) {
   return cands.length ? Math.max.apply(null, cands) : null;
 }
 
-function ehLiga(fmt) {
-  var f = String(fmt || '').toLowerCase();
+function ehLiga(t) {
+  /* A temporada contínua pertence à fase classificatória atual. Um torneio
+   * que nasceu como Liga mas está no mata-mata não pode escapar para sempre da
+   * manutenção por causa do rótulo histórico do documento. */
+  if (!t) return false;
+  if (Array.isArray(t.phases)) {
+    if (!t.phases.length) return false;
+    var index = Number(t.currentPhaseIndex || 0);
+    if (!(index >= 0 && index < t.phases.length)) return false;
+    var phase = t.phases[index] || {};
+    return phase.kind === 'classification' &&
+      (!phase.classification || phase.classification.structure !== 'groups');
+  }
+  var f = String(t.format || '').toLowerCase();
   return f === 'liga' || f === 'ranking' || f.indexOf('pontos corridos') >= 0;
 }
 
@@ -93,7 +105,7 @@ function computeAbandon(t, placares, agoraMs) {
   if (t.status === 'finished') return nada;                       // já encerrado
   // LIGA/PONTOS CORRIDOS NUNCA: é temporada contínua — passa semanas sem jogo por desenho, e
   // já tem expiração própria (ligaSeasonMonths). Encerrar Liga por ociosidade seria bug.
-  if (ehLiga(t.format)) return { acao: 'nada', dueAt: null, motivo: 'liga' };
+  if (ehLiga(t)) return { acao: 'nada', dueAt: null, motivo: 'liga' };
   if (t.isSandbox === true) return { acao: 'nada', dueAt: null, motivo: 'sandbox' };
 
   var p = placares || {};

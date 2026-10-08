@@ -101,6 +101,18 @@ const ms = (s) => Date.parse(s);
      'nada', 'LIGA nunca é encerrada por ociosidade (temporada contínua)');
   eq(ac.computeAbandon({ status: 'active', format: 'Ranking', createdAt: '2026-05-01' }, parado, NOW).acao,
      'nada', 'Ranking (nome legado da Liga) idem');
+  const faseEliminatoria = {
+    status: 'active', format: 'Liga', createdAt: '2026-05-01',
+    phases: [
+      { kind: 'classification', classification: { structure: 'round_robin' } },
+      { kind: 'elimination', elimination: { bracketType: 'single' } }
+    ], currentPhaseIndex: 1
+  };
+  eq(ac.computeAbandon(faseEliminatoria, parado, NOW).acao, 'encerrar',
+     'rótulo Liga não protege eliminatória atual abandonada');
+  const faseClassificatoria = Object.assign({}, faseEliminatoria, { currentPhaseIndex: 0 });
+  eq(ac.computeAbandon(faseClassificatoria, parado, NOW).acao, 'nada',
+     'classificatória atual continua protegida como temporada contínua');
   eq(ac.computeAbandon({ status: 'finished', format: 'Eliminatórias Simples' }, parado, NOW).acao,
      'nada', 'quem já está encerrado não é reencerrado');
   eq(ac.computeAbandon({ status: 'active', format: 'Eliminatórias Simples', isSandbox: true, createdAt: '2026-05-01' }, parado, NOW).acao,
