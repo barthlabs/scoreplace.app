@@ -4323,7 +4323,9 @@ window._applyRoundCloseToTournament = function (t, roundIdx) {
   if (!round.completedAt) round.completedAt = Date.now();
   _poeStandings(t);
 
-  var isSuico = t.format === 'Suíço Clássico' || t.classifyFormat === 'swiss' || t.currentStage === 'swiss';
+  var isSuico = typeof window._faseCorrenteEhSuico === 'function'
+    ? window._faseCorrenteEhSuico(t)
+    : (t.format === 'Suíço Clássico' || t.classifyFormat === 'swiss' || t.currentStage === 'swiss');
   var maxRounds = t.swissRounds || 99;
   var isSwissClassification = t.p2Resolution === 'swiss' && t.currentStage === 'swiss';
   // Suíço-2-FASES (classificatória do construtor de fases, via _buildSwissClassifDraw): o
@@ -4332,7 +4334,7 @@ window._applyRoundCloseToTournament = function (t, roundIdx) {
   // ENCERRAVA o torneio antes de avançar (p2Resolution=null ⇒ isSwissClassification=false).
   // Ver project_draw_canonization_cf_phase23_deferred.
   var _curIdxRC = t.currentPhaseIndex || 0;
-  var isMultiPhaseSwiss = (t.classifyFormat === 'swiss' || t.currentStage === 'swiss')
+  var isMultiPhaseSwiss = isSuico
     && Array.isArray(t.phases) && t.phases.length > _curIdxRC + 1;
 
   if (isSuico && t.rounds.length >= maxRounds) {
@@ -4440,7 +4442,9 @@ function _doCloseRound(t, tId, roundIdx, anchorMatchId, resultCtx, _forcarLocal)
   // Se _callCloseRound faltar (cliente velho), cai no caminho local abaixo (com o pré-fix).
   // Ver project_draw_canonization_cf_phase23_deferred.
   var _curIdxDC = t.currentPhaseIndex || 0;
-  var isMultiPhaseSwiss = (t.classifyFormat === 'swiss' || t.currentStage === 'swiss')
+  var isMultiPhaseSwiss = (typeof window._faseCorrenteEhSuico === 'function'
+    ? window._faseCorrenteEhSuico(t)
+    : (t.classifyFormat === 'swiss' || t.currentStage === 'swiss'))
     && Array.isArray(t.phases) && t.phases.length > _curIdxDC + 1;
   /* ⭐ 2.0.98 — O FECHO DE RODADA VAI PRA CF EM TODO FORMATO.
    * Ordem do dono (25/ago/2026): _"o certo é tudo rodar em CF só sendo disparado pelo
@@ -4509,7 +4513,9 @@ function _doCloseRound(t, tId, roundIdx, anchorMatchId, resultCtx, _forcarLocal)
   if (!t.rounds[roundIdx].completedAt) t.rounds[roundIdx].completedAt = Date.now();
   _poeStandings(t);
 
-  const isSuico = t.format === 'Suíço Clássico' || t.classifyFormat === 'swiss' || t.currentStage === 'swiss';
+  const isSuico = typeof window._faseCorrenteEhSuico === 'function'
+    ? window._faseCorrenteEhSuico(t)
+    : (t.format === 'Suíço Clássico' || t.classifyFormat === 'swiss' || t.currentStage === 'swiss');
   const maxRounds = t.swissRounds || 99;
   const isSwissClassification = t.p2Resolution === 'swiss' && t.currentStage === 'swiss';
   // isMultiPhaseSwiss já declarado no topo (o Suíço-2-fases retorna cedo pela CF; este ramo

@@ -577,9 +577,10 @@ window._buildSwissClassifDraw = function (t) {
     while (_swLo * 2 <= _swCount) _swLo *= 2;          // pow2 inferior = nº de classificados
     var _swRounds = (t.swissRounds && t.swissRounds >= 1) ? t.swissRounds : Math.max(2, Math.ceil(Math.log2(_swCount)));
     var _origFormat = t.format || 'Eliminatórias Simples';
+    var _origIsDouble = _origFormat === 'Dupla Eliminatória';
     t.phases = [
-        { name: (window._t ? window._t('predraw.optSwissTitle') : 'Classificatória'), formatCode: 'liga', format: 'Suíço', rounds: _swRounds, source: { type: 'enrollment' } },
-        { name: _origFormat, format: _origFormat, source: { type: 'previous_phase', mapping: [{ dest: 'main', rankFrom: 1, rankTo: _swLo }] }, fixedPairs: false }
+        { name: (window._t ? window._t('predraw.optSwissTitle') : 'Classificatória'), kind: 'classification', classification: { structure: 'round_robin', pairing: 'swiss' }, formatCode: 'liga', format: 'Suíço', rounds: _swRounds, source: { type: 'enrollment' } },
+        { name: _origFormat, kind: 'elimination', elimination: { bracketType: _origIsDouble ? 'double' : 'single' }, formatCode: _origIsDouble ? 'elim_dupla' : 'elim_simples', format: _origFormat, source: { type: 'previous_phase', mapping: [{ dest: 'main', rankFrom: 1, rankTo: _swLo }] }, fixedPairs: false }
     ];
     t.currentPhaseIndex = 0;
     // fase 0 Suíço sinalizada por currentStage/classifyFormat:'swiss' (render da classificação +

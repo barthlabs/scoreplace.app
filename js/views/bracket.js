@@ -3039,7 +3039,9 @@ window._renderReadyMatchesBanner = function _renderReadyMatchesBanner(t, opts) {
     : ((typeof window._isLigaFormat === 'function')
       ? window._isLigaFormat(t)
       : (t.format === 'Liga' || t.format === 'Ranking'));
-  var isSwissFmt = t.format === 'Suíço' || t.format === 'Suico' || t.format === 'Suíço Clássico';
+  var isSwissFmt = typeof window._faseCorrenteEhSuico === 'function'
+    ? window._faseCorrenteEhSuico(t)
+    : (t.format === 'Suíço' || t.format === 'Suico' || t.format === 'Suíço Clássico');
   if (isLigaFmt || isSwissFmt) return '';
   const ci = window._presencaViva(t);   // presença caduca em 24h — [[project_presenca_caduca_em_24h]]
   const hasAnyCheckin = Object.keys(ci).length > 0;
@@ -8394,7 +8396,9 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
   // Sem jogos pendentes, ou com o próximo só depois da janela de seis horas, a
   // classificação pode ser o primeiro bloco — intervalo legítimo entre dias.
   const _classificacaoNoTopo = !_chavesAntesDaClassificacao;
-  const isSuico = t.format === 'Suíço Clássico' || t.classifyFormat === 'swiss' || t.currentStage === 'swiss';
+  const isSuico = typeof window._faseCorrenteEhSuico === 'function'
+    ? window._faseCorrenteEhSuico(t)
+    : (t.format === 'Suíço Clássico' || t.classifyFormat === 'swiss' || t.currentStage === 'swiss');
   const isLigaFmt = window._isLigaFormat ? window._isLigaFormat(t) : (t.format === 'Liga' || t.format === 'Ranking');
   const maxRounds = t.swissRounds || 99;
   const isFinished = isSuico && currentRound >= maxRounds && allComplete;

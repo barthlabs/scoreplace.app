@@ -87,6 +87,19 @@
     return (code === 'grupos_mata' || /grupo/.test(label)) ? 'groups' : 'round_robin';
   }
 
+  function legacyClassificationPairing(phase, tournament) {
+    var current = phase && phase.classification && phase.classification.pairing;
+    if (current === 'swiss') return current;
+    var code = String((phase && phase.formatCode) || (tournament && tournament.formatCode) || '').toLowerCase();
+    var label = String((phase && phase.format) || (tournament && tournament.format) || '').toLowerCase();
+    // `classifyFormat` e `currentStage` foram marcadores transitórios do
+    // construtor suíço. A projeção os absorve no único lugar de domínio que
+    // importa: a própria fase classificatória.
+    var isSwiss = /su[ií]ç?o|swiss/.test(label) ||
+      (code === 'liga' && tournament && (tournament.classifyFormat === 'swiss' || tournament.currentStage === 'swiss'));
+    return isSwiss ? 'swiss' : null;
+  }
+
   function legacyBracketType(phase, tournament) {
     var current = phase && phase.elimination && phase.elimination.bracketType;
     if (current === 'single' || current === 'double') return current;
@@ -118,6 +131,11 @@
         var structure = legacyClassificationStructure(phase, tournament);
         if (!phase.classification || phase.classification.structure !== structure) {
           phase.classification = Object.assign({}, phase.classification || {}, { structure: structure });
+          changed = true;
+        }
+        var pairing = legacyClassificationPairing(phase, tournament);
+        if (pairing && phase.classification.pairing !== pairing) {
+          phase.classification = Object.assign({}, phase.classification, { pairing: pairing });
           changed = true;
         }
       } else {

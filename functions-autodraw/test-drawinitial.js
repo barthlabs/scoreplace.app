@@ -326,6 +326,10 @@ console.log('══════════════════════�
   ok('Suíço-pow2 → fase 0 é Suíço (formatCode liga, format Suíço)',
     p0.formatCode === 'liga' && /su[ií]ç?o|swiss/i.test(String(p0.format)),
     JSON.stringify({ fc: p0.formatCode, f: p0.format }));
+  ok('Suíço-pow2 → as duas fases já nascem no contrato canônico',
+    p0.kind === 'classification' && p0.classification && p0.classification.pairing === 'swiss' &&
+      p1.kind === 'elimination' && p1.elimination && p1.elimination.bracketType === 'single',
+    JSON.stringify({ p0: p0.classification, p1: p1.elimination }));
   ok('Suíço-pow2 → fase 0 com K≥2 rodadas', (parseInt(p0.rounds, 10) || 0) >= 2, 'rounds=' + p0.rounds);
   ok('Suíço-pow2 → fase 1 puxa top-lo (rankTo=' + lo + ')',
     !!(p1.source && p1.source.type === 'previous_phase' && p1.source.mapping &&

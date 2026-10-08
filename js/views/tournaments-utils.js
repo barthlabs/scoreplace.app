@@ -36,7 +36,37 @@ window._isLigaFormat = function(t) {
 window._faseCorrenteEhLiga = function(t) {
     var fase = (t && Array.isArray(t.phases)) ? t.phases[t.currentPhaseIndex || 0] : null;
     if (!fase || fase.kind !== 'classification') return false;
-    return !fase.classification || fase.classification.structure !== 'groups';
+    // Suíço também é classificatória, mas NÃO é pontos corridos: os pares da
+    // rodada seguinte dependem da classificação corrente. Confundi-los aqui
+    // fazia cada leitor precisar consultar `classifyFormat` por fora.
+    return (!fase.classification || fase.classification.structure !== 'groups') &&
+        !(window._faseCorrenteEhSuico && window._faseCorrenteEhSuico(t));
+};
+
+// Suíço é uma estratégia de pareamento dentro de uma fase classificatória —
+// nunca um terceiro tipo de fase. Documentos atuais declaram isso em
+// `classification.pairing`; os três campos de topo abaixo existem somente para
+// torneios ainda não projetados. Centralizar a ponte impede que cada tela dê
+// prioridade diferente ao legado.
+window._faseCorrenteEhSuico = function(t, phaseIndex) {
+    if (!t) return false;
+    var fases = Array.isArray(t.phases) ? t.phases : null;
+    var idx = phaseIndex == null ? (t.currentPhaseIndex || 0) : phaseIndex;
+    var fase = fases && fases[idx];
+    if (fase && fase.kind) {
+        if (fase.kind !== 'classification') return false;
+        if (fase.classification && fase.classification.pairing != null) {
+            return fase.classification.pairing === 'swiss';
+        }
+        // Ponte curta para a projeção: fases suíças criadas antes deste
+        // campo ainda carregam o marcador transitório no topo. A migração o
+        // absorve na fase; não deixamos o documento antigo mudar de ramo até
+        // que ela rode.
+        return t.classifyFormat === 'swiss' || t.currentStage === 'swiss';
+    }
+    return t.format === 'Suíço' || t.format === 'Suico' ||
+        t.format === 'Suíço Clássico' || t.classifyFormat === 'swiss' ||
+        t.currentStage === 'swiss';
 };
 
 // Contrato canônico da fase eliminatória. O texto em `t.format` é somente a

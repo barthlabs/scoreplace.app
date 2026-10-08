@@ -22,5 +22,8 @@ ok(threw, 'projeção vazia aborta antes de qualquer escrita');
 const realLegacy = { format: 'Liga', ligaMode: 'round_robin', rounds: [{ matches: [{ id: 'm3', scoreP1: 6 }] }] };
 r = planLegacyPhaseProjection(realLegacy, _window.FORMAT2.projectLegacyPhases);
 ok(r.changed && r.phases[0].kind === 'classification', 'projetor real traduz liga legada para classificação canônica');
+const legacySwiss = { format: 'Eliminatórias Simples', classifyFormat: 'swiss', currentStage: 'swiss', phases: [{ name: 'Classificatória', formatCode: 'liga', format: 'Suíço' }] };
+r = planLegacyPhaseProjection(legacySwiss, _window.FORMAT2.projectLegacyPhases);
+ok(r.changed && r.phases[0].classification && r.phases[0].classification.pairing === 'swiss', 'projetor absorve o pareamento suíço dentro da fase classificatória');
 console.log((fail ? '✗' : '✓') + ' legacy-phase-projection-core: ' + pass + ' passaram, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);
