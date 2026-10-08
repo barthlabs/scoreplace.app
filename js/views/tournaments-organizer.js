@@ -1243,28 +1243,43 @@ window._buildPersonGreeting = function (t, personName) {
     'Somos do torneio "' + ((t && t.name) || '') + '" no scoreplace.app. ';
 };
 
-// Pré-carrega os perfis dos uids visíveis na classificação. EXISTE POR UM MOTIVO
-// ESPECÍFICO: o clique precisa abrir wa.me/mailto DENTRO do gesto do usuário — um
-// await no meio do handler faz o Safari (iOS) tratar a abertura como pop-up e
-// bloquear em silêncio. Mesmo padrão do _hydrateContactOrgButtons.
+// Arma o carregamento sob demanda dos perfis dos uids visíveis na classificação.
+//
+// Não se pode buscar TODOS os ícones assim que a chave pinta: uma chave grande contém
+// pessoas que o participante não pode contatar (outro grupo, entrada retirada ou perfil
+// já mesclado). Além de desperdiçar I/O, isso convertia recusas deliberadas 403/404 em
+// uma rajada que o alerta operacional interpretava como falha da Cloud Function.
+//
+// `pointerenter` e `touchstart` começam a carga antes do toque final; o fallback do
+// clique continua existindo em `_contactPersonByUid` para rede lenta. Assim o Safari
+// preserva o gesto quando o perfil já chegou, sem fazer sondagem automática da chave.
 window._hydrateContactPersonButtons = function (rootEl) {
   var root = rootEl || document;
-  var targets = [];
+  var cache = window._spPersonProfileCache = window._spPersonProfileCache || {};
+  var pending = window._spPersonProfilePending = window._spPersonProfilePending || {};
+  var preload = function (el) {
+    var uid = String(el.getAttribute('data-contact-uid') || '').trim();
+    var tournamentId = String(el.getAttribute('data-contact-tournament-id') || '').trim();
+    if (!uid || !tournamentId) return Promise.resolve(null);
+    var key = tournamentId + '|' + uid;
+    if (Object.prototype.hasOwnProperty.call(cache, key)) return Promise.resolve(cache[key]);
+    if (pending[key]) return pending[key];
+    var request = (window.FirestoreDB && typeof window.FirestoreDB.carregarContatoDoTorneio === 'function')
+      ? window.FirestoreDB.carregarContatoDoTorneio(tournamentId, uid) : Promise.resolve(null);
+    pending[key] = Promise.resolve(request)
+      .then(function (prof) { cache[key] = prof || null; return cache[key]; })
+      .catch(function () { cache[key] = null; return null; })
+      .then(function (answer) { delete pending[key]; return answer; });
+    return pending[key];
+  };
   Array.prototype.forEach.call(root.querySelectorAll('[data-contact-uid]'), function (el) {
-    var u = el.getAttribute('data-contact-uid');
-    var tId = el.getAttribute('data-contact-tournament-id');
-    var key = tId + '|' + u;
-    if (u && tId && !Object.prototype.hasOwnProperty.call(window._spPersonProfileCache, key) &&
-        !targets.some(function(x) { return x.key === key; })) targets.push({ uid: u, tournamentId: tId, key: key });
+    if (el._spContactPreloadBound) return;
+    el._spContactPreloadBound = true;
+    el.addEventListener('pointerenter', function () { preload(el); }, { passive: true });
+    el.addEventListener('touchstart', function () { preload(el); }, { passive: true });
+    el.addEventListener('focus', function () { preload(el); }, { passive: true });
   });
-  if (!targets.length) return Promise.resolve();
-  return Promise.all(targets.map(function (target) {
-    var p = (window.FirestoreDB && typeof window.FirestoreDB.carregarContatoDoTorneio === 'function')
-      ? window.FirestoreDB.carregarContatoDoTorneio(target.tournamentId, target.uid) : Promise.resolve(null);
-    return Promise.resolve(p)
-      .then(function (prof) { window._spPersonProfileCache[target.key] = prof || null; })
-      .catch(function () { window._spPersonProfileCache[target.key] = null; });
-  })).then(function () {});
+  return Promise.resolve();
 };
 
 // Abre o canal de contato da pessoa. Identidade por UID SEMPRE — nome aqui é só o
@@ -1302,8 +1317,9 @@ window._contactPersonByUid = function (uid, personName, tId) {
   }
   // Não hidratado (render recém-pintado ou carga falhou): busca e abre. Pode ser
   // bloqueado no iOS por perder o gesto — daí o aviso explícito em vez de silêncio.
-  var _p = (window.FirestoreDB && typeof window.FirestoreDB.carregarContatoDoTorneio === 'function')
-    ? window.FirestoreDB.carregarContatoDoTorneio(tId, uid) : Promise.resolve(null);
+  var _pendingProfiles = window._spPersonProfilePending = window._spPersonProfilePending || {};
+  var _p = _pendingProfiles[_contactKey] || ((window.FirestoreDB && typeof window.FirestoreDB.carregarContatoDoTorneio === 'function')
+    ? window.FirestoreDB.carregarContatoDoTorneio(tId, uid) : Promise.resolve(null));
   Promise.resolve(_p)
     .then(function (prof) { window._spPersonProfileCache[_contactKey] = prof || null; _open(prof || null); })
     .catch(function () {
