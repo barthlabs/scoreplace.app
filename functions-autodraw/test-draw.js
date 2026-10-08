@@ -83,6 +83,27 @@ function validateRound(round, n, label) {
   return round;
 }
 
+// A elegibilidade do motor é da fase corrente. O mesmo torneio pode começar
+// classificatório e terminar eliminatório sem o cron criar rodadas indevidas.
+console.log('\n[FASE ATUAL] autoDraw não usa o rótulo legado do torneio');
+{
+  const elimination = mkConfra(8);
+  elimination.phases = [{ kind: 'elimination', elimination: { bracketType: 'single' } }];
+  elimination.currentPhaseIndex = 0;
+  const blocked = generateLigaRound(elimination, new Date('2026-06-14T19:00:00-03:00'));
+  assert(!blocked.ok && blocked.reason === 'not-liga', 'topo Liga + fase eliminatória não gera rodada classificatória');
+
+  const classification = mkConfra(8);
+  classification.format = 'Fase de Grupos';
+  classification.ligaRoundFormat = 'standard';
+  classification.drawMode = 'standard';
+  classification.phases = [{ kind: 'classification', classification: { structure: 'round_robin' } }];
+  classification.currentPhaseIndex = 0;
+  const allowed = generateLigaRound(classification, new Date('2026-06-14T19:00:00-03:00'));
+  assert(allowed.ok, 'fase classificatória round-robin gera rodada mesmo sem rótulo Liga no topo');
+  assert(classification.format === 'Fase de Grupos', 'projeção compatível do gerador não regrava o rótulo de topo');
+}
+
 // 1) Primeiro sorteio em 3 tamanhos (atual, projetado, exato múltiplo de 4).
 [73, 142, 140].forEach(n => validateRound(mkConfra(n), n, 'PRIMEIRO SORTEIO'));
 

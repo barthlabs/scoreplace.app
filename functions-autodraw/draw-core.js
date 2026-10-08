@@ -79,6 +79,7 @@ g.window._profileNameByUid = g.window._profileNameByUid || {};
  * Quem não abre contexto (autoDraw, drawRound, closeRound) continua lendo o global de
  * sempre — comportamento idêntico ao de antes. */
 const { AsyncLocalStorage } = require('node:async_hooks');
+const _leagueSeasonCore = require('./league-season-core.js');
 const _alsNomes = new AsyncLocalStorage();
 const _alsLiga = new AsyncLocalStorage();
 g.window._spRodaComNomes = function (nameByUid, profByUid, fn) {
@@ -448,7 +449,11 @@ function generateLigaRound(t, scheduledTime) {
   // v4.5.85 (ITEM 3 · Fase 4): rehidrata nomes por uid ANTES de tudo (standings seeding L76
   // e _generateNextRound leem p.displayName). _profileNameByUid já populado pelo caller.
   if (typeof win._rehydrateEntryNames === 'function') win._rehydrateEntryNames(t);
-  if (!win._isLigaFormat || !win._isLigaFormat(t)) {
+  // A rodada pertence à fase classificatória atual, não ao texto legado em
+  // `t.format`. Isso impede que um cron continue sorteando depois da transição
+  // para eliminatórias e também permite uma classificação canônica em torneio
+  // multi-fase cujo rótulo de topo nunca foi "Liga".
+  if (!_leagueSeasonCore.isLeagueFormat(t)) {
     return { ok: false, reason: 'not-liga' };
   }
 
@@ -495,8 +500,25 @@ function generateLigaRound(t, scheduledTime) {
 
   const beforeLen = Array.isArray(t.rounds) ? t.rounds.length : 0;
 
-  // O MESMO dispatcher do cliente: round_robin / rei_rainha / padrão, por categoria.
-  win._generateNextRound(t);
+  // O dispatcher histórico ainda consulta `t.format` para escolher o gerador. A
+  // autoridade já é a fase acima; aqui projetamos somente durante a chamada a
+  // etiqueta que esse dispatcher antigo espera e a restauramos antes de gravar.
+  // Assim um torneio multi-fase não precisa mentir permanentemente sobre o seu
+  // formato de topo para uma classificação canônica gerar a rodada.
+  const hadFormat = Object.prototype.hasOwnProperty.call(t, 'format');
+  const previousFormat = t.format;
+  const projectCurrentPhaseAsLeague = Array.isArray(t.phases) &&
+    (!win._isLigaFormat || !win._isLigaFormat(t));
+  if (projectCurrentPhaseAsLeague) t.format = 'Liga';
+  try {
+    // O MESMO dispatcher do cliente: round_robin / rei_rainha / padrão, por categoria.
+    win._generateNextRound(t);
+  } finally {
+    if (projectCurrentPhaseAsLeague) {
+      if (hadFormat) t.format = previousFormat;
+      else delete t.format;
+    }
+  }
 
   const afterLen = Array.isArray(t.rounds) ? t.rounds.length : 0;
   if (afterLen <= beforeLen) {
