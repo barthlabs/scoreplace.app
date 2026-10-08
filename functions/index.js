@@ -2980,6 +2980,7 @@ exports.enrollParticipant = onCall(
       const snap = await tx.get(docRef);
       if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
       const _dados = await _splitParts.hidratar(tx, docRef, snap.data());
+      _assertLegacyRosterStillAuthoritative(_dados);
       const isOrganizer = _isTournamentOrgCaller(_dados, callerUid);
       if (participantUid && participantUid !== callerUid && !isOrganizer) {
         throw new HttpsError("permission-denied", "só o organizador pode inscrever outra pessoa");
@@ -3916,6 +3917,7 @@ exports.deenrollParticipant = onCall(
       // Torneio DIVIDIDO: o elenco mora na subcoleção. Hidrata ANTES de decidir —
       // sem isto as regras rodam contra `participants: []`. Ver functions/split-parts.js.
       const t = await _splitParts.hidratar(tx, docRef, snap.data());
+      _assertLegacyRosterStillAuthoritative(t);
       // Permissão: cada um sai de si mesmo; o organizador/co-host tira qualquer um.
       const isOrg = _isTournamentOrgCaller(t, callerUid);
       if (userUid !== callerUid && !isOrg) {
@@ -3954,6 +3956,7 @@ exports.leaveStandby = onCall(
       const snap = await tx.get(docRef);
       if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
       const t = await _splitParts.hidratar(tx, docRef, snap.data());
+      _assertLegacyRosterStillAuthoritative(t);
       const r = _enrollCore.computeLeaveStandby(t, callerUid);
       if (r.updateData) _splitParts.gravar(tx, docRef, t, r.updateData);
       return r;
@@ -4006,6 +4009,23 @@ function _isTournamentOrgCaller(t, callerUid) {
   if (Array.isArray(t.adminUids) && t.adminUids.indexOf(callerUid) !== -1) return true;
   const ch = Array.isArray(t.coHosts) ? t.coHosts : [];
   return ch.some((c) => c && c.uid === callerUid && (c.status === 'active' || c.status === 'accepted'));
+}
+
+/* Uma materialização não pode deixar duas fontes concorrentes de verdade.
+ * O leitor e o sorteador passam a usar `registrations` assim que o marcador
+ * existe; permitir que as portas legadas continuem alterando `participants`
+ * depois disso faria a pessoa entrar/sair/formar dupla numa projeção que já
+ * não é lida. Até cada mutação ganhar a transição canônica equivalente, a
+ * recusa transacional é preferível a produzir um torneio visualmente coerente
+ * mas estruturalmente divergente. */
+function _assertLegacyRosterStillAuthoritative(tournament) {
+  const migration = (tournament && tournament.canonicalRegistrationMigration) || {};
+  if (typeof migration.fingerprint === 'string' && migration.fingerprint) {
+    throw new HttpsError(
+      'failed-precondition',
+      'inscrições canônicas já materializadas; esta alteração precisa usar a porta canônica'
+    );
+  }
 }
 
 // Prévia da migração I1: lê o elenco fresco e devolve somente o censo que
@@ -5240,6 +5260,7 @@ exports.formPair = onCall(
       // Torneio DIVIDIDO: o elenco mora na subcoleção. Hidrata ANTES de decidir —
       // sem isto as regras rodam contra `participants: []`. Ver functions/split-parts.js.
       const t = await _splitParts.hidratar(tx, docRef, snap.data());
+      _assertLegacyRosterStillAuthoritative(t);
       // Permissão: o organizador/co-host forma qualquer dupla; senão, o próprio (aceite de
       // convite) só pode formar dupla que INCLUA o seu uid.
       const isOrg = _isTournamentOrgCaller(t, callerUid, callerEmail);
@@ -5290,6 +5311,7 @@ exports.splitPair = onCall(
       // Torneio DIVIDIDO: o elenco mora na subcoleção. Hidrata ANTES de decidir —
       // sem isto as regras rodam contra `participants: []`. Ver functions/split-parts.js.
       const t = await _splitParts.hidratar(tx, docRef, snap.data());
+      _assertLegacyRosterStillAuthoritative(t);
       const r = _pairCore.computeSplitPair(t, opts);
       // Permissão: organizador/co-host desfaz qualquer dupla; senão, um MEMBRO da dupla.
       const isOrg = _isTournamentOrgCaller(t, callerUid, callerEmail);
