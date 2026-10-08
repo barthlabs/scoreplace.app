@@ -12,8 +12,11 @@
  *
  *   node scripts/conferir-contas-duplicadas.js
  */
-const admin = require('firebase-admin');
 const path = require('path');
+/* Scripts da raiz não têm node_modules próprio. A credencial e a versão do
+ * Admin SDK usadas na operação vivem no runtime das Functions; usar a mesma
+ * instalação evita uma segunda árvore de dependências só para auditoria. */
+const admin = require(path.join(__dirname, '..', 'functions', 'node_modules', 'firebase-admin'));
 const D = require(path.join(__dirname, '..', 'functions', 'duplicate-person-core.js'));
 
 if (require.main === module) {
