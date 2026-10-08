@@ -1146,7 +1146,7 @@ function _resolveCompetitorRows(t) {
   var parts = Array.isArray(t.participants) ? t.participants : [];
   return parts.map(function(p) {
     if (typeof p === 'string') return { name: p, category: '', gender: '', skill: '', email: '' };
-    var _rawName = p.displayName || p.name || (p.email ? p.email.split('@')[0] : '');
+    var _rawName = p.displayName || p.name || '';
     // v4.5.68: nome vivo por uid (CSV é snapshot → _resolveSideLive cai no nome
     // gravado quando o perfil não está no cache, nunca em branco).
     var _uidHint = (p.p1Uid && p.p2Uid) ? [p.p1Uid, p.p2Uid] : (p.uid || '');
@@ -1157,7 +1157,7 @@ function _resolveCompetitorRows(t) {
       category: cats,
       gender: (window._pGender ? window._pGender(p) : p.gender) || '',
       skill: (window._pDefaultCat ? window._pDefaultCat(p) : p.defaultCategory) || '',
-      email: p.email || '',
+      email: '',
     };
   }).sort(function(a, b) { return String(a.name).localeCompare(String(b.name), 'pt-BR'); });
 }

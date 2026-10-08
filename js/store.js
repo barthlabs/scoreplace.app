@@ -3438,7 +3438,7 @@ window._sbRebuildCleanRoster = function (list, isTeamEnroll) {
   /* ⛔ `genderSource` ENTRA NA LISTA (23/set/2026): sem ela, a reconstrução devolvia o gênero SEM
    * a marca, e o sanitizador — que agora exige o par — o apagaria no save seguinte. A decisão do
    * organizador evaporaria dentro do Sandbox, em silêncio. */
-  var ALLOW_I = ['uid', 'name', 'displayName', 'email', 'photoURL', 'gender', 'genderSource', 'birthDate',
+  var ALLOW_I = ['uid', 'manualParticipantId', 'name', 'displayName', 'gender', 'genderSource', 'birthDate',
     'skillBySport', 'categories', 'category', 'defaultCategory', 'categorySource',
     'wasUncategorized', 'selfEnrolled', 'addedAt', 'enrollSeq', 'isPlaceholder'];
   /* 2.1.41: `isPlaceholder` (e o par p1/p2Placeholder) entram na lista. Fora dela a
@@ -3453,8 +3453,8 @@ window._sbRebuildCleanRoster = function (list, isTeamEnroll) {
     /* ⛔ A PROCEDÊNCIA VIAJA COM O GÊNERO ao desmembrar a dupla: o membro vira inscrito individual,
      * e sem `genderSource` o sanitizador apagaria o valor no save seguinte — a decisão do
      * organizador sumiria justamente ao desmontar. */
-    var o = { uid: g('Uid'), name: g('Name'), displayName: g('Name'), email: g('Email'),
-      photoURL: g('Photo'), gender: g('Gender'), genderSource: g('GenderSource'),
+    var o = { uid: g('Uid'), manualParticipantId: g('ManualId'), name: g('Name'), displayName: g('Name'),
+      gender: g('Gender'), genderSource: g('GenderSource'),
       birthDate: g('BirthDate'), enrollSeq: g('Seq'),
       isPlaceholder: (g('Placeholder') ? true : undefined) };
     Object.keys(o).forEach(function (k) { if (o[k] === undefined || o[k] === null) delete o[k]; });
@@ -14539,22 +14539,21 @@ window._isOrgParticipant = function (t, p) {
 
 // v3.0.x: org de UM jogador específico — NÃO contamina o parceiro. _isOrgParticipant
 // olha p1Uid/p2Uid do TIME, então uma dupla SORTEADA com o organizador (ou co-host)
-// marcava o parceiro como organizador (⭐). Aqui resolvemos o uid/email DAQUELE jogador
-// (casando o nome com p1Name/p2Name) e só comparamos esse. Bug: Cocozza/Thereza viraram
+// marcava o parceiro como organizador (⭐). Aqui resolvemos o UID DAQUELE jogador
+// (casando o nome com p1Name/p2Name) e só comparamos esse UID. Bug: Cocozza/Thereza viraram
 // "organizadoras" por estarem na dupla do org/co-host.
 window._isOrgPlayer = function (t, playerName, pObj) {
   if (!t) return false;
   var nm = String(playerName == null ? '' : playerName).trim();
-  var uid = '', email = '';
+  var uid = '';
   if (pObj && typeof pObj === 'object') {
-    if (pObj.p1Name && String(pObj.p1Name).trim() === nm) { uid = pObj.p1Uid || ''; email = pObj.p1Email || ''; }
-    else if (pObj.p2Name && String(pObj.p2Name).trim() === nm) { uid = pObj.p2Uid || ''; email = pObj.p2Email || ''; }
+    if (pObj.p1Name && String(pObj.p1Name).trim() === nm) { uid = pObj.p1Uid || ''; }
+    else if (pObj.p2Name && String(pObj.p2Name).trim() === nm) { uid = pObj.p2Uid || ''; }
     else if (Array.isArray(pObj.participants)) {
       var _m = pObj.participants.filter(function (s) { return s && String(s.displayName || s.name || '').trim() === nm; })[0];
-      if (_m) { uid = _m.uid || ''; email = _m.email || ''; }
-    } else { uid = pObj.uid || ''; email = pObj.email || ''; }
+      if (_m) { uid = _m.uid || ''; }
+    } else { uid = pObj.uid || ''; }
   }
-  email = String(email || '').toLowerCase();
   if (uid && t.creatorUid && uid === t.creatorUid) return true;
   // ⛔ e-mail saiu (cânone do dono) — ver isCreator/_isOrgParticipant, mesma razão.
   if (uid && Array.isArray(t.adminUids) && t.adminUids.indexOf(uid) >= 0) return true;

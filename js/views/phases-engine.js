@@ -547,7 +547,7 @@
         if (_lo) {
           if (!byDest[_lo]) byDest[_lo] = [];
           var _members = _ina.map(function (p) {
-            return { name: (p && (p.displayName || p.name)) || '', uid: p && p.uid, email: p && p.email, photoURL: p && p.photoURL };
+            return { name: (p && (p.displayName || p.name)) || '', uid: p && p.uid, manualParticipantId: p && p.manualParticipantId };
           }).filter(function (m) { return m.name; });
           var _step = (fixedPairs ? 2 : 1);
           for (var _k = 0; _k < _members.length; _k += _step) byDest[_lo].push(mkTeam(_members.slice(_k, _k + _step)));
