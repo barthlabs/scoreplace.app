@@ -19,13 +19,15 @@ function block(source, start, end) {
 // A prévia termina antes da próxima porta de escrita. Não use o comentário de
 // deleteTournament como limite: novas Functions entre as duas fariam o teste
 // atribuir a escrita delas à prévia, mascarando a intenção desta sonda.
-const fn = block(index, 'exports.previewCanonicalRegistrationMigration', '// Configuração tipada das categorias novas.');
+const fn = block(index, 'exports.previewCanonicalRegistrationMigration', '// Materializa exclusivamente a prévia que o próprio servidor acabou de poder');
 ok('Function de prévia existe', fn.length > 300);
 ok('identidade vem exclusivamente do token', /request\.auth && request\.auth\.uid/.test(fn));
 ok('exige tournamentId', /tournamentId é obrigatório/.test(fn));
 ok('lê o torneio e a parte participants em transação', /db\.runTransaction/.test(fn) && /_splitParts\.hidratar\(tx, ref, snap\.data\(\) \|\| \{\}, \["participants"\]\)/.test(fn));
 ok('autoriza organização contra dado fresco', /_isTournamentOrgCaller\(tournament, callerUid\)/.test(fn));
-ok('usa o núcleo puro para o censo', /_registrationCore\.dryRunLegacyRoster\(tournamentId, tournament\.participants\)/.test(fn));
+ok('usa o núcleo puro sobre os registros físicos do elenco dividido',
+  /_splitParts\.lerRegistrosDaParte\(tx, ref, "participants"\)/.test(fn) &&
+  /_registrationCore\.projectLegacyRoster\(tournamentId, records\)/.test(fn));
 ok('prévia não cria nem atualiza documentos', !/\btx\.(?:set|update|delete)\b/.test(fn));
 ok('retorno contém contadores, exceções e fingerprint', /summary: \{/.test(fn) && /conflicts: report\.conflicts/.test(fn) && /unsupported: report\.unsupported/.test(fn) && /fingerprint: report\.fingerprint/.test(fn));
 
