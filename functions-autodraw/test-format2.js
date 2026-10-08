@@ -191,6 +191,37 @@ console.log('══════════════════════�
   ok('legado multifase → projeção idempotente', again.ok === true && again.migrated === false);
 })();
 
+// A marca textual `pairing: 'swiss'` era um dialeto de transição. Ela não pode
+// sobreviver como uma terceira modalidade de fase: a projeção deve gravar a
+// classificação por rodadas com entradas fixas e a política de repetição atual.
+(function () {
+  const t = {
+    id: 'tour_legacy_swiss_pairing', sport: SPORT, format: 'Liga',
+    phases: [{ name: 'Classificatória', formatCode: 'liga', classification: { structure: 'round_robin', pairing: 'swiss' }, rounds: [{ id: 'r1' }] }]
+  };
+  const r = core.compileFromFmt2(t);
+  const pairing = t.phases[0].classification.pairing;
+  ok('legado pairing=swiss → projeção ok', r.ok === true && r.legacy === true && r.migrated === true, JSON.stringify(r));
+  ok('legado pairing=swiss → contrato de classificatória por rodadas', pairing && pairing.strategy === 'ranking_clusters' &&
+    pairing.entryMode === 'fixed' && pairing.rematchPolicy === 'exhaust_cluster_before_repeat', JSON.stringify(pairing));
+  ok('legado pairing=swiss → conserva rodada materializada', t.phases[0].rounds[0].id === 'r1');
+  const again = core.compileFromFmt2(t);
+  ok('legado pairing=swiss → projeção idempotente', again.ok === true && again.migrated === false, JSON.stringify(again));
+})();
+
+// Documentos salvos durante a implantação podem ter o objeto novo incompleto.
+// Completar defaults aqui evita um ramo implícito diferente em cada consumidor.
+(function () {
+  const t = {
+    id: 'tour_legacy_incomplete_round_pairing', sport: SPORT, format: 'Liga',
+    phases: [{ name: 'Classificatória', formatCode: 'liga', classification: { structure: 'round_robin', pairing: { strategy: 'ranking_clusters', clusterSize: 6 } } }]
+  };
+  core.compileFromFmt2(t);
+  const pairing = t.phases[0].classification.pairing;
+  ok('pairing incompleto → fixa entradas e regra de repetição', pairing.entryMode === 'fixed' &&
+    pairing.rematchPolicy === 'exhaust_cluster_before_repeat' && pairing.clusterSize === 6, JSON.stringify(pairing));
+})();
+
 (function () {
   const t = { id: 'tour_legacy_top_level', sport: SPORT, format: 'Fase de Grupos', gruposCount: 4 };
   const r = core.compileFromFmt2(t);

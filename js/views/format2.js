@@ -89,7 +89,34 @@
 
   function legacyClassificationPairing(phase, tournament) {
     var current = phase && phase.classification && phase.classification.pairing;
-    if (current && typeof current === 'object' && current.strategy === 'ranking_clusters') return current;
+    // Alguns documentos da transição já têm `pairing`, mas ainda no dialeto
+    // antigo (`'swiss'`) ou com só metade do contrato. Não podemos deixá-los
+    // depender para sempre de quem ainda sabe ler "swiss": a projeção precisa
+    // materializar a mesma política que um torneio novo grava. A referência é
+    // preservada quando já está completa para a projeção permanecer idempotente.
+    var canonicalizeRoundPairing = function (value) {
+      var isLegacySwiss = value === 'swiss';
+      var isRanking = value && typeof value === 'object' && value.strategy === 'ranking_clusters';
+      var isFixedFreeDraw = value && typeof value === 'object' &&
+        value.strategy === 'free_draw' && value.entryMode === 'fixed';
+      if (!isLegacySwiss && !isRanking && !isFixedFreeDraw) return null;
+
+      var normalized = Object.assign({}, (value && typeof value === 'object') ? value : {});
+      normalized.strategy = isFixedFreeDraw ? 'free_draw' : 'ranking_clusters';
+      // A política é para entradas fixas: um par já formado nunca pode cair no
+      // gerador de parceiros rotativos apenas porque o documento é antigo.
+      normalized.entryMode = 'fixed';
+      if (normalized.rematchPolicy !== 'exhaust_cluster_before_repeat') {
+        normalized.rematchPolicy = 'exhaust_cluster_before_repeat';
+      }
+      var same = value && typeof value === 'object' &&
+        value.strategy === normalized.strategy &&
+        value.entryMode === normalized.entryMode &&
+        value.rematchPolicy === normalized.rematchPolicy;
+      return same ? value : normalized;
+    };
+    var normalizedCurrent = canonicalizeRoundPairing(current);
+    if (normalizedCurrent) return normalizedCurrent;
     var code = String((phase && phase.formatCode) || (tournament && tournament.formatCode) || '').toLowerCase();
     var label = String((phase && phase.format) || (tournament && tournament.format) || '').toLowerCase();
     // `classifyFormat` e `currentStage` foram marcadores transitórios do
