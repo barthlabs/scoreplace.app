@@ -89,7 +89,7 @@
 
   function legacyClassificationPairing(phase, tournament) {
     var current = phase && phase.classification && phase.classification.pairing;
-    if (current === 'swiss') return current;
+    if (current && typeof current === 'object' && current.strategy === 'ranking_clusters') return current;
     var code = String((phase && phase.formatCode) || (tournament && tournament.formatCode) || '').toLowerCase();
     var label = String((phase && phase.format) || (tournament && tournament.format) || '').toLowerCase();
     // `classifyFormat` e `currentStage` foram marcadores transitórios do
@@ -97,7 +97,11 @@
     // importa: a própria fase classificatória.
     var isSwiss = /su[ií]ç?o|swiss/.test(label) ||
       (code === 'liga' && tournament && (tournament.classifyFormat === 'swiss' || tournament.currentStage === 'swiss'));
-    return isSwiss ? 'swiss' : null;
+    return isSwiss ? {
+      strategy: 'ranking_clusters',
+      entryMode: 'fixed',
+      rematchPolicy: 'exhaust_cluster_before_repeat'
+    } : null;
   }
 
   function legacyBracketType(phase, tournament) {

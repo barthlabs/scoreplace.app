@@ -761,13 +761,16 @@ function drawInitial(t, opts) {
     });
   }
 
-  // ── Suíço como RESOLUÇÃO de pow2 (Opção B, canonizado): monta a classificatória Suíço
-  // (fase 0) + a eliminatória (fase 1) e gera a 1ª rodada, com a MESMA função vendorada que
+  // ── Classificatória por rodadas + eliminatória: monta a fase 0 e gera a primeira rodada
+  // com a MESMA função vendorada que
   // o cliente roda. DEPOIS da formação de duplas (entram COMO ESTÃO), ANTES do reset/
-  // generatePhase da fase 0 (caminho NÃO-Suíço). Ver project_draw_canonization_cf_phase23_deferred.
-  if (t.p2Resolution === 'swiss') {
-    if (typeof win._buildSwissClassifDraw !== 'function') return { ok: false, reason: 'swiss-builder-missing' };
-    const _sw = win._buildSwissClassifDraw(t);
+  // generatePhase da fase 0. `p2Resolution:'swiss'` é somente entrada legada.
+  if (t.classificationTransition || t.p2Resolution === 'swiss') {
+    if (!t.classificationTransition) {
+      t.classificationTransition = { rounds: t.swissRounds || null, pairing: { strategy: 'ranking_clusters', entryMode: 'fixed', rematchPolicy: 'exhaust_cluster_before_repeat' } };
+    }
+    if (typeof win._buildClassificationRoundsDraw !== 'function') return { ok: false, reason: 'classification-rounds-builder-missing' };
+    const _sw = win._buildClassificationRoundsDraw(t);
     return { ok: true, format: t.format, native: true, matchCount: _sw.roundMatches, sitOuts: _sw.sitOuts, allMaleCount: _allMale };
   }
 

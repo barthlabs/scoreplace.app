@@ -293,11 +293,19 @@
       t.p2Resolution = 'exclusion';
       actionMsg = 'Exclusão: removidos ' + info.excess + ' últimos inscritos (' +
         removedX.map(function (x) { return _nameOf(x) || '?'; }).join(', ') + ')';
-    } else if (option === 'swiss') {
-      t.p2Resolution = 'swiss';
-      t.classifyFormat = 'swiss';
-      if (opts.swissRounds) t.swissRounds = opts.swissRounds;
-      actionMsg = 'Iniciado com Fase Classificatória (Suíço' + (t.swissRounds ? ' — ' + t.swissRounds + ' rodadas' : '') + ')';
+    } else if (option === 'classification_rounds' || option === 'swiss') {
+      // `swiss` é aceito apenas para decisões pendentes gravadas por versões
+      // antigas. O contrato novo descreve o que ocorre, não um modo à parte.
+      var rounds = Math.max(1, parseInt(opts.classificationRounds || opts.swissRounds, 10) || 0);
+      t.classificationTransition = {
+        rounds: rounds || null,
+        pairing: Object.assign({
+          strategy: 'ranking_clusters',
+          entryMode: 'fixed',
+          rematchPolicy: 'exhaust_cluster_before_repeat'
+        }, opts.pairing || {})
+      };
+      actionMsg = 'Iniciado com Fase Classificatória por rodadas' + (rounds ? ' — ' + rounds + ' rodadas' : '');
     }
 
     t.status = 'closed';

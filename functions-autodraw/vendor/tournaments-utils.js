@@ -36,19 +36,21 @@ window._isLigaFormat = function(t) {
 window._faseCorrenteEhLiga = function(t) {
     var fase = (t && Array.isArray(t.phases)) ? t.phases[t.currentPhaseIndex || 0] : null;
     if (!fase || fase.kind !== 'classification') return false;
-    // Suíço também é classificatória, mas NÃO é pontos corridos: os pares da
-    // rodada seguinte dependem da classificação corrente. Confundi-los aqui
-    // fazia cada leitor precisar consultar `classifyFormat` por fora.
+    // Uma classificatória por rodadas com confrontos entre entradas FIXAS não
+    // é liga de duplas rotativas: os pares da rodada seguinte dependem da
+    // classificação corrente. Confundi-las aqui fazia cada leitor consultar
+    // um rótulo de formato por fora.
     return (!fase.classification || fase.classification.structure !== 'groups') &&
-        !(window._faseCorrenteEhSuico && window._faseCorrenteEhSuico(t));
+        !(window._faseCorrenteEhClassificatoriaPorRodadas && window._faseCorrenteEhClassificatoriaPorRodadas(t));
 };
 
-// Suíço é uma estratégia de pareamento dentro de uma fase classificatória —
-// nunca um terceiro tipo de fase. Documentos atuais declaram isso em
-// `classification.pairing`; os três campos de topo abaixo existem somente para
-// torneios ainda não projetados. Centralizar a ponte impede que cada tela dê
-// prioridade diferente ao legado.
-window._faseCorrenteEhSuico = function(t, phaseIndex) {
+// Classificatória por rodadas é uma política de pareamento dentro da fase
+// classificatória — nunca um terceiro tipo de fase nem um formato de torneio.
+// Ela mantém entradas/times fixos e ordena os confrontos pela classificação,
+// em clusters e com a política anti-repetição configurada pelo organizador.
+// `pairing:'swiss'` e os campos de topo abaixo são SOMENTE ponte de leitura para
+// documentos anteriores à canonização; nenhum fluxo novo deve gravá-los.
+window._faseCorrenteEhClassificatoriaPorRodadas = function(t, phaseIndex) {
     if (!t) return false;
     var fases = Array.isArray(t.phases) ? t.phases : null;
     var idx = phaseIndex == null ? (t.currentPhaseIndex || 0) : phaseIndex;
@@ -56,7 +58,9 @@ window._faseCorrenteEhSuico = function(t, phaseIndex) {
     if (fase && fase.kind) {
         if (fase.kind !== 'classification') return false;
         if (fase.classification && fase.classification.pairing != null) {
-            return fase.classification.pairing === 'swiss';
+            var pairing = fase.classification.pairing;
+            return pairing === 'swiss' ||
+                (typeof pairing === 'object' && pairing.strategy === 'ranking_clusters');
         }
         // Ponte curta para a projeção: fases suíças criadas antes deste
         // campo ainda carregam o marcador transitório no topo. A migração o
@@ -68,6 +72,10 @@ window._faseCorrenteEhSuico = function(t, phaseIndex) {
         t.format === 'Suíço Clássico' || t.classifyFormat === 'swiss' ||
         t.currentStage === 'swiss';
 };
+
+// Compatibilidade de leitura para módulos ainda não migrados. Não use em novos
+// fluxos: a pergunta de domínio é a função acima, sem um "modo suíço".
+window._faseCorrenteEhSuico = window._faseCorrenteEhClassificatoriaPorRodadas;
 
 // Contrato canônico da fase eliminatória. O texto em `t.format` é somente a
 // ponte para documentos que ainda não foram projetados; fluxos novos nunca

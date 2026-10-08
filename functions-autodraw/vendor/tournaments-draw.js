@@ -554,14 +554,14 @@ function _formDoublesTeams(origParticipants, teamSize, teamOrigins, balanceMode,
 // v2.1.22: exposto pra reuso (jogos extras de tardios em torneios "expand").
 window._formDoublesTeams = _formDoublesTeams;
 
-// ── Suíço como RESOLUÇÃO de pow2 (Opção B — 2 fases, canonizado na CF) ───────────────────
-// Monta a classificatória Suíço (fase 0, K rodadas) + a eliminatória original (fase 1,
-// puxando o top-lo = maior pow2 ≤ N da classificação) e GERA a 1ª rodada Suíço. PURA: muta
+// ── Classificatória por rodadas + eliminatória (canonizado na CF) ─────────────────────────
+// Monta uma classificatória por rodadas (fase 0, K rodadas) + a eliminatória original (fase 1,
+// puxando o top-lo = maior pow2 ≤ N da classificação) e gera a primeira rodada. PURA: muta
 // t, SEM DOM/toast/commit — o cliente (generateDrawFunction) e o servidor
 // (draw-core.drawInitial) rodam ESTA função, nunca duas versões (anti-drift; vendorada).
 // Pressupõe t.participants já com as entradas finais (duplas já formadas por _formDoublesTeams;
-// entram COMO ESTÃO — o Suíço não re-pareia). Ver project_draw_canonization_cf_phase23_deferred.
-window._buildSwissClassifDraw = function (t) {
+// entram COMO ESTÃO — a classificatória de entradas fixas não re-pareia).
+window._buildClassificationRoundsDraw = function (t) {
     var participants = Array.isArray(t.participants) ? t.participants.slice() : Object.values(t.participants || {});
     var _swissNames = participants.map(function (p) {
         return (typeof window._entryDisplayName === 'function')
@@ -575,39 +575,43 @@ window._buildSwissClassifDraw = function (t) {
     var _swCount = _swissNames.length;
     var _swLo = 1;
     while (_swLo * 2 <= _swCount) _swLo *= 2;          // pow2 inferior = nº de classificados
-    var _swRounds = (t.swissRounds && t.swissRounds >= 1) ? t.swissRounds : Math.max(2, Math.ceil(Math.log2(_swCount)));
+    var _transition = t.classificationTransition || {};
+    var _rounds = (parseInt(_transition.rounds, 10) || 0) >= 1 ? parseInt(_transition.rounds, 10) : Math.max(2, Math.ceil(Math.log2(_swCount)));
     var _origFormat = t.format || 'Eliminatórias Simples';
     var _origIsDouble = _origFormat === 'Dupla Eliminatória';
     t.phases = [
-        { name: (window._t ? window._t('predraw.optSwissTitle') : 'Classificatória'), kind: 'classification', classification: { structure: 'round_robin', pairing: 'swiss' }, formatCode: 'liga', format: 'Suíço', rounds: _swRounds, source: { type: 'enrollment' } },
+        { name: 'Classificatória', kind: 'classification', classification: { structure: 'rounds', pairing: Object.assign({ strategy: 'ranking_clusters', entryMode: 'fixed', rematchPolicy: 'exhaust_cluster_before_repeat' }, _transition.pairing || {}) }, formatCode: 'classification_rounds', rounds: _rounds, source: { type: 'enrollment' } },
         { name: _origFormat, kind: 'elimination', elimination: { bracketType: _origIsDouble ? 'double' : 'single' }, formatCode: _origIsDouble ? 'elim_dupla' : 'elim_simples', format: _origFormat, source: { type: 'previous_phase', mapping: [{ dest: 'main', rankFrom: 1, rankTo: _swLo }] }, fixedPairs: false }
     ];
     t.currentPhaseIndex = 0;
-    // fase 0 Suíço sinalizada por currentStage/classifyFormat:'swiss' (render da classificação +
-    // PAREAMENTO INDIVIDUAL no _generateNextRound). t.format FICA o original (a eliminatória) —
-    // virar 'Liga' dispararia o modo Liga=duplas-rotativas (Rei/Rainha) em vez do Suíço.
-    t.classifyFormat = 'swiss';
-    t.currentStage = 'swiss';
-    // Zera o gatilho da transição LEGADA (exigia p2Resolution==='swiss' && currentStage==='swiss').
+    // A fase, e não t.format, determina o comportamento. t.format continua sendo
+    // a eliminatória final para compatibilidade de exibição antiga.
+    delete t.classifyFormat;
+    delete t.currentStage;
     t.p2Resolution = null;
     t.p2TargetCount = null;
-    t.swissRounds = _swRounds;
+    delete t.swissRounds;
+    delete t.classificationTransition;
     t.standings = _swissNames.map(function (name) {
         return { name: name, points: 0, wins: 0, losses: 0, draws: 0, pointsDiff: 0, played: 0 };
     });
     _clearPresenceKeepWaitlist(t);     // v1.3.73: limpa presença de quem entrou; PRESERVA do resto/espera
     t.rounds = [];
     t.status = 'active';
-    window._generateNextRound(t);      // 1ª rodada Suíço (storage nativo t.rounds)
+    window._generateNextRound(t);      // 1ª rodada (storage nativo t.rounds)
     var _r1 = (t.rounds[0] && t.rounds[0].matches) || [];
     return {
-        swissRounds: _swRounds, lo: _swLo, origFormat: _origFormat,
+        rounds: _rounds, lo: _swLo, origFormat: _origFormat,
         // REGRESSÃO: o retorno deste sorteio vira texto de sucesso. BYE e folga
         // descrevem a estrutura, mas nunca podem ser anunciados como partidas.
         roundMatches: _r1.filter(function (m) { return m && !m.isSitOut && !m.isBye; }).length,
         sitOuts: _r1.filter(function (m) { return m.isSitOut; }).length
     };
 };
+
+// Ponte executável apenas para clientes/cache antigos. Nenhuma chamada nova deve
+// usar este nome; mantê-lo evita que uma versão em cache interrompa um sorteio.
+window._buildSwissClassifDraw = window._buildClassificationRoundsDraw;
 
 // v1.2.48: PREVIEW dos pares que o sorteio EQUILIBRADO formaria a partir dos avulsos,
 // SEM formar nada — mesma lógica de _formDoublesTeams (mistas primeiro; depois mesmo-gênero

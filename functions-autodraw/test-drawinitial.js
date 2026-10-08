@@ -308,7 +308,7 @@ console.log('══════════════════════�
   ok('chave já existe → recusa (already-drawn)', r.ok === false && r.reason === 'already-drawn', JSON.stringify(r));
 })();
 
-// ── Suíço como RESOLUÇÃO de pow2 (Opção B: 2 fases, mas via CF) ──────────────────────
+// ── Classificatória por rodadas como configuração de fase (via CF) ─────────────────────
 // ÂNCORA (vermelha até o drawInitial canonizar o Suíço; ver project_draw_canonization_cf
 // _phase23_deferred): a resolução 'swiss' NÃO é "vira o torneio em Suíço" — são K rodadas
 // Suíço classificatórias que reduzem o elenco a uma potência de 2 e entregam pra chave.
@@ -320,36 +320,66 @@ console.log('══════════════════════�
 (function () {
   const N = 12;                    // não-pow2 → lo=8, K=ceil(log2(12))=4
   const lo = 8, half = Math.floor(N / 2);
-  const t = mkT('sw', { format: 'Eliminatórias Simples', p2Resolution: 'swiss' }, N);
+  const t = mkT('classification-rounds', { format: 'Eliminatórias Simples', classificationTransition: { rounds: 4, pairing: { strategy: 'ranking_clusters', entryMode: 'fixed' } } }, N);
   const r = core.drawInitial(t);
-  ok('Suíço-pow2 → servidor sorteia (não recusa)', r.ok === true, JSON.stringify(r).slice(0, 120));
+  ok('Classificatória por rodadas → servidor sorteia', r.ok === true, JSON.stringify(r).slice(0, 120));
   const phases = Array.isArray(t.phases) ? t.phases : [];
   const p0 = phases[0] || {}, p1 = phases[1] || {};
-  ok('Suíço-pow2 → 2 fases (classificatória + elim)', phases.length === 2, 'phases=' + phases.length);
-  ok('Suíço-pow2 → fase 0 é Suíço (formatCode liga, format Suíço)',
-    p0.formatCode === 'liga' && /su[ií]ç?o|swiss/i.test(String(p0.format)),
+  ok('Classificatória por rodadas → 2 fases (classificatória + elim)', phases.length === 2, 'phases=' + phases.length);
+  ok('Classificatória por rodadas → fase 0 não depende de rótulo legado',
+    p0.formatCode === 'classification_rounds' && p0.format == null,
     JSON.stringify({ fc: p0.formatCode, f: p0.format }));
-  ok('Suíço-pow2 → as duas fases já nascem no contrato canônico',
-    p0.kind === 'classification' && p0.classification && p0.classification.pairing === 'swiss' &&
+  ok('Classificatória por rodadas → as duas fases já nascem no contrato canônico',
+    p0.kind === 'classification' && p0.classification && p0.classification.pairing && p0.classification.pairing.strategy === 'ranking_clusters' &&
       p1.kind === 'elimination' && p1.elimination && p1.elimination.bracketType === 'single',
     JSON.stringify({ p0: p0.classification, p1: p1.elimination }));
-  ok('Suíço-pow2 → fase 0 com K≥2 rodadas', (parseInt(p0.rounds, 10) || 0) >= 2, 'rounds=' + p0.rounds);
-  ok('Suíço-pow2 → fase 1 puxa top-lo (rankTo=' + lo + ')',
+  ok('Classificatória por rodadas → fase 0 preserva K rodadas', (parseInt(p0.rounds, 10) || 0) === 4, 'rounds=' + p0.rounds);
+  ok('Classificatória por rodadas → fase 1 puxa top-lo (rankTo=' + lo + ')',
     !!(p1.source && p1.source.type === 'previous_phase' && p1.source.mapping &&
        p1.source.mapping[0] && p1.source.mapping[0].rankTo === lo),
     JSON.stringify(p1.source));
-  ok('Suíço-pow2 → currentPhaseIndex=0', t.currentPhaseIndex === 0, 'idx=' + t.currentPhaseIndex);
-  ok('Suíço-pow2 → classifyFormat=swiss', t.classifyFormat === 'swiss', String(t.classifyFormat));
-  ok('Suíço-pow2 → standings com N entradas', Array.isArray(t.standings) && t.standings.length === N,
+  ok('Classificatória por rodadas → currentPhaseIndex=0', t.currentPhaseIndex === 0, 'idx=' + t.currentPhaseIndex);
+  ok('Classificatória por rodadas → não deixa marcador suíço no topo', t.classifyFormat == null && t.currentStage == null, JSON.stringify({ classifyFormat: t.classifyFormat, currentStage: t.currentStage }));
+  ok('Classificatória por rodadas → standings com N entradas', Array.isArray(t.standings) && t.standings.length === N,
     'standings=' + (t.standings && t.standings.length));
-  ok('Suíço-pow2 → rodada 1 gerada (storage nativo t.rounds)', Array.isArray(t.rounds) && t.rounds.length === 1,
+  ok('Classificatória por rodadas → rodada 1 gerada (storage nativo t.rounds)', Array.isArray(t.rounds) && t.rounds.length === 1,
     'rounds=' + (t.rounds && t.rounds.length));
   const r1 = (t.rounds && t.rounds[0] && t.rounds[0].matches) || [];
   const r1real = r1.filter(function (m) { return !m.isSitOut && !m.isBye; });
-  ok('Suíço-pow2 → R1 pareia todos (~floor(N/2)=' + half + ' jogos)', r1real.length === half, 'jogos=' + r1real.length);
-  ok('Suíço-pow2 → status active', t.status === 'active', String(t.status));
-  ok('Suíço-pow2 → p2Resolution limpo (gatilho legado morto)', t.p2Resolution == null, String(t.p2Resolution));
-  ok('Suíço-pow2 → presença limpa', !!(t.checkedIn && Object.keys(t.checkedIn).length === 0));
+  ok('Classificatória por rodadas → R1 pareia todos (~floor(N/2)=' + half + ' jogos)', r1real.length === half, 'jogos=' + r1real.length);
+  ok('Classificatória por rodadas → status active', t.status === 'active', String(t.status));
+  ok('Classificatória por rodadas → decisão temporária limpa', t.classificationTransition == null && t.p2Resolution == null, JSON.stringify({ transition: t.classificationTransition, p2: t.p2Resolution }));
+  ok('Classificatória por rodadas → presença limpa', !!(t.checkedIn && Object.keys(t.checkedIn).length === 0));
+})();
+
+// A decisão pendente de versões antigas continua executável, mas deve ser
+// traduzida ANTES de gravar o sorteio: nenhum marcador "swiss" fica no doc novo.
+(function () {
+  const t = mkT('legacy-swiss-decision', { format: 'Eliminatórias Simples', p2Resolution: 'swiss', swissRounds: 3 }, 12);
+  const r = core.drawInitial(t);
+  const p0 = (t.phases || [])[0] || {};
+  ok('decisão suíça legada → sorteia pela classificatória canônica', r.ok === true && p0.kind === 'classification', JSON.stringify(r).slice(0, 120));
+  ok('decisão suíça legada → elimina marcadores transitórios',
+    t.p2Resolution == null && t.classifyFormat == null && t.currentStage == null && t.swissRounds == null &&
+    p0.classification && p0.classification.pairing && p0.classification.pairing.strategy === 'ranking_clusters',
+    JSON.stringify({ p2: t.p2Resolution, classify: t.classifyFormat, stage: t.currentStage, rounds: t.swissRounds, pairing: p0.classification && p0.classification.pairing }));
+})();
+
+// Diversidade no cluster: uma repetição não é proibida, mas não pode ocorrer
+// enquanto ainda houver adversário inédito no mesmo cluster de classificação.
+(function () {
+  const names = ['A', 'B', 'C', 'D'];
+  const t = {
+    id: 'cluster-diversity', format: 'Eliminatórias Simples', status: 'active',
+    participants: names.map((displayName, i) => ({ uid: 'cluster-' + i, displayName })),
+    standings: names.map(name => ({ name, points: 0, wins: 0, losses: 0, draws: 0, pointsDiff: 0, played: 0 })),
+    phases: [{ kind: 'classification', rounds: 4, classification: { structure: 'rounds', pairing: { strategy: 'ranking_clusters', entryMode: 'fixed', clusterSize: 4, rematchPolicy: 'exhaust_cluster_before_repeat' } } }],
+    currentPhaseIndex: 0,
+    rounds: [{ round: 1, matches: [{ p1: 'A', p2: 'B' }, { p1: 'C', p2: 'D' }] }]
+  };
+  core._window._generateNextRound(t, { ts: 123 });
+  const pairs = (t.rounds[1].matches || []).filter(m => !m.isBye && !m.isSitOut).map(m => [m.p1, m.p2].sort().join('|')).sort();
+  ok('cluster → esgota adversários inéditos antes de repetir', pairs.join(',') === 'A|C,B|D', pairs.join(','));
 })();
 
 // O sorteio LIMPA a presença (v4.1.30).
