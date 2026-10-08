@@ -69,6 +69,21 @@ async function hidratar(tx, ref, data, apenas) {
   return data;
 }
 
+/*
+ * Leitura com chave física para migrações. `hidratar()` devolve somente valores
+ * porque é o formato que o motor de torneio consome; uma migração de identidade
+ * precisa também do document ID, pois ele é a âncora determinística do convidado
+ * legado. Esta função não escreve nem tenta remontar a parte.
+ */
+async function lerRegistrosDaParte(tx, ref, nome) {
+  const col = ref.collection(S.colecaoDaParte(nome));
+  const snap = await (tx ? tx.get(col) : col.get());
+  return snap.docs.map((doc) => {
+    const data = doc.data() || {};
+    return { sourceKey: doc.id, entry: data.item || data };
+  });
+}
+
 /**
  * Aplica `updateData` respeitando a divisão: campo que mora fora vai pra subcoleção (com
  * diff, para não reescrever o que não mudou nem perder quem saiu), e o resto vai pro doc.
@@ -135,4 +150,4 @@ function gravar(tx, ref, antes, updateData) {
   if (Object.keys(doc).length) tx.update(ref, doc);
 }
 
-module.exports = { partesDivididas, hidratar, gravar };
+module.exports = { partesDivididas, hidratar, lerRegistrosDaParte, gravar };

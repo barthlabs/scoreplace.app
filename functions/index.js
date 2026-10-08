@@ -4046,18 +4046,23 @@ exports.previewCanonicalRegistrationMigration = onCall(
       if (!_isTournamentOrgCaller(tournament, callerUid)) {
         throw new HttpsError("permission-denied", "só a organização consulta a prévia de migração");
       }
-      return _registrationCore.dryRunLegacyRoster(tournamentId, tournament.participants);
+      // A prévia usa os IDs físicos da coleção dividida. É proibido derivar a
+      // identidade de convidado da posição do array ou do nome exibido.
+      const records = await _splitParts.lerRegistrosDaParte(tx, ref, "participants");
+      return _registrationCore.projectLegacyRoster(tournamentId, records);
     });
 
     return {
       tournamentId: tournamentId,
       generatedAt: new Date().toISOString(),
       registrations: report.registrations,
+      formedPairs: report.formedPairs,
       conflicts: report.conflicts,
       unsupported: report.unsupported,
       fingerprint: report.fingerprint,
       summary: {
         registrations: report.registrations.length,
+        formedPairs: report.formedPairs.length,
         conflicts: report.conflicts.length,
         unsupported: report.unsupported.length,
       },

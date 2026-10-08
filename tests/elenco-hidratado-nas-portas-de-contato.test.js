@@ -76,6 +76,12 @@ const docDividido = {
   ok('⭐ e o elenco passa de 1 para 153 uids (152 + organizador)', mu.length === 153,
     'veio ' + mu.length);
   ok('⭐ a Cadu está no elenco', mu.indexOf(CADU) !== -1);
+  const comChaves = await SP.lerRegistrosDaParte(null, b.ref, 'participants');
+  ok('⭐ leitura de migração preserva a chave física de cada registro',
+    comChaves.length === 152 && comChaves.every((record) => record.sourceKey && record.entry),
+    'sem sourceKey o convidado legado voltaria a depender de nome ou índice');
+  ok('⭐ leitura de migração carrega o mesmo elenco da hidratação',
+    comChaves.map((record) => record.entry.uid).sort().join(',') === elenco.map((record) => record.uid).sort().join(','));
   const r = CP.computeSetContactPhone({ tournament: hid, callerUid: ORG, targetUid: CADU,
     phone: '11934253400', targetProfile: {} });
   ok('⭐ e a porta AUTORIZA o registro', r.ok === true, JSON.stringify(r));
