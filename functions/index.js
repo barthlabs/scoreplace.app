@@ -3900,7 +3900,6 @@ exports.deenrollParticipant = onCall(
   { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
   async (request) => {
     const callerUid = request.auth && request.auth.uid;
-    const callerEmail = ((request.auth && request.auth.token && request.auth.token.email) || "").toLowerCase();
     if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
 
     const tournamentId = String((request.data && request.data.tournamentId) || "");
@@ -4001,8 +4000,7 @@ catch (e) { _ligaDrawWindow = require("./liga-availability-window.js"); }
  * e aqui é pior: CF roda com admin SDK e não passa por regra nenhuma.
  * ⚠️ Admin legítimo que só exista por e-mail se conserta dando UID a ele (`adminUids`),
  * NUNCA reabrindo a porta.
- * ⚠️ `callerEmail` continua no argumento de propósito: 6 dos 8 chamadores passavam e-mail
- * e mudar a assinatura junto esconderia se algum deles ainda depende disso. */
+ */
 function _isTournamentOrgCaller(t, callerUid) {
   if (!t || !callerUid) return false;
   if (t.creatorUid && t.creatorUid === callerUid) return true;
@@ -5242,7 +5240,6 @@ exports.formPair = onCall(
   { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
   async (request) => {
     const callerUid = request.auth && request.auth.uid;
-    const callerEmail = ((request.auth && request.auth.token && request.auth.token.email) || "").toLowerCase();
     if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
 
     const tournamentId = String((request.data && request.data.tournamentId) || "");
@@ -5263,7 +5260,7 @@ exports.formPair = onCall(
       _assertLegacyRosterStillAuthoritative(t);
       // Permissão: o organizador/co-host forma qualquer dupla; senão, o próprio (aceite de
       // convite) só pode formar dupla que INCLUA o seu uid.
-      const isOrg = _isTournamentOrgCaller(t, callerUid, callerEmail);
+      const isOrg = _isTournamentOrgCaller(t, callerUid);
       const involvesCaller = (opts.uid1 && opts.uid1 === callerUid) || (opts.uid2 && opts.uid2 === callerUid);
       if (!isOrg && !involvesCaller) {
         throw new HttpsError("permission-denied", "só o organizador ou um dos dois da dupla podem formá-la");
@@ -5293,7 +5290,6 @@ exports.splitPair = onCall(
   { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
   async (request) => {
     const callerUid = request.auth && request.auth.uid;
-    const callerEmail = ((request.auth && request.auth.token && request.auth.token.email) || "").toLowerCase();
     if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
 
     const tournamentId = String((request.data && request.data.tournamentId) || "");
@@ -5314,7 +5310,7 @@ exports.splitPair = onCall(
       _assertLegacyRosterStillAuthoritative(t);
       const r = _pairCore.computeSplitPair(t, opts);
       // Permissão: organizador/co-host desfaz qualquer dupla; senão, um MEMBRO da dupla.
-      const isOrg = _isTournamentOrgCaller(t, callerUid, callerEmail);
+      const isOrg = _isTournamentOrgCaller(t, callerUid);
       const isMember = r.outcome === "split" && (r.p1Uid === callerUid || r.p2Uid === callerUid);
       if (!isOrg && !isMember) {
         throw new HttpsError("permission-denied", "só o organizador ou um membro da dupla podem desfazê-la");
@@ -5364,14 +5360,12 @@ exports.respondHostInvite = onCall(
 
     // Perfil do caller (para preencher os campos DERIVADOS de exibição na transferência —
     // a identidade continua sendo só o uid).
-    let callerEmail = ((request.auth.token && request.auth.token.email) || "").toLowerCase();
     let callerName = (request.auth.token && request.auth.token.name) || "";
     const db = admin.firestore();
     try {
       const u = await db.collection("users").doc(callerUid).get();
       if (u.exists) {
         const ud = u.data() || {};
-        callerEmail = String(ud.email || callerEmail || "").toLowerCase();
         callerName = ud.displayName || callerName || "";
       }
     } catch (_e) { /* perfil é só display; nunca derruba a resposta ao convite */ }
@@ -5887,7 +5881,6 @@ exports.listCommunications = onCall(
   { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
   async (request) => {
     const callerUid = request.auth && request.auth.uid;
-    const callerEmail = ((request.auth && request.auth.token && request.auth.token.email) || "").toLowerCase();
     if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
     const tournamentId = String((request.data && request.data.tournamentId) || "");
     if (!tournamentId) throw new HttpsError("invalid-argument", "tournamentId obrigatório");
