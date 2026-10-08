@@ -6805,7 +6805,14 @@ async function _computeBackfillStats(db, uid, userData) {
     plansCreated:              0,
   };
 
-  const LIGA_KEYWORDS = ["Liga", "Ranking", "Suíço", "Suico", "Swiss"];
+  // Participação classificatória vem do contrato de fases. O texto de formato só
+  // existe como compatibilidade para um documento excepcional sem `phases`.
+  function _hasClassificationPhase(t) {
+    const phases = Array.isArray(t && t.phases) ? t.phases.filter((phase) => phase && phase.kind) : [];
+    if (phases.length) return phases.some((phase) => phase.kind === "classification");
+    const format = String((t && t.format) || "");
+    return ["Liga", "Ranking", "Suíço", "Suico", "Swiss"].some((keyword) => format.includes(keyword));
+  }
 
   // ── Anti-fraude (mesmo núcleo do navegador) ──────────────────────────────
   const DAILY_MATCH_LIMIT = 5;
@@ -6856,7 +6863,7 @@ async function _computeBackfillStats(db, uid, userData) {
           snap.forEach((doc) => {
             const t = doc.data();
             stats.tournamentsEnrolled++;
-            if (t.format && LIGA_KEYWORDS.some((k) => t.format.includes(k))) {
+            if (_hasClassificationPhase(t)) {
               stats.ligaParticipations++;
             }
             // Vitória só conta em torneios com >= 4 participantes (anti-fraude)

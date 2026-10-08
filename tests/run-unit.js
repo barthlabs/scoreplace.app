@@ -1917,6 +1917,9 @@ const SUITES = [
   // L3.P1: troféus e backfill liam host/guest inexistentes e zeravam as
   // estatísticas. O núcleo usa playerUids/players/result, igual ao banco real.
   'tests/casual-stats-canonicos.test.js',
+  // Backfill de torneios: a participação classificatória nasce das fases canônicas;
+  // o rótulo histórico de formato só é fallback para documento sem `phases`.
+  'tests/backfill-stats-phases.test.js',
   // a MESMA bola de 'Carregando' era pedida em 5 tamanhos (4.5/4/3/2.4/2.2rem) e pulava
   // de tamanho a cada troca de tela. O tamanho passa a ser imposto NA FONTE; o que varia
   // por tela e a CAIXA (minHeight). A versao inline e excecao (e uma linha, nao uma tela).
