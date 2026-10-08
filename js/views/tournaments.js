@@ -757,8 +757,9 @@ window.splitParticipantFunction = function (tId, participantName) {
 
 // Self-healing: when enrollments are open (status not 'closed' AND no draw yet),
 // the waitlist/standby lists should always be empty. Anyone sitting there from a
-// previous closed state gets promoted back to the main roster. Dedupe by
-// email/uid/displayName/name. Returns the number of promoted entries.
+// previous closed state gets promoted back to the main roster. Dedupe only by
+// structural registration identity (UID or manualParticipantId). Registros
+// legados sem identificador não são fundidos pelo nome: podem ser homônimos.
 // Call with { save: true } to persist to Firestore when any promotion happens.
 window._drainWaitlistsIfOpen = function(t, opts) {
     if (!t) return 0;
@@ -772,19 +773,16 @@ window._drainWaitlistsIfOpen = function(t, opts) {
     if (!hasStandby && !hasWaitlist) return 0;
     if (!Array.isArray(t.participants)) t.participants = t.participants ? Object.values(t.participants) : [];
     var promoted = 0;
+    function structuralKey(entry) {
+        if (!entry || typeof entry !== 'object' || typeof window._participantEntryKey !== 'function') return '';
+        var key = window._participantEntryKey(entry);
+        return key && key.indexOf('legacy-name:') === -1 ? key : '';
+    }
     function promote(list) {
         if (!Array.isArray(list) || list.length === 0) return;
         list.forEach(function(sp) {
-            var spEmail = (sp && sp.email) || '';
-            var spUid = (sp && sp.uid) || '';
-            var spName = (sp && (sp.displayName || sp.name)) || (typeof sp === 'string' ? sp : '');
-            var already = t.participants.some(function(p) {
-                if (typeof p === 'string') return (spEmail && p === spEmail) || (spName && p === spName);
-                return (p.email && spEmail && p.email === spEmail)
-                    || (p.uid && spUid && p.uid === spUid)
-                    || (p.displayName && spName && p.displayName === spName)
-                    || (p.name && spName && p.name === spName);
-            });
+            var spKey = structuralKey(sp);
+            var already = spKey && t.participants.some(function(p) { return structuralKey(p) === spKey; });
             if (!already) { t.participants.push(sp); promoted++; }
         });
     }
