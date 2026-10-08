@@ -92,6 +92,20 @@ async function listTournaments(accessToken) {
   return documents;
 }
 
+// Marcadores de transição que um documento antigo pode carregar mesmo depois de
+// `phases[]` já descrever completamente o torneio. Eles são SOMENTE medidos
+// aqui: removê-los em lote é uma escrita de dados separada, a ser feita apenas
+// depois de conferir que nenhuma tela/Function ainda depende daquele fato.
+function legacySwissMarkers(tournament) {
+  const t = tournament || {};
+  return {
+    format: String(t.format || '') === 'Suíço Clássico',
+    classifyFormat: String(t.classifyFormat || '') === 'swiss',
+    currentStage: String(t.currentStage || '') === 'swiss',
+    swissRounds: t.swissRounds !== null && t.swissRounds !== undefined
+  };
+}
+
 async function main() {
   const accessToken = token();
   console.log(`▶ migração de fases legadas${APPLY ? '' : ' (DRY-RUN — nenhuma escrita)'}`);
@@ -100,12 +114,19 @@ async function main() {
   let planned = 0;
   let written = 0;
   let unchanged = 0;
+  const residualSwiss = { tournaments: 0, format: 0, classifyFormat: 0, currentStage: 0, swissRounds: 0 };
 
   for (const response of responses) {
     const document = await response.json();
     const id = document.name.split('/').pop();
     const tournament = documentToObject(document);
     scanned++;
+    const markers = legacySwissMarkers(tournament);
+    const hasResidual = Object.keys(markers).some((key) => markers[key]);
+    if (hasResidual) {
+      residualSwiss.tournaments++;
+      Object.keys(markers).forEach((key) => { if (markers[key]) residualSwiss[key]++; });
+    }
     const plan = planLegacyPhaseProjection(tournament, project);
     if (!plan.changed) { unchanged++; continue; }
     planned++;
@@ -124,6 +145,9 @@ async function main() {
   }
 
   console.log(`✓ analisados: ${scanned} | ${APPLY ? 'gravados' : 'a gravar'}: ${APPLY ? written : planned} | já canônicos: ${unchanged}`);
+  console.log('  marcadores suíços transitórios (somente censo): ' +
+    `${residualSwiss.tournaments} torneio(s) · format=${residualSwiss.format} · ` +
+    `classifyFormat=${residualSwiss.classifyFormat} · currentStage=${residualSwiss.currentStage} · swissRounds=${residualSwiss.swissRounds}`);
   if (!APPLY) console.log('  rode com --apply somente após revisar esta lista');
 }
 
