@@ -2289,7 +2289,7 @@ window._bracketTentarPartesDeNovo = function (tId) {
   if (typeof window._softRefreshView === 'function') window._softRefreshView();
 };
 
-// Tabela agregada de times (Super 8) — derivada sempre dos jogos, nunca persistida.
+// Tabela agregada de times — derivada sempre dos jogos, nunca persistida.
 // A dupla continua sendo a unidade da categoria; este quadro apenas soma os resultados
 // das duplas que representam cada time. Folga/BYE, pendência e jogo sem dois times são
 // excluídos pelo domínio compartilhado, para jamais virarem "jogo" ou pontuação.

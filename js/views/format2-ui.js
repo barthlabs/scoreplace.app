@@ -755,7 +755,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       classif += _sec('Formação das equipes', fBtns);
     }
 
-    // Super 8 não é um novo formato: as categorias continuam classificatórias de
+    // Grupos configuráveis não são um novo formato: as categorias continuam classificatórias de
     // duplas. Esta opção apenas cria oito times que recebem a soma dos resultados
     // dessas duplas. O valor fica na mesma configuração da fase para a CF sortear e
     // gravar os vínculos antes de gerar jogos — nunca como cálculo local da tela.

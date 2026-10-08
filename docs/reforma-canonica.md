@@ -4,7 +4,7 @@
 
 Esta reforma corrige o modelo e as fronteiras do sistema sem reescrever recursos que já funcionam. O resultado esperado é uma plataforma configurável: o organizador escolhe regras de negócio válidas; o sistema compila uma configuração única, reproduzível e testável; cliente e servidor aplicam a mesma regra.
 
-Torneios já sorteados não são migrados estruturalmente. A configuração e a topologia de uma fase materializada são históricas. Toda alteração de schema ou de contrato deve preservar a leitura desses documentos e ser aplicada apenas a torneios novos ou ainda não sorteados, salvo migração aprovada e reversível.
+Todo torneio é traduzido para as fases canônicas. A configuração e a topologia de uma fase materializada continuam históricas, mas são lidas pela mesma representação atual; adaptadores existem apenas como fallback defensivo para documento incompleto.
 
 ## Estado confirmado em 20/09/2026
 
@@ -13,7 +13,7 @@ Torneios já sorteados não são migrados estruturalmente. A configuração e a 
 - A tela já representa Rei/Rainha como uma configuração de sorteio, e não como uma tela independente. Porém, o schema ainda mistura os conceitos: a classificatória usa `formatCode: 'liga'` e o valor interno `format: 'Liga'`.
 - O motor de chaves (`chaves.js`) é determinístico e tem uma cobertura extensa. Ele implementa a política atual de repescagem/folga e normaliza a segunda rodada para uma potência de 2.
 - O pré-sorteio calcula BYE versus repescagem automaticamente pelo menor número de intervenções. Isso diverge do requisito: a política deve ser escolhida pelo organizador antes do sorteio.
-- Super 8, BYE configurável e sobra única não estão implementados como formatos configuráveis do novo modelo.
+- BYE configurável e sobra única ainda não estão implementados como políticas configuráveis do novo modelo. Grupos são configuráveis pela quantidade de unidades e de confrontos.
 
 ## Contrato de domínio alvo
 
@@ -35,14 +35,14 @@ O sorteio é uma regra de uma fase, não um tipo de torneio nem uma rota paralel
 - formação de equipe: participantes individuais podem ser sorteados em duplas; duplas já formadas não passam por este sorteio;
 - persistência da dupla classificatória: uma dupla sorteada pode permanecer fixa durante toda a fase ou ser desfeita ao fim de cada rodada; neste último caso, a rodada seguinte sorteia novas duplas a partir dos participantes ativos e, em seguida, sorteia os novos confrontos;
 - formação de confrontos: depois de existirem equipes, o sistema pode sortear quais duplas se enfrentam; numa eliminatória, os confrontos posteriores são definidos pela chave;
-- modalidade da rodada: o sorteio padrão de duplas e confrontos pode ser substituído por Rei/Rainha ou Super 8 quando a fase o permitir;
+- modalidade da rodada: o sorteio padrão de duplas e confrontos pode ser substituído por Rei/Rainha quando a fase o permitir;
 - critério de pareamento/semeadura: desempenho, equilíbrio ou sorteio;
 - repetição: rodada única, número fixo de rodadas ou todos contra todos;
 - política de espera e novas entradas, por fase.
 
-Assim, Rei/Rainha e Super 8 são modalidades adicionais, não alternativas à simples formação de duplas ou ao sorteio de confrontos. Na classificatória padrão com dupla não persistente, há dois sorteios sucessivos em toda rodada: primeiro as duplas, depois os confrontos. Rei/Rainha sorteia grupos de quatro participantes, produz três jogos por grupo e pontua individualmente. Quando abrir uma eliminatória, a rodada de formação é uma fase classificatória de uma rodada, seguida da fase eliminatória; não é uma exceção fora do modelo de fases.
+Rei/Rainha é modalidade adicional, não alternativa à simples formação de duplas ou ao sorteio de confrontos. Na classificatória padrão com dupla não persistente, há dois sorteios sucessivos em toda rodada: primeiro as duplas, depois os confrontos. Rei/Rainha sorteia grupos de quatro participantes, produz três jogos por grupo e pontua individualmente. Quando abrir uma eliminatória, a rodada de formação é uma fase classificatória de uma rodada, seguida da fase eliminatória; não é uma exceção fora do modelo de fases.
 
-Super 8 é uma modalidade classificatória para oito duplas. Essas duplas podem ter sido formadas previamente pelo organizador ou por sorteio. O Super 8 gera o todos-contra-todos de sete rodadas e produz a classificação pela mesma interface de standings. Não será adicionado antes de o contrato comum de formação de dupla e de confrontos estar extraído e coberto por testes.
+Grupos configuráveis comportam qualquer quantidade de duplas e uma agenda escolhida pelo organizador. Para um grupo de N duplas, todos contra todos significa N−1 jogos por dupla; pode-se configurar menos jogos para uma agenda mais curta.
 
 ### Política da chave eliminatória
 
@@ -70,7 +70,7 @@ Face ID, Touch ID e BiometricPrompt confirmam presença no dispositivo e não fo
 2. **Contrato e compilador.** Extrair o schema de fase e sorteio para um núcleo puro compartilhado por cliente e Function. Adicionar normalização fechada, validação de valores desconhecidos e testes de compilação cliente-servidor. Os códigos antigos serão adaptados na borda, não renomeados por busca e troca.
 3. **Chave por política.** Separar a topologia determinística da escolha de `repescagem`, `bye` ou `sobra_unica`. A UI seleciona a política; a Function valida e persiste a decisão junto ao sorteio; o motor a aplica sem heurística implícita.
 4. **Migração de interface.** Trocar a configuração atual para os conceitos do contrato, mantendo os valores internos antigos somente no adaptador de compatibilidade. O formulário não deve oferecer combinações que o compilador normalizaria silenciosamente para outra coisa.
-5. **Novos formatos.** Implementar Super 8 após a etapa 2 e depois de uma matriz completa de resultados, desempates, ausências, inscrições tardias e integração com playoff.
+5. **Agenda de grupos.** Consolidar a agenda configurável de grupos com matriz completa de resultados, desempates, ausências, inscrições tardias e integração com playoff.
 6. **Identidade e inscrição.** Aplicar o censo de UID, mover leitores e escritores para o contrato único e bloquear duplicidade no servidor. Qualquer merge de contas entra em uma entrega separada, com plano de recuperação e auditoria.
 7. **Limpeza final.** Remover adaptadores somente quando o censo de produção e as versões mínimas de cliente demonstrarem que não há leitores deles. Dados de produção não são apagados por esta reforma sem backup novo e aprovação específica.
 

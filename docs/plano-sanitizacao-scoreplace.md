@@ -29,7 +29,7 @@ censo antes/depois e aprovação específica.
 | Histórico de partidas | Há três construtores no navegador: `_persistInlineTournamentMatchRecord`, `_persistGSMTournamentMatchRecord` e `_buildAndPersistMatchRecord`. Todos chamam `saveUserMatchRecords`, que hoje pode escrever em qualquer `users/{uid}/matchHistory`. | Não migrar por simples wrapper: primeiro o resultado confirmado precisa ser uma fonte canônica server-side; depois a projeção é derivada dela, sem jogadores, placar ou estatísticas no payload. |
 | Fusão de contas | `autoMergeOnProfileUpdate` e a rotina agendada de limpeza podem executar fusão a partir de coincidência de credenciais; `requestParticipantMerge` usa o rótulo de um participante manual como identificador da vaga. | Fusão automática e vaga manual identificada por nome precisam ser contidas antes da migração de identidade. |
 | Propagação de perfil | `propagateDisplayName` ainda varre torneios e regrava rótulos quando o nome muda. | Demonstra que o torneio continua contendo cópia de perfil e cria escrita concorrente sobre dados de competição. |
-| Super 8 | Não há implementação fora da documentação de reforma. | É funcionalidade nova e entra depois do núcleo comum de rodadas. |
+| Grupos configuráveis | A agenda deve ser comum ao núcleo classificatório. | Tamanho do grupo e número de jogos são escolhas do organizador. |
 
 Essas afirmações são sobre o código inspecionado em 20/09/2026, especialmente
 `functions/enroll-core.js`, `functions/index.js`,
@@ -434,10 +434,9 @@ autoridade de elegibilidade.
 
 - Implementar grupos como modalidade classificatória comum: tamanho do grupo e
   quantidade de rodadas/emparelhamentos são escolhas explícitas do organizador.
-  Não há fase nem formato paralelo chamado Super 8.
-- “Super 8” é apenas um preset visual para grupo de oito duplas com agenda
-  todos-contra-todos (sete rodadas, 28 partidas). O mesmo grupo pode ter menos
-  rodadas para um torneio mais curto.
+  Não há fase nem formato paralelo fora da classificatória por grupos.
+- Um grupo de oito duplas pode usar todos-contra-todos (sete rodadas, 28 partidas), e qualquer
+  grupo pode configurar menos rodadas para um torneio mais curto.
 - Reusar a mesma representação de equipe, rodada, partida, pontuação,
   desempate, ausência/W.O. e ponte para playoff. O planejador deve provar que
   não repete confronto antes de esgotar combinações disponíveis.

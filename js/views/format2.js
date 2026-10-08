@@ -17,8 +17,8 @@
 //  • Dupla FIXA  → Fase de Grupos (formatCode 'grupos_mata'), gruposCount=nº grupos
 //    (inclusive 1). Liga PROÍBE duplas formadas.
 //  • A Fase de Grupos continua sendo a classificatória das DUPLAS: todos se enfrentam
-//    e as categorias só definem quais duplas se encontram. Super 8 não pode adulterar
-//    este motor tratando um time com várias duplas como se fosse uma dupla; a tabela
+//    e as categorias só definem quais duplas se encontram. Um grupo configurável não
+//    pode adulterar este motor tratando um time com várias duplas como se fosse uma dupla; a tabela
 //    agregada dos times é uma camada acima dos jogos por categoria.
 //  • Rei/Rainha  → Liga 'rei_rainha' (grupos de 4 rotativos, individual).
 //  • Sorteio/rodada → Liga 'standard' clusterizado (parceiro+adversário/rodada, individual).
@@ -228,7 +228,7 @@
 
     out.grupos = Math.max(1, parseInt(out.grupos, 10) || 1);
     var umGrupo = out.grupos === 1;
-    // Times representados (Super 8): a dupla continua na categoria e o time soma
+    // Times representados: a dupla continua na categoria e o time soma
     // seus resultados. Normalizar aqui garante que web e CF leiam o MESMO toggle de
     // confronto interno e a mesma escala, sem ativar nada em torneios existentes.
     var _tcCore = (typeof window !== 'undefined') && window.ScoreplaceTeamCompetition;
