@@ -82,6 +82,10 @@ ok(W._resolucaoJogos('playin', { effectiveTeams: 14, loP2: 8, hiP2: 16 }, { isDo
 // A contagem consertada só vale se ela ainda for multiplicada pela duração REAL da partida
 // daquela fase. Checagem no FONTE porque o cálculo mora dentro do painel (precisa de DOM).
 const src = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'tournaments-draw-prep.js'), 'utf8');
+ok(/_hasCanonicalPhase/.test(src),
+  'painel: resolve a fase corrente antes do formato histórico');
+ok(/_currentPhase\.kind === 'classification'/.test(src) && /_currentPhase\.kind === 'elimination'/.test(src),
+  'painel: classificatória e eliminatória são decididas pela fase canônica');
 ok(/_uDur\s*=\s*window\._minutosDaPartida\(t,\s*window\._faseDoTorneio\(/.test(src),
   'painel: duração vem de _minutosDaPartida(t, fase) — régua por SET');
 ok(/Math\.ceil\(g\s*\/\s*Math\.max\(1,\s*_uCourts\)\)\s*\*\s*_uDur/.test(src),

@@ -1387,15 +1387,15 @@ window.showUnifiedResolutionPanel = function(tId) {
     var issuesText;
 
     if (!_phaseCtx) {
-        // Swiss/Liga: skip power-of-2 and odd-number checks — these formats handle BYEs naturally
-        var _isSuicoOrLiga = t.format === 'Suíço Clássico' || t.classifyFormat === 'swiss' || t.currentStage === 'swiss' || (window._isLigaFormat && window._isLigaFormat(t));
-        if (_isSuicoOrLiga) {
-            window.showFinalReviewPanel(tId);
-            return;
-        }
-
+        // A fase corrente governa o próximo sorteio. `t.format` só sustenta documentos
+        // sem phases; num torneio híbrido, consultar o rótulo do torneio mandava a fase
+        // eliminatória de volta para o fluxo classificatório.
+        var _currentPhase = window._faseDoTorneio ? window._faseDoTorneio(t, t.currentPhaseIndex || 0) : null;
+        var _hasCanonicalPhase = !!(_currentPhase && _currentPhase.kind);
         // Groups format: redirect to dedicated groups config panel
-        var _isGruposFmt = t.format === 'Fase de Grupos + Eliminatórias' || t.format === 'Grupos + Eliminatória' || t.format === 'Grupos + Mata-Mata' || (t.format || '').indexOf('Grupo') !== -1;
+        var _isGruposFmt = _hasCanonicalPhase
+            ? (_currentPhase.kind === 'classification' && _currentPhase.classification && _currentPhase.classification.structure === 'groups')
+            : (t.format === 'Fase de Grupos + Eliminatórias' || t.format === 'Grupos + Eliminatória' || t.format === 'Grupos + Mata-Mata' || (t.format || '').indexOf('Grupo') !== -1);
         if (_isGruposFmt && typeof window._showGroupsConfigPanel === 'function') {
             var _diagG = window._diagnoseAll(t);
             // v3.0.x: a Fase de Grupos NÃO usa potência de 2. A sobra ímpar (quem não
@@ -1407,6 +1407,16 @@ window.showUnifiedResolutionPanel = function(tId) {
                 window._showGroupsConfigPanel(tId);
                 return;
             }
+        }
+
+        // Pontos corridos/Suíço não usam potência de 2. A fase de grupos já foi
+        // roteada acima para a sua configuração própria.
+        var _isSuicoOrLiga = _hasCanonicalPhase
+            ? _currentPhase.kind === 'classification'
+            : (t.format === 'Suíço Clássico' || t.classifyFormat === 'swiss' || t.currentStage === 'swiss' || (window._isLigaFormat && window._isLigaFormat(t)));
+        if (_isSuicoOrLiga) {
+            window.showFinalReviewPanel(tId);
+            return;
         }
 
         // Suspend enrollment while decision panel is open. This is persisted only by the
@@ -1432,7 +1442,9 @@ window.showUnifiedResolutionPanel = function(tId) {
             // derrotado mais bem colocado; OU lista de espera = suplentes, não entra na chave).
             // Só Eliminatória Simples (único formato onde a integração tardia recalcula pow2).
             var _leChk = (window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t) : t.lateEnrollment);
-            var _isElimFmt = t.format === 'Eliminatórias Simples' || t.format === 'Eliminatória Simples';
+            var _isElimFmt = _hasCanonicalPhase
+                ? _currentPhase.kind === 'elimination'
+                : (t.format === 'Eliminatórias Simples' || t.format === 'Eliminatória Simples');
             if (_isElimFmt && _leChk === 'expand' && !t._lateResolutionAck && typeof window._showLateConfrontosPanel === 'function') {
                 window._showLateConfrontosPanel(tId);
                 return;
@@ -1508,7 +1520,9 @@ window.showUnifiedResolutionPanel = function(tId) {
     // v2.0.74: POR SET — a partida desta fase, não o valor cru. Ver sport-rules.js.
     var _uDur = window._minutosDaPartida(t, window._faseDoTorneio(t, t.currentPhaseIndex || 0));
     var _uCourts = parseInt(t.courtCount) || (Array.isArray(t.courtNames) ? t.courtNames.length : 0) || 2;
-    var _uIsDouble = (t.format || '').indexOf('Dupla') !== -1;
+    var _uIsDouble = (typeof window._isDoubleEliminationPhase === 'function')
+        ? window._isDoubleEliminationPhase(t, t.currentPhaseIndex || 0)
+        : ((t.format || '').indexOf('Dupla') !== -1);
     // a CONTA mora em window._resolucaoJogos (pura, testada); aqui só o contexto do painel.
     var _uGamesFor = function(key) {
         return window._resolucaoJogos(key, info, {
