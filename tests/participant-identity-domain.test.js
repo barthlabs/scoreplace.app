@@ -103,10 +103,17 @@ ok(/startRealtimeListener\(\)/.test(authView) && /startRealtimeListener\(\)\s*\{
   /where\('memberUids', 'array-contains', _uid\)/.test(store),
   '㉖ ouvinte de torneios recebe e consulta exclusivamente UID');
 
+const pNameBody = store.slice(store.indexOf('window._pName = function'), store.indexOf('// POOL DE STANDBY CANÔNICO'));
+const entryNameBody = store.slice(store.indexOf('window._entryDisplayName = function'), store.indexOf('// ── SANITIZADOR DE IDENTIDADE'));
+const serverEntryNameBody = draw.slice(draw.indexOf('g.window._entryDisplayName'), draw.indexOf('// _pName do servidor'));
+ok(!/\.email\b|\.phone\b/.test(pNameBody) && !/\.email\b|\.phone\b/.test(entryNameBody) &&
+  !/\.email\b|\.phone\b/.test(serverEntryNameBody),
+  '㉗ resolvedores centrais não promovem e-mail ou telefone a nome de participante');
+
 const createFunction = fs.readFileSync(path.join(ROOT, 'functions-autodraw/tournament-create.js'), 'utf8');
 ok(!/organizerName\s*:/.test(createFunction) &&
   /'organizerName'/.test(functionsIndex),
-  '㉗ criação não congela o nome do organizador e a fronteira de escrita remove o legado');
+  '㉘ criação não congela o nome do organizador e a fronteira de escrita remove o legado');
 
 console.log(fail ? ('  ' + fail + ' FALHA(S), ' + pass + ' ok') : ('  ✓ ' + pass + ' asserções'));
 process.exit(fail ? 1 : 0);

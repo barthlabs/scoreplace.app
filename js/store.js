@@ -7803,8 +7803,9 @@ window._pName = function(p, fallback) {
       return _pNameDisplay(nm) || nm;
     }).filter(Boolean).join(' / ');
   }
-  // indivíduo: nome pelo uid (ao vivo); displayName/name/email/phone só fallback
-  var raw = R(p.uid, p.displayName || p.name || p.email || (p.phone ? String(p.phone) : '')) || fb;
+  // indivíduo: nome pelo uid (ao vivo); nome legado/manual só como fallback.
+  // E-mail e telefone são dados de contato, nunca identidade nem rótulo público.
+  var raw = R(p.uid, p.displayName || p.name || '') || fb;
   return _pNameDisplay(raw) || fb;
 };
 
@@ -11297,11 +11298,9 @@ window._entryDisplayName = function (p) {
       return (typeof s === 'string') ? s : R(s && s.uid, s && (s.displayName || s.name));
     }).filter(Boolean).join(' / ');
   }
-  // indivíduo — v1.2.2: e-mail/telefone entram no fallback igual ao _pName. Os dois
-  // resolvedores tinham a MESMA ordem exceto aqui, então uma inscrição órfã com e-mail
-  // aparecia pelo e-mail no _pName e como rótulo neutro no _entryDisplayName (mesma
-  // pessoa, dois nomes, dependendo da tela).
-  return R(p.uid, p.displayName || p.name || p.email || (p.phone ? String(p.phone) : ''));
+  // indivíduo: perfil pelo UID; nome legado/manual apenas como fallback. Dados de contato
+  // não são identidade e não podem virar rótulo em nenhuma tela.
+  return R(p.uid, p.displayName || p.name || '');
 };
 
 // ── SANITIZADOR DE IDENTIDADE NA PERSISTÊNCIA → js/views/identity-core.js ────────
@@ -11314,10 +11313,10 @@ window._entryDisplayName = function (p) {
 // dos placeholders legados (tinham uid sintético 'jog_NN_…'), então adicionar um 2º lote
 // não "via" os números já usados (nomes vazios) e RECOMEÇAVA do 01 → números repetidos
 // (dois "Jogador 02"). Aqui renumera cada placeholder pra um número ÚNICO e cura pro formato
-// limpo (só-nome, sem uid/email fake). SÓ renumera se o torneio NÃO foi sorteado — depois do
+// limpo (só-nome, sem UID/e-mail sintético). SÓ renumera se o torneio NÃO foi sorteado — depois do
 // sorteio as partidas referenciam a vaga por NOME e renumerar quebraria o vínculo. Muta t in
 // place; retorna true se mudou algo. Número atual do placeholder = do nome "Jogador NN", ou
-// (nome apagado) do uid 'jog_NN' ou do email 'jogadorNN@scoreplace.app'.
+// (nome apagado) do UID sintético 'jog_NN'. O e-mail sintético é apagado na cura.
 window._normalizePlaceholderNumbers = function (t) {
   if (!t) return false;
   var drawn = (Array.isArray(t.matches) && t.matches.length > 0) ||
@@ -11335,7 +11334,6 @@ window._normalizePlaceholderNumbers = function (t) {
     var m, nm = String(p.displayName || p.name || '').trim();
     if ((m = nm.match(_phRe))) return parseInt(m[1], 10);
     if (p.uid && (m = String(p.uid).match(/^jog_0*(\d+)/))) return parseInt(m[1], 10);
-    if (p.email && (m = String(p.email).match(/^jogador0*(\d+)@scoreplace\.app$/i))) return parseInt(m[1], 10);
     return 0;
   };
   // números "tomados" por participantes NÃO-placeholder chamados "Jogador X" (raro) — evita colisão
@@ -14518,12 +14516,11 @@ window._loadTemplates = async function() {
 };
 
 // v2.7.37: é ESTE participante um organizador (criador ou co-host ATIVO)? Aceita o
-// objeto participante (checa uid/email + p1/p2 de duplas). Usado pra ESTRELA + fixar
+// objeto participante (checa UID e slots p1/p2 de duplas). Usado pra ESTRELA + fixar
 // no topo da lista de Inscritos (organizadores no topo, como os VIPs).
 window._isOrgParticipant = function (t, p) {
   if (!t || !p || typeof p !== 'object') return false;
   var uids = [p.uid || '', p.p1Uid || '', p.p2Uid || ''].filter(Boolean);
-  var emails = [p.email, p.p1Email, p.p2Email].map(function (e) { return String(e || '').toLowerCase(); }).filter(Boolean);
   if (t.creatorUid && uids.indexOf(t.creatorUid) >= 0) return true;
   // ⛔ e-mail saiu (cânone do dono): a estrela de organizador ia pra quem tivesse a string.
   if (Array.isArray(t.adminUids) && uids.some(function (u) { return t.adminUids.indexOf(u) >= 0; })) return true;

@@ -152,7 +152,7 @@ g.window._entryDisplayName = function (p) {
       return (typeof s === 'string') ? s : R(s && s.uid, s && (s.displayName || s.name));
     }).filter(Boolean).join(' / ');
   }
-  return R(p.uid, p.displayName || p.name || p.email || (p.phone ? String(p.phone) : ''));
+  return R(p.uid, p.displayName || p.name || '');
 };
 // _pName do servidor = _entryDisplayName + fallback do caller. O _pNameDisplay (máscara de
 // telefone) do cliente é PURO DISPLAY e não existe aqui: o servidor só usa o nome como CHAVE

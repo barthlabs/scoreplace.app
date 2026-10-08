@@ -548,7 +548,7 @@ window._updateCardPresenceInPlace = function (tId, uid, playerName) {
     for (var i = 0; i < parts.length; i++) {
       var pp = parts[i]; if (!pp) continue;
       if (uid && typeof pp === 'object' && pp.uid === uid) { p = pp; break; }
-      var nm = (typeof pp === 'string') ? pp : (pp.displayName || pp.name || pp.email || '');
+      var nm = (typeof pp === 'string') ? pp : (window._pName ? window._pName(pp, '') : (pp.displayName || pp.name || ''));
       if (!uid && nm === playerName) { p = pp; break; }
     }
     if (!p) return false;
@@ -2264,7 +2264,7 @@ function renderParticipants(container, tournamentId) {
     // só via card solo de orphan (loop abaixo). Evita aparecer 2x. O skip usa
     // window._woHistHas (uid-first) — woHistory é chaveado por uid (v3.0.78).
     parts.forEach((p, idx) => {
-      const pName = typeof p === 'string' ? p : (p.displayName || p.name || p.email || _t('participants.participant', {n: idx + 1}));
+      const pName = typeof p === 'string' ? p : (window._pName ? window._pName(p, _t('participants.participant', {n: idx + 1})) : (p.displayName || p.name || _t('participants.participant', {n: idx + 1})));
       const isTeam = !!window._entryTeamMembers(p); // v3.0.x: time por estrutura (slots), não por '/'
       const namesToProcess = isTeam ? pName.split('/').map(n => n.trim()).filter(n => n) : [pName];
       namesToProcess.forEach(n => {
@@ -2295,7 +2295,7 @@ function renderParticipants(container, tournamentId) {
     // Add standby participants — v3.0.x: DEDUP. Quem já está nos inscritos (ex.: solo que
     // não fechou dupla e foi pra espera) NÃO vira card novo; só ganha a marca de espera.
     standbyParts.forEach((p, idx) => {
-      const pName = typeof p === 'string' ? p : (p.displayName || p.name || p.email || 'Espera ' + (idx + 1));
+      const pName = typeof p === 'string' ? p : (window._pName ? window._pName(p, 'Espera ' + (idx + 1)) : (p.displayName || p.name || 'Espera ' + (idx + 1)));
       const names = window._entryTeamMembers(p) || (pName ? [pName] : []); // v3.0.x: membros por estrutura, não por '/'
       names.forEach(n => {
         const ex = _indivByName[n.toLowerCase()];
@@ -2372,7 +2372,7 @@ function renderParticipants(container, tournamentId) {
       standbyParts.forEach(function (p) {
         var _m = window._entryTeamMembers(p); // v3.0.x: membros da dupla por estrutura, não por '/'
         if (_m) { _m.forEach(function (x) { var k = String(x).trim().toLowerCase(); if (k) _sbSet[k] = 1; }); return; }
-        var n = String((typeof p === 'string') ? p : (p && (p.displayName || p.name || p.email)) || '');
+        var n = String((typeof p === 'string') ? p : (window._pName ? window._pName(p, '') : (p && (p.displayName || p.name))) || '');
         var k = n.trim().toLowerCase(); if (k) _sbSet[k] = 1;
       });
       _dedupedIndividuals.forEach(function (ind) {

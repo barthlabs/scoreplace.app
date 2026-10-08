@@ -1783,7 +1783,10 @@ window._hydrateParticipantGenders = function (t) {
 window._drawBalanceRows = function (t, done) {
   var parts = (t && Array.isArray(t.participants)) ? t.participants : [];
   var solos = parts.filter(function (p) { return !(window._entryTeamMembers && window._entryTeamMembers(p)); });
-  var _pName = function (p) { return (typeof p === 'string') ? p : (p.displayName || p.name || p.email || '?'); };
+  var _pName = function (p) {
+    if (typeof p === 'string') return p;
+    return (typeof window._pName === 'function') ? window._pName(p, '?') : ((p && (p.displayName || p.name)) || '?');
+  };
   var _tem = function (p) { var g = window._pGender ? window._pGender(p) : (p && p.gender); return typeof p === 'object' && !!g && !!String(g).trim(); };
   var _fim = function () {
     // o gênero AUTORITATIVO é o do PERFIL: enriquece o snapshot antes de decidir quem falta
@@ -4094,8 +4097,8 @@ window.handleDropTeam = function (e, targetIdx) {
         const p2snap = arr0[targetIdx];
         if (!p1snap || !p2snap) return;
 
-        const name1 = typeof p1snap === 'string' ? p1snap : (p1snap.displayName || p1snap.name || p1snap.email || '');
-        const name2 = typeof p2snap === 'string' ? p2snap : (p2snap.displayName || p2snap.name || p2snap.email || '');
+        const name1 = typeof p1snap === 'string' ? p1snap : (window._pName ? window._pName(p1snap, '') : (p1snap.displayName || p1snap.name || ''));
+        const name2 = typeof p2snap === 'string' ? p2snap : (window._pName ? window._pName(p2snap, '') : (p2snap.displayName || p2snap.name || ''));
 
         if (!name1 || !name2 || name1 === name2) return;
         if (window._entryTeamMembers(p1snap) || window._entryTeamMembers(p2snap)) { // v3.0.x: "já em dupla" por estrutura, não por '/' no nome
