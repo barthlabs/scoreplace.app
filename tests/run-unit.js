@@ -1825,6 +1825,7 @@ const SUITES = [
   // Uma reentrega das filas de e-mail usa o mesmo documento de outbox: após
   // criar a mensagem, falhar ao marcar a pendência como sent não dobra o envio.
   'tests/pending-email-outbox-idempotent.test.js',
+  'tests/notification-outbox-index.test.js',
   // O "Entrar" da landing responde ao PRIMEIRO toque mesmo com o JS ainda na rede —
   // era isso que ficava mudo logo depois de uma atualização (cache zerado). v1.8.37.
   'tests/entrar-nunca-fica-mudo.test.js',
