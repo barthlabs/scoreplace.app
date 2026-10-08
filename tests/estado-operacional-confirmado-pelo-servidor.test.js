@@ -76,7 +76,7 @@ must(/_setServerFreshness\('waiting'\)/.test(fallback)
   && /_setServerFreshness\('current'\)/.test(fallback)
   && /_setServerFreshness\('unavailable'\)/.test(fallback),
   'a recuperação comunica espera, confirmação remota e indisponibilidade');
-const listenerStart = store.slice(store.indexOf('startRealtimeListener(email)'), store.indexOf('// v1.9.92: gatilho tempo-real da descoberta pública'));
+const listenerStart = store.slice(store.indexOf('startRealtimeListener()'), store.indexOf('// v1.9.92: gatilho tempo-real da descoberta pública'));
 must(/_setServerFreshness\('waiting'\)/.test(listenerStart)
   && /_setServerFreshness\('current'\)/.test(listenerStart)
   && /_setServerFreshness\('unavailable'\)/.test(listenerStart),

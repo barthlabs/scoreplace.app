@@ -12543,11 +12543,11 @@ window.AppStore = {
 
   // Start real-time listener — auto-updates tournaments on any Firestore change
   //
-  // Scoped to the user's own tournaments via the denormalized `memberEmails[]`
+  // Scoped to the user's own tournaments via the denormalized `memberUids[]`
   // field (creator + organizer + active co-hosts + participants). Without a
   // scope, every snapshot downloaded every tournament in the database on
   // every change anywhere — doesn't scale past a handful of users.
-  startRealtimeListener(email) {
+  startRealtimeListener() {
     if (this._realtimeUnsubscribe) return; // Already listening
     if (!window.FirestoreDB || !window.FirestoreDB.db) return;
 

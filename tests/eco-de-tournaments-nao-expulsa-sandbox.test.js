@@ -184,7 +184,7 @@ W.AppStore.currentUser = DONO;
 W._sbIdsConhecidos = {};
 ['_montandoPesados', '_ultimaMontagem', '_tentativasDePartes', '_retentandoPartes', '_partesEmErro']
   .forEach((m) => { W.AppStore[m] = {}; });
-W.AppStore.startRealtimeListener(DONO.email);
+W.AppStore.startRealtimeListener();
 const cbT = (CB.tournaments || [])[0];
 const cbSb = (CB.sandboxes || [])[0];
 ok('o ouvinte de `tournaments` abriu', typeof cbT === 'function');

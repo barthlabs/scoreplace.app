@@ -98,5 +98,10 @@ ok(!/currentUser\.uid \|\| currentUser\.email/.test(authView) &&
   !/actor\.name \|\| actor\.email/.test(functionsIndex),
   '㉕ convite, criação e notificações não usam e-mail como identidade ou nome persistido');
 
+const store = fs.readFileSync(path.join(ROOT, 'js/store.js'), 'utf8');
+ok(/startRealtimeListener\(\)/.test(authView) && /startRealtimeListener\(\)\s*\{/.test(store) &&
+  /where\('memberUids', 'array-contains', _uid\)/.test(store),
+  '㉖ ouvinte de torneios recebe e consulta exclusivamente UID');
+
 console.log(fail ? ('  ' + fail + ' FALHA(S), ' + pass + ' ok') : ('  ✓ ' + pass + ' asserções'));
 process.exit(fail ? 1 : 0);

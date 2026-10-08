@@ -4467,12 +4467,11 @@ async function simulateLoginSuccess(user) {
     window.AppStore.stopRealtimeListener();
   }
 
-  // Start real-time listener scoped to the user's own tournaments
-  // (creator / organizer / active co-host / participant via memberEmails[]).
+  // Start real-time listener scoped to the user's own tournaments by UID.
   // Without the scope every change in the DB fires a full snapshot to every
   // client — doesn't scale past a few users.
   if (window.AppStore.startRealtimeListener) {
-    window.AppStore.startRealtimeListener(window.AppStore.currentUser && window.AppStore.currentUser.email);
+    window.AppStore.startRealtimeListener();
   } else if (window.AppStore.loadFromFirestore) {
     await window.AppStore.loadFromFirestore();
   }

@@ -2129,7 +2129,7 @@ window.FirestoreDB = {
 
   // Scoped load: returns only tournaments the user has a relationship with
   // (creator / organizer / active co-host / participant) via the denormalized
-  // `memberEmails` field. Replaces `loadAllTournaments()` at login once the
+  // `memberUids` field. Replaces `loadAllTournaments()` at login once the
   // backfill is complete and the composite index is live. Kept side-by-side
   // for now so the swap is a one-line change.
   // v1.2.2: UID ONLY (era loadMyTournaments(email) → where memberEmails).
