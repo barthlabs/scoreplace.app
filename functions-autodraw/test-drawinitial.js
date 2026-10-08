@@ -373,7 +373,7 @@ console.log('══════════════════════�
     id: 'cluster-diversity', format: 'Eliminatórias Simples', status: 'active',
     participants: names.map((displayName, i) => ({ uid: 'cluster-' + i, displayName })),
     standings: names.map(name => ({ name, points: 0, wins: 0, losses: 0, draws: 0, pointsDiff: 0, played: 0 })),
-    phases: [{ kind: 'classification', rounds: 4, classification: { structure: 'rounds', pairing: { strategy: 'ranking_clusters', entryMode: 'fixed', clusterSize: 4, rematchPolicy: 'exhaust_cluster_before_repeat' } } }],
+    phases: [{ kind: 'classification', rounds: 4, classification: { structure: 'round_robin', pairing: { strategy: 'ranking_clusters', entryMode: 'fixed', clusterSize: 4, rematchPolicy: 'exhaust_cluster_before_repeat' } } }],
     currentPhaseIndex: 0,
     rounds: [{ round: 1, matches: [{ p1: 'A', p2: 'B' }, { p1: 'C', p2: 'D' }] }]
   };
@@ -425,7 +425,7 @@ console.log('══════════════════════�
   const t = {
     id: 'dynamic-ranking-clusters', format: 'Eliminatórias Simples', status: 'active',
     participants: names.map((displayName, i) => ({ uid: 'dynamic-' + i, displayName })),
-    phases: [{ kind: 'classification', rounds: 5, classification: { structure: 'rounds', pairing: { strategy: 'ranking_clusters', entryMode: 'fixed', clusterSize: 4, rematchPolicy: 'exhaust_cluster_before_repeat' } } }],
+    phases: [{ kind: 'classification', rounds: 5, classification: { structure: 'round_robin', pairing: { strategy: 'ranking_clusters', entryMode: 'fixed', clusterSize: 4, rematchPolicy: 'exhaust_cluster_before_repeat' } } }],
     currentPhaseIndex: 0,
     rounds: [
       { round: 1, matches: [

@@ -23,14 +23,17 @@ console.log('\n== Suíço-pow2 pelo cliente → CF ==');
   const t = buildViaDraw('Eliminatórias Simples', 12, { p2Resolution: 'swiss' });
   const ph = Array.isArray(t.phases) ? t.phases : [];
   ok('individuais → 2 fases', ph.length === 2, 'phases=' + ph.length);
-  ok('individuais → fase 0 é Suíço (liga/Suíço)',
-    !!(ph[0] && ph[0].formatCode === 'liga' && /su[ií]ç?o|swiss/i.test(String(ph[0].format))),
-    JSON.stringify(ph[0] && { fc: ph[0].formatCode, f: ph[0].format }));
+  ok('individuais → fase 0 é classificatória por rodadas no contrato canônico',
+    !!(ph[0] && ph[0].kind === 'classification' && ph[0].classification &&
+       ph[0].classification.structure === 'round_robin' &&
+       ph[0].classification.pairing && ph[0].classification.pairing.strategy === 'ranking_clusters'),
+    JSON.stringify(ph[0] && { kind: ph[0].kind, c: ph[0].classification }));
   ok('individuais → fase 1 puxa top-8 (rankTo=8)',
     !!(ph[1] && ph[1].source && ph[1].source.type === 'previous_phase' &&
        ph[1].source.mapping && ph[1].source.mapping[0] && ph[1].source.mapping[0].rankTo === 8),
     JSON.stringify(ph[1] && ph[1].source));
-  ok('individuais → classifyFormat=swiss', t.classifyFormat === 'swiss', String(t.classifyFormat));
+  ok('individuais → não persiste marcador suíço de topo', t.classifyFormat == null && t.currentStage == null,
+    JSON.stringify({ classifyFormat: t.classifyFormat, currentStage: t.currentStage }));
   ok('individuais → standings com 12 entradas', Array.isArray(t.standings) && t.standings.length === 12,
     'standings=' + (t.standings && t.standings.length));
   ok('individuais → rodada 1 gerada (6 jogos)',

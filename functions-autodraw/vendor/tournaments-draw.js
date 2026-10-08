@@ -602,7 +602,11 @@ window._buildClassificationRoundsDraw = function (t) {
     var _origFormat = t.format || 'Eliminatórias Simples';
     var _origIsDouble = _origFormat === 'Dupla Eliminatória';
     t.phases = [
-        { name: 'Classificatória', kind: 'classification', classification: { structure: 'rounds', pairing: Object.assign({ strategy: 'ranking_clusters', entryMode: 'fixed', rematchPolicy: 'exhaust_cluster_before_repeat' }, _transition.pairing || {}) }, formatCode: 'classification_rounds', rounds: _rounds, source: { type: 'enrollment' } },
+        // `round_robin` é a única estrutura de uma classificatória sem grupos.
+        // O número de rodadas e o pareamento por ranking são configuração da fase,
+        // não uma terceira estrutura chamada "rounds". Isso mantém o caminho de
+        // corte para pow2 no mesmo contrato dos torneios criados hoje.
+        { name: 'Classificatória', kind: 'classification', classification: { structure: 'round_robin', pairing: Object.assign({ strategy: 'ranking_clusters', entryMode: 'fixed', rematchPolicy: 'exhaust_cluster_before_repeat' }, _transition.pairing || {}) }, formatCode: 'classification_rounds', rounds: _rounds, source: { type: 'enrollment' } },
         { name: _origFormat, kind: 'elimination', elimination: { bracketType: _origIsDouble ? 'double' : 'single' }, formatCode: _origIsDouble ? 'elim_dupla' : 'elim_simples', format: _origFormat, source: { type: 'previous_phase', mapping: [{ dest: 'main', rankFrom: 1, rankTo: _swLo }] }, fixedPairs: false }
     ];
     t.currentPhaseIndex = 0;
