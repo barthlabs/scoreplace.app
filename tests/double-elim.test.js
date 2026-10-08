@@ -3,7 +3,7 @@
  * Congela a topologia e o ciclo de vida da Dupla Eliminatória sobre o código REAL:
  *   • `window._buildDoubleElimBracket` (tournaments-draw.js) monta upper + lower + grand.
  *   • `window._advanceWinner` (bracket-logic.js) roteia vencedor→próxima e PERDEDOR→lower
- *     (loser-drop, guardado por `t.format==='Dupla Eliminatória'`).
+ *     (loser-drop, decidido pela fase canônica quando ela existir).
  * Invariantes (pow2 4 e 8): upper drop pra lower (loserMatchId), upper final + lower final
  *   convergem na ÚNICA grande final, e jogando TUDO sai 1 campeão com ZERO órfãos (nenhum
  *   match real fica sem vencedor ou com slot 'TBD' pendente).
@@ -20,7 +20,15 @@ const isReal = (x) => x && x !== 'TBD' && !/BYE/.test(String(x));
 function buildDE(n) {
   // upper R1: n/2 jogos, semente adjacente (T1×T2, T3×T4 …) — basta pra topologia.
   const names = []; for (let i = 1; i <= n; i++) names.push('T' + i);
-  const t = { id: 'de' + n, format: 'Dupla Eliminatória', matches: [] };
+  const t = {
+    id: 'de' + n,
+    // O rótulo de topo deliberadamente contradiz a fase: prova que o motor
+    // não volta ao legado quando um documento já é canônico.
+    format: 'Liga',
+    phases: [{ kind: 'elimination', elimination: { bracketType: 'double' } }],
+    currentPhaseIndex: 0,
+    matches: []
+  };
   for (let i = 0; i < n / 2; i++) {
     t.matches.push({ id: 'u' + i, round: 1, bracket: 'upper',
       p1: names[2 * i], p2: names[2 * i + 1],

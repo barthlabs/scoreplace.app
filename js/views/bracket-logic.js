@@ -1936,6 +1936,30 @@ function _congelaGruposEncerrados(t) {
 }
 window._congelaGruposEncerrados = _congelaGruposEncerrados;
 
+// Formato da chave é uma propriedade da fase canônica. `t.format` só continua
+// como fallback para documentos que ainda não passaram pela projeção segura de
+// legado. Não usar o rótulo histórico quando a fase já o contradiz.
+function _bracketPhaseFormat(t) {
+  var phases = t && Array.isArray(t.phases) ? t.phases : null;
+  var phase = phases && phases[t.currentPhaseIndex || 0];
+  if (!phase || !phase.kind) return null;
+  if (phase.kind !== 'elimination') return 'classification';
+  return phase.elimination && phase.elimination.bracketType === 'double' ? 'double' : 'single';
+}
+
+function _isDoubleEliminationBracket(t) {
+  var canonical = _bracketPhaseFormat(t);
+  return canonical ? canonical === 'double' : !!(t && t.format === 'Dupla Eliminatória');
+}
+
+function _isEliminationBracket(t) {
+  var canonical = _bracketPhaseFormat(t);
+  if (canonical) return canonical === 'single' || canonical === 'double';
+  var legacy = (t && t.format) || '';
+  return legacy === 'Eliminatórias Simples' || legacy === 'Eliminatória Simples' ||
+    legacy === 'Dupla Eliminatória' || legacy === 'Fase de Grupos';
+}
+
 function _advanceWinner(t, completedMatch) {
   const winner = completedMatch.winner;
   const loser = winner === completedMatch.p1 ? completedMatch.p2 : completedMatch.p1;
@@ -1954,7 +1978,7 @@ function _advanceWinner(t, completedMatch) {
   // o match tem phase:'playoff' + bracket ('upper'/'lower'/'grand'). Aditivo e
   // guardado: playoff de eliminatória simples não tem `bracket` → comportamento
   // intocado; Liga/torneios normais idem.
-  const isDupla = t.format === 'Dupla Eliminatória'
+  const isDupla = _isDoubleEliminationBracket(t)
     || (completedMatch.phase === 'playoff' && !!completedMatch.bracket);
 
   if (completedMatch.nextMatchId) {
@@ -2980,13 +3004,12 @@ function _updateDuplaElimClassification(t) {
 
 function _updateProgressiveClassification(t) {
   if (!t.matches || t.matches.length === 0) return;
-  var fmt = t.format || '';
-  if (fmt.indexOf('Elim') === -1 && fmt.indexOf('Fase') === -1) return;
+  if (!_isEliminationBracket(t)) return;
 
   // v1.0.90-beta: Dupla Eliminatória usa lógica DEDICADA (lower bracket + GF).
   // A função abaixo (single-elim) trata upper-final winner=1º que é ERRADO em
   // DE — winner do upper-final vai pra GF, ainda pode ser 2º.
-  if (fmt === 'Dupla Eliminatória') {
+  if (_isDoubleEliminationBracket(t)) {
     _updateDuplaElimClassification(t);
     return;
   }
@@ -3807,9 +3830,7 @@ function _maybeFinishElimination(t) {
   // checava 'Eliminatória Simples' (singular) → a função saía cedo e o torneio
   // NUNCA auto-encerrava (ficava "em andamento" mesmo com campeão definido).
   // Agora aceita ambos (plural atual + singular legado).
-  var _emFmt = t.format || '';
-  if (_emFmt !== 'Eliminatórias Simples' && _emFmt !== 'Eliminatória Simples' &&
-      _emFmt !== 'Dupla Eliminatória' && _emFmt !== 'Fase de Grupos') return;
+  if (!_isEliminationBracket(t)) return;
 
   const allMatches = t.matches || [];
   if (allMatches.length === 0) return;
@@ -3892,7 +3913,7 @@ function _ensureFutureRounds(t, dryRun, opts) {
   if (!t.matches || !t.matches.length) return false;
   // Repechage tournaments already have all rounds built — skip
   if (t.hasRepechage) return false;
-  const isDupla = t.format === 'Dupla Eliminatória';
+  const isDupla = _isDoubleEliminationBracket(t);
 
   // Filtrar apenas matches do bracket principal (upper ou sem bracket)
   const mainMatches = isDupla
@@ -4042,7 +4063,7 @@ function _maybeGenerate3rdPlace(t) {
   // 'if (t.thirdPlaceMatch && !t.thirdPlaceMatch.winner) return' — torneio
   // nunca finalizava. User: 'de novo diz que são 15 partidas mas só
   // renderiza 14 delas. tudo preenchido e não termina'.
-  if (t && t.format === 'Dupla Eliminatória') {
+  if (_isDoubleEliminationBracket(t)) {
     // Cleanup: deleta thirdPlaceMatch fantasma criado por bug anterior em
     // torneios velhos. Senão t.thirdPlaceMatch ainda aparece em
     // _collectAllMatches inflando o total.
