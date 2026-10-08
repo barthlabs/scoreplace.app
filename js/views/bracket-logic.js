@@ -6137,7 +6137,16 @@ window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPl
 function _generateNextRoundForPlayers(t, category, _rn, det) {
   det = det || {};
   const standings = _computeStandings(t, category);
-  const _isLigaFmtHere = window._isLigaFormat && window._isLigaFormat(t);
+  // O rótulo legado "Liga" não pode sequestrar uma classificatória de
+  // entradas fixas. A política canônica da fase decide: `entryMode:'fixed'`
+  // usa o pareamento ranking×ranking abaixo; somente entradas rotativas seguem
+  // o motor de parceiros/adversários da Liga. Isso também cobre a configuração
+  // criada pelo FORMAT2, não apenas a antiga ponte de leitura do Suíço.
+  var _phaseForPairing = Array.isArray(t.phases) ? t.phases[t.currentPhaseIndex || 0] : null;
+  var _phasePairing = _phaseForPairing && _phaseForPairing.classification && _phaseForPairing.classification.pairing;
+  var _fixedRankingEntries = _phasePairing && typeof _phasePairing === 'object' &&
+    _phasePairing.strategy === 'ranking_clusters' && _phasePairing.entryMode === 'fixed';
+  const _isLigaFmtHere = !!(window._isLigaFormat && window._isLigaFormat(t)) && !_fixedRankingEntries;
   // v2.5.1: ver comentário em _generateReiRainhaRoundForPlayers — round = maior
   // round existente +1, pra categorias do mesmo sorteio compartilharem a rodada.
   const roundNum = (typeof _rn === 'number') ? _rn : (((t.rounds || []).reduce(function (mx, c) { return Math.max(mx, (c && c.round) || 0); }, 0)) + 1);

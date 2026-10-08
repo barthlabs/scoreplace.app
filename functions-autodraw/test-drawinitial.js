@@ -382,6 +382,22 @@ console.log('══════════════════════�
   ok('cluster → esgota adversários inéditos antes de repetir', pairs.join(',') === 'A|C,B|D', pairs.join(','));
 })();
 
+// A configuração nova pode coexistir com o rótulo legado "Liga", mas entradas
+// fixas não podem cair no gerador rotativo de parceiros. O contrato da fase vence.
+(function () {
+  const names = ['A', 'B', 'C', 'D'];
+  const t = {
+    id: 'fixed-ranking-beats-legacy-liga', format: 'Liga', status: 'active', teamSize: 1,
+    participants: names.map((displayName, i) => ({ uid: 'fixed-' + i, displayName })),
+    phases: [{ kind: 'classification', rounds: 3, classification: { structure: 'round_robin', pairing: { strategy: 'ranking_clusters', entryMode: 'fixed', clusterSize: 4, rematchPolicy: 'exhaust_cluster_before_repeat' } } }],
+    currentPhaseIndex: 0,
+    rounds: []
+  };
+  core._window._generateNextRound(t, { ts: 1231 });
+  const real = (t.rounds[0].matches || []).filter(m => !m.isBye && !m.isSitOut);
+  ok('classificatória fixa → não entra no gerador rotativo da Liga', real.length === 2 && real.every(m => !m.isMonarch && !m.team1 && !m.team2), JSON.stringify(real));
+})();
+
 // Cluster não é uma divisão congelada no sorteio inicial. A cada rodada ele nasce
 // novamente da classificação acumulada: aqui F e H começam no bloco inferior,
 // mas sobem após os resultados e passam a disputar o bloco superior na rodada 3.
