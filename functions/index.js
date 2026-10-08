@@ -91,6 +91,7 @@ const _enrollCore = require("./enroll-core");
 const _emailFail = require("./email-failure-core");
 const _categoryEligibility = require("./category-eligibility-core");
 const _registrationCore = require("./registration-core");
+const _registrationMigration = require("./registration-migration-core");
 const _registrationLifecycle = require("./registration-lifecycle-core");
 const _splitParts = require("./split-parts.js");   // torneio dividido: elenco na subcoleção
 const _refereeRoster = require("./vendor/referee-roster.js"); // escala de arbitragem: contrato puro e sem contato
@@ -4067,6 +4068,73 @@ exports.previewCanonicalRegistrationMigration = onCall(
         unsupported: report.unsupported.length,
       },
     };
+  }
+);
+
+// Materializa exclusivamente a prévia que o próprio servidor acabou de poder
+// calcular. O fingerprint protege contra elenco/categoria alterados entre a
+// conferência humana e o clique; conflito nunca é sobrescrito. A migração não
+// toca participants, placares, chaves nem pares legados — estes continuam sendo
+// a projeção de jogo enquanto o leitor canônico é introduzido gradualmente.
+exports.applyCanonicalRegistrationMigration = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
+    const data = request.data || {};
+    const tournamentId = String(data.tournamentId || "").trim();
+    const expectedFingerprint = String(data.fingerprint || "").trim();
+    if (!tournamentId || !expectedFingerprint) {
+      throw new HttpsError("invalid-argument", "tournamentId e fingerprint são obrigatórios");
+    }
+
+    const db = admin.firestore();
+    const ref = db.collection("tournaments").doc(tournamentId);
+    return await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
+      const tournament = await _splitParts.hidratar(tx, ref, snap.data() || {}, ["participants"]);
+      if (!_isTournamentOrgCaller(tournament, callerUid)) {
+        throw new HttpsError("permission-denied", "só a organização migra inscrições");
+      }
+      const records = await _splitParts.lerRegistrosDaParte(tx, ref, "participants");
+      const report = _registrationCore.projectLegacyRoster(tournamentId, records);
+      if (report.fingerprint !== expectedFingerprint) {
+        throw new HttpsError("failed-precondition", "o elenco mudou; gere uma nova prévia antes de migrar");
+      }
+      const existingSnap = await tx.get(ref.collection("registrations"));
+      const existingById = Object.fromEntries(existingSnap.docs.map((doc) => [doc.id, doc.data() || {}]));
+      let decision;
+      try { decision = _registrationMigration.decideMaterialization(tournamentId, report, existingById); }
+      catch (error) { throw new HttpsError("failed-precondition", error.message); }
+      if (decision.conflicts.length) {
+        throw new HttpsError("failed-precondition", "há inscrições canônicas divergentes; a migração não sobrescreve dados");
+      }
+      decision.creates.forEach((document) => {
+        tx.create(ref.collection("registrations").doc(document.registrationId), Object.assign({}, document, {
+          createdAt: _FV.serverTimestamp(),
+          updatedAt: _FV.serverTimestamp(),
+        }));
+      });
+      tx.set(ref, {
+        canonicalRegistrationMigration: {
+          fingerprint: report.fingerprint,
+          registrationCount: decision.desired.length,
+          fixedPairCount: report.formedPairs.length,
+          appliedBy: callerUid,
+          appliedAt: _FV.serverTimestamp(),
+        },
+        updatedAt: _FV.serverTimestamp(),
+      }, { merge: true });
+      return {
+        outcome: decision.creates.length ? "migrated" : "already_migrated",
+        created: decision.creates.length,
+        already: decision.already.length,
+        registrations: decision.desired.length,
+        formedPairs: report.formedPairs.length,
+        fingerprint: report.fingerprint,
+      };
+    });
   }
 );
 
