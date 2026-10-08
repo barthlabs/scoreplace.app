@@ -1707,9 +1707,13 @@ window._toggleLigaActive = function(tId, isActive) {
 
 window._buildLigaActiveToggleHtml = function(t) {
   if (!t) return '';
-  var isLiga = (typeof window._isLigaFormat === 'function')
-    ? window._isLigaFormat(t)
-    : (t.format === 'Liga' || t.format === 'Ranking');
+  // Disponibilidade é comportamento da FASE atual. Um torneio que nasceu como
+  // Liga não pode manter este comando quando avançou para a eliminatória.
+  var isLiga = Array.isArray(t.phases)
+    ? (typeof window._faseCorrenteEhLiga === 'function' && window._faseCorrenteEhLiga(t))
+    : ((typeof window._isLigaFormat === 'function')
+      ? window._isLigaFormat(t)
+      : (t.format === 'Liga' || t.format === 'Ranking'));
   if (!isLiga) return '';
   // v2.7.38: organizador desligou a auto-desativação → o controle some de TODOS os
   // inscritos (e todos ficam ativos, ver _getActiveLigaPlayers).

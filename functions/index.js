@@ -4814,6 +4814,11 @@ exports.setLigaAvailability = onCall(
       const snap = await tx.get(ref);
       if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
       const t = await _splitParts.hidratar(tx, ref, snap.data() || {});
+      if (!_ligaAvailability.allowsLigaAvailability(t)) {
+        console.warn("[setLigaAvailability] recusado uid=" + callerUid + " tid=" + tournamentId +
+          " motivo=fase-atual-nao-e-classificatoria-pontos-corridos");
+        throw new HttpsError("failed-precondition", "a disponibilidade só pode ser alterada durante a fase classificatória por pontos corridos");
+      }
       const before = JSON.parse(JSON.stringify(t));
       let update;
       try { update = _ligaAvailability.applyLigaAvailability(t, callerUid, data.isActive, _ligaDrawWindow); }
