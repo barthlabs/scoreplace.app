@@ -329,8 +329,8 @@ function computeEnroll(data, participantObj, extraUpdates, nowMs) {
 
 // Constrói o PARCEIRO (lado `n`) de uma dupla como inscrito SOLO. Espelha
 // window._pairPartnerSolo (js/views/tournaments.js) e o solo() de computeSplitPair
-// (pair-core.js) — o solo herda o que era POR MEMBRO (nº de inscrição, contato,
-// categoria). Documento legado sem uid nem identificador continua como STRING do nome; vaga
+// (pair-core.js) — o solo herda somente o que era POR MEMBRO no torneio (nº de inscrição
+// e categoria). Documento legado sem uid nem identificador continua como STRING do nome; vaga
 // manual atual volta como objeto para não perder manualParticipantId. Sem identidade/nome → null.
 /* ⛔⛔ O NÚMERO DE INSCRIÇÃO NASCE AQUI, DENTRO DA TRANSAÇÃO (24/set/2026).
  * Relato do dono: quem entra na lista de espera aparecia com 1, 2, 3, 4 num torneio com
@@ -354,7 +354,7 @@ function _seqHelpers() {
     },
     displayName: function (value) {
       if (typeof value === 'string') return value.trim();
-      return String((value && (value.displayName || value.name || value.email)) || '').trim();
+      return String((value && (value.displayName || value.name)) || '').trim();
     }
   };
 }
@@ -376,19 +376,13 @@ function pairPartnerSolo(entry, n) {
   if (!uid && !manualId) return nome || null;
   var o = { ligaActive: true };
   if (uid) o.uid = uid;
-  if (!uid && manualId) o.manualParticipantId = manualId;
-  if (nome) { o.displayName = nome; o.name = nome; }
+  if (!uid && manualId) {
+    o.manualParticipantId = manualId;
+    if (nome) { o.displayName = nome; o.name = nome; }
+  }
   if (g('Seq') != null) o.enrollSeq = g('Seq');
-  // CAMPO DE PERFIL NÃO É GRAVADO EM QUEM TEM UID (email/photoURL/gender/birthDate).
-  // Antes eram copiados aqui, e o servidor não passa pelo strip do cliente
-  // (identity-core._stripUidEntryNames) — então a CF era a ÚNICA porta por onde
-  // cópia de perfil ainda entrava no torneio (medido em produção: 2 entradas com
-  // email/gender/skillBySport, ambas de uid com perfil VIVO). O argumento que
-  // justifica preservar o NOME — sem perfil, o nome é a última âncora de identidade
-  // do uid órfão — NÃO vale pra esses campos: eles nunca identificam ninguém, e o
-  // app já os resolve pelo uid (_pGender/_pBirth/_userProfileCache, e a própria CF
-  // via _enrichParticipantsFromProfiles). Guardar cópia só cria um segundo lugar
-  // onde o dado da pessoa vive — e que o "apagar do perfil" não alcança.
+  // Conta autenticada permanece somente pelo UID. Perfil (inclusive nome) é
+  // resolvido na leitura; somente a vaga manual conserva seu rótulo digitado.
   if (entry.category) o.category = entry.category;
   if (Array.isArray(entry.categories)) o.categories = entry.categories.slice();
   if (entry.categorySource) o.categorySource = entry.categorySource;

@@ -232,6 +232,8 @@ try { C.normalizeExtraUpdates({ status: 'finished' }); ok('extraUpdates recusa p
   eq('deenroll dupla → Kelly não é mais dupla', !!(kelly && (kelly.p1Uid || kelly.p2Uid)), false);
   eq('deenroll dupla → Kelly herda nº de inscrição', kelly && kelly.enrollSeq, 3);
   eq('deenroll dupla → Kelly herda categoria', kelly && kelly.category, 'Misto');
+  ok('deenroll dupla → conta preserva somente uid, não o nome do perfil',
+    kelly && !Object.prototype.hasOwnProperty.call(kelly, 'displayName') && !Object.prototype.hasOwnProperty.call(kelly, 'name'));
   // TRAP re-inscrição: o uid de quem saiu não pode sobrar em NENHUM slot, senão
   // _userMatchesParticipant ainda o vê inscrito e "Inscrever-se" vira no-op.
   const rodrigoAnywhere = r.participants.some(p =>
@@ -275,6 +277,7 @@ try { C.normalizeExtraUpdates({ status: 'finished' }); ok('extraUpdates recusa p
   eq('deenroll → parceiro manual vira objeto', typeof guest, 'object');
   eq('deenroll → parceiro manual preserva id estável', guest && guest.manualParticipantId, 'manual-convidado-42');
   eq('deenroll → parceiro manual preserva nº de inscrição', guest && guest.enrollSeq, 17);
+  eq('deenroll → parceiro manual preserva o rótulo digitado', guest && guest.displayName, 'Convidado com vaga');
 })();
 
 // ── Desinscrição de quem não está → notFound ─────────────────────────────────
