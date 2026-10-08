@@ -109,6 +109,19 @@ console.log('──── result-approval-uid ────');
   eq(W._userTeamInMatch(t, m, { displayName: 'Ana Silva', email: 'ana@x.com' }), 0, 'sem uid (só nome/email) → 0 (uid e nada mais)');
 })();
 
+// _sideBelongsToUser alimenta chips e ações do card. Nome e e-mail iguais aos do
+// slot jamais podem tornar uma segunda conta dona de uma vaga: somente o uid da
+// entrada estrutural abre essa porta.
+(function () {
+  const t = mkT();
+  eq(W._sideBelongsToUser(t, 'Dupla A', { uid: 'uA1', displayName: 'Ana', email: 'ana@x.com' }), true,
+    'uid estrutural da dupla é reconhecido');
+  eq(W._sideBelongsToUser(t, 'Dupla A', { uid: 'conta-secundaria', displayName: 'Dupla A', email: 'ana@x.com' }), false,
+    'mesmo nome/e-mail não assume a vaga de outro uid');
+  eq(W._sideBelongsToUser(t, 'Dupla A', { displayName: 'Dupla A', email: 'ana@x.com' }), false,
+    'sem uid não assume vaga');
+})();
+
 // _isOpposingProposer — proponente uA1 (lado 1); adversário uB1 (lado 2) → true; parceiro uA2 → false
 (function () {
   const t = mkT(), m = t.matches[0];

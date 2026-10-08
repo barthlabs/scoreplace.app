@@ -7022,7 +7022,6 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   // Detect if current user participates in this match
   const _cu = window.AppStore && window.AppStore.currentUser;
   const _cuName = _cu ? (_cu.displayName || '') : '';
-  const _cuEmail = _cu ? (_cu.email || '') : '';
 
   // v2.1.85: Reverter W.O. — partidas decididas por W.O. de time (m.wo) ganham
   // um botão pra autoridade desfazer o W.O. (reabre o jogo + libera ausentes).
@@ -7037,16 +7036,13 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     : '';
 
   // v0.17.26: bloco de Approve/Reject/Cancel MOVIDO pra depois das const
-  // _cu/_cuEmail. Antes ficava entre headerConfirmBtn e headerEditBtn —
-  // mas usava _cu e _cuEmail que ainda não tinham sido declarados.
+  // _cu. Antes ficava entre headerConfirmBtn e headerEditBtn —
+  // mas usava o usuário atual antes de ele ser declarado.
   // Quando hasPending=true, JavaScript dava ReferenceError de TDZ em const
   // antes de inicializar. Fix: mover bloco inteiro pra cá, sem mudar lógica.
   let pendingActionBtns = '';
   if (hasPending) {
-    var _isProposerSelf = !!(_cu && (
-      (_pr.proposedBy && _cu.uid && _pr.proposedBy === _cu.uid) ||
-      (_pr.proposedByEmail && _cuEmail && _pr.proposedByEmail === _cuEmail)
-    ));
+    var _isProposerSelf = !!(_cu && _cu.uid && _pr.proposedBy === _cu.uid);
     var _isUserOrgInner = (typeof window._isUserOrgOrCoHost === 'function')
       ? window._isUserOrgOrCoHost(t, _cu)
       : isOrg;
@@ -7055,8 +7051,8 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
       ? window._userTeamInMatch(t, m, _cu)
       : 0;
     var _proposerSideInner = 0;
-    if (_pr && (_pr.proposedBy || _pr.proposedByEmail) && typeof window._userTeamInMatch === 'function') {
-      _proposerSideInner = window._userTeamInMatch(t, m, { uid: _pr.proposedBy, email: _pr.proposedByEmail });
+    if (_pr && _pr.proposedBy && typeof window._userTeamInMatch === 'function') {
+      _proposerSideInner = window._userTeamInMatch(t, m, { uid: _pr.proposedBy });
     }
     var _isOpposingMember = _userSideInner > 0 && _userSideInner !== _proposerSideInner;
     // Authority (org / co-host / confirmed arbiter): edits confirm directly.

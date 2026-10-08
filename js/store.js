@@ -4444,7 +4444,7 @@ window._tournamentDetailSig = function (t) {
     // consenso (contra-proposta / em disputa).
     var _pr = m.pendingResult;
     var _prc = _pr
-      ? ('P' + (_pr.proposedBy || _pr.proposedByEmail || '') + ':' +
+      ? ('P' + (_pr.proposedBy || '') + ':' +
          (_pr.scoreP1 != null ? _pr.scoreP1 : '') + '-' + (_pr.scoreP2 != null ? _pr.scoreP2 : '') +
          (_pr.isCounterProposal ? ':C' : '') + (_pr.disputed ? ':D' : ''))
       : '';

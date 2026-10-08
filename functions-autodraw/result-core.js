@@ -311,8 +311,7 @@ function applyResult(t, opts) {
     };
     m.pendingResult = Object.assign({}, payload.pending || {}, {
       proposedBy: actor.uid || null,
-      proposedByEmail: actor.email || null,
-      proposedByName: actor.name || actor.email || 'Jogador',
+      proposedByName: actor.name || 'Jogador',
       proposedAt: (typeof o.now === 'number') ? o.now : Date.now(),
       isCounterProposal: true,
       originalProposal: original
@@ -337,7 +336,7 @@ function applyResult(t, opts) {
     }
     pending.disputed = true;
     pending.disputedBy = actor.uid || null;
-    pending.disputedByName = actor.name || actor.email || 'Jogador';
+    pending.disputedByName = actor.name || 'Jogador';
     pending.disputedAt = (typeof o.now === 'number') ? o.now : Date.now();
     if (typeof win._propagateMatchUpdate === 'function') win._propagateMatchUpdate(t, m);
     if (o.logMessage) pushHistory(t, o.logMessage, o.now);
@@ -372,8 +371,7 @@ function applyResult(t, opts) {
   if (needsApproval && !o.forceApply) {
     m.pendingResult = Object.assign({}, payload.pending || {}, {
       proposedBy: actor.uid || null,
-      proposedByEmail: actor.email || null,
-      proposedByName: actor.name || actor.email || 'Jogador',
+      proposedByName: actor.name || 'Jogador',
       proposedAt: (typeof o.now === 'number') ? o.now : Date.now()
     });
     if (typeof win._propagateMatchUpdate === 'function') win._propagateMatchUpdate(t, m);

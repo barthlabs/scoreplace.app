@@ -706,7 +706,7 @@ function _sideIndex(t) {
   return mapa;
 }
 function _sideBelongsToUser(t, sideStr, user) {
-  if (!t || !sideStr || !user) return false;
+  if (!t || !sideStr || !user || !user.uid) return false;
   if (typeof sideStr !== 'string' || sideStr === 'TBD' || sideStr === 'BYE') return false;
   var parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
   var pp = null;
@@ -722,30 +722,10 @@ function _sideBelongsToUser(t, sideStr, user) {
     }
   }
   if (pp && typeof pp === 'object') {
-    if (user.uid) {
-      var _uids = (typeof window._participantUids === 'function')
-        ? window._participantUids(pp)
-        : [pp.uid, pp.p1Uid, pp.p2Uid].filter(Boolean);
-      if (_uids.indexOf(user.uid) !== -1) return true;
-    }
-    if (user.email && pp.email && pp.email === user.email) return true;
-    if (user.email && pp.email_lower && pp.email_lower === (user.email || '').toLowerCase()) return true;
-  }
-  // Fallback nome/email (legado / informal): nome do usuário aparece no nome do
-  // lado, incluindo dupla "A / B".
-  var dn = user.displayName || '';
-  var em = user.email || '';
-  // v1.7.78: EXATO. `indexOf` fazia "Mariana C" casar com "Mariana Ciocci" e
-  // "Ana" com "Ana Paula" — identidade nunca foi substring. Dupla "A / B"
-  // segue coberta pelo split logo abaixo.
-  if (dn && sideStr === dn) return true;
-  if (em && sideStr === em) return true;
-  if (sideStr.indexOf('/') !== -1) {
-    var members = sideStr.split('/').map(function(n) { return n.trim(); });
-    for (var mi = 0; mi < members.length; mi++) {
-      if (dn && members[mi] === dn) return true;
-      if (em && members[mi] === em) return true;
-    }
+    var _uids = (typeof window._participantUids === 'function')
+      ? window._participantUids(pp)
+      : [pp.uid, pp.p1Uid, pp.p2Uid].filter(Boolean);
+    return _uids.indexOf(user.uid) !== -1;
   }
   return false;
 }
@@ -1715,8 +1695,7 @@ window._commitSetsResult = function (tId, matchId, sets, p1Sets, p2Sets, isFixed
     var _pendingGsmObj = {
       kind: 'gsm',
       proposedBy: _curUserGsm.uid || null,
-      proposedByEmail: _curUserGsm.email || null,
-      proposedByName: _curUserGsm.displayName || _curUserGsm.email || 'Jogador',
+      proposedByName: _curUserGsm.displayName || 'Jogador',
       proposedAt: Date.now(),
       winner: _proposedWinnerGsm,
       winnerUids: (_proposedWinnerUids && _proposedWinnerUids.length) ? _proposedWinnerUids.slice() : null,
@@ -2434,8 +2413,7 @@ window._saveResultInline = function (tId, matchId) {
     var _pendingPayload = {
       kind: 'inline',
       proposedBy: _curUser.uid || null,
-      proposedByEmail: _curUser.email || null,
-      proposedByName: _curUser.displayName || _curUser.email || 'Jogador',
+      proposedByName: _curUser.displayName || 'Jogador',
       proposedAt: Date.now(),
       winner: _proposedWinner,
       draw: _proposedDraw,
@@ -2700,7 +2678,7 @@ window._saveResultInline = function (tId, matchId) {
 function _isOpposingProposer(t, m, cu) {
   if (!cu || !m || !m.pendingResult) return false;
   var pr = m.pendingResult;
-  var proposerSide = (pr.proposedBy || pr.proposedByEmail) ? _userTeamInMatch(t, m, { uid: pr.proposedBy, email: pr.proposedByEmail }) : 0;
+  var proposerSide = pr.proposedBy ? _userTeamInMatch(t, m, { uid: pr.proposedBy }) : 0;
   var userSide = _userTeamInMatch(t, m, cu);
   return userSide > 0 && userSide !== proposerSide;
 }
@@ -2930,7 +2908,7 @@ window._contestResult = function(tId, matchId) {
   // de disputa da chave, onde ele resolve (Confirmar / Editar / Refazer). Quem propôs
   // segue sem contestar a própria proposta — pra isso existe o Editar.
   var _souAutoridade = (typeof _isUserOrgOrCoHost === 'function') && _isUserOrgOrCoHost(t, cu);
-  var _souProponente = !!(pr && ((cu.uid && pr.proposedBy === cu.uid) || (cu.email && pr.proposedByEmail === cu.email)));
+  var _souProponente = !!(pr && cu.uid && pr.proposedBy === cu.uid);
   if (!_isOpposingProposer(t, m, cu) && !(_souAutoridade && !_souProponente)) {
     showNotification('Sem permissão', 'Só o time adversário ou quem organiza pode contestar.', 'warning');
     return;
@@ -3074,9 +3052,9 @@ window._editPendingResult = function(tId, matchId) {
 
   var pr = m.pendingResult;
   var userSide = _userTeamInMatch(t, m, cu);
-  var proposerSide = pr && (pr.proposedBy || pr.proposedByEmail)
-    ? _userTeamInMatch(t, m, { uid: pr.proposedBy, email: pr.proposedByEmail }) : 0;
-  var isProposerSelf = !!(pr && ((cu.uid && pr.proposedBy === cu.uid) || (cu.email && pr.proposedByEmail === cu.email)));
+  var proposerSide = pr && pr.proposedBy
+    ? _userTeamInMatch(t, m, { uid: pr.proposedBy }) : 0;
+  var isProposerSelf = !!(pr && cu.uid && pr.proposedBy === cu.uid);
   var canEdit = _isUserAuthority(t, cu) || isProposerSelf || (userSide > 0 && userSide !== proposerSide);
   if (!canEdit) { showNotification('Sem permissão', 'Você não pode editar este resultado.', 'warning'); return; }
 
@@ -3214,8 +3192,7 @@ window._editPendingResult = function(tId, matchId) {
         m.pendingResult = {
           kind: 'inline',
           proposedBy: cu.uid || null,
-          proposedByEmail: cu.email || null,
-          proposedByName: cu.displayName || cu.email || 'Organizador',
+          proposedByName: cu.displayName || 'Organizador',
           proposedAt: Date.now(),
           winner: winner,
           draw: s1v === s2v,
@@ -3248,8 +3225,7 @@ window._editPendingResult = function(tId, matchId) {
       var _counter = {
         kind: 'inline',
         proposedBy: cu.uid || null,
-        proposedByEmail: cu.email || null,
-        proposedByName: cu.displayName || cu.email || 'Jogador',
+        proposedByName: cu.displayName || 'Jogador',
         proposedAt: Date.now(),
         winner: winner,
         draw: s1v === s2v,

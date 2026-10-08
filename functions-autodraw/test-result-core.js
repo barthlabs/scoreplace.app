@@ -98,6 +98,7 @@ console.log('\n──── result-core: autorização ────');
   const m = win._findMatch(T, 'm1');
   t('participante propõe → pending', r.ok && r.outcome === 'pending', JSON.stringify(r));
   t('pendingResult carimba quem propôs', m.pendingResult && m.pendingResult.proposedBy === UID_A1);
+  t('pendingResult não persiste e-mail do proponente', m.pendingResult && !Object.prototype.hasOwnProperty.call(m.pendingResult, 'proposedByEmail'));
   t('não define vencedor ainda', !m.winner);
 }
 

@@ -2207,7 +2207,7 @@ function renderDashboard(container) {
             // Fase 4: já contestado — aguardando organizador. Jogador não age mais.
             disputedMatches.push(Object.assign({ inP1: inP1 }, matchInfo));
           } else {
-            var isProposerSelf = (uid && pr.proposedBy === uid) || (email && pr.proposedByEmail === (cu.email || '').toLowerCase());
+            var isProposerSelf = !!(uid && pr.proposedBy === uid);
             if (isProposerSelf) {
               pendingByMe.push(Object.assign({ inP1: inP1 }, matchInfo));
             } else {
