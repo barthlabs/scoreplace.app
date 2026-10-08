@@ -85,5 +85,10 @@ ok(/window\._participantEntryKey\(p\)/.test(tournamentsView) &&
   /p\.p1ManualId/.test(tournamentsView),
   '㉓ card, arraste e desfazer de dupla preservam UID e manualParticipantId antes de nome legado');
 
+const participantCards = fs.readFileSync(path.join(ROOT, 'js/views/participants.js'), 'utf8');
+ok(/!p\.p1ManualId && !p\.p2ManualId/.test(participantCards) &&
+  !/\|\| p\.email \|\| _T\('participants\.participant'/.test(participantCards),
+  '㉔ card individual não confunde dupla manual com solo nem expõe e-mail como nome');
+
 console.log(fail ? ('  ' + fail + ' FALHA(S), ' + pass + ' ok') : ('  ✓ ' + pass + ' asserções'));
 process.exit(fail ? 1 : 0);

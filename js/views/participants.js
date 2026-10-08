@@ -1626,16 +1626,16 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
   var _gridWaitSet = ctx.waitSet || {};
   var _T = window._t || function (k) { return k; };
   // IDENTIDADE DO CARD = uid. Só o FICTÍCIO (digitado pelo organizador, sem conta) não tem uid e
-  // é controlado pelo nome — regra do dono: quem tem uid é controlado EXCLUSIVAMENTE pelo uid.
+  // usa manualParticipantId — nunca o nome como identidade de uma vaga criada hoje.
   // Vazio de propósito quando a entrada é uma DUPLA: aí o card representa a ENTRADA inteira, e as
   // ações de pessoa (VIP/nível/excluir) valem pra entrada. [[project_uid_identity_canon_locked]]
-  var _cardUid = (p && typeof p === 'object' && p.uid && !p.p1Uid && !p.p2Uid && !p.p1Name && !p.p2Name)
+  var _cardUid = (p && typeof p === 'object' && p.uid && !p.p1Uid && !p.p2Uid && !p.p1ManualId && !p.p2ManualId && !p.p1Name && !p.p2Name)
     ? String(p.uid).replace(/'/g, "\\'") : '';
   // Só a ação de remover aceita também a identidade manual. As demais ações pessoais
   // continuam exigindo UID de conta; não transformar manualParticipantId em "uid".
-  var _removeIdentity = (p && typeof p === 'object' && !p.p1Uid && !p.p2Uid && !p.p1Name && !p.p2Name)
+  var _removeIdentity = (p && typeof p === 'object' && !p.p1Uid && !p.p2Uid && !p.p1ManualId && !p.p2ManualId && !p.p1Name && !p.p2Name)
     ? String(p.uid || p.manualParticipantId || '').replace(/'/g, "\\'") : '';
-  // v1.3.67: resolve o nome pelo UID ANTES do fallback "Participante N"/email. Entrada só-uid
+  // v1.3.67: resolve o nome pelo UID ANTES do fallback "Participante N". Entrada só-uid
   // (nome stripado no save — cânone: identidade é uid) caía direto no "Participante N" e o card
   // (e o data-lj-name do drag de formar dupla) mostrava "Participante 2" no lugar do nome real.
   // Ver [[project_uid_identity_canon_locked]].
@@ -1643,7 +1643,7 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
   var pName = (typeof p === 'string') ? p
     : (p.displayName || p.name
        || (_pUidN && typeof window._displayNameForUid === 'function' ? window._displayNameForUid(_pUidN, '') : '')
-       || p.email || _T('participants.participant', { n: idx + 1 }));
+       || _T('participants.participant', { n: idx + 1 }));
   var isTeam = !!window._entryTeamMembers(p);
   var _isOrgP = (typeof window._isOrgPlayer === 'function') && window._isOrgPlayer(t, pName, p);
   var _orgStar = _isOrgP ? '<span title="Organizador" aria-label="Organizador" style="flex-shrink:0;color:var(--sp-c-fbbf24,#fbbf24);font-size:0.95rem;line-height:1;">⭐</span>' : '';
