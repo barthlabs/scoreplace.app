@@ -69,6 +69,67 @@ window._participantEntryKey = function(p) {
   return members.length > 1 ? 'team:' + members.join('|') : (members[0] || '');
 };
 
+// Origem de dupla é estado da ENTRADA, nunca do texto que ela exibe. O formato
+// antigo usava `teamOrigins['Ana / Bia']`; duas duplas homônimas colidiam e uma
+// mudança de nome apagava a origem da outra. A chave estrutural já usada para
+// inscrições e categorias resolve isso. Os adaptadores abaixo ainda leem o
+// rótulo legado para que documentos históricos possam ser abertos e salvos sem
+// perda, mas nenhuma gravação nova volta a depender dele.
+window._teamOriginKey = function(entry) {
+  if (entry && typeof entry === 'object') {
+    var key = window._participantEntryKey(entry);
+    if (key && key.indexOf('team:') === 0) return key;
+  }
+  var label = entry && typeof entry === 'object'
+    ? (entry.displayName || entry.name || '')
+    : String(entry == null ? '' : entry);
+  label = String(label).trim().toLowerCase();
+  return label ? 'legacy-team:' + label : '';
+};
+
+window._teamOriginLabel = function(entry) {
+  if (entry && typeof entry === 'object') {
+    var stored = String(entry.displayName || entry.name || '').trim();
+    // Após a sanitização de nomes, uma dupla autenticada pode ter somente os
+    // slots UID. A projeção viva é necessária apenas para reencontrar a marca
+    // textual de um documento legado; nunca vira chave de nova gravação.
+    if (!stored && typeof window._pName === 'function') stored = String(window._pName(entry, '') || '').trim();
+    return stored;
+  }
+  return String(entry == null ? '' : entry).trim();
+};
+
+window._getTeamOrigin = function(origins, entry) {
+  if (!origins || typeof origins !== 'object') return '';
+  var key = window._teamOriginKey(entry);
+  if (key && origins[key]) return origins[key];
+  // Compatibilidade de leitura para documentos anteriores ao cânone estrutural.
+  var label = window._teamOriginLabel(entry);
+  return label && origins[label] ? origins[label] : '';
+};
+
+window._setTeamOrigin = function(origins, entry, origin) {
+  if (!origins || typeof origins !== 'object') return '';
+  var key = window._teamOriginKey(entry);
+  if (!key) return '';
+  origins[key] = origin;
+  return key;
+};
+
+window._deleteTeamOrigin = function(origins, entry) {
+  if (!origins || typeof origins !== 'object') return;
+  var key = window._teamOriginKey(entry);
+  if (key) delete origins[key];
+  // Remover uma dupla ainda deve remover sua marca legada, se houver uma.
+  var label = window._teamOriginLabel(entry);
+  if (label) delete origins[label];
+};
+
+window._deleteTeamOriginsByValue = function(origins, origin) {
+  if (!origins || typeof origins !== 'object') return;
+  Object.keys(origins).forEach(function(key) { if (origins[key] === origin) delete origins[key]; });
+};
+
 // Chaves de PESSOAS da entrada: indicadores e estatísticas precisam contar os
 // membros da dupla individualmente, sem usar e-mail como atalho de identidade.
 window._participantIdentityKeys = function(p) {

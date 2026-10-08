@@ -1234,7 +1234,8 @@ window.submitTeamEnroll = function (tId) {
     };
     // Registrar origem da equipe via extraUpdates
     var _teamOrigins = t.teamOrigins || {};
-    _teamOrigins[teamString] = 'inscrita';
+    if (typeof window._setTeamOrigin === 'function') window._setTeamOrigin(_teamOrigins, participantObj, 'inscrita');
+    else _teamOrigins[teamString] = 'inscrita';
 
     const mod = document.getElementById('team-enroll-modal-' + tId);
     if (mod) mod.style.display = 'none';

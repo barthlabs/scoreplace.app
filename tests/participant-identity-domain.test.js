@@ -58,16 +58,26 @@ ok(browser._participantEntryKey({ p1Uid: 'u1', p2ManualId: 'm2', p2Name: 'Manual
   '⑯ adaptador expõe a mesma chave tipada de entrada');
 ok(browser._participantIdentityKeys({ p1Uid: 'u1', p2ManualId: 'm2', p2Name: 'Manual' }).join(',') === 'manual:m2,uid:u1',
   '⑰ adaptador expõe as chaves individuais da dupla');
+const duoA = { displayName: 'Ana / Bia', p1Uid: 'ana-1', p2Uid: 'bia-1' };
+const duoB = { displayName: 'Ana / Bia', p1Uid: 'ana-2', p2Uid: 'bia-2' };
+const origins = {};
+browser._setTeamOrigin(origins, duoA, 'formada');
+browser._setTeamOrigin(origins, duoB, 'sorteada');
+ok(browser._teamOriginKey(duoA) !== browser._teamOriginKey(duoB) &&
+  browser._getTeamOrigin(origins, duoA) === 'formada' && browser._getTeamOrigin(origins, duoB) === 'sorteada',
+  '⑱ duplas homônimas guardam origens separadas pela identidade estrutural');
+ok(browser._getTeamOrigin({ 'Ana / Bia': 'inscrita' }, duoA) === 'inscrita',
+  '⑲ documentos legados por rótulo continuam legíveis durante a migração');
 
 const index = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
 ok(index.indexOf('js/domain/participant-identity.js') < index.indexOf('js/views/identity-core.js'),
-  '⑱ domínio carrega antes do adaptador clássico');
+  '⑳ domínio carrega antes do adaptador clássico');
 const draw = fs.readFileSync(path.join(ROOT, 'functions-autodraw', 'draw-core.js'), 'utf8');
 ok(draw.indexOf("participant-identity.js") < draw.indexOf("require('./vendor/identity-core.js')"),
-  '⑲ motor de sorteio carrega o mesmo domínio antes do adaptador');
+  '㉑ motor de sorteio carrega o mesmo domínio antes do adaptador');
 const engine = require(path.join(ROOT, 'functions-autodraw', 'draw-core.js'));
 ok(engine._window.ScoreplaceParticipantIdentity && engine._window._participantUids({ uid: 'a', p1Uid: 'b', p2Uid: 'a' }).join(',') === 'a,b',
-  '⑳ motor executa o contrato tipado, não uma cópia própria');
+  '㉒ motor executa o contrato tipado, não uma cópia própria');
 
 console.log(fail ? ('  ' + fail + ' FALHA(S), ' + pass + ' ok') : ('  ✓ ' + pass + ' asserções'));
 process.exit(fail ? 1 : 0);

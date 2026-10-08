@@ -1777,10 +1777,9 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
   }
 
   var safeP = pName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-  var teamOrigins = t.teamOrigins || {};
   var teamLabel = _T('participants.teamIndividual');
   if (isTeam) {
-    var origin = teamOrigins[pName];
+    var origin = (typeof window._getTeamOrigin === 'function') ? window._getTeamOrigin(t.teamOrigins, p) : (t.teamOrigins || {})[pName];
     if (origin === 'inscrita') teamLabel = _T('tourn.teamEnrolled');
     else if (origin === 'sorteada') teamLabel = _T('tourn.teamDrawn');
     else teamLabel = _T('tourn.teamFormed');

@@ -725,9 +725,12 @@ window._applySplitParticipantFresh = function (t, participantName) {
     Array.prototype.splice.apply(arr, [idx, 0].concat(slots));
     t.participants = arr;
     if (t.teamOrigins && typeof t.teamOrigins === 'object') {
-        delete t.teamOrigins[participantName];
-        var label = window._entryDisplayName ? window._entryDisplayName(entry) : null;
-        if (label) delete t.teamOrigins[label];
+        if (typeof window._deleteTeamOrigin === 'function') window._deleteTeamOrigin(t.teamOrigins, entry);
+        else {
+            delete t.teamOrigins[participantName];
+            var label = window._entryDisplayName ? window._entryDisplayName(entry) : null;
+            if (label) delete t.teamOrigins[label];
+        }
     }
     return true;
 };

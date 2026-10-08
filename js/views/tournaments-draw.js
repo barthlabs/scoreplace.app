@@ -2,6 +2,21 @@
 (function() {
 var _t = window._t || function(k) { return k; };
 
+// `teamOrigins` nasceu indexado pelo texto "Ana / Bia". Centralizar a ponte
+// aqui impede que a chave de apresentação volte a ser identidade durante o
+// sorteio. A leitura aceita o documento legado; a escrita usa a chave da dupla.
+function _teamOriginOf(origins, entry) {
+  var label = typeof entry === 'string' ? entry : ((typeof window._pName === 'function' && window._pName(entry, '')) || (entry && (entry.displayName || entry.name)) || '');
+  return (typeof window._getTeamOrigin === 'function')
+    ? window._getTeamOrigin(origins, entry)
+    : ((origins || {})[label] || '');
+}
+function _setTeamOriginOf(origins, entry, origin) {
+  if (typeof window._setTeamOrigin === 'function') return window._setTeamOrigin(origins, entry, origin);
+  if (origins && entry) origins[typeof entry === 'string' ? entry : (entry.displayName || entry.name || '')] = origin;
+  return '';
+}
+
 // v1.3.73: o SORTEIO limpa a presença de quem ENTROU na chave (acabou de sortear), MAS PRESERVA
 // a de quem foi pro RESTO/LISTA DE ESPERA — estava presente ANTES do sorteio, continua presente
 // (e por isso aparece PRIMEIRO na fila de espera, pronto pra ser chamado num W.O./desistência).
@@ -106,7 +121,7 @@ window._clearTournamentDraw = function (t) {
         ? ((window._pName ? window._pName(p, '') : '') || p.displayName || p.name || '')
         : String(p || '');
       var isTeam = (p && typeof p === 'object' && Array.isArray(p.participants) && p.participants.length) || (p && typeof p === 'object' && (p.p1Uid || p.p1ManualId || p.p1Name) && (p.p2Uid || p.p2ManualId || p.p2Name)) || (nm.indexOf(' / ') !== -1);
-      if (nm && _origins[nm] === 'sorteada' && isTeam) {
+      if (nm && _teamOriginOf(_origins, p) === 'sorteada' && isTeam) {
         if (Array.isArray(p.participants) && p.participants.length) {
           p.participants.forEach(function (s) { _out.push(s); });
         } else if ((p.p1Uid || p.p1ManualId || p.p1Name) && (p.p2Uid || p.p2ManualId || p.p2Name)) {
@@ -143,7 +158,8 @@ window._clearTournamentDraw = function (t) {
     t.waitlist = [];
     t.standbyParticipants = [];
     t.monarchWaitlist = {}; // CANÔNICO: limpa também a 3ª fonte (Rei/Rainha por categoria)
-    if (t.teamOrigins) Object.keys(t.teamOrigins).forEach(function (k) { if (t.teamOrigins[k] === 'sorteada') delete t.teamOrigins[k]; });
+    if (typeof window._deleteTeamOriginsByValue === 'function') window._deleteTeamOriginsByValue(t.teamOrigins, 'sorteada');
+    else if (t.teamOrigins) Object.keys(t.teamOrigins).forEach(function (k) { if (t.teamOrigins[k] === 'sorteada') delete t.teamOrigins[k]; });
   } catch (e) { if (window._error) window._error('[clearDraw dismantle]', e); }
   t.matches = [];
   t.rounds = [];
@@ -549,7 +565,7 @@ function _formDoublesTeams(origParticipants, teamSize, teamOrigins, balanceMode,
       newTeams.push(mkTeamObj(group)); // v3.0.x: passa objetos (uid autoritativo, sem lookup por nome)
     }
   }
-  if (teamOrigins) newTeams.forEach(function(to){ teamOrigins[to.displayName] = 'sorteada'; });
+  if (teamOrigins) newTeams.forEach(function(to){ _setTeamOriginOf(teamOrigins, to, 'sorteada'); });
   return {
     participants: preFormed.concat(newTeams, individuals),
     newTeamsCount: newTeams.length,
@@ -660,7 +676,7 @@ window._applyMixedOriginCategories = function(t, participants) {
     if (!p || typeof p !== 'object') return;
     var nm = p.displayName || p.name || '';
     if (!window._entryTeamMembers(p)) return; // v3.0.x: só duplas/times (estrutura), não por '/'
-    var originLbl = (origins[nm] === 'sorteada') ? window._MIXED_ORIGIN_DRAWN : window._MIXED_ORIGIN_FORMED;
+    var originLbl = (_teamOriginOf(origins, p) === 'sorteada') ? window._MIXED_ORIGIN_DRAWN : window._MIXED_ORIGIN_FORMED;
     var existing = (typeof window._getParticipantCategories === 'function') ? window._getParticipantCategories(p) : [];
     // Não cruzar com rótulos de origem já aplicados (idempotência em re-sorteio).
     existing = existing.filter(function(c) {
@@ -917,7 +933,7 @@ window._integrateLateDuplas = function (t) {
       if (!_isPair(p)) return;
       var nm = _nm(p);
       if (!nm || _inBracketD(p) || _formedNames[nm]) return;         // já na chave (POR UID) ou já coletado
-      if (t.teamOrigins[nm] !== 'formada' || !_orphPresent(p)) return; // só dupla formada à mão E presente
+      if (_teamOriginOf(t.teamOrigins, p) !== 'formada' || !_orphPresent(p)) return; // só dupla formada à mão E presente
       formed.push(p); _formedNames[nm] = 1;
     });
   }
@@ -1023,7 +1039,7 @@ window._integrateLateDuplas = function (t) {
       var _dn2 = _nm(d);
       var _already2 = t.participants.some(function (p) { return _nm(p) === _dn2; }); // órfão de roster já existe
       if (!_already2) { var clone = Object.assign({}, d); delete clone._lateJoin; t.participants.push(clone); }
-      t.teamOrigins[_dn2] = 'formada'; integrated2++;
+      _setTeamOriginOf(t.teamOrigins, d, 'formada'); integrated2++;
     });
     ['standbyParticipants', 'waitlist'].forEach(function (k) {
       if (Array.isArray(t[k])) t[k] = t[k].filter(function (p) { return !(_isPair(p) && p._lateJoin && usedNames2[_nm(p)]); });
@@ -1131,7 +1147,7 @@ window._integrateLateDuplas = function (t) {
     var _dn = _nm(d);
     var _already = t.participants.some(function (p) { return _nm(p) === _dn; });
     if (!_already) { var clone = Object.assign({}, d); delete clone._lateJoin; t.participants.push(clone); }
-    t.teamOrigins[_dn] = 'formada'; integrated++;
+    _setTeamOriginOf(t.teamOrigins, d, 'formada'); integrated++;
   });
   ['standbyParticipants', 'waitlist'].forEach(function (k) {
     if (Array.isArray(t[k])) t[k] = t[k].filter(function (p) { return !(_isPair(p) && p._lateJoin && usedNames[_nm(p)]); });
@@ -1209,7 +1225,7 @@ window._createExtraGamesFromWaitlist = function(t) {
       var n = _name(p), key = window._lateEntryKey(p);
       if (!n || !key || seen[key]) return;
       if (window._entryInBracket(t, p, _brkSet)) return;  // já na chave (POR UID)
-      if (t.teamOrigins[n] !== 'formada') return;        // só dupla formada à mão
+      if (_teamOriginOf(t.teamOrigins, p) !== 'formada') return;        // só dupla formada à mão
       if (window._lateAlreadyIntegrated(t, p)) return;   // já COLOCADA antes
       seen[key] = true; pool.push(p);
     });
@@ -1315,8 +1331,8 @@ window._createExtraGamesFromWaitlist = function(t) {
   while (preDuplas.length >= 2) {
     var da = preDuplas.shift(), db = preDuplas.shift();
     var dn1 = da.displayName || da.name, dn2 = db.displayName || db.name;
-    _addPart(da, dn1); t.teamOrigins[dn1] = 'formada';
-    _addPart(db, dn2); t.teamOrigins[dn2] = 'formada';
+    _addPart(da, dn1); _setTeamOriginOf(t.teamOrigins, da, 'formada');
+    _addPart(db, dn2); _setTeamOriginOf(t.teamOrigins, db, 'formada');
     var usedD = [dn1, dn2];
     t.standbyParticipants = _rm(usedD, t.standbyParticipants);
     t.waitlist = _rm(usedD, t.waitlist);
@@ -1335,7 +1351,7 @@ window._createExtraGamesFromWaitlist = function(t) {
       n1 = tm1.displayName || tm1.name; n2 = tm2.displayName || tm2.name;
       u1 = _pu(tm1); u2 = _pu(tm2);
       // tardios viram INSCRITOS (duplas) — para aparecer na lista, marcar presença/W.O.
-      [tm1, tm2].forEach(function(tm){ var nm = tm.displayName || tm.name; _addPart(tm, nm); t.teamOrigins[nm] = 'formada'; });
+      [tm1, tm2].forEach(function(tm){ var nm = tm.displayName || tm.name; _addPart(tm, nm); _setTeamOriginOf(t.teamOrigins, tm, 'formada'); });
       used = four.map(_name);
     } else {
       // INDIVIDUAL: 2 solos tardios → 1 jogo solo-vs-solo (sem formar dupla).
@@ -1359,7 +1375,7 @@ window._createExtraGamesFromWaitlist = function(t) {
   else if (!_isTeams && solos.length === 1) _lastSolo = solos.shift();
   if (_lastSolo) {
     var _ln = _name(_lastSolo), _lu = _pu(_lastSolo);
-    _addPart(_lastSolo, _ln); if (_isTeams) t.teamOrigins[_ln] = 'formada';
+    _addPart(_lastSolo, _ln); if (_isTeams) _setTeamOriginOf(t.teamOrigins, _lastSolo, 'formada');
     t.standbyParticipants = _rm([_ln], t.standbyParticipants);
     t.waitlist = _rm([_ln], t.waitlist);
     // v1.3.78: a ENTRADA tardia é sempre um qualifier — o novo time joga o MELHOR derrotado da 1ª
@@ -1455,7 +1471,7 @@ window._fillRepFillWithLateDuplas = function (t) {
       if (!_isPair(p)) return;
       var nm = _nm(p), _k = _entryKey(p);
       if (!nm || _seenFormed[_k] || window._entryInBracket(t, p, _brkSetF)) return;
-      if (t.teamOrigins[nm] !== 'formada' || !_pairPresent(p)) return;
+      if (_teamOriginOf(t.teamOrigins, p) !== 'formada' || !_pairPresent(p)) return;
       formed.push(p); _seenFormed[_k] = 1;
     });
   }
@@ -1540,7 +1556,7 @@ window._fillRepFillWithLateDuplas = function (t) {
         if (!t.participants.some(function (p) { return _nm(p) === _dn2; })) {
           var _cl2 = Object.assign({}, d); delete _cl2._lateJoin; t.participants.push(_cl2);
         }
-        t.teamOrigins[_dn2] = 'formada';
+        _setTeamOriginOf(t.teamOrigins, d, 'formada');
         window._markLateIntegrated(t, d);
         usedNames[_dn2] = 1; integrated++;
         return;
@@ -1590,7 +1606,7 @@ window._fillRepFillWithLateDuplas = function (t) {
     var _dn = _nm(d);
     var _already = t.participants.some(function (p) { return _nm(p) === _dn; });
     if (!_already) { var clone = Object.assign({}, d); delete clone._lateJoin; t.participants.push(clone); }
-    t.teamOrigins[_dn] = 'formada';
+    _setTeamOriginOf(t.teamOrigins, d, 'formada');
     window._markLateIntegrated(t, d);
     usedNames[_dn] = 1; integrated++;
   });
@@ -5829,7 +5845,7 @@ window._collectLateCandidates = function (t, _theCat) {
     t.participants.forEach(function (p) {
       var n = _nm(p), kk = _key(p);
       if (!n || seen[kk] || window._entryInBracket(t, p, _brkSetP)) return;
-      var _formada = !!(t.teamOrigins && t.teamOrigins[n] === 'formada');
+      var _formada = _teamOriginOf(t.teamOrigins, p) === 'formada';
       if (!_formada && !_mesmoDia) return;          // fora do mesmo dia só a dupla formada entra
       if (!_present(p)) return;
       if (!_catOk(p)) return;
@@ -6154,7 +6170,7 @@ window._placeLateEntriesSurgically = function (t, _theCat) {
       var dn = _nm(d);
       var exists = t.participants.some(function (p) { return _nm(p) === dn; });
       if (!exists) { var clone = Object.assign({}, d); delete clone._lateJoin; t.participants.push(clone); }
-      if (d && (d.p1Uid || d.p1Name) && (d.p2Uid || d.p2Name)) t.teamOrigins[dn] = t.teamOrigins[dn] || 'formada';
+      if (d && (d.p1Uid || d.p1Name) && (d.p2Uid || d.p2Name) && !_teamOriginOf(t.teamOrigins, d)) _setTeamOriginOf(t.teamOrigins, d, 'formada');
       window._markLateIntegrated(t, d);
       usedNames[dn] = 1; inBracket[dn] = 1; placed++;
     };
@@ -6292,7 +6308,7 @@ window._placeLateEntriesSurgically = function (t, _theCat) {
     // vira inscrito (idempotente) e sai da espera
     var exists = t.participants.some(function (p) { return _nm(p) === dn; });
     if (!exists) { var clone = Object.assign({}, d); delete clone._lateJoin; t.participants.push(clone); }
-    if (d && (d.p1Uid || d.p1Name) && (d.p2Uid || d.p2Name)) t.teamOrigins[dn] = t.teamOrigins[dn] || 'formada';
+    if (d && (d.p1Uid || d.p1Name) && (d.p2Uid || d.p2Name) && !_teamOriginOf(t.teamOrigins, d)) _setTeamOriginOf(t.teamOrigins, d, 'formada');
     window._markLateIntegrated(t, d);
     usedNames[dn] = 1; inBracket[dn] = 1; placed++;
   });
