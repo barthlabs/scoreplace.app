@@ -2847,11 +2847,10 @@ function renderTournaments(container, tournamentId = null) {
         if (window.AppStore.currentUser) {
             var _cuStb = window.AppStore.currentUser;
             var _matchStb = function(p) {
-                if (!p) return false;
-                if (typeof p === 'string') return p === _cuStb.email || p === _cuStb.displayName;
-                return (p.uid && _cuStb.uid && p.uid === _cuStb.uid) ||
-                       (p.email && _cuStb.email && p.email === _cuStb.email) ||
-                       (p.displayName && _cuStb.displayName && p.displayName === _cuStb.displayName);
+                // Uma conta só pode reconhecer a própria inscrição pela sua identidade
+                // estável. Nome/e-mail aqui fazia um homônimo aparecer como suplente e
+                // permitia que uma conta nova "reivindicasse" uma entrada legada.
+                return !!(p && typeof p === 'object' && _cuStb.uid && p.uid === _cuStb.uid);
             };
             _isInStandby = (Array.isArray(t.standbyParticipants) && t.standbyParticipants.some(_matchStb)) ||
                            (Array.isArray(t.waitlist) && t.waitlist.some(_matchStb));
@@ -5033,7 +5032,9 @@ window._partnerPickerInit = async function(tId) {
     if (!prof) return;
     var nm = prof.displayName || '';
     if (!nm) return;
-    if (enrolled.some(function(e) { return e.uid === uid || e.name === nm; })) return;
+    // Um nome igual não significa a mesma pessoa. Só o UID prova que este amigo
+    // já ocupa uma vaga; entradas manuais/legadas permanecem independentes.
+    if (enrolled.some(function(e) { return e && e.uid === uid; })) return;
     friends.push({ name: nm, uid: uid, photo: prof.photoURL || '' });
   });
   window._partnerPickerFriendsCache[tId] = friends;
