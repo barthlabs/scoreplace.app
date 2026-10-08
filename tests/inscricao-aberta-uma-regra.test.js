@@ -92,6 +92,19 @@ ok(cliente({ format: 'Eliminatórias Simples', registrationOpenAt: ONTEM }, AGOR
   'não-Liga após abertura programada → aberta');
 ok(cliente({ format: 'Eliminatórias Simples', rounds: [{}] }, AGORA).open === false,
   'não-Liga com sorteio → fechada (tardia é outra porta)');
+ok(cliente({
+  format: 'Liga', rounds: [{}], currentPhaseIndex: 1,
+  phases: [
+    { kind: 'classification', lateEnrollment: 'expand' },
+    { kind: 'elimination', lateEnrollment: 'closed' }
+  ]
+}, AGORA).open === false,
+  'eliminatória canônica fechada não reabre pelo rótulo legado Liga');
+ok(cliente({
+  format: 'Eliminatórias Simples', rounds: [{}], currentPhaseIndex: 0,
+  phases: [{ kind: 'classification', lateEnrollment: 'standby' }]
+}, AGORA).open === true,
+  'fase classificatória canônica aberta aceita inscrição tardia sem depender de rótulo Liga');
 
 // ── VARREDURA: os gates passaram a usar a FONTE ÚNICA ─────────────────────────
 const semComent = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');

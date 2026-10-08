@@ -108,7 +108,22 @@ function asParticipantsArray(data) {
 // nenhum organizador esteja olhando a ficha. `status === 'closed'` continua sendo
 // a decisão MANUAL e sempre vence um horário programado.
 function enrollmentOpen(data, nowMs) {
-  var isLiga = data.format && (data.format === 'Liga' || data.format === 'Ranking' || data.format === 'liga' || data.format === 'ranking');
+  // Inscrição pós-sorteio pertence à fase atual. O rótulo legado "Liga" no
+  // topo não pode reabrir uma eliminatória de um torneio multifase. Sem fases
+  // canônicas, mantém-se a compatibilidade de leitura de Liga/Ranking.
+  var phases = Array.isArray(data.phases) ? data.phases : [];
+  var phaseIndex = Number(data.currentPhaseIndex || 0);
+  var phase = phases.length && phaseIndex >= 0 && phaseIndex < phases.length && phases[phaseIndex] && typeof phases[phaseIndex] === 'object'
+    ? phases[phaseIndex] : null;
+  var legacyFormat = String(data.format || '').toLowerCase();
+  var isLegacyLiga = legacyFormat === 'liga' || legacyFormat === 'ranking';
+  var phaseLateEnrollment = phase && String(phase.lateEnrollment || '').trim();
+  // Campo explícito vence. Sem ele, mantemos apenas a classificatória legada
+  // que ainda usa Liga no topo; uma eliminatória sem política não reabre por
+  // omissão.
+  var allowsLateEnrollment = phase
+    ? (phaseLateEnrollment ? phaseLateEnrollment !== 'closed' : (phase.kind === 'classification' && isLegacyLiga))
+    : isLegacyLiga;
   var sorteioRealizado = (Array.isArray(data.matches) && data.matches.length > 0) ||
     (Array.isArray(data.rounds) && data.rounds.length > 0) ||
     (Array.isArray(data.groups) && data.groups.length > 0);
@@ -119,7 +134,7 @@ function enrollmentOpen(data, nowMs) {
   var deadlinePassed = !!(data.registrationLimit && Number.isFinite(deadline) && deadline < now);
   // Liga mantém a exceção de aceitar inscrições depois do sorteio, mas NÃO ignora
   // uma janela que o organizador configurou nem um fechamento manual.
-  var ligaOpen = isLiga && data.ligaOpenEnrollment !== false && data.status !== 'closed' && data.status !== 'finished' && !notOpenYet && !deadlinePassed;
+  var ligaOpen = allowsLateEnrollment && data.ligaOpenEnrollment !== false && data.status !== 'closed' && data.status !== 'finished' && !notOpenYet && !deadlinePassed;
   var open = (data.status !== 'closed' && data.status !== 'finished' && !sorteioRealizado && !notOpenYet && !deadlinePassed) || !!ligaOpen;
   return { open: open, deadlinePassed: deadlinePassed, notOpenYet: notOpenYet, opensAt: Number.isFinite(opensAt) ? opensAt : null };
 }

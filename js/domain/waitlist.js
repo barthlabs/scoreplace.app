@@ -420,8 +420,23 @@ var ScoreplaceWaitlist;
     function enrollmentOpenState(tournament, nowMs) {
         if (!tournament)
             return { open: false, ligaOpen: false, sorteio: false, deadlinePassed: false, notOpenYet: false, opensAt: null };
+        /* A inscrição após o sorteio é política da FASE corrente. Um torneio
+         * multifase pode ter começado como Liga, mas estar na eliminatória agora:
+         * o rótulo de topo não pode reabrir aquela fase. Documentos sem fases
+         * canônicas preservam a ponte legada Liga/Ranking. */
+        const phases = array(tournament.phases);
+        const phaseIndex = Number(tournament.currentPhaseIndex || 0);
+        const phase = phases.length && phaseIndex >= 0 && phaseIndex < phases.length
+            ? record(phases[phaseIndex]) : null;
         const format = text(tournament.format).toLowerCase();
-        const isLiga = format === 'liga' || format === 'ranking';
+        const isLegacyLiga = format === 'liga' || format === 'ranking';
+        const phaseLateEnrollment = phase && text(phase.lateEnrollment);
+        // Campo explícito sempre vence. Sem ele, só a classificatória legada que
+        // ainda traz o rótulo Liga conserva o comportamento histórico; eliminatória
+        // sem política nunca é reaberta por omissão.
+        const allowsLateEnrollment = phase
+            ? (phaseLateEnrollment ? phaseLateEnrollment !== 'closed' : (phase.kind === 'classification' && isLegacyLiga))
+            : isLegacyLiga;
         const sorteio = phaseDrawDone(tournament);
         const now = typeof nowMs === 'number' ? nowMs : Date.now();
         const opensAt = new Date(String(tournament.registrationOpenAt || '')).getTime();
@@ -431,7 +446,7 @@ var ScoreplaceWaitlist;
         /* REGRESSÃO: esta é a cópia cliente da porta server-side enrollmentOpen.
          * Abertura/fechamento agendados são avaliados pelo relógio, não por timer da
          * página; status fechado manualmente continua fechado mesmo depois do horário. */
-        const ligaOpen = isLiga && tournament.ligaOpenEnrollment !== false && tournament.status !== 'closed' && tournament.status !== 'finished' && !notOpenYet && !deadlinePassed;
+        const ligaOpen = allowsLateEnrollment && tournament.ligaOpenEnrollment !== false && tournament.status !== 'closed' && tournament.status !== 'finished' && !notOpenYet && !deadlinePassed;
         return { open: (tournament.status !== 'closed' && tournament.status !== 'finished' && !sorteio && !notOpenYet && !deadlinePassed) || !!ligaOpen, ligaOpen, sorteio, deadlinePassed, notOpenYet, opensAt: Number.isFinite(opensAt) ? opensAt : null };
     }
     ScoreplaceWaitlist.enrollmentOpenState = enrollmentOpenState;

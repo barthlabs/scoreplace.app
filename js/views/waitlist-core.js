@@ -300,13 +300,25 @@ window._enrollmentOpenState = function (t, nowMs) {
   var domain = _wlDomain();
   if (domain && typeof domain.enrollmentOpenState === 'function') return domain.enrollmentOpenState(t, nowMs);
   var now = (typeof nowMs === 'number') ? nowMs : Date.now();
-  var isLiga = !!(t.format && (t.format === 'Liga' || t.format === 'Ranking' || t.format === 'liga' || t.format === 'ranking'));
+  // A inscrição pós-sorteio é da fase atual. Um documento multifase pode
+  // conservar "Liga" no topo depois de entrar na eliminatória; esse rótulo
+  // não pode reabrir a fase. Sem fases canônicas, mantém-se o fallback legado.
+  var phases = Array.isArray(t.phases) ? t.phases : [];
+  var phaseIndex = Number(t.currentPhaseIndex || 0);
+  var phase = phases.length && phaseIndex >= 0 && phaseIndex < phases.length && phases[phaseIndex] && typeof phases[phaseIndex] === 'object'
+    ? phases[phaseIndex] : null;
+  var legacyFormat = String(t.format || '').toLowerCase();
+  var isLegacyLiga = legacyFormat === 'liga' || legacyFormat === 'ranking';
+  var phaseLateEnrollment = phase && String(phase.lateEnrollment || '').trim();
+  var allowsLateEnrollment = phase
+    ? (phaseLateEnrollment ? phaseLateEnrollment !== 'closed' : (phase.kind === 'classification' && isLegacyLiga))
+    : isLegacyLiga;
   var sorteio = window._phaseDrawDone(t);
   var opensAt = new Date(t.registrationOpenAt || '').getTime();
   var notOpenYet = !!(t.registrationOpenAt && Number.isFinite(opensAt) && opensAt > now);
   var deadline = new Date(t.registrationLimit || '').getTime();
   var deadlinePassed = !!(t.registrationLimit && Number.isFinite(deadline) && deadline < now);
-  var ligaOpen = isLiga && t.ligaOpenEnrollment !== false && t.status !== 'closed' && t.status !== 'finished' && !notOpenYet && !deadlinePassed;
+  var ligaOpen = allowsLateEnrollment && t.ligaOpenEnrollment !== false && t.status !== 'closed' && t.status !== 'finished' && !notOpenYet && !deadlinePassed;
   var open = (t.status !== 'closed' && t.status !== 'finished' && !sorteio && !notOpenYet && !deadlinePassed) || !!ligaOpen;
   return { open: open, ligaOpen: ligaOpen, sorteio: sorteio, deadlinePassed: deadlinePassed, notOpenYet: notOpenYet, opensAt: Number.isFinite(opensAt) ? opensAt : null };
 };
