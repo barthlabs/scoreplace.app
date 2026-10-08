@@ -2246,13 +2246,25 @@ window._spGameComp = function (imp, g) {
   return g.competition || '';
 };
 
-// Rótulo do TIPO do torneio pra EXIBIÇÃO (cards, pílulas, títulos, badges). Rei/Rainha é MODO
-// de sorteio (drawMode), NÃO formato → mostra "Rei/Rainha" via _isMonarchFormat; senão o nome do
-// formato. As telas usam SEMPRE _formatLabel(t) (com o objeto t), nunca _formatDisplayName(t.format)
-// cru — senão torneios Rei/Rainha (que são formato de grupos + drawMode='rei_rainha') aparecem
-// errado como "Fase de Grupos". Rei/Rainha é MODO (drawMode/ligaRoundFormat), nunca formato.
+// Rótulo do torneio para EXIBIÇÃO (cards, pílulas, títulos, badges). Quando há fases
+// canônicas elas descrevem o torneio inteiro; `t.format` é somente a compatibilidade dos
+// documentos ainda sem fases. Rei/Rainha segue sendo MODO de sorteio, não tipo de fase.
 window._formatLabel = function (t) {
   if (!t) return '';
+  var phases = Array.isArray(t.phases) ? t.phases.filter(function(p) { return p && p.kind; }) : [];
+  if (phases.length) {
+    var labels = [];
+    phases.forEach(function(phase) {
+      var label = '';
+      if (phase.kind === 'elimination') label = 'Eliminatória';
+      else if (phase.kind === 'classification') {
+        if (phase.drawMode === 'rei_rainha' || phase.reiRainha === true) label = 'Rei/Rainha';
+        else label = phase.classification && phase.classification.structure === 'groups' ? 'Fase de Grupos' : 'Pontos Corridos';
+      }
+      if (label && labels.indexOf(label) === -1) labels.push(label);
+    });
+    if (labels.length) return labels.join(' + ');
+  }
   if (window._isMonarchFormat && window._isMonarchFormat(t)) return 'Rei/Rainha';
   return window._formatDisplayName(t.format) || t.format || '';
 };

@@ -76,6 +76,15 @@ function confraCfg() {
     'herdando: o jogo da eliminatória usa 1 set, como a classificatória');
 })();
 
+// O rótulo geral também vem das fases. `format` continua só como fallback de documento sem phases.
+(function () {
+  const t = { format: 'Liga', phases: [
+    { kind: 'classification', classification: { structure: 'groups' } },
+    { kind: 'elimination' }
+  ] };
+  eq(W._formatLabel(t), 'Fase de Grupos + Eliminatória', 'rótulo do torneio segue fases, não o formato legado');
+})();
+
 // ── 2. O CASO DO DONO: 1 set na classificatória, melhor de 3 na eliminatória ──
 (function () {
   const c = confraCfg();

@@ -632,15 +632,20 @@ window._showPlayerStats = function(playerName, currentTournamentId) {
         var _started = (_getAllMatches(t).length > 0) || t.status === 'active' || t.status === 'finished' || t.status === 'closed';
         if (!_started) return;
 
+        var _canonicalPhases = Array.isArray(t.phases) ? t.phases.filter(function(p) { return p && p.kind; }) : [];
+        var _hasClassification = _canonicalPhases.length
+          ? _canonicalPhases.some(function(p) { return p.kind === 'classification'; })
+          : !!((window._isLigaFormat && window._isLigaFormat(t)) || t.format === 'Suíço Clássico' || t.classifyFormat === 'swiss');
+        var _format = (window._formatLabel ? window._formatLabel(t) : t.format) || '';
         stats.tournamentsPlayed++;
-        stats.tournamentNames.push({ name: t.name, id: t.id, sport: t.sport || '', format: (window._formatLabel ? window._formatLabel(t) : t.format) || '', date: (window._tournamentEndDate ? window._tournamentEndDate(t) : t.endDate) || t.startDate || t.date || null, isRanking: !!(window._isLigaFormat && window._isLigaFormat(t)) });
+        stats.tournamentNames.push({ name: t.name, id: t.id, sport: t.sport || '', format: _format, date: (window._tournamentEndDate ? window._tournamentEndDate(t) : t.endDate) || t.startDate || t.date || null, isRanking: _hasClassification });
 
         // Track sports and formats
         if (t.sport) stats.sports[t.sport] = (stats.sports[t.sport] || 0) + 1;
-        if (t.format) stats.formats[t.format] = (stats.formats[t.format] || 0) + 1;
+        if (_format) stats.formats[_format] = (stats.formats[_format] || 0) + 1;
 
         // Check standings for position (Liga/Suíço)
-        if (typeof window._computeStandings === 'function' && (window._isLigaFormat(t) || t.format === 'Suíço Clássico' || t.classifyFormat === 'swiss')) {
+        if (typeof window._computeStandings === 'function' && _hasClassification) {
             var computed = window._computeStandings(t);
             for (var si = 0; si < computed.length; si++) {
                 if (_nameMatch(computed[si].name, playerName)) {

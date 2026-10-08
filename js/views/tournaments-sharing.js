@@ -1241,9 +1241,11 @@ function _resolveMatchRows(t) {
 function _resolveStandingsRows(t) {
   // Padrão do CSV antigo, extraído. Retorna [{cat, rows: [{pos, name,...}]}].
   if (typeof window._computeStandings !== 'function') return [];
-  var isLiga = window._isLigaFormat ? window._isLigaFormat(t) : false;
-  var isSuico = t.format === 'Suíço Clássico' || t.classifyFormat === 'swiss' || t.currentStage === 'swiss';
-  if (!isLiga && !isSuico) return [];
+  var canonicalPhases = Array.isArray(t.phases) ? t.phases.filter(function(p) { return p && p.kind; }) : [];
+  var hasClassification = canonicalPhases.length
+    ? canonicalPhases.some(function(p) { return p.kind === 'classification'; })
+    : ((window._isLigaFormat ? window._isLigaFormat(t) : false) || t.format === 'Suíço Clássico' || t.classifyFormat === 'swiss' || t.currentStage === 'swiss');
+  if (!hasClassification) return [];
   var categories = (t.combinedCategories && t.combinedCategories.length) ? t.combinedCategories : ['default'];
   var out = [];
   categories.forEach(function(cat) {
