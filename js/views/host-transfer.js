@@ -26,7 +26,6 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var t = (window.AppStore.tournaments || []).find(function(x) { return String(x.id) === String(tId); });
     if (!t) return;
     var pName = window._pName(participant);
-    var pEmail = typeof participant === 'object' ? (participant.email || '') : '';
     var pUid = typeof participant === 'object' ? (participant.uid || '') : '';
 
     var existing = document.getElementById('host-transfer-overlay');
@@ -87,9 +86,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       var type = checked ? checked.value : 'cohost';
       overlay.remove();
       if (type === 'transfer') {
-        window._initiateHostTransfer(tId, { email: pEmail, uid: pUid, displayName: pName });
+        window._initiateHostTransfer(tId, { uid: pUid, displayName: pName });
       } else {
-        window._initiateCoHostInvite(tId, { email: pEmail, uid: pUid, displayName: pName });
+        window._initiateCoHostInvite(tId, { uid: pUid, displayName: pName });
       }
     });
   };
@@ -110,14 +109,14 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (!t || !user || !target || !target.uid) return;
     _mutateHostOrganization(tId, 'invite', 'transfer', target.uid).then(function (out) {
       if (!out.changed) throw new Error('convite já não está disponível');
-      var name = out.targetName || target.displayName || target.email || '';
-      _notifyByEmail(out.targetUid || target.uid, {
+      var name = out.targetName || target.displayName || '';
+      _notifyUser(out.targetUid || target.uid, {
         type: 'host_transfer_invite', tournamentId: String(t.id), tournamentName: out.tournamentName || t.name,
         fromName: user.displayName, fromUid: user.uid,
         message: (user.displayName || _tH('org.theOrganizer')) + ' ' + _tH('org.wantsToTransfer') + ' "' + (out.tournamentName || t.name) + '".',
         level: 'fundamental', _fallbackEmail: target.email || '', _fallbackName: name
       });
-      _notifyByEmail(user.uid, {
+      _notifyUser(user.uid, {
         type: 'host_transfer_sent', tournamentId: String(t.id), tournamentName: out.tournamentName || t.name,
         targetName: name, message: _tH('org.transferInviteSent') + ' ' + name + '.', level: 'all', inviteType: 'transfer'
       });
@@ -135,12 +134,12 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (!t || !user || !target || !target.uid) return;
     _mutateHostOrganization(tId, 'invite', 'cohost', target.uid).then(function (out) {
       if (!out.changed) {
-        if (typeof showNotification === 'function') showNotification(_tH('org.alreadyInvited'), (target.displayName || target.email || _pName(target)) + ' ' + _tH('org.alreadyInvitedMsg'), 'warning');
+        if (typeof showNotification === 'function') showNotification(_tH('org.alreadyInvited'), (target.displayName || _pName(target)) + ' ' + _tH('org.alreadyInvitedMsg'), 'warning');
         return;
       }
-      var name = out.targetName || target.displayName || target.email || '';
+      var name = out.targetName || target.displayName || '';
       var _chBase = 'https://scoreplace.app/#cohost/';
-      _notifyByEmail(out.targetUid || target.uid, {
+      _notifyUser(out.targetUid || target.uid, {
         type: 'cohost_invite', tournamentId: String(t.id), tournamentName: out.tournamentName || t.name,
         fromName: user.displayName, fromUid: user.uid, inviterName: user.displayName || _tH('org.theOrganizer'),
         acceptUrl: _chBase + 'accept/' + encodeURIComponent(String(t.id)) + '/cohost',
@@ -148,7 +147,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         message: (user.displayName || _tH('org.theOrganizer')) + ' ' + _tH('org.invitedCohost') + ' "' + (out.tournamentName || t.name) + '".',
         level: 'fundamental', _fallbackEmail: target.email || '', _fallbackName: name
       });
-      _notifyByEmail(user.uid, {
+      _notifyUser(user.uid, {
         type: 'cohost_invite_sent', tournamentId: String(t.id), tournamentName: out.tournamentName || t.name,
         targetName: name, message: _tH('org.cohostInviteSent') + ' ' + name + '.', level: 'all', inviteType: 'cohost'
       });
@@ -207,9 +206,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       _oldOrgUid = (res && res.fromUid) || '';
       if (inviteType === 'transfer') {
         if (!_applied) return; // já transferido (idempotência) — nada a notificar
-        _notifyByEmail(_oldOrgUid, { type: 'host_invite_accepted', tournamentId: String(tId), tournamentName: _tName, message: (user.displayName || _tH('org.theUser')) + ' ' + _tH('org.acceptedTransfer') + ' "' + _tName + '".', level: 'fundamental' });
+        _notifyUser(_oldOrgUid, { type: 'host_invite_accepted', tournamentId: String(tId), tournamentName: _tName, message: (user.displayName || _tH('org.theUser')) + ' ' + _tH('org.acceptedTransfer') + ' "' + _tName + '".', level: 'fundamental' });
         _markInviteNotifsRead(_oldOrgUid, tId, ['host_transfer_sent']);
-        _notifyByEmail(user.uid, { type: 'host_invite_accepted', tournamentId: String(tId), tournamentName: _tName, message: _tH('org.youAcceptedTransfer') + ' "' + _tName + '".', level: 'fundamental' });
+        _notifyUser(user.uid, { type: 'host_invite_accepted', tournamentId: String(tId), tournamentName: _tName, message: _tH('org.youAcceptedTransfer') + ' "' + _tName + '".', level: 'fundamental' });
         _markInviteNotifsRead(user.uid, tId, ['host_transfer_invite']);
         if (typeof showNotification === 'function') showNotification(_tH('org.accepted'), _tH('org.youAreNow') + ' ' + _tH('org.organizerRole') + '.', 'success');
       } else if (inviteType === 'cohost') {
@@ -217,9 +216,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
           if (typeof showNotification === 'function') showNotification(_tH('org.error'), 'Convite não encontrado. Peça ao organizador para re-enviar.', 'warning');
           return;
         }
-        _notifyByEmail(_orgRef, { type: 'host_invite_accepted', tournamentId: String(tId), tournamentName: _tName, message: (user.displayName || _tH('org.theUser')) + ' ' + _tH('org.acceptedCohost') + ' "' + _tName + '".', level: 'important' });
+        _notifyUser(_orgRef, { type: 'host_invite_accepted', tournamentId: String(tId), tournamentName: _tName, message: (user.displayName || _tH('org.theUser')) + ' ' + _tH('org.acceptedCohost') + ' "' + _tName + '".', level: 'important' });
         if (_orgRef) _markInviteNotifsRead(_orgRef, tId, ['cohost_invite_sent']);
-        _notifyByEmail(user.uid, { type: 'host_invite_accepted', tournamentId: String(tId), tournamentName: _tName, message: _tH('org.youAcceptedCohost') + ' "' + _tName + '".', level: 'important' });
+        _notifyUser(user.uid, { type: 'host_invite_accepted', tournamentId: String(tId), tournamentName: _tName, message: _tH('org.youAcceptedCohost') + ' "' + _tName + '".', level: 'important' });
         _markInviteNotifsRead(user.uid, tId, ['cohost_invite']);
         if (typeof showNotification === 'function') showNotification(_tH('org.accepted'), _tH('org.youAreNow') + ' ' + _tH('org.coOrganizerRole') + '.', 'success');
       }
@@ -240,14 +239,14 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       _orgRef = (res && res.orgUid) || '';
       _fromUid = (res && res.fromUid) || '';
       if (inviteType === 'transfer' && _applied) {
-        _notifyByEmail(_fromUid, { type: 'host_invite_rejected', tournamentId: String(tId), tournamentName: _tName, message: (user.displayName || _tH('org.theUser')) + ' ' + _tH('org.rejectedTransfer') + ' "' + _tName + '".', level: 'important' });
+        _notifyUser(_fromUid, { type: 'host_invite_rejected', tournamentId: String(tId), tournamentName: _tName, message: (user.displayName || _tH('org.theUser')) + ' ' + _tH('org.rejectedTransfer') + ' "' + _tName + '".', level: 'important' });
         _markInviteNotifsRead(_fromUid, tId, ['host_transfer_sent']);
-        _notifyByEmail(user.uid, { type: 'host_invite_rejected', tournamentId: String(tId), tournamentName: _tName, message: _tH('org.youRejectedTransfer') + ' "' + _tName + '".', level: 'important' });
+        _notifyUser(user.uid, { type: 'host_invite_rejected', tournamentId: String(tId), tournamentName: _tName, message: _tH('org.youRejectedTransfer') + ' "' + _tName + '".', level: 'important' });
         _markInviteNotifsRead(user.uid, tId, ['host_transfer_invite']);
       } else if (inviteType === 'cohost' && _applied) {
-        _notifyByEmail(_orgRef, { type: 'host_invite_rejected', tournamentId: String(tId), tournamentName: _tName, message: (user.displayName || _tH('org.theUser')) + ' ' + _tH('org.rejectedCohost') + ' "' + _tName + '".', level: 'important' });
+        _notifyUser(_orgRef, { type: 'host_invite_rejected', tournamentId: String(tId), tournamentName: _tName, message: (user.displayName || _tH('org.theUser')) + ' ' + _tH('org.rejectedCohost') + ' "' + _tName + '".', level: 'important' });
         if (_orgRef) _markInviteNotifsRead(_orgRef, tId, ['cohost_invite_sent']);
-        _notifyByEmail(user.uid, { type: 'host_invite_rejected', tournamentId: String(tId), tournamentName: _tName, message: _tH('org.youRejectedCohost') + ' "' + _tName + '".', level: 'important' });
+        _notifyUser(user.uid, { type: 'host_invite_rejected', tournamentId: String(tId), tournamentName: _tName, message: _tH('org.youRejectedCohost') + ' "' + _tName + '".', level: 'important' });
         _markInviteNotifsRead(user.uid, tId, ['cohost_invite']);
       }
       if (typeof showNotification === 'function') showNotification(_tH('org.rejected'), _tH('org.inviteRejected'), 'info');
@@ -264,7 +263,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     _mutateHostOrganization(tId, 'cancel', inviteType, target.targetUid || target.uid).then(function (out) {
       if (!out.changed) return;
       var targetUid = out.targetUid || target.targetUid || target.uid;
-      _notifyByEmail(targetUid, {
+      _notifyUser(targetUid, {
         type: 'cohost_removed', tournamentId: String(t.id), tournamentName: out.tournamentName || t.name,
         message: (user ? user.displayName : '') + ' ' + _tH('org.cancelledInviteFor') + ' "' + (out.tournamentName || t.name) + '".', level: 'important'
       });
@@ -280,7 +279,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (!removed) return;
     _mutateHostOrganization(tId, 'remove', 'cohost', coHostKey).then(function (out) {
       if (!out.changed) return;
-      _notifyByEmail(out.targetUid || coHostKey, {
+      _notifyUser(out.targetUid || coHostKey, {
         type: 'cohost_removed', tournamentId: String(t.id), tournamentName: out.tournamentName || t.name,
         message: _tH('org.youWereRemoved') + ' "' + (out.tournamentName || t.name) + '".', level: 'important'
       });
@@ -309,36 +308,25 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (existing) existing.remove();
 
     var parts = Array.isArray(t.participants) ? t.participants : [];
-    // Filter: only participants with email (can receive notification), exclude self and current org/coHosts
-    /* ⛔ A exclusão é por UID (LGPD, 25/set/2026): `t.organizerEmail` saiu do documento. A lista
-     * continua existindo VAZIA porque o filtro abaixo ainda a consulta. */
-    var orgEmails = [];
-
-    // v2.8.50: elegível por UID **ou** email (antes exigia email → inscritos só-uid,
-    // comuns em torneios de duplas, NÃO apareciam e não dava pra promover). Exclui o
-    // próprio usuário, o organizador e co-orgs ativos (por uid e por email).
+    // Só participantes com UID podem receber uma função organizadora. Vaga manual
+    // sem UID não representa conta e não pode receber convite por rótulo/e-mail.
     var orgUids = [t.creatorUid];
     if (Array.isArray(t.coHosts)) t.coHosts.forEach(function(ch) { if (ch.uid && ch.status === 'active') orgUids.push(ch.uid); });
     var eligible = parts.filter(function(p) {
       if (typeof p === 'string') return false;
-      var email = p.email || '';
       var puid = p.uid || '';
-      if (!email && !puid) return false; // precisa de algum identificador
-      if (puid && user.uid && puid === user.uid) return false;
-      if (email && user.email && email === user.email) return false;
-      if (email && orgEmails.indexOf(email) !== -1) return false;
-      if (puid && orgUids.indexOf(puid) !== -1) return false;
+      if (!puid) return false;
+      if (puid === user.uid) return false;
+      if (orgUids.indexOf(puid) !== -1) return false;
       return true;
     });
 
     // Also check for pending invites
-    // Convites PENDENTES — por uid (cânone só-uid, jul/2026). O e-mail do pendingTransfer
-    // fica só como fallback pra convite legado que ainda não tem targetUid.
+    // Convites pendentes por UID. Convite legado sem UID é apenas histórico e não bloqueia
+    // nem concede identidade a uma conta selecionada agora.
     var pendingUids = [];
-    var pendingEmails = [];
     if (t.pendingTransfer) {
       if (t.pendingTransfer.targetUid) pendingUids.push(t.pendingTransfer.targetUid);
-      else if (t.pendingTransfer.targetEmail) pendingEmails.push(t.pendingTransfer.targetEmail);
     }
     if (Array.isArray(t.coHosts)) t.coHosts.forEach(function(ch) { if (ch.status === 'pending' && ch.uid) pendingUids.push(ch.uid); });
 
@@ -351,15 +339,13 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       listHtml = '<div style="text-align:center;padding:2rem;color:var(--text-muted);font-size:0.85rem;">' + _tH('org.noEligible') + '</div>';
     } else {
       eligible.forEach(function(p) {
-        var name = p.displayName || p.name || p.email;
-        var email = p.email || '';
+        var name = p.displayName || p.name || '';
         var pUid = p.uid || '';
-        var isPending = (pUid && pendingUids.indexOf(pUid) !== -1) || (email && pendingEmails.indexOf(email) !== -1);
-        var safeEmail = email.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        var isPending = pUid && pendingUids.indexOf(pUid) !== -1;
         var safeUid = pUid.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         var safeName = window._safeHtml(name).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         listHtml += '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;cursor:' + (isPending ? 'default' : 'pointer') + ';background:' + window._spCor((isPending ? 'rgba(251,191,36,0.08)' : 'rgba(255,255,255,0.03)'), 'background') + ';border:1px solid ' + window._spCor((isPending ? 'rgba(251,191,36,0.3)' : 'var(--border-color)'), 'borda') + ';transition:background 0.2s;" ' +
-          (isPending ? '' : 'onmouseover="this.style.background=\'rgba(251,191,36,0.1)\'" onmouseout="this.style.background=\'rgba(255,255,255,0.03)\'" onclick="document.getElementById(\'org-picker-overlay\').remove(); window._openHostTransferDialog({email:\'' + safeEmail + '\',uid:\'' + safeUid + '\',displayName:\'' + safeName + '\'},\'' + String(tId).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\')"') + '>' +
+          (isPending ? '' : 'onmouseover="this.style.background=\'rgba(251,191,36,0.1)\'" onmouseout="this.style.background=\'rgba(255,255,255,0.03)\'" onclick="document.getElementById(\'org-picker-overlay\').remove(); window._openHostTransferDialog({uid:\'' + safeUid + '\',displayName:\'' + safeName + '\'},\'' + String(tId).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\')"') + '>' +
           // ⭐ PONTO ÚNICO: o uid está aqui (pUid) e o perfil pode não ter resolvido ainda.
           // Semear o avatar pelo NOME devolvia círculo mudo, e o nome escrito no HTML
           // congelava vazio. Ver `_personAvatarHtml` em store.js.
@@ -367,7 +353,6 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
           '<div style="flex:1;min-width:0;">' +
             '<div style="font-weight:600;font-size:0.88rem;color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' +
               window._personNameHtml(pUid, name, '') + '</div>' +
-            '<div style="font-size:0.7rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + window._safeHtml(email) + '</div>' +
           '</div>' +
           (isPending ? '<span style="font-size:0.65rem;color:var(--sp-c-fbbf24,#fbbf24);font-weight:600;white-space:nowrap;">' + _tH('org.pendingInvite') + '</span>' : '<span style="font-size:1rem;color:var(--text-muted);">›</span>') +
         '</div>';
@@ -389,15 +374,15 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   };
 
   // ─── Helper: send notification — uses _sendUserNotification (proven path) with fallback ──
-  function _notifyByEmail(uidOrEmail, data) {
-    if (!uidOrEmail || String(uidOrEmail).indexOf('@') !== -1) {
+  function _notifyUser(uid, data) {
+    if (!uid) {
       window._warn('[host-transfer] notificação sem uid válido');
       return;
     }
     var cu = window.AppStore.currentUser || {};
     var payload = {
       type: data.type || 'info',
-      fromUid: data.fromUid || cu.uid || cu.email || '',
+      fromUid: data.fromUid || cu.uid || '',
       fromName: data.fromName || cu.displayName || '',
       tournamentId: data.tournamentId || '',
       tournamentName: data.tournamentName || '',

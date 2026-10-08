@@ -1361,10 +1361,7 @@ window._leaveStandby = function (tId) {
     var _matchUser = function(p) {
         if (!p) return false;
         if (typeof window._userMatchesParticipant === 'function') return window._userMatchesParticipant(user, p);
-        if (typeof p === 'string') return p === user.email || p === user.displayName;
-        return (p.uid && user.uid && p.uid === user.uid) ||
-               (p.email && user.email && p.email === user.email) ||
-               (p.displayName && user.displayName && p.displayName === user.displayName);
+        return typeof p === 'object' && !!(p.uid && user.uid && p.uid === user.uid);
     };
     showConfirmDialog(
         _t('enroll.leaveWaitlist') || 'Sair da lista de espera',
@@ -1721,14 +1718,13 @@ window._buildLigaActiveToggleHtml = function(t) {
   if (t.allowSelfDeactivation === false) return '';
   if (t.status === 'finished') return '';
   var cu = window.AppStore && window.AppStore.currentUser;
-  if (!cu || !cu.uid && !cu.email) return '';
+  if (!cu || !cu.uid) return '';
   var _acha = function (lista) {
     return (lista || []).find(function(p) {
       if (typeof p !== 'object' || !p) return false;
       // v3.0.76: uid-first + slot-aware — o toggle aparece pro p2 da dupla também.
       if (typeof window._userMatchesParticipant === 'function') return window._userMatchesParticipant(cu, p);
       if (p.uid && cu.uid && p.uid === cu.uid) return true;
-      if (p.email && cu.email && p.email === cu.email) return true;
       return false;
     });
   };
