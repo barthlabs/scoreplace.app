@@ -10,7 +10,7 @@ var _t = window._t || function(k) { return k; };
 // que o dono mandou EXTIRPAR. Presença (Presente/Ausente + toggle + W.O.) é injetada
 // pela chamada via ctx.cardPresence(p) → { skip, styleExtra, rowHtml }. O detalhe
 // passa sem presença → comportamento idêntico ao de antes.
-// ctx = { isOrg, drawDone, orgUids, orgEmails, peopleCount, hasTournCats,
+// ctx = { isOrg, drawDone, orgUids, peopleCount, hasTournCats,
 //         chrome (inclui h3 + barra de filtro + gerenciador de categorias),
 //         cardPresence(p) -> {skip,styleExtra,rowHtml} }
 // retorna { isDoubles, html } — isDoubles=false quando NÃO é duplas-pré-sorteio
@@ -54,7 +54,7 @@ window._duplaCard = function (t, p, draggable, ctx) {
   if (p == null) return '';
   ctx = ctx || {};
   var isOrg = !!ctx.isOrg, drawDone = !!ctx.drawDone;
-  var _orgUidsShared = ctx.orgUids || {}, _orgEmailsShared = ctx.orgEmails || {};
+  var _orgUidsShared = ctx.orgUids || {};
   var _cardPres = (typeof ctx.cardPresence === 'function') ? ctx.cardPresence : null;
   var _enrollOrderMapD = ctx.enrollOrderMap || (typeof window._buildEnrollOrderMap === 'function' ? window._buildEnrollOrderMap(t) : {});
   function _safeAttr(s) { return String(s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
@@ -67,8 +67,7 @@ window._duplaCard = function (t, p, draggable, ctx) {
     var nm = typeof p === 'string' ? p : (p.displayName || p.name || '');
     var uid = typeof p === 'object' ? (p.uid || '') : '';
     var _removeIdentity = typeof p === 'object' ? (p.uid || p.manualParticipantId || '') : '';
-    var email = typeof p === 'object' ? (p.email || '') : '';
-    var _isOrgP = uid ? !!_orgUidsShared[uid] : (email && !!_orgEmailsShared[email]);
+    var _isOrgP = !!(uid && _orgUidsShared[uid]);
     var _crown = _isOrgP ? ' <svg width="14" height="14" viewBox="0 0 24 24" fill="rgba(251,191,36,0.9)" style="flex-shrink:0;margin-left:2px;"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>' : '';
     // v4.5.86: dupla = uid OU nome (ESPELHA _isPairEntry). A migração ITEM 3/Fase 4 apaga
     // p1Name/p2Name de quem tem uid → exigir NOME aqui fazia a dupla renderizar como solo.
@@ -266,7 +265,6 @@ window._buildDoublesInscritosSection = function (t, ctx) {
   var isOrg = !!ctx.isOrg;
   var drawDone = !!ctx.drawDone;
   var _orgUidsShared = ctx.orgUids || {};
-  var _orgEmailsShared = ctx.orgEmails || {};
   var individualCountParts = (ctx.peopleCount != null) ? ctx.peopleCount : '';
   var _hasTournCats = !!ctx.hasTournCats;
   var _chrome = !!ctx.chrome;
@@ -313,7 +311,7 @@ window._buildDoublesInscritosSection = function (t, ctx) {
   function _safeAttr(s) { return String(s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
 
   // v1.3.37: card de dupla via FONTE ÚNICA window._duplaCard (extraído). ctx com as deps.
-  var _dctx = { isOrg: isOrg, drawDone: drawDone, orgUids: _orgUidsShared, orgEmails: _orgEmailsShared, cardPresence: _cardPres, memberPresence: ctx.memberPresence, enrollOrderMap: _enrollOrderMapD };
+  var _dctx = { isOrg: isOrg, drawDone: drawDone, orgUids: _orgUidsShared, cardPresence: _cardPres, memberPresence: ctx.memberPresence, enrollOrderMap: _enrollOrderMapD };
 
   // Convites pendentes → card de dupla PENDENTE (âmbar) na seção "Sem dupla".
   var _cuUid = (window.AppStore && window.AppStore.currentUser && window.AppStore.currentUser.uid) || '';
@@ -534,7 +532,6 @@ window._addPlaceholdersCore = function (id, qtd, onDone, opts) {
         if (p && typeof p === 'object') {
             var mm;
             if (p.uid && (mm = String(p.uid).match(/^jog_0*(\d+)/))) { _bump(parseInt(mm[1], 10)); existingNames['Jogador ' + String(parseInt(mm[1], 10)).padStart(2, '0')] = true; }
-            if (p.email && (mm = String(p.email).match(/^jogador0*(\d+)@scoreplace\.app$/i))) { _bump(parseInt(mm[1], 10)); existingNames['Jogador ' + String(parseInt(mm[1], 10)).padStart(2, '0')] = true; }
         }
     });
     var _allM = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (Array.isArray(t.matches) ? t.matches : []);
@@ -716,21 +713,21 @@ window._applySplitParticipantFresh = function (t, participantName) {
     if (idx === -1) return false;
     var entry = arr[idx];
     var slots = [];
-    var mkSlot = function(uid, name, email) {
+    var mkSlot = function(uid, name, manualParticipantId) {
         var o = {};
         if (uid) o.uid = uid;
+        if (manualParticipantId) o.manualParticipantId = manualParticipantId;
         if (name) { o.name = name; o.displayName = name; }
-        if (email) o.email = email;
-        return (o.uid || o.name) ? o : null;
+        return (o.uid || o.manualParticipantId || o.name) ? o : null;
     };
     if (entry && typeof entry === 'object' && Array.isArray(entry.participants) && entry.participants.length) {
         entry.participants.forEach(function(s) {
-            var o = s && typeof s === 'object' ? mkSlot(s.uid, s.displayName || s.name, s.email) : (s ? mkSlot(null, String(s), null) : null);
+            var o = s && typeof s === 'object' ? mkSlot(s.uid, s.displayName || s.name, s.manualParticipantId) : (s ? mkSlot(null, String(s), null) : null);
             if (o) slots.push(o);
         });
     } else if (entry && typeof entry === 'object' && (entry.p1Uid || entry.p2Uid || (entry.p1Name && entry.p2Name))) {
-        var s1 = mkSlot(entry.p1Uid, entry.p1Name, entry.p1Email);
-        var s2 = mkSlot(entry.p2Uid, entry.p2Name, entry.p2Email);
+        var s1 = mkSlot(entry.p1Uid, entry.p1Name, entry.p1ManualId);
+        var s2 = mkSlot(entry.p2Uid, entry.p2Name, entry.p2ManualId);
         if (s1) slots.push(s1);
         if (s2) slots.push(s2);
     }
@@ -815,11 +812,11 @@ window._drainWaitlistsIfOpen = function(t, opts) {
 // duas listas conta 1x; uma equipe na espera conta como equipe, não como "1
 // pessoa"). Mantém INSCRITOS/EQUIPES estáveis antes E depois do sorteio.
 window._countCompetitors = function(t) {
-    var seenPpl = {}, seenTeam = {}, people = 0, teams = 0, vagaSeq = 0;
+    var seenPpl = {}, seenTeam = {}, people = 0, teams = 0, vagaSeq = 0, vagaTeamSeq = 0;
     // VAGA (placeholder) É SEMPRE ÚNICA — nunca deduplica (v1.5.26).
     //
     // BUG MEDIDO (dono, 27/jul, Confra): os placeholders não entravam nos INSCRITOS. A
-    // dedup deste contador é por uid/email OU, na falta deles, pelo NOME — e vaga não
+    // dedup deste contador é por UID/manualParticipantId OU, no legado, pelo NOME — e vaga não
     // tem identidade:
     //   • sem nome (o cânone só-uid strippa o nome no save) → a chave virava 'n:', que
     //     é justamente o valor descartado logo abaixo → a vaga SUMIA da conta;
@@ -837,12 +834,13 @@ window._countCompetitors = function(t) {
         if (o && typeof o === 'object' && o.isPlaceholder) return true;
         // uid 'jog_NN' é vaga LEGADA (identity-core normaliza por aí também)
         if (o && typeof o === 'object' && o.uid && String(o.uid).indexOf('jog_') === 0) return true;
-        if (o && typeof o === 'object' && (o.uid || o.email)) return false;   // tem identidade real
+        if (o && typeof o === 'object' && (o.uid || o.manualParticipantId)) return false; // tem identidade estrutural
         var s = String(nm == null ? '' : nm).trim();
         return !s || _phName(s);
     };
     var pKey = function(o, nm) {
-        if (o && typeof o === 'object' && (o.uid || o.email)) return 'id:' + String(o.uid || o.email).toLowerCase();
+        if (o && typeof o === 'object' && o.uid) return 'uid:' + String(o.uid);
+        if (o && typeof o === 'object' && o.manualParticipantId) return 'manual:' + String(o.manualParticipantId);
         return 'n:' + String(nm == null ? '' : nm).trim().toLowerCase();
     };
     var addP = function(o, nm) {
@@ -855,13 +853,18 @@ window._countCompetitors = function(t) {
             // v1.2.60: chave do TIME por uids — o nome é stripado no save de entrada com uid
             // ([[project_uid_identity_canon_locked]]), então `displayName`/`p1Name` vinham VAZIOS
             // e `addTeam('')` PULAVA a dupla → contava só as duplas com nome (bug real 8/4 vs 26/13).
-            var _tUids = (typeof window._participantUids === 'function') ? window._participantUids(p) : [];
-            var _tKey = _tUids.length ? ('t:' + _tUids.slice().sort().join('|')) : null;
+            var _tKey = (typeof window._participantEntryKey === 'function') ? window._participantEntryKey(p) : null;
             if (p && typeof p === 'object' && Array.isArray(p.participants) && p.participants.length) {
                 if (addTeam(_tKey || p.displayName || p.name)) p.participants.forEach(function(s) { addP(s, s && (s.displayName || s.name)); });
             } else if (p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) {
                 // ESTRUTURAL (uid OU nome) — [[project_dupla_entry_structural_not_slash]]. Antes exigia p1Name&&p2Name.
-                if (addTeam(_tKey || p.displayName || ((p.p1Name || '') + ' / ' + (p.p2Name || '')))) { addP({ uid: p.p1Uid, email: p.p1Email }, p.p1Name); addP({ uid: p.p2Uid, email: p.p2Email }, p.p2Name); }
+                var _slot1 = { uid: p.p1Uid, manualParticipantId: p.p1ManualId };
+                var _slot2 = { uid: p.p2Uid, manualParticipantId: p.p2ManualId };
+                // Duas vagas formam um time distinto mesmo se o legado repetiu seus rótulos.
+                // Não se pode deduplicar a chave de duas vagas pelo texto "Jogador NN".
+                var _bothVacancies = ehVaga(_slot1, p.p1Name) && ehVaga(_slot2, p.p2Name);
+                var _teamIdentity = _bothVacancies ? ('vaga-team:' + (++vagaTeamSeq)) : (_tKey || p.displayName || ((p.p1Name || '') + ' / ' + (p.p2Name || '')));
+                if (addTeam(_teamIdentity)) { addP(_slot1, p.p1Name); addP(_slot2, p.p2Name); }
             } else {
                 var s = window._pName ? window._pName(p) : (typeof p === 'string' ? p : (p && (p.displayName || p.name)) || '');
                 if (s && s.indexOf('/') !== -1) {
@@ -886,7 +889,8 @@ window._waitlistPeopleCount = function(t) {
     if (!t) return 0;
     var seen = {}, n = 0;
     var pKey = function(o, nm) {
-        if (o && typeof o === 'object' && (o.uid || o.email)) return 'id:' + String(o.uid || o.email).toLowerCase();
+        if (o && typeof o === 'object' && o.uid) return 'uid:' + String(o.uid);
+        if (o && typeof o === 'object' && o.manualParticipantId) return 'manual:' + String(o.manualParticipantId);
         return 'n:' + String(nm == null ? '' : nm).trim().toLowerCase();
     };
     var addP = function(o, nm) { var k = pKey(o, nm); if (k !== 'n:' && !seen[k]) { seen[k] = 1; n++; } };
@@ -895,7 +899,7 @@ window._waitlistPeopleCount = function(t) {
             if (p && typeof p === 'object' && Array.isArray(p.participants) && p.participants.length) {
                 p.participants.forEach(function(s) { addP(s, s && (s.displayName || s.name)); });
             } else if (p && typeof p === 'object' && p.p1Name && p.p2Name) {
-                addP({ uid: p.p1Uid, email: p.p1Email }, p.p1Name); addP({ uid: p.p2Uid, email: p.p2Email }, p.p2Name);
+                addP({ uid: p.p1Uid, manualParticipantId: p.p1ManualId }, p.p1Name); addP({ uid: p.p2Uid, manualParticipantId: p.p2ManualId }, p.p2Name);
             } else {
                 var s = window._pName ? window._pName(p) : (typeof p === 'string' ? p : (p && (p.displayName || p.name)) || '');
                 if (s && s.indexOf('/') !== -1) s.split('/').map(function(x){ return x.trim(); }).filter(Boolean).forEach(function(nm){ addP(null, nm); });
@@ -4418,9 +4422,7 @@ function renderTournaments(container, tournamentId = null) {
             // Build organizer emails + uids sets (shared by check-in and normal modes)
             // _orgUids é necessário para que co-organizadores com uid (mas sem email
             // no participant object) também mostrem a coroa.
-            /* ⛔ ORGANIZAÇÃO POR UID (LGPD, 25/set/2026): os e-mails saíram do documento. O mapa
-             * continua existindo VAZIO porque o card compartilhado ainda o recebe no contexto. */
-            var _orgEmailsShared = {};
+            /* ⛔ ORGANIZAÇÃO POR UID: a autoria de card não depende de contato. */
             var _orgUidsShared = {};
             if (t.creatorUid) _orgUidsShared[t.creatorUid] = true;
             if (Array.isArray(t.coHosts)) t.coHosts.forEach(function(ch) {
@@ -4434,7 +4436,6 @@ function renderTournaments(container, tournamentId = null) {
                 // window._inscritoIndividualCard — a MESMA função do #participants.
                 // PIRATA APAGADA: a lista de check-in flat E o card rico duplicado.
                 // Um caminho só → o SB testa exatamente o que a produção mostra.
-                var _orgEmails = _orgEmailsShared;
                 var _orgUidsSort = _orgUidsShared;
                 var _sortedParts = parts.slice().sort(function(a, b) {
                   if (_tIsLiga && (_enrollSort === 'active_asc' || _enrollSort === 'active_desc')) {
@@ -4443,12 +4444,10 @@ function renderTournaments(container, tournamentId = null) {
                     if (aActive !== bActive) return (_enrollSort === 'active_desc' ? -1 : 1) * (aActive - bActive);
                     return parts.indexOf(a) - parts.indexOf(b);
                   }
-                  var aEmail = (typeof a === 'object' ? (a.email || '') : '');
-                  var bEmail = (typeof b === 'object' ? (b.email || '') : '');
                   var aUid   = (typeof a === 'object' ? (a.uid   || '') : '');
                   var bUid   = (typeof b === 'object' ? (b.uid   || '') : '');
-                  var aIsOrg = (_orgEmails[aEmail] || _orgUidsSort[aUid]) ? 0 : 1;
-                  var bIsOrg = (_orgEmails[bEmail] || _orgUidsSort[bUid]) ? 0 : 1;
+                  var aIsOrg = _orgUidsSort[aUid] ? 0 : 1;
+                  var bIsOrg = _orgUidsSort[bUid] ? 0 : 1;
                   if (aIsOrg !== bIsOrg) return aIsOrg - bIsOrg;
                   if (_enrollSort === 'alpha_asc' || _enrollSort === 'alpha_desc') {
                     var nA = (typeof a === 'string' ? a : (a.displayName || a.name || '')).toLowerCase();
@@ -4566,7 +4565,7 @@ function renderTournaments(container, tournamentId = null) {
             var _dsec = (typeof window._buildDoublesInscritosSection === 'function')
               ? window._buildDoublesInscritosSection(t, {
                   isOrg: isOrg, drawDone: drawDone,
-                  orgUids: _orgUidsShared, orgEmails: _orgEmailsShared,
+                  orgUids: _orgUidsShared,
                   peopleCount: individualCountParts, hasTournCats: _hasTournCats,
                   chrome: false
                 })
