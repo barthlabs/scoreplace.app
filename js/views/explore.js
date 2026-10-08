@@ -96,7 +96,7 @@ function renderExplore(container) {
     return;
   }
 
-  var myUid = cu.uid || cu.email;
+  var myUid = cu.uid || '';
   var myFriends = cu.friends || [];
   var mySent = cu.friendRequestsSent || [];
   var myReceived = cu.friendRequestsReceived || [];
@@ -203,9 +203,10 @@ function renderExplore(container) {
   // custa nada a mais: é a mesma leitura que aconteceria de qualquer jeito.
   if (!_temTotal && window.FirestoreDB && typeof window.FirestoreDB.listInvitableUsers === 'function') {
     window.FirestoreDB.listInvitableUsers().then(function (todos) {
-      var meu = String(cu.uid || cu.email || '');
+      var meu = String(cu.uid || '');
       var n = (todos || []).filter(function (u) {
-        return u && String(u._docId || u.uid || u.email || '') !== meu;
+        var uid = String((u && (u._docId || u.uid)) || '');
+        return uid && uid !== meu;
       }).length;
       if (!n) return;
       try { localStorage.setItem('scoreplace_totalPessoas', String(n)); } catch (e) {}
@@ -228,11 +229,11 @@ function renderExplore(container) {
 }
 
 // ---- Helper: participant identity is UID, never email/name -------------------
-function _participantMatchesUser(p, email, displayName, uid) {
+function _participantMatchesUser(p, uid) {
   if (p == null) return false;
-  // O chamador ainda recebe e-mail/nome por compatibilidade de assinatura, mas
-  // eles são dados de apresentação/contato. Usá-los aqui fazia homônimos e quem
-  // compartilha e-mail de família herdarem torneios e confrontos alheios.
+  // E-mail e nome são dados de apresentação/contato. Usá-los aqui fazia
+  // homônimos e quem compartilha e-mail de família herdarem torneios e
+  // confrontos alheios.
   if (uid && p && typeof p === 'object') {
     if (typeof window._participantUids === 'function') {
       try { if (window._participantUids(p).indexOf(uid) !== -1) return true; } catch (e) {}
@@ -403,9 +404,7 @@ function _sortOtrosArray(arr, mode) {
   }
 }
 
-function _computeSharedInfo(user, myEmail, myName, myUid) {
-  var email = user.email || '';
-  var name = user.displayName || '';
+function _computeSharedInfo(user, myUid) {
   var uUid = user.uid || user._docId || '';
   var tournaments = window.AppStore.tournaments || [];
   var latest = 0;
@@ -415,11 +414,11 @@ function _computeSharedInfo(user, myEmail, myName, myUid) {
     var parts = Array.isArray(t.participants) ? t.participants : [];
     // ⛔ só uid: e-mail não identifica ninguém (cânone do dono)
     var hasMe = (myUid && t.creatorUid === myUid) || parts.some(function(p) {
-      return _participantMatchesUser(p, myEmail, myName, myUid);
+      return _participantMatchesUser(p, myUid);
     });
     if (!hasMe) continue;
     var hasUser = parts.some(function(p) {
-      return _participantMatchesUser(p, email, name, uUid);
+      return _participantMatchesUser(p, uUid);
     });
     if (!hasUser) continue;
     count++;
@@ -436,21 +435,12 @@ function _computeSharedInfo(user, myEmail, myName, myUid) {
 // Drop users the caller already has a relationship with so they don't appear
 // twice (they're already in the friends / received / sent sections above).
 function _dedupeAgainstRelationships(users, myUid, myFriends, mySent, myReceived) {
-  var friendEmails = window._friendEmails || [];
-  var friendNames = window._friendNames || [];
   return (users || []).filter(function(u) {
-    var uid = u._docId || u.uid || u.email;
-    var email = u.email || '';
-    var name = u.displayName || '';
-    if (uid === myUid) return false;
+    var uid = u && (u._docId || u.uid);
+    if (!uid || uid === myUid) return false;
     if (myFriends.indexOf(uid) !== -1) return false;
-    if (email && myFriends.indexOf(email) !== -1) return false;
-    if (email && friendEmails.indexOf(email) !== -1) return false;
-    if (name && friendNames.indexOf(name) !== -1) return false;
     if (mySent.indexOf(uid) !== -1) return false;
-    if (email && mySent.indexOf(email) !== -1) return false;
     if (myReceived.indexOf(uid) !== -1) return false;
-    if (email && myReceived.indexOf(email) !== -1) return false;
     return true;
   });
 }
@@ -485,10 +475,8 @@ function _renderSearchResults(resultsDiv, users, query, recentDays) {
     return;
   }
   var cu = window.AppStore.currentUser || {};
-  var _myEmail = cu.email || '';
-  var _myName = cu.displayName || '';
   users.forEach(function(u) {
-    var shareInfo = _computeSharedInfo(u, _myEmail, _myName, cu.uid || ''); // v2.8.80: uid
+    var shareInfo = _computeSharedInfo(u, cu.uid || '');
     u._sharedCount = shareInfo.count;
     if (shareInfo.latest > 0) {
       u._latestTs = shareInfo.latest;
@@ -529,7 +517,7 @@ window._exploreExpandRecent = function(days) {
   window._exploreRecentDays = days;
   var cu = window.AppStore.currentUser;
   if (!cu) return;
-  var myUid = cu.uid || cu.email;
+  var myUid = cu.uid || '';
   var input = document.getElementById('explore-search-input');
   var q = input ? input.value.trim() : '';
   _performUserSearch(q, myUid, cu.friends || [], cu.friendRequestsSent || [], cu.friendRequestsReceived || []);
@@ -667,7 +655,7 @@ window._exploreApplyFilter = function () {
   window._exploreLastSearch = searchVal;
   var cu = window.AppStore && window.AppStore.currentUser;
   if (searchChanged && cu) {
-    var myUid = cu.uid || cu.email;
+    var myUid = cu.uid || '';
     if (window._exploreApplyDebounce) clearTimeout(window._exploreApplyDebounce);
     window._exploreApplyDebounce = setTimeout(function () {
       _performUserSearch(searchVal, myUid, cu.friends || [], cu.friendRequestsSent || [], cu.friendRequestsReceived || []);
@@ -769,10 +757,8 @@ function _continueSearchRender(users, query, resultsDiv, _t) {
 
     // Compute timestamps + shared tournament count: latest shared tournament (preferred) or profile updatedAt/createdAt
     var cu = window.AppStore.currentUser || {};
-    var _myEmail = cu.email || '';
-    var _myName = cu.displayName || '';
     users.forEach(function(u) {
-      var shareInfo = _computeSharedInfo(u, _myEmail, _myName, cu.uid || ''); // v2.8.80: uid
+      var shareInfo = _computeSharedInfo(u, cu.uid || '');
       u._sharedCount = shareInfo.count;
       if (shareInfo.latest > 0) {
         u._latestTs = shareInfo.latest;
@@ -847,7 +833,7 @@ function _renderOtrosCards(resultsDiv, users) {
   function _renderCardGrid(groupUsers) {
     var inner = '<div style="display:flex;flex-direction:column;gap:6px;">';
     groupUsers.forEach(function(u) {
-      var uid = u._docId || u.uid || u.email;
+      var uid = u._docId || u.uid || '';
       window._exploreProfileCache = window._exploreProfileCache || {};
       if (uid) window._exploreProfileCache[uid] = u;
       inner += _userCardWithEncounterHtml(u, uid, _actionBtnFor(u));
@@ -1110,8 +1096,6 @@ function _renderMyFriends(myUid, friendIds) {
   var div = document.getElementById('explore-friends');
   if (!div || !friendIds || friendIds.length === 0) {
     if (div) div.innerHTML = '';
-    window._friendEmails = [];
-    window._friendNames = [];
     return Promise.resolve();
   }
 
@@ -1141,21 +1125,11 @@ function _renderMyFriends(myUid, friendIds) {
       if (uid) { window._exploreProfileCache = window._exploreProfileCache || {}; window._exploreProfileCache[uid] = p; }
     });
 
-    // Nomes são únicos entre contas vivas; a busca e a deduplicação não
-    // precisam mais de e-mail de amigos.
-    window._friendEmails = [];
-    window._friendNames = [];
-    profiles.forEach(function(p) {
-      if (p.displayName) window._friendNames.push(p.displayName);
-    });
-
     if (profiles.length === 0) { div.innerHTML = ''; return; }
 
     // Sort by interaction: users with more shared tournaments first,
     // then by most recently updated profile
     var myTournaments = window.AppStore.tournaments || [];
-    var _myEmail = (window.AppStore.currentUser && window.AppStore.currentUser.email) || '';
-    var _myName = (window.AppStore.currentUser && window.AppStore.currentUser.displayName) || '';
     var _myUid = (window.AppStore.currentUser && window.AppStore.currentUser.uid) || ''; // v2.8.80
     profiles.forEach(function(p) {
       var uid = p._docId;
@@ -1164,12 +1138,12 @@ function _renderMyFriends(myUid, friendIds) {
         var parts = Array.isArray(t.participants) ? t.participants : [];
         // ⛔ só uid: e-mail não identifica ninguém (cânone do dono)
         var hasMe = (_myUid && t.creatorUid === _myUid) || parts.some(function(pp) {
-          return _participantMatchesUser(pp, _myEmail, _myName, _myUid);
+          return _participantMatchesUser(pp, _myUid);
         });
         var hasFriend = parts.some(function(pp) {
           // Perfil de amigo vem do espelho público; identidade do participante
           // é o UID, nunca o e-mail privado de outra conta.
-          return _participantMatchesUser(pp, '', p.displayName || '', uid);
+          return _participantMatchesUser(pp, uid);
         });
         if (hasMe && hasFriend) sharedCount++;
       });
@@ -1202,7 +1176,7 @@ function _renderMyFriends(myUid, friendIds) {
 window._cancelFriendRequest = function(toUid) {
   var cu = window.AppStore.currentUser;
   if (!cu) return;
-  var myUid = cu.uid || cu.email;
+  var myUid = cu.uid || '';
 
   var desfazerC = _amizadeOtimista(cu, function () {
     cu.friendRequestsSent = (cu.friendRequestsSent || []).filter(function(id) { return id !== toUid; });
@@ -1223,7 +1197,7 @@ window._cancelFriendRequest = function(toUid) {
 window._cancelFriendRequestMulti = function(toUids) {
   var cu = window.AppStore.currentUser;
   if (!cu || !Array.isArray(toUids) || toUids.length === 0) return;
-  var myUid = cu.uid || cu.email;
+  var myUid = cu.uid || '';
 
   /* ⛔ 5ª auditoria (ponto 5): ANTES este multi tirava TODOS os uids do estado local e
    * engolia a falha de cada um com um `.catch` que só logava — depois anunciava
@@ -1376,7 +1350,7 @@ window._descartarAmizadeLegada = function (uid) {
 window._sendFriendRequest = function(toUid) {
   var cu = window.AppStore.currentUser;
   if (!cu) return;
-  var myUid = cu.uid || cu.email;
+  var myUid = cu.uid || '';
 
   window.FirestoreDB.sendFriendRequest(myUid, toUid, {
     displayName: cu.displayName,
@@ -1463,7 +1437,7 @@ function _amizadeOtimista(cu, aplicar) {
 window._acceptFriend = function(friendUid) {
   var cu = window.AppStore.currentUser;
   if (!cu) return;
-  var myUid = cu.uid || cu.email;
+  var myUid = cu.uid || '';
 
   var desfazer = _amizadeOtimista(cu, function () {
     if (!cu.friends) cu.friends = [];
@@ -1488,7 +1462,7 @@ window._acceptFriend = function(friendUid) {
 window._rejectFriend = function(friendUid) {
   var cu = window.AppStore.currentUser;
   if (!cu) return;
-  var myUid = cu.uid || cu.email;
+  var myUid = cu.uid || '';
 
   var desfazerR = _amizadeOtimista(cu, function () {
     cu.friendRequestsReceived = (cu.friendRequestsReceived || []).filter(function(id) { return id !== friendUid; });
@@ -1506,7 +1480,7 @@ window._rejectFriend = function(friendUid) {
 window._removeFriend = function(friendUid) {
   var cu = window.AppStore.currentUser;
   if (!cu) return;
-  var myUid = cu.uid || cu.email;
+  var myUid = cu.uid || '';
 
   // Confirm before removing
   if (typeof showAlertDialog === 'function') {
@@ -1882,10 +1856,10 @@ function _renderUserProfileSheet(u) {
   var cu = window.AppStore ? (window.AppStore.currentUser || {}) : {};
   var myFriends = cu.friends || [];
   var mySent = cu.friendRequestsSent || [];
-  var uid = u._docId || u.uid || u.email;
+  var uid = u._docId || u.uid || '';
   var isFriend = myFriends.indexOf(uid) !== -1;
   var isSent = mySent.indexOf(uid) !== -1;
-  var isMe = uid === (cu.uid || cu.email);
+  var isMe = !!uid && uid === (cu.uid || '');
   var safeUid = String(uid || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
   var fullName = window._safeHtml(window._friendlyDisplayName ? window._friendlyDisplayName(u) : (u.displayName || u.email || 'Usuário'));
   var borderColor = isFriend ? 'var(--success-color)' : 'var(--primary-color)';
@@ -1985,7 +1959,7 @@ function _renderUserProfileSheet(u) {
 }
 
 function _renderInviteDetailSheet(u) {
-  var uid = u._docId || u.uid || u.email;
+  var uid = u._docId || u.uid || '';
   var allUids = (window._exploreInviteGroups && window._exploreInviteGroups[uid]) || [uid];
   var safeUid = String(uid || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
   var allUidsJs = allUids.map(function (id) {
@@ -2042,7 +2016,7 @@ window._explorePersonActionBtn = function (u, mySent, myReceived, myFriends) {
   var _t = window._t || function (k) { return k; };
   mySent = mySent || []; myReceived = myReceived || [];
   myFriends = myFriends || window._exploreMeusAmigos();
-  var uid = u._docId || u.uid || u.email;
+  var uid = u._docId || u.uid || '';
   var isFriend = myFriends.indexOf(String(uid)) !== -1;
   var isSent = mySent.indexOf(uid) !== -1;
   var isReceived = myReceived.indexOf(uid) !== -1;
@@ -2083,7 +2057,7 @@ window._explorePersonActionBtn = function (u, mySent, myReceived, myFriends) {
   return '<button class="' + btnClass + '" onclick="event.stopPropagation(); window._spinButton(this, \'Enviando...\'); _sendFriendRequest(\'' + safeUid + '\')">' + _t('explore.invite') + '</button>';
 };
 window._explorePersonCard = function (u, mySent, myReceived, myFriends) {
-  var uid = u._docId || u.uid || u.email;
+  var uid = u._docId || u.uid || '';
   var safeUid = String(uid || '').replace(/'/g, "\\'");
   myFriends = myFriends || window._exploreMeusAmigos();
   // ⛔ A COR DIZ O ESTADO, e ela é a MESMA das seções da tela de Pessoas:
