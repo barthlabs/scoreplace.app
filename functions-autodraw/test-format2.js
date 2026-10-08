@@ -9,7 +9,7 @@
 //  1) PARIDADE — vendor/format2.js e js/views/format2.js compilam IDÊNTICO (contextos VM
 //     isolados, bateria de configs). É o teste que sustenta a canonização.
 //  2) CONTRATO — compileFromFmt2 espelha create-tournament.js:5229-5236 (ordem de escrita).
-//  3) GUARDS — legado sem fmt2 não inventa config; recompilar só na fase 0 sem chave.
+//  3) GUARDS — legado sem fmt2 é projetado sem inventar config; recompilar só na fase 0 sem chave.
 //
 // Uso: node test-format2.js   (roda junto de test-draw.js antes de qualquer deploy)
 
@@ -159,13 +159,43 @@ console.log('══════════════════════�
 console.log('3) GUARDS — legado e recompilação segura');
 console.log('════════════════════════════════════════');
 
-// Decisão do dono: sem fmt2 = torneio legado → NÃO inventa config; o caller confia em t.phases.
+// Sem fmt2 não existe intent para recompilar. O legado, porém, recebe a estrutura canônica
+// de fase sem tocar em qualquer dado materializado.
 (function () {
-  const t = { id: 'tour_legacy', sport: SPORT, format: 'Eliminatórias Simples', phases: [{ name: 'Eliminatória' }] };
+  const match = { id: 'm-1', score: [6, 4] };
+  const round = { id: 'r-1', matches: ['m-1'] };
+  const group = { id: 'g-1', players: ['u1', 'u2'] };
+  const t = { id: 'tour_legacy', sport: SPORT, format: 'Eliminatórias Simples', matches: [match], rounds: [round], groups: [group], phases: [{ name: 'Eliminatória', custom: { keep: true } }] };
   const r = core.compileFromFmt2(t);
-  ok('legado sem fmt2 → ok:false + reason no-fmt2', r.ok === false && r.reason === 'no-fmt2', JSON.stringify(r));
-  ok('legado sem fmt2 → t.phases INTOCADO', Array.isArray(t.phases) && t.phases.length === 1 && t.phases[0].name === 'Eliminatória');
+  ok('legado sem fmt2 → projeção ok', r.ok === true && r.legacy === true && r.migrated === true, JSON.stringify(r));
+  ok('legado elim → kind atual + chave simples', t.phases[0].kind === 'elimination' && t.phases[0].elimination.bracketType === 'single');
+  ok('legado elim → conserva dados opacos da fase', t.phases[0].name === 'Eliminatória' && t.phases[0].custom.keep === true);
+  ok('legado elim → não toca jogos, rodadas ou grupos', t.matches[0] === match && t.rounds[0] === round && t.groups[0] === group);
   ok('legado sem fmt2 → t.format INTOCADO', t.format === 'Eliminatórias Simples', t.format);
+})();
+
+(function () {
+  const t = {
+    id: 'tour_legacy_two_phases', sport: SPORT, format: 'Liga',
+    phases: [
+      { name: 'Classificatória', formatCode: 'liga', rounds: [{ id: 'c1' }] },
+      { name: 'Mata-mata', formatCode: 'elim_dupla', matches: [{ id: 'e1', score: [7, 5] }] }
+    ]
+  };
+  const r = core.compileFromFmt2(t);
+  ok('legado multifase → projeção ok', r.ok === true && r.phases === 2);
+  ok('legado multifase → classificatória é round_robin', t.phases[0].kind === 'classification' && t.phases[0].classification.structure === 'round_robin');
+  ok('legado multifase → eliminação dupla é canonical', t.phases[1].kind === 'elimination' && t.phases[1].elimination.bracketType === 'double');
+  ok('legado multifase → conserva rodada e placar', t.phases[0].rounds[0].id === 'c1' && t.phases[1].matches[0].score[0] === 7);
+  const again = core.compileFromFmt2(t);
+  ok('legado multifase → projeção idempotente', again.ok === true && again.migrated === false);
+})();
+
+(function () {
+  const t = { id: 'tour_legacy_top_level', sport: SPORT, format: 'Fase de Grupos', gruposCount: 4 };
+  const r = core.compileFromFmt2(t);
+  ok('legado sem phases → cria projeção mínima', r.ok === true && r.legacy === true && t.phases.length === 1);
+  ok('legado grupos → classificação por grupos', t.phases[0].kind === 'classification' && t.phases[0].classification.structure === 'groups');
 })();
 
 // fmt2 corrompido não pode virar sorteio de formato errado — aborta (espelha o cliente).

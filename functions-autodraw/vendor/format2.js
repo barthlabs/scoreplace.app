@@ -57,6 +57,81 @@
     };
   }
 
+  // ── PROJEÇÃO DE LEGADO ─────────────────────────────────────────────────────
+  // Antes do configurador único, a fase era identificada por strings (`format`,
+  // `formatCode`) espalhadas pelo documento. Elas continuam sendo uma fonte de
+  // leitura para documentos históricos, mas não podem manter dois modelos de
+  // domínio vivos. Esta função acrescenta o contrato atual sem recompilar a
+  // competição: não cria jogos, não reordena rodadas, não toca grupos nem
+  // placares e tampouco fabrica um `fmt2` que o organizador nunca configurou.
+  //
+  // É propositalmente idempotente para poder rodar em toda fronteira de escrita
+  // segura. Um torneio antigo passa a carregar `kind` + o detalhe de domínio
+  // como se tivesse nascido hoje, preservando todo o estado materializado.
+  function legacyPhaseKind(phase, tournament) {
+    var explicit = phase && phase.kind;
+    if (explicit === 'classification' || explicit === 'elimination') return explicit;
+    var code = String((phase && phase.formatCode) || (tournament && tournament.formatCode) || '').toLowerCase();
+    var label = String((phase && phase.format) || (tournament && tournament.format) || '').toLowerCase();
+    if (code === 'elim_simples' || code === 'elim_dupla') return 'elimination';
+    if (code === 'grupos_mata' || /grupo/.test(label)) return 'classification';
+    if (code === 'liga' || /\bliga\b|pontos corridos|ranking|su[ií]ç?o|swiss/.test(label)) return 'classification';
+    return 'elimination';
+  }
+
+  function legacyClassificationStructure(phase, tournament) {
+    var current = phase && phase.classification && phase.classification.structure;
+    if (current === 'groups' || current === 'round_robin') return current;
+    var code = String((phase && phase.formatCode) || (tournament && tournament.formatCode) || '').toLowerCase();
+    var label = String((phase && phase.format) || (tournament && tournament.format) || '').toLowerCase();
+    return (code === 'grupos_mata' || /grupo/.test(label)) ? 'groups' : 'round_robin';
+  }
+
+  function legacyBracketType(phase, tournament) {
+    var current = phase && phase.elimination && phase.elimination.bracketType;
+    if (current === 'single' || current === 'double') return current;
+    var code = String((phase && phase.formatCode) || (tournament && tournament.formatCode) || '').toLowerCase();
+    var label = String((phase && phase.format) || (tournament && tournament.format) || '').toLowerCase();
+    return (code === 'elim_dupla' || /dupla eliminat/.test(label)) ? 'double' : 'single';
+  }
+
+  function projectLegacyPhases(tournament) {
+    tournament = tournament || {};
+    var stored = Array.isArray(tournament.phases) ? tournament.phases : [];
+    // Alguns documentos antigos eram uma única fase somente nos campos do torneio.
+    // Projetamos uma fase mínima, usando unicamente fatos já gravados no documento.
+    var source = stored.length ? stored : [{
+      name: tournament.phaseName || tournament.format || 'Eliminatória',
+      format: tournament.format,
+      formatCode: tournament.formatCode,
+      drawMode: tournament.drawMode,
+      reiRainha: tournament.reiRainha,
+      gruposCount: tournament.gruposCount,
+      gruposClassified: tournament.gruposClassified
+    }];
+    var changed = !stored.length;
+    var phases = source.map(function (raw) {
+      var phase = Object.assign({}, raw || {});
+      var kind = legacyPhaseKind(phase, tournament);
+      if (phase.kind !== kind) { phase.kind = kind; changed = true; }
+      if (kind === 'classification') {
+        var structure = legacyClassificationStructure(phase, tournament);
+        if (!phase.classification || phase.classification.structure !== structure) {
+          phase.classification = Object.assign({}, phase.classification || {}, { structure: structure });
+          changed = true;
+        }
+      } else {
+        var bracketType = legacyBracketType(phase, tournament);
+        if (!phase.elimination || phase.elimination.bracketType !== bracketType) {
+          phase.elimination = Object.assign({}, phase.elimination || {}, { bracketType: bracketType });
+          changed = true;
+        }
+      }
+      return phase;
+    });
+    return { phases: phases, changed: changed, created: !stored.length };
+  }
+
   function defaultConfig(sport) {
     var dispDefault = allowsSingles(sport) ? 'individual' : 'dupla';
     return normalize({
@@ -717,6 +792,7 @@
     defaultConfig: defaultConfig,
     normalize: normalize,
     summary: summary,
+    projectLegacyPhases: projectLegacyPhases,
     compileToPhases: compileToPhases
   };
 })();

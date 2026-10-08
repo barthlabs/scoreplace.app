@@ -722,6 +722,15 @@ function _gravaTorneio(tx, ref, tDepois, tAntes, ctx) {
   if (!_agoraIso) {
     throw new Error('[write-plan] _gravaTorneio exige ctx.agoraIso — instante estável calculado FORA da transação');
   }
+  /* Todo torneio passa por esta fronteira antes de voltar ao banco. Documentos anteriores
+   * ao fmt2 não têm intent cru para serem recompilados, mas podem — e devem — carregar a
+   * representação atual de fases. A projeção é lossless: só acrescenta kind e a semântica
+   * de classificação/eliminatória; não recria sorteio, rodada, grupo, jogo ou placar. */
+  if (tDepois && !tDepois.fmt2 && drawWindow && drawWindow.FORMAT2
+    && typeof drawWindow.FORMAT2.projectLegacyPhases === 'function') {
+    const legado = drawWindow.FORMAT2.projectLegacyPhases(tDepois);
+    if (legado.changed) tDepois.phases = legado.phases;
+  }
   /* ⛔⛔⛔ VAGA DE REPESCAGEM CARIMBADA NÃO MUDA — E A TRAVA MORA AQUI, NO SERVIDOR.
    *
    * RELATO DO DONO, 27/set/2026, com print: o jogo 153 aparecia na tela dele com

@@ -539,8 +539,9 @@ function generateLigaRound(t, scheduledTime) {
 // (create-tournament.js:5232). Ou seja, `t.phases` é DERIVADO e reproduzível a partir do
 // `fmt2` — o servidor recompila do intent e ignora o que o app velho compilou.
 //
-// LEGADO (decisão do dono): torneio sem `t.fmt2` é anterior ao format2 → NÃO inventa config;
-// devolve {ok:false, reason:'no-fmt2'} e o caller confia no `t.phases` que está no doc.
+// LEGADO: torneio sem `t.fmt2` não tem intent suficiente para ser recompilado. Ainda assim,
+// ele é projetado no schema atual de fases de forma lossless: acrescenta `kind` + o detalhe
+// classification/elimination, sem refazer jogos, rodadas, grupos, placares ou inventar fmt2.
 //
 // ⚠️ SÓ CHAMAR NA FASE 0 SEM CHAVE. Recompilar no meio do torneio destruiria estado de fase
 // (currentPhaseIndex/_phaseMaterialized). O guard é do caller — ver `canRecompile`.
@@ -550,7 +551,16 @@ function compileFromFmt2(t, opts) {
   opts = opts || {};
   const win = g.window;
   if (!t || !t.fmt2 || typeof t.fmt2 !== 'object') {
-    return { ok: false, reason: 'no-fmt2' };
+    if (!t || !win.FORMAT2 || typeof win.FORMAT2.projectLegacyPhases !== 'function') {
+      return { ok: false, reason: 'no-fmt2' };
+    }
+    try {
+      const projected = win.FORMAT2.projectLegacyPhases(t);
+      t.phases = projected.phases;
+      return { ok: true, legacy: true, migrated: projected.changed, phases: projected.phases.length, format: t.format };
+    } catch (e) {
+      return { ok: false, reason: 'legacy-projection-failed', error: String(e && e.message || e) };
+    }
   }
   try {
     const out = win.FORMAT2.compileToPhases(t.fmt2, {
