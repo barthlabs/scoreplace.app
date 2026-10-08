@@ -44,6 +44,8 @@ ok(domain.entryIdentityKey({ p1Uid: 'ana', p2ManualId: 'guest-7', p2Name: 'Convi
   '⑪ dupla preserva UID e ID manual dos dois membros');
 ok(domain.entryIdentityKey({ manualParticipantId: 'ana', displayName: 'Ana' }) !== domain.entryIdentityKey({ uid: 'ana', displayName: 'Ana' }),
   '⑫ UID e participante manual com o mesmo texto não colidem');
+ok(domain.participantIdentityKeys({ p1Uid: 'ana', p2ManualId: 'guest-7', p2Name: 'Convidada' }).join(',') === 'manual:guest-7,uid:ana',
+  '⑬ contadores recebem uma chave por pessoa da dupla');
 
 const browser = { window: null }; browser.window = browser; vm.createContext(browser);
 vm.runInContext(fs.readFileSync(path.join(ROOT, 'js/domain/participant-identity.js'), 'utf8'), browser);
@@ -53,17 +55,19 @@ ok(browser._participantUids({ uid: 'ana', p1Uid: 'bia', p2Uid: 'ana' }).join(','
 ok(browser._entryTeamMembers({ p1Uid: 'u1', p2Uid: 'u2' }).join(',') === 'u1,u2',
   '⑭ adaptador de browser preserva a dupla só-uid');
 ok(browser._participantEntryKey({ p1Uid: 'u1', p2ManualId: 'm2', p2Name: 'Manual' }) === 'team:manual:m2|uid:u1',
-  '⑮ adaptador expõe a mesma chave tipada de entrada');
+  '⑯ adaptador expõe a mesma chave tipada de entrada');
+ok(browser._participantIdentityKeys({ p1Uid: 'u1', p2ManualId: 'm2', p2Name: 'Manual' }).join(',') === 'manual:m2,uid:u1',
+  '⑰ adaptador expõe as chaves individuais da dupla');
 
 const index = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
 ok(index.indexOf('js/domain/participant-identity.js') < index.indexOf('js/views/identity-core.js'),
-  '⑯ domínio carrega antes do adaptador clássico');
+  '⑱ domínio carrega antes do adaptador clássico');
 const draw = fs.readFileSync(path.join(ROOT, 'functions-autodraw', 'draw-core.js'), 'utf8');
 ok(draw.indexOf("participant-identity.js") < draw.indexOf("require('./vendor/identity-core.js')"),
-  '⑰ motor de sorteio carrega o mesmo domínio antes do adaptador');
+  '⑲ motor de sorteio carrega o mesmo domínio antes do adaptador');
 const engine = require(path.join(ROOT, 'functions-autodraw', 'draw-core.js'));
 ok(engine._window.ScoreplaceParticipantIdentity && engine._window._participantUids({ uid: 'a', p1Uid: 'b', p2Uid: 'a' }).join(',') === 'a,b',
-  '⑱ motor executa o contrato tipado, não uma cópia própria');
+  '⑳ motor executa o contrato tipado, não uma cópia própria');
 
 console.log(fail ? ('  ' + fail + ' FALHA(S), ' + pass + ' ok') : ('  ✓ ' + pass + ' asserções'));
 process.exit(fail ? 1 : 0);

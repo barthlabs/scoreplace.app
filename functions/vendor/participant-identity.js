@@ -135,6 +135,17 @@ var ScoreplaceParticipantIdentity;
         return slots;
     }
     ScoreplaceParticipantIdentity.participantSlots = participantSlots;
+    /** Chaves por PESSOA da entrada, nunca por contato. */
+    function participantIdentityKeys(value) {
+        return participantSlots(value).map((person) => {
+            if (person.uid)
+                return 'uid:' + person.uid;
+            if (person.manualParticipantId)
+                return 'manual:' + person.manualParticipantId;
+            return person.name ? 'legacy-name:' + person.name.toLocaleLowerCase() : '';
+        }).filter(Boolean).sort();
+    }
+    ScoreplaceParticipantIdentity.participantIdentityKeys = participantIdentityKeys;
     /**
      * Chave estável de uma ENTRADA de torneio. É usada apenas onde a operação é
      * sobre a inscrição inteira (por exemplo, desfazer uma mesclagem de
@@ -147,13 +158,7 @@ var ScoreplaceParticipantIdentity;
      * documento antigo permaneça reversível até a migração explícita.
      */
     function entryIdentityKey(value) {
-        const members = participantSlots(value).map((person) => {
-            if (person.uid)
-                return 'uid:' + person.uid;
-            if (person.manualParticipantId)
-                return 'manual:' + person.manualParticipantId;
-            return person.name ? 'legacy-name:' + person.name.toLocaleLowerCase() : '';
-        }).filter(Boolean).sort();
+        const members = participantIdentityKeys(value);
         if (!members.length)
             return '';
         return members.length === 1 ? members[0] : 'team:' + members.join('|');

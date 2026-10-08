@@ -58,8 +58,8 @@ window._buildAnalyticsSection = function _buildAnalyticsSection(organizados) {
       // Snapshots parciais podem conter lacunas transitórias. Elas não são um
       // participante e jamais podem derrubar a tela ao montar a analítica.
       if (!p) return;
-      var key = (typeof p === 'string') ? p : (p.uid || p.email || p.displayName || JSON.stringify(p));
-      if (key) participantSet[key] = true;
+      var keys = (typeof window._participantIdentityKeys === 'function') ? window._participantIdentityKeys(p) : [];
+      keys.forEach(function(key) { participantSet[key] = true; });
     });
     totalParts += parts.length;
   });

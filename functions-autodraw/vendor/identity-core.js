@@ -69,6 +69,30 @@ window._participantEntryKey = function(p) {
   return members.length > 1 ? 'team:' + members.join('|') : (members[0] || '');
 };
 
+// Chaves de PESSOAS da entrada: indicadores e estatísticas precisam contar os
+// membros da dupla individualmente, sem usar e-mail como atalho de identidade.
+window._participantIdentityKeys = function(p) {
+  var domain = window.ScoreplaceParticipantIdentity;
+  if (domain && typeof domain.participantIdentityKeys === 'function') return domain.participantIdentityKeys(p);
+  if (!p || typeof p !== 'object') {
+    var legacy = String(p == null ? '' : p).trim();
+    return legacy ? ['legacy-name:' + legacy.toLowerCase()] : [];
+  }
+  var keys = [];
+  function add(uid, manual, name) {
+    var key = uid ? 'uid:' + String(uid) : (manual ? 'manual:' + String(manual) : (name ? 'legacy-name:' + String(name).trim().toLowerCase() : ''));
+    if (key && keys.indexOf(key) === -1) keys.push(key);
+  }
+  if (Array.isArray(p.participants) && p.participants.length) p.participants.forEach(function(slot) {
+    if (slot && typeof slot === 'object') add(slot.uid, slot.manualParticipantId, slot.displayName || slot.name);
+    else add('', '', slot);
+  });
+  else if (p.p1Uid || p.p2Uid || p.p1ManualId || p.p2ManualId || p.p1Name || p.p2Name) {
+    add(p.p1Uid, p.p1ManualId, p.p1Name); add(p.p2Uid, p.p2ManualId, p.p2Name);
+  } else add(p.uid, p.manualParticipantId, p.displayName || p.name);
+  return keys.sort();
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // IDENTIDADE = uid em TODO mapa por-pessoa do torneio (checkedIn / absent / vips).
 // Regra do dono (jun/2026): "sempre identifica pelo uid. vips, checkin, ausente e
