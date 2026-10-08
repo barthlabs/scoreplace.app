@@ -37,6 +37,7 @@ function rosterKey(t) {
     p2: t.p2Resolution || '', p2t: t.p2TargetCount || 0,
     odd: t.oddResolution || '', inc: t.incompleteResolution || '',
     bal: t._drawBalanceMode || '', classify: t.classifyFormat || '',
+    classificationTransition: t.classificationTransition || null,
   });
 }
 const r1 = (t) => (t.matches || []).filter((m) => m.round === 1 && !m.isBye && !m.isSitOut).length;
@@ -101,6 +102,15 @@ parity('p2=standby/last', () => mkSolos(6), { p2: { option: 'standby', pick: 'la
      t.p2Resolution === 'standby' && t.standbyPick === 'random',
      'standby=' + (t.standbyParticipants || []).length + ' parts=' + (t.participants || []).length + ' pick=' + t.standbyPick); }
 parity('p2=exclusion', () => mkSolos(6), { p2: { option: 'exclusion' } }, (t) => { autos(t); W._applyP2Resolution(t, 'exclusion', {}); });
+parity('p2=classification_rounds', () => mkSolos(6),
+  { p2: { option: 'classification_rounds', classificationRounds: 3 } },
+  (t) => { autos(t); W._applyP2Resolution(t, 'classification_rounds', { classificationRounds: 3 }); });
+{ const t = mkSolos(6); W._applyDrawDecisions(t, { p2: { option: 'classification_rounds', classificationRounds: 3 } });
+  ok('p2=classification_rounds — grava contrato, não modo suíço',
+    t.classificationTransition && t.classificationTransition.rounds === 3 &&
+    t.classificationTransition.pairing && t.classificationTransition.pairing.strategy === 'ranking_clusters' &&
+    t.p2Resolution == null,
+    JSON.stringify({ transition: t.classificationTransition, p2: t.p2Resolution })); }
 
 console.log('\n══════════ FIM-A-FIM: drawInitial(roster cru + pacote) ══════════');
 

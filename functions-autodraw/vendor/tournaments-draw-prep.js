@@ -1337,10 +1337,13 @@ window._showLateConfrontosPanel = function(tId) {
 // divergiu do sorteio sem ninguém ver. Agora é global pura, coberta por
 // tests/painel-resolucao-conta-como-o-sorteio.test.js.
 //   info  = {effectiveTeams, loP2, hiP2}
-//   opts  = {isDouble, swissRounds, swissElim, lines}
+//   opts  = {isDouble, classificationRounds, classificationElim, lines}
 // Devolve null quando a opção não tem estimativa direta (dissolve/poll) — o painel omite o ⏱️.
 window._resolucaoJogos = function (key, info, opts) {
     info = info || {}; opts = opts || {};
+    // Compatibilidade só de leitura para uma enquete/decisão antiga. A interface
+    // e os documentos novos usam `classification_rounds`.
+    if (key === 'swiss') key = 'classification_rounds';
     var s = info.effectiveTeams, lo = info.loP2, hi = info.hiP2, base;
     var isDouble = !!opts.isDouble;
     if (!s || s <= 1) return null;
@@ -1364,10 +1367,10 @@ window._resolucaoJogos = function (key, info, opts) {
     }
     else if (key === 'reopen') base = hi - 1;                                // enche até hi
     else if (key === 'standby' || key === 'exclusion') base = lo - 1;        // cai pra lo
-    else if (key === 'swiss') { base = (opts.swissRounds || 3) * Math.floor(s / 2) + (opts.swissElim || 0); } // X rodadas de suíço + eliminatória de loP2
+    else if (key === 'classification_rounds') { base = (opts.classificationRounds || opts.swissRounds || 3) * Math.floor(s / 2) + (opts.classificationElim || opts.swissElim || 0); }
     else return null;                                                        // dissolve/poll: sem estimativa direta
-    // dupla elim ≈ dobro - 1; NÃO ao Suíço nem ao Play-in (ambos já contabilizados acima).
-    if (isDouble && base > 0 && key !== 'swiss' && key !== 'playin') base = 2 * base - 1;
+    // dupla elim ≈ dobro - 1; NÃO à classificatória por rodadas nem ao Play-in (ambos já contabilizados acima).
+    if (isDouble && base > 0 && key !== 'classification_rounds' && key !== 'playin') base = 2 * base - 1;
     // fase: a MESMA estratégia roda em cada linha → multiplica pelo nº de linhas.
     if (opts.lines && base != null) base = base * (opts.lines || 1);
     return base;
@@ -1527,8 +1530,8 @@ window.showUnifiedResolutionPanel = function(tId) {
     var _uGamesFor = function(key) {
         return window._resolucaoJogos(key, info, {
             isDouble: _uIsDouble,
-            swissRounds: window._unifiedSwissRounds,
-            swissElim: window._unifiedSwissElim,
+            classificationRounds: window._unifiedSwissRounds,
+            classificationElim: window._unifiedSwissElim,
             lines: t._phaseResInfo ? (t._phaseResInfo.lines.length || 1) : 0
         });
     };
@@ -1541,7 +1544,7 @@ window.showUnifiedResolutionPanel = function(tId) {
     window._unifiedSwissRounds = Math.max(2, Math.ceil(Math.log(Math.max(2, info.effectiveTeams)) / Math.log(2)));
     window._unifiedFmtMin = _uFmtMin;
     window._unifiedEstData = {};
-    ['reopen','bye','playin','standby','exclusion','swiss','dissolve','poll'].forEach(function(k){
+    ['reopen','bye','playin','standby','exclusion','classification_rounds','dissolve','poll'].forEach(function(k){
         var g = _uGamesFor(k);
         if (g == null) { window._unifiedEstData[k] = null; return; }
         var mins = Math.ceil(g / Math.max(1, _uCourts)) * _uDur;
@@ -1573,7 +1576,7 @@ window.showUnifiedResolutionPanel = function(tId) {
         playin:    { title: _t('predraw.optPlayinTitle'),    lines: _piLines },
         standby:   { title: _t('predraw.optStandbyTitle'),   lines: ['Chave de ' + info.loP2 + ' (potência de 2)', (_nExc === 1 ? 'O último vai pra lista de espera' : 'Os ' + _nExc + ' últimos vão pra lista de espera'), 'Disponíveis pra substituir num W.O.'] },
         exclusion: { title: _t('predraw.optExclusionTitle'), lines: ['Chave de ' + info.loP2, (_nExc === 1 ? 'O último é removido do torneio' : 'Os ' + _nExc + ' últimos são removidos do torneio')] },
-        swiss:     { title: _t('predraw.optSwissTitle'),     lines: ['Troca pro formato Suíço', 'Todos jogam várias rodadas, sem eliminação direta', 'Classificação por pontos'] },
+        classification_rounds: { title: _t('predraw.optSwissTitle'), lines: ['Classificatória por rodadas', 'Todos jogam várias rodadas antes do corte', 'Classificação por pontos'] },
         dissolve:  { title: _t('predraw.optDissolveTitle'),  lines: ['Desfaz os times incompletos em jogadores individuais', 'Re-sorteia as duplas'] },
         poll:      { title: _t('predraw.optPollTitle'),      lines: ['Cria uma enquete pros participantes', 'Eles votam na solução a aplicar'] },
         promote:   { title: 'Promover linha',                lines: ['A melhor dupla da linha de baixo sobe pra de cima', 'Rebalanceia (cima +1, baixo −1)', 'Se ainda sobrar, você escolhe BYE/repescagem'] }
@@ -1624,7 +1627,7 @@ window.showUnifiedResolutionPanel = function(tId) {
             { key: 'playin', icon: '🔁', title: _t('predraw.optPlayinTitle'), desc: _t('predraw.optPlayinDesc') },
             { key: 'standby', icon: '⏱️', title: _t('predraw.optStandbyTitle'), desc: _standbyDesc },
             { key: 'exclusion', icon: '🚫', title: _t('predraw.optExclusionTitle'), desc: _exclusionDesc },
-            { key: 'swiss', icon: '🏅', title: _t('predraw.optSwissTitle'), desc: _t('predraw.optSwissDesc') },
+            { key: 'classification_rounds', icon: '🏅', title: _t('predraw.optSwissTitle'), desc: _t('predraw.optSwissDesc') },
             { key: 'dissolve', icon: '🧩', title: _t('predraw.optDissolveTitle'), desc: _t('predraw.optDissolveDesc') },
             { key: 'poll', icon: '🗳️', title: _t('predraw.optPollTitle'), desc: _t('predraw.optPollDesc') },
             { key: 'promote', icon: '⬆️', title: 'Promover linha', desc: 'A melhor dupla da linha de baixo sobe pra completar a de cima. Rebalanceia o resto; se ainda não fechar, você escolhe BYE/repescagem.' }
@@ -1670,7 +1673,7 @@ window.showUnifiedResolutionPanel = function(tId) {
             playin:    { f: 8,  i: 10, e: 6 },
             standby:   { f: 6,  i: 4,  e: 9 },
             exclusion: { f: 3,  i: 2,  e: 10 },
-            swiss:     { f: 9,  i: 10, e: 5 },
+            classification_rounds: { f: 9, i: 10, e: 5 },
             dissolve:  { f: 7,  i: 7,  e: 4 },
             poll:      { f: 10, i: 10, e: 2 },
             promote:   { f: 8,  i: 10, e: 7 }
@@ -1822,7 +1825,7 @@ window.showUnifiedResolutionPanel = function(tId) {
         var el = document.getElementById('unified-detail'); if (!el) return;
         var key = window._unifiedSel;
         // SUÍÇO: stepper de X RODADAS (− esquerda / + direita) + texto + estimativa AO VIVO
-        if (key === 'swiss') {
+        if (key === 'classification_rounds') {
             var _sx = window._unifiedSwissRounds || 3;
             var _sg = _sx * (window._unifiedSwissHalf || 0) + (window._unifiedSwissElim || 0);
             var _sm = Math.ceil(_sg / Math.max(1, window._unifiedCourts)) * window._unifiedDur;
@@ -1830,14 +1833,14 @@ window.showUnifiedResolutionPanel = function(tId) {
             var _rw = _sx > 1 ? 'rodadas' : 'rodada';
             var _stepBtn = 'width:38px;height:38px;border-radius:10px;border:2px solid rgba(254,243,199,0.4);background:var(--sp-g-0-0-0-03,rgba(0,0,0,0.3));color:var(--sp-c-fef3c7,#fef3c7);font-size:1.4rem;font-weight:900;cursor:pointer;line-height:1;flex-shrink:0;';
             el.innerHTML =
-                '<div style="font-weight:900;color:var(--sp-c-fbbf24,#fbbf24);font-size:0.92rem;margin-bottom:7px;">' + ((window._unifiedSummary && window._unifiedSummary.swiss) ? window._unifiedSummary.swiss.title : 'Formato Suíço') + '</div>' +
+                '<div style="font-weight:900;color:var(--sp-c-fbbf24,#fbbf24);font-size:0.92rem;margin-bottom:7px;">' + ((window._unifiedSummary && window._unifiedSummary.classification_rounds) ? window._unifiedSummary.classification_rounds.title : 'Classificatória por rodadas') + '</div>' +
                 '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">' +
                     '<button onclick="window._unifiedSwissStep(-1)" title="Menos uma rodada" style="' + _stepBtn + '">−</button>' +
                     '<div style="min-width:52px;height:38px;display:flex;align-items:center;justify-content:center;background:var(--sp-g-0-0-0-035,rgba(0,0,0,0.35));border:2px solid rgba(254,243,199,0.3);border-radius:10px;"><span style="font-size:1.5rem;font-weight:950;color:#fff;line-height:1;">' + _sx + '</span></div>' +
                     '<button onclick="window._unifiedSwissStep(1)" title="Mais uma rodada" style="' + _stepBtn + '">+</button>' +
                     '<span style="font-size:0.92rem;color:var(--sp-c-fde68a,#fde68a);font-weight:600;margin-left:2px;">' + _rw + '</span>' +
                 '</div>' +
-                '<div style="font-size:0.8rem;color:var(--sp-c-fef3c7,#fef3c7);line-height:1.55;">' + _sx + ' ' + _rw + ' de Suíço para classificar para as eliminatórias <b>(chave de ' + (window._unifiedSwissLo || '?') + ')</b></div>' +
+                '<div style="font-size:0.8rem;color:var(--sp-c-fef3c7,#fef3c7);line-height:1.55;">' + _sx + ' ' + _rw + ' classificatórias para definir quem segue às eliminatórias <b>(chave de ' + (window._unifiedSwissLo || '?') + ')</b></div>' +
                 '<div style="margin-top:7px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><span style="font-weight:800;color:var(--sp-c-6ee7b7,#6ee7b7);font-size:0.95rem;">⏱️ ~' + _sf + '</span><span style="opacity:0.8;font-size:0.72rem;color:var(--sp-c-e2e8f0,#e2e8f0);">(' + _sg + ' jogos · ' + window._unifiedCourts + ' quadra' + (window._unifiedCourts > 1 ? 's' : '') + ' · ' + window._unifiedDur + ' min/jogo)</span></div>';
             return;
         }
@@ -1895,12 +1898,11 @@ window.showUnifiedResolutionPanel = function(tId) {
             window._confirmP2Resolution(tId, option);
         } else if (option === 'standby' || option === 'exclusion') {
             window._showRemovalSubChoice(tId, option, info);
-        } else if (option === 'swiss') {
-            // X rodadas escolhido no stepper → t.swissRounds (+ _swissSelectedRounds que
-            // o _confirmP2Resolution lê). O corte pra loP2 (p2TargetCount) é automático e
-            // a transição Suíço→eliminatória já existe (bracket-logic.js).
-            if (window._unifiedSwissRounds) { t.swissRounds = window._unifiedSwissRounds; window._swissSelectedRounds = window._unifiedSwissRounds; }
-            window._confirmP2Resolution(tId, 'swiss');
+        } else if (option === 'classification_rounds') {
+            // X rodadas é uma configuração transitória da decisão; a CF a converte
+            // em phases[0].classification, sem gravar um "modo suíço" no documento.
+            if (window._unifiedSwissRounds) window._swissSelectedRounds = window._unifiedSwissRounds;
+            window._confirmP2Resolution(tId, 'classification_rounds');
         } else if (option === 'dissolve') {
             window.showDissolveTeamsPanel(tId);
         } else if (option === 'poll') {
@@ -3252,10 +3254,11 @@ window._applyPollResult = function(tId, pollId) {
 window._handleP2Option = function (tId, option) {
     const t = window._findTournamentById(tId);
     if (!t) return;
+    if (option === 'swiss') option = 'classification_rounds';
 
     const info = window.checkPowerOf2(t);
 
-    if (option === 'bye' || option === 'playin' || option === 'standby' || option === 'swiss') {
+    if (option === 'bye' || option === 'playin' || option === 'standby' || option === 'classification_rounds') {
         window._confirmP2Resolution(tId, option); // v4.0.73: aplica DIRETO (sem a tela de simulação)
         return;
     }
@@ -3311,7 +3314,7 @@ window._handleP2Option = function (tId, option) {
             { key: 'playin', icon: '🔁', title: _t('predraw.p2PollPlayinTitle'), desc: _t('predraw.p2PollPlayinDesc', {n: (info.excess * 2), unit: _pLabel, k: info.excess}) },
             { key: 'exclusion', icon: '🚫', title: _t('predraw.p2PollExclusionTitle'), desc: _t('predraw.p2PollExclusionDesc', {n: info.excess, unit: _pLabelInscritos, target: info.lo}) },
             { key: 'standby', icon: '⏱️', title: _t('predraw.p2PollStandbyTitle'), desc: _t('predraw.p2PollStandbyDesc', {n: info.excess, unit: _pLabel, target: info.lo}) },
-            { key: 'swiss', icon: '🏅', title: _t('predraw.p2PollSwissTitle'), desc: _t('predraw.p2PollSwissDesc', {target: info.lo}) }
+            { key: 'classification_rounds', icon: '🏅', title: _t('predraw.p2PollSwissTitle'), desc: _t('predraw.p2PollSwissDesc', {target: info.lo}) }
         ];
         window._showPollCreationDialog(tId, 'p2', pollOptions);
         return;
@@ -3575,14 +3578,14 @@ window._confirmP2Resolution = function (tId, option) {
     var _r = window._applyP2Resolution(t, option, {
         pick: _pickRadio ? _pickRadio.value : 'last',
         mode: _modeRadio ? _modeRadio.value : 'teams',
-        swissRounds: window._swissSelectedRounds || null
+        classificationRounds: window._swissSelectedRounds || null
     });
     var actionMsg = _r.actionMsg;
     // O pacote que a CF vai aplicar (o cliente NÃO é a fonte da verdade do elenco):
     window._setDrawDecision(t.id, { // v1.3.93: mapa por tId (sobrevive ao onSnapshot)
         p2: { option: option, pick: _pickRadio ? _pickRadio.value : 'last',
               mode: _modeRadio ? _modeRadio.value : 'teams',
-              swissRounds: window._swissSelectedRounds || null }
+              classificationRounds: window._swissSelectedRounds || null }
     });
 
     window.AppStore.logAction(tId, actionMsg);

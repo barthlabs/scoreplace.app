@@ -66,7 +66,10 @@ ok(W._resolucaoJogos('bye', info33, {}) === 32, 'bye: s−1');
 ok(W._resolucaoJogos('reopen', info33, {}) === 63, 'reopen: hi−1');
 ok(W._resolucaoJogos('standby', info33, {}) === 31, 'standby: lo−1');
 ok(W._resolucaoJogos('exclusion', info33, {}) === 31, 'exclusion: lo−1');
-ok(W._resolucaoJogos('swiss', info33, { swissRounds: 6, swissElim: 31 }) === 6 * 16 + 31, 'swiss: X rodadas + eliminatória');
+ok(W._resolucaoJogos('classification_rounds', info33, { classificationRounds: 6, classificationElim: 31 }) === 6 * 16 + 31,
+  'classificatória por rodadas: X rodadas + eliminatória');
+ok(W._resolucaoJogos('swiss', info33, { swissRounds: 6, swissElim: 31 }) === 6 * 16 + 31,
+  'decisão suíça legada: continua legível como classificatória por rodadas');
 ok(W._resolucaoJogos('dissolve', info33, {}) === null, 'dissolve: sem estimativa direta');
 ok(W._resolucaoJogos('poll', info33, {}) === null, 'poll: sem estimativa direta');
 ok(W._resolucaoJogos('playin', { effectiveTeams: 1, loP2: 1, hiP2: 1 }, {}) === null, 's<=1: sem estimativa');

@@ -209,13 +209,18 @@
   };
 
   // ── POTÊNCIA DE 2 — núcleo de `_confirmP2Resolution` (draw-prep.js:3599) ────
-  // option: 'bye' | 'playin' | 'standby' | 'swiss' | 'exclusion'
+  // option: 'bye' | 'playin' | 'standby' | 'classification_rounds' | 'exclusion'
   // opts.pick: 'last' (default) | 'random'  → QUEM vai pra espera (era radio standby-pick)
   // opts.mode: modo de substituição             (era radio standby-mode, default 'teams')
   // opts.swissRounds: nº de rodadas do Suíço    (era window._swissSelectedRounds)
   window._applyP2Resolution = function (t, option, opts) {
     if (!t) return { actionMsg: '' };
     opts = opts || {};
+    // Decisões pendentes de clientes anteriores chamavam esta configuração de
+    // "swiss". O novo valor descreve a decisão de domínio: rodadas
+    // classificatórias antes da eliminatória. Normalizar logo na fronteira evita
+    // que qualquer gravação nova perpetue um terceiro modo de fase.
+    if (option === 'swiss') option = 'classification_rounds';
     var info = window.checkPowerOf2(t);
 
     // v4.1.x: DESMONTA o multifase Suíço quando o org troca de Suíço p/ OUTRA resolução.
@@ -226,7 +231,7 @@
     var _swissMP = (t.classifyFormat === 'swiss') || (t.currentStage === 'swiss') ||
       (Array.isArray(t.phases) && t.phases.length > 1 && t.phases[0] &&
         String(t.phases[0].format) === 'Suíço' && String(t.phases[0].formatCode) === 'liga');
-    if (option !== 'swiss' && _swissMP) {
+    if (option !== 'classification_rounds' && _swissMP) {
       t.phases = [{ name: t.format, format: t.format, source: { type: 'enrollment' } }];
       t.currentPhaseIndex = 0;
       t.classifyFormat = null;
@@ -293,9 +298,7 @@
       t.p2Resolution = 'exclusion';
       actionMsg = 'Exclusão: removidos ' + info.excess + ' últimos inscritos (' +
         removedX.map(function (x) { return _nameOf(x) || '?'; }).join(', ') + ')';
-    } else if (option === 'classification_rounds' || option === 'swiss') {
-      // `swiss` é aceito apenas para decisões pendentes gravadas por versões
-      // antigas. O contrato novo descreve o que ocorre, não um modo à parte.
+    } else if (option === 'classification_rounds') {
       var rounds = Math.max(1, parseInt(opts.classificationRounds || opts.swissRounds, 10) || 0);
       t.classificationTransition = {
         rounds: rounds || null,
@@ -530,7 +533,9 @@
     // 8. POTÊNCIA DE 2
     if (d.p2 && d.p2.option) {
       var rp = window._applyP2Resolution(t, d.p2.option, {
-        pick: d.p2.pick, mode: d.p2.mode, swissRounds: d.p2.swissRounds
+        pick: d.p2.pick, mode: d.p2.mode,
+        classificationRounds: d.p2.classificationRounds,
+        swissRounds: d.p2.swissRounds
       });
       applied.push({ step: 'p2', mode: d.p2.option, msg: rp.actionMsg, moved: rp.movedToStandby });
     }
