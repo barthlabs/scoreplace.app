@@ -227,39 +227,21 @@ function renderExplore(container) {
   if (window._coach && typeof window._coach.startExploreTour === 'function') window._coach.startExploreTour();
 }
 
-// ---- Helper: check if a participant entry matches a given user (by email OR displayName) ----
+// ---- Helper: participant identity is UID, never email/name -------------------
 function _participantMatchesUser(p, email, displayName, uid) {
   if (p == null) return false;
-  // v2.8.80: uid é a identidade primária — casa por uid antes de email/nome.
+  // O chamador ainda recebe e-mail/nome por compatibilidade de assinatura, mas
+  // eles são dados de apresentação/contato. Usá-los aqui fazia homônimos e quem
+  // compartilha e-mail de família herdarem torneios e confrontos alheios.
   if (uid && p && typeof p === 'object') {
     if (typeof window._participantUids === 'function') {
       try { if (window._participantUids(p).indexOf(uid) !== -1) return true; } catch (e) {}
     }
     if (p.uid === uid || p.p1Uid === uid || p.p2Uid === uid) return true;
   }
-  if (typeof p === 'string') {
-    // Post-draw: participant is a team string like "Rodrigo Barth / Eduardo Mange".
-    // v3.0.x: match EXATO por membro (split por " / ") — antes o substring fazia
-    // "Ana" casar "Ana Paula" e inflar torneios-em-comum / confrontos no Explorar.
-    if (email && p === email) return true;
-    if (displayName) {
-      var _dl = displayName.toLowerCase();
-      var _mem = p.split(/\s*\/\s*/).map(function (s) { return s.trim().toLowerCase(); });
-      if (_mem.indexOf(_dl) !== -1) return true;
-    }
-    return false;
-  }
-  // Object with email/displayName/name fields
-  var pEmail = p.email || '';
-  var pName = p.displayName || p.name || '';
-  if (email && pEmail === email) return true;
-  // v3.0.x: match EXATO por membro (não substring), e removido o match do NOME
-  // dentro do campo EMAIL (heurística que dava falso-positivo).
-  if (displayName && pName) {
-    var _dl2 = displayName.toLowerCase();
-    var _mem2 = pName.split(/\s*\/\s*/).map(function (s) { return s.trim().toLowerCase(); });
-    if (_mem2.indexOf(_dl2) !== -1) return true;
-  }
+  // Entrada textual ou sem UID é legado sem identidade provada. Continua no
+  // histórico do torneio, porém não entra em estatísticas pessoais até passar
+  // pela migração canônica explícita.
   return false;
 }
 
