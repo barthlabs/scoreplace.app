@@ -367,30 +367,10 @@ async function _repairTournaments(db, dropUid, dropEmail, dropName, keepUid, kee
       if (swept.changed) { next = swept.value; changed = true; }
     }
 
-    // ── E-MAIL/NOME: não são identidade, mas seguem gravados em campos legados ──
-    // (o uid acima é a identidade; isto aqui é só higiene de dados antigos)
+    // Contato não é identidade. A troca de UID acima já alcança todos os slots
+    // canônicos; reescrever participantes pelo e-mail da conta absorvida poderia
+    // sequestrar uma entrada manual que compartilha o contato da família.
     const update = {};
-    if (dropEmail && keepEmail) {
-      /* ⛔ O TORNEIO NÃO GUARDA MAIS O ENDEREÇO DO ORGANIZADOR (LGPD, 25/set/2026), então não há
-       * o que propagar aqui. O e-mail dos PARTICIPANTES informais continua abaixo: ele foi
-       * digitado pelo organizador e é o único jeito de avisar quem não tem conta. */
-      const parts = Array.isArray(next.participants) ? next.participants : null;
-      if (parts) {
-        let hit = false;
-        const novos = parts.map((p) => {
-          if (!p || typeof p !== "object") return p;
-          const q = Object.assign({}, p);
-          let h = false;
-          if (String(p.email || "").toLowerCase() === dropEmail.toLowerCase())   { q.email = keepEmail; h = true; }
-          if (String(p.p1Email || "").toLowerCase() === dropEmail.toLowerCase()) { q.p1Email = keepEmail; h = true; }
-          if (String(p.p2Email || "").toLowerCase() === dropEmail.toLowerCase()) { q.p2Email = keepEmail; h = true; }
-          if (!h) return p;
-          hit = true;
-          return q;
-        });
-        if (hit) { next = Object.assign({}, next, { participants: novos }); changed = true; }
-      }
-    }
 
     if (!changed) continue;
 
@@ -8900,7 +8880,7 @@ exports.mergePhoneAccount = onCall(
 
     console.log(`[mergePhoneAccount] ${dryRun ? "DRY-RUN " : ""}Merging oldUid=${oldUid} (${oldName}/${oldEmail}) → newUid=${callerUid} (${newName}/${newEmail})`);
 
-    // ── 2. Torneios: busca por oldUid OU oldEmail; re-aponta uid/email/nome ────
+    // ── 2. Torneios: re-aponta exclusivamente referências pelo oldUid ──────────
     const tourSnaps = await db.collection("tournaments").get();
     let batch1 = db.batch();
     let batchCount = 0;
@@ -8932,7 +8912,7 @@ exports.mergePhoneAccount = onCall(
       if (Array.isArray(t.coHosts)) {
         let chHit = false;
         const ch = t.coHosts.map(c => {
-          if (c && (c.uid === oldUid || (oldEmail && String(c.email || "").toLowerCase() === oldEmail))) {
+          if (c && c.uid === oldUid) {
             chHit = true;
             const out = Object.assign({}, c, { uid: callerUid });
             ["email", "phone", "name", "displayName"].forEach((f) => { delete out[f]; });
@@ -8943,20 +8923,17 @@ exports.mergePhoneAccount = onCall(
         if (chHit) { update.coHosts = ch; changed = true; }
       }
 
-      // 2b. participants[] — atualiza uid/p1Uid/p2Uid/email/displayName/name
+      // 2b. participants[] — atualiza somente UID/slots UID. Nome e e-mail são
+      // projeções de perfil ou contato, nunca chaves de uma inscrição.
       const participants = Array.isArray(t.participants) ? t.participants.map(p => {
         if (typeof p !== "object" || !p) return p;
         const pUid = p.uid || p.id || "";
-        const pEmail = (p.email || p.displayName || "").toLowerCase();
-        const matches = (pUid && pUid === oldUid) ||
-                        (oldEmail && pEmail === oldEmail.toLowerCase());
+        const matches = pUid && pUid === oldUid;
         let upd = p;
         if (matches) {
           changed = true;
           upd = Object.assign({}, p);
           if (callerUid) upd.uid = callerUid;
-          if (newEmail) upd.email = newEmail;
-          if (newName) { upd.displayName = newName; upd.name = newName; }
         }
         // p1Uid/p2Uid de duplas
         if (upd.p1Uid === oldUid || upd.p2Uid === oldUid) {

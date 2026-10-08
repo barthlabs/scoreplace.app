@@ -833,6 +833,7 @@ const SUITES = [
   'tests/round-bounds-domain-build.test.js',
   'tests/participant-identity-domain.test.js',
   'tests/explore-participant-identity.test.js',
+  'tests/account-merge-uid-identity.test.js',
   'tests/waitlist-domain.test.js',
   'tests/build-www-deterministico.test.js',
   'tests/divisao-rodadas-por-fase.test.js',
