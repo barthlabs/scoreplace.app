@@ -15,6 +15,7 @@ ok('gera um documento por pessoa e categoria', first.creates.length === 3 && fir
 const pairDocs = first.creates.filter((item) => item.fixedPairId);
 ok('dupla formada fica vinculada nos dois registros da categoria', pairDocs.length === 2 && pairDocs[0].fixedPairId === pairDocs[1].fixedPairId);
 ok('convidada usa identidade manual, não nome', pairDocs.some((item) => item.participantKind === 'manual' && item.manualParticipantId.indexOf('legacy-manual-') === 0));
+ok('convidada preserva nome somente para exibição no torneio', pairDocs.some((item) => item.participantKind === 'manual' && item.manualDisplayName === 'Convidada'));
 ok('conta usa somente UID', pairDocs.some((item) => item.participantKind === 'account' && item.participantUid === 'u1' && item.manualParticipantId === null));
 
 const stored = Object.fromEntries(first.creates.map((item) => [item.registrationId, Object.assign({}, item, { createdAt: 'server-time' })]));

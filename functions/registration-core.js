@@ -142,6 +142,11 @@ function projectLegacyRoster(tournamentId, records) {
       let generated;
       try { generated = registrationsForEntry(tournamentId, Object.assign({}, entry || {}, normalized)); }
       catch (error) { unsupported.push({ index: index, reason: error.message }); return; }
+      // Nome manual é apresentação do convidado no torneio; a identidade segue
+      // sendo somente manualParticipantId. Nunca copie nome de conta aqui.
+      if (normalized.manualParticipantId && slot.name) {
+        generated.forEach((registration) => { registration.manualDisplayName = slot.name; });
+      }
       memberKeys.push(participantKey(normalized));
       generated.forEach((registration) => {
         if (seen.has(registration.registrationId)) {

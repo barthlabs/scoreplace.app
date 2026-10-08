@@ -15,6 +15,7 @@ const _woClaimCore = require('./wo-claim-core.js');
 const _matchHistory = require('./match-history-core.js');
 const _rosterState = require('./roster-state-core.js');
 const _tSplit = require('./vendor/tournament-split-core.js');   // fonte única: js/views/ (copy-vendor)
+const _registrationRoster = require('./vendor/registration-roster-core.js');
 // fonte única: functions/match-roster.js (copy-vendor) — monta o subdoc de resultado,
 // incluindo o carregar-adiante do `replay`, que o servidor não sabe recalcular.
 let _mrEspelho = null;
@@ -578,6 +579,23 @@ async function _leTorneio(tx, ref, tId) {
     if (noPai.length && !(lidas[parte] || []).length) legadoNoPai[parte] = true;
   });
   if (Object.keys(legadoNoPai).length) montado._partesLegadasNoDocumento = legadoNoPai;
+  /*
+   * Depois da migração de inscrições, o sorteio lê a fonte canônica. Não há
+   * fallback para o elenco legado: se o marcador diz que o corte foi aplicado
+   * mas falta algum documento, sortear com a fotografia antiga seria esconder
+   * uma migração incompleta. A transação aborta antes de criar qualquer chave.
+   */
+  const migration = montado.canonicalRegistrationMigration || {};
+  if (migration.fingerprint) {
+    const registrationSnap = await tx.get(ref.collection('registrations'));
+    const registrations = registrationSnap.docs.map((doc) => doc.data() || {});
+    const expected = Number(migration.registrationCount || 0);
+    if (expected !== registrations.length) {
+      throw new Error('[canonical-registration] contagem divergente: esperado ' + expected + ', recebido ' + registrations.length);
+    }
+    try { montado.participants = _registrationRoster.rosterFromRegistrations(registrations); }
+    catch (error) { throw new Error('[canonical-registration] elenco inválido: ' + error.message); }
+  }
   montado.id = tId;
   return montado;
 }

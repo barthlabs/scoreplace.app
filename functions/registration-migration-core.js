@@ -37,6 +37,18 @@ function pairIndex(report) {
   return map;
 }
 
+function manualNamesByKey(report) {
+  const names = new Map();
+  (report.registrations || []).forEach((registration) => {
+    const key = text(registration && registration.participantKey);
+    const name = text(registration && registration.manualDisplayName);
+    if (!key || !name) return;
+    if (names.has(key) && names.get(key) !== name) throw new Error('convidado manual com rótulos divergentes');
+    names.set(key, name);
+  });
+  return names;
+}
+
 function desiredDocuments(tournamentId, report) {
   const tid = text(tournamentId);
   if (!tid) throw new Error('tournamentId obrigatório');
@@ -45,6 +57,7 @@ function desiredDocuments(tournamentId, report) {
     throw new Error('plano de migração ainda contém exceções');
   }
   const pairs = pairIndex(report);
+  const manualNames = manualNamesByKey(report);
   const seen = new Set();
   return (report.registrations || []).map((registration) => {
     if (!registration || registration.tournamentId !== tid) throw new Error('registro fora do torneio');
@@ -57,7 +70,7 @@ function desiredDocuments(tournamentId, report) {
     seen.add(registrationId);
     const participant = participantFields(participantKey);
     const fixedPairId = pairs.get(participantKey + '\u0000' + categoryId) || null;
-    return Object.assign({
+    const document = Object.assign({
       registrationId: registrationId,
       tournamentId: tid,
       categoryId: categoryId,
@@ -67,13 +80,15 @@ function desiredDocuments(tournamentId, report) {
       migrationFingerprint: report.fingerprint,
       fixedPairId: fixedPairId,
     }, participant);
+    if (participant.participantKind === 'manual') document.manualDisplayName = manualNames.get(participantKey) || null;
+    return document;
   });
 }
 
 function sameRegistration(existing, desired) {
   return existing && [
     'registrationId', 'tournamentId', 'categoryId', 'participantKey', 'participantKind',
-    'participantUid', 'manualParticipantId', 'status', 'validationState', 'fixedPairId',
+    'participantUid', 'manualParticipantId', 'manualDisplayName', 'status', 'validationState', 'fixedPairId',
   ].every((key) => (existing[key] == null ? null : existing[key]) === (desired[key] == null ? null : desired[key]));
 }
 

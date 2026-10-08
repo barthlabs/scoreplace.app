@@ -48,6 +48,7 @@ const migratedGuests = C.projectLegacyRoster('torneio-1', [
   { sourceKey: 'pair-1', entry: { p1Name: 'Ana', p2Name: 'Ana', category: 'B' } },
 ]);
 ok('convidado legado recebe id manual opaco a partir da chave física', migratedGuests.registrations[0].participantKey.indexOf('manual:legacy-manual-') === 0);
+ok('convidado legado preserva nome apenas como rótulo de exibição', migratedGuests.registrations[0].manualDisplayName === 'Ana');
 ok('homônimos de uma dupla não são fundidos pelo nome', migratedGuests.registrations.length === 3 && migratedGuests.formedPairs.length === 1);
 ok('id manual derivado não depende do rótulo', C.derivedManualParticipantId('torneio-1', 'part-ana', 'solo') === C.derivedManualParticipantId('torneio-1', 'part-ana', 'solo'));
 
