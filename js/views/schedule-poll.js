@@ -184,7 +184,11 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var now = Date.now();
     var endMs = null;
     try {
-      var isLiga = t && (t.format === 'Liga' || t.format === 'Ranking');
+      // Janela é comportamento da FASE atual, não do rótulo histórico do torneio.
+      // Em classificatória usa o próximo sorteio; em eliminatória usa a janela da fase.
+      var isLiga = t && (typeof window._faseCorrenteEhLiga === 'function'
+        ? window._faseCorrenteEhLiga(t)
+        : (t.format === 'Liga' || t.format === 'Ranking'));
       if (isLiga && typeof window._nextOwedDrawMs === 'function') {
         endMs = window._nextOwedDrawMs(t, now);
       }

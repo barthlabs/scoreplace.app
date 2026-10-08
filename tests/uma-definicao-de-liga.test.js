@@ -12,12 +12,13 @@
  * vez, e um deles MEXE EM DADO (o interruptor de disponibilidade de Liga chama a Function
  * que altera `ligaActive` e pode mover participante para a lista de espera, sem validar
  * formato nem fase). Então esta leva CONSOLIDA sem mudar comportamento, e a pergunta da
- * fase passa a ter nome: `_faseCorrenteEhLiga`, ainda sem chamador.
+ * fase passa a ter nome: `_faseCorrenteEhLiga`, consumida primeiro pela janela
+ * de agendamento, que precisa usar o prazo da fase atual.
  *
  * ⭐ A DIVERGÊNCIA É REAL E ALCANÇÁVEL, e está medida aqui pelo compilador de verdade:
  * torneio de 3 fases (grupos → formação Rei/Rainha → eliminatória) na FASE 1 responde
- * `_isLigaFormat=false` e `_faseCorrenteEhLiga=true`. Quem migrar leitor nesse bloco vai
- * mexer exatamente aí.
+ * `_isLigaFormat=false` e `_faseCorrenteEhLiga=true`. A janela de agendamento é o
+ * primeiro leitor deliberadamente migrado.
  */
 'use strict';
 const fs = require('fs');
@@ -137,13 +138,13 @@ ok(!W._isLigaFormat(t3), '④ ⭐⭐ e `_isLigaFormat` diz NÃO no MESMO torneio
 t3.currentPhaseIndex = 0;
 ok(W._faseCorrenteEhLiga(t3) === false, '④ na fase 0 (grupos) o resolvedor novo diz NÃO');
 
-/* ── ⑤ E ELE AINDA NÃO TEM LEITOR ────────────────────────────────────────────────
- * Se alguém ligar um consumidor sem passar por uma leva, esta asserção cai. */
+/* ── ⑤ LEITOR DELIBERADO: a janela de agendamento é sensível à fase ─────────────── */
 /* ⚠️ Conto CHAMADA (`nome(`), não menção: os comentários das duas casas citam o nome de
  * propósito, e contar menção reprovaria pela documentação. A definição é
  * `window._faseCorrenteEhLiga = function(t)`, onde o `(` vem depois de `function`. */
 const chamadas = varrer(path.join(ROOT, 'js'), /_faseCorrenteEhLiga\s*\(/g);
-ok(chamadas.length === 0, '⑤ `_faseCorrenteEhLiga` ainda NÃO tem chamador — achei ' + chamadas.length + ': ' + chamadas.join(', '));
+ok(chamadas.length === 1 && chamadas[0] === 'js/views/schedule-poll.js',
+  '⑤ só a janela de agendamento consulta a fase — achei ' + chamadas.length + ': ' + chamadas.join(', '));
 const atribNova = varrer(path.join(ROOT, 'js'), /window\._faseCorrenteEhLiga\s*=(?!=)/g);
 ok(atribNova.length === 1 && atribNova[0] === 'js/views/tournaments-utils.js',
   '⑤ e ele tem UMA casa, a mesma do outro — ' + atribNova.join(', '));
