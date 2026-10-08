@@ -75,6 +75,21 @@ const coerente = function (s) { return !(s.n > 1 && !(parseInt(s.iv, 10) >= 1));
     '[GRUPOS] todos-contra-todos remove a agenda parcial explícita (legado seguro)');
 })();
 
+// A tabela única também é um grupo: agenda curta vale no todos-contra-todos,
+// mas não converte uma liga de rodadas sucessivas em outra coisa.
+(function () {
+  const cfg = W.FORMAT2.defaultConfig('Beach Tennis');
+  cfg.parceria = 'fixa'; cfg.formacaoDupla = 'sorteio';
+  cfg.rodadas = Object.assign({}, cfg.rodadas, { modo: 'todos', turnos: 'ida_volta' });
+  W._f2MountInForm({ innerHTML: '' }, 'Beach Tennis', cfg, { id: 't1', endDate: '2026-08-20T23:00' });
+  W._f2GroupSchedule('short');
+  const out = W._f2GetConfig();
+  ok(out.grupos === 1 && out.rodadas.modo === 'todos' && !!out.classificationSchedule,
+    '[TABELA ÚNICA] agenda curta existe dentro do grupo único — got ' + JSON.stringify(out));
+  ok(out.rodadas.turnos === 'ida',
+    '[TABELA ÚNICA] agenda curta não é dobrada por ida/volta residual — got ' + JSON.stringify(out.rodadas));
+})();
+
 // ── [REGRA-2] mudar o Nº de rodadas ⇒ calcula e mostra o Repetir ────────────────────────
 (function () {
   const st = mount({ drawIntervalDays: null, n: 1 });   // parte de "sorteio único"

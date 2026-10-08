@@ -824,8 +824,11 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       rInner = _pill(rModo === 'fixo', 'window._f2Modo(\'fixo\')', '🔢 Nº de rodadas') +
                _pill(rModo === 'todos', 'window._f2Modo(\'todos\')', '🔄 Todos contra todos');
       if (rModo === 'todos') {
-        rInner += '<div style="margin-top:12px;">' + _toggleRight('Ida e volta', cfg.rodadas.turnos === 'ida_volta', 'window._f2Turnos(this.checked ? \'ida_volta\' : \'ida\')') + '</div>' +
-          '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;">Cada ' + (isDupla ? 'dupla' : 'jogador') + ' enfrenta todos os outros' + (cfg.rodadas.turnos === 'ida_volta' ? ' — ida e volta (mando invertido)' : '') + '.</div>';
+        rInner += '<div style="margin-top:12px;">' + _groupScheduleControls(cfg) + '</div>';
+        if (!cfg.classificationSchedule) {
+          rInner += '<div style="margin-top:12px;">' + _toggleRight('Ida e volta', cfg.rodadas.turnos === 'ida_volta', 'window._f2Turnos(this.checked ? \'ida_volta\' : \'ida\')') + '</div>' +
+            '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;">Cada ' + (isDupla ? 'dupla' : 'jogador') + ' enfrenta todos os outros' + (cfg.rodadas.turnos === 'ida_volta' ? ' — ida e volta (mando invertido)' : '') + '.</div>';
+        }
       } else {
         rInner += _schedBlock(cfg.rodadas);
       }
@@ -1103,6 +1106,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (v === 'short') {
       var gi = _groupInfo(S.cfg);
       current.gamesPerUnit = Math.max(1, Math.floor(Math.max(2, gi.big || 2) / 2));
+      // Agenda curta é uma passada da fase. Impede que um ida/volta residual
+      // dobre silenciosamente o número que o organizador acabou de escolher.
+      S.cfg.rodadas.turnos = 'ida';
     } else {
       current.gamesPerUnit = Math.max(1, parseInt(v, 10) || 1);
       var out = document.getElementById('f2-group-schedule-games-value'); if (out) out.textContent = current.gamesPerUnit;
