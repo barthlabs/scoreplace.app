@@ -2649,13 +2649,24 @@ function renderBracket(container, tournamentId, isInline) {
     try { window._triggerLateIntegration(t); } catch (e) {}
   }
   const canEnterResult = isOrg || window._resultEntryIncludes(t, 'players') || window._resultEntryIncludes(t, 'referee');
-  const isLiga = window._isLigaFormat ? window._isLigaFormat(t) : (t.format === 'Liga' || t.format === 'Ranking');
+  // O formato no topo é histórico depois que o torneio entra numa segunda fase.
+  // A tela precisa decidir pela fase corrente: uma classificatória não-grupos
+  // renderiza classificação; grupos e eliminatória não herdam o antigo "Liga".
+  const currentPhase = Array.isArray(t.phases) ? t.phases[t.currentPhaseIndex || 0] : null;
+  const hasCanonicalPhase = !!(currentPhase && currentPhase.kind);
+  const isLiga = hasCanonicalPhase
+    ? (typeof window._faseCorrenteEhLiga === 'function' && window._faseCorrenteEhLiga(t))
+    : (window._isLigaFormat ? window._isLigaFormat(t) : (t.format === 'Liga' || t.format === 'Ranking'));
   // Note: after Swiss-as-p2 transitions to elimination, currentStage becomes 'elimination'
   // and we fall through to the elim bracket renderer (the already-drawn brackets).
   const isSuico = (t.format === 'Suíço Clássico' || t.classifyFormat === 'swiss' || t.currentStage === 'swiss') && t.currentStage !== 'elimination';
-  const isDupla = t.format === 'Dupla Eliminatória';
+  const isDupla = hasCanonicalPhase
+    ? (typeof window._isDoubleEliminationPhase === 'function' && window._isDoubleEliminationPhase(t))
+    : t.format === 'Dupla Eliminatória';
 
-  const isGrupos = t.format === 'Fase de Grupos + Eliminatórias';
+  const isGrupos = hasCanonicalPhase
+    ? (currentPhase.kind === 'classification' && currentPhase.classification && currentPhase.classification.structure === 'groups')
+    : t.format === 'Fase de Grupos + Eliminatórias';
   const hasContent = (t.matches && t.matches.length) || (t.rounds && t.rounds.length) || (t.groups && t.groups.length);
 
   const _tIdSafe = String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
@@ -3022,9 +3033,12 @@ window._renderReadyMatchesBanner = function _renderReadyMatchesBanner(t, opts) {
   // sorteio automático periódico e jogos auto-agendados; check-in/banner
   // pronto-pra-chamar é UX de evento presencial (Eliminatórias, Grupos,
   // Dupla Elim).
-  var isLigaFmt = (typeof window._isLigaFormat === 'function')
-    ? window._isLigaFormat(t)
-    : (t.format === 'Liga' || t.format === 'Ranking');
+  var _readyPhase = Array.isArray(t.phases) ? t.phases[t.currentPhaseIndex || 0] : null;
+  var isLigaFmt = _readyPhase && _readyPhase.kind
+    ? (typeof window._faseCorrenteEhLiga === 'function' && window._faseCorrenteEhLiga(t))
+    : ((typeof window._isLigaFormat === 'function')
+      ? window._isLigaFormat(t)
+      : (t.format === 'Liga' || t.format === 'Ranking'));
   var isSwissFmt = t.format === 'Suíço' || t.format === 'Suico' || t.format === 'Suíço Clássico';
   if (isLigaFmt || isSwissFmt) return '';
   const ci = window._presencaViva(t);   // presença caduca em 24h — [[project_presenca_caduca_em_24h]]
@@ -3809,7 +3823,9 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
   // (eliminatória/grupos). Suprime quando a fase ATUAL é Liga.
   var _cpIdxSb = (t && t.currentPhaseIndex) || 0;
   var _curPhSb = (t && Array.isArray(t.phases) && t.phases[_cpIdxSb]) ? t.phases[_cpIdxSb] : null;
-  var _curIsLigaSb = _curPhSb ? (_curPhSb.formatCode === 'liga') : !!(window._isLigaFormat && window._isLigaFormat(t));
+  var _curIsLigaSb = _curPhSb && _curPhSb.kind
+    ? (typeof window._faseCorrenteEhLiga === 'function' && window._faseCorrenteEhLiga(t))
+    : (_curPhSb ? (_curPhSb.formatCode === 'liga') : !!(window._isLigaFormat && window._isLigaFormat(t)));
   if (_curIsLigaSb) return '';
   // v2.7.52: LISTA DE ESPERA CANÔNICA — _getWaitlist une os 3 storages
   // (waitlist + standbyParticipants + monarchWaitlist por categoria). Antes só lia
