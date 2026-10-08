@@ -8946,12 +8946,17 @@ exports.mergePhoneAccount = onCall(
       }) : null;
       if (participants) update.participants = participants;
 
-      // 2c. Strings p1/p2 em matches/rounds/groups que referenciam o nome antigo
-      if (oldName && newName && oldName !== newName) {
+      // 2c. Jogos e projeções derivados re-apontados POR UID — nunca por nome.
+      // A troca de uid não depende de uma troca de nome: duas contas podem ter o
+      // mesmo displayName, e ainda assim a conta absorvida precisa sair de todos
+      // os slots estruturais. Entradas legadas sem uid continuam visíveis, mas não
+      // são reivindicadas por uma fusão de contas.
+      if (oldUid && callerUid) {
+        const projectedName = newName || oldName;
         // v4.4.116: jogos re-apontados POR UID (oldUid → callerUid), não por nome. Cobre
         // t.matches, rounds/groups/rodadas[].matches E rounds[].monarchGroups[].matches.
         if (Array.isArray(t.matches)) {
-          const r = _replaceNameInMatches(t.matches, oldUid, newName, callerUid);
+          const r = _replaceNameInMatches(t.matches, oldUid, projectedName, callerUid);
           if (r.hit) { update.matches = r.arr; changed = true; }
         }
         ["rounds", "groups", "rodadas"].forEach(structKey => {
@@ -8961,13 +8966,13 @@ exports.mergePhoneAccount = onCall(
             if (!col || typeof col !== "object") return col;
             let c = col;
             if (Array.isArray(col.matches)) {
-              const r = _replaceNameInMatches(col.matches, oldUid, newName, callerUid);
+              const r = _replaceNameInMatches(col.matches, oldUid, projectedName, callerUid);
               if (r.hit) { structHit = true; c = Object.assign({}, c, { matches: r.arr }); }
             }
             if (Array.isArray(col.monarchGroups)) {
               const mg = col.monarchGroups.map(g => {
                 if (!g || !Array.isArray(g.matches)) return g;
-                const r = _replaceNameInMatches(g.matches, oldUid, newName, callerUid);
+                const r = _replaceNameInMatches(g.matches, oldUid, projectedName, callerUid);
                 if (r.hit) { structHit = true; return Object.assign({}, g, { matches: r.arr }); }
                 return g;
               });
@@ -8977,27 +8982,43 @@ exports.mergePhoneAccount = onCall(
           });
           if (structHit) { update[structKey] = arr; changed = true; }
         });
-        // standings[].name (classificação Liga/Suíço)
+        // standings[] pode conter uma projeção visual, mas só é migrada se o
+        // registro carregar também a referência UID. Nome igual nunca prova pessoa.
         if (Array.isArray(t.standings)) {
           let sHit = false;
           const st = t.standings.map(s => {
-            if (s && s.name === oldName) { sHit = true; return Object.assign({}, s, { name: newName }); }
+            if (!s || typeof s !== "object") return s;
+            const hasUid = s.uid === oldUid || s.playerUid === oldUid || s.participantUid === oldUid;
+            if (hasUid) {
+              sHit = true;
+              const nextStanding = Object.assign({}, s);
+              if (nextStanding.uid === oldUid) nextStanding.uid = callerUid;
+              if (nextStanding.playerUid === oldUid) nextStanding.playerUid = callerUid;
+              if (nextStanding.participantUid === oldUid) nextStanding.participantUid = callerUid;
+              if (projectedName && (nextStanding.name === oldName || nextStanding.displayName === oldName)) {
+                if (nextStanding.name === oldName) nextStanding.name = projectedName;
+                if (nextStanding.displayName === oldName) nextStanding.displayName = projectedName;
+              }
+              return nextStanding;
+            }
             return s;
           });
           if (sHit) { update.standings = st; changed = true; }
         }
-        // waitlist / standbyParticipants (strings OU objetos {name/displayName/uid})
+        // waitlist / standbyParticipants: só objetos com uid são canônicos.
+        // Strings e objetos sem uid são entradas manuais/legadas e não pertencem a
+        // nenhuma conta até uma migração explícita e verificada.
         ["waitlist", "standbyParticipants"].forEach(wk => {
           if (!Array.isArray(t[wk])) return;
           let wHit = false;
           const arr = t[wk].map(w => {
-            if (typeof w === "string") { if (w === oldName) { wHit = true; return newName; } return w; }
+            if (typeof w === "string") return w;
             if (w && typeof w === "object") {
               let ww = w;
-              if (w.name === oldName || w.displayName === oldName || w.uid === oldUid) {
+              if (w.uid === oldUid) {
                 wHit = true; ww = Object.assign({}, w);
-                if (ww.name === oldName) ww.name = newName;
-                if (ww.displayName === oldName) ww.displayName = newName;
+                if (projectedName && ww.name === oldName) ww.name = projectedName;
+                if (projectedName && ww.displayName === oldName) ww.displayName = projectedName;
                 if (ww.uid === oldUid) ww.uid = callerUid;
               }
               return ww;

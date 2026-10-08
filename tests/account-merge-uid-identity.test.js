@@ -22,5 +22,11 @@ ok(!/const pEmail/.test(phoneMerge) && !/oldEmail && pEmail/.test(phoneMerge),
   'fusão por telefone não troca inscrição por e-mail ou nome de apresentação');
 ok(/upd\.p1Uid === oldUid \|\| upd\.p2Uid === oldUid/.test(phoneMerge),
   'fusão por telefone preserva a atualização dos dois slots UID da dupla');
+ok(/if \(oldUid && callerUid\)/.test(phoneMerge) &&
+   /const projectedName = newName \|\| oldName/.test(phoneMerge),
+  'jogos são reendereçados pelo UID mesmo quando o nome de apresentação não muda');
+ok(/const hasUid = s\.uid === oldUid \|\| s\.playerUid === oldUid \|\| s\.participantUid === oldUid/.test(phoneMerge) &&
+   /if \(typeof w === "string"\) return w;/.test(phoneMerge),
+  'classificação e espera legadas sem UID não são apropriadas por coincidência de nome');
 
 process.exit(failures ? 1 : 0);
