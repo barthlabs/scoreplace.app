@@ -674,6 +674,29 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     return html;
   }
 
+  // Nas classificatórias de várias rodadas, cluster é uma faixa móvel da
+  // classificação — não uma divisão fixa de inscritos. A cada novo sorteio o
+  // motor recompõe as faixas pelos pontos e só repete adversário depois de esgotar
+  // os inéditos no cluster então vigente.
+  function _classificationPairingControls(cfg) {
+    var pairing = cfg.classificationPairing || {};
+    var byRanking = pairing.strategy !== 'free_draw';
+    var size = Math.max(2, parseInt(pairing.clusterSize, 10) || 8);
+    var html = '<div style="font-size:.72rem;color:var(--text-muted);margin:12px 0 6px;">Pareamento das rodadas</div>' +
+      _pill(byRanking, 'window._f2ClassificationPairing(\'ranking_clusters\')', '📈 Por desempenho') +
+      _pill(!byRanking, 'window._f2ClassificationPairing(\'free_draw\')', '🎲 Livre') +
+      '<div style="font-size:.72rem;color:var(--text-muted);margin-top:6px;line-height:1.45;">' +
+        (byRanking
+          ? 'A classificação acumulada recalcula os clusters a cada rodada. Antes de repetir um adversário, o sorteio busca todos os demais do cluster atual.'
+          : 'Os confrontos são sorteados livremente; ainda assim, o motor evita repetições desnecessárias.') +
+      '</div>';
+    if (!byRanking) return html;
+    html += '<div style="font-size:.72rem;color:var(--text-muted);margin:12px 0 6px;">Participantes por cluster <b id="f2-cluster-size-value" style="color:var(--text-main);">' + size + '</b></div>' +
+      '<input id="f2-cluster-size" type="range" min="2" max="32" step="1" value="' + size + '" oninput="window._f2ClusterSize(this.value,this)" style="width:100%;">' +
+      '<div style="font-size:.72rem;color:var(--text-muted);margin-top:6px;line-height:1.45;">O número define somente o tamanho da faixa; ninguém fica preso nela entre rodadas.</div>';
+    return html;
+  }
+
   // Bloco de fase (Classificatória / Eliminatória) com cabeçalho destacado.
   function _phaseBlock(title, color, inner, headerRight) {
     var pill = '<span style="display:inline-block;font-size:1.05rem;font-weight:800;letter-spacing:0.4px;text-transform:uppercase;color:' + window._spCor(color, 'color') + ';background:' + window._spCor(color, 'background') + '22;padding:9px 17px;border-radius:10px;">' + title + '</span>';
@@ -830,7 +853,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
             '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;">Cada ' + (isDupla ? 'dupla' : 'jogador') + ' enfrenta todos os outros' + (cfg.rodadas.turnos === 'ida_volta' ? ' — ida e volta (mando invertido)' : '') + '.</div>';
         }
       } else {
-        rInner += _schedBlock(cfg.rodadas);
+        rInner += _schedBlock(cfg.rodadas) + _classificationPairingControls(cfg);
       }
     } else {
       // Fase de grupos (2+): o motor gera uma passada de cada grade. Não expomos
@@ -1124,6 +1147,25 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     current.mode = mode === 'structured' ? 'structured' : 'free';
     S.cfg.classificationSchedule = current;
     _norm(); _rerender();
+  };
+  window._f2ClassificationPairing = function (strategy) {
+    if (!S) return;
+    var current = S.cfg.classificationPairing || {};
+    current.strategy = strategy === 'free_draw' ? 'free_draw' : 'ranking_clusters';
+    current.clusterSize = Math.max(2, parseInt(current.clusterSize, 10) || 8);
+    current.rematchPolicy = 'exhaust_cluster_before_repeat';
+    S.cfg.classificationPairing = current;
+    _norm(); _rerender();
+  };
+  window._f2ClusterSize = function (value, input) {
+    if (!S) return;
+    var current = S.cfg.classificationPairing || {};
+    current.strategy = 'ranking_clusters';
+    current.clusterSize = Math.max(2, Math.min(64, parseInt(value, 10) || 8));
+    current.rematchPolicy = 'exhaust_cluster_before_repeat';
+    S.cfg.classificationPairing = current;
+    var output = document.getElementById('f2-cluster-size-value'); if (output) output.textContent = current.clusterSize;
+    if (!input) { _norm(); _rerender(); }
   };
   window._f2Form = function (v) { S.cfg.formacaoDupla = v; _norm(); _rerender(); };
   window._f2ElimManualPairing = function (checked) { S.cfg.manualPairingOpen = !!checked; _norm(); _rerender(); };

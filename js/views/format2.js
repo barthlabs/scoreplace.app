@@ -164,6 +164,9 @@
       manualPairingOpen: false,   // duplas "já formadas": os PARTICIPANTES podem formar duplas?
                                   // false (padrão) = só o organizador forma. → t.manualPairing.
       rodadas: { modo: 'fixo', turnos: 'ida', n: 5, drawFirstDate: '', drawFirstTime: '19:00', drawIntervalDays: 7, drawManual: false, allowSelfDeactivation: true, _intervalAuto: true },
+      // Pareamento de classificatórias por rodadas. O tamanho é só a faixa de
+      // ranking; seus integrantes são recalculados após cada rodada pelos pontos.
+      classificationPairing: { strategy: 'ranking_clusters', clusterSize: 8, rematchPolicy: 'exhaust_cluster_before_repeat' },
       classifAtiva: true,        // false = SEM classificatória → eliminação direta do enrollment
       classificados: 2,          // X que classificam (por grupo OU total, conforme classifScope)
       classifScope: 'per_group', // 'per_group' (melhores de cada grupo) | 'overall' (tabela geral)
@@ -268,6 +271,18 @@
     // auditável pelo organizador.
     out.classificationSchedule = normalizeClassificationSchedule(out.classificationSchedule);
     if (!out.classificationSchedule) delete out.classificationSchedule;
+
+    // Uma classificatória com várias rodadas não é um formato "Suíço" separado.
+    // É pareamento por ranking dentro da própria fase. A política de repetição é
+    // deliberadamente fechada: antes de repetir, esgota adversários inéditos do
+    // cluster atual; se for inevitável, o motor escolhe o confronto menos repetido.
+    var pairing = (out.classificationPairing && typeof out.classificationPairing === 'object') ? out.classificationPairing : {};
+    var pairingClusterSize = parseInt(pairing.clusterSize, 10);
+    out.classificationPairing = {
+      strategy: pairing.strategy === 'free_draw' ? 'free_draw' : 'ranking_clusters',
+      clusterSize: Math.max(2, Math.min(64, pairingClusterSize >= 2 ? pairingClusterSize : 8)),
+      rematchPolicy: 'exhaust_cluster_before_repeat'
+    };
 
     if (!isDupla) {
       out.parceria = null;
@@ -621,6 +636,9 @@
       var isRR = isDupla && cfg.parceria === 'rei_rainha';
       // dupla FIXA com nº de rodadas → Liga com pares travados (não rotativo).
       var ligaFixedPairs = isDupla && cfg.parceria === 'fixa';
+      var _roundPairing = isRR
+        ? { strategy: 'monarch_groups', entryMode: 'rotate' }
+        : Object.assign({}, cfg.classificationPairing, { entryMode: ligaFixedPairs ? 'fixed' : 'rotate' });
       top.format = 'Liga';
       top.drawMode = isRR ? 'rei_rainha' : 'sorteio';
       top.teamSize = teamSize;
@@ -629,7 +647,11 @@
       top.ligaDrawMode = 'standard';           // rodada-a-rodada (não RR pré-gerado)
       top.gruposCount = 1;
       top.gruposClassified = cfg.classificados;
-      if (!isRR && !ligaFixedPairs) { top.equilibrado = true; top.clusterSize = 8; top.balanceBy = 'individual'; }
+      if (!isRR && !ligaFixedPairs) {
+        top.equilibrado = _roundPairing.strategy === 'ranking_clusters';
+        top.clusterSize = _roundPairing.clusterSize;
+        top.balanceBy = 'individual';
+      }
       // Agendamento dos sorteios. Manual é o modo EFETIVO quando o org marcou manual OU
       // quando não dá pra automatizar (sem data do 1º sorteio). Auto só quando há data.
       var _schedManual = !!cfg.rodadas.drawManual || !cfg.rodadas.drawFirstDate;
@@ -640,7 +662,7 @@
         top.drawIntervalDays = (cfg.rodadas.drawIntervalDays >= 1) ? cfg.rodadas.drawIntervalDays : null; // vazio = sem repetição
       }
       p0 = Object.assign(_phaseBase(re), {
-        kind: 'classification', classification: { structure: 'round_robin' }, name: isRR ? 'Rei/Rainha' : 'Pontos Corridos',
+        kind: 'classification', classification: { structure: 'round_robin', pairing: _roundPairing }, name: isRR ? 'Rei/Rainha' : 'Pontos Corridos',
         formatCode: 'liga', format: 'Liga',
         drawMode: top.drawMode, reiRainha: isRR,
         rounds: cfg.rodadas.n, groupsBy: 'sorteio',

@@ -90,6 +90,26 @@ const coerente = function (s) { return !(s.n > 1 && !(parseInt(s.iv, 10) >= 1));
     '[TABELA ÚNICA] agenda curta não é dobrada por ida/volta residual — got ' + JSON.stringify(out.rodadas));
 })();
 
+// ── [CLUSTERS] classificação por rodadas é uma política da fase ──────────────
+(function () {
+  const cfg = W.FORMAT2.defaultConfig('Beach Tennis');
+  cfg.parceria = 'fixa'; cfg.formacaoDupla = 'sorteio';
+  cfg.rodadas = Object.assign({}, cfg.rodadas, { modo: 'fixo', n: 3 });
+  W._f2MountInForm({ innerHTML: '' }, 'Beach Tennis', cfg, { id: 't-cluster', endDate: '2026-08-20T23:00' });
+  W._f2ClusterSize(6);
+  let out = W._f2GetConfig();
+  ok(out.classificationPairing && out.classificationPairing.clusterSize === 6,
+    '[CLUSTERS] tamanho é configuração explícita da fase — got ' + JSON.stringify(out.classificationPairing));
+  const compiled = W.FORMAT2.compileToPhases(out, { sport: 'Beach Tennis' });
+  const pairing = compiled.phases[0] && compiled.phases[0].classification && compiled.phases[0].classification.pairing;
+  ok(pairing && pairing.strategy === 'ranking_clusters' && pairing.entryMode === 'fixed' && pairing.clusterSize === 6 && pairing.rematchPolicy === 'exhaust_cluster_before_repeat',
+    '[CLUSTERS] compilador grava contrato canônico da classificação por rodadas — got ' + JSON.stringify(pairing));
+  W._f2ClassificationPairing('free_draw');
+  out = W._f2GetConfig();
+  ok(out.classificationPairing && out.classificationPairing.strategy === 'free_draw' && out.classificationPairing.rematchPolicy === 'exhaust_cluster_before_repeat',
+    '[CLUSTERS] sorteio livre mantém a política de repetição explícita — got ' + JSON.stringify(out.classificationPairing));
+})();
+
 // ── [REGRA-2] mudar o Nº de rodadas ⇒ calcula e mostra o Repetir ────────────────────────
 (function () {
   const st = mount({ drawIntervalDays: null, n: 1 });   // parte de "sorteio único"
