@@ -130,7 +130,7 @@ if (bi !== -1) {
   w._profileNameByUid = { uid_A_longo: 'Ana Lima', uid_B_longo: 'Bruno Sá' };
   const mm1 = { id: 'm1', p1: 'Ana Lima', p2: 'Bruno Sá' };
   const doc2 = {
-    id: 'T1', creatorUid: 'uid_A_longo', organizerEmail: 'a@x.com',
+    id: 'T1', creatorUid: 'uid_A_longo', organizerEmail: 'a@x.com', organizerName: 'Ana Lima',
     participants: [{ uid: 'uid_A_longo', displayName: 'Ana Lima' }, { displayName: 'Zé Guest' },
                    { uid: 'uid_B_longo', displayName: 'Bruno Sá' }],
     rounds: [{ matches: [mm1], monarchGroups: [{ name: 'G1', matches: [mm1] }] }],
@@ -143,6 +143,8 @@ if (bi !== -1) {
   const b = boundary(doc2);
 
   ok(!has(b.persist.participants[0], 'displayName'), 'PERSIST: nome de quem tem perfil sanitizado (storage só-uid)');
+  ok(!has(b.persist, 'organizerName') && !has(b.clean, 'organizerName'),
+    'PERSIST/CLEAN: organizador fica somente no creatorUid; nome vem do perfil vivo');
   ok(b.persist.participants[1].displayName === 'Zé Guest', 'PERSIST: guest mantém o nome');
   ok(b.clean.participants[0].displayName === 'Ana Lima', 'CLEAN (devolvido ao cliente): nome PRESERVADO');
   // REGRESSÃO REAL (v1.2.25): Object.assign é RASO → persist.rounds É clean.rounds. Hidratar

@@ -910,10 +910,11 @@ function _applyWriteBoundary(data) {
   // EXCEÇÃO: SANDBOX substitui (não une) — o memberUids do SB é só o dev, senão os uids
   // reais clonados voltam a cada gravação e o Firestore entrega o SB pra todo mundo.
   // _mergeMemberUids é o MESMO helper do cliente (vendorado de persist-core.js).
-  /* ⛔⛔ OS TRÊS CAMPOS DE E-MAIL SAEM AQUI — E AQUI **OMITIR** É O CERTO (LGPD, 25/set/2026).
+  /* ⛔⛔ OS CAMPOS LEGADOS DE CONTATO/EXIBIÇÃO SAEM AQUI — E AQUI **OMITIR** É O CERTO (LGPD, 25/set/2026).
    *
-   * Esta fronteira recompunha a lista de e-mails em TODA escrita do autodraw — sorteio, fecho de
-   * rodada, placar e cron. Era ela que ressuscitaria o campo depois de qualquer limpeza.
+   * Esta fronteira poderia ressuscitar e-mails ou o displayName do organizador em TODA escrita
+   * do autodraw — sorteio, fecho de rodada, placar e cron. A identidade e a apresentação vêm,
+   * respectivamente, do UID e do perfil vivo.
    *
    * ⛔⛔ E A REGRA É O CONTRÁRIO DA DO CLIENTE. Eu pus sentinela aqui também, por simetria, e a
    * escrita EXPLODIU: o documento do torneio é gravado com `set` SEM mesclagem, e o Firestore
@@ -925,7 +926,7 @@ function _applyWriteBoundary(data) {
    *
    * ⚠️ Onde o plano grava COM mesclagem, quem apaga campo é o canal `apagarCampos` do plano.
    * Quem manda na autorização é `adminUids`, logo abaixo, e ele FICA. */
-  ['organizerEmail', 'creatorEmail', 'adminEmails'].forEach((campo) => { delete data[campo]; });
+  ['organizerEmail', 'creatorEmail', 'adminEmails', 'organizerName'].forEach((campo) => { delete data[campo]; });
   data.adminUids = w._computeAdminUids(data);
   data.memberUids = w._mergeMemberUids(data, data.memberUids, w._computeMemberUids(data));
   /* ── L6.R1 · O `nextDrawAt` CANÔNICO SAI DAQUI, e nunca do passado ────────────────────

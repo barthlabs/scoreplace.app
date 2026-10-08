@@ -121,7 +121,6 @@ window._cloneTournament = async function(tournamentId) {
  * Nenhuma Rule decide por ele e nenhuma Function autoriza por ele: só a tela usava, e a tela
  * agora recebe o endereço pela porta autenticada de contato, só para quem está inscrito.
  * Quem voltar a gravar aqui republica o dado. */
-        organizerName: window.AppStore.currentUser.displayName,
         participants: [],
         status: 'open',
         createdAt: new Date().toISOString()
@@ -1186,9 +1185,10 @@ window._resolveOrgContact = function(t, profile) {
    * Sem e-mail e sem WhatsApp, quem chama cai no diálogo in-app — que sempre funcionou
    * e não precisa de endereço nenhum. */
   var _emailDaPorta = (profile && profile.organizerEmail) || '';
-  var c = window._resolvePersonContact(profile, t.organizerName, _emailDaPorta);
+  var _legacyName = t.organizerName || '';
+  var c = window._resolvePersonContact(profile, _legacyName, _emailDaPorta);
   return {
-    orgName: (t.organizerName || (profile && profile.displayName) ||
+    orgName: ((profile && profile.displayName) || _legacyName ||
               (_emailDaPorta ? String(_emailDaPorta).split('@')[0] : '') || 'o organizador'),
     phoneDigits: c.phoneDigits,
     email: c.email || '',

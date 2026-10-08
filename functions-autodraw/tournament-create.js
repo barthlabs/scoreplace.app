@@ -76,7 +76,6 @@ function makeCreateTournament({ db, HttpsError, FieldValue, fields, cloneConfig,
     const hash = createHash('sha256').update(JSON.stringify(canonical(config))).digest('hex');
     const ref = db.collection('tournaments').doc(id);
     const receipt = db.collection('tournamentCreationRequests').doc(id);
-    const profileRef = db.collection('users').doc(uid);
     return db.runTransaction(async tx => {
       const prior = await tx.get(receipt);
       const snap = await tx.get(ref);
@@ -88,10 +87,6 @@ function makeCreateTournament({ db, HttpsError, FieldValue, fields, cloneConfig,
         return { ok: true, changed: false, tournament };
       }
       if (snap.exists) fail('already-exists', 'Este identificador já pertence a outro torneio.');
-      const profile = await tx.get(profileRef);
-      const user = profile.exists ? profile.data() : {};
-      const token = request.auth.token || {};
-      const email = token.email_verified === true ? String(token.email || '') : '';
       const t = Object.assign({}, config);
       if (config.fmt2) {
         const out = compile(config.fmt2, { sport: t.sport, resultEntry: t.resultEntry || ['organizer'], lateEnrollment: t.lateEnrollment, newMatchups: t.newMatchups });
@@ -101,13 +96,12 @@ function makeCreateTournament({ db, HttpsError, FieldValue, fields, cloneConfig,
         const lastBounds = config.fmt2.eliminatoria && config.fmt2.eliminatoria.roundBounds;
         if (Array.isArray(lastBounds) && t.phases.length > 1) t.phases[t.phases.length - 1].roundBounds = lastBounds;
       }
-/* ⛔⛔ O E-MAIL DO ORGANIZADOR NÃO NASCE NO DOCUMENTO (LGPD, 25/set/2026).
-       * O documento do torneio é legível SEM LOGIN em 76 dos 78 torneios. Nenhuma Rule decide por
-       * estes campos e nenhuma Function autoriza por eles: só a tela usava, e a tela recebe o
-       * endereço pela porta autenticada de contato, apenas para quem está inscrito. */
+/* O organizador é exclusivamente o `creatorUid`. Nome, foto e contato vivem no
+       * perfil e a tela os hidrata pelo UID; congelar displayName aqui faria o
+       * torneio envelhecer quando a pessoa atualizasse o próprio perfil. */
       Object.assign(t, { id, name: config.name.trim(), status: 'open', storageCanonico: true,
         creatorUid: uid, organizerUid: uid, organizerId: uid,
-        organizerName: String(user.displayName || token.name || 'Organizador'), coHosts: [],
+        coHosts: [],
         participants: [], standbyParticipants: [], matches: [], rounds: [], groups: [],
         currentPhaseIndex: 0, createdAt: iso, updatedAt: iso,
         history: [{ date: iso, message: 'Torneio Criado' }] });

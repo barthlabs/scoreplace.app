@@ -149,7 +149,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       if (p.p1Uid && !info[p.p1Uid]) info[p.p1Uid] = { name: _ln(p.p1Uid, p.p1Name), photo: p.p1PhotoURL || '' };
       if (p.p2Uid && !info[p.p2Uid]) info[p.p2Uid] = { name: _ln(p.p2Uid, p.p2Name), photo: p.p2PhotoURL || '' };
     });
-    if (t && t.creatorUid && !info[t.creatorUid]) info[t.creatorUid] = { name: t.organizerName || 'Organizador', photo: '' };
+    if (t && t.creatorUid && !info[t.creatorUid]) info[t.creatorUid] = {
+      name: _ln(t.creatorUid, t.organizerName || 'Organizador'), photo: ''
+    };
     return info;
   }
   window._opVoterName = function (t, uid) {

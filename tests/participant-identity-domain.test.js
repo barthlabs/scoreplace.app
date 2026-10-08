@@ -103,5 +103,10 @@ ok(/startRealtimeListener\(\)/.test(authView) && /startRealtimeListener\(\)\s*\{
   /where\('memberUids', 'array-contains', _uid\)/.test(store),
   '㉖ ouvinte de torneios recebe e consulta exclusivamente UID');
 
+const createFunction = fs.readFileSync(path.join(ROOT, 'functions-autodraw/tournament-create.js'), 'utf8');
+ok(!/organizerName\s*:/.test(createFunction) &&
+  /'organizerName'/.test(functionsIndex),
+  '㉗ criação não congela o nome do organizador e a fronteira de escrita remove o legado');
+
 console.log(fail ? ('  ' + fail + ' FALHA(S), ' + pass + ' ok') : ('  ✓ ' + pass + ' asserções'));
 process.exit(fail ? 1 : 0);

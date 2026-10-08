@@ -5028,7 +5028,9 @@ window._dashRerender = function(opts) {
 window._tournamentSearchBlob = function(t) {
   if (!t) return '';
   // ⛔ sem e-mail (LGPD, 25/set/2026): o campo saiu do documento; busca por nome.
-  var parts = [t.name || '', t.venueName || '', t.organizerName || ''];
+  var _organizerName = (t.creatorUid && typeof window._displayNameForUid === 'function')
+    ? window._displayNameForUid(t.creatorUid, t.organizerName || '') : (t.organizerName || '');
+  var parts = [t.name || '', t.venueName || '', _organizerName || ''];
   var pl = Array.isArray(t.participants) ? t.participants : (t.participants ? Object.values(t.participants) : []);
   for (var i = 0; i < pl.length; i++) {
     var p = pl[i];
