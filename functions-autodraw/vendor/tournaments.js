@@ -2004,7 +2004,7 @@ function renderTournaments(container, tournamentId = null) {
           if (_td && Array.isArray(_td.participants)) {
             _pd = _td.participants.find(function(p){
               if (!p || typeof p !== 'object') return false;
-              return (p.uid && p.uid === uidOrName) || ((p.displayName || p.name) === uidOrName) || (p.email && p.email === uidOrName);
+              return !!(p.uid && p.uid === uidOrName);
             });
           }
           window._participantDragData = (_pd && typeof _pd === 'object') ? _pd : { displayName: uidOrName, name: uidOrName };
@@ -2463,14 +2463,14 @@ function renderTournaments(container, tournamentId = null) {
         // Convidar todos os amigos para o torneio (via notificação na plataforma)
         window._inviteFriendsToTournament = async function(tournamentId, inviteTextSafe) {
             var cu = window.AppStore.currentUser;
-            if (!cu) return;
+            if (!cu || !cu.uid) return;
             if (!cu.friends || cu.friends.length === 0) {
                 if (typeof showNotification === 'function') {
                     showNotification(_t('tourn.noFriends'), _t('tourn.noFriendsMsg'), 'info');
                 }
                 return;
             }
-            var myUid = cu.uid || cu.email;
+            var myUid = cu.uid;
             var t = window.AppStore.tournaments.find(function(tour) { return String(tour.id) === String(tournamentId); });
             if (!t) return;
 
@@ -2496,7 +2496,7 @@ function renderTournaments(container, tournamentId = null) {
                         if (String(p.uid || '') === String(friendUid) ||
                             String(p.p1Uid || '') === String(friendUid) ||
                             String(p.p2Uid || '') === String(friendUid)) return true;
-                        return String(p.displayName || p.name || '') === String(profile.displayName || '');
+                        return false;
                     });
                     if (alreadyIn) continue;
 
@@ -3287,7 +3287,7 @@ function renderTournaments(container, tournamentId = null) {
         }
 
         if (tournamentId) {
-            const _inviterUid = (window.AppStore.currentUser && (window.AppStore.currentUser.uid || window.AppStore.currentUser.email)) || '';
+            const _inviterUid = (window.AppStore.currentUser && window.AppStore.currentUser.uid) || '';
             const inviteUrl = window._tournamentUrl(t.id) + (_inviterUid ? '?ref=' + encodeURIComponent(_inviterUid) : '');
             const inviteText = (typeof window._tournamentInviteText === 'function')
                 ? window._tournamentInviteText(t, inviteUrl)
@@ -4189,15 +4189,15 @@ function renderTournaments(container, tournamentId = null) {
             // guardar displayName pra quem tem perfil; ver _stripStoredNamesForUidEntries).
             // Só cai no que está gravado quando não há perfil resolvível.
             var _chName = (ch.uid && typeof window._nameForUid === 'function' && window._nameForUid(ch.uid))
-              || ch.displayName || ch.email || '';
+              || ch.displayName || '';
             if (ch.status === 'active') {
               var _chGender = ch.gender || _resolveOrgGender(ch.uid);
               var _chLabel = _gw(_chGender, 'Co-organizador', 'Co-organizadora');
-              _orgCards += _buildOrgCard(_chName, _chLabel, _orgBgCohost, _isCreatorNow, ch.uid || ch.email, false, ch.uid, 'Co-organizador', 'Co-organizadora');
+              _orgCards += _buildOrgCard(_chName, _chLabel, _orgBgCohost, _isCreatorNow, ch.uid || '', false, ch.uid, 'Co-organizador', 'Co-organizadora');
             } else if (ch.status === 'pending') {
               // v2.8.48: convidado pendente aparece AQUI (box âmbar pontilhado, ao
               // lado do organizador), não mais só na lista de inscritos.
-              _orgCards += _buildPendingOrgCard(_chName, ch.uid || ch.email || '', _isCreatorNow, ch.uid || '');
+              _orgCards += _buildPendingOrgCard(_chName, ch.uid || '', _isCreatorNow, ch.uid || '');
             }
           });
         }
