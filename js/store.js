@@ -13617,9 +13617,9 @@ window.AppStore = {
   //      arrayRemove. Writing them here on every profile save was another
   //      clobber path when currentUser wasn't fully hydrated.
   async saveUserProfileToFirestore() {
-    if (!window.FirestoreDB || !window.FirestoreDB.db || !this.currentUser) return;
+    if (!window.FirestoreDB || !window.FirestoreDB.db || !this.currentUser || !this.currentUser.uid) return;
     var user = this.currentUser;
-    var uid = user.uid || user.email;
+    var uid = user.uid;
     var payload = {
       // v1.7.88: saneia AQUI, no choke point de escrita — não nos ~10 lugares que
       // copiam `user.displayName` do provedor. Lista à mão sempre esquece um (é a

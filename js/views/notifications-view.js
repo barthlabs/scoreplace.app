@@ -7,7 +7,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
 function renderNotifications(container) {
   var _t = window._t || function(k) { return k; };
   var cu = window.AppStore.currentUser;
-  if (!cu) {
+  if (!cu || !cu.uid) {
     container.innerHTML = '<div class="card" style="padding: 2rem; text-align: center;">' +
       '<p style="color: var(--text-muted); font-size: 1.1rem;">' + _t('notif.loginRequired') + '</p>' +
       '<button class="btn btn-primary" onclick="if(typeof openModal===\'function\')openModal(\'modal-login\');" style="margin-top: 1rem;">' + _t('notif.login') + '</button>' +
@@ -15,7 +15,7 @@ function renderNotifications(container) {
     return;
   }
 
-  var uid = cu.uid || cu.email;
+  var uid = cu.uid;
 
   // ⭐ REDESENHO DE TELA ABERTA NÃO ROUBA A ROLAGEM. Trocar o `innerHTML` do container
   // encolhe a página pro esqueleto de "carregando" por um instante, e o navegador prende
@@ -603,8 +603,8 @@ function _observeNotifDwell(uid, listDiv) {
 
 window._markNotifRead = function(notifId, el) {
   var cu = window.AppStore.currentUser;
-  if (!cu) return;
-  var uid = cu.uid || cu.email;
+  if (!cu || !cu.uid) return;
+  var uid = cu.uid;
   window.FirestoreDB.markNotificationRead(uid, notifId);
   if (el) {
     el.style.borderLeft = 'none';
@@ -618,8 +618,8 @@ window._markNotifRead = function(notifId, el) {
 // Update the notification badge count in the header + show banner
 window._updateNotificationBadge = function() {
   var cu = window.AppStore.currentUser;
-  if (!cu) return;
-  var uid = cu.uid || cu.email;
+  if (!cu || !cu.uid) return;
+  var uid = cu.uid;
   window.FirestoreDB.getUnreadNotificationCount(uid).then(function(count) {
     // Update the small badge on the bell icon in nav
     var badge = document.getElementById('notif-badge');

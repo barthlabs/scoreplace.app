@@ -66,7 +66,7 @@ function initRouter() {
       try {
         var _refUidVal = decodeURIComponent(_refMatch[1]);
         var _cuRef = window.AppStore && window.AppStore.currentUser;
-        if (_cuRef && (_cuRef.uid || _cuRef.email) && typeof window._autoFriendOnInvite === 'function') {
+        if (_cuRef && _cuRef.uid && typeof window._autoFriendOnInvite === 'function') {
           // já logado: cria a amizade na hora (não passa pelo login pós-convite)
           try { window._autoFriendOnInvite(_refUidVal, _cuRef); } catch(e) {}
         } else {
