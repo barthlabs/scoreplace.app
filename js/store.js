@@ -14188,7 +14188,6 @@ window.AppStore = {
   getMyOrganized() {
     if (!this.currentUser) return [];
     var uid = this.currentUser.uid;
-    var email = this.currentUser.email;
     // v1.2.44: só uid (o fallback por organizerEmail saiu — ver AppStore.isOrganizer).
     return this.tournaments.filter(function(t) {
       // o sandbox é do dono dele, ainda que `creatorUid` seja o do original (2.1.88)

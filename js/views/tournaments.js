@@ -4088,7 +4088,7 @@ function renderTournaments(container, tournamentId = null) {
         // do organizador (onde a pessoa ficará se aceitar), já com a tag "Pendente de
         // aceite". Substitui o antigo "só na lista de inscritos". canRemove (criador)
         // mostra ✕ pra cancelar o convite.
-        function _buildPendingOrgCard(name, removeKey, canRemove, uidOrEmail) {
+        function _buildPendingOrgCard(name, removeKey, canRemove, uid) {
           var _safeTId = window._safeHtml(String(_t.id));
           var _rmBtn = canRemove ? '<button type="button" class="cancel-x-btn" style="--cx-size:20px;" title="Cancelar convite" onclick="event.stopPropagation();window._removeCoHost(\'' + _safeTId + '\',\'' + window._safeHtml(removeKey) + '\')">✕</button>' : '';
           // Convite pendente é gente com nome igual aos demais — entra no filtro do
@@ -4096,11 +4096,11 @@ function renderTournaments(container, tournamentId = null) {
           var _pendFiltro = ' data-players="' + window._safeHtml(String(name || '') + ' co-organizador pendente') + '" data-my-match="1"';
           return '<div class="sp-org-card sp-org-pending"' + _pendFiltro + ' style="box-sizing:border-box;position:relative;display:flex;align-items:center;gap:8px;padding:8px 12px;background:rgba(251,191,36,0.08);border:2px dashed rgba(251,191,36,0.6);border-radius:10px;flex:1 1 13.5rem;max-width:100%;height:58px;overflow:hidden;">' +
             // mesmo ponto único do card ativo — o convidado pendente também é uid+perfil
-            window._personAvatarHtml(uidOrEmail, name,
+            window._personAvatarHtml(uid, name,
               'width:2rem;height:2rem;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid rgba(251,191,36,0.5);opacity:0.85;') +
             '<div style="flex:1;min-width:0;">' +
               '<div style="height:1.15rem;overflow:hidden;display:flex;align-items:center;">' +
-                window._personNameHtml(uidOrEmail, name,
+                window._personNameHtml(uid, name,
                   'font-weight:700;color:var(--text-bright);white-space:nowrap;',
                   'sp-name-fit', ' data-maxrem="0.82" data-minrem="0.55"') + '</div>' +
               '<div style="font-size:0.6rem;font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);text-transform:uppercase;letter-spacing:0.3px;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">⭐ Pendente de aceite</div>' +
