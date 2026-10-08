@@ -14570,8 +14570,6 @@ window._isOrgPlayer = function (t, playerName, pObj) {
       /* ⛔ e-mail da co-organização saiu (LGPD, 25/set/2026) — ver _isOrgParticipant, mesma razão. */
     }
   }
-  // fallback por NOME (org/co-host sem uid resolvido neste objeto)
-  if (typeof window._isOrgName === 'function' && window._isOrgName(nm, t)) return true;
   return false;
 };
 
@@ -14620,26 +14618,20 @@ window._applyTemplate = function(index) {
 // ─── Crown helper: adds crown SVG next to organizer names ──────────────────
 window._CROWN_MINI = '<svg width="14" height="14" viewBox="0 0 24 24" fill="rgba(251,191,36,0.85)" style="flex-shrink:0;vertical-align:middle;margin-left:2px;"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>';
 
-/* ⛔ A COROA POR NOME NÃO COMPARA E-MAIL (LGPD, 25/set/2026). Comparar um nome de participante
- * com `organizerEmail`/`coHosts[].email` só acertava quando alguém foi inscrito à mão COM O
- * E-MAIL NO LUGAR DO NOME — e os dois campos saíram do documento. Quem tem conta é reconhecido
- * por uid nos caminhos que recebem uid; aqui só o nome existe. */
+/* Uma string de nome não identifica uma conta. Esta porta persiste como casca
+ * de compatibilidade para renderizadores históricos, mas nunca confere título
+ * de organizador: os caminhos que recebem pessoa usam `_isOrgPlayer`, por UID. */
 window._isOrgName = function(name, tournament) {
-  if (!name || !tournament) return false;
-  if (name === (tournament.organizerName || '')) return true;
-  if (Array.isArray(tournament.coHosts)) {
-    return tournament.coHosts.some(function(ch) {
-      return ch.status === 'active' && ch.displayName === name;
-    });
-  }
+  void name; void tournament;
   return false;
 };
 
 window._nameWithCrown = function(name, tournament) {
+  // Este helper recebe só texto, portanto não pode deduzir identidade nem papel.
+  // A coroa de organizador é adicionada apenas pelos renderizadores que recebem
+  // o UID estrutural do participante.
+  void tournament;
   var safe = window._safeHtml(name);
-  if (window._isOrgName(name, tournament)) {
-    return safe + ' ' + window._CROWN_MINI;
-  }
   return safe;
 };
 

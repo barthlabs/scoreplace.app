@@ -1485,6 +1485,7 @@ const SUITES = [
   'tests/runner-timeout-nao-pendura.test.js',
   'tests/reprocessar-resumos.test.js',
   'tests/porta-unica-do-papel.test.js',
+  'tests/coroa-organizador-uid-only.test.js',
   'tests/servidor-e-app-respondem-o-mesmo-papel.test.js',
   'tests/listas-derivadas-batem-com-os-fatos.test.js',
   'tests/fantasma-do-wo-mostra-o-rotulo.test.js',
