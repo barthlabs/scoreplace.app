@@ -43,6 +43,8 @@ ok(!/duplas/.test(dlg), 'e a porta do SALVAR não chama de dupla o que pode ser 
 ok(/ov\.id = 'gender-draw-overlay';/.test(draw), 'e o mesmo overlay de sempre');
 const manual = draw.slice(draw.indexOf('window._maybeShowGenderDrawDialog = function'));
 ok(/window\._showDrawBalanceOverlay\(\{/.test(manual), 'a porta MANUAL usa a mesma tela');
+ok(/Array\.isArray\(t\.phases\)[\s\S]{0,260}_faseCorrenteEhLiga/.test(manual),
+  'a porta MANUAL decide a exceção de liga pela fase atual');
 
 // o salvar pergunta ANTES de montar/gravar, e repete o salvar depois da resposta
 const save = src.slice(src.search(/window\._saveTournamentClickHandler = (?:async )?function/),

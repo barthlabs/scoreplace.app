@@ -1905,12 +1905,16 @@ window._maybeShowGenderDrawDialog = function(tId, onProceed) {
   var t = window.AppStore && window.AppStore.tournaments &&
           window.AppStore.tournaments.find(function(x){ return String(x.id) === String(tId); });
   if (!t) return false;
-  // v2.8.7: Liga/Pontos Corridos forma os pares DENTRO de cada rodada (Rei/Rainha =
+  // Liga/Pontos Corridos forma os pares DENTRO de cada rodada (Rei/Rainha =
   // grupos de 4 com parceiros ROTATIVOS; padrão = duplas aleatórias por rodada) — NÃO
   // existe dupla FIXA pra formar antes do sorteio. O diálogo "Sorteio de duplas"
   // (gênero + Livre/Equilibrado) só faz sentido em Eliminatórias/Grupos de duplas fixas.
-  // Pular pra Liga — senão o "Sortear" abre essa tela errada (exposto após reset).
-  if (window._isLigaFormat && window._isLigaFormat(t)) return false;
+  // A decisão é da FASE atual: um torneio que começou como Liga pode estar hoje
+  // na eliminatória, onde este diálogo volta a ser necessário.
+  var isCurrentLeague = Array.isArray(t.phases)
+    ? (typeof window._faseCorrenteEhLiga === 'function' && window._faseCorrenteEhLiga(t))
+    : (window._isLigaFormat && window._isLigaFormat(t));
+  if (isCurrentLeague) return false;
   // v4.4.x: DUPLAS FORMADAS (manual) — as duplas são montadas pelos participantes/organizador,
   // NÃO se auto-formam por sorteio. Os avulsos (sem dupla) são PENDÊNCIA (reabrir/formar/lista/
   // exclusão), não gente pra parear ao acaso. Então esse diálogo (Livre/Equilibrado) não se
