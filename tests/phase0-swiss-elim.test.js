@@ -27,6 +27,22 @@ var E = require('../js/views/phases-engine.js');
 var pass = 0, fail = 0;
 function ok(c, m) { if (c) pass++; else { fail++; console.error('  ✗ FALHOU:', m); } }
 
+// O tipo canônico é a única fonte de verdade depois da projeção do legado.
+// Rótulos/formats antigos podem continuar chegando em documentos históricos, mas
+// jamais podem redirecionar uma fase que já foi traduzida para o contrato novo.
+ok(E.classifyPhaseFormat({
+  kind: 'classification',
+  classification: { structure: 'groups' },
+  formatCode: 'elim',
+  format: 'Eliminatórias Simples'
+}) === 'groups', 'kind:classification/groups vence rótulo legado de eliminatória');
+ok(E.classifyPhaseFormat({
+  kind: 'elimination',
+  elimination: { bracketType: 'single' },
+  formatCode: 'liga',
+  format: 'Pontos Corridos'
+}) === 'elim', 'kind:elimination vence rótulo legado de classificatória');
+
 // 8 duplas, classificatória Suíço/Liga (fase 0) de 1 rodada = 4 jogos, todos decididos.
 // Top 4 avançam pra eliminatória (fase 1): semis (2) + final (1) [+ 3º/4º].
 function mkTournament() {
