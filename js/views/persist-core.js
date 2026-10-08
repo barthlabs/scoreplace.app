@@ -41,6 +41,22 @@ window._cleanUndefined = function (obj) {
   return obj;
 };
 
+// Fases antigas podem ter sido materializadas antes do contrato `kind` +
+// `classification`/`elimination`. A promoção precisa acontecer no limite de
+// escrita, não apenas no render ou no próximo sorteio: assim qualquer salvamento
+// legítimo deixa o documento como se tivesse nascido no modelo atual. O projetor
+// é lossless — não recompila, não cria jogos e não toca em rodadas, grupos ou
+// placares. Se um cliente muito antigo não tiver carregado FORMAT2, ele apenas
+// não promove localmente; a mesma fronteira do servidor faz a promoção antes do
+// commit autoritativo.
+window._canonicalizeTournamentPhases = function (data) {
+  if (!data || !window.FORMAT2 || typeof window.FORMAT2.projectLegacyPhases !== 'function') return false;
+  var plan = window.FORMAT2.projectLegacyPhases(data);
+  if (!plan || !plan.changed) return false;
+  data.phases = plan.phases;
+  return true;
+};
+
 /* ── SANDBOX: A INVISIBILIDADE MUDOU DE LUGAR (2.1.88) ────────────────────────
  * ⛔ AQUI MORAVA A ADULTERAÇÃO DE MEMBERSHIP, e ela sobrevivia à 2.1.87 em silêncio.
  * Enquanto o sandbox vivia em `tournaments`, o listener (`memberUids array-contains`)

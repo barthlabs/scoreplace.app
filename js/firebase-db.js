@@ -355,6 +355,10 @@ window.FirestoreDB = {
     if (!this.db) return;
     var docId = String(tourData.id);
     var cleanData = this._cleanUndefined(tourData);
+    // Toda escrita legítima também promove o metadado de fases legado. A função é
+    // lossless: preserva jogos/rodadas/placares e só substitui a descrição antiga
+    // (Liga/Grupos) pelo contrato kind + classificação/eliminatória atual.
+    if (typeof window._canonicalizeTournamentPhases === 'function') window._canonicalizeTournamentPhases(cleanData);
     /* `sync()` salva uma fotografia administrativa e passa `skipParticipants`.
      * Num sandbox dividido, essa fotografia NÃO é um mandato para reconciliar as
      * subcoleções: ela pode chegar antes de participants/matches/opponentHistory.
@@ -1654,6 +1658,7 @@ window.FirestoreDB = {
         }
       } catch (_ndErr) { /* otimização; nunca derruba a transação */ }
       var clean = self._cleanUndefined(data);
+      if (typeof window._canonicalizeTournamentPhases === 'function') window._canonicalizeTournamentPhases(clean);
       self._foldMonarchGroups(clean); // Rei/Rainha: grava só matchIds (fonte única = round.matches)
       // v4.5.85 (ITEM 3 · Fase 4): PERSISTE cópia sanitizada (sem nome pra quem tem uid),
       // mas DEVOLVE `clean` COM nome pro caller sincronizar o AppStore local (display em

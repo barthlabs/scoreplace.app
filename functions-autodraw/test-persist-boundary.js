@@ -36,6 +36,7 @@ ok(typeof w._cleanUndefined === 'function', '_cleanUndefined alcançável (era f
 ok(typeof w._computeAdminEmails === 'function', '_computeAdminEmails alcançável (era firebase-db.js)');
 ok(typeof w._computeAdminUids === 'function', '_computeAdminUids alcançável (era firebase-db.js)');
 ok(typeof w._computeMemberUids === 'function', '_computeMemberUids alcançável (era firebase-db.js)');
+ok(typeof w._canonicalizeTournamentPhases === 'function', '_canonicalizeTournamentPhases alcançável (promoção lossless de legado)');
 
 console.log('──── 2. o strip SANITIZA igual ao cliente (não é no-op) ────');
 // _preloadDrawNames popula isto a partir de users/{uid}: só quem TEM perfil vivo entra.
@@ -110,6 +111,22 @@ const mu = w._computeMemberUids(T).sort();
 ok(JSON.stringify(mu) === '["uid_1_longo","uid_2_longo","uid_3_longo","uid_4_longo","uid_A_longo","uid_B_longo"]',
    '_computeMemberUids: solo + dupla (p1Uid/p2Uid) + sub-participants + admins');
 ok(mu.indexOf('xy') === -1, '_computeMemberUids: uid curto (<4) descartado');
+
+// A promoção roda na fronteira de escrita e não pode redesenhar a competição que
+// já aconteceu. O teste usa uma fase com rodada e placar materializados de propósito.
+const legadoDeFase = {
+  format: 'Liga',
+  phases: [{ name: 'Classificatória', formatCode: 'liga', rounds: [{ id: 'r-1', matches: ['m-1'] }] }],
+  matches: [{ id: 'm-1', score: [6, 4] }]
+};
+const rodadaLegada = legadoDeFase.phases[0].rounds[0];
+const jogoLegado = legadoDeFase.matches[0];
+ok(w._canonicalizeTournamentPhases(legadoDeFase) === true, 'boundary promove fase legada ao contrato atual');
+ok(legadoDeFase.phases[0].kind === 'classification' && legadoDeFase.phases[0].formatCode === 'classification_rounds',
+   'boundary grava classificatória canônica, sem código Liga');
+ok(legadoDeFase.phases[0].rounds[0] === rodadaLegada && legadoDeFase.matches[0] === jogoLegado && jogoLegado.score[0] === 6,
+   'boundary não toca rodada nem placar materializados');
+ok(w._canonicalizeTournamentPhases(legadoDeFase) === false, 'boundary é idempotente depois da promoção');
 
 console.log('──── 5. _applyWriteBoundary da drawRound: PERSIST sanitizado × CLEAN com nome ────');
 // A assimetria do cliente (firebase-db.js:mutateTournament): PERSISTE a cópia sem nome pra quem
