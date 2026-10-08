@@ -56,9 +56,10 @@
     try {
       var todos = await window.FirestoreDB.listInvitableUsers();
       var cu = (window.AppStore && window.AppStore.currentUser) || {};
-      var meu = String(cu.uid || cu.email || '');
+      var meu = String(cu.uid || '');
       E.pessoas = (todos || []).filter(function (u) {
-        return u && String(u._docId || u.uid || u.email || '') !== meu;   // eu não me exploro
+        var uid = String((u && (u._docId || u.uid)) || '');
+        return uid && uid !== meu; // eu não me exploro; perfis sem UID não são acionáveis
       });
       E.estado = 'ok';
       // ⭐ guarda o total pro botão da tela de Pessoas — MESMO desenho de #todos-torneios.
