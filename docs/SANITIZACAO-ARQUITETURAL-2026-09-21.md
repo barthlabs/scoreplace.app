@@ -24,8 +24,9 @@ testes de unidade, integração com emulador e regressão de Rules.
    transferência ou exclusão automática de dados.
 7. Dados biométricos brutos não são persistidos no Firestore.
 8. Uma fase é `classificatoria` ou `eliminatoria`. Sorteio de confrontos,
-   sorteio de duplas, Rei/Rainha e Super 8 são estratégias de sorteio, não tipos
-   paralelos de fase.
+   sorteio de duplas e Rei/Rainha são políticas dentro dessas fases, não tipos
+   paralelos. “Super 8” não é sequer uma política própria: é somente o caso de
+   um grupo classificatório com 8 equipes e agenda completa (7 jogos por equipe).
 
 ## Estado verificado em 21/set/2026
 
@@ -124,7 +125,8 @@ Torneio
   fases[]
     classificatoria | eliminatoria
     política de equipe: individual | dupla formada | dupla sorteada fixa | dupla sorteada por rodada
-    estratégia de sorteio: confrontos | rei-rainha | super-8
+    política de sorteio: confrontos | rei-rainha
+    agenda de grupo: jogos por equipe (1 … N−1; N−1 = todos contra todos)
     política de resolução eliminatória: bye | repescagem | sobra-unica
 ```
 
@@ -134,10 +136,13 @@ eliminatória recebe classificados e aplica semeadura por desempenho ou por
 equilíbrio conforme configuração explícita.
 
 Rei/Rainha sorteia grupos de quatro e gera as três combinações de dupla e jogos
-da rodada; pode produzir duplas fixas para uma eliminatória posterior. Super 8
-é outra estratégia de sorteio classificatório, não uma terceira espécie de
-fase. Ambos devem reutilizar a mesma materialização de rodada, placar,
-classificação, audiência e numeração global de jogos.
+da rodada; pode produzir duplas fixas para uma eliminatória posterior. Em
+grupos, a agenda é parametrizada pelo número de jogos por equipe: para um grupo
+com N equipes, N−1 significa todos contra todos; qualquer número menor cria uma
+agenda mais curta, sem inventar outro formato. Assim, um grupo de 8 com 7 jogos
+por equipe é apenas a configuração historicamente chamada de “Super 8”. Todas
+essas opções reutilizam a mesma materialização de rodada, placar, classificação,
+audiência e numeração global de jogos.
 
 ## Decisão de chave eliminatória
 

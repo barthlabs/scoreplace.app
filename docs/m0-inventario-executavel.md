@@ -35,7 +35,7 @@ uma decisão documental separada, para não apagar evidência de incidentes.
 | Participante autenticado | UID é encontrado em `uid`, `p1Uid`, `p2Uid` e `participants[].uid`. | Formas legadas impedem uma única chave estrutural. | `participantRef.kind='account'` com `uid` obrigatório. |
 | Participante manual | `manualParticipantId` já distingue a vaga local. | Rótulos ainda existem nos adaptadores de leitura. | `participantRef.kind='manual'`; nome local não resolve conta. |
 | Perfil | `users/{uid}` ainda tem gravações gradualmente transferidas para Functions. | Há cópias de apresentação em dados de competição. | Perfil é a única fonte de nome, foto e contato; competição usa UID. |
-| Fases | `liga`, formatos e Rei/Rainha ainda surgem em adaptadores e testes. | Conceitos de fase e sorteio continuam sobrepostos. | Apenas `classification` e `elimination`; Rei/Rainha e Super 8 são modalidades de sorteio. |
+| Fases | `liga`, formatos e Rei/Rainha ainda surgem em adaptadores e testes. | Conceitos de fase e sorteio continuam sobrepostos. | Apenas `classification` e `elimination`; Rei/Rainha é política de sorteio e “Super 8” é grupo de 8 com agenda completa (7 jogos por equipe). |
 
 ## Escritores e leitores que exigem fronteira
 
