@@ -382,6 +382,35 @@ console.log('══════════════════════�
   ok('cluster → esgota adversários inéditos antes de repetir', pairs.join(',') === 'A|C,B|D', pairs.join(','));
 })();
 
+// Cluster não é uma divisão congelada no sorteio inicial. A cada rodada ele nasce
+// novamente da classificação acumulada: aqui F e H começam no bloco inferior,
+// mas sobem após os resultados e passam a disputar o bloco superior na rodada 3.
+(function () {
+  const names = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+  const played = function (p1, p2, winner, scoreP1, scoreP2) {
+    return { p1, p2, winner, scoreP1, scoreP2 };
+  };
+  const t = {
+    id: 'dynamic-ranking-clusters', format: 'Eliminatórias Simples', status: 'active',
+    participants: names.map((displayName, i) => ({ uid: 'dynamic-' + i, displayName })),
+    phases: [{ kind: 'classification', rounds: 5, classification: { structure: 'rounds', pairing: { strategy: 'ranking_clusters', entryMode: 'fixed', clusterSize: 4, rematchPolicy: 'exhaust_cluster_before_repeat' } } }],
+    currentPhaseIndex: 0,
+    rounds: [
+      { round: 1, matches: [
+        played('A', 'B', 'B', 0, 6), played('C', 'D', 'D', 0, 6),
+        played('E', 'F', 'F', 0, 6), played('G', 'H', 'H', 0, 6)
+      ] },
+      { round: 2, matches: [
+        played('B', 'D', 'B', 6, 5), played('F', 'H', 'F', 6, 5),
+        played('A', 'C', 'A', 6, 5), played('E', 'G', 'E', 6, 5)
+      ] }
+    ]
+  };
+  core._window._generateNextRound(t, { ts: 124 });
+  const pairs = (t.rounds[2].matches || []).filter(m => !m.isBye && !m.isSitOut).map(m => [m.p1, m.p2].sort().join('|')).sort();
+  ok('cluster → recalcula grupos pela classificação de cada rodada', pairs.join(',') === 'A|E,B|F,C|G,D|H', pairs.join(','));
+})();
+
 // O sorteio LIMPA a presença (v4.1.30).
 (function () {
   const t = mkT('pres', { format: 'Eliminatórias Simples', checkedIn: { uA: 1 }, absent: { uB: 1 } }, 8);
