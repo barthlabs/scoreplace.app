@@ -660,12 +660,12 @@ window._checkTournamentReminders = async function() {
 
         if (reminderKey && reminderMsg) {
             // Avoid duplicate: check localStorage
-            var sentKey = '_notifSent_' + reminderKey + '_' + (cu.uid || cu.email);
+            var sentKey = '_notifSent_' + reminderKey + '_' + (cu.uid || '');
             try {
                 if (localStorage.getItem(sentKey)) continue;
             } catch(e) {}
 
-            var uid = cu.uid || cu.email;
+            var uid = cu.uid || '';
             await window._sendUserNotification(uid, {
                 type: 'tournament_reminder',
                 message: reminderMsg,
@@ -689,7 +689,7 @@ window._checkTournamentReminders = async function() {
 // (Sentry, 7 usuários). Os call sites usam window._haversineKm diretamente.
 
 window._checkNearbyTournaments = async function() {
-    if (!window.AppStore || !window.AppStore.currentUser || !window.FirestoreDB) return;
+    if (!window.AppStore || !window.AppStore.currentUser || !window.AppStore.currentUser.uid || !window.FirestoreDB) return;
     var cu = window.AppStore.currentUser;
 
     // Location-based matching (primary) + legacy CEP matching (fallback)
@@ -712,7 +712,7 @@ window._checkNearbyTournaments = async function() {
     } else {
         tournaments = window.AppStore.tournaments || [];
     }
-    var uid = cu.uid || cu.email;
+    var uid = cu.uid;
     var _t = window._t || function(k) { return k; };
 
     for (var i = 0; i < tournaments.length; i++) {
