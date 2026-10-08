@@ -526,6 +526,22 @@ ok(mres3.ok === false && mres3.error === 'already-materialized', 'guard _phaseMa
   }, 'g8-complete');
   eq(eightCompleteBySchedule.matches.length, 28, 'agenda completa: N−1 jogos por unidade é todos-contra-todos');
 
+  // Ida/volta é permitido quando há uma única tabela. A volta não é um segundo
+  // sorteio: reaproveita os mesmos confrontos e inverte o mando, preservando a
+  // agenda e impedindo dois pares idênticos no mesmo sentido.
+  var eightHomeAndAway = eng.genGroupsFromPool(eightPairPool, {
+    kind: 'classification', classification: { structure: 'groups' }, gruposCount: 1, turnos: 'ida_volta'
+  }, 'g8-home-away');
+  eq(eightHomeAndAway.matches.length, 56, 'ida/volta: oito unidades geram 2 × C(8,2)=56 jogos');
+  ok(eightHomeAndAway.matches.filter(function (m) { return /^Ida • /.test(m.label); }).length === 28,
+    'ida/volta: ida tem todos os confrontos');
+  ok(eightHomeAndAway.matches.filter(function (m) { return /^Volta • /.test(m.label); }).length === 28,
+    'ida/volta: volta tem todos os confrontos');
+  var directedFixtures = {};
+  eightHomeAndAway.matches.forEach(function (m) { directedFixtures[m.p1 + '→' + m.p2] = true; });
+  ok(eightHomeAndAway.matches.every(function (m) { return directedFixtures[m.p2 + '→' + m.p1]; }),
+    'ida/volta: cada confronto tem a inversão de mando correspondente');
+
   // Grupo ímpar também respeita a quantidade configurada. Cinco unidades × dois
   // jogos têm exatamente cinco confrontos (um ciclo); não pode virar uma grade
   // maior apenas porque o método do círculo tem uma folga por rodada.

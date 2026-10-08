@@ -657,7 +657,9 @@
         drawMode: 'sorteio', reiRainha: false,
         gruposCount: _teamGroupCount, gruposClassified: cfg.classificados,
         groupsBy: 'sorteio', rounds: 1,
-        turnos: idaVolta ? 'ida_volta' : 'ida',   // ⚠️ motor grupos_mata ainda não honra turnos (TODO extensão)
+        // O motor de grupos materializa a volta com o mando invertido. Este campo
+        // continua na fase porque é a configuração, não uma particularidade do rótulo.
+        turnos: idaVolta ? 'ida_volta' : 'ida',
         _doubleRR: idaVolta,
         source: { type: 'enrollment' },
         fixedPairs: isDupla,                   // teamSize>1 forma duplas fixas no sorteio
