@@ -79,5 +79,11 @@ const engine = require(path.join(ROOT, 'functions-autodraw', 'draw-core.js'));
 ok(engine._window.ScoreplaceParticipantIdentity && engine._window._participantUids({ uid: 'a', p1Uid: 'b', p2Uid: 'a' }).join(',') === 'a,b',
   '㉒ motor executa o contrato tipado, não uma cópia própria');
 
+const tournamentsView = fs.readFileSync(path.join(ROOT, 'js/views/tournaments.js'), 'utf8');
+ok(/window\._participantEntryKey\(p\)/.test(tournamentsView) &&
+  /p\.manualParticipantId/.test(tournamentsView) &&
+  /p\.p1ManualId/.test(tournamentsView),
+  '㉓ card, arraste e desfazer de dupla preservam UID e manualParticipantId antes de nome legado');
+
 console.log(fail ? ('  ' + fail + ' FALHA(S), ' + pass + ' ok') : ('  ✓ ' + pass + ' asserções'));
 process.exit(fail ? 1 : 0);

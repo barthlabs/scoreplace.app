@@ -33,9 +33,22 @@ window._INSCRITO_GRID_DUPLA = 'display:grid;grid-template-columns:repeat(auto-fi
 // v1.3.84: chave ESTÁVEL da entrada (dupla ou solo) pra achar o card no DOM no update in-place.
 window._duplaEntryKey = function (p) {
   if (!p) return '';
-  if (typeof p === 'string') return 'nm:' + p;
-  if ((p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) return 'pair:' + (p.p1Uid || p.p1Name) + '~' + (p.p2Uid || p.p2Name);
-  return 'solo:' + (p.uid || p.name || p.displayName || '');
+  /* A chave do card participa de atualização in-place, arraste e seleção. Ela
+   * não pode colidir quando duas contas ou duas vagas manuais têm o mesmo
+   * nome. O contrato tipado também preserva o último caso legado por nome sem
+   * permitir que ele se disfarce de UID. */
+  if (typeof window._participantEntryKey === 'function') {
+    var canonical = window._participantEntryKey(p);
+    if (canonical) return canonical;
+  }
+  if (typeof p === 'string') return 'legacy-name:' + p.toLocaleLowerCase();
+  var p1 = p.p1Uid ? ('uid:' + p.p1Uid) : (p.p1ManualId ? ('manual:' + p.p1ManualId) : (p.p1Name ? ('legacy-name:' + String(p.p1Name).toLocaleLowerCase()) : ''));
+  var p2 = p.p2Uid ? ('uid:' + p.p2Uid) : (p.p2ManualId ? ('manual:' + p.p2ManualId) : (p.p2Name ? ('legacy-name:' + String(p.p2Name).toLocaleLowerCase()) : ''));
+  if (p1 && p2) return 'team:' + [p1, p2].sort().join('|');
+  if (p.uid) return 'uid:' + p.uid;
+  if (p.manualParticipantId) return 'manual:' + p.manualParticipantId;
+  var legacyName = p.name || p.displayName || '';
+  return legacyName ? ('legacy-name:' + String(legacyName).toLocaleLowerCase()) : '';
 };
 window._duplaCard = function (t, p, draggable, ctx) {
   if (p == null) return '';
@@ -124,8 +137,9 @@ window._duplaCard = function (t, p, draggable, ctx) {
       ? 'background:linear-gradient(135deg,rgba(67,56,202,0.6),rgba(99,102,241,0.6));border:1px solid rgba(99,102,241,0.5);'
       : 'background:linear-gradient(135deg,rgba(15,118,110,0.6),rgba(20,184,166,0.6));border:1px solid rgba(20,184,166,0.5);';
     var _canPairDrag = isOrg || (t && t.manualPairing === 'open');
+    var _dragIdentity = uid || (typeof p === 'object' && p.manualParticipantId) || nm;
     var dragAttrs = (draggable && _canPairDrag)
-      ? 'draggable="true" ondragstart="window._duplaDragStart(event,\'' + _safeAttr(uid || nm) + '\',\'' + _safeAttr(tIdStr) + '\')" ondragover="event.preventDefault();this.style.outline=\'3px solid #f59e0b\'" ondragleave="this.style.outline=\'\'" ondrop="event.preventDefault();this.style.outline=\'\';window._duplaDropOn(event,\'' + _safeAttr(uid || nm) + '\',\'' + _safeAttr(tIdStr) + '\')"'
+      ? 'draggable="true" ondragstart="window._duplaDragStart(event,\'' + _safeAttr(_dragIdentity) + '\',\'' + _safeAttr(tIdStr) + '\')" ondragover="event.preventDefault();this.style.outline=\'3px solid #f59e0b\'" ondragleave="this.style.outline=\'\'" ondrop="event.preventDefault();this.style.outline=\'\';window._duplaDropOn(event,\'' + _safeAttr(_dragIdentity) + '\',\'' + _safeAttr(tIdStr) + '\')"'
       : '';
     var labelHtml = !draggable
       ? '<div style="font-size:0.65rem;color:var(--sp-c-34d399,#34d399);margin-top:3px;">✅ Dupla formada</div>'
@@ -1505,7 +1519,7 @@ window._splitDupla = function(tId, id1, id2, btnEl) {
         var _want = [String(id1 || ''), String(id2 || '')].filter(Boolean).sort();
         idx = arr.findIndex(function(p) {
             if (!p || typeof p !== 'object') return false;
-            if (!((p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name))) return false; // só dupla
+            if (!((p.p1Uid || p.p1ManualId || p.p1Name) && (p.p2Uid || p.p2ManualId || p.p2Name))) return false; // só dupla
             var _got = [String(p.p1Uid || p.p1ManualId || p.p1Name || ''), String(p.p2Uid || p.p2ManualId || p.p2Name || '')].filter(Boolean).sort();
             return _got.length === _want.length && _got.every(function(v, i){ return v === _want[i]; });
         });
@@ -1531,7 +1545,7 @@ window._splitDupla = function(tId, id1, id2, btnEl) {
         var _wantW = [String(id1 || ''), String(id2 || '')].filter(Boolean).sort();
         var _achouEspera = _naEspera.some(function (p) {
             if (!p || typeof p !== 'object') return false;
-            if (!((p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name))) return false;
+            if (!((p.p1Uid || p.p1ManualId || p.p1Name) && (p.p2Uid || p.p2ManualId || p.p2Name))) return false;
             var g = [String(p.p1Uid || p.p1ManualId || p.p1Name || ''), String(p.p2Uid || p.p2ManualId || p.p2Name || '')].filter(Boolean).sort();
             if (_wantW.length === 2) return g.length === 2 && g[0] === _wantW[0] && g[1] === _wantW[1];
             var _res = (typeof window._pName === 'function') ? window._pName(p, '') : '';
