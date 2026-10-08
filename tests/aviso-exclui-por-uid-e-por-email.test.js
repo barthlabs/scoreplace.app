@@ -1,12 +1,10 @@
 'use strict';
 
-/* ⛔⛔ QUEM DISPARA O AVISO NÃO RECEBE O PRÓPRIO AVISO — por UID **ou** por e-mail.
+/* ⛔ QUEM DISPARA O AVISO NÃO RECEBE O PRÓPRIO AVISO — por UID.
  *
- * O defeito nasceu de um conserto: com o e-mail do organizador fora do documento (LGPD,
- * 25/set/2026), a edição do torneio passou a excluir o autor por UID. Só que o laço dos
- * participantes continuava comparando SÓ e-mail — então o organizador que também está INSCRITO
- * recebia aviso da própria edição. Trocar a chave de um lado e não do outro é o jeito clássico
- * de criar defeito ao consertar; esta suíte prende os DOIS lados.
+ * Contato não é identidade: a notificação não pode decidir quem excluir nem quem
+ * receber por e-mail copiado no roster. Quem tem conta é resolvido pelo UID e o
+ * e-mail, quando habilitado, sai exclusivamente do perfil daquela conta.
  */
 const assert = require('assert/strict');
 const fs = require('fs');
@@ -28,11 +26,11 @@ const fn = src.slice(ini, fim > ini ? fim : undefined);
 const codigo = fn.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
 
 assert.match(fn, /function\(tournament, notifData, excluir\)/,
-  'o parâmetro se chama `excluir` — é e-mail OU uid, e o nome diz isso');
-assert.match(fn, /if \(e && e === excluir\) return;/,
-  'exclui por e-mail (participante informal, que não tem conta)');
+  'o parâmetro se chama excluir');
 assert.match(fn, /if \(excluir && _allUids\(p\)\.indexOf\(excluir\) !== -1\) return;/,
   '⛔ e exclui por UID — inclusive p1/p2 de dupla, porque `_allUids` devolve os dois');
+assert.doesNotMatch(codigo, /p\.email|r\.email|seenEmails/,
+  'o roster não usa e-mail para decidir destinatário ou exclusão');
 assert.doesNotMatch(codigo, /excludeEmail/,
   'não sobrou nenhum resíduo do nome antigo, que prometia só e-mail');
 
@@ -49,4 +47,17 @@ const criar = fs.readFileSync(path.join(root, 'js/views/create-tournament.js'), 
 assert.match(criar, /_notifyTournamentParticipants\(_freshEdit, \{[\s\S]{0,200}?\}, _freshEdit\.creatorUid\)/,
   'a edição do torneio exclui o autor por uid (era por e-mail, que saiu do documento)');
 
-console.log('✅ aviso exclui por uid E por e-mail — 8 verificações (ausência medida no CÓDIGO, não no comentário)');
+// A callable de comunicado também não pode reviver o fallback: e-mail é canal
+// do perfil, jamais chave de resolução de participante.
+const server = fs.readFileSync(path.join(root, 'functions/index.js'), 'utf8');
+const startServer = server.indexOf('exports.sendOrgCommunication = onCall');
+const endServer = server.indexOf('// ─── Estatísticas de um comunicado', startServer);
+const serverBody = server.slice(startServer, endServer);
+const serverCode = serverBody.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+assert.ok(startServer >= 0, 'achou a callable de comunicado');
+assert.match(serverCode, /recipients\.push\(\{ uid: u \}\)/,
+  'a callable coleta destinatários por UID');
+assert.doesNotMatch(serverCode, /where\("email"|sentByEmail|seenEmails|r\.email|p\.email/,
+  'a callable não resolve, persiste nem identifica destinatário por e-mail');
+
+console.log('✅ aviso e comunicado usam somente UID — 11 verificações (ausência medida no CÓDIGO, não no comentário)');

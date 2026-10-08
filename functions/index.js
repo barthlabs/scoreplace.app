@@ -5483,7 +5483,6 @@ exports.sendOrgCommunication = onCall(
   { region: "us-central1", memory: "256MiB", timeoutSeconds: 120, cors: APP_ORIGINS },
   async (request) => {
     const callerUid = request.auth && request.auth.uid;
-    const callerEmail = ((request.auth && request.auth.token && request.auth.token.email) || "").toLowerCase();
     if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
 
     const tournamentId = String((request.data && request.data.tournamentId) || "");
@@ -5531,7 +5530,6 @@ exports.sendOrgCommunication = onCall(
       ? t.participants
       : (t.participants ? Object.values(t.participants) : []);
     const seenUids = {};
-    const seenEmails = {};
     const recipients = [];
     function _allUids(p) {
       if (typeof p !== "object" || !p) return [];
@@ -5543,16 +5541,12 @@ exports.sendOrgCommunication = onCall(
     }
     parts.forEach((p) => {
       if (typeof p === "string") return;
-      const e = String(p.email || "").toLowerCase();
       const uids = _allUids(p);
       uids.forEach((u) => {
         if (targetUids && !targetUids.has(String(u))) return;
         if ((skipCaller && u === callerUid) || (skippedPoll && _hasPollVote(u))) return;
-        if (u && !seenUids[u]) { seenUids[u] = true; recipients.push({ uid: u, email: e }); }
+        if (u && !seenUids[u]) { seenUids[u] = true; recipients.push({ uid: u }); }
       });
-      if (uids.length === 0 && e && !seenEmails[e]) {
-        seenEmails[e] = true; recipients.push({ uid: "", email: e });
-      }
     });
 
     // v2.4.64: o organizador também RECEBE o próprio comunicado (como um inscrito)
@@ -5560,11 +5554,11 @@ exports.sendOrgCommunication = onCall(
     // organizador na lista (ou adiciona, se ele não for inscrito).
     let orgInList = false;
     recipients.forEach((r) => {
-      if ((r.uid && r.uid === callerUid) || (r.email && callerEmail && r.email === callerEmail)) {
+      if (r.uid === callerUid) {
         r.isOrganizer = true; orgInList = true;
       }
     });
-    if (!orgInList && !skipCaller && !targetUids) recipients.push({ uid: callerUid, email: callerEmail, isOrganizer: true });
+    if (!orgInList && !skipCaller && !targetUids) recipients.push({ uid: callerUid, isOrganizer: true });
 
     function _notifLevelAllowed(userLevel, notifLevel) {
       if (!userLevel || userLevel === "todas") return true;
@@ -5593,19 +5587,13 @@ exports.sendOrgCommunication = onCall(
     // v1.2.9: o canal WhatsApp saiu — ver project_whatsapp_meta_2fa_block.
     const recipientDetails = [];
 
-    // Resolve a PESSOA VIVA do inscrito → { uid, profile }, ou null.
-    //
-    // Passa pela porta nos DOIS caminhos, e o do uid não é zelo à toa: o inscrito guarda o
+    // Resolve a PESSOA VIVA do inscrito → { uid, profile }, ou null. O inscrito guarda o
     // uid do dia da inscrição, e se a conta dele foi fundida depois esse uid virou LÁPIDE —
     // o doc ainda existe (`exists` é true), então o código antigo achava que tinha achado a
     // pessoa e mandava o comunicado pra uma caixa que ninguém abre. Custo zero: a porta lê o
     // mesmo `users/{uid}` que a linha seguinte já lia, e devolve o perfil junto.
     async function _resolvePessoa(r) {
-      if (r.uid) return await _userVivo.userVivo(db, String(r.uid));
-      if (!r.email) return null;
-      // limit(8) porque o e-mail casa a lápide E o sobrevivente; a porta colapsa os dois.
-      const snap = await db.collection("users").where("email", "==", r.email).limit(8).get();
-      return await _userVivo.userVivo(db, snap);
+      return r.uid ? await _userVivo.userVivo(db, String(r.uid)) : null;
     }
 
     // Concorrência limitada (chunks de 20) — rápido mesmo com centenas.
@@ -5615,11 +5603,11 @@ exports.sendOrgCommunication = onCall(
       await Promise.all(slice.map(async (r) => {
         try {
           const _pessoa = await _resolvePessoa(r);
-          // Sem uid nem e-mail não havia por onde procurar; com um deles e sem resultado, o
-          // doc sumiu ou a corrente de lápide está quebrada — nos dois casos não há conta
-          // viva a quem entregar, e mandar pro uid morto seria pior que registrar o pulo.
+          // Sem UID não existe conta a quem entregar; com UID sem resultado, o documento
+          // sumiu ou a corrente de lápide está quebrada. Nunca resolver uma pessoa pelo
+          // e-mail copiado no torneio evita que contato vire identidade.
           if (!_pessoa) {
-            skipped.push({ uid: r.uid || "", email: r.email, reason: (r.uid || r.email) ? "no-user" : "no-uid" });
+            skipped.push({ uid: r.uid || "", reason: r.uid ? "no-user" : "no-uid" });
             return;
           }
           const uid = _pessoa.uid;
@@ -5631,7 +5619,7 @@ exports.sendOrgCommunication = onCall(
 
           const detail = {
             uid: uid,
-            name: profile.displayName || profile.name || r.email || uid,
+            name: profile.displayName || profile.name || uid,
             isOrganizer: isOrganizer,
             notifDocId: "",
             platform: false,
@@ -5715,7 +5703,6 @@ exports.sendOrgCommunication = onCall(
         fullMessage: fullMsg,
         level: level,
         sentByUid: callerUid,
-        sentByEmail: callerEmail,
         sentAt: new Date().toISOString(),
         sentAtMs: Date.now(),
         totalRecipients: recipientDetails.length,
@@ -5749,7 +5736,6 @@ exports.getCommunicationStats = onCall(
   { region: "us-central1", memory: "256MiB", timeoutSeconds: 120, cors: APP_ORIGINS },
   async (request) => {
     const callerUid = request.auth && request.auth.uid;
-    const callerEmail = ((request.auth && request.auth.token && request.auth.token.email) || "").toLowerCase();
     if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
 
     const tournamentId = String((request.data && request.data.tournamentId) || "");
@@ -5880,7 +5866,6 @@ exports.getCommunicationStats = onCall(
       rawMessage: comm.rawMessage || "",
       level: comm.level || "all",
       sentAt: comm.sentAt || "",
-      sentByEmail: comm.sentByEmail || "",
       totalRecipients: comm.totalRecipients || recips.length,
       skippedCount: comm.skippedCount || 0,
       counts: {

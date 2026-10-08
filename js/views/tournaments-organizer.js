@@ -431,53 +431,32 @@ window._notifyTournamentParticipants = async function(tournament, notifData, exc
     if (window._tournamentNotificationsMuted && window._tournamentNotificationsMuted(t)) return;
     var parts = Array.isArray(t.participants) ? t.participants : (t.participants ? Object.values(t.participants) : []);
 
-    // Build list of {uid, email} from participants — prefer uid directly from participant object
+    // Destinatários são contas, portanto entram somente por UID. Contato digitado
+    // pelo organizador nunca identifica alguém nem vira atalho de entrega.
     var recipients = [];
     var seenUids = {};
-    var seenEmails = {};
     var _allUids = typeof window._participantUids === 'function' ? window._participantUids : function(p) { return p && p.uid ? [p.uid] : []; };
     parts.forEach(function(p) {
         if (typeof p === 'string') return;
-        var e = p.email || '';
-        /* ⛔⛔ `excluir` É E-MAIL **OU** UID, E O LAÇO TEM DE CONFERIR OS DOIS (25/set/2026).
-         * Eu troquei o chamador para excluir por uid — porque o e-mail saiu do documento (LGPD) —
-         * e deixei este laço comparando SÓ e-mail. Resultado: o organizador que também está
-         * INSCRITO recebia aviso da própria edição. Trocar a chave de um lado e não do outro é o
-         * jeito clássico de criar defeito ao consertar. */
-        if (e && e === excluir) return;
+        // A exclusão também é UID-only: contato não concede nem remove destinatário.
         if (excluir && _allUids(p).indexOf(excluir) !== -1) return;
         // Notifica TODOS os UIDs do participante (p1Uid + p2Uid para duplas)
         _allUids(p).forEach(function(u) {
-            if (u && !seenUids[u]) { seenUids[u] = true; recipients.push({ uid: u, email: e }); }
+            if (u && !seenUids[u]) { seenUids[u] = true; recipients.push({ uid: u }); }
         });
-        // Participante sem uid: fallback por email
-        if (_allUids(p).length === 0 && e && !seenEmails[e]) {
-            seenEmails[e] = true; recipients.push({ uid: '', email: e });
-        }
     });
 
-    // Also notify organizer if not excluded and not already in list.
-    // v1.8.17-beta: bug fix — dedup anterior usava `(!orgUid && seenEmails[email])`
-    // que só checava o email quando orgUid estava vazio. Quando o organizador é
-    // participante (adicionado via email sem uid) E tem creatorUid no torneio,
-    // `seenEmails` marcava o email mas a dedup ignorava (por causa do `!orgUid`).
-    // Resultado: organizador entrava na lista 2x e recebia 2 notifs de fechamento.
-    // Fix: checar seenEmails independentemente de orgUid.
-    /* ⛔ O ORGANIZADOR ENTRA POR UID (LGPD, 25/set/2026). Antes a entrada dependia de
-     * `t.organizerEmail`, que saiu do documento: sem o campo, o organizador deixaria de ser
-     * avisado. `excluir` aceita e-mail (participante informal) ou uid — quem dispara o aviso
-     * não recebe o próprio aviso. */
+    // Também notifica o organizador quando ele não é o autor excluído e não
+    // já está no elenco. A deduplicação é estrutural, por UID.
     var orgUid = t.creatorUid || '';
     if (orgUid && orgUid !== excluir && !seenUids[orgUid]) {
         seenUids[orgUid] = true;
-        recipients.push({ uid: orgUid, email: '' });
+        recipients.push({ uid: orgUid });
     }
 
     var nd = Object.assign({}, notifData, { tournamentId: String(t.id), tournamentName: t.name || '' });
-    /* ⛔ O LOTE JUNTA DESTINOS, NÃO CAIXAS. Antes juntava `allEmails` — o navegador de quem
-     * avisa precisava do e-mail de cada participante. Agora junta UID; o e-mail só entra para
-     * o participante INFORMAL, que não tem conta e cujo endereço foi digitado pelo próprio
-     * organizador (aí não há ficha alheia a ler: o dado veio dele). */
+    /* ⛔ O LOTE JUNTA DESTINOS, NÃO CAIXAS. O e-mail só é obtido no perfil
+     * da conta pelo fluxo de entrega; nunca a partir do roster do torneio. */
     var allDestinos = [];
 
     for (var i = 0; i < recipients.length; i++) {
@@ -489,10 +468,6 @@ window._notifyTournamentParticipants = async function(tournament, notifData, exc
                 // v1.3.28: coleta TODOS os e-mails do usuário (principal + linkedEmails)
                 // pro lote — não só o principal.
                 if (result && Array.isArray(result.destinos)) result.destinos.forEach(function(d){ allDestinos.push(d); });
-            } else if (r.email) {
-                // Participante informal (sem conta): sem perfil pra ler linkedEmails/opt-out,
-                // mas o e-mail do próprio participante é destinatário válido.
-                allDestinos.push({ email: r.email });   // sem conta: o e-mail é o que existe
             }
         } catch(e) { window._warn('Notify participant error:', e); }
     }
