@@ -185,8 +185,8 @@ window._shareTournament = function(tournamentId) {
     var url = window._tournamentUrl(t.id);
     // Append ref=UID so the recipient auto-friends the sharer
     var cu = window.AppStore.currentUser;
-    if (cu && (cu.uid || cu.email)) {
-        url += '?ref=' + encodeURIComponent(cu.uid || cu.email);
+    if (cu && cu.uid) {
+        url += '?ref=' + encodeURIComponent(cu.uid);
     }
     var title = t.name;
     var text = '\uD83C\uDFC6 ' + t.name + ' — scoreplace.app';
@@ -221,8 +221,8 @@ window.renderInvitePage = function(container) {
     var baseUrl = window.SCOREPLACE_URL || 'https://scoreplace.app';
     var url = baseUrl;
     var cu = window.AppStore && window.AppStore.currentUser;
-    if (cu && (cu.uid || cu.email)) {
-        url += '/?ref=' + encodeURIComponent(cu.uid || cu.email);
+    if (cu && cu.uid) {
+        url += '/?ref=' + encodeURIComponent(cu.uid);
     }
     var qrImageUrl = window._qrCodeUrl(url, 280, true);
     var qrImageUrlLight = window._qrCodeUrl(url, 280, false);
@@ -409,8 +409,8 @@ window._showQRCode = function(tournamentId) {
     var url = window._tournamentUrl(t.id);
     // Append ref=UID so the recipient auto-friends the sharer
     var cu = window.AppStore.currentUser;
-    if (cu && (cu.uid || cu.email)) {
-        url += '?ref=' + encodeURIComponent(cu.uid || cu.email);
+    if (cu && cu.uid) {
+        url += '?ref=' + encodeURIComponent(cu.uid);
     }
     var qrImageUrl = window._qrCodeUrl(url, 280, true);
     var qrImageUrlLight = window._qrCodeUrl(url, 280, false);
@@ -517,7 +517,7 @@ window._openTournamentInvitePrint = function(tournamentId) {
   }
   if (!t) return;
   var cu = window.AppStore.currentUser;
-  var ref = (cu && (cu.uid || cu.email)) || '';
+  var ref = (cu && cu.uid) || '';
   var url = window._tournamentUrl(t.id) + (ref ? '?ref=' + encodeURIComponent(ref) : '');
   var subParts = [];
   var dline = _tournamentDateText(t);
