@@ -6007,12 +6007,11 @@ function _hydrateFriendsPresenceWidget() {
 // Check all tournaments for pending co-org invites or pending transfers targeting current user
 function _checkPendingInvitesAndRedirect(allTournaments) {
   var cu = window.AppStore.currentUser;
-  if (!cu || !cu.email) return;
+  if (!cu || !cu.uid) return;
   // Only auto-redirect once per session to avoid loop
   if (window._pendingInviteRedirected) return;
 
-  var email = cu.email;
-  var uid = cu.uid || '';
+  var uid = cu.uid;
 
   for (var i = 0; i < allTournaments.length; i++) {
     var t = allTournaments[i];
@@ -6020,7 +6019,7 @@ function _checkPendingInvitesAndRedirect(allTournaments) {
     // Check co-host pending invite
     if (Array.isArray(t.coHosts)) {
       var pendingCohost = t.coHosts.find(function(ch) {
-        return ch.status === 'pending' && (ch.email === email || (uid && ch.uid === uid));
+        return ch.status === 'pending' && ch.uid === uid;
       });
       if (pendingCohost) {
         window._pendingInviteRedirected = true;
@@ -6032,7 +6031,7 @@ function _checkPendingInvitesAndRedirect(allTournaments) {
     }
 
     // Check pending transfer
-    if (t.pendingTransfer && (t.pendingTransfer.targetEmail === email || (uid && t.pendingTransfer.targetUid === uid))) {
+    if (t.pendingTransfer && t.pendingTransfer.targetUid === uid) {
       window._pendingInviteRedirected = true;
       window._pendingInviteType = 'transfer';
       window._pendingInviteTournamentId = String(t.id);
