@@ -171,6 +171,7 @@ const SUITES = [
   'tests/l7-category-definitions-cf-only.test.js',
   'tests/telefone-do-organizador-caduca.test.js',
   'tests/rules-mudou-tem-de-ser-testada.test.js',
+  'tests/legacy-phase-projection-core.test.js',
 
   /* ⭐ AS 9 DO AUTODRAW SAÍRAM DO LIMBO "MANUAL" (13/set/2026).
    * Elas estavam num grupo do catálogo chamado `autodraw-manual`: existiam, tinham comando

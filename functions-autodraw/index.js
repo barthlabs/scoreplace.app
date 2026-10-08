@@ -80,6 +80,9 @@ function _hidrataGrupos(t, onde, tId) {
 const _agenda = require('./agenda-core.js');
 const _matchReadyNotifications = require('./match-ready-notifications-core.js');
 const _leagueSeasonCore = require('./league-season-core.js');
+/* A mesma decisão de projeção usada pelo backfill administrativo. Mantê-la pura
+ * impede que uma escrita normal e a migração interpretem legado de formas distintas. */
+const _legacyPhaseProjection = require('../functions/legacy-phase-projection-core.js');
 /* Quais campos de `fmt2` um torneio JÁ SORTEADO ainda aceita mudar (os prazos).
  * ⛔ O require mora AQUI EM CIMA, com os outros: o bloco de configuração lá embaixo é
  * recortado e avaliado por `tests/l7-creation-replay-behavior.test.js` num escopo sem
@@ -728,8 +731,11 @@ function _gravaTorneio(tx, ref, tDepois, tAntes, ctx) {
    * de classificação/eliminatória; não recria sorteio, rodada, grupo, jogo ou placar. */
   if (tDepois && !tDepois.fmt2 && drawWindow && drawWindow.FORMAT2
     && typeof drawWindow.FORMAT2.projectLegacyPhases === 'function') {
-    const legado = drawWindow.FORMAT2.projectLegacyPhases(tDepois);
-    if (legado.changed) tDepois.phases = legado.phases;
+    const planoDeFases = _legacyPhaseProjection.planLegacyPhaseProjection(
+      tDepois,
+      drawWindow.FORMAT2.projectLegacyPhases
+    );
+    if (planoDeFases.changed) tDepois.phases = planoDeFases.phases;
   }
   /* ⛔⛔⛔ VAGA DE REPESCAGEM CARIMBADA NÃO MUDA — E A TRAVA MORA AQUI, NO SERVIDOR.
    *
