@@ -198,6 +198,18 @@ console.log('══════════════════════�
   ok('legado grupos → classificação por grupos', t.phases[0].kind === 'classification' && t.phases[0].classification.structure === 'groups');
 })();
 
+// A fronteira de geração também tem de consumir a fase canônica, não reaprender o
+// formato pelo rótulo do torneio inteiro. Isto cobre a transição Liga → eliminação.
+(function () {
+  const t = {
+    id: 'tour_phase_priority', format: 'Liga', gruposCount: 9,
+    phases: [{ kind: 'elimination', elimination: { bracketType: 'double' }, gruposCount: 4, politicaDaChave: 'bye' }]
+  };
+  const cfg = core._window._buildPhase0Cfg(t);
+  ok('construtor da fase 0 → prioridade para elimination canônica', cfg.formatCode === 'elim_dupla');
+  ok('construtor da fase 0 → preserva política e vagas da fase', cfg.politicaDaChave === 'bye' && cfg.gruposCount === 4);
+})();
+
 // fmt2 corrompido não pode virar sorteio de formato errado — aborta (espelha o cliente).
 (function () {
   const t = { id: 'tour_bad', sport: SPORT, fmt2: { disputa: 'dupla', get grupos() { throw new Error('config corrompida'); } } };

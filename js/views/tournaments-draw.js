@@ -2216,15 +2216,25 @@ window._generateExtraRound = function (tId) {
 // cadência) viram propriedades da cfg que o motor único (generatePhase) honra. Rei/Rainha
 // é MODO (drawMode/reiRainha), não formato.
 window._buildPhase0Cfg = function (t) {
-    var fmt = t.format || 'Eliminatórias Simples';
+    var phase0 = ((t && t.phases) || [])[0] || null;
+    var fmt = (phase0 && phase0.format) || t.format || 'Eliminatórias Simples';
     var code;
-    if (window._isLigaFormat && window._isLigaFormat(t)) code = 'liga';
+    // O contrato de domínio da fase é a fonte primária. Os textos de topo abaixo
+    // existem exclusivamente para documentos ainda não projetados; usar o texto antes
+    // da fase fazia uma fase eliminatória posterior herdar "Liga" do torneio inteiro.
+    if (phase0 && phase0.kind === 'classification') {
+        code = (phase0.classification && phase0.classification.structure === 'groups') ? 'grupos_mata' : 'liga';
+    } else if (phase0 && phase0.kind === 'elimination') {
+        code = (phase0.elimination && phase0.elimination.bracketType === 'double') ? 'elim_dupla' : 'elim_simples';
+    } else if (window._isLigaFormat && window._isLigaFormat(t)) code = 'liga';
     else if (fmt === 'Suíço Clássico' || t.classifyFormat === 'swiss') code = 'liga';
     else if (/Grupo/.test(fmt)) code = 'grupos_mata';
     else if (/Dupla/.test(fmt)) code = 'elim_dupla';
     else if (/Rei|Rainha|monarch/i.test(fmt)) code = 'grupos_mata';
     else code = 'elim_simples';
-    var rei = (t.drawMode === 'rei_rainha') || (t.ligaRoundFormat === 'rei_rainha') || /Rei|Rainha/i.test(fmt);
+    var phaseDrawMode = phase0 && phase0.drawMode;
+    var rei = (phase0 && phase0.reiRainha === true) || phaseDrawMode === 'rei_rainha'
+        || (t.drawMode === 'rei_rainha') || (t.ligaRoundFormat === 'rei_rainha') || /Rei|Rainha/i.test(fmt);
     var cfg = {
         format: fmt, formatCode: code,
         /* ⛔⛔ A POLÍTICA DA CHAVE ENTRA AQUI, E ESTE É O CAMINHO MAIS IMPORTANTE DE TODOS: a fase 0 é
@@ -2234,12 +2244,12 @@ window._buildPhase0Cfg = function (t) {
          * em recálculo e em fase posterior, o que é pior que não funcionar — funcionaria pela metade.
          * ⚠️ A Cloud Function do sorteio monta esta MESMA cfg pelo vendor. Um caminho só.
          * [[feedback_enumerar_todos_os_caminhos_antes_de_dar_por_pronto]] */
-        politicaDaChave: t.politicaDaChave || null,
-        drawMode: t.drawMode || (rei ? 'rei_rainha' : 'sorteio'),
+        politicaDaChave: (phase0 && phase0.politicaDaChave) || t.politicaDaChave || null,
+        drawMode: phaseDrawMode || t.drawMode || (rei ? 'rei_rainha' : 'sorteio'),
         reiRainha: rei,
-        gruposCount: parseInt(t.gruposCount, 10) || 4,
-        gruposClassified: parseInt(t.gruposClassified, 10) || 2,
-        gruposEqualOnly: t.gruposEqualOnly === true,
+        gruposCount: parseInt((phase0 && phase0.gruposCount) != null ? phase0.gruposCount : t.gruposCount, 10) || 4,
+        gruposClassified: parseInt((phase0 && phase0.gruposClassified) != null ? phase0.gruposClassified : t.gruposClassified, 10) || 2,
+        gruposEqualOnly: (phase0 && phase0.gruposEqualOnly) === true || t.gruposEqualOnly === true,
         // Time representado é uma camada sobre as duplas/categorias. A fase 0 precisa
         // receber a mesma configuração gravada no torneio; sem ela o sorteio do servidor
         // respeitaria o toggle e o caminho legado da tela redesenharia confrontos internos.
@@ -2269,10 +2279,10 @@ window._buildPhase0Cfg = function (t) {
         categories: (Array.isArray(t.combinedCategories) && t.combinedCategories.length) ? t.combinedCategories.slice() : null,
         source: { type: 'enrollment' }
     };
-    if (code === 'liga') cfg.ligaCadence = (t.ligaDrawMode === 'round_robin') ? 'round_robin' : 'incremental';
+    if (code === 'liga') cfg.ligaCadence = ((phase0 && phase0.ligaDrawMode) || t.ligaDrawMode) === 'round_robin' ? 'round_robin' : 'incremental';
     // v4.4.x: ida-e-volta em Fase de Grupos (tabela única de duplas fixas) — propaga o
     // turnos pro genGroupsFromPool. Ausente/ida = single-RR (legado). Ver format2.
-    if (code === 'grupos_mata') cfg.turnos = (t.turnos === 'ida_volta' || parseInt(t.ligaTurnos, 10) === 2) ? 'ida_volta' : 'ida';
+    if (code === 'grupos_mata') cfg.turnos = (((phase0 && phase0.turnos) || t.turnos) === 'ida_volta' || parseInt((phase0 && phase0.ligaTurnos) != null ? phase0.ligaTurnos : t.ligaTurnos, 10) === 2) ? 'ida_volta' : 'ida';
     return cfg;
 };
 
