@@ -462,7 +462,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     // parceiro sumia. Mantém o "pelo menos 1" anônimo quando o torneio não tem
     // participantes carregados.
     var _seenUid = {};
-    function _vpush(uid, email, dn, photo) {
+    function _vpush(uid, dn) {
       // v1.5.x: dedup por uid DENTRO do torneio — uma pessoa em 2 entradas (dupla + solo,
       // resíduo de inscrição duplicada) não conta duas vezes. Anônimo (uid null) repete.
       if (uid) { if (_seenUid[uid]) return; _seenUid[uid] = true; }
@@ -475,9 +475,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         _tournamentId: t.id,
         _tournamentName: t.name || 'Torneio',
         uid: uid || null,
-        email_lower: (email || '').toLowerCase(),
         displayName: _live || dn || '',
-        photoURL: photo || '',
         startsAt: start.getTime(),
         endsAt: endMs,
         visibility: 'public',
@@ -485,18 +483,18 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       });
     }
     if (parts.length === 0) {
-      _vpush(null, '', '', '');
+      _vpush(null, '');
     } else {
       parts.forEach(function(p) {
         p = p || {};
         var hasDupla = !!((p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name));
         if (hasDupla) {
-          _vpush(p.p1Uid || p.uid, p.p1Email || p.email, p.p1Name || p.displayName || p.name, p.p1Photo || p.photoURL);
-          _vpush(p.p2Uid, p.p2Email, p.p2Name, p.p2Photo);
+          _vpush(p.p1Uid || p.uid, p.p1Name || p.displayName || p.name);
+          _vpush(p.p2Uid, p.p2Name);
         } else if (Array.isArray(p.participants) && p.participants.length) {
-          p.participants.forEach(function(s) { s = s || {}; _vpush(s.uid, s.email, s.displayName || s.name, s.photoURL || s.photo); });
+          p.participants.forEach(function(s) { s = s || {}; _vpush(s.uid, s.displayName || s.name); });
         } else {
-          _vpush(p.uid, p.email, p.displayName || p.name, p.photoURL || p.photo);
+          _vpush(p.uid, p.displayName || p.name);
         }
       });
     }

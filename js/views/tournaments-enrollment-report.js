@@ -300,8 +300,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         /* ⛔ VALOR LEGADO NÃO É DECISÃO (23/set/2026). Isto marcava QUALQUER `pNGender` antigo como
          * "do organizador" — e com a precedência nova isso poria gênero velho da dupla ACIMA do
          * perfil vivo. A marca agora é a do próprio membro, que a porta grava junto do valor. */
-        out.push({ uid: p.p1Uid || '', manualParticipantId: p.p1ManualId || '', displayName: p.p1Name, name: p.p1Name, email: p.p1Email || '', categories: baseCats.slice(), category: p.category || '', gender: p.p1Gender || '', genderSource: p.p1GenderSource === 'organizador' ? 'organizador' : '', _fromDupla: true, _duplaIdx: idx, _duplaSide: 'p1' });
-        out.push({ uid: p.p2Uid || '', manualParticipantId: p.p2ManualId || '', displayName: p.p2Name, name: p.p2Name, email: p.p2Email || '', categories: baseCats.slice(), category: p.category || '', gender: p.p2Gender || '', genderSource: p.p2GenderSource === 'organizador' ? 'organizador' : '', _fromDupla: true, _duplaIdx: idx, _duplaSide: 'p2' });
+        out.push({ uid: p.p1Uid || '', manualParticipantId: p.p1ManualId || '', displayName: p.p1Name, name: p.p1Name, categories: baseCats.slice(), category: p.category || '', gender: p.p1Gender || '', genderSource: p.p1GenderSource === 'organizador' ? 'organizador' : '', _fromDupla: true, _duplaIdx: idx, _duplaSide: 'p1' });
+        out.push({ uid: p.p2Uid || '', manualParticipantId: p.p2ManualId || '', displayName: p.p2Name, name: p.p2Name, categories: baseCats.slice(), category: p.category || '', gender: p.p2Gender || '', genderSource: p.p2GenderSource === 'organizador' ? 'organizador' : '', _fromDupla: true, _duplaIdx: idx, _duplaSide: 'p2' });
       } else {
         out.push(p);
       }
@@ -973,7 +973,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   // A regra correta já estava escrita neste arquivo, mas só aplicada às linhas da ESPERA:
   // "Resolução SÓ por uid: cair no fallback posicional gravaria a categoria em OUTRA PESSOA".
   // Agora vale pra todas. Quem tem uid casa SÓ por uid; fictício (sem uid) casa por nome/
-  // e-mail, que é a única identidade que ele tem. Sem casar, devolve null e o caller PULA —
+  // nome, que é a única identidade histórica que ele tem. Sem casar, devolve null e o caller PULA —
   // não gravar é sempre melhor que gravar na pessoa errada.
   // Ver [[project_uid_identity_canon_locked]], [[feedback_uid_controls_everything_name_only_ficticio]].
   function _erFindParticipant(parts, row, order) {
@@ -987,11 +987,10 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       }
       return null;   // tem uid e não achou → NÃO chuta
     }
-    // Sem uid = fictício: nome/e-mail são a identidade que resta (e o nome NÃO é strippado).
+    // Sem uid/manualParticipantId = legado: nome é a identidade que resta.
     for (i = 0; i < parts.length; i++) {
       cp = parts[i]; if (!cp || typeof cp !== 'object') continue;
       if (cp.uid) continue;                                  // entrada com uid não casa por nome
-      if (row.email && (cp.email || '').toLowerCase() === String(row.email).toLowerCase()) return cp;
       if (row.name && (cp.displayName || cp.name) === row.name) return cp;
     }
     return null;

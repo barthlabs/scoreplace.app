@@ -2679,12 +2679,9 @@ function _assignParticipantCategory(tId, pIdx, category) {
 function _addCategoryNotification(t, participant, category) {
     if (!t || !participant) return;
     // Identidade = uid (varredura uid, Parte 6). targetUid é a chave canônica;
-    // email/nome só fallback (display + match de docs legados). Pega o uid primário
-    // da entrada (solo: uid; dupla: capitão p1Uid). Antes bailava sem email →
-    // participante só-celular (sem e-mail) NUNCA era notificado da categoria.
+    // Pega o UID primário da entrada (solo: uid; dupla: capitão p1Uid).
     var pUid = participant.uid || participant.p1Uid || '';
-    var pEmail = participant.email || '';
-    if (!pUid && !pEmail) return;
+    if (!pUid) return;
 
     // Initialize notifications array if needed
     if (!t.categoryNotifications) t.categoryNotifications = [];
