@@ -61,7 +61,11 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var cu = _cu();
     return !!(cu && typeof window._canManagePresence === 'function' && window._canManagePresence(t, cu));
   }
-  function _isLiga(t) { return !!(window._isLigaFormat ? window._isLigaFormat(t) : (t && (t.format === 'Liga' || t.format === 'Ranking'))); }
+  function _isLiga(t, m) {
+    var phase = (typeof window._phaseForMatch === 'function') ? window._phaseForMatch(t, m) : null;
+    if (phase) return phase.kind === 'classification' && (!phase.classification || phase.classification.structure !== 'groups');
+    return !!(window._isLigaFormat ? window._isLigaFormat(t) : (t && (t.format === 'Liga' || t.format === 'Ranking')));
+  }
   function _isMonarchFmt(t) { return !!(window._isMonarchFormat && window._isMonarchFormat(t)); }
 
   // ─── gating: multi-dia + jogadores lançam resultado ────────────────────────────
@@ -103,6 +107,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   window._woIsKnockoutMatch = function (t, m) {
     if (!t || !m || m.isMonarch || m.isBye || m.isSitOut) return false;
     if (m.group !== undefined) return false;          // fase de grupos = por grupo
+    var phase = (typeof window._phaseForMatch === 'function') ? window._phaseForMatch(t, m) : null;
+    if (phase) return phase.kind === 'elimination';
     var f = t.format || '';
     if (f === 'Eliminatórias Simples' || f === 'Dupla Eliminatória') return true;
     if (m.phase === 'playoff') return true;            // playoff de Liga em dupla elim

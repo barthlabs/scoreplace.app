@@ -33,6 +33,13 @@ console.log('──── formato-da-partida-por-fase ────');
 ok(typeof F.compileToPhases === 'function', 'FORMAT2.compileToPhases existe');
 ok(typeof W._effectiveScoring === 'function', 'window._effectiveScoring existe (store.js)');
 
+const utilsSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'tournaments-utils.js'), 'utf8');
+const dashboardSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'dashboard.js'), 'utf8');
+const woSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'wo-claim.js'), 'utf8');
+ok(/window\._phaseForMatch/.test(utilsSource), 'uma porta única resolve a fase de cada partida');
+ok(/_phaseForMatch\(t, m\)/.test(dashboardSource), 'dashboard rotula a fase da partida, não o formato do torneio');
+ok(/_phaseForMatch\(t, m\)/.test(woSource), 'W.O. classifica mata-mata pela fase da partida');
+
 // 1 SET: o formato da classificatória da Confra (t.scoring, do bloco do form).
 const UM_SET = {
   type: 'sets', setsToWin: 1, gamesPerSet: 6, tiebreakEnabled: true, tiebreakPoints: 7,

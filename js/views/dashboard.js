@@ -685,7 +685,10 @@ function renderDashboard(container) {
     // só conta após o user iniciar.
     const tournamentStarted = !!(t.tournamentStarted || t.status === 'in_progress');
     if (tournamentStarted) return 'inProgress';
-    const isLiga = t.format === 'Liga' || t.format === 'Ranking' || t.format === 'liga' || t.format === 'ranking';
+    const currentPhase = (typeof window._phaseForMatch === 'function') ? window._phaseForMatch(t) : null;
+    const isLiga = currentPhase
+      ? currentPhase.kind === 'classification' && (!currentPhase.classification || currentPhase.classification.structure !== 'groups')
+      : (t.format === 'Liga' || t.format === 'Ranking' || t.format === 'liga' || t.format === 'ranking');
     const ligaAcceptsEnroll = isLiga && t.ligaOpenEnrollment !== false && t.status !== 'closed';
     // Liga após sorteio com inscrição aberta = considerar como "inProgress"
     // (rodadas em andamento) — caso especial pra Liga, que não tem botão
@@ -2092,8 +2095,16 @@ function renderDashboard(container) {
         else if (m.label) _phaseLabel = String(m.label);
         else if (m.roundLabel) _phaseLabel = String(m.roundLabel);
         else if (m.round != null) _phaseLabel = 'Rodada ' + window._matchRoundDisplayNum(t, m); // 1-based, nunca R0
-        var _formatLabel = m.isMonarch ? 'Rei/Rainha' : ((window._formatDisplayName ? window._formatDisplayName(t.format) : t.format) || '');
-        if (t.format === 'Liga' && t.ligaRoundFormat === 'rei_rainha' && m.isMonarch) _formatLabel = 'Pontos Corridos · Rei/Rainha';
+        var _matchPhaseDash = (typeof window._phaseForMatch === 'function') ? window._phaseForMatch(t, m) : null;
+        var _formatLabel = '';
+        if (m.isMonarch) {
+          _formatLabel = _matchPhaseDash && _matchPhaseDash.kind === 'classification' ? 'Pontos Corridos · Rei/Rainha' : 'Rei/Rainha';
+        } else if (_matchPhaseDash) {
+          _formatLabel = _matchPhaseDash.kind === 'elimination' ? 'Eliminatória'
+            : ((_matchPhaseDash.classification && _matchPhaseDash.classification.structure === 'groups') ? 'Fase de grupos' : 'Pontos Corridos');
+        } else {
+          _formatLabel = (window._formatDisplayName ? window._formatDisplayName(t.format) : t.format) || '';
+        }
         var _subLine = [_formatLabel, _phaseLabel].filter(Boolean).join(' · ');
 
         if (!inP1 && !inP2) {
@@ -2384,9 +2395,12 @@ function renderDashboard(container) {
       // jogo ("R1 Grupo F • Jogo 1") ou "Rodada N". Sem este guard, a derivação
       // abaixo (fromEnd = maxRound - curRound) aplicava nomes de mata-mata numa
       // Liga — ex.: card de Liga aparecia como "🏆 SEMIFINAL". (bug v2.3.x)
-      var _isLiga = (typeof window._isLigaFormat === 'function')
-        ? window._isLigaFormat(t)
-        : (t && (t.format === 'Liga' || t.format === 'Ranking'));
+      var _matchPhase = (typeof window._phaseForMatch === 'function') ? window._phaseForMatch(t, m) : null;
+      var _isLiga = _matchPhase
+        ? _matchPhase.kind === 'classification' && (!_matchPhase.classification || _matchPhase.classification.structure !== 'groups')
+        : ((typeof window._isLigaFormat === 'function')
+          ? window._isLigaFormat(t)
+          : (t && (t.format === 'Liga' || t.format === 'Ranking')));
       var _isSwiss = t && (t.format === 'Suíço' || t.format === 'Suico');
       if (_isLiga || _isSwiss || (m && m.isMonarch)) {
         if (m && m.label) return String(m.label);

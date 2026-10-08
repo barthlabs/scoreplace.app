@@ -66,6 +66,18 @@ window._isEliminationPhase = function(t, phaseIndex) {
     return kind === 'single' || kind === 'double';
 };
 
+// A identidade de uma partida é a sua fase, não o rótulo histórico do torneio.
+// `phaseIndex` pode faltar nos documentos antigos: neste único caso a partida pertence
+// à fase corrente (ou à primeira). Centralizar isso evita que cada tela escolha um
+// fallback diferente e volte a interpretar `t.format` como fonte de verdade.
+window._phaseForMatch = window._phaseForMatch || function(t, match) {
+    if (!t || !Array.isArray(t.phases) || !t.phases.length) return null;
+    var rawIndex = match && match.phaseIndex != null ? match.phaseIndex : t.currentPhaseIndex;
+    var index = Number(rawIndex == null ? 0 : rawIndex);
+    if (!isFinite(index) || index < 0 || index >= t.phases.length) return null;
+    return t.phases[index] || null;
+};
+
 // Rei/Rainha é MODO de sorteio/chaveamento (parceiro rotativo), NÃO um formato de fase.
 // A fonte da verdade é t.drawMode === 'rei_rainha' (ou ligaRoundFormat='rei_rainha' p/ Liga
 // Rei/Rainha) — nunca t.format. O antigo string t.format === 'Rei/Rainha da Praia' foi APAGADO
