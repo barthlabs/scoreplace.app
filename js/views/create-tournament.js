@@ -5977,14 +5977,11 @@ window._saveTournamentClickHandler = async function() {
           coHosts: []
         };
 
-        // Suíço
-        if (formatValue === 'suico') {
-          tourData.swissRounds = parseInt(document.getElementById('suico-rounds').value) || 5;
-          tourData.drawFirstDate = document.getElementById('suico-first-draw-date').value || '';
-          tourData.drawFirstTime = document.getElementById('suico-first-draw-time').value || '19:00';
-          tourData.drawIntervalDays = parseInt(document.getElementById('suico-draw-interval').value) || 7;
-          tourData.drawManual = document.getElementById('suico-manual-draw').checked;
-        }
+        // Não existe mais um modo suíço persistível. Os controles visuais antigos
+        // podem continuar montados enquanto há edições históricas, mas a escolha
+        // atual é compilada abaixo como fase classificatória por rodadas, com
+        // `phases[0].rounds` e `classification.pairing`. Gravar esses campos de
+        // topo criaria um terceiro dialeto para o mesmo torneio.
 
         // Liga (unificado — inclui antigo Ranking)
         if (formatValue === 'liga') {
@@ -6070,10 +6067,10 @@ window._saveTournamentClickHandler = async function() {
           tourData.clusterSize = null;
           tourData.balanceBy = null;
         }
-        // Limpar campos exclusivos de Suíço quando não é Suíço
-        if (formatValue !== 'suico') {
-          tourData.swissRounds = null;
-        }
+        // Campo transitório de documentos antigos. A projeção de leitura continua
+        // entendendo-o, mas qualquer save atual o limpa: o número de rodadas mora
+        // no contrato da fase compilada pelo FORMAT2, nunca num modo paralelo.
+        tourData.swissRounds = null;
 
         // Eliminatórias
         if (formatValue === 'elim_simples' || formatValue === 'elim_dupla' || formatValue === 'grupos_mata') {
