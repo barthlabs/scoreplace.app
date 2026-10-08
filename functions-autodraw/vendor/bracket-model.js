@@ -959,6 +959,33 @@ window._rotaMostraAChaveDeste = function (hash, id) {
     };
   };
 
+  // Porta pública para qualquer superfície que precise nomear UMA partida eliminatória.
+  // Dashboard, agenda e chave não podem voltar a manter regras paralelas baseadas em
+  // `format` ou no ordinal cru da rodada: uma classificatória seguida de eliminatória
+  // ainda pode carregar `format: 'Liga'`, como a Confra. A coluna canônica já sabe se
+  // a partida é eliminatória e aplica a cadeia 8/4/2/1 corretamente.
+  window._canonicalElimLabelsByMatchId = function _canonicalElimLabelsByMatchId(t) {
+    var labels = {};
+    if (!t) return labels;
+    var model = window._getUnifiedRounds(t);
+    var columns = (model && model.columns) || [];
+    for (var i = 0; i < columns.length; i++) {
+      var col = columns[i];
+      if (!col || !col.label || !Array.isArray(col.matches)) continue;
+      if (col.phase !== 'elim' && col.phase !== 'playin' &&
+          col.phase !== 'repechage' && col.phase !== 'grandfinal') continue;
+      for (var j = 0; j < col.matches.length; j++) {
+        if (col.matches[j] && col.matches[j].id != null) labels[String(col.matches[j].id)] = col.label;
+      }
+    }
+    return labels;
+  };
+
+  window._canonicalElimLabelForMatch = function _canonicalElimLabelForMatch(t, match) {
+    if (!match || match.id == null) return '';
+    return window._canonicalElimLabelsByMatchId(t)[String(match.id)] || '';
+  };
+
   // ── Sanity checks (runs once in dev when ?debug=bracket-model is set) ────
   function _runSanityChecks() {
     try {

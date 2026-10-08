@@ -81,6 +81,9 @@ confraCols.forEach(function (col) {
 ok(confraPorJogo['R4-P1'] === 'Oitavas de Final' && confraPorJogo['R5-P1'] === 'Quartas de Final' &&
   confraPorJogo['R6-P1'] === 'Semifinais' && confraPorJogo['R7-P1'] === 'Final',
   '① R4-R7 da Confra recebem os nomes eliminatórios canônicos: ' + JSON.stringify(confraPorJogo));
+ok(W._canonicalElimLabelForMatch({ id: 'confra', format: 'Liga', matches: confraMatches }, confraMatches[0]) === 'Oitavas de Final' &&
+  W._canonicalElimLabelForMatch({ id: 'confra', format: 'Liga', matches: confraMatches }, confraMatches[8]) === 'Quartas de Final',
+  '① dashboard/agenda consultam a mesma porta: Liga com eliminatória reconhece R4 como Oitavas e R5 como Quartas');
 
 /* ── ② A CONTAGEM ERRADA PERDE O NOME, mesmo na distância certa ─────────────
  * ⛔ É o defeito que este arquivo existe para travar: 2 jogos na antepenúltima NÃO é "Quartas". */
@@ -126,7 +129,7 @@ ok(/_NOMES_POR_JOGOS/.test(src), '⑥ a tabela do conceito existe, nomeada');
 ok(/1 jogo[\s\S]{0,400}2 jogos[\s\S]{0,400}4 jogos[\s\S]{0,400}8 jogos/.test(src),
   '⑥ e os quatro nomes estão explicados com o número de jogos de cada um');
 const dashboardSrc = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'dashboard.js'), 'utf8');
-ok(/_getUnifiedRounds\(t\)/.test(dashboardSrc) && /_elimLabelByMatchId/.test(dashboardSrc) &&
+ok(/_canonicalElimLabelsByMatchId\(t\)/.test(dashboardSrc) && /_elimLabelByMatchId/.test(dashboardSrc) &&
   !/Object\.assign\(\{\}, t, \{ matches: matchSources \}\)/.test(dashboardSrc),
   '⑥ dashboard e chave consomem o MESMO torneio canônico; o espelho não altera a fase');
 

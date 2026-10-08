@@ -2035,24 +2035,10 @@ function renderDashboard(container) {
       // rótulo canônico divergente.
       var _elimLabelByMatchId = {};
       try {
-        if (typeof window._getUnifiedRounds === 'function') {
-          var _roundModel = window._getUnifiedRounds(t);
-          ((_roundModel && _roundModel.columns) || []).forEach(function (_col) {
-            // A mesma porta também devolve colunas classificatórias (Liga/Suíço).
-            // Elas mantêm os próprios rótulos de rodada; só uma coluna efetivamente
-            // eliminatória pode substituir a apresentação original do jogo.
-            if (!_col || !(_col.phase === 'elim' || _col.phase === 'playin' ||
-              _col.phase === 'repechage' || _col.phase === 'grandfinal') ||
-              !_col.label || !Array.isArray(_col.matches)) return;
-            _col.matches.forEach(function (_matchOfColumn) {
-              if (_matchOfColumn && _matchOfColumn.id != null) {
-                _elimLabelByMatchId[String(_matchOfColumn.id)] = _col.label;
-              }
-            });
-          });
-        }
+        _elimLabelByMatchId = (typeof window._canonicalElimLabelsByMatchId === 'function')
+          ? window._canonicalElimLabelsByMatchId(t) : {};
       } catch (_roundLabelError) {
-        // O card continua com o fallback legado se a estrutura estiver incompleta.
+        // Estrutura ainda incompleta: mantém o fallback até a hidratação terminar.
       }
 
       matchSources.forEach(function(m) {
@@ -2379,6 +2365,14 @@ function renderDashboard(container) {
 
     // Calcula label de fase para eliminatórias (FINAL, SEMI-FINAL etc.)
     function _elabFaseLabel(t, m) {
+      // Uma fase eliminatória posterior pode viver num torneio cujo formato de
+      // origem é Liga/Classificatória. Consulte primeiro a mesma porta usada pela
+      // chave; só então aplique os fallbacks de partidas classificatórias.
+      try {
+        var _canonicalElimLabel = (typeof window._canonicalElimLabelForMatch === 'function')
+          ? window._canonicalElimLabelForMatch(t, m) : '';
+        if (_canonicalElimLabel) return _canonicalElimLabel;
+      } catch (_roundLabelError) {}
       // Liga/Suíço/Ranking e jogos Rei/Rainha NÃO têm fase de eliminatória
       // (Final/Semi/Quartas). Para esses, o rótulo correto é o label próprio do
       // jogo ("R1 Grupo F • Jogo 1") ou "Rodada N". Sem este guard, a derivação
