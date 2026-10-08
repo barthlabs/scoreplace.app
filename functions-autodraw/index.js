@@ -4198,13 +4198,21 @@ exports.advanceTournamentPhase = onCall(async (request) => {
     const current = t.currentPhaseIndex || 0;
     if (!Array.isArray(t.phases) || current + 1 >= t.phases.length) return { ok: false, reason: 'no-next-phase' };
     const antes = _antesDoMotor(t);
-    // O painel pode ter decidido play-in e rodadas suíças no snapshot da tela.
+    // O painel pode ter decidido play-in e rodadas classificatórias no snapshot da tela.
     // A CF aceita somente essas duas escolhas de configuração e as reaplica no doc fresco
     // antes de materializar; nenhum placar, participante ou chave vem do cliente.
     phaseChoices.forEach((choice, index) => {
       if (!choice || !t.phases || !t.phases[index]) return;
       if (typeof choice.bracketResolution === 'string' && choice.bracketResolution.length <= 32) t.phases[index].bracketResolution = choice.bracketResolution;
-      if (Number.isInteger(choice.swissRounds) && choice.swissRounds > 0 && choice.swissRounds <= 30) t.phases[index].swissRounds = choice.swissRounds;
+      // `swissRounds` é aceito apenas na leitura de um cliente/documento antigo.
+      // Toda escrita volta para o contrato canônico da fase: `rounds`.
+      const classificationRounds = Number.isInteger(choice.classificationRounds)
+        ? choice.classificationRounds
+        : choice.swissRounds;
+      if (Number.isInteger(classificationRounds) && classificationRounds > 0 && classificationRounds <= 30) {
+        t.phases[index].rounds = classificationRounds;
+        delete t.phases[index].swissRounds;
+      }
     });
     _enrichParticipantsFromProfiles(t);
     _hidrataGrupos(t, 'advanceTournamentPhase', tId);

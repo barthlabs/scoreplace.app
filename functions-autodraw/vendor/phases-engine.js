@@ -2657,7 +2657,15 @@
     // o syncImmediate do doc inteiro, que a corrida (echo de result-save) podia clobbar.
     // O `t` local já foi materializado acima (UI otimista). project_concurrency_safe_saves.
     if (typeof window._callCF !== 'function') { if (window.showNotification) window.showNotification('Não foi possível avançar','Atualize o aplicativo e tente novamente.','error'); return; }
-    var phaseChoices = (t.phases || []).map(function (phase) { return { bracketResolution: phase && phase.bracketResolution, swissRounds: phase && phase.swissRounds }; });
+    // O contrato de fase usa `rounds`. `classificationRounds` é apenas o nome
+    // explícito da escolha que atravessa a fronteira cliente → CF; não grave
+    // novamente `swissRounds` em torneios novos.
+    var phaseChoices = (t.phases || []).map(function (phase) {
+      return {
+        bracketResolution: phase && phase.bracketResolution,
+        classificationRounds: phase && phase.rounds
+      };
+    });
     window._callCF('advanceTournamentPhase',{ tournamentId:String(tId), phaseChoices:phaseChoices },'Entre na sua conta para avançar a fase.').then(function(res) {
       var out=(res&&res.data)||{};
       if (!out.ok) throw new Error(out.reason||'advance-failed');
