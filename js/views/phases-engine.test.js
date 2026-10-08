@@ -526,6 +526,33 @@ ok(mres3.ok === false && mres3.error === 'already-materialized', 'guard _phaseMa
   }, 'g8-complete');
   eq(eightCompleteBySchedule.matches.length, 28, 'agenda completa: N−1 jogos por unidade é todos-contra-todos');
 
+  // Grupo ímpar também respeita a quantidade configurada. Cinco unidades × dois
+  // jogos têm exatamente cinco confrontos (um ciclo); não pode virar uma grade
+  // maior apenas porque o método do círculo tem uma folga por rodada.
+  var fivePool = [];
+  for (var p5 = 1; p5 <= 5; p5++) fivePool.push({ displayName: 'I-' + p5, uid: 'i-' + p5 });
+  var fivePartial = eng.genGroupsFromPool(fivePool, {
+    kind: 'classification', classification: { structure: 'groups', schedule: { gamesPerUnit: 2, mode: 'structured' } }, gruposCount: 1
+  }, 'g5-partial');
+  eq(fivePartial.matches.length, 5, 'agenda parcial ímpar: 5 × 2 ÷ 2 = 5 confrontos');
+  var oddAppearances = {};
+  fivePartial.matches.forEach(function (m) {
+    (m.team1Uids || []).concat(m.team2Uids || []).forEach(function (uid) { oddAppearances[uid] = (oddAppearances[uid] || 0) + 1; });
+  });
+  ok(fivePool.every(function (p) { return oddAppearances[p.uid] === 2; }), 'agenda parcial ímpar: cada unidade joga exatamente duas vezes');
+
+  // Com N ímpar e alvo ímpar não há solução com grau igual para todos. O contrato
+  // é não exceder a escolha e distribuir a única diferença de forma mínima.
+  var fiveOddTarget = eng.genGroupsFromPool(fivePool, {
+    kind: 'classification', classification: { structure: 'groups', schedule: { gamesPerUnit: 3, mode: 'structured' } }, gruposCount: 1
+  }, 'g5-odd-target');
+  eq(fiveOddTarget.matches.length, 7, 'agenda ímpar impossível: floor(5 × 3 ÷ 2) = 7 confrontos');
+  var oddTargetAppearances = {};
+  fiveOddTarget.matches.forEach(function (m) {
+    (m.team1Uids || []).concat(m.team2Uids || []).forEach(function (uid) { oddTargetAppearances[uid] = (oddTargetAppearances[uid] || 0) + 1; });
+  });
+  ok(fivePool.every(function (p) { return oddTargetAppearances[p.uid] === 2 || oddTargetAppearances[p.uid] === 3; }), 'agenda ímpar impossível: ninguém passa do alvo e a diferença é no máximo um');
+
   // Times são agregação SOBRE as duplas: o toggle só remove confrontos internos.
   var pairTeams = [
     { displayName: 'A-1', uid: 'a1', competitionTeamId: 'azul' },

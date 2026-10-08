@@ -57,6 +57,24 @@ const coerente = function (s) { return !(s.n > 1 && !(parseInt(s.iv, 10) >= 1));
   ok(coerente(st()), '[REGRA-1] sem contradição após esvaziar');
 })();
 
+// ── [GRUPOS] agenda curta é explícita; N−1 permanece todos-contra-todos ───────
+(function () {
+  mount({ modo: 'todos' });
+  W._f2Grupos(2);
+  W._f2GroupSchedule('short');
+  let cfg = W._f2GetConfig();
+  ok(!!cfg.classificationSchedule && cfg.classificationSchedule.gamesPerUnit >= 1,
+    '[GRUPOS] agenda curta grava jogos por unidade, sem depender de competição por times — got ' + JSON.stringify(cfg.classificationSchedule));
+  W._f2GroupSchedule(4);
+  cfg = W._f2GetConfig();
+  ok(cfg.classificationSchedule && cfg.classificationSchedule.gamesPerUnit === 4,
+    '[GRUPOS] valor escolhido é preservado no contrato — got ' + JSON.stringify(cfg.classificationSchedule));
+  W._f2GroupSchedule(null);
+  cfg = W._f2GetConfig();
+  ok(!cfg.classificationSchedule,
+    '[GRUPOS] todos-contra-todos remove a agenda parcial explícita (legado seguro)');
+})();
+
 // ── [REGRA-2] mudar o Nº de rodadas ⇒ calcula e mostra o Repetir ────────────────────────
 (function () {
   const st = mount({ drawIntervalDays: null, n: 1 });   // parte de "sorteio único"

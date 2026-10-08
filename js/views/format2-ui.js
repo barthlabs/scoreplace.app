@@ -571,7 +571,14 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var gi = _groupInfo(cfg);
     if (!gi.people) return '<div style="margin-top:8px;font-size:0.72rem;color:var(--text-muted);">Sem inscritos ainda — a divisão dos grupos e o tempo aparecem quando houver gente inscrita.</div>';
     var groupGames = 0;
-    for (var g = 0; g < gi.ng; g++) { var u = gi.base + (g < gi.rem ? 1 : 0); groupGames += u * (u - 1) / 2; }
+    var wanted = cfg.classificationSchedule && parseInt(cfg.classificationSchedule.gamesPerUnit, 10);
+    for (var g = 0; g < gi.ng; g++) {
+      var u = gi.base + (g < gi.rem ? 1 : 0);
+      var perUnit = wanted ? Math.min(Math.max(1, wanted), Math.max(0, u - 1)) : Math.max(0, u - 1);
+      // N×jogos ímpar não admite grau idêntico para todos: o motor mantém a
+      // diferença máxima em um jogo e gera floor(N×jogos/2) confrontos.
+      groupGames += Math.floor(u * perUnit / 2);
+    }
     var elimGames = 0;
     if (cfg.eliminatoria.ativa) {
       var q = (cfg.grupos > 1) ? cfg.grupos * cfg.classificados : cfg.classificados;
@@ -636,6 +643,35 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       (gi.isDupla ? (dot + col(gi.perU, 'duplas/grupo')) : '') + '</div>' +
       '<div style="text-align:center;font-size:0.74rem;color:var(--text-muted);"><b>Fase de Grupos</b> — classificação por grupo</div>';
     return nums + _estimateLine(cfg);
+  }
+
+  // Agenda da fase de grupos. O valor é sempre por UNIDADE que joga (jogador no
+  // individual, dupla na disputa em dupla), nunca por "time" agregado. Ausência
+  // do objeto significa todos-contra-todos, preservando exatamente o legado.
+  function _groupScheduleControls(cfg) {
+    var gi = _groupInfo(cfg);
+    var sched = cfg.classificationSchedule;
+    var isShort = !!sched;
+    var current = isShort ? Math.max(1, parseInt(sched.gamesPerUnit, 10) || 1) : 1;
+    var inferredMax = Math.max(1, (gi.big || 2) - 1);
+    var max = Math.max(inferredMax, current);
+    var unit = gi.isDupla ? 'dupla' : 'jogador';
+    var text = !gi.units
+      ? 'Quando houver inscritos, o sistema limita automaticamente o valor ao tamanho de cada grupo.'
+      : ('Em um grupo com N ' + (gi.isDupla ? 'duplas' : 'jogadores') + ', todos contra todos são N−1 jogos por ' + unit + '.');
+    var html = _pill(!isShort, 'window._f2GroupSchedule(null)', '🔄 Todos contra todos') +
+      _pill(isShort, 'window._f2GroupSchedule(\'short\')', '🔢 Agenda curta') +
+      '<div style="font-size:.72rem;color:var(--text-muted);margin-top:7px;line-height:1.45;">' + text + '</div>';
+    if (!isShort) return html;
+    html += '<div style="margin-top:12px;font-size:.72rem;color:var(--text-muted);">Jogos por ' + unit + ' no grupo <b id="f2-group-schedule-games-value" style="color:var(--text-main);">' + current + '</b></div>' +
+      '<input id="f2-group-schedule-games" type="range" min="1" max="' + max + '" value="' + current + '" oninput="window._f2GroupSchedule(this.value,this)" style="width:100%;">' +
+      '<div style="margin-top:10px;font-size:.72rem;color:var(--text-muted);margin-bottom:6px;">Montagem dos confrontos</div>' +
+      _pill(sched.mode !== 'structured', 'window._f2GroupScheduleMode(\'free\')', '🎲 Sorteio livre') +
+      _pill(sched.mode === 'structured', 'window._f2GroupScheduleMode(\'structured\')', '📋 Estruturado') +
+      '<div style="font-size:.72rem;color:var(--text-muted);margin-top:6px;line-height:1.45;">' +
+        (sched.mode === 'structured' ? 'A grade segue uma ordem estável baseada nos identificadores das unidades, nunca em nomes.' : 'Os confrontos são sorteados dentro de cada grupo.') +
+      '</div>';
+    return html;
   }
 
   // Bloco de fase (Classificatória / Eliminatória) com cabeçalho destacado.
@@ -794,9 +830,10 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         rInner += _schedBlock(cfg.rodadas);
       }
     } else {
-      // Fase de grupos (2+): round-robin dentro do grupo, com toggle ida/volta.
-      rInner = _toggleRight('Ida e volta', cfg.rodadas.turnos === 'ida_volta', 'window._f2Turnos(this.checked ? \'ida_volta\' : \'ida\')') +
-        '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;">Dentro de cada grupo, todos contra todos' + (cfg.rodadas.turnos === 'ida_volta' ? ' — ida e volta' : '') + '.</div>';
+      // Fase de grupos (2+): o motor gera uma passada de cada grade. Não expomos
+      // "ida e volta" porque o compilador nunca a aplicou a vários grupos; em vez
+      // de prometer uma configuração inexistente, mostramos a agenda real.
+      rInner = _groupScheduleControls(cfg);
     }
     classifSchedule += _sec('Rodadas', rInner);
 
@@ -1055,6 +1092,32 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     S.cfg.grupos = Math.max(1, parseInt(v, 10) || 1);
     _norm();
     _rerender();
+  };
+  window._f2GroupSchedule = function (v, input) {
+    if (!S) return;
+    if (v == null) {
+      delete S.cfg.classificationSchedule;
+      _norm(); _rerender(); return;
+    }
+    var current = S.cfg.classificationSchedule || { gamesPerUnit: 1, mode: 'free' };
+    if (v === 'short') {
+      var gi = _groupInfo(S.cfg);
+      current.gamesPerUnit = Math.max(1, Math.floor(Math.max(2, gi.big || 2) / 2));
+    } else {
+      current.gamesPerUnit = Math.max(1, parseInt(v, 10) || 1);
+      var out = document.getElementById('f2-group-schedule-games-value'); if (out) out.textContent = current.gamesPerUnit;
+      // Range é atualização de valor; não desmonta o controle sob o dedo.
+      if (input) { S.cfg.classificationSchedule = current; return; }
+    }
+    S.cfg.classificationSchedule = current;
+    _norm(); _rerender();
+  };
+  window._f2GroupScheduleMode = function (mode) {
+    if (!S) return;
+    var current = S.cfg.classificationSchedule || { gamesPerUnit: 1, mode: 'free' };
+    current.mode = mode === 'structured' ? 'structured' : 'free';
+    S.cfg.classificationSchedule = current;
+    _norm(); _rerender();
   };
   window._f2Form = function (v) { S.cfg.formacaoDupla = v; _norm(); _rerender(); };
   window._f2ElimManualPairing = function (checked) { S.cfg.manualPairingOpen = !!checked; _norm(); _rerender(); };

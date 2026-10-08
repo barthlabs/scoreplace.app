@@ -1250,14 +1250,56 @@
       }
       else for (var i = ordered.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var swap = ordered[i]; ordered[i] = ordered[j]; ordered[j] = swap; }
       var all = roundRobinSchedule(ordered);
-      // Em grupos pares, cada rodada do método do círculo dá exatamente um jogo a
-      // cada time. Ex.: 8 times e 4 jogos → 4 rodadas, 16 confrontos, zero BYE.
-      if (ordered.length % 2 === 0) return all.slice(0, Math.min(wanted, all.length));
-      // Para grupos ímpares, grau ímpar é matematicamente impossível para todos os
-      // times. Preservamos o RR completo (seguro e sem falsa folga como jogo) até o
-      // organizador escolher uma combinação viável; a configuração Neon é par.
-      if (wanted % 2 === 1) return all;
-      return all.slice(0, Math.min(wanted + 1, all.length));
+      var maxGames = Math.max(0, ordered.length - 1);
+      wanted = Math.min(Math.max(1, parseInt(wanted, 10) || 1), maxGames);
+      if (wanted >= maxGames) return all;
+
+      // Seleciona uma grade parcial pelo GRAU de cada unidade, não por "primeiras
+      // rodadas". Isso preserva exatamente `gamesPerUnit` quando a matemática
+      // permite (N × jogos é par), inclusive em grupos ímpares: 5 unidades × 2
+      // jogos = ciclo de 5 confrontos, não seis jogos acidentais. A ordem das
+      // rodadas original continua, então ninguém aparece em dois jogos na mesma
+      // rodada. Quando N × jogos é ímpar, uma igualdade perfeita é impossível;
+      // o resultado fica equilibrado: uma unidade joga um jogo a menos, nunca a
+      // mais do que o número escolhido.
+      var indexOf = new Map();
+      ordered.forEach(function (entry, index) { indexOf.set(entry, index); });
+      var degrees = ordered.map(function () { return 0; });
+      var selected = {};
+      function edgeKey(a, b) { return a < b ? a + ':' + b : b + ':' + a; }
+      function choose(a, b) {
+        var key = edgeKey(a, b);
+        if (selected[key] || degrees[a] >= wanted || degrees[b] >= wanted) return false;
+        selected[key] = true; degrees[a]++; degrees[b]++; return true;
+      }
+      // Base regular de grau par: vizinhos circulares. Para grau ímpar e N par,
+      // soma a oposição perfeita. Esses dois casos cobrem toda grade regular
+      // possível de um grafo completo.
+      var regular = (ordered.length * wanted) % 2 === 0;
+      if (regular) {
+        var half = Math.floor(wanted / 2);
+        for (var distance = 1; distance <= half; distance++) {
+          for (var i = 0; i < ordered.length; i++) choose(i, (i + distance) % ordered.length);
+        }
+        if (wanted % 2 === 1) {
+          var opposite = ordered.length / 2;
+          for (var j = 0; j < opposite; j++) choose(j, j + opposite);
+        }
+      } else {
+        // Não existe grau ímpar igual para N ímpar. Começa no grau par inferior e
+        // completa o máximo de pares possíveis, mantendo a diferença em no máximo 1.
+        var base = wanted - 1;
+        for (var d = 1; d <= Math.floor(base / 2); d++) {
+          for (var x = 0; x < ordered.length; x++) choose(x, (x + d) % ordered.length);
+        }
+        all.forEach(function (round) {
+          round.pairs.forEach(function (pair) { choose(indexOf.get(pair.a), indexOf.get(pair.b)); });
+        });
+      }
+      return all.map(function (round) {
+        var pairs = round.pairs.filter(function (pair) { return !!selected[edgeKey(indexOf.get(pair.a), indexOf.get(pair.b))]; });
+        return pairs.length ? { round: round.round, pairs: pairs } : null;
+      }).filter(Boolean);
     }
     // v4.4.x: ida-e-volta (turnos=2) — repete a grade com mando invertido.
     // GATED: só quando phaseCfg.turnos==='ida_volta' (ou _doubleRR); ausente = single-RR (comportamento legado).
