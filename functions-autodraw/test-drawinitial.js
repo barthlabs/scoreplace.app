@@ -398,6 +398,22 @@ console.log('══════════════════════�
   ok('classificatória fixa → não entra no gerador rotativo da Liga', real.length === 2 && real.every(m => !m.isMonarch && !m.team1 && !m.team2), JSON.stringify(real));
 })();
 
+// "Livre" troca a ordem dos confrontos, não a identidade das entradas nem o
+// tipo de gerador. Sem esta guarda, esse botão voltaria a formar parceiros.
+(function () {
+  const names = ['A', 'B', 'C', 'D'];
+  const t = {
+    id: 'fixed-free-draw', format: 'Liga', status: 'active', teamSize: 1,
+    participants: names.map((displayName, i) => ({ uid: 'free-' + i, displayName })),
+    phases: [{ kind: 'classification', rounds: 3, classification: { structure: 'round_robin', pairing: { strategy: 'free_draw', entryMode: 'fixed', rematchPolicy: 'exhaust_cluster_before_repeat' } } }],
+    currentPhaseIndex: 0,
+    rounds: []
+  };
+  core._window._generateNextRound(t, { ts: 1232, rnd: () => 0 });
+  const real = (t.rounds[0].matches || []).filter(m => !m.isBye && !m.isSitOut);
+  ok('classificatória fixa livre → mantém confrontos entre entradas', real.length === 2 && real.every(m => !m.isMonarch && !m.team1 && !m.team2), JSON.stringify(real));
+})();
+
 // Cluster não é uma divisão congelada no sorteio inicial. A cada rodada ele nasce
 // novamente da classificação acumulada: aqui F e H começam no bloco inferior,
 // mas sobem após os resultados e passam a disputar o bloco superior na rodada 3.

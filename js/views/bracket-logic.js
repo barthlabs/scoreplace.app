@@ -6139,14 +6139,13 @@ function _generateNextRoundForPlayers(t, category, _rn, det) {
   const standings = _computeStandings(t, category);
   // O rótulo legado "Liga" não pode sequestrar uma classificatória de
   // entradas fixas. A política canônica da fase decide: `entryMode:'fixed'`
-  // usa o pareamento ranking×ranking abaixo; somente entradas rotativas seguem
-  // o motor de parceiros/adversários da Liga. Isso também cobre a configuração
-  // criada pelo FORMAT2, não apenas a antiga ponte de leitura do Suíço.
+  // usa o pareamento entre entradas abaixo (por ranking OU livre); somente
+  // entradas rotativas seguem o motor de parceiros/adversários da Liga. Isso
+  // também cobre a configuração criada pelo FORMAT2, não apenas a ponte antiga.
   var _phaseForPairing = Array.isArray(t.phases) ? t.phases[t.currentPhaseIndex || 0] : null;
   var _phasePairing = _phaseForPairing && _phaseForPairing.classification && _phaseForPairing.classification.pairing;
-  var _fixedRankingEntries = _phasePairing && typeof _phasePairing === 'object' &&
-    _phasePairing.strategy === 'ranking_clusters' && _phasePairing.entryMode === 'fixed';
-  const _isLigaFmtHere = !!(window._isLigaFormat && window._isLigaFormat(t)) && !_fixedRankingEntries;
+  var _fixedClassificationEntries = _phasePairing && typeof _phasePairing === 'object' && _phasePairing.entryMode === 'fixed';
+  const _isLigaFmtHere = !!(window._isLigaFormat && window._isLigaFormat(t)) && !_fixedClassificationEntries;
   // v2.5.1: ver comentário em _generateReiRainhaRoundForPlayers — round = maior
   // round existente +1, pra categorias do mesmo sorteio compartilharem a rodada.
   const roundNum = (typeof _rn === 'number') ? _rn : (((t.rounds || []).reduce(function (mx, c) { return Math.max(mx, (c && c.round) || 0); }, 0)) + 1);
@@ -6192,6 +6191,16 @@ function _generateNextRoundForPlayers(t, category, _rn, det) {
     if (!_isLigaFmtHere && _teamsTourney && String(n).indexOf(' / ') === -1) return false; // dupla obrigatória (Suíço de duplas)
     return true;
   });
+  // Sorteio livre continua sendo uma classificatória de ENTRADAS FIXAS: muda
+  // somente a ordem de preferência dos confrontos. A política anti-repetição
+  // permanece ativa, para não degradar em re-encontros desnecessários.
+  if (_fixedClassificationEntries && _phasePairing.strategy === 'free_draw') {
+    var _freeRnd = (det && typeof det.rnd === 'function') ? det.rnd : Math.random;
+    for (var _freeI = allPlayersSwiss.length - 1; _freeI > 0; _freeI--) {
+      var _freeJ = Math.floor(_freeRnd() * (_freeI + 1));
+      var _freeTmp = allPlayersSwiss[_freeI]; allPlayersSwiss[_freeI] = allPlayersSwiss[_freeJ]; allPlayersSwiss[_freeJ] = _freeTmp;
+    }
+  }
   // Liga: filter out inactive players
   const players = (_isLigaFmtHere && activeNamesSwiss)
     ? allPlayersSwiss.filter(function(n) { return activeNamesSwiss[n]; })

@@ -60,7 +60,12 @@ window._faseCorrenteEhClassificatoriaPorRodadas = function(t, phaseIndex) {
         if (fase.classification && fase.classification.pairing != null) {
             var pairing = fase.classification.pairing;
             return pairing === 'swiss' ||
-                (typeof pairing === 'object' && pairing.strategy === 'ranking_clusters');
+                // Entradas fixas fazem uma classificatória por rodadas mesmo que
+                // o organizador tenha escolhido sorteio livre para os confrontos.
+                // O que a define é a cadência/identidade das entradas, não a
+                // estratégia de pareamento de uma rodada específica.
+                (typeof pairing === 'object' &&
+                    (pairing.strategy === 'ranking_clusters' || pairing.entryMode === 'fixed'));
         }
         // Ponte curta para a projeção: fases suíças criadas antes deste
         // campo ainda carregam o marcador transitório no topo. A migração o
