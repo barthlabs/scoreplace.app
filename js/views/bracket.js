@@ -2657,9 +2657,12 @@ function renderBracket(container, tournamentId, isInline) {
   const isLiga = hasCanonicalPhase
     ? (typeof window._faseCorrenteEhLiga === 'function' && window._faseCorrenteEhLiga(t))
     : (window._isLigaFormat ? window._isLigaFormat(t) : (t.format === 'Liga' || t.format === 'Ranking'));
-  // Note: after Swiss-as-p2 transitions to elimination, currentStage becomes 'elimination'
-  // and we fall through to the elim bracket renderer (the already-drawn brackets).
-  const isSuico = (t.format === 'Suíço Clássico' || t.classifyFormat === 'swiss' || t.currentStage === 'swiss') && t.currentStage !== 'elimination';
+  // Depois que o Suíço classificatório avança, a fase corrente é eliminatória;
+  // portanto o resolvedor de fase já devolve falso sem precisar ler o marcador
+  // transitório `currentStage` do documento.
+  const isSuico = hasCanonicalPhase
+    ? (typeof window._faseCorrenteEhSuico === 'function' && window._faseCorrenteEhSuico(t))
+    : ((t.format === 'Suíço Clássico' || t.classifyFormat === 'swiss' || t.currentStage === 'swiss') && t.currentStage !== 'elimination');
   const isDupla = hasCanonicalPhase
     ? (typeof window._isDoubleEliminationPhase === 'function' && window._isDoubleEliminationPhase(t))
     : t.format === 'Dupla Eliminatória';
@@ -8404,7 +8407,17 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
   const isFinished = isSuico && currentRound >= maxRounds && allComplete;
   // Swiss-as-qualifier: Swiss rounds in a tournament whose final format is
   // elimination/double-elim/groups (NOT pure Suíço/Liga). Label as "RODADA SUIÇA N/M".
-  const isSwissQualifier = isSuico && t.format !== 'Suíço' && t.format !== 'Suíço Clássico' && !isLigaFmt;
+  // Em documentos atuais, a existência da próxima fase eliminatória é a
+  // definição de "Suíço classificatório". O rótulo histórico permanece só
+  // como fallback para torneios sem fases projetadas.
+  const _currentPhaseIndexSwiss = t.currentPhaseIndex || 0;
+  const _canonicalSwissQualifier = Array.isArray(t.phases) && t.phases[_currentPhaseIndexSwiss] &&
+    t.phases[_currentPhaseIndexSwiss].kind === 'classification'
+    ? t.phases.length > _currentPhaseIndexSwiss + 1
+    : null;
+  const isSwissQualifier = isSuico && (_canonicalSwissQualifier == null
+    ? (t.format !== 'Suíço' && t.format !== 'Suíço Clássico' && !isLigaFmt)
+    : _canonicalSwissQualifier);
   const _swissQualifierLabel = function(n) {
     return _t('bracket.swissRoundFull', {n: n, total: maxRounds});
   };
