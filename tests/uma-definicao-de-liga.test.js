@@ -143,8 +143,8 @@ ok(W._faseCorrenteEhLiga(t3) === false, '④ na fase 0 (grupos) o resolvedor nov
  * propósito, e contar menção reprovaria pela documentação. A definição é
  * `window._faseCorrenteEhLiga = function(t)`, onde o `(` vem depois de `function`. */
 const chamadas = varrer(path.join(ROOT, 'js'), /_faseCorrenteEhLiga\s*\(/g);
-ok(chamadas.length === 3 && chamadas.includes('js/views/schedule-poll.js') && chamadas.includes('js/views/tournaments-enrollment.js') && chamadas.includes('js/views/tournaments-draw.js'),
-  '⑤ janela, disponibilidade e sorteio manual consultam a fase — achei ' + chamadas.length + ': ' + chamadas.join(', '));
+ok(chamadas.length === 4 && chamadas.includes('js/views/schedule-poll.js') && chamadas.includes('js/views/tournaments-enrollment.js') && chamadas.includes('js/views/tournaments-draw.js') && chamadas.includes('js/views/dashboard.js'),
+  '⑤ janela, disponibilidade, sorteio manual e ciclo de temporada consultam a fase — achei ' + chamadas.length + ': ' + chamadas.join(', '));
 const atribNova = varrer(path.join(ROOT, 'js'), /window\._faseCorrenteEhLiga\s*=(?!=)/g);
 ok(atribNova.length === 1 && atribNova[0] === 'js/views/tournaments-utils.js',
   '⑤ e ele tem UMA casa, a mesma do outro — ' + atribNova.join(', '));

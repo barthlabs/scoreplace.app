@@ -37,7 +37,7 @@ ok(fn.includes("doc('season-finished')") && fn.includes('notificationOutbox'), '
 const dash = fs.readFileSync('js/views/dashboard.js', 'utf8');
 const helperStart = dash.indexOf('window._requestExpiredLeagueSeasonClose');
 const block = dash.slice(helperStart, dash.indexOf('})();', helperStart) + 4);
-ok(block.includes("_callCF('closeExpiredLeagueSeason'") && !block.includes('saveTournament') && !/t\.status\s*=(?!=)/.test(block), 'dashboard apenas dispara a CF e não persiste fechamento');
+ok(block.includes("_callCF('closeExpiredLeagueSeason'") && block.includes('_faseCorrenteEhLiga') && !block.includes('saveTournament') && !/t\.status\s*=(?!=)/.test(block), 'dashboard só solicita a CF para a classificatória atual e não persiste fechamento');
 const tours = fs.readFileSync('js/views/tournaments.js', 'utf8');
 ok(!tours.includes('_applyLigaSeasonClosure') && tours.includes('_requestExpiredLeagueSeasonClose(t)'), 'lista de torneios não mantém segundo escritor local');
 process.exit(failed ? 1 : 0);

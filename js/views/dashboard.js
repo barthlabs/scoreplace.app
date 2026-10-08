@@ -25,7 +25,13 @@ window._requestExpiredLeagueSeasonClose = window._requestExpiredLeagueSeasonClos
     if (!t || !t.id || t.status === 'finished' || !window.AppStore ||
         !window._souOrganizador(t) ||
         typeof window._callCF !== 'function') return;
-    var isLeague = typeof window._isLigaFormat === 'function' ? window._isLigaFormat(t) : (t.format === 'Liga' || t.format === 'Ranking');
+    // A solicitação é de ciclo de vida da fase atual. O rótulo do torneio pode
+    // continuar sendo Liga depois que a classificatória terminou.
+    var isLeague = Array.isArray(t.phases)
+      ? (typeof window._faseCorrenteEhLiga === 'function' && window._faseCorrenteEhLiga(t))
+      : (typeof window._isLigaFormat === 'function'
+        ? window._isLigaFormat(t)
+        : (t.format === 'Liga' || t.format === 'Ranking'));
     if (!isLeague || !t.ligaSeasonMonths || !t.startDate || requested[t.id]) return;
     requested[t.id] = true;
     window._callCF('closeExpiredLeagueSeason', { tournamentId: String(t.id) }, 'Entre na sua conta para atualizar a temporada.').catch(function() {
