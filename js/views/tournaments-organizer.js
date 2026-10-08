@@ -1639,6 +1639,84 @@ window._saveAsTemplate = function(tId) {
 var _reopenState = { ini: '', fim: '' };
 window._reopenSetDate = function (qual, valor) { _reopenState[qual] = String(valor || ''); };
 
+/* ── Materialização explícita das inscrições canônicas ──────────────────────
+ * A ficha antiga continua sendo a projeção que alimenta os jogos já existentes.
+ * Esta ferramenta não regrava elenco, sorteios, duplas ou placares: pede uma
+ * prévia ao servidor e, em outro clique, cria os documentos `registrations`
+ * que a prévia acabou de assinar. O fingerprint impede aplicar um elenco que
+ * tenha mudado durante a conferência.
+ *
+ * Não rode isto ao abrir o torneio. Materializar é uma alteração de dados e
+ * precisa ser uma decisão explícita da organização.
+ */
+window._materializeCanonicalRegistrations = function (tId) {
+  var tournamentId = String(tId || '').trim();
+  if (!tournamentId) return;
+  if (typeof window._callCF !== 'function') {
+    showNotification('Conversão indisponível', 'Atualize o aplicativo e tente novamente.', 'error');
+    return;
+  }
+
+  window._callCF('previewCanonicalRegistrationMigration', { tournamentId: tournamentId }, {
+    unauth: 'Entre na sua conta para conferir as inscrições.',
+    falha: 'Não foi possível gerar a prévia das inscrições.'
+  }).then(function (response) {
+    var preview = (response && response.data) || {};
+    var summary = preview.summary || {};
+    var registrations = Number(summary.registrations || 0);
+    var pairs = Number(summary.formedPairs || 0);
+    var conflicts = Number(summary.conflicts || 0);
+    var unsupported = Number(summary.unsupported || 0);
+    var fingerprint = String(preview.fingerprint || '');
+    if (!fingerprint) throw new Error('prévia sem assinatura');
+
+    var safe = function (value) { return Number.isFinite(value) && value >= 0 ? value : 0; };
+    var body = '<div style="text-align:left;font-size:0.86rem;line-height:1.5;">' +
+      '<p style="margin:0 0 10px;">A conversão cria o cadastro canônico das inscrições sem alterar o elenco legado, sorteios, duplas ou placares.</p>' +
+      '<ul style="margin:0 0 10px;padding-left:20px;">' +
+        '<li><b>' + safe(registrations) + '</b> inscrições a representar</li>' +
+        '<li><b>' + safe(pairs) + '</b> duplas formadas preservadas</li>' +
+        '<li><b>' + safe(conflicts) + '</b> conflitos</li>' +
+        '<li><b>' + safe(unsupported) + '</b> entradas sem suporte</li>' +
+      '</ul>' +
+      (conflicts || unsupported
+        ? '<p style="margin:0;color:var(--sp-c-f87171,#f87171);font-weight:700;">Nada será convertido enquanto houver conflitos ou entradas sem suporte.</p>'
+        : '<p style="margin:0;color:var(--sp-c-86efac,#86efac);font-weight:700;">A prévia está consistente. Confirme para materializar.</p>') +
+      '</div>';
+
+    showConfirmDialog('🧬 Conferir inscrições canônicas', body, function () {
+      if (conflicts || unsupported) return;
+      window._callCF('applyCanonicalRegistrationMigration', {
+        tournamentId: tournamentId,
+        fingerprint: fingerprint
+      }, {
+        unauth: 'Entre na sua conta para converter as inscrições.',
+        falha: 'Não foi possível converter as inscrições.'
+      }).then(function (appliedResponse) {
+        var applied = (appliedResponse && appliedResponse.data) || {};
+        var created = Number(applied.created || 0);
+        var already = Number(applied.already || 0);
+        showNotification('Inscrições canônicas confirmadas',
+          (created ? created + ' criadas' : 'Nenhuma nova inscrição precisava ser criada') +
+          (already ? ' · ' + already + ' já estavam canônicas' : '') + '.', 'success');
+        if (typeof window._softRefreshView === 'function') window._softRefreshView();
+      }).catch(function (error) {
+        if (window._warn) window._warn('[canonical-registration-migration] apply falhou', error);
+        var message = (error && error.message) || 'Tente gerar uma nova prévia antes de converter.';
+        showNotification('Conversão não aplicada', message, 'error');
+      });
+    }, null, {
+      confirmText: (conflicts || unsupported) ? 'Fechar' : '🧬 Converter',
+      cancelText: 'Cancelar',
+      type: (conflicts || unsupported) ? 'warning' : 'info',
+      maxWidth: '500px'
+    });
+  }).catch(function (error) {
+    if (window._warn) window._warn('[canonical-registration-migration] preview falhou', error);
+    showNotification('Prévia indisponível', (error && error.message) || 'Tente novamente.', 'error');
+  });
+};
+
 window._reopenAbandonedTournament = function (tId, _valores) {
   var t = (typeof window._findTournamentById === 'function') ? window._findTournamentById(tId) : null;
   if (!t) { showNotification('Torneio não encontrado', '', 'error'); return; }
