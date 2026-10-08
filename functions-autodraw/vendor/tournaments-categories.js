@@ -746,13 +746,16 @@ window._buildTimeEstimation = function(t, opts) {
     }
   }
   var courts = Math.max(parseInt(t.courtCount) || 1, 1);
-  var intervalBetween = 5; // intervalo entre slots no mesmo court (min)
+  // A agenda operacional ocupa a mesma quadra no instante em que a partida
+  // anterior termina. `callTime` e `warmupTime` já pertencem à duração da
+  // partida em `_minutosDaPartida`; acrescentar outro intervalo aqui criava uma
+  // previsão mais longa que a própria grade publicada.
   // v2.0.74: `gameDuration` é o tempo POR SET (régua única `_minutosDaPartida`, em
   // sport-rules.js). A partida vale `× sets esperados` do formato, e cada FASE tem o
   // seu — por isso são DOIS tempos de slot e não um. Torneio de fase única usa o
   // mesmo nos dois e a conta não muda de forma.
   function _slotDaFase(i) {
-    return window._minutosDaPartida(t, window._faseDoTorneio(t, i)) + intervalBetween;
+    return window._minutosDaPartida(t, window._faseDoTorneio(t, i));
   }
   var timePerSlot = _slotDaFase(0);                                    // classificatória
   var timePerSlotElim = (window._isMultiPhase && window._isMultiPhase(t)) ? _slotDaFase(1) : timePerSlot;
@@ -841,7 +844,7 @@ window._buildTimeEstimation = function(t, opts) {
         var mInR = Math.ceil(qual / Math.pow(2, er + 1));
         elimMin += Math.ceil(mInR / courts) * timePerSlotElim; // ← formato da fase 2
       }
-      return groupMin + elimMin + 15; // +15 intervalo entre fases
+      return groupMin + elimMin;
     }
 
     if (fmt === 'Suíço' || fmt === 'Suíço Clássico') {

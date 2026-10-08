@@ -3,7 +3,7 @@
  * 96 pessoas / 2 por dupla / 6 categorias = 8 duplas por categoria.
  * Com 4 jogos por dupla, são 16 confrontos por categoria e 96 no torneio.
  * Fem e Masc correm em blocos separados: 3 categorias × 4 rodadas, 9 quadras,
- * 40 min por slot = 320 min por bloco. */
+ * 35 min por slot = 280 min por bloco, sem intervalo artificial entre jogos. */
 'use strict';
 const W = require('./headless').window;
 W._pName = function (p) { return String((p && (p.displayName || p.name)) || p || ''); };
@@ -21,7 +21,7 @@ const t = {
 const d = W._buildTimeEstimation(t, { dataOnly: true });
 ok(d && d.realCount === 96 && d.unitCount === 48, 'capacidade é 96 pessoas / 48 duplas, não as 8 já formadas');
 ok(d && d.matchesPerCategory === 16 && d.matches === 96, '8 duplas × 4 jogos / 2 = 16 por categoria, 96 no total');
-ok(d && d.bucketCount === 2 && d.minutes === 640, 'Fem/Masc em blocos distintos: 10h40 é a duração total dos dois blocos com 9 quadras');
+ok(d && d.bucketCount === 2 && d.minutes === 560, 'Fem/Masc em blocos distintos: 9h20 em slots contínuos, sem intervalo artificial entre jogos');
 
 // O título histórico não manda no cálculo quando o documento já tem fases
 // canônicas. Isso impede que uma eliminatória publicada como "Liga" por legado

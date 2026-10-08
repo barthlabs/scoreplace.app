@@ -924,9 +924,10 @@ window._cardSouEspera = function (t, cu) {
 window._estimateTournamentMinutes = function(t) {
   if (!t) return 0;
   var courts = Math.max(parseInt(t.courtCount) || 1, 1);
-  var INTERVALO = 5; // entre partidas na mesma quadra
   var tempoDe = function (fase, n) {
-    return Math.ceil(n / courts) * (window._minutosDaPartida(t, fase) + INTERVALO);
+    // `_minutosDaPartida` já inclui chamada e aquecimento. Não existe intervalo
+    // implícito entre slots: a próxima partida começa ao término da anterior.
+    return Math.ceil(n / courts) * window._minutosDaPartida(t, fase);
   };
 
   if (!window._isMultiPhase(t)) {
@@ -1609,7 +1610,7 @@ window._buildProgressInner = function(t) {
       else {
         // v2.0.74: tempo é POR SET — a partida desta FASE (`_ph`) pode ser 3 sets
         // (Rei/Rainha) ou 2,5 (melhor de 3). Régua única em sport-rules.js.
-        var _crtMp = Math.max(parseInt(t.courtCount) || 1, 1), _slotMp = window._minutosDaPartida(t, _ph) + 5;
+        var _crtMp = Math.max(parseInt(t.courtCount) || 1, 1), _slotMp = window._minutosDaPartida(t, _ph);
         plannedEnd = (schedStart || actualStart || Date.now()) + Math.ceil(_rTotal / _crtMp) * _slotMp * 60000;
         _schedEndReal = false;   // estimado por tempo de quadra → sem regressiva
       }
@@ -1720,7 +1721,7 @@ window._buildProgressInner = function(t) {
       }
       else {
         // v2.0.74: tempo é POR SET — a partida desta fase (`_phL`). Ver sport-rules.js.
-        var _crtL = Math.max(parseInt(t.courtCount) || 1, 1), _slotL = window._minutosDaPartida(t, _phL) + 5;
+        var _crtL = Math.max(parseInt(t.courtCount) || 1, 1), _slotL = window._minutosDaPartida(t, _phL);
         plannedEnd = (schedStart || actualStart || Date.now()) + Math.ceil(_pr.total / _crtL) * _slotL * 60000;
         _schedEndReal = false;   // estimado por tempo de quadra → sem regressiva
       }

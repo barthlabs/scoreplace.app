@@ -161,7 +161,9 @@ window._showGroupsConfigPanel = function(tId) {
     // v2.0.74: o tempo configurado é POR SET — a partida da fase que está sendo
     // sorteada pode ter 1, 2,5, 3 ou 4,5 sets. Régua única em sport-rules.js.
     var _courts = Math.max(parseInt(t.courtCount) || 1, 1);
-    var _slotMin = window._minutosDaPartida(t, window._faseDoTorneio(t, t.currentPhaseIndex || 0)) + 5; // +5min intervalo
+    // A chamada e o aquecimento já estão dentro de `_minutosDaPartida`. A prévia
+    // precisa usar a mesma régua contínua da agenda operacional, sem folga extra.
+    var _slotMin = window._minutosDaPartida(t, window._faseDoTorneio(t, t.currentPhaseIndex || 0));
 
     // Conta partidas pra uma config específica
     function _matchesForConfig(c) {
