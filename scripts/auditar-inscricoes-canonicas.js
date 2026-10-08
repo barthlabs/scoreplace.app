@@ -12,6 +12,7 @@ const path = require('path');
 const { execSync } = require('child_process');
 const split = require(path.join(__dirname, '..', 'js', 'views', 'tournament-split-core.js'));
 const registration = require(path.join(__dirname, '..', 'functions', 'registration-core.js'));
+const materialization = require(path.join(__dirname, '..', 'functions', 'registration-migration-core.js'));
 
 if (process.argv.length > 2) {
   console.error('Este censo é somente leitura e não aceita opções.');
@@ -75,10 +76,22 @@ async function entriesForTournament(document, token) {
   return Array.isArray(tournament.participants) ? tournament.participants : [];
 }
 
+async function canonicalRegistrationsForTournament(document, token) {
+  const url = BASE + '/' + document.name.replace(/^.*\/documents\//, '') + '/registrations';
+  const docs = await listCollection(url, token);
+  const byId = {};
+  docs.forEach((doc) => { byId[doc.name.split('/').pop()] = documentToObject(doc); });
+  return byId;
+}
+
 async function main() {
   const token = accessToken();
   const tournaments = await listCollection(BASE + '/tournaments', token);
-  const totals = { tournaments: tournaments.length, entries: 0, registrations: 0, formedPairs: 0, conflicts: 0, unsupported: 0 };
+  const totals = {
+    tournaments: tournaments.length, entries: 0, registrations: 0, formedPairs: 0,
+    conflicts: 0, unsupported: 0, canonicalExisting: 0, canonicalMissing: 0,
+    canonicalAlready: 0, canonicalDivergent: 0, canonicalBlocked: 0
+  };
   const unsupportedByReason = {};
   const unsupportedSchemas = {};
   const flagged = [];
@@ -88,15 +101,31 @@ async function main() {
   for (let offset = 0; offset < tournaments.length; offset += 8) {
     const reports = await Promise.all(tournaments.slice(offset, offset + 8).map(async (document) => {
       const id = document.name.split('/').pop();
-      const entries = await entriesForTournament(document, token);
-      return { id: id, entries: entries, report: registration.dryRunLegacyRoster(id, entries) };
+      const [entries, existing] = await Promise.all([
+        entriesForTournament(document, token),
+        canonicalRegistrationsForTournament(document, token)
+      ]);
+      const report = registration.dryRunLegacyRoster(id, entries);
+      let decision = null;
+      let materializationError = null;
+      try { decision = materialization.decideMaterialization(id, report, existing); }
+      catch (error) { materializationError = error && error.message ? error.message : String(error); }
+      return { id: id, entries: entries, report: report, existing: existing, decision: decision, materializationError: materializationError };
     }));
-    reports.forEach(({ id, entries, report }) => {
+    reports.forEach(({ id, entries, report, existing, decision, materializationError }) => {
       totals.entries += entries.length;
       totals.registrations += report.registrations.length;
       totals.formedPairs += report.formedPairs.length;
       totals.conflicts += report.conflicts.length;
       totals.unsupported += report.unsupported.length;
+      totals.canonicalExisting += Object.keys(existing).length;
+      if (decision) {
+        totals.canonicalMissing += decision.creates.length;
+        totals.canonicalAlready += decision.already.length;
+        totals.canonicalDivergent += decision.conflicts.length;
+      } else {
+        totals.canonicalBlocked++;
+      }
       report.unsupported.forEach((item) => {
         unsupportedByReason[item.reason] = (unsupportedByReason[item.reason] || 0) + 1;
         const record = entries[item.index] || {};
@@ -105,8 +134,9 @@ async function main() {
         const key = item.reason + ' :: ' + schema;
         unsupportedSchemas[key] = (unsupportedSchemas[key] || 0) + 1;
       });
-      if (report.conflicts.length || report.unsupported.length) {
-        flagged.push({ id: id, entries: entries.length, conflicts: report.conflicts.length, unsupported: report.unsupported.length });
+      if (report.conflicts.length || report.unsupported.length || (decision && decision.conflicts.length) || materializationError) {
+        flagged.push({ id: id, entries: entries.length, conflicts: report.conflicts.length, unsupported: report.unsupported.length,
+          canonicalDivergent: decision ? decision.conflicts.length : 0, blocked: materializationError || '' });
       }
     });
   }
@@ -118,6 +148,11 @@ async function main() {
   console.log('  duplas formadas preserváveis: ' + totals.formedPairs);
   console.log('  conflitos: ' + totals.conflicts);
   console.log('  entradas sem suporte: ' + totals.unsupported);
+  console.log('  inscrições canônicas já materializadas: ' + totals.canonicalAlready);
+  console.log('  documentos canônicos existentes: ' + totals.canonicalExisting);
+  console.log('  inscrições canônicas ainda a materializar: ' + totals.canonicalMissing);
+  console.log('  inscrições canônicas divergentes: ' + totals.canonicalDivergent);
+  console.log('  torneios bloqueados para materialização: ' + totals.canonicalBlocked);
   Object.keys(unsupportedByReason).sort().forEach((reason) => {
     console.log('  sem-suporte[' + reason + ']: ' + unsupportedByReason[reason]);
   });
@@ -125,9 +160,10 @@ async function main() {
     console.log('  estrutura[' + schema + ']: ' + unsupportedSchemas[schema]);
   });
   flagged.forEach((item) => {
-    console.log('  exceção ' + item.id + ': entradas=' + item.entries + ', conflitos=' + item.conflicts + ', sem-suporte=' + item.unsupported);
+        console.log('  exceção ' + item.id + ': entradas=' + item.entries + ', conflitos=' + item.conflicts + ', sem-suporte=' + item.unsupported +
+          ', canônico-divergente=' + item.canonicalDivergent + (item.blocked ? ', bloqueado=' + item.blocked : ''));
   });
-  process.exit((totals.conflicts || totals.unsupported) ? 2 : 0);
+  process.exit((totals.conflicts || totals.unsupported || totals.canonicalDivergent || totals.canonicalBlocked) ? 2 : 0);
 }
 
 console.log('Iniciando censo de inscrições canônicas (somente leitura)…');
