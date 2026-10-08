@@ -160,39 +160,6 @@ function isAlreadyEnrolled(participants, participantObj) {
   });
 }
 
-/* Nome repetido não é uma segunda identidade permitida. Contas já nascem com
- * displayName globalmente único; esta porta cobre a exceção operacional: participante
- * digitado pelo organizador, sem UID. A proteção é NOS DOIS SENTIDOS: uma conta também
- * não pode entrar sobre a vaga manual homônima. Comparar dentro da transação impede
- * reenvio de cliente antigo e corrida com a espera. Dados antigos continuam legíveis. */
-function displayNameKey(entry) {
-  var name = entry && (entry.displayName || entry.name);
-  return String(name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    .replace(/\s+/g, ' ').trim().toLocaleLowerCase();
-}
-function entryDisplayNameKeys(entry) {
-  var values = [];
-  if (entry && typeof entry === 'object') {
-    values.push(entry.displayName || entry.name || '');
-    values.push(entry.p1Name || '', entry.p2Name || '');
-    if (Array.isArray(entry.participants)) entry.participants.forEach(function(member) {
-      values.push(member && typeof member === 'object' ? (member.displayName || member.name || '') : member || '');
-    });
-  } else values.push(entry || '');
-  var out = {};
-  values.forEach(function(value) { var key = displayNameKey({ displayName: value }); if (key) out[key] = true; });
-  return out;
-}
-function hasDuplicateParticipantName(lists, participantObj, accountDisplayName) {
-  var wanted = displayNameKey(accountDisplayName ? { displayName: accountDisplayName } : participantObj);
-  if (!wanted) return false;
-  return (lists || []).some(function(list) {
-    return (Array.isArray(list) ? list : []).some(function(entry) {
-      return !!entryDisplayNameKeys(entry)[wanted];
-    });
-  });
-}
-
 // Conta autenticada é identificada pelo UID. Nome, foto, contato e atributos de
 // perfil não são uma projeção do perfil dentro do torneio. A entrada manual é a
 // exceção: sem UID, o nome é a própria referência daquela vaga.
@@ -289,7 +256,7 @@ function normalizeExtraUpdates(extraUpdates) {
 // A CF aplica updateData dentro da transação. NÃO stripa nomes (o servidor não tem
 // perfil vivo pra reidratar — preservar o nome é o comportamento conservador que o
 // próprio cliente adota quando _stripStoredNamesForUidEntries está indisponível).
-function computeEnroll(data, participantObj, extraUpdates, nowMs, accountDisplayName) {
+function computeEnroll(data, participantObj, extraUpdates, nowMs) {
   participantObj = sanitizeAccountParticipant(participantObj);
   var participants = asParticipantsArray(data);
   var openState = enrollmentOpen(data, nowMs);

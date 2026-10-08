@@ -40,11 +40,11 @@ try { C.normalizeExtraUpdates({ status: 'finished' }); ok('extraUpdates recusa p
     /_enrollCore\.normalizeParticipantIntent\(participantObj, callerUid, new Date\(\)\.toISOString\(\)\)/.test(block) &&
     !/computeEnroll\([^\n]*participantObj/.test(block) &&
     /entry: _enrollCore\.cleanUndefined\(out\.entry \|\| sanitizedParticipantObj\)/.test(block));
-  ok('Function usa nome real do perfil para bloquear conta sobre vaga manual homônima',
-    /const profileRef = participantUid \? db\.collection\("users"\)\.doc\(participantUid\) : null;/.test(block) &&
-    /tx\.get\(profileRef\)/.test(block) &&
-    /accountDisplayName = String\(profile\.displayName \|\| profile\.name \|\| ""\)\.trim\(\)/.test(block) &&
-    /computeEnroll\(_dados, sanitizedParticipantObj, extraUpdates, nowMs, accountDisplayName\)/.test(block));
+  const enrollmentDecision = block.slice(0, block.indexOf('const withDuplicateSignal'));
+  ok('Function decide inscrição por identidade estrutural, sem ler perfil para comparar nomes',
+    !/profileRef/.test(enrollmentDecision) &&
+    !/accountDisplayName/.test(enrollmentDecision) &&
+    /computeEnroll\(_dados, sanitizedParticipantObj, extraUpdates, nowMs\)/.test(enrollmentDecision));
 })();
 
 (() => {
@@ -111,10 +111,10 @@ try { C.normalizeExtraUpdates({ status: 'finished' }); ok('extraUpdates recusa p
   eq('manual homônimo na espera é uma nova pessoa', C.computeEnroll(naEspera, { manualParticipantId: 'manual-d', displayName: 'Convidada' }, null, NOW).outcome, 'waitlisted');
   const naWaitlistLegada = { status: 'open', participants: [], waitlist: [{ manualParticipantId: 'manual-e', displayName: 'Débora  Castello' }] };
   eq('manual homônimo na waitlist legada também entra', C.computeEnroll(naWaitlistLegada, { manualParticipantId: 'manual-f', displayName: 'debora castello' }, null, NOW).outcome, 'enrolled');
-  eq('conta homônima não ocupa vaga manual', C.computeEnroll(data, { uid: 'uid-convidado' }, null, NOW, 'Convidado').outcome, 'enrolled');
+  eq('conta homônima não ocupa vaga manual', C.computeEnroll(data, { uid: 'uid-convidado' }, null, NOW).outcome, 'enrolled');
   const duplaManual = { status: 'open', participants: [{ p1Name: 'Ana Manual', p1ManualId: 'manual-p1', p2Name: 'Bia Manual', p2ManualId: 'manual-p2' }] };
-  eq('conta homônima não ocupa membro manual de dupla', C.computeEnroll(duplaManual, { uid: 'uid-ana' }, null, NOW, 'ana manual').outcome, 'enrolled');
-  eq('conta com outro nome continua entrando', C.computeEnroll(data, { uid: 'uid-outra' }, null, NOW, 'Outra pessoa').outcome, 'enrolled');
+  eq('conta homônima não ocupa membro manual de dupla', C.computeEnroll(duplaManual, { uid: 'uid-ana' }, null, NOW).outcome, 'enrolled');
+  eq('conta com outro nome continua entrando', C.computeEnroll(data, { uid: 'uid-outra' }, null, NOW).outcome, 'enrolled');
   eq('manual já em p2 da dupla → already', C.computeEnroll(duplaManual, { manualParticipantId: 'manual-p2', displayName: 'Outro nome' }, null, NOW).outcome, 'already');
 })();
 

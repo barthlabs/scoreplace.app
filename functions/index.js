@@ -2923,7 +2923,6 @@ exports.enrollParticipant = onCall(
 
     const db = admin.firestore();
     const docRef = db.collection("tournaments").doc(tournamentId);
-    const profileRef = participantUid ? db.collection("users").doc(participantUid) : null;
     const nowMs = Date.now();
     let duplicateSignal = null;
 
@@ -2940,12 +2939,6 @@ exports.enrollParticipant = onCall(
         throw new HttpsError("permission-denied", "só o organizador pode incluir participante sem conta");
       }
     }
-
-    // Conta não leva nome para o documento do torneio (o UID é a identidade), mas também
-    // não pode ocupar uma vaga manual homônima. O perfil é lido DENTRO da transação:
-    // se ele mudar enquanto a inscrição corre, o Firestore repete a decisão com o nome
-    // atual. Nunca aceitar o nome alegado pelo navegador evita reabrir essa regressão.
-    let accountDisplayName = '';
 
     // Sinais de possível segunda conta são privados e não bloqueiam inscrição. A pessoa
     // continua pelo mesmo UID; revisão/prova de posse é um fluxo separado.
@@ -2988,12 +2981,7 @@ exports.enrollParticipant = onCall(
       if (!participantUid && !isOrganizer) {
         throw new HttpsError("permission-denied", "só o organizador pode incluir participante sem conta");
       }
-      if (profileRef) {
-        const profileSnap = await tx.get(profileRef);
-        const profile = profileSnap.exists ? (profileSnap.data() || {}) : {};
-        accountDisplayName = String(profile.displayName || profile.name || "").trim();
-      }
-      const r = _enrollCore.computeEnroll(_dados, sanitizedParticipantObj, extraUpdates, nowMs, accountDisplayName);
+      const r = _enrollCore.computeEnroll(_dados, sanitizedParticipantObj, extraUpdates, nowMs);
       if (r.updateData) _splitParts.gravar(tx, docRef, _dados, r.updateData);
       return r;
     });
@@ -3003,7 +2991,7 @@ exports.enrollParticipant = onCall(
 
     // Sandbox: a MESMA CF replica a inscrição no SB via o MESMO core (best-effort).
     await _replicateRosterToSandbox(db, tournamentId, function (sbData) {
-      return _enrollCore.computeEnroll(sbData, sanitizedParticipantObj, extraUpdates, nowMs, accountDisplayName);
+      return _enrollCore.computeEnroll(sbData, sanitizedParticipantObj, extraUpdates, nowMs);
     });
 
     // ── ESPELHO DO ROSTER (v1.7.40) ─────────────────────────────────────────
@@ -3036,7 +3024,6 @@ exports.enrollParticipant = onCall(
     }
 
     if (out.outcome === "capacityFull") return withDuplicateSignal({ capacityFull: true, participants: out.participants });
-    if (out.outcome === "duplicateName") return withDuplicateSignal({ duplicateName: true, participants: out.participants });
     if (out.outcome === "already") return withDuplicateSignal({ alreadyEnrolled: true, participants: out.participants });
     if (out.outcome === "closed" || out.outcome === "notOpenYet") return withDuplicateSignal({ alreadyEnrolled: false, enrollmentClosed: true, enrollmentNotOpenYet: out.outcome === "notOpenYet", participants: out.participants });
     // v1.6.86: fase já sorteada → a pessoa entrou na LISTA DE ESPERA (não no roster).
