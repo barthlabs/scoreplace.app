@@ -2165,7 +2165,7 @@ function _disputeNotificationEvent(t, m, actor, at) {
   const recipients = new Set();
   if (t.creatorUid) recipients.add(String(t.creatorUid));
   (Array.isArray(t.adminUids) ? t.adminUids : []).forEach(uid => { if (uid) recipients.add(String(uid)); });
-  const who = String((m.pendingResult && m.pendingResult.disputedByName) || actor.name || actor.email || 'Alguém');
+  const who = String((m.pendingResult && m.pendingResult.disputedByName) || actor.name || 'Alguém');
   return {
     schema: 1,
     kind: 'score-notification',
@@ -2202,7 +2202,7 @@ function _matchReopenedNotificationEvent(t, m, outcome, actor, at) {
     schema: 1, kind: 'score-notification', type: isWo ? 'wo-reverted' : 'match-reset', title,
     message: String(m.p1 || '') + ' vs ' + String(m.p2 || '') + ' — ' + suffix,
     tournamentId: String(t.id || ''), tournamentName: String(t.name || ''), matchId: String(m.id || ''),
-    fromUid: String(actor.uid || ''), fromName: String(actor.name || actor.email || 'Organizador'),
+    fromUid: String(actor.uid || ''), fromName: String(actor.name || 'Organizador'),
     level: 'fundamental', recipients: Array.from(recipients), createdAt: at,
     createdAtMs: Date.parse(at), dispatchStatus: 'pending'
   };

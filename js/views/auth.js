@@ -3469,7 +3469,8 @@ window._unblockUser = function(uid) {
 // Auto-amizade quando alguém aceita convite de torneio (com ?ref=UID no link)
 function _autoFriendOnInvite(inviterUid, currentUser) {
   if (!inviterUid || !currentUser || !window.FirestoreDB || !window.FirestoreDB.db) return;
-  var myUid = currentUser.uid || currentUser.email;
+  var myUid = currentUser.uid;
+  if (!myUid) return;
   if (inviterUid === myUid) return; // Não se auto-adicionar
 
   // Verifica se já são amigos

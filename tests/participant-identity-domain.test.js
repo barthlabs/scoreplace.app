@@ -90,5 +90,13 @@ ok(/!p\.p1ManualId && !p\.p2ManualId/.test(participantCards) &&
   !/\|\| p\.email \|\| _T\('participants\.participant'/.test(participantCards),
   '㉔ card individual não confunde dupla manual com solo nem expõe e-mail como nome');
 
+const authView = fs.readFileSync(path.join(ROOT, 'js/views/auth.js'), 'utf8');
+const createTournament = fs.readFileSync(path.join(ROOT, 'js/views/create-tournament.js'), 'utf8');
+const functionsIndex = fs.readFileSync(path.join(ROOT, 'functions-autodraw/index.js'), 'utf8');
+ok(!/currentUser\.uid \|\| currentUser\.email/.test(authView) &&
+  !/currentUser\.displayName \|\| window\.AppStore\.currentUser\.email/.test(createTournament) &&
+  !/actor\.name \|\| actor\.email/.test(functionsIndex),
+  '㉕ convite, criação e notificações não usam e-mail como identidade ou nome persistido');
+
 console.log(fail ? ('  ' + fail + ' FALHA(S), ' + pass + ' ok') : ('  ✓ ' + pass + ' asserções'));
 process.exit(fail ? 1 : 0);

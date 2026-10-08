@@ -5972,7 +5972,7 @@ window._saveTournamentClickHandler = async function() {
  * Nenhuma Rule decide por ele e nenhuma Function autoriza por ele: só a tela usava, e a tela
  * agora recebe o endereço pela porta autenticada de contato, só para quem está inscrito.
  * Quem voltar a gravar aqui republica o dado. */
-          organizerName: window.AppStore.currentUser ? (window.AppStore.currentUser.displayName || window.AppStore.currentUser.email) : 'visitante',
+          organizerName: window.AppStore.currentUser ? (window.AppStore.currentUser.displayName || '') : 'visitante',
           creatorUid: window.AppStore.currentUser ? window.AppStore.currentUser.uid : '',
           coHosts: []
         };
