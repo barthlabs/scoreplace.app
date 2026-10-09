@@ -46,6 +46,10 @@ ok(domain.entryIdentityKey({ manualParticipantId: 'ana', displayName: 'Ana' }) !
   '⑫ UID e participante manual com o mesmo texto não colidem');
 ok(domain.participantIdentityKeys({ p1Uid: 'ana', p2ManualId: 'guest-7', p2Name: 'Convidada' }).join(',') === 'manual:guest-7,uid:ana',
   '⑬ contadores recebem uma chave por pessoa da dupla');
+ok(domain.entryIdentityKey({ p1Uid: 'ana', p2Uid: 'bia' }) === domain.entryIdentityKey({ p1Uid: 'bia', p2Uid: 'ana' }),
+  '⑬a chave de dupla é independente da ordem dos slots');
+ok(domain.entryIdentityKey({ p1Uid: 'ana' }) === 'uid:ana' && domain.entryIdentityKey({}) === '',
+  '⑬b chave de entrada trata dupla parcial e entrada vazia sem inventar identidade');
 
 const browser = { window: null }; browser.window = browser; vm.createContext(browser);
 vm.runInContext(fs.readFileSync(path.join(ROOT, 'js/domain/participant-identity.js'), 'utf8'), browser);
