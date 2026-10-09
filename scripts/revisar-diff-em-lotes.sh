@@ -49,6 +49,9 @@ if rg -q '^functions-autodraw/vendor/' "$ALL" 2>/dev/null; then
     rg -n '_stripStoredNamesForUidEntries' js/firebase-db.js functions-autodraw/index.js
     echo 'Resolver de fase disponível no cliente e no vendor:'
     rg -n 'window\._faseDoTorneio\s*=' js/views/sport-rules.js functions-autodraw/vendor/sport-rules.js
+    echo 'Helpers de fase eliminatória disponíveis no cliente e no vendor:'
+    rg -n 'window\._is(Double)?EliminationPhase\s*=' \
+      js/views/tournaments-utils.js functions-autodraw/vendor/tournaments-utils.js
   } > "$CROSS_EVIDENCE"
 fi
 

@@ -90,6 +90,8 @@ ok(W._setsEsperadosDe(0) === null && W._setsEsperadosDe('x') === null,
      'chamada+aquecimento entram UMA vez por partida (75+15=90), não a cada set');
   ok(W._minutosDaPartida(t, { scoring: { setsToWin: 1 } }) === 30 + 10 + 5,
      'e num set único a partida é 30+10+5=45');
+  ok(W._minutosDaPartida({ ...t, intervalBetween: 5 }, { scoring: { setsToWin: 2 } }) === 90,
+     'intervalo legado não soma uma segunda pausa: chamada+aquecimento já ocupam os 15 min operacionais');
 }
 
 // ── ⑤ fase sem `scoring` cai na MODALIDADE, nunca em zero ────────────────────
