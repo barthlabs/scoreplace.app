@@ -7,6 +7,9 @@
 // de inscrições ficou indisponível até que inscrever, sair e formar/desfazer dupla usem
 // a mesma coleção canônica; ela não pode congelar um torneio entre a conversão e a
 // próxima alteração. Comunicados informam que alcançam apenas participantes com conta.
+// No próximo jogo da dashboard, o grupo de WhatsApp fica ao lado do agendamento;
+// depois do placar, o app não sugere criar grupo novo, mas continua mostrando um
+// link de grupo já criado.
 // 2.3.310 — A dashboard passa a usar a mesma definição de fase da chave: uma eliminatória
 // que começa na R4 aparece como Oitavas de Final, seguida de Quartas, Semifinais e Final,
 // em vez de exibir o número cru da rodada. A restauração pré-publicação continua restrita

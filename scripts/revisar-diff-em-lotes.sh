@@ -88,6 +88,11 @@ if rg -q '^functions-autodraw/vendor/' "$ALL" 2>/dev/null; then
     rg -n '_stripStoredNamesForUidEntries' js/firebase-db.js functions-autodraw/index.js
     echo 'Resolver de fase disponível no cliente e no vendor:'
     rg -n 'window\._faseDoTorneio\s*=' js/views/sport-rules.js functions-autodraw/vendor/sport-rules.js
+    echo 'Helper da fase classificatória e duração operacional disponíveis na mesma árvore:'
+    rg -n 'window\._faseCorrenteEhLiga\s*=' \
+      js/views/tournaments-utils.js functions-autodraw/vendor/tournaments-utils.js
+    rg -n 'window\._minutosDaPartida\s*=|callTime|warmupTime' \
+      js/views/sport-rules.js functions-autodraw/vendor/sport-rules.js
     echo 'Helpers de fase eliminatória disponíveis no cliente e no vendor:'
     rg -n 'window\._is(Double)?EliminationPhase\s*=' \
       js/views/tournaments-utils.js functions-autodraw/vendor/tournaments-utils.js
@@ -116,6 +121,16 @@ MIGRATION_BATCH="$(grep -l '^functions/index\.js$' "$TMP"/batch-* 2>/dev/null | 
 if [[ -n "$MIGRATION_BATCH" ]]; then
   for context_file in CLAUDE.md js/release-notes.js js/views/tournaments-organizer.js tests/materializacao-inscricoes-organizador.test.js; do
     grep -qxF "$context_file" "$MIGRATION_BATCH" || printf '%s\n' "$context_file" >> "$MIGRATION_BATCH"
+  done
+fi
+
+# `schedule-poll` consulta helpers globais carregados antes dele. Incluímos a
+# prova dessas definições no mesmo lote para que a revisão de transporte não
+# confunda uma dependência carregada pelo index com uma função ausente.
+SCHEDULE_BATCH="$(grep -l '^js/views/schedule-poll\.js$' "$TMP"/batch-* 2>/dev/null | head -1 || true)"
+if [[ -n "$SCHEDULE_BATCH" ]]; then
+  for context_file in js/views/tournaments-utils.js js/views/sport-rules.js; do
+    grep -qxF "$context_file" "$SCHEDULE_BATCH" || printf '%s\n' "$context_file" >> "$SCHEDULE_BATCH"
   done
 fi
 
