@@ -40,4 +40,24 @@ function verifiedRoster(tournament, registrations) {
   return { migration, registrations: items, participants };
 }
 
-module.exports = { migrationOf, verifiedRoster };
+/* Reconstroi a fotografia após uma transição pura antes de qualquer write. A
+ * atualização tem de referir um registro que já pertence ao recibo: não há
+ * upsert silencioso, mudança de identidade ou alteração de categoria durante
+ * retirada/formação de dupla. */
+function applyUpdates(tournament, registrations, updates) {
+  const before = verifiedRoster(tournament, registrations);
+  const replacements = new Map();
+  (Array.isArray(updates) ? updates : []).forEach((update) => {
+    const id = text(update && update.registrationId);
+    if (!id) throw new Error('atualização canônica sem registrationId');
+    if (replacements.has(id)) throw new Error('atualização canônica duplicada');
+    replacements.set(id, update);
+  });
+  const existing = new Set(before.registrations.map((item) => item.registrationId));
+  replacements.forEach((_, id) => {
+    if (!existing.has(id)) throw new Error('atualização canônica fora do elenco');
+  });
+  return verifiedRoster(tournament, before.registrations.map((item) => replacements.get(item.registrationId) || item));
+}
+
+module.exports = { migrationOf, verifiedRoster, applyUpdates };

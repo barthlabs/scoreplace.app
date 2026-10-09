@@ -15,6 +15,14 @@ ok(body.includes('.where("participantKey", "==", "uid:" + callerUid)') && !body.
 ok(body.includes('_registrationMutations.enroll(') && body.includes('{ uid: callerUid }'), 'registro novo recebe participantKey estrutural pelo núcleo, nunca nome');
 ok(body.includes('_registrationMutations.enroll(') && body.includes('enrollment.creates.forEach'), 'callable nova usa o núcleo canônico único para decidir creates');
 ok(body.includes('tx.create(tournamentRef.collection("registrations")') && !body.includes('participants:'), 'Function grava só o registro canônico, sem dual-write no roster');
+const deenrollStart = source.indexOf('exports.deenrollParticipant = onCall');
+const deenrollEnd = source.indexOf('\nexports.', deenrollStart + 8);
+const deenroll = source.slice(deenrollStart, deenrollEnd < 0 ? source.length : deenrollEnd);
+ok(deenroll.includes('_loadCanonicalRosterForMutation') && deenroll.includes('_registrationMutations.withdraw(') && deenroll.includes('if (!out.canonical)'), 'desinscrição materializada usa o núcleo canônico e não replica escrita legada');
+const standbyStart = source.indexOf('exports.leaveStandby = onCall');
+const standbyEnd = source.indexOf('\nexports.', standbyStart + 8);
+const standby = source.slice(standbyStart, standbyEnd < 0 ? source.length : standbyEnd);
+ok(standby.includes('_loadCanonicalRosterForMutation') && standby.includes('_registrationMutations.leaveWaitlist(') && standby.includes('if (!out.canonical)'), 'saída da espera materializada usa o núcleo canônico e não replica escrita legada');
 const deletionStart = source.indexOf('exports.deleteAccount = onCall');
 const deletionEnd = source.indexOf('\nexports.', deletionStart + 8);
 const deletion = source.slice(deletionStart, deletionEnd < 0 ? source.length : deletionEnd);

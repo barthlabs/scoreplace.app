@@ -3927,6 +3927,17 @@ exports.deenrollParticipant = onCall(
     const out = await db.runTransaction(async (tx) => {
       const snap = await tx.get(docRef);
       if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
+      const rawTournament = snap.data() || {};
+      if (rawTournament.canonicalRegistrationMigration && rawTournament.canonicalRegistrationMigration.fingerprint) {
+        const isOrg = _isTournamentOrgCaller(rawTournament, callerUid);
+        if (userUid !== callerUid && !isOrg) {
+          throw new HttpsError("permission-denied", "só a própria pessoa ou o organizador podem desinscrever");
+        }
+        const checked = await _loadCanonicalRosterForMutation(tx, docRef, rawTournament);
+        const decision = _registrationMutations.withdraw(tournamentId, checked.registrations, { uid: userUid });
+        const next = _writeCanonicalRosterUpdates(tx, docRef, rawTournament, checked.registrations, decision.updates);
+        return { outcome: decision.outcome === "changed" ? "removed" : "notFound", participants: next.participants, canonical: true };
+      }
       // Torneio DIVIDIDO: o elenco mora na subcoleção. Hidrata ANTES de decidir —
       // sem isto as regras rodam contra `participants: []`. Ver functions/split-parts.js.
       const t = await _splitParts.hidratar(tx, docRef, snap.data());
@@ -3942,9 +3953,11 @@ exports.deenrollParticipant = onCall(
     });
 
     // Sandbox: a MESMA CF replica a desinscrição no SB via o MESMO core (best-effort).
-    await _replicateRosterToSandbox(db, tournamentId, function (sbData) {
-      return _enrollCore.computeDeenroll(sbData, userUid);
-    });
+    if (!out.canonical) {
+      await _replicateRosterToSandbox(db, tournamentId, function (sbData) {
+        return _enrollCore.computeDeenroll(sbData, userUid);
+      });
+    }
 
     if (out.outcome === "notFound") return { notFound: true, participants: out.participants };
     return { notFound: false, participants: out.participants };
@@ -3968,6 +3981,13 @@ exports.leaveStandby = onCall(
     const out = await db.runTransaction(async (tx) => {
       const snap = await tx.get(docRef);
       if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
+      const rawTournament = snap.data() || {};
+      if (rawTournament.canonicalRegistrationMigration && rawTournament.canonicalRegistrationMigration.fingerprint) {
+        const checked = await _loadCanonicalRosterForMutation(tx, docRef, rawTournament);
+        const decision = _registrationMutations.leaveWaitlist(tournamentId, checked.registrations, { uid: callerUid });
+        const next = _writeCanonicalRosterUpdates(tx, docRef, rawTournament, checked.registrations, decision.updates);
+        return { outcome: decision.outcome === "changed" ? "removed" : "notFound", participants: next.participants, canonical: true };
+      }
       const t = await _splitParts.hidratar(tx, docRef, snap.data());
       _assertLegacyRosterStillAuthoritative(t);
       const r = _enrollCore.computeLeaveStandby(t, callerUid);
@@ -3975,14 +3995,17 @@ exports.leaveStandby = onCall(
       return r;
     });
 
-    await _replicateRosterToSandbox(db, tournamentId, function (sbData) {
-      return _enrollCore.computeLeaveStandby(sbData, callerUid);
-    });
+    if (!out.canonical) {
+      await _replicateRosterToSandbox(db, tournamentId, function (sbData) {
+        return _enrollCore.computeLeaveStandby(sbData, callerUid);
+      });
+    }
 
     return {
       removed: out.outcome === "removed",
-      standbyParticipants: out.standbyParticipants,
-      waitlist: out.waitlist
+      standbyParticipants: out.standbyParticipants || [],
+      waitlist: out.waitlist || [],
+      participants: out.participants || []
     };
   }
 );
@@ -4038,6 +4061,39 @@ function _assertLegacyRosterStillAuthoritative(tournament) {
       'inscrições canônicas já materializadas; esta alteração precisa usar a porta canônica'
     );
   }
+}
+
+/* Carrega e grava o elenco materializado como uma única fonte. A query é
+ * limitada pelo recibo e lê um documento a mais para detectar excesso; cada
+ * update toca somente status/vínculo de dupla, jamais a projeção legada. */
+async function _loadCanonicalRosterForMutation(tx, tournamentRef, tournament) {
+  let migration;
+  try { migration = _canonicalRegistrationBoundary.migrationOf(tournament); }
+  catch (error) { throw new HttpsError("failed-precondition", error.message); }
+  const snap = await tx.get(tournamentRef.collection("registrations").limit(migration.expectedCount + 1));
+  const registrations = snap.docs.map((doc) => {
+    const item = doc.data() || {};
+    if (String(doc.id) !== String(item.registrationId || "")) {
+      throw new HttpsError("failed-precondition", "documento canônico sem id estrutural");
+    }
+    return item;
+  });
+  try { return _canonicalRegistrationBoundary.verifiedRoster(tournament, registrations); }
+  catch (error) { throw new HttpsError("failed-precondition", error.message); }
+}
+
+function _writeCanonicalRosterUpdates(tx, tournamentRef, tournament, registrations, updates) {
+  let next;
+  try { next = _canonicalRegistrationBoundary.applyUpdates(tournament, registrations, updates); }
+  catch (error) { throw new HttpsError("failed-precondition", error.message); }
+  (updates || []).forEach((item) => {
+    tx.update(tournamentRef.collection("registrations").doc(item.registrationId), {
+      status: item.status,
+      fixedPairId: item.fixedPairId || null,
+      updatedAt: _FV.serverTimestamp(),
+    });
+  });
+  return next;
 }
 
 // Prévia da migração I1: lê o elenco fresco e devolve somente o censo que

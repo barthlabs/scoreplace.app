@@ -48,6 +48,11 @@ afetada. Se uma pessoa sair de dupla fixa, a dupla é desfeita nos dois
 registros da categoria; a outra pessoa permanece inscrita. Nenhum documento é
 apagado: histórico e idempotência permanecem auditáveis.
 
+As duas callables já passam pela fronteira transacional canônica quando há
+marcador: validam o recibo, atualizam somente `status` e `fixedPairId` nos
+documentos atingidos e não replicam uma mutação canônica para o Sandbox pelo
+caminho legado.
+
 ### Formar e desfazer dupla
 
 As duas pessoas precisam ter registros elegíveis, na mesma categoria e sem

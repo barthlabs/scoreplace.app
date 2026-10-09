@@ -16,5 +16,8 @@ bad('recusa torneio sem marcador canônico', () => boundary.verifiedRoster({ id:
 bad('recusa recibo sem contagem íntegra', () => boundary.verifiedRoster({ id: 't1', canonicalRegistrationMigration: { fingerprint: 'fp' } }, [account('u1')]));
 bad('recusa contagem divergente', () => boundary.verifiedRoster(tournament, []));
 bad('recusa documento com identidade divergente', () => boundary.verifiedRoster(tournament, [Object.assign({}, account('u1'), { participantKey: 'uid:u2' })]));
+const changed = boundary.applyUpdates(tournament, [account('u1')], [Object.assign({}, account('u1'), { status: 'withdrawn' })]);
+ok('projeção pós-mutação mantém o recibo e remove inscrito retirado do roster', changed.registrations[0].status === 'withdrawn' && changed.participants.length === 0);
+bad('recusa atualização de registro fora do recibo', () => boundary.applyUpdates(tournament, [account('u1')], [account('u2')]));
 console.log((fail ? '✗' : '✓') + ' canonical-registration-boundary-core: ' + pass + ' passaram, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);
