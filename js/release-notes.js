@@ -1,3 +1,4 @@
+// 2.3.311 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.3.310 — A dashboard passa a usar a mesma definição de fase da chave: uma eliminatória
 // que começa na R4 aparece como Oitavas de Final, seguida de Quartas, Semifinais e Final,
 // em vez de exibir o número cru da rodada. A restauração pré-publicação continua restrita
