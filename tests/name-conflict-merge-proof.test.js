@@ -33,6 +33,8 @@ const cli = fs.readFileSync(path.join(root, 'js', 'views', 'auth.js'), 'utf8');
 const init = block(cf, 'exports.initializeUserProfile', 'exports.updateOwnProfile');
 const update = block(cf, 'exports.updateOwnProfile', 'exports.updateOwnInterfacePreferences');
 const availability = block(cf, 'exports.checkDisplayNameAvailability', 'exports.initializeUserProfile');
+const duplicateDetector = block(cf, 'async function _detectarDuplicataNaBase', '// ─── scheduledAutoMergeCleanup');
+const duplicateOnProfileWrite = block(cf, 'exports.enforceUniqueDisplayName', '// ─── scheduledAutoMergeCleanup');
 
 ok(!/displayNameClaims|findDisplayNameConflict|already-exists/.test(init),
   'criação de perfil não reserva nem recusa homônimo');
@@ -50,6 +52,11 @@ ok(!/window\._profileHydrateNameConflict\(\);/.test(cli),
   'perfil não consulta conflito de nome ao abrir');
 ok(/_askDuplicateAccount/.test(cli) && /dupSuspect/.test(cli),
   'sinal de possível segunda conta continua separado do nome de exibição');
+ok(/_detectarDuplicataNaBase/.test(duplicateOnProfileWrite) && /dupSuspect/.test(duplicateDetector) &&
+  /normalizarTelefone/.test(duplicateDetector),
+  'escrita de perfil encaminha possível segunda conta por sinal de contato, não por nome');
+ok(/nunca bloqueia, renomeia ou funde automaticamente/.test(duplicateOnProfileWrite),
+  'sinal de duplicata não altera contas sem revisão e prova de posse');
 ok(/proofIdToken/.test(cli) && /verifyIdToken\(String\(proof\)\)/.test(cf),
   'mesclagem legítima continua exigindo prova de posse');
 
