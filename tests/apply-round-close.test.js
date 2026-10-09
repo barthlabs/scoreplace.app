@@ -42,7 +42,7 @@ function eq(a, b, m) { ok(a === b, m + ' (esperado ' + JSON.stringify(b) + ', ve
 
 ok(typeof W._applyRoundCloseToTournament === 'function', '_applyRoundCloseToTournament carregou');
 
-// ── 1. Suíço puro no fim → encerra ───────────────────────────────────────────
+// ── 1. Classificatória de fase única no fim → encerra ─────────────────────────
 (function () {
   const t = {
     format: 'Suíço Clássico', swissRounds: 1, currentStage: 'swiss', p2Resolution: 'bye',
@@ -50,12 +50,12 @@ ok(typeof W._applyRoundCloseToTournament === 'function', '_applyRoundCloseToTour
     rounds: [{ status: 'active', matches: [{ id: 'm1', p1: 'A', p2: 'B', winner: 'A' }] }],
   };
   const branch = W._applyRoundCloseToTournament(t, 0);
-  eq(branch, 'pureSwissFinish', 'suíço puro no maxRounds → pureSwissFinish');
+  eq(branch, 'classificationFinished', 'classificatória de fase única no máximo → classificationFinished');
   eq(t.rounds[0].status, 'complete', 'rodada marcada complete');
   eq(t.status, 'finished', 'torneio encerrado');
 })();
 
-// ── 2. Suíço-como-classificação → só SINALIZA transição (não executa aqui) ────
+// ── 2. Ponte legada → só SINALIZA transição (não executa aqui) ────────────────
 (function () {
   const t = {
     format: 'Suíço Clássico', swissRounds: 1, currentStage: 'swiss', p2Resolution: 'swiss', p2TargetCount: 2,

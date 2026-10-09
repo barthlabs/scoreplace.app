@@ -3007,7 +3007,11 @@ function _updateDuplaElimClassification(t) {
 
 function _updateProgressiveClassification(t) {
   if (!t.matches || t.matches.length === 0) return;
-  if (!_isEliminationBracket(t)) return;
+  // A classificação final de uma fase de grupos também precisa preservar a
+  // identidade canônica de quem não avançou. Ela é complementada no bloco de
+  // grupos ao fim desta função; não a descarte apenas porque o torneio ainda
+  // não materializou a chave eliminatória.
+  if (!_isEliminationBracket(t) && !(Array.isArray(t.groups) && t.groups.length > 0)) return;
 
   // v1.0.90-beta: Dupla Eliminatória usa lógica DEDICADA (lower bracket + GF).
   // A função abaixo (single-elim) trata upper-final winner=1º que é ERRADO em

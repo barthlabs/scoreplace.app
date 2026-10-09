@@ -25,10 +25,15 @@ function playAll(t, ri) {
 
 console.log('\n== Suíço: fecho de rodada pelo cliente → CF ==');
 
-// Suíço-2-fases via sorteio (cliente → CF stub → drawInitial), K=3.
-const t = buildViaDraw('Eliminatórias Simples', 12, { p2Resolution: 'swiss', swissRounds: 3 });
-ok('sorteou: fase 0 Suíço, round 1', Array.isArray(t.rounds) && t.rounds.length === 1 && t.classifyFormat === 'swiss',
-  { r: t.rounds && t.rounds.length, cf: t.classifyFormat });
+// Classificatória-2-fases via sorteio (cliente → CF stub → drawInitial), K=3.
+// O antigo marcador p2Resolution:'swiss' é normalizado antes da gravação; testes
+// novos exercitam diretamente o contrato que um torneio criado hoje recebe.
+const t = buildViaDraw('Eliminatórias Simples', 12, {
+  classificationTransition: { rounds: 3, pairing: { strategy: 'ranking_clusters', entryMode: 'fixed', rematchPolicy: 'exhaust_cluster_before_repeat' } }
+});
+ok('sorteou: fase 0 classificatória, round 1', Array.isArray(t.rounds) && t.rounds.length === 1 &&
+  t.phases && t.phases[0] && t.phases[0].kind === 'classification',
+  { r: t.rounds && t.rounds.length, p0: t.phases && t.phases[0] });
 
 // round 1 completo → fecha pelo cliente → a CF gera round 2 e substitui `t`.
 playAll(t, 0);

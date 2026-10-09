@@ -54,7 +54,7 @@ ok(/_callCloseRound !== 'function'/.test(src),
 // ③ o aviso não pode sumir ao trocar de caminho
 ok(/window\._avisoDoFechoDeRodada = function/.test(src),
   'o aviso do fecho tem fonte única, derivada do DESFECHO');
-['phaseComplete', 'transition', 'pureSwissFinish', 'nextRound'].forEach(function (b) {
+['phaseComplete', 'classificationFinished', 'nextRound'].forEach(function (b) {
   ok(new RegExp("'" + b + "'").test(src.slice(src.indexOf('_avisoDoFechoDeRodada = function'),
                                               src.indexOf('_avisoDoFechoDeRodada = function') + 2600)),
     'o aviso cobre o desfecho "' + b + '" (rotear sem ele faria a tela mudar em silêncio)');

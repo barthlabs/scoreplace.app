@@ -3188,7 +3188,8 @@ window.generateDrawFunction = function (tId) {
       : (t.format === 'Fase de Grupos + Eliminatórias' || (t.format || '').indexOf('Grupo') !== -1);
     const isSuicoOrLiga = _hasCanonicalKind
       ? _drawPhase.kind === 'classification'
-      : (t.format === 'Suíço Clássico' || t.classifyFormat === 'swiss' || t.currentStage === 'swiss' || (window._isLigaFormat && window._isLigaFormat(t)));
+      : (t.format === 'Suíço Clássico' || t.classifyFormat === 'swiss' || t.currentStage === 'swiss' ||
+        !!t.classificationTransition || (window._isLigaFormat && window._isLigaFormat(t)));
     if (!isElim && !isGruposFmt && !isSuicoOrLiga && !t.oddResolution && typeof window.checkOddEntries === 'function') {
         const oddInfo = window.checkOddEntries(t);
         if (oddInfo.isOdd) {
@@ -3198,7 +3199,10 @@ window.generateDrawFunction = function (tId) {
     }
 
     // ── Verificação de potência de 2 para eliminatórias (não Grupos) ──────────────
-    if (isElim && !isGruposFmt && !t.p2Resolution) {
+    // `classificationTransition` é uma decisão pendente para materializar uma
+    // fase classificatória seguida de eliminatória. Enquanto ela existe, não é
+    // uma chave eliminatória inicial e portanto não pode cair no painel pow2.
+    if (isElim && !isGruposFmt && !t.p2Resolution && !t.classificationTransition) {
         const info = window.checkPowerOf2(t);
         if (info.count < 2) {
             const _label = (info.teamSize > 1) ? 'times' : 'participantes';

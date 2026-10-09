@@ -1148,8 +1148,9 @@ function splitLatePairCore(t, opts) {
 // Roda o MESMO fecho que _doCloseRound faz no cliente, mas PURO: re-aplica o placar DEFERIDO
 // que fechou a rodada (resultCtx — não persistido no cliente pra evitar o clobber-race) e fecha
 // a rodada via a mutação canônica vendorada _applyRoundCloseToTournament (gera a próxima rodada
-// Suíço, marca 'phaseComplete' quando a classificatória acaba, ou 'transition'/'pureSwissFinish'/
-// 'ligaScheduled'). NÃO faz o commit — quem chama (a CF closeRound) persiste com o boundary.
+// classificatória, marca 'phaseComplete' quando há fase seguinte, ou
+// 'classificationFinished'/'ligaScheduled'). A ponte 'transition' só atende documentos
+// legados ainda não projetados. NÃO faz o commit — quem chama (a CF closeRound) persiste com o boundary.
 // Guards de concorrência/idempotência espelham _doCloseRound (só a rodada mais recente e não
 // fechada). Ver project_draw_canonization_cf_phase23_deferred / project_concurrency_safe_saves.
 function closeRoundCore(t, roundIdx, resultCtx) {
