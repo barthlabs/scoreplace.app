@@ -1231,6 +1231,7 @@ const SUITES = [
   'tests/liga-wo-invite.test.js',
   'tests/swiss-to-elim-transition.test.js',
   'tests/phase0-swiss-elim.test.js',
+  'tests/partial-group-schedule.test.js',
   'tests/swiss-draw-via-cf.test.js',
   'tests/swiss-close-via-cf.test.js',
   'tests/dupla-repechage-full.test.js',

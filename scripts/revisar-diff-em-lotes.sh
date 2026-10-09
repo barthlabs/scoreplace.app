@@ -41,10 +41,14 @@ if rg -q '^functions-autodraw/vendor/' "$ALL" 2>/dev/null; then
     node tests/vendor-do-autodraw-nao-fica-velho.test.js
     node functions-autodraw/test-persist-boundary.js
     node functions-autodraw/test-drawinitial.js
+    node tests/duracao-por-set.test.js
+    node tests/partial-group-schedule.test.js
     echo 'Chamadas de canonicalização no boundary de escrita:'
     rg -n 'canonicalizeTournamentPhases' js/firebase-db.js functions-autodraw/index.js
     echo 'Sanitização de identidade no boundary de escrita:'
     rg -n '_stripStoredNamesForUidEntries' js/firebase-db.js functions-autodraw/index.js
+    echo 'Resolver de fase disponível no cliente e no vendor:'
+    rg -n 'window\._faseDoTorneio\s*=' js/views/sport-rules.js functions-autodraw/vendor/sport-rules.js
   } > "$CROSS_EVIDENCE"
 fi
 
