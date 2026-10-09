@@ -43,6 +43,18 @@ if rg -q '^functions-autodraw/vendor/' "$ALL" 2>/dev/null; then
     node functions-autodraw/test-drawinitial.js
     node tests/duracao-por-set.test.js
     node tests/partial-group-schedule.test.js
+    echo 'Módulo de projeção de fases exigido pelo entrypoint do autodraw:'
+    [[ -f functions/legacy-phase-projection-core.js ]] || {
+      echo '✗ fonte ausente: functions/legacy-phase-projection-core.js'; exit 1;
+    }
+    [[ -f functions-autodraw/vendor/legacy-phase-projection-core.js ]] || {
+      echo '✗ vendor ausente: functions-autodraw/vendor/legacy-phase-projection-core.js'; exit 1;
+    }
+    cmp -s functions/legacy-phase-projection-core.js functions-autodraw/vendor/legacy-phase-projection-core.js || {
+      echo '✗ fonte e vendor de projeção de fases divergem'; exit 1;
+    }
+    rg -n 'module\.exports\s*=\s*\{\s*planLegacyPhaseProjection\s*\}' \
+      functions/legacy-phase-projection-core.js functions-autodraw/vendor/legacy-phase-projection-core.js
     echo 'Chamadas de canonicalização no boundary de escrita:'
     rg -n 'canonicalizeTournamentPhases' js/firebase-db.js functions-autodraw/index.js
     echo 'Sanitização de identidade no boundary de escrita:'
