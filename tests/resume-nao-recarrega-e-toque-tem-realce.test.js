@@ -119,8 +119,8 @@ ok(/var _naTelaInicial = \(v === '' \|\| v === 'dashboard'\);/.test(safe),
    'a regra "so na tela inicial" mora DENTRO de _isSafeToReload');
 ok(/if \(!_naTelaInicial\) return false;/.test(safe),
    'e ela BLOQUEIA o reload fora da tela inicial');
-ok(/_applyUpdate = function\(force\) \{\s*if \(!force && !window\._isSafeToReload\(\)\)/.test(store),
-   'e `_applyUpdate` consulta a porta antes de qualquer coisa');
+ok(/_applyUpdate = function\(force, options\) \{\s*options = options \|\| \{\};[\s\S]{0,120}?if \(!force && !window\._isSafeToReload\(\)\)/.test(store),
+   'e `_applyUpdate` preserva chamadas antigas e consulta a porta antes de qualquer coisa');
 ok(/window\._pendingUpdateReload = true;/.test(store),
    'o update nao se perde: fica pendente e a pilula da a opcao de atualizar na hora');
 
