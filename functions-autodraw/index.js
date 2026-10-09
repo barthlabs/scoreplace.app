@@ -1639,6 +1639,10 @@ exports.resetTournamentToEnrollment = onCall(async request => {
       }
     }
     const boundary = _gravaTorneio(tx, ref, t, before, { agoraIso });
+    /* Recibo consumido pela UI em `tournaments-draw.js`: este é o codebase
+     * Functions AUTODRAW, não `functions/index.js`. A fotografia `clean` é
+     * pós-plano transacional (matches/rounds/resultados já removidos), portanto
+     * é a única que a tela pode usar para confirmar a restauração. */
     return { ok: true, changed: true, tournament: boundary.clean };
   });
 });

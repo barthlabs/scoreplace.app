@@ -104,15 +104,18 @@ W._countCompetitors = W._countCompetitors || function (t) { return { people: (t.
   var draw = fs.readFileSync(path.join(root, 'js', 'views', 'tournaments-draw.js'), 'utf8');
   var db = fs.readFileSync(path.join(root, 'js', 'firebase-db.js'), 'utf8');
   var server = fs.readFileSync(path.join(root, 'functions-autodraw', 'index.js'), 'utf8');
+  var resetStart = server.indexOf('exports.resetTournamentToEnrollment = onCall');
+  var resetEnd = server.indexOf('// ─── Rodada extra manual', resetStart);
+  var resetServer = server.slice(resetStart, resetEnd);
   ok(/t\.allowPrePublicationRestore === true/.test(tournaments) && /Voltar ao estado antes do sorteio/.test(tournaments) && /_restoreTournamentPrePublication/.test(tournaments),
     'as Ferramentas do Organizador oferecem a restauração somente quando a permissão explícita do torneio é true');
   ok(/_callFn\('resetTournamentToEnrollment', \{ tournamentId: String\(tId\), restoreMode: 'prePublication' \}\)/.test(draw),
     'a UI identifica explicitamente a restauração pré-publicação na callable canônica');
   ok(/result\.ok !== true \|\| !result\.tournament[\s\S]*?_applyCFTournament\(String\(tId\), result\.tournament\)/.test(draw),
     'a UI só confirma o reset com recibo canônico e troca imediatamente o torneio local pela fotografia limpa (não reexibe a chave obsoleta)');
-  ok(/return \{ ok: true, changed: true, tournament: boundary\.clean \};/.test(server),
-    'a callable devolve a fotografia canônica efetivamente persistida para a UI refletir');
-  ok(/async _callFn\(name, payload, msgs\)/.test(db) && /exports\.resetTournamentToEnrollment\s*=\s*onCall/.test(server),
+  ok(/const boundary = _gravaTorneio\(tx, ref, t, before, \{ agoraIso \}\);[\s\S]*?return \{ ok: true, changed: true, tournament: boundary\.clean \};/.test(resetServer),
+    'a callable do codebase functions-autodraw devolve a fotografia pós-transação efetivamente persistida para a UI refletir');
+  ok(/async _callFn\(name, payload, msgs\)/.test(db) && resetStart >= 0,
     'o transporte canônico e a callable de restauração existem');
   ok(/isSandboxRestore/.test(server) && /isPrePublicationRestore/.test(server) && /!isSandboxRestore && !isPrePublicationRestore/.test(server),
     'o servidor só aceita restauração de Sandbox ou a pré-publicação explicitamente habilitada');
