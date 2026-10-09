@@ -1,4 +1,6 @@
-// 2.3.313 — Atualização consolidada de produção com as correções validadas desde a última publicação.
+// 2.3.313 — A restauração pré-publicação só confirma depois de receber a fotografia canônica
+// já limpa do servidor; a tela substitui imediatamente chave, placares e horários antigos,
+// sem reutilizar o estado local anterior enquanto o listener em tempo real se atualiza.
 // 2.3.312 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.3.311 — Rodadas classificatórias canônicas passam diretamente pelo sorteio antes da
 // transição pow2, respeitando a política da chave do torneio. A lista de inscritos preserva
