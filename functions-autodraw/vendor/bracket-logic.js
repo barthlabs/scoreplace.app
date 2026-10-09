@@ -6781,7 +6781,7 @@ window._openPendingInitialSchedule = function (tId) {
      * preservada entre um drop e o próximo render. */
     var previousScroll = overlay.querySelector('[data-pis-scroll]');
     if (previousScroll) gridScroll = { top:previousScroll.scrollTop, left:previousScroll.scrollLeft };
-    var p = plan(), board = window._operationalScheduleGrid(view(), p, { prefix:'pis', activeDay:activeDay, renumberBySchedule:true }); activeDay = board.activeDay;
+    var p = plan(), board = window._operationalScheduleGrid(view(), p, { prefix:'pis', activeDay:activeDay, renumberBySchedule:true, scrollOwner:'parent' }); activeDay = board.activeDay;
     overlay.innerHTML = '<div role="dialog" aria-modal="true" style="width:100%;max-width:1600px;height:100%;margin:0 auto;background:#111827;border:1px solid rgba(56,189,248,.5);border-radius:16px;box-sizing:border-box;overflow:hidden;color:var(--text-main);box-shadow:0 24px 70px rgba(0,0,0,.55);display:flex;flex-direction:column;isolation:isolate">' +
       /* ⛔ REGRESSÃO DO CABEÇALHO DA AGENDA: este bloco é IRMÃO do painel que
        * rola, e não `sticky` dentro dele. Sticky deixava a grade pintar por trás

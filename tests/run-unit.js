@@ -1030,6 +1030,7 @@ const SUITES = [
   'tests/analise-duplas-arrastaveis.test.js',
   'tests/chaves-abas-categoria.test.js',
   'tests/chaves-abas-estaveis.test.js',
+  'tests/superficies-abas-resize-observer.test.js',
   'tests/bracket-geral-agenda.test.js',
   'tests/neon-agenda-categoria-contract.test.js',
   'tests/dashboard-atalho-aba-e-agenda.test.js',

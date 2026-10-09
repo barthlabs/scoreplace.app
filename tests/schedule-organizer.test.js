@@ -67,13 +67,45 @@ const mesmoHorario = W._operationalSchedulePlan(seisQuadrasNumeracao, seisQuadra
 ok(mesmoHorario.items.map(function (i) { return i.scheduledGameNumber; }).sort(function(a,b){ return a-b; }).join(',') === '1,2,3,4,5,6',
   'seis quadras às 18:00 são exatamente Jogos 1–6, sem repetir número');
 
-const confirmed = Object.assign({}, t, { matches: t.matches.map(function (m) {
-  return m.id === 'B' ? Object.assign({}, m, { court: 'Quadra 1', scheduledAt: '2026-10-01T09:00:00.000Z', scheduleLocked: false, scheduleSource: 'estimate' }) : m;
+const fixture2q3 = {
+  id:'compactar-estimativas', startDate:'2026-10-01T19:45:00.000Z', endDate:'2026-10-01T23:00:00.000Z',
+  courtCount:2, gameDuration:30,
+  matches:[
+    { id:'A', round:1, p1:'A', p2:'B' },
+    { id:'B', round:1, p1:'C', p2:'D' },
+    { id:'C', round:1, p1:'E', p2:'F', court:'Quadra 1', scheduledAt:'2026-10-02T01:40:00.000Z', scheduleLocked:false, scheduleSource:'estimate' }
+  ]
+};
+// Estimativas são descartáveis por definição: compactar é intencional para
+// preencher a próxima vaga de quadra. Só a decisão explícita do organizador
+// (`scheduleLocked`) é contrato e pode manter uma lacuna no planejamento.
+const planEstimado = W._operationalSchedulePlan(fixture2q3);
+const itemC = planEstimado.items.find(function (x) { return x.matchId === 'C'; });
+ok(itemC && itemC.scheduledAt.includes('23:15') && !planEstimado.items.some(function (i) { return i.scheduledAt.includes('01:40'); }),
+  'jogo estimado é recompactado para a primeira vaga, sem cristalizar em 22:40');
+const fixture2qBlocked = Object.assign({}, fixture2q3, { matches:fixture2q3.matches.map(function (m) {
+  return m.id === 'C' ? Object.assign({}, m, { scheduleLocked:true, scheduleSource:'organizer' }) : m;
 }) });
-const afterConfirmed = W._operationalSchedulePlan(confirmed);
-const confirmedB = afterConfirmed.items.find(x => x.matchId === 'B');
-ok(confirmedB && confirmedB.court === 'Quadra 1' && confirmedB.scheduledAt === '2026-10-01T09:00:00.000Z' && confirmedB.scheduleLocked,
-  'jogo já alocado não é movido automaticamente, mesmo se a alocação antiga era uma sugestão');
+const planBloqueado = W._operationalSchedulePlan(fixture2qBlocked);
+const itemCBlocked = planBloqueado.items.find(function (x) { return x.matchId === 'C'; });
+ok(itemCBlocked && itemCBlocked.scheduledAt.includes('01:40'),
+  'jogo bloqueado pelo organizador permanece no slot escolhido');
+const fixture2q3NoScheduledAt = Object.assign({}, fixture2q3, { matches:fixture2q3.matches.map(function (m) {
+  return m.id === 'C' ? Object.assign({}, m, { scheduledAt:undefined }) : m;
+}) });
+const planNovo = W._operationalSchedulePlan(fixture2q3NoScheduledAt);
+const itemCNovo = planNovo.items.find(function (x) { return x.matchId === 'C'; });
+ok(itemCNovo && itemCNovo.scheduledAt.includes('23:15'),
+  'jogo novo sem materialização também ocupa o slot preferido compactado');
+const fixtureLegadoAlocado = Object.assign({}, fixture2q3, { matches:fixture2q3.matches.map(function (m) {
+  return m.id === 'C' ? Object.assign({}, m, { scheduleLocked:undefined, scheduleSource:undefined }) : m;
+}) });
+const planLegadoAlocado = W._operationalSchedulePlan(fixtureLegadoAlocado);
+const itemCLegado = planLegadoAlocado.items.find(function (x) { return x.matchId === 'C'; });
+ok(itemCLegado && itemCLegado.scheduledAt.includes('01:40') && itemCLegado.scheduleLocked === true,
+  'alocação legada sem marcador é preservada; só estimativa explícita pode ser recompactada');
+ok(/var stickySurface = 'var\(--bg-darker,#111114\)'/.test(organizerSource) && !/stickyHeader = sticky \? 'position:sticky;top:0;z-index:4;background:#111827/.test(organizerSource),
+  'cabeçalhos sticky da grade usam o token de tema canônico, não fundo escuro fixo');
 ok(!/<select[^>]+data-agenda-(court|time)/.test(organizerSource),
   'a tela não repete seletor de quadra nem horário dentro de cada card');
 ok(/Object\.keys\(manual\)\.map/.test(organizerSource),
@@ -354,6 +386,13 @@ t.matches[0] = Object.assign({}, t.matches[0], {
   team2Obj:{ p1Name:'Carla', p2Name:'Dani', competitionTeamHue:207, competitionTeamSaturation:70, category:'Fem Power' }
 });
 const board = W._operationalScheduleGrid(t, p, { prefix:'agenda' });
+const pisBoard = W._operationalScheduleGrid(t, p, { prefix:'pis', scrollOwner:'parent' });
+ok(!pisBoard.gridHtml.includes('data-pis-grid-scroll'), 'PIS não cria wrapper rolável interno');
+ok(pisBoard.gridHtml.includes('position:sticky;top:0;left:0;z-index:5;background:var(--bg-darker,#111114);'), 'PIS fixa o canto no token de tema');
+ok(pisBoard.gridHtml.includes('position:sticky;top:0;z-index:4;background:var(--bg-darker,#111114);'), 'PIS fixa os cabeçalhos no token de tema');
+ok(pisBoard.gridHtml.includes('position:sticky;left:0;z-index:3;background:var(--bg-darker,#111114);'), 'PIS fixa os horários no token de tema');
+ok(board.gridHtml.includes('data-agenda-grid-scroll'), 'Agenda conserva wrapper rolável');
+ok(!board.gridHtml.includes('position:sticky'), 'Agenda não recebe sticky');
 ok(board.days.length === 1 && /data-agenda-day/.test(board.html),
   'a grade cria abas por dia quando há agenda');
 ok(/VENOM/.test(board.html) && /BLACKOUT/.test(board.html) && /Ana/.test(board.html) && /Bia/.test(board.html) && /Fem Power/.test(board.html),

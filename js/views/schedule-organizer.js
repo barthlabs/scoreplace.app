@@ -85,12 +85,14 @@
     var blocked = [], pending = [];
     ms.forEach(function (m) {
       var change = changesByMatch[String(m.id)];
-      // Uma alocação já confirmada pelo organizador é um compromisso operacional,
-      // mesmo se nasceu da sugestão. Recalcular não pode trocar quadra ou horário
-      // de quem já recebeu um slot; só uma edição manual explícita pode fazê-lo.
-      // [[regression_confirmed_court_never_moves_automatically]]
-      var allocated = !!(m.court && m.scheduledAt);
-      var manual = allocated || m.scheduleLocked === true || m.scheduleSource === 'organizer' || !!change;
+      // Apenas escolhas explícitas congelam um slot. Uma estimativa materializada
+      // continua sendo rascunho e precisa voltar à grade canônica para não deixar
+      // quadras livres enquanto há jogo elegível em horário posterior. Documentos
+      // legados, porém, já podem ter quadra/data sem qualquer marcador: como não
+      // há prova de que eram estimativa, preservamos a alocação até o organizador
+      // decidir de novo. Só estimativa EXPLÍCITA é automaticamente compactável.
+      var legacyAllocated = !!(m.court && m.scheduledAt && m.scheduleLocked == null && !m.scheduleSource);
+      var manual = m.scheduleLocked === true || m.scheduleSource === 'organizer' || legacyAllocated || !!change;
       if (played(m) || manual) blocked.push(m); else pending.push(m);
     });
     var occupied = {};
@@ -109,12 +111,15 @@
     var cursor = start(t), items = [];
     ms.forEach(function (m) {
       var change = changesByMatch[String(m.id)];
-      var allocated = !!(m.court && m.scheduledAt);
-      var manual = allocated || m.scheduleLocked === true || m.scheduleSource === 'organizer' || !!change;
+      var legacyAllocated = !!(m.court && m.scheduledAt && m.scheduleLocked == null && !m.scheduleSource);
+      var manual = m.scheduleLocked === true || m.scheduleSource === 'organizer' || legacyAllocated || !!change;
       if (played(m)) return;
       if (manual) {
         var a = change ? change.scheduledAt : m.scheduledAt;
         var c = change ? change.court : m.court;
+        // O plano normaliza qualquer bloqueio — inclusive a alocação legada
+        // sem marcador — para a forma explícita. Não mutar `m`: este cálculo é
+        // puro e só a confirmação do organizador pode persistir uma agenda.
         if (a && c) items.push({ matchId:String(m.id), court:String(c), scheduledAt:String(a), scheduleLocked:true, scheduleSource:'organizer', extrapolaJanela:exceedsConfiguredWindow(t, m, a) });
         return;
       }
@@ -260,7 +265,7 @@
   // cada coluna, uma quadra. Assim os IDs técnicos nunca são a informação principal.
   window._operationalScheduleGrid = function (t, plan, options) {
     options = options || {};
-    var prefix = String(options.prefix || 'agenda'), matchById = {};
+    var prefix = String(options.prefix || 'agenda'), sticky = options.scrollOwner === 'parent', matchById = {};
     all(t).forEach(function (m) { if (m) matchById[String(m.id)] = m; });
     var names = teamLookup(t), byDay = {}, numberByMatch = {};
     // Durante a revisão do sorteio, o número é a sequência da agenda que o
@@ -284,7 +289,14 @@
     (byDay[activeDay] || []).forEach(function (item) {
       var key = String(item.scheduledAt || ''); (slots[key] || (slots[key] = [])).push(item);
     });
-    var headers = plan.courts.map(function (court) { return '<div style="font-size:.72rem;font-weight:800;text-align:center;padding:7px 4px;background:rgba(30,41,59,.92);border-radius:7px;white-space:nowrap;">' + esc(court) + '</div>'; }).join('');
+    // Cabeçalhos sticky pertencem à mesma superfície canônica da busca/abas.
+    // Token, não hex: em tema claro continuam legíveis e nunca abrem uma
+    // emenda de cor diferente no topo da grade.
+    var stickySurface = 'var(--bg-darker,#111114)';
+    var stickyCorner = sticky ? 'position:sticky;top:0;left:0;z-index:5;background:' + stickySurface + ';' : '';
+    var stickyHeader = sticky ? 'position:sticky;top:0;z-index:4;background:' + stickySurface + ';' : '';
+    var stickyTime = sticky ? 'position:sticky;left:0;z-index:3;background:' + stickySurface + ';' : '';
+    var headers = plan.courts.map(function (court) { return '<div style="' + stickyHeader + 'font-size:.72rem;font-weight:800;text-align:center;padding:7px 4px;background:' + (sticky ? stickySurface : 'rgba(30,41,59,.92)') + ';border-radius:7px;white-space:nowrap;">' + esc(court) + '</div>'; }).join('');
     var rows = Object.keys(slots).sort().map(function (slot) {
       var byCourt = {}; slots[slot].forEach(function (item) { byCourt[String(item.court)] = item; });
       var cells = plan.courts.map(function (court) {
@@ -298,10 +310,13 @@
           sideHtml(t, m, 'p1', names) + sideHtml(t, m, 'p2', names) +
           '</article>';
       }).join('');
-      return '<div style="display:grid;grid-template-columns:72px repeat(' + plan.courts.length + ', minmax(176px,1fr));gap:6px;margin-top:6px;align-items:stretch"><div style="font-size:.82rem;font-weight:900;color:#fbbf24;display:flex;align-items:center;justify-content:center;text-align:center;">' + esc(timeLabel(slot)) + '</div>' + cells + '</div>';
+      return '<div style="display:grid;grid-template-columns:72px repeat(' + plan.courts.length + ', minmax(176px,1fr));gap:6px;margin-top:6px;align-items:stretch"><div style="' + stickyTime + 'font-size:.82rem;font-weight:900;color:#fbbf24;display:flex;align-items:center;justify-content:center;text-align:center;">' + esc(timeLabel(slot)) + '</div>' + cells + '</div>';
     }).join('');
     var tabsHtml = '<div style="display:flex;gap:7px;flex-wrap:wrap;">' + tabs + '</div>';
-    var gridHtml = '<div style="overflow:auto;border-top:1px solid rgba(148,163,184,.2);padding-top:7px;"><div style="min-width:' + (72 + plan.courts.length * 182) + 'px"><div style="display:grid;grid-template-columns:72px repeat(' + plan.courts.length + ', minmax(176px,1fr));gap:6px"><div></div>' + headers + '</div>' + (rows || '<div style="padding:16px;opacity:.72">Não há jogos neste dia.</div>') + '</div></div>';
+    var frameStart = sticky
+      ? '<div style="border-top:1px solid rgba(148,163,184,.2);padding-top:7px;">'
+      : '<div data-' + prefix + '-grid-scroll style="overflow:auto;border-top:1px solid rgba(148,163,184,.2);padding-top:7px;">';
+    var gridHtml = frameStart + '<div style="min-width:' + (72 + plan.courts.length * 182) + 'px"><div style="display:grid;grid-template-columns:72px repeat(' + plan.courts.length + ', minmax(176px,1fr));gap:6px"><div style="' + stickyCorner + '"></div>' + headers + '</div>' + (rows || '<div style="padding:16px;opacity:.72">Não há jogos neste dia.</div>') + '</div></div>';
     return { activeDay:activeDay, days:days, tabsHtml:tabsHtml, gridHtml:gridHtml, html:'<div style="margin:10px 0 8px;">' + tabsHtml + '</div>' + gridHtml };
   };
   window._renderOperationalSchedule = function (slot, t) {

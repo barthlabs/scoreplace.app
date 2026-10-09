@@ -283,6 +283,20 @@ input[type="time"].sp-team-draw-time::-webkit-datetime-edit-minute-field {
   position: relative;
   z-index: 1;
 }
+/* Contrato compartilhado pelas superfícies da pilha fixa da chave. Não usar
+   overflow/clipping num ancestral: isso invalida `position:sticky`. A proteção
+   é de geometria e camada, então busca e abas não atravessam cards em painel
+   estreito, split-screen ou webview. */
+[data-sp-sticky-surface] {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+}
+[data-sp-sticky-surface="tabs"],
+[data-sp-sticky-surface="search"] {
+  background: var(--bg-darker, #111114);
+  isolation: isolate;
+}
 /* No z-index lowering needed — hamburger dropdown is OUTSIDE the topbar
    at z-index 102 (its own stacking context). back-header stays at 101.
    Both are visible and clickable simultaneously. */

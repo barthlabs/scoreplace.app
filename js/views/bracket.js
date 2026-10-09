@@ -1580,6 +1580,88 @@ function _bracketEnsureRoundHeadingResizeListener() {
   // chave; assim o cabeçalho espelhado acompanha a rodada sem trocar o foco.
   document.addEventListener('scroll', window._bracketRoundHeadingResizeListener, true);
 }
+// A largura útil da navegação da chave é a do painel que a contém, não a da
+// janela. No split-screen a viewport pode ter 1440px enquanto o painel tem
+// 400px; usar window.innerWidth nesse ponto fazia a busca atravessar as abas.
+// [[regression_tabs_search_uses_host_width_not_viewport]]
+function _bracketTabsHostWidth(root) {
+  if (!root) return 0;
+  var rect = root.getBoundingClientRect ? root.getBoundingClientRect() : null;
+  var width = rect && Number(rect.width) > 0 ? Number(rect.width) : Number(root.clientWidth || 0);
+  return width > 0 ? width : 0;
+}
+function _bracketTabsPlaceSearch(root, searchWrap, force) {
+  if (!root || !searchWrap) return '';
+  var inlineSlot = root.querySelector('[data-bracket-search-slot="inline"]');
+  var stackSlot = root.querySelector('[data-bracket-search-slot="stack"]');
+  if (!inlineSlot || !stackSlot) return '';
+  // 2 abas primárias (264px), busca mínima (220px), margens/gaps e folga de
+  // leitura. Abaixo disso, uma linha exclusiva é mais estável do que flex-wrap.
+  var mode = _bracketTabsHostWidth(root) >= 760 ? 'inline' : 'stack';
+  var target = mode === 'inline' ? inlineSlot : stackSlot;
+  var other = mode === 'inline' ? stackSlot : inlineSlot;
+  inlineSlot.hidden = mode !== 'inline';
+  stackSlot.hidden = mode !== 'stack';
+  if (!force && searchWrap.parentNode === target && root.getAttribute('data-bracket-search-layout') === mode) return mode;
+  if (!searchWrap.dataset.bracketTabsOriginalStyle) searchWrap.dataset.bracketTabsOriginalStyle = searchWrap.getAttribute('style') || '';
+  searchWrap.setAttribute('data-sp-sticky-surface', 'search');
+  searchWrap.style.cssText = 'position:static;top:auto;z-index:auto;background:#111114;margin:0;padding:0;width:100%;max-width:100%;min-width:0;box-sizing:border-box;isolation:isolate;';
+  target.appendChild(searchWrap);
+  other.hidden = true;
+  root.setAttribute('data-bracket-search-layout', mode);
+  return mode;
+}
+function _bracketTabsObserveSearchLayout(root, searchWrap) {
+  if (!root || !searchWrap) return;
+  if (root._bracketTabsResizeObserver) {
+    try { root._bracketTabsResizeObserver.disconnect(); } catch (e) {}
+    root._bracketTabsResizeObserver = null;
+  }
+  if (root._bracketTabsResizeFrame) {
+    try { cancelAnimationFrame(root._bracketTabsResizeFrame); } catch (e) {}
+    root._bracketTabsResizeFrame = null;
+  }
+  root._bracketTabsObservedWidth = _bracketTabsHostWidth(root);
+  var relayout = function () {
+    if (!root.isConnected) {
+      if (root._bracketTabsResizeObserver) try { root._bracketTabsResizeObserver.disconnect(); } catch (e) {}
+      root._bracketTabsResizeObserver = null;
+      return;
+    }
+    var width = _bracketTabsHostWidth(root);
+    if (Math.abs(width - Number(root._bracketTabsObservedWidth || 0)) < 2) return;
+    root._bracketTabsObservedWidth = width;
+    _bracketTabsPlaceSearch(root, searchWrap, false);
+  };
+  if (typeof ResizeObserver !== 'undefined') {
+    root._bracketTabsResizeObserver = new ResizeObserver(function () {
+      if (root._bracketTabsResizeFrame) return;
+      var schedule = typeof requestAnimationFrame === 'function' ? requestAnimationFrame : function (fn) { return setTimeout(fn, 16); };
+      root._bracketTabsResizeFrame = schedule(function () {
+        root._bracketTabsResizeFrame = null;
+        relayout();
+      });
+    });
+    root._bracketTabsResizeObserver.observe(root);
+    return;
+  }
+  // Reserva apenas para navegadores sem ResizeObserver. O caminho moderno não
+  // recebe este listener e portanto não recalcula duas vezes na mesma rajada.
+  window._bracketTabsFallbackRoot = root;
+  window._bracketTabsFallbackSearch = searchWrap;
+  if (!window._bracketTabsFallbackResizeListener && typeof window.addEventListener === 'function') {
+    window._bracketTabsFallbackResizeListener = function () {
+      if (window._bracketTabsFallbackResizeTimer) clearTimeout(window._bracketTabsFallbackResizeTimer);
+      window._bracketTabsFallbackResizeTimer = setTimeout(function () {
+        var activeRoot = window._bracketTabsFallbackRoot;
+        var activeSearch = window._bracketTabsFallbackSearch;
+        if (!activeRoot || !activeRoot.isConnected) return;
+        _bracketTabsPlaceSearch(activeRoot, activeSearch, false);
+      }, 150);
+    };
+    window.addEventListener('resize', window._bracketTabsFallbackResizeListener, { passive: true });
+  }
+}
 window._bracketCategoryTabsMount = function () {
   var cards = Array.prototype.slice.call(document.querySelectorAll('[data-bracket-tab-category]'));
   if (!cards.length) return;
@@ -1623,6 +1705,7 @@ window._bracketCategoryTabsMount = function () {
   if (!root) {
     root = document.createElement('nav');
     root.setAttribute('data-bracket-tabs-root', '1');
+    root.setAttribute('data-sp-sticky-surface', 'tabs');
     root.setAttribute('data-tournament-id', id);
     root.setAttribute('aria-label', 'Categorias da chave');
     // A busca e as abas formam uma única pilha sticky. `--scroll-anchor` tem
@@ -1670,6 +1753,10 @@ window._bracketCategoryTabsMount = function () {
   }
   // `scope` é o contêiner da chave que recebeu esta navegação. Guardamos a
   // referência no root para o sincronizador global de altura das abas.
+  // A montagem pode reutilizar um root criado por versão anterior. Reafirmar o
+  // contrato evita que uma remontagem perca a superfície opaca que protege as
+  // abas e a busca do conteúdo rolável abaixo.
+  root.setAttribute('data-sp-sticky-surface', 'tabs');
   root._bracketTabsScope = scope;
   root._bracketCardsScope = detailScope;
   // Fase classificatória comum pode trocar de rodada. Já a agenda concentrada
@@ -1742,22 +1829,17 @@ window._bracketCategoryTabsMount = function () {
       }).join('');
     }).join('');
   }
-  // No desktop, a busca ocupa a sobra da mesma faixa das abas. O próprio nó
-  // viaja (não se cria um segundo input nem se perde o listener do filtro).
+  // A busca viaja como o mesmo nó (sem duplicar input/listener). Há dois slots
+  // permanentes: inline quando a LARGURA DO PAINEL suporta tudo, ou uma linha
+  // própria segura quando split-screen/webview deixariam abas e busca colidirem.
   if (searchWrap && root.contains(searchWrap) && root.parentNode) root.parentNode.insertBefore(searchWrap, root);
-  var putSearchInTabs = !!(searchWrap && window.innerWidth >= 560);
-  root.innerHTML = '<div style="display:flex;align-items:flex-end;gap:5px;flex-wrap:wrap;width:100%;border-bottom:1px solid rgba(129,140,248,.6);padding:0 4px;">' + genderHtml + (putSearchInTabs ? '<div data-bracket-search-slot style="margin-left:auto;flex:1 1 260px;max-width:390px;min-width:220px;"></div>' : '') + '</div>'
+  root.innerHTML = '<div data-bracket-tabs-primary style="display:flex;align-items:flex-end;gap:5px;flex-wrap:nowrap;width:100%;min-width:0;border-bottom:1px solid rgba(129,140,248,.6);padding:0 4px;">' + genderHtml + '<div data-bracket-search-slot="inline" hidden style="margin-left:auto;flex:1 1 260px;max-width:390px;min-width:220px;"></div></div>'
+    + '<div data-bracket-search-slot="stack" hidden style="width:100%;min-width:0;padding:8px 4px 0;box-sizing:border-box;"></div>'
     + (isOnlyLines ? '' : '<div style="display:flex;align-items:flex-end;gap:5px;flex-wrap:wrap;width:100%;padding:9px 4px 0;border-bottom:1px solid rgba(129,140,248,.42);">' + categoryHtml + '</div>')
     + (roundHtml ? '<div style="display:flex;gap:7px;flex-wrap:wrap;width:100%;padding:8px 4px 0;border-top:1px solid rgba(255,255,255,.07);">' + roundHtml + '</div>' : '')
     + (isRoundBased ? '' : '<div data-bracket-round-rail aria-label="Rodadas da chave" hidden style="overflow-x:auto;overflow-y:hidden;max-width:100%;background:#111114;border-bottom:1px solid rgba(255,255,255,.08);scrollbar-width:thin;"></div>');
-  if (putSearchInTabs) {
-    var searchSlot = root.querySelector('[data-bracket-search-slot]');
-    if (searchSlot) {
-      if (!searchWrap.dataset.bracketTabsOriginalStyle) searchWrap.dataset.bracketTabsOriginalStyle = searchWrap.getAttribute('style') || '';
-      searchWrap.style.cssText = 'position:static;top:auto;z-index:auto;background:transparent;margin:0;padding:0;width:100%;box-sizing:border-box;';
-      searchSlot.appendChild(searchWrap);
-    }
-  }
+  _bracketTabsPlaceSearch(root, searchWrap, true);
+  _bracketTabsObserveSearchLayout(root, searchWrap);
   // As abas filtram apenas os cards. Esconder um ancestral estrutural escondia
   // junto o seletor de Ouro/Prata em algumas larguras e deixava a pessoa sem
   // caminho para voltar — inaceitável numa chave em produção.
