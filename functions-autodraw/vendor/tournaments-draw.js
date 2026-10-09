@@ -11,11 +11,16 @@ function _teamOriginOf(origins, entry) {
     ? window._getTeamOrigin(origins, entry)
     : ((origins || {})[label] || '');
 }
+// O adaptador de chaves também usa esta ponte durante a integração tardia na
+// Cloud Function. Expô-la evita que cada módulo recrie (ou deixe de encontrar)
+// a regra canônica de uid → rótulo legado.
+window._teamOriginOf = _teamOriginOf;
 function _setTeamOriginOf(origins, entry, origin) {
   if (typeof window._setTeamOrigin === 'function') return window._setTeamOrigin(origins, entry, origin);
   if (origins && entry) origins[typeof entry === 'string' ? entry : (entry.displayName || entry.name || '')] = origin;
   return '';
 }
+window._setTeamOriginOf = _setTeamOriginOf;
 
 // v1.3.73: o SORTEIO limpa a presença de quem ENTROU na chave (acabou de sortear), MAS PRESERVA
 // a de quem foi pro RESTO/LISTA DE ESPERA — estava presente ANTES do sorteio, continua presente
@@ -858,6 +863,9 @@ function _drawIsDoubleElimination(t) {
     ? window._isDoubleEliminationPhase(t)
     : /dupla/i.test(String((t && t.format) || ''));
 }
+// Há rotinas legadas de integração tardia depois do fechamento deste módulo.
+// Elas precisam da mesma política de fase, não de uma cópia por regex de formato.
+window._drawIsDoubleElimination = _drawIsDoubleElimination;
 
 function _drawIsSingleElimination(t) {
   if (typeof window._phaseEliminationKind === 'function') return window._phaseEliminationKind(t) === 'single';
@@ -6315,7 +6323,9 @@ window._placeLateEntriesSurgically = function (t, _theCat) {
     // vira inscrito (idempotente) e sai da espera
     var exists = t.participants.some(function (p) { return _nm(p) === dn; });
     if (!exists) { var clone = Object.assign({}, d); delete clone._lateJoin; t.participants.push(clone); }
-    if (d && (d.p1Uid || d.p1Name) && (d.p2Uid || d.p2Name) && !_teamOriginOf(t.teamOrigins, d)) _setTeamOriginOf(t.teamOrigins, d, 'formada');
+    if (d && (d.p1Uid || d.p1Name) && (d.p2Uid || d.p2Name) && !(typeof window._teamOriginOf === 'function' && window._teamOriginOf(t.teamOrigins, d))) {
+      if (typeof window._setTeamOriginOf === 'function') window._setTeamOriginOf(t.teamOrigins, d, 'formada');
+    }
     window._markLateIntegrated(t, d);
     usedNames[dn] = 1; inBracket[dn] = 1; placed++;
   });
@@ -6327,7 +6337,7 @@ window._placeLateEntriesSurgically = function (t, _theCat) {
     // NORMALIZA a proporção da árvore dupla-elim FRESCA: a colocação aditiva deixa 6 R1 → 4 R2 + 2
     // inf em vez de 3/3. Recompõe o downstream em árvore-mínima com repescagem no ímpar, MANTENDO a
     // R1. Auto-guardado (fresca + R1 completa por categoria). project_dupla_downstream_bye_deadend.
-    if (_drawIsDoubleElimination(t) && typeof window._rebuildDuplaDownstream === 'function') {
+    if (typeof window._drawIsDoubleElimination === 'function' && window._drawIsDoubleElimination(t) && typeof window._rebuildDuplaDownstream === 'function') {
       try { window._rebuildDuplaDownstream(t); } catch (e) {}
     }
   }
