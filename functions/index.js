@@ -97,6 +97,12 @@ const _registrationLifecycle = require("./registration-lifecycle-core");
 const _splitParts = require("./split-parts.js");   // torneio dividido: elenco na subcoleção
 const _refereeRoster = require("./vendor/referee-roster.js"); // escala de arbitragem: contrato puro e sem contato
 
+// A materialização só pode ser habilitada depois que TODAS as mutações de elenco
+// (inscrever, sair, formar e desfazer dupla) escreverem a coleção `registrations`.
+// Enquanto uma delas ainda depender da projeção legada, converter deixaria o torneio
+// aberto para leitura, mas incapaz de receber a próxima alteração com segurança.
+const _CANONICAL_REGISTRATION_MUTATIONS_READY = false;
+
 /* ═══ QUEM PERGUNTA "ESTA PESSOA ESTÁ INSCRITA?" TEM QUE LER O ELENCO ONDE ELE MORA ═══
  *
  * ⛔ O BURACO, MEDIDO EM PRODUÇÃO (02/set/2026, Confra `tour_1780009816637`):
@@ -4078,6 +4084,12 @@ exports.applyCanonicalRegistrationMigration = onCall(
     const expectedFingerprint = String(data.fingerprint || "").trim();
     if (!tournamentId || !expectedFingerprint) {
       throw new HttpsError("invalid-argument", "tournamentId e fingerprint são obrigatórios");
+    }
+    if (!_CANONICAL_REGISTRATION_MUTATIONS_READY) {
+      throw new HttpsError(
+        "failed-precondition",
+        "a conversão de inscrições ainda não está disponível: as operações canônicas de elenco não foram concluídas"
+      );
     }
 
     const db = admin.firestore();

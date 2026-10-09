@@ -1245,7 +1245,7 @@ window._translations['pt'] = {
   'org.clonedTitle': 'Torneio Clonado!',
   'org.clonedMsg': 'criado com sucesso.',
   'org.commTitle': 'Comunicar Inscritos',
-  'org.commDesc': 'Enviar comunicado para todos os inscritos do torneio "{name}".',
+  'org.commDesc': 'Enviar comunicado aos inscritos com conta no torneio "{name}".',
   'org.commMessage': 'Mensagem',
   'org.commPlaceholder': 'Digite sua mensagem para os inscritos...',
   'org.commLevel': 'Nível de importância',

@@ -1627,6 +1627,15 @@ window._reopenSetDate = function (qual, valor) { _reopenState[qual] = String(val
 window._materializeCanonicalRegistrations = function (tId) {
   var tournamentId = String(tId || '').trim();
   if (!tournamentId) return;
+  // A coleção canônica já tem leitor, mas as quatro mutações do elenco ainda
+  // precisam chegar nela. Não exponha uma conversão que congelaria o torneio
+  // depois do clique; o servidor possui o mesmo bloqueio como autoridade.
+  if (window._canonicalRegistrationMutationsReady !== true) {
+    showNotification('Conversão ainda indisponível',
+      'As operações canônicas de inscrição e dupla estão sendo concluídas. O elenco atual permanece seguro e editável.',
+      'warning');
+    return;
+  }
   if (typeof window._callCF !== 'function') {
     showNotification('Conversão indisponível', 'Atualize o aplicativo e tente novamente.', 'error');
     return;
