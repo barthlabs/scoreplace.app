@@ -9937,10 +9937,9 @@ exports.autoMergeOnProfileUpdate = onDocumentWritten(
 // segunda conta e não se inscrevia em nada nunca era perguntado, e a duplicata só aparecia
 // mais tarde (no Confra levou 8 dias, e só porque a fila formou grupo).
 //
-// ⚠️ NÃO reusa `findDisplayNameConflict`: aquela é o caminho que BLOQUEIA o cadastro
-// (`already-exists`, "escolha outro nome"). Ampliá-la pra nomes PARECIDOS faria o app
-// RECUSAR "Rodrigo Terra Barth" por existir "Rodrigo Barth" — o oposto do pedido. Aqui só
-// se PERGUNTA. Perguntar e bloquear são caminhos separados de propósito.
+// A detecção de semelhança não bloqueia cadastro: ela apenas pergunta se há uma segunda
+// conta. Ampliá-la para nomes parecidos recusaria homônimos legítimos — o oposto da
+// política atual. Perguntar e bloquear são caminhos separados de propósito.
 //
 // Rigor BASE (não o de torneio): o universo é a base inteira, onde quem se parece com você
 // provavelmente não tem nada a ver. Ver compararNomes.
@@ -10175,10 +10174,9 @@ exports.enforceUniqueDisplayName = onDocumentWritten(
       console.error("[enforceUniqueDisplayName] duplicata no cadastro (best-effort):", e && e.message);
     }
 
-    // A antiga reserva global `displayNameClaims` não é mais lida nem escrita.
-    // Reservas históricas ficam intactas até uma limpeza própria, auditada e sem
-    // impacto no perfil. Possível segunda conta continua sendo tratada acima por
-    // `dupSuspect`, que nunca bloqueia, renomeia ou funde automaticamente.
+    // A antiga reserva global de nomes não é mais lida nem escrita. Registros históricos
+    // ficam intactos até uma limpeza própria, auditada e sem impacto no perfil. Possível
+    // segunda conta continua sendo tratada acima por `dupSuspect`, que nunca bloqueia, renomeia ou funde automaticamente.
   }
 );
 
