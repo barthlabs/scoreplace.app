@@ -2,6 +2,7 @@
  * de `phases`, nunca do texto histórico do formato do torneio. */
 const fs = require('fs');
 const path = require('path');
+const R = require('./recorte.js');
 
 const src = fs.readFileSync(path.join(__dirname, '..', 'functions', 'index.js'), 'utf8');
 let fail = 0;
@@ -12,7 +13,7 @@ function ok(condition, message) {
 }
 
 const start = src.indexOf('function _hasClassificationPhase(t)');
-const body = src.slice(start, start + 700);
+const body = R.ateOFim(src, start);
 ok(start >= 0, 'backfill possui a porta _hasClassificationPhase');
 ok(/phase\.kind === "classification"/.test(body), 'fase classification é reconhecida explicitamente');
 ok(/if \(phases\.length\)/.test(body), 'fases canônicas têm precedência sobre texto legado');
