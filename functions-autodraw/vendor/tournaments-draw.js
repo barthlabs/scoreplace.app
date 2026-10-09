@@ -277,7 +277,14 @@ window._restoreTournamentPrePublication = function (tId) {
     function () {
       if (!window.FirestoreDB || typeof window.FirestoreDB._callFn !== 'function') return;
       window.FirestoreDB._callFn('resetTournamentToEnrollment', { tournamentId: String(tId), restoreMode: 'prePublication' })
-        .then(function () {
+        .then(function (result) {
+          /* A callable devolve a fotografia canônica JÁ sem partidas. Não esperar o
+           * onSnapshot é essencial: redesenhar antes com o objeto velho do AppStore
+           * faz a chave e os placares continuarem visíveis mesmo depois de o servidor
+           * tê-los apagado. [[regression_prepublication_restore_stale_screen]] */
+          if (result && result.tournament && typeof window._applyCFTournament === 'function') {
+            window._applyCFTournament(String(tId), result.tournament);
+          }
           if (typeof showNotification === 'function') showNotification('↩️ Pré-publicação restaurada', 'A grade e as duplas formadas foram preservadas; a chave e os placares foram apagados.', 'success');
           var c = document.getElementById('view-container');
           if (c && typeof window.renderTournaments === 'function') window.renderTournaments(c, String(tId));

@@ -108,6 +108,8 @@ W._countCompetitors = W._countCompetitors || function (t) { return { people: (t.
     'as Ferramentas do Organizador oferecem a restauração somente quando a permissão explícita do torneio é true');
   ok(/_callFn\('resetTournamentToEnrollment', \{ tournamentId: String\(tId\), restoreMode: 'prePublication' \}\)/.test(draw),
     'a UI identifica explicitamente a restauração pré-publicação na callable canônica');
+  ok(/then\(function \(result\) \{[\s\S]*?result\.tournament[\s\S]*?_applyCFTournament\(String\(tId\), result\.tournament\)/.test(draw),
+    'a UI troca imediatamente o torneio local pela fotografia limpa devolvida pela callable (não reexibe a chave obsoleta)');
   ok(/async _callFn\(name, payload, msgs\)/.test(db) && /exports\.resetTournamentToEnrollment\s*=\s*onCall/.test(server),
     'o transporte canônico e a callable de restauração existem');
   ok(/isSandboxRestore/.test(server) && /isPrePublicationRestore/.test(server) && /!isSandboxRestore && !isPrePublicationRestore/.test(server),
