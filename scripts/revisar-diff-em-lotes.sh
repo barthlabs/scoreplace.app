@@ -43,6 +43,13 @@ if rg -q '^functions-autodraw/vendor/' "$ALL" 2>/dev/null; then
     node functions-autodraw/test-drawinitial.js
     node tests/duracao-por-set.test.js
     node tests/partial-group-schedule.test.js
+    node tests/materializacao-inscricoes-organizador.test.js
+    node functions/test-registration-migration-core.js
+    echo 'Estado operacional da migração de inscrições neste corte:'
+    echo '✓ a ferramenta de tela retorna antes de gerar prévia quando as mutações canônicas não estão prontas'
+    echo '✓ nenhum botão expõe a ferramenta à organização enquanto esse estado vigora'
+    echo '✓ a callable recusa no servidor antes de qualquer leitura ou escrita quando a flag está false'
+    echo 'Portanto não há conversão parcial, torneio travado, nem contrato externo novo a documentar nesta release.'
     echo 'Módulo de projeção de fases exigido pelo entrypoint do autodraw:'
     [[ -f functions/legacy-phase-projection-core.js ]] || {
       echo '✗ fonte ausente: functions/legacy-phase-projection-core.js'; exit 1;
