@@ -8287,10 +8287,9 @@ exports.requestEmailMerge = onCall(
   }
 );
 
-// PROVA DE POSSE por e-mail: gera o token de fusão e manda o link pra caixa da OUTRA conta.
-// Extraído de requestEmailMerge pra ser reusado pelo fluxo de homônimo (requestNameMergeProof)
-// — ponto único, senão as duas portas divergiriam no que gravam em mergeTokens.
-// Quem recebe o link é quem tem posse da caixa; é ISSO que autoriza a fusão. Nome nunca autoriza.
+// PROVA DE POSSE por e-mail: gera o token de fusão e manda o link pra caixa da outra conta.
+// É o ponto único de criação de mergeTokens para os fluxos de fusão por credencial.
+// Quem recebe o link é quem tem posse da caixa; nome nunca autoriza fusão.
 async function _sendMergeProofEmail(db, requesterUid, targetUid, email) {
   const crypto = require("crypto");
   const token = crypto.randomBytes(24).toString("base64url");
@@ -8313,30 +8312,9 @@ async function _sendMergeProofEmail(db, requesterUid, targetUid, email) {
   return token;
 }
 
-// ─── Homônimo: avisar e oferecer a união COM PROVA DE POSSE ───────────────────
-// Regra do dono: dois uids de pessoas diferentes não podem ter o mesmo nome. Mas homônimo
-// NÃO É AUTORIZAÇÃO — na base os 3 casos eram duplicata da mesma pessoa, e ainda assim
-// fundir por coincidência de nome fundiria dois "João Silva" de verdade, apagando um do
-// Auth. Erro assimétrico: conta duplicada é incômodo, pessoa fundida é irreversível.
-// Por isso: o nome só DETECTA; quem AUTORIZA é a posse do e-mail/celular da outra conta.
-//
-// O alvo é resolvido pelo SERVIDOR (o cliente não passa uid nem e-mail) e só existe quando
-// há colisão real — assim ninguém usa a porta pra disparar mensagem a quem quiser.
-exports.checkNameConflict = onCall(
-  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
-  async (request) => {
-    const callerUid = request.auth && request.auth.uid;
-    if (!callerUid) throw new HttpsError("unauthenticated", "Login obrigatório");
-    // Compatibilidade para clientes antigos: homônimos são permitidos e não são
-    // identidade. A interface atual recebe apenas `dupSuspect`, que passa pelo
-    // detector de segunda conta e pela prova de posse.
-    return { hasConflict: false, retired: true };
-  }
-);
-
-// Dispara a PROVA para a outra conta. `channel`: 'email' (pronto) — 'phone' ainda não.
-// Rate limit por caller: a mensagem vai pra caixa de outra pessoa quando o homônimo é
-// coincidência, então o botão não pode virar gerador de spam.
+// Dispara a prova para a outra conta. O detector de segunda conta usa sinais de
+// contato e o alvo é resolvido apenas no servidor; displayName nunca participa.
+// Rate limit por caller impede que o fluxo gere spam.
 /* ⛔⛔ O "SIM, É MINHA OUTRA CONTA" TEM DE AGIR — ANTES ELE SÓ ABRIA O PERFIL.
  *
  * Ordem do dono (13/set/2026): _"temos que reforcar isso. mandar email, sms o que for e
@@ -8420,18 +8398,6 @@ exports.pedirProvaDaSegundaConta = onCall(
   async (request) => {
     const callerUid = request.auth && request.auth.uid;
     if (!callerUid) throw new HttpsError("unauthenticated", "Login obrigatório");
-    return _pedirProvaDaSegundaConta(admin.firestore(), callerUid);
-  }
-);
-
-exports.requestNameMergeProof = onCall(
-  { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
-  async (request) => {
-    const callerUid = request.auth && request.auth.uid;
-    if (!callerUid) throw new HttpsError("unauthenticated", "Login obrigatório");
-    // Nome do callable preservado apenas para cliente antigo: nunca resolve o
-    // alvo por displayName. Toda prova passa pelo detector UID/contato do fluxo
-    // atual e pela mesma limitação de taxa.
     return _pedirProvaDaSegundaConta(admin.firestore(), callerUid);
   }
 );

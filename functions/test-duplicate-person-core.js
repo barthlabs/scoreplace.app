@@ -478,9 +478,10 @@ const achou = (c, p) => D.detectarMesmaPessoa(c, p).suspeito;
   ok('a inscrição pergunta quando o servidor acusa duplicata (no leitor único do resultado)',
     /res\.dupSuspect && typeof window\._askDuplicatePerson === 'function'/.test(enr));
   ok('o "não sou eu" chama a CF de dispensa', /dismissDuplicateSuspicion'\)\(\{ tournamentId/.test(enr));
-  ok('a porta legada por nome delega para a prova de segunda conta, sem lookup de nome',
-    /exports\.requestNameMergeProof = onCall[\s\S]{0,700}return _pedirProvaDaSegundaConta\(admin\.firestore\(\), callerUid\)/.test(idx) &&
-    !/exports\.requestNameMergeProof = onCall[\s\S]{0,700}findDisplayNameConflict/.test(idx));
+  ok('portas legadas por nome foram removidas; só a prova por segunda conta permanece',
+    !/exports\.requestNameMergeProof\s*=/.test(idx) &&
+    !/exports\.checkNameConflict\s*=/.test(idx) &&
+    /exports\.pedirProvaDaSegundaConta = onCall[\s\S]{0,700}return _pedirProvaDaSegundaConta\(admin\.firestore\(\), callerUid\)/.test(idx));
 })();
 
 // ── EXCEÇÃO DE 1 TOKEN: raridade + não-sobrenome (caso real da Betânia, 12/ago/2026) ──
