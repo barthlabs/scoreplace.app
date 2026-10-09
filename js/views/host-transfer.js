@@ -114,7 +114,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         type: 'host_transfer_invite', tournamentId: String(t.id), tournamentName: out.tournamentName || t.name,
         fromName: user.displayName, fromUid: user.uid,
         message: (user.displayName || _tH('org.theOrganizer')) + ' ' + _tH('org.wantsToTransfer') + ' "' + (out.tournamentName || t.name) + '".',
-        level: 'fundamental', _fallbackEmail: target.email || '', _fallbackName: name
+        level: 'fundamental'
       });
       _notifyUser(user.uid, {
         type: 'host_transfer_sent', tournamentId: String(t.id), tournamentName: out.tournamentName || t.name,
@@ -145,7 +145,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         acceptUrl: _chBase + 'accept/' + encodeURIComponent(String(t.id)) + '/cohost',
         rejectUrl: _chBase + 'reject/' + encodeURIComponent(String(t.id)) + '/cohost',
         message: (user.displayName || _tH('org.theOrganizer')) + ' ' + _tH('org.invitedCohost') + ' "' + (out.tournamentName || t.name) + '".',
-        level: 'fundamental', _fallbackEmail: target.email || '', _fallbackName: name
+        level: 'fundamental'
       });
       _notifyUser(user.uid, {
         type: 'cohost_invite_sent', tournamentId: String(t.id), tournamentName: out.tournamentName || t.name,
@@ -423,15 +423,10 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       }
     }
 
-    if (window.FirestoreDB && window.FirestoreDB.db) {
-      // Existência e lápide vêm do espelho público; convite novo sempre nasce
-      // com UID, portanto não há queda por e-mail/nome.
-      window.FirestoreDB.db.collection(window._COLECAO_PERFIL_PUBLICO || 'usersPublic').doc(uidOrEmail).get()
-        .then(function(doc) { return window._userVivo(doc, { publico: true }); })
-        .then(function(v) { if (v) _resolveAndSend(v.uid); })
-        .catch(function() { _resolveAndSend(uidOrEmail); });
-      return;
-    }
-    _resolveAndSend(uidOrEmail);
+    // Esta porta recebe exclusivamente UID das mutações confirmadas pela
+    // Function. Não relê perfil nem aceita e-mail/nome como destino: além de
+    // ser redundante, o fallback anterior usava um destino inexistente e podia
+    // silenciar o aviso inteiro.
+    _resolveAndSend(uid);
   }
 })();

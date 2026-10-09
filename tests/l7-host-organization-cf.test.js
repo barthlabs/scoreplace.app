@@ -41,4 +41,12 @@ test('cliente só despacha a CF e Function hidrata e grava a transação', () =>
   assert(server.includes('await _splitParts.hidratar(tx, ref'));
   assert(server.includes('_splitParts.gravar(tx, ref, before'));
 });
+test('notificações de co-organização usam somente o UID confirmado pela Function', () => {
+  const client = fs.readFileSync('js/views/host-transfer.js', 'utf8');
+  assert(client.includes('_resolveAndSend(uid);'));
+  assert(client.includes('window._sendUserNotification(uid, data)'));
+  assert.equal(client.includes('uidOrEmail'), false);
+  assert.equal(client.includes('_fallbackEmail'), false);
+  assert.equal(client.includes('_fallbackName'), false);
+});
 console.log('\nL7 co-organização: ' + ok + ' ok, ' + bad + ' falharam'); process.exitCode = bad ? 1 : 0;
