@@ -1601,7 +1601,9 @@ exports.revertMonarchGroupWO = onCall(request => _applyMonarchWO(request, '_monW
 // ─── Reset para inscrições: confirmação no cliente, mutação completa no servidor ───
 exports.resetTournamentToEnrollment = onCall(async request => {
   const uid = request.auth && request.auth.uid;
-  const tId = String((request.data && request.data.tournamentId) || '').trim();
+  const requestData = request.data || {};
+  const tId = String(requestData.tournamentId || '').trim();
+  const restoreMode = String(requestData.restoreMode || '').trim();
   if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
   if (!tId) throw new HttpsError('invalid-argument', 'Torneio obrigatório.');
   if (!drawWindow || typeof drawWindow._clearTournamentDraw !== 'function') {
@@ -1613,6 +1615,12 @@ exports.resetTournamentToEnrollment = onCall(async request => {
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
     if (!_isTournamentAdmin(t, uid)) {
       throw _drawFail('permission-denied', 'Só a organização reseta o torneio.', { tId, uid });
+    }
+    // A restauração de um torneio publicado é uma exceção administrativa explícita.
+    // O escape hatch genérico segue reservado ao sandbox; um cliente não pode forjar
+    // o botão de pré-publicação para apagar uma chave de outro torneio.
+    if (restoreMode === 'prePublication' && t.allowPrePublicationRestore !== true) {
+      throw _drawFail('permission-denied', 'A restauração pré-publicação não está habilitada para este torneio.', { tId, uid });
     }
     const before = _antesDoMotor(t), wasAuto = t.drawManual !== true && t.drawFirstDate;
     drawWindow._clearTournamentDraw(t);

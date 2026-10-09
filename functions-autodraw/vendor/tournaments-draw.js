@@ -244,7 +244,7 @@ window._resetTournamentToEnrollment = function (tId) {
       };
       // Confirmação fica na UI; limpeza, reagendamento e persistência são uma transação da CF.
       if (!window.FirestoreDB || typeof window.FirestoreDB._callFn !== 'function') return;
-      window.FirestoreDB._callFn('resetTournamentToEnrollment', { tournamentId: String(tId) })
+      window.FirestoreDB._callFn('resetTournamentToEnrollment', { tournamentId: String(tId), restoreMode: 'prePublication' })
         .then(done)
         .catch(function (err) {
           window._error && window._error('[resetToEnrollment] server error:', err);
