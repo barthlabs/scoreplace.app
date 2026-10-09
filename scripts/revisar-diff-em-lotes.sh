@@ -108,6 +108,17 @@ while IFS= read -r file; do
   bytes=$((bytes + size))
 done < "$ALL"
 
+# A migração de inscrições é um contrato único: Function, botão (ou sua ausência),
+# nota pública e regra de rollout não podem ser julgados como se fossem mudanças
+# independentes só porque a divisão por bytes os separou. Incluímos o contexto no
+# lote da Function; a eventual repetição nos lotes próprios é proposital e read-only.
+MIGRATION_BATCH="$(grep -l '^functions/index\.js$' "$TMP"/batch-* 2>/dev/null | head -1 || true)"
+if [[ -n "$MIGRATION_BATCH" ]]; then
+  for context_file in CLAUDE.md js/release-notes.js js/views/tournaments-organizer.js tests/materializacao-inscricoes-organizador.test.js; do
+    grep -qxF "$context_file" "$MIGRATION_BATCH" || printf '%s\n' "$context_file" >> "$MIGRATION_BATCH"
+  done
+fi
+
 count=$(find "$TMP" -name 'batch-*' -type f | wc -l | tr -d ' ')
 echo "▸ revisão completa em $count lote(s), teto de $MAX_BYTES bytes por lote"
 for file in "$TMP"/batch-*; do
