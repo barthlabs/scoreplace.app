@@ -5333,7 +5333,7 @@ exports.formPair = onCall(
 
     const tournamentId = String((request.data && request.data.tournamentId) || "");
     const d = request.data || {};
-    const opts = { uid1: d.uid1 || "", manualId1: d.manualId1 || "", name1: d.name1 || "", uid2: d.uid2 || "", manualId2: d.manualId2 || "", name2: d.name2 || "", changeRule: !!d.changeRule };
+    const opts = { uid1: d.uid1 || "", manualId1: d.manualId1 || "", name1: d.name1 || "", uid2: d.uid2 || "", manualId2: d.manualId2 || "", name2: d.name2 || "", categoryId: d.categoryId || "", changeRule: !!d.changeRule };
     if (!tournamentId || (!opts.uid1 && !opts.manualId1 && !opts.name1) || (!opts.uid2 && !opts.manualId2 && !opts.name2)) {
       throw new HttpsError("invalid-argument", "tournamentId e os dois membros são obrigatórios");
     }
@@ -5343,6 +5343,31 @@ exports.formPair = onCall(
     const out = await db.runTransaction(async (tx) => {
       const snap = await tx.get(docRef);
       if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
+      const rawTournament = snap.data() || {};
+      if (rawTournament.canonicalRegistrationMigration && rawTournament.canonicalRegistrationMigration.fingerprint) {
+        if (opts.changeRule) throw new HttpsError("failed-precondition", "alteração de regra não faz parte da dupla canônica");
+        if (!opts.categoryId) throw new HttpsError("invalid-argument", "categoryId é obrigatório para formar dupla canônica");
+        if ((!opts.uid1 && !opts.manualId1) || (!opts.uid2 && !opts.manualId2)) {
+          throw new HttpsError("invalid-argument", "dupla canônica exige UID ou ID manual; nome não é identidade");
+        }
+        const isOrg = _isTournamentOrgCaller(rawTournament, callerUid);
+        const involvesCaller = opts.uid1 === callerUid || opts.uid2 === callerUid;
+        if (!isOrg && !involvesCaller) {
+          throw new HttpsError("permission-denied", "só o organizador ou um dos dois da dupla podem formá-la");
+        }
+        const checked = await _loadCanonicalRosterForMutation(tx, docRef, rawTournament);
+        let decision;
+        try {
+          decision = _registrationMutations.pairParticipants(
+            tournamentId, checked.registrations,
+            opts.uid1 ? { uid: opts.uid1 } : { manualParticipantId: opts.manualId1 },
+            opts.uid2 ? { uid: opts.uid2 } : { manualParticipantId: opts.manualId2 },
+            opts.categoryId
+          );
+        } catch (error) { throw new HttpsError("failed-precondition", error.message); }
+        const next = _writeCanonicalRosterUpdates(tx, docRef, rawTournament, checked.registrations, decision.updates);
+        return { outcome: "paired", participants: next.participants, canonical: true };
+      }
       // Torneio DIVIDIDO: o elenco mora na subcoleção. Hidrata ANTES de decidir —
       // sem isto as regras rodam contra `participants: []`. Ver functions/split-parts.js.
       const t = await _splitParts.hidratar(tx, docRef, snap.data());
@@ -5360,9 +5385,11 @@ exports.formPair = onCall(
     });
 
     // Sandbox: a MESMA CF replica a formação no SB via o MESMO core (best-effort).
-    await _replicateRosterToSandbox(db, tournamentId, function (sbData) {
-      return _pairCore.computeFormPair(sbData, opts);
-    });
+    if (!out.canonical) {
+      await _replicateRosterToSandbox(db, tournamentId, function (sbData) {
+        return _pairCore.computeFormPair(sbData, opts);
+      });
+    }
 
     if (out.outcome === "alreadyPaired") {
       return { notFound: false, alreadyPaired: true, who: out.who || "", participants: out.participants };
@@ -5383,9 +5410,9 @@ exports.splitPair = onCall(
 
     const tournamentId = String((request.data && request.data.tournamentId) || "");
     const d = request.data || {};
-    const opts = { id1: d.id1, id2: d.id2 };
-    if (!tournamentId || (opts.id1 == null || String(opts.id1) === "")) {
-      throw new HttpsError("invalid-argument", "tournamentId e id1 são obrigatórios");
+    const opts = { id1: d.id1, id2: d.id2, uid1: d.uid1 || "", manualId1: d.manualId1 || "", uid2: d.uid2 || "", manualId2: d.manualId2 || "", categoryId: d.categoryId || "" };
+    if (!tournamentId || ((opts.id1 == null || String(opts.id1) === "") && !opts.uid1 && !opts.manualId1)) {
+      throw new HttpsError("invalid-argument", "tournamentId e a primeira identidade são obrigatórios");
     }
 
     const db = admin.firestore();
@@ -5393,6 +5420,30 @@ exports.splitPair = onCall(
     const out = await db.runTransaction(async (tx) => {
       const snap = await tx.get(docRef);
       if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
+      const rawTournament = snap.data() || {};
+      if (rawTournament.canonicalRegistrationMigration && rawTournament.canonicalRegistrationMigration.fingerprint) {
+        if (!opts.categoryId) throw new HttpsError("invalid-argument", "categoryId é obrigatório para desfazer dupla canônica");
+        if ((!opts.uid1 && !opts.manualId1) || (!opts.uid2 && !opts.manualId2)) {
+          throw new HttpsError("invalid-argument", "dupla canônica exige UID ou ID manual; nome não é identidade");
+        }
+        const checked = await _loadCanonicalRosterForMutation(tx, docRef, rawTournament);
+        let decision;
+        try {
+          decision = _registrationMutations.splitParticipants(
+            tournamentId, checked.registrations,
+            opts.uid1 ? { uid: opts.uid1 } : { manualParticipantId: opts.manualId1 },
+            opts.uid2 ? { uid: opts.uid2 } : { manualParticipantId: opts.manualId2 },
+            opts.categoryId
+          );
+        } catch (error) { throw new HttpsError("failed-precondition", error.message); }
+        const isOrg = _isTournamentOrgCaller(rawTournament, callerUid);
+        const isMember = opts.uid1 === callerUid || opts.uid2 === callerUid;
+        if (!isOrg && !isMember) {
+          throw new HttpsError("permission-denied", "só o organizador ou um membro da dupla podem desfazê-la");
+        }
+        const next = _writeCanonicalRosterUpdates(tx, docRef, rawTournament, checked.registrations, decision.updates);
+        return { outcome: "split", participants: next.participants, canonical: true };
+      }
       // Torneio DIVIDIDO: o elenco mora na subcoleção. Hidrata ANTES de decidir —
       // sem isto as regras rodam contra `participants: []`. Ver functions/split-parts.js.
       const t = await _splitParts.hidratar(tx, docRef, snap.data());
@@ -5409,9 +5460,11 @@ exports.splitPair = onCall(
     });
 
     // Sandbox: a MESMA CF replica o desfazer no SB via o MESMO core (best-effort).
-    await _replicateRosterToSandbox(db, tournamentId, function (sbData) {
-      return _pairCore.computeSplitPair(sbData, opts);
-    });
+    if (!out.canonical) {
+      await _replicateRosterToSandbox(db, tournamentId, function (sbData) {
+        return _pairCore.computeSplitPair(sbData, opts);
+      });
+    }
 
     if (out.outcome === "notFound") return { notFound: true, participants: out.participants };
     return { notFound: false, participants: out.participants };

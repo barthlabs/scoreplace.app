@@ -62,6 +62,12 @@ o desfazer remove esse ID dos dois. A chamada traz obrigatoriamente o
 escolha arbitrária de uma das vagas. Não há fallback por nome nem busca de
 participante na projeção legada.
 
+As callables aceitam essa rota somente depois do marcador canônico e rejeitam
+`changeRule` nessa transição: mudar a configuração global do torneio é outra
+operação e não pode ser efeito colateral de formar uma dupla. Enquanto a UI
+ainda não puder enviar o ID tipado da categoria em todos os pontos, a flag de
+materialização permanece desligada.
+
 ## Segurança e compatibilidade
 
 - Autorização continua decidida pelo UID autenticado na Function.

@@ -2023,6 +2023,7 @@ window.FirestoreDB = {
       tournamentId: String(tournamentId),
       uid1: (opts && opts.uid1) || '', manualId1: (opts && opts.manualId1) || '', name1: (opts && opts.name1) || '',
       uid2: (opts && opts.uid2) || '', manualId2: (opts && opts.manualId2) || '', name2: (opts && opts.name2) || '',
+      categoryId: (opts && opts.categoryId) || '',
       changeRule: !!(opts && opts.changeRule)
     });
   },
@@ -2040,7 +2041,10 @@ window.FirestoreDB = {
     return await this._callFn('splitPair', {
       tournamentId: String(tournamentId),
       id1: (opts && opts.id1) != null ? opts.id1 : '',
-      id2: (opts && opts.id2) != null ? opts.id2 : ''
+      id2: (opts && opts.id2) != null ? opts.id2 : '',
+      uid1: (opts && opts.uid1) || '', manualId1: (opts && opts.manualId1) || '',
+      uid2: (opts && opts.uid2) || '', manualId2: (opts && opts.manualId2) || '',
+      categoryId: (opts && opts.categoryId) || ''
     });
   },
   // CF-only da DUPLA NA LISTA DE ESPERA: formar (funde _lateJoin + presença + integra na chave,
