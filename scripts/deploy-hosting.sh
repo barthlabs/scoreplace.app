@@ -234,6 +234,16 @@ if [[ -n "$(git status --porcelain)" ]]; then
   exit 1
 fi
 
+# A revisão cobre tudo que ainda não chegou ao backup remoto, nunca apenas o
+# último commit de versão local. Uma tentativa interrompida pode já ter criado
+# esse commit sem publicar: usá-lo como base esconderia o corte real.
+echo "▸ atualizando origin/main para fixar a base da revisão…"
+if ! git fetch -q --no-tags origin '+refs/heads/main:refs/remotes/origin/main'; then
+  echo "✗ não consegui atualizar origin/main — não reviso nem publico contra uma referência velha."
+  exit 1
+fi
+BASE_REVISAO="$(git rev-parse refs/remotes/origin/main)"
+
 # ── 1.1 · CORTE ÚNICO DE VERSÃO: só o Hosting promove uma release ────────────
 # GitHub é backup. O main pode receber várias correções com a mesma versão; somente
 # aqui, quando a versão SERVIDA foi lida, nasce o próximo patch e seus cache-busters.
@@ -353,8 +363,8 @@ echo "  ✓ CACHE_NAME do SW = versão do app ($VER_APP)"
 # Interruptor por lado: `revisar-com-{gpt,claude}.sh desligar "<motivo>"` (passa com aviso).
 # Escape só com uma linha `sem-gpt: <motivo>` num commit a publicar, e SP_SEM_GPT=1.
 fase "nota+gates locais"
-echo "▸ 1.8 revisão cruzada sobre o corte $BASE_CORTE..HEAD…"
-if ! SP_REVIEW_BASE="$BASE_CORTE" "$RAIZ/scripts/revisar-diff-em-lotes.sh"; then
+echo "▸ 1.8 revisão cruzada sobre o corte remoto $BASE_REVISAO..HEAD…"
+if ! SP_REVIEW_BASE="$BASE_REVISAO" "$RAIZ/scripts/revisar-diff-em-lotes.sh"; then
   echo
   echo "✗ O REVISOR NÃO APROVOU (ou não respondeu) — nada foi empurrado nem publicado."
   echo "  Parecer em .claude/tmp/parecer-<revisor>-diff.md: atenda os pontos e rode de novo (o"
