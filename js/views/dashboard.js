@@ -2613,9 +2613,18 @@ function renderDashboard(container) {
       // A data/hora do próximo jogo fica no rodapé do card, alinhada à
       // esquerda. A dashboard reaproveita o fragmento da chave, sem uma faixa
       // solta antes do card nem uma segunda regra de agendamento.
-      var cardFooterHtml = opts.footerHtml
-        ? '<div data-next-game-schedule="1" style="margin-top:10px;padding-top:9px;border-top:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));display:flex;justify-content:flex-start;align-items:center;min-height:30px;">' +
-            '<span style="display:inline-flex;align-items:center;min-height:28px;padding:4px 10px;border:1px solid var(--sp-c-38bdf8,#38bdf8);border-radius:999px;background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));color:var(--sp-c-7dd3fc,#7dd3fc);font-size:0.72rem;font-weight:800;">' + opts.footerHtml + '</span>' +
+      // No próximo jogo, agenda e grupo são ações complementares: a pílula
+      // azul informa/abre o agendamento e o botão verde cria ou abre a conversa.
+      // O mesmo chip canônico decide as permissões; não há uma segunda regra da
+      // dashboard. Em resultados e demais cards este slot continua ausente.
+      var _nextGroupChip = (opts.showMatchGroupChip && tRef &&
+        typeof window._waGrpCardChip === 'function')
+        ? window._waGrpCardChip(tRef, item.m, { semCabecalhoDeGrupo: true }) : '';
+      var cardFooterHtml = (opts.footerHtml || _nextGroupChip)
+        ? '<div data-next-game-schedule="1" style="margin-top:10px;padding-top:9px;border-top:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));display:flex;justify-content:flex-start;align-items:center;gap:6px;flex-wrap:wrap;min-height:30px;">' +
+            (opts.footerHtml
+              ? '<span style="display:inline-flex;align-items:center;min-height:28px;padding:4px 10px;border:1px solid var(--sp-c-38bdf8,#38bdf8);border-radius:999px;background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));color:var(--sp-c-7dd3fc,#7dd3fc);font-size:0.72rem;font-weight:800;">' + opts.footerHtml + '</span>'
+              : '') + _nextGroupChip +
           '</div>'
         : '';
 
@@ -2907,7 +2916,8 @@ function renderDashboard(container) {
         _miniBracketCard(_ng, _ngEntry.canLaunch, {
           hideFaseHeader: true,
           boxLabelOverride: _boxU,
-          footerHtml: _nextTimeline
+          footerHtml: _nextTimeline,
+          showMatchGroupChip: true
         }) +
         '</div></div>';
       _upHtml += '</div>'; // fecha #proximos-jogos-section

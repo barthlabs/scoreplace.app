@@ -382,16 +382,15 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     return _btn(_souJogador ? 'Criar grupo<br>dos seus jogos' : 'Criar grupo<br>dos jogos', open);
   }
 
-  // ⭐ 2.0.60 — PRO ORGANIZADOR, O BOTÃO APARECE EM TODOS OS JOGOS.
-  // Ordem do dono (24/ago/2026): _"o botão do grupo de whats do grupo de jogos para o
-  // organizador em todos os jogos."_ A 2.0.57 tirou o gate "só quem joga este grupo", mas
-  // sobravam TRÊS filtros que continuavam escondendo dele — todos escritos pensando no
-  // JOGADOR, pra quem fazem sentido (ninguém combina um jogo que já acabou):
-  //   1. grupo com todos os jogos decididos;      2. jogo já decidido;
-  //   3. jogo fora da rodada atual.
-  // Pra quem ORGANIZA a regra é outra: ele monta os grupos de todas as rodadas, inclusive
-  // antes de a rodada abrir e depois de os jogos acabarem (o grupo do WhatsApp sobrevive ao
-  // jogo — é onde se combina o próximo). Os filtros seguem valendo pro jogador.
+  // Um grupo novo só tem utilidade antes do resultado. Depois do placar, o
+  // card preserva SOMENTE um grupo que já exista: o link continua sendo uma
+  // conversa útil, mas oferecer criação tardia é uma ação sem sentido tanto
+  // para atleta quanto para organização.
+  function _matchHasResult(m) {
+    return !!(m && (m.winner || m.wo || m.completedAt || m.resultAt ||
+      (m.pendingResult && m.pendingResult.proposedAt)));
+  }
+
   window._waGrpCardChip = function (t, m, opts) {
     try {
       if (!t || !m) return '';
@@ -403,10 +402,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
        * resultados" o card aparece SOZINHO, sem grupo em volta: calar o chip ali não evita
        * repetição nenhuma, só tira o acesso. Quem sabe se há cabeçalho é a tela, e ela diz. */
       if (m.isMonarch && !(opts && opts.semCabecalhoDeGrupo)) return '';
-      var _souOrg = _isOrg(t, _cu());
-      if (!_souOrg && (m.winner || m.isBye || m.isSitOut)) return '';
       if (m.isBye || m.isSitOut) return '';   // folga/BYE não é jogo, pra ninguém
       if (!m.p1 || !m.p2 || m.p1 === 'BYE' || m.p2 === 'BYE' || m.p1 === 'TBD' || m.p2 === 'TBD') return '';
+      if (_matchHasResult(m) && !(m.waGroup && m.waGroup.link)) return '';
       return _matchChip(t, m, false);
     } catch (e) { return ''; }
   };
@@ -416,10 +414,16 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       if (!t || !Array.isArray(groupMatches) || !groupMatches.length) return '';
       var m0 = groupMatches.find(function (m) { return m && !m.isBye && !m.isSitOut; }) || groupMatches[0];
       if (!m0) return '';
-      // grupo encerrado: o jogador não vê mais; o organizador continua vendo (ele usa o
-      // grupo pra falar com aquelas 4 pessoas depois do jogo também).
-      if (!_isOrg(t, _cu()) && groupMatches.every(function (m) { return m.winner || m.isBye || m.isSitOut; })) return '';
-      return _matchChip(t, m0, true);
+      // Grupo encerrado também não ganha link novo. Caso já tenha sido criado,
+      // `_matchChip` mantém o acesso ao WhatsApp para todos que podem geri-lo.
+      var _groupFinished = groupMatches.every(function (m) { return _matchHasResult(m) || m.isBye || m.isSitOut; });
+      var _hasGroupLink = groupMatches.some(function (m) { return !!(m && m.waGroup && m.waGroup.link); });
+      if (_groupFinished && !_hasGroupLink) return '';
+      // A gravação normal espelha o link nos três jogos do grupo. Este fallback
+      // tolera um snapshot intermediário: se um irmão já recebeu o link, abre-o
+      // em vez de oferecer uma segunda criação pelo primeiro irmão ainda velho.
+      var _linkedMatch = groupMatches.find(function (m) { return !!(m && m.waGroup && m.waGroup.link); });
+      return _matchChip(t, _linkedMatch || m0, true);
     } catch (e) { return ''; }
   };
 

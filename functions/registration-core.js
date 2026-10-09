@@ -147,7 +147,15 @@ function projectLegacyRoster(tournamentId, records) {
       if (normalized.manualParticipantId && slot.name) {
         generated.forEach((registration) => { registration.manualDisplayName = slot.name; });
       }
-      memberKeys.push(participantKey(normalized));
+      // A chave do membro vem da própria inscrição canônica recém-gerada.
+      // Assim par e inscrição não podem divergir de identidade por haver uma
+      // segunda composição local da mesma chave.
+      const memberKey = generated[0] && generated[0].participantKey;
+      if (!memberKey) {
+        unsupported.push({ index: index, reason: 'inscrição sem chave de participante' });
+        return;
+      }
+      memberKeys.push(memberKey);
       generated.forEach((registration) => {
         if (seen.has(registration.registrationId)) {
           conflicts.push({ index: index, registrationId: registration.registrationId });

@@ -27,14 +27,17 @@ ok(dashboard.includes('window._goToMyNextTournamentMatch') && dashboard.includes
 ok(dashboard.includes('window._matchCardTimelineTextHtml(_ngT, _ngM)'),
   'Seu próximo jogo reutiliza a linha Agendado da chave');
 ok(dashboard.includes('footerHtml: _nextTimeline') &&
+  dashboard.includes('showMatchGroupChip: true') &&
+  dashboard.includes('window._waGrpCardChip(tRef, item.m, { semCabecalhoDeGrupo: true })') &&
   dashboard.includes('data-next-game-schedule="1"') &&
   dashboard.includes('justify-content:flex-start') &&
+  dashboard.includes('gap:6px;flex-wrap:wrap;min-height:30px;') &&
   dashboard.includes('border:1px solid var(--sp-c-38bdf8,#38bdf8)') &&
   dashboard.includes('background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06))') &&
   !dashboard.includes('rgba(56,189,248,0.5)') &&
   !dashboard.includes('rgba(14,165,233,0.12)') &&
   !dashboard.includes("(_nextTimeline ? '<div style=\"margin-top:5px;\">' + _nextTimeline + '</div>' : '')"),
-  'o agendamento fica no rodapé azul esquerdo do card, sem reservar linha acima e respeita os temas');
+  'o agendamento e o grupo do jogo ficam juntos no rodapé esquerdo do próximo card, sem reservar linha acima e respeitando os temas');
 const lightPaletteStart = paleta.indexOf('[data-theme="light"]');
 const lightPaletteEnd = paleta.indexOf('/* ── A TARJA DE LEITURA', lightPaletteStart);
 const lightPalette = paleta.slice(lightPaletteStart, lightPaletteEnd);

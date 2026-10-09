@@ -281,16 +281,17 @@ sec('whatsapp pro organizador', function () {
   ok(chip2.indexOf('_waGrpOpenLink') !== -1, 'com link, o botão dele abre o grupo');
 });
 
-// ── 6b. …EM TODOS OS JOGOS (ordem do dono, 24/ago): grupo encerrado, jogo decidido e
-// rodada que ainda não abriu deixam de esconder o botão DO ORGANIZADOR ───────────
+// ── 6b. Jogos futuros podem ganhar grupo; jogo concluído preserva só link existente ──
 sec('em todos os jogos', function () {
   const { t, g } = torneio();
   comoOrganizador(t);
-  // (a) grupo com todos os jogos decididos
+  // (a) grupo com todos os jogos decididos, sem link, não oferece criação tardia
   g.matches.forEach((m) => { m.winner = m.p1; });
-  ok(W._waGrpGroupChip(t, g.matches) !== '', 'grupo encerrado: o organizador ainda vê o botão');
+  ok(W._waGrpGroupChip(t, g.matches) === '', 'grupo encerrado sem link não oferece criação tardia ao organizador');
+  g.matches[0].waGroup = { link: 'https://chat.whatsapp.com/AAAAAAAAAAAAAAAAAAAAAA' };
+  ok(W._waGrpGroupChip(t, g.matches).indexOf('_waGrpOpenLink') !== -1, 'grupo encerrado com link mantém acesso ao WhatsApp');
   W.AppStore.currentUser = { uid: 'u_fer', displayName: 'Fernanda Biojone', notifyWhatsApp: true };
-  ok(W._waGrpGroupChip(t, g.matches) === '', 'e o jogador não — pra ele o grupo acabou');
+  ok(W._waGrpGroupChip(t, g.matches).indexOf('_waGrpOpenLink') !== -1, 'o jogador também mantém o link já criado');
 
   // (b) jogo de RODADA FUTURA com as duas duplas já definidas
   // ⚠️ ASSERÇÃO INVERTIDA DE PROPÓSITO em 2.1.98. Antes: _"o jogador só vê quando a rodada
@@ -319,7 +320,9 @@ sec('em todos os jogos', function () {
   // (c) jogo já decidido
   comoOrganizador(t2);
   avulso.winner = 'Fernanda Biojone';
-  ok(W._waGrpCardChip(t2, avulso) !== '', 'jogo decidido: o organizador segue com o botão');
+  ok(W._waGrpCardChip(t2, avulso) === '', 'jogo decidido sem link não oferece criação tardia ao organizador');
+  avulso.waGroup = { link: 'https://chat.whatsapp.com/BBBBBBBBBBBBBBBBBBBBBB' };
+  ok(W._waGrpCardChip(t2, avulso).indexOf('_waGrpOpenLink') !== -1, 'jogo decidido com link mantém o acesso ao grupo');
   // (d) folga/BYE nunca vira grupo — nem pra ele
   ok(W._waGrpCardChip(t2, { id: 'f1', isSitOut: true, p1: 'X', p2: 'FOLGA' }) === '', 'folga não tem grupo de WhatsApp');
 });
