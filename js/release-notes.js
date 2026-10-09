@@ -10,6 +10,8 @@
 // No próximo jogo da dashboard, o grupo de WhatsApp fica ao lado do agendamento;
 // depois do placar, o app não sugere criar grupo novo, mas continua mostrando um
 // link de grupo já criado.
+// O arquivo desse componente também recebe o cache-buster da versão, impedindo
+// que o navegador mantenha a regra anterior em cache após a publicação.
 // Convites de organização também voltam a notificar exclusivamente pelo UID confirmado.
 // A inscrição de dupla usa a mesma ponte estrutural de origem que o sorteio.
 // A revisão de publicação reaproveita pareceres idênticos e recupera uma resposta inválida por lote.
