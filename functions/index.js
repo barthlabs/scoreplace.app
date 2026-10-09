@@ -4285,10 +4285,14 @@ exports.requestCanonicalRegistration = onCall(
       createdCategoryIds.forEach((categoryId) => {
         const registrationId = _registrationCore.registrationId("uid:" + callerUid, categoryId);
         tx.create(tournamentRef.collection("registrations").doc(registrationId), {
-          registrationId: registrationId,
-          tournamentId: tournamentId,
-          categoryId: categoryId,
-          participantKind: "account",
+        registrationId: registrationId,
+        tournamentId: tournamentId,
+        categoryId: categoryId,
+        // O mesmo identificador estrutural usado pela materialização. Sem
+        // participantKey, o registro novo não passa pelo validador que protege
+        // dupla, retirada e leitura do roster; nunca derive isso do nome.
+        participantKey: "uid:" + callerUid,
+        participantKind: "account",
           participantUid: callerUid,
           status: decision.validationState === "pending_review" ? "pending" : "confirmed",
           validationState: decision.validationState,

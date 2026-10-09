@@ -11,6 +11,7 @@ ok(body.includes('_enrollCore.enrollmentOpen(tournament, Date.now())') && body.i
 ok(body.includes('_categoryEligibility.decideEnrollment') && body.includes('tx.get(profileRef)'), 'perfil e rigor são decididos no servidor');
 ok(body.includes('_amizadeLock.exigirAtivos(tx, db, [callerUid]'), 'inscrição lê o lifecycle dentro da mesma transação antes de criar');
 ok(body.includes('existingCategoryIds: existing') && body.includes('registrationId("uid:" + callerUid'), 'idempotência e exclusividade usam UID e categoria estáveis');
+ok(body.includes('participantKey: "uid:" + callerUid'), 'registro novo guarda participantKey estrutural, nunca nome');
 ok(body.includes('tx.create(tournamentRef.collection("registrations")') && !body.includes('participants:'), 'Function grava só o registro canônico, sem dual-write no roster');
 const deletionStart = source.indexOf('exports.deleteAccount = onCall');
 const deletionEnd = source.indexOf('\nexports.', deletionStart + 8);
