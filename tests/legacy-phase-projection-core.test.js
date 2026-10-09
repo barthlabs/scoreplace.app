@@ -24,6 +24,10 @@ r = planLegacyPhaseProjection(realLegacy, _window.FORMAT2.projectLegacyPhases, {
 ok(r.changed && r.phases[0].kind === 'classification', 'projetor real traduz liga legada para classificação canônica');
 const sameReceipt = planLegacyPhaseProjection(realLegacy, _window.FORMAT2.projectLegacyPhases, { tournamentId: 't1', updateTime: 'u1' });
 ok(r.fingerprint === sameReceipt.fingerprint && r.protectedFingerprint, 'projeção emite recibo estável e fingerprint de campos protegidos');
+const defaultReceipt = planLegacyPhaseProjection(realLegacy, _window.FORMAT2.projectLegacyPhases);
+const repeatedDefaultReceipt = planLegacyPhaseProjection(realLegacy, _window.FORMAT2.projectLegacyPhases);
+ok(defaultReceipt.fingerprint === repeatedDefaultReceipt.fingerprint && defaultReceipt.protectedFingerprint === repeatedDefaultReceipt.protectedFingerprint,
+  'recibo também é estável para chamadores legados sem opções');
 const legacySwiss = { format: 'Eliminatórias Simples', classifyFormat: 'swiss', currentStage: 'swiss', phases: [{ name: 'Classificatória', formatCode: 'liga', format: 'Suíço' }] };
 r = planLegacyPhaseProjection(legacySwiss, _window.FORMAT2.projectLegacyPhases);
 ok(r.changed && r.phases[0].classification && r.phases[0].classification.pairing && r.phases[0].classification.pairing.strategy === 'ranking_clusters', 'projetor traduz o marcador suíço legado para pareamento classificatório canônico');
