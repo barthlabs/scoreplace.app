@@ -32,13 +32,16 @@ namespace ScoreplaceRegistrationRoster {
   }
   function soloEntry(registration: Registration, person: Person): Record<string, unknown> {
     const categoryId = text(registration.categoryId);
-    const entry: Record<string, unknown> = { category: categoryId, categories: [categoryId] };
+    // `category`/`categories` são apenas a superfície compatível do motor
+    // legado. O ID explícito permite que as portas de mutação nunca tenham de
+    // recuperar identidade de um rótulo visível.
+    const entry: Record<string, unknown> = { categoryId, category: categoryId, categories: [categoryId] };
     if (person.uid) entry.uid = person.uid;
     else { entry.manualParticipantId = person.manualParticipantId as string; entry.displayName = person.name; entry.name = person.name; }
     return entry;
   }
   function pairEntry(categoryId: string, first: Person, second: Person): Record<string, unknown> {
-    const entry: Record<string, unknown> = { category: categoryId, categories: [categoryId], fixedPair: true };
+    const entry: Record<string, unknown> = { categoryId, category: categoryId, categories: [categoryId], fixedPair: true };
     if (first.uid) entry.p1Uid = first.uid;
     if (second.uid) entry.p2Uid = second.uid;
     if (first.manualParticipantId) entry.p1ManualId = first.manualParticipantId;

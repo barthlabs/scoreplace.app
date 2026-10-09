@@ -4239,12 +4239,21 @@ window._formTeamConfirm = function(tId, name1, uid1, name2, uid2, opts) {
         if (!p1final || !p2final || p1final === p2final) return;
         var fuid1 = typeof p1final === 'object' ? (p1final.uid || '') : '';
         var fuid2 = typeof p2final === 'object' ? (p2final.uid || '') : '';
+        var fmanual1 = typeof p1final === 'object' ? (p1final.manualParticipantId || '') : '';
+        var fmanual2 = typeof p2final === 'object' ? (p2final.manualParticipantId || '') : '';
+        var fcategory1 = typeof p1final === 'object' ? String(p1final.categoryId || '').trim() : '';
+        var fcategory2 = typeof p2final === 'object' ? String(p2final.categoryId || '').trim() : '';
+        var fcanonical = !!(t.canonicalRegistrationMigration && t.canonicalRegistrationMigration.fingerprint);
         if (!(window.FirestoreDB && typeof window.FirestoreDB.formPair === 'function')) {
             if (typeof showNotification === 'function') showNotification('Sem conexão', 'Não foi possível formar a dupla agora — tente de novo.', 'warning');
             return;
         }
         var _hasBracketDF = !!((t.matches && t.matches.length) || (t.rounds && t.rounds.length) || (t.groups && t.groups.length));
-        window.FirestoreDB.formPair(tId, { uid1: fuid1, name1: name1, uid2: fuid2, name2: name2, changeRule: !!_changeRule })
+        if (fcanonical && ((!fuid1 && !fmanual1) || (!fuid2 && !fmanual2) || !fcategory1 || fcategory1 !== fcategory2)) {
+            if (typeof showNotification === 'function') showNotification('Dupla sem identidade ou categoria válida', 'Atualize o elenco antes de formar a dupla.', 'warning');
+            return;
+        }
+        window.FirestoreDB.formPair(tId, { uid1: fuid1, manualId1: fmanual1, name1: name1, uid2: fuid2, manualId2: fmanual2, name2: name2, categoryId: fcanonical ? fcategory1 : '', changeRule: !!_changeRule })
             .then(function () {
                 if (_hasBracketDF && typeof window._triggerLateIntegration === 'function') { try { window._triggerLateIntegration(t, { force: true }); } catch (e) {} }
                 var container = document.getElementById('view-container');

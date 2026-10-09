@@ -1450,13 +1450,22 @@ window._formDuplaByUids = function(tId, name1, uid1, name2, uid2) {
     var _p2 = arr2.find(function(p) { return uid2 ? (typeof p === 'object' && p.uid === uid2) : ((typeof p === 'string' ? p : (p.displayName||p.name||'')) === name2); });
     var _u1 = uid1 || (_p1 && typeof _p1==='object' ? (_p1.uid||'') : '');
     var _u2 = uid2 || (_p2 && typeof _p2==='object' ? (_p2.uid||'') : '');
+    var _manual1 = _p1 && typeof _p1 === 'object' ? (_p1.manualParticipantId || '') : '';
+    var _manual2 = _p2 && typeof _p2 === 'object' ? (_p2.manualParticipantId || '') : '';
+    var _category1 = _p1 && typeof _p1 === 'object' ? String(_p1.categoryId || '').trim() : '';
+    var _category2 = _p2 && typeof _p2 === 'object' ? String(_p2.categoryId || '').trim() : '';
+    var _canonicalRoster = !!(t.canonicalRegistrationMigration && t.canonicalRegistrationMigration.fingerprint);
     var newName = name1 + ' / ' + name2;
     if (!(window.FirestoreDB && typeof window.FirestoreDB.formPair === 'function')) {
         if (typeof showNotification !== 'undefined') showNotification('Sem conexão', 'Não foi possível formar a dupla agora — tente de novo.', 'warning');
         return;
     }
     var _hasBracket = !!((t.matches && t.matches.length) || (t.rounds && t.rounds.length) || (t.groups && t.groups.length));
-    window.FirestoreDB.formPair(tId, { uid1: _u1, name1: name1, uid2: _u2, name2: name2 })
+    if (_canonicalRoster && ((!_u1 && !_manual1) || (!_u2 && !_manual2) || !_category1 || _category1 !== _category2)) {
+        if (typeof showNotification !== 'undefined') showNotification('Dupla sem identidade ou categoria válida', 'Atualize o elenco: a formação canônica exige os dois IDs de participante e uma categoria tipada em comum.', 'warning');
+        return;
+    }
+    window.FirestoreDB.formPair(tId, { uid1: _u1, manualId1: _manual1, name1: name1, uid2: _u2, manualId2: _manual2, name2: name2, categoryId: _canonicalRoster ? _category1 : '' })
         .then(function (res) {
             // MESMA regra do desfazer: só comemora se a CF gravou de verdade (notFound = não achou).
             var _r = (res && res.data) ? res.data : res;
@@ -1574,16 +1583,28 @@ window._splitDupla = function(tId, id1, id2, btnEl) {
     var p2Name = ((entry.p2Uid && window._displayNameForUid) ? window._displayNameForUid(entry.p2Uid, entry.p2Name || parts[1]) : (entry.p2Name || parts[1] || '')).trim();
     var p1Uid  = entry.p1Uid || '';
     var p2Uid  = entry.p2Uid || '';
+    var p1ManualId = entry.p1ManualId || '';
+    var p2ManualId = entry.p2ManualId || '';
+    var _splitCategoryId = String(entry.categoryId || '').trim();
+    var _canonicalSplit = !!(t.canonicalRegistrationMigration && t.canonicalRegistrationMigration.fingerprint);
     // IDENTIDADE = uid (o nome só identifica o fictício). O storage é só-uid, então exigir os
     // dois NOMES aqui abortava o desfazer sempre que o perfil ainda não tinha resolvido.
-    if (!(p1Uid || p1Name) || !(p2Uid || p2Name)) { _busyDone(); return; }
+    if (_canonicalSplit && ((!p1Uid && !p1ManualId) || (!p2Uid && !p2ManualId) || !_splitCategoryId)) {
+        _busyDone();
+        if (typeof showNotification !== 'undefined') showNotification('Dupla canônica incompleta', 'Atualize o elenco antes de desfazer a dupla.', 'warning');
+        return;
+    }
+    if (!_canonicalSplit && (!(p1Uid || p1Name) || !(p2Uid || p2Name))) { _busyDone(); return; }
     if (!(window.FirestoreDB && typeof window.FirestoreDB.splitPair === 'function')) {
         if (typeof showNotification !== 'undefined') showNotification('Sem conexão', 'Não foi possível desfazer a dupla agora — tente de novo.', 'warning');
         _busyDone();
         return;
     }
     var _hasBracketSplit = !!((t.matches && t.matches.length) || (t.rounds && t.rounds.length) || (t.groups && t.groups.length));
-    window.FirestoreDB.splitPair(tId, { id1: id1, id2: id2 }).then(function (res) {
+    window.FirestoreDB.splitPair(tId, {
+        id1: id1, id2: id2, uid1: p1Uid, manualId1: p1ManualId,
+        uid2: p2Uid, manualId2: p2ManualId, categoryId: _canonicalSplit ? _splitCategoryId : ''
+    }).then(function (res) {
         // A CF devolve notFound quando NÃO achou/NÃO gravou. Comemorar assim mesmo (como era)
         // dava o pior sintoma possível: toast "Dupla desfeita" e a dupla intacta, pra sempre.
         var _r = (res && res.data) ? res.data : res;

@@ -1,6 +1,7 @@
 'use strict';
 
 const C = require('./registration-core');
+const B = require('./registration-category-bridge-core');
 let pass = 0;
 let fail = 0;
 function ok(name, condition) {
@@ -21,6 +22,12 @@ throws('não usa nome como identidade', () => C.participantKey({ displayName: 'A
 const cats = C.categoryIds({ categories: ['Fem A', 'Masc B', 'Fem A', ' '] });
 ok('categorias múltiplas são únicas e determinísticas', JSON.stringify(cats) === JSON.stringify(['Fem A', 'Masc B']));
 ok('categoria ausente recebe sentinela explícita', C.categoryIds({})[0] === C.UNCATEGORIZED_CATEGORY_ID);
+const mapLegacyCategory = B.categoryBridge([
+  { id: 'fem-a', label: 'Fem A' }, { id: 'masc-b', label: 'Masc B' },
+]);
+ok('migração traduz rótulo legado para id tipado uma única vez', JSON.stringify(C.categoryIds({ categories: ['Fem A', 'Masc B'] }, mapLegacyCategory)) === JSON.stringify(['fem-a', 'masc-b']));
+throws('migração recusa rótulo legado sem definição tipada', () => C.categoryIds({ category: 'Fem C' }, mapLegacyCategory));
+throws('migração recusa rótulos tipados ambíguos', () => B.categoryBridge([{ id: 'a', label: 'Fem A' }, { id: 'b', label: ' fem a ' }]));
 const slash = C.registrationsForEntry('torneio-1', { uid: 'ana', category: 'A/B' })[0];
 ok('id do documento não contém barra de rótulo legado', slash.registrationId.indexOf('/') === -1);
 

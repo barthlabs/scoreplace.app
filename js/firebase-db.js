@@ -2440,7 +2440,24 @@ window.FirestoreDB = {
         if (Number(_canonical.registrationCount || 0) !== _expected) {
           throw new Error('inscrições canônicas divergentes: esperado ' + _expected + ', recebido ' + Number(_canonical.registrationCount || 0));
         }
-        t.participants = _canonical.participants;
+        var _categoryLabels = {};
+        (Array.isArray(_canonical.categoryDefinitions) ? _canonical.categoryDefinitions : []).forEach(function (definition) {
+          if (definition && definition.id && definition.label) _categoryLabels[String(definition.id)] = String(definition.label);
+        });
+        t.participants = _canonical.participants.map(function (entry) {
+          if (!entry || typeof entry !== 'object') throw new Error('participante canônico inválido');
+          var projected = Object.assign({}, entry);
+          var categoryId = String(projected.categoryId || projected.category || '').trim();
+          var categoryLabel = _categoryLabels[categoryId];
+          if (!categoryId || !categoryLabel) throw new Error('categoria canônica sem rótulo tipado');
+          // Compatibilidade de desenho: o legado continua exibindo `category`,
+          // mas toda ação nova lê `categoryId` (o valor estrutural).
+          projected.categoryId = categoryId;
+          projected.category = categoryLabel;
+          projected.categories = [categoryLabel];
+          return projected;
+        });
+        t.categoryDefinitions = _canonical.categoryDefinitions;
       }
       try { if (window._noteFsReads) window._noteFsReads(lidos, 'abrir-torneio-subcolecao'); } catch (e) {}
       return t;

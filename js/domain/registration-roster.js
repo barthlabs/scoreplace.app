@@ -26,7 +26,10 @@ var ScoreplaceRegistrationRoster;
     }
     function soloEntry(registration, person) {
         const categoryId = text(registration.categoryId);
-        const entry = { category: categoryId, categories: [categoryId] };
+        // `category`/`categories` são apenas a superfície compatível do motor
+        // legado. O ID explícito permite que as portas de mutação nunca tenham de
+        // recuperar identidade de um rótulo visível.
+        const entry = { categoryId, category: categoryId, categories: [categoryId] };
         if (person.uid)
             entry.uid = person.uid;
         else {
@@ -37,7 +40,7 @@ var ScoreplaceRegistrationRoster;
         return entry;
     }
     function pairEntry(categoryId, first, second) {
-        const entry = { category: categoryId, categories: [categoryId], fixedPair: true };
+        const entry = { categoryId, category: categoryId, categories: [categoryId], fixedPair: true };
         if (first.uid)
             entry.p1Uid = first.uid;
         if (second.uid)

@@ -425,6 +425,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         age: age,
         ageBuckets: ageBks,
         assigned: assigned,
+        categoryId: (p && p.categoryId) || '',
         assignedSkills: assignedSkills,
         profileSkill: profileSkill,        // skill auto-declarado no perfil
         effectiveSkills: effectiveSkills,  // skill efetivo (assigned > profile)
@@ -3317,9 +3318,16 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     }
     if (!(window.FirestoreDB && typeof window.FirestoreDB.formPair === 'function')) return;
     var t = _liveState.t, label = (source.name || '') + ' / ' + (target.name || '');
+    var canonical = !!(t.canonicalRegistrationMigration && t.canonicalRegistrationMigration.fingerprint);
+    var categoryId = String(source.categoryId || '').trim();
+    if (canonical && (!categoryId || categoryId !== String(target.categoryId || '').trim())) {
+      if (typeof showNotification === 'function') showNotification('Dupla sem categoria canônica compatível', 'Atualize o elenco antes de formar a dupla.', 'warning');
+      return;
+    }
     window.FirestoreDB.formPair(String(t.id), {
       uid1: source.uid || '', manualId1: source.manualId || '', name1: source.name || '',
-      uid2: target.uid || '', manualId2: target.manualId || '', name2: target.name || ''
+      uid2: target.uid || '', manualId2: target.manualId || '', name2: target.name || '',
+      categoryId: canonical ? categoryId : ''
     }).then(function (res) {
       var data = (res && res.data) ? res.data : (res || {});
       if (data.alreadyPaired) { if (typeof showNotification === 'function') showNotification('Já está em dupla', (data.who || 'Um dos participantes') + ' já faz parte de outra dupla.', 'warning'); return; }
@@ -3354,7 +3362,17 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var id2 = pair[1].uid || pair[1].manualId || pair[1].name || '';
     if (!id1 || !id2) return;
     if (btn && typeof window._spinButton === 'function') window._spinButton(btn, '');
-    window.FirestoreDB.splitPair(String(_liveState.t.id), { id1: id1, id2: id2 }).then(function (res) {
+    var canonical = !!(_liveState.t.canonicalRegistrationMigration && _liveState.t.canonicalRegistrationMigration.fingerprint);
+    var categoryId = String(pair[0].categoryId || '').trim();
+    if (canonical && (!categoryId || categoryId !== String(pair[1].categoryId || '').trim())) {
+      if (btn && typeof window._spinButtonDone === 'function') window._spinButtonDone(btn);
+      if (typeof showNotification === 'function') showNotification('Dupla sem categoria canônica compatível', 'Atualize o elenco antes de desfazer a dupla.', 'warning');
+      return;
+    }
+    window.FirestoreDB.splitPair(String(_liveState.t.id), {
+      id1: id1, id2: id2, uid1: pair[0].uid || '', manualId1: pair[0].manualId || '',
+      uid2: pair[1].uid || '', manualId2: pair[1].manualId || '', categoryId: canonical ? categoryId : ''
+    }).then(function (res) {
       var data = (res && res.data) ? res.data : (res || {});
       if (btn && typeof window._spinButtonDone === 'function') window._spinButtonDone(btn);
       if (data.notFound) { if (typeof showNotification === 'function') showNotification('Não foi possível desfazer a dupla', 'O servidor não encontrou esta dupla no torneio.', 'warning'); return; }

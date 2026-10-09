@@ -90,6 +90,7 @@ const _enrollCore = require("./enroll-core");
  * relatório de comunicado — 128 docs em erro na fila eram TODOS transitórios. */
 const _emailFail = require("./email-failure-core");
 const _categoryEligibility = require("./category-eligibility-core");
+const _registrationCategoryBridge = require("./registration-category-bridge-core");
 const _registrationCore = require("./registration-core");
 const _registrationMigration = require("./registration-migration-core");
 const _registrationMutations = require("./registration-mutations-core");
@@ -4119,7 +4120,13 @@ exports.previewCanonicalRegistrationMigration = onCall(
       // A prévia usa os IDs físicos da coleção dividida. É proibido derivar a
       // identidade de convidado da posição do array ou do nome exibido.
       const records = await _splitParts.lerRegistrosDaParte(tx, ref, "participants");
-      return _registrationCore.projectLegacyRoster(tournamentId, records);
+      let categoryIdForLegacyLabel;
+      try {
+        categoryIdForLegacyLabel = _registrationCategoryBridge.categoryBridge(
+          _categoryEligibility.normalizeCategoryDefinitions(tournament.categoryDefinitions)
+        );
+      } catch (error) { throw new HttpsError("failed-precondition", error.message); }
+      return _registrationCore.projectLegacyRoster(tournamentId, records, categoryIdForLegacyLabel);
     });
 
     return {
@@ -4173,7 +4180,13 @@ exports.applyCanonicalRegistrationMigration = onCall(
         throw new HttpsError("permission-denied", "só a organização migra inscrições");
       }
       const records = await _splitParts.lerRegistrosDaParte(tx, ref, "participants");
-      const report = _registrationCore.projectLegacyRoster(tournamentId, records);
+      let categoryIdForLegacyLabel;
+      try {
+        categoryIdForLegacyLabel = _registrationCategoryBridge.categoryBridge(
+          _categoryEligibility.normalizeCategoryDefinitions(tournament.categoryDefinitions)
+        );
+      } catch (error) { throw new HttpsError("failed-precondition", error.message); }
+      const report = _registrationCore.projectLegacyRoster(tournamentId, records, categoryIdForLegacyLabel);
       if (report.fingerprint !== expectedFingerprint) {
         throw new HttpsError("failed-precondition", "o elenco mudou; gere uma nova prévia antes de migrar");
       }
@@ -4404,13 +4417,24 @@ exports.getCanonicalTournamentRoster = onCall(
       let checked;
       try { checked = _canonicalRegistrationBoundary.verifiedRoster(tournament, registrations); }
       catch (error) { throw new HttpsError("failed-precondition", error.message); }
+      let categoryDefinitions;
+      try { categoryDefinitions = _categoryEligibility.normalizeCategoryDefinitions(tournament.categoryDefinitions); }
+      catch (error) { throw new HttpsError("failed-precondition", error.message); }
       const participants = checked.participants;
       const belongsToRoster = participants.some((entry) => [entry.uid, entry.p1Uid, entry.p2Uid]
         .filter(Boolean).map(String).indexOf(String(callerUid)) !== -1);
       if (!_isTournamentOrgCaller(tournament, callerUid) && !belongsToRoster) {
         throw new HttpsError("permission-denied", "elenco indisponível neste torneio");
       }
-      return { tournamentId, registrationCount: checked.registrations.length, participants };
+      // A interface recebe o mapa somente para apresentação. A identidade que
+      // acompanha cada entrada é `categoryId` e as portas de mutação nunca
+      // aceitam um label em seu lugar.
+      return {
+        tournamentId,
+        registrationCount: checked.registrations.length,
+        participants,
+        categoryDefinitions: categoryDefinitions.map((definition) => ({ id: definition.id, label: definition.label }))
+      };
     });
   }
 );
