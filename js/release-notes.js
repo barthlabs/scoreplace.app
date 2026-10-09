@@ -1,3 +1,4 @@
+// 2.3.313 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.3.312 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.3.311 — Rodadas classificatórias canônicas passam diretamente pelo sorteio antes da
 // transição pow2, respeitando a política da chave do torneio. A lista de inscritos preserva
