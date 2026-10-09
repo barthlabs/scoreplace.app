@@ -55,6 +55,46 @@ function statusCanPair(status) {
   return status === 'confirmed' || status === 'pending';
 }
 
+/* Cria somente inscrições que ainda não existam. A elegibilidade, a janela e
+ * a decisão entre confirmado/espera pertencem à Function; este núcleo recebe
+ * apenas o resultado já validado para manter a transição testável e livre de
+ * perfil, nome ou I/O. Repetir exatamente o mesmo pedido é idempotente. */
+function enroll(tournamentId, registrations, participant, categoryIds, options) {
+  const byId = indexRegistrations(tournamentId, registrations);
+  const tid = text(tournamentId);
+  const key = participantKey(participant || {});
+  const categoryList = Array.from(new Set((Array.isArray(categoryIds) ? categoryIds : [])
+    .map(text).filter(Boolean)));
+  if (!categoryList.length) throw new Error('inscrição exige ao menos uma categoria');
+  const raw = options && typeof options === 'object' ? options : {};
+  const status = raw.status === 'waitlisted' ? 'waitlisted' : (raw.status === 'pending' ? 'pending' : 'confirmed');
+  const validationState = text(raw.validationState) || 'approved';
+  const identity = key.indexOf('uid:') === 0
+    ? { participantKind: 'account', participantUid: key.slice(4), manualParticipantId: null }
+    : { participantKind: 'manual', participantUid: null, manualParticipantId: key.slice(7) };
+  const creates = [];
+  const already = [];
+  categoryList.forEach((categoryId) => {
+    const id = registrationId(key, categoryId);
+    const existing = byId.get(id);
+    if (existing) { already.push(id); return; }
+    const next = Object.assign({
+      registrationId: id,
+      tournamentId: tid,
+      categoryId: categoryId,
+      participantKey: key,
+      status: status,
+      validationState: validationState,
+      fixedPairId: null,
+    }, identity);
+    if (identity.participantKind === 'manual' && text(raw.manualDisplayName)) {
+      next.manualDisplayName = text(raw.manualDisplayName);
+    }
+    creates.push(next);
+  });
+  return { outcome: creates.length ? 'enrolled' : 'alreadyRegistered', creates, already };
+}
+
 function pair(tournamentId, registrations, registrationIds) {
   const byId = indexRegistrations(tournamentId, registrations);
   const ids = (Array.isArray(registrationIds) ? registrationIds : []).map(text).filter(Boolean);
@@ -122,6 +162,7 @@ function leaveWaitlist(tournamentId, registrations, participant) {
 module.exports = {
   canonicalPairId,
   indexRegistrations,
+  enroll,
   pair,
   split,
   withdraw,
