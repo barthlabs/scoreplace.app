@@ -155,6 +155,16 @@
     } : null;
   }
 
+  // `legacyClassificationPairing` projeta um objeto novo a cada leitura. A
+  // comparação precisa ser semântica: comparar referências faria uma fase já
+  // canônica parecer pendente para sempre, disparando regravações inúteis.
+  function samePairing(left, right) {
+    if (!left || !right) return left === right;
+    return left.strategy === right.strategy &&
+      left.entryMode === right.entryMode &&
+      left.rematchPolicy === right.rematchPolicy;
+  }
+
   function legacyBracketType(phase, tournament) {
     var current = phase && phase.elimination && phase.elimination.bracketType;
     if (current === 'single' || current === 'double') return current;
@@ -189,7 +199,7 @@
           changed = true;
         }
         var pairing = legacyClassificationPairing(phase, tournament);
-        if (pairing && phase.classification.pairing !== pairing) {
+        if (pairing && !samePairing(phase.classification.pairing, pairing)) {
           phase.classification = Object.assign({}, phase.classification, { pairing: pairing });
           changed = true;
         }
