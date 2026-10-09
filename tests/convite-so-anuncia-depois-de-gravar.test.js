@@ -117,6 +117,7 @@ function palco(opts) {
   /* dependências que a função usa e que vivem fora do recorte */
   vm.runInContext('var _tH = function (k) { return k; };' +
                   'var _notifyByEmail = function (quem) { window.__ev.push("notif:" + quem); };' +
+                  'var _notifyUser = function (quem) { window.__ev.push("notif:" + quem); };' +
                   'var _pName = window._pName;' +
                   'var showNotification = window.showNotification;', ctx);
   ctx.window.__ev = eventos;

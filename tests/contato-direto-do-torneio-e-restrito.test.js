@@ -24,7 +24,7 @@ const contactEnd = view.indexOf('// Abre o canal de contato da pessoa', contactS
 const contact = view.slice(contactStart, contactEnd);
 assert.match(contact, /data-contact-tournament-id/,
   'o contato carrega o contexto do torneio');
-assert.match(contact, /carregarContatoDoTorneio\(target\.tournamentId, target\.uid\)/,
+assert.match(contact, /carregarContatoDoTorneio\(tournamentId, uid\)/,
   'a pré-carga preserva o gesto com o contato autorizado');
 assert.doesNotMatch(contact, /loadUserProfile\(/,
   'a pré-carga não baixa ficha privada');

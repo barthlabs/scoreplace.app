@@ -54,7 +54,7 @@ console.log('\n▸ ① preflight e integridade vêm antes do Hosting; backup vem
     cache: sh.indexOf('TRAVA DURA: O CACHE DO SW'),
     preflight: sh.indexOf('PREFLIGHT: TODOS OS GATES ANTES DE TOCAR NO'),
     npmtest: sh.indexOf('&& npm test'),
-    revisao: sh.indexOf('revisão cruzada sobre o corte $BASE_CORTE..HEAD'),
+    revisao: sh.indexOf('revisão cruzada sobre o corte remoto $BASE_REVISAO..HEAD'),
     // ⚠️ MARCO, não o texto do comando.
     push: sh.indexOf('# MARCO: push-do-main'),
     deploy: sh.indexOf('firebase deploy --only hosting --project')
@@ -133,8 +133,8 @@ function cenario(opcoes) {
   // chegar no preflight, então ② e ③ não mediam mais o que dizem medir. O revisor NÃO é o
   // assunto deste teste — a ORDEM é —, e quem prova que ele vem antes do push é a asserção
   // por fonte em ①. Aqui ele é um stub que aprova, como os outros gates.
-  fs.writeFileSync(path.join(repo, 'scripts', 'revisar.sh'), '#!/bin/sh\nexit 0\n');
-  fs.chmodSync(path.join(repo, 'scripts', 'revisar.sh'), 0o755);
+  fs.writeFileSync(path.join(repo, 'scripts', 'revisar-diff-em-lotes.sh'), '#!/bin/sh\nexit 0\n');
+  fs.chmodSync(path.join(repo, 'scripts', 'revisar-diff-em-lotes.sh'), 0o755);
   fs.writeFileSync(path.join(repo, 'scripts', 'check-version-ahead.js'), 'process.exit(0);\n');
   fs.writeFileSync(path.join(repo, 'scripts', 'check-release-version-fresh.js'), 'process.exit(0);\n');
   // O corte único pertence a outra suíte. Aqui ele é neutro para a cena continuar

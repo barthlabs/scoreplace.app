@@ -31,7 +31,7 @@ function mkTournament() {
   for (let i = 1; i <= 10; i++) parts.push({ uid: 'u' + i, ligaActive: true });
   // Órfão SEM contato nenhum — o pior caso: só o uid existe.
   parts.push({ uid: ORPHAN_UID, ligaActive: false });
-  // Órfão COM e-mail — deve exibir o e-mail (decisão do dono, jul/2026).
+  // Órfão COM e-mail — e-mail não é identidade nem rótulo público do torneio.
   parts.push({ uid: ORPHAN_EMAIL_UID, email: 'camila@millideas.com.br', ligaActive: false });
   return {
     id: 'mock-orphan', name: 'Ranking', format: 'Liga',
@@ -80,10 +80,12 @@ assert(leaked.length === 0, 'NENHUM uid gravado como nome em slot/grupo — vaza
 const orphanSitOut = inactive.filter(m => m.p1Uid === ORPHAN_UID)[0];
 assert(!!orphanSitOut, 'o sit-out do órfão guarda a identidade em p1Uid (não no nome)');
 
-// Órfão COM e-mail → exibe o e-mail (decisão do dono: "exibir pelo e-mail gravado").
+// Órfão COM e-mail → também usa rótulo neutro: documento de torneio não deve vazar e-mail.
 const emailSitOut = inactive.filter(m => m.p1Uid === ORPHAN_EMAIL_UID)[0];
-assert(emailSitOut && emailSitOut.p1 === 'camila@millideas.com.br',
-  'órfão com e-mail exibe o e-mail (got ' + (emailSitOut ? JSON.stringify(emailSitOut.p1) : 'sit-out não achado') + ')');
+assert(emailSitOut && /^Jogador sem perfil \(/.test(String(emailSitOut.p1)) &&
+  !String(emailSitOut.p1).includes('camila@millideas.com.br'),
+  'órfão com e-mail também exibe rótulo neutro, sem vazar e-mail (got ' +
+  (emailSitOut ? JSON.stringify(emailSitOut.p1) : 'sit-out não achado') + ')');
 
 // Órfão SEM contato → rótulo neutro. O sufixo do uid dá unicidade: o nome é CHAVE no
 // motor, então dois rótulos iguais fariam um dos dois sumir do sorteio.

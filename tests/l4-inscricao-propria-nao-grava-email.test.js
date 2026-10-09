@@ -6,8 +6,8 @@
  * A L4 registrava a ordem certa — ① provar que uid cobre os admins → ② tirar e-mail das
  * DECISÕES → ③ parar de gravar e remover. ① e ② já estavam cumpridos; esta é a primeira
  * fatia de ③: estancar a ENTRADA na inscrição própria, onde o uid SEMPRE existe.
- * ⛔ O que esta leva NÃO faz: não toca no inscrito SEM uid (digitado pelo organizador), onde
- * o e-mail ainda é a única âncora de deduplicação; e não remove o que já está gravado.
+ * ⛔ O que esta leva NÃO faz: não toca no inscrito SEM uid digitado pelo organizador; ele usa
+ * `manualParticipantId`, nunca e-mail, como âncora de deduplicação.
  */
 const assert = require('assert/strict'), fs = require('fs'), path = require('path');
 const E = fs.readFileSync(path.join(__dirname, '..', 'js/views/tournaments-enrollment.js'), 'utf8');
@@ -24,10 +24,12 @@ const F = fs.readFileSync(path.join(__dirname, '..', 'functions', 'enroll-core.j
 must(/out\.selfEnrolled = uid === callerUid/.test(F), 'a Function deriva a marca de inscrição própria do uid autenticado');
 must(!/_safeEmail/.test(E), '⛔ a variável que carregava o e-mail não sobrou em lugar nenhum');
 
-/* ③ O FALLBACK SEM UID CONTINUA DE PÉ — tirá-lo quebraria a deduplicação do sorteio.
- * A chave de identidade do sorteio é `p.uid || p.email`: sem uid, o e-mail é a única âncora. */
+/* ③ O FALLBACK SEM UID CONTINUA DE PÉ sem reutilizar dado pessoal.
+ * A chave de identidade do participante manual é `manualParticipantId`. */
 const D = fs.readFileSync(path.join(__dirname, '..', 'js/views/tournaments-draw.js'), 'utf8');
-must(/String\(p\.uid \|\| p\.email\)/.test(D),
-  '③ a âncora de quem NÃO tem uid segue intacta — esta leva só mexe em quem tem');
+must(/p\.manualParticipantId \? 'manual:' \+ String\(p\.manualParticipantId\)/.test(D),
+  '③ participante sem uid usa âncora manual estável, sem e-mail');
+must(!/String\(p\.uid \|\| p\.email\)/.test(D),
+  '⛔ sorteio não volta a usar e-mail como identidade');
 
 console.log('\n✅ inscrição própria não grava e-mail no doc público — ' + ok + ' verificações');

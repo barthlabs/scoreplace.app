@@ -109,9 +109,11 @@ ok(/\bt\.checkedIn\b|\["checkedIn"\]|'checkedIn'/.test(repBloco) === false,
   '_repairTournaments NÃO lista mais campo a campo (a lista é o que apodrecia)');
 
 // ── enrollSeq: a ORDEM DE INSCRIÇÃO não pode mudar no remap ──────────────────
-// _repairTournaments copia a entrada e troca só o uid — enrollSeq vai junto.
+// A varredura canônica copia o documento e troca somente o uid — enrollSeq vai junto.
 const blocoRep = src.slice(src.indexOf('async function _repairTournaments'), src.indexOf('function _determineMergeWinner'));
-ok(/Object\.assign\(\{\}, p\)/.test(blocoRep), '_repairTournaments: copia a entrada (enrollSeq preservado)');
+const remapped = require('../functions/uid-sweep').remapUid({ participants: [{ uid: 'old', enrollSeq: 17 }] }, 'old', 'new').value;
+ok(remapped.participants[0].uid === 'new' && remapped.participants[0].enrollSeq === 17,
+  '_repairTournaments: varredura canônica preserva enrollSeq ao remapear uid');
 ok(/enrollSeq\s*=/.test(blocoRep) === false, '_repairTournaments: NUNCA reescreve enrollSeq');
 
 console.log(fail === 0

@@ -2259,7 +2259,14 @@ function renderParticipants(container, tournamentId) {
     });
 
     const allIndividuals = [];
-    const _indivByName = {}; // v3.0.x: dedup — nome → objeto já adicionado
+    // A identidade de uma conta é o UID. Antes da hidratação dos perfis, vários
+    // participantes só-uid compartilham o mesmo rótulo temporário; deduplicar por
+    // esse rótulo fazia 111 inscritos virarem um card no primeiro render.
+    // Nome é chave somente da entrada manual, que não possui uid.
+    const _individualKey = function (name, uid) {
+      return uid ? 'uid:' + String(uid) : 'manual:' + String(name || '').toLowerCase().trim();
+    };
+    const _indivByName = {}; // chave canônica (uid; nome apenas para manual) → objeto
     // v0.17.35: jogadores em t.woHistory são pulados aqui — eles aparecem
     // só via card solo de orphan (loop abaixo). Evita aparecer 2x. O skip usa
     // window._woHistHas (uid-first) — woHistory é chaveado por uid (v3.0.78).
@@ -2267,9 +2274,8 @@ function renderParticipants(container, tournamentId) {
       const pName = typeof p === 'string' ? p : (window._pName ? window._pName(p, _t('participants.participant', {n: idx + 1})) : (p.displayName || p.name || _t('participants.participant', {n: idx + 1})));
       const isTeam = !!window._entryTeamMembers(p); // v3.0.x: time por estrutura (slots), não por '/'
       const namesToProcess = isTeam ? pName.split('/').map(n => n.trim()).filter(n => n) : [pName];
-      namesToProcess.forEach(n => {
+      namesToProcess.forEach((n, memberIndex) => {
         if (window._woHistHas(t, n)) return; // skip W.O.'d member (uid-first) — solo card via woHistory loop
-        if (_indivByName[n.toLowerCase()]) return; // já adicionado
         // v0.17.36: lookup por nome do membro (source of truth: match atual).
         // memberToTeam dá o team string da match — pode diferir de pName se
         // t.participants estiver stale após substituição.
@@ -2283,12 +2289,15 @@ function renderParticipants(container, tournamentId) {
         if (p && typeof p === 'object') {
           if (p.p1Name && n === String(p.p1Name).trim()) _slotUid = p.p1Uid || '';
           else if (p.p2Name && n === String(p.p2Name).trim()) _slotUid = p.p2Uid || '';
+          else if (isTeam && Array.isArray(p.memberUids)) _slotUid = p.memberUids[memberIndex] || '';
           else _slotUid = p.uid || '';
         }
+        const _identityKey = _individualKey(n, _slotUid);
+        if (_indivByName[_identityKey]) return; // já adicionado
         const _obj = { name: n, uid: _slotUid, teamName: currentTeam, teamIdx: idx, matchNum, matchDecided, opponent,
           category: _canonicalParticipantCategory(p && typeof p === 'object' ? p.category : '') };
         allIndividuals.push(_obj);
-        _indivByName[n.toLowerCase()] = _obj;
+        _indivByName[_identityKey] = _obj;
       });
     });
 
@@ -2297,19 +2306,21 @@ function renderParticipants(container, tournamentId) {
     standbyParts.forEach((p, idx) => {
       const pName = typeof p === 'string' ? p : (window._pName ? window._pName(p, 'Espera ' + (idx + 1)) : (p.displayName || p.name || 'Espera ' + (idx + 1)));
       const names = window._entryTeamMembers(p) || (pName ? [pName] : []); // v3.0.x: membros por estrutura, não por '/'
-      names.forEach(n => {
-        const ex = _indivByName[n.toLowerCase()];
-        if (ex) { ex.isStandby = true; return; }
+      names.forEach((n, memberIndex) => {
         let _slotUidSb = '';
         if (p && typeof p === 'object') {
           if (p.p1Name && n === String(p.p1Name).trim()) _slotUidSb = p.p1Uid || '';
           else if (p.p2Name && n === String(p.p2Name).trim()) _slotUidSb = p.p2Uid || '';
+          else if (Array.isArray(p.memberUids)) _slotUidSb = p.memberUids[memberIndex] || '';
           else _slotUidSb = p.uid || '';
         }
+        const _identityKeySb = _individualKey(n, _slotUidSb);
+        const ex = _indivByName[_identityKeySb];
+        if (ex) { ex.isStandby = true; return; }
         const _obj = { name: n, uid: _slotUidSb, teamName: pName.includes('/') ? pName : null, teamIdx: -1, matchNum: null, matchDecided: false, opponent: null, isStandby: true,
           category: _canonicalParticipantCategory(p && typeof p === 'object' ? p.category : '') };
         allIndividuals.push(_obj);
-        _indivByName[n.toLowerCase()] = _obj;
+        _indivByName[_identityKeySb] = _obj;
       });
     });
 
@@ -2342,7 +2353,7 @@ function renderParticipants(container, tournamentId) {
     const _seenNames = {};
     const _dedupedIndividuals = [];
     allIndividuals.forEach(ind => {
-      const key = ind.name.toLowerCase().trim();
+      const key = _individualKey(ind.name, ind.uid);
       if (_seenNames[key]) {
         // Duplicate — keep the one with more info (team > solo, matchNum > null)
         const prev = _seenNames[key];
