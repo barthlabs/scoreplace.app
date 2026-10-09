@@ -1697,6 +1697,7 @@ const SUITES = [
   'functions/test-enroll-core.js',
   'functions/test-registration-core.js',
   'functions/test-registration-migration-core.js',
+  'functions/test-registration-mutations-core.js',
   'tests/materializacao-inscricoes-organizador.test.js',
   'tests/materializacao-nao-diverge-roster-legado.test.js',
   'functions/test-registration-roster-core.js',
