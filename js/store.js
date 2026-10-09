@@ -3984,14 +3984,19 @@ window._devWhatsAppBtnHtml = function (opts) {
 
   // Aplica a atualização: nuke caches + unregister SW + reload. Se não for
   // seguro e force!=true, marca pendente e tenta de novo quando ficar seguro.
-  window._applyUpdate = function(force) {
+  window._applyUpdate = function(force, options) {
+    options = options || {};
     if (!force && !window._isSafeToReload()) {
       window._pendingUpdateReload = true;
+      window._pendingUpdateSilent = !!options.silent;
       window._log('[AutoUpdate] Nova versão pronta — aguardando momento seguro pra recarregar.');
-      window._showUpdatePill(); // dá agência ao usuário: 1 toque atualiza já
+      // Shell HTML atrasado não é versão nova do aplicativo. Corrija-o sem
+      // oferecer um "atualizar" para quem já executa o JavaScript atual.
+      if (!options.silent) window._showUpdatePill();
       return;
     }
     window._pendingUpdateReload = false;
+    window._pendingUpdateSilent = false;
 
     // ⛔⛔ NÃO TROQUE ISTO POR "apaga os caches + unregister + reload". ⛔⛔
     //
@@ -4112,7 +4117,10 @@ window._devWhatsAppBtnHtml = function (opts) {
     opts = opts || {};
     var now = Date.now();
     // Se já detectamos uma versão nova antes mas adiamos, tenta aplicar agora.
-    if (window._pendingUpdateReload) { window._applyUpdate(false); if (!opts.force) return; }
+    if (window._pendingUpdateReload) {
+      window._applyUpdate(false, { silent: !!window._pendingUpdateSilent });
+      if (!opts.force) return;
+    }
     if (!opts.force && (now - window._lastUpdateCheck) < 60000) return;
     window._lastUpdateCheck = now;
     // v4.5.96: ping BARATO — /version.txt (~20 bytes, gerado no prerender a cada deploy)
@@ -4128,25 +4136,16 @@ window._devWhatsAppBtnHtml = function (opts) {
       var _approvedUpdateFor = '';
       try { _approvedUpdateFor = sessionStorage.getItem('sp_update_user_approved_for') || ''; } catch (e) {}
       if (v === window.SCOREPLACE_VERSION) {
-        // O handoff autorizado chegou à versão pedida; nenhum aviso residual
-        // pode sobreviver para a publicação seguinte. Se o HTML ainda for o
-        // shell anterior, preserve a autorização até ele ser revalidado: apagar
-        // aqui era precisamente o que devolvia uma segunda pílula ao usuário.
-        //
-        // A pílula é DOM, não só uma chave de sessão. Antes este ramo limpava
-        // as chaves mas deixava `#sp-update-pill` pintada: depois de atualizar,
-        // o aplicativo já rodava a versão do servidor e ainda oferecia
-        // “Nova versão”. Só a coerência COMPLETA (versão + shell) pode encerrá-la;
-        // se o shell for de outra build, o ramo logo abaixo continua pedindo o
-        // handoff em vez de esconder um problema real.
-        if (!_shell || _shell === v) {
-          window._pendingUpdateVersion = '';
-          window._pendingUpdateReload = false;
-          var _pillAtualizada = document.getElementById('sp-update-pill');
-          if (_pillAtualizada) _pillAtualizada.remove();
-        }
+        // A pílula só existe para uma versão de JavaScript realmente nova.
+        // Se version.txt e o JS em execução coincidem, a pessoa já atualizou —
+        // mesmo que um meta do HTML tenha vindo atrasado de cache.
+        window._pendingUpdateVersion = '';
+        window._pendingUpdateReload = false;
+        window._pendingUpdateSilent = false;
+        var _pillAtualizada = document.getElementById('sp-update-pill');
+        if (_pillAtualizada) _pillAtualizada.remove();
         try {
-          if (_approvedUpdateFor === v && (!_shell || _shell === v)) {
+          if (_approvedUpdateFor === v) {
             sessionStorage.removeItem('sp_update_user_approved_for');
             sessionStorage.removeItem('sp_update_user_approved_retry');
           }
@@ -4201,34 +4200,17 @@ window._devWhatsAppBtnHtml = function (opts) {
         var _jaTentou = null;
         try { _jaTentou = sessionStorage.getItem('sp_shell_reloaded_for'); } catch (e) {}
         if (_jaTentou === _chave) {
-          // A pessoa já autorizou a publicação e o JS correto já está rodando.
-          // Não pedir um segundo clique por um marcador do shell que ficou
-          // atrasado: a próxima navegação normal revalida o documento.
-          if (_approvedUpdateFor === window.SCOREPLACE_VERSION) {
-            try {
-              sessionStorage.removeItem('sp_update_user_approved_for');
-              sessionStorage.removeItem('sp_update_user_approved_retry');
-              sessionStorage.removeItem('sp_shell_reloaded_for');
-            } catch (e) {}
-            var _residualPill = document.getElementById('sp-update-pill');
-            if (_residualPill) _residualPill.remove();
-            return;
-          }
+          // O JS já é atual. A pessoa não precisa tomar ação por uma meta HTML
+          // atrasada; a próxima navegação normal ainda revalida o documento.
           window._log('[AutoUpdate] shell=' + _shell + ' != js=' + window.SCOREPLACE_VERSION +
-            ' MESMO após reload — sem laço: só a pílula.');
-          window._showUpdatePill();
+            ' após tentativa silenciosa — sem loop e sem aviso ao usuário.');
           return;
         }
         try { sessionStorage.setItem('sp_shell_reloaded_for', _chave); } catch (e) {}
         window._log('[AutoUpdate] EXECUÇÃO HÍBRIDA: shell=' + _shell + ' js=' + window.SCOREPLACE_VERSION + '.');
-        // Este reload vem de uma atualização explicitamente aprovada: refaz o
-        // handoff em silêncio, em vez de mostrar outra pílula idêntica.
-        if (_approvedUpdateFor === window.SCOREPLACE_VERSION) {
-          window._applyUpdate(true);
-          return;
-        }
-        window._showUpdatePill();
-        window._applyUpdate(!!opts.force);
+        // Corrige uma vez o shell atrasado em silêncio; ele não é uma versão
+        // nova, então nunca merece a pílula de atualização.
+        window._applyUpdate(!!opts.force, { silent: true });
       }
     }).catch(function() {});
   };

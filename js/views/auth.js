@@ -833,6 +833,15 @@ if (typeof firebase !== 'undefined' && firebase.auth) {
     window._log('[scoreplace-auth] onAuthStateChanged fired:', user ? { uid: user.uid, email: user.email } : 'null');
     window._authStateResolved = true;
     if (user) {
+      // Firebase já confirmou a sessão, mas o perfil ainda será instalado no
+      // funil abaixo. Durante essa janela, login/landing não podem reaparecer.
+      // Em reemissões da MESMA sessão já pronta, não redesenhamos a dashboard.
+      var _sessaoJaNaTela = !!(window.AppStore && window.AppStore.currentUser &&
+        window.AppStore.currentUser.uid === user.uid);
+      if (!_sessaoJaNaTela) {
+        window._marcarLoginEmCurso();
+        window._mostrarTransicaoLogin();
+      }
       // Cancel any pending sign-out — auth came back with a user before grace elapsed
       if (_pendingSignoutTimer) {
         window._log('[scoreplace-auth] cancelling pending sign-out — auth re-resolved');
@@ -970,6 +979,19 @@ window._marcarLoginEmCurso = function () {
   window._log('[scoreplace-auth] login em curso — a landing fica fora do caminho');
 };
 
+// Assim que a credencial é confirmada, a interface não pode voltar a parecer
+// deslogada. Enquanto o perfil assume, mostramos apenas a transição canônica.
+window._mostrarTransicaoLogin = function () {
+  try {
+    var vc = document.getElementById('view-container');
+    if (!vc) return;
+    vc.innerHTML = (typeof window._renderBallLoader === 'function')
+      ? window._renderBallLoader('Entrando…', { minHeight: '60vh', bar: true })
+      : '<div style="text-align:center;padding:40vh 0 0;color:var(--text-muted);">Entrando…</div>';
+    try { window.scrollTo(0, 0); } catch (_scroll) {}
+  } catch (e) {}
+};
+
 window._limparLoginEmCurso = function () {
   try { sessionStorage.removeItem(_LOGIN_EM_CURSO_K); } catch (e) {}
 };
@@ -1049,6 +1071,11 @@ function handleGoogleLogin() {
     .then(function(result) {
       var user = result.user;
       window._log('[scoreplace-auth] Popup success:', { uid: user && user.uid, email: user && user.email });
+
+      // Pinta a transição ANTES de fechar o modal. Assim não há um frame em
+      // que a landing/login reaparece enquanto Firestore prepara o perfil.
+      window._marcarLoginEmCurso();
+      window._mostrarTransicaoLogin();
 
       // v0.17.83: belt+suspenders — close login modal IMMEDIATELY upon popup
       // success, before any other logic. simulateLoginSuccess also closes it
@@ -3891,11 +3918,10 @@ window._checkEmailVerified = function() {
 };
 
 async function simulateLoginSuccess(user) {
-  /* A sessão resolveu — a landing volta a ser um destino legítimo. Aqui é o FUNIL
-   * ÚNICO de sucesso (popup, redirect, e-mail, nativo e o modo dev passam por ele),
-   * então é o lugar certo pra apagar a marca: um clear por caminho ficaria devendo
-   * num deles. [[feedback_unify_dual_entry_points]] */
-  try { if (typeof window._limparLoginEmCurso === 'function') window._limparLoginEmCurso(); } catch (_lc) {}
+  /* A sessão só está pronta para a interface depois de currentUser existir.
+   * Mantemos a marca durante as leituras do perfil para o router nunca voltar
+   * a mostrar login/landing no meio da entrada. */
+  try { if (typeof window._marcarLoginEmCurso === 'function') window._marcarLoginEmCurso(); } catch (_lc) {}
   // v1.8.40: memoriza o MÉTODO de login numa chave que sobrevive ao logout —
   // alimenta a badge "✓ da última vez" do modal. Cada handler já gravou o
   // authProvider no authCache antes de chegar aqui (funil único).
@@ -4090,6 +4116,7 @@ async function simulateLoginSuccess(user) {
   window.AppStore.currentUser = sameUser
     ? Object.assign({}, existingUser, user)
     : Object.assign({}, user);
+  try { if (typeof window._limparLoginEmCurso === 'function') window._limparLoginEmCurso(); } catch (_lc2) {}
   // E-mail sintético de conta de celular NUNCA é identidade visível: trata como
   // "sem e-mail" no currentUser (perfil mostra o campo de adicionar e-mail).
   if (window.AppStore.currentUser && window._isSyntheticEmail(window.AppStore.currentUser.email)) {

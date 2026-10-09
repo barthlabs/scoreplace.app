@@ -84,14 +84,20 @@ ok(posLogin > 0 && posCache > posLogin,
    'PRIMEIRA vez (sem cache), que é o caso do relato, cairia na landing assim mesmo');
 
 // ── ⑤ posta nos três caminhos, apagada no funil de sucesso ───────────────────────
-console.log('\n⑤ Posta em todo caminho de login, apagada quando resolve');
+console.log('\n⑤ Posta em todo caminho e só sai quando currentUser assume');
 ['function handleGoogleLogin', 'function handleAppleLogin', 'function handleEmailLogin'].forEach((f) => {
   const i = auth.indexOf(f);
   ok(i > 0 && /_marcarLoginEmCurso\(\)/.test(auth.slice(i, i + 1200)), '   ' + f.replace('function ', '') + ' marca');
 });
 const iS = auth.indexOf('async function simulateLoginSuccess(user) {');
-ok(iS > 0 && /_limparLoginEmCurso\(\)/.test(auth.slice(iS, iS + 900)),
-   '⭐ e o FUNIL ÚNICO de sucesso apaga — um clear por caminho ficaria devendo em algum');
+const iCurrentUser = auth.indexOf('window.AppStore.currentUser = sameUser', iS);
+const iClearAfterCurrentUser = auth.indexOf('_limparLoginEmCurso()', iCurrentUser);
+ok(iS > 0 && /_marcarLoginEmCurso\(\)/.test(auth.slice(iS, iS + 900)),
+   '⭐ o funil único mantém a marca enquanto ainda prepara a sessão');
+ok(iCurrentUser > iS && iClearAfterCurrentUser > iCurrentUser,
+   '⛔ a marca só sai DEPOIS de currentUser existir — antes disso o router não pode reabrir a landing');
+ok(/window\._mostrarTransicaoLogin/.test(auth),
+   '⭐ o callback autenticado pinta Entrando… antes de fechar a tela de login');
 ok(/if \(!result \|\| !result\.user\) \{[\s\S]{0,400}_limparLoginEmCurso/.test(auth),
    '⛔ redirect que volta SEM usuário também apaga (o pior caso, porque a página recarregou)');
 
