@@ -184,6 +184,8 @@ ok(r.code === 0 && /retificação estruturada/.test(r.out),
   'parecer sem cabeçalho cobra retificação formal antes de aprovar — code ' + r.code);
 ok(fs.readFileSync(chamadasSemCabecalho, 'utf8') === '2',
   'retificação de formato faz exatamente uma chamada adicional ao mesmo revisor');
+ok(NUCLEO.includes('PROMPT_ORIGINAL="$PROMPT"') && NUCLEO.includes('executar_revisor ".retry"'),
+  'retificação inválida refaz apenas o lote original uma única vez');
 
 ok(NUCLEO.includes('SP_CLAUDE_MAX_BUDGET_USD_NORMAL:-0.35') &&
    NUCLEO.includes('SP_CLAUDE_MAX_BUDGET_USD_CRITICA:-0.60') &&

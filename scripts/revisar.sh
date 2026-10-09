@@ -460,6 +460,9 @@ CARIMBO="$(date +%Y%m%d-%H%M%S)"
 OUT_DATADO="${OUT%.md}-$CARIMBO.md"
 LOG="${OUT%.md}.log"
 RASCUNHO="$(mktemp "${TMPDIR:-/tmp}/sp-revisao-out.XXXXXX")"
+# Guarde o pedido completo. Se a retificação formal também vier vazia, repetimos
+# apenas este lote uma vez; nunca reabrimos os lotes já aprovados.
+PROMPT_ORIGINAL="$PROMPT"
 
 executar_revisor() {
   local sufixo="$1"
@@ -581,6 +584,17 @@ EOF
   executar_revisor ".veredito"
   mv "$RASCUNHO" "$OUT"; RASCUNHO=""
   VEREDITO=$(extrair_veredito "$OUT")
+  if [[ -z "$VEREDITO" ]]; then
+    echo '⚠️ retificação inválida; repetindo uma única vez a revisão original deste lote.'
+    PROMPT="$PROMPT_ORIGINAL"
+    {
+      echo
+      echo 'ATENÇÃO: a tentativa anterior não trouxe um VEREDITO legível. A sua resposta DEVE começar pelas três linhas obrigatórias; depois, se necessário, explique o achado concreto.'
+    } >> "$PROMPT"
+    executar_revisor ".retry"
+    mv "$RASCUNHO" "$OUT"; RASCUNHO=""
+    VEREDITO=$(extrair_veredito "$OUT")
+  fi
 fi
 EXECUTOR=$(grep -m1 -E '^EXECUTOR:|^\*\*EXECUTOR:' "$OUT" || true)
 echo

@@ -12,6 +12,7 @@
 // link de grupo já criado.
 // Convites de organização também voltam a notificar exclusivamente pelo UID confirmado.
 // A inscrição de dupla usa a mesma ponte estrutural de origem que o sorteio.
+// A revisão de publicação reaproveita pareceres idênticos e recupera uma resposta inválida por lote.
 // 2.3.310 — A dashboard passa a usar a mesma definição de fase da chave: uma eliminatória
 // que começa na R4 aparece como Oitavas de Final, seguida de Quartas, Semifinais e Final,
 // em vez de exibir o número cru da rodada. A restauração pré-publicação continua restrita
