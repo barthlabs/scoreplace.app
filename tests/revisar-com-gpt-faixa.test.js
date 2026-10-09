@@ -161,6 +161,30 @@ r = runLab(labCLAUDE, ['plano', planoAdapt], { CLAUDE_BIN: fakeClaude, FAKE_MODE
 ok(r.code === 2, 'Claude pede investigação: bloqueia sem gastar outra chamada — code ' + r.code);
 ok(fs.readFileSync(modelos, 'utf8') === 'haiku\n', 'Claude faz uma única chamada Haiku, sem escalada automática');
 
+// Resposta conclusiva sem o cabeçalho é um erro de protocolo, nunca uma aprovação por
+// inferência. O núcleo cobra uma única retificação curta do mesmo revisor; só o token
+// formal da segunda resposta libera o fluxo.
+const fakeClaudeSemCabecalho = path.join(lab, 'claude-sem-cabecalho.sh');
+const chamadasSemCabecalho = path.join(lab, 'chamadas-sem-cabecalho.txt');
+fs.writeFileSync(fakeClaudeSemCabecalho, `#!/usr/bin/env bash
+n=0; [[ -f "${'$'}FAKE_CHAMADAS" ]] && n=$(cat "${'$'}FAKE_CHAMADAS")
+n=$((n+1)); printf '%s' "${'$'}n" > "${'$'}FAKE_CHAMADAS"
+if [[ "${'$'}n" -eq 1 ]]; then
+  result='O lote atende todas as condições de saída. Pode executar e publicar.'
+else
+  result=$'VEREDITO: APROVADO\\nEXECUTOR: modelo=haiku esforço=medium — retificação formal\\nESCALAR: NAO'
+fi
+node -e 'process.stdout.write(JSON.stringify({result:process.argv[1],usage:{input_tokens:1,output_tokens:1},total_cost_usd:0}))' "${'$'}result"
+`);
+fs.chmodSync(fakeClaudeSemCabecalho, 0o755);
+r = runLab(labCLAUDE, ['plano', planoAdapt], {
+  CLAUDE_BIN: fakeClaudeSemCabecalho, FAKE_CHAMADAS: chamadasSemCabecalho,
+});
+ok(r.code === 0 && /retificação estruturada/.test(r.out),
+  'parecer sem cabeçalho cobra retificação formal antes de aprovar — code ' + r.code);
+ok(fs.readFileSync(chamadasSemCabecalho, 'utf8') === '2',
+  'retificação de formato faz exatamente uma chamada adicional ao mesmo revisor');
+
 ok(NUCLEO.includes('SP_CLAUDE_MAX_BUDGET_USD_NORMAL:-0.35') &&
    NUCLEO.includes('SP_CLAUDE_MAX_BUDGET_USD_CRITICA:-0.60') &&
    NUCLEO.includes('--max-budget-usd "$CLAUDE_ORCAMENTO"') &&

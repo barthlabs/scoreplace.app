@@ -549,10 +549,37 @@ if [[ "$REVISOR" == claude && "$ESCALAR" == SIM ]]; then
   exit 2
 fi
 
-VEREDITO=$(grep -m1 -oE 'VEREDITO: *(APROVADO|RESSALVAS|BLOQUEIO)' "$OUT" | sed 's/VEREDITO: *//' || true)
-# Claude às vezes preserva o conteúdo obrigatório mas envolve a linha em `**`.
-# Aceitamos só o mesmo token explícito, nunca uma frase solta dizendo "aprovado".
-[[ -n "$VEREDITO" ]] || VEREDITO=$(grep -m1 -oE '\*\*VEREDITO: *(APROVADO|RESSALVAS|BLOQUEIO)\*\*' "$OUT" | sed -E 's/^\*\*VEREDITO: *//; s/\*\*$//' || true)
+extrair_veredito() {
+  local parecer="$1" v=""
+  v=$(grep -m1 -oE 'VEREDITO: *(APROVADO|RESSALVAS|BLOQUEIO)' "$parecer" | sed 's/VEREDITO: *//' || true)
+  # Claude às vezes preserva o conteúdo obrigatório mas envolve a linha em `**`.
+  # Aceitamos só o mesmo token explícito, nunca uma frase solta dizendo "aprovado".
+  [[ -n "$v" ]] || v=$(grep -m1 -oE '\*\*VEREDITO: *(APROVADO|RESSALVAS|BLOQUEIO)\*\*' "$parecer" | sed -E 's/^\*\*VEREDITO: *//; s/\*\*$//' || true)
+  printf '%s' "$v"
+}
+VEREDITO=$(extrair_veredito "$OUT")
+# Uma resposta sem o cabeçalho nunca é aprovada por inferência. Para não prender um
+# deploy por descumprimento meramente formal, cobramos uma única retificação curta do
+# MESMO revisor, sem reanalisar o código. Se ela continuar fora do contrato, o gate falha.
+if [[ -z "$VEREDITO" ]]; then
+  echo '⚠️ parecer sem cabeçalho formal; cobrando retificação estruturada do revisor.'
+  {
+    cat <<'EOF'
+Sua resposta anterior abaixo não cumpriu o formato obrigatório. Isto NÃO é uma nova
+revisão do código: classifique estritamente o parecer que você já emitiu. Responda
+EXATAMENTE com estas três linhas e nada mais:
+VEREDITO: APROVADO | RESSALVAS | BLOQUEIO
+EXECUTOR: modelo=<modelo> esforço=<esforço> — <motivo curto>
+ESCALAR: SIM | NAO
+
+PARECER A CLASSIFICAR:
+EOF
+    cat "$OUT"
+  } > "$PROMPT"
+  executar_revisor ".veredito"
+  mv "$RASCUNHO" "$OUT"; RASCUNHO=""
+  VEREDITO=$(extrair_veredito "$OUT")
+fi
 EXECUTOR=$(grep -m1 -E '^EXECUTOR:|^\*\*EXECUTOR:' "$OUT" || true)
 echo
 echo "════════ PARECER DO $(echo "$REVISOR" | tr a-z A-Z) ($MODO · faixa $FAIXA · ${TOKENS:-? tokens}) ════════"
