@@ -27,6 +27,9 @@ ok(r.fingerprint === sameReceipt.fingerprint && r.protectedFingerprint, 'projeç
 const legacySwiss = { format: 'Eliminatórias Simples', classifyFormat: 'swiss', currentStage: 'swiss', phases: [{ name: 'Classificatória', formatCode: 'liga', format: 'Suíço' }] };
 r = planLegacyPhaseProjection(legacySwiss, _window.FORMAT2.projectLegacyPhases);
 ok(r.changed && r.phases[0].classification && r.phases[0].classification.pairing && r.phases[0].classification.pairing.strategy === 'ranking_clusters', 'projetor traduz o marcador suíço legado para pareamento classificatório canônico');
+const canonicalSwiss = Object.assign({}, legacySwiss, { phases: r.phases });
+r = planLegacyPhaseProjection(canonicalSwiss, _window.FORMAT2.projectLegacyPhases);
+ok(!r.changed && r.reason === 'already-canonical', 'pareamento classificatório já canônico não volta a parecer pendente por identidade de objeto');
 const legacyMonarch = { phases: [{ name: 'Abertura', format: 'Rei/Rainha', drawMode: 'rei_rainha', reiRainha: true }] };
 r = planLegacyPhaseProjection(legacyMonarch, _window.FORMAT2.projectLegacyPhases);
 ok(r.changed && r.phases[0].kind === 'classification' && r.phases[0].formatCode === 'classification_rounds', 'Rei/Rainha legado sem código Liga continua uma classificatória');
