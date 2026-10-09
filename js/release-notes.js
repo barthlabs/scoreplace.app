@@ -1,4 +1,9 @@
-// 2.3.311 — Atualização consolidada de produção com as correções validadas desde a última publicação.
+// 2.3.311 — Rodadas classificatórias canônicas passam diretamente pelo sorteio antes da
+// transição pow2, respeitando a política da chave do torneio. A lista de inscritos preserva
+// cada conta por UID mesmo antes de os perfis hidratarem, sem colapsar participantes no mesmo
+// rótulo temporário. Inscritos manuais usam ID manual estável, e e-mail não volta a servir como
+// identidade ou rótulo público. O manifesto de callables, a revisão de convites e o preflight
+// de publicação foram alinhados ao caminho canônico atual.
 // 2.3.310 — A dashboard passa a usar a mesma definição de fase da chave: uma eliminatória
 // que começa na R4 aparece como Oitavas de Final, seguida de Quartas, Semifinais e Final,
 // em vez de exibir o número cru da rodada. A restauração pré-publicação continua restrita
