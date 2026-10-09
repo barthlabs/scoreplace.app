@@ -36,6 +36,11 @@ const i=src.indexOf('window._bracketNorm = function');
 vm.runInContext(src.slice(i),sandbox,{filename:'bracket-filter'});
 const F=sandbox.window._bracketApplyFilter;
 
+// O filtro não pode depender só deste DOM de mentira: o renderizador real do
+// card precisa expor o número operacional que a busca consulta.
+ok(/class="sp-match-card"[\s\S]{0,1200}data-match-num="\$\{matchNum != null \? matchNum : ''\}"/.test(src),
+  'o card real escreve data-match-num com o número do jogo');
+
 function vis(){return cards.map(c=>c.style.display!=='none');}
 
 input.value=''; F();
