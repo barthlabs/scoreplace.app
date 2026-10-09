@@ -2301,7 +2301,7 @@ window._buildPhase0Cfg = function (t) {
          * em recálculo e em fase posterior, o que é pior que não funcionar — funcionaria pela metade.
          * ⚠️ A Cloud Function do sorteio monta esta MESMA cfg pelo vendor. Um caminho só.
          * [[feedback_enumerar_todos_os_caminhos_antes_de_dar_por_pronto]] */
-        politicaDaChave: (phase0 && phase0.politicaDaChave) || t.politicaDaChave || null,
+        politicaDaChave: t.politicaDaChave || (phase0 && phase0.politicaDaChave) || null,
         drawMode: phaseDrawMode || t.drawMode || (rei ? 'rei_rainha' : 'sorteio'),
         reiRainha: rei,
         gruposCount: parseInt((phase0 && phase0.gruposCount) != null ? phase0.gruposCount : t.gruposCount, 10) || 4,
