@@ -282,12 +282,11 @@ window._restoreTournamentPrePublication = function (tId) {
            * onSnapshot é essencial: redesenhar antes com o objeto velho do AppStore
            * faz a chave e os placares continuarem visíveis mesmo depois de o servidor
            * tê-los apagado. [[regression_prepublication_restore_stale_screen]] */
-          if (result && result.tournament && typeof window._applyCFTournament === 'function') {
-            window._applyCFTournament(String(tId), result.tournament);
+          if (!result || result.ok !== true || !result.tournament || typeof window._applyCFTournament !== 'function') {
+            throw new Error('A restauração não devolveu o estado canônico confirmado. Atualize e tente novamente.');
           }
+          window._applyCFTournament(String(tId), result.tournament);
           if (typeof showNotification === 'function') showNotification('↩️ Pré-publicação restaurada', 'A grade e as duplas formadas foram preservadas; a chave e os placares foram apagados.', 'success');
-          var c = document.getElementById('view-container');
-          if (c && typeof window.renderTournaments === 'function') window.renderTournaments(c, String(tId));
         })
         .catch(function (err) {
           window._error && window._error('[restorePrePublication] server error:', err);
