@@ -87,6 +87,7 @@ function lerListaNomeada(fonte, nome) {
 }
 const DOMAIN_FILES = lerListaNomeada(fs.readFileSync(COPY_VENDOR, 'utf8'), 'DOMAIN_FILES');
 const DE_FUNCTIONS = lerListaNomeada(fs.readFileSync(COPY_VENDOR, 'utf8'), 'DE_FUNCTIONS');
+const CORE_TO_AUTODRAW = lerListaNomeada(fs.readFileSync(COPY_VENDOR, 'utf8'), 'CORE_TO_AUTODRAW');
 const DOMAIN_TO_FUNCTIONS = lerListaNomeada(fs.readFileSync(COPY_VENDOR, 'utf8'), 'DOMAIN_TO_FUNCTIONS');
 
 // Sanidade da própria trava: renomear/reformatar o `const FILES` no copy-vendor.js faria a
@@ -160,7 +161,7 @@ for (const f of DOMAIN_TO_FUNCTIONS) {
 // Se o draw-core.js ainda der require nele, o servidor roda um arquivo que o app já não
 // tem — drift na direção contrária, e igualmente silencioso.
 if (fs.existsSync(VENDOR_DIR)) {
-  const naLista = new Set(FILES.concat(DOMAIN_FILES, DE_FUNCTIONS));
+  const naLista = new Set(FILES.concat(DOMAIN_FILES, DE_FUNCTIONS, CORE_TO_AUTODRAW));
   // E o que vem de `functions/` também é conferido byte a byte — divergir ali é ter
   // duas cópias do formato do subdoc, que é o defeito que essa lista veio evitar.
   for (const f of DE_FUNCTIONS) {
@@ -176,6 +177,20 @@ if (fs.existsSync(VENDOR_DIR)) {
     if (!temDst) { divergentes.push({ f: f, motivo: 'ausente no vendor/ (roda `node functions-autodraw/copy-vendor.js`)' }); continue; }
     if (fs.readFileSync(src, 'utf8') !== fs.readFileSync(dst, 'utf8')) {
       divergentes.push({ f: f, motivo: 'vendor/ diverge de functions/' + f });
+    }
+  }
+  // Núcleos de servidor compartilhados também precisam ser autocontidos no
+  // bundle do autoDraw; imports ../functions funcionam localmente e quebram no
+  // Cloud Run, onde cada codebase recebe apenas seu próprio source bundle.
+  for (const f of CORE_TO_AUTODRAW) {
+    const src = path.join(root, 'functions', f);
+    const dst = path.join(VENDOR_DIR, f);
+    const hasSrc = fs.existsSync(src), hasDst = fs.existsSync(dst);
+    if (!hasSrc && !hasDst) continue;
+    if (!hasSrc) { fail.push('functions/' + f + ': FONTE AUSENTE, mas o vendor/ ainda tem a cópia.'); continue; }
+    if (!hasDst) { divergentes.push({ f, motivo: 'core compartilhado ausente no vendor/ (roda `node functions-autodraw/copy-vendor.js`)' }); continue; }
+    if (fs.readFileSync(src, 'utf8') !== fs.readFileSync(dst, 'utf8')) {
+      divergentes.push({ f, motivo: 'vendor/ diverge de functions/' + f });
     }
   }
   for (const nome of fs.readdirSync(VENDOR_DIR)) {

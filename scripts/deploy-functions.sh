@@ -113,15 +113,41 @@ deploy_dir() { # $1=dir(de onde rodar o firebase) $2=targets $3=descrição $4=p
   # ⛔ O CLI pode imprimir "Deploy complete!" e sair não-zero. Isso não pode derrubar um
   # deploy que chegou ao fim, mas também não pode transformar QUALQUER erro em sucesso: sem o
   # marcador explícito, não há evidência de publicação e o próximo codebase não deve rodar.
-  local _rc=0
-  local _log
+  # A frase final, porém, não apaga uma função que falhou para subir: health-check, atualização
+  # recusada e erro de quota deixam o codebase parcialmente velho. Esses casos NUNCA podem
+  # gerar carimbo verde nem abrir caminho para o hosting.
+  # O CLI dispara as mutações de cada alvo em paralelo. Mandar ~100 funções de
+  # uma vez excede a quota regional, produz rollout parcial e, pior, pode
+  # acabar com "Deploy complete" no rodapé. Dez por leva mantém cada mutação
+  # verificável; a próxima só começa depois da anterior terminar saudável.
+  local _batch_size=10 _batch="" _count=0 _target
+  local IFS=','
+  read -r -a _targets <<< "$targets"
+  for _target in "${_targets[@]}"; do
+    _batch="${_batch:+$_batch,}$_target"
+    _count=$((_count + 1))
+    if [ "$_count" -eq "$_batch_size" ]; then
+      _deploy_batch "$dir" "$_batch" "$desc"
+      _batch=""; _count=0
+    fi
+  done
+  [ -z "$_batch" ] || _deploy_batch "$dir" "$_batch" "$desc"
+}
+
+_deploy_batch() { # $1=dir $2=targets (máx. 10) $3=descrição
+  local dir="$1" targets="$2" desc="$3" _rc=0 _log
   _log="$(mktemp)"
+  echo "   · publicando lote: $(echo "$targets" | tr ',' '\n' | wc -l | tr -d ' ') função(ões)"
   if (cd "$dir" && firebase deploy --project "$PROJECT" --non-interactive --only "$targets") >"$_log" 2>&1; then
     _rc=0
   else
     _rc=$?
   fi
   cat "$_log"
+  if grep -Eqi 'Could not create or update Cloud Run service|Container Healthcheck failed|failed to update function|Quota exceeded' "$_log"; then
+    rm -f "$_log"
+    die "$desc: Firebase relatou função sem revisão saudável ou atualização recusada — abortando sem carimbar"
+  fi
   if [[ "$_rc" != "0" ]]; then
     if ! grep -q 'Deploy complete!' "$_log"; then
       rm -f "$_log"

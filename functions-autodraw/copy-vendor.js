@@ -144,3 +144,15 @@ for (const f of DE_FUNCTIONS) {
   fs.copyFileSync(src, path.join(OUT_DIR, f));
   console.log(`[copy-vendor] vendor/${f} (de functions/)`);
 }
+
+/* A projeção lossless das fases é usada tanto pelo backfill administrativo
+ * quanto pelo autoDraw. O artefato do autoDraw é implantado isoladamente:
+ * exigir `../functions/...` dele funciona no checkout, mas quebra o container
+ * publicado porque esse diretório não existe dentro do source bundle. */
+const CORE_TO_AUTODRAW = ['legacy-phase-projection-core.js'];
+for (const f of CORE_TO_AUTODRAW) {
+  const src = path.resolve(__dirname, '..', 'functions', f);
+  if (!fs.existsSync(src)) { console.error(`[copy-vendor] FONTE AUSENTE: ${src}`); process.exit(1); }
+  fs.copyFileSync(src, path.join(OUT_DIR, f));
+  console.log(`[copy-vendor] vendor/${f} (core compartilhado de functions/)`);
+}

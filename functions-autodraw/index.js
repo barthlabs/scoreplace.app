@@ -83,7 +83,10 @@ const _matchReadyNotifications = require('./match-ready-notifications-core.js');
 const _leagueSeasonCore = require('./league-season-core.js');
 /* A mesma decisão de projeção usada pelo backfill administrativo. Mantê-la pura
  * impede que uma escrita normal e a migração interpretem legado de formas distintas. */
-const _legacyPhaseProjection = require('../functions/legacy-phase-projection-core.js');
+// O codebase do autoDraw é enviado como artefato isolado. Este núcleo é
+// sincronizado por copy-vendor.js para que o container nunca dependa de
+// ../functions, diretório que não existe em produção.
+const _legacyPhaseProjection = require('./vendor/legacy-phase-projection-core.js');
 /* Quais campos de `fmt2` um torneio JÁ SORTEADO ainda aceita mudar (os prazos).
  * ⛔ O require mora AQUI EM CIMA, com os outros: o bloco de configuração lá embaixo é
  * recortado e avaliado por `tests/l7-creation-replay-behavior.test.js` num escopo sem

@@ -45,5 +45,10 @@ texto = (r.stdout || '') + (r.stderr || '');
 assert.equal(r.status, 0, 'marcador explícito permite seguir mesmo após exit não-zero do CLI');
 assert.match(texto, /DEPOIS de confirmar o deploy/, 'o aviso descreve a condição excepcional sem fingir que não houve erro');
 
+r = executar('✔ Deploy complete!\nCould not create or update Cloud Run service autodraw, Container Healthcheck failed.', 1);
+texto = (r.stdout || '') + (r.stderr || '');
+assert.notEqual(r.status, 0, 'health check falho invalida o marcador genérico de conclusão');
+assert.match(texto, /sem revisão saudável ou atualização recusada/, 'o motivo impede carimbo falso após falha de Cloud Run');
+
 fs.rmSync(falso, { recursive: true, force: true });
 console.log('✅ deploy-functions só confirma falha depois de evidência explícita');
