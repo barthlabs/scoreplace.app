@@ -432,6 +432,14 @@ EOF
   else
     echo "=== DIFF A REVISAR ($BASE_DIFF..HEAD + alterações não commitadas) ==="
     [[ -n "${SP_REVIEW_PART:-}" ]] && echo "=== LOTE ${SP_REVIEW_PART}: todos os lotes precisam ser aprovados antes da publicação ==="
+    if [[ -n "${SP_REVIEW_CROSS_BATCH_EVIDENCE:-}" && -f "$SP_REVIEW_CROSS_BATCH_EVIDENCE" ]]; then
+      echo "=== EVIDÊNCIA CRUZADA ENTRE LOTES ==="
+      cat "$SP_REVIEW_CROSS_BATCH_EVIDENCE"
+      echo
+      echo "A evidência cruzada acima é executada pelo orquestrador nesta submissão."
+      echo "Ela demonstra contratos que podem ter fonte, vendor, teste e boundary em lotes distintos;"
+      echo "não trate essa separação de transporte como ausência sem apontar uma divergência concreta."
+    fi
     if [[ -n "${SP_REVIEW_EVIDENCE:-}" && -f "$SP_REVIEW_EVIDENCE" ]]; then
       echo "=== EVIDÊNCIA DE VALIDAÇÃO EXECUTADA PELO PIPELINE ==="
       cat "$SP_REVIEW_EVIDENCE"

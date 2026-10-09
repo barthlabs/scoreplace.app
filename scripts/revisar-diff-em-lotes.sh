@@ -21,6 +21,33 @@ ALL="$TMP/all-files"
 } | sed '/^$/d' | sort -u > "$ALL"
 [[ -s "$ALL" ]] || { echo "✓ nenhum arquivo para revisar"; exit 0; }
 
+# Um lote é apenas transporte: fonte TypeScript, sua cópia vendor e o boundary que
+# a usa podem cair em lotes diferentes. Sem uma evidência curta e reproduzível, o
+# revisor de um lote de vendor tende a tratar essa separação como ausência do
+# contrato e bloqueia um corte que a árvore e a suíte já provaram íntegro.
+#
+# Esta evidência NÃO aprova o corte nem substitui a revisão. Ela só entrega a
+# prova cruzada mínima ao revisor de todos os lotes, uma vez por execução.
+CROSS_EVIDENCE="$TMP/cross-batch-evidence"
+if rg -q '^functions-autodraw/vendor/' "$ALL" 2>/dev/null; then
+  {
+    echo 'Evidência cruzada do corte (fonte, vendor e boundary):'
+    if [[ -f src/domain/registration-roster.ts ]]; then
+      echo '✓ fonte TypeScript: src/domain/registration-roster.ts existe'
+    else
+      echo '✗ fonte TypeScript: src/domain/registration-roster.ts ausente'; exit 1
+    fi
+    node scripts/build-domain.js --check
+    node tests/vendor-do-autodraw-nao-fica-velho.test.js
+    node functions-autodraw/test-persist-boundary.js
+    node functions-autodraw/test-drawinitial.js
+    echo 'Chamadas de canonicalização no boundary de escrita:'
+    rg -n 'canonicalizeTournamentPhases' js/firebase-db.js functions-autodraw/index.js
+    echo 'Sanitização de identidade no boundary de escrita:'
+    rg -n '_stripStoredNamesForUidEntries' js/firebase-db.js functions-autodraw/index.js
+  } > "$CROSS_EVIDENCE"
+fi
+
 batch=1; bytes=0; current="$TMP/batch-$batch"
 touch "$current"
 while IFS= read -r file; do
@@ -40,6 +67,7 @@ for file in "$TMP"/batch-*; do
   if [[ "$MODE" == --plan ]]; then sed 's/^/   /' "$file"; continue; fi
   validate=0; [[ "$n" == 1 ]] && validate=1
   SP_REVIEW_BASE="$BASE" SP_REVIEW_FILE_LIST="$file" SP_REVIEW_PART="$n-de-$count" \
+    SP_REVIEW_CROSS_BATCH_EVIDENCE="$CROSS_EVIDENCE" \
     SP_REVIEW_VALIDATE="$validate" "$ROOT/scripts/revisar.sh" diff
 done
 if [[ "$MODE" == --plan ]]; then
