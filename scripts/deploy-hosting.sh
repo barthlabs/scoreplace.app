@@ -354,7 +354,7 @@ echo "  ✓ CACHE_NAME do SW = versão do app ($VER_APP)"
 # Escape só com uma linha `sem-gpt: <motivo>` num commit a publicar, e SP_SEM_GPT=1.
 fase "nota+gates locais"
 echo "▸ 1.8 revisão cruzada sobre o corte $BASE_CORTE..HEAD…"
-if ! SP_REVIEW_BASE="$BASE_CORTE" SP_REVIEW_VALIDATE=1 "$RAIZ/scripts/revisar.sh" diff; then
+if ! SP_REVIEW_BASE="$BASE_CORTE" "$RAIZ/scripts/revisar-diff-em-lotes.sh"; then
   echo
   echo "✗ O REVISOR NÃO APROVOU (ou não respondeu) — nada foi empurrado nem publicado."
   echo "  Parecer em .claude/tmp/parecer-<revisor>-diff.md: atenda os pontos e rode de novo (o"

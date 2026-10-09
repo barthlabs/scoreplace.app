@@ -155,6 +155,25 @@ arquivos_do_diff() {
     git ls-files --others --exclude-standard 2>/dev/null || true
   } | sed '/^$/d' | sort -u
 }
+# Um orquestrador de lotes pode restringir a revisão a uma lista explícita. Sem
+# essa variável, a revisão preserva o comportamento histórico e cobre o corte
+# inteiro.
+arquivos_do_escopo() {
+  if [[ -n "${SP_REVIEW_FILE_LIST:-}" ]]; then
+    [[ -f "$SP_REVIEW_FILE_LIST" ]] || { echo "✗ SP_REVIEW_FILE_LIST não encontrado: $SP_REVIEW_FILE_LIST" >&2; return 1; }
+    cat "$SP_REVIEW_FILE_LIST"
+  else
+    arquivos_do_diff
+  fi
+}
+diff_do_escopo() {
+  local f
+  while IFS= read -r f; do
+    [[ -n "$f" ]] || continue
+    git diff "$BASE_DIFF"...HEAD -- "$f" 2>/dev/null || true
+    git diff HEAD -- "$f" 2>/dev/null || true
+  done < "$LISTA"
+}
 # plano: todo caminho citado — EXISTINDO OU NÃO (arquivo novo em functions/ é crítico antes de nascer)
 arquivos_do_plano() {
   grep -oE '[A-Za-z0-9_][A-Za-z0-9_./-]*\.(js|mjs|rules|json|html|css|sh|toml|md)' "$1" \
@@ -228,7 +247,7 @@ case "$MODO" in
     PLANO="${ARGS[0]:-}"; [[ -f "$PLANO" ]] || { echo "✗ plano não encontrado: '$PLANO'"; uso; }
     arquivos_do_plano "$PLANO" > "$LISTA" ;;
   diff)
-    arquivos_do_diff > "$LISTA" ;;
+    arquivos_do_escopo > "$LISTA" ;;
 esac
 
 FAIXA=$(faixa_para "$LISTA")
@@ -321,7 +340,8 @@ fi
 if [[ "$MODO" == "plano" ]]; then
   SLUG=$(basename "$PLANO" .md | sed 's/^plano-//'); OUT="$OUTDIR/parecer-$REVISOR-plano-$SLUG.md"
 else
-  OUT="$OUTDIR/parecer-$REVISOR-diff.md"
+  PARTE="${SP_REVIEW_PART:-}"
+  OUT="$OUTDIR/parecer-$REVISOR-diff${PARTE:+-$PARTE}.md"
 fi
 # Para `diff`, um parecer aprovado só pode ser reaproveitado se o conteúdo exato
 # revisado for idêntico. Assim o deploy não cobra/reaguarda o Claude quando nada
@@ -330,7 +350,7 @@ RECIBO="$OUT.sha256"
 RECIBO_BASE="$OUT.base"
 FINGERPRINT=""
 if [[ "$MODO" == diff ]]; then
-  FINGERPRINT=$( { git diff "$BASE_DIFF"...HEAD 2>/dev/null; git diff HEAD 2>/dev/null; git ls-files --others --exclude-standard -z 2>/dev/null | xargs -0 shasum -a 256 2>/dev/null; } | shasum -a 256 | awk '{print $1}')
+  FINGERPRINT=$( { diff_do_escopo; while IFS= read -r f; do [[ -f "$f" ]] && shasum -a 256 "$f"; done < "$LISTA"; } | shasum -a 256 | awk '{print $1}')
   if [[ -s "$OUT" && -s "$RECIBO" && "$(cat "$RECIBO")" == "$FINGERPRINT" ]] && grep -qE '(^|\*\*)VEREDITO: *APROVADO' "$OUT"; then
     echo "  ✓ parecer APROVADO reaproveitado: diff idêntico ($FINGERPRINT)."
     exit 0
@@ -404,6 +424,7 @@ EOF
     echo "=== PLANO A REVISAR (arquivo: $PLANO) ==="; cat "$PLANO"
   else
     echo "=== DIFF A REVISAR ($BASE_DIFF..HEAD + alterações não commitadas) ==="
+    [[ -n "${SP_REVIEW_PART:-}" ]] && echo "=== LOTE ${SP_REVIEW_PART}: todos os lotes precisam ser aprovados antes da publicação ==="
     if [[ -n "${SP_REVIEW_EVIDENCE:-}" && -f "$SP_REVIEW_EVIDENCE" ]]; then
       echo "=== EVIDÊNCIA DE VALIDAÇÃO EXECUTADA PELO PIPELINE ==="
       cat "$SP_REVIEW_EVIDENCE"
@@ -411,7 +432,7 @@ EOF
       echo "A evidência acima foi produzida pelo pipeline nesta execução. Não peça novamente os mesmos comandos; só bloqueie por defeito concreto do diff."
     fi
     echo "--- commits à frente da base do corte:"; git log --oneline "$BASE_DIFF"..HEAD 2>/dev/null || true
-    echo "--- diff:"; git diff "$BASE_DIFF"...HEAD 2>/dev/null || true; git diff HEAD 2>/dev/null || true
+    echo "--- diff:"; diff_do_escopo
     git ls-files --others --exclude-standard -z 2>/dev/null | while IFS= read -r -d '' f; do
       echo "--- arquivo NOVO não rastreado: $f"; sed -n '1,400p' "$f"
     done
