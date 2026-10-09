@@ -51,6 +51,12 @@ const partsOf = async (id) => ((await T(id).get()).data().participants || []).ma
   await replicateRosterToSandbox(db, "ORIG", (sb) => enrollCore.computeEnroll(sb, ana, null, now));
   ok((await partsOf("ORIG_SB")).indexOf("uA") === -1, "2: SB sorteado NÃO recebe replicação");
 
+  // (2b) Sandbox materializado não pode receber a projeção legada, mesmo se
+  // um chamador antigo tentar replicar depois da transição canônica.
+  await seed({}, { canonicalRegistrationMigration: { fingerprint: "canon-sb" } });
+  await replicateRosterToSandbox(db, "ORIG", (sb) => enrollCore.computeEnroll(sb, ana, null, now));
+  ok((await partsOf("ORIG_SB")).indexOf("uA") === -1, "2b: SB canônico NÃO recebe replicação legada");
+
   // (3) mão única: partindo do id do SB, a query não acha SB-filho → nada replica.
   await seed({}, { participants: [ana], memberUids: ["uDEV", "uA"] });
   const r3 = await replicateRosterToSandbox(db, "ORIG_SB", (sb) => enrollCore.computeEnroll(sb, { uid: "uX" }, null, now));

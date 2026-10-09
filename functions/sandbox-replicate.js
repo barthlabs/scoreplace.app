@@ -23,6 +23,12 @@ async function replicateRosterToSandbox(db, origId, computeFn) {
           const snap = await tx.get(sbDoc.ref);
           if (!snap.exists) return false;
           const sb = snap.data();
+          // Uma migração é por documento de torneio. Se o Sandbox já foi
+          // materializado, ele não pode receber a projeção legada de uma
+          // operação no original, ainda que algum chamador antigo alcance esta
+          // função por engano. O caller canônico não chama replicação legada.
+          const migration = (sb && sb.canonicalRegistrationMigration) || {};
+          if (typeof migration.fingerprint === "string" && migration.fingerprint) return false;
           const drawn = (Array.isArray(sb.matches) && sb.matches.length > 0) ||
             (Array.isArray(sb.rounds) && sb.rounds.length > 0) ||
             (Array.isArray(sb.groups) && sb.groups.length > 0);

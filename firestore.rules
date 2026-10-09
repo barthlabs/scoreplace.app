@@ -539,6 +539,26 @@ service cloud.firestore {
           && igual('teamOrigins');
       }
 
+      /* Depois da materialização, `registrations` é a fonte de verdade do
+       * elenco. `elencoIntacto()` já impede o navegador de alterar o roster
+       * para qualquer torneio; esta guarda separada torna o contrato canônico
+       * explícito e protege contra uma futura exceção de agenda/placar que
+       * eventualmente relaxe a trava legada. A Function usa Admin SDK e
+       * continua sendo a única porta de mutação de `registrations`.
+       *
+       * Importante: a decisão usa o documento existente (`resource`), nunca
+       * o payload. Assim ninguém cria o marcador e altera `participants` no
+       * mesmo PATCH para atravessar a fronteira. */
+      function migracaoCanonicaAtiva() {
+        let migration = d0().get('canonicalRegistrationMigration', {});
+        return migration is map
+          && migration.get('fingerprint', '') is string
+          && migration.get('fingerprint', '').size() > 0;
+      }
+      function rosterLegadoProtegidoAposMigracao() {
+        return !migracaoCanonicaAtiva() || elencoIntacto();
+      }
+
       function faseIntacta() {
         return igualZeroBase('currentPhaseIndex')
           && igualZeroBase('_phaseMaterialized')
@@ -717,6 +737,7 @@ service cloud.firestore {
         )
         && (faseIntacta() || ehResetOk())
         && elencoIntacto()
+        && rosterLegadoProtegidoAposMigracao()
         && categoriasTipadasIntactas();
 
       // Delete: admins only.
