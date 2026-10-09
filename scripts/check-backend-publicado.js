@@ -45,9 +45,32 @@ function ultimoDe(caminhos) {
   try { return git(['log', '-1', '--format=%H', '--'].concat(caminhos)); } catch (e) { return null; }
 }
 
+// O codebase autodraw não envia `test-*.js` (ver firebase.json). Um teste novo
+// precisa passar na revisão, mas não altera o artefato publicado; tratá-lo como
+// backend pendente obriga um redeploy caro de 100 funções e cria um carimbo que
+// afirma uma necessidade inexistente. Todo arquivo que pode entrar no bundle
+// continua exigindo deploy, inclusive vendor, package e firebase.json.
+function ultimoAutodrawImplantavel() {
+  let commits;
+  try { commits = git(['log', '--format=%H', '--', 'functions-autodraw']).split('\n').filter(Boolean); }
+  catch (e) { return null; }
+  for (const sha of commits) {
+    let changed = [];
+    try { changed = git(['diff-tree', '--no-commit-id', '--name-only', '-r', sha]).split('\n').filter(Boolean); }
+    catch (e) { continue; }
+    if (changed.some((file) => file.startsWith('functions-autodraw/') &&
+      !/^functions-autodraw\/test-[^/]+\.js$/.test(file))) return sha;
+  }
+  return '';
+}
+
+function ultimoDoEscopo(nome, caminhos) {
+  return nome === 'autodraw' ? ultimoAutodrawImplantavel() : ultimoDe(caminhos);
+}
+
 if (iCarimbar !== -1) {
   const e = ESCOPOS[escopoPedido];
-  const sha = ultimoDe(e.caminhos);
+  const sha = ultimoDoEscopo(escopoPedido, e.caminhos);
   if (!sha) { console.log('⚠️ sem git/mudança aqui — nada a carimbar em ' + escopoPedido + '.'); process.exit(0); }
   fs.writeFileSync(path.join(RAIZ, e.carimbo), sha + '\n');
   console.log('✓ carimbado (' + escopoPedido + '): publicado em ' + sha.slice(0, 8));
@@ -57,7 +80,7 @@ if (iCarimbar !== -1) {
 let falhou = false;
 Object.keys(ESCOPOS).forEach((nome) => {
   const e = ESCOPOS[nome];
-  const ultimo = ultimoDe(e.caminhos);
+  const ultimo = ultimoDoEscopo(nome, e.caminhos);
   if (ultimo === null) { console.log('⚠️ sem git aqui — ' + nome + ' não conferido.'); return; }
   if (!ultimo) { console.log('✓ ' + nome + ' nunca mudou neste repositório.'); return; }
   const arq = path.join(RAIZ, e.carimbo);
