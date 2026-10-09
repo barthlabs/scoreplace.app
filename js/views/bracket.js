@@ -10448,6 +10448,14 @@ window._bracketApplyFilter = function () {
     var _casa = !q;
     if (!_casa) {
       _casa = window._buscaCasa(c.getAttribute('data-players') || '', q);
+      // O número é identidade operacional do jogo, não nome de atleta. Mantemos a
+      // busca textual normal (inclusive alguém chamado "168"), mas uma consulta só
+      // numérica também encontra o card cujo JOGO tem aquele número. O prefixo permite
+      // localizar "168" dentro de "JOGO 168" sem fazer palavras como "jogo" trazerem
+      // todos os cards da chave.
+      if (!_casa && /^\d+$/.test(q)) {
+        _casa = window._buscaCasa(c.getAttribute('data-match-num') || '', q);
+      }
       /* ⛔ A REDE LÊ SÓ OS NOMES — NÃO O CARD INTEIRO. Escrito assim depois de eu quebrar
        * a busca em produção na 2.1.99: a 1ª versão casava com `c.textContent`, que carrega
        * "JOGO 116", o placar e os botões ("Aplicar W.O.", "Cheguei", "Ao Vivo", "Propor

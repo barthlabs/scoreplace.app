@@ -20,9 +20,9 @@ function mkEl(attrs, parent){
 const groupBox=mkEl({'data-group-box':'1'});
 const colA=mkEl({},groupBox), colB=mkEl({});
 const cards=[
-  mkEl({'data-players':'José Silva | Ana'},colA),
-  mkEl({'data-players':'Bruno / Carla | Bruno | Carla'},colA),
-  mkEl({'data-players':'Dinho | Elza'},colB),
+  mkEl({'data-players':'José Silva | Ana','data-match-num':'167'},colA),
+  mkEl({'data-players':'Bruno / Carla | Bruno | Carla','data-match-num':'168'},colA),
+  mkEl({'data-players':'Dinho 168 | Elza','data-match-num':'169'},colB),
 ];
 const empty={style:{}};
 const input={value:''};
@@ -53,6 +53,11 @@ ok(vis()[0]===true,'acento-insensitive: "jose" devia achar "José"');
 input.value='carla'; F();
 ok(vis()[1]===true,'membro de dupla devia casar sozinho');
 
+// A mesma busca numérica encontra tanto o número operacional do JOGO quanto uma pessoa
+// cujo nome contenha os mesmos dígitos; ela não depende do texto visual "JOGO 168".
+input.value='168'; F();
+ok(JSON.stringify(vis())==='[false,true,true]', '"168" acha o JOGO 168 e pessoa com 168 no nome — '+JSON.stringify(vis()));
+
 input.value='zzz'; F();
 ok(vis().every(v=>!v),'busca sem resultado esconde tudo');
 ok(empty.style.display==='block','busca sem resultado mostra "Nenhum jogo encontrado"');
@@ -71,9 +76,9 @@ ok(groupBox.style.display!=='none','limpar a busca restaura o box do grupo');
 
 // "Só meus jogos" e a busca decidem JUNTOS o mesmo display (v1.6.86). Antes eram dois
 // loops separados e o toggle desfazia a busca.
-cards[0].getAttribute=(k)=>({'data-players':'José Silva | Ana','data-my-match':'1'})[k];
-cards[1].getAttribute=(k)=>({'data-players':'Bruno / Carla | Bruno | Carla','data-my-match':'0'})[k];
-cards[2].getAttribute=(k)=>({'data-players':'Dinho | Elza','data-my-match':'0'})[k];
+cards[0].getAttribute=(k)=>({'data-players':'José Silva | Ana','data-match-num':'167','data-my-match':'1'})[k];
+cards[1].getAttribute=(k)=>({'data-players':'Bruno / Carla | Bruno | Carla','data-match-num':'168','data-my-match':'0'})[k];
+cards[2].getAttribute=(k)=>({'data-players':'Dinho 168 | Elza','data-match-num':'169','data-my-match':'0'})[k];
 sandbox.window._showOnlyMyMatches=true; input.value=''; F();
 ok(JSON.stringify(vis())==='[true,false,false]','só meus jogos: fica só o card do usuário');
 ok(colB.style.display==='none','só meus jogos: coluna sem jogo meu some');
