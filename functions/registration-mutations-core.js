@@ -109,6 +109,18 @@ function pair(tournamentId, registrations, registrationIds) {
   return { outcome: 'paired', fixedPairId, updates };
 }
 
+/* A UI pode conhecer dois participantes em várias categorias paralelas. Nome
+ * jamais desempata essa situação: a categoria explícita é parte da identidade
+ * da vaga. Estas fachadas transformam somente UID/ID manual + categoryId nos
+ * document IDs determinísticos antes de chamar o mesmo motor de dupla. */
+function pairParticipants(tournamentId, registrations, first, second, categoryId) {
+  const category = text(categoryId);
+  if (!category) throw new Error('formar dupla exige categoryId explícito');
+  const firstId = registrationId(participantKey(first || {}), category);
+  const secondId = registrationId(participantKey(second || {}), category);
+  return pair(tournamentId, registrations, [firstId, secondId]);
+}
+
 function split(tournamentId, registrations, registrationIds) {
   const byId = indexRegistrations(tournamentId, registrations);
   const ids = (Array.isArray(registrationIds) ? registrationIds : []).map(text).filter(Boolean);
@@ -119,6 +131,14 @@ function split(tournamentId, registrations, registrationIds) {
     throw new Error('as inscrições não formam a mesma dupla');
   }
   return { outcome: 'split', updates: entries.map((item) => Object.assign({}, item, { fixedPairId: null })) };
+}
+
+function splitParticipants(tournamentId, registrations, first, second, categoryId) {
+  const category = text(categoryId);
+  if (!category) throw new Error('desfazer dupla exige categoryId explícito');
+  const firstId = registrationId(participantKey(first || {}), category);
+  const secondId = registrationId(participantKey(second || {}), category);
+  return split(tournamentId, registrations, [firstId, secondId]);
 }
 
 function transitionStatus(tournamentId, registrations, participant, fromStatuses, toStatus) {
@@ -164,7 +184,9 @@ module.exports = {
   indexRegistrations,
   enroll,
   pair,
+  pairParticipants,
   split,
+  splitParticipants,
   withdraw,
   leaveWaitlist,
 };

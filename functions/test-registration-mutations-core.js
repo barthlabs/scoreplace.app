@@ -28,10 +28,16 @@ ok('espera canônica preserva ID manual e rótulo sem usar nome como chave', wai
 const paired = M.pair('t1', [a, b, c], [a.registrationId, b.registrationId]);
 ok('forma dupla na mesma categoria', paired.outcome === 'paired' && paired.updates.length === 2 && paired.updates[0].fixedPairId === paired.updates[1].fixedPairId);
 ok('id de dupla é determinístico e independente da ordem', paired.fixedPairId === M.canonicalPairId('t1', 'cat-a', [b.registrationId, a.registrationId]));
+const pairedByIdentity = M.pairParticipants('t1', [a, b], { uid: 'u1' }, { uid: 'u2' }, 'cat-a');
+ok('formar dupla por identidade exige categoria explícita e não consulta nome', pairedByIdentity.outcome === 'paired' && pairedByIdentity.updates.length === 2);
+bad('recusa formar dupla por identidade sem categoria explícita', () => M.pairParticipants('t1', [a, b], { uid: 'u1' }, { uid: 'u2' }, ''));
 bad('recusa dupla entre categorias', () => M.pair('t1', [a, c], [a.registrationId, c.registrationId]));
 bad('recusa formar dupla sobre registro já pareado', () => M.pair('t1', [paired.updates[0], paired.updates[1]], [a.registrationId, b.registrationId]));
 const split = M.split('t1', paired.updates, [a.registrationId, b.registrationId]);
 ok('desfaz apenas a dupla indicada', split.outcome === 'split' && split.updates.every((item) => item.fixedPairId === null));
+const splitByIdentity = M.splitParticipants('t1', pairedByIdentity.updates, { uid: 'u1' }, { uid: 'u2' }, 'cat-a');
+ok('desfaz dupla por identidade e categoria explícitas', splitByIdentity.outcome === 'split' && splitByIdentity.updates.every((item) => item.fixedPairId === null));
+bad('recusa desfazer dupla por identidade sem categoria explícita', () => M.splitParticipants('t1', pairedByIdentity.updates, { uid: 'u1' }, { uid: 'u2' }, ''));
 bad('recusa desfazer registros que não são dupla', () => M.split('t1', [a, b], [a.registrationId, b.registrationId]));
 const waitlisted = registration('u4', 'cat-a', 'waitlisted');
 const leave = M.leaveWaitlist('t1', [a, waitlisted], { uid: 'u4' });

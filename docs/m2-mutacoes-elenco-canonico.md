@@ -52,7 +52,9 @@ apagado: histórico e idempotência permanecem auditáveis.
 
 As duas pessoas precisam ter registros elegíveis, na mesma categoria e sem
 `fixedPairId`. A formação grava o mesmo ID determinístico nos dois documentos;
-o desfazer remove esse ID dos dois. Não há fallback por nome nem busca de
+o desfazer remove esse ID dos dois. A chamada traz obrigatoriamente o
+`categoryId`: em categorias paralelas não existe inferência pelo nome, nem
+escolha arbitrária de uma das vagas. Não há fallback por nome nem busca de
 participante na projeção legada.
 
 ## Segurança e compatibilidade
