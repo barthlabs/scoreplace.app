@@ -238,6 +238,9 @@ window._resetTournamentToEnrollment = function (tId) {
   if (typeof showAlertDialog !== 'function') return;
   var _wasAuto = (t.drawManual !== true && t.drawFirstDate);
   var _isSB = (window._isSandboxTournament && window._isSandboxTournament(t));
+  // Este reset genérico é exclusivamente do Sandbox. A restauração de um
+  // torneio real tem uma intenção, permissão e mensagem próprias abaixo.
+  if (!_isSB) return;
   showAlertDialog(_isSB ? '🔄 Resetar o Sandbox?' : '🔄 Resetar para inscrições?',
     _isSB
       ? 'Isto <strong>re-sincroniza o Sandbox com o estado ATUAL do original</strong> e apaga o sorteio/resultados. Some tudo que você adicionou no teste (duplas formadas, +participante, placeholders). Não dá pra desfazer.'
@@ -249,7 +252,7 @@ window._resetTournamentToEnrollment = function (tId) {
       };
       // Confirmação fica na UI; limpeza, reagendamento e persistência são uma transação da CF.
       if (!window.FirestoreDB || typeof window.FirestoreDB._callFn !== 'function') return;
-      window.FirestoreDB._callFn('resetTournamentToEnrollment', { tournamentId: String(tId), restoreMode: 'prePublication' })
+      window.FirestoreDB._callFn('resetTournamentToEnrollment', { tournamentId: String(tId), restoreMode: 'sandbox' })
         .then(done)
         .catch(function (err) {
           window._error && window._error('[resetToEnrollment] server error:', err);
@@ -273,7 +276,7 @@ window._restoreTournamentPrePublication = function (tId) {
     'Preserva as configurações já ajustadas, os <strong>' + n + '</strong> inscritos e as <strong>duplas formadas manualmente</strong>. Não dá pra desfazer.',
     function () {
       if (!window.FirestoreDB || typeof window.FirestoreDB._callFn !== 'function') return;
-      window.FirestoreDB._callFn('resetTournamentToEnrollment', { tournamentId: String(tId) })
+      window.FirestoreDB._callFn('resetTournamentToEnrollment', { tournamentId: String(tId), restoreMode: 'prePublication' })
         .then(function () {
           if (typeof showNotification === 'function') showNotification('↩️ Pré-publicação restaurada', 'A grade e as duplas formadas foram preservadas; a chave e os placares foram apagados.', 'success');
           var c = document.getElementById('view-container');

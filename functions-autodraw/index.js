@@ -1619,17 +1619,19 @@ exports.resetTournamentToEnrollment = onCall(async request => {
     if (!_isTournamentAdmin(t, uid)) {
       throw _drawFail('permission-denied', 'Só a organização reseta o torneio.', { tId, uid });
     }
-    // A restauração de um torneio publicado é uma exceção administrativa explícita.
-    // O escape hatch genérico segue reservado ao sandbox; um cliente não pode forjar
-    // o botão de pré-publicação para apagar uma chave de outro torneio.
-    if (restoreMode === 'prePublication' && t.allowPrePublicationRestore !== true) {
-      throw _drawFail('permission-denied', 'A restauração pré-publicação não está habilitada para este torneio.', { tId, uid });
+    // Não há reset genérico para torneio real. Cada intenção tem uma autorização
+    // própria e explícita: Sandbox ou o único torneio liberado para voltar ao
+    // estado imediatamente anterior à publicação.
+    const isSandboxRestore = restoreMode === 'sandbox' && t.isSandbox === true;
+    const isPrePublicationRestore = restoreMode === 'prePublication' && t.allowPrePublicationRestore === true;
+    if (!isSandboxRestore && !isPrePublicationRestore) {
+      throw _drawFail('permission-denied', 'Esta restauração não está habilitada para este torneio.', { tId, uid, restoreMode });
     }
     const before = _antesDoMotor(t), wasAuto = t.drawManual !== true && t.drawFirstDate;
     drawWindow._clearTournamentDraw(t);
     t.status = 'open';
     // Preserva a configuração automática e impede que um horário já vencido redesenhe agora.
-    if (wasAuto) {
+    if (isSandboxRestore && wasAuto) {
       const at = new Date(String(t.drawFirstDate) + 'T' + String(t.drawFirstTime || '19:00')).getTime();
       if (!Number.isFinite(at) || at <= agora.getTime()) {
         const tomorrow = new Date(agora.getTime()); tomorrow.setDate(tomorrow.getDate() + 1);

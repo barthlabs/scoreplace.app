@@ -449,15 +449,16 @@ const achou = (c, p) => D.detectarMesmaPessoa(c, p).suspeito;
   ok('  → e-mail é opt-out INDEPENDENTE do in-app (quem desligou o sininho quer o e-mail)',
     /_avisarDuplicataSuspeita[\s\S]{0,3000}notifyEmail !== false/.test(idx));
 
-  // O trigger mantém índices e sinais privados, mas nome não é mais reserva.
+  // O trigger mantém índices e sinais privados; a reserva de nome mora nas
+  // Functions transacionais de perfil, não neste observador assíncrono.
   const bloco = idx.slice(idx.indexOf('exports.enforceUniqueDisplayName'));
   const corpo = bloco.slice(0, bloco.indexOf('\n);'));
   ok('enforceUniqueDisplayName NÃO renomeia mais (sem resolveUniqueName)',
     !/resolveUniqueName\(/.test(corpo));
   ok('  → ele não grava nameConflict nem reserva displayName',
     !/set\([\s\S]{0,180}nameConflict:\s*\{/.test(corpo) && !/collection\("displayNameClaims"\)/.test(corpo));
-  ok('a CF legada de disponibilidade responde sem bloquear homônimo',
-    /exports\.checkDisplayNameAvailability = onCall[\s\S]{0,900}return \{ livre: !!pedido, sugestoes: \[\] \}/.test(idx));
+  ok('a CF de disponibilidade consulta a reserva canônica, sem usar o detector de duplicata',
+    /exports\.checkDisplayNameAvailability = onCall[\s\S]{0,1200}displayNameClaimRef/.test(idx));
 
   // O cliente também parou de renomear no primeiro login.
   const auth = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'auth.js'), 'utf8');

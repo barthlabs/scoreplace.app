@@ -1,11 +1,10 @@
 'use strict';
 
 /*
- * Regressão da retirada da unicidade global de displayName.
+ * Regressão da reserva global de displayName.
  *
- * Dois usuários podem se chamar igual. A confirmação de identidade continua
- * dependente de credenciais comprovadas; nome não pode abrir uma tela que force
- * renomeação, nem decidir inscrição/mesclagem.
+ * O nome é exclusivo como apresentação, mas identidade, inscrição e mesclagem
+ * continuam dependentes de UID e de credenciais comprovadas — nunca do nome.
  *
  * node tests/name-conflict-merge-proof.test.js
  */
@@ -36,16 +35,20 @@ const availability = block(cf, 'exports.checkDisplayNameAvailability', 'exports.
 const duplicateDetector = block(cf, 'async function _detectarDuplicataNaBase', '// ─── scheduledAutoMergeCleanup');
 const duplicateOnProfileWrite = block(cf, 'exports.enforceUniqueDisplayName', '// ─── scheduledAutoMergeCleanup');
 
-ok(!/displayNameClaims|findDisplayNameConflict|already-exists/.test(init),
-  'criação de perfil não reserva nem recusa homônimo');
-ok(!/displayNameClaims|findDisplayNameConflict|already-exists/.test(update),
-  'edição de perfil não reserva nem recusa homônimo');
-ok(/livre:\s*!!pedido/.test(availability) && /sugestoes:\s*\[\]/.test(availability),
-  'porta de compatibilidade de disponibilidade não bloqueia nomes');
+ok(/reserveDisplayName/.test(init) && /already-exists/.test(init),
+  'criação reserva o nome em transação e recusa homônimo');
+ok(/reserveDisplayName/.test(update) && /already-exists/.test(update),
+  'edição reserva o novo nome em transação e recusa homônimo');
+ok(/displayNameClaimRef/.test(availability) && /claimData\.state !== "conflict"/.test(availability),
+  'porta de compatibilidade consulta a reserva canônica de nome');
 
 const modal = block(cli, 'function setupProfileModal()', 'window._profileVerifyPhone = function');
 ok(!/profile-name-conflict/.test(modal),
   'perfil não tem slot visual de “nome em uso”');
+const profileSave = block(cli, 'window.saveUserProfile = async function()', '// ── 2a. PRIVACIDADE × NOME');
+ok(!/where\('displayName_lower'|_triggerAccountMerge/.test(profileSave) &&
+  /Esse nome de exibição já está em uso/.test(cli),
+  'salvar perfil deixa a reserva bloquear no servidor, sem consulta ou mesclagem por nome');
 ok(!/setTimeout\(function \(\) \{ if \(typeof window\._askNameConflict/.test(cli),
   'login não abre pergunta por homônimo');
 ok(!/window\._profileHydrateNameConflict\(\);/.test(cli),

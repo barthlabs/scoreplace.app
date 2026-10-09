@@ -2345,8 +2345,8 @@ window._entrarDoRegister = function(mode, raw, password) {
          * Esta conta ainda não tem `users/{uid}`; chamar `saveUserProfile` usa a porta
          * de UPDATE, que a Function recusa para perfil inexistente. O catch antigo
          * escondia essa recusa e a tela dizia "conta criada" sem perfil. A Function
-         * cria o perfil do UID na mesma transação; homônimos são permitidos.
-         * [[project_perfil-servidor-sem-reserva-de-nome]] */
+         * cria o perfil do UID e reserva o nome na mesma transação. Nome em uso
+         * é rejeitado pelo servidor; UID continua sendo a identidade. */
         if (!(window.FirestoreDB && typeof window.FirestoreDB.initializeUserProfile === 'function')) {
           throw new Error('Não foi possível inicializar seu perfil. Tente novamente.');
         }
@@ -2356,15 +2356,15 @@ window._entrarDoRegister = function(mode, raw, password) {
           authProvider: 'password', email: user.email || raw.toLowerCase(), displayName: name
         }).then(function() {
           return user.updateProfile({ displayName: name }).catch(function(e) {
-            // A conta/perfil já são válidos; falha no espelho do Firebase Auth não cria homônimo.
+            // A conta/perfil já são válidos; falha no espelho do Firebase Auth não libera a reserva.
             if (window._warn) window._warn('[cadastro] não salvou nome no Firebase Auth:', e);
           });
         }).then(function() {
           if (typeof _sendRichVerificationEmail === 'function') _sendRichVerificationEmail(user, name);
           window._entrarStatus('✅ Conta criada! Enviamos um <b>link de confirmação</b> pro seu e-mail — abra pra ativar.<br><span style="color:var(--text-muted);">Não chegou (UOL/Hotmail)? Volte e cadastre com <b>celular</b> — recebe um código por SMS.</span>', 'success');
         }).catch(function(e) {
-          // `delete()` é permitido logo após createUser; se a reserva falhou, manter esta
-          // credencial impediria a tentativa seguinte com o mesmo e-mail e outro nome.
+          // `delete()` é permitido logo após createUser; se a criação do perfil
+          // falhou, manter a credencial deixaria uma conta Auth órfã.
           return user.delete().catch(function(delErr) {
             if (window._error) window._error('[cadastro] não apagou credencial sem perfil:', delErr);
           }).then(function() { throw e; });
@@ -2378,7 +2378,9 @@ window._entrarDoRegister = function(mode, raw, password) {
         } else if (code === 'auth/invalid-email') {
           window._entrarStatus('E-mail inválido.', 'warning');
         } else if (code === 'already-exists' || code === 'functions/already-exists') {
-          window._entrarStatus('Esse nome já está em uso. Escolha outro nome de exibição.', 'warning');
+          // A decisão veio da reserva transacional no servidor; o navegador
+          // apenas mostra o veredito, sem tentar descobrir ou mesclar titular.
+          window._entrarStatus('Esse nome de exibição já está em uso. Escolha outro nome.', 'warning');
           if (nameEl) nameEl.focus();
         } else {
           window._entrarStatus((error && error.message) || 'Não foi possível criar a conta.', 'error');
@@ -9107,74 +9109,6 @@ window._askDuplicateAccount = function () {
         }
       }
 
-      // ── 2.5 GATE DE NOME ÚNICO — merge-aware (v3.x) ─────────────────────────
-      // Se o nome MUDOU e já existe de OUTRA pessoa (uid diferente, não-tombstone),
-      // NÃO bloqueia de cara: se essa conta tem o MESMO telefone/e-mail que o
-      // usuário, é a conta ANTERIOR dele → oferece MESCLAR (relato: testadora
-      // reinstalou o app e foi barrada — "esse nome/telefone já é de outra pessoa"
-      // — em vez de recuperar a própria conta). Só bloqueia (pedindo variante)
-      // quando é de fato outra pessoa. Nome-que-é-contato é exceção. Fail-open
-      // (erro de consulta não trava o save). Consolida os antigos gates 2 + 2b.
-      if (finalName && finalName.trim().toLowerCase() !== (_oldDisplayName || '').trim().toLowerCase()
-          && !(typeof window._isUnfriendlyName === 'function' && window._isUnfriendlyName(finalName))
-          && window.FirestoreDB && window.FirestoreDB.db) {
-        try {
-          var _nameLower = finalName.trim().toLowerCase();
-          /* ⛔ A GÊMEA DISTO JÁ LIA O ESPELHO E ESTA NÃO — mesma pergunta, duas coleções.
-           * `FirestoreDB.isDisplayNameTaken` faz a consulta IDÊNTICA (`displayName_lower`,
-           * limite 8, ignorando lápide) e passou para `usersPublic` na 2.3.2; esta cópia
-           * ficou em `users` e baixava até 8 fichas inteiras para ler `id` e `mergedInto`.
-           * É o mesmo padrão que a auditoria já nomeou: a mitigação cobre um caminho e não
-           * o irmão. Os dois campos que a decisão usa estão no espelho.
-           * ⚠️ A marca de isenção abaixo tem de ficar COLADA na consulta: a varredura da
-           * lápide olha 3 linhas acima, e foi exatamente este comentário que a empurrou para
-           * fora do alcance e fez o portão acusar fuga. */
-          // user-vivo:isento — mesma exclusão do isDisplayNameTaken: conflito de nome
-          // IGNORA lápide (conta morta não reserva nome), nunca segue pro sobrevivente.
-          var _nameSnap = await window.FirestoreDB.db
-            .collection(window._COLECAO_PERFIL_PUBLICO || 'usersPublic')
-            .where('displayName_lower', '==', _nameLower).limit(8).get();
-          // Conflitos = outras contas VIVAS com o mesmo nome (exclui self e
-          // tombstones mergedInto — mesma exclusão do isDisplayNameTaken).
-          var _conflicts = _nameSnap.docs.filter(function (d) {
-            var dd = d.data() || {};
-            return d.id !== uid && !dd.mergedInto;
-          });
-          if (_conflicts.length > 0) {
-            // É a conta anterior do próprio usuário? (mesmo telefone OU e-mail)
-            var _myPhone = (typeof window._normalizePhoneE164 === 'function' && phoneDigits)
-              ? window._normalizePhoneE164(phoneDigits, phoneCountry || '55') : phoneDigits;
-            var _myEmail = (cu.email || '').toLowerCase();
-            var _mergeCand = null;
-            for (var _ci = 0; _ci < _conflicts.length; _ci++) {
-              var _cd = _conflicts[_ci].data() || {};
-              var _cdPhone = _cd.phone || '';
-              var _cdEmail = (_cd.email || _cd.email_lower || '').toLowerCase();
-              if ((_myPhone && _cdPhone && _myPhone === _cdPhone) ||
-                  (_myEmail && _cdEmail && _myEmail === _cdEmail)) {
-                _mergeCand = { uid: _conflicts[_ci].id, data: _cd };
-                break;
-              }
-            }
-            var _sbtn = document.getElementById('profile-save-btn');
-            if (_sbtn && typeof window._unspinButton === 'function') window._unspinButton(_sbtn);
-            if (_mergeCand) {
-              // Conta anterior do próprio usuário → oferecer mesclar (não bloquear).
-              if (typeof window._triggerAccountMerge === 'function') {
-                window._triggerAccountMerge(_mergeCand.uid, _mergeCand.data);
-              }
-            } else if (typeof showAlertDialog === 'function') {
-              showAlertDialog('Esse nome já está em uso', 'Já existe outra pessoa cadastrada como "' + finalName + '". Escolha um nome diferente — pode incluir o sobrenome ou uma inicial (ex.: "' + finalName + ' M.").', null, { type: 'warning' });
-            } else if (typeof showNotification !== 'undefined') {
-              showNotification('Nome em uso', 'Já existe "' + finalName + '". Escolha outro.', 'warning');
-            }
-            return;
-          }
-        } catch (_nameErr) {
-          if (window._warn) window._warn('[Profile] gate de nome único (fail-open):', _nameErr);
-        }
-      }
-
       // ── 2a. PRIVACIDADE × NOME (v2.4.4) ────────────────────────────────
       // Se o usuário ativou "ocultar e-mail/telefone" mas o nome de exibição
       // É justamente o contato (não tem nome real), bloqueia o save e exige
@@ -9418,7 +9352,10 @@ window._askDuplicateAccount = function () {
           delete cu._pendingPhotoUpload;
         }
       } catch (e) {
-        saveError = (e && e.message) || String(e);
+        var _saveCode = (e && e.code) || '';
+        saveError = (_saveCode === 'already-exists' || _saveCode === 'functions/already-exists')
+          ? 'Esse nome de exibição já está em uso. Escolha outro nome.'
+          : ((e && e.message) || String(e));
         window._lastProfileSave.ok = false;
         window._lastProfileSave.error = saveError;
         window._error('[Profile v0.16.9] save FAILED:', e);
@@ -9569,6 +9506,11 @@ window._askDuplicateAccount = function () {
           }
         }
       }
+
+      // Nenhuma sincronização secundária pode sobreviver a uma recusa da
+      // transação. Sem este corte, um nome rejeitado pelo servidor ainda podia
+      // vazar para Firebase Auth ou caminhos legados de apresentação.
+      if (saveError) return;
 
       // ── 8. HINTS — só toggle quando state REALMENTE mudou ──────────────
       // Antes: enable/disable era chamado incondicionalmente a cada save,

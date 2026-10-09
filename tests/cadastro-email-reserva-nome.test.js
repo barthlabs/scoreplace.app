@@ -1,11 +1,11 @@
 'use strict';
-/* CADASTRO EMAIL RESERVA NOME — não existe “conta criada” antes do perfil.
+/* CADASTRO EMAIL CRIA PERFIL — não existe “conta criada” antes do perfil.
  * node tests/cadastro-email-reserva-nome.test.js
  *
- * A função REAL de auth.js é executada em VM. A reserva do nome pertence à
- * initializeUserProfile (Function transacional); se ela disser already-exists,
- * a credencial que acabou de nascer é apagada e o usuário escolhe outro nome.
- * Isto impede tanto homônimos como contas Auth órfãs que o app não reconhece.
+ * A função REAL de auth.js é executada em VM. `initializeUserProfile` pertence
+ * ao servidor e fixa o perfil ao UID autenticado; nome é apresentação e nunca
+ * é reservado. Se a criação do perfil falhar por qualquer motivo, a credencial
+ * que acabou de nascer é apagada para não deixar uma conta Auth órfã.
  */
 const fs = require('fs');
 const path = require('path');
@@ -20,14 +20,14 @@ ok(INICIO !== -1 && FIM > INICIO, 'encontrou _entrarDoRegister real');
 const CODIGO = SRC.slice(INICIO, FIM);
 
 function executar(op) {
-  const ordem = [], status = [], foco = { nome: 0 };
+  const ordem = [], status = [];
   const user = {
     uid: 'uid-novo', email: 'novo@exemplo.com',
     updateProfile: () => { ordem.push('auth-profile'); return Promise.resolve(); },
     delete: () => { ordem.push('delete-auth'); return Promise.resolve(); }
   };
   const elementos = {
-    'reg-displayname': { value: 'Nome Já Existente', focus: () => { foco.nome++; } },
+    'reg-displayname': { value: 'Nome Já Existente', focus() {} },
     'reg-password-confirm': { value: 'senha' }
   };
   const win = {
@@ -56,27 +56,26 @@ function executar(op) {
   vm.createContext(sb);
   vm.runInContext(CODIGO, sb, { filename: 'auth-real.js' });
   sb.window._entrarDoRegister('email', 'NOVO@EXEMPLO.COM', 'senha');
-  return new Promise((resolve) => setTimeout(() => resolve({ ordem, status, foco }), 25));
+  return new Promise((resolve) => setTimeout(() => resolve({ ordem, status }), 25));
 }
 
 (async () => {
   const saudavel = await executar({});
   const reserva = saudavel.ordem.indexOf('reserva:Nome Já Existente');
   const sucesso = saudavel.ordem.indexOf('status:success');
-  ok(reserva !== -1, 'cadastro usa initializeUserProfile para reservar o nome');
-  ok(reserva < saudavel.ordem.indexOf('auth-profile'), 'reserva acontece antes do espelho no Firebase Auth');
-  ok(reserva < saudavel.ordem.indexOf('email-verificacao'), 'reserva acontece antes do e-mail de confirmação');
-  ok(reserva < sucesso, 'reserva acontece antes da tela confirmar conta criada');
-  ok(!saudavel.ordem.includes('delete-auth'), 'reserva saudável não apaga a credencial');
+  ok(reserva !== -1, 'cadastro usa initializeUserProfile para criar o perfil do UID');
+  ok(reserva < saudavel.ordem.indexOf('auth-profile'), 'perfil é criado antes do espelho no Firebase Auth');
+  ok(reserva < saudavel.ordem.indexOf('email-verificacao'), 'perfil é criado antes do e-mail de confirmação');
+  ok(reserva < sucesso, 'perfil é criado antes da tela confirmar conta criada');
+  ok(!saudavel.ordem.includes('delete-auth'), 'criação saudável não apaga a credencial');
 
   const repetido = await executar({ conflito: true });
-  ok(repetido.ordem.includes('delete-auth'), 'nome ocupado apaga a credencial recém-criada');
-  ok(!repetido.ordem.includes('auth-profile'), 'nome ocupado não espelha nome no Auth');
-  ok(!repetido.ordem.includes('email-verificacao'), 'nome ocupado não envia verificação');
-  ok(!repetido.ordem.includes('status:success'), 'nome ocupado nunca anuncia conta criada');
-  ok(repetido.status.some((s) => s.tipo === 'warning' && /nome já está em uso/i.test(s.texto)),
-    'nome ocupado explica que a pessoa deve escolher outro nome');
-  ok(repetido.foco.nome === 1, 'nome ocupado devolve o foco ao campo de nome');
+  ok(repetido.ordem.includes('delete-auth'), 'falha ao criar perfil apaga a credencial recém-criada');
+  ok(!repetido.ordem.includes('auth-profile'), 'falha não espelha nome no Auth');
+  ok(!repetido.ordem.includes('email-verificacao'), 'falha não envia verificação');
+  ok(!repetido.ordem.includes('status:success'), 'falha nunca anuncia conta criada');
+  ok(repetido.status.some((s) => s.tipo === 'warning' && /nome de exibição já está em uso/i.test(s.texto)),
+    'reserva recusada explica que o nome de exibição é exclusivo');
 
   console.log((fail ? '❌' : '✅') + ' cadastro-email-reserva-nome: ' + pass + ' asserções, ' + fail + ' falha(s)');
   process.exit(fail ? 1 : 0);

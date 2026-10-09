@@ -24,8 +24,8 @@ ok(/_profileUpdate\.normalize/.test(fnBlock) && /normalizeEraseFields/.test(fnBl
   'Function aceita somente o contrato puro de perfil');
 ok(/request\.auth\.token\.email/.test(fnBlock) && /telefone novo exige verificação/.test(fnBlock),
   'Function não aceita e-mail ou telefone novos só pela intenção do cliente');
-ok(!/displayNameClaims/.test(fnBlock) && !/findDisplayNameConflict/.test(fnBlock) && /denormalizeDisplayName/.test(fnBlock),
-  'troca de nome preserva o UID e permite homônimo sem claim global');
+ok(/reserveDisplayName/.test(fnBlock) && /runTransaction/.test(fnBlock) && /denormalizeDisplayName/.test(fnBlock),
+  'troca de nome preserva o UID e reserva apresentação exclusiva na mesma transação');
 
 const saveStart = db.indexOf('async saveUserProfile(uid, profileData, eraseFields)');
 const saveEnd = db.indexOf('\n  },', saveStart);

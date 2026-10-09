@@ -197,6 +197,12 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Reserva canônica de nome de exibição: somente Cloud Functions cria,
+    // troca ou libera. Cliente não pode tomar, apagar ou descobrir o titular.
+    match /displayNameClaims/{nameKey} {
+      allow read, write: if false;
+    }
+
     /* ⛔ A RARIDADE DO TROFÉU ESTAVA NO ESCURO. `_meta` não tinha regra nenhuma, e sem regra
      * é negado — MEDIDO: 403. A tela de troféus (`js/views/trophies-view.js:455`) calcula
      * "quantos por cento têm este troféu" a partir de `_meta/trophyStats`, e a leitura sempre

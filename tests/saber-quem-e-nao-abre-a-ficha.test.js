@@ -7,12 +7,8 @@
  * telefone ou qualquer campo privado: usavam `displayName`, `gender`, `skillBySport`,
  * `birthDate`, `mergedInto` — ou só a EXISTÊNCIA do documento.
  *
- * ⛔ O CASO MAIS FEIO ERA UMA GÊMEA DIVERGENTE. `FirestoreDB.isDisplayNameTaken` e a
- * checagem de conflito dentro do save do perfil fazem a consulta IDÊNTICA
- * (`displayName_lower`, limite 8, ignorando lápide). A primeira passou para o espelho na
- * 2.3.2; a segunda ficou em `users` e seguiu baixando até 8 fichas inteiras para ler `id` e
- * `mergedInto`. Mesma pergunta, duas coleções — o padrão que esta auditoria já nomeou:
- * "a mitigação cobre um caminho e não o irmão". [[feedback_unify_dual_entry_points]]
+ * ⛔ O CASO MAIS FEIO ERA UMA GÊMEA DIVERGENTE. A antiga consulta client-side de conflito
+ * de nome foi removida: reserva de nome é transacional e exclusivamente server-side.
  *
  * ⚠️ O QUE NÃO ENTROU NESTA LEVA, E POR QUÊ (medido, não estimado):
  *   • a própria caixa de notificações — cada conta segue lendo somente a sua;
@@ -51,16 +47,11 @@ must((bloco.match(/\{ publico: true \}/g) || []).length === 2,
   '① ⭐ os dois atravessam a lápide sem baixar ficha');
 must(!/collection\('users'\)/.test(bloco), '① ⛔ nenhum dos dois toca `users`');
 
-// ── ② a GÊMEA divergente: mesma pergunta, agora uma coleção só ─────────────
-const iAuth = AUTH.indexOf("where('displayName_lower', '==', _nameLower).limit(8)");
-must(iAuth > 0, '② a checagem de conflito de nome no save do perfil existe');
-// idem: ancorado no início da declaração, não em 300 caracteres para trás.
-const antes = AUTH.slice(AUTH.lastIndexOf('var _nameSnap', iAuth), iAuth);
-must(/_COLECAO_PERFIL_PUBLICO/.test(antes),
-  '② ⭐ ela passou a ler o espelho — baixava até 8 fichas para ler `id` e `mergedInto`');
-const _iq = DB.indexOf("where('displayName_lower', '==', q)");
-must(/_COLECAO_PERFIL_PUBLICO/.test(DB.slice(DB.lastIndexOf('var snap', _iq), _iq)),
-  '② ⭐ e a gêmea `isDisplayNameTaken` continua no espelho — as duas na MESMA coleção');
+// ── ② o portão de nome não pode reaparecer no navegador ────────────────────
+must(!/isDisplayNameTaken\s*\(/.test(DB),
+  '② ⭐ não existe mais checagem client-side de nome com falha aberta');
+must(!/displayName_lower',\s*'=='/.test(AUTH),
+  '② ⭐ o save do perfil não consulta nomes de terceiros no navegador');
 
 // ── ③ transferência de organização: UID confirmado, nunca ficha ────────────
 const htEspelho = (HT.match(/collection\(window\._COLECAO_PERFIL_PUBLICO \|\| 'usersPublic'\)/g) || []).length;

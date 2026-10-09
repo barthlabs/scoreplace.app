@@ -182,6 +182,8 @@ const chipC = W._schCardChip(t10b, t10b.matches[0]);
 ok(!/≈/.test(chipC), 'data combinada NÃO leva o "≈"');
 ok(/Horário definido/.test(chipC) && /estimado pelo sistema/.test(W._schCardChip(t10, t10.matches[0])),
   'o title diz a origem em texto — cor não é o único sinal');
+ok(/<button\b/.test(chipC) && /window\._schOpenMatch/.test(chipC) && /toque para alterar/.test(chipC),
+  'data combinada continua sendo botão e reabre a alteração do agendamento');
 
 // ── 11. o botão do GRUPO: data pra todos, proposta só pra quem joga ───────────
 const tg = mkMonarch();

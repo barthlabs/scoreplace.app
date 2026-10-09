@@ -3003,40 +3003,16 @@ window.FirestoreDB = {
 
   // ---- Explore: list users who accept friend requests ----
 
-  // v2.6.104: nome de exibição único. Retorna o uid de OUTRA conta que já usa
-  // este nome (ou null). Consulta exata em displayName_lower (mesmo índice do
-  // searchUsers). Ignora contas já mescladas (mergedInto). Fail-open: erro de
-  // consulta retorna null (não bloqueia o save por falha técnica).
-  async isDisplayNameTaken(name, myUid) {
-    if (!name || !this.db) return null;
-    var q = String(name).trim().toLowerCase();
-    if (!q) return null;
-    try {
-      // user-vivo:isento — aqui não se RESOLVE uma pessoa, se procura CONFLITO de nome:
-      // a lápide tem de ser IGNORADA (nome de conta morta não bloqueia ninguém), não seguida.
-      var snap = await this.db.collection(window._COLECAO_PERFIL_PUBLICO).where('displayName_lower', '==', q).limit(8).get();
-      var conflict = null;
-      snap.forEach(function (doc) {
-        var data = doc.data() || {};
-        if (doc.id !== myUid && !data.mergedInto) conflict = doc.id;
-      });
-      return conflict;
-    } catch (e) {
-      if (window._warn) window._warn('[isDisplayNameTaken] consulta falhou (fail-open):', e);
-      return null;
-    }
-  },
-
   // Resolve um NOME DIGITADO → a(s) conta(s) que têm EXATAMENTE esse displayName.
   // IDENTIDADE = uid: usado no enroll/pareamento pra nunca gravar um titular de
-  // conta só por nome (a classe de bug que sumiu o Adriano).
-  // Assim, normalmente há 0 ou 1 resultado; 2+ só é resíduo legado para tratar com cuidado.
+  // conta só por nome (a classe de bug que sumiu o Adriano). Há no máximo um
+  // perfil vivo novo por nome; 2+ é resíduo legado, a ser tratado com cuidado.
   // Ignora contas mescladas (mergedInto) e nomes "não-amigáveis" (dupla "A / B",
   // email, telefone, placeholder) — esses não são nome de pessoa.
   /* ⛔ NOME DE EXIBIÇÃO NÃO IDENTIFICA PESSOA.
    * A resolução abaixo só LÊ candidatas para permitir que o organizador escolha
-   * conscientemente uma conta pelo UID. Cadastro e edição aceitam homônimos; não
-   * reintroduzir reserva global ou sufixo automático. [[project_uid-e-nao-nome]] */
+   * conscientemente uma conta pelo UID. A reserva global impede novos homônimos;
+   * ambiguidade só existe enquanto um legado ainda aguarda revisão. */
   // ⛔ NOME DE EXIBIÇÃO NÃO IDENTIFICA PESSOA. Retorna:
   //   { status:'none' }                      → sem conta (participante informal)
   //   { status:'unique', uid, profile }      → 1 conta

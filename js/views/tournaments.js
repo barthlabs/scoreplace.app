@@ -3892,6 +3892,7 @@ function renderTournaments(container, tournamentId = null) {
                       _setPhaseLateEnrollment DELETADAS (v1.3.66). Pedido do dono. */ ''}
                 ${sortearBtn}
                 ${sortearAberto}
+                ${isOrg && hasDraw && t.allowPrePublicationRestore === true ? `<button class="btn btn-warning hover-lift" onclick="event.stopPropagation(); window._restoreTournamentPrePublication('${t.id}')" title="Apaga a chave, os placares e os horários publicados, preservando inscritos, duplas formadas manualmente e os ajustes confirmados">↩️ Voltar ao estado antes do sorteio</button>` : ''}
                 ${/* ⛔ REMOVIDO: a segunda renderização de "Avançar de fase" (bloco v4.4.50).
                       Ela criava "🏆 Avançar de fase" sob a MESMA condição do "⏭️ Avançar de
                       Fase" que já vem em `sortearBtn` logo acima — os dois apareciam LADO A

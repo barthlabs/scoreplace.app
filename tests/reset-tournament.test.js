@@ -100,18 +100,18 @@ W._countCompetitors = W._countCompetitors || function (t) { return { people: (t.
 // UI, transporte e callable para a revisão não aceitar um campo sem efeito real.
 (function () {
   var root = path.join(__dirname, '..');
-  var bracket = fs.readFileSync(path.join(root, 'js', 'views', 'bracket.js'), 'utf8');
+  var tournaments = fs.readFileSync(path.join(root, 'js', 'views', 'tournaments.js'), 'utf8');
   var draw = fs.readFileSync(path.join(root, 'js', 'views', 'tournaments-draw.js'), 'utf8');
   var db = fs.readFileSync(path.join(root, 'js', 'firebase-db.js'), 'utf8');
   var server = fs.readFileSync(path.join(root, 'functions-autodraw', 'index.js'), 'utf8');
-  ok(/t\.allowPrePublicationRestore === true/.test(bracket) && /_restoreTournamentPrePublication/.test(bracket),
-    'a UI oferece restauração somente quando a permissão explícita do torneio é true');
+  ok(/t\.allowPrePublicationRestore === true/.test(tournaments) && /Voltar ao estado antes do sorteio/.test(tournaments) && /_restoreTournamentPrePublication/.test(tournaments),
+    'as Ferramentas do Organizador oferecem a restauração somente quando a permissão explícita do torneio é true');
   ok(/_callFn\('resetTournamentToEnrollment', \{ tournamentId: String\(tId\), restoreMode: 'prePublication' \}\)/.test(draw),
     'a UI identifica explicitamente a restauração pré-publicação na callable canônica');
   ok(/async _callFn\(name, payload, msgs\)/.test(db) && /exports\.resetTournamentToEnrollment\s*=\s*onCall/.test(server),
     'o transporte canônico e a callable de restauração existem');
-  ok(/restoreMode === 'prePublication' && t\.allowPrePublicationRestore !== true/.test(server),
-    'o servidor recusa restauração pré-publicação quando o torneio não foi habilitado');
+  ok(/isSandboxRestore/.test(server) && /isPrePublicationRestore/.test(server) && /!isSandboxRestore && !isPrePublicationRestore/.test(server),
+    'o servidor só aceita restauração de Sandbox ou a pré-publicação explicitamente habilitada');
 })();
 
 // ── v1.2.45: RESETAR desfaz a dupla SORTEADA mesmo com entrada só-uid ────────

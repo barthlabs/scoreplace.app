@@ -1,35 +1,81 @@
 'use strict';
 /*
- * name-unique-core.js — nome de exibição ÚNICO entre uids, checado NO SERVIDOR.
+ * Reserva canônica do nome de exibição.
  *
- * POR QUE existe (incidente real, 02/ago/2026): a regra "dois uids nunca têm o mesmo
- * displayName" morava SÓ no cliente (js/firebase-db.js: isDisplayNameTaken /
- * resolveUniqueDisplayName). A CF registerPhonePassword gravava o nome direto em
- * users/{uid} sem checar nada — e uma usuária com conta Google "Gabriela Ferreira"
- * criou uma SEGUNDA conta homônima via celular+senha e se inscreveu 2x no mesmo
- * torneio. Cânone roda no servidor ([[project_canon_runs_on_server]]); o cliente é
- * conveniência, a CF é o gate.
- *
- * DECISÃO (do prompt do dono): homônimo em cadastro novo por celular é quase sempre
- * a MESMA pessoa que já tem conta — por isso o conflito REJEITA com already-exists
- * e sugere entrar com a conta existente (e-mail mascarado). NUNCA auto-sufixar
- * silenciosamente ("Gabriela Ferreira 2") aqui: isso criaria a duplicata de novo,
- * só que com nome maquiado.
- *
- * DUAS CONSULTAS, não uma: o índice canônico é `displayName_lower` (denormalizado
- * pelo saveUserProfile do cliente), mas perfis escritos pelo PRÓPRIO servidor antes
- * deste fix (a registerPhonePassword gravava displayName sem o _lower) e perfis
- * legados não têm o campo — a consulta exata em `displayName` cobre esses. Quem
- * grava nome no servidor a partir daqui DEVE gravar também displayName_lower
- * (ver denormalizeDisplayName), fechando o buraco pra frente.
- *
- * REGRA: nada de firebase/admin importado — o db entra por parâmetro (superfície
- * mínima: collection().where().limit().get()), pra rodar em teste com um fake.
- * Fail-open POR CONSULTA (espelha o cliente): erro técnico de query não pode
- * bloquear cadastro ([[feedback_enrollment_fail_open]] — mesma filosofia).
+ * UID é a identidade e nunca é deduzido do nome. A política de produto, porém,
+ * exige um rótulo de apresentação exclusivo. A reserva mora em
+ * `displayNameClaims`, é manipulada somente por Cloud Functions e sempre na
+ * mesma transação que cria ou renomeia o perfil. Não há auto-sufixo, consulta
+ * client-side de terceiros ou mesclagem inferida por nome.
  */
 
 const _dupPerson = require('./duplicate-person-core.js');
+const DISPLAY_NAME_CLAIMS = 'displayNameClaims';
+
+// Nome é apresentação, mas a política do produto exige que seja exclusivo.
+// A identidade continua sendo o UID; esta chave só reserva a apresentação e
+// jamais é usada para autorizar acesso a conta, torneio ou inscrição.
+function normalizeDisplayNameKey(name) {
+  return String(name == null ? '' : name).trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+function displayNameClaimId(name) {
+  // Doc IDs não podem conter '/'. encodeURIComponent preserva a mesma chave
+  // humana e produz um caminho estável para a transação e para a migração.
+  return encodeURIComponent(normalizeDisplayNameKey(name));
+}
+
+function displayNameClaimRef(db, name) {
+  const key = normalizeDisplayNameKey(name);
+  return key ? db.collection(DISPLAY_NAME_CLAIMS).doc(displayNameClaimId(key)) : null;
+}
+
+// Reserva/libera o nome exclusivamente dentro da transação que grava o perfil.
+// Retorna um veredito, em vez de lançar, para o chamador escolher a mensagem
+// pública sem expor o UID do titular da reserva.
+async function reserveDisplayName(tx, db, uid, nextName, previousName) {
+  const nextKey = normalizeDisplayNameKey(nextName);
+  const previousKey = normalizeDisplayNameKey(previousName);
+  const nextRef = displayNameClaimRef(db, nextKey);
+  const previousRef = previousKey && previousKey !== nextKey
+    ? displayNameClaimRef(db, previousKey) : null;
+  const reads = [];
+  if (nextRef) reads.push(tx.get(nextRef));
+  if (previousRef) reads.push(tx.get(previousRef));
+  const snapshots = await Promise.all(reads);
+  const nextSnap = nextRef ? snapshots[0] : null;
+  const previousSnap = previousRef ? snapshots[nextRef ? 1 : 0] : null;
+  const nextData = nextSnap && nextSnap.exists ? (nextSnap.data() || {}) : {};
+  const ownerUid = String(nextData.uid || '');
+  // Colisão legada fica reservada até revisão: ninguém toma este nome
+  // silenciosamente, inclusive um dos UIDs envolvidos.
+  if (nextRef && nextSnap && nextSnap.exists && nextData.state === 'conflict') {
+    return { ok: false, code: 'taken' };
+  }
+  if (nextRef && ownerUid && ownerUid !== String(uid)) {
+    return { ok: false, code: 'taken' };
+  }
+  if (previousRef && previousSnap && previousSnap.exists) {
+    const previousData = previousSnap.data() || {};
+    if (String(previousData.uid || '') === String(uid)) {
+      tx.delete(previousRef);
+    } else if (previousData.state === 'conflict' && Array.isArray(previousData.uids)) {
+      const remaining = previousData.uids.filter((candidate) => String(candidate) !== String(uid));
+      if (remaining.length === 1) {
+        tx.set(previousRef, { state: 'active', uid: String(remaining[0]), uids: [], updatedAt: new Date().toISOString() }, { merge: true });
+      } else {
+        tx.set(previousRef, { uids: remaining, updatedAt: new Date().toISOString() }, { merge: true });
+      }
+    }
+  }
+  if (nextRef) {
+    tx.set(nextRef, {
+      uid: String(uid), key: nextKey, displayName: String(nextName).trim().replace(/\s+/g, ' '),
+      updatedAt: new Date().toISOString(),
+    }, { merge: true });
+  }
+  return { ok: true };
+}
 
 // Espelha window._isUnfriendlyName (store.js): só placeholders genéricos são
 // "não-nome" e ficam fora da disputa de unicidade. Telefone/e-mail como nome é
@@ -64,76 +110,6 @@ function maskPhone(phone) {
   return '(••) •••••-••' + d.slice(-2);
 }
 
-// PURO: decide o conflito a partir dos docs retornados. Ignora o próprio uid e
-// tombstones de merge (mergedInto) — espelha isDisplayNameTaken do cliente.
-// Retorna { uid, email, phone } do dono do nome, ou null.
-function pickConflict(docs, myUid) {
-  for (const d of (Array.isArray(docs) ? docs : [])) {
-    if (!d || !d.id || d.id === myUid) continue;
-    const data = d.data || {};
-    if (data.mergedInto) continue;
-    const rawEmail = data.email || data.email_lower || '';
-    return {
-      uid: d.id,
-      email: (rawEmail && !isSyntheticEmail(rawEmail)) ? rawEmail : '',
-      phone: data.phone || '',
-      // createdAt entra pro desempate de QUEM recebe o sinal numa colisão simultânea
-      // (ver shouldIReceiveConflict). Aditivo: quem só lê uid/email/phone não é afetado.
-      createdAt: data.createdAt || null,
-    };
-  }
-  return null;
-}
-
-// Consulta o Firestore (Admin SDK ou fake com a mesma superfície) e devolve o
-// conflito, ou null. Fail-open por consulta.
-async function findDisplayNameConflict(db, name, myUid) {
-  const nm = String(name == null ? '' : name).trim();
-  if (!nm || !db) return null;
-  if (isUnfriendlyName(nm)) return null;
-  const tries = [
-    ['displayName_lower', nm.toLowerCase()], // índice canônico (cliente denormaliza)
-    ['displayName', nm],                     // perfis sem o _lower (server-written/legado)
-  ];
-  const seen = {};
-  const docs = [];
-  for (const t of tries) {
-    try {
-      // user-vivo:isento — colhe CANDIDATOS a homônimo pro pickConflict julgar; não resolve
-      // uma pessoa pra agir sobre ela. A lápide tem que ser DESCARTADA, não seguida: o nome
-      // dela é o mesmo do sobrevivente, e segui-la faria a pessoa colidir consigo mesma e
-      // ser renomeada à toa. O descarte está em pickConflict (`if (data.mergedInto) continue`),
-      // junto com o do próprio uid.
-      const snap = await db.collection('users').where(t[0], '==', t[1]).limit(8).get();
-      snap.forEach((doc) => {
-        if (seen[doc.id]) return;
-        seen[doc.id] = true;
-        docs.push({ id: doc.id, data: doc.data() });
-      });
-    } catch (e) { /* fail-open — tenta a próxima consulta */ }
-  }
-  return pickConflict(docs, myUid);
-}
-
-// Mensagem do already-exists (pt-BR). Prefere apontar a conta existente pelo
-// e-mail mascarado (é quase sempre a MESMA pessoa); sem e-mail real cai no
-// celular mascarado; sem nenhum, genérica. Nunca vaza o valor cheio.
-function buildConflictMessage(conflict) {
-  const me = conflict && maskEmail(conflict.email);
-  const mp = conflict && maskPhone(conflict.phone);
-  if (me) {
-    return 'Este nome já está em uso por uma conta cadastrada com o e-mail ' + me +
-      '. Se essa conta é sua, entre com ela (dá pra vincular o celular depois, no perfil). ' +
-      'Se não é, escolha outro nome de exibição.';
-  }
-  if (mp) {
-    return 'Este nome já está em uso por uma conta cadastrada com o celular ' + mp +
-      '. Se essa conta é sua, entre com ela. Se não é, escolha outro nome de exibição.';
-  }
-  return 'Este nome já está em uso por outra conta. Se essa conta é sua, entre com ela. ' +
-    'Se não é, escolha outro nome de exibição.';
-}
-
 // Denormaliza o par displayName/displayName_lower num payload de perfil — o MESMO
 // contrato do saveUserProfile do cliente. Todo write de nome no servidor passa
 // por aqui pra que a conta seja encontrável pelas checagens futuras.
@@ -155,20 +131,18 @@ function denormalizeDisplayName(profilePayload, displayName) {
   return profilePayload;
 }
 
-// ⚠️ AUTO-SUFIXO NÃO MORA AQUI, DE PROPÓSITO — e há teste travando o export.
-// No CADASTRO por celular (o consumidor deste módulo) homônimo é quase sempre a MESMA
-// pessoa: sufixar criaria a duplicata de novo, só que com nome maquiado. A variante
-// automática é política do LOGIN FEDERADO e vive em name-variant-core.js, que importa a
-// detecção daqui. Manter separado é o que impede a registerPhonePassword de ter a
-// ferramenta errada ao alcance.
+// Não existe resolvedor de variante: nome repetido exige outro nome ou revisão
+// explícita da conta; nunca se cria "Nome 2" automaticamente.
 
 module.exports = {
+  DISPLAY_NAME_CLAIMS,
+  normalizeDisplayNameKey,
+  displayNameClaimId,
+  displayNameClaimRef,
+  reserveDisplayName,
   isUnfriendlyName,
   isSyntheticEmail,
   maskEmail,
   maskPhone,
-  pickConflict,
-  findDisplayNameConflict,
-  buildConflictMessage,
   denormalizeDisplayName,
 };

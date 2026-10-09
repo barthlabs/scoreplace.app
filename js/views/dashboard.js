@@ -2611,8 +2611,10 @@ function renderDashboard(container) {
       var cardBgStr = opts.cardBg || 'rgba(99,102,241,0.06)';
       var cardShadow = opts.cardShadow || '0 0 20px rgba(99,102,241,0.25),0 4px 12px rgba(0,0,0,0.15)';
       // A data/hora do próximo jogo fica no rodapé do card, alinhada à
-      // esquerda. A dashboard reaproveita o fragmento da chave, sem uma faixa
-      // solta antes do card nem uma segunda regra de agendamento.
+      // esquerda. A dashboard reaproveita o BOTÃO canônico da chave, sem uma
+      // faixa solta antes do card nem uma segunda regra de agendamento. Data
+      // confirmada continua sendo ação: quem precisa remarcar abre a mesma
+      // enquete, em vez de receber texto inerte.
       // No próximo jogo, agenda e grupo são ações complementares: a pílula
       // azul informa/abre o agendamento e o botão verde cria ou abre a conversa.
       // O mesmo chip canônico decide as permissões; não há uma segunda regra da
@@ -2620,11 +2622,20 @@ function renderDashboard(container) {
       var _nextGroupChip = (opts.showMatchGroupChip && tRef &&
         typeof window._waGrpCardChip === 'function')
         ? window._waGrpCardChip(tRef, item.m, { semCabecalhoDeGrupo: true }) : '';
-      var cardFooterHtml = (opts.footerHtml || _nextGroupChip)
+      var _nextScheduleChip = (opts.showScheduleChip && tRef &&
+        typeof window._schCardChip === 'function')
+        ? window._schCardChip(tRef, item.m) : '';
+      // `footerHtml` é apenas a reserva visual para o caso excepcional de o
+      // módulo de agenda não estar carregado. No caminho normal, o chip acima
+      // tem precedência para preservar o click de alterar agendamento.
+      var _nextScheduleFallback = (!_nextScheduleChip && opts.footerHtml) ? opts.footerHtml : '';
+      var cardFooterHtml = (_nextScheduleChip || _nextScheduleFallback || _nextGroupChip)
         ? '<div data-next-game-schedule="1" style="margin-top:10px;padding-top:9px;border-top:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));display:flex;justify-content:flex-start;align-items:center;gap:6px;flex-wrap:wrap;min-height:30px;">' +
-            (opts.footerHtml
-              ? '<span style="display:inline-flex;align-items:center;min-height:28px;padding:4px 10px;border:1px solid var(--sp-c-38bdf8,#38bdf8);border-radius:999px;background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));color:var(--sp-c-7dd3fc,#7dd3fc);font-size:0.72rem;font-weight:800;">' + opts.footerHtml + '</span>'
-              : '') + _nextGroupChip +
+            (_nextScheduleChip
+              ? _nextScheduleChip
+              : (_nextScheduleFallback
+                ? '<span style="display:inline-flex;align-items:center;min-height:28px;padding:4px 10px;border:1px solid var(--sp-c-38bdf8,#38bdf8);border-radius:999px;background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));color:var(--sp-c-7dd3fc,#7dd3fc);font-size:0.72rem;font-weight:800;">' + _nextScheduleFallback + '</span>'
+                : '')) + _nextGroupChip +
           '</div>'
         : '';
 
@@ -2917,6 +2928,7 @@ function renderDashboard(container) {
           hideFaseHeader: true,
           boxLabelOverride: _boxU,
           footerHtml: _nextTimeline,
+          showScheduleChip: true,
           showMatchGroupChip: true
         }) +
         '</div></div>';

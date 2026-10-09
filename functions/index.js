@@ -174,7 +174,6 @@ const _profileEligibility = require("./profile-eligibility-core");
  * muda `skillBySport`. Sem isso, categoria digitada por cima de apurada mantinha o selo e o
  * perfil dizia "apurada" sobre valor escrito à mão. Viaja para o autodraw pelo vendor. */
 const _skillSource = require("./skill-source-core");
-const _nameVariant = require("./name-variant-core");
 // v1.7.36: vigia estrutural — quem troca jogadores de um jogo que JÁ EXISTE sem ter
 // autoridade pra isso. Pendurado no syncMatchRosters (mesmo gatilho, custo zero).
 const _rosterWatch = require("./roster-watch-core");
@@ -3076,16 +3075,21 @@ exports.enrollParticipant = onCall(
 // `email` mudam, e o enforceUniqueDisplayName só quando `displayName` muda.
 
 // Compatibilidade para clientes antigos que ainda consultam disponibilidade de nome.
-// Nomes de exibição não são identidade: homônimos são permitidos. Portanto esta
-// porta nunca mais bloqueia ou sugere variante; o sinal de possível segunda conta
-// segue em `_detectarDuplicataNaBase`, separado da escolha de apresentação.
+// Nome não identifica ninguém (UID identifica), mas sua apresentação é exclusiva
+// por decisão de produto. A resposta é só conveniência de interface: a transação
+// em initializeUserProfile/updateOwnProfile é a autoridade contra corrida.
 exports.checkDisplayNameAvailability = onCall(
   { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
   async (request) => {
     const callerUid = request.auth && request.auth.uid;
     if (!callerUid) throw new HttpsError("unauthenticated", "Login obrigatório");
-    const pedido = String((request.data && request.data.nome) || "").trim();
-    return { livre: !!pedido, sugestoes: [] };
+    const pedido = String((request.data && request.data.nome) || "").trim().replace(/\s+/g, " ");
+    if (!pedido || _nameUnique.isUnfriendlyName(pedido)) return { livre: false, sugestoes: [] };
+    const ref = _nameUnique.displayNameClaimRef(admin.firestore(), pedido);
+    const claim = ref ? await ref.get() : null;
+    const claimData = claim && claim.exists ? (claim.data() || {}) : null;
+    const ownerUid = claimData ? String(claimData.uid || "") : "";
+    return { livre: !claimData || (claimData.state !== "conflict" && ownerUid === callerUid), sugestoes: [] };
   }
 );
 
@@ -3101,8 +3105,8 @@ exports.initializeUserProfile = onCall(
     }
 
     const db = admin.firestore();
-    // UID é a identidade. Nome é apenas apresentação e pode coincidir com o de
-    // outra conta; a transação só evita criar duas vezes o perfil do MESMO UID.
+    // UID é a identidade. Nome não concede poder algum, mas sua apresentação é
+    // reservada uma única vez na mesma transação que cria o perfil.
     const profileRef = db.collection("users").doc(uid);
     const allowed = ["authProvider", "email", "photoURL"];
     const profile = { createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
@@ -3113,6 +3117,8 @@ exports.initializeUserProfile = onCall(
     return await db.runTransaction(async (tx) => {
       const current = await tx.get(profileRef);
       if (current.exists) return { ok: true, existing: true };
+      const reservation = await _nameUnique.reserveDisplayName(tx, db, uid, name, '');
+      if (!reservation.ok) throw new HttpsError("already-exists", "nome de exibição já está em uso");
       tx.set(profileRef, profile);
       return { ok: true, created: true };
     });
@@ -3120,8 +3126,8 @@ exports.initializeUserProfile = onCall(
 );
 
 // Atualização canônica do próprio perfil. A tela envia intenção; o servidor
-// relê, valida e grava tudo na mesma transação. Nome não é reservado: homônimos
-// são válidos e os sinais de possível duplicidade não alteram esta decisão.
+// relê, reserva o nome e grava tudo na mesma transação. UID segue sendo a
+// identidade; a reserva só assegura apresentação exclusiva.
 exports.updateOwnProfile = onCall(
   { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
   async (request) => {
@@ -3147,6 +3153,10 @@ exports.updateOwnProfile = onCall(
         throw new HttpsError("permission-denied", "telefone novo exige verificação");
       }
       const update = Object.assign({}, patch, { updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+      if (patch.displayName && patch.displayName !== old.displayName) {
+        const reservation = await _nameUnique.reserveDisplayName(tx, db, uid, patch.displayName, old.displayName || '');
+        if (!reservation.ok) throw new HttpsError("already-exists", "nome de exibição já está em uso");
+      }
       /* ⛔ Categoria mudada à mão NÃO pode ficar com selo de apurada. A marca de cada
        * modalidade MEXIDA sai; a das intocadas fica. `update` substitui o mapa inteiro, que
        * é o que se quer — inclusive quando o resultado é `{}`. */
@@ -6440,7 +6450,7 @@ exports.registerPhonePassword = onCall(
     if (!auth || !auth.uid) throw new HttpsError("unauthenticated", "sessão de telefone ausente");
     const data = request.data || {};
     const password = String(data.password || "");
-    const displayName = String(data.displayName || "").trim();
+    const displayName = String(data.displayName || "").trim().replace(/\s+/g, " ");
     const phoneIn = _normalizePhoneE164(data.phone || "");
     if (password.length < 6) throw new HttpsError("invalid-argument", "senha precisa de 6+ caracteres");
     if (!phoneIn) throw new HttpsError("invalid-argument", "telefone inválido");
@@ -6465,14 +6475,44 @@ exports.registerPhonePassword = onCall(
       if (e instanceof HttpsError) throw e; // user-not-found = ok
     }
 
-    // Nome é apresentação, não chave humana. Um telefone verificado continua
-    // protegido pelo seu próprio vínculo de Auth; homônimos não recusam cadastro.
+    // Reserva o nome antes de mexer na credencial. Esta também é a porta do
+    // primeiro cadastro por SMS; deixá-la escrever users/{uid} diretamente
+    // recriaria o furo que permitia homônimos fora do cadastro por e-mail.
+    const db = admin.firestore();
+    const profileRef = db.collection("users").doc(uid);
+    let canonicalDisplayName = displayName;
+    await db.runTransaction(async (tx) => {
+      const current = await tx.get(profileRef);
+      const old = current.exists ? (current.data() || {}) : {};
+      canonicalDisplayName = displayName || String(old.displayName || "").trim().replace(/\s+/g, " ");
+      if (!canonicalDisplayName && !current.exists) {
+        throw new HttpsError("invalid-argument", "informe um nome de exibição válido");
+      }
+      if (canonicalDisplayName && _nameUnique.isUnfriendlyName(canonicalDisplayName)) {
+        throw new HttpsError("invalid-argument", "informe um nome de exibição válido");
+      }
+      if (canonicalDisplayName) {
+        const reservation = await _nameUnique.reserveDisplayName(
+          tx, db, uid, canonicalDisplayName, String(old.displayName || ""));
+        if (!reservation.ok) throw new HttpsError("already-exists", "nome de exibição já está em uso");
+      }
+      const prof = Object.assign(
+        { phone: phoneE164, phoneCountry: "55", authProvider: "phone+password",
+          updatedAt: admin.firestore.FieldValue.serverTimestamp() },
+        _contactPhone.apagarCarimboDeTerceiro(admin.firestore.FieldValue)
+      );
+      if (!current.exists) prof.createdAt = admin.firestore.FieldValue.serverTimestamp();
+      if (canonicalDisplayName) _nameUnique.denormalizeDisplayName(prof, canonicalDisplayName);
+      tx.set(profileRef, prof, { merge: true });
+    });
 
     const upd = { email: synthetic, emailVerified: true, password: password, phoneNumber: phoneE164 };
-    if (displayName) upd.displayName = displayName;
+    if (canonicalDisplayName) upd.displayName = canonicalDisplayName;
     try {
       await admin.auth().updateUser(uid, upd);
     } catch (err) {
+      // O perfil já é válido e a reserva é segura. A próxima tentativa retoma a
+      // sincronização do Auth sem criar outro UID nem liberar o nome.
       console.error("[registerPhonePassword] updateUser failed:", err.code || err.message);
       throw new HttpsError("internal", "não foi possível salvar: " + (err.code || err.message));
     }
@@ -6502,15 +6542,7 @@ exports.registerPhonePassword = onCall(
      * Sem isto a conta ficava com telefone verificado E selo de "posto por terceiro", e as
      * travas de identidade seguiam recusando o que já tinha sido provado. Era o caminho que
      * faltava: só o ramo do SMS limpava. [[project_celular_contato_vs_identidade]] */
-    const prof = Object.assign(
-      { phone: phoneE164, phoneCountry: "55", authProvider: "phone+password", updatedAt: new Date().toISOString() },
-      _contactPhone.apagarCarimboDeTerceiro(admin.firestore.FieldValue)
-    );
-    // displayName_lower JUNTO do displayName (contrato do saveUserProfile do cliente) —
-    // sem ele a conta fica invisível pra própria checagem de unicidade.
-    if (displayName) _nameUnique.denormalizeDisplayName(prof, displayName);
-    await admin.firestore().collection("users").doc(uid).set(prof, { merge: true }).catch(() => {});
-    console.log("[registerPhonePassword] set for uid:", uid);
+    console.log("[registerPhonePassword] perfil e reserva confirmados para uid:", uid);
     return { ok: true };
   }
 );
@@ -9893,26 +9925,11 @@ exports.autoMergeOnProfileUpdate = onDocumentWritten(
 // no cliente, v4.5.72). O texto das notificações de sorteio passou a resolver o nome pelo
 // uid do slot no momento do envio (functions-autodraw).
 
-// ─── enforceUniqueDisplayName (Firestore trigger) ─────────────────────────
-// NOME ÚNICO ENTRE UIDS, garantido no SERVIDOR.
-//
-// A regra já existia em 4 pontos — mas 3 deles são do CLIENTE (auto-variante no primeiro
-// login, gate do perfil, isDisplayNameTaken) e são fail-open de propósito. O único ponto
-// server-side era a registerPhonePassword, que cobre só cadastro por celular+senha:
-// **login com Google/Apple não passava por checagem nenhuma no servidor**.
-//
-// MEDIDO em 04/ago/2026 (184 contas): o auto-variante entrou em 24/jun e mesmo assim
-// nasceram contas homônimas em 11/jul, 14/jul, 17/jul e 30/jul. Não era falta de
-// displayName_lower (todas têm), nem permissão (as rules liberam a consulta), nem nome
-// vazio do provedor — era a lei morar num lugar que pode simplesmente não rodar.
-// Cânone roda no servidor ([[project_canon_runs_on_server]]).
-//
-// POLÍTICA: aqui NÃO se bloqueia — adota-se variante. Bloquear é o comportamento do
-// cadastro por celular (onde homônimo é quase sempre a mesma pessoa) e do gate do perfil
-// (ação explícita). Na ENTRADA vale "deixa entrar e edita depois" (v1.1.3).
-//
-// ANTI-LOOP: só age quando o displayName MUDOU nesta escrita. Depois de renomear, a
-// própria escrita reacorda o trigger — mas aí o nome novo não colide e ele volta na hora.
+// ─── Índices e sinalização complementar de perfil ──────────────────────────
+// A exclusividade de displayName é decidida ANTES da escrita, pela reserva
+// transacional em initializeUserProfile/updateOwnProfile. Este gatilho não é
+// um segundo portão de identidade: conserva índices de busca e abre revisão
+// para sinais de conta duplicada (telefone/e-mail), sem renomear nem fundir.
 // ─── DUPLICATA NO CADASTRO — a mesma pergunta, fora de torneio (v1.8.3) ──────────
 // Regra do dono (11/ago/2026): _"essa verificação deve acontecer quando a pessoa se
 // cadastra"_. Até aqui a detecção só rodava na INSCRIÇÃO EM TORNEIO — quem criava a
@@ -9920,8 +9937,9 @@ exports.autoMergeOnProfileUpdate = onDocumentWritten(
 // mais tarde (no Confra levou 8 dias, e só porque a fila formou grupo).
 //
 // A detecção de semelhança não bloqueia cadastro: ela apenas pergunta se há uma segunda
-// conta. Ampliá-la para nomes parecidos recusaria homônimos legítimos — o oposto da
-// política atual. Perguntar e bloquear são caminhos separados de propósito.
+// conta. A reserva já barra NOME IGUAL; ampliar isso para nomes apenas parecidos criaria
+// falsos positivos. Perguntar por sinais de identidade e bloquear nome exato são portas
+// separadas de propósito.
 //
 // Rigor BASE (não o de torneio): o universo é a base inteira, onde quem se parece com você
 // provavelmente não tem nada a ver. Ver compararNomes.

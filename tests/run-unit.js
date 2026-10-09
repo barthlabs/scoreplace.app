@@ -1516,10 +1516,6 @@ const SUITES = [
   // os que ele PROIBIU: subconjunto de nome (30% de acerto) e nascimento+1º nome.
   // Trava também o "não sou eu" lembrado — o caso das duas contas "Nelson Barth".
   'functions/test-duplicate-person-core.js',
-  // NOME ÚNICO no SERVIDOR: a regra existia em 4 pontos, 3 deles no cliente e fail-open —
-  // login federado não passava por checagem server-side, e homônimos continuaram nascendo
-  // (11/jul, 14/jul, 17/jul, 30/jul) depois de a lei existir (24/jun).
-  'functions/test-name-variant-core.js',
   // Trocou o displayName → o rótulo gravado nos torneios vira mentira. Este core
   // decide o que reescrever SÓ por uid; metade do teste existe pra travar o que
   // NÃO pode ser tocado (homônimo de outro uid, parceiro de dupla, fictício).
@@ -1738,6 +1734,9 @@ const SUITES = [
   // celular+senha porque a regra só existia no cliente. Conflito = already-exists
   // com e-mail mascarado — NUNCA auto-sufixo silencioso.
   'functions/test-name-unique-core.js',
+  // Perfis legados viram reservas ativas ou conflitos explícitos; a migração
+  // jamais escolhe dono, renomeia ou mescla contas por conta própria.
+  'functions/test-display-name-claim-migration-core.js',
   // CONTA NO AUTH SEM PERFIL NO FIRESTORE. Medido em 22/ago/2026: 236 contas no Auth ×
   // 248 docs em users/ → 2 órfãs, ambas Apple com e-mail oculto, ambas com
   // lastSignIn == creation. Sem doc a pessoa não existe pro app (busca, lista de espera,

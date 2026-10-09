@@ -25,9 +25,11 @@ ok(dashboard.includes('window._goToMyNextTournamentMatch') && dashboard.includes
   tournaments.includes('resolveForCurrentUser: !!(options && options.resolveForCurrentUser)'),
   'o card de próximo jogo pede que o detalhe recalcule o próximo confronto do usuário');
 ok(dashboard.includes('window._matchCardTimelineTextHtml(_ngT, _ngM)'),
-  'Seu próximo jogo reutiliza a linha Agendado da chave');
+  'Seu próximo jogo mantém fallback visual da linha Agendado se o módulo de agenda ainda não carregou');
 ok(dashboard.includes('footerHtml: _nextTimeline') &&
+  dashboard.includes('showScheduleChip: true') &&
   dashboard.includes('showMatchGroupChip: true') &&
+  dashboard.includes("window._schCardChip(tRef, item.m)") &&
   dashboard.includes('window._waGrpCardChip(tRef, item.m, { semCabecalhoDeGrupo: true })') &&
   dashboard.includes('data-next-game-schedule="1"') &&
   dashboard.includes('justify-content:flex-start') &&
@@ -37,7 +39,7 @@ ok(dashboard.includes('footerHtml: _nextTimeline') &&
   !dashboard.includes('rgba(56,189,248,0.5)') &&
   !dashboard.includes('rgba(14,165,233,0.12)') &&
   !dashboard.includes("(_nextTimeline ? '<div style=\"margin-top:5px;\">' + _nextTimeline + '</div>' : '')"),
-  'o agendamento e o grupo do jogo ficam juntos no rodapé esquerdo do próximo card, sem reservar linha acima e respeitando os temas');
+  'o botão canônico de agendamento e o grupo ficam juntos no rodapé esquerdo do próximo card, sem reservar linha acima e respeitando os temas');
 const lightPaletteStart = paleta.indexOf('[data-theme="light"]');
 const lightPaletteEnd = paleta.indexOf('/* ── A TARJA DE LEITURA', lightPaletteStart);
 const lightPalette = paleta.slice(lightPaletteStart, lightPaletteEnd);
