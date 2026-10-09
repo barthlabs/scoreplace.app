@@ -53,7 +53,11 @@ if rg -q '^functions-autodraw/vendor/' "$ALL" 2>/dev/null; then
     echo '✓ a ferramenta de tela retorna antes de gerar prévia quando as mutações canônicas não estão prontas'
     echo '✓ nenhum botão expõe a ferramenta à organização enquanto esse estado vigora'
     echo '✓ a callable recusa no servidor antes de qualquer leitura ou escrita quando a flag está false'
-    echo 'Portanto não há conversão parcial, torneio travado, nem contrato externo novo a documentar nesta release.'
+    echo '✓ a nota pública informa que comunicados alcançam somente contas vinculadas e que a conversão permanece indisponível'
+    rg -n '📣 Comunicados alcançam contas registradas|🔒 Conversão de inscrições segue indisponível por segurança' js/release-notes.js
+    echo '✓ o guia de rollout proíbe liberar parcialmente ou editar o marcador manualmente no Firestore'
+    rg -n 'Nunca limpar `canonicalRegistrationMigration\.fingerprint`|_CANONICAL_REGISTRATION_MUTATIONS_READY` só pode virar `true`' CLAUDE.md
+    echo 'Portanto não há conversão parcial, torneio travado, nem mudança de contrato sem comunicação nesta release.'
     echo 'Módulos e testes fora do lote de transporte, mas exigidos pelo runner:'
     for review_test in \
       tests/legacy-phase-projection-core.test.js \

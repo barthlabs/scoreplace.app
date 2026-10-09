@@ -33,6 +33,18 @@ Plataforma web de gestao de torneios esportivos e board games. App SPA (Single P
 - **Defensive code OK** quando lidar com docs antigos: branches `if (legacy_shape)`, fallbacks pra campos opcionais, normalização de payload no read são aceitáveis e recomendados.
 - **Comunicação obrigatória** antes de qualquer mudança que afete dados do usuário.
 
+### Migração do elenco canônico
+
+Enquanto as quatro mutações de elenco — inscrever, sair, formar dupla e desfazer dupla —
+não escreverem a coleção canônica pelo mesmo contrato, a materialização de inscrições deve
+permanecer indisponível. `_CANONICAL_REGISTRATION_MUTATIONS_READY` só pode virar `true`
+em um corte que entregue as quatro portas, seus testes transacionais e uma reversão
+servidor-a-servidor testada. Nunca limpar `canonicalRegistrationMigration.fingerprint`
+manualmente no Firestore: esse marcador protege a divergência entre elenco legado e
+canônico. Se uma futura ativação precisar ser desfeita, a release seguinte deve fornecer
+uma callable administrativa idempotente, auditada e limitada ao torneio afetado; não há
+atalho de console autorizado.
+
 ### Reset histórico (transição alpha → beta) — 2026-04-29
 Na transição do alpha pra beta foi feito o reset final das coleções:
 - ❌ Apagadas: `tournaments`, `venues`, `presences`, `casualMatches`, `mail`
