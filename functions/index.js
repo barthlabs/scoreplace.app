@@ -4259,7 +4259,13 @@ exports.requestCanonicalRegistration = onCall(
       try { definitions = _categoryEligibility.normalizeCategoryDefinitions(tournament.categoryDefinitions); }
       catch (_) { throw new HttpsError("failed-precondition", "torneio sem categorias tipadas válidas"); }
 
-      const reads = await Promise.all([tx.get(profileRef), tx.get(tournamentRef.collection("registrations"))]);
+      // A inscrição é determinística por participante+categoria. Para saber se
+      // o próprio chamador já ocupa uma categoria, não há motivo para ler o
+      // elenco inteiro do torneio: uma query indexada por participantKey mantém
+      // esta porta proporcional às inscrições daquela conta.
+      const ownRegistrationsQuery = tournamentRef.collection("registrations")
+        .where("participantKey", "==", "uid:" + callerUid);
+      const reads = await Promise.all([tx.get(profileRef), tx.get(ownRegistrationsQuery)]);
       const profile = reads[0].exists ? (reads[0].data() || {}) : {};
       const registrations = reads[1].docs.map((doc) => doc.data() || {});
       const existing = registrations
@@ -4329,7 +4335,15 @@ exports.getCanonicalTournamentRoster = onCall(
       const tournamentSnap = await tx.get(ref);
       if (!tournamentSnap.exists) throw new HttpsError("not-found", "torneio não existe");
       const tournament = tournamentSnap.data() || {};
-      const registrationsSnap = await tx.get(ref.collection("registrations"));
+      // O recibo de migração é o limite exato do elenco. Lemos no máximo um
+      // documento além dele: isso preserva a detecção de divergência sem uma
+      // varredura ilimitada se uma coleção ficar corrompida ou crescer por erro.
+      let migration;
+      try { migration = _canonicalRegistrationBoundary.migrationOf(tournament); }
+      catch (error) { throw new HttpsError("failed-precondition", error.message); }
+      const registrationsSnap = await tx.get(
+        ref.collection("registrations").limit(migration.expectedCount + 1)
+      );
       const registrations = registrationsSnap.docs.map((doc) => doc.data() || {});
       let checked;
       try { checked = _canonicalRegistrationBoundary.verifiedRoster(tournament, registrations); }

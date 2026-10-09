@@ -11,6 +11,7 @@ ok(body.includes('_enrollCore.enrollmentOpen(tournament, Date.now())') && body.i
 ok(body.includes('_categoryEligibility.decideEnrollment') && body.includes('tx.get(profileRef)'), 'perfil e rigor são decididos no servidor');
 ok(body.includes('_amizadeLock.exigirAtivos(tx, db, [callerUid]'), 'inscrição lê o lifecycle dentro da mesma transação antes de criar');
 ok(body.includes('existingCategoryIds: existing') && body.includes('registration.participantKey === "uid:" + callerUid'), 'idempotência e exclusividade usam UID e categoria estáveis');
+ok(body.includes('.where("participantKey", "==", "uid:" + callerUid)') && !body.includes('tx.get(tournamentRef.collection("registrations"))'), 'inscrição consulta somente os registros do próprio UID, sem varrer o elenco');
 ok(body.includes('_registrationMutations.enroll(') && body.includes('{ uid: callerUid }'), 'registro novo recebe participantKey estrutural pelo núcleo, nunca nome');
 ok(body.includes('_registrationMutations.enroll(') && body.includes('enrollment.creates.forEach'), 'callable nova usa o núcleo canônico único para decidir creates');
 ok(body.includes('tx.create(tournamentRef.collection("registrations")') && !body.includes('participants:'), 'Function grava só o registro canônico, sem dual-write no roster');
