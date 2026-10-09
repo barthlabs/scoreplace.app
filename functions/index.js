@@ -92,6 +92,7 @@ const _emailFail = require("./email-failure-core");
 const _categoryEligibility = require("./category-eligibility-core");
 const _registrationCore = require("./registration-core");
 const _registrationMigration = require("./registration-migration-core");
+const _registrationMutations = require("./registration-mutations-core");
 const _canonicalRegistrationBoundary = require("./canonical-registration-boundary-core");
 const _registrationLifecycle = require("./registration-lifecycle-core");
 const _splitParts = require("./split-parts.js");   // torneio dividido: elenco na subcoleção
@@ -4258,12 +4259,13 @@ exports.requestCanonicalRegistration = onCall(
       try { definitions = _categoryEligibility.normalizeCategoryDefinitions(tournament.categoryDefinitions); }
       catch (_) { throw new HttpsError("failed-precondition", "torneio sem categorias tipadas válidas"); }
 
-      const registrationRefs = definitions.map((definition) => tournamentRef.collection("registrations").doc(
-        _registrationCore.registrationId("uid:" + callerUid, definition.id)
-      ));
-      const reads = await Promise.all([tx.get(profileRef)].concat(registrationRefs.map((ref) => tx.get(ref))));
+      const reads = await Promise.all([tx.get(profileRef), tx.get(tournamentRef.collection("registrations"))]);
       const profile = reads[0].exists ? (reads[0].data() || {}) : {};
-      const existing = definitions.filter((definition, index) => reads[index + 1].exists).map((definition) => definition.id);
+      const registrations = reads[1].docs.map((doc) => doc.data() || {});
+      const existing = registrations
+        .filter((registration) => registration.participantKey === "uid:" + callerUid)
+        .map((registration) => String(registration.categoryId || ""))
+        .filter(Boolean);
       let decision;
       try {
         decision = _categoryEligibility.decideEnrollment({
@@ -4280,30 +4282,29 @@ exports.requestCanonicalRegistration = onCall(
         return { outcome: decision.outcome, reasons: decision.reasons || [] };
       }
 
-      const existingSet = new Set(existing);
-      const createdCategoryIds = decision.categoryIds.filter((categoryId) => !existingSet.has(categoryId));
-      createdCategoryIds.forEach((categoryId) => {
-        const registrationId = _registrationCore.registrationId("uid:" + callerUid, categoryId);
-        tx.create(tournamentRef.collection("registrations").doc(registrationId), {
-        registrationId: registrationId,
-        tournamentId: tournamentId,
-        categoryId: categoryId,
-        // O mesmo identificador estrutural usado pela materialização. Sem
-        // participantKey, o registro novo não passa pelo validador que protege
-        // dupla, retirada e leitura do roster; nunca derive isso do nome.
-        participantKey: "uid:" + callerUid,
-        participantKind: "account",
-          participantUid: callerUid,
-          status: decision.validationState === "pending_review" ? "pending" : "confirmed",
-          validationState: decision.validationState,
+      let enrollment;
+      try {
+        enrollment = _registrationMutations.enroll(
+          tournamentId,
+          registrations,
+          { uid: callerUid },
+          decision.categoryIds,
+          {
+            status: decision.validationState === "pending_review" ? "pending" : "confirmed",
+            validationState: decision.validationState,
+          }
+        );
+      } catch (error) { throw new HttpsError("failed-precondition", "inscrições canônicas inválidas: " + error.message); }
+      enrollment.creates.forEach((registration) => {
+        tx.create(tournamentRef.collection("registrations").doc(registration.registrationId), Object.assign({}, registration, {
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
+        }));
       });
       return {
-        outcome: createdCategoryIds.length ? "accepted" : "already_registered",
+        outcome: enrollment.creates.length ? "accepted" : "already_registered",
         categoryIds: decision.categoryIds,
-        createdCategoryIds: createdCategoryIds,
+        createdCategoryIds: enrollment.creates.map((registration) => registration.categoryId),
         validationState: decision.validationState,
         reasons: decision.reasons || [],
       };
