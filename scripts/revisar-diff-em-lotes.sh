@@ -52,6 +52,9 @@ if rg -q '^functions-autodraw/vendor/' "$ALL" 2>/dev/null; then
     echo 'Helpers de fase eliminatória disponíveis no cliente e no vendor:'
     rg -n 'window\._is(Double)?EliminationPhase\s*=' \
       js/views/tournaments-utils.js functions-autodraw/vendor/tournaments-utils.js
+    echo 'Identidade usada pelo pareamento classificatório, no mesmo escopo local:'
+    rg -n 'var _n2uGen|var _uidForName|var _pairKey' \
+      js/views/bracket-logic.js functions-autodraw/vendor/bracket-logic.js
   } > "$CROSS_EVIDENCE"
 fi
 

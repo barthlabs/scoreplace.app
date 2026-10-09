@@ -378,8 +378,15 @@ console.log('══════════════════════�
     rounds: [{ round: 1, matches: [{ p1: 'A', p2: 'B' }, { p1: 'C', p2: 'D' }] }]
   };
   core._window._generateNextRound(t, { ts: 123 });
-  const pairs = (t.rounds[1].matches || []).filter(m => !m.isBye && !m.isSitOut).map(m => [m.p1, m.p2].sort().join('|')).sort();
+  const nextMatches = (t.rounds[1].matches || []).filter(m => !m.isBye && !m.isSitOut);
+  const pairs = nextMatches.map(m => [m.p1, m.p2].sort().join('|')).sort();
   ok('cluster → esgota adversários inéditos antes de repetir', pairs.join(',') === 'A|C,B|D', pairs.join(','));
+  // A chave anti-repetição e os slots da súmula usam a mesma tradução local
+  // nome → uid. Este ensaio impede que uma cópia vendor perca `_uidForName`:
+  // sem ela, a geração acima lança ReferenceError antes de devolver os jogos.
+  ok('cluster → confronto e súmula preservam uid', nextMatches.every(m =>
+    /^cluster-[0-3]$/.test(m.p1Uid || '') && /^cluster-[0-3]$/.test(m.p2Uid || '')),
+  JSON.stringify(nextMatches.map(m => [m.p1Uid, m.p2Uid])));
 })();
 
 // A configuração nova pode coexistir com o rótulo legado "Liga", mas entradas
