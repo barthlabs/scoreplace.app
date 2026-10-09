@@ -439,6 +439,8 @@ EOF
       echo "A evidência cruzada acima é executada pelo orquestrador nesta submissão."
       echo "Ela demonstra contratos que podem ter fonte, vendor, teste e boundary em lotes distintos;"
       echo "não trate essa separação de transporte como ausência sem apontar uma divergência concreta."
+      echo "Os fatos nela marcados com ✓ são parte do corte: não peça que sejam recriados no lote atual."
+      echo "Não recomende edição manual de Firestore nem liberar feature bloqueada por flag false; só aponte um defeito verificável no contrato ou na prova exibida."
     fi
     if [[ -n "${SP_REVIEW_EVIDENCE:-}" && -f "$SP_REVIEW_EVIDENCE" ]]; then
       echo "=== EVIDÊNCIA DE VALIDAÇÃO EXECUTADA PELO PIPELINE ==="
