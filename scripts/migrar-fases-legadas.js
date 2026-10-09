@@ -5,9 +5,8 @@
  * O script é idempotente e começa em dry-run. Para gravar, use --apply.
  *
  * Uso:
- *   node scripts/migrar-fases-legadas.js
- *   node scripts/migrar-fases-legadas.js --apply
- *   node scripts/migrar-fases-legadas.js --id <torneioId> [--apply]
+ *   node scripts/migrar-fases-legadas.js --id <torneioId>
+ *   node scripts/migrar-fases-legadas.js --id <torneioId> --apply --fingerprint <recibo>
  */
 'use strict';
 
@@ -15,7 +14,7 @@ const path = require('path');
 const { execSync } = require('child_process');
 const ROOT = path.join(__dirname, '..');
 const { _window } = require(path.join(ROOT, 'functions-autodraw', 'draw-core.js'));
-const { planLegacyPhaseProjection } = require(path.join(ROOT, 'functions', 'legacy-phase-projection-core.js'));
+const { runOne } = require(path.join(ROOT, 'scripts', 'migrar-fases-legadas-core.js'));
 
 const project = _window && _window.FORMAT2 && _window.FORMAT2.projectLegacyPhases;
 if (typeof project !== 'function') {
@@ -26,8 +25,22 @@ if (typeof project !== 'function') {
 const APPLY = process.argv.includes('--apply');
 const requestedIdAt = process.argv.indexOf('--id');
 const ONLY_ID = requestedIdAt >= 0 ? process.argv[requestedIdAt + 1] : null;
+const fingerprintAt = process.argv.indexOf('--fingerprint');
+const FINGERPRINT = fingerprintAt >= 0 ? process.argv[fingerprintAt + 1] : null;
 if (requestedIdAt >= 0 && !ONLY_ID) {
   console.error('✗ --id exige o identificador do torneio');
+  process.exit(1);
+}
+if (!ONLY_ID) {
+  console.error('✗ esta migração é individual; informe --id <torneioId>');
+  process.exit(1);
+}
+if (APPLY && !ONLY_ID) {
+  console.error('✗ --apply exige --id; migração em lote é proibida');
+  process.exit(1);
+}
+if (APPLY && !FINGERPRINT) {
+  console.error('✗ --apply exige --fingerprint do dry-run revisado');
   process.exit(1);
 }
 
@@ -71,25 +84,26 @@ function documentToObject(document) {
   return result;
 }
 
-async function listTournaments(accessToken) {
-  if (ONLY_ID) {
-    const response = await fetch(`${BASE}/tournaments/${encodeURIComponent(ONLY_ID)}`, {
-      headers: { Authorization: `Bearer ${accessToken}` }
-    });
-    if (!response.ok) throw new Error(`falhou ao ler ${ONLY_ID}: ${response.status} ${await response.text()}`);
-    return [response];
-  }
-  const documents = [];
-  let pageToken = null;
-  do {
-    const url = `${BASE}/tournaments?pageSize=200` + (pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : '');
-    const response = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
-    if (!response.ok) throw new Error(`falhou ao listar torneios: ${response.status} ${await response.text()}`);
-    const json = await response.json();
-    documents.push(...(json.documents || []).map((document) => ({ ok: true, json: async () => document })));
-    pageToken = json.nextPageToken || null;
-  } while (pageToken);
-  return documents;
+async function readTournament(accessToken, id) {
+  const response = await fetch(`${BASE}/tournaments/${encodeURIComponent(id)}`, {
+    headers: { Authorization: `Bearer ${accessToken}` }
+  });
+  if (!response.ok) throw new Error(`falhou ao ler ${id}: ${response.status} ${await response.text()}`);
+  const document = await response.json();
+  return { tournament: documentToObject(document), updateTime: document.updateTime || '' };
+}
+
+async function writePhases(accessToken, id, phases, updateTime) {
+  if (!updateTime) throw new Error('documento sem updateTime; CAS indisponível');
+  const query = new URLSearchParams();
+  query.append('updateMask.fieldPaths', 'phases');
+  query.append('currentDocument.updateTime', updateTime);
+  const response = await fetch(`${BASE}/tournaments/${encodeURIComponent(id)}?${query.toString()}`, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fields: { phases: toFirestore(phases) } })
+  });
+  if (!response.ok) throw new Error(`CAS recusou a escrita de ${id}: ${response.status} ${(await response.text()).slice(0, 240)}`);
 }
 
 // Marcadores de transição que um documento antigo pode carregar mesmo depois de
@@ -108,47 +122,24 @@ function legacySwissMarkers(tournament) {
 
 async function main() {
   const accessToken = token();
-  console.log(`▶ migração de fases legadas${APPLY ? '' : ' (DRY-RUN — nenhuma escrita)'}`);
-  const responses = await listTournaments(accessToken);
-  let scanned = 0;
-  let planned = 0;
-  let written = 0;
-  let unchanged = 0;
-  const residualSwiss = { tournaments: 0, format: 0, classifyFormat: 0, currentStage: 0, swissRounds: 0 };
-
-  for (const response of responses) {
-    const document = await response.json();
-    const id = document.name.split('/').pop();
-    const tournament = documentToObject(document);
-    scanned++;
-    const markers = legacySwissMarkers(tournament);
-    const hasResidual = Object.keys(markers).some((key) => markers[key]);
-    if (hasResidual) {
-      residualSwiss.tournaments++;
-      Object.keys(markers).forEach((key) => { if (markers[key]) residualSwiss[key]++; });
-    }
-    const plan = planLegacyPhaseProjection(tournament, project);
-    if (!plan.changed) { unchanged++; continue; }
-    planned++;
-    console.log(`  ${APPLY ? 'gravando' : 'simulando'} ${id}: ${plan.reason}`);
-    if (!APPLY) continue;
-
-    /* updateMask torna impossível substituir acidentalmente outros campos. */
-    const url = `${BASE}/tournaments/${encodeURIComponent(id)}?updateMask.fieldPaths=phases`;
-    const write = await fetch(url, {
-      method: 'PATCH',
-      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fields: { phases: toFirestore(plan.phases) } })
-    });
-    if (!write.ok) throw new Error(`falhou ao gravar ${id}: ${write.status} ${(await write.text()).slice(0, 240)}`);
-    written++;
-  }
-
-  console.log(`✓ analisados: ${scanned} | ${APPLY ? 'gravados' : 'a gravar'}: ${APPLY ? written : planned} | já canônicos: ${unchanged}`);
+  console.log(`▶ migração individual de fases legadas${APPLY ? '' : ' (DRY-RUN — nenhuma escrita)'}`);
+  const result = await runOne({
+    tournamentId: ONLY_ID,
+    apply: APPLY,
+    fingerprint: FINGERPRINT,
+    project,
+    load: (id) => readTournament(accessToken, id),
+    write: (id, phases, updateTime) => writePhases(accessToken, id, phases, updateTime),
+  });
+  const plan = result.plan;
+  const markers = legacySwissMarkers((await readTournament(accessToken, ONLY_ID)).tournament);
+  console.log(`✓ ${ONLY_ID}: ${result.outcome} · ${plan.reason}`);
+  console.log(`  recibo: ${plan.fingerprint}`);
+  console.log(`  campos protegidos: ${plan.protectedFingerprint}`);
   console.log('  marcadores suíços transitórios (somente censo): ' +
-    `${residualSwiss.tournaments} torneio(s) · format=${residualSwiss.format} · ` +
-    `classifyFormat=${residualSwiss.classifyFormat} · currentStage=${residualSwiss.currentStage} · swissRounds=${residualSwiss.swissRounds}`);
-  if (!APPLY) console.log('  rode com --apply somente após revisar esta lista');
+    `format=${markers.format} · classifyFormat=${markers.classifyFormat} · ` +
+    `currentStage=${markers.currentStage} · swissRounds=${markers.swissRounds}`);
+  if (!APPLY && plan.changed) console.log(`  para aplicar: --id ${ONLY_ID} --apply --fingerprint ${plan.fingerprint}`);
 }
 
 main().catch((error) => {

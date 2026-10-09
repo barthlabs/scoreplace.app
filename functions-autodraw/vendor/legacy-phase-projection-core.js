@@ -1,10 +1,31 @@
 'use strict';
 
+const crypto = require('crypto');
+
+function stable(value) {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return '[' + value.map(stable).join(',') + ']';
+  return '{' + Object.keys(value).sort().map((key) => JSON.stringify(key) + ':' + stable(value[key])).join(',') + '}';
+}
+
+function hash(value) {
+  return crypto.createHash('sha256').update(stable(value)).digest('hex');
+}
+
+// Tudo fora de `phases` é protegido: a migração não tem autoridade para
+// modificar elenco, chave, agenda, resultados nem metadados do torneio.
+function protectedFingerprint(tournament) {
+  // Cópia rasa basta: esta migração nunca muta o documento de entrada.
+  const copy = Object.assign({}, tournament || {});
+  delete copy.phases;
+  return hash(copy);
+}
+
 /* Decide se a projeção lossless de fases precisa ser persistida. A função não
  * conhece Firestore e não muta o torneio: o escritor escolhe a transação e
  * grava apenas `phases`. Assim uma migração nunca toca elenco, chave, rodada,
  * jogo ou placar. `project` é a única implementação da tradução (FORMAT2). */
-function planLegacyPhaseProjection(tournament, project) {
+function planLegacyPhaseProjection(tournament, project, options) {
   if (!tournament || typeof tournament !== 'object') {
     return { changed: false, reason: 'invalid-tournament' };
   }
@@ -14,8 +35,37 @@ function planLegacyPhaseProjection(tournament, project) {
   const out = project(tournament) || {};
   const phases = Array.isArray(out.phases) ? out.phases : [];
   if (!phases.length) throw new Error('projeção de fases vazia');
-  if (!out.changed) return { changed: false, reason: 'already-canonical', phases };
-  return { changed: true, reason: out.created ? 'created-from-legacy' : 'completed-canonical-fields', phases };
+  const opts = options || {};
+  const tournamentId = String(opts.tournamentId || tournament.id || '').trim();
+  const updateTime = String(opts.updateTime || '').trim();
+  const receipt = {
+    schema: 'legacy-phase-projection-v1',
+    tournamentId,
+    updateTime,
+    // Documento inteiro: evolução de schema exige nova prévia e revisão.
+    source: tournament,
+    projectedPhases: phases,
+  };
+  const base = {
+    phases,
+    protectedFingerprint: protectedFingerprint(tournament),
+    fingerprint: hash(receipt),
+  };
+  if (!out.changed) return Object.assign({ changed: false, reason: 'already-canonical' }, base);
+  return Object.assign({ changed: true, reason: out.created ? 'created-from-legacy' : 'completed-canonical-fields' }, base);
 }
 
-module.exports = { planLegacyPhaseProjection };
+function verifyProjectedDocument(tournamentId, before, after, plan, project) {
+  if (!plan || !Array.isArray(plan.phases)) throw new Error('plano de fases inválido');
+  if (protectedFingerprint(before) !== protectedFingerprint(after)) {
+    throw new Error('campo protegido mudou durante a migração de fases');
+  }
+  if (stable((after || {}).phases || []) !== stable(plan.phases)) {
+    throw new Error('phases persistidas divergem do plano aprovado');
+  }
+  const afterPlan = planLegacyPhaseProjection(after, project, { tournamentId });
+  if (afterPlan.changed) throw new Error('projeção de fases continuou pendente após a escrita');
+  return { ok: true, fingerprint: afterPlan.fingerprint };
+}
+
+module.exports = { stable, hash, protectedFingerprint, planLegacyPhaseProjection, verifyProjectedDocument };

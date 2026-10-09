@@ -172,6 +172,8 @@ const SUITES = [
   'tests/telefone-do-organizador-caduca.test.js',
   'tests/rules-mudou-tem-de-ser-testada.test.js',
   'tests/legacy-phase-projection-core.test.js',
+  'tests/migrar-fases-legadas-core.test.js',
+  'tests/migrar-fases-legadas-cas-emulador.test.js',
   'tests/advance-decisions-contract.test.js',
 
   /* ⭐ AS 9 DO AUTODRAW SAÍRAM DO LIMBO "MANUAL" (13/set/2026).
