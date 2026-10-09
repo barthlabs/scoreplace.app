@@ -80,7 +80,10 @@ if rg -q '^functions-autodraw/vendor/' "$ALL" 2>/dev/null; then
     cmp -s functions/legacy-phase-projection-core.js functions-autodraw/vendor/legacy-phase-projection-core.js || {
       echo '✗ fonte e vendor de projeção de fases divergem'; exit 1;
     }
-    rg -n 'module\.exports\s*=\s*\{\s*planLegacyPhaseProjection\s*\}' \
+    # A ordem das propriedades exportadas não é contrato. Exigir que a função
+    # fosse a primeira do objeto fazia a própria evidência abortar embora os
+    # dois módulos expusessem corretamente a mesma API.
+    rg -n 'planLegacyPhaseProjection' \
       functions/legacy-phase-projection-core.js functions-autodraw/vendor/legacy-phase-projection-core.js
     echo 'Chamadas de canonicalização no boundary de escrita:'
     rg -n 'canonicalizeTournamentPhases' js/firebase-db.js functions-autodraw/index.js
