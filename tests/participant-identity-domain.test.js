@@ -69,6 +69,10 @@ ok(browser._teamOriginKey(duoA) !== browser._teamOriginKey(duoB) &&
 ok(browser._getTeamOrigin({ 'Ana / Bia': 'inscrita' }, duoA) === 'inscrita',
   '⑲ documentos legados por rótulo continuam legíveis durante a migração');
 
+const enrollmentView = fs.readFileSync(path.join(ROOT, 'js/views/tournaments-enrollment.js'), 'utf8');
+ok(/window\._setTeamOriginOf\(_teamOrigins, participantObj, 'inscrita'\)/.test(enrollmentView),
+  '⑲a inscrição usa a ponte canônica de origem da dupla, com a mesma chave do sorteio');
+
 const index = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
 ok(index.indexOf('js/domain/participant-identity.js') < index.indexOf('js/views/identity-core.js'),
   '⑳ domínio carrega antes do adaptador clássico');
