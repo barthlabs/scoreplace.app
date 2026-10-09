@@ -829,10 +829,9 @@
               window._swReg.update().catch(function(){});
             }
           });
-          // Novo SW instalado: ativa logo (skipWaiting). NÃO recarrega aqui — o
-          // reload é centralizado no controllerchange (abaixo), com guarda, pra
-          // não disparar reload em DOBRO/TRIPLO (causa da barra de carregamento
-          // "avançar e voltar" várias vezes). v2.6.16.
+          // Novo SW instalado: ativa logo (skipWaiting). A decisão de atualizar
+          // pertence exclusivamente à sonda de version.txt em store.js; trocar
+          // controller não prova que existe uma versão nova da aplicação.
           reg.addEventListener('updatefound', function() {
             var nw = reg.installing;
             if (nw) nw.addEventListener('statechange', function() {
@@ -841,43 +840,33 @@
           });
           if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
         }).catch(function() {});
-        // Recarrega UMA única vez quando um SW NOVO assume o controle — e SÓ
-        // quando já havia um controller (update real). Na 1ª instalação o
-        // clients.claim dispara controllerchange sem precisar recarregar.
+        // Uma troca de controller só dispara uma SONDAGEM forçada. Ela nunca
+        // cria pílula, pendência ou reload direto: em alguns navegadores o SW
+        // troca mesmo com JS/version.txt já iguais, e oferecer "Atualizar" nesse
+        // caso é exatamente o falso positivo que esta porta deve impedir.
         var _hadController = !!navigator.serviceWorker.controller;
         navigator.serviceWorker.addEventListener('controllerchange', function() {
           if (window._swReloading || !_hadController) return;
           window._swReloading = true;
-          // NUNCA recarrega no MEIO do boot — reiniciaria a barra ("avançar e voltar")
-          // ou deixaria o loader preso se caírem vários updates seguidos. Espera a tela
-          // revelar (window._bootInProgress vira false no hide, inclusive pelo failsafe
-          // de 12s) e só então recarrega pra pegar a versão nova.
-          // ⛔ E NUNCA RECARREGA FORA DA TELA INICIAL (18/set/2026). Relato do dono: com o
-          // app aberto há tempo, "do nada ele apaga a tela, diz que está recarregando e
-          // volta para o seu jogo, que não era onde estávamos". Era este handler: a versão
-          // nova assumia em segundo plano e a aba recarregava no meio da chave. O reload
-          // passa a esperar o mesmo momento seguro que o auto-update já respeita
-          // (_isSafeToReload: dashboard, sem overlay, sem campo em edição); até lá fica a
-          // pílula de atualização e a tela que a pessoa está olhando não muda.
-          var _doReload = function(){
+          // Nunca recarrega no meio do boot. Ao terminar, apenas pergunta ao
+          // árbitro version.txt; se houver diferença real, _checkForUpdate
+          // aplica as mesmas regras de segurança e de interface do resto do app.
+          var _probeControllerChange = function(){
             try {
-              if (typeof window._isSafeToReload === 'function' && !window._isSafeToReload()) {
-                window._swReloading = false;            // libera para a próxima tentativa
-                window._pendingUpdateReload = true;      // _checkForUpdate recarrega no momento seguro
-                if (typeof window._showUpdatePill === 'function') window._showUpdatePill();
-                return;
+              window._swReloading = false;
+              if (typeof window._checkForUpdate === 'function') {
+                window._checkForUpdate({ force: true, source: 'controllerchange' });
               }
-              window.location.reload();
             } catch(e){}
           };
           if (window._bootInProgress) {
             var _w = 0;
             var _iv = setInterval(function(){
               _w += 250;
-              if (!window._bootInProgress || _w >= 14000) { clearInterval(_iv); _doReload(); }
+              if (!window._bootInProgress || _w >= 14000) { clearInterval(_iv); _probeControllerChange(); }
             }, 250);
           } else {
-            _doReload();
+            _probeControllerChange();
           }
         });
       });

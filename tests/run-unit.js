@@ -556,6 +556,7 @@ const SUITES = [
   'tests/prazo-da-rodada-eliminatoria.test.js',
   'tests/prazo-do-card-sem-round-usa-o-id.test.js',
   'tests/troca-de-versao-nao-apaga-a-tela.test.js',
+  'tests/atualizacao-so-com-versao-comprovada.test.js',
   'tests/presenca-so-quando-o-jogo-e-iminente.test.js',
   // A chamada no card é individual: uma dupla parcial precisa mostrar quem chegou.
   'tests/bolinha-presenca-individual.test.js',

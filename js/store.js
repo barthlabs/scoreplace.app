@@ -3947,12 +3947,32 @@ window._devWhatsAppBtnHtml = function (opts) {
     return true;
   };
 
+  // Só existe atualização pendente quando a sonda canônica já viu uma versão
+  // remota diferente do JavaScript desta página. Evento de Service Worker, shell
+  // atrasado ou estado antigo de sessão não são prova suficiente para oferecer
+  // "Atualizar" a quem já está na versão servida.
+  window._hasProvenUpdatePending = function() {
+    try {
+      var pending = String(window._pendingUpdateVersion || '').trim();
+      var running = String(window.SCOREPLACE_VERSION || '').trim();
+      return !!pending && pending.length < 40 && !!running && pending !== running;
+    } catch (e) { return false; }
+  };
+
   // v2.6.103: pílula visível "Nova versão — toque pra atualizar". Aparece sempre
   // que detectamos versão nova (mesmo quando o reload automático é adiado por ação
   // em andamento) — assim o usuário NUNCA precisa de DevTools/aba anônima: 1 toque
   // e atualiza na hora. O reload automático (quando seguro) continua valendo.
   window._showUpdatePill = function() {
     try {
+      // A UI não pode sobreviver à prova que a invalida. Este guard protege
+      // inclusive chamadas legadas: sem versão remota comprovada, remove a
+      // pílula residual e não cria um falso pedido de atualização.
+      if (!window._hasProvenUpdatePending()) {
+        var stale = document.getElementById('sp-update-pill');
+        if (stale) stale.remove();
+        return;
+      }
       if (document.getElementById('sp-update-pill')) return;
       if (!document.body) return;
       var pill = document.createElement('button');
@@ -4118,8 +4138,22 @@ window._devWhatsAppBtnHtml = function (opts) {
     var now = Date.now();
     // Se já detectamos uma versão nova antes mas adiamos, tenta aplicar agora.
     if (window._pendingUpdateReload) {
-      window._applyUpdate(false, { silent: !!window._pendingUpdateSilent });
-      if (!opts.force) return;
+      if (window._hasProvenUpdatePending()) {
+        window._applyUpdate(false, { silent: !!window._pendingUpdateSilent });
+        if (!opts.force) return;
+      } else {
+        // `controllerchange` antigo ou sessão anterior não decide atualização.
+        // Só a resposta de version.txt pode restaurar este estado.
+        window._pendingUpdateReload = false;
+        window._pendingUpdateSilent = false;
+      }
+    }
+    // Eventos de controller podem chegar em rajada. Uma única sonda fica em
+    // voo; outro pedido forçado agenda exatamente uma nova leitura depois dela,
+    // para que uma versão publicada no intervalo seja a que prevalece.
+    if (window._updateCheckInFlight) {
+      if (opts.force) window._updateCheckQueued = true;
+      return window._updateCheckInFlight;
     }
     if (!opts.force && (now - window._lastUpdateCheck) < 60000) return;
     window._lastUpdateCheck = now;
@@ -4127,7 +4161,7 @@ window._devWhatsAppBtnHtml = function (opts) {
     // em vez de baixar store.js (400KB) a cada check. URL `_swcheck` = o SW IGNORA (rede
     // direta, sem cachear). cache:'no-store' evita o cache HTTP. Antes o Range em store.js
     // não era honrado pelo hosting (voltava 400KB) → caro com checks frequentes.
-    fetch('/version.txt?_swcheck=' + now, { cache: 'no-store' }).then(function(r) {
+    var _probe = fetch('/version.txt?_swcheck=' + now, { cache: 'no-store' }).then(function(r) {
       if (!r.ok) throw new Error('fetch failed');
       return r.text();
     }).then(function(txt) {
@@ -4213,6 +4247,16 @@ window._devWhatsAppBtnHtml = function (opts) {
         window._applyUpdate(!!opts.force, { silent: true });
       }
     }).catch(function() {});
+    window._updateCheckInFlight = _probe;
+    var _finishProbe = function() {
+      if (window._updateCheckInFlight !== _probe) return;
+      window._updateCheckInFlight = null;
+      if (!window._updateCheckQueued) return;
+      window._updateCheckQueued = false;
+      setTimeout(function() { window._checkForUpdate({ force: true }); }, 0);
+    };
+    _probe.then(_finishProbe, _finishProbe);
+    return _probe;
   };
 
   // 1. No load inicial: força (nada que o usuário tenha digitado ainda).
