@@ -400,6 +400,13 @@ ele provar um defeito específico deste diff, indicando arquivo e cenário.
 Quando o diff referencia variável, função ou script parcialmente fora do corte, use Read/Grep
 na árvore atual antes de declarar algo indefinido, ausente ou sem contexto. A árvore atual é
 autoridade: um diff é deliberadamente parcial e não prova que uma definição antiga inexiste.
+Quando o cabeçalho disser LOTE, ele é apenas uma partição de transporte do mesmo corte: não
+infira ausência de arquivo, função, teste ou cópia vendor porque não apareceu naquele lote.
+Antes de alegar que um arquivo ou símbolo não existe, confirme com Read/Grep na árvore e cite
+o resultado concreto. Você não tem Bash: nunca afirme que testes falharam, passaram ou foram
+executados, salvo quando isso constar expressamente na EVIDÊNCIA DE VALIDAÇÃO do pipeline.
+Para cópias vendor, compare fonte e destino na árvore atual ou descreva uma divergência
+comprovada; arquivos relacionados podem estar deliberadamente em lotes diferentes.
 
 Depois, só o que for concreto, sempre com arquivo:linha:
 1. O QUE QUEBRA — regressão, caso não coberto, concorrência, dado que some.
