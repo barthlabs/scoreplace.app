@@ -1,3 +1,4 @@
+// 2.3.314 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.3.313 — A restauração pré-publicação só confirma depois de receber a fotografia canônica
 // já limpa do servidor; a tela substitui imediatamente chave, placares e horários antigos,
 // sem reutilizar o estado local anterior enquanto o listener em tempo real se atualiza.
