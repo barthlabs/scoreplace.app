@@ -92,7 +92,7 @@ const _emailFail = require("./email-failure-core");
 const _categoryEligibility = require("./category-eligibility-core");
 const _registrationCore = require("./registration-core");
 const _registrationMigration = require("./registration-migration-core");
-const _registrationRoster = require("./vendor/registration-roster.js");
+const _canonicalRegistrationBoundary = require("./canonical-registration-boundary-core");
 const _registrationLifecycle = require("./registration-lifecycle-core");
 const _splitParts = require("./split-parts.js");   // torneio dividido: elenco na subcoleção
 const _refereeRoster = require("./vendor/referee-roster.js"); // escala de arbitragem: contrato puro e sem contato
@@ -4328,23 +4328,18 @@ exports.getCanonicalTournamentRoster = onCall(
       const tournamentSnap = await tx.get(ref);
       if (!tournamentSnap.exists) throw new HttpsError("not-found", "torneio não existe");
       const tournament = tournamentSnap.data() || {};
-      const migration = tournament.canonicalRegistrationMigration || {};
-      if (!migration.fingerprint) throw new HttpsError("failed-precondition", "torneio ainda não usa inscrições canônicas");
       const registrationsSnap = await tx.get(ref.collection("registrations"));
       const registrations = registrationsSnap.docs.map((doc) => doc.data() || {});
-      const expected = Number(migration.registrationCount || 0);
-      if (expected !== registrations.length) {
-        throw new HttpsError("failed-precondition", "inscrições canônicas divergentes; abertura interrompida");
-      }
-      let participants;
-      try { participants = _registrationRoster.rosterFromRegistrations(registrations); }
-      catch (error) { throw new HttpsError("failed-precondition", "elenco canônico inválido: " + error.message); }
+      let checked;
+      try { checked = _canonicalRegistrationBoundary.verifiedRoster(tournament, registrations); }
+      catch (error) { throw new HttpsError("failed-precondition", error.message); }
+      const participants = checked.participants;
       const belongsToRoster = participants.some((entry) => [entry.uid, entry.p1Uid, entry.p2Uid]
         .filter(Boolean).map(String).indexOf(String(callerUid)) !== -1);
       if (!_isTournamentOrgCaller(tournament, callerUid) && !belongsToRoster) {
         throw new HttpsError("permission-denied", "elenco indisponível neste torneio");
       }
-      return { tournamentId, registrationCount: registrations.length, participants };
+      return { tournamentId, registrationCount: checked.registrations.length, participants };
     });
   }
 );

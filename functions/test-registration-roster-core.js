@@ -29,8 +29,9 @@ ok('autoDraw recebe a mesma cópia do leitor canônico', source.equals(vendor));
 ok('autoDraw troca o elenco somente após marcador de migração', autoDraw.includes('canonicalRegistrationMigration') && autoDraw.includes('rosterFromRegistrations(registrations)'));
 ok('autoDraw falha fechado se a contagem materializada divergir', autoDraw.includes('contagem divergente') && !/canonicalRegistrationMigration[\s\S]{0,600}participants\s*=\s*montado\.participants/.test(autoDraw));
 ok('leitura canônica fica restrita à organização ou ao próprio elenco', functionsIndex.includes('exports.getCanonicalTournamentRoster = onCall') && functionsIndex.includes('belongsToRoster') && !functionsIndex.includes('tournament.isPublic !== true && !_isTournamentOrgCaller(tournament, callerUid)'));
+ok('leitura e futuras mutações passam por uma fronteira canônica comum', functionsIndex.includes('_canonicalRegistrationBoundary.verifiedRoster(tournament, registrations)'));
 ok('cliente troca o roster somente pelo recibo canônico validado', client.includes("loadCanonicalTournamentRoster(id)") && client.includes('inscrições canônicas divergentes'));
-ok('Function devolve a contagem junto do elenco canônico para o recibo do cliente',
-  /return \{ tournamentId, registrationCount: registrations\.length, participants \}/.test(functionsIndex));
+ok('Function devolve a contagem verificada junto do elenco canônico para o recibo do cliente',
+  /return \{ tournamentId, registrationCount: checked\.registrations\.length, participants \}/.test(functionsIndex));
 console.log((fail ? '❌' : '✅') + ' registration-roster-core: ' + pass + ' ok, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);
