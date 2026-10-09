@@ -28,6 +28,7 @@ ctx.window._matchChip = function () { ctx.chamadasDoChip++; return '<botao/>'; }
 // o recorte usa helpers do módulo: `_isOrg`, `_cu`, `_matchChip` — todos stubados aqui
 vm.runInNewContext(
   'function _isOrg(){return false;} function _cu(){return {uid:"u1"};}\n' +
+  'function _matchHasResult(m){ return !!(m && (m.winner || m.wo || m.completedAt || m.resultAt || (m.pendingResult && m.pendingResult.proposedAt))); }\n' +
   'function _matchChip(){ return window._matchChip(); }\n' +
   WA.slice(ini, fim + 4), ctx);
 const chip = ctx.window._waGrpCardChip;
@@ -44,6 +45,8 @@ must(chip(t, { id: 'm3', p1: 'A', p2: 'BYE' }, { semCabecalhoDeGrupo: true }) ==
   '① ⛔ e BYE continua sem chip em qualquer tela — folga não é jogo');
 must(chip(t, { id: 'm4', p1: 'TBD', p2: 'C / D' }, { semCabecalhoDeGrupo: true }) === '',
   '① ⛔ nem jogo com lado indefinido');
+must(chip(t, { id: 'm5', p1: 'A / B', p2: 'C / D', winner: 'A / B' }) === '',
+  '① ⛔ jogo já encerrado sem grupo não convida a criar conversa tardia');
 
 // ── ② a fiação: quem avisa é a tela inicial ─────────────────────────────────
 must(/_cardFooterChips\(t, m, \{ semCabecalhoDeGrupo: _dashConsensus \}\)/.test(BRK),

@@ -62,10 +62,10 @@ const _iq = DB.indexOf("where('displayName_lower', '==', q)");
 must(/_COLECAO_PERFIL_PUBLICO/.test(DB.slice(DB.lastIndexOf('var snap', _iq), _iq)),
   '② ⭐ e a gêmea `isDisplayNameTaken` continua no espelho — as duas na MESMA coleção');
 
-// ── ③ transferência de organização: existência e conta viva, nunca ficha ───
+// ── ③ transferência de organização: UID confirmado, nunca ficha ────────────
 const htEspelho = (HT.match(/collection\(window\._COLECAO_PERFIL_PUBLICO \|\| 'usersPublic'\)/g) || []).length;
-must(htEspelho === 1,
-  '③ ⭐ o caminho que só pergunta "existe?/quem está vivo?" lê o espelho (achados: ' + htEspelho + ')');
+must(htEspelho === 0,
+  '③ ⭐ a notificação usa o UID confirmado pela Function e não relê perfil algum (achados: ' + htEspelho + ')');
 const htFicha = (HT.match(/collection\('users'\)/g) || []).length;
 must(htFicha === 1,
   '③ resta só a caixa de avisos da própria conta (achados: ' + htFicha + ')');
@@ -77,9 +77,9 @@ const desfeito = STORE.replace("var _col = window._COLECAO_PERFIL_PUBLICO || 'us
   "var _col = 'users';");
 must(!/var _col = window\._COLECAO_PERFIL_PUBLICO/.test(desfeito),
   '④ ⭐ apontado de volta para `users`, a asserção ① iria vermelha');
-const htDesfeito = HT.replace(/collection\(window\._COLECAO_PERFIL_PUBLICO \|\| 'usersPublic'\)/g,
-  "collection('users')");
+const htDesfeito = HT.replace('_resolveAndSend(uid);',
+  "window.FirestoreDB.db.collection('users').doc(uid).get().then(function(){ _resolveAndSend(uid); });");
 must((htDesfeito.match(/collection\('users'\)/g) || []).length === 2,
-  '④ ⭐ desfeita a consulta pública, a contagem do ③ iria de 1 para 2');
+  '④ ⭐ reintroduzida uma consulta de ficha, a contagem do ③ iria de 1 para 2');
 
 console.log('\n✅ ' + ok + ' verificações');
