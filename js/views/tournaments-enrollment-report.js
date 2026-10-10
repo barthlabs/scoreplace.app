@@ -1025,6 +1025,49 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     window._erUpdateSaveBar();
   };
 
+  // O relatório nasceu antes do roster tipado e por isso acumulava alterações para
+  // `applyEnrollmentAssignments`. Em torneio migrado essa porta é proibida: cada
+  // alteração precisa conservar a origem `categoryId` e a identidade estável.
+  // Mantemos as chamadas em série para que uma falha não gere corridas entre
+  // transações; pares recebem uma única mudança, pois a Function move a dupla toda.
+  function _erSaveCanonicalCategoryEdits(t, rows, edits) {
+    if (edits.some(function (edit) { return Object.prototype.hasOwnProperty.call(edit, 'gender'); })) {
+      return Promise.reject(new Error('O gênero não é editável por esta tela em um torneio com inscrições canônicas. Ajuste a categoria tipada da inscrição.'));
+    }
+    var seen = Object.create(null), moves = [];
+    edits.forEach(function (edit) {
+      if (!Object.prototype.hasOwnProperty.call(edit, 'category')) return;
+      var row = rows.filter(function (candidate) {
+        return candidate && ((edit.uid && candidate.uid === edit.uid) || (edit.manualParticipantId && candidate.manualId === edit.manualParticipantId));
+      })[0];
+      if (!row || !row.categoryId || (!row.uid && !row.manualId)) {
+        throw new Error('inscrição canônica sem identidade estável ou categoryId');
+      }
+      var pairKey = row._duplaIdx != null ? 'pair:' + String(row._duplaIdx) : (row.uid ? 'uid:' + row.uid : 'manual:' + row.manualId);
+      if (seen[pairKey]) return;
+      seen[pairKey] = true;
+      moves.push({
+        participant: {
+          uid: row.uid || '',
+          manualParticipantId: row.manualId || '',
+          categoryId: row.categoryId,
+          category: (row.assigned && row.assigned[0]) || ''
+        },
+        targetCategory: edit.category
+      });
+    });
+    if (!moves.length) return Promise.resolve({ changed: 0 });
+    if (typeof window._reclassifyCanonicalCategory !== 'function') {
+      return Promise.reject(new Error('A rota canônica de categorias não está disponível. Atualize o aplicativo e tente novamente.'));
+    }
+    return moves.reduce(function (chain, move) {
+      return chain.then(function (result) {
+        return window._reclassifyCanonicalCategory(t, String(t.id), move.participant, move.targetCategory, move.participant.category)
+          .then(function () { return { changed: result.changed + 1 }; });
+      });
+    }, Promise.resolve({ changed: 0 }));
+  }
+
   function _erPendingCount() {
     var n = 0;
     Object.keys(_pendingEdits).forEach(function (k) { var pe = _pendingEdits[k]; if (pe && Object.keys(pe).length > 0) n++; });
@@ -1221,6 +1264,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       edits.push(e);
     });
     var nEdits = edits.length; if (!nEdits) return;
+    var isCanonicalRoster = typeof window._isCanonicalCategoryRoster === 'function' && window._isCanonicalCategoryRoster(_liveState.t);
     var btns = ['er-save-btn','er-mx-save-btn'].map(function(id){return document.getElementById(id);}).filter(Boolean);
     btns.forEach(function(b){ if(window._spinButton) window._spinButton(b,'Salvando…'); else { b.disabled=true; b.textContent='Salvando…'; } });
     window._suppressSoftRefresh = true;
@@ -1229,7 +1273,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     // em sessões compat — Cloud Run recusava antes de a Function ver o pedido e a UI
     // mostrava apenas "internal". `_callCF` renova o ID token e preserva o protocolo
     // callable, igual a Participantes e às demais telas. [[regression_analysis_save_uses_callcf]]
-    var saveCall = (typeof window._callCF === 'function')
+    var saveCall = isCanonicalRoster
+      ? Promise.resolve().then(function () { return _erSaveCanonicalCategoryEdits(_liveState.t, rows, edits); })
+      : (typeof window._callCF === 'function')
       ? window._callCF('applyEnrollmentAssignments', {
           tournamentId:String(tId), sport:String(sport||''), edits:edits
         }, { unauth:'Entre na sua conta para salvar as atribuições.', falha:'Não foi possível salvar as atribuições.' })

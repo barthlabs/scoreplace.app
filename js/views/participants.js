@@ -3190,6 +3190,7 @@ window._setParticipantSkillCategory = function(tId, pName, newSkill, uid) {
   // usa essa leitura para compor a intenção; quem altera torneio e perfil é a Function.
   var _skillIntent = function(target) {
   var category = null;
+  var participant = null;
   let found = false;
   (target.participants || []).forEach(function(p) {
     if (!p) return;
@@ -3214,18 +3215,36 @@ window._setParticipantSkillCategory = function(tId, pName, newSkill, uid) {
     // Build new combined category
     const newCat = newSkill ? (genderPrefix ? genderPrefix + ' ' + newSkill : newSkill) : genderPrefix;
     category = newCat;
+    participant = p;
     found = true;
   });
-  return found ? category : null;
+  return found ? { category: category, participant: participant } : null;
   };
 
-  var newCategory = _skillIntent(t);
-  if (newCategory === null) return;
+  var skillIntent = _skillIntent(t);
+  if (skillIntent === null) return;
+  var newCategory = skillIntent.category;
 
   // Sem alteração otimista: o navegador só despacha a categoria já combinada e espera o
   // snapshot canônico. A mesma transação atualiza a entrada e o perfil por esporte, sem
   // regravar placar, chave ou presença que tenham mudado em outra aba.
-  const savePromise = (typeof window._callCF === 'function')
+  const isCanonicalRoster = typeof window._isCanonicalCategoryRoster === 'function' && window._isCanonicalCategoryRoster(t);
+  // A inscrição canônica nunca pode ser reenviada pela porta de compatibilidade
+  // por nome. A Function converte o rótulo visual em categoryId e relê o roster
+  // dentro da transação antes de mover a pessoa (e a dupla fixa, se houver).
+  const canonicalParticipant = skillIntent.participant && typeof skillIntent.participant === 'object'
+    ? {
+        uid: uid ? String(uid) : String(skillIntent.participant.uid || skillIntent.participant.p1Uid || skillIntent.participant.p2Uid || ''),
+        manualParticipantId: String(skillIntent.participant.manualParticipantId || skillIntent.participant.manualId || ''),
+        categoryId: String(skillIntent.participant.categoryId || ''),
+        category: String(skillIntent.participant.category || '')
+      }
+    : null;
+  const savePromise = isCanonicalRoster
+    ? ((typeof window._reclassifyCanonicalCategory === 'function' && canonicalParticipant)
+      ? window._reclassifyCanonicalCategory(t, String(tId), canonicalParticipant, newCategory, canonicalParticipant.category)
+      : Promise.reject(new Error('Não foi possível localizar a inscrição canônica para alterar a categoria.')))
+    : (typeof window._callCF === 'function')
     ? window._callCF('applyEnrollmentAssignments', {
       tournamentId: String(tId),
       sport: String(t.sport || t.sportType || ''),
@@ -3244,6 +3263,7 @@ window._setParticipantSkillCategory = function(tId, pName, newSkill, uid) {
     }
   }).catch(function(e) {
     window._warn('[Participants] skill save failed:', e);
+    if (typeof showNotification === 'function') showNotification('Não foi possível atualizar a categoria', String((e && e.message) || e), 'error');
   });
 };
 

@@ -2713,6 +2713,10 @@ function _assignmentParticipantIdentity(p) {
 function _isCanonicalCategoryRoster(t) {
     return !!(t && t.canonicalRegistrationMigration && t.canonicalRegistrationMigration.fingerprint);
 }
+// Portas secundárias (Inscritos e Análise) também precisam reconhecer o roster
+// migrado. Expor apenas a pergunta, em vez de cada tela repetir a heurística,
+// evita que um novo marcador canônico deixe uma delas voltar ao writer legado.
+window._isCanonicalCategoryRoster = _isCanonicalCategoryRoster;
 
 function _canonicalCategoryIdForDisplay(t, value) {
     var raw = String(value || '').trim();
@@ -2722,6 +2726,7 @@ function _canonicalCategoryIdForDisplay(t, value) {
     });
     return definition ? String(definition.id || '') : '';
 }
+window._canonicalCategoryIdForDisplay = _canonicalCategoryIdForDisplay;
 
 function _reclassifyCanonicalCategory(t, tId, participant, targetCategory, sourceCategory) {
     var identity = _assignmentParticipantIdentity(participant);
@@ -2746,6 +2751,7 @@ function _reclassifyCanonicalCategory(t, tId, participant, targetCategory, sourc
     else payload.manualParticipantId = identity.manualParticipantId;
     return window.FirestoreDB._callFn('reclassifyCanonicalRegistration', payload);
 }
+window._reclassifyCanonicalCategory = _reclassifyCanonicalCategory;
 
 function _assignParticipantCategory(tId, pIdx, category) {
     var t = window._findTournamentById(tId);
