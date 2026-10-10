@@ -59,6 +59,16 @@ window._autoDrawScheduleForCurrentPhase = function(t) {
         var idx = Number(t.currentPhaseIndex == null ? 0 : t.currentPhaseIndex);
         if (!isFinite(idx) || idx < 0 || idx >= t.phases.length || Math.floor(idx) !== idx) return null;
         var phase = t.phases[idx] || {};
+        // Ponte de leitura, estritamente para a primeira fase de documentos
+        // antigos que já tinham `phases[]`, mas foram gravados antes de `kind`.
+        // Não vale para uma fase posterior nem para uma fase canônica de outro
+        // tipo: assim uma eliminatória nunca ressuscita a agenda do topo.
+        if (!phase.kind) {
+            if (idx === 0 && (t.format === 'Liga' || t.format === 'Ranking')) {
+                return { phaseIndex: 0, phase: phase, schedule: t, projected: false };
+            }
+            return null;
+        }
         if (phase.kind !== 'classification' || (phase.classification && phase.classification.structure === 'groups')) return null;
         var hasPhaseSchedule = hasOwn.call(phase, 'drawManual') ||
             hasOwn.call(phase, 'drawFirstDate') || hasOwn.call(phase, 'drawFirstTime') ||

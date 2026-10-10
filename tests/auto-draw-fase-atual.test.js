@@ -17,6 +17,13 @@ console.log('\n──── agenda automática da fase atual ────\n');
 const legacy = { format: 'Liga', drawManual: false, drawFirstDate: '2026-10-20' };
 same(W._isLigaAutoDraw(legacy), true, 'documento sem phases[] preserva a ponte Liga legada');
 same(W._autoDrawScheduleForCurrentPhase(legacy).projected, false, 'resolvedor marca explicitamente a ponte de documento sem phases[]');
+const faseLegadaSemKind = Object.assign({}, legacy, {
+  phases: [{ formatCode: 'liga', rounds: 3, reiRainha: true }]
+});
+same(W._isLigaAutoDraw(faseLegadaSemKind), true,
+  'fase 0 antiga sem kind preserva a agenda do topo durante a tradução de leitura');
+same(W._autoDrawScheduleForCurrentPhase(faseLegadaSemKind).projected, false,
+  'ponte de fase sem kind é marcada como legado, não confundida com fase canônica');
 
 const faseInicialProjetada = {
   format: 'Liga', drawManual: false, drawFirstDate: '2026-10-20', currentPhaseIndex: 0,

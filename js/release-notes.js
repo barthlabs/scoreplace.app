@@ -1,4 +1,7 @@
-// 2.3.321 — Atualização consolidada de produção com as correções validadas desde a última publicação.
+// 2.3.321 — A agenda automática passa a resolver a fase corrente antes de qualquer
+// configuração histórica do torneio. Documentos antigos cuja primeira fase ainda não
+// traz `kind` preservam o agendamento que já possuíam; uma fase canônica eliminatória
+// ou posterior não herda, por engano, a agenda classificatória legada.
 // 2.3.320 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.3.319 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.3.318 — Atualização consolidada de produção com as correções validadas desde a última publicação.
