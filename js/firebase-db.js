@@ -2615,7 +2615,8 @@ window.FirestoreDB = {
 
   // Criação inicial é exclusivamente no servidor: ele grava o perfil do UID
   // autenticado na mesma transação. O navegador nunca cria users/{uid} direto;
-  // displayName é apresentação e pode coincidir entre pessoas.
+  // displayName é apresentação exclusiva por decisão de produto, mas nunca
+  // substitui o UID como identidade.
   async initializeUserProfile(profileData) {
     return this._callFn('initializeUserProfile', { profile: profileData || {} });
   },

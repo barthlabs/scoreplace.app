@@ -22,7 +22,7 @@ censo antes/depois e aprovação específica.
 | Sorteio | Rei/Rainha já é tratado em diversos pontos como modo de sorteio; ainda há caminhos e testes dependentes de `Liga`. | Deve migrar para uma modalidade explícita dentro de uma fase classificatória, sem apagar o adaptador de leitura. |
 | Chaves | `tournaments-draw-prep.js` oferece uma escolha; `phases-engine.js` documenta e executa a decisão ignorando `bracketResolution`; `tournaments-draw.js` remove essa decisão no reset. | A escolha atual não é uma política canônica aplicada pelo motor. BYE e sobra única não devem ser conectados a ela ainda. |
 | Inscrição | `functions/enroll-core.js` deduplica contas por `uid` e vagas manuais por `manualParticipantId`; sinais de conta suspeita não decidem inscrição. | Ainda falta o registro canônico por categoria, mas nome/e-mail/telefone não são chaves de unicidade. |
-| Nome de exibição | `initializeUserProfile` e `displayNameClaims` ainda recusam um nome já usado. | Isto contraria o domínio: homônimos são permitidos; nome é apresentação e, no máximo, sinal privado de revisão — nunca identidade ou trava de cadastro. |
+| Nome de exibição | `initializeUserProfile` e `displayNameClaims` reservam o nome em transação e recusam um nome já usado. | O produto não admite homônimos de exibição: a colisão bloqueia somente o rótulo, nunca cria vínculo, autorização ou fusão entre UIDs. |
 | Dados de perfil | Há cópias de nome, e-mail e foto em participantes e pares; a análise de inscritos resolve perfis somente por UID. | A regra de perfil único ainda não está completa; precisa de migração por fronteira, não de nova varredura textual isolada. |
 | Elenco | O produto mantém lista embutida, espera embutida, espelho `participants` e, em torneios divididos, `inscritos`. | A duplicação é uma causa raiz de regressões; o cadastro deve ter uma fonte canônica única. |
 | Telemetria de SMS | O cliente anteriormente criava `users/{uid}/phoneVerifyAttempts` e duplicava telefone no rastro. Em 21/09/2026, `recordPhoneVerificationAttempt` passou a validar o intent, fixar o UID do token e gravar somente desfecho operacional. | A subcoleção está fechada a escrita direta nas Rules; telefone e mensagem crua não entram mais nessa projeção. |
@@ -498,8 +498,10 @@ aceitá-la por payload numa nova Function apenas deslocaria a vulnerabilidade.
   do mesmo torneio, inclusive em chamadas concorrentes.
 - Nenhum dado pessoal de perfil é escrito em entidade viva de torneio para
   participante autenticado; todas as referências são por UID.
-- Dois `uid`s distintos nunca são fundidos ou bloqueados definitivamente por
-  foto, nome ou sinal probabilístico.
+- Dois `uid`s distintos nunca são fundidos, autorizados ou bloqueados como
+  contas por foto, nome ou sinal probabilístico. A única exceção é a reserva
+  explícita do mesmo nome de exibição, que recusa o rótulo duplicado sem tocar
+  nas contas nem em suas inscrições.
 - Nenhum gatilho ou tarefa agendada pode alterar ou apagar conta, inscrição ou
   partida por coincidência de atributo de perfil; toda fusão possui comando,
   prova dos dois lados, recibo de auditoria e reversão validada.

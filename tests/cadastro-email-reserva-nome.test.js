@@ -3,8 +3,8 @@
  * node tests/cadastro-email-reserva-nome.test.js
  *
  * A função REAL de auth.js é executada em VM. `initializeUserProfile` pertence
- * ao servidor e fixa o perfil ao UID autenticado; nome é apresentação e nunca
- * é reservado. Se a criação do perfil falhar por qualquer motivo, a credencial
+ * ao servidor e fixa o perfil ao UID autenticado; nome é apresentação exclusiva
+ * reservada na mesma transação. Se a criação do perfil falhar por qualquer motivo, a credencial
  * que acabou de nascer é apagada para não deixar uma conta Auth órfã.
  */
 const fs = require('fs');
