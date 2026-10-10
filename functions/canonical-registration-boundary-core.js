@@ -86,15 +86,40 @@ function applyCreates(tournament, registrations, creates) {
   return Object.assign({ tournament: nextTournament }, next);
 }
 
-/* Uma transição pode retirar registros e criar a categoria de destino no mesmo
- * commit. Validamos a fotografia intermediária antes de avançar o recibo: assim
- * nunca há criação que ignore uma retirada, nem retirada que faça a contagem
- * canônica divergir. */
+/* Uma transição pode trocar a identidade estrutural de uma vaga no mesmo
+ * commit (por exemplo, vaga manual -> conta). Nesse caso validar primeiro só
+ * as atualizações produziria uma dupla órfã temporária, embora a fotografia
+ * final seja íntegra. Por isso esta operação monta a fotografia FINAL inteira
+ * e a valida uma única vez antes de qualquer write. */
 function applyChanges(tournament, registrations, updates, creates) {
-  const afterUpdates = applyUpdates(tournament, registrations, updates);
-  return (Array.isArray(creates) && creates.length)
-    ? applyCreates(tournament, afterUpdates.registrations, creates)
-    : afterUpdates;
+  const before = verifiedRoster(tournament, registrations);
+  const replacements = new Map();
+  (Array.isArray(updates) ? updates : []).forEach((update) => {
+    const id = text(update && update.registrationId);
+    if (!id) throw new Error('atualização canônica sem registrationId');
+    if (replacements.has(id)) throw new Error('atualização canônica duplicada');
+    replacements.set(id, update);
+  });
+  const existing = new Set(before.registrations.map((item) => item.registrationId));
+  replacements.forEach((_, id) => {
+    if (!existing.has(id)) throw new Error('atualização canônica fora do elenco');
+  });
+
+  const additions = Array.isArray(creates) ? creates.slice() : [];
+  const seen = new Set();
+  additions.forEach((item) => {
+    const id = text(item && item.registrationId);
+    if (!id) throw new Error('nova inscrição canônica sem registrationId');
+    if (existing.has(id) || seen.has(id)) throw new Error('nova inscrição canônica duplicada');
+    seen.add(id);
+  });
+  const nextRegistrations = before.registrations.map((item) => replacements.get(item.registrationId) || item).concat(additions);
+  const migration = Object.assign({}, tournament.canonicalRegistrationMigration, {
+    registrationCount: nextRegistrations.length,
+  });
+  const nextTournament = Object.assign({}, tournament, { canonicalRegistrationMigration: migration });
+  const next = verifiedRoster(nextTournament, nextRegistrations);
+  return Object.assign({ tournament: nextTournament }, next);
 }
 
 /* `memberUids` é o índice de entrega do torneio no cliente, não uma cópia de

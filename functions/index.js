@@ -4192,11 +4192,18 @@ function _writeCanonicalRosterChanges(tx, tournamentRef, tournament, registratio
   try { next = _canonicalRegistrationBoundary.applyChanges(canonicalTournament, registrations, updates, creates); }
   catch (error) { throw new HttpsError("failed-precondition", error.message); }
   updates.forEach((item) => {
-    tx.update(tournamentRef.collection("registrations").doc(item.registrationId), {
+    const patch = {
       status: item.status,
       fixedPairId: item.fixedPairId || null,
       updatedAt: _FV.serverTimestamp(),
-    });
+    };
+    // Motivos de retirada pertencem ao histórico canônico do registro. A
+    // transição manual -> conta os cria/limpa no mesmo commit; ignorá-los aqui
+    // faria o núcleo aprovar uma fotografia que nunca é persistida inteira.
+    if (Object.prototype.hasOwnProperty.call(item, "withdrawnReason")) {
+      patch.withdrawnReason = item.withdrawnReason || null;
+    }
+    tx.update(tournamentRef.collection("registrations").doc(item.registrationId), patch);
   });
   creates.forEach((item) => {
     tx.create(tournamentRef.collection("registrations").doc(item.registrationId), Object.assign({}, item, {
