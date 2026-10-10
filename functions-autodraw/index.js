@@ -1311,6 +1311,14 @@ exports.addTournamentPlaceholders = onCall(async request => {
     const t = await _leTorneio(tx, ref, tId);
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
     if (!_isTournamentAdmin(t, uid)) throw new HttpsError('permission-denied', 'Só a organização adiciona placeholders.');
+    // A rota histórica só sabe criar uma vaga numerada no espelho de
+    // participants. Depois da materialização canônica, toda vaga exige
+    // manualParticipantId e categoryId no registro físico; aceitar esta chamada
+    // produziria um elenco que a fonte canônica não reconhece. A interface
+    // encaminha a organização para “+ Participante”, que já exige a categoria.
+    if (t.canonicalRegistrationMigration && t.canonicalRegistrationMigration.fingerprint) {
+      throw new HttpsError('failed-precondition', 'Em torneios canônicos, adicione a vaga por “+ Participante” e escolha a categoria.');
+    }
     const before = _antesDoMotor(t);
     const out = drawWindow._addPlaceholdersCore(tId, quantity, null, { tournament: t, server: true, skipPersist: true, silent: true });
     if (!out || !out.changed) throw new HttpsError('failed-precondition', 'Não foi possível adicionar placeholders.');
