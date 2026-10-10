@@ -151,6 +151,7 @@ const TABELA = [
   { nome: "reconcileMonarchEnrollment", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },
   { nome: "recordPhoneVerificationAttempt", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
   { nome: "registerPhonePassword", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
+  { nome: "reclassifyCanonicalRegistration", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
   { nome: "rejectFriendRequest", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"constante","nome":"_AMIZADE_OPTS"} },
   { nome: "removeFriend", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"constante","nome":"_AMIZADE_OPTS"} },
   { nome: "removeOwnCasualMatchHistory", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
