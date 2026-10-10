@@ -6526,12 +6526,16 @@ window._phaseGenNextLeagueRound = _phaseGenNextLeagueRound;
 // Roda no poller (só organizador escreve) e corrige os dados já afetados sem
 // intervenção manual. Retorna true se removeu alguma rodada.
 function _healPrematureLigaRounds(t) {
-  if (!(window._isLigaFormat && window._isLigaFormat(t))) return false;
-  if (t.drawManual === true || !t.drawFirstDate) return false;
+  // `rounds` é o storage da fase 0. Em fase posterior, ou sem agenda
+  // classificatória canônica, nunca tentar "curar" pelo rótulo histórico Liga.
+  var autoCfg = window._autoDrawScheduleForCurrentPhase && window._autoDrawScheduleForCurrentPhase(t);
+  if (!autoCfg || autoCfg.phaseIndex !== 0) return false;
+  var schedule = autoCfg.schedule;
+  if (schedule.drawManual === true || !schedule.drawFirstDate) return false;
   if (!Array.isArray(t.rounds) || t.rounds.length < 2) return false;
-  var firstDraw = new Date(t.drawFirstDate + 'T' + (t.drawFirstTime || '19:00')).getTime();
+  var firstDraw = new Date(schedule.drawFirstDate + 'T' + (schedule.drawFirstTime || '19:00')).getTime();
   if (isNaN(firstDraw)) return false;
-  var intervalDays = parseInt(t.drawIntervalDays) || 7;
+  var intervalDays = parseInt(schedule.drawIntervalDays) || 7;
   if (intervalDays < 1) intervalDays = 1;
   var intervalMs = intervalDays * 86400000;
   var now = Date.now();
@@ -7115,24 +7119,9 @@ window._annulPendingDraw = function (tId) {
 // Sem drawFirstDate o auto está mal configurado e cai no fluxo manual. Usado por
 // tournaments.js, participants.js e _ligaScheduled abaixo.
 window._isLigaAutoDraw = function (t) {
-  if (!t) return false;
-  var hasOwn = Object.prototype.hasOwnProperty;
-  if (Array.isArray(t.phases)) {
-    if (!t.phases.length) return false;
-    var idx = Number(t.currentPhaseIndex == null ? 0 : t.currentPhaseIndex);
-    if (!isFinite(idx) || idx < 0 || idx >= t.phases.length) return false;
-    var phase = t.phases[idx] || {};
-    if (phase.kind !== 'classification' || (phase.classification && phase.classification.structure === 'groups')) return false;
-
-    // A agenda própria de uma fase posterior nunca pode vazar da fase 0. A
-    // retrocompatibilidade é limitada à fase 0 sem qualquer campo de agenda.
-    var hasPhaseSchedule = hasOwn.call(phase, 'drawManual') ||
-      hasOwn.call(phase, 'drawFirstDate') || hasOwn.call(phase, 'drawFirstTime') ||
-      hasOwn.call(phase, 'drawIntervalDays');
-    var schedule = (!hasPhaseSchedule && idx === 0) ? t : phase;
-    return schedule.drawManual !== true && !!schedule.drawFirstDate;
-  }
-  return !!((window._isLigaFormat && window._isLigaFormat(t)) && t.drawManual !== true && t.drawFirstDate);
+  var autoCfg = window._autoDrawScheduleForCurrentPhase && window._autoDrawScheduleForCurrentPhase(t);
+  var schedule = autoCfg && autoCfg.schedule;
+  return !!(schedule && schedule.drawManual !== true && schedule.drawFirstDate);
 };
 
 // v1.2.11: _fireLigaAutoDraw REMOVIDA — o sorteio agendado da Liga é do SERVIDOR.

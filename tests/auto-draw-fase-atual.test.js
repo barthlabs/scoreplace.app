@@ -16,6 +16,7 @@ console.log('\n──── agenda automática da fase atual ────\n');
 
 const legacy = { format: 'Liga', drawManual: false, drawFirstDate: '2026-10-20' };
 same(W._isLigaAutoDraw(legacy), true, 'documento sem phases[] preserva a ponte Liga legada');
+same(W._autoDrawScheduleForCurrentPhase(legacy).projected, false, 'resolvedor marca explicitamente a ponte de documento sem phases[]');
 
 const faseInicialProjetada = {
   format: 'Liga', drawManual: false, drawFirstDate: '2026-10-20', currentPhaseIndex: 0,
@@ -23,6 +24,8 @@ const faseInicialProjetada = {
 };
 same(W._isLigaAutoDraw(faseInicialProjetada), true,
   'fase 0 classificatória projetada herda agenda do topo somente quando ainda não a carrega');
+same(W._autoDrawScheduleForCurrentPhase(faseInicialProjetada).phaseIndex, 0,
+  'resolvedor único identifica a fase atual que fornece a agenda');
 
 const eliminatoriaAtual = Object.assign({}, faseInicialProjetada, {
   currentPhaseIndex: 1,
@@ -30,6 +33,8 @@ const eliminatoriaAtual = Object.assign({}, faseInicialProjetada, {
 });
 same(W._isLigaAutoDraw(eliminatoriaAtual), false,
   'eliminatória atual não herda agenda nem o rótulo Liga da classificatória');
+same(W._autoDrawScheduleForCurrentPhase(eliminatoriaAtual), null,
+  'resolvedor único recusa eliminatória, em vez de deixar cada leitor decidir pelo topo');
 
 const grupos = {
   format: 'Liga', drawManual: false, drawFirstDate: '2026-10-20', currentPhaseIndex: 0,

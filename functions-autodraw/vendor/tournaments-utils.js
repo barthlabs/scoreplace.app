@@ -44,6 +44,31 @@ window._faseCorrenteEhLiga = function(t) {
         !(window._faseCorrenteEhClassificatoriaPorRodadas && window._faseCorrenteEhClassificatoriaPorRodadas(t));
 };
 
+/* Resolve a agenda de sorteio da FASE ATUAL sem responder ainda se ela está
+ * completa ou vencida. É a porta única para UI, cálculo do autoDraw e reparos.
+ * `format` no topo só sobrevive como ponte de documento sem `phases[]`.
+ *
+ * A fase 0 projetada antes da cópia dos campos herda o topo; nenhuma fase
+ * posterior recebe essa herança. Isso impede que uma eliminatória ou uma nova
+ * classificatória leia a agenda deixada pela fase inicial. */
+window._autoDrawScheduleForCurrentPhase = function(t) {
+    if (!t) return null;
+    var hasOwn = Object.prototype.hasOwnProperty;
+    if (Array.isArray(t.phases)) {
+        if (!t.phases.length) return null;
+        var idx = Number(t.currentPhaseIndex == null ? 0 : t.currentPhaseIndex);
+        if (!isFinite(idx) || idx < 0 || idx >= t.phases.length || Math.floor(idx) !== idx) return null;
+        var phase = t.phases[idx] || {};
+        if (phase.kind !== 'classification' || (phase.classification && phase.classification.structure === 'groups')) return null;
+        var hasPhaseSchedule = hasOwn.call(phase, 'drawManual') ||
+            hasOwn.call(phase, 'drawFirstDate') || hasOwn.call(phase, 'drawFirstTime') ||
+            hasOwn.call(phase, 'drawIntervalDays');
+        return { phaseIndex: idx, phase: phase, schedule: (!hasPhaseSchedule && idx === 0) ? t : phase, projected: true };
+    }
+    if (t.format !== 'Liga' && t.format !== 'Ranking') return null;
+    return { phaseIndex: 0, phase: null, schedule: t, projected: false };
+};
+
 // Classificatória por rodadas é uma política de pareamento dentro da fase
 // classificatória — nunca um terceiro tipo de fase nem um formato de torneio.
 // Ela mantém entradas/times fixos e ordena os confrontos pela classificação,
@@ -2328,26 +2353,13 @@ window._nextOwedDrawMs = function(t, nowMs) {
         }
         return window._owedDrawSlotMs(_pcfg.drawFirstDate, _pcfg.drawFirstTime, _pcfg.drawIntervalDays, _slot && _slot.lastAutoDrawAt, _now);
     }
-    var hasPhases = Array.isArray(t.phases);
-    if (hasPhases && !t.phases.length) return null;
     // Este ramo é somente a agenda da fase 0. Uma fase posterior incremental
     // retornou acima; qualquer outra fase posterior não pode herdar o relógio
     // da classificatória inicial só porque o topo ainda diz "Liga".
-    var curPhase = Number(t.currentPhaseIndex == null ? 0 : t.currentPhaseIndex);
-    if (hasPhases && (!isFinite(curPhase) || curPhase !== 0)) return null;
-    var phase0 = hasPhases ? (t.phases[0] || {}) : null;
-    // A agenda pertence à fase. A ponte para os campos do topo existe só para
-    // uma fase 0 projetada antes de os campos serem copiados — e para documentos
-    // que ainda não têm phases[]. Uma fase vazia não ressuscita o formato legado.
-    var isLiga = phase0 && phase0.kind
-      ? (phase0.kind === 'classification' && (!phase0.classification || phase0.classification.structure !== 'groups'))
-      : (t.format === 'Liga' || t.format === 'Ranking');
-    var hasOwn = Object.prototype.hasOwnProperty;
-    var phaseHasSchedule = !!(phase0 && (hasOwn.call(phase0, 'drawManual') ||
-      hasOwn.call(phase0, 'drawFirstDate') || hasOwn.call(phase0, 'drawFirstTime') ||
-      hasOwn.call(phase0, 'drawIntervalDays')));
-    var schedule = phaseHasSchedule ? phase0 : t;
-    if (!isLiga || schedule.drawManual === true || !schedule.drawFirstDate || t.status === 'finished') return null;
+    var autoCfg = window._autoDrawScheduleForCurrentPhase && window._autoDrawScheduleForCurrentPhase(t);
+    if (!autoCfg || autoCfg.phaseIndex !== 0) return null;
+    var schedule = autoCfg.schedule;
+    if (schedule.drawManual === true || !schedule.drawFirstDate || t.status === 'finished') return null;
     // v3.x: torneio multifase — o auto-draw para no fim da fase classificatória
     // (avanço pra próxima fase é MANUAL). Single-phase → false (zero efeito).
     if (window._suppressAutoDrawForPhases && window._suppressAutoDrawForPhases(t)) return null;
