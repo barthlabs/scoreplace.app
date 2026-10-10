@@ -4349,14 +4349,20 @@ window._mergeParticipantConfirm = function(tId, personName, personUid, placehold
     if (typeof window._callCF !== 'function') return Promise.resolve(false);
     var t = window._findTournamentById(tId);
     var canonical = !!(t && Array.isArray(t.pendingCanonicalParticipantClaims) && t.pendingCanonicalParticipantClaims.some(function(r) { return r.id === reqId; }));
-    return window._callCF(canonical ? 'resolveCanonicalParticipantClaim' : 'resolveParticipantMerge', {
-        tournamentId: String(tId), [canonical ? 'claimId' : 'requestId']: String(reqId || ''), action: 'accept'
-    }).then(function(out) {
+    var payload = { tournamentId: String(tId), action: 'accept' };
+    var request = canonical
+      ? window._callCF('resolveCanonicalParticipantClaim', Object.assign(payload, { claimId: String(reqId || '') }))
+      : window._callCF('resolveParticipantMerge', Object.assign(payload, { requestId: String(reqId || '') }));
+    return request.then(function(out) {
         var ok = !!(out && out.ok && out.changed);
         if (ok) {
             var container = document.getElementById('view-container');
             if (container) renderTournaments(container, tId);
-            if (typeof showNotification === 'function') showNotification('Mesclado', personName + ' assumiu a vaga de ' + placeholderName + '.', 'success');
+            if (typeof showNotification === 'function') showNotification(
+              canonical ? 'Vínculo concluído' : 'Mesclado',
+              canonical ? 'Sua conta foi vinculada à vaga manual.' : personName + ' assumiu a vaga de ' + placeholderName + '.',
+              'success'
+            );
         }
         return ok;
     }).catch(function(err) {
@@ -4389,9 +4395,13 @@ window._requestMergeAcceptance = function(opts) {
         function() {
             if (typeof window._callCF !== 'function') return;
             var canonical = !!(t.canonicalRegistrationMigration && t.canonicalRegistrationMigration.fingerprint);
-            window._callCF(canonical ? 'requestCanonicalParticipantClaim' : 'requestParticipantMerge', canonical
+            var payload = canonical
               ? { tournamentId: String(opts.tId), accountUid: String(realUid), manualParticipantId: String(manualParticipantId) }
-              : { tournamentId: String(opts.tId), realUid: String(realUid), manualParticipantId: String(manualParticipantId) })
+              : { tournamentId: String(opts.tId), realUid: String(realUid), manualParticipantId: String(manualParticipantId) };
+            var request = canonical
+              ? window._callCF('requestCanonicalParticipantClaim', payload)
+              : window._callCF('requestParticipantMerge', payload);
+            request
               .then(function(out) {
                 if (!out || !out.ok) return;
                 if (typeof window._sendUserNotification === 'function') window._sendUserNotification(realUid, {
@@ -4416,7 +4426,8 @@ window._acceptMergeRequest = function(tId, reqId) {
     if (window._mergePromptShown) delete window._mergePromptShown[reqId];
     window._mergeParticipantConfirm(tId, req.realName, req.realUid, req.genericName, '', reqId).then(function(ok) {
         if (!ok) return;
-        if (req.byUid && typeof window._sendUserNotification === 'function') window._sendUserNotification(req.byUid, { type: 'enrollment_new', title: '✅ Vínculo aceito', message: window._safeHtml(req.realName) + ' aceitou assumir “' + window._safeHtml(req.genericName) + '” em ' + window._safeHtml(t.name || '') + '.', tournamentId: String(t.id), tournamentName: t.name || '', level: 'all' });
+        var requesterUid = canonical ? req.requestedByUid : req.byUid;
+        if (requesterUid && typeof window._sendUserNotification === 'function') window._sendUserNotification(requesterUid, { type: 'enrollment_new', title: '✅ Vínculo aceito', message: canonical ? 'A conta indicada aceitou o vínculo de uma vaga manual em ' + window._safeHtml(t.name || '') + '.' : window._safeHtml(req.realName) + ' aceitou assumir “' + window._safeHtml(req.genericName) + '” em ' + window._safeHtml(t.name || '') + '.', tournamentId: String(t.id), tournamentName: t.name || '', level: 'all' });
     });
 };
 
@@ -4430,9 +4441,14 @@ window._rejectMergeRequest = function(tId, reqId) {
     if (!myUid || myUid !== (canonical ? req.accountUid : req.realUid)) return;
     if (window._mergePromptShown) delete window._mergePromptShown[reqId];
     if (typeof window._callCF !== 'function') return;
-    window._callCF(canonical ? 'resolveCanonicalParticipantClaim' : 'resolveParticipantMerge', Object.assign({ tournamentId: String(tId), action: 'reject' }, canonical ? { claimId: String(reqId) } : { requestId: String(reqId) })).then(function(out) {
+    var payload = { tournamentId: String(tId), action: 'reject' };
+    var request = canonical
+      ? window._callCF('resolveCanonicalParticipantClaim', Object.assign(payload, { claimId: String(reqId) }))
+      : window._callCF('resolveParticipantMerge', Object.assign(payload, { requestId: String(reqId) }));
+    request.then(function(out) {
         if (!out || !out.ok) return;
-        if (req.byUid && typeof window._sendUserNotification === 'function') window._sendUserNotification(req.byUid, { type: 'enrollment_new', title: '❌ Vínculo recusado', message: window._safeHtml(req.realName) + ' recusou assumir “' + window._safeHtml(req.genericName) + '” em ' + window._safeHtml(t.name || '') + '.', tournamentId: String(t.id), tournamentName: t.name || '', level: 'all' });
+        var requesterUid = canonical ? req.requestedByUid : req.byUid;
+        if (requesterUid && typeof window._sendUserNotification === 'function') window._sendUserNotification(requesterUid, { type: 'enrollment_new', title: '❌ Vínculo recusado', message: canonical ? 'A conta indicada recusou o vínculo de uma vaga manual em ' + window._safeHtml(t.name || '') + '.' : window._safeHtml(req.realName) + ' recusou assumir “' + window._safeHtml(req.genericName) + '” em ' + window._safeHtml(t.name || '') + '.', tournamentId: String(t.id), tournamentName: t.name || '', level: 'all' });
         if (typeof showNotification === 'function') showNotification('Pedido recusado', 'A organização foi avisada.', 'info');
         if (typeof window._softRefreshView === 'function') window._softRefreshView();
     }).catch(function(err) { if (typeof showNotification === 'function') showNotification('Não foi possível recusar', (err && err.message) || '', 'warning'); });

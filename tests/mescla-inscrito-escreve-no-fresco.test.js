@@ -9,7 +9,7 @@ const merge = s.slice(start, end);
 const applyStart = s.indexOf('window._applyParticipantMergeFresh = function');
 const apply = s.slice(applyStart, start);
 const serverMerge = server.slice(server.indexOf('exports.resolveParticipantMerge = onCall'), server.indexOf('// ─── Declarar/reverter ausência', server.indexOf('exports.resolveParticipantMerge = onCall')));
-ok(/_callCF\('resolveParticipantMerge'/.test(merge) && !/commitTournamentTx|AppStore\.mutate/.test(merge), 'mescla só envia a decisão à Function');
+ok(/_callCF\('resolveParticipantMerge'/.test(merge) && /_callCF\('resolveCanonicalParticipantClaim'/.test(merge) && !/commitTournamentTx|AppStore\.mutate/.test(merge), 'mescla só envia a decisão à Function canônica ou legada');
 ok(/_mergeParticipantInFreshTournament/.test(serverMerge) && /_gravaTorneio/.test(serverMerge), 'Function reaplica a troca no documento fresco');
 ok(!/saveTournament\(|AppStore\.sync\(/.test(merge), 'mescla não regrava o snapshot da tela');
 ok(/_mergedFrom/.test(apply) && /_replaceParticipantNameInBracket/.test(apply), 'aplicador fresco preserva desfazer e atualiza a chave');
