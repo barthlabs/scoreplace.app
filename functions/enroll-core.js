@@ -183,7 +183,7 @@ function normalizeParticipantIntent(participantObj, callerUid, addedAt) {
   var allowed = {
     uid: true, manualParticipantId: true, name: true, displayName: true,
     ligaActive: true, p1Uid: true, p1Name: true, p2Uid: true, p2Name: true,
-    categories: true, category: true, categorySource: true
+    categories: true, categoryIds: true, category: true, categorySource: true
   };
   if (Object.keys(participantObj).some(function (key) { return !allowed[key]; })) throw new Error('campo de participante não permitido');
   var text = function (key, max) {
@@ -218,6 +218,13 @@ function normalizeParticipantIntent(participantObj, callerUid, addedAt) {
     if (!Array.isArray(participantObj.categories) || participantObj.categories.length > 30) throw new Error('categories inválido');
     out.categories = participantObj.categories.map(function (value) {
       if (typeof value !== 'string' || !(value = value.trim()) || value.length > 120) throw new Error('categories inválido');
+      return value;
+    });
+  }
+  if (participantObj.categoryIds != null) {
+    if (!Array.isArray(participantObj.categoryIds) || participantObj.categoryIds.length > 30) throw new Error('categoryIds inválido');
+    out.categoryIds = participantObj.categoryIds.map(function (value) {
+      if (typeof value !== 'string' || !(value = value.trim()) || !/^[a-z][a-z0-9_-]{0,63}$/.test(value)) throw new Error('categoryIds inválido');
       return value;
     });
   }

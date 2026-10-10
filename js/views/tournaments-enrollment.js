@@ -921,6 +921,35 @@ window._doEnrollCurrentUser = function(tId, selectedCategories, _onSuccess) {
         catsArr = [selectedCategories];
     }
 
+    /* Depois da materialização, o rótulo ainda existe para a pessoa escolher e
+     * enxergar, mas a inscrição deve transportar o ID estável da categoria.
+     * Não há fallback por texto no servidor: definição incompleta/ambígua deve
+     * parar aqui, antes de criar uma vaga na categoria errada. */
+    var canonicalCategoryIds = null;
+    var _canonicalMigration = t && t.canonicalRegistrationMigration;
+    if (_canonicalMigration && _canonicalMigration.fingerprint) {
+        var definitions = Array.isArray(t.categoryDefinitions) ? t.categoryDefinitions : [];
+        var byLabel = {};
+        definitions.forEach(function(definition) {
+            if (!definition || !definition.id || !definition.label) return;
+            var key = String(definition.label).trim().normalize('NFKC').toLocaleLowerCase('pt-BR');
+            if (byLabel[key]) byLabel[key] = null;
+            else byLabel[key] = String(definition.id);
+        });
+        var selected = catsArr && catsArr.length ? catsArr : (definitions.length === 1 ? [definitions[0].label] : []);
+        canonicalCategoryIds = [];
+        selected.forEach(function(label) {
+            var key = String(label || '').trim().normalize('NFKC').toLocaleLowerCase('pt-BR');
+            var id = byLabel[key];
+            if (!id || canonicalCategoryIds.indexOf(id) !== -1) return;
+            canonicalCategoryIds.push(id);
+        });
+        if (!canonicalCategoryIds.length || canonicalCategoryIds.length !== selected.length) {
+            if (typeof showNotification !== 'undefined') showNotification('Categoria necessária', 'Escolha uma categoria válida para concluir a inscrição.', 'warning');
+            return;
+        }
+    }
+
     // v1.8.20-beta: usuários phone-only têm displayName=null e email=null.
     // Telefone guardado como dígitos puros (sem +55, sem máscara) — ex: 11916936454.
     // _pNameDisplay() em store.js aplica a máscara (11) XXXXX-XXXX ao exibir.
@@ -967,6 +996,7 @@ window._doEnrollCurrentUser = function(tId, selectedCategories, _onSuccess) {
         participantObj.category = catsArr[0]; // backward compat
         participantObj.categorySource = 'inscricao';
     }
+    if (canonicalCategoryIds) participantObj.categoryIds = canonicalCategoryIds;
     // Guard: se AppStore.currentUser ainda não carregou completamente (race
     // condition entre login e inscrição), o participantObj pode ter todos os
     // identificadores nulos. Nesse caso, abortar silenciosamente — o _tryAutoEnroll

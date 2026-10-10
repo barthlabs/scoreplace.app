@@ -66,6 +66,13 @@ try { C.normalizeExtraUpdates({ status: 'finished' }); ok('extraUpdates recusa p
     C.normalizeParticipantIntent({ manualParticipantId: 'manual-convidada-01', name: 'Convidada' }, 'org-uid', '2026-07-17T12:00:00.000Z'),
     { name: 'Convidada', ligaActive: true, addedAt: '2026-07-17T12:00:00.000Z',
       manualParticipantId: 'manual-convidada-01', selfEnrolled: false, addedByUid: 'org-uid' });
+  eq('intenção canônica conserva somente IDs tipados de categoria',
+    C.normalizeParticipantIntent({ uid: 'ana-uid', categoryIds: ['fem-a', 'fem-a'] }, 'ana-uid', '2026-07-17T12:00:00.000Z'),
+    { categoryIds: ['fem-a', 'fem-a'], ligaActive: true, addedAt: '2026-07-17T12:00:00.000Z', uid: 'ana-uid', selfEnrolled: true });
+  try {
+    C.normalizeParticipantIntent({ uid: 'ana-uid', categoryIds: ['Fem A'] }, 'ana-uid', '2026-07-17T12:00:00.000Z');
+    ok('intenção canônica recusa rótulo no campo de ID', false);
+  } catch (_) { ok('intenção canônica recusa rótulo no campo de ID', true); }
 })();
 
 (() => {
