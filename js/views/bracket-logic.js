@@ -7101,14 +7101,38 @@ window._annulPendingDraw = function (tId) {
   if(window.showConfirmDialog) window.showConfirmDialog('Anular sorteio?','O sorteio em revisão será descartado.',go,null,{confirmText:'Anular',cancelText:'Cancelar',danger:true}); else go();
 };
 
-// v2.7.6: ÚNICA fonte de "Pontos Corridos com sorteio AUTOMÁTICO agendado" — Liga
-// (ou Ranking) + sorteio não-manual + data agendada. Definido AQUI (e não em store.js)
-// de propósito: bracket-logic.js é vendored pra Cloud Function autoDraw, que não
-// carrega store.js — assim cliente e CF compartilham a MESMA regra. Sem drawFirstDate
-// é auto mal-configurado e cai no fallback manual (v0.16.56). Usado por tournaments.js,
-// participants.js e _ligaScheduled abaixo.
+// ÚNICA fonte de "classificatória com sorteio AUTOMÁTICO agendado". Definido AQUI
+// (e não em store.js) de propósito: bracket-logic.js é vendored pra Cloud Function
+// autoDraw, que não carrega store.js — assim cliente e CF compartilham a MESMA regra.
+//
+// Um torneio multifase pode conservar `format: 'Liga'` como ponte histórica mesmo
+// estando numa eliminatória. Portanto, havendo `phases[]`, a decisão é SEMPRE da
+// fase atual: só classificatória sem grupos pode ser agendada. Os campos de agenda
+// também pertencem à fase; a fase 0 só herda os campos do topo quando é um documento
+// projetado antigo que ainda não os copiou. Documento sem `phases[]` mantém a ponte
+// legada. Lista vazia é documento projetado sem fase, não licença para reanimar o
+// rótulo antigo.
+// Sem drawFirstDate o auto está mal configurado e cai no fluxo manual. Usado por
+// tournaments.js, participants.js e _ligaScheduled abaixo.
 window._isLigaAutoDraw = function (t) {
-  return !!(t && (window._isLigaFormat && window._isLigaFormat(t)) && t.drawManual !== true && t.drawFirstDate);
+  if (!t) return false;
+  var hasOwn = Object.prototype.hasOwnProperty;
+  if (Array.isArray(t.phases)) {
+    if (!t.phases.length) return false;
+    var idx = Number(t.currentPhaseIndex == null ? 0 : t.currentPhaseIndex);
+    if (!isFinite(idx) || idx < 0 || idx >= t.phases.length) return false;
+    var phase = t.phases[idx] || {};
+    if (phase.kind !== 'classification' || (phase.classification && phase.classification.structure === 'groups')) return false;
+
+    // A agenda própria de uma fase posterior nunca pode vazar da fase 0. A
+    // retrocompatibilidade é limitada à fase 0 sem qualquer campo de agenda.
+    var hasPhaseSchedule = hasOwn.call(phase, 'drawManual') ||
+      hasOwn.call(phase, 'drawFirstDate') || hasOwn.call(phase, 'drawFirstTime') ||
+      hasOwn.call(phase, 'drawIntervalDays');
+    var schedule = (!hasPhaseSchedule && idx === 0) ? t : phase;
+    return schedule.drawManual !== true && !!schedule.drawFirstDate;
+  }
+  return !!((window._isLigaFormat && window._isLigaFormat(t)) && t.drawManual !== true && t.drawFirstDate);
 };
 
 // v1.2.11: _fireLigaAutoDraw REMOVIDA — o sorteio agendado da Liga é do SERVIDOR.
