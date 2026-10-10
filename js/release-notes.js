@@ -1,3 +1,4 @@
+// 2.3.318 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.3.317 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.3.316 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.3.315 — Atualização consolidada de produção com as correções validadas desde a última publicação.
