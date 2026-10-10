@@ -4386,6 +4386,9 @@ exports.requestCanonicalRegistration = onCall(
       const tournamentSnap = await tx.get(tournamentRef);
       if (!tournamentSnap.exists) throw new HttpsError("not-found", "torneio não existe");
       const tournament = tournamentSnap.data() || {};
+      if (tournament.canonicalRegistrationMigration && tournament.canonicalRegistrationMigration.fingerprint) {
+        throw new HttpsError("failed-precondition", "torneio já usa inscrições canônicas; use a porta de inscrição normal");
+      }
       if (!_canonicalRegistrationCanStart(tournament)) {
         throw new HttpsError("failed-precondition", "registro canônico exige torneio novo e ainda não sorteado");
       }
@@ -4404,56 +4407,66 @@ exports.requestCanonicalRegistration = onCall(
       try { definitions = _categoryEligibility.normalizeCategoryDefinitions(tournament.categoryDefinitions); }
       catch (_) { throw new HttpsError("failed-precondition", "torneio sem categorias tipadas válidas"); }
 
-      // A inscrição é determinística por participante+categoria. Para saber se
-      // o próprio chamador já ocupa uma categoria, não há motivo para ler o
-      // elenco inteiro do torneio: uma query indexada por participantKey mantém
-      // esta porta proporcional às inscrições daquela conta.
-      const ownRegistrationsQuery = tournamentRef.collection("registrations")
-        .where("participantKey", "==", "uid:" + callerUid);
-      const reads = await Promise.all([tx.get(profileRef), tx.get(ownRegistrationsQuery)]);
+      // Esta é a porta inaugural: antes de criar o recibo, qualquer documento
+      // físico já existente é corrupção/uma tentativa antiga incompleta, não
+      // um estado que possamos mesclar silenciosamente.
+      const reads = await Promise.all([
+        tx.get(profileRef),
+        tx.get(tournamentRef.collection("registrations").limit(1))
+      ]);
       const profile = reads[0].exists ? (reads[0].data() || {}) : {};
-      const registrations = reads[1].docs.map((doc) => doc.data() || {});
-      const existing = registrations
-        .filter((registration) => registration.participantKey === "uid:" + callerUid)
-        .map((registration) => String(registration.categoryId || ""))
-        .filter(Boolean);
+      if (!reads[1].empty) {
+        throw new HttpsError("failed-precondition", "há registros canônicos sem recibo; a abertura foi interrompida");
+      }
       let decision;
       try {
-        decision = _categoryEligibility.decideEnrollment({
-          definitions: definitions,
-          rigor: tournament.enrollmentRigor || "casual",
-          categoryIds: categoryIds,
-          existingCategoryIds: existing,
+        const inauguralTournament = Object.assign({ id: tournamentId }, tournament, {
+          canonicalRegistrationMigration: {
+            fingerprint: "native:" + tournamentId,
+            registrationCount: 0,
+            source: "native",
+            appliedBy: callerUid,
+          }
+        });
+        decision = _canonicalEnrollment.decide({
+          tournament: inauguralTournament,
+          registrations: [],
+          participant: { uid: callerUid, categoryIds: categoryIds },
           profile: profile,
-          sport: tournament.sport,
-          now: new Date(),
+          nowMs: Date.now(),
         });
       } catch (error) { throw new HttpsError("invalid-argument", error.message); }
       if (decision.outcome === "rejected" || decision.outcome === "conflict") {
         return { outcome: decision.outcome, reasons: decision.reasons || [] };
       }
-
-      let enrollment;
+      const enrollment = decision.enrollment;
+      let next;
       try {
-        enrollment = _registrationMutations.enroll(
-          tournamentId,
-          registrations,
-          { uid: callerUid },
-          decision.categoryIds,
-          {
-            status: decision.validationState === "pending_review" ? "pending" : "confirmed",
-            validationState: decision.validationState,
-          }
+        next = _canonicalRegistrationBoundary.applyCreates(
+          Object.assign({ id: tournamentId }, tournament, {
+            canonicalRegistrationMigration: {
+              fingerprint: "native:" + tournamentId,
+              registrationCount: 0,
+              source: "native",
+              appliedBy: callerUid,
+            }
+          }),
+          [], enrollment.creates
         );
-      } catch (error) { throw new HttpsError("failed-precondition", "inscrições canônicas inválidas: " + error.message); }
+      } catch (error) { throw new HttpsError("failed-precondition", error.message); }
       enrollment.creates.forEach((registration) => {
         tx.create(tournamentRef.collection("registrations").doc(registration.registrationId), Object.assign({}, registration, {
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         }));
       });
+      tx.update(tournamentRef, {
+        canonicalRegistrationMigration: next.tournament.canonicalRegistrationMigration,
+        memberUids: _canonicalRegistrationBoundary.memberUids(next.tournament, next.registrations),
+        updatedAt: _FV.serverTimestamp(),
+      });
       return {
-        outcome: enrollment.creates.length ? "accepted" : "already_registered",
+        outcome: decision.outcome === "waitlisted" ? "waitlisted" : "accepted",
         categoryIds: decision.categoryIds,
         createdCategoryIds: enrollment.creates.map((registration) => registration.categoryId),
         validationState: decision.validationState,
