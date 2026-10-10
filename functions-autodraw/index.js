@@ -3417,6 +3417,7 @@ exports.applyEnrollmentAssignments = onCall({ invoker: 'public' }, async (reques
   return db.runTransaction(async tx=>{
     const t=await _leTorneio(tx,ref,tId); if(!t) throw new HttpsError('not-found','Torneio não encontrado.');
     if(!_isTournamentAdmin(t,uid)) throw _drawFail('permission-denied','Só a organização altera inscrições.',{tId,uid});
+    _assertLegacyRosterMutationAllowed(t, 'atribuição legada de categoria');
     const before=_antesDoMotor(t), valid=new Set(Array.isArray(t.combinedCategories)?t.combinedCategories:[]); let changed=0;
     const missing=[];
     const ensureManualIdentity=(target,e)=>{
@@ -3487,6 +3488,7 @@ exports.assignCompetitionTeams = onCall(async (request) => {
     const t = await _leTorneio(tx, ref, tId);
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
     if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização forma os times.', { tId, uid });
+    _assertLegacyRosterMutationAllowed(t, 'formação legada de times');
     if (typeof hasDrawnBracket !== 'function') throw _drawFail('internal', 'Motor do sorteio indisponível no servidor.', { tId });
     if (hasDrawnBracket(t)) throw _drawFail('failed-precondition', 'Os times não podem mudar depois do sorteio.', { tId });
     const core = drawWindow && drawWindow.ScoreplaceTeamCompetition;
@@ -3526,6 +3528,7 @@ exports.applyCategoryCommunicationMarkers = onCall(async (request) => {
     const t = await _leTorneio(tx, ref, tId);
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
     if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização registra comunicação de categorias.', { tId, uid });
+    _assertLegacyRosterMutationAllowed(t, 'marcadores legados de categoria');
     const before = _antesDoMotor(t), parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
     let changed = false;
     const identityOf = p => String((p && (p.uid || p.p1Uid || p.displayName || p.name)) || '');
@@ -3573,6 +3576,7 @@ exports.syncProfileTournamentCategory = onCall(async (request) => {
   return db.runTransaction(async tx => {
     const t = await _leTorneio(tx, ref, tId);
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    _assertLegacyRosterMutationAllowed(t, 'sincronização legada de categoria do perfil');
     const profileSnap = await tx.get(db.collection('users').doc(uid));
     const profile = profileSnap.exists ? (profileSnap.data() || {}) : {};
     const before = _antesDoMotor(t), outcome = drawWindow._categoryMutationsCore.syncProfile(t, profile, uid, nowIso);
@@ -3599,6 +3603,7 @@ exports.resolveProfileTournamentCategoryChange = onCall(async (request) => {
     const t = await _leTorneio(tx, ref, tId);
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
     if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização decide mudança de categoria.', { tId, uid });
+    _assertLegacyRosterMutationAllowed(t, 'decisão legada de categoria do perfil');
     const before = _antesDoMotor(t), outcome = drawWindow._categoryMutationsCore.resolveProfile(t, participantUid, approve, nowIso);
     if (!outcome.changed) return { ok: true, changed: false, action: outcome.action || 'missing' };
     const b = _gravaTorneio(tx, ref, t, before, { agoraIso: nowIso }), r = outcome.request || {};
@@ -3623,6 +3628,7 @@ exports.normalizeTournamentCategories = onCall(async (request) => {
     const t = await _leTorneio(tx, ref, tId);
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
     if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização normaliza categorias.', { tId, uid });
+    _assertLegacyRosterMutationAllowed(t, 'normalização legada de categorias');
     const before = _antesDoMotor(t);
     if (!drawWindow._categoryMutationsCore.normalize(t)) return { ok: true, changed: false };
     const b = _gravaTorneio(tx, ref, t, before, { agoraIso });
@@ -3643,6 +3649,7 @@ exports.autoAssignTournamentCategories = onCall(async (request) => {
     const t = await _leTorneio(tx, ref, tId);
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
     if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização enquadra participantes.', { tId, uid });
+    _assertLegacyRosterMutationAllowed(t, 'enquadramento automático legado');
     // Hidrate somente a cópia transacional com o perfil canônico. Nada do perfil
     // volta para o browser e nenhum snapshot local participa da decisão.
     const participants = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
@@ -3685,6 +3692,7 @@ exports.mergeTournamentCategories = onCall(async (request) => {
     const t = await _leTorneio(tx, ref, tId);
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
     if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização mescla categorias.', { tId, uid });
+    _assertLegacyRosterMutationAllowed(t, 'mesclagem legada de categorias');
     const cats = Array.isArray(t.combinedCategories) ? t.combinedCategories : [];
     if (!cats.includes(sourceCat) || !cats.includes(targetCat)) return { ok: true, changed: false, reason: 'categories-changed' };
     const before = _antesDoMotor(t);
@@ -3705,6 +3713,7 @@ exports.deleteEmptyTournamentCategory = onCall(async (request) => {
     const t = await _leTorneio(tx, ref, tId);
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
     if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização exclui categorias.', { tId, uid });
+    _assertLegacyRosterMutationAllowed(t, 'exclusão legada de categoria');
     const before = _antesDoMotor(t), outcome = drawWindow._categoryMutationsCore.deleteEmpty(t, category);
     if (outcome !== true) return { ok: true, changed: false, outcome };
     const b = _gravaTorneio(tx, ref, t, before, { agoraIso });
@@ -3720,7 +3729,7 @@ exports.undoTournamentCategoryMerge = onCall(async (request) => {
   if (!tId || !Number.isFinite(identity.timestamp) || !identity.mergedName || !identity.sourceCat || !identity.targetCat) throw new HttpsError('invalid-argument', 'Mesclagem inválida.');
   if (!drawWindow || !drawWindow._categoryMutationsCore || typeof drawWindow._categoryMutationsCore.unmerge !== 'function') throw new HttpsError('internal', 'Núcleo de categorias indisponível no servidor.');
   const ref = db.collection('tournaments').doc(tId), agoraIso = new Date().toISOString();
-  return db.runTransaction(async tx => { const t=await _leTorneio(tx,ref,tId); if(!t) throw new HttpsError('not-found','Torneio não encontrado.'); if(!_isTournamentAdmin(t,uid)) throw _drawFail('permission-denied','Só a organização desfaz a mesclagem.',{tId,uid}); const before=_antesDoMotor(t); if(!drawWindow._categoryMutationsCore.unmerge(t,identity)) return {ok:true,changed:false}; const b=_gravaTorneio(tx,ref,t,before,{agoraIso}); return {ok:true,changed:true,tournament:b.clean}; });
+  return db.runTransaction(async tx => { const t=await _leTorneio(tx,ref,tId); if(!t) throw new HttpsError('not-found','Torneio não encontrado.'); if(!_isTournamentAdmin(t,uid)) throw _drawFail('permission-denied','Só a organização desfaz a mesclagem.',{tId,uid}); _assertLegacyRosterMutationAllowed(t, 'desfazer legado de mesclagem de categorias'); const before=_antesDoMotor(t); if(!drawWindow._categoryMutationsCore.unmerge(t,identity)) return {ok:true,changed:false}; const b=_gravaTorneio(tx,ref,t,before,{agoraIso}); return {ok:true,changed:true,tournament:b.clean}; });
 });
 
 exports.undoInferredTournamentCategoryMerge = onCall(async (request) => {
@@ -3730,7 +3739,7 @@ exports.undoInferredTournamentCategoryMerge = onCall(async (request) => {
   if (!tId || !mergedName || inferredCats.length < 2) throw new HttpsError('invalid-argument', 'Categorias inferidas inválidas.');
   if (!drawWindow || !drawWindow._categoryMutationsCore || typeof drawWindow._categoryMutationsCore.unmergeInferred !== 'function') throw new HttpsError('internal', 'Núcleo de categorias indisponível no servidor.');
   const ref=db.collection('tournaments').doc(tId),agoraIso=new Date().toISOString();
-  return db.runTransaction(async tx=>{const t=await _leTorneio(tx,ref,tId);if(!t)throw new HttpsError('not-found','Torneio não encontrado.');if(!_isTournamentAdmin(t,uid))throw _drawFail('permission-denied','Só a organização desfaz a mesclagem.',{tId,uid});const before=_antesDoMotor(t);if(!drawWindow._categoryMutationsCore.unmergeInferred(t,mergedName,inferredCats))return {ok:true,changed:false};const b=_gravaTorneio(tx,ref,t,before,{agoraIso});return {ok:true,changed:true,tournament:b.clean};});
+  return db.runTransaction(async tx=>{const t=await _leTorneio(tx,ref,tId);if(!t)throw new HttpsError('not-found','Torneio não encontrado.');if(!_isTournamentAdmin(t,uid))throw _drawFail('permission-denied','Só a organização desfaz a mesclagem.',{tId,uid});_assertLegacyRosterMutationAllowed(t, 'desfazer legado de mesclagem inferida');const before=_antesDoMotor(t);if(!drawWindow._categoryMutationsCore.unmergeInferred(t,mergedName,inferredCats))return {ok:true,changed:false};const b=_gravaTorneio(tx,ref,t,before,{agoraIso});return {ok:true,changed:true,tournament:b.clean};});
 });
 
 // ─── Escolha de equilíbrio antes do sorteio: uma intenção, uma transação ───────
@@ -3759,6 +3768,7 @@ exports.setDrawBalanceChoice = onCall(async (request) => {
     const t = await _leTorneio(tx, ref, tId);
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
     if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização define o equilíbrio do sorteio.', { tId, uid });
+    _assertLegacyRosterMutationAllowed(t, 'equilíbrio legado do sorteio');
     const before = _antesDoMotor(t);
     const find = item => (t.participants || []).find(participant => {
       if (!participant || typeof participant !== 'object') return false;
@@ -3847,6 +3857,7 @@ exports.setTournamentCategoryConfig = onCall({ invoker: 'public' }, async (reque
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
     if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização configura categorias.', { tId, uid });
     if (JSON.stringify(t.genderCategories || []) === JSON.stringify(genderCategories) && JSON.stringify(t.skillCategories || []) === JSON.stringify(skillCategories)) return { ok:true, changed:false };
+    _assertLegacyRosterMutationAllowed(t, 'configuração legada de categorias');
     const antes = _antesDoMotor(t); t.genderCategories = genderCategories; t.skillCategories = skillCategories; t.combinedCategories = combinedCategories;
     const b = _gravaTorneio(tx, ref, t, antes, { agoraIso });
     return { ok:true, changed:true, tournament:b.clean };

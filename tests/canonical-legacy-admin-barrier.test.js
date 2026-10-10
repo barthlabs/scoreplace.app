@@ -14,7 +14,20 @@ ok(/function _assertLegacyRosterMutationAllowed\(t, operation\)/.test(server) &&
   'promoção legada da lista de espera',
   'sorteio legado de vagas',
   'dissolução legada de times incompletos',
-  'remoção legada entre fases'
+  'remoção legada entre fases',
+  'atribuição legada de categoria',
+  'formação legada de times',
+  'marcadores legados de categoria',
+  'sincronização legada de categoria do perfil',
+  'decisão legada de categoria do perfil',
+  'normalização legada de categorias',
+  'enquadramento automático legado',
+  'mesclagem legada de categorias',
+  'exclusão legada de categoria',
+  'desfazer legado de mesclagem de categorias',
+  'desfazer legado de mesclagem inferida',
+  'equilíbrio legado do sorteio',
+  'configuração legada de categorias'
 ].forEach(function (operation) {
   ok(server.includes("_assertLegacyRosterMutationAllowed(t, '" + operation + "')"), operation + ' é recusada quando o elenco é canônico');
 });
