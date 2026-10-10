@@ -101,6 +101,7 @@ const SUITES = [
   'tests/coluna-do-tiebreak-nao-cola.test.js',
   'tests/wo-card-diz-de-onde-veio.test.js',
   'tests/wo-lista-ativa-canonica.test.js',
+  'tests/wo-manual-identity.test.js',
   'tests/wo-uid-only-storage-contract.test.js',
   'tests/espera-usa-o-card-canonico.test.js',
   'tests/uma-barra-de-busca-por-lista.test.js',

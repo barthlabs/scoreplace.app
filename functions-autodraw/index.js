@@ -2972,6 +2972,54 @@ exports.resolveParticipantMerge = onCall(async request => {
   return db.runTransaction(async tx=>{const t=await _leTorneio(tx,ref,tId);if(!t)throw new HttpsError('not-found','Torneio não encontrado.');const req=(t.pendingMerges||[]).find(r=>r&&r.id===reqId);if(!req) return {ok:true,changed:false,reason:'already-resolved'};if(String(req.realUid||'')!==uid)throw _drawFail('permission-denied','Só a conta indicada decide o vínculo.',{tId,uid});if(!String(req.manualParticipantId||'').trim())throw _drawFail('failed-precondition','Pedido legado sem identificador estável; crie um novo vínculo.',{tId,reqId});const before=_antesDoMotor(t);t.pendingMerges=t.pendingMerges.filter(r=>r&&r.id!==reqId);if(action==='reject'){const boundary=_gravaTorneio(tx,ref,t,before,{agoraIso});return {ok:true,changed:true,action,tournament:boundary.clean};}const result=_mergeParticipantInFreshTournament(t,String(req.realUid),String(req.manualParticipantId));if(!result)throw _drawFail('failed-precondition','Os participantes mudaram no servidor.',{tId,reqId});if(!Array.isArray(t.history))t.history=[];t.history.push({date:agoraIso,message:'"'+result.realName+'" assumiu a vaga de "'+req.genericName+'"'});const boundary=_gravaTorneio(tx,ref,t,before,{agoraIso});return {ok:true,changed:true,action,tournament:boundary.clean};});
 });
 
+function _woIdentitySlots(entry) {
+  const out = [];
+  const add = (uid, manualParticipantId, name) => {
+    uid = String(uid || '').trim();
+    manualParticipantId = String(manualParticipantId || '').trim();
+    name = String(name || '').trim();
+    if (!uid && !manualParticipantId && !name) return;
+    out.push({ uid, manualParticipantId, displayName: name });
+  };
+  if (typeof entry === 'string') { add('', '', entry); return out; }
+  if (!entry || typeof entry !== 'object') return out;
+  if (Array.isArray(entry.participants)) {
+    entry.participants.forEach((slot) => {
+      if (typeof slot === 'string') add('', '', slot);
+      else if (slot && typeof slot === 'object') add(slot.uid, slot.manualParticipantId || slot.manualId, slot.displayName || slot.name);
+    });
+    return out;
+  }
+  if (entry.p1Uid || entry.p2Uid || entry.p1ManualId || entry.p2ManualId || entry.p1Name || entry.p2Name) {
+    add(entry.p1Uid, entry.p1ManualId, entry.p1Name);
+    add(entry.p2Uid, entry.p2ManualId, entry.p2Name);
+    return out;
+  }
+  add(entry.uid, entry.manualParticipantId || entry.manualId, entry.displayName || entry.name);
+  return out;
+}
+
+function _normalizeWOIdentity(raw, seen, allEntries) {
+  const hasName = !!raw && typeof raw === 'object' && Object.prototype.hasOwnProperty.call(raw, 'name');
+  const uid = String(raw && raw.uid || '').trim();
+  const manualParticipantId = String(raw && raw.manualParticipantId || '').trim();
+  if (hasName || (uid && manualParticipantId) || (!uid && !manualParticipantId)) {
+    throw new HttpsError('invalid-argument', 'Identidade estrutural inválida.');
+  }
+  const key = uid ? 'uid:' + uid : 'manual:' + manualParticipantId;
+  if (seen[key]) throw new HttpsError('invalid-argument', 'Participante repetido.');
+  const matches = [];
+  (allEntries || []).forEach((entry) => _woIdentitySlots(entry).forEach((slot) => {
+    if ((uid && slot.uid === uid) || (manualParticipantId && slot.manualParticipantId === manualParticipantId)) matches.push(slot);
+  }));
+  if (!matches.length) throw new HttpsError('not-found', 'Participante não pertence mais ao torneio.');
+  if (matches.length !== 1) throw new HttpsError('failed-precondition', 'Identidade duplicada na inscrição; corrija o cadastro antes de aplicar W.O.');
+  const displayName = String(matches[0].displayName || '').trim();
+  if (!displayName) throw new HttpsError('failed-precondition', 'Participante sem nome de apresentação; atualize a inscrição antes de aplicar W.O.');
+  seen[key] = true;
+  return uid ? { uid, displayName } : { manualParticipantId, displayName };
+}
+
 // ─── Declarar/reverter ausência de W.O. ──────────────────────────────────────
 // Esta porta cobre os botões compactos de chamada. O browser envia identidades e
 // o alvo absoluto; a Function confere cada identidade no elenco fresco e roda a
@@ -3002,24 +3050,8 @@ exports.setTournamentWOAbsence = onCall(async (request) => {
     _enrichParticipantsFromProfiles(t);
     const pools = ['participants', 'standbyParticipants', 'waitlist'];
     const allEntries = pools.flatMap((key) => Array.isArray(t[key]) ? t[key] : Object.values(t[key] || {}));
-    const identities = requested.map((raw) => {
-      const requestedUid = String(raw && raw.uid || '').trim();
-      const requestedName = String(raw && raw.name || '').trim();
-      const entry = allEntries.find((p) => {
-        const uids = typeof drawWindow._participantUids === 'function' ? drawWindow._participantUids(p).filter(Boolean) : [];
-        if (requestedUid) return uids.includes(requestedUid);
-        const display = typeof drawWindow._pName === 'function' ? drawWindow._pName(p, '') : String((p && (p.displayName || p.name)) || '');
-        return display === requestedName || display.split('/').map(x => x.trim()).includes(requestedName);
-      });
-      if (!entry) return null;
-      if (requestedUid) {
-        const displayName = typeof drawWindow._memberNameByUid === 'function'
-          ? (drawWindow._memberNameByUid(t, requestedUid) || requestedName) : requestedName;
-        return { uid: requestedUid, displayName };
-      }
-      return requestedName;
-    });
-    if (identities.some((x) => !x)) throw _drawFail('not-found', 'Participante não pertence mais ao torneio.', { tId, uid });
+    const seenIdentities = {};
+    const identities = requested.map((raw) => _normalizeWOIdentity(raw, seenIdentities, allEntries));
 
     if (!wantAbsent) {
       const allMatches = typeof drawWindow._collectAllMatches === 'function' ? drawWindow._collectAllMatches(t) : (t.matches || []);

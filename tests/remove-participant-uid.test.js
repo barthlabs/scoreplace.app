@@ -159,7 +159,7 @@ console.log('\n── ações do card gravam na CHAVE-UID (W.O. · VIP · nível
   W._reRenderParticipants = function () {};
 
   // W.O. do solo — o card manda nome VAZIO (não há nome gravado) + uid
-  W._markAbsent(t.id, '', 'uSolo');
+  W._markAbsent(t.id, '', 'u:uSolo');
   const woSolo = woCalls.pop();
   ok(woSolo && woSolo.action === 'absent' && woSolo.identities.length === 1 && woSolo.identities[0].uid === 'uSolo', 'W.O. :: enviou a intenção pela chave-UID');
   ok(!Object.keys(t.absent).length, 'W.O. :: a tela não gravou ausência localmente');
@@ -197,23 +197,23 @@ console.log('\n── W.O. do time chaveia pelos DOIS membros ──');
 // DUPLA MISTA (um com conta + um fictício) — cada um pelo que ele é.
 {
   const t = mkT();
-  t.participants = [{ uid: 'uMarcello', p1Uid: 'uMarcello', p2Name: 'Convidado sem conta' }];
+  t.participants = [{ uid: 'uMarcello', p1Uid: 'uMarcello', p2ManualId: 'manual-convidado', p2Name: 'Convidado sem conta' }];
   W.AppStore = { tournaments: [t], currentUser: { uid: 'uOrg' }, isCreator: () => true, sync: () => {}, commitTournamentTx: (id, fn) => { saved++; fn(t); return Promise.resolve(true); }, mutate: (tid, fn) => { fn(t); return Promise.resolve(true); }, getTournament: () => t };
   W._canManagePresence = function () { return true; };
-  W._markAbsent(t.id, 'Marcello / Convidado sem conta', 'u:uMarcello|n:Convidado sem conta');
+  W._markAbsent(t.id, 'Marcello / Convidado sem conta', 'u:uMarcello|m:manual-convidado');
   const woMixed = woCalls.pop();
   ok(woMixed && woMixed.identities.some(x => x.uid === 'uMarcello'), 'mista :: quem tem conta viaja pelo UID');
-  ok(woMixed && woMixed.identities.some(x => x.name === 'Convidado sem conta'), 'mista :: o fictício viaja pelo NOME');
+  ok(woMixed && woMixed.identities.some(x => x.manualParticipantId === 'manual-convidado'), 'mista :: o convidado viaja pelo ID manual');
 }
 
-// FICTÍCIO (sem conta) — ÚNICO caso que continua pelo nome, como o dono definiu.
+// Registro legado sem identificador não pode sofrer mutação por nome.
 {
   const t = mkT();
   W.AppStore = { tournaments: [t], currentUser: { uid: 'uOrg' }, isCreator: () => true, sync: () => {}, commitTournamentTx: (id, fn) => { saved++; fn(t); return Promise.resolve(true); }, mutate: (tid, fn) => { fn(t); return Promise.resolve(true); }, getTournament: () => t };
   W._canManagePresence = function () { return true; };
+  const before = woCalls.length;
   W._markAbsent(t.id, 'Convidado sem conta');
-  const woGuest = woCalls.pop();
-  ok(woGuest && woGuest.identities.length === 1 && woGuest.identities[0].name === 'Convidado sem conta', 'fictício :: W.O. envia nome somente quando não há uid');
+  ok(woCalls.length === before, 'legado sem identificador :: W.O. não envia nome como identidade');
 }
 
 console.log(fail === 0 ? `✅ remove-participant-uid: OK  (${pass} asserts ok)` : `❌ ${fail} FALHA(S)  (${pass} ok)`);

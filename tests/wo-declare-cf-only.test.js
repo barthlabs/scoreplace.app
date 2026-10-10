@@ -40,7 +40,7 @@ assert(choiceBody.includes("_callFn('resolveWOSubstitutionChoice'"), 'escolha de
 assert(!choiceBody.includes('_commit('), 'escolha de categoria não grava pelo commit do navegador');
 
 const absenceBegin = source.indexOf('window._markAbsent = function');
-const absenceEnd = source.indexOf('// Traduz o argumento de identidade', absenceBegin);
+const absenceEnd = source.indexOf('// Traduz tokens internos da tela', absenceBegin);
 assert(absenceBegin >= 0 && absenceEnd > absenceBegin, 'recorte de declarar/reverter ausência existe');
 const absenceBody = source.slice(absenceBegin, absenceEnd);
 assert(absenceBody.includes("_callFn('setTournamentWOAbsence'"), 'declaração/reversão compacta envia intenção à CF');

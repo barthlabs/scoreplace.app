@@ -55,7 +55,13 @@ const hasDupla = (t, arr, dn) => arr.some((p) => (p && (p.displayName || p.name)
   const LA = latePair('LA', 'LB'), LC = latePair('LC', 'LD');
   t.standbyParticipants = [LA, LC];
   // mesmo-dia no harness (store._tournamentIsSameDay não carrega) → precisa presença
-  t.checkedIn = { 'LA / LB': _AGORA, 'LC / LD': _AGORA };
+  // Presença é da PESSOA, nunca do rótulo combinado da dupla. O caso cobre
+  // justamente a integração estrutural de duplas tardias após a retirada da
+  // compatibilidade insegura por nome.
+  t.checkedIn = {};
+  [LA.p1Uid, LA.p2Uid, LC.p1Uid, LC.p2Uid].forEach(function(uid) {
+    W._idMapSet(t, t.checkedIn, { uid: uid }, _AGORA);
+  });
 
   const before = R1(t).length;
   const ret = W._createExtraGamesFromWaitlist(t);
@@ -94,7 +100,10 @@ const hasDupla = (t, arr, dn) => arr.some((p) => (p && (p.displayName || p.name)
   const t = build();
   const LA = latePair('LA', 'LB');
   t.standbyParticipants = [LA];
-  t.checkedIn = { 'LA / LB': _AGORA };
+  t.checkedIn = {};
+  [LA.p1Uid, LA.p2Uid].forEach(function(uid) {
+    W._idMapSet(t, t.checkedIn, { uid: uid }, _AGORA);
+  });
 
   W._createExtraGamesFromWaitlist(t);
   const onBracket = R1(t).some((m) => m.p1 === 'LA / LB' || m.p2 === 'LA / LB');

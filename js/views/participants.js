@@ -725,12 +725,13 @@ window._applyCheckInToggle = function (tId, playerName, uid) {
 window._markAbsent = function (tId, playerName, uid) {
   const t = window._findTournamentById(tId);
   if (!t) return;
-  // `uid` aceita 1 identidade (pessoa) ou VÁRIAS separadas por '|' — o W.O. DO TIME chaveia pelos
-  // DOIS MEMBROS (regra do dono), nunca pelo nome do time. Token 'u:<uid>' = conta, 'n:<nome>' =
-  // fictício (sem conta, a única exceção); token cru = uid (compat com os call sites de 1 pessoa).
-  // Assim a dupla MISTA (um com conta + um fictício) marca os dois pelo que cada um é.
+  // `uid` carrega somente tokens de identidade estrutural: `u:<uid>` ou
+  // `m:<manualParticipantId>`. Nome é apresentação; nunca identidade de mutação.
   const _whos = window._absenceIdentities(uid, playerName);
-  const _who = _whos[0];
+  if (!_whos.length) {
+    if (typeof showNotification === 'function') showNotification('W.O. indisponível', 'Esta vaga legada não tem identificador estável. Identifique o participante antes de aplicar W.O.', 'warning');
+    return;
+  }
   // v2.3.82: W.O. (declarar ausente / reverter) só por autoridade (org/co-org/
   // árbitro). O W.O. por consenso entre participantes virá num próximo passo.
   if (window._canManagePresence && !window._canManagePresence(t, window.AppStore && window.AppStore.currentUser)) {
@@ -768,7 +769,7 @@ window._markAbsent = function (tId, playerName, uid) {
     tournamentId: String(tId),
     action: _wantAbs ? 'absent' : 'revert',
     identities: _whos.map(function (w) {
-      return (w && typeof w === 'object' && w.uid) ? { uid: String(w.uid), name: String(w.displayName || w.name || '') } : { name: String(w || '') };
+      return w.uid ? { uid: String(w.uid) } : { manualParticipantId: String(w.manualParticipantId) };
     })
   });
   _saveWO.then(function () {
@@ -780,23 +781,18 @@ window._markAbsent = function (tId, playerName, uid) {
   });
 };
 
-// Traduz o argumento de identidade do W.O. numa LISTA de identidades pros mapas (uid-keyed).
-// '' → [nome] (fictício/legado) · 'UID' → [{uid}] · 'u:U1|n:Convidado' → [{uid:U1}, 'Convidado'].
+// Traduz tokens internos da tela para identidades estruturais. Entrada sem `u:`
+// ou `m:` é inválida: o caminho remoto jamais recupera identidade pelo nome.
 window._absenceIdentities = function (uid, playerName) {
   var raw = String(uid == null ? '' : uid).trim();
-  if (!raw) return [playerName];
+  if (!raw) return [];
   var out = [];
   raw.split('|').forEach(function (tok) {
     tok = String(tok || '').trim();
     if (!tok) return;
-    if (tok.indexOf('n:') === 0) { var nm = tok.slice(2).trim(); if (nm) out.push(nm); return; }
-    var u = (tok.indexOf('u:') === 0) ? tok.slice(2).trim() : tok;
-    if (u) out.push({ uid: u });
+    if (tok.indexOf('u:') === 0) { var u = tok.slice(2).trim(); if (u) out.push({ uid: u }); return; }
+    if (tok.indexOf('m:') === 0) { var m = tok.slice(2).trim(); if (m) out.push({ manualParticipantId: m }); }
   });
-  if (!out.length) return [playerName];
-  // 1 pessoa: leva o nome junto (display/meta do woHistory). Time: cada membro resolve o SEU nome
-  // pelo uid dentro do _applyAbsenceToggle — o nome do TIME não serve de identidade pra ninguém.
-  if (out.length === 1 && out[0] && typeof out[0] === 'object') out[0].displayName = playerName;
   return out;
 };
 
@@ -1190,14 +1186,13 @@ window._rollCallPresenceCtx = function (t, opts) {
           var _tEntry = window._pName(p);
           var _tAbs = _anyAbs || _abs(_tEntry);
           var _tE = String(_tEntry).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-          // W.O. DO TIME chaveia pelos DOIS MEMBROS (dono, 22/jul), nunca pelo nome do time: cada
-          // um vai como 'u:<uid>' (conta) ou 'n:<nome>' (fictício sem conta — a única exceção).
-          // Dupla mista marca os dois pelo que cada um é. [[project_id_maps_uid_keyed]]
+          // W.O. DO TIME chaveia pelos DOIS membros estruturais. Convidado usa
+          // manualParticipantId; não existe mais token de nome neste fluxo.
           var _tIds = [
-            (p && p.p1Uid) ? ('u:' + p.p1Uid) : (p && p.p1Name ? ('n:' + String(p.p1Name).trim()) : ''),
-            (p && p.p2Uid) ? ('u:' + p.p2Uid) : (p && p.p2Name ? ('n:' + String(p.p2Name).trim()) : '')
+            (p && p.p1Uid) ? ('u:' + p.p1Uid) : (p && p.p1ManualId ? ('m:' + p.p1ManualId) : ''),
+            (p && p.p2Uid) ? ('u:' + p.p2Uid) : (p && p.p2ManualId ? ('m:' + p.p2ManualId) : '')
           ].filter(Boolean).join('|').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-          _teamRow = window._woBtnHtml("event.stopPropagation(); window._markAbsent('" + t.id + "', '" + _tE + "', '" + _tIds + "');", !_tAbs, { label: _tAbs ? 'Reverter' : '', subject: 'do time', size: 'btn-micro', fontSize: '0.68rem', extraStyle: 'min-height:0;height:24px;line-height:1;' });
+          _teamRow = _tIds ? window._woBtnHtml("event.stopPropagation(); window._markAbsent('" + t.id + "', '" + _tE + "', '" + _tIds + "');", !_tAbs, { label: _tAbs ? 'Reverter' : '', subject: 'do time', size: 'btn-micro', fontSize: '0.68rem', extraStyle: 'min-height:0;height:24px;line-height:1;' }) : '';
         }
         // DUPLA → tom ESCURO ('pair'): VERDE só quando os DOIS estão presentes; qualquer outro
         // caso (ausente OU ainda não marcado) = AZUL. Antes o "pendente" não pintava nada e o card
@@ -1230,13 +1225,15 @@ window._rollCallPresenceCtx = function (t, opts) {
       var styleExtra = mc ? _sty('present', 'solo') : (blu ? _sty('confirmed', 'solo') : _sty('absent', 'solo'));
       var rowHtml = '';
       var _puid = String((p && p.uid) || '').replace(/'/g, "\\'");
+      var _woPuid = (p && p.uid) ? ('u:' + p.uid) : ((p && p.manualParticipantId) ? ('m:' + p.manualParticipantId) : '');
+      _woPuid = String(_woPuid).replace(/'/g, "\\'");
       if (active) {
         var _rcEntry = entry.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         var label = mc ? 'Presente' : (blu ? 'Confirmado' : 'Ausente');
         var color = mc ? _txt('present', 'solo') : (blu ? _txt('confirmed', 'solo') : _txt('absent', 'solo'));
         var _onc = mc ? _tgl('present', 'solo') : (blu ? _tgl('confirmed', 'solo') : _tgl('absent', 'solo'));
-        var wo = (!mc && !blu && isOrg)
-          ? window._woBtnHtml("event.stopPropagation(); window._markAbsent('" + t.id + "', '" + _rcEntry + "', '" + _puid + "');", !abs, { label: abs ? 'Reverter' : '', size: 'btn-micro', fontSize: '0.68rem', extraStyle: 'min-height:0;height:24px;line-height:1;' })
+        var wo = (!mc && !blu && isOrg && _woPuid)
+          ? window._woBtnHtml("event.stopPropagation(); window._markAbsent('" + t.id + "', '" + _rcEntry + "', '" + _woPuid + "');", !abs, { label: abs ? 'Reverter' : '', size: 'btn-micro', fontSize: '0.68rem', extraStyle: 'min-height:0;height:24px;line-height:1;' })
           : '';
         rowHtml = '<span style="font-size:0.74rem;font-weight:800;color:' + window._spCor(color, 'color') + ';white-space:nowrap;">' + label + '</span>' +
           '<label class="toggle-switch toggle-sm" style="--toggle-on-bg:' + _onc + ';--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:' + _onc + ';flex-shrink:0;" onclick="event.stopPropagation();"><input type="checkbox" ' + ((mc || blu) ? 'checked' : '') + ' onclick="event.stopPropagation(); window._toggleCheckIn(\'' + t.id + '\', \'' + _rcEntry + '\', \'' + _puid + '\');"><span class="toggle-slider"></span></label>' + wo;
@@ -1253,8 +1250,10 @@ window._rollCallPresenceCtx = function (t, opts) {
       var keyName = (member && member.guest) ? String(member.guest).trim()
         : (window._displayName ? window._displayName(member && member.uid, member && member.guest) : '');
       if (!keyName) return { html: '' };
-      var _mWho = (member && member.uid) ? { uid: member.uid, displayName: keyName } : keyName;
+      var _mWho = (member && member.uid) ? { uid: member.uid, displayName: keyName } : ((member && member.manualParticipantId) ? { manualParticipantId: member.manualParticipantId, displayName: keyName } : keyName);
       var _mUidEsc = String((member && member.uid) || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      var _woMUidEsc = (member && member.uid) ? ('u:' + member.uid) : ((member && member.manualParticipantId) ? ('m:' + member.manualParticipantId) : '');
+      _woMUidEsc = String(_woMUidEsc).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
       var mc = _pres(_mWho);
       var blu = !mc && _conf(_mWho);
       var abs = !mc && !blu && _abs(_mWho);
@@ -1267,8 +1266,8 @@ window._rollCallPresenceCtx = function (t, opts) {
       }
       var _e = keyName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
       var _oncM = mc ? _tgl('present', 'pair') : (blu ? _tgl('confirmed', 'pair') : _tgl('absent', 'pair'));
-      var wo = (!mc && !blu && isOrg && woScope === 'individual')
-        ? window._woBtnHtml("event.stopPropagation(); window._markAbsent('" + t.id + "', '" + _e + "', '" + _mUidEsc + "');", !abs, { label: abs ? 'Reverter' : '', size: 'btn-micro', fontSize: '0.66rem', extraStyle: 'min-height:0;height:22px;line-height:1;' })
+      var wo = (!mc && !blu && isOrg && woScope === 'individual' && _woMUidEsc)
+        ? window._woBtnHtml("event.stopPropagation(); window._markAbsent('" + t.id + "', '" + _e + "', '" + _woMUidEsc + "');", !abs, { label: abs ? 'Reverter' : '', size: 'btn-micro', fontSize: '0.66rem', extraStyle: 'min-height:0;height:22px;line-height:1;' })
         : '';
       var word = '<span style="font-size:0.7rem;font-weight:800;color:' + window._spCor(color, 'color') + ';white-space:nowrap;">' + label + '</span>';
       var toggle = '<label class="toggle-switch toggle-sm" style="--toggle-on-bg:' + _oncM + ';--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:' + _oncM + ';flex-shrink:0;" onclick="event.stopPropagation();"><input type="checkbox" ' + ((mc || blu) ? 'checked' : '') + ' onclick="event.stopPropagation(); window._toggleCheckIn(\'' + t.id + '\', \'' + _e + '\', \'' + _mUidEsc + '\');"><span class="toggle-slider"></span></label>';
@@ -2645,6 +2644,7 @@ function renderParticipants(container, tournamentId) {
       // independente de o jogo já ter resultado ou W.O. (check-in é independente do resultado)
       // v2.2.8: standby players marcados como ausentes ficam com toggle desabilitado — usar "Reverter"
       const isAbsentStandby = isStandby && isAbsent;
+      const _woToken = ind.uid ? ('u:' + String(ind.uid)) : (ind.manualParticipantId ? ('m:' + String(ind.manualParticipantId)) : '');
       // v2.7.42: switch e palavra SEPARADOS (pra montar "Ausente [toggle] W.O." numa linha).
       const _toggleSwitch = `<label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;${isAbsentStandby ? 'opacity:0.35;cursor:not-allowed;pointer-events:none;' : ''}" onclick="event.stopPropagation();"><input type="checkbox" ${mc ? 'checked' : ''} ${isAbsentStandby ? 'disabled' : `onclick="event.stopPropagation(); window._toggleCheckIn('${tId}', '${safeName}', '${String(ind.uid || '').replace(/'/g, "\\'")}');"`}><span class="toggle-slider"></span></label>`;
       const _presenceWord = `<span style="font-size:0.68rem;font-weight:700;color:${window._spCor(mc ? '#4ade80' : '#94a3b8', 'color')};white-space:nowrap;">${mc ? 'Presente' : 'Ausente'}</span>`;
@@ -2653,17 +2653,17 @@ function renderParticipants(container, tournamentId) {
       // Standby players use simple toggle; active participants always go through the
       // dialog (_declareAbsent uses _collectAllMatches which is more robust than ind.matchNum).
       const woAction = isAbsent
-        ? `window._markAbsent('${tId}', '${safeName}', '${ind.uid || ''}')`
+        ? `window._markAbsent('${tId}', '${safeName}', '${_woToken.replace(/'/g, "\\'")}')`
         : (isStandby
-          ? `window._markAbsent('${tId}', '${safeName}', '${ind.uid || ''}')`
-          : `window._declareAbsent('${tId}', '${safeName}', '${String(ind.uid || '').replace(/'/g, "\\'")}')`);
+          ? `window._markAbsent('${tId}', '${safeName}', '${_woToken.replace(/'/g, "\\'")}')`
+          : `window._declareAbsent('${tId}', '${safeName}', '${_woToken.replace(/'/g, "\\'")}')`);
       const woLabel = isAbsent ? 'Reverter' : '';   // declarar → rótulo canônico do _woBtnHtml
       // Regra simples: botão W.O./Reverter aparece para todo participante que
       // NÃO está com o toggle Presente ativado (!mc). Quando isAbsent=true →
       // mostra "Reverter"; quando !mc && !isAbsent → mostra "W.O.".
       // Remover a restrição !isWO que escondia o botão para jogadores cujo
       // jogo já foi resolvido por W.O. mas que ainda não estão marcados ausentes.
-      const _showWoBtn = isOrg && !mc;
+      const _showWoBtn = isOrg && !mc && !!_woToken;
       const woBtn = _showWoBtn
         ? window._woBtnHtml('event.stopPropagation(); ' + woAction, !isAbsent, { label: woLabel, size: 'btn-micro', fontSize: '0.7rem', extraStyle: 'min-height:0;height:24px;line-height:1;padding:0 12px;' })
         : '';

@@ -83,7 +83,9 @@ function mkT(uidsNaEspera, ratio) {
   // todo cenário e o teste mediria a pré-condição, não a regra de gênero.
   t.checkedIn = {};
   uidsNaEspera.forEach(u => {
-    if (typeof win._idMapSet === 'function') win._idMapSet(t, t.checkedIn, NOME(u), Date.now());
+    // A presença canônica pertence ao UID da entrada da espera. Nome é só
+    // exibição e não pode tornar um homônimo presente por acidente.
+    if (typeof win._idMapSet === 'function') win._idMapSet(t, t.checkedIn, { uid: u }, Date.now());
     else t.checkedIn[u] = Date.now();
   });
   return t;
@@ -217,7 +219,7 @@ console.log('\n──── perfil FORA do cache não vira "não-homem" (o bug d
   const t = mkT(['uH1', 'uH2', 'uH3']);
   t.monarchWaitlist['_default_'].push(FANTASMA);
   t.standbyParticipants.push({ uid: 'uFantasma', displayName: FANTASMA, addedAt: '2026-08-04T16:17:00.000Z' });
-  if (typeof win._idMapSet === 'function') win._idMapSet(t, t.checkedIn, FANTASMA, Date.now());
+  if (typeof win._idMapSet === 'function') win._idMapSet(t, t.checkedIn, { uid: 'uFantasma' }, Date.now());
   const n = win._tryFormMonarchWaitlistGroups(t, null, 1);
   t2('3 homens + 1 perfil não resolvido NÃO formam grupo', n === 0, 'formados=' + n);
 }
@@ -251,7 +253,7 @@ console.log('\n──── uid vem da ENTRADA da espera quando o nome não est�
   t.monarchWaitlist['_default_'] = ['uH1', 'uM1', 'uM2', 'uM3'].map(NOME);
   ['uH1', 'uM1', 'uM2', 'uM3'].forEach(u => {
     t.standbyParticipants.push({ uid: u, addedAt: '2026-08-04T10:00:00.000Z' });
-    if (typeof win._idMapSet === 'function') win._idMapSet(t, t.checkedIn, NOME(u), Date.now());
+    if (typeof win._idMapSet === 'function') win._idMapSet(t, t.checkedIn, { uid: u }, Date.now());
   });
   const n = win._tryFormMonarchWaitlistGroups(t, null, 1);
   t2('formou 1 grupo resolvendo o gênero pela entrada da fila', n === 1, 'formados=' + n);

@@ -305,16 +305,115 @@ window._memberNameByUid = function(t, uid) {
   return '';
 };
 
-// _idMapKey(t, who): chave canônica {uid, name} de UMA pessoa. `who` pode ser
-// string (nome — resolve via varredura) OU objeto de pessoa única (usa who.uid).
-// NÃO use objeto de DUPLA aqui (dois uids) — os mapas são por-pessoa; readers
-// iteram indivíduos decompostos.
-window._idMapKey = function(t, who) {
-  if (who && typeof who === 'object') {
-    return { uid: who.uid || '', name: (who.displayName || who.name || '') };
+// Slots de UMA pessoa por entrada. O W.O. e os mapas por pessoa precisam enxergar
+// convidados manuais sem inventar uma segunda regra para duplas/teams. A posição
+// só vira chave quando o documento é realmente legado (sem UID e sem id manual).
+window._identitySlotsForEntry = function(entry) {
+  var out = [];
+  function add(uid, manualParticipantId, name) {
+    uid = String(uid || '').trim();
+    manualParticipantId = String(manualParticipantId || '').trim();
+    name = String(name || '').trim();
+    if (!uid && !manualParticipantId && !name) return;
+    out.push({ uid: uid, manualParticipantId: manualParticipantId, name: name });
   }
-  var nm = String(who == null ? '' : who);
-  return { uid: window._memberUidByName(t, nm), name: nm };
+  if (typeof entry === 'string') { add('', '', entry); return out; }
+  if (!entry || typeof entry !== 'object') return out;
+  if (Array.isArray(entry.participants)) {
+    entry.participants.forEach(function(slot) {
+      if (typeof slot === 'string') add('', '', slot);
+      else if (slot && typeof slot === 'object') add(slot.uid, slot.manualParticipantId || slot.manualId, slot.displayName || slot.name);
+    });
+    return out;
+  }
+  if (entry.p1Uid || entry.p2Uid || entry.p1ManualId || entry.p2ManualId || entry.p1Name || entry.p2Name) {
+    add(entry.p1Uid, entry.p1ManualId, entry.p1Name);
+    add(entry.p2Uid, entry.p2ManualId, entry.p2Name);
+    return out;
+  }
+  add(entry.uid, entry.manualParticipantId || entry.manualId, entry.displayName || entry.name);
+  return out;
+};
+
+// Um nome legado só pode abrir compatibilidade se designar UMA pessoa estrutural.
+// Sem isso, um documento antigo nunca pode transferir W.O./presença entre homônimos.
+window._isUniqueMemberName = function(t, name) {
+  var target = String(name || '').trim().toLocaleLowerCase();
+  if (!t || !target) return false;
+  var pools = ['participants', 'standbyParticipants', 'waitlist'];
+  var seen = {}, count = 0;
+  for (var pi = 0; pi < pools.length; pi++) {
+    var list = Array.isArray(t[pools[pi]]) ? t[pools[pi]] : Object.values(t[pools[pi]] || {});
+    for (var ei = 0; ei < list.length; ei++) {
+      var slots = window._identitySlotsForEntry(list[ei]);
+      for (var si = 0; si < slots.length; si++) {
+        var slot = slots[si];
+        if (String(slot.name || '').trim().toLocaleLowerCase() !== target) continue;
+        var key = slot.uid ? 'uid:' + slot.uid : (slot.manualParticipantId ? 'manual:' + slot.manualParticipantId : 'legacy:' + pools[pi] + ':' + ei + ':' + si);
+        if (!seen[key]) { seen[key] = true; count++; }
+      }
+    }
+  }
+  return count === 1;
+};
+
+// Compatibilidade segura para chamadores antigos que ainda passam a identidade
+// estrutural crua (UID ou manualParticipantId) como string. Só a aceitamos se
+// ela existir no roster atual; uma string nunca é promovida por parecer nome.
+window._memberIdentityByRawId = function(t, rawId) {
+  var target = String(rawId || '').trim();
+  if (!t || !target) return { uid: '', manualParticipantId: '' };
+  var pools = ['participants', 'standbyParticipants', 'waitlist'];
+  var foundUid = '', foundManual = '';
+  for (var pi = 0; pi < pools.length; pi++) {
+    var list = Array.isArray(t[pools[pi]]) ? t[pools[pi]] : Object.values(t[pools[pi]] || {});
+    for (var ei = 0; ei < list.length; ei++) {
+      var slots = window._identitySlotsForEntry(list[ei]);
+      for (var si = 0; si < slots.length; si++) {
+        if (slots[si].uid === target) foundUid = target;
+        if (slots[si].manualParticipantId === target) foundManual = target;
+      }
+    }
+  }
+  // Um documento inválido não pode ter as duas identidades para a mesma pessoa.
+  return foundUid ? { uid: foundUid, manualParticipantId: '' } : { uid: '', manualParticipantId: foundManual };
+};
+
+// _idMapKey sempre devolve as quatro propriedades. `key` é a única chave nova:
+// UID cru para preservar dados existentes e `manual:<id>` para convidados.
+// Nome permanece apenas como ponte de leitura para documento legado inequívoco.
+window._idMapKey = function(t, who) {
+  var uid = '', manualParticipantId = '', name = '';
+  if (who && typeof who === 'object') {
+    uid = String(who.uid || '').trim();
+    manualParticipantId = String(who.manualParticipantId || who.manualId || '').trim();
+    name = String(who.displayName || who.name || '').trim();
+  } else {
+    name = String(who == null ? '' : who).trim();
+    var rawIdentity = window._memberIdentityByRawId(t, name);
+    uid = rawIdentity.uid;
+    manualParticipantId = rawIdentity.manualParticipantId;
+    // Chamadores legados que ainda enviam nome só podem promover para UID quando
+    // esse nome representa exatamente uma pessoa no torneio.
+    if (!uid && !manualParticipantId && name && window._isUniqueMemberName(t, name)) uid = String(window._memberUidByName(t, name) || '').trim();
+  }
+  if (uid && manualParticipantId) { uid = ''; manualParticipantId = ''; }
+  return { uid: uid, manualParticipantId: manualParticipantId, name: name, key: uid || (manualParticipantId ? 'manual:' + manualParticipantId : '') };
+};
+
+window._memberNameByIdentity = function(t, who) {
+  var k = window._idMapKey(t, who);
+  if (k.uid) return window._memberNameByUid(t, k.uid);
+  if (!k.manualParticipantId || !t) return k.name || '';
+  var pools = ['participants', 'standbyParticipants', 'waitlist'];
+  for (var pi = 0; pi < pools.length; pi++) {
+    var list = Array.isArray(t[pools[pi]]) ? t[pools[pi]] : Object.values(t[pools[pi]] || {});
+    for (var ei = 0; ei < list.length; ei++) {
+      var slots = window._identitySlotsForEntry(list[ei]);
+      for (var si = 0; si < slots.length; si++) if (slots[si].manualParticipantId === k.manualParticipantId) return slots[si].name || '';
+    }
+  }
+  return k.name || '';
 };
 // ─── ⭐ PRESENÇA CADUCA EM 24h — EM TODO O PROGRAMA ─────────────────────────────────
 //
@@ -385,7 +484,8 @@ window._presencaViva = function (t, qual) {
 window._idMapGet = function(t, map, who) {
   if (!map || who == null) return undefined;
   var k = window._idMapKey(t, who);
-  var v = (k.uid && map[k.uid] != null) ? map[k.uid] : (k.name ? map[k.name] : undefined);
+  var v = (k.key && map[k.key] != null) ? map[k.key] : undefined;
+  if (v == null && k.name && window._isUniqueMemberName(t, k.name)) v = map[k.name];
   if (v == null) return undefined;
   // ⭐ presença vencida = presença que não existe (ver o bloco acima)
   if (window._ehMapaDePresenca(t, map) && !window._presencaFresca(v)) return undefined;
@@ -397,14 +497,16 @@ window._idMapHas = function(t, map, who) { return !!window._idMapGet(t, map, who
 window._idMapSet = function(t, map, who, val) {
   if (!map || who == null) return;
   var k = window._idMapKey(t, who);
-  if (k.uid) { map[k.uid] = val; if (k.name && k.name !== k.uid && map[k.name] != null) delete map[k.name]; }
-  else if (k.name) map[k.name] = val;
+  if (k.key) {
+    map[k.key] = val;
+    if (k.name && window._isUniqueMemberName(t, k.name) && map[k.name] != null) delete map[k.name];
+  } else if (k.name && window._isUniqueMemberName(t, k.name)) map[k.name] = val;
 };
 window._idMapDel = function(t, map, who) {
   if (!map || who == null) return;
   var k = window._idMapKey(t, who);
-  if (k.uid && map[k.uid] != null) delete map[k.uid];
-  if (k.name && map[k.name] != null) delete map[k.name];
+  if (k.key && map[k.key] != null) delete map[k.key];
+  if (k.name && window._isUniqueMemberName(t, k.name) && map[k.name] != null) delete map[k.name];
 };
 
 // _vipIdentitiesForEntry(entry): identidade explícita dos membros de uma entrada.

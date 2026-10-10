@@ -3573,9 +3573,11 @@ window._renderLateJoinPairing = function _renderLateJoinPairing(t, isOrg) {
     var mc = window._idMapHas ? window._idMapHas(t, ci, _who) : false;
     var _abs = window._idMapHas ? window._idMapHas(t, t.absent || {}, _who) : false;
     var uidp = String((pp && typeof pp === 'object' && pp.uid) || '').replace(/'/g, "\\'");
+    var woIdentity = (pp && typeof pp === 'object' && pp.uid) ? ('u:' + pp.uid) : ((pp && typeof pp === 'object' && pp.manualParticipantId) ? ('m:' + pp.manualParticipantId) : '');
+    woIdentity = String(woIdentity).replace(/'/g, "\\'");
     // v1.3.55: W.O. no card "Sem dupla" (faltava). Só pro organizador; vira Reverter se ausente.
-    var wo = (isOrg && typeof window._woBtnHtml === 'function')
-      ? window._woBtnHtml("event.stopPropagation(); window._markAbsent('" + tIdSafe + "', '" + _sa(nmp) + "', '" + uidp + "');", !_abs, { label: _abs ? 'Reverter' : '', size: 'btn-micro', fontSize: '0.68rem', extraStyle: 'min-height:0;height:24px;line-height:1;' })
+    var wo = (isOrg && woIdentity && typeof window._woBtnHtml === 'function')
+      ? window._woBtnHtml("event.stopPropagation(); window._markAbsent('" + tIdSafe + "', '" + _sa(nmp) + "', '" + woIdentity + "');", !_abs, { label: _abs ? 'Reverter' : '', size: 'btn-micro', fontSize: '0.68rem', extraStyle: 'min-height:0;height:24px;line-height:1;' })
       : '';
     // v1.3.148 (dono: "mantenha as cores dos inscritos consistente"): este painel colorizava por
     // STATUS DE PAREAMENTO (âmbar = sem dupla, verde = dupla formada) e devolvia styleExtra VAZIO —

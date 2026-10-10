@@ -23,11 +23,18 @@ const start = source.indexOf('window._woHistGet = function');
 const end = source.indexOf('// v2.4.72-beta:', start);
 assert.ok(start > 0 && end > start, 'funções de histórico localizadas');
 const sandbox = { window: {} };
-sandbox.window._idMapKey = (_t, who) => ({ uid: (who && who.uid) || '', name: (who && who.displayName) || (typeof who === 'string' ? who : '') });
+sandbox.window._idMapKey = (_t, who) => {
+  const uid = String((who && who.uid) || '').trim();
+  const manualParticipantId = String((who && who.manualParticipantId) || '').trim();
+  const name = String((who && (who.displayName || who.name)) || (typeof who === 'string' ? who : '')).trim();
+  return { uid, manualParticipantId, name, key: uid || (manualParticipantId ? 'manual:' + manualParticipantId : '') };
+};
+sandbox.window._isUniqueMemberName = (tournament, name) => (tournament.participants || []).filter((p) => String(p.displayName || p.name || '').trim() === String(name).trim()).length === 1;
+sandbox.window._memberNameByIdentity = (_t, who) => (who && who.uid === U.absent ? 'Nome atual do perfil' : '');
 sandbox.window._memberNameByUid = (_t, uid) => ({ [U.absent]: 'Nome atual do perfil' }[uid] || '');
 vm.createContext(sandbox);
 vm.runInContext(source.slice(start, end), sandbox, { filename: 'store-wo-history-contract.js' });
-const histTournament = { woHistory: {} };
+const histTournament = { participants: [{ uid: U.absent, displayName: 'Nome antigo' }, { displayName: 'Jogador X' }], woHistory: {} };
 sandbox.window._woHistSet(histTournament, { uid: U.absent, displayName: 'Nome antigo' }, {
   name: 'Nome antigo', originalTeam: 'Nome antigo / Parceiro', partner: 'Parceiro', replacedBy: 'Substituto',
   partnerUid: U.partner, substituteUid: U.substitute, matchId: 'm-1', matchNum: 1

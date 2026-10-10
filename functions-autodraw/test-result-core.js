@@ -254,6 +254,10 @@ console.log('\n──── result-core: reabertura administrativa ────'
 // 15) Reverter W.O. desfaz avanço, ausência e encerramento, mas nunca apaga jogo real.
 {
   const T = mkT({ status: 'finished', finishedAt: 'x', absent: { Ana: true, Bia: true }, woHistory: { Ana: { name: 'Ana' }, Bia: { name: 'Bia' } } });
+  T.participants = [
+    { uid: UID_A1, displayName: 'Ana' }, { uid: UID_A2, displayName: 'Bia' },
+    { uid: UID_B1, displayName: 'Caio' }, { uid: UID_B2, displayName: 'Dora' }
+  ];
   const m = win._findMatch(T, 'm1'); const next = { id: 'm2', p1: 'Ana / Bia', p2: 'TBD' };
   T.matches.push(next); m.nextMatchId = 'm2'; m.wo = true; m.woAbsentSide = 2; m.winner = 'Ana / Bia'; m.scoreP1 = 'W.O.'; m.scoreP2 = 0;
   const r = core.applyResult(T, { matchId: 'm1', payload: { action: 'revert-wo' }, actor: { uid: UID_ORG }, now: 1 });
@@ -262,6 +266,28 @@ console.log('\n──── result-core: reabertura administrativa ────'
   m.wo = true; m.sets = [{ gamesP1: 6, gamesP2: 2 }];
   const real = core.applyResult(T, { matchId: 'm1', payload: { action: 'revert-wo' }, actor: { uid: UID_ORG }, now: 2 });
   t('W.O. com jogo real não é apagado', real.ok === false && real.reason === 'wo-has-real-play', JSON.stringify(real));
+}
+
+// 15b) Chaves legadas por nome podem existir em documentos antigos, mas não
+// representam uma pessoa quando há homônimos. A reversão não pode apagá-las.
+{
+  const T = mkT({
+    absent: { Ana: true, Bia: true },
+    woHistory: { Ana: { name: 'Ana' }, Bia: { name: 'Bia' } },
+    participants: [
+      { uid: UID_A1, displayName: 'Ana' },
+      { manualParticipantId: 'manual-outra-ana', displayName: 'Ana' },
+      { uid: UID_A2, displayName: 'Bia' },
+      { uid: UID_B1, displayName: 'Caio' }, { uid: UID_B2, displayName: 'Dora' }
+    ]
+  });
+  const m = win._findMatch(T, 'm1');
+  m.wo = true; m.woAbsentSide = 2; m.winner = 'Ana / Bia'; m.scoreP1 = 'W.O.'; m.scoreP2 = 0;
+  const reverted = core.applyResult(T, { matchId: 'm1', payload: { action: 'revert-wo' }, actor: { uid: UID_ORG }, now: 1 });
+  t('reversão não apaga ausência legada de homônimo ambíguo', reverted.ok && T.absent.Ana === true && T.woHistory.Ana,
+    JSON.stringify({ absent: T.absent, woHistory: T.woHistory }));
+  t('reversão ainda remove a chave legada do participante de nome único', !T.absent.Bia && !T.woHistory.Bia,
+    JSON.stringify({ absent: T.absent, woHistory: T.woHistory }));
 }
 
 // 16) O fechamento do placar ao vivo é reaplicado pelo servidor e não entra em fila de aprovação.

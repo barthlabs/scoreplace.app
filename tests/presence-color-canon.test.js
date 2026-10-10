@@ -66,27 +66,30 @@ function mkT(checkedIn, absent) {
 }
 const PAIR = { p1Uid: 'a1', p1Name: 'A1', p2Uid: 'b1', p2Name: 'B1', displayName: 'A1 / B1', name: 'A1 / B1' };
 const SOLO = { uid: 's1', displayName: 'S1', name: 'S1' };
+// O resolvedor legado por nome só é permitido quando a pessoa está de fato no
+// roster; os cenários de dupla abaixo representam o card de uma entrada real.
+function withPair(t) { t.participants = [PAIR]; return t; }
 const ctxOf = (t) => W._rollCallPresenceCtx(t, { isOrg: true, active: true });
 
 // dupla com os DOIS presentes → VERDE escuro
-let t = mkT({ a1: _AGORA, b1: _AGORA });
+let t = withPair(mkT({ a1: _AGORA, b1: _AGORA }));
 let st = ctxOf(t).cardPresence(PAIR).styleExtra;
 ok(GREEN.test(st) && !BLUE.test(st), 'dupla com os DOIS presentes → VERDE');
 ok(st === W._presenceCardStyle('present', 'pair'), 'dupla presente usa o tom ESCURO de dupla');
 
 // dupla com UM presente e outro ausente → ÂMBAR (parcial) — o caso do print
-t = mkT({ a1: _AGORA }, { b1: 1 });
+t = withPair(mkT({ a1: _AGORA }, { b1: 1 }));
 st = ctxOf(t).cardPresence(PAIR).styleExtra;
 ok(st === W._presenceCardStyle('partial', 'pair'), '✅ dupla com 1 presente → ÂMBAR (parcial), não azul');
 ok(st !== W._presenceCardStyle('absent', 'pair'), 'parcial NÃO é igual a "nenhum presente" (era o bug do print)');
 
 // dupla com um ausente → AZUL escuro
-t = mkT({}, { a1: 1, b1: 1 });
+t = withPair(mkT({}, { a1: 1, b1: 1 }));
 st = ctxOf(t).cardPresence(PAIR).styleExtra;
 ok(BLUE.test(st) && !RED.test(st), 'dupla com os DOIS ausentes → AZUL (nunca vermelho)');
 
 // dupla PENDENTE (ninguém marcado) → AZUL (era o bug do print: ficava VERDE)
-t = mkT({}, {});
+t = withPair(mkT({}, {}));
 st = ctxOf(t).cardPresence(PAIR).styleExtra;
 ok(BLUE.test(st), 'dupla NÃO marcada → AZUL (antes ficava sem cor e herdava o fundo VERDE do card)');
 ok(st === W._presenceCardStyle('absent', 'pair'), 'dupla não marcada usa o tom ESCURO de ausente');

@@ -504,9 +504,8 @@ window._applyAbsenceToggle = function (t, who, wantAbsent) {
   // `playerName` abaixo serve SÓ pras operações de string do revert de substituição (nome do
   // time na chave), nunca como identidade. [[project_id_maps_uid_keyed]]
   var playerName = (who && typeof who === 'object') ? String(who.displayName || who.name || '') : String(who == null ? '' : who);
-  if (!playerName && who && who.uid && typeof window._displayNameForUid === 'function') {
-    playerName = window._displayNameForUid(who.uid, '');
-  }
+  if (!playerName && who && typeof window._memberNameByIdentity === 'function') playerName = window._memberNameByIdentity(t, who);
+  if (!playerName && who && who.uid && typeof window._displayNameForUid === 'function') playerName = window._displayNameForUid(who.uid, '');
   // v1.0.79-beta: revert completo. Detecta orphan (W.O.'d via woHistory) e,
   // se há replacedBy, desfaz substituição: restaura time original, remove
   // substituto da chave, devolve ele à waitlist se aplicável.

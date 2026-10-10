@@ -6130,8 +6130,8 @@ window.SCOREPLACE_URL = 'https://scoreplace.app';
 window._woHistGet = function(t, who) {
   if (!t || !t.woHistory || who == null) return undefined;
   var k = window._idMapKey(t, who);
-  if (k.uid && t.woHistory[k.uid] != null) return t.woHistory[k.uid];
-  return k.name ? t.woHistory[k.name] : undefined;
+  if (k.key && t.woHistory[k.key] != null) return t.woHistory[k.key];
+  return (k.name && window._isUniqueMemberName(t, k.name)) ? t.woHistory[k.name] : undefined;
 };
 window._woHistHas = function(t, who) { return !!window._woHistGet(t, who); };
 window._woHistSet = function(t, who, meta) {
@@ -6140,14 +6140,15 @@ window._woHistSet = function(t, who, meta) {
   var k = window._idMapKey(t, who);
   var next = {}; var source = (meta && typeof meta === 'object') ? meta : {};
   for (var field in source) if (Object.prototype.hasOwnProperty.call(source, field)) next[field] = source[field];
-  if (k.uid) {
+  if (k.key) {
     // Conta = UID. Nunca congele no histórico o nome, o time ou o substituto;
     // a tela resolve cada rótulo pelos UIDs no perfil atual.
     ['name', 'originalTeam', 'partner', 'replacedBy'].forEach(function (field) { delete next[field]; });
-    t.woHistory[k.uid] = next;
-    if (k.name && k.name !== k.uid && t.woHistory[k.name] != null) delete t.woHistory[k.name];
-  } else if (k.name) {
-    // Convidado sem conta: o nome é a única identidade disponível.
+    if (k.manualParticipantId && !next.name) next.name = k.name || (window._memberNameByIdentity ? window._memberNameByIdentity(t, who) : '');
+    t.woHistory[k.key] = next;
+    if (k.name && window._isUniqueMemberName(t, k.name) && t.woHistory[k.name] != null) delete t.woHistory[k.name];
+  } else if (k.name && window._isUniqueMemberName(t, k.name)) {
+    // Documento histórico sem UID/manual: compatibilidade só se o nome é único.
     if (!next.name) next.name = k.name;
     t.woHistory[k.name] = next;
   }
@@ -6155,13 +6156,16 @@ window._woHistSet = function(t, who, meta) {
 window._woHistDel = function(t, who) {
   if (!t || !t.woHistory || who == null) return;
   var k = window._idMapKey(t, who);
-  if (k.uid && t.woHistory[k.uid] != null) delete t.woHistory[k.uid];
-  if (k.name && t.woHistory[k.name] != null) delete t.woHistory[k.name];
+  if (k.key && t.woHistory[k.key] != null) delete t.woHistory[k.key];
+  if (k.name && window._isUniqueMemberName(t, k.name) && t.woHistory[k.name] != null) delete t.woHistory[k.name];
 };
 // Display de W.O.: conta é resolvida pelo UID vivo; meta.name só existe em legado
 // e em convidado sem conta.
 window._woHistDisplayName = function(t, key, meta) {
-  return window._memberNameByUid(t, key) || (meta && meta.name) || key;
+  var who = String(key || '').indexOf('manual:') === 0
+    ? { manualParticipantId: String(key).slice('manual:'.length) }
+    : { uid: key };
+  return (window._memberNameByIdentity && window._memberNameByIdentity(t, who)) || (meta && meta.name) || key;
 };
 
 // v2.4.72-beta: pontuação de "interação" entre o usuário logado e um amigo

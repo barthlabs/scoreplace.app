@@ -149,10 +149,16 @@ function clearAbsenceAndWoHistory(t, side) {
     const name = String(raw || '').trim();
     if (!name) return;
     if (typeof win._idMapDel === 'function') win._idMapDel(t, t.absent, name);
+    // Documento anterior ao identificador estrutural: só limpamos a chave
+    // legada por nome quando ela identifica uma única pessoa no elenco fresco.
+    // O rótulo do lado do jogo não resolve homônimos e não pode, numa reversão
+    // administrativa, apagar a ausência de outra inscrição.
+    const legacyNameIsUnique = !!(typeof win._isUniqueMemberName === 'function' && win._isUniqueMemberName(t, name));
+    if (legacyNameIsUnique && t.absent && t.absent[name] != null) delete t.absent[name];
     if (!t.woHistory) return;
     const key = (typeof win._idMapKey === 'function') ? win._idMapKey(t, name) : { name };
-    if (key.uid && t.woHistory[key.uid] != null) delete t.woHistory[key.uid];
-    if (key.name && t.woHistory[key.name] != null) delete t.woHistory[key.name];
+    if (key.key && t.woHistory[key.key] != null) delete t.woHistory[key.key];
+    if (legacyNameIsUnique && key.name && t.woHistory[key.name] != null) delete t.woHistory[key.name];
   });
 }
 
