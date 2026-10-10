@@ -164,6 +164,20 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
 
     var fieldStyle = 'width:100%;box-sizing:border-box;padding:11px 14px;border-radius:10px;border:1px solid var(--border-color);background:var(--bg-darker);color:var(--text-color);font-size:0.9rem;outline:none;';
 
+    // Depois da materialização, categoria é identidade tipada da vaga. O
+    // organizador pode selecionar mais de uma categoria paralela, mas envia
+    // somente IDs; rótulo é apresentação e jamais participa da mutação.
+    var _canonical = t && t.canonicalRegistrationMigration && t.canonicalRegistrationMigration.fingerprint;
+    var _defs = _canonical && Array.isArray(t.categoryDefinitions)
+      ? t.categoryDefinitions.filter(function (d) { return d && d.id && d.label && d.enabled !== false; }) : [];
+    var categoryBox = _canonical
+      ? ('<label class="form-label" style="display:block;font-size:0.82rem;font-weight:600;margin-top:12px;">Categorias</label>' +
+        '<select id="addpart-category-' + safeId + '" multiple size="' + Math.min(Math.max(_defs.length, 1), 5) + '" style="' + fieldStyle + 'margin-top:6px;min-height:42px;">' +
+          _defs.map(function (d) { return '<option value="' + _safe(String(d.id)) + '">' + _safe(String(d.label)) + '</option>'; }).join('') +
+        '</select>' +
+        '<div style="font-size:0.68rem;color:var(--text-muted);margin-top:5px;">Selecione uma ou mais categorias. Combinações excludentes são validadas pelo servidor.</div>')
+      : '';
+
     var nameBox =
       '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;padding:1.1rem;margin-bottom:1.1rem;">' +
         '<label class="form-label" style="font-size:0.82rem;font-weight:600;">👤 Nome do participante</label>' +
@@ -171,6 +185,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
           '<input type="text" id="addpart-name-' + safeId + '" placeholder="Ex.: Maria Silva" style="' + fieldStyle + 'flex:1;min-width:160px;" onkeydown="if(event.key===\'Enter\'){event.preventDefault();window._pageAddParticipant(\'' + safeId + '\');}">' +
           '<button type="button" id="addpart-name-btn-' + safeId + '" class="btn btn-cyan hover-lift" onclick="window._pageAddParticipant(\'' + safeId + '\')">Adicionar</button>' +
         '</div>' +
+        categoryBox +
       '</div>';
 
     var phBox =
@@ -226,6 +241,16 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var inp = document.getElementById('addpart-name-' + tId);
     var name = inp ? inp.value.trim() : '';
     if (!name) { if (typeof showNotification === 'function') showNotification('Nome vazio', 'Digite o nome do participante.', 'warning'); return; }
+    var tournament = _guard(tId); if (!tournament) return;
+    var categoryIds = null;
+    if (tournament.canonicalRegistrationMigration && tournament.canonicalRegistrationMigration.fingerprint) {
+      var select = document.getElementById('addpart-category-' + tId);
+      categoryIds = select ? Array.prototype.slice.call(select.selectedOptions || []).map(function (option) { return option.value; }).filter(Boolean) : [];
+      if (!categoryIds.length) {
+        if (typeof showNotification === 'function') showNotification('Categoria necessária', 'Selecione ao menos uma categoria para adicionar este participante.', 'warning');
+        return;
+      }
+    }
     var btnId = 'addpart-name-btn-' + tId;
     _addBtnLoading(btnId, true);
     var _done = false, _finish = function () { if (_done) return; _done = true; _addBtnLoading(btnId, false); };
@@ -234,7 +259,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       clearTimeout(_to); _finish();
       if (inp) { inp.value = ''; inp.focus(); }
       _refreshCount(tId);
-    });
+    }, null, categoryIds);
   };
 
   window._pageAddPlaceholders = function (tId) {

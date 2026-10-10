@@ -1554,8 +1554,8 @@ window.addParticipantFunction = function (tId) {
         return;
     }
     // Overlay com autocomplete de amigos/usuários → delega ao core canônico.
-    window._addParticipantWithAutocomplete(tId, _closedOrDrawn, function(pName, selectedUid, selectedPhoto) {
-        window._doAddParticipant(tId, pName, selectedUid, selectedPhoto);
+    window._addParticipantWithAutocomplete(tId, _closedOrDrawn, function(pName, selectedUid, selectedPhoto, categoryIds) {
+        window._doAddParticipant(tId, pName, selectedUid, selectedPhoto, null, null, categoryIds);
     });
 };
 
@@ -1563,7 +1563,7 @@ window.addParticipantFunction = function (tId) {
 // Fonte ÚNICA usada pelo overlay de autocomplete (addParticipantFunction) E pela página
 // consolidada "+ Participante" (#participantes/<tId>). onDone(opcional) roda no sucesso —
 // a página recarrega a lista; sem onDone, faz o refresh padrão da view do torneio.
-window._doAddParticipant = function (tId, pName, selectedUid, selectedPhoto, onDone, _resolved) {
+window._doAddParticipant = function (tId, pName, selectedUid, selectedPhoto, onDone, _resolved, categoryIds) {
     var t = window._findTournamentById(tId);
     if (!t) return;
     // v1.8.40: regra canônica (waitlist-core._enrollmentOpenState — a mesma do servidor).
@@ -1595,6 +1595,17 @@ window._doAddParticipant = function (tId, pName, selectedUid, selectedPhoto, onD
                 participantObj.manualParticipantId = 'manual-' + String(tId) + '-' + _manualNonce;
                 participantObj.name = pName.trim();
                 participantObj.displayName = pName.trim();
+            }
+            // O roster materializado só recebe categoryIds. A interface pode
+            // exibir rótulos, mas nunca os manda ao servidor como identidade.
+            var _canonicalMigration = t.canonicalRegistrationMigration;
+            if (_canonicalMigration && _canonicalMigration.fingerprint) {
+                var _ids = Array.isArray(categoryIds) ? categoryIds.map(function (id) { return String(id || '').trim(); }).filter(Boolean) : [];
+                if (!_ids.length) {
+                    if (typeof showNotification !== 'undefined') showNotification('Categoria necessária', 'Selecione ao menos uma categoria para adicionar este participante.', 'warning');
+                    return;
+                }
+                participantObj.categoryIds = Array.from(new Set(_ids));
             }
             // If late enrollment, add to standby instead
             if (_closedOrDrawn) {
@@ -1827,6 +1838,14 @@ window._addParticipantWithAutocomplete = function(tId, isLate, onConfirm) {
           window.AppStore.tournaments.find(function(x){ return String(x.id)===String(tId); });
   var _sh = window._safeHtml || function(s){return String(s||'');};
   var title = isLate ? 'Adicionar à lista de espera' : '👤 Adicionar participante';
+  var canonicalDefinitions = t && t.canonicalRegistrationMigration && t.canonicalRegistrationMigration.fingerprint && Array.isArray(t.categoryDefinitions)
+    ? t.categoryDefinitions.filter(function (definition) { return definition && definition.id && definition.label && definition.enabled !== false; }) : [];
+  var categoryPicker = canonicalDefinitions.length
+    ? ('<label style="display:block;margin-top:14px;font-size:0.76rem;font-weight:700;color:var(--text-bright,#f1f5f9);">Categorias</label>' +
+      '<select id="ap-category-ids" multiple size="' + Math.min(Math.max(canonicalDefinitions.length, 1), 5) + '" style="width:100%;margin-top:6px;padding:9px;border-radius:8px;border:1px solid var(--border-color,rgba(255,255,255,0.15));background:var(--bg-dark,#0f172a);color:var(--text-main,#e2e8f0);box-sizing:border-box;">' +
+      canonicalDefinitions.map(function (definition) { return '<option value="' + _sh(String(definition.id)) + '">' + _sh(String(definition.label)) + '</option>'; }).join('') +
+      '</select><div style="font-size:0.68rem;color:var(--text-muted,#94a3b8);margin-top:5px;">Selecione uma ou mais categorias. O servidor valida combinações excludentes.</div>')
+    : '';
 
   var old = document.getElementById('add-participant-overlay');
   if (old) old.remove();
@@ -1852,6 +1871,7 @@ window._addParticipantWithAutocomplete = function(tId, isLate, onConfirm) {
           '<span id="ap-sel-text" style="font-size:0.88rem;color:var(--text-bright);flex:1;font-weight:600;"></span>' +
           '<button type="button" class="cancel-x-btn" title="Limpar" onclick="window._apClear()" style="--cx-size:18px;">✕</button>' +
         '</div>' +
+        categoryPicker +
         '<div style="display:flex;gap:8px;margin-top:14px;">' +
           '<button onclick="document.getElementById(\'add-participant-overlay\').remove()" style="flex:1;padding:10px;border-radius:8px;border:1px solid rgba(239,68,68,0.45);background:rgba(239,68,68,0.10);color:var(--sp-c-ef4444,#ef4444);font-weight:700;cursor:pointer;font-size:0.85rem;">Cancelar</button>' +
           '<button id="ap-confirm" onclick="window._apConfirm()" disabled style="flex:2;padding:10px;border-radius:8px;border:none;background:linear-gradient(135deg,#06b6d4,#0891b2);color:#fff;font-weight:700;font-size:0.88rem;cursor:not-allowed;opacity:0.4;transition:opacity 0.2s;">Adicionar</button>' +
@@ -2011,7 +2031,16 @@ window._addParticipantWithAutocomplete = function(tId, isLate, onConfirm) {
         }
       } catch (e) {}
     }
+    var categoryIds = [];
+    var categorySelect = document.getElementById('ap-category-ids');
+    if (categorySelect) {
+      categoryIds = Array.prototype.slice.call(categorySelect.selectedOptions || []).map(function (option) { return option.value; }).filter(Boolean);
+      if (!categoryIds.length) {
+        if (typeof showNotification !== 'undefined') showNotification('Categoria necessária', 'Selecione ao menos uma categoria para adicionar este participante.', 'warning');
+        return;
+      }
+    }
     document.getElementById('add-participant-overlay') && document.getElementById('add-participant-overlay').remove();
-    onConfirm(sel.name, sel.uid, sel.photo);
+    onConfirm(sel.name, sel.uid, sel.photo, categoryIds);
   };
 };
