@@ -702,6 +702,37 @@ window.removeParticipantFunction = function (tId, participantName, memberUid) {
         _t('tourn.removeParticipantMsg') + _pairMsg,
         () => {
             if (window.FirestoreDB && typeof window.FirestoreDB._callFn === 'function') {
+                // O registro canônico não aceita nome como chave. A ação do
+                // organizador reutiliza a transação de desinscrição por UID ou
+                // manualParticipantId — a mesma que dissolve uma dupla sem
+                // deixar o parceiro com vínculo órfão.
+                var _canonical = _tPre && _tPre.canonicalRegistrationMigration && _tPre.canonicalRegistrationMigration.fingerprint;
+                if (_canonical) {
+                    var _manualId = '';
+                    (Array.isArray(_tPre.participants) ? _tPre.participants : []).some(function (entry) {
+                        if (!entry || typeof entry !== 'object') return false;
+                        if (String(entry.manualParticipantId || '') === String(memberUid || '')) { _manualId = String(memberUid); return true; }
+                        if (String(entry.p1ManualId || '') === String(memberUid || '')) { _manualId = String(memberUid); return true; }
+                        if (String(entry.p2ManualId || '') === String(memberUid || '')) { _manualId = String(memberUid); return true; }
+                        return false;
+                    });
+                    if (!memberUid) {
+                        if (typeof showNotification === 'function') showNotification('Identidade necessária', 'Reabra a lista: este participante não tem uma identidade canônica disponível.', 'warning');
+                        return;
+                    }
+                    var _removePayload = { tournamentId: String(tId) };
+                    if (_manualId) _removePayload.manualParticipantId = _manualId;
+                    else _removePayload.userUid = String(memberUid);
+                    window.FirestoreDB._callFn('deenrollParticipant', _removePayload).then(function(result) {
+                        if (result && Array.isArray(result.participants)) _tPre.participants = result.participants;
+                        const container = document.getElementById('view-container');
+                        if (container) {
+                            if ((window.location.hash || '').indexOf('#participants') === 0 && typeof window.renderParticipants === 'function') window.renderParticipants(container, tId);
+                            else if (typeof renderTournaments === 'function') renderTournaments(container, tId);
+                        }
+                    }).catch(function(err) { if (typeof showNotification === 'function') showNotification('Erro', (err && err.message) || 'Não foi possível remover o participante.', 'error'); });
+                    return;
+                }
                 window.FirestoreDB._callFn('removeTournamentParticipant', { tournamentId: String(tId), participantName: String(participantName || ''), memberUid: String(memberUid || '') }).then(function(result) {
                     if (result && result.tournament && typeof window._applyCFTournament === 'function') window._applyCFTournament(tId, result.tournament);
                     const container = document.getElementById('view-container');

@@ -3963,8 +3963,9 @@ exports.deenrollParticipant = onCall(
 
     const tournamentId = String((request.data && request.data.tournamentId) || "");
     const userUid = String((request.data && request.data.userUid) || "");
-    if (!tournamentId || !userUid) {
-      throw new HttpsError("invalid-argument", "tournamentId e userUid são obrigatórios");
+    const manualParticipantId = String((request.data && request.data.manualParticipantId) || "");
+    if (!tournamentId || (!userUid && !manualParticipantId) || (userUid && manualParticipantId)) {
+      throw new HttpsError("invalid-argument", "tournamentId e uma identidade única são obrigatórios");
     }
 
     const db = admin.firestore();
@@ -3975,13 +3976,19 @@ exports.deenrollParticipant = onCall(
       const rawTournament = snap.data() || {};
       if (rawTournament.canonicalRegistrationMigration && rawTournament.canonicalRegistrationMigration.fingerprint) {
         const isOrg = _isTournamentOrgCaller(rawTournament, callerUid);
-        if (userUid !== callerUid && !isOrg) {
+        // Vaga manual não pertence a uma conta: somente a organização pode
+        // removê-la. Conta real conserva a regra de poder sair de si mesma.
+        if ((manualParticipantId && !isOrg) || (userUid && userUid !== callerUid && !isOrg)) {
           throw new HttpsError("permission-denied", "só a própria pessoa ou o organizador podem desinscrever");
         }
         const checked = await _loadCanonicalRosterForMutation(tx, docRef, rawTournament);
-        const decision = _registrationMutations.withdraw(tournamentId, checked.registrations, { uid: userUid });
+        const decision = _registrationMutations.withdraw(tournamentId, checked.registrations,
+          userUid ? { uid: userUid } : { manualParticipantId: manualParticipantId });
         const next = _writeCanonicalRosterUpdates(tx, docRef, rawTournament, checked.registrations, decision.updates);
         return { outcome: decision.outcome === "changed" ? "removed" : "notFound", participants: next.participants, canonical: true };
+      }
+      if (manualParticipantId) {
+        throw new HttpsError("failed-precondition", "vaga manual legada deve usar a porta administrativa correspondente");
       }
       // Torneio DIVIDIDO: o elenco mora na subcoleção. Hidrata ANTES de decidir —
       // sem isto as regras rodam contra `participants: []`. Ver functions/split-parts.js.
