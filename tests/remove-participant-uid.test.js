@@ -48,7 +48,14 @@ W.FirestoreDB = {
     } else if (name === 'setTournamentWOAbsence') woCalls.push(payload);
     else vipCall = { name: name, payload: payload };
     return { then: function (f) {
-      if (f) f({ data: { ok: true, vips: (function () { var out = {}; out[String(payload.uid || payload.participantName)] = true; return out; })() } });
+      if (f) f({ data: { ok: true, vips: (function () {
+        var out = {};
+        (payload.identities || []).forEach(function (identity) {
+          if (identity.uid) out[String(identity.uid)] = true;
+          if (identity.manualParticipantId) out['manual:' + String(identity.manualParticipantId)] = true;
+        });
+        return out;
+      })() } });
       return { catch: function () { return null; } };
     } };
   },
@@ -158,8 +165,8 @@ console.log('\n── ações do card gravam na CHAVE-UID (W.O. · VIP · nível
   ok(!Object.keys(t.absent).length, 'W.O. :: a tela não gravou ausência localmente');
 
   // VIP do solo
-  W._toggleVip(t.id, '', 'uSolo');
-  ok(vipCall && vipCall.name === 'setTournamentParticipantVip' && vipCall.payload.uid === 'uSolo', 'VIP :: enviou somente a intenção uid à Function');
+  W._toggleVip(t.id, 'uSolo');
+  ok(vipCall && vipCall.name === 'setTournamentParticipantVip' && vipCall.payload.identities && vipCall.payload.identities.length === 1 && vipCall.payload.identities[0].uid === 'uSolo', 'VIP :: enviou somente a intenção uid à Function');
   ok(t.vips.uSolo != null, 'VIP :: gravou na chave-UID');
   ok(!Object.keys(t.vips).some((k) => k === '' || k === 'undefined'), 'VIP :: sem chave-nome órfã — got ' + JSON.stringify(Object.keys(t.vips)));
 

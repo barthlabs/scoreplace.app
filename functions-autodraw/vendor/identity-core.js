@@ -407,16 +407,46 @@ window._idMapDel = function(t, map, who) {
   if (k.name && map[k.name] != null) delete map[k.name];
 };
 
+// _vipIdentitiesForEntry(entry): identidade explícita dos membros de uma entrada.
+// O convidado do organizador usa manualParticipantId; nome é só apresentação e
+// não pode decidir VIP (homônimos são pessoas distintas).
+window._vipIdentitiesForEntry = function(entry) {
+  if (!entry || typeof entry !== 'object') return [];
+  var candidates = [];
+  if (Array.isArray(entry.participants)) candidates = candidates.concat(entry.participants);
+  candidates.push(
+    { uid: entry.p1Uid, manualParticipantId: entry.p1ManualId },
+    { uid: entry.p2Uid, manualParticipantId: entry.p2ManualId },
+    { uid: entry.uid, manualParticipantId: entry.manualParticipantId }
+  );
+  var seen = {}, out = [];
+  candidates.forEach(function(person) {
+    if (!person || typeof person !== 'object') return;
+    var uid = String(person.uid || '').trim();
+    var manualParticipantId = String(person.manualParticipantId || person.manualId || '').trim();
+    if ((uid && manualParticipantId) || (!uid && !manualParticipantId)) return;
+    var key = uid ? 'uid:' + uid : 'manual:' + manualParticipantId;
+    if (seen[key]) return;
+    seen[key] = true;
+    out.push(uid ? { uid: uid } : { manualParticipantId: manualParticipantId });
+  });
+  return out;
+};
+
 // _entryHasVip(t, entry): VIP é flag de ENTRADA (qualquer membro VIP → entrada
-// VIP), armazenada por uid de cada membro (ver _toggleVip). Aceita objeto
-// (solo/dupla — usa _participantUids) OU string ("A / B" = time → resolve cada
-// membro; ou nome solo). Nome só fallback legado. Unifica todos os readers de VIP.
+// VIP), armazenada por UID ou `manual:` + ID manual. Não resolve/escreve por
+// nome. Chaves de nome históricas continuam somente como leitura de entrada
+// sem identidade estável, até a conversão canônica do respectivo torneio.
 window._entryHasVip = function(t, entry) {
   if (!t || !t.vips || entry == null) return false;
   var vips = t.vips;
   if (typeof entry === 'object') {
-    var uids = (typeof window._participantUids === 'function') ? window._participantUids(entry) : (entry.uid ? [entry.uid] : []);
-    for (var i = 0; i < uids.length; i++) { if (vips[uids[i]]) return true; }
+    var identities = window._vipIdentitiesForEntry(entry);
+    for (var i = 0; i < identities.length; i++) {
+      var key = identities[i].uid || ('manual:' + identities[i].manualParticipantId);
+      if (vips[key]) return true;
+    }
+    if (identities.length) return false;
     var nm = entry.displayName || entry.name || '';
     return nm ? !!vips[nm] : false;
   }

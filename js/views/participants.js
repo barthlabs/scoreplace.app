@@ -1416,11 +1416,25 @@ window._partApplyFilter = function () {
   try { if (window._stickyFilterKeepRoom) window._stickyFilterKeepRoom(_keepY, !!q); } catch (e) {}
 };
 
-window._toggleVip = function (tId, participantName, uid) {
+window._toggleVip = function (tId, identitiesOrUid, manualParticipantId) {
   const t = window._findTournamentById(tId);
   if (!t || !window.FirestoreDB || typeof window.FirestoreDB._callFn !== 'function') return;
+  const raw = Array.isArray(identitiesOrUid) ? identitiesOrUid : [{
+    uid: String(identitiesOrUid || '').trim(),
+    manualParticipantId: String(manualParticipantId || '').trim()
+  }];
+  const identities = raw.map(function(identity) {
+    const item = identity && typeof identity === 'object' ? identity : {};
+    const uid = String(item.uid || '').trim();
+    const manualId = String(item.manualParticipantId || item.manualId || '').trim();
+    return uid && !manualId ? { uid: uid } : (!uid && manualId ? { manualParticipantId: manualId } : null);
+  }).filter(Boolean);
+  if (!identities.length) {
+    if (typeof showNotification === 'function') showNotification('VIP', 'Participante sem identidade estável.', 'error');
+    return;
+  }
   window.FirestoreDB._callFn('setTournamentParticipantVip', {
-    tournamentId: String(tId), participantName: String(participantName || ''), uid: String(uid || '')
+    tournamentId: String(tId), identities: identities
   }).then(function(res) {
     const out = (res && res.data) || res || {};
     if (!out.ok) throw new Error('vip-not-updated');
@@ -1631,6 +1645,11 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
   // ações de pessoa (VIP/nível/excluir) valem pra entrada. [[project_uid_identity_canon_locked]]
   var _cardUid = (p && typeof p === 'object' && p.uid && !p.p1Uid && !p.p2Uid && !p.p1ManualId && !p.p2ManualId && !p.p1Name && !p.p2Name)
     ? String(p.uid).replace(/'/g, "\\'") : '';
+  var _vipIdentities = (typeof window._vipIdentitiesForEntry === 'function') ? window._vipIdentitiesForEntry(p) : [];
+  // O payload vai para um atributo `onclick` com aspas duplas: preservar o
+  // JSON sem escapar `"` aqui fecharia o atributo e recriaria uma ação por
+  // texto. Entidades HTML viram aspas novamente antes de o handler executar.
+  var _vipPayload = JSON.stringify(_vipIdentities).replace(/</g, '\\u003c').replace(/"/g, '&quot;').replace(/'/g, "\\'");
   // Só a ação de remover aceita também a identidade manual. As demais ações pessoais
   // continuam exigindo UID de conta; não transformar manualParticipantId em "uid".
   var _removeIdentity = (p && typeof p === 'object' && !p.p1Uid && !p.p2Uid && !p.p1ManualId && !p.p2ManualId && !p.p1Name && !p.p2Name)
@@ -1811,7 +1830,7 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
   if (isOrg && !_isStandbyEntry) {
     dragProps = 'draggable="true" ondragstart="window.handleDragStart(event, ' + idx + ', \'' + t.id + '\')" ondragend="window.handleDragEnd(event)" ondragover="window.handleDragOver(event)" ondragenter="window.handleDragEnter(event)" ondragleave="window.handleDragLeave(event)" ondrop="window.handleDropTeam(event, ' + idx + ')"';
     if (!drawDone) {
-      _vipBtn = '<button class="btn btn-micro" title="' + (isVip ? _T('tourn.removeVip') : _T('tourn.markVip')) + '" style="min-height:0;height:24px;line-height:1;padding:0 9px;font-size:0.66rem;font-weight:800;flex-shrink:0;background: ' + (isVip ? 'linear-gradient(135deg,rgba(234,179,8,0.35),rgba(251,191,36,0.25))' : 'rgba(234,179,8,0.08)') + '; color: ' + window._spCor((isVip ? '#fbbf24' : '#a3842a'), 'color') + '; border: 1px ' + (isVip ? 'solid' : 'dashed') + ' ' + (isVip ? 'rgba(251,191,36,0.6)' : 'rgba(234,179,8,0.3)') + ';" onclick="event.stopPropagation(); window._toggleVip(\'' + t.id + '\', \'' + safeP + '\', \'' + _cardUid + '\');">💎 VIP</button>';
+      _vipBtn = _vipIdentities.length ? '<button class="btn btn-micro" title="' + (isVip ? _T('tourn.removeVip') : _T('tourn.markVip')) + '" style="min-height:0;height:24px;line-height:1;padding:0 9px;font-size:0.66rem;font-weight:800;flex-shrink:0;background: ' + (isVip ? 'linear-gradient(135deg,rgba(234,179,8,0.35),rgba(251,191,36,0.25))' : 'rgba(234,179,8,0.08)') + '; color: ' + window._spCor((isVip ? '#fbbf24' : '#a3842a'), 'color') + '; border: 1px ' + (isVip ? 'solid' : 'dashed') + ' ' + (isVip ? 'rgba(251,191,36,0.6)' : 'rgba(234,179,8,0.3)') + ';" onclick="event.stopPropagation(); window._toggleVip(\'' + t.id + '\', ' + _vipPayload + ');">💎 VIP</button>' : '';
       // Este ✕ é da ENTRADA inteira (dupla sai inteira) → NÃO manda uid de membro: mandar
       // p.uid (que numa dupla é o uid do p1) tiraria só uma pessoa e deixaria a outra.
       _delBtn = '<button type="button" class="cancel-x-btn" title="' + _T('btn.remove') + '" style="--cx-size:22px;" onclick="event.stopPropagation(); window.removeParticipantFunction(\'' + t.id + '\', \'' + safeP + '\', \'' + _removeIdentity + '\');">✕</button>';
@@ -2675,7 +2694,9 @@ function renderParticipants(container, tournamentId) {
         (ind.teamName ? window._entryHasVip(t, ind.teamName) : false);
       const vipTag = isVipPlayer ? '<span style="background:linear-gradient(135deg,#eab308,#fbbf24);color:#1a1a2e;font-size:0.55rem;font-weight:900;padding:1px 5px;border-radius:3px;letter-spacing:0.5px;flex-shrink:0;">💎 VIP</span>' : '';
       // v2.7.40: botão VIP ao lado do W.O. — SÓ pro organizador (toggle marca/desmarca).
-      const _vipBtnC = isOrg ? `<button type="button" class="btn btn-micro" onclick="event.stopPropagation();window._toggleVip('${tId}','${safeName}','${ind.uid || ''}')" title="${isVipPlayer ? 'Remover VIP' : 'Marcar VIP'}" style="min-height:0;height:24px;line-height:1;padding:0 9px;font-size:0.66rem;font-weight:800;border-radius:7px;flex-shrink:0;background:${window._spCor(isVipPlayer ? 'linear-gradient(135deg,rgba(234,179,8,0.4),rgba(251,191,36,0.28))' : 'rgba(234,179,8,0.1)', 'background')};color:${window._spCor(isVipPlayer ? '#fbbf24' : '#d4a72a', 'color')};border:1px ${isVipPlayer ? 'solid rgba(251,191,36,0.65)' : 'dashed rgba(234,179,8,0.4)'};">💎 VIP</button>` : '';
+      const _vipIdentityC = ind.uid ? { uid: String(ind.uid) } : (ind.manualParticipantId ? { manualParticipantId: String(ind.manualParticipantId) } : null);
+      const _vipPayloadC = _vipIdentityC ? JSON.stringify([_vipIdentityC]).replace(/</g, '\\u003c').replace(/"/g, '&quot;').replace(/'/g, "\\'") : '';
+      const _vipBtnC = isOrg && _vipPayloadC ? `<button type="button" class="btn btn-micro" onclick="event.stopPropagation();window._toggleVip('${tId}',${_vipPayloadC})" title="${isVipPlayer ? 'Remover VIP' : 'Marcar VIP'}" style="min-height:0;height:24px;line-height:1;padding:0 9px;font-size:0.66rem;font-weight:800;border-radius:7px;flex-shrink:0;background:${window._spCor(isVipPlayer ? 'linear-gradient(135deg,rgba(234,179,8,0.4),rgba(251,191,36,0.28))' : 'rgba(234,179,8,0.1)', 'background')};color:${window._spCor(isVipPlayer ? '#fbbf24' : '#d4a72a', 'color')};border:1px ${isVipPlayer ? 'solid rgba(251,191,36,0.65)' : 'dashed rgba(234,179,8,0.4)'};">💎 VIP</button>` : '';
       // ── v1.9.97 · CAMADA 3: REGISTRAR O CONTATO DE QUEM O SMS NÃO ALCANÇA ────
       // Caso Leila Arida (20/ago/2026): pediu o código, o Google entregou o SMS à
       // operadora (HTTP 200) e nada chegou no aparelho — sem saída, ela ficava fora da

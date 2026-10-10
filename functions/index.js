@@ -96,6 +96,7 @@ const _registrationMigration = require("./registration-migration-core");
 const _registrationMutations = require("./registration-mutations-core");
 const _canonicalRegistrationBoundary = require("./canonical-registration-boundary-core");
 const _registrationLifecycle = require("./registration-lifecycle-core");
+const _tournamentVip = require("./tournament-vip-core");
 const _splitParts = require("./split-parts.js");   // torneio dividido: elenco na subcoleção
 const _refereeRoster = require("./vendor/referee-roster.js"); // escala de arbitragem: contrato puro e sem contato
 
@@ -4911,49 +4912,32 @@ exports.setTournamentParticipantVip = onCall(
     if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
     const data = request.data || {};
     const tournamentId = String(data.tournamentId || "").trim();
-    const targetUid = String(data.uid || "").trim();
-    const participantName = String(data.participantName || "").trim().slice(0, 160);
-    if (!tournamentId || (!targetUid && !participantName)) {
-      throw new HttpsError("invalid-argument", "torneio e participante são obrigatórios");
-    }
+    if (!tournamentId) throw new HttpsError("invalid-argument", "torneio é obrigatório");
+    let targets;
+    try { targets = _tournamentVip.normalizeTargets(data); }
+    catch (error) { throw new HttpsError("invalid-argument", error.message); }
     const db = admin.firestore();
-    const hydrated = await _lerTorneioComElenco(db, tournamentId);
-    if (!hydrated) throw new HttpsError("not-found", "torneio não existe");
-    if (!_isTournamentOrgCaller(hydrated, callerUid)) {
-      throw new HttpsError("permission-denied", "só a organização marca VIP");
-    }
-    const roster = Array.isArray(hydrated.participants) ? hydrated.participants : [];
-    const target = roster.find((p) => {
-      if (typeof p === "string") return !targetUid && p.split(" /").map(x => x.trim()).indexOf(participantName) !== -1;
-      if (!p || typeof p !== "object") return false;
-      const ids = [p.uid, p.p1Uid, p.p2Uid].concat(Array.isArray(p.participants) ? p.participants.map(x => x && x.uid) : []).filter(Boolean).map(String);
-      const names = [p.displayName, p.name, p.p1Name, p.p2Name].concat(Array.isArray(p.participants) ? p.participants.map(x => x && (x.displayName || x.name)) : []).filter(Boolean).map(String);
-      return (targetUid && ids.indexOf(targetUid) !== -1) || (!targetUid && names.indexOf(participantName) !== -1);
-    });
-    if (!target) throw new HttpsError("failed-precondition", "participante não está inscrito");
-    const memberUids = typeof target === "object"
-      ? [target.uid, target.p1Uid, target.p2Uid].concat(Array.isArray(target.participants) ? target.participants.map(x => x && x.uid) : []).filter(Boolean).map(String)
-      : [];
-    const legacyKey = memberUids.length ? "" : participantName;
     const ref = db.collection("tournaments").doc(tournamentId);
     return db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
-      const fresh = snap.data() || {};
-      if (!_isTournamentOrgCaller(fresh, callerUid)) throw new HttpsError("permission-denied", "só a organização marca VIP");
-      const vips = Object.assign({}, fresh.vips || {});
-      const wasVip = memberUids.length ? memberUids.some(uid => !!vips[uid]) : !!vips[legacyKey];
-      if (wasVip) {
-        memberUids.forEach(uid => { delete vips[uid]; });
-        if (legacyKey) delete vips[legacyKey];
-      } else if (memberUids.length) {
-        memberUids.forEach(uid => { vips[uid] = Date.now(); });
-        if (participantName) delete vips[participantName];
+      const rawTournament = snap.data() || {};
+      if (!_isTournamentOrgCaller(rawTournament, callerUid)) throw new HttpsError("permission-denied", "só a organização marca VIP");
+      let roster;
+      if (rawTournament.canonicalRegistrationMigration && rawTournament.canonicalRegistrationMigration.fingerprint) {
+        const checked = await _loadCanonicalRosterForMutation(tx, ref, rawTournament);
+        roster = checked.participants;
       } else {
-        vips[legacyKey] = Date.now();
+        const hydrated = await _splitParts.hidratar(tx, ref, rawTournament);
+        _assertLegacyRosterStillAuthoritative(hydrated);
+        roster = hydrated.participants;
       }
-      tx.update(ref, { vips, updatedAt: new Date().toISOString() });
-      return { ok: true, isVip: !wasVip, vips };
+      if (!_tournamentVip.rosterHasTargets(roster, targets)) {
+        throw new HttpsError("failed-precondition", "participante não está inscrito com identidade estável");
+      }
+      const result = _tournamentVip.toggle(rawTournament.vips, targets, Date.now());
+      tx.update(ref, { vips: result.vips, updatedAt: new Date().toISOString() });
+      return { ok: true, isVip: result.isVip, vips: result.vips };
     });
   }
 );
