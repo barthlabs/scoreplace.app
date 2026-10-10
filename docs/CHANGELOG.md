@@ -1,3 +1,10 @@
+## 2.3.322 — 10/out/2026 (categorias canônicas em todas as telas do organizador)
+
+- **A troca de categoria deixou de ter atalhos legados nas telas secundárias.** O cartão de nível de Participantes e o salvamento em lote da Análise agora detectam o roster canônico e usam a mesma reclassificação tipada do gerenciador de categorias: identidade por `uid` ou `manualParticipantId`, origem e destino por `categoryId`.
+- **Dupla fixa é movida uma vez só.** A Análise deduplica os dois lados antes da chamada; a transação canônica movimenta a dupla inteira, preservando a invariância de categoria compartilhada.
+- A Análise não tenta mais enviar campos sem equivalente no registro canônico ao writer de compatibilidade. A alteração fica bloqueada com mensagem explícita em vez de produzir mutação parcial ou por nome.
+- Acrescentado teste de regressão que cobre as duas telas e garante que o marcador de migração escolhe a rota canônica antes de qualquer chamada legada. A suíte completa passou com 1.016 suítes.
+
 ## 2.3.122 — 27/set/2026 (data curta no agendamento da organização)
 
 - **A data proposta pela organização não quebra mais no celular.** O controle nativo do iPhone escolhia mostrar a data por extenso e o ano caía numa segunda linha. O campo agora é explícito: `dd/mm/aa`; a hora continua `hh:mm`.
