@@ -2328,18 +2328,30 @@ window._nextOwedDrawMs = function(t, nowMs) {
         }
         return window._owedDrawSlotMs(_pcfg.drawFirstDate, _pcfg.drawFirstTime, _pcfg.drawIntervalDays, _slot && _slot.lastAutoDrawAt, _now);
     }
-    var phase0 = Array.isArray(t.phases) ? t.phases[0] : null;
-    // A agenda inicial pertence à fase 0. Um torneio multifase pode manter o
-    // rótulo histórico “Liga” no topo e já estar em mata-mata; a fase resolve a
-    // ambiguidade sem mudar o fallback de documentos ainda não projetados.
+    var hasPhases = Array.isArray(t.phases);
+    if (hasPhases && !t.phases.length) return null;
+    // Este ramo é somente a agenda da fase 0. Uma fase posterior incremental
+    // retornou acima; qualquer outra fase posterior não pode herdar o relógio
+    // da classificatória inicial só porque o topo ainda diz "Liga".
+    var curPhase = Number(t.currentPhaseIndex == null ? 0 : t.currentPhaseIndex);
+    if (hasPhases && (!isFinite(curPhase) || curPhase !== 0)) return null;
+    var phase0 = hasPhases ? (t.phases[0] || {}) : null;
+    // A agenda pertence à fase. A ponte para os campos do topo existe só para
+    // uma fase 0 projetada antes de os campos serem copiados — e para documentos
+    // que ainda não têm phases[]. Uma fase vazia não ressuscita o formato legado.
     var isLiga = phase0 && phase0.kind
       ? (phase0.kind === 'classification' && (!phase0.classification || phase0.classification.structure !== 'groups'))
       : (t.format === 'Liga' || t.format === 'Ranking');
-    if (!isLiga || t.drawManual === true || !t.drawFirstDate || t.status === 'finished') return null;
+    var hasOwn = Object.prototype.hasOwnProperty;
+    var phaseHasSchedule = !!(phase0 && (hasOwn.call(phase0, 'drawManual') ||
+      hasOwn.call(phase0, 'drawFirstDate') || hasOwn.call(phase0, 'drawFirstTime') ||
+      hasOwn.call(phase0, 'drawIntervalDays')));
+    var schedule = phaseHasSchedule ? phase0 : t;
+    if (!isLiga || schedule.drawManual === true || !schedule.drawFirstDate || t.status === 'finished') return null;
     // v3.x: torneio multifase — o auto-draw para no fim da fase classificatória
     // (avanço pra próxima fase é MANUAL). Single-phase → false (zero efeito).
     if (window._suppressAutoDrawForPhases && window._suppressAutoDrawForPhases(t)) return null;
-    var owed = window._owedDrawSlotMs(t.drawFirstDate, t.drawFirstTime, t.drawIntervalDays, t.lastAutoDrawAt, _now);
+    var owed = window._owedDrawSlotMs(schedule.drawFirstDate, schedule.drawFirstTime, schedule.drawIntervalDays, t.lastAutoDrawAt, _now);
     if (owed == null) return null;
     var seasonEnd = (typeof window._ligaSeasonEndMs === 'function') ? window._ligaSeasonEndMs(t) : null;
     if (seasonEnd != null && owed > seasonEnd) return null;

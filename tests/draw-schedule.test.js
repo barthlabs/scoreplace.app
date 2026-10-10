@@ -57,6 +57,23 @@ const FD = new Date('2026-07-01T19:00:00-03:00').getTime();
     '[next] fase canônica eliminatória vence o rótulo Liga do topo');
   ok(g({ format: 'Eliminatórias Simples', phases: [{ kind: 'classification', classification: { structure: 'round_robin' } }], drawFirstDate: '2026-07-01', drawFirstTime: '19:00', drawIntervalDays: 7 }, NOW) === FD,
     '[next] fase canônica classificatória vence o rótulo eliminatório do topo');
+  const phaseDate = new Date('2026-07-03T20:00:00-03:00').getTime();
+  const phaseScheduled = {
+    format: 'Liga', drawFirstDate: '2026-07-01', drawFirstTime: '19:00', drawIntervalDays: 7,
+    phases: [{ kind: 'classification', classification: { structure: 'round_robin' }, drawManual: false,
+      drawFirstDate: '2026-07-03', drawFirstTime: '20:00', drawIntervalDays: 3 }]
+  };
+  ok(g(phaseScheduled, phaseDate - D) === phaseDate,
+    '[next] fase 0 com agenda própria vence data/hora/intervalo históricos do topo');
+  ok(g(Object.assign({}, phaseScheduled, { phases: [Object.assign({}, phaseScheduled.phases[0], { drawManual: true })] }), NOW) === null,
+    '[next] modo manual da fase 0 vence agenda automática residual do topo');
+  ok(g(Object.assign({}, baseLiga, { phases: [] }), NOW) === null,
+    '[next] phases[] vazio não reativa agenda por rótulo Liga legado');
+  ok(g(Object.assign({}, baseLiga, { currentPhaseIndex: 1, phases: [
+    { kind: 'classification', classification: { structure: 'round_robin' } },
+    { kind: 'classification', classification: { structure: 'round_robin' } }
+  ] }), NOW) === null,
+    '[next] fase posterior sem cadência incremental não herda agenda da fase inicial');
   ok(g({ format: 'Eliminatórias Simples', drawFirstDate: '2026-07-01', drawIntervalDays: 7 }, NOW) === null, '[next] não-Liga → null');
   ok(g(Object.assign({ drawManual: true }, baseLiga), NOW) === null, '[next] Liga MANUAL → null');
   ok(g({ format: 'Liga', drawIntervalDays: 7 }, NOW) === null, '[next] Liga sem drawFirstDate → null');
