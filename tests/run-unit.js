@@ -169,6 +169,7 @@ const SUITES = [
   'functions/test-phone-verification-attempt-core.js',
   'tests/no-magic-link-login.test.js',
   'tests/l7-canonical-registration-cf-only.test.js',
+  'tests/canonical-roster-write-boundary.test.js',
   'tests/l7-category-definitions-cf-only.test.js',
   'tests/telefone-do-organizador-caduca.test.js',
   'tests/rules-mudou-tem-de-ser-testada.test.js',

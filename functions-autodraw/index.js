@@ -417,6 +417,30 @@ function _assertLegacyRosterMutationAllowed(t, operation) {
   }
 }
 
+/* Depois da migração, `participants`/esperas que o motor recebe são somente uma
+ * projeção de trabalho dos documentos `registrations`. O sorteio ainda pode
+ * agrupá-la em duplas, limpar presença e consultar nomes para montar partidas,
+ * mas nenhuma dessas transformações pode voltar pelo planejador como uma nova
+ * fonte de elenco. Sem esta fronteira, uma callable futura que esquecesse a
+ * barreira acima poderia ressuscitar o espelho legado sem alterar a fonte
+ * canônica — o próximo carregamento mostraria outra fotografia.
+ *
+ * A cópia vem de `tAntes`, já reidratado pela própria `_leTorneio`: não há
+ * leitura extra, nem fallback ao documento pai. `pairRequests` não entra aqui,
+ * porque é intenção operacional, não composição do elenco. */
+function _preserveCanonicalRosterProjection(tDepois, tAntes) {
+  const migration = tDepois && tDepois.canonicalRegistrationMigration;
+  if (!migration || !migration.fingerprint || !tAntes) return false;
+  ['participants', 'standbyParticipants', 'waitlist'].forEach((key) => {
+    if (Object.prototype.hasOwnProperty.call(tAntes, key)) {
+      tDepois[key] = JSON.parse(JSON.stringify(tAntes[key]));
+    } else {
+      delete tDepois[key];
+    }
+  });
+  return true;
+}
+
 // Uma única porta para a temporada acabar. A tela a solicita para obter a
 // resposta imediatamente; a decisão e a escrita seguem sendo do servidor.
 async function _closeExpiredLeagueSeason(ref, tId, nowIso) {
@@ -795,14 +819,21 @@ function _gravaTorneio(tx, ref, tDepois, tAntes, ctx) {
   }
   /* Todas as callables passam por esta única fronteira de persistência. A fila
    * não pode sobreviver em paralelo a uma dupla, grupo ou jogo futuro por UID.
-   * [[regression_confra_paula_promovida_nao_fica_na_espera]] */
-  const _reconciliacaoElenco = _rosterState.reconcileRosterStates(tDepois, {
-    collectMatches: (torneio) => {
-      if (drawWindow && typeof drawWindow._collectAllMatches === 'function') return drawWindow._collectAllMatches(torneio) || [];
-      return Array.isArray(torneio && torneio.matches) ? torneio.matches : [];
-    }
-  });
-  if (_reconciliacaoElenco.removed) console.warn('[gravaTorneio] removeu ' + _reconciliacaoElenco.removed + ' cópia(s) de espera já alocadas.');
+   * [[regression_confra_paula_promovida_nao_fica_na_espera]]
+   *
+   * O reconciliador é deliberadamente legado: ele reorganiza `participants` e
+   * listas de espera. No torneio canônico, esses campos são projeções efêmeras
+   * dos registros e não podem ser saneados/escritos por este caminho. */
+  const _rosterCanonico = _preserveCanonicalRosterProjection(tDepois, tAntes);
+  if (!_rosterCanonico) {
+    const _reconciliacaoElenco = _rosterState.reconcileRosterStates(tDepois, {
+      collectMatches: (torneio) => {
+        if (drawWindow && typeof drawWindow._collectAllMatches === 'function') return drawWindow._collectAllMatches(torneio) || [];
+        return Array.isArray(torneio && torneio.matches) ? torneio.matches : [];
+      }
+    });
+    if (_reconciliacaoElenco.removed) console.warn('[gravaTorneio] removeu ' + _reconciliacaoElenco.removed + ' cópia(s) de espera já alocadas.');
+  }
   const plan = _planejaEscrita(tDepois, tAntes, { agoraIso: _agoraIso, extras: (ctx && ctx.extras) || [] });
   _wp.applyPlan(tx, ref, plan, { FieldValue: FieldValue });
   /* O chamador da W.O. precisa distinguir "motor mudou o objeto" de "o slot entrou
