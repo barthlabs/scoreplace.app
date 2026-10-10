@@ -7,13 +7,22 @@ const { classificarTorneio, resumir } = require(path.join(ROOT, 'scripts', 'cens
 const antigo = classificarTorneio({ genderCategories: ['F'], skillCategories: ['A'], rankingInactivity: 2 });
 assert.equal(antigo.categoriasPorEixos, true, 'eixos antigos precisam aparecer: fallback ainda necessário');
 assert.equal(antigo.rankingLegado, true, 'campo ranking legado precisa aparecer');
+assert.equal(antigo.semProjecaoDeFases, true, 'documento sem phases entra no censo de projeção');
+assert.equal(antigo.fasesNaoCanonicas, false, 'sem fase não é fase inválida');
 const atual = classificarTorneio({ _semPesados: ['matches'], combinedCategories: ['F A'], ligaNewPlayerScore: 'zero' });
-assert.equal(atual.dividido, true);
+assert.equal(atual.partesCanonicas, true, 'todo torneio usa as partes canônicas, com ou sem marcador antigo');
 assert.equal(atual.categoriasCanonicas, true);
 assert.equal(atual.categoriasPorEixos, false);
 assert.equal(atual.ligaAtual, true, 'campo liga atual não pode ser contado como legado');
-const r = resumir([{ genderCategories: ['M'] }, { _semPesados: ['matches'], combinedCategories: ['F A'], rankingNewPlayerScore: 10 }]);
-assert.deepEqual(r, { total: 2, divididos: 1, inteiros: 1, categoriasCanonicas: 1, categoriasPorEixos: 1, categoriasSemDados: 0, rankingLegado: 1, ligaAtual: 0, semMarcadorDeFonte: 1 });
+const semMarcador = classificarTorneio({ combinedCategories: ['F A'] });
+assert.equal(semMarcador.partesCanonicas, true, 'a ausência de _semPesados não recria torneio inteiro');
+assert.equal(semMarcador.marcadorDeCompatibilidadeNativa, false, 'o marcador é só compatibilidade, não decisão de modelo');
+const faseAtual = { kind: 'classification', classification: { structure: 'round_robin' } };
+const faseQuebrada = { kind: 'liga' };
+assert.equal(classificarTorneio({ phases: [faseAtual], format: 'Liga' }).rotuloDeFormatoLegado, true, 'rótulo legado é medido mesmo com fase já projetada');
+assert.equal(classificarTorneio({ phases: [faseQuebrada] }).fasesNaoCanonicas, true, 'fase fora do contrato aparece no censo');
+const r = resumir([{ genderCategories: ['M'] }, { _semPesados: ['matches'], combinedCategories: ['F A'], rankingNewPlayerScore: 10, phases: [faseAtual], format: 'Liga' }]);
+assert.deepEqual(r, { total: 2, partesCanonicas: 2, categoriasCanonicas: 1, categoriasPorEixos: 1, categoriaUnicaSemConfiguracao: 0, rankingLegado: 1, ligaAtual: 0, semMarcadorDeCompatibilidadeNativa: 1, semProjecaoDeFases: 1, fasesNaoCanonicas: 0, rotuloDeFormatoLegado: 1 });
 
 const fonte = fs.readFileSync(path.join(ROOT, 'scripts', 'censo-formatos-legados.js'), 'utf8');
 assert.ok(/SOMENTE LEITURA/.test(fonte));

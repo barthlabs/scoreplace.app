@@ -18,35 +18,60 @@ const CAMPOS_LIGA_ATUAL = [
   'ligaSeasonMonths', 'ligaOpenEnrollment'
 ];
 function temAlgumCampo(o, campos) { return campos.some((nome) => temCampo(o, nome)); }
+function texto(v) { return String(v == null ? '' : v).trim(); }
+function faseCanonica(fase) {
+  if (!fase || typeof fase !== 'object') return false;
+  if (fase.kind === 'classification') {
+    return !!(fase.classification &&
+      (fase.classification.structure === 'round_robin' || fase.classification.structure === 'groups'));
+  }
+  return fase.kind === 'elimination' && !!(fase.elimination &&
+    (fase.elimination.bracketType === 'single' || fase.elimination.bracketType === 'double'));
+}
+function rotuloDeFormatoLegado(t) {
+  return ['Liga', 'Ranking', 'Suíço', 'Suico', 'Suíço Clássico', 'Eliminatórias Simples', 'Eliminatória Simples', 'Dupla Eliminatória']
+    .indexOf(texto(t && t.format)) !== -1;
+}
 
 function classificarTorneio(t) {
   t = t || {};
   const combinado = temLista(t.combinedCategories);
   const eixos = temLista(t.genderCategories) || temLista(t.skillCategories) || temLista(t.customCategories);
+  const fases = Array.isArray(t.phases) ? t.phases : [];
   return {
-    dividido: temLista(t._semPesados),
+    // Todo torneio usa as partes canônicas. `_semPesados` ainda pode existir
+    // exclusivamente para clientes nativos antigos, mas não distingue modelos
+    // de torneio nem pode voltar a decidir uma leitura/escrita.
+    partesCanonicas: true,
     categoriasCanonicas: combinado,
     categoriasPorEixos: !combinado && eixos,
-    categoriasSemDados: !combinado && !eixos,
+    // Sem uma lista explícita, a configuração vigente é categoria única. Não
+    // é ausência de dados: tratá-la assim produzia um falso alerta em todo
+    // torneio inclusivo/de categoria única.
+    categoriaUnicaSemConfiguracao: !combinado && !eixos,
     rankingLegado: temAlgumCampo(t, CAMPOS_RANKING_LEGADO),
     ligaAtual: temAlgumCampo(t, CAMPOS_LIGA_ATUAL),
-    marcadorDeFonte: temCampo(t, '_semPesados')
+    marcadorDeCompatibilidadeNativa: temCampo(t, '_semPesados'),
+    semProjecaoDeFases: fases.length === 0,
+    fasesNaoCanonicas: fases.some((fase) => !faseCanonica(fase)),
+    rotuloDeFormatoLegado: rotuloDeFormatoLegado(t)
   };
 }
 
 function resumir(torneios) {
   const total = (torneios || []).length;
   const soma = {
-    total, divididos: 0, inteiros: 0, categoriasCanonicas: 0,
-    categoriasPorEixos: 0, categoriasSemDados: 0, rankingLegado: 0,
-    ligaAtual: 0, semMarcadorDeFonte: 0
+    total, partesCanonicas: total, categoriasCanonicas: 0,
+    categoriasPorEixos: 0, categoriaUnicaSemConfiguracao: 0, rankingLegado: 0,
+    ligaAtual: 0, semMarcadorDeCompatibilidadeNativa: 0,
+    semProjecaoDeFases: 0, fasesNaoCanonicas: 0, rotuloDeFormatoLegado: 0
   };
   (torneios || []).forEach((t) => {
     const c = classificarTorneio(t);
-    if (c.dividido) soma.divididos++; else soma.inteiros++;
-    ['categoriasCanonicas', 'categoriasPorEixos', 'categoriasSemDados', 'rankingLegado', 'ligaAtual']
+    ['categoriasCanonicas', 'categoriasPorEixos', 'categoriaUnicaSemConfiguracao', 'rankingLegado', 'ligaAtual',
+      'semProjecaoDeFases', 'fasesNaoCanonicas', 'rotuloDeFormatoLegado']
       .forEach((k) => { if (c[k]) soma[k]++; });
-    if (!c.marcadorDeFonte) soma.semMarcadorDeFonte++;
+    if (!c.marcadorDeCompatibilidadeNativa) soma.semMarcadorDeCompatibilidadeNativa++;
   });
   return soma;
 }

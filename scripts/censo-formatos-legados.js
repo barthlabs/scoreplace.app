@@ -1,6 +1,8 @@
 /* CENSO L9 — formatos legados ainda presentes em produção.
  *
  * ⛔ NÃO ESCREVE NADA. Só faz GET na coleção tournaments e imprime a medição.
+ * Todo torneio já usa partes canônicas; o censo mede o marcador legado apenas
+ * como compatibilidade de cliente nativo, nunca como modelo alternativo.
  * Uso: node scripts/censo-formatos-legados.js [--json]
  */
 const { execSync } = require('child_process');
