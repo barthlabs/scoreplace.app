@@ -2186,6 +2186,15 @@ function _executeRemoveFromCategory(tId, pIdx, category) {
     // L7: a tela só descreve a identidade e a categoria desejada. A Function
     // relê o elenco fresco e grava a mudança; não há escrita otimista local.
     if (!window.FirestoreDB || typeof window.FirestoreDB._callFn !== 'function') return;
+    if (_isCanonicalCategoryRoster(t)) {
+        // "Remover da categoria" no modelo antigo significava deixar uma vaga
+        // sem categoria. Isso não existe no registro canônico: a inscrição é
+        // sempre uma identidade + categoryId. Não simulamos o estado inválido
+        // com a Function legada; a organização deve mover para outra categoria
+        // tipada ou retirar a inscrição pelo fluxo próprio.
+        if (typeof showNotification === 'function') showNotification('⚠️ Categoria canônica', 'Mova a inscrição para outra categoria ou retire-a do torneio; uma inscrição canônica não fica sem categoria.', 'error');
+        return;
+    }
     var identity = _assignmentParticipantIdentity(p);
     if (!identity) return;
     window.FirestoreDB._callFn('applyEnrollmentAssignments', {
@@ -2212,6 +2221,18 @@ window._moveBetweenCategories = function(tId, pIdx, sourceCat, targetCat) {
 
     // L7: quem encontra a inscrição e substitui a categoria é a Function.
     if (!window.FirestoreDB || typeof window.FirestoreDB._callFn !== 'function') return;
+    if (_isCanonicalCategoryRoster(t)) {
+        _reclassifyCanonicalCategory(t, tId, p, targetCat, sourceCat).then(function(result) {
+            if (typeof showNotification === 'function') {
+                var suffix = result && result.movedPair ? ' A dupla fixa foi movida junto.' : '';
+                showNotification('✅ Categoria atualizada', pName + ': ' + window._displayCategoryName(sourceCat) + ' → ' + window._displayCategoryName(targetCat) + suffix, 'success');
+            }
+            setTimeout(function() { window._refreshCatMgr(tId); }, 100);
+        }).catch(function(err) {
+            if (typeof showNotification === 'function') showNotification('⚠️ Não foi possível atualizar a categoria', (err && err.message) || 'Tente novamente.', 'error');
+        });
+        return;
+    }
     var identity = _assignmentParticipantIdentity(p);
     if (!identity) return;
     window.FirestoreDB._callFn('applyEnrollmentAssignments', {
@@ -2684,6 +2705,48 @@ function _assignmentParticipantIdentity(p) {
     return legacyName ? { legacyName: legacyName } : null;
 }
 
+// A projeção visual mantém `category` como rótulo para não obrigar cada card
+// antigo a conhecer os IDs internos. Em torneio já migrado, porém, toda
+// alteração administrativa precisa voltar pela porta canônica com `categoryId`.
+// Esta ponte fica concentrada aqui para que nenhuma ação de drag-and-drop volte
+// a usar texto visível como chave de banco.
+function _isCanonicalCategoryRoster(t) {
+    return !!(t && t.canonicalRegistrationMigration && t.canonicalRegistrationMigration.fingerprint);
+}
+
+function _canonicalCategoryIdForDisplay(t, value) {
+    var raw = String(value || '').trim();
+    if (!raw || !t || !Array.isArray(t.categoryDefinitions)) return '';
+    var definition = t.categoryDefinitions.find(function(def) {
+        return def && (String(def.id || '') === raw || String(def.label || '') === raw);
+    });
+    return definition ? String(definition.id || '') : '';
+}
+
+function _reclassifyCanonicalCategory(t, tId, participant, targetCategory, sourceCategory) {
+    var identity = _assignmentParticipantIdentity(participant);
+    // `legacyName` só existe para o compatível legado: nenhuma inscrição
+    // canônica pode ser escolhida por nome.
+    if (!identity || identity.legacyName) {
+        return Promise.reject(new Error('inscrição canônica sem identidade estável'));
+    }
+    var fromCategoryId = String((participant && participant.categoryId) || '').trim() ||
+        _canonicalCategoryIdForDisplay(t, sourceCategory);
+    var toCategoryId = _canonicalCategoryIdForDisplay(t, targetCategory);
+    if (!fromCategoryId || !toCategoryId) {
+        return Promise.reject(new Error('categoria canônica sem ID tipado'));
+    }
+    if (fromCategoryId === toCategoryId) return Promise.resolve({ ok: true, outcome: 'unchanged' });
+    var payload = {
+        tournamentId: tId,
+        fromCategoryId: fromCategoryId,
+        toCategoryId: toCategoryId
+    };
+    if (identity.uid) payload.userUid = identity.uid;
+    else payload.manualParticipantId = identity.manualParticipantId;
+    return window.FirestoreDB._callFn('reclassifyCanonicalRegistration', payload);
+}
+
 function _assignParticipantCategory(tId, pIdx, category) {
     var t = window._findTournamentById(tId);
     if (!t || !t.participants) return;
@@ -2694,6 +2757,13 @@ function _assignParticipantCategory(tId, pIdx, category) {
     var identity = _assignmentParticipantIdentity(p);
     if (!identity) return;
     if (!window.FirestoreDB || typeof window.FirestoreDB._callFn !== 'function') return;
+    if (_isCanonicalCategoryRoster(t)) {
+        // Uma inscrição canônica nasce com categoria tipada; portanto uma vaga
+        // realmente "sem categoria" indica dado incompleto, não autorização
+        // para criar um registro por nome no navegador.
+        if (typeof showNotification === 'function') showNotification('⚠️ Inscrição sem categoria', 'Reabra ou corrija a inscrição pelo fluxo canônico antes de atribuí-la.', 'error');
+        return;
+    }
     window.FirestoreDB._callFn('applyEnrollmentAssignments', { tournamentId: tId, sport: t.sport || '', edits: [Object.assign(identity, { category: category, markWasUncategorized: true, notifyCategory: true })] })
         .then(function() { if (typeof showNotification === 'function') showNotification(_t('cat.assigned'), _t('cat.assignedMsg', { name: pName, cat: window._displayCategoryName(category) }), 'success'); setTimeout(function() { window._refreshCatMgr(tId); }, 100); })
         .catch(function(e) { if (typeof showNotification === 'function') showNotification('Erro', (e && e.message) || 'Não foi possível atribuir a categoria.', 'error'); });

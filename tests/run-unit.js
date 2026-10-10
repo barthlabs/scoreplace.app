@@ -1704,6 +1704,7 @@ const SUITES = [
   'functions/test-registration-mutations-core.js',
   'functions/test-canonical-registration-boundary-core.js',
   'tests/canonical-registration-reclassify.test.js',
+  'tests/canonical-category-manager-route.test.js',
   'tests/canonical-manual-category-selection.test.js',
   'tests/canonical-organizer-removal.test.js',
   'tests/canonical-legacy-admin-barrier.test.js',
