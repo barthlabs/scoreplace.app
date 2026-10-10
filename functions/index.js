@@ -95,6 +95,7 @@ const _registrationCore = require("./registration-core");
 const _registrationMigration = require("./registration-migration-core");
 const _registrationMutations = require("./registration-mutations-core");
 const _canonicalRegistrationBoundary = require("./canonical-registration-boundary-core");
+const _canonicalEnrollment = require("./canonical-enrollment-core");
 const _registrationLifecycle = require("./registration-lifecycle-core");
 const _tournamentVip = require("./tournament-vip-core");
 const _splitParts = require("./split-parts.js");   // torneio dividido: elenco na subcoleção
@@ -2991,6 +2992,46 @@ exports.enrollParticipant = onCall(
       const snap = await tx.get(docRef);
       if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
       const _dados = await _splitParts.hidratar(tx, docRef, snap.data());
+      const rawTournament = snap.data() || {};
+      if (rawTournament.canonicalRegistrationMigration && rawTournament.canonicalRegistrationMigration.fingerprint) {
+        if (extraUpdates) {
+          throw new HttpsError("failed-precondition", "origem de dupla não faz parte da inscrição canônica");
+        }
+        if (sanitizedParticipantObj.p1Uid || sanitizedParticipantObj.p2Uid) {
+          throw new HttpsError("failed-precondition", "duplas usam a porta canônica de formar dupla");
+        }
+        const isOrganizer = _isTournamentOrgCaller(rawTournament, callerUid);
+        if (participantUid && participantUid !== callerUid && !isOrganizer) {
+          throw new HttpsError("permission-denied", "só o organizador pode inscrever outra pessoa");
+        }
+        if (!participantUid && !isOrganizer) {
+          throw new HttpsError("permission-denied", "só o organizador pode incluir participante sem conta");
+        }
+        const profileSnap = participantUid ? await tx.get(db.collection("users").doc(participantUid)) : null;
+        const checked = await _loadCanonicalRosterForMutation(tx, docRef, rawTournament);
+        let decision;
+        try {
+          decision = _canonicalEnrollment.decide({
+            tournament: Object.assign({ id: tournamentId }, _dados),
+            registrations: checked.registrations,
+            participant: sanitizedParticipantObj,
+            profile: profileSnap && profileSnap.exists ? (profileSnap.data() || {}) : {},
+            nowMs,
+          });
+        } catch (error) { throw new HttpsError("failed-precondition", error.message); }
+        if (decision.outcome === "rejected" || decision.outcome === "conflict") {
+          return Object.assign({ canonical: true, participants: checked.participants }, decision);
+        }
+        let next = checked;
+        if (decision.enrollment && decision.enrollment.creates.length) {
+          next = _writeCanonicalRosterCreates(tx, docRef, rawTournament, checked.registrations, decision.enrollment.creates);
+        }
+        return Object.assign({}, decision, {
+          canonical: true,
+          participants: next.participants,
+          standbyParticipants: decision.outcome === "waitlisted" ? next.participants : null,
+        });
+      }
       _assertLegacyRosterStillAuthoritative(_dados);
       const isOrganizer = _isTournamentOrgCaller(_dados, callerUid);
       if (participantUid && participantUid !== callerUid && !isOrganizer) {
@@ -3008,9 +3049,11 @@ exports.enrollParticipant = onCall(
       : payload;
 
     // Sandbox: a MESMA CF replica a inscrição no SB via o MESMO core (best-effort).
-    await _replicateRosterToSandbox(db, tournamentId, function (sbData) {
-      return _enrollCore.computeEnroll(sbData, sanitizedParticipantObj, extraUpdates, nowMs);
-    });
+    if (!out.canonical) {
+      await _replicateRosterToSandbox(db, tournamentId, function (sbData) {
+        return _enrollCore.computeEnroll(sbData, sanitizedParticipantObj, extraUpdates, nowMs);
+      });
+    }
 
     // ── ESPELHO DO ROSTER (v1.7.40) ─────────────────────────────────────────
     // O dual-write da 1.7.29 (`tournaments/{id}/participants/{uid}`) existe pra ser a rede
@@ -3023,7 +3066,7 @@ exports.enrollParticipant = onCall(
     // protege justamente quem está mais exposto.
     // Espelhar aqui é escrever onde a escrita de verdade acontece ([[feedback_functions_must_mirror_app]]).
     // Best-effort: falhar aqui não desfaz a inscrição, que já está gravada.
-    if (out.outcome === "enrolled" || out.outcome === "waitlisted") {
+    if (!out.canonical && (out.outcome === "enrolled" || out.outcome === "waitlisted")) {
       try {
         const _alvo = String(sanitizedParticipantObj.uid || "");
         if (_alvo) {
@@ -3042,7 +3085,7 @@ exports.enrollParticipant = onCall(
     }
 
     if (out.outcome === "capacityFull") return withDuplicateSignal({ capacityFull: true, participants: out.participants });
-    if (out.outcome === "already") return withDuplicateSignal({ alreadyEnrolled: true, participants: out.participants });
+    if (out.outcome === "already" || out.outcome === "alreadyRegistered") return withDuplicateSignal({ alreadyEnrolled: true, participants: out.participants });
     if (out.outcome === "closed" || out.outcome === "notOpenYet") return withDuplicateSignal({ alreadyEnrolled: false, enrollmentClosed: true, enrollmentNotOpenYet: out.outcome === "notOpenYet", participants: out.participants });
     // v1.6.86: fase já sorteada → a pessoa entrou na LISTA DE ESPERA (não no roster).
     // No caminho normal o cliente já detecta e chama a espera direto; este ramo cobre a
@@ -4069,8 +4112,9 @@ function _assertLegacyRosterStillAuthoritative(tournament) {
  * limitada pelo recibo e lê um documento a mais para detectar excesso; cada
  * update toca somente status/vínculo de dupla, jamais a projeção legada. */
 async function _loadCanonicalRosterForMutation(tx, tournamentRef, tournament) {
+  const canonicalTournament = Object.assign({ id: tournamentRef.id }, tournament || {});
   let migration;
-  try { migration = _canonicalRegistrationBoundary.migrationOf(tournament); }
+  try { migration = _canonicalRegistrationBoundary.migrationOf(canonicalTournament); }
   catch (error) { throw new HttpsError("failed-precondition", error.message); }
   const snap = await tx.get(tournamentRef.collection("registrations").limit(migration.expectedCount + 1));
   const registrations = snap.docs.map((doc) => {
@@ -4080,13 +4124,14 @@ async function _loadCanonicalRosterForMutation(tx, tournamentRef, tournament) {
     }
     return item;
   });
-  try { return _canonicalRegistrationBoundary.verifiedRoster(tournament, registrations); }
+  try { return _canonicalRegistrationBoundary.verifiedRoster(canonicalTournament, registrations); }
   catch (error) { throw new HttpsError("failed-precondition", error.message); }
 }
 
 function _writeCanonicalRosterUpdates(tx, tournamentRef, tournament, registrations, updates) {
+  const canonicalTournament = Object.assign({ id: tournamentRef.id }, tournament || {});
   let next;
-  try { next = _canonicalRegistrationBoundary.applyUpdates(tournament, registrations, updates); }
+  try { next = _canonicalRegistrationBoundary.applyUpdates(canonicalTournament, registrations, updates); }
   catch (error) { throw new HttpsError("failed-precondition", error.message); }
   (updates || []).forEach((item) => {
     tx.update(tournamentRef.collection("registrations").doc(item.registrationId), {
@@ -4099,7 +4144,30 @@ function _writeCanonicalRosterUpdates(tx, tournamentRef, tournament, registratio
   // Nunca preservamos memberUids antigo, pois ele pode manter uma conta retirada
   // ou esconder alguém recém-aceito/na espera.
   tx.update(tournamentRef, {
-    memberUids: _canonicalRegistrationBoundary.memberUids(tournament, next.registrations),
+    memberUids: _canonicalRegistrationBoundary.memberUids(next.tournament || canonicalTournament, next.registrations),
+    updatedAt: _FV.serverTimestamp(),
+  });
+  return next;
+}
+
+/* Criação, recibo e índice de membros são uma unidade atômica. Sem o avanço
+ * de `registrationCount`, a próxima leitura trataria o novo documento como
+ * corrupção; sem `memberUids`, a pessoa acabaria inscrita mas invisível no
+ * listener do app. */
+function _writeCanonicalRosterCreates(tx, tournamentRef, tournament, registrations, creates) {
+  const canonicalTournament = Object.assign({ id: tournamentRef.id }, tournament || {});
+  let next;
+  try { next = _canonicalRegistrationBoundary.applyCreates(canonicalTournament, registrations, creates); }
+  catch (error) { throw new HttpsError("failed-precondition", error.message); }
+  (creates || []).forEach((item) => {
+    tx.create(tournamentRef.collection("registrations").doc(item.registrationId), Object.assign({}, item, {
+      createdAt: _FV.serverTimestamp(),
+      updatedAt: _FV.serverTimestamp(),
+    }));
+  });
+  tx.update(tournamentRef, {
+    canonicalRegistrationMigration: next.tournament.canonicalRegistrationMigration,
+    memberUids: _canonicalRegistrationBoundary.memberUids(next.tournament, next.registrations),
     updatedAt: _FV.serverTimestamp(),
   });
   return next;

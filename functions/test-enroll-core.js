@@ -41,10 +41,11 @@ try { C.normalizeExtraUpdates({ status: 'finished' }); ok('extraUpdates recusa p
     !/computeEnroll\([^\n]*participantObj/.test(block) &&
     /entry: _enrollCore\.cleanUndefined\(out\.entry \|\| sanitizedParticipantObj\)/.test(block));
   const enrollmentDecision = block.slice(0, block.indexOf('const withDuplicateSignal'));
-  ok('Function decide inscrição por identidade estrutural, sem ler perfil para comparar nomes',
-    !/profileRef/.test(enrollmentDecision) &&
+  ok('Function mantém a decisão legada e usa núcleo tipado no roster materializado',
     !/accountDisplayName/.test(enrollmentDecision) &&
-    /computeEnroll\(_dados, sanitizedParticipantObj, extraUpdates, nowMs\)/.test(enrollmentDecision));
+    /computeEnroll\(_dados, sanitizedParticipantObj, extraUpdates, nowMs\)/.test(enrollmentDecision) &&
+    /_canonicalEnrollment\.decide\(/.test(enrollmentDecision) &&
+    /_writeCanonicalRosterCreates\(/.test(enrollmentDecision));
   ok('Function recusa inscrição durante fusão ou exclusão pela trava transacional do UID',
     /_amizadeLock\.exigirAtivos\(tx, db, \[callerUid, participantUid\], nowMs\)/.test(enrollmentDecision));
 })();
