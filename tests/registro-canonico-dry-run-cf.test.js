@@ -27,7 +27,9 @@ ok('lê o torneio e a parte participants em transação', /db\.runTransaction/.t
 ok('autoriza organização contra dado fresco', /_isTournamentOrgCaller\(tournament, callerUid\)/.test(fn));
 ok('usa o núcleo puro sobre os registros físicos do elenco dividido',
   /_splitParts\.lerRegistrosDaParte\(tx, ref, "participants"\)/.test(fn) &&
-  /_registrationCore\.projectLegacyRoster\(tournamentId, records\)/.test(fn));
+  // A projeção recebe também a ponte explícita rótulo legado → categoryId. Sem
+  // ela, nomes de categoria virariam identidade implícita durante a migração.
+  /_registrationCore\.projectLegacyRoster\(tournamentId, records, categoryIdForLegacyLabel\)/.test(fn));
 ok('prévia não cria nem atualiza documentos', !/\btx\.(?:set|update|delete)\b/.test(fn));
 ok('retorno contém contadores, exceções e fingerprint', /summary: \{/.test(fn) && /conflicts: report\.conflicts/.test(fn) && /unsupported: report\.unsupported/.test(fn) && /fingerprint: report\.fingerprint/.test(fn));
 
