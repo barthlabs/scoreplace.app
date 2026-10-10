@@ -405,6 +405,18 @@ function _seasonRecipientUids(t) {
   return Array.from(out);
 }
 
+/* Estas operações reorganizam o espelho histórico `participants`. Depois que
+ * o recibo canônico existe, a fonte é `registrations`: deixar uma callable
+ * legada seguir adiante produziria uma fotografia visual diferente do banco.
+ * Não há fallback silencioso; a operação precisa ganhar uma transição canônica
+ * própria antes de ser liberada. */
+function _assertLegacyRosterMutationAllowed(t, operation) {
+  const migration = t && t.canonicalRegistrationMigration;
+  if (migration && migration.fingerprint) {
+    throw new HttpsError('failed-precondition', String(operation || 'esta operação') + ' ainda não possui transição canônica de elenco.');
+  }
+}
+
 // Uma única porta para a temporada acabar. A tela a solicita para obter a
 // resposta imediatamente; a decisão e a escrita seguem sendo do servidor.
 async function _closeExpiredLeagueSeason(ref, tId, nowIso) {
@@ -1342,6 +1354,7 @@ exports.removeTournamentParticipant = onCall(async request => {
     const t = await _leTorneio(tx, ref, tId);
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
     if (!_isTournamentAdmin(t, uid)) throw new HttpsError('permission-denied', 'Só a organização remove participantes.');
+    _assertLegacyRosterMutationAllowed(t, 'remoção administrativa legada');
     const before = _antesDoMotor(t);
     const out = drawWindow._applyOrganizerParticipantRemoval(t, participantName, memberUid);
     if (!out) throw new HttpsError('failed-precondition', 'Participante já não está inscrito.');
@@ -1370,6 +1383,7 @@ exports.splitTournamentParticipant = onCall(async request => {
     const t = await _leTorneio(tx, ref, tId);
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
     if (!_isTournamentAdmin(t, uid)) throw new HttpsError('permission-denied', 'Só a organização desfaz duplas.');
+    _assertLegacyRosterMutationAllowed(t, 'desmembramento legado de dupla');
     const before = _antesDoMotor(t);
     if (!drawWindow._applySplitParticipantFresh(t, participantName)) throw new HttpsError('failed-precondition', 'A dupla já mudou no servidor.');
     const b = _gravaTorneio(tx, ref, t, before, { agoraIso });
@@ -1391,6 +1405,7 @@ exports.deduplicateTournamentParticipants = onCall(async request => {
     const t = await _leTorneio(tx, ref, tId);
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
     if (!_isTournamentAdmin(t, uid)) throw new HttpsError('permission-denied', 'Só a organização pode reconciliar o elenco.');
+    _assertLegacyRosterMutationAllowed(t, 'deduplicação legada');
     const before = _antesDoMotor(t);
     const removed = Number(drawWindow._deduplicateParticipants(t)) || 0;
     if (!removed) return { ok: true, changed: false, removed: 0 };
@@ -1412,6 +1427,7 @@ exports.drainTournamentWaitlists = onCall(async request => {
     const t = await _leTorneio(tx, ref, tId);
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
     if (!_isTournamentAdmin(t, uid)) throw new HttpsError('permission-denied', 'Só a organização pode promover a lista de espera.');
+    _assertLegacyRosterMutationAllowed(t, 'drenagem legada da lista de espera');
     const before = _antesDoMotor(t);
     const promoted = Number(drawWindow._drainWaitlistsIfOpen(t, { server: true })) || 0;
     if (!promoted) return { ok: true, changed: false, promoted: 0 };

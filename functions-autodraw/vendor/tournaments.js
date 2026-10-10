@@ -4067,7 +4067,11 @@ function renderTournaments(container, tournamentId = null) {
 
         // Higiene do elenco é sempre canônica: a tela só pede à Function que
         // deduplique ou promova; ela nunca altera a cópia que está renderizando.
-        var _canReconcile = window.AppStore && window._souOrganizador(visible[0]);
+        var _canonicalRoster = !!(visible[0] && visible[0].canonicalRegistrationMigration && visible[0].canonicalRegistrationMigration.fingerprint);
+        // Dedupe/drenagem são rotas de saneamento do espelho legado. O elenco
+        // canônico já é validado pelo recibo e por documentos determinísticos;
+        // reexecutar esses writers ao abrir a tela seria uma regressão.
+        var _canReconcile = window.AppStore && window._souOrganizador(visible[0]) && !_canonicalRoster;
         var _reconcile = window.FirestoreDB && typeof window.FirestoreDB._callFn === 'function';
         if (_canReconcile && _reconcile) {
             window.FirestoreDB._callFn('deduplicateTournamentParticipants', { tournamentId: String(visible[0].id) })
