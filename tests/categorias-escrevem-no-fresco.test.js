@@ -9,7 +9,7 @@ const assign = body('_assignParticipantCategory', '// Category assignment notifi
 [['remoção', remove], ['movimentação', move]].forEach(([name, code]) => {
   ok(/FirestoreDB\._callFn\('applyEnrollmentAssignments'/.test(code), name + ' despacha a intenção server-side');
   ok(!/AppStore\.commitTournamentTx|saveTournament\(|AppStore\.sync\(/.test(code), name + ' não escreve no navegador');
-  ok(/uid: p\.uid/.test(code) && /name: p\.displayName/.test(code) && !/email: p\.email/.test(code), name + ' envia UID estável; nome é só apresentação de participante manual');
+  ok(/_assignmentParticipantIdentity\(p\)/.test(code) && /Object\.assign\(identity,/.test(code) && !/edits:\s*\[[^\]]*\bname\s*:/.test(code) && !/email: p\.email/.test(code), name + ' envia somente a identidade estrutural; nome não vira alvo de mutação');
 });
 ok(/uncategorizedByOrganizer: true/.test(remove), 'remoção preserva a marca explícita de sem categoria definida pela organização');
 ok(/_callFn\('applyEnrollmentAssignments'/.test(assign) && /markWasUncategorized: true/.test(assign) && /notifyCategory: true/.test(assign) && !/AppStore\.commitTournamentTx|saveTournament\(|AppStore\.sync\(/.test(assign), 'atribuição direta só despacha a intenção com marca e aviso canônicos');

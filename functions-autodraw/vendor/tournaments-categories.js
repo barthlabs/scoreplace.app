@@ -2186,10 +2186,12 @@ function _executeRemoveFromCategory(tId, pIdx, category) {
     // L7: a tela só descreve a identidade e a categoria desejada. A Function
     // relê o elenco fresco e grava a mudança; não há escrita otimista local.
     if (!window.FirestoreDB || typeof window.FirestoreDB._callFn !== 'function') return;
+    var identity = _assignmentParticipantIdentity(p);
+    if (!identity) return;
     window.FirestoreDB._callFn('applyEnrollmentAssignments', {
         tournamentId: tId,
         sport: t.sport || '',
-        edits: [{ uid: p.uid || '', name: p.displayName || p.name || '', category: '', uncategorizedByOrganizer: true }]
+        edits: [Object.assign(identity, { category: '', uncategorizedByOrganizer: true })]
     }).then(function() {
         if (typeof showNotification === 'function') showNotification(_t('cat.participantRemoved'), _t('cat.removedMsg', { name: pName, cat: window._displayCategoryName(category) }), 'success');
         setTimeout(function() { window._refreshCatMgr(tId); }, 100);
@@ -2210,10 +2212,12 @@ window._moveBetweenCategories = function(tId, pIdx, sourceCat, targetCat) {
 
     // L7: quem encontra a inscrição e substitui a categoria é a Function.
     if (!window.FirestoreDB || typeof window.FirestoreDB._callFn !== 'function') return;
+    var identity = _assignmentParticipantIdentity(p);
+    if (!identity) return;
     window.FirestoreDB._callFn('applyEnrollmentAssignments', {
         tournamentId: tId,
         sport: t.sport || '',
-        edits: [{ uid: p.uid || '', name: p.displayName || p.name || '', category: targetCat }]
+        edits: [Object.assign(identity, { category: targetCat })]
     }).then(function() {
         if (typeof showNotification === 'function') showNotification('✅ Categoria atualizada', pName + ': ' + window._displayCategoryName(sourceCat) + ' → ' + window._displayCategoryName(targetCat), 'success');
         setTimeout(function() { window._refreshCatMgr(tId); }, 100);
@@ -2661,6 +2665,25 @@ function _executeInferredUnmerge(tId, mergedName, inferredCats) {
 }
 
 // Assign an uncategorized participant to a category (manual by organizer)
+/* A mutação não pode usar o rótulo que aparece no card. Toda inscrição criada
+ * hoje carrega UID ou manualParticipantId; `legacyName` existe exclusivamente
+ * para documentos antigos sem nenhum ID. A Function ainda exige que ele case
+ * UMA única vaga e materializa o ID antes de gravar a categoria. */
+function _assignmentParticipantIdentity(p) {
+    if (typeof p === 'string') {
+        var rawLegacyName = p.trim();
+        return rawLegacyName ? { legacyName: rawLegacyName } : null;
+    }
+    if (!p || typeof p !== 'object') return null;
+    var uid = String(p.uid || '').trim();
+    var manualParticipantId = String(p.manualParticipantId || p.manualId || '').trim();
+    if (uid && !manualParticipantId) return { uid: uid };
+    if (manualParticipantId && !uid) return { manualParticipantId: manualParticipantId };
+    if (uid || manualParticipantId) return null;
+    var legacyName = String(p.displayName || p.name || '').trim();
+    return legacyName ? { legacyName: legacyName } : null;
+}
+
 function _assignParticipantCategory(tId, pIdx, category) {
     var t = window._findTournamentById(tId);
     if (!t || !t.participants) return;
@@ -2668,9 +2691,10 @@ function _assignParticipantCategory(tId, pIdx, category) {
     if (pIdx < 0 || pIdx >= parts.length) return;
     var p = parts[pIdx];
     var pName = typeof p === 'string' ? p : (p.displayName || p.name || '');
-    var _assignKey = (p && typeof p === 'object') ? (p.uid || p.displayName || p.name || '') : String(p || '');
+    var identity = _assignmentParticipantIdentity(p);
+    if (!identity) return;
     if (!window.FirestoreDB || typeof window.FirestoreDB._callFn !== 'function') return;
-    window.FirestoreDB._callFn('applyEnrollmentAssignments', { tournamentId: tId, sport: t.sport || '', edits: [{ uid: (p && p.uid) || '', name: _assignKey, category: category, markWasUncategorized: true, notifyCategory: true }] })
+    window.FirestoreDB._callFn('applyEnrollmentAssignments', { tournamentId: tId, sport: t.sport || '', edits: [Object.assign(identity, { category: category, markWasUncategorized: true, notifyCategory: true })] })
         .then(function() { if (typeof showNotification === 'function') showNotification(_t('cat.assigned'), _t('cat.assignedMsg', { name: pName, cat: window._displayCategoryName(category) }), 'success'); setTimeout(function() { window._refreshCatMgr(tId); }, 100); })
         .catch(function(e) { if (typeof showNotification === 'function') showNotification('Erro', (e && e.message) || 'Não foi possível atribuir a categoria.', 'error'); });
 }

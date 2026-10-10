@@ -1215,7 +1215,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       // manualParticipantId estável; nome é só o último fallback legado e não pode
       // decidir qual dupla será atualizada.
       if (!row) return;
-      var e = { uid: row.uid || '', manualParticipantId: row.manualId || '', name: (row.uid || row.manualId) ? '' : (row.name || ''), email: (row.uid || row.manualId) ? '' : (row.email || ''), waitlist: !!row._wl, pairMember: row._duplaSide || '' };
+      var e = { uid: row.uid || '', manualParticipantId: row.manualId || '', legacyName: (row.uid || row.manualId) ? '' : (row.name || ''), waitlist: !!row._wl, pairMember: row._duplaSide || '' };
       if ('gender' in pe) e.gender = pe.gender;
       if ('category' in pe) e.category = pe.category;
       edits.push(e);

@@ -3229,7 +3229,7 @@ window._setParticipantSkillCategory = function(tId, pName, newSkill, uid) {
     ? window._callCF('applyEnrollmentAssignments', {
       tournamentId: String(tId),
       sport: String(t.sport || t.sportType || ''),
-      edits: [{ uid: uid ? String(uid) : '', name: uid ? '' : String(pName || ''), category: newCategory }]
+      edits: [{ uid: uid ? String(uid) : '', legacyName: uid ? '' : String(pName || ''), category: newCategory }]
     }, 'Entre na sua conta para atualizar a categoria.')
     : Promise.reject(new Error('Atualize o aplicativo para salvar esta alteração com segurança.'));
 

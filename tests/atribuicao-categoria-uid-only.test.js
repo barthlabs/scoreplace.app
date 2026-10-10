@@ -22,9 +22,15 @@ const clientCalls = client.match(/_callFn\('applyEnrollmentAssignments',[\s\S]*?
 ok(clientCalls.length === 3, 'as três ações de categoria chamam a Function canônica');
 clientCalls.forEach((call, index) => {
   ok(!/\bemail\s*:/.test(call), 'ação ' + (index + 1) + ' não envia e-mail como identidade');
-  ok(/\buid\s*:/.test(call), 'ação ' + (index + 1) + ' envia uid');
-  ok(/\bname\s*:/.test(call), 'ação ' + (index + 1) + ' mantém nome somente para participante manual');
+  ok(/Object\.assign\(identity,/.test(call), 'ação ' + (index + 1) + ' recebe identidade estrutural única');
+  ok(!/\bname\s*:/.test(call), 'ação ' + (index + 1) + ' não envia nome como chave de mutação');
 });
+const identityStart = client.indexOf('function _assignmentParticipantIdentity');
+const identityEnd = client.indexOf('function _assignParticipantCategory', identityStart);
+const identityHelper = identityStart >= 0 && identityEnd > identityStart ? client.slice(identityStart, identityEnd) : '';
+ok(!!identityHelper, 'resolvedor cliente da identidade estrutural foi encontrado');
+ok(/if \(uid && !manualParticipantId\) return \{ uid: uid \}/.test(identityHelper) && /if \(manualParticipantId && !uid\) return \{ manualParticipantId: manualParticipantId \}/.test(identityHelper), 'cliente escolhe UID ou ID manual, nunca ambos');
+ok(/legacyName/.test(identityHelper) && !/\bname\s*:/.test(identityHelper), 'nome só sobrevive como legado explicitamente nomeado');
 const assignStart = client.indexOf('function _assignParticipantCategory');
 const assignEnd = client.indexOf('// Category assignment notification', assignStart);
 const assignHandler = assignStart >= 0 && assignEnd > assignStart ? client.slice(assignStart, assignEnd) : '';
@@ -36,9 +42,13 @@ const end = server.indexOf('exports.applyCategoryCommunicationMarkers = onCall',
 const handler = begin >= 0 && end > begin ? server.slice(begin, end) : '';
 ok(!!handler, 'handler canônico de atribuição foi encontrado');
 ok(!/\bemail\b/.test(handler), 'handler não aceita nem consulta e-mail');
-ok(/e\.uid\s*\?\s*u\.includes\(e\.uid\)\s*:\s*e\.manualParticipantId\s*\?\s*manual\.includes\(e\.manualParticipantId\)\s*:\s*\(e\.name/.test(handler),
+const resolverStart = server.indexOf('function _findEnrollmentAssignmentTarget');
+const resolverEnd = server.indexOf('exports.applyEnrollmentAssignments = onCall', resolverStart);
+const resolver = resolverStart >= 0 && resolverEnd > resolverStart ? server.slice(resolverStart, resolverEnd) : '';
+ok(/e\.uid\?u\.includes\(e\.uid\):e\.manualParticipantId\?manual\.includes\(e\.manualParticipantId\):\(e\.legacyName/.test(resolver),
   'handler casa UID primeiro, depois ID manual estável e só então nome legado');
-ok(/\(!x\.uid&&!x\.manualParticipantId&&!x\.name\)/.test(handler), 'pedido sem UID aceita ID manual estável ou, só no legado, nome');
+ok(/hits\.length===1/.test(resolver) && /ambiguous:hits\.length>1/.test(resolver), 'nome legado ambíguo não escolhe a primeira pessoa');
+ok(/\(!x\.uid&&!x\.manualParticipantId&&!x\.legacyName\)/.test(handler), 'pedido sem UID aceita ID manual estável ou, só no legado, nome');
 
 const commStart = client.indexOf('function _categoryCommIdentity');
 const commEnd = client.indexOf('// Persist only communication markers', commStart);

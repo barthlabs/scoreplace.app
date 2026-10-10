@@ -3344,6 +3344,31 @@ exports.assignMatchCourt = onCall(async (request) => {
 
 
 // ─── Atribuições da análise: torneio e perfil no mesmo comando canônico ─────────
+/* Resolve uma intenção de categoria pelo identificador estrutural. Nome só é
+ * permitido no caminho de migração de um documento histórico sem ID, e somente
+ * se apontar para UMA entrada. Isso evita que uma ação administrativa escolha a
+ * primeira "Maria" do array e também mantém o dado antigo recuperável: a
+ * transação chama ensureManualIdentity logo depois de encontrar esse alvo único. */
+function _findEnrollmentAssignmentTarget(arr, e) {
+  const hits=[];
+  (arr||[]).forEach(p=>{
+    if(!p||typeof p!=='object')return;
+    const u=[p.uid,p.p1Uid,p.p2Uid].filter(Boolean).map(String);
+    const manual=[p.manualParticipantId,p.manualId,p.p1ManualId,p.p2ManualId].filter(Boolean).map(String);
+    const names=[p.name,p.displayName];
+    if(e.pairMember&&p[e.pairMember+'Name']) names.push(p[e.pairMember+'Name']);
+    if(Array.isArray(p.participants))p.participants.forEach(q=>{
+      if(!q)return;
+      if(q.uid)u.push(String(q.uid));
+      if(q.manualParticipantId)manual.push(String(q.manualParticipantId));
+      if(q.name)names.push(q.name);
+      if(q.displayName)names.push(q.displayName);
+    });
+    if(e.uid?u.includes(e.uid):e.manualParticipantId?manual.includes(e.manualParticipantId):(e.legacyName&&names.some(n=>String(n||'')===e.legacyName)))hits.push(p);
+  });
+  return hits.length===1?{target:hits[0],ambiguous:false}:{target:null,ambiguous:hits.length>1};
+}
+
 /* `invoker:'public'` só abre o transporte callable deste salvamento: identidade e
  * autorização continuam exigidas abaixo (request.auth + _isTournamentAdmin). Sem
  * isso o Cloud Run bloqueia o preflight e a tela mostra apenas "Failed to fetch".
@@ -3353,8 +3378,11 @@ exports.applyEnrollmentAssignments = onCall({ invoker: 'public' }, async (reques
   const sport=String(data.sport||'').trim().slice(0,80), raw=Array.isArray(data.edits)?data.edits.slice(0,100):null;
   if(!uid) throw new HttpsError('unauthenticated','Entre na sua conta.');
   if(!tId||!raw||!raw.length) throw new HttpsError('invalid-argument','Atribuições inválidas.');
-  const clean=raw.map(x=>({uid:String(x&&x.uid||'').trim(),manualParticipantId:String(x&&x.manualParticipantId||'').trim().slice(0,180),name:String(x&&x.name||'').trim().slice(0,120),waitlist:!!(x&&x.waitlist),pairMember:(x&&['p1','p2'].includes(x.pairMember))?x.pairMember:'',gender:(x&&['feminino','masculino','outro',''].includes(x.gender))?x.gender:undefined,category:x&&Object.prototype.hasOwnProperty.call(x,'category')?String(x.category||'').trim().slice(0,80):undefined,uncategorizedByOrganizer:!!(x&&x.uncategorizedByOrganizer),markWasUncategorized:!!(x&&x.markWasUncategorized),notifyCategory:!!(x&&x.notifyCategory)}));
-  if(clean.some(x=>(!x.uid&&!x.manualParticipantId&&!x.name)||(x.gender===undefined&&x.category===undefined))) throw new HttpsError('invalid-argument','Alvo ou alteração inválida.');
+  /* `name` é aceito só como ponte de clientes ainda em cache: entra no mesmo
+   * caminho `legacyName`, que exige alvo único. Clientes atuais nunca o enviam;
+   * portanto não há retorno à mutação por nome nem janela de rollout quebrada. */
+  const clean=raw.map(x=>({uid:String(x&&x.uid||'').trim(),manualParticipantId:String(x&&x.manualParticipantId||'').trim().slice(0,180),legacyName:String(x&&(x.legacyName||x.name)||'').trim().slice(0,120),waitlist:!!(x&&x.waitlist),pairMember:(x&&['p1','p2'].includes(x.pairMember))?x.pairMember:'',gender:(x&&['feminino','masculino','outro',''].includes(x.gender))?x.gender:undefined,category:x&&Object.prototype.hasOwnProperty.call(x,'category')?String(x.category||'').trim().slice(0,80):undefined,uncategorizedByOrganizer:!!(x&&x.uncategorizedByOrganizer),markWasUncategorized:!!(x&&x.markWasUncategorized),notifyCategory:!!(x&&x.notifyCategory)}));
+  if(clean.some(x=>((x.uid&&x.manualParticipantId)||(!x.uid&&!x.manualParticipantId&&!x.legacyName))||(x.gender===undefined&&x.category===undefined))) throw new HttpsError('invalid-argument','Alvo ou alteração inválida.');
   const ref=db.collection('tournaments').doc(tId),agoraIso=new Date().toISOString();
   // Migração preguiçosa de registros antigos: novas vagas já nascem com ID manual,
   // mas fotos legadas só tinham nome. O nonce é criado fora da transação para que um
@@ -3366,14 +3394,6 @@ exports.applyEnrollmentAssignments = onCall({ invoker: 'public' }, async (reques
     const t=await _leTorneio(tx,ref,tId); if(!t) throw new HttpsError('not-found','Torneio não encontrado.');
     if(!_isTournamentAdmin(t,uid)) throw _drawFail('permission-denied','Só a organização altera inscrições.',{tId,uid});
     const before=_antesDoMotor(t), valid=new Set(Array.isArray(t.combinedCategories)?t.combinedCategories:[]); let changed=0;
-    const find=(arr,e)=>{let hit=null; (arr||[]).forEach(p=>{if(hit||!p||typeof p!=='object')return; const u=[p.uid,p.p1Uid,p.p2Uid].filter(Boolean).map(String); const manual=[p.manualParticipantId,p.p1ManualId,p.p2ManualId].filter(Boolean).map(String); const names=[p.name,p.displayName];
-      /* Duplas criadas antes dos IDs estáveis carregam apenas p1Name/p2Name. A Análise
-       * expande o card pelo lado (p1/p2), logo a porta deve usar o MESMO lado para
-       * localizar a única entrada canônica; comparar só com "Ana / Bia" nunca encontra
-       * o card "Ana" e retornava changed:0 como se tivesse salvo. */
-      if(e.pairMember && p[e.pairMember+'Name']) names.push(p[e.pairMember+'Name']);
-      if(Array.isArray(p.participants))p.participants.forEach(q=>{if(!q)return;if(q.uid)u.push(String(q.uid));if(q.manualParticipantId)manual.push(String(q.manualParticipantId));if(q.name)names.push(q.name);if(q.displayName)names.push(q.displayName);});
-      if(e.uid?u.includes(e.uid):e.manualParticipantId?manual.includes(e.manualParticipantId):(e.name&&names.some(n=>String(n||'')===e.name)))hit=p;});return hit;};
     const missing=[];
     const ensureManualIdentity=(target,e)=>{
       const next=()=>legacyIdPrefix+'-'+(++legacyIdSequence);
@@ -3382,7 +3402,7 @@ exports.applyEnrollmentAssignments = onCall({ invoker: 'public' }, async (reques
       }else if(!target.uid&&!target.manualParticipantId&&(target.name||target.displayName)) target.manualParticipantId=next();
       if(Array.isArray(target.participants)) target.participants.forEach(slot=>{if(slot&&typeof slot==='object'&&!slot.uid&&!slot.manualParticipantId&&(slot.name||slot.displayName))slot.manualParticipantId=next();});
     };
-    for(const e of clean){const pools=e.waitlist?[t.waitlist,t.standbyParticipants,t.monarchWaitlist]:[t.participants]; let target=null; for(const pool of pools){target=find(pool,e);if(target)break;} if(!target){missing.push(e.name||e.manualParticipantId||e.uid);continue;}
+    for(const e of clean){const pools=e.waitlist?[t.waitlist,t.standbyParticipants,t.monarchWaitlist]:[t.participants]; let target=null, ambiguous=false; for(const pool of pools){const found=_findEnrollmentAssignmentTarget(pool,e);if(found.ambiguous){ambiguous=true;break;} if(found.target){if(target&&target!==found.target){ambiguous=true;break;}target=found.target;}} if(!target||ambiguous){missing.push(ambiguous?'alvo ambíguo':(e.legacyName||e.manualParticipantId||e.uid));continue;}
       ensureManualIdentity(target,e);
       /* ⛔ O PAR {valor, marca} ANDA JUNTO, inclusive por MEMBRO de dupla — antes o membro recebia só
        * o valor, e o sanitizador (que agora exige a marca) o apagaria no próximo save: a decisão
