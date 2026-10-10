@@ -64,9 +64,9 @@ participante na projeção legada.
 
 As callables aceitam essa rota somente depois do marcador canônico e rejeitam
 `changeRule` nessa transição: mudar a configuração global do torneio é outra
-operação e não pode ser efeito colateral de formar uma dupla. Enquanto a UI
-ainda não puder enviar o ID tipado da categoria em todos os pontos, a flag de
-materialização permanece desligada.
+operação e não pode ser efeito colateral de formar uma dupla. A UI envia o ID
+tipado da categoria nos pontos de dupla; a conversão continua exigindo a
+prévia assinada e confirmação explícita da organização.
 
 ## Segurança e compatibilidade
 
@@ -90,5 +90,5 @@ materialização permanece desligada.
 5. nenhum teste permite `participants` como escrita autoritativa após o
    marcador de migração;
 6. a replicação legada nunca escreve em Sandbox que já tenha marcador canônico;
-7. a flag global permanece `false` até todos esses testes e o piloto individual
-   passarem.
+7. a flag global só permanece `true` enquanto todos esses testes passarem; o
+   piloto continua individual, reversível por callable e nunca por console.

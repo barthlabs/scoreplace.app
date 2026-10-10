@@ -1,3 +1,8 @@
+// 2.3.325 — A organização passa a ter uma conversão segura de inscrições antigas: ela
+// só aparece para o próprio organizador, começa por uma prévia assinada e converte
+// apenas aquele torneio quando o elenco está consistente. Depois disso, inscrições,
+// saídas e duplas usam uma única fonte canônica por UID/ID manual e categoria. Não há
+// conversão automática nem em massa.
 // 2.3.324 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.3.323 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.3.322 — Atualização consolidada de produção com as correções validadas desde a última publicação.

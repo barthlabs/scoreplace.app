@@ -103,15 +103,17 @@ const _tournamentVip = require("./tournament-vip-core");
 const _splitParts = require("./split-parts.js");   // torneio dividido: elenco na subcoleção
 const _refereeRoster = require("./vendor/referee-roster.js"); // escala de arbitragem: contrato puro e sem contato
 
-// A materialização só pode ser habilitada depois que TODAS as mutações de elenco
-// (inscrever, sair, formar e desfazer dupla) escreverem a coleção `registrations`.
-// Enquanto uma delas ainda depender da projeção legada, converter deixaria o torneio
-// aberto para leitura, mas incapaz de receber a próxima alteração com segurança.
-// Contrato operacional v2.3.311: não há botão exposto enquanto esta flag é false;
-// a nota pública informa que comunicados exigem conta vinculada e que a conversão
-// está indisponível. Não existe reversão manual de Firestore autorizada: uma futura
-// ativação exige callable administrativa idempotente e auditada no mesmo corte.
-const _CANONICAL_REGISTRATION_MUTATIONS_READY = false;
+// A materialização só é liberada quando TODAS as mutações de elenco
+// (inscrever, sair, formar e desfazer dupla) escrevem `registrations` pela
+// mesma fronteira transacional. Esse contrato agora é coberto pelo núcleo puro,
+// pelas quatro callables, pelo leitor da tela e pelo sorteador. A flag continua
+// no servidor — não é uma decisão do navegador — para que uma regressão volte
+// a falhar fechada se uma dessas portas deixar de existir.
+//
+// A liberação NÃO é migração em massa: cada torneio continua exigindo prévia
+// assinada, confirmação explícita da organização, recibo fresco e aborta sem
+// escrever se houver conflito, entrada sem suporte ou mudança no elenco.
+const _CANONICAL_REGISTRATION_MUTATIONS_READY = true;
 
 /* ═══ QUEM PERGUNTA "ESTA PESSOA ESTÁ INSCRITA?" TEM QUE LER O ELENCO ONDE ELE MORA ═══
  *

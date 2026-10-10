@@ -3934,6 +3934,7 @@ function renderTournaments(container, tournamentId = null) {
                 ${isOrg ? `<button class="btn btn-tool-amber hover-lift" onclick="event.stopPropagation(); window._saveAsTemplate('${t.id}')">💾 ${window._t ? window._t('btn.saveTemplate') : 'Salvar como Template'}</button>` : ''}
                 ${categoriasBtn}
                 ${enrollmentReportBtn}
+                ${isOrg && !(t.canonicalRegistrationMigration && t.canonicalRegistrationMigration.fingerprint) && window._canonicalRegistrationMutationsReady === true ? `<button class="btn btn-indigo hover-lift" onclick="event.stopPropagation(); window._materializeCanonicalRegistrations('${t.id}')" title="Confere o elenco atual e só converte se a prévia assinada não tiver conflitos">🧬 Converter inscrições</button>` : ''}
                 ${isOrg ? `<button class="btn hover-lift" style="background:linear-gradient(135deg,#f59e0b,#ea580c);color:#fff;border:none;" onclick="event.stopPropagation(); window._opOpenManage('${t.id}')">📊 Enquete</button>` : ''}
                 ${/* ⛔ 1.8.31 — o chip do grupo do torneio SAIU daqui. Ordem do dono: "existe esse
                       botao la em cima ao lado do inscrever-se/desinscrever-se. nao é o mesmo? tem

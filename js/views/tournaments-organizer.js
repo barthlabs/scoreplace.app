@@ -1,5 +1,9 @@
 /* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
 if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
+// A disponibilidade visual é apenas uma pista de UX. A Function mantém a
+// mesma trava no servidor e ainda exige prévia assinada antes de qualquer
+// escrita; o navegador nunca escolhe nem executa a migração sozinho.
+if (typeof window !== 'undefined') window._canonicalRegistrationMutationsReady = true;
 // ── Organizer Actions & Notifications ──
 // Clone tournament — creates a new tournament based on an existing one
 // ─── Sandbox (SB) do desenvolvedor ──────────────────────────────────────────
@@ -1627,9 +1631,9 @@ window._reopenSetDate = function (qual, valor) { _reopenState[qual] = String(val
 window._materializeCanonicalRegistrations = function (tId) {
   var tournamentId = String(tId || '').trim();
   if (!tournamentId) return;
-  // A coleção canônica já tem leitor, mas as quatro mutações do elenco ainda
-  // precisam chegar nela. Não exponha uma conversão que congelaria o torneio
-  // depois do clique; o servidor possui o mesmo bloqueio como autoridade.
+  // A coleção canônica e as quatro mutações já passam pela mesma fronteira.
+  // Conservamos a guarda visual para que um bundle incompatível falhe fechado;
+  // a autoridade é a mesma trava no servidor.
   if (window._canonicalRegistrationMutationsReady !== true) {
     showNotification('Conversão ainda indisponível',
       'As operações canônicas de inscrição e dupla estão sendo concluídas. O elenco atual permanece seguro e editável.',

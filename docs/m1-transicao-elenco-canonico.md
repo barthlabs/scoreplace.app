@@ -20,21 +20,22 @@ O censo não expõe nome, e-mail, foto ou telefone. Ele não escreve no
 Firestore. Os números provam que existe uma coorte elegível, mas **não**
 autorizam uma migração em lote.
 
-## Problema que ainda bloqueia a materialização
+## Corte que liberou a materialização controlada
 
-`registrations` já possui prévia, recibo (fingerprint), decisão idempotente e
-leitor. Porém as quatro operações que alteram um elenco continuam usando a
-projeção legada `participants`:
+`registrations` possui prévia, recibo (fingerprint), decisão idempotente e
+leitor. As quatro operações que alteram o elenco passaram a escolher a rota
+canônica dentro da própria transação quando o recibo existe:
 
 1. `enrollParticipant`;
 2. `deenrollParticipant` e `leaveStandby`;
 3. `formPair`;
 4. `splitPair`.
 
-Por isso `_CANONICAL_REGISTRATION_MUTATIONS_READY` fica `false`. Alterá-lo
-antes da transição deixaria um torneio convertido legível, mas incapaz de
-receber uma inscrição, saída ou mudança de dupla sem voltar a ter duas fontes
-de verdade.
+Por isso `_CANONICAL_REGISTRATION_MUTATIONS_READY` pode ficar `true`. A
+liberação é somente do mecanismo: não há conversão em lote. A organização vê
+a prévia, confirma um fingerprint e o servidor relê tudo antes de gravar. Um
+torneio com conflito, entrada sem suporte ou elenco alterado entre os dois
+passos permanece legado e íntegro.
 
 ## Contrato do corte
 
@@ -63,10 +64,9 @@ Para um torneio cujo `canonicalRegistrationMigration.fingerprint` exista:
    nome.
 4. Acrescentar testes de concorrência para dupla, saída e nova inscrição na
    mesma categoria, e testes de Rules que neguem escrita direta do cliente.
-5. Só então substituir o bloqueio por uma feature gate de servidor, executar
-   um piloto individual com backup + prévia + fingerprint e verificar o
-   retorno após recarregamento.
-6. Nunca habilitar em lote: cada coorte exige novo censo e recibo; qualquer
+5. Manter a feature gate de servidor e executar pilotos individuais com
+   backup + prévia + fingerprint, verificando o retorno após recarregamento.
+6. Nunca migrar em lote: cada coorte exige novo censo e recibo; qualquer
    divergência aborta sem sobrescrever documentos existentes.
 
 ## Critérios de aceite

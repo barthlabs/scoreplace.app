@@ -30,7 +30,8 @@ const start = server.indexOf('exports.applyCanonicalRegistrationMigration = onCa
 const body = start === -1 ? '' : server.slice(start, server.indexOf('\n// Configuração tipada', start));
 ok('callable de migração existe', start !== -1);
 ok('callable exige fingerprint e organização por UID', body.includes('expectedFingerprint') && body.includes('_isTournamentOrgCaller(tournament, callerUid)'));
-ok('callable recusa a conversão enquanto mutações canônicas não estão prontas',
+ok('migração só é liberada depois das mutações canônicas e conserva a trava do servidor',
+  server.includes('const _CANONICAL_REGISTRATION_MUTATIONS_READY = true;') &&
   body.includes('if (!_CANONICAL_REGISTRATION_MUTATIONS_READY)') && body.includes('operações canônicas de elenco não foram concluídas'));
 ok('callable relê registros físicos e recusa plano alterado', body.includes('lerRegistrosDaParte') && body.includes('report.fingerprint !== expectedFingerprint'));
 ok('callable cria somente operações decididas pelo núcleo', body.includes('decision.creates.forEach') && body.includes('tx.create('));

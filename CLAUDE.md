@@ -35,11 +35,12 @@ Plataforma web de gestao de torneios esportivos e board games. App SPA (Single P
 
 ### Migração do elenco canônico
 
-Enquanto as quatro mutações de elenco — inscrever, sair, formar dupla e desfazer dupla —
-não escreverem a coleção canônica pelo mesmo contrato, a materialização de inscrições deve
-permanecer indisponível. `_CANONICAL_REGISTRATION_MUTATIONS_READY` só pode virar `true`
-em um corte que entregue as quatro portas, seus testes transacionais e uma reversão
-servidor-a-servidor testada. Nunca limpar `canonicalRegistrationMigration.fingerprint`
+As quatro mutações de elenco — inscrever, sair, formar dupla e desfazer dupla — agora
+escrevem a coleção canônica pelo mesmo contrato. `_CANONICAL_REGISTRATION_MUTATIONS_READY`
+fica `true` somente enquanto os testes das quatro portas, da fronteira do recibo e do
+sorteador canônico permanecerem verdes. A liberação não autoriza migração automática nem
+em massa: cada torneio exige prévia assinada, confirmação explícita da organização e nova
+leitura transacional do elenco. Nunca limpar `canonicalRegistrationMigration.fingerprint`
 manualmente no Firestore: esse marcador protege a divergência entre elenco legado e
 canônico. Se uma futura ativação precisar ser desfeita, a release seguinte deve fornecer
 uma callable administrativa idempotente, auditada e limitada ao torneio afetado; não há
