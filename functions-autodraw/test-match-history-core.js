@@ -18,10 +18,16 @@ function match(overrides) {
 console.log('\n──── match-history-core ────');
 
 {
-  const out = core.buildTournamentRecord(tournament, match(), '2026-09-21T12:00:00.000Z');
+  const out = core.buildTournamentRecord(tournament, match({
+    // Estes rótulos deliberadamente não correspondem a contas. A projeção não
+    // pode procurar, escolher ou criar destinatário por nome.
+    p1: 'Nome inventado A / Nome inventado B',
+    p2: 'Nome inventado C / Nome inventado D'
+  }), '2026-09-21T12:00:00.000Z');
   t('deriva ID determinístico', out && out.record.matchId === 't_tour_1_match_1');
   t('destinatários vêm só dos slots UID', out && out.recipients.join('|') === 'uid_a|uid_b|uid_c|uid_d');
   t('não persiste nome ou foto de pessoa', out && out.record.players.every((p) => Object.keys(p).sort().join('|') === 'team|uid'));
+  t('rótulos não alteram os destinatários UID', out && out.record.playerUids.join('|') === 'uid_a|uid_b|uid_c|uid_d');
   t('usa winnerUids, não o rótulo', out && out.record.winnerTeam === 1);
   t('deriva placar e estatística mínima canônicos', out && out.record.scoreSummary === '6-4' && out.record.stats.team1.games === 6 && out.record.stats.team2.games === 4);
 }

@@ -1928,10 +1928,9 @@ exports.splitLatePair = onCall(async (request) => {
 // AUTHZ = PARTICIPANTE ou ADMIN (igual closeRound, diferente do drawRound que é admin-only):
 // num resultEntry='players' quem lança é jogador. Quem decide de fato é o result-core.
 //
-// ⚠️ ISTO AINDA NÃO É AUTORIDADE ABSOLUTA: as firestore.rules continuam deixando o
-// participante escrever `matches` direto (é o que mantém o app de loja antigo funcionando
-// — ele não chama esta CF e não tem auto-update). Fechar essa porta é passo SEPARADO, só
-// quando o piso das lojas alcançar. Ver [[project_result_launch_cf_evaluation]] §5.
+// A autoridade é exclusiva da Function: as Firestore Rules recusam escrita do
+// cliente tanto no jogo quanto no resultado. O app não tem queda que reaplique
+// placar localmente; sem confirmação do servidor o resultado não é lançado.
 /* ── O MIOLO DO LANÇAMENTO DE PLACAR, EM UM LUGAR SÓ ───────────────────────────────
  * Duas portas chegam aqui: a CHAMADA direta (`applyMatchResult`, quando há sinal) e a
  * FILA (`applyQueuedResult`, quando não havia). ⛔ Elas NÃO podem ter cada uma a sua
