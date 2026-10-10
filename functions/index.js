@@ -94,6 +94,7 @@ const _registrationCategoryBridge = require("./registration-category-bridge-core
 const _registrationCore = require("./registration-core");
 const _registrationMigration = require("./registration-migration-core");
 const _registrationMutations = require("./registration-mutations-core");
+const _registrationClaim = require("./registration-claim-core");
 const _canonicalRegistrationBoundary = require("./canonical-registration-boundary-core");
 const _canonicalEnrollment = require("./canonical-enrollment-core");
 const _registrationLifecycle = require("./registration-lifecycle-core");
@@ -4098,6 +4099,13 @@ function _isTournamentOrgCaller(t, callerUid) {
   return ch.some((c) => c && c.uid === callerUid && (c.status === 'active' || c.status === 'accepted'));
 }
 
+function _hasCanonicalTournamentDraw(tournament) {
+  const t = tournament || {};
+  return [t.matches, t.rounds, t.groups, t.phaseRounds].some((value) => (
+    Array.isArray(value) ? value.length > 0 : (value && typeof value === "object" && Object.keys(value).length > 0)
+  ));
+}
+
 /* Uma materialização não pode deixar duas fontes concorrentes de verdade.
  * O leitor e o sorteador passam a usar `registrations` assim que o marcador
  * existe; permitir que as portas legadas continuem alterando `participants`
@@ -4184,7 +4192,7 @@ function _writeCanonicalRosterCreates(tx, tournamentRef, tournament, registratio
  * origem permanece como histórico retirado e o recibo avança apenas com os
  * novos documentos de destino. Separar essas duas partes permitiria uma
  * metade da mudança sobreviver a retry/transação concorrente. */
-function _writeCanonicalRosterChanges(tx, tournamentRef, tournament, registrations, changes) {
+function _writeCanonicalRosterChanges(tx, tournamentRef, tournament, registrations, changes, extraTournamentPatch) {
   const canonicalTournament = Object.assign({ id: tournamentRef.id }, tournament || {});
   const updates = Array.isArray(changes && changes.updates) ? changes.updates : [];
   const creates = Array.isArray(changes && changes.creates) ? changes.creates : [];
@@ -4211,11 +4219,11 @@ function _writeCanonicalRosterChanges(tx, tournamentRef, tournament, registratio
       updatedAt: _FV.serverTimestamp(),
     }));
   });
-  tx.update(tournamentRef, {
+  tx.update(tournamentRef, Object.assign({
     canonicalRegistrationMigration: next.tournament.canonicalRegistrationMigration,
     memberUids: _canonicalRegistrationBoundary.memberUids(next.tournament, next.registrations),
     updatedAt: _FV.serverTimestamp(),
-  });
+  }, extraTournamentPatch || {}));
   return next;
 }
 
@@ -4273,6 +4281,66 @@ exports.reclassifyCanonicalRegistration = onCall(
         fromCategoryId: changes.fromCategoryId,
         toCategoryId: changes.toCategoryId,
       };
+    });
+  }
+);
+
+/* Vínculo manual -> conta em torneio canônico. A solicitação não usa nome,
+ * não apaga histórico e não pode alterar identidade depois do sorteio. */
+exports.requestCanonicalParticipantClaim = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    const data = request.data || {};
+    const tournamentId = String(data.tournamentId || "").trim();
+    const manualParticipantId = String(data.manualParticipantId || "").trim();
+    const accountUid = String(data.accountUid || "").trim();
+    if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
+    if (!tournamentId || !manualParticipantId || !accountUid) throw new HttpsError("invalid-argument", "identidades estáveis são obrigatórias");
+    const db = admin.firestore(), ref = db.collection("tournaments").doc(tournamentId);
+    return db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
+      const tournament = snap.data() || {};
+      if (!_isTournamentOrgCaller(tournament, callerUid)) throw new HttpsError("permission-denied", "só a organização pede o vínculo");
+      if (!_hasCanonicalTournamentDraw(tournament)) {
+        const checked = await _loadCanonicalRosterForMutation(tx, ref, tournament);
+        const exists = checked.registrations.some((item) => item.participantKind === "manual" && item.manualParticipantId === manualParticipantId && item.status !== "withdrawn");
+        if (!exists) throw new HttpsError("not-found", "vaga manual ativa não encontrada");
+      } else throw new HttpsError("failed-precondition", "vínculo de identidade só é permitido antes do sorteio");
+      const claims = Array.isArray(tournament.pendingCanonicalParticipantClaims) ? tournament.pendingCanonicalParticipantClaims : [];
+      const nextClaims = claims.filter((item) => !(item && item.manualParticipantId === manualParticipantId));
+      const claim = { id: "claim__" + Date.now() + "__" + Math.floor(Math.random() * 1e6), manualParticipantId, accountUid, requestedByUid: callerUid, createdAt: new Date().toISOString() };
+      nextClaims.push(claim);
+      tx.update(ref, { pendingCanonicalParticipantClaims: nextClaims, updatedAt: _FV.serverTimestamp() });
+      return { ok: true, claim };
+    });
+  }
+);
+
+exports.resolveCanonicalParticipantClaim = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    const data = request.data || {}, tournamentId = String(data.tournamentId || "").trim(), claimId = String(data.claimId || "").trim();
+    const action = data.action === "accept" ? "accept" : (data.action === "reject" ? "reject" : "");
+    if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
+    if (!tournamentId || !claimId || !action) throw new HttpsError("invalid-argument", "pedido inválido");
+    const db = admin.firestore(), ref = db.collection("tournaments").doc(tournamentId);
+    return db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref); if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
+      const tournament = snap.data() || {}, claims = Array.isArray(tournament.pendingCanonicalParticipantClaims) ? tournament.pendingCanonicalParticipantClaims : [];
+      const claim = claims.find((item) => item && item.id === claimId);
+      if (!claim) return { ok: true, changed: false, reason: "already-resolved" };
+      if (claim.accountUid !== callerUid) throw new HttpsError("permission-denied", "só a conta indicada decide o vínculo");
+      const remaining = claims.filter((item) => item && item.id !== claimId);
+      if (action === "reject") { tx.update(ref, { pendingCanonicalParticipantClaims: remaining, updatedAt: _FV.serverTimestamp() }); return { ok: true, changed: true, action }; }
+      if (_hasCanonicalTournamentDraw(tournament)) throw new HttpsError("failed-precondition", "vínculo de identidade só é permitido antes do sorteio");
+      const checked = await _loadCanonicalRosterForMutation(tx, ref, tournament);
+      let changes; try { changes = _registrationClaim.claimManualParticipant(tournamentId, checked.registrations, claim.manualParticipantId, callerUid); }
+      catch (error) { throw new HttpsError("failed-precondition", error.message); }
+      _writeCanonicalRosterChanges(tx, ref, tournament, checked.registrations, changes, { pendingCanonicalParticipantClaims: remaining });
+      return { ok: true, changed: true, action, outcome: changes.outcome };
     });
   }
 );
