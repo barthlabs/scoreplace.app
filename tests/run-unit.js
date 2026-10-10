@@ -1699,6 +1699,9 @@ const SUITES = [
   'functions/test-registration-migration-core.js',
   'functions/test-registration-mutations-core.js',
   'functions/test-canonical-registration-boundary-core.js',
+  // VIP é uma decisão de identidade (UID ou vaga manual), nunca uma decisão por nome.
+  // Mantê-lo no runner evita que a rota callable volte a aceitar homônimos em silêncio.
+  'functions/test-tournament-vip-core.js',
   'tests/materializacao-inscricoes-organizador.test.js',
   'tests/materializacao-nao-diverge-roster-legado.test.js',
   'functions/test-registration-roster-core.js',
