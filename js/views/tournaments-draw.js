@@ -4347,8 +4347,10 @@ window._applyParticipantMergeFresh = function(t, personName, personUid, placehol
 
 window._mergeParticipantConfirm = function(tId, personName, personUid, placeholderName, placeholderUid, reqId) {
     if (typeof window._callCF !== 'function') return Promise.resolve(false);
-    return window._callCF('resolveParticipantMerge', {
-        tournamentId: String(tId), requestId: String(reqId || ''), action: 'accept'
+    var t = window._findTournamentById(tId);
+    var canonical = !!(t && Array.isArray(t.pendingCanonicalParticipantClaims) && t.pendingCanonicalParticipantClaims.some(function(r) { return r.id === reqId; }));
+    return window._callCF(canonical ? 'resolveCanonicalParticipantClaim' : 'resolveParticipantMerge', {
+        tournamentId: String(tId), [canonical ? 'claimId' : 'requestId']: String(reqId || ''), action: 'accept'
     }).then(function(out) {
         var ok = !!(out && out.ok && out.changed);
         if (ok) {
@@ -4386,7 +4388,10 @@ window._requestMergeAcceptance = function(opts) {
         '“' + window._safeHtml(realName) + '” (usuário real) vai assumir os jogos de “' + window._safeHtml(genericName) + '” <b>só neste torneio</b>. Vamos enviar um pedido de aceite pra <b>' + window._safeHtml(realName) + '</b> — a mescla só acontece se ele aceitar. Enviar o pedido?',
         function() {
             if (typeof window._callCF !== 'function') return;
-            window._callCF('requestParticipantMerge', { tournamentId: String(opts.tId), realUid: String(realUid), manualParticipantId: String(manualParticipantId) })
+            var canonical = !!(t.canonicalRegistrationMigration && t.canonicalRegistrationMigration.fingerprint);
+            window._callCF(canonical ? 'requestCanonicalParticipantClaim' : 'requestParticipantMerge', canonical
+              ? { tournamentId: String(opts.tId), accountUid: String(realUid), manualParticipantId: String(manualParticipantId) }
+              : { tournamentId: String(opts.tId), realUid: String(realUid), manualParticipantId: String(manualParticipantId) })
               .then(function(out) {
                 if (!out || !out.ok) return;
                 if (typeof window._sendUserNotification === 'function') window._sendUserNotification(realUid, {
@@ -4403,10 +4408,11 @@ window._requestMergeAcceptance = function(opts) {
 // O usuário REAL aceita o vínculo → executa a mescla (assume a vaga do genérico).
 window._acceptMergeRequest = function(tId, reqId) {
     var t = window._findTournamentById(tId);
-    var req = t && Array.isArray(t.pendingMerges) && t.pendingMerges.filter(function(r) { return r.id === reqId; })[0];
+    var canonical = t && Array.isArray(t.pendingCanonicalParticipantClaims) && t.pendingCanonicalParticipantClaims.filter(function(r) { return r.id === reqId; })[0];
+    var req = canonical || (t && Array.isArray(t.pendingMerges) && t.pendingMerges.filter(function(r) { return r.id === reqId; })[0]);
     if (!req) return;
     var myUid = (window.AppStore.currentUser || {}).uid;
-    if (!myUid || myUid !== req.realUid) { if (typeof showNotification === 'function') showNotification('Sem permissão', 'Só o usuário indicado pode aceitar este vínculo.', 'warning'); return; }
+    if (!myUid || myUid !== (canonical ? req.accountUid : req.realUid)) { if (typeof showNotification === 'function') showNotification('Sem permissão', 'Só o usuário indicado pode aceitar este vínculo.', 'warning'); return; }
     if (window._mergePromptShown) delete window._mergePromptShown[reqId];
     window._mergeParticipantConfirm(tId, req.realName, req.realUid, req.genericName, '', reqId).then(function(ok) {
         if (!ok) return;
@@ -4417,13 +4423,14 @@ window._acceptMergeRequest = function(tId, reqId) {
 // O usuário REAL recusa o vínculo → descarta a pendência e avisa o organizador.
 window._rejectMergeRequest = function(tId, reqId) {
     var t = window._findTournamentById(tId);
-    var req = t && Array.isArray(t.pendingMerges) && t.pendingMerges.filter(function(r) { return r.id === reqId; })[0];
+    var canonical = t && Array.isArray(t.pendingCanonicalParticipantClaims) && t.pendingCanonicalParticipantClaims.filter(function(r) { return r.id === reqId; })[0];
+    var req = canonical || (t && Array.isArray(t.pendingMerges) && t.pendingMerges.filter(function(r) { return r.id === reqId; })[0]);
     if (!req) return;
     var myUid = (window.AppStore.currentUser || {}).uid;
-    if (!myUid || myUid !== req.realUid) return;
+    if (!myUid || myUid !== (canonical ? req.accountUid : req.realUid)) return;
     if (window._mergePromptShown) delete window._mergePromptShown[reqId];
     if (typeof window._callCF !== 'function') return;
-    window._callCF('resolveParticipantMerge', { tournamentId: String(tId), requestId: String(reqId), action: 'reject' }).then(function(out) {
+    window._callCF(canonical ? 'resolveCanonicalParticipantClaim' : 'resolveParticipantMerge', Object.assign({ tournamentId: String(tId), action: 'reject' }, canonical ? { claimId: String(reqId) } : { requestId: String(reqId) })).then(function(out) {
         if (!out || !out.ok) return;
         if (req.byUid && typeof window._sendUserNotification === 'function') window._sendUserNotification(req.byUid, { type: 'enrollment_new', title: '❌ Vínculo recusado', message: window._safeHtml(req.realName) + ' recusou assumir “' + window._safeHtml(req.genericName) + '” em ' + window._safeHtml(t.name || '') + '.', tournamentId: String(t.id), tournamentName: t.name || '', level: 'all' });
         if (typeof showNotification === 'function') showNotification('Pedido recusado', 'A organização foi avisada.', 'info');
@@ -4434,18 +4441,20 @@ window._rejectMergeRequest = function(tId, reqId) {
 // Mostra ao usuário REAL (quando abre o torneio) o pedido de vínculo pendente.
 // Uma vez por sessão por pedido (não fica re-disparando no soft-refresh).
 window._checkPendingMerges = function(t) {
-    if (!t || !Array.isArray(t.pendingMerges) || !t.pendingMerges.length) return;
+    if (!t) return;
     var myUid = (window.AppStore.currentUser || {}).uid;
     if (!myUid) return;
-    var req = t.pendingMerges.filter(function(r) { return r.realUid === myUid; })[0];
+    var canonical = Array.isArray(t.pendingCanonicalParticipantClaims) && t.pendingCanonicalParticipantClaims.filter(function(r) { return r.accountUid === myUid; })[0];
+    var req = canonical || (Array.isArray(t.pendingMerges) && t.pendingMerges.filter(function(r) { return r.realUid === myUid; })[0]);
     if (!req) return;
     if (!window._mergePromptShown) window._mergePromptShown = {};
     if (window._mergePromptShown[req.id]) return;
     window._mergePromptShown[req.id] = 1;
     showConfirmDialog(
         '🔗 Pedido de vínculo',
-        '<b>' + window._safeHtml(req.byName) + '</b> quer que você assuma a participação de “' + window._safeHtml(req.genericName) + '” no torneio <b>' + window._safeHtml(t.name || '') + '</b>. ' +
-        'Você herda os jogos e resultados desse participante <b>neste torneio</b>. Aceitar?',
+        canonical
+          ? 'A organização quer vincular sua conta a uma vaga manual neste torneio. O vínculo só pode ocorrer antes do sorteio. Aceitar?'
+          : '<b>' + window._safeHtml(req.byName) + '</b> quer que você assuma a participação de “' + window._safeHtml(req.genericName) + '” no torneio <b>' + window._safeHtml(t.name || '') + '</b>. Você herda os jogos e resultados desse participante <b>neste torneio</b>. Aceitar?',
         function() { window._acceptMergeRequest(String(t.id), req.id); },
         function() { window._rejectMergeRequest(String(t.id), req.id); },
         { type: 'info', confirmText: 'Aceitar', cancelText: 'Recusar' }

@@ -1706,6 +1706,7 @@ const SUITES = [
   'functions/test-canonical-registration-boundary-core.js',
   'functions/test-registration-claim-core.js',
   'tests/canonical-participant-claim.test.js',
+  'tests/canonical-participant-claim-ui.test.js',
   'tests/canonical-registration-reclassify.test.js',
   'tests/canonical-category-manager-route.test.js',
   'tests/canonical-category-secondary-routes.test.js',
