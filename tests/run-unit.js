@@ -2189,6 +2189,8 @@ const PRENDEM_PORTA = [
   'tests/decisao-do-tardio-na-folga-emulador.test.js',   // sobe o próprio emulador do Firestore
   'tests/tardio-entra-em-torneio-dividido.test.js',      // idem
   'tests/torneio-nasce-dividido.test.js',               // idem
+  // Consulta a subcoleção real pelo índice automático; sobe o Firestore na porta 8080.
+  'functions/test-canonical-registration-query-emu.js',
   'functions-autodraw/test-corrida-slot-emu.js',   // corrida real no Firestore Emulator
   'tests/deploy-liga-firebase-admin.test.js',      // roda a corrida acima dentro da cópia extraída
   // Abre dois emuladores em sequência; sob carga paralela o Firebase CLI pode esperar
