@@ -8,11 +8,11 @@ implementados e testados. O objetivo não é trocar nomes na interface: é fazer
 com que cada fato tenha uma única origem, cada operação tenha uma autoridade
 única e cada regra seja a mesma no navegador e no servidor.
 
-Torneios cuja fase já foi materializada são registros históricos. Eles
-continuam legíveis pelo adaptador legado e não recebem conversão estrutural em
-massa. Um torneio novo, ou uma fase ainda não sorteada, usa o contrato novo.
-Qualquer migração de dados existentes será reversível, acompanhada de backup,
-censo antes/depois e aprovação específica.
+Todos os torneios são tratados como divididos e passam pela mesma fronteira de
+leitura/escrita canônica. Registros históricos podem manter campos físicos
+legados enquanto a projeção lossless os traduz para fases atuais; nenhum leitor
+ou mutador pode bifurcar comportamento por serem antigos. Migração física em
+massa continua exigindo backup, censo antes/depois e aprovação específica.
 
 ## O que a inspeção confirmou
 
@@ -26,7 +26,7 @@ censo antes/depois e aprovação específica.
 | Dados de perfil | Há cópias de nome, e-mail e foto em participantes e pares; a análise de inscritos resolve perfis somente por UID. | A regra de perfil único ainda não está completa; precisa de migração por fronteira, não de nova varredura textual isolada. |
 | Elenco | O produto mantém lista embutida, espera embutida, espelho `participants` e, em torneios divididos, `inscritos`. | A duplicação é uma causa raiz de regressões; o cadastro deve ter uma fonte canônica única. |
 | Telemetria de SMS | O cliente anteriormente criava `users/{uid}/phoneVerifyAttempts` e duplicava telefone no rastro. Em 21/09/2026, `recordPhoneVerificationAttempt` passou a validar o intent, fixar o UID do token e gravar somente desfecho operacional. | A subcoleção está fechada a escrita direta nas Rules; telefone e mensagem crua não entram mais nessa projeção. |
-| Histórico de partidas | Há três construtores no navegador: `_persistInlineTournamentMatchRecord`, `_persistGSMTournamentMatchRecord` e `_buildAndPersistMatchRecord`. Todos chamam `saveUserMatchRecords`, que hoje pode escrever em qualquer `users/{uid}/matchHistory`. | Não migrar por simples wrapper: primeiro o resultado confirmado precisa ser uma fonte canônica server-side; depois a projeção é derivada dela, sem jogadores, placar ou estatísticas no payload. |
+| Histórico de partidas | Resultado de torneio chama `applyMatchResult`; a mesma transação deriva `matchHistory` pelo módulo puro `match-history-core`. Casual chama `materializeOwnCasualMatchHistory`, que relê a partida final. Rules recusam toda escrita cliente em `matchHistory`. | Histórico é projeção por UID, com ID determinístico, nunca entrada declarada pelo navegador. A regressão cobre rótulos falsos, vencedor por UID e bloqueio pelas Rules. |
 | Fusão de contas | `autoMergeOnProfileUpdate` e a rotina agendada de limpeza podem executar fusão a partir de coincidência de credenciais; `requestParticipantMerge` usa o rótulo de um participante manual como identificador da vaga. | Fusão automática e vaga manual identificada por nome precisam ser contidas antes da migração de identidade. |
 | Propagação de perfil | `propagateDisplayName` ainda varre torneios e regrava rótulos quando o nome muda. | Demonstra que o torneio continua contendo cópia de perfil e cria escrita concorrente sobre dados de competição. |
 | Grupos configuráveis | A agenda deve ser comum ao núcleo classificatório. | Tamanho do grupo e número de jogos são escolhas do organizador. |
@@ -466,33 +466,23 @@ ou estatísticas para essa coleção.
   nova estatística.
 - A Function deriva destinatários exclusivamente dos UIDs presentes na fonte;
   um payload do cliente não escolhe em quais perfis o histórico é gravado.
-- Antes de negar `matchHistory/**` nas Rules, todos os atuais escritores devem
-  estar migrados para a Function e cobertos por teste de emulador. Nenhuma
-  regra parcial por convenção de ID é aceitável.
+- `matchHistory/**` já é negado às aplicações cliente; a Function materializa
+  a projeção canônica e os testes de emulador provam que nem o dono cria,
+  atualiza ou apaga registros diretamente.
 
-#### Evidência de dependência — 21/09/2026
+#### Evidência de corte concluído — 10/10/2026
 
-O inventário confirmou exatamente três construtores que convergem em
-`FirestoreDB.saveUserMatchRecords(record)`: o caminho inline de torneio, o
-caminho set-a-set de torneio e o placar ao vivo compartilhado entre casual e
-torneio. A operação atual recebe do navegador a lista `record.players`, o
-vencedor, o placar e estatísticas; portanto uma Function que apenas recebesse
-esse mesmo objeto continuaria aceitando uma projeção forjável.
+Os três construtores antigos permanecem apenas como auxiliares de UI/local
+score; eles não escrevem `matchHistory`. Para torneio, `applyMatchResult`
+aceita o resultado, relê o jogo dentro da transação e usa
+`match-history-core` para derivar destinatários exclusivamente de slots UID.
+Para casual, a callable relê `casualMatches/{id}` e materializa somente a
+cópia do UID autenticado quando ele é participante confirmado.
 
-A ordem obrigatória da S1 é:
-
-1. materializar a confirmação de resultado de torneio em uma Function ou
-   gatilho idempotente que leia a partida canônica, inclusive quando o legado
-   ainda mantiver a chave no documento do torneio;
-2. mover a finalização casual para uma Function que relê
-   `casualMatches/{id}` e aceita o comando somente de participante autorizado;
-3. derivar destinatários pelos UIDs da fonte, gravar IDs determinísticos e
-   testar reexecução/substituição do resultado;
-4. só então retirar `saveUserMatchRecords` do cliente e negar toda escrita em
-   `matchHistory/**` pelas Rules.
-
-Enquanto o passo 1 não existir, bloquear a subcoleção quebraria a projeção;
-aceitá-la por payload numa nova Function apenas deslocaria a vulnerabilidade.
+O corte foi aceito com IDs determinísticos, substituição idempotente e Rules
+fechadas. `functions-autodraw/test-match-history-core.js` prova que nomes e
+rótulos não decidem nem destinatários nem vencedor; `rules-privileged-fields`
+prova no emulador que nenhum cliente escreve a projeção.
 
 - Nenhuma conta autenticada consegue duas inscrições ativas na mesma categoria
   do mesmo torneio, inclusive em chamadas concorrentes.
