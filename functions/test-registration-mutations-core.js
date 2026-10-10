@@ -47,5 +47,13 @@ ok('saída do torneio altera todas as categorias da pessoa', withdrawn.updates.f
 ok('saída de integrante dissolve a dupla sem retirar o parceiro', withdrawn.updates.some((item) => item.participantUid === 'u2' && item.status === 'confirmed' && item.fixedPairId === null));
 bad('recusa registros com chave de participante divergente', () => M.indexRegistrations('t1', [Object.assign({}, a, { participantKey: 'uid:outra' })]));
 bad('recusa duas inscrições da mesma pessoa na categoria', () => M.indexRegistrations('t1', [a, Object.assign({}, a)]));
+const movedSolo = M.reclassify('t1', [a], { uid: 'u1' }, 'cat-a', 'cat-b');
+ok('troca canônica preserva origem retirada e cria destino determinístico',
+  movedSolo.updates.length === 1 && movedSolo.updates[0].status === 'withdrawn' && movedSolo.creates.length === 1 && movedSolo.creates[0].registrationId === R.registrationId('uid:u1', 'cat-b'));
+const pairedForMove = M.pair('t1', [a, b], [a.registrationId, b.registrationId]);
+const movedPair = M.reclassify('t1', pairedForMove.updates, { uid: 'u1' }, 'cat-a', 'cat-b');
+ok('troca de categoria leva a dupla inteira e recalcula o vínculo',
+  movedPair.updates.filter((item) => item.status === 'withdrawn').length === 2 && movedPair.creates.length === 2 && movedPair.creates.every((item) => item.categoryId === 'cat-b' && item.fixedPairId === movedPair.fixedPairId));
+bad('recusa categoria destino já ativa', () => M.reclassify('t1', [a, aSecondCategory], { uid: 'u1' }, 'cat-a', 'cat-b'));
 console.log((fail ? '✗' : '✓') + ' registration-mutations-core: ' + pass + ' passaram, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);

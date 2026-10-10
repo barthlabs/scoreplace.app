@@ -179,6 +179,48 @@ function leaveWaitlist(tournamentId, registrations, participant) {
   return transitionStatus(tournamentId, registrations, participant, ['waitlisted'], 'withdrawn');
 }
 
+/* Trocar categoria não pode reescrever a projeção `participants`: categoryId faz
+ * parte da identidade estrutural do documento. A transição preserva o registro
+ * anterior como retirado e cria (ou reativa) a inscrição determinística da nova
+ * categoria. Se a pessoa estiver em dupla fixa, a dupla inteira atravessa junta;
+ * deixá-la em categorias diferentes produziria um pairId sem significado. */
+function reclassify(tournamentId, registrations, participant, fromCategoryId, toCategoryId) {
+  const byId = indexRegistrations(tournamentId, registrations);
+  const key = participantKey(participant || {});
+  const from = text(fromCategoryId), to = text(toCategoryId);
+  if (!from || !to || from === to) throw new Error('mudança de categoria inválida');
+  const source = Array.from(byId.values()).find((item) => (
+    item.participantKey === key && item.categoryId === from && item.status !== 'withdrawn'
+  ));
+  if (!source) throw new Error('inscrição ativa na categoria de origem não encontrada');
+  const cohort = source.fixedPairId
+    ? Array.from(byId.values()).filter((item) => item.fixedPairId === source.fixedPairId)
+    : [source];
+  if (cohort.length !== (source.fixedPairId ? 2 : 1) || cohort.some((item) => item.categoryId !== from || item.status === 'withdrawn')) {
+    throw new Error('dupla canônica inválida para mudança de categoria');
+  }
+  const targetIds = cohort.map((item) => registrationId(item.participantKey, to));
+  const nextPairId = cohort.length === 2 ? canonicalPairId(tournamentId, to, targetIds) : null;
+  const updates = [], creates = [];
+  cohort.forEach((item, index) => {
+    updates.push(Object.assign({}, item, { status: 'withdrawn', fixedPairId: null }));
+    const targetId = targetIds[index], existing = byId.get(targetId);
+    if (existing && existing.status !== 'withdrawn') {
+      throw new Error('participante já possui inscrição ativa na categoria de destino');
+    }
+    if (existing) {
+      updates.push(Object.assign({}, existing, { status: item.status, fixedPairId: nextPairId }));
+      return;
+    }
+    creates.push(Object.assign({}, item, {
+      registrationId: targetId,
+      categoryId: to,
+      fixedPairId: nextPairId,
+    }));
+  });
+  return { outcome: 'reclassified', updates, creates, fromCategoryId: from, toCategoryId: to, fixedPairId: nextPairId };
+}
+
 module.exports = {
   canonicalPairId,
   indexRegistrations,
@@ -189,4 +231,5 @@ module.exports = {
   splitParticipants,
   withdraw,
   leaveWaitlist,
+  reclassify,
 };

@@ -29,5 +29,9 @@ bad('recusa documento com identidade divergente', () => boundary.verifiedRoster(
 const changed = boundary.applyUpdates(tournament, [account('u1')], [Object.assign({}, account('u1'), { status: 'withdrawn' })]);
 ok('projeção pós-mutação mantém o recibo e remove inscrito retirado do roster', changed.registrations[0].status === 'withdrawn' && changed.participants.length === 0);
 bad('recusa atualização de registro fora do recibo', () => boundary.applyUpdates(tournament, [account('u1')], [account('u2')]));
+const moved = Object.assign({}, account('u1'), { registrationId: core.registrationId('uid:u1', 'cat-b'), categoryId: 'cat-b' });
+const afterChanges = boundary.applyChanges(tournament, [account('u1')], [Object.assign({}, account('u1'), { status: 'withdrawn' })], [moved]);
+ok('mudança composta retira origem e avança recibo com categoria destino',
+  afterChanges.tournament.canonicalRegistrationMigration.registrationCount === 2 && afterChanges.registrations.length === 2 && afterChanges.participants.length === 1 && afterChanges.participants[0].categoryId === 'cat-b');
 console.log((fail ? '✗' : '✓') + ' canonical-registration-boundary-core: ' + pass + ' passaram, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);

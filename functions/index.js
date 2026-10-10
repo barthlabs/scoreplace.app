@@ -4180,6 +4180,96 @@ function _writeCanonicalRosterCreates(tx, tournamentRef, tournament, registratio
   return next;
 }
 
+/* Retirada e criação de categoria são uma transição única: o registro de
+ * origem permanece como histórico retirado e o recibo avança apenas com os
+ * novos documentos de destino. Separar essas duas partes permitiria uma
+ * metade da mudança sobreviver a retry/transação concorrente. */
+function _writeCanonicalRosterChanges(tx, tournamentRef, tournament, registrations, changes) {
+  const canonicalTournament = Object.assign({ id: tournamentRef.id }, tournament || {});
+  const updates = Array.isArray(changes && changes.updates) ? changes.updates : [];
+  const creates = Array.isArray(changes && changes.creates) ? changes.creates : [];
+  let next;
+  try { next = _canonicalRegistrationBoundary.applyChanges(canonicalTournament, registrations, updates, creates); }
+  catch (error) { throw new HttpsError("failed-precondition", error.message); }
+  updates.forEach((item) => {
+    tx.update(tournamentRef.collection("registrations").doc(item.registrationId), {
+      status: item.status,
+      fixedPairId: item.fixedPairId || null,
+      updatedAt: _FV.serverTimestamp(),
+    });
+  });
+  creates.forEach((item) => {
+    tx.create(tournamentRef.collection("registrations").doc(item.registrationId), Object.assign({}, item, {
+      createdAt: _FV.serverTimestamp(),
+      updatedAt: _FV.serverTimestamp(),
+    }));
+  });
+  tx.update(tournamentRef, {
+    canonicalRegistrationMigration: next.tournament.canonicalRegistrationMigration,
+    memberUids: _canonicalRegistrationBoundary.memberUids(next.tournament, next.registrations),
+    updatedAt: _FV.serverTimestamp(),
+  });
+  return next;
+}
+
+/* Mudança administrativa de categoria usa IDs tipados e a subcoleção canônica.
+ * Nome, rótulo visual e fotografia de `participants` não participam do pedido.
+ * Caso a pessoa esteja em dupla fixa, o core move os dois registros juntos. */
+exports.reclassifyCanonicalRegistration = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
+    const data = request.data || {};
+    const tournamentId = String(data.tournamentId || "").trim();
+    const userUid = String(data.userUid || "").trim();
+    const manualParticipantId = String(data.manualParticipantId || "").trim();
+    const fromCategoryId = String(data.fromCategoryId || "").trim();
+    const toCategoryId = String(data.toCategoryId || "").trim();
+    if (!tournamentId || (!userUid && !manualParticipantId) || (userUid && manualParticipantId) || !fromCategoryId || !toCategoryId) {
+      throw new HttpsError("invalid-argument", "identidade e categorias tipadas são obrigatórias");
+    }
+    const db = admin.firestore();
+    const ref = db.collection("tournaments").doc(tournamentId);
+    return db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
+      const tournament = snap.data() || {};
+      if (!_isTournamentOrgCaller(tournament, callerUid)) {
+        throw new HttpsError("permission-denied", "só a organização altera categoria de inscrição");
+      }
+      if (!(tournament.canonicalRegistrationMigration && tournament.canonicalRegistrationMigration.fingerprint)) {
+        throw new HttpsError("failed-precondition", "torneio ainda não usa inscrições canônicas");
+      }
+      let definitions;
+      try { definitions = _categoryEligibility.normalizeCategoryDefinitions(tournament.categoryDefinitions); }
+      catch (error) { throw new HttpsError("failed-precondition", error.message); }
+      try { _registrationCategoryBridge.categoryIdsFromTypedIds(definitions, [fromCategoryId, toCategoryId]); }
+      catch (error) { throw new HttpsError("invalid-argument", error.message); }
+      const checked = await _loadCanonicalRosterForMutation(tx, ref, tournament);
+      let changes;
+      try {
+        changes = _registrationMutations.reclassify(
+          tournamentId,
+          checked.registrations,
+          userUid ? { uid: userUid } : { manualParticipantId },
+          fromCategoryId,
+          toCategoryId
+        );
+      } catch (error) { throw new HttpsError("failed-precondition", error.message); }
+      const next = _writeCanonicalRosterChanges(tx, ref, tournament, checked.registrations, changes);
+      return {
+        ok: true,
+        outcome: changes.outcome,
+        movedPair: !!changes.fixedPairId,
+        participants: next.participants,
+        fromCategoryId: changes.fromCategoryId,
+        toCategoryId: changes.toCategoryId,
+      };
+    });
+  }
+);
+
 // Prévia da migração I1: lê o elenco fresco e devolve somente o censo que
 // antecede uma migração-piloto. Não cria `registrations`, não altera projeções
 // legadas e não aceita um elenco enviado pelo navegador.

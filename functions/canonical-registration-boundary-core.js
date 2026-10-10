@@ -86,6 +86,17 @@ function applyCreates(tournament, registrations, creates) {
   return Object.assign({ tournament: nextTournament }, next);
 }
 
+/* Uma transição pode retirar registros e criar a categoria de destino no mesmo
+ * commit. Validamos a fotografia intermediária antes de avançar o recibo: assim
+ * nunca há criação que ignore uma retirada, nem retirada que faça a contagem
+ * canônica divergir. */
+function applyChanges(tournament, registrations, updates, creates) {
+  const afterUpdates = applyUpdates(tournament, registrations, updates);
+  return (Array.isArray(creates) && creates.length)
+    ? applyCreates(tournament, afterUpdates.registrations, creates)
+    : afterUpdates;
+}
+
 /* `memberUids` é o índice de entrega do torneio no cliente, não uma cópia de
  * nomes. Ele deve acompanhar qualquer transição canônica, inclusive espera e
  * retirada, ou o registro estará correto mas a pessoa não verá (ou continuará
@@ -105,4 +116,4 @@ function memberUids(tournament, registrations) {
   return Array.from(values).sort();
 }
 
-module.exports = { migrationOf, verifiedRoster, applyUpdates, applyCreates, memberUids };
+module.exports = { migrationOf, verifiedRoster, applyUpdates, applyCreates, applyChanges, memberUids };
