@@ -14,6 +14,12 @@ const valid = boundary.verifiedRoster(tournament, [account('u1')]);
 ok('recibo com marcador, contagem e identidade válidos libera roster', valid.participants.length === 1 && valid.migration.fingerprint === 'fp-1');
 bad('recusa torneio sem marcador canônico', () => boundary.verifiedRoster({ id: 't1' }, [account('u1')]));
 bad('recusa recibo sem contagem íntegra', () => boundary.verifiedRoster({ id: 't1', canonicalRegistrationMigration: { fingerprint: 'fp' } }, [account('u1')]));
+
+const created = account('u2');
+const afterCreate = boundary.applyCreates(tournament, [account('u1')], [created]);
+ok('criação avança o recibo junto com a fotografia',
+  afterCreate.migration.expectedCount === 2 && afterCreate.tournament.canonicalRegistrationMigration.registrationCount === 2 && afterCreate.registrations.length === 2);
+bad('recusa criação que repete documento materializado', () => boundary.applyCreates(tournament, [account('u1')], [account('u1')]));
 bad('recusa contagem divergente', () => boundary.verifiedRoster(tournament, []));
 bad('recusa documento com identidade divergente', () => boundary.verifiedRoster(tournament, [Object.assign({}, account('u1'), { participantKey: 'uid:u2' })]));
 const changed = boundary.applyUpdates(tournament, [account('u1')], [Object.assign({}, account('u1'), { status: 'withdrawn' })]);

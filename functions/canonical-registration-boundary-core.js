@@ -60,4 +60,30 @@ function applyUpdates(tournament, registrations, updates) {
   return verifiedRoster(tournament, before.registrations.map((item) => replacements.get(item.registrationId) || item));
 }
 
-module.exports = { migrationOf, verifiedRoster, applyUpdates };
+/*
+ * Inclusões também precisam atravessar a fronteira. O recibo contém a
+ * contagem do conjunto materializado; criar documentos sem avançá-la faria a
+ * próxima leitura legítima parecer corrupção. Esta função constrói a próxima
+ * fotografia inteira ANTES de a Function tocar Firestore e devolve o recibo
+ * já ajustado para a mesma transação gravar ambos atomically.
+ */
+function applyCreates(tournament, registrations, creates) {
+  const before = verifiedRoster(tournament, registrations);
+  const additions = Array.isArray(creates) ? creates.slice() : [];
+  const existing = new Set(before.registrations.map((item) => item.registrationId));
+  const seen = new Set();
+  additions.forEach((item) => {
+    const id = text(item && item.registrationId);
+    if (!id) throw new Error('nova inscrição canônica sem registrationId');
+    if (existing.has(id) || seen.has(id)) throw new Error('nova inscrição canônica duplicada');
+    seen.add(id);
+  });
+  const migration = Object.assign({}, tournament.canonicalRegistrationMigration, {
+    registrationCount: before.registrations.length + additions.length,
+  });
+  const nextTournament = Object.assign({}, tournament, { canonicalRegistrationMigration: migration });
+  const next = verifiedRoster(nextTournament, before.registrations.concat(additions));
+  return Object.assign({ tournament: nextTournament }, next);
+}
+
+module.exports = { migrationOf, verifiedRoster, applyUpdates, applyCreates };
