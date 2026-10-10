@@ -5,7 +5,17 @@ function ok(condition, message) { if (condition) console.log('✓ ' + message); 
 const server = fs.readFileSync('functions-autodraw/index.js', 'utf8');
 ok(/function _assertLegacyRosterMutationAllowed\(t, operation\)/.test(server) && /migration\.fingerprint/.test(server),
   'barreira central identifica recibo canônico antes de writers legados');
-['remoção administrativa legada', 'desmembramento legado de dupla', 'deduplicação legada', 'drenagem legada da lista de espera'].forEach(function (operation) {
+[
+  'remoção administrativa legada',
+  'desmembramento legado de dupla',
+  'deduplicação legada',
+  'drenagem legada da lista de espera',
+  'ocupação legada de placeholder',
+  'promoção legada da lista de espera',
+  'sorteio legado de vagas',
+  'dissolução legada de times incompletos',
+  'remoção legada entre fases'
+].forEach(function (operation) {
   ok(server.includes("_assertLegacyRosterMutationAllowed(t, '" + operation + "')"), operation + ' é recusada quando o elenco é canônico');
 });
 const client = fs.readFileSync('js/views/tournaments.js', 'utf8');

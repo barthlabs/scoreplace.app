@@ -2903,6 +2903,7 @@ exports.occupyTournamentPlaceholder = onCall(async (request) => {
     const t = await _leTorneio(tx, ref, tId);
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
     if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização ocupa uma vaga.', { tId, uid });
+    _assertLegacyRosterMutationAllowed(t, 'ocupação legada de placeholder');
     const espera = [].concat(Array.isArray(t.standbyParticipants) ? t.standbyParticipants : [], Array.isArray(t.waitlist) ? t.waitlist : []);
     const person = espera.find(p => p && String(p.uid || '') === participantUid);
     const realName = String(person && (person.displayName || person.name) || '').trim();
@@ -4804,6 +4805,7 @@ exports.setTournamentEnrollmentStatus = onCall(async request => {
         t.polls.forEach(p => { if (p && p.id === t.activePollId && p.status === 'active') { p.status = 'closed'; p.deadline = Date.now(); } });
         t.activePollId = null;
       }
+      _assertLegacyRosterMutationAllowed(t, 'promoção legada da lista de espera');
       promoted = _promoteWaitlists(t);
       _enqueueEnrollmentNotice(tx, ref, t, 'enrollments-reopened', '📋 Inscrições reabertas', 'As inscrições de ' + String(t.name || 'seu torneio') + ' foram reabertas.', nowIso);
     } else if (action === 'close' || action === 'late-close') {
@@ -4842,6 +4844,7 @@ exports.runEnrollmentSlotsDraw = onCall(async request => {
     if (_hasTournamentDraw(t)) throw new HttpsError('failed-precondition', 'A chave já foi sorteada.');
     if (t.enrollmentLimitMode !== 'draw') throw new HttpsError('failed-precondition', 'Este torneio não usa sorteio de vagas.');
     if (t.drawSelectionDone) return { ok:true, changed:false, tournament:t };
+    _assertLegacyRosterMutationAllowed(t, 'sorteio legado de vagas');
     const slots = Number.parseInt(t.targetSlots, 10);
     if (!Number.isFinite(slots) || slots < 1) throw new HttpsError('failed-precondition', 'Defina o número de vagas antes do sorteio.');
     const before = _antesDoMotor(t), entries = _entriesOf(t, 'participants');
@@ -4981,6 +4984,7 @@ exports.dissolveIncompleteTeams = onCall(async (request) => {
     if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização dissolve times incompletos.', { tId, uid });
     if (hasDrawnBracket && hasDrawnBracket(t)) throw _drawFail('failed-precondition', 'A chave já foi sorteada; os times não podem mais ser dissolvidos.', { tId, uid });
     if (t.pendingDraw) throw _drawFail('failed-precondition', 'Há um sorteio em revisão; conclua-o antes de dissolver os times.', { tId, uid });
+    _assertLegacyRosterMutationAllowed(t, 'dissolução legada de times incompletos');
     const outcome = drawWindow._dissolveIncompleteTeams(t);
     if (!outcome || !outcome.dissolved) return { ok:true, changed:false, dissolved:0, tournament:t };
     const antes = _antesDoMotor(t);
@@ -5220,6 +5224,7 @@ exports.resolvePhaseInactives = onCall(async (request) => {
     if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Só a organização decide os participantes da próxima fase.', { tId, uid });
     const nextIdx = (t.currentPhaseIndex || 0) + 1;
     if (t._inactiveResolvedPhase === nextIdx) return { ok:true, changed:false, tournament:t };
+    if (choice === 'remove') _assertLegacyRosterMutationAllowed(t, 'remoção legada entre fases');
     const antes = _antesDoMotor(t);
     if (choice === 'remove') {
       const fora = drawWindow._phaseNonEntrants(t);
