@@ -93,6 +93,25 @@ incompatibilidade exige novo censo.
 outro caso; trocar o estado de uma conta revoga sua autorização de Function;
 nenhum claim de papel existente é apagado.
 
+### Base de auditoria entregue — 10/10/2026
+
+O primeiro corte de I2 foi entregue sem mudar capacidades: `initializeUserProfile`
+cria `accountIdentity/{uid}` no estado `legacy`, com epoch zero, na mesma
+transação do perfil. Contas anteriores são interpretadas como `legacy` quando
+não possuem documento; não houve backfill, bloqueio, claim Firebase nem
+alteração de login.
+
+`getOwnIdentityStatus` é a única leitura de aplicativo dessa situação. As
+Rules negam leitura e escrita diretas de `accountIdentity`,
+`identityVerifications` e `identityClaims`, e a suíte do emulador prova que
+uma conta autenticada não consegue ler ou forjar estado, UID canônico ou
+verificação. O resumo retornado não contém contato, biometria ou evidência.
+
+O próximo corte de I2 continua sendo a transição auditada de estados e claims
+que preserva papéis, revoga tokens e consulta estado vivo nas operações
+sensíveis. Ele não pode ser ativado antes de existirem recuperação e coorte
+piloto aprovadas.
+
 ## Entrega I3 — passkey e biometria local
 
 **Objetivo:** entregar a entrada diária instantânea antes do corte global.

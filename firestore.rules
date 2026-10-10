@@ -203,6 +203,22 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Estado e evidências de identidade são privados e pertencem ao servidor.
+    // O cliente consulta apenas seu resumo pela Callable getOwnIdentityStatus;
+    // assim não pode promover a si mesmo, trocar UID canônico ou enumerar
+    // casos de revisão de outras pessoas.
+    match /accountIdentity/{userId} {
+      allow read, write: if false;
+    }
+
+    match /identityVerifications/{verificationId} {
+      allow read, write: if false;
+    }
+
+    match /identityClaims/{providerSubjectHash} {
+      allow read, write: if false;
+    }
+
     /* ⛔ A RARIDADE DO TROFÉU ESTAVA NO ESCURO. `_meta` não tinha regra nenhuma, e sem regra
      * é negado — MEDIDO: 403. A tela de troféus (`js/views/trophies-view.js:455`) calcula
      * "quantos por cento têm este troféu" a partir de `_meta/trophyStats`, e a leitura sempre

@@ -118,6 +118,7 @@ const TABELA = [
   { nome: "getPendingDrawReviewState", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },
   { nome: "getCommunicationStats", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
   { nome: "getCanonicalTournamentRoster", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
+  { nome: "getOwnIdentityStatus", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
   { nome: "getOwnEmailMergeCandidates", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
   { nome: "getTournamentDuplicateAccounts", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
   { nome: "getTournamentEnrollmentProfiles", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },

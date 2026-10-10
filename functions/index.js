@@ -56,6 +56,7 @@ const _casualScoringPreferences = require("./casual-scoring-preferences-core");
 const _blockedUsers = require("./blocked-users-core");
 const _phoneVerificationAttempt = require("./phone-verification-attempt-core");
 const _casualMatchHistory = require("./casual-match-history-core");
+const _identityState = require("./identity-state-core");
 
 // v1.8.38 — RARIDADE DO TOKEN, em UM lugar só (os dois caminhos de detecção usam este).
 // O subconjunto de 1 token só vira sinal quando o token existe SÓ nas duas contas
@@ -3155,6 +3156,7 @@ exports.initializeUserProfile = onCall(
     // UID é a identidade. Nome não concede poder algum, mas sua apresentação é
     // reservada uma única vez na mesma transação que cria o perfil.
     const profileRef = db.collection("users").doc(uid);
+    const identityRef = db.collection("accountIdentity").doc(uid);
     const allowed = ["authProvider", "email", "photoURL"];
     const profile = { createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
     allowed.forEach((key) => { if (typeof input[key] === "string" && input[key]) profile[key] = input[key]; });
@@ -3167,8 +3169,31 @@ exports.initializeUserProfile = onCall(
       const reservation = await _nameUnique.reserveDisplayName(tx, db, uid, name, '');
       if (!reservation.ok) throw new HttpsError("already-exists", "nome de exibição já está em uso");
       tx.set(profileRef, profile);
+      // Auditoria de identidade: não cria claim nem restringe conta. O estado
+      // privado nasce junto do perfil para não haver uma segunda autoridade de
+      // criação. Contas anteriores continuam `legacy` implicitamente até uma
+      // migração explícita, nunca por varredura silenciosa.
+      tx.create(identityRef, _identityState.initial(new Date().toISOString()));
       return { ok: true, created: true };
     });
+  }
+);
+
+// Leitura da própria situação de identidade. A coleção é inacessível pelas
+// Rules: esta porta devolve apenas o estado mínimo para um futuro fluxo de
+// migração/recuperação, sem dados de contato, biometria ou decisão de revisão.
+exports.getOwnIdentityStatus = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
+  async (request) => {
+    const uid = request.auth && request.auth.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Login obrigatório.");
+    const db = admin.firestore();
+    const [profile, identity] = await Promise.all([
+      db.collection("users").doc(uid).get(),
+      db.collection("accountIdentity").doc(uid).get()
+    ]);
+    if (!profile.exists) throw new HttpsError("failed-precondition", "Perfil inexistente.");
+    return _identityState.read(identity.exists ? identity.data() : null, uid);
   }
 );
 

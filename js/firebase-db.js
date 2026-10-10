@@ -2621,6 +2621,12 @@ window.FirestoreDB = {
     return this._callFn('initializeUserProfile', { profile: profileData || {} });
   },
 
+  // Estado privado, servido por Callable. Nunca ler `accountIdentity` direto:
+  // a coleção existe para a barreira de ciclo de vida, não como perfil público.
+  async getOwnIdentityStatus() {
+    return this._callFn('getOwnIdentityStatus', {});
+  },
+
   // Preferências de interface também são gravadas pelo servidor. O uid vem do
   // token da chamada; o navegador não escolhe o documento de destino.
   async saveInterfacePreferences(preferences) {
