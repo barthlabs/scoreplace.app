@@ -28,6 +28,11 @@ const mapLegacyCategory = B.categoryBridge([
 ok('migração traduz rótulo legado para id tipado uma única vez', JSON.stringify(C.categoryIds({ categories: ['Fem A', 'Masc B'] }, mapLegacyCategory)) === JSON.stringify(['fem-a', 'masc-b']));
 throws('migração recusa rótulo legado sem definição tipada', () => C.categoryIds({ category: 'Fem C' }, mapLegacyCategory));
 throws('migração recusa rótulos tipados ambíguos', () => B.categoryBridge([{ id: 'a', label: 'Fem A' }, { id: 'b', label: ' fem a ' }]));
+ok('porta nova aceita somente ids tipados explícitos', JSON.stringify(B.categoryIdsFromTypedIds([
+  { id: 'fem-a', label: 'Fem A' }, { id: 'masc-b', label: 'Masc B' },
+], ['masc-b', 'fem-a', 'masc-b'])) === JSON.stringify(['masc-b', 'fem-a']));
+throws('porta nova não adivinha rótulo legado como id', () => B.categoryIdsFromTypedIds([{ id: 'fem-a', label: 'Fem A' }], ['Fem A']));
+throws('porta nova exige categoria explícita', () => B.categoryIdsFromTypedIds([{ id: 'fem-a', label: 'Fem A' }], []));
 const slash = C.registrationsForEntry('torneio-1', { uid: 'ana', category: 'A/B' })[0];
 ok('id do documento não contém barra de rótulo legado', slash.registrationId.indexOf('/') === -1);
 

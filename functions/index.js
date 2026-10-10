@@ -4095,6 +4095,13 @@ function _writeCanonicalRosterUpdates(tx, tournamentRef, tournament, registratio
       updatedAt: _FV.serverTimestamp(),
     });
   });
+  // O índice de entrega é derivado exclusivamente da fotografia já validada.
+  // Nunca preservamos memberUids antigo, pois ele pode manter uma conta retirada
+  // ou esconder alguém recém-aceito/na espera.
+  tx.update(tournamentRef, {
+    memberUids: _canonicalRegistrationBoundary.memberUids(tournament, next.registrations),
+    updatedAt: _FV.serverTimestamp(),
+  });
   return next;
 }
 

@@ -31,4 +31,25 @@ function categoryBridge(definitions) {
   };
 }
 
-module.exports = { categoryBridge };
+/* A mesma configuração tem duas entradas deliberadamente distintas: dados
+ * legados carregam o rótulo que já estava gravado; as novas portas recebem o
+ * ID tipado. Não tentamos adivinhar entre os dois — um label pode coincidir
+ * com o ID de outra categoria e uma escolha ambígua não pode ocupar vaga. */
+function categoryIdsFromTypedIds(definitions, values) {
+  if (!Array.isArray(definitions) || !definitions.length) {
+    throw new Error('a inscrição canônica exige definições tipadas de categoria');
+  }
+  if (!Array.isArray(values) || !values.length) {
+    throw new Error('a inscrição canônica exige categoria explícita');
+  }
+  const known = new Set(definitions.map((definition) => text(definition && definition.id)).filter(Boolean));
+  const result = [];
+  values.forEach((value) => {
+    const id = text(value);
+    if (!id || !known.has(id)) throw new Error('categoryId desconhecido');
+    if (result.indexOf(id) === -1) result.push(id);
+  });
+  return result;
+}
+
+module.exports = { categoryBridge, categoryIdsFromTypedIds };

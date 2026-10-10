@@ -86,4 +86,23 @@ function applyCreates(tournament, registrations, creates) {
   return Object.assign({ tournament: nextTournament }, next);
 }
 
-module.exports = { migrationOf, verifiedRoster, applyUpdates, applyCreates };
+/* `memberUids` é o índice de entrega do torneio no cliente, não uma cópia de
+ * nomes. Ele deve acompanhar qualquer transição canônica, inclusive espera e
+ * retirada, ou o registro estará correto mas a pessoa não verá (ou continuará
+ * vendo) o torneio. Organização e co-hosts ativos continuam membros mesmo
+ * sem inscrição esportiva. */
+function memberUids(tournament, registrations) {
+  const checked = verifiedRoster(tournament, registrations);
+  const values = new Set();
+  const add = (value) => { const uid = text(value); if (uid) values.add(uid); };
+  add(tournament && tournament.creatorUid);
+  (Array.isArray(tournament && tournament.coHosts) ? tournament.coHosts : []).forEach((coHost) => {
+    if (coHost && (coHost.status === 'active' || coHost.status === 'accepted')) add(coHost.uid);
+  });
+  checked.registrations.forEach((registration) => {
+    if (registration.status !== 'withdrawn' && registration.participantKind === 'account') add(registration.participantUid);
+  });
+  return Array.from(values).sort();
+}
+
+module.exports = { migrationOf, verifiedRoster, applyUpdates, applyCreates, memberUids };

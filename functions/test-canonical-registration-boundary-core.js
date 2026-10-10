@@ -19,6 +19,10 @@ const created = account('u2');
 const afterCreate = boundary.applyCreates(tournament, [account('u1')], [created]);
 ok('criação avança o recibo junto com a fotografia',
   afterCreate.migration.expectedCount === 2 && afterCreate.tournament.canonicalRegistrationMigration.registrationCount === 2 && afterCreate.registrations.length === 2);
+ok('índice de membros usa uid e remove somente registros retirados', JSON.stringify(boundary.memberUids(
+  Object.assign({}, afterCreate.tournament, { creatorUid: 'org', coHosts: [{ uid: 'cohost', status: 'active' }], canonicalRegistrationMigration: { fingerprint: 'fp-1', registrationCount: 4 } }),
+  afterCreate.registrations.concat([Object.assign({}, account('u3'), { status: 'waitlisted' }), Object.assign({}, account('u4'), { status: 'withdrawn' })])
+)) === JSON.stringify(['cohost', 'org', 'u1', 'u2', 'u3']));
 bad('recusa criação que repete documento materializado', () => boundary.applyCreates(tournament, [account('u1')], [account('u1')]));
 bad('recusa contagem divergente', () => boundary.verifiedRoster(tournament, []));
 bad('recusa documento com identidade divergente', () => boundary.verifiedRoster(tournament, [Object.assign({}, account('u1'), { participantKey: 'uid:u2' })]));
