@@ -1,3 +1,4 @@
+// 2.3.324 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.3.323 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.3.322 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.3.321 — A agenda automática passa a resolver a fase corrente antes de qualquer
