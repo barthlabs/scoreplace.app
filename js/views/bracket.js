@@ -1762,6 +1762,12 @@ window._bracketCategoryTabsMount = function () {
   // Fase classificatória comum pode trocar de rodada. Já a agenda concentrada
   // por times (Neon) precisa deixar R1–R4 visíveis lado a lado: esconder cada
   // coluna atrás de uma terceira aba apaga justamente os jogos futuros.
+  // `format` no topo descreve a primeira fase em documentos históricos; uma
+  // eliminatória posterior não pode receber abas de rodada por herança.
+  var currentPhase = Array.isArray(currentTournament.phases)
+    ? currentTournament.phases[currentTournament.currentPhaseIndex || 0]
+    : null;
+  var hasCanonicalCurrentPhase = !!(currentPhase && currentPhase.kind);
   var formatText = String(currentTournament.format || currentTournament.classifyFormat || '').toLowerCase();
   var teamCfg = (window.ScoreplaceTeamCompetition && window.ScoreplaceTeamCompetition.configurationForTournament)
     ? window.ScoreplaceTeamCompetition.configurationForTournament(currentTournament)
@@ -1775,8 +1781,10 @@ window._bracketCategoryTabsMount = function () {
   /* [[regression_neon_all_planned_rounds_visible]] Não reintroduzir abas de
    * rodada para agenda concentrada: elas filtram os cards por `m.round` e
    * deixam R2–R4 invisíveis, embora o sorteio as tenha criado. */
-  var isRoundBased = !isTeamSchedule && !isOnlyLines && currentTournament.currentStage !== 'elimination'
-    && /grupo|liga|ranking|su[ií]ç/.test(formatText);
+  var isRoundBased = !isTeamSchedule && !isOnlyLines && (hasCanonicalCurrentPhase
+    ? (currentPhase.kind === 'classification' &&
+        (!currentPhase.classification || currentPhase.classification.structure !== 'groups'))
+    : (currentTournament.currentStage !== 'elimination' && /grupo|liga|ranking|su[ií]ç/.test(formatText)));
   root.setAttribute('data-bracket-line-tabs', isOnlyLines ? '1' : '0');
   root.setAttribute('data-bracket-round-tabs', isRoundBased ? '1' : '0');
   root.setAttribute('data-bracket-team-schedule', isTeamSchedule ? '1' : '0');

@@ -24,7 +24,8 @@ ok(tabs.includes("rail.hidden = true") && tabs.includes("rail.innerHTML = ''") &
 ok(tabs.includes('isOnlyLines') && tabs.includes("'linhas'"), 'Ouro/Prata ocupam diretamente a faixa de abas principal, sem aba genérica intermediária');
 ok(tabs.includes("translateY(1px)") && tabs.includes("translateY(0)") && tabs.includes("linear-gradient(135deg,#fbbf24,#f59e0b)"), 'a aba ativa vem para a frente e as demais permanecem alinhadas e clicáveis');
 ok(tabs.includes('isRoundBased') && tabs.includes('data-bracket-round-tab') && card.includes('data-bracket-tab-round='), 'fases classificatórias ganham uma terceira faixa de abas por rodada independente');
-ok(tabs.includes('currentTournament.currentStage !== \'elimination\'') && tabs.includes('grupo|liga|ranking'), 'a faixa de rodadas não aparece na chave eliminatória encadeada');
+ok(tabs.includes("currentPhase.kind === 'classification'") && tabs.includes("currentPhase.classification.structure !== 'groups'"), 'a faixa de rodadas segue a fase canônica atual, não o rótulo da primeira fase');
+ok(tabs.includes("currentTournament.currentStage !== 'elimination'") && tabs.includes('grupo|liga|ranking'), 'documento ainda não projetado mantém ponte de leitura para a faixa de rodadas');
 
 console.log('\n' + (fail ? '❌' : '✅') + ' chaves-abas-categoria: ' + pass + ' asserts ok, ' + fail + ' falharam');
 process.exitCode = fail ? 1 : 0;
