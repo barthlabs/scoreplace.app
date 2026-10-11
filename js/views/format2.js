@@ -140,9 +140,14 @@
 
       var normalized = Object.assign({}, (value && typeof value === 'object') ? value : {});
       normalized.strategy = isFixedFreeDraw ? 'free_draw' : 'ranking_clusters';
-      // A política é para entradas fixas: um par já formado nunca pode cair no
-      // gerador de parceiros rotativos apenas porque o documento é antigo.
-      normalized.entryMode = 'fixed';
+      // Uma política já canônica conserva se a inscrição era de duplas fixas
+      // ou individual com parceiros rotativos. Forçar `fixed` aqui fazia uma
+      // Liga histórica mudar de `rotate` na segunda leitura do projetor: além
+      // de quebrar idempotência, a alteração mudava o sorteio seguinte sem
+      // qualquer ação da organização. Só o dialeto incompleto e o antigo
+      // `free_draw` fixo recebem a escolha segura de entradas fixas.
+      normalized.entryMode = isFixedFreeDraw ? 'fixed' :
+        (isRanking && (value.entryMode === 'fixed' || value.entryMode === 'rotate') ? value.entryMode : 'fixed');
       if (normalized.rematchPolicy !== 'exhaust_cluster_before_repeat') {
         normalized.rematchPolicy = 'exhaust_cluster_before_repeat';
       }

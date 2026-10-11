@@ -260,8 +260,9 @@ A forma alvo é:
     antiRepeat: { partners: true, opponents: true, sitOuts: true }
   },
   classification: {
-    structure: 'round_robin' | 'groups' | 'swiss',
-    groupSchedule: { mode: 'round_robin' | 'configured_rounds', rounds: number }
+    structure: 'round_robin' | 'groups',
+    groupSchedule: { mode: 'round_robin' | 'configured_rounds', rounds: number },
+    pairing: { strategy: 'ranking_clusters' | 'free_draw', rematchPolicy: 'exhaust_cluster_before_repeat' }
   },
   elimination: { seeding: 'performance' | 'balance', bracketPolicy: ... }
 }
@@ -423,7 +424,8 @@ autoridade de elegibilidade.
 
 ### 5. Formatos classificatórios e entradas tardias
 
-- Levar pontos corridos, grupos, suíço e Rei/Rainha ao planejador comum,
+- Levar pontos corridos, grupos, pareamento por clusters (inclusive a
+  configuração historicamente chamada de “suíço”) e Rei/Rainha ao planejador comum,
   incluindo o mapeamento explícito de colocação de grupos para confrontos da
   eliminatória.
 - Implementar clusters, anti-repetição e justiça de sobras como restrições

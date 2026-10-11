@@ -21,6 +21,9 @@ ok('campo transitório swissRounds sempre é limpo no save atual',
 ok('pareamento e rodadas ficam no contrato de fase, não num modo paralelo',
   format2.includes("classification: { structure: 'round_robin', pairing: _roundPairing }") &&
   format2.includes('rounds: cfg.rodadas.n'));
+ok('o contrato de configuração não admite suíço como estrutura de fase',
+  !/structure\s*:\s*['\"]swiss['\"]/.test(format2) &&
+  format2.includes("strategy: 'ranking_clusters'"));
 
 console.log((fail ? '❌' : '✅') + ' format2-novo-sem-suico: ' + pass + ' ok, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);
