@@ -36,8 +36,20 @@ ok(sandbox.window._faseCorrenteEhClassificatoriaPorRodadas(inClassification) ===
   'classificatória canônica por clusters mantém a ação de rodada');
 ok(sandbox.window._faseCorrenteEhClassificatoriaPorRodadas(inElimination) === false,
   'eliminatória atual vence o marcador suíço legado do topo');
+const hybridLiga = {
+  format: 'Liga', ligaOpenEnrollment: true, currentPhaseIndex: 0,
+  phases: [{ kind: 'classification', classification: { structure: 'round_robin' } }, { kind: 'elimination' }]
+};
+ok(sandbox.window._ligaOpenEnrollmentNaFaseAtual(hybridLiga) === true,
+  'inscrição contínua de Liga vale enquanto a classificatória estiver ativa');
+ok(sandbox.window._ligaOpenEnrollmentNaFaseAtual(Object.assign({}, hybridLiga, { currentPhaseIndex: 1 })) === false,
+  'rótulo Liga no topo não mantém inscrição contínua na eliminatória');
+ok(sandbox.window._ligaOpenEnrollmentNaFaseAtual({ format: 'Liga', ligaOpenEnrollment: true }) === true,
+  'documento legado sem fases preserva inscrição contínua de Liga');
 ok(/const isClassificationRounds = typeof window\._faseCorrenteEhClassificatoriaPorRodadas/.test(source),
   'ferramentas usam a porta canônica de fase atual');
+ok(/_ligaOpenEnrollmentNaFaseAtual/.test(source),
+  'ferramentas consultam a inscrição contínua da fase atual');
 ok(/const isAutoDrawFormat = isClassificationRounds \|\| isLigaAutoDraw;/.test(source),
   'auto-sorteio operacional deriva da fase atual, não de um modo suíço paralelo');
 ok(!/const isSuicoFormat = t\.format === 'Suíço Clássico'/.test(source),

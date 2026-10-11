@@ -27,6 +27,27 @@ window._isLigaFormat = function(t) {
     return t && (t.format === 'Liga' || t.format === 'Ranking');
 };
 
+/* Inscrição contínua é uma política da fase que está em curso, não uma
+ * propriedade imutável do torneio. A exceção histórica de Liga/Ranking só
+ * sobrevive enquanto a classificatória correspondente estiver ativa: ao
+ * avançar para uma eliminatória, o topo pode continuar com format:'Liga', mas
+ * não pode esconder os controles operacionais dessa nova fase. Documentos sem
+ * phases[] preservam exatamente a leitura antiga. */
+window._ligaOpenEnrollmentNaFaseAtual = function(t) {
+    if (!t || t.ligaOpenEnrollment === false) return false;
+    if (Array.isArray(t.phases)) {
+        if (!t.phases.length) return false;
+        var index = Number(t.currentPhaseIndex || 0);
+        if (!isFinite(index) || index < 0 || index >= t.phases.length || Math.floor(index) !== index) return false;
+        var phase = t.phases[index];
+        // Uma fase ainda sem kind é uma ponte de leitura: até a migração
+        // materializá-la, conserva a semântica legada em vez de inventar uma.
+        if (!phase || !phase.kind) return !!window._isLigaFormat(t);
+        return phase.kind === 'classification' && !!window._isLigaFormat(t);
+    }
+    return !!window._isLigaFormat(t);
+};
+
 /* ⭐ "A FASE CORRENTE se comporta como Liga?" — OUTRA pergunta, e é de propósito que ela
  * tenha outro nome. Fase de classificação que não é por grupos roda como liga (pontos
  * corridos); por grupos, não.

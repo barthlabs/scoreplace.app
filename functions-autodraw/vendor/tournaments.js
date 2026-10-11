@@ -3260,7 +3260,12 @@ function renderTournaments(container, tournamentId = null) {
         const isCurrentClassificationPhase = _currentPhaseForTools && _currentPhaseForTools.kind
           ? _currentPhaseForTools.kind === 'classification'
           : isLigaFormat;
-        const isLigaOpenEnroll = isLigaFormat && t.ligaOpenEnrollment !== false;
+        // A inscrição contínua legada só vale durante a classificatória atual.
+        // Em um híbrido, `format:'Liga'` continua no documento após avançar para
+        // a eliminatória, mas não pode esconder controles daquela fase.
+        const isLigaOpenEnroll = typeof window._ligaOpenEnrollmentNaFaseAtual === 'function'
+          ? window._ligaOpenEnrollmentNaFaseAtual(t)
+          : (isCurrentClassificationPhase && isLigaFormat && t.ligaOpenEnrollment !== false);
         // v2.1.0: mostra o botão Encerrar/Reabrir também APÓS o sorteio quando as
         // inscrições tardias estão ativas (lateEnrollManaged) — é o único jeito de
         // fechar as inscrições nesse modo (o sorteio não fecha).
