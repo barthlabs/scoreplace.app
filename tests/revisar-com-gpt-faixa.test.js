@@ -205,6 +205,9 @@ const LOTES = fs.readFileSync(path.join(ROOT, 'scripts', 'revisar-diff-em-lotes.
 ok(LOTES.includes('BASE="$(git rev-parse --verify "${BASE_REF}^{commit}")"') &&
    LOTES.includes('SP_REVIEW_BASE="$BASE"'),
   'orquestrador transmite aos lotes o SHA da base, nunca uma ref móvel');
+ok(NUCLEO.includes('CHECKLIST FINAL DE RESPOSTA (OBRIGATÓRIO)') &&
+   NUCLEO.includes('Não entregue\nresumo, tabela ou observação antes delas'),
+  'o revisor recebe o contrato de veredito também no fim do prompt, após o diff');
 fs.rmSync(lab, { recursive: true, force: true });
 console.log(fail ? '❌ revisar (faixa/interruptor/auto): ' + fail + ' falha(s), ' + pass + ' ok' : '✅ revisar (faixa/interruptor/auto): ' + pass + ' ok');
 process.exit(fail ? 1 : 0);

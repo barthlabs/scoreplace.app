@@ -465,6 +465,15 @@ EOF
       echo "--- arquivo NOVO não rastreado: $f"; sed -n '1,400p' "$f"
     done
   fi
+  cat <<'EOF'
+
+=== CHECKLIST FINAL DE RESPOSTA (OBRIGATÓRIO) ===
+Antes de encerrar, comece a resposta exatamente por estas três linhas. Não entregue
+resumo, tabela ou observação antes delas:
+VEREDITO: APROVADO | RESSALVAS | BLOQUEIO
+EXECUTOR: modelo=<modelo> esforço=<esforço> — <motivo curto>
+ESCALAR: SIM | NAO
+EOF
 } > "$PROMPT"
 
 CARIMBO="$(date +%Y%m%d-%H%M%S)"
