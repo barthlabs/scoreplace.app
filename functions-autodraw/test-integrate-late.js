@@ -110,7 +110,9 @@ const R1 = (t) => (t.matches || []).filter((m) => m && m.round === 1);
      /autoDrawReconcile[\s\S]{0,4000}_formarGruposDaEspera\(doc\)/.test(src));
   const corpo = src.slice(src.indexOf('async function _formarGruposDaEspera'),
                           src.indexOf('exports.autoDrawReconcile'));
-  ok('só toca Rei/Rainha (o formato que a fila serve)', corpo.includes("ligaRoundFormat !== 'rei_rainha'"));
+  ok('só toca Rei/Rainha rotativo da fase atual (o formato que a fila serve)',
+     corpo.includes('drawWindow._faseCorrenteUsaEntradasRotativas(t0)') &&
+     corpo.includes('drawWindow._motorDaFaseUsaReiRainha(t0)'));
   ok('nem carrega perfil sem 4 na fila (custo zero no caso comum)', corpo.includes('_fila < 4'));
   ok('resolve nome e gênero por uid ANTES do motor', corpo.includes('_preloadDrawNames(') && corpo.includes('_enrichParticipantsFromProfiles('));
   ok('monta torneio dividido dentro da transação', corpo.includes('await _leTorneio(tx, doc.ref, doc.id)'));
