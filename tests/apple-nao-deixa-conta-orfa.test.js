@@ -45,6 +45,7 @@ const CODIGO = SRC.slice(h0, h1) + '\n' + SRC.slice(i0, SRC.indexOf('\n}\n', i0)
 function montar(op) {
   op = op || {};
   const log = [], docs = Object.assign({}, op.docs || {});
+  let signedOut = false;
   const ref = (c, id) => ({
     get: async () => {
       if (op.getPendura) return new Promise(() => {});
@@ -104,7 +105,10 @@ function montar(op) {
     sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
     initRouter() {}, handleLogout() {}, _t: (k) => k, showNotification() {},
     firebase: {
-      auth: () => ({ currentUser: op.fbUser || null }),
+      auth: () => ({
+        currentUser: op.fbUser || null,
+        signOut: async () => { signedOut = true; },
+      }),
       functions: () => ({ httpsCallable: () => async () => {
         if (op.cfPendura) return new Promise(() => {});
         if (op.cfRejeita) throw new Error('internal');
@@ -114,7 +118,7 @@ function montar(op) {
     },
   };
   sb.globalThis = sb;
-  return { sb, win, log, docs };
+  return { sb, win, log, docs, get signedOut() { return signedOut; } };
 }
 
 const AUTH_APPLE = (nome, email) => ({
@@ -132,7 +136,7 @@ async function entrar(op, user) {
     S.sb.__entrar(user).then(() => { travou = false; }, () => { travou = false; }),
     new Promise((r) => setTimeout(r, 1500)),
   ]);
-  return { perfil: S.docs['users/' + user.uid] || null, travou, log: S.log };
+  return { perfil: S.docs['users/' + user.uid] || null, travou, log: S.log, signedOut: S.signedOut };
 }
 
 (async () => {
@@ -144,8 +148,6 @@ async function entrar(op, user) {
   // e a ÚNICA escrita que criava o doc era fire-and-forget com .catch() mudo.
   const falhas = [
     ['tudo saudável', {}],
-    ['resolveLoginRedirect pendurada', { cfPendura: true }],
-    ['resolveLoginRedirect rejeita', { cfRejeita: true }],
     ['Firestore .get() pendurado (IndexedDB apagado)', { getPendura: true }],
     ['Firestore .get() rejeita', { getRejeita: true }],
     ['loadUserProfile pendurado', { loadPendura: true }],
@@ -154,6 +156,19 @@ async function entrar(op, user) {
     const r = await entrar(Object.assign({ fbUser: AUTH_APPLE(null, RELAY) }, op), userRelay);
     ok(!!r.perfil, 'conta Apple NOVA ganha perfil mesmo com: ' + nome);
     ok(!r.travou, '  → e o login TERMINA (nada de spinner eterno): ' + nome);
+  }
+
+  // Se a busca do redirecionamento não respondeu, não sabemos se este UID
+  // recém-autenticado é uma conta nova ou o alvo de uma mesclagem. Prosseguir
+  // criaria perfil parcial e esconderia o redirecionamento numa tentativa futura.
+  for (const [nome, op] of [
+    ['resolveLoginRedirect pendurada', { cfPendura: true }],
+    ['resolveLoginRedirect rejeita', { cfRejeita: true }],
+  ]) {
+    const r = await entrar(Object.assign({ fbUser: AUTH_APPLE(null, RELAY) }, op), userRelay);
+    ok(!r.perfil, 'sem perfil parcial quando: ' + nome);
+    ok(r.signedOut, '  → sessão recém-criada é encerrada: ' + nome);
+    ok(!r.travou, '  → a tela não fica em carregamento: ' + nome);
   }
 
   // ── 2. O caso que o cliente NÃO consegue resolver — mas tem que RELATAR ─────
@@ -215,6 +230,8 @@ async function entrar(op, user) {
   ok(!/saveUserProfile\(uid, basicData\)\.catch/.test(corpo),
      'a gravação do perfil não é mais fire-and-forget com .catch() mudo');
   ok(/_ensureProfileDoc\(/.test(corpo), 'ela passa pelo _ensureProfileDoc (espera + repete + Sentry)');
+  ok(/_abortIncompleteProfileLogin\(newUid/.test(corpo),
+     'perfil novo sem gravação encerra a sessão em vez de entrar parcialmente');
 
   console.log((fail === 0 ? '✅' : '❌') + ' apple-nao-deixa-conta-orfa: ' + pass + ' asserções, ' + fail + ' falha(s)');
   process.exit(fail === 0 ? 0 : 1);

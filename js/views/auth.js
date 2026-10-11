@@ -1806,6 +1806,38 @@ window._ensureProfileDoc = async function (uid, seed) {
   return false;
 };
 
+// Uma sessão não pode prosseguir se a conta acabou de ser autenticada mas o
+// perfil canônico não nasceu. Sem `users/{uid}`, ela não é pesquisável, não
+// pode se inscrever com segurança e abre a porta para uma segunda conta na
+// próxima tentativa. Isso é diferente de falhar ao carregar um perfil já
+// existente: aqui sabemos que o documento não existia no início da entrada.
+window._abortIncompleteProfileLogin = async function (uid, reason) {
+  window._simulateLoginInProgress = false;
+  window._simulateLoginInProgressAt = 0;
+  window._simulateLoginInProgressUid = '';
+  if (window.AppStore && window.AppStore.currentUser && String(window.AppStore.currentUser.uid || '') === String(uid || '')) {
+    window.AppStore.currentUser = null;
+  }
+  try {
+    var cached = JSON.parse(localStorage.getItem('scoreplace_authCache') || 'null');
+    if (cached && String(cached.uid || '') === String(uid || '')) localStorage.removeItem('scoreplace_authCache');
+  } catch (_cacheErr) {}
+  if (typeof window._captureException === 'function') {
+    window._captureException(reason || new Error('Perfil canônico não foi criado'), {
+      area: 'incompleteProfileLogin', uid: uid || ''
+    });
+  }
+  try {
+    if (firebase && firebase.auth) await firebase.auth().signOut();
+  } catch (_signOutErr) {
+    window._warn('[perfil] não foi possível encerrar sessão incompleta:', _signOutErr);
+  }
+  if (typeof showNotification === 'function') {
+    showNotification('Não foi possível concluir a entrada', 'Seu perfil não foi criado. Tente entrar novamente em instantes.', 'error');
+  }
+  return false;
+};
+
 // ─── Account linking helper ─────────────────────────────────────────────────
 // When user tries to sign in with a provider but already has an account with
 // the same email via a different provider, Firebase throws
@@ -4055,13 +4087,16 @@ async function simulateLoginSuccess(user) {
         // de acontecer no escuro.
         if (_lrRes.ok) {
           _perfilSemeado = await window._ensureProfileDoc(newUid, window._seedProfileFromAuth(user));
-          if (!_perfilSemeado) window._warn('[perfil] conta nova ficou SEM doc — a varredura do servidor cobre');
-        } else {
-          window._warn('[perfil] resgate sem resposta — doc adiado de propósito (varredura do servidor cobre)');
-          if (typeof window._captureException === 'function') {
-            window._captureException(new Error('resolveLoginRedirect sem resposta em conta nova'),
-              { area: 'ensureProfileDoc', uid: newUid, provider: window._loginProviderId(user) });
+          if (!_perfilSemeado) {
+            window._warn('[perfil] criação do perfil recusada; sessão nova será encerrada');
+            await window._abortIncompleteProfileLogin(newUid, new Error('initializeUserProfile não criou o perfil'));
+            return;
           }
+        } else {
+          window._warn('[perfil] resgate sem resposta; sessão nova será encerrada sem criar perfil parcial');
+          await window._abortIncompleteProfileLogin(newUid,
+            new Error('resolveLoginRedirect sem resposta em conta nova'));
+          return;
         }
       }
     }
