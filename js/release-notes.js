@@ -1,3 +1,4 @@
+// 2.3.336 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.3.335 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.3.334 — O motor de rodadas agora escolhe parceiros rotativos e Rei/Rainha pela
 // fase canônica atual. Uma eliminatória não herda o sorteio da classificatória;
