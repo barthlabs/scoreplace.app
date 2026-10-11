@@ -1733,6 +1733,8 @@ const SUITES = [
   'tests/migrar-fases-legadas-censo.test.js',
   'tests/registro-canonico-dry-run-cf.test.js',
   'tests/auditoria-inscricoes-canonicas.test.js',
+  'functions/test-registration-batch-plan-core.js',
+  'tests/planejamento-materializacao-inscricoes.test.js',
   'functions/test-profile-preferences-core.js',
   'functions/test-profile-update-core.js',
   'functions/test-profile-name-claim-core.js',
