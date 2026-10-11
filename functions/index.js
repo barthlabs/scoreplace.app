@@ -5694,8 +5694,10 @@ exports.formPair = onCall(
     const tournamentId = String((request.data && request.data.tournamentId) || "");
     const d = request.data || {};
     const opts = { uid1: d.uid1 || "", manualId1: d.manualId1 || "", name1: d.name1 || "", uid2: d.uid2 || "", manualId2: d.manualId2 || "", name2: d.name2 || "", categoryId: d.categoryId || "", changeRule: !!d.changeRule };
-    if (!tournamentId || (!opts.uid1 && !opts.manualId1 && !opts.name1) || (!opts.uid2 && !opts.manualId2 && !opts.name2)) {
-      throw new HttpsError("invalid-argument", "tournamentId e os dois membros são obrigatórios");
+    // Nome serve para exibir a dupla, nunca para selecionar quem será alterado.
+    // Esta fronteira protege inclusive clientes antigos que ainda tenham JS em cache.
+    if (!tournamentId || (!opts.uid1 && !opts.manualId1) || (!opts.uid2 && !opts.manualId2)) {
+      throw new HttpsError("invalid-argument", "tournamentId e os dois IDs de participante são obrigatórios; nome não é identidade");
     }
 
     const db = admin.firestore();
@@ -5771,8 +5773,10 @@ exports.splitPair = onCall(
     const tournamentId = String((request.data && request.data.tournamentId) || "");
     const d = request.data || {};
     const opts = { id1: d.id1, id2: d.id2, uid1: d.uid1 || "", manualId1: d.manualId1 || "", uid2: d.uid2 || "", manualId2: d.manualId2 || "", categoryId: d.categoryId || "" };
-    if (!tournamentId || ((opts.id1 == null || String(opts.id1) === "") && !opts.uid1 && !opts.manualId1)) {
-      throw new HttpsError("invalid-argument", "tournamentId e a primeira identidade são obrigatórios");
+    // Não aceitar id1/id2 textual: uma dupla só pode ser desfeita pelos dois
+    // UID/manualParticipantId que a compõem.
+    if (!tournamentId || (!opts.uid1 && !opts.manualId1) || (!opts.uid2 && !opts.manualId2)) {
+      throw new HttpsError("invalid-argument", "tournamentId e os dois IDs de participante são obrigatórios; nome não é identidade");
     }
 
     const db = admin.firestore();

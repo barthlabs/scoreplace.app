@@ -15,10 +15,10 @@ ok(/_isTournamentAdmin/.test(server) && /runTransaction/.test(server) && /notifi
 const s = ui.indexOf('window.splitParticipantFunction');
 const e = ui.indexOf('// Self-healing:', s);
 const split = ui.slice(s, e);
-ok(/_callFn\('splitTournamentParticipant'/.test(split) && !/commitTournamentTx/.test(split), 'desmembramento de dupla só despacha a CF');
+ok(!/_callFn\('splitTournamentParticipant'/.test(split) && /Atualize a lista/.test(split), 'atalho legado de desmembrar por nome é bloqueado no cliente');
 const sx = fn.indexOf('exports.splitTournamentParticipant');
 const sy = fn.indexOf('// ─── Reset para inscrições', sx);
-ok(/_isTournamentAdmin/.test(fn.slice(sx, sy)) && /_gravaTorneio/.test(fn.slice(sx, sy)), 'CF desmembra a dupla no documento fresco');
+ok(/use splitPair com os dois IDs/.test(fn.slice(sx, sy)), 'CF recusa o desmembramento legado que recebia somente nome');
 const p = ui.indexOf('window._autoPresenceFromVenue');
 const pe = ui.indexOf('// Mede a altura', p);
 const presence = ui.slice(p, pe);

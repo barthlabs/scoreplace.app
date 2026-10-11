@@ -3404,8 +3404,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (!row || row._duplaIdx == null) return;
     var pair = (_liveState.rows || []).filter(function (r) { return r && r._duplaIdx === row._duplaIdx; });
     if (pair.length !== 2 || !(window.FirestoreDB && typeof window.FirestoreDB.splitPair === 'function')) return;
-    var id1 = pair[0].uid || pair[0].manualId || pair[0].name || '';
-    var id2 = pair[1].uid || pair[1].manualId || pair[1].name || '';
+    var id1 = pair[0].uid || pair[0].manualId || '';
+    var id2 = pair[1].uid || pair[1].manualId || '';
     if (!id1 || !id2) return;
     if (btn && typeof window._spinButton === 'function') window._spinButton(btn, '');
     var canonical = !!(_liveState.t.canonicalRegistrationMigration && _liveState.t.canonicalRegistrationMigration.fingerprint);

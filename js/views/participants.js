@@ -1823,6 +1823,8 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
   }
 
   var dragProps = '', _vipBtn = '', _delBtn = '', _splitBtn = '', undoMergeBtn = '';
+  var _splitP1Id = (p && typeof p === 'object' && (p.p1Uid || p.p1ManualId)) || '';
+  var _splitP2Id = (p && typeof p === 'object' && (p.p2Uid || p.p2ManualId)) || '';
   if (isOrg && p && typeof p === 'object' && p._mergedFrom) {
     undoMergeBtn = '<button class="btn btn-micro" title="Desfazer mesclagem" style="background: rgba(251,191,36,0.12); color: var(--sp-c-fbbf24,#fbbf24); border: 1px dashed rgba(251,191,36,0.5);" onmouseover="this.style.transform=\'scale(1.1)\'" onmouseout="this.style.transform=\'none\'" onclick="event.stopPropagation(); window._undoMergeParticipant(\'' + t.id + '\', \'' + safeP + '\');">↩️</button>';
   }
@@ -1832,20 +1834,22 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
       _vipBtn = _vipIdentities.length ? '<button class="btn btn-micro" title="' + (isVip ? _T('tourn.removeVip') : _T('tourn.markVip')) + '" style="min-height:0;height:24px;line-height:1;padding:0 9px;font-size:0.66rem;font-weight:800;flex-shrink:0;background: ' + (isVip ? 'linear-gradient(135deg,rgba(234,179,8,0.35),rgba(251,191,36,0.25))' : 'rgba(234,179,8,0.08)') + '; color: ' + window._spCor((isVip ? '#fbbf24' : '#a3842a'), 'color') + '; border: 1px ' + (isVip ? 'solid' : 'dashed') + ' ' + (isVip ? 'rgba(251,191,36,0.6)' : 'rgba(234,179,8,0.3)') + ';" onclick="event.stopPropagation(); window._toggleVip(\'' + t.id + '\', ' + _vipPayload + ');">💎 VIP</button>' : '';
       // Este ✕ é da ENTRADA inteira (dupla sai inteira) → NÃO manda uid de membro: mandar
       // p.uid (que numa dupla é o uid do p1) tiraria só uma pessoa e deixaria a outra.
-      _delBtn = '<button type="button" class="cancel-x-btn" title="' + _T('btn.remove') + '" style="--cx-size:22px;" onclick="event.stopPropagation(); window.removeParticipantFunction(\'' + t.id + '\', \'' + safeP + '\', \'' + _removeIdentity + '\');">✕</button>';
-      if (window._entryTeamMembers(p)) {
-        _splitBtn = '<button class="btn btn-micro" title="' + _T('participants.splitTeam') + '" style="min-height:0;height:24px;line-height:1;padding:0 9px;font-size:0.7rem;font-weight:800;flex-shrink:0;background: rgba(14,165,233,0.1); color: var(--sp-c-38bdf8,#38bdf8); border: 1px dashed #0ea5e9;" onclick="event.stopPropagation(); window.splitParticipantFunction(\'' + t.id + '\', \'' + safeP + '\');">✂️</button>';
+      _delBtn = _removeIdentity
+        ? '<button type="button" class="cancel-x-btn" title="' + _T('btn.remove') + '" style="--cx-size:22px;" onclick="event.stopPropagation(); window.removeParticipantFunction(\'' + t.id + '\', \'' + safeP + '\', \'' + _removeIdentity + '\');">✕</button>'
+        : '';
+      if (window._entryTeamMembers(p) && _splitP1Id && _splitP2Id) {
+        _splitBtn = '<button class="btn btn-micro" title="' + _T('participants.splitTeam') + '" style="min-height:0;height:24px;line-height:1;padding:0 9px;font-size:0.7rem;font-weight:800;flex-shrink:0;background: rgba(14,165,233,0.1); color: var(--sp-c-38bdf8,#38bdf8); border: 1px dashed #0ea5e9;" onclick="event.stopPropagation(); window._splitDupla(\'' + t.id + '\',\'' + window._safeHtml(_splitP1Id) + '\',\'' + window._safeHtml(_splitP2Id) + '\',this);">✂️</button>';
       }
     }
   }
   // v1.3.36: pareamento tardio → arraste pointer-drag (data-lj-*), NÃO HTML5 DnD (trava no
   // touch). VIP/✂️/🗑️ já saem sozinhos (drawDone=true). Mantém o handler exato do painel.
   if (ctx.lateJoin) {
-    // REGRESSÃO: o arraste da vaga manual enviava pName; se o nome mudasse entre a renderização
-    // e a transação, formLatePair não a encontrava. A vaga moderna tem manualParticipantId,
-    // que é a identidade estável. Nome fica só para cards legados sem ID.
-    var _lateDragKey = (p && typeof p === 'object' && (p.uid || p.manualParticipantId)) || pName;
-    dragProps = ctx.lateJoin.canPair
+    // Pareamento tardio é mutação: só começa quando há chave estrutural. Um
+    // rótulo legado pode continuar no card, mas não seleciona pessoa alguma —
+    // especialmente quando há homônimos aguardando a materialização canônica.
+    var _lateDragKey = (p && typeof p === 'object' && (p.uid || p.manualParticipantId)) || '';
+    dragProps = ctx.lateJoin.canPair && _lateDragKey
       ? ('data-lj-card="1" data-lj-key="' + window._safeHtml(String(_lateDragKey)) + '" data-lj-tid="' + window._safeHtml(t.id) + '" data-lj-name="' + window._safeHtml(pName) + '"')
       : '';
   }

@@ -101,11 +101,12 @@ console.log('\n── excluir inscrito num roster SÓ-UID (o clique real do ✕)
   ok(t.participants.length === 3, 'dupla :: 3 entradas (parceiro + solo + fictício) — got ' + t.participants.length);
 }
 
-// 3) FICTÍCIO (sem conta) — identidade continua sendo o nome.
+// 3) Registro legado sem UID/manualParticipantId fica visível, mas NÃO pode ser
+// removido pelo nome: homônimos exigem materialização antes de qualquer mutação.
 {
   const t = mkT(); W.AppStore = { tournaments: [t], currentUser: { uid: 'uOrg' }, isCreator: () => true, sync: () => {}, commitTournamentTx: (id, fn) => { saved++; fn(t); return Promise.resolve(true); } };
   W.removeParticipantFunction(t.id, 'Convidado sem conta');
-  ok(t.participants.indexOf('Convidado sem conta') === -1, 'fictício :: saiu do roster');
+  ok(t.participants.indexOf('Convidado sem conta') !== -1, 'legado sem ID :: não é removido por nome');
 }
 
 // Vaga manual moderna também tem identidade estável. Mesmo em dado legado com dois

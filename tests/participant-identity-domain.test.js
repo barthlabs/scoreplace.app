@@ -114,9 +114,33 @@ ok(/window\._participantEntryKey\(p\)/.test(tournamentsView) &&
   '㉓ card, arraste e desfazer de dupla preservam UID e manualParticipantId antes de nome legado');
 const identityAdapter = fs.readFileSync(path.join(ROOT, 'js/views/identity-core.js'), 'utf8');
 const drawView = fs.readFileSync(path.join(ROOT, 'js/views/tournaments-draw.js'), 'utf8');
+const participantsView = fs.readFileSync(path.join(ROOT, 'js/views/participants.js'), 'utf8');
 ok(!/legacy-name:/.test(source) && !/legacy-name:/.test(identityAdapter) &&
   !/legacy-name:/.test(tournamentsView) && !/legacy-name:/.test(drawView),
   '㉓a nenhum caminho ativo transforma nome legado em identidade');
+ok(/ctx\.lateJoin\.canPair && _lateDragKey/.test(participantsView) &&
+  !/manualParticipantId\)\) \|\| pName/.test(participantsView),
+  '㉓b pareamento tardio não inicia mutação com nome legado sem ID');
+ok(/var _dragIdentity = uid \|\| \(typeof p === 'object' && p\.manualParticipantId\) \|\| ''/.test(tournamentsView) &&
+  /draggable && _canPairDrag && _dragIdentity/.test(tournamentsView) &&
+  !/var _dragIdentity =[^\n]*\|\| nm/.test(tournamentsView),
+  '㉓c card geral só inicia pareamento com UID ou manualParticipantId');
+ok(/var _m1Id = \(p && \(p\.p1Uid \|\| p\.p1ManualId\)\) \|\| ''/.test(tournamentsView) &&
+  /var _m2Id = \(p && \(p\.p2Uid \|\| p\.p2ManualId\)\) \|\| ''/.test(tournamentsView) &&
+  /!draggable && isOrg && _m1Id && _m2Id/.test(tournamentsView),
+  '㉓d desfazer dupla exige a identidade estrutural dos dois membros');
+const drawPairView = fs.readFileSync(path.join(ROOT, 'js/views/tournaments-draw.js'), 'utf8');
+const enrollmentReportView = fs.readFileSync(path.join(ROOT, 'js/views/tournaments-enrollment-report.js'), 'utf8');
+ok(/sourceManualParticipantId: opts\.sourceManualParticipantId/.test(drawPairView) &&
+  /var findEntry = function\(uid, manualParticipantId\)/.test(drawPairView) &&
+  !/return arr\.find\(function\(p\) \{ var n = typeof p === 'string'/.test(drawPairView),
+  '㉓e arraste de dupla resolve UID ou ID manual, nunca o nome exibido');
+ok(/var id1 = pair\[0\]\.uid \|\| pair\[0\]\.manualId \|\| ''/.test(enrollmentReportView) &&
+  /var id2 = pair\[1\]\.uid \|\| pair\[1\]\.manualId \|\| ''/.test(enrollmentReportView),
+  '㉓f análise também não desfaz dupla por nome legado');
+const mainFunctions = fs.readFileSync(path.join(ROOT, 'functions/index.js'), 'utf8');
+ok(/os dois IDs de participante são obrigatórios; nome não é identidade/.test(mainFunctions),
+  '㉓g Functions recusam formar ou desfazer dupla sem identidade estrutural');
 
 const participantCards = fs.readFileSync(path.join(ROOT, 'js/views/participants.js'), 'utf8');
 ok(/!p\.p1ManualId && !p\.p2ManualId/.test(participantCards) &&

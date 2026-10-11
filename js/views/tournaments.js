@@ -135,21 +135,25 @@ window._duplaCard = function (t, p, draggable, ctx) {
       ? 'background:linear-gradient(135deg,rgba(67,56,202,0.6),rgba(99,102,241,0.6));border:1px solid rgba(99,102,241,0.5);'
       : 'background:linear-gradient(135deg,rgba(15,118,110,0.6),rgba(20,184,166,0.6));border:1px solid rgba(20,184,166,0.5);';
     var _canPairDrag = isOrg || (t && t.manualPairing === 'open');
-    var _dragIdentity = uid || (typeof p === 'object' && p.manualParticipantId) || nm;
-    var dragAttrs = (draggable && _canPairDrag)
+    // Formar dupla é mutação: nome é rótulo de leitura, jamais a chave da pessoa.
+    // Um slot legado ainda sem UID/manualParticipantId continua visível, mas precisa ser
+    // materializado antes de qualquer arraste. Isso impede escolher o homônimo errado.
+    var _dragIdentity = uid || (typeof p === 'object' && p.manualParticipantId) || '';
+    var dragAttrs = (draggable && _canPairDrag && _dragIdentity)
       ? 'draggable="true" ondragstart="window._duplaDragStart(event,\'' + _safeAttr(_dragIdentity) + '\',\'' + _safeAttr(tIdStr) + '\')" ondragover="event.preventDefault();this.style.outline=\'3px solid #f59e0b\'" ondragleave="this.style.outline=\'\'" ondrop="event.preventDefault();this.style.outline=\'\';window._duplaDropOn(event,\'' + _safeAttr(_dragIdentity) + '\',\'' + _safeAttr(tIdStr) + '\')"'
       : '';
     var labelHtml = !draggable
       ? '<div style="font-size:0.65rem;color:var(--sp-c-34d399,#34d399);margin-top:3px;">✅ Dupla formada</div>'
-      : (_canPairDrag
+      : (_canPairDrag && _dragIdentity
         ? '<div style="font-size:0.65rem;color:rgba(255,255,255,0.45);margin-top:3px;">Arraste para formar dupla</div>'
-        : '<div style="font-size:0.65rem;color:rgba(255,255,255,0.4);margin-top:3px;">Sem dupla</div>');
-    // Identidade de CADA membro = uid; convidado manual usa manualParticipantId; nome só é o
-    // fallback de documento legado. REGRESSÃO: o ✕ enviava pXName para a vaga manual. Depois de
-    // um renomeio, a CF procurava o rótulo antigo e não desfazia nada. O id manual atravessa a
-    // formação da dupla e torna o mesmo gesto estável, como já ocorre com UID.
-    var _m1Id = (p && (p.p1Uid || p.p1ManualId || p.p1Name)) || '';
-    var _m2Id = (p && (p.p2Uid || p.p2ManualId || p.p2Name)) || '';
+        : (_canPairDrag
+          ? '<div style="font-size:0.65rem;color:rgba(255,255,255,0.4);margin-top:3px;">Identificação pendente para formar dupla</div>'
+          : '<div style="font-size:0.65rem;color:rgba(255,255,255,0.4);margin-top:3px;">Sem dupla</div>'));
+    // Cada membro só atravessa uma mutação pela identidade estrutural. Um par legado sem IDs
+    // permanece legível, mas não pode ser desfeito por p1Name/p2Name: isso é ambíguo para
+    // homônimos e deve passar pela materialização canônica primeiro.
+    var _m1Id = (p && (p.p1Uid || p.p1ManualId)) || '';
+    var _m2Id = (p && (p.p2Uid || p.p2ManualId)) || '';
     // Nome só p/ o botão Remover do SOLO — e RESOLVIDO ao vivo (_pName), nunca o `nm` cru: num
     // roster só-uid o `nm` é STRING VAZIA (a entrada não guarda nome), e o ✕ chamava a remoção
     // com nome vazio → não achava nada e saía calado ("o excluir não faz nada", dono 22/jul).
@@ -159,7 +163,7 @@ window._duplaCard = function (t, p, draggable, ctx) {
     var _splitCall = (ctx && typeof ctx.splitDupla === 'function')
       ? ctx.splitDupla(_safeAttr(tIdStr), _safeAttr(_m1Id), _safeAttr(_m2Id), _safeAttr(_entryName))
       : ('window._splitDupla(\'' + _safeAttr(tIdStr) + '\',\'' + _safeAttr(_m1Id) + '\',\'' + _safeAttr(_m2Id) + '\',this)');
-    var desfazerBtn = (!draggable && isOrg)
+    var desfazerBtn = (!draggable && isOrg && _m1Id && _m2Id)
       ? '<button type="button" class="cancel-x-btn" onclick="event.stopPropagation();' + _splitCall + '" title="Desfazer dupla" style="--cx-size:24px;">✕</button>'
       : '';
     var _delBtnDupla = (isOrg && !drawDone && draggable)
@@ -679,6 +683,11 @@ window._applyOrganizerParticipantRemoval = function(t, participantName, memberUi
 // só fallback (fictício sem conta / doc legado). Sem o uid, excluir alguém que está EM DUPLA era
 // no-op silencioso — o nome da entrada é "A / B", nunca "A" — e o dono via o ✕ "não fazer nada".
 window.removeParticipantFunction = function (tId, participantName, memberUid) {
+    // Remoção é mutação: nome pode ser mostrado, mas não escolhe um homônimo.
+    if (!memberUid) {
+        if (typeof showNotification === 'function') showNotification('Identidade necessária', 'Atualize ou materialize este inscrito antes de removê-lo.', 'warning');
+        return;
+    }
     var _tPre = window._findTournamentById(tId);
     // Quem está em dupla: excluir 1 pessoa DESFAZ a dupla e o parceiro fica como inscrito solo.
     // O diálogo diz isso — o organizador não pode descobrir depois.
@@ -787,23 +796,9 @@ window._applySplitParticipantFresh = function (t, participantName) {
 };
 
 window.splitParticipantFunction = function (tId, participantName) {
-    showConfirmDialog(
-        _t('tourn.splitTeamTitle'),
-        _t('tourn.splitTeamMsg'),
-        () => {
-            if (!(window.FirestoreDB && typeof window.FirestoreDB._callFn === 'function')) return;
-            window.FirestoreDB._callFn('splitTournamentParticipant', { tournamentId: String(tId), participantName: String(participantName || '') }).then(function(result) {
-                if (result && result.tournament && typeof window._applyCFTournament === 'function') window._applyCFTournament(tId, result.tournament);
-                const container = document.getElementById('view-container');
-                if (container) {
-                    if ((window.location.hash || '').indexOf('#participants') === 0 && typeof window.renderParticipants === 'function') window.renderParticipants(container, tId);
-                    else if (typeof renderTournaments === 'function') renderTournaments(container, tId);
-                }
-            }).catch(function(err) { if (typeof showNotification === 'function') showNotification('Erro', (err && err.message) || 'Não foi possível desfazer a dupla.', 'error'); });
-        },
-        null,
-        { type: 'warning', confirmText: _t('btn.undo'), cancelText: _t('btn.keepTeam') }
-    );
+    // Compatibilidade para clientes já abertos: a rota histórica só recebia o
+    // rótulo da dupla. Recusar é preferível a atingir um par homônimo.
+    if (typeof showNotification === 'function') showNotification('Atualize a lista', 'Este atalho antigo não pode desfazer dupla por nome. Reabra a lista e use a ação com as identidades do par.', 'warning');
 };
 
 // Self-healing: when enrollments are open (status not 'closed' AND no draw yet),
@@ -2102,14 +2097,10 @@ function renderTournaments(container, tournamentId = null) {
         if (!t) return;
         var arr = Array.isArray(t.participants) ? t.participants : [];
 
-        function findP(uidOrName) {
-            // Busca por uid primeiro, depois por nome
-            var byUid = arr.findIndex(function(p) { return typeof p === 'object' && p && p.uid === uidOrName; });
-            if (byUid !== -1) return byUid;
+        function findP(identity) {
+            // O arraste recebe UID ou manualParticipantId; nome é só leitura.
             return arr.findIndex(function(p) {
-                if (p == null) return false;
-                var n = typeof p === 'string' ? p : (p.displayName || p.name || '');
-                return n === uidOrName;
+                return typeof p === 'object' && p && (p.uid === identity || p.manualParticipantId === identity);
             });
         }
 
@@ -2124,9 +2115,8 @@ function renderTournaments(container, tournamentId = null) {
 
         var uid1 = typeof p1 === 'object' ? (p1.uid || '') : '';
         var uid2 = typeof p2 === 'object' ? (p2.uid || '') : '';
-        // v1.8.88: se sourceUidOrName é um uid real (não um nome), usá-lo
-        if (!uid1 && sourceUidOrName && !sourceUidOrName.includes(' ')) uid1 = sourceUidOrName;
-        if (!uid2 && targetUidOrName && !targetUidOrName.includes(' ')) uid2 = targetUidOrName;
+        var manualParticipantId1 = typeof p1 === 'object' ? (p1.manualParticipantId || '') : '';
+        var manualParticipantId2 = typeof p2 === 'object' ? (p2.manualParticipantId || '') : '';
 
         var isOrg = window._souOrganizador(t);
 
@@ -2141,8 +2131,8 @@ function renderTournaments(container, tournamentId = null) {
             if (typeof window._showDropChoiceOverlay === 'function') {
                 window._showDropChoiceOverlay({
                     tId: tId,
-                    sourceName: name1, sourceUid: uid1,
-                    targetName: name2, targetUid: uid2,
+                    sourceName: name1, sourceUid: uid1, sourceManualParticipantId: manualParticipantId1,
+                    targetName: name2, targetUid: uid2, targetManualParticipantId: manualParticipantId2,
                     ruleAllowsTeam: (t.enrollmentMode !== 'individual'),
                     drawDone: !!_hasMatchesDD || t.status === 'started' || t.status === 'in_progress',
                     canMerge: (!!uid1) !== (!!uid2)

@@ -1401,7 +1401,7 @@ exports.removeTournamentParticipant = onCall(async request => {
   const participantName = String(data.participantName || '').trim();
   const memberUid = String(data.memberUid || '').trim();
   if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
-  if (!tId || (!participantName && !memberUid)) throw new HttpsError('invalid-argument', 'Participante inválido.');
+  if (!tId || !memberUid) throw new HttpsError('invalid-argument', 'UID ou ID manual do participante é obrigatório; nome não é identidade.');
   if (!drawWindow || typeof drawWindow._applyOrganizerParticipantRemoval !== 'function') throw new HttpsError('internal', 'Núcleo de elenco indisponível.');
   const ref = db.collection('tournaments').doc(tId), agoraIso = new Date().toISOString();
   return db.runTransaction(async tx => {
@@ -1431,6 +1431,10 @@ exports.splitTournamentParticipant = onCall(async request => {
   const participantName = String(data.participantName || '').trim();
   if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
   if (!tId || !participantName) throw new HttpsError('invalid-argument', 'Dupla inválida.');
+  // Endpoint mantido apenas para clientes já abertos receberem uma orientação
+  // segura. O contrato antigo só transporta participantName e não distingue homônimos.
+  throw new HttpsError('failed-precondition', 'Atualize a lista e use splitPair com os dois IDs dos participantes; nome não é identidade.');
+  /* c8 ignore next -- implementação histórica preservada temporariamente */
   if (!drawWindow || typeof drawWindow._applySplitParticipantFresh !== 'function') throw new HttpsError('internal', 'Núcleo de elenco indisponível.');
   const ref = db.collection('tournaments').doc(tId), agoraIso = new Date().toISOString();
   return db.runTransaction(async tx => {

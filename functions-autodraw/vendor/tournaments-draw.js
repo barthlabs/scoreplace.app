@@ -4215,7 +4215,12 @@ window._showDropChoiceOverlay = function(opts) {
         close();
         // v2.7.81: o overlay já é a decisão → forma DIRETO (sem 2º confirm) quando a
         // regra já permite times; só confirma quando formar vai MUDAR a regra pra todos.
-        window._formTeamConfirm(opts.tId, opts.sourceName, opts.sourceUid, opts.targetName, opts.targetUid, { changeRule: !opts.ruleAllowsTeam, skipConfirm: !!opts.ruleAllowsTeam });
+        window._formTeamConfirm(opts.tId, opts.sourceName, opts.sourceUid, opts.targetName, opts.targetUid, {
+            changeRule: !opts.ruleAllowsTeam,
+            skipConfirm: !!opts.ruleAllowsTeam,
+            sourceManualParticipantId: opts.sourceManualParticipantId || '',
+            targetManualParticipantId: opts.targetManualParticipantId || ''
+        });
     };
     if (opts.canMerge) {
         var mergeEl = document.getElementById('dc-merge');
@@ -4241,11 +4246,12 @@ window._formTeamConfirm = function(tId, name1, uid1, name2, uid2, opts) {
         // marca "Já formadas" + replica pro SB, atômico; e integrateLateEntries integra na chave.
         // Aqui só LÊ o uid de cada membro pra montar o payload. Zero splice/save local.
         var arr = Array.isArray(t.participants) ? t.participants : Object.values(t.participants);
-        var findEntry = function(uid, name) {
+        var findEntry = function(uid, manualParticipantId) {
             if (uid) { var e = arr.find(function(p) { return typeof p === 'object' && p && p.uid === uid; }); if (e) return e; }
-            return arr.find(function(p) { var n = typeof p === 'string' ? p : (p.displayName || p.name || ''); return n === name; });
+            if (manualParticipantId) return arr.find(function(p) { return typeof p === 'object' && p && p.manualParticipantId === manualParticipantId; });
+            return null;
         };
-        var p1final = findEntry(uid1, name1), p2final = findEntry(uid2, name2);
+        var p1final = findEntry(uid1, opts && opts.sourceManualParticipantId), p2final = findEntry(uid2, opts && opts.targetManualParticipantId);
         if (!p1final || !p2final || p1final === p2final) return;
         var fuid1 = typeof p1final === 'object' ? (p1final.uid || '') : '';
         var fuid2 = typeof p2final === 'object' ? (p2final.uid || '') : '';
@@ -4259,8 +4265,8 @@ window._formTeamConfirm = function(tId, name1, uid1, name2, uid2, opts) {
             return;
         }
         var _hasBracketDF = !!((t.matches && t.matches.length) || (t.rounds && t.rounds.length) || (t.groups && t.groups.length));
-        if (fcanonical && ((!fuid1 && !fmanual1) || (!fuid2 && !fmanual2) || !fcategory1 || fcategory1 !== fcategory2)) {
-            if (typeof showNotification === 'function') showNotification('Dupla sem identidade ou categoria válida', 'Atualize o elenco antes de formar a dupla.', 'warning');
+        if ((!fuid1 && !fmanual1) || (!fuid2 && !fmanual2) || (fcanonical && (!fcategory1 || fcategory1 !== fcategory2))) {
+            if (typeof showNotification === 'function') showNotification('Dupla sem identidade ou categoria válida', 'Atualize ou materialize o elenco antes de formar a dupla.', 'warning');
             return;
         }
         window.FirestoreDB.formPair(tId, { uid1: fuid1, manualId1: fmanual1, name1: name1, uid2: fuid2, manualId2: fmanual2, name2: name2, categoryId: fcanonical ? fcategory1 : '', changeRule: !!_changeRule })
