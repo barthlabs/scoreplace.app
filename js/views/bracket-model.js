@@ -910,9 +910,10 @@ window._rotaMostraAChaveDeste = function (hash, id) {
         !!(currentPhase.classification && currentPhase.classification.structure === 'groups')
       : t.currentStage === 'groups';
     var currentIsMonarch = hasCanonicalCurrentPhase
-      ? (typeof window._sorteioDaFaseEhReiRainha === 'function'
-        ? window._sorteioDaFaseEhReiRainha(t)
-        : !!(currentPhase.reiRainha || currentPhase.drawMode === 'rei_rainha'))
+      // Reaproveita a única porta que interpreta o modo de sorteio, mas recebe
+      // a CONFIGURAÇÃO da fase atual — nunca o documento do torneio, cujo topo
+      // ainda pode descrever uma fase classificatória já encerrada.
+      ? !!(window._isMonarchFormat && window._isMonarchFormat(currentPhase))
       : window._isMonarchFormat(t);
 
     // 1) Swiss past (p2 resolution recap) — only when we're in the elim phase
