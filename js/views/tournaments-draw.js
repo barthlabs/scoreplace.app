@@ -3109,10 +3109,13 @@ window.generateDrawFunction = function (tId) {
     // IMPORTANTE: ambas as perguntas são DA FASE ATUAL. O rótulo histórico do torneio
     // continua sendo Liga/Rei-Rainha depois da transição para eliminatória e não pode
     // impedir que as duplas classificadas sejam sorteadas na chave.
-    var isCurrentMonarch = Array.isArray(t.phases)
+    var isCurrentDrawLeague = Array.isArray(t.phases)
+      ? !!(window._faseCorrenteEhLiga && window._faseCorrenteEhLiga(t))
+      : !!(window._isLigaFormat && window._isLigaFormat(t));
+    var isCurrentDrawMonarch = Array.isArray(t.phases)
       ? (typeof window._sorteioDaFaseEhReiRainha === 'function' && window._sorteioDaFaseEhReiRainha(t))
       : (typeof window._isMonarchFormat === 'function' && window._isMonarchFormat(t));
-    if (isCurrentLeague && !isCurrentMonarch) {
+    if (isCurrentDrawLeague && !isCurrentDrawMonarch) {
         var _hasFormedPair = (Array.isArray(t.participants) ? t.participants : []).some(function (p) {
             return p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name);
         });

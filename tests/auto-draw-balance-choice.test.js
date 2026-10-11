@@ -45,9 +45,9 @@ const manual = draw.slice(draw.indexOf('window._maybeShowGenderDrawDialog = func
 ok(/window\._showDrawBalanceOverlay\(\{/.test(manual), 'a porta MANUAL usa a mesma tela');
 ok(/Array\.isArray\(t\.phases\)[\s\S]{0,260}_faseCorrenteEhLiga/.test(manual),
   'a porta MANUAL decide a exceção de liga pela fase atual');
-ok(/var isCurrentMonarch = Array\.isArray\(t\.phases\)[\s\S]{0,260}_sorteioDaFaseEhReiRainha/.test(manual),
+ok(/var isCurrentDrawLeague = Array\.isArray\(t\.phases\)[\s\S]{0,520}var isCurrentDrawMonarch = Array\.isArray\(t\.phases\)[\s\S]{0,260}_sorteioDaFaseEhReiRainha/.test(manual),
   'a barreira de duplas formadas decide Rei/Rainha pela fase atual');
-ok(/if \(isCurrentLeague && !isCurrentMonarch\)/.test(manual),
+ok(/if \(isCurrentDrawLeague && !isCurrentDrawMonarch\)/.test(manual),
   'a barreira de duplas formadas não consulta o rótulo histórico do torneio');
 
 // o salvar pergunta ANTES de montar/gravar, e repete o salvar depois da resposta
