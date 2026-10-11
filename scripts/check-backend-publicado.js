@@ -109,8 +109,7 @@ Object.keys(ESCOPOS).forEach((nome) => {
 });
 if (falhou) {
   console.error('\n  Publique nesta ordem e carimbe cada escopo:');
-  console.error('    firebase deploy --only firestore:rules --project scoreplace-app');
-  console.error('    node scripts/check-backend-publicado.js --carimbar rules');
+  console.error('    scripts/deploy-rules.sh');
   console.error('    scripts/deploy-functions.sh autodraw   (carimba autodraw sozinho)\n');
   process.exit(1);
 }

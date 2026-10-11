@@ -586,7 +586,7 @@ cd "$DEST"
 # que roda este script com `firebase` falso para provar que o push vem ANTES do upload. Essa
 # garantia — não publicar o que não está no remoto — vale mais que automatizar dois comandos.
 # ⛔ A ORDEM DA LEVA, quando há backend novo, é:
-#     firebase deploy --only firestore:rules --project scoreplace-app
+#     scripts/deploy-rules.sh
 #     scripts/deploy-functions.sh autodraw
 #     scripts/deploy-hosting.sh        ⟵ por último: a tela nova tem de encontrar regra e servidor
 # ⚠️ O que ESTE script garante sozinho é a trava abaixo: nenhuma porta aposentada fica no ar.

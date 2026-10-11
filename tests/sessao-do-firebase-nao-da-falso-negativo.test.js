@@ -10,6 +10,7 @@
 const assert = require('assert/strict'), fs = require('fs'), path = require('path');
 const sh = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'deploy-hosting.sh'), 'utf8');
 const functionsSh = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'deploy-functions.sh'), 'utf8');
+const rulesSh = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'deploy-rules.sh'), 'utf8');
 const credential = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'firebase-credencial-persistente.sh'), 'utf8');
 let ok = 0; const must = (v, m) => { assert.ok(v, m); ok++; console.log('  ✓ ' + m); };
 
@@ -25,14 +26,16 @@ must(/FIREBASE NÃO AUTENTICADO/.test(sh), 'a trava continua existindo — o que
 must(sh.indexOf('conferindo a sessão do Firebase') < sh.indexOf('FIREBASE NÃO AUTENTICADO'),
   'e ela continua ANTES da suíte: descobrir sessão morta depois de minutos de teste é o que ela evita');
 
-must(/sp_preparar_credencial_firebase/.test(sh) && /sp_preparar_credencial_firebase/.test(functionsSh),
-  'hosting e Functions passam pela mesma trava de credencial persistente');
+must(/sp_preparar_credencial_firebase/.test(sh) && /sp_preparar_credencial_firebase/.test(functionsSh) && /sp_preparar_credencial_firebase/.test(rulesSh),
+  'hosting, Functions e Rules passam pela mesma trava de credencial persistente');
 must(/XDG_CONFIG_HOME="\$cofre" firebase/.test(credential),
   'a trava isola a CLI do cofre OAuth de usuário antes de validar a conta de serviço');
 must(/deploy-sa\.json/.test(credential),
   'a chave persistente padrão é conhecida mesmo em shell não interativo');
-must(!/sessão de usuário \(a conta de serviço não passou no teste\)/.test(sh + functionsSh),
+must(!/sessão de usuário \(a conta de serviço não passou no teste\)/.test(sh + functionsSh + rulesSh),
   '⛔ não existe fallback silencioso para a sessão OAuth expirável');
+must(/firebase deploy --only firestore:rules --project "\$PROJECT" --non-interactive/.test(rulesSh),
+  'Rules só publica pelo invólucro que já preparou a credencial persistente');
 must(!/Saída para hoje, se estiver com pressa: firebase login --reauth/.test(sh),
   'e o publicador não recomenda reautenticação temporária como saída');
 
