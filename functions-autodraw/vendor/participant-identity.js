@@ -71,7 +71,6 @@ var ScoreplaceParticipantIdentity;
         const slots = [];
         const vistosUid = new Set();
         const vistosManual = new Set();
-        const vistosNome = new Set();
         const add = (rawUid, rawManualId, rawName) => {
             const uid = uidOf(rawUid);
             const manualParticipantId = uidOf(rawManualId);
@@ -92,10 +91,10 @@ var ScoreplaceParticipantIdentity;
                 slots.push({ uid: null, manualParticipantId, name });
                 return;
             }
-            const chave = name.toLowerCase();
-            if (vistosNome.has(chave))
-                return;
-            vistosNome.add(chave);
+            // Um nome legado sem identificador continua legível, mas NÃO pode ser
+            // deduplicado aqui. Duas pessoas chamadas Ana são duas vagas até que a
+            // migração lhes atribua `manualParticipantId`; colapsá-las por texto
+            // seria perder participante por mera homonímia.
             slots.push({ uid: null, manualParticipantId: null, name: name });
         };
         // Entrada TEXTUAL — a fila legada guarda nome solto. É pessoa, não lixo.
@@ -135,14 +134,18 @@ var ScoreplaceParticipantIdentity;
         return slots;
     }
     ScoreplaceParticipantIdentity.participantSlots = participantSlots;
-    /** Chaves por PESSOA da entrada, nunca por contato. */
+    /** Chaves por PESSOA da entrada, nunca por contato ou nome.
+     *
+     * Entrada histórica ainda sem UID/manualParticipantId não recebe chave. Ela
+     * segue visível, mas qualquer operação mutável precisa primeiro passar pela
+     * migração que cria um ID manual opaco a partir do registro físico. */
     function participantIdentityKeys(value) {
         return participantSlots(value).map((person) => {
             if (person.uid)
                 return 'uid:' + person.uid;
             if (person.manualParticipantId)
                 return 'manual:' + person.manualParticipantId;
-            return person.name ? 'legacy-name:' + person.name.toLocaleLowerCase() : '';
+            return '';
         }).filter(Boolean).sort();
     }
     ScoreplaceParticipantIdentity.participantIdentityKeys = participantIdentityKeys;
@@ -152,10 +155,9 @@ var ScoreplaceParticipantIdentity;
      * categorias), portanto uma dupla precisa carregar os dois membros.
      *
      * Conta: `uid:<uid>`; convidado manual criado hoje:
-     * `manual:<manualParticipantId>`; registros históricos sem nenhum ID:
-     * `legacy-name:<nome normalizado>`. E-mail não é identidade de participante
-     * e não entra nesta chave. O último caso existe exclusivamente para que um
-     * documento antigo permaneça reversível até a migração explícita.
+     * `manual:<manualParticipantId>`. Registros históricos sem nenhum ID não
+     * recebem chave de decisão: nome não é identidade e dois homônimos não podem
+     * colidir. Eles seguem legíveis até a migração explícita.
      */
     function entryIdentityKey(value) {
         const members = participantIdentityKeys(value);

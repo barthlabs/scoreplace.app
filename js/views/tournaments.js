@@ -35,20 +35,19 @@ window._duplaEntryKey = function (p) {
   if (!p) return '';
   /* A chave do card participa de atualização in-place, arraste e seleção. Ela
    * não pode colidir quando duas contas ou duas vagas manuais têm o mesmo
-   * nome. O contrato tipado também preserva o último caso legado por nome sem
-   * permitir que ele se disfarce de UID. */
+   * nome. Documento histórico sem ID fica legível, mas não é arrastável nem
+   * deduplicável até receber manualParticipantId na migração. */
   if (typeof window._participantEntryKey === 'function') {
     var canonical = window._participantEntryKey(p);
     if (canonical) return canonical;
   }
-  if (typeof p === 'string') return 'legacy-name:' + p.toLocaleLowerCase();
-  var p1 = p.p1Uid ? ('uid:' + p.p1Uid) : (p.p1ManualId ? ('manual:' + p.p1ManualId) : (p.p1Name ? ('legacy-name:' + String(p.p1Name).toLocaleLowerCase()) : ''));
-  var p2 = p.p2Uid ? ('uid:' + p.p2Uid) : (p.p2ManualId ? ('manual:' + p.p2ManualId) : (p.p2Name ? ('legacy-name:' + String(p.p2Name).toLocaleLowerCase()) : ''));
+  if (typeof p === 'string') return '';
+  var p1 = p.p1Uid ? ('uid:' + p.p1Uid) : (p.p1ManualId ? ('manual:' + p.p1ManualId) : '');
+  var p2 = p.p2Uid ? ('uid:' + p.p2Uid) : (p.p2ManualId ? ('manual:' + p.p2ManualId) : '');
   if (p1 && p2) return 'team:' + [p1, p2].sort().join('|');
   if (p.uid) return 'uid:' + p.uid;
   if (p.manualParticipantId) return 'manual:' + p.manualParticipantId;
-  var legacyName = p.name || p.displayName || '';
-  return legacyName ? ('legacy-name:' + String(legacyName).toLocaleLowerCase()) : '';
+  return '';
 };
 window._duplaCard = function (t, p, draggable, ctx) {
   if (p == null) return '';
@@ -827,8 +826,7 @@ window._drainWaitlistsIfOpen = function(t, opts) {
     var promoted = 0;
     function structuralKey(entry) {
         if (!entry || typeof entry !== 'object' || typeof window._participantEntryKey !== 'function') return '';
-        var key = window._participantEntryKey(entry);
-        return key && key.indexOf('legacy-name:') === -1 ? key : '';
+        return window._participantEntryKey(entry) || '';
     }
     function promote(list) {
         if (!Array.isArray(list) || list.length === 0) return;

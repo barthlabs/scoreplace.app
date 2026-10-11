@@ -45,24 +45,24 @@ window._participantEntryKey = function(p) {
   // Reserva para harness legado parcial: mantém a semântica tipada sem introduzir
   // e-mail como chave. O produto sempre carrega o domínio antes deste adaptador.
   if (!p || typeof p !== 'object') return '';
-  function member(uid, manual, name) {
+  function member(uid, manual) {
     if (uid) return 'uid:' + String(uid);
     if (manual) return 'manual:' + String(manual);
-    return name ? 'legacy-name:' + String(name).trim().toLowerCase() : '';
+    return '';
   }
   var members = [];
   if (Array.isArray(p.participants)) p.participants.forEach(function(slot) {
     if (!slot || typeof slot !== 'object') return;
-    var key = member(slot.uid, slot.manualParticipantId, slot.displayName || slot.name);
+    var key = member(slot.uid, slot.manualParticipantId);
     if (key && members.indexOf(key) === -1) members.push(key);
   });
   if (!members.length && (p.p1Uid || p.p2Uid || p.p1ManualId || p.p2ManualId || p.p1Name || p.p2Name)) {
-    [member(p.p1Uid, p.p1ManualId, p.p1Name), member(p.p2Uid, p.p2ManualId, p.p2Name)].forEach(function(key) {
+    [member(p.p1Uid, p.p1ManualId), member(p.p2Uid, p.p2ManualId)].forEach(function(key) {
       if (key && members.indexOf(key) === -1) members.push(key);
     });
   }
   if (!members.length) {
-    var single = member(p.uid, p.manualParticipantId, p.displayName || p.name);
+    var single = member(p.uid, p.manualParticipantId);
     if (single) members.push(single);
   }
   members.sort();
@@ -135,22 +135,18 @@ window._deleteTeamOriginsByValue = function(origins, origin) {
 window._participantIdentityKeys = function(p) {
   var domain = window.ScoreplaceParticipantIdentity;
   if (domain && typeof domain.participantIdentityKeys === 'function') return domain.participantIdentityKeys(p);
-  if (!p || typeof p !== 'object') {
-    var legacy = String(p == null ? '' : p).trim();
-    return legacy ? ['legacy-name:' + legacy.toLowerCase()] : [];
-  }
+  if (!p || typeof p !== 'object') return [];
   var keys = [];
-  function add(uid, manual, name) {
-    var key = uid ? 'uid:' + String(uid) : (manual ? 'manual:' + String(manual) : (name ? 'legacy-name:' + String(name).trim().toLowerCase() : ''));
+  function add(uid, manual) {
+    var key = uid ? 'uid:' + String(uid) : (manual ? 'manual:' + String(manual) : '');
     if (key && keys.indexOf(key) === -1) keys.push(key);
   }
   if (Array.isArray(p.participants) && p.participants.length) p.participants.forEach(function(slot) {
-    if (slot && typeof slot === 'object') add(slot.uid, slot.manualParticipantId, slot.displayName || slot.name);
-    else add('', '', slot);
+    if (slot && typeof slot === 'object') add(slot.uid, slot.manualParticipantId);
   });
   else if (p.p1Uid || p.p2Uid || p.p1ManualId || p.p2ManualId || p.p1Name || p.p2Name) {
-    add(p.p1Uid, p.p1ManualId, p.p1Name); add(p.p2Uid, p.p2ManualId, p.p2Name);
-  } else add(p.uid, p.manualParticipantId, p.displayName || p.name);
+    add(p.p1Uid, p.p1ManualId); add(p.p2Uid, p.p2ManualId);
+  } else add(p.uid, p.manualParticipantId);
   return keys.sort();
 };
 

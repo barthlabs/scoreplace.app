@@ -63,7 +63,6 @@ const TABELA = [
   { nome: "advanceTournamentPhase", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },
   { nome: "applyCategoryCommunicationMarkers", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },
   { nome: "applyCanonicalRegistrationMigration", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
-  { nome: "applyCanonicalRegistrationMigrationBatch", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
   { nome: "applyDrawPollResult", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },
   { nome: "applyEnrollmentAssignments", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },
   { nome: "applyLigaGroupWO", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },

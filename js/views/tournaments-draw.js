@@ -155,7 +155,9 @@ window._clearTournamentDraw = function (t) {
         // Harness/artefato parcial: reproduz o contrato tipado sem cair em e-mail.
         k = p.uid ? 'uid:' + String(p.uid) : (p.manualParticipantId ? 'manual:' + String(p.manualParticipantId) : '');
       }
-      if (!k) { var s = (p && typeof p === 'object') ? (p.displayName || p.name || '') : String(p || ''); k = s.trim() ? 'legacy-name:' + s.trim().toLowerCase() : ''; }
+      // Sem UID/manualParticipantId não existe chave segura. Preserve a vaga
+      // separadamente; nunca deduplique por nome e nunca a transforme em uma
+      // inscrição mutável até a materialização canônica.
       if (!k) { _final.push(p); return; }
       if (!_seen[k]) { _seen[k] = 1; _final.push(p); }
     });

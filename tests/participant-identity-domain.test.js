@@ -50,6 +50,23 @@ ok(domain.entryIdentityKey({ p1Uid: 'ana', p2Uid: 'bia' }) === domain.entryIdent
   '⑬a chave de dupla é independente da ordem dos slots');
 ok(domain.entryIdentityKey({ p1Uid: 'ana' }) === 'uid:ana' && domain.entryIdentityKey({}) === '',
   '⑬b chave de entrada trata dupla parcial e entrada vazia sem inventar identidade');
+const legacyHomonyms = {
+  participants: [
+    { displayName: 'Ana sem cadastro' },
+    { displayName: 'Ana sem cadastro' }
+  ]
+};
+ok(domain.participantSlots(legacyHomonyms).length === 2 &&
+  domain.participantIdentityKeys(legacyHomonyms).length === 0 &&
+  domain.entryIdentityKey(legacyHomonyms) === '',
+  '⑬c homônimos legados sem ID permanecem duas vagas, mas nunca viram identidade');
+ok(domain.participantIdentityKeys({
+  participants: [
+    { manualParticipantId: 'manual-a', displayName: 'Ana' },
+    { manualParticipantId: 'manual-b', displayName: 'Ana' }
+  ]
+}).join(',') === 'manual:manual-a,manual:manual-b',
+  '⑬d homônimos manuais permanecem distinguíveis pelos IDs do torneio');
 
 const browser = { window: null }; browser.window = browser; vm.createContext(browser);
 vm.runInContext(fs.readFileSync(path.join(ROOT, 'js/domain/participant-identity.js'), 'utf8'), browser);
@@ -62,6 +79,9 @@ ok(browser._participantEntryKey({ p1Uid: 'u1', p2ManualId: 'm2', p2Name: 'Manual
   '⑯ adaptador expõe a mesma chave tipada de entrada');
 ok(browser._participantIdentityKeys({ p1Uid: 'u1', p2ManualId: 'm2', p2Name: 'Manual' }).join(',') === 'manual:m2,uid:u1',
   '⑰ adaptador expõe as chaves individuais da dupla');
+ok(browser._participantEntryKey({ displayName: 'Ana sem cadastro' }) === '' &&
+  browser._participantIdentityKeys({ displayName: 'Ana sem cadastro' }).length === 0,
+  '⑰a adaptador não devolve nome legado como chave de decisão');
 const duoA = { displayName: 'Ana / Bia', p1Uid: 'ana-1', p2Uid: 'bia-1' };
 const duoB = { displayName: 'Ana / Bia', p1Uid: 'ana-2', p2Uid: 'bia-2' };
 const origins = {};
@@ -92,6 +112,11 @@ ok(/window\._participantEntryKey\(p\)/.test(tournamentsView) &&
   /p\.manualParticipantId/.test(tournamentsView) &&
   /p\.p1ManualId/.test(tournamentsView),
   '㉓ card, arraste e desfazer de dupla preservam UID e manualParticipantId antes de nome legado');
+const identityAdapter = fs.readFileSync(path.join(ROOT, 'js/views/identity-core.js'), 'utf8');
+const drawView = fs.readFileSync(path.join(ROOT, 'js/views/tournaments-draw.js'), 'utf8');
+ok(!/legacy-name:/.test(source) && !/legacy-name:/.test(identityAdapter) &&
+  !/legacy-name:/.test(tournamentsView) && !/legacy-name:/.test(drawView),
+  '㉓a nenhum caminho ativo transforma nome legado em identidade');
 
 const participantCards = fs.readFileSync(path.join(ROOT, 'js/views/participants.js'), 'utf8');
 ok(/!p\.p1ManualId && !p\.p2ManualId/.test(participantCards) &&
