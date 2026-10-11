@@ -49,6 +49,25 @@ window._cleanUndefined = function (obj) {
 // placares. Se um cliente muito antigo não tiver carregado FORMAT2, ele apenas
 // não promove localmente; a mesma fronteira do servidor faz a promoção antes do
 // commit autoritativo.
+/* Projeção de LEITURA da mesma tradução. O Firestore pode entregar um
+ * documento antigo antes que qualquer ação legítima o salve novamente; deixá-lo
+ * atravessar o ouvinte cru recriava, só na memória, o terceiro "formato" Liga/
+ * Suíço que a escrita já eliminou. Esta porta não persiste nada e não toca
+ * partidas, rodadas, placares nem inscrições: só acrescenta a descrição atual
+ * de `phases` para que toda tela leia o mesmo contrato. */
+window._projectTournamentPhasesForRead = function (data) {
+  if (!data || !window.FORMAT2 || typeof window.FORMAT2.projectLegacyPhases !== 'function') return data;
+  try {
+    var plan = window.FORMAT2.projectLegacyPhases(data);
+    if (plan && plan.changed && Array.isArray(plan.phases) && plan.phases.length) data.phases = plan.phases;
+  } catch (error) {
+    // Leitura nunca pode apagar/mascarar um torneio por uma projeção defeituosa.
+    // A mutação autoritativa continua recusando schema inválido no servidor.
+    if (typeof window._warn === 'function') window._warn('[phases] projeção de leitura ignorada', error);
+  }
+  return data;
+};
+
 window._canonicalizeTournamentPhases = function (data) {
   if (!data || !window.FORMAT2 || typeof window.FORMAT2.projectLegacyPhases !== 'function') return false;
   var plan = window.FORMAT2.projectLegacyPhases(data);

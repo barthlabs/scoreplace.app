@@ -3578,6 +3578,7 @@ window._sbIngest = function (docs) {
 
   (docs || []).forEach(function (d) {
     if (!d || !d.id || d.sbState !== 'ready') return;
+    if (typeof window._projectTournamentPhasesForRead === 'function') d = window._projectTournamentPhasesForRead(d);
     var id = String(d.id);
     vivos[id] = true;
     window._sbIdsConhecidos = window._sbIdsConhecidos || {};
@@ -12757,6 +12758,10 @@ window.AppStore = {
              * "não consegui carregar" ao lado do dado carregado, que é pior que o erro. */
             else if (data && store._partesEmErro) delete store._partesEmErro[String(data.id)];
           }
+          // Toda entrada do listener passa pela mesma projeção de leitura da
+          // abertura direta. Assim um documento legado não escolhe um ramo por
+          // texto só porque ainda não sofreu uma escrita administrativa.
+          if (data && typeof window._projectTournamentPhasesForRead === 'function') data = window._projectTournamentPhasesForRead(data);
           _novoParsed[doc.id] = data;
           if (data && data.isSandbox === true && !_devSeesSb) return;
           tournaments.push(data);

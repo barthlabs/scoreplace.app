@@ -2122,7 +2122,7 @@ window.FirestoreDB = {
       var tournaments = [];
       snap.forEach(function(doc) {
         var d = doc.data();
-        if (d) tournaments.push(d);
+        if (d) tournaments.push(typeof window._projectTournamentPhasesForRead === 'function' ? window._projectTournamentPhasesForRead(d) : d);
       });
       // Torneios carregados do Firestore
       return tournaments;
@@ -2173,7 +2173,7 @@ window.FirestoreDB = {
         // sentinela: se alguém pedir jogo/inscrito a este documento leve, o app avisa
         // com o rastro de quem pediu (ver `_marcaResumo` em store.js)
         if (typeof window._marcaResumo === 'function') window._marcaResumo(d);
-        _viaResumo.push(d);
+        _viaResumo.push(typeof window._projectTournamentPhasesForRead === 'function' ? window._projectTournamentPhasesForRead(d) : d);
       });
     } catch (eR) {
       window._warn('[meus torneios] resumo indisponível, caindo no caminho antigo:', eR && eR.message);
@@ -2188,7 +2188,7 @@ window.FirestoreDB = {
       var tournaments = [];
       snap.forEach(function(doc) {
         var d = doc.data();
-        if (d) tournaments.push(d);
+        if (d) tournaments.push(typeof window._projectTournamentPhasesForRead === 'function' ? window._projectTournamentPhasesForRead(d) : d);
       });
       return tournaments;
     } catch (e) {
@@ -2460,7 +2460,7 @@ window.FirestoreDB = {
         t.categoryDefinitions = _canonical.categoryDefinitions;
       }
       try { if (window._noteFsReads) window._noteFsReads(lidos, 'abrir-torneio-subcolecao'); } catch (e) {}
-      return t;
+      return (typeof window._projectTournamentPhasesForRead === 'function') ? window._projectTournamentPhasesForRead(t) : t;
     } catch (e) {
       // ⛔ NÃO devolver o config cru: config cru é torneio SEM JOGOS, e entregar isso em
       // silêncio foi o que pintou chave vazia pra todo mundo em 26/ago.
@@ -2604,7 +2604,7 @@ window.FirestoreDB = {
       if (_fora && _fora.length) _t = await this._montaDeSubcolecoes(id, _t, _fora);
       // Rei/Rainha: o doc traz grupos só com matchIds — reidrata group.matches como refs.
       try { if (typeof window !== 'undefined' && typeof window._hydrateMonarchGroups === 'function') window._hydrateMonarchGroups(_t); } catch (_hmErr) {}
-      return _t;
+      return (typeof window._projectTournamentPhasesForRead === 'function') ? window._projectTournamentPhasesForRead(_t) : _t;
     } catch (e) {
       window._error('Erro ao carregar torneio:', e);
       return null;
