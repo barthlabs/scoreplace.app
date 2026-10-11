@@ -100,11 +100,25 @@ function _getGroup(t, roundIndex, groupName) {
 // depois. [[project_uid_identity_canon_locked]]
 function _woAbsentUidOf(group, name, t) {
   if (!group || !name) return '';
-  var i = (group.players || []).indexOf(name);
+  // Nome é rótulo; não pode escolher uma pessoa quando há homônimos no grupo.
+  // Um documento legado sem ids continua legível/localmente editável, mas a rota
+  // transacional rejeitará a alteração até a identidade ser materializada.
+  var hits = (group.players || []).reduce(function (all, value, index) {
+    if (String(value) === String(name)) all.push(index);
+    return all;
+  }, []);
+  if (hits.length !== 1) return '';
+  var i = hits[0];
   var u = (i >= 0) ? (group.playersUids || [])[i] : null;
   if (u) return String(u);
+  // A ponte legado só é permitida quando o próprio grupo prova que há uma única
+  // pessoa com aquele rótulo. `_uidDoNome` jamais recebe homônimo como chave.
   var viaNome = t ? _uidDoNome(t, name) : null;
   return viaNome ? String(viaNome) : '';
+}
+
+function _ligaAbsentIdentity(t, roundIndex, groupName, absentName) {
+  return _woAbsentUidOf(_getGroup(t, roundIndex, groupName), absentName, t);
 }
 function _groupCategory(group) {
   var m = (group && group.matches || []).filter(function (x) { return x && x.category; })[0];
@@ -586,7 +600,8 @@ window._ligaNextSuplente = _ligaNextSuplente;
 // fila no lugar dele — no grupo E no elenco.
 window._ligaApplyWo = function (tId, roundIndex, groupName, absentName) {
   if (!_ligaContext() && window.FirestoreDB && typeof window.FirestoreDB._callFn === 'function') {
-    window.FirestoreDB._callFn('applyLigaGroupWO', { tournamentId: String(tId), roundIndex: roundIndex, groupName: String(groupName), absentName: String(absentName) }).then(function(result) {
+    var _tRemote = _findT(tId), _absentUidRemote = _ligaAbsentIdentity(_tRemote, roundIndex, groupName, absentName);
+    window.FirestoreDB._callFn('applyLigaGroupWO', { tournamentId: String(tId), roundIndex: roundIndex, groupName: String(groupName), absentUid: _absentUidRemote }).then(function(result) {
       if (result && result.tournament && typeof window._applyCFTournament === 'function') window._applyCFTournament(tId, result.tournament);
       if (window.showNotification) window.showNotification('W.O. aplicado', 'A substituição foi registrada no servidor.', 'success');
       _rerender(tId);
@@ -1064,7 +1079,8 @@ window._ligaPickFill = function (tId, roundIndex, groupName, absentName, opts) {
 // o ausente vai pro destino escolhido, e todo mundo é notificado.
 window._ligaSubstituteNow = function (tId, roundIndex, groupName, absentName, subUid, subName) {
   if (!_ligaContext() && window.FirestoreDB && typeof window.FirestoreDB._callFn === 'function') {
-    window.FirestoreDB._callFn('substituteLigaGroupDirect', { tournamentId: tId, roundIndex: roundIndex, groupName: groupName, absentName: absentName, subUid: subUid, subName: subName }).then(function (out) {
+    var _tRemote = _findT(tId), _absentUidRemote = _ligaAbsentIdentity(_tRemote, roundIndex, groupName, absentName);
+    window.FirestoreDB._callFn('substituteLigaGroupDirect', { tournamentId: tId, roundIndex: roundIndex, groupName: groupName, absentUid: _absentUidRemote, subUid: subUid }).then(function (out) {
       if (out && out.tournament && typeof window._applyCFTournament === 'function') window._applyCFTournament(out.tournament);
       if (window.showNotification) window.showNotification('Substituição feita', subName + ' entrou no lugar de ' + absentName + '.', 'success');
       _rerender(tId);
@@ -1272,7 +1288,8 @@ window._ligaFillGuestPrompt = function (tId, roundIndex, groupName, absentName) 
 };
 window._ligaFillGuest = function (tId, roundIndex, groupName, absentName, guestName) {
   if (!_ligaContext() && window.FirestoreDB && typeof window.FirestoreDB._callFn === 'function') {
-    window.FirestoreDB._callFn('fillLigaGuest', { tournamentId: tId, roundIndex: roundIndex, groupName: groupName, absentName: absentName, guestName: guestName }).then(function (out) {
+    var _tRemote = _findT(tId), _absentUidRemote = _ligaAbsentIdentity(_tRemote, roundIndex, groupName, absentName);
+    window.FirestoreDB._callFn('fillLigaGuest', { tournamentId: tId, roundIndex: roundIndex, groupName: groupName, absentUid: _absentUidRemote, guestName: guestName }).then(function (out) {
       if (out && out.tournament && typeof window._applyCFTournament === 'function') window._applyCFTournament(out.tournament);
       if (window.showNotification) window.showNotification('Rodada liberada', absentName + ' levou W.O. e a vaga foi completada.', 'success');
       _rerender(tId);
@@ -1334,7 +1351,8 @@ window._ligaFillGuest = function (tId, roundIndex, groupName, absentName, guestN
 // demais convites são supersedidos no aceite.
 window._ligaInviteSubMulti = function (tId, roundIndex, groupName, absentName, invitees) {
   if (!_ligaContext() && window.FirestoreDB && typeof window.FirestoreDB._callFn === 'function') {
-    window.FirestoreDB._callFn('inviteLigaSubstitutes', { tournamentId: tId, roundIndex: roundIndex, groupName: groupName, absentName: absentName, invitees: invitees || [] }).then(function (out) {
+    var _tRemote = _findT(tId), _absentUidRemote = _ligaAbsentIdentity(_tRemote, roundIndex, groupName, absentName);
+    window.FirestoreDB._callFn('inviteLigaSubstitutes', { tournamentId: tId, roundIndex: roundIndex, groupName: groupName, absentUid: _absentUidRemote, invitees: (invitees || []).map(function (x) { return { uid: x && x.uid }; }) }).then(function (out) {
       if (out && out.tournament && typeof window._applyCFTournament === 'function') window._applyCFTournament(out.tournament);
       if (window.showNotification) window.showNotification('Convite enviado', ((out && out.invited) || (invitees || []).length) + ' convite(s) enviado(s).', 'success');
       _rerender(tId);

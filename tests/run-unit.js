@@ -1243,6 +1243,10 @@ const SUITES = [
   'tests/inscricao-otimista-nao-persiste.test.js',
   'tests/monarch-wo-uid-identity.test.js',
   'tests/liga-wo-invite.test.js',
+  // A fronteira browser→Callable do W.O. resolve o ausente e os convidados por ID;
+  // nomes só voltam como rótulos derivados no servidor. Impede homônimo de receber
+  // W.O. ou substituição por acidente.
+  'tests/liga-wo-identity-gate.test.js',
   'tests/swiss-to-elim-transition.test.js',
   'tests/phase0-swiss-elim.test.js',
   // Ferramentas da organização obedecem à fase atual; o rótulo histórico suíço
