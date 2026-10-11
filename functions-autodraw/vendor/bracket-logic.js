@@ -3370,11 +3370,12 @@ function _updateProgressiveClassification(t) {
     : null;
   var _birthElim = (typeof window._tbBirthByName === 'function') ? window._tbBirthByName(t) : {};
   function _linhaDoEliminado(e) {
-    // uid pelo nome, quando dá (o mapa do torneio já resolve isso)
+    // `e.key` veio do slot que eliminou a entrada. Nunca reconstrua a pessoa
+    // pelo nome: dois homônimos podem cair em jogos diferentes. Equipes têm
+    // vários UIDs e seguem com `uid:null`, pois não existe um UID único delas.
     var uid = null;
-    if (typeof window._buildNameToUid === 'function') {
-      try { uid = (window._buildNameToUid(t) || {})[e.name] || null; } catch (_e) { uid = null; }
-    }
+    var _oneUid = /^uid:([^+]+)$/.exec(String(e.key || ''));
+    if (_oneUid) uid = _oneUid[1];
     return {
       name: e.name, uid: uid,
       // "performance" do eliminado, no vocabulário do comparador
@@ -4354,21 +4355,83 @@ window._applyRoundCloseToTournament = function (t, roundIdx) {
 // motor canônico (buildPhaseBrackets, seed 1×N pela classificação). Rodada DENTRO
 // de commitTournamentTx sobre o estado FRESCO. Retorna o nº de classificados.
 window._applySwissEliminationTransition = function (t, roundIdx) {
-  var _finalStandings = _computeStandings(t);
   var _targetCount = t.p2TargetCount;
-  var _advancedNames = _finalStandings.slice(0, _targetCount).map(function (s) { return s.name; });
+  var _allParts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
+
+  // A transição não pode reescolher atletas pelo texto que aparece na tabela. A
+  // classificação já vem com `uid:` quando o slot do jogo o conhece; era aqui que
+  // esse dado era jogado fora e dois homônimos podiam promover a primeira pessoa
+  // duas vezes. Para documentos antigos sem id no slot, nome só serve se for único.
+  // Se não for, falhamos ANTES de tocar em rounds/participants: é melhor pedir a
+  // conversão do legado do que montar uma chave com a pessoa errada.
+  function _partName(p) {
+    return String(typeof p === 'string' ? p : ((p && (p.displayName || p.name)) || '')).trim();
+  }
+  function _partKey(p) {
+    if (!p || typeof p !== 'object') {
+      var legacyLabel = _partName(p);
+      return legacyLabel ? ('legacy:' + legacyLabel) : '';
+    }
+    if (typeof window._participantEntryKey === 'function') {
+      var canonical = String(window._participantEntryKey(p) || '').trim();
+      if (canonical) return canonical;
+    }
+    if (p.uid) return 'uid:' + String(p.uid);
+    if (p.manualParticipantId) return 'manual:' + String(p.manualParticipantId);
+    var legacyName = _partName(p);
+    return legacyName ? ('legacy:' + legacyName) : '';
+  }
+  var _partsByKey = {}, _partsByName = {};
+  _allParts.forEach(function (p) {
+    var key = _partKey(p), name = _partName(p);
+    if (key) _partsByKey[key] = p;
+    if (name) (_partsByName[name] || (_partsByName[name] = [])).push(p);
+  });
+  // Um placar legado de homônimos sem identidade no próprio slot não permite
+  // saber qual dos dois jogou. O ranking que ele produziu pode ter recebido um
+  // UID de um mapa nome→uid antigo, isto é, uma aparência de certeza falsa.
+  // Interrompemos antes de qualquer escrita; a conversão do legado precisa
+  // completar os slots primeiro.
+  (t.rounds || []).forEach(function (round) {
+    (round.matches || []).forEach(function (m) {
+      ['p1', 'p2'].forEach(function (side) {
+        var label = String((m && m[side]) || '').trim();
+        var repeated = label && (_partsByName[label] || []).length > 1;
+        var slotIdentity = m && (m[side + 'Uid'] || m[side + 'ManualId'] || m[side + 'ManualParticipantId']);
+        if (repeated && !slotIdentity) {
+          throw new Error('Classificação legada ambígua: homônimo sem identidade no slot do jogo.');
+        }
+      });
+    });
+  });
+  var _finalStandings = _computeStandings(t);
+  function _standingPart(s) {
+    var key = String((s && s.key) || '').trim();
+    if (key && _partsByKey[key]) return _partsByKey[key];
+    if (s && s.uid && _partsByKey['uid:' + s.uid]) return _partsByKey['uid:' + s.uid];
+    if (s && s.manualParticipantId && _partsByKey['manual:' + s.manualParticipantId]) return _partsByKey['manual:' + s.manualParticipantId];
+    var candidates = _partsByName[_partName(s)] || [];
+    return candidates.length === 1 ? candidates[0] : null;
+  }
+  var _advancedParts = _finalStandings.slice(0, _targetCount).map(_standingPart);
+  if (_advancedParts.length !== _targetCount || _advancedParts.some(function (p) { return !p; })) {
+    throw new Error('Não foi possível avançar classificação ambígua sem identidade estrutural.');
+  }
+  var _advancedKeys = {};
+  _advancedParts.forEach(function (p) {
+    var key = _partKey(p);
+    if (!key || _advancedKeys[key]) throw new Error('Classificação ambígua: participante sem identidade única.');
+    _advancedKeys[key] = true;
+  });
   t.swissStandings = _finalStandings;
   t.swissRoundsData = (t.rounds || []).slice();
   t.currentStage = 'elimination';
   t.classifyFormat = null;
   t.rounds = [];
-  var _allParts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
-  var _advancedParts = [];
-  _advancedNames.forEach(function (name) {
-    var found = _allParts.find(function (p) { var pn = typeof p === 'string' ? p : (p.displayName || p.name || ''); return pn === name; });
-    if (found) _advancedParts.push(found);
+  t.swissEliminated = _allParts.filter(function (p) {
+    var key = _partKey(p);
+    return !key || !_advancedKeys[key];
   });
-  t.swissEliminated = _allParts.filter(function (p) { var pn = typeof p === 'string' ? p : (p.displayName || p.name || ''); return _advancedNames.indexOf(pn) === -1; });
   t.participants = _advancedParts;
   t.p2Resolution = 'bye';
   var _tsE = parseInt(t.teamSize, 10) || 1;

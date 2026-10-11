@@ -85,5 +85,68 @@ function eq(a, b, m) { ok(a === b, m + ' (esperado ' + JSON.stringify(b) + ', ve
   ok(!(t.rounds && t.rounds.length > 0 && t.rounds[0].matches && t.rounds[0].matches.some(function (m) { return m.id && String(m.id).indexOf('s') !== 0 && !m.winner; })), 'não regenerou rodada de liga no lugar da chave');
 })();
 
+// Dois atletas podem exibir o mesmo nome. A classificação chega com o UID de
+// cada slot; a transição precisa preservar ambos, em vez de procurar o primeiro
+// participante cujo texto coincida (o defeito antigo promovia Alex #1 duas vezes).
+(function () {
+  const t = {
+    id: 'swx-homonyms', name: 'SwissX homonyms', status: 'active',
+    currentStage: 'swiss', classifyFormat: 'swiss', p2Resolution: 'swiss', p2TargetCount: 2, swissRounds: 1,
+    participants: [
+      { uid: 'alex-1', displayName: 'Alex' }, { uid: 'alex-2', displayName: 'Alex' },
+      { uid: 'bia', displayName: 'Bia' }, { uid: 'caio', displayName: 'Caio' }
+    ],
+    rounds: [{ status: 'active', matches: [
+      { id: 'h1', p1: 'Alex', p1Uid: 'alex-1', p2: 'Bia', p2Uid: 'bia', winner: 'Alex', scoreP1: 6, scoreP2: 1 },
+      { id: 'h2', p1: 'Alex', p1Uid: 'alex-2', p2: 'Caio', p2Uid: 'caio', winner: 'Alex', scoreP1: 6, scoreP2: 2 }
+    ] }]
+  };
+  sb.window._applySwissEliminationTransition(t, 0);
+  const advanced = t.participants.map(function (p) { return p.uid; }).sort();
+  const eliminated = t.swissEliminated.map(function (p) { return p.uid; }).sort();
+  eq(advanced.join(','), 'alex-1,alex-2', 'homônimos distintos avançam pelos UIDs dos slots');
+  eq(eliminated.join(','), 'bia,caio', 'não elimina um homônimo classificado por coincidência de nome');
+})();
+
+// Documento histórico sem UID no slot de dois homônimos não tem informação
+// suficiente para promover alguém com segurança. A operação deve falhar fechada
+// e manter o torneio exatamente na fase classificatória.
+(function () {
+  const t = {
+    id: 'swx-ambiguous-legacy', currentStage: 'swiss', classifyFormat: 'swiss', p2Resolution: 'swiss', p2TargetCount: 2,
+    participants: [
+      { uid: 'alex-1', displayName: 'Alex' }, { uid: 'alex-2', displayName: 'Alex' },
+      { uid: 'bia', displayName: 'Bia' }, { uid: 'caio', displayName: 'Caio' }
+    ],
+    rounds: [{ matches: [
+      { id: 'legacy-1', p1: 'Alex', p2: 'Bia', winner: 'Alex', scoreP1: 6, scoreP2: 1 },
+      { id: 'legacy-2', p1: 'Alex', p2: 'Caio', winner: 'Alex', scoreP1: 6, scoreP2: 2 }
+    ] }]
+  };
+  let err = null;
+  try { sb.window._applySwissEliminationTransition(t, 0); } catch (e) { err = e; }
+  ok(!!err && /ambígua/i.test(err.message), 'legado ambíguo é bloqueado antes da transição');
+  eq(t.currentStage, 'swiss', 'bloqueio não altera o estágio do torneio');
+  eq(t.rounds.length, 1, 'bloqueio não apaga as rodadas classificatórias');
+})();
+
+// Leitura de legado inequívoco continua possível: um rótulo sem UID só pode
+// atravessar a ponte se designa uma única inscrição.
+(function () {
+  const t = {
+    id: 'swx-legacy-unique', currentStage: 'swiss', classifyFormat: 'swiss', p2Resolution: 'swiss', p2TargetCount: 2,
+    participants: ['Ana', 'Bia', 'Caio', 'Dani'],
+    rounds: [{ matches: [
+      { id: 'u1', p1: 'Ana', p2: 'Bia', winner: 'Ana', scoreP1: 6, scoreP2: 1 },
+      { id: 'u2', p1: 'Caio', p2: 'Dani', winner: 'Caio', scoreP1: 6, scoreP2: 2 }
+    ] }]
+  };
+  sb.window._applySwissEliminationTransition(t, 0);
+  // O harness não carrega o comparador completo e preserva a ordem de seed;
+  // aqui a prova é a separação estrutural sem UID, não a regra de desempate.
+  eq(t.participants.join(','), 'Ana,Bia', 'legado sem ambiguidade avança sem duplicar ou perder inscrições');
+  eq(t.swissEliminated.join(','), 'Caio,Dani', 'legado inequívoco preserva os eliminados complementares');
+})();
+
 console.log((fail === 0 ? '✅' : '❌') + ' swiss-to-elim-transition: ' + pass + ' asserts ok, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);

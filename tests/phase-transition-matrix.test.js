@@ -81,6 +81,22 @@ SCOPES.forEach((scope) => FIXED.forEach((fixedPairs) => STRAT.forEach((strat) =>
   ok(JSON.stringify(bal) === JSON.stringify([['G0P0', 'G0P3'], ['G0P1', 'G0P2']]), "I5 'balanced' (equilíbrio) = 1º+último · 2º+3º");
 })();
 
+// A passagem de fase não pode apagar a identidade de convidados inseridos pelo
+// organizador. O rótulo pode mudar ou até coincidir; o manualParticipantId é o
+// vínculo que chega à chave seguinte.
+(function () {
+  const standings = [
+    { name: 'Convidada', manualParticipantId: 'manual-1' },
+    { name: 'Convidada', manualParticipantId: 'manual-2' }
+  ];
+  const out = E.buildEntrantsByDest([{ standings }], [{ dest: 'main', rankFrom: 1, rankTo: 2 }], true, cs, 'top');
+  const pair = out.main && out.main[0];
+  ok(pair && pair.p1ManualId === 'manual-1' && pair.p2ManualId === 'manual-2',
+    'dupla formada na transição preserva os dois IDs manuais, mesmo com rótulo igual');
+  ok(pair && Array.isArray(pair.participants) && pair.participants.map((p) => p.manualParticipantId).join(',') === 'manual-1,manual-2',
+    'participants[] da dupla preserva a identidade manual estrutural');
+})();
+
 // ── Caso documentado: 'overall' + 2 linhas + 2 grupos DEGENERA p/ per_group ──
 (function () {
   const { prev, all } = makeGroups(2, 4);

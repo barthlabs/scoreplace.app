@@ -30,6 +30,7 @@
     members.forEach(function (m, i) {
       obj['p' + (i + 1) + 'Name'] = m.name;
       if (m.uid) obj['p' + (i + 1) + 'Uid'] = m.uid;
+      if (m.manualParticipantId) obj['p' + (i + 1) + 'ManualId'] = m.manualParticipantId;
       if (m.email) obj['p' + (i + 1) + 'Email'] = m.email;
       if (m.photoURL) obj['p' + (i + 1) + 'Photo'] = m.photoURL;
     });
@@ -56,12 +57,13 @@
     if (s.p2Name || s.p2Uid || s.fixedPair) {
       var members = [];
       for (var k = 1; k <= 4; k++) {
-        var _uk = s['p' + k + 'Uid'], _nk = s['p' + k + 'Name'];
-        if (!_nk && !_uk) break;
+        var _uk = s['p' + k + 'Uid'], _mk = s['p' + k + 'ManualId'], _nk = s['p' + k + 'Name'];
+        if (!_nk && !_uk && !_mk) break;
         // FASE 2: nome do membro pelo uid (perfil ao vivo); nome gravado só fallback (guest/cache frio)
         var nm = (_uk && typeof window !== 'undefined' && window._displayNameForUid) ? window._displayNameForUid(_uk, _nk) : (_nk || _uk || '');
         var mem = { name: nm };
         if (_uk) mem.uid = _uk;
+        if (_mk) mem.manualParticipantId = _mk;
         if (s['p' + k + 'Email']) mem.email = s['p' + k + 'Email'];
         if (s['p' + k + 'Photo']) mem.photoURL = s['p' + k + 'Photo'];
         members.push(mem);
@@ -1887,8 +1889,9 @@
       var dst = smap[nm];
       if (Array.isArray(entry.participants) && entry.participants.length > 1) dst.participants = entry.participants.slice();
       for (var i = 1; i <= 4; i++) {
-        var uidKey = 'p' + i + 'Uid', nameKey = 'p' + i + 'Name', emailKey = 'p' + i + 'Email', photoKey = 'p' + i + 'Photo';
+        var uidKey = 'p' + i + 'Uid', manualKey = 'p' + i + 'ManualId', nameKey = 'p' + i + 'Name', emailKey = 'p' + i + 'Email', photoKey = 'p' + i + 'Photo';
         if (entry[uidKey]) dst[uidKey] = entry[uidKey];
+        if (entry[manualKey]) dst[manualKey] = entry[manualKey];
         if (entry[nameKey]) dst[nameKey] = entry[nameKey];
         if (entry[emailKey]) dst[emailKey] = entry[emailKey];
         if (entry[photoKey]) dst[photoKey] = entry[photoKey];
