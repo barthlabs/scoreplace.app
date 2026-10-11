@@ -13350,9 +13350,10 @@ window.AppStore = {
           window._applyUiScale(this.currentUser.uiScale);
         }
         if (profile.gender) this.currentUser.gender = profile.gender;
-        // `nameConflict` é legado da antiga reserva global de displayName. Não
-        // participa da sessão: homônimos são válidos e qualquer sinal de possível
-        // segunda conta chega exclusivamente por `dupSuspect`.
+        // `nameConflict` é legado da reserva global antiga. A reserva transacional
+        // atual impede NOVOS homônimos; colisões históricas ficam em revisão no
+        // servidor e nunca entram nesta sessão como se fossem identidade. Um sinal
+        // de possível segunda conta chega exclusivamente por `dupSuspect`.
         delete this.currentUser.nameConflict;
         // v1.8.3 — POSSÍVEL SEGUNDA CONTA (detectada no cadastro pelo trigger).
         // ⚠️ loadUserProfile copia CAMPO A CAMPO (não há merge genérico): sem esta linha o

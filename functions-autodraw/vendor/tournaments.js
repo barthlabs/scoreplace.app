@@ -3252,6 +3252,14 @@ function renderTournaments(container, tournamentId = null) {
           ? window._faseCorrenteEhClassificatoriaPorRodadas(t)
           : (t.format === 'Suíço Clássico' || t.classifyFormat === 'swiss' || t.currentStage === 'swiss');
         const isLigaFormat = window._isLigaFormat(t);
+        // Encerrar manualmente é uma ação da chave eliminatória atual. O
+        // formato histórico pode continuar dizendo "Liga" depois da transição,
+        // mas não pode esconder o único botão de encerramento da fase final.
+        const _currentPhaseForTools = typeof window._faseDoTorneio === 'function'
+          ? window._faseDoTorneio(t, t.currentPhaseIndex || 0) : null;
+        const isCurrentClassificationPhase = _currentPhaseForTools && _currentPhaseForTools.kind
+          ? _currentPhaseForTools.kind === 'classification'
+          : isLigaFormat;
         const isLigaOpenEnroll = isLigaFormat && t.ligaOpenEnrollment !== false;
         // v2.1.0: mostra o botão Encerrar/Reabrir também APÓS o sorteio quando as
         // inscrições tardias estão ativas (lateEnrollManaged) — é o único jeito de
@@ -3974,7 +3982,7 @@ function renderTournaments(container, tournamentId = null) {
                       `_advBtn`, que é o único lugar. O botão da CHAVE (bracket.js) é outra
                       ação, no contexto dela, e continua independente.
                       Travado por tests/avancar-de-fase-e-um-botao-so.test.js. */ ''}
-                ${(!isFinished && hasDraw && !window._isLigaFormat(t)) ? `<button class="btn btn-tool-amber hover-lift" onclick="event.stopPropagation(); window.finishTournament('${t.id}')">🏁 ${_t('org.finishTournament')}</button>` : ''}
+                ${(!isFinished && hasDraw && !isCurrentClassificationPhase) ? `<button class="btn btn-tool-amber hover-lift" onclick="event.stopPropagation(); window.finishTournament('${t.id}')">🏁 ${_t('org.finishTournament')}</button>` : ''}
                 ${/* v2.6.29/31: botão "Configurar Playoffs (Fase Final)" removido e o
                       módulo de playoff (tournaments-playoff.js, rota #fase-final,
                       _renderPlayoffSection) deletado de vez — confirmado que nenhum

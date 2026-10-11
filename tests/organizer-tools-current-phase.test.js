@@ -42,6 +42,9 @@ ok(/const isAutoDrawFormat = isClassificationRounds \|\| isLigaAutoDraw;/.test(s
   'auto-sorteio operacional deriva da fase atual, não de um modo suíço paralelo');
 ok(!/const isSuicoFormat = t\.format === 'Suíço Clássico'/.test(source),
   'não restou detecção local por rótulo suíço na ferramenta');
+ok(/const isCurrentClassificationPhase = _currentPhaseForTools && _currentPhaseForTools\.kind/.test(source) &&
+   /!isCurrentClassificationPhase\) \? `<button class="btn btn-tool-amber/.test(source),
+  'encerrar torneio segue a fase atual e continua disponível na eliminatória de torneio híbrido');
 
 console.log((fail ? '❌' : '✅') + ' organizer-tools-current-phase: ' + pass + ' ok, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);

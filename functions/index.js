@@ -3195,7 +3195,13 @@ exports.getOwnIdentityStatus = onCall(
       db.collection("accountIdentity").doc(uid).get()
     ]);
     if (!profile.exists) throw new HttpsError("failed-precondition", "Perfil inexistente.");
-    return _identityState.read(identity.exists ? identity.data() : null, uid);
+    const profileData = profile.data() || {};
+    const nameClaimRef = _nameUnique.displayNameClaimRef(db, profileData.displayName || "");
+    const nameClaim = nameClaimRef ? await nameClaimRef.get() : null;
+    const nameClaimData = nameClaim && nameClaim.exists ? (nameClaim.data() || {}) : {};
+    const displayNameConflict = nameClaimData.state === "conflict" &&
+      Array.isArray(nameClaimData.uids) && nameClaimData.uids.map(String).indexOf(String(uid)) !== -1;
+    return _identityState.read(identity.exists ? identity.data() : null, uid, { displayNameConflict });
   }
 );
 

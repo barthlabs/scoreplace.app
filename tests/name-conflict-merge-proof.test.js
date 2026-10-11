@@ -49,10 +49,15 @@ const profileSave = block(cli, 'window.saveUserProfile = async function()', '// 
 ok(!/where\('displayName_lower'|_triggerAccountMerge/.test(profileSave) &&
   /Esse nome de exibição já está em uso/.test(cli),
   'salvar perfil deixa a reserva bloquear no servidor, sem consulta ou mesclagem por nome');
-ok(!/setTimeout\(function \(\) \{ if \(typeof window\._askNameConflict/.test(cli),
-  'login não abre pergunta por homônimo');
-ok(!/window\._profileHydrateNameConflict\(\);/.test(cli),
-  'perfil não consulta conflito de nome ao abrir');
+ok(/window\._enforceDisplayNameReview = async function/.test(cli) &&
+   /getOwnIdentityStatus/.test(cli) && /Escolha um nome exclusivo/.test(cli),
+  'homônimo legado recebe revisão obrigatória pelo estado privado da própria conta');
+ok(/displayNameClaimRef/.test(cf) && /nameClaimData\.state === "conflict"/.test(cf) &&
+   /Array\.isArray\(nameClaimData\.uids\)/.test(cf),
+  'servidor calcula a revisão pela reserva canônica, sem consultar outro perfil no cliente');
+ok(/firebase\.auth\) firebase\.auth\(\)\.signOut\(\)/.test(cli) ||
+   /firebase && firebase\.auth\) firebase\.auth\(\)\.signOut\(\)/.test(cli),
+  'a revisão não oferece "agora não": sair da conta não altera dados');
 ok(/_askDuplicateAccount/.test(cli) && /dupSuspect/.test(cli),
   'sinal de possível segunda conta continua separado do nome de exibição');
 ok(/_detectarDuplicataNaBase/.test(duplicateOnProfileWrite) && /dupSuspect/.test(duplicateDetector) &&

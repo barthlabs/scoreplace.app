@@ -4480,8 +4480,9 @@ async function simulateLoginSuccess(user) {
       basicData.createdAt = new Date().toISOString();
       needsSave = true;
     }
-    // `displayName` é somente apresentação: pessoas diferentes podem compartilhar
-    // o mesmo nome. O UID e credenciais comprovadas continuam sendo identidade.
+    // O displayName é apresentação exclusiva por política de produto; UID e
+    // credenciais comprovadas continuam sendo a identidade. A reserva é feita
+    // pelo servidor na mesma transação da criação/atualização do perfil.
     if (needsSave) {
       basicData.updatedAt = new Date().toISOString();
       // Espera, repete e AVISA. Era `.catch()` mudo — e numa conta nova esta era
@@ -4513,20 +4514,22 @@ async function simulateLoginSuccess(user) {
   if (window.AppStore.startProfileListener) {
     window.AppStore.startProfileListener();
   }
-  // Sem nome nenhum (login social que não devolveu nome) a pessoa aparece
-  // "Jogador sem perfil (XXXX)" pra TODO MUNDO já na primeira inscrição — por isso
-  // esta pergunta vem antes das outras. O app não inventa um nome nem publica o
-  // e-mail: pergunta. Ver _seedProfileFromAuth.
-  setTimeout(function () { if (typeof window._askMissingName === 'function') window._askMissingName(); }, 2500);
-  // A pergunta de SEGUNDA CONTA vem depois da de nome ausente — duas caixas ao mesmo tempo é o
-  // jeito mais rápido de a pessoa fechar as duas no automático (que é justamente o que o
-  // dono descreveu: "as pessoas às vezes não leem na pressa e fecham respondendo não").
-  setTimeout(function () { if (typeof window._askDuplicateAccount === 'function') window._askDuplicateAccount(); }, 9000);
-  // v1.8.40: por último (16s), o pedido de CELULAR — sinal mais forte de "mesma pessoa"
-  // que existe (medido: zero celular repetido na base) e âncora de recuperação de conta.
-  // Depois das perguntas de nome/duplicata de propósito: três caixas empilhadas é o jeito
-  // mais rápido de a pessoa fechar todas no automático.
-  setTimeout(function () { if (typeof window._askSecureContact === 'function') window._askSecureContact(); }, 16000);
+  // Primeiro vem a revisão obrigatória de homônimo legado. Só se ela não for
+  // necessária mostramos os lembretes normais; assim não há duas caixas
+  // competindo nem uma brecha de segundos para navegar com nome em conflito.
+  setTimeout(function () {
+    Promise.resolve(typeof window._enforceDisplayNameReview === 'function'
+      ? window._enforceDisplayNameReview() : false).then(function (blocked) {
+      if (blocked) return;
+      // Sem nome nenhum (login social que não devolveu nome) a pessoa aparece
+      // "Jogador sem perfil (XXXX)" pra TODO MUNDO já na primeira inscrição.
+      if (typeof window._askMissingName === 'function') window._askMissingName();
+      // A pergunta de segunda conta vem depois da de nome ausente.
+      setTimeout(function () { if (typeof window._askDuplicateAccount === 'function') window._askDuplicateAccount(); }, 6500);
+      // Por último, o pedido de celular — não empilhamos caixas.
+      setTimeout(function () { if (typeof window._askSecureContact === 'function') window._askSecureContact(); }, 13500);
+    });
+  }, 1000);
 
   // Quando perfil carregar: remover dot de carregamento da topbar e re-renderizar botão
   // Ouvinte único — remove-se após disparar pra não acumular listeners entre logins.
@@ -8338,10 +8341,11 @@ function setupProfileModal() {
 // cadastra"_ e _"tem que perguntar"_. O trigger grava `dupSuspect` (só o contato
 // MASCARADO); aqui é quem finalmente PERGUNTA — sem isso o sinal era gravado e ninguém lia.
 //
-// Homônimos são permitidos. Este fluxo trata somente suspeita de DUPLICATA por sinais
-// combinados, e nunca usa nome como identidade. Sobre "Rodrigo Terra Barth" × "Rodrigo Barth" o dono foi
-// explícito: _"é diferente. se disser que não é, não é, mas é um baita indício."_ — ninguém
-// precisa trocar de nome por isso, precisa ser perguntado.
+// A reserva transacional impede NOVOS homônimos. Este fluxo continua tratando
+// somente suspeita de DUPLICATA por sinais combinados, e nunca usa nome como
+// identidade: colisões históricas podem existir até a revisão explícita. Sobre
+// "Rodrigo Terra Barth" × "Rodrigo Barth", nomes diferentes não são prova de
+// duplicata, apenas um indício a ser avaliado pelos sinais de conta.
 //
 // NADA é fundido aqui. "Sim" leva ao perfil, onde vivem os canais de PROVA DE POSSE (link
 // no e-mail / SMS no celular da outra conta). Credencial já autenticada nem chega aqui: o
@@ -8365,6 +8369,7 @@ window._askMissingName = function () {
   try {
     var cu = window.AppStore && window.AppStore.currentUser;
     if (!cu || !cu.uid) return;
+    if (cu._displayNameReviewRequired) return;
     var dn = String(cu.displayName || '').trim();
     if (dn && !(typeof window._isUnfriendlyName === 'function' && window._isUnfriendlyName(dn))) return;
     if (window._missingNameAsked) return;      // uma vez por sessão
@@ -8386,10 +8391,62 @@ window._askMissingName = function () {
   } catch (e) { if (window._warn) window._warn('[missingName] pergunta falhou:', e); }
 };
 
+// ─── NOME LEGADO EM CONFLITO ────────────────────────────────────────────────
+// Antes da reserva transacional existir, algumas contas já nasceram com o mesmo
+// nome de exibição. A migração reserva esses nomes como `conflict`; não escolhe
+// um vencedor, não acrescenta número e, principalmente, não mescla dois UIDs
+// pelo rótulo. Ao entrar, cada conta envolvida precisa escolher outro nome.
+//
+// O Callable devolve somente este veredito sobre o PRÓPRIO UID. O navegador
+// nunca recebe o outro UID, contato ou a hipótese de que seja a mesma pessoa.
+window._enforceDisplayNameReview = async function () {
+  try {
+    var cu = window.AppStore && window.AppStore.currentUser;
+    if (!cu || !cu.uid || !(window.FirestoreDB && typeof window.FirestoreDB.getOwnIdentityStatus === 'function')) return false;
+    var response = await window.FirestoreDB.getOwnIdentityStatus();
+    var status = (response && response.data) || response || {};
+    if (status.displayNameReviewRequired !== true) return false;
+    cu._displayNameReviewRequired = true;
+    window._displayNameReviewRequired = true;
+
+    window.location.hash = '#profile';
+    setTimeout(function () {
+      if (typeof showConfirmDialog !== 'function') return;
+      showConfirmDialog('Escolha um nome exclusivo',
+        '<div style="font-size:0.9rem;line-height:1.55;">' +
+          'Seu nome de exibição coincide com o de uma conta criada antes da regra de nomes exclusivos.' +
+        '</div><div style="margin-top:10px;font-size:0.82rem;line-height:1.5;color:var(--text-muted);">' +
+          'Para evitar homônimos, escolha agora um nome diferente no seu perfil. ' +
+          'Isso não altera sua conta, seus torneios, inscrições ou resultados.' +
+        '</div>',
+        function () {
+          window.location.hash = '#profile';
+          setTimeout(function () {
+            var input = document.getElementById('profile-edit-name');
+            if (input) { try { input.focus(); input.select(); } catch (_e) {} }
+          }, 180);
+        },
+        function () {
+          // Sem "agora não": circular com um homônimo perpetua exatamente a
+          // inconsistência que a migração está removendo. Sair não altera dados.
+          try { if (firebase && firebase.auth) firebase.auth().signOut(); } catch (_e) {}
+        },
+        { confirmText: 'Escolher meu nome', cancelText: 'Sair da conta', type: 'warning' });
+    }, 180);
+    return true;
+  } catch (e) {
+    // Falha transitória não deve deslogar nem inventar um veredito local. A
+    // reserva continua protegida no servidor e a checagem será refeita no login.
+    if (window._warn) window._warn('[display-name-review] checagem falhou:', e);
+    return false;
+  }
+};
+
 window._askSecureContact = function () {
   try {
     var cu = window.AppStore && window.AppStore.currentUser;
     if (!cu || !cu.uid) return;
+    if (cu._displayNameReviewRequired) return;
     if (cu.phone) return;                                   // já tem celular — nada a pedir
     if (cu.dupSuspect) return;                              // outra pergunta em aberto tem prioridade
     if (typeof showConfirmDialog !== 'function') return;
@@ -8440,6 +8497,7 @@ window._askDuplicateAccount = function () {
   try {
     var cu = window.AppStore && window.AppStore.currentUser;
     if (!cu || !cu.uid) return;
+    if (cu._displayNameReviewRequired) return;
     var ds = cu.dupSuspect;
     if (!ds || !ds.nome) return;
     if (window._dupAccountAsked) return;        // uma vez por sessão
@@ -9442,6 +9500,13 @@ window._askDuplicateAccount = function () {
           // Atualiza currentUser com o que REALMENTE está no Firestore —
           // single source of truth. Próximo load não vai divergir.
           Object.keys(got).forEach(function(k) { cu[k] = got[k]; });
+          // A troca de nome resolve a colisão somente após a Function concluir
+          // a mesma transação que move a reserva. Não há suposição local: este
+          // readback só acontece depois do sucesso daquela transação.
+          if (window._displayNameReviewRequired && got.displayName && got.displayName !== _oldDisplayName) {
+            delete cu._displayNameReviewRequired;
+            window._displayNameReviewRequired = false;
+          }
           // Campo apagado não vem no readback — então o currentUser precisa
           // ESQUECÊ-LO na mão. Sem isso o valor continuaria na memória da
           // sessão e reapareceria na tela ao reabrir o perfil (era metade do

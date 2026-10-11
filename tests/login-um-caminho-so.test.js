@@ -112,8 +112,11 @@ ok(/if \(cu\.dupSuspect\) return/.test(auth) && !/cu\.dupSuspect \|\| cu\.nameCo
   'sinal de segunda conta tem prioridade, sem tratar homônimo como bloqueio');
 // (no fonte o domínio aparece como regex literal com \. escapado — casar por partes)
 ok(/privaterelay/.test(auth) && /e-mail oculto/.test(auth), 'e-mail oculto da Apple tem texto próprio');
-ok(/_askSecureContact === 'function'\) window\._askSecureContact\(\); \}, 16000\)/.test(auth),
-  'agendado DEPOIS das perguntas de nome (4s) e duplicata (9s)');
+ok(/_enforceDisplayNameReview/.test(auth) &&
+   /Promise\.resolve\(typeof window\._enforceDisplayNameReview/.test(auth) &&
+   /if \(blocked\) return;/.test(auth) &&
+   /_askSecureContact === 'function'\) window\._askSecureContact\(\); \}, 13500\)/.test(auth),
+  'revisão obrigatória de nome roda antes dos avisos de nome, duplicata e celular');
 
 console.log(fail === 0 ? '✅ login-um-caminho-so: ' + pass + ' asserções, 0 falha(s)'
                        : '❌ login-um-caminho-so: ' + pass + ' ok, ' + fail + ' falha(s)');

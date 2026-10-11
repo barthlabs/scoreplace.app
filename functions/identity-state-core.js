@@ -26,7 +26,7 @@ function initial(now) {
   };
 }
 
-function read(raw, ownUid) {
+function read(raw, ownUid, options) {
   const source = raw && typeof raw === 'object' ? raw : {};
   const state = STATES.has(text(source.state)) ? text(source.state) : 'legacy';
   const canonicalUid = text(source.canonicalUid);
@@ -37,12 +37,18 @@ function read(raw, ownUid) {
   // restrito/revisão. Em `legacy` e `verified`, uma cópia arbitrária de UID no
   // documento não ganha significado nem chega ao cliente.
   const redirected = (state === 'restricted' || state === 'duplicate_review') && canonicalUid && canonicalUid !== ownUid;
+  const opts = options && typeof options === 'object' ? options : {};
   return {
     state,
     identityEpoch: epoch,
     canonicalUid: redirected ? canonicalUid : null,
     isCanonical: !redirected,
-    auditOnly: state === 'legacy'
+    auditOnly: state === 'legacy',
+    // Um conflito de nome histórico não revela o outro perfil e tampouco é
+    // prova de segunda conta. Ele só obriga este UID a trocar seu rótulo antes
+    // de continuar usando a plataforma. A decisão vem da reserva canônica,
+    // nunca de uma consulta do cliente a perfis alheios.
+    displayNameReviewRequired: opts.displayNameConflict === true
   };
 }
 

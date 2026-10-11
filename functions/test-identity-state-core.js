@@ -14,6 +14,9 @@ ok('estado desconhecido falha fechado para legacy', core.read({ state: 'inventad
 const redirect = core.read({ state: 'duplicate_review', canonicalUid: 'uid-b', identityEpoch: 4 }, 'uid-a');
 ok('revisão expõe somente redirecionamento próprio necessário', redirect.canonicalUid === 'uid-b' && redirect.isCanonical === false && redirect.identityEpoch === 4);
 ok('UID espúrio não vaza em estado operacional', core.read({ state: 'verified', canonicalUid: 'uid-b' }, 'uid-a').canonicalUid === null);
+ok('colisão histórica exige revisão sem expor outro UID',
+  core.read(null, 'uid-a', { displayNameConflict: true }).displayNameReviewRequired === true &&
+  core.read(null, 'uid-a', { displayNameConflict: true }).canonicalUid === null);
 
 console.log('\n' + okCount + ' asserts OK, ' + failures + ' falha(s)');
 process.exit(failures ? 1 : 0);
