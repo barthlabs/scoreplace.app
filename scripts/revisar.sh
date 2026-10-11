@@ -305,6 +305,33 @@ else
   QUEM_EXECUTA="o GPT (Codex)"
 fi
 
+# ── recibo do parecer: antes de qualquer validação cara ──────────────────────────────
+# A mesma árvore pode passar duas vezes por esta porta: uma quando quem implementou pede
+# o parecer, outra quando o publicador confirma o mesmo corte. Rodar `npm test` ANTES de
+# saber se já há um APROVADO para o mesmo conteúdo fazia a segunda passagem gastar vários
+# minutos sem aumentar a segurança. O fingerprint inclui a base, o diff e o hash de cada
+# arquivo do escopo; qualquer mudança invalida o recibo e volta a exigir revisão+gates.
+if [[ "$MODO" == "plano" ]]; then
+  SLUG=$(basename "$PLANO" .md | sed 's/^plano-//'); OUT="$OUTDIR/parecer-$REVISOR-plano-$SLUG.md"
+else
+  PARTE="${SP_REVIEW_PART:-}"
+  OUT="$OUTDIR/parecer-$REVISOR-diff${PARTE:+-$PARTE}.md"
+fi
+RECIBO="$OUT.sha256"
+RECIBO_BASE="$OUT.base"
+FINGERPRINT=""
+if [[ "$MODO" == diff ]]; then
+  FINGERPRINT=$( {
+    printf 'base=%s\n' "$BASE_DIFF"
+    diff_do_escopo
+    while IFS= read -r f; do [[ -f "$f" ]] && shasum -a 256 "$f"; done < "$LISTA"
+  } | shasum -a 256 | awk '{print $1}')
+  if [[ -s "$OUT" && -s "$RECIBO" && -s "$RECIBO_BASE" && "$(cat "$RECIBO")" == "$FINGERPRINT" && "$(cat "$RECIBO_BASE")" == "$BASE_DIFF" ]] && grep -qE '(^|\*\*)VEREDITO: *APROVADO' "$OUT"; then
+    echo "  ✓ parecer APROVADO reaproveitado: mesmo corte e conteúdo ($FINGERPRINT)."
+    exit 0
+  fi
+fi
+
 # ── o pedido ao revisor ──────────────────────────────────────────────────────────────
 PROMPT="$(mktemp "${TMPDIR:-/tmp}/sp-revisao-prompt.XXXXXX")"
 EVIDENCIA_REVISAO=""
@@ -336,25 +363,6 @@ if [[ "$MODO" == diff && "${SP_REVIEW_VALIDATE:-0}" == 1 ]]; then
     exit 1
   fi
   export SP_REVIEW_EVIDENCE="$EVIDENCIA_REVISAO"
-fi
-if [[ "$MODO" == "plano" ]]; then
-  SLUG=$(basename "$PLANO" .md | sed 's/^plano-//'); OUT="$OUTDIR/parecer-$REVISOR-plano-$SLUG.md"
-else
-  PARTE="${SP_REVIEW_PART:-}"
-  OUT="$OUTDIR/parecer-$REVISOR-diff${PARTE:+-$PARTE}.md"
-fi
-# Para `diff`, um parecer aprovado só pode ser reaproveitado se o conteúdo exato
-# revisado for idêntico. Assim o deploy não cobra/reaguarda o Claude quando nada
-# mudou, mas qualquer alteração invalida o recibo automaticamente.
-RECIBO="$OUT.sha256"
-RECIBO_BASE="$OUT.base"
-FINGERPRINT=""
-if [[ "$MODO" == diff ]]; then
-  FINGERPRINT=$( { diff_do_escopo; while IFS= read -r f; do [[ -f "$f" ]] && shasum -a 256 "$f"; done < "$LISTA"; } | shasum -a 256 | awk '{print $1}')
-  if [[ -s "$OUT" && -s "$RECIBO" && "$(cat "$RECIBO")" == "$FINGERPRINT" ]] && grep -qE '(^|\*\*)VEREDITO: *APROVADO' "$OUT"; then
-    echo "  ✓ parecer APROVADO reaproveitado: diff idêntico ($FINGERPRINT)."
-    exit 0
-  fi
 fi
 # Um parecer só é contexto de ressubmissão se revisou O MESMO corte. Sem essa
 # vinculação, trocar origin/main pela base real da publicação carregava uma

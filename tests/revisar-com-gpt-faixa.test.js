@@ -195,6 +195,11 @@ ok(NUCLEO.includes('MODELO=haiku') &&
    NUCLEO.includes('Sonnet só entra se for pedido explicitamente') &&
    NUCLEO.includes('[[ "$MODELO" != haiku ]]'),
   'Haiku é o padrão econômico; Sonnet só entra por pedido explícito');
+const reciboAntesDaSuite = NUCLEO.indexOf('base=%s\\n') < NUCLEO.indexOf('SP_REVIEW_VALIDATE:-0');
+ok(reciboAntesDaSuite &&
+   NUCLEO.includes('mesmo corte e conteúdo') &&
+   NUCLEO.includes('"$(cat "$RECIBO_BASE")" == "$BASE_DIFF"'),
+  'parecer aprovado do mesmo corte é conferido antes da suíte cara e não sobrevive à troca de base');
 fs.rmSync(lab, { recursive: true, force: true });
 console.log(fail ? '❌ revisar (faixa/interruptor/auto): ' + fail + ' falha(s), ' + pass + ' ok' : '✅ revisar (faixa/interruptor/auto): ' + pass + ' ok');
 process.exit(fail ? 1 : 0);
