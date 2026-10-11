@@ -46,6 +46,34 @@ function state() {
   const stable = await runOne({ tournamentId: 't1', load, write, project });
   ok(stable.outcome === 'unchanged' && writes === 1, 'documento já canônico não recebe escrita');
 
+  // Alguns projetores só traduzem phases[] e não têm autoridade para escolher
+  // a fase corrente. Nesse caso o PATCH deve omitir o índice, preservando o
+  // valor já registrado — inclusive se ele veio de um fluxo legado.
+  const indexed = state();
+  indexed.tournament.currentPhaseIndex = 2;
+  const projectWithoutIndex = (t) => ({
+    phases: Array.isArray(t.phases) && t.phases.length
+      ? t.phases.map((p) => Object.assign({}, p))
+      : [{ kind: 'classification', classification: { structure: 'round_robin' } }],
+    changed: !(Array.isArray(t.phases) && t.phases.length),
+    created: true
+  });
+  const indexedLoad = async () => ({ updateTime: indexed.updateTime, tournament: JSON.parse(JSON.stringify(indexed.tournament)) });
+  let indexedPayload = null;
+  const indexedWrite = async (_id, projection, updateTime) => {
+    if (updateTime !== indexed.updateTime) throw new Error('precondição recusada');
+    indexedPayload = JSON.parse(JSON.stringify(projection));
+    indexed.tournament.phases = JSON.parse(JSON.stringify(projection.phases));
+    if (Number.isInteger(projection.currentPhaseIndex)) indexed.tournament.currentPhaseIndex = projection.currentPhaseIndex;
+    indexed.updateTime = '2026-10-09T21:00:02.000000Z';
+  };
+  const indexedPreview = await runOne({ tournamentId: 't-index', load: indexedLoad, write: indexedWrite, project: projectWithoutIndex });
+  const indexedApplied = await runOne({ tournamentId: 't-index', apply: true, fingerprint: indexedPreview.plan.fingerprint, load: indexedLoad, write: indexedWrite, project: projectWithoutIndex });
+  ok(indexedApplied.outcome === 'applied' && Object.keys(indexedPayload).length === 1 && Array.isArray(indexedPayload.phases), 'projetor sem índice escreve somente phases');
+  ok(indexed.tournament.currentPhaseIndex === 2, 'índice legado é preservado quando a projeção não o recalcula');
+  const indexedStable = await runOne({ tournamentId: 't-index', load: indexedLoad, write: indexedWrite, project: projectWithoutIndex });
+  ok(indexedStable.outcome === 'unchanged', 'documento canônico sem novo índice não recebe segunda escrita');
+
   const raced = state();
   const racedLoad = async () => ({ updateTime: raced.updateTime, tournament: JSON.parse(JSON.stringify(raced.tournament)) });
   const racedPreview = await runOne({ tournamentId: 't2', load: racedLoad, write, project });
