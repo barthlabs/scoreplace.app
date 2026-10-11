@@ -1,4 +1,4 @@
-/* L7 — perfil não regrava torneios pelo navegador. */
+/* L7 — perfil não regrava torneios, nem pelo navegador nem pelo servidor. */
 'use strict';
 const fs=require('fs'), path=require('path'), root=path.join(__dirname,'..'); let ok=0,bad=0;
 function check(n,v){if(v){ok++;console.log('  ✓ '+n)}else{bad++;console.log('  ✗ '+n)}}
@@ -8,8 +8,7 @@ const nameBody=client.slice(client.indexOf('window._propagateNameChange'), clien
 const photoBody=client.slice(client.indexOf('function _propagatePhotoToTournaments'), client.indexOf('// v0.17.87'));
 check('nome não salva torneios pelo cliente', !/saveTournament|mutateTournament|commitTournamentTx/.test(nameBody));
 check('foto não salva torneios pelo cliente', !/saveTournament|mutateTournament|commitTournamentTx/.test(photoBody));
-const trigger=server.slice(server.indexOf('exports.propagateDisplayName'), server.indexOf('exports.syncDiscoveryFeed'));
-check('trigger do servidor observa users/{uid}', /onDocumentWritten/.test(trigger) && /users\/\{uid\}/.test(trigger));
-check('trigger relê em transação', /db\.runTransaction/.test(trigger) && /_splitParts\.hidratar\(tx/.test(trigger));
-check('trigger só atualiza campos tocados', /_renameProp\.camposTocados/.test(trigger));
+check('servidor não exporta propagador de nome', !/exports\.propagateDisplayName\s*=/.test(server));
+check('servidor não importa o propagador legado', !/rename-propagate-core/.test(server));
+check('cliente não promete gatilho canônico de propagação', !/aguardando o trigger canônico do servidor/.test(nameBody));
 console.log('\nL7 perfil: '+ok+' ok, '+bad+' falharam'); process.exitCode=bad?1:0;

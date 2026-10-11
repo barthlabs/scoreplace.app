@@ -1533,10 +1533,9 @@ const SUITES = [
   // os que ele PROIBIU: subconjunto de nome (30% de acerto) e nascimento+1º nome.
   // Trava também o "não sou eu" lembrado — o caso das duas contas "Nelson Barth".
   'functions/test-duplicate-person-core.js',
-  // Trocou o displayName → o rótulo gravado nos torneios vira mentira. Este core
-  // decide o que reescrever SÓ por uid; metade do teste existe pra travar o que
-  // NÃO pode ser tocado (homônimo de outro uid, parceiro de dupla, fictício).
-  'functions/test-rename-propagate-core.js',
+  // Trocar displayName não pode regravar torneios: uid resolve o perfil vivo
+  // na leitura, e snapshots legados nunca decidem identidade.
+  'tests/profile-name-never-writes-tournaments.test.js',
   // Arrays pareados nome[i] ↔ uid[i]. A exclusão de conta filtrava SÓ o lado dos
   // uids e deixava o nome (caso Denise Mamesso, 08/ago/2026) — na 1ª posição isso
   // faria cada nome apontar pro uid do vizinho.

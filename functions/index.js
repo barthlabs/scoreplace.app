@@ -188,7 +188,6 @@ const _rosterWatch = require("./roster-watch-core");
 const _rosterMirror = require("./roster-mirror-core");
 const _delGuard = require("./delete-account-guard-core");
 const _passkey = require("./passkey-core");   // decisões puras: origem, desafio, contador
-const _renameProp = require("./rename-propagate-core");
 // A PORTA DA CONTA VIVA. Toda busca ampla em users/ por campo de identidade (email /
 // email_lower / phone / displayName / letzplayHandle) que resolva UMA pessoa e AJA sobre ela
 // passa por aqui — a lápide de fusão fica com o MESMO contato do sobrevivente, então
@@ -10678,7 +10677,6 @@ function _discoverySummary(t) {
 // completa nem instantânea (doc offline, torneio antigo, escrita que falha no
 // meio), então nada pode voltar a DEPENDER dela.
 //
-// A regra do que reescrever mora em rename-propagate-core (PURO, 20 asserções):
 // só por uid, nunca por nome — e array desalinhado é recusado por inteiro em vez
 // de adivinhado (foi assim que a saída da Denise quase renomeou o vizinho).
 /* ⛔ ESPELHO PÚBLICO DO PERFIL — a saída para o que Rule nenhuma resolve.
@@ -10735,54 +10733,17 @@ exports.espelhoDoPerfilPublico = onDocumentWritten(
   }
 );
 
-exports.propagateDisplayName = onDocumentWritten(
-  { document: "users/{uid}", region: "us-central1", memory: "256MiB", timeoutSeconds: 300 },
-  async (event) => {
-    const after = event.data.after;
-    if (!after || !after.exists) return;
-    const a = after.data() || {};
-    const b = event.data.before && event.data.before.exists ? (event.data.before.data() || {}) : {};
-    if (a.deleted || a.mergedInto) return;                 // tombstone não propaga nada
-    const novo = String(a.displayName || "").trim();
-    const velho = String(b.displayName || "").trim();
-    // SÓ quando o nome MUDOU de verdade — senão toda escrita de perfil (presença,
-    // troféu, preferência) varreria os torneios à toa. Também é o anti-loop.
-    if (!novo || novo === velho) return;
-
-    const uid = event.params.uid;
-    const db = admin.firestore();
-    let docs = [];
-    try { docs = (await db.collection("tournaments").where("memberUids", "array-contains", uid).get()).docs; }
-    catch (e) { console.error("[propagateDisplayName] query:", e.message); return; }
-
-    let tocados = 0, slots = 0;
-    for (const d of docs) {
-      try {
-        await db.runTransaction(async (tx) => {
-          const snap = await tx.get(d.ref);            // relê DENTRO da transação
-          if (!snap.exists) return;
-          // ⛔ Torneio DIVIDIDO: o elenco e os jogos moram em subcoleções, e no documento
-          // os campos ficam `[]`. Sem hidratar, `planRename` não acharia UM slot sequer e
-          // o rótulo velho ficaria pra sempre — falha silenciosa, `r.total` = 0.
-          // Hidrata ANTES de qualquer escrita (a transação lê tudo primeiro).
-          const t = await _splitParts.hidratar(tx, d.ref, snap.data());
-          const r = _renameProp.planRename(t, uid, novo);
-          if (!r.total) return;
-          // escrita SELETIVA: só os campos de topo que o plano tocou — nunca o doc
-          // inteiro (outra aba pode ter lançado placar no meio).
-          const patch = {};
-          _renameProp.camposTocados(r.mudancas).forEach((c) => { patch[c] = t[c]; });
-          _splitParts.gravar(tx, d.ref, t, patch);
-          tocados++; slots += r.total;
-          if (r.avisos && r.avisos.length) {
-            console.warn("[propagateDisplayName] arrays desalinhados em " + d.id + ": " + JSON.stringify(r.avisos));
-          }
-        });
-      } catch (e) { console.error("[propagateDisplayName] " + d.id + ":", e.message); }
-    }
-    if (tocados) console.log(`[propagateDisplayName] ${uid} → "${novo}": ${slots} rótulo(s) em ${tocados} torneio(s)`);
-  }
-);
+/*
+ * Não existe mais propagação de displayName para torneios.
+ *
+ * Um nome de perfil é dado vivo de users/{uid}; varrer `tournaments` numa troca de
+ * nome criava uma segunda fonte de verdade e concorria com placar, agenda e sorteio.
+ * Inscrições autenticadas são sanitizadas para uid-only, o sorteio reidrata em memória
+ * e os renderizadores resolvem o perfil por uid. Rótulos históricos de jogos podem
+ * permanecer como snapshot/fallback, mas nunca são usados para localizar ou modificar
+ * uma conta. A ausência deliberada deste gatilho é protegida por
+ * tests/profile-name-never-writes-tournaments.test.js.
+ */
 
 exports.syncDiscoveryFeed = onDocumentWritten(
   { document: "tournaments/{tid}", region: "us-central1", memory: "256MiB", timeoutSeconds: 60 },

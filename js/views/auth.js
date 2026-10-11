@@ -6515,19 +6515,17 @@ window._applyProfileSportsUI = function(arr) {
   }
 };
 
-// ─── Propagate displayName change across all tournaments ─────────────────
+// ─── Compatibilidade de mudança de displayName (sem escrever torneios) ────
 window._propagateNameChange = function _propagateNameChange(oldName, newName) {
-  /* A fonte canônica é `propagateDisplayName` no servidor. Esta casca fica só
-   * por compatibilidade com chamadores antigos; ela nunca grava um torneio. */
+  /* Esta casca existe só por compatibilidade com chamadores antigos. O perfil
+   * é a única fonte do nome; telas resolvem users/{uid} ao ler e nunca há
+   * varredura de torneios por troca de displayName. */
   if (!oldName || !newName || oldName === newName) return;
-  window._debug('[PropagateName] aguardando o trigger canônico do servidor');
+  window._debug('[ProfileName] perfil atualizado; exibição resolve por uid');
 };
 
-// v1.8.63: propagar mudança de perfil (nome E/OU foto) para torneios.
-// Quando só a foto muda, garante que memberUids está atualizado (para
-// que o usuário phone-only possa salvar via regras do Firestore).
-// NÃO armazena photoURL no objeto participante — fotos são buscadas
-// diretamente de users/{uid} em _preloadPlayerPhotos (v1.8.58).
+// Foto também vem exclusivamente de users/{uid}; nenhum dado de perfil regrava
+// o torneio. Os argumentos são preservados só para os antigos call sites.
 function _propagatePhotoToTournaments() {
   /* Foto é lida diretamente de users/{uid}; nenhuma troca de foto regrava torneio. */
   window._debug('[PropagatePhoto] perfil salvo; cartões consultam o perfil canônico');

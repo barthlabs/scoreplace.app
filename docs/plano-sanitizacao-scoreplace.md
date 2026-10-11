@@ -27,8 +27,8 @@ massa continua exigindo backup, censo antes/depois e aprovação específica.
 | Elenco | O produto mantém lista embutida, espera embutida, espelho `participants` e, em torneios divididos, `inscritos`. | A duplicação é uma causa raiz de regressões; o cadastro deve ter uma fonte canônica única. |
 | Telemetria de SMS | O cliente anteriormente criava `users/{uid}/phoneVerifyAttempts` e duplicava telefone no rastro. Em 21/09/2026, `recordPhoneVerificationAttempt` passou a validar o intent, fixar o UID do token e gravar somente desfecho operacional. | A subcoleção está fechada a escrita direta nas Rules; telefone e mensagem crua não entram mais nessa projeção. |
 | Histórico de partidas | Resultado de torneio chama `applyMatchResult`; a mesma transação deriva `matchHistory` pelo módulo puro `match-history-core`. Casual chama `materializeOwnCasualMatchHistory`, que relê a partida final. Rules recusam toda escrita cliente em `matchHistory`. | Histórico é projeção por UID, com ID determinístico, nunca entrada declarada pelo navegador. A regressão cobre rótulos falsos, vencedor por UID e bloqueio pelas Rules. |
-| Fusão de contas | `autoMergeOnProfileUpdate` e a rotina agendada de limpeza podem executar fusão a partir de coincidência de credenciais; `requestParticipantMerge` usa o rótulo de um participante manual como identificador da vaga. | Fusão automática e vaga manual identificada por nome precisam ser contidas antes da migração de identidade. |
-| Propagação de perfil | `propagateDisplayName` ainda varre torneios e regrava rótulos quando o nome muda. | Demonstra que o torneio continua contendo cópia de perfil e cria escrita concorrente sobre dados de competição. |
+| Fusão de contas | `autoMergeOnProfileUpdate` e a varredura agendada agora só abrem caso privado de revisão; a fusão exige confirmação e prova de posse. A vaga manual usa `manualParticipantId`, não nome. | Sinais de duplicidade não alteram UIDs, inscrições ou partidas automaticamente. |
+| Propagação de perfil | A troca de `displayName` não consulta nem regrava torneios; o teste `profile-name-never-writes-tournaments` protege essa fronteira. | Perfil é a única fonte do nome; rótulos históricos são somente snapshot/fallback. |
 | Grupos configuráveis | A agenda deve ser comum ao núcleo classificatório. | Tamanho do grupo e número de jogos são escolhas do organizador. |
 
 Essas afirmações são sobre o código inspecionado em 20/09/2026, especialmente
@@ -37,15 +37,15 @@ Essas afirmações são sobre o código inspecionado em 20/09/2026, especialment
 `js/views/phases-engine.js`, `js/views/tournaments-draw.js` e
 `js/views/tournaments-draw-prep.js`.
 
-### Gate para retirar a propagação de nome
+### Gate cumprido: retirada da propagação de nome
 
-Em 21/09/2026, a inspeção de `propagateDisplayName` confirmou que ele só casa
-slots pelo UID, mas ainda regrava `rounds`, `matches`, grupos e classificação
-para atualizar rótulos de exibição. Isso não pode ser removido por simples
-desativação: há leitores legados em sorteio e entrada tardia que ainda usam
-`displayName`/`name` e `p1Name`/`p2Name` como fallback.
+O antigo `propagateDisplayName` casava slots pelo UID, mas ainda regravava
+`rounds`, `matches`, grupos e classificação para atualizar rótulos de exibição.
+Ele foi removido: a mudança de perfil não pode abrir uma escrita concorrente em
+dados de competição. Os rótulos físicos legados podem continuar como fallback
+de leitura, mas o perfil vivo prevalece quando existe UID.
 
-Antes de desligar o gatilho, cada leitor precisa obedecer a este contrato:
+O contrato que permite manter essa retirada é:
 
 1. se houver UID, toda chave, deduplicação, presença, inscrição e decisão usa
    exclusivamente UID; o nome é resolvido para exibição pelo perfil;
@@ -53,14 +53,13 @@ Antes de desligar o gatilho, cada leitor precisa obedecer a este contrato:
    explicitamente manual/convidada, com `manualParticipantId` quando persistida;
 3. histórico materializado pode conservar o rótulo como snapshot de partida,
    mas não pode usá-lo para localizar, autorizar ou alterar uma conta;
-4. o teste de retirada deve provar que a troca de nome não escreve torneios e
+4. o teste de retirada prova que a troca de nome não escreve torneios e
    que os caminhos com UID continuam desenhando, sorteando e deduplicando.
 
-O primeiro corte é a entrada tardia e a formação de duplas: esses módulos já
-priorizam `participantUids` em vários caminhos, porém ainda têm chaves por
-nome como contingência. A migração deve substituir apenas a contingência de
-entrada autenticada, preservando convidados sem conta; não autoriza apagar
-rótulos históricos em massa.
+Persistências futuras continuam obrigadas a remover campos de perfil de
+inscrições autenticadas na fronteira de escrita; convidados sem conta mantêm
+seu rótulo local. Esta retirada não autoriza apagar snapshots históricos em
+massa.
 
 ## Modelo de domínio definitivo
 
