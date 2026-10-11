@@ -4857,7 +4857,10 @@ function setupCreateTournamentModal() {
     let fmtValue = 'elim_simples';
     var drawModeVal = t.drawMode || 'sorteio';
     if (t.format === 'Liga') fmtValue = 'liga';
-    else if (t.format === 'Suíço Clássico') fmtValue = 'suico';
+    // Suíço legado é uma classificatória por rodadas. Não há mais opção
+    // independente no select oculto; mapeá-lo para Liga mantém o formulário
+    // coerente até que o FORMAT2 derive a configuração canônica das fases.
+    else if (t.format === 'Suíço Clássico') fmtValue = 'liga';
     else if (t.format === 'Ranking') fmtValue = 'liga'; // Ranking unificado com Liga
     else if (t.format === 'Eliminatórias Simples') fmtValue = 'elim_simples';
     else if (t.format === 'Dupla Eliminatória') fmtValue = 'elim_dupla';

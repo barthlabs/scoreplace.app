@@ -184,6 +184,11 @@
       formatCode: tournament.formatCode,
       drawMode: tournament.drawMode,
       reiRainha: tournament.reiRainha,
+      // `swissRounds` era o único lugar onde alguns documentos antigos
+      // guardavam o número de rodadas. Projetá-lo para a fase não altera a
+      // competição materializada; apenas impede que a edição canônica abra
+      // como se a classificatória tivesse uma rodada arbitrária.
+      rounds: tournament.swissRounds,
       gruposCount: tournament.gruposCount,
       gruposClassified: tournament.gruposClassified
     }];
@@ -275,6 +280,56 @@
         roundBoundsEditorEnabled: false
       }
     }, sport);
+  }
+
+  // Reconstrói a configuração editável a partir do contrato de fases. É uma
+  // ponte de ENTRADA: documentos sem `fmt2` não voltam ao formulário com o
+  // default do aplicativo, nem ressuscitam o antigo "modo suíço". A saída do
+  // próximo salvar continua sendo `fmt2` + `phases` canônicos.
+  function configFromTournament(tournament, sport) {
+    tournament = tournament || {};
+    var projected = projectLegacyPhases(tournament).phases || [];
+    var first = projected[0] || {};
+    var elimination = projected.filter(function (phase) { return phase && phase.kind === 'elimination'; })[0] || null;
+    var cfg = defaultConfig(sport || tournament.sport);
+
+    cfg.disputa = Number(tournament.teamSize) === 1 ? 'individual' : 'dupla';
+    if (first.kind === 'elimination') {
+      cfg.classifAtiva = false;
+      cfg.eliminatoria.ativa = true;
+      cfg.eliminatoria.dupla = !!(first.elimination && first.elimination.bracketType === 'double');
+      cfg.eliminatoria.politicaDaChave = first.politicaDaChave || cfg.eliminatoria.politicaDaChave;
+      return normalize(cfg, sport || tournament.sport);
+    }
+
+    cfg.classifAtiva = true;
+    var classif = first.classification || {};
+    cfg.grupos = classif.structure === 'groups'
+      ? Math.max(2, parseInt(first.gruposCount || tournament.gruposCount, 10) || 2)
+      : 1;
+    var pairing = classif.pairing || {};
+    if (pairing.strategy === 'monarch_groups') cfg.parceria = 'rei_rainha';
+    else if (cfg.disputa === 'dupla') cfg.parceria = pairing.entryMode === 'fixed' ? 'fixa' : 'sorteio_rodada';
+    if (cfg.grupos === 1 && classif.structure !== 'groups') {
+      var rounds = parseInt(first.rounds || tournament.swissRounds, 10);
+      if (rounds > 0) { cfg.rodadas.modo = 'fixo'; cfg.rodadas.n = rounds; }
+    }
+    if (pairing.clusterSize) cfg.classificationPairing.clusterSize = pairing.clusterSize;
+    if (pairing.strategy === 'free_draw') cfg.classificationPairing.strategy = 'free_draw';
+
+    // A antiga transição suíça carregava o corte no topo; ela representa uma
+    // eliminatória posterior e deve sobreviver à primeira edição canônica.
+    var inferredTarget = parseInt(tournament.p2TargetCount, 10);
+    var hasInferredElimination = tournament.p2Resolution === 'swiss' && inferredTarget > 1;
+    cfg.eliminatoria.ativa = !!elimination || hasInferredElimination;
+    if (elimination) {
+      cfg.eliminatoria.dupla = !!(elimination.elimination && elimination.elimination.bracketType === 'double');
+      cfg.eliminatoria.politicaDaChave = elimination.politicaDaChave || cfg.eliminatoria.politicaDaChave;
+      var mapping = elimination.source && elimination.source.mapping;
+      if (Array.isArray(mapping) && mapping[0] && parseInt(mapping[0].rankTo, 10) > 0) inferredTarget = parseInt(mapping[0].rankTo, 10);
+    }
+    if (inferredTarget > 0) cfg.classificados = inferredTarget;
+    return normalize(cfg, sport || tournament.sport);
   }
 
   // ── FORMATO DA PARTIDA (GSM) DE UMA FASE ─────────────────────────────────────
@@ -905,6 +960,7 @@
     allowsSingles: allowsSingles,
     teamSizeFor: teamSizeFor,
     defaultConfig: defaultConfig,
+    configFromTournament: configFromTournament,
     normalize: normalize,
     summary: summary,
     projectLegacyPhases: projectLegacyPhases,

@@ -48,6 +48,10 @@
   // (uids/emails/fotos quando existem). Usado no carry-forward ('keep') — a dupla
   // SEGUE junta. Quando só há o nome "X / Y", divide pelos nomes (sem uid).
   function _asTeam(s) {
+    // A classificação de grupos carrega a dupla vencedora como uma linha de
+    // standings. Essa linha precisa conservar os membros estruturados: cair no
+    // fallback "A / B" abaixo descartaria os UIDs e faria a repescagem recusar
+    // corretamente uma escolha por nome.
     if (Array.isArray(s.participants) && s.participants.length > 1) return mkTeam(s.participants);
     if (s.p2Name || s.p2Uid || s.fixedPair) {
       var members = [];
@@ -1875,6 +1879,22 @@
     var participants = group.players || group.participants || [];
     var smap = {}, h2h = {}, usesSets = false;
     function ensure(nm) { if (nm && !smap[nm]) smap[nm] = { name: nm, uid: null, points: 0, wins: 0, losses: 0, draws: 0, pointsDiff: 0, played: 0, setsWon: 0, setsLost: 0, gamesWon: 0, gamesLost: 0, tiebreaksWon: 0, buchholz: 0, sonnebornBerger: 0 }; }
+    // Mantém a identidade da dupla ao transformar players[] em standings. O
+    // placar continua indexado pelo nome do time (formato dos matches), mas a
+    // próxima fase recebe o objeto canônico com os dois UIDs.
+    function preserveTeam(nm, entry) {
+      if (!nm || !entry || typeof entry !== 'object' || !smap[nm] || !_isTeamEntry(entry)) return;
+      var dst = smap[nm];
+      if (Array.isArray(entry.participants) && entry.participants.length > 1) dst.participants = entry.participants.slice();
+      for (var i = 1; i <= 4; i++) {
+        var uidKey = 'p' + i + 'Uid', nameKey = 'p' + i + 'Name', emailKey = 'p' + i + 'Email', photoKey = 'p' + i + 'Photo';
+        if (entry[uidKey]) dst[uidKey] = entry[uidKey];
+        if (entry[nameKey]) dst[nameKey] = entry[nameKey];
+        if (entry[emailKey]) dst[emailKey] = entry[emailKey];
+        if (entry[photoKey]) dst[photoKey] = entry[photoKey];
+      }
+      dst.fixedPair = true;
+    }
     participants.forEach(function (p) {
       var nm = (typeof p === 'string') ? p : ((p && (p.displayName || p.name)) || '');
       ensure(nm);
@@ -1883,6 +1903,7 @@
       // os jogos de grupo usam em p1/p2), mas o DESEMPATE passa a casar por uid — que é o
       // que erra quando alguém se renomeia ou quando há dois homônimos no mesmo grupo.
       if (nm && smap[nm] && !smap[nm].uid && p && typeof p === 'object' && p.uid) smap[nm].uid = p.uid;
+      preserveTeam(nm, p);
     });
     // uid também dos SLOTS dos jogos (grupo legado sem uid no elenco ainda tem no jogo)
     (function () {
@@ -1893,6 +1914,7 @@
         [['p1', m.p1], ['p2', m.p2]].forEach(function (par) {
           var u = slot(m, par[0]) || [];
           if (u.length === 1 && par[1] && smap[par[1]] && !smap[par[1]].uid) smap[par[1]].uid = u[0];
+          preserveTeam(par[1], par[0] === 'p1' ? m.team1Obj : m.team2Obj);
         });
       });
     })();

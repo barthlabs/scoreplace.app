@@ -1723,6 +1723,7 @@ const SUITES = [
   'tests/materializacao-nao-diverge-roster-legado.test.js',
   'functions/test-registration-roster-core.js',
   'tests/format2-novo-sem-suico.test.js',
+  'tests/format2-legacy-config.test.js',
   'tests/migrar-fases-legadas-censo.test.js',
   'tests/registro-canonico-dry-run-cf.test.js',
   'tests/auditoria-inscricoes-canonicas.test.js',

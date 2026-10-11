@@ -1577,7 +1577,11 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   // sport: modalidade; initialCfg: config existente (t.fmt2) ou null (default do esporte).
   window._f2MountInForm = function (container, sport, initialCfg, tournament) {
     sport = sport || 'Beach Tennis';
-    var cfg = (initialCfg && typeof initialCfg === 'object') ? window.FORMAT2.normalize(initialCfg, sport) : window.FORMAT2.defaultConfig(sport);
+    var cfg = (initialCfg && typeof initialCfg === 'object')
+      ? window.FORMAT2.normalize(initialCfg, sport)
+      : ((tournament && typeof window.FORMAT2.configFromTournament === 'function')
+        ? window.FORMAT2.configFromTournament(tournament, sport)
+        : window.FORMAT2.defaultConfig(sport));
     var last = tournament && Array.isArray(tournament.phases) ? tournament.phases[tournament.phases.length - 1] : null;
     if (cfg.classifAtiva && cfg.eliminatoria && last && last.formatCode && String(last.formatCode).indexOf('elim_') === 0) {
       if (!Array.isArray(cfg.eliminatoria.roundBounds) || !cfg.eliminatoria.roundBounds.length) cfg.eliminatoria.roundBounds = Array.isArray(last.roundBounds) ? last.roundBounds.slice() : [];
@@ -1597,7 +1601,11 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (!t) { container.innerHTML = hdr + '<div style="padding:24px;text-align:center;color:var(--text-muted);">Torneio não encontrado. Abra logado, pelo app.</div>'; return; }
     var sport = t.sport || 'Beach Tennis';
     if (!S || S.mode !== 'page' || S.tId !== tId) {
-      var init = (t.fmt2 && typeof t.fmt2 === 'object') ? window.FORMAT2.normalize(t.fmt2, sport) : window.FORMAT2.defaultConfig(sport);
+      var init = (t.fmt2 && typeof t.fmt2 === 'object')
+        ? window.FORMAT2.normalize(t.fmt2, sport)
+        : (typeof window.FORMAT2.configFromTournament === 'function'
+          ? window.FORMAT2.configFromTournament(t, sport)
+          : window.FORMAT2.defaultConfig(sport));
       S = { mode: 'page', tId: tId, t: t, sport: sport, cfg: init };
     } else { S.t = t; }
     container.innerHTML = hdr + '<div style="max-width:720px;margin:0 auto;padding:14px 16px 44px;">' + _bodyControls() +
