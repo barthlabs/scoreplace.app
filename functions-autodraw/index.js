@@ -6004,8 +6004,19 @@ async function _avisarGrupoFormado(tId, tName, novos) {
 async function _formarGruposDaEspera(doc) {
   const t0 = doc.data();
   if (!drawWindow || typeof integrateLateFn !== 'function') return 0;
-  const _liga = drawWindow._isLigaFormat ? drawWindow._isLigaFormat(t0) : (t0.format === 'Liga' || t0.format === 'Ranking');
-  if (!_liga || t0.ligaRoundFormat !== 'rei_rainha') return 0;
+  // A fila de espera é uma operação da FASE atual. Consultar o rótulo histórico
+  // do torneio fazia uma classificatória canônica Rei/Rainha ser ignorada quando
+  // o topo descrevia o torneio inteiro (por exemplo, "Grupos + Eliminatórias").
+  // Sem phases[] os helpers preservam exatamente o contrato legado: Liga +
+  // ligaRoundFormat. Esta rotina ainda atende só a fase 0 porque as fases
+  // posteriores usam `phaseRounds`, não `rounds`/`monarchGroups` deste fluxo.
+  const _rotativa = drawWindow._faseCorrenteUsaEntradasRotativas
+    ? drawWindow._faseCorrenteUsaEntradasRotativas(t0)
+    : (drawWindow._isLigaFormat ? drawWindow._isLigaFormat(t0) : (t0.format === 'Liga' || t0.format === 'Ranking'));
+  const _reiRainha = drawWindow._motorDaFaseUsaReiRainha
+    ? drawWindow._motorDaFaseUsaReiRainha(t0)
+    : t0.ligaRoundFormat === 'rei_rainha';
+  if (!_rotativa || !_reiRainha) return 0;
   if ((t0.currentPhaseIndex || 0) !== 0) return 0;
   if (t0.status === 'finished' || t0.status === 'closed') return 0;
   const _fila = (Array.isArray(t0.standbyParticipants) ? t0.standbyParticipants.length : 0) +

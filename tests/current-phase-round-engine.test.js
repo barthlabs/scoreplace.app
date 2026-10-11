@@ -67,5 +67,12 @@ const monarchGuard = source.slice(source.indexOf('window._onParticipantAddedToMo
 ok(monarchGuard.includes('_faseCorrenteUsaEntradasRotativas(t)') && monarchGuard.includes('_motorDaFaseUsaReiRainha(t)'),
   'entrada tardia no Rei/Rainha é guardada pela fase atual');
 
+const autoDrawSource = fs.readFileSync(path.join(ROOT, 'functions-autodraw', 'index.js'), 'utf8');
+const waitlistWorker = autoDrawSource.slice(autoDrawSource.indexOf('async function _formarGruposDaEspera'), autoDrawSource.indexOf('exports.autoDrawReconcile'));
+ok(waitlistWorker.includes('drawWindow._faseCorrenteUsaEntradasRotativas(t0)') &&
+   waitlistWorker.includes('drawWindow._motorDaFaseUsaReiRainha(t0)') &&
+   !waitlistWorker.includes('const _liga = drawWindow._isLigaFormat'),
+  'Function forma grupos da espera pela fase atual, não pelo rótulo global');
+
 console.log((fail ? '✗' : '✓') + ' current-phase-round-engine: ' + pass + ' passaram, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);
