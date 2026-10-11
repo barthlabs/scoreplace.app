@@ -3023,7 +3023,14 @@ function renderBracket(container, tournamentId, isInline) {
 
   // ── Fase de Grupos ─────────────────────────────────────────────────────────
   if (isGrupos && t.groups && t.groups.length > 0) {
-    if (t.currentStage === 'groups') {
+    // Uma fase de grupos atual já é informação suficiente no contrato atual.
+    // `currentStage` só serve de ponte para documentos que ainda não receberam
+    // `phases[]`; exigir os dois deixava grupos novos/convertidos caírem no
+    // renderer de chave por causa de um marcador que nunca deveriam gravar.
+    var _renderCurrentGroups = hasCanonicalPhase
+      ? (currentPhase.kind === 'classification' && currentPhase.classification && currentPhase.classification.structure === 'groups')
+      : t.currentStage === 'groups';
+    if (_renderCurrentGroups) {
       // ⚠️ A ORDEM É A DE ANTES: o `standbyHtml` (lista de espera) vem DEPOIS dos grupos,
       // então ele viaja na 2ª tacada junto com eles — separar por "leve/pesado" sem olhar
       // a ordem jogaria a espera pra cima dos grupos.

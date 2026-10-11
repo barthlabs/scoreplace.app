@@ -27,6 +27,7 @@ ok(tabs.includes('isRoundBased') && tabs.includes('data-bracket-round-tab') && c
 ok(tabs.includes("currentPhase.kind === 'classification'") && tabs.includes("currentPhase.classification.structure !== 'groups'"), 'a faixa de rodadas segue a fase canônica atual, não o rótulo da primeira fase');
 ok(tabs.includes("currentTournament.currentStage !== 'elimination'") && tabs.includes('grupo|liga|ranking'), 'documento ainda não projetado mantém ponte de leitura para a faixa de rodadas');
 ok(src.includes("currentPhase.kind === 'elimination'") && src.includes('a navegação não pode voltar para grupos'), 'navegação de grupos também segue a fase canônica atual');
+ok(src.includes('var _renderCurrentGroups = hasCanonicalPhase') && src.includes("currentPhase.classification.structure === 'groups'"), 'fase de grupos canônica renderiza sem depender de currentStage legado');
 
 console.log('\n' + (fail ? '❌' : '✅') + ' chaves-abas-categoria: ' + pass + ' asserts ok, ' + fail + ' falharam');
 process.exitCode = fail ? 1 : 0;
