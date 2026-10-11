@@ -1734,6 +1734,7 @@ const SUITES = [
   'tests/registro-canonico-dry-run-cf.test.js',
   'tests/auditoria-inscricoes-canonicas.test.js',
   'functions/test-registration-batch-plan-core.js',
+  'functions/test-registration-batch-apply-core.js',
   'tests/planejamento-materializacao-inscricoes.test.js',
   'functions/test-profile-preferences-core.js',
   'functions/test-profile-update-core.js',
