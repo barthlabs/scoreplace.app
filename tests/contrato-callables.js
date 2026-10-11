@@ -218,7 +218,6 @@ const TABELA = [
   { nome: "setTournamentWhatsAppGroup", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
   { nome: "splitLatePair", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },
   { nome: "splitPair", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
-  { nome: "splitTournamentParticipant", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },
   { nome: "startTournament", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },
   { nome: "substituteLigaGroupDirect", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },
   { nome: "syncProfileTournamentCategory", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },
