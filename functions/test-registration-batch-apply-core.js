@@ -20,7 +20,17 @@ const done = core.batchPlan(plan, { afterTournamentId: 'tour_c' });
 assert.strictEqual(done.complete, true);
 
 const receipt = { results: first.items.map((item) => ({ tournamentId: item.tournamentId, fingerprint: item.fingerprint, outcome: 'migrated', registrations: item.registrations })) };
-assert.deepStrictEqual(core.verifyBatchReceipt(first, receipt), { verified: true, tournaments: 2, nextCursor: 'tour_b' });
+const request = core.batchRequest(first);
+assert.strictEqual(request.items.length, 2);
+assert.match(request.requestFingerprint, /^[a-f0-9]{64}$/);
+assert.deepStrictEqual(core.verifyBatchReceipt(first, receipt), { verified: true, tournaments: 2, blocked: 0, nextCursor: 'tour_b' });
+const blocked = { results: first.items.map((item, index) => ({
+  tournamentId: item.tournamentId,
+  fingerprint: item.fingerprint,
+  outcome: index ? 'blocked' : 'migrated',
+  registrations: item.registrations,
+})) };
+assert.strictEqual(core.verifyBatchReceipt(first, blocked).blocked, 1);
 assert.throws(() => core.verifyBatchReceipt(first, { results: receipt.results.slice(0, 1) }), /incompleto/);
 assert.throws(() => core.verifyBatchReceipt(first, { results: receipt.results.map((item) => Object.assign({}, item, { fingerprint: 'outra' })) }), /fingerprint/);
 assert.throws(() => core.batchPlan(Object.assign({}, plan, { manifestFingerprint: 'alterado' })), /adulterado/);

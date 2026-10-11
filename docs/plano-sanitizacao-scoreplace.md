@@ -399,9 +399,13 @@ autoridade de elegibilidade.
 - Criar a coleção canônica de inscrições com chave determinística e índices
   necessários; manter apenas projeção de leitura compatível enquanto migra.
 - Antes da materialização física, gerar manifesto somente-leitura assinado por
-  fingerprints, recortá-lo em lotes transacionais retomáveis e conferir recibo
-  por torneio. A existência do manifesto não é autorização de escrita; o lote
-  de produção continua exigindo confirmação específica, backup e censo final.
+  fingerprints, recortá-lo em lotes de no máximo dez torneios e conferir recibo
+  por torneio. Cada torneio reutiliza a mesma transação da conversão unitária:
+  uma falha bloqueia somente aquele item e jamais abre escrita parcial nele. A
+  existência do manifesto não é autorização de escrita; o lote de produção
+  continua exigindo confirmação específica, backup operacional por torneio e
+  censo final. A assinatura curta da requisição impede troca, reordenação ou
+  truncamento dos itens entre o manifesto revisado e a Function.
 - Passar todos os comandos ao servidor; eliminar lista embutida como autoridade.
 - Resolver perfil por UID e remover cópias de e-mail/foto/nome dos dados vivos
   de conta. Adaptador de histórico fica explicitamente isolado e com prazo de

@@ -8,7 +8,7 @@
  * reler cada torneio e fazer cada recorte em um único commit transacional.
  */
 
-const { verifyPlan } = require('./registration-batch-plan-core');
+const { verifyPlan, stableHash } = require('./registration-batch-plan-core');
 
 function positiveInt(value, label) {
   const number = Number(value);
@@ -36,6 +36,30 @@ function batchPlan(plan, options) {
   };
 }
 
+/* Assina só os IDs e fingerprints que o servidor deve receber nesta chamada.
+ * O manifesto completo continua sendo o artefato humano/auditável; esta
+ * assinatura menor impede que a requisição seja truncada, reordenada ou tenha
+ * um torneio trocado no trajeto até a Function. */
+function requestFingerprint(batch) {
+  const items = batch && Array.isArray(batch.items) ? batch.items : [];
+  if (!items.length) throw new Error('lote vazio não pode ser aplicado');
+  return stableHash(items.map((item) => ({
+    tournamentId: String(item.tournamentId || ''),
+    fingerprint: String(item.fingerprint || ''),
+  })));
+}
+
+function batchRequest(batch) {
+  return {
+    manifestFingerprint: String(batch && batch.manifestFingerprint || ''),
+    requestFingerprint: requestFingerprint(batch),
+    items: (batch && Array.isArray(batch.items) ? batch.items : []).map((item) => ({
+      tournamentId: item.tournamentId,
+      fingerprint: item.fingerprint,
+    })),
+  };
+}
+
 function verifyBatchReceipt(batch, receipt) {
   const planned = batch && Array.isArray(batch.items) ? batch.items : [];
   const results = receipt && Array.isArray(receipt.results) ? receipt.results : [];
@@ -49,12 +73,17 @@ function verifyBatchReceipt(batch, receipt) {
     if (!item || seen.has(id)) throw new Error('recibo contém torneio inesperado');
     seen.add(id);
     if (String(result.fingerprint || '') !== item.fingerprint) throw new Error('recibo com fingerprint divergente');
-    if (!['migrated', 'already_migrated'].includes(result.outcome)) throw new Error('resultado de migração inválido');
+    if (!['migrated', 'already_migrated', 'blocked'].includes(result.outcome)) throw new Error('resultado de migração inválido');
+    // Bloqueio não afirma uma contagem: a transação recusou o estado atual e
+    // o operador deve gerar prévia nova. Exigir a contagem antiga aqui seria
+    // transformar o próprio recibo de segurança numa falsa confirmação.
+    if (result.outcome === 'blocked') return;
     if (!Number.isInteger(result.registrations) || result.registrations !== item.registrations) {
       throw new Error('recibo com contagem divergente');
     }
   });
-  return { verified: true, tournaments: planned.length, nextCursor: batch.nextCursor };
+  const blocked = results.filter((result) => result.outcome === 'blocked').length;
+  return { verified: true, tournaments: planned.length, blocked, nextCursor: batch.nextCursor };
 }
 
-module.exports = { batchPlan, verifyBatchReceipt };
+module.exports = { batchPlan, requestFingerprint, batchRequest, verifyBatchReceipt };

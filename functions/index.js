@@ -94,6 +94,7 @@ const _categoryEligibility = require("./category-eligibility-core");
 const _registrationCategoryBridge = require("./registration-category-bridge-core");
 const _registrationCore = require("./registration-core");
 const _registrationMigration = require("./registration-migration-core");
+const _registrationBatchApply = require("./registration-batch-apply-core");
 const _registrationMutations = require("./registration-mutations-core");
 const _registrationClaim = require("./registration-claim-core");
 const _canonicalRegistrationBoundary = require("./canonical-registration-boundary-core");
@@ -4432,6 +4433,67 @@ exports.previewCanonicalRegistrationMigration = onCall(
 // conferência humana e o clique; conflito nunca é sobrescrito. A migração não
 // toca participants, placares, chaves nem pares legados — estes continuam sendo
 // a projeção de jogo enquanto o leitor canônico é introduzido gradualmente.
+async function _applyCanonicalRegistrationMigrationForOrganizer(db, callerUid, tournamentId, expectedFingerprint) {
+  if (!_CANONICAL_REGISTRATION_MUTATIONS_READY) {
+    throw new HttpsError(
+      "failed-precondition",
+      "a conversão de inscrições ainda não está disponível: as operações canônicas de elenco não foram concluídas"
+    );
+  }
+  const ref = db.collection("tournaments").doc(tournamentId);
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
+    const tournament = await _splitParts.hidratar(tx, ref, snap.data() || {}, ["participants"]);
+    if (!_isTournamentOrgCaller(tournament, callerUid)) {
+      throw new HttpsError("permission-denied", "só a organização migra inscrições");
+    }
+    const records = await _splitParts.lerRegistrosDaParte(tx, ref, "participants");
+    let categoryIdForLegacyLabel;
+    try {
+      categoryIdForLegacyLabel = _registrationCategoryBridge.categoryBridge(
+        _categoryEligibility.normalizeCategoryDefinitions(tournament.categoryDefinitions)
+      );
+    } catch (error) { throw new HttpsError("failed-precondition", error.message); }
+    const report = _registrationCore.projectLegacyRoster(tournamentId, records, categoryIdForLegacyLabel);
+    if (report.fingerprint !== expectedFingerprint) {
+      throw new HttpsError("failed-precondition", "o elenco mudou; gere uma nova prévia antes de migrar");
+    }
+    const existingSnap = await tx.get(ref.collection("registrations"));
+    const existingById = Object.fromEntries(existingSnap.docs.map((doc) => [doc.id, doc.data() || {}]));
+    let decision;
+    try { decision = _registrationMigration.decideMaterialization(tournamentId, report, existingById); }
+    catch (error) { throw new HttpsError("failed-precondition", error.message); }
+    if (decision.conflicts.length) {
+      throw new HttpsError("failed-precondition", "há inscrições canônicas divergentes; a migração não sobrescreve dados");
+    }
+    decision.creates.forEach((document) => {
+      tx.create(ref.collection("registrations").doc(document.registrationId), Object.assign({}, document, {
+        createdAt: _FV.serverTimestamp(),
+        updatedAt: _FV.serverTimestamp(),
+      }));
+    });
+    tx.set(ref, {
+      canonicalRegistrationMigration: {
+        fingerprint: report.fingerprint,
+        registrationCount: decision.desired.length,
+        fixedPairCount: report.formedPairs.length,
+        appliedBy: callerUid,
+        appliedAt: _FV.serverTimestamp(),
+      },
+      updatedAt: _FV.serverTimestamp(),
+    }, { merge: true });
+    return {
+      outcome: decision.creates.length ? "migrated" : "already_migrated",
+      created: decision.creates.length,
+      already: decision.already.length,
+      registrations: decision.desired.length,
+      formedPairs: report.formedPairs.length,
+      fingerprint: report.fingerprint,
+    };
+  });
+}
+
 exports.applyCanonicalRegistrationMigration = onCall(
   { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
   async (request) => {
@@ -4443,66 +4505,64 @@ exports.applyCanonicalRegistrationMigration = onCall(
     if (!tournamentId || !expectedFingerprint) {
       throw new HttpsError("invalid-argument", "tournamentId e fingerprint são obrigatórios");
     }
-    if (!_CANONICAL_REGISTRATION_MUTATIONS_READY) {
-      throw new HttpsError(
-        "failed-precondition",
-        "a conversão de inscrições ainda não está disponível: as operações canônicas de elenco não foram concluídas"
-      );
-    }
-
     const db = admin.firestore();
-    const ref = db.collection("tournaments").doc(tournamentId);
-    return await db.runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
-      if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
-      const tournament = await _splitParts.hidratar(tx, ref, snap.data() || {}, ["participants"]);
-      if (!_isTournamentOrgCaller(tournament, callerUid)) {
-        throw new HttpsError("permission-denied", "só a organização migra inscrições");
+    return _applyCanonicalRegistrationMigrationForOrganizer(db, callerUid, tournamentId, expectedFingerprint);
+  }
+);
+
+/* Lote administrativo limitado: não aceita um elenco do cliente, não ignora
+ * autorização por UID e não transforma falha de um torneio em escrita parcial
+ * dentro dele. Cada item chama exatamente a mesma transação da conversão
+ * unitária; o resultado sempre devolve recibo por item para retomada segura. */
+exports.applyCanonicalRegistrationMigrationBatch = onCall(
+  { region: "us-central1", memory: "512MiB", timeoutSeconds: 540, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
+    const data = request.data || {};
+    const manifestFingerprint = String(data.manifestFingerprint || "").trim();
+    const requestFingerprint = String(data.requestFingerprint || "").trim();
+    const items = Array.isArray(data.items) ? data.items.map((item) => ({
+      tournamentId: String(item && item.tournamentId || "").trim(),
+      fingerprint: String(item && item.fingerprint || "").trim(),
+    })) : [];
+    if (!manifestFingerprint || !requestFingerprint || !items.length || items.length > 10) {
+      throw new HttpsError("invalid-argument", "lote exige manifesto, assinatura e de 1 a 10 torneios");
+    }
+    const seen = new Set();
+    items.forEach((item) => {
+      if (!item.tournamentId || !item.fingerprint || seen.has(item.tournamentId)) {
+        throw new HttpsError("invalid-argument", "item de lote inválido ou duplicado");
       }
-      const records = await _splitParts.lerRegistrosDaParte(tx, ref, "participants");
-      let categoryIdForLegacyLabel;
-      try {
-        categoryIdForLegacyLabel = _registrationCategoryBridge.categoryBridge(
-          _categoryEligibility.normalizeCategoryDefinitions(tournament.categoryDefinitions)
-        );
-      } catch (error) { throw new HttpsError("failed-precondition", error.message); }
-      const report = _registrationCore.projectLegacyRoster(tournamentId, records, categoryIdForLegacyLabel);
-      if (report.fingerprint !== expectedFingerprint) {
-        throw new HttpsError("failed-precondition", "o elenco mudou; gere uma nova prévia antes de migrar");
-      }
-      const existingSnap = await tx.get(ref.collection("registrations"));
-      const existingById = Object.fromEntries(existingSnap.docs.map((doc) => [doc.id, doc.data() || {}]));
-      let decision;
-      try { decision = _registrationMigration.decideMaterialization(tournamentId, report, existingById); }
-      catch (error) { throw new HttpsError("failed-precondition", error.message); }
-      if (decision.conflicts.length) {
-        throw new HttpsError("failed-precondition", "há inscrições canônicas divergentes; a migração não sobrescreve dados");
-      }
-      decision.creates.forEach((document) => {
-        tx.create(ref.collection("registrations").doc(document.registrationId), Object.assign({}, document, {
-          createdAt: _FV.serverTimestamp(),
-          updatedAt: _FV.serverTimestamp(),
-        }));
-      });
-      tx.set(ref, {
-        canonicalRegistrationMigration: {
-          fingerprint: report.fingerprint,
-          registrationCount: decision.desired.length,
-          fixedPairCount: report.formedPairs.length,
-          appliedBy: callerUid,
-          appliedAt: _FV.serverTimestamp(),
-        },
-        updatedAt: _FV.serverTimestamp(),
-      }, { merge: true });
-      return {
-        outcome: decision.creates.length ? "migrated" : "already_migrated",
-        created: decision.creates.length,
-        already: decision.already.length,
-        registrations: decision.desired.length,
-        formedPairs: report.formedPairs.length,
-        fingerprint: report.fingerprint,
-      };
+      seen.add(item.tournamentId);
     });
+    let expectedRequestFingerprint;
+    try { expectedRequestFingerprint = _registrationBatchApply.requestFingerprint({ items: items }); }
+    catch (error) { throw new HttpsError("invalid-argument", error.message); }
+    if (expectedRequestFingerprint !== requestFingerprint) {
+      throw new HttpsError("failed-precondition", "a requisição não confere com o lote assinado");
+    }
+    const db = admin.firestore();
+    const results = [];
+    for (const item of items) {
+      try {
+        const result = await _applyCanonicalRegistrationMigrationForOrganizer(db, callerUid, item.tournamentId, item.fingerprint);
+        results.push(Object.assign({ tournamentId: item.tournamentId }, result));
+      } catch (error) {
+        // Não reinterpreta o erro nem tenta um caminho legado. O recibo mantém
+        // o fingerprint planejado para que o operador saiba exatamente o que
+        // foi bloqueado e possa gerar uma nova prévia apenas desse torneio.
+        results.push({
+          tournamentId: item.tournamentId,
+          fingerprint: item.fingerprint,
+          outcome: "blocked",
+          registrations: null,
+          code: error && error.code || "internal",
+          message: error && error.message || "migração bloqueada",
+        });
+      }
+    }
+    return { manifestFingerprint, requestFingerprint, results };
   }
 );
 

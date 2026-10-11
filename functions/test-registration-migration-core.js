@@ -28,14 +28,21 @@ bad('recusa plano ainda com exceções', () => M.desiredDocuments('t1', Object.a
 const server = fs.readFileSync(__dirname + '/index.js', 'utf8');
 const start = server.indexOf('exports.applyCanonicalRegistrationMigration = onCall');
 const body = start === -1 ? '' : server.slice(start, server.indexOf('\n// Configuração tipada', start));
+const helperStart = server.indexOf('async function _applyCanonicalRegistrationMigrationForOrganizer');
+const helper = helperStart === -1 ? '' : server.slice(helperStart, start);
 ok('callable de migração existe', start !== -1);
-ok('callable exige fingerprint e organização por UID', body.includes('expectedFingerprint') && body.includes('_isTournamentOrgCaller(tournament, callerUid)'));
+ok('callable exige fingerprint e organização por UID', body.includes('expectedFingerprint') && helper.includes('_isTournamentOrgCaller(tournament, callerUid)'));
 ok('migração só é liberada depois das mutações canônicas e conserva a trava do servidor',
   server.includes('const _CANONICAL_REGISTRATION_MUTATIONS_READY = true;') &&
-  body.includes('if (!_CANONICAL_REGISTRATION_MUTATIONS_READY)') && body.includes('operações canônicas de elenco não foram concluídas'));
-ok('callable relê registros físicos e recusa plano alterado', body.includes('lerRegistrosDaParte') && body.includes('report.fingerprint !== expectedFingerprint'));
-ok('callable cria somente operações decididas pelo núcleo', body.includes('decision.creates.forEach') && body.includes('tx.create('));
-ok('callable não reescreve participants nem resultados legados', !/gravar\(tx, ref.*participants/.test(body) && !/matches\s*:/.test(body));
+  helper.includes('if (!_CANONICAL_REGISTRATION_MUTATIONS_READY)') && helper.includes('operações canônicas de elenco não foram concluídas'));
+ok('callable relê registros físicos e recusa plano alterado', helper.includes('lerRegistrosDaParte') && helper.includes('report.fingerprint !== expectedFingerprint'));
+ok('callable cria somente operações decididas pelo núcleo', helper.includes('decision.creates.forEach') && helper.includes('tx.create('));
+ok('callable não reescreve participants nem resultados legados', !/gravar\(tx, ref.*participants/.test(helper) && !/matches\s*:/.test(helper));
+ok('lote usa o mesmo helper transacional e limita dez torneios',
+  server.includes('exports.applyCanonicalRegistrationMigrationBatch = onCall') &&
+  body.includes('_applyCanonicalRegistrationMigrationForOrganizer(db, callerUid, tournamentId, expectedFingerprint)') &&
+  server.includes('items.length > 10') &&
+  server.includes('_registrationBatchApply.requestFingerprint'));
 
 console.log((fail ? '❌' : '✅') + ' registration-migration-core: ' + pass + ' ok, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);
