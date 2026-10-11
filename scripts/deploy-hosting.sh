@@ -363,8 +363,17 @@ echo "  ✓ CACHE_NAME do SW = versão do app ($VER_APP)"
 # Interruptor por lado: `revisar-com-{gpt,claude}.sh desligar "<motivo>"` (passa com aviso).
 # Escape só com uma linha `sem-gpt: <motivo>` num commit a publicar, e SP_SEM_GPT=1.
 fase "nota+gates locais"
+AUDITORIA_TRANSICAO="$(mktemp "${TMPDIR:-/tmp}/sp-transicao-classificatoria.XXXXXX")"
+trap 'rm -f "$AUDITORIA_TRANSICAO"' EXIT
+echo "▸ auditando slots classificatórios legados em produção (somente leitura)…"
+if ! node "$RAIZ/scripts/auditar-transicao-classificatoria-legada.js" > "$AUDITORIA_TRANSICAO"; then
+  cat "$AUDITORIA_TRANSICAO"
+  echo "✗ há slot classificatório legado ambíguo; migre sua identidade antes de publicar."
+  exit 1
+fi
+cat "$AUDITORIA_TRANSICAO"
 echo "▸ 1.8 revisão cruzada sobre o corte remoto $BASE_REVISAO..HEAD…"
-if ! SP_REVIEW_BASE="$BASE_REVISAO" "$RAIZ/scripts/revisar-diff-em-lotes.sh"; then
+if ! SP_REVIEW_BASE="$BASE_REVISAO" SP_REVIEW_EVIDENCE="$AUDITORIA_TRANSICAO" "$RAIZ/scripts/revisar-diff-em-lotes.sh"; then
   echo
   echo "✗ O REVISOR NÃO APROVOU (ou não respondeu) — nada foi empurrado nem publicado."
   echo "  Parecer em .claude/tmp/parecer-<revisor>-diff.md: atenda os pontos e rode de novo (o"
