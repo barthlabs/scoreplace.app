@@ -18,6 +18,9 @@ function protectedFingerprint(tournament) {
   // Cópia rasa basta: esta migração nunca muta o documento de entrada.
   const copy = Object.assign({}, tournament || {});
   delete copy.phases;
+  // A posição da fase também é derivada pela projeção de legado. Ela é a
+  // tradução segura de `currentStage`, não conteúdo competitivo protegido.
+  delete copy.currentPhaseIndex;
   return hash(copy);
 }
 
@@ -48,6 +51,7 @@ function planLegacyPhaseProjection(tournament, project, options) {
   };
   const base = {
     phases,
+    currentPhaseIndex: Number.isInteger(out.currentPhaseIndex) ? out.currentPhaseIndex : undefined,
     protectedFingerprint: protectedFingerprint(tournament),
     fingerprint: hash(receipt),
   };
@@ -62,6 +66,9 @@ function verifyProjectedDocument(tournamentId, before, after, plan, project) {
   }
   if (stable((after || {}).phases || []) !== stable(plan.phases)) {
     throw new Error('phases persistidas divergem do plano aprovado');
+  }
+  if (Number.isInteger(plan.currentPhaseIndex) && Number((after || {}).currentPhaseIndex) !== plan.currentPhaseIndex) {
+    throw new Error('índice de fase persistido diverge do plano aprovado');
   }
   const afterPlan = planLegacyPhaseProjection(after, project, { tournamentId });
   if (afterPlan.changed) throw new Error('projeção de fases continuou pendente após a escrita');

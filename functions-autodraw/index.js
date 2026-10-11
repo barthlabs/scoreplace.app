@@ -790,7 +790,10 @@ function _gravaTorneio(tx, ref, tDepois, tAntes, ctx) {
       tDepois,
       drawWindow.FORMAT2.projectLegacyPhases
     );
-    if (planoDeFases.changed) tDepois.phases = planoDeFases.phases;
+    if (planoDeFases.changed) {
+      tDepois.phases = planoDeFases.phases;
+      if (Number.isInteger(planoDeFases.currentPhaseIndex)) tDepois.currentPhaseIndex = planoDeFases.currentPhaseIndex;
+    }
   }
   /* ⛔⛔⛔ VAGA DE REPESCAGEM CARIMBADA NÃO MUDA — E A TRAVA MORA AQUI, NO SERVIDOR.
    *

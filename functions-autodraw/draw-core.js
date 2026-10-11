@@ -579,6 +579,7 @@ function compileFromFmt2(t, opts) {
     try {
       const projected = win.FORMAT2.projectLegacyPhases(t);
       t.phases = projected.phases;
+      if (Number.isInteger(projected.currentPhaseIndex)) t.currentPhaseIndex = projected.currentPhaseIndex;
       return { ok: true, legacy: true, migrated: projected.changed, phases: projected.phases.length, format: t.format };
     } catch (e) {
       return { ok: false, reason: 'legacy-projection-failed', error: String(e && e.message || e) };

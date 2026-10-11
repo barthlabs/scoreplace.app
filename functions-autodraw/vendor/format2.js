@@ -71,6 +71,15 @@
   function legacyPhaseKind(phase, tournament) {
     var explicit = phase && phase.kind;
     if (explicit === 'classification' || explicit === 'elimination') return explicit;
+    // A transição suíça antiga mantinha o rótulo original no topo e guardava
+    // as rodadas classificatórias em `swissRoundsData`. Depois de materializar
+    // a chave, `currentStage='elimination'` é o único fato que diz qual fase
+    // está ativa. Sem esta precedência, a projeção relia a eliminatória como
+    // outra classificatória apenas porque o texto ainda dizia "Suíço".
+    if (tournament && tournament.currentStage === 'elimination' &&
+        Array.isArray(tournament.swissRoundsData) && tournament.swissRoundsData.length) {
+      return 'elimination';
+    }
     // O suíço antigo usava `currentStage`/`classifyFormat` para dizer qual
     // trecho do torneio estava ativo, mesmo quando o `format` de topo ainda
     // dizia "Eliminatórias Simples". Durante a classificatória esse marcador
@@ -201,6 +210,11 @@
       gruposClassified: tournament.gruposClassified
     }];
     var changed = !stored.length;
+    // O construtor anterior apagava `rounds` ao abrir a chave e preservava a
+    // classificatória em `swissRoundsData`. Esse é um torneio de duas fases já
+    // em andamento, não uma eliminatória isolada com um rótulo antigo.
+    var swissHistoricalElimination = tournament.currentStage === 'elimination' &&
+      Array.isArray(tournament.swissRoundsData) && tournament.swissRoundsData.length > 0;
     var phases = source.map(function (raw) {
       var phase = Object.assign({}, raw || {});
       var kind = legacyPhaseKind(phase, tournament);
@@ -242,6 +256,18 @@
     var swissTarget = parseInt(tournament.p2TargetCount, 10);
     var swissIsActive = tournament.classifyFormat === 'swiss' || tournament.currentStage === 'swiss';
     var hasElimination = phases.some(function (phase) { return phase && phase.kind === 'elimination'; });
+    if (swissHistoricalElimination && !phases.some(function (phase) { return phase && phase.kind === 'classification'; })) {
+      phases.unshift({
+        name: 'Classificatória', kind: 'classification', format: 'Classificatória por rodadas', formatCode: 'classification_rounds',
+        rounds: parseInt(tournament.swissRounds, 10) || tournament.swissRoundsData.length,
+        classification: {
+          structure: 'round_robin',
+          pairing: { strategy: 'ranking_clusters', entryMode: 'fixed', rematchPolicy: 'exhaust_cluster_before_repeat' }
+        },
+        fixedPairs: Number(tournament.teamSize) > 1
+      });
+      changed = true;
+    }
     if (swissIsActive && tournament.p2Resolution === 'swiss' && swissTarget >= 2 && !hasElimination) {
       var legacyPolicy = ['repescagem', 'bye', 'sobra_unica'].indexOf(tournament.politicaDaChave) >= 0
         ? tournament.politicaDaChave : 'repescagem';
@@ -259,7 +285,17 @@
       });
       changed = true;
     }
-    return { phases: phases, changed: changed, created: !stored.length };
+    // A projeção só altera a posição atual quando o documento antigo declara
+    // inequivocamente que a classificatória acabou e a chave já foi aberta.
+    // `currentPhaseIndex` é estado derivado do contrato de fases, não jogo,
+    // rodada, agenda, placar ou inscrição.
+    var currentPhaseIndex;
+    if (swissHistoricalElimination) {
+      currentPhaseIndex = phases.findIndex(function (phase) { return phase && phase.kind === 'elimination'; });
+      if (currentPhaseIndex < 0) currentPhaseIndex = 0;
+      if (Number(tournament.currentPhaseIndex) !== currentPhaseIndex) changed = true;
+    }
+    return { phases: phases, changed: changed, created: !stored.length, currentPhaseIndex: currentPhaseIndex };
   }
 
   function defaultConfig(sport) {

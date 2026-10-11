@@ -59,7 +59,10 @@ window._projectTournamentPhasesForRead = function (data) {
   if (!data || !window.FORMAT2 || typeof window.FORMAT2.projectLegacyPhases !== 'function') return data;
   try {
     var plan = window.FORMAT2.projectLegacyPhases(data);
-    if (plan && plan.changed && Array.isArray(plan.phases) && plan.phases.length) data.phases = plan.phases;
+    if (plan && plan.changed && Array.isArray(plan.phases) && plan.phases.length) {
+      data.phases = plan.phases;
+      if (Number.isInteger(plan.currentPhaseIndex)) data.currentPhaseIndex = plan.currentPhaseIndex;
+    }
   } catch (error) {
     // Leitura nunca pode apagar/mascarar um torneio por uma projeção defeituosa.
     // A mutação autoritativa continua recusando schema inválido no servidor.
@@ -73,6 +76,7 @@ window._canonicalizeTournamentPhases = function (data) {
   var plan = window.FORMAT2.projectLegacyPhases(data);
   if (!plan || !plan.changed) return false;
   data.phases = plan.phases;
+  if (Number.isInteger(plan.currentPhaseIndex)) data.currentPhaseIndex = plan.currentPhaseIndex;
   return true;
 };
 
