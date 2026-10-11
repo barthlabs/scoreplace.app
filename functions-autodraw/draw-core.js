@@ -776,7 +776,7 @@ function drawInitial(t, opts) {
 
   // Reset do storage stale da fase 0 (generatePhase/storePhase reescrevem).
   t.matches = []; delete t.groups; delete t.rounds; delete t.standings;
-  t.currentPhaseIndex = 0; delete t._phaseMaterialized;
+  t.currentPhaseIndex = 0; t.currentStage = null; delete t._phaseMaterialized;
   if (!t.drawVisibility) t.drawVisibility = 'public';
   // v1.3.73: o SORTEIO limpa a presença de quem ENTROU na chave, mas PRESERVA a de quem foi pro
   // resto/lista de espera (estava presente antes → continua presente, primeiro na fila). Regra do

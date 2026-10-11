@@ -2468,7 +2468,12 @@
       t.phaseRounds = t.phaseRounds || {};
       t.phaseRounds[idx] = { rounds: [], opponentHistory: {}, sitOutHistory: {}, pool: _slim };
       t.currentPhaseIndex = idx;
-      t.currentStage = 'phase' + idx;
+      // `currentPhaseIndex` é a única posição de fase canônica. `currentStage`
+      // existia antes do modelo de fases e chegou a receber valores artificiais
+      // como "phase1"; isso criava duas fontes de verdade e persistia um estado
+      // que nenhum leitor canônico deve precisar interpretar. Ao materializar
+      // uma fase pelo motor atual, removemos também qualquer marcador legado.
+      t.currentStage = null;
       t._phaseMaterialized = idx;
       _carimbaInicioDaFase(t, idx, det.agoraIso);   // o avanço É o início desta fase
       return { ok: true, matches: [], built: built, incrementalLeague: true, phaseIndex: idx };
@@ -2498,7 +2503,9 @@
       });
     }
     t.currentPhaseIndex = idx;
-    t.currentStage = 'phase' + idx;
+    // Ver comentário no ramo incremental acima: a fase atual é definida
+    // exclusivamente por `currentPhaseIndex`.
+    t.currentStage = null;
     t._phaseMaterialized = idx;
     _carimbaInicioDaFase(t, idx, det.agoraIso);   // o avanço É o início desta fase
     return { ok: true, matches: built.matches, built: built };

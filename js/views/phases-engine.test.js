@@ -159,7 +159,7 @@ ok(eng.phaseComplete(tourn) === true, 'fase 1 (4 grupos decididos) reconhecida c
 var mres = eng.materializeNextPhase(tourn, stand, 'confraP1');
 ok(mres.ok === true, 'materializeNextPhase ok');
 eq(tourn.currentPhaseIndex, 1, 'currentPhaseIndex avançou para 1');
-ok(tourn.currentStage === 'phase1', 'currentStage = phase1');
+ok(tourn.currentStage == null, 'materialização canônica não persiste currentStage legado');
 var golds = tourn.matches.filter(function (m) { return m.bracket === 'gold'; });
 var silvers = tourn.matches.filter(function (m) { return m.bracket === 'silver'; });
 ok(golds.length === 3 && silvers.length === 3, 'torneio recebeu 3 jogos Ouro + 3 Prata');
