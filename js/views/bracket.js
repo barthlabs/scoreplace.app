@@ -2798,7 +2798,12 @@ function renderBracket(container, tournamentId, isInline) {
 
   // Group nav buttons for Fase de Grupos (also shown inline)
   const _hasGroupStage = t.groups && t.groups.length > 0;
-  const _inElimination = t.currentStage === 'elimination' || (t.matches && t.matches.length > 0 && _hasGroupStage);
+  // `currentStage` é apenas a ponte de leitura do grupo legado. Depois que
+  // há fases canônicas, a navegação não pode voltar para grupos porque o
+  // documento de topo ainda descreve a primeira fase.
+  const _inElimination = hasCanonicalPhase
+    ? currentPhase.kind === 'elimination'
+    : (t.currentStage === 'elimination' || (t.matches && t.matches.length > 0 && _hasGroupStage));
   const _showGroupNav = _hasGroupStage && !_inElimination;
   const _groupNavHtml = _showGroupNav ? (() => {
     const colors = ['#f59e0b', '#8b5cf6', '#10b981', '#ef4444', '#3b82f6', '#ec4899', '#14b8a6', '#f97316'];
