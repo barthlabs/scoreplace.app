@@ -146,8 +146,13 @@ base_do_diff() {
     # revisão e o deploy a ref pode avançar, fazendo um parecer antigo parecer
     # pertencer ao corte novo. O contrato do recibo é sempre o SHA imutável.
     git rev-parse --verify "${base}^{commit}"
-  else
+  elif git rev-parse --verify -q 'origin/main^{commit}' >/dev/null; then
     git rev-parse --verify 'origin/main^{commit}'
+  else
+    # A classificação por lista também roda dentro da cópia sem `.git` do
+    # preflight. Ela não calcula diff nem reutiliza recibo, logo só precisa de
+    # um marcador estável para continuar disponível offline.
+    printf '%s\n' 'sem-base-git'
   fi
 }
 BASE_DIFF="$(base_do_diff)"
