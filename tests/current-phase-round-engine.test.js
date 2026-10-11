@@ -67,6 +67,17 @@ const monarchGuard = source.slice(source.indexOf('window._onParticipantAddedToMo
 ok(monarchGuard.includes('_faseCorrenteUsaEntradasRotativas(t)') && monarchGuard.includes('_motorDaFaseUsaReiRainha(t)'),
   'entrada tardia no Rei/Rainha é guardada pela fase atual');
 
+const substitutions = fs.readFileSync(path.join(ROOT, 'js', 'views', 'liga-substitution.js'), 'utf8');
+const woCore = fs.readFileSync(path.join(ROOT, 'js', 'views', 'wo-core.js'), 'utf8');
+ok(substitutions.includes('W.O. de grupo é próprio da classificatória rotativa') &&
+   substitutions.includes('_faseCorrenteUsaEntradasRotativas(t)') &&
+   substitutions.includes('_motorDaFaseUsaReiRainha(t)'),
+  'controles de W.O. consultam a fase atual, não o rótulo Liga do torneio');
+ok(woCore.includes('O fluxo de grupo pertence à fase atual') &&
+   woCore.includes('_faseCorrenteUsaEntradasRotativas(t)') &&
+   woCore.includes('_motorDaFaseUsaReiRainha(t)'),
+  'motor único de W.O. não delega eliminatória híbrida ao fluxo de grupo');
+
 const autoDrawSource = fs.readFileSync(path.join(ROOT, 'functions-autodraw', 'index.js'), 'utf8');
 const waitlistWorker = autoDrawSource.slice(autoDrawSource.indexOf('async function _formarGruposDaEspera'), autoDrawSource.indexOf('exports.autoDrawReconcile'));
 ok(waitlistWorker.includes('drawWindow._faseCorrenteUsaEntradasRotativas(t0)') &&

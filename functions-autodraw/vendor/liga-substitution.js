@@ -1956,7 +1956,13 @@ function _woBlocoComBotao(btn, resto) {
 // HTML dos controles de W.O./substituição no cabeçalho do grupo.
 window._ligaGroupControlsHtml = function (t, roundIndex, group) {
   if (!t || !group) return '';
-  var isLiga = window._isLigaFormat && window._isLigaFormat(t);
+  // W.O. de grupo é próprio da classificatória rotativa que está em curso.
+  // Um híbrido pode conservar format:'Liga' depois de abrir a eliminatória;
+  // nesse ponto, mostrar o picker de folga/Jogador X corromperia a operação da
+  // chave. Sem phases canônicas, preservamos o comportamento legado.
+  var isLiga = typeof window._faseCorrenteUsaEntradasRotativas === 'function'
+    ? window._faseCorrenteUsaEntradasRotativas(t)
+    : !!(window._isLigaFormat && window._isLigaFormat(t));
   if (!isLiga || t.status === 'finished') return '';
   var gDone = (group.matches || []).length > 0 && (group.matches || []).every(function (m) { return !!m.winner; });
   var manage = _canManageGroup(t, group);
@@ -2349,7 +2355,13 @@ window._monWoGuestPrompt = function (tId, pIdx, gName, absentName, absentSlotId)
 window._monWoControlHtml = function (tId, pIdx, gName, groupDone) {
   pIdx = pIdx || 0;
   var t = _findT(tId); if (!t) return '';
-  if (!(window._isLigaFormat && window._isLigaFormat(t)) || t.status === 'finished') return '';
+  var isLiga = typeof window._faseCorrenteUsaEntradasRotativas === 'function'
+    ? window._faseCorrenteUsaEntradasRotativas(t)
+    : !!(window._isLigaFormat && window._isLigaFormat(t));
+  var isMonarch = typeof window._motorDaFaseUsaReiRainha === 'function'
+    ? window._motorDaFaseUsaReiRainha(t)
+    : !!(window._isMonarchFormat && window._isMonarchFormat(t));
+  if ((!isLiga && !isMonarch) || t.status === 'finished') return '';
   var manage = _monCanManage(t, gName, pIdx);
   var wm = _monWoMarker(t, gName, pIdx);
   // v1.7.92 — MESMA REGRA do bloco da rota Liga (`_ligaGroupControlsHtml`): um botão só,

@@ -645,8 +645,15 @@ window._applyWO = function (t, opts) {
   window._idMapDel(t, t.checkedIn, absentName);
 
   // ── Liga / Rei-Rainha (escopo de grupo) → picker de folga / Jogador X ──
-  const _isLigaFmt = window._isLigaFormat ? window._isLigaFormat(t) : (t.format === 'Liga' || t.format === 'Ranking');
-  const _isMonarch = window._isMonarchFormat ? window._isMonarchFormat(t) : false;
+  // O fluxo de grupo pertence à fase atual. `format:'Liga'` é só uma ponte de
+  // leitura em híbridos e não pode desviar um W.O. de eliminatória para o
+  // picker de folga/Jogador X.
+  const _isLigaFmt = typeof window._faseCorrenteUsaEntradasRotativas === 'function'
+    ? window._faseCorrenteUsaEntradasRotativas(t)
+    : (window._isLigaFormat ? window._isLigaFormat(t) : (t.format === 'Liga' || t.format === 'Ranking'));
+  const _isMonarch = typeof window._motorDaFaseUsaReiRainha === 'function'
+    ? window._motorDaFaseUsaReiRainha(t)
+    : (window._isMonarchFormat ? window._isMonarchFormat(t) : false);
   if (scope === 'group' && (_isLigaFmt || _isMonarch)) {
     if (typeof window._ligaPickFill === 'function') {
       window._ligaPickFill(String(t.id), opts.roundIndex, opts.groupName, absentName);
