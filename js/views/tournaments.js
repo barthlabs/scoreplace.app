@@ -4690,10 +4690,19 @@ function renderTournaments(container, tournamentId = null) {
             </label>
           </div>` : '';
 
-        // Group nav buttons for Fase de Grupos
+        // Navegação de grupos é da FASE ATUAL. `format`/`currentStage` no topo
+        // são ponte de documentos antigos; num torneio híbrido eles podem continuar
+        // dizendo "grupos" depois de a eliminatória ter sido materializada.
         const _grpTour = visible[0];
-        const _isGruposFmt = _grpTour && (_grpTour.format === 'Fase de Grupos + Eliminatórias');
-        const _hasGrpNav = _isGruposFmt && _grpTour.groups && _grpTour.groups.length > 0 && _grpTour.currentStage !== 'elimination';
+        const _grpPhase = _grpTour && window._faseDoTorneio
+          ? window._faseDoTorneio(_grpTour, _grpTour.currentPhaseIndex || 0)
+          : null;
+        const _hasCanonicalGrpPhase = !!(_grpPhase && _grpPhase.kind);
+        const _isGruposFmt = _grpTour && (_hasCanonicalGrpPhase
+          ? (_grpPhase.kind === 'classification' && _grpPhase.classification && _grpPhase.classification.structure === 'groups')
+          : (_grpTour.format === 'Fase de Grupos + Eliminatórias'));
+        const _hasGrpNav = _isGruposFmt && _grpTour.groups && _grpTour.groups.length > 0 &&
+          (_hasCanonicalGrpPhase ? _grpPhase.kind === 'classification' : _grpTour.currentStage !== 'elimination');
         const _grpColors = ['#f59e0b', '#8b5cf6', '#10b981', '#ef4444', '#3b82f6', '#ec4899', '#14b8a6', '#f97316'];
         const _grpNavHtml = _hasGrpNav ? '<div style="display:flex;gap:5px;flex-wrap:nowrap;align-items:center;">' +
           _grpTour.groups.map(function(g, i) {

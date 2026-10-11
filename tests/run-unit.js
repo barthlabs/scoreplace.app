@@ -270,6 +270,7 @@ const SUITES = [
   'tests/uma-definicao-de-liga.test.js',
   'tests/current-phase-presence-gate.test.js',
   'tests/current-phase-round-engine.test.js',
+  'tests/group-nav-current-phase.test.js',
   'tests/auto-draw-fase-atual.test.js',
   'tests/sorteio-da-fase-nao-e-do-torneio.test.js',
   'tests/rei-rainha-nao-se-pergunta-a-mao.test.js',
