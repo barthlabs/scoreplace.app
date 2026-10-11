@@ -1241,6 +1241,9 @@ const SUITES = [
   'tests/liga-wo-invite.test.js',
   'tests/swiss-to-elim-transition.test.js',
   'tests/phase0-swiss-elim.test.js',
+  // Ferramentas da organização obedecem à fase atual; o rótulo histórico suíço
+  // não pode reabrir ações de rodada depois que a eliminatória começou.
+  'tests/organizer-tools-current-phase.test.js',
   'tests/partial-group-schedule.test.js',
   'tests/swiss-draw-via-cf.test.js',
   'tests/swiss-close-via-cf.test.js',

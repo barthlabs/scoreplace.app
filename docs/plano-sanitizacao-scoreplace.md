@@ -80,9 +80,11 @@ rótulos históricos em massa.
 - Uma entrada de inscrição autenticada possui chave determinística
   `uid + tournamentId + categoryId`. Essa é a única regra de unicidade para
   impedir a mesma conta de estar duas vezes na mesma categoria.
-- `displayName` é somente apresentação. Duas contas diferentes podem ter o
-  mesmo nome; isso pode abrir sinal privado de possível duplicidade, mas nunca
-  recusar cadastro, alterar uma conta ou decidir uma inscrição.
+- `displayName` é somente apresentação, mas o produto reserva globalmente o
+  rótulo normalizado: duas contas ativas não recebem o mesmo nome de exibição.
+  Uma colisão recusa somente o novo rótulo — nunca autoriza, vincula, funde ou
+  bloqueia contas e inscrições. Colisões históricas permanecem identificadas
+  por UID até revisão explícita; não se escolhe um "vencedor" pelo nome.
 
 O bloqueio por conta não resolve duas contas da mesma pessoa. Para isso, a
 solução correta é separada:

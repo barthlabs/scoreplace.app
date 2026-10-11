@@ -3242,7 +3242,15 @@ function renderTournaments(container, tournamentId = null) {
         // sumia após o sorteio; o organizador pediu de volta.
         const enrollmentReportBtn = isOrg ? `<button class="btn btn-indigo hover-lift btn-shine" onclick="event.stopPropagation(); window._openEnrollmentReport('${t.id}')">🔍 Análise</button>` : '';
 
-        const isSuicoFormat = t.format === 'Suíço Clássico' || t.classifyFormat === 'swiss' || t.currentStage === 'swiss';
+        // A ação operacional é da FASE ATUAL. O rótulo histórico do torneio
+        // (ou `currentStage` legado) pode continuar descrevendo a
+        // classificatória depois que a chave eliminatória já abriu; usá-lo
+        // aqui ressuscitava "Rodada Extra" na eliminatória. A porta abaixo
+        // conhece a configuração canônica de pareamento por clusters e só cai
+        // no legado quando o documento ainda não tem `phases[]`.
+        const isClassificationRounds = typeof window._faseCorrenteEhClassificatoriaPorRodadas === 'function'
+          ? window._faseCorrenteEhClassificatoriaPorRodadas(t)
+          : (t.format === 'Suíço Clássico' || t.classifyFormat === 'swiss' || t.currentStage === 'swiss');
         const isLigaFormat = window._isLigaFormat(t);
         const isLigaOpenEnroll = isLigaFormat && t.ligaOpenEnrollment !== false;
         // v2.1.0: mostra o botão Encerrar/Reabrir também APÓS o sorteio quando as
@@ -3275,7 +3283,7 @@ function renderTournaments(container, tournamentId = null) {
         // Ligas novas criadas a partir da v0.16.56 sempre têm drawFirstDate
         // (default: amanhã 19:00) — esse fallback só pega legado.
         const isLigaAutoDraw = window._isLigaAutoDraw(t); // v2.7.5: canônico (store.js)
-        const isAutoDrawFormat = isSuicoFormat || isLigaAutoDraw;
+        const isAutoDrawFormat = isClassificationRounds || isLigaAutoDraw;
         let sortearBtn = '';
         let sortearAberto = '';
         if (isOrg) {
