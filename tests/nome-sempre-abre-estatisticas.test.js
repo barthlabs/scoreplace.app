@@ -65,11 +65,11 @@ ok(/\$\{_niContato\}/.test(_nameRowAdmin), 'a lista administrativa mostra o bal�
 ok(/\$\{_niEditBtn\}/.test(_nameRowAdmin), 'a edição da lista administrativa é um botão próprio, não o nome');
 /* ⛔ E o botão só existe para quem foi digitado À MÃO (25/set/2026). Pergunta do dono: "onde
  * renomeia conta que não no perfil do usuário?" — em lugar nenhum. */
-ok(/const _niEditBtn = \(isOrg && !_niUid\)/.test(participants),
+ok(/const _niEditBtn = \(isOrg && !_niUid && _niManualId\)/.test(participants),
   '⛔ o lápis não aparece para quem tem conta — conta se renomeia no perfil dela');
-ok(/var _pEditBtn = \(isOrg && !_pUid\)/.test(participants) && /var _mEditBtn = \(isOrg && !_mUid\)/.test(participants),
+ok(/var _pEditBtn = \(isOrg && !_pUid && _pManualId\)/.test(participants) && /var _mEditBtn = \(isOrg && !_mUid && _mManualId\)/.test(participants),
   'e o mesmo vale no card do inscrito e no membro de dupla — os TRÊS pontos');
-ok(/if \(targetUid\) \{[\s\S]{0,260}O nome é da pessoa/.test(participants),
+ok(/if \(!manualParticipantId\) \{[\s\S]{0,260}O nome é da pessoa/.test(participants),
   '⛔ e a própria porta RECUSA conta, como segunda linha — caminho futuro não reabre isso');
 ok(!/onclick=/.test(_nameRowAdmin), 'nenhum onclick sobrou dentro da linha do nome');
 ok(/_personNameHtml\(_niUid, _niShown/.test(participants), 'o nome entregue ao helper é o vivo e CRU, não o já escapado');
@@ -239,7 +239,7 @@ ok(listeners.click.capture === true && opened === 1 && click.prevented && click.
     addEventListener(tipo, fn) { ouvintes[tipo] = fn; }
   };
   const escopo = {
-    _attrs: { 'data-edit-name-scope': '', 'data-edit-key': 't1|u-ana' },
+    _attrs: { 'data-edit-name-scope': '', 'data-edit-key': 't1|manual-fixture' },
     getAttribute(k) { return this._attrs[k] || ''; },
     querySelector(sel) { return sel.indexOf('data-uid-name') !== -1 ? marcador : null; }
   };
@@ -259,12 +259,12 @@ ok(listeners.click.capture === true && opened === 1 && click.prevented && click.
   vm.runInContext('window._resolveEditNameTarget = function (btn, chave) ' + corpoResolve, W2, { filename: 'resolve-alvo' });
   vm.runInContext('var showNotification = window.showNotification; var _t = window._t;' +
     'var _reRenderParticipants = window._reRenderParticipants;' +
-    'window._editParticipantName = function(tId, oldName, targetUid, btn) ' + corpoEdit, W2, { filename: 'editar-nome' });
+    'window._editParticipantName = function(tId, oldName, manualParticipantId, btn) ' + corpoEdit, W2, { filename: 'editar-nome' });
 
   /* ⛔ A FIXTURE PASSOU A EDITAR QUEM NÃO TEM CONTA. A edição de conta foi eliminada, então
    * exercitá-la aqui testaria um caminho que já não existe. Sem uid, o nome gravado É a
    * identidade — e é esse o caso legítimo do lápis. */
-  W2._editParticipantName('t1', 'Ana Gravada', '', botao);
+  W2._editParticipantName('t1', 'Ana Gravada', 'manual-fixture', botao);
   ok(marcador._attrs['contenteditable'] === 'true', 'o lápis abriu a edição no span do nome, não no botão');
   ok(marcador._attrs['data-player-profile-disabled'] === '1', 'durante a edição a ficha fica travada');
   marcador.blur();
@@ -273,14 +273,14 @@ ok(listeners.click.capture === true && opened === 1 && click.prevented && click.
   ok(!marcador._attrs['data-player-profile-disabled'], 'a trava da ficha sai ao terminar');
 
   // Escape depois de digitar: também não chama, e devolve o nome vivo.
-  W2._editParticipantName('t1', 'Ana Gravada', '', botao);
+  W2._editParticipantName('t1', 'Ana Gravada', 'manual-fixture', botao);
   marcador.textContent = 'Ana Nova';
   ouvintes.keydown({ key: 'Escape', preventDefault() {} });
   ok(chamouCF === 0 && marcador.textContent === 'Ana Perfil',
     'Escape descarta o que foi digitado e não dispara a renomeação');
 
   // Digitar de verdade e sair: aí sim chama, com o nome GRAVADO como referência.
-  W2._editParticipantName('t1', 'Ana Gravada', '', botao);
+  W2._editParticipantName('t1', 'Ana Gravada', 'manual-fixture', botao);
   marcador.textContent = 'Ana Souza';
   let pacote = null;
   W2._callCF = function (fn, p2) { chamouCF++; pacote = p2; return { then(f) { f(); return { catch() { return { finally() {} }; } }; } }; };
@@ -291,7 +291,7 @@ ok(listeners.click.capture === true && opened === 1 && click.prevented && click.
   /* ⛔ E COM CONTA, RECUSA — sem abrir nada e sem chamar servidor. */
   marcador._attrs['contenteditable'] = 'false';
   const antesDaRecusa = chamouCF;
-  W2._editParticipantName('t1', 'Ana Gravada', 'uid-conta-real-01', botao);
+  W2._editParticipantName('t1', 'Ana Gravada', '', botao);
   ok(marcador._attrs['contenteditable'] === 'false' && chamouCF === antesDaRecusa,
     '⛔ com conta não abre edição nem chama o servidor — o nome é da pessoa');
   ok(avisos.some((a) => /O nome é da pessoa/.test(a)),

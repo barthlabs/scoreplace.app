@@ -10,7 +10,8 @@ const apply = s.slice(applyStart, start);
 ok(!/_callFn\('splitTournamentParticipant'/.test(split) && /Atualize a lista/.test(split), 'atalho de divisão por nome é bloqueado; a tela usa splitPair estrutural');
 ok(!/saveTournament\(|AppStore\.sync\(/.test(split), 'divisão de dupla não regrava o snapshot da tela');
 ok(/window\._splitDupla/.test(s), 'a divisão ativa usa a função estrutural de dupla');
-ok(/teamOrigins/.test(apply) && /p1Uid/.test(apply) && /participants/.test(apply), 'aplicador fresco preserva os slots e limpa a origem da dupla');
+ok(/return false;/.test(apply) && !/findIndex\(function\(p\) \{ return window\._pName/.test(apply),
+  'aplicador legado por nome está desativado; divisão ativa exige IDs estruturais');
 const placeholdersStart = s.indexOf('window._addPlaceholdersCore = function');
 const placeholdersEnd = s.indexOf('// v2.7.32:', placeholdersStart);
 const placeholders = s.slice(placeholdersStart, placeholdersEnd);
