@@ -58,6 +58,41 @@ window._faseCorrenteDispensaPresencaNoSorteio = function(t) {
     return !!window._isLigaFormat(t);
 };
 
+/* O motor de rodadas precisa de uma pergunta mais específica que o rótulo
+ * histórico do torneio: a FASE ATUAL usa entradas/parceiros rotativos? Sem
+ * `phases[]`, preservamos a leitura legada de `format`. Com fases canônicas,
+ * uma lista vazia ou uma eliminatória não pode cair no comportamento da
+ * primeira fase só porque o documento ainda traz `format:'Liga'` no topo.
+ * Classificatória de entradas fixas (clusters/sorteio livre) usa confrontos
+ * entre as próprias entradas e também responde não. */
+window._faseCorrenteUsaEntradasRotativas = function(t) {
+    if (!t) return false;
+    if (Array.isArray(t.phases)) {
+        if (!t.phases.length) return false;
+        var phase = t.phases[t.currentPhaseIndex || 0];
+        // Documento com phases ainda sem `kind` é legado/projetado pela ponte:
+        // conservar a operação antiga até a migração materializá-lo por completo.
+        if (!phase || !phase.kind) return !!window._isLigaFormat(t);
+        return !!window._faseCorrenteEhLiga(t);
+    }
+    return !!window._isLigaFormat(t);
+};
+
+/* A decisão do MOTOR sobre Rei/Rainha segue a mesma régua. A porta pública
+ * `_sorteioDaFaseEhReiRainha` continua respondendo a apresentação de um
+ * documento legado por drawMode; o motor antigo, porém, só usava
+ * `ligaRoundFormat`. Não podemos mudar essa operação enquanto a fase não for
+ * canônica — isso alteraria sobras, filas e o storage de jogos já existentes. */
+window._motorDaFaseUsaReiRainha = function(t) {
+    if (!t) return false;
+    if (Array.isArray(t.phases)) {
+        if (!t.phases.length) return false;
+        var phase = t.phases[t.currentPhaseIndex || 0];
+        if (phase && phase.kind) return !!window._sorteioDaFaseEhReiRainha(t);
+    }
+    return t.ligaRoundFormat === 'rei_rainha';
+};
+
 /* Resolve a agenda de sorteio da FASE ATUAL sem responder ainda se ela está
  * completa ou vencida. É a porta única para UI, cálculo do autoDraw e reparos.
  * `format` no topo só sobrevive como ponte de documento sem `phases[]`.

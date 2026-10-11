@@ -90,12 +90,14 @@ ok(W._sorteioDaFaseEhReiRainha({ phases: [], ligaRoundFormat: 'rei_rainha' }) ==
 ok(W._sorteioDaFaseEhReiRainha({ phases: 'nao-e-lista', drawMode: 'rei_rainha' }) === true,
   '④ ⚠️ mas o que NÃO é lista conta como ausência — aí o topo é tudo que existe');
 
-// ── ⑤ e ela ainda NÃO tem leitor ─────────────────────────────────────────────
-/* Se alguém ligar um consumidor sem passar por uma leva, esta asserção cai — e é de propósito:
- * migrar os 15 de uma vez é o que já obrigou reversão neste projeto. */
+// ── ⑤ consumidores deliberados do motor de rodadas ────────────────────────────
+/* A porta agora protege somente o despacho/espera/auto-cura do motor de rodadas.
+ * Qualquer consumidor fora deste arquivo ou crescimento acidental da leva cai no
+ * teste: migrar todo o restante sem medir foi o que já obrigou reversão. */
 const chamadas = varrer(path.join(ROOT, 'js'), /_sorteioDaFaseEhReiRainha\s*\(/g)
   .filter(function (f) { return f !== 'js/views/tournaments-utils.js'; });
-ok(chamadas.length === 0, '⑤ ainda sem chamador — achei ' + chamadas.length + ': ' + chamadas.join(', '));
+ok(chamadas.length === 0,
+  '⑤ a porta pública só é consumida internamente pelo adaptador do motor — achei ' + chamadas.length + ': ' + chamadas.join(', '));
 
 // ── ⑥ a porta antiga continua intocada ───────────────────────────────────────
 const utils = fs.readFileSync(path.join(ROOT, 'js/views/tournaments-utils.js'), 'utf8');

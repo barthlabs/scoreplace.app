@@ -4632,8 +4632,6 @@ function _generateNextRound(t, det) {
   // (drawManual===true) mantém o passo explícito (rede de segurança do banner).
   if (t.drawManual !== true && !t.tournamentStarted) t.tournamentStarted = Date.now();
 
-  var isLiga = window._isLigaFormat && window._isLigaFormat(t);
-
   // v2.5.1: nº da rodada deste sorteio calculado UMA vez, ANTES do loop de
   // categorias = (maior round já existente) + 1. Passado pra cada gerador pra
   // que TODAS as categorias do mesmo sorteio fiquem na MESMA rodada (C e D ambas
@@ -4649,7 +4647,11 @@ function _generateNextRound(t, det) {
   // (Rei/Rainha ou simples), que trata inativo corretamente. Nada é gerado fora deste ponto.
 
   // Gerador padrão: Rei/Rainha OU simples — ÚNICO caminho de geração de rodada.
-  var useReiRainha = t.ligaRoundFormat === 'rei_rainha';
+  // O modo de sorteio pertence à fase corrente. Uma eliminatória posterior
+  // não pode herdar Rei/Rainha só porque a classificatória inicial usou-o.
+  var useReiRainha = typeof window._motorDaFaseUsaReiRainha === 'function'
+    ? window._motorDaFaseUsaReiRainha(t)
+    : t.ligaRoundFormat === 'rei_rainha';
   var genFn = useReiRainha ? _generateReiRainhaRoundForPlayers : _generateNextRoundForPlayers;
 
   var categories = (typeof window._sortCategoriesBySkillOrder === 'function')
@@ -5544,8 +5546,13 @@ window._tryFormMonarchWaitlistGroups = function (t, category, roundNum, det) {
 // Idempotente: sem 4 elegíveis → forma 0 (sem efeito). Retorna nº de grupos formados.
 window._expandMonarchFromWaitlist = function (t) {
   if (!t) return 0;
-  if (!(window._isLigaFormat && window._isLigaFormat(t)) || t.ligaRoundFormat !== 'rei_rainha') return 0;
-  if ((t.currentPhaseIndex || 0) !== 0) return 0; // só na fase de grupos (fase 0)
+  var _rotativaAqui = typeof window._faseCorrenteUsaEntradasRotativas === 'function'
+    ? window._faseCorrenteUsaEntradasRotativas(t)
+    : !!(window._isLigaFormat && window._isLigaFormat(t));
+  var _monarchAqui = typeof window._motorDaFaseUsaReiRainha === 'function'
+    ? window._motorDaFaseUsaReiRainha(t)
+    : t.ligaRoundFormat === 'rei_rainha';
+  if (!_rotativaAqui || !_monarchAqui) return 0;
   if (typeof window._expandFormationAllowed === 'function' && !window._expandFormationAllowed(t)) return 0;
   var rounds = t.rounds || [];
   var target = null;
@@ -5726,9 +5733,13 @@ window._expandMonarchFromWaitlist = function (t) {
 window._onParticipantAddedToMonarchRound = function (t, playerName, category) {
   var res = { added: false, formed: 0 };
   if (!t || !playerName) return res;
-  if ((t.currentPhaseIndex || 0) !== 0) return res; // já avançou de fase
-  var isLiga = window._isLigaFormat && window._isLigaFormat(t);
-  if (!isLiga || t.ligaRoundFormat !== 'rei_rainha') return res;
+  var isLiga = typeof window._faseCorrenteUsaEntradasRotativas === 'function'
+    ? window._faseCorrenteUsaEntradasRotativas(t)
+    : !!(window._isLigaFormat && window._isLigaFormat(t));
+  var isMonarch = typeof window._motorDaFaseUsaReiRainha === 'function'
+    ? window._motorDaFaseUsaReiRainha(t)
+    : t.ligaRoundFormat === 'rei_rainha';
+  if (!isLiga || !isMonarch) return res;
   var rounds = t.rounds || [];
   var target = null;
   for (var i = rounds.length - 1; i >= 0; i--) {
@@ -5759,9 +5770,14 @@ window._onParticipantAddedToMonarchRound = function (t, playerName, category) {
 // rodízio agendado legítimo (o jogador joga em outras rodadas), não fila.
 window._healMonarchRemainderToWaitlist = function (t) {
   if (!t || !Array.isArray(t.rounds)) return false;
-  if (!(window._isLigaFormat && window._isLigaFormat(t)) || t.ligaRoundFormat !== 'rei_rainha') return false;
+  var _rotativaAqui = typeof window._faseCorrenteUsaEntradasRotativas === 'function'
+    ? window._faseCorrenteUsaEntradasRotativas(t)
+    : !!(window._isLigaFormat && window._isLigaFormat(t));
+  var _monarchAqui = typeof window._motorDaFaseUsaReiRainha === 'function'
+    ? window._motorDaFaseUsaReiRainha(t)
+    : t.ligaRoundFormat === 'rei_rainha';
+  if (!_rotativaAqui || !_monarchAqui) return false;
   if (t.ligaDrawMode === 'round_robin') return false; // rodízio agendado, não fila
-  if ((t.currentPhaseIndex || 0) !== 0) return false; // só na fase de grupos
   var changed = false;
   var touchedCats = {};
   var _isRem = function (m) { return m && m.isSitOut && m.sitOutReason !== 'inactive' && m.sitOutReason !== 'wo'; };
@@ -5904,7 +5920,9 @@ window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPl
   det = det || {};
   var standings = _computeStandings(t, category);
   var allPlayers = standings.map(function(s) { return s.name; });
-  var isLiga = window._isLigaFormat && window._isLigaFormat(t);
+  var isLiga = typeof window._faseCorrenteUsaEntradasRotativas === 'function'
+    ? window._faseCorrenteUsaEntradasRotativas(t)
+    : !!(window._isLigaFormat && window._isLigaFormat(t));
 
   // Liga: filter out inactive players and record them as sit-out
   var players = allPlayers;
@@ -6148,7 +6166,9 @@ function _generateNextRoundForPlayers(t, category, _rn, det) {
   var _phaseForPairing = Array.isArray(t.phases) ? t.phases[t.currentPhaseIndex || 0] : null;
   var _phasePairing = _phaseForPairing && _phaseForPairing.classification && _phaseForPairing.classification.pairing;
   var _fixedClassificationEntries = _phasePairing && typeof _phasePairing === 'object' && _phasePairing.entryMode === 'fixed';
-  const _isLigaFmtHere = !!(window._isLigaFormat && window._isLigaFormat(t)) && !_fixedClassificationEntries;
+  const _isLigaFmtHere = (typeof window._faseCorrenteUsaEntradasRotativas === 'function'
+    ? window._faseCorrenteUsaEntradasRotativas(t)
+    : !!(window._isLigaFormat && window._isLigaFormat(t))) && !_fixedClassificationEntries;
   // v2.5.1: ver comentário em _generateReiRainhaRoundForPlayers — round = maior
   // round existente +1, pra categorias do mesmo sorteio compartilharem a rodada.
   const roundNum = (typeof _rn === 'number') ? _rn : (((t.rounds || []).reduce(function (mx, c) { return Math.max(mx, (c && c.round) || 0); }, 0)) + 1);

@@ -1,3 +1,7 @@
+// 2.3.334 — O motor de rodadas agora escolhe parceiros rotativos e Rei/Rainha pela
+// fase canônica atual. Uma eliminatória não herda o sorteio da classificatória;
+// documentos legados ou parcialmente projetados preservam exatamente o fluxo antigo
+// até receberem uma fase completa. Cliente e Function usam a mesma decisão.
 // 2.3.333 — A preparação do sorteio passa a decidir a chamada de presença pela fase
 // atual: uma eliminatória não herda o comportamento de pontos corridos de uma
 // classificatória anterior. Torneios legados sem fases continuam com o comportamento
