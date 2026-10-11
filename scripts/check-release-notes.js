@@ -66,9 +66,27 @@ function checarAtraso() {
   };
   const ultimoDaNota = git(['log', '-1', '--format=%H', '--', 'js/release-notes.js']);
   if (!ultimoDaNota) return;   // sem git/histórico → só a parte 1 vale
-  const depois = git(['log', ultimoDaNota + '..HEAD', '--format=%h|%s', '--',
+  const candidatos = git(['log', ultimoDaNota + '..HEAD', '--format=%H|%h|%s', '--',
     'js/', 'css/', 'index.html', ':!js/release-notes.js'])
     .split('\n').filter(Boolean);
+  // O próprio publicador cria, DEPOIS da nota, um commit mecânico de versão que
+  // altera store/sw/index. Ele não é uma entrega omitida: a nota já foi escrita
+  // no corte de código anterior. Sem esta distinção, toda publicação se bloqueia
+  // a si mesma ao conferir o artefato que acabou de preparar.
+  const gerados = new Set([
+    'ext-version.txt', 'extension/content.js', 'index.html', 'ios/App/App.xcodeproj/project.pbxproj',
+    'js/release-notes.js', 'js/store.js', 'scoreplace-letzplay-ext-2.07.zip', 'sw.js', 'version.txt'
+  ]);
+  const ehCommitMecanicoDeRelease = (hash, assunto) => {
+    if (!/^\d+\.\d+\.\d+ — (?:corte único de produção|snapshot do prerender que está no ar)$/.test(assunto)) return false;
+    const arquivos = git(['show', '--format=', '--name-only', hash]).split('\n').filter(Boolean);
+    return arquivos.length > 0 && arquivos.every((arquivo) => gerados.has(arquivo) || /^scoreplace-letzplay-ext-[0-9.]+\.zip$/.test(arquivo));
+  };
+  const depois = candidatos.map((linha) => {
+    const [hash, curto, ...resto] = linha.split('|');
+    return { hash, curto, assunto: resto.join('|') };
+  }).filter(({ hash, assunto }) => !ehCommitMecanicoDeRelease(hash, assunto))
+    .map(({ curto, assunto }) => curto + '|' + assunto);
   if (!depois.length) return;
   console.error('');
   console.error('✗ A NOTA ESTÁ ATRASADA — ' + depois.length + ' entrega(s) de código depois da última vez que ela foi escrita:');
