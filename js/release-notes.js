@@ -1,3 +1,9 @@
+// 2.3.333 — A preparação do sorteio passa a decidir a chamada de presença pela fase
+// atual: uma eliminatória não herda o comportamento de pontos corridos de uma
+// classificatória anterior. Torneios legados sem fases continuam com o comportamento
+// que já tinham. Ferramentas do organizador também passam a seguir a fase corrente
+// quando a classificatória usa pareamento por clusters, sem reabrir uma rodada extra
+// depois da entrada na eliminatória.
 // 2.3.332 — A chave passa a resolver grupos, histórico classificatório e conectores
 // pela fase canônica atual, sem herdar `currentStage` ou o rótulo de uma fase anterior.
 // Pareamento por clusters só recebe o rótulo suíço quando a própria classificatória o

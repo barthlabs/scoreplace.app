@@ -44,6 +44,20 @@ window._faseCorrenteEhLiga = function(t) {
         !(window._faseCorrenteEhClassificatoriaPorRodadas && window._faseCorrenteEhClassificatoriaPorRodadas(t));
 };
 
+/* A chamada de presença é uma decisão operacional da FASE que será sorteada,
+ * não do rótulo histórico do torneio. Uma classificatória de pontos corridos
+ * não exige presença; uma eliminatória posterior, mesmo num torneio cujo topo
+ * ainda diz "Liga", exige. Documentos sem phases[] preservam o comportamento
+ * antigo porque não existe outra fase que possa responder à pergunta. */
+window._faseCorrenteDispensaPresencaNoSorteio = function(t) {
+    if (!t) return false;
+    if (Array.isArray(t.phases)) {
+        if (!t.phases.length) return false;
+        return !!window._faseCorrenteEhLiga(t);
+    }
+    return !!window._isLigaFormat(t);
+};
+
 /* Resolve a agenda de sorteio da FASE ATUAL sem responder ainda se ela está
  * completa ou vencida. É a porta única para UI, cálculo do autoDraw e reparos.
  * `format` no topo só sobrevive como ponte de documento sem `phases[]`.

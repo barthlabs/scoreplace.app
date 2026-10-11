@@ -2194,7 +2194,7 @@ function renderTournaments(container, tournamentId = null) {
         // quem não fecha grupo de 4 (Rei/Rainha) vai pra lista de espera (o motor de rodada
         // já faz isso). O diálogo "Sortear com todos / Só entre os presentes" só faz sentido
         // em torneio PRESENCIAL de 1 dia (Eliminatórias / Fase de Grupos). Pular pra Liga.
-        if (window._isLigaFormat && window._isLigaFormat(t)) { if (typeof startDraw === 'function') startDraw(); return; }
+        if (window._faseCorrenteDispensaPresencaNoSorteio && window._faseCorrenteDispensaPresencaNoSorteio(t)) { if (typeof startDraw === 'function') startDraw(); return; }
         var existing = document.getElementById('presence-draw-choice');
         if (existing) existing.remove();
         var dialog = document.createElement('div');
@@ -2446,7 +2446,7 @@ function renderTournaments(container, tournamentId = null) {
         // inscrições e realizar sorteio antecipado (cancelar/confirmar)". Só status=='closed'
         // (inscrições já encerradas pelo organizador) pula direto pro sorteio.
         var _inscricoesAbertas = !!(_tSort && (_tSort.status !== 'closed' || _tSort._autoClosedByDeadline));
-        var _isLigaSort = !!(window._isLigaFormat && _tSort && window._isLigaFormat(_tSort));
+        var _isLigaSort = !!(window._faseCorrenteDispensaPresencaNoSorteio && _tSort && window._faseCorrenteDispensaPresencaNoSorteio(_tSort));
         var _teamDrawCfg = window.ScoreplaceTeamCompetition && window.ScoreplaceTeamCompetition.configurationForTournament
             ? window.ScoreplaceTeamCompetition.configurationForTournament(_tSort)
             : (_tSort && (_tSort.teamCompetition || ((_tSort.phases || [])[0] || {}).teamCompetition));

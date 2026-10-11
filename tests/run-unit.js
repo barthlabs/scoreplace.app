@@ -268,6 +268,7 @@ const SUITES = [
   // ramo isLigaAutoDraw: apagar só o duplicado deixaria duas delas SEM ação de avanço.
   'tests/avancar-de-fase-e-um-botao-so.test.js',
   'tests/uma-definicao-de-liga.test.js',
+  'tests/current-phase-presence-gate.test.js',
   'tests/auto-draw-fase-atual.test.js',
   'tests/sorteio-da-fase-nao-e-do-torneio.test.js',
   'tests/rei-rainha-nao-se-pergunta-a-mao.test.js',
