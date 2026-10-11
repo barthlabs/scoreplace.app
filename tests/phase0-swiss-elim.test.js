@@ -43,6 +43,53 @@ ok(E.classifyPhaseFormat({
   format: 'Pontos Corridos'
 }) === 'elim', 'kind:elimination vence rótulo legado de classificatória');
 
+// A navegação da chave precisa obedecer à fase canônica mesmo quando o
+// documento histórico já não traz `currentStage`. Isso é o que acontece após
+// traduzir um classificatório por rodadas que já avançou para eliminatória.
+var historicTransition = {
+  phases: [
+    { kind: 'classification', classification: { structure: 'round_robin' } },
+    { kind: 'elimination', elimination: { bracketType: 'single' } }
+  ],
+  currentPhaseIndex: 1,
+  swissRoundsData: [{ matches: [{ id: 'hist-r1', round: 1, p1: 'A', p2: 'B', winner: 'A' }] }],
+  matches: [{ id: 'hist-semi', round: 1, p1: 'A', p2: 'C' }]
+};
+var historicModel = window._getUnifiedRounds(historicTransition);
+ok(historicModel.columns.some(function (c) { return c.phase === 'swiss-past'; }),
+  'histórico classificatório aparece antes da eliminação pela fase canônica, sem currentStage');
+
+var canonicalGroups = {
+  phases: [{ kind: 'classification', classification: { structure: 'groups' } }],
+  currentPhaseIndex: 0,
+  groups: [{ name: 'Grupo A', matches: [{ id: 'group-r1', round: 1, p1: 'A', p2: 'B' }] }],
+  matches: []
+};
+var groupsModel = window._getUnifiedRounds(canonicalGroups);
+ok(groupsModel.columns.some(function (c) { return c.phase === 'groups'; }),
+  'grupos canônicos aparecem sem depender de currentStage legado');
+
+var swissQualifier = {
+  phases: [
+    { kind: 'classification', classification: { structure: 'round_robin', pairing: { strategy: 'ranking_clusters' } } },
+    { kind: 'elimination', elimination: { bracketType: 'single' } }
+  ],
+  currentPhaseIndex: 0,
+  rounds: [{ round: 1, matches: [{ id: 'swiss-q1', p1: 'A', p2: 'B' }] }]
+};
+var swissQualifierModel = window._getUnifiedRounds(swissQualifier);
+ok(swissQualifierModel.columns[0].label.indexOf('SUIÇA') !== -1,
+  'clusters classificatórios com eliminatória posterior recebem rótulo suíço pela fase, não pelo formato do topo');
+
+var roundRobinOnly = {
+  phases: [{ kind: 'classification', classification: { structure: 'round_robin', pairing: { strategy: 'round_robin' } } }],
+  currentPhaseIndex: 0,
+  rounds: [{ round: 1, matches: [{ id: 'rr1', p1: 'A', p2: 'B' }] }]
+};
+var roundRobinModel = window._getUnifiedRounds(roundRobinOnly);
+ok(roundRobinModel.columns[0].label.indexOf('SUIÇA') === -1,
+  'pontos corridos sem eliminatória não vira suíço por herança de formato');
+
 // 8 duplas, classificatória Suíço/Liga (fase 0) de 1 rodada = 4 jogos, todos decididos.
 // Top 4 avançam pra eliminatória (fase 1): semis (2) + final (1) [+ 3º/4º].
 function mkTournament() {

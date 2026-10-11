@@ -6,9 +6,9 @@ const path = require('path');
 const src = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'bracket.js'), 'utf8');
 const routerSrc = fs.readFileSync(path.join(__dirname, '..', 'js', 'router.js'), 'utf8');
 const componentsCss = fs.readFileSync(path.join(__dirname, '..', 'css', 'components.css'), 'utf8');
-let fail = 0;
+let fail = 0, pass = 0;
 function ok(condition, message) {
-  if (condition) console.log('  ✓ ' + message);
+  if (condition) { pass++; console.log('  ✓ ' + message); }
   else { console.error('  ✗ ' + message); fail++; }
 }
 
@@ -22,6 +22,7 @@ ok(!src.includes('[data-bracket-tab-empty="1"]{display:none!important;}'), 'filt
 ok(!src.includes("p.setAttribute('data-bracket-tab-holder', '1')"), 'montagem não marca ancestrais dos cards como escondíveis');
 ok(src.includes("cb.style.display = ownG === gender ? '' : 'none'"), 'subabas só alternam pelo gênero ativo sem remover as abas principais');
 ok(src.includes('function _bracketLayoutEliminationTree') && src.includes("data-bracket-tree-lines") && src.includes("cardColumns[ci - 1].length !== cardColumns[ci].length * 2") && src.includes('Nunca tirar um jogo do fluxo da sua coluna'), 'eliminatórias desenham conectores sem tirar cards do fluxo nem aplicar a regra em rodadas independentes');
+ok(src.includes("if (phase && phase.kind) return phase.kind === 'elimination';"), 'conectores respeitam a fase canônica e não herdam um rótulo eliminatório legado');
 ok(src.includes('function _bracketTabsRefreshRoundRail') && src.includes("rail.hidden = true") && src.includes("rail.innerHTML = ''"), 'não existe uma segunda régua de rodadas concorrendo com a chave');
 ok(src.includes('class="bracket-round-heading"') && src.includes('data-bracket-round-heading-portal') && src.includes('function _bracketUpdateRoundHeadingPortal') && src.includes('(root.parentNode || scope).appendChild(portal)') && !src.includes('document.body.appendChild(portal)') && src.includes('document.addEventListener(\'scroll\'') && src.includes('scope && scope.style') && src.includes('function _bracketSyncRoundHeadingOffsets') && src.includes('window._bracketRoundHeadingResizeListener') && src.includes('var(--bg-darker,#111114)') && !src.includes('visibility:hidden!important'), 'a linha e o Ocultar usam um portal fixo sob as abas, no ciclo de vida da seção da chave e sem camadas órfãs');
 ok(src.includes('regression_round_portal_overlaps_tabs_subpixel_seam') && src.includes('regression_round_portal_masks_cards_before_round_heading') && src.includes('regression_round_portal_is_hard_clipped_to_tabs_width') && src.includes("top:' + (Math.floor(anchorBottom) - 24) + 'px") && src.includes('overflow:hidden;isolation:isolate;pointer-events:none;z-index:30') && src.includes("clone.style.cssText = 'position:absolute;top:24px;"), 'o portal mascara cards antes do cabeçalho de rodada em tela cheia, fica abaixo das abas e é recortado na largura delas');
@@ -48,5 +49,5 @@ ok(src.includes('defaultAgendaGender') && src.includes("'__general'") && src.inc
 ok(src.includes('regression_operational_focus_reserves_round_heading') && src.includes("closest('.bracket-general-round-column, .bracket-round-column')") && src.includes('var portalReserve = headingHeight ? headingHeight + 30 : 68;') && src.includes('var safeTop = rootRect.bottom + Math.max(12, portalReserve);'), 'o foco operacional reserva a altura da régua de Rodada antes de rolar, mantendo o card inteiro abaixo do cabeçalho fixo');
 ok(src.includes('root._bracketFocusToken') && !src.includes('view._bracketFocusToken'), 'o cancelamento do foco operacional usa o contêiner recebido no escopo, sem referência livre em runtime');
 
-console.log('\n' + (fail ? '❌' : '✅') + ' chaves-abas-estáveis: ' + (21 - fail) + ' asserts ok, ' + fail + ' falharam');
+console.log('\n' + (fail ? '❌' : '✅') + ' chaves-abas-estáveis: ' + pass + ' asserts ok, ' + fail + ' falharam');
 process.exitCode = fail ? 1 : 0;

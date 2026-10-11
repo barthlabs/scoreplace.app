@@ -176,6 +176,26 @@ window._rotaMostraAChaveDeste = function (hash, id) {
   // follow. Pure Suíço / Liga / Ranking tournaments keep the plain "Rodada N".
   function _isSwissQualifierTournament(t) {
     if (!t) return false;
+    // No contrato canônico, Suíço é uma configuração de pareamento da fase
+    // classificatória — não um terceiro tipo de fase nem o rótulo do torneio.
+    // Assim, só chamamos as rodadas de "suíças" quando a fase atual usa
+    // clusters de ranking E existe uma eliminatória posterior configurada.
+    if (Array.isArray(t.phases) && t.phases.length) {
+      var phaseIndex = Number(t.currentPhaseIndex || 0);
+      var phase = t.phases[phaseIndex];
+      if (phase && phase.kind) {
+        if (phase.kind !== 'classification') return false;
+        var classification = phase.classification || {};
+        var pairing = classification.pairing || {};
+        var strategy = String(pairing.strategy || classification.pairingStrategy || '').toLowerCase();
+        var phaseCode = String(phase.formatCode || phase.format || '').toLowerCase();
+        var isSwissPairing = strategy === 'ranking_clusters' || /su[ií]ç/.test(phaseCode);
+        if (!isSwissPairing) return false;
+        return t.phases.slice(phaseIndex + 1).some(function (next) {
+          return next && next.kind === 'elimination';
+        });
+      }
+    }
     var fmt = t.format || '';
     if (fmt === 'Suíço' || fmt === 'Suíço Clássico' || fmt === 'Liga' || fmt === 'Ranking') return false;
     return true;
@@ -875,11 +895,30 @@ window._rotaMostraAChaveDeste = function (hash, id) {
     }
 
     var cols = [];
+    // Depois da projeção de legado, `phases/currentPhaseIndex` é o contrato
+    // primário. `currentStage` continua apenas como fallback para snapshots que
+    // ainda não foram traduzidos. Depender só dele aqui fazia a chave omitir a
+    // classificatória histórica de um torneio já avançado e os grupos de um
+    // torneio canônico — ambos podem não carregar esse marcador legado.
+    var currentPhase = Array.isArray(t.phases) ? t.phases[Number(t.currentPhaseIndex) || 0] : null;
+    var hasCanonicalCurrentPhase = !!(currentPhase && currentPhase.kind);
+    var currentIsElimination = hasCanonicalCurrentPhase
+      ? currentPhase.kind === 'elimination'
+      : t.currentStage === 'elimination';
+    var currentIsGroups = hasCanonicalCurrentPhase
+      ? currentPhase.kind === 'classification' &&
+        !!(currentPhase.classification && currentPhase.classification.structure === 'groups')
+      : t.currentStage === 'groups';
+    var currentIsMonarch = hasCanonicalCurrentPhase
+      ? (typeof window._sorteioDaFaseEhReiRainha === 'function'
+        ? window._sorteioDaFaseEhReiRainha(t)
+        : !!(currentPhase.reiRainha || currentPhase.drawMode === 'rei_rainha'))
+      : window._isMonarchFormat(t);
 
     // 1) Swiss past (p2 resolution recap) — only when we're in the elim phase
     //    and there's preserved swiss data.
     var hasSwissRecap = Array.isArray(t.swissRoundsData) && t.swissRoundsData.length > 0;
-    if (hasSwissRecap && t.currentStage === 'elimination') {
+    if (hasSwissRecap && currentIsElimination) {
       cols = cols.concat(_buildSwissPastColumns(t));
     }
 
@@ -888,8 +927,9 @@ window._rotaMostraAChaveDeste = function (hash, id) {
     var hasMatches = Array.isArray(t.matches) && t.matches.length > 0;
     var hasGroups = Array.isArray(t.groups) && t.groups.length > 0;
 
-    // Groups phase comes before the elim strip when currentStage === 'groups'.
-    if (hasGroups && (t.currentStage === 'groups' || window._isMonarchFormat(t))) {
+    // Groups phase comes before the elim strip when the current canonical phase
+    // is a classificatória por grupos. Legacy `currentStage` is fallback only.
+    if (hasGroups && (currentIsGroups || currentIsMonarch)) {
       cols = cols.concat(_buildGroupsColumn(t));
     }
 

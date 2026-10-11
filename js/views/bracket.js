@@ -839,6 +839,11 @@ function _bracketLineSection(card) {
 }
 function _bracketIsEliminationTree(t) {
   var phase = t && t.phases && t.phases[t.currentPhaseIndex || 0];
+  // A fase canônica vence qualquer rótulo que sobrou do formato de origem.
+  // Sem isto, uma classificatória convertida que ainda carregasse `formatCode:
+  // 'elim'` poderia receber conectores de chave, sugerindo avanço entre rodadas
+  // independentes. `currentStage`/format continuam somente como ponte de leitura.
+  if (phase && phase.kind) return phase.kind === 'elimination';
   var format = String((phase && (phase.format || phase.formatCode || phase.kind)) || (t && (t.format || t.classifyFormat)) || '').toLowerCase();
   return !!(t && t.currentStage === 'elimination') || /eliminat|knockout/.test(format);
 }
