@@ -1242,6 +1242,7 @@ const SUITES = [
   // por um save de outra coisa quando a resposta do servidor nunca chega. v1.8.1.
   'tests/inscricao-otimista-nao-persiste.test.js',
   'tests/monarch-wo-uid-identity.test.js',
+  'tests/monarch-wo-identity-gate.test.js',
   'tests/liga-wo-invite.test.js',
   // A fronteira browser→Callable do W.O. resolve o ausente e os convidados por ID;
   // nomes só voltam como rótulos derivados no servidor. Impede homônimo de receber

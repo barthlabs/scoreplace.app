@@ -2162,13 +2162,15 @@ function _monSlotIds(m, side) {
   return m[k];
 }
 function _monPlayers(t, gName, pIdx) {
-  var s = {}, n2u = (typeof window._buildNameToUid === 'function') ? (window._buildNameToUid(t) || {}) : {};
+  var s = {};
   _monPlaying(t, gName, pIdx).forEach(function (m) {
     [['p1', m.team1 || [], m.team1Uids || []], ['p2', m.team2 || [], m.team2Uids || []]].forEach(function (side) {
       var ids = _monSlotIds(m, side[0]);
       side[1].forEach(function (name, i) {
         if (!name) return;
-        var uid = side[2][i] || n2u[name] || null, slotId = ids[i] || null;
+        // A vaga ou o participante, nunca o nome, identifica quem será alterado.
+        // Não use `_buildNameToUid` aqui: um mapa por rótulo colapsa homônimos.
+        var uid = side[2][i] || null, slotId = ids[i] || null;
         var key = uid ? ('uid:' + uid) : (slotId ? ('slot:' + slotId) : ('name:' + name));
         if (!s[key]) s[key] = { name: name, uid: uid, slotId: slotId };
       });
@@ -2180,25 +2182,32 @@ function _monPlayers(t, gName, pIdx) {
 // grupos desta fase e não estão ausentes/ghost. São os candidatos a "chamar".
 function _monRoundFolgas(t, pIdx) {
   var playing = {};
-  _monMatchesAll(t, pIdx).forEach(function (m) { if (!m.isSitOut) (m.team1 || []).concat(m.team2 || []).forEach(function (n) { if (n) playing[n] = 1; }); });
+  _monMatchesAll(t, pIdx).forEach(function (m) {
+    if (m.isSitOut) return;
+    [['team1', 'team1Uids'], ['team2', 'team2Uids']].forEach(function (side) {
+      var names = Array.isArray(m[side[0]]) ? m[side[0]] : [], ids = Array.isArray(m[side[1]]) ? m[side[1]] : [];
+      names.forEach(function (name, i) { if (name && ids[i]) playing['id:' + ids[i]] = 1; });
+    });
+  });
   var ghosts = t.ligaGhosts || [];
   var out = [];
   (t.participants || []).forEach(function (p) {
     var nm = (typeof window._pName === 'function') ? window._pName(p) : (p && (p.displayName || p.name) || '');
+    var identity = p && typeof p === 'object' ? String(p.uid || p.manualParticipantId || '').trim() : '';
     if (!nm || nm.indexOf('/') > -1) return;                 // só solo (Rei/Rainha é individual)
-    if (playing[nm]) return;                                 // já joga nesta rodada
+    if (!identity || playing['id:' + identity]) return;      // já joga nesta rodada / legado sem id não é mutável
     if (ghosts.indexOf(nm) > -1) return;
     if (typeof window._idMapHas === 'function' && window._idMapHas(t, t.absent || {}, p)) return; // ausente
-    out.push(nm);
+    out.push({ name: nm, identity: identity });
   });
   return out;
 }
 function _monCanManage(t, gName, pIdx) { return _canManageGroup(t, { players: _monPlayers(t, gName, pIdx).map(function (p) { return p.name; }) }); }
 
 // Aplica: troca ausente→substituto nos jogos do grupo + marcador W.O. + ghost/folga.
-window._monWoApply = function (tId, pIdx, gName, absentName, fillName, isGuest, absentSlotId) {
+window._monWoApply = function (tId, pIdx, gName, absentName, fillName, isGuest, absentSlotId, absentUidExplicit, fillUidExplicit) {
   if (!_ligaContext() && window.FirestoreDB && typeof window.FirestoreDB._callFn === 'function') {
-    window.FirestoreDB._callFn('applyMonarchGroupWO', { tournamentId: tId, phaseIndex: pIdx || 0, groupName: gName, absentName: absentName, fillName: fillName, isGuest: !!isGuest, absentSlotId: absentSlotId || '' }).then(function (out) {
+    window.FirestoreDB._callFn('applyMonarchGroupWO', { tournamentId: tId, phaseIndex: pIdx || 0, groupName: gName, absentUid: absentUidExplicit || '', fillUid: isGuest ? '' : (fillUidExplicit || ''), guestName: isGuest ? fillName : '', isGuest: !!isGuest, absentSlotId: absentSlotId || '' }).then(function (out) {
       if (out && out.tournament && typeof window._applyCFTournament === 'function') window._applyCFTournament(out.tournament);
       if (window.showNotification) window.showNotification('W.O. aplicado', absentName + ' → ' + fillName, 'success'); _rerender(tId);
     }).catch(function (e) { if (window.showNotification) window.showNotification('W.O.', (e && e.message) || 'Não foi possível registrar no servidor.', 'error'); });
@@ -2214,10 +2223,30 @@ window._monWoApply = function (tId, pIdx, gName, absentName, fillName, isGuest, 
     // substituto → a classificação por uid (_monKey) creditava os jogos do substituto
     // na linha do ausente. Casa o slot do ausente por uid quando ambos têm uid (nome só
     // fallback p/ slot/ausente sem uid — guest/legado). Espelha _rewriteSlot (v4.4.117).
-    var _n2u = (typeof window._buildNameToUid === 'function') ? (window._buildNameToUid(ft) || {}) : {};
-    var absentUid = _n2u[absentName] || null;
-    var fillUid = isGuest ? null : (_n2u[fillName] || null);
-    var fillSlotId = isGuest ? ('ghostmon:' + Date.now() + ':' + Math.floor(Math.random() * 1e6)) : null;
+    // Compatibilidade local para sorteios antigos: resolve um nome somente se ele
+    // aponta para UMA identidade. Homônimo não é aceito como chave de mutação.
+    var _uniqueParticipantIdentity = function (name) {
+      var hits = {};
+      (ft.participants || []).forEach(function (p) {
+        var label = (typeof window._pName === 'function') ? window._pName(p) : (p && (p.displayName || p.name) || '');
+        var id = p && typeof p === 'object' ? String(p.uid || p.manualParticipantId || '').trim() : '';
+        if (label === name && id) hits[id] = 1;
+      });
+      var ids = Object.keys(hits); return ids.length === 1 ? ids[0] : null;
+    };
+    var absentUid = absentUidExplicit || null;
+    if (!absentUid && absentSlotId) {
+      _monPlaying(ft, gName, pIdx).some(function (m) {
+        return [['p1', m.team1Uids || []], ['p2', m.team2Uids || []]].some(function (side) {
+          var ids = _monSlotIds(m, side[0]), index = ids.indexOf(absentSlotId);
+          if (index >= 0 && side[1][index]) { absentUid = side[1][index]; return true; }
+          return false;
+        });
+      });
+    }
+    if (!absentUid) absentUid = _uniqueParticipantIdentity(absentName);
+    var fillUid = isGuest ? null : (fillUidExplicit || _uniqueParticipantIdentity(fillName));
+    var fillSlotId = isGuest ? ('ghostmon:' + Date.now() + ':' + Math.floor(Math.random() * 1e6)) : (absentSlotId || null);
     var _rwSide = function (m, nk, uk, side) {
       var names = m[nk]; if (!Array.isArray(names)) return;
       var uids = Array.isArray(m[uk]) ? m[uk].slice() : names.map(function () { return null; });
@@ -2293,8 +2322,25 @@ window._monWoRevert = function (tId, pIdx, gName) {
     // v4.5.x (Parte 14): reverte NOME e UID do slot (substituto → ausente). Casa o slot
     // do substituto por uid quando ambos têm uid (Jogador X = null → cai no nome).
     var _n2u = (typeof window._buildNameToUid === 'function') ? (window._buildNameToUid(ft) || {}) : {};
-    var absentUid = _n2u[absentName] || null;
-    var fillUid = isGuest ? null : (_n2u[fillName] || null);
+    var _uniqueParticipantIdentity = function (name) {
+      var hits = {};
+      (ft.participants || []).forEach(function (p) {
+        var label = (typeof window._pName === 'function') ? window._pName(p) : (p && (p.displayName || p.name) || '');
+        var id = p && typeof p === 'object' ? String(p.uid || p.manualParticipantId || '').trim() : '';
+        if (label === name && id) hits[id] = 1;
+      });
+      var ids = Object.keys(hits); return ids.length === 1 ? ids[0] : null;
+    };
+    var absentUid = (wm.team1Uids || [])[0] || wm.p1Uid || _uniqueParticipantIdentity(absentName);
+    var fillUid = isGuest ? null : null;
+    _monPlaying(ft, gName, pIdx).some(function (m) {
+      return [['p1', m.team1 || [], m.team1Uids || []], ['p2', m.team2 || [], m.team2Uids || []]].some(function (side) {
+        var ids = _monSlotIds(m, side[0]), index = wm.woFillSlotId ? ids.indexOf(wm.woFillSlotId) : -1;
+        if (index >= 0 && side[2][index]) { fillUid = side[2][index]; return true; }
+        return false;
+      });
+    });
+    if (!fillUid && !isGuest) fillUid = _uniqueParticipantIdentity(fillName);
     var _rwSide = function (m, nk, uk, side) {
       var names = m[nk]; if (!Array.isArray(names)) return;
       var uids = Array.isArray(m[uk]) ? m[uk].slice() : names.map(function () { return null; });
@@ -2330,7 +2376,7 @@ window._monWoFlow = function (tId, pIdx, gName) {
   var players = _monPlayers(t, gName, pIdx);
   var rows = players.map(function (p, i) {
     var discr = p.slotId ? (' <span style="opacity:.65;font-size:.75em;">(vaga ' + (i + 1) + ')</span>') : '';
-    return '<button class="btn btn-outline" style="width:100%;margin-bottom:8px;text-align:left;" onclick="window._monWoPickFill(\'' + _esc(tId) + '\',' + pIdx + ',\'' + _esc(gName) + '\',\'' + _esc(p.name) + '\',\'' + _esc(p.slotId || '') + '\')">' + _safe(p.name) + discr + '</button>';
+    return '<button class="btn btn-outline" style="width:100%;margin-bottom:8px;text-align:left;" onclick="window._monWoPickFill(\'' + _esc(tId) + '\',' + pIdx + ',\'' + _esc(gName) + '\',\'' + _esc(p.name) + '\',\'' + _esc(p.slotId || '') + '\',\'' + _esc(p.uid || '') + '\')">' + _safe(p.name) + discr + '</button>';
   }).join('');
   if (window.showAlertDialog) {
     window.showAlertDialog('Quem não pôde jogar? — ' + _safe(gName),
@@ -2340,7 +2386,7 @@ window._monWoFlow = function (tId, pIdx, gName) {
 };
 
 // Passo 2: escolher o preenchimento — chamar uma FOLGA da rodada OU Jogador X.
-window._monWoPickFill = function (tId, pIdx, gName, absentName, absentSlotId) {
+window._monWoPickFill = function (tId, pIdx, gName, absentName, absentSlotId, absentUid) {
   pIdx = pIdx || 0;
   var t = _findT(tId); if (!t) return;
   var folgas = _monRoundFolgas(t, pIdx);
@@ -2348,24 +2394,24 @@ window._monWoPickFill = function (tId, pIdx, gName, absentName, absentSlotId) {
   if (folgas.length) {
     html += '<div style="font-size:0.74rem;font-weight:700;color:var(--sp-c-4ade80,#4ade80);margin:4px 0 6px;">Folga da rodada — entra e PONTUA</div>';
     html += folgas.map(function (f) {
-      return '<button class="btn btn-outline" style="width:100%;margin-bottom:8px;text-align:left;border-color:rgba(16,185,129,0.4);color:var(--sp-c-4ade80,#4ade80);" onclick="window._monWoApply(\'' + _esc(tId) + '\',' + pIdx + ',\'' + _esc(gName) + '\',\'' + _esc(absentName) + '\',\'' + _esc(f) + '\',false,\'' + _esc(absentSlotId || '') + '\'); window._dismissAllOverlays&&window._dismissAllOverlays();">🟢 ' + _safe(f) + '</button>';
+      return '<button class="btn btn-outline" style="width:100%;margin-bottom:8px;text-align:left;border-color:rgba(16,185,129,0.4);color:var(--sp-c-4ade80,#4ade80);" onclick="window._monWoApply(\'' + _esc(tId) + '\',' + pIdx + ',\'' + _esc(gName) + '\',\'' + _esc(absentName) + '\',\'' + _esc(f.name) + '\',false,\'' + _esc(absentSlotId || '') + '\',\'' + _esc(absentUid || '') + '\',\'' + _esc(f.identity) + '\'); window._dismissAllOverlays&&window._dismissAllOverlays();">🟢 ' + _safe(f.name) + '</button>';
     }).join('');
   } else {
     html += '<div style="font-size:0.72rem;opacity:0.7;margin-bottom:8px;">Nenhum jogador de folga nesta rodada.</div>';
   }
   html += '<div style="font-size:0.74rem;font-weight:700;color:var(--sp-c-fbbf24,#fbbf24);margin:12px 0 6px;">Jogador X — qualquer presente (NÃO pontua)</div>';
-  html += '<button class="btn btn-outline" style="width:100%;border-color:rgba(251,191,36,0.4);color:var(--sp-c-fbbf24,#fbbf24);" onclick="window._monWoGuestPrompt(\'' + _esc(tId) + '\',' + pIdx + ',\'' + _esc(gName) + '\',\'' + _esc(absentName) + '\',\'' + _esc(absentSlotId || '') + '\')">🎾 Completar com Jogador X</button>';
+  html += '<button class="btn btn-outline" style="width:100%;border-color:rgba(251,191,36,0.4);color:var(--sp-c-fbbf24,#fbbf24);" onclick="window._monWoGuestPrompt(\'' + _esc(tId) + '\',' + pIdx + ',\'' + _esc(gName) + '\',\'' + _esc(absentName) + '\',\'' + _esc(absentSlotId || '') + '\',\'' + _esc(absentUid || '') + '\')">🎾 Completar com Jogador X</button>';
   if (window.showAlertDialog) window.showAlertDialog('Substituir ' + _safe(absentName), html, function () {}, { type: 'info', confirmText: 'Fechar' });
 };
 
-window._monWoGuestPrompt = function (tId, pIdx, gName, absentName, absentSlotId) {
+window._monWoGuestPrompt = function (tId, pIdx, gName, absentName, absentSlotId, absentUid) {
   if (typeof window.showInputDialog === 'function') {
     window.showInputDialog('Jogador X', 'Nome de quem vai completar a rodada (opcional):', function (val) {
       var name = (val || '').trim() || 'Jogador X';
-      window._monWoApply(tId, pIdx, gName, absentName, name, true, absentSlotId);
+      window._monWoApply(tId, pIdx, gName, absentName, name, true, absentSlotId, absentUid);
     }, { placeholder: 'Jogador X', confirmText: 'Completar' });
   } else {
-    window._monWoApply(tId, pIdx, gName, absentName, 'Jogador X', true, absentSlotId);
+    window._monWoApply(tId, pIdx, gName, absentName, 'Jogador X', true, absentSlotId, absentUid);
   }
 };
 

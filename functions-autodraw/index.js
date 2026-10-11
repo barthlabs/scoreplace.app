@@ -1728,13 +1728,36 @@ async function _applyMonarchWO(request, action, args) {
     const t = await _leTorneio(tx, ref, tId);
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
     if (!_canManageMonarchGroup(t, groupName, phaseIndex, uid)) throw new HttpsError('permission-denied', 'Só a organização ou alguém do grupo pode alterar o W.O.');
-    const before = _antesDoMotor(t), out = runLigaActionFn(t, { uid: uid }, action, args(data, tId, phaseIndex, groupName));
+    const before = _antesDoMotor(t), out = runLigaActionFn(t, { uid: uid }, action, args(data, tId, phaseIndex, groupName, t));
     if (!out || !out.changed) throw new HttpsError('failed-precondition', 'O grupo mudou antes da operação.');
     const b = _gravaTorneio(tx, ref, t, before, { agoraIso });
     return { ok: true, tournament: b.clean };
   });
 }
-exports.applyMonarchGroupWO = onCall(request => _applyMonarchWO(request, '_monWoApply', (d, tId, p, g) => [tId, p, g, String(d.absentName || '').trim(), String(d.fillName || '').trim(), !!d.isGuest, String(d.absentSlotId || '').trim()]));
+function _monarchSlotByReference(tournament, groupName, phaseIndex, slotId, identity) {
+  const wantedSlot = String(slotId || '').trim(), wantedIdentity = String(identity || '').trim();
+  if (!wantedSlot && !wantedIdentity) throw new HttpsError('invalid-argument', 'Escolha a vaga pelo identificador do participante.');
+  const matches = (tournament.matches || []).filter(m => m && m.bracket === 'monarch' && String(m.groupName || '') === String(groupName || '') && Number(m.phaseIndex || 0) === Number(phaseIndex || 0) && !m.isSitOut);
+  const hits = [];
+  matches.forEach(m => [['team1', 'team1Uids', 'team1SlotIds'], ['team2', 'team2Uids', 'team2SlotIds']].forEach(([nameField, uidField, slotField]) => {
+    const names = Array.isArray(m[nameField]) ? m[nameField] : [], ids = Array.isArray(m[uidField]) ? m[uidField] : [], slots = Array.isArray(m[slotField]) ? m[slotField] : [];
+    names.forEach((name, index) => {
+      const foundId = String(ids[index] || '').trim(), foundSlot = String(slots[index] || '').trim();
+      if ((wantedSlot && foundSlot === wantedSlot) || (!wantedSlot && wantedIdentity && foundId === wantedIdentity)) hits.push({ name: String(name || '').trim(), identity: foundId, slotId: foundSlot });
+    });
+  }));
+  const names = new Set(hits.map(x => x.name).filter(Boolean)), identities = new Set(hits.map(x => x.identity).filter(Boolean)), slots = new Set(hits.map(x => x.slotId).filter(Boolean));
+  if (!hits.length || names.size !== 1 || (wantedIdentity && (identities.size !== 1 || Array.from(identities)[0] !== wantedIdentity)) || (wantedSlot && slots.size !== 1)) throw new HttpsError('failed-precondition', 'A vaga deste grupo não tem identidade estrutural única. Atualize o torneio antes de registrar o W.O.');
+  return { name: Array.from(names)[0], identity: identities.size ? Array.from(identities)[0] : '', slotId: slots.size ? Array.from(slots)[0] : wantedSlot };
+}
+exports.applyMonarchGroupWO = onCall(request => _applyMonarchWO(request, '_monWoApply', (d, tId, p, g, tournament) => {
+  const absent = _monarchSlotByReference(tournament, g, p, d.absentSlotId, d.absentUid);
+  const isGuest = !!d.isGuest;
+  const fillUid = isGuest ? '' : String(d.fillUid || '').trim();
+  const fillName = isGuest ? (String(d.guestName || '').trim() || 'Jogador X') : _ligaParticipantNameByIdentity(tournament, fillUid);
+  if (!fillName || (!isGuest && !fillUid)) throw new HttpsError('failed-precondition', 'O substituto precisa ter uma identidade estrutural única no torneio.');
+  return [tId, p, g, absent.name, fillName, isGuest, absent.slotId, absent.identity, fillUid];
+}));
 exports.revertMonarchGroupWO = onCall(request => _applyMonarchWO(request, '_monWoRevert', (d, tId, p, g) => [tId, p, g]));
 
 // ─── Reset para inscrições: confirmação no cliente, mutação completa no servidor ───
