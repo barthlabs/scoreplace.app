@@ -110,7 +110,7 @@ próprio votante (`functions-autodraw/index.js:4060`). Ou seja, quem vota hoje n
    aba em cache continua com o JS velho por horas. Se o resumo mudar de forma antes da tela
    saber ler a forma nova, o cartão de enquete quebra para quem não recarregou.
    Ordem certa:
-   ① `scripts/deploy-functions.sh autodraw` — **a codebase INTEIRA, sem `--only`**. O script já
+   ① `scripts/deploy-functions.sh autodraw --all` — **a codebase INTEIRA, com `--all` explícito**. O script já
      alveja por nome (é para isso que ele existe); `--only` deixaria o carimbo de publicação
      PARCIAL, e o portão cobra o carimbo. ⛔ Não é `firebase deploy --only functions`, que
      nunca se roda aqui;

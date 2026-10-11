@@ -11,13 +11,14 @@
 # exports do código. Ver memória project_autodraw_deploy_footgun.
 #
 # Uso:
-#   scripts/deploy-functions.sh main            # codebase principal (functions/)
-#   scripts/deploy-functions.sh autodraw        # sorteio (functions-autodraw/)
-#   scripts/deploy-functions.sh stripe          # Pro/pagamentos (functions-stripe/)
-#   scripts/deploy-functions.sh all             # os três, em sequência
-#   scripts/deploy-functions.sh main --dry-run  # só mostra o comando, não roda
-#   scripts/deploy-functions.sh main --only drainPendingVerifications,drainPendingPasswordResets
+#   scripts/deploy-functions.sh main --only applyCanonicalRegistrationMigration
 #                                              # publica somente funções principais nomeadas
+#   scripts/deploy-functions.sh main --all      # codebase principal inteiro (exceção explícita)
+#   scripts/deploy-functions.sh autodraw --all  # sorteio inteiro (exceção explícita)
+#   scripts/deploy-functions.sh stripe --all    # Pro/pagamentos inteiro (exceção explícita)
+#   scripts/deploy-functions.sh all --all       # os três codebases inteiros (recuperação)
+#   scripts/deploy-functions.sh main --all --dry-run
+#                                              # só mostra o comando, não roda
 #
 # NUNCA rodar `firebase deploy --only functions` puro nem `--force` na mão.
 
@@ -40,6 +41,7 @@ PROJECT="scoreplace-app"
 #
 DRY=0
 ONLY=""
+ALL=0
 
 die() { echo "✗ $*" >&2; exit 1; }
 
@@ -48,6 +50,7 @@ shift || true
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --dry-run) DRY=1; shift ;;
+    --all) ALL=1; shift ;;
     --only)
       [ "$#" -ge 2 ] || die "--only exige uma lista de nomes de funções"
       ONLY="$2"
@@ -56,6 +59,12 @@ while [ "$#" -gt 0 ]; do
     *) die "opção desconhecida: $1" ;;
   esac
 done
+
+# Uma mudança em functions/index.js não implica que os ~132 exports mudaram.
+# Exigir o alvo nominal elimina o deploy amplo acidental, que é caro, lento e
+# aumenta a superfície de falha. `--all` existe somente para recuperação ou
+# mudança transversal deliberada e precisa ser visível no comando.
+[ -z "$ONLY" ] || [ "$ALL" = "0" ] || die "use --only OU --all, nunca os dois"
 
 # `--dry-run` só constrói e mostra a lista de funções. Ele é usado pelo gate
 # unitário para validar o runbook em um runner sem segredos Firebase; pedir a
@@ -80,7 +89,11 @@ targets_esm() {
 # tanto ao codebase principal quanto aos codebases nomeados.
 selected_targets() { # $1=todos os alvos, $2=prefixo do codebase
   local all="$1" prefix="$2"
-  [ -n "$ONLY" ] || { printf '%s' "$all"; return 0; }
+  if [ -z "$ONLY" ]; then
+    [ "$ALL" = "1" ] || die "$prefix exige --only nome[,nome] ou --all explícito; recusei publicar todos os exports por omissão"
+    printf '%s' "$all"
+    return 0
+  fi
 
   local out="" name candidate
   local IFS=','

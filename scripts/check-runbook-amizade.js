@@ -24,19 +24,26 @@ const runbook = fs.readFileSync(DOC, 'utf8');
 // ── 1. o comando de deploy do runbook é o REAL ──────────────────────────────
 const semArg = /^scripts\/deploy-functions\.sh\s*(#.*)?$/m.test(runbook);
 ok(!semArg, '⛔ o runbook NÃO manda `deploy-functions.sh` sem argumento (o script aborta assim)');
-ok(/scripts\/deploy-functions\.sh main/.test(runbook), 'e usa `deploy-functions.sh main` (o codebase desta leva)');
+ok(/scripts\/deploy-functions\.sh main --all/.test(runbook), 'e explicita `--all` no deploy completo do codebase desta leva');
 
 // ── 2. o comando existe e aceita o argumento ────────────────────────────────
 const sh = path.join(ROOT, 'scripts', 'deploy-functions.sh');
 ok(fs.existsSync(sh), 'scripts/deploy-functions.sh existe');
-const dry = spawnSync('bash', [sh, 'main', '--dry-run'], { cwd: ROOT, encoding: 'utf8' });
-ok(dry.status === 0, '`deploy-functions.sh main --dry-run` sai 0 (deu ' + dry.status + ')');
+const recusaAmplo = spawnSync('bash', [sh, 'main', '--dry-run'], { cwd: ROOT, encoding: 'utf8' });
+ok(recusaAmplo.status !== 0, '`deploy-functions.sh main --dry-run` recusa deploy amplo implícito');
+const dry = spawnSync('bash', [sh, 'main', '--all', '--dry-run'], { cwd: ROOT, encoding: 'utf8' });
+ok(dry.status === 0, '`deploy-functions.sh main --all --dry-run` sai 0 (deu ' + dry.status + ')');
 const saida = (dry.stdout || '') + (dry.stderr || '');
 ['sendFriendRequest', 'acceptFriendRequest', 'rejectFriendRequest', 'cancelFriendRequest',
  'removeFriend', 'listLegacyFriendships', 'mergePhoneAccount', 'deleteAccount',
  'autoMergeOnProfileUpdate', 'scheduledAutoMergeCleanup'].forEach((fn) => {
   ok(saida.indexOf('functions:' + fn) !== -1, '  o deploy alveja `' + fn + '`');
 });
+const seletivo = spawnSync('bash', [sh, 'main', '--only', 'sendFriendRequest', '--dry-run'], { cwd: ROOT, encoding: 'utf8' });
+const saidaSeletiva = (seletivo.stdout || '') + (seletivo.stderr || '');
+ok(seletivo.status === 0, '`--only sendFriendRequest --dry-run` é aceito');
+ok(/functions:sendFriendRequest/.test(saidaSeletiva) && !/functions:acceptFriendRequest/.test(saidaSeletiva),
+  '`--only` monta exatamente o alvo nominal, sem incluir exports vizinhos');
 
 // ── 3. os demais scripts citados existem e aceitam o que o runbook mostra ────
 const citados = [

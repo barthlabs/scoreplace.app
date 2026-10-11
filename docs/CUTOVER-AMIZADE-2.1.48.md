@@ -97,7 +97,7 @@ comando de todo o cutover. (`backfilled` NÃO libera: ver a tabela adiante.)
 
 ```bash
 # 1. Functions 2.1.48 — sobem JÁ CONGELADAS (fase = not_started ⇒ tudo recusado)
-scripts/deploy-functions.sh main
+scripts/deploy-functions.sh main --all
 
 # 2. ⛔ IMEDIATAMENTE as Rules: fecha o CLIENTE antes de qualquer espera
 cp firestore.rules firestore.rules.final
@@ -243,7 +243,7 @@ transformar dado adulterável em autorização permanente.
 ## ETAPA C — Functions + cliente + Rules finais, e a reconfirmação
 
 ```bash
-scripts/deploy-functions.sh main
+scripts/deploy-functions.sh main --all
 firebase deploy --only firestore:rules --project scoreplace-app
 scripts/deploy-hosting.sh
 node scripts/backfill-amizade.js --fase=live --aplicar

@@ -482,10 +482,11 @@ Sem `--force` o não-interativo aborta — o abort É o aviso, não um obstácul
 - **Usar SEMPRE o script** (monta o deploy alvejado por nome sozinho, lendo os exports;
   roda os testes do autodraw antes de deployar sorteio):
   ```bash
-  scripts/deploy-functions.sh main       # functions/ (o script LÊ os exports; não confie em contagem fixa)
-  scripts/deploy-functions.sh autodraw   # functions-autodraw/ (roda test-draw.js antes; falhou = não deploya)
-  scripts/deploy-functions.sh stripe     # functions-stripe/ (codebase NOMEADO — prefixo functions:stripe:)
-  scripts/deploy-functions.sh all        # os três; aceita --dry-run
+  scripts/deploy-functions.sh main --only nomeDaFunction  # Functions principais alteradas
+  scripts/deploy-functions.sh main --all                  # functions/ inteiro — somente mudança transversal
+  scripts/deploy-functions.sh autodraw --all              # sorteio inteiro (roda test-draw.js antes)
+  scripts/deploy-functions.sh stripe --all                # Pro/pagamentos inteiro
+  scripts/deploy-functions.sh all --all                   # os três inteiros; aceita --dry-run
   ```
 - Antes de mexer em função que roda em produção (ex.: `autoDraw` de hora em hora num
   torneio ao vivo), validar com o emulador (`firebase emulators:start --only functions`).
