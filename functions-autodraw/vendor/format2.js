@@ -71,6 +71,14 @@
   function legacyPhaseKind(phase, tournament) {
     var explicit = phase && phase.kind;
     if (explicit === 'classification' || explicit === 'elimination') return explicit;
+    // O suíço antigo usava `currentStage`/`classifyFormat` para dizer qual
+    // trecho do torneio estava ativo, mesmo quando o `format` de topo ainda
+    // dizia "Eliminatórias Simples". Durante a classificatória esse marcador
+    // vence o rótulo histórico: a fase presente é classificatória, e a chave
+    // posterior é projetada separadamente em `projectLegacyPhases`.
+    var swissActive = tournament &&
+      (tournament.classifyFormat === 'swiss' || tournament.currentStage === 'swiss');
+    if (swissActive) return 'classification';
     var code = String((phase && phase.formatCode) || (tournament && tournament.formatCode) || '').toLowerCase();
     var label = String((phase && phase.format) || (tournament && tournament.format) || '').toLowerCase();
     var monarch = !!(phase && phase.reiRainha) ||
@@ -225,6 +233,32 @@
       }
       return phase;
     });
+    // O construtor suíço antigo registrava o corte em campos transitórios do
+    // torneio (`p2Resolution` + `p2TargetCount`) e só criava a chave depois da
+    // última rodada. No contrato atual, isso já são DUAS fases desde a leitura:
+    // classificatória seguida de eliminatória. Projetar a segunda fase não
+    // materializa jogo, não altera a rodada corrente e não muda placar; apenas
+    // impede que um leitor canônico encerre o torneio na classificatória.
+    var swissTarget = parseInt(tournament.p2TargetCount, 10);
+    var swissIsActive = tournament.classifyFormat === 'swiss' || tournament.currentStage === 'swiss';
+    var hasElimination = phases.some(function (phase) { return phase && phase.kind === 'elimination'; });
+    if (swissIsActive && tournament.p2Resolution === 'swiss' && swissTarget >= 2 && !hasElimination) {
+      var legacyPolicy = ['repescagem', 'bye', 'sobra_unica'].indexOf(tournament.politicaDaChave) >= 0
+        ? tournament.politicaDaChave : 'repescagem';
+      phases.push({
+        name: 'Eliminatória', kind: 'elimination', format: 'Eliminatórias Simples', formatCode: 'elim_simples',
+        elimination: { bracketType: 'single' },
+        source: {
+          type: 'previous_phase', fromPhaseOffset: 1, scope: 'overall',
+          rankingBasis: Number(tournament.teamSize) > 1 ? 'team' : 'individual',
+          mapping: [{ dest: 'main', rankFrom: 1, rankTo: swissTarget, label: '' }]
+        },
+        fixedPairs: Number(tournament.teamSize) > 1,
+        pairingStrategy: 'seed', bracketSeeding: 'seed', politicaDaChave: legacyPolicy,
+        grandFinal: true, thirdPlace: true, lateEnrollment: 'closed', drawManual: false
+      });
+      changed = true;
+    }
     return { phases: phases, changed: changed, created: !stored.length };
   }
 

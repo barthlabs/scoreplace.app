@@ -17,6 +17,18 @@ ok(cfg.classifAtiva === true, 'Suíço legado abre como classificatória');
 ok(cfg.grupos === 1 && cfg.rodadas.modo === 'fixo' && cfg.rodadas.n === 4, 'preserva as quatro rodadas históricas');
 ok(cfg.classificationPairing.strategy === 'ranking_clusters', 'pareamento vira clusters canônicos');
 ok(cfg.eliminatoria.ativa === true && cfg.classificados === 8, 'preserva o corte legado para a eliminatória');
+const projectedSwiss = window.FORMAT2.projectLegacyPhases(legacySwiss);
+ok(projectedSwiss.phases.length === 2 && projectedSwiss.phases[0].kind === 'classification' && projectedSwiss.phases[1].kind === 'elimination',
+  'Suíço legado ativo é projetado como duas fases, sem esperar o último placar');
+ok(projectedSwiss.phases[1].source.mapping[0].rankTo === 8 && projectedSwiss.phases[1].source.rankingBasis === 'team',
+  'a eliminatória projetada preserva corte e unidade competitiva');
+const legacySwissWithoutPhase = {
+  format: 'Eliminatórias Simples', teamSize: 1, swissRounds: 3,
+  classifyFormat: 'swiss', currentStage: 'swiss', p2Resolution: 'swiss', p2TargetCount: 4
+};
+const projectedSwissWithoutPhase = window.FORMAT2.projectLegacyPhases(legacySwissWithoutPhase);
+ok(projectedSwissWithoutPhase.phases[0].kind === 'classification' && projectedSwissWithoutPhase.phases[1].source.mapping[0].rankTo === 4,
+  'marcador suíço ativo vence o rótulo eliminatório antigo sem fabricar jogos');
 
 const legacyElim = { format: 'Eliminatórias Simples', teamSize: 1 };
 const elimCfg = window.FORMAT2.configFromTournament(legacyElim, 'Tênis');
