@@ -32,7 +32,7 @@ function executar(saida, codigo) {
     GOOGLE_APPLICATION_CREDENTIALS: chave,
     NODE_OPTIONS: '-r ' + hook,
   });
-  return spawnSync('bash', ['scripts/deploy-functions.sh', 'main'], { cwd: raiz, env, encoding: 'utf8' });
+  return spawnSync('bash', ['scripts/deploy-functions.sh', 'main', '--all'], { cwd: raiz, env, encoding: 'utf8' });
 }
 
 let r = executar('Error: permission denied', 1);
