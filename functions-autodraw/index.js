@@ -794,11 +794,16 @@ function _gravaTorneio(tx, ref, tDepois, tAntes, ctx) {
   if (!_agoraIso) {
     throw new Error('[write-plan] _gravaTorneio exige ctx.agoraIso — instante estável calculado FORA da transação');
   }
-  /* Todo torneio passa por esta fronteira antes de voltar ao banco. Documentos anteriores
-   * ao fmt2 não têm intent cru para serem recompilados, mas podem — e devem — carregar a
-   * representação atual de fases. A projeção é lossless: só acrescenta kind e a semântica
-   * de classificação/eliminatória; não recria sorteio, rodada, grupo, jogo ou placar. */
-  if (tDepois && !tDepois.fmt2 && drawWindow && drawWindow.FORMAT2
+  /* Todo torneio passa por esta fronteira antes de voltar ao banco. `fmt2` é a intenção
+   * do configurador, não um certificado de que `phases[]` chegou inteiro à versão nova:
+   * houve documentos híbridos com fmt2 salvo e fases ainda em dialeto Liga/Suíço. Pular a
+   * projeção nesses casos deixava cada leitor decidir de novo pelo rótulo do topo.
+   *
+   * A projeção é lossless e idempotente: só completa `phases[]` com kind e a semântica de
+   * classificação/eliminatória; não recria sorteio, rodada, grupo, jogo ou placar. Assim a
+   * própria primeira escrita canônica de qualquer torneio absorve o legado, seja ele pré
+   * ou pós-fmt2. */
+  if (tDepois && drawWindow && drawWindow.FORMAT2
     && typeof drawWindow.FORMAT2.projectLegacyPhases === 'function') {
     const planoDeFases = _legacyPhaseProjection.planLegacyPhaseProjection(
       tDepois,

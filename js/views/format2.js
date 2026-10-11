@@ -165,11 +165,30 @@
     // importa: a própria fase classificatória.
     var isSwiss = /su[ií]ç?o|swiss/.test(label) ||
       (code === 'liga' && tournament && (tournament.classifyFormat === 'swiss' || tournament.currentStage === 'swiss'));
-    return isSwiss ? {
+    if (isSwiss) return {
       strategy: 'ranking_clusters',
       entryMode: 'fixed',
       rematchPolicy: 'exhaust_cluster_before_repeat'
-    } : null;
+    };
+    /* Uma classificatória antiga por rodadas podia trazer apenas `format:'Liga'`.
+     * Deixá-la sem pairing faz cada motor inventar um comportamento: alguns a
+     * tratam como liga rotativa, outros nem reconhecem a rodada classificatória.
+     * O modelo atual não tem um "modo suíço" separado: a tradução equivalente é
+     * a política normal de clusters dinâmicos, com repetição progressivamente
+     * evitada. Times já inscritos como dupla continuam fixos; inscrições
+     * individuais preservam a rotação de parceiros da Liga histórica. */
+    var isRoundClassification = phase && phase.classification &&
+      phase.classification.structure === 'round_robin';
+    if (isRoundClassification || code === 'liga' || /\bliga\b|pontos corridos|ranking/.test(label)) {
+      var fixedEntries = !!((phase && phase.fixedPairs) ||
+        (tournament && (tournament.enrollmentMode === 'teams' || tournament.enrollment === 'teams')));
+      return {
+        strategy: 'ranking_clusters',
+        entryMode: fixedEntries ? 'fixed' : 'rotate',
+        rematchPolicy: 'exhaust_cluster_before_repeat'
+      };
+    }
+    return null;
   }
 
   // `legacyClassificationPairing` projeta um objeto novo a cada leitura. A

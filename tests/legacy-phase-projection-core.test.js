@@ -38,5 +38,33 @@ const legacyMonarch = { phases: [{ name: 'Abertura', format: 'Rei/Rainha', drawM
 r = planLegacyPhaseProjection(legacyMonarch, _window.FORMAT2.projectLegacyPhases);
 ok(r.changed && r.phases[0].kind === 'classification' && r.phases[0].formatCode === 'classification_rounds', 'Rei/Rainha legado sem código Liga continua uma classificatória');
 ok(r.phases[0].classification && r.phases[0].classification.pairing && r.phases[0].classification.pairing.strategy === 'monarch_groups', 'Rei/Rainha legado preserva o modo de sorteio canônico');
+const hybridFmt2 = {
+  fmt2: { classifAtiva: true },
+  format: 'Liga', classifyFormat: 'swiss', currentStage: 'swiss',
+  phases: [{ name: 'Classificatória', formatCode: 'liga', format: 'Suíço' }],
+  rounds: [{ matches: [{ id: 'preserved-score', scoreP1: 6, scoreP2: 3 }] }]
+};
+const hybridScores = JSON.stringify(hybridFmt2.rounds);
+r = planLegacyPhaseProjection(hybridFmt2, _window.FORMAT2.projectLegacyPhases);
+ok(r.changed && r.phases[0].kind === 'classification' && r.phases[0].formatCode === 'classification_rounds',
+  'fmt2 não impede a tradução de uma fase híbrida legada');
+ok(JSON.stringify(hybridFmt2.rounds) === hybridScores,
+  'tradução do híbrido preserva jogos e placares materializados');
+const legacyRoundLeague = {
+  format: 'Liga', enrollmentMode: 'individual',
+  phases: [{ name: 'Pontos Corridos', formatCode: 'liga' }]
+};
+r = planLegacyPhaseProjection(legacyRoundLeague, _window.FORMAT2.projectLegacyPhases);
+ok(r.changed && r.phases[0].classification.pairing.strategy === 'ranking_clusters' &&
+  r.phases[0].classification.pairing.entryMode === 'rotate',
+  'Liga legada individual vira classificatória por clusters dinâmicos, sem modo paralelo');
+const legacyFixedLeague = {
+  format: 'Liga', enrollmentMode: 'teams',
+  phases: [{ name: 'Duplas fixas', formatCode: 'liga', fixedPairs: true }]
+};
+r = planLegacyPhaseProjection(legacyFixedLeague, _window.FORMAT2.projectLegacyPhases);
+ok(r.changed && r.phases[0].classification.pairing.strategy === 'ranking_clusters' &&
+  r.phases[0].classification.pairing.entryMode === 'fixed',
+  'Liga legada de equipes preserva a dupla fixa na classificação canônica');
 console.log((fail ? '✗' : '✓') + ' legacy-phase-projection-core: ' + pass + ' passaram, ' + fail + ' falharam');
 process.exit(fail ? 1 : 0);
