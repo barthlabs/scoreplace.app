@@ -223,20 +223,45 @@
     if (option === 'swiss') option = 'classification_rounds';
     var info = window.checkPowerOf2(t);
 
-    // v4.1.x: DESMONTA o multifase Suíço quando o org troca de Suíço p/ OUTRA resolução.
-    // Escolher "Suíço" monta t.phases=[Suíço classificatória, elim] + classifyFormat='swiss'
-    // (fase única vira multifase). Qualquer OUTRA escolha tem que VOLTAR pra fase única —
-    // senão o phases fantasma fica grudado e o torneio parece multifase quebrado.
-    // Regra do dono: "selecionou Suíço: multifase; selecionou outra coisa: fase única".
+    // A decisão de rodadas classificatórias é uma CONFIGURAÇÃO de fase, não um
+    // terceiro formato chamado "Suíço". Quando o organizador troca esta decisão
+    // por outra solução de potência de dois, desmontamos tanto o marcador legado
+    // quanto o contrato canônico atual. Deixar a classificação no array faria o
+    // sorteio seguinte interpretar duas fases, embora a escolha agora seja uma
+    // eliminatória direta.
+    var _phasesBeforeP2 = Array.isArray(t.phases) ? t.phases : [];
+    var _phase0BeforeP2 = _phasesBeforeP2[0] || {};
+    var _canonicalClassificationMP = _phasesBeforeP2.length > 1 &&
+      _phase0BeforeP2.kind === 'classification' &&
+      _phase0BeforeP2.formatCode === 'classification_rounds';
     var _swissMP = (t.classifyFormat === 'swiss') || (t.currentStage === 'swiss') ||
-      (Array.isArray(t.phases) && t.phases.length > 1 && t.phases[0] &&
-        String(t.phases[0].format) === 'Suíço' && String(t.phases[0].formatCode) === 'liga');
+      _canonicalClassificationMP ||
+      (_phasesBeforeP2.length > 1 &&
+        String(_phase0BeforeP2.format) === 'Suíço' && String(_phase0BeforeP2.formatCode) === 'liga');
     if (option !== 'classification_rounds' && _swissMP) {
-      t.phases = [{ name: t.format, format: t.format, source: { type: 'enrollment' } }];
+      // Preserva a configuração já compilada da eliminatória quando ela existe,
+      // mas nunca recria uma fase crua com `format` legado.
+      var _existingElim = _phasesBeforeP2.filter(function (phase) {
+        return phase && phase.kind === 'elimination';
+      })[0];
+      var _bracketType = _existingElim && _existingElim.elimination && _existingElim.elimination.bracketType;
+      if (_bracketType !== 'double') _bracketType = /dupla eliminat/i.test(String(t.format || '')) ? 'double' : 'single';
+      var _directElim = _existingElim ? Object.assign({}, _existingElim) : {
+        name: 'Eliminatória',
+        kind: 'elimination',
+        formatCode: _bracketType === 'double' ? 'elim_dupla' : 'elim_simples',
+        elimination: { bracketType: _bracketType }
+      };
+      _directElim.kind = 'elimination';
+      _directElim.elimination = Object.assign({}, _directElim.elimination || {}, { bracketType: _bracketType });
+      _directElim.formatCode = _bracketType === 'double' ? 'elim_dupla' : 'elim_simples';
+      if (!_directElim.source) _directElim.source = { type: 'enrollment' };
+      t.phases = [_directElim];
       t.currentPhaseIndex = 0;
       t.classifyFormat = null;
       if (t.currentStage === 'swiss') t.currentStage = null;
       t.swissRounds = null;
+      delete t.classificationTransition;
       t.rounds = []; delete t.standings;   // limpa a classificação Suíço residual
     }
 

@@ -111,6 +111,21 @@ parity('p2=classification_rounds', () => mkSolos(6),
     t.classificationTransition.pairing && t.classificationTransition.pairing.strategy === 'ranking_clusters' &&
     t.p2Resolution == null,
     JSON.stringify({ transition: t.classificationTransition, p2: t.p2Resolution })); }
+{ const t = mkSolos(6, {
+  classificationTransition: { rounds: 3, pairing: { strategy: 'ranking_clusters' } },
+  phases: [
+    { name: 'Classificatória', kind: 'classification', formatCode: 'classification_rounds', classification: { structure: 'rounds', pairing: { strategy: 'ranking_clusters' } } },
+    { name: 'Mata-mata', kind: 'elimination', formatCode: 'elim_simples', elimination: { bracketType: 'single' }, source: { type: 'ranking' } }
+  ],
+  rounds: [{ id: 'r-legada', matches: [] }], standings: [{ name: 'P1' }]
+});
+  W._applyP2Resolution(t, 'bye', {});
+  ok('p2=bye desmonta classificação canônica antes do sorteio',
+    t.phases.length === 1 && t.phases[0].kind === 'elimination' &&
+    t.phases[0].formatCode === 'elim_simples' &&
+    t.phases[0].elimination && t.phases[0].elimination.bracketType === 'single' &&
+    !t.classificationTransition && t.rounds.length === 0 && !t.standings,
+    JSON.stringify({ phases: t.phases, transition: t.classificationTransition, rounds: t.rounds.length })); }
 
 console.log('\n══════════ FIM-A-FIM: drawInitial(roster cru + pacote) ══════════');
 
