@@ -198,8 +198,13 @@ ok(NUCLEO.includes('MODELO=haiku') &&
 const reciboAntesDaSuite = NUCLEO.indexOf('base=%s\\n') < NUCLEO.indexOf('SP_REVIEW_VALIDATE:-0');
 ok(reciboAntesDaSuite &&
    NUCLEO.includes('mesmo corte e conteúdo') &&
-   NUCLEO.includes('"$(cat "$RECIBO_BASE")" == "$BASE_DIFF"'),
-  'parecer aprovado do mesmo corte é conferido antes da suíte cara e não sobrevive à troca de base');
+   NUCLEO.includes('"$(cat "$RECIBO_BASE")" == "$BASE_DIFF"') &&
+   NUCLEO.includes('git rev-parse --verify "${base}^{commit}"'),
+  'parecer aprovado do mesmo corte é conferido antes da suíte cara, com base imutável, e não sobrevive à troca de base');
+const LOTES = fs.readFileSync(path.join(ROOT, 'scripts', 'revisar-diff-em-lotes.sh'), 'utf8');
+ok(LOTES.includes('BASE="$(git rev-parse --verify "${BASE_REF}^{commit}")"') &&
+   LOTES.includes('SP_REVIEW_BASE="$BASE"'),
+  'orquestrador transmite aos lotes o SHA da base, nunca uma ref móvel');
 fs.rmSync(lab, { recursive: true, force: true });
 console.log(fail ? '❌ revisar (faixa/interruptor/auto): ' + fail + ' falha(s), ' + pass + ' ok' : '✅ revisar (faixa/interruptor/auto): ' + pass + ' ok');
 process.exit(fail ? 1 : 0);

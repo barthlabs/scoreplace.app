@@ -142,9 +142,12 @@ fi
 base_do_diff() {
   local base="${SP_REVIEW_BASE:-origin/main}"
   if git rev-parse --verify -q "${base}^{commit}" >/dev/null; then
-    printf '%s\n' "$base"
+    # Um recibo não pode depender de um nome móvel como `origin/main`: entre a
+    # revisão e o deploy a ref pode avançar, fazendo um parecer antigo parecer
+    # pertencer ao corte novo. O contrato do recibo é sempre o SHA imutável.
+    git rev-parse --verify "${base}^{commit}"
   else
-    printf '%s\n' 'origin/main'
+    git rev-parse --verify 'origin/main^{commit}'
   fi
 }
 BASE_DIFF="$(base_do_diff)"

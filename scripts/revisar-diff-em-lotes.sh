@@ -5,7 +5,12 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
-BASE="${SP_REVIEW_BASE:-origin/main}"
+BASE_REF="${SP_REVIEW_BASE:-origin/main}"
+# Transporte sempre carrega a base já resolvida. Isso impede que um lote e seu
+# recibo usem, em momentos distintos, significados diferentes de `origin/main`.
+BASE="$(git rev-parse --verify "${BASE_REF}^{commit}")" || {
+  echo "✗ base de revisão inválida: $BASE_REF" >&2; exit 2;
+}
 MAX_BYTES="${SP_REVIEW_BATCH_BYTES:-120000}"
 [[ "$MAX_BYTES" =~ ^[1-9][0-9]*$ ]] || { echo "✗ SP_REVIEW_BATCH_BYTES inválido" >&2; exit 2; }
 MODE="${1:-run}"
