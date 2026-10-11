@@ -93,15 +93,21 @@ async function readTournament(accessToken, id) {
   return { tournament: documentToObject(document), updateTime: document.updateTime || '' };
 }
 
-async function writePhases(accessToken, id, phases, updateTime) {
+async function writePhaseProjection(accessToken, id, projection, updateTime) {
   if (!updateTime) throw new Error('documento sem updateTime; CAS indisponível');
+  if (!projection || !Array.isArray(projection.phases)) throw new Error('projeção de fases inválida');
   const query = new URLSearchParams();
   query.append('updateMask.fieldPaths', 'phases');
+  if (Number.isInteger(projection.currentPhaseIndex)) query.append('updateMask.fieldPaths', 'currentPhaseIndex');
   query.append('currentDocument.updateTime', updateTime);
+  const fields = { phases: toFirestore(projection.phases) };
+  if (Number.isInteger(projection.currentPhaseIndex)) {
+    fields.currentPhaseIndex = toFirestore(projection.currentPhaseIndex);
+  }
   const response = await fetch(`${BASE}/tournaments/${encodeURIComponent(id)}?${query.toString()}`, {
     method: 'PATCH',
     headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ fields: { phases: toFirestore(phases) } })
+    body: JSON.stringify({ fields })
   });
   if (!response.ok) throw new Error(`CAS recusou a escrita de ${id}: ${response.status} ${(await response.text()).slice(0, 240)}`);
 }
@@ -129,7 +135,7 @@ async function main() {
     fingerprint: FINGERPRINT,
     project,
     load: (id) => readTournament(accessToken, id),
-    write: (id, phases, updateTime) => writePhases(accessToken, id, phases, updateTime),
+    write: (id, projection, updateTime) => writePhaseProjection(accessToken, id, projection, updateTime),
   });
   const plan = result.plan;
   const markers = legacySwissMarkers((await readTournament(accessToken, ONLY_ID)).tournament);

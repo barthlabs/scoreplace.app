@@ -46,5 +46,29 @@ if (!process.env.FIRESTORE_EMULATOR_HOST) {
   assert.strictEqual(after.phases, undefined, 'PATCH recusado não cria phases');
   assert.strictEqual(after.matches[0].scoreP1, 6, 'PATCH recusado preserva placar');
   assert.strictEqual(after.participants[0].uid, 'u1', 'PATCH recusado preserva elenco');
-  console.log('✓ CAS REST do emulador rejeita updateTime vencido sem alterar o torneio');
+
+  // A projeção válida grava fase + índice no MESMO PATCH CAS. Não basta
+  // testar o núcleo em memória: este é o contrato do REST que o migrador usa.
+  const okQuery = new URLSearchParams();
+  okQuery.append('updateMask.fieldPaths', 'phases');
+  okQuery.append('updateMask.fieldPaths', 'currentPhaseIndex');
+  const accepted = await fetch('http://' + host + ':' + port +
+    '/v1/projects/demo-scoreplace/databases/(default)/documents/tournaments/phase-cas?' + okQuery.toString(), {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fields: {
+      phases: { arrayValue: { values: [{ mapValue: { fields: {
+        kind: { stringValue: 'classification' },
+        classification: { mapValue: { fields: { structure: { stringValue: 'round_robin' } } } }
+      } } }] } },
+      currentPhaseIndex: { integerValue: '0' }
+    } })
+  });
+  const acceptedBody = await accepted.text();
+  const finalDoc = (await ref.get()).data();
+  assert.strictEqual(accepted.ok, true, 'CAS fresco aceita a projeção: ' + acceptedBody);
+  assert.strictEqual(finalDoc.currentPhaseIndex, 0, 'índice é gravado junto com phases');
+  assert.strictEqual(finalDoc.phases[0].kind, 'classification', 'fase canônica é gravada');
+  assert.strictEqual(finalDoc.matches[0].scoreP1, 6, 'CAS aceito preserva placar');
+  assert.strictEqual(finalDoc.participants[0].uid, 'u1', 'CAS aceito preserva elenco');
+  console.log('✓ CAS REST do emulador protege no conflito e grava fases + índice juntos quando aceito');
 })().catch((error) => { console.error(error.stack || error); process.exit(1); });

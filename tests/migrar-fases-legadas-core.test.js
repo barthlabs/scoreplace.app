@@ -9,7 +9,7 @@ const project = (t) => {
   const phases = Array.isArray(t.phases) && t.phases.length
     ? t.phases.map((p) => Object.assign({}, p))
     : [{ kind: 'classification', classification: { structure: 'round_robin' } }];
-  return { phases, changed: !(Array.isArray(t.phases) && t.phases.length), created: true };
+  return { phases, currentPhaseIndex: 0, changed: !(Array.isArray(t.phases) && t.phases.length), created: true };
 };
 function state() {
   return {
@@ -25,9 +25,10 @@ function state() {
   const current = state();
   const load = async () => ({ updateTime: current.updateTime, tournament: JSON.parse(JSON.stringify(current.tournament)) });
   let writes = 0;
-  const write = async (_id, phases, updateTime) => {
+  const write = async (_id, projection, updateTime) => {
     if (updateTime !== current.updateTime) throw new Error('precondição recusada');
-    current.tournament.phases = JSON.parse(JSON.stringify(phases));
+    current.tournament.phases = JSON.parse(JSON.stringify(projection.phases));
+    if (Number.isInteger(projection.currentPhaseIndex)) current.tournament.currentPhaseIndex = projection.currentPhaseIndex;
     current.updateTime = '2026-10-09T21:00:01.000000Z';
     writes++;
   };
@@ -41,6 +42,7 @@ function state() {
   const applied = await runOne({ tournamentId: 't1', apply: true, fingerprint: preview.plan.fingerprint, load, write, project });
   ok(applied.outcome === 'applied' && writes === 1, 'apply escreve uma única vez após validar o recibo');
   ok(current.tournament.participants.length === 1 && current.tournament.matches[0].scoreP1 === 6 && current.tournament.schedule.start === '19:00', 'apply preserva elenco, placar e agenda');
+  ok(current.tournament.currentPhaseIndex === 0, 'índice da fase canônica é persistido no mesmo CAS da projeção');
   const stable = await runOne({ tournamentId: 't1', load, write, project });
   ok(stable.outcome === 'unchanged' && writes === 1, 'documento já canônico não recebe escrita');
 

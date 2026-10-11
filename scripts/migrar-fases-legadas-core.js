@@ -23,7 +23,12 @@ async function runOne(options) {
 
   // A escrita é CAS: o transporte deve enviar currentDocument.updateTime.
   // Se outro ator alterar o doc após a releitura, o PATCH falha sem sobrescrever.
-  await opts.write(tournamentId, plan.phases, first.updateTime);
+  // `currentPhaseIndex` pertence à mesma projeção de schema. Persisti-lo em
+  // outra escrita criaria uma janela em que phases[] já é canônico, mas a tela
+  // ainda abre a fase errada. O transporte recebe um único payload CAS.
+  const projection = { phases: plan.phases };
+  if (Number.isInteger(plan.currentPhaseIndex)) projection.currentPhaseIndex = plan.currentPhaseIndex;
+  await opts.write(tournamentId, projection, first.updateTime);
   const after = await opts.load(tournamentId);
   if (!after || !after.tournament) throw new Error('torneio sumiu após a escrita');
   const verification = verifyProjectedDocument(tournamentId, first.tournament, after.tournament, plan, opts.project);
