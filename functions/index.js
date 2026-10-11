@@ -5410,8 +5410,8 @@ exports.renameTournamentParticipant = onCall(
     const tournamentId = String(data.tournamentId || "").trim();
     const oldName = String(data.oldName || "").trim();
     const newName = String(data.newName || "").trim();
-    const targetUid = String(data.uid || "").trim();
-    if (!tournamentId || !oldName || !newName) throw new HttpsError("invalid-argument", "torneio e nomes são obrigatórios");
+    const manualParticipantId = String(data.manualParticipantId || "").trim();
+    if (!tournamentId || !oldName || !newName || !manualParticipantId) throw new HttpsError("invalid-argument", "torneio, nomes e ID manual do participante são obrigatórios");
     if (newName.length > 160) throw new HttpsError("invalid-argument", "nome muito longo");
     const db = admin.firestore();
     const ref = db.collection("tournaments").doc(tournamentId);
@@ -5422,7 +5422,7 @@ exports.renameTournamentParticipant = onCall(
       if (!_isTournamentOrgCaller(t, callerUid)) throw new HttpsError("permission-denied", "só a organização edita nome de participante");
       const before = JSON.parse(JSON.stringify(t));
       let renamed;
-      try { renamed = _participantRename.renameTournamentParticipant(t, { oldName, newName, uid: targetUid }); }
+      try { renamed = _participantRename.renameTournamentParticipant(t, { oldName, newName, manualParticipantId }); }
       catch (err) { throw new HttpsError("failed-precondition", err && err.message ? err.message : "não foi possível renomear participante"); }
       if (!renamed.changed) return { ok: true, changed: false };
       _splitParts.gravar(tx, ref, before, Object.assign({}, renamed.update, { updatedAt: new Date().toISOString() }));

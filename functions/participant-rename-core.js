@@ -23,11 +23,14 @@ function _replaceNameFields(obj, oldName, newName, fields) {
  * pelo revisor em quatro rodadas da leva da entrada sem senha (25/set/2026) e separado aqui: bloco da
  * IDENTIDADE. O outro ponto é `chaveDoInscrito` em `js/views/tournament-split-core.js`, e os dois têm
  * de mudar na MESMA leva — um sem o outro deixa o espelho e a renomeação discordando sobre quem é quem. */
-function _matchesIdentity(p, oldName, uid) {
-  if (typeof p === 'string') return !uid && p.split(' / ').some(x => _same(x, oldName));
+function _matchesIdentity(p, oldName, uid, manualParticipantId) {
+  const identity = String(uid || manualParticipantId || '');
+  if (typeof p === 'string') return !identity && p.split(' / ').some(x => _same(x, oldName));
   if (!p || typeof p !== 'object') return false;
-  const ids = [p.uid, p.p1Uid, p.p2Uid].concat(Array.isArray(p.participants) ? p.participants.map(x => x && x.uid) : []).filter(Boolean).map(String);
-  if (uid) return ids.indexOf(uid) !== -1;
+  const ids = [p.uid, p.p1Uid, p.p2Uid, p.manualParticipantId, p.p1ManualId, p.p2ManualId]
+    .concat(Array.isArray(p.participants) ? p.participants.flatMap(x => x ? [x.uid, x.manualParticipantId] : []) : [])
+    .filter(Boolean).map(String);
+  if (identity) return ids.indexOf(identity) !== -1;
   const names = [p.displayName, p.name, p.p1Name, p.p2Name].concat(Array.isArray(p.participants) ? p.participants.map(x => x && (x.displayName || x.name)) : []).filter(Boolean);
   return names.some(x => _same(x, oldName));
 }
@@ -108,8 +111,9 @@ function _uidsQueCarregamORotulo(t, oldName) {
     const contaSemUid = lista.elenco;
     if (typeof p === 'string') { if (contaSemUid && p.split(' / ').some(x => _same(x, oldName))) semUid++; return; }
     if (!p || typeof p !== 'object') return;
-    const pares = [[p.displayName, p.uid], [p.name, p.uid], [p.p1Name, p.p1Uid], [p.p2Name, p.p2Uid]];
-    if (Array.isArray(p.participants)) p.participants.forEach(x => { if (x) pares.push([x.displayName || x.name, x.uid]); });
+    const pares = [[p.displayName, p.uid || p.manualParticipantId], [p.name, p.uid || p.manualParticipantId],
+      [p.p1Name, p.p1Uid || p.p1ManualId], [p.p2Name, p.p2Uid || p.p2ManualId]];
+    if (Array.isArray(p.participants)) p.participants.forEach(x => { if (x) pares.push([x.displayName || x.name, x.uid || x.manualParticipantId]); });
     pares.forEach(([nome, u]) => {
       if (!_same(nome, oldName)) return;
       if (u) uids.add(String(u)); else if (contaSemUid) semUid++;
@@ -121,32 +125,33 @@ function renameTournamentParticipant(t, input) {
   const oldName = String(input && input.oldName || '').trim();
   const newName = String(input && input.newName || '').trim();
   const uid = String(input && input.uid || '').trim();
+  const manualParticipantId = String(input && input.manualParticipantId || '').trim();
+  const identity = uid || manualParticipantId;
   if (!oldName || !newName) throw new Error('nome inválido');
   if (oldName === newName) return { changed: false, update: {} };
   if (newName.length > 160) throw new Error('nome muito longo');
   const roster = Array.isArray(t.participants) ? t.participants : [];
-  const candidates = roster.filter(p => _matchesIdentity(p, oldName, uid));
+  const candidates = roster.filter(p => _matchesIdentity(p, oldName, uid, manualParticipantId));
   if (!candidates.length) throw new Error('participante não está inscrito');
-  if (!uid && candidates.length !== 1) throw new Error('nome ambíguo: selecione o participante pelo cadastro');
+  if (!identity && candidates.length !== 1) throw new Error('nome ambíguo: selecione o participante pelo cadastro');
   /* Recusa fechada ANTES de qualquer mutação — ver o bloco acima. */
   const _portadores = _uidsQueCarregamORotulo(t, oldName);
-  const _outros = _portadores.uids.filter(u => u !== uid);
-  if (uid && (_outros.length > 0 || _portadores.semUid > 0)) {
+  const _outros = _portadores.uids.filter(u => u !== identity);
+  if (identity && (_outros.length > 0 || _portadores.semUid > 0)) {
     throw new Error('há mais de um inscrito com esse nome: renomeie pelo cadastro de cada um, um de cada vez');
   }
-  if (!uid && (_portadores.uids.length + _portadores.semUid) > 1) {
+  if (!identity && (_portadores.uids.length + _portadores.semUid) > 1) {
     throw new Error('há mais de um inscrito com esse nome: renomeie pelo cadastro de cada um, um de cada vez');
   }
   /* O nome NOVO também não pode ser de outra pessoa: a troca global fundiria os dois
    * rótulos e nenhum dos dois jogos saberia mais de quem era. */
   const _donosDoNovo = _uidsQueCarregamORotulo(t, newName);
-  if (_donosDoNovo.uids.some(u => u !== uid) || (_donosDoNovo.semUid > 0 && !uid) ||
-      (_donosDoNovo.semUid > 0 && uid)) {
+  if (_donosDoNovo.uids.some(u => u !== identity) || _donosDoNovo.semUid > 0) {
     throw new Error('já há outro inscrito com esse nome neste torneio');
   }
   const changed = new Set();
   const mark = k => changed.add(k);
-  roster.forEach((p, i) => { const next = _renameParticipantEntry(p, oldName, newName); if (next !== p) { roster[i] = next; mark('participants'); } else if (typeof p === 'object' && p && _matchesIdentity(p, oldName, uid)) mark('participants'); });
+  roster.forEach((p, i) => { const next = _renameParticipantEntry(p, oldName, newName); if (next !== p) { roster[i] = next; mark('participants'); } else if (typeof p === 'object' && p && _matchesIdentity(p, oldName, uid, manualParticipantId)) mark('participants'); });
   let matchChanged = false;
   _forEachMatch(t, m => {
     if (_replaceNameFields(m, oldName, newName, ['p1', 'p2', 'winner'])) matchChanged = true;

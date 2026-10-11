@@ -663,19 +663,17 @@ window._applyOrganizerParticipantRemoval = function(t, participantName, memberUi
             idx = pi;
         }
     }
-    if (idx === -1) {
-        idx = arr.findIndex(function(p, i) {
-            var forms = (typeof window._nameForms === 'function') ? window._nameForms(p) : [String(window._pName(p) || '').toLowerCase()];
-            return forms.indexOf(target) !== -1 || ('participante ' + (i + 1)) === target;
-        });
-        if (idx !== -1) { removedP = arr[idx]; arr.splice(idx, 1); t.participants = arr; }
-    } else if (!removedP) removedP = String(memberUid).indexOf('manual-') === 0 ? { manualParticipantId: memberUid } : { uid: memberUid };
+    // Não existe fallback pelo rótulo. Se o ID não localiza a vaga, a cópia da tela
+    // está velha ou o dado ainda é legado sem identidade materializada; escolher pelo
+    // nome poderia remover um homônimo.
     var removalKey = memberUid || (removedP && (removedP.uid || removedP.manualParticipantId)) || participantName;
     var removedFromWait = (typeof window._removeFromWaitlistByKey === 'function')
         ? window._removeFromWaitlistByKey(t, removalKey)
-        : ((typeof window._removeFromWaitlist === 'function') ? window._removeFromWaitlist(t, participantName) : false);
+        : false;
     if (idx === -1 && !removedFromWait) return false;
-    if (typeof window._purgePersonFromMaps === 'function') window._purgePersonFromMaps(t, removalKey, participantName);
+    // Mapas modernos são indexados por identidade. Não limpar a chave textual evita
+    // apagar o estado de outro homônimo em documentos legados.
+    if (typeof window._purgePersonFromMaps === 'function') window._purgePersonFromMaps(t, removalKey, '');
     return { participant: removedP, removedFromWait: removedFromWait };
 };
 
@@ -755,44 +753,10 @@ window.removeParticipantFunction = function (tId, participantName, memberUid) {
         { type: 'danger', confirmText: _t('btn.remove'), cancelText: _t('btn.cancel') }
     );
 };
-window._applySplitParticipantFresh = function (t, participantName) {
-    if (!t || !t.participants) return false;
-    var arr = Array.isArray(t.participants) ? t.participants : Object.values(t.participants);
-    var idx = arr.findIndex(function(p) { return window._pName(p) === participantName; });
-    if (idx === -1) return false;
-    var entry = arr[idx];
-    var slots = [];
-    var mkSlot = function(uid, name, manualParticipantId) {
-        var o = {};
-        if (uid) o.uid = uid;
-        if (manualParticipantId) o.manualParticipantId = manualParticipantId;
-        if (name) { o.name = name; o.displayName = name; }
-        return (o.uid || o.manualParticipantId || o.name) ? o : null;
-    };
-    if (entry && typeof entry === 'object' && Array.isArray(entry.participants) && entry.participants.length) {
-        entry.participants.forEach(function(s) {
-            var o = s && typeof s === 'object' ? mkSlot(s.uid, s.displayName || s.name, s.manualParticipantId) : (s ? mkSlot(null, String(s), null) : null);
-            if (o) slots.push(o);
-        });
-    } else if (entry && typeof entry === 'object' && (entry.p1Uid || entry.p2Uid || (entry.p1Name && entry.p2Name))) {
-        var s1 = mkSlot(entry.p1Uid, entry.p1Name, entry.p1ManualId);
-        var s2 = mkSlot(entry.p2Uid, entry.p2Name, entry.p2ManualId);
-        if (s1) slots.push(s1);
-        if (s2) slots.push(s2);
-    }
-    if (slots.length < 2) return false;
-    arr.splice(idx, 1);
-    Array.prototype.splice.apply(arr, [idx, 0].concat(slots));
-    t.participants = arr;
-    if (t.teamOrigins && typeof t.teamOrigins === 'object') {
-        if (typeof window._deleteTeamOrigin === 'function') window._deleteTeamOrigin(t.teamOrigins, entry);
-        else {
-            delete t.teamOrigins[participantName];
-            var label = window._entryDisplayName ? window._entryDisplayName(entry) : null;
-            if (label) delete t.teamOrigins[label];
-        }
-    }
-    return true;
+window._applySplitParticipantFresh = function () {
+    // Contrato histórico: recebia somente participantName. Mantemos o símbolo para
+    // clientes já carregados, mas recusamos a operação: splitPair exige os dois IDs.
+    return false;
 };
 
 window.splitParticipantFunction = function (tId, participantName) {

@@ -1398,7 +1398,6 @@ exports.removeTournamentParticipant = onCall(async request => {
   const uid = request.auth && request.auth.uid;
   const data = request.data || {};
   const tId = String(data.tournamentId || '').trim();
-  const participantName = String(data.participantName || '').trim();
   const memberUid = String(data.memberUid || '').trim();
   if (!uid) throw new HttpsError('unauthenticated', 'Entre na sua conta.');
   if (!tId || !memberUid) throw new HttpsError('invalid-argument', 'UID ou ID manual do participante é obrigatório; nome não é identidade.');
@@ -1410,7 +1409,7 @@ exports.removeTournamentParticipant = onCall(async request => {
     if (!_isTournamentAdmin(t, uid)) throw new HttpsError('permission-denied', 'Só a organização remove participantes.');
     _assertLegacyRosterMutationAllowed(t, 'remoção administrativa legada');
     const before = _antesDoMotor(t);
-    const out = drawWindow._applyOrganizerParticipantRemoval(t, participantName, memberUid);
+    const out = drawWindow._applyOrganizerParticipantRemoval(t, '', memberUid);
     if (!out) throw new HttpsError('failed-precondition', 'Participante já não está inscrito.');
     const b = _gravaTorneio(tx, ref, t, before, { agoraIso });
     const removedUid = out.participant && out.participant.uid ? String(out.participant.uid) : '';

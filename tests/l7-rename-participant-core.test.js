@@ -35,6 +35,23 @@ ok(tAux.waitlist[0].displayName === 'Dai L.' && tAux.standbyParticipants[0].name
    tAux.sorteioRealizado[0].p1Name === 'Dai L.',
   'e o nome foi de fato trocado nas três');
 
+/* Convidado criado pelo organizador não tem UID de conta, mas tem um identificador
+ * estável dentro do torneio. A edição nunca pode voltar a localizar essa vaga pelo
+ * rótulo: dois convidados com o mesmo nome são possíveis durante a transição. */
+const tManual = {
+  participants: [
+    { manualParticipantId: 'manual-a', displayName: 'Convidado' },
+    { manualParticipantId: 'manual-b', displayName: 'Outro' }
+  ],
+  matches: [{ p1: 'Convidado', p2: 'Outro', team1: ['Convidado'], team2: ['Outro'] }]
+};
+const rManual = renameTournamentParticipant(tManual, {
+  manualParticipantId: 'manual-a', oldName: 'Convidado', newName: 'Convidado A'
+});
+ok(rManual.changed && tManual.participants[0].displayName === 'Convidado A' &&
+  tManual.participants[1].displayName === 'Outro' && tManual.matches[0].p1 === 'Convidado A',
+  'renomeia convidado manual pelo manualParticipantId, nunca pelo nome');
+
 /* ⛔⛔ HOMÔNIMO NÃO PODE SER RENOMEADO JUNTO (24/set/2026).
  * A substituição é GLOBAL por rótulo. O uid só achava o alvo; depois disso, os dois
  * "Ana" eram trocados. A recusa tem de vir ANTES de tocar em qualquer estrutura —
@@ -86,8 +103,11 @@ console.log('OK ' + n + ' assertions');
 const fs = require('fs');
 const client = fs.readFileSync(require('path').join(__dirname, '../js/views/participants.js'), 'utf8');
 const server = fs.readFileSync(require('path').join(__dirname, '../functions/index.js'), 'utf8');
+const renameServer = server.slice(server.indexOf('exports.renameTournamentParticipant = onCall'), server.indexOf('/* ═══ GRUPO GERAL', server.indexOf('exports.renameTournamentParticipant = onCall')));
 const editStart = client.indexOf('window._editParticipantName = function');
 const editEnd = client.indexOf('window._startTournament = function', editStart);
 const editBody = client.slice(editStart, editEnd);
 ok(/_callCF\('renameTournamentParticipant'/.test(editBody) && !/FirestoreDB\.saveTournament|AppStore\.mutate/.test(editBody), 'o cliente só despacha a intenção; não grava o torneio');
 ok(/exports\.renameTournamentParticipant = onCall/.test(server) && /_splitParts\.hidratar\(tx, ref, snap\.data\(\) \|\| \{\}\)/.test(server) && /_isTournamentOrgCaller\(t, callerUid\)/.test(server), 'a CF relê as partes divididas e autoriza pelo organizador fresco');
+ok(/manualParticipantId/.test(editBody) && !/uid:\s*targetUid/.test(editBody), 'a edição manual envia o ID estrutural, não um nome nem UID de conta');
+ok(/(?:const|let) manualParticipantId = String\(data\.manualParticipantId/.test(renameServer) && !/targetUid = String\(data\.uid/.test(renameServer), 'a CF aceita edição somente da vaga manual identificada');

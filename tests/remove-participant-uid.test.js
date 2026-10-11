@@ -129,6 +129,19 @@ console.log('\n── excluir inscrito num roster SÓ-UID (o clique real do ✕)
     'manual :: remove da espera somente a vaga escolhida');
 }
 
+// Uma cópia atrasada que pede um ID inexistente não pode cair para o nome mostrado.
+// Esse era o fallback que fazia a primeira pessoa homônima desaparecer.
+{
+  const t = {
+    participants: [
+      { manualParticipantId: 'manual-a', displayName: 'Convidado' },
+      { manualParticipantId: 'manual-b', displayName: 'Convidado' },
+    ], checkedIn: {}, absent: {}, vips: {}, waitlist: [], standbyParticipants: [],
+  };
+  const out = W._applyOrganizerParticipantRemoval(t, 'Convidado', 'manual-inexistente');
+  ok(!out && t.participants.length === 2, 'ID desconhecido :: não remove homônimo pelo nome exibido');
+}
+
 {
   const source = require('fs').readFileSync(require('path').join(__dirname, '..', 'js', 'views', 'participants.js'), 'utf8');
   ok(/ind\.uid \|\| ind\.manualParticipantId \|\| ''/.test(source),

@@ -992,21 +992,21 @@ window._resolveEditNameTarget = function (btn, chave) {
   return escopo.querySelector('[data-uid-name]') || escopo.querySelector('[data-edit-name-target]');
 };
 
-window._editParticipantName = function(tId, oldName, targetUid, btn) {
+window._editParticipantName = function(tId, oldName, manualParticipantId, btn) {
   /* ⛔⛔ CONTA SE RENOMEIA NO PERFIL DELA, NÃO AQUI (25/set/2026).
    * Pergunta do dono: _"onde renomeia conta que nao no perfil do usuário?"_ — em lugar nenhum.
    * O lápis já não é desenhado para quem tem conta; esta recusa é a segunda linha, para o caso
    * de algum caminho futuro chamar esta função com um uid. Editar o cadastro de outra pessoa
    * não é poder de organizador, e a tela mostra o nome VIVO do perfil de todo modo — trocar o
    * rótulo interno do torneio mudava um dado que ninguém vê e ainda dizia "atualizado". */
-  if (targetUid) {
+  if (!manualParticipantId) {
     if (typeof showNotification === 'function') {
       showNotification('O nome é da pessoa',
         'Quem tem conta muda o próprio nome no perfil. Você edita só quem você inscreveu à mão.', 'info');
     }
     return;
   }
-  var span = window._resolveEditNameTarget(btn, String(tId) + '|' + String(targetUid || oldName));
+  var span = window._resolveEditNameTarget(btn, String(tId) + '|' + String(manualParticipantId));
   if (!span) {
     if (typeof showNotification === 'function') showNotification('Não deu pra editar', 'Recarregue a tela e tente de novo.', 'error');
     return;
@@ -1063,7 +1063,7 @@ window._editParticipantName = function(tId, oldName, targetUid, btn) {
       return;
     }
     span.setAttribute('aria-busy', 'true');
-    window._callCF('renameTournamentParticipant', { tournamentId: tId, oldName: oldName, newName: newName, uid: targetUid || '' }, 'Salvando nome…')
+    window._callCF('renameTournamentParticipant', { tournamentId: tId, oldName: oldName, newName: newName, manualParticipantId: manualParticipantId }, 'Salvando nome…')
       .then(function() {
         if (window.AppStore && typeof window.AppStore.logAction === 'function') window.AppStore.logAction(tId, 'Nome editado: "' + oldName + '" → "' + newName + '"');
         /* ⛔⛔ NÃO PROMETER O QUE A TELA NÃO VAI MOSTRAR (24/set/2026).
@@ -1717,10 +1717,11 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
       var _nmH = window._safeHtml(_nm);
       var _mPart = _nameToParticipant && _nameToParticipant[_nm];
       var _mUid = '';
+      var _mManualId = '';
       if (_mPart && typeof _mPart === 'object') {
-        if (_mPart.p1Name && _nm === String(_mPart.p1Name).trim()) _mUid = _mPart.p1Uid || '';
-        else if (_mPart.p2Name && _nm === String(_mPart.p2Name).trim()) _mUid = _mPart.p2Uid || '';
-        else _mUid = _mPart.uid || '';
+        if (_mPart.p1Name && _nm === String(_mPart.p1Name).trim()) { _mUid = _mPart.p1Uid || ''; _mManualId = _mPart.p1ManualId || ''; }
+        else if (_mPart.p2Name && _nm === String(_mPart.p2Name).trim()) { _mUid = _mPart.p2Uid || ''; _mManualId = _mPart.p2ManualId || ''; }
+        else { _mUid = _mPart.uid || ''; _mManualId = _mPart.manualParticipantId || ''; }
       }
       var _mShown = _mUid ? window._displayName(_mUid, _nm) : _nm;
       var _mDisp = window._safeHtml(_mShown);
@@ -1740,15 +1741,15 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
        * outra pessoa não é poder de organizador.
        * ⭐ O lápis FICA para quem o organizador digitou À MÃO: sem conta, o nome escrito é a
        * única identidade que existe, e corrigi-lo é legítimo. */
-      var _mEditBtn = (isOrg && !_mUid)
-        ? '<button type="button" title="Editar ' + _nmH + '" aria-label="Editar ' + _nmH + '" style="border:0;background:transparent;color:var(--text-muted);font-size:0.86rem;line-height:1;padding:3px;cursor:pointer;flex-shrink:0;" onclick="event.stopPropagation();window._editParticipantName(\'' + t.id + '\',\'' + _nmSafe + '\',\'' + _mUid + '\',this)">✏️</button>'
+      var _mEditBtn = (isOrg && !_mUid && _mManualId)
+        ? '<button type="button" title="Editar ' + _nmH + '" aria-label="Editar ' + _nmH + '" style="border:0;background:transparent;color:var(--text-muted);font-size:0.86rem;line-height:1;padding:3px;cursor:pointer;flex-shrink:0;" onclick="event.stopPropagation();window._editParticipantName(\'' + t.id + '\',\'' + _nmSafe + '\',\'' + _mManualId + '\',this)">✏️</button>'
         : '';
       // ⭐ ponto único: o nome já hidratava (_mUidAttr), o ÍCONE não — e era ele que
       // nascia mudo quando o perfil ainda não tinha chegado.
       /* ⛔ `data-edit-name-scope` é do DIV, nunca do span do nome: o helper do nome só leva
        * atributos extras ao span externo, e o alvo editável é o marcador INTERNO. A chave
        * casa por igualdade de string — jamais entra dentro de um seletor CSS. */
-      return '<div data-edit-name-scope data-edit-key="' + window._safeHtml(String(t.id) + '|' + String(_mUid || _nm)) + '" style="display:flex;align-items:center;gap:6px;margin-bottom:2px;overflow:hidden;">' +
+      return '<div data-edit-name-scope data-edit-key="' + window._safeHtml(String(t.id) + '|' + String(_mUid || _mManualId || _nm)) + '" style="display:flex;align-items:center;gap:6px;margin-bottom:2px;overflow:hidden;">' +
         window._personAvatarHtml(_mUid, _nm, 'width:24px;height:24px;border-radius:50%;object-fit:cover;flex-shrink:0;') + _mNameHtml + _mContact + _mEditBtn + '</div>';
     }).join('') + (_orgStar ? '<div style="margin-top:2px;">' + _orgStar + '</div>' : '');
   } else {
@@ -1774,6 +1775,7 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
      * ⛔ Não cair no `pName` como texto: nome gravado ENVELHECE e quem troca o nome no perfil
      * apareceria com o antigo — que é o defeito que o cânone do uid existe pra impedir. */
     var _pUid = (typeof p === 'object' && p && p.uid) ? p.uid : ((_pPart && typeof _pPart === 'object') ? (_pPart.uid || '') : '');
+    var _pManualId = (typeof p === 'object' && p && p.manualParticipantId) ? p.manualParticipantId : ((_pPart && typeof _pPart === 'object') ? (_pPart.manualParticipantId || '') : '');
     if (!_pUid && typeof window._memberUidByName === 'function') {
       try { _pUid = window._memberUidByName(t, pName) || ''; } catch (_eU) { _pUid = ''; }
     }
@@ -1787,10 +1789,10 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
       : '<span' + _pUidAttr + ' style="font-weight:700;font-size:' + _FONT + 'px;color:var(--text-bright);white-space:normal;overflow-wrap:anywhere;word-break:break-word;min-width:0;">' + _pDisp + '</span>';
     /* ⛔ Mesmo motivo do bloco acima: conta se renomeia no perfil dela. O lápis fica só
      * para inscrito digitado à mão. */
-    var _pEditBtn = (isOrg && !_pUid)
-      ? '<button type="button" title="Editar ' + _pNameH + '" aria-label="Editar ' + _pNameH + '" style="border:0;background:transparent;color:var(--text-muted);font-size:0.86rem;line-height:1;padding:3px;cursor:pointer;flex-shrink:0;" onclick="event.stopPropagation();window._editParticipantName(\'' + t.id + '\',\'' + _pSafe + '\',\'' + _pUid + '\',this)">✏️</button>'
+    var _pEditBtn = (isOrg && !_pUid && _pManualId)
+      ? '<button type="button" title="Editar ' + _pNameH + '" aria-label="Editar ' + _pNameH + '" style="border:0;background:transparent;color:var(--text-muted);font-size:0.86rem;line-height:1;padding:3px;cursor:pointer;flex-shrink:0;" onclick="event.stopPropagation();window._editParticipantName(\'' + t.id + '\',\'' + _pSafe + '\',\'' + _pManualId + '\',this)">✏️</button>'
       : '';
-    pNameHtml = '<div data-edit-name-scope data-edit-key="' + window._safeHtml(String(t.id) + '|' + String(_pUid || pName)) + '" style="display:flex;align-items:center;gap:8px;overflow:hidden;">' +
+    pNameHtml = '<div data-edit-name-scope data-edit-key="' + window._safeHtml(String(t.id) + '|' + String(_pUid || _pManualId || pName)) + '" style="display:flex;align-items:center;gap:8px;overflow:hidden;">' +
       window._personAvatarHtml(_pUid, pName, 'width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;') + _pNameLinkHtml + _pContact + _pEditBtn + _orgStar + '</div>';
   }
 
@@ -2798,6 +2800,7 @@ function renderParticipants(container, tournamentId) {
       // da linha do nome e foi pra coluna da direita (não disputa espaço com o nome).
       // v4.5.64: nome resolve VIVO por uid (perfil users/{uid}); nome gravado só p/ guest sem uid.
       const _niUid = ind.uid || '';
+      const _niManualId = ind.manualParticipantId || '';
       const _niUidAttr = _niUid ? ` data-uid-name="${window._safeHtml(_niUid)}"` : '';
       const _niDisp = _niUid ? window._safeHtml(window._displayName(_niUid, ind.name)) : _safeName;
       /* ⛔⛔ O NOME É A PORTA DA FICHA — EM TODA TELA, INCLUSIVE NESTA (24/set/2026).
@@ -2837,10 +2840,10 @@ function renderParticipants(container, tournamentId) {
         ? `<div style="font-size:0.63rem;color:var(--text-muted);opacity:0.75;line-height:1.2;margin-top:1px;">neste torneio: ${window._safeHtml(String(ind.name).trim())}</div>`
         : '';
       /* ⛔ Mesmo motivo: conta se renomeia no perfil dela. Lápis só para digitado à mão. */
-      const _niEditBtn = (isOrg && !_niUid)
-        ? `<button type="button" title="Editar ${_safeName}" aria-label="Editar ${_safeName}" style="border:0;background:transparent;color:var(--text-muted);font-size:0.82rem;line-height:1;padding:3px;cursor:pointer;flex-shrink:0;" onclick="event.stopPropagation();window._editParticipantName('${tId}','${safeName}','${_niUid}',this)">\u270f\ufe0f</button>`
+      const _niEditBtn = (isOrg && !_niUid && _niManualId)
+        ? `<button type="button" title="Editar ${_safeName}" aria-label="Editar ${_safeName}" style="border:0;background:transparent;color:var(--text-muted);font-size:0.82rem;line-height:1;padding:3px;cursor:pointer;flex-shrink:0;" onclick="event.stopPropagation();window._editParticipantName('${tId}','${safeName}','${_niManualId}',this)">\u270f\ufe0f</button>`
         : '';
-      const _nameRow = `<div data-edit-name-scope data-edit-key="${window._safeHtml(String(tId) + '|' + String(_niUid || ind.name || ''))}" style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;min-width:0;">${_niNomeHtml}${_niContato}${_niEditBtn}${_orgStarC}${isStandby ? presenceDot : ''}</div>${_niRotuloTorneio}`;
+      const _nameRow = `<div data-edit-name-scope data-edit-key="${window._safeHtml(String(tId) + '|' + String(_niUid || _niManualId || ind.name || ''))}" style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;min-width:0;">${_niNomeHtml}${_niContato}${_niEditBtn}${_orgStarC}${isStandby ? presenceDot : ''}</div>${_niRotuloTorneio}`;
       const _jogoTop = matchLabel ? `<span style="font-weight:${_jogoWeight};color:${window._spCor(_jogoColor, 'color')};opacity:${_jogoOpacity};font-size:0.72rem;white-space:nowrap;">${matchLabel}</span>` : '';
       // Faixa do jogo FULL-WIDTH abaixo do header (libera largura pros nomes dos times).
       let _matchStrip = '';
