@@ -135,6 +135,12 @@ function cenario(opcoes) {
   // por fonte em ①. Aqui ele é um stub que aprova, como os outros gates.
   fs.writeFileSync(path.join(repo, 'scripts', 'revisar-diff-em-lotes.sh'), '#!/bin/sh\nexit 0\n');
   fs.chmodSync(path.join(repo, 'scripts', 'revisar-diff-em-lotes.sh'), 0o755);
+  // O censo de transição legada é um gate de produção somente leitura. Neste
+  // laboratório a rede é deliberadamente falsa: o stub verde mantém a cena
+  // focada na ordem preflight → push → Hosting, sem desativar o gate real.
+  fs.writeFileSync(path.join(repo, 'scripts', 'auditar-transicao-classificatoria-legada.js'),
+    '#!/usr/bin/env node\nconsole.log("censo de teste aprovado");\nprocess.exit(0);\n');
+  fs.chmodSync(path.join(repo, 'scripts', 'auditar-transicao-classificatoria-legada.js'), 0o755);
   fs.writeFileSync(path.join(repo, 'scripts', 'check-version-ahead.js'), 'process.exit(0);\n');
   fs.writeFileSync(path.join(repo, 'scripts', 'check-release-version-fresh.js'), 'process.exit(0);\n');
   // O corte único pertence a outra suíte. Aqui ele é neutro para a cena continuar
