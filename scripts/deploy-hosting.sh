@@ -619,40 +619,25 @@ _APOSENTADAS="setParticipantsProfile setParticipantsGender applyLetzplayScans"
 # ⛔ NENHUMA PORTA APOSENTADA PODE ESTAR NO AR. Apagar o `exports.` não apaga a função publicada —
 # o deploy deriva alvos dos exports que EXISTEM, então a removida some da lista e continua viva,
 # alcançável por aparelho antigo. As três escreviam no PERFIL GLOBAL de terceiro.
-# ⚠️ FRONTEIRA DESTA TRAVA, dita em voz alta: se a API RESPONDE e alguma está lá, ela APAGA e
-# aborta se sobrar. Se a API NÃO responde, ela AVISA e segue — porque o ensaio do preflight roda
-# este script com um `firebase` falso para provar que o push vem antes do upload, e abortar ali
-# seria reprovar por falta de CLI, não por porta viva. Quem não pode publicar sem conferir é quem
-# publica de verdade, e aí a API responde.
+# ⚠️ A publicação de Hosting NUNCA apaga Functions. A aposentadoria é uma operação destrutiva
+# separada (`scripts/retire-obsolete-functions.sh --confirm-retire-obsolete`), para que um
+# corte de interface não possa remover parte do backend por efeito colateral. Aqui apenas
+# conferimos e abortamos se alguma porta aposentada ainda existir.
 # ⛔ FALHA DE LISTAGEM ABORTA. Avisar e publicar assim mesmo era o pior dos dois mundos: a tela
-# nova no ar e ninguém sabendo se as portas vulneráveis saíram. O único caso tolerado é a listagem
-# RESPONDER e vir VAZIA — projeto sem Function nenhuma, onde não há o que apagar (e é o que o
-# `firebase` de mentira do ensaio do preflight devolve).
+# nova no ar e ninguém sabendo se as portas vulneráveis saíram.
 if ! _LISTA="$(firebase functions:list --project scoreplace-app 2>&1)"; then
   echo "✗ não consegui listar as Functions publicadas — abortando (publicar sem conferir é pior)."
   echo "$_LISTA" | tail -5
   exit 1
 fi
 if [[ -n "$_LISTA" ]]; then
-  for _f in $_APOSENTADAS; do
-    if echo "$_LISTA" | grep -q "$_f"; then
-      echo "  ▸ aposentada ainda no ar: $_f — apagando…"
-      firebase functions:delete "$_f" --region us-central1 --project scoreplace-app --force \
-        || { echo "✗ falhei ao apagar $_f — abortando antes de publicar."; exit 1; }
-    fi
-  done
-  # ⛔ A RECONFERÊNCIA TAMBÉM ABORTA EM FALHA: engolir o erro aqui deixava `_LISTA2` vazia e o
-  # Hosting subia "sem encontrar nada" — falha ABERTA, a pior forma de trava.
-  if ! _LISTA2="$(firebase functions:list --project scoreplace-app 2>&1)"; then
-    echo "✗ não consegui reconferir as Functions — abortando."
-    exit 1
-  fi
   _VIVAS=""
   for _f in $_APOSENTADAS; do
-    if echo "$_LISTA2" | grep -q "$_f"; then _VIVAS="$_VIVAS $_f"; fi
+    if echo "$_LISTA" | grep -q "$_f"; then _VIVAS="$_VIVAS $_f"; fi
   done
   if [[ -n "$_VIVAS" ]]; then
-    echo "✗ AINDA NO AR depois da deleção:$_VIVAS — abortando antes de publicar."
+    echo "✗ Functions aposentadas ainda no ar:$_VIVAS — abortando antes de publicar."
+    echo "  A limpeza é deliberada e separada: scripts/retire-obsolete-functions.sh --confirm-retire-obsolete"
     exit 1
   fi
   echo "  ✓ nenhuma porta aposentada está publicada"
