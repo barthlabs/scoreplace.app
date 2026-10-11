@@ -1,4 +1,9 @@
-// 2.3.332 — Atualização consolidada de produção com as correções validadas desde a última publicação.
+// 2.3.332 — A chave passa a resolver grupos, histórico classificatório e conectores
+// pela fase canônica atual, sem herdar `currentStage` ou o rótulo de uma fase anterior.
+// Pareamento por clusters só recebe o rótulo suíço quando a própria classificatória o
+// configura e há eliminatória posterior; pontos corridos podem terminar na classificação.
+// O modo Rei/Rainha continua lido pela porta central, agora sobre a configuração da fase
+// corrente, sem confundir o rótulo histórico do torneio com a eliminatória em andamento.
 // 2.3.331 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.3.330 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.3.329 — Atualização consolidada de produção com as correções validadas desde a última publicação.
