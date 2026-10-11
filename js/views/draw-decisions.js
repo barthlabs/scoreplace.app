@@ -325,14 +325,52 @@
         removedX.map(function (x) { return _nameOf(x) || '?'; }).join(', ') + ')';
     } else if (option === 'classification_rounds') {
       var rounds = Math.max(1, parseInt(opts.classificationRounds || opts.swissRounds, 10) || 0);
-      t.classificationTransition = {
-        rounds: rounds || null,
-        pairing: Object.assign({
-          strategy: 'ranking_clusters',
-          entryMode: 'fixed',
-          rematchPolicy: 'exhaust_cluster_before_repeat'
-        }, opts.pairing || {})
+      /* A escolha já é o plano de fases que será sorteado. Gravar uma flag
+       * intermediária (classificationTransition) fazia a mesma intenção ter
+       * dois modelos: a UI nova via phases[] e o sorteador via marcador legado.
+       * Materializamos aqui, ainda antes de qualquer jogo/rodada existir, as
+       * duas fases canônicas. A ponte em tournaments-draw/draw-core fica só
+       * para documentos antigos que chegarem contendo a flag histórica. */
+      var _pairing = Object.assign({
+        strategy: 'ranking_clusters',
+        entryMode: 'fixed',
+        rematchPolicy: 'exhaust_cluster_before_repeat'
+      }, opts.pairing || {});
+      var _existingElimination = _phasesBeforeP2.filter(function (phase) {
+        return phase && phase.kind === 'elimination';
+      })[0];
+      var _classificationBracketType = _existingElimination && _existingElimination.elimination &&
+        _existingElimination.elimination.bracketType === 'double' ? 'double' :
+        (/dupla eliminat/i.test(String(t.format || '')) ? 'double' : 'single');
+      var _classifiedCount = Math.max(2, parseInt(info.lo, 10) || 2);
+      var _eliminationPhase = _existingElimination ? Object.assign({}, _existingElimination) : {
+        name: 'Eliminatória',
+        kind: 'elimination',
+        formatCode: _classificationBracketType === 'double' ? 'elim_dupla' : 'elim_simples',
+        elimination: { bracketType: _classificationBracketType }
       };
+      _eliminationPhase.kind = 'elimination';
+      _eliminationPhase.elimination = Object.assign({}, _eliminationPhase.elimination || {}, {
+        bracketType: _classificationBracketType
+      });
+      _eliminationPhase.formatCode = _classificationBracketType === 'double' ? 'elim_dupla' : 'elim_simples';
+      _eliminationPhase.source = {
+        type: 'previous_phase',
+        mapping: [{ dest: 'main', rankFrom: 1, rankTo: _classifiedCount }]
+      };
+      t.phases = [{
+        name: 'Classificatória',
+        kind: 'classification',
+        formatCode: 'classification_rounds',
+        classification: { structure: 'round_robin', pairing: _pairing },
+        rounds: rounds || null,
+        source: { type: 'enrollment' }
+      }, _eliminationPhase];
+      t.currentPhaseIndex = 0;
+      delete t.classificationTransition;
+      t.p2Resolution = null;
+      t.p2TargetCount = null;
+      delete t.p2CrossSeed;
       actionMsg = 'Iniciado com Fase Classificatória por rodadas' + (rounds ? ' — ' + rounds + ' rodadas' : '');
     }
 

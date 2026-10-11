@@ -106,11 +106,15 @@ parity('p2=classification_rounds', () => mkSolos(6),
   { p2: { option: 'classification_rounds', classificationRounds: 3 } },
   (t) => { autos(t); W._applyP2Resolution(t, 'classification_rounds', { classificationRounds: 3 }); });
 { const t = mkSolos(6); W._applyDrawDecisions(t, { p2: { option: 'classification_rounds', classificationRounds: 3 } });
-  ok('p2=classification_rounds — grava contrato, não modo suíço',
-    t.classificationTransition && t.classificationTransition.rounds === 3 &&
-    t.classificationTransition.pairing && t.classificationTransition.pairing.strategy === 'ranking_clusters' &&
-    t.p2Resolution == null,
-    JSON.stringify({ transition: t.classificationTransition, p2: t.p2Resolution })); }
+  var p0 = (t.phases || [])[0] || {}, p1 = (t.phases || [])[1] || {};
+  ok('p2=classification_rounds — grava fases canônicas, não marcador suíço',
+    p0.kind === 'classification' && p0.formatCode === 'classification_rounds' &&
+    p0.classification && p0.classification.structure === 'round_robin' &&
+    p0.classification.pairing && p0.classification.pairing.strategy === 'ranking_clusters' &&
+    p0.rounds === 3 && p1.kind === 'elimination' &&
+    p1.source && p1.source.type === 'previous_phase' &&
+    !t.classificationTransition && t.p2Resolution == null,
+    JSON.stringify({ phases: t.phases, transition: t.classificationTransition, p2: t.p2Resolution })); }
 { const t = mkSolos(6, {
   classificationTransition: { rounds: 3, pairing: { strategy: 'ranking_clusters' } },
   phases: [
@@ -155,6 +159,25 @@ console.log('\n── p2=bye → NINGUÉM sai da chave (e, na árvore mínima, n
   ok('os 6 continuam na chave (nada vai pro standby)', (t.standbyParticipants || []).length === 0, 'standby=' + (t.standbyParticipants || []).length);
   ok('R1 = 3 jogos (árvore mínima de 6)', r1(t) === 3, 'R1=' + r1(t));
   ok('ZERO folga — N par não deixa sobra pra preencher', byes(t) === 0, 'byes=' + byes(t)); }
+
+console.log('\n── p2=classification_rounds → fases canônicas → R1 ──');
+{ const t = mkSolos(6); const r = core.drawInitial(t, {
+  idStamp: 14,
+  decisions: { p2: { option: 'classification_rounds', classificationRounds: 3 } }
+});
+  const p0 = (t.phases || [])[0] || {}, p1 = (t.phases || [])[1] || {};
+  ok('sorteou classificatória canônica', !!(r && r.ok), 'reason=' + (r && r.reason || '—'));
+  ok('não persiste classificationTransition nem p2 swiss',
+    !t.classificationTransition && t.p2Resolution == null && t.currentStage == null && t.classifyFormat == null,
+    JSON.stringify({ transition: t.classificationTransition, p2: t.p2Resolution, stage: t.currentStage }));
+  ok('preserva classificação + eliminatória no contrato de fases',
+    p0.kind === 'classification' && p0.formatCode === 'classification_rounds' && p0.rounds === 3 &&
+    p1.kind === 'elimination' && p1.source && p1.source.type === 'previous_phase',
+    JSON.stringify({ p0: p0, p1: p1 }));
+  const firstRoundGames = (((t.rounds || [])[0] || {}).matches || []).filter((m) => !m.isBye && !m.isSitOut);
+  ok('gera R1 classificatória', Array.isArray(t.rounds) && t.rounds.length === 1 && firstRoundGames.length === 3,
+    'rounds=' + (t.rounds || []).length + ' jogos=' + firstRoundGames.length);
+}
 
 console.log('\n══════════ FLEXIBILIZAR: forma duplas dos avulsos (bug #2 — auto-move não drena antes) ══════════');
 // Bug #2 achado neste ciclo: o auto-move (step 3) drenava os avulsos pra espera ANTES do
