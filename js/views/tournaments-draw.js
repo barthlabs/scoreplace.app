@@ -3106,8 +3106,13 @@ window.generateDrawFunction = function (tId) {
     // Rei/Rainha (modo) é EXCEÇÃO ao bloqueio: o pool-prep DECOMPÕE entradas-time nos
     // membros individuais (parceiro rotativo — fix Confra, ver _isMon0 abaixo). O bloqueio
     // vale só pra Liga PADRÃO, onde dupla formada viraria "time de 4" no pareamento.
-    if (typeof window._isLigaFormat === 'function' && window._isLigaFormat(t) &&
-        !(typeof window._isMonarchFormat === 'function' && window._isMonarchFormat(t))) {
+    // IMPORTANTE: ambas as perguntas são DA FASE ATUAL. O rótulo histórico do torneio
+    // continua sendo Liga/Rei-Rainha depois da transição para eliminatória e não pode
+    // impedir que as duplas classificadas sejam sorteadas na chave.
+    var isCurrentMonarch = Array.isArray(t.phases)
+      ? (typeof window._sorteioDaFaseEhReiRainha === 'function' && window._sorteioDaFaseEhReiRainha(t))
+      : (typeof window._isMonarchFormat === 'function' && window._isMonarchFormat(t));
+    if (isCurrentLeague && !isCurrentMonarch) {
         var _hasFormedPair = (Array.isArray(t.participants) ? t.participants : []).some(function (p) {
             return p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name);
         });

@@ -52,6 +52,12 @@ ok(/_ligaOpenEnrollmentNaFaseAtual/.test(source),
   'ferramentas consultam a inscrição contínua da fase atual');
 ok(/const isAutoDrawFormat = isClassificationRounds \|\| isLigaAutoDraw;/.test(source),
   'auto-sorteio operacional deriva da fase atual, não de um modo suíço paralelo');
+ok(/const isCurrentLeaguePhase = Array\.isArray\(t\.phases\)[\s\S]{0,180}_faseCorrenteEhLiga/.test(source),
+  'ações manuais distinguem a Liga do torneio da Liga da fase atual');
+ok(/else if \(isCurrentLeaguePhase && t\.drawManual\)/.test(source),
+  'Próxima Rodada manual só aparece na classificatória corrente');
+ok(/\$\{isCurrentLeaguePhase \? '' : startTournamentBanner\}/.test(source),
+  'a eliminatória posterior volta a exibir seu indicador de início');
 ok(!/const isSuicoFormat = t\.format === 'Suíço Clássico'/.test(source),
   'não restou detecção local por rótulo suíço na ferramenta');
 ok(/const isCurrentClassificationPhase = _currentPhaseForTools && _currentPhaseForTools\.kind/.test(source) &&

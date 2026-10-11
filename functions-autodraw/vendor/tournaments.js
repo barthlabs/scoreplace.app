@@ -3252,6 +3252,13 @@ function renderTournaments(container, tournamentId = null) {
           ? window._faseCorrenteEhClassificatoriaPorRodadas(t)
           : (t.format === 'Suíço Clássico' || t.classifyFormat === 'swiss' || t.currentStage === 'swiss');
         const isLigaFormat = window._isLigaFormat(t);
+        // `_isLigaFormat` descreve o torneio para compatibilidade e apresentação.
+        // Ação de sorteio, porém, pertence à fase atual: num híbrido que saiu da
+        // classificação para a chave, manter esse rótulo não pode recriar o botão
+        // "Próxima Rodada" nem esconder os indicadores da eliminatória.
+        const isCurrentLeaguePhase = Array.isArray(t.phases)
+          ? !!(window._faseCorrenteEhLiga && window._faseCorrenteEhLiga(t))
+          : isLigaFormat;
         // Encerrar manualmente é uma ação da chave eliminatória atual. O
         // formato histórico pode continuar dizendo "Liga" depois da transição,
         // mas não pode esconder o único botão de encerramento da fase final.
@@ -3357,7 +3364,7 @@ function renderTournaments(container, tournamentId = null) {
                     var _manualBtn = _faseEhElim ? '' : `<button class="btn btn-warning hover-lift${_glowGame}" onclick="event.stopPropagation(); window._drawBtnBusy&&window._drawBtnBusy(this,'${t.id}'); window._confirmManualAutoDraw('${t.id}')">${_adManualLbl}</button>`;
                     sortearBtn = _manualBtn;   // o "Avançar de Fase" entra depois, uma vez só, pros três ramos
                 }
-            } else if (isLigaFormat && t.drawManual) {
+            } else if (isCurrentLeaguePhase && t.drawManual) {
                 sortearBtn = (t.status === 'closed' && !hasDraw) ? `<button class="btn btn-warning hover-lift${_glowGame}" onclick="event.stopPropagation(); window._drawBtnBusy&&window._drawBtnBusy(this,'${t.id}'); window.generateDrawFunction('${t.id}')">🎲 Sortear</button>` : '';
                 sortearAberto = (t.status !== 'closed' && !hasDraw) ? `<button class="btn btn-warning hover-lift${_glowGame}" onclick="${sortearOnClick}">🎲 Sortear</button>` : '';
                 if (hasDraw) {
@@ -3543,8 +3550,8 @@ function renderTournaments(container, tournamentId = null) {
                     // Sorteio já feito — mostrar Iniciar Torneio ou badge Em Andamento
                     actionsHtml = `
                    ${inviteModalHtml}
-                   ${isLigaFormat ? '' : startTournamentBanner}
-                   ${isLigaFormat ? '' : startedBadge}
+                   ${isCurrentLeaguePhase ? '' : startTournamentBanner}
+                   ${isCurrentLeaguePhase ? '' : startedBadge}
                    ${autoDrawCountdownHtml ? `<div style="margin-top:1rem;text-align:center;">${autoDrawCountdownHtml}</div>` : ''}
                    <div class="tournament-action-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:1rem;">
                      <button class="btn btn-outline btn-sm hover-lift" onclick="window.location.hash='#rules/${t.id}'">📋 Regras</button>

@@ -91,13 +91,15 @@ ok(W._sorteioDaFaseEhReiRainha({ phases: 'nao-e-lista', drawMode: 'rei_rainha' }
   '④ ⚠️ mas o que NÃO é lista conta como ausência — aí o topo é tudo que existe');
 
 // ── ⑤ consumidores deliberados do motor de rodadas ────────────────────────────
-/* A porta agora protege somente o despacho/espera/auto-cura do motor de rodadas.
- * Qualquer consumidor fora deste arquivo ou crescimento acidental da leva cai no
- * teste: migrar todo o restante sem medir foi o que já obrigou reversão. */
+/* A porta protege o despacho/espera/auto-cura e a barreira de duplas formadas
+ * no sorteio. Esta última precisa saber que uma eliminatória posterior não é mais
+ * Rei/Rainha, mesmo se o torneio nasceu como tal. Qualquer outro consumidor fora
+ * desta lista cai no teste: migrar todo o restante sem medir foi o que já obrigou
+ * reversão. */
 const chamadas = varrer(path.join(ROOT, 'js'), /_sorteioDaFaseEhReiRainha\s*\(/g)
   .filter(function (f) { return f !== 'js/views/tournaments-utils.js'; });
-ok(chamadas.length === 0,
-  '⑤ a porta pública só é consumida internamente pelo adaptador do motor — achei ' + chamadas.length + ': ' + chamadas.join(', '));
+ok(chamadas.length === 1 && chamadas[0] === 'js/views/tournaments-draw.js',
+  '⑤ a única consumidora externa é a barreira de duplas do sorteio — achei ' + chamadas.length + ': ' + chamadas.join(', '));
 
 // ── ⑥ a porta antiga continua intocada ───────────────────────────────────────
 const utils = fs.readFileSync(path.join(ROOT, 'js/views/tournaments-utils.js'), 'utf8');
