@@ -34,6 +34,19 @@ same(W._isLigaAutoDraw(faseInicialProjetada), true,
 same(W._autoDrawScheduleForCurrentPhase(faseInicialProjetada).phaseIndex, 0,
   'resolvedor único identifica a fase atual que fornece a agenda');
 
+const faseInicialComAgendaPropria = {
+  format: 'Liga', currentPhaseIndex: 0,
+  phases: [{
+    kind: 'classification', classification: { structure: 'round_robin' },
+    drawManual: false, drawFirstDate: '2026-10-21', drawFirstTime: '18:30', drawIntervalDays: 7
+  }]
+};
+same(W._isLigaAutoDraw(faseInicialComAgendaPropria), true,
+  'fase 0 canônica com agenda própria não depende de campos legados no topo');
+same(W._autoDrawScheduleForCurrentPhase(faseInicialComAgendaPropria).schedule,
+  faseInicialComAgendaPropria.phases[0],
+  'resolvedor devolve a configuração da fase, não uma fotografia do torneio inteiro');
+
 const eliminatoriaAtual = Object.assign({}, faseInicialProjetada, {
   currentPhaseIndex: 1,
   phases: [faseInicialProjetada.phases[0], { kind: 'elimination', elimination: { bracketType: 'single' } }]

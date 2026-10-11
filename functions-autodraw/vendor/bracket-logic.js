@@ -6623,8 +6623,10 @@ window._checkLigaAutoDraws = async function() {
       continue;
     }
 
-    // Only Liga tournaments
-    if (!(window._isLigaFormat && window._isLigaFormat(t))) continue;
+    // Só a agenda canônica DA FASE ATUAL justifica reconciliação. Um torneio
+    // que nasceu como Liga pode estar na eliminatória; o rótulo histórico do
+    // topo não pode fazer o navegador acordar uma chave já em andamento.
+    if (!(window._isLigaAutoDraw && window._isLigaAutoDraw(t))) continue;
 
     // Só o organizador chegava aqui (participante nunca sorteia). Mantido: a
     // auto-cura abaixo mexe no doc e só o organizador tem permissão de gravar.

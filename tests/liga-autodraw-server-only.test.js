@@ -78,6 +78,24 @@ W.AppStore.isOrganizer = function () { return true; };  // o poller só disparav
   ok(typeof W._generateNextRound === 'function', 'o motor (_generateNextRound) SEGUE no cliente — manual e render dependem dele');
   ok(typeof W._computeStandings === 'function', '_computeStandings segue no cliente (render da classificação)');
 
+  // A etiqueta histórica do torneio não basta nem para despachar o reparo.
+  // Depois do avanço para eliminatória, o navegador não deve chamar a Function
+  // de reconciliação por ter nascido como Liga — isto evita escrita/latência
+  // indevida sobre uma chave que já está em andamento.
+  const callsAntes = [];
+  W._callCF = function (name) { callsAntes.push(name); return Promise.resolve({ data: { ok: true } }); };
+  W.AppStore.tournaments = [{
+    id: 'liga-ja-na-chave', format: 'Liga', creatorUid: 'uOrg', status: 'active',
+    drawManual: false, drawFirstDate: t.drawFirstDate,
+    phases: [
+      { kind: 'classification', classification: { structure: 'round_robin' } },
+      { kind: 'elimination', elimination: { bracketType: 'single' } }
+    ],
+    currentPhaseIndex: 1
+  }];
+  await W._checkLigaAutoDraws();
+  ok(callsAntes.length === 0, 'eliminatória não despacha reconciliação pelo rótulo Liga legado');
+
   console.log('');
   if (fail === 0) { console.log('✅ liga-autodraw-server-only: ' + pass + ' ok, 0 falharam'); }
   else { console.error('❌ liga-autodraw-server-only: ' + pass + ' ok, ' + fail + ' FALHARAM'); process.exit(1); }

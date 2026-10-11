@@ -360,7 +360,19 @@ function _sideDisplayName(uids, nameByUid, storedStr) {
 // rodadas — e disparava notificações — PRA SEMPRE após o fim da temporada, se
 // nenhum cliente abrisse o torneio pra marcar status='finished' (que é lazy, só
 // no render). Horários em BRT (UTC-3), igual ao resto do autoDraw.
-function _ligaSeasonEnded(t, now) {
+/* A agenda é da FASE atual. `format` no topo só é ponte para documentos sem
+ * `phases[]`, e essa distinção já está codificada no helper vendorizado que o
+ * cliente usa. Centralizar a leitura aqui impede os três caminhos do servidor
+ * (cron, reconciliação e fronteira de escrita) de cada um escolher uma fonte
+ * diferente e ressuscitar a agenda de uma classificatória durante a chave. */
+function _agendaDaFaseAtual(t) {
+  if (!t || !drawWindow || typeof drawWindow._autoDrawScheduleForCurrentPhase !== 'function') return null;
+  const out = drawWindow._autoDrawScheduleForCurrentPhase(t);
+  return out && out.schedule ? out : null;
+}
+
+function _ligaSeasonEnded(t, now, agenda) {
+  const source = agenda || t || {};
   // Date-only ('2026-06-11') → fim do dia BRT (23:59:59). Com 'T' → hora exata
   // informada, também em BRT. v2.4.75: antes, quando endDate já tinha 'T' o
   // offset -03:00 NÃO era anexado e o servidor (UTC) lia como UTC → 3h de skew
@@ -373,14 +385,16 @@ function _ligaSeasonEnded(t, now) {
     return new Date(s);
   }
   // 1) endDate explícita
-  if (t.endDate) {
-    const endD = _parseBrt(t.endDate, '23:59:59');
+  const endDate = source.endDate || (source !== t && t && t.endDate);
+  if (endDate) {
+    const endD = _parseBrt(endDate, '23:59:59');
     if (!isNaN(endD.getTime()) && endD < now) return true;
   }
   // 2) ligaSeasonMonths a partir de startDate
-  const months = parseInt(t.ligaSeasonMonths);
-  if (months && t.startDate) {
-    const start = _parseBrt(t.startDate, '00:00:00');
+  const months = parseInt(source.ligaSeasonMonths != null ? source.ligaSeasonMonths : (t && t.ligaSeasonMonths));
+  const startDate = source.startDate || (source !== t && t && t.startDate);
+  if (months && startDate) {
+    const start = _parseBrt(startDate, '00:00:00');
     if (!isNaN(start.getTime())) {
       const end = new Date(start);
       end.setMonth(end.getMonth() + months);
@@ -1000,8 +1014,9 @@ function _applyWriteBoundary(data) {
       } else {
         const _inc = !!(w._isIncrementalLigaPhase && w._isIncrementalLigaPhase(data));
         const _cur = data.currentPhaseIndex || 0;
-        const _fonte = _inc ? ((data.phases && data.phases[_cur]) || {}) : data;
-        const _q = _agenda.agendamentoCanonico(_agenda.cfgDeAgenda(_fonte), data, Date.now(), _fz.tz);
+        const _agendaAtual = _agendaDaFaseAtual(data);
+        const _fonte = _inc ? ((data.phases && data.phases[_cur]) || {}) : (_agendaAtual && _agendaAtual.schedule);
+        const _q = _fonte ? _agenda.agendamentoCanonico(_agenda.cfgDeAgenda(_fonte), data, Date.now(), _fz.tz) : null;
         if (typeof _q === 'number') data.nextDrawAt = _q;
         else delete data.nextDrawAt;
       }
@@ -5420,16 +5435,17 @@ exports.autoDraw = onSchedule('every 1 minutes', async (event) => {
      *      a divisão.
      * Agora: fuso IANA do local do evento, janela do MESMO MINUTO local, montagem por
      * `_leTorneio` DENTRO da transação e persistência exclusivamente por `_gravaTorneio`. */
-    // A fase atual é a autoridade: um torneio que começou como pontos corridos
-    // pode já estar na eliminatória. O campo `format` fica apenas como leitura
-    // de documentos antigos sem `phases`.
-    const isLiga = _leagueSeasonCore.isLeagueFormat(t);
-    if (!isLiga) continue;
-    if (t.drawManual) continue;
-    if (!t.drawFirstDate) continue;
+    // A fase atual é a autoridade. O resolvedor é o mesmo do cliente e só usa
+    // o topo como ponte de documento sem `phases[]`; uma eliminatória nunca
+    // recebe a agenda da classificatória que a precedeu.
+    const _agendaAtual = _agendaDaFaseAtual(t);
+    if (!_agendaAtual || _agendaAtual.phaseIndex !== 0) continue;
+    const _fonteAgenda = _agendaAtual.schedule;
+    if (_fonteAgenda.drawManual === true) continue;
+    if (!_fonteAgenda.drawFirstDate) continue;
     if (t.status === 'finished') continue;
     // v2.4.12: temporada acabou (endDate ou ligaSeasonMonths) → não gerar mais rodadas.
-    if (_ligaSeasonEnded(t, now)) { console.log(`Auto-draw: ${tId} — temporada encerrada, skip`); continue; }
+    if (_ligaSeasonEnded(t, now, _fonteAgenda)) { console.log(`Auto-draw: ${tId} — temporada encerrada, skip`); continue; }
     // v2.3.96: já há um sorteio em revisão aguardando o organizador publicar/anular.
     if (t.pendingDraw) { console.log(`Auto-draw: ${tId} tem pendingDraw em revisão — skip`); continue; }
 
@@ -5448,7 +5464,7 @@ exports.autoDraw = onSchedule('every 1 minutes', async (event) => {
 
     /* (2) A JANELA. A rodada automática só nasce no MESMO MINUTO LOCAL do horário
      * agendado; o Scheduler pode entrar alguns segundos depois e isso vale. */
-    const _cfg = _agenda.cfgDeAgenda(t);
+    const _cfg = _agenda.cfgDeAgenda(_fonteAgenda);
     const _nowMs = now.getTime();
     const _devido = _agenda.slotDevido(_cfg, _nowMs, _fuso.tz);
     const _futuro = _agenda.proximoSlotFuturo(_cfg, _nowMs, _fuso.tz);
@@ -5504,6 +5520,21 @@ exports.autoDraw = onSchedule('every 1 minutes', async (event) => {
           const _tAntes = _antesDoMotor(tf);
           if (tf.status === 'finished') return { pulou: 'finished' };
           if (tf.pendingDraw) return { pulou: 'pendingDraw' };
+          // A configuração pode ter mudado entre a consulta do cron e esta
+          // transação. Relê-la no documento fresco antes de reivindicar o slot:
+          // jamais sorteamos com a data antiga de uma aba ou de um cron atrasado.
+          const _agendaFresca = _agendaDaFaseAtual(tf);
+          if (!_agendaFresca || _agendaFresca.phaseIndex !== 0) return { pulou: 'fase-sem-agenda', nextDrawAt: null };
+          const _fonteFresca = _agendaFresca.schedule;
+          if (_fonteFresca.drawManual === true || !_fonteFresca.drawFirstDate) return { pulou: 'agenda-alterada', nextDrawAt: null };
+          if (_ligaSeasonEnded(tf, now, _fonteFresca)) return { pulou: 'temporada-encerrada', nextDrawAt: null };
+          const _devidoFresco = _agenda.slotDevido(_agenda.cfgDeAgenda(_fonteFresca), _nowMs, _fuso.tz);
+          if (_devidoFresco == null || !_agenda.mesmoMinuto(_nowMs, _devidoFresco)) {
+            return {
+              pulou: 'agenda-alterada',
+              nextDrawAt: _agenda.agendamentoCanonico(_agenda.cfgDeAgenda(_fonteFresca), tf, _nowMs, _fuso.tz)
+            };
+          }
           if (drawWindow && typeof drawWindow._suppressAutoDrawForPhases === 'function' &&
               drawWindow._suppressAutoDrawForPhases(tf)) return { pulou: 'fase-classificatoria-completa' };
 
@@ -5514,15 +5545,15 @@ exports.autoDraw = onSchedule('every 1 minutes', async (event) => {
            * mesma marca (`drawSlotAt`), gravada na MESMA transação que grava a rodada — é o
            * Firestore que serializa: quem perder a corrida re-executa, relê a marca e
            * desiste. Não é estado local, não é listener, não é timeout. */
-          if (!_agenda.reivindicarSlot(tf, _devido)) return { pulou: 'slot-ja-sorteado' };
+          if (!_agenda.reivindicarSlot(tf, _devidoFresco)) return { pulou: 'slot-ja-sorteado' };
 
           _enrichParticipantsFromProfiles(tf); // gênero/skill/e-mail por uid
-          const _res = generateLigaRound(tf, new Date(_devido));
+          const _res = generateLigaRound(tf, new Date(_devidoFresco));
           if (!_res || !_res.ok) return { pulou: (_res && _res.reason) || 'no-round-generated' };
 
           // o motor também mexe em lastAutoDrawAt; a marca do slot é a nossa e fica.
-          tf.drawSlotAt = _devido;
-          tf.lastAutoDrawAt = new Date(_devido).toISOString();
+          tf.drawSlotAt = _devidoFresco;
+          tf.lastAutoDrawAt = new Date(_devidoFresco).toISOString();
           tf.updatedAt = new Date().toISOString();
 
           if (tf.stagedDraw) {
@@ -5562,7 +5593,12 @@ exports.autoDraw = onSchedule('every 1 minutes', async (event) => {
            * MANUAL (`slot-ja-sorteado`), que é literalmente a regra: o automático reconhece
            * a geração e apenas agenda o próximo. Sem isto o documento voltaria à consulta a
            * cada minuto com o mesmo horário vencido, que foi o defeito da L6.P1. */
-          const _q2 = (typeof _futuro === 'number') ? _futuro : null;
+          // Se a transação viu uma agenda mais nova, só ela pode decidir o
+          // próximo slot. Reaplicar `_futuro` calculado antes da transação
+          // recolocaria no banco a data que a organização acabou de trocar.
+          const _q2 = (_m === 'agenda-alterada' || _m === 'fase-sem-agenda' || _m === 'temporada-encerrada')
+            ? (typeof (_out && _out.nextDrawAt) === 'number' ? _out.nextDrawAt : null)
+            : ((typeof _futuro === 'number') ? _futuro : null);
           const _t2 = (typeof t.nextDrawAt === 'number') ? t.nextDrawAt : null;
           if (_q2 !== _t2) {
             try { await doc.ref.update({ nextDrawAt: _q2 != null ? _q2 : FieldValue.delete() }); }
@@ -6097,8 +6133,9 @@ exports.autoDrawReconcile = onSchedule('every 30 minutes', async (event) => {
         else {
           const inc = !!(drawWindow._isIncrementalLigaPhase && drawWindow._isIncrementalLigaPhase(t));
           const cur = t.currentPhaseIndex || 0;
-          const fonte = inc ? ((t.phases && t.phases[cur]) || {}) : t;
-          const q = _agenda.agendamentoCanonico(_agenda.cfgDeAgenda(fonte), t, now, fz.tz);
+          const agendaAtual = _agendaDaFaseAtual(t);
+          const fonte = inc ? ((t.phases && t.phases[cur]) || {}) : (agendaAtual && agendaAtual.schedule);
+          const q = fonte ? _agenda.agendamentoCanonico(_agenda.cfgDeAgenda(fonte), t, now, fz.tz) : null;
           if (typeof q === 'number') want = q;
         }
       }
