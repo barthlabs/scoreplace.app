@@ -488,6 +488,13 @@ Sem `--force` o não-interativo aborta — o abort É o aviso, não um obstácul
   scripts/deploy-functions.sh stripe --all                # Pro/pagamentos inteiro
   scripts/deploy-functions.sh all --all                   # os três inteiros; aceita --dry-run
   ```
+
+**Credencial persistente para scripts administrativos.** Leituras e migrações usam a conta
+de serviço em `~/.config/scoreplace/deploy-sa.json` (ou o caminho explícito em
+`GOOGLE_APPLICATION_CREDENTIALS`), nunca sessão pessoal de `gcloud`. Antes de rodar um
+script administrativo, execute `source scripts/firebase-credencial-persistente.sh &&
+sp_preparar_credencial_firebase "$PWD" scoreplace-app`; se a chave faltar, o script deve
+falhar fechado — não trocar para OAuth pessoal nem improvisar um token.
 - Antes de mexer em função que roda em produção (ex.: `autoDraw` de hora em hora num
   torneio ao vivo), validar com o emulador (`firebase emulators:start --only functions`).
 - Depois do deploy do autodraw, commitar o diff de `functions-autodraw/vendor/`

@@ -54,6 +54,10 @@ if rg -q '^functions-autodraw/vendor/' "$ALL" 2>/dev/null; then
     node tests/advance-decisions-contract.test.js
     node tests/category-merge-entry-identity.test.js
     node tests/coroa-organizador-uid-only.test.js
+    echo 'Contratos de publicação e credencial persistente:'
+    node -e 'const p=require("./package.json"); if(!p.dependencies || !p.dependencies["google-auth-library"]) process.exit(1); console.log("✓ google-auth-library=" + p.dependencies["google-auth-library"])'
+    node scripts/check-web-entry-contract.js
+    rg -n 'Credencial persistente para scripts administrativos|deploy-sa\\.json' CLAUDE.md
     echo 'Estado operacional da migração de inscrições neste corte:'
     echo '✓ a ferramenta de tela retorna antes de gerar prévia quando as mutações canônicas não estão prontas'
     echo '✓ nenhum botão expõe a ferramenta à organização enquanto esse estado vigora'
