@@ -3686,12 +3686,31 @@ function renderTournaments(container, tournamentId = null) {
               // Desativado" alinhados nas pontas (left/right). Se não há
               // updatedAt, left fica vazio e o toggle ocupa a direita; se
               // não há toggle (não-Liga ou user não inscrito), só "Atualizado".
-              var _hasUpdated = !!(tournamentId && t.updatedAt);
+              // Um `updatedAt` vindo de documento legado, cache parcial ou um Timestamp
+              // ainda não serializado não é motivo para exibir "Invalid Date". A linha é
+              // puramente informativa: sem instante válido, ela simplesmente não existe.
+              // `_spTsData` é o parser canônico do app; o tratamento de Timestamp mantém a
+              // compatibilidade com snapshots que chegam antes da normalização.
+              var _updatedAtMs = 0;
+              if (tournamentId && t.updatedAt != null) {
+                try {
+                  if (typeof t.updatedAt === 'object' && typeof t.updatedAt.toMillis === 'function') {
+                    _updatedAtMs = Number(t.updatedAt.toMillis()) || 0;
+                  } else if (typeof t.updatedAt === 'object' && t.updatedAt.seconds != null) {
+                    _updatedAtMs = Number(t.updatedAt.seconds) * 1000;
+                  } else if (typeof window._spTsData === 'function') {
+                    _updatedAtMs = window._spTsData(t.updatedAt, { fallback: 0 });
+                  } else {
+                    _updatedAtMs = Date.parse(String(t.updatedAt)) || 0;
+                  }
+                } catch (_updatedAtErr) { _updatedAtMs = 0; }
+              }
+              var _hasUpdated = Number.isFinite(_updatedAtMs) && _updatedAtMs > 0;
               if (!_hasUpdated && !ligaActiveToggleHtml) return '';
               var _updatedHtml = _hasUpdated
                 ? `<div style="display:inline-flex;align-items:center;gap:8px;font-size:0.75rem;font-weight:400;${_pReadBg ? 'background:' + window._spCor(_pReadBg, 'background')+';color:'+_pReadFg+' !important;border-radius:10px;padding:6px 10px;' : 'opacity:0.5;'}">
                      <span>🔄</span>
-                     <span>Atualizado em ${(() => { try { var d = new Date(t.updatedAt); return d.toLocaleDateString('pt-BR') + ' às ' + d.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'}); } catch(e) { return t.updatedAt; } })()}</span>
+                     <span>Atualizado em ${(() => { var d = new Date(_updatedAtMs); return d.toLocaleDateString('pt-BR') + ' às ' + d.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'}); })()}</span>
                    </div>`
                 : '<div></div>';
               // v2.6.21: o toggle agora é pílula sólida verde/vermelha (cor própria)
