@@ -20,6 +20,7 @@ ok(/_maybeFinishElimination/.test(server), 'fechar inscrição tardia encerra a 
 ok(/notificationOutbox'\)\.doc\(type \+ '-'/.test(server), 'cada aviso de inscrição tem id de outbox próprio');
 ok(/window\._setTournamentEnrollmentStatus/.test(toggle), 'a tela envia apenas a intenção de inscrição');
 ok(!/AppStore\.(?:mutate|commitTournamentTx)\s*\(/.test(toggle), 'a tela não grava inscrição diretamente');
+ok(/err\.message/.test(toggle) && !/Nada foi alterado\. Atualize e tente novamente\./.test(toggle), 'falha da inscrição mostra a causa devolvida pelo servidor, sem instrução enganosa de atualizar');
 ok(/Inscrições abertas — fechar/.test(detail) && /Inscrições fechadas — abrir/.test(detail), 'organizador vê o estado atual e a ação inversa no mesmo botão');
 ok(/window\._runEnrollmentSlotsDraw/.test(slots), 'a tela solicita o sorteio ao servidor');
 ok(!/Math\.random|AppStore\.(?:mutate|commitTournamentTx)\s*\(/.test(slots), 'a tela não sorteia nem grava vagas');

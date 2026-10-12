@@ -3454,7 +3454,13 @@ window.toggleRegistrationStatus = function (tId) {
         }).catch(function(err) {
             if (window._warn) window._warn('[setTournamentEnrollmentStatus] falhou', err);
             if (typeof window._regBtnDone === 'function') window._regBtnDone();
-            if (typeof showNotification === 'function') showNotification('Não foi possível alterar as inscrições', 'Nada foi alterado. Atualize e tente novamente.', 'error');
+            // A tela não pode transformar uma recusa concreta do servidor numa instrução
+            // enganosa para "atualizar". A Function é a autoridade e já devolve a causa
+            // segura (permissão, estado da chave ou autenticação) para a organização agir.
+            var reason = err && typeof err.message === 'string' && err.message.trim()
+                ? err.message.trim()
+                : 'Não foi possível concluir a alteração. Tente novamente.';
+            if (typeof showNotification === 'function') showNotification('Não foi possível alterar as inscrições', reason, 'error');
         });
     };
     var hasDraw = (Array.isArray(t.matches) && t.matches.length > 0) || (Array.isArray(t.rounds) && t.rounds.length > 0) || (Array.isArray(t.groups) && t.groups.length > 0);
