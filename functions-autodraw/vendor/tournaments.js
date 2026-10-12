@@ -3380,7 +3380,7 @@ function renderTournaments(container, tournamentId = null) {
 
                    <!-- Standard back header row -->
                    <div style="display:flex;align-items:center;gap:8px;padding:0.5rem 0.75rem;border-bottom:1px solid var(--border-color);">
-                      <button onclick="event.stopPropagation();closeInviteModal('${t.id}')" style="display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:20px;border:1px solid var(--border-color);background:transparent;color:var(--text-color);cursor:pointer;font-size:0.78rem;font-weight:600;flex-shrink:0;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg> Voltar</button>
+                      <button onclick="event.stopPropagation();closeInviteModal('${t.id}')" aria-label="Voltar ao torneio" style="display:inline-flex;align-items:center;gap:6px;padding:7px 13px;border-radius:20px;border:1px solid rgba(96,165,250,0.78);background:rgba(59,130,246,0.2);color:var(--text-bright);cursor:pointer;font-size:0.8rem;font-weight:800;box-shadow:0 1px 8px rgba(59,130,246,0.22);flex-shrink:0;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg> Voltar</button>
                       <div style="flex:1;text-align:center;font-size:0.85rem;font-weight:700;color:var(--text-bright);">Convidar para o Torneio</div>
                       <button class="back-hdr-ham" type="button" aria-label="Abrir menu" onclick="event.stopPropagation();typeof window._toggleHamburger==='function'&&window._toggleHamburger(this);" style="width:32px;height:32px;border:none;background:transparent;color:var(--text-color);cursor:pointer;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
                    </div>
@@ -3399,6 +3399,9 @@ function renderTournaments(container, tournamentId = null) {
                             <span style="font-size:1.1rem;">📋</span>Copiar
                          </button>
                       </div>
+                      <button class="btn btn-outline btn-sm hover-lift" style="width:100%;display:flex;align-items:center;justify-content:center;gap:7px;padding:8px 12px;font-size:0.76rem;font-weight:800;border-color:rgba(96,165,250,0.7);color:var(--sp-c-93c5fd,#93c5fd);" onclick="event.stopPropagation(); window._shareTournament('${t.id}')">
+                         📤 Compartilhar convite
+                      </button>
                       <div id="invite-friends-status-${t.id}" style="font-size: 0.68rem; color: var(--text-muted); text-align: center; min-height:0;"></div>
 
                       <!-- QR Code centered -->
@@ -3663,7 +3666,6 @@ function renderTournaments(container, tournamentId = null) {
             ${(tournamentId && isFinished && !(window._isAutoClosed && window._isAutoClosed(t))) ? podiumHtml : ''}
             ${tournamentId ? `<div style="margin-bottom: 1rem; display: flex; gap: 8px; flex-wrap: wrap;">
               ${!isFinished ? `<button class="btn btn-warning btn-sm hover-lift" onclick="event.stopPropagation(); openInviteModal('${t.id}')">📤 Convidar</button>` : ''}
-              <button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window._shareTournament('${t.id}');">📋 Compartilhar</button>
               ${/* Grupo do torneio no WhatsApp — BOTÃO ÚNICO (1.8.31). Ele mora à esquerda de
                     "Desinscrever-se" quando esse bloco existe (inscrito + inscrições abertas);
                     AQUI é o mesmo botão, pra TODOS os outros estados. A condição é o

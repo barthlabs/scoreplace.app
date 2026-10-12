@@ -7,6 +7,7 @@
 // 2.4.0 — Datas e horários do torneio compartilham a mesma faixa do logo do local;
 // a regressiva é a única indicação de início, sem a pílula duplicada "Começa em".
 // Os scripts alterados desta entrega usam o carimbo 2.4.0 para impedir cache antigo.
+// O convite concentra Compartilhar e deixa Voltar visível em qualquer fundo.
 // 2.3.356 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.3.355 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.3.354 — Atualização consolidada de produção com as correções validadas desde a última publicação.
@@ -651,6 +652,7 @@ window._RELEASE_NOTES_HTML = (function () {
         '<li><b>📋 Inscrições reabertas com confirmação:</b> abrir ou fechar inscrições é confirmado pelo servidor antes de a tela mudar. Se houver uma restrição real, o app mostra o motivo em vez de pedir para atualizar sem necessidade; os arquivos dessa correção são renovados junto da versão para que o navegador não conserve a tela anterior.</li>' +
         '<li><b>🗓️ Carimbo de atualização legível:</b> um registro antigo ou incompleto sem data válida não mostra mais <b>Invalid Date</b>; a informação só aparece quando há data e hora confirmáveis.</li>' +
         '<li><b>📍 Período e local sem informação repetida:</b> no detalhe, o logo do local acompanha as datas e horários do torneio. A regressiva continua sendo a única indicação de quando o evento começa — a pílula duplicada “Começa em…” saiu da vitrine.</li>' +
+        '<li><b>📤 Convite com ações no mesmo lugar:</b> Compartilhar agora fica dentro do painel de convite, junto de WhatsApp e Copiar. O botão <b>Voltar</b> desse painel ganhou contraste próprio e não desaparece sobre o fundo do torneio.</li>' +
       '</ul>' +
     '</div>' +
     // v2.3 — a faixa que nasce da AUDITORIA: o que mudou aqui quase não se vê na tela, e é

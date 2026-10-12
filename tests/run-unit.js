@@ -1690,6 +1690,7 @@ const SUITES = [
   'tests/inscricoes-e-sorteio-vagas-cf-only.test.js', // L7: encerramento manual só passa pela Function
   'tests/atualizado-em-nunca-data-invalida.test.js', // ficha omite carimbo legado sem instante válido
   'tests/tournament-card-date-and-countdown-contract.test.js', // datas+logo e uma única regressiva
+  'tests/tournament-invite-actions-contract.test.js', // voltar e compartilhar no convite
   // Joga o torneio INTEIRO lançando só pelo servidor: 8 jogos (escada + 3º lugar), campeão,
   // zero slot TBD. É o "jogar até o campeão" antes de mexer no caminho mais quente do app.
   'functions-autodraw/test-result-playthrough.js',
