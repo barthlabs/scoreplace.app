@@ -55,6 +55,7 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..');
 const SUITES = [
   'tests/native-update-policy.test.js',
+  'tests/native-release-candidate.test.js',
   'tests/bracket-policy.test.js',
   'tests/logo-local-no-cabecalho.test.js',
   /* ⛔ Bloco 7: as 61 linhas da planilha do dono, a política ausente e o redesenho nos três desenhos. */

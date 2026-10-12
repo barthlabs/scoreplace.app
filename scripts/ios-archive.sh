@@ -34,6 +34,7 @@ node "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/scripts/check-release-not
 # de string. Roda ANTES de arquivar: falhar aqui custa segundos; falhar depois custa uma
 # volta inteira na fila da loja.
 node "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/scripts/check-versao-nativa.js" ios
+node "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/scripts/check-native-release-candidate.js"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_DIR="$REPO_ROOT/ios/App"
