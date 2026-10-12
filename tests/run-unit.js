@@ -180,6 +180,7 @@ const SUITES = [
   'tests/legacy-phase-projection-core.test.js',
   'tests/notification-authority-catalog.test.js',
   'tests/notification-authority-core.test.js',
+  'tests/notification-client-callable-contract.test.js',
   'tests/legacy-phase-write-boundary.test.js',
   'tests/canonical-phase-read-boundary.test.js',
   'tests/migrar-fases-legadas-core.test.js',
