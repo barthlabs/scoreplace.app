@@ -21,7 +21,24 @@ namespace ScoreplaceTeamCompetition {
     internalMatches: InternalMatches;
     ranking: Ranking;
     aggregation: Aggregation;
-    schedule: { enabled: boolean; teamsPerGroup: number; gamesPerTeam: number; mode: ScheduleMode; modeConfirmed?: boolean };
+    /**
+     * A agenda é sempre da unidade que entra em quadra (dupla no Beach Tennis),
+     * nunca da tabela agregada do time. `gamesPerTeam` fica só como leitor de
+     * documentos publicados antes deste contrato.
+     */
+    schedule: {
+      enabled: boolean;
+      teamsPerGroup: number;
+      gamesPerPair: number;
+      /** @deprecated Migração semântica para gamesPerPair. */
+      gamesPerTeam: number;
+      /** Quantas duplas de cada time entram em cada categoria. */
+      pairsPerTeamByCategory: Record<string, number>;
+      /** Quantos jogos cada dupla disputa em cada categoria. */
+      gamesPerPairByCategory: Record<string, number>;
+      mode: ScheduleMode;
+      modeConfirmed?: boolean;
+    };
     scoring: { win: number; draw: number; loss: number };
   }
 
@@ -93,14 +110,38 @@ namespace ScoreplaceTeamCompetition {
     const maximumGroupSize = Math.max(2, teamCount || 2);
     const teamsPerGroup = Math.min(maximumGroupSize, Math.max(2,
       Math.floor(number(schedule.teamsPerGroup, maximumGroupSize))));
-    const gamesPerTeam = Math.min(teamsPerGroup - 1, Math.max(1,
-      Math.floor(number(schedule.gamesPerTeam, teamsPerGroup - 1))));
+    // `gamesPerTeam` era o nome histórico do controle, mas descrevia a dupla
+    // que entra em quadra. Preservamos seu valor como fallback para que todo
+    // torneio anterior continue idêntico; novas configurações gravam o nome
+    // explícito `gamesPerPair`.
+    const gamesPerPair = Math.min(teamsPerGroup - 1, Math.max(1,
+      Math.floor(number(schedule.gamesPerPair, number(schedule.gamesPerTeam, teamsPerGroup - 1)))));
+    const rawPairsByCategory = record(schedule.pairsPerTeamByCategory);
+    const pairsPerTeamByCategory: Record<string, number> = {};
+    Object.keys(rawPairsByCategory).slice(0, 128).forEach((category) => {
+      const key = text(category).slice(0, 160);
+      if (!key || Object.prototype.hasOwnProperty.call(pairsPerTeamByCategory, key)) return;
+      pairsPerTeamByCategory[key] = Math.max(1, Math.min(64, Math.floor(number(rawPairsByCategory[category], 1))));
+    });
+    const rawGamesByCategory = record(schedule.gamesPerPairByCategory);
+    const gamesPerPairByCategory: Record<string, number> = {};
+    Object.keys(rawGamesByCategory).slice(0, 128).forEach((category) => {
+      const key = text(category).slice(0, 160);
+      if (!key || Object.prototype.hasOwnProperty.call(gamesPerPairByCategory, key)) return;
+      gamesPerPairByCategory[key] = Math.min(teamsPerGroup - 1, Math.max(1,
+        Math.floor(number(rawGamesByCategory[category], gamesPerPair))));
+    });
+    // Com duas ou mais duplas do mesmo time na mesma categoria, um confronto
+    // interno deixa de ser uma escolha válida: ele reduz artificialmente a
+    // variedade de adversários e corrompe a classificação agregada.
+    const requiresInternalMatchAvoid = Object.keys(pairsPerTeamByCategory)
+      .some((category) => pairsPerTeamByCategory[category] > 1);
     return {
       enabled: raw.enabled === true,
       teamCount,
       teamNames,
       formation: raw.formation === 'manual' ? 'manual' : 'draw',
-      internalMatches: raw.internalMatches === 'allow' ? 'allow' : 'avoid',
+      internalMatches: requiresInternalMatchAvoid ? 'avoid' : (raw.internalMatches === 'allow' ? 'allow' : 'avoid'),
       // Pontos preserva os torneios existentes. Saldo de games é uma escolha explícita
       // do organizador para eventos em que o placar — e não a vitória isolada — define o time.
       ranking: raw.ranking === 'games_diff' ? 'games_diff' : 'points',
@@ -111,7 +152,18 @@ namespace ScoreplaceTeamCompetition {
       // nunca pode redesenhar os confrontos. Livre embaralha cada categoria.
       // Ausência de `schedule` é legado e preserva o todos-contra-todos completo.
       // A nova tela grava enabled=true explicitamente antes do primeiro sorteio.
-      schedule: { enabled: Object.keys(schedule).length > 0 && schedule.enabled !== false, teamsPerGroup, gamesPerTeam, mode: schedule.mode === 'structured' ? 'structured' : 'free', modeConfirmed: schedule.modeConfirmed === true },
+      schedule: {
+        enabled: Object.keys(schedule).length > 0 && schedule.enabled !== false,
+        teamsPerGroup,
+        gamesPerPair,
+        // Espelho transitório: os leitores antigos continuam recebendo o mesmo
+        // número durante a migração, mas nenhum código novo decide por ele.
+        gamesPerTeam: gamesPerPair,
+        pairsPerTeamByCategory,
+        gamesPerPairByCategory,
+        mode: schedule.mode === 'structured' ? 'structured' : 'free',
+        modeConfirmed: schedule.modeConfirmed === true,
+      },
       // A escala padrão é a mesma da classificatória atual: 3/1/0. O organizador
       // pode substituí-la, inclusive com valores zero ou negativos, de forma explícita.
       scoring: {
@@ -125,6 +177,13 @@ namespace ScoreplaceTeamCompetition {
   /** Identidade estável do time que uma dupla representa; rótulo nunca participa. */
   export function teamIdOf(entry: unknown): string {
     return text(record(entry).competitionTeamId);
+  }
+
+  /** Jogos da dupla na categoria; o valor global só é compatibilidade de documentos antigos. */
+  export function gamesPerPairForCategory(config: unknown, category: unknown): number {
+    const cfg = normalize(config);
+    const key = text(category);
+    return cfg.schedule.gamesPerPairByCategory[key] || cfg.schedule.gamesPerPair;
   }
 
   /** O toggle só veda confronto ENTRE DUPLAS DO MESMO TIME; não muda as categorias. */

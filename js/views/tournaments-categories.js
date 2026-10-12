@@ -946,24 +946,40 @@ window._buildTimeEstimation = function(t, opts) {
     var sch = tc && tc.schedule;
     if (!tc || !tc.enabled || !sch) return null;
     var groupSize = Math.max(2, Math.floor(Number(sch.teamsPerGroup) || 0));
-    var games = Math.max(1, Math.floor(Number(sch.gamesPerTeam) || 0));
+    // A agenda pertence à DUPLA que entra em quadra. `gamesPerTeam` é lido
+    // somente para torneios anteriores à configuração explícita.
+    var games = Math.max(1, Math.floor(Number(sch.gamesPerPair || sch.gamesPerTeam) || 0));
     if (!groupSize || !games) return null;
     games = Math.min(games, groupSize - 1);
     var cats = (Array.isArray(t.combinedCategories) ? t.combinedCategories : (Array.isArray(t.categories) ? t.categories : [])).filter(Boolean);
     var catCount = Math.max(1, cats.length);
     var people = Math.max(realCount, Math.floor(Number(t.maxParticipants) || 0));
-    var teams = Math.floor(people / _ts);
+    var declaredTeamCount = Math.max(0, Math.floor(Number(tc.teamCount) || 0));
+    var teams = declaredTeamCount || Math.floor(people / _ts);
     if (teams < 2) return null;
-    var perCat = Math.max(2, Math.floor(teams / catCount));
-    var full = Math.floor(perCat / groupSize), rest = perCat % groupSize;
-    function groupMatches(n) {
-      if (n < 2) return 0;
-      if (n % 2 && games % 2) return n * (n - 1) / 2;
-      return n % 2 ? Math.floor(n / 2) * (games + 1) : n * games / 2;
+    var pairsByCategory = sch.pairsPerTeamByCategory && typeof sch.pairsPerTeamByCategory === 'object' ? sch.pairsPerTeamByCategory : {};
+    var gamesByCategory = sch.gamesPerPairByCategory && typeof sch.gamesPerPairByCategory === 'object' ? sch.gamesPerPairByCategory : {};
+    function gamesForCategory(category) {
+      return Math.min(groupSize - 1, Math.max(1, Math.floor(Number(gamesByCategory[category]) || games)));
     }
-    var perCatMatches = full * groupMatches(groupSize) + groupMatches(rest);
-    if (!perCatMatches) return null;
-    var rounds = (groupSize % 2 && games % 2) ? groupSize - 1 : (groupSize % 2 ? games + 1 : games);
+    function groupMatches(n, gamesForGroup) {
+      if (n < 2) return 0;
+      if (n % 2 && gamesForGroup % 2) return n * (n - 1) / 2;
+      return n % 2 ? Math.floor(n / 2) * (gamesForGroup + 1) : n * gamesForGroup / 2;
+    }
+    function matchesForCategory(category) {
+      var pairsPerTeam = Math.max(1, Math.floor(Number(pairsByCategory[category]) || 1));
+      var categoryGames = gamesForCategory(category);
+      // Documento legado não declarou times nem cotas: conserva a divisão igual
+      // histórica pela quantidade de categorias. Configuração nova, ao contrário,
+      // declara os times e calcula cada categoria pela sua própria cota.
+      var units = declaredTeamCount ? teams * pairsPerTeam : Math.floor(teams / catCount);
+      var full = Math.floor(units / groupSize), rest = units % groupSize;
+      return full * groupMatches(groupSize, categoryGames) + groupMatches(rest, categoryGames);
+    }
+    var categoryMatches = {};
+    cats.forEach(function (cat) { categoryMatches[cat] = matchesForCategory(cat); });
+    if (!Object.keys(categoryMatches).some(function (cat) { return categoryMatches[cat] > 0; })) return null;
     var buckets = {};
     cats.forEach(function(cat) {
       var s = String(cat).toLowerCase();
@@ -971,17 +987,44 @@ window._buildTimeEstimation = function(t, opts) {
       buckets[k] = (buckets[k] || 0) + 1;
     });
     if (!cats.length) buckets.geral = 1;
-    // Cada bloco de categorias é uma parte da agenda do torneio; a duração
-    // exibida ao organizador é o TOTAL do evento, não o maior bloco isolado.
-    var minutes = Object.keys(buckets).reduce(function(total, k) {
-      var perRound = buckets[k] * (full * Math.floor(groupSize / 2) + Math.floor(rest / 2));
-      return total + rounds * Math.ceil(perRound / courts) * timePerSlot;
-    }, 0);
+    var minutes;
+    if (!declaredTeamCount) {
+      // Leitor de compatibilidade: o documento antigo não tinha times nem
+      // cotas, portanto mantém exatamente a previsão por rodadas que já estava
+      // publicada. A regra nova só entra quando o organizador a declara.
+      var legacyPerCategory = Math.floor(teams / catCount);
+      var legacyFull = Math.floor(legacyPerCategory / groupSize), legacyRest = legacyPerCategory % groupSize;
+      var legacyRounds = (groupSize % 2 && games % 2) ? groupSize - 1 : (groupSize % 2 ? games + 1 : games);
+      minutes = Object.keys(buckets).reduce(function(total, k) {
+        var perRound = buckets[k] * (legacyFull * Math.floor(groupSize / 2) + Math.floor(legacyRest / 2));
+        return total + legacyRounds * Math.ceil(perRound / courts) * timePerSlot;
+      }, 0);
+    } else {
+      // Cada bloco (Fem/Masc, quando houver) é uma parte da agenda. O organizador
+      // pode preencher quadras misturando categorias no mesmo horário; portanto a
+      // conta é pelo total de jogos do bloco / quadras, sem inventar respiros entre
+      // rodadas. A grade Neon 4 duplas por time, 3 jogos por dupla, 6 quadras e
+      // 35min resulta em 48 jogos → 8 janelas → 22h40.
+      minutes = Object.keys(buckets).reduce(function(total, k) {
+        var bucketMatches = cats.filter(function (cat) {
+          var s = String(cat).toLowerCase();
+          var key = /^(fem|femin)/.test(s) ? 'fem' : (/^(masc|mascul)/.test(s) ? 'masc' : 'geral');
+          return key === k;
+        }).reduce(function(sum, cat) { return sum + (categoryMatches[cat] || 0); }, 0);
+        return total + Math.ceil(bucketMatches / courts) * timePerSlot;
+      }, 0);
+    }
+    var totalMatches = Object.keys(categoryMatches).reduce(function(sum, cat) { return sum + categoryMatches[cat]; }, 0);
+    var categoryMatchValues = Object.keys(categoryMatches).map(function (category) { return categoryMatches[category]; });
+    var sharedMatchesPerCategory = categoryMatchValues.length && categoryMatchValues.every(function (value) {
+      return value === categoryMatchValues[0];
+    }) ? categoryMatchValues[0] : null;
     return { realCount: people, unitCount: teams, format: format,
-      matches: perCatMatches * catCount, minutes: minutes,
-      categories: catCount, teamsPerCategory: perCat,
-      matchesPerCategory: perCatMatches, bucketCount: Object.keys(buckets).length,
-      gamesPerTeam: games };
+      matches: totalMatches, minutes: minutes,
+      categories: catCount, teamsPerCategory: teams,
+      matchesPerCategory: sharedMatchesPerCategory,
+      categoryMatches: categoryMatches, bucketCount: Object.keys(buckets).length,
+      gamesPerPair: games, gamesPerTeam: games, gamesPerPairByCategory: gamesByCategory };
   }
   var _teamPlan = _teamSchedulePlan();
 

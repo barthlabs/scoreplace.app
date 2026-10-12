@@ -264,6 +264,86 @@ const CASES = [
         return list.length === 4 && new Set(list).size === 4;
       });
     }));
+
+  // Grade Neon vigente: em cada noite/gênero, Light recebe duas duplas por
+  // time, Power e Extreme uma. Três partidas para cada dupla dão 48 jogos:
+  // 24 Light + 12 Power + 12 Extreme. É um contrato configurável por categoria,
+  // não uma exceção codificada para este torneio.
+  const currentNeonCategories = ['Fem Light', 'Fem Power', 'Fem Extreme'];
+  const currentNeonPairs = [];
+  currentNeonCategories.forEach(function (category, categoryIndex) {
+    const quantity = category === 'Fem Light' ? 16 : 8;
+    for (let i = 0; i < quantity; i++) currentNeonPairs.push(dupla(500 + categoryIndex * 100 + i, category));
+  });
+  const currentNeonConfig = {
+    enabled: true, teamCount: 8,
+    teamNames: ['Blast', 'Blackout', 'Eclipse', 'Panic', 'Phantom', 'Venom', 'Volt', 'Vortex'],
+    formation: 'draw', internalMatches: 'avoid',
+    schedule: {
+      enabled: true, teamsPerGroup: 8, gamesPerPair: 3, gamesPerTeam: 3,
+      pairsPerTeamByCategory: { 'Fem Light': 2, 'Fem Power': 1, 'Fem Extreme': 1 },
+      gamesPerPairByCategory: { 'Fem Light': 3, 'Fem Power': 3, 'Fem Extreme': 3 },
+      mode: 'structured'
+    }
+  };
+  const currentNeonTournament = {
+    id: 'neon-current-four-pairs', name: 'Neon vigente', status: 'open',
+    format: 'Fase de Grupos', teamSize: 2, enrollmentMode: 'teams',
+    combinedCategories: currentNeonCategories, participants: currentNeonPairs,
+    teamCompetition: currentNeonConfig,
+    phases: [{ teamCompetition: currentNeonConfig }]
+  };
+  const currentNeonDraw = core.drawInitial(currentNeonTournament, { idStamp: 'neon-current-four-pairs' });
+  const currentByCategory = (currentNeonTournament.matches || []).reduce(function (out, match) {
+    (out[String(match.category || '')] || (out[String(match.category || '')] = [])).push(match); return out;
+  }, {});
+  const currentAppearances = {};
+  (currentNeonTournament.matches || []).forEach(function (match) {
+    [match.p1, match.p2].forEach(function (pair) { currentAppearances[pair] = (currentAppearances[pair] || 0) + 1; });
+  });
+  ok('Neon vigente: 32 duplas produzem 48 jogos por categoria (24/12/12)', currentNeonDraw.ok &&
+    currentNeonTournament.participants.length === 32 && currentNeonTournament.matches.length === 48 &&
+    (currentByCategory['Fem Light'] || []).length === 24 &&
+    (currentByCategory['Fem Power'] || []).length === 12 &&
+    (currentByCategory['Fem Extreme'] || []).length === 12,
+    JSON.stringify(Object.keys(currentByCategory).map(function (category) { return [category, currentByCategory[category].length]; })));
+  ok('Neon vigente: cada time recebe 2 Light, 1 Power e 1 Extreme', currentNeonTournament.competitionTeams.every(function (team) {
+    return currentNeonCategories.every(function (category) {
+      const expected = category === 'Fem Light' ? 2 : 1;
+      return currentNeonTournament.participants.filter(function (entry) {
+        return entry.competitionTeamId === team.id && entry.category === category;
+      }).length === expected;
+    });
+  }));
+  ok('Neon vigente: toda dupla disputa exatamente 3 jogos', currentNeonTournament.participants.every(function (entry) {
+    return currentAppearances[entry.displayName] === 3;
+  }), JSON.stringify(currentAppearances));
+  ok('Neon vigente: duas duplas Light da mesma equipe nunca se enfrentam', (currentNeonTournament.matches || []).every(function (match) {
+    return match.p1CompetitionTeamId !== match.p2CompetitionTeamId;
+  }));
+
+  // A escolha não é uma constante do Neon: cada categoria pode definir quantos
+  // jogos a sua dupla fará. Este cenário reduz Power para 2 e Extreme para 1.
+  const flexibleNeonTournament = JSON.parse(JSON.stringify(currentNeonTournament));
+  flexibleNeonTournament.id = 'neon-category-games';
+  flexibleNeonTournament.status = 'open';
+  delete flexibleNeonTournament.matches;
+  delete flexibleNeonTournament.groups;
+  delete flexibleNeonTournament.competitionTeams;
+  flexibleNeonTournament.participants.forEach(function (entry) {
+    delete entry.competitionTeamId; delete entry.competitionTeamHue;
+    delete entry.competitionTeamSaturation; delete entry.competitionTeamColor;
+  });
+  flexibleNeonTournament.teamCompetition.schedule.gamesPerPairByCategory = { 'Fem Light': 3, 'Fem Power': 2, 'Fem Extreme': 1 };
+  flexibleNeonTournament.phases[0].teamCompetition = flexibleNeonTournament.teamCompetition;
+  const flexibleNeonDraw = core.drawInitial(flexibleNeonTournament, { idStamp: 'neon-category-games' });
+  const flexibleByCategory = (flexibleNeonTournament.matches || []).reduce(function (out, match) {
+    (out[String(match.category || '')] || (out[String(match.category || '')] = [])).push(match); return out;
+  }, {});
+  ok('Neon flexível: motor respeita jogos diferentes por categoria (24/8/4)', flexibleNeonDraw.ok &&
+    flexibleNeonTournament.matches.length === 36 && (flexibleByCategory['Fem Light'] || []).length === 24 &&
+    (flexibleByCategory['Fem Power'] || []).length === 8 && (flexibleByCategory['Fem Extreme'] || []).length === 4,
+    JSON.stringify(Object.keys(flexibleByCategory).map(function (category) { return [category, flexibleByCategory[category].length]; })));
 })();
 
 console.log('════════════════════════════════════════');

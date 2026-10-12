@@ -707,6 +707,49 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       header + inner + '</div>';
   }
 
+  // O número de duplas NÃO é uma propriedade implícita da categoria nem uma
+  // particularidade do Neon. A categoria dita quem pode se inscrever; a agenda
+  // declarada pelo organizador dita quantas duplas daquele time entram nela.
+  // O mapa é persistido dentro da agenda da competição, portanto chega idêntico
+  // à prévia, à Cloud Function e ao re-sorteio.
+  function _teamCompetitionCategories(tc) {
+    var categories = [];
+    var add = function (value) {
+      var name = String(value || '').trim();
+      if (name && categories.indexOf(name) < 0) categories.push(name);
+    };
+    var t = S && S.t;
+    ((t && (t.combinedCategories || t.categories)) || []).forEach(add);
+    if (!categories.length && typeof window._getCreateFormCategoryData === 'function') {
+      try { (((window._getCreateFormCategoryData() || {}).combinedCategories) || []).forEach(add); } catch (e) {}
+    }
+    var saved = tc && tc.schedule && tc.schedule.pairsPerTeamByCategory;
+    Object.keys(saved || {}).forEach(add);
+    return categories;
+  }
+  function _teamCategoryPairControls(tc) {
+    var categories = _teamCompetitionCategories(tc);
+    if (!categories.length) return '<div style="font-size:.72rem;color:var(--text-muted);margin-top:12px;line-height:1.45;">Defina as categorias do torneio para informar quantas duplas de cada time entram em cada uma.</div>';
+    var pairValues = (tc.schedule && tc.schedule.pairsPerTeamByCategory) || {};
+    var gameValues = (tc.schedule && tc.schedule.gamesPerPairByCategory) || {};
+    var fallbackGames = Math.max(1, parseInt(tc.schedule && (tc.schedule.gamesPerPair || tc.schedule.gamesPerTeam), 10) || 1);
+    var maxGames = Math.max(1, parseInt(tc.schedule && tc.schedule.teamsPerGroup, 10) || 2) - 1;
+    return '<div style="margin-top:14px;padding-top:12px;border-top:1px solid rgba(129,140,248,.22);">' +
+      '<div style="font-size:.72rem;color:var(--text-muted);margin-bottom:7px;">Agenda por categoria</div>' +
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:8px;">' +
+      categories.map(function (category) {
+        var count = Math.max(1, parseInt(pairValues[category], 10) || 1);
+        var games = Math.max(1, Math.min(maxGames, parseInt(gameValues[category], 10) || fallbackGames));
+        var categoryArg = JSON.stringify(category).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        return '<div style="padding:7px 8px;border:1px solid rgba(129,140,248,.25);border-radius:8px;font-size:.74rem;color:var(--text-muted);"><div style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:6px;" title="' + _safe(category) + '">' + _safe(category) + '</div><div style="display:flex;gap:8px;align-items:center;justify-content:space-between;"><label>Duplas <input type="number" min="1" max="64" value="' + count + '" aria-label="Duplas por time em ' + _safe(category) + '" onchange="window._f2TeamCategorySchedule(' + categoryArg + ',\'pairs\',this.value,this)" style="width:42px;text-align:center;padding:4px;border-radius:6px;border:1px solid rgba(255,255,255,.2);background:var(--bg-darker,rgba(0,0,0,.25));color:var(--text-main);"></label><label>Jogos <input type="number" min="1" max="' + maxGames + '" value="' + games + '" aria-label="Jogos por dupla em ' + _safe(category) + '" onchange="window._f2TeamCategorySchedule(' + categoryArg + ',\'games\',this.value,this)" style="width:42px;text-align:center;padding:4px;border-radius:6px;border:1px solid rgba(255,255,255,.2);background:var(--bg-darker,rgba(0,0,0,.25));color:var(--text-main);"></label></div></div>';
+      }).join('') + '</div>' +
+      '<div style="font-size:.68rem;color:var(--text-muted);margin-top:7px;line-height:1.4;">Cada categoria define vagas e jogos da sua dupla. O sorteio exige exatamente as vagas declaradas por time e não cria vagas artificiais.</div></div>';
+  }
+  function _teamScheduleRequiresInternalAvoid(tc) {
+    var values = (tc && tc.schedule && tc.schedule.pairsPerTeamByCategory) || {};
+    return Object.keys(values).some(function (category) { return (parseInt(values[category], 10) || 0) > 1; });
+  }
+
   // ── Controles do configurador (compartilhados form+page) ──
   function _bodyControls() {
     var cfg = S.cfg, sport = S.sport;
@@ -783,14 +826,17 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     // dessas duplas. O valor fica na mesma configuração da fase para a CF sortear e
     // gravar os vínculos antes de gerar jogos — nunca como cálculo local da tela.
     if (isDupla && !rotativo && cfg.classifAtiva) {
-      var tc = cfg.teamCompetition || { enabled: false, teamCount: 0, teamNames: [], formation: 'draw', internalMatches: 'avoid', ranking: 'points', aggregation: 'overall', schedule: { enabled: false, teamsPerGroup: 2, gamesPerTeam: 1, mode: 'structured' }, scoring: { win: 3, draw: 1, loss: 0 } };
+      var tc = cfg.teamCompetition || { enabled: false, teamCount: 0, teamNames: [], formation: 'draw', internalMatches: 'avoid', ranking: 'points', aggregation: 'overall', schedule: { enabled: false, teamsPerGroup: 2, gamesPerPair: 1, gamesPerTeam: 1, pairsPerTeamByCategory: {}, gamesPerPairByCategory: {}, mode: 'structured' }, scoring: { win: 3, draw: 1, loss: 0 } };
       var tcLocked = _classifLocked;
       var tcToggle = '<label style="display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:' + (tcLocked ? 'not-allowed' : 'pointer') + ';font-size:.9rem;color:var(--text-main);' + (tcLocked ? 'opacity:.55;' : '') + '">' +
         '<span>🏆 Competição por times</span><span class="toggle-switch"><input type="checkbox"' + (tc.enabled ? ' checked' : '') + (tcLocked ? ' disabled' : '') + ' onchange="window._f2TeamCompetition(this.checked)"><span class="toggle-slider"></span></span></label>';
       if (tc.enabled) {
+        var internalAvoidRequired = _teamScheduleRequiresInternalAvoid(tc);
         tcToggle += '<div style="font-size:.72rem;color:var(--text-muted);margin:6px 0 12px;line-height:1.45;">As duplas permanecem nas suas categorias e são distribuídas entre os times no sorteio. A tabela soma os resultados de todas as categorias.</div>' +
-          _toggleRight('Duplas do mesmo time podem se enfrentar', tc.internalMatches === 'allow', 'window._f2TeamInternalMatches(this.checked)') +
-          '<div style="font-size:.72rem;color:var(--text-muted);margin:6px 0 12px;">' + (tc.internalMatches === 'allow' ? 'Confrontos internos são permitidos.' : 'Confrontos internos são evitados ao montar os grupos.') + '</div>' +
+          (internalAvoidRequired
+            ? '<div style="font-size:.78rem;color:#fbbf24;margin:6px 0 12px;line-height:1.45;">🔒 Com duas ou mais duplas do mesmo time na categoria, confronto interno é bloqueado obrigatoriamente.</div>'
+            : _toggleRight('Duplas do mesmo time podem se enfrentar', tc.internalMatches === 'allow', 'window._f2TeamInternalMatches(this.checked)') +
+              '<div style="font-size:.72rem;color:var(--text-muted);margin:6px 0 12px;">' + (tc.internalMatches === 'allow' ? 'Confrontos internos são permitidos.' : 'Confrontos internos são evitados ao montar os grupos.') + '</div>') +
           '<div style="font-size:.72rem;color:var(--text-muted);margin-bottom:6px;">Critério da classificação</div>' +
           _pill(tc.ranking !== 'games_diff', 'window._f2TeamRanking(\'points\')', '🏅 Pontos') +
           _pill(tc.ranking === 'games_diff', 'window._f2TeamRanking(\'games_diff\')', '➗ Saldo de games') +
@@ -817,8 +863,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
               // os rótulos e o limite dependente sem interromper o gesto.
               '<div style="font-size:.72rem;color:var(--text-muted);margin-bottom:6px;">Times por grupo <b id="f2-team-schedule-teams-value" style="color:var(--text-main);">' + tc.schedule.teamsPerGroup + '</b></div>' +
               '<input id="f2-team-schedule-teams" type="range" min="2" max="' + tc.teamCount + '" value="' + tc.schedule.teamsPerGroup + '" oninput="window._f2TeamSchedule(\'teamsPerGroup\',this.value,this)" style="width:100%;">' +
-              '<div style="font-size:.72rem;color:var(--text-muted);margin:10px 0 6px;">Jogos por time no grupo <b id="f2-team-schedule-games-value" style="color:var(--text-main);">' + tc.schedule.gamesPerTeam + '</b></div>' +
-              '<input id="f2-team-schedule-games" type="range" min="1" max="' + Math.max(1, tc.schedule.teamsPerGroup - 1) + '" value="' + tc.schedule.gamesPerTeam + '" oninput="window._f2TeamSchedule(\'gamesPerTeam\',this.value,this)" style="width:100%;">' +
+              _teamCategoryPairControls(tc) +
               '<div style="margin-top:12px;font-size:.72rem;color:var(--text-muted);margin-bottom:6px;">Grade entre categorias</div>' +
               _pill(tc.schedule.mode !== 'structured', 'window._f2TeamSchedule(\'mode\',\'free\')', '🎲 Sorteio livre') +
               _pill(tc.schedule.mode === 'structured', 'window._f2TeamSchedule(\'mode\',\'structured\')', '📋 Estruturado') +
@@ -841,7 +886,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       // liga e esconderiam os dois controles que determinam os confrontos.
       // [[regression_team_schedule_replaces_round_mode_buttons]]
       rInner = _toggleRight('Ida e volta', cfg.rodadas.turnos === 'ida_volta', 'window._f2Turnos(this.checked ? \'ida_volta\' : \'ida\')') +
-        '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;">Cada time faz ' + tc.schedule.gamesPerTeam + ' jogo(s) por categoria' + (cfg.rodadas.turnos === 'ida_volta' ? ' em cada turno — ida e volta dobra o total.' : '.') + '</div>';
+        '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;">Vagas e jogos por dupla são definidos em cada categoria' + (cfg.rodadas.turnos === 'ida_volta' ? ' em cada turno — ida e volta dobra o total.' : '.') + '</div>';
     } else if (um) {
       // Pontos corridos: Nº de rodadas (PADRÃO, primeiro) × Todos contra todos.
       rInner = _pill(rModo === 'fixo', 'window._f2Modo(\'fixo\')', '🔢 Nº de rodadas') +
@@ -1380,7 +1425,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     // um número padrão escondido. Isso evita "Time 1…8" não escolhidos no sorteio.
     tc.teamNames = Array.isArray(tc.teamNames) ? tc.teamNames : [];
     tc.teamCount = tc.teamNames.length; tc.formation = 'draw';
-    tc.schedule = tc.schedule || { teamsPerGroup: 2, gamesPerTeam: 1, mode: 'structured' };
+    tc.schedule = tc.schedule || { teamsPerGroup: 2, gamesPerPair: 1, gamesPerTeam: 1, pairsPerTeamByCategory: {}, gamesPerPairByCategory: {}, mode: 'structured' };
     tc.schedule.enabled = true;
     if (tc.internalMatches !== 'allow' && tc.internalMatches !== 'avoid') tc.internalMatches = 'avoid';
     tc.scoring = tc.scoring || { win: 3, draw: 1, loss: 0 };
@@ -1390,7 +1435,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   };
   window._f2TeamInternalMatches = function (allowed) {
     if (!S || !S.cfg.teamCompetition) return;
-    S.cfg.teamCompetition.internalMatches = allowed ? 'allow' : 'avoid'; _norm(); _rerender();
+    S.cfg.teamCompetition.internalMatches = allowed && !_teamScheduleRequiresInternalAvoid(S.cfg.teamCompetition) ? 'allow' : 'avoid'; _norm(); _rerender();
   };
   window._f2TeamRanking = function (ranking) {
     if (!S || !S.cfg.teamCompetition) return;
@@ -1403,7 +1448,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   function _f2TeamScheduleRefresh(tc) {
     if (!tc || !tc.schedule) return;
     var teams = Math.max(2, parseInt(tc.schedule.teamsPerGroup, 10) || 2);
-    var games = Math.max(1, parseInt(tc.schedule.gamesPerTeam, 10) || 1);
+    var games = Math.max(1, parseInt(tc.schedule.gamesPerPair, 10) || parseInt(tc.schedule.gamesPerTeam, 10) || 1);
     var gamesMax = Math.max(1, teams - 1);
     if (games > gamesMax) games = gamesMax;
     var setText = function (id, value) { var target = document.getElementById(id); if (target) target.textContent = value; };
@@ -1412,7 +1457,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var teamsInput = document.getElementById('f2-team-schedule-teams');
     if (teamsInput) { teamsInput.value = teams; teamsInput.setAttribute('aria-valuetext', teams + ' times por grupo'); }
     var gamesInput = document.getElementById('f2-team-schedule-games');
-    if (gamesInput) { gamesInput.max = gamesMax; gamesInput.value = games; gamesInput.setAttribute('aria-valuetext', games + ' jogos por time no grupo'); }
+    if (gamesInput) { gamesInput.max = gamesMax; gamesInput.value = games; gamesInput.setAttribute('aria-valuetext', games + ' jogos por dupla no grupo'); }
   }
   window._f2TeamSchedule = function (field, value, el) {
     if (!S || !S.cfg.teamCompetition) return;
@@ -1420,7 +1465,11 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     tc.schedule = tc.schedule || {};
     if (field === 'mode') tc.schedule.mode = value === 'structured' ? 'structured' : 'free';
     else if (field === 'teamsPerGroup') tc.schedule.teamsPerGroup = value;
-    else if (field === 'gamesPerTeam') tc.schedule.gamesPerTeam = value;
+    else if (field === 'gamesPerPair' || field === 'gamesPerTeam') {
+      tc.schedule.gamesPerPair = value;
+      // Mantém apenas o espelho de compatibilidade; o motor lê gamesPerPair.
+      tc.schedule.gamesPerTeam = value;
+    }
     _norm();
     // O arraste atualiza os valores no mesmo frame. A reconstrução estrutural fica no
     // blur, pela proteção de _rerenderSemAtrapalhar, para o range não saltar de posição.
@@ -1430,6 +1479,28 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
      * arraste; recalcular aqui mantém confrontos e duração sincronizados em cada pixel,
      * sem esperar salvar, soltar o controle ou trocar de seção. */
     if (typeof window._recalcDuration === 'function') window._recalcDuration();
+  };
+  window._f2TeamCategorySchedule = function (category, field, value, el) {
+    if (!S || !S.cfg.teamCompetition) return;
+    var name = String(category || '').trim();
+    if (!name) return;
+    var tc = S.cfg.teamCompetition;
+    tc.schedule = tc.schedule || {};
+    if (field === 'games') {
+      tc.schedule.gamesPerPairByCategory = tc.schedule.gamesPerPairByCategory || {};
+      var maxGames = Math.max(1, (parseInt(tc.schedule.teamsPerGroup, 10) || 2) - 1);
+      tc.schedule.gamesPerPairByCategory[name] = Math.max(1, Math.min(maxGames, parseInt(value, 10) || 1));
+    } else {
+      tc.schedule.pairsPerTeamByCategory = tc.schedule.pairsPerTeamByCategory || {};
+      tc.schedule.pairsPerTeamByCategory[name] = Math.max(1, Math.min(64, parseInt(value, 10) || 1));
+    }
+    if (_teamScheduleRequiresInternalAvoid(tc)) tc.internalMatches = 'avoid';
+    _norm(); _rerenderSemAtrapalhar(el);
+    if (typeof window._recalcDuration === 'function') window._recalcDuration();
+  };
+  // Compatibilidade para páginas ainda montadas pela versão anterior da UI.
+  window._f2TeamCategoryPairs = function (category, value, el) {
+    window._f2TeamCategorySchedule(category, 'pairs', value, el);
   };
   window._f2TeamName = function (index, value, el) {
     if (!S || !S.cfg.teamCompetition || index < 0) return;

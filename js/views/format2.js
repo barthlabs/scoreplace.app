@@ -503,7 +503,7 @@
     // O carregamento normal traz o domínio antes deste arquivo. Ainda assim, o
     // normalizador é usado por harnesses e ferramentas isoladas: sem o domínio, a
     // opção fica explicitamente desligada em vez de acessar uma configuração nula.
-    if (!out.teamCompetition) out.teamCompetition = { enabled: false, teamCount: 0, teamNames: [], formation: 'draw', internalMatches: 'avoid', ranking: 'points', aggregation: 'overall', schedule: { enabled: false, teamsPerGroup: 2, gamesPerTeam: 1, mode: 'structured' }, scoring: { win: 3, draw: 1, loss: 0 } };
+    if (!out.teamCompetition) out.teamCompetition = { enabled: false, teamCount: 0, teamNames: [], formation: 'draw', internalMatches: 'avoid', ranking: 'points', aggregation: 'overall', schedule: { enabled: false, teamsPerGroup: 2, gamesPerPair: 1, gamesPerTeam: 1, pairsPerTeamByCategory: {}, gamesPerPairByCategory: {}, mode: 'structured' }, scoring: { win: 3, draw: 1, loss: 0 } };
 
     // O campo novo é explícito. `teamCompetition.schedule` continua sendo lido
     // exclusivamente pelo adaptador de compatibilidade do motor: promovê-lo aqui
@@ -920,8 +920,15 @@
       // competição por times mantêm seu tamanho de grupo calculado como antes. Em
       // qualquer configuração nova, `grupos` é a fonte de verdade da fase — a agenda
       // parcial apenas limita jogos por unidade, não cria outro formato de torneio.
+      // Há uma grade técnica por CATEGORIA. Com duas duplas Light por time,
+      // por exemplo, cada grupo recebe 2× mais unidades sem inventar times.
+      var _maxPairsPerTeam = (function () {
+        var map = cfg.teamCompetition && cfg.teamCompetition.schedule && cfg.teamCompetition.schedule.pairsPerTeamByCategory;
+        var values = map && typeof map === 'object' ? Object.keys(map).map(function (key) { return Math.max(1, parseInt(map[key], 10) || 1); }) : [];
+        return values.length ? Math.max.apply(Math, values) : 1;
+      })();
       var _teamGroupCount = (!cfg.classificationSchedule && cfg.teamCompetition && cfg.teamCompetition.enabled && cfg.teamCompetition.schedule.enabled && cfg.teamCompetition.teamCount >= 2)
-        ? Math.max(1, Math.ceil(cfg.teamCompetition.teamCount / cfg.teamCompetition.schedule.teamsPerGroup))
+        ? Math.max(1, Math.ceil((cfg.teamCompetition.teamCount * _maxPairsPerTeam) / cfg.teamCompetition.schedule.teamsPerGroup))
         : cfg.grupos;
       top.format = 'Fase de Grupos';
       top.drawMode = 'sorteio';

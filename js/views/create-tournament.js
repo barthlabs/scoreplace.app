@@ -4038,14 +4038,31 @@ function setupCreateTournamentModal() {
       if (games % 2 === 1) return (size * (size - 1)) / 2;
       return Math.floor(size / 2) * (games + 1);
     }
-    function scheduledTeamMatches(units) {
+    function scheduledTeamMatches(units, gamesOverride) {
       if (!teamSchedule || !teamSchedule.enabled || units < 2) return null;
       var groupSize = Math.min(units, Math.max(2, Math.floor(teamSchedule.teamsPerGroup || 2)));
-      var games = Math.max(1, Math.floor(teamSchedule.gamesPerTeam || 1));
+      var games = Math.max(1, Math.floor(gamesOverride || teamSchedule.gamesPerPair || teamSchedule.gamesPerTeam || 1));
       var fullGroups = Math.floor(units / groupSize), remainder = units % groupSize, matches = 0;
       for (var g = 0; g < fullGroups; g++) matches += scheduledMatchesInGroup(groupSize, games);
       if (remainder) matches += scheduledMatchesInGroup(remainder, games);
       return matches * (teamSchedule.turns === 2 ? 2 : 1);
+    }
+    function scheduledTeamMatchesByCategory() {
+      if (!teamSchedule || !teamSchedule.enabled) return null;
+      var categories = Array.isArray(teamSchedule.categories) ? teamSchedule.categories.filter(Boolean) : [];
+      var teamCount = Math.max(0, Math.floor(Number(teamSchedule.teamCount) || 0));
+      if (!categories.length || teamCount < 2) return null;
+      var pairsByCategory = teamSchedule.pairsPerTeamByCategory && typeof teamSchedule.pairsPerTeamByCategory === 'object'
+        ? teamSchedule.pairsPerTeamByCategory : {};
+      var gamesByCategory = teamSchedule.gamesPerPairByCategory && typeof teamSchedule.gamesPerPairByCategory === 'object'
+        ? teamSchedule.gamesPerPairByCategory : {};
+      var byCategory = {};
+      categories.forEach(function (category) {
+        var pairs = Math.max(1, Math.floor(Number(pairsByCategory[category]) || 1));
+        var games = Math.max(1, Math.floor(Number(gamesByCategory[category]) || teamSchedule.gamesPerPair || teamSchedule.gamesPerTeam || 1));
+        byCategory[category] = scheduledTeamMatches(teamCount * pairs, games) || 0;
+      });
+      return byCategory;
     }
 
     var fmtLabel = ({ elim_simples: 'Eliminatória', elim_dupla: 'Dupla Elim.', grupos_mata: 'Fase de Grupos', liga: 'Pontos Corridos' })[fmt] || fmt;
@@ -4057,13 +4074,18 @@ function setupCreateTournamentModal() {
       h += '<div style="font-size:0.72rem;color:var(--text-muted);">Defina a capacidade máxima para estimar participantes, confrontos e tempo de quadra.</div>';
       return h;
     }
+    var categoryMatches = scheduledTeamMatchesByCategory();
     var matchesPerCategory = scheduledTeamMatches(perCat(N));
-    var matches = matchesPerCategory === null ? totalMatches(N) : matchesPerCategory * K;
+    var matches = categoryMatches
+      ? Object.keys(categoryMatches).reduce(function (sum, category) { return sum + categoryMatches[category]; }, 0)
+      : (matchesPerCategory === null ? totalMatches(N) : matchesPerCategory * K);
     var operationalMinutes = slot <= 0 ? -1 : Math.ceil(matches / courts) * slot;
     var unitsLabel = o.unitLbl || 'inscritos';
     var peopleLabel = totalParticipants > 0 ? totalParticipants + ' participante' + (totalParticipants === 1 ? '' : 's') : '';
-    var perCategory = K > 1 ? (' · ' + perCat(N) + ' ' + unitsLabel + '/categoria' + (matchesPerCategory === null ? '' : ' · ' + matchesPerCategory + ' confrontos/categoria')) : '';
-    var scheduleLabel = teamSchedule && teamSchedule.enabled ? (' · ' + teamSchedule.gamesPerTeam + ' jogos por ' + (teamSchedule.unitLabel || 'dupla/time')) : '';
+    var perCategory = categoryMatches
+      ? (' · ' + Object.keys(categoryMatches).map(function (category) { return category + ': ' + categoryMatches[category] + ' jogos'; }).join(' · '))
+      : (K > 1 ? (' · ' + perCat(N) + ' ' + unitsLabel + '/categoria' + (matchesPerCategory === null ? '' : ' · ' + matchesPerCategory + ' confrontos/categoria')) : '');
+    var scheduleLabel = teamSchedule && teamSchedule.enabled ? ' · jogos por dupla definidos por categoria' : '';
     var capacityLabel = capacityIsMax ? 'Capacidade máxima' : (isReal ? 'Inscritos atuais' : 'Capacidade planejada');
     h += '<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:rgba(59,130,246,0.18);border:1px solid rgba(59,130,246,0.4);border-radius:8px;flex-wrap:wrap;">';
     h += '<span style="font-size:0.78rem;font-weight:700;color:#60a5fa;">' + capacityLabel + ': ' + (peopleLabel ? peopleLabel + ' · ' : '') + N + ' ' + unitsLabel + perCategory + scheduleLabel + '</span>';
@@ -4129,7 +4151,12 @@ function setupCreateTournamentModal() {
     var teamSchedule = tc && tc.enabled && tc.schedule ? {
       enabled: true,
       teamsPerGroup: tc.schedule.teamsPerGroup,
-      gamesPerTeam: tc.schedule.gamesPerTeam,
+      gamesPerPair: tc.schedule.gamesPerPair || tc.schedule.gamesPerTeam,
+      gamesPerTeam: tc.schedule.gamesPerPair || tc.schedule.gamesPerTeam,
+      pairsPerTeamByCategory: tc.schedule.pairsPerTeamByCategory || {},
+      gamesPerPairByCategory: tc.schedule.gamesPerPairByCategory || {},
+      categories: (window._getCreateFormCategoryData ? ((window._getCreateFormCategoryData() || {}).combinedCategories || []) : []),
+      teamCount: tc.teamCount,
       turns: f2cfg.rodadas && f2cfg.rodadas.turnos === 'ida_volta' ? 2 : 1,
       unitLabel: teamSize >= 2 ? 'dupla' : 'time'
     } : null;

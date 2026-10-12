@@ -374,15 +374,6 @@ function assignCompetitionTeamsAtInitialDraw(t, rawConfig) {
       seen.add(id); teams.push({ id: id, name: names[ordinal - 1], hue: TEAM_HUES[(ordinal - 1) % TEAM_HUES.length] });
     }
   }
-  if (cfg.formation === 'manual') {
-    t.competitionTeams = teams;
-    const known = new Set(teams.map(function (team) { return team.id; }));
-    const missing = entries.some(function (entry) { return !known.has(core.teamIdOf(entry)); });
-    // Em modo manual, sortear silenciosamente contrariaria a decisão explícita do
-    // organizador e deixaria a tabela de times sem dono verificável.
-    return missing ? { ok: false, reason: 'competition-teams-unassigned' } : { ok: true, config: cfg };
-  }
-
   // Sorteia e distribui por categoria em rodízio. Cada categoria começa em ordem
   // aleatória própria, mas a distribuição fica balanceada (diferença máxima de uma
   // dupla por time dentro da categoria) e não mistura categorias para montar dupla.
@@ -394,21 +385,37 @@ function assignCompetitionTeamsAtInitialDraw(t, rawConfig) {
     byCategory.get(category).push(entry);
   });
   // Para a competição por times com categorias explícitas, não existe sorteio parcial:
-  // cada categoria precisa ter exatamente uma dupla para cada time. Sem isto o produto
-  // estaria revelando um "Time" que não poderia jogar todas as suas categorias.
+  // cada categoria precisa ter exatamente a quantidade declarada de duplas POR TIME.
+  // Ex.: 8 times × (2 Light + 1 Power + 1 Extreme) = 32 duplas no bloco do dia.
+  // Sem isto o produto estaria revelando um "Time" que não consegue cumprir sua agenda.
   const configuredCategories = (Array.isArray(t.combinedCategories) ? t.combinedCategories : (Array.isArray(t.categories) ? t.categories : []))
     .map(function (category) { return String(category || '').trim(); }).filter(Boolean);
-  const categoriesToValidate = configuredCategories.length > 1 ? configuredCategories : Array.from(byCategory.keys()).filter(Boolean);
-  if (categoriesToValidate.length > 1) {
+  const configuredPairs = cfg.schedule && cfg.schedule.pairsPerTeamByCategory || {};
+  const hasExplicitCategoryQuotas = Object.keys(configuredPairs).length > 0;
+  const categoriesToValidate = configuredCategories.length ? configuredCategories : Array.from(byCategory.keys()).filter(Boolean);
+  const pairsRequired = function (category) {
+    return Math.max(1, Math.floor(Number(configuredPairs[category]) || 1));
+  };
+  if (categoriesToValidate.length > 1 || hasExplicitCategoryQuotas) {
     const bad = categoriesToValidate.filter(function (category) {
-      return !byCategory.has(category) || byCategory.get(category).length !== teams.length;
+      return !byCategory.has(category) || byCategory.get(category).length !== teams.length * pairsRequired(category);
     });
-    if (bad.length || entries.length !== categoriesToValidate.length * teams.length) {
+    const expectedPairs = categoriesToValidate.reduce(function (total, category) { return total + teams.length * pairsRequired(category); }, 0);
+    if (bad.length || entries.length !== expectedPairs) {
       return { ok: false, reason: 'competition-team-category-coverage', details: {
-        categories: categoriesToValidate.length, teams: teams.length, pairs: entries.length,
+        categories: categoriesToValidate.length, teams: teams.length, pairs: entries.length, expectedPairs: expectedPairs,
+        pairsPerTeamByCategory: categoriesToValidate.reduce(function (out, category) { out[category] = pairsRequired(category); return out; }, {}),
         invalidCategories: bad
       } };
     }
+  }
+  if (cfg.formation === 'manual') {
+    t.competitionTeams = teams;
+    const known = new Set(teams.map(function (team) { return team.id; }));
+    const missing = entries.some(function (entry) { return !known.has(core.teamIdOf(entry)); });
+    // Em modo manual, sortear silenciosamente contrariaria a decisão explícita do
+    // organizador e deixaria a tabela de times sem dono verificável.
+    return missing ? { ok: false, reason: 'competition-teams-unassigned' } : { ok: true, config: cfg };
   }
   // Só passa a expor a lista de times depois que a grade inteira foi validada.
   // Assim uma tentativa rejeitada não deixa estado parcial nem para chamadores

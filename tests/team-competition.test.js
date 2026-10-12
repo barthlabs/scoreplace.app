@@ -19,6 +19,9 @@ ok(C.allowsMatch(pairA1, pairA2, config) === false, 'toggle desligado: duplas do
 ok(C.allowsMatch(pairA1, pairB, config) === true, 'times diferentes continuam podendo se enfrentar');
 ok(C.allowsMatch(pairA1, pairA2, Object.assign({}, config, { internalMatches: 'allow' })) === true,
   'toggle ligado: duplas do mesmo time podem se enfrentar');
+ok(C.allowsMatch(pairA1, pairA2, Object.assign({}, config, {
+  internalMatches: 'allow', schedule: { enabled: true, pairsPerTeamByCategory: { 'Fem Light': 2 } }
+})) === false, 'duas duplas da mesma equipe na categoria bloqueiam confronto interno mesmo se configuração antiga disser allow');
 
 const empty = C.normalize({ enabled: true });
 ok(empty.teamCount === 0 && empty.teamNames.length === 0,
@@ -32,6 +35,13 @@ ok(legacyNames.teamNames.join(',') === 'Time 1,Time 2,Time 3',
 const neonSchedule = C.normalize({ enabled: true, teamNames: ['Venom', 'Blackout', 'Eclipse', 'Volt', 'Phantom', 'Panic', 'Vortex', 'Blast'], schedule: { enabled: true, teamsPerGroup: 8, gamesPerTeam: 4, mode: 'structured' } });
 ok(neonSchedule.schedule.enabled && neonSchedule.schedule.teamsPerGroup === 8 && neonSchedule.schedule.gamesPerTeam === 4 && neonSchedule.schedule.mode === 'structured',
   'grade por times preserva 8 times, 4 jogos por time e o modo estruturado');
+const neonFourPairs = C.normalize({ enabled: true, teamNames: ['Venom', 'Blackout', 'Eclipse', 'Volt', 'Phantom', 'Panic', 'Vortex', 'Blast'], schedule: { enabled: true, teamsPerGroup: 8, gamesPerPair: 3, pairsPerTeamByCategory: { 'Fem Light': 2, 'Fem Power': 1, 'Fem Extreme': 1 }, gamesPerPairByCategory: { 'Fem Light': 3, 'Fem Power': 2, 'Fem Extreme': 1 }, mode: 'structured' } });
+ok(neonFourPairs.schedule.gamesPerPair === 3 && neonFourPairs.schedule.gamesPerTeam === 3 &&
+  neonFourPairs.schedule.pairsPerTeamByCategory['Fem Light'] === 2 &&
+  neonFourPairs.schedule.pairsPerTeamByCategory['Fem Power'] === 1 &&
+  neonFourPairs.schedule.gamesPerPairByCategory['Fem Light'] === 3 &&
+  neonFourPairs.schedule.gamesPerPairByCategory['Fem Power'] === 2,
+  'agenda explícita preserva vagas e jogos independentes por categoria');
 
 const phasePlan = { enabled: true, teamNames: ['Venom', 'Blackout'], schedule: { enabled: true, teamsPerGroup: 2, gamesPerTeam: 1, mode: 'structured', modeConfirmed: true } };
 const incompleteTopLevel = { enabled: true, teamNames: ['Venom', 'Blackout'] };
@@ -42,8 +52,8 @@ ok(C.configurationForTournament({ teamCompetition: incompleteTopLevel }).enabled
   'sem plano completo, a competição ativa ainda é retornada para bloquear sorteio sem escolha explícita');
 
 const teamUi = fs.readFileSync('js/views/format2-ui.js', 'utf8');
-ok(teamUi.includes('f2-team-schedule-teams-value') && teamUi.includes('f2-team-schedule-games-value') && teamUi.includes('_f2TeamScheduleRefresh(tc)'),
-  'sliders de times atualizam seus números no próprio arraste, sem recriar o range em foco');
+ok(teamUi.includes('f2-team-schedule-teams-value') && teamUi.includes('_f2TeamScheduleRefresh(tc)') && teamUi.includes('Agenda por categoria') && teamUi.includes('_f2TeamCategorySchedule') && teamUi.includes('gamesPerPairByCategory'),
+  'a UI configura vagas e jogos de cada categoria sem depender de um valor global');
 const createUi = fs.readFileSync('js/views/create-tournament.js', 'utf8');
 ok(!createUi.includes("lines.push(_t('create.gsmPoints'") && !createUi.includes("lines.push(_t('create.gsmNumericPts'"),
   'formato numérico não inventa “pontos para vencer” nem duração a partir de campos técnicos');

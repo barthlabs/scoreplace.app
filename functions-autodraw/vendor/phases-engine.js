@@ -1195,7 +1195,15 @@
       try { _tcPlacementCore = require('../domain/team-competition.js'); } catch (e) { _tcPlacementCore = null; }
     }
     var _tcPlacementCfg = _tcPlacementCore && typeof _tcPlacementCore.normalize === 'function' ? _tcPlacementCore.normalize(_tcForPlacement) : null;
-    if (_tcPlacementCfg && _tcPlacementCfg.enabled && _tcPlacementCfg.schedule.mode === 'structured') {
+    // Com mais de uma dupla do mesmo time na categoria (ex.: Light 2×), a
+    // distribuição nos grupos técnicos precisa espalhar as cópias antes de
+    // gerar confrontos. Caso contrário o bloqueio de confronto interno retiraria
+    // jogos e quebraria o contrato "cada dupla joga N vezes". A serpentina
+    // abaixo reparte entradas consecutivas do mesmo competitionTeamId por grupo.
+    // No modo estruturado a ordem sorteada da edição continua prevalecendo; no
+    // livre isso só equilibra a composição e o sorteio dos confrontos segue livre.
+    if (_tcPlacementCfg && _tcPlacementCfg.enabled &&
+      (_tcPlacementCfg.schedule.mode === 'structured' || _tcPlacementCfg.internalMatches === 'avoid')) {
       var _placementOrder = Array.isArray(_tcForPlacement && _tcForPlacement.structuredTeamOrder)
         ? _tcForPlacement.structuredTeamOrder.map(function (id) { return String(id); }) : [];
       _placePool = _placePool.slice().sort(function (a, b) {
@@ -1327,7 +1335,9 @@
       var sched = genericSchedule
         ? _partialGroupSchedule(g.players, genericSchedule.gamesPerUnit, genericSchedule.mode)
         : (teamSchedule
-          ? _partialGroupSchedule(g.players, teamSchedule.gamesPerTeam, teamSchedule.mode, function (entry) {
+          ? _partialGroupSchedule(g.players, _teamCompetitionCore && _teamCompetitionCore.gamesPerPairForCategory
+              ? _teamCompetitionCore.gamesPerPairForCategory(_teamCompetition, phaseCfg && phaseCfg.category)
+              : ((teamSchedule.gamesPerPairByCategory && teamSchedule.gamesPerPairByCategory[phaseCfg && phaseCfg.category]) || teamSchedule.gamesPerPair || teamSchedule.gamesPerTeam), teamSchedule.mode, function (entry) {
               return _teamCompetitionCore && _teamCompetitionCore.teamIdOf ? _teamCompetitionCore.teamIdOf(entry) : '';
             })
           : roundRobinSchedule(g.players));
@@ -1713,6 +1723,9 @@
           if (tc && tc.enabled && tc.schedule && tc.schedule.enabled) {
             groupCfg.gruposCount = Math.max(1, Math.ceil(catPool.length / Math.max(2, Number(tc.schedule.teamsPerGroup) || catPool.length)));
           }
+          // A agenda pode variar por categoria; a identidade precisa chegar ao
+          // gerador antes que ele selecione a grade parcial de confrontos.
+          groupCfg.category = cat;
           var one = genGroupsFromPool(catPool, groupCfg, idPrefix + '-c' + ci);
           (one.matches || []).forEach(function (match) { match.category = cat; });
           (one.groups || []).forEach(function (group) {

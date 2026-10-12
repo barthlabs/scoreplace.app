@@ -23,6 +23,31 @@ ok(d && d.realCount === 96 && d.unitCount === 48, 'capacidade é 96 pessoas / 48
 ok(d && d.matchesPerCategory === 16 && d.matches === 96, '8 duplas × 4 jogos / 2 = 16 por categoria, 96 no total');
 ok(d && d.bucketCount === 2 && d.minutes === 560, 'Fem/Masc em blocos distintos: 9h20 em slots contínuos, sem intervalo artificial entre jogos');
 
+// Grade atual do Neon por bloco (feminino OU masculino): cada um dos oito times
+// leva duas duplas Light e uma Power/Extreme. São 32 duplas, três jogos por
+// dupla e 48 confrontos; seis quadras de 35min ficam cheias por oito janelas.
+const currentNeon = {
+  format: 'Fase de Grupos', teamSize: 2, maxParticipants: 64, courtCount: 6,
+  gameDuration: 25, callTime: 5, warmupTime: 5,
+  combinedCategories: ['Fem Light', 'Fem Power', 'Fem Extreme'],
+  phases: [{ teamCompetition: { enabled: true, teamCount: 8,
+    schedule: { enabled: true, teamsPerGroup: 8, gamesPerPair: 3,
+      pairsPerTeamByCategory: { 'Fem Light': 2, 'Fem Power': 1, 'Fem Extreme': 1 },
+      gamesPerPairByCategory: { 'Fem Light': 3, 'Fem Power': 3, 'Fem Extreme': 3 }, mode: 'structured' } } }]
+};
+const current = W._buildTimeEstimation(currentNeon, { dataOnly: true });
+ok(current && current.unitCount === 8 && current.matches === 48 && current.minutes === 280,
+  'Neon atual: 8 times × (2 Light + 1 Power + 1 Extreme) × 3 jogos ÷ 2 = 48 jogos, 22h40 em 6 quadras');
+ok(current && current.categoryMatches && current.categoryMatches['Fem Light'] === 24 && current.categoryMatches['Fem Power'] === 12 && current.categoryMatches['Fem Extreme'] === 12,
+  'Neon atual: previsão separa 24 jogos Light e 12 em cada uma das demais categorias');
+
+const flexibleNeon = JSON.parse(JSON.stringify(currentNeon));
+flexibleNeon.phases[0].teamCompetition.schedule.gamesPerPairByCategory = { 'Fem Light': 3, 'Fem Power': 2, 'Fem Extreme': 1 };
+const flexible = W._buildTimeEstimation(flexibleNeon, { dataOnly: true });
+ok(flexible && flexible.matches === 36 && flexible.minutes === 210 &&
+  flexible.categoryMatches['Fem Light'] === 24 && flexible.categoryMatches['Fem Power'] === 8 && flexible.categoryMatches['Fem Extreme'] === 4,
+  'vagas e jogos podem variar por categoria: Light 3, Power 2 e Extreme 1 gera 24/8/4 jogos');
+
 // O título histórico não manda no cálculo quando o documento já tem fases
 // canônicas. Isso impede que uma eliminatória publicada como "Liga" por legado
 // perca a previsão, e o inverso que uma temporada de pontos corridos a exiba.
