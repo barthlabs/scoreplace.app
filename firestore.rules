@@ -1380,8 +1380,11 @@ service cloud.firestore {
         && request.auth.uid == userId && !touchesPrivileged()
         && !request.resource.data.diff(resource.data).affectedKeys().hasAny(serverOwnedProfileFields());
 
-      // Delete: owner only.
-      allow delete: if request.auth != null && request.auth.uid == userId;
+      // A exclusão não é uma operação isolada de documento: `deleteAccount`
+      // preserva a lápide, limpa vínculos derivados e só então remove o Auth.
+      // Permitir ao navegador apagar `users/{uid}` deixava uma conta autenticável
+      // sem perfil e pulava todo esse ciclo de vida.
+      allow delete: if false;
 
       // Notifications — senders create (cross-user), owner manages.
       /* ⛔ QUEM ASSINA O AVISO TEM DE SER QUEM ESTÁ LOGADO.

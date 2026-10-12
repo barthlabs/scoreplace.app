@@ -69,6 +69,9 @@ const S = v => ({ stringValue: v });
   out.leProprioPerfil   = await req('GET', 'users/' + A, A);
   out.lePerfilVitima    = await req('GET', 'users/' + V, A);
   out.leLegadoDoProprio = await req('GET', 'users/' + A + '%40x.com', A);
+  // A saída da conta é transacional no servidor (deleteAccount): apagar só o
+  // perfil deixaria o uid autenticável e toda a topologia associada órfã.
+  out.apagaProprioPerfil = await req('DELETE', 'users/' + A, A);
 
   // ── O ATAQUE: mergedInto no PRÓPRIO doc → custom token da vítima ──
   out.ataqueMergedInto = await req('PATCH', 'users/' + A + '?updateMask.fieldPaths=mergedInto', A,
@@ -185,6 +188,8 @@ ok(novo.criaProprioPerfil === 403, '🔒 criação direta de perfil é negada (a
 ok(novo.leProprioPerfil === 200, 'legítimo: o dono lê a própria ficha (got ' + novo.leProprioPerfil + ')');
 ok(novo.lePerfilVitima === 403, '🔒 perfil privado de terceiro é NEGADO (got ' + novo.lePerfilVitima + ')');
 ok(novo.leLegadoDoProprio === 200, 'legítimo: o token lê seu documento legado por e-mail (got ' + novo.leLegadoDoProprio + ')');
+ok(novo.apagaProprioPerfil === 403,
+  '🔒 navegador não apaga o perfil isoladamente; deleteAccount é a única porta (got ' + novo.apagaProprioPerfil + ')');
 ok(novo.ataqueMergedInto === 403,
   '🔒 SEQUESTRO: escrever mergedInto no próprio perfil é NEGADO (got ' + novo.ataqueMergedInto + ')');
 ok(novo.ataqueMergedAt === 403, '🔒 mergedAt negado (got ' + novo.ataqueMergedAt + ')');
@@ -241,6 +246,8 @@ fs.writeFileSync(tmpOld, antigas);
 const velho = runAgainst(tmpOld, 'antigas');
 ok(velho.lePerfilVitima === 200,
   '⚠️  REGRESSÃO-GUARD: nas rules ANTIGAS a ficha da vítima abria (got ' + velho.lePerfilVitima + ')');
+ok(velho.apagaProprioPerfil === 200,
+  '⚠️  REGRESSÃO-GUARD: nas rules ANTIGAS o dono apagava só o perfil (got ' + velho.apagaProprioPerfil + ')');
 ok(velho.ataqueMergedInto === 200,
   '⚠️  REGRESSÃO-GUARD: nas rules ANTIGAS o ataque PASSAVA (got ' + velho.ataqueMergedInto + ') — o teste prova o fix');
 ok(velho.ataquePlan === 200, '⚠️  nas ANTIGAS o Pro de graça PASSAVA (got ' + velho.ataquePlan + ')');
