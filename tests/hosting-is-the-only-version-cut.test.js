@@ -35,5 +35,17 @@ try {
   git(['add', '.']); git(['commit', '-m', 'hosting cut']);
   const second = spawnSync(process.execPath, [prep], { env: { ...env, SP_RELEASE_PRODUCTION_VERSION: '2.3.254' }, encoding: 'utf8' });
   if (second.status !== 0 || !/versão 2\.3\.254 preservada/.test(second.stdout)) throw new Error('corte vazio inflou a versão');
+  // Uma promoção explícita (que também será a versão de iOS e Android) não
+  // pode ser rebaixada para o patch automático do Hosting.
+  fs.writeFileSync(path.join(lab, 'version.txt'), '2.4.0\n');
+  fs.writeFileSync(path.join(lab, 'js', 'store.js'), "window.SCOREPLACE_VERSION = '2.4.0';\n");
+  fs.writeFileSync(path.join(lab, 'sw.js'), "var CACHE_NAME = 'scoreplace-v2.4.0';\n");
+  fs.writeFileSync(path.join(lab, 'js', 'release-notes.js'), '// 2.4.0 — Promoção nativa intermediária.\n// notes\n');
+  fs.writeFileSync(path.join(lab, 'js', 'screen.js'), 'minor release\n');
+  git(['add', '.']); git(['commit', '-m', 'explicit minor promotion']);
+  const minor = spawnSync(process.execPath, [prep], { env: { ...env, SP_RELEASE_PRODUCTION_VERSION: '2.3.254' }, encoding: 'utf8' });
+  if (minor.status !== 0 || !/promoção explícita preservada: 2\.3\.254 → 2\.4\.0/.test(minor.stdout)) {
+    throw new Error('promoção explícita foi rebaixada: ' + minor.stdout + minor.stderr);
+  }
   console.log('✓ hosting-is-the-only-version-cut: trabalho acumula e só o Hosting corta uma versão');
 } finally { fs.rmSync(lab, { recursive: true, force: true }); }

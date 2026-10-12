@@ -16,13 +16,13 @@ if (!/^\d+\.\d+\.\d+$/.test(production)) throw new Error('SP_RELEASE_PRODUCTION_
 const git = (args) => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();
 const current = fs.readFileSync(path.join(root, 'version.txt'), 'utf8').trim();
 if (!/^\d+\.\d+\.\d+$/.test(current)) throw new Error('version.txt inválido.');
-const lastCut = git(['log', '-1', '--format=%H', '--', 'version.txt']);
-const changed = git(['diff', '--name-only', lastCut + '..HEAD']).split('\n').filter(Boolean)
-  .some((file) => /^(?:js|css|assets|public)\//.test(file) || file === 'index.html' || file === 'sw.js' || file === 'manifest.json');
-if (!changed) {
-  console.log('✓ nenhum código público desde o último corte — versão ' + current + ' preservada');
-  process.exit(0);
-}
+const compareVersions = (a, b) => {
+  const left = String(a).split('.').map(Number), right = String(b).split('.').map(Number);
+  for (let i = 0; i < 3; i++) {
+    if (left[i] !== right[i]) return left[i] > right[i] ? 1 : -1;
+  }
+  return 0;
+};
 const parts = production.split('.').map(Number);
 const next = [parts[0], parts[1], parts[2] + 1].join('.');
 // O deploy pode precisar ser retomado depois de uma revisão. Se a primeira
@@ -32,6 +32,25 @@ const next = [parts[0], parts[1], parts[2] + 1].join('.');
 const notes = path.join(root, 'js/release-notes.js');
 const note = '// ' + next + ' — Atualização consolidada de produção com as correções validadas desde a última publicação.\n';
 const hasVersionNote = (content) => new RegExp('^// ' + next.replace(/\./g, '\\.') + ' — ', 'm').test(content);
+const hasCurrentVersionNote = (content) => new RegExp('^// ' + current.replace(/\./g, '\\.') + ' — ', 'm').test(content);
+// O patch é o padrão do Hosting, mas uma promoção deliberada de minor/major
+// (por exemplo, a primeira nativa de uma leva) já chega com a versão única
+// escrita para Web, iOS e Android. Nunca a reduza ao próximo patch do ar.
+if (compareVersions(current, production) > 0) {
+  const explicitNotes = fs.readFileSync(notes, 'utf8');
+  if (!hasCurrentVersionNote(explicitNotes)) {
+    throw new Error('promoção explícita ' + current + ' sem nota de versão correspondente.');
+  }
+  console.log('✓ promoção explícita preservada: ' + production + ' → ' + current);
+  process.exit(0);
+}
+const lastCut = git(['log', '-1', '--format=%H', '--', 'version.txt']);
+const changed = git(['diff', '--name-only', lastCut + '..HEAD']).split('\n').filter(Boolean)
+  .some((file) => /^(?:js|css|assets|public)\//.test(file) || file === 'index.html' || file === 'sw.js' || file === 'manifest.json');
+if (!changed) {
+  console.log('✓ nenhum código público desde o último corte — versão ' + current + ' preservada');
+  process.exit(0);
+}
 if (current === next) {
   const existingNotes = fs.readFileSync(notes, 'utf8');
   if (!hasVersionNote(existingNotes)) fs.writeFileSync(notes, note + existingNotes);
