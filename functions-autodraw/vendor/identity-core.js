@@ -175,9 +175,10 @@ window._participantIdentityKeys = function(p) {
 // ([[project_render_on2_resolucao_de_nome]]) — e a cura é a mesma do `_sideIndex`:
 // montar o mapa nome→uid UMA vez por (torneio × época do cache de perfis).
 //
-// ⛔ A SEMÂNTICA NÃO MUDA:
+// ⛔ A SEMÂNTICA DE IDENTIDADE:
 //   · nome GRAVADO tem precedência sobre nome VIVO (era passada 1 antes da 2);
-//   · dentro de cada passada, a PRIMEIRA entrada que casa vence (era o `return`);
+//   · nome que aponta para UIDs DIFERENTES é AMBÍGUO e devolve vazio; nunca escolhe
+//     a primeira entrada. Uma referência operacional precisa vir do UID do slot.
 //   · a ordem das piscinas e dos campos é a mesma (participants → standby → waitlist;
 //     displayName/name → p1Name → p2Name → sub-participants);
 //   · entrada sem uid (jogador informal) continua devolvendo ''.
@@ -245,7 +246,11 @@ function _mubnMapa(pools, live) {
   _mubnVarre(pools, function (nome, uid) {
     if (!uid || !nome) return;
     var k = String(nome).trim().toLowerCase();
-    if (k && !mapa.has(k)) mapa.set(k, uid);   // primeiro que chega vence (era o `return`)
+    if (!k) return;
+    if (!mapa.has(k)) { mapa.set(k, uid); return; }
+    // Repetir o MESMO uid em participantes/espera é normal. Dois UIDs para o
+    // mesmo nome não são: guardar '' torna a ambiguidade explícita e segura.
+    if (mapa.get(k) !== uid) mapa.set(k, '');
   }, live);
   return mapa;
 }
@@ -259,8 +264,7 @@ window._memberUidByName = function(t, name) {
     c.gravados = _mubnMapa(c.pools, null);
     if (!c.gravados) return '';   // ambiente sem Map: não há como indexar
   }
-  var achado = c.gravados.get(target);
-  if (achado) return achado;
+  if (c.gravados.has(target)) return c.gravados.get(target) || '';
   // v4.5.84 (ITEM 3 · Fase 3): 2ª passada por nome VIVO (perfil) — só quando o nome
   // GRAVADO não casou (a passada acima ganha → zero regressão). Resolve a pessoa
   // quando a entrada não tem p1Name/p2Name/displayName gravado (pós-Fase-4).

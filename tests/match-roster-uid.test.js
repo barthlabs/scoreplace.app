@@ -68,6 +68,12 @@ const soloParts = [{ uid: 'uA', displayName: 'A' }, { uid: 'uB', displayName: 'B
 const tLegacy = { participants: soloParts, matches: [{ id: 'leg1', p1: 'A', p2: 'B' }] };
 eqArr(AppStore._matchPlayerUids(tLegacy, tLegacy.matches[0]), ['uA', 'uB'], 'slot sem uid (legado) → fallback por nome [uA,uB]');
 
+// HOMÔNIMO LEGADO sem p*Uid: não há evidência para escolher uJ1 ou uJ2. O
+// fallback deve falhar fechado, nunca autorizar arbitrariamente a primeira conta.
+const tLegacyAmbiguous = { participants: homParts, matches: [{ id: 'leg-amb', p1: 'João', p2: 'Zé' }] };
+eqArr(AppStore._matchPlayerUids(tLegacyAmbiguous, tLegacyAmbiguous.matches[0]), ['uZ'],
+  'slot legado com homônimo não escolhe a primeira conta');
+
 // dupla legada "A / B" via split de solos (sem team*Uids no slot).
 const tSplit = { participants: soloParts, matches: [{ id: 'sp1', p1: 'A / B', p2: 'TBD' }] };
 eqArr(AppStore._matchPlayerUids(tSplit, tSplit.matches[0]), ['uA', 'uB'], 'dupla legada "A / B" via split de solos → [uA,uB]');

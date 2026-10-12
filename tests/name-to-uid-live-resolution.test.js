@@ -73,6 +73,12 @@ function oldBuildNameToUid(t) {
   eq(m3['Bia'], 'uBia', 'ANTI-CLOBBER: chave de nome GRAVADO preservada');
   eq(m3['Bianca'], 'uBia', 'ADITIVO: nome vivo de uBia também mapeado');
 
+  const tAmbiguousMap = { participants: [
+    { uid: 'uA', displayName: 'Alex' }, { uid: 'uB', displayName: 'Alex' }
+  ] };
+  ok(!W._buildNameToUid(tAmbiguousMap)['Alex'],
+     'SEGURANÇA: mapa do motor não escolhe UID para homônimo');
+
   // autoDraw (sem _nameForUid) → só chaves de nome gravado (comportamento de hoje intacto)
   delete W._nameForUid;
   const mSrv = W._buildNameToUid(tStored);
@@ -100,6 +106,12 @@ function oldBuildNameToUid(t) {
   // BACKWARD: entrada com displayName gravado (solo legado) segue resolvendo por nome gravado.
   const t2 = { participants: [{ uid: 'uZ', displayName: 'Zilda' }] };
   eq(W._memberUidByName(t2, 'Zilda'), 'uZ', 'BACKWARD: nome gravado resolve (passada 1 ganha)');
+
+  const tAmbiguous = { participants: [
+    { uid: 'uA', displayName: 'Alex' }, { uid: 'uB', displayName: 'Alex' }
+  ] };
+  eq(W._memberUidByName(tAmbiguous, 'Alex'), '',
+     'SEGURANÇA: homônimo não resolve para a primeira conta');
 })();
 
 if (fail) { console.error('\n❌ name-to-uid-live: ' + fail + ' falharam, ' + pass + ' ok'); process.exit(1); }

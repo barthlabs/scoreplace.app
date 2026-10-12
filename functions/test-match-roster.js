@@ -206,6 +206,9 @@ eqArr(matchRoster(tObj, tObj.matches[0]), ["uJ1", "uJ2", "uZ"], "team1Obj resolv
 // LEGADO/GUEST: slot SEM nenhum uid → cai no fallback por nome e continua autorizando.
 const tLegacy = { participants: parts, matches: [{ id: "leg1", p1: "A", p2: "B" }] };
 eqArr(matchRoster(tLegacy, tLegacy.matches[0]), ["uA", "uB"], "slot sem uid (legado) → fallback por nome mantém [uA,uB]");
+const tLegacyAmbiguous = { participants: homParts, matches: [{ id: "leg-amb", p1: "João", p2: "Zé" }] };
+eqArr(matchRoster(tLegacyAmbiguous, tLegacyAmbiguous.matches[0]), ["uZ"],
+  "legado homônimo sem uid NÃO escolhe a primeira conta (só o lado único entra)");
 // GUEST sem conta: nome não casa participante nenhum → roster vazio (sem authz), esperado.
 const tGuest = { participants: parts, matches: [{ id: "g1", p1: "Convidado Sem Conta", p2: "A" }] };
 eqArr(matchRoster(tGuest, tGuest.matches[0]), ["uA"], "guest sem conta (sem uid, sem match de nome) → só o lado com conta [uA]");

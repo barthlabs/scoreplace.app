@@ -1704,9 +1704,24 @@ window._matchPlayerUids = function (t, m) {
   // homônimo certo (nome igual, uids distintos) e sobrevive a nome divergente
   // (o reconcile de nome foi removido em v4.5.73). É uid-first, NOME fallback:
   // slot sem uid (guest/informal ou rodada LEGADA sorteada antes do trabalho de
-  // uid) cai no match por nome pra não parar de autorizar jogos antigos.
+  // uid) cai no match por nome pra não parar de autorizar jogos antigos. Um nome
+  // ambíguo, porém, NÃO escolhe a primeira conta: o jogo fica sem aquele roster
+  // até a migração/revisão estrutural do slot.
   var _slot = (typeof window._slotUids === 'function') ? window._slotUids : null;
   var seen = {};
+  function uniquePartByName(name) {
+    var found = null, foundKey = '';
+    for (var pi = 0; pi < parts.length; pi++) {
+      var candidate = parts[pi];
+      if (!candidate || typeof candidate !== 'object' || (candidate.displayName || candidate.name || '') !== name) continue;
+      var ids = _uidsOf(candidate).filter(Boolean).sort();
+      if (!ids.length) continue;
+      var key = ids.join('|');
+      if (!found) { found = candidate; foundKey = key; }
+      else if (foundKey !== key) return null;
+    }
+    return found;
+  }
   ['p1', 'p2'].forEach(function (side) {
     var entry = m[side];
     if (!entry || entry === 'TBD' || entry === 'BYE') return;
@@ -1717,12 +1732,12 @@ window._matchPlayerUids = function (t, m) {
     }
     // 2) fallback POR NOME — só quando o slot NÃO tem uid (guest/legado).
     // 2a) casa a ENTRADA inteira (solo ou dupla registrada como "A / B")
-    var p = parts.find(function (pp) { return typeof pp === 'object' && (pp.displayName || pp.name || '') === entry; });
+    var p = uniquePartByName(entry);
     if (p) { _uidsOf(p).forEach(function (u) { if (u) seen[u] = 1; }); return; }
     // 2b) dupla cujo slot mostra "A / B" mas cada membro é participante solo
     var members = entry.indexOf('/') !== -1 ? entry.split('/').map(function (n) { return n.trim(); }) : [entry];
     members.forEach(function (nm) {
-      var mp = parts.find(function (pp) { return typeof pp === 'object' && (pp.displayName || pp.name || '') === nm; });
+      var mp = uniquePartByName(nm);
       if (mp) _uidsOf(mp).forEach(function (u) { if (u) seen[u] = 1; });
     });
   });
@@ -5086,30 +5101,36 @@ window._buildMonarchGroup = _buildMonarchGroup;
 
 // v4.4.115: mapa nome→uid dos INDIVÍDUOS do torneio, pra o sorteio gravar o uid em cada
 // slot do jogo. Cobre indivíduos (uid+name) e membros de dupla (p1Name/p1Uid, p2Name/p2Uid,
-// sub-participants[]). Homônimos verdadeiros (2 pessoas mesmo nome) mantêm o último — é a
-// mesma ambiguidade que o sorteio já tem por operar em nomes; o ganho é que nomes DISTINTOS
-// (Vivian × Vivi Hirata) nunca mais se cruzam no PA/render/sync.
+// sub-participants[]). Nome jamais escolhe entre homônimos: se duas contas fornecem a mesma
+// chave, ela fica explicitamente ambígua (null) e o fluxo deve usar o UID estrutural do slot.
+// Isso preserva documentos legados sem conceder identidade à conta errada.
 function _buildNameToUid(t) {
   var map = {};
   // v4.5.84 (ITEM 3 · Fase 3): resolver de nome VIVO por uid (perfil), quando disponível
   // (cliente). No autoDraw (sem store.js) window._nameForUid é undefined → cai só nas chaves de
   // nome GRAVADO (comportamento de hoje; o preload servidor é a Fase 4).
   var _live = (typeof window !== 'undefined' && typeof window._nameForUid === 'function') ? window._nameForUid : null;
+  function _put(name, uid) {
+    var key = String(name || '').trim();
+    if (!key || !uid) return;
+    if (!Object.prototype.hasOwnProperty.call(map, key)) { map[key] = uid; return; }
+    if (map[key] !== uid) map[key] = null;
+  }
   function _putLive(uid) {
     if (!_live || !uid) return;
     var ln = String(_live(uid) || '').trim();
-    if (ln && !map[ln]) map[ln] = uid; // aditivo: nunca sobrescreve a chave de nome gravado
+    _put(ln, uid);
   }
   var parr = Array.isArray(t && t.participants) ? t.participants : Object.values((t && t.participants) || {});
   parr.forEach(function (p) {
     if (!p || typeof p !== 'object') return;
-    if (p.p1Name && p.p1Uid) map[String(p.p1Name).trim()] = p.p1Uid;
-    if (p.p2Name && p.p2Uid) map[String(p.p2Name).trim()] = p.p2Uid;
+    if (p.p1Name && p.p1Uid) _put(p.p1Name, p.p1Uid);
+    if (p.p2Name && p.p2Uid) _put(p.p2Name, p.p2Uid);
     if (Array.isArray(p.participants)) p.participants.forEach(function (s) {
-      if (s && s.uid) { var sn = String((s.displayName || s.name) || '').trim(); if (sn) map[sn] = s.uid; }
+      if (s && s.uid) _put(s.displayName || s.name, s.uid);
     });
     var nm = String((p.displayName || p.name) || '').trim();
-    if (nm && p.uid && !map[nm]) map[nm] = p.uid;
+    if (nm && p.uid) _put(nm, p.uid);
     // v4.5.84: chave de nome VIVO por uid (resolve entrada só-uid, sem p1Name/p2Name — pós-Fase-4).
     _putLive(p.p1Uid); _putLive(p.p2Uid); _putLive(p.uid);
     if (Array.isArray(p.participants)) p.participants.forEach(function (s) { if (s) _putLive(s.uid); });
@@ -5122,7 +5143,7 @@ function _buildNameToUid(t) {
     // Aditivo e por último: só cria a chave que ninguém criou. Ver [[project_orphan_uid_entries]].
     if (p.uid && typeof window._entryDisplayName === 'function') {
       var _dn = String(window._entryDisplayName(p) || '').trim();
-      if (_dn && !map[_dn]) map[_dn] = p.uid;
+      _put(_dn, p.uid);
     }
   });
 
@@ -5146,7 +5167,7 @@ function _buildNameToUid(t) {
   // são mais confiáveis, continuam mandando quando existem.
   try {
     var _rec = _nameToUidRecovery(t);
-    Object.keys(_rec).forEach(function (n) { if (!map[n]) map[n] = _rec[n]; });
+    Object.keys(_rec).forEach(function (n) { _put(n, _rec[n]); });
   } catch (e) { /* mapa incompleto é melhor que motor derrubado */ }
 
   return map;

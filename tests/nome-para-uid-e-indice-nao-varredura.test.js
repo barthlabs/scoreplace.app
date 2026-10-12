@@ -11,9 +11,9 @@
  * passada barata nunca casa; a cara varre tudo, toda vez. Mesma forma do O(n²) que
  * fazia a chave levar 925ms no iPhone.
  *
- * ⛔ O QUE ESTE TESTE TRAVA: um índice que seja RÁPIDO E ERRADO. Ele guarda a
- * implementação ANTIGA aqui dentro como REFERÊNCIA e compara as duas, nome por nome,
- * em todos os torneios da base real. Se a semântica mudar, acusa.
+ * ⛔ O QUE ESTE TESTE TRAVA: um índice que seja RÁPIDO E ERRADO. A referência abaixo
+ * reproduz o contrato atual: nome só resolve se apontar a UM UID. Homônimo devolve
+ * vazio; escolher o primeiro seria uma regressão de autorização.
  */
 const HARNESS = require('./render-harness');
 const W = HARNESS.window;
@@ -26,7 +26,7 @@ const ok = (c, m) => { if (c) { pass++; console.log('  ✓ ' + m); } else { fail
 console.log('──── nome→uid: índice com a MESMA resposta da varredura ────');
 
 // ── A IMPLEMENTAÇÃO ANTIGA, palavra por palavra, como referência ─────────────
-function _antiga(t, name) {
+function _referenciaSegura(t, name) {
   if (!t || !name) return '';
   var target = String(name).trim().toLowerCase();
   if (!target) return '';
@@ -34,40 +34,48 @@ function _antiga(t, name) {
   if (Array.isArray(t.participants)) pools.push(t.participants);
   if (Array.isArray(t.standbyParticipants)) pools.push(t.standbyParticipants);
   if (Array.isArray(t.waitlist)) pools.push(t.waitlist);
+  function unico(encontrados) {
+    var ids = Array.from(encontrados);
+    return ids.length === 1 ? ids[0] : '';
+  }
   for (var pi = 0; pi < pools.length; pi++) {
     var arr = pools[pi];
+    var gravados = new Set();
     for (var i = 0; i < arr.length; i++) {
       var p = arr[i];
       if (!p || typeof p !== 'object') continue;
-      if ((p.displayName || p.name || '').trim().toLowerCase() === target && p.uid) return p.uid;
-      if ((p.p1Name || '').trim().toLowerCase() === target && p.p1Uid) return p.p1Uid;
-      if ((p.p2Name || '').trim().toLowerCase() === target && p.p2Uid) return p.p2Uid;
+      if ((p.displayName || p.name || '').trim().toLowerCase() === target && p.uid) gravados.add(p.uid);
+      if ((p.p1Name || '').trim().toLowerCase() === target && p.p1Uid) gravados.add(p.p1Uid);
+      if ((p.p2Name || '').trim().toLowerCase() === target && p.p2Uid) gravados.add(p.p2Uid);
       if (Array.isArray(p.participants)) {
         for (var s = 0; s < p.participants.length; s++) {
           var sub = p.participants[s];
-          if (sub && (sub.displayName || sub.name || '').trim().toLowerCase() === target && sub.uid) return sub.uid;
+          if (sub && (sub.displayName || sub.name || '').trim().toLowerCase() === target && sub.uid) gravados.add(sub.uid);
         }
       }
     }
+    if (gravados.size) return unico(gravados);
   }
   var _live = (typeof W._nameForUid === 'function') ? W._nameForUid : null;
   if (_live) {
+    var vivos = new Set();
     for (var pi2 = 0; pi2 < pools.length; pi2++) {
       var arr2 = pools[pi2];
       for (var j = 0; j < arr2.length; j++) {
         var q = arr2[j];
         if (!q || typeof q !== 'object') continue;
-        if (q.uid && String(_live(q.uid) || '').trim().toLowerCase() === target) return q.uid;
-        if (q.p1Uid && String(_live(q.p1Uid) || '').trim().toLowerCase() === target) return q.p1Uid;
-        if (q.p2Uid && String(_live(q.p2Uid) || '').trim().toLowerCase() === target) return q.p2Uid;
+        if (q.uid && String(_live(q.uid) || '').trim().toLowerCase() === target) vivos.add(q.uid);
+        if (q.p1Uid && String(_live(q.p1Uid) || '').trim().toLowerCase() === target) vivos.add(q.p1Uid);
+        if (q.p2Uid && String(_live(q.p2Uid) || '').trim().toLowerCase() === target) vivos.add(q.p2Uid);
         if (Array.isArray(q.participants)) {
           for (var s2 = 0; s2 < q.participants.length; s2++) {
             var sub2 = q.participants[s2];
-            if (sub2 && sub2.uid && String(_live(sub2.uid) || '').trim().toLowerCase() === target) return sub2.uid;
+            if (sub2 && sub2.uid && String(_live(sub2.uid) || '').trim().toLowerCase() === target) vivos.add(sub2.uid);
           }
         }
       }
     }
+    return unico(vivos);
   }
   return '';
 }
@@ -113,7 +121,7 @@ function _antiga(t, name) {
     });
     nomes.forEach((nome) => {
       comparados++;
-      const a = _antiga(t, nome), b = W._memberUidByName(t, nome);
+      const a = _referenciaSegura(t, nome), b = W._memberUidByName(t, nome);
       if (a === b) iguais++;
       else if (erros.length < 5) erros.push((t.name || '?').slice(0, 18) + ' · "' + String(nome).slice(0, 22) + '" → antiga=' + (a || '∅') + ' nova=' + (b || '∅'));
     });
@@ -145,7 +153,7 @@ function _antiga(t, name) {
   try {
     W._bumpProfileEpoch();
     ok(W._memberUidByName(t, 'Nome Gravado') === 'u1',
-       '⛔ com o mesmo nome nos dois lados, o GRAVADO vence (u1), como no laço original');
+       '⛔ nome gravado único vence o nome vivo concorrente');
     ok(W._memberUidByName(t, 'Nome Vivo Do U1') === 'u1',
        'e o nome VIVO ainda resolve quando o gravado não casa');
   } finally { W._nameForUid = antes; W._bumpProfileEpoch(); }
@@ -187,7 +195,14 @@ function _antiga(t, name) {
      '⛔ inscrito novo aparece sem esperar a época (o índice confere o tamanho)');
 }
 
-// ── ⑥ ⚡ a PROPRIEDADE de desempenho: uma varredura, não uma por chamada ─────
+// ── ⑥ homônimo nunca resolve para "o primeiro" ──────────────────────────────
+{
+  const t = { participants: [{ uid: 'u1', displayName: 'Alex' }, { uid: 'u2', displayName: 'Alex' }] };
+  W._bumpProfileEpoch();
+  ok(W._memberUidByName(t, 'Alex') === '', '⛔ dois UIDs para o mesmo nome devolvem vazio');
+}
+
+// ── ⑦ ⚡ a PROPRIEDADE de desempenho: uma varredura, não uma por chamada ─────
 // Sem isto, alguém "simplifica" o índice de volta pra varredura e o teste ①
 // continuaria verde — rápido e errado é o que se trava aqui.
 {

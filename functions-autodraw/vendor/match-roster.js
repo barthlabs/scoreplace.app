@@ -77,8 +77,24 @@ function slotUids(m, side) {
 // Espelha AppStore._matchPlayerUids (store.js) — resolve p1/p2 (solo ou dupla
 // "A / B") pros uids dos dois lados. TBD/BYE ignorados. uid-FIRST (identidade
 // estrutural do slot), NOME fallback só quando o slot não carrega uid (guest/
-// informal ou rodada LEGADA sorteada antes do trabalho de uid) — assim homônimo
-// resolve certo e nome divergente não bloqueia, sem parar jogos antigos.
+// informal ou rodada LEGADA sorteada antes do trabalho de uid). O fallback nunca
+// escolhe "o primeiro" homônimo: se o legado não traz identidade suficiente, ele
+// permanece sem roster até ser migrado/revisado — é melhor não autorizar ninguém
+// do que autorizar a conta errada.
+function uniqueParticipantByName(parts, entry) {
+  let chosen = null;
+  let chosenKey = "";
+  for (const candidate of parts) {
+    if (typeof candidate !== "object" || !candidate || (candidate.displayName || candidate.name || "") !== entry) continue;
+    const uids = participantUids(candidate).filter(Boolean).sort();
+    if (!uids.length) continue;
+    const key = uids.join("|");
+    if (!chosen) { chosen = candidate; chosenKey = key; }
+    else if (chosenKey !== key) return null;
+  }
+  return chosen;
+}
+
 function matchRoster(t, m) {
   if (!t || !m) return [];
   const parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
@@ -91,12 +107,12 @@ function matchRoster(t, m) {
     if (su.length) { su.forEach((u) => { if (u) seen[u] = 1; }); return; }
     // 2) fallback POR NOME — só quando o slot NÃO tem uid (guest/legado).
     // 2a) casa a ENTRADA inteira (solo ou dupla registrada como "A / B")
-    const p = parts.find((pp) => typeof pp === "object" && (pp.displayName || pp.name || "") === entry);
+    const p = uniqueParticipantByName(parts, entry);
     if (p) { participantUids(p).forEach((u) => { if (u) seen[u] = 1; }); return; }
     // 2b) dupla cujo slot mostra "A / B" mas cada membro é solo
     const members = entry.indexOf("/") !== -1 ? entry.split("/").map((n) => n.trim()) : [entry];
     members.forEach((nm) => {
-      const mp = parts.find((pp) => typeof pp === "object" && (pp.displayName || pp.name || "") === nm);
+      const mp = uniqueParticipantByName(parts, nm);
       if (mp) participantUids(mp).forEach((u) => { if (u) seen[u] = 1; });
     });
   });
@@ -201,6 +217,6 @@ function buildMirrorDoc(t, m, tid, nowIso, anterior) {
 }
 
 module.exports = {
-  collectMatches, participantUids, slotUids, matchRoster, rosterKey, computeRosterChanges,
+  collectMatches, participantUids, slotUids, uniqueParticipantByName, matchRoster, rosterKey, computeRosterChanges,
   RESULT_FIELDS, buildSeedDoc, subdocSignature, buildMirrorDoc,
 };

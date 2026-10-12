@@ -13,9 +13,10 @@ function name(value) {
 function memberUidByName(tournament, rawName) {
   const wanted = String(rawName || '').trim().toLowerCase();
   if (!wanted) return '';
-  return (Array.isArray(tournament && tournament.participants) ? tournament.participants : []).find((entry) =>
-    waitlist.nameForms(entry, helpers(tournament)).includes(wanted)
-  )?.uid || '';
+  const matches = (Array.isArray(tournament && tournament.participants) ? tournament.participants : [])
+    .filter((entry) => entry && entry.uid && waitlist.nameForms(entry, helpers(tournament)).includes(wanted))
+    .map((entry) => String(entry.uid));
+  return matches.length === 1 ? matches[0] : '';
 }
 function helpers(tournament) {
   return {

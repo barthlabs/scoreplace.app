@@ -13,8 +13,8 @@ const helpers = {
   },
   memberUidByName(tournament, name) {
     const wanted = String(name || '').trim().toLowerCase();
-    const entry = (tournament.participants || []).find((candidate) => D.nameForms(candidate, helpers).includes(wanted));
-    return entry && entry.uid || '';
+    const matches = (tournament.participants || []).filter((candidate) => candidate && candidate.uid && D.nameForms(candidate, helpers).includes(wanted));
+    return matches.length === 1 ? matches[0].uid : '';
   },
 };
 const entry = (uid, displayName) => ({ uid, displayName });
@@ -37,6 +37,8 @@ ok(D.normalizeKey(t, 'Ana', helpers) === 'u_ana', 'nome legado de conta normaliz
 ok(D.entryByKey(t, 'u_bia', helpers).displayName === 'Bia', 'chave volta para a entrada canônica');
 ok(D.pushBack(t, entry('u_ana', 'Outra Ana'), helpers) === false, 'uid existente não duplica mesmo com nome diferente');
 ok(D.pushBack(t, entry('u_clara', 'Ana'), helpers) === true, 'homônimos com UIDs distintos não colidem');
+const amb = { participants: [entry('u_1', 'Alex'), entry('u_2', 'Alex')] };
+ok(D.normalizeKey(amb, 'Alex', helpers) === '', 'nome de duas contas não normaliza para UID arbitrário');
 ok(D.removeByKey(t, 'u_ana', helpers) === true, 'remoção por uid remove a pessoa da fila');
 ok(!D.getWaitlist(t, helpers).some((value) => D.key(value, helpers) === 'u_ana'), 'remoção limpa todos os três storages');
 ok(D.removeByName(t, 'Convidada', helpers) === true, 'remoção por nome atende convidado sem uid');
