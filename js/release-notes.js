@@ -6,6 +6,7 @@
 // concreta. Carimbos de atualização sem data válida deixam de exibir "Invalid Date".
 // 2.4.0 — Datas e horários do torneio compartilham a mesma faixa do logo do local;
 // a regressiva é a única indicação de início, sem a pílula duplicada "Começa em".
+// Os scripts alterados desta entrega usam o carimbo 2.4.0 para impedir cache antigo.
 // 2.3.356 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.3.355 — Atualização consolidada de produção com as correções validadas desde a última publicação.
 // 2.3.354 — Atualização consolidada de produção com as correções validadas desde a última publicação.
