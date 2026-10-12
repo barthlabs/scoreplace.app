@@ -126,7 +126,12 @@ function renameTournamentParticipant(t, input) {
   const newName = String(input && input.newName || '').trim();
   const uid = String(input && input.uid || '').trim();
   const manualParticipantId = String(input && input.manualParticipantId || '').trim();
-  const identity = uid || manualParticipantId;
+  /* Conta autenticada não carrega rótulo persistido na inscrição canônica.
+   * Permitir UID aqui reabriria a antiga atualização global por texto em jogos
+   * e classificações. O nome de conta é lido do perfil; somente a vaga manual
+   * (que não tem perfil) pode ter seu rótulo alterado dentro do torneio. */
+  if (uid) throw new Error('conta autenticada não pode ser renomeada no torneio');
+  const identity = manualParticipantId;
   if (!oldName || !newName) throw new Error('nome inválido');
   if (oldName === newName) return { changed: false, update: {} };
   if (newName.length > 160) throw new Error('nome muito longo');
