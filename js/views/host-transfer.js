@@ -179,7 +179,12 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       db.collection('users').doc(me.uid).collection('notifications')
         .where('type', '==', typ).where('tournamentId', '==', String(tId)).where('read', '==', false)
         .get().then(function(snap) {
-          snap.forEach(function(d) { d.ref.update({ read: true }); });
+          var ids = snap.docs.map(function(d) { return d.id; });
+          if (ids.length && window.FirestoreDB.markNotificationsRead) {
+            // A caixa é própria, mas a mutação continua no servidor. Não há
+            // atualização direta escondida no aceite de co-organização.
+            window.FirestoreDB.markNotificationsRead(me.uid, ids);
+          }
         }).catch(window._falhouCalado('aviso-transferencia'));
     });
     if (typeof window._updateNotificationBadge === 'function') {

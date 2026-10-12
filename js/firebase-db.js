@@ -3299,12 +3299,19 @@ window.FirestoreDB = {
   },
 
   async markNotificationRead(uid, notifId) {
-    if (!this.db || !uid || !notifId) return;
+    if (!uid || !notifId) return;
     try {
-      await this.db.collection('users').doc(uid).collection('notifications').doc(notifId).update({ read: true });
+      return await this.markNotificationsRead(uid, [String(notifId)]);
     } catch (e) {
       window._error('Erro ao marcar notificação como lida:', e);
     }
+  },
+
+  async markNotificationsRead(uid, notificationIds) {
+    if (!uid || !Array.isArray(notificationIds) || !notificationIds.length) return { ok: true, changed: 0 };
+    return this._callFn('markOwnNotificationsRead', {
+      notificationIds: notificationIds.map(function (id) { return String(id); })
+    });
   },
 
   // ── v1.8.92: TODA notificação não lida tem que ser ALCANÇÁVEL ───────────────
@@ -3341,12 +3348,9 @@ window.FirestoreDB = {
     try {
       var pend = await this.getUnreadNotifications(uid);
       if (!pend.length) return 0;
-      var col = this.db.collection('users').doc(uid).collection('notifications');
       // Lotes de 400: o teto do batch do Firestore é 500.
       for (var i = 0; i < pend.length; i += 400) {
-        var batch = this.db.batch();
-        pend.slice(i, i + 400).forEach(function (n) { batch.update(col.doc(n._id), { read: true }); });
-        await batch.commit();
+        await this.markNotificationsRead(uid, pend.slice(i, i + 400).map(function (n) { return String(n._id); }));
       }
       return pend.length;
     } catch (e) {
@@ -3512,11 +3516,11 @@ window.FirestoreDB = {
   // ---- Templates ----
 
   async saveTemplate(uid, templateData) {
-    if (!this.db || !uid) return null;
+    if (!uid) return null;
     try {
       var clean = this._cleanUndefined(templateData);
-      var ref = await this.db.collection('users').doc(uid).collection('templates').add(clean);
-      return ref.id;
+      var result = await this._callFn('saveOwnTournamentTemplate', { template: clean });
+      return result && result.templateId ? result.templateId : null;
     } catch (e) {
       window._error('Erro ao salvar template:', e);
       return null;
@@ -3545,9 +3549,9 @@ window.FirestoreDB = {
   },
 
   async deleteTemplate(uid, templateId) {
-    if (!this.db || !uid || !templateId) return;
+    if (!uid || !templateId) return;
     try {
-      await this.db.collection('users').doc(uid).collection('templates').doc(templateId).delete();
+      await this._callFn('deleteOwnTournamentTemplate', { templateId: String(templateId) });
     } catch (e) {
       window._error('Erro ao excluir template:', e);
     }

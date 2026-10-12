@@ -45,6 +45,7 @@ const _profileNotifications = require("./profile-notifications-core");
 const _profilePresence = require("./profile-presence-core");
 const _profileTerms = require("./profile-terms-core");
 const _profileSession = require("./profile-session-core");
+const _ownLibrary = require("./own-library-core");
 const _profileTournamentPreferences = require("./profile-tournament-preferences-core");
 const _profileFriendRequests = require("./profile-friend-requests-core");
 const _profileContactPrivacy = require("./profile-contact-privacy-core");
@@ -3722,6 +3723,67 @@ exports.updateOwnCasualScoringPreferences = onCall(
       tx.update(ref, { casualPrefs: preferences });
     });
     return { ok: true, preferences };
+  }
+);
+
+// ─── Biblioteca pessoal: templates e caixa de avisos ───────────────────────
+// O UID de destino nunca vem do navegador. Estas capabilities fecham duas
+// subcoleções que antes aceitavam mutação direta do dono, mantendo a leitura
+// em tempo real e impedindo que uma nova tela recrie uma segunda porta.
+exports.saveOwnTournamentTemplate = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
+  async (request) => {
+    const uid = request.auth && request.auth.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Login obrigatório");
+    let template;
+    try { template = _ownLibrary.normalizeTemplate(request.data && request.data.template); }
+    catch (error) { throw new HttpsError("invalid-argument", error.message); }
+    const db = admin.firestore();
+    const profile = await db.collection("users").doc(uid).get();
+    if (!profile.exists) throw new HttpsError("failed-precondition", "Perfil inexistente");
+    const ref = await db.collection("users").doc(uid).collection("templates").add(Object.assign({}, template, {
+      createdAt: new Date().toISOString(),
+      ownerUid: uid,
+    }));
+    return { ok: true, templateId: ref.id };
+  }
+);
+
+exports.deleteOwnTournamentTemplate = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
+  async (request) => {
+    const uid = request.auth && request.auth.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Login obrigatório");
+    let templateId;
+    try { templateId = _ownLibrary.normalizeDocumentId(request.data && request.data.templateId, "templateId"); }
+    catch (error) { throw new HttpsError("invalid-argument", error.message); }
+    await admin.firestore().collection("users").doc(uid).collection("templates").doc(templateId).delete();
+    return { ok: true, templateId };
+  }
+);
+
+exports.markOwnNotificationsRead = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
+  async (request) => {
+    const uid = request.auth && request.auth.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Login obrigatório");
+    let notificationIds;
+    try { notificationIds = _ownLibrary.normalizeNotificationIds(request.data && request.data.notificationIds); }
+    catch (error) { throw new HttpsError("invalid-argument", error.message); }
+    const db = admin.firestore();
+    const col = db.collection("users").doc(uid).collection("notifications");
+    const refs = notificationIds.map((id) => col.doc(id));
+    const docs = await db.getAll(...refs);
+    const batch = db.batch();
+    let changed = 0;
+    docs.forEach((doc) => {
+      if (doc.exists && doc.get("read") !== true) {
+        batch.update(doc.ref, { read: true, readAt: new Date().toISOString() });
+        changed++;
+      }
+    });
+    if (changed) await batch.commit();
+    return { ok: true, changed };
   }
 );
 
