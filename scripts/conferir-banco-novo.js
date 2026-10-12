@@ -1,16 +1,15 @@
 /* CONFERIDOR — a fonte viva de cada torneio pode ser provada?
  *
- * Antes da divisão, o documento é a fonte e as subcoleções são o espelho: remontar
- * o espelho tem de devolver o documento inteiro. Depois da divisão, o documento fica
- * propositalmente magro e as partes indicadas por `_semPesados` viram a fonte viva.
+ * Todo torneio nasce dividido. O documento fica propositalmente magro e as partes
+ * canônicas viram a fonte viva. `_semPesados` permanece somente como marcador de
+ * compatibilidade do aplicativo nativo antigo: nunca escolhe o formato do torneio.
  * Comparar a remontagem completa contra esse documento magro acusa uma divergência
  * que é justamente o estado correto — e ler `participants` em vez de `inscritos`
  * sequer olha a coleção canônica.
  *
- * Este gate mantém as duas provas separadas:
- *   ① inteiro: espelho → documento, byte a byte;
- *   ② dividido: marcador → coleção canônica → montar → dividir de volta, com cada
- *      registro aproveitado, contagem de jogos e backup pré-divisão obrigatório.
+ * Este gate prova a fonte única: partes canônicas → montar → dividir de volta, com
+ * cada registro aproveitado, contagem de jogos e backup pré-divisão obrigatório.
+ * O marcador de compatibilidade também é conferido, mas não decide a leitura.
  *
  * ⛔ NÃO ESCREVE NADA. Só lê e compara.
  *
@@ -23,10 +22,10 @@ const { accessTokenForServiceAccountSync } = require('./firebase-service-account
 const S = require(path.join(__dirname, '..', 'js', 'views', 'tournament-split-core.js'));
 
 const BASE = 'https://firestore.googleapis.com/v1/projects/scoreplace-app/databases/(default)/documents';
-const PARTES_DO_ESPELHO_LEGADO = ['matches', 'participants', 'history'];
 const token = () => accessTokenForServiceAccountSync();
 const DETALHE = process.argv.includes('--detalhe');
 const SO_ESTE = process.argv.slice(2).find((a) => !a.startsWith('--')) || null;
+const CONCORRENCIA = 8;
 
 function fromF(v) {
   if (v == null) return null;
@@ -63,9 +62,14 @@ async function documento(url, tk) {
 }
 
 function partesIndicadas(config) {
-  const fora = Array.isArray(config && config._semPesados) ? config._semPesados.slice() : [];
-  const invalidas = fora.filter((nome) => (S.PARTES || []).indexOf(nome) === -1);
-  return { fora, invalidas, dividida: fora.length > 0 };
+  const marcador = Array.isArray(config && config._semPesados) ? config._semPesados.slice() : null;
+  const fora = S.partesDe(config);
+  // `grupos` é uma parte histórica adicional, não outro formato de torneio. O
+  // núcleo a restaura quando a fotografia de compatibilidade a declara.
+  if (marcador && marcador.indexOf('grupos') !== -1 && fora.indexOf('grupos') === -1) fora.push('grupos');
+  const invalidas = (marcador || []).filter((nome) => (S.PARTES || []).indexOf(nome) === -1);
+  const faltamNoMarcador = !marcador || fora.some((nome) => marcador.indexOf(nome) === -1);
+  return { fora, marcador, invalidas, faltamNoMarcador };
 }
 
 async function lePartes(id, nomes, tk) {
@@ -80,6 +84,15 @@ async function lePartes(id, nomes, tk) {
 function diferencas(a, b) {
   return [...new Set([...Object.keys(a || {}), ...Object.keys(b || {})])]
     .filter((k) => !S.iguais((a || {})[k], (b || {})[k]));
+}
+
+function contaRegistrosMontados(nome, registros) {
+  return (registros || []).filter((registro) => {
+    if (!registro) return false;
+    if (nome === 'matches') return registro.jogo != null;
+    if (nome === 'grupos') return registro.grupo != null;
+    return registro.item != null;
+  }).length;
 }
 
 async function confereDividido(config, nomes, partes, backup) {
@@ -105,7 +118,11 @@ async function confereDividido(config, nomes, partes, backup) {
     // Sem esta contagem, um doc com `_loc` inválido pode ser lido e silenciosamente
     // ignorado pela remontagem. A tela perderia um jogo e o gate ainda ficaria verde.
     const lidos = (partes[nome] || []).length;
-    const aproveitados = ((volta && volta[nome]) || []).length;
+    // Participantes removidos podem deixar um intervalo de índice proposital para
+    // não deslocar a ordem visível dos demais. Ao clonar, JSON materializa esse
+    // buraco como `item: null`; contar o tamanho do array (ou o envelope) acusaria
+    // um inscrito inventado. A prova conta o conteúdo real de cada registro.
+    const aproveitados = contaRegistrosMontados(nome, (volta && volta[nome]) || []);
     if (lidos !== aproveitados) problemas.push(nome + ': li ' + lidos + ', a montagem aproveitou ' + aproveitados);
   });
   if (nomes.indexOf('matches') !== -1 && Number.isFinite(config._nJogos) &&
@@ -123,6 +140,40 @@ async function confereDividido(config, nomes, partes, backup) {
   return problemas;
 }
 
+async function confereTorneio(t, tk) {
+  const config = t.dados;
+  if (!config) return { id: t.id, nome: t.id, falhas: ['TORNEIO AUSENTE'] };
+  const estado = partesIndicadas(config);
+  if (estado.invalidas.length) {
+    return { id: t.id, nome: config.name, falhas: ['MARCADOR INVÁLIDO: ' + estado.invalidas.join(', ')] };
+  }
+  if (estado.faltamNoMarcador) {
+    return { id: t.id, nome: config.name, falhas: ['MARCADOR DE COMPATIBILIDADE AUSENTE OU INCOMPLETO'] };
+  }
+
+  // Partes e backup são leituras independentes. Fazê-las em série deixa o gate
+  // artificialmente lento e não acrescenta segurança.
+  const [partes, backup] = await Promise.all([
+    lePartes(t.id, estado.fora, tk),
+    documento(`${BASE}/tournaments_backup/${t.id}`, tk)
+  ]);
+  return { id: t.id, nome: config.name, falhas: await confereDividido(config, estado.fora, partes, backup) };
+}
+
+async function emLotes(items, limite, operacao) {
+  const resultados = new Array(items.length);
+  let proximo = 0;
+  async function trabalhador() {
+    while (true) {
+      const indice = proximo++;
+      if (indice >= items.length) return;
+      resultados[indice] = await operacao(items[indice]);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limite, items.length) }, trabalhador));
+  return resultados;
+}
+
 (async () => {
   const tk = token();
   console.log('▶ conferindo fontes do torneio (NÃO escreve nada)\n');
@@ -131,48 +182,14 @@ async function confereDividido(config, nomes, partes, backup) {
     ? [{ id: SO_ESTE, dados: await documento(`${BASE}/tournaments/${SO_ESTE}`, tk) }]
     : await lista(`${BASE}/tournaments`, tk);
 
-  let inteiros = 0, divididos = 0, problemasN = 0;
-  const problemas = [];
-
-  for (const t of torneios) {
-    const config = t.dados;
-    if (!config) { problemasN++; problemas.push({ id: t.id, nome: t.id, o: 'TORNEIO AUSENTE' }); continue; }
-    const estado = partesIndicadas(config);
-    if (estado.invalidas.length) {
-      problemasN++; problemas.push({ id: t.id, nome: config.name, o: 'MARCADOR INVÁLIDO: ' + estado.invalidas.join(', ') }); continue;
-    }
-
-    if (!estado.dividida) {
-      const partes = await lePartes(t.id, PARTES_DO_ESPELHO_LEGADO, tk);
-      const esperado = S.dividir(config, PARTES_DO_ESPELHO_LEGADO);
-      const haEspelho = PARTES_DO_ESPELHO_LEGADO.some((nome) => (partes[nome] || []).length);
-      const haFonte = PARTES_DO_ESPELHO_LEGADO.some((nome) => (esperado[nome] || []).length);
-      if (!haEspelho && haFonte) {
-        problemasN++; problemas.push({ id: t.id, nome: config.name, o: 'ESPELHO AUSENTE' }); continue;
-      }
-      const montado = S.remontar(Object.assign({ config }, partes));
-      if (!S.iguais(config, montado)) {
-        problemasN++; problemas.push({ id: t.id, nome: config.name, o: 'ESPELHO DIVERGE: ' + diferencas(config, montado).join(', ') }); continue;
-      }
-      inteiros++;
-      continue;
-    }
-
-    // Partes e backup são leituras independentes. Fazê-las em série deixa o gate
-    // artificialmente lento e não acrescenta nenhuma segurança.
-    const [partes, backup] = await Promise.all([
-      lePartes(t.id, estado.fora, tk),
-      documento(`${BASE}/tournaments_backup/${t.id}`, tk)
-    ]);
-    const falhas = await confereDividido(config, estado.fora, partes, backup);
-    if (falhas.length) {
-      problemasN++; problemas.push({ id: t.id, nome: config.name, o: falhas.join(' · ') }); continue;
-    }
-    divididos++;
-  }
+  const resultados = await emLotes(torneios, CONCORRENCIA, (t) => confereTorneio(t, tk));
+  const problemas = resultados.filter((resultado) => resultado.falhas.length)
+    .map((resultado) => ({ id: resultado.id, nome: resultado.nome, o: resultado.falhas.join(' · ') }));
+  const divididos = resultados.length - problemas.length;
+  const problemasN = problemas.length;
 
   console.log('torneios conferidos:', torneios.length);
-  console.log('  ✓ inteiros, espelho idêntico :', inteiros);
+  console.log('  · concorrência limitada    :', Math.min(CONCORRENCIA, torneios.length));
   console.log('  ✓ divididos, fonte montável  :', divididos);
   console.log('  ✗ bloqueios                  :', problemasN);
   if (problemas.length) {
@@ -181,7 +198,10 @@ async function confereDividido(config, nomes, partes, backup) {
     if (problemas.length > 16) console.log('  … e mais', problemas.length - 16);
   }
   console.log('\n' + (problemasN === 0
-    ? '✅ cada torneio é lido da sua fonte canônica e o backup da divisão existe'
+    ? '✅ cada torneio é dividido, lido da fonte canônica e tem backup da divisão'
     : '⛔ NÃO avançar a migração enquanto houver bloqueio'));
-  process.exit(problemasN ? 1 : 0);
-})().catch((e) => { console.error(e); process.exit(1); });
+  // Não use `process.exit()` aqui: em CI e em chamadas automatizadas o stdout é
+  // um pipe e o encerramento forçado pode descartar justamente o veredito que
+  // decidiu a liberação. O event loop termina naturalmente depois do flush.
+  process.exitCode = problemasN ? 1 : 0;
+})().catch((e) => { console.error(e); process.exitCode = 1; });

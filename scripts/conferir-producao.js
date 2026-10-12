@@ -131,11 +131,13 @@ const conta = (rotulo, n, total, detalhe) => {
   vm.runInContext(fs.readFileSync(path.join(ROOT, 'js/views/tournament-split-core.js'), 'utf8'), S);
   const TS = S._tSplit;
   const W = doStore('window._marcaPartesQueFaltam', 'window._partesFaltandoComCerteza');
-  let divididos = 0, incompletos = 0, semProva = 0;
+  let divididos = 0, incompletos = 0, semProva = 0, compatibilidadeIncompleta = 0;
   for (const d of torneios.docs) {
     const t = d.data() || {};
-    const fora = Array.isArray(t._semPesados) ? t._semPesados : [];
-    if (!fora.length) continue;
+    const marcador = Array.isArray(t._semPesados) ? t._semPesados : [];
+    const fora = TS.partesDe(t);
+    if (marcador.indexOf('grupos') !== -1 && fora.indexOf('grupos') === -1) fora.push('grupos');
+    if (fora.some((nome) => marcador.indexOf(nome) === -1)) compatibilidadeIncompleta++;
     divididos++;
     const partes = {};
     for (const nome of fora) {
@@ -152,6 +154,7 @@ const conta = (rotulo, n, total, detalhe) => {
   conta('divididos INCOMPLETOS com prova (gravação seria recusada)', incompletos, divididos);
   conta('divididos que a TARJA marcaria (só testemunha, sem prova)', semProva, divididos,
     'diferença esperada: elenco vazio com organizador em memberUids');
+  conta('marcador nativo AUSENTE/INCOMPLETO (não muda a leitura web)', compatibilidadeIncompleta, divididos);
 
   /* ── ⑤ AUTORIA: aviso de placar sem nome de gente ───────────────────────── */
   console.log('\n── autoria dos avisos de placar (amostra das caixas)');
@@ -174,8 +177,8 @@ const conta = (rotulo, n, total, detalhe) => {
   let comJogos = 0, jogoSemEspelho = 0, divergem = 0, orfaos = 0;
   for (const d of torneios.docs) {
     const t = d.data() || {};
-    const fora = Array.isArray(t._semPesados) ? t._semPesados : [];
-    if (fora.indexOf('matches') === -1) continue;
+    const fora = TS.partesDe(t);
+    if (fora.indexOf('matches') === -1) throw new Error('contrato canônico sem matches');
     const [jogos, espelho] = await Promise.all([
       d.ref.collection('matches').get(), d.ref.collection('results').get(),
     ]);

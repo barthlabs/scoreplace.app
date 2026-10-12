@@ -18,8 +18,18 @@ ok(/S\.dividir\(JSON\.parse\(JSON\.stringify\(montado\)\), nomes\)/.test(src),
 ok(/tournaments_backup\/\$\{t\.id\}/.test(src), 'backup pré-divisão é obrigatório no gate');
 ok(!/\/participants`, tk\),\n\s*lista\(`\$\{BASE\}\/tournaments\/\$\{t\.id\}\/history/.test(src),
   'não volta a ler a coleção participants fixa');
-ok(/PARTES_DO_ESPELHO_LEGADO/.test(src) && /if \(!estado\.dividida\)/.test(src),
-  'espelho legado e fonte viva dividida continuam sendo provas distintas');
+ok(/const fora = S\.partesDe\(config\)/.test(src),
+  'a fonte canônica é invariável: todo torneio é lido como dividido');
+ok(/MARCADOR DE COMPATIBILIDADE AUSENTE OU INCOMPLETO/.test(src),
+  'marcador legado ausente vira bloqueio de compatibilidade, nunca caminho de torneio inteiro');
+ok(!/PARTES_DO_ESPELHO_LEGADO/.test(src) && !/estado\.dividida/.test(src),
+  'não resta caminho de auditoria para torneio inteiro');
+ok(/process\.exitCode = problemasN \? 1 : 0/.test(src) && !/process\.exit\(problemasN/.test(src),
+  'o veredito não é truncado por process.exit antes do stdout esvaziar');
+ok(/function contaRegistrosMontados/.test(src) && /registro\.item != null/.test(src),
+  'a prova conta o conteúdo dos registros, não buracos materializados em índices históricos');
+ok(/const CONCORRENCIA = 8/.test(src) && /await emLotes\(torneios, CONCORRENCIA/.test(src),
+  'a auditoria completa usa concorrência limitada, sem deixar a prova serial expirar');
 
 console.log((fail ? '✗' : '✓') + ' conferidor-fase2-segue-a-fonte-canonica: ' + pass + ' ok, ' + fail + ' falhas');
 process.exit(fail ? 1 : 0);
