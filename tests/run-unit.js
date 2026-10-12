@@ -163,6 +163,8 @@ const SUITES = [
   'functions/test-split-parts-marker.js',
   'functions/test-category-eligibility-core.js',
   'functions/test-legacy-category-definition-core.js',
+  'tests/planejamento-fases-legadas.test.js',
+  'tests/migrar-fases-legadas-lote.test.js',
   'functions/test-registration-lifecycle-core.js',
   'functions/test-registration-merge-core.js',
   'functions/test-push-token-core.js',

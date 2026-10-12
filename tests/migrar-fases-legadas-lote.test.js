@@ -1,0 +1,10 @@
+'use strict';
+const fs = require('fs'); const path = require('path'); let fail = 0;
+const source = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'migrar-fases-legadas-lote.js'), 'utf8');
+const ok = (value, message) => { console.log((value ? '✓ ' : '✗ ') + message); if (!value) fail++; };
+ok(source.includes('runOne') && source.includes('writePhaseProjection'), 'lote usa o mesmo núcleo CAS da migração individual');
+ok(source.includes('expected !== manifest.manifestFingerprint') && source.includes('manifesto mudou'), 'lote exige recibo fresco antes de escrever');
+ok(source.includes('args.length !== 3'), 'validador aceita exatamente os três argumentos explícitos da aplicação');
+ok(source.includes("outcome: 'blocked'") && source.includes('results.push'), 'falha de um torneio recebe recibo e não apaga os demais');
+ok(source.includes('protectedFingerprint') && source.includes('planLegacyPhaseProjection'), 'lote conserva o contrato de campos protegidos da projeção');
+process.exit(fail ? 1 : 0);
