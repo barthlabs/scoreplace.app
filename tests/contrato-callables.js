@@ -185,6 +185,7 @@ const TABELA = [
   { nome: "resolveProfileTournamentCategoryChange", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },
   { nome: "resolveWOSubstitutionChoice", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },
   { nome: "respondHostInvite", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
+  { nome: "reconcileOwnTrophies", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
   { nome: "revertLigaGroupWO", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },
   { nome: "revertMonarchGroupWO", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"default"} },
   { nome: "revogarPasskey", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },

@@ -102,7 +102,9 @@ const S = v => ({ stringValue: v });
     // que era o único escritor dela no cliente.
     'skillBySportSource',
     'phoneSource', 'phoneSetBy', 'phoneSetAt', 'friends', 'friendRequestsSent',
-    'friendRequestsReceived', 'friendRequestsSentAt', 'theme', 'uiScale', 'activeCasualRoom', 'liveScorePrefs', 'casualLast', 'casualPrefs', 'preferredLocations', 'notifyPlatform', 'notifyEmail', 'notifyWhatsApp', 'notifyLevel', 'presenceVisibility', 'statsVisibility', 'presenceMuteDays', 'presenceMuteUntil', 'presenceAutoCheckin', 'acceptedTerms', 'acceptedTermsAt', 'acceptedTermsVersion', 'acceptedTermsGrandfathered', 'lastSeenAt', 'lastClientVersion', 'lastClientPlatform', 'favorites', 'hiddenTournaments', 'acceptFriendRequests', 'omitEmail', 'omitPhone', 'liveAlerts', 'liveAlertsWho', 'blockedUids', 'emailVerified', 'fcmToken', 'fcmTokenPlatform', 'fcmTokenUpdatedAt', 'linkedPhones', 'hasGooglePhotoReal'];
+    'friendRequestsReceived', 'friendRequestsSentAt', 'theme', 'uiScale', 'activeCasualRoom', 'liveScorePrefs', 'casualLast', 'casualPrefs', 'preferredLocations', 'notifyPlatform', 'notifyEmail', 'notifyWhatsApp', 'notifyLevel', 'presenceVisibility', 'statsVisibility', 'presenceMuteDays', 'presenceMuteUntil', 'presenceAutoCheckin', 'acceptedTerms', 'acceptedTermsAt', 'acceptedTermsVersion', 'acceptedTermsGrandfathered', 'lastSeenAt', 'lastClientVersion', 'lastClientPlatform', 'favorites', 'hiddenTournaments', 'acceptFriendRequests', 'omitEmail', 'omitPhone', 'liveAlerts', 'liveAlertsWho', 'blockedUids', 'emailVerified', 'fcmToken', 'fcmTokenPlatform', 'fcmTokenUpdatedAt', 'linkedPhones', 'hasGooglePhotoReal',
+    // Ranking é uma projeção de coleções canônicas e só o servidor a calcula.
+    '_rankStats'];
   out.ataquesExtras = {};
   out.criaComExtras = {};
   for (const field of extras) {
@@ -133,6 +135,12 @@ const S = v => ({ stringValue: v });
   // capability: o dono não pode escolher data, procedência ou handle direto.
   out.escreveProprioLetzplayImport = await req('PATCH', 'users/' + A + '/letzplay/import', A,
     { fields: { source: S('letzplay'), handle: S('@forjado') } });
+  // Recompensas não são uma escolha do aparelho: a Function reconcilia a
+  // partir das fontes canônicas e Rules impede tanto prêmio quanto marco falso.
+  out.escreveProprioTrofeu = await req('PATCH', 'users/' + A + '/trophies/forjado', A,
+    { fields: { awardedAt: S('2099-01-01'), tier: S('platina') } });
+  out.escreveProprioMarco = await req('PATCH', 'users/' + A + '/milestones/forjado_99', A,
+    { fields: { level: { integerValue: '99' } } });
 
   // ── CONTROLE: cross-user continua bloqueado (prova que as rules estão ativas) ──
   out.crossUser = await req('PATCH', 'users/' + V + '?updateMask.fieldPaths=displayName', A,
@@ -220,6 +228,10 @@ ok(novo.escreveMatchHistoryVitima === 403,
   '🔒 cliente não cria estatística no histórico de terceiro (got ' + novo.escreveMatchHistoryVitima + ')');
 ok(novo.escreveProprioLetzplayImport === 403,
   '🔒 cliente não grava import Letzplay direto; a capability fixa UID e procedência (got ' + novo.escreveProprioLetzplayImport + ')');
+ok(novo.escreveProprioTrofeu === 403,
+  '🔒 cliente não fabrica troféu próprio; a reconciliação é a única porta (got ' + novo.escreveProprioTrofeu + ')');
+ok(novo.escreveProprioMarco === 403,
+  '🔒 cliente não fabrica nível de marco; a reconciliação é a única porta (got ' + novo.escreveProprioMarco + ')');
 ok(novo.crossUser === 403, 'controle: editar o perfil de OUTRO segue negado (got ' + novo.crossUser + ')');
 
 // ── loginRedirects (v1.2.9): mapa credencial→dono que o merge grava ─────────

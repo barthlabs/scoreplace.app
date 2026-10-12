@@ -71,6 +71,7 @@ const SUITES = [
   'tests/classificacao-congelada-reidrata-o-nome.test.js',
   'tests/classificacao-chave-canonica.test.js',
   'tests/trofeu-podio-por-uid.test.js',
+  'tests/trophy-writes-are-server-only.test.js',
   'tests/saldo-e-sempre-na-unidade-mais-rica.test.js',
   'tests/repescagem-decidida-nao-se-reescreve.test.js',
   'tests/vaga-carimbada-nao-muda-no-servidor.test.js',

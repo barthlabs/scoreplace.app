@@ -1366,7 +1366,8 @@ service cloud.firestore {
                 'gender', 'birthDate', 'age', 'city', 'hrMax', 'letzplayHandle', 'letzplaySource',
                 'phone', 'phoneCountry', 'preferredCeps', 'preferredSports', 'skillBySport',
                 'canRefereeBySport', 'refereeSports', 'updatedAt', 'emailVerified', 'fcmToken',
-                'fcmTokenPlatform', 'fcmTokenUpdatedAt', 'linkedPhones', 'hasGooglePhotoReal'];
+                'fcmTokenPlatform', 'fcmTokenUpdatedAt', 'linkedPhones', 'hasGooglePhotoReal',
+                '_rankStats'];
       }
 
       // A criação inicial só ocorre pela Function initializeUserProfile. Ela reserva
@@ -1496,18 +1497,19 @@ service cloud.firestore {
       // o cliente engolia com `.catch` e devolvia `{}` — então **o amigo aparecia
       // sempre com ZERO troféus**. Recusa desenhada como ausência.
       //
-      // ESCRITA segue só do dono (o backfill usa Admin SDK e passa por fora das regras).
+      // Concessão e revogação são uma projeção de dados canônicos. O navegador só
+      // solicita a reconciliação do próprio UID; apenas a Function escreve.
       match /trophies/{trophyId} {
         allow read: if request.auth != null && (
           request.auth.uid == userId || statsVisibleToCaller(userId)
         );
-        allow write: if request.auth != null && request.auth.uid == userId;
+        allow write: if false;
       }
       match /milestones/{milestoneId} {
         allow read: if request.auth != null && (
           request.auth.uid == userId || statsVisibleToCaller(userId)
         );
-        allow write: if request.auth != null && request.auth.uid == userId;
+        allow write: if false;
       }
     }
 

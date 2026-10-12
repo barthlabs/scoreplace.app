@@ -91,22 +91,10 @@
         // tem 50+ cores únicas mesmo após quantização agressiva.
         if (count < 12) {
           window._lastMonogramCheck.status = 'monogram-detected';
-          // Revoga o troféu — usuário não tem foto real
-          var _rdb = _db();
-          if (_rdb && _cache.trophies[uid] && _cache.trophies[uid]['perfil_foto']) {
-            _rdb.collection('users').doc(uid)
-              .collection('trophies').doc('perfil_foto')
-              .delete()
-              .then(function() {
-                if (_cache.trophies[uid]) delete _cache.trophies[uid]['perfil_foto'];
-                var cIds = _getCheckedTrophyIds(uid);
-                var idx = cIds.indexOf('perfil_foto');
-                if (idx !== -1) { cIds.splice(idx, 1); _saveCheckedTrophyIds(uid, cIds); }
-                window._warn('[trophies] REVOKED perfil_foto via pixel-sampling — only', count, 'unique colors (monogram detected)');
-                window._lastMonogramCheck.revoked = true;
-              })
-              .catch(function() {});
-          }
+          // A análise visual local é apenas diagnóstica. Ela não é uma prova
+          // confiável nem uma autorização para apagar documento de conquista.
+          // A revisão canônica permanece no servidor.
+          _requestOwnTrophyReconciliation(uid, true);
         }
       } catch (e) {
         window._lastMonogramCheck.status = 'exception:' + (e && e.message);
@@ -119,6 +107,39 @@
   function _db() {
     if (window.FirestoreDB && window.FirestoreDB.db) return window.FirestoreDB.db;
     return null;
+  }
+
+  // Toda mutação de troféu/marco é decisão do servidor. O cliente pode pedir
+  // reconciliação do próprio UID, com debounce, mas jamais indica o prêmio,
+  // nível ou valor a gravar.
+  var _reconcilePromiseByUid = {};
+  var _reconcileLastAtByUid = {};
+  function _requestOwnTrophyReconciliation(uid, force) {
+    var current = (window.AppStore && window.AppStore.currentUser) || {};
+    if (!uid || uid !== current.uid || !window.FirestoreDB ||
+        typeof window.FirestoreDB.reconcileOwnTrophies !== 'function') return Promise.resolve(false);
+    var now = Date.now();
+    if (!force && _reconcileLastAtByUid[uid] && now - _reconcileLastAtByUid[uid] < 15000) {
+      return _reconcilePromiseByUid[uid] || Promise.resolve(false);
+    }
+    if (_reconcilePromiseByUid[uid]) return _reconcilePromiseByUid[uid];
+    _reconcileLastAtByUid[uid] = now;
+    _reconcilePromiseByUid[uid] = window.FirestoreDB.reconcileOwnTrophies()
+      .then(function(result) {
+        return window._loadUserTrophies(uid).then(function() {
+          return !!(result && ((result.awarded && result.awarded.length) ||
+            (result.milestonesAwarded && result.milestonesAwarded.length)));
+        });
+      })
+      .catch(function(error) {
+        window._warn('[trophies] reconciliation failed', error && error.message);
+        return false;
+      })
+      .then(function(result) {
+        delete _reconcilePromiseByUid[uid];
+        return result;
+      });
+    return _reconcilePromiseByUid[uid];
   }
 
   // ─── Resolução de identidade por UID em partidas/colocação ────────────────
@@ -540,138 +561,21 @@
     });
   };
 
-  // ─── Conceder troféu (idempotente) ────────────────────────────────────────
+  // ─── Conceder troféu (intenção no cliente; decisão no servidor) ──────────
   window._checkAndAwardTrophy = function(trophyId, uid, ctx) {
     if (!trophyId || !uid) return Promise.resolve(false);
-
     var trophy = window.TROPHY_CATALOG_BY_ID && window.TROPHY_CATALOG_BY_ID[trophyId];
-    if (!trophy) return Promise.resolve(false);
-
-    // Já tem em cache local?
-    var userTrophies = _cache.trophies[uid] || {};
-    if (userTrophies[trophyId]) return Promise.resolve(false); // já conquistado
-
-    // Lock em voo
-    var lockKey = uid + '_' + trophyId;
-    if (_pendingAwards[lockKey]) return Promise.resolve(false);
-    _pendingAwards[lockKey] = true;
-
-    // Verificação da condição
+    if (!trophy || (_cache.trophies[uid] || {})[trophyId]) return Promise.resolve(false);
     ctx = ctx || {};
     ctx.currentUser = (window.AppStore && window.AppStore.currentUser) || ctx.currentUser || {};
     ctx.stats = ctx.stats || (_cache.stats[uid] || {});
     ctx.userTrophies = ctx.userTrophies || (_cache.trophies[uid] || {});
-
-    var conditionMet = false;
     try {
-      conditionMet = trophy.check(ctx);
-    } catch(e) {
-      delete _pendingAwards[lockKey];
+      if (!trophy.check(ctx)) return Promise.resolve(false);
+    } catch (error) {
       return Promise.resolve(false);
     }
-
-    if (!conditionMet) {
-      delete _pendingAwards[lockKey];
-      return Promise.resolve(false);
-    }
-
-    // v1.8.66: verificar Firestore antes de conceder — previne re-concessão
-    // quando o hook dispara antes do bootstrap terminar de carregar o cache.
-    var db = _db();
-    if (!db) { delete _pendingAwards[lockKey]; return Promise.resolve(false); }
-    return db.collection('users').doc(uid).collection('trophies').doc(trophyId).get()
-      .then(function(existingDoc) {
-        if (existingDoc.exists) {
-          // Já tem no Firestore — popular cache local e não mostrar overlay
-          if (!_cache.trophies[uid]) _cache.trophies[uid] = {};
-          _cache.trophies[uid][trophyId] = existingDoc.data();
-          delete _pendingAwards[lockKey];
-          return false;
-        }
-        // Não existe → prosseguir para concessão
-
-    // Calcular tier dinâmico
-    return _loadTrophyStats().then(function(tStats) {
-      var tier = trophy.tier; // tier fixo
-      if (!tier) {
-        var count = (tStats.counts && tStats.counts[trophyId]) || 0;
-        var total = tStats.totalUsers || 1;
-        var pct = (count / total) * 100;
-        tier = window._trophyTierFromPct ? window._trophyTierFromPct(pct) : 'bronze';
-      }
-
-      var db = _db();
-      if (!db) {
-        delete _pendingAwards[lockKey];
-        return false;
-      }
-
-      var payload = { awardedAt: new Date().toISOString(), tier: tier };
-      // v1.6.16-beta: pra troféus de natureza ambígua (perfil_foto, por
-      // exemplo, depende de heurística pra detectar default Google avatar),
-      // grava debugInfo que permite inspeção via Firebase Console quando
-      // user reporta concessão incorreta. Sem isso, era impossível debugar
-      // sem DevTools no celular do user.
-      if (trophyId === 'perfil_foto') {
-        try {
-          var _fbU = window.firebase && window.firebase.auth && window.firebase.auth().currentUser;
-          var _cuT = (window.AppStore && window.AppStore.currentUser) || {};
-          payload._debugInfo = {
-            photoURL_fb: (_fbU && _fbU.photoURL) ? String(_fbU.photoURL).slice(0, 500) : null,
-            photoURL_store: _cuT.photoURL ? String(_cuT.photoURL).slice(0, 500) : null,
-            displayName: _cuT.displayName || (_fbU && _fbU.displayName) || null,
-            email: _cuT.email || (_fbU && _fbU.email) || null,
-            providerId: (_fbU && _fbU.providerData && _fbU.providerData[0]) ? _fbU.providerData[0].providerId : null
-          };
-          window._warn('[trophy perfil_foto AWARDED] photoURL=', payload._debugInfo.photoURL_fb || payload._debugInfo.photoURL_store);
-        } catch (_e) {}
-      }
-      return db.collection('users').doc(uid)
-        .collection('trophies').doc(trophyId)
-        .set(payload)
-        .then(function() {
-          // Atualiza cache local
-          if (!_cache.trophies[uid]) _cache.trophies[uid] = {};
-          _cache.trophies[uid][trophyId] = payload;
-          delete _pendingAwards[lockKey];
-
-          // ⛔ O incremento do contador global saiu daqui: era negado pelas rules e falhava
-          // calado. Quem mantém o número agora é o servidor, recontando — ver o bloco acima.
-
-          // Verifica troféu de categoria completa (após 300ms para cache estar fresco)
-          if (trophy.category && trophyId.indexOf('cat_') !== 0) {
-            var _catId = 'cat_' + trophy.category;
-            if (window.TROPHY_CATALOG_BY_ID && window.TROPHY_CATALOG_BY_ID[_catId]) {
-              (function(_cid) {
-                setTimeout(function() {
-                  window._checkAndAwardTrophy(_cid, uid, {
-                    stats: ctx.stats,
-                    currentUser: ctx.currentUser,
-                    userTrophies: _cache.trophies[uid] || {}
-                  }).catch(function() {});
-                }, 300);
-              })(_catId);
-            }
-          }
-
-          // Exibe overlay de conquista
-          _showTrophyUnlockOverlay(trophy, tier);
-
-          window._log('[trophies] AWARDED', trophyId, 'tier:', tier);
-          return true;
-        })
-        .catch(function(e) {
-          delete _pendingAwards[lockKey];
-          window._warn('[trophies] award failed', trophyId, e && e.message);
-          return false;
-        });
-    }); // end _loadTrophyStats.then
-      }) // end .then(existingDoc)
-      .catch(function() {
-        // Erro ao ler Firestore — continuar sem a verificação extra
-        delete _pendingAwards[lockKey];
-        return false;
-      });
+    return _requestOwnTrophyReconciliation(uid, false);
   };
 
   // ─── Conceder milestone de nível ─────────────────────────────────────────
@@ -695,57 +599,9 @@
 
     if (newLevel <= prevLevel) return; // nenhum nível novo
 
-    // Concede todos os níveis novos do prevLevel+1 até newLevel
-    var db = _db();
-    if (!db) return;
-
-    for (var lvl = prevLevel + 1; lvl <= newLevel; lvl++) {
-      (function(level) {
-        var threshold = window._milestoneThresholdAt ? window._milestoneThresholdAt(milestone, level) : (milestone.startAt + milestone.step * (level - 1));
-        var tier = window._milestoneTierFromLevel ? window._milestoneTierFromLevel(level) : 'bronze';
-        var payload = {
-          level: level,
-          threshold: threshold,
-          tier: tier,
-          awardedAt: new Date().toISOString(),
-          metric: milestone.metric,
-          value: currentValue
-        };
-
-        db.collection('users').doc(uid)
-          .collection('milestones').doc(milestoneId + '_' + level)
-          .set(payload)
-          .then(function() {
-            if (!_cache.milestones[uid]) _cache.milestones[uid] = {};
-            _cache.milestones[uid][milestoneId] = payload;
-
-            // Exibe overlay apenas para ouro/platina ou para cada múltiplo de 5 níveis
-            if (tier === 'ouro' || tier === 'platina' || level % 5 === 0) {
-              var fakeTrophy = {
-                title: milestone.titleFn ? milestone.titleFn(threshold) : ('Nível ' + level),
-                desc: 'Marco: ' + (milestone.metric),
-                icon: milestone.icon || '🏅',
-                id: milestoneId,
-                isMilestone: true,
-                level: level
-              };
-              _showTrophyUnlockOverlay(fakeTrophy, tier);
-            }
-            window._log('[trophies] MILESTONE', milestoneId, 'level', level, 'tier', tier);
-          })
-          .catch(function() {});
-      })(lvl);
-    }
-
-    // Atualiza "bestLevel" no doc raiz do milestone
-    db.collection('users').doc(uid)
-      .collection('milestones').doc(milestoneId)
-      .set({ level: newLevel, awardedAt: new Date().toISOString() }, { merge: true })
-      .catch(window._falhouCalado('trofeu-rankStats'));
-
-    if (!_cache.milestones[uid]) _cache.milestones[uid] = {};
-    _cache.milestones[uid][milestoneId] = _cache.milestones[uid][milestoneId] || {};
-    _cache.milestones[uid][milestoneId].level = newLevel;
+    // O servidor deriva e grava todos os níveis a partir das coleções
+    // canônicas; a tela nunca persiste um marco por conta própria.
+    return _requestOwnTrophyReconciliation(uid, false);
   };
 
   // ─── Dispatcher principal: chama todos os checks para um evento ──────────
@@ -850,39 +706,9 @@
             var cu = (window.AppStore && window.AppStore.currentUser) || {};
             var ctx = { stats: stats, currentUser: cu };
 
-            // ── Revogação (v1.6.10-beta) ──────────────────────────────────────
-            // Troféus marcados com revocable:true são re-verificados a cada
-            // bootstrap. Se a condição não é mais satisfeita (ex: usuário não
-            // tem foto real), o troféu é removido do Firestore e do cache local,
-            // permitindo que seja reconquistado quando a condição voltar a ser
-            // verdadeira. Isso corrige troféus concedidos incorretamente antes
-            // da lógica de check ser mais rigorosa (ex: perfil_foto).
-            var revocableTrophies = (window.TROPHY_CATALOG || []).filter(function(t) { return t.revocable; });
-            var _rdb = _db();
-            revocableTrophies.forEach(function(trophy) {
-              var userTrophies = _cache.trophies[uid] || {};
-              if (!userTrophies[trophy.id]) return; // não tem → nada a revogar
-              var stillValid = false;
-              try { stillValid = trophy.check(ctx); } catch(e) {}
-              if (stillValid) return; // condição ainda atendida → mantém
-              // Condição não atendida → revogar
-              if (!_rdb) return;
-              _rdb.collection('users').doc(uid)
-                .collection('trophies').doc(trophy.id)
-                .delete()
-                .then(function() {
-                  if (_cache.trophies[uid]) delete _cache.trophies[uid][trophy.id];
-                  // Remove do localStorage de checados para ser re-avaliado agora
-                  var cIds = _getCheckedTrophyIds(uid);
-                  var idx = cIds.indexOf(trophy.id);
-                  if (idx !== -1) { cIds.splice(idx, 1); _saveCheckedTrophyIds(uid, cIds); }
-                  // Garante que este ID entre na passagem de awards abaixo
-                  if (toCheckIds.indexOf(trophy.id) === -1) toCheckIds.push(trophy.id);
-                  window._log('[trophies] REVOKED', trophy.id, '— condition no longer met');
-                })
-                .catch(function() {});
-            });
-            // ─────────────────────────────────────────────────────────────────
+            // A reconciliação autoritativa não aceita revogação do navegador.
+            // A tela pode sinalizar mudança, mas o servidor decide a projeção.
+            _requestOwnTrophyReconciliation(uid, true);
 
             // v1.6.24-beta: SEGUNDA CAMADA DE DEFESA pra perfil_foto.
             // A check síncrona usa patterns conhecidos pra rejeitar avatares
@@ -956,19 +782,10 @@
                 : checkedIds.concat(toCheckIds.filter(function(id) { return checkedIds.indexOf(id) === -1; }));
               _markBootstrapped(uid, newChecked);
 
-              // Persiste snapshot de ranking no doc do usuário
-              var _rdb = _db();
-              if (_rdb) {
-                var _rankSnap = {
-                  casualMatchesPlayed: stats.casualMatchesPlayed || 0,
-                  checkinsTotal:       stats.checkinsTotal       || 0,
-                  tournamentsEnrolled: stats.tournamentsEnrolled  || 0,
-                  tournamentWins:      stats.tournamentWins       || 0
-                };
-                _rdb.collection('users').doc(uid)
-                  .update({ _rankStats: _rankSnap })
-                  .catch(window._falhouCalado('trofeu-concedido'));
-              }
+              // Reconcilia incondicionalmente no servidor: o catálogo do
+              // navegador serve para apresentação, nunca para decidir o que
+              // persiste. Isso também atualiza o snapshot de ranking.
+              _requestOwnTrophyReconciliation(uid, true);
 
               // Se ganhou troféus retroativos, mostra resumo único
               if (newlyAwarded > 0) {

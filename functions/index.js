@@ -3769,6 +3769,22 @@ exports.saveOwnLetzplayImport = onCall(
   }
 );
 
+// O navegador pode pedir a revisão do PRÓPRIO perfil após um evento, mas não
+// informa qual troféu merece nem consegue gravar a subcoleção. A decisão e a
+// escrita vêm exclusivamente das fontes canônicas no servidor.
+exports.reconcileOwnTrophies = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
+  async (request) => {
+    const uid = request.auth && request.auth.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Login obrigatório");
+    const db = admin.firestore();
+    const profile = await db.collection("users").doc(uid).get();
+    if (!profile.exists) throw new HttpsError("failed-precondition", "Perfil inexistente");
+    const result = await _reconcileTrophiesForUser(db, uid, profile.data() || {}, "self");
+    return Object.assign({ ok: true }, result);
+  }
+);
+
 // ─── Biblioteca pessoal: templates e caixa de avisos ───────────────────────
 // O UID de destino nunca vem do navegador. Estas capabilities fecham duas
 // subcoleções que antes aceitavam mutação direta do dono, mantendo a leitura
@@ -7815,6 +7831,90 @@ async function _computeBackfillStats(db, uid, userData) {
   }
 
   return stats;
+}
+
+/*
+ * A única porta de escrita dos troféus de uma pessoa. Ela não recebe ids,
+ * níveis, placares ou qualquer "prova" do navegador: recalcula tudo a partir
+ * do perfil e das coleções canônicas. É idempotente por construção e serve ao
+ * bootstrap, à ação em tempo real e à rotina agendada.
+ */
+async function _reconcileTrophiesForUser(db, uid, userData, source) {
+  const profileRef = db.collection("users").doc(uid);
+  const stats = await _computeBackfillStats(db, uid, userData || {});
+  const trophiesRef = profileRef.collection("trophies");
+  const milestonesRef = profileRef.collection("milestones");
+  const [trophySnap, milestoneSnap] = await Promise.all([trophiesRef.get(), milestonesRef.get()]);
+  const existingTrophies = {};
+  trophySnap.forEach((doc) => { existingTrophies[doc.id] = doc.data() || {}; });
+  const existingMilestones = {};
+  milestoneSnap.forEach((doc) => { existingMilestones[doc.id] = doc.data() || {}; });
+
+  const awarded = [];
+  for (const def of BACKFILL_TROPHY_DEFS) {
+    if (existingTrophies[def.id]) continue;
+    try {
+      if (def.check(userData || {}, stats)) awarded.push(def.id);
+    } catch (error) {
+      _trofeuQueFalhou(def.id, error);
+    }
+  }
+  const earned = Object.assign({}, existingTrophies);
+  awarded.forEach((id) => { earned[id] = true; });
+  for (const category of BACKFILL_CAT_TROPHIES) {
+    if (!earned[category.id] && category.required.every((id) => earned[id])) {
+      awarded.push(category.id);
+      earned[category.id] = true;
+    }
+  }
+
+  const now = new Date().toISOString();
+  const batch = db.batch();
+  let writes = 0;
+  awarded.forEach((id) => {
+    batch.set(trophiesRef.doc(id), { awardedAt: now, tier: "bronze", reconciledBy: source });
+    writes++;
+  });
+
+  const milestonesAwarded = [];
+  for (const milestone of BACKFILL_MILESTONES) {
+    const value = stats[milestone.metric] || 0;
+    if (value < milestone.startAt) continue;
+    const newLevel = Math.floor((value - milestone.startAt) / milestone.step) + 1;
+    const previous = (existingMilestones[milestone.id] && existingMilestones[milestone.id].level) || 0;
+    if (newLevel <= previous) continue;
+    for (let level = previous + 1; level <= newLevel; level++) {
+      const levelId = milestone.id + "_" + level;
+      if (existingMilestones[levelId]) continue;
+      batch.set(milestonesRef.doc(levelId), {
+        level,
+        threshold: milestone.startAt + milestone.step * (level - 1),
+        tier: _milestoneTierFromLevel(level),
+        awardedAt: now,
+        metric: milestone.metric,
+        value,
+        reconciledBy: source,
+      });
+      milestonesAwarded.push(levelId);
+      writes++;
+    }
+    batch.set(milestonesRef.doc(milestone.id), { level: newLevel, awardedAt: now, reconciledBy: source }, { merge: true });
+    writes++;
+  }
+
+  const allTrophyIds = Object.keys(existingTrophies);
+  awarded.forEach((id) => { if (!allTrophyIds.includes(id)) allTrophyIds.push(id); });
+  const rankStats = {
+    casualMatchesPlayed: stats.casualMatchesPlayed || 0,
+    checkinsTotal: stats.checkinsTotal || 0,
+    tournamentsEnrolled: stats.tournamentsEnrolled || 0,
+    tournamentWins: stats.tournamentWins || 0,
+  };
+  batch.update(profileRef, { _rankStats: rankStats, _trophyIds: allTrophyIds });
+  writes++;
+  if (writes > 500) throw new HttpsError("resource-exhausted", "Reconciliação excedeu o limite de escrita");
+  await batch.commit();
+  return { awarded, milestonesAwarded, rankStats };
 }
 
 /* ⛔ CONTADOR DE TROFÉU NÃO SE SOMA — SE RECONTA.

@@ -2660,6 +2660,10 @@ window.FirestoreDB = {
     return this._callFn('saveOwnLetzplayImport', { import: imp || {} });
   },
 
+  async reconcileOwnTrophies() {
+    return this._callFn('reconcileOwnTrophies', {});
+  },
+
   async materializeOwnCasualMatchHistory(casualMatchId) {
     return this._callFn('materializeOwnCasualMatchHistory', { casualMatchId: String(casualMatchId || '') });
   },
