@@ -645,7 +645,7 @@ window._RELEASE_NOTES_HTML = (function () {
         '<li><b>🤝 Duplas da mesma equipe não se enfrentam:</b> quando uma equipe tem mais de uma dupla na categoria, o sorteio bloqueia confrontos internos e procura adversários de outras equipes.</li>' +
         '<li><b>🗓️ Previsão de quadras sem intervalos inventados:</b> a análise usa a capacidade contínua das quadras e mostra a quantidade real de jogos e janelas necessárias antes da publicação.</li>' +
         '<li><b>🔎 Encontrar jogo pelo número:</b> a busca aceita o número da partida, além do nome de atletas e equipes, para abrir rapidamente o jogo certo.</li>' +
-        '<li><b>📋 Inscrições reabertas com confirmação:</b> abrir ou fechar inscrições é confirmado pelo servidor antes de a tela mudar. Se houver uma restrição real, o app mostra o motivo em vez de pedir para atualizar sem necessidade.</li>' +
+        '<li><b>📋 Inscrições reabertas com confirmação:</b> abrir ou fechar inscrições é confirmado pelo servidor antes de a tela mudar. Se houver uma restrição real, o app mostra o motivo em vez de pedir para atualizar sem necessidade; os arquivos dessa correção são renovados junto da versão para que o navegador não conserve a tela anterior.</li>' +
         '<li><b>🗓️ Carimbo de atualização legível:</b> um registro antigo ou incompleto sem data válida não mostra mais <b>Invalid Date</b>; a informação só aparece quando há data e hora confirmáveis.</li>' +
       '</ul>' +
     '</div>' +
