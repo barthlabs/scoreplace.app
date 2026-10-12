@@ -3,10 +3,7 @@
 // A extensão apenas coleta dados que o usuário ou o organizador está vendo. A
 // normalização e a escrita vivem no servidor para que nenhum navegador possa
 // escolher caminhos, ids ou campos do acervo compartilhado.
-const model = require('../js/letzplay-model.js');
-
 const MAX_IMPORT_BYTES = 850 * 1024;
-const MAX_HISTORY_BYTES = 8 * 1024 * 1024;
 const MAX_GAMES = 5000;
 const HANDLE_MAX = 120;
 
@@ -55,22 +52,11 @@ function normalizeOwnImport(input) {
   return imp;
 }
 
-function normalizeHistory(input, suppliedHandle, suppliedGames) {
-  if (!plain(input)) throw new Error('histórico letzplay inválido');
-  const imp = cloneJson(input, 'histórico letzplay', MAX_HISTORY_BYTES);
-  const handle = normalizeHandle(suppliedHandle || imp.handle);
-  const games = suppliedGames == null ? imp.games : suppliedGames;
-  if (!Array.isArray(games) || games.length > MAX_GAMES) throw new Error('lote de jogos letzplay inválido');
-  const source = Object.assign({}, imp, { games: cloneJson(games, 'jogos letzplay', MAX_HISTORY_BYTES), handle });
-  const docs = model.historyDocs(source, handle);
-  return { handle, docs };
-}
-
 function isSameHandle(a, b) {
   return String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
 }
 
 module.exports = {
-  MAX_IMPORT_BYTES, MAX_HISTORY_BYTES, MAX_GAMES,
-  normalizeHandle, normalizeOwnImport, normalizeHistory, gameCount, isSameHandle,
+  MAX_IMPORT_BYTES, MAX_GAMES,
+  normalizeHandle, normalizeOwnImport, gameCount, isSameHandle,
 };
