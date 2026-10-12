@@ -8509,21 +8509,20 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
   const isLigaFmt = window._isLigaFormat ? window._isLigaFormat(t) : (t.format === 'Liga' || t.format === 'Ranking');
   const maxRounds = t.swissRounds || 99;
   const isFinished = isSuico && currentRound >= maxRounds && allComplete;
-  // Swiss-as-qualifier: Swiss rounds in a tournament whose final format is
-  // elimination/double-elim/groups (NOT pure Suíço/Liga). Label as "RODADA SUIÇA N/M".
-  // Em documentos atuais, a existência da próxima fase eliminatória é a
-  // definição de "Suíço classificatório". O rótulo histórico permanece só
-  // como fallback para torneios sem fases projetadas.
+  // Classificatória por clusters com eliminatória posterior: a tela precisa
+  // distingui-la da chave seguinte, sem inventar um modo/fase "Suíço".
+  // Em documentos atuais, a próxima fase eliminatória é o fato canônico;
+  // marcadores históricos continuam apenas como fallback de leitura.
   const _currentPhaseIndexSwiss = t.currentPhaseIndex || 0;
   const _canonicalSwissQualifier = Array.isArray(t.phases) && t.phases[_currentPhaseIndexSwiss] &&
     t.phases[_currentPhaseIndexSwiss].kind === 'classification'
     ? t.phases.length > _currentPhaseIndexSwiss + 1
     : null;
-  const isSwissQualifier = isSuico && (_canonicalSwissQualifier == null
+  const isClassificationQualifier = isSuico && (_canonicalSwissQualifier == null
     ? (t.format !== 'Suíço' && t.format !== 'Suíço Clássico' && !isLigaFmt)
     : _canonicalSwissQualifier);
-  const _swissQualifierLabel = function(n) {
-    return _t('bracket.swissRoundFull', {n: n, total: maxRounds});
+  const _classificationQualifierLabel = function(n) {
+    return _t('bracket.classificationRoundFull', {n: n, total: maxRounds});
   };
 
   // Safety net: auto-advance a stuck Swiss round. If all matches are complete
@@ -8609,7 +8608,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
     <div class="card" style="margin-top:1.5rem;">
       ${rankingCountdownHtml}
       <div class="sp-bracket-round-heading" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:1rem;">
-        <h3 class="card-title" style="margin:0;border-left:3px solid ${_isReiRainhaRound ? '#fbbf24' : 'var(--primary-color)'};padding-left:10px;">${_isReiRainhaRound ? '👑 ' : ''}${isSwissQualifier ? _swissQualifierLabel(currentRound) : (_t('bracket.round', {n: currentRound}) + (isSuico ? ` / ${maxRounds}` : ''))} ${currentRoundData.status === 'complete' ? '— ' + _t('bracket.complete') + ' ✓' : ''}</h3>
+        <h3 class="card-title" style="margin:0;border-left:3px solid ${_isReiRainhaRound ? '#fbbf24' : 'var(--primary-color)'};padding-left:10px;">${_isReiRainhaRound ? '👑 ' : ''}${isClassificationQualifier ? _classificationQualifierLabel(currentRound) : (_t('bracket.round', {n: currentRound}) + (isSuico ? ` / ${maxRounds}` : ''))} ${currentRoundData.status === 'complete' ? '— ' + _t('bracket.complete') + ' ✓' : ''}</h3>
         ${isOrg && !isFinished && allComplete && _phaseCad ? `
           <button class="btn btn-success btn-sm hover-lift" onclick="window._phaseCloseLeagueRound('${String(_phaseCad.tId || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}', ${parseInt(_phaseCad.phaseIdx, 10) || 0})">
             🔁 Encerrar rodada e sortear próxima
@@ -10006,7 +10005,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         _swissGN++;
         return renderMatchCard(m, canEnterResult, t.id, _swissGN);
       }).join('');
-      var _prLabel = isSwissQualifier ? _swissQualifierLabel(_pri + 1) : (_t('bracket.round', {n: _pri + 1}) + ' / ' + maxRounds);
+      var _prLabel = isClassificationQualifier ? _classificationQualifierLabel(_pri + 1) : (_t('bracket.round', {n: _pri + 1}) + ' / ' + maxRounds);
       var _prHideBtn = '';
       _completedColsHtml +=
         '<div class="bracket-round-column" data-round-num="' + (_pri + 1) + '" style="display:flex;flex-direction:column;gap:1rem;min-width:280px;">' +
@@ -10026,7 +10025,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
       _swissGN++;
       return renderMatchCard(m, canEnterResult, t.id, _swissGN);
     }).join('');
-    var _currentLabel = isSwissQualifier ? _swissQualifierLabel(currentRound) : (_t('bracket.round', {n: currentRound}) + ' / ' + maxRounds);
+    var _currentLabel = isClassificationQualifier ? _classificationQualifierLabel(currentRound) : (_t('bracket.round', {n: currentRound}) + ' / ' + maxRounds);
     var _currentStatusBadge = currentRoundData.status === 'complete'
       ? '<span style="color:var(--sp-c-4ade80,#4ade80);font-size:0.7rem;font-weight:700;white-space:nowrap;">✓ ' + _t('bracket.complete') + '</span>'
       : (isFinished ? '<span style="color:var(--sp-c-fbbf24,#fbbf24);font-weight:700;font-size:0.7rem;white-space:nowrap;">' + _t('bracket.tournamentFinished') + '</span>' : '');
@@ -10055,7 +10054,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         _roundColumns.push(
           '<div class="bracket-round-column" style="display:flex;flex-direction:column;gap:1rem;min-width:280px;opacity:0.9;">' +
             '<div style="display:flex;align-items:center;gap:8px;">' +
-              '<h4 style="color:var(--text-muted);font-size:0.75rem;text-transform:uppercase;letter-spacing:2px;margin:0;border-left:3px solid rgba(148,163,184,0.35);padding-left:8px;flex:1;">' + (isSwissQualifier ? _swissQualifierLabel(_upR) : (_t('bracket.round', {n: _upR}) + ' / ' + maxRounds)) + '</h4>' +
+              '<h4 style="color:var(--text-muted);font-size:0.75rem;text-transform:uppercase;letter-spacing:2px;margin:0;border-left:3px solid rgba(148,163,184,0.35);padding-left:8px;flex:1;">' + (isClassificationQualifier ? _classificationQualifierLabel(_upR) : (_t('bracket.round', {n: _upR}) + ' / ' + maxRounds)) + '</h4>' +
             '</div>' +
             '<div style="font-size:0.7rem;color:var(--text-muted);font-style:italic;">⏳ ' + _t('bracket.awaitingPrevRound') + '</div>' +
             '<div style="display:flex;flex-direction:column;gap:1.5rem;">' + _tbdSwiss + '</div>' +
@@ -10176,7 +10175,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         upcomingRoundsHtml +=
           '<div class="card" style="margin-top:1rem;opacity:0.8;border-style:dashed;">' +
             '<div class="sp-bracket-round-heading" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:0.5rem;">' +
-              '<h3 class="card-title" style="margin:0;border-left:3px solid rgba(148,163,184,0.35);padding-left:10px;">' + (isSwissQualifier ? _swissQualifierLabel(_legR) : (_t('bracket.round', {n: _legR}) + ' / ' + maxRounds)) + '</h3>' +
+              '<h3 class="card-title" style="margin:0;border-left:3px solid rgba(148,163,184,0.35);padding-left:10px;">' + (isClassificationQualifier ? _classificationQualifierLabel(_legR) : (_t('bracket.round', {n: _legR}) + ' / ' + maxRounds)) + '</h3>' +
               '<span style="font-size:0.75rem;color:var(--text-muted);">⏳ ' + _t('bracket.awaitingPrevRound') + '</span>' +
             '</div>' +
             '<div style="display:flex;flex-wrap:wrap;gap:12px;">' + _legCards + '</div>' +

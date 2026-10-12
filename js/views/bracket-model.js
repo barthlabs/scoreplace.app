@@ -169,12 +169,10 @@ window._rotaMostraAChaveDeste = function (hash, id) {
     return 'pending';
   }
 
-  // True when the tournament uses Swiss as a qualifier stage within a
-  // non-Swiss elimination-style format (Eliminatórias / Dupla Eliminatória /
-  // Fase de Grupos + Eliminatórias). In that case Swiss rounds must be labeled
-  // "RODADA SUIÇA N/M" to distinguish them from the elimination rounds that
-  // follow. Pure Suíço / Liga / Ranking tournaments keep the plain "Rodada N".
-  function _isSwissQualifierTournament(t) {
+  // Uma classificatória por rodadas que alimenta uma eliminatória precisa ser
+  // distinguida da chave seguinte. Isso NÃO cria um terceiro tipo de fase:
+  // "suíço" é só uma política de pareamento por clusters.
+  function _isClassificationQualifierTournament(t) {
     if (!t) return false;
     // No contrato canônico, Suíço é uma configuração de pareamento da fase
     // classificatória — não um terceiro tipo de fase nem o rótulo do torneio.
@@ -189,8 +187,8 @@ window._rotaMostraAChaveDeste = function (hash, id) {
         var pairing = classification.pairing || {};
         var strategy = String(pairing.strategy || classification.pairingStrategy || '').toLowerCase();
         var phaseCode = String(phase.formatCode || phase.format || '').toLowerCase();
-        var isSwissPairing = strategy === 'ranking_clusters' || /su[ií]ç/.test(phaseCode);
-        if (!isSwissPairing) return false;
+        var isClusterPairing = strategy === 'ranking_clusters' || /su[ií]ç/.test(phaseCode);
+        if (!isClusterPairing) return false;
         return t.phases.slice(phaseIndex + 1).some(function (next) {
           return next && next.kind === 'elimination';
         });
@@ -201,13 +199,13 @@ window._rotaMostraAChaveDeste = function (hash, id) {
     return true;
   }
 
-  // ── Swiss past rounds (used when Swiss was p2 resolution) ────────────────
+  // ── Rodadas classificatórias históricas (transição legada) ───────────────
   function _buildSwissPastColumns(t) {
     if (!Array.isArray(t.swissRoundsData) || t.swissRoundsData.length === 0) return [];
     var total = (t.swissRounds ? parseInt(t.swissRounds) : 0) || t.swissRoundsData.length;
     return t.swissRoundsData.map(function (rd, ri) {
       var matches = (rd && rd.matches) ? rd.matches : [];
-      var label = _tr('bracket.swissRoundFull', 'RODADA SUIÇA ' + (ri + 1) + '/' + total,
+      var label = _tr('bracket.classificationRoundFull', 'RODADA CLASSIFICATÓRIA ' + (ri + 1) + '/' + total,
         { n: ri + 1, total: total });
       return {
         id: 'swiss-past-r' + (ri + 1),
@@ -224,10 +222,10 @@ window._rotaMostraAChaveDeste = function (hash, id) {
     });
   }
 
-  // ── Swiss / Liga / Liga-rei-rainha from t.rounds[] ───────────────────────
+  // ── Rodadas classificatórias / Rei-Rainha de t.rounds[] ─────────────────
   function _buildSwissColumns(t) {
     if (!Array.isArray(t.rounds) || t.rounds.length === 0) return [];
-    var isSwissQualifier = _isSwissQualifierTournament(t);
+    var isClassificationQualifier = _isClassificationQualifierTournament(t);
 
     // v2.5.1: agrupa as entradas de t.rounds pelo número da RODADA (r.round).
     // Liga multi-categoria emite UMA entrada de t.rounds POR CATEGORIA no mesmo
@@ -248,7 +246,7 @@ window._rotaMostraAChaveDeste = function (hash, id) {
     });
     buckets.sort(function (a, b) { return a.round - b.round; });
 
-    var swissTotal = (t.swissRounds ? parseInt(t.swissRounds) : 0) || buckets.length;
+    var classificationTotal = (t.swissRounds ? parseInt(t.swissRounds) : 0) || buckets.length;
 
     return buckets.map(function (grp) {
       var rn = grp.round;
@@ -259,9 +257,9 @@ window._rotaMostraAChaveDeste = function (hash, id) {
       if (isMonarchRound) {
         label = _tr('bracket.round', 'Rodada ' + rn, { n: rn }) +
           ' • ' + _tr('bracket.monarchShort', 'Rei/Rainha');
-      } else if (isSwissQualifier) {
-        label = _tr('bracket.swissRoundFull', 'RODADA SUIÇA ' + rn + '/' + swissTotal,
-          { n: rn, total: swissTotal });
+      } else if (isClassificationQualifier) {
+        label = _tr('bracket.classificationRoundFull', 'RODADA CLASSIFICATÓRIA ' + rn + '/' + classificationTotal,
+          { n: rn, total: classificationTotal });
       } else {
         label = _tr('bracket.round', 'Rodada ' + rn, { n: rn });
       }

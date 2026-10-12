@@ -316,6 +316,9 @@ window._translations['en'] = {
   'bracket.hideStandings': 'Hide standings',
   'bracket.swissRecapTitle': 'Classification Phase — Top {n}',
   'bracket.swissRoundShort': 'Classification R{n}',
+  // Swiss is a pairing policy inside a classification phase, never a phase type.
+  // New UI uses the canonical key; keep the old one only for historical callers.
+  'bracket.classificationRoundFull': 'CLASSIFICATION ROUND {n}/{total}',
   'bracket.swissRoundFull': 'CLASSIFICATION ROUND {n}/{total}',
   'bracket.player': 'Participant',
   'bracket.champion': 'Champion',

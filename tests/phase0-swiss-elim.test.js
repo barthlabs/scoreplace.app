@@ -78,8 +78,8 @@ var swissQualifier = {
   rounds: [{ round: 1, matches: [{ id: 'swiss-q1', p1: 'A', p2: 'B' }] }]
 };
 var swissQualifierModel = window._getUnifiedRounds(swissQualifier);
-ok(swissQualifierModel.columns[0].label.indexOf('SUIÇA') !== -1,
-  'clusters classificatórios com eliminatória posterior recebem rótulo suíço pela fase, não pelo formato do topo');
+ok(swissQualifierModel.columns[0].label.indexOf('CLASSIFICATÓRIA') !== -1 && swissQualifierModel.columns[0].label.indexOf('SUIÇA') === -1,
+  'clusters classificatórios com eliminatória posterior recebem rótulo da classificatória, não um modo suíço');
 
 var roundRobinOnly = {
   phases: [{ kind: 'classification', classification: { structure: 'round_robin', pairing: { strategy: 'round_robin' } } }],
@@ -89,6 +89,12 @@ var roundRobinOnly = {
 var roundRobinModel = window._getUnifiedRounds(roundRobinOnly);
 ok(roundRobinModel.columns[0].label.indexOf('SUIÇA') === -1,
   'pontos corridos sem eliminatória não vira suíço por herança de formato');
+
+var renderSource = require('fs').readFileSync(require('path').join(__dirname, '..', 'js/views/bracket.js'), 'utf8');
+ok(renderSource.indexOf('_swissQualifierLabel') === -1 &&
+  renderSource.indexOf('_classificationQualifierLabel') !== -1 &&
+  renderSource.indexOf("bracket.classificationRoundFull") !== -1,
+  'cards de rodadas usam o rótulo classificatório canônico, sem recaída no nome suíço');
 
 // 8 duplas, classificatória Suíço/Liga (fase 0) de 1 rodada = 4 jogos, todos decididos.
 // Top 4 avançam pra eliminatória (fase 1): semis (2) + final (1) [+ 3º/4º].

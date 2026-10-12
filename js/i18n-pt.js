@@ -316,6 +316,10 @@ window._translations['pt'] = {
   'bracket.hideStandings': 'Ocultar classificação',
   'bracket.swissRecapTitle': 'Fase Classificatória — Top {n}',
   'bracket.swissRoundShort': 'Classificatória R{n}',
+  // "Suíço" não é tipo de fase: é apenas uma política possível de pareamento
+  // dentro da classificatória. A chave atual é a que telas novas devem usar;
+  // a antiga permanece abaixo só para artefatos históricos que ainda a peçam.
+  'bracket.classificationRoundFull': 'RODADA CLASSIFICATÓRIA {n}/{total}',
   'bracket.swissRoundFull': 'RODADA CLASSIFICATÓRIA {n}/{total}',
   'bracket.player': 'Participante',
   'bracket.champion': 'Campeão',
