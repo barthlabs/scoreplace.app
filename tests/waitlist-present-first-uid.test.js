@@ -47,9 +47,9 @@ ok(typeof W._idMapGet === 'function', '_idMapGet existe');
 ok(W._idMapGet(t, t.checkedIn, { uid: 'uR2' }) === _AGORA, 'presença lida por uid (uR2) do objeto');
 ok(W._idMapGet(t, t.checkedIn, { uid: 'uR1' }) == null, 'o outro homônimo (uR1) NÃO está presente');
 
-// (2) a REPRODUÇÃO da falha: resolver presença por NOME casa o homônimo ERRADO (uR1) → "ausente".
-//     _memberUidByName('Rodrigo') devolve o 1º match (uR1), cujo check-in não existe.
-ok(W._memberUidByName(t, 'Rodrigo') === 'uR1', 'por-nome resolve o 1º homônimo (uR1) — a armadilha');
+// (2) Nome ambíguo jamais pode escolher uma conta. A presença continua sendo obtida
+// pelo UID da entrada; o atalho por nome fecha em vez de arbitrariamente retornar uR1.
+ok(W._memberUidByName(t, 'Rodrigo') === '', 'por-nome recusa homônimo — não escolhe uR1 nem uR2');
 ok(W._idMapGet(t, t.checkedIn, 'Rodrigo') == null, 'lookup por-nome NÃO acha o presente (uR2) — a falha');
 
 // (3) o painel real: Rodrigo (presente via uR2) aparece ANTES da Ana (não presente).
