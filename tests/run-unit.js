@@ -1731,6 +1731,7 @@ const SUITES = [
   // Mantê-lo no runner evita que a rota callable volte a aceitar homônimos em silêncio.
   'functions/test-tournament-vip-core.js',
   'tests/materializacao-inscricoes-organizador.test.js',
+  'tests/credencial-persistente-censos.test.js',
   'tests/materializacao-nao-diverge-roster-legado.test.js',
   'functions/test-registration-roster-core.js',
   'tests/format2-novo-sem-suico.test.js',

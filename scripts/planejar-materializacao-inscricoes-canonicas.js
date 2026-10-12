@@ -8,11 +8,11 @@
 'use strict';
 
 const path = require('path');
-const { execSync } = require('child_process');
 const split = require(path.join(__dirname, '..', 'js', 'views', 'tournament-split-core.js'));
 const registration = require(path.join(__dirname, '..', 'functions', 'registration-core.js'));
 const materialization = require(path.join(__dirname, '..', 'functions', 'registration-migration-core.js'));
 const batch = require(path.join(__dirname, '..', 'functions', 'registration-batch-plan-core.js'));
+const { accessTokenForServiceAccount } = require('./firebase-service-account-token');
 
 if (process.argv.length > 2) {
   console.error('Este planejador é somente leitura e não aceita opções.');
@@ -20,7 +20,6 @@ if (process.argv.length > 2) {
 }
 
 const BASE = 'https://firestore.googleapis.com/v1/projects/scoreplace-app/databases/(default)/documents';
-const accessToken = () => execSync('gcloud auth print-access-token', { encoding: 'utf8' }).trim();
 
 function fromFirestore(value) {
   if (value == null) return null;
@@ -86,7 +85,7 @@ async function inspectTournament(document, token) {
 }
 
 async function main() {
-  const token = accessToken();
+  const token = await accessTokenForServiceAccount();
   const tournaments = await listCollection(BASE + '/tournaments', token);
   const inspected = [];
   for (let offset = 0; offset < tournaments.length; offset += 8) {

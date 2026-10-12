@@ -9,17 +9,16 @@
 'use strict';
 
 const path = require('path');
-const { execSync } = require('child_process');
 const split = require(path.join(__dirname, '..', 'js', 'views', 'tournament-split-core.js'));
 const registration = require(path.join(__dirname, '..', 'functions', 'registration-core.js'));
 const materialization = require(path.join(__dirname, '..', 'functions', 'registration-migration-core.js'));
+const { accessTokenForServiceAccount } = require('./firebase-service-account-token');
 
 if (process.argv.length > 2) {
   console.error('Este censo é somente leitura e não aceita opções.');
   process.exit(1);
 }
 const BASE = 'https://firestore.googleapis.com/v1/projects/scoreplace-app/databases/(default)/documents';
-const accessToken = () => execSync('gcloud auth print-access-token', { encoding: 'utf8' }).trim();
 
 function fromFirestore(value) {
   if (value == null) return null;
@@ -85,7 +84,7 @@ async function canonicalRegistrationsForTournament(document, token) {
 }
 
 async function main() {
-  const token = accessToken();
+  const token = await accessTokenForServiceAccount();
   const tournaments = await listCollection(BASE + '/tournaments', token);
   const totals = {
     tournaments: tournaments.length, entries: 0, registrations: 0, formedPairs: 0,
