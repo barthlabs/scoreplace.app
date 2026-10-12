@@ -65,7 +65,7 @@ const EMULADOR_MANUAL = {
  * O comando registrado é o que de fato funciona nos dois casos. */
 const AUTODRAW_MANUAL = [
   'test-closeround.js', 'test-closeround-authz.js', 'test-drawinitial.js',
-  'test-drawround-authz.js', 'test-format2.js', 'test-orphan-uid.js',
+  'test-drawround-authz.js', 'test-enrollment-reopen.js', 'test-format2.js', 'test-orphan-uid.js',
   'test-persist-boundary.js', 'test-uid-identity.js',
 ].reduce((acc, f) => {
   acc['functions-autodraw/' + f] = 'node functions-autodraw/' + f;

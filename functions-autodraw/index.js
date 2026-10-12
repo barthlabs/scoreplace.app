@@ -4902,6 +4902,17 @@ function _promoteWaitlists(t) {
   t.monarchWaitlist = {};
   return promoted;
 }
+/* A fonte do elenco já é `registrations` nos torneios migrados. Abrir as
+ * inscrições não pode tentar regravar a projeção histórica para promover uma
+ * espera que não existe no documento pai: a reabertura só muda a janela para
+ * as próximas inscrições. Nos documentos anteriores à migração, preservamos
+ * a promoção histórica na íntegra. */
+function _promoteWaitlistsWhenOpeningEnrollment(t) {
+  const migration = t && t.canonicalRegistrationMigration;
+  if (migration && migration.fingerprint) return 0;
+  _assertLegacyRosterMutationAllowed(t, 'promoção legada da lista de espera');
+  return _promoteWaitlists(t);
+}
 function _hasTournamentDraw(t) {
   return !!((_entriesOf(t, 'matches').length) || (_entriesOf(t, 'rounds').length) || (_entriesOf(t, 'groups').length));
 }
@@ -4951,8 +4962,7 @@ exports.setTournamentEnrollmentStatus = onCall(async request => {
         t.polls.forEach(p => { if (p && p.id === t.activePollId && p.status === 'active') { p.status = 'closed'; p.deadline = Date.now(); } });
         t.activePollId = null;
       }
-      _assertLegacyRosterMutationAllowed(t, 'promoção legada da lista de espera');
-      promoted = _promoteWaitlists(t);
+      promoted = _promoteWaitlistsWhenOpeningEnrollment(t);
       _enqueueEnrollmentNotice(tx, ref, t, 'enrollments-reopened', '📋 Inscrições reabertas', 'As inscrições de ' + String(t.name || 'seu torneio') + ' foram reabertas.', nowIso);
     } else if (action === 'close' || action === 'late-close') {
       if (t.status !== 'closed') { t.status = 'closed'; changed = true; }
