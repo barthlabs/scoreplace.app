@@ -31,6 +31,8 @@ if (fs.existsSync(CANON) && fs.existsSync(vendor)) {
 }
 const idx = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
 ok(idx.indexOf('js/views/tournament-split-core.js') !== -1, 'o navegador carrega o tradutor');
+ok(idx.indexOf('js/views/tournament-split-core.js') < idx.indexOf('js/store.js'),
+  'e ANTES do store.js: a inicialização nunca escolhe a leitura pelo marcador legado');
 ok(idx.indexOf('js/views/tournament-split-core.js') < idx.indexOf('js/firebase-db.js'),
   'e ANTES do firebase-db.js, que é quem o chama');
 

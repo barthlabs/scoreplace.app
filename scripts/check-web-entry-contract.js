@@ -41,6 +41,12 @@ function verify(root = ROOT, report = console) {
   });
   const requiredOrder = [
     ['js/domain/round-bounds.js', 'js/views/round-bounds-core.js'],
+    // Todo torneio é dividido. O núcleo que sabe listar/montar as partes precisa
+    // existir antes de cada consumidor: qualquer inversão reabre o fallback que
+    // decide pelo marcador de compatibilidade `_semPesados`.
+    ['js/views/tournament-split-core.js', 'js/store.js'],
+    ['js/views/tournament-split-core.js', 'js/firebase-db.js'],
+    ['js/views/tournament-split-core.js', 'js/views/bracket.js'],
   ];
   requiredOrder.forEach(([producer, consumer]) => {
     const before = localScripts.indexOf(producer);

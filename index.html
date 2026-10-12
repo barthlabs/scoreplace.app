@@ -653,13 +653,15 @@
   <!-- ⭐ TABELA DE COR, lado dinâmico: traduz `cor -> var(--token, cor)` quando a cor
        chega por variável (`'color:' + cor`). Tem que vir ANTES de quem desenha. -->
   <script src="js/paleta-tabela.js?v=2.0.118"></script>
+  <!-- ⭐ FASE 2 — o tradutor documento ⇄ subcoleções. ANTES do firebase-db.js: é ele que
+       REMONTA o torneio quando os jogos já saíram do documento (o passo que remove o
+       teto de 1 MB). Ele também vem ANTES do store.js: não existe mais um caminho de
+       bootstrap em que a store decida por `_semPesados` porque o núcleo canônico ainda
+       não chegou. Mesmo arquivo que o gatilho do servidor roda (copy-vendor). -->
+  <script src="js/views/tournament-split-core.js?v=2.3.141" defer></script>
 <script src="js/store.js?v=2.3.349-x2.07" defer></script>
   <!-- Fonte única das regras das modalidades (antes de create-tournament.js e bracket-ui.js, que derivam dela) -->
   <script src="js/views/sport-rules.js?v=2.0.118" defer></script>
-  <!-- ⭐ FASE 2 — o tradutor documento ⇄ subcoleções. ANTES do firebase-db.js: é ele que
-       REMONTA o torneio quando os jogos já saíram do documento (o passo que remove o
-       teto de 1 MB). Mesmo arquivo que o gatilho do servidor roda (copy-vendor). -->
-  <script src="js/views/tournament-split-core.js?v=2.3.141" defer></script>
   <!-- A cópia FIEL do sandbox e a prova de que ela é fiel (FIX.SANDBOX.P1). Depende do
        tradutor acima (_tSplit) pra conferir as partes; por isso vem logo depois dele. -->
   <script src="js/firebase-db.js?v=2.3.326" defer></script>
