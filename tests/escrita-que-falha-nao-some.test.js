@@ -71,11 +71,11 @@ must(mudos.length === 0,
 
 // ── ③ e as que existiam passaram pela porta ───────────────────────────────
 const ligadas = arqs.reduce((n, f) => n + (fs.readFileSync(f, 'utf8').match(/_falhouCalado\('/g) || []).length, 0);
-// A remoção da escrita direta de celular vinculado eliminou um ponto local;
-// o mínimo só pode cair com nova remoção comprovada de writer, nunca por
-// silenciosamente trocar o tratamento de erro.
-must(ligadas >= 22,
-  '③ ' + ligadas + ' pontos de escrita passam pela porta (eram 23 mudos; 1 foi removido)');
+// A remoção da escrita direta de celular e das duas escritas de recompensa
+// (troféu e marco, agora reconciliados pelo servidor) eliminou três pontos
+// locais. O mínimo só pode cair com nova remoção comprovada de writer.
+must(ligadas >= 21,
+  '③ ' + ligadas + ' pontos de escrita passam pela porta (eram 23 mudos; 3 foram removidos)');
 const VEN = fs.readFileSync(path.join(raiz, 'js/views/venues.js'), 'utf8');
 must((VEN.match(/_falhouCalado\('preferredLocations'\)/g) || []).length === 3,
   '③ ⭐ os 3 pontos que salvam os clubes preferidos usam o MESMO rótulo — a contagem por ponto só funciona se o nome for o mesmo');
