@@ -294,7 +294,7 @@ function setupHelpModal() {
       content: '<div style="background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.15);border-radius:10px;padding:12px;margin-bottom:12px;">' +
           '<div style="font-weight:700;font-size:0.85rem;color:var(--text-bright);margin-bottom:8px;">Antes do Sorteio</div>' +
           '<p>O organizador encerra inscrições (manual ou automático) e clica em "Sortear".</p>' +
-          '<p><b>Painel de resolução</b> — Se os inscritos não são potência de 2 (eliminatórias), painel inteligente com Nash sugere: BYE, Play-in, Repescagem, Suíço, Reabrir, Lista de Espera ou Enquete.</p>' +
+          '<p><b>Painel de resolução</b> — Se os inscritos não são potência de 2 (eliminatórias), painel inteligente com Nash sugere: BYE, Play-in, Repescagem, Classificatória por Rodadas, Reabrir, Lista de Espera ou Enquete.</p>' +
           '<p><b>Times incompletos</b> — Se há sobra de jogadores que não formam time completo: Reabrir, Bots, Lista de Espera ou Ajuste Manual.</p>' +
           '<p><b>Cabeças de chave (VIP)</b> — Marque jogadores como VIP na lista de inscritos para prioridade no seeding.</p>' +
         '</div>' +
@@ -960,7 +960,7 @@ function setupHelpModal() {
             '• <b>Duração da partida</b> — Para estimativa total<br>' +
             '• <b>Classificados Rei/Rainha</b> — 1 ou 2 por grupo<br>' +
             '• <b>Grupos</b> — Número e classificados por grupo<br>' +
-            '• <b>Rodadas Suíço</b> — Recomendado: log₂ participantes (aparece se Suíço foi escolhido como solução em torneio Eliminatórias)<br>' +
+            '• <b>Rodadas classificatórias</b> — Defina quantas rodadas por clusters antes do corte para a eliminatória (quando essa transição existir)<br>' +
             '• <b>W.O.</b> — Individual ou Time Inteiro<br>' +
             '• <b>Inscrições tardias</b> — Fechado, Standby, Expansão<br>' +
             '• <b>Desempate</b> — Arrastar para reordenar critérios<br>' +
@@ -995,7 +995,7 @@ function setupHelpModal() {
             '• <b>Reabrir (P2)</b> — Completar potência de 2<br>' +
             '• <b>BYE</b> — Avançar sem jogar na 1ª rodada<br>' +
             '• <b>Play-in</b> — Rodada extra para excedentes<br>' +
-            '• <b>Suíço</b> — Várias rodadas antes de afunilar<br>' +
+            '• <b>Classificatória por rodadas</b> — Várias rodadas por clusters antes de cortar para a eliminatória<br>' +
             '• <b>Enquete</b> — Participantes votam na solução<br>' +
             '• <b>Nash (Times)</b> — Score de equilíbrio por opção<br>' +
             '• <b>Reabrir (Times)</b> — Novos jogadores completam times<br>' +

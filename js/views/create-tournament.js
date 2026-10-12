@@ -1496,7 +1496,6 @@ function setupCreateTournamentModal() {
     'elim_simples': _t('create.descElimSimples'),
     'elim_dupla': _t('create.descElimDupla'),
     'grupos_mata': _t('create.descGrupos'),
-    'suico': _t('create.descSuico'),
     'liga': _t('create.descLiga')
   };
   var _drawModeDescs = {
@@ -2760,9 +2759,13 @@ function setupCreateTournamentModal() {
     // controles de estrutura antigos. Deferido pra rodar DEPOIS deste _onFormatoChange
     // (que seta displays) — o mount re-esconde tudo. Idempotente (config monta 1×).
     setTimeout(function () { if (typeof window._f2MountInEditForm === 'function') { try { window._f2MountInEditForm(); } catch (e) { if (window._warn) window._warn('[f2 mount] ' + e); } } }, 0);
-    const fmt = document.getElementById('select-formato').value;
+    var formatSelect = document.getElementById('select-formato');
+    // Compatibilidade de leitura: documentos e automações antigas ainda podem
+    // enviar `suico`, mas ele nunca pode reabrir um quarto caminho de escrita.
+    // A configuração real é a classificatória do FORMAT2 (rodadas + clusters).
+    if (formatSelect.value === 'suico') formatSelect.value = 'liga';
+    const fmt = formatSelect.value;
     const isElim = fmt === 'elim_simples' || fmt === 'elim_dupla';
-    const isSuico = fmt === 'suico';
     const isLiga = fmt === 'liga';
     const isGrupos = fmt === 'grupos_mata';
     const drawMode = document.getElementById('draw-mode').value;
@@ -2775,10 +2778,7 @@ function setupCreateTournamentModal() {
     var _duplaRow = document.getElementById('dupla-elim-row');
     if (_duplaRow) _duplaRow.style.display = isElim ? 'flex' : 'none';
 
-    _sd('suico-fields', isSuico ? 'block' : 'none');
     _sd('liga-fields', isLiga ? 'block' : 'none');
-    // v2.6.48: Agendamento de Sorteios foi extraído do #liga-fields pra logo abaixo
-    _sd('suico-draw-schedule-fields', isSuico ? 'block' : 'none');
     _sd('elim-settings', (isElim || isGrupos) ? 'block' : 'none');
     _sd('grupos-fields', isGrupos ? 'block' : 'none');
     if (isGrupos && typeof window._renderGruposSuggestions === 'function') { try { window._renderGruposSuggestions(); } catch (e) {} }
@@ -4048,7 +4048,7 @@ function setupCreateTournamentModal() {
       return matches * (teamSchedule.turns === 2 ? 2 : 1);
     }
 
-    var fmtLabel = ({ elim_simples: 'Eliminatória', elim_dupla: 'Dupla Elim.', grupos_mata: 'Fase de Grupos', liga: 'Pontos Corridos', suico: 'Suíço' })[fmt] || fmt;
+    var fmtLabel = ({ elim_simples: 'Eliminatória', elim_dupla: 'Dupla Elim.', grupos_mata: 'Fase de Grupos', liga: 'Pontos Corridos' })[fmt] || fmt;
     var headLabel = (drawMode === 'rei_rainha') ? '👑 Rei/Rainha (grupos de 4)' : fmtLabel;
     var catLabel = K > 1 ? (' · ' + K + ' categorias') : '';
     var h = '';
@@ -4406,10 +4406,6 @@ function setupCreateTournamentModal() {
       if (pCount < 2) return 0;
       if (fmtKey === 'elim_simples') return pCount - 1;
       if (fmtKey === 'elim_dupla') return (pCount - 1) * 2 + 1;
-      if (fmtKey === 'suico') {
-        const sr = parseInt(document.getElementById('suico-rounds').value) || 5;
-        return sr * Math.floor(pCount / 2);
-      }
       if (fmtKey === 'liga') return pCount * (pCount - 1) / 2;
       if (fmtKey === 'grupos_mata') {
         const groups = parseInt(document.getElementById('grupos-count').value) || 4;
@@ -4511,10 +4507,6 @@ function setupCreateTournamentModal() {
       if (fmtKey === 'elim_simples') return totalSlots + 1;
       if (fmtKey === 'elim_dupla') return Math.floor((totalSlots + 1) / 2);
       if (fmtKey === 'liga') return Math.floor((1 + Math.sqrt(1 + 8 * totalSlots)) / 2);
-      if (fmtKey === 'suico') {
-        const sr = parseInt(document.getElementById('suico-rounds').value) || 5;
-        return Math.floor(totalSlots / sr) * 2;
-      }
       if (fmtKey === 'grupos_mata') {
         const groups = parseInt(document.getElementById('grupos-count').value) || 4;
         const classified = parseInt(document.getElementById('grupos-classified').value) || 2;
@@ -4752,8 +4744,7 @@ function setupCreateTournamentModal() {
 
         // Suggestion 4: Change format
         const fmtOptions = [
-          { key: 'elim_simples', label: 'Eliminatórias Simples', optVal: 'elim_simples' },
-          { key: 'suico', label: 'Suíço Clássico', optVal: 'suico' }
+          { key: 'elim_simples', label: 'Eliminatórias Simples', optVal: 'elim_simples' }
         ];
         fmtOptions.forEach(opt => {
           if (opt.key === fmt) return;
@@ -4902,7 +4893,7 @@ function setupCreateTournamentModal() {
     if (dmDescEl && typeof _drawModeDescs !== 'undefined') dmDescEl.textContent = _drawModeDescs[drawModeVal] || '';
     // Sync formato buttons with loaded value (v2.6.66: categoria, não valor cru).
     var fmtBtns = document.querySelectorAll('#formato-buttons .formato-btn');
-    var _loadCat = (fmtValue === 'liga' || fmtValue === 'suico') ? 'pontos'
+    var _loadCat = fmtValue === 'liga' ? 'pontos'
                  : (fmtValue === 'grupos_mata') ? 'grupos' : 'elim';
     var _duplaTgl = document.getElementById('toggle-dupla-elim');
     if (_duplaTgl) _duplaTgl.checked = (fmtValue === 'elim_dupla');
@@ -5745,7 +5736,6 @@ window._saveTournamentClickHandler = async function() {
         const drawModeValue = document.getElementById('draw-mode').value;
         const formatMap = {
           liga: 'Liga',
-          suico: 'Suíço Clássico',
           elim_simples: 'Eliminatórias Simples',
           elim_dupla: 'Dupla Eliminatória',
           grupos_mata: 'Fase de Grupos + Eliminatórias'
@@ -7959,7 +7949,7 @@ window._saveCurrentFormAsTemplate = function(saveButton) {
   var sportClean = sportRaw.replace(/^[^\w\u00C0-\u024F]+/u, '').trim();
   var formatValue = get('select-formato');
   var drawModeValue = get('draw-mode');
-  var formatMap = { liga:'Liga', suico:'Suíço Clássico', elim_simples:'Eliminatórias Simples', elim_dupla:'Dupla Eliminatória', grupos_mata:'Fase de Grupos + Eliminatórias' };
+  var formatMap = { liga:'Liga', elim_simples:'Eliminatórias Simples', elim_dupla:'Dupla Eliminatória', grupos_mata:'Fase de Grupos + Eliminatórias' };
   var format;
   // Rei/Rainha é MODO do Pontos Corridos (campanha kill-monarch-format) → template
   // grava Liga + drawMode='rei_rainha' (mesma regra do save do torneio).
@@ -8148,7 +8138,9 @@ window._showTemplatePickerInCreate = function() {
     // v3.0.54: subtítulo reflete MULTIFASE. Antes mostrava só o formato da Fase 1
     // (ex.: "Liga") mesmo num torneio multifase. Agora, se há fases extras, lista
     // TODAS as fases pelo nome de exibição (Liga→Pontos Corridos etc.).
-    var _fmtCodeMap = { liga:'Liga', suico:'Suíço Clássico', elim_simples:'Eliminatórias Simples', elim_dupla:'Dupla Eliminatória', grupos_mata:'Fase de Grupos + Eliminatórias' };
+    // Template legado pode trazer `suico`; exibimos o conceito atual, sem
+    // ressuscitar uma opção de formato que o novo configurador não oferece.
+    var _fmtCodeMap = { liga:'Liga', suico:'Classificatória por rodadas', elim_simples:'Eliminatórias Simples', elim_dupla:'Dupla Eliminatória', grupos_mata:'Fase de Grupos + Eliminatórias' };
     var _disp = function(canon){ return (typeof window._formatDisplayName === 'function') ? (window._formatDisplayName(canon) || canon || '') : (canon || ''); };
     var _fmtLabel;
     if (Array.isArray(tpl.extraPhases) && tpl.extraPhases.length > 0) {
