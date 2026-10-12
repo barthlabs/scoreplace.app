@@ -3454,11 +3454,21 @@ window.toggleRegistrationStatus = function (tId) {
         }).catch(function(err) {
             if (window._warn) window._warn('[setTournamentEnrollmentStatus] falhou', err);
             if (typeof window._regBtnDone === 'function') window._regBtnDone();
-            // A tela não pode transformar uma recusa concreta do servidor numa instrução
-            // enganosa para "atualizar". A Function é a autoridade e já devolve a causa
-            // segura (permissão, estado da chave ou autenticação) para a organização agir.
-            var reason = err && typeof err.message === 'string' && err.message.trim()
-                ? err.message.trim()
+            // Só mensagens previstas pela callable chegam à tela. Isso preserva as causas
+            // acionáveis da organização sem transformar eventual detalhe interno do SDK ou
+            // do Firestore em texto público.
+            var serverReasons = [
+                'Entre na sua conta.',
+                'Ação de inscrição inválida.',
+                'Torneio não encontrado.',
+                'Só a organização altera as inscrições.',
+                'O torneio já foi encerrado.',
+                'A inscrição tardia não está disponível neste torneio.',
+                'Depois da chave, use a inscrição tardia.'
+            ];
+            var receivedReason = err && typeof err.message === 'string' ? err.message.trim() : '';
+            var reason = serverReasons.indexOf(receivedReason) !== -1
+                ? receivedReason
                 : 'Não foi possível concluir a alteração. Tente novamente.';
             if (typeof showNotification === 'function') showNotification('Não foi possível alterar as inscrições', reason, 'error');
         });
