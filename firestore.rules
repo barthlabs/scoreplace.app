@@ -1431,8 +1431,10 @@ service cloud.firestore {
 
       match /notifications/{notifId} {
         allow read: if request.auth != null && request.auth.uid == userId;
-        allow create: if request.auth != null
-                      && request.resource.data.fromUid == request.auth.uid;
+        // Destinatário, autoria e vínculo (amizade/torneio) são todos
+        // verificados por `sendRelatedNotification`. Um create direto não tem
+        // como provar a relação e permitiria forjar conteúdo na caixa alheia.
+        allow create: if false;
         // A marcação de leitura é uma capability do próprio dono
         // (`markOwnNotificationsRead`). A caixa continua em tempo real, mas
         // nenhuma tela altera documentos diretamente.

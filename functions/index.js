@@ -59,6 +59,7 @@ const _phoneVerificationAttempt = require("./phone-verification-attempt-core");
 const _casualMatchHistory = require("./casual-match-history-core");
 const _identityState = require("./identity-state-core");
 const _letzplayWrite = require("./letzplay-write-core");
+const _notificationAuthority = require("./notification-authority-core");
 
 // v1.8.38 — RARIDADE DO TOKEN, em UM lugar só (os dois caminhos de detecção usam este).
 // O subconjunto de 1 token só vira sinal quando o token existe SÓ nas duas contas
@@ -3818,6 +3819,74 @@ exports.deleteOwnTournamentTemplate = onCall(
     catch (error) { throw new HttpsError("invalid-argument", error.message); }
     await admin.firestore().collection("users").doc(uid).collection("templates").doc(templateId).delete();
     return { ok: true, templateId };
+  }
+);
+
+// Criação de aviso para outra pessoa. A coleção é uma caixa privada do
+// destinatário: o navegador nunca escreve nela diretamente. Em vez de aceitar
+// um `fromUid` declarado pelo cliente, esta porta deriva o remetente do token e
+// só entrega quando há amizade aceita ou relação verificável com o torneio.
+//
+// Não é um "enviar mensagem genérico": tipos desconhecidos, payloads ricos e
+// destinos soltos são recusados. Cada novo tipo precisa entrar no catálogo puro
+// `notification-authority-core` junto com sua prova de relação.
+exports.sendRelatedNotification = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError("unauthenticated", "Login obrigatório");
+    const targetUid = String((request.data && request.data.targetUid) || "").trim();
+    if (!targetUid || targetUid.indexOf("@") >= 0) {
+      throw new HttpsError("invalid-argument", "destinatário precisa ser um UID");
+    }
+    let notification;
+    try { notification = _notificationAuthority.normalize(request.data && request.data.notification); }
+    catch (error) { throw new HttpsError("invalid-argument", error.message); }
+
+    const db = admin.firestore();
+    const [callerSnap, targetSnap, friendSnap] = await Promise.all([
+      db.collection("users").doc(callerUid).get(),
+      db.collection("users").doc(targetUid).get(),
+      callerUid === targetUid ? Promise.resolve(null) : db.collection("friendships").doc(_amizadeAuth.pairId(callerUid, targetUid)).get()
+    ]);
+    if (!callerSnap.exists || (callerSnap.data() || {}).deleted === true || (callerSnap.data() || {}).deletedAt || (callerSnap.data() || {}).mergedInto) {
+      throw new HttpsError("failed-precondition", "sua conta não está ativa para enviar avisos");
+    }
+    if (!targetSnap.exists || (targetSnap.data() || {}).deleted === true || (targetSnap.data() || {}).deletedAt) {
+      throw new HttpsError("not-found", "destinatário não encontrado");
+    }
+    const facts = {
+      callerUid,
+      targetUid,
+      areFriends: !!(friendSnap && friendSnap.exists && (friendSnap.data() || {}).status === "accepted")
+    };
+    if (notification.tournamentId) {
+      const tournament = await _lerTorneioComElenco(db, notification.tournamentId);
+      if (!tournament) throw new HttpsError("not-found", "torneio não encontrado");
+      const members = new Set(_enrollCore.computeMemberUids(tournament));
+      facts.callerOrganizer = _isTournamentOrgCaller(tournament, callerUid);
+      facts.targetOrganizer = _isTournamentOrgCaller(tournament, targetUid);
+      facts.callerParticipant = members.has(callerUid);
+      facts.targetParticipant = members.has(targetUid);
+      // O nome é de apresentação e vem do documento fonte; o navegador não
+      // escolhe qual torneio aparece no card do destinatário.
+      notification.tournamentName = String(tournament.name || notification.tournamentName || "").slice(0, 240);
+    }
+    const decision = _notificationAuthority.authorize(notification, facts);
+    if (!decision.allowed) {
+      throw new HttpsError("permission-denied", "não há relação autorizada para este aviso");
+    }
+    const target = targetSnap.data() || {};
+    if (target.notifyPlatform === false) return { ok: true, delivered: false, reason: "platform-disabled" };
+    const id = _notificationAuthority.notificationId(targetUid, notification, Date.now(), callerUid);
+    await db.collection("users").doc(targetUid).collection("notifications").doc(id).set(Object.assign({}, notification, {
+      fromUid: callerUid,
+      fromName: String((callerSnap.data() || {}).displayName || "").slice(0, 240),
+      createdAt: new Date().toISOString(),
+      read: false,
+      deliveryScope: decision.scope
+    }));
+    return { ok: true, delivered: true, notificationId: id };
   }
 );
 

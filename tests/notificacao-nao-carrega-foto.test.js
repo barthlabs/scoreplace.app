@@ -20,8 +20,7 @@
  *
  * DOIS INVARIANTES, e é isto que este arquivo guarda (não os mecanismos):
  *   1. NENHUM caminho de gravação pode pendurar uma foto na notificação. A garantia mora
- *      no ponto ÚNICO por onde toda notificação passa (`addNotification`), pra que call
- *      site novo não possa reintroduzir o campo. Ver [[feedback_unify_dual_entry_points]].
+ *      na capability do servidor; o cliente não grava mais a caixa de terceiros.
  *   2. Pintar o sininho tem CUSTO COM TETO. O ideal é a agregação `count()` (zero doc
  *      baixado) — e o código a usa quando existe. Mas MEDIDO na página servida: o
  *      firebase-firestore-compat 10.14.1 que o app carrega **não tem count()** (só o
@@ -94,10 +93,12 @@ function fakeDb(opts) {
   return { db, reg };
 }
 
-// ═══ 1) GRAVAÇÃO: a foto não entra, venha de onde vier ══════════════════════════
+// ═══ 1) TRANSPORTE: o cliente não escreve uma caixa de terceiro ═════════════════
 (async function () {
-  const { db, reg } = fakeDb();
+  const { db } = fakeDb();
   DB.db = db;
+  let chamada = null;
+  DB._callFn = async function(nome, payload) { chamada = { nome, payload }; return { ok: true, delivered: true }; };
 
   await DB.addNotification('uid-destino', {
     type: 'match-pending-approval',
@@ -111,19 +112,12 @@ function fakeDb(opts) {
     read: false
   });
 
-  ok(reg.gravado !== null, 'a notificação foi gravada');
-  ok(!('fromPhoto' in (reg.gravado || {})), 'o doc gravado NÃO tem fromPhoto (era 95 KB por destinatário)');
-
-  const bytes = Buffer.byteLength(JSON.stringify(reg.gravado || {}), 'utf8');
-  ok(bytes < 2048, 'o doc gravado cabe em 2 KB (saiu com ' + bytes + ' bytes; antes: ' + Math.round(FOTO_BASE64.length / 1024) + ' KB)');
-
-  // O resto do payload é intocado — o conserto não pode comer campo útil.
-  ok(reg.gravado.type === 'match-pending-approval', 'type preservado');
-  ok(reg.gravado.fromUid === 'uid-quem-lancou', 'fromUid preservado (é por ele que se acha a foto, se um dia alguém quiser)');
-  ok(reg.gravado.fromName === 'Juliana Carneiro', 'fromName preservado');
-  ok(reg.gravado.message.indexOf('Ana Cattani') > 0, 'message preservada');
-  ok(reg.gravado.read === false, 'read:false preservado');
-  ok(reg.gravado.tournamentId === 'tour_1780009816637', 'tournamentId preservado');
+  ok(chamada && chamada.nome === 'sendRelatedNotification', 'a notificação usa a capability do servidor');
+  ok(chamada && chamada.payload.targetUid === 'uid-destino', 'o destino é enviado como UID');
+  ok(chamada && chamada.payload.notification.type === 'match-pending-approval', 'type útil segue no pedido');
+  ok(chamada && chamada.payload.notification.message.indexOf('Ana Cattani') > 0, 'mensagem útil segue no pedido');
+  ok(!/\.collection\('users'\)\.doc\(uid\)\.collection\('notifications'\).*\.set\(/s.test(SRC),
+    'não sobrou escrita direta do cliente na caixa de avisos');
 })();
 
 // ═══ 2) QUANDO O SDK TIVER count(): zero documento baixado ══════════════════════

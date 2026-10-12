@@ -1,10 +1,9 @@
 'use strict';
 /* ⛔ O AUTOR DO AVISO É O UID — E ERA ONDE CAÍA UM E-MAIL.
  *
- * `users/{uid}/notifications` aceita `create` de QUALQUER autenticado
- * (firestore.rules:1031). É a porta mais fraca que a auditoria da L2 apontou: hoje dá para
- * escrever aviso na lista de qualquer pessoa, com o autor que se quiser. A trava natural é a
- * regra exigir `fromUid == request.auth.uid`.
+ * A caixa de `users/{uid}/notifications` agora é server-only. A Function
+ * `sendRelatedNotification` deriva o UID do token e prova a relação com o destino;
+ * Rules não tenta reimplementar amizade e elenco em uma expressão frágil.
  *
  * MEDIDO no código: o único escritor de cliente (`_sendUserNotification` →
  * `addNotification`) gravava `cu.uid || cu.email || ''`. Um e-mail num campo chamado
@@ -12,10 +11,7 @@
  * ninguém, e o aviso fica órfão de autor. E enquanto isso existir, a regra NÃO pode ser
  * apertada: ela recusaria o que o nosso próprio cliente grava.
  *
- * ⛔ CONTROLE DE ESCOPO: esta leva é a METADE DO CLIENTE. A Rule segue como está, de
- * propósito — o app das lojas roda o bundle EMBARCADO, e ele só passa a gravar o uid depois
- * de um build nativo publicado. Apertar antes cortaria o aviso de quem está na loja.
- * [[project_travar_as_rules_em_9_setembro]]
+ * O cliente só pede a capability canônica; autoria e instante não cruzam a fronteira.
  */
 const assert = require('assert/strict'), fs = require('fs'), path = require('path');
 const raiz = path.join(__dirname, '..');
@@ -32,7 +28,7 @@ const envia = semComentario(ORG.slice(iEnvia, iFim));
 
 // ── ① o autor é o uid, e só ele ─────────────────────────────────────────────
 must(/_notifPayload\.fromUid = cu\.uid;/.test(envia),
-  '① ⭐ o autor gravado é o UID verificado, sem queda');
+  '① ⭐ o pedido ainda usa o UID verificado, sem queda');
 must(!/fromUid = cu\.uid \|\| cu\.email/.test(envia),
   '① ⛔ sumiu a queda para E-MAIL — e-mail não é uid');
 must(!/fromUid = [^;]*\|\| ''/.test(envia),
@@ -50,20 +46,14 @@ must(/_warn\('\[notif\] sem uid verificado/.test(envia),
 must(/_verifiedCurrentUser\(\)/.test(envia),
   '③ o usuário vem de `_verifiedCurrentUser`, conferido contra o Firebase Auth');
 
-/* ── ④ A RULE FECHOU (13/set/2026) ──────────────────────────────────────────
- * Esta seção dizia o CONTRÁRIO: cobrava que a regra continuasse aberta, porque a trava só
- * podia entrar depois de medir. A medida veio — 5.792 avisos de produção, e NENHUMA escrita
- * de cliente seria recusada (as 37 sem autor são do servidor, que ignora as rules). A regra
- * foi apertada e a inversão desta seção é o registro disso.
- * ⚠️ O comportamento contra o emulador é provado em tests/rules-aviso-so-em-nome-proprio.js,
- * que roda nas DUAS direções — aqui fica só a trava estática. */
+/* ── ④ A RULE FECHOU ─────────────────────────────────────────────────────── */
 const iR = RULES.indexOf('match /notifications/{notifId}');
 assert.ok(iR > 0, 'âncora: a regra dos avisos');
 const bloco = RULES.slice(iR, RULES.indexOf('}', RULES.indexOf('allow update, delete', iR)));
-must(/fromUid == request\.auth\.uid/.test(bloco),
-  '④ ⭐ a Rule exige que o autor seja quem está logado — fim da falsificação');
-must(!/allow create: if request\.auth != null;\s*$/m.test(bloco),
-  '④ ⛔ não sobrou o `create` que aceitava qualquer autenticado sem conferir o autor');
+must(/allow create: if false;/.test(bloco),
+  '④ ⭐ a Rule fecha toda escrita direta na caixa de aviso');
+must(/sendRelatedNotification/.test(fs.readFileSync(path.join(raiz, 'js/firebase-db.js'), 'utf8')),
+  '④ o cliente pede a capability do servidor, não grava a caixa alheia');
 
 
 /* ── ⑩ O AVISO ESCRITO PELO SERVIDOR TAMBÉM ASSINA ─────────────────────────

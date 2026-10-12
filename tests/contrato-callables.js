@@ -199,6 +199,7 @@ const TABELA = [
   { nome: "sendPairInviteEmail", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
   { nome: "sendPasswordReset", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
   { nome: "sendPasswordResetPhone", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
+  { nome: "sendRelatedNotification", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
   { nome: "sendTournamentInvite", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
   { nome: "sendVerificationCode", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },
   { nome: "sendVerificationEmail", regiao: "us-central1", modo: "sondavel", origemRegiao: {"tipo":"literal"} },

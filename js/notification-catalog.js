@@ -32,6 +32,10 @@ window.NOTIF_CATALOG = {
   new_round:                   { level: 'fundamental', icon: '🔄', color: 'var(--primary-color)' },
   // Construtor de fases: torneio avançou pra próxima fase (chaves materializadas).
   new_phase:                   { level: 'fundamental', icon: '🏆', color: 'var(--primary-color)' },
+  // Agenda confirmada/alterada: o horário é ação central no card de jogo.
+  schedule:                    { level: 'fundamental', icon: '📅', color: '#38bdf8' },
+  // Rodadas classificatórias definiram o corte que segue para eliminatórias.
+  swiss_to_elimination:        { level: 'fundamental', icon: '🏁', color: '#a78bfa' },
 
   // Match events
   result:                      { level: 'fundamental', icon: '🏅', color: '#a78bfa' },
@@ -39,6 +43,8 @@ window.NOTIF_CATALOG = {
   // v1.8.2-beta: level → 'fundamental' (jogador precisa ver mesmo com notify filtrado)
   'match-pending-approval':    { level: 'fundamental', icon: '⏳', color: '#fbbf24' },
   'match-rejected':            { level: 'fundamental', icon: '❌', color: 'var(--danger-color, #ef4444)' },
+  // Pedido/andamento de W.O. precisa ficar reconhecível, não no fallback genérico.
+  'wo-claim':                  { level: 'fundamental', icon: '⚠️', color: '#f59e0b' },
 
   // Reminders
   tournament_reminder:         { level: 'fundamental', icon: '⏰', color: '#f59e0b' },
@@ -122,7 +128,9 @@ window.NOTIF_CATALOG = {
   // É 'important' de propósito: alguém escreveu um telefone no perfil dela. A pessoa
   // TEM que saber — é o que separa "registro com procedência" de "mexeram no meu
   // cadastro sem avisar", e é a chance dela corrigir se o número estiver errado.
-  contact_phone_set:           { level: 'important',   icon: '📱', color: '#f59e0b' }
+  contact_phone_set:           { level: 'important',   icon: '📱', color: '#f59e0b' },
+  // Registro de segurança da própria conta (método de acesso ou dados críticos).
+  account_update:              { level: 'important',   icon: '🔐', color: '#38bdf8' }
 };
 
 // v1.2.9: NOTIF_WHATSAPP_POLICY + _waPolicy REMOVIDOS. A política de entrega por

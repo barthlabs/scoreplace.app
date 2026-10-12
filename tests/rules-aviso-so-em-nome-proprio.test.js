@@ -1,4 +1,4 @@
-/* AVISO SÓ EM NOME PRÓPRIO — quem assina tem de ser quem está logado.
+/* CAIXA DE AVISO SERVER-ONLY — o navegador não escreve em nenhuma caixa.
  *
  * ⛔ O QUE ESTAVA ABERTO:
  *     match /notifications/{notifId} { allow create: if request.auth != null; }
@@ -8,7 +8,7 @@
  * migração da fila de e-mail: um gatilho que escutasse a notificação herdaria a fraqueza.
  *
  * ⭐ MEDIDO ANTES DE APERTAR, sobre os 5.792 avisos gravados em produção (279 perfis) —
- * porque regra apertada sem medida corta usuário de verdade:
+ * porque a migração precisava conservar o caminho canônico no servidor:
  *     5.245  autor é uid que EXISTE em users/          → passa
  *        75  uid de conta já apagada                   → passa (compara com o CHAMADOR)
  *       435  `system`                                  → Admin SDK, IGNORA as rules
@@ -16,13 +16,9 @@
  *         0  e-mail       ·       0  vazio
  * Nenhuma escrita de cliente seria recusada.
  *
- * ⚠️ PISO DAS LOJAS: o bundle embarcado (2.2.84) grava `cu.uid || cu.email || ''`, e a queda
- * para e-mail/vazio NUNCA disparou em 5.792 avisos — usuário autenticado sempre tem uid. A
- * 2.3.0 tirou a queda do código; esta regra fecha a porta.
- *
- * ⚠️ AS DUAS DIREÇÕES. O teste dirige as rules REAIS no emulador e REPETE tudo contra a
- * árvore ANTERIOR, onde a falsificação TEM que passar. Um teste que passasse nos dois não
- * provaria o corte — descreveria o presente.
+ * ⚠️ A Function `sendRelatedNotification` substitui a escrita: ela verifica amizade ou
+ * torneio compartilhado e assina o documento com o token. Este teste prova que Rules
+ * não deixa uma versão antiga ou uma tela nova pular essa fronteira.
  * [[feedback_rede_que_cobre_o_rerender_nao_cobre_o_primeiro]]
  *
  * Dados 100% sintéticos. Nada de produção é lido ou escrito.
@@ -124,12 +120,12 @@ console.log('\n──── aviso só em nome próprio ────\n');
 /* ── 1. RULES ATUAIS ───────────────────────────────────────────────────────── */
 const atual = rodarContra(path.join(ROOT, 'firestore.rules'), 'atual');
 
-ok(atual.legitimo === 200,
-  '① o que o produto PRECISA continua: A avisa B assinando como A (got ' + atual.legitimo + ')');
+ok(atual.legitimo === 403,
+  '① escrita direta legítima também é recusada: só a Function cria aviso (got ' + atual.legitimo + ')');
 ok(atual.finge_ser_B === 403,
-  '② ⭐ A não consegue se passar por B dentro da caixa de B (got ' + atual.finge_ser_B + ')');
+  '② A não consegue se passar por B dentro da caixa de B (got ' + atual.finge_ser_B + ')');
 ok(atual.finge_ser_system === 403,
-  '② ⭐ nem por "system" — era como forjar aviso oficial (got ' + atual.finge_ser_system + ')');
+  '② nem por "system" — era como forjar aviso oficial (got ' + atual.finge_ser_system + ')');
 ok(atual.sem_autor === 403,
   '② aviso SEM autor é recusado (got ' + atual.sem_autor + ')');
 ok(atual.autor_vazio === 403,
@@ -138,10 +134,10 @@ ok(atual.autor_email === 403,
   '② e-mail no lugar do uid é recusado (got ' + atual.autor_email + ')');
 ok(atual.anonimo === 403,
   '② sem conta nenhuma, nada entra (got ' + atual.anonimo + ')');
-ok(atual.propria_caixa_ok === 200,
-  '③ na própria caixa, assinando como si mesmo, passa (got ' + atual.propria_caixa_ok + ')');
+ok(atual.propria_caixa_ok === 403,
+  '③ nem a própria caixa tem uma exceção de escrita direta (got ' + atual.propria_caixa_ok + ')');
 ok(atual.propria_caixa_finge === 403,
-  '③ ⛔ e nem na PRÓPRIA caixa dá para assinar como outro (got ' + atual.propria_caixa_finge + ')');
+  '③ e nem na própria caixa dá para assinar como outro (got ' + atual.propria_caixa_finge + ')');
 ok(atual.le_propria === 200, '④ leitura não mudou: o dono lê a própria caixa (got ' + atual.le_propria + ')');
 ok(atual.le_alheia === 403, '④ e ninguém lê a caixa alheia (got ' + atual.le_alheia + ')');
 
@@ -160,7 +156,7 @@ ok(antes.finge_ser_system === 200,
 ok(antes.sem_autor === 200,
   '⑤ ANTES, aviso sem autor entrava (got ' + antes.sem_autor + ')');
 ok(antes.legitimo === 200,
-  '⑤ e o caminho legítimo passava nas duas — o corte não custou nada ao produto');
+  '⑤ antes até a escrita aparentemente legítima passava sem capability (got ' + antes.legitimo + ')');
 
 console.log('\n' + (fail ? '✗ ' + fail + ' falha(s), ' : '✅ ') + pass + ' verificações');
 if (fail) process.exit(1);

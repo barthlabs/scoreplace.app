@@ -3237,55 +3237,17 @@ window.FirestoreDB = {
   // ---- Notifications ----
 
   async addNotification(uid, notifData) {
-    if (!this.db || !uid) return;
+    if (!uid) return;
     try {
-      // v1.8.45-beta: ID determinístico em vez de .add() para garantir
-      // idempotência no Firestore. Múltiplas chamadas do mesmo evento
-      // (race, retry, re-render) produzem o MESMO doc — sem duplicatas.
-      // v2.1.15: BUG — a chave (type+tournament+match+dia+uid) era grossa demais:
-      // eventos DIFERENTES do mesmo tipo/torneio no mesmo dia colapsavam no MESMO
-      // doc, e o 2º .set() virava UPDATE (doc já existe) que a regra só permite
-      // pro DONO → quem dispara (organizador) era NEGADO e a notificação sumia.
-      // Agora incluímos um hash da mensagem: evento distinto → doc distinto (é
-      // CREATE, permitido); duplicata real (mesma mensagem) → mesmo doc (idempotente).
-      var _type = String(notifData.type || 'info');
-      var _tId  = String(notifData.tournamentId || '');
-      var _mId  = String(notifData.matchId || '');
-      var _day  = new Date().toISOString().slice(0, 10); // YYYY-MM-DD UTC
-      var _msg  = String(notifData.message || '');
-      var _msgHash = (function(s){ var h = 0; for (var i = 0; i < s.length; i++) { h = (h * 31 + s.charCodeAt(i)) | 0; } return (h >>> 0).toString(36); })(_msg);
-      var _raw  = [_type, _tId, _mId, _day, _msgHash, uid].join('|');
-      // Converte para ID válido (só alfanumérico + _ + -)
-      var _docId = _raw.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 200);
-
-      // ── NOTIFICAÇÃO NÃO CARREGA FOTO (1.9.24) ───────────────────────────────
-      // Incidente REAL (17/ago/2026, relato do dono: _"demorou para caramba para
-      // carregar os dados. dash no ar mas sem dados, sem perfil, sem torneios"_).
-      // MEDIDO na base antes de mexer: a caixa dele tinha 476 notificações somando
-      // **1,2 MB**, e as 3 NÃO LIDAS daquele momento pesavam **95 KB cada**. O peso
-      // inteiro era `fromPhoto` — a `photoURL` de quem disparou, quando ela é
-      // `data:image/jpeg;base64,…` (21 das 234 contas guardam a foto assim; a maior
-      // tem 133 KB). Cada resultado proposto copiava a foto do proponente pra caixa
-      // de CADA destinatário: 25 notificações de placar = 618 KB.
-      // ⚠️ E `fromPhoto` **não é lido em lugar nenhum**: varredura no repo inteiro
-      // deu 5 pontos gravando e ZERO renderizando. Era peso morto — e ele caía no
-      // caminho de ABERTURA, porque o badge do sino baixava toda não lida pra contar
-      // (ver `getUnreadNotificationCount`, consertado na mesma leva).
-      // A limpeza mora AQUI, no ponto único por onde toda notificação passa: caller
-      // novo não tem como reintroduzir o campo. Quem um dia quiser a foto lê o doc
-      // de quem mandou por `fromUid` — a identidade já viaja no payload.
-      // Ver [[feedback_unify_dual_entry_points]].
-      var _limpo = {};
-      Object.keys(notifData).forEach(function (k) {
-        if (k === 'fromPhoto') return;
-        _limpo[k] = notifData[k];
+      // A caixa de terceiro é servidor-only. A Function determina autoria,
+      // instante, idempotência e a relação que torna o aviso legítimo.
+      return await this._callFn('sendRelatedNotification', {
+        targetUid: String(uid),
+        notification: notifData || {}
       });
-
-      // .set() com merge:false sobrescreve silenciosamente doc existente.
-      // Notificações não lidas preservam read:false (campo vem no notifData).
-      await this.db.collection('users').doc(uid).collection('notifications').doc(_docId).set(_limpo);
     } catch (e) {
       window._error('Erro ao criar notificação:', e);
+      throw e;
     }
   },
 

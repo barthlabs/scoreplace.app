@@ -178,6 +178,8 @@ const SUITES = [
   'tests/telefone-do-organizador-caduca.test.js',
   'tests/rules-mudou-tem-de-ser-testada.test.js',
   'tests/legacy-phase-projection-core.test.js',
+  'tests/notification-authority-catalog.test.js',
+  'tests/notification-authority-core.test.js',
   'tests/legacy-phase-write-boundary.test.js',
   'tests/canonical-phase-read-boundary.test.js',
   'tests/migrar-fases-legadas-core.test.js',
