@@ -17,6 +17,14 @@ const status = functions.slice(statusStart, statusEnd < 0 ? functions.length : s
 
 ok(init.includes('identityRef') && init.includes('_identityState.initial') && init.includes('tx.create(identityRef'),
   'perfil e estado privado nascem na mesma transação');
+ok(init.includes('identityInitialized') && init.includes('tx.get(identityRef)'),
+  'porta canônica completa o estado privado de perfil legado sem abrir outro ciclo');
+const phoneRegistrationStart = functions.indexOf('exports.registerPhonePassword = onCall');
+const phoneRegistrationEnd = functions.indexOf('exports.phonePasswordLogin', phoneRegistrationStart);
+const phoneRegistration = functions.slice(phoneRegistrationStart, phoneRegistrationEnd);
+ok(phoneRegistration.includes('identityRef') && phoneRegistration.includes('tx.create(identityRef') &&
+  phoneRegistration.includes('_identityState.initial'),
+  'cadastro por telefone cria o mesmo estado privado na transação do perfil');
 ok(status.includes('request.auth && request.auth.uid') && status.includes('accountIdentity') && status.includes('_identityState.read'),
   'Callable devolve somente o estado normalizado da própria conta');
 ok(/match \/accountIdentity\/\{userId\} \{\s*allow read, write: if false;/s.test(rules),

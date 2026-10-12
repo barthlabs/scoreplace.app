@@ -3168,8 +3168,17 @@ exports.initializeUserProfile = onCall(
     if (name) _nameUnique.denormalizeDisplayName(profile, name);
 
     return await db.runTransaction(async (tx) => {
-      const current = await tx.get(profileRef);
-      if (current.exists) return { ok: true, existing: true };
+      const [current, identity] = await Promise.all([
+        tx.get(profileRef),
+        tx.get(identityRef),
+      ]);
+      // Clientes que já tinham perfil antes da coleção privada não passam a
+      // ter um segundo ciclo de criação: a própria porta canônica completa o
+      // estado legado, sem alterar perfil, credenciais ou permissões.
+      if (current.exists) {
+        if (!identity.exists) tx.create(identityRef, _identityState.initial(new Date().toISOString()));
+        return { ok: true, existing: true, identityInitialized: !identity.exists };
+      }
       const reservation = await _nameUnique.reserveDisplayName(tx, db, uid, name, '');
       if (!reservation.ok) throw new HttpsError("already-exists", "nome de exibição já está em uso");
       tx.set(profileRef, profile);
@@ -7105,9 +7114,13 @@ exports.registerPhonePassword = onCall(
     // recriaria o furo que permitia homônimos fora do cadastro por e-mail.
     const db = admin.firestore();
     const profileRef = db.collection("users").doc(uid);
+    const identityRef = db.collection("accountIdentity").doc(uid);
     let canonicalDisplayName = displayName;
     await db.runTransaction(async (tx) => {
-      const current = await tx.get(profileRef);
+      const [current, identity] = await Promise.all([
+        tx.get(profileRef),
+        tx.get(identityRef),
+      ]);
       const old = current.exists ? (current.data() || {}) : {};
       canonicalDisplayName = displayName || String(old.displayName || "").trim().replace(/\s+/g, " ");
       if (!canonicalDisplayName && !current.exists) {
@@ -7129,6 +7142,11 @@ exports.registerPhonePassword = onCall(
       if (!current.exists) prof.createdAt = admin.firestore.FieldValue.serverTimestamp();
       if (canonicalDisplayName) _nameUnique.denormalizeDisplayName(prof, canonicalDisplayName);
       tx.set(profileRef, prof, { merge: true });
+      // Cadastro por telefone é uma porta de criação tão canônica quanto
+      // e-mail/senha: nunca pode deixar users/{uid} sem seu estado privado.
+      // Em perfil histórico, inicializa apenas o estado `legacy`, sem inferir
+      // identidade, alterar credencial ou tomar decisão de fusão.
+      if (!identity.exists) tx.create(identityRef, _identityState.initial(new Date().toISOString()));
     });
 
     const upd = { email: synthetic, emailVerified: true, password: password, phoneNumber: phoneE164 };
@@ -7141,28 +7159,10 @@ exports.registerPhonePassword = onCall(
       console.error("[registerPhonePassword] updateUser failed:", err.code || err.message);
       throw new HttpsError("internal", "não foi possível salvar: " + (err.code || err.message));
     }
-    /* ⛔⛔ TELEFONE AUTENTICADO NÃO CRIA SEGUNDA CONTA — ELE ASSUME A QUE JÁ EXISTE.
-     *
-     * Ordem do dono (13/set/2026): _"nao tem que criar a porra de uma segunda conta nunca
-     * nesses casos"_ e _"o registro do organizador é superado por um mais forte, autenticado.
-     * ponto final"_.
-     *
-     * ⛔ COMO A SEGUNDA CONTA NASCIA. MEDIDO no dado real, em dois pares, pelos carimbos:
-     *   · Deborah entrou pela Apple às 21:09, criou conta por telefone+senha às 21:13 — e o
-     *     organizador só digitou o número às 21:14. A segunda conta veio ANTES dele.
-     *   · Carolina tinha conta desde 11/jun; a conta por telefone nasceu em 04/ago; o
-     *     organizador entrou em 24/ago.
-     * Ou seja: o culpado NUNCA foi o organizador. É o cadastro por telefone, que criava conta
-     * nova sem olhar se aquele número já estava no perfil de alguém vivo.
-     *
-     * ⭐ AGORA ELE OLHA. Se outra conta VIVA já tem esse telefone — não importa se veio do
-     * organizador ou da própria pessoa —, as duas são a mesma pessoa: o número acabou de ser
-     * PROVADO por SMS nesta sessão, e é o registro mais forte que existe. Em vez de nascer um
-     * segundo cadastro, as contas são unidas pela porta de sempre, que escolhe quem sobrevive
-     * por atividade (torneios, último acesso) e leva o histórico junto.
-     *
-     * ⚠️ NÃO É ADIVINHAÇÃO: o telefone só chega aqui depois do SMS. A prova é do usuário,
-     * não do organizador. [[project_celular_contato_vs_identidade]] */
+    /* Uma conta que chega por SMS pode corresponder a um registro de contato
+     * anterior. Isso é um sinal para a porta explícita de fusão, nunca uma
+     * autorização para este cadastro absorver outro UID por inferência. A
+     * fusão exige a prova de posse conferida em mergePhoneAccount. */
     /* ⛔ O NÚMERO ACABOU DE SER PROVADO — o carimbo do organizador morre aqui.
      * Sem isto a conta ficava com telefone verificado E selo de "posto por terceiro", e as
      * travas de identidade seguiam recusando o que já tinha sido provado. Era o caminho que

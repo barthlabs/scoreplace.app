@@ -54,8 +54,9 @@ function fakeStore() {
     'core não contém caminhos legados de conflito, mensagem ou auto-sufixo');
   const phoneRegistration = src.slice(src.indexOf('exports.registerPhonePassword'), src.indexOf('exports.phonePasswordLogin'));
   ok(/db\.runTransaction/.test(phoneRegistration) && /reserveDisplayName/.test(phoneRegistration) &&
+    /identityRef/.test(phoneRegistration) && /tx\.create\(identityRef/.test(phoneRegistration) &&
     !/collection\("users"\)\.doc\(uid\)\.set\(prof/.test(phoneRegistration),
-  'cadastro por celular usa a mesma reserva transacional e não escreve perfil por fora');
+  'cadastro por celular reserva nome e cria estado privado na mesma transação');
 
   console.log(fail ? '❌ name-unique-core: ' + pass + ' ok, ' + fail + ' falhas' : '✅ name-unique-core: ' + pass + ' ok, 0 falhas');
   process.exit(fail ? 1 : 0);
