@@ -30,7 +30,7 @@ ok('usa o núcleo puro sobre os registros físicos do elenco dividido',
   /_splitParts\.lerRegistrosDaParte\(tx, ref, "participants"\)/.test(helper) &&
   // A projeção recebe também a ponte explícita rótulo legado → categoryId. Sem
   // ela, nomes de categoria virariam identidade implícita durante a migração.
-  /_registrationCore\.projectLegacyRoster\(tournamentId, records, categoryIdForLegacyLabel\)/.test(helper));
+  /_registrationCore\.projectLegacyRoster\(\s*tournamentId,\s*records,\s*categories\.categoryIdForLegacyLabel,\s*categories\.defaultCategoryId\s*\)/.test(helper));
 ok('prévia não cria nem atualiza documentos', !/\btx\.(?:set|update|delete)\b/.test(helper));
 ok('retorno contém contadores, exceções e fingerprint', /summary: \{/.test(helper) && /conflicts: report\.conflicts/.test(helper) && /unsupported: report\.unsupported/.test(helper) && /fingerprint: report\.fingerprint/.test(helper));
 

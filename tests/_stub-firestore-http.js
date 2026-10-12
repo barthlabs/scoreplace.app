@@ -1,11 +1,11 @@
-/* FIXTURE (não é suíte) — dublê de `node:https` e do gcloud, injetado por `--require`.
+/* FIXTURE (não é suíte) — dublê de `node:https` e da credencial, injetado por `--require`.
  *
  * Serve a `tests/conferidor-entrega-o-veredito.test.js`, que precisa executar o
  * CONFERIDOR REAL como subprocesso e capturar stdout/stderr — a única forma de provar que
  * ele ENTREGA o veredito, que foi o defeito relatado (o Codex recebeu saída vazia).
  *
  * ⭐ POR QUE `--require` E NÃO UM PARÂMETRO NO SCRIPT: o preload roda ANTES do script, então
- * dá pra trocar `https.request` e `execSync` sem que o conferidor saiba que existe teste. Se
+ * dá pra trocar `https.request` e o módulo da credencial sem que o conferidor saiba que existe teste. Se
  * eu tivesse aberto uma variável de ambiente pra apontar outro servidor, teria acrescentado
  * superfície de produção só pra testar — e um script de auditoria que aceita mudar de alvo é
  * pior do que um que não testo.
@@ -17,6 +17,7 @@
 const fs = require('fs');
 const https = require('node:https');
 const cp = require('child_process');
+const Module = require('module');
 
 const cenario = JSON.parse(fs.readFileSync(process.env.SP_STUB_CENARIO, 'utf8'));
 const anota = process.env.SP_STUB_METODOS;
@@ -25,6 +26,22 @@ const anota = process.env.SP_STUB_METODOS;
 cp.execSync = function (cmd) {
   if (cenario.tokenFalha) { const e = new Error(cenario.tokenFalha); throw e; }
   return (cenario.token || 'token-de-mentira') + '\n';
+};
+
+/* O conferidor é iniciado como subprocesso; interceptamos exatamente o
+ * provedor de credencial antes de ele ser carregado, sem acrescentar uma flag
+ * ou um alvo alternativo ao script de produção. */
+const carregarOriginal = Module._load;
+Module._load = function (pedido, pai, principal) {
+  if (pedido === './firebase-service-account-token' || /firebase-service-account-token$/.test(pedido)) {
+    return {
+      accessTokenForServiceAccountSync: function () {
+        if (cenario.tokenFalha) throw new Error(cenario.tokenFalha);
+        return cenario.token || 'token-de-mentira';
+      }
+    };
+  }
+  return carregarOriginal.apply(this, arguments);
 };
 
 function respostaPara(caminho) {
